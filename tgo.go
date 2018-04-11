@@ -23,11 +23,13 @@ func init() {
 }
 
 type Compiler struct {
-	mod      llvm.Module
-	ctx      llvm.Context
-	builder  llvm.Builder
-	machine  llvm.TargetMachine
-	putsFunc llvm.Value
+	mod             llvm.Module
+	ctx             llvm.Context
+	builder         llvm.Builder
+	machine         llvm.TargetMachine
+	printstringFunc llvm.Value
+	printspaceFunc  llvm.Value
+	printnlFunc     llvm.Value
 }
 
 func NewCompiler(path, triplet string) (*Compiler, error) {
@@ -43,8 +45,12 @@ func NewCompiler(path, triplet string) (*Compiler, error) {
 	c.ctx = c.mod.Context()
 	c.builder = c.ctx.NewBuilder()
 
-	putsType := llvm.FunctionType(llvm.Int32Type(), []llvm.Type{llvm.PointerType(llvm.Int8Type(), 0)}, false)
-	c.putsFunc = llvm.AddFunction(c.mod, "puts", putsType)
+	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.PointerType(llvm.Int8Type(), 0)}, false)
+	c.printstringFunc = llvm.AddFunction(c.mod, "__go_printstring", printstringType)
+	printspaceType := llvm.FunctionType(llvm.VoidType(), nil, false)
+	c.printspaceFunc = llvm.AddFunction(c.mod, "__go_printspace", printspaceType)
+	printnlType := llvm.FunctionType(llvm.VoidType(), nil, false)
+	c.printnlFunc = llvm.AddFunction(c.mod, "__go_printnl", printnlType)
 
 	return c, nil
 }
@@ -66,7 +72,7 @@ func (c *Compiler) Parse(path string) error {
 	}
 	fmt.Println("package:", pkgInfo.Pkg.Name())
 	for _, file := range pkgInfo.Files {
-		err := c.parseFile(file)
+		err := c.parseFile(pkgInfo.Pkg.Name(), file)
 		if err != nil {
 			return err
 		}
@@ -75,16 +81,11 @@ func (c *Compiler) Parse(path string) error {
 	return nil
 }
 
-func (c *Compiler) IR() string {
-	return c.mod.String()
-}
-
-
-func (c *Compiler) parseFile(file *ast.File) error {
+func (c *Compiler) parseFile(pkgName string, file *ast.File) error {
 	for _, decl := range file.Decls {
 		switch v := decl.(type) {
 		case *ast.FuncDecl:
-			err := c.parseFunc(v)
+			err := c.parseFunc(pkgName, v)
 			if err != nil {
 				return err
 			}
@@ -96,11 +97,17 @@ func (c *Compiler) parseFile(file *ast.File) error {
 	return nil
 }
 
-func (c *Compiler) parseFunc(f *ast.FuncDecl) error {
+func (c *Compiler) parseFunc(pkgName string, f *ast.FuncDecl) error {
 	fmt.Println("func:", f.Name)
 
-	fnType := llvm.FunctionType(llvm.Int32Type(), nil, false)
-	fn := llvm.AddFunction(c.mod, f.Name.Name, fnType)
+	var fnType llvm.Type
+	if f.Type.Results == nil {
+		fnType = llvm.FunctionType(llvm.VoidType(), nil, false)
+	} else {
+		return errors.New("todo: return values")
+	}
+
+	fn := llvm.AddFunction(c.mod, pkgName + "." + f.Name.Name, fnType)
 	start := c.ctx.AddBasicBlock(fn, "start")
 	c.builder.SetInsertPointAtEnd(start)
 
@@ -112,7 +119,11 @@ func (c *Compiler) parseFunc(f *ast.FuncDecl) error {
 		}
 	}
 
-	c.builder.CreateRet(llvm.ConstInt(llvm.Int32Type(), 0, false))
+	if f.Type.Results == nil {
+		c.builder.CreateRetVoid()
+	//} else if len(f.Type.Results.List) == 1 {
+	//	c.builder.CreateRet(llvm.ConstInt(llvm.Int32Type(), 0, false))
+	}
 	return nil
 }
 
@@ -132,26 +143,32 @@ func (c *Compiler) parseStmt(stmt ast.Node) error {
 func (c *Compiler) parseExpr(expr ast.Expr) error {
 	switch v := expr.(type) {
 	case *ast.CallExpr:
-		values := []llvm.Value{}
-
 		zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 		name := v.Fun.(*ast.Ident).Name
 		fmt.Printf("  call: %s\n", name)
 
-		if name != "println" {
-			return errors.New("implement anything other than println()")
+		printnl := false
+		if name == "println" {
+			printnl = true
+		} else if name == "print" {
+		} else {
+			return errors.New("todo: call anything other than println()")
 		}
 
-		for _, arg := range v.Args {
+		for i, arg := range v.Args {
+			if i >= 1 {
+				c.builder.CreateCall(c.printspaceFunc, nil, "")
+			}
 			switch arg := arg.(type) {
 			case *ast.BasicLit:
 				fmt.Printf("    arg: %s\n", arg.Value)
 				val := constant.MakeFromLiteral(arg.Value, arg.Kind, 0)
 				switch arg.Kind {
 				case token.STRING:
-					msg := c.builder.CreateGlobalString(constant.StringVal(val) + "\x00", "")
-					msgCast := c.builder.CreateGEP(msg, []llvm.Value{zero, zero}, "")
-					values = append(values, msgCast)
+					str := constant.StringVal(val)
+					strObj := c.builder.CreateGlobalString(str + "\x00", "")
+					msgCast := c.builder.CreateGEP(strObj, []llvm.Value{zero, zero}, "")
+					c.builder.CreateCall(c.printstringFunc, []llvm.Value{msgCast}, "")
 				default:
 					return errors.New("todo: print anything other than strings")
 				}
@@ -159,11 +176,18 @@ func (c *Compiler) parseExpr(expr ast.Expr) error {
 				return errors.New("unknown arg type")
 			}
 		}
-		c.builder.CreateCall(c.putsFunc, values, "")
+		if printnl {
+			c.builder.CreateCall(c.printnlFunc, nil, "")
+		}
 	default:
 		return errors.New("unknown expr")
 	}
 	return nil
+}
+
+// IR returns the whole IR as a human-readable string.
+func (c *Compiler) IR() string {
+	return c.mod.String()
 }
 
 func (c *Compiler) Verify() error {
@@ -201,6 +225,7 @@ func (c *Compiler) EmitObject(path string) error {
 	return nil
 }
 
+// Helper function for Compiler object.
 func Compile(inpath, outpath, target string, printIR bool) error {
 	c, err := NewCompiler(inpath, target)
 	if err != nil {
