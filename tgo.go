@@ -237,9 +237,13 @@ func Compile(inpath, outpath, target string, printIR bool) error {
 		return err
 	}
 
-	c.Verify()
+	if err := c.Verify(); err != nil {
+		return err
+	}
 	c.Optimize(2)
-	c.Verify()
+	if err := c.Verify(); err != nil {
+		return err
+	}
 
 	if printIR {
 		fmt.Println(c.IR())
@@ -264,10 +268,12 @@ func main() {
 	if *outpath == "" || flag.NArg() != 1 {
 		fmt.Fprintf(os.Stderr, "usage: %s [-printir] [-target=<target>] -o <output> <input>", os.Args[0])
 		flag.PrintDefaults()
+		return
 	}
 
 	err := Compile(flag.Args()[0], *outpath, *target, *printIR)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
 	}
 }
