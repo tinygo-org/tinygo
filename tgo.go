@@ -32,14 +32,14 @@ type Compiler struct {
 	printnlFunc     llvm.Value
 }
 
-func NewCompiler(path, triplet string) (*Compiler, error) {
+func NewCompiler(path, triple string) (*Compiler, error) {
 	c := &Compiler{}
 
-	target, err := llvm.GetTargetFromTriple(triplet)
+	target, err := llvm.GetTargetFromTriple(triple)
 	if err != nil {
 		return nil, err
 	}
-	c.machine = target.CreateTargetMachine(triplet, "", "", llvm.CodeGenLevelDefault, llvm.RelocDefault, llvm.CodeModelDefault)
+	c.machine = target.CreateTargetMachine(triple, "", "", llvm.CodeGenLevelDefault, llvm.RelocDefault, llvm.CodeModelDefault)
 
 	c.mod = llvm.NewModule(path)
 	c.ctx = c.mod.Context()
@@ -256,7 +256,7 @@ func Compile(inpath, outpath, target string, printIR bool) error {
 
 func main() {
 	outpath := flag.String("o", "", "output filename")
-	target := flag.String("target", "x86_64-pc-linux-gnu", "LLVM target")
+	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
 	printIR := flag.Bool("printir", false, "print LLVM IR after optimizing")
 
 	flag.Parse()
