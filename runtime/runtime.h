@@ -8,5 +8,4 @@ typedef struct {
 	uint8_t  buf[]; // variable size
 } string_t;
 
-void __go_printstring(string_t *str);
-void __go_printnl();
+typedef int32_t intgo_t; // may be 64-bit

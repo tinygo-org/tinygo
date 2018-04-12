@@ -10,7 +10,7 @@ void __go_printstring(string_t *str) {
 	write(STDOUT_FILENO, str->buf, str->len);
 }
 
-void __go_printint(int32_t n) {
+void __go_printint(intgo_t n) {
 	// Print integer in signed big-endian base-10 notation, for humans to
 	// read.
 	// TODO: don't recurse, but still be compact (and don't divide/mod
@@ -19,7 +19,7 @@ void __go_printint(int32_t n) {
 		print("-", 1);
 		n = -n;
 	}
-	int32_t prevdigits = n / 10;
+	intgo_t prevdigits = n / 10;
 	if (prevdigits != 0) {
 		__go_printint(prevdigits);
 	}

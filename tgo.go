@@ -29,6 +29,8 @@ type Compiler struct {
 	ctx             llvm.Context
 	builder         llvm.Builder
 	machine         llvm.TargetMachine
+	intType         llvm.Type
+	stringLenType   llvm.Type
 	stringType      llvm.Type
 	stringPtrType   llvm.Type
 	printstringFunc llvm.Value
@@ -50,13 +52,17 @@ func NewCompiler(path, triple string) (*Compiler, error) {
 	c.ctx = c.mod.Context()
 	c.builder = c.ctx.NewBuilder()
 
+	// Depends on platform (32bit or 64bit), but fix it here for now.
+	c.intType = llvm.Int32Type()
+	c.stringLenType = llvm.Int32Type()
+
 	// Length-prefixed string.
-	c.stringType = llvm.StructType([]llvm.Type{llvm.Int32Type(), llvm.ArrayType(llvm.Int8Type(), 0)}, false)
+	c.stringType = llvm.StructType([]llvm.Type{c.stringLenType, llvm.ArrayType(llvm.Int8Type(), 0)}, false)
 	c.stringPtrType = llvm.PointerType(c.stringType, 0)
 
 	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.stringPtrType}, false)
 	c.printstringFunc = llvm.AddFunction(c.mod, "__go_printstring", printstringType)
-	printintType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.Int32Type()}, false)
+	printintType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.intType}, false)
 	c.printintFunc = llvm.AddFunction(c.mod, "__go_printint", printintType)
 	printspaceType := llvm.FunctionType(llvm.VoidType(), nil, false)
 	c.printspaceFunc = llvm.AddFunction(c.mod, "__go_printspace", printspaceType)
@@ -192,7 +198,7 @@ func (c *Compiler) parseBuiltin(instr *ssa.CallCommon, call *ssa.Builtin) error 
 			switch expr.Type() {
 			case c.stringPtrType:
 				c.builder.CreateCall(c.printstringFunc, []llvm.Value{*expr}, "")
-			case llvm.Int32Type():
+			case c.intType:
 				c.builder.CreateCall(c.printintFunc, []llvm.Value{*expr}, "")
 			default:
 				return errors.New("unknown arg type")
@@ -252,7 +258,7 @@ func (c *Compiler) parseExpr(expr ssa.Value) (*llvm.Value, error) {
 		case constant.String:
 			str := constant.StringVal(expr.Value)
 			strVal := c.ctx.ConstString(str, false)
-			strLen := llvm.ConstInt(llvm.Int32Type(), uint64(len(str)), false)
+			strLen := llvm.ConstInt(c.stringLenType, uint64(len(str)), false)
 			strObj := llvm.ConstStruct([]llvm.Value{strLen, strVal}, false)
 			ptr := llvm.AddGlobal(c.mod, strObj.Type(), ".str")
 			ptr.SetInitializer(strObj)
@@ -261,7 +267,7 @@ func (c *Compiler) parseExpr(expr ssa.Value) (*llvm.Value, error) {
 			return &ptrCast, nil
 		case constant.Int:
 			n, _ := constant.Int64Val(expr.Value) // TODO: do something with the 'exact' return value?
-			val := llvm.ConstInt(llvm.Int32Type(), uint64(n), true)
+			val := llvm.ConstInt(c.intType, uint64(n), true)
 			return &val, nil
 		default:
 			return nil, errors.New("todo: unknown constant")
