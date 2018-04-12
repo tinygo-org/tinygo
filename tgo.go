@@ -27,6 +27,8 @@ type Compiler struct {
 	ctx             llvm.Context
 	builder         llvm.Builder
 	machine         llvm.TargetMachine
+	stringType      llvm.Type
+	stringPtrType   llvm.Type
 	printstringFunc llvm.Value
 	printspaceFunc  llvm.Value
 	printnlFunc     llvm.Value
@@ -45,7 +47,11 @@ func NewCompiler(path, triple string) (*Compiler, error) {
 	c.ctx = c.mod.Context()
 	c.builder = c.ctx.NewBuilder()
 
-	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.PointerType(llvm.Int8Type(), 0)}, false)
+	// Length-prefixed string.
+	c.stringType = llvm.StructType([]llvm.Type{llvm.Int32Type(), llvm.ArrayType(llvm.Int8Type(), 0)}, false)
+	c.stringPtrType = llvm.PointerType(c.stringType, 0)
+
+	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.stringPtrType}, false)
 	c.printstringFunc = llvm.AddFunction(c.mod, "__go_printstring", printstringType)
 	printspaceType := llvm.FunctionType(llvm.VoidType(), nil, false)
 	c.printspaceFunc = llvm.AddFunction(c.mod, "__go_printspace", printspaceType)
@@ -143,7 +149,6 @@ func (c *Compiler) parseStmt(stmt ast.Node) error {
 func (c *Compiler) parseExpr(expr ast.Expr) error {
 	switch v := expr.(type) {
 	case *ast.CallExpr:
-		zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 		name := v.Fun.(*ast.Ident).Name
 		fmt.Printf("  call: %s\n", name)
 
@@ -166,9 +171,14 @@ func (c *Compiler) parseExpr(expr ast.Expr) error {
 				switch arg.Kind {
 				case token.STRING:
 					str := constant.StringVal(val)
-					strObj := c.builder.CreateGlobalString(str + "\x00", "")
-					msgCast := c.builder.CreateGEP(strObj, []llvm.Value{zero, zero}, "")
-					c.builder.CreateCall(c.printstringFunc, []llvm.Value{msgCast}, "")
+					strVal := c.ctx.ConstString(str, false)
+					strLen := llvm.ConstInt(llvm.Int32Type(), uint64(len(str)), false)
+					strObj := llvm.ConstStruct([]llvm.Value{strLen, strVal}, false)
+					ptr := llvm.AddGlobal(c.mod, strObj.Type(), ".str")
+					ptr.SetInitializer(strObj)
+					ptr.SetLinkage(llvm.InternalLinkage)
+					ptrCast := llvm.ConstPointerCast(ptr, c.stringPtrType)
+					c.builder.CreateCall(c.printstringFunc, []llvm.Value{ptrCast}, "")
 				default:
 					return errors.New("todo: print anything other than strings")
 				}

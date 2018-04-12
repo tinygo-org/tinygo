@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include "runtime.h"
 
-void __go_printstring(char *str) {
-	write(STDOUT_FILENO, str, strlen(str));
+void __go_printstring(string_t *str) {
+	write(STDOUT_FILENO, str->buf, str->len);
 }
 
 void __go_printspace() {
