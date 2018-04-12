@@ -8,6 +8,7 @@ import (
 	"go/constant"
 	"go/token"
 	"os"
+	"strings"
 
 	"golang.org/x/tools/go/loader"
 	"golang.org/x/tools/go/ssa"
@@ -119,7 +120,7 @@ func (c *Compiler) parseFunc(pkgName string, f *ssa.Function) error {
 	for _, block := range f.Blocks {
 		for _, instr := range block.Instrs {
 			fmt.Printf("  instr: %v\n", instr)
-			err := c.parseInstr(instr)
+			err := c.parseInstr(pkgName, instr)
 			if err != nil {
 				return err
 			}
@@ -128,12 +129,14 @@ func (c *Compiler) parseFunc(pkgName string, f *ssa.Function) error {
 	return nil
 }
 
-func (c *Compiler) parseInstr(instr ssa.Instruction) error {
+func (c *Compiler) parseInstr(pkgName string, instr ssa.Instruction) error {
 	switch instr := instr.(type) {
 	case *ssa.Call:
 		switch call := instr.Common().Value.(type) {
 		case *ssa.Builtin:
 			return c.parseBuiltin(instr.Common(), call)
+		case *ssa.Function:
+			return c.parseFunctionCall(pkgName, instr.Common(), call)
 		default:
 			return errors.New("todo: unknown call type: " + fmt.Sprintf("%#v", call))
 		}
@@ -145,7 +148,8 @@ func (c *Compiler) parseInstr(instr ssa.Instruction) error {
 			return errors.New("todo: return value")
 		}
 	case *ssa.BinOp:
-		return c.parseBinOp(instr)
+		_, err := c.parseBinOp(instr)
+		return err
 	default:
 		return errors.New("unknown instruction: " + fmt.Sprintf("%#v", instr))
 	}
@@ -183,24 +187,42 @@ func (c *Compiler) parseBuiltin(instr *ssa.CallCommon, call *ssa.Builtin) error 
 	return nil
 }
 
-func (c *Compiler) parseBinOp(binop *ssa.BinOp) error {
+func (c *Compiler) parseFunctionCall(pkgName string, instr *ssa.CallCommon, call *ssa.Function) error {
+	fmt.Printf("    function: %#v\n", call)
+
+	name := call.Name()
+	if strings.IndexByte(name, '.') == -1 {
+		// TODO: import path instead of pkgName
+		name = pkgName + "." + name
+	}
+	target := c.mod.NamedFunction(name)
+	if target.IsNil() {
+		return errors.New("undefined function: " + name)
+	}
+	c.builder.CreateCall(target, nil, "")
+
+	return nil
+}
+
+func (c *Compiler) parseBinOp(binop *ssa.BinOp) (*llvm.Value, error) {
 	x, err := c.parseExpr(binop.X)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	y, err := c.parseExpr(binop.Y)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	switch binop.Op {
 	case token.ADD:
-		c.builder.CreateBinOp(llvm.Add, *x, *y, "")
-		return nil
+		val := c.builder.CreateBinOp(llvm.Add, *x, *y, "")
+		return &val, nil
 	case token.MUL:
-		c.builder.CreateBinOp(llvm.Mul, *x, *y, "")
-		return nil
+		val := c.builder.CreateBinOp(llvm.Mul, *x, *y, "")
+		return &val, nil
+	default:
+		return nil, errors.New("todo: unknown binop")
 	}
-	return errors.New("todo: unknown binop")
 }
 
 func (c *Compiler) parseExpr(expr ssa.Value) (*llvm.Value, error) {
@@ -225,6 +247,8 @@ func (c *Compiler) parseExpr(expr ssa.Value) (*llvm.Value, error) {
 		default:
 			return nil, errors.New("todo: unknown constant")
 		}
+	case *ssa.BinOp:
+		return c.parseBinOp(expr)
 	}
 	return nil, errors.New("todo: unknown expression: " + fmt.Sprintf("%#v", expr))
 }
