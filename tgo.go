@@ -81,9 +81,24 @@ func (c *Compiler) Parse(path string) error {
 	program.Build()
 	for _, pkg := range program.AllPackages() {
 		fmt.Println("package:", pkg.Pkg.Name())
+
+		// First, build all function declarations.
+		for name, member := range pkg.Members {
+			if name == "init" {
+				continue
+			}
+			if member, ok := member.(*ssa.Function); ok {
+				err := c.parseFuncDecl(pkg.Pkg.Name(), member)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		// Now, add definitions to those declarations.
 		for name, member := range pkg.Members {
 			fmt.Println("member:", name, member, member.Token())
-			if member.Name() == "init" {
+			if name == "init" {
 				continue
 			}
 			switch member := member.(type) {
@@ -102,17 +117,21 @@ func (c *Compiler) Parse(path string) error {
 	return nil
 }
 
-func (c *Compiler) parseFunc(pkgName string, f *ssa.Function) error {
-	fmt.Println("func:", f.Name(), f.Blocks, "len:", len(f.Blocks))
-
+func (c *Compiler) parseFuncDecl(pkgName string, f *ssa.Function) error {
 	var fnType llvm.Type
 	if f.Signature.Results() == nil {
 		fnType = llvm.FunctionType(llvm.VoidType(), nil, false)
 	} else {
 		return errors.New("todo: return values")
 	}
+	llvm.AddFunction(c.mod, pkgName + "." + f.Name(), fnType)
+	return nil
+}
 
-	fn := llvm.AddFunction(c.mod, pkgName + "." + f.Name(), fnType)
+func (c *Compiler) parseFunc(pkgName string, f *ssa.Function) error {
+	fmt.Println("func:", f.Name(), f.Blocks, "len:", len(f.Blocks))
+
+	fn := c.mod.NamedFunction(pkgName + "." + f.Name())
 	start := c.ctx.AddBasicBlock(fn, "start")
 	c.builder.SetInsertPointAtEnd(start)
 
@@ -188,7 +207,7 @@ func (c *Compiler) parseBuiltin(instr *ssa.CallCommon, call *ssa.Builtin) error 
 }
 
 func (c *Compiler) parseFunctionCall(pkgName string, instr *ssa.CallCommon, call *ssa.Function) error {
-	fmt.Printf("    function: %#v\n", call)
+	fmt.Printf("    function: %s\n", call)
 
 	name := call.Name()
 	if strings.IndexByte(name, '.') == -1 {
