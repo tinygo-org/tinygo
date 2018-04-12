@@ -30,6 +30,7 @@ type Compiler struct {
 	stringType      llvm.Type
 	stringPtrType   llvm.Type
 	printstringFunc llvm.Value
+	printintFunc    llvm.Value
 	printspaceFunc  llvm.Value
 	printnlFunc     llvm.Value
 }
@@ -53,6 +54,8 @@ func NewCompiler(path, triple string) (*Compiler, error) {
 
 	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.stringPtrType}, false)
 	c.printstringFunc = llvm.AddFunction(c.mod, "__go_printstring", printstringType)
+	printintType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.Int32Type()}, false)
+	c.printintFunc = llvm.AddFunction(c.mod, "__go_printint", printintType)
 	printspaceType := llvm.FunctionType(llvm.VoidType(), nil, false)
 	c.printspaceFunc = llvm.AddFunction(c.mod, "__go_printspace", printspaceType)
 	printnlType := llvm.FunctionType(llvm.VoidType(), nil, false)
@@ -179,6 +182,10 @@ func (c *Compiler) parseExpr(expr ast.Expr) error {
 					ptr.SetLinkage(llvm.InternalLinkage)
 					ptrCast := llvm.ConstPointerCast(ptr, c.stringPtrType)
 					c.builder.CreateCall(c.printstringFunc, []llvm.Value{ptrCast}, "")
+				case token.INT:
+					n, _ := constant.Int64Val(val) // TODO: do something with the 'exact' return value?
+					val := llvm.ConstInt(llvm.Int32Type(), uint64(n), true)
+					c.builder.CreateCall(c.printintFunc, []llvm.Value{val}, "")
 				default:
 					return errors.New("todo: print anything other than strings")
 				}
