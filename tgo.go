@@ -45,7 +45,7 @@ type Frame struct {
 	pkgName string
 	name    string                   // full name, including package
 	params  map[*ssa.Parameter]int   // arguments to the function
-	values  map[ssa.Value]llvm.Value // local variables
+	locals  map[ssa.Value]llvm.Value // local variables
 }
 
 func NewCompiler(path, triple string) (*Compiler, error) {
@@ -148,7 +148,7 @@ func (c *Compiler) parseFuncDecl(pkgName string, f *ssa.Function) (*Frame, error
 		pkgName: pkgName,
 		name:    name,
 		params:  make(map[*ssa.Parameter]int),
-		values:  make(map[ssa.Value]llvm.Value),
+		locals:  make(map[ssa.Value]llvm.Value),
 	}
 
 	var retType llvm.Type
@@ -220,8 +220,9 @@ func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
 
 func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 	switch instr := instr.(type) {
-	case *ssa.Call:
-		_, err := c.parseCall(frame, instr)
+	case ssa.Value:
+		value, err := c.parseExpr(frame, instr)
+		frame.locals[instr] = value
 		return err
 	case *ssa.Return:
 		if len(instr.Results) == 0 {
@@ -237,9 +238,6 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		} else {
 			return errors.New("todo: return value")
 		}
-	case ssa.Value:
-		_, err := c.parseExpr(frame, instr)
-		return err
 	default:
 		return errors.New("unknown instruction: " + fmt.Sprintf("%#v", instr))
 	}
@@ -337,6 +335,13 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 
 func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	fmt.Printf("      expr: %v\n", expr)
+
+	if value, ok := frame.locals[expr]; ok {
+		// Value is a local variable that has already been computed.
+		fmt.Println("        from local var")
+		return value, nil
+	}
+
 	switch expr := expr.(type) {
 	case *ssa.Const:
 		switch expr.Value.Kind() {
