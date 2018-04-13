@@ -199,8 +199,6 @@ func (c *Compiler) parseFuncDecl(pkgName string, f *ssa.Function) (*Frame, error
 }
 
 func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
-	fmt.Println("func:", f.Name())
-
 	llvmFn := c.mod.NamedFunction(frame.name)
 	start := c.ctx.AddBasicBlock(llvmFn, "start")
 	c.builder.SetInsertPointAtEnd(start)
@@ -324,12 +322,32 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 		return llvm.Value{}, err
 	}
 	switch binop.Op {
-	case token.ADD:
-		return c.builder.CreateBinOp(llvm.Add, x, y, ""), nil
-	case token.MUL:
-		return c.builder.CreateBinOp(llvm.Mul, x, y, ""), nil
+	case token.ADD: // +
+		return c.builder.CreateAdd(x, y, ""), nil
+	case token.SUB: // -
+		return c.builder.CreateSub(x, y, ""), nil
+	case token.MUL: // *
+		return c.builder.CreateMul(x, y, ""), nil
+	case token.QUO: // /
+		return c.builder.CreateSDiv(x, y, ""), nil // TODO: UDiv (unsigned)
+	case token.REM: // %
+		return c.builder.CreateSRem(x, y, ""), nil // TODO: URem (unsigned)
+	case token.AND: // &
+		return c.builder.CreateAnd(x, y, ""), nil
+	case token.OR:  // |
+		return c.builder.CreateOr(x, y, ""), nil
+	case token.XOR: // ^
+		return c.builder.CreateXor(x, y, ""), nil
+	case token.SHL: // <<
+		return c.builder.CreateShl(x, y, ""), nil
+	case token.SHR: // >>
+		return c.builder.CreateAShr(x, y, ""), nil // TODO: LShr (unsigned)
+	case token.AND_NOT: // &^
+		// Go specific. Calculate "and not" with x & (~y)
+		inv := c.builder.CreateNot(y, "") // ~y
+		return c.builder.CreateAnd(x, inv, ""), nil
 	default:
-		return llvm.Value{}, errors.New("todo: unknown binop")
+		return llvm.Value{}, errors.New("todo: unknown binop: " + fmt.Sprintf("%#v", binop))
 	}
 }
 
