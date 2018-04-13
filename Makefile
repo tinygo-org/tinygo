@@ -1,11 +1,12 @@
 
+# aliases
 all: tgo
 tgo: build/tgo
 test: build/hello.o
 
-CFLAGS = -Wall -Werror -O2 -g -flto
-
 .PHONY: all tgo test run-test clean
+
+CFLAGS = -Wall -Werror -O2 -g -flto
 
 build/tgo: *.go
 	@mkdir -p build
