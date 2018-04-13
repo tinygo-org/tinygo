@@ -346,8 +346,20 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 		// Go specific. Calculate "and not" with x & (~y)
 		inv := c.builder.CreateNot(y, "") // ~y
 		return c.builder.CreateAnd(x, inv, ""), nil
+	case token.EQL: // ==
+		return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+	case token.NEQ: // !=
+		return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+	case token.LSS: // <
+		return c.builder.CreateICmp(llvm.IntSLT, x, y, ""), nil // TODO: ULT
+	case token.LEQ: // <=
+		return c.builder.CreateICmp(llvm.IntSLE, x, y, ""), nil // TODO: ULE
+	case token.GTR: // >
+		return c.builder.CreateICmp(llvm.IntSGT, x, y, ""), nil // TODO: UGT
+	case token.GEQ: // >=
+		return c.builder.CreateICmp(llvm.IntSGE, x, y, ""), nil // TODO: UGE
 	default:
-		return llvm.Value{}, errors.New("todo: unknown binop: " + fmt.Sprintf("%#v", binop))
+		return llvm.Value{}, errors.New("unknown binop")
 	}
 }
 
