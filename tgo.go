@@ -46,6 +46,7 @@ type Frame struct {
 	name    string                   // full name, including package
 	params  map[*ssa.Parameter]int   // arguments to the function
 	locals  map[ssa.Value]llvm.Value // local variables
+	blocks  map[*ssa.BasicBlock]llvm.BasicBlock
 }
 
 func NewCompiler(path, triple string) (*Compiler, error) {
@@ -149,6 +150,7 @@ func (c *Compiler) parseFuncDecl(pkgName string, f *ssa.Function) (*Frame, error
 		name:    name,
 		params:  make(map[*ssa.Parameter]int),
 		locals:  make(map[ssa.Value]llvm.Value),
+		blocks:  make(map[*ssa.BasicBlock]llvm.BasicBlock),
 	}
 
 	var retType llvm.Type
@@ -199,12 +201,18 @@ func (c *Compiler) parseFuncDecl(pkgName string, f *ssa.Function) (*Frame, error
 }
 
 func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
-	llvmFn := c.mod.NamedFunction(frame.name)
-	start := c.ctx.AddBasicBlock(llvmFn, "start")
-	c.builder.SetInsertPointAtEnd(start)
-
 	// TODO: external functions
+
+	// Pre-create all basic blocks in the function.
+	llvmFn := c.mod.NamedFunction(frame.name)
 	for _, block := range f.Blocks {
+		llvmBlock := c.ctx.AddBasicBlock(llvmFn, "block")
+		frame.blocks[block] = llvmBlock
+	}
+
+	// Fill those blocks with instructions.
+	for _, block := range f.Blocks {
+		c.builder.SetInsertPointAtEnd(frame.blocks[block])
 		for _, instr := range block.Instrs {
 			fmt.Printf("  instr: %v\n", instr)
 			err := c.parseInstr(frame, instr)
@@ -222,6 +230,16 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		value, err := c.parseExpr(frame, instr)
 		frame.locals[instr] = value
 		return err
+	case *ssa.If:
+		cond, err := c.parseExpr(frame, instr.Cond)
+		if err != nil {
+			return err
+		}
+		block := instr.Block()
+		blockThen := frame.blocks[block.Succs[0]]
+		blockElse := frame.blocks[block.Succs[1]]
+		c.builder.CreateCondBr(cond, blockThen, blockElse)
+		return nil
 	case *ssa.Return:
 		if len(instr.Results) == 0 {
 			c.builder.CreateRetVoid()

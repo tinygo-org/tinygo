@@ -8,6 +8,7 @@ func main() {
 	println("The answer is:", calculateAnswer())
 	println("5 ** 2 =", square(5))
 	println("3 + 12 =", add(3, 12))
+	println("fib(11) =", fib(11))
 }
 
 func calculateAnswer() int {
@@ -21,4 +22,12 @@ func square(n int) int {
 
 func add(a, b int) int {
 	return a + b
+}
+
+func fib(n int) int {
+	if n <= 2 {
+		return 1
+	}
+	ret := fib(n - 1) + fib(n - 2)
+	return ret
 }
