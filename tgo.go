@@ -424,16 +424,16 @@ func Compile(inpath, outpath, target string, printIR bool) error {
 		return err
 	}
 
+	if printIR {
+		fmt.Println(c.IR())
+	}
+
 	if err := c.Verify(); err != nil {
 		return err
 	}
 	c.Optimize(2)
 	if err := c.Verify(); err != nil {
 		return err
-	}
-
-	if printIR {
-		fmt.Println(c.IR())
 	}
 
 	err = c.EmitObject(outpath)
