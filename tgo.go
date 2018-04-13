@@ -229,7 +229,7 @@ func (c *Compiler) parseInstr(pkgName string, instr ssa.Instruction) error {
 			if err != nil {
 				return err
 			}
-			c.builder.CreateRet(*val)
+			c.builder.CreateRet(val)
 			return nil
 		} else {
 			return errors.New("todo: return value")
@@ -242,7 +242,7 @@ func (c *Compiler) parseInstr(pkgName string, instr ssa.Instruction) error {
 	}
 }
 
-func (c *Compiler) parseBuiltin(pkgName string, instr *ssa.CallCommon, call *ssa.Builtin) (*llvm.Value, error) {
+func (c *Compiler) parseBuiltin(pkgName string, instr *ssa.CallCommon, call *ssa.Builtin) (llvm.Value, error) {
 	fmt.Printf("    builtin: %#v\n", call)
 	name := call.Name()
 
@@ -255,27 +255,27 @@ func (c *Compiler) parseBuiltin(pkgName string, instr *ssa.CallCommon, call *ssa
 			fmt.Printf("    arg: %s\n", arg);
 			expr, err := c.parseExpr(pkgName, arg)
 			if err != nil {
-				return nil, err
+				return llvm.Value{}, err
 			}
 			switch expr.Type() {
 			case c.stringPtrType:
-				c.builder.CreateCall(c.printstringFunc, []llvm.Value{*expr}, "")
+				c.builder.CreateCall(c.printstringFunc, []llvm.Value{expr}, "")
 			case c.intType:
-				c.builder.CreateCall(c.printintFunc, []llvm.Value{*expr}, "")
+				c.builder.CreateCall(c.printintFunc, []llvm.Value{expr}, "")
 			default:
-				return nil, errors.New("unknown arg type")
+				return llvm.Value{}, errors.New("unknown arg type")
 			}
 		}
 		if name == "println" {
 			c.builder.CreateCall(c.printnlFunc, nil, "")
 		}
-		return nil, nil // print() or println() returns void
+		return llvm.Value{}, nil // print() or println() returns void
 	default:
-		return nil, errors.New("todo: builtin: " + name)
+		return llvm.Value{}, errors.New("todo: builtin: " + name)
 	}
 }
 
-func (c *Compiler) parseFunctionCall(pkgName string, call *ssa.CallCommon, fn *ssa.Function) (*llvm.Value, error) {
+func (c *Compiler) parseFunctionCall(pkgName string, call *ssa.CallCommon, fn *ssa.Function) (llvm.Value, error) {
 	fmt.Printf("    function: %s\n", fn)
 
 	name := fn.Name()
@@ -285,23 +285,22 @@ func (c *Compiler) parseFunctionCall(pkgName string, call *ssa.CallCommon, fn *s
 	}
 	target := c.mod.NamedFunction(name)
 	if target.IsNil() {
-		return nil, errors.New("undefined function: " + name)
+		return llvm.Value{}, errors.New("undefined function: " + name)
 	}
 
 	var params []llvm.Value
 	for _, param := range call.Args {
 		val, err := c.parseExpr(pkgName, param)
 		if err != nil {
-			return nil, err
+			return llvm.Value{}, err
 		}
-		params = append(params, *val)
+		params = append(params, val)
 	}
 
-	val := c.builder.CreateCall(target, params, "")
-	return &val, nil
+	return c.builder.CreateCall(target, params, ""), nil
 }
 
-func (c *Compiler) parseCall(pkgName string, instr *ssa.Call) (*llvm.Value, error) {
+func (c *Compiler) parseCall(pkgName string, instr *ssa.Call) (llvm.Value, error) {
 	fmt.Printf("    call: %s\n", instr)
 
 	switch call := instr.Common().Value.(type) {
@@ -310,32 +309,30 @@ func (c *Compiler) parseCall(pkgName string, instr *ssa.Call) (*llvm.Value, erro
 	case *ssa.Function:
 		return c.parseFunctionCall(pkgName, instr.Common(), call)
 	default:
-		return nil, errors.New("todo: unknown call type: " + fmt.Sprintf("%#v", call))
+		return llvm.Value{}, errors.New("todo: unknown call type: " + fmt.Sprintf("%#v", call))
 	}
 }
 
-func (c *Compiler) parseBinOp(pkgName string, binop *ssa.BinOp) (*llvm.Value, error) {
+func (c *Compiler) parseBinOp(pkgName string, binop *ssa.BinOp) (llvm.Value, error) {
 	x, err := c.parseExpr(pkgName, binop.X)
 	if err != nil {
-		return nil, err
+		return llvm.Value{}, err
 	}
 	y, err := c.parseExpr(pkgName, binop.Y)
 	if err != nil {
-		return nil, err
+		return llvm.Value{}, err
 	}
 	switch binop.Op {
 	case token.ADD:
-		val := c.builder.CreateBinOp(llvm.Add, *x, *y, "")
-		return &val, nil
+		return c.builder.CreateBinOp(llvm.Add, x, y, ""), nil
 	case token.MUL:
-		val := c.builder.CreateBinOp(llvm.Mul, *x, *y, "")
-		return &val, nil
+		return c.builder.CreateBinOp(llvm.Mul, x, y, ""), nil
 	default:
-		return nil, errors.New("todo: unknown binop")
+		return llvm.Value{}, errors.New("todo: unknown binop")
 	}
 }
 
-func (c *Compiler) parseExpr(pkgName string, expr ssa.Value) (*llvm.Value, error) {
+func (c *Compiler) parseExpr(pkgName string, expr ssa.Value) (llvm.Value, error) {
 	fmt.Printf("      expr: %v\n", expr)
 	switch expr := expr.(type) {
 	case *ssa.Const:
@@ -348,14 +345,12 @@ func (c *Compiler) parseExpr(pkgName string, expr ssa.Value) (*llvm.Value, error
 			ptr := llvm.AddGlobal(c.mod, strObj.Type(), ".str")
 			ptr.SetInitializer(strObj)
 			ptr.SetLinkage(llvm.InternalLinkage)
-			ptrCast := llvm.ConstPointerCast(ptr, c.stringPtrType)
-			return &ptrCast, nil
+			return llvm.ConstPointerCast(ptr, c.stringPtrType), nil
 		case constant.Int:
 			n, _ := constant.Int64Val(expr.Value) // TODO: do something with the 'exact' return value?
-			val := llvm.ConstInt(c.intType, uint64(n), true)
-			return &val, nil
+			return llvm.ConstInt(c.intType, uint64(n), true), nil
 		default:
-			return nil, errors.New("todo: unknown constant")
+			return llvm.Value{}, errors.New("todo: unknown constant")
 		}
 	case *ssa.BinOp:
 		return c.parseBinOp(pkgName, expr)
@@ -364,10 +359,9 @@ func (c *Compiler) parseExpr(pkgName string, expr ssa.Value) (*llvm.Value, error
 	case *ssa.Parameter:
 		fn := c.funcs[expr.Parent()]
 		llvmFn := c.mod.NamedFunction(fn.name)
-		param := llvmFn.Param(fn.params[expr])
-		return &param, nil
+		return llvmFn.Param(fn.params[expr]), nil
 	default:
-		return nil, errors.New("todo: unknown expression: " + fmt.Sprintf("%#v", expr))
+		return llvm.Value{}, errors.New("todo: unknown expression: " + fmt.Sprintf("%#v", expr))
 	}
 }
 
