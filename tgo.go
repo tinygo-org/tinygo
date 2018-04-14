@@ -47,6 +47,12 @@ type Frame struct {
 	params  map[*ssa.Parameter]int   // arguments to the function
 	locals  map[ssa.Value]llvm.Value // local variables
 	blocks  map[*ssa.BasicBlock]llvm.BasicBlock
+	phis    []Phi
+}
+
+type Phi struct {
+	ssa  *ssa.Phi
+	llvm llvm.Value
 }
 
 func NewCompiler(path, triple string) (*Compiler, error) {
@@ -143,6 +149,22 @@ func (c *Compiler) Parse(path string) error {
 	return nil
 }
 
+func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
+	switch typ := goType.(type) {
+	case *types.Basic:
+		switch typ.Kind() {
+		case types.Int:
+			return c.intType, nil
+		case types.Int32:
+			return llvm.Int32Type(), nil
+		default:
+			return llvm.Type{}, errors.New("todo: unknown basic type")
+		}
+	default:
+		return llvm.Type{}, errors.New("todo: unknown type")
+	}
+}
+
 func (c *Compiler) parseFuncDecl(pkgName string, f *ssa.Function) (*Frame, error) {
 	name := pkgName + "." + f.Name()
 	frame := &Frame{
@@ -157,19 +179,10 @@ func (c *Compiler) parseFuncDecl(pkgName string, f *ssa.Function) (*Frame, error
 	if f.Signature.Results() == nil {
 		retType = llvm.VoidType()
 	} else if f.Signature.Results().Len() == 1 {
-		result := f.Signature.Results().At(0)
-		switch typ := result.Type().(type) {
-		case *types.Basic:
-			switch typ.Kind() {
-			case types.Int:
-				retType = c.intType
-			case types.Int32:
-				retType = llvm.Int32Type()
-			default:
-				return nil, errors.New("todo: unknown basic return type")
-			}
-		default:
-			return nil, errors.New("todo: unknown return type")
+		var err error
+		retType, err = c.getLLVMType(f.Signature.Results().At(0).Type())
+		if err != nil {
+			return nil, err
 		}
 	} else {
 		return nil, errors.New("todo: return values")
@@ -205,13 +218,13 @@ func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
 
 	// Pre-create all basic blocks in the function.
 	llvmFn := c.mod.NamedFunction(frame.name)
-	for _, block := range f.Blocks {
-		llvmBlock := c.ctx.AddBasicBlock(llvmFn, "block")
+	for _, block := range f.DomPreorder() {
+		llvmBlock := c.ctx.AddBasicBlock(llvmFn, block.Comment)
 		frame.blocks[block] = llvmBlock
 	}
 
 	// Fill those blocks with instructions.
-	for _, block := range f.Blocks {
+	for _, block := range f.DomPreorder() {
 		c.builder.SetInsertPointAtEnd(frame.blocks[block])
 		for _, instr := range block.Instrs {
 			fmt.Printf("  instr: %v\n", instr)
@@ -221,6 +234,20 @@ func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
 			}
 		}
 	}
+
+	// Resolve phi nodes
+	for _, phi := range frame.phis {
+		block := phi.ssa.Block()
+		for i, edge := range phi.ssa.Edges {
+			llvmVal, err := c.parseExpr(frame, edge)
+			if err != nil {
+				return err
+			}
+			llvmBlock := frame.blocks[block.Preds[i]]
+			phi.llvm.AddIncoming([]llvm.Value{llvmVal}, []llvm.BasicBlock{llvmBlock})
+		}
+	}
+
 	return nil
 }
 
@@ -239,6 +266,10 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		blockThen := frame.blocks[block.Succs[0]]
 		blockElse := frame.blocks[block.Succs[1]]
 		c.builder.CreateCondBr(cond, blockThen, blockElse)
+		return nil
+	case *ssa.Jump:
+		blockJump := frame.blocks[instr.Block().Succs[0]]
+		c.builder.CreateBr(blockJump)
 		return nil
 	case *ssa.Return:
 		if len(instr.Results) == 0 {
@@ -415,6 +446,14 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	case *ssa.Parameter:
 		llvmFn := c.mod.NamedFunction(frame.name)
 		return llvmFn.Param(frame.params[expr]), nil
+	case *ssa.Phi:
+		t, err := c.getLLVMType(expr.Type())
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		phi := c.builder.CreatePHI(t, "")
+		frame.phis = append(frame.phis, Phi{expr, phi})
+		return phi, nil
 	default:
 		return llvm.Value{}, errors.New("todo: unknown expression: " + fmt.Sprintf("%#v", expr))
 	}
