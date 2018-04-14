@@ -6,8 +6,8 @@
 
 #define print(buf, len) write(STDOUT_FILENO, buf, len)
 
-void __go_printstring(string_t *str) {
-	write(STDOUT_FILENO, str->buf, str->len);
+void __go_printstring(string_t str) {
+	write(STDOUT_FILENO, str.buf, str.len);
 }
 
 void __go_printint(intgo_t n) {

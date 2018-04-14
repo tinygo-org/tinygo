@@ -34,7 +34,6 @@ type Compiler struct {
 	intType         llvm.Type
 	stringLenType   llvm.Type
 	stringType      llvm.Type
-	stringPtrType   llvm.Type
 	printstringFunc llvm.Value
 	printintFunc    llvm.Value
 	printspaceFunc  llvm.Value
@@ -73,10 +72,9 @@ func NewCompiler(path, triple string) (*Compiler, error) {
 	c.stringLenType = llvm.Int32Type()
 
 	// Length-prefixed string.
-	c.stringType = llvm.StructType([]llvm.Type{c.stringLenType, llvm.ArrayType(llvm.Int8Type(), 0)}, false)
-	c.stringPtrType = llvm.PointerType(c.stringType, 0)
+	c.stringType = llvm.StructType([]llvm.Type{c.stringLenType, llvm.PointerType(llvm.Int8Type(), 0)}, false)
 
-	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.stringPtrType}, false)
+	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.stringType}, false)
 	c.printstringFunc = llvm.AddFunction(c.mod, "__go_printstring", printstringType)
 	printintType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.intType}, false)
 	c.printintFunc = llvm.AddFunction(c.mod, "__go_printint", printintType)
@@ -306,7 +304,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, instr *ssa.CallCommon, call *ssa.B
 				return llvm.Value{}, err
 			}
 			switch expr.Type() {
-			case c.stringPtrType:
+			case c.stringType:
 				c.builder.CreateCall(c.printstringFunc, []llvm.Value{expr}, "")
 			case c.intType:
 				c.builder.CreateCall(c.printintFunc, []llvm.Value{expr}, "")
@@ -426,13 +424,10 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		switch expr.Value.Kind() {
 		case constant.String:
 			str := constant.StringVal(expr.Value)
-			strVal := c.ctx.ConstString(str, false)
 			strLen := llvm.ConstInt(c.stringLenType, uint64(len(str)), false)
-			strObj := llvm.ConstStruct([]llvm.Value{strLen, strVal}, false)
-			ptr := llvm.AddGlobal(c.mod, strObj.Type(), ".str")
-			ptr.SetInitializer(strObj)
-			ptr.SetLinkage(llvm.InternalLinkage)
-			return llvm.ConstPointerCast(ptr, c.stringPtrType), nil
+			strPtr := c.builder.CreateGlobalStringPtr(str, ".str")
+			strObj := llvm.ConstStruct([]llvm.Value{strLen, strPtr}, false)
+			return strObj, nil
 		case constant.Int:
 			n, _ := constant.Int64Val(expr.Value) // TODO: do something with the 'exact' return value?
 			return llvm.ConstInt(c.intType, uint64(n), true), nil
