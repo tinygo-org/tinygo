@@ -465,7 +465,7 @@ func (c *Compiler) IR() string {
 }
 
 func (c *Compiler) Verify() error {
-	return llvm.VerifyModule(c.mod, llvm.PrintMessageAction)
+	return llvm.VerifyModule(c.mod, 0)
 }
 
 func (c *Compiler) Optimize(optLevel int) {
@@ -506,13 +506,12 @@ func Compile(inpath, outpath, target string, printIR bool) error {
 		return err
 	}
 
-	err = c.Parse(inpath)
-	if err != nil {
-		return err
-	}
-
+	parseErr := c.Parse(inpath)
 	if printIR {
 		fmt.Println(c.IR())
+	}
+	if parseErr != nil {
+		return parseErr
 	}
 
 	if err := c.Verify(); err != nil {
