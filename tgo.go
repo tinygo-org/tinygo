@@ -457,14 +457,16 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 	switch expr := expr.(type) {
 	case *ssa.Alloc:
-		if expr.Heap {
-			return llvm.Value{}, errors.New("todo: heap alloc")
-		}
 		typ, err := c.getLLVMType(expr.Type().Underlying().(*types.Pointer).Elem())
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return c.builder.CreateAlloca(typ, expr.Comment), nil
+		if expr.Heap {
+			// TODO: escape analysis
+			return c.builder.CreateMalloc(typ, expr.Comment), nil
+		} else {
+			return c.builder.CreateAlloca(typ, expr.Comment), nil
+		}
 	case *ssa.Const:
 		return c.parseConst(expr)
 	case *ssa.BinOp:
