@@ -4,10 +4,10 @@
 #include <stdio.h>
 #include "runtime.h"
 
-#define print(buf, len) write(STDOUT_FILENO, buf, len)
-
 void __go_printstring(string_t str) {
-	write(STDOUT_FILENO, str.buf, str.len);
+	for (int i = 0; i < str.len; i++) {
+		putchar(str.buf[i]);
+	}
 }
 
 void __go_printint(intgo_t n) {
@@ -16,23 +16,22 @@ void __go_printint(intgo_t n) {
 	// TODO: don't recurse, but still be compact (and don't divide/mod
 	// more than necessary).
 	if (n < 0) {
-		print("-", 1);
+		putchar('-');
 		n = -n;
 	}
 	intgo_t prevdigits = n / 10;
 	if (prevdigits != 0) {
 		__go_printint(prevdigits);
 	}
-	char buf[1] = {(n % 10) + '0'};
-	print(buf, 1);
+	putchar((n % 10) + '0');
 }
 
 void __go_printspace() {
-	print(" ", 1);
+	putchar(' ');
 }
 
 void __go_printnl() {
-	print("\n", 1);
+	putchar('\n');
 }
 
 void go_main() __asm__("main.main");
