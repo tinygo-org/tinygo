@@ -1,6 +1,10 @@
 
 package main
 
+type Thing struct {
+	name string
+}
+
 const SIX = 6
 
 func main() {
@@ -10,6 +14,9 @@ func main() {
 	println("3 + 12 =", add(3, 12))
 	println("fib(11) =", fib(11))
 	println("sumrange(100) =", sumrange(100))
+
+	thing := Thing{"foo"}
+	println("thing:", thing.name)
 }
 
 func calculateAnswer() int {

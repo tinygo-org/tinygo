@@ -173,6 +173,8 @@ func (c *Compiler) Parse(pkgName string) error {
 				if ast.IsExported(member.Name()) {
 					global.SetLinkage(llvm.PrivateLinkage)
 				}
+			case *ssa.Type:
+				// TODO
 			default:
 				return errors.New("todo: member: " + fmt.Sprintf("%#v", member))
 			}
@@ -199,6 +201,7 @@ func (c *Compiler) Parse(pkgName string) error {
 }
 
 func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
+	fmt.Println("        type:", goType)
 	switch typ := goType.(type) {
 	case *types.Basic:
 		switch typ.Kind() {
@@ -208,17 +211,31 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			return c.intType, nil
 		case types.Int32:
 			return llvm.Int32Type(), nil
+		case types.String:
+			return c.stringType, nil
 		case types.UnsafePointer:
 			return llvm.PointerType(llvm.Int8Type(), 0), nil
 		default:
 			return llvm.Type{}, errors.New("todo: unknown basic type: " + fmt.Sprintf("%#v", typ))
 		}
+	case *types.Named:
+		return c.getLLVMType(typ.Underlying())
 	case *types.Pointer:
 		ptrTo, err := c.getLLVMType(typ.Elem())
 		if err != nil {
 			return llvm.Type{}, err
 		}
 		return llvm.PointerType(ptrTo, 0), nil
+	case *types.Struct:
+		members := make([]llvm.Type, typ.NumFields())
+		for i := 0; i < typ.NumFields(); i++ {
+			member, err := c.getLLVMType(typ.Field(i).Type())
+			if err != nil {
+				return llvm.Type{}, err
+			}
+			members[i] = member
+		}
+		return llvm.StructType(members, false), nil
 	default:
 		return llvm.Type{}, errors.New("todo: unknown type: " + fmt.Sprintf("%#v", goType))
 	}
@@ -339,6 +356,17 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		} else {
 			return errors.New("todo: return value")
 		}
+	case *ssa.Store:
+		addr, err := c.parseExpr(frame, instr.Addr)
+		if err != nil {
+			return err
+		}
+		val, err := c.parseExpr(frame, instr.Val)
+		if err != nil {
+			return err
+		}
+		c.builder.CreateStore(val, addr)
+		return nil
 	default:
 		return errors.New("unknown instruction: " + fmt.Sprintf("%#v", instr))
 	}
@@ -355,17 +383,22 @@ func (c *Compiler) parseBuiltin(frame *Frame, instr *ssa.CallCommon, call *ssa.B
 				c.builder.CreateCall(c.printspaceFunc, nil, "")
 			}
 			fmt.Printf("    arg: %s\n", arg);
-			expr, err := c.parseExpr(frame, arg)
+			value, err := c.parseExpr(frame, arg)
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			switch expr.Type() {
-			case c.stringType:
-				c.builder.CreateCall(c.printstringFunc, []llvm.Value{expr}, "")
-			case c.intType:
-				c.builder.CreateCall(c.printintFunc, []llvm.Value{expr}, "")
+			switch typ := arg.Type().(type) {
+			case *types.Basic:
+				switch typ.Kind() {
+				case types.Int, types.Int32: // TODO: assumes a 32-bit int type
+					c.builder.CreateCall(c.printintFunc, []llvm.Value{value}, "")
+				case types.String:
+					c.builder.CreateCall(c.printstringFunc, []llvm.Value{value}, "")
+				default:
+					return llvm.Value{}, errors.New("unknown basic arg type: " + fmt.Sprintf("%#v", typ))
+				}
 			default:
-				return llvm.Value{}, errors.New("unknown arg type")
+				return llvm.Value{}, errors.New("unknown arg type: " + fmt.Sprintf("%#v", typ))
 			}
 		}
 		if name == "println" {
@@ -423,12 +456,31 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	}
 
 	switch expr := expr.(type) {
+	case *ssa.Alloc:
+		if expr.Heap {
+			return llvm.Value{}, errors.New("todo: heap alloc")
+		}
+		typ, err := c.getLLVMType(expr.Type().Underlying().(*types.Pointer).Elem())
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		return c.builder.CreateAlloca(typ, expr.Comment), nil
 	case *ssa.Const:
 		return c.parseConst(expr)
 	case *ssa.BinOp:
 		return c.parseBinOp(frame, expr)
 	case *ssa.Call:
 		return c.parseCall(frame, expr)
+	case *ssa.FieldAddr:
+		val, err := c.parseExpr(frame, expr.X)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		indices := []llvm.Value{
+			llvm.ConstInt(llvm.Int32Type(), 0, false),
+			llvm.ConstInt(llvm.Int32Type(), uint64(expr.Field), false),
+		}
+		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Global:
 		return c.mod.NamedGlobal(c.getPackageRelativeName(frame, expr.Name())), nil
 	case *ssa.Parameter:
@@ -522,8 +574,10 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 		return llvm.Value{}, err
 	}
 	switch unop.Op {
-	case token.NOT:
+	case token.NOT: // !
 		return c.builder.CreateNot(x, ""), nil
+	case token.MUL: // *ptr, dereference pointer
+		return c.builder.CreateLoad(x, ""), nil
 	default:
 		return llvm.Value{}, errors.New("todo: unknown unop")
 	}
