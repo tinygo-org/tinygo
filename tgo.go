@@ -174,7 +174,15 @@ func (c *Compiler) Parse(pkgName string) error {
 					global.SetLinkage(llvm.PrivateLinkage)
 				}
 			case *ssa.Type:
-				// TODO
+				ms := program.MethodSets.MethodSet(member.Type())
+				for i := 0; i < ms.Len(); i++ {
+					fn := program.MethodValue(ms.At(i))
+					frame, err := c.parseFuncDecl(pkgPrefix, fn)
+					if err != nil {
+						return err
+					}
+					frames[fn] = frame
+				}
 			default:
 				return errors.New("todo: member: " + fmt.Sprintf("%#v", member))
 			}
@@ -185,13 +193,23 @@ func (c *Compiler) Parse(pkgName string) error {
 			member := pkg.Members[name]
 			fmt.Println("member:", member.Token(), member)
 
-			if member, ok := member.(*ssa.Function); ok {
+			switch member := member.(type) {
+			case *ssa.Function:
 				if member.Blocks == nil {
 					continue // external function
 				}
 				err := c.parseFunc(frames[member], member)
 				if err != nil {
 					return err
+				}
+			case *ssa.Type:
+				ms := program.MethodSets.MethodSet(member.Type())
+				for i := 0; i < ms.Len(); i++ {
+					fn := program.MethodValue(ms.At(i))
+					err := c.parseFunc(frames[fn], fn)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -241,15 +259,19 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 	}
 }
 
-func (c *Compiler) getPackageRelativeName(frame *Frame, name string) string {
-	if strings.IndexByte(name, '.') == -1 {
-		name = frame.pkgPrefix + "." + name
+func (c *Compiler) getFunctionName(pkgPrefix string, fn *ssa.Function) string {
+	if fn.Signature.Recv() != nil {
+		// Method on a defined type.
+		typeName := fn.Params[0].Type().(*types.Named).Obj().Name()
+		return pkgPrefix + "." + typeName + "." + fn.Name()
+	} else {
+		// Bare function.
+		return pkgPrefix + "." + fn.Name()
 	}
-	return name
 }
 
 func (c *Compiler) parseFuncDecl(pkgPrefix string, f *ssa.Function) (*Frame, error) {
-	name := pkgPrefix + "." + f.Name()
+	name := c.getFunctionName(pkgPrefix, f)
 	frame := &Frame{
 		pkgPrefix: pkgPrefix,
 		name:      name,
@@ -413,7 +435,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, instr *ssa.CallCommon, call *ssa.B
 func (c *Compiler) parseFunctionCall(frame *Frame, call *ssa.CallCommon, fn *ssa.Function) (llvm.Value, error) {
 	fmt.Printf("    function: %s\n", fn)
 
-	name := c.getPackageRelativeName(frame, fn.Name())
+	name := c.getFunctionName(frame.pkgPrefix, fn)
 	target := c.mod.NamedFunction(name)
 	if target.IsNil() {
 		return llvm.Value{}, errors.New("undefined function: " + name)
@@ -484,7 +506,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Global:
-		return c.mod.NamedGlobal(c.getPackageRelativeName(frame, expr.Name())), nil
+		return c.mod.NamedGlobal(expr.Name()), nil
 	case *ssa.Parameter:
 		llvmFn := c.mod.NamedFunction(frame.name)
 		return llvmFn.Param(frame.params[expr]), nil
@@ -559,7 +581,7 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 	case constant.String:
 		str := constant.StringVal(expr.Value)
 		strLen := llvm.ConstInt(c.stringLenType, uint64(len(str)), false)
-		strPtr := c.builder.CreateGlobalStringPtr(str, ".str")
+		strPtr := c.builder.CreateGlobalStringPtr(str, ".str") // TODO: remove \0 at end
 		strObj := llvm.ConstStruct([]llvm.Value{strLen, strPtr}, false)
 		return strObj, nil
 	case constant.Int:

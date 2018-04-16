@@ -5,6 +5,10 @@ type Thing struct {
 	name string
 }
 
+func (t Thing) String() string {
+	return t.name
+}
+
 const SIX = 6
 
 func main() {
@@ -16,7 +20,7 @@ func main() {
 	println("sumrange(100) =", sumrange(100))
 
 	thing := Thing{"foo"}
-	println("thing:", thing.name)
+	println("thing:", thing.String())
 }
 
 func calculateAnswer() int {
