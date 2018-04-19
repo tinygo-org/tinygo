@@ -22,10 +22,23 @@ func main() {
 
 	thing := Thing{"foo"}
 	println("thing:", thing.String())
+	printItf(5)
+	printItf(byte('x'))
 }
 
 func strlen(s string) int {
 	return len(s)
+}
+
+func printItf(val interface{}) {
+	switch val := val.(type) {
+	case int:
+		println("is int:", val)
+	case byte:
+		println("is byte:", val)
+	default:
+		println("is ?")
+	}
 }
 
 func calculateAnswer() int {

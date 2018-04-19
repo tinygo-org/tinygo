@@ -26,6 +26,10 @@ void __go_printint(intgo_t n) {
 	putchar((n % 10) + '0');
 }
 
+void __go_printbyte(uint8_t c) {
+	putchar(c);
+}
+
 void __go_printspace() {
 	putchar(' ');
 }
