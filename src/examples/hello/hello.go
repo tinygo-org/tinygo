@@ -18,9 +18,14 @@ func main() {
 	println("3 + 12 =", add(3, 12))
 	println("fib(11) =", fib(11))
 	println("sumrange(100) =", sumrange(100))
+	println("strlen foo:", strlen("foo"))
 
 	thing := Thing{"foo"}
 	println("thing:", thing.String())
+}
+
+func strlen(s string) int {
+	return len(s)
 }
 
 func calculateAnswer() int {

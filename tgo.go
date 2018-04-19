@@ -76,7 +76,7 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	c.intType = llvm.Int32Type()
 	c.stringLenType = llvm.Int32Type()
 
-	// Length-prefixed string.
+	// Go string: tuple of (len, ptr)
 	c.stringType = llvm.StructType([]llvm.Type{c.stringLenType, llvm.PointerType(llvm.Int8Type(), 0)}, false)
 
 	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.stringType}, false)
@@ -427,6 +427,23 @@ func (c *Compiler) parseBuiltin(frame *Frame, instr *ssa.CallCommon, call *ssa.B
 			c.builder.CreateCall(c.printnlFunc, nil, "")
 		}
 		return llvm.Value{}, nil // print() or println() returns void
+	case "len":
+		arg := instr.Args[0]
+		value, err := c.parseExpr(frame, arg)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		switch typ := arg.Type().(type) {
+		case *types.Basic:
+			switch typ.Kind() {
+			case types.String:
+				return c.builder.CreateExtractValue(value, 0, "len"), nil
+			default:
+				return llvm.Value{}, errors.New("todo: len: unknown basic type")
+			}
+		default:
+			return llvm.Value{}, errors.New("todo: len: unknown type")
+		}
 	default:
 		return llvm.Value{}, errors.New("todo: builtin: " + name)
 	}
