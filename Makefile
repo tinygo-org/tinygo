@@ -12,7 +12,7 @@ build/tgo: *.go
 	@mkdir -p build
 	@go build -o build/tgo -i .
 
-build/hello.o: build/tgo src/examples/hello/*.go
+build/hello.o: build/tgo src/examples/hello/*.go src/runtime/*.go
 	@./build/tgo -printir -o build/hello.o examples/hello
 
 build/runtime.o: src/runtime/*.c src/runtime/*.h

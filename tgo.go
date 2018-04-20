@@ -97,15 +97,15 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	c.typeassertType = llvm.StructType([]llvm.Type{llvm.PointerType(llvm.Int8Type(), 0), llvm.Int1Type()}, false)
 
 	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.stringType}, false)
-	c.printstringFunc = llvm.AddFunction(c.mod, "__go_printstring", printstringType)
+	c.printstringFunc = llvm.AddFunction(c.mod, "runtime.printstring", printstringType)
 	printintType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.intType}, false)
-	c.printintFunc = llvm.AddFunction(c.mod, "__go_printint", printintType)
+	c.printintFunc = llvm.AddFunction(c.mod, "runtime.printint", printintType)
 	printbyteType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.Int8Type()}, false)
-	c.printbyteFunc = llvm.AddFunction(c.mod, "__go_printbyte", printbyteType)
+	c.printbyteFunc = llvm.AddFunction(c.mod, "runtime.printbyte", printbyteType)
 	printspaceType := llvm.FunctionType(llvm.VoidType(), nil, false)
-	c.printspaceFunc = llvm.AddFunction(c.mod, "__go_printspace", printspaceType)
+	c.printspaceFunc = llvm.AddFunction(c.mod, "runtime.printspace", printspaceType)
 	printnlType := llvm.FunctionType(llvm.VoidType(), nil, false)
-	c.printnlFunc = llvm.AddFunction(c.mod, "__go_printnl", printnlType)
+	c.printnlFunc = llvm.AddFunction(c.mod, "runtime.printnl", printnlType)
 
 	return c, nil
 }
@@ -126,6 +126,7 @@ func (c *Compiler) Parse(pkgName string) error {
 		},
 		AllowErrors: true,
 	}
+	config.Import("runtime")
 	config.Import(pkgName)
 	lprogram, err := config.Load()
 	if err != nil {
