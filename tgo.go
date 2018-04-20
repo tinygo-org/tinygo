@@ -539,6 +539,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return c.parseCall(frame, expr)
 	case *ssa.Const:
 		return c.parseConst(expr)
+	case *ssa.Convert:
+		return c.parseConvert(frame, expr)
 	case *ssa.Extract:
 		value, err := c.parseExpr(frame, expr.Tuple)
 		if err != nil {
@@ -694,6 +696,42 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 		}
 	default:
 		return llvm.Value{}, errors.New("todo: unknown constant")
+	}
+}
+
+func (c *Compiler) parseConvert(frame *Frame, expr *ssa.Convert) (llvm.Value, error) {
+	value, err := c.parseExpr(frame, expr.X)
+	if err != nil {
+		return value, nil
+	}
+
+	typeFrom, err := c.getLLVMType(expr.X.Type())
+	if err != nil {
+		return llvm.Value{}, err
+	}
+	typeTo, err := c.getLLVMType(expr.Type())
+	if err != nil {
+		return llvm.Value{}, err
+	}
+	sizeFrom := typeFrom.IntTypeWidth()
+	sizeTo := typeTo.IntTypeWidth()
+
+	if sizeFrom >= sizeTo {
+		return c.builder.CreateTruncOrBitCast(value, typeTo, ""), nil
+	} else { // sizeFrom < sizeTo: extend
+		switch typ := expr.X.Type().(type) { // typeFrom
+		case *types.Basic:
+			if typ.Info() & types.IsInteger == 0 { // if not integer
+				return llvm.Value{}, errors.New("todo: convert: extend non-integer type")
+			}
+			if typ.Info() & types.IsUnsigned != 0 { // if unsigned
+				return c.builder.CreateZExt(value, typeTo, ""), nil
+			} else {
+				return c.builder.CreateSExt(value, typeTo, ""), nil
+			}
+		default:
+			return llvm.Value{}, errors.New("todo: convert: extend non-basic type")
+		}
 	}
 }
 
