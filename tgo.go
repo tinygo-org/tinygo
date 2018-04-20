@@ -286,26 +286,6 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 	}
 }
 
-func (c *Compiler) getTypeWidth(typ types.Type) (int, error) {
-	switch typ := typ.(type) {
-	case *types.Basic:
-		if typ.Kind() == types.UnsafePointer {
-			return c.targetData.PointerSize(), nil
-		}
-		llvmType, err := c.getLLVMType(typ)
-		if err != nil {
-			return 0, err
-		}
-		return llvmType.IntTypeWidth(), nil
-	case *types.Named:
-		return c.getTypeWidth(typ.Underlying())
-	case *types.Pointer:
-		return c.targetData.PointerSize(), nil
-	default:
-		return 0, errors.New("todo: type width")
-	}
-}
-
 func (c *Compiler) getInterfaceType(typ types.Type) llvm.Value {
 	if _, ok := c.itfTypeNumbers[typ]; !ok {
 		num := uint64(len(c.itfTypes))
@@ -831,18 +811,16 @@ func (c *Compiler) parseConvert(frame *Frame, expr *ssa.Convert) (llvm.Value, er
 		return value, nil
 	}
 
-	sizeFrom, err := c.getTypeWidth(expr.X.Type())
+	typeFrom, err := c.getLLVMType(expr.X.Type())
 	if err != nil {
 		return llvm.Value{}, err
 	}
+	sizeFrom := c.targetData.TypeAllocSize(typeFrom)
 	typeTo, err := c.getLLVMType(expr.Type())
 	if err != nil {
 		return llvm.Value{}, err
 	}
-	sizeTo, err := c.getTypeWidth(expr.Type())
-	if err != nil {
-		return llvm.Value{}, err
-	}
+	sizeTo := c.targetData.TypeAllocSize(typeTo)
 
 	if sizeFrom > sizeTo {
 		return c.builder.CreateTrunc(value, typeTo, ""), nil
