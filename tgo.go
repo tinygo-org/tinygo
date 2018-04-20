@@ -54,7 +54,7 @@ type Compiler struct {
 
 type Frame struct {
 	pkgPrefix string
-	name      string                   // full name, including package
+	llvmFn    llvm.Value
 	params    map[*ssa.Parameter]int   // arguments to the function
 	locals    map[ssa.Value]llvm.Value // local variables
 	blocks    map[*ssa.BasicBlock]llvm.BasicBlock
@@ -336,7 +336,6 @@ func (c *Compiler) parseFuncDecl(pkgPrefix string, f *ssa.Function) (*Frame, err
 
 	frame := &Frame{
 		pkgPrefix: pkgPrefix,
-		name:      name,
 		params:    make(map[*ssa.Parameter]int),
 		locals:    make(map[ssa.Value]llvm.Value),
 		blocks:    make(map[*ssa.BasicBlock]llvm.BasicBlock),
@@ -366,21 +365,24 @@ func (c *Compiler) parseFuncDecl(pkgPrefix string, f *ssa.Function) (*Frame, err
 	}
 
 	fnType := llvm.FunctionType(retType, paramTypes, false)
-	llvm.AddFunction(c.mod, name, fnType)
+
+	frame.llvmFn = c.mod.NamedFunction(name)
+	if frame.llvmFn.IsNil() {
+		frame.llvmFn = llvm.AddFunction(c.mod, name, fnType)
+	}
 	return frame, nil
 }
 
 func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
 	// Pre-create all basic blocks in the function.
-	llvmFn := c.mod.NamedFunction(frame.name)
 	for _, block := range f.DomPreorder() {
-		llvmBlock := c.ctx.AddBasicBlock(llvmFn, block.Comment)
+		llvmBlock := c.ctx.AddBasicBlock(frame.llvmFn, block.Comment)
 		frame.blocks[block] = llvmBlock
 	}
 
 	// Load function parameters
 	for _, param := range f.Params {
-		llvmParam := llvmFn.Param(frame.params[param])
+		llvmParam := frame.llvmFn.Param(frame.params[param])
 		frame.locals[param] = llvmParam
 	}
 
