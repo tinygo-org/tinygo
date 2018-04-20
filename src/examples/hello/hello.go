@@ -24,6 +24,7 @@ func main() {
 	println("thing:", thing.String())
 	printItf(5)
 	printItf(byte('x'))
+	printItf("foo")
 }
 
 func strlen(s string) int {
@@ -36,6 +37,8 @@ func printItf(val interface{}) {
 		println("is int:", val)
 	case byte:
 		println("is byte:", val)
+	case string:
+		println("is string:", val)
 	default:
 		println("is ?")
 	}

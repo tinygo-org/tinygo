@@ -654,8 +654,14 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		var itfValue llvm.Value
 		switch typ := expr.X.Type().(type) {
 		case *types.Basic:
+			itfValueType := llvm.PointerType(llvm.Int8Type(), 0)
 			if typ.Info() & types.IsInteger != 0 {
-				itfValue = c.builder.CreateIntToPtr(val, llvm.PointerType(llvm.Int8Type(), 0), "")
+				itfValue = c.builder.CreateIntToPtr(val, itfValueType, "")
+			} else if typ.Kind() == types.String {
+				// TODO: escape analysis
+				itfValue = c.builder.CreateMalloc(c.stringType, "")
+				c.builder.CreateStore(val, itfValue)
+				itfValue = c.builder.CreateBitCast(itfValue, itfValueType, "")
 			} else {
 				return llvm.Value{}, errors.New("todo: make interface: unknown basic type")
 			}
@@ -689,7 +695,20 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		assertedTypeNum := c.getInterfaceType(expr.AssertedType)
 		actualTypeNum := c.builder.CreateExtractValue(itf, 0, "interface.type")
 		valuePtr := c.builder.CreateExtractValue(itf, 1, "interface.value")
-		value := c.builder.CreatePtrToInt(valuePtr, assertedType, "")
+		var value llvm.Value
+		switch typ := expr.AssertedType.(type) {
+		case *types.Basic:
+			if typ.Info() & types.IsInteger != 0 {
+				value = c.builder.CreatePtrToInt(valuePtr, assertedType, "")
+			} else if typ.Kind() == types.String {
+				valueStringPtr := c.builder.CreateBitCast(valuePtr, llvm.PointerType(c.stringType, 0), "")
+				value = c.builder.CreateLoad(valueStringPtr, "")
+			} else {
+				return llvm.Value{}, errors.New("todo: typeassert: unknown basic type")
+			}
+		default:
+			return llvm.Value{}, errors.New("todo: typeassert: unknown type")
+		}
 		commaOk := c.builder.CreateICmp(llvm.IntEQ, assertedTypeNum, actualTypeNum, "")
 		tuple := llvm.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(llvm.Int1Type())}, false) // create empty tuple
 		tuple = c.builder.CreateInsertValue(tuple, value, 0, "") // insert value
