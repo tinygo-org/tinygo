@@ -780,6 +780,8 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 	switch unop.Op {
 	case token.NOT: // !
 		return c.builder.CreateNot(x, ""), nil
+	case token.SUB: // -num
+		return c.builder.CreateSub(llvm.ConstInt(x.Type(), 0, false), x, ""), nil
 	case token.MUL: // *ptr, dereference pointer
 		return c.builder.CreateLoad(x, ""), nil
 	default:
