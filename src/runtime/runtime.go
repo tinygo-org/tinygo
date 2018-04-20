@@ -57,7 +57,7 @@ func _panic(message interface{}) {
 	C.exit(1)
 }
 
-func boundsCheck(s string, outOfRange bool) {
+func boundsCheck(outOfRange bool) {
 	if outOfRange {
 		// printstring() here is safe as this function is excluded from bounds
 		// checking.

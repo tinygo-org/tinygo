@@ -102,7 +102,7 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	panicType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.interfaceType}, false)
 	c.panicFunc = llvm.AddFunction(c.mod, "runtime._panic", panicType)
 
-	boundsCheckType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.stringType, llvm.Int1Type()}, false)
+	boundsCheckType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.Int1Type()}, false)
 	c.boundsCheckFunc = llvm.AddFunction(c.mod, "runtime.boundsCheck", boundsCheckType)
 
 	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.stringType}, false)
@@ -659,7 +659,25 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		// TODO: bounds check
+
+		// Get buffer length
+		var buflen llvm.Value
+		typ := expr.X.Type().(*types.Pointer).Elem()
+		switch typ := typ.(type) {
+		case *types.Array:
+			buflen = llvm.ConstInt(llvm.Int32Type(), uint64(typ.Len()), false)
+		default:
+			return llvm.Value{}, errors.New("todo: indexaddr: len")
+		}
+
+		// Bounds check
+		// TODO: inline, and avoid if possible
+		constZero := llvm.ConstInt(c.intType, 0, false)
+		isNegative := c.builder.CreateICmp(llvm.IntSLT, index, constZero, "") // index < 0
+		isTooBig := c.builder.CreateICmp(llvm.IntSGE, index, buflen, "") // index >= len(value)
+		isOverflow := c.builder.CreateOr(isNegative, isTooBig, "")
+		c.builder.CreateCall(c.boundsCheckFunc, []llvm.Value{isOverflow}, "")
+
 		indices := []llvm.Value{
 			llvm.ConstInt(llvm.Int32Type(), 0, false),
 			index,
@@ -696,7 +714,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			}
 			isTooBig := c.builder.CreateICmp(llvm.IntSGE, index, strlen, "") // index >= len(value)
 			isOverflow := c.builder.CreateOr(isNegative, isTooBig, "")
-			c.builder.CreateCall(c.boundsCheckFunc, []llvm.Value{value, isOverflow}, "")
+			c.builder.CreateCall(c.boundsCheckFunc, []llvm.Value{isOverflow}, "")
 		}
 
 		// Lookup byte
