@@ -582,6 +582,29 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Global:
 		return c.mod.NamedGlobal(expr.Name()), nil
+	case *ssa.Lookup:
+		if expr.CommaOk {
+			return llvm.Value{}, errors.New("todo: lookup with comma-ok")
+		}
+		if _, ok := expr.X.Type().(*types.Map); ok {
+			return llvm.Value{}, errors.New("todo: lookup in map")
+		}
+		// Value type must be a string, which is a basic type.
+		if expr.X.Type().(*types.Basic).Kind() != types.String {
+			panic("lookup on non-string?")
+		}
+		value, err := c.parseExpr(frame, expr.X)
+		if err != nil {
+			return llvm.Value{}, nil
+		}
+		index, err := c.parseExpr(frame, expr.Index)
+		if err != nil {
+			return llvm.Value{}, nil
+		}
+		// TODO: out-of-bounds checking
+		buf := c.builder.CreateExtractValue(value, 1, "")
+		bufPtr := c.builder.CreateGEP(buf, []llvm.Value{index}, "")
+		return c.builder.CreateLoad(bufPtr, ""), nil
 	case *ssa.MakeInterface:
 		val, err := c.parseExpr(frame, expr.X)
 		if err != nil {
