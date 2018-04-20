@@ -666,7 +666,16 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 		strObj := llvm.ConstStruct([]llvm.Value{strLen, strPtr}, false)
 		return strObj, nil
 	case constant.Int:
-		switch expr.Type().(*types.Basic).Kind() {
+		return c.parseConstInt(expr, expr.Type())
+	default:
+		return llvm.Value{}, errors.New("todo: unknown constant")
+	}
+}
+
+func (c *Compiler) parseConstInt(expr *ssa.Const, typ types.Type) (llvm.Value, error) {
+	switch typ := typ.(type) {
+	case *types.Basic:
+		switch typ.Kind() {
 		case types.Bool:
 			n, _ := constant.Int64Val(expr.Value)
 			return llvm.ConstInt(llvm.Int1Type(), uint64(n), false), nil
@@ -694,8 +703,10 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 		default:
 			return llvm.Value{}, errors.New("todo: unknown integer constant")
 		}
+	case *types.Named:
+		return c.parseConstInt(expr, typ.Underlying())
 	default:
-		return llvm.Value{}, errors.New("todo: unknown constant")
+		return llvm.Value{}, errors.New("todo: unknown constant: " + fmt.Sprintf("%#v", typ))
 	}
 }
 
