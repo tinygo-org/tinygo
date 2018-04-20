@@ -56,3 +56,12 @@ func _panic(message interface{}) {
 	printnl()
 	C.exit(1)
 }
+
+func boundsCheck(s string, outOfRange bool) {
+	if outOfRange {
+		// printstring() here is safe as this function is excluded from bounds
+		// checking.
+		printstring("panic: runtime error: index out of range\n")
+		C.exit(1)
+	}
+}
