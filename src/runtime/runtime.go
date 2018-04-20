@@ -2,6 +2,7 @@
 package runtime
 
 // #include <stdio.h>
+// #include <stdlib.h>
 import "C"
 
 const Compiler = "tgo"
@@ -38,4 +39,20 @@ func printspace() {
 
 func printnl() {
 	C.putchar('\n')
+}
+
+func printitf(msg interface{}) {
+	switch msg := msg.(type) {
+	case string:
+		print(msg)
+	default:
+		print("???")
+	}
+}
+
+func _panic(message interface{}) {
+	printstring("panic: ")
+	printitf(message)
+	printnl()
+	C.exit(1)
 }

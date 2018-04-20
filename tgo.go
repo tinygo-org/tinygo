@@ -43,6 +43,7 @@ type Compiler struct {
 	stringType      llvm.Type
 	interfaceType   llvm.Type
 	typeassertType  llvm.Type
+	panicFunc       llvm.Value
 	printstringFunc llvm.Value
 	printintFunc    llvm.Value
 	printbyteFunc   llvm.Value
@@ -96,6 +97,9 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 
 	// Go typeassert result: tuple of (ptr, bool)
 	c.typeassertType = llvm.StructType([]llvm.Type{llvm.PointerType(llvm.Int8Type(), 0), llvm.Int1Type()}, false)
+
+	panicType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.interfaceType}, false)
+	c.panicFunc = llvm.AddFunction(c.mod, "runtime._panic", panicType)
 
 	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.stringType}, false)
 	c.printstringFunc = llvm.AddFunction(c.mod, "runtime.printstring", printstringType)
@@ -433,6 +437,14 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 	case *ssa.Jump:
 		blockJump := frame.blocks[instr.Block().Succs[0]]
 		c.builder.CreateBr(blockJump)
+		return nil
+	case *ssa.Panic:
+		value, err := c.parseExpr(frame, instr.X)
+		if err != nil {
+			return err
+		}
+		c.builder.CreateCall(c.panicFunc, []llvm.Value{value}, "")
+		c.builder.CreateUnreachable()
 		return nil
 	case *ssa.Return:
 		if len(instr.Results) == 0 {
