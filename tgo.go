@@ -20,6 +20,9 @@ import (
 	"llvm.org/llvm/bindings/go/llvm"
 )
 
+// Silently ignore this instruction.
+var ErrCGoIgnore = errors.New("cgo: ignore")
+
 func init() {
 	llvm.InitializeAllTargets()
 	llvm.InitializeAllTargetMCs()
@@ -147,6 +150,13 @@ func (c *Compiler) Parse(pkgName string) error {
 		// run.
 		memberNames := make([]string, 0)
 		for name := range pkg.Members {
+			if strings.HasPrefix(name, "_Cgo_") || strings.HasPrefix(name, "_cgo") {
+				// _Cgo_ptr, _Cgo_use, _cgoCheckResult, _cgo_runtime_cgocall
+				continue // CGo-internal functions
+			}
+			if strings.HasPrefix(name, "__cgofn__cgo_") {
+				continue // CGo function pointer in global scope
+			}
 			memberNames = append(memberNames, name)
 		}
 		sort.Strings(memberNames)
@@ -203,6 +213,10 @@ func (c *Compiler) Parse(pkgName string) error {
 
 			switch member := member.(type) {
 			case *ssa.Function:
+				if strings.HasPrefix(name, "_Cfunc_") {
+					// CGo function. Don't implement it's body.
+					continue
+				}
 				if member.Blocks == nil {
 					continue // external function
 				}
@@ -313,6 +327,12 @@ func (c *Compiler) getFunctionName(pkgPrefix string, fn *ssa.Function) string {
 
 func (c *Compiler) parseFuncDecl(pkgPrefix string, f *ssa.Function) (*Frame, error) {
 	name := c.getFunctionName(pkgPrefix, f)
+	if strings.HasPrefix(name, pkgPrefix + "._Cfunc_") {
+		// CGo wrapper declaration.
+		// Don't wrap the function, instead declare it.
+		name = name[len(pkgPrefix + "._Cfunc_"):]
+	}
+
 	frame := &Frame{
 		pkgPrefix: pkgPrefix,
 		name:      name,
@@ -369,6 +389,9 @@ func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
 		for _, instr := range block.Instrs {
 			fmt.Printf("  instr: %v\n", instr)
 			err := c.parseInstr(frame, instr)
+			if err == ErrCGoIgnore {
+				continue // ignore irrelevant CGo instruction
+			}
 			if err != nil {
 				return err
 			}
@@ -502,6 +525,11 @@ func (c *Compiler) parseFunctionCall(frame *Frame, call *ssa.CallCommon, fn *ssa
 	fmt.Printf("    function: %s\n", fn)
 
 	name := c.getFunctionName(frame.pkgPrefix, fn)
+	if strings.HasPrefix(name, frame.pkgPrefix + "._Cfunc_") {
+		// Call C function directly.
+		name = name[len(frame.pkgPrefix + "._Cfunc_"):]
+	}
+
 	target := c.mod.NamedFunction(name)
 	if target.IsNil() {
 		return llvm.Value{}, errors.New("undefined function: " + name)
@@ -539,6 +567,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if value, ok := frame.locals[expr]; ok {
 			// Value is a local variable that has already been computed.
 			fmt.Println("        from local var")
+			if value.IsNil() {
+				return llvm.Value{}, errors.New("undefined local var (from cgo?)")
+			}
 			return value, nil
 		}
 	}
@@ -581,7 +612,14 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Global:
-		return c.mod.NamedGlobal(expr.Name()), nil
+		if strings.HasPrefix(expr.Name(), "__cgofn__cgo_") || strings.HasPrefix(expr.Name(), "_cgo_") {
+			return llvm.Value{}, ErrCGoIgnore
+		}
+		value := c.mod.NamedGlobal(expr.Name())
+		if value.IsNil() {
+			return llvm.Value{}, errors.New("global not found: " + expr.Name())
+		}
+		return value, nil
 	case *ssa.Lookup:
 		if expr.CommaOk {
 			return llvm.Value{}, errors.New("todo: lookup with comma-ok")

@@ -1,0 +1,4 @@
+
+package cgo
+
+// dummy
