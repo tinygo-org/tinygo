@@ -651,10 +651,20 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		bitcast := c.builder.CreateIntToPtr(val, llvm.PointerType(llvm.Int8Type(), 0), "")
+		var itfValue llvm.Value
+		switch typ := expr.X.Type().(type) {
+		case *types.Basic:
+			if typ.Info() & types.IsInteger != 0 {
+				itfValue = c.builder.CreateIntToPtr(val, llvm.PointerType(llvm.Int8Type(), 0), "")
+			} else {
+				return llvm.Value{}, errors.New("todo: make interface: unknown basic type")
+			}
+		default:
+			return llvm.Value{}, errors.New("todo: make interface: unknown type")
+		}
 		itfType := c.getInterfaceType(expr.X.Type())
 		itf := c.ctx.ConstStruct([]llvm.Value{itfType, llvm.Undef(llvm.PointerType(llvm.Int8Type(), 0))}, false)
-		itf = c.builder.CreateInsertValue(itf, bitcast, 1, "")
+		itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
 		return itf, nil
 	case *ssa.Phi:
 		t, err := c.getLLVMType(expr.Type())
