@@ -47,6 +47,7 @@ type Compiler struct {
 	boundsCheckFunc llvm.Value
 	printstringFunc llvm.Value
 	printintFunc    llvm.Value
+	printuintFunc   llvm.Value
 	printbyteFunc   llvm.Value
 	printspaceFunc  llvm.Value
 	printnlFunc     llvm.Value
@@ -109,6 +110,8 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	c.printstringFunc = llvm.AddFunction(c.mod, "runtime.printstring", printstringType)
 	printintType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.intType}, false)
 	c.printintFunc = llvm.AddFunction(c.mod, "runtime.printint", printintType)
+	printuintType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.intType}, false)
+	c.printuintFunc = llvm.AddFunction(c.mod, "runtime.printuint", printuintType)
 	printbyteType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.Int8Type()}, false)
 	c.printbyteFunc = llvm.AddFunction(c.mod, "runtime.printbyte", printbyteType)
 	printspaceType := llvm.FunctionType(llvm.VoidType(), nil, false)
@@ -273,12 +276,16 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		switch typ.Kind() {
 		case types.Bool:
 			return llvm.Int1Type(), nil
-		case types.Uint8:
+		case types.Int8, types.Uint8:
 			return llvm.Int8Type(), nil
-		case types.Int:
-			return c.intType, nil
-		case types.Int32:
+		case types.Int16, types.Uint16:
+			return llvm.Int16Type(), nil
+		case types.Int32, types.Uint32:
 			return llvm.Int32Type(), nil
+		case types.Int, types.Uint:
+			return c.intType, nil
+		case types.Int64, types.Uint64:
+			return llvm.Int64Type(), nil
 		case types.String:
 			return c.stringType, nil
 		case types.UnsafePointer:
@@ -501,6 +508,8 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 					c.builder.CreateCall(c.printbyteFunc, []llvm.Value{value}, "")
 				case types.Int, types.Int32: // TODO: assumes a 32-bit int type
 					c.builder.CreateCall(c.printintFunc, []llvm.Value{value}, "")
+				case types.Uint, types.Uint32:
+					c.builder.CreateCall(c.printuintFunc, []llvm.Value{value}, "")
 				case types.String:
 					c.builder.CreateCall(c.printstringFunc, []llvm.Value{value}, "")
 				default:
@@ -730,7 +739,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		switch typ := expr.X.Type().(type) {
 		case *types.Basic:
 			itfValueType := llvm.PointerType(llvm.Int8Type(), 0)
-			if typ.Info() & types.IsInteger != 0 {
+			if typ.Info() & types.IsInteger != 0 { // TODO: 64-bit int on 32-bit platform
 				itfValue = c.builder.CreateIntToPtr(val, itfValueType, "")
 			} else if typ.Kind() == types.String {
 				// TODO: escape analysis
@@ -805,6 +814,7 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 	if err != nil {
 		return llvm.Value{}, err
 	}
+	signed := binop.X.Type().(*types.Basic).Info() & types.IsUnsigned == 0
 	switch binop.Op {
 	case token.ADD: // +
 		return c.builder.CreateAdd(x, y, ""), nil
@@ -813,9 +823,17 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 	case token.MUL: // *
 		return c.builder.CreateMul(x, y, ""), nil
 	case token.QUO: // /
-		return c.builder.CreateSDiv(x, y, ""), nil // TODO: UDiv (unsigned)
+		if signed {
+			return c.builder.CreateSDiv(x, y, ""), nil
+		} else {
+			return c.builder.CreateUDiv(x, y, ""), nil
+		}
 	case token.REM: // %
-		return c.builder.CreateSRem(x, y, ""), nil // TODO: URem (unsigned)
+		if signed {
+			return c.builder.CreateSRem(x, y, ""), nil
+		} else {
+			return c.builder.CreateURem(x, y, ""), nil
+		}
 	case token.AND: // &
 		return c.builder.CreateAnd(x, y, ""), nil
 	case token.OR:  // |
@@ -825,7 +843,11 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 	case token.SHL: // <<
 		return c.builder.CreateShl(x, y, ""), nil
 	case token.SHR: // >>
-		return c.builder.CreateAShr(x, y, ""), nil // TODO: LShr (unsigned)
+		if signed {
+			return c.builder.CreateAShr(x, y, ""), nil
+		} else {
+			return c.builder.CreateLShr(x, y, ""), nil
+		}
 	case token.AND_NOT: // &^
 		// Go specific. Calculate "and not" with x & (~y)
 		inv := c.builder.CreateNot(y, "") // ~y
@@ -835,13 +857,29 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 	case token.NEQ: // !=
 		return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 	case token.LSS: // <
-		return c.builder.CreateICmp(llvm.IntSLT, x, y, ""), nil // TODO: ULT
+		if signed {
+			return c.builder.CreateICmp(llvm.IntSLT, x, y, ""), nil
+		} else {
+			return c.builder.CreateICmp(llvm.IntULT, x, y, ""), nil
+		}
 	case token.LEQ: // <=
-		return c.builder.CreateICmp(llvm.IntSLE, x, y, ""), nil // TODO: ULE
+		if signed {
+			return c.builder.CreateICmp(llvm.IntSLE, x, y, ""), nil
+		} else {
+			return c.builder.CreateICmp(llvm.IntULE, x, y, ""), nil
+		}
 	case token.GTR: // >
-		return c.builder.CreateICmp(llvm.IntSGT, x, y, ""), nil // TODO: UGT
+		if signed {
+			return c.builder.CreateICmp(llvm.IntSGT, x, y, ""), nil
+		} else {
+			return c.builder.CreateICmp(llvm.IntUGT, x, y, ""), nil
+		}
 	case token.GEQ: // >=
-		return c.builder.CreateICmp(llvm.IntSGE, x, y, ""), nil // TODO: UGE
+		if signed {
+			return c.builder.CreateICmp(llvm.IntSGE, x, y, ""), nil
+		} else {
+			return c.builder.CreateICmp(llvm.IntUGE, x, y, ""), nil
+		}
 	default:
 		return llvm.Value{}, errors.New("unknown binop")
 	}

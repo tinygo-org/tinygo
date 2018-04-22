@@ -10,20 +10,24 @@ func printstring(s string) {
 	}
 }
 
+func printuint(n uint) {
+	// TODO: don't recurse, but still be compact (and don't divide/mod
+	// more than necessary).
+	prevdigits := n / 10
+	if prevdigits != 0 {
+		printuint(prevdigits)
+	}
+	C.putchar(C.int((n % 10) + '0'))
+}
+
 func printint(n int) {
 	// Print integer in signed big-endian base-10 notation, for humans to
 	// read.
-	// TODO: don't recurse, but still be compact (and don't divide/mod
-	// more than necessary).
 	if n < 0 {
 		C.putchar('-')
 		n = -n
 	}
-	prevdigits := n / 10
-	if prevdigits != 0 {
-		printint(prevdigits)
-	}
-	C.putchar(C.int((n % 10) + '0'))
+	printuint(uint(n))
 }
 
 func printbyte(c uint8) {
