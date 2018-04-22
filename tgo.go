@@ -57,12 +57,18 @@ type Compiler struct {
 }
 
 type Frame struct {
-	pkgPrefix string
-	llvmFn    llvm.Value
-	params    map[*ssa.Parameter]int   // arguments to the function
-	locals    map[ssa.Value]llvm.Value // local variables
-	blocks    map[*ssa.BasicBlock]llvm.BasicBlock
-	phis      []Phi
+	llvmFn llvm.Value
+	params map[*ssa.Parameter]int   // arguments to the function
+	locals map[ssa.Value]llvm.Value // local variables
+	blocks map[*ssa.BasicBlock]llvm.BasicBlock
+	phis   []Phi
+}
+
+func pkgPrefix(pkg *ssa.Package) string {
+	if pkg.Pkg.Name() == "main" {
+		return "main"
+	}
+	return pkg.Pkg.Path()
 }
 
 type Phi struct {
@@ -224,14 +230,9 @@ func (c *Compiler) Parse(mainPath string) error {
 		for _, name := range memberNames {
 			member := pkg.Members[name]
 
-			pkgPrefix := pkg.Pkg.Path()
-			if pkg.Pkg.Name() == "main" {
-				pkgPrefix = "main"
-			}
-
 			switch member := member.(type) {
 			case *ssa.Function:
-				frame, err := c.parseFuncDecl(pkgPrefix, member)
+				frame, err := c.parseFuncDecl(member)
 				if err != nil {
 					return err
 				}
@@ -244,7 +245,7 @@ func (c *Compiler) Parse(mainPath string) error {
 				if err != nil {
 					return err
 				}
-				global := llvm.AddGlobal(c.mod, typ, pkgPrefix + "." +  member.Name())
+				global := llvm.AddGlobal(c.mod, typ, pkgPrefix(member.Pkg) + "." +  member.Name())
 				if ast.IsExported(member.Name()) {
 					global.SetLinkage(llvm.PrivateLinkage)
 				}
@@ -252,7 +253,7 @@ func (c *Compiler) Parse(mainPath string) error {
 				ms := program.MethodSets.MethodSet(member.Type())
 				for i := 0; i < ms.Len(); i++ {
 					fn := program.MethodValue(ms.At(i))
-					frame, err := c.parseFuncDecl(pkgPrefix, fn)
+					frame, err := c.parseFuncDecl(fn)
 					if err != nil {
 						return err
 					}
@@ -361,30 +362,30 @@ func (c *Compiler) getInterfaceType(typ types.Type) llvm.Value {
 	return llvm.ConstInt(llvm.Int32Type(), c.itfTypeNumbers[typ], false)
 }
 
-func (c *Compiler) getFunctionName(pkgPrefix string, fn *ssa.Function) string {
+func (c *Compiler) getFunctionName(fn *ssa.Function) string {
 	if fn.Signature.Recv() != nil {
 		// Method on a defined type.
 		typeName := fn.Params[0].Type().(*types.Named).Obj().Name()
-		return pkgPrefix + "." + typeName + "." + fn.Name()
+		return pkgPrefix(fn.Pkg) + "." + typeName + "." + fn.Name()
 	} else {
 		// Bare function.
-		return pkgPrefix + "." + fn.Name()
+		if strings.HasPrefix(fn.Name(), "_Cfunc_") {
+			// Name CGo functions directly.
+			return fn.Name()[len("_Cfunc_"):]
+		} else {
+			return pkgPrefix(fn.Pkg) + "." + fn.Name()
+		}
 	}
 }
 
-func (c *Compiler) parseFuncDecl(pkgPrefix string, f *ssa.Function) (*Frame, error) {
-	name := c.getFunctionName(pkgPrefix, f)
-	if strings.HasPrefix(name, pkgPrefix + "._Cfunc_") {
-		// CGo wrapper declaration.
-		// Don't wrap the function, instead declare it.
-		name = name[len(pkgPrefix + "._Cfunc_"):]
-	}
+func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
+	f.WriteTo(os.Stdout)
+	name := c.getFunctionName(f)
 
 	frame := &Frame{
-		pkgPrefix: pkgPrefix,
-		params:    make(map[*ssa.Parameter]int),
-		locals:    make(map[ssa.Value]llvm.Value),
-		blocks:    make(map[*ssa.BasicBlock]llvm.BasicBlock),
+		params: make(map[*ssa.Parameter]int),
+		locals: make(map[ssa.Value]llvm.Value),
+		blocks: make(map[*ssa.BasicBlock]llvm.BasicBlock),
 	}
 
 	var retType llvm.Type
@@ -581,12 +582,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 func (c *Compiler) parseFunctionCall(frame *Frame, call *ssa.CallCommon, fn *ssa.Function) (llvm.Value, error) {
 	fmt.Printf("    function: %s\n", fn)
 
-	name := c.getFunctionName(frame.pkgPrefix, fn)
-	if strings.HasPrefix(name, frame.pkgPrefix + "._Cfunc_") {
-		// Call C function directly.
-		name = name[len(frame.pkgPrefix + "._Cfunc_"):]
-	}
-
+	name := c.getFunctionName(fn)
 	target := c.mod.NamedFunction(name)
 	if target.IsNil() {
 		return llvm.Value{}, errors.New("undefined function: " + name)
