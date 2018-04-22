@@ -903,33 +903,18 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 func (c *Compiler) parseConstInt(expr *ssa.Const, typ types.Type) (llvm.Value, error) {
 	switch typ := typ.(type) {
 	case *types.Basic:
-		switch typ.Kind() {
-		case types.Bool:
-			n, _ := constant.Int64Val(expr.Value)
-			return llvm.ConstInt(llvm.Int1Type(), uint64(n), false), nil
-		case types.Int:
-			n, _ := constant.Int64Val(expr.Value)
-			return llvm.ConstInt(c.intType, uint64(n), false), nil
-		case types.Int8:
-			n, _ := constant.Int64Val(expr.Value)
-			return llvm.ConstInt(llvm.Int8Type(), uint64(n), false), nil
-		case types.Uint8:
+		llvmType, err := c.getLLVMType(typ)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		if typ.Info() & types.IsUnsigned != 0 || typ.Info() & types.IsBoolean != 0 {
 			n, _ := constant.Uint64Val(expr.Value)
-			return llvm.ConstInt(llvm.Int8Type(), n, false), nil
-		case types.Int32:
+			return llvm.ConstInt(llvmType, n, false), nil
+		} else if typ.Info() & types.IsInteger != 0 { // signed
 			n, _ := constant.Int64Val(expr.Value)
-			return llvm.ConstInt(llvm.Int32Type(), uint64(n), false), nil
-		case types.Uint32:
-			n, _ := constant.Uint64Val(expr.Value)
-			return llvm.ConstInt(llvm.Int32Type(), n, false), nil
-		case types.Int64:
-			n, _ := constant.Int64Val(expr.Value)
-			return llvm.ConstInt(llvm.Int64Type(), uint64(n), false), nil
-		case types.Uint64:
-			n, _ := constant.Uint64Val(expr.Value)
-			return llvm.ConstInt(llvm.Int64Type(), n, false), nil
-		default:
-			return llvm.Value{}, errors.New("todo: unknown integer constant")
+			return llvm.ConstInt(llvmType, uint64(n), true), nil
+		} else {
+			return llvm.Value{}, errors.New("unknown integer constant")
 		}
 	case *types.Named:
 		return c.parseConstInt(expr, typ.Underlying())
