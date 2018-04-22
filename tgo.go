@@ -132,7 +132,7 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	return c, nil
 }
 
-func (c *Compiler) Parse(pkgName string) error {
+func (c *Compiler) Parse(mainPath string) error {
 	tripleSplit := strings.Split(c.triple, "-")
 
 	config := loader.Config {
@@ -149,7 +149,7 @@ func (c *Compiler) Parse(pkgName string) error {
 		AllowErrors: true,
 	}
 	config.Import("runtime")
-	config.Import(pkgName)
+	config.Import(mainPath)
 	lprogram, err := config.Load()
 	if err != nil {
 		return err
@@ -165,8 +165,42 @@ func (c *Compiler) Parse(pkgName string) error {
 
 	program := ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions | ssa.BareInits)
 	program.Build()
-	// TODO: order of packages is random
-	for _, pkg := range program.AllPackages() {
+
+	// Make a list of packages in import order.
+	packageList := []*ssa.Package{}
+	packageSet := map[string]struct{}{}
+	worklist := [][]string{{"runtime", mainPath}}
+	for len(worklist) != 0 {
+		for _, pkgPath := range worklist[0] {
+			pkg := program.ImportedPackage(pkgPath)
+			if pkg == nil {
+				packageSet[pkgPath] = struct{}{}
+				continue // non-SSA package (e.g. cgo)
+			}
+			if _, ok := packageSet[pkgPath]; ok {
+				continue
+			}
+
+			unsatisfiedImports := make([]string, 0)
+			for _, pkg := range pkg.Pkg.Imports() {
+				if _, ok := packageSet[pkg.Path()]; ok {
+					continue
+				}
+				unsatisfiedImports = append(unsatisfiedImports, pkg.Path())
+			}
+			if len(unsatisfiedImports) == 0 {
+				// all dependencies are in packageList inserted
+				packageList = append(packageList, pkg)
+				packageSet[pkgPath] = struct{}{}
+			} else {
+				unsatisfiedImports = append(unsatisfiedImports, pkgPath) // reconsider
+				worklist = append(worklist, unsatisfiedImports)
+			}
+		}
+		worklist = worklist[1:]
+	}
+
+	for _, pkg := range packageList {
 		fmt.Println("package:", pkg.Pkg.Path())
 
 		// Make sure we're walking through all members in a constant order every
