@@ -1,0 +1,6 @@
+[submodule "lib/nrfx"]
+	path = lib/nrfx
+	url = https://github.com/NordicSemiconductor/nrfx.git
+[submodule "lib/CMSIS"]
+	path = lib/CMSIS
+	url = https://github.com/ARM-software/CMSIS.git

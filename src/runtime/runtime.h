@@ -9,3 +9,5 @@ typedef struct {
 } string_t;
 
 typedef int32_t intgo_t; // may be 64-bit
+
+int main();
