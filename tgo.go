@@ -1035,15 +1035,28 @@ func (c *Compiler) Optimize(optLevel int) {
 }
 
 func (c *Compiler) EmitObject(path string) error {
-	buf, err := c.machine.EmitToMemoryBuffer(c.mod, llvm.ObjectFile)
-	if err != nil {
-		return err
+	// Generate output
+	var buf []byte
+	if strings.HasSuffix(path, ".o") {
+		llvmBuf, err := c.machine.EmitToMemoryBuffer(c.mod, llvm.ObjectFile)
+		if err != nil {
+			return err
+		}
+		buf = llvmBuf.Bytes()
+	} else if strings.HasSuffix(path, ".bc") {
+		buf = llvm.WriteBitcodeToMemoryBuffer(c.mod).Bytes()
+	} else if strings.HasSuffix(path, ".ll") {
+		buf = []byte(c.mod.String())
+	} else {
+		return errors.New("unknown output file extension")
 	}
+
+	// Write output to file
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}
-	f.Write(buf.Bytes())
+	f.Write(buf)
 	f.Close()
 	return nil
 }
