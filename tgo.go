@@ -1106,6 +1106,8 @@ func main() {
 		return
 	}
 
+	os.Setenv("CC", "clang -target=" + *target)
+
 	err := Compile(flag.Args()[0], *outpath, *target, *printIR)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
