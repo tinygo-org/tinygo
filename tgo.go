@@ -140,7 +140,7 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	return c, nil
 }
 
-func (c *Compiler) Parse(mainPath string) error {
+func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	tripleSplit := strings.Split(c.triple, "-")
 
 	config := loader.Config {
@@ -152,7 +152,7 @@ func (c *Compiler) Parse(mainPath string) error {
 			CgoEnabled:  true,
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
-			BuildTags:   []string{"tgo"},
+			BuildTags:   append([]string{"tgo"}, buildTags...),
 		},
 		AllowErrors: true,
 	}
@@ -1074,12 +1074,19 @@ func (c *Compiler) EmitObject(path string) error {
 
 // Helper function for Compiler object.
 func Compile(pkgName, outpath, target string, printIR bool) error {
+	var buildTags []string
+	// TODO: put this somewhere else
+	if target == "pca10040" {
+		buildTags = append(buildTags, "nrf")
+		target = "armv7m-none-eabi"
+	}
+
 	c, err := NewCompiler(pkgName, target)
 	if err != nil {
 		return err
 	}
 
-	parseErr := c.Parse(pkgName)
+	parseErr := c.Parse(pkgName, buildTags)
 	if printIR {
 		fmt.Println(c.IR())
 	}
