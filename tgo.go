@@ -663,10 +663,12 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return c.parseBinOp(frame, expr)
 	case *ssa.Call:
 		return c.parseCall(frame, expr)
+	case *ssa.ChangeType:
+		return c.parseConvert(frame, expr.Type(), expr.X)
 	case *ssa.Const:
 		return c.parseConst(expr)
 	case *ssa.Convert:
-		return c.parseConvert(frame, expr)
+		return c.parseConvert(frame, expr.Type(), expr.X)
 	case *ssa.Extract:
 		value, err := c.parseExpr(frame, expr.Tuple)
 		if err != nil {
@@ -961,41 +963,42 @@ func (c *Compiler) parseConstInt(expr *ssa.Const, typ types.Type) (llvm.Value, e
 	}
 }
 
-func (c *Compiler) parseConvert(frame *Frame, expr *ssa.Convert) (llvm.Value, error) {
-	value, err := c.parseExpr(frame, expr.X)
-	if err != nil {
-		return value, nil
-	}
-
-	typeFrom, err := c.getLLVMType(expr.X.Type())
-	if err != nil {
-		return llvm.Value{}, err
-	}
-	sizeFrom := c.targetData.TypeAllocSize(typeFrom)
-	typeTo, err := c.getLLVMType(expr.Type())
-	if err != nil {
-		return llvm.Value{}, err
-	}
-	sizeTo := c.targetData.TypeAllocSize(typeTo)
-
-	if sizeFrom > sizeTo {
-		return c.builder.CreateTrunc(value, typeTo, ""), nil
-	} else if sizeFrom == sizeTo {
-		return c.builder.CreateBitCast(value, typeTo, ""), nil
-	} else { // sizeFrom < sizeTo: extend
-		switch typ := expr.X.Type().(type) { // typeFrom
-		case *types.Basic:
-			if typ.Info() & types.IsInteger == 0 { // if not integer
-				return llvm.Value{}, errors.New("todo: convert: extend non-integer type")
-			}
-			if typ.Info() & types.IsUnsigned != 0 { // if unsigned
-				return c.builder.CreateZExt(value, typeTo, ""), nil
-			} else {
-				return c.builder.CreateSExt(value, typeTo, ""), nil
-			}
-		default:
-			return llvm.Value{}, errors.New("todo: convert: extend non-basic type")
+func (c *Compiler) parseConvert(frame *Frame, typeTo types.Type, x ssa.Value) (llvm.Value, error) {
+	switch typeTo := typeTo.(type) {
+	case *types.Basic:
+		value, err := c.parseExpr(frame, x)
+		if err != nil {
+			return value, nil
 		}
+
+		llvmTypeFrom, err := c.getLLVMType(x.Type())
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		sizeFrom := c.targetData.TypeAllocSize(llvmTypeFrom)
+		llvmTypeTo, err := c.getLLVMType(typeTo)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		sizeTo := c.targetData.TypeAllocSize(llvmTypeTo)
+
+		if typeTo.Info() & types.IsInteger == 0 { // if not integer
+			return llvm.Value{}, errors.New("todo: convert: extend non-integer type")
+		}
+
+		if sizeFrom > sizeTo {
+			return c.builder.CreateTrunc(value, llvmTypeTo, ""), nil
+		} else if sizeFrom == sizeTo {
+			return c.builder.CreateBitCast(value, llvmTypeTo, ""), nil
+		} else if typeTo.Info() & types.IsUnsigned != 0 { // if unsigned
+			return c.builder.CreateZExt(value, llvmTypeTo, ""), nil
+		} else { // if signed
+			return c.builder.CreateSExt(value, llvmTypeTo, ""), nil
+		}
+	case *types.Named:
+		return c.parseConvert(frame, typeTo.Underlying(), x)
+	default:
+		return llvm.Value{}, errors.New("todo: convert: extend non-basic type: " + fmt.Sprintf("%#v", typeTo))
 	}
 }
 
