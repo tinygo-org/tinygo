@@ -39,6 +39,7 @@ type Compiler struct {
 	machine         llvm.TargetMachine
 	targetData      llvm.TargetData
 	intType         llvm.Type
+	uintptrType     llvm.Type
 	stringLenType   llvm.Type
 	stringType      llvm.Type
 	interfaceType   llvm.Type
@@ -96,6 +97,7 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	// Depends on platform (32bit or 64bit), but fix it here for now.
 	c.intType = llvm.Int32Type()
 	c.stringLenType = llvm.Int32Type()
+	c.uintptrType = c.targetData.IntPtrType()
 
 	// Go string: tuple of (len, ptr)
 	c.stringType = llvm.StructType([]llvm.Type{c.stringLenType, llvm.PointerType(llvm.Int8Type(), 0)}, false)
@@ -323,6 +325,8 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			return llvm.Int64Type(), nil
 		case types.String:
 			return c.stringType, nil
+		case types.Uintptr:
+			return c.uintptrType, nil
 		case types.UnsafePointer:
 			return llvm.PointerType(llvm.Int8Type(), 0), nil
 		default:
