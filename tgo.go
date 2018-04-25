@@ -848,7 +848,11 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 	if err != nil {
 		return llvm.Value{}, err
 	}
-	signed := binop.X.Type().(*types.Basic).Info() & types.IsUnsigned == 0
+	typ := binop.X.Type()
+	if typNamed, ok := typ.(*types.Named); ok {
+		typ = typNamed.Underlying()
+	}
+	signed := typ.(*types.Basic).Info() & types.IsUnsigned == 0
 	switch binop.Op {
 	case token.ADD: // +
 		return c.builder.CreateAdd(x, y, ""), nil
