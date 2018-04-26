@@ -425,6 +425,11 @@ func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
 }
 
 func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
+	if frame.llvmFn.Name() != "main.main" {
+		// This function is only used from within Go.
+		frame.llvmFn.SetLinkage(llvm.PrivateLinkage)
+	}
+
 	// Pre-create all basic blocks in the function.
 	for _, block := range f.DomPreorder() {
 		llvmBlock := c.ctx.AddBasicBlock(frame.llvmFn, block.Comment)
@@ -1028,10 +1033,11 @@ func (c *Compiler) Verify() error {
 	return llvm.VerifyModule(c.mod, 0)
 }
 
-func (c *Compiler) Optimize(optLevel int) {
+func (c *Compiler) Optimize(optLevel, sizeLevel int) {
 	builder := llvm.NewPassManagerBuilder()
 	defer builder.Dispose()
 	builder.SetOptLevel(optLevel)
+	builder.SetSizeLevel(sizeLevel)
 	builder.UseInlinerWithThreshold(200) // TODO depend on opt level, and -Os
 
 	funcPasses := llvm.NewFunctionPassManagerForModule(c.mod)
@@ -1097,7 +1103,7 @@ func Compile(pkgName, outpath, target string, printIR bool) error {
 	if err := c.Verify(); err != nil {
 		return err
 	}
-	c.Optimize(2)
+	c.Optimize(2, 1) // -O2 -Os
 	if err := c.Verify(); err != nil {
 		return err
 	}
