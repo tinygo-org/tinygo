@@ -12,11 +12,14 @@ LLC = $(LLVM)llc
 
 CFLAGS = -Wall -Werror -Os -g -fno-exceptions -flto -ffunction-sections -fdata-sections $(LLFLAGS)
 
-RUNTIME = build/runtime.bc
+RUNTIME_PARTS = build/runtime.bc
+
+TARGET ?= unix
 
 ifeq ($(TARGET),pca10040)
 GCC = arm-none-eabi-gcc
 LD = arm-none-eabi-ld -T arm.ld
+SIZE = arm-none-eabi-size
 OBJCOPY = arm-none-eabi-objcopy
 LLFLAGS += -target armv7m-none-eabi
 TGOFLAGS += -target $(TARGET)
@@ -26,16 +29,20 @@ CFLAGS += -I$(CURDIR)/lib/nrfx/mdk
 CFLAGS += -I$(CURDIR)/lib/CMSIS/CMSIS/Include
 CFLAGS += -DNRF52832_XXAA
 CFLAGS += -Wno-uninitialized
-RUNTIME += build/runtime_nrf.bc
-RUNTIME += build/system_nrf52.bc
+RUNTIME_PARTS += build/runtime_nrf.bc
+RUNTIME_PARTS += build/system_nrf52.bc
 OBJ += build/startup_nrf51.o # TODO nrf52, see https://bugs.llvm.org/show_bug.cgi?id=31601
 
-else
+else ifeq ($(TARGET),unix)
 # Regular *nix system.
 GCC = gcc
 LD = clang
+SIZE = size
 endif
 
+
+# Make debugging easier by keeping these intermediary files.
+SECONDARY: build/hello.ll build/blinky.ll build/blinky.elf
 
 
 run-hello: build/hello
@@ -58,8 +65,8 @@ build/tgo: *.go
 	go build -o build/tgo -i .
 
 # Build textual IR with the Go compiler.
-build/%.ll: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go
-	./build/tgo $(TGOFLAGS) -printir -o $@ $(subst src/,,$<)
+build/%.o: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go build/runtime-$(TARGET)-combined.bc
+	./build/tgo $(TGOFLAGS) -printir -runtime build/runtime-$(TARGET)-combined.bc -o $@ $(subst src/,,$<)
 
 # Compile C sources for the runtime.
 build/%.bc: src/runtime/%.c src/runtime/*.h
@@ -76,13 +83,9 @@ build/%.o: lib/nrfx/mdk/gcc_%.S
 	@mkdir -p build
 	clang $(CFLAGS) -c -o $@ $^
 
-# Merge all LLVM files together in a single bitcode file.
-build/%.bc: $(RUNTIME) build/%.ll
+# Merge all runtime LLVM files together in a single bitcode file.
+build/runtime-$(TARGET)-combined.bc: $(RUNTIME_PARTS)
 	$(LINK) -o $@ $^
-
-# Generate an ELF object file from a LLVM bitcode file.
-build/%.o: build/%.bc
-	$(LLC) -filetype=obj -O2 -o $@ $^
 
 # Generate output ELF executable.
 build/%: build/%.o $(OBJ)
@@ -91,6 +94,7 @@ build/%: build/%.o $(OBJ)
 # Generate output ELF for use in objcopy (on a microcontroller).
 build/%.elf: build/%.o $(OBJ)
 	$(LD) -o $@ $^
+	$(SIZE) $@
 
 # Convert executable to Intel hex file (for flashing).
 build/%.hex: build/%.elf

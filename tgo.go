@@ -1033,6 +1033,10 @@ func (c *Compiler) Verify() error {
 	return llvm.VerifyModule(c.mod, 0)
 }
 
+func (c *Compiler) LinkModule(mod llvm.Module) error {
+	return llvm.LinkModules(c.mod, mod)
+}
+
 func (c *Compiler) Optimize(optLevel, sizeLevel int) {
 	builder := llvm.NewPassManagerBuilder()
 	defer builder.Dispose()
@@ -1079,7 +1083,7 @@ func (c *Compiler) EmitObject(path string) error {
 }
 
 // Helper function for Compiler object.
-func Compile(pkgName, outpath, target string, printIR bool) error {
+func Compile(pkgName, runtimePath, outpath, target string, printIR bool) error {
 	var buildTags []string
 	// TODO: put this somewhere else
 	if target == "pca10040" {
@@ -1098,6 +1102,16 @@ func Compile(pkgName, outpath, target string, printIR bool) error {
 	}
 	if parseErr != nil {
 		return parseErr
+	}
+
+	// Add C runtime.
+	runtime, err := llvm.ParseBitcodeFile(runtimePath)
+	if err != nil {
+		return err
+	}
+	err = c.LinkModule(runtime)
+	if err != nil {
+		return err
 	}
 
 	if err := c.Verify(); err != nil {
@@ -1119,20 +1133,21 @@ func Compile(pkgName, outpath, target string, printIR bool) error {
 
 func main() {
 	outpath := flag.String("o", "", "output filename")
-	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
 	printIR := flag.Bool("printir", false, "print LLVM IR after optimizing")
+	runtime := flag.String("runtime", "", "runtime LLVM bitcode files (from C sources)")
+	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
 
 	flag.Parse()
 
 	if *outpath == "" || flag.NArg() != 1 {
-		fmt.Fprintf(os.Stderr, "usage: %s [-printir] [-target=<target>] -o <output> <input>", os.Args[0])
+		fmt.Fprintf(os.Stderr, "usage: %s [-printir] -runtime=<runtime.bc> [-target=<target>] -o <output> <input>", os.Args[0])
 		flag.PrintDefaults()
 		return
 	}
 
 	os.Setenv("CC", "clang -target=" + *target)
 
-	err := Compile(flag.Args()[0], *outpath, *target, *printIR)
+	err := Compile(flag.Args()[0], *runtime, *outpath, *target, *printIR)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
