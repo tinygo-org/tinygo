@@ -17,6 +17,35 @@ void uart_send(uint8_t c) {
 	NRF_UART0->EVENTS_TXDRDY = 0;
 }
 
+void rtc_init() {
+	// Make sure the low-frequency clock is running.
+	NRF_CLOCK->TASKS_LFCLKSTART = 1;
+	while (NRF_CLOCK->EVENTS_LFCLKSTARTED == 0) {}
+	NRF_CLOCK->EVENTS_LFCLKSTARTED = 0;
+
+	NRF_RTC0->TASKS_START = 1;
+	NVIC_SetPriority(RTC0_IRQn, 3);
+	NVIC_EnableIRQ(RTC0_IRQn);
+}
+
+static volatile bool rtc_wakeup;
+
+void rtc_sleep(uint32_t ticks) {
+	NRF_RTC0->INTENSET = RTC_INTENSET_COMPARE0_Msk;
+	rtc_wakeup = false;
+	NRF_RTC0->TASKS_CLEAR = 1;
+	NRF_RTC0->CC[0] = ticks;
+	while (!rtc_wakeup) {
+		__WFI();
+	}
+}
+
+void RTC0_IRQHandler() {
+	NRF_RTC0->INTENCLR = RTC_INTENSET_COMPARE0_Msk;
+	NRF_RTC0->EVENTS_COMPARE[0] = 0;
+	rtc_wakeup = true;
+}
+
 void _start() {
 	main();
 }
