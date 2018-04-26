@@ -731,7 +731,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if strings.HasPrefix(expr.Name(), "__cgofn__cgo_") || strings.HasPrefix(expr.Name(), "_cgo_") {
 			return llvm.Value{}, ErrCGoIgnore
 		}
-		value := c.mod.NamedGlobal(expr.Name())
+		value := c.mod.NamedGlobal(expr.Pkg.Pkg.Path() + "." + expr.Name())
 		if value.IsNil() {
 			return llvm.Value{}, errors.New("global not found: " + expr.Name())
 		}
