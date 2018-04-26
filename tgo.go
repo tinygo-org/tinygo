@@ -968,16 +968,16 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 
 func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 	switch expr.Value.Kind() {
+	case constant.Bool, constant.Int:
+		return c.parseConstInt(expr, expr.Type())
 	case constant.String:
 		str := constant.StringVal(expr.Value)
 		strLen := llvm.ConstInt(c.stringLenType, uint64(len(str)), false)
 		strPtr := c.builder.CreateGlobalStringPtr(str, ".str") // TODO: remove \0 at end
 		strObj := llvm.ConstStruct([]llvm.Value{strLen, strPtr}, false)
 		return strObj, nil
-	case constant.Int:
-		return c.parseConstInt(expr, expr.Type())
 	default:
-		return llvm.Value{}, errors.New("todo: unknown constant")
+		return llvm.Value{}, errors.New("todo: unknown constant: " + fmt.Sprintf("%#v", expr.Value.Kind()))
 	}
 }
 
@@ -988,7 +988,14 @@ func (c *Compiler) parseConstInt(expr *ssa.Const, typ types.Type) (llvm.Value, e
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		if typ.Info() & types.IsUnsigned != 0 || typ.Info() & types.IsBoolean != 0 {
+		if typ.Info() & types.IsBoolean != 0 {
+			b := constant.BoolVal(expr.Value)
+			n := uint64(0)
+			if b {
+				n = 1
+			}
+			return llvm.ConstInt(llvmType, n, false), nil
+		} else if typ.Info() & types.IsUnsigned != 0 {
 			n, _ := constant.Uint64Val(expr.Value)
 			return llvm.ConstInt(llvmType, n, false), nil
 		} else if typ.Info() & types.IsInteger != 0 { // signed
