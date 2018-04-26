@@ -2,9 +2,11 @@
 #include "runtime.h"
 #include <string.h>
 
+void go_init() __asm__("runtime.initAll");
 void go_main() __asm__("main.main");
 
 int main() {
+	go_init();
 	go_main();
 
 	return 0;

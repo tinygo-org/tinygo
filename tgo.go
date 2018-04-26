@@ -55,6 +55,7 @@ type Compiler struct {
 	memsetIntrinsic llvm.Value
 	itfTypeNumbers  map[types.Type]uint64
 	itfTypes        []types.Type
+	initFuncs       []llvm.Value
 }
 
 type Frame struct {
@@ -211,6 +212,17 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	for _, pkg := range packageList {
 		c.parsePackage(program, pkg)
 	}
+
+	// After all packages are imported, add a synthetic initializer function
+	// that calls the initializer of each package.
+	initType := llvm.FunctionType(llvm.VoidType(), nil, false)
+	initFn := llvm.AddFunction(c.mod, "runtime.initAll", initType)
+	block := c.ctx.AddBasicBlock(initFn, "entry")
+	c.builder.SetInsertPointAtEnd(block)
+	for _, fn := range c.initFuncs {
+		c.builder.CreateCall(fn, nil, "")
+	}
+	c.builder.CreateRetVoid()
 
 	return nil
 }
@@ -434,7 +446,7 @@ func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
 }
 
 func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
-	if frame.llvmFn.Name() != "main.main" {
+	if frame.llvmFn.Name() != "main.main" && frame.llvmFn.Name() != "runtime.init" {
 		// This function is only used from within Go.
 		frame.llvmFn.SetLinkage(llvm.PrivateLinkage)
 	}

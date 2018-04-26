@@ -18,7 +18,6 @@ void uart_send(uint8_t c) {
 }
 
 void _start() {
-	uart_init(6); // pin_tx = 6, for NRF52840-DK
 	main();
 }
 
