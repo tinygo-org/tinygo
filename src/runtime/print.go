@@ -7,24 +7,40 @@ func printstring(s string) {
 	}
 }
 
-func printuint(n uint) {
+func printuint32(n uint32) {
 	// TODO: don't recurse, but still be compact (and don't divide/mod
 	// more than necessary).
 	prevdigits := n / 10
 	if prevdigits != 0 {
-		printuint(prevdigits)
+		printuint32(prevdigits)
 	}
 	putchar(byte((n % 10) + '0'))
 }
 
-func printint(n int) {
+func printint32(n int32) {
 	// Print integer in signed big-endian base-10 notation, for humans to
 	// read.
 	if n < 0 {
 		putchar('-')
 		n = -n
 	}
-	printuint(uint(n))
+	printuint32(uint32(n))
+}
+
+func printuint64(n uint64) {
+	prevdigits := n / 10
+	if prevdigits != 0 {
+		printuint64(prevdigits)
+	}
+	putchar(byte((n % 10) + '0'))
+}
+
+func printint64(n int64) {
+	if n < 0 {
+		putchar('-')
+		n = -n
+	}
+	printuint64(uint64(n))
 }
 
 func printbyte(c uint8) {

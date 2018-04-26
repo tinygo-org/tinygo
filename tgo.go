@@ -47,8 +47,10 @@ type Compiler struct {
 	panicFunc       llvm.Value
 	boundsCheckFunc llvm.Value
 	printstringFunc llvm.Value
-	printintFunc    llvm.Value
-	printuintFunc   llvm.Value
+	printint32Func  llvm.Value
+	printuint32Func llvm.Value
+	printint64Func  llvm.Value
+	printuint64Func llvm.Value
 	printbyteFunc   llvm.Value
 	printspaceFunc  llvm.Value
 	printnlFunc     llvm.Value
@@ -117,10 +119,12 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 
 	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.stringType}, false)
 	c.printstringFunc = llvm.AddFunction(c.mod, "runtime.printstring", printstringType)
-	printintType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.intType}, false)
-	c.printintFunc = llvm.AddFunction(c.mod, "runtime.printint", printintType)
-	printuintType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.intType}, false)
-	c.printuintFunc = llvm.AddFunction(c.mod, "runtime.printuint", printuintType)
+	printi32Type := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.Int32Type()}, false)
+	c.printint32Func = llvm.AddFunction(c.mod, "runtime.printint32", printi32Type)
+	c.printuint32Func = llvm.AddFunction(c.mod, "runtime.printuint32", printi32Type)
+	printi64Type := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.Int64Type()}, false)
+	c.printint64Func = llvm.AddFunction(c.mod, "runtime.printint64", printi64Type)
+	c.printuint64Func = llvm.AddFunction(c.mod, "runtime.printuint64", printi64Type)
 	printbyteType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.Int8Type()}, false)
 	c.printbyteFunc = llvm.AddFunction(c.mod, "runtime.printbyte", printbyteType)
 	printspaceType := llvm.FunctionType(llvm.VoidType(), nil, false)
@@ -579,9 +583,13 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 				case types.Uint8:
 					c.builder.CreateCall(c.printbyteFunc, []llvm.Value{value}, "")
 				case types.Int, types.Int32: // TODO: assumes a 32-bit int type
-					c.builder.CreateCall(c.printintFunc, []llvm.Value{value}, "")
+					c.builder.CreateCall(c.printint32Func, []llvm.Value{value}, "")
 				case types.Uint, types.Uint32:
-					c.builder.CreateCall(c.printuintFunc, []llvm.Value{value}, "")
+					c.builder.CreateCall(c.printuint32Func, []llvm.Value{value}, "")
+				case types.Int64:
+					c.builder.CreateCall(c.printint64Func, []llvm.Value{value}, "")
+				case types.Uint64:
+					c.builder.CreateCall(c.printuint64Func, []llvm.Value{value}, "")
 				case types.String:
 					c.builder.CreateCall(c.printstringFunc, []llvm.Value{value}, "")
 				default:
