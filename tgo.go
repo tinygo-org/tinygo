@@ -1030,14 +1030,16 @@ func (c *Compiler) parseConvert(frame *Frame, typeTo types.Type, x ssa.Value) (l
 		}
 		sizeTo := c.targetData.TypeAllocSize(llvmTypeTo)
 
+		if sizeFrom == sizeTo {
+			return c.builder.CreateBitCast(value, llvmTypeTo, ""), nil
+		}
+
 		if typeTo.Info() & types.IsInteger == 0 { // if not integer
 			return llvm.Value{}, errors.New("todo: convert: extend non-integer type")
 		}
 
 		if sizeFrom > sizeTo {
 			return c.builder.CreateTrunc(value, llvmTypeTo, ""), nil
-		} else if sizeFrom == sizeTo {
-			return c.builder.CreateBitCast(value, llvmTypeTo, ""), nil
 		} else if typeTo.Info() & types.IsUnsigned != 0 { // if unsigned
 			return c.builder.CreateZExt(value, llvmTypeTo, ""), nil
 		} else { // if signed
