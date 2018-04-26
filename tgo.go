@@ -569,7 +569,11 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			switch typ := arg.Type().(type) {
+			typ := arg.Type()
+			if _, ok := typ.(*types.Named); ok {
+				typ = typ.Underlying()
+			}
+			switch typ := typ.(type) {
 			case *types.Basic:
 				switch typ.Kind() {
 				case types.Uint8:
