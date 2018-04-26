@@ -209,92 +209,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	}
 
 	for _, pkg := range packageList {
-		fmt.Println("package:", pkg.Pkg.Path())
-
-		// Make sure we're walking through all members in a constant order every
-		// run.
-		memberNames := make([]string, 0)
-		for name := range pkg.Members {
-			if strings.HasPrefix(name, "_Cgo_") || strings.HasPrefix(name, "_cgo") {
-				// _Cgo_ptr, _Cgo_use, _cgoCheckResult, _cgo_runtime_cgocall
-				continue // CGo-internal functions
-			}
-			if strings.HasPrefix(name, "__cgofn__cgo_") {
-				continue // CGo function pointer in global scope
-			}
-			memberNames = append(memberNames, name)
-		}
-		sort.Strings(memberNames)
-
-		frames := make(map[*ssa.Function]*Frame)
-
-		// First, build all function declarations.
-		for _, name := range memberNames {
-			member := pkg.Members[name]
-
-			switch member := member.(type) {
-			case *ssa.Function:
-				frame, err := c.parseFuncDecl(member)
-				if err != nil {
-					return err
-				}
-				frames[member] = frame
-			case *ssa.NamedConst:
-				// Ignore package-level untyped constants. The SSA form doesn't
-				// need them.
-			case *ssa.Global:
-				typ, err := c.getLLVMType(member.Type())
-				if err != nil {
-					return err
-				}
-				global := llvm.AddGlobal(c.mod, typ, pkgPrefix(member.Pkg) + "." +  member.Name())
-				if ast.IsExported(member.Name()) {
-					global.SetLinkage(llvm.PrivateLinkage)
-				}
-			case *ssa.Type:
-				ms := program.MethodSets.MethodSet(member.Type())
-				for i := 0; i < ms.Len(); i++ {
-					fn := program.MethodValue(ms.At(i))
-					frame, err := c.parseFuncDecl(fn)
-					if err != nil {
-						return err
-					}
-					frames[fn] = frame
-				}
-			default:
-				return errors.New("todo: member: " + fmt.Sprintf("%#v", member))
-			}
-		}
-
-		// Now, add definitions to those declarations.
-		for _, name := range memberNames {
-			member := pkg.Members[name]
-			fmt.Println("member:", member.Token(), member)
-
-			switch member := member.(type) {
-			case *ssa.Function:
-				if strings.HasPrefix(name, "_Cfunc_") {
-					// CGo function. Don't implement it's body.
-					continue
-				}
-				if member.Blocks == nil {
-					continue // external function
-				}
-				err := c.parseFunc(frames[member], member)
-				if err != nil {
-					return err
-				}
-			case *ssa.Type:
-				ms := program.MethodSets.MethodSet(member.Type())
-				for i := 0; i < ms.Len(); i++ {
-					fn := program.MethodValue(ms.At(i))
-					err := c.parseFunc(frames[fn], fn)
-					if err != nil {
-						return err
-					}
-				}
-			}
-		}
+		c.parsePackage(program, pkg)
 	}
 
 	return nil
@@ -380,6 +295,100 @@ func (c *Compiler) getFunctionName(fn *ssa.Function) string {
 			return pkgPrefix(fn.Pkg) + "." + fn.Name()
 		}
 	}
+}
+
+func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
+	fmt.Println("package:", pkg.Pkg.Path())
+
+	// Make sure we're walking through all members in a constant order every
+	// run.
+	memberNames := make([]string, 0)
+	for name := range pkg.Members {
+		if strings.HasPrefix(name, "_Cgo_") || strings.HasPrefix(name, "_cgo") {
+			// _Cgo_ptr, _Cgo_use, _cgoCheckResult, _cgo_runtime_cgocall
+			continue // CGo-internal functions
+		}
+		if strings.HasPrefix(name, "__cgofn__cgo_") {
+			continue // CGo function pointer in global scope
+		}
+		memberNames = append(memberNames, name)
+	}
+	sort.Strings(memberNames)
+
+	frames := make(map[*ssa.Function]*Frame)
+
+	// First, build all function declarations.
+	for _, name := range memberNames {
+		member := pkg.Members[name]
+
+		switch member := member.(type) {
+		case *ssa.Function:
+			frame, err := c.parseFuncDecl(member)
+			if err != nil {
+				return err
+			}
+			frames[member] = frame
+			if member.Synthetic == "package initializer" {
+				c.initFuncs = append(c.initFuncs, frame.llvmFn)
+			}
+		case *ssa.NamedConst:
+			// Ignore package-level untyped constants. The SSA form doesn't need
+			// them.
+		case *ssa.Global:
+			typ, err := c.getLLVMType(member.Type())
+			if err != nil {
+				return err
+			}
+			global := llvm.AddGlobal(c.mod, typ, pkgPrefix(member.Pkg) + "." +  member.Name())
+			if ast.IsExported(member.Name()) {
+				global.SetLinkage(llvm.PrivateLinkage)
+			}
+		case *ssa.Type:
+			ms := program.MethodSets.MethodSet(member.Type())
+			for i := 0; i < ms.Len(); i++ {
+				fn := program.MethodValue(ms.At(i))
+				frame, err := c.parseFuncDecl(fn)
+				if err != nil {
+					return err
+				}
+				frames[fn] = frame
+			}
+		default:
+			return errors.New("todo: member: " + fmt.Sprintf("%#v", member))
+		}
+	}
+
+	// Now, add definitions to those declarations.
+	for _, name := range memberNames {
+		member := pkg.Members[name]
+		fmt.Println("member:", member.Token(), member)
+
+		switch member := member.(type) {
+		case *ssa.Function:
+			if strings.HasPrefix(name, "_Cfunc_") {
+				// CGo function. Don't implement it's body.
+				continue
+			}
+			if member.Blocks == nil {
+				continue // external function
+			}
+			err := c.parseFunc(frames[member], member)
+			if err != nil {
+				return err
+			}
+		case *ssa.Type:
+			ms := program.MethodSets.MethodSet(member.Type())
+			for i := 0; i < ms.Len(); i++ {
+				fn := program.MethodValue(ms.At(i))
+				err := c.parseFunc(frames[fn], fn)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
