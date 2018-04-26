@@ -26,6 +26,14 @@ SECTIONS
     /* used by the startup to initialize data */
     _sidata = LOADADDR(.data);
 
+    /* Put the stack at the bottom of RAM, so that the application will
+     * crash on stack overflow instead of silently corrupting memory.
+     * See: http://blog.japaric.io/stack-overflow-protection/ */
+    .stack :
+    {
+        KEEP(*(.stack))
+    } >RAM
+
     /* This is the initialized data section
     The program executes knowing that the data is in the RAM
     but the loader puts the initial values in the FLASH (inidata).
