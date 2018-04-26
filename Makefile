@@ -41,9 +41,6 @@ SIZE = size
 endif
 
 
-# Make debugging easier by keeping these intermediary files.
-SECONDARY: build/hello.ll build/blinky.ll build/blinky.elf
-
 
 run-hello: build/hello
 	./build/hello
