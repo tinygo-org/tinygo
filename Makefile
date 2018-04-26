@@ -18,7 +18,7 @@ TARGET ?= unix
 
 ifeq ($(TARGET),pca10040)
 GCC = arm-none-eabi-gcc
-LD = arm-none-eabi-ld -T arm.ld
+LD = arm-none-eabi-ld -T arm.ld --gc-sections
 SIZE = arm-none-eabi-size
 OBJCOPY = arm-none-eabi-objcopy
 LLFLAGS += -target armv7m-none-eabi

@@ -1082,6 +1082,16 @@ func (c *Compiler) LinkModule(mod llvm.Module) error {
 	return llvm.LinkModules(c.mod, mod)
 }
 
+func (c *Compiler) ApplyFunctionSections() {
+	llvmFn := c.mod.FirstFunction()
+	for !llvmFn.IsNil() {
+		if !llvmFn.IsDeclaration() {
+			llvmFn.SetSection(".text." + llvmFn.Name())
+		}
+		llvmFn = llvm.NextFunction(llvmFn)
+	}
+}
+
 func (c *Compiler) Optimize(optLevel, sizeLevel int) {
 	builder := llvm.NewPassManagerBuilder()
 	defer builder.Dispose()
@@ -1158,6 +1168,8 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR bool) error {
 	if err != nil {
 		return err
 	}
+
+	c.ApplyFunctionSections() // -ffunction-sections
 
 	if err := c.Verify(); err != nil {
 		return err
