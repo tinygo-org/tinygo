@@ -210,7 +210,10 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	}
 
 	for _, pkg := range packageList {
-		c.parsePackage(program, pkg)
+		err := c.parsePackage(program, pkg)
+		if err != nil {
+			return err
+		}
 	}
 
 	// After all packages are imported, add a synthetic initializer function
