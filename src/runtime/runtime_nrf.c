@@ -1,7 +1,9 @@
 
+#include "hal/nrf_gpio.h"
 #include "hal/nrf_uart.h"
 #include "nrf.h"
 #include "runtime.h"
+#include "runtime_nrf.h"
 #include <string.h>
 
 void uart_init(uint32_t pin_tx) {
@@ -44,6 +46,20 @@ void RTC0_IRQHandler() {
 	NRF_RTC0->INTENCLR = RTC_INTENSET_COMPARE0_Msk;
 	NRF_RTC0->EVENTS_COMPARE[0] = 0;
 	rtc_wakeup = true;
+}
+
+void gpio_cfg(uint32_t pin, gpio_mode_t mode) {
+	nrf_gpio_cfg(
+			pin,
+			mode == GPIO_INPUT ? NRF_GPIO_PIN_DIR_INPUT : NRF_GPIO_PIN_DIR_OUTPUT,
+			mode == GPIO_INPUT ? NRF_GPIO_PIN_INPUT_CONNECT : NRF_GPIO_PIN_INPUT_DISCONNECT,
+			NRF_GPIO_PIN_NOPULL,
+			NRF_GPIO_PIN_S0S1,
+			NRF_GPIO_PIN_NOSENSE);
+}
+
+void gpio_set(uint32_t pin, bool high) {
+	nrf_gpio_pin_write(pin, high);
 }
 
 void _start() {

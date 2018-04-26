@@ -1,14 +1,21 @@
 
 package main
 
-import "runtime"
+import (
+	"machine"
+	"runtime"
+)
 
 func main() {
+	led := machine.GPIO{17} // LED 1 on the PCA10040
+	led.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
 	for {
-		// TODO: enable/disable actual LED
 		println("LED on")
-		runtime.Sleep(runtime.Millisecond * 250)
+		led.Set(false)
+		runtime.Sleep(runtime.Millisecond * 500)
+
 		println("LED off")
-		runtime.Sleep(runtime.Millisecond * 250)
+		led.Set(true)
+		runtime.Sleep(runtime.Millisecond * 500)
 	}
 }
