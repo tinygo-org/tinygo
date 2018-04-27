@@ -213,6 +213,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		worklist = worklist[1:]
 	}
 
+	// Transform each package into LLVM IR.
 	for _, pkg := range packageList {
 		err := c.parsePackage(program, pkg)
 		if err != nil {
@@ -1083,6 +1084,8 @@ func (c *Compiler) LinkModule(mod llvm.Module) error {
 }
 
 func (c *Compiler) ApplyFunctionSections() {
+	// Put every function in a separate section. This makes it possible for the
+	// linker to remove dead code (--gc-sections).
 	llvmFn := c.mod.FirstFunction()
 	for !llvmFn.IsNil() {
 		if !llvmFn.IsDeclaration() {
