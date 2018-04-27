@@ -453,7 +453,7 @@ func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
 }
 
 func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
-	if frame.llvmFn.Name() != "main.main" && frame.llvmFn.Name() != "runtime.init" {
+	if frame.llvmFn.Name() != "main.main" {
 		// This function is only used from within Go.
 		frame.llvmFn.SetLinkage(llvm.PrivateLinkage)
 	}
