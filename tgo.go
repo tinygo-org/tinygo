@@ -583,7 +583,11 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		if err != nil {
 			return err
 		}
-		c.builder.CreateStore(val, addr)
+		if instr.Parent().Synthetic == "package initializer" {
+			addr.SetInitializer(val)
+		} else {
+			c.builder.CreateStore(val, addr)
+		}
 		return nil
 	default:
 		return errors.New("unknown instruction: " + fmt.Sprintf("%#v", instr))
