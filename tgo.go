@@ -54,7 +54,6 @@ type Compiler struct {
 	printbyteFunc   llvm.Value
 	printspaceFunc  llvm.Value
 	printnlFunc     llvm.Value
-	memsetIntrinsic llvm.Value
 	itfTypeNumbers  map[types.Type]uint64
 	itfTypes        []types.Type
 	initFuncs       []llvm.Value
@@ -131,16 +130,6 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	c.printspaceFunc = llvm.AddFunction(c.mod, "runtime.printspace", printspaceType)
 	printnlType := llvm.FunctionType(llvm.VoidType(), nil, false)
 	c.printnlFunc = llvm.AddFunction(c.mod, "runtime.printnl", printnlType)
-
-	// Intrinsic functions
-	memsetType := llvm.FunctionType(
-		llvm.VoidType(), []llvm.Type{
-			llvm.PointerType(llvm.Int8Type(), 0),
-			llvm.Int8Type(),
-			llvm.Int32Type(),
-			llvm.Int1Type(),
-		}, false)
-	c.memsetIntrinsic = llvm.AddFunction(c.mod, "llvm.memset.p0i8.i32", memsetType)
 
 	return c, nil
 }
@@ -289,6 +278,39 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		return llvm.StructType(members, false), nil
 	default:
 		return llvm.Type{}, errors.New("todo: unknown type: " + fmt.Sprintf("%#v", goType))
+	}
+}
+
+func (c *Compiler) getZeroValue(typ llvm.Type) (llvm.Value, error) {
+	switch typ.TypeKind() {
+	case llvm.ArrayTypeKind:
+		subTyp := typ.ElementType()
+		vals := make([]llvm.Value, typ.ArrayLength())
+		for i := range vals {
+			val, err := c.getZeroValue(subTyp)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			vals[i] = val
+		}
+		return llvm.ConstArray(subTyp, vals), nil
+	case llvm.IntegerTypeKind:
+		return llvm.ConstInt(typ, 0, false), nil
+	case llvm.PointerTypeKind:
+		return llvm.ConstPointerNull(typ), nil
+	case llvm.StructTypeKind:
+		types := typ.StructElementTypes()
+		vals := make([]llvm.Value, len(types))
+		for i, subTyp := range types {
+			val, err := c.getZeroValue(subTyp)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			vals[i] = val
+		}
+		return llvm.ConstStruct(vals, false), nil
+	default:
+		return llvm.Value{}, errors.New("todo: LLVM zero initializer")
 	}
 }
 
@@ -686,20 +708,14 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		} else {
 			buf = c.builder.CreateAlloca(typ, expr.Comment)
 		}
-		width := c.targetData.TypeAllocSize(typ)
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		llvmWidth := llvm.ConstInt(llvm.Int32Type(), width, false)
-		bufBytes := c.builder.CreateBitCast(buf, llvm.PointerType(llvm.Int8Type(), 0), "")
-		c.builder.CreateCall(
-			c.memsetIntrinsic,
-			[]llvm.Value{
-				bufBytes,
-				llvm.ConstInt(llvm.Int8Type(), 0, false), // value to set (zero)
-				llvmWidth,                                // size to zero
-				llvm.ConstInt(llvm.Int1Type(), 0, false), // volatile
-			}, "")
+		zero, err := c.getZeroValue(typ)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		c.builder.CreateStore(zero, buf) // zero-initialize var
 		return buf, nil
 	case *ssa.BinOp:
 		return c.parseBinOp(frame, expr)
