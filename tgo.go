@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"go/ast"
 	"go/build"
 	"go/constant"
 	"go/token"
@@ -377,14 +376,23 @@ func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
 			// Ignore package-level untyped constants. The SSA form doesn't need
 			// them.
 		case *ssa.Global:
-			typ, err := c.getLLVMType(member.Type())
+			typ := member.Type()
+			if typPtr, ok := typ.(*types.Pointer); ok {
+				typ = typPtr.Elem()
+			} else {
+				return errors.New("global is not a pointer")
+			}
+			llvmType, err := c.getLLVMType(typ)
 			if err != nil {
 				return err
 			}
-			global := llvm.AddGlobal(c.mod, typ, pkgPrefix(member.Pkg) + "." +  member.Name())
-			if ast.IsExported(member.Name()) {
-				global.SetLinkage(llvm.PrivateLinkage)
+			global := llvm.AddGlobal(c.mod, llvmType, pkgPrefix(member.Pkg) + "." +  member.Name())
+			global.SetLinkage(llvm.PrivateLinkage)
+			initializer, err := c.getZeroValue(llvmType)
+			if err != nil {
+				return err
 			}
+			global.SetInitializer(initializer)
 		case *ssa.Type:
 			ms := program.MethodSets.MethodSet(member.Type())
 			for i := 0; i < ms.Len(); i++ {
