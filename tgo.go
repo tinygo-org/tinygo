@@ -19,9 +19,6 @@ import (
 	"llvm.org/llvm/bindings/go/llvm"
 )
 
-// Silently ignore this instruction.
-var ErrCGoIgnore = errors.New("cgo: ignore")
-
 func init() {
 	llvm.InitializeAllTargets()
 	llvm.InitializeAllTargetMCs()
@@ -395,7 +392,12 @@ func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
 			if member.Blocks == nil {
 				continue // external function
 			}
-			err := c.parseFunc(frames[member], member)
+			var err error
+			if member.Synthetic == "package initializer" {
+				err = c.parseInitFunc(frames[member], member)
+			} else {
+				err = c.parseFunc(frames[member], member)
+			}
 			if err != nil {
 				return err
 			}
@@ -456,6 +458,67 @@ func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
 	return frame, nil
 }
 
+// Special function parser for generated package initializers (which also
+// initializes global variables).
+func (c *Compiler) parseInitFunc(frame *Frame, f *ssa.Function) error {
+	llvmBlock := c.ctx.AddBasicBlock(frame.llvmFn, "entry")
+	c.builder.SetInsertPointAtEnd(llvmBlock)
+
+	for _, block := range f.DomPreorder() {
+		for _, instr := range block.Instrs {
+			var err error
+			switch instr := instr.(type) {
+			case *ssa.Convert:
+				// ignore: CGo pointer conversion
+			case *ssa.Return:
+				err = c.parseInstr(frame, instr)
+			case *ssa.FieldAddr:
+				// ignore
+			case *ssa.Store:
+				var llvmAddr llvm.Value
+				switch addr := instr.Addr.(type) {
+				case *ssa.Global:
+					// Regular store, like a global int variable.
+					if strings.HasPrefix(addr.Name(), "__cgofn__cgo_") || strings.HasPrefix(addr.Name(), "_cgo_") {
+						// Ignore CGo global variables which we don't use.
+						continue
+					}
+					val, err := c.parseExpr(frame, instr.Val)
+					if err != nil {
+						return err
+					}
+					fullName := pkgPrefix(addr.Pkg) + "." + addr.Name()
+					llvmAddr = c.mod.NamedGlobal(fullName)
+					llvmAddr.SetInitializer(val)
+				case *ssa.FieldAddr:
+					// Initialize field of a global struct.
+					// LLVM does not allow setting an initializer on part of a
+					// global variable. So we take the current initializer, add
+					// the field, and replace the initializer with the new
+					// initializer.
+					val, err := c.parseExpr(frame, instr.Val)
+					if err != nil {
+						return err
+					}
+					global := addr.X.(*ssa.Global)
+					llvmAddr := c.mod.NamedGlobal(pkgPrefix(global.Pkg) + "." + global.Name())
+					llvmValue := llvmAddr.Initializer()
+					llvmValue = c.builder.CreateInsertValue(llvmValue, val, addr.Field, "")
+					llvmAddr.SetInitializer(llvmValue)
+				default:
+					return errors.New("unknown init store: " + fmt.Sprintf("%#v", addr))
+				}
+			default:
+				return errors.New("unknown init instruction: " + fmt.Sprintf("%#v", instr))
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
 	if frame.llvmFn.Name() != "main.main" {
 		// This function is only used from within Go.
@@ -480,9 +543,6 @@ func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
 		for _, instr := range block.Instrs {
 			fmt.Printf("  instr: %v\n", instr)
 			err := c.parseInstr(frame, instr)
-			if err == ErrCGoIgnore {
-				continue // ignore irrelevant CGo instruction
-			}
 			if err != nil {
 				return err
 			}
@@ -556,11 +616,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		if err != nil {
 			return err
 		}
-		if instr.Parent().Synthetic == "package initializer" {
-			addr.SetInitializer(val)
-		} else {
-			c.builder.CreateStore(val, addr)
-		}
+		c.builder.CreateStore(val, addr)
 		return nil
 	default:
 		return errors.New("unknown instruction: " + fmt.Sprintf("%#v", instr))
@@ -730,9 +786,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Global:
-		if strings.HasPrefix(expr.Name(), "__cgofn__cgo_") || strings.HasPrefix(expr.Name(), "_cgo_") {
-			return llvm.Value{}, ErrCGoIgnore
-		}
 		fullName := pkgPrefix(expr.Pkg) + "." + expr.Name()
 		value := c.mod.NamedGlobal(fullName)
 		if value.IsNil() {
