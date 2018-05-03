@@ -43,16 +43,6 @@ type Compiler struct {
 	stringType      llvm.Type
 	interfaceType   llvm.Type
 	typeassertType  llvm.Type
-	panicFunc       llvm.Value
-	boundsCheckFunc llvm.Value
-	printstringFunc llvm.Value
-	printint32Func  llvm.Value
-	printuint32Func llvm.Value
-	printint64Func  llvm.Value
-	printuint64Func llvm.Value
-	printbyteFunc   llvm.Value
-	printspaceFunc  llvm.Value
-	printnlFunc     llvm.Value
 	itfTypeNumbers  map[types.Type]uint64
 	itfTypes        []types.Type
 	initFuncs       []llvm.Value
@@ -109,27 +99,6 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	// Go typeassert result: tuple of (ptr, bool)
 	c.typeassertType = llvm.StructType([]llvm.Type{llvm.PointerType(llvm.Int8Type(), 0), llvm.Int1Type()}, false)
 
-	panicType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.interfaceType}, false)
-	c.panicFunc = llvm.AddFunction(c.mod, "runtime._panic", panicType)
-
-	boundsCheckType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.Int1Type()}, false)
-	c.boundsCheckFunc = llvm.AddFunction(c.mod, "runtime.boundsCheck", boundsCheckType)
-
-	printstringType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.stringType}, false)
-	c.printstringFunc = llvm.AddFunction(c.mod, "runtime.printstring", printstringType)
-	printi32Type := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.Int32Type()}, false)
-	c.printint32Func = llvm.AddFunction(c.mod, "runtime.printint32", printi32Type)
-	c.printuint32Func = llvm.AddFunction(c.mod, "runtime.printuint32", printi32Type)
-	printi64Type := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.Int64Type()}, false)
-	c.printint64Func = llvm.AddFunction(c.mod, "runtime.printint64", printi64Type)
-	c.printuint64Func = llvm.AddFunction(c.mod, "runtime.printuint64", printi64Type)
-	printbyteType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{llvm.Int8Type()}, false)
-	c.printbyteFunc = llvm.AddFunction(c.mod, "runtime.printbyte", printbyteType)
-	printspaceType := llvm.FunctionType(llvm.VoidType(), nil, false)
-	c.printspaceFunc = llvm.AddFunction(c.mod, "runtime.printspace", printspaceType)
-	printnlType := llvm.FunctionType(llvm.VoidType(), nil, false)
-	c.printnlFunc = llvm.AddFunction(c.mod, "runtime.printnl", printnlType)
-
 	return c, nil
 }
 
@@ -183,7 +152,11 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 			}
 
 			unsatisfiedImports := make([]string, 0)
-			for _, pkg := range pkg.Pkg.Imports() {
+			imports := pkg.Pkg.Imports()
+			if pkgPath != "runtime" && pkgPath != "unsafe" && pkgPath != "runtime/cgo" && pkgPath != "syscall" {
+				imports = append(imports, program.ImportedPackage("runtime").Pkg)
+			}
+			for _, pkg := range imports {
 				if _, ok := packageSet[pkg.Path()]; ok {
 					continue
 				}
@@ -557,7 +530,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		if err != nil {
 			return err
 		}
-		c.builder.CreateCall(c.panicFunc, []llvm.Value{value}, "")
+		c.builder.CreateCall(c.mod.NamedFunction("runtime._panic"), []llvm.Value{value}, "")
 		c.builder.CreateUnreachable()
 		return nil
 	case *ssa.Return:
@@ -601,7 +574,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 	case "print", "println":
 		for i, arg := range args {
 			if i >= 1 {
-				c.builder.CreateCall(c.printspaceFunc, nil, "")
+				c.builder.CreateCall(c.mod.NamedFunction("runtime.printspace"), nil, "")
 			}
 			fmt.Printf("    arg: %s\n", arg);
 			value, err := c.parseExpr(frame, arg)
@@ -616,17 +589,17 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			case *types.Basic:
 				switch typ.Kind() {
 				case types.Uint8:
-					c.builder.CreateCall(c.printbyteFunc, []llvm.Value{value}, "")
+					c.builder.CreateCall(c.mod.NamedFunction("runtime.printbyte"), []llvm.Value{value}, "")
 				case types.Int, types.Int32: // TODO: assumes a 32-bit int type
-					c.builder.CreateCall(c.printint32Func, []llvm.Value{value}, "")
+					c.builder.CreateCall(c.mod.NamedFunction("runtime.printint32"), []llvm.Value{value}, "")
 				case types.Uint, types.Uint32:
-					c.builder.CreateCall(c.printuint32Func, []llvm.Value{value}, "")
+					c.builder.CreateCall(c.mod.NamedFunction("runtime.printuint32"), []llvm.Value{value}, "")
 				case types.Int64:
-					c.builder.CreateCall(c.printint64Func, []llvm.Value{value}, "")
+					c.builder.CreateCall(c.mod.NamedFunction("runtime.printint64"), []llvm.Value{value}, "")
 				case types.Uint64:
-					c.builder.CreateCall(c.printuint64Func, []llvm.Value{value}, "")
+					c.builder.CreateCall(c.mod.NamedFunction("runtime.printuint64"), []llvm.Value{value}, "")
 				case types.String:
-					c.builder.CreateCall(c.printstringFunc, []llvm.Value{value}, "")
+					c.builder.CreateCall(c.mod.NamedFunction("runtime.printstring"), []llvm.Value{value}, "")
 				default:
 					return llvm.Value{}, errors.New("unknown basic arg type: " + fmt.Sprintf("%#v", typ))
 				}
@@ -635,7 +608,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			}
 		}
 		if callName == "println" {
-			c.builder.CreateCall(c.printnlFunc, nil, "")
+			c.builder.CreateCall(c.mod.NamedFunction("runtime.printnl"), nil, "")
 		}
 		return llvm.Value{}, nil // print() or println() returns void
 	case "len":
@@ -792,7 +765,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		isNegative := c.builder.CreateICmp(llvm.IntSLT, index, constZero, "") // index < 0
 		isTooBig := c.builder.CreateICmp(llvm.IntSGE, index, buflen, "") // index >= len(value)
 		isOverflow := c.builder.CreateOr(isNegative, isTooBig, "")
-		c.builder.CreateCall(c.boundsCheckFunc, []llvm.Value{isOverflow}, "")
+		c.builder.CreateCall(c.mod.NamedFunction("runtime.boundsCheck"), []llvm.Value{isOverflow}, "")
 
 		indices := []llvm.Value{
 			llvm.ConstInt(llvm.Int32Type(), 0, false),
@@ -830,7 +803,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			}
 			isTooBig := c.builder.CreateICmp(llvm.IntSGE, index, strlen, "") // index >= len(value)
 			isOverflow := c.builder.CreateOr(isNegative, isTooBig, "")
-			c.builder.CreateCall(c.boundsCheckFunc, []llvm.Value{isOverflow}, "")
+			c.builder.CreateCall(c.mod.NamedFunction("runtime.boundsCheck"), []llvm.Value{isOverflow}, "")
 		}
 
 		// Lookup byte
