@@ -3,7 +3,7 @@
 all: tgo
 tgo: build/tgo
 
-.PHONY: all tgo run-hello run-blinky flash-blinky clean
+.PHONY: all tgo run-hello run-blinky flash-blinky clean gen-device gen-device-nrf
 
 # Custom LLVM toolchain.
 LLVM =
@@ -54,6 +54,11 @@ flash-blinky: build/blinky.hex
 clean:
 	@rm -rf build
 
+gen-device: gen-device-nrf
+
+gen-device-nrf:
+	./gen-device.py lib/nrfx/mdk/ src/device/nrf/
+	go fmt ./src/device/nrf
 
 
 # Build the Go compiler.
