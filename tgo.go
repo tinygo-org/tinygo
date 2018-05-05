@@ -1140,6 +1140,8 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 		return c.builder.CreateSub(llvm.ConstInt(x.Type(), 0, false), x, ""), nil
 	case token.MUL: // *x, dereference pointer
 		return c.builder.CreateLoad(x, ""), nil
+	case token.XOR: // ^x, toggle all bits in integer
+		return c.builder.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil
 	default:
 		return llvm.Value{}, errors.New("todo: unknown unop")
 	}
