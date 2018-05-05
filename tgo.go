@@ -628,15 +628,24 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 			return errors.New("todo: return value")
 		}
 	case *ssa.Store:
-		addr, err := c.parseExpr(frame, instr.Addr)
+		llvmAddr, err := c.parseExpr(frame, instr.Addr)
 		if err != nil {
 			return err
 		}
-		val, err := c.parseExpr(frame, instr.Val)
+		llvmVal, err := c.parseExpr(frame, instr.Val)
 		if err != nil {
 			return err
 		}
-		c.builder.CreateStore(val, addr)
+		valType := instr.Addr.Type().(*types.Pointer).Elem()
+		if valType, ok := valType.(*types.Named); ok && valType.Obj().Name() == "__reg" {
+			// Magic type name to transform this store to a register store.
+			registerAddr := c.builder.CreateLoad(llvmAddr, "")
+			ptr := c.builder.CreateIntToPtr(registerAddr, llvmAddr.Type(), "")
+			store := c.builder.CreateStore(llvmVal, ptr)
+			store.SetVolatile(true)
+		} else {
+			c.builder.CreateStore(llvmVal, llvmAddr)
+		}
 		return nil
 	default:
 		return errors.New("unknown instruction: " + fmt.Sprintf("%#v", instr))
@@ -1139,7 +1148,20 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 	case token.SUB: // -x
 		return c.builder.CreateSub(llvm.ConstInt(x.Type(), 0, false), x, ""), nil
 	case token.MUL: // *x, dereference pointer
-		return c.builder.CreateLoad(x, ""), nil
+		valType := unop.X.Type().(*types.Pointer).Elem()
+		if valType, ok := valType.(*types.Named); ok && valType.Obj().Name() == "__reg" {
+			// Magic type name: treat the value as a register pointer.
+			register := unop.X.(*ssa.FieldAddr)
+			global := register.X.(*ssa.Global)
+			llvmGlobal := c.mod.NamedGlobal(pkgPrefix(global.Pkg) + "." + global.Name())
+			llvmAddr := c.builder.CreateExtractValue(llvmGlobal.Initializer(), register.Field, "")
+			ptr := llvm.ConstIntToPtr(llvmAddr, x.Type())
+			load := c.builder.CreateLoad(ptr, "")
+			load.SetVolatile(true)
+			return load, nil
+		} else {
+			return c.builder.CreateLoad(x, ""), nil
+		}
 	case token.XOR: // ^x, toggle all bits in integer
 		return c.builder.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil
 	default:
