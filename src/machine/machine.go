@@ -1,26 +1,18 @@
 
 package machine
 
-// #include "../runtime/runtime_nrf.h"
-import "C"
+type GPIOConfig struct {
+	Mode GPIOMode
+}
 
 type GPIO struct {
-	Pin uint32
+	Pin uint8
 }
 
-type GPIOConfig struct {
-	Mode uint8
+func (p GPIO) High() {
+	p.Set(true)
 }
 
-const (
-	GPIO_INPUT  = iota
-	GPIO_OUTPUT
-)
-
-func (p GPIO) Configure(config GPIOConfig) {
-	C.gpio_cfg(C.uint(p.Pin), C.gpio_mode_t(config.Mode))
-}
-
-func (p GPIO) Set(value bool) {
-	C.gpio_set(C.uint(p.Pin), C.bool(value))
+func (p GPIO) Low() {
+	p.Set(false)
 }

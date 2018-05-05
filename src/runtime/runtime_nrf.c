@@ -48,20 +48,6 @@ void RTC0_IRQHandler() {
 	rtc_wakeup = true;
 }
 
-void gpio_cfg(uint32_t pin, gpio_mode_t mode) {
-	nrf_gpio_cfg(
-			pin,
-			mode == GPIO_INPUT ? NRF_GPIO_PIN_DIR_INPUT : NRF_GPIO_PIN_DIR_OUTPUT,
-			mode == GPIO_INPUT ? NRF_GPIO_PIN_INPUT_CONNECT : NRF_GPIO_PIN_INPUT_DISCONNECT,
-			NRF_GPIO_PIN_NOPULL,
-			NRF_GPIO_PIN_S0S1,
-			NRF_GPIO_PIN_NOSENSE);
-}
-
-void gpio_set(uint32_t pin, bool high) {
-	nrf_gpio_pin_write(pin, high);
-}
-
 void _start() {
 	main();
 }
