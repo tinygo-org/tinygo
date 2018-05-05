@@ -843,11 +843,16 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		// Bounds check.
 		// LLVM optimizes this away in most cases.
-		constZero := llvm.ConstInt(c.intType, 0, false)
-		isNegative := c.builder.CreateICmp(llvm.IntSLT, index, constZero, "") // index < 0
-		isTooBig := c.builder.CreateICmp(llvm.IntSGE, index, buflen, "") // index >= len(value)
-		isOverflow := c.builder.CreateOr(isNegative, isTooBig, "")
-		c.builder.CreateCall(c.mod.NamedFunction("runtime.boundsCheck"), []llvm.Value{isOverflow}, "")
+		// TODO: runtime.boundsCheck is undefined in packages imported by
+		// package runtime, so we have to remove it. This should be fixed.
+		boundsCheck := c.mod.NamedFunction("runtime.boundsCheck")
+		if !boundsCheck.IsNil() {
+			constZero := llvm.ConstInt(c.intType, 0, false)
+			isNegative := c.builder.CreateICmp(llvm.IntSLT, index, constZero, "") // index < 0
+			isTooBig := c.builder.CreateICmp(llvm.IntSGE, index, buflen, "") // index >= len(value)
+			isOverflow := c.builder.CreateOr(isNegative, isTooBig, "")
+			c.builder.CreateCall(boundsCheck, []llvm.Value{isOverflow}, "")
+		}
 
 		indices := []llvm.Value{
 			llvm.ConstInt(llvm.Int32Type(), 0, false),
