@@ -471,14 +471,13 @@ func (c *Compiler) parseInitFunc(frame *Frame, f *ssa.Function) error {
 		for _, instr := range block.Instrs {
 			var err error
 			switch instr := instr.(type) {
-			case *ssa.Convert:
-				// ignore: CGo pointer conversion
-			case *ssa.Return:
+			case *ssa.Call, *ssa.Return:
 				err = c.parseInstr(frame, instr)
-			case *ssa.FieldAddr:
-				// ignore
+			case *ssa.Convert:
+				// Ignore: CGo pointer conversion.
+			case *ssa.FieldAddr, *ssa.IndexAddr:
+				// Ignore: handled below with *ssa.Store.
 			case *ssa.Store:
-				var llvmAddr llvm.Value
 				switch addr := instr.Addr.(type) {
 				case *ssa.Global:
 					// Regular store, like a global int variable.
@@ -491,7 +490,7 @@ func (c *Compiler) parseInitFunc(frame *Frame, f *ssa.Function) error {
 						return err
 					}
 					fullName := pkgPrefix(addr.Pkg) + "." + addr.Name()
-					llvmAddr = c.mod.NamedGlobal(fullName)
+					llvmAddr := c.mod.NamedGlobal(fullName)
 					llvmAddr.SetInitializer(val)
 				case *ssa.FieldAddr:
 					// Initialize field of a global struct.
@@ -507,6 +506,24 @@ func (c *Compiler) parseInitFunc(frame *Frame, f *ssa.Function) error {
 					llvmAddr := c.mod.NamedGlobal(pkgPrefix(global.Pkg) + "." + global.Name())
 					llvmValue := llvmAddr.Initializer()
 					llvmValue = c.builder.CreateInsertValue(llvmValue, val, addr.Field, "")
+					llvmAddr.SetInitializer(llvmValue)
+				case *ssa.IndexAddr:
+					val, err := c.parseExpr(frame, instr.Val)
+					if err != nil {
+						return err
+					}
+					constIndex := addr.Index.(*ssa.Const)
+					index, exact := constant.Int64Val(constIndex.Value)
+					if !exact {
+						return errors.New("could not get store index: " + constIndex.Value.ExactString())
+					}
+					fieldAddr := addr.X.(*ssa.FieldAddr)
+					global := fieldAddr.X.(*ssa.Global)
+					llvmAddr := c.mod.NamedGlobal(pkgPrefix(global.Pkg) + "." + global.Name())
+					llvmValue := c.mod.NamedGlobal(pkgPrefix(global.Pkg) + "." + global.Name()).Initializer()
+					llvmFieldValue := c.builder.CreateExtractValue(llvmValue, fieldAddr.Field, "")
+					llvmFieldValue = c.builder.CreateInsertValue(llvmFieldValue, val, int(index), "")
+					llvmValue = c.builder.CreateInsertValue(llvmValue, llvmFieldValue, fieldAddr.Field, "")
 					llvmAddr.SetInitializer(llvmValue)
 				default:
 					return errors.New("unknown init store: " + fmt.Sprintf("%#v", addr))
