@@ -124,7 +124,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 
 	// TODO: pick the error of the first package, not a random package
 	for _, pkgInfo := range lprogram.AllPackages {
-		fmt.Println("package:", pkgInfo.Pkg.Name())
+		fmt.Println("package:", pkgInfo.Pkg.Path())
 		if len(pkgInfo.Errors) != 0 {
 			return pkgInfo.Errors[0]
 		}
@@ -136,39 +136,42 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	// Make a list of packages in import order.
 	packageList := []*ssa.Package{}
 	packageSet := map[string]struct{}{}
-	worklist := [][]string{{"runtime", mainPath}}
+	worklist := []string{"runtime", mainPath}
 	for len(worklist) != 0 {
-		for _, pkgPath := range worklist[0] {
-			pkg := program.ImportedPackage(pkgPath)
-			if pkg == nil {
-				packageSet[pkgPath] = struct{}{}
-				continue // non-SSA package (e.g. cgo)
-			}
-			if _, ok := packageSet[pkgPath]; ok {
+		pkgPath := worklist[0]
+		pkg := program.ImportedPackage(pkgPath)
+		if pkg == nil {
+			// Non-SSA package (e.g. cgo).
+			packageSet[pkgPath] = struct{}{}
+			worklist = worklist[1:]
+			continue
+		}
+		if _, ok := packageSet[pkgPath]; ok {
+			// Package already in the final package list.
+			worklist = worklist[1:]
+			continue
+		}
+
+		unsatisfiedImports := make([]string, 0)
+		imports := pkg.Pkg.Imports()
+		for _, pkg := range imports {
+			if _, ok := packageSet[pkg.Path()]; ok {
 				continue
 			}
-
-			unsatisfiedImports := make([]string, 0)
-			imports := pkg.Pkg.Imports()
-			if pkgPath != "runtime" && pkgPath != "unsafe" && pkgPath != "runtime/cgo" && pkgPath != "syscall" {
-				imports = append(imports, program.ImportedPackage("runtime").Pkg)
-			}
-			for _, pkg := range imports {
-				if _, ok := packageSet[pkg.Path()]; ok {
-					continue
-				}
-				unsatisfiedImports = append(unsatisfiedImports, pkg.Path())
-			}
-			if len(unsatisfiedImports) == 0 {
-				// all dependencies are in packageList inserted
-				packageList = append(packageList, pkg)
-				packageSet[pkgPath] = struct{}{}
-			} else {
-				unsatisfiedImports = append(unsatisfiedImports, pkgPath) // reconsider
-				worklist = append(worklist, unsatisfiedImports)
-			}
+			unsatisfiedImports = append(unsatisfiedImports, pkg.Path())
 		}
-		worklist = worklist[1:]
+		if len(unsatisfiedImports) == 0 {
+			// All dependencies of this package are satisfied, so add this
+			// package to the list.
+			packageList = append(packageList, pkg)
+			packageSet[pkgPath] = struct{}{}
+			worklist = worklist[1:]
+		} else {
+			// Prepend all dependencies to the worklist and reconsider this
+			// package (by not removing it from the worklist). At that point, it
+			// must be possible to add it to packageList.
+			worklist = append(unsatisfiedImports, worklist...)
+		}
 	}
 
 	// Transform each package into LLVM IR.
@@ -309,7 +312,7 @@ func (c *Compiler) getFunctionName(fn *ssa.Function) string {
 }
 
 func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
-	fmt.Println("package:", pkg.Pkg.Path())
+	fmt.Println("\npackage:", pkg.Pkg.Path())
 
 	// Make sure we're walking through all members in a constant order every
 	// run.
