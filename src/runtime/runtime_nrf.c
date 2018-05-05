@@ -6,30 +6,6 @@
 #include "runtime_nrf.h"
 #include <string.h>
 
-void uart_init(uint32_t pin_tx) {
-	NRF_UART0->ENABLE        = UART_ENABLE_ENABLE_Enabled;
-	NRF_UART0->BAUDRATE      = UART_BAUDRATE_BAUDRATE_Baud115200;
-	NRF_UART0->TASKS_STARTTX = 1;
-	NRF_UART0->PSELTXD       = 6;
-}
-
-void uart_send(uint8_t c) {
-	NRF_UART0->TXD = c;
-	while (NRF_UART0->EVENTS_TXDRDY != 1) {}
-	NRF_UART0->EVENTS_TXDRDY = 0;
-}
-
-void rtc_init() {
-	// Make sure the low-frequency clock is running.
-	NRF_CLOCK->TASKS_LFCLKSTART = 1;
-	while (NRF_CLOCK->EVENTS_LFCLKSTARTED == 0) {}
-	NRF_CLOCK->EVENTS_LFCLKSTARTED = 0;
-
-	NRF_RTC0->TASKS_START = 1;
-	NVIC_SetPriority(RTC0_IRQn, 3);
-	NVIC_EnableIRQ(RTC0_IRQn);
-}
-
 static volatile bool rtc_wakeup;
 
 void rtc_sleep(uint32_t ticks) {
