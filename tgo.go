@@ -832,8 +832,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, errors.New("todo: indexaddr: len")
 		}
 
-		// Bounds check
-		// TODO: inline, and avoid if possible
+		// Bounds check.
+		// LLVM optimizes this away in most cases.
 		constZero := llvm.ConstInt(c.intType, 0, false)
 		isNegative := c.builder.CreateICmp(llvm.IntSLT, index, constZero, "") // index < 0
 		isTooBig := c.builder.CreateICmp(llvm.IntSGE, index, buflen, "") // index >= len(value)
@@ -865,8 +865,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, nil
 		}
 
-		// Bounds check
-		// TODO: inline, and avoid if possible
+		// Bounds check.
+		// LLVM optimizes this away in most cases.
 		if frame.llvmFn.Name() != "runtime.boundsCheck" {
 			constZero := llvm.ConstInt(c.intType, 0, false)
 			isNegative := c.builder.CreateICmp(llvm.IntSLT, index, constZero, "") // index < 0
@@ -1134,11 +1134,11 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 		return llvm.Value{}, err
 	}
 	switch unop.Op {
-	case token.NOT: // !
+	case token.NOT: // !x
 		return c.builder.CreateNot(x, ""), nil
-	case token.SUB: // -num
+	case token.SUB: // -x
 		return c.builder.CreateSub(llvm.ConstInt(x.Type(), 0, false), x, ""), nil
-	case token.MUL: // *ptr, dereference pointer
+	case token.MUL: // *x, dereference pointer
 		return c.builder.CreateLoad(x, ""), nil
 	default:
 		return llvm.Value{}, errors.New("todo: unknown unop")
