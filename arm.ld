@@ -5,6 +5,7 @@ MEMORY
     RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 16K
 }
 
+_stack_size = 2K;
 
 /* define output sections */
 SECTIONS
@@ -23,15 +24,14 @@ SECTIONS
         _etext = .;        /* define a global symbol at end of code */
     } >FLASH_TEXT
 
-    /* used by the startup to initialize data */
-    _sidata = LOADADDR(.data);
-
     /* Put the stack at the bottom of RAM, so that the application will
      * crash on stack overflow instead of silently corrupting memory.
      * See: http://blog.japaric.io/stack-overflow-protection/ */
     .stack :
     {
-        KEEP(*(.stack))
+        . = ALIGN(4);
+        . += _stack_size;
+        __StackTop = .;
     } >RAM
 
     /* This is the initialized data section
@@ -62,10 +62,16 @@ SECTIONS
         _ebss = .;         /* define a global symbol at bss end; used by startup code and GC */
     } >RAM
 
-    .ARM.attributes 0 : { *(.ARM.attributes) }
+    /DISCARD/ :
+    {
+        *(.ARM.exidx.*)
+        *(.ARM.attributes)
+        *(.stack) /* from nrfx */
+        *(.heap)  /* from nrfx */
+    }
 }
 
-/* For the nrfx startup file */
+/* For the nrfx startup file. */
 __etext = _etext;
 __data_start__ = _sdata;
 __bss_start__ = _sbss;
