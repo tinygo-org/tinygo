@@ -350,7 +350,7 @@ func getFunctionName(fn *ssa.Function) string {
 	}
 }
 
-func (c *Compiler) getGlobalName(global *ssa.Global) string {
+func getGlobalName(global *ssa.Global) string {
 	if strings.HasPrefix(global.Name(), "_extern_") {
 		return global.Name()[len("_extern_"):]
 	} else {
@@ -414,10 +414,10 @@ func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
 			if err != nil {
 				return err
 			}
-			global := llvm.AddGlobal(c.mod, llvmType, c.getGlobalName(member))
+			global := llvm.AddGlobal(c.mod, llvmType, getGlobalName(member))
 			if !strings.HasPrefix(member.Name(), "_extern_") {
 				global.SetLinkage(llvm.PrivateLinkage)
-				if c.getGlobalName(member) == "runtime.TargetBits" {
+				if getGlobalName(member) == "runtime.TargetBits" {
 					bitness := c.targetData.PointerSize()
 					if bitness < 32 {
 						// Only 8 and 32+ architectures supported at the moment.
@@ -561,7 +561,7 @@ func (c *Compiler) parseInitFunc(frame *Frame, f *ssa.Function) error {
 					if err != nil {
 						return err
 					}
-					llvmAddr := c.mod.NamedGlobal(c.getGlobalName(addr))
+					llvmAddr := c.mod.NamedGlobal(getGlobalName(addr))
 					llvmAddr.SetInitializer(val)
 				case *ssa.FieldAddr:
 					// Initialize field of a global struct.
@@ -574,7 +574,7 @@ func (c *Compiler) parseInitFunc(frame *Frame, f *ssa.Function) error {
 						return err
 					}
 					global := addr.X.(*ssa.Global)
-					llvmAddr := c.mod.NamedGlobal(c.getGlobalName(global))
+					llvmAddr := c.mod.NamedGlobal(getGlobalName(global))
 					llvmValue := llvmAddr.Initializer()
 					if llvmValue.IsNil() {
 						llvmValue, err = c.getZeroValue(llvmAddr.Type().ElementType())
@@ -596,7 +596,7 @@ func (c *Compiler) parseInitFunc(frame *Frame, f *ssa.Function) error {
 					}
 					fieldAddr := addr.X.(*ssa.FieldAddr)
 					global := fieldAddr.X.(*ssa.Global)
-					llvmAddr := c.mod.NamedGlobal(c.getGlobalName(global))
+					llvmAddr := c.mod.NamedGlobal(getGlobalName(global))
 					llvmValue := llvmAddr.Initializer()
 					if llvmValue.IsNil() {
 						llvmValue, err = c.getZeroValue(llvmAddr.Type().ElementType())
@@ -904,7 +904,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Global:
-		fullName := c.getGlobalName(expr)
+		fullName := getGlobalName(expr)
 		value := c.mod.NamedGlobal(fullName)
 		if value.IsNil() {
 			return llvm.Value{}, errors.New("global not found: " + fullName)
@@ -1256,7 +1256,7 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 			// Magic type name: treat the value as a register pointer.
 			register := unop.X.(*ssa.FieldAddr)
 			global := register.X.(*ssa.Global)
-			llvmGlobal := c.mod.NamedGlobal(c.getGlobalName(global))
+			llvmGlobal := c.mod.NamedGlobal(getGlobalName(global))
 			llvmAddr := c.builder.CreateExtractValue(llvmGlobal.Initializer(), register.Field, "")
 			ptr := llvm.ConstIntToPtr(llvmAddr, x.Type())
 			load := c.builder.CreateLoad(ptr, "")
