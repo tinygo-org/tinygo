@@ -392,6 +392,14 @@ func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
 			if member.Synthetic == "package initializer" {
 				c.initFuncs = append(c.initFuncs, frame.llvmFn)
 			}
+			// TODO: recursively anonymous functions
+			for _, child := range member.AnonFuncs {
+				frame, err := c.parseFuncDecl(child)
+				if err != nil {
+					return err
+				}
+				frames[child] = frame
+			}
 		case *ssa.NamedConst:
 			// Ignore package-level untyped constants. The SSA form doesn't need
 			// them.
