@@ -54,3 +54,8 @@ func abort() {
 	for {
 	}
 }
+
+// Align on word boundary.
+func align(ptr uintptr) uintptr {
+	return (ptr + 3) &^ 3
+}
