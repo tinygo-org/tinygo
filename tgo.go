@@ -414,7 +414,7 @@ func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
 			if !strings.HasPrefix(member.Name(), "_extern_") {
 				global.SetLinkage(llvm.PrivateLinkage)
 				if getGlobalName(member) == "runtime.TargetBits" {
-					bitness := c.targetData.PointerSize()
+					bitness := c.targetData.PointerSize() * 8
 					if bitness < 32 {
 						// Only 8 and 32+ architectures supported at the moment.
 						// On 8 bit architectures, pointers are normally bigger
