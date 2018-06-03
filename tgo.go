@@ -320,7 +320,7 @@ func (c *Compiler) isPointer(typ types.Type) bool {
 	}
 }
 
-func (c *Compiler) getFunctionName(fn *ssa.Function) string {
+func getFunctionName(fn *ssa.Function) string {
 	if fn.Signature.Recv() != nil {
 		// Method on a defined type.
 		typeName := fn.Params[0].Type().(*types.Named).Obj().Name()
@@ -331,7 +331,12 @@ func (c *Compiler) getFunctionName(fn *ssa.Function) string {
 			// Name CGo functions directly.
 			return fn.Name()[len("_Cfunc_"):]
 		} else {
-			return pkgPrefix(fn.Pkg) + "." + fn.Name()
+			name := pkgPrefix(fn.Pkg) + "." + fn.Name()
+			if fn.Pkg.Pkg.Path() == "runtime" && strings.HasPrefix(fn.Name(), "_llvm_") {
+				// Special case for LLVM intrinsics in the runtime.
+				name = "llvm." + strings.Replace(fn.Name()[len("_llvm_"):], "_", ".", -1)
+			}
+			return name
 		}
 	}
 }
@@ -470,7 +475,6 @@ func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
 
 func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
 	f.WriteTo(os.Stdout)
-	name := c.getFunctionName(f)
 
 	frame := &Frame{
 		params: make(map[*ssa.Parameter]int),
@@ -503,6 +507,7 @@ func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
 
 	fnType := llvm.FunctionType(retType, paramTypes, false)
 
+	name := getFunctionName(f)
 	frame.llvmFn = c.mod.NamedFunction(name)
 	if frame.llvmFn.IsNil() {
 		frame.llvmFn = llvm.AddFunction(c.mod, name, fnType)
@@ -790,7 +795,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 func (c *Compiler) parseFunctionCall(frame *Frame, call *ssa.CallCommon, fn *ssa.Function) (llvm.Value, error) {
 	fmt.Printf("    function: %s\n", fn)
 
-	name := c.getFunctionName(fn)
+	name := getFunctionName(fn)
 	target := c.mod.NamedFunction(name)
 	if target.IsNil() {
 		return llvm.Value{}, errors.New("undefined function: " + name)
