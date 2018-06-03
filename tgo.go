@@ -199,14 +199,23 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 
 	// After all packages are imported, add a synthetic initializer function
 	// that calls the initializer of each package.
-	initType := llvm.FunctionType(llvm.VoidType(), nil, false)
-	initFn := llvm.AddFunction(c.mod, "runtime.initAll", initType)
+	initFn := c.mod.NamedFunction("runtime.initAll")
+	if initFn.IsNil() {
+		initType := llvm.FunctionType(llvm.VoidType(), nil, false)
+		initFn = llvm.AddFunction(c.mod, "runtime.initAll", initType)
+	}
+	initFn.SetLinkage(llvm.PrivateLinkage)
 	block := c.ctx.AddBasicBlock(initFn, "entry")
 	c.builder.SetInsertPointAtEnd(block)
 	for _, fn := range c.initFuncs {
 		c.builder.CreateCall(fn, nil, "")
 	}
 	c.builder.CreateRetVoid()
+
+	// Set functions referenced in runtime.ll to internal linkage, to improve
+	// optimization (hopefully).
+	main := c.mod.NamedFunction("main.main")
+	main.SetLinkage(llvm.PrivateLinkage)
 
 	return nil
 }
@@ -518,6 +527,7 @@ func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
 // Special function parser for generated package initializers (which also
 // initializes global variables).
 func (c *Compiler) parseInitFunc(frame *Frame, f *ssa.Function) error {
+	frame.llvmFn.SetLinkage(llvm.PrivateLinkage)
 	llvmBlock := c.ctx.AddBasicBlock(frame.llvmFn, "entry")
 	c.builder.SetInsertPointAtEnd(llvmBlock)
 
@@ -605,10 +615,7 @@ func (c *Compiler) parseInitFunc(frame *Frame, f *ssa.Function) error {
 }
 
 func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
-	if frame.llvmFn.Name() != "main.main" {
-		// This function is only used from within Go.
-		frame.llvmFn.SetLinkage(llvm.PrivateLinkage)
-	}
+	frame.llvmFn.SetLinkage(llvm.PrivateLinkage)
 
 	// Pre-create all basic blocks in the function.
 	for _, block := range f.DomPreorder() {
@@ -1341,15 +1348,7 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR bool) error {
 		return err
 	}
 
-	parseErr := c.Parse(pkgName, buildTags)
-	if printIR {
-		fmt.Println(c.IR())
-	}
-	if parseErr != nil {
-		return parseErr
-	}
-
-	// Add C runtime.
+	// Add C/LLVM runtime.
 	runtime, err := llvm.ParseBitcodeFile(runtimePath)
 	if err != nil {
 		return err
@@ -1357,6 +1356,15 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR bool) error {
 	err = c.LinkModule(runtime)
 	if err != nil {
 		return err
+	}
+
+	// Compile Go code to IR.
+	parseErr := c.Parse(pkgName, buildTags)
+	if printIR {
+		fmt.Println(c.IR())
+	}
+	if parseErr != nil {
+		return parseErr
 	}
 
 	c.ApplyFunctionSections() // -ffunction-sections

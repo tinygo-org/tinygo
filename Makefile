@@ -9,6 +9,7 @@ tgo: build/tgo
 LLVM := $(shell go env GOPATH)/src/llvm.org/llvm/bindings/go/llvm/workdir/llvm_build/bin/
 LINK = $(LLVM)llvm-link
 LLC = $(LLVM)llc
+LLAS = $(LLVM)llvm-as
 
 CFLAGS = -Wall -Werror -Os -g -fno-exceptions -flto -ffunction-sections -fdata-sections $(LLFLAGS)
 
@@ -16,7 +17,14 @@ RUNTIME_PARTS = build/runtime.bc
 
 TARGET ?= unix
 
-ifeq ($(TARGET),pca10040)
+ifeq ($(TARGET),unix)
+# Regular *nix system.
+GCC = gcc
+LD = clang
+SIZE = size
+
+else ifeq ($(TARGET),pca10040)
+# PCA10040: nRF52832 development board
 GCC = arm-none-eabi-gcc
 LD = arm-none-eabi-ld -T arm.ld --gc-sections
 SIZE = arm-none-eabi-size
@@ -30,14 +38,12 @@ CFLAGS += -I$(CURDIR)/lib/CMSIS/CMSIS/Include
 CFLAGS += -DNRF52832_XXAA
 CFLAGS += -Wno-uninitialized
 RUNTIME_PARTS += build/runtime_nrf.bc
-RUNTIME_PARTS += build/system_nrf52.bc
-OBJ += build/startup_nrf51.o # TODO nrf52, see https://bugs.llvm.org/show_bug.cgi?id=31601
+RUNTIME_PARTS += build/nrfx_system_nrf52.bc
+OBJ += build/nrfx_startup_nrf51.o # TODO nrf52, see https://bugs.llvm.org/show_bug.cgi?id=31601
 
-else ifeq ($(TARGET),unix)
-# Regular *nix system.
-GCC = gcc
-LD = clang
-SIZE = size
+else
+$(error Unknown target)
+
 endif
 
 
@@ -75,13 +81,17 @@ build/%.bc: src/runtime/%.c src/runtime/*.h
 	@mkdir -p build
 	clang $(CFLAGS) -c -o $@ $<
 
+# Compile LLVM bitcode from LLVM source.
+build/%.bc: src/runtime/%.ll
+	$(LLAS) -o $@ $<
+
 # Compile system_* file for the nRF.
-build/%.bc: lib/nrfx/mdk/%.c
+build/nrfx_%.bc: lib/nrfx/mdk/%.c
 	@mkdir -p build
 	clang $(CFLAGS) -c -o $@ $^
 
 # Compile startup_* file for the nRF.
-build/%.o: lib/nrfx/mdk/gcc_%.S
+build/nrfx_%.o: lib/nrfx/mdk/gcc_%.S
 	@mkdir -p build
 	clang $(CFLAGS) -c -o $@ $^
 
