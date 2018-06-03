@@ -3,6 +3,10 @@
 
 package runtime
 
+import (
+	"unsafe"
+)
+
 // #include <stdio.h>
 // #include <stdlib.h>
 // #include <unistd.h>
@@ -20,4 +24,16 @@ func Sleep(d Duration) {
 
 func abort() {
 	C.abort()
+}
+
+func alloc(size uintptr) unsafe.Pointer {
+	buf := C.calloc(1, C.size_t(size))
+	if buf == nil {
+		panic("cannot allocate memory")
+	}
+	return buf
+}
+
+func free(ptr unsafe.Pointer) {
+	C.free(ptr)
 }

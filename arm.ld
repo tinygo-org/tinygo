@@ -75,3 +75,8 @@ SECTIONS
 __etext = _etext;
 __data_start__ = _sdata;
 __bss_start__ = _sbss;
+
+/* For the memory allocator. */
+_heap_start = _ebss;
+_heap_end = ORIGIN(RAM) + LENGTH(RAM);
+runtime.heapptr = _heap_start; /* necessary? */
