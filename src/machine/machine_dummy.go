@@ -12,7 +12,14 @@ const (
 	GPIO_OUTPUT
 )
 
-const LED = 0
+// Fake LED numbers, for testing.
+const (
+	LED  = LED1
+	LED1 = 0
+	LED2 = 0
+	LED3 = 0
+	LED4 = 0
+)
 
 func (p GPIO) Configure(config GPIOConfig) {
 }
