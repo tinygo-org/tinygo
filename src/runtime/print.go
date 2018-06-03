@@ -1,9 +1,37 @@
 
 package runtime
 
+import (
+	"unsafe"
+)
+
 func printstring(s string) {
 	for i := 0; i < len(s); i++ {
 		putchar(s[i])
+	}
+}
+
+func printuint8(n uint8) {
+	if TargetBits >= 32 {
+		printuint32(uint32(n))
+	} else {
+		prevdigits := n / 10
+		if prevdigits != 0 {
+			printuint8(prevdigits)
+		}
+		putchar(byte((n % 10) + '0'))
+	}
+}
+
+func printint8(n int8) {
+	if TargetBits >= 32 {
+		printint32(int32(n))
+	} else {
+		if n < 0 {
+			putchar('-')
+			n = -n
+		}
+		printuint8(uint8(n))
 	}
 }
 
@@ -62,5 +90,19 @@ func printitf(msg interface{}) {
 		print(msg)
 	default:
 		print("???")
+	}
+}
+
+func printptr(ptr uintptr) {
+	putchar('0')
+	putchar('x')
+	for i := 0; i < int(unsafe.Sizeof(ptr)) * 2; i++ {
+		nibble := byte(ptr >> (unsafe.Sizeof(ptr) * 8 - 4))
+		if nibble < 10 {
+			putchar(nibble + '0')
+		} else {
+			putchar(nibble - 10 + 'a')
+		}
+		ptr <<= 4
 	}
 }

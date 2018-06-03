@@ -113,7 +113,12 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	tripleSplit := strings.Split(c.triple, "-")
 
 	config := loader.Config {
-		// TODO: TypeChecker.Sizes
+		TypeChecker: types.Config{
+			Sizes: &types.StdSizes{
+				int64(c.targetData.PointerSize()),
+				int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
+			},
+		},
 		Build: &build.Context {
 			GOARCH:      tripleSplit[0],
 			GOOS:        tripleSplit[2],
@@ -390,11 +395,25 @@ func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
 			global := llvm.AddGlobal(c.mod, llvmType, c.getGlobalName(member))
 			if !strings.HasPrefix(member.Name(), "_extern_") {
 				global.SetLinkage(llvm.PrivateLinkage)
-				initializer, err := c.getZeroValue(llvmType)
-				if err != nil {
-					return err
+				if c.getGlobalName(member) == "runtime.TargetBits" {
+					bitness := c.targetData.PointerSize()
+					if bitness < 32 {
+						// Only 8 and 32+ architectures supported at the moment.
+						// On 8 bit architectures, pointers are normally bigger
+						// than 8 bits to do anything meaningful.
+						// TODO: clean up this hack to support 16-bit
+						// architectures.
+						bitness = 8
+					}
+					global.SetInitializer(llvm.ConstInt(llvm.Int8Type(), uint64(bitness), false))
+					global.SetGlobalConstant(true)
+				} else {
+					initializer, err := c.getZeroValue(llvmType)
+					if err != nil {
+						return err
+					}
+					global.SetInitializer(initializer)
 				}
-				global.SetInitializer(initializer)
 			}
 		case *ssa.Type:
 			ms := program.MethodSets.MethodSet(member.Type())
@@ -714,8 +733,10 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			switch typ := typ.(type) {
 			case *types.Basic:
 				switch typ.Kind() {
+				case types.Int8:
+					c.builder.CreateCall(c.mod.NamedFunction("runtime.printint8"), []llvm.Value{value}, "")
 				case types.Uint8:
-					c.builder.CreateCall(c.mod.NamedFunction("runtime.printbyte"), []llvm.Value{value}, "")
+					c.builder.CreateCall(c.mod.NamedFunction("runtime.printuint8"), []llvm.Value{value}, "")
 				case types.Int, types.Int32: // TODO: assumes a 32-bit int type
 					c.builder.CreateCall(c.mod.NamedFunction("runtime.printint32"), []llvm.Value{value}, "")
 				case types.Uint, types.Uint32:
@@ -726,9 +747,17 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 					c.builder.CreateCall(c.mod.NamedFunction("runtime.printuint64"), []llvm.Value{value}, "")
 				case types.String:
 					c.builder.CreateCall(c.mod.NamedFunction("runtime.printstring"), []llvm.Value{value}, "")
+				case types.Uintptr:
+					c.builder.CreateCall(c.mod.NamedFunction("runtime.printptr"), []llvm.Value{value}, "")
+				case types.UnsafePointer:
+					ptrValue := c.builder.CreatePtrToInt(value, c.uintptrType, "")
+					c.builder.CreateCall(c.mod.NamedFunction("runtime.printptr"), []llvm.Value{ptrValue}, "")
 				default:
 					return llvm.Value{}, errors.New("unknown basic arg type: " + fmt.Sprintf("%#v", typ))
 				}
+			case *types.Pointer:
+				ptrValue := c.builder.CreatePtrToInt(value, c.uintptrType, "")
+				c.builder.CreateCall(c.mod.NamedFunction("runtime.printptr"), []llvm.Value{ptrValue}, "")
 			default:
 				return llvm.Value{}, errors.New("unknown arg type: " + fmt.Sprintf("%#v", typ))
 			}
