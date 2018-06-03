@@ -1347,7 +1347,7 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR bool) error {
 	var buildTags []string
 	// TODO: put this somewhere else
 	if target == "pca10040" {
-		buildTags = append(buildTags, "nrf")
+		buildTags = append(buildTags, "nrf", "nrf52", "nrf52832")
 		target = "armv7m-none-eabi"
 	}
 
