@@ -139,7 +139,6 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 
 	// TODO: pick the error of the first package, not a random package
 	for _, pkgInfo := range lprogram.AllPackages {
-		fmt.Println("package:", pkgInfo.Pkg.Path())
 		if len(pkgInfo.Errors) != 0 {
 			return pkgInfo.Errors[0]
 		}
@@ -221,7 +220,6 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 }
 
 func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
-	fmt.Println("        type:", goType)
 	switch typ := goType.(type) {
 	case *types.Array:
 		elemType, err := c.getLLVMType(typ.Elem())
@@ -359,8 +357,6 @@ func getGlobalName(global *ssa.Global) string {
 }
 
 func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
-	fmt.Println("\npackage:", pkg.Pkg.Path())
-
 	// Make sure we're walking through all members in a constant order every
 	// run.
 	memberNames := make([]string, 0)
@@ -455,8 +451,6 @@ func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
 	// Now, add definitions to those declarations.
 	for _, name := range memberNames {
 		member := pkg.Members[name]
-		fmt.Println("member:", member.Token(), member)
-
 		switch member := member.(type) {
 		case *ssa.Function:
 			if strings.HasPrefix(name, "_Cfunc_") {
@@ -641,7 +635,6 @@ func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
 	for _, block := range f.DomPreorder() {
 		c.builder.SetInsertPointAtEnd(frame.blocks[block])
 		for _, instr := range block.Instrs {
-			fmt.Printf("  instr: %v\n", instr)
 			err := c.parseInstr(frame, instr)
 			if err != nil {
 				return err
@@ -733,15 +726,12 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 }
 
 func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string) (llvm.Value, error) {
-	fmt.Printf("    builtin: %v\n", callName)
-
 	switch callName {
 	case "print", "println":
 		for i, arg := range args {
 			if i >= 1 {
 				c.builder.CreateCall(c.mod.NamedFunction("runtime.printspace"), nil, "")
 			}
-			fmt.Printf("    arg: %s\n", arg);
 			value, err := c.parseExpr(frame, arg)
 			if err != nil {
 				return llvm.Value{}, err
@@ -842,12 +832,9 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.Call) (llvm.Value, error) 
 }
 
 func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
-	fmt.Printf("      expr: %v\n", expr)
-
 	if frame != nil {
 		if value, ok := frame.locals[expr]; ok {
 			// Value is a local variable that has already been computed.
-			fmt.Println("        from local var")
 			if value.IsNil() {
 				return llvm.Value{}, errors.New("undefined local var (from cgo?)")
 			}
