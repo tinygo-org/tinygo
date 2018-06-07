@@ -3,7 +3,7 @@
 all: tgo
 tgo: build/tgo
 
-.PHONY: all tgo run-hello run-blinky flash-blinky clean gen-device gen-device-nrf
+.PHONY: all tgo run-hello run-blinky clean gen-device gen-device-nrf
 
 # Custom LLVM toolchain.
 LLVM := $(shell go env GOPATH)/src/github.com/aykevl/llvm/bindings/go/llvm/workdir/llvm_build/bin/
@@ -43,6 +43,16 @@ RUNTIME_PARTS += build/runtime_nrf.bc
 RUNTIME_PARTS += build/nrfx_system_nrf52.bc
 OBJ += build/nrfx_startup_nrf51.o # TODO nrf52, see https://bugs.llvm.org/show_bug.cgi?id=31601
 
+else ifeq ($(TARGET),arduino)
+GCC = avr-gcc
+AS = avr-as -mmcu=atmega328p
+LD = avr-ld -T avr.ld --gc-sections
+SIZE = avr-size
+OBJCOPY = avr-objcopy
+LLFLAGS += -target avr8--
+TGOFLAGS += -target $(TARGET)
+OBJ += build/avr.o
+
 else
 $(error Unknown target)
 
@@ -56,8 +66,13 @@ run-hello: build/hello
 run-blinky: build/blinky
 	./build/blinky
 
-flash-blinky: build/blinky.hex
+ifeq ($(TARGET),pca10040)
+flash-%: build/%.hex
 	nrfjprog -f nrf52 --sectorerase --program $< --reset
+else ifeq ($(TARGET),arduino)
+flash-%: build/%.hex
+	avrdude -c arduino -p atmega328p -P /dev/ttyACM0 -U flash:w:$<
+endif
 
 clean:
 	@rm -rf build
@@ -101,6 +116,9 @@ build/nrfx_%.bc: lib/nrfx/mdk/%.c
 build/nrfx_%.o: lib/nrfx/mdk/gcc_%.S
 	@mkdir -p build
 	clang $(CFLAGS) -D__STARTUP_CLEAR_BSS -c -o $@ $^
+
+build/%.o: %.S
+	$(AS) -o $@ $^
 
 # Merge all runtime LLVM files together in a single bitcode file.
 build/runtime-$(TARGET)-combined.bc: $(RUNTIME_PARTS)

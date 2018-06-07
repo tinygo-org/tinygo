@@ -1588,6 +1588,9 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR bool) error {
 	if target == "pca10040" {
 		buildTags = append(buildTags, "nrf", "nrf52", "nrf52832")
 		target = "armv7m-none-eabi"
+	} else if target == "arduino" {
+		buildTags = append(buildTags, "avr", "avr8", "atmega", "atmega328p")
+		target = "avr--"
 	}
 
 	c, err := NewCompiler(pkgName, target)
