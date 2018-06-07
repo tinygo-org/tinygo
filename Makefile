@@ -12,7 +12,8 @@ LLC = $(LLVM)llc
 LLAS = $(LLVM)llvm-as
 OPT = $(LLVM)opt
 
-CFLAGS = -Wall -Werror -Os -g -fno-exceptions -flto -ffunction-sections -fdata-sections $(LLFLAGS)
+CFLAGS = -Wall -Werror -Os -fno-exceptions -flto -ffunction-sections -fdata-sections $(LLFLAGS)
+CFLAGS += -fno-exceptions -fno-unwind-tables # Avoid .ARM.exidx etc.
 
 RUNTIME_PARTS = build/runtime.bc
 
@@ -99,7 +100,7 @@ build/nrfx_%.bc: lib/nrfx/mdk/%.c
 # Compile startup_* file for the nRF.
 build/nrfx_%.o: lib/nrfx/mdk/gcc_%.S
 	@mkdir -p build
-	clang $(CFLAGS) -c -o $@ $^
+	clang $(CFLAGS) -D__STARTUP_CLEAR_BSS -c -o $@ $^
 
 # Merge all runtime LLVM files together in a single bitcode file.
 build/runtime-$(TARGET)-combined.bc: $(RUNTIME_PARTS)

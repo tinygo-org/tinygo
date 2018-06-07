@@ -75,6 +75,7 @@ SECTIONS
 __etext = _etext;
 __data_start__ = _sdata;
 __bss_start__ = _sbss;
+__bss_end__ = _ebss;
 
 /* For the memory allocator. */
 _heap_start = _ebss;
