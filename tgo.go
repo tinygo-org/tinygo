@@ -38,7 +38,6 @@ type Compiler struct {
 	i8ptrType       llvm.Type // for convenience
 	uintptrType     llvm.Type
 	stringLenType   llvm.Type
-	stringType      llvm.Type
 	interfaceType   llvm.Type
 	typeassertType  llvm.Type
 	taskDataType    llvm.Type
@@ -107,7 +106,8 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	c.i8ptrType = llvm.PointerType(llvm.Int8Type(), 0)
 
 	// Go string: tuple of (len, ptr)
-	c.stringType = llvm.StructType([]llvm.Type{c.stringLenType, c.i8ptrType}, false)
+	t := c.ctx.StructCreateNamed("string")
+	t.StructSetBody([]llvm.Type{c.stringLenType, c.i8ptrType}, false)
 
 	// Go interface: tuple of (type, ptr)
 	c.interfaceType = llvm.StructType([]llvm.Type{llvm.Int32Type(), c.i8ptrType}, false)
@@ -297,7 +297,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		case types.Int64, types.Uint64:
 			return llvm.Int64Type(), nil
 		case types.String:
-			return c.stringType, nil
+			return c.mod.GetTypeByName("string"), nil
 		case types.Uintptr:
 			return c.uintptrType, nil
 		case types.UnsafePointer:
@@ -383,7 +383,11 @@ func (c *Compiler) getZeroValue(typ llvm.Type) (llvm.Value, error) {
 			}
 			vals[i] = val
 		}
-		return llvm.ConstStruct(vals, false), nil
+		if typ.StructName() == "string" {
+			return llvm.ConstNamedStruct(typ, vals), nil
+		} else {
+			return llvm.ConstStruct(vals, false), nil
+		}
 	default:
 		return llvm.Value{}, errors.New("todo: LLVM zero initializer")
 	}
@@ -1394,7 +1398,7 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 			global.SetGlobalConstant(false)
 			zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 			strPtr := c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
-			strObj := llvm.ConstStruct([]llvm.Value{strLen, strPtr}, false)
+			strObj := llvm.ConstNamedStruct(c.mod.GetTypeByName("string"), []llvm.Value{strLen, strPtr})
 			return strObj, nil
 		} else if typ.Kind() == types.UnsafePointer {
 			if !expr.IsNil() {
