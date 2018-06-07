@@ -38,8 +38,6 @@ type Compiler struct {
 	i8ptrType       llvm.Type // for convenience
 	uintptrType     llvm.Type
 	stringLenType   llvm.Type
-	interfaceType   llvm.Type
-	typeassertType  llvm.Type
 	taskDataType    llvm.Type
 	allocFunc       llvm.Value
 	freeFunc        llvm.Value
@@ -110,10 +108,8 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	t.StructSetBody([]llvm.Type{c.stringLenType, c.i8ptrType}, false)
 
 	// Go interface: tuple of (type, ptr)
-	c.interfaceType = llvm.StructType([]llvm.Type{llvm.Int32Type(), c.i8ptrType}, false)
-
-	// Go typeassert result: tuple of (ptr, bool)
-	c.typeassertType = llvm.StructType([]llvm.Type{c.i8ptrType, llvm.Int1Type()}, false)
+	t = c.ctx.StructCreateNamed("interface")
+	t.StructSetBody([]llvm.Type{llvm.Int32Type(), c.i8ptrType}, false)
 
 	// Goroutine / task data: {i8 state, i32 data, i8* next}
 	c.taskDataType = llvm.StructType([]llvm.Type{llvm.Int8Type(), llvm.Int32Type(), c.i8ptrType}, false)
@@ -306,7 +302,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			return llvm.Type{}, errors.New("todo: unknown basic type: " + fmt.Sprintf("%#v", typ))
 		}
 	case *types.Interface:
-		return c.interfaceType, nil
+		return c.mod.GetTypeByName("interface"), nil
 	case *types.Named:
 		return c.getLLVMType(typ.Underlying())
 	case *types.Pointer:
@@ -383,7 +379,7 @@ func (c *Compiler) getZeroValue(typ llvm.Type) (llvm.Value, error) {
 			}
 			vals[i] = val
 		}
-		if typ.StructName() == "string" {
+		if typ.StructName() != "" {
 			return llvm.ConstNamedStruct(typ, vals), nil
 		} else {
 			return llvm.ConstStruct(vals, false), nil
@@ -1237,7 +1233,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			itfValue = c.builder.CreateIntToPtr(val, c.i8ptrType, "")
 		}
 		itfTypeNum := c.getInterfaceType(expr.X.Type())
-		itf := c.ctx.ConstStruct([]llvm.Value{itfTypeNum, llvm.Undef(c.i8ptrType)}, false)
+		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("interface"), []llvm.Value{itfTypeNum, llvm.Undef(c.i8ptrType)})
 		itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
 		return itf, nil
 	case *ssa.Phi:
