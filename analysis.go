@@ -2,6 +2,8 @@
 package main
 
 import (
+	"go/types"
+
 	"golang.org/x/tools/go/ssa"
 )
 
@@ -35,8 +37,10 @@ func (a *Analysis) AddPackage(pkg *ssa.Package) {
 			a.addFunction(member)
 		case *ssa.Type:
 			ms := pkg.Prog.MethodSets.MethodSet(member.Type())
-			for i := 0; i < ms.Len(); i++ {
-				a.addFunction(pkg.Prog.MethodValue(ms.At(i)))
+			if !types.IsInterface(member.Type()) {
+				for i := 0; i < ms.Len(); i++ {
+					a.addFunction(pkg.Prog.MethodValue(ms.At(i)))
+				}
 			}
 		}
 	}
@@ -118,9 +122,9 @@ func (a *Analysis) AnalyseBlockingRecursive() {
 	}
 }
 
-// Check whether we need a scheduler. This is only necessary when there are go
-// calls that start blocking functions (if they're not blocking, the go function
-// can be turned into a regular function call).
+// Check whether we need a scheduler. A scheduler is only necessary when there
+// are go calls that start blocking functions (if they're not blocking, the go
+// function can be turned into a regular function call).
 //
 // Depends on AnalyseBlockingRecursive.
 func (a *Analysis) AnalyseGoCalls() {
