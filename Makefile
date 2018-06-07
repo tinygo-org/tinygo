@@ -6,7 +6,7 @@ tgo: build/tgo
 .PHONY: all tgo run-hello run-blinky flash-blinky clean gen-device gen-device-nrf
 
 # Custom LLVM toolchain.
-LLVM := $(shell go env GOPATH)/src/llvm.org/llvm/bindings/go/llvm/workdir/llvm_build/bin/
+LLVM := $(shell go env GOPATH)/src/github.com/aykevl/llvm/bindings/go/llvm/workdir/llvm_build/bin/
 LINK = $(LLVM)llvm-link
 LLC = $(LLVM)llc
 LLAS = $(LLVM)llvm-as
