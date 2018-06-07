@@ -1601,10 +1601,16 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR bool) error {
 	}
 
 	// Compile Go code to IR.
-	parseErr := c.Parse(pkgName, buildTags)
-	if printIR {
-		fmt.Println(c.IR())
-	}
+	parseErr := func() error {
+		if printIR {
+			// Run this even if c.Parse() panics.
+			defer func() {
+				fmt.Println("IR until the error:")
+				fmt.Println(c.IR())
+			}()
+		}
+		return c.Parse(pkgName, buildTags)
+	}()
 	if parseErr != nil {
 		return parseErr
 	}
