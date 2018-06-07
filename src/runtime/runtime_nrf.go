@@ -74,8 +74,8 @@ func monotime() uint64 {
 }
 
 func abort() {
-	// TODO: wfi
 	for {
+		arm.Asm("wfi")
 	}
 }
 

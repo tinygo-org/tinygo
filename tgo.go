@@ -1038,6 +1038,15 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 	case *ssa.Builtin:
 		return c.parseBuiltin(frame, instr.Args, call.Name())
 	case *ssa.Function:
+		if call.Name() == "Asm" && len(instr.Args) == 1 {
+			// Magic function: insert inline assembly instead of calling it.
+			if named, ok := instr.Args[0].Type().(*types.Named); ok && named.Obj().Name() == "__asm" {
+				fnType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{}, false)
+				asm := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
+				target := llvm.InlineAsm(fnType, asm, "", true, false, 0)
+				return c.builder.CreateCall(target, nil, ""), nil
+			}
+		}
 		targetBlocks := false
 		name := getFunctionName(call, targetBlocks)
 		llvmFn := c.mod.NamedFunction(name)

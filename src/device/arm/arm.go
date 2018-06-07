@@ -32,6 +32,9 @@ package arm
 type __reg uint32
 type RegValue = __reg
 
+type __asm string
+func Asm(s __asm)
+
 const (
 	SCS_BASE  = 0xE000E000
 	NVIC_BASE = SCS_BASE + 0x0100
