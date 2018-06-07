@@ -45,8 +45,32 @@ func putchar(c byte) {
 	nrf.UART0.EVENTS_TXDRDY = 0
 }
 
-func Sleep(d Duration) {
-	C.rtc_sleep(C.uint32_t(d / 32)) // TODO: not accurate (must be d / 30.5175...)
+func sleep(d Duration) {
+	ticks64 := d / 32
+	for ticks64 != 0 {
+		monotime() // update timestamp
+		ticks := uint32(ticks64) & 0x7fffff // 23 bits (to be on the safe side)
+		C.rtc_sleep(C.uint32_t(ticks)) // TODO: not accurate (must be d / 30.5175...)
+		ticks64 -= Duration(ticks)
+	}
+}
+
+var (
+	timestamp      uint64 // microseconds since boottime
+	rtcLastCounter uint32 // 24 bits ticks
+)
+
+// Monotonically increasing numer of microseconds since start.
+//
+// Note: very long pauses between measurements (more than 8 minutes) may
+// overflow the counter, leading to incorrect results. This might be fixed by
+// handling the overflow event.
+func monotime() uint64 {
+	rtcCounter := uint32(nrf.RTC0.COUNTER)
+	offset := (rtcCounter - rtcLastCounter) % 0xffffff // change since last measurement
+	rtcLastCounter = rtcCounter
+	timestamp += uint64(offset * 32) // TODO: not precise
+	return timestamp
 }
 
 func abort() {

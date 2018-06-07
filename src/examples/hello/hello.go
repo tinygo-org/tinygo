@@ -25,6 +25,16 @@ func main() {
 	printItf(5)
 	printItf(byte('x'))
 	printItf("foo")
+
+	runFunc(hello) // must be indirect to avoid obvious inlining
+}
+
+func runFunc(f func()) {
+	f()
+}
+
+func hello() {
+	println("hello from function pointer!")
 }
 
 func strlen(s string) int {

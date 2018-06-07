@@ -10,6 +10,7 @@ LLVM := $(shell go env GOPATH)/src/github.com/aykevl/llvm/bindings/go/llvm/workd
 LINK = $(LLVM)llvm-link
 LLC = $(LLVM)llc
 LLAS = $(LLVM)llvm-as
+OPT = $(LLVM)opt
 
 CFLAGS = -Wall -Werror -Os -g -fno-exceptions -flto -ffunction-sections -fdata-sections $(LLFLAGS)
 
@@ -72,9 +73,14 @@ build/tgo: *.go
 	@mkdir -p build
 	go build -o build/tgo -i .
 
-# Build textual IR with the Go compiler.
-build/%.o: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go build/runtime-$(TARGET)-combined.bc
+# Build IR with the Go compiler.
+build/%.bc: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go build/runtime-$(TARGET)-combined.bc
 	./build/tgo $(TGOFLAGS) -printir -runtime build/runtime-$(TARGET)-combined.bc -o $@ $(subst src/,,$<)
+
+# Compile and optimize bitcode file.
+build/%.o: build/%.bc
+	$(OPT) -coro-early -coro-split -coro-elide -O1 -coro-cleanup -o $< $<
+	$(LLC) -filetype=obj -o $@ $<
 
 # Compile C sources for the runtime.
 build/%.bc: src/runtime/%.c src/runtime/*.h

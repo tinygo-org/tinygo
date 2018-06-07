@@ -41,19 +41,33 @@ type Compiler struct {
 	stringType      llvm.Type
 	interfaceType   llvm.Type
 	typeassertType  llvm.Type
+	taskDataType    llvm.Type
 	allocFunc       llvm.Value
 	freeFunc        llvm.Value
+	coroIdFunc      llvm.Value
+	coroSizeFunc    llvm.Value
+	coroBeginFunc   llvm.Value
+	coroSuspendFunc llvm.Value
+	coroEndFunc     llvm.Value
+	coroFreeFunc    llvm.Value
 	itfTypeNumbers  map[types.Type]uint64
 	itfTypes        []types.Type
 	initFuncs       []llvm.Value
+	analysis        *Analysis
 }
 
 type Frame struct {
-	llvmFn llvm.Value
-	params map[*ssa.Parameter]int   // arguments to the function
-	locals map[ssa.Value]llvm.Value // local variables
-	blocks map[*ssa.BasicBlock]llvm.BasicBlock
-	phis   []Phi
+	fn           *ssa.Function
+	llvmFn       llvm.Value
+	params       map[*ssa.Parameter]int   // arguments to the function
+	locals       map[ssa.Value]llvm.Value // local variables
+	blocks       map[*ssa.BasicBlock]llvm.BasicBlock
+	phis         []Phi
+	blocking     bool
+	taskState    llvm.Value
+	taskHandle   llvm.Value
+	cleanupBlock llvm.BasicBlock
+	suspendBlock llvm.BasicBlock
 }
 
 func pkgPrefix(pkg *ssa.Package) string {
@@ -72,6 +86,7 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	c := &Compiler{
 		triple:         triple,
 		itfTypeNumbers: make(map[types.Type]uint64),
+		analysis:       NewAnalysis(),
 	}
 
 	target, err := llvm.GetTargetFromTriple(triple)
@@ -100,11 +115,32 @@ func NewCompiler(pkgName, triple string) (*Compiler, error) {
 	// Go typeassert result: tuple of (ptr, bool)
 	c.typeassertType = llvm.StructType([]llvm.Type{c.i8ptrType, llvm.Int1Type()}, false)
 
+	// Goroutine / task data: {i8 state, i32 data, i8* next}
+	c.taskDataType = llvm.StructType([]llvm.Type{llvm.Int8Type(), llvm.Int32Type(), c.i8ptrType}, false)
+
 	allocType := llvm.FunctionType(c.i8ptrType, []llvm.Type{c.uintptrType}, false)
 	c.allocFunc = llvm.AddFunction(c.mod, "runtime.alloc", allocType)
 
 	freeType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{c.i8ptrType}, false)
 	c.freeFunc = llvm.AddFunction(c.mod, "runtime.free", freeType)
+
+	coroIdType := llvm.FunctionType(c.ctx.TokenType(), []llvm.Type{llvm.Int32Type(), c.i8ptrType, c.i8ptrType, c.i8ptrType}, false)
+	c.coroIdFunc = llvm.AddFunction(c.mod, "llvm.coro.id", coroIdType)
+
+	coroSizeType := llvm.FunctionType(llvm.Int32Type(), nil, false)
+	c.coroSizeFunc = llvm.AddFunction(c.mod, "llvm.coro.size.i32", coroSizeType)
+
+	coroBeginType := llvm.FunctionType(c.i8ptrType, []llvm.Type{c.ctx.TokenType(), c.i8ptrType}, false)
+	c.coroBeginFunc = llvm.AddFunction(c.mod, "llvm.coro.begin", coroBeginType)
+
+	coroSuspendType := llvm.FunctionType(llvm.Int8Type(), []llvm.Type{c.ctx.TokenType(), llvm.Int1Type()}, false)
+	c.coroSuspendFunc = llvm.AddFunction(c.mod, "llvm.coro.suspend", coroSuspendType)
+
+	coroEndType := llvm.FunctionType(llvm.Int1Type(), []llvm.Type{c.i8ptrType, llvm.Int1Type()}, false)
+	c.coroEndFunc = llvm.AddFunction(c.mod, "llvm.coro.end", coroEndType)
+
+	coroFreeType := llvm.FunctionType(c.i8ptrType, []llvm.Type{c.ctx.TokenType(), c.i8ptrType}, false)
+	c.coroFreeFunc = llvm.AddFunction(c.mod, "llvm.coro.free", coroFreeType)
 
 	return c, nil
 }
@@ -188,6 +224,13 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		}
 	}
 
+	for _, pkg := range packageList {
+		c.analysis.AddPackage(pkg)
+	}
+	c.analysis.AnalyseCallgraph()         // set up callgraph
+	c.analysis.AnalyseBlockingRecursive() // make all parents of blocking calls blocking (transitively)
+	c.analysis.AnalyseGoCalls()           // check whether we need a scheduler
+
 	// Transform each package into LLVM IR.
 	for _, pkg := range packageList {
 		err := c.parsePackage(program, pkg)
@@ -214,7 +257,19 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	// Set functions referenced in runtime.ll to internal linkage, to improve
 	// optimization (hopefully).
 	main := c.mod.NamedFunction("main.main")
-	main.SetLinkage(llvm.PrivateLinkage)
+	if !main.IsDeclaration() {
+		main.SetLinkage(llvm.PrivateLinkage)
+	}
+	mainAsync := c.mod.NamedFunction("main.main$async")
+	if !mainAsync.IsDeclaration() {
+		mainAsync.SetLinkage(llvm.PrivateLinkage)
+	}
+	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.PrivateLinkage)
+
+	if c.analysis.NeedsScheduler() {
+		// Enable the scheduler.
+		c.mod.NamedGlobal(".has_scheduler").SetInitializer(llvm.ConstInt(llvm.Int1Type(), 1, false))
+	}
 
 	return nil
 }
@@ -260,6 +315,32 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			return llvm.Type{}, err
 		}
 		return llvm.PointerType(ptrTo, 0), nil
+	case *types.Signature: // function pointer
+		// return value
+		var err error
+		var returnType llvm.Type
+		if typ.Results().Len() == 0 {
+			returnType = llvm.VoidType()
+		} else if typ.Results().Len() == 1 {
+			returnType, err = c.getLLVMType(typ.Results().At(0).Type())
+			if err != nil {
+				return llvm.Type{}, err
+			}
+		} else {
+			return llvm.Type{}, errors.New("todo: multiple return values in function pointer")
+		}
+		// param values
+		var paramTypes []llvm.Type
+		params := typ.Params()
+		for i := 0; i < params.Len(); i++ {
+			subType, err := c.getLLVMType(params.At(i).Type())
+			if err != nil {
+				return llvm.Type{}, err
+			}
+			paramTypes = append(paramTypes, subType)
+		}
+		// make a function pointer of it
+		return llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), 0), nil
 	case *types.Struct:
 		members := make([]llvm.Type, typ.NumFields())
 		for i := 0; i < typ.NumFields(); i++ {
@@ -327,18 +408,22 @@ func (c *Compiler) isPointer(typ types.Type) bool {
 	}
 }
 
-func getFunctionName(fn *ssa.Function) string {
+func getFunctionName(fn *ssa.Function, blocking bool) string {
+	suffix := ""
+	if blocking {
+		suffix = "$async"
+	}
 	if fn.Signature.Recv() != nil {
 		// Method on a defined type.
 		typeName := fn.Params[0].Type().(*types.Named).Obj().Name()
-		return pkgPrefix(fn.Pkg) + "." + typeName + "." + fn.Name()
+		return pkgPrefix(fn.Pkg) + "." + typeName + "." + fn.Name() + suffix
 	} else {
 		// Bare function.
 		if strings.HasPrefix(fn.Name(), "_Cfunc_") {
 			// Name CGo functions directly.
 			return fn.Name()[len("_Cfunc_"):]
 		} else {
-			name := pkgPrefix(fn.Pkg) + "." + fn.Name()
+			name := pkgPrefix(fn.Pkg) + "." + fn.Name() + suffix
 			if fn.Pkg.Pkg.Path() == "runtime" && strings.HasPrefix(fn.Name(), "_llvm_") {
 				// Special case for LLVM intrinsics in the runtime.
 				name = "llvm." + strings.Replace(fn.Name()[len("_llvm_"):], "_", ".", -1)
@@ -488,13 +573,20 @@ func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
 	f.WriteTo(os.Stdout)
 
 	frame := &Frame{
-		params: make(map[*ssa.Parameter]int),
-		locals: make(map[ssa.Value]llvm.Value),
-		blocks: make(map[*ssa.BasicBlock]llvm.BasicBlock),
+		fn:       f,
+		params:   make(map[*ssa.Parameter]int),
+		locals:   make(map[ssa.Value]llvm.Value),
+		blocks:   make(map[*ssa.BasicBlock]llvm.BasicBlock),
+		blocking: c.analysis.IsBlocking(f),
 	}
 
 	var retType llvm.Type
-	if f.Signature.Results() == nil {
+	if frame.blocking {
+		if f.Signature.Results() != nil {
+			return nil, errors.New("todo: return values in blocking function")
+		}
+		retType = c.i8ptrType
+	} else if f.Signature.Results() == nil {
 		retType = llvm.VoidType()
 	} else if f.Signature.Results().Len() == 1 {
 		var err error
@@ -507,6 +599,9 @@ func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
 	}
 
 	var paramTypes []llvm.Type
+	if frame.blocking {
+		paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
+	}
 	for i, param := range f.Params {
 		paramType, err := c.getLLVMType(param.Type())
 		if err != nil {
@@ -518,7 +613,7 @@ func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
 
 	fnType := llvm.FunctionType(retType, paramTypes, false)
 
-	name := getFunctionName(f)
+	name := getFunctionName(f, frame.blocking)
 	frame.llvmFn = c.mod.NamedFunction(name)
 	if frame.llvmFn.IsNil() {
 		frame.llvmFn = llvm.AddFunction(c.mod, name, fnType)
@@ -624,6 +719,10 @@ func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
 		llvmBlock := c.ctx.AddBasicBlock(frame.llvmFn, block.Comment)
 		frame.blocks[block] = llvmBlock
 	}
+	if frame.blocking {
+		frame.cleanupBlock = c.ctx.AddBasicBlock(frame.llvmFn, "task.cleanup")
+		frame.suspendBlock = c.ctx.AddBasicBlock(frame.llvmFn, "task.suspend")
+	}
 
 	// Load function parameters
 	for _, param := range f.Params {
@@ -631,7 +730,41 @@ func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
 		frame.locals[param] = llvmParam
 	}
 
-	// Fill those blocks with instructions.
+	if frame.blocking {
+		// Coroutine initialization.
+		c.builder.SetInsertPointAtEnd(frame.blocks[f.Blocks[0]])
+		frame.taskState = c.builder.CreateAlloca(c.taskDataType, "task.state")
+		stateI8 := c.builder.CreateBitCast(frame.taskState, c.i8ptrType, "task.state.i8")
+		id := c.builder.CreateCall(c.coroIdFunc, []llvm.Value{
+			llvm.ConstInt(llvm.Int32Type(), 0, false),
+			stateI8,
+			llvm.ConstNull(c.i8ptrType),
+			llvm.ConstNull(c.i8ptrType),
+		}, "task.token")
+		size := c.builder.CreateCall(c.coroSizeFunc, nil, "task.size")
+		if c.targetData.TypeAllocSize(size.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+			size = c.builder.CreateTrunc(size, c.uintptrType, "task.size.uintptr")
+		} else if c.targetData.TypeAllocSize(size.Type()) < c.targetData.TypeAllocSize(c.uintptrType) {
+			size = c.builder.CreateZExt(size, c.uintptrType, "task.size.uintptr")
+		}
+		data := c.builder.CreateCall(c.allocFunc, []llvm.Value{size}, "task.data")
+		frame.taskHandle = c.builder.CreateCall(c.coroBeginFunc, []llvm.Value{id, data}, "task.handle")
+
+		// Coroutine cleanup. Free resources associated with this coroutine.
+		c.builder.SetInsertPointAtEnd(frame.cleanupBlock)
+		mem := c.builder.CreateCall(c.coroFreeFunc, []llvm.Value{id, frame.taskHandle}, "task.data.free")
+		c.builder.CreateCall(c.freeFunc, []llvm.Value{mem}, "")
+		// re-insert parent coroutine
+		c.builder.CreateCall(c.mod.NamedFunction("runtime.scheduleTask"), []llvm.Value{frame.llvmFn.FirstParam()}, "")
+		c.builder.CreateBr(frame.suspendBlock)
+
+		// Coroutine suspend. A call to llvm.coro.suspend() will branch here.
+		c.builder.SetInsertPointAtEnd(frame.suspendBlock)
+		c.builder.CreateCall(c.coroEndFunc, []llvm.Value{frame.taskHandle, llvm.ConstInt(llvm.Int1Type(), 0, false)}, "unused")
+		c.builder.CreateRet(frame.taskHandle)
+	}
+
+	// Fill blocks with instructions.
 	for _, block := range f.DomPreorder() {
 		c.builder.SetInsertPointAtEnd(frame.blocks[block])
 		for _, instr := range block.Instrs {
@@ -664,6 +797,27 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		value, err := c.parseExpr(frame, instr)
 		frame.locals[instr] = value
 		return err
+	case *ssa.Go:
+		if instr.Common().Method != nil {
+			return errors.New("todo: go on method receiver")
+		}
+
+		// Execute non-blocking calls (including builtins) directly.
+		// parentHandle param is ignored.
+		if !c.analysis.IsBlocking(instr.Common().Value) {
+			_, err := c.parseCall(frame, instr.Common(), llvm.Value{})
+			return err // probably nil
+		}
+
+		// Start this goroutine.
+		// parentHandle is nil, as the goroutine has no parent frame (it's a new
+		// stack).
+		handle, err := c.parseCall(frame, instr.Common(), llvm.Value{})
+		if err != nil {
+			return err
+		}
+		c.builder.CreateCall(c.mod.NamedFunction("runtime.scheduleTask"), []llvm.Value{handle}, "")
+		return nil
 	case *ssa.If:
 		cond, err := c.parseExpr(frame, instr.Cond)
 		if err != nil {
@@ -687,18 +841,32 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		c.builder.CreateUnreachable()
 		return nil
 	case *ssa.Return:
-		if len(instr.Results) == 0 {
-			c.builder.CreateRetVoid()
-			return nil
-		} else if len(instr.Results) == 1 {
-			val, err := c.parseExpr(frame, instr.Results[0])
-			if err != nil {
-				return err
+		if frame.blocking {
+			if len(instr.Results) != 0 {
+				return errors.New("todo: return values from blocking function")
 			}
-			c.builder.CreateRet(val)
+			// Final suspend.
+			continuePoint := c.builder.CreateCall(c.coroSuspendFunc, []llvm.Value{
+				llvm.ConstNull(c.ctx.TokenType()),
+				llvm.ConstInt(llvm.Int1Type(), 1, false), // final=true
+			}, "")
+			sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
+			sw.AddCase(llvm.ConstInt(llvm.Int8Type(), 1, false), frame.cleanupBlock)
 			return nil
 		} else {
-			return errors.New("todo: return value")
+			if len(instr.Results) == 0 {
+				c.builder.CreateRetVoid()
+				return nil
+			} else if len(instr.Results) == 1 {
+				val, err := c.parseExpr(frame, instr.Results[0])
+				if err != nil {
+					return err
+				}
+				c.builder.CreateRet(val)
+				return nil
+			} else {
+				return errors.New("todo: return value")
+			}
 		}
 	case *ssa.Store:
 		llvmAddr, err := c.parseExpr(frame, instr.Addr)
@@ -797,16 +965,17 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 	}
 }
 
-func (c *Compiler) parseFunctionCall(frame *Frame, call *ssa.CallCommon, fn *ssa.Function) (llvm.Value, error) {
-	fmt.Printf("    function: %s\n", fn)
-
-	name := getFunctionName(fn)
-	target := c.mod.NamedFunction(name)
-	if target.IsNil() {
-		return llvm.Value{}, errors.New("undefined function: " + name)
-	}
-
+func (c *Compiler) parseFunctionCall(frame *Frame, call *ssa.CallCommon, llvmFn llvm.Value, blocking bool, parentHandle llvm.Value) (llvm.Value, error) {
 	var params []llvm.Value
+	if blocking {
+		if parentHandle.IsNil() {
+			// Started from 'go' statement.
+			params = append(params, llvm.ConstNull(c.i8ptrType))
+		} else {
+			// Blocking function calls another blocking function.
+			params = append(params, parentHandle)
+		}
+	}
 	for _, param := range call.Args {
 		val, err := c.parseExpr(frame, param)
 		if err != nil {
@@ -815,19 +984,75 @@ func (c *Compiler) parseFunctionCall(frame *Frame, call *ssa.CallCommon, fn *ssa
 		params = append(params, val)
 	}
 
-	return c.builder.CreateCall(target, params, ""), nil
+	if frame.blocking && llvmFn.Name() == "runtime.Sleep" {
+		// Set task state to TASK_STATE_SLEEP and set the duration.
+		c.builder.CreateCall(c.mod.NamedFunction("runtime.sleepTask"), []llvm.Value{frame.taskHandle, params[0]}, "")
+
+		// Yield to scheduler.
+		continuePoint := c.builder.CreateCall(c.coroSuspendFunc, []llvm.Value{
+			llvm.ConstNull(c.ctx.TokenType()),
+			llvm.ConstInt(llvm.Int1Type(), 0, false),
+		}, "")
+		wakeup := c.ctx.InsertBasicBlock(llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.wakeup")
+		sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
+		sw.AddCase(llvm.ConstInt(llvm.Int8Type(), 0, false), wakeup)
+		sw.AddCase(llvm.ConstInt(llvm.Int8Type(), 1, false), frame.cleanupBlock)
+		c.builder.SetInsertPointAtEnd(wakeup)
+
+		return llvm.Value{}, nil
+	}
+
+	result := c.builder.CreateCall(llvmFn, params, "")
+	if blocking && !parentHandle.IsNil() {
+		// Calling a blocking function as a regular function call.
+		// This is done by passing the current coroutine as a parameter to the
+		// new coroutine and dropping the current coroutine from the scheduler
+		// (with the TASK_STATE_CALL state). When the subroutine is finished, it
+		// will reactivate the parent (this frame) in it's destroy function.
+
+		c.builder.CreateCall(c.mod.NamedFunction("runtime.scheduleTask"), []llvm.Value{result}, "")
+
+		// Set task state to TASK_STATE_CALL.
+		c.builder.CreateCall(c.mod.NamedFunction("runtime.waitForAsyncCall"), []llvm.Value{frame.taskHandle}, "")
+
+		// Yield to the scheduler.
+		continuePoint := c.builder.CreateCall(c.coroSuspendFunc, []llvm.Value{
+			llvm.ConstNull(c.ctx.TokenType()),
+			llvm.ConstInt(llvm.Int1Type(), 0, false),
+		}, "")
+		resume := c.ctx.InsertBasicBlock(llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.callComplete")
+		sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
+		sw.AddCase(llvm.ConstInt(llvm.Int8Type(), 0, false), resume)
+		sw.AddCase(llvm.ConstInt(llvm.Int8Type(), 1, false), frame.cleanupBlock)
+		c.builder.SetInsertPointAtEnd(resume)
+	}
+	return result, nil
 }
 
-func (c *Compiler) parseCall(frame *Frame, instr *ssa.Call) (llvm.Value, error) {
-	fmt.Printf("    call: %s\n", instr)
-
-	switch call := instr.Common().Value.(type) {
+func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle llvm.Value) (llvm.Value, error) {
+	switch call := instr.Value.(type) {
 	case *ssa.Builtin:
-		return c.parseBuiltin(frame, instr.Common().Args, call.Name())
+		return c.parseBuiltin(frame, instr.Args, call.Name())
 	case *ssa.Function:
-		return c.parseFunctionCall(frame, instr.Common(), call)
-	default:
-		return llvm.Value{}, errors.New("todo: unknown call type: " + fmt.Sprintf("%#v", call))
+		targetBlocks := false
+		name := getFunctionName(call, targetBlocks)
+		llvmFn := c.mod.NamedFunction(name)
+		if llvmFn.IsNil() {
+			targetBlocks = true
+			nameAsync := getFunctionName(call, targetBlocks)
+			llvmFn = c.mod.NamedFunction(nameAsync)
+			if llvmFn.IsNil() {
+				return llvm.Value{}, errors.New("undefined function: " + name)
+			}
+		}
+		return c.parseFunctionCall(frame, instr, llvmFn, targetBlocks, parentHandle)
+	default: // function pointer
+		value, err := c.parseExpr(frame, instr.Value)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		// TODO: blocking function pointers (needs analysis)
+		return c.parseFunctionCall(frame, instr, value, false, parentHandle)
 	}
 }
 
@@ -866,7 +1091,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	case *ssa.BinOp:
 		return c.parseBinOp(frame, expr)
 	case *ssa.Call:
-		return c.parseCall(frame, expr)
+		// Passing the current task here to the subroutine. It is only used when
+		// the subroutine is blocking.
+		return c.parseCall(frame, expr.Common(), frame.taskHandle)
 	case *ssa.ChangeType:
 		return c.parseConvert(frame, expr.Type(), expr.X)
 	case *ssa.Const:
@@ -890,6 +1117,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			llvm.ConstInt(llvm.Int32Type(), uint64(expr.Field), false),
 		}
 		return c.builder.CreateGEP(val, indices, ""), nil
+	case *ssa.Function:
+		return c.mod.NamedFunction(getFunctionName(expr, false)), nil
 	case *ssa.Global:
 		fullName := getGlobalName(expr)
 		value := c.mod.NamedGlobal(fullName)
@@ -1274,11 +1503,15 @@ func (c *Compiler) LinkModule(mod llvm.Module) error {
 
 func (c *Compiler) ApplyFunctionSections() {
 	// Put every function in a separate section. This makes it possible for the
-	// linker to remove dead code (--gc-sections).
+	// linker to remove dead code (-ffunction-sections).
 	llvmFn := c.mod.FirstFunction()
 	for !llvmFn.IsNil() {
 		if !llvmFn.IsDeclaration() {
-			llvmFn.SetSection(".text." + llvmFn.Name())
+			name := llvmFn.Name()
+			if strings.HasSuffix(name, "$async") {
+				name = name[:len(name)-len("$async")]
+			}
+			llvmFn.SetSection(".text." + name)
 		}
 		llvmFn = llvm.NextFunction(llvmFn)
 	}
@@ -1367,7 +1600,7 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR bool) error {
 	if err := c.Verify(); err != nil {
 		return err
 	}
-	c.Optimize(2, 1) // -O2 -Os
+	//c.Optimize(2, 1) // -O2 -Os
 	if err := c.Verify(); err != nil {
 		return err
 	}
