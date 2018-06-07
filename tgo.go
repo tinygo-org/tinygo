@@ -1388,7 +1388,12 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 		} else if typ.Kind() == types.String {
 			str := constant.StringVal(expr.Value)
 			strLen := llvm.ConstInt(c.stringLenType, uint64(len(str)), false)
-			strPtr := c.builder.CreateGlobalStringPtr(str, ".str") // TODO: remove \0 at end
+			global := llvm.AddGlobal(c.mod, llvm.ArrayType(llvm.Int8Type(), len(str)), ".str")
+			global.SetInitializer(c.ctx.ConstString(str, false))
+			global.SetLinkage(llvm.PrivateLinkage)
+			global.SetGlobalConstant(false)
+			zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+			strPtr := c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
 			strObj := llvm.ConstStruct([]llvm.Value{strLen, strPtr}, false)
 			return strObj, nil
 		} else if typ.Kind() == types.UnsafePointer {
