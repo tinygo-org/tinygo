@@ -519,14 +519,16 @@ func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
 				}
 			}
 		case *ssa.Type:
-			ms := program.MethodSets.MethodSet(member.Type())
-			for i := 0; i < ms.Len(); i++ {
-				fn := program.MethodValue(ms.At(i))
-				frame, err := c.parseFuncDecl(fn)
-				if err != nil {
-					return err
+			if !types.IsInterface(member.Type()) {
+				ms := program.MethodSets.MethodSet(member.Type())
+				for i := 0; i < ms.Len(); i++ {
+					fn := program.MethodValue(ms.At(i))
+					frame, err := c.parseFuncDecl(fn)
+					if err != nil {
+						return err
+					}
+					frames[fn] = frame
 				}
-				frames[fn] = frame
 			}
 		default:
 			return errors.New("todo: member: " + fmt.Sprintf("%#v", member))
@@ -555,12 +557,14 @@ func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
 				return err
 			}
 		case *ssa.Type:
-			ms := program.MethodSets.MethodSet(member.Type())
-			for i := 0; i < ms.Len(); i++ {
-				fn := program.MethodValue(ms.At(i))
-				err := c.parseFunc(frames[fn], fn)
-				if err != nil {
-					return err
+			if !types.IsInterface(member.Type()) {
+				ms := program.MethodSets.MethodSet(member.Type())
+				for i := 0; i < ms.Len(); i++ {
+					fn := program.MethodValue(ms.At(i))
+					err := c.parseFunc(frames[fn], fn)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -1094,6 +1098,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// Passing the current task here to the subroutine. It is only used when
 		// the subroutine is blocking.
 		return c.parseCall(frame, expr.Common(), frame.taskHandle)
+	case *ssa.ChangeInterface:
+		value, err := c.parseExpr(frame, expr.X)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		itfTypeNum := c.getInterfaceType(expr.X.Type())
+		return c.builder.CreateInsertValue(value, itfTypeNum, 0, ""), nil
 	case *ssa.ChangeType:
 		return c.parseConvert(frame, expr.Type(), expr.X)
 	case *ssa.Const:
@@ -1208,25 +1219,21 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, err
 		}
 		var itfValue llvm.Value
-		switch typ := expr.X.Type().(type) {
-		case *types.Basic:
-			if typ.Info() & types.IsInteger != 0 { // TODO: 64-bit int on 32-bit platform
-				itfValue = c.builder.CreateIntToPtr(val, c.i8ptrType, "")
-			} else if typ.Kind() == types.String {
-				// TODO: escape analysis
-				size := c.targetData.TypeAllocSize(c.stringType)
-				sizeValue := llvm.ConstInt(c.uintptrType, size, false)
-				itfValue = c.builder.CreateCall(c.allocFunc, []llvm.Value{sizeValue}, "")
-				itfValueCast := c.builder.CreateBitCast(itfValue, llvm.PointerType(c.stringType, 0), "")
-				c.builder.CreateStore(val, itfValueCast)
-			} else {
-				return llvm.Value{}, errors.New("todo: make interface: unknown basic type")
-			}
-		default:
-			return llvm.Value{}, errors.New("todo: make interface: unknown type")
+		size := c.targetData.TypeAllocSize(val.Type())
+		if size > c.targetData.TypeAllocSize(c.i8ptrType) {
+			// Allocate on the heap and put a pointer in the interface.
+			// TODO: escape analysis.
+			sizeValue := llvm.ConstInt(c.uintptrType, size, false)
+			itfValue = c.builder.CreateCall(c.allocFunc, []llvm.Value{sizeValue}, "")
+			itfValueCast := c.builder.CreateBitCast(itfValue, llvm.PointerType(val.Type(), 0), "")
+			c.builder.CreateStore(val, itfValueCast)
+		} else {
+			// Directly place the value in the interface.
+			// TODO: non-integers
+			itfValue = c.builder.CreateIntToPtr(val, c.i8ptrType, "")
 		}
-		itfType := c.getInterfaceType(expr.X.Type())
-		itf := c.ctx.ConstStruct([]llvm.Value{itfType, llvm.Undef(c.i8ptrType)}, false)
+		itfTypeNum := c.getInterfaceType(expr.X.Type())
+		itf := c.ctx.ConstStruct([]llvm.Value{itfTypeNum, llvm.Undef(c.i8ptrType)}, false)
 		itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
 		return itf, nil
 	case *ssa.Phi:
@@ -1253,19 +1260,17 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		actualTypeNum := c.builder.CreateExtractValue(itf, 0, "interface.type")
 		valuePtr := c.builder.CreateExtractValue(itf, 1, "interface.value")
 		var value llvm.Value
-		switch typ := expr.AssertedType.(type) {
-		case *types.Basic:
-			if typ.Info() & types.IsInteger != 0 {
-				value = c.builder.CreatePtrToInt(valuePtr, assertedType, "")
-			} else if typ.Kind() == types.String {
-				valueStringPtr := c.builder.CreateBitCast(valuePtr, llvm.PointerType(c.stringType, 0), "")
-				value = c.builder.CreateLoad(valueStringPtr, "")
-			} else {
-				return llvm.Value{}, errors.New("todo: typeassert: unknown basic type")
-			}
-		default:
-			return llvm.Value{}, errors.New("todo: typeassert: unknown type")
+		if c.targetData.TypeAllocSize(assertedType) > c.targetData.TypeAllocSize(c.i8ptrType) {
+			// Value was stored in an allocated buffer, load it from there.
+			valuePtrCast := c.builder.CreateBitCast(valuePtr, llvm.PointerType(assertedType, 0), "")
+			value = c.builder.CreateLoad(valuePtrCast, "")
+		} else {
+			// Value was stored directly in the interface.
+			// TODO: non-integer values.
+			value = c.builder.CreatePtrToInt(valuePtr, assertedType, "")
 		}
+		// TODO: for interfaces, check whether the type implements the
+		// interface.
 		commaOk := c.builder.CreateICmp(llvm.IntEQ, assertedTypeNum, actualTypeNum, "")
 		tuple := llvm.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(llvm.Int1Type())}, false) // create empty tuple
 		tuple = c.builder.CreateInsertValue(tuple, value, 0, "") // insert value
