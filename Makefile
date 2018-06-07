@@ -79,7 +79,7 @@ build/%.bc: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go build/
 
 # Compile and optimize bitcode file.
 build/%.o: build/%.bc
-	$(OPT) -coro-early -coro-split -coro-elide -O1 -coro-cleanup -o $< $<
+	$(OPT) -coro-early -coro-split -coro-elide -Os -coro-cleanup -o $< $<
 	$(LLC) -filetype=obj -o $@ $<
 
 # Compile C sources for the runtime.
