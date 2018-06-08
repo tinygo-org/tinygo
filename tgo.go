@@ -1108,12 +1108,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// the subroutine is blocking.
 		return c.parseCall(frame, expr.Common(), frame.taskHandle)
 	case *ssa.ChangeInterface:
-		value, err := c.parseExpr(frame, expr.X)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		itfTypeNum := c.getInterfaceType(expr.X.Type())
-		return c.builder.CreateInsertValue(value, itfTypeNum, 0, ""), nil
+		// Do not change between interface types: always use the underlying
+		// (concrete) type in the type number of the interface. Every method
+		// call on an interface will do a lookup which method to call.
+		// This is different from how the official Go compiler works, because of
+		// heap allocation and because it's easier to implement, see:
+		// https://research.swtch.com/interfaces
+		return c.parseExpr(frame, expr.X)
 	case *ssa.ChangeType:
 		return c.parseConvert(frame, expr.Type(), expr.X)
 	case *ssa.Const:
