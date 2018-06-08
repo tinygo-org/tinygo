@@ -46,13 +46,15 @@ Currently supported features:
 Not yet supported:
 
   * float, complex, etc.
-  * garbage collection
+  * maps
+  * slices
   * interface methods
+  * garbage collection
+  * defer
+  * closures
   * channels
   * introspection (if it ever gets implemented)
   * standard library (needs more language support)
-  * `defer`
-  * closures
   * ...
 
 ## Analysis
@@ -63,3 +65,10 @@ whole lot of analysis (except for escape analysis) becauses it needs to be fast,
 but embedded programs are necessarily smaller so it becomes practical. And I
 think especially program size can be reduced by a large margin when actually
 trying to optimize for it.
+
+Implemented analysis passes:
+
+  * Check which functions are blocking. Blocking functions a functions that call
+    sleep, chan send, etc. It's parents are also blocking.
+  * Check whether the scheduler is needed. It is only needed when there are `go`
+    statements for blocking functions.
