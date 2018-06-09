@@ -398,7 +398,8 @@ func (c *Compiler) getInterfaceType(typ types.Type) llvm.Value {
 	return llvm.ConstInt(llvm.Int32Type(), c.itfTypeNumbers[typ], false)
 }
 
-func (c *Compiler) isPointer(typ types.Type) bool {
+// Is this a pointer type of some sort? Can be unsafe.Pointer or any *T pointer.
+func isPointer(typ types.Type) bool {
 	if _, ok := typ.(*types.Pointer); ok {
 		return true
 	} else if typ, ok := typ.(*types.Basic); ok && typ.Kind() == types.UnsafePointer {
@@ -1442,8 +1443,8 @@ func (c *Compiler) parseConvert(frame *Frame, typeTo types.Type, x ssa.Value) (l
 
 	switch typeTo := typeTo.(type) {
 	case *types.Basic:
-		isPtrFrom := c.isPointer(x.Type())
-		isPtrTo := c.isPointer(typeTo)
+		isPtrFrom := isPointer(x.Type())
+		isPtrTo := isPointer(typeTo)
 		if isPtrFrom && !isPtrTo {
 			return c.builder.CreatePtrToInt(value, llvmTypeTo, ""), nil
 		} else if !isPtrFrom && isPtrTo {
