@@ -28,6 +28,7 @@ func init() {
 }
 
 type Compiler struct {
+	dumpSSA         bool
 	triple          string
 	mod             llvm.Module
 	ctx             llvm.Context
@@ -79,8 +80,9 @@ type Phi struct {
 	llvm llvm.Value
 }
 
-func NewCompiler(pkgName, triple string) (*Compiler, error) {
+func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 	c := &Compiler{
+		dumpSSA:        dumpSSA,
 		triple:         triple,
 		itfTypeNumbers: make(map[types.Type]uint64),
 		analysis:       NewAnalysis(),
@@ -575,8 +577,6 @@ func (c *Compiler) parsePackage(program *ssa.Program, pkg *ssa.Package) error {
 }
 
 func (c *Compiler) parseFuncDecl(f *ssa.Function) (*Frame, error) {
-	f.WriteTo(os.Stdout)
-
 	frame := &Frame{
 		fn:       f,
 		params:   make(map[*ssa.Parameter]int),
@@ -717,6 +717,9 @@ func (c *Compiler) parseInitFunc(frame *Frame, f *ssa.Function) error {
 }
 
 func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
+	if c.dumpSSA {
+		fmt.Printf("\nfunc %s:\n", f)
+	}
 	frame.llvmFn.SetLinkage(llvm.PrivateLinkage)
 
 	// Pre-create all basic blocks in the function.
@@ -771,8 +774,18 @@ func (c *Compiler) parseFunc(frame *Frame, f *ssa.Function) error {
 
 	// Fill blocks with instructions.
 	for _, block := range f.DomPreorder() {
+		if c.dumpSSA {
+			fmt.Printf("%s:\n", block.Comment)
+		}
 		c.builder.SetInsertPointAtEnd(frame.blocks[block])
 		for _, instr := range block.Instrs {
+			if c.dumpSSA {
+				if val, ok := instr.(ssa.Value); ok && val.Name() != "" {
+					fmt.Printf("\t%s = %s\n", val.Name(), val.String())
+				} else {
+					fmt.Printf("\t%s\n", instr.String())
+				}
+			}
 			err := c.parseInstr(frame, instr)
 			if err != nil {
 				return err
@@ -1584,7 +1597,7 @@ func (c *Compiler) EmitObject(path string) error {
 }
 
 // Helper function for Compiler object.
-func Compile(pkgName, runtimePath, outpath, target string, printIR bool) error {
+func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool) error {
 	var buildTags []string
 	// TODO: put this somewhere else
 	if target == "pca10040" {
@@ -1595,7 +1608,7 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR bool) error {
 		target = "avr--"
 	}
 
-	c, err := NewCompiler(pkgName, target)
+	c, err := NewCompiler(pkgName, target, dumpSSA)
 	if err != nil {
 		return err
 	}
@@ -1615,7 +1628,7 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR bool) error {
 		if printIR {
 			// Run this even if c.Parse() panics.
 			defer func() {
-				fmt.Println("IR until the error:")
+				fmt.Println("Generated LLVM IR:")
 				fmt.Println(c.IR())
 			}()
 		}
@@ -1646,7 +1659,8 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR bool) error {
 
 func main() {
 	outpath := flag.String("o", "", "output filename")
-	printIR := flag.Bool("printir", false, "print LLVM IR after optimizing")
+	printIR := flag.Bool("printir", false, "print LLVM IR")
+	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	runtime := flag.String("runtime", "", "runtime LLVM bitcode files (from C sources)")
 	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
 
@@ -1660,7 +1674,7 @@ func main() {
 
 	os.Setenv("CC", "clang -target=" + *target)
 
-	err := Compile(flag.Args()[0], *runtime, *outpath, *target, *printIR)
+	err := Compile(flag.Args()[0], *runtime, *outpath, *target, *printIR, *dumpSSA)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
