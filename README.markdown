@@ -72,3 +72,6 @@ Implemented analysis passes:
     sleep, chan send, etc. It's parents are also blocking.
   * Check whether the scheduler is needed. It is only needed when there are `go`
     statements for blocking functions.
+  * Check whether a given type switch or type assert is possible with
+    [type-based alias analysis](https://en.wikipedia.org/wiki/Alias_analysis#Type-based_alias_analysis).
+    I would like to use flow-based alias analysis in the future.

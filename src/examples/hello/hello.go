@@ -9,6 +9,10 @@ func (t Thing) String() string {
 	return t.name
 }
 
+type Stringer interface {
+	String() string
+}
+
 const SIX = 6
 
 func main() {
@@ -20,21 +24,26 @@ func main() {
 	println("sumrange(100) =", sumrange(100))
 	println("strlen foo:", strlen("foo"))
 
-	thing := Thing{"foo"}
+	thing := &Thing{"foo"}
 	println("thing:", thing.String())
 	printItf(5)
 	printItf(byte('x'))
 	printItf("foo")
+	printItf(*thing)
+	printItf(thing)
+	printItf(Stringer(thing))
+	s := Stringer(thing)
+	println("Stringer.String():", s.String())
 
-	runFunc(hello) // must be indirect to avoid obvious inlining
+	runFunc(hello, 5) // must be indirect to avoid obvious inlining
 }
 
-func runFunc(f func()) {
-	f()
+func runFunc(f func(int), arg int) {
+	f(arg)
 }
 
-func hello() {
-	println("hello from function pointer!")
+func hello(n int) {
+	println("hello from function pointer:", n)
 }
 
 func strlen(s string) int {
@@ -49,6 +58,10 @@ func printItf(val interface{}) {
 		println("is byte:", val)
 	case string:
 		println("is string:", val)
+	case Thing:
+		println("is Thing:", val.String())
+	case *Thing:
+		println("is *Thing:", val.String())
 	default:
 		println("is ?")
 	}
