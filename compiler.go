@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"go/types"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -137,6 +138,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 			GOARCH:      tripleSplit[0],
 			GOOS:        tripleSplit[2],
 			GOROOT:      ".",
+			GOPATH:      runtime.GOROOT(),
 			CgoEnabled:  true,
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
