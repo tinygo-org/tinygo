@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"go/types"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/aykevl/llvm/bindings/go/llvm"
@@ -926,18 +927,6 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			switch typ := typ.(type) {
 			case *types.Basic:
 				switch typ.Kind() {
-				case types.Int8:
-					c.builder.CreateCall(c.mod.NamedFunction("runtime.printint8"), []llvm.Value{value}, "")
-				case types.Uint8:
-					c.builder.CreateCall(c.mod.NamedFunction("runtime.printuint8"), []llvm.Value{value}, "")
-				case types.Int, types.Int32: // TODO: assumes a 32-bit int type
-					c.builder.CreateCall(c.mod.NamedFunction("runtime.printint32"), []llvm.Value{value}, "")
-				case types.Uint, types.Uint32:
-					c.builder.CreateCall(c.mod.NamedFunction("runtime.printuint32"), []llvm.Value{value}, "")
-				case types.Int64:
-					c.builder.CreateCall(c.mod.NamedFunction("runtime.printint64"), []llvm.Value{value}, "")
-				case types.Uint64:
-					c.builder.CreateCall(c.mod.NamedFunction("runtime.printuint64"), []llvm.Value{value}, "")
 				case types.String:
 					c.builder.CreateCall(c.mod.NamedFunction("runtime.printstring"), []llvm.Value{value}, "")
 				case types.Uintptr:
@@ -946,7 +935,24 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 					ptrValue := c.builder.CreatePtrToInt(value, c.uintptrType, "")
 					c.builder.CreateCall(c.mod.NamedFunction("runtime.printptr"), []llvm.Value{ptrValue}, "")
 				default:
-					return llvm.Value{}, errors.New("unknown basic arg type: " + fmt.Sprintf("%#v", typ))
+					// runtime.print{int,uint}{8,16,32,64}
+					if typ.Info()&types.IsInteger != 0 {
+						name := "runtime.print"
+						if typ.Info()&types.IsUnsigned != 0 {
+							name += "uint"
+						} else {
+							name += "int"
+						}
+						name += strconv.FormatUint(c.targetData.TypeAllocSize(value.Type())*8, 10)
+						fn := c.mod.NamedFunction(name)
+						if fn.IsNil() {
+							panic("undefined: " + name)
+						}
+						c.builder.CreateCall(fn, []llvm.Value{value}, "")
+						continue
+					} else {
+						return llvm.Value{}, errors.New("unknown basic arg type: " + fmt.Sprintf("%#v", typ))
+					}
 				}
 			case *types.Pointer:
 				ptrValue := c.builder.CreatePtrToInt(value, c.uintptrType, "")

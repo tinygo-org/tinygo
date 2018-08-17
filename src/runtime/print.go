@@ -70,10 +70,6 @@ func printint64(n int64) {
 	printuint64(uint64(n))
 }
 
-func printbyte(c uint8) {
-	putchar(c)
-}
-
 func printspace() {
 	putchar(' ')
 }
