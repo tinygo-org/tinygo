@@ -7,125 +7,13 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-// Analysis results over a whole program.
-type Analysis struct {
-	functions            map[*ssa.Function]*FuncMeta
-	needsScheduler       bool
-	goCalls              []*ssa.Go
-	typesWithMethods     map[string]*TypeMeta
-	typesWithoutMethods  map[string]int
-	methodSignatureNames map[string]int
-}
-
-// Some analysis results of a single function.
-type FuncMeta struct {
-	f                 *ssa.Function
-	blocking          bool
-	parents           []*ssa.Function // calculated by AnalyseCallgraph
-	children          []*ssa.Function
-}
-
-type TypeMeta struct {
-	t       types.Type
-	Num     int
-	Methods map[string]*types.Selection
-}
-
-// Return a new Analysis object.
-func NewAnalysis() *Analysis {
-	return &Analysis{
-		functions:            make(map[*ssa.Function]*FuncMeta),
-		typesWithMethods:     make(map[string]*TypeMeta),
-		typesWithoutMethods:  make(map[string]int),
-		methodSignatureNames: make(map[string]int),
-	}
-}
-
-// Add a given package to the analyzer, to be analyzed later.
-func (a *Analysis) AddPackage(pkg *ssa.Package) {
-	for _, member := range pkg.Members {
-		switch member := member.(type) {
-		case *ssa.Function:
-			if isCGoInternal(member.Name()) || getCName(member.Name()) != "" {
-				continue
-			}
-			a.addFunction(member)
-		case *ssa.Type:
-			methods := getAllMethods(pkg.Prog, member.Type())
-			if types.IsInterface(member.Type()) {
-				for _, method := range methods {
-					a.MethodName(method.Obj().(*types.Func))
-				}
-			} else { // named type
-				for _, method := range methods {
-					a.addFunction(pkg.Prog.MethodValue(method))
-				}
-			}
-		}
-	}
-}
-
-// Analyze the given function quickly without any recursion, and add it to the
-// list of functions in the analyzer.
-func (a *Analysis) addFunction(f *ssa.Function) {
-	fm := &FuncMeta{}
-	for _, block := range f.Blocks {
-		for _, instr := range block.Instrs {
-			switch instr := instr.(type) {
-			case *ssa.Call:
-				if instr.Common().IsInvoke() {
-					name := a.MethodName(instr.Common().Method)
-					a.methodSignatureNames[name] = len(a.methodSignatureNames)
-				} else {
-					switch call := instr.Call.Value.(type) {
-					case *ssa.Builtin:
-						// ignore
-					case *ssa.Function:
-						if isCGoInternal(call.Name()) || getCName(call.Name()) != "" {
-							continue
-						}
-						name := getFunctionName(call, false)
-						if name == "runtime.Sleep" {
-							fm.blocking = true
-						}
-						fm.children = append(fm.children, call)
-					}
-				}
-			case *ssa.MakeInterface:
-				methods := getAllMethods(f.Prog, instr.X.Type())
-				if _, ok := a.typesWithMethods[instr.X.Type().String()]; !ok && len(methods) > 0 {
-					meta := &TypeMeta{
-						t:       instr.X.Type(),
-						Num:     len(a.typesWithMethods),
-						Methods: make(map[string]*types.Selection),
-					}
-					for _, sel := range methods {
-						name := a.MethodName(sel.Obj().(*types.Func))
-						meta.Methods[name] = sel
-					}
-					a.typesWithMethods[instr.X.Type().String()] = meta
-				} else if _, ok := a.typesWithoutMethods[instr.X.Type().String()]; !ok && len(methods) == 0 {
-					a.typesWithoutMethods[instr.X.Type().String()] = len(a.typesWithoutMethods)
-				}
-			case *ssa.Go:
-				a.goCalls = append(a.goCalls, instr)
-			}
-		}
-	}
-	a.functions[f] = fm
-
-	for _, child := range f.AnonFuncs {
-		a.addFunction(child)
-	}
-}
-
 // Make a readable version of the method signature (including the function name,
 // excluding the receiver name). This string is used internally to match
 // interfaces and to call the correct method on an interface. Examples:
 //
 //     String() string
 //     Read([]byte) (int, error)
-func (a *Analysis) MethodName(method *types.Func) string {
+func MethodName(method *types.Func) string {
 	sig := method.Type().(*types.Signature)
 	name := method.Name()
 	if sig.Params().Len() == 0 {
@@ -161,15 +49,75 @@ func (a *Analysis) MethodName(method *types.Func) string {
 //
 // All packages need to be added before this pass can run, or it will produce
 // incorrect results.
-func (a *Analysis) AnalyseCallgraph() {
-	for f, fm := range a.functions {
-		for _, child := range fm.children {
-			childRes, ok := a.functions[child]
-			if !ok {
-				println("child not found: " + child.Pkg.Pkg.Path() + "." + child.Name() + ", function: " + f.Name())
-				continue
+func (p *Program) AnalyseCallgraph() {
+	for _, f := range p.Functions {
+		// Clear, if AnalyseCallgraph has been called before.
+		f.children = nil
+		f.parents = nil
+
+		for _, block := range f.fn.Blocks {
+			for _, instr := range block.Instrs {
+				switch instr := instr.(type) {
+				case *ssa.Call:
+					if instr.Common().IsInvoke() {
+						continue
+					}
+					switch call := instr.Call.Value.(type) {
+					case *ssa.Builtin:
+						// ignore
+					case *ssa.Function:
+						if isCGoInternal(call.Name()) {
+							continue
+						}
+						child := p.GetFunction(call)
+						if child.CName() != "" {
+							continue // assume non-blocking
+						}
+						if child.Name(false) == "runtime.Sleep" {
+							f.blocking = true
+						}
+						f.children = append(f.children, child)
+					}
+				}
 			}
-			childRes.parents = append(childRes.parents, f)
+		}
+	}
+	for _, f := range p.Functions {
+		for _, child := range f.children {
+			child.parents = append(child.parents, f)
+		}
+	}
+}
+
+// Find all types that are put in an interface.
+func (p *Program) AnalyseInterfaceConversions() {
+	// Clear, if AnalyseTypes has been called before.
+	p.typesWithMethods = make(map[string]*InterfaceType)
+	p.typesWithoutMethods = make(map[string]int)
+
+	for _, f := range p.Functions {
+		for _, block := range f.fn.Blocks {
+			for _, instr := range block.Instrs {
+				switch instr := instr.(type) {
+				case *ssa.MakeInterface:
+					methods := getAllMethods(f.fn.Prog, instr.X.Type())
+					name := instr.X.Type().String()
+					if _, ok := p.typesWithMethods[name]; !ok && len(methods) > 0 {
+						t := &InterfaceType{
+							t:       instr.X.Type(),
+							Num:     len(p.typesWithMethods),
+							Methods: make(map[string]*types.Selection),
+						}
+						for _, sel := range methods {
+							name := MethodName(sel.Obj().(*types.Func))
+							t.Methods[name] = sel
+						}
+						p.typesWithMethods[instr.X.Type().String()] = t
+					} else if _, ok := p.typesWithoutMethods[name]; !ok && len(methods) == 0 {
+						p.typesWithoutMethods[name] = len(p.typesWithoutMethods)
+					}
+				}
+			}
 		}
 	}
 }
@@ -177,13 +125,13 @@ func (a *Analysis) AnalyseCallgraph() {
 // Analyse which functions are recursively blocking.
 //
 // Depends on AnalyseCallgraph.
-func (a *Analysis) AnalyseBlockingRecursive() {
-	worklist := make([]*FuncMeta, 0)
+func (p *Program) AnalyseBlockingRecursive() {
+	worklist := make([]*Function, 0)
 
 	// Fill worklist with directly blocking functions.
-	for _, fm := range a.functions {
-		if fm.blocking {
-			worklist = append(worklist, fm)
+	for _, f := range p.Functions {
+		if f.blocking {
+			worklist = append(worklist, f)
 		}
 	}
 
@@ -193,13 +141,12 @@ func (a *Analysis) AnalyseBlockingRecursive() {
 	// The work items are then grey objects.
 	for len(worklist) != 0 {
 		// Pick the topmost.
-		fm := worklist[len(worklist)-1]
+		f := worklist[len(worklist)-1]
 		worklist = worklist[:len(worklist)-1]
-		for _, parent := range fm.parents {
-			parentfm := a.functions[parent]
-			if !parentfm.blocking {
-				parentfm.blocking = true
-				worklist = append(worklist, parentfm)
+		for _, parent := range f.parents {
+			if !parent.blocking {
+				parent.blocking = true
+				worklist = append(worklist, parent)
 			}
 		}
 	}
@@ -210,10 +157,27 @@ func (a *Analysis) AnalyseBlockingRecursive() {
 // function can be turned into a regular function call).
 //
 // Depends on AnalyseBlockingRecursive.
-func (a *Analysis) AnalyseGoCalls() {
-	for _, instr := range a.goCalls {
-		if a.isBlocking(instr.Call.Value) {
-			a.needsScheduler = true
+func (p *Program) AnalyseGoCalls() {
+	p.goCalls = nil
+	for _, f := range p.Functions {
+		for _, block := range f.fn.Blocks {
+			for _, instr := range block.Instrs {
+				switch instr := instr.(type) {
+				case *ssa.Go:
+					p.goCalls = append(p.goCalls, instr)
+				}
+			}
+		}
+	}
+	for _, instr := range p.goCalls {
+		switch instr := instr.Call.Value.(type) {
+		case *ssa.Builtin:
+		case *ssa.Function:
+			if p.functionMap[instr].blocking {
+				p.needsScheduler = true
+			}
+		default:
+			panic("unknown go call function type")
 		}
 	}
 }
@@ -221,30 +185,19 @@ func (a *Analysis) AnalyseGoCalls() {
 // Whether this function needs a scheduler.
 //
 // Depends on AnalyseGoCalls.
-func (a *Analysis) NeedsScheduler() bool {
-	return a.needsScheduler
+func (p *Program) NeedsScheduler() bool {
+	return p.needsScheduler
 }
 
 // Whether this function blocks. Builtins are also accepted for convenience.
 // They will always be non-blocking.
 //
 // Depends on AnalyseBlockingRecursive.
-func (a *Analysis) IsBlocking(f ssa.Value) bool {
-	if !a.needsScheduler {
+func (p *Program) IsBlocking(f *Function) bool {
+	if !p.needsScheduler {
 		return false
 	}
-	return a.isBlocking(f)
-}
-
-func (a *Analysis) isBlocking(f ssa.Value) bool {
-	switch f := f.(type) {
-	case *ssa.Builtin:
-		return false
-	case *ssa.Function:
-		return a.functions[f].blocking
-	default:
-		panic("Analysis.IsBlocking on unknown type")
-	}
+	return f.blocking
 }
 
 // Return the type number and whether this type is actually used. Used in
@@ -252,11 +205,11 @@ func (a *Analysis) isBlocking(f ssa.Value) bool {
 // used, meaning assert is always false in this program).
 //
 // May only be used after all packages have been added to the analyser.
-func (a *Analysis) TypeNum(typ types.Type) (int, bool) {
-	if n, ok := a.typesWithoutMethods[typ.String()]; ok {
+func (p *Program) TypeNum(typ types.Type) (int, bool) {
+	if n, ok := p.typesWithoutMethods[typ.String()]; ok {
 		return n, true
-	} else if meta, ok := a.typesWithMethods[typ.String()]; ok {
-		return len(a.typesWithoutMethods) + meta.Num, true
+	} else if meta, ok := p.typesWithMethods[typ.String()]; ok {
+		return len(p.typesWithoutMethods) + meta.Num, true
 	} else {
 		return -1, false // type is never put in an interface
 	}
@@ -264,11 +217,12 @@ func (a *Analysis) TypeNum(typ types.Type) (int, bool) {
 
 // MethodNum returns the numeric ID of this method, to be used in method lookups
 // on interfaces for example.
-func (a *Analysis) MethodNum(method *types.Func) int {
-	if n, ok := a.methodSignatureNames[a.MethodName(method)]; ok {
-		return n
+func (p *Program) MethodNum(method *types.Func) int {
+	name := MethodName(method)
+	if _, ok := p.methodSignatureNames[name]; !ok {
+		p.methodSignatureNames[name] = len(p.methodSignatureNames)
 	}
-	return -1 // signal error
+	return p.methodSignatureNames[MethodName(method)]
 }
 
 // The start index of the first dynamic type that has methods.
@@ -276,14 +230,14 @@ func (a *Analysis) MethodNum(method *types.Func) int {
 // or a higher ID.
 //
 // May only be used after all packages have been added to the analyser.
-func (a *Analysis) FirstDynamicType() int {
-	return len(a.typesWithoutMethods)
+func (p *Program) FirstDynamicType() int {
+	return len(p.typesWithoutMethods)
 }
 
 // Return all types with methods, sorted by type ID.
-func (a *Analysis) AllDynamicTypes() []*TypeMeta {
-	l := make([]*TypeMeta, len(a.typesWithMethods))
-	for _, m := range a.typesWithMethods {
+func (p *Program) AllDynamicTypes() []*InterfaceType {
+	l := make([]*InterfaceType, len(p.typesWithMethods))
+	for _, m := range p.typesWithMethods {
 		l[m.Num] = m
 	}
 	return l
