@@ -216,7 +216,16 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 
 	var frames []*Frame
 
-	// Declare all named (struct) types.
+	// Declare all named struct types.
+	for _, t := range c.ir.NamedTypes {
+		if named, ok := t.t.Type().(*types.Named); ok {
+			if _, ok := named.Underlying().(*types.Struct); ok {
+				t.llvmType = c.ctx.StructCreateNamed(named.Obj().Pkg().Path() + "." + named.Obj().Name())
+			}
+		}
+	}
+
+	// Define all named struct types.
 	for _, t := range c.ir.NamedTypes {
 		if named, ok := t.t.Type().(*types.Named); ok {
 			if st, ok := named.Underlying().(*types.Struct); ok {
@@ -224,8 +233,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 				if err != nil {
 					return err
 				}
-				llvmNamedType := c.ctx.StructCreateNamed(named.Obj().Pkg().Path() + "." + named.Obj().Name())
-				llvmNamedType.StructSetBody(llvmType.StructElementTypes(), false)
+				t.llvmType.StructSetBody(llvmType.StructElementTypes(), false)
 			}
 		}
 	}

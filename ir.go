@@ -41,7 +41,8 @@ type Global struct {
 
 // Type with a name and possibly methods.
 type NamedType struct {
-	t *ssa.Type
+	t        *ssa.Type
+	llvmType llvm.Type
 }
 
 // Type that is at some point put in an interface.
