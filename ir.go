@@ -94,6 +94,10 @@ func (p *Program) AddPackage(pkg *ssa.Package) {
 			g := &Global{g: member}
 			p.Globals = append(p.Globals, g)
 			p.globalMap[member] = g
+		case *ssa.NamedConst:
+			// Ignore: these are already resolved.
+		default:
+			panic("unknown member type: " + member.String())
 		}
 	}
 }
