@@ -33,6 +33,7 @@ type __reg uint32
 type RegValue = __reg
 
 type __asm string
+
 func Asm(s __asm)
 
 const (

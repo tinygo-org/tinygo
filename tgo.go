@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -127,14 +126,14 @@ func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	tripleSplit := strings.Split(c.triple, "-")
 
-	config := loader.Config {
+	config := loader.Config{
 		TypeChecker: types.Config{
 			Sizes: &types.StdSizes{
 				int64(c.targetData.PointerSize()),
 				int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
 			},
 		},
-		Build: &build.Context {
+		Build: &build.Context{
 			GOARCH:      tripleSplit[0],
 			GOOS:        tripleSplit[2],
 			GOROOT:      ".",
@@ -159,7 +158,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		}
 	}
 
-	c.program = ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions | ssa.BareInits)
+	c.program = ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions|ssa.BareInits)
 	c.program.Build()
 
 	c.mainPkg = c.program.ImportedPackage(mainPath)
@@ -1219,7 +1218,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if !boundsCheck.IsNil() {
 			constZero := llvm.ConstInt(c.intType, 0, false)
 			isNegative := c.builder.CreateICmp(llvm.IntSLT, index, constZero, "") // index < 0
-			isTooBig := c.builder.CreateICmp(llvm.IntSGE, index, buflen, "") // index >= len(value)
+			isTooBig := c.builder.CreateICmp(llvm.IntSGE, index, buflen, "")      // index >= len(value)
 			isOverflow := c.builder.CreateOr(isNegative, isTooBig, "")
 			c.builder.CreateCall(boundsCheck, []llvm.Value{isOverflow}, "")
 		}
@@ -1382,7 +1381,7 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 	if typNamed, ok := typ.(*types.Named); ok {
 		typ = typNamed.Underlying()
 	}
-	signed := typ.(*types.Basic).Info() & types.IsUnsigned == 0
+	signed := typ.(*types.Basic).Info()&types.IsUnsigned == 0
 	switch binop.Op {
 	case token.ADD: // +
 		return c.builder.CreateAdd(x, y, ""), nil
@@ -1404,7 +1403,7 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 		}
 	case token.AND: // &
 		return c.builder.CreateAnd(x, y, ""), nil
-	case token.OR:  // |
+	case token.OR: // |
 		return c.builder.CreateOr(x, y, ""), nil
 	case token.XOR: // ^
 		return c.builder.CreateXor(x, y, ""), nil
@@ -1487,10 +1486,10 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 				return llvm.Value{}, errors.New("todo: non-null constant pointer")
 			}
 			return llvm.ConstNull(c.i8ptrType), nil
-		} else if typ.Info() & types.IsUnsigned != 0 {
+		} else if typ.Info()&types.IsUnsigned != 0 {
 			n, _ := constant.Uint64Val(expr.Value)
 			return llvm.ConstInt(llvmType, n, false), nil
-		} else if typ.Info() & types.IsInteger != 0 { // signed
+		} else if typ.Info()&types.IsInteger != 0 { // signed
 			n, _ := constant.Int64Val(expr.Value)
 			return llvm.ConstInt(llvmType, uint64(n), true), nil
 		} else {
@@ -1532,13 +1531,13 @@ func (c *Compiler) parseConvert(frame *Frame, typeTo types.Type, x ssa.Value) (l
 			return c.builder.CreateBitCast(value, llvmTypeTo, ""), nil
 		}
 
-		if typeTo.Info() & types.IsInteger == 0 { // if not integer
+		if typeTo.Info()&types.IsInteger == 0 { // if not integer
 			return llvm.Value{}, errors.New("todo: convert: extend non-integer type")
 		}
 
 		if sizeFrom > sizeTo {
 			return c.builder.CreateTrunc(value, llvmTypeTo, ""), nil
-		} else if typeTo.Info() & types.IsUnsigned != 0 { // if unsigned
+		} else if typeTo.Info()&types.IsUnsigned != 0 { // if unsigned
 			return c.builder.CreateZExt(value, llvmTypeTo, ""), nil
 		} else { // if signed
 			return c.builder.CreateSExt(value, llvmTypeTo, ""), nil
@@ -1718,7 +1717,6 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool
 	return nil
 }
 
-
 func main() {
 	outpath := flag.String("o", "", "output filename")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
@@ -1734,7 +1732,7 @@ func main() {
 		return
 	}
 
-	os.Setenv("CC", "clang -target=" + *target)
+	os.Setenv("CC", "clang -target="+*target)
 
 	err := Compile(flag.Args()[0], *runtime, *outpath, *target, *printIR, *dumpSSA)
 	if err != nil {

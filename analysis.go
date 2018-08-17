@@ -1,9 +1,7 @@
-
 package main
 
 import (
 	"go/types"
-
 	"golang.org/x/tools/go/ssa"
 )
 

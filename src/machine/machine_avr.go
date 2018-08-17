@@ -1,4 +1,3 @@
-
 // +build avr
 
 package machine
@@ -10,7 +9,7 @@ import (
 type GPIOMode uint8
 
 const (
-	GPIO_INPUT  = iota
+	GPIO_INPUT = iota
 	GPIO_OUTPUT
 )
 

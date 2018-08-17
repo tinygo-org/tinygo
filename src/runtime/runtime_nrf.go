@@ -1,4 +1,3 @@
-
 // +build nrf
 
 package runtime
@@ -20,16 +19,17 @@ func init() {
 }
 
 func initUART() {
-	nrf.UART0.ENABLE        = nrf.UART0_ENABLE_ENABLE_Enabled
-	nrf.UART0.BAUDRATE      = nrf.UART0_BAUDRATE_BAUDRATE_Baud115200
+	nrf.UART0.ENABLE = nrf.UART0_ENABLE_ENABLE_Enabled
+	nrf.UART0.BAUDRATE = nrf.UART0_BAUDRATE_BAUDRATE_Baud115200
 	nrf.UART0.TASKS_STARTTX = 1
-	nrf.UART0.PSELTXD       = 6 // pin 6 for NRF52840-DK
+	nrf.UART0.PSELTXD = 6 // pin 6 for NRF52840-DK
 }
 
 func initLFCLK() {
 	nrf.CLOCK.LFCLKSRC = nrf.CLOCK_LFCLKSTAT_SRC_Xtal
 	nrf.CLOCK.TASKS_LFCLKSTART = 1
-	for nrf.CLOCK.EVENTS_LFCLKSTARTED == 0 {}
+	for nrf.CLOCK.EVENTS_LFCLKSTARTED == 0 {
+	}
 	nrf.CLOCK.EVENTS_LFCLKSTARTED = 0
 }
 
@@ -41,16 +41,17 @@ func initRTC() {
 
 func putchar(c byte) {
 	nrf.UART0.TXD = nrf.RegValue(c)
-	for nrf.UART0.EVENTS_TXDRDY == 0 {}
+	for nrf.UART0.EVENTS_TXDRDY == 0 {
+	}
 	nrf.UART0.EVENTS_TXDRDY = 0
 }
 
 func sleep(d Duration) {
 	ticks64 := d / 32
 	for ticks64 != 0 {
-		monotime() // update timestamp
+		monotime()                          // update timestamp
 		ticks := uint32(ticks64) & 0x7fffff // 23 bits (to be on the safe side)
-		C.rtc_sleep(C.uint32_t(ticks)) // TODO: not accurate (must be d / 30.5175...)
+		C.rtc_sleep(C.uint32_t(ticks))      // TODO: not accurate (must be d / 30.5175...)
 		ticks64 -= Duration(ticks)
 	}
 }

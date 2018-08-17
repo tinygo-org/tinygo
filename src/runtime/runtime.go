@@ -1,4 +1,3 @@
-
 package runtime
 
 const Compiler = "tgo"

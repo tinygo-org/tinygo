@@ -1,4 +1,3 @@
-
 package main
 
 type Thing struct {
@@ -84,7 +83,7 @@ func fib(n int) int {
 	if n <= 2 {
 		return 1
 	}
-	return fib(n - 1) + fib(n - 2)
+	return fib(n-1) + fib(n-2)
 }
 
 func sumrange(n int) int {

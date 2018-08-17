@@ -1,4 +1,3 @@
-
 package runtime
 
 // This file implements the Go scheduler using coroutines.
@@ -212,7 +211,7 @@ func scheduler(main taskInstance) {
 
 		// Add tasks that are done sleeping to the end of the runqueue so they
 		// will be executed soon.
-		if sleepQueue != nil && now - sleepQueueBaseTime >= uint64(taskPromise(sleepQueue).data) {
+		if sleepQueue != nil && now-sleepQueueBaseTime >= uint64(taskPromise(sleepQueue).data) {
 			scheduleLog("  run <- sleep")
 			t := sleepQueue
 			promise := taskPromise(t)

@@ -1,4 +1,3 @@
-
 package machine
 
 type GPIOConfig struct {

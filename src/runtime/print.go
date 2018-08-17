@@ -1,4 +1,3 @@
-
 package runtime
 
 import (
@@ -96,8 +95,8 @@ func printitf(msg interface{}) {
 func printptr(ptr uintptr) {
 	putchar('0')
 	putchar('x')
-	for i := 0; i < int(unsafe.Sizeof(ptr)) * 2; i++ {
-		nibble := byte(ptr >> (unsafe.Sizeof(ptr) * 8 - 4))
+	for i := 0; i < int(unsafe.Sizeof(ptr))*2; i++ {
+		nibble := byte(ptr >> (unsafe.Sizeof(ptr)*8 - 4))
 		if nibble < 10 {
 			putchar(nibble + '0')
 		} else {

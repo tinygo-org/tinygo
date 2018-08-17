@@ -1,4 +1,3 @@
-
 // +build linux
 
 package runtime
@@ -30,7 +29,7 @@ func sleep(d Duration) {
 func monotime() uint64 {
 	var ts C.struct_timespec
 	C.clock_gettime(C.CLOCK_MONOTONIC, &ts)
-	return uint64(ts.tv_sec) * 1000 * 1000 + uint64(ts.tv_nsec) / 1000
+	return uint64(ts.tv_sec)*1000*1000 + uint64(ts.tv_nsec)/1000
 }
 
 func abort() {

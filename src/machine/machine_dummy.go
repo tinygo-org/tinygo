@@ -1,4 +1,3 @@
-
 // +build !avr,!nrf
 
 package machine
@@ -8,7 +7,7 @@ package machine
 type GPIOMode uint8
 
 const (
-	GPIO_INPUT  = iota
+	GPIO_INPUT = iota
 	GPIO_OUTPUT
 )
 

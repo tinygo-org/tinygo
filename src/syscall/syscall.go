@@ -1,4 +1,3 @@
-
 package syscall
 
 // dummy
