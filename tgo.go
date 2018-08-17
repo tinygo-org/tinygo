@@ -1120,14 +1120,12 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 }
 
 func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
-	if frame != nil {
-		if value, ok := frame.locals[expr]; ok {
-			// Value is a local variable that has already been computed.
-			if value.IsNil() {
-				return llvm.Value{}, errors.New("undefined local var (from cgo?)")
-			}
-			return value, nil
+	if value, ok := frame.locals[expr]; ok {
+		// Value is a local variable that has already been computed.
+		if value.IsNil() {
+			return llvm.Value{}, errors.New("undefined local var (from cgo?)")
 		}
+		return value, nil
 	}
 
 	switch expr := expr.(type) {
