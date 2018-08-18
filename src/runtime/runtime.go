@@ -19,11 +19,20 @@ func _panic(message interface{}) {
 	abort()
 }
 
-func boundsCheck(outOfRange bool) {
-	if outOfRange {
+// Check for bounds in *ssa.IndexAddr and *ssa.Lookup.
+func lookupBoundsCheck(length, index int) {
+	if index < 0 || index >= length {
 		// printstring() here is safe as this function is excluded from bounds
 		// checking.
 		printstring("panic: runtime error: index out of range\n")
+		abort()
+	}
+}
+
+// Check for bounds in *ssa.Slice
+func sliceBoundsCheck(length, low, high uint) {
+	if !(0 <= low && low <= high && high <= length) {
+		printstring("panic: runtime error: slice out of range\n")
 		abort()
 	}
 }

@@ -23,6 +23,11 @@ func main() {
 	println("sumrange(100) =", sumrange(100))
 	println("strlen foo:", strlen("foo"))
 
+	foo := []int{1, 2, 4, 5}
+	println("len/cap foo:", len(foo), cap(foo))
+	println("foo[3]:", foo[3])
+	println("sum foo:", sum(foo))
+
 	thing := &Thing{"foo"}
 	println("thing:", thing.String())
 	printItf(5)
@@ -90,6 +95,14 @@ func sumrange(n int) int {
 	sum := 0
 	for i := 1; i <= n; i++ {
 		sum += i
+	}
+	return sum
+}
+
+func sum(l []int) int {
+	sum := 0
+	for _, n := range l {
+		sum += n
 	}
 	return sum
 }

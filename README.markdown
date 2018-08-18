@@ -45,12 +45,12 @@ Currently supported features:
   * interface methods
   * standard library (but most packages won't work due to missing language
     features)
+  * slices (partially)
 
 Not yet supported:
 
   * float, complex, etc.
   * maps
-  * slices
   * garbage collection
   * defer
   * closures
