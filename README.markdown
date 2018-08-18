@@ -58,6 +58,20 @@ Not yet supported:
   * introspection (if it ever gets implemented)
   * ...
 
+## Supported targets
+
+Most targets that are supported by LLVM should be supported by this compiler.
+This means amd64 (where most of the testing happens), ARM, and Cortex-M
+microcontrollers.
+
+The AVR platform (as used by the Arduino, for example) is also supported when
+support for it is enabled in LLVM. However, because it is a Harvard style
+architecture with different address spaces for code and data and because LLVM
+turns globals into const for you (moving them to
+[PROGMEM](https://www.nongnu.org/avr-libc/user-manual/pgmspace.html)) most real
+programs don't work unfortunately. This can be fixed but that can be difficult
+to do efficiently and hasn't been implemented yet.
+
 ## Analysis
 
 The goal is to reduce code size (and increase performance) by performing all
