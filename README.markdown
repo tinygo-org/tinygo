@@ -90,3 +90,8 @@ Implemented analysis passes:
   * Check whether a given type switch or type assert is possible with
     [type-based alias analysis](https://en.wikipedia.org/wiki/Alias_analysis#Type-based_alias_analysis).
     I would like to use flow-based alias analysis in the future.
+
+## License
+
+This project is licensed under the BSD 3-clause license, just like the
+[Go project](https://golang.org/LICENSE) itself.
