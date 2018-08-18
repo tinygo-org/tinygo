@@ -12,6 +12,11 @@ func Sleep(d Duration) {
 	sleep(d)
 }
 
+func GOMAXPROCS(n int) int {
+	// Note: setting GOMAXPROCS is ignored.
+	return 1
+}
+
 func _panic(message interface{}) {
 	printstring("panic: ")
 	printitf(message)
