@@ -42,19 +42,20 @@ Currently supported features:
   * interfaces for basic types (with type switches and asserts)
   * goroutines (very initial support)
   * function pointers (non-blocking)
+  * interface methods
+  * standard library (but most packages won't work due to missing language
+    features)
 
 Not yet supported:
 
   * float, complex, etc.
   * maps
   * slices
-  * interface methods
   * garbage collection
   * defer
   * closures
   * channels
   * introspection (if it ever gets implemented)
-  * standard library (needs more language support)
   * ...
 
 ## Analysis
