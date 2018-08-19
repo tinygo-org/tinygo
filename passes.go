@@ -180,6 +180,92 @@ func (p *Program) AnalyseGoCalls() {
 	}
 }
 
+// Simple pass that removes dead code. This pass makes later analysis passes
+// more useful.
+func (p *Program) SimpleDCE() {
+	// Unmark all functions and globals.
+	for _, f := range p.Functions {
+		f.flag = false
+	}
+	for _, f := range p.Globals {
+		f.flag = false
+	}
+
+	// Initial set of live functions. Include main.main, *.init and runtime.*
+	// functions.
+	main := p.mainPkg.Members["main"].(*ssa.Function)
+	runtimePkg := p.program.ImportedPackage("runtime")
+	p.GetFunction(main).flag = true
+	worklist := []*ssa.Function{main}
+	for _, f := range p.Functions {
+		if f.fn.Synthetic == "package initializer" || f.fn.Pkg == runtimePkg {
+			if f.flag || isCGoInternal(f.fn.Name()) {
+				continue
+			}
+			f.flag = true
+			worklist = append(worklist, f.fn)
+		}
+	}
+
+	// Mark all called functions recursively.
+	for len(worklist) != 0 {
+		f := worklist[len(worklist)-1]
+		worklist = worklist[:len(worklist)-1]
+		for _, block := range f.Blocks {
+			for _, instr := range block.Instrs {
+				if instr, ok := instr.(*ssa.MakeInterface); ok {
+					for _, sel := range getAllMethods(p.program, instr.X.Type()) {
+						callee := p.GetFunction(p.program.MethodValue(sel))
+						if !callee.flag {
+							callee.flag = true
+							worklist = append(worklist, callee.fn)
+						}
+					}
+				}
+				for _, operand := range instr.Operands(nil) {
+					if operand == nil || *operand == nil || isCGoInternal((*operand).Name()) {
+						continue
+					}
+					switch operand := (*operand).(type) {
+					case *ssa.Function:
+						f := p.GetFunction(operand)
+						if !f.flag {
+							f.flag = true
+							worklist = append(worklist, operand)
+						}
+					case *ssa.Global:
+						// TODO: globals that reference other globals
+						global := p.GetGlobal(operand)
+						global.flag = true
+					}
+				}
+			}
+		}
+	}
+
+	// Remove unmarked functions.
+	livefunctions := []*Function{p.GetFunction(main)}
+	for _, f := range p.Functions {
+		if f.flag {
+			livefunctions = append(livefunctions, f)
+		} else {
+			delete(p.functionMap, f.fn)
+		}
+	}
+	p.Functions = livefunctions
+
+	// Remove unmarked globals.
+	liveglobals := []*Global{}
+	for _, g := range p.Globals {
+		if g.flag {
+			liveglobals = append(liveglobals, g)
+		} else {
+			delete(p.globalMap, g.g)
+		}
+	}
+	p.Globals = liveglobals
+}
+
 // Whether this function needs a scheduler.
 //
 // Depends on AnalyseGoCalls.

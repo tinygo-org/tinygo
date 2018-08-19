@@ -205,6 +205,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	for _, pkg := range packageList {
 		c.ir.AddPackage(pkg)
 	}
+	c.ir.SimpleDCE()                   // remove most dead code
 	c.ir.AnalyseCallgraph()            // set up callgraph
 	c.ir.AnalyseInterfaceConversions() // determine which types are converted to an interface
 	c.ir.AnalyseBlockingRecursive()    // make all parents of blocking calls blocking (transitively)

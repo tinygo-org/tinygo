@@ -31,6 +31,7 @@ type Function struct {
 	fn       *ssa.Function
 	llvmFn   llvm.Value
 	blocking bool
+	flag     bool        // used by dead code elimination
 	parents  []*Function // calculated by AnalyseCallgraph
 	children []*Function
 }
@@ -39,6 +40,7 @@ type Function struct {
 type Global struct {
 	g          *ssa.Global
 	llvmGlobal llvm.Value
+	flag       bool // used by dead code elimination
 }
 
 // Type with a name and possibly methods.
