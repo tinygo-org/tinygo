@@ -12,6 +12,8 @@ import (
 // View on all functions, types, and globals in a program, with analysis
 // results.
 type Program struct {
+	program              *ssa.Program
+	mainPkg              *ssa.Package
 	Functions            []*Function
 	functionMap          map[*ssa.Function]*Function
 	Globals              []*Global
@@ -52,8 +54,11 @@ type InterfaceType struct {
 	Methods map[string]*types.Selection
 }
 
-func NewProgram() *Program {
+// Create and intialize a new *Program from a *ssa.Program.
+func NewProgram(program *ssa.Program, mainPath string) *Program {
 	return &Program{
+		program:              program,
+		mainPkg:              program.ImportedPackage(mainPath),
 		functionMap:          make(map[*ssa.Function]*Function),
 		globalMap:            make(map[*ssa.Global]*Global),
 		methodSignatureNames: make(map[string]int),

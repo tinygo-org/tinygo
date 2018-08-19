@@ -46,8 +46,6 @@ type Compiler struct {
 	coroSuspendFunc llvm.Value
 	coroEndFunc     llvm.Value
 	coroFreeFunc    llvm.Value
-	program         *ssa.Program
-	mainPkg         *ssa.Package
 	initFuncs       []llvm.Value
 	ir              *Program
 }
@@ -73,7 +71,6 @@ func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 	c := &Compiler{
 		dumpSSA: dumpSSA,
 		triple:  triple,
-		ir:      NewProgram(),
 	}
 
 	target, err := llvm.GetTargetFromTriple(triple)
@@ -160,10 +157,9 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		}
 	}
 
-	c.program = ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions|ssa.BareInits)
-	c.program.Build()
-
-	c.mainPkg = c.program.ImportedPackage(mainPath)
+	program := ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions|ssa.BareInits)
+	program.Build()
+	c.ir = NewProgram(program, mainPath)
 
 	// Make a list of packages in import order.
 	packageList := []*ssa.Package{}
@@ -171,7 +167,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	worklist := []string{"runtime", mainPath}
 	for len(worklist) != 0 {
 		pkgPath := worklist[0]
-		pkg := c.program.ImportedPackage(pkgPath)
+		pkg := program.ImportedPackage(pkgPath)
 		if pkg == nil {
 			// Non-SSA package (e.g. cgo).
 			packageSet[pkgPath] = struct{}{}
@@ -322,12 +318,12 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 
 	// Adjust main function.
 	main := c.mod.NamedFunction("main.main")
-	realMain := c.mod.NamedFunction(c.mainPkg.Pkg.Path() + ".main")
+	realMain := c.mod.NamedFunction(c.ir.mainPkg.Pkg.Path() + ".main")
 	if !realMain.IsNil() {
 		main.ReplaceAllUsesWith(realMain)
 	}
 	mainAsync := c.mod.NamedFunction("main.main$async")
-	realMainAsync := c.mod.NamedFunction(c.mainPkg.Pkg.Path() + ".main$async")
+	realMainAsync := c.mod.NamedFunction(c.ir.mainPkg.Pkg.Path() + ".main$async")
 	if !realMainAsync.IsNil() {
 		mainAsync.ReplaceAllUsesWith(realMainAsync)
 	}
@@ -361,7 +357,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		tuple := llvm.ConstNamedStruct(tupleType, tupleValues)
 		tuples = append(tuples, tuple)
 		for _, method := range meta.Methods {
-			f := c.ir.GetFunction(c.program.MethodValue(method))
+			f := c.ir.GetFunction(program.MethodValue(method))
 			if f.llvmFn.IsNil() {
 				return errors.New("cannot find function: " + f.Name(false))
 			}
