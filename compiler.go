@@ -247,11 +247,11 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		if err != nil {
 			return err
 		}
-		global := llvm.AddGlobal(c.mod, llvmType, g.Name())
+		global := llvm.AddGlobal(c.mod, llvmType, g.LinkName())
 		g.llvmGlobal = global
-		if !strings.HasPrefix(g.Name(), "_extern_") {
+		if !strings.HasPrefix(g.LinkName(), "_extern_") {
 			global.SetLinkage(llvm.PrivateLinkage)
-			if g.Name() == "runtime.TargetBits" {
+			if g.LinkName() == "runtime.TargetBits" {
 				bitness := c.targetData.PointerSize() * 8
 				if bitness < 32 {
 					// Only 8 and 32+ architectures supported at the moment.
@@ -359,7 +359,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		for _, method := range meta.Methods {
 			f := c.ir.GetFunction(program.MethodValue(method))
 			if f.llvmFn.IsNil() {
-				return errors.New("cannot find function: " + f.Name(false))
+				return errors.New("cannot find function: " + f.LinkName(false))
 			}
 			fn := llvm.ConstBitCast(f.llvmFn, c.i8ptrType)
 			funcPointers = append(funcPointers, fn)
@@ -632,7 +632,7 @@ func (c *Compiler) parseFuncDecl(f *Function) (*Frame, error) {
 
 	fnType := llvm.FunctionType(retType, paramTypes, false)
 
-	name := f.Name(frame.blocking)
+	name := f.LinkName(frame.blocking)
 	frame.fn.llvmFn = c.mod.NamedFunction(name)
 	if frame.fn.llvmFn.IsNil() {
 		frame.fn.llvmFn = llvm.AddFunction(c.mod, name, fnType)
@@ -1127,11 +1127,11 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 			}
 		}
 		targetBlocks := false
-		name := c.ir.GetFunction(call).Name(targetBlocks)
+		name := c.ir.GetFunction(call).LinkName(targetBlocks)
 		llvmFn := c.mod.NamedFunction(name)
 		if llvmFn.IsNil() {
 			targetBlocks = true
-			nameAsync := c.ir.GetFunction(call).Name(targetBlocks)
+			nameAsync := c.ir.GetFunction(call).LinkName(targetBlocks)
 			llvmFn = c.mod.NamedFunction(nameAsync)
 			if llvmFn.IsNil() {
 				return llvm.Value{}, errors.New("undefined function: " + name)
@@ -1216,11 +1216,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Function:
-		return c.mod.NamedFunction(c.ir.GetFunction(expr).Name(false)), nil
+		return c.mod.NamedFunction(c.ir.GetFunction(expr).LinkName(false)), nil
 	case *ssa.Global:
 		value := c.ir.GetGlobal(expr).llvmGlobal
 		if value.IsNil() {
-			return llvm.Value{}, errors.New("global not found: " + c.ir.GetGlobal(expr).Name())
+			return llvm.Value{}, errors.New("global not found: " + c.ir.GetGlobal(expr).LinkName())
 		}
 		return value, nil
 	case *ssa.IndexAddr:

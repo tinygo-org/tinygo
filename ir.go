@@ -122,7 +122,7 @@ func (p *Program) GetGlobal(ssaGlobal *ssa.Global) *Global {
 }
 
 // Return the link name for this function.
-func (f *Function) Name(blocking bool) string {
+func (f *Function) LinkName(blocking bool) string {
 	suffix := ""
 	if blocking {
 		suffix = "$async"
@@ -157,7 +157,7 @@ func (f *Function) CName() string {
 }
 
 // Return the link name for this global.
-func (g *Global) Name() string {
+func (g *Global) LinkName() string {
 	if strings.HasPrefix(g.g.Name(), "_extern_") {
 		return g.g.Name()[len("_extern_"):]
 	} else {
