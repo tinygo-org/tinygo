@@ -426,7 +426,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		case types.UnsafePointer:
 			return c.i8ptrType, nil
 		default:
-			return llvm.Type{}, errors.New("todo: unknown basic type: " + fmt.Sprintf("%#v", typ))
+			return llvm.Type{}, errors.New("todo: unknown basic type: " + typ.String())
 		}
 	case *types.Interface:
 		return c.mod.GetTypeByName("interface"), nil
@@ -643,12 +643,25 @@ func (c *Compiler) parseFuncDecl(f *Function) (*Frame, error) {
 // Special function parser for generated package initializers (which also
 // initializes global variables).
 func (c *Compiler) parseInitFunc(frame *Frame) error {
+	if c.dumpSSA {
+		fmt.Printf("\nfunc %s:\n", frame.fn.fn)
+	}
 	frame.fn.llvmFn.SetLinkage(llvm.PrivateLinkage)
 	llvmBlock := c.ctx.AddBasicBlock(frame.fn.llvmFn, "entry")
 	c.builder.SetInsertPointAtEnd(llvmBlock)
 
 	for _, block := range frame.fn.fn.DomPreorder() {
+		if c.dumpSSA {
+			fmt.Printf("%s:\n", block.Comment)
+		}
 		for _, instr := range block.Instrs {
+			if c.dumpSSA {
+				if val, ok := instr.(ssa.Value); ok && val.Name() != "" {
+					fmt.Printf("\t%s = %s\n", val.Name(), val.String())
+				} else {
+					fmt.Printf("\t%s\n", instr.String())
+				}
+			}
 			var err error
 			switch instr := instr.(type) {
 			case *ssa.Call, *ssa.Return:
@@ -717,10 +730,10 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 					llvmValue = c.builder.CreateInsertValue(llvmValue, llvmFieldValue, fieldAddr.Field, "")
 					llvmAddr.SetInitializer(llvmValue)
 				default:
-					return errors.New("unknown init store: " + fmt.Sprintf("%#v", addr))
+					return errors.New("unknown init store: " + addr.String())
 				}
 			default:
-				return errors.New("unknown init instruction: " + fmt.Sprintf("%#v", instr))
+				return errors.New("unknown init instruction: " + instr.String())
 			}
 			if err != nil {
 				return err
@@ -921,7 +934,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		}
 		return nil
 	default:
-		return errors.New("unknown instruction: " + fmt.Sprintf("%#v", instr))
+		return errors.New("unknown instruction: " + instr.String())
 	}
 }
 
@@ -996,14 +1009,14 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 						c.builder.CreateCall(fn, []llvm.Value{value}, "")
 						continue
 					} else {
-						return llvm.Value{}, errors.New("unknown basic arg type: " + fmt.Sprintf("%#v", typ))
+						return llvm.Value{}, errors.New("unknown basic arg type: " + typ.String())
 					}
 				}
 			case *types.Pointer:
 				ptrValue := c.builder.CreatePtrToInt(value, c.uintptrType, "")
 				c.builder.CreateCall(c.mod.NamedFunction("runtime.printptr"), []llvm.Value{ptrValue}, "")
 			default:
-				return llvm.Value{}, errors.New("unknown arg type: " + fmt.Sprintf("%#v", typ))
+				return llvm.Value{}, errors.New("unknown arg type: " + typ.String())
 			}
 		}
 		if callName == "println" {
@@ -1601,10 +1614,10 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 			n, _ := constant.Int64Val(expr.Value)
 			return llvm.ConstInt(llvmType, uint64(n), true), nil
 		} else {
-			return llvm.Value{}, errors.New("todo: unknown constant: " + fmt.Sprintf("%v", typ))
+			return llvm.Value{}, errors.New("todo: unknown constant: " + typ.String())
 		}
 	default:
-		return llvm.Value{}, errors.New("todo: unknown constant: " + fmt.Sprintf("%#v", typ))
+		return llvm.Value{}, errors.New("todo: unknown constant: " + typ.String())
 	}
 }
 
@@ -1655,7 +1668,7 @@ func (c *Compiler) parseConvert(frame *Frame, typeTo types.Type, x ssa.Value) (l
 	case *types.Pointer:
 		return c.builder.CreateBitCast(value, llvmTypeTo, ""), nil
 	default:
-		return llvm.Value{}, errors.New("todo: convert: extend non-basic type: " + fmt.Sprintf("%#v", typeTo))
+		return llvm.Value{}, errors.New("todo: convert: extend non-basic type: " + typeTo.String())
 	}
 }
 
