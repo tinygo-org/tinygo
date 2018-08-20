@@ -55,7 +55,7 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool
 	if err := c.Verify(); err != nil {
 		return err
 	}
-	c.Optimize(2, 1) // -O2 -Os
+	//c.Optimize(2, 1) // -O2 -Os
 	if err := c.Verify(); err != nil {
 		return err
 	}

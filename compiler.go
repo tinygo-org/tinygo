@@ -1746,12 +1746,8 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int) {
 	builder.PopulateFunc(funcPasses)
 
 	modPasses := llvm.NewPassManager()
-	modPasses.AddCoroEarlyPass()
-	modPasses.AddCoroSplitPass()
-	modPasses.AddCoroElidePass()
 	defer modPasses.Dispose()
 	builder.Populate(modPasses)
-	modPasses.AddCoroCleanupPass()
 
 	modPasses.Run(c.mod)
 }
