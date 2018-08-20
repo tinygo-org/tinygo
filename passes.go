@@ -244,7 +244,7 @@ func (p *Program) SimpleDCE() {
 	}
 
 	// Remove unmarked functions.
-	livefunctions := []*Function{p.GetFunction(main)}
+	livefunctions := []*Function{}
 	for _, f := range p.Functions {
 		if f.flag {
 			livefunctions = append(livefunctions, f)
