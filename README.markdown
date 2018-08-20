@@ -91,6 +91,49 @@ Implemented analysis passes:
     [type-based alias analysis](https://en.wikipedia.org/wiki/Alias_analysis#Type-based_alias_analysis).
     I would like to use flow-based alias analysis in the future.
 
+## Building
+
+Requirements:
+
+  * Go 1.10+ (Go 1.9 has a
+    [known bug](https://github.com/aykevl/tinygo/issues/2)).
+  * LLVM dependencies, see the Software section in the
+    [LLVM build guide](https://llvm.org/docs/GettingStarted.html#software).
+
+First download the sources (this takes a while):
+
+    go get -u github.com/aykevl/tinygo
+
+You'll get an error like the following, this is expected:
+
+    src/github.com/aykevl/llvm/bindings/go/llvm/analysis.go:17:10: fatal error: 'llvm-c/Analysis.h' file not found
+    #include "llvm-c/Analysis.h" // If you are getting an error here read bindings/go/README.txt
+             ^~~~~~~~~~~~~~~~~~~
+    1 error generated.
+
+To continue, you'll need to build LLVM for Go. This will take about an hour and
+require a fair bit of RAM. In fact, I would recommend setting your `ld` binary
+to `gold` to speed up linking, especially on systems with less than 16GB RAM.
+
+Also, I would recommend editing build.sh and set `cmake_flags` to:
+
+```sh
+cmake_flags="../../../../.. $@ -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR -DLLVM_LINK_LLVM_DYLIB=ON"
+```
+
+This will enable the experimental AVR backend (for Arduino support) and will
+make sure `tinygo` links to a shared library instead of a static library,
+greatly improving link time on every rebuild. This is especially useful during
+development.
+
+After LLVM has been built, you can run an example with:
+
+    make run-hello
+
+For a blinky example on the PCA10040 development board, do this:
+
+    make flash-blinky TARGET=pca10040
+
 ## License
 
 This project is licensed under the BSD 3-clause license, just like the
