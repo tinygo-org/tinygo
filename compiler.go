@@ -1008,7 +1008,8 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 							panic("undefined: " + name)
 						}
 						c.builder.CreateCall(fn, []llvm.Value{value}, "")
-						continue
+					} else if typ.Kind() == types.Bool {
+						c.builder.CreateCall(c.mod.NamedFunction("runtime.printbool"), []llvm.Value{value}, "")
 					} else {
 						return llvm.Value{}, errors.New("unknown basic arg type: " + typ.String())
 					}

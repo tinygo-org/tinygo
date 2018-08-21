@@ -101,3 +101,11 @@ func printptr(ptr uintptr) {
 		ptr <<= 4
 	}
 }
+
+func printbool(b bool) {
+	if b {
+		printstring("true")
+	} else {
+		printstring("false")
+	}
+}
