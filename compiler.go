@@ -1542,10 +1542,27 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 		// Go specific. Calculate "and not" with x & (~y)
 		inv := c.builder.CreateNot(y, "") // ~y
 		return c.builder.CreateAnd(x, inv, ""), nil
-	case token.EQL: // ==
-		return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
-	case token.NEQ: // !=
-		return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+	case token.EQL, token.NEQ: // ==, !=
+		switch typ := binop.X.Type().Underlying().(type) {
+		case *types.Basic:
+			if typ.Info()&types.IsInteger != 0 || typ.Kind() == types.UnsafePointer {
+				if binop.Op == token.EQL {
+					return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+				} else {
+					return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+				}
+			} else if typ.Kind() == types.String {
+				result := c.builder.CreateCall(c.mod.NamedFunction("runtime.stringequal"), []llvm.Value{x, y}, "")
+				if binop.Op == token.NEQ {
+					result = c.builder.CreateNot(result, "")
+				}
+				return result, nil
+			} else {
+				return llvm.Value{}, errors.New("todo: equality operator on unknown basic type: " + typ.String())
+			}
+		default:
+			return llvm.Value{}, errors.New("todo: equality operator on unknown type: " + typ.String())
+		}
 	case token.LSS: // <
 		if signed {
 			return c.builder.CreateICmp(llvm.IntSLT, x, y, ""), nil

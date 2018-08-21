@@ -17,6 +17,18 @@ func GOMAXPROCS(n int) int {
 	return 1
 }
 
+func stringequal(x, y string) bool {
+	if len(x) != len(y) {
+		return false
+	}
+	for i := 0; i < len(x); i++ {
+		if x[i] != y[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func _panic(message interface{}) {
 	printstring("panic: ")
 	printitf(message)
