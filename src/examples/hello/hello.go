@@ -23,6 +23,9 @@ func main() {
 	println("sumrange(100) =", sumrange(100))
 	println("strlen foo:", strlen("foo"))
 
+	m := map[string]int{"answer": 42, "foo": 3}
+	readMap(m, "answer")
+
 	foo := []int{1, 2, 4, 5}
 	println("len/cap foo:", len(foo), cap(foo))
 	println("foo[3]:", foo[3])
@@ -44,6 +47,10 @@ func main() {
 
 func runFunc(f func(int), arg int) {
 	f(arg)
+}
+
+func readMap(m map[string]int, key string) {
+	println("map read:", key, "=", m[key])
 }
 
 func hello(n int) {

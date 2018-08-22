@@ -1,5 +1,9 @@
 package runtime
 
+import (
+	"unsafe"
+)
+
 const Compiler = "tgo"
 
 // The bitness of the CPU (e.g. 8, 32, 64). Set by the compiler as a constant.
@@ -27,6 +31,20 @@ func stringequal(x, y string) bool {
 		}
 	}
 	return true
+}
+
+// Copy size bytes from src to dst. The memory areas must not overlap.
+func memcpy(dst, src unsafe.Pointer, size uintptr) {
+	for i := uintptr(0); i < size; i++ {
+		*(*uint8)(unsafe.Pointer(uintptr(dst) + i)) = *(*uint8)(unsafe.Pointer(uintptr(src) + i))
+	}
+}
+
+// Set the given number of bytes to zero.
+func memzero(ptr unsafe.Pointer, size uintptr) {
+	for i := uintptr(0); i < size; i++ {
+		*(*byte)(unsafe.Pointer(uintptr(ptr) + size)) = 0
+	}
 }
 
 func _panic(message interface{}) {

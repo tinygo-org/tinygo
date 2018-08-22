@@ -46,11 +46,11 @@ Currently supported features:
   * standard library (but most packages won't work due to missing language
     features)
   * slices (partially)
+  * maps (very rough, unfinished)
 
 Not yet supported:
 
   * float, complex, etc.
-  * maps
   * garbage collection
   * defer
   * closures

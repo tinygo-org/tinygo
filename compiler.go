@@ -431,6 +431,8 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		}
 	case *types.Interface:
 		return c.mod.GetTypeByName("interface"), nil
+	case *types.Map:
+		return llvm.PointerType(c.mod.GetTypeByName("runtime.hashmap"), 0), nil
 	case *types.Named:
 		if _, ok := typ.Underlying().(*types.Struct); ok {
 			llvmType := c.mod.GetTypeByName(typ.Obj().Pkg().Path() + "." + typ.Obj().Name())
@@ -878,6 +880,36 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		blockJump := frame.blocks[instr.Block().Succs[0]]
 		c.builder.CreateBr(blockJump)
 		return nil
+	case *ssa.MapUpdate:
+		m, err := c.parseExpr(frame, instr.Map)
+		if err != nil {
+			return err
+		}
+		key, err := c.parseExpr(frame, instr.Key)
+		if err != nil {
+			return err
+		}
+		value, err := c.parseExpr(frame, instr.Value)
+		if err != nil {
+			return err
+		}
+		mapType := instr.Map.Type().Underlying().(*types.Map)
+		switch keyType := mapType.Key().Underlying().(type) {
+		case *types.Basic:
+			if keyType.Kind() == types.String {
+				valueAlloca := c.builder.CreateAlloca(value.Type(), "hashmap.value")
+				c.builder.CreateStore(value, valueAlloca)
+				valuePtr := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "hashmap.valueptr")
+				params := []llvm.Value{m, key, valuePtr}
+				fn := c.mod.NamedFunction("runtime.hashmapSet")
+				c.builder.CreateCall(fn, params, "")
+				return nil
+			} else {
+				return errors.New("todo: map update key type: " + keyType.String())
+			}
+		default:
+			return errors.New("todo: map update key type: " + keyType.String())
+		}
 	case *ssa.Panic:
 		value, err := c.parseExpr(frame, instr.X)
 		if err != nil {
@@ -1292,13 +1324,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if expr.CommaOk {
 			return llvm.Value{}, errors.New("todo: lookup with comma-ok")
 		}
-		if _, ok := expr.X.Type().(*types.Map); ok {
-			return llvm.Value{}, errors.New("todo: lookup in map")
-		}
-		// Value type must be a string, which is a basic type.
-		if expr.X.Type().(*types.Basic).Kind() != types.String {
-			panic("lookup on non-string?")
-		}
 		value, err := c.parseExpr(frame, expr.X)
 		if err != nil {
 			return llvm.Value{}, nil
@@ -1307,21 +1332,50 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, nil
 		}
-
-		// Bounds check.
-		// LLVM optimizes this away in most cases.
-		if frame.fn.llvmFn.Name() != "runtime.lookupBoundsCheck" {
-			length, err := c.parseBuiltin(frame, []ssa.Value{expr.X}, "len")
-			if err != nil {
-				return llvm.Value{}, err // shouldn't happen
+		switch xType := expr.X.Type().(type) {
+		case *types.Basic:
+			// Value type must be a string, which is a basic type.
+			if xType.Kind() != types.String {
+				panic("lookup on non-string?")
 			}
-			c.builder.CreateCall(c.mod.NamedFunction("runtime.lookupBoundsCheck"), []llvm.Value{length, index}, "")
-		}
 
-		// Lookup byte
-		buf := c.builder.CreateExtractValue(value, 1, "")
-		bufPtr := c.builder.CreateGEP(buf, []llvm.Value{index}, "")
-		return c.builder.CreateLoad(bufPtr, ""), nil
+			// Bounds check.
+			// LLVM optimizes this away in most cases.
+			if frame.fn.llvmFn.Name() != "runtime.lookupBoundsCheck" {
+				length, err := c.parseBuiltin(frame, []ssa.Value{expr.X}, "len")
+				if err != nil {
+					return llvm.Value{}, err // shouldn't happen
+				}
+				c.builder.CreateCall(c.mod.NamedFunction("runtime.lookupBoundsCheck"), []llvm.Value{length, index}, "")
+			}
+
+			// Lookup byte
+			buf := c.builder.CreateExtractValue(value, 1, "")
+			bufPtr := c.builder.CreateGEP(buf, []llvm.Value{index}, "")
+			return c.builder.CreateLoad(bufPtr, ""), nil
+		case *types.Map:
+			switch keyType := xType.Key().Underlying().(type) {
+			case *types.Basic:
+				if keyType.Kind() == types.String {
+					llvmValueType, err := c.getLLVMType(expr.Type())
+					if err != nil {
+						return llvm.Value{}, err
+					}
+					mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "hashmap.value")
+					mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "hashmap.valueptr")
+					params := []llvm.Value{value, index, mapValuePtr}
+					fn := c.mod.NamedFunction("runtime.hashmapGet")
+					c.builder.CreateCall(fn, params, "")
+					return c.builder.CreateLoad(mapValueAlloca, ""), nil
+				} else {
+					return llvm.Value{}, errors.New("todo: map lookup key type: " + keyType.String())
+				}
+			default:
+				return llvm.Value{}, errors.New("todo: map lookup key type: " + keyType.String())
+			}
+		default:
+			panic("unknown lookup type: " + expr.String())
+		}
 	case *ssa.MakeInterface:
 		val, err := c.parseExpr(frame, expr.X)
 		if err != nil {
@@ -1359,6 +1413,63 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("interface"), []llvm.Value{llvm.ConstInt(llvm.Int32Type(), uint64(itfTypeNum), false), llvm.Undef(c.i8ptrType)})
 		itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
 		return itf, nil
+	case *ssa.MakeMap:
+		mapType := expr.Type().Underlying().(*types.Map)
+		llvmKeyType, err := c.getLLVMType(mapType.Key().Underlying())
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		llvmValueType, err := c.getLLVMType(mapType.Elem().Underlying())
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		switch keyType := mapType.Key().Underlying().(type) {
+		case *types.Basic:
+			if keyType.Kind() == types.String {
+				// Create hashmap
+				llvmType := c.mod.GetTypeByName("runtime.hashmap")
+				size := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(llvmType), false)
+				buf := c.builder.CreateCall(c.allocFunc, []llvm.Value{size}, "")
+				buf = c.builder.CreateBitCast(buf, llvm.PointerType(llvmType, 0), "")
+
+				// Set keySize
+				keySize := c.targetData.TypeAllocSize(llvmKeyType)
+				keyIndices := []llvm.Value{
+					llvm.ConstInt(llvm.Int32Type(), 0, false),
+					llvm.ConstInt(llvm.Int32Type(), 3, false), // keySize uint8
+				}
+				keySizePtr := c.builder.CreateGEP(buf, keyIndices, "hashmap.keySize")
+				c.builder.CreateStore(llvm.ConstInt(llvm.Int8Type(), keySize, false), keySizePtr)
+
+				// Set valueSize
+				valueSize := c.targetData.TypeAllocSize(llvmValueType)
+				valueIndices := []llvm.Value{
+					llvm.ConstInt(llvm.Int32Type(), 0, false),
+					llvm.ConstInt(llvm.Int32Type(), 4, false), // valueSize uint8
+				}
+				valueSizePtr := c.builder.CreateGEP(buf, valueIndices, "hashmap.valueSize")
+				c.builder.CreateStore(llvm.ConstInt(llvm.Int8Type(), valueSize, false), valueSizePtr)
+
+				// Create initial bucket
+				bucketType := c.mod.GetTypeByName("runtime.hashmapBucket")
+				bucketSize := c.targetData.TypeAllocSize(bucketType) + keySize*8 + valueSize*8
+				bucketSizeValue := llvm.ConstInt(c.uintptrType, bucketSize, false)
+				bucket := c.builder.CreateCall(c.allocFunc, []llvm.Value{bucketSizeValue}, "")
+
+				// Set initial bucket
+				bucketIndices := []llvm.Value{
+					llvm.ConstInt(llvm.Int32Type(), 0, false),
+					llvm.ConstInt(llvm.Int32Type(), 1, false), // buckets unsafe.Pointer
+				}
+				bucketsElementPtr := c.builder.CreateGEP(buf, bucketIndices, "hashmap.buckets")
+				c.builder.CreateStore(bucket, bucketsElementPtr)
+				return buf, nil
+			} else {
+				return llvm.Value{}, errors.New("todo: map key type: " + keyType.String())
+			}
+		default:
+			return llvm.Value{}, errors.New("todo: map key type: " + keyType.String())
+		}
 	case *ssa.Phi:
 		t, err := c.getLLVMType(expr.Type())
 		if err != nil {
