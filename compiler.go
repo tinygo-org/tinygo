@@ -1500,11 +1500,11 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 	if err != nil {
 		return llvm.Value{}, err
 	}
-	typ := binop.X.Type()
-	if typNamed, ok := typ.(*types.Named); ok {
-		typ = typNamed.Underlying()
+	typ := binop.X.Type().Underlying()
+	signed := false
+	if typ, ok := typ.(*types.Basic); ok {
+		signed = typ.Info()&types.IsUnsigned == 0
 	}
-	signed := typ.(*types.Basic).Info()&types.IsUnsigned == 0
 	switch binop.Op {
 	case token.ADD: // +
 		return c.builder.CreateAdd(x, y, ""), nil
@@ -1559,6 +1559,12 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 				return result, nil
 			} else {
 				return llvm.Value{}, errors.New("todo: equality operator on unknown basic type: " + typ.String())
+			}
+		case *types.Pointer:
+			if binop.Op == token.EQL {
+				return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+			} else {
+				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 			}
 		default:
 			return llvm.Value{}, errors.New("todo: equality operator on unknown type: " + typ.String())
@@ -1635,6 +1641,12 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 		} else {
 			return llvm.Value{}, errors.New("todo: unknown constant: " + typ.String())
 		}
+	case *types.Pointer:
+		llvmType, err := c.getLLVMType(typ)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		return llvm.ConstPointerNull(llvmType), nil
 	default:
 		return llvm.Value{}, errors.New("todo: unknown constant: " + typ.String())
 	}
