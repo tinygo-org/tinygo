@@ -1237,11 +1237,19 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// https://research.swtch.com/interfaces
 		return c.parseExpr(frame, expr.X)
 	case *ssa.ChangeType:
-		return c.parseConvert(frame, expr.Type(), expr.X)
+		x, err := c.parseExpr(frame, expr.X)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		return c.parseConvert(expr.X.Type(), expr.Type(), x)
 	case *ssa.Const:
 		return c.parseConst(expr)
 	case *ssa.Convert:
-		return c.parseConvert(frame, expr.Type(), expr.X)
+		x, err := c.parseExpr(frame, expr.X)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		return c.parseConvert(expr.X.Type(), expr.Type(), x)
 	case *ssa.Extract:
 		value, err := c.parseExpr(frame, expr.Tuple)
 		if err != nil {
@@ -1769,24 +1777,16 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 	}
 }
 
-func (c *Compiler) parseConvert(frame *Frame, typeTo types.Type, x ssa.Value) (llvm.Value, error) {
-	value, err := c.parseExpr(frame, x)
-	if err != nil {
-		return value, nil
-	}
-
-	llvmTypeFrom, err := c.getLLVMType(x.Type())
-	if err != nil {
-		return llvm.Value{}, err
-	}
+func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (llvm.Value, error) {
+	llvmTypeFrom := value.Type()
 	llvmTypeTo, err := c.getLLVMType(typeTo)
 	if err != nil {
 		return llvm.Value{}, err
 	}
 
-	switch typeTo := typeTo.(type) {
+	switch typeTo := typeTo.Underlying().(type) {
 	case *types.Basic:
-		isPtrFrom := isPointer(x.Type())
+		isPtrFrom := isPointer(typeFrom)
 		isPtrTo := isPointer(typeTo)
 		if isPtrFrom && !isPtrTo {
 			return c.builder.CreatePtrToInt(value, llvmTypeTo, ""), nil
@@ -1811,8 +1811,6 @@ func (c *Compiler) parseConvert(frame *Frame, typeTo types.Type, x ssa.Value) (l
 		} else { // if signed
 			return c.builder.CreateSExt(value, llvmTypeTo, ""), nil
 		}
-	case *types.Named:
-		return c.parseConvert(frame, typeTo.Underlying(), x)
 	case *types.Pointer:
 		return c.builder.CreateBitCast(value, llvmTypeTo, ""), nil
 	default:
