@@ -1530,13 +1530,25 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 		return c.builder.CreateOr(x, y, ""), nil
 	case token.XOR: // ^
 		return c.builder.CreateXor(x, y, ""), nil
-	case token.SHL: // <<
-		return c.builder.CreateShl(x, y, ""), nil
-	case token.SHR: // >>
-		if signed {
-			return c.builder.CreateAShr(x, y, ""), nil
-		} else {
-			return c.builder.CreateLShr(x, y, ""), nil
+	case token.SHL, token.SHR:
+		sizeX := c.targetData.TypeAllocSize(x.Type())
+		sizeY := c.targetData.TypeAllocSize(y.Type())
+		if sizeX > sizeY {
+			// x and y must have equal sizes, make Y bigger in this case.
+			// y is unsigned, this has been checked by the Go type checker.
+			y = c.builder.CreateZExt(y, x.Type(), "")
+		}
+		switch binop.Op {
+		case token.SHL: // <<
+			return c.builder.CreateShl(x, y, ""), nil
+		case token.SHR: // >>
+			if signed {
+				return c.builder.CreateAShr(x, y, ""), nil
+			} else {
+				return c.builder.CreateLShr(x, y, ""), nil
+			}
+		default:
+			panic("unreachable")
 		}
 	case token.AND_NOT: // &^
 		// Go specific. Calculate "and not" with x & (~y)
