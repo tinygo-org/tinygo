@@ -1011,10 +1011,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			typ := arg.Type()
-			if _, ok := typ.(*types.Named); ok {
-				typ = typ.Underlying()
-			}
+			typ := arg.Type().Underlying()
 			switch typ := typ.(type) {
 			case *types.Basic:
 				switch typ.Kind() {
@@ -1722,10 +1719,7 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 }
 
 func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
-	typ := expr.Type()
-	if named, ok := typ.(*types.Named); ok {
-		typ = named.Underlying()
-	}
+	typ := expr.Type().Underlying()
 	switch typ := typ.(type) {
 	case *types.Basic:
 		llvmType, err := c.getLLVMType(typ)
