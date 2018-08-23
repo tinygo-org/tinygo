@@ -1095,6 +1095,13 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			default:
 				return llvm.Value{}, errors.New("todo: len: unknown basic type")
 			}
+		case *types.Map:
+			indices := []llvm.Value{
+				llvm.ConstInt(llvm.Int32Type(), 0, false),
+				llvm.ConstInt(llvm.Int32Type(), 2, false), // hashmap.count
+			}
+			ptr := c.builder.CreateGEP(value, indices, "lenptr")
+			return c.builder.CreateLoad(ptr, "len"), nil
 		case *types.Slice:
 			return c.builder.CreateExtractValue(value, 1, "len"), nil
 		default:

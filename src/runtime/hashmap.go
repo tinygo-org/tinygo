@@ -98,6 +98,7 @@ func hashmapSet(m *hashmap, key string, value unsafe.Pointer) {
 		bucket = bucket.next
 	}
 	if emptySlotKey != nil {
+		m.count++
 		*emptySlotKey = key
 		memcpy(emptySlotValue, value, uintptr(m.valueSize))
 		*emptySlotTophash = tophash
