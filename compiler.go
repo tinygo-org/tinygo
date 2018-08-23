@@ -293,6 +293,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		}
 		var err error
 		if frame.fn.fn.Synthetic == "package initializer" {
+			c.initFuncs = append(c.initFuncs, frame.fn.llvmFn)
 			err = c.parseInitFunc(frame)
 		} else {
 			err = c.parseFunc(frame)
