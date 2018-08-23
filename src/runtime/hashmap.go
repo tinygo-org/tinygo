@@ -42,6 +42,18 @@ func stringhash(s *string) uint32 {
 	return result
 }
 
+// Create a new hashmap with the given keySize and valueSize.
+func hashmapMake(keySize, valueSize uint8) *hashmap {
+	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(keySize)*8 + uintptr(valueSize)*8
+	bucket := alloc(bucketBufSize)
+	return &hashmap{
+		buckets:    bucket,
+		keySize:    keySize,
+		valueSize:  valueSize,
+		bucketBits: 0,
+	}
+}
+
 // Set a specified key to a given value. Grow the map if necessary.
 func hashmapSet(m *hashmap, key string, value unsafe.Pointer) {
 	hash := stringhash(&key)

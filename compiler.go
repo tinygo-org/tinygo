@@ -1529,44 +1529,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		switch keyType := mapType.Key().Underlying().(type) {
 		case *types.Basic:
 			if keyType.Kind() == types.String {
-				// Create hashmap
-				llvmType := c.mod.GetTypeByName("runtime.hashmap")
-				size := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(llvmType), false)
-				buf := c.builder.CreateCall(c.allocFunc, []llvm.Value{size}, "")
-				buf = c.builder.CreateBitCast(buf, llvm.PointerType(llvmType, 0), "")
-
-				// Set keySize
 				keySize := c.targetData.TypeAllocSize(llvmKeyType)
-				keyIndices := []llvm.Value{
-					llvm.ConstInt(llvm.Int32Type(), 0, false),
-					llvm.ConstInt(llvm.Int32Type(), 3, false), // keySize uint8
-				}
-				keySizePtr := c.builder.CreateGEP(buf, keyIndices, "hashmap.keySize")
-				c.builder.CreateStore(llvm.ConstInt(llvm.Int8Type(), keySize, false), keySizePtr)
-
-				// Set valueSize
 				valueSize := c.targetData.TypeAllocSize(llvmValueType)
-				valueIndices := []llvm.Value{
-					llvm.ConstInt(llvm.Int32Type(), 0, false),
-					llvm.ConstInt(llvm.Int32Type(), 4, false), // valueSize uint8
-				}
-				valueSizePtr := c.builder.CreateGEP(buf, valueIndices, "hashmap.valueSize")
-				c.builder.CreateStore(llvm.ConstInt(llvm.Int8Type(), valueSize, false), valueSizePtr)
-
-				// Create initial bucket
-				bucketType := c.mod.GetTypeByName("runtime.hashmapBucket")
-				bucketSize := c.targetData.TypeAllocSize(bucketType) + keySize*8 + valueSize*8
-				bucketSizeValue := llvm.ConstInt(c.uintptrType, bucketSize, false)
-				bucket := c.builder.CreateCall(c.allocFunc, []llvm.Value{bucketSizeValue}, "")
-
-				// Set initial bucket
-				bucketIndices := []llvm.Value{
-					llvm.ConstInt(llvm.Int32Type(), 0, false),
-					llvm.ConstInt(llvm.Int32Type(), 1, false), // buckets unsafe.Pointer
-				}
-				bucketsElementPtr := c.builder.CreateGEP(buf, bucketIndices, "hashmap.buckets")
-				c.builder.CreateStore(bucket, bucketsElementPtr)
-				return buf, nil
+				hashmapMake := c.mod.NamedFunction("runtime.hashmapMake")
+				llvmKeySize := llvm.ConstInt(llvm.Int8Type(), keySize, false)
+				llvmValueSize := llvm.ConstInt(llvm.Int8Type(), valueSize, false)
+				hashmap := c.builder.CreateCall(hashmapMake, []llvm.Value{llvmKeySize, llvmValueSize}, "")
+				return hashmap, nil
 			} else {
 				return llvm.Value{}, errors.New("todo: map key type: " + keyType.String())
 			}
