@@ -686,6 +686,44 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 				// Ignore: CGo pointer conversion.
 			case *ssa.FieldAddr, *ssa.IndexAddr:
 				// Ignore: handled below with *ssa.Store.
+			case *ssa.Slice:
+				// Turn a just-allocated array into a slice.
+				if instr.Low != nil || instr.High != nil || instr.Max != nil {
+					return errors.New("init: slice expression with bounds")
+				}
+				var val llvm.Value
+				if v, ok := allocs[instr.X]; ok {
+					val = v
+				} else {
+					return errors.New("init: slice operation didn't find source data")
+				}
+				switch typ := instr.X.Type().Underlying().(type) {
+				case *types.Pointer: // pointer to array
+					// make slice from array
+					length := typ.Elem().(*types.Array).Len()
+					llvmLen := llvm.ConstInt(c.lenType, uint64(length), false)
+					global := llvm.AddGlobal(c.mod, val.Type(), ".array")
+					global.SetLinkage(llvm.PrivateLinkage)
+					global.SetInitializer(val)
+					zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+					globalPtr := c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
+					sliceTyp, err := c.getLLVMType(instr.Type())
+					if err != nil {
+						return err
+					}
+
+					slice := llvm.ConstNamedStruct(sliceTyp, []llvm.Value{
+						llvm.Undef(val.Type()),
+						llvm.Undef(c.lenType),
+						llvm.Undef(c.lenType),
+					})
+					slice = c.builder.CreateInsertValue(slice, globalPtr, 0, "")
+					slice = c.builder.CreateInsertValue(slice, llvmLen, 1, "")
+					slice = c.builder.CreateInsertValue(slice, llvmLen, 2, "")
+					allocs[instr] = slice
+				default:
+					return errors.New("init: unknown slice type: " + typ.String())
+				}
 			case *ssa.Store:
 				switch addr := instr.Addr.(type) {
 				case *ssa.Global:
