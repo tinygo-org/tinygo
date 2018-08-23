@@ -42,6 +42,16 @@ func stringhash(s *string) uint32 {
 	return result
 }
 
+// Get the topmost 8 bits of the hash, without using a special value (like 0).
+func hashmapTopHash(hash uint32) uint8 {
+	tophash := uint8(hash >> 24)
+	if tophash < 1 {
+		// 0 means empty slot, so make it bigger.
+		tophash += 1
+	}
+	return tophash
+}
+
 // Create a new hashmap with the given keySize and valueSize.
 func hashmapMake(keySize, valueSize uint8) *hashmap {
 	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(keySize)*8 + uintptr(valueSize)*8
@@ -63,11 +73,7 @@ func hashmapSet(m *hashmap, key string, value unsafe.Pointer) {
 	bucketAddr := uintptr(m.buckets) + bucketSize*bucketNumber
 	bucket := (*hashmapBucket)(unsafe.Pointer(bucketAddr))
 
-	tophash := uint8(hash >> 24)
-	if tophash < 1 {
-		// 0 means empty slot, so make it bigger.
-		tophash += 1
-	}
+	tophash := hashmapTopHash(hash)
 
 	// See whether the key already exists somewhere.
 	var emptySlotKey *string

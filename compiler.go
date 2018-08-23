@@ -686,6 +686,93 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 				// Ignore: CGo pointer conversion.
 			case *ssa.FieldAddr, *ssa.IndexAddr:
 				// Ignore: handled below with *ssa.Store.
+			case *ssa.MakeMap:
+				mapType := instr.Type().Underlying().(*types.Map)
+				llvmKeyType, err := c.getLLVMType(mapType.Key().Underlying())
+				if err != nil {
+					return err
+				}
+				llvmValueType, err := c.getLLVMType(mapType.Elem().Underlying())
+				if err != nil {
+					return err
+				}
+				// TODO: use the initial map size
+				bucketType := llvm.StructType([]llvm.Type{
+					llvm.ArrayType(llvm.Int8Type(), 8), // tophash
+					c.i8ptrType,                        // next bucket
+					llvm.ArrayType(llvmKeyType, 8),     // key type
+					llvm.ArrayType(llvmValueType, 8),   // value type
+				}, false)
+				bucket := llvm.AddGlobal(c.mod, bucketType, ".hashmap.bucket")
+				bucketValue, err := getZeroValue(bucketType)
+				if err != nil {
+					return err
+				}
+				bucket.SetInitializer(bucketValue)
+				zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+				bucketPtr := llvm.ConstInBoundsGEP(bucket, []llvm.Value{zero})
+				keySize := c.targetData.TypeAllocSize(llvmKeyType)
+				valueSize := c.targetData.TypeAllocSize(llvmValueType)
+				hashmapType := c.mod.GetTypeByName("runtime.hashmap")
+				hashmap := llvm.ConstNamedStruct(hashmapType, []llvm.Value{
+					llvm.ConstPointerNull(llvm.PointerType(hashmapType, 0)), // next
+					llvm.ConstBitCast(bucketPtr, c.i8ptrType),               // buckets
+					llvm.ConstInt(c.lenType, 0, false),                      // count
+					llvm.ConstInt(llvm.Int8Type(), keySize, false),          // keySize
+					llvm.ConstInt(llvm.Int8Type(), valueSize, false),        // valueSize
+					llvm.ConstInt(llvm.Int8Type(), 0, false),                // bucketBits
+				})
+				allocs[instr] = hashmap
+			case *ssa.MapUpdate:
+				// Note: we're assuming here the Go SSA compiler knows what it's
+				// doing and doesn't insert a key twice.
+
+				// Update hashmap.count.
+				hashmap := allocs[instr.Map]
+				count := llvm.ConstExtractValue(hashmap, []uint32{2}).ZExtValue()
+				count++
+				countValue := llvm.ConstInt(c.lenType, count + 1, false)
+				hashmap = llvm.ConstInsertValue(hashmap, countValue, []uint32{2})
+				allocs[instr.Map] = hashmap
+
+				// Select the bucket (chain).
+				bucketPtr := llvm.ConstExtractValue(hashmap, []uint32{1})
+				bucketGlobal := bucketPtr.Operand(0)
+
+				llvmKey, err := c.initParseValue(instr.Key, allocs)
+				if err != nil {
+					return err
+				}
+				llvmValue, err := c.initParseValue(instr.Value, allocs)
+				if err != nil {
+					return err
+				}
+
+				// Hash for the hashtable. This must be equal to what is
+				// calculated in the runtime implementation.
+				key := constant.StringVal(instr.Key.(*ssa.Const).Value)
+				hash := stringhash(&key)
+
+				// Find an empty spot in the bucket.
+				done := false
+				for !done {
+					bucket := bucketGlobal.Initializer()
+					for i := uint32(0); i < 8; i++ {
+						if llvm.ConstExtractValue(bucket, []uint32{0, i}).ZExtValue() != 0 {
+							// already taken
+							continue
+						}
+						tophashValue := llvm.ConstInt(llvm.Int8Type(), uint64(hashmapTopHash(hash)), false)
+						bucket = llvm.ConstInsertValue(bucket, tophashValue, []uint32{0, i})
+						bucket = llvm.ConstInsertValue(bucket, llvmKey, []uint32{2, i})
+						bucket = llvm.ConstInsertValue(bucket, llvmValue, []uint32{3, i})
+						bucketGlobal.SetInitializer(bucket)
+						done = true
+					}
+					if !done {
+						return errors.New("init: todo: allocate a new bucket")
+					}
+				}
 			case *ssa.Slice:
 				// Turn a just-allocated array into a slice.
 				if instr.Low != nil || instr.High != nil || instr.Max != nil {
@@ -734,6 +821,17 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 					val, err := c.initParseValue(instr.Val, allocs)
 					if err != nil {
 						return err
+					}
+					if _, ok := instr.Val.Type().Underlying().(*types.Map); ok {
+						// Store pointer to map instead of the map itself. It is
+						// a reference type, so every access goes through a
+						// pointer to the real value. Note that this has to be a
+						// pointer in some cases as the global value can be
+						// replaced with a different map.
+						hashmap := llvm.AddGlobal(c.mod, val.Type(), ".hashmap")
+						hashmap.SetInitializer(val)
+						zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+						val = llvm.ConstInBoundsGEP(hashmap, []llvm.Value{zero})
 					}
 					llvmAddr := c.ir.GetGlobal(addr).llvmGlobal
 					llvmAddr.SetInitializer(val)

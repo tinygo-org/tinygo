@@ -14,6 +14,8 @@ type Stringer interface {
 
 const SIX = 6
 
+var testmap = map[string]int{"data": 3}
+
 func main() {
 	println("Hello world from Go!")
 	println("The answer is:", calculateAnswer())
@@ -25,6 +27,7 @@ func main() {
 
 	m := map[string]int{"answer": 42, "foo": 3}
 	readMap(m, "answer")
+	readMap(testmap, "data")
 
 	foo := []int{1, 2, 4, 5}
 	println("len/cap foo:", len(foo), cap(foo))
@@ -50,6 +53,7 @@ func runFunc(f func(int), arg int) {
 }
 
 func readMap(m map[string]int, key string) {
+	println("map length:", len(m))
 	println("map read:", key, "=", m[key])
 }
 
