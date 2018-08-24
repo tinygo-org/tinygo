@@ -731,7 +731,7 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 				hashmap := allocs[instr.Map]
 				count := llvm.ConstExtractValue(hashmap, []uint32{2}).ZExtValue()
 				count++
-				countValue := llvm.ConstInt(c.lenType, count + 1, false)
+				countValue := llvm.ConstInt(c.lenType, count, false)
 				hashmap = llvm.ConstInsertValue(hashmap, countValue, []uint32{2})
 				allocs[instr.Map] = hashmap
 
