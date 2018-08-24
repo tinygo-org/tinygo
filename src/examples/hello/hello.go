@@ -1,5 +1,7 @@
 package main
 
+import "unicode"
+
 type Thing struct {
 	name string
 }
@@ -46,6 +48,9 @@ func main() {
 	println("Stringer.String():", s.String())
 
 	runFunc(hello, 5) // must be indirect to avoid obvious inlining
+
+	// test library functions
+	println("lower to upper char:", 'h', "->", unicode.ToUpper('h'))
 }
 
 func runFunc(f func(int), arg int) {
