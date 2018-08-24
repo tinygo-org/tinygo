@@ -863,6 +863,17 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 						return err
 					}
 				}
+			case *ssa.UnOp:
+				if instr.Op != token.MUL || instr.CommaOk {
+					return errors.New("init: unknown unop: " + instr.String())
+				}
+				valPtr, err := c.initParseValue(instr.X, allocs)
+				if err != nil {
+					return err
+				}
+				// Assume it's a GEP instruction...
+				val := valPtr.Operand(0)
+				allocs[instr] = val
 			default:
 				return errors.New("unknown init instruction: " + instr.String())
 			}
