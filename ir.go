@@ -38,9 +38,10 @@ type Function struct {
 
 // Global variable, possibly constant.
 type Global struct {
-	g          *ssa.Global
-	llvmGlobal llvm.Value
-	flag       bool // used by dead code elimination
+	g           *ssa.Global
+	llvmGlobal  llvm.Value
+	flag        bool // used by dead code elimination
+	initializer Value
 }
 
 // Type with a name and possibly methods.
