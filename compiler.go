@@ -1546,9 +1546,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		// Get buffer pointer and length
 		var bufptr, buflen llvm.Value
-		switch ptrTyp := expr.X.Type().(type) {
+		switch ptrTyp := expr.X.Type().Underlying().(type) {
 		case *types.Pointer:
-			typ := expr.X.Type().(*types.Pointer).Elem()
+			typ := expr.X.Type().(*types.Pointer).Elem().Underlying()
 			switch typ := typ.(type) {
 			case *types.Array:
 				bufptr = val
