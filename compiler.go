@@ -1990,7 +1990,7 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 			global := llvm.AddGlobal(c.mod, llvm.ArrayType(llvm.Int8Type(), len(str)), ".str")
 			global.SetInitializer(c.ctx.ConstString(str, false))
 			global.SetLinkage(llvm.PrivateLinkage)
-			global.SetGlobalConstant(false)
+			global.SetGlobalConstant(true)
 			zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 			strPtr := c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
 			strObj := llvm.ConstNamedStruct(c.mod.GetTypeByName("string"), []llvm.Value{strLen, strPtr})
