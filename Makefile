@@ -98,7 +98,7 @@ build/%.bc: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go build/
 
 # Compile and optimize bitcode file.
 build/%.o: build/%.bc
-	$(OPT) -Os -enable-coroutines -o $< $<
+	$(OPT) -Oz -enable-coroutines -o $< $<
 	$(LLC) -filetype=obj -o $@ $<
 
 # Compile C sources for the runtime.
