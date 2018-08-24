@@ -687,32 +687,14 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 			case *ssa.FieldAddr, *ssa.IndexAddr:
 				// Ignore: handled below with *ssa.Store.
 			case *ssa.MakeMap:
-				mapType := instr.Type().Underlying().(*types.Map)
-				llvmKeyType, err := c.getLLVMType(mapType.Key().Underlying())
-				if err != nil {
-					return err
-				}
-				llvmValueType, err := c.getLLVMType(mapType.Elem().Underlying())
-				if err != nil {
-					return err
-				}
 				// TODO: use the initial map size
-				bucketType := llvm.StructType([]llvm.Type{
-					llvm.ArrayType(llvm.Int8Type(), 8), // tophash
-					c.i8ptrType,                        // next bucket
-					llvm.ArrayType(llvmKeyType, 8),     // key type
-					llvm.ArrayType(llvmValueType, 8),   // value type
-				}, false)
-				bucket := llvm.AddGlobal(c.mod, bucketType, ".hashmap.bucket")
-				bucketValue, err := getZeroValue(bucketType)
+				mapType := instr.Type().Underlying().(*types.Map)
+				bucket, keySize, valueSize, err := c.initMapNewBucket(mapType)
 				if err != nil {
 					return err
 				}
-				bucket.SetInitializer(bucketValue)
 				zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 				bucketPtr := llvm.ConstInBoundsGEP(bucket, []llvm.Value{zero})
-				keySize := c.targetData.TypeAllocSize(llvmKeyType)
-				valueSize := c.targetData.TypeAllocSize(llvmValueType)
 				hashmapType := c.mod.GetTypeByName("runtime.hashmap")
 				hashmap := llvm.ConstNamedStruct(hashmapType, []llvm.Value{
 					llvm.ConstPointerNull(llvm.PointerType(hashmapType, 0)), // next
@@ -768,9 +750,30 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 						bucket = llvm.ConstInsertValue(bucket, llvmValue, []uint32{3, i})
 						bucketGlobal.SetInitializer(bucket)
 						done = true
+						break
 					}
 					if !done {
-						return errors.New("init: todo: allocate a new bucket")
+						nextBucket := llvm.ConstExtractValue(bucket, []uint32{1})
+						if nextBucket.IsNull() {
+							// create new bucket
+							newBucketGlobal, _, _, err := c.initMapNewBucket(instr.Map.Type().Underlying().(*types.Map))
+							if err != nil {
+								return err
+							}
+							zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+							newBucketPtr := llvm.ConstInBoundsGEP(newBucketGlobal, []llvm.Value{zero})
+							newBucketPtrCast := llvm.ConstBitCast(newBucketPtr, c.i8ptrType)
+							newBucket := newBucketGlobal.Initializer()
+							// insert pointer into old bucket
+							bucket = llvm.ConstInsertValue(bucket, newBucketPtrCast, []uint32{1})
+							bucketGlobal.SetInitializer(bucket)
+							// switch to next bucket
+							bucketGlobal = newBucketGlobal
+							bucket = newBucket
+						} else {
+							bucketGlobal = nextBucket.Operand(0)
+							bucket = bucketGlobal.Initializer()
+						}
 					}
 				}
 			case *ssa.Slice:
@@ -822,7 +825,9 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 					if err != nil {
 						return err
 					}
-					if _, ok := instr.Val.Type().Underlying().(*types.Map); ok {
+					switch valType := instr.Val.Type().Underlying().(type) {
+					case *types.Basic:
+					case *types.Map:
 						// Store pointer to map instead of the map itself. It is
 						// a reference type, so every access goes through a
 						// pointer to the real value. Note that this has to be a
@@ -832,6 +837,19 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 						hashmap.SetInitializer(val)
 						zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 						val = llvm.ConstInBoundsGEP(hashmap, []llvm.Value{zero})
+					case *types.Pointer:
+						// Turn this into a pointer to a global object if it
+						// isn't already.
+						if val.IsConstant() && val.IsAGlobalVariable().IsNil() {
+							obj := llvm.AddGlobal(c.mod, val.Type(), ".obj")
+							obj.SetInitializer(val)
+							zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+							val = llvm.ConstInBoundsGEP(obj, []llvm.Value{zero})
+						}
+					case *types.Slice:
+					case *types.Struct:
+					default:
+						return errors.New("init: unknown store type: " + valType.String())
 					}
 					llvmAddr := c.ir.GetGlobal(addr).llvmGlobal
 					llvmAddr.SetInitializer(val)
@@ -876,6 +894,33 @@ func (c *Compiler) initParseValue(val ssa.Value, allocs map[ssa.Value]llvm.Value
 	} else {
 		return llvm.Value{}, errors.New("todo: init value for store: " + val.String())
 	}
+}
+
+// Create a new global hashmap bucket, for map initialization.
+func (c *Compiler) initMapNewBucket(mapType *types.Map) (llvm.Value, uint64, uint64, error) {
+	llvmKeyType, err := c.getLLVMType(mapType.Key().Underlying())
+	if err != nil {
+		return llvm.Value{}, 0, 0, err
+	}
+	llvmValueType, err := c.getLLVMType(mapType.Elem().Underlying())
+	if err != nil {
+		return llvm.Value{}, 0, 0, err
+	}
+	keySize := c.targetData.TypeAllocSize(llvmKeyType)
+	valueSize := c.targetData.TypeAllocSize(llvmValueType)
+	bucketType := llvm.StructType([]llvm.Type{
+		llvm.ArrayType(llvm.Int8Type(), 8), // tophash
+		c.i8ptrType,                        // next bucket
+		llvm.ArrayType(llvmKeyType, 8),     // key type
+		llvm.ArrayType(llvmValueType, 8),   // value type
+	}, false)
+	bucket := llvm.AddGlobal(c.mod, bucketType, ".hashmap.bucket")
+	bucketValue, err := getZeroValue(bucketType)
+	if err != nil {
+		return llvm.Value{}, 0, 0, err
+	}
+	bucket.SetInitializer(bucketValue)
+	return bucket, keySize, valueSize, nil
 }
 
 func (c *Compiler) initStore(addr ssa.Value, val llvm.Value, allocs map[ssa.Value]llvm.Value) error {
