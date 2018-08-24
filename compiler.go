@@ -236,7 +236,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	}
 
 	// Declare all globals. These will get an initializer when parsing "package
-	// initializer" packages.
+	// initializer" functions.
 	for _, g := range c.ir.Globals {
 		typ := g.g.Type()
 		if typPtr, ok := typ.(*types.Pointer); ok {
@@ -646,6 +646,16 @@ func (c *Compiler) parseFuncDecl(f *Function) (*Frame, error) {
 
 // Special function parser for generated package initializers (which also
 // initializes global variables).
+//
+// What we're doing here is two things:
+//   * Initialize global variables. The SSA compiler generates alloc/gep/store
+//     instructions to initialize variables at runtime. But that's inefficient
+//     in code size and RAM (for const variables) so we're interpreting these
+//     instructions and store global variables instead. When they're not
+//     modified, LLVM will automatically make them const.
+//     In some cases this might even help constant propagation and thus
+//     performance / code size elsewhere.
+//   * Call the actual init() functions (init#0(), init#1 etc.) for the package.
 func (c *Compiler) parseInitFunc(frame *Frame) error {
 	if c.dumpSSA {
 		fmt.Printf("\nfunc %s:\n", frame.fn.fn)
@@ -889,7 +899,6 @@ func (c *Compiler) initParseValue(val ssa.Value, allocs map[ssa.Value]llvm.Value
 	if cnst, ok := val.(*ssa.Const); ok {
 		return c.parseConst(cnst)
 	} else if v, ok := val.(*ssa.Convert); ok {
-		// hopefully the same type under the hood
 		val, err := c.initParseValue(v.X, allocs)
 		if err != nil {
 			return llvm.Value{}, err
