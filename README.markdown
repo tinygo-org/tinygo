@@ -72,7 +72,7 @@ turns globals into const for you (moving them to
 programs don't work unfortunately. This can be fixed but that can be difficult
 to do efficiently and hasn't been implemented yet.
 
-## Analysis
+## Analysis and optimizations
 
 The goal is to reduce code size (and increase performance) by performing all
 kinds of whole-program analysis passes. The official Go compiler doesn't do a
@@ -81,15 +81,17 @@ but embedded programs are necessarily smaller so it becomes practical. And I
 think especially program size can be reduced by a large margin when actually
 trying to optimize for it.
 
-Implemented analysis passes:
+Implemented compiler passes:
 
-  * Check which functions are blocking. Blocking functions a functions that call
-    sleep, chan send, etc. It's parents are also blocking.
-  * Check whether the scheduler is needed. It is only needed when there are `go`
-    statements for blocking functions.
-  * Check whether a given type switch or type assert is possible with
+  * Analyse which functions are blocking. Blocking functions are functions that
+    call sleep, chan send, etc. Its parents are also blocking.
+  * Analyse whether the scheduler is needed. It is only needed when there are
+    `go` statements for blocking functions.
+  * Analyse whether a given type switch or type assert is possible with
     [type-based alias analysis](https://en.wikipedia.org/wiki/Alias_analysis#Type-based_alias_analysis).
-    I would like to use flow-based alias analysis in the future.
+    I would like to use flow-based alias analysis in the future, if feasible.
+  * Do basic dead code elimination of functions. This pass makes later passes
+    better and probably improves compile time as well.
 
 ## Building
 
