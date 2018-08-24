@@ -3,7 +3,7 @@
 all: tgo
 tgo: build/tgo
 
-.PHONY: all tgo run-hello run-blinky clean gen-device gen-device-nrf
+.PHONY: all tgo run-hello run-blinky clean fmt gen-device gen-device-nrf
 
 # Custom LLVM toolchain.
 LLVM := $(shell go env GOPATH)/src/github.com/aykevl/llvm/bindings/go/llvm/workdir/llvm_build/bin/
@@ -76,6 +76,9 @@ endif
 
 clean:
 	@rm -rf build
+
+fmt:
+	go fmt . ./src/examples/hello ./src/runtime
 
 gen-device: gen-device-nrf
 
