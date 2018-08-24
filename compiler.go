@@ -375,6 +375,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	tupleArray := llvm.ConstArray(tupleType, tuples)
 	tupleArrayNewGlobal := llvm.AddGlobal(c.mod, tupleArray.Type(), "interface_tuples.tmp")
 	tupleArrayNewGlobal.SetInitializer(tupleArray)
+	tupleArrayNewGlobal.SetLinkage(llvm.PrivateLinkage)
 	tupleArrayOldGlobal := c.mod.NamedGlobal("interface_tuples")
 	tupleArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(tupleArrayNewGlobal, tupleArrayOldGlobal.Type()))
 	tupleArrayOldGlobal.EraseFromParentAsGlobal()
@@ -382,6 +383,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	funcArray := llvm.ConstArray(c.i8ptrType, funcPointers)
 	funcArrayNewGlobal := llvm.AddGlobal(c.mod, funcArray.Type(), "interface_functions.tmp")
 	funcArrayNewGlobal.SetInitializer(funcArray)
+	funcArrayNewGlobal.SetLinkage(llvm.PrivateLinkage)
 	funcArrayOldGlobal := c.mod.NamedGlobal("interface_functions")
 	funcArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(funcArrayNewGlobal, funcArrayOldGlobal.Type()))
 	funcArrayOldGlobal.EraseFromParentAsGlobal()
@@ -389,6 +391,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	signatureArray := llvm.ConstArray(llvm.Int32Type(), signatures)
 	signatureArrayNewGlobal := llvm.AddGlobal(c.mod, signatureArray.Type(), "interface_signatures.tmp")
 	signatureArrayNewGlobal.SetInitializer(signatureArray)
+	signatureArrayNewGlobal.SetLinkage(llvm.PrivateLinkage)
 	signatureArrayOldGlobal := c.mod.NamedGlobal("interface_signatures")
 	signatureArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(signatureArrayNewGlobal, signatureArrayOldGlobal.Type()))
 	signatureArrayOldGlobal.EraseFromParentAsGlobal()
@@ -803,8 +806,8 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 					length := typ.Elem().(*types.Array).Len()
 					llvmLen := llvm.ConstInt(c.lenType, uint64(length), false)
 					global := llvm.AddGlobal(c.mod, val.Type(), ".array")
-					global.SetLinkage(llvm.PrivateLinkage)
 					global.SetInitializer(val)
+					global.SetLinkage(llvm.PrivateLinkage)
 					zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 					globalPtr := c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
 					sliceTyp, err := c.getLLVMType(instr.Type())
@@ -845,6 +848,7 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 						// replaced with a different map.
 						hashmap := llvm.AddGlobal(c.mod, val.Type(), ".hashmap")
 						hashmap.SetInitializer(val)
+						hashmap.SetLinkage(llvm.PrivateLinkage)
 						zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 						val = llvm.ConstInBoundsGEP(hashmap, []llvm.Value{zero})
 					case *types.Pointer:
@@ -853,6 +857,7 @@ func (c *Compiler) parseInitFunc(frame *Frame) error {
 						if val.IsConstant() && val.IsAGlobalVariable().IsNil() {
 							obj := llvm.AddGlobal(c.mod, val.Type(), ".obj")
 							obj.SetInitializer(val)
+							obj.SetLinkage(llvm.PrivateLinkage)
 							zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 							val = llvm.ConstInBoundsGEP(obj, []llvm.Value{zero})
 						}
@@ -934,12 +939,13 @@ func (c *Compiler) initMapNewBucket(mapType *types.Map) (llvm.Value, uint64, uin
 		llvm.ArrayType(llvmKeyType, 8),     // key type
 		llvm.ArrayType(llvmValueType, 8),   // value type
 	}, false)
-	bucket := llvm.AddGlobal(c.mod, bucketType, ".hashmap.bucket")
 	bucketValue, err := getZeroValue(bucketType)
 	if err != nil {
 		return llvm.Value{}, 0, 0, err
 	}
+	bucket := llvm.AddGlobal(c.mod, bucketType, ".hashmap.bucket")
 	bucket.SetInitializer(bucketValue)
+	bucket.SetLinkage(llvm.PrivateLinkage)
 	return bucket, keySize, valueSize, nil
 }
 
