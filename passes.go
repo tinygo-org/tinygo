@@ -90,8 +90,8 @@ func (p *Program) AnalyseCallgraph() {
 // Find all types that are put in an interface.
 func (p *Program) AnalyseInterfaceConversions() {
 	// Clear, if AnalyseTypes has been called before.
-	p.typesWithMethods = make(map[string]*InterfaceType)
-	p.typesWithoutMethods = make(map[string]int)
+	p.typesWithoutMethods = map[string]int{"interface{}": 0}
+	p.typesWithMethods = map[string]*InterfaceType{}
 
 	for _, f := range p.Functions {
 		for _, block := range f.fn.Blocks {

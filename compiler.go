@@ -748,6 +748,18 @@ func (c *Compiler) getInterpretedValue(value Value) (llvm.Value, error) {
 		ptr := llvm.ConstInBoundsGEP(value.Global.llvmGlobal, []llvm.Value{zero})
 		return ptr, nil
 
+	case *InterfaceValue:
+		itfTypeNum, ok := c.ir.TypeNum(value.Type)
+		if !ok {
+			panic("interface number is unknown")
+		}
+		fields := []llvm.Value{
+			llvm.ConstInt(llvm.Int32Type(), uint64(itfTypeNum), false),
+			llvm.Undef(c.i8ptrType),
+		}
+		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("interface"), fields)
+		return itf, nil
+
 	case *MapValue:
 		// Create initial bucket.
 		firstBucketGlobal, keySize, valueSize, err := c.initMapNewBucket(value.Type)
@@ -1929,14 +1941,31 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 		} else {
 			return llvm.Value{}, errors.New("todo: unknown constant: " + typ.String())
 		}
+	case *types.Interface:
+		if expr.Value != nil {
+			return llvm.Value{}, errors.New("non-nil interface constant")
+		}
+		itfTypeNum, ok := c.ir.TypeNum(expr.Type())
+		if !ok {
+			panic("interface number is unknown")
+		}
+		fields := []llvm.Value{
+			llvm.ConstInt(llvm.Int32Type(), uint64(itfTypeNum), false),
+			llvm.Undef(c.i8ptrType),
+		}
+		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("interface"), fields)
+		return itf, nil
 	case *types.Pointer:
+		if expr.Value != nil {
+			return llvm.Value{}, errors.New("non-nil pointer constant")
+		}
 		llvmType, err := c.getLLVMType(typ)
 		if err != nil {
 			return llvm.Value{}, err
 		}
 		return llvm.ConstPointerNull(llvmType), nil
 	default:
-		return llvm.Value{}, errors.New("todo: unknown constant: " + typ.String())
+		return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
 	}
 }
 

@@ -224,6 +224,8 @@ func (p *Program) getZeroValue(t types.Type) (Value, error) {
 		return &ArrayValue{typ.Elem(), elems}, nil
 	case *types.Basic:
 		return &ZeroBasicValue{typ}, nil
+	case *types.Interface:
+		return &InterfaceValue{typ}, nil
 	case *types.Pointer:
 		return &PointerValue{nil}, nil
 	case *types.Struct:
@@ -257,6 +259,11 @@ type ZeroBasicValue struct {
 
 type PointerValue struct {
 	Elem *Value
+}
+
+type InterfaceValue struct {
+	Type *types.Interface
+	//Elem Value
 }
 
 type PointerBitCastValue struct {
