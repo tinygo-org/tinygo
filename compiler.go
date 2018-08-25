@@ -1964,6 +1964,22 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 			return llvm.Value{}, err
 		}
 		return llvm.ConstPointerNull(llvmType), nil
+	case *types.Slice:
+		if expr.Value != nil {
+			return llvm.Value{}, errors.New("non-nil slice constant")
+		}
+		elemType, err := c.getLLVMType(typ.Elem())
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		llvmPtr := llvm.ConstPointerNull(llvm.PointerType(elemType, 0))
+		llvmLen := llvm.ConstInt(c.lenType, 0, false)
+		slice := llvm.ConstStruct([]llvm.Value{
+			llvmPtr, // backing array
+			llvmLen, // len
+			llvmLen, // cap
+		}, false)
+		return slice, nil
 	default:
 		return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
 	}
