@@ -448,7 +448,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		return llvm.ArrayType(elemType, int(typ.Len())), nil
 	case *types.Basic:
 		switch typ.Kind() {
-		case types.Bool:
+		case types.Bool, types.UntypedBool:
 			return llvm.Int1Type(), nil
 		case types.Int8, types.Uint8:
 			return llvm.Int8Type(), nil
@@ -1902,14 +1902,13 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 }
 
 func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
-	typ := expr.Type().Underlying()
-	switch typ := typ.(type) {
+	switch typ := expr.Type().Underlying().(type) {
 	case *types.Basic:
 		llvmType, err := c.getLLVMType(typ)
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		if typ.Kind() == types.Bool {
+		if typ.Info()&types.IsBoolean != 0 {
 			b := constant.BoolVal(expr.Value)
 			n := uint64(0)
 			if b {
@@ -1939,7 +1938,7 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 			n, _ := constant.Int64Val(expr.Value)
 			return llvm.ConstInt(llvmType, uint64(n), true), nil
 		} else {
-			return llvm.Value{}, errors.New("todo: unknown constant: " + typ.String())
+			return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
 		}
 	case *types.Interface:
 		if expr.Value != nil {
