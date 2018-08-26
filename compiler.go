@@ -240,12 +240,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	// Declare all globals. These will get an initializer when parsing "package
 	// initializer" functions.
 	for _, g := range c.ir.Globals {
-		typ := g.g.Type()
-		if typPtr, ok := typ.(*types.Pointer); ok {
-			typ = typPtr.Elem()
-		} else {
-			return errors.New("global is not a pointer")
-		}
+		typ := g.g.Type().(*types.Pointer).Elem()
 		llvmType, err := c.getLLVMType(typ)
 		if err != nil {
 			return err
