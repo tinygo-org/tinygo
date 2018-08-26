@@ -368,23 +368,24 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	}
 
 	// Initialize runtime type information, for interfaces.
+	// See src/runtime/interface.go for more details.
 	dynamicTypes := c.ir.AllDynamicTypes()
 	numDynamicTypes := 0
 	for _, meta := range dynamicTypes {
 		numDynamicTypes += len(meta.Methods)
 	}
-	tuples := make([]llvm.Value, 0, len(dynamicTypes))
+	ranges := make([]llvm.Value, 0, len(dynamicTypes))
 	funcPointers := make([]llvm.Value, 0, numDynamicTypes)
 	signatures := make([]llvm.Value, 0, numDynamicTypes)
 	startIndex := 0
-	tupleType := c.mod.GetTypeByName("interface_tuple")
+	rangeType := c.mod.GetTypeByName("runtime.methodSetRange")
 	for _, meta := range dynamicTypes {
-		tupleValues := []llvm.Value{
+		rangeValues := []llvm.Value{
 			llvm.ConstInt(llvm.Int32Type(), uint64(startIndex), false),
 			llvm.ConstInt(llvm.Int32Type(), uint64(len(meta.Methods)), false),
 		}
-		tuple := llvm.ConstNamedStruct(tupleType, tupleValues)
-		tuples = append(tuples, tuple)
+		rangeValue := llvm.ConstNamedStruct(rangeType, rangeValues)
+		ranges = append(ranges, rangeValue)
 		for _, method := range meta.Methods {
 			f := c.ir.GetFunction(program.MethodValue(method))
 			if f.llvmFn.IsNil() {
@@ -398,33 +399,34 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		}
 		startIndex += len(meta.Methods)
 	}
+
 	// Replace the pre-created arrays with the generated arrays.
-	tupleArray := llvm.ConstArray(tupleType, tuples)
-	tupleArrayNewGlobal := llvm.AddGlobal(c.mod, tupleArray.Type(), "interface_tuples.tmp")
-	tupleArrayNewGlobal.SetInitializer(tupleArray)
-	tupleArrayNewGlobal.SetLinkage(llvm.PrivateLinkage)
-	tupleArrayOldGlobal := c.mod.NamedGlobal("interface_tuples")
-	tupleArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(tupleArrayNewGlobal, tupleArrayOldGlobal.Type()))
-	tupleArrayOldGlobal.EraseFromParentAsGlobal()
-	tupleArrayNewGlobal.SetName("interface_tuples")
+	rangeArray := llvm.ConstArray(rangeType, ranges)
+	rangeArrayNewGlobal := llvm.AddGlobal(c.mod, rangeArray.Type(), "runtime.methodSetRanges.tmp")
+	rangeArrayNewGlobal.SetInitializer(rangeArray)
+	rangeArrayNewGlobal.SetLinkage(llvm.PrivateLinkage)
+	rangeArrayOldGlobal := c.mod.NamedGlobal("runtime.methodSetRanges")
+	rangeArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(rangeArrayNewGlobal, rangeArrayOldGlobal.Type()))
+	rangeArrayOldGlobal.EraseFromParentAsGlobal()
+	rangeArrayNewGlobal.SetName("runtime.methodSetRanges")
 	funcArray := llvm.ConstArray(c.i8ptrType, funcPointers)
-	funcArrayNewGlobal := llvm.AddGlobal(c.mod, funcArray.Type(), "interface_functions.tmp")
+	funcArrayNewGlobal := llvm.AddGlobal(c.mod, funcArray.Type(), "runtime.methodSetFunctions.tmp")
 	funcArrayNewGlobal.SetInitializer(funcArray)
 	funcArrayNewGlobal.SetLinkage(llvm.PrivateLinkage)
-	funcArrayOldGlobal := c.mod.NamedGlobal("interface_functions")
+	funcArrayOldGlobal := c.mod.NamedGlobal("runtime.methodSetFunctions")
 	funcArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(funcArrayNewGlobal, funcArrayOldGlobal.Type()))
 	funcArrayOldGlobal.EraseFromParentAsGlobal()
-	funcArrayNewGlobal.SetName("interface_functions")
+	funcArrayNewGlobal.SetName("runtime.methodSetFunctions")
 	signatureArray := llvm.ConstArray(llvm.Int32Type(), signatures)
-	signatureArrayNewGlobal := llvm.AddGlobal(c.mod, signatureArray.Type(), "interface_signatures.tmp")
+	signatureArrayNewGlobal := llvm.AddGlobal(c.mod, signatureArray.Type(), "runtime.methodSetSignatures.tmp")
 	signatureArrayNewGlobal.SetInitializer(signatureArray)
 	signatureArrayNewGlobal.SetLinkage(llvm.PrivateLinkage)
-	signatureArrayOldGlobal := c.mod.NamedGlobal("interface_signatures")
+	signatureArrayOldGlobal := c.mod.NamedGlobal("runtime.methodSetSignatures")
 	signatureArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(signatureArrayNewGlobal, signatureArrayOldGlobal.Type()))
 	signatureArrayOldGlobal.EraseFromParentAsGlobal()
-	signatureArrayNewGlobal.SetName("interface_signatures")
+	signatureArrayNewGlobal.SetName("runtime.methodSetSignatures")
 
-	c.mod.NamedGlobal("first_interface_num").SetInitializer(llvm.ConstInt(llvm.Int32Type(), uint64(c.ir.FirstDynamicType()), false))
+	c.mod.NamedGlobal("runtime.firstInterfaceNum").SetInitializer(llvm.ConstInt(llvm.Int32Type(), uint64(c.ir.FirstDynamicType()), false))
 
 	return nil
 }
@@ -461,7 +463,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			return llvm.Type{}, errors.New("todo: unknown basic type: " + typ.String())
 		}
 	case *types.Interface:
-		return c.mod.GetTypeByName("interface"), nil
+		return c.mod.GetTypeByName("runtime._interface"), nil
 	case *types.Map:
 		return llvm.PointerType(c.mod.GetTypeByName("runtime.hashmap"), 0), nil
 	case *types.Named:
@@ -500,7 +502,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			if err != nil {
 				return llvm.Type{}, err
 			}
-			if recv.StructName() == "interface" {
+			if recv.StructName() == "runtime._interface" {
 				recv = c.i8ptrType
 			}
 			paramTypes = append(paramTypes, recv)
@@ -748,7 +750,7 @@ func (c *Compiler) getInterpretedValue(value Value) (llvm.Value, error) {
 			llvm.ConstInt(llvm.Int32Type(), uint64(itfTypeNum), false),
 			llvm.Undef(c.i8ptrType),
 		}
-		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("interface"), fields)
+		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), fields)
 		return itf, nil
 
 	case *MapValue:
@@ -1334,7 +1336,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 			itf,
 			llvm.ConstInt(llvm.Int32Type(), uint64(c.ir.MethodNum(instr.Method)), false),
 		}
-		fn := c.builder.CreateCall(c.mod.NamedFunction("itfmethod"), values, "invoke.func")
+		fn := c.builder.CreateCall(c.mod.NamedFunction("runtime.itfmethod"), values, "invoke.func")
 		fnCast := c.builder.CreateBitCast(fn, llvmFnType, "invoke.func.cast")
 		receiverValue := c.builder.CreateExtractValue(itf, 1, "invoke.func.receiver")
 		args := []llvm.Value{receiverValue}
@@ -1501,7 +1503,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// TODO: runtime.lookupBoundsCheck is undefined in packages imported by
 		// package runtime, so we have to remove it. This should be fixed.
 		lookupBoundsCheck := c.mod.NamedFunction("runtime.lookupBoundsCheck")
-		if !lookupBoundsCheck.IsNil() {
+		if !lookupBoundsCheck.IsNil() && frame.fn.llvmFn.Name() != "runtime.itfmethod" {
 			c.builder.CreateCall(lookupBoundsCheck, []llvm.Value{buflen, index}, "")
 		}
 
@@ -1607,7 +1609,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			}
 		}
 		itfTypeNum, _ := c.ir.TypeNum(expr.X.Type())
-		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("interface"), []llvm.Value{llvm.ConstInt(llvm.Int32Type(), uint64(itfTypeNum), false), llvm.Undef(c.i8ptrType)})
+		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), []llvm.Value{llvm.ConstInt(llvm.Int32Type(), uint64(itfTypeNum), false), llvm.Undef(c.i8ptrType)})
 		itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
 		return itf, nil
 	case *ssa.MakeMap:
@@ -1938,7 +1940,7 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 			llvm.ConstInt(llvm.Int32Type(), uint64(itfTypeNum), false),
 			llvm.Undef(c.i8ptrType),
 		}
-		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("interface"), fields)
+		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), fields)
 		return itf, nil
 	case *types.Pointer:
 		if expr.Value != nil {
