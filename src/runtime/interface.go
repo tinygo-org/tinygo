@@ -36,19 +36,19 @@ type methodSetRange struct {
 // which is a dummy value, but will be bigger after the compiler has filled them
 // in.
 var (
+	firstInterfaceNum   uint16            // the lowest typecode that has at least one method
 	methodSetRanges     [0]methodSetRange // indexes into methodSetSignatures and methodSetFunctions
 	methodSetSignatures [0]uint16         // uniqued method ID
 	methodSetFunctions  [0]*uint8         // function pointer of method
-	firstInterfaceNum   uint16            // the lowest typecode that has at least one method
 )
 
 // Get the function pointer for the method on the interface.
 // This is a compiler intrinsic.
-func itfmethod(itf _interface, method uint16) *uint8 {
+func interfaceMethod(itf _interface, method uint16) *uint8 {
 	// This function doesn't do bounds checking as the supplied method must be
-	// in the list of signatures. The compiler will only emit runtime.itfmethod
-	// calls when the method actually exists on this interface (proven by the
-	// typechecker).
+	// in the list of signatures. The compiler will only emit
+	// runtime.interfaceMethod calls when the method actually exists on this
+	// interface (proven by the typechecker).
 	i := methodSetRanges[itf.typecode-firstInterfaceNum].index
 	for {
 		if methodSetSignatures[i] == method {

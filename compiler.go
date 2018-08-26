@@ -1343,7 +1343,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 			itf,
 			llvm.ConstInt(llvm.Int16Type(), uint64(c.ir.MethodNum(instr.Method)), false),
 		}
-		fn := c.builder.CreateCall(c.mod.NamedFunction("runtime.itfmethod"), values, "invoke.func")
+		fn := c.builder.CreateCall(c.mod.NamedFunction("runtime.interfaceMethod"), values, "invoke.func")
 		fnCast := c.builder.CreateBitCast(fn, llvmFnType, "invoke.func.cast")
 		receiverValue := c.builder.CreateExtractValue(itf, 1, "invoke.func.receiver")
 		args := []llvm.Value{receiverValue}
@@ -1510,7 +1510,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// TODO: runtime.lookupBoundsCheck is undefined in packages imported by
 		// package runtime, so we have to remove it. This should be fixed.
 		lookupBoundsCheck := c.mod.NamedFunction("runtime.lookupBoundsCheck")
-		if !lookupBoundsCheck.IsNil() && frame.fn.llvmFn.Name() != "runtime.itfmethod" {
+		if !lookupBoundsCheck.IsNil() && frame.fn.llvmFn.Name() != "runtime.interfaceMethod" {
 			c.builder.CreateCall(lookupBoundsCheck, []llvm.Value{buflen, index}, "")
 		}
 
