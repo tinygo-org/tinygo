@@ -350,15 +350,11 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	c.builder.CreateRetVoid()
 
 	// Adjust main function.
-	main := c.mod.NamedFunction("main.main")
 	realMain := c.mod.NamedFunction(c.ir.mainPkg.Pkg.Path() + ".main")
-	if !realMain.IsNil() {
-		main.ReplaceAllUsesWith(realMain)
-	}
-	mainAsync := c.mod.NamedFunction("main.main$async")
-	realMainAsync := c.mod.NamedFunction(c.ir.mainPkg.Pkg.Path() + ".main$async")
-	if !realMainAsync.IsNil() {
-		mainAsync.ReplaceAllUsesWith(realMainAsync)
+	if c.ir.NeedsScheduler() {
+		c.mod.NamedFunction("main.main$async").ReplaceAllUsesWith(realMain)
+	} else {
+		c.mod.NamedFunction("main.main").ReplaceAllUsesWith(realMain)
 	}
 
 	// Set functions referenced in runtime.ll to internal linkage, to improve
@@ -392,7 +388,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		for _, method := range meta.Methods {
 			f := c.ir.GetFunction(program.MethodValue(method))
 			if f.llvmFn.IsNil() {
-				return errors.New("cannot find function: " + f.LinkName(false))
+				return errors.New("cannot find function: " + f.LinkName())
 			}
 			fn := llvm.ConstBitCast(f.llvmFn, c.i8ptrType)
 			funcPointers = append(funcPointers, fn)
@@ -670,7 +666,7 @@ func (c *Compiler) parseFuncDecl(f *Function) (*Frame, error) {
 
 	fnType := llvm.FunctionType(retType, paramTypes, false)
 
-	name := f.LinkName(frame.blocking)
+	name := f.LinkName()
 	frame.fn.llvmFn = c.mod.NamedFunction(name)
 	if frame.fn.llvmFn.IsNil() {
 		frame.fn.llvmFn = llvm.AddFunction(c.mod, name, fnType)
@@ -1367,18 +1363,13 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 				return c.builder.CreateCall(target, nil, ""), nil
 			}
 		}
-		targetBlocks := false
-		name := c.ir.GetFunction(call).LinkName(targetBlocks)
+		targetFunc := c.ir.GetFunction(call)
+		name := targetFunc.LinkName()
 		llvmFn := c.mod.NamedFunction(name)
 		if llvmFn.IsNil() {
-			targetBlocks = true
-			nameAsync := c.ir.GetFunction(call).LinkName(targetBlocks)
-			llvmFn = c.mod.NamedFunction(nameAsync)
-			if llvmFn.IsNil() {
-				return llvm.Value{}, errors.New("undefined function: " + name)
-			}
+			return llvm.Value{}, errors.New("undefined function: " + name)
 		}
-		return c.parseFunctionCall(frame, instr.Args, llvmFn, targetBlocks, parentHandle)
+		return c.parseFunctionCall(frame, instr.Args, llvmFn, targetFunc.blocking, parentHandle)
 	default: // function pointer
 		value, err := c.parseExpr(frame, instr.Value)
 		if err != nil {
@@ -1465,7 +1456,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Function:
-		return c.mod.NamedFunction(c.ir.GetFunction(expr).LinkName(false)), nil
+		return c.mod.NamedFunction(c.ir.GetFunction(expr).LinkName()), nil
 	case *ssa.Global:
 		if strings.HasPrefix(expr.Name(), "__cgofn__cgo_") || strings.HasPrefix(expr.Name(), "_cgo_") {
 			// Ignore CGo global variables which we don't use.
@@ -2072,9 +2063,6 @@ func (c *Compiler) ApplyFunctionSections() {
 	for !llvmFn.IsNil() {
 		if !llvmFn.IsDeclaration() {
 			name := llvmFn.Name()
-			if strings.HasSuffix(name, "$async") {
-				name = name[:len(name)-len("$async")]
-			}
 			llvmFn.SetSection(".text." + name)
 		}
 		llvmFn = llvm.NextFunction(llvmFn)

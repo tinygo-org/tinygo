@@ -125,21 +125,17 @@ func (p *Program) GetGlobal(ssaGlobal *ssa.Global) *Global {
 }
 
 // Return the link name for this function.
-func (f *Function) LinkName(blocking bool) string {
-	suffix := ""
-	if blocking {
-		suffix = "$async"
-	}
+func (f *Function) LinkName() string {
 	if f.fn.Signature.Recv() != nil {
 		// Method on a defined type (which may be a pointer).
-		return f.fn.RelString(nil) + suffix
+		return f.fn.RelString(nil)
 	} else {
 		// Bare function.
 		if name := f.CName(); name != "" {
 			// Name CGo functions directly.
 			return name
 		} else {
-			name := f.fn.RelString(nil) + suffix
+			name := f.fn.RelString(nil)
 			if f.fn.Pkg.Pkg.Path() == "runtime" && strings.HasPrefix(f.fn.Name(), "_llvm_") {
 				// Special case for LLVM intrinsics in the runtime.
 				name = "llvm." + strings.Replace(f.fn.Name()[len("_llvm_"):], "_", ".", -1)
