@@ -1731,6 +1731,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
+		if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
+			return llvm.Value{}, errors.New("todo: assert on interface")
+		}
 		assertedType, err := c.getLLVMType(expr.AssertedType)
 		if err != nil {
 			return llvm.Value{}, err
