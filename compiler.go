@@ -381,8 +381,8 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	rangeType := c.mod.GetTypeByName("runtime.methodSetRange")
 	for _, meta := range dynamicTypes {
 		rangeValues := []llvm.Value{
-			llvm.ConstInt(llvm.Int32Type(), uint64(startIndex), false),
-			llvm.ConstInt(llvm.Int32Type(), uint64(len(meta.Methods)), false),
+			llvm.ConstInt(llvm.Int16Type(), uint64(startIndex), false),
+			llvm.ConstInt(llvm.Int16Type(), uint64(len(meta.Methods)), false),
 		}
 		rangeValue := llvm.ConstNamedStruct(rangeType, rangeValues)
 		ranges = append(ranges, rangeValue)
@@ -394,10 +394,14 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 			fn := llvm.ConstBitCast(f.llvmFn, c.i8ptrType)
 			funcPointers = append(funcPointers, fn)
 			signatureNum := c.ir.MethodNum(method.Obj().(*types.Func))
-			signature := llvm.ConstInt(llvm.Int32Type(), uint64(signatureNum), false)
+			signature := llvm.ConstInt(llvm.Int16Type(), uint64(signatureNum), false)
 			signatures = append(signatures, signature)
 		}
 		startIndex += len(meta.Methods)
+	}
+
+	if len(ranges) >= 1<<16 {
+		return errors.New("method call numbers do not fit in a 16-bit integer")
 	}
 
 	// Replace the pre-created arrays with the generated arrays.
@@ -417,7 +421,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	funcArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(funcArrayNewGlobal, funcArrayOldGlobal.Type()))
 	funcArrayOldGlobal.EraseFromParentAsGlobal()
 	funcArrayNewGlobal.SetName("runtime.methodSetFunctions")
-	signatureArray := llvm.ConstArray(llvm.Int32Type(), signatures)
+	signatureArray := llvm.ConstArray(llvm.Int16Type(), signatures)
 	signatureArrayNewGlobal := llvm.AddGlobal(c.mod, signatureArray.Type(), "runtime.methodSetSignatures.tmp")
 	signatureArrayNewGlobal.SetInitializer(signatureArray)
 	signatureArrayNewGlobal.SetLinkage(llvm.PrivateLinkage)
@@ -426,7 +430,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	signatureArrayOldGlobal.EraseFromParentAsGlobal()
 	signatureArrayNewGlobal.SetName("runtime.methodSetSignatures")
 
-	c.mod.NamedGlobal("runtime.firstInterfaceNum").SetInitializer(llvm.ConstInt(llvm.Int32Type(), uint64(c.ir.FirstDynamicType()), false))
+	c.mod.NamedGlobal("runtime.firstInterfaceNum").SetInitializer(llvm.ConstInt(llvm.Int16Type(), uint64(c.ir.FirstDynamicType()), false))
 
 	return nil
 }
@@ -746,8 +750,11 @@ func (c *Compiler) getInterpretedValue(value Value) (llvm.Value, error) {
 		if !ok {
 			panic("interface number is unknown")
 		}
+		if itfTypeNum >= 1<<16 {
+			return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
+		}
 		fields := []llvm.Value{
-			llvm.ConstInt(llvm.Int32Type(), uint64(itfTypeNum), false),
+			llvm.ConstInt(llvm.Int16Type(), uint64(itfTypeNum), false),
 			llvm.Undef(c.i8ptrType),
 		}
 		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), fields)
@@ -1334,7 +1341,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 		}
 		values := []llvm.Value{
 			itf,
-			llvm.ConstInt(llvm.Int32Type(), uint64(c.ir.MethodNum(instr.Method)), false),
+			llvm.ConstInt(llvm.Int16Type(), uint64(c.ir.MethodNum(instr.Method)), false),
 		}
 		fn := c.builder.CreateCall(c.mod.NamedFunction("runtime.itfmethod"), values, "invoke.func")
 		fnCast := c.builder.CreateBitCast(fn, llvmFnType, "invoke.func.cast")
@@ -1609,7 +1616,10 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			}
 		}
 		itfTypeNum, _ := c.ir.TypeNum(expr.X.Type())
-		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), []llvm.Value{llvm.ConstInt(llvm.Int32Type(), uint64(itfTypeNum), false), llvm.Undef(c.i8ptrType)})
+		if itfTypeNum >= 1<<16 {
+			return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
+		}
+		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), []llvm.Value{llvm.ConstInt(llvm.Int16Type(), uint64(itfTypeNum), false), llvm.Undef(c.i8ptrType)})
 		itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
 		return itf, nil
 	case *ssa.MakeMap:
@@ -1730,6 +1740,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			// Static analysis has determined this type assert will never apply.
 			return llvm.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.ConstInt(llvm.Int1Type(), 0, false)}, false), nil
 		}
+		if assertedTypeNum >= 1<<16 {
+			return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
+		}
 		actualTypeNum := c.builder.CreateExtractValue(itf, 0, "interface.type")
 		valuePtr := c.builder.CreateExtractValue(itf, 1, "interface.value")
 		var value llvm.Value
@@ -1758,7 +1771,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		// TODO: for interfaces, check whether the type implements the
 		// interface.
-		commaOk := c.builder.CreateICmp(llvm.IntEQ, llvm.ConstInt(llvm.Int32Type(), uint64(assertedTypeNum), false), actualTypeNum, "")
+		commaOk := c.builder.CreateICmp(llvm.IntEQ, llvm.ConstInt(llvm.Int16Type(), uint64(assertedTypeNum), false), actualTypeNum, "")
 		tuple := llvm.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(llvm.Int1Type())}, false) // create empty tuple
 		tuple = c.builder.CreateInsertValue(tuple, value, 0, "")                                              // insert value
 		tuple = c.builder.CreateInsertValue(tuple, commaOk, 1, "")                                            // insert 'comma ok' boolean
@@ -1933,11 +1946,14 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 			return llvm.Value{}, errors.New("non-nil interface constant")
 		}
 		itfTypeNum, ok := c.ir.TypeNum(expr.Type())
+		if itfTypeNum >= 1<<16 {
+			return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
+		}
 		if !ok {
 			panic("interface number is unknown")
 		}
 		fields := []llvm.Value{
-			llvm.ConstInt(llvm.Int32Type(), uint64(itfTypeNum), false),
+			llvm.ConstInt(llvm.Int16Type(), uint64(itfTypeNum), false),
 			llvm.Undef(c.i8ptrType),
 		}
 		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), fields)

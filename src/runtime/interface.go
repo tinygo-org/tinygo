@@ -21,15 +21,15 @@ package runtime
 // the mapping from uniqued signature to function pointer.
 
 type _interface struct {
-	typecode uint32
+	typecode uint16
 	value    *uint8
 }
 
 // This struct indicates the range of methods in the methodSetSignatures and
 // methodSetFunctions arrays that belong to this named type.
 type methodSetRange struct {
-	index  uint32 // start index into interfaceSignatures and interfaceFunctions
-	length uint32 // number of methods
+	index  uint16 // start index into interfaceSignatures and interfaceFunctions
+	length uint16 // number of methods
 }
 
 // Global constants that will be set by the compiler. The arrays are of size 0,
@@ -37,14 +37,14 @@ type methodSetRange struct {
 // in.
 var (
 	methodSetRanges     [0]methodSetRange // indexes into methodSetSignatures and methodSetFunctions
-	methodSetSignatures [0]uint32         // uniqued method ID
+	methodSetSignatures [0]uint16         // uniqued method ID
 	methodSetFunctions  [0]*uint8         // function pointer of method
-	firstInterfaceNum   uint32            // the lowest typecode that has at least one method
+	firstInterfaceNum   uint16            // the lowest typecode that has at least one method
 )
 
 // Get the function pointer for the method on the interface.
 // This is a compiler intrinsic.
-func itfmethod(itf _interface, method uint32) *uint8 {
+func itfmethod(itf _interface, method uint16) *uint8 {
 	// This function doesn't do bounds checking as the supplied method must be
 	// in the list of signatures. The compiler will only emit runtime.itfmethod
 	// calls when the method actually exists on this interface (proven by the
