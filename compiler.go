@@ -2067,6 +2067,20 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 
 		if typeTo.Kind() == types.String {
 			switch typeFrom := typeFrom.Underlying().(type) {
+			case *types.Basic:
+				// Assume a Unicode code point, as that is the only possible
+				// value here.
+				// Cast to an i32 value as expected by
+				// runtime.stringFromUnicode.
+				if sizeFrom > 4 {
+					value = c.builder.CreateTrunc(value, llvm.Int32Type(), "")
+				} else if sizeFrom < 4 && typeTo.Info()&types.IsUnsigned != 0 {
+					value = c.builder.CreateZExt(value, llvm.Int32Type(), "")
+				} else if sizeFrom < 4 {
+					value = c.builder.CreateSExt(value, llvm.Int32Type(), "")
+				}
+				fn := c.mod.NamedFunction("runtime.stringFromUnicode")
+				return c.builder.CreateCall(fn, []llvm.Value{value}, ""), nil
 			case *types.Slice:
 				switch typeFrom.Elem().(*types.Basic).Kind() {
 				case types.Byte:
@@ -2082,7 +2096,7 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 
 		typeFrom := typeFrom.Underlying().(*types.Basic)
 		sizeTo := c.targetData.TypeAllocSize(llvmTypeTo)
-		if typeFrom.Info() & types.IsInteger != 0 && typeTo.Info() & types.IsInteger != 0 {
+		if typeFrom.Info()&types.IsInteger != 0 && typeTo.Info()&types.IsInteger != 0 {
 			// Conversion between two integers.
 			if sizeFrom > sizeTo {
 				return c.builder.CreateTrunc(value, llvmTypeTo, ""), nil

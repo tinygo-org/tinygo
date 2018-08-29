@@ -48,3 +48,40 @@ func stringFromBytes(x []byte) _string {
 	}
 	return _string{lenType(len(x)), (*byte)(buf)}
 }
+
+// Create a string from a Unicode code point.
+func stringFromUnicode(x rune) _string {
+	array, length := encodeUTF8(x)
+	// Array will be heap allocated.
+	// The heap most likely doesn't work with blocks below 4 bytes, so there's
+	// no point in allocating a smaller buffer for the string here.
+	return _string{length, (*byte)(unsafe.Pointer(&array))}
+}
+
+// Convert a Unicode code point into an array of bytes and its length.
+func encodeUTF8(x rune) ([4]byte, lenType) {
+	// https://stackoverflow.com/questions/6240055/manually-converting-unicode-codepoints-into-utf-8-and-utf-16
+	// Note: this code can probably be optimized (in size and speed).
+	switch {
+	case x <= 0x7f:
+		return [4]byte{byte(x), 0, 0, 0}, 1
+	case x <= 0x7ff:
+		b1 := 0xc0 | byte(x>>6)
+		b2 := 0x80 | byte(x&0x3f)
+		return [4]byte{b1, b2, 0, 0}, 2
+	case x <= 0xffff:
+		b1 := 0xe0 | byte(x>>12)
+		b2 := 0x80 | byte((x>>6)&0x3f)
+		b3 := 0x80 | byte((x>>0)&0x3f)
+		return [4]byte{b1, b2, b3, 0}, 3
+	case x <= 0x10ffff:
+		b1 := 0xf0 | byte(x>>18)
+		b2 := 0x80 | byte((x>>12)&0x3f)
+		b3 := 0x80 | byte((x>>6)&0x3f)
+		b4 := 0x80 | byte((x>>0)&0x3f)
+		return [4]byte{b1, b2, b3, b4}, 4
+	default:
+		// Invalid Unicode code point.
+		return [4]byte{0xef, 0xbf, 0xbd, 0}, 3
+	}
+}
