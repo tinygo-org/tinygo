@@ -1835,7 +1835,13 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 	}
 	switch binop.Op {
 	case token.ADD: // +
-		return c.builder.CreateAdd(x, y, ""), nil
+		if typ, ok := binop.X.Type().(*types.Basic); ok && typ.Kind() == types.String {
+			// string concatenation
+			fn := c.mod.NamedFunction("runtime.stringConcat")
+			return c.builder.CreateCall(fn, []llvm.Value{x, y}, ""), nil
+		} else {
+			return c.builder.CreateAdd(x, y, ""), nil
+		}
 	case token.SUB: // -
 		return c.builder.CreateSub(x, y, ""), nil
 	case token.MUL: // *
