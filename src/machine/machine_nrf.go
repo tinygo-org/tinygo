@@ -2,9 +2,6 @@
 
 package machine
 
-// #include "../runtime/runtime_nrf.h"
-import "C"
-
 import (
 	"device/nrf"
 )
@@ -26,7 +23,6 @@ const (
 )
 
 func (p GPIO) Configure(config GPIOConfig) {
-	//C.gpio_cfg(C.uint(p.Pin), C.gpio_mode_t(config.Mode))
 	cfg := config.Mode | nrf.P0_PIN_CNF_PULL_Disabled | nrf.P0_PIN_CNF_DRIVE_S0S1 | nrf.P0_PIN_CNF_SENSE_Disabled
 	if config.Mode == GPIO_INPUT {
 		cfg |= nrf.P0_PIN_CNF_INPUT_Connect
@@ -37,7 +33,6 @@ func (p GPIO) Configure(config GPIOConfig) {
 }
 
 func (p GPIO) Set(high bool) {
-	//C.gpio_set(C.uint(p.Pin), C.bool(value))
 	// TODO: compiler limitation: both operands must be the same LLVM type
 	if high {
 		nrf.P0.OUTSET = 1 << uint32(p.Pin)
