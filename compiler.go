@@ -497,7 +497,16 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 				return llvm.Type{}, err
 			}
 		} else {
-			return llvm.Type{}, errors.New("todo: multiple return values in function pointer")
+			// Multiple return values. Put them together in a struct.
+			members := make([]llvm.Type, typ.Results().Len())
+			for i := 0; i < typ.Results().Len(); i++ {
+				returnType, err := c.getLLVMType(typ.Results().At(i).Type())
+				if err != nil {
+					return llvm.Type{}, err
+				}
+				members[i] = returnType
+			}
+			returnType = llvm.StructType(members, false)
 		}
 		// param values
 		var paramTypes []llvm.Type
@@ -654,7 +663,15 @@ func (c *Compiler) parseFuncDecl(f *Function) (*Frame, error) {
 			return nil, err
 		}
 	} else {
-		return nil, errors.New("todo: return values")
+		results := make([]llvm.Type, 0, f.fn.Signature.Results().Len())
+		for i := 0; i < f.fn.Signature.Results().Len(); i++ {
+			typ, err := c.getLLVMType(f.fn.Signature.Results().At(i).Type())
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, typ)
+		}
+		retType = llvm.StructType(results, false)
 	}
 
 	var paramTypes []llvm.Type
@@ -1134,7 +1151,20 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 				c.builder.CreateRet(val)
 				return nil
 			} else {
-				return errors.New("todo: return value")
+				// Multiple return values. Put them all in a struct.
+				retVal, err := getZeroValue(frame.fn.llvmFn.Type().ElementType().ReturnType())
+				if err != nil {
+					return err
+				}
+				for i, result := range instr.Results {
+					val, err := c.parseExpr(frame, result)
+					if err != nil {
+						return err
+					}
+					retVal = c.builder.CreateInsertValue(retVal, val, i, "")
+				}
+				c.builder.CreateRet(retVal)
+				return nil
 			}
 		}
 	case *ssa.Store:
