@@ -2,13 +2,12 @@
 
 package runtime
 
-// #include "runtime_nrf.h"
-import "C"
-
 import (
 	"device/arm"
 	"device/nrf"
 )
+
+func _Cfunc_rtc_sleep(ticks uint32)
 
 const Microsecond = 1
 
@@ -51,7 +50,7 @@ func sleep(d Duration) {
 	for ticks64 != 0 {
 		monotime()                          // update timestamp
 		ticks := uint32(ticks64) & 0x7fffff // 23 bits (to be on the safe side)
-		C.rtc_sleep(C.uint32_t(ticks))      // TODO: not accurate (must be d / 30.5175...)
+		_Cfunc_rtc_sleep(ticks)             // TODO: not accurate (must be d / 30.5175...)
 		ticks64 -= Duration(ticks)
 	}
 }
