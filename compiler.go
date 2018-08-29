@@ -88,7 +88,7 @@ func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 
 	// Depends on platform (32bit or 64bit), but fix it here for now.
 	c.intType = llvm.Int32Type()
-	c.lenType = llvm.Int32Type()
+	c.lenType = llvm.Int32Type() // also defined as runtime.lenType
 	c.uintptrType = c.targetData.IntPtrType()
 	c.i8ptrType = llvm.PointerType(llvm.Int8Type(), 0)
 

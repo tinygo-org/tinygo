@@ -13,7 +13,7 @@ import (
 type hashmap struct {
 	next       *hashmap       // hashmap after evacuate (for iterators)
 	buckets    unsafe.Pointer // pointer to array of buckets
-	count      uint
+	count      lenType
 	keySize    uint8 // maybe this can store the key type as well? E.g. keysize == 5 means string?
 	valueSize  uint8
 	bucketBits uint8

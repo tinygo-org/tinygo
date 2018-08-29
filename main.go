@@ -13,11 +13,15 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool
 	var buildTags []string
 	// TODO: put this somewhere else
 	if target == "pca10040" {
-		buildTags = append(buildTags, "nrf", "nrf52", "nrf52832")
+		// Pretend to be a WASM target, not ARM (for standard library support).
+		buildTags = append(buildTags, "nrf", "nrf52", "nrf52832", "js", "wasm")
 		target = "armv7m-none-eabi"
 	} else if target == "arduino" {
-		buildTags = append(buildTags, "avr", "avr8", "atmega", "atmega328p")
+		// Pretend to be a WASM target, not AVR (for standard library support).
+		buildTags = append(buildTags, "avr", "avr8", "atmega", "atmega328p", "js", "wasm")
 		target = "avr--"
+	} else {
+		buildTags = append(buildTags, "linux", "amd64")
 	}
 
 	c, err := NewCompiler(pkgName, target, dumpSSA)
