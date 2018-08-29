@@ -1472,7 +1472,17 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return c.parseConvert(expr.X.Type(), expr.Type(), x)
+		// The only case when we need to bitcast is when casting between named
+		// struct types, as those are actually different in LLVM. Let's just
+		// bitcast all struct types for ease of use.
+		if _, ok := expr.Type().Underlying().(*types.Struct); ok {
+			llvmType, err := c.getLLVMType(expr.X.Type())
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			return c.builder.CreateBitCast(x, llvmType, "changetype"), nil
+		}
+		return x, nil
 	case *ssa.Const:
 		return c.parseConst(expr)
 	case *ssa.Convert:
@@ -2037,37 +2047,45 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 		return llvm.Value{}, err
 	}
 
+	// Conversion between unsafe.Pointer and uintptr.
+	isPtrFrom := isPointer(typeFrom.Underlying())
+	isPtrTo := isPointer(typeTo.Underlying())
+	if isPtrFrom && !isPtrTo {
+		return c.builder.CreatePtrToInt(value, llvmTypeTo, ""), nil
+	} else if !isPtrFrom && isPtrTo {
+		return c.builder.CreateIntToPtr(value, llvmTypeTo, ""), nil
+	}
+
+	// Conversion between pointers and unsafe.Pointer.
+	if isPtrFrom && isPtrTo {
+		return c.builder.CreateBitCast(value, llvmTypeTo, ""), nil
+	}
+
 	switch typeTo := typeTo.Underlying().(type) {
 	case *types.Basic:
-		isPtrFrom := isPointer(typeFrom)
-		isPtrTo := isPointer(typeTo)
-		if isPtrFrom && !isPtrTo {
-			return c.builder.CreatePtrToInt(value, llvmTypeTo, ""), nil
-		} else if !isPtrFrom && isPtrTo {
-			return c.builder.CreateIntToPtr(value, llvmTypeTo, ""), nil
-		}
-
 		sizeFrom := c.targetData.TypeAllocSize(llvmTypeFrom)
+
+		if typeTo.Kind() == types.String {
+			return llvm.Value{}, errors.New("todo: convert to string: " + typeFrom.String())
+		}
+
+		typeFrom := typeFrom.Underlying().(*types.Basic)
 		sizeTo := c.targetData.TypeAllocSize(llvmTypeTo)
-		if sizeFrom == sizeTo {
-			return c.builder.CreateBitCast(value, llvmTypeTo, ""), nil
+		if typeFrom.Info() & types.IsInteger != 0 && typeTo.Info() & types.IsInteger != 0 {
+			// Conversion between two integers.
+			if sizeFrom > sizeTo {
+				return c.builder.CreateTrunc(value, llvmTypeTo, ""), nil
+			} else if typeTo.Info()&types.IsUnsigned != 0 { // if unsigned
+				return c.builder.CreateZExt(value, llvmTypeTo, ""), nil
+			} else { // if signed
+				return c.builder.CreateSExt(value, llvmTypeTo, ""), nil
+			}
 		}
 
-		if typeTo.Info()&types.IsInteger == 0 { // if not integer
-			return llvm.Value{}, errors.New("todo: convert: extend non-integer type")
-		}
+		return llvm.Value{}, errors.New("todo: convert: basic non-integer type: " + typeTo.String())
 
-		if sizeFrom > sizeTo {
-			return c.builder.CreateTrunc(value, llvmTypeTo, ""), nil
-		} else if typeTo.Info()&types.IsUnsigned != 0 { // if unsigned
-			return c.builder.CreateZExt(value, llvmTypeTo, ""), nil
-		} else { // if signed
-			return c.builder.CreateSExt(value, llvmTypeTo, ""), nil
-		}
-	case *types.Pointer:
-		return c.builder.CreateBitCast(value, llvmTypeTo, ""), nil
 	default:
-		return llvm.Value{}, errors.New("todo: convert: extend non-basic type: " + typeTo.String())
+		return llvm.Value{}, errors.New("todo: convert " + typeTo.String() + " <- " + typeFrom.String())
 	}
 }
 
