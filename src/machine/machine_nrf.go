@@ -33,10 +33,9 @@ func (p GPIO) Configure(config GPIOConfig) {
 }
 
 func (p GPIO) Set(high bool) {
-	// TODO: compiler limitation: both operands must be the same LLVM type
 	if high {
-		nrf.P0.OUTSET = 1 << uint32(p.Pin)
+		nrf.P0.OUTSET = 1 << p.Pin
 	} else {
-		nrf.P0.OUTCLR = 1 << uint32(p.Pin)
+		nrf.P0.OUTCLR = 1 << p.Pin
 	}
 }
