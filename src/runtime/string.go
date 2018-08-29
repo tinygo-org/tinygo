@@ -9,7 +9,7 @@ import (
 // The underlying struct for the Go string type.
 type _string struct {
 	length lenType
-	ptr    *uint8
+	ptr    *byte
 }
 
 // Return true iff the strings match.
@@ -36,6 +36,15 @@ func stringConcat(x, y _string) _string {
 		buf := alloc(length)
 		memcpy(buf, unsafe.Pointer(x.ptr), uintptr(x.length))
 		memcpy(unsafe.Pointer(uintptr(buf)+uintptr(x.length)), unsafe.Pointer(y.ptr), uintptr(y.length))
-		return _string{lenType(length), (*uint8)(buf)}
+		return _string{lenType(length), (*byte)(buf)}
 	}
+}
+
+// Create a string from a []byte slice.
+func stringFromBytes(x []byte) _string {
+	buf := alloc(uintptr(len(x)))
+	for i, c := range x {
+		*(*byte)(unsafe.Pointer(uintptr(buf) + uintptr(i))) = c
+	}
+	return _string{lenType(len(x)), (*byte)(buf)}
 }

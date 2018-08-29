@@ -2066,7 +2066,18 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 		sizeFrom := c.targetData.TypeAllocSize(llvmTypeFrom)
 
 		if typeTo.Kind() == types.String {
-			return llvm.Value{}, errors.New("todo: convert to string: " + typeFrom.String())
+			switch typeFrom := typeFrom.Underlying().(type) {
+			case *types.Slice:
+				switch typeFrom.Elem().(*types.Basic).Kind() {
+				case types.Byte:
+					fn := c.mod.NamedFunction("runtime.stringFromBytes")
+					return c.builder.CreateCall(fn, []llvm.Value{value}, ""), nil
+				default:
+					return llvm.Value{}, errors.New("todo: convert to string: " + typeFrom.String())
+				}
+			default:
+				return llvm.Value{}, errors.New("todo: convert to string: " + typeFrom.String())
+			}
 		}
 
 		typeFrom := typeFrom.Underlying().(*types.Basic)
