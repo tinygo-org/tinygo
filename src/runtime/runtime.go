@@ -35,6 +35,18 @@ func memzero(ptr unsafe.Pointer, size uintptr) {
 	}
 }
 
+// Compare two same-size buffers for equality.
+func memequal(x, y unsafe.Pointer, n uintptr) bool {
+	for i := uintptr(0); i < n; i++ {
+		cx := *(*uint8)(unsafe.Pointer(uintptr(x) + i))
+		cy := *(*uint8)(unsafe.Pointer(uintptr(y) + i))
+		if cx != cy {
+			return false
+		}
+	}
+	return true
+}
+
 func _panic(message interface{}) {
 	printstring("panic: ")
 	printitf(message)

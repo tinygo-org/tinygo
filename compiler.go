@@ -1100,12 +1100,20 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		mapType := instr.Map.Type().Underlying().(*types.Map)
 		switch keyType := mapType.Key().Underlying().(type) {
 		case *types.Basic:
+			valueAlloca := c.builder.CreateAlloca(value.Type(), "hashmap.value")
+			c.builder.CreateStore(value, valueAlloca)
+			valuePtr := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "hashmap.valueptr")
 			if keyType.Kind() == types.String {
-				valueAlloca := c.builder.CreateAlloca(value.Type(), "hashmap.value")
-				c.builder.CreateStore(value, valueAlloca)
-				valuePtr := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "hashmap.valueptr")
 				params := []llvm.Value{m, key, valuePtr}
-				fn := c.mod.NamedFunction("runtime.hashmapSet")
+				fn := c.mod.NamedFunction("runtime.hashmapStringSet")
+				c.builder.CreateCall(fn, params, "")
+				return nil
+			} else if keyType.Info()&(types.IsBoolean|types.IsInteger) != 0 {
+				keyAlloca := c.builder.CreateAlloca(key.Type(), "hashmap.key")
+				c.builder.CreateStore(key, keyAlloca)
+				keyPtr := c.builder.CreateBitCast(keyAlloca, c.i8ptrType, "hashmap.keyptr")
+				params := []llvm.Value{m, keyPtr, valuePtr}
+				fn := c.mod.NamedFunction("runtime.hashmapBinarySet")
 				c.builder.CreateCall(fn, params, "")
 				return nil
 			} else {
@@ -1588,15 +1596,23 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		case *types.Map:
 			switch keyType := xType.Key().Underlying().(type) {
 			case *types.Basic:
+				llvmValueType, err := c.getLLVMType(expr.Type())
+				if err != nil {
+					return llvm.Value{}, err
+				}
+				mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "hashmap.value")
+				mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "hashmap.valueptr")
 				if keyType.Kind() == types.String {
-					llvmValueType, err := c.getLLVMType(expr.Type())
-					if err != nil {
-						return llvm.Value{}, err
-					}
-					mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "hashmap.value")
-					mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "hashmap.valueptr")
 					params := []llvm.Value{value, index, mapValuePtr}
-					fn := c.mod.NamedFunction("runtime.hashmapGet")
+					fn := c.mod.NamedFunction("runtime.hashmapStringGet")
+					c.builder.CreateCall(fn, params, "")
+					return c.builder.CreateLoad(mapValueAlloca, ""), nil
+				} else if keyType.Info()&(types.IsBoolean|types.IsInteger) != 0 {
+					keyAlloca := c.builder.CreateAlloca(index.Type(), "hashmap.key")
+					c.builder.CreateStore(index, keyAlloca)
+					keyPtr := c.builder.CreateBitCast(keyAlloca, c.i8ptrType, "hashmap.keyptr")
+					params := []llvm.Value{value, keyPtr, mapValuePtr}
+					fn := c.mod.NamedFunction("runtime.hashmapBinaryGet")
 					c.builder.CreateCall(fn, params, "")
 					return c.builder.CreateLoad(mapValueAlloca, ""), nil
 				} else {
@@ -1658,22 +1674,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		switch keyType := mapType.Key().Underlying().(type) {
-		case *types.Basic:
-			if keyType.Kind() == types.String {
-				keySize := c.targetData.TypeAllocSize(llvmKeyType)
-				valueSize := c.targetData.TypeAllocSize(llvmValueType)
-				hashmapMake := c.mod.NamedFunction("runtime.hashmapMake")
-				llvmKeySize := llvm.ConstInt(llvm.Int8Type(), keySize, false)
-				llvmValueSize := llvm.ConstInt(llvm.Int8Type(), valueSize, false)
-				hashmap := c.builder.CreateCall(hashmapMake, []llvm.Value{llvmKeySize, llvmValueSize}, "")
-				return hashmap, nil
-			} else {
-				return llvm.Value{}, errors.New("todo: map key type: " + keyType.String())
-			}
-		default:
-			return llvm.Value{}, errors.New("todo: map key type: " + keyType.String())
-		}
+		keySize := c.targetData.TypeAllocSize(llvmKeyType)
+		valueSize := c.targetData.TypeAllocSize(llvmValueType)
+		hashmapMake := c.mod.NamedFunction("runtime.hashmapMake")
+		llvmKeySize := llvm.ConstInt(llvm.Int8Type(), keySize, false)
+		llvmValueSize := llvm.ConstInt(llvm.Int8Type(), valueSize, false)
+		hashmap := c.builder.CreateCall(hashmapMake, []llvm.Value{llvmKeySize, llvmValueSize}, "")
+		return hashmap, nil
 	case *ssa.Phi:
 		t, err := c.getLLVMType(expr.Type())
 		if err != nil {
