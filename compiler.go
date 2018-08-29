@@ -92,10 +92,6 @@ func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 	c.uintptrType = c.targetData.IntPtrType()
 	c.i8ptrType = llvm.PointerType(llvm.Int8Type(), 0)
 
-	// Go string: tuple of (len, ptr)
-	t := c.ctx.StructCreateNamed("string")
-	t.StructSetBody([]llvm.Type{c.lenType, c.i8ptrType}, false)
-
 	allocType := llvm.FunctionType(c.i8ptrType, []llvm.Type{c.uintptrType}, false)
 	c.allocFunc = llvm.AddFunction(c.mod, "runtime.alloc", allocType)
 
@@ -458,7 +454,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		case types.Int64, types.Uint64:
 			return llvm.Int64Type(), nil
 		case types.String:
-			return c.mod.GetTypeByName("string"), nil
+			return c.mod.GetTypeByName("runtime._string"), nil
 		case types.Uintptr:
 			return c.uintptrType, nil
 		case types.UnsafePointer:
@@ -1889,7 +1885,7 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 					return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 				}
 			} else if typ.Kind() == types.String {
-				result := c.builder.CreateCall(c.mod.NamedFunction("runtime.stringequal"), []llvm.Value{x, y}, "")
+				result := c.builder.CreateCall(c.mod.NamedFunction("runtime.stringEqual"), []llvm.Value{x, y}, "")
 				if binop.Op == token.NEQ {
 					result = c.builder.CreateNot(result, "")
 				}
@@ -1958,7 +1954,7 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 			global.SetGlobalConstant(true)
 			zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 			strPtr := c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
-			strObj := llvm.ConstNamedStruct(c.mod.GetTypeByName("string"), []llvm.Value{strLen, strPtr})
+			strObj := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._string"), []llvm.Value{strLen, strPtr})
 			return strObj, nil
 		} else if typ.Kind() == types.UnsafePointer {
 			if !expr.IsNil() {

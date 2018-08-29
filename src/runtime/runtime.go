@@ -21,18 +21,6 @@ func GOMAXPROCS(n int) int {
 	return 1
 }
 
-func stringequal(x, y string) bool {
-	if len(x) != len(y) {
-		return false
-	}
-	for i := 0; i < len(x); i++ {
-		if x[i] != y[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // Copy size bytes from src to dst. The memory areas must not overlap.
 func memcpy(dst, src unsafe.Pointer, size uintptr) {
 	for i := uintptr(0); i < size; i++ {
