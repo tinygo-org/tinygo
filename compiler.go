@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/aykevl/llvm/bindings/go/llvm"
+	"go/parser"
 	"golang.org/x/tools/go/loader"
 	"golang.org/x/tools/go/ssa"
 	"golang.org/x/tools/go/ssa/ssautil"
@@ -139,6 +140,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 			Compiler:    "gc", // must be one of the recognized compilers
 			BuildTags:   append([]string{"tgo"}, buildTags...),
 		},
+		ParserMode:  parser.ParseComments,
 		AllowErrors: true,
 	}
 	config.Import("runtime")
@@ -155,7 +157,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		}
 	}
 
-	program := ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions|ssa.BareInits)
+	program := ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions|ssa.BareInits|ssa.GlobalDebug)
 	program.Build()
 	c.ir = NewProgram(program, mainPath)
 
@@ -1067,6 +1069,8 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		}
 		frame.locals[instr] = value
 		return err
+	case *ssa.DebugRef:
+		return nil // ignore
 	case *ssa.Go:
 		if instr.Common().Method != nil {
 			return errors.New("todo: go on method receiver")

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"go/ast"
 	"go/types"
 	"sort"
 	"strings"
@@ -33,6 +34,7 @@ type Program struct {
 type Function struct {
 	fn       *ssa.Function
 	llvmFn   llvm.Value
+	linkName string
 	blocking bool
 	flag     bool        // used by dead code elimination
 	parents  []*Function // calculated by AnalyseCallgraph
@@ -117,6 +119,39 @@ func (p *Program) addFunction(ssaFn *ssa.Function) {
 	f := &Function{fn: ssaFn}
 	p.Functions = append(p.Functions, f)
 	p.functionMap[ssaFn] = f
+
+	// Parse compiler directives in the preceding comments.
+	if f.fn.Syntax() != nil && f.fn.Syntax().(*ast.FuncDecl).Doc != nil {
+		for _, comment := range f.fn.Syntax().(*ast.FuncDecl).Doc.List {
+			if !strings.HasPrefix(comment.Text, "//go:") {
+				continue
+			}
+			parts := strings.Fields(comment.Text)
+			switch parts[0] {
+			case "//go:linkname":
+				if len(parts) != 3 || parts[1] != ssaFn.Name() {
+					continue
+				}
+				// Only enable go:linkname when the package imports "unsafe".
+				// This is a slightly looser requirement than what gc uses: gc
+				// requires the file to import "unsafe", not the package as a
+				// whole.
+				if hasUnsafeImport(ssaFn.Pkg.Pkg) {
+					f.linkName = parts[2]
+				}
+			}
+		}
+	}
+}
+
+// Return true if this package imports "unsafe", false otherwise.
+func hasUnsafeImport(pkg *types.Package) bool {
+	for _, imp := range pkg.Imports() {
+		if imp == types.Unsafe {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Program) GetFunction(ssaFn *ssa.Function) *Function {
@@ -129,6 +164,9 @@ func (p *Program) GetGlobal(ssaGlobal *ssa.Global) *Global {
 
 // Return the link name for this function.
 func (f *Function) LinkName() string {
+	if f.linkName != "" {
+		return f.linkName
+	}
 	if f.fn.Signature.Recv() != nil {
 		// Method on a defined type (which may be a pointer).
 		return f.fn.RelString(nil)

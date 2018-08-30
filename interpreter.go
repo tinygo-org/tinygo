@@ -128,6 +128,8 @@ func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter
 			default:
 				return i, errors.New("todo: init: unknown convert: " + instr.String())
 			}
+		case *ssa.DebugRef:
+			// ignore
 		case *ssa.FieldAddr:
 			x, err := p.getValue(instr.X, locals)
 			if err != nil {
@@ -273,6 +275,7 @@ func canInterpret(callee *ssa.Function) bool {
 		// above.
 		case *ssa.Alloc:
 		case *ssa.Convert:
+		case *ssa.DebugRef:
 		case *ssa.FieldAddr:
 		case *ssa.IndexAddr:
 		case *ssa.MakeInterface:
