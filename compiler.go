@@ -866,6 +866,13 @@ func (c *Compiler) getInterpretedValue(value Value) (llvm.Value, error) {
 		return llvm.ConstPtrToInt(elem, c.uintptrType), nil
 
 	case *PointerValue:
+		if value.Elem == nil {
+			typ, err := c.getLLVMType(value.Type)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			return llvm.ConstPointerNull(typ), nil
+		}
 		elem, err := c.getInterpretedValue(*value.Elem)
 		if err != nil {
 			return llvm.Value{}, err

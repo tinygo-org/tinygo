@@ -39,7 +39,7 @@ func (p *Program) interpret(instrs []ssa.Instruction) (int, error) {
 			if err != nil {
 				return i, err
 			}
-			locals[instr] = &PointerValue{&alloc}
+			locals[instr] = &PointerValue{nil, &alloc}
 		case *ssa.Convert:
 			x, err := p.getValue(instr.X, locals)
 			if err != nil {
@@ -77,7 +77,7 @@ func (p *Program) interpret(instrs []ssa.Instruction) (int, error) {
 			default:
 				panic("expected a pointer")
 			}
-			locals[instr] = &PointerValue{&structVal.Fields[instr.Field]}
+			locals[instr] = &PointerValue{nil, &structVal.Fields[instr.Field]}
 		case *ssa.IndexAddr:
 			x, err := p.getValue(instr.X, locals)
 			if err != nil {
@@ -95,7 +95,7 @@ func (p *Program) interpret(instrs []ssa.Instruction) (int, error) {
 				}
 				switch x := x.(type) {
 				case *ArrayValue:
-					locals[instr] = &PointerValue{&x.Elems[index]}
+					locals[instr] = &PointerValue{nil, &x.Elems[index]}
 				default:
 					return i, errors.New("todo: init IndexAddr not on an array or struct")
 				}
@@ -234,7 +234,7 @@ func (p *Program) getZeroValue(t types.Type) (Value, error) {
 	case *types.Map:
 		return &MapValue{typ, nil, nil}, nil
 	case *types.Pointer:
-		return &PointerValue{nil}, nil
+		return &PointerValue{typ, nil}, nil
 	case *types.Struct:
 		elems := make([]Value, typ.NumFields())
 		for i := range elems {
@@ -265,6 +265,7 @@ type ZeroBasicValue struct {
 }
 
 type PointerValue struct {
+	Type types.Type
 	Elem *Value
 }
 
