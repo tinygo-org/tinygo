@@ -43,6 +43,24 @@ func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter
 				return i, err
 			}
 			locals[instr] = &PointerValue{nil, &alloc}
+		case *ssa.BinOp:
+			if typ, ok := instr.Type().(*types.Basic); ok && typ.Kind() == types.String {
+				// Concatenate two strings.
+				// This happens in the time package, for example.
+				x, err := p.getValue(instr.X, locals)
+				if err != nil {
+					return i, err
+				}
+				y, err := p.getValue(instr.Y, locals)
+				if err != nil {
+					return i, err
+				}
+				xstr := constant.StringVal(x.(*ConstValue).Expr.Value)
+				ystr := constant.StringVal(y.(*ConstValue).Expr.Value)
+				locals[instr] = &ConstValue{ssa.NewConst(constant.MakeString(xstr+ystr), types.Typ[types.String])}
+			} else {
+				return i, errors.New("init: unknown binop: " + instr.String())
+			}
 		case *ssa.Call:
 			common := instr.Common()
 			callee := common.StaticCallee()
