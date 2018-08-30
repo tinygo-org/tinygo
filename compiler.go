@@ -1036,6 +1036,9 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 				return err
 			}
 		}
+		if frame.fn.fn.Name() == "init" && len(block.Instrs) == 0 {
+			c.builder.CreateRetVoid()
+		}
 	}
 
 	// Resolve phi nodes

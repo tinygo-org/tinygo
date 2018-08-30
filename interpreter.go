@@ -17,7 +17,7 @@ import (
 // the basic block.
 func (p *Program) Interpret(block *ssa.BasicBlock) error {
 	for {
-		i, err := p.interpret(block.Instrs)
+		i, err := p.interpret(block.Instrs, nil, nil, nil)
 		if err == cgoWrapperError {
 			// skip this instruction
 			block.Instrs = block.Instrs[i+1:]
@@ -30,8 +30,11 @@ func (p *Program) Interpret(block *ssa.BasicBlock) error {
 
 // Interpret instructions as far as possible, and return the index of the first
 // unknown instruction.
-func (p *Program) interpret(instrs []ssa.Instruction) (int, error) {
+func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter, paramValues []Value, results []Value) (int, error) {
 	locals := map[ssa.Value]Value{}
+	for i, key := range paramKeys {
+		locals[key] = paramValues[i]
+	}
 	for i, instr := range instrs {
 		switch instr := instr.(type) {
 		case *ssa.Alloc:
@@ -40,6 +43,40 @@ func (p *Program) interpret(instrs []ssa.Instruction) (int, error) {
 				return i, err
 			}
 			locals[instr] = &PointerValue{nil, &alloc}
+		case *ssa.Call:
+			common := instr.Common()
+			callee := common.StaticCallee()
+			if callee == nil {
+				return i, nil // don't understand dynamic dispatch
+			}
+			if canInterpret(callee) {
+				params := make([]Value, len(common.Args))
+				for i, arg := range common.Args {
+					val, err := p.getValue(arg, locals)
+					if err != nil {
+						return i, err
+					}
+					params[i] = val
+				}
+				results := make([]Value, callee.Signature.Results().Len())
+				subi, err := p.interpret(callee.Blocks[0].Instrs, callee.Params, params, results)
+				if err != nil {
+					return i, err
+				}
+				if subi != len(callee.Blocks[0].Instrs) {
+					return i, errors.New("init: could not interpret all instructions of subroutine")
+				}
+				if len(results) == 1 {
+					locals[instr] = results[0]
+				} else {
+					panic("unimplemented: not exactly 1 result")
+				}
+				continue
+			}
+			if callee.Object().Name() == "init" {
+				return i, nil // arrived at the init#num functions
+			}
+			return i, errors.New("todo: init call: " + callee.String())
 		case *ssa.Convert:
 			x, err := p.getValue(instr.X, locals)
 			if err != nil {
@@ -121,6 +158,14 @@ func (p *Program) interpret(instrs []ssa.Instruction) (int, error) {
 			x := locals[instr.Map].(*MapValue)
 			x.Keys = append(x.Keys, key)
 			x.Values = append(x.Values, value)
+		case *ssa.Return:
+			for i, r := range instr.Results {
+				val, err := p.getValue(r, locals)
+				if err != nil {
+					return i, err
+				}
+				results[i] = val
+			}
 		case *ssa.Slice:
 			// Turn a just-allocated array into a slice.
 			if instr.Low != nil || instr.High != nil || instr.Max != nil {
@@ -181,7 +226,39 @@ func (p *Program) interpret(instrs []ssa.Instruction) (int, error) {
 			return i, nil
 		}
 	}
-	return len(instrs), nil // normally unreachable
+	return len(instrs), nil
+}
+
+// Check whether this function can be interpreted at compile time. For that, it
+// needs to only contain relatively simple instructions (for example, no control
+// flow).
+func canInterpret(callee *ssa.Function) bool {
+	if len(callee.Blocks) != 1 || callee.Signature.Results().Len() != 1 {
+		// No control flow supported so only one basic block.
+		// Only exactly one return value supported right now so check that as
+		// well.
+		return false
+	}
+	for _, instr := range callee.Blocks[0].Instrs {
+		switch instr.(type) {
+		// Ignore all functions fully supported by Program.interpret()
+		// above.
+		case *ssa.Alloc:
+		case *ssa.Convert:
+		case *ssa.FieldAddr:
+		case *ssa.IndexAddr:
+		case *ssa.MakeInterface:
+		case *ssa.MakeMap:
+		case *ssa.MapUpdate:
+		case *ssa.Return:
+		case *ssa.Slice:
+		case *ssa.Store:
+		case *ssa.UnOp:
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func (p *Program) getValue(value ssa.Value, locals map[ssa.Value]Value) (Value, error) {
