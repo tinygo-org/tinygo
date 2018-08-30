@@ -34,6 +34,14 @@ func printint8(n int8) {
 	}
 }
 
+func printuint16(n uint16) {
+	printuint32(uint32(n))
+}
+
+func printint16(n uint16) {
+	printint32(int32(n))
+}
+
 func printuint32(n uint32) {
 	// TODO: don't recurse, but still be compact (and don't divide/mod
 	// more than necessary).
@@ -84,7 +92,13 @@ func printitf(msg interface{}) {
 	case string:
 		print(msg)
 	default:
-		print("???")
+		// cast to underlying type
+		itf := *(*_interface)(unsafe.Pointer(&msg))
+		putchar('(')
+		print(itf.typecode)
+		putchar(':')
+		print(itf.value)
+		putchar(')')
 	}
 }
 
