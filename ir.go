@@ -176,12 +176,7 @@ func (f *Function) LinkName() string {
 			// Name CGo functions directly.
 			return name
 		} else {
-			name := f.fn.RelString(nil)
-			if f.fn.Pkg.Pkg.Path() == "runtime" && strings.HasPrefix(f.fn.Name(), "_llvm_") {
-				// Special case for LLVM intrinsics in the runtime.
-				name = "llvm." + strings.Replace(f.fn.Name()[len("_llvm_"):], "_", ".", -1)
-			}
-			return name
+			return f.fn.RelString(nil)
 		}
 	}
 }

@@ -25,17 +25,35 @@ import (
 	"unsafe"
 )
 
+// A coroutine instance, wrapped here to provide some type safety. The value
+// must not be used directly, it is meant to be used as an opaque *i8 in LLVM.
+type coroutine uint8
+
+//go:linkname resume llvm.coro.resume
+func (t *coroutine) resume()
+
+//go:linkname destroy llvm.coro.destroy
+func (t *coroutine) destroy()
+
+//go:linkname done llvm.coro.done
+func (t *coroutine) done() bool
+
+//go:linkname _promise llvm.coro.promise
+func (t *coroutine) _promise(alignment int32, from bool) unsafe.Pointer
+
+// Get the promise belonging to a task.
+func (t *coroutine) promise() *taskState {
+	return (*taskState)(t._promise(4, false))
+}
+
 // State/promise of a task. Internally represented as:
 //
 //     {i8 state, i32 data, i8* next}
 type taskState struct {
 	state uint8
 	data  uint32
-	next  taskInstance
+	next  *coroutine
 }
-
-// Pointer to a task. Wrap unsafe.Pointer to provide some sort of type safety.
-type taskInstance unsafe.Pointer
 
 // Various states a task can be in. Not always updated (especially
 // TASK_STATE_RUNNABLE).
@@ -50,28 +68,11 @@ const (
 // TODO: runqueueFront can be removed by making the run queue a circular linked
 // list. The runqueueBack will simply refer to the front in the 'next' pointer.
 var (
-	runqueueFront      taskInstance
-	runqueueBack       taskInstance
-	sleepQueue         taskInstance
+	runqueueFront      *coroutine
+	runqueueBack       *coroutine
+	sleepQueue         *coroutine
 	sleepQueueBaseTime uint64
 )
-
-// Translated to void @llvm.coro.resume(i8*).
-func _llvm_coro_resume(taskInstance)
-
-// Translated to void @llvm.coro.destroy(i8*).
-func _llvm_coro_destroy(taskInstance)
-
-// Translated to i1 @llvm.coro.done(i8*).
-func _llvm_coro_done(taskInstance) bool
-
-// Translated to i8* @llvm.coro.promise(i8*, i32, i1).
-func _llvm_coro_promise(taskInstance, int32, bool) unsafe.Pointer
-
-// Get the promise belonging to a task.
-func taskPromise(t taskInstance) *taskState {
-	return (*taskState)(_llvm_coro_promise(t, 4, false))
-}
 
 // Simple logging, for debugging.
 func scheduleLog(msg string) {
@@ -79,15 +80,15 @@ func scheduleLog(msg string) {
 }
 
 // Simple logging with a task pointer, for debugging.
-func scheduleLogTask(msg string, t taskInstance) {
+func scheduleLogTask(msg string, t *coroutine) {
 	//println(msg, t)
 }
 
 // Set the task state to sleep for a given time.
 //
 // This is a compiler intrinsic.
-func sleepTask(caller taskInstance, duration Duration) {
-	promise := taskPromise(caller)
+func sleepTask(caller *coroutine, duration Duration) {
+	promise := caller.promise()
 	promise.state = TASK_STATE_SLEEP
 	promise.data = uint32(duration) // TODO: longer durations
 }
@@ -96,22 +97,22 @@ func sleepTask(caller taskInstance, duration Duration) {
 // will be removed from the runqueue and be rescheduled by the callee.
 //
 // This is a compiler intrinsic.
-func waitForAsyncCall(caller taskInstance) {
-	promise := taskPromise(caller)
+func waitForAsyncCall(caller *coroutine) {
+	promise := caller.promise()
 	promise.state = TASK_STATE_CALL
 }
 
 // Add a task to the runnable or sleep queue, depending on the state.
 //
 // This is a compiler intrinsic.
-func scheduleTask(t taskInstance) {
+func scheduleTask(t *coroutine) {
 	if t == nil {
 		return
 	}
 	scheduleLogTask("  schedule task:", t)
 	// See what we should do with this task: try to execute it directly
 	// again or let it sleep for a bit.
-	promise := taskPromise(t)
+	promise := t.promise()
 	if promise.state == TASK_STATE_CALL {
 		return // calling an async task, the subroutine will re-active the parent
 	} else if promise.state == TASK_STATE_SLEEP && promise.data != 0 {
@@ -123,30 +124,30 @@ func scheduleTask(t taskInstance) {
 
 // Add this task to the end of the run queue. May also destroy the task if it's
 // done.
-func pushTask(t taskInstance) {
-	if _llvm_coro_done(t) {
+func pushTask(t *coroutine) {
+	if t.done() {
 		scheduleLogTask("  destroy task:", t)
-		_llvm_coro_destroy(t)
+		t.destroy()
 		return
 	}
 	if runqueueBack == nil { // empty runqueue
 		runqueueBack = t
 		runqueueFront = t
 	} else {
-		lastTaskPromise := taskPromise(runqueueBack)
+		lastTaskPromise := runqueueBack.promise()
 		lastTaskPromise.next = t
 		runqueueBack = t
 	}
 }
 
 // Get a task from the front of the run queue. May return nil if there is none.
-func popTask() taskInstance {
+func popTask() *coroutine {
 	t := runqueueFront
 	if t == nil {
 		return nil
 	}
 	scheduleLogTask("    popTask:", t)
-	promise := taskPromise(t)
+	promise := t.promise()
 	runqueueFront = promise.next
 	if runqueueFront == nil {
 		runqueueBack = nil
@@ -156,7 +157,7 @@ func popTask() taskInstance {
 }
 
 // Add this task to the sleep queue, assuming its state is set to sleeping.
-func addSleepTask(t taskInstance) {
+func addSleepTask(t *coroutine) {
 	now := monotime()
 	if sleepQueue == nil {
 		scheduleLog("  -> sleep new queue")
@@ -167,12 +168,12 @@ func addSleepTask(t taskInstance) {
 	}
 
 	// Make sure promise.data is relative to the queue time base.
-	promise := taskPromise(t)
+	promise := t.promise()
 
 	// Insert at front of sleep queue.
-	if promise.data < taskPromise(sleepQueue).data {
+	if promise.data < sleepQueue.promise().data {
 		scheduleLog("  -> sleep at start")
-		taskPromise(sleepQueue).data -= promise.data
+		sleepQueue.promise().data -= promise.data
 		promise.next = sleepQueue
 		sleepQueue = t
 		return
@@ -181,26 +182,26 @@ func addSleepTask(t taskInstance) {
 	// Add to sleep queue (in the middle or at the end).
 	queueIndex := sleepQueue
 	for {
-		promise.data -= taskPromise(queueIndex).data
-		if taskPromise(queueIndex).next == nil || taskPromise(queueIndex).data > promise.data {
-			if taskPromise(queueIndex).next == nil {
+		promise.data -= queueIndex.promise().data
+		if queueIndex.promise().next == nil || queueIndex.promise().data > promise.data {
+			if queueIndex.promise().next == nil {
 				scheduleLog("  -> sleep at end")
 				promise.next = nil
 			} else {
 				scheduleLog("  -> sleep in middle")
-				promise.next = taskPromise(queueIndex).next
-				taskPromise(promise.next).data -= promise.data
+				promise.next = queueIndex.promise().next
+				promise.next.promise().data -= promise.data
 			}
-			taskPromise(queueIndex).next = t
+			queueIndex.promise().next = t
 			break
 		}
-		queueIndex = taskPromise(queueIndex).next
+		queueIndex = queueIndex.promise().next
 	}
 }
 
 // Run the scheduler until all tasks have finished.
 // It takes an initial task (main.main) to bootstrap.
-func scheduler(main taskInstance) {
+func scheduler(main *coroutine) {
 	// Initial task.
 	scheduleTask(main)
 
@@ -211,10 +212,10 @@ func scheduler(main taskInstance) {
 
 		// Add tasks that are done sleeping to the end of the runqueue so they
 		// will be executed soon.
-		if sleepQueue != nil && now-sleepQueueBaseTime >= uint64(taskPromise(sleepQueue).data) {
+		if sleepQueue != nil && now-sleepQueueBaseTime >= uint64(sleepQueue.promise().data) {
 			scheduleLog("  run <- sleep")
 			t := sleepQueue
-			promise := taskPromise(t)
+			promise := t.promise()
 			sleepQueueBaseTime += uint64(promise.data)
 			sleepQueue = promise.next
 			promise.next = nil
@@ -233,14 +234,14 @@ func scheduler(main taskInstance) {
 				return
 			}
 			scheduleLog("  sleeping...")
-			timeLeft := uint64(taskPromise(sleepQueue).data) - (now - sleepQueueBaseTime)
+			timeLeft := uint64(sleepQueue.promise().data) - (now - sleepQueueBaseTime)
 			sleep(Duration(timeLeft))
 			continue
 		}
 
 		// Run the given task.
 		scheduleLogTask("  run:", t)
-		_llvm_coro_resume(t)
+		t.resume()
 
 		// Add the just resumed task to the run queue or the sleep queue.
 		scheduleTask(t)
