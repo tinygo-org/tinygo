@@ -118,6 +118,8 @@ func (p *Program) interpret(instrs []ssa.Instruction) (int, error) {
 			default:
 				panic("expected a pointer")
 			}
+		case *ssa.MakeInterface:
+			locals[instr] = &InterfaceValue{instr.X.Type(), locals[instr.X]}
 		case *ssa.MakeMap:
 			locals[instr] = &MapValue{instr.Type().Underlying().(*types.Map), nil, nil}
 		case *ssa.MapUpdate:
@@ -225,7 +227,7 @@ func (p *Program) getZeroValue(t types.Type) (Value, error) {
 	case *types.Basic:
 		return &ZeroBasicValue{typ}, nil
 	case *types.Interface:
-		return &InterfaceValue{typ}, nil
+		return &InterfaceValue{typ, nil}, nil
 	case *types.Pointer:
 		return &PointerValue{nil}, nil
 	case *types.Struct:
@@ -262,8 +264,8 @@ type PointerValue struct {
 }
 
 type InterfaceValue struct {
-	Type *types.Interface
-	//Elem Value
+	Type types.Type
+	Elem Value
 }
 
 type PointerBitCastValue struct {

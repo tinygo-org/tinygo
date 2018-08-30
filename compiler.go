@@ -759,19 +759,15 @@ func (c *Compiler) getInterpretedValue(value Value) (llvm.Value, error) {
 		return ptr, nil
 
 	case *InterfaceValue:
-		itfTypeNum, ok := c.ir.TypeNum(value.Type)
-		if !ok {
-			panic("interface number is unknown")
+		underlying := llvm.ConstPointerNull(c.i8ptrType) // could be any 0 value
+		if value.Elem != nil {
+			elem, err := c.getInterpretedValue(value.Elem)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			underlying = elem
 		}
-		if itfTypeNum >= 1<<16 {
-			return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
-		}
-		fields := []llvm.Value{
-			llvm.ConstInt(llvm.Int16Type(), uint64(itfTypeNum), false),
-			llvm.Undef(c.i8ptrType),
-		}
-		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), fields)
-		return itf, nil
+		return c.parseMakeInterface(underlying, value.Type, true)
 
 	case *MapValue:
 		// Create initial bucket.
@@ -1279,6 +1275,8 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 						return llvm.Value{}, errors.New("unknown basic arg type: " + typ.String())
 					}
 				}
+			case *types.Interface:
+				c.builder.CreateCall(c.mod.NamedFunction("runtime.printitf"), []llvm.Value{value}, "")
 			case *types.Pointer:
 				ptrValue := c.builder.CreatePtrToInt(value, c.uintptrType, "")
 				c.builder.CreateCall(c.mod.NamedFunction("runtime.printptr"), []llvm.Value{ptrValue}, "")
@@ -1639,41 +1637,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		var itfValue llvm.Value
-		size := c.targetData.TypeAllocSize(val.Type())
-		if size > c.targetData.TypeAllocSize(c.i8ptrType) {
-			// Allocate on the heap and put a pointer in the interface.
-			// TODO: escape analysis.
-			sizeValue := llvm.ConstInt(c.uintptrType, size, false)
-			itfValue = c.builder.CreateCall(c.allocFunc, []llvm.Value{sizeValue}, "")
-			itfValueCast := c.builder.CreateBitCast(itfValue, llvm.PointerType(val.Type(), 0), "")
-			c.builder.CreateStore(val, itfValueCast)
-		} else {
-			// Directly place the value in the interface.
-			switch val.Type().TypeKind() {
-			case llvm.IntegerTypeKind:
-				itfValue = c.builder.CreateIntToPtr(val, c.i8ptrType, "")
-			case llvm.PointerTypeKind:
-				itfValue = c.builder.CreateBitCast(val, c.i8ptrType, "")
-			case llvm.StructTypeKind:
-				// A bitcast would be useful here, but bitcast doesn't allow
-				// aggregate types. So we'll bitcast it using an alloca.
-				// Hopefully this will get optimized away.
-				mem := c.builder.CreateAlloca(c.i8ptrType, "")
-				memStructPtr := c.builder.CreateBitCast(mem, llvm.PointerType(val.Type(), 0), "")
-				c.builder.CreateStore(val, memStructPtr)
-				itfValue = c.builder.CreateLoad(mem, "")
-			default:
-				return llvm.Value{}, errors.New("todo: makeinterface: cast small type to i8*")
-			}
-		}
-		itfTypeNum, _ := c.ir.TypeNum(expr.X.Type())
-		if itfTypeNum >= 1<<16 {
-			return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
-		}
-		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), []llvm.Value{llvm.ConstInt(llvm.Int16Type(), uint64(itfTypeNum), false), llvm.Undef(c.i8ptrType)})
-		itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
-		return itf, nil
+		return c.parseMakeInterface(val, expr.X.Type(), false)
 	case *ssa.MakeMap:
 		mapType := expr.Type().Underlying().(*types.Map)
 		llvmKeyType, err := c.getLLVMType(mapType.Key().Underlying())
@@ -2112,6 +2076,55 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 	default:
 		return llvm.Value{}, errors.New("todo: convert " + typeTo.String() + " <- " + typeFrom.String())
 	}
+}
+
+func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, isConst bool) (llvm.Value, error) {
+	var itfValue llvm.Value
+	size := c.targetData.TypeAllocSize(val.Type())
+	if size > c.targetData.TypeAllocSize(c.i8ptrType) {
+		if isConst {
+			// Allocate in a global variable.
+			global := llvm.AddGlobal(c.mod, val.Type(), ".itfvalue")
+			global.SetInitializer(val)
+			global.SetLinkage(llvm.PrivateLinkage)
+			global.SetGlobalConstant(true)
+			zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+			itfValueRaw := llvm.ConstInBoundsGEP(global, []llvm.Value{zero, zero})
+			itfValue = llvm.ConstBitCast(itfValueRaw, c.i8ptrType)
+		} else {
+			// Allocate on the heap and put a pointer in the interface.
+			// TODO: escape analysis.
+			sizeValue := llvm.ConstInt(c.uintptrType, size, false)
+			itfValue = c.builder.CreateCall(c.allocFunc, []llvm.Value{sizeValue}, "")
+			itfValueCast := c.builder.CreateBitCast(itfValue, llvm.PointerType(val.Type(), 0), "")
+			c.builder.CreateStore(val, itfValueCast)
+		}
+	} else {
+		// Directly place the value in the interface.
+		switch val.Type().TypeKind() {
+		case llvm.IntegerTypeKind:
+			itfValue = c.builder.CreateIntToPtr(val, c.i8ptrType, "")
+		case llvm.PointerTypeKind:
+			itfValue = c.builder.CreateBitCast(val, c.i8ptrType, "")
+		case llvm.StructTypeKind:
+			// A bitcast would be useful here, but bitcast doesn't allow
+			// aggregate types. So we'll bitcast it using an alloca.
+			// Hopefully this will get optimized away.
+			mem := c.builder.CreateAlloca(c.i8ptrType, "")
+			memStructPtr := c.builder.CreateBitCast(mem, llvm.PointerType(val.Type(), 0), "")
+			c.builder.CreateStore(val, memStructPtr)
+			itfValue = c.builder.CreateLoad(mem, "")
+		default:
+			return llvm.Value{}, errors.New("todo: makeinterface: cast small type to i8*")
+		}
+	}
+	itfTypeNum, _ := c.ir.TypeNum(typ)
+	if itfTypeNum >= 1<<16 {
+		return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
+	}
+	itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), []llvm.Value{llvm.ConstInt(llvm.Int16Type(), uint64(itfTypeNum), false), llvm.Undef(c.i8ptrType)})
+	itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
+	return itf, nil
 }
 
 func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
