@@ -102,7 +102,21 @@ func printitf(msg interface{}) {
 	}
 }
 
+func printmap(m *hashmap) {
+	print("map[")
+	if m == nil {
+		print("nil")
+	} else {
+		print(m.count)
+	}
+	putchar(']')
+}
+
 func printptr(ptr uintptr) {
+	if ptr == 0 {
+		print("nil")
+		return
+	}
 	putchar('0')
 	putchar('x')
 	for i := 0; i < int(unsafe.Sizeof(ptr))*2; i++ {

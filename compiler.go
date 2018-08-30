@@ -1277,6 +1277,8 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 				}
 			case *types.Interface:
 				c.builder.CreateCall(c.mod.NamedFunction("runtime.printitf"), []llvm.Value{value}, "")
+			case *types.Map:
+				c.builder.CreateCall(c.mod.NamedFunction("runtime.printmap"), []llvm.Value{value}, "")
 			case *types.Pointer:
 				ptrValue := c.builder.CreatePtrToInt(value, c.uintptrType, "")
 				c.builder.CreateCall(c.mod.NamedFunction("runtime.printptr"), []llvm.Value{ptrValue}, "")
