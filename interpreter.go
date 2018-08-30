@@ -228,6 +228,8 @@ func (p *Program) getZeroValue(t types.Type) (Value, error) {
 		return &ZeroBasicValue{typ}, nil
 	case *types.Interface:
 		return &InterfaceValue{typ, nil}, nil
+	case *types.Map:
+		return &MapValue{typ, nil, nil}, nil
 	case *types.Pointer:
 		return &PointerValue{nil}, nil
 	case *types.Struct:
