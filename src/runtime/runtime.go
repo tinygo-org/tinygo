@@ -21,6 +21,11 @@ func GOMAXPROCS(n int) int {
 	return 1
 }
 
+func GOROOT() string {
+	// TODO: don't hardcode but take the one at compile time.
+	return "/usr/local/go"
+}
+
 // Copy size bytes from src to dst. The memory areas must not overlap.
 func memcpy(dst, src unsafe.Pointer, size uintptr) {
 	for i := uintptr(0); i < size; i++ {
