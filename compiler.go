@@ -462,6 +462,8 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		default:
 			return llvm.Type{}, errors.New("todo: unknown basic type: " + typ.String())
 		}
+	case *types.Chan:
+		return llvm.PointerType(c.mod.GetTypeByName("runtime.channel"), 0), nil
 	case *types.Interface:
 		return c.mod.GetTypeByName("runtime._interface"), nil
 	case *types.Map:
