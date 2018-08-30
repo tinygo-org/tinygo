@@ -119,28 +119,10 @@ func (p *Program) addFunction(ssaFn *ssa.Function) {
 	f := &Function{fn: ssaFn}
 	p.Functions = append(p.Functions, f)
 	p.functionMap[ssaFn] = f
+	f.parsePragmas()
 
-	// Parse compiler directives in the preceding comments.
-	if f.fn.Syntax() != nil && f.fn.Syntax().(*ast.FuncDecl).Doc != nil {
-		for _, comment := range f.fn.Syntax().(*ast.FuncDecl).Doc.List {
-			if !strings.HasPrefix(comment.Text, "//go:") {
-				continue
-			}
-			parts := strings.Fields(comment.Text)
-			switch parts[0] {
-			case "//go:linkname":
-				if len(parts) != 3 || parts[1] != ssaFn.Name() {
-					continue
-				}
-				// Only enable go:linkname when the package imports "unsafe".
-				// This is a slightly looser requirement than what gc uses: gc
-				// requires the file to import "unsafe", not the package as a
-				// whole.
-				if hasUnsafeImport(ssaFn.Pkg.Pkg) {
-					f.linkName = parts[2]
-				}
-			}
-		}
+	for _, anon := range ssaFn.AnonFuncs {
+		p.addFunction(anon)
 	}
 }
 
@@ -160,6 +142,34 @@ func (p *Program) GetFunction(ssaFn *ssa.Function) *Function {
 
 func (p *Program) GetGlobal(ssaGlobal *ssa.Global) *Global {
 	return p.globalMap[ssaGlobal]
+}
+
+// Parse compiler directives in the preceding comments.
+func (f *Function) parsePragmas() {
+	if f.fn.Syntax() == nil {
+		return
+	}
+	if decl, ok := f.fn.Syntax().(*ast.FuncDecl); ok && decl.Doc != nil {
+		for _, comment := range decl.Doc.List {
+			if !strings.HasPrefix(comment.Text, "//go:") {
+				continue
+			}
+			parts := strings.Fields(comment.Text)
+			switch parts[0] {
+			case "//go:linkname":
+				if len(parts) != 3 || parts[1] != f.fn.Name() {
+					continue
+				}
+				// Only enable go:linkname when the package imports "unsafe".
+				// This is a slightly looser requirement than what gc uses: gc
+				// requires the file to import "unsafe", not the package as a
+				// whole.
+				if hasUnsafeImport(f.fn.Pkg.Pkg) {
+					f.linkName = parts[2]
+				}
+			}
+		}
+	}
 }
 
 // Return the link name for this function.
