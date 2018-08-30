@@ -755,6 +755,16 @@ func (c *Compiler) getInterpretedValue(value Value) (llvm.Value, error) {
 	case *ConstValue:
 		return c.parseConst(value.Expr)
 
+	case *FunctionValue:
+		if value.Elem == nil {
+			llvmType, err := c.getLLVMType(value.Type)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			return getZeroValue(llvmType)
+		}
+		return c.ir.GetFunction(value.Elem).llvmFn, nil
+
 	case *GlobalValue:
 		zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 		ptr := llvm.ConstInBoundsGEP(value.Global.llvmGlobal, []llvm.Value{zero})

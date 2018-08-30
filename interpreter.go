@@ -188,6 +188,8 @@ func (p *Program) getValue(value ssa.Value, locals map[ssa.Value]Value) (Value, 
 	switch value := value.(type) {
 	case *ssa.Const:
 		return &ConstValue{value}, nil
+	case *ssa.Function:
+		return &FunctionValue{value.Type(), value}, nil
 	case *ssa.Global:
 		if strings.HasPrefix(value.Name(), "__cgofn__cgo_") || strings.HasPrefix(value.Name(), "_cgo_") {
 			// Ignore CGo global variables which we don't use.
@@ -202,7 +204,6 @@ func (p *Program) getValue(value ssa.Value, locals map[ssa.Value]Value) (Value, 
 			g.initializer = value
 		}
 		return &GlobalValue{g}, nil
-		//return &PointerValue{&g.initializer}, nil
 	default:
 		if local, ok := locals[value]; ok {
 			return local, nil
@@ -226,6 +227,8 @@ func (p *Program) getZeroValue(t types.Type) (Value, error) {
 		return &ArrayValue{typ.Elem(), elems}, nil
 	case *types.Basic:
 		return &ZeroBasicValue{typ}, nil
+	case *types.Signature:
+		return &FunctionValue{typ, nil}, nil
 	case *types.Interface:
 		return &InterfaceValue{typ, nil}, nil
 	case *types.Map:
@@ -263,6 +266,11 @@ type ZeroBasicValue struct {
 
 type PointerValue struct {
 	Elem *Value
+}
+
+type FunctionValue struct {
+	Type types.Type
+	Elem *ssa.Function
 }
 
 type InterfaceValue struct {
