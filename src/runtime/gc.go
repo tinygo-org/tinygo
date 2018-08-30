@@ -28,3 +28,11 @@ func alloc(size uintptr) unsafe.Pointer {
 func free(ptr unsafe.Pointer) {
 	// TODO: use a GC
 }
+
+func GC() {
+	// Unimplemented.
+}
+
+func KeepAlive(x interface{}) {
+	// Unimplemented. Only required with SetFinalizer().
+}
