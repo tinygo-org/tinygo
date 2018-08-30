@@ -5,6 +5,10 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
+// This function implements several optimization passes (analysis + transform)
+// to optimize code in SSA form before it is compiled to LLVM IR. It is based on
+// the IR defined in ir.go.
+
 // Make a readable version of the method signature (including the function name,
 // excluding the receiver name). This string is used internally to match
 // interfaces and to call the correct method on an interface. Examples:

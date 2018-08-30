@@ -9,6 +9,9 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
+// This file provides a wrapper around go/ssa values and adds extra
+// functionality to them.
+
 // View on all functions, types, and globals in a program, with analysis
 // results.
 type Program struct {
