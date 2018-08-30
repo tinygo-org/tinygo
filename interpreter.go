@@ -102,22 +102,6 @@ func (p *Program) interpret(instrs []ssa.Instruction) (int, error) {
 			} else {
 				return i, errors.New("todo: init IndexAddr index: " + instr.Index.String())
 			}
-		case *ssa.UnOp:
-			if instr.Op != token.MUL || instr.CommaOk {
-				return i, errors.New("init: unknown unop: " + instr.String())
-			}
-			valPtr, err := p.getValue(instr.X, locals)
-			if err != nil {
-				return i, err
-			}
-			switch valPtr := valPtr.(type) {
-			case *GlobalValue:
-				locals[instr] = valPtr.Global.initializer
-			case *PointerValue:
-				locals[instr] = *valPtr.Elem
-			default:
-				panic("expected a pointer")
-			}
 		case *ssa.MakeInterface:
 			locals[instr] = &InterfaceValue{instr.X.Type(), locals[instr.X]}
 		case *ssa.MakeMap:
@@ -176,6 +160,22 @@ func (p *Program) interpret(instrs []ssa.Instruction) (int, error) {
 				}
 			} else {
 				return i, errors.New("todo: init Store: " + instr.String())
+			}
+		case *ssa.UnOp:
+			if instr.Op != token.MUL || instr.CommaOk {
+				return i, errors.New("init: unknown unop: " + instr.String())
+			}
+			valPtr, err := p.getValue(instr.X, locals)
+			if err != nil {
+				return i, err
+			}
+			switch valPtr := valPtr.(type) {
+			case *GlobalValue:
+				locals[instr] = valPtr.Global.initializer
+			case *PointerValue:
+				locals[instr] = *valPtr.Elem
+			default:
+				panic("expected a pointer")
 			}
 		default:
 			return i, nil
