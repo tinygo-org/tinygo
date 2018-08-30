@@ -1321,6 +1321,11 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 }
 
 func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn llvm.Value, blocking bool, parentHandle llvm.Value) (llvm.Value, error) {
+	if llvmFn.Name() == "sync.runtime_registerPoolCleanup" || llvmFn.Name() == "sync.runtime_notifyListCheck" {
+		// Ignore these functions calls for now, as a hack.
+		// TODO: implement //go:linkname.
+		return llvm.Value{}, nil
+	}
 	var params []llvm.Value
 	if blocking {
 		if parentHandle.IsNil() {

@@ -67,6 +67,16 @@ func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter
 			if callee == nil {
 				return i, nil // don't understand dynamic dispatch
 			}
+			if callee.String() == "syscall.runtime_envs" {
+				// TODO: replace this with some //go:linkname magic.
+				// For now, do as if it returned a zero-length slice.
+				var err error
+				locals[instr], err = p.getZeroValue(callee.Signature.Results().At(0).Type())
+				if err != nil {
+					return i, err
+				}
+				continue
+			}
 			if canInterpret(callee) {
 				params := make([]Value, len(common.Args))
 				for i, arg := range common.Args {

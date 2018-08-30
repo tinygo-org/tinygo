@@ -97,10 +97,9 @@ Implemented compiler passes:
 
 Requirements:
 
-  * Go 1.10+ (Go 1.9 has a
-    [known bug](https://github.com/aykevl/tinygo/issues/2)).
+  * Go 1.11+
   * LLVM dependencies, see the Software section in the
-    [LLVM build guide](https://llvm.org/docs/GettingStarted.html#software).
+    [LLVM build guide](https://llvm.org/docs/GettingStarted.html#software)
 
 First download the sources (this takes a while):
 
