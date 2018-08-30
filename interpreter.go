@@ -238,7 +238,7 @@ func (p *Program) getZeroValue(t types.Type) (Value, error) {
 	case *types.Struct:
 		elems := make([]Value, typ.NumFields())
 		for i := range elems {
-			elem, err := p.getZeroValue(typ.Field(i).Type().Underlying())
+			elem, err := p.getZeroValue(typ.Field(i).Type())
 			if err != nil {
 				return nil, err
 			}
