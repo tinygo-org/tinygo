@@ -114,7 +114,7 @@ func (p *Program) AnalyseInterfaceConversions() {
 							name := MethodName(sel.Obj().(*types.Func))
 							t.Methods[name] = sel
 						}
-						p.typesWithMethods[instr.X.Type().String()] = t
+						p.typesWithMethods[name] = t
 					} else if _, ok := p.typesWithoutMethods[name]; !ok && len(methods) == 0 {
 						p.typesWithoutMethods[name] = len(p.typesWithoutMethods)
 					}
