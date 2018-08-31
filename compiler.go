@@ -1546,6 +1546,29 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, errors.New("global not found: " + c.ir.GetGlobal(expr).LinkName())
 		}
 		return value, nil
+	case *ssa.Index:
+		array, err := c.parseExpr(frame, expr.X)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		index, err := c.parseExpr(frame, expr.Index)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+
+		// Check bounds.
+		arrayLen := expr.X.Type().(*types.Array).Len()
+		arrayLenLLVM := llvm.ConstInt(llvm.Int32Type(), uint64(arrayLen), false)
+		lookupBoundsCheck := c.mod.NamedFunction("runtime.lookupBoundsCheck")
+		c.builder.CreateCall(lookupBoundsCheck, []llvm.Value{arrayLenLLVM, index}, "")
+
+		// Can't load directly from array (as index is non-constant), so have to
+		// do it using an alloca+gep+load.
+		alloca := c.builder.CreateAlloca(array.Type(), "")
+		c.builder.CreateStore(array, alloca)
+		zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+		ptr := c.builder.CreateGEP(alloca, []llvm.Value{zero, index}, "")
+		return c.builder.CreateLoad(ptr, ""), nil
 	case *ssa.IndexAddr:
 		val, err := c.parseExpr(frame, expr.X)
 		if err != nil {
