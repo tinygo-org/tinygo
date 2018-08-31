@@ -86,6 +86,92 @@ func printint64(n int64) {
 	printuint64(uint64(n))
 }
 
+func printfloat32(v float32) {
+	// TODO: write an implementation like printfloat64, as some systems have
+	// 32-bit floats but only software emulation for 64-bit floats.
+	printfloat64(float64(v))
+}
+
+// printfloat64() was copied from the relevant source in the original Go
+// implementation. It is copyright by the Go authors, licensed under the same
+// BSD 3-clause license. See https://golang.org/LICENSE for details.
+//
+// Source:
+// https://github.com/golang/go/blob/master/src/runtime/print.go
+func printfloat64(v float64) {
+	switch {
+	case v != v:
+		printstring("NaN")
+		return
+	case v+v == v && v > 0:
+		printstring("+Inf")
+		return
+	case v+v == v && v < 0:
+		printstring("-Inf")
+		return
+	}
+
+	const n = 7 // digits printed
+	var buf [n + 7]byte
+	buf[0] = '+'
+	e := 0 // exp
+	if v == 0 {
+		if 1/v < 0 {
+			buf[0] = '-'
+		}
+	} else {
+		if v < 0 {
+			v = -v
+			buf[0] = '-'
+		}
+
+		// normalize
+		for v >= 10 {
+			e++
+			v /= 10
+		}
+		for v < 1 {
+			e--
+			v *= 10
+		}
+
+		// round
+		h := 5.0
+		for i := 0; i < n; i++ {
+			h /= 10
+		}
+		v += h
+		if v >= 10 {
+			e++
+			v /= 10
+		}
+	}
+
+	// format +d.dddd+edd
+	for i := 0; i < n; i++ {
+		s := int(v)
+		buf[i+2] = byte(s + '0')
+		v -= float64(s)
+		v *= 10
+	}
+	buf[1] = buf[2]
+	buf[2] = '.'
+
+	buf[n+2] = 'e'
+	buf[n+3] = '+'
+	if e < 0 {
+		e = -e
+		buf[n+3] = '-'
+	}
+
+	buf[n+4] = byte(e/100) + '0'
+	buf[n+5] = byte(e/10)%10 + '0'
+	buf[n+6] = byte(e%10) + '0'
+	for _, c := range buf {
+		putchar(c)
+	}
+}
+
 func printspace() {
 	putchar(' ')
 }

@@ -1303,6 +1303,10 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 						c.builder.CreateCall(fn, []llvm.Value{value}, "")
 					} else if typ.Kind() == types.Bool {
 						c.builder.CreateCall(c.mod.NamedFunction("runtime.printbool"), []llvm.Value{value}, "")
+					} else if typ.Kind() == types.Float32 {
+						c.builder.CreateCall(c.mod.NamedFunction("runtime.printfloat32"), []llvm.Value{value}, "")
+					} else if typ.Kind() == types.Float64 {
+						c.builder.CreateCall(c.mod.NamedFunction("runtime.printfloat64"), []llvm.Value{value}, "")
 					} else {
 						return llvm.Value{}, errors.New("unknown basic arg type: " + typ.String())
 					}
