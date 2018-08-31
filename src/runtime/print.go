@@ -43,13 +43,21 @@ func printint16(n uint16) {
 }
 
 func printuint32(n uint32) {
-	// TODO: don't recurse, but still be compact (and don't divide/mod
-	// more than necessary).
-	prevdigits := n / 10
-	if prevdigits != 0 {
-		printuint32(prevdigits)
+	digits := [10]byte{} // enough to hold (2^32)-1
+	// Fill in all 10 digits.
+	firstdigit := 9 // digit index that isn't zero (by default, the last to handle '0' correctly)
+	for i := 9; i >= 0; i-- {
+		digit := byte(n%10 + '0')
+		digits[i] = digit
+		if digit != '0' {
+			firstdigit = i
+		}
+		n /= 10
 	}
-	putchar(byte((n % 10) + '0'))
+	// Print digits without the leading zeroes.
+	for i := firstdigit; i < 10; i++ {
+		putchar(digits[i])
+	}
 }
 
 func printint32(n int32) {
