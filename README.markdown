@@ -37,7 +37,7 @@ func main() {
 Currently supported features:
 
   * control flow
-  * many (but not all) basic types: most ints, strings, structs
+  * many (but not all) basic types: most ints, floats, strings, structs
   * function calling
   * interfaces for basic types (with type switches and asserts)
   * goroutines (very initial support)
@@ -50,7 +50,7 @@ Currently supported features:
 
 Not yet supported:
 
-  * float, complex, etc.
+  * complex numbers
   * garbage collection
   * defer
   * closures

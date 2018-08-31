@@ -455,6 +455,10 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			return c.intType, nil
 		case types.Int64, types.Uint64:
 			return llvm.Int64Type(), nil
+		case types.Float32:
+			return llvm.FloatType(), nil
+		case types.Float64:
+			return llvm.DoubleType(), nil
 		case types.String:
 			return c.mod.GetTypeByName("runtime._string"), nil
 		case types.Uintptr:
@@ -573,6 +577,8 @@ func getZeroValue(typ llvm.Type) (llvm.Value, error) {
 			vals[i] = val
 		}
 		return llvm.ConstArray(subTyp, vals), nil
+	case llvm.FloatTypeKind, llvm.DoubleTypeKind:
+		return llvm.ConstFloat(typ, 0.0), nil
 	case llvm.IntegerTypeKind:
 		return llvm.ConstInt(typ, 0, false), nil
 	case llvm.PointerTypeKind:
@@ -1853,119 +1859,158 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 	if err != nil {
 		return llvm.Value{}, err
 	}
-	typ := binop.X.Type().Underlying()
-	signed := false
-	if typ, ok := typ.(*types.Basic); ok {
-		signed = typ.Info()&types.IsUnsigned == 0
-	}
-	switch binop.Op {
-	case token.ADD: // +
-		if typ, ok := binop.X.Type().(*types.Basic); ok && typ.Kind() == types.String {
-			// string concatenation
-			fn := c.mod.NamedFunction("runtime.stringConcat")
-			return c.builder.CreateCall(fn, []llvm.Value{x, y}, ""), nil
-		} else {
-			return c.builder.CreateAdd(x, y, ""), nil
-		}
-	case token.SUB: // -
-		return c.builder.CreateSub(x, y, ""), nil
-	case token.MUL: // *
-		return c.builder.CreateMul(x, y, ""), nil
-	case token.QUO: // /
-		if signed {
-			return c.builder.CreateSDiv(x, y, ""), nil
-		} else {
-			return c.builder.CreateUDiv(x, y, ""), nil
-		}
-	case token.REM: // %
-		if signed {
-			return c.builder.CreateSRem(x, y, ""), nil
-		} else {
-			return c.builder.CreateURem(x, y, ""), nil
-		}
-	case token.AND: // &
-		return c.builder.CreateAnd(x, y, ""), nil
-	case token.OR: // |
-		return c.builder.CreateOr(x, y, ""), nil
-	case token.XOR: // ^
-		return c.builder.CreateXor(x, y, ""), nil
-	case token.SHL, token.SHR:
-		sizeX := c.targetData.TypeAllocSize(x.Type())
-		sizeY := c.targetData.TypeAllocSize(y.Type())
-		if sizeX > sizeY {
-			// x and y must have equal sizes, make Y bigger in this case.
-			// y is unsigned, this has been checked by the Go type checker.
-			y = c.builder.CreateZExt(y, x.Type(), "")
-		}
-		switch binop.Op {
-		case token.SHL: // <<
-			return c.builder.CreateShl(x, y, ""), nil
-		case token.SHR: // >>
-			if signed {
-				return c.builder.CreateAShr(x, y, ""), nil
-			} else {
-				return c.builder.CreateLShr(x, y, ""), nil
-			}
-		default:
-			panic("unreachable")
-		}
-	case token.AND_NOT: // &^
-		// Go specific. Calculate "and not" with x & (~y)
-		inv := c.builder.CreateNot(y, "") // ~y
-		return c.builder.CreateAnd(x, inv, ""), nil
-	case token.EQL, token.NEQ: // ==, !=
-		switch typ := binop.X.Type().Underlying().(type) {
-		case *types.Basic:
-			if typ.Info()&types.IsInteger != 0 || typ.Kind() == types.UnsafePointer {
-				if binop.Op == token.EQL {
-					return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+	switch typ := binop.X.Type().Underlying().(type) {
+	case *types.Basic:
+		if typ.Info()&types.IsInteger != 0 {
+			// Operations on integers
+			signed := typ.Info()&types.IsUnsigned == 0
+			switch binop.Op {
+			case token.ADD: // +
+				return c.builder.CreateAdd(x, y, ""), nil
+			case token.SUB: // -
+				return c.builder.CreateSub(x, y, ""), nil
+			case token.MUL: // *
+				return c.builder.CreateMul(x, y, ""), nil
+			case token.QUO: // /
+				if signed {
+					return c.builder.CreateSDiv(x, y, ""), nil
 				} else {
-					return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+					return c.builder.CreateUDiv(x, y, ""), nil
 				}
-			} else if typ.Kind() == types.String {
+			case token.REM: // %
+				if signed {
+					return c.builder.CreateSRem(x, y, ""), nil
+				} else {
+					return c.builder.CreateURem(x, y, ""), nil
+				}
+			case token.AND: // &
+				return c.builder.CreateAnd(x, y, ""), nil
+			case token.OR: // |
+				return c.builder.CreateOr(x, y, ""), nil
+			case token.XOR: // ^
+				return c.builder.CreateXor(x, y, ""), nil
+			case token.SHL, token.SHR:
+				sizeX := c.targetData.TypeAllocSize(x.Type())
+				sizeY := c.targetData.TypeAllocSize(y.Type())
+				if sizeX > sizeY {
+					// x and y must have equal sizes, make Y bigger in this case.
+					// y is unsigned, this has been checked by the Go type checker.
+					y = c.builder.CreateZExt(y, x.Type(), "")
+				}
+				switch binop.Op {
+				case token.SHL: // <<
+					return c.builder.CreateShl(x, y, ""), nil
+				case token.SHR: // >>
+					if signed {
+						return c.builder.CreateAShr(x, y, ""), nil
+					} else {
+						return c.builder.CreateLShr(x, y, ""), nil
+					}
+				default:
+					panic("unreachable")
+				}
+			case token.EQL: // ==
+				return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+			case token.NEQ: // !=
+				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+			case token.AND_NOT: // &^
+				// Go specific. Calculate "and not" with x & (~y)
+				inv := c.builder.CreateNot(y, "") // ~y
+				return c.builder.CreateAnd(x, inv, ""), nil
+			case token.LSS: // <
+				if signed {
+					return c.builder.CreateICmp(llvm.IntSLT, x, y, ""), nil
+				} else {
+					return c.builder.CreateICmp(llvm.IntULT, x, y, ""), nil
+				}
+			case token.LEQ: // <=
+				if signed {
+					return c.builder.CreateICmp(llvm.IntSLE, x, y, ""), nil
+				} else {
+					return c.builder.CreateICmp(llvm.IntULE, x, y, ""), nil
+				}
+			case token.GTR: // >
+				if signed {
+					return c.builder.CreateICmp(llvm.IntSGT, x, y, ""), nil
+				} else {
+					return c.builder.CreateICmp(llvm.IntUGT, x, y, ""), nil
+				}
+			case token.GEQ: // >=
+				if signed {
+					return c.builder.CreateICmp(llvm.IntSGE, x, y, ""), nil
+				} else {
+					return c.builder.CreateICmp(llvm.IntUGE, x, y, ""), nil
+				}
+			default:
+				return llvm.Value{}, errors.New("todo: binop on integer: " + binop.Op.String())
+			}
+		} else if typ.Info()&types.IsFloat != 0 {
+			// Operations on floats
+			switch binop.Op {
+			case token.ADD:
+				return c.builder.CreateFAdd(x, y, ""), nil
+			case token.SUB: // -
+				return c.builder.CreateFSub(x, y, ""), nil
+			case token.MUL: // *
+				return c.builder.CreateFMul(x, y, ""), nil
+			case token.QUO: // /
+				return c.builder.CreateFDiv(x, y, ""), nil
+			case token.REM: // %
+				return c.builder.CreateFRem(x, y, ""), nil
+			case token.EQL: // ==
+				return c.builder.CreateFCmp(llvm.FloatOEQ, x, y, ""), nil
+			case token.NEQ: // !=
+				return c.builder.CreateFCmp(llvm.FloatONE, x, y, ""), nil
+			case token.LSS: // <
+				return c.builder.CreateFCmp(llvm.FloatOLT, x, y, ""), nil
+			case token.LEQ: // <=
+				return c.builder.CreateFCmp(llvm.FloatOLE, x, y, ""), nil
+			case token.GTR: // >
+				return c.builder.CreateFCmp(llvm.FloatOGT, x, y, ""), nil
+			case token.GEQ: // >=
+				return c.builder.CreateFCmp(llvm.FloatOGE, x, y, ""), nil
+			default:
+				return llvm.Value{}, errors.New("todo: binop on float: " + binop.Op.String())
+			}
+		} else if typ.Kind() == types.UnsafePointer {
+			// Operations on pointers
+			switch binop.Op {
+			case token.EQL: // ==
+				return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+			case token.NEQ: // !=
+				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+			default:
+				return llvm.Value{}, errors.New("todo: binop on pointer: " + binop.Op.String())
+			}
+		} else if typ.Kind() == types.String {
+			// Operations on strings
+			switch binop.Op {
+			case token.ADD:
+				fn := c.mod.NamedFunction("runtime.stringConcat")
+				return c.builder.CreateCall(fn, []llvm.Value{x, y}, ""), nil
+			case token.EQL, token.NEQ: // ==, !=
 				result := c.builder.CreateCall(c.mod.NamedFunction("runtime.stringEqual"), []llvm.Value{x, y}, "")
 				if binop.Op == token.NEQ {
 					result = c.builder.CreateNot(result, "")
 				}
 				return result, nil
-			} else {
-				return llvm.Value{}, errors.New("todo: equality operator on unknown basic type: " + typ.String())
+			default:
+				return llvm.Value{}, errors.New("todo: binop on string: " + binop.Op.String())
 			}
-		case *types.Pointer:
-			if binop.Op == token.EQL {
-				return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
-			} else {
-				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
-			}
+		} else {
+			return llvm.Value{}, errors.New("todo: unknown basic type in binop: " + typ.String())
+		}
+	case *types.Pointer:
+		switch binop.Op {
+		case token.EQL: // ==
+			return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+		case token.NEQ: // !=
+			return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 		default:
-			return llvm.Value{}, errors.New("todo: equality operator on unknown type: " + typ.String())
-		}
-	case token.LSS: // <
-		if signed {
-			return c.builder.CreateICmp(llvm.IntSLT, x, y, ""), nil
-		} else {
-			return c.builder.CreateICmp(llvm.IntULT, x, y, ""), nil
-		}
-	case token.LEQ: // <=
-		if signed {
-			return c.builder.CreateICmp(llvm.IntSLE, x, y, ""), nil
-		} else {
-			return c.builder.CreateICmp(llvm.IntULE, x, y, ""), nil
-		}
-	case token.GTR: // >
-		if signed {
-			return c.builder.CreateICmp(llvm.IntSGT, x, y, ""), nil
-		} else {
-			return c.builder.CreateICmp(llvm.IntUGT, x, y, ""), nil
-		}
-	case token.GEQ: // >=
-		if signed {
-			return c.builder.CreateICmp(llvm.IntSGE, x, y, ""), nil
-		} else {
-			return c.builder.CreateICmp(llvm.IntUGE, x, y, ""), nil
+			return llvm.Value{}, errors.New("todo: binop on pointer: " + binop.Op.String())
 		}
 	default:
-		return llvm.Value{}, errors.New("unknown binop")
+		return llvm.Value{}, errors.New("unknown binop type: " + binop.X.Type().String())
 	}
 }
 
@@ -2005,6 +2050,9 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 		} else if typ.Info()&types.IsInteger != 0 { // signed
 			n, _ := constant.Int64Val(expr.Value)
 			return llvm.ConstInt(llvmType, uint64(n), true), nil
+		} else if typ.Info()&types.IsFloat != 0 {
+			n, _ := constant.Float64Val(expr.Value)
+			return llvm.ConstFloat(llvmType, n), nil
 		} else {
 			return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
 		}
@@ -2111,6 +2159,7 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 
 		typeFrom := typeFrom.Underlying().(*types.Basic)
 		sizeTo := c.targetData.TypeAllocSize(llvmTypeTo)
+
 		if typeFrom.Info()&types.IsInteger != 0 && typeTo.Info()&types.IsInteger != 0 {
 			// Conversion between two integers.
 			if sizeFrom > sizeTo {
@@ -2122,7 +2171,36 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 			}
 		}
 
-		return llvm.Value{}, errors.New("todo: convert: basic non-integer type: " + typeTo.String())
+		if typeFrom.Info()&types.IsFloat != 0 && typeTo.Info()&types.IsFloat != 0 {
+			// Conversion between two floats.
+			if sizeFrom > sizeTo {
+				return c.builder.CreateFPTrunc(value, llvmTypeTo, ""), nil
+			} else if sizeFrom < sizeTo {
+				return c.builder.CreateFPExt(value, llvmTypeTo, ""), nil
+			} else {
+				return value, nil
+			}
+		}
+
+		if typeFrom.Info()&types.IsFloat != 0 && typeTo.Info()&types.IsInteger != 0 {
+			// Conversion from float to int.
+			if typeTo.Info()&types.IsUnsigned != 0 { // to signed int
+				return c.builder.CreateFPToSI(value, llvmTypeTo, ""), nil
+			} else { // to unsigned int
+				return c.builder.CreateFPToUI(value, llvmTypeTo, ""), nil
+			}
+		}
+
+		if typeFrom.Info()&types.IsInteger != 0 && typeTo.Info()&types.IsFloat != 0 {
+			// Conversion from int to float.
+			if typeFrom.Info()&types.IsUnsigned != 0 { // from signed int
+				return c.builder.CreateSIToFP(value, llvmTypeTo, ""), nil
+			} else { // from unsigned int
+				return c.builder.CreateUIToFP(value, llvmTypeTo, ""), nil
+			}
+		}
+
+		return llvm.Value{}, errors.New("todo: convert: basic non-integer type: " + typeFrom.String() + " -> " + typeTo.String())
 
 	default:
 		return llvm.Value{}, errors.New("todo: convert " + typeTo.String() + " <- " + typeFrom.String())
@@ -2187,7 +2265,17 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 	case token.NOT: // !x
 		return c.builder.CreateNot(x, ""), nil
 	case token.SUB: // -x
-		return c.builder.CreateSub(llvm.ConstInt(x.Type(), 0, false), x, ""), nil
+		if typ, ok := unop.X.Type().Underlying().(*types.Basic); ok {
+			if typ.Info()&types.IsInteger != 0 {
+				return c.builder.CreateSub(llvm.ConstInt(x.Type(), 0, false), x, ""), nil
+			} else if typ.Info()&types.IsFloat != 0 {
+				return c.builder.CreateFSub(llvm.ConstFloat(x.Type(), 0.0), x, ""), nil
+			} else {
+				return llvm.Value{}, errors.New("todo: unknown basic type for negate: " + typ.String())
+			}
+		} else {
+			return llvm.Value{}, errors.New("todo: unknown type for negate: " + unop.X.Type().Underlying().String())
+		}
 	case token.MUL: // *x, dereference pointer
 		valType := unop.X.Type().(*types.Pointer).Elem()
 		if valType, ok := valType.(*types.Named); ok && valType.Obj().Name() == "__reg" {
