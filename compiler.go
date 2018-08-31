@@ -459,6 +459,10 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			return llvm.FloatType(), nil
 		case types.Float64:
 			return llvm.DoubleType(), nil
+		case types.Complex64:
+			return llvm.VectorType(llvm.FloatType(), 2), nil
+		case types.Complex128:
+			return llvm.VectorType(llvm.DoubleType(), 2), nil
 		case types.String:
 			return c.mod.GetTypeByName("runtime._string"), nil
 		case types.Uintptr:
