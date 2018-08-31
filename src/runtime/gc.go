@@ -36,3 +36,7 @@ func GC() {
 func KeepAlive(x interface{}) {
 	// Unimplemented. Only required with SetFinalizer().
 }
+
+func SetFinalizer(obj interface{}, finalizer interface{}) {
+	// Unimplemented.
+}
