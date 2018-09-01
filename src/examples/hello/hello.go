@@ -48,6 +48,7 @@ func main() {
 	println("Stringer.String():", s.String())
 
 	runFunc(hello, 5) // must be indirect to avoid obvious inlining
+	testDefer()
 
 	// test library functions
 	println("lower to upper char:", 'h', "->", unicode.ToUpper('h'))
@@ -55,6 +56,18 @@ func main() {
 
 func runFunc(f func(int), arg int) {
 	f(arg)
+}
+
+func testDefer() {
+	i := 1
+	defer deferred("...run as defer", i)
+	i += 1
+	defer deferred("...run as defer", i)
+	println("deferring...")
+}
+
+func deferred(msg string, i int) {
+	println(msg, i)
 }
 
 func readMap(m map[string]int, key string) {

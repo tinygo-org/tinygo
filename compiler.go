@@ -61,6 +61,12 @@ type Frame struct {
 	taskHandle   llvm.Value
 	cleanupBlock llvm.BasicBlock
 	suspendBlock llvm.BasicBlock
+	deferred     []*Defer
+}
+
+type Defer struct {
+	*ssa.Defer
+	Args []llvm.Value
 }
 
 type Phi struct {
@@ -1081,6 +1087,22 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		return err
 	case *ssa.DebugRef:
 		return nil // ignore
+	case *ssa.Defer:
+		if instr.Block() == instr.Parent().Blocks[0] {
+			// Easy: evaluate the arguments now and run it at the end.
+			args := make([]llvm.Value, len(instr.Call.Args))
+			for i, arg := range instr.Call.Args {
+				val, err := c.parseExpr(frame, arg)
+				if err != nil {
+					return err
+				}
+				args[i] = val
+			}
+			frame.deferred = append(frame.deferred, &Defer{instr, args})
+			return nil
+		} else {
+			return errors.New("todo: defer in non-entry block")
+		}
 	case *ssa.Go:
 		if instr.Common().Method != nil {
 			return errors.New("todo: go on method receiver")
@@ -1203,6 +1225,18 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 				return nil
 			}
 		}
+	case *ssa.RunDefers:
+		// Execute all deferred functions from the entry block, in reverse
+		// order.
+		for i := len(frame.deferred) - 1; i >= 0; i-- {
+			deferred := frame.deferred[i]
+			callee := deferred.Call.StaticCallee()
+			if callee == nil {
+				return errors.New("todo: non-static deferred functions")
+			}
+			c.builder.CreateCall(c.ir.GetFunction(callee).llvmFn, deferred.Args, "")
+		}
+		return nil
 	case *ssa.Store:
 		llvmAddr, err := c.parseExpr(frame, instr.Addr)
 		if err == cgoWrapperError {
