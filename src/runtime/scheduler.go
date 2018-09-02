@@ -25,6 +25,8 @@ import (
 	"unsafe"
 )
 
+const schedulerDebug = false
+
 // A coroutine instance, wrapped here to provide some type safety. The value
 // must not be used directly, it is meant to be used as an opaque *i8 in LLVM.
 type coroutine uint8
@@ -75,18 +77,25 @@ var (
 
 // Simple logging, for debugging.
 func scheduleLog(msg string) {
-	//println(msg)
+	if schedulerDebug {
+		println(msg)
+	}
 }
 
 // Simple logging with a task pointer, for debugging.
 func scheduleLogTask(msg string, t *coroutine) {
-	//println(msg, t)
+	if schedulerDebug {
+		println(msg, t)
+	}
 }
 
 // Set the task state to sleep for a given time.
 //
 // This is a compiler intrinsic.
 func sleepTask(caller *coroutine, duration Duration) {
+	if schedulerDebug {
+		println("  set state sleep:", caller, uint32(duration))
+	}
 	promise := caller.promise()
 	promise.state = TASK_STATE_SLEEP
 	promise.data = uint32(duration) // TODO: longer durations
@@ -97,6 +106,7 @@ func sleepTask(caller *coroutine, duration Duration) {
 //
 // This is a compiler intrinsic.
 func waitForAsyncCall(caller *coroutine) {
+	scheduleLogTask("  set state call:", caller)
 	promise := caller.promise()
 	promise.state = TASK_STATE_CALL
 }
@@ -104,51 +114,70 @@ func waitForAsyncCall(caller *coroutine) {
 // Add a task to the runnable or sleep queue, depending on the state.
 //
 // This is a compiler intrinsic.
-func scheduleTask(t *coroutine) {
+func yieldToScheduler(t *coroutine) {
 	if t == nil {
 		return
 	}
-	scheduleLogTask("  schedule task:", t)
 	// See what we should do with this task: try to execute it directly
 	// again or let it sleep for a bit.
 	promise := t.promise()
 	if promise.state == TASK_STATE_CALL {
+		scheduleLogTask("  set waiting for call:", t)
 		return // calling an async task, the subroutine will re-active the parent
 	} else if promise.state == TASK_STATE_SLEEP && promise.data != 0 {
+		scheduleLogTask("  set sleeping:", t)
 		addSleepTask(t)
 	} else {
-		pushTask(t)
+		scheduleLogTask("  set runnable:", t)
+		runqueuePushBack(t)
 	}
 }
 
 // Add this task to the end of the run queue. May also destroy the task if it's
 // done.
-func pushTask(t *coroutine) {
+func runqueuePushBack(t *coroutine) {
 	if t.done() {
 		scheduleLogTask("  destroy task:", t)
 		t.destroy()
 		return
 	}
+	if schedulerDebug {
+		if t.promise().next != nil {
+			panic("runtime: runqueuePushBack: expected next task to be nil")
+		}
+		if t.promise().state != TASK_STATE_RUNNABLE {
+			panic("runtime: runqueuePushBack: expected task state to be runnable")
+		}
+	}
 	if runqueueBack == nil { // empty runqueue
+		scheduleLogTask("  add to runqueue front:", t)
 		runqueueBack = t
 		runqueueFront = t
 	} else {
+		scheduleLogTask("  add to runqueue back:", t)
 		lastTaskPromise := runqueueBack.promise()
 		lastTaskPromise.next = t
 		runqueueBack = t
 	}
 }
 
-// Get a task from the front of the run queue. May return nil if there is none.
-func popTask() *coroutine {
+// Get a task from the front of the run queue. Returns nil if there is none.
+func runqueuePopFront() *coroutine {
 	t := runqueueFront
 	if t == nil {
 		return nil
 	}
-	scheduleLogTask("    popTask:", t)
+	if schedulerDebug {
+		println("    runqueuePopFront:", t)
+		// Sanity checking.
+		if t.promise().state != TASK_STATE_RUNNABLE {
+			panic("runtime: runqueuePopFront: task not runnable")
+		}
+	}
 	promise := t.promise()
 	runqueueFront = promise.next
 	if runqueueFront == nil {
+		// Runqueue is empty now.
 		runqueueBack = nil
 	}
 	promise.next = nil
@@ -157,6 +186,14 @@ func popTask() *coroutine {
 
 // Add this task to the sleep queue, assuming its state is set to sleeping.
 func addSleepTask(t *coroutine) {
+	if schedulerDebug {
+		if t.promise().next != nil {
+			panic("runtime: addSleepTask: expected next task to be nil")
+		}
+		if t.promise().state != TASK_STATE_SLEEP {
+			panic("runtime: addSleepTask: task not sleeping")
+		}
+	}
 	now := monotime()
 	if sleepQueue == nil {
 		scheduleLog("  -> sleep new queue")
@@ -202,7 +239,7 @@ func addSleepTask(t *coroutine) {
 // It takes an initial task (main.main) to bootstrap.
 func scheduler(main *coroutine) {
 	// Initial task.
-	scheduleTask(main)
+	yieldToScheduler(main)
 
 	// Main scheduler loop.
 	for {
@@ -212,18 +249,17 @@ func scheduler(main *coroutine) {
 		// Add tasks that are done sleeping to the end of the runqueue so they
 		// will be executed soon.
 		if sleepQueue != nil && now-sleepQueueBaseTime >= uint64(sleepQueue.promise().data) {
-			scheduleLog("  run <- sleep")
 			t := sleepQueue
+			scheduleLogTask("  awake:", t)
 			promise := t.promise()
 			sleepQueueBaseTime += uint64(promise.data)
 			sleepQueue = promise.next
 			promise.state = TASK_STATE_RUNNABLE
 			promise.next = nil
-			pushTask(t)
+			runqueuePushBack(t)
 		}
 
-		scheduleLog("  <- popTask")
-		t := popTask()
+		t := runqueuePopFront()
 		if t == nil {
 			if sleepQueue == nil {
 				// No more tasks to execute.
@@ -233,17 +269,20 @@ func scheduler(main *coroutine) {
 				scheduleLog("  no tasks left!")
 				return
 			}
-			scheduleLog("  sleeping...")
 			timeLeft := uint64(sleepQueue.promise().data) - (now - sleepQueueBaseTime)
+			if schedulerDebug {
+				println("  sleeping...", sleepQueue, uint32(timeLeft))
+			}
 			sleep(Duration(timeLeft))
 			continue
 		}
 
 		// Run the given task.
+		scheduleLog("  <- runqueuePopFront")
 		scheduleLogTask("  run:", t)
 		t.resume()
 
 		// Add the just resumed task to the run queue or the sleep queue.
-		scheduleTask(t)
+		yieldToScheduler(t)
 	}
 }

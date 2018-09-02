@@ -1086,7 +1086,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		mem := c.builder.CreateCall(c.coroFreeFunc, []llvm.Value{id, frame.taskHandle}, "task.data.free")
 		c.builder.CreateCall(c.freeFunc, []llvm.Value{mem}, "")
 		// re-insert parent coroutine
-		c.builder.CreateCall(c.mod.NamedFunction("runtime.scheduleTask"), []llvm.Value{frame.fn.llvmFn.FirstParam()}, "")
+		c.builder.CreateCall(c.mod.NamedFunction("runtime.yieldToScheduler"), []llvm.Value{frame.fn.llvmFn.FirstParam()}, "")
 		c.builder.CreateBr(frame.suspendBlock)
 
 		// Coroutine suspend. A call to llvm.coro.suspend() will branch here.
@@ -1182,7 +1182,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		if err != nil {
 			return err
 		}
-		c.builder.CreateCall(c.mod.NamedFunction("runtime.scheduleTask"), []llvm.Value{handle}, "")
+		c.builder.CreateCall(c.mod.NamedFunction("runtime.yieldToScheduler"), []llvm.Value{handle}, "")
 		return nil
 	case *ssa.If:
 		cond, err := c.parseExpr(frame, instr.Cond)
@@ -1483,7 +1483,7 @@ func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, con
 		// (with the TASK_STATE_CALL state). When the subroutine is finished, it
 		// will reactivate the parent (this frame) in it's destroy function.
 
-		c.builder.CreateCall(c.mod.NamedFunction("runtime.scheduleTask"), []llvm.Value{result}, "")
+		c.builder.CreateCall(c.mod.NamedFunction("runtime.yieldToScheduler"), []llvm.Value{result}, "")
 
 		// Set task state to TASK_STATE_CALL.
 		c.builder.CreateCall(c.mod.NamedFunction("runtime.waitForAsyncCall"), []llvm.Value{frame.taskHandle}, "")
