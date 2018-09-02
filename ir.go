@@ -220,3 +220,7 @@ func (g *Global) LinkName() string {
 		return g.g.RelString(nil)
 	}
 }
+
+func (g *Global) IsExtern() bool {
+	return strings.HasPrefix(g.g.Name(), "_extern_")
+}

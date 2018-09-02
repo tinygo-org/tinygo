@@ -80,4 +80,3 @@ __bss_end__ = _ebss;
 /* For the memory allocator. */
 _heap_start = _ebss;
 _heap_end = ORIGIN(RAM) + LENGTH(RAM);
-runtime.heapptr = _heap_start; /* necessary? */

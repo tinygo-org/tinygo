@@ -252,7 +252,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		}
 		global := llvm.AddGlobal(c.mod, llvmType, g.LinkName())
 		g.llvmGlobal = global
-		if !strings.HasPrefix(g.LinkName(), "_extern_") {
+		if !g.IsExtern() {
 			global.SetLinkage(llvm.InternalLinkage)
 			initializer, err := getZeroValue(llvmType)
 			if err != nil {
@@ -745,6 +745,9 @@ func (c *Compiler) initMapNewBucket(mapType *types.Map) (llvm.Value, uint64, uin
 }
 
 func (c *Compiler) parseGlobalInitializer(g *Global) error {
+	if g.IsExtern() {
+		return nil
+	}
 	llvmValue, err := c.getInterpretedValue(g.initializer)
 	if err != nil {
 		return err
