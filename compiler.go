@@ -1610,6 +1610,26 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 	}
 }
 
+func (c *Compiler) emitBoundsCheck(frame *Frame, arrayLen, index llvm.Value) {
+	if frame.fn.nobounds {
+		// The //go:nobounds pragma was added to the function to avoid bounds
+		// checking.
+		return
+	}
+	// Optimize away trivial cases.
+	// LLVM would do this anyway with interprocedural optimizations, but it
+	// helps to see cases where bounds checking would really help.
+	if index.IsConstant() && arrayLen.IsConstant() {
+		index := index.SExtValue()
+		arrayLen := arrayLen.SExtValue()
+		if index >= 0 && index < arrayLen {
+			return
+		}
+	}
+	lookupBoundsCheck := c.mod.NamedFunction("runtime.lookupBoundsCheck")
+	c.builder.CreateCall(lookupBoundsCheck, []llvm.Value{arrayLen, index}, "")
+}
+
 func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	if value, ok := frame.locals[expr]; ok {
 		// Value is a local variable that has already been computed.
@@ -1730,8 +1750,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// Check bounds.
 		arrayLen := expr.X.Type().(*types.Array).Len()
 		arrayLenLLVM := llvm.ConstInt(llvm.Int32Type(), uint64(arrayLen), false)
-		lookupBoundsCheck := c.mod.NamedFunction("runtime.lookupBoundsCheck")
-		c.builder.CreateCall(lookupBoundsCheck, []llvm.Value{arrayLenLLVM, index}, "")
+		c.emitBoundsCheck(frame, arrayLenLLVM, index)
 
 		// Can't load directly from array (as index is non-constant), so have to
 		// do it using an alloca+gep+load.
@@ -1771,12 +1790,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		// Bounds check.
 		// LLVM optimizes this away in most cases.
-		// TODO: runtime.lookupBoundsCheck is undefined in packages imported by
-		// package runtime, so we have to remove it. This should be fixed.
-		lookupBoundsCheck := c.mod.NamedFunction("runtime.lookupBoundsCheck")
-		if !lookupBoundsCheck.IsNil() && frame.fn.llvmFn.Name() != "runtime.interfaceMethod" {
-			c.builder.CreateCall(lookupBoundsCheck, []llvm.Value{buflen, index}, "")
-		}
+		c.emitBoundsCheck(frame, buflen, index)
 
 		switch expr.X.Type().(type) {
 		case *types.Pointer:
@@ -1811,13 +1825,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			// Bounds check.
 			// LLVM optimizes this away in most cases.
-			if frame.fn.llvmFn.Name() != "runtime.lookupBoundsCheck" {
-				length, err := c.parseBuiltin(frame, []ssa.Value{expr.X}, "len")
-				if err != nil {
-					return llvm.Value{}, err // shouldn't happen
-				}
-				c.builder.CreateCall(c.mod.NamedFunction("runtime.lookupBoundsCheck"), []llvm.Value{length, index}, "")
+			length, err := c.parseBuiltin(frame, []ssa.Value{expr.X}, "len")
+			if err != nil {
+				return llvm.Value{}, err // shouldn't happen
 			}
+			c.emitBoundsCheck(frame, length, index)
 
 			// Lookup byte
 			buf := c.builder.CreateExtractValue(value, 1, "")
@@ -1932,8 +1944,10 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			}
 
 			// This check is optimized away in most cases.
-			sliceBoundsCheck := c.mod.NamedFunction("runtime.sliceBoundsCheck")
-			c.builder.CreateCall(sliceBoundsCheck, []llvm.Value{llvmLen, low, high}, "")
+			if !frame.fn.nobounds {
+				sliceBoundsCheck := c.mod.NamedFunction("runtime.sliceBoundsCheck")
+				c.builder.CreateCall(sliceBoundsCheck, []llvm.Value{llvmLen, low, high}, "")
+			}
 
 			slice := llvm.ConstNamedStruct(sliceTyp, []llvm.Value{
 				llvm.Undef(slicePtr.Type()),

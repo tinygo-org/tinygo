@@ -56,7 +56,7 @@ func _panic(message interface{}) {
 	abort()
 }
 
-// Check for bounds in *ssa.IndexAddr and *ssa.Lookup.
+// Check for bounds in *ssa.Index, *ssa.IndexAddr and *ssa.Lookup.
 func lookupBoundsCheck(length, index int) {
 	if index < 0 || index >= length {
 		// printstring() here is safe as this function is excluded from bounds

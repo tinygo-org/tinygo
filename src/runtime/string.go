@@ -13,6 +13,7 @@ type _string struct {
 }
 
 // Return true iff the strings match.
+//go:nobounds
 func stringEqual(x, y string) bool {
 	if len(x) != len(y) {
 		return false

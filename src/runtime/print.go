@@ -4,6 +4,7 @@ import (
 	"unsafe"
 )
 
+//go:nobounds
 func printstring(s string) {
 	for i := 0; i < len(s); i++ {
 		putchar(s[i])
@@ -42,6 +43,7 @@ func printint16(n uint16) {
 	printint32(int32(n))
 }
 
+//go:nobounds
 func printuint32(n uint32) {
 	digits := [10]byte{} // enough to hold (2^32)-1
 	// Fill in all 10 digits.

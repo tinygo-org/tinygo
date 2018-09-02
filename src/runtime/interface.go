@@ -44,6 +44,7 @@ var (
 
 // Get the function pointer for the method on the interface.
 // This is a compiler intrinsic.
+//go:nobounds
 func interfaceMethod(itf _interface, method uint16) *uint8 {
 	// This function doesn't do bounds checking as the supplied method must be
 	// in the list of signatures. The compiler will only emit

@@ -35,8 +35,9 @@ type Program struct {
 type Function struct {
 	fn           *ssa.Function
 	llvmFn       llvm.Value
-	linkName     string
-	blocking     bool
+	linkName     string      // go:linkname pragma
+	nobounds     bool        // go:nobounds pragma
+	blocking     bool        // calculated by AnalyseBlockingRecursive
 	flag         bool        // used by dead code elimination
 	addressTaken bool        // used as function pointer, calculated by AnalyseFunctionPointers
 	parents      []*Function // calculated by AnalyseCallgraph
@@ -168,6 +169,14 @@ func (f *Function) parsePragmas() {
 				// whole.
 				if hasUnsafeImport(f.fn.Pkg.Pkg) {
 					f.linkName = parts[2]
+				}
+			case "//go:nobounds":
+				// Skip bounds checking in this function. Useful for some
+				// runtime functions.
+				// This is somewhat dangerous and thus only imported in packages
+				// that import unsafe.
+				if hasUnsafeImport(f.fn.Pkg.Pkg) {
+					f.nobounds = true
 				}
 			}
 		}
