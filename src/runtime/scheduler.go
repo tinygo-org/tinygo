@@ -55,8 +55,7 @@ type taskState struct {
 	next  *coroutine
 }
 
-// Various states a task can be in. Not always updated (especially
-// TASK_STATE_RUNNABLE).
+// Various states a task can be in.
 const (
 	TASK_STATE_RUNNABLE = iota
 	TASK_STATE_SLEEP
@@ -218,6 +217,7 @@ func scheduler(main *coroutine) {
 			promise := t.promise()
 			sleepQueueBaseTime += uint64(promise.data)
 			sleepQueue = promise.next
+			promise.state = TASK_STATE_RUNNABLE
 			promise.next = nil
 			pushTask(t)
 		}
