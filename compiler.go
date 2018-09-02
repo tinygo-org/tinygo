@@ -2279,16 +2279,10 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 		if expr.Value != nil {
 			return llvm.Value{}, errors.New("non-nil interface constant")
 		}
-		itfTypeNum, ok := c.ir.TypeNum(expr.Type())
-		if itfTypeNum >= 1<<16 {
-			return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
-		}
-		if !ok {
-			panic("interface number is unknown")
-		}
+		// Create a generic nil interface with no dynamic type (typecode=0).
 		fields := []llvm.Value{
-			llvm.ConstInt(llvm.Int16Type(), uint64(itfTypeNum), false),
-			llvm.Undef(c.i8ptrType),
+			llvm.ConstInt(llvm.Int16Type(), 0, false),
+			llvm.ConstPointerNull(c.i8ptrType),
 		}
 		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), fields)
 		return itf, nil
