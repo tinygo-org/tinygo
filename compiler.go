@@ -1708,6 +1708,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		result := c.builder.CreateExtractValue(value, expr.Index, "")
 		return result, nil
+	case *ssa.Field:
+		value, err := c.parseExpr(frame, expr.X)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		result := c.builder.CreateExtractValue(value, expr.Field, "")
+		return result, nil
 	case *ssa.FieldAddr:
 		val, err := c.parseExpr(frame, expr.X)
 		if err != nil {
