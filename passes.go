@@ -5,46 +5,55 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-// This function implements several optimization passes (analysis + transform)
-// to optimize code in SSA form before it is compiled to LLVM IR. It is based on
+// This file implements several optimization passes (analysis + transform) to
+// optimize code in SSA form before it is compiled to LLVM IR. It is based on
 // the IR defined in ir.go.
 
-// Make a readable version of the method signature (including the function name,
+// Make a readable version of a method signature (including the function name,
 // excluding the receiver name). This string is used internally to match
 // interfaces and to call the correct method on an interface. Examples:
 //
 //     String() string
 //     Read([]byte) (int, error)
-func MethodName(method *types.Func) string {
-	sig := method.Type().(*types.Signature)
-	name := method.Name()
+func MethodSignature(method *types.Func) string {
+	return method.Name() + Signature(method.Type().(*types.Signature))
+}
+
+// Make a readable version of a function (pointer) signature. This string is
+// used internally to match signatures (like in AnalyseFunctionPointers).
+// Examples:
+//
+//     () string
+//     (string, int) (int, error)
+func Signature(sig *types.Signature) string {
+	s := ""
 	if sig.Params().Len() == 0 {
-		name += "()"
+		s += "()"
 	} else {
-		name += "("
+		s += "("
 		for i := 0; i < sig.Params().Len(); i++ {
 			if i > 0 {
-				name += ", "
+				s += ", "
 			}
-			name += sig.Params().At(i).Type().String()
+			s += sig.Params().At(i).Type().String()
 		}
-		name += ")"
+		s += ")"
 	}
 	if sig.Results().Len() == 0 {
 		// keep as-is
 	} else if sig.Results().Len() == 1 {
-		name += " " + sig.Results().At(0).Type().String()
+		s += " " + sig.Results().At(0).Type().String()
 	} else {
-		name += " ("
+		s += " ("
 		for i := 0; i < sig.Results().Len(); i++ {
 			if i > 0 {
-				name += ", "
+				s += ", "
 			}
-			name += sig.Results().At(i).Type().String()
+			s += sig.Results().At(i).Type().String()
 		}
-		name += ")"
+		s += ")"
 	}
-	return name
+	return s
 }
 
 // Fill in parents of all functions.
@@ -111,13 +120,56 @@ func (p *Program) AnalyseInterfaceConversions() {
 							Methods: make(map[string]*types.Selection),
 						}
 						for _, sel := range methods {
-							name := MethodName(sel.Obj().(*types.Func))
+							name := MethodSignature(sel.Obj().(*types.Func))
 							t.Methods[name] = sel
 						}
 						p.typesWithMethods[name] = t
 					} else if _, ok := p.typesWithoutMethods[name]; !ok && len(methods) == 0 {
 						p.typesWithoutMethods[name] = len(p.typesWithoutMethods)
 					}
+				}
+			}
+		}
+	}
+}
+
+// Analyse which function pointer signatures need a context parameter.
+// This makes calling function pointers more efficient.
+func (p *Program) AnalyseFunctionPointers() {
+	// Clear, if AnalyseFunctionPointers has been called before.
+	p.fpWithContext = map[string]struct{}{}
+
+	for _, f := range p.Functions {
+		for _, block := range f.fn.Blocks {
+			for _, instr := range block.Instrs {
+				switch instr := instr.(type) {
+				case ssa.CallInstruction:
+					for _, arg := range instr.Common().Args {
+						switch arg := arg.(type) {
+						case *ssa.Function:
+							f := p.GetFunction(arg)
+							f.addressTaken = true
+						}
+					}
+				case *ssa.DebugRef:
+				default:
+					// For anything that isn't a call...
+					for _, operand := range instr.Operands(nil) {
+						if operand == nil || *operand == nil || isCGoInternal((*operand).Name()) {
+							continue
+						}
+						switch operand := (*operand).(type) {
+						case *ssa.Function:
+							f := p.GetFunction(operand)
+							f.addressTaken = true
+						}
+					}
+				}
+				switch instr := instr.(type) {
+				case *ssa.MakeClosure:
+					fn := instr.Fn.(*ssa.Function)
+					sig := Signature(fn.Signature)
+					p.fpWithContext[sig] = struct{}{}
 				}
 			}
 		}
@@ -233,6 +285,12 @@ func (p *Program) SimpleDCE() {
 					switch operand := (*operand).(type) {
 					case *ssa.Function:
 						f := p.GetFunction(operand)
+						if f == nil {
+							// FIXME HACK: this function should have been
+							// discovered already. It is not for bound methods.
+							p.addFunction(operand)
+							f = p.GetFunction(operand)
+						}
 						if !f.flag {
 							f.flag = true
 							worklist = append(worklist, operand)
@@ -306,11 +364,11 @@ func (p *Program) TypeNum(typ types.Type) (int, bool) {
 // MethodNum returns the numeric ID of this method, to be used in method lookups
 // on interfaces for example.
 func (p *Program) MethodNum(method *types.Func) int {
-	name := MethodName(method)
+	name := MethodSignature(method)
 	if _, ok := p.methodSignatureNames[name]; !ok {
 		p.methodSignatureNames[name] = len(p.methodSignatureNames)
 	}
-	return p.methodSignatureNames[MethodName(method)]
+	return p.methodSignatureNames[MethodSignature(method)]
 }
 
 // The start index of the first dynamic type that has methods.
@@ -329,4 +387,16 @@ func (p *Program) AllDynamicTypes() []*InterfaceType {
 		l[m.Num] = m
 	}
 	return l
+}
+
+func (p *Program) FunctionNeedsContext(f *Function) bool {
+	if !f.addressTaken {
+		return false
+	}
+	return p.SignatureNeedsContext(f.fn.Signature)
+}
+
+func (p *Program) SignatureNeedsContext(sig *types.Signature) bool {
+	_, needsContext := p.fpWithContext[Signature(sig)]
+	return needsContext
 }

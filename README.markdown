@@ -48,13 +48,14 @@ Currently supported features:
   * slices (partially)
   * maps (very rough, unfinished)
   * defer (only in trivial cases)
+  * closures
+  * bound methods
 
 Not yet supported:
 
   * complex numbers
   * garbage collection
   * recover
-  * closures
   * channels
   * introspection (if it ever gets implemented)
   * ...

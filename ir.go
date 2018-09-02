@@ -25,20 +25,22 @@ type Program struct {
 	NamedTypes           []*NamedType
 	needsScheduler       bool
 	goCalls              []*ssa.Go
-	typesWithMethods     map[string]*InterfaceType
-	typesWithoutMethods  map[string]int
+	typesWithMethods     map[string]*InterfaceType // see AnalyseInterfaceConversions
+	typesWithoutMethods  map[string]int            // see AnalyseInterfaceConversions
 	methodSignatureNames map[string]int
+	fpWithContext        map[string]struct{} // see AnalyseFunctionPointers
 }
 
 // Function or method.
 type Function struct {
-	fn       *ssa.Function
-	llvmFn   llvm.Value
-	linkName string
-	blocking bool
-	flag     bool        // used by dead code elimination
-	parents  []*Function // calculated by AnalyseCallgraph
-	children []*Function
+	fn           *ssa.Function
+	llvmFn       llvm.Value
+	linkName     string
+	blocking     bool
+	flag         bool        // used by dead code elimination
+	addressTaken bool        // used as function pointer, calculated by AnalyseFunctionPointers
+	parents      []*Function // calculated by AnalyseCallgraph
+	children     []*Function // calculated by AnalyseCallgraph
 }
 
 // Global variable, possibly constant.
@@ -117,9 +119,9 @@ func (p *Program) AddPackage(pkg *ssa.Package) {
 
 func (p *Program) addFunction(ssaFn *ssa.Function) {
 	f := &Function{fn: ssaFn}
+	f.parsePragmas()
 	p.Functions = append(p.Functions, f)
 	p.functionMap[ssaFn] = f
-	f.parsePragmas()
 
 	for _, anon := range ssaFn.AnonFuncs {
 		p.addFunction(anon)

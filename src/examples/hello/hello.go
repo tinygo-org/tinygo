@@ -27,15 +27,18 @@ func main() {
 	println("sumrange(100) =", sumrange(100))
 	println("strlen foo:", strlen("foo"))
 
+	// map
 	m := map[string]int{"answer": 42, "foo": 3}
 	readMap(m, "answer")
 	readMap(testmap, "data")
 
+	// slice
 	foo := []int{1, 2, 4, 5}
 	println("len/cap foo:", len(foo), cap(foo))
 	println("foo[3]:", foo[3])
 	println("sum foo:", sum(foo))
 
+	// interfaces, pointers
 	thing := &Thing{"foo"}
 	println("thing:", thing.String())
 	printItf(5)
@@ -47,8 +50,16 @@ func main() {
 	s := Stringer(thing)
 	println("Stringer.String():", s.String())
 
+	// unusual calls
 	runFunc(hello, 5) // must be indirect to avoid obvious inlining
 	testDefer()
+	testBound(thing.String)
+	func() {
+		println("thing inside closure:", thing.String()) //, len(foo))
+	}()
+	runFunc(func(i int) {
+		println("inside fp closure:", thing.String(), i)
+	}, 3)
 
 	// test library functions
 	println("lower to upper char:", 'h', "->", unicode.ToUpper('h'))
@@ -68,6 +79,10 @@ func testDefer() {
 
 func deferred(msg string, i int) {
 	println(msg, i)
+}
+
+func testBound(f func() string) {
+	println("bound method:", f())
 }
 
 func readMap(m map[string]int, key string) {
