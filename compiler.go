@@ -1588,7 +1588,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 				}
 			}
 		}
-		return c.parseFunctionCall(frame, instr.Args, targetFunc.llvmFn, context, targetFunc.blocking, parentHandle)
+		return c.parseFunctionCall(frame, instr.Args, targetFunc.llvmFn, context, c.ir.IsBlocking(targetFunc), parentHandle)
 	}
 
 	// Builtin or function pointer.
