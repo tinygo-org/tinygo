@@ -2414,6 +2414,20 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 
 		return llvm.Value{}, errors.New("todo: convert: basic non-integer type: " + typeFrom.String() + " -> " + typeTo.String())
 
+	case *types.Slice:
+		if basic, ok := typeFrom.(*types.Basic); !ok || basic.Kind() != types.String {
+			panic("can only convert from a string to a slice")
+		}
+
+		elemType := typeTo.Elem().Underlying().(*types.Basic) // must be byte or rune
+		switch elemType.Kind() {
+		case types.Byte:
+			fn := c.mod.NamedFunction("runtime.stringToBytes")
+			return c.builder.CreateCall(fn, []llvm.Value{value}, ""), nil
+		default:
+			return llvm.Value{}, errors.New("todo: convert from string: " + elemType.String())
+		}
+
 	default:
 		return llvm.Value{}, errors.New("todo: convert " + typeTo.String() + " <- " + typeFrom.String())
 	}

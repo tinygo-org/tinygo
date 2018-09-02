@@ -42,12 +42,28 @@ func stringConcat(x, y _string) _string {
 }
 
 // Create a string from a []byte slice.
-func stringFromBytes(x []byte) _string {
-	buf := alloc(uintptr(len(x)))
-	for i, c := range x {
-		*(*byte)(unsafe.Pointer(uintptr(buf) + uintptr(i))) = c
-	}
-	return _string{lenType(len(x)), (*byte)(buf)}
+func stringFromBytes(x struct {
+	ptr *byte
+	len lenType
+	cap lenType
+}) _string {
+	buf := alloc(uintptr(x.len))
+	memcpy(buf, unsafe.Pointer(x.ptr), uintptr(x.len))
+	return _string{lenType(x.len), (*byte)(buf)}
+}
+
+// Convert a string to a []byte slice.
+func stringToBytes(x _string) (slice struct {
+	ptr *byte
+	len lenType
+	cap lenType
+}) {
+	buf := alloc(uintptr(x.length))
+	memcpy(buf, unsafe.Pointer(x.ptr), uintptr(x.length))
+	slice.ptr = (*byte)(buf)
+	slice.len = x.length
+	slice.cap = x.length
+	return
 }
 
 // Create a string from a Unicode code point.
