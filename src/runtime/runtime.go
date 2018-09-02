@@ -6,9 +6,6 @@ import (
 
 const Compiler = "tgo"
 
-// The bitness of the CPU (e.g. 8, 32, 64). Set by the compiler as a constant.
-var TargetBits uint8
-
 func Sleep(d Duration) {
 	// This function is treated specially by the compiler: when goroutines are
 	// used, it is transformed into a llvm.coro.suspend() call.

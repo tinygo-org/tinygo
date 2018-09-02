@@ -254,25 +254,11 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		g.llvmGlobal = global
 		if !strings.HasPrefix(g.LinkName(), "_extern_") {
 			global.SetLinkage(llvm.InternalLinkage)
-			if g.LinkName() == "runtime.TargetBits" {
-				bitness := c.targetData.PointerSize() * 8
-				if bitness < 32 {
-					// Only 8 and 32+ architectures supported at the moment.
-					// On 8 bit architectures, pointers are normally bigger
-					// than 8 bits to do anything meaningful.
-					// TODO: clean up this hack to support 16-bit
-					// architectures.
-					bitness = 8
-				}
-				global.SetInitializer(llvm.ConstInt(llvm.Int8Type(), uint64(bitness), false))
-				global.SetGlobalConstant(true)
-			} else {
-				initializer, err := getZeroValue(llvmType)
-				if err != nil {
-					return err
-				}
-				global.SetInitializer(initializer)
+			initializer, err := getZeroValue(llvmType)
+			if err != nil {
+				return err
 			}
+			global.SetInitializer(initializer)
 		}
 	}
 
