@@ -253,7 +253,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		global := llvm.AddGlobal(c.mod, llvmType, g.LinkName())
 		g.llvmGlobal = global
 		if !strings.HasPrefix(g.LinkName(), "_extern_") {
-			global.SetLinkage(llvm.PrivateLinkage)
+			global.SetLinkage(llvm.InternalLinkage)
 			if g.LinkName() == "runtime.TargetBits" {
 				bitness := c.targetData.PointerSize() * 8
 				if bitness < 32 {
@@ -346,7 +346,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		initType := llvm.FunctionType(llvm.VoidType(), nil, false)
 		initFn = llvm.AddFunction(c.mod, "runtime.initAll", initType)
 	}
-	initFn.SetLinkage(llvm.PrivateLinkage)
+	initFn.SetLinkage(llvm.InternalLinkage)
 	block := c.ctx.AddBasicBlock(initFn, "entry")
 	c.builder.SetInsertPointAtEnd(block)
 	for _, fn := range c.initFuncs {
@@ -364,7 +364,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 
 	// Set functions referenced in runtime.ll to internal linkage, to improve
 	// optimization (hopefully).
-	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.PrivateLinkage)
+	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.InternalLinkage)
 
 	// Only use a scheduler when necessary.
 	if c.ir.NeedsScheduler() {
@@ -413,7 +413,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	rangeArray := llvm.ConstArray(rangeType, ranges)
 	rangeArrayNewGlobal := llvm.AddGlobal(c.mod, rangeArray.Type(), "runtime.methodSetRanges.tmp")
 	rangeArrayNewGlobal.SetInitializer(rangeArray)
-	rangeArrayNewGlobal.SetLinkage(llvm.PrivateLinkage)
+	rangeArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
 	rangeArrayOldGlobal := c.mod.NamedGlobal("runtime.methodSetRanges")
 	rangeArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(rangeArrayNewGlobal, rangeArrayOldGlobal.Type()))
 	rangeArrayOldGlobal.EraseFromParentAsGlobal()
@@ -421,7 +421,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	funcArray := llvm.ConstArray(c.i8ptrType, funcPointers)
 	funcArrayNewGlobal := llvm.AddGlobal(c.mod, funcArray.Type(), "runtime.methodSetFunctions.tmp")
 	funcArrayNewGlobal.SetInitializer(funcArray)
-	funcArrayNewGlobal.SetLinkage(llvm.PrivateLinkage)
+	funcArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
 	funcArrayOldGlobal := c.mod.NamedGlobal("runtime.methodSetFunctions")
 	funcArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(funcArrayNewGlobal, funcArrayOldGlobal.Type()))
 	funcArrayOldGlobal.EraseFromParentAsGlobal()
@@ -429,7 +429,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	signatureArray := llvm.ConstArray(llvm.Int16Type(), signatures)
 	signatureArrayNewGlobal := llvm.AddGlobal(c.mod, signatureArray.Type(), "runtime.methodSetSignatures.tmp")
 	signatureArrayNewGlobal.SetInitializer(signatureArray)
-	signatureArrayNewGlobal.SetLinkage(llvm.PrivateLinkage)
+	signatureArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
 	signatureArrayOldGlobal := c.mod.NamedGlobal("runtime.methodSetSignatures")
 	signatureArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(signatureArrayNewGlobal, signatureArrayOldGlobal.Type()))
 	signatureArrayOldGlobal.EraseFromParentAsGlobal()
@@ -1006,7 +1006,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 	if c.dumpSSA {
 		fmt.Printf("\nfunc %s:\n", frame.fn.fn)
 	}
-	frame.fn.llvmFn.SetLinkage(llvm.PrivateLinkage)
+	frame.fn.llvmFn.SetLinkage(llvm.InternalLinkage)
 
 	// Pre-create all basic blocks in the function.
 	for _, block := range frame.fn.fn.DomPreorder() {
