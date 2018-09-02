@@ -11,8 +11,13 @@ static volatile bool rtc_wakeup;
 void rtc_sleep(uint32_t ticks) {
 	NRF_RTC0->INTENSET = RTC_INTENSET_COMPARE0_Msk;
 	rtc_wakeup = false;
-	NRF_RTC0->TASKS_CLEAR = 1;
-	NRF_RTC0->CC[0] = ticks;
+	if (ticks == 1) {
+		// Race condition (even in hardware) at ticks == 1.
+		// TODO: fix this in a better way by detecting it, like the manual
+		// describes.
+		ticks = 2;
+	}
+	NRF_RTC0->CC[0] = (NRF_RTC0->COUNTER + ticks) & 0x00ffffff;
 	while (!rtc_wakeup) {
 		__WFI();
 	}
