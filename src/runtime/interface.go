@@ -58,3 +58,17 @@ func interfaceMethod(itf _interface, method uint16) *uint8 {
 		i++
 	}
 }
+
+// Return true iff both interfaces are equal.
+func interfaceEqual(x, y _interface) bool {
+	if x.typecode != y.typecode {
+		// Different dynamic type so always unequal.
+		return false
+	}
+	if x.typecode == 0 {
+		// Both interfaces are nil, so they are equal.
+		return true
+	}
+	// TODO: depends on reflection.
+	panic("unimplemented: interface equality")
+}

@@ -2219,6 +2219,17 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 		} else {
 			return llvm.Value{}, errors.New("todo: unknown basic type in binop: " + typ.String())
 		}
+	case *types.Interface:
+		switch binop.Op {
+		case token.EQL, token.NEQ: // ==, !=
+			result := c.builder.CreateCall(c.mod.NamedFunction("runtime.interfaceEqual"), []llvm.Value{x, y}, "")
+			if binop.Op == token.NEQ {
+				result = c.builder.CreateNot(result, "")
+			}
+			return result, nil
+		default:
+			return llvm.Value{}, errors.New("binop on interface: " + binop.Op.String())
+		}
 	case *types.Pointer:
 		switch binop.Op {
 		case token.EQL: // ==
