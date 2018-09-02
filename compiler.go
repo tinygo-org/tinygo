@@ -2108,6 +2108,13 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 					// x and y must have equal sizes, make Y bigger in this case.
 					// y is unsigned, this has been checked by the Go type checker.
 					y = c.builder.CreateZExt(y, x.Type(), "")
+				} else if sizeX < sizeY {
+					// What about shifting more than the integer width?
+					// I'm not entirely sure what the Go spec is on that, but as
+					// Intel CPUs have undefined behavior when shifting more
+					// than the integer width I'm assuming it is also undefined
+					// in Go.
+					y = c.builder.CreateTrunc(y, x.Type(), "")
 				}
 				switch binop.Op {
 				case token.SHL: // <<
