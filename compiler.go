@@ -1919,27 +1919,28 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
+		var low, high llvm.Value
+		if expr.Low == nil {
+			low = llvm.ConstInt(c.lenType, 0, false)
+		} else {
+			low, err = c.parseExpr(frame, expr.Low)
+			if err != nil {
+				return llvm.Value{}, nil
+			}
+		}
+		if expr.High != nil {
+			high, err = c.parseExpr(frame, expr.High)
+			if err != nil {
+				return llvm.Value{}, nil
+			}
+		}
 		switch typ := expr.X.Type().Underlying().(type) {
 		case *types.Pointer: // pointer to array
 			// slice an array
 			length := typ.Elem().(*types.Array).Len()
 			llvmLen := llvm.ConstInt(c.lenType, uint64(length), false)
-			var low, high llvm.Value
-			if expr.Low == nil {
-				low = llvm.ConstInt(c.lenType, 0, false)
-			} else {
-				low, err = c.parseExpr(frame, expr.Low)
-				if err != nil {
-					return llvm.Value{}, nil
-				}
-			}
-			if expr.High == nil {
+			if high.IsNil() {
 				high = llvmLen
-			} else {
-				high, err = c.parseExpr(frame, expr.High)
-				if err != nil {
-					return llvm.Value{}, nil
-				}
 			}
 			indices := []llvm.Value{
 				llvm.ConstInt(llvm.Int32Type(), 0, false),
@@ -1948,10 +1949,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			slicePtr := c.builder.CreateGEP(value, indices, "slice.ptr")
 			sliceLen := c.builder.CreateSub(high, low, "slice.len")
 			sliceCap := c.builder.CreateSub(llvmLen, low, "slice.cap")
-			sliceTyp, err := c.getLLVMType(expr.Type())
-			if err != nil {
-				return llvm.Value{}, err
-			}
 
 			// This check is optimized away in most cases.
 			if !frame.fn.nobounds {
@@ -1959,24 +1956,46 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				c.builder.CreateCall(sliceBoundsCheck, []llvm.Value{llvmLen, low, high}, "")
 			}
 
-			slice := llvm.ConstNamedStruct(sliceTyp, []llvm.Value{
+			slice := llvm.ConstStruct([]llvm.Value{
 				llvm.Undef(slicePtr.Type()),
 				llvm.Undef(c.lenType),
 				llvm.Undef(c.lenType),
-			})
+			}, false)
 			slice = c.builder.CreateInsertValue(slice, slicePtr, 0, "")
 			slice = c.builder.CreateInsertValue(slice, sliceLen, 1, "")
 			slice = c.builder.CreateInsertValue(slice, sliceCap, 2, "")
 			return slice, nil
+
 		case *types.Slice:
 			// slice a slice
 			return llvm.Value{}, errors.New("todo: slice a slice: " + typ.String())
+
 		case *types.Basic:
-			// slice a string
 			if typ.Kind() != types.String {
 				return llvm.Value{}, errors.New("unknown slice type: " + typ.String())
 			}
-			return llvm.Value{}, errors.New("todo: slice a string")
+			// slice a string
+			oldLen := c.builder.CreateExtractValue(value, 0, "")
+			oldPtr := c.builder.CreateExtractValue(value, 1, "")
+			if high.IsNil() {
+				high = oldLen
+			}
+
+			if !frame.fn.nobounds {
+				sliceBoundsCheck := c.mod.NamedFunction("runtime.sliceBoundsCheck")
+				c.builder.CreateCall(sliceBoundsCheck, []llvm.Value{oldLen, low, high}, "")
+			}
+
+			newLen := c.builder.CreateSub(high, low, "")
+			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
+			str, err := getZeroValue(c.mod.GetTypeByName("runtime._string"))
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			str = c.builder.CreateInsertValue(str, newLen, 0, "")
+			str = c.builder.CreateInsertValue(str, newPtr, 1, "")
+			return str, nil
+
 		default:
 			return llvm.Value{}, errors.New("unknown slice type: " + typ.String())
 		}
