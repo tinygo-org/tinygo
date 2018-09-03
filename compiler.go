@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"go/types"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -29,10 +30,15 @@ func init() {
 
 type Compiler struct {
 	dumpSSA         bool
+	debug           bool
 	triple          string
 	mod             llvm.Module
 	ctx             llvm.Context
 	builder         llvm.Builder
+	dibuilder       *llvm.DIBuilder
+	cu              llvm.Metadata
+	difiles         map[string]llvm.Metadata
+	ditypes         map[string]llvm.Metadata
 	machine         llvm.TargetMachine
 	targetData      llvm.TargetData
 	intType         llvm.Type
@@ -62,6 +68,7 @@ type Frame struct {
 	cleanupBlock llvm.BasicBlock
 	suspendBlock llvm.BasicBlock
 	deferred     []*Defer
+	difunc       llvm.Metadata
 }
 
 type Defer struct {
@@ -79,7 +86,10 @@ var cgoWrapperError = errors.New("tinygo internal: cgo wrapper")
 func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 	c := &Compiler{
 		dumpSSA: dumpSSA,
+		debug:   false, // TODO: make configurable
 		triple:  triple,
+		difiles: make(map[string]llvm.Metadata),
+		ditypes: make(map[string]llvm.Metadata),
 	}
 
 	target, err := llvm.GetTargetFromTriple(triple)
@@ -92,6 +102,7 @@ func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 	c.mod = llvm.NewModule(pkgName)
 	c.ctx = c.mod.Context()
 	c.builder = c.ctx.NewBuilder()
+	c.dibuilder = llvm.NewDIBuilder(c.mod)
 
 	// Depends on platform (32bit or 64bit), but fix it here for now.
 	c.intType = llvm.Int32Type()
@@ -217,6 +228,15 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	c.ir.AnalyseFunctionPointers()     // determine which function pointer signatures need context
 	c.ir.AnalyseBlockingRecursive()    // make all parents of blocking calls blocking (transitively)
 	c.ir.AnalyseGoCalls()              // check whether we need a scheduler
+
+	// Initialize debug information.
+	c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
+		Language:  llvm.DW_LANG_Go,
+		File:      mainPath,
+		Dir:       "",
+		Producer:  "TinyGo",
+		Optimized: true,
+	})
 
 	var frames []*Frame
 
@@ -423,6 +443,16 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 
 	c.mod.NamedGlobal("runtime.firstInterfaceNum").SetInitializer(llvm.ConstInt(llvm.Int16Type(), uint64(c.ir.FirstDynamicType()), false))
 
+	// see: https://reviews.llvm.org/D18355
+	c.mod.AddNamedMetadataOperand("llvm.module.flags",
+		c.ctx.MDNode([]llvm.Metadata{
+			llvm.ConstInt(llvm.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
+			llvm.GlobalContext().MDString("Debug Info Version"),
+			llvm.ConstInt(llvm.Int32Type(), 3, false).ConstantAsMetadata(), // DWARF version
+		}),
+	)
+	c.dibuilder.Finalize()
+
 	return nil
 }
 
@@ -621,6 +651,47 @@ func isPointer(typ types.Type) bool {
 	}
 }
 
+// Get the DWARF type for this Go type.
+func (c *Compiler) getDIType(typ types.Type) (llvm.Metadata, error) {
+	name := typ.String()
+	if dityp, ok := c.ditypes[name]; ok {
+		return dityp, nil
+	} else {
+		llvmType, err := c.getLLVMType(typ)
+		if err != nil {
+			return llvm.Metadata{}, err
+		}
+		sizeInBytes := c.targetData.TypeAllocSize(llvmType)
+		var encoding llvm.DwarfTypeEncoding
+		switch typ := typ.(type) {
+		case *types.Basic:
+			if typ.Info()&types.IsBoolean != 0 {
+				encoding = llvm.DW_ATE_boolean
+			} else if typ.Info()&types.IsFloat != 0 {
+				encoding = llvm.DW_ATE_float
+			} else if typ.Info()&types.IsComplex != 0 {
+				encoding = llvm.DW_ATE_complex_float
+			} else if typ.Info()&types.IsUnsigned != 0 {
+				encoding = llvm.DW_ATE_unsigned
+			} else if typ.Info()&types.IsInteger != 0 {
+				encoding = llvm.DW_ATE_signed
+			} else if typ.Kind() == types.UnsafePointer {
+				encoding = llvm.DW_ATE_address
+			}
+		case *types.Pointer:
+			encoding = llvm.DW_ATE_address
+		}
+		// TODO: other types
+		return c.dibuilder.CreateBasicType(llvm.DIBasicType{
+			Name:       name,
+			SizeInBits: sizeInBytes * 8,
+			Encoding:   encoding,
+		}), nil
+		c.ditypes[name] = dityp
+		return dityp, nil
+	}
+}
+
 // Get all methods of a type: both value receivers and pointer receivers.
 func getAllMethods(prog *ssa.Program, typ types.Type) []*types.Selection {
 	var methods []*types.Selection
@@ -713,6 +784,44 @@ func (c *Compiler) parseFuncDecl(f *Function) (*Frame, error) {
 	if frame.fn.llvmFn.IsNil() {
 		frame.fn.llvmFn = llvm.AddFunction(c.mod, name, fnType)
 	}
+
+	if c.debug && f.fn.Syntax() != nil && len(f.fn.Blocks) != 0 {
+		// Create debug info file if needed.
+		pos := c.ir.program.Fset.Position(f.fn.Syntax().Pos())
+		if _, ok := c.difiles[pos.Filename]; !ok {
+			dir, file := filepath.Split(pos.Filename)
+			c.difiles[pos.Filename] = c.dibuilder.CreateFile(file, dir[:len(dir)-1])
+		}
+
+		// Debug info for this function.
+		diparams := make([]llvm.Metadata, 0, len(f.fn.Params))
+		for _, param := range f.fn.Params {
+			ditype, err := c.getDIType(param.Type())
+			if err != nil {
+				return nil, err
+			}
+			diparams = append(diparams, ditype)
+		}
+		diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+			File:       c.difiles[pos.Filename],
+			Parameters: diparams,
+			Flags:      0, // ?
+		})
+		frame.difunc = c.dibuilder.CreateFunction(c.difiles[pos.Filename], llvm.DIFunction{
+			Name:         f.fn.RelString(nil),
+			LinkageName:  f.LinkName(),
+			File:         c.difiles[pos.Filename],
+			Line:         pos.Line,
+			Type:         diFuncType,
+			LocalToUnit:  true,
+			IsDefinition: true,
+			ScopeLine:    0,
+			Flags:        llvm.FlagPrototyped,
+			Optimized:    true,
+		})
+		frame.fn.llvmFn.SetSubprogram(frame.difunc)
+	}
+
 	return frame, nil
 }
 
@@ -1136,6 +1245,11 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 }
 
 func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
+	if c.debug {
+		pos := c.ir.program.Fset.Position(instr.Pos())
+		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), frame.difunc, llvm.Metadata{})
+	}
+
 	switch instr := instr.(type) {
 	case ssa.Value:
 		value, err := c.parseExpr(frame, instr)
