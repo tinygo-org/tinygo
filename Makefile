@@ -94,13 +94,8 @@ build/tgo: *.go
 	go build -o build/tgo -i .
 
 # Build IR with the Go compiler.
-build/%.bc: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go build/runtime-$(TARGET)-combined.bc
+build/%.o: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go build/runtime-$(TARGET)-combined.bc
 	./build/tgo $(TGOFLAGS) -runtime build/runtime-$(TARGET)-combined.bc -o $@ $(subst src/,,$<)
-
-# Compile and optimize bitcode file.
-build/%.o: build/%.bc
-	$(OPT) -Oz -enable-coroutines -o $< $<
-	$(LLC) -filetype=obj -o $@ $<
 
 # Compile C sources for the runtime.
 build/%.bc: src/runtime/%.c src/runtime/*.h

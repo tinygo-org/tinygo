@@ -2787,21 +2787,28 @@ func (c *Compiler) ApplyFunctionSections() {
 	}
 }
 
-func (c *Compiler) Optimize(optLevel, sizeLevel int) {
+func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) {
 	builder := llvm.NewPassManagerBuilder()
 	defer builder.Dispose()
 	builder.SetOptLevel(optLevel)
 	builder.SetSizeLevel(sizeLevel)
-	builder.UseInlinerWithThreshold(200) // TODO depend on opt level, and -Os
+	builder.UseInlinerWithThreshold(inlinerThreshold)
+	builder.AddCoroutinePassesToExtensionPoints()
 
+	// Run function passes for each function.
 	funcPasses := llvm.NewFunctionPassManagerForModule(c.mod)
 	defer funcPasses.Dispose()
 	builder.PopulateFunc(funcPasses)
+	funcPasses.InitializeFunc()
+	for fn := c.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		funcPasses.RunFunc(fn)
+	}
+	funcPasses.FinalizeFunc()
 
+	// Run module passes.
 	modPasses := llvm.NewPassManager()
 	defer modPasses.Dispose()
 	builder.Populate(modPasses)
-
 	modPasses.Run(c.mod)
 }
 
