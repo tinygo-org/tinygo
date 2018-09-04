@@ -348,10 +348,6 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	// After all packages are imported, add a synthetic initializer function
 	// that calls the initializer of each package.
 	initFn := c.mod.NamedFunction("runtime.initAll")
-	if initFn.IsNil() {
-		initType := llvm.FunctionType(llvm.VoidType(), nil, false)
-		initFn = llvm.AddFunction(c.mod, "runtime.initAll", initType)
-	}
 	initFn.SetLinkage(llvm.InternalLinkage)
 	block := c.ctx.AddBasicBlock(initFn, "entry")
 	c.builder.SetInsertPointAtEnd(block)
@@ -363,19 +359,18 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	// Adjust main function.
 	realMain := c.mod.NamedFunction(c.ir.mainPkg.Pkg.Path() + ".main")
 	if c.ir.NeedsScheduler() {
-		c.mod.NamedFunction("main.main$async").ReplaceAllUsesWith(realMain)
+		c.mod.NamedFunction("runtime.main_mainAsync").ReplaceAllUsesWith(realMain)
 	} else {
-		c.mod.NamedFunction("main.main").ReplaceAllUsesWith(realMain)
+		c.mod.NamedFunction("runtime.main_main").ReplaceAllUsesWith(realMain)
 	}
-
-	// Set functions referenced in runtime.ll to internal linkage, to improve
-	// optimization (hopefully).
-	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.InternalLinkage)
 
 	// Only use a scheduler when necessary.
 	if c.ir.NeedsScheduler() {
 		// Enable the scheduler.
-		c.mod.NamedGlobal("has_scheduler").SetInitializer(llvm.ConstInt(llvm.Int1Type(), 1, false))
+		hasScheduler := c.mod.NamedGlobal("runtime.hasScheduler")
+		hasScheduler.SetInitializer(llvm.ConstInt(llvm.Int1Type(), 1, false))
+		hasScheduler.SetGlobalConstant(true)
+		hasScheduler.SetUnnamedAddr(true)
 	}
 
 	// Initialize runtime type information, for interfaces.
@@ -1104,7 +1099,9 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 	if c.dumpSSA {
 		fmt.Printf("\nfunc %s:\n", frame.fn.fn)
 	}
-	frame.fn.llvmFn.SetLinkage(llvm.InternalLinkage)
+	if !frame.fn.IsExported() {
+		frame.fn.llvmFn.SetLinkage(llvm.InternalLinkage)
+	}
 
 	// Pre-create all basic blocks in the function.
 	for _, block := range frame.fn.fn.DomPreorder() {

@@ -35,7 +35,8 @@ type Program struct {
 type Function struct {
 	fn           *ssa.Function
 	llvmFn       llvm.Value
-	linkName     string      // go:linkname pragma
+	linkName     string      // go:linkname or go:export pragma
+	exported     bool        // go:export
 	nobounds     bool        // go:nobounds pragma
 	blocking     bool        // calculated by AnalyseBlockingRecursive
 	flag         bool        // used by dead code elimination
@@ -178,9 +179,20 @@ func (f *Function) parsePragmas() {
 				if hasUnsafeImport(f.fn.Pkg.Pkg) {
 					f.nobounds = true
 				}
+			case "//go:export":
+				if len(parts) != 2 {
+					continue
+				}
+				f.linkName = parts[1]
+				f.exported = true
 			}
 		}
 	}
+}
+
+// Return true iff this function is externally visible.
+func (f *Function) IsExported() bool {
+	return f.exported
 }
 
 // Return the link name for this function.

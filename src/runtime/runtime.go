@@ -6,6 +6,39 @@ import (
 
 const Compiler = "tgo"
 
+// The compiler will fill this with calls to the initialization function of each
+// package.
+func initAll()
+
+// These signatures are used to call the correct main function: with scheduling
+// or without scheduling.
+func main_main()
+func main_mainAsync(parent *coroutine) *coroutine
+
+// The compiler will change this to true if there are 'go' statements in the
+// compiled program and turn it into a const.
+var hasScheduler bool
+
+// Entry point for Go. Initialize all packages and call main.main().
+//go:export main
+func main() int {
+	// Run initializers of all packages.
+	initAll()
+
+	// This branch must be optimized away. Only one of the targets must remain,
+	// or there will be link errors.
+	if hasScheduler {
+		// Initialize main and run the scheduler.
+		coro := main_mainAsync(nil)
+		scheduler(coro)
+		return 0
+	} else {
+		// No scheduler is necessary. Call main directly.
+		main_main()
+		return 0
+	}
+}
+
 func Sleep(d Duration) {
 	// This function is treated specially by the compiler: when goroutines are
 	// used, it is transformed into a llvm.coro.suspend() call.

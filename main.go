@@ -30,13 +30,15 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool
 	}
 
 	// Add C/LLVM runtime.
-	runtime, err := llvm.ParseBitcodeFile(runtimePath)
-	if err != nil {
-		return err
-	}
-	err = c.LinkModule(runtime)
-	if err != nil {
-		return err
+	if runtimePath != "" {
+		runtime, err := llvm.ParseBitcodeFile(runtimePath)
+		if err != nil {
+			return err
+		}
+		err = c.LinkModule(runtime)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Compile Go code to IR.

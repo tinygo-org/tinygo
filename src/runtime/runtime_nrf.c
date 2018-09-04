@@ -29,10 +29,6 @@ void RTC0_IRQHandler() {
 	rtc_wakeup = true;
 }
 
-void _start() {
-	main();
-}
-
 __attribute__((weak))
 void __aeabi_unwind_cpp_pr0() {
 	// dummy, not actually used

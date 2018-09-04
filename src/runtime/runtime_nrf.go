@@ -11,6 +11,11 @@ func _Cfunc_rtc_sleep(ticks uint32)
 
 const Microsecond = 1
 
+//go:export _start
+func _start() {
+	main()
+}
+
 func init() {
 	initUART()
 	initLFCLK()
