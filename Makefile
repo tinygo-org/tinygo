@@ -8,7 +8,6 @@ tgo: build/tgo
 # Custom LLVM toolchain.
 LLVM := $(shell go env GOPATH)/src/github.com/aykevl/llvm/bindings/go/llvm/workdir/llvm_build/bin/
 LINK = $(LLVM)llvm-link
-LLC = $(LLVM)llc
 LLAS = $(LLVM)llvm-as
 OPT = $(LLVM)opt
 
@@ -21,13 +20,11 @@ TARGET ?= unix
 
 ifeq ($(TARGET),unix)
 # Regular *nix system.
-GCC = gcc
 LD = clang
 SIZE = size
 
 else ifeq ($(TARGET),pca10040)
 # PCA10040: nRF52832 development board
-GCC = arm-none-eabi-gcc
 LD = arm-none-eabi-ld -T arm.ld --gc-sections
 SIZE = arm-none-eabi-size
 OBJCOPY = arm-none-eabi-objcopy
@@ -44,7 +41,6 @@ RUNTIME_PARTS += build/nrfx_system_nrf52.bc
 OBJ += build/nrfx_startup_nrf51.o # TODO nrf52, see https://bugs.llvm.org/show_bug.cgi?id=31601
 
 else ifeq ($(TARGET),arduino)
-GCC = avr-gcc
 AS = avr-as -mmcu=atmega328p
 LD = avr-ld -T avr.ld --gc-sections
 SIZE = avr-size
@@ -126,6 +122,7 @@ build/runtime-$(TARGET)-combined.bc: $(RUNTIME_PARTS)
 # Generate output ELF executable.
 build/%: build/%.o $(OBJ)
 	$(LD) -o $@ $^
+	$(SIZE) $@
 
 # Generate output ELF for use in objcopy (on a microcontroller).
 build/%.elf: build/%.o $(OBJ)
