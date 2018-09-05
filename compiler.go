@@ -2414,7 +2414,8 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 			return strObj, nil
 		} else if typ.Kind() == types.UnsafePointer {
 			if !expr.IsNil() {
-				return llvm.Value{}, errors.New("todo: non-null constant pointer")
+				value, _ := constant.Uint64Val(expr.Value)
+				return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, value, false), c.i8ptrType), nil
 			}
 			return llvm.ConstNull(c.i8ptrType), nil
 		} else if typ.Info()&types.IsUnsigned != 0 {
