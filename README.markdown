@@ -131,7 +131,7 @@ development.
 
 After LLVM has been built, you can run an example with:
 
-    make run-hello
+    make run-test
 
 For a blinky example on the PCA10040 development board, do this:
 

@@ -1,5 +1,7 @@
 package main
 
+// This file is here to test features of the Go compiler.
+
 import "unicode"
 
 type Thing struct {

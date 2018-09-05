@@ -3,7 +3,7 @@
 all: tgo
 tgo: build/tgo
 
-.PHONY: all tgo run-hello run-blinky clean fmt gen-device gen-device-nrf
+.PHONY: all tgo run-test run-blinky run-blinky2 clean fmt gen-device gen-device-nrf
 
 # Custom LLVM toolchain.
 LLVM := $(shell go env GOPATH)/src/github.com/aykevl/llvm/bindings/go/llvm/workdir/llvm_build/bin/
@@ -56,11 +56,12 @@ endif
 
 
 
-run-hello: build/hello
-	./build/hello
+run-test: build/test
+	./build/test
 
-run-blinky: build/blinky
-	./build/blinky
+run-blinky: run-blinky2
+run-blinky2: build/blinky2
+	./build/blinky2
 
 ifeq ($(TARGET),pca10040)
 flash-%: build/%.hex
@@ -74,7 +75,7 @@ clean:
 	@rm -rf build
 
 fmt:
-	@go fmt . ./src/examples/hello
+	@go fmt . ./src/examples/test
 	@go fmt ./src/runtime/*.go
 
 gen-device: gen-device-nrf

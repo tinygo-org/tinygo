@@ -1,5 +1,10 @@
 package main
 
+// This blinky is a bit more advanced than blink1, with two goroutines running
+// at the same time and blinking a different LED. The delay of led2 is slightly
+// less than half of led1, which would be hard to do without some sort of
+// concurrency.
+
 import (
 	"machine"
 	"runtime"
