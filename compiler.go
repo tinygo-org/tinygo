@@ -54,6 +54,7 @@ type Compiler struct {
 	coroEndFunc     llvm.Value
 	coroFreeFunc    llvm.Value
 	initFuncs       []llvm.Value
+	deferFuncs      []*Function
 	ir              *Program
 }
 
@@ -67,13 +68,8 @@ type Frame struct {
 	taskHandle   llvm.Value
 	cleanupBlock llvm.BasicBlock
 	suspendBlock llvm.BasicBlock
-	deferred     []*Defer
+	deferPtr     llvm.Value
 	difunc       llvm.Metadata
-}
-
-type Defer struct {
-	*ssa.Defer
-	Args []llvm.Value
 }
 
 type Phi struct {
@@ -86,7 +82,7 @@ var cgoWrapperError = errors.New("tinygo internal: cgo wrapper")
 func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 	c := &Compiler{
 		dumpSSA: dumpSSA,
-		debug:   false, // TODO: make configurable
+		debug:   true, // TODO: make configurable
 		triple:  triple,
 		difiles: make(map[string]llvm.Metadata),
 		ditypes: make(map[string]llvm.Metadata),
@@ -343,6 +339,44 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	// Create deferred function wrappers.
+	for _, fn := range c.deferFuncs {
+		// This function gets a single parameter which is a pointer to a struct.
+		// This struct starts with the values of runtime._defer, but after that
+		// follow the real parameters.
+		// The job of this wrapper is to extract these parameters and to call
+		// the real function with them.
+		llvmFn := c.mod.NamedFunction(fn.LinkName() + "$defer")
+		entry := c.ctx.AddBasicBlock(llvmFn, "entry")
+		c.builder.SetInsertPointAtEnd(entry)
+		deferRawPtr := llvmFn.Param(0)
+
+		// Get the real param type and cast to it.
+		valueTypes := []llvm.Type{llvmFn.Type(), llvm.PointerType(c.mod.GetTypeByName("runtime._defer"), 0)}
+		for _, param := range fn.fn.Params {
+			llvmType, err := c.getLLVMType(param.Type())
+			if err != nil {
+				return err
+			}
+			valueTypes = append(valueTypes, llvmType)
+		}
+		contextType := llvm.StructType(valueTypes, false)
+		contextPtr := c.builder.CreateBitCast(deferRawPtr, llvm.PointerType(contextType, 0), "context")
+
+		// Extract the params from the struct.
+		forwardParams := []llvm.Value{}
+		zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+		for i := range fn.fn.Params {
+			gep := c.builder.CreateGEP(contextPtr, []llvm.Value{zero, llvm.ConstInt(llvm.Int32Type(), uint64(i+2), false)}, "gep")
+			forwardParam := c.builder.CreateLoad(gep, "param")
+			forwardParams = append(forwardParams, forwardParam)
+		}
+
+		// Call real function (of which this is a wrapper).
+		c.builder.CreateCall(fn.llvmFn, forwardParams, "")
+		c.builder.CreateRetVoid()
 	}
 
 	// After all packages are imported, add a synthetic initializer function
@@ -1172,9 +1206,17 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		}
 	}
 
+	c.builder.SetInsertPointAtEnd(frame.blocks[frame.fn.fn.Blocks[0]])
+
+	if frame.fn.fn.Recover != nil {
+		// Create defer list pointer.
+		deferType := llvm.PointerType(c.mod.GetTypeByName("runtime._defer"), 0)
+		frame.deferPtr = c.builder.CreateAlloca(deferType, "deferPtr")
+		c.builder.CreateStore(llvm.ConstPointerNull(deferType), frame.deferPtr)
+	}
+
 	if frame.blocking {
 		// Coroutine initialization.
-		c.builder.SetInsertPointAtEnd(frame.blocks[frame.fn.fn.Blocks[0]])
 		taskState := c.builder.CreateAlloca(c.mod.GetTypeByName("runtime.taskState"), "task.state")
 		stateI8 := c.builder.CreateBitCast(taskState, c.i8ptrType, "task.state.i8")
 		id := c.builder.CreateCall(c.coroIdFunc, []llvm.Value{
@@ -1264,21 +1306,57 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 	case *ssa.DebugRef:
 		return nil // ignore
 	case *ssa.Defer:
-		if instr.Block() == instr.Parent().Blocks[0] {
-			// Easy: evaluate the arguments now and run it at the end.
-			args := make([]llvm.Value, len(instr.Call.Args))
-			for i, arg := range instr.Call.Args {
-				val, err := c.parseExpr(frame, arg)
-				if err != nil {
-					return err
-				}
-				args[i] = val
-			}
-			frame.deferred = append(frame.deferred, &Defer{instr, args})
-			return nil
-		} else {
-			return errors.New("todo: defer in non-entry block")
+		if _, ok := instr.Call.Value.(*ssa.Function); !ok || instr.Call.IsInvoke() {
+			return errors.New("todo: non-direct function calls in defer")
 		}
+		fn := c.ir.GetFunction(instr.Call.Value.(*ssa.Function))
+
+		// The pointer to the previous defer struct, which we will replace to
+		// make a linked list.
+		next := c.builder.CreateLoad(frame.deferPtr, "defer.next")
+
+		// Try to find the wrapper $defer function.
+		deferName := fn.LinkName() + "$defer"
+		callback := c.mod.NamedFunction(deferName)
+		if callback.IsNil() {
+			// Not found, have to add it.
+			deferFuncType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{next.Type()}, false)
+			callback = llvm.AddFunction(c.mod, deferName, deferFuncType)
+			c.deferFuncs = append(c.deferFuncs, fn)
+		}
+
+		// Collect all values to be put in the struct (starting with
+		// runtime._defer fields).
+		values := []llvm.Value{callback, next}
+		valueTypes := []llvm.Type{callback.Type(), next.Type()}
+		for _, param := range instr.Call.Args {
+			llvmParam, err := c.parseExpr(frame, param)
+			if err != nil {
+				return err
+			}
+			values = append(values, llvmParam)
+			valueTypes = append(valueTypes, llvmParam.Type())
+		}
+
+		// Make a struct out of it.
+		contextType := llvm.StructType(valueTypes, false)
+		context, err := getZeroValue(contextType)
+		if err != nil {
+			return err
+		}
+		for i, value := range values {
+			context = c.builder.CreateInsertValue(context, value, i, "")
+		}
+
+		// Put this struct in an alloca.
+		alloca := c.builder.CreateAlloca(contextType, "defer.alloca")
+		c.builder.CreateStore(context, alloca)
+
+		// Push it on top of the linked list by replacing deferPtr.
+		allocaCast := c.builder.CreateBitCast(alloca, next.Type(), "defer.alloca.cast")
+		c.builder.CreateStore(allocaCast, frame.deferPtr)
+		return nil
+
 	case *ssa.Go:
 		if instr.Common().Method != nil {
 			return errors.New("todo: go on method receiver")
@@ -1402,16 +1480,9 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 			}
 		}
 	case *ssa.RunDefers:
-		// Execute all deferred functions from the entry block, in reverse
-		// order.
-		for i := len(frame.deferred) - 1; i >= 0; i-- {
-			deferred := frame.deferred[i]
-			callee := deferred.Call.StaticCallee()
-			if callee == nil {
-				return errors.New("todo: non-static deferred functions")
-			}
-			c.builder.CreateCall(c.ir.GetFunction(callee).llvmFn, deferred.Args, "")
-		}
+		deferData := c.builder.CreateLoad(frame.deferPtr, "")
+		fn := c.mod.NamedFunction("runtime.rundefers")
+		c.builder.CreateCall(fn, []llvm.Value{deferData}, "")
 		return nil
 	case *ssa.Store:
 		llvmAddr, err := c.parseExpr(frame, instr.Addr)
