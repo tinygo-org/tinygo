@@ -2435,6 +2435,24 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 		} else {
 			return llvm.Value{}, errors.New("todo: unknown basic type in binop: " + typ.String())
 		}
+	case *types.Signature:
+		if c.ir.SignatureNeedsContext(typ) {
+			// This is a closure, not a function pointer. Get the underlying
+			// function pointer.
+			// This is safe: function pointers are generally not comparable
+			// against each other, only against nil. So one or both has to be
+			// nil, so we can ignore the contents of the closure.
+			x = c.builder.CreateExtractValue(x, 1, "")
+			y = c.builder.CreateExtractValue(y, 1, "")
+		}
+		switch binop.Op {
+		case token.EQL: // ==
+			return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+		case token.NEQ: // !=
+			return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+		default:
+			return llvm.Value{}, errors.New("binop on signature: " + binop.Op.String())
+		}
 	case *types.Interface:
 		switch binop.Op {
 		case token.EQL, token.NEQ: // ==, !=
@@ -2503,6 +2521,15 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 		} else {
 			return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
 		}
+	case *types.Signature:
+		if expr.Value != nil {
+			return llvm.Value{}, errors.New("non-nil signature constant")
+		}
+		sig, err := c.getLLVMType(expr.Type())
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		return getZeroValue(sig)
 	case *types.Interface:
 		if expr.Value != nil {
 			return llvm.Value{}, errors.New("non-nil interface constant")
