@@ -83,6 +83,10 @@ gen-device-nrf:
 	./gen-device.py lib/nrfx/mdk/ src/device/nrf/
 	go fmt ./src/device/nrf
 
+gen-device-avr:
+	./gen-device.py lib/avr/packs/atmega src/device/avr/
+	go fmt ./src/device/avr
+
 
 # Build the Go compiler.
 build/tgo: *.go
