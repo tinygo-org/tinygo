@@ -1103,6 +1103,11 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		frame.fn.llvmFn.SetLinkage(llvm.InternalLinkage)
 	}
 
+	if c.debug {
+		pos := c.ir.program.Fset.Position(frame.fn.fn.Pos())
+		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), frame.difunc, llvm.Metadata{})
+	}
+
 	// Pre-create all basic blocks in the function.
 	for _, block := range frame.fn.fn.DomPreorder() {
 		llvmBlock := c.ctx.AddBasicBlock(frame.fn.llvmFn, block.Comment)
