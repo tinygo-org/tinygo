@@ -29,6 +29,10 @@
 //     POSSIBILITY OF SUCH DAMAGE.
 package arm
 
+import (
+	"unsafe"
+)
+
 type __reg uint32
 type RegValue = __reg
 
@@ -42,22 +46,13 @@ const (
 )
 
 // Nested Vectored Interrupt Controller (NVIC).
-var NVIC = struct {
+type NVIC_Type struct {
 	ISER [8]__reg
-}{
-	ISER: [8]__reg{
-		NVIC_BASE + 0x000,
-		NVIC_BASE + 0x004,
-		NVIC_BASE + 0x008,
-		NVIC_BASE + 0x00C,
-		NVIC_BASE + 0x010,
-		NVIC_BASE + 0x014,
-		NVIC_BASE + 0x018,
-		NVIC_BASE + 0x01C,
-	},
 }
+
+var NVIC = (*NVIC_Type)(unsafe.Pointer(uintptr(NVIC_BASE)))
 
 // Enable the given interrupt number.
 func EnableIRQ(irq uint32) {
-	NVIC.ISER[irq >> 5] = 1 << (irq & 0x1F)
+	NVIC.ISER[irq>>5] = 1 << (irq & 0x1F)
 }

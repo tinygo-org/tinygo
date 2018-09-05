@@ -1421,15 +1421,12 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		if err != nil {
 			return err
 		}
+		store := c.builder.CreateStore(llvmVal, llvmAddr)
 		valType := instr.Addr.Type().(*types.Pointer).Elem()
 		if valType, ok := valType.(*types.Named); ok && valType.Obj().Name() == "__reg" {
-			// Magic type name to transform this store to a register store.
-			registerAddr := c.builder.CreateLoad(llvmAddr, "")
-			ptr := c.builder.CreateIntToPtr(registerAddr, llvmAddr.Type(), "")
-			store := c.builder.CreateStore(llvmVal, ptr)
+			// Magic type name to make this store volatile, for memory-mapped
+			// registers.
 			store.SetVolatile(true)
-		} else {
-			c.builder.CreateStore(llvmVal, llvmAddr)
 		}
 		return nil
 	default:
@@ -2739,19 +2736,13 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 		}
 	case token.MUL: // *x, dereference pointer
 		valType := unop.X.Type().(*types.Pointer).Elem()
+		load := c.builder.CreateLoad(x, "")
 		if valType, ok := valType.(*types.Named); ok && valType.Obj().Name() == "__reg" {
-			// Magic type name: treat the value as a register pointer.
-			register := unop.X.(*ssa.FieldAddr)
-			global := register.X.(*ssa.Global)
-			llvmGlobal := c.ir.GetGlobal(global).llvmGlobal
-			llvmAddr := c.builder.CreateExtractValue(llvmGlobal.Initializer(), register.Field, "")
-			ptr := llvm.ConstIntToPtr(llvmAddr, x.Type())
-			load := c.builder.CreateLoad(ptr, "")
+			// Magic type name to make this load volatile, for memory-mapped
+			// registers.
 			load.SetVolatile(true)
-			return load, nil
-		} else {
-			return c.builder.CreateLoad(x, ""), nil
 		}
+		return load, nil
 	case token.XOR: // ^x, toggle all bits in integer
 		return c.builder.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil
 	default:
