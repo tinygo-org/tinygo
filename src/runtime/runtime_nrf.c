@@ -28,20 +28,3 @@ void RTC0_IRQHandler() {
 	NRF_RTC0->EVENTS_COMPARE[0] = 0;
 	rtc_wakeup = true;
 }
-
-__attribute__((weak))
-void __aeabi_unwind_cpp_pr0() {
-	// dummy, not actually used
-}
-
-__attribute__((weak))
-void __aeabi_memclr(uint8_t *dest, size_t n) {
-	// TODO: link with compiler-rt for a better implementation.
-	// For now, use a simple memory zeroer.
-	memset(dest, 0, n);
-}
-
-__attribute__((weak))
-void __aeabi_memclr4(uint8_t *dest, size_t n) {
-	__aeabi_memclr(dest, n);
-}
