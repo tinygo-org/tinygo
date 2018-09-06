@@ -2118,6 +2118,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		sliceSize := c.builder.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
 		slicePtr := c.builder.CreateCall(c.allocFunc, []llvm.Value{sliceSize}, "makeslice.buf")
+		slicePtr = c.builder.CreateBitCast(slicePtr, llvm.PointerType(llvmElemType, 0), "makeslice.array")
 
 		// Create the slice.
 		slice := llvm.ConstStruct([]llvm.Value{
