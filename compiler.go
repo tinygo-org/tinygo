@@ -1532,9 +1532,6 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		if _, ok := args[1].Type().(*types.Basic); ok {
-			return llvm.Value{}, errors.New("todo: copy: string to []byte")
-		}
 		dstLen := c.builder.CreateExtractValue(dst, 1, "copy.dstLen")
 		srcLen := c.builder.CreateExtractValue(src, 1, "copy.srcLen")
 		dstBuf := c.builder.CreateExtractValue(dst, 0, "copy.dstArray")
