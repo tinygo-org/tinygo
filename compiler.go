@@ -1554,7 +1554,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 		case *types.Basic:
 			switch typ.Kind() {
 			case types.String:
-				return c.builder.CreateExtractValue(value, 0, "len"), nil
+				return c.builder.CreateExtractValue(value, 1, "len"), nil
 			default:
 				return llvm.Value{}, errors.New("todo: len: unknown basic type")
 			}
@@ -2048,7 +2048,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			c.emitBoundsCheck(frame, length, index)
 
 			// Lookup byte
-			buf := c.builder.CreateExtractValue(value, 1, "")
+			buf := c.builder.CreateExtractValue(value, 0, "")
 			bufPtr := c.builder.CreateGEP(buf, []llvm.Value{index}, "")
 			return c.builder.CreateLoad(bufPtr, ""), nil
 		case *types.Map:
@@ -2224,8 +2224,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				return llvm.Value{}, errors.New("unknown slice type: " + typ.String())
 			}
 			// slice a string
-			oldLen := c.builder.CreateExtractValue(value, 0, "")
-			oldPtr := c.builder.CreateExtractValue(value, 1, "")
+			oldPtr := c.builder.CreateExtractValue(value, 0, "")
+			oldLen := c.builder.CreateExtractValue(value, 1, "")
 			if high.IsNil() {
 				high = oldLen
 			}
@@ -2235,14 +2235,14 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				c.builder.CreateCall(sliceBoundsCheck, []llvm.Value{oldLen, low, high}, "")
 			}
 
-			newLen := c.builder.CreateSub(high, low, "")
 			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
+			newLen := c.builder.CreateSub(high, low, "")
 			str, err := getZeroValue(c.mod.GetTypeByName("runtime._string"))
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			str = c.builder.CreateInsertValue(str, newLen, 0, "")
-			str = c.builder.CreateInsertValue(str, newPtr, 1, "")
+			str = c.builder.CreateInsertValue(str, newPtr, 0, "")
+			str = c.builder.CreateInsertValue(str, newLen, 1, "")
 			return str, nil
 
 		default:
@@ -2566,7 +2566,7 @@ func (c *Compiler) parseConst(expr *ssa.Const) (llvm.Value, error) {
 			global.SetGlobalConstant(true)
 			zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 			strPtr := c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
-			strObj := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._string"), []llvm.Value{strLen, strPtr})
+			strObj := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._string"), []llvm.Value{strPtr, strLen})
 			return strObj, nil
 		} else if typ.Kind() == types.UnsafePointer {
 			if !expr.IsNil() {

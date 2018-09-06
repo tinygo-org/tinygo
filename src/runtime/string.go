@@ -8,8 +8,8 @@ import (
 
 // The underlying struct for the Go string type.
 type _string struct {
-	length lenType
 	ptr    *byte
+	length lenType
 }
 
 // Return true iff the strings match.
@@ -37,7 +37,7 @@ func stringConcat(x, y _string) _string {
 		buf := alloc(length)
 		memcpy(buf, unsafe.Pointer(x.ptr), uintptr(x.length))
 		memcpy(unsafe.Pointer(uintptr(buf)+uintptr(x.length)), unsafe.Pointer(y.ptr), uintptr(y.length))
-		return _string{lenType(length), (*byte)(buf)}
+		return _string{ptr: (*byte)(buf), length: lenType(length)}
 	}
 }
 
@@ -49,7 +49,7 @@ func stringFromBytes(x struct {
 }) _string {
 	buf := alloc(uintptr(x.len))
 	memcpy(buf, unsafe.Pointer(x.ptr), uintptr(x.len))
-	return _string{lenType(x.len), (*byte)(buf)}
+	return _string{ptr: (*byte)(buf), length: lenType(x.len)}
 }
 
 // Convert a string to a []byte slice.
@@ -72,7 +72,7 @@ func stringFromUnicode(x rune) _string {
 	// Array will be heap allocated.
 	// The heap most likely doesn't work with blocks below 4 bytes, so there's
 	// no point in allocating a smaller buffer for the string here.
-	return _string{length, (*byte)(unsafe.Pointer(&array))}
+	return _string{ptr: (*byte)(unsafe.Pointer(&array)), length: length}
 }
 
 // Convert a Unicode code point into an array of bytes and its length.
