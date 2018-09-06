@@ -1523,6 +1523,28 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 		default:
 			return llvm.Value{}, errors.New("todo: cap: unknown type")
 		}
+	case "copy":
+		dst, err := c.parseExpr(frame, args[0])
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		src, err := c.parseExpr(frame, args[1])
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		if _, ok := args[1].Type().(*types.Basic); ok {
+			return llvm.Value{}, errors.New("todo: copy: string to []byte")
+		}
+		dstLen := c.builder.CreateExtractValue(dst, 1, "copy.dstLen")
+		srcLen := c.builder.CreateExtractValue(src, 1, "copy.srcLen")
+		dstBuf := c.builder.CreateExtractValue(dst, 0, "copy.dstArray")
+		srcBuf := c.builder.CreateExtractValue(src, 0, "copy.srcArray")
+		elemType := dstBuf.Type().ElementType()
+		dstBuf = c.builder.CreateBitCast(dstBuf, c.i8ptrType, "copy.dstPtr")
+		srcBuf = c.builder.CreateBitCast(srcBuf, c.i8ptrType, "copy.srcPtr")
+		elemSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(elemType), false)
+		sliceCopy := c.mod.NamedFunction("runtime.sliceCopy")
+		return c.builder.CreateCall(sliceCopy, []llvm.Value{dstBuf, srcBuf, dstLen, srcLen, elemSize}, "copy.n"), nil
 	case "len":
 		value, err := c.parseExpr(frame, args[0])
 		if err != nil {

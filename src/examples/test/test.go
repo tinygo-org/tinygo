@@ -37,11 +37,13 @@ func main() {
 	// slice
 	l := 5
 	foo := []int{1, 2, 4, 5}
-	bar := make([]byte, l-2, l)
+	bar := make([]int, l-2, l)
 	println("len/cap foo:", len(foo), cap(foo))
 	println("len/cap bar:", len(bar), cap(bar))
 	println("foo[3]:", foo[3])
 	println("sum foo:", sum(foo))
+	println("copy foo -> bar:", copy(bar, foo))
+	println("sum bar:", sum(bar))
 
 	// interfaces, pointers
 	thing := &Thing{"foo"}

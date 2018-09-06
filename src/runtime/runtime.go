@@ -63,6 +63,25 @@ func memcpy(dst, src unsafe.Pointer, size uintptr) {
 	}
 }
 
+// Copy size bytes from src to dst. The memory areas may overlap and will do the
+// correct thing.
+func memmove(dst, src unsafe.Pointer, size uintptr) {
+	if uintptr(dst) < uintptr(src) {
+		// Copy forwards.
+		memcpy(dst, src, size)
+		return
+	}
+	// Copy backwards.
+	i := size
+	for {
+		i--
+		*(*uint8)(unsafe.Pointer(uintptr(dst) + i)) = *(*uint8)(unsafe.Pointer(uintptr(src) + i))
+		if i == 0 {
+			break
+		}
+	}
+}
+
 // Set the given number of bytes to zero.
 func memzero(ptr unsafe.Pointer, size uintptr) {
 	for i := uintptr(0); i < size; i++ {
@@ -80,4 +99,15 @@ func memequal(x, y unsafe.Pointer, n uintptr) bool {
 		}
 	}
 	return true
+}
+
+// Builtin copy(dst, src) function: copy bytes from dst to src.
+func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen lenType, elemSize uintptr) lenType {
+	// n = min(srcLen, dstLen)
+	n := srcLen
+	if n > dstLen {
+		n = dstLen
+	}
+	memmove(dst, src, uintptr(n)*elemSize)
+	return n
 }
