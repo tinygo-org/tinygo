@@ -1550,14 +1550,10 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		switch typ := args[0].Type().(type) {
-		case *types.Basic:
-			switch typ.Kind() {
-			case types.String:
-				return c.builder.CreateExtractValue(value, 1, "len"), nil
-			default:
-				return llvm.Value{}, errors.New("todo: len: unknown basic type")
-			}
+		switch args[0].Type().(type) {
+		case *types.Basic, *types.Slice:
+			// string or slice
+			return c.builder.CreateExtractValue(value, 1, "len"), nil
 		case *types.Map:
 			indices := []llvm.Value{
 				llvm.ConstInt(llvm.Int32Type(), 0, false),
@@ -1565,8 +1561,6 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			}
 			ptr := c.builder.CreateGEP(value, indices, "lenptr")
 			return c.builder.CreateLoad(ptr, "len"), nil
-		case *types.Slice:
-			return c.builder.CreateExtractValue(value, 1, "len"), nil
 		default:
 			return llvm.Value{}, errors.New("todo: len: unknown type")
 		}
