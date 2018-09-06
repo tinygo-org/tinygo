@@ -101,7 +101,7 @@ func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter
 				}
 				continue
 			}
-			if callee.Object().Name() == "init" {
+			if callee.Object() == nil || callee.Object().Name() == "init" {
 				return i, nil // arrived at the init#num functions
 			}
 			return i, errors.New("todo: init call: " + callee.String())
