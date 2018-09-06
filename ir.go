@@ -25,10 +25,11 @@ type Program struct {
 	NamedTypes           []*NamedType
 	needsScheduler       bool
 	goCalls              []*ssa.Go
-	typesWithMethods     map[string]*InterfaceType // see AnalyseInterfaceConversions
-	typesWithoutMethods  map[string]int            // see AnalyseInterfaceConversions
-	methodSignatureNames map[string]int
-	fpWithContext        map[string]struct{} // see AnalyseFunctionPointers
+	typesWithMethods     map[string]*TypeWithMethods // see AnalyseInterfaceConversions
+	typesWithoutMethods  map[string]int              // see AnalyseInterfaceConversions
+	methodSignatureNames map[string]int              // see MethodNum
+	interfaces           map[string]*Interface       // see AnalyseInterfaceConversions
+	fpWithContext        map[string]struct{}         // see AnalyseFunctionPointers
 }
 
 // Function or method.
@@ -60,10 +61,17 @@ type NamedType struct {
 }
 
 // Type that is at some point put in an interface.
-type InterfaceType struct {
+type TypeWithMethods struct {
 	t       types.Type
 	Num     int
 	Methods map[string]*types.Selection
+}
+
+// Interface type that is at some point used in a type assert (to check whether
+// it implements another interface).
+type Interface struct {
+	Num  int
+	Type *types.Interface
 }
 
 // Create and intialize a new *Program from a *ssa.Program.
@@ -74,6 +82,7 @@ func NewProgram(program *ssa.Program, mainPath string) *Program {
 		functionMap:          make(map[*ssa.Function]*Function),
 		globalMap:            make(map[*ssa.Global]*Global),
 		methodSignatureNames: make(map[string]int),
+		interfaces:           make(map[string]*Interface),
 	}
 }
 
@@ -146,6 +155,18 @@ func (p *Program) GetFunction(ssaFn *ssa.Function) *Function {
 
 func (p *Program) GetGlobal(ssaGlobal *ssa.Global) *Global {
 	return p.globalMap[ssaGlobal]
+}
+
+// SortMethods sorts the list of methods by method ID.
+func (p *Program) SortMethods(methods []*types.Selection) {
+	m := &methodList{methods: methods, program: p}
+	sort.Sort(m)
+}
+
+// SortFuncs sorts the list of functions by method ID.
+func (p *Program) SortFuncs(funcs []*types.Func) {
+	m := &funcList{funcs: funcs, program: p}
+	sort.Sort(m)
 }
 
 // Parse compiler directives in the preceding comments.
@@ -235,4 +256,44 @@ func (g *Global) LinkName() string {
 
 func (g *Global) IsExtern() bool {
 	return strings.HasPrefix(g.g.Name(), "_extern_")
+}
+
+// Wrapper type to implement sort.Interface for []*types.Selection.
+type methodList struct {
+	methods []*types.Selection
+	program *Program
+}
+
+func (m *methodList) Len() int {
+	return len(m.methods)
+}
+
+func (m *methodList) Less(i, j int) bool {
+	iid := m.program.MethodNum(m.methods[i].Obj().(*types.Func))
+	jid := m.program.MethodNum(m.methods[j].Obj().(*types.Func))
+	return iid < jid
+}
+
+func (m *methodList) Swap(i, j int) {
+	m.methods[i], m.methods[j] = m.methods[j], m.methods[i]
+}
+
+// Wrapper type to implement sort.Interface for []*types.Func.
+type funcList struct {
+	funcs   []*types.Func
+	program *Program
+}
+
+func (fl *funcList) Len() int {
+	return len(fl.funcs)
+}
+
+func (fl *funcList) Less(i, j int) bool {
+	iid := fl.program.MethodNum(fl.funcs[i])
+	jid := fl.program.MethodNum(fl.funcs[j])
+	return iid < jid
+}
+
+func (fl *funcList) Swap(i, j int) {
+	fl.funcs[i], fl.funcs[j] = fl.funcs[j], fl.funcs[i]
 }

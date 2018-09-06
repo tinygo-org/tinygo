@@ -426,7 +426,12 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		}
 		rangeValue := llvm.ConstNamedStruct(rangeType, rangeValues)
 		ranges = append(ranges, rangeValue)
+		methods := make([]*types.Selection, 0, len(meta.Methods))
 		for _, method := range meta.Methods {
+			methods = append(methods, method)
+		}
+		c.ir.SortMethods(methods)
+		for _, method := range methods {
 			f := c.ir.GetFunction(program.MethodValue(method))
 			if f.llvmFn.IsNil() {
 				return errors.New("cannot find function: " + f.LinkName())
@@ -438,6 +443,25 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 			signatures = append(signatures, signature)
 		}
 		startIndex += len(meta.Methods)
+	}
+
+	interfaceTypes := c.ir.AllInterfaces()
+	interfaceLengths := make([]llvm.Value, len(interfaceTypes))
+	interfaceMethods := make([]llvm.Value, 0)
+	for i, itfType := range interfaceTypes {
+		if itfType.Type.NumMethods() > 0xff {
+			return errors.New("too many methods for interface " + itfType.Type.String())
+		}
+		interfaceLengths[i] = llvm.ConstInt(llvm.Int8Type(), uint64(itfType.Type.NumMethods()), false)
+		funcs := make([]*types.Func, itfType.Type.NumMethods())
+		for i := range funcs {
+			funcs[i] = itfType.Type.Method(i)
+		}
+		c.ir.SortFuncs(funcs)
+		for _, f := range funcs {
+			id := llvm.ConstInt(llvm.Int16Type(), uint64(c.ir.MethodNum(f)), false)
+			interfaceMethods = append(interfaceMethods, id)
+		}
 	}
 
 	if len(ranges) >= 1<<16 {
@@ -469,8 +493,24 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	signatureArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(signatureArrayNewGlobal, signatureArrayOldGlobal.Type()))
 	signatureArrayOldGlobal.EraseFromParentAsGlobal()
 	signatureArrayNewGlobal.SetName("runtime.methodSetSignatures")
+	interfaceLengthsArray := llvm.ConstArray(llvm.Int8Type(), interfaceLengths)
+	interfaceLengthsArrayNewGlobal := llvm.AddGlobal(c.mod, interfaceLengthsArray.Type(), "runtime.interfaceLengths.tmp")
+	interfaceLengthsArrayNewGlobal.SetInitializer(interfaceLengthsArray)
+	interfaceLengthsArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
+	interfaceLengthsArrayOldGlobal := c.mod.NamedGlobal("runtime.interfaceLengths")
+	interfaceLengthsArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(interfaceLengthsArrayNewGlobal, interfaceLengthsArrayOldGlobal.Type()))
+	interfaceLengthsArrayOldGlobal.EraseFromParentAsGlobal()
+	interfaceLengthsArrayNewGlobal.SetName("runtime.interfaceLengths")
+	interfaceMethodsArray := llvm.ConstArray(llvm.Int16Type(), interfaceMethods)
+	interfaceMethodsArrayNewGlobal := llvm.AddGlobal(c.mod, interfaceMethodsArray.Type(), "runtime.interfaceMethods.tmp")
+	interfaceMethodsArrayNewGlobal.SetInitializer(interfaceMethodsArray)
+	interfaceMethodsArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
+	interfaceMethodsArrayOldGlobal := c.mod.NamedGlobal("runtime.interfaceMethods")
+	interfaceMethodsArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(interfaceMethodsArrayNewGlobal, interfaceMethodsArrayOldGlobal.Type()))
+	interfaceMethodsArrayOldGlobal.EraseFromParentAsGlobal()
+	interfaceMethodsArrayNewGlobal.SetName("runtime.interfaceMethods")
 
-	c.mod.NamedGlobal("runtime.firstInterfaceNum").SetInitializer(llvm.ConstInt(llvm.Int16Type(), uint64(c.ir.FirstDynamicType()), false))
+	c.mod.NamedGlobal("runtime.firstTypeWithMethods").SetInitializer(llvm.ConstInt(llvm.Int16Type(), uint64(c.ir.FirstDynamicType()), false))
 
 	// see: https://reviews.llvm.org/D18355
 	c.mod.AddNamedMetadataOperand("llvm.module.flags",
@@ -2238,25 +2278,43 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
-			// TODO: check whether the type implements the interface.
-			return llvm.Value{}, errors.New("todo: assert on interface")
-		}
+
 		assertedType, err := c.getLLVMType(expr.AssertedType)
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		assertedTypeNum, typeExists := c.ir.TypeNum(expr.AssertedType)
-		if !typeExists {
-			// Static analysis has determined this type assert will never apply.
-			return llvm.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.ConstInt(llvm.Int1Type(), 0, false)}, false), nil
+		valueNil, err := getZeroValue(assertedType)
+		if err != nil {
+			return llvm.Value{}, err
 		}
-		if assertedTypeNum >= 1<<16 {
-			return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
-		}
-		actualTypeNum := c.builder.CreateExtractValue(itf, 0, "interface.type")
 
-		commaOk := c.builder.CreateICmp(llvm.IntEQ, llvm.ConstInt(llvm.Int16Type(), uint64(assertedTypeNum), false), actualTypeNum, "")
+		actualTypeNum := c.builder.CreateExtractValue(itf, 0, "interface.type")
+		commaOk := llvm.Value{}
+		if itf, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
+			// Type assert on interface type.
+			// This is slightly non-trivial: at runtime the list of methods
+			// needs to be checked to see whether it implements the interface.
+			// At the same time, the interface value itself is unchanged.
+			itfTypeNum := c.ir.InterfaceNum(itf)
+			itfTypeNumValue := llvm.ConstInt(llvm.Int16Type(), uint64(itfTypeNum), false)
+			fn := c.mod.NamedFunction("runtime.interfaceImplements")
+			commaOk = c.builder.CreateCall(fn, []llvm.Value{actualTypeNum, itfTypeNumValue}, "")
+
+		} else {
+			// Type assert on concrete type.
+			// This is easy: just compare the type number.
+			assertedTypeNum, typeExists := c.ir.TypeNum(expr.AssertedType)
+			if !typeExists {
+				// Static analysis has determined this type assert will never apply.
+				return llvm.ConstStruct([]llvm.Value{valueNil, llvm.ConstInt(llvm.Int1Type(), 0, false)}, false), nil
+			}
+			if assertedTypeNum >= 1<<16 {
+				return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
+			}
+
+			assertedTypeNumValue := llvm.ConstInt(llvm.Int16Type(), uint64(assertedTypeNum), false)
+			commaOk = c.builder.CreateICmp(llvm.IntEQ, assertedTypeNumValue, actualTypeNum, "")
+		}
 
 		// Add 2 new basic blocks (that should get optimized away): one for the
 		// 'ok' case and one for all instructions following this type assert.
@@ -2269,11 +2327,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// typeassert should return a zero value, not an incorrectly casted
 		// value.
 
-		valueNil, err := getZeroValue(assertedType)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-
 		prevBlock := c.builder.GetInsertBlock()
 		okBlock := c.ctx.AddBasicBlock(frame.fn.llvmFn, "typeassert.ok")
 		nextBlock := c.ctx.AddBasicBlock(frame.fn.llvmFn, "typeassert.next")
@@ -2282,29 +2335,37 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// Retrieve the value from the interface if the type assert was
 		// successful.
 		c.builder.SetInsertPointAtEnd(okBlock)
-		valuePtr := c.builder.CreateExtractValue(itf, 1, "typeassert.value.ptr")
 		var valueOk llvm.Value
-		if c.targetData.TypeAllocSize(assertedType) > c.targetData.TypeAllocSize(c.i8ptrType) {
-			// Value was stored in an allocated buffer, load it from there.
-			valuePtrCast := c.builder.CreateBitCast(valuePtr, llvm.PointerType(assertedType, 0), "")
-			valueOk = c.builder.CreateLoad(valuePtrCast, "typeassert.value.ok")
+		if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
+			// Type assert on interface type. Easy: just return the same
+			// interface value.
+			valueOk = itf
 		} else {
-			// Value was stored directly in the interface.
-			switch assertedType.TypeKind() {
-			case llvm.IntegerTypeKind:
-				valueOk = c.builder.CreatePtrToInt(valuePtr, assertedType, "typeassert.value.ok")
-			case llvm.PointerTypeKind:
-				valueOk = c.builder.CreateBitCast(valuePtr, assertedType, "typeassert.value.ok")
-			case llvm.StructTypeKind:
-				// A bitcast would be useful here, but bitcast doesn't allow
-				// aggregate types. So we'll bitcast it using an alloca.
-				// Hopefully this will get optimized away.
-				mem := c.builder.CreateAlloca(c.i8ptrType, "")
-				c.builder.CreateStore(valuePtr, mem)
-				memStructPtr := c.builder.CreateBitCast(mem, llvm.PointerType(assertedType, 0), "")
-				valueOk = c.builder.CreateLoad(memStructPtr, "typeassert.value.ok")
-			default:
-				return llvm.Value{}, errors.New("todo: typeassert: bitcast small types")
+			// Type assert on concrete type. Extract the underlying type from
+			// the interface (but only after checking it matches).
+			valuePtr := c.builder.CreateExtractValue(itf, 1, "typeassert.value.ptr")
+			if c.targetData.TypeAllocSize(assertedType) > c.targetData.TypeAllocSize(c.i8ptrType) {
+				// Value was stored in an allocated buffer, load it from there.
+				valuePtrCast := c.builder.CreateBitCast(valuePtr, llvm.PointerType(assertedType, 0), "")
+				valueOk = c.builder.CreateLoad(valuePtrCast, "typeassert.value.ok")
+			} else {
+				// Value was stored directly in the interface.
+				switch assertedType.TypeKind() {
+				case llvm.IntegerTypeKind:
+					valueOk = c.builder.CreatePtrToInt(valuePtr, assertedType, "typeassert.value.ok")
+				case llvm.PointerTypeKind:
+					valueOk = c.builder.CreateBitCast(valuePtr, assertedType, "typeassert.value.ok")
+				case llvm.StructTypeKind:
+					// A bitcast would be useful here, but bitcast doesn't allow
+					// aggregate types. So we'll bitcast it using an alloca.
+					// Hopefully this will get optimized away.
+					mem := c.builder.CreateAlloca(c.i8ptrType, "")
+					c.builder.CreateStore(valuePtr, mem)
+					memStructPtr := c.builder.CreateBitCast(mem, llvm.PointerType(assertedType, 0), "")
+					valueOk = c.builder.CreateLoad(memStructPtr, "typeassert.value.ok")
+				default:
+					return llvm.Value{}, errors.New("todo: typeassert: bitcast small types")
+				}
 			}
 		}
 		c.builder.CreateBr(nextBlock)

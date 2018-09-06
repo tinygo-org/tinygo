@@ -2,6 +2,9 @@ package main
 
 import (
 	"go/types"
+	"sort"
+	"strings"
+
 	"golang.org/x/tools/go/ssa"
 )
 
@@ -56,6 +59,18 @@ func Signature(sig *types.Signature) string {
 	return s
 }
 
+// Convert an interface type to a string of all method strings, separated by
+// "; ". For example: "Read([]byte) (int, error); Close() error"
+func InterfaceKey(itf *types.Interface) string {
+	methodStrings := []string{}
+	for i := 0; i < itf.NumMethods(); i++ {
+		method := itf.Method(i)
+		methodStrings = append(methodStrings, MethodSignature(method))
+	}
+	sort.Strings(methodStrings)
+	return strings.Join(methodStrings, ";")
+}
+
 // Fill in parents of all functions.
 //
 // All packages need to be added before this pass can run, or it will produce
@@ -104,7 +119,7 @@ func (p *Program) AnalyseCallgraph() {
 func (p *Program) AnalyseInterfaceConversions() {
 	// Clear, if AnalyseTypes has been called before.
 	p.typesWithoutMethods = map[string]int{"nil": 0}
-	p.typesWithMethods = map[string]*InterfaceType{}
+	p.typesWithMethods = map[string]*TypeWithMethods{}
 
 	for _, f := range p.Functions {
 		for _, block := range f.fn.Blocks {
@@ -114,7 +129,7 @@ func (p *Program) AnalyseInterfaceConversions() {
 					methods := getAllMethods(f.fn.Prog, instr.X.Type())
 					name := instr.X.Type().String()
 					if _, ok := p.typesWithMethods[name]; !ok && len(methods) > 0 {
-						t := &InterfaceType{
+						t := &TypeWithMethods{
 							t:       instr.X.Type(),
 							Num:     len(p.typesWithMethods),
 							Methods: make(map[string]*types.Selection),
@@ -271,7 +286,13 @@ func (p *Program) SimpleDCE() {
 			for _, instr := range block.Instrs {
 				if instr, ok := instr.(*ssa.MakeInterface); ok {
 					for _, sel := range getAllMethods(p.program, instr.X.Type()) {
-						callee := p.GetFunction(p.program.MethodValue(sel))
+						fn := p.program.MethodValue(sel)
+						callee := p.GetFunction(fn)
+						if callee == nil {
+							// TODO: why is this necessary?
+							p.addFunction(fn)
+							callee = p.GetFunction(fn)
+						}
 						if !callee.flag {
 							callee.flag = true
 							worklist = append(worklist, callee.fn)
@@ -361,6 +382,19 @@ func (p *Program) TypeNum(typ types.Type) (int, bool) {
 	}
 }
 
+// InterfaceNum returns the numeric interface ID of this type, for use in type
+// asserts.
+func (p *Program) InterfaceNum(itfType *types.Interface) int {
+	key := InterfaceKey(itfType)
+	if itf, ok := p.interfaces[key]; !ok {
+		num := len(p.interfaces)
+		p.interfaces[key] = &Interface{Num: num, Type: itfType}
+		return num
+	} else {
+		return itf.Num
+	}
+}
+
 // MethodNum returns the numeric ID of this method, to be used in method lookups
 // on interfaces for example.
 func (p *Program) MethodNum(method *types.Func) int {
@@ -381,10 +415,19 @@ func (p *Program) FirstDynamicType() int {
 }
 
 // Return all types with methods, sorted by type ID.
-func (p *Program) AllDynamicTypes() []*InterfaceType {
-	l := make([]*InterfaceType, len(p.typesWithMethods))
+func (p *Program) AllDynamicTypes() []*TypeWithMethods {
+	l := make([]*TypeWithMethods, len(p.typesWithMethods))
 	for _, m := range p.typesWithMethods {
 		l[m.Num] = m
+	}
+	return l
+}
+
+// Return all interface types, sorted by interface ID.
+func (p *Program) AllInterfaces() []*Interface {
+	l := make([]*Interface, len(p.interfaces))
+	for _, itf := range p.interfaces {
+		l[itf.Num] = itf
 	}
 	return l
 }

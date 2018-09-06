@@ -16,6 +16,18 @@ type Stringer interface {
 	String() string
 }
 
+type Foo int
+
+type Number int
+
+func (n Number) Double() int {
+	return int(n) * 2
+}
+
+type Doubler interface {
+	Double() int
+}
+
 const SIX = 6
 
 var testmap = map[string]int{"data": 3}
@@ -54,6 +66,7 @@ func main() {
 	printItf(*thing)
 	printItf(thing)
 	printItf(Stringer(thing))
+	printItf(Number(3))
 	s := Stringer(thing)
 	println("Stringer.String():", s.String())
 
@@ -107,6 +120,8 @@ func strlen(s string) int {
 
 func printItf(val interface{}) {
 	switch val := val.(type) {
+	case Doubler:
+		println("is Doubler:", val.Double())
 	case int:
 		println("is int:", val)
 	case byte:
@@ -117,6 +132,8 @@ func printItf(val interface{}) {
 		println("is Thing:", val.String())
 	case *Thing:
 		println("is *Thing:", val.String())
+	case Foo:
+		println("is Foo:", val)
 	default:
 		println("is ?")
 	}
