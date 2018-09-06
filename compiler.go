@@ -2087,6 +2087,48 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		llvmValueSize := llvm.ConstInt(llvm.Int8Type(), valueSize, false)
 		hashmap := c.builder.CreateCall(hashmapMake, []llvm.Value{llvmKeySize, llvmValueSize}, "")
 		return hashmap, nil
+	case *ssa.MakeSlice:
+		sliceLen, err := c.parseExpr(frame, expr.Len)
+		if err != nil {
+			return llvm.Value{}, nil
+		}
+		sliceCap, err := c.parseExpr(frame, expr.Cap)
+		if err != nil {
+			return llvm.Value{}, nil
+		}
+		sliceType := expr.Type().Underlying().(*types.Slice)
+		llvmElemType, err := c.getLLVMType(sliceType.Elem())
+		if err != nil {
+			return llvm.Value{}, nil
+		}
+		elemSize := c.targetData.TypeAllocSize(llvmElemType)
+
+		// Bounds checking.
+		if !frame.fn.nobounds {
+			sliceBoundsCheck := c.mod.NamedFunction("runtime.sliceBoundsCheckMake")
+			c.builder.CreateCall(sliceBoundsCheck, []llvm.Value{sliceLen, sliceCap}, "")
+		}
+
+		// Allocate the backing array.
+		// TODO: escape analysis
+		elemSizeValue := llvm.ConstInt(c.uintptrType, elemSize, false)
+		sliceCapCast, err := c.parseConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		sliceSize := c.builder.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
+		slicePtr := c.builder.CreateCall(c.allocFunc, []llvm.Value{sliceSize}, "makeslice.buf")
+
+		// Create the slice.
+		slice := llvm.ConstStruct([]llvm.Value{
+			llvm.Undef(slicePtr.Type()),
+			llvm.Undef(c.lenType),
+			llvm.Undef(c.lenType),
+		}, false)
+		slice = c.builder.CreateInsertValue(slice, slicePtr, 0, "")
+		slice = c.builder.CreateInsertValue(slice, sliceLen, 1, "")
+		slice = c.builder.CreateInsertValue(slice, sliceCap, 2, "")
+		return slice, nil
 	case *ssa.Phi:
 		t, err := c.getLLVMType(expr.Type())
 		if err != nil {
