@@ -721,22 +721,13 @@ func (c *Compiler) getDIType(typ types.Type) (llvm.Metadata, error) {
 	}
 }
 
-// Get all methods of a type: both value receivers and pointer receivers.
+// Get all methods of a type.
 func getAllMethods(prog *ssa.Program, typ types.Type) []*types.Selection {
-	var methods []*types.Selection
-
-	// value receivers
 	ms := prog.MethodSets.MethodSet(typ)
+	methods := make([]*types.Selection, ms.Len())
 	for i := 0; i < ms.Len(); i++ {
-		methods = append(methods, ms.At(i))
+		methods[i] = ms.At(i)
 	}
-
-	// pointer receivers
-	ms = prog.MethodSets.MethodSet(types.NewPointer(typ))
-	for i := 0; i < ms.Len(); i++ {
-		methods = append(methods, ms.At(i))
-	}
-
 	return methods
 }
 
