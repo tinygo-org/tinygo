@@ -1623,7 +1623,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 		}
 	case "print", "println":
 		for i, arg := range args {
-			if i >= 1 {
+			if i >= 1 && callName == "println" {
 				c.builder.CreateCall(c.mod.NamedFunction("runtime.printspace"), nil, "")
 			}
 			value, err := c.parseExpr(frame, arg)
