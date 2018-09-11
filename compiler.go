@@ -446,12 +446,14 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	}
 
 	interfaceTypes := c.ir.AllInterfaces()
+	interfaceIndex := make([]llvm.Value, len(interfaceTypes))
 	interfaceLengths := make([]llvm.Value, len(interfaceTypes))
 	interfaceMethods := make([]llvm.Value, 0)
 	for i, itfType := range interfaceTypes {
 		if itfType.Type.NumMethods() > 0xff {
 			return errors.New("too many methods for interface " + itfType.Type.String())
 		}
+		interfaceIndex[i] = llvm.ConstInt(llvm.Int16Type(), uint64(i), false)
 		interfaceLengths[i] = llvm.ConstInt(llvm.Int8Type(), uint64(itfType.Type.NumMethods()), false)
 		funcs := make([]*types.Func, itfType.Type.NumMethods())
 		for i := range funcs {
@@ -493,6 +495,14 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	signatureArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(signatureArrayNewGlobal, signatureArrayOldGlobal.Type()))
 	signatureArrayOldGlobal.EraseFromParentAsGlobal()
 	signatureArrayNewGlobal.SetName("runtime.methodSetSignatures")
+	interfaceIndexArray := llvm.ConstArray(llvm.Int16Type(), interfaceIndex)
+	interfaceIndexArrayNewGlobal := llvm.AddGlobal(c.mod, interfaceIndexArray.Type(), "runtime.interfaceIndex.tmp")
+	interfaceIndexArrayNewGlobal.SetInitializer(interfaceIndexArray)
+	interfaceIndexArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
+	interfaceIndexArrayOldGlobal := c.mod.NamedGlobal("runtime.interfaceIndex")
+	interfaceIndexArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(interfaceIndexArrayNewGlobal, interfaceIndexArrayOldGlobal.Type()))
+	interfaceIndexArrayOldGlobal.EraseFromParentAsGlobal()
+	interfaceIndexArrayNewGlobal.SetName("runtime.interfaceIndex")
 	interfaceLengthsArray := llvm.ConstArray(llvm.Int8Type(), interfaceLengths)
 	interfaceLengthsArrayNewGlobal := llvm.AddGlobal(c.mod, interfaceLengthsArray.Type(), "runtime.interfaceLengths.tmp")
 	interfaceLengthsArrayNewGlobal.SetInitializer(interfaceLengthsArray)

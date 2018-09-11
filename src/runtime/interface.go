@@ -37,7 +37,7 @@ type methodSetRange struct {
 // in.
 var (
 	firstTypeWithMethods uint16            // the lowest typecode that has at least one method
-	methodSetRanges      [0]methodSetRange // indexes into methodSetSignatures and methodSetFunctions
+	methodSetRanges      [0]methodSetRange // indices into methodSetSignatures and methodSetFunctions
 	methodSetSignatures  [0]uint16         // uniqued method ID
 	methodSetFunctions   [0]*uint8         // function pointer of method
 	interfaceIndex       [0]uint16         // mapping from interface ID to an index in interfaceMethods
@@ -81,14 +81,27 @@ func interfaceEqual(x, y _interface) bool {
 // This is a compiler intrinsic.
 //go:nobounds
 func interfaceImplements(typecode, interfaceNum uint16) bool {
-	// method set indexes of the concrete type
+	// method set indices of the interface
+	itfIndex := interfaceIndex[interfaceNum]
+	itfIndexEnd := itfIndex + uint16(interfaceLengths[interfaceNum])
+
+	if itfIndex == itfIndexEnd {
+		// This interface has no methods, so it satisfies all types.
+		// TODO: this should be figured out at compile time (as it is known at
+		// compile time), so that this check is unnecessary at runtime.
+		return true
+	}
+
+	if typecode < firstTypeWithMethods {
+		// Type has no methods while the interface has (checked above), so this
+		// type does not satisfy this interface.
+		return false
+	}
+
+	// method set indices of the concrete type
 	methodSet := methodSetRanges[typecode-firstTypeWithMethods]
 	methodIndex := methodSet.index
 	methodIndexEnd := methodSet.index + methodSet.length
-
-	// method set indexes of the interface
-	itfIndex := interfaceIndex[interfaceNum]
-	itfIndexEnd := itfIndex + uint16(interfaceLengths[interfaceNum])
 
 	// Iterate over all methods of the interface:
 	for itfIndex < itfIndexEnd {
