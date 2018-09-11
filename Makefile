@@ -96,7 +96,7 @@ build/tgo: *.go
 
 # Build IR with the Go compiler.
 build/%.o: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go build/runtime-$(TARGET)-combined.bc
-	./build/tgo $(TGOFLAGS) -runtime build/runtime-$(TARGET)-combined.bc -o $@ $(subst src/,,$<)
+	./build/tgo build $(TGOFLAGS) -runtime build/runtime-$(TARGET)-combined.bc -o $@ $(subst src/,,$<)
 
 # Compile C sources for the runtime.
 build/%.bc: src/runtime/%.c src/runtime/*.h

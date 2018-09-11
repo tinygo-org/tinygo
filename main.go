@@ -76,6 +76,14 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool
 	return nil
 }
 
+func usage() {
+	fmt.Fprintf(os.Stderr, "usage: %s command [-printir] -runtime=<runtime.bc> [-target=<target>] -o <output> <input>\n", os.Args[0])
+	fmt.Fprintln(os.Stderr, "\ncommands:")
+	fmt.Fprintln(os.Stderr, "  build: compile packages and dependencies")
+	fmt.Fprintln(os.Stderr, "\nflags:")
+	flag.PrintDefaults()
+}
+
 func main() {
 	outpath := flag.String("o", "", "output filename")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
@@ -83,19 +91,32 @@ func main() {
 	runtime := flag.String("runtime", "", "runtime LLVM bitcode files (from C sources)")
 	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
 
-	flag.Parse()
+	if len(os.Args) < 2 {
+		usage()
+		os.Exit(1)
+	}
+	command := os.Args[1]
+
+	flag.CommandLine.Parse(os.Args[2:])
 
 	if *outpath == "" || flag.NArg() != 1 {
-		fmt.Fprintf(os.Stderr, "usage: %s [-printir] -runtime=<runtime.bc> [-target=<target>] -o <output> <input>", os.Args[0])
-		flag.PrintDefaults()
-		return
+		usage()
+		os.Exit(1)
 	}
 
 	os.Setenv("CC", "clang -target="+*target)
 
-	err := Compile(flag.Args()[0], *runtime, *outpath, *target, *printIR, *dumpSSA)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+	switch command {
+	case "build":
+		err := Compile(flag.Arg(0), *runtime, *outpath, *target, *printIR, *dumpSSA)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+	case "help":
+		usage()
+	default:
+		usage()
 		os.Exit(1)
 	}
 }
