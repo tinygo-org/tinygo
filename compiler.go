@@ -2300,9 +2300,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, errors.New("unknown slice type: " + typ.String())
 		}
 	case *ssa.TypeAssert:
-		if !expr.CommaOk {
-			return llvm.Value{}, errors.New("todo: type assert without comma-ok")
-		}
 		itf, err := c.parseExpr(frame, expr.X)
 		if err != nil {
 			return llvm.Value{}, err
@@ -2404,10 +2401,18 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		phi := c.builder.CreatePHI(assertedType, "typeassert.value")
 		phi.AddIncoming([]llvm.Value{valueNil, valueOk}, []llvm.BasicBlock{prevBlock, okBlock})
 
-		tuple := llvm.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(llvm.Int1Type())}, false) // create empty tuple
-		tuple = c.builder.CreateInsertValue(tuple, phi, 0, "")                                                // insert value
-		tuple = c.builder.CreateInsertValue(tuple, commaOk, 1, "")                                            // insert 'comma ok' boolean
-		return tuple, nil
+		if expr.CommaOk {
+			tuple := llvm.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(llvm.Int1Type())}, false) // create empty tuple
+			tuple = c.builder.CreateInsertValue(tuple, phi, 0, "")                                                // insert value
+			tuple = c.builder.CreateInsertValue(tuple, commaOk, 1, "")                                            // insert 'comma ok' boolean
+			return tuple, nil
+		} else {
+			// This is kind of dirty as the branch above becomes mostly useless,
+			// but hopefully this gets optimized away.
+			fn := c.mod.NamedFunction("runtime.interfaceTypeAssert")
+			c.builder.CreateCall(fn, []llvm.Value{commaOk}, "")
+			return phi, nil
+		}
 	case *ssa.UnOp:
 		return c.parseUnOp(frame, expr)
 	default:

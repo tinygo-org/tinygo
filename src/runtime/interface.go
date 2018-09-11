@@ -134,3 +134,9 @@ func interfaceImplements(typecode, interfaceNum uint16) bool {
 	// assert is successful.
 	return true
 }
+
+func interfaceTypeAssert(ok bool) {
+	if !ok {
+		runtimePanic("type assert failed")
+	}
+}

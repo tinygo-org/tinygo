@@ -69,6 +69,8 @@ func main() {
 	printItf(Number(3))
 	s := Stringer(thing)
 	println("Stringer.String():", s.String())
+	var itf interface{} = s
+	println("Stringer.(*Thing).String():", itf.(Stringer).String())
 
 	// unusual calls
 	runFunc(hello, 5) // must be indirect to avoid obvious inlining
