@@ -48,7 +48,7 @@ func abort() {
 func alloc(size uintptr) unsafe.Pointer {
 	buf := _Cfunc_calloc(1, size)
 	if buf == nil {
-		panic("cannot allocate memory")
+		runtimePanic("cannot allocate memory")
 	}
 	return buf
 }
