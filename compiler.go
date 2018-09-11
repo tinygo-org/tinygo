@@ -1182,11 +1182,30 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		frame.cleanupBlock = c.ctx.AddBasicBlock(frame.fn.llvmFn, "task.cleanup")
 		frame.suspendBlock = c.ctx.AddBasicBlock(frame.fn.llvmFn, "task.suspend")
 	}
+	entryBlock := frame.blocks[frame.fn.fn.Blocks[0]]
 
 	// Load function parameters
-	for _, param := range frame.fn.fn.Params {
+	for i, param := range frame.fn.fn.Params {
 		llvmParam := frame.fn.llvmFn.Param(frame.params[param])
 		frame.locals[param] = llvmParam
+
+		// Add debug information to this parameter (if available)
+		if c.debug && frame.fn.fn.Syntax() != nil {
+			pos := c.ir.program.Fset.Position(frame.fn.fn.Syntax().Pos())
+			dityp, err := c.getDIType(param.Type())
+			if err != nil {
+				return err
+			}
+			c.dibuilder.CreateParameterVariable(frame.difunc, llvm.DIParameterVariable{
+				Name:           param.Name(),
+				File:           c.difiles[pos.Filename],
+				Line:           pos.Line,
+				Type:           dityp,
+				AlwaysPreserve: true,
+				ArgNo:          i + 1,
+			})
+			// TODO: set the value of this parameter.
+		}
 	}
 
 	// Load free variables from the context. This is a closure (or bound
@@ -1195,7 +1214,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		if !c.ir.FunctionNeedsContext(frame.fn) {
 			panic("free variables on function without context")
 		}
-		c.builder.SetInsertPointAtEnd(frame.blocks[frame.fn.fn.Blocks[0]])
+		c.builder.SetInsertPointAtEnd(entryBlock)
 		context := frame.fn.llvmFn.Param(len(frame.fn.fn.Params))
 
 		// Determine the context type. It's a struct containing all variables.
@@ -1237,7 +1256,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		}
 	}
 
-	c.builder.SetInsertPointAtEnd(frame.blocks[frame.fn.fn.Blocks[0]])
+	c.builder.SetInsertPointAtEnd(entryBlock)
 
 	if frame.fn.fn.Recover != nil {
 		// Create defer list pointer.
