@@ -92,7 +92,7 @@ func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.machine = target.CreateTargetMachine(triple, "", "", llvm.CodeGenLevelDefault, llvm.RelocDefault, llvm.CodeModelDefault)
+	c.machine = target.CreateTargetMachine(triple, "", "", llvm.CodeGenLevelDefault, llvm.RelocPIC, llvm.CodeModelDefault)
 	c.targetData = c.machine.CreateTargetData()
 
 	c.mod = llvm.NewModule(pkgName)

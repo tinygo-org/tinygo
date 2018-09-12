@@ -4,7 +4,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -67,7 +71,56 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool
 	} else if strings.HasSuffix(outpath, ".ll") {
 		return c.EmitText(outpath)
 	} else {
-		return errors.New("unknown output file extension")
+		// Act as a compiler driver.
+
+		// Create a temporary directory for intermediary files.
+		dir, err := ioutil.TempDir("", "tinygo")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(dir)
+
+		// Write the object file.
+		objfile := filepath.Join(dir, "main.o")
+		err = c.EmitObject(objfile)
+		if err != nil {
+			return err
+		}
+
+		// Link the object file with the system compiler.
+		executable := filepath.Join(dir, "main")
+		cmd := exec.Command("cc", "-o", executable, objfile)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+		if err != nil {
+			return err
+		}
+
+		if err := os.Rename(executable, outpath); err != nil {
+			// Moving failed. Do a file copy.
+			inf, err := os.Open(executable)
+			if err != nil {
+				return err
+			}
+			defer inf.Close()
+			outf, err := os.OpenFile(outpath, os.O_RDWR|os.O_CREATE, 0777)
+			if err != nil {
+				return err
+			}
+
+			// Copy data to output file.
+			_, err = io.Copy(outf, inf)
+			if err != nil {
+				return err
+			}
+
+			// Check whether file writing was successful.
+			return outf.Close()
+		} else {
+			// Move was successful.
+			return nil
+		}
 	}
 }
 
