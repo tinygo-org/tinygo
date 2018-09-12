@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/aykevl/llvm/bindings/go/llvm"
 )
@@ -58,12 +59,16 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool
 		return err
 	}
 
-	err = c.EmitObject(outpath)
-	if err != nil {
-		return err
+	// Generate output.
+	if strings.HasSuffix(outpath, ".o") {
+		return c.EmitObject(outpath)
+	} else if strings.HasSuffix(outpath, ".bc") {
+		return c.EmitBitcode(outpath)
+	} else if strings.HasSuffix(outpath, ".ll") {
+		return c.EmitText(outpath)
+	} else {
+		return errors.New("unknown output file extension")
 	}
-
-	return nil
 }
 
 // Run the specified package directly (using JIT or interpretation).

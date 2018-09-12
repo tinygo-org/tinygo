@@ -3048,29 +3048,37 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) {
 	modPasses.Run(c.mod)
 }
 
+// Emit object file (.o).
 func (c *Compiler) EmitObject(path string) error {
-	// Generate output
-	var buf []byte
-	if strings.HasSuffix(path, ".o") {
-		llvmBuf, err := c.machine.EmitToMemoryBuffer(c.mod, llvm.ObjectFile)
-		if err != nil {
-			return err
-		}
-		buf = llvmBuf.Bytes()
-	} else if strings.HasSuffix(path, ".bc") {
-		buf = llvm.WriteBitcodeToMemoryBuffer(c.mod).Bytes()
-	} else if strings.HasSuffix(path, ".ll") {
-		buf = []byte(c.mod.String())
-	} else {
-		return errors.New("unknown output file extension")
+	llvmBuf, err := c.machine.EmitToMemoryBuffer(c.mod, llvm.ObjectFile)
+	if err != nil {
+		return err
 	}
+	return c.writeFile(llvmBuf.Bytes(), path)
+}
 
+// Emit LLVM bitcode file (.bc).
+func (c *Compiler) EmitBitcode(path string) error {
+	data := llvm.WriteBitcodeToMemoryBuffer(c.mod).Bytes()
+	return c.writeFile(data, path)
+}
+
+// Emit LLVM IR source file (.ll).
+func (c *Compiler) EmitText(path string) error {
+	data := []byte(c.mod.String())
+	return c.writeFile(data, path)
+}
+
+// Write the data to the file specified by path.
+func (c *Compiler) writeFile(data []byte, path string) error {
 	// Write output to file
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}
-	f.Write(buf)
-	f.Close()
-	return nil
+	_, err = f.Write(data)
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
