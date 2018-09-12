@@ -80,6 +80,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "usage: %s command [-printir] -runtime=<runtime.bc> [-target=<target>] -o <output> <input>\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "\ncommands:")
 	fmt.Fprintln(os.Stderr, "  build: compile packages and dependencies")
+	fmt.Fprintln(os.Stderr, "  help:  print this help text")
 	fmt.Fprintln(os.Stderr, "\nflags:")
 	flag.PrintDefaults()
 }
@@ -92,6 +93,7 @@ func main() {
 	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
 
 	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
 		usage()
 		os.Exit(1)
 	}
@@ -99,15 +101,20 @@ func main() {
 
 	flag.CommandLine.Parse(os.Args[2:])
 
-	if *outpath == "" || flag.NArg() != 1 {
-		usage()
-		os.Exit(1)
-	}
-
 	os.Setenv("CC", "clang -target="+*target)
 
 	switch command {
 	case "build":
+		if *outpath == "" {
+			fmt.Fprintln(os.Stderr, "No output filename supplied (-o).")
+			usage()
+			os.Exit(1)
+		}
+		if flag.NArg() != 1 {
+			fmt.Fprintln(os.Stderr, "No package specified.")
+			usage()
+			os.Exit(1)
+		}
 		err := Compile(flag.Arg(0), *runtime, *outpath, *target, *printIR, *dumpSSA)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
@@ -116,6 +123,7 @@ func main() {
 	case "help":
 		usage()
 	default:
+		fmt.Fprintln(os.Stderr, "Unknown command:", command)
 		usage()
 		os.Exit(1)
 	}
