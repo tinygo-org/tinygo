@@ -2,5 +2,5 @@
 	"llvm-target": "armv7m-none-eabi",
 	"build-tags": ["nrf", "nrf52", "nrf52832", "js", "wasm"],
 	"linker": "arm-none-eabi-gcc",
-	"pre-link-args": ["-nostdlib", "-nostartfiles", "-mcpu=cortex-m4", "-mthumb", "-T", "arm.ld", "-Wl,--gc-sections", "-fno-exceptions", "-fno-unwind-tables", "-ffunction-sections", "-fdata-sections", "-Os", "-DNRF52832_XXAA", "-D__STARTUP_CLEAR_BSS", "-Ilib/CMSIS/CMSIS/Include", "lib/nrfx/mdk/gcc_startup_nrf51.S", "lib/nrfx/mdk/system_nrf52.c"]
+	"pre-link-args": ["-nostdlib", "-nostartfiles", "-mcpu=cortex-m4", "-mthumb", "-T", "targets/arm.ld", "-Wl,--gc-sections", "-fno-exceptions", "-fno-unwind-tables", "-ffunction-sections", "-fdata-sections", "-Os", "-DNRF52832_XXAA", "-D__STARTUP_CLEAR_BSS", "-Ilib/CMSIS/CMSIS/Include", "lib/nrfx/mdk/gcc_startup_nrf51.S", "lib/nrfx/mdk/system_nrf52.c"]
 }
