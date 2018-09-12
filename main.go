@@ -12,21 +12,9 @@ import (
 
 // Helper function for Compiler object.
 func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool) error {
-	var buildTags []string
-	// TODO: put this somewhere else
-	if target == "pca10040" {
-		// Pretend to be a WASM target, not ARM (for standard library support).
-		buildTags = append(buildTags, "nrf", "nrf52", "nrf52832", "js", "wasm")
-		target = "armv7m-none-eabi"
-	} else if target == "arduino" {
-		// Pretend to be a WASM target, not AVR (for standard library support).
-		buildTags = append(buildTags, "avr", "avr8", "atmega", "atmega328p", "js", "wasm")
-		target = "avr--"
-	} else {
-		buildTags = append(buildTags, runtime.GOOS, runtime.GOARCH)
-	}
+	spec, err := LoadTarget(target)
 
-	c, err := NewCompiler(pkgName, target, dumpSSA)
+	c, err := NewCompiler(pkgName, spec.Triple, dumpSSA)
 	if err != nil {
 		return err
 	}
@@ -52,7 +40,7 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool
 				fmt.Println(c.IR())
 			}()
 		}
-		return c.Parse(pkgName, buildTags)
+		return c.Parse(pkgName, spec.BuildTags)
 	}()
 	if parseErr != nil {
 		return parseErr

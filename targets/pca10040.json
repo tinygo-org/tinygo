@@ -1,0 +1,4 @@
+{
+	"llvm-target": "armv7m-none-eabi",
+	"build-tags": ["nrf", "nrf52", "nrf52832", "js", "wasm"]
+}

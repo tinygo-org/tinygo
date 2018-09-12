@@ -1,0 +1,4 @@
+{
+	"llvm-target": "avr-atmel-none",
+	"build-tags": ["avr", "avr8", "atmega", "atmega328p", "js", "wasm"]
+}
