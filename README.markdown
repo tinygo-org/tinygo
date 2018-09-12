@@ -143,7 +143,19 @@ After LLVM has been built, you can run an example with:
 
 For a blinky example on the PCA10040 development board, do this:
 
-    make flash-blinky TARGET=pca10040
+    make flash-blinky2 TARGET=pca10040
+
+Note that you will have to execute the following commands before the blinky
+example will work:
+
+    git submodule update --init
+    make gen-device-nrf
+
+You can also run a simpler blinky example (blinky1) on the Arduino:
+
+    git submodule update --init # only required the first time
+    make gen-device-avr         # only required the first time
+    make flash-blinky1 TARGET=arduino
 
 ## License
 
