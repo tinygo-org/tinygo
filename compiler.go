@@ -3026,7 +3026,9 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) {
 	defer builder.Dispose()
 	builder.SetOptLevel(optLevel)
 	builder.SetSizeLevel(sizeLevel)
-	builder.UseInlinerWithThreshold(inlinerThreshold)
+	if inlinerThreshold != 0 {
+		builder.UseInlinerWithThreshold(inlinerThreshold)
+	}
 	builder.AddCoroutinePassesToExtensionPoints()
 
 	// Run function passes for each function.
