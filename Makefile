@@ -54,11 +54,11 @@ fmt:
 gen-device: gen-device-nrf
 
 gen-device-nrf:
-	./gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/
+	./tools/gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/
 	go fmt ./src/device/nrf
 
 gen-device-avr:
-	./gen-device-avr.py lib/avr/packs/atmega src/device/avr/
+	./tools/gen-device-avr.py lib/avr/packs/atmega src/device/avr/
 	go fmt ./src/device/avr
 
 
