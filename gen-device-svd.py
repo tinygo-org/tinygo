@@ -123,6 +123,18 @@ def parseSVDRegister(peripheralName, regEl, baseAddress, namePrefix=''):
                 continue
             fieldName = getText(fieldEl.getElementsByTagName('name')[0])
             descrEls = fieldEl.getElementsByTagName('description')
+            lsb = int(getText(fieldEl.getElementsByTagName('lsb')[0]))
+            msb = int(getText(fieldEl.getElementsByTagName('msb')[0]))
+            fields.append({
+                'name':        '{}_{}{}_{}_Pos'.format(peripheralName, namePrefix, regName, fieldName),
+                'description': 'Position of %s field.' % fieldName,
+                'value':       lsb,
+            })
+            fields.append({
+                'name':        '{}_{}{}_{}_Msk'.format(peripheralName, namePrefix, regName, fieldName),
+                'description': 'Bit mask of %s field.' % fieldName,
+                'value':       (0xffffffff >> (31 - (msb - lsb))) << lsb,
+            })
             for enumEl in fieldEl.getElementsByTagName('enumeratedValue'):
                 enumName = getText(enumEl.getElementsByTagName('name')[0])
                 enumDescription = getText(enumEl.getElementsByTagName('description')[0])
