@@ -7,8 +7,6 @@ import (
 	"device/nrf"
 )
 
-func _Cfunc_rtc_sleep(ticks uint32)
-
 const Microsecond = 1
 
 //go:export _start
@@ -55,7 +53,7 @@ func sleep(d Duration) {
 	for ticks64 != 0 {
 		monotime()                          // update timestamp
 		ticks := uint32(ticks64) & 0x7fffff // 23 bits (to be on the safe side)
-		_Cfunc_rtc_sleep(ticks)             // TODO: not accurate (must be d / 30.5175...)
+		rtc_sleep(ticks)                    // TODO: not accurate (must be d / 30.5175...)
 		ticks64 -= Duration(ticks)
 	}
 }
@@ -87,4 +85,30 @@ func abort() {
 // Align on word boundary.
 func align(ptr uintptr) uintptr {
 	return (ptr + 3) &^ 3
+}
+
+type __volatile bool
+
+var rtc_wakeup __volatile
+
+func rtc_sleep(ticks uint32) {
+	nrf.RTC0.INTENSET = nrf.RTC0_INTENSET_COMPARE0_Msk
+	rtc_wakeup = false
+	if ticks == 1 {
+		// Race condition (even in hardware) at ticks == 1.
+		// TODO: fix this in a better way by detecting it, like the manual
+		// describes.
+		ticks = 2
+	}
+	nrf.RTC0.CC[0] = (nrf.RTC0.COUNTER + nrf.RegValue(ticks)) & 0x00ffffff
+	for !rtc_wakeup {
+		arm.Asm("wfi")
+	}
+}
+
+//go:export RTC0_IRQHandler
+func RTC0_IRQHandler() {
+	nrf.RTC0.INTENCLR = nrf.RTC0_INTENSET_COMPARE0_Msk
+	nrf.RTC0.EVENTS_COMPARE[0] = 0
+	rtc_wakeup = true
 }

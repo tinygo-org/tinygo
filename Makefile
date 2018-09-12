@@ -36,7 +36,6 @@ CFLAGS += -I$(CURDIR)/lib/nrfx/mdk
 CFLAGS += -I$(CURDIR)/lib/CMSIS/CMSIS/Include
 CFLAGS += -DNRF52832_XXAA
 CFLAGS += -Wno-uninitialized
-RUNTIME_PARTS += build/runtime_nrf.bc
 RUNTIME_PARTS += build/nrfx_system_nrf52.bc
 OBJ += build/nrfx_startup_nrf51.o # TODO nrf52, see https://bugs.llvm.org/show_bug.cgi?id=31601
 
@@ -97,11 +96,6 @@ build/tgo: *.go
 # Build IR with the Go compiler.
 build/%.o: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go build/runtime-$(TARGET)-combined.bc
 	./build/tgo build $(TGOFLAGS) -runtime build/runtime-$(TARGET)-combined.bc -o $@ $(subst src/,,$<)
-
-# Compile C sources for the runtime.
-build/%.bc: src/runtime/%.c src/runtime/*.h
-	@mkdir -p build
-	clang $(CFLAGS) -c -o $@ $<
 
 # Compile LLVM bitcode from LLVM source.
 build/%.bc: src/runtime/%.ll
