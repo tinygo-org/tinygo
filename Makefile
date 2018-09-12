@@ -5,16 +5,8 @@ tgo: build/tgo
 
 .PHONY: all tgo run-test run-blinky run-blinky2 clean fmt gen-device gen-device-nrf
 
-# Custom LLVM toolchain.
-LLVM := $(shell go env GOPATH)/src/github.com/aykevl/llvm/bindings/go/llvm/workdir/llvm_build/bin/
-LINK = $(LLVM)llvm-link
-LLAS = $(LLVM)llvm-as
-OPT = $(LLVM)opt
-
-CFLAGS = -Wall -Werror -Os -fno-exceptions -flto -ffunction-sections -fdata-sections $(LLFLAGS)
+CFLAGS = -Wall -Werror -Os -fno-exceptions -ffunction-sections -fdata-sections $(LLFLAGS)
 CFLAGS += -fno-exceptions -fno-unwind-tables # Avoid .ARM.exidx etc.
-
-RUNTIME_PARTS = build/runtime.bc
 
 TARGET ?= unix
 
@@ -30,13 +22,10 @@ SIZE = arm-none-eabi-size
 OBJCOPY = arm-none-eabi-objcopy
 LLFLAGS += -target armv7m-none-eabi
 TGOFLAGS += -target $(TARGET)
-CFLAGS += -I$(CURDIR)/src/runtime
-CFLAGS += -I$(CURDIR)/lib/nrfx
-CFLAGS += -I$(CURDIR)/lib/nrfx/mdk
 CFLAGS += -I$(CURDIR)/lib/CMSIS/CMSIS/Include
 CFLAGS += -DNRF52832_XXAA
 CFLAGS += -Wno-uninitialized
-RUNTIME_PARTS += build/nrfx_system_nrf52.bc
+OBJ += build/nrfx_system_nrf52.o
 OBJ += build/nrfx_startup_nrf51.o # TODO nrf52, see https://bugs.llvm.org/show_bug.cgi?id=31601
 
 else ifeq ($(TARGET),arduino)
@@ -94,15 +83,11 @@ build/tgo: *.go
 	go build -o build/tgo -i .
 
 # Build IR with the Go compiler.
-build/%.o: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go build/runtime-$(TARGET)-combined.bc
-	./build/tgo build $(TGOFLAGS) -runtime build/runtime-$(TARGET)-combined.bc -o $@ $(subst src/,,$<)
-
-# Compile LLVM bitcode from LLVM source.
-build/%.bc: src/runtime/%.ll
-	$(LLAS) -o $@ $<
+build/%.o: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go
+	./build/tgo build $(TGOFLAGS) -o $@ $(subst src/,,$<)
 
 # Compile system_* file for the nRF.
-build/nrfx_%.bc: lib/nrfx/mdk/%.c
+build/nrfx_%.o: lib/nrfx/mdk/%.c
 	@mkdir -p build
 	clang $(CFLAGS) -c -o $@ $^
 
@@ -113,10 +98,6 @@ build/nrfx_%.o: lib/nrfx/mdk/gcc_%.S
 
 build/%.o: %.S
 	$(AS) -o $@ $^
-
-# Merge all runtime LLVM files together in a single bitcode file.
-build/runtime-$(TARGET)-combined.bc: $(RUNTIME_PARTS)
-	$(LINK) -o $@ $^
 
 # Generate output ELF executable.
 build/%: build/%.o $(OBJ)

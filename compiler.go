@@ -96,6 +96,8 @@ func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 	c.targetData = c.machine.CreateTargetData()
 
 	c.mod = llvm.NewModule(pkgName)
+	c.mod.SetTarget(triple)
+	c.mod.SetDataLayout(c.targetData.String())
 	c.ctx = c.mod.Context()
 	c.builder = c.ctx.NewBuilder()
 	c.dibuilder = llvm.NewDIBuilder(c.mod)
