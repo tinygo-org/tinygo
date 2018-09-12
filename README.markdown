@@ -114,11 +114,8 @@ You'll get an error like the following, this is expected:
              ^~~~~~~~~~~~~~~~~~~
     1 error generated.
 
-To continue, you'll need to build LLVM for Go. This will take about an hour and
-require a fair bit of RAM. In fact, I would recommend setting your `ld` binary
-to `gold` to speed up linking, especially on systems with less than 16GB RAM.
-
-Also, I would recommend editing build.sh and set `cmake_flags` to:
+To continue, you'll need to build LLVM. As a first step, modify
+github.com/aykevl/llvm/bindings/go/build.sh:
 
 ```sh
 cmake_flags="../../../../.. $@ -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR -DLLVM_LINK_LLVM_DYLIB=ON"
@@ -128,6 +125,17 @@ This will enable the experimental AVR backend (for Arduino support) and will
 make sure `tinygo` links to a shared library instead of a static library,
 greatly improving link time on every rebuild. This is especially useful during
 development.
+
+The next step is actually building LLVM. This is done by running this command
+inside github.com/aykevl/llvm/bindings/go:
+
+```sh
+$ ./build.sh
+```
+
+This will take about an hour and require a fair bit of RAM. In fact, I would
+recommend setting your `ld` binary to `gold` to speed up linking, especially on
+systems with less than 16GB RAM.
 
 After LLVM has been built, you can run an example with:
 
