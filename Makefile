@@ -3,7 +3,7 @@
 all: tgo
 tgo: build/tgo
 
-.PHONY: all tgo run-test run-blinky run-blinky2 clean fmt gen-device gen-device-nrf
+.PHONY: all tgo run-test run-blinky run-blinky2 clean fmt gen-device gen-device-nrf gen-device-avr
 
 TARGET ?= unix
 
@@ -51,7 +51,7 @@ fmt:
 	@go fmt . ./src/examples/test
 	@go fmt ./src/runtime/*.go
 
-gen-device: gen-device-nrf
+gen-device: gen-device-nrf gen-device-avr
 
 gen-device-nrf:
 	./tools/gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/
