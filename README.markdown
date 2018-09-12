@@ -47,7 +47,7 @@ Currently supported features:
     features)
   * slices (partially)
   * maps (very rough, unfinished)
-  * defer (only in trivial cases)
+  * defer
   * closures
   * bound methods
 
