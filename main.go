@@ -89,7 +89,8 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool
 
 		// Link the object file with the system compiler.
 		executable := filepath.Join(dir, "main")
-		cmd := exec.Command("cc", "-o", executable, objfile)
+		args := append(spec.PreLinkArgs, "-o", executable, objfile)
+		cmd := exec.Command(spec.Linker, args...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()

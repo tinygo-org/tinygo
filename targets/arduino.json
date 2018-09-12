@@ -1,4 +1,6 @@
 {
 	"llvm-target": "avr-atmel-none",
-	"build-tags": ["avr", "avr8", "atmega", "atmega328p", "js", "wasm"]
+	"build-tags": ["avr", "avr8", "atmega", "atmega328p", "js", "wasm"],
+	"linker": "avr-gcc",
+	"pre-link-args": ["-nostdlib", "-T", "avr.ld", "-Wl,--gc-sections", "avr.S"]
 }

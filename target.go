@@ -14,8 +14,10 @@ import (
 // https://doc.rust-lang.org/nightly/nightly-rustc/rustc_target/spec/struct.TargetOptions.html
 // https://github.com/shepmaster/rust-arduino-blink-led-no-core-with-cargo/blob/master/blink/arduino.json
 type TargetSpec struct {
-	Triple    string   `json:"llvm-target"`
-	BuildTags []string `json:"build-tags"`
+	Triple      string   `json:"llvm-target"`
+	BuildTags   []string `json:"build-tags"`
+	Linker      string   `json:"linker"`
+	PreLinkArgs []string `json:"pre-link-args"`
 }
 
 // Load a target specification
@@ -23,6 +25,7 @@ func LoadTarget(target string) (*TargetSpec, error) {
 	spec := &TargetSpec{
 		Triple:    target,
 		BuildTags: []string{runtime.GOOS, runtime.GOARCH},
+		Linker:    "cc",
 	}
 
 	// See whether there is a target specification for this target (e.g.
