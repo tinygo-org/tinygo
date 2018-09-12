@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/aykevl/llvm/bindings/go/llvm"
 )
@@ -21,7 +22,7 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool
 		buildTags = append(buildTags, "avr", "avr8", "atmega", "atmega328p", "js", "wasm")
 		target = "avr--"
 	} else {
-		buildTags = append(buildTags, "linux", "amd64")
+		buildTags = append(buildTags, runtime.GOOS, runtime.GOARCH)
 	}
 
 	c, err := NewCompiler(pkgName, target, dumpSSA)
