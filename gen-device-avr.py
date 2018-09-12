@@ -143,10 +143,10 @@ package {pkgName}
 import "unsafe"
 
 // Magic type name for the compiler.
-type __reg uint8
+type __volatile uint8
 
 // Export this magic type name.
-type RegValue = __reg
+type RegValue = __volatile
 
 // Some information about this device.
 const (
@@ -169,7 +169,7 @@ const (
         out.write('\n\t// {description}\n'.format(**peripheral))
         for register in peripheral['registers']:
             for variant in register['variants']:
-                out.write('\t{name} = (*__reg)(unsafe.Pointer(uintptr(0x{address:x})))\n'.format(**variant))
+                out.write('\t{name} = (*__volatile)(unsafe.Pointer(uintptr(0x{address:x})))\n'.format(**variant))
     out.write(')\n')
 
     for peripheral in device.peripherals:

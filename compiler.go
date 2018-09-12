@@ -1559,7 +1559,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		}
 		store := c.builder.CreateStore(llvmVal, llvmAddr)
 		valType := instr.Addr.Type().(*types.Pointer).Elem()
-		if valType, ok := valType.(*types.Named); ok && valType.Obj().Name() == "__reg" {
+		if valType, ok := valType.(*types.Named); ok && valType.Obj().Name() == "__volatile" {
 			// Magic type name to make this store volatile, for memory-mapped
 			// registers.
 			store.SetVolatile(true)
@@ -2982,7 +2982,7 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 	case token.MUL: // *x, dereference pointer
 		valType := unop.X.Type().(*types.Pointer).Elem()
 		load := c.builder.CreateLoad(x, "")
-		if valType, ok := valType.(*types.Named); ok && valType.Obj().Name() == "__reg" {
+		if valType, ok := valType.(*types.Named); ok && valType.Obj().Name() == "__volatile" {
 			// Magic type name to make this load volatile, for memory-mapped
 			// registers.
 			load.SetVolatile(true)
