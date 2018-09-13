@@ -2334,7 +2334,18 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			assertedTypeNum, typeExists := c.ir.TypeNum(expr.AssertedType)
 			if !typeExists {
 				// Static analysis has determined this type assert will never apply.
-				return llvm.ConstStruct([]llvm.Value{valueNil, llvm.ConstInt(llvm.Int1Type(), 0, false)}, false), nil
+				// Using undef here so that LLVM knows we'll never get here and
+				// can optimize accordingly.
+				undef := llvm.Undef(assertedType)
+				commaOk := llvm.ConstInt(llvm.Int1Type(), 0, false)
+				if expr.CommaOk {
+					return llvm.ConstStruct([]llvm.Value{undef, commaOk}, false), nil
+				} else {
+					fn := c.mod.NamedFunction("runtime.interfaceTypeAssert")
+					c.builder.CreateCall(fn, []llvm.Value{commaOk}, "")
+					c.builder.CreateUnreachable()
+					return undef, nil
+				}
 			}
 			if assertedTypeNum >= 1<<16 {
 				return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
