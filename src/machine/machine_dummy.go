@@ -25,3 +25,7 @@ func (p GPIO) Configure(config GPIOConfig) {
 
 func (p GPIO) Set(value bool) {
 }
+
+func (p GPIO) Get() (value bool) {
+	return
+}

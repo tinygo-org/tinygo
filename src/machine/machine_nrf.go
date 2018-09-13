@@ -39,3 +39,9 @@ func (p GPIO) Set(high bool) {
 		nrf.P0.OUTCLR = 1 << p.Pin
 	}
 }
+
+// Get returns the current value of a GPIO pin.
+func (p GPIO) Get() (value bool) {
+	// TODO: implement
+	return
+}
