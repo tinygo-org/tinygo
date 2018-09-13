@@ -41,7 +41,7 @@ func (p GPIO) Set(high bool) {
 }
 
 // Get returns the current value of a GPIO pin.
-func (p GPIO) Get() (value bool) {
+func (p GPIO) Get() bool {
 	// TODO: implement
-	return
+	return false
 }

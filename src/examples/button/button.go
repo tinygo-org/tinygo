@@ -12,8 +12,6 @@ func main() {
 	button := machine.GPIO{8}
 	button.Configure(machine.GPIOConfig{Mode: machine.GPIO_INPUT})
 
-	led.High()
-
 	for {
 		if button.Get() {
 			led.Low()
@@ -21,6 +19,6 @@ func main() {
 			led.High()
 		}
 
-		runtime.Sleep(runtime.Millisecond * 100)
+		runtime.Sleep(runtime.Millisecond * 10)
 	}
 }
