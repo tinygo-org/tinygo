@@ -47,3 +47,14 @@ func (p GPIO) Set(value bool) {
 		}
 	}
 }
+
+// Get returns the current value of a GPIO pin.
+func (p GPIO) Get() bool {
+	if p.Pin < 8 {
+		val := *avr.PIND & (1 << p.Pin)
+		return (val > 0)
+	} else {
+		val := *avr.PINB & (1 << (p.Pin - 8))
+		return (val > 0)
+	}
+}
