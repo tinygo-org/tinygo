@@ -41,7 +41,7 @@ func (p GPIO) Set(value bool) {
 		}
 	} else { // clear bits
 		if p.Pin < 8 {
-			*avr.PORTB &^= 1 << p.Pin
+			*avr.PORTD &^= 1 << p.Pin
 		} else {
 			*avr.PORTB &^= 1 << (p.Pin - 8)
 		}
