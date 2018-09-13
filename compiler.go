@@ -63,6 +63,7 @@ type Frame struct {
 	params       map[*ssa.Parameter]int   // arguments to the function
 	locals       map[ssa.Value]llvm.Value // local variables
 	blocks       map[*ssa.BasicBlock]llvm.BasicBlock
+	currentBlock *ssa.BasicBlock
 	phis         []Phi
 	blocking     bool
 	taskHandle   llvm.Value
@@ -1316,6 +1317,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 			fmt.Printf("%s:\n", block.Comment)
 		}
 		c.builder.SetInsertPointAtEnd(frame.blocks[block])
+		frame.currentBlock = block
 		for _, instr := range block.Instrs {
 			if c.dumpSSA {
 				if val, ok := instr.(ssa.Value); ok && val.Name() != "" {
@@ -2369,6 +2371,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		prevBlock := c.builder.GetInsertBlock()
 		okBlock := c.ctx.AddBasicBlock(frame.fn.llvmFn, "typeassert.ok")
 		nextBlock := c.ctx.AddBasicBlock(frame.fn.llvmFn, "typeassert.next")
+		frame.blocks[frame.currentBlock] = nextBlock // adjust outgoing block for phi nodes
 		c.builder.CreateCondBr(commaOk, okBlock, nextBlock)
 
 		// Retrieve the value from the interface if the type assert was
