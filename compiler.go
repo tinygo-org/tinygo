@@ -2272,7 +2272,30 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		case *types.Slice:
 			// slice a slice
-			return llvm.Value{}, errors.New("todo: slice a slice: " + typ.String())
+			oldPtr := c.builder.CreateExtractValue(value, 0, "")
+			oldLen := c.builder.CreateExtractValue(value, 1, "")
+			oldCap := c.builder.CreateExtractValue(value, 2, "")
+			if high.IsNil() {
+				high = oldLen
+			}
+
+			if !frame.fn.nobounds {
+				sliceBoundsCheck := c.mod.NamedFunction("runtime.sliceBoundsCheck")
+				c.builder.CreateCall(sliceBoundsCheck, []llvm.Value{oldLen, low, high}, "")
+			}
+
+			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
+			newLen := c.builder.CreateSub(high, low, "")
+			newCap := c.builder.CreateSub(oldCap, low, "")
+			slice := llvm.ConstStruct([]llvm.Value{
+				llvm.Undef(newPtr.Type()),
+				llvm.Undef(c.lenType),
+				llvm.Undef(c.lenType),
+			}, false)
+			slice = c.builder.CreateInsertValue(slice, newPtr, 0, "")
+			slice = c.builder.CreateInsertValue(slice, newLen, 1, "")
+			slice = c.builder.CreateInsertValue(slice, newCap, 2, "")
+			return slice, nil
 
 		case *types.Basic:
 			if typ.Kind() != types.String {
