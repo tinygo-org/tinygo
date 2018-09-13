@@ -2345,7 +2345,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				} else {
 					fn := c.mod.NamedFunction("runtime.interfaceTypeAssert")
 					c.builder.CreateCall(fn, []llvm.Value{commaOk}, "")
-					c.builder.CreateUnreachable()
 					return undef, nil
 				}
 			}
