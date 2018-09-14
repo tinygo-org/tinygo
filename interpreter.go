@@ -14,6 +14,16 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
+// Ignore these calls (replace with a zero return value) when encountered during
+// interpretation.
+var ignoreInitCalls = map[string]struct{}{
+	"syscall.runtime_envs":   struct{}{},
+	"syscall/js.predefValue": struct{}{},
+	"(syscall/js.Value).Get": struct{}{},
+	"(syscall/js.Value).New": struct{}{},
+	"(syscall/js.Value).Int": struct{}{},
+}
+
 // Interpret instructions as far as possible, and drop those instructions from
 // the basic block.
 func (p *Program) Interpret(block *ssa.BasicBlock, dumpSSA bool) error {
@@ -81,9 +91,9 @@ func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter
 			if callee == nil {
 				return i, nil // don't understand dynamic dispatch
 			}
-			if callee.String() == "syscall.runtime_envs" {
-				// TODO: replace this with some //go:linkname magic.
-				// For now, do as if it returned a zero-length slice.
+			if _, ok := ignoreInitCalls[callee.String()]; ok && callee.Signature.Results().Len() == 1 {
+				// These calls are not needed and can be ignored, for the time
+				// being.
 				var err error
 				locals[instr], err = p.getZeroValue(callee.Signature.Results().At(0).Type())
 				if err != nil {
