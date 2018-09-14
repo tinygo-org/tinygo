@@ -16,9 +16,7 @@ import (
 )
 
 // Helper function for Compiler object.
-func Compile(pkgName, outpath, target string, printIR, dumpSSA bool) error {
-	spec, err := LoadTarget(target)
-
+func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, action func(string) error) error {
 	c, err := NewCompiler(pkgName, spec.Triple, dumpSSA)
 	if err != nil {
 		return err
@@ -98,7 +96,17 @@ func Compile(pkgName, outpath, target string, printIR, dumpSSA bool) error {
 				return err
 			}
 		}
+		return action(tmppath)
+	}
+}
 
+func Build(pkgName, outpath, target string, printIR, dumpSSA bool) error {
+	spec, err := LoadTarget(target)
+	if err != nil {
+		return err
+	}
+
+	return Compile(pkgName, outpath, spec, printIR, dumpSSA, func(tmppath string) error {
 		if err := os.Rename(tmppath, outpath); err != nil {
 			// Moving failed. Do a file copy.
 			inf, err := os.Open(tmppath)
@@ -123,7 +131,31 @@ func Compile(pkgName, outpath, target string, printIR, dumpSSA bool) error {
 			// Move was successful.
 			return nil
 		}
+	})
+}
+
+func Flash(pkgName, target, port string, printIR, dumpSSA bool) error {
+	spec, err := LoadTarget(target)
+	if err != nil {
+		return err
 	}
+
+	return Compile(pkgName, ".hex", spec, printIR, dumpSSA, func(tmppath string) error {
+		// Create the command.
+		flashCmd := spec.Flasher
+		parts := strings.Split(flashCmd, " ") // TODO: this should be a real shell split
+		for i, part := range parts {
+			part = strings.Replace(part, "{hex}", tmppath, -1)
+			part = strings.Replace(part, "{port}", port, -1)
+			parts[i] = part
+		}
+
+		// Execute the command.
+		cmd := exec.Command(parts[0], parts[1:]...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	})
 }
 
 // Run the specified package directly (using JIT or interpretation).
@@ -160,6 +192,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "usage: %s command [-printir] [-target=<target>] -o <output> <input>\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "\ncommands:")
 	fmt.Fprintln(os.Stderr, "  build: compile packages and dependencies")
+	fmt.Fprintln(os.Stderr, "  flash: compile and flash to the device")
 	fmt.Fprintln(os.Stderr, "  help:  print this help text")
 	fmt.Fprintln(os.Stderr, "  run:   run package in an interpreter")
 	fmt.Fprintln(os.Stderr, "\nflags:")
@@ -171,6 +204,7 @@ func main() {
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
+	port := flag.String("port", "/dev/ttyACM0", "flash port")
 
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
@@ -195,7 +229,18 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Compile(flag.Arg(0), *outpath, *target, *printIR, *dumpSSA)
+		err := Build(flag.Arg(0), *outpath, *target, *printIR, *dumpSSA)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+	case "flash":
+		if *outpath != "" {
+			fmt.Fprintln(os.Stderr, "Output cannot be specified with the flash command.")
+			usage()
+			os.Exit(1)
+		}
+		err := Flash(flag.Arg(0), *target, *port, *printIR, *dumpSSA)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)

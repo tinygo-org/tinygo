@@ -19,6 +19,7 @@ type TargetSpec struct {
 	Linker      string   `json:"linker"`
 	PreLinkArgs []string `json:"pre-link-args"`
 	Objcopy     string   `json:"objcopy"`
+	Flasher     string   `json:"flash"`
 }
 
 // Load a target specification
