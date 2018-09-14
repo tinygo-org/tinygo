@@ -307,7 +307,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 			// continues at runtime).
 			// This should only happen when it hits a function call or the end
 			// of the block, ideally.
-			err := c.ir.Interpret(frame.fn.fn.Blocks[0])
+			err := c.ir.Interpret(frame.fn.fn.Blocks[0], c.dumpSSA)
 			if err != nil {
 				return err
 			}

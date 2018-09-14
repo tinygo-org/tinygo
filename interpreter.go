@@ -5,6 +5,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"go/constant"
 	"go/token"
 	"go/types"
@@ -15,9 +16,12 @@ import (
 
 // Interpret instructions as far as possible, and drop those instructions from
 // the basic block.
-func (p *Program) Interpret(block *ssa.BasicBlock) error {
+func (p *Program) Interpret(block *ssa.BasicBlock, dumpSSA bool) error {
+	if dumpSSA {
+		fmt.Printf("\ninterpret: %s\n", block.Parent().Pkg.Pkg.Path())
+	}
 	for {
-		i, err := p.interpret(block.Instrs, nil, nil, nil)
+		i, err := p.interpret(block.Instrs, nil, nil, nil, dumpSSA)
 		if err == cgoWrapperError {
 			// skip this instruction
 			block.Instrs = block.Instrs[i+1:]
@@ -30,12 +34,22 @@ func (p *Program) Interpret(block *ssa.BasicBlock) error {
 
 // Interpret instructions as far as possible, and return the index of the first
 // unknown instruction.
-func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter, paramValues []Value, results []Value) (int, error) {
+func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter, paramValues []Value, results []Value, dumpSSA bool) (int, error) {
 	locals := map[ssa.Value]Value{}
 	for i, key := range paramKeys {
 		locals[key] = paramValues[i]
 	}
 	for i, instr := range instrs {
+		if _, ok := instr.(*ssa.DebugRef); ok {
+			continue
+		}
+		if dumpSSA {
+			if val, ok := instr.(ssa.Value); ok && val.Name() != "" {
+				fmt.Printf("\t%s: %s = %s\n", instr.Parent().RelString(nil), val.Name(), val.String())
+			} else {
+				fmt.Printf("\t%s: %s\n", instr.Parent().RelString(nil), instr.String())
+			}
+		}
 		switch instr := instr.(type) {
 		case *ssa.Alloc:
 			alloc, err := p.getZeroValue(instr.Type().Underlying().(*types.Pointer).Elem())
@@ -87,7 +101,7 @@ func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter
 					params[i] = val
 				}
 				results := make([]Value, callee.Signature.Results().Len())
-				subi, err := p.interpret(callee.Blocks[0].Instrs, callee.Params, params, results)
+				subi, err := p.interpret(callee.Blocks[0].Instrs, callee.Params, params, results, dumpSSA)
 				if err != nil {
 					return i, err
 				}
