@@ -16,24 +16,12 @@ import (
 )
 
 // Helper function for Compiler object.
-func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool) error {
+func Compile(pkgName, outpath, target string, printIR, dumpSSA bool) error {
 	spec, err := LoadTarget(target)
 
 	c, err := NewCompiler(pkgName, spec.Triple, dumpSSA)
 	if err != nil {
 		return err
-	}
-
-	// Add C/LLVM runtime.
-	if runtimePath != "" {
-		runtime, err := llvm.ParseBitcodeFile(runtimePath)
-		if err != nil {
-			return err
-		}
-		err = c.LinkModule(runtime)
-		if err != nil {
-			return err
-		}
 	}
 
 	// Compile Go code to IR.
@@ -169,7 +157,7 @@ func Run(pkgName string) error {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: %s command [-printir] -runtime=<runtime.bc> [-target=<target>] -o <output> <input>\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "usage: %s command [-printir] [-target=<target>] -o <output> <input>\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "\ncommands:")
 	fmt.Fprintln(os.Stderr, "  build: compile packages and dependencies")
 	fmt.Fprintln(os.Stderr, "  help:  print this help text")
@@ -182,7 +170,6 @@ func main() {
 	outpath := flag.String("o", "", "output filename")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
-	runtime := flag.String("runtime", "", "runtime LLVM bitcode files (from C sources)")
 	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
 
 	if len(os.Args) < 2 {
@@ -208,7 +195,7 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Compile(flag.Arg(0), *runtime, *outpath, *target, *printIR, *dumpSSA)
+		err := Compile(flag.Arg(0), *outpath, *target, *printIR, *dumpSSA)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)

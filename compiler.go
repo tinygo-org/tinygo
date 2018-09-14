@@ -3042,10 +3042,6 @@ func (c *Compiler) Verify() error {
 	return llvm.VerifyModule(c.mod, 0)
 }
 
-func (c *Compiler) LinkModule(mod llvm.Module) error {
-	return llvm.LinkModules(c.mod, mod)
-}
-
 func (c *Compiler) ApplyFunctionSections() {
 	// Put every function in a separate section. This makes it possible for the
 	// linker to remove dead code (-ffunction-sections).
