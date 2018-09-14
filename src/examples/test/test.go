@@ -77,7 +77,7 @@ func main() {
 	testDefer()
 	testBound(thing.String)
 	func() {
-		println("thing inside closure:", thing.String()) //, len(foo))
+		println("thing inside closure:", thing.String())
 	}()
 	runFunc(func(i int) {
 		println("inside fp closure:", thing.String(), i)
