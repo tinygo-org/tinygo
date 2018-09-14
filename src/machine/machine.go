@@ -15,3 +15,7 @@ func (p GPIO) High() {
 func (p GPIO) Low() {
 	p.Set(false)
 }
+
+type PWM struct {
+	Pin uint8
+}
