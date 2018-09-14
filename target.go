@@ -18,6 +18,7 @@ type TargetSpec struct {
 	BuildTags   []string `json:"build-tags"`
 	Linker      string   `json:"linker"`
 	PreLinkArgs []string `json:"pre-link-args"`
+	Objcopy     string   `json:"objcopy"`
 }
 
 // Load a target specification
@@ -26,6 +27,7 @@ func LoadTarget(target string) (*TargetSpec, error) {
 		Triple:    target,
 		BuildTags: []string{runtime.GOOS, runtime.GOARCH},
 		Linker:    "cc",
+		Objcopy:   "objcopy",
 	}
 
 	// See whether there is a target specification for this target (e.g.

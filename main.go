@@ -89,6 +89,7 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool
 
 		// Link the object file with the system compiler.
 		executable := filepath.Join(dir, "main")
+		tmppath := executable // final file
 		args := append(spec.PreLinkArgs, "-o", executable, objfile)
 		cmd := exec.Command(spec.Linker, args...)
 		cmd.Stdout = os.Stdout
@@ -98,9 +99,21 @@ func Compile(pkgName, runtimePath, outpath, target string, printIR, dumpSSA bool
 			return err
 		}
 
-		if err := os.Rename(executable, outpath); err != nil {
+		if strings.HasSuffix(outpath, ".hex") {
+			// Get an Intel .hex file from the .elf file.
+			tmppath = filepath.Join(dir, "main.hex")
+			cmd := exec.Command(spec.Objcopy, "-O", "ihex", executable, tmppath)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err = cmd.Run()
+			if err != nil {
+				return err
+			}
+		}
+
+		if err := os.Rename(tmppath, outpath); err != nil {
 			// Moving failed. Do a file copy.
-			inf, err := os.Open(executable)
+			inf, err := os.Open(tmppath)
 			if err != nil {
 				return err
 			}
