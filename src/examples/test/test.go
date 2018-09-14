@@ -111,6 +111,9 @@ func testBound(f func() string) {
 func readMap(m map[string]int, key string) {
 	println("map length:", len(m))
 	println("map read:", key, "=", m[key])
+	for k, v := range m {
+		println(" ", k, "=", v)
+	}
 }
 
 func hello(n int) {

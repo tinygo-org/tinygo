@@ -30,6 +30,12 @@ type hashmapBucket struct {
 	// allocated but as they're of variable size they can't be shown here.
 }
 
+type hashmapIterator struct {
+	bucketNumber uintptr
+	bucket       *hashmapBucket
+	bucketIndex  uint8
+}
+
 // Get FNV-1a hash of this key.
 //
 // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1a_hash
@@ -150,6 +156,45 @@ func hashmapGet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 
 	// Did not find the key.
 	memzero(value, uintptr(m.valueSize))
+}
+
+// Iterate over a hashmap.
+//go:nobounds
+func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) bool {
+	numBuckets := uintptr(1) << m.bucketBits
+	for {
+		if it.bucketIndex >= 8 {
+			// end of bucket, move to the next in the chain
+			it.bucketIndex = 0
+			it.bucket = it.bucket.next
+		}
+		if it.bucket == nil {
+			if it.bucketNumber >= numBuckets {
+				// went through all buckets
+				return false
+			}
+			bucketSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*8
+			bucketAddr := uintptr(m.buckets) + bucketSize*it.bucketNumber
+			it.bucket = (*hashmapBucket)(unsafe.Pointer(bucketAddr))
+			it.bucketNumber++ // next bucket
+		}
+		if it.bucket.tophash[it.bucketIndex] == 0 {
+			// slot is empty - move on
+			it.bucketIndex++
+			continue
+		}
+
+		bucketAddr := uintptr(unsafe.Pointer(it.bucket))
+		slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*uintptr(it.bucketIndex)
+		slotKey := unsafe.Pointer(bucketAddr + slotKeyOffset)
+		slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*uintptr(it.bucketIndex)
+		slotValue := unsafe.Pointer(bucketAddr + slotValueOffset)
+		memcpy(key, slotKey, uintptr(m.keySize))
+		memcpy(value, slotValue, uintptr(m.valueSize))
+		it.bucketIndex++
+
+		return true
+	}
 }
 
 // Hashmap with plain binary data keys (not containing strings etc.).

@@ -2211,6 +2211,42 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		slice = c.builder.CreateInsertValue(slice, sliceLen, 1, "")
 		slice = c.builder.CreateInsertValue(slice, sliceCap, 2, "")
 		return slice, nil
+	case *ssa.Next:
+		if expr.IsString {
+			return llvm.Value{}, errors.New("todo: next: string")
+		} else { // map
+			fn := c.mod.NamedFunction("runtime.hashmapNext")
+			it, err := c.parseExpr(frame, expr.Iter)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			rangeMap := expr.Iter.(*ssa.Range).X
+			m, err := c.parseExpr(frame, rangeMap)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+
+			llvmKeyType, err := c.getLLVMType(rangeMap.Type().(*types.Map).Key())
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			llvmValueType, err := c.getLLVMType(rangeMap.Type().(*types.Map).Elem())
+			if err != nil {
+				return llvm.Value{}, err
+			}
+
+			mapKeyAlloca := c.builder.CreateAlloca(llvmKeyType, "range.key")
+			mapKeyPtr := c.builder.CreateBitCast(mapKeyAlloca, c.i8ptrType, "range.keyptr")
+			mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "range.value")
+			mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "range.valueptr")
+			ok := c.builder.CreateCall(fn, []llvm.Value{m, it, mapKeyPtr, mapValuePtr}, "range.next")
+
+			tuple := llvm.Undef(llvm.StructType([]llvm.Type{llvm.Int1Type(), llvmKeyType, llvmValueType}, false))
+			tuple = c.builder.CreateInsertValue(tuple, ok, 0, "")
+			tuple = c.builder.CreateInsertValue(tuple, c.builder.CreateLoad(mapKeyAlloca, ""), 1, "")
+			tuple = c.builder.CreateInsertValue(tuple, c.builder.CreateLoad(mapValueAlloca, ""), 2, "")
+			return tuple, nil
+		}
 	case *ssa.Phi:
 		t, err := c.getLLVMType(expr.Type())
 		if err != nil {
@@ -2219,6 +2255,23 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		phi := c.builder.CreatePHI(t, "")
 		frame.phis = append(frame.phis, Phi{expr, phi})
 		return phi, nil
+	case *ssa.Range:
+		switch typ := expr.X.Type().Underlying().(type) {
+		case *types.Basic:
+			// string
+			return llvm.Value{}, errors.New("todo: range: string")
+		case *types.Map:
+			iteratorType := c.mod.GetTypeByName("runtime.hashmapIterator")
+			it := c.builder.CreateAlloca(iteratorType, "range.it")
+			zero, err := getZeroValue(iteratorType)
+			if err != nil {
+				return llvm.Value{}, nil
+			}
+			c.builder.CreateStore(zero, it)
+			return it, nil
+		default:
+			panic("unknown type in range: " + typ.String())
+		}
 	case *ssa.Slice:
 		if expr.Max != nil {
 			return llvm.Value{}, errors.New("todo: full slice expressions (with max): " + expr.Type().String())
