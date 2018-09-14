@@ -1016,8 +1016,22 @@ func (c *Compiler) getInterpretedValue(value Value) (llvm.Value, error) {
 				return llvm.Value{}, nil
 			}
 
-			keyString := constant.StringVal(key.(*ConstValue).Expr.Value)
-			hash := stringhash(&keyString)
+			constVal := key.(*ConstValue).Expr
+			var keyBuf []byte
+			switch constVal.Type().Underlying().(*types.Basic).Kind() {
+			case types.String:
+				keyBuf = []byte(constant.StringVal(constVal.Value))
+			case types.Int:
+				keyBuf = make([]byte, c.targetData.TypeAllocSize(c.intType))
+				n, _ := constant.Uint64Val(constVal.Value)
+				for i := range keyBuf {
+					keyBuf[i] = byte(n)
+					n >>= 8
+				}
+			default:
+				return llvm.Value{}, errors.New("todo: init: map key not implemented: " + constVal.Type().Underlying().String())
+			}
+			hash := hashmapHash(keyBuf)
 
 			if i%8 == 0 && i != 0 {
 				// Bucket is full, create a new one.
