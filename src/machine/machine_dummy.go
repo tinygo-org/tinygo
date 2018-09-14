@@ -20,6 +20,15 @@ const (
 	LED4 = 0
 )
 
+// Fake button numbers, for testing.
+const (
+	BUTTON  = BUTTON1
+	BUTTON1 = 0
+	BUTTON2 = 0
+	BUTTON3 = 0
+	BUTTON4 = 0
+)
+
 func (p GPIO) Configure(config GPIOConfig) {
 }
 
