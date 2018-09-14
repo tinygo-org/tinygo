@@ -39,13 +39,6 @@ func main() int {
 	}
 }
 
-func Sleep(d Duration) {
-	// This function is treated specially by the compiler: when goroutines are
-	// used, it is transformed into a llvm.coro.suspend() call.
-	// When goroutines are not used this function behaves as normal.
-	sleep(d)
-}
-
 func GOMAXPROCS(n int) int {
 	// Note: setting GOMAXPROCS is ignored.
 	return 1

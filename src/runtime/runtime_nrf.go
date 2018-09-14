@@ -7,7 +7,9 @@ import (
 	"device/nrf"
 )
 
-const Microsecond = 1
+type timeUnit int64
+
+const tickMicros = 1024 * 32
 
 //go:export _start
 func _start() {
@@ -48,31 +50,35 @@ func putchar(c byte) {
 	nrf.UART0.EVENTS_TXDRDY = 0
 }
 
-func sleep(d Duration) {
-	ticks64 := d / 32
-	for ticks64 != 0 {
-		monotime()                          // update timestamp
-		ticks := uint32(ticks64) & 0x7fffff // 23 bits (to be on the safe side)
-		rtc_sleep(ticks)                    // TODO: not accurate (must be d / 30.5175...)
-		ticks64 -= Duration(ticks)
+//go:linkname sleep time.Sleep
+func sleep(d timeUnit) {
+	sleepTicks(d / tickMicros)
+}
+
+func sleepTicks(d timeUnit) {
+	for d != 0 {
+		ticks()                       // update timestamp
+		ticks := uint32(d) & 0x7fffff // 23 bits (to be on the safe side)
+		rtc_sleep(ticks)              // TODO: not accurate (must be d / 30.5175...)
+		d -= timeUnit(ticks)
 	}
 }
 
 var (
-	timestamp      uint64 // microseconds since boottime
-	rtcLastCounter uint32 // 24 bits ticks
+	timestamp      timeUnit // nanoseconds since boottime
+	rtcLastCounter uint32   // 24 bits ticks
 )
 
-// Monotonically increasing numer of microseconds since start.
+// Monotonically increasing numer of ticks since start.
 //
 // Note: very long pauses between measurements (more than 8 minutes) may
 // overflow the counter, leading to incorrect results. This might be fixed by
 // handling the overflow event.
-func monotime() uint64 {
+func ticks() timeUnit {
 	rtcCounter := uint32(nrf.RTC0.COUNTER)
 	offset := (rtcCounter - rtcLastCounter) % 0xffffff // change since last measurement
 	rtcLastCounter = rtcCounter
-	timestamp += uint64(offset * 32) // TODO: not precise
+	timestamp += timeUnit(offset) // TODO: not precise
 	return timestamp
 }
 

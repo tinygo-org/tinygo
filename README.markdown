@@ -19,17 +19,20 @@ run on even lower level micros.
 Example program (blinky):
 
 ```go
-import "machine"
+import (
+	"machine"
+	"time"
+)
 
 func main() {
 	led := machine.GPIO{machine.LED}
 	led.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
 	for {
 		led.Low()
-		runtime.Sleep(runtime.Millisecond * 1000)
+		time.Sleep(time.Millisecond * 1000)
 
 		led.High()
-		runtime.Sleep(runtime.Millisecond * 1000)
+		time.Sleep(time.Millisecond * 1000)
 	}
 }
 ```

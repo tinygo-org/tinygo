@@ -1736,7 +1736,7 @@ func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, con
 		params = append(params, context)
 	}
 
-	if frame.blocking && llvmFn.Name() == "runtime.Sleep" {
+	if frame.blocking && llvmFn.Name() == "time.Sleep" {
 		// Set task state to TASK_STATE_SLEEP and set the duration.
 		c.builder.CreateCall(c.mod.NamedFunction("runtime.sleepTask"), []llvm.Value{frame.taskHandle, params[0]}, "")
 

@@ -8,13 +8,11 @@ import (
 
 const BOARD = "arduino"
 
-const Microsecond = 1
+type timeUnit uint32
 
-var currentTime uint64
+var currentTime timeUnit
 
-func init() {
-	currentTime = 0
-}
+const tickMicros = 1024 * 16384
 
 // Watchdog timer periods. These can be off by a large margin (hence the jump
 // between 64ms and 125ms which is not an exact double), so don't rely on this
@@ -53,9 +51,13 @@ func putchar(c byte) {
 //
 // TODO: not very accurate. Improve accuracy by calibrating on startup and every
 // once in a while.
-func sleep(d Duration) {
-	currentTime += uint64(d)
-	d /= 16384 // about 16ms
+//go:linkname sleep time.Sleep
+func sleep(d int64) {
+	sleepTicks(timeUnit(d / tickMicros))
+}
+
+func sleepTicks(d timeUnit) {
+	currentTime += d
 	for d != 0 {
 		sleepWDT(WDT_PERIOD_16MS)
 		d -= 1
@@ -90,7 +92,7 @@ func sleepWDT(period uint8) {
 	*avr.SMCR = 0
 }
 
-func monotime() uint64 {
+func ticks() timeUnit {
 	return currentTime
 }
 

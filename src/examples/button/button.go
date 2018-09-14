@@ -2,7 +2,7 @@ package main
 
 import (
 	"machine"
-	"runtime"
+	"time"
 )
 
 // This example assumes that the button is connected to pin 8. Change the value
@@ -23,6 +23,6 @@ func main() {
 			led.High()
 		}
 
-		runtime.Sleep(runtime.Millisecond * 10)
+		time.Sleep(time.Millisecond * 10)
 	}
 }

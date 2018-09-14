@@ -72,7 +72,7 @@ var (
 	runqueueFront      *coroutine
 	runqueueBack       *coroutine
 	sleepQueue         *coroutine
-	sleepQueueBaseTime uint64
+	sleepQueueBaseTime timeUnit
 )
 
 // Simple logging, for debugging.
@@ -92,13 +92,13 @@ func scheduleLogTask(msg string, t *coroutine) {
 // Set the task state to sleep for a given time.
 //
 // This is a compiler intrinsic.
-func sleepTask(caller *coroutine, duration Duration) {
+func sleepTask(caller *coroutine, duration int64) {
 	if schedulerDebug {
-		println("  set state sleep:", caller, uint32(duration))
+		println("  set state sleep:", caller, uint32(duration/tickMicros))
 	}
 	promise := caller.promise()
 	promise.state = TASK_STATE_SLEEP
-	promise.data = uint32(duration) // TODO: longer durations
+	promise.data = uint32(duration / tickMicros) // TODO: longer durations
 }
 
 // Wait for the result of an async call. This means that the parent goroutine
@@ -194,7 +194,7 @@ func addSleepTask(t *coroutine) {
 			panic("runtime: addSleepTask: task not sleeping")
 		}
 	}
-	now := monotime()
+	now := ticks()
 	if sleepQueue == nil {
 		scheduleLog("  -> sleep new queue")
 		// Create new linked list for the sleep queue.
@@ -244,15 +244,15 @@ func scheduler(main *coroutine) {
 	// Main scheduler loop.
 	for {
 		scheduleLog("\n  schedule")
-		now := monotime()
+		now := ticks()
 
 		// Add tasks that are done sleeping to the end of the runqueue so they
 		// will be executed soon.
-		if sleepQueue != nil && now-sleepQueueBaseTime >= uint64(sleepQueue.promise().data) {
+		if sleepQueue != nil && now-sleepQueueBaseTime >= timeUnit(sleepQueue.promise().data) {
 			t := sleepQueue
 			scheduleLogTask("  awake:", t)
 			promise := t.promise()
-			sleepQueueBaseTime += uint64(promise.data)
+			sleepQueueBaseTime += timeUnit(promise.data)
 			sleepQueue = promise.next
 			promise.state = TASK_STATE_RUNNABLE
 			promise.next = nil
@@ -269,11 +269,11 @@ func scheduler(main *coroutine) {
 				scheduleLog("  no tasks left!")
 				return
 			}
-			timeLeft := uint64(sleepQueue.promise().data) - (now - sleepQueueBaseTime)
+			timeLeft := timeUnit(sleepQueue.promise().data) - (now - sleepQueueBaseTime)
 			if schedulerDebug {
 				println("  sleeping...", sleepQueue, uint32(timeLeft))
 			}
-			sleep(Duration(timeLeft))
+			sleepTicks(timeUnit(timeLeft))
 			continue
 		}
 

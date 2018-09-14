@@ -4,7 +4,7 @@ package main
 
 import (
 	"machine"
-	"runtime"
+	"time"
 )
 
 func main() {
@@ -12,9 +12,9 @@ func main() {
 	led.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
 	for {
 		led.Low()
-		runtime.Sleep(runtime.Millisecond * 500)
+		time.Sleep(time.Millisecond * 500)
 
 		led.High()
-		runtime.Sleep(runtime.Millisecond * 500)
+		time.Sleep(time.Millisecond * 500)
 	}
 }

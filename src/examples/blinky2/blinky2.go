@@ -7,7 +7,7 @@ package main
 
 import (
 	"machine"
-	"runtime"
+	"time"
 )
 
 func main() {
@@ -21,11 +21,11 @@ func led1() {
 	for {
 		println("+")
 		led.Low()
-		runtime.Sleep(runtime.Millisecond * 1000)
+		time.Sleep(time.Millisecond * 1000)
 
 		println("-")
 		led.High()
-		runtime.Sleep(runtime.Millisecond * 1000)
+		time.Sleep(time.Millisecond * 1000)
 	}
 }
 
@@ -35,10 +35,10 @@ func led2() {
 	for {
 		println("  +")
 		led.Low()
-		runtime.Sleep(runtime.Millisecond * 420)
+		time.Sleep(time.Millisecond * 420)
 
 		println("  -")
 		led.High()
-		runtime.Sleep(runtime.Millisecond * 420)
+		time.Sleep(time.Millisecond * 420)
 	}
 }

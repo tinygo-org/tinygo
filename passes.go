@@ -99,7 +99,7 @@ func (p *Program) AnalyseCallgraph() {
 						if child.CName() != "" {
 							continue // assume non-blocking
 						}
-						if child.LinkName() == "runtime.Sleep" {
+						if child.fn.RelString(nil) == "time.Sleep" {
 							f.blocking = true
 						}
 						f.children = append(f.children, child)
