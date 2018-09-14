@@ -52,6 +52,7 @@ func main() {
 	bar := make([]int, l-2, l)
 	println("len/cap foo:", len(foo), cap(foo))
 	println("len/cap bar:", len(bar), cap(bar))
+	println("len/cap foo[1:2]:", len(foo[1:2]), cap(foo[1:2]))
 	println("foo[3]:", foo[3])
 	println("sum foo:", sum(foo))
 	println("copy foo -> bar:", copy(bar, foo))
