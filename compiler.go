@@ -1337,6 +1337,9 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		c.builder.SetInsertPointAtEnd(frame.blocks[block])
 		frame.currentBlock = block
 		for _, instr := range block.Instrs {
+			if _, ok := instr.(*ssa.DebugRef); ok {
+				continue
+			}
 			if c.dumpSSA {
 				if val, ok := instr.(ssa.Value); ok && val.Name() != "" {
 					fmt.Printf("\t%s = %s\n", val.Name(), val.String())
