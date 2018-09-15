@@ -134,18 +134,29 @@ func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter
 			if err != nil {
 				return i, err
 			}
-			switch typ := instr.Type().Underlying().(type) {
+			typeFrom := instr.X.Type().Underlying()
+			switch typeTo := instr.Type().Underlying().(type) {
 			case *types.Basic:
-				if _, ok := instr.X.Type().Underlying().(*types.Pointer); ok && typ.Kind() == types.UnsafePointer {
-					locals[instr] = &PointerBitCastValue{typ, x}
-				} else if xtyp, ok := instr.X.Type().Underlying().(*types.Basic); ok && xtyp.Kind() == types.UnsafePointer && typ.Kind() == types.Uintptr {
-					locals[instr] = &PointerToUintptrValue{x}
+				if typeTo.Kind() == types.String {
+					return i, errors.New("todo: init: cannot convert string")
+				}
+
+				if _, ok := typeFrom.(*types.Pointer); ok && typeTo.Kind() == types.UnsafePointer {
+					locals[instr] = &PointerBitCastValue{typeTo, x}
+				} else if typeFrom, ok := typeFrom.(*types.Basic); ok {
+					if typeFrom.Kind() == types.UnsafePointer && typeTo.Kind() == types.Uintptr {
+						locals[instr] = &PointerToUintptrValue{x}
+					} else if typeFrom.Info()&types.IsInteger != 0 && typeTo.Info()&types.IsInteger != 0 {
+						locals[instr] = &ConstValue{Expr: ssa.NewConst(x.(*ConstValue).Expr.Value, typeTo)}
+					} else {
+						return i, errors.New("todo: init: unknown basic-to-basic convert: " + instr.String())
+					}
 				} else {
 					return i, errors.New("todo: init: unknown basic convert: " + instr.String())
 				}
 			case *types.Pointer:
-				if xtyp, ok := instr.X.Type().Underlying().(*types.Basic); ok && xtyp.Kind() == types.UnsafePointer {
-					locals[instr] = &PointerBitCastValue{typ, x}
+				if typeFrom, ok := typeFrom.(*types.Basic); ok && typeFrom.Kind() == types.UnsafePointer {
+					locals[instr] = &PointerBitCastValue{typeTo, x}
 				} else {
 					panic("expected unsafe pointer conversion")
 				}
