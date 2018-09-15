@@ -14,8 +14,7 @@ const (
 )
 
 // cycleColor is just a placeholder until math/rand or some equivalent is working.
-func cycleColor(color uint8) uint8 {
-
+func cycleColor(color uint16) uint16 {
 	if color < 10 {
 		return color + 1
 	}
@@ -40,9 +39,9 @@ func main() {
 	blue := machine.PWM{bluePin}
 	blue.Configure()
 
-	var rc uint8
-	var gc uint8 = 20
-	var bc uint8 = 30
+	var rc uint16
+	var gc uint16 = 20
+	var bc uint16 = 30
 
 	for {
 		rc = cycleColor(rc)

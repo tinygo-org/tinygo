@@ -24,6 +24,13 @@ def formatText(text):
     text = text.strip()
     return text
 
+def getShift(bitmask):
+    count = 0
+    while not(bitmask & 0x1):
+        bitmask >>= 1
+        count+=1
+    return count
+
 def readATDF(path):
     # Read Atmel device descriptor files.
     # See: http://packs.download.atmel.com
@@ -183,10 +190,15 @@ const (
                     out.write(': {description}'.format(**register))
                 out.write('\n')
             for bitfield in register['bitfields']:
-                out.write('\t{name} = 0x{value:x}'.format(**bitfield))
-                if bitfield['description']:
-                    out.write(' // {description}'.format(**bitfield))
-                out.write('\n')
+                name = bitfield['name']
+                value = bitfield['value']
+                bitshift = getShift(value)
+                for c in range(bin(value >> bitshift).count("1")):
+                    v = hex(1 << (bitshift + c))
+                    out.write('\t{0}{1} = {2}'.format(name, c, v))
+                    if bitfield['description']:
+                        out.write(' // {description}'.format(**bitfield))
+                    out.write('\n')
         out.write(')\n')
 
 def writeLD(outdir, device):

@@ -56,12 +56,12 @@ func initUART() {
 	// Initialize UART at 115200 baud when running at 16MHz.
 	*avr.UBRR0H = 0
 	*avr.UBRR0L = 8
-	*avr.UCSR0B = avr.UCSR0B_RXEN0 | avr.UCSR0B_TXEN0 // enable RX and TX
-	*avr.UCSR0C = avr.UCSR0C_UCSZ0                    // 8-bits data
+	*avr.UCSR0B = avr.UCSR0B_RXEN00 | avr.UCSR0B_TXEN00 // enable RX and TX
+	*avr.UCSR0C = avr.UCSR0C_UCSZ00                     // 8-bits data
 }
 
 func putchar(c byte) {
-	for (*avr.UCSR0A & avr.UCSR0A_UDRE0) == 0 {
+	for (*avr.UCSR0A & avr.UCSR0A_UDRE00) == 0 {
 		// Wait until previous char has been sent.
 	}
 	*avr.UDR0 = avr.RegValue(c) // send char
@@ -95,15 +95,15 @@ func sleepWDT(period uint8) {
 	avr.Asm("cli")
 	avr.Asm("wdr")
 	// Start timed sequence.
-	*avr.WDTCSR |= avr.WDTCSR_WDCE | avr.WDTCSR_WDE
+	*avr.WDTCSR |= avr.WDTCSR_WDCE0 | avr.WDTCSR_WDE0
 	// Enable WDT and set new timeout (0.5s)
-	*avr.WDTCSR = avr.WDTCSR_WDIE | avr.RegValue(period)
+	*avr.WDTCSR = avr.WDTCSR_WDIE0 | avr.RegValue(period)
 	avr.Asm("sei")
 
 	// Set sleep mode to idle and enable sleep mode.
 	// Note: when using something other than idle, the UART won't work
 	// correctly. This needs to be fixed, though, so we can truly sleep.
-	*avr.SMCR = (0 << 1) | avr.SMCR_SE
+	*avr.SMCR = (0 << 1) | avr.SMCR_SE0
 
 	// go to sleep
 	avr.Asm("sleep")
