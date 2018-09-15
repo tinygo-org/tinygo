@@ -9,7 +9,7 @@ import (
 func _Cfunc_putchar(c int) int
 func _Cfunc_usleep(usec uint) int
 func _Cfunc_calloc(nmemb, size uintptr) unsafe.Pointer
-func _Cfunc_exit(status int)
+func _Cfunc_abort()
 func _Cfunc_clock_gettime(clk_id uint, ts *timespec)
 
 type timeUnit int64
@@ -52,7 +52,7 @@ func ticks() timeUnit {
 
 func abort() {
 	// panic() exits with exit code 2.
-	_Cfunc_exit(2)
+	_Cfunc_abort()
 }
 
 func alloc(size uintptr) unsafe.Pointer {
