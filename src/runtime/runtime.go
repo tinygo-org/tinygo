@@ -49,6 +49,11 @@ func GOROOT() string {
 	return "/usr/local/go"
 }
 
+//go:linkname os_runtime_args os.runtime_args
+func os_runtime_args() []string {
+	return nil
+}
+
 // Copy size bytes from src to dst. The memory areas must not overlap.
 func memcpy(dst, src unsafe.Pointer, size uintptr) {
 	for i := uintptr(0); i < size; i++ {
