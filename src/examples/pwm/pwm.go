@@ -2,7 +2,7 @@ package main
 
 import (
 	"machine"
-	"runtime"
+	"time"
 )
 
 // This example assumes that an RGB LED is connected to pins 3, 5 and 6 on an Arduino.
@@ -52,6 +52,6 @@ func main() {
 		green.Set(gc)
 		blue.Set(bc)
 
-		runtime.Sleep(runtime.Millisecond * 500)
+		time.Sleep(time.Millisecond * 500)
 	}
 }
