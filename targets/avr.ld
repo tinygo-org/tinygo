@@ -25,10 +25,14 @@ SECTIONS
         _stack_top = .;
     } >RAM
 
+    _sidata = LOADADDR(.data);
+
     .data :
     {
+        _sdata = .;
         *(.data)
         *(.data*)
+        _edata = .;
     } >RAM AT>FLASH_TEXT
 
     .bss :

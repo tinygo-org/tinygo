@@ -17,6 +17,23 @@ reset:
     out  0x3d, xl; SPL
     out  0x3e, xh; SPH
 
+    ; Initialize .data
+init_data:
+    ldi  xl, lo8(_sdata)
+    ldi  xh, hi8(_sdata)
+    ldi  yl, lo8(_edata)
+    ldi  yh, hi8(_edata)
+    ldi  zl, lo8(_sidata)
+    ldi  zh, hi8(_sidata)
+init_data_loop:
+    cp   xl, yl         ; if x == y
+    cpc  xh, yh
+    breq init_data_end  ; goto main
+    lpm  r0, Z+         ; r0 = *(z++)
+    st   X+, r0         ; *(x++) = r0
+    rjmp init_data_loop ; goto init_data_loop
+init_data_end:
+
     ; main will be placed right after here by the linker script so there's no
     ; need to jump.
 
