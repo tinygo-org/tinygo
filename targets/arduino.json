@@ -2,7 +2,7 @@
 	"llvm-target": "avr-atmel-none",
 	"build-tags": ["avr", "avr8", "atmega", "atmega328p", "js", "wasm"],
 	"linker": "avr-gcc",
-	"pre-link-args": ["-nostdlib", "-T", "targets/avr.ld", "-Wl,--gc-sections", "targets/avr.S"],
+	"pre-link-args": ["-nostartfiles", "-T", "targets/avr.ld", "-Wl,--gc-sections", "targets/avr.S"],
 	"objcopy": "avr-objcopy",
 	"flash": "avrdude -c arduino -p atmega328p -P {port} -U flash:w:{hex}"
 }
