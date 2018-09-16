@@ -139,15 +139,12 @@ func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	tripleSplit := strings.Split(c.triple, "-")
 
-	wordSize := c.targetData.PointerSize()
-	if wordSize < 4 {
-		wordSize = 4
-	}
 	config := loader.Config{
 		TypeChecker: types.Config{
-			Sizes: &types.StdSizes{
-				int64(wordSize),
-				int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
+			Sizes: &StdSizes{
+				IntSize:  int64(c.targetData.TypeAllocSize(c.intType)),
+				PtrSize:  int64(c.targetData.PointerSize()),
+				MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
 			},
 		},
 		Build: &build.Context{
