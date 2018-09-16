@@ -22,8 +22,14 @@ var hasScheduler bool
 // Entry point for Go. Initialize all packages and call main.main().
 //go:export main
 func main() int {
+	// Initialize memory etc.
+	preinit()
+
 	// Run initializers of all packages.
 	initAll()
+
+	// Enable interrupts etc.
+	postinit()
 
 	// This branch must be optimized away. Only one of the targets must remain,
 	// or there will be link errors.

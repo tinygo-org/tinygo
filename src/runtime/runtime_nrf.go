@@ -16,6 +16,12 @@ func _start() {
 	main()
 }
 
+func preinit() {
+}
+
+func postinit() {
+}
+
 func init() {
 	initUART()
 	initLFCLK()

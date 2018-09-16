@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"device/avr"
+	"unsafe"
 )
 
 const BOARD = "arduino"
@@ -27,6 +28,25 @@ const (
 	WDT_PERIOD_1S
 	WDT_PERIOD_2S
 )
+
+var (
+	_extern__sbss unsafe.Pointer // defined by the linker
+	_extern__ebss unsafe.Pointer // defined by the linker
+)
+
+func preinit() {
+	// Initialize .bss: zero-initialized global variables.
+	ptr := uintptr(unsafe.Pointer(&_extern__sbss))
+	for ptr != uintptr(unsafe.Pointer(&_extern__ebss)) {
+		*(*uint8)(unsafe.Pointer(ptr)) = 0
+		ptr += 1
+	}
+}
+
+func postinit() {
+	// Enable interrupts after initialization.
+	avr.Asm("sei")
+}
 
 func init() {
 	initUART()

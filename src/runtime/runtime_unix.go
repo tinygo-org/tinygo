@@ -24,6 +24,12 @@ type timespec struct {
 
 const CLOCK_MONOTONIC_RAW = 4
 
+func preinit() {
+}
+
+func postinit() {
+}
+
 func putchar(c byte) {
 	_Cfunc_putchar(int(c))
 }

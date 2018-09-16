@@ -11,29 +11,11 @@ isr:
 reset:
     clr  r1          ; r1 is expected to be 0 by the C calling convention
 
-    ; Zero .bss
-clear_bss:
-    ldi  xl, lo8(_sbss)
-    ldi  xh, hi8(_sbss)
-clear_bss_loop:
-    ldi  yl, lo8(_ebss)
-    ldi  yh, hi8(_ebss)
-    cp   xl, yl         ; if x == y
-    cpc  xh, yh
-    breq clear_bss_end
-    st   x+, r1         ; zero byte in *x
-    rjmp clear_bss_loop
-clear_bss_end:
-
     ; Set up the stack pointer.
     ldi  xl, lo8(_stack_top)
     ldi  xh, hi8(_stack_top)
     out  0x3d, xl; SPL
     out  0x3e, xh; SPH
-
-    ; Enable interrupts.
-    ; TODO: make sure interrupts are started after all initializers have run.
-    sei
 
     ; main will be placed right after here by the linker script so there's no
     ; need to jump.
