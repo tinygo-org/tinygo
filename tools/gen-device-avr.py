@@ -183,10 +183,22 @@ const (
                     out.write(': {description}'.format(**register))
                 out.write('\n')
             for bitfield in register['bitfields']:
-                out.write('\t{name} = 0x{value:x}'.format(**bitfield))
-                if bitfield['description']:
-                    out.write(' // {description}'.format(**bitfield))
-                out.write('\n')
+                name = bitfield['name']
+                value = bitfield['value']
+                if '{:08b}'.format(value).count('1') == 1:
+                    out.write('\t{name} = 0x{value:x}'.format(**bitfield))
+                    if bitfield['description']:
+                        out.write(' // {description}'.format(**bitfield))
+                    out.write('\n')
+                else:
+                    n = 0
+                    for i in range(8):
+                        if (value >> i) & 1 == 0: continue
+                        out.write('\t{}{} = 0x{:x}'.format(name, n, 1 << i))
+                        if bitfield['description']:
+                            out.write(' // {description}'.format(**bitfield))
+                        n += 1
+                        out.write('\n')
         out.write(')\n')
 
 def writeLD(outdir, device):
