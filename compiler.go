@@ -3129,6 +3129,17 @@ func (c *Compiler) ApplyFunctionSections() {
 	}
 }
 
+// Turn all global constants into global variables. This works around a
+// limitation on Harvard architectures (e.g. AVR), where constant and
+// non-constant pointers point to a different address space.
+func (c *Compiler) NonConstGlobals() {
+	global := c.mod.FirstGlobal()
+	for !global.IsNil() {
+		global.SetGlobalConstant(false)
+		global = llvm.NextGlobal(global)
+	}
+}
+
 func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) {
 	builder := llvm.NewPassManagerBuilder()
 	defer builder.Dispose()

@@ -49,6 +49,18 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, a
 		return err
 	}
 
+	// On the AVR, pointers can point either to flash or to RAM, but we don't
+	// know. As a temporary fix, load all global variables in RAM.
+	// In the future, there should be a compiler pass that determines which
+	// pointers are flash and which are in RAM so that pointers can have a
+	// correct address space parameter (address space 1 is for flash).
+	if strings.HasPrefix(spec.Triple, "avr") {
+		c.NonConstGlobals()
+		if err := c.Verify(); err != nil {
+			return err
+		}
+	}
+
 	// Generate output.
 	if strings.HasSuffix(outpath, ".o") {
 		return c.EmitObject(outpath)
