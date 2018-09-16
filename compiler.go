@@ -3180,7 +3180,7 @@ func (c *Compiler) EmitText(path string) error {
 // Write the data to the file specified by path.
 func (c *Compiler) writeFile(data []byte, path string) error {
 	// Write output to file
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}

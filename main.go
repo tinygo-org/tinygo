@@ -114,7 +114,7 @@ func Build(pkgName, outpath, target string, printIR, dumpSSA bool) error {
 				return err
 			}
 			defer inf.Close()
-			outf, err := os.OpenFile(outpath, os.O_RDWR|os.O_CREATE, 0777)
+			outf, err := os.OpenFile(outpath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
 			if err != nil {
 				return err
 			}
