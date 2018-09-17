@@ -17,7 +17,7 @@ reset:
     out  0x3d, xl; SPL
     out  0x3e, xh; SPH
 
-    ; Add one to the stack pointer, so it doesn't point in the .data section.
+    ; Subtract one from the stack pointer, so it doesn't point in the .data section.
     push r0
 
     ; Initialize .data
