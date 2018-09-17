@@ -270,7 +270,10 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		if err != nil {
 			return err
 		}
-		global := llvm.AddGlobal(c.mod, llvmType, g.LinkName())
+		global := c.mod.NamedGlobal(g.LinkName())
+		if global.IsNil() {
+			global = llvm.AddGlobal(c.mod, llvmType, g.LinkName())
+		}
 		g.llvmGlobal = global
 		if !g.IsExtern() {
 			global.SetLinkage(llvm.InternalLinkage)
