@@ -254,11 +254,8 @@ func (p *Program) AnalyseGoCalls() {
 // Simple pass that removes dead code. This pass makes later analysis passes
 // more useful.
 func (p *Program) SimpleDCE() {
-	// Unmark all functions and globals.
+	// Unmark all functions.
 	for _, f := range p.Functions {
-		f.flag = false
-	}
-	for _, f := range p.Globals {
 		f.flag = false
 	}
 
@@ -316,10 +313,6 @@ func (p *Program) SimpleDCE() {
 							f.flag = true
 							worklist = append(worklist, operand)
 						}
-					case *ssa.Global:
-						// TODO: globals that reference other globals
-						global := p.GetGlobal(operand)
-						global.flag = true
 					}
 				}
 			}
@@ -336,17 +329,6 @@ func (p *Program) SimpleDCE() {
 		}
 	}
 	p.Functions = livefunctions
-
-	// Remove unmarked globals.
-	liveglobals := []*Global{}
-	for _, g := range p.Globals {
-		if g.flag {
-			liveglobals = append(liveglobals, g)
-		} else {
-			delete(p.globalMap, g.g)
-		}
-	}
-	p.Globals = liveglobals
 }
 
 // Whether this function needs a scheduler.

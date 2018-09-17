@@ -50,7 +50,6 @@ type Function struct {
 type Global struct {
 	g           *ssa.Global
 	llvmGlobal  llvm.Value
-	flag        bool // used by dead code elimination
 	initializer Value
 }
 
