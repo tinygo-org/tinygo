@@ -9,16 +9,13 @@ TARGET ?= unix
 
 ifeq ($(TARGET),unix)
 # Regular *nix system.
-SIZE = size
 
 else ifeq ($(TARGET),pca10040)
 # PCA10040: nRF52832 development board
-SIZE = arm-none-eabi-size
 OBJCOPY = arm-none-eabi-objcopy
 TGOFLAGS += -target $(TARGET)
 
 else ifeq ($(TARGET),arduino)
-SIZE = avr-size
 OBJCOPY = avr-objcopy
 TGOFLAGS += -target $(TARGET)
 
@@ -68,13 +65,11 @@ build/tgo: *.go
 
 # Binary that can run on the host.
 build/%: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go
-	./build/tgo build $(TGOFLAGS) -o $@ $(subst src/,,$<)
-	@$(SIZE) $@
+	./build/tgo build $(TGOFLAGS) -size=short -o $@ $(subst src/,,$<)
 
 # ELF file that can run on a microcontroller.
 build/%.elf: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go
-	./build/tgo build $(TGOFLAGS) -o $@ $(subst src/,,$<)
-	@$(SIZE) $@
+	./build/tgo build $(TGOFLAGS) -size=short -o $@ $(subst src/,,$<)
 
 # Convert executable to Intel hex file (for flashing).
 build/%.hex: build/%.elf

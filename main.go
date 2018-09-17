@@ -16,7 +16,7 @@ import (
 )
 
 // Helper function for Compiler object.
-func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, action func(string) error) error {
+func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, printSizes string, action func(string) error) error {
 	c, err := NewCompiler(pkgName, spec.Triple, dumpSSA)
 	if err != nil {
 		return err
@@ -97,6 +97,25 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, a
 			return err
 		}
 
+		if printSizes == "short" || printSizes == "full" {
+			sizes, err := Sizes(executable)
+			if err != nil {
+				return err
+			}
+			if printSizes == "short" {
+				fmt.Printf("   code    data     bss |   flash     ram\n")
+				fmt.Printf("%7d %7d %7d | %7d %7d\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
+			} else {
+				fmt.Printf("   code  rodata    data     bss |   flash     ram | package\n")
+				for _, name := range sizes.SortedPackageNames() {
+					pkgSize := sizes.Packages[name]
+					fmt.Printf("%7d %7d %7d %7d | %7d %7d | %s\n", pkgSize.Code, pkgSize.ROData, pkgSize.Data, pkgSize.BSS, pkgSize.Flash(), pkgSize.RAM(), name)
+				}
+				fmt.Printf("%7d %7d %7d %7d | %7d %7d | (sum)\n", sizes.Sum.Code, sizes.Sum.ROData, sizes.Sum.Data, sizes.Sum.BSS, sizes.Sum.Flash(), sizes.Sum.RAM())
+				fmt.Printf("%7d       - %7d %7d | %7d %7d | (all)\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
+			}
+		}
+
 		if strings.HasSuffix(outpath, ".hex") {
 			// Get an Intel .hex file from the .elf file.
 			tmppath = filepath.Join(dir, "main.hex")
@@ -112,13 +131,13 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, a
 	}
 }
 
-func Build(pkgName, outpath, target string, printIR, dumpSSA bool) error {
+func Build(pkgName, outpath, target string, printIR, dumpSSA bool, printSizes string) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
 	}
 
-	return Compile(pkgName, outpath, spec, printIR, dumpSSA, func(tmppath string) error {
+	return Compile(pkgName, outpath, spec, printIR, dumpSSA, printSizes, func(tmppath string) error {
 		if err := os.Rename(tmppath, outpath); err != nil {
 			// Moving failed. Do a file copy.
 			inf, err := os.Open(tmppath)
@@ -146,13 +165,13 @@ func Build(pkgName, outpath, target string, printIR, dumpSSA bool) error {
 	})
 }
 
-func Flash(pkgName, target, port string, printIR, dumpSSA bool) error {
+func Flash(pkgName, target, port string, printIR, dumpSSA bool, printSizes string) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
 	}
 
-	return Compile(pkgName, ".hex", spec, printIR, dumpSSA, func(tmppath string) error {
+	return Compile(pkgName, ".hex", spec, printIR, dumpSSA, printSizes, func(tmppath string) error {
 		// Create the command.
 		flashCmd := spec.Flasher
 		parts := strings.Split(flashCmd, " ") // TODO: this should be a real shell split
@@ -216,6 +235,7 @@ func main() {
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
+	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
 
 	if len(os.Args) < 2 {
@@ -241,7 +261,7 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Build(flag.Arg(0), *outpath, *target, *printIR, *dumpSSA)
+		err := Build(flag.Arg(0), *outpath, *target, *printIR, *dumpSSA, *printSize)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
@@ -252,7 +272,7 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Flash(flag.Arg(0), *target, *port, *printIR, *dumpSSA)
+		err := Flash(flag.Arg(0), *target, *port, *printIR, *dumpSSA, *printSize)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
