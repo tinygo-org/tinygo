@@ -124,3 +124,47 @@ func (pwm PWM) Set(value uint16) {
 		panic("Invalid PWM pin")
 	}
 }
+
+// ADC on the Arduino
+const (
+	ADC0 = 0
+	ADC1 = 1
+	ADC2 = 2
+	ADC3 = 3
+	ADC4 = 4
+	ADC5 = 5
+)
+
+// InitADC initializes the registers needed for ADC.
+func InitADC() {
+	// set a2d prescaler so we are inside the desired 50-200 KHz range.
+	*avr.ADCSRA |= (avr.ADCSRA_ADPS2 | avr.ADCSRA_ADPS1 | avr.ADCSRA_ADPS0)
+
+	// enable a2d conversions
+	*avr.ADCSRA |= avr.ADCSRA_ADEN
+}
+
+// Configures an ADCPin to be able to be used to read data.
+func (a ADC) Configure() {
+	return // no pin specific setup on AVR.
+}
+
+// Get returns the current value of a ADC pin.
+func (a ADC) Get() uint16 {
+	// set the analog reference (high two bits of ADMUX) and select the
+	// channel (low 4 bits). this also sets ADLAR (left-adjust result)
+	// to 0 (the default).
+	*avr.ADMUX = avr.RegValue(avr.ADMUX_REFS0 | (a.Pin & 0x07))
+
+	// start the conversion
+	*avr.ADCSRA |= avr.ADCSRA_ADSC
+
+	// ADSC is cleared when the conversion finishes
+	for ok := true; ok; ok = (*avr.ADCSRA & avr.ADCSRA_ADSC) > 0 {
+	}
+
+	low := *avr.ADCL
+	high := *avr.ADCH
+
+	return uint16(high<<8) | uint16(low)
+}

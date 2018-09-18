@@ -19,3 +19,7 @@ func (p GPIO) Low() {
 type PWM struct {
 	Pin uint8
 }
+
+type ADC struct {
+	Pin uint8
+}
