@@ -5,7 +5,8 @@ import (
 	"time"
 )
 
-// This example assumes that an analog sensor is connected to pin ADC0.
+// This example assumes that an analog sensor such as a rotary dial is connected to pin ADC0.
+// When the dial is turned past the midway point, the built-in LED will light up.
 
 func main() {
 	machine.InitADC()
@@ -18,13 +19,11 @@ func main() {
 
 	for {
 		val := sensor.Get()
-		if val < 255 {
+		if val < 512 {
 			led.Low()
 		} else {
 			led.High()
 		}
-		println("val is", val)
-
 		time.Sleep(time.Millisecond * 100)
 	}
 }

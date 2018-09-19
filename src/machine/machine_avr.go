@@ -137,23 +137,24 @@ const (
 
 // InitADC initializes the registers needed for ADC.
 func InitADC() {
-	// set a2d prescaler so we are inside the desired 50-200 KHz range.
+	// set a2d prescaler so we are inside the desired 50-200 KHz range at 16MHz.
 	*avr.ADCSRA |= (avr.ADCSRA_ADPS2 | avr.ADCSRA_ADPS1 | avr.ADCSRA_ADPS0)
 
 	// enable a2d conversions
 	*avr.ADCSRA |= avr.ADCSRA_ADEN
 }
 
-// Configures an ADCPin to be able to be used to read data.
+// Configure configures a ADCPin to be able to be used to read data.
 func (a ADC) Configure() {
-	return // no pin specific setup on AVR.
+	return // no pin specific setup on AVR machine.
 }
 
-// Get returns the current value of a ADC pin.
+// Get returns the current value of a ADC pin. The AVR will return a 10bit value ranging
+// from 0-1023.
 func (a ADC) Get() uint16 {
 	// set the analog reference (high two bits of ADMUX) and select the
-	// channel (low 4 bits). this also sets ADLAR (left-adjust result)
-	// to 0 (the default).
+	// channel (low 4 bits), masked to only turn on one ADC at a time.
+	// this also sets ADLAR (left-adjust result) to 0 (the default).
 	*avr.ADMUX = avr.RegValue(avr.ADMUX_REFS0 | (a.Pin & 0x07))
 
 	// start the conversion
@@ -163,8 +164,7 @@ func (a ADC) Get() uint16 {
 	for ok := true; ok; ok = (*avr.ADCSRA & avr.ADCSRA_ADSC) > 0 {
 	}
 
-	low := *avr.ADCL
-	high := *avr.ADCH
-
-	return uint16(high<<8) | uint16(low)
+	low := uint16(*avr.ADCL)
+	high := uint16(*avr.ADCH)
+	return uint16(low) | uint16(high<<8)
 }
