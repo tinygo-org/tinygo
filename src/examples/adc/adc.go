@@ -19,7 +19,7 @@ func main() {
 
 	for {
 		val := sensor.Get()
-		if val < 512 {
+		if val < 0x8000 {
 			led.Low()
 		} else {
 			led.High()

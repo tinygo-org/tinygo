@@ -149,13 +149,15 @@ func (a ADC) Configure() {
 	return // no pin specific setup on AVR machine.
 }
 
-// Get returns the current value of a ADC pin. The AVR will return a 10bit value ranging
-// from 0-1023.
+// Get returns the current value of a ADC pin, in the range 0..0xffff. The AVR
+// has an ADC of 10 bits precision so the lower 6 bits will be zero.
 func (a ADC) Get() uint16 {
 	// set the analog reference (high two bits of ADMUX) and select the
 	// channel (low 4 bits), masked to only turn on one ADC at a time.
-	// this also sets ADLAR (left-adjust result) to 0 (the default).
-	*avr.ADMUX = avr.RegValue(avr.ADMUX_REFS0 | (a.Pin & 0x07))
+	// set the ADLAR bit (left-adjusted result) to get a value scaled to 16
+	// bits. This has the same effect as shifting the return value left by 6
+	// bits.
+	*avr.ADMUX = avr.RegValue(avr.ADMUX_REFS0 | avr.ADMUX_ADLAR | (a.Pin & 0x07))
 
 	// start the conversion
 	*avr.ADCSRA |= avr.ADCSRA_ADSC
