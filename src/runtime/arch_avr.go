@@ -1,11 +1,11 @@
-// +build wasm,!avr
+// +build avr
 
 package runtime
 
-const GOARCH = "wasm"
+const GOARCH = "avr"
 
 // The length type used inside strings and slices.
-type lenType uint32
+type lenType uint16
 
 // The bitness of the CPU (e.g. 8, 32, 64).
-const TargetBits = 32
+const TargetBits = 8

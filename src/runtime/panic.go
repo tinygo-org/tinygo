@@ -16,15 +16,15 @@ func runtimePanic(msg string) {
 }
 
 // Check for bounds in *ssa.Index, *ssa.IndexAddr and *ssa.Lookup.
-func lookupBoundsCheck(length, index int) {
-	if index < 0 || index >= length {
+func lookupBoundsCheck(length lenType, index int) {
+	if index < 0 || index >= int(length) {
 		runtimePanic("index out of range")
 	}
 }
 
 // Check for bounds in *ssa.Slice.
-func sliceBoundsCheck(length, low, high uint) {
-	if !(0 <= low && low <= high && high <= length) {
+func sliceBoundsCheck(length lenType, low, high uint) {
+	if !(0 <= low && low <= high && high <= uint(length)) {
 		runtimePanic("slice out of range")
 	}
 }

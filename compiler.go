@@ -105,8 +105,13 @@ func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 
 	// Depends on platform (32bit or 64bit), but fix it here for now.
 	c.intType = llvm.Int32Type()
-	c.lenType = llvm.Int32Type() // also defined as runtime.lenType
 	c.uintptrType = c.targetData.IntPtrType()
+	if c.targetData.PointerSize() < 4 {
+		// 16 or 8 bits target with smaller length type
+		c.lenType = c.uintptrType
+	} else {
+		c.lenType = llvm.Int32Type() // also defined as runtime.lenType
+	}
 	c.i8ptrType = llvm.PointerType(llvm.Int8Type(), 0)
 
 	allocType := llvm.FunctionType(c.i8ptrType, []llvm.Type{c.uintptrType}, false)
@@ -1632,20 +1637,25 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 		if err != nil {
 			return llvm.Value{}, err
 		}
+		var llvmLen llvm.Value
 		switch args[0].Type().(type) {
 		case *types.Basic, *types.Slice:
 			// string or slice
-			return c.builder.CreateExtractValue(value, 1, "len"), nil
+			llvmLen = c.builder.CreateExtractValue(value, 1, "len")
 		case *types.Map:
 			indices := []llvm.Value{
 				llvm.ConstInt(llvm.Int32Type(), 0, false),
 				llvm.ConstInt(llvm.Int32Type(), 2, false), // hashmap.count
 			}
 			ptr := c.builder.CreateGEP(value, indices, "lenptr")
-			return c.builder.CreateLoad(ptr, "len"), nil
+			llvmLen = c.builder.CreateLoad(ptr, "len")
 		default:
 			return llvm.Value{}, errors.New("todo: len: unknown type")
 		}
+		if c.targetData.TypeAllocSize(llvmLen.Type()) < c.targetData.TypeAllocSize(c.intType) {
+			llvmLen = c.builder.CreateZExt(llvmLen, c.intType, "len.int")
+		}
+		return llvmLen, nil
 	case "print", "println":
 		for i, arg := range args {
 			if i >= 1 && callName == "println" {
@@ -2041,7 +2051,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		// Check bounds.
 		arrayLen := expr.X.Type().(*types.Array).Len()
-		arrayLenLLVM := llvm.ConstInt(llvm.Int32Type(), uint64(arrayLen), false)
+		arrayLenLLVM := llvm.ConstInt(c.lenType, uint64(arrayLen), false)
 		c.emitBoundsCheck(frame, arrayLenLLVM, index)
 
 		// Can't load directly from array (as index is non-constant), so have to
@@ -2069,7 +2079,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			switch typ := typ.(type) {
 			case *types.Array:
 				bufptr = val
-				buflen = llvm.ConstInt(llvm.Int32Type(), uint64(typ.Len()), false)
+				buflen = llvm.ConstInt(c.lenType, uint64(typ.Len()), false)
 			default:
 				return llvm.Value{}, errors.New("todo: indexaddr: " + typ.String())
 			}
@@ -2218,6 +2228,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		slicePtr := c.builder.CreateCall(c.allocFunc, []llvm.Value{sliceSize}, "makeslice.buf")
 		slicePtr = c.builder.CreateBitCast(slicePtr, llvm.PointerType(llvmElemType, 0), "makeslice.array")
 
+		if c.targetData.TypeAllocSize(sliceLen.Type()) > c.targetData.TypeAllocSize(c.lenType) {
+			sliceLen = c.builder.CreateTrunc(sliceLen, c.lenType, "")
+			sliceCap = c.builder.CreateTrunc(sliceCap, c.lenType, "")
+		}
+
 		// Create the slice.
 		slice := llvm.ConstStruct([]llvm.Value{
 			llvm.Undef(slicePtr.Type()),
@@ -2299,7 +2314,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		var low, high llvm.Value
 		if expr.Low == nil {
-			low = llvm.ConstInt(c.lenType, 0, false)
+			low = llvm.ConstInt(c.intType, 0, false)
 		} else {
 			low, err = c.parseExpr(frame, expr.Low)
 			if err != nil {
@@ -2317,8 +2332,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			// slice an array
 			length := typ.Elem().(*types.Array).Len()
 			llvmLen := llvm.ConstInt(c.lenType, uint64(length), false)
+			llvmLenInt := llvm.ConstInt(c.intType, uint64(length), false)
 			if high.IsNil() {
-				high = llvmLen
+				high = llvmLenInt
 			}
 			indices := []llvm.Value{
 				llvm.ConstInt(llvm.Int32Type(), 0, false),
@@ -2326,12 +2342,17 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			}
 			slicePtr := c.builder.CreateGEP(value, indices, "slice.ptr")
 			sliceLen := c.builder.CreateSub(high, low, "slice.len")
-			sliceCap := c.builder.CreateSub(llvmLen, low, "slice.cap")
+			sliceCap := c.builder.CreateSub(llvmLenInt, low, "slice.cap")
 
 			// This check is optimized away in most cases.
 			if !frame.fn.nobounds {
 				sliceBoundsCheck := c.mod.NamedFunction("runtime.sliceBoundsCheck")
 				c.builder.CreateCall(sliceBoundsCheck, []llvm.Value{llvmLen, low, high}, "")
+			}
+
+			if c.targetData.TypeAllocSize(sliceLen.Type()) > c.targetData.TypeAllocSize(c.lenType) {
+				sliceLen = c.builder.CreateTrunc(sliceLen, c.lenType, "")
+				sliceCap = c.builder.CreateTrunc(sliceCap, c.lenType, "")
 			}
 
 			slice := llvm.ConstStruct([]llvm.Value{
@@ -2356,6 +2377,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			if !frame.fn.nobounds {
 				sliceBoundsCheck := c.mod.NamedFunction("runtime.sliceBoundsCheck")
 				c.builder.CreateCall(sliceBoundsCheck, []llvm.Value{oldLen, low, high}, "")
+			}
+
+			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.lenType) {
+				low = c.builder.CreateTrunc(low, c.lenType, "")
+			}
+			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.lenType) {
+				high = c.builder.CreateTrunc(high, c.lenType, "")
 			}
 
 			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
