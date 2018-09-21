@@ -41,10 +41,10 @@ func main() {
 	button4.Configure(machine.GPIOConfig{Mode: machine.GPIO_INPUT_PULLUP})
 
 	for {
-		setLED(&led1, button1.Get())
-		setLED(&led2, button2.Get())
-		setLED(&led3, button3.Get())
-		setLED(&led4, button4.Get())
+		led1.Set(button1.Get())
+		led2.Set(button2.Get())
+		led3.Set(button3.Get())
+		led4.Set(button4.Get())
 
 		time.Sleep(time.Millisecond * 10)
 	}
