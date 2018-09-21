@@ -6,6 +6,7 @@ from xml.dom import minidom
 from glob import glob
 from collections import OrderedDict
 import re
+import argparse
 
 class Device:
     # dummy
@@ -24,7 +25,7 @@ def formatText(text):
     text = text.strip()
     return text
 
-def readSVD(path):
+def readSVD(path, sourceURL):
     # Read ARM SVD files.
     device = Device()
     xml = minidom.parse(path)
@@ -123,7 +124,7 @@ def readSVD(path):
         licenseBlock = '\n'.join(map(str.rstrip, licenseBlock.split('\n'))) # strip trailing whitespace
     device.metadata = {
         'file':             os.path.basename(path),
-        'descriptorSource': 'https://github.com/NordicSemiconductor/nrfx/tree/master/mdk',
+        'descriptorSource': sourceURL,
         'name':             deviceName,
         'nameLower':        deviceName.lower(),
         'description':      deviceDescription,
@@ -370,17 +371,24 @@ Default_Handler:
     for intr in device.interrupts:
         out.write('    IRQ {name}_IRQHandler\n'.format(**intr))
 
-def generate(indir, outdir):
+def generate(indir, outdir, sourceURL):
     if not os.path.isdir(outdir):
         os.mkdir(outdir)
     for filepath in sorted(glob(indir + '/*.svd')):
         print(filepath)
-        device = readSVD(filepath)
+        device = readSVD(filepath, sourceURL)
         writeGo(outdir, device)
         writeAsm(outdir, device)
 
 
 if __name__ == '__main__':
-    indir = sys.argv[1] # directory with register descriptor files (*.svd, *.atdf)
-    outdir = sys.argv[2] # output directory
-    generate(indir, outdir)
+    parser = argparse.ArgumentParser(description='Generate Go register descriptors and interrupt vectors from .svd files')
+    parser.add_argument('indir', metavar='indir', type=str,
+                        help='input directory containing .svd files')
+    parser.add_argument('outdir', metavar='outdir', type=str,
+                        help='output directory')
+    parser.add_argument('--source', metavar='source', type=str,
+                        help='output directory',
+                        default='<unknown>')
+    args = parser.parse_args()
+    generate(args.indir, args.outdir, args.source)
