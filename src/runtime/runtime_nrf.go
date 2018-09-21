@@ -5,18 +5,53 @@ package runtime
 import (
 	"device/arm"
 	"device/nrf"
+	"unsafe"
 )
 
 type timeUnit int64
 
 const tickMicros = 1024 * 32
 
-//go:export _start
-func _start() {
+//go:linkname systemInit SystemInit
+func systemInit()
+
+//go:export Reset_Handler
+func handleReset() {
+	systemInit()
 	main()
 }
 
+//go:extern _sbss
+var _sbss unsafe.Pointer
+
+//go:extern _ebss
+var _ebss unsafe.Pointer
+
+//go:extern _sdata
+var _sdata unsafe.Pointer
+
+//go:extern _sidata
+var _sidata unsafe.Pointer
+
+//go:extern _edata
+var _edata unsafe.Pointer
+
 func preinit() {
+	// Initialize .bss: zero-initialized global variables.
+	ptr := uintptr(unsafe.Pointer(&_sbss))
+	for ptr != uintptr(unsafe.Pointer(&_ebss)) {
+		*(*uint32)(unsafe.Pointer(ptr)) = 0
+		ptr += 4
+	}
+
+	// Initialize .data: global variables initialized from flash.
+	src := uintptr(unsafe.Pointer(&_sidata))
+	dst := uintptr(unsafe.Pointer(&_sdata))
+	for dst != uintptr(unsafe.Pointer(&_edata)) {
+		*(*uint32)(unsafe.Pointer(dst)) = *(*uint32)(unsafe.Pointer(src))
+		dst += 4
+		src += 4
+	}
 }
 
 func postinit() {
@@ -119,7 +154,7 @@ func rtc_sleep(ticks uint32) {
 }
 
 //go:export RTC0_IRQHandler
-func RTC0_IRQHandler() {
+func handleRTC0() {
 	nrf.RTC0.INTENCLR = nrf.RTC0_INTENSET_COMPARE0_Msk
 	nrf.RTC0.EVENTS_COMPARE[0] = 0
 	rtc_wakeup = true

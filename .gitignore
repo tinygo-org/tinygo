@@ -2,3 +2,4 @@ build
 src/device/avr/*.go
 src/device/avr/*.ld
 src/device/nrf/*.go
+src/device/nrf/*.s

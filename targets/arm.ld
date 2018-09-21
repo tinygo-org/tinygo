@@ -34,6 +34,8 @@ SECTIONS
         __StackTop = .;
     } >RAM
 
+    _sidata = LOADADDR(.data);
+
     /* This is the initialized data section
     The program executes knowing that the data is in the RAM
     but the loader puts the initial values in the FLASH (inidata).
