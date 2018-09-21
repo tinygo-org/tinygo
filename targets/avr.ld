@@ -1,10 +1,11 @@
 
 MEMORY
 {
-    FLASH_TEXT (rw) : ORIGIN = 0, LENGTH = 32256
+    FLASH_TEXT (rw) : ORIGIN = 0, LENGTH = 32K - _bootloader_size
     RAM (xrw)       : ORIGIN = 0, LENGTH = 2K
 }
 
+_bootloader_size = 512;
 _stack_size = 512;
 
 SECTIONS
@@ -29,19 +30,22 @@ SECTIONS
 
     .data :
     {
-        _sdata = .;
+        _sdata = .;        /* used by startup code */
         *(.data)
         *(.data*)
-        _edata = .;
+        _edata = .;        /* used by startup code */
     } >RAM AT>FLASH_TEXT
 
     .bss :
     {
-        _sbss = .;
+        _sbss = .;         /* used by startup code */
         *(.bss)
         *(.bss*)
         *(COMMON)
-        _ebss = .;
-        _heap_start = .;
+        _ebss = .;         /* used by startup code */
     } >RAM
 }
+
+/* For the memory allocator. */
+_heap_start = _ebss;
+_heap_end = ORIGIN(RAM) + LENGTH(RAM);

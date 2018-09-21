@@ -10,18 +10,14 @@ _stack_size = 2K;
 /* define output sections */
 SECTIONS
 {
-    /* The program code and other data goes into FLASH */
+    /* Program code and read-only data goes to FLASH_TEXT. */
     .text :
     {
-        _stext = .;
-        . = ALIGN(4);
         KEEP(*(.isr_vector))
-        *(.text)           /* .text sections (code) */
-        *(.text*)          /* .text* sections (code) */
-        *(.rodata)         /* .rodata sections (constants, strings, etc.) */
-        *(.rodata*)        /* .rodata* sections (constants, strings, etc.) */
-        . = ALIGN(4);
-        _etext = .;        /* define a global symbol at end of code */
+        *(.text)
+        *(.text*)
+        *(.rodata)
+        *(.rodata*)
     } >FLASH_TEXT
 
     /* Put the stack at the bottom of RAM, so that the application will
@@ -31,53 +27,40 @@ SECTIONS
     {
         . = ALIGN(4);
         . += _stack_size;
-        __StackTop = .;
+        _stack_top = .;
     } >RAM
 
+    /* Start address (in flash) of .data, used by startup code. */
     _sidata = LOADADDR(.data);
 
-    /* This is the initialized data section
-    The program executes knowing that the data is in the RAM
-    but the loader puts the initial values in the FLASH (inidata).
-    It is one task of the startup to copy the initial values from FLASH to RAM. */
+    /* Globals with initial value */
     .data :
     {
         . = ALIGN(4);
-        _sdata = .;        /* create a global symbol at data start; used by startup code in order to initialise the .data section in RAM */
-        *(.data)           /* .data sections */
-        *(.data*)          /* .data* sections */
-
+        _sdata = .;        /* used by startup code */
+        *(.data)
+        *(.data*)
         . = ALIGN(4);
-        _edata = .;        /* define a global symbol at data end; used by startup code in order to initialise the .data section in RAM */
+        _edata = .;        /* used by startup code */
     } >RAM AT>FLASH_TEXT
 
-    /* Uninitialized data section */
+    /* Zero-initialized globals  */
     .bss :
     {
         . = ALIGN(4);
-        _sbss = .;         /* define a global symbol at bss start; used by startup code */
+        _sbss = .;         /* used by startup code */
         *(.bss)
         *(.bss*)
         *(COMMON)
-
         . = ALIGN(4);
-        _ebss = .;         /* define a global symbol at bss end; used by startup code and GC */
+        _ebss = .;         /* used by startup code */
     } >RAM
 
     /DISCARD/ :
     {
-        *(.ARM.exidx.*)
-        *(.ARM.attributes)
-        *(.stack) /* from nrfx */
-        *(.heap)  /* from nrfx */
+        *(.ARM.exidx.*)    /* causes spurious 'undefined reference' errors */
     }
 }
-
-/* For the nrfx startup file. */
-__etext = _etext;
-__data_start__ = _sdata;
-__bss_start__ = _sbss;
-__bss_end__ = _ebss;
 
 /* For the memory allocator. */
 _heap_start = _ebss;

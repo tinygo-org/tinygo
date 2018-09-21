@@ -278,8 +278,8 @@ Default_Handler:
 .global  __isr_vector
     // Interrupt vector as defined by Cortex-M, starting with the stack top.
     // On reset, SP is initialized with *0x0 and PC is loaded with *0x4, loading
-    // __StackTop and Reset_Handler.
-    .long __StackTop
+    // _stack_top and Reset_Handler.
+    .long _stack_top
     .long Reset_Handler
     .long NMI_Handler
     .long HardFault_Handler
