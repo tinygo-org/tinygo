@@ -25,10 +25,11 @@ type TargetSpec struct {
 // Load a target specification
 func LoadTarget(target string) (*TargetSpec, error) {
 	spec := &TargetSpec{
-		Triple:    target,
-		BuildTags: []string{runtime.GOOS, runtime.GOARCH},
-		Linker:    "cc",
-		Objcopy:   "objcopy",
+		Triple:      target,
+		BuildTags:   []string{runtime.GOOS, runtime.GOARCH},
+		Linker:      "cc",
+		PreLinkArgs: []string{"-no-pie"}, // WARNING: clang < 5.0 requires -nopie
+		Objcopy:     "objcopy",
 	}
 
 	// See whether there is a target specification for this target (e.g.
