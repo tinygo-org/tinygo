@@ -29,15 +29,16 @@ const (
 	WDT_PERIOD_2S
 )
 
-var (
-	_extern__sbss unsafe.Pointer // defined by the linker
-	_extern__ebss unsafe.Pointer // defined by the linker
-)
+//go:extern _sbss
+var _sbss unsafe.Pointer
+
+//go:extern _ebss
+var _ebss unsafe.Pointer
 
 func preinit() {
 	// Initialize .bss: zero-initialized global variables.
-	ptr := uintptr(unsafe.Pointer(&_extern__sbss))
-	for ptr != uintptr(unsafe.Pointer(&_extern__ebss)) {
+	ptr := uintptr(unsafe.Pointer(&_sbss))
+	for ptr != uintptr(unsafe.Pointer(&_ebss)) {
 		*(*uint8)(unsafe.Pointer(ptr)) = 0
 		ptr += 1
 	}

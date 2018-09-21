@@ -6,10 +6,10 @@ import (
 	"unsafe"
 )
 
-var (
-	_extern__heap_start unsafe.Pointer // defined by the linker
-	heapptr             = uintptr(unsafe.Pointer(&_extern__heap_start))
-)
+//go:extern _heap_start
+var heapStart unsafe.Pointer
+
+var heapptr = uintptr(unsafe.Pointer(&heapStart))
 
 func alloc(size uintptr) unsafe.Pointer {
 	// TODO: this can be optimized by not casting between pointers and ints so

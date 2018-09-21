@@ -2,6 +2,7 @@ package main
 
 import (
 	"go/ast"
+	"go/token"
 	"go/types"
 	"sort"
 	"strings"
@@ -24,6 +25,7 @@ type Program struct {
 	functionMap          map[*ssa.Function]*Function
 	Globals              []*Global
 	globalMap            map[*ssa.Global]*Global
+	comments             map[string]*ast.CommentGroup
 	NamedTypes           []*NamedType
 	needsScheduler       bool
 	goCalls              []*ssa.Go
@@ -50,8 +52,11 @@ type Function struct {
 
 // Global variable, possibly constant.
 type Global struct {
+	program     *Program
 	g           *ssa.Global
 	llvmGlobal  llvm.Value
+	linkName    string // go:extern
+	extern      bool   // go:extern
 	initializer Value
 }
 
@@ -77,6 +82,30 @@ type Interface struct {
 
 // Create and intialize a new *Program from a *ssa.Program.
 func NewProgram(lprogram *loader.Program, mainPath string) *Program {
+	comments := map[string]*ast.CommentGroup{}
+	for _, pkgInfo := range lprogram.AllPackages {
+		for _, file := range pkgInfo.Files {
+			for _, decl := range file.Decls {
+				switch decl := decl.(type) {
+				case *ast.GenDecl:
+					switch decl.Tok {
+					case token.VAR:
+						if len(decl.Specs) != 1 {
+							continue
+						}
+						for _, spec := range decl.Specs {
+							valueSpec := spec.(*ast.ValueSpec)
+							for _, valueName := range valueSpec.Names {
+								id := pkgInfo.Pkg.Path() + "." + valueName.Name
+								comments[id] = decl.Doc
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	program := ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions|ssa.BareInits|ssa.GlobalDebug)
 	program.Build()
 
@@ -87,6 +116,7 @@ func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 		globalMap:            make(map[*ssa.Global]*Global),
 		methodSignatureNames: make(map[string]int),
 		interfaces:           make(map[string]*Interface),
+		comments:             comments,
 	}
 }
 
@@ -121,7 +151,11 @@ func (p *Program) AddPackage(pkg *ssa.Package) {
 				}
 			}
 		case *ssa.Global:
-			g := &Global{g: member}
+			g := &Global{program: p, g: member}
+			doc := p.comments[g.g.RelString(nil)]
+			if doc != nil {
+				g.parsePragmas(doc)
+			}
 			p.Globals = append(p.Globals, g)
 			p.globalMap[member] = g
 		case *ssa.NamedConst:
@@ -249,17 +283,33 @@ func (f *Function) CName() string {
 	return ""
 }
 
-// Return the link name for this global.
-func (g *Global) LinkName() string {
-	if strings.HasPrefix(g.g.Name(), "_extern_") {
-		return g.g.Name()[len("_extern_"):]
-	} else {
-		return g.g.RelString(nil)
+// Parse //go: pragma comments from the source.
+func (g *Global) parsePragmas(doc *ast.CommentGroup) {
+	for _, comment := range doc.List {
+		if !strings.HasPrefix(comment.Text, "//go:") {
+			continue
+		}
+		parts := strings.Fields(comment.Text)
+		switch parts[0] {
+		case "//go:extern":
+			g.extern = true
+			if len(parts) == 2 {
+				g.linkName = parts[1]
+			}
+		}
 	}
 }
 
+// Return the link name for this global.
+func (g *Global) LinkName() string {
+	if g.linkName != "" {
+		return g.linkName
+	}
+	return g.g.RelString(nil)
+}
+
 func (g *Global) IsExtern() bool {
-	return strings.HasPrefix(g.g.Name(), "_extern_")
+	return g.extern
 }
 
 // Wrapper type to implement sort.Interface for []*types.Selection.
