@@ -41,6 +41,7 @@ def readSVD(path):
 
     device.peripherals = []
     peripheralDict = {}
+    groups = {}
 
     interrupts = OrderedDict()
 
@@ -52,31 +53,38 @@ def readSVD(path):
             description = formatText(getText(descriptionTags[0]))
         baseAddress = int(getText(periphEl.getElementsByTagName('baseAddress')[0]), 0)
         groupNameTags = periphEl.getElementsByTagName('groupName')
-        groupName = name
+        groupName = None
         if groupNameTags:
             groupName = getText(groupNameTags[0])
 
-        if periphEl.hasAttribute('derivedFrom'):
-            derivedFromName = periphEl.getAttribute('derivedFrom')
-            derivedFrom = peripheralDict[derivedFromName]
+        if periphEl.hasAttribute('derivedFrom') or groupName in groups:
+            if periphEl.hasAttribute('derivedFrom'):
+                derivedFromName = periphEl.getAttribute('derivedFrom')
+                derivedFrom = peripheralDict[derivedFromName]
+            else:
+                derivedFrom = groups[groupName]
             peripheral = {
                 'name':        name,
                 'groupName':   derivedFrom['groupName'],
-                'description': description if description is not None else derivedFrom['description'],
+                'description': description or derivedFrom['description'],
                 'baseAddress': baseAddress,
             }
             device.peripherals.append(peripheral)
+            peripheralDict[name] = peripheral
             continue
 
         peripheral = {
             'name':        name,
-            'groupName':   groupName,
+            'groupName':   groupName or name,
             'description': description,
             'baseAddress': baseAddress,
             'registers':   [],
         }
         device.peripherals.append(peripheral)
         peripheralDict[name] = peripheral
+
+        if groupName and groupName not in groups:
+            groups[groupName] = peripheral
 
         for interrupt in periphEl.getElementsByTagName('interrupt'):
             intrName = getText(interrupt.getElementsByTagName('name')[0])
@@ -96,7 +104,7 @@ def readSVD(path):
         if regsEls:
             for el in regsEls[0].childNodes:
                 if el.nodeName == 'register':
-                    peripheral['registers'].append(parseSVDRegister(groupName, el, baseAddress))
+                    peripheral['registers'].append(parseSVDRegister(groupName or name, el, baseAddress))
                 elif el.nodeName == 'cluster':
                     if el.getElementsByTagName('dim'):
                         continue # TODO
@@ -104,7 +112,7 @@ def readSVD(path):
                     clusterOffset = int(getText(el.getElementsByTagName('addressOffset')[0]), 0)
                     for regEl in el.childNodes:
                         if regEl.nodeName == 'register':
-                            peripheral['registers'].append(parseSVDRegister(groupName, regEl, baseAddress + clusterOffset, clusterPrefix))
+                            peripheral['registers'].append(parseSVDRegister(groupName or name, regEl, baseAddress + clusterOffset, clusterPrefix))
                 else:
                     continue
 
