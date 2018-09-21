@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/aykevl/llvm/bindings/go/llvm"
+	"golang.org/x/tools/go/loader"
 	"golang.org/x/tools/go/ssa"
+	"golang.org/x/tools/go/ssa/ssautil"
 )
 
 // This file provides a wrapper around go/ssa values and adds extra
@@ -74,7 +76,10 @@ type Interface struct {
 }
 
 // Create and intialize a new *Program from a *ssa.Program.
-func NewProgram(program *ssa.Program, mainPath string) *Program {
+func NewProgram(lprogram *loader.Program, mainPath string) *Program {
+	program := ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions|ssa.BareInits|ssa.GlobalDebug)
+	program.Build()
+
 	return &Program{
 		program:              program,
 		mainPkg:              program.ImportedPackage(mainPath),

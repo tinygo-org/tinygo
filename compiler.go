@@ -17,7 +17,6 @@ import (
 	"go/parser"
 	"golang.org/x/tools/go/loader"
 	"golang.org/x/tools/go/ssa"
-	"golang.org/x/tools/go/ssa/ssautil"
 )
 
 func init() {
@@ -179,9 +178,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		}
 	}
 
-	program := ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions|ssa.BareInits|ssa.GlobalDebug)
-	program.Build()
-	c.ir = NewProgram(program, mainPath)
+	c.ir = NewProgram(lprogram, mainPath)
 
 	// Make a list of packages in import order.
 	packageList := []*ssa.Package{}
@@ -189,7 +186,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 	worklist := []string{"runtime", mainPath}
 	for len(worklist) != 0 {
 		pkgPath := worklist[0]
-		pkg := program.ImportedPackage(pkgPath)
+		pkg := c.ir.program.ImportedPackage(pkgPath)
 		if pkg == nil {
 			// Non-SSA package (e.g. cgo).
 			packageSet[pkgPath] = struct{}{}
@@ -444,7 +441,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		}
 		c.ir.SortMethods(methods)
 		for _, method := range methods {
-			f := c.ir.GetFunction(program.MethodValue(method))
+			f := c.ir.GetFunction(c.ir.program.MethodValue(method))
 			if f.llvmFn.IsNil() {
 				return errors.New("cannot find function: " + f.LinkName())
 			}
