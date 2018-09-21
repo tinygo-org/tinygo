@@ -183,6 +183,18 @@ func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter
 				return i, nil // arrived at the init#num functions
 			}
 			return i, errors.New("todo: init call: " + callee.String())
+		case *ssa.ChangeType:
+			x, err := p.getValue(instr.X, locals)
+			if err != nil {
+				return i, err
+			}
+			// The only case when we need to bitcast is when casting between named
+			// struct types, as those are actually different in LLVM. Let's just
+			// bitcast all struct types for ease of use.
+			if _, ok := instr.Type().Underlying().(*types.Struct); ok {
+				return i, errors.New("todo: init: " + instr.String())
+			}
+			locals[instr] = x
 		case *ssa.Convert:
 			x, err := p.getValue(instr.X, locals)
 			if err != nil {
@@ -369,6 +381,7 @@ func canInterpret(callee *ssa.Function) bool {
 		// Ignore all functions fully supported by Program.interpret()
 		// above.
 		case *ssa.Alloc:
+		case *ssa.ChangeType:
 		case *ssa.Convert:
 		case *ssa.DebugRef:
 		case *ssa.Extract:
