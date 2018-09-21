@@ -7,11 +7,6 @@ from glob import glob
 from collections import OrderedDict
 import re
 
-ARM_ARCHS = {
-    'CM0': 'armv6m',
-    'CM4': 'armv7em',
-}
-
 class Device:
     # dummy
     pass
@@ -36,9 +31,13 @@ def readSVD(path):
     root = xml.getElementsByTagName('device')[0]
     deviceName = getText(root.getElementsByTagName('name')[0])
     deviceDescription = getText(root.getElementsByTagName('description')[0]).strip()
-    licenseText = formatText(getText(root.getElementsByTagName('licenseText')[0]))
-    cpu = root.getElementsByTagName('cpu')[0]
-    cpuName = getText(cpu.getElementsByTagName('name')[0])
+    licenseTexts = root.getElementsByTagName('licenseText')
+    if len(licenseTexts) == 0:
+        licenseText = None
+    elif len(licenseTexts) == 1:
+        licenseText = formatText(getText(licenseTexts[0]))
+    else:
+        raise ValueError('multiple <licenseText> elements')
 
     device.peripherals = []
 
@@ -46,7 +45,10 @@ def readSVD(path):
 
     for periphEl in root.getElementsByTagName('peripherals')[0].getElementsByTagName('peripheral'):
         name = getText(periphEl.getElementsByTagName('name')[0])
-        description = getText(periphEl.getElementsByTagName('description')[0])
+        descriptionTags = periphEl.getElementsByTagName('description')
+        description = ''
+        if descriptionTags:
+            description = formatText(getText(descriptionTags[0]))
         baseAddress = int(getText(periphEl.getElementsByTagName('baseAddress')[0]), 0)
 
         peripheral = {
@@ -88,8 +90,10 @@ def readSVD(path):
                     continue
 
     device.interrupts = sorted(interrupts.values(), key=lambda v: v['index'])
-    licenseBlock = '//     ' + licenseText.replace('\n', '\n//     ')
-    licenseBlock = '\n'.join(map(str.rstrip, licenseBlock.split('\n'))) # strip trailing whitespace
+    licenseBlock = ''
+    if licenseText is not None:
+        licenseBlock = '//     ' + licenseText.replace('\n', '\n//     ')
+        licenseBlock = '\n'.join(map(str.rstrip, licenseBlock.split('\n'))) # strip trailing whitespace
     device.metadata = {
         'file':             os.path.basename(path),
         'descriptorSource': 'https://github.com/NordicSemiconductor/nrfx/tree/master/mdk',
@@ -97,8 +101,6 @@ def readSVD(path):
         'nameLower':        deviceName.lower(),
         'description':      deviceDescription,
         'licenseBlock':     licenseBlock,
-        'arch':             ARM_ARCHS[cpuName],
-        'family':           getText(root.getElementsByTagName('series')[0]),
     }
 
     return device
@@ -125,8 +127,16 @@ def parseSVDRegister(peripheralName, regEl, baseAddress, namePrefix=''):
                 continue
             fieldName = getText(fieldEl.getElementsByTagName('name')[0])
             descrEls = fieldEl.getElementsByTagName('description')
-            lsb = int(getText(fieldEl.getElementsByTagName('lsb')[0]))
-            msb = int(getText(fieldEl.getElementsByTagName('msb')[0]))
+            lsbTags = fieldEl.getElementsByTagName('lsb')
+            if len(lsbTags) == 1:
+                lsb = int(getText(lsbTags[0]))
+            else:
+                lsb = int(getText(fieldEl.getElementsByTagName('bitOffset')[0]))
+            msbTags = fieldEl.getElementsByTagName('msb')
+            if len(msbTags) == 1:
+                msb = int(getText(msbTags[0]))
+            else:
+                msb = int(getText(fieldEl.getElementsByTagName('bitWidth')[0])) + lsb - 1
             fields.append({
                 'name':        '{}_{}{}_{}_Pos'.format(peripheralName, namePrefix, regName, fieldName),
                 'description': 'Position of %s field.' % fieldName,
@@ -181,8 +191,6 @@ type RegValue = __volatile
 // Some information about this device.
 const (
 	DEVICE     = "{name}"
-	ARCH       = "{arch}"
-	FAMILY     = "{family}"
 )
 '''.format(pkgName=pkgName, **device.metadata))
 
