@@ -316,8 +316,8 @@ Default_Handler:
 
 // Avoid the need for repeated .weak and .set instructions.
 .macro IRQ handler
-.weak  \\handler
-.set   \\handler, Default_Handler
+    .weak  \\handler
+    .set   \\handler, Default_Handler
 .endm
 
 .section .isr_vector
