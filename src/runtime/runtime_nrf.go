@@ -64,8 +64,8 @@ func init() {
 }
 
 func initUART() {
-	nrf.UART0.ENABLE = nrf.UART0_ENABLE_ENABLE_Enabled
-	nrf.UART0.BAUDRATE = nrf.UART0_BAUDRATE_BAUDRATE_Baud115200
+	nrf.UART0.ENABLE = nrf.UART_ENABLE_ENABLE_Enabled
+	nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud115200
 	nrf.UART0.TASKS_STARTTX = 1
 	nrf.UART0.PSELTXD = 6 // pin 6 for NRF52840-DK
 }
@@ -139,7 +139,7 @@ type __volatile bool
 var rtc_wakeup __volatile
 
 func rtc_sleep(ticks uint32) {
-	nrf.RTC0.INTENSET = nrf.RTC0_INTENSET_COMPARE0_Msk
+	nrf.RTC0.INTENSET = nrf.RTC_INTENSET_COMPARE0_Msk
 	rtc_wakeup = false
 	if ticks == 1 {
 		// Race condition (even in hardware) at ticks == 1.
@@ -155,7 +155,7 @@ func rtc_sleep(ticks uint32) {
 
 //go:export RTC0_IRQHandler
 func handleRTC0() {
-	nrf.RTC0.INTENCLR = nrf.RTC0_INTENSET_COMPARE0_Msk
+	nrf.RTC0.INTENCLR = nrf.RTC_INTENSET_COMPARE0_Msk
 	nrf.RTC0.EVENTS_COMPARE[0] = 0
 	rtc_wakeup = true
 }

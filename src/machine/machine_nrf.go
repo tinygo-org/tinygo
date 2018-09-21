@@ -9,10 +9,10 @@ import (
 type GPIOMode uint8
 
 const (
-	GPIO_INPUT          = (nrf.P0_PIN_CNF_DIR_Input << nrf.P0_PIN_CNF_DIR_Pos) | (nrf.P0_PIN_CNF_INPUT_Connect << nrf.P0_PIN_CNF_INPUT_Pos)
-	GPIO_INPUT_PULLUP   = GPIO_INPUT | (nrf.P0_PIN_CNF_PULL_Pullup << nrf.P0_PIN_CNF_PULL_Pos)
-	GPIO_INPUT_PULLDOWN = GPIO_INPUT | (nrf.P0_PIN_CNF_PULL_Pulldown << nrf.P0_PIN_CNF_PULL_Pos)
-	GPIO_OUTPUT         = (nrf.P0_PIN_CNF_DIR_Output << nrf.P0_PIN_CNF_DIR_Pos) | (nrf.P0_PIN_CNF_INPUT_Disconnect << nrf.P0_PIN_CNF_INPUT_Pos)
+	GPIO_INPUT          = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) | (nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos)
+	GPIO_INPUT_PULLUP   = GPIO_INPUT | (nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos)
+	GPIO_INPUT_PULLDOWN = GPIO_INPUT | (nrf.GPIO_PIN_CNF_PULL_Pulldown << nrf.GPIO_PIN_CNF_PULL_Pos)
+	GPIO_OUTPUT         = (nrf.GPIO_PIN_CNF_DIR_Output << nrf.GPIO_PIN_CNF_DIR_Pos) | (nrf.GPIO_PIN_CNF_INPUT_Disconnect << nrf.GPIO_PIN_CNF_INPUT_Pos)
 )
 
 // LEDs on the PCA10040 (nRF52832 dev board)
@@ -35,7 +35,7 @@ const (
 
 // Configure this pin with the given configuration.
 func (p GPIO) Configure(config GPIOConfig) {
-	cfg := config.Mode | nrf.P0_PIN_CNF_DRIVE_S0S1 | nrf.P0_PIN_CNF_SENSE_Disabled
+	cfg := config.Mode | nrf.GPIO_PIN_CNF_DRIVE_S0S1 | nrf.GPIO_PIN_CNF_SENSE_Disabled
 	nrf.P0.PIN_CNF[p.Pin] = nrf.RegValue(cfg)
 }
 

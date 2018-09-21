@@ -40,6 +40,7 @@ def readSVD(path):
         raise ValueError('multiple <licenseText> elements')
 
     device.peripherals = []
+    peripheralDict = {}
 
     interrupts = OrderedDict()
 
@@ -50,14 +51,32 @@ def readSVD(path):
         if descriptionTags:
             description = formatText(getText(descriptionTags[0]))
         baseAddress = int(getText(periphEl.getElementsByTagName('baseAddress')[0]), 0)
+        groupNameTags = periphEl.getElementsByTagName('groupName')
+        groupName = name
+        if groupNameTags:
+            groupName = getText(groupNameTags[0])
+
+        if periphEl.hasAttribute('derivedFrom'):
+            derivedFromName = periphEl.getAttribute('derivedFrom')
+            derivedFrom = peripheralDict[derivedFromName]
+            peripheral = {
+                'name':        name,
+                'groupName':   derivedFrom['groupName'],
+                'description': description if description is not None else derivedFrom['description'],
+                'baseAddress': baseAddress,
+            }
+            device.peripherals.append(peripheral)
+            continue
 
         peripheral = {
             'name':        name,
+            'groupName':   groupName,
             'description': description,
             'baseAddress': baseAddress,
             'registers':   [],
         }
         device.peripherals.append(peripheral)
+        peripheralDict[name] = peripheral
 
         for interrupt in periphEl.getElementsByTagName('interrupt'):
             intrName = getText(interrupt.getElementsByTagName('name')[0])
@@ -77,7 +96,7 @@ def readSVD(path):
         if regsEls:
             for el in regsEls[0].childNodes:
                 if el.nodeName == 'register':
-                    peripheral['registers'].append(parseSVDRegister(name, el, baseAddress))
+                    peripheral['registers'].append(parseSVDRegister(groupName, el, baseAddress))
                 elif el.nodeName == 'cluster':
                     if el.getElementsByTagName('dim'):
                         continue # TODO
@@ -85,7 +104,7 @@ def readSVD(path):
                     clusterOffset = int(getText(el.getElementsByTagName('addressOffset')[0]), 0)
                     for regEl in el.childNodes:
                         if regEl.nodeName == 'register':
-                            peripheral['registers'].append(parseSVDRegister(name, regEl, baseAddress + clusterOffset, clusterPrefix))
+                            peripheral['registers'].append(parseSVDRegister(groupName, regEl, baseAddress + clusterOffset, clusterPrefix))
                 else:
                     continue
 
@@ -105,7 +124,7 @@ def readSVD(path):
 
     return device
 
-def parseSVDRegister(peripheralName, regEl, baseAddress, namePrefix=''):
+def parseSVDRegister(groupName, regEl, baseAddress, namePrefix=''):
     regName = getText(regEl.getElementsByTagName('name')[0])
     regDescription = getText(regEl.getElementsByTagName('description')[0])
     offsetEls = regEl.getElementsByTagName('offset')
@@ -138,12 +157,12 @@ def parseSVDRegister(peripheralName, regEl, baseAddress, namePrefix=''):
             else:
                 msb = int(getText(fieldEl.getElementsByTagName('bitWidth')[0])) + lsb - 1
             fields.append({
-                'name':        '{}_{}{}_{}_Pos'.format(peripheralName, namePrefix, regName, fieldName),
+                'name':        '{}_{}{}_{}_Pos'.format(groupName, namePrefix, regName, fieldName),
                 'description': 'Position of %s field.' % fieldName,
                 'value':       lsb,
             })
             fields.append({
-                'name':        '{}_{}{}_{}_Msk'.format(peripheralName, namePrefix, regName, fieldName),
+                'name':        '{}_{}{}_{}_Msk'.format(groupName, namePrefix, regName, fieldName),
                 'description': 'Bit mask of %s field.' % fieldName,
                 'value':       (0xffffffff >> (31 - (msb - lsb))) << lsb,
             })
@@ -152,7 +171,7 @@ def parseSVDRegister(peripheralName, regEl, baseAddress, namePrefix=''):
                 enumDescription = getText(enumEl.getElementsByTagName('description')[0])
                 enumValue = int(getText(enumEl.getElementsByTagName('value')[0]), 0)
                 fields.append({
-                    'name':        '{}_{}{}_{}_{}'.format(peripheralName, namePrefix, regName, fieldName, enumName),
+                    'name':        '{}_{}{}_{}_{}'.format(groupName, namePrefix, regName, fieldName, enumName),
                     'description': enumDescription,
                     'value':       enumValue,
                 })
@@ -201,8 +220,13 @@ const (
     out.write('\tIRQ_max = {} // Highest interrupt number on this device.\n'.format(intrMax))
     out.write(')\n')
 
+    # Define peripheral struct types.
     for peripheral in device.peripherals:
-        out.write('\n// {description}\ntype {name}_Type struct {{\n'.format(**peripheral))
+        if 'registers' not in peripheral:
+            # This peripheral was derived from another peripheral. No new type
+            # needs to be defined for it.
+            continue
+        out.write('\n// {description}\ntype {groupName}_Type struct {{\n'.format(**peripheral))
         address = peripheral['baseAddress']
         padNumber = 0
         for register in peripheral['registers']:
@@ -233,12 +257,18 @@ const (
                 address = register['address'] + 4
         out.write('}\n')
 
+    # Define actual peripheral pointers.
     out.write('\n// Peripherals.\nvar (\n')
     for peripheral in device.peripherals:
-        out.write('\t{name} = (*{name}_Type)(unsafe.Pointer(uintptr(0x{baseAddress:x}))) // {description}\n'.format(**peripheral))
+        out.write('\t{name} = (*{groupName}_Type)(unsafe.Pointer(uintptr(0x{baseAddress:x}))) // {description}\n'.format(**peripheral))
     out.write(')\n')
 
+    # Define bitfields.
     for peripheral in device.peripherals:
+        if 'registers' not in peripheral:
+            # This peripheral was derived from another peripheral. Bitfields are
+            # already defined.
+            continue
         if not sum(map(lambda r: len(r['bitfields']), peripheral['registers'])): continue
         out.write('\n// Bitfields for {name}: {description}\nconst('.format(**peripheral))
         for register in peripheral['registers']:
