@@ -15,6 +15,12 @@ else ifeq ($(TARGET),pca10040)
 OBJCOPY = arm-none-eabi-objcopy
 TGOFLAGS += -target $(TARGET)
 
+else ifeq ($(TARGET),bluepill)
+# "blue pill" development board
+# See: https://wiki.stm32duino.com/index.php?title=Blue_Pill
+OBJCOPY = arm-none-eabi-objcopy
+TGOFLAGS += -target $(TARGET)
+
 else ifeq ($(TARGET),arduino)
 OBJCOPY = avr-objcopy
 TGOFLAGS += -target $(TARGET)
@@ -39,6 +45,9 @@ flash-%: build/%.hex
 else ifeq ($(TARGET),arduino)
 flash-%: build/%.hex
 	avrdude -c arduino -p atmega328p -P /dev/ttyACM0 -U flash:w:$<
+else ifeq ($(TARGET),bluepill)
+flash-%: build/%.hex
+	openocd -f interface/stlink-v2.cfg -f target/stm32f1x.cfg -c 'program $< reset exit'
 endif
 
 clean:
@@ -56,6 +65,10 @@ gen-device-nrf:
 gen-device-avr:
 	./tools/gen-device-avr.py lib/avr/packs/atmega src/device/avr/
 	go fmt ./src/device/avr
+
+gen-device-stm32:
+	./tools/gen-device-svd.py lib/cmsis-svd/data/STMicro/ src/device/stm32/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro
+	go fmt ./src/device/stm32
 
 
 # Build the Go compiler.

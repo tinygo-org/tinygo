@@ -3,3 +3,5 @@ src/device/avr/*.go
 src/device/avr/*.ld
 src/device/nrf/*.go
 src/device/nrf/*.s
+src/device/stm32/*.go
+src/device/stm32/*.s
