@@ -34,13 +34,8 @@ func putchar(c byte) {
 	_Cfunc_putchar(int(c))
 }
 
-//go:linkname sleep time.Sleep
-func sleep(d int64) {
-	_Cfunc_usleep(uint(d) / 1000)
-}
-
 func sleepTicks(d timeUnit) {
-	sleep(int64(d))
+	_Cfunc_usleep(uint(d) / 1000)
 }
 
 // Return monotonic time in nanoseconds.

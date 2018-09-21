@@ -68,15 +68,10 @@ func putchar(c byte) {
 	*avr.UDR0 = avr.RegValue(c) // send char
 }
 
-// Sleep by the given amount.
+// Sleep this number of ticks of 16ms.
 //
 // TODO: not very accurate. Improve accuracy by calibrating on startup and every
 // once in a while.
-//go:linkname sleep time.Sleep
-func sleep(d int64) {
-	sleepTicks(timeUnit(d / tickMicros))
-}
-
 func sleepTicks(d timeUnit) {
 	currentTime += d
 	for d != 0 {

@@ -91,11 +91,6 @@ func putchar(c byte) {
 	nrf.UART0.EVENTS_TXDRDY = 0
 }
 
-//go:linkname sleep time.Sleep
-func sleep(d timeUnit) {
-	sleepTicks(d / tickMicros)
-}
-
 func sleepTicks(d timeUnit) {
 	for d != 0 {
 		ticks()                       // update timestamp

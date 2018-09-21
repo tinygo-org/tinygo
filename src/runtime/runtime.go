@@ -115,3 +115,8 @@ func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen lenType, elemSize uintptr
 	memmove(dst, src, uintptr(n)*elemSize)
 	return n
 }
+
+//go:linkname sleep time.Sleep
+func sleep(d int64) {
+	sleepTicks(timeUnit(d / tickMicros))
+}
