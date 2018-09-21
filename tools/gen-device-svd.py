@@ -371,6 +371,8 @@ Default_Handler:
         out.write('    IRQ {name}_IRQHandler\n'.format(**intr))
 
 def generate(indir, outdir):
+    if not os.path.isdir(outdir):
+        os.mkdir(outdir)
     for filepath in sorted(glob(indir + '/*.svd')):
         print(filepath)
         device = readSVD(filepath)
