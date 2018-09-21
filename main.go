@@ -174,15 +174,11 @@ func Flash(pkgName, target, port string, printIR, dumpSSA bool, printSizes strin
 	return Compile(pkgName, ".hex", spec, printIR, dumpSSA, printSizes, func(tmppath string) error {
 		// Create the command.
 		flashCmd := spec.Flasher
-		parts := strings.Split(flashCmd, " ") // TODO: this should be a real shell split
-		for i, part := range parts {
-			part = strings.Replace(part, "{hex}", tmppath, -1)
-			part = strings.Replace(part, "{port}", port, -1)
-			parts[i] = part
-		}
+		flashCmd = strings.Replace(flashCmd, "{hex}", tmppath, -1)
+		flashCmd = strings.Replace(flashCmd, "{port}", port, -1)
 
 		// Execute the command.
-		cmd := exec.Command(parts[0], parts[1:]...)
+		cmd := exec.Command("/bin/sh", "-c", flashCmd)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		return cmd.Run()
