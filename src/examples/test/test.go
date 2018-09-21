@@ -85,7 +85,7 @@ func main() {
 	}, 3)
 
 	// test library functions
-	println("lower to upper char:", 'h', "->", unicode.ToUpper('h'))
+	println("lower to upper char:", string('h'), "->", string(unicode.ToUpper('h')))
 }
 
 func runFunc(f func(int), arg int) {
