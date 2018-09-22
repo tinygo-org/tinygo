@@ -1,6 +1,6 @@
 {
 	"llvm-target": "avr-atmel-none",
-	"build-tags": ["avr", "avr8", "atmega", "atmega328p", "js", "wasm"],
+	"build-tags": ["arduino", "atmega328p", "atmega", "avr8", "avr", "js", "wasm"],
 	"linker": "avr-gcc",
 	"pre-link-args": ["-nostartfiles", "-T", "targets/avr.ld", "-Wl,--gc-sections", "targets/avr.S"],
 	"objcopy": "avr-objcopy",
