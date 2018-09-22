@@ -574,7 +574,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			return llvm.VectorType(llvm.FloatType(), 2), nil
 		case types.Complex128:
 			return llvm.VectorType(llvm.DoubleType(), 2), nil
-		case types.String:
+		case types.String, types.UntypedString:
 			return c.mod.GetTypeByName("runtime._string"), nil
 		case types.Uintptr:
 			return c.uintptrType, nil
@@ -1498,7 +1498,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 			valueAlloca := c.builder.CreateAlloca(value.Type(), "hashmap.value")
 			c.builder.CreateStore(value, valueAlloca)
 			valuePtr := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "hashmap.valueptr")
-			if keyType.Kind() == types.String {
+			if keyType.Info()&types.IsString != 0 {
 				params := []llvm.Value{m, key, valuePtr}
 				fn := c.mod.NamedFunction("runtime.hashmapStringSet")
 				c.builder.CreateCall(fn, params, "")
@@ -2143,7 +2143,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				}
 				mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "hashmap.value")
 				mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "hashmap.valueptr")
-				if keyType.Kind() == types.String {
+				if keyType.Info()&types.IsString != 0 {
 					params := []llvm.Value{value, index, mapValuePtr}
 					fn := c.mod.NamedFunction("runtime.hashmapStringGet")
 					c.builder.CreateCall(fn, params, "")
@@ -2696,7 +2696,7 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 			default:
 				return llvm.Value{}, errors.New("todo: binop on pointer: " + binop.Op.String())
 			}
-		} else if typ.Kind() == types.String {
+		} else if typ.Info()&types.IsString != 0 {
 			// Operations on strings
 			switch binop.Op {
 			case token.ADD:
@@ -2771,7 +2771,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 				n = 1
 			}
 			return llvm.ConstInt(llvmType, n, false), nil
-		} else if typ.Kind() == types.String {
+		} else if typ.Info()&types.IsString != 0 {
 			str := constant.StringVal(expr.Value)
 			strLen := llvm.ConstInt(c.lenType, uint64(len(str)), false)
 			objname := prefix + "$string"
@@ -2876,7 +2876,7 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 	case *types.Basic:
 		sizeFrom := c.targetData.TypeAllocSize(llvmTypeFrom)
 
-		if typeTo.Kind() == types.String {
+		if typeTo.Info()&types.IsString != 0 {
 			switch typeFrom := typeFrom.Underlying().(type) {
 			case *types.Basic:
 				// Assume a Unicode code point, as that is the only possible
