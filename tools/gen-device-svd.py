@@ -175,6 +175,12 @@ def parseSVDRegister(groupName, regEl, baseAddress, namePrefix=''):
                 'description': 'Bit mask of %s field.' % fieldName,
                 'value':       (0xffffffff >> (31 - (msb - lsb))) << lsb,
             })
+            if lsb == msb: # single bit
+                fields.append({
+                    'name':        '{}_{}{}_{}'.format(groupName, namePrefix, regName, fieldName),
+                    'description': 'Bit %s.' % fieldName,
+                    'value':       1 << lsb,
+                })
             for enumEl in fieldEl.getElementsByTagName('enumeratedValue'):
                 enumName = getText(enumEl.getElementsByTagName('name')[0])
                 enumDescription = getText(enumEl.getElementsByTagName('description')[0])
