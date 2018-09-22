@@ -1,4 +1,4 @@
-package main
+package ir
 
 import (
 	"go/ast"
@@ -19,7 +19,7 @@ import (
 // View on all functions, types, and globals in a program, with analysis
 // results.
 type Program struct {
-	program              *ssa.Program
+	Program              *ssa.Program
 	mainPkg              *ssa.Package
 	Functions            []*Function
 	functionMap          map[*ssa.Function]*Function
@@ -38,8 +38,8 @@ type Program struct {
 
 // Function or method.
 type Function struct {
-	fn           *ssa.Function
-	llvmFn       llvm.Value
+	*ssa.Function
+	LLVMFn       llvm.Value
 	linkName     string      // go:linkname or go:export pragma
 	exported     bool        // go:export
 	nobounds     bool        // go:nobounds pragma
@@ -52,9 +52,9 @@ type Function struct {
 
 // Global variable, possibly constant.
 type Global struct {
+	*ssa.Global
 	program     *Program
-	g           *ssa.Global
-	llvmGlobal  llvm.Value
+	LLVMGlobal  llvm.Value
 	linkName    string // go:extern
 	extern      bool   // go:extern
 	initializer Value
@@ -62,8 +62,8 @@ type Global struct {
 
 // Type with a name and possibly methods.
 type NamedType struct {
-	t        *ssa.Type
-	llvmType llvm.Type
+	*ssa.Type
+	LLVMType llvm.Type
 }
 
 // Type that is at some point put in an interface.
@@ -110,7 +110,7 @@ func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 	program.Build()
 
 	return &Program{
-		program:              program,
+		Program:              program,
 		mainPkg:              program.ImportedPackage(mainPath),
 		functionMap:          make(map[*ssa.Function]*Function),
 		globalMap:            make(map[*ssa.Global]*Global),
@@ -141,7 +141,7 @@ func (p *Program) AddPackage(pkg *ssa.Package) {
 			}
 			p.addFunction(member)
 		case *ssa.Type:
-			t := &NamedType{t: member}
+			t := &NamedType{Type: member}
 			p.NamedTypes = append(p.NamedTypes, t)
 			methods := getAllMethods(pkg.Prog, member.Type())
 			if !types.IsInterface(member.Type()) {
@@ -151,8 +151,8 @@ func (p *Program) AddPackage(pkg *ssa.Package) {
 				}
 			}
 		case *ssa.Global:
-			g := &Global{program: p, g: member}
-			doc := p.comments[g.g.RelString(nil)]
+			g := &Global{program: p, Global: member}
+			doc := p.comments[g.RelString(nil)]
 			if doc != nil {
 				g.parsePragmas(doc)
 			}
@@ -167,7 +167,7 @@ func (p *Program) AddPackage(pkg *ssa.Package) {
 }
 
 func (p *Program) addFunction(ssaFn *ssa.Function) {
-	f := &Function{fn: ssaFn}
+	f := &Function{Function: ssaFn}
 	f.parsePragmas()
 	p.Functions = append(p.Functions, f)
 	p.functionMap[ssaFn] = f
@@ -207,12 +207,16 @@ func (p *Program) SortFuncs(funcs []*types.Func) {
 	sort.Sort(m)
 }
 
+func (p *Program) MainPkg() *ssa.Package {
+	return p.mainPkg
+}
+
 // Parse compiler directives in the preceding comments.
 func (f *Function) parsePragmas() {
-	if f.fn.Syntax() == nil {
+	if f.Syntax() == nil {
 		return
 	}
-	if decl, ok := f.fn.Syntax().(*ast.FuncDecl); ok && decl.Doc != nil {
+	if decl, ok := f.Syntax().(*ast.FuncDecl); ok && decl.Doc != nil {
 		for _, comment := range decl.Doc.List {
 			if !strings.HasPrefix(comment.Text, "//go:") {
 				continue
@@ -220,14 +224,14 @@ func (f *Function) parsePragmas() {
 			parts := strings.Fields(comment.Text)
 			switch parts[0] {
 			case "//go:linkname":
-				if len(parts) != 3 || parts[1] != f.fn.Name() {
+				if len(parts) != 3 || parts[1] != f.Name() {
 					continue
 				}
 				// Only enable go:linkname when the package imports "unsafe".
 				// This is a slightly looser requirement than what gc uses: gc
 				// requires the file to import "unsafe", not the package as a
 				// whole.
-				if hasUnsafeImport(f.fn.Pkg.Pkg) {
+				if hasUnsafeImport(f.Pkg.Pkg) {
 					f.linkName = parts[2]
 				}
 			case "//go:nobounds":
@@ -235,7 +239,7 @@ func (f *Function) parsePragmas() {
 				// runtime functions.
 				// This is somewhat dangerous and thus only imported in packages
 				// that import unsafe.
-				if hasUnsafeImport(f.fn.Pkg.Pkg) {
+				if hasUnsafeImport(f.Pkg.Pkg) {
 					f.nobounds = true
 				}
 			case "//go:export":
@@ -249,6 +253,10 @@ func (f *Function) parsePragmas() {
 	}
 }
 
+func (f *Function) IsNoBounds() bool {
+	return f.nobounds
+}
+
 // Return true iff this function is externally visible.
 func (f *Function) IsExported() bool {
 	return f.exported
@@ -259,16 +267,16 @@ func (f *Function) LinkName() string {
 	if f.linkName != "" {
 		return f.linkName
 	}
-	if f.fn.Signature.Recv() != nil {
+	if f.Signature.Recv() != nil {
 		// Method on a defined type (which may be a pointer).
-		return f.fn.RelString(nil)
+		return f.RelString(nil)
 	} else {
 		// Bare function.
 		if name := f.CName(); name != "" {
 			// Name CGo functions directly.
 			return name
 		} else {
-			return f.fn.RelString(nil)
+			return f.RelString(nil)
 		}
 	}
 }
@@ -276,7 +284,7 @@ func (f *Function) LinkName() string {
 // Return the name of the C function if this is a CGo wrapper. Otherwise, return
 // a zero-length string.
 func (f *Function) CName() string {
-	name := f.fn.Name()
+	name := f.Name()
 	if strings.HasPrefix(name, "_Cfunc_") {
 		return name[len("_Cfunc_"):]
 	}
@@ -305,11 +313,15 @@ func (g *Global) LinkName() string {
 	if g.linkName != "" {
 		return g.linkName
 	}
-	return g.g.RelString(nil)
+	return g.RelString(nil)
 }
 
 func (g *Global) IsExtern() bool {
 	return g.extern
+}
+
+func (g *Global) Initializer() Value {
+	return g.initializer
 }
 
 // Wrapper type to implement sort.Interface for []*types.Selection.
@@ -350,4 +362,26 @@ func (fl *funcList) Less(i, j int) bool {
 
 func (fl *funcList) Swap(i, j int) {
 	fl.funcs[i], fl.funcs[j] = fl.funcs[j], fl.funcs[i]
+}
+
+// Return true if this is a CGo-internal function that can be ignored.
+func isCGoInternal(name string) bool {
+	if strings.HasPrefix(name, "_Cgo_") || strings.HasPrefix(name, "_cgo") {
+		// _Cgo_ptr, _Cgo_use, _cgoCheckResult, _cgo_runtime_cgocall
+		return true // CGo-internal functions
+	}
+	if strings.HasPrefix(name, "__cgofn__cgo_") {
+		return true // CGo function pointer in global scope
+	}
+	return false
+}
+
+// Get all methods of a type.
+func getAllMethods(prog *ssa.Program, typ types.Type) []*types.Selection {
+	ms := prog.MethodSets.MethodSet(typ)
+	methods := make([]*types.Selection, ms.Len())
+	for i := 0; i < ms.Len(); i++ {
+		methods[i] = ms.At(i)
+	}
+	return methods
 }
