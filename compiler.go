@@ -2241,25 +2241,26 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		slice = c.builder.CreateInsertValue(slice, sliceCap, 2, "")
 		return slice, nil
 	case *ssa.Next:
+		rangeVal := expr.Iter.(*ssa.Range).X
+		llvmRangeVal, err := c.parseExpr(frame, rangeVal)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		it, err := c.parseExpr(frame, expr.Iter)
+		if err != nil {
+			return llvm.Value{}, err
+		}
 		if expr.IsString {
-			return llvm.Value{}, errors.New("todo: next: string")
+			fn := c.mod.NamedFunction("runtime.stringNext")
+			return c.builder.CreateCall(fn, []llvm.Value{llvmRangeVal, it}, "range.next"), nil
 		} else { // map
 			fn := c.mod.NamedFunction("runtime.hashmapNext")
-			it, err := c.parseExpr(frame, expr.Iter)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			rangeMap := expr.Iter.(*ssa.Range).X
-			m, err := c.parseExpr(frame, rangeMap)
-			if err != nil {
-				return llvm.Value{}, err
-			}
 
-			llvmKeyType, err := c.getLLVMType(rangeMap.Type().(*types.Map).Key())
+			llvmKeyType, err := c.getLLVMType(rangeVal.Type().(*types.Map).Key())
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			llvmValueType, err := c.getLLVMType(rangeMap.Type().(*types.Map).Elem())
+			llvmValueType, err := c.getLLVMType(rangeVal.Type().(*types.Map).Elem())
 			if err != nil {
 				return llvm.Value{}, err
 			}
@@ -2268,7 +2269,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			mapKeyPtr := c.builder.CreateBitCast(mapKeyAlloca, c.i8ptrType, "range.keyptr")
 			mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "range.value")
 			mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "range.valueptr")
-			ok := c.builder.CreateCall(fn, []llvm.Value{m, it, mapKeyPtr, mapValuePtr}, "range.next")
+			ok := c.builder.CreateCall(fn, []llvm.Value{llvmRangeVal, it, mapKeyPtr, mapValuePtr}, "range.next")
 
 			tuple := llvm.Undef(llvm.StructType([]llvm.Type{llvm.Int1Type(), llvmKeyType, llvmValueType}, false))
 			tuple = c.builder.CreateInsertValue(tuple, ok, 0, "")
@@ -2285,22 +2286,22 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		frame.phis = append(frame.phis, Phi{expr, phi})
 		return phi, nil
 	case *ssa.Range:
+		var iteratorType llvm.Type
 		switch typ := expr.X.Type().Underlying().(type) {
-		case *types.Basic:
-			// string
-			return llvm.Value{}, errors.New("todo: range: string")
+		case *types.Basic: // string
+			iteratorType = c.mod.GetTypeByName("runtime.stringIterator")
 		case *types.Map:
-			iteratorType := c.mod.GetTypeByName("runtime.hashmapIterator")
-			it := c.builder.CreateAlloca(iteratorType, "range.it")
-			zero, err := getZeroValue(iteratorType)
-			if err != nil {
-				return llvm.Value{}, nil
-			}
-			c.builder.CreateStore(zero, it)
-			return it, nil
+			iteratorType = c.mod.GetTypeByName("runtime.hashmapIterator")
 		default:
 			panic("unknown type in range: " + typ.String())
 		}
+		it := c.builder.CreateAlloca(iteratorType, "range.it")
+		zero, err := getZeroValue(iteratorType)
+		if err != nil {
+			return llvm.Value{}, nil
+		}
+		c.builder.CreateStore(zero, it)
+		return it, nil
 	case *ssa.Slice:
 		if expr.Max != nil {
 			return llvm.Value{}, errors.New("todo: full slice expressions (with max): " + expr.Type().String())
