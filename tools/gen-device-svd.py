@@ -175,6 +175,12 @@ def parseSVDRegister(groupName, regEl, baseAddress, namePrefix=''):
                 'description': 'Bit mask of %s field.' % fieldName,
                 'value':       (0xffffffff >> (31 - (msb - lsb))) << lsb,
             })
+            if lsb == msb: # single bit
+                fields.append({
+                    'name':        '{}_{}{}_{}'.format(groupName, namePrefix, regName, fieldName),
+                    'description': 'Bit %s.' % fieldName,
+                    'value':       1 << lsb,
+                })
             for enumEl in fieldEl.getElementsByTagName('enumeratedValue'):
                 enumName = getText(enumEl.getElementsByTagName('name')[0])
                 enumDescription = getText(enumEl.getElementsByTagName('description')[0])
@@ -372,9 +378,16 @@ Default_Handler:
         out.write('    IRQ {name}_IRQHandler\n'.format(**intr))
 
 def generate(indir, outdir, sourceURL):
+    if not os.path.isdir(indir):
+        print('cannot find input directory:', indir, file=sys.stderr)
+        sys.exit(1)
     if not os.path.isdir(outdir):
         os.mkdir(outdir)
-    for filepath in sorted(glob(indir + '/*.svd')):
+    infiles = glob(indir + '/*.svd')
+    if not infiles:
+        print('no .svd files found:', indir, file=sys.stderr)
+        sys.exit(1)
+    for filepath in sorted(infiles):
         print(filepath)
         device = readSVD(filepath, sourceURL)
         writeGo(outdir, device)

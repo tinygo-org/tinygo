@@ -1,6 +1,6 @@
 {
 	"llvm-target": "armv7m-none-eabi",
-	"build-tags": ["stm32", "stm32f103xx", "arm", "js", "wasm"],
+	"build-tags": ["bluepill", "stm32f103xx", "stm32", "arm", "js", "wasm"],
 	"linker": "arm-none-eabi-gcc",
 	"pre-link-args": ["-nostdlib", "-nostartfiles", "-mcpu=cortex-m3", "-mthumb", "-T", "targets/stm32.ld", "-Wl,--gc-sections", "-fno-exceptions", "-fno-unwind-tables", "-ffunction-sections", "-fdata-sections", "-Os", "src/device/stm32/stm32f103xx.s"],
 	"objcopy": "arm-none-eabi-objcopy",

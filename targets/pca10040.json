@@ -1,6 +1,6 @@
 {
 	"llvm-target": "armv7em-none-eabi",
-	"build-tags": ["nrf", "nrf52", "nrf52832", "arm", "js", "wasm"],
+	"build-tags": ["pca10040", "nrf52832", "nrf52", "nrf", "arm", "js", "wasm"],
 	"linker": "arm-none-eabi-gcc",
 	"pre-link-args": ["-nostdlib", "-nostartfiles", "-mcpu=cortex-m4", "-mthumb", "-T", "targets/nrf52.ld", "-Wl,--gc-sections", "-fno-exceptions", "-fno-unwind-tables", "-ffunction-sections", "-fdata-sections", "-Os", "-DNRF52832_XXAA", "-Ilib/CMSIS/CMSIS/Include", "lib/nrfx/mdk/system_nrf52.c", "src/device/nrf/nrf52.s"],
 	"objcopy": "arm-none-eabi-objcopy",

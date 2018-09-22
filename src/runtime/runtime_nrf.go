@@ -86,7 +86,7 @@ type __volatile bool
 var rtc_wakeup __volatile
 
 func rtc_sleep(ticks uint32) {
-	nrf.RTC0.INTENSET = nrf.RTC_INTENSET_COMPARE0_Msk
+	nrf.RTC0.INTENSET = nrf.RTC_INTENSET_COMPARE0
 	rtc_wakeup = false
 	if ticks == 1 {
 		// Race condition (even in hardware) at ticks == 1.
@@ -102,7 +102,7 @@ func rtc_sleep(ticks uint32) {
 
 //go:export RTC0_IRQHandler
 func handleRTC0() {
-	nrf.RTC0.INTENCLR = nrf.RTC_INTENSET_COMPARE0_Msk
+	nrf.RTC0.INTENCLR = nrf.RTC_INTENSET_COMPARE0
 	nrf.RTC0.EVENTS_COMPARE[0] = 0
 	rtc_wakeup = true
 }

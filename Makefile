@@ -54,7 +54,7 @@ clean:
 	@rm -rf build
 
 fmt:
-	@go fmt . ./src/runtime ./src/examples/test
+	@go fmt . ./src/examples/* ./src/machine ./src/runtime ./src/sync
 
 gen-device: gen-device-nrf gen-device-avr
 

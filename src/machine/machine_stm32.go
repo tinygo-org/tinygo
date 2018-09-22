@@ -25,10 +25,6 @@ const (
 	portG
 )
 
-const (
-	LED = portC + 13
-)
-
 func (p GPIO) getPort() *stm32.GPIO_Type {
 	switch p.Pin / 16 {
 	case 0:
@@ -55,7 +51,7 @@ func (p GPIO) Configure(config GPIOConfig) {
 	// Enable clock.
 	// Do this always, as it isn't known whether the clock has already been
 	// enabled.
-	stm32.RCC.APB2ENR |= stm32.RCC_APB2ENR_IOPCEN_Msk;
+	stm32.RCC.APB2ENR |= stm32.RCC_APB2ENR_IOPCEN
 
 	// Configure the GPIO pin.
 	port := p.getPort()

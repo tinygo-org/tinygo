@@ -15,24 +15,6 @@ const (
 	GPIO_OUTPUT         = (nrf.GPIO_PIN_CNF_DIR_Output << nrf.GPIO_PIN_CNF_DIR_Pos) | (nrf.GPIO_PIN_CNF_INPUT_Disconnect << nrf.GPIO_PIN_CNF_INPUT_Pos)
 )
 
-// LEDs on the PCA10040 (nRF52832 dev board)
-const (
-	LED  = LED1
-	LED1 = 17
-	LED2 = 18
-	LED3 = 19
-	LED4 = 20
-)
-
-// Buttons on the PCA10040 (nRF52832 dev board)
-const (
-	BUTTON  = BUTTON1
-	BUTTON1 = 13
-	BUTTON2 = 14
-	BUTTON3 = 15
-	BUTTON4 = 16
-)
-
 // Configure this pin with the given configuration.
 func (p GPIO) Configure(config GPIOConfig) {
 	cfg := config.Mode | nrf.GPIO_PIN_CNF_DRIVE_S0S1 | nrf.GPIO_PIN_CNF_SENSE_Disabled
