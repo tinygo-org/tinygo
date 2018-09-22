@@ -13,11 +13,12 @@ import (
 	"strings"
 
 	"github.com/aykevl/llvm/bindings/go/llvm"
+	"github.com/aykevl/tinygo/compiler"
 )
 
 // Helper function for Compiler object.
 func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, printSizes string, action func(string) error) error {
-	c, err := NewCompiler(pkgName, spec.Triple, dumpSSA)
+	c, err := compiler.NewCompiler(pkgName, spec.Triple, dumpSSA)
 	if err != nil {
 		return err
 	}
@@ -187,7 +188,7 @@ func Flash(pkgName, target, port string, printIR, dumpSSA bool, printSizes strin
 
 // Run the specified package directly (using JIT or interpretation).
 func Run(pkgName string) error {
-	c, err := NewCompiler(pkgName, llvm.DefaultTargetTriple(), false)
+	c, err := compiler.NewCompiler(pkgName, llvm.DefaultTargetTriple(), false)
 	if err != nil {
 		return errors.New("compiler: " + err.Error())
 	}
@@ -200,7 +201,7 @@ func Run(pkgName string) error {
 	}
 	c.Optimize(1, 0, 0) // -O1, the fastest optimization level that doesn't crash
 
-	engine, err := llvm.NewExecutionEngine(c.mod)
+	engine, err := llvm.NewExecutionEngine(c.Module())
 	if err != nil {
 		return errors.New("interpreter setup: " + err.Error())
 	}

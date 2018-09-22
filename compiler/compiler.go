@@ -1,4 +1,4 @@
-package main
+package compiler
 
 import (
 	"errors"
@@ -137,6 +137,10 @@ func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 	c.coroFreeFunc = llvm.AddFunction(c.mod, "llvm.coro.free", coroFreeType)
 
 	return c, nil
+}
+
+func (c *Compiler) Module() llvm.Module {
+	return c.mod
 }
 
 func (c *Compiler) Parse(mainPath string, buildTags []string) error {

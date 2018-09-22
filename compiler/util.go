@@ -1,4 +1,4 @@
-package main
+package compiler
 
 // This file contains functions that are also used by the runtime. These must be
 // kept in sync.
