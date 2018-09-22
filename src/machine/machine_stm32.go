@@ -25,10 +25,6 @@ const (
 	portG
 )
 
-const (
-	LED = portC + 13
-)
-
 func (p GPIO) getPort() *stm32.GPIO_Type {
 	switch p.Pin / 16 {
 	case 0:

@@ -13,9 +13,6 @@ const (
 	GPIO_OUTPUT
 )
 
-// LED on the Arduino
-const LED = 13
-
 func (p GPIO) Configure(config GPIOConfig) {
 	if config.Mode == GPIO_OUTPUT { // set output bit
 		if p.Pin < 8 {
@@ -124,16 +121,6 @@ func (pwm PWM) Set(value uint16) {
 		panic("Invalid PWM pin")
 	}
 }
-
-// ADC on the Arduino
-const (
-	ADC0 = 0
-	ADC1 = 1
-	ADC2 = 2
-	ADC3 = 3
-	ADC4 = 4
-	ADC5 = 5
-)
 
 // InitADC initializes the registers needed for ADC.
 func InitADC() {
