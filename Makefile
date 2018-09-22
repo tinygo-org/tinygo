@@ -72,7 +72,7 @@ gen-device-stm32:
 
 
 # Build the Go compiler.
-build/tgo: *.go
+build/tgo: *.go compiler/*.go ir/*.go
 	@mkdir -p build
 	go build -o build/tgo -i .
 
