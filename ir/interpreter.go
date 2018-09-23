@@ -1,4 +1,4 @@
-package main
+package ir
 
 // This file provides functionality to interpret very basic Go SSA, for
 // compile-time initialization of globals.
@@ -13,6 +13,8 @@ import (
 
 	"golang.org/x/tools/go/ssa"
 )
+
+var ErrCGoWrapper = errors.New("tinygo internal: cgo wrapper") // a signal, not an error
 
 // Ignore these calls (replace with a zero return value) when encountered during
 // interpretation.
@@ -33,7 +35,7 @@ func (p *Program) Interpret(block *ssa.BasicBlock, dumpSSA bool) error {
 	}
 	for {
 		i, err := p.interpret(block.Instrs, nil, nil, nil, dumpSSA)
-		if err == cgoWrapperError {
+		if err == ErrCGoWrapper {
 			// skip this instruction
 			block.Instrs = block.Instrs[i+1:]
 			continue
@@ -410,7 +412,7 @@ func (p *Program) getValue(value ssa.Value, locals map[ssa.Value]Value) (Value, 
 	case *ssa.Global:
 		if strings.HasPrefix(value.Name(), "__cgofn__cgo_") || strings.HasPrefix(value.Name(), "_cgo_") {
 			// Ignore CGo global variables which we don't use.
-			return nil, cgoWrapperError
+			return nil, ErrCGoWrapper
 		}
 		g := p.GetGlobal(value)
 		if g.initializer == nil {

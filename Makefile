@@ -54,7 +54,7 @@ clean:
 	@rm -rf build
 
 fmt:
-	@go fmt . ./src/examples/* ./src/machine ./src/runtime ./src/sync
+	@go fmt . ./compiler ./ir ./src/examples/* ./src/machine ./src/runtime ./src/sync
 
 gen-device: gen-device-nrf gen-device-avr
 
@@ -72,7 +72,7 @@ gen-device-stm32:
 
 
 # Build the Go compiler.
-build/tgo: *.go
+build/tgo: *.go compiler/*.go ir/*.go
 	@mkdir -p build
 	go build -o build/tgo -i .
 

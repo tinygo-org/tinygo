@@ -1,4 +1,4 @@
-package main
+package ir
 
 import (
 	"go/types"
@@ -81,7 +81,7 @@ func (p *Program) AnalyseCallgraph() {
 		f.children = nil
 		f.parents = nil
 
-		for _, block := range f.fn.Blocks {
+		for _, block := range f.Blocks {
 			for _, instr := range block.Instrs {
 				switch instr := instr.(type) {
 				case *ssa.Call:
@@ -99,7 +99,7 @@ func (p *Program) AnalyseCallgraph() {
 						if child.CName() != "" {
 							continue // assume non-blocking
 						}
-						if child.fn.RelString(nil) == "time.Sleep" {
+						if child.RelString(nil) == "time.Sleep" {
 							f.blocking = true
 						}
 						f.children = append(f.children, child)
@@ -122,11 +122,11 @@ func (p *Program) AnalyseInterfaceConversions() {
 	p.typesWithMethods = map[string]*TypeWithMethods{}
 
 	for _, f := range p.Functions {
-		for _, block := range f.fn.Blocks {
+		for _, block := range f.Blocks {
 			for _, instr := range block.Instrs {
 				switch instr := instr.(type) {
 				case *ssa.MakeInterface:
-					methods := getAllMethods(f.fn.Prog, instr.X.Type())
+					methods := getAllMethods(f.Prog, instr.X.Type())
 					name := instr.X.Type().String()
 					if _, ok := p.typesWithMethods[name]; !ok && len(methods) > 0 {
 						t := &TypeWithMethods{
@@ -155,7 +155,7 @@ func (p *Program) AnalyseFunctionPointers() {
 	p.fpWithContext = map[string]struct{}{}
 
 	for _, f := range p.Functions {
-		for _, block := range f.fn.Blocks {
+		for _, block := range f.Blocks {
 			for _, instr := range block.Instrs {
 				switch instr := instr.(type) {
 				case ssa.CallInstruction:
@@ -229,7 +229,7 @@ func (p *Program) AnalyseBlockingRecursive() {
 func (p *Program) AnalyseGoCalls() {
 	p.goCalls = nil
 	for _, f := range p.Functions {
-		for _, block := range f.fn.Blocks {
+		for _, block := range f.Blocks {
 			for _, instr := range block.Instrs {
 				switch instr := instr.(type) {
 				case *ssa.Go:
@@ -262,16 +262,16 @@ func (p *Program) SimpleDCE() {
 	// Initial set of live functions. Include main.main, *.init and runtime.*
 	// functions.
 	main := p.mainPkg.Members["main"].(*ssa.Function)
-	runtimePkg := p.program.ImportedPackage("runtime")
+	runtimePkg := p.Program.ImportedPackage("runtime")
 	p.GetFunction(main).flag = true
 	worklist := []*ssa.Function{main}
 	for _, f := range p.Functions {
-		if f.fn.Synthetic == "package initializer" || f.fn.Pkg == runtimePkg {
-			if f.flag || isCGoInternal(f.fn.Name()) {
+		if f.Synthetic == "package initializer" || f.Pkg == runtimePkg {
+			if f.flag || isCGoInternal(f.Name()) {
 				continue
 			}
 			f.flag = true
-			worklist = append(worklist, f.fn)
+			worklist = append(worklist, f.Function)
 		}
 	}
 
@@ -282,8 +282,8 @@ func (p *Program) SimpleDCE() {
 		for _, block := range f.Blocks {
 			for _, instr := range block.Instrs {
 				if instr, ok := instr.(*ssa.MakeInterface); ok {
-					for _, sel := range getAllMethods(p.program, instr.X.Type()) {
-						fn := p.program.MethodValue(sel)
+					for _, sel := range getAllMethods(p.Program, instr.X.Type()) {
+						fn := p.Program.MethodValue(sel)
 						callee := p.GetFunction(fn)
 						if callee == nil {
 							// TODO: why is this necessary?
@@ -292,7 +292,7 @@ func (p *Program) SimpleDCE() {
 						}
 						if !callee.flag {
 							callee.flag = true
-							worklist = append(worklist, callee.fn)
+							worklist = append(worklist, callee.Function)
 						}
 					}
 				}
@@ -325,7 +325,7 @@ func (p *Program) SimpleDCE() {
 		if f.flag {
 			livefunctions = append(livefunctions, f)
 		} else {
-			delete(p.functionMap, f.fn)
+			delete(p.functionMap, f.Function)
 		}
 	}
 	p.Functions = livefunctions
@@ -418,7 +418,7 @@ func (p *Program) FunctionNeedsContext(f *Function) bool {
 	if !f.addressTaken {
 		return false
 	}
-	return p.SignatureNeedsContext(f.fn.Signature)
+	return p.SignatureNeedsContext(f.Signature)
 }
 
 func (p *Program) SignatureNeedsContext(sig *types.Signature) bool {
