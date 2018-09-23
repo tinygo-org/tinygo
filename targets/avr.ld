@@ -12,8 +12,8 @@ SECTIONS
 {
     .text :
     {
-        KEEP(*(.isr))
-        KEEP(*(.reset))
+        KEEP(*(.vectors))
+        KEEP(*(.text.__vector_RESET))
         KEEP(*(.text.main)) /* main must follow the reset handler */
         *(.text.*)
         *(.rodata)
