@@ -2734,6 +2734,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 			global.SetInitializer(c.ctx.ConstString(str, false))
 			global.SetLinkage(llvm.InternalLinkage)
 			global.SetGlobalConstant(true)
+			global.SetUnnamedAddr(true)
 			zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
 			strPtr := c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
 			strObj := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._string"), []llvm.Value{strPtr, strLen})
