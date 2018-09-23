@@ -11,8 +11,8 @@ Requirements
 These are the base requirements and enough for most (desktop) use.
 
   * Go 1.11+
-  * LLVM dependencies, see the Software section in the
-    [LLVM build guide](https://llvm.org/docs/GettingStarted.html#software)
+  * LLVM dependencies, see the Software section in the `LLVM build guide
+    <https://llvm.org/docs/GettingStarted.html#software>`_.
 
 Linking a binary needs an installed C compiler (``cc``). At the moment it
 expects GCC or a recent Clang.
