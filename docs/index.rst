@@ -13,13 +13,3 @@ Contents:
 
    installation
    internals
-
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-
