@@ -1,11 +1,10 @@
 
 MEMORY
 {
-    FLASH_TEXT (rw) : ORIGIN = 0, LENGTH = 32K - _bootloader_size
-    RAM (xrw)       : ORIGIN = 0, LENGTH = 2K
+    FLASH_TEXT (rw) : ORIGIN = 0, LENGTH = __flash_size - _bootloader_size
+    RAM (xrw)       : ORIGIN = 0, LENGTH = __ram_size
 }
 
-_bootloader_size = 512;
 _stack_size = 512;
 
 SECTIONS
