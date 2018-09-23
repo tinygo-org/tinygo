@@ -55,7 +55,7 @@ Differences from ``go``
     enables far more optimization opportunities. In the future, an option should
     be added for incremental compilation during edit-compile-test cycles.
   * Interfaces are always represented as a ``{typecode, value}`` pair. `Unlike
-    Go <https://research.swtch.com/interfaces>`, TinyGo will not precompute a
+    Go <https://research.swtch.com/interfaces>`_, TinyGo will not precompute a
     list of function pointers for fast interface method calls. Instead, all
     interface method calls are looked up where they are used. This may sound
     expensive, but it avoids memory allocation at interface creation.
