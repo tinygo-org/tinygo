@@ -266,7 +266,7 @@ func (p *Program) SimpleDCE() {
 	p.GetFunction(main).flag = true
 	worklist := []*ssa.Function{main}
 	for _, f := range p.Functions {
-		if f.Synthetic == "package initializer" || f.Pkg == runtimePkg {
+		if f.exported || f.Synthetic == "package initializer" || f.Pkg == runtimePkg {
 			if f.flag || isCGoInternal(f.Name()) {
 				continue
 			}

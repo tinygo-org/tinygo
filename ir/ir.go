@@ -40,11 +40,12 @@ type Program struct {
 type Function struct {
 	*ssa.Function
 	LLVMFn       llvm.Value
-	linkName     string      // go:linkname or go:export pragma
+	linkName     string      // go:linkname, go:export, go:interrupt
 	exported     bool        // go:export
-	nobounds     bool        // go:nobounds pragma
+	nobounds     bool        // go:nobounds
 	blocking     bool        // calculated by AnalyseBlockingRecursive
 	flag         bool        // used by dead code elimination
+	interrupt    bool        // go:interrupt
 	addressTaken bool        // used as function pointer, calculated by AnalyseFunctionPointers
 	parents      []*Function // calculated by AnalyseCallgraph
 	children     []*Function // calculated by AnalyseCallgraph
@@ -298,6 +299,18 @@ func (f *Function) parsePragmas() {
 				}
 				f.linkName = parts[1]
 				f.exported = true
+			case "//go:interrupt":
+				if len(parts) != 2 {
+					continue
+				}
+				name := parts[1]
+				if strings.HasSuffix(name, "_vect") {
+					// AVR vector naming
+					name = "__vector_" + name[:len(name)-5]
+				}
+				f.linkName = name
+				f.exported = true
+				f.interrupt = true
 			case "//go:linkname":
 				if len(parts) != 3 || parts[1] != f.Name() {
 					continue
@@ -328,6 +341,14 @@ func (f *Function) IsNoBounds() bool {
 
 // Return true iff this function is externally visible.
 func (f *Function) IsExported() bool {
+	return f.exported
+}
+
+// Return true for functions annotated with //go:interrupt. The function name is
+// already customized in LinkName() to hook up in the interrupt vector.
+//
+// On some platforms (like AVR), interrupts need a special compiler flag.
+func (f *Function) IsInterrupt() bool {
 	return f.exported
 }
 
