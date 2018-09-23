@@ -378,7 +378,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		}
 
 		// Call real function (of which this is a wrapper).
-		c.createCall(fn, forwardParams, "")
+		c.createCall(fn.LLVMFn, forwardParams, "")
 		c.builder.CreateRetVoid()
 	}
 
@@ -813,10 +813,11 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 		paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
 	}
 	for _, param := range f.Params {
-		paramTypeFragments, err := c.getLLVMParamTypes(param.Type())
+		paramType, err := c.getLLVMType(param.Type())
 		if err != nil {
 			return nil, err
 		}
+		paramTypeFragments := c.expandFormalParamType(paramType)
 		paramTypes = append(paramTypes, paramTypeFragments...)
 	}
 
@@ -1690,7 +1691,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 	}
 }
 
-func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, fnType *types.Signature, llvmFn, context llvm.Value, blocking bool, parentHandle llvm.Value) (llvm.Value, error) {
+func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, context llvm.Value, blocking bool, parentHandle llvm.Value) (llvm.Value, error) {
 	var params []llvm.Value
 	if blocking {
 		if parentHandle.IsNil() {
@@ -1733,7 +1734,7 @@ func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, fnType *typ
 		return llvm.Value{}, nil
 	}
 
-	result := c.createIndirectCall(fnType, llvmFn, params, "")
+	result := c.createCall(llvmFn, params, "")
 	if blocking && !parentHandle.IsNil() {
 		// Calling a blocking function as a regular function call.
 		// This is done by passing the current coroutine as a parameter to the
@@ -1807,7 +1808,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 		}
 
 		// TODO: blocking methods (needs analysis)
-		return c.createIndirectCall(instr.Method.Type().(*types.Signature), fnCast, args, ""), nil
+		return c.createCall(fnCast, args, ""), nil
 	}
 
 	// Try to call the function directly for trivially static calls.
@@ -1845,7 +1846,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 				}
 			}
 		}
-		return c.parseFunctionCall(frame, instr.Args, targetFunc.Signature, targetFunc.LLVMFn, context, c.ir.IsBlocking(targetFunc), parentHandle)
+		return c.parseFunctionCall(frame, instr.Args, targetFunc.LLVMFn, context, c.ir.IsBlocking(targetFunc), parentHandle)
 	}
 
 	// Builtin or function pointer.
@@ -1866,7 +1867,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 			context = c.builder.CreateExtractValue(value, 0, "")
 			value = c.builder.CreateExtractValue(value, 1, "")
 		}
-		return c.parseFunctionCall(frame, instr.Args, instr.Value.Type().(*types.Signature), value, context, false, parentHandle)
+		return c.parseFunctionCall(frame, instr.Args, value, context, false, parentHandle)
 	}
 }
 
