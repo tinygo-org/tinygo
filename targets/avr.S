@@ -38,16 +38,6 @@ init_data_end:
     ; need to jump.
 
 
-; This is the default handler for interrupts, if triggered but not defined.
-; Sleep inside so that an accidentally triggered interrupt won't drain the
-; battery of a battery-powered device.
-.section .text.__vector_default
-.global  __vector_default
-__vector_default:
-    sleep
-    rjmp __vector_default
-
-
 ; The only thing this WDT handler really does is disable itself, to get out of
 ; sleep mode.
 .section .text.__vector_WDT
