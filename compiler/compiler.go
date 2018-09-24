@@ -361,22 +361,18 @@ func (c *Compiler) Compile(mainPath string) error {
 	}
 	c.builder.CreateRetVoid()
 
-	// Adjust main function.
+	mainWrapper := c.mod.NamedFunction("runtime.mainWrapper")
+	block = c.ctx.AddBasicBlock(mainWrapper, "entry")
+	c.builder.SetInsertPointAtEnd(block)
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
 	if c.ir.NeedsScheduler() {
-		c.mod.NamedFunction("runtime.main_mainAsync").ReplaceAllUsesWith(realMain)
+		coroutine := c.builder.CreateCall(realMain, []llvm.Value{llvm.ConstPointerNull(c.i8ptrType)}, "")
+		scheduler := c.mod.NamedFunction("runtime.scheduler")
+		c.builder.CreateCall(scheduler, []llvm.Value{coroutine}, "")
 	} else {
-		c.mod.NamedFunction("runtime.main_main").ReplaceAllUsesWith(realMain)
+		c.builder.CreateCall(realMain, nil, "")
 	}
-
-	// Only use a scheduler when necessary.
-	if c.ir.NeedsScheduler() {
-		// Enable the scheduler.
-		hasScheduler := c.mod.NamedGlobal("runtime.hasScheduler")
-		hasScheduler.SetInitializer(llvm.ConstInt(llvm.Int1Type(), 1, false))
-		hasScheduler.SetGlobalConstant(true)
-		hasScheduler.SetUnnamedAddr(true)
-	}
+	c.builder.CreateRetVoid()
 
 	// Initialize runtime type information, for interfaces.
 	// See src/runtime/interface.go for more details.
