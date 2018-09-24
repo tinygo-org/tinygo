@@ -177,50 +177,8 @@ func (c *Compiler) Parse(mainPath string) error {
 
 	c.ir = ir.NewProgram(lprogram, mainPath)
 
-	// Make a list of packages in import order.
-	packageList := []*ssa.Package{}
-	packageSet := map[string]struct{}{}
-	worklist := []string{"runtime", mainPath}
-	for len(worklist) != 0 {
-		pkgPath := worklist[0]
-		pkg := c.ir.Program.ImportedPackage(pkgPath)
-		if pkg == nil {
-			// Non-SSA package (e.g. cgo).
-			packageSet[pkgPath] = struct{}{}
-			worklist = worklist[1:]
-			continue
-		}
-		if _, ok := packageSet[pkgPath]; ok {
-			// Package already in the final package list.
-			worklist = worklist[1:]
-			continue
-		}
-
-		unsatisfiedImports := make([]string, 0)
-		imports := pkg.Pkg.Imports()
-		for _, pkg := range imports {
-			if _, ok := packageSet[pkg.Path()]; ok {
-				continue
-			}
-			unsatisfiedImports = append(unsatisfiedImports, pkg.Path())
-		}
-		if len(unsatisfiedImports) == 0 {
-			// All dependencies of this package are satisfied, so add this
-			// package to the list.
-			packageList = append(packageList, pkg)
-			packageSet[pkgPath] = struct{}{}
-			worklist = worklist[1:]
-		} else {
-			// Prepend all dependencies to the worklist and reconsider this
-			// package (by not removing it from the worklist). At that point, it
-			// must be possible to add it to packageList.
-			worklist = append(unsatisfiedImports, worklist...)
-		}
-	}
-
-	for _, pkg := range packageList {
-		c.ir.AddPackage(pkg)
-	}
+	// Run some DCE and analysis passes. The results are later used by the
+	// compiler.
 	c.ir.SimpleDCE()                   // remove most dead code
 	c.ir.AnalyseCallgraph()            // set up callgraph
 	c.ir.AnalyseInterfaceConversions() // determine which types are converted to an interface
