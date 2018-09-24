@@ -160,16 +160,10 @@ func (a ADC) Get() uint16 {
 
 // I2C on the Arduino
 
-const (
-	SDA = 18
-	SCL = 19
-)
-
 // I2CInit initializes the I2C interface.
 func I2CInit() {
 	// Activate internal pullups for twi.
-	*avr.PORTC |= (1 << 4)
-	*avr.PORTC |= (1 << 5)
+	*avr.PORTC |= (avr.DIDR0_ADC4D | avr.DIDR0_ADC5D)
 
 	// Initialize twi prescaler and bit rate.
 	*avr.TWSR |= (avr.TWSR_TWPS0 | avr.TWSR_TWPS1)
