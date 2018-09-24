@@ -109,13 +109,35 @@ func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 	program := ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions|ssa.BareInits|ssa.GlobalDebug)
 	program.Build()
 
+	// Find the main package, which is a bit difficult when running a .go file
+	// directly.
+	mainPkg := program.ImportedPackage(mainPath)
+	if mainPkg == nil {
+		for _, pkgInfo := range program.AllPackages() {
+			if pkgInfo.Pkg.Name() == "main" {
+				if mainPkg != nil {
+					panic("more than one main package found")
+				}
+				mainPkg = pkgInfo
+			}
+		}
+	}
+	if mainPkg == nil {
+		panic("could not find main package")
+	}
+
 	// Make a list of packages in import order.
 	packageList := []*ssa.Package{}
 	packageSet := map[string]struct{}{}
 	worklist := []string{"runtime", mainPath}
 	for len(worklist) != 0 {
 		pkgPath := worklist[0]
-		pkg := program.ImportedPackage(pkgPath)
+		var pkg *ssa.Package
+		if pkgPath == mainPath {
+			pkg = mainPkg // necessary for compiling individual .go files
+		} else {
+			pkg = program.ImportedPackage(pkgPath)
+		}
 		if pkg == nil {
 			// Non-SSA package (e.g. cgo).
 			packageSet[pkgPath] = struct{}{}
@@ -152,7 +174,7 @@ func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 
 	p := &Program{
 		Program:              program,
-		mainPkg:              program.ImportedPackage(mainPath),
+		mainPkg:              mainPkg,
 		functionMap:          make(map[*ssa.Function]*Function),
 		globalMap:            make(map[*ssa.Global]*Global),
 		methodSignatureNames: make(map[string]int),

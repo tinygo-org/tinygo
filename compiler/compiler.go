@@ -169,7 +169,11 @@ func (c *Compiler) Parse(mainPath string) error {
 		ParserMode: parser.ParseComments,
 	}
 	config.Import("runtime")
-	config.Import(mainPath)
+	if strings.HasSuffix(mainPath, ".go") {
+		config.CreateFromFilenames("main", mainPath)
+	} else {
+		config.Import(mainPath)
+	}
 	lprogram, err := config.Load()
 	if err != nil {
 		return err
