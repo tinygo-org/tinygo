@@ -134,7 +134,7 @@ func (c *Compiler) Module() llvm.Module {
 	return c.mod
 }
 
-func (c *Compiler) Parse(mainPath string, buildTags []string) error {
+func (c *Compiler) Parse(mainPath, sourceDir string, buildTags []string) error {
 	tripleSplit := strings.Split(c.triple, "-")
 
 	config := loader.Config{
@@ -148,7 +148,7 @@ func (c *Compiler) Parse(mainPath string, buildTags []string) error {
 		Build: &build.Context{
 			GOARCH:      tripleSplit[0],
 			GOOS:        tripleSplit[2],
-			GOROOT:      ".",
+			GOROOT:      sourceDir,
 			GOPATH:      runtime.GOROOT(),
 			CgoEnabled:  true,
 			UseAllFiles: false,
