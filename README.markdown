@@ -1,5 +1,7 @@
 # TinyGo - Go compiler for microcontrollers
 
+[![Documentation Status](https://readthedocs.org/projects/tinygo/badge/?version=latest)](https://tinygo.readthedocs.io/)
+
 > We never expected Go to be an embedded language and so it's got serious
 > problems [...].
 
@@ -100,65 +102,7 @@ Implemented compiler passes:
 
 ## Building
 
-Requirements:
-
-  * Go 1.11+
-  * LLVM dependencies, see the Software section in the
-    [LLVM build guide](https://llvm.org/docs/GettingStarted.html#software)
-
-First download the sources (this takes a while):
-
-    go get -u github.com/aykevl/tinygo
-
-You'll get an error like the following, this is expected:
-
-    src/github.com/aykevl/llvm/bindings/go/llvm/analysis.go:17:10: fatal error: 'llvm-c/Analysis.h' file not found
-    #include "llvm-c/Analysis.h" // If you are getting an error here read bindings/go/README.txt
-             ^~~~~~~~~~~~~~~~~~~
-    1 error generated.
-
-To continue, you'll need to build LLVM. As a first step, modify
-github.com/aykevl/llvm/bindings/go/build.sh:
-
-```sh
-cmake_flags="../../../../.. $@ -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR -DLLVM_LINK_LLVM_DYLIB=ON"
-```
-
-This will enable the experimental AVR backend (for Arduino support) and will
-make sure `tinygo` links to a shared library instead of a static library,
-greatly improving link time on every rebuild. This is especially useful during
-development.
-
-The next step is actually building LLVM. This is done by running this command
-inside github.com/aykevl/llvm/bindings/go:
-
-```sh
-$ ./build.sh
-```
-
-This will take about an hour and require a fair bit of RAM. In fact, I would
-recommend setting your `ld` binary to `gold` to speed up linking, especially on
-systems with less than 16GB RAM.
-
-After LLVM has been built, you can run an example with:
-
-    make run-test
-
-For a blinky example on the PCA10040 development board, do this:
-
-    make flash-blinky2 TARGET=pca10040
-
-Note that you will have to execute the following commands before the blinky
-example will work:
-
-    git submodule update --init
-    make gen-device-nrf
-
-You can also run a simpler blinky example (blinky1) on the Arduino:
-
-    git submodule update --init # only required the first time
-    make gen-device-avr         # only required the first time
-    make flash-blinky1 TARGET=arduino
+See the [installation instructions](https://tinygo.readthedocs.io/en/latest/installation.html).
 
 ## License
 

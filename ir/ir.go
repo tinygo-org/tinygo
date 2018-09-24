@@ -223,6 +223,12 @@ func (f *Function) parsePragmas() {
 			}
 			parts := strings.Fields(comment.Text)
 			switch parts[0] {
+			case "//go:export":
+				if len(parts) != 2 {
+					continue
+				}
+				f.linkName = parts[1]
+				f.exported = true
 			case "//go:linkname":
 				if len(parts) != 3 || parts[1] != f.Name() {
 					continue
@@ -242,12 +248,6 @@ func (f *Function) parsePragmas() {
 				if hasUnsafeImport(f.Pkg.Pkg) {
 					f.nobounds = true
 				}
-			case "//go:export":
-				if len(parts) != 2 {
-					continue
-				}
-				f.linkName = parts[1]
-				f.exported = true
 			}
 		}
 	}
