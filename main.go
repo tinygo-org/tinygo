@@ -297,7 +297,7 @@ func main() {
 			os.Exit(1)
 		}
 		if *target != llvm.DefaultTargetTriple() {
-			fmt.Fprintf(os.Stderr, "Cannot run %s: target triple does not match host triple.")
+			fmt.Fprintf(os.Stderr, "Cannot run %s: target triple does not match host triple.", *target)
 			os.Exit(1)
 		}
 		err := Run(flag.Arg(0))

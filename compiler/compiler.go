@@ -728,11 +728,11 @@ func (c *Compiler) getDIType(typ types.Type) (llvm.Metadata, error) {
 			encoding = llvm.DW_ATE_address
 		}
 		// TODO: other types
-		return c.dibuilder.CreateBasicType(llvm.DIBasicType{
+		dityp = c.dibuilder.CreateBasicType(llvm.DIBasicType{
 			Name:       name,
 			SizeInBits: sizeInBytes * 8,
 			Encoding:   encoding,
-		}), nil
+		})
 		c.ditypes[name] = dityp
 		return dityp, nil
 	}
