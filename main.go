@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/aykevl/llvm/bindings/go/llvm"
@@ -18,7 +17,14 @@ import (
 
 // Helper function for Compiler object.
 func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, printSizes string, action func(string) error) error {
-	c, err := compiler.NewCompiler(pkgName, spec.Triple, dumpSSA)
+	config := compiler.Config{
+		Triple:    spec.Triple,
+		Debug:     true, // TODO: make configurable
+		DumpSSA:   dumpSSA,
+		RootDir:   sourceDir(),
+		BuildTags: spec.BuildTags,
+	}
+	c, err := compiler.NewCompiler(pkgName, config)
 	if err != nil {
 		return err
 	}
@@ -32,7 +38,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, p
 				fmt.Println(c.IR())
 			}()
 		}
-		return c.Parse(pkgName, sourceDir(), spec.BuildTags)
+		return c.Parse(pkgName)
 	}()
 	if parseErr != nil {
 		return parseErr
@@ -190,11 +196,14 @@ func Flash(pkgName, target, port string, printIR, dumpSSA bool, printSizes strin
 
 // Run the specified package directly (using JIT or interpretation).
 func Run(pkgName string) error {
-	c, err := compiler.NewCompiler(pkgName, llvm.DefaultTargetTriple(), false)
+	config := compiler.Config{
+		RootDir: sourceDir(),
+	}
+	c, err := compiler.NewCompiler(pkgName, config)
 	if err != nil {
 		return errors.New("compiler: " + err.Error())
 	}
-	err = c.Parse(pkgName, sourceDir(), []string{runtime.GOOS, runtime.GOARCH})
+	err = c.Parse(pkgName)
 	if err != nil {
 		return errors.New("compiler: " + err.Error())
 	}
