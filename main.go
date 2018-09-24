@@ -32,13 +32,13 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, p
 	// Compile Go code to IR.
 	parseErr := func() error {
 		if printIR {
-			// Run this even if c.Parse() panics.
+			// Run this even if c.Compile() panics.
 			defer func() {
 				fmt.Println("Generated LLVM IR:")
 				fmt.Println(c.IR())
 			}()
 		}
-		return c.Parse(pkgName)
+		return c.Compile(pkgName)
 	}()
 	if parseErr != nil {
 		return parseErr
@@ -203,7 +203,7 @@ func Run(pkgName string) error {
 	if err != nil {
 		return errors.New("compiler: " + err.Error())
 	}
-	err = c.Parse(pkgName)
+	err = c.Compile(pkgName)
 	if err != nil {
 		return errors.New("compiler: " + err.Error())
 	}

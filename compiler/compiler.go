@@ -141,11 +141,14 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 	return c, nil
 }
 
+// Return the LLVM module. Only valid after a successful compile.
 func (c *Compiler) Module() llvm.Module {
 	return c.mod
 }
 
-func (c *Compiler) Parse(mainPath string) error {
+// Compile the given package path or .go file path. Return an error when this
+// fails (in any stage).
+func (c *Compiler) Compile(mainPath string) error {
 	tripleSplit := strings.Split(c.Triple, "-")
 
 	config := loader.Config{
