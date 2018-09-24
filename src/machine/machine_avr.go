@@ -174,8 +174,7 @@ func I2CInit() {
 	// It is 72 for a 16mhz board with 100kHz TWI
 	*avr.TWBR = avr.RegValue(72)
 
-	// Enable twi module, acks, and twi interrupt.
-	//*avr.TWCR = (avr.TWCR_TWEN | avr.TWCR_TWEA)
+	// Enable twi module.
 	*avr.TWCR = avr.TWCR_TWEN
 }
 
