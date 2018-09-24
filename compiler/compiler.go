@@ -166,21 +166,13 @@ func (c *Compiler) Parse(mainPath string) error {
 			Compiler:    "gc", // must be one of the recognized compilers
 			BuildTags:   append([]string{"tgo"}, c.BuildTags...),
 		},
-		ParserMode:  parser.ParseComments,
-		AllowErrors: true,
+		ParserMode: parser.ParseComments,
 	}
 	config.Import("runtime")
 	config.Import(mainPath)
 	lprogram, err := config.Load()
 	if err != nil {
 		return err
-	}
-
-	// TODO: pick the error of the first package, not a random package
-	for _, pkgInfo := range lprogram.AllPackages {
-		if len(pkgInfo.Errors) != 0 {
-			return pkgInfo.Errors[0]
-		}
 	}
 
 	c.ir = ir.NewProgram(lprogram, mainPath)
