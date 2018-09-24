@@ -32,7 +32,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, p
 				fmt.Println(c.IR())
 			}()
 		}
-		return c.Parse(pkgName, spec.BuildTags)
+		return c.Parse(pkgName, sourceDir(), spec.BuildTags)
 	}()
 	if parseErr != nil {
 		return parseErr
@@ -93,6 +93,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, p
 		cmd := exec.Command(spec.Linker, args...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+		cmd.Dir = sourceDir()
 		err = cmd.Run()
 		if err != nil {
 			return err
@@ -182,6 +183,7 @@ func Flash(pkgName, target, port string, printIR, dumpSSA bool, printSizes strin
 		cmd := exec.Command("/bin/sh", "-c", flashCmd)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+		cmd.Dir = sourceDir()
 		return cmd.Run()
 	})
 }
@@ -192,7 +194,7 @@ func Run(pkgName string) error {
 	if err != nil {
 		return errors.New("compiler: " + err.Error())
 	}
-	err = c.Parse(pkgName, []string{runtime.GOOS, runtime.GOARCH})
+	err = c.Parse(pkgName, sourceDir(), []string{runtime.GOOS, runtime.GOARCH})
 	if err != nil {
 		return errors.New("compiler: " + err.Error())
 	}

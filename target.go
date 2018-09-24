@@ -34,7 +34,7 @@ func LoadTarget(target string) (*TargetSpec, error) {
 
 	// See whether there is a target specification for this target (e.g.
 	// Arduino).
-	path := filepath.Join("targets", strings.ToLower(target)+".json")
+	path := filepath.Join(sourceDir(), "targets", strings.ToLower(target)+".json")
 	if fp, err := os.Open(path); err == nil {
 		defer fp.Close()
 		err := json.NewDecoder(fp).Decode(spec)
@@ -49,4 +49,12 @@ func LoadTarget(target string) (*TargetSpec, error) {
 	}
 
 	return spec, nil
+}
+
+// Return the source directory of this package, or "." when it cannot be
+// recovered.
+func sourceDir() string {
+	// https://stackoverflow.com/a/32163888/559350
+	_, path, _, _ := runtime.Caller(0)
+	return filepath.Dir(path)
 }
