@@ -12,6 +12,11 @@ func main() {
 	// Init BlinkM
 	machine.I2CWriteTo(0x09, []byte("o"))
 
+	version := []byte{0, 0}
+	machine.I2CWriteTo(0x09, []byte("Z"))
+	machine.I2CReadFrom(0x09, version)
+	println("Firmware version:", string(version[0]), string(version[1]))
+
 	count := 0
 	for {
 		machine.I2CWriteTo(0x09, []byte("n"))
