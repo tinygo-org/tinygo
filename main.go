@@ -210,7 +210,10 @@ func Run(pkgName string) error {
 	if err := c.Verify(); err != nil {
 		return errors.New("compiler error: failed to verify module: " + err.Error())
 	}
-	c.Optimize(1, 0, 0) // -O1, the fastest optimization level that doesn't crash
+	// -Oz, which is the fastest optimization level (faster than -O0, -O1, -O2
+	// and -Os). Turn off the inliner, as the inliner increases optimization
+	// time.
+	c.Optimize(2, 2, 0)
 
 	engine, err := llvm.NewExecutionEngine(c.Module())
 	if err != nil {
