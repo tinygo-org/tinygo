@@ -168,12 +168,14 @@ const (
 // I2CInit initializes the I2C interface.
 func I2CInit() {
 	// Activate internal pullups for twi.
-	sda := GPIO{SDA}
-	sda.Configure(GPIOConfig{Mode: GPIO_OUTPUT})
-	sda.High()
-	scl := GPIO{SCL}
-	scl.Configure(GPIOConfig{Mode: GPIO_OUTPUT})
-	scl.High()
+	// sda := GPIO{SDA}
+	// sda.Configure(GPIOConfig{Mode: GPIO_OUTPUT})
+	// sda.High()
+	*avr.PORTC |= (1 << 4)
+	// scl := GPIO{SCL}
+	// scl.Configure(GPIOConfig{Mode: GPIO_OUTPUT})
+	// scl.High()
+	*avr.PORTC |= (1 << 5)
 
 	// Initialize twi prescaler and bit rate.
 	*avr.TWSR |= (avr.TWSR_TWPS0 | avr.TWSR_TWPS1)
@@ -185,7 +187,8 @@ func I2CInit() {
 	*avr.TWBR = avr.RegValue(72)
 
 	// Enable twi module, acks, and twi interrupt.
-	*avr.TWCR = (avr.TWCR_TWEN | avr.TWCR_TWIE | avr.TWCR_TWEA)
+	//*avr.TWCR = (avr.TWCR_TWEN | avr.TWCR_TWEA)
+	*avr.TWCR = avr.TWCR_TWEN
 }
 
 // I2CStart starts a communication session.
@@ -204,7 +207,7 @@ func I2CStop() {
 	*avr.TWCR = (avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWSTO)
 
 	// Wait for stop condition to be executed on bus.
-	for ok := true; ok; ok = (*avr.TWCR & avr.TWCR_TWSTO) > 0 {
+	for ok := true; ok; ok = (*avr.TWCR & avr.TWCR_TWSTO) == 0 {
 	}
 }
 
@@ -213,7 +216,7 @@ func I2CWriteTo(address uint8, data []byte) {
 	I2CStart()
 
 	// Write 7-bit shifted peripheral address plus write flag
-	I2CWriteByte(address<<1 + 1)
+	I2CWriteByte(address << 1)
 
 	for _, v := range data {
 		I2CWriteByte(v)
@@ -227,7 +230,7 @@ func I2CReadFrom(address uint8, data []byte) {
 	I2CStart()
 
 	// Write 7-bit shifted peripheral address
-	I2CWriteByte(address << 7)
+	I2CWriteByte(address<<7 + 1)
 
 	// TODO: handle read
 
