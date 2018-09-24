@@ -28,10 +28,17 @@ func init() {
 	llvm.InitializeAllAsmPrinters()
 }
 
+// Configure the compiler.
+type Config struct {
+	Triple    string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
+	DumpSSA   bool     // dump Go SSA, for compiler debugging
+	Debug     bool     // add debug symbols for gdb
+	RootDir   string   // GOROOT for TinyGo
+	BuildTags []string // build tags for TinyGo (empty means {runtime.GOOS/runtime.GOARCH})
+}
+
 type Compiler struct {
-	dumpSSA         bool
-	debug           bool
-	triple          string
+	Config
 	mod             llvm.Module
 	ctx             llvm.Context
 	builder         llvm.Builder
@@ -75,24 +82,28 @@ type Phi struct {
 	llvm llvm.Value
 }
 
-func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
+func NewCompiler(pkgName string, config Config) (*Compiler, error) {
+	if config.Triple == "" {
+		config.Triple = llvm.DefaultTargetTriple()
+	}
+	if len(config.BuildTags) == 0 {
+		config.BuildTags = []string{runtime.GOOS, runtime.GOARCH}
+	}
 	c := &Compiler{
-		dumpSSA: dumpSSA,
-		debug:   true, // TODO: make configurable
-		triple:  triple,
+		Config:  config,
 		difiles: make(map[string]llvm.Metadata),
 		ditypes: make(map[string]llvm.Metadata),
 	}
 
-	target, err := llvm.GetTargetFromTriple(triple)
+	target, err := llvm.GetTargetFromTriple(config.Triple)
 	if err != nil {
 		return nil, err
 	}
-	c.machine = target.CreateTargetMachine(triple, "", "", llvm.CodeGenLevelDefault, llvm.RelocStatic, llvm.CodeModelDefault)
+	c.machine = target.CreateTargetMachine(config.Triple, "", "", llvm.CodeGenLevelDefault, llvm.RelocStatic, llvm.CodeModelDefault)
 	c.targetData = c.machine.CreateTargetData()
 
 	c.mod = llvm.NewModule(pkgName)
-	c.mod.SetTarget(triple)
+	c.mod.SetTarget(config.Triple)
 	c.mod.SetDataLayout(c.targetData.String())
 	c.ctx = c.mod.Context()
 	c.builder = c.ctx.NewBuilder()
@@ -130,12 +141,15 @@ func NewCompiler(pkgName, triple string, dumpSSA bool) (*Compiler, error) {
 	return c, nil
 }
 
+// Return the LLVM module. Only valid after a successful compile.
 func (c *Compiler) Module() llvm.Module {
 	return c.mod
 }
 
-func (c *Compiler) Parse(mainPath, sourceDir string, buildTags []string) error {
-	tripleSplit := strings.Split(c.triple, "-")
+// Compile the given package path or .go file path. Return an error when this
+// fails (in any stage).
+func (c *Compiler) Compile(mainPath string) error {
+	tripleSplit := strings.Split(c.Triple, "-")
 
 	config := loader.Config{
 		TypeChecker: types.Config{
@@ -148,76 +162,30 @@ func (c *Compiler) Parse(mainPath, sourceDir string, buildTags []string) error {
 		Build: &build.Context{
 			GOARCH:      tripleSplit[0],
 			GOOS:        tripleSplit[2],
-			GOROOT:      sourceDir,
+			GOROOT:      c.RootDir,
 			GOPATH:      runtime.GOROOT(),
 			CgoEnabled:  true,
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
-			BuildTags:   append([]string{"tgo"}, buildTags...),
+			BuildTags:   append([]string{"tgo"}, c.BuildTags...),
 		},
-		ParserMode:  parser.ParseComments,
-		AllowErrors: true,
+		ParserMode: parser.ParseComments,
 	}
 	config.Import("runtime")
-	config.Import(mainPath)
+	if strings.HasSuffix(mainPath, ".go") {
+		config.CreateFromFilenames("main", mainPath)
+	} else {
+		config.Import(mainPath)
+	}
 	lprogram, err := config.Load()
 	if err != nil {
 		return err
 	}
 
-	// TODO: pick the error of the first package, not a random package
-	for _, pkgInfo := range lprogram.AllPackages {
-		if len(pkgInfo.Errors) != 0 {
-			return pkgInfo.Errors[0]
-		}
-	}
-
 	c.ir = ir.NewProgram(lprogram, mainPath)
 
-	// Make a list of packages in import order.
-	packageList := []*ssa.Package{}
-	packageSet := map[string]struct{}{}
-	worklist := []string{"runtime", mainPath}
-	for len(worklist) != 0 {
-		pkgPath := worklist[0]
-		pkg := c.ir.Program.ImportedPackage(pkgPath)
-		if pkg == nil {
-			// Non-SSA package (e.g. cgo).
-			packageSet[pkgPath] = struct{}{}
-			worklist = worklist[1:]
-			continue
-		}
-		if _, ok := packageSet[pkgPath]; ok {
-			// Package already in the final package list.
-			worklist = worklist[1:]
-			continue
-		}
-
-		unsatisfiedImports := make([]string, 0)
-		imports := pkg.Pkg.Imports()
-		for _, pkg := range imports {
-			if _, ok := packageSet[pkg.Path()]; ok {
-				continue
-			}
-			unsatisfiedImports = append(unsatisfiedImports, pkg.Path())
-		}
-		if len(unsatisfiedImports) == 0 {
-			// All dependencies of this package are satisfied, so add this
-			// package to the list.
-			packageList = append(packageList, pkg)
-			packageSet[pkgPath] = struct{}{}
-			worklist = worklist[1:]
-		} else {
-			// Prepend all dependencies to the worklist and reconsider this
-			// package (by not removing it from the worklist). At that point, it
-			// must be possible to add it to packageList.
-			worklist = append(unsatisfiedImports, worklist...)
-		}
-	}
-
-	for _, pkg := range packageList {
-		c.ir.AddPackage(pkg)
-	}
+	// Run some DCE and analysis passes. The results are later used by the
+	// compiler.
 	c.ir.SimpleDCE()                   // remove most dead code
 	c.ir.AnalyseCallgraph()            // set up callgraph
 	c.ir.AnalyseInterfaceConversions() // determine which types are converted to an interface
@@ -303,7 +271,7 @@ func (c *Compiler) Parse(mainPath, sourceDir string, buildTags []string) error {
 			// continues at runtime).
 			// This should only happen when it hits a function call or the end
 			// of the block, ideally.
-			err := c.ir.Interpret(frame.fn.Blocks[0], c.dumpSSA)
+			err := c.ir.Interpret(frame.fn.Blocks[0], c.DumpSSA)
 			if err != nil {
 				return err
 			}
@@ -393,22 +361,18 @@ func (c *Compiler) Parse(mainPath, sourceDir string, buildTags []string) error {
 	}
 	c.builder.CreateRetVoid()
 
-	// Adjust main function.
+	mainWrapper := c.mod.NamedFunction("runtime.mainWrapper")
+	block = c.ctx.AddBasicBlock(mainWrapper, "entry")
+	c.builder.SetInsertPointAtEnd(block)
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
 	if c.ir.NeedsScheduler() {
-		c.mod.NamedFunction("runtime.main_mainAsync").ReplaceAllUsesWith(realMain)
+		coroutine := c.builder.CreateCall(realMain, []llvm.Value{llvm.ConstPointerNull(c.i8ptrType)}, "")
+		scheduler := c.mod.NamedFunction("runtime.scheduler")
+		c.builder.CreateCall(scheduler, []llvm.Value{coroutine}, "")
 	} else {
-		c.mod.NamedFunction("runtime.main_main").ReplaceAllUsesWith(realMain)
+		c.builder.CreateCall(realMain, nil, "")
 	}
-
-	// Only use a scheduler when necessary.
-	if c.ir.NeedsScheduler() {
-		// Enable the scheduler.
-		hasScheduler := c.mod.NamedGlobal("runtime.hasScheduler")
-		hasScheduler.SetInitializer(llvm.ConstInt(llvm.Int1Type(), 1, false))
-		hasScheduler.SetGlobalConstant(true)
-		hasScheduler.SetUnnamedAddr(true)
-	}
+	c.builder.CreateRetVoid()
 
 	// Initialize runtime type information, for interfaces.
 	// See src/runtime/interface.go for more details.
@@ -764,11 +728,11 @@ func (c *Compiler) getDIType(typ types.Type) (llvm.Metadata, error) {
 			encoding = llvm.DW_ATE_address
 		}
 		// TODO: other types
-		return c.dibuilder.CreateBasicType(llvm.DIBasicType{
+		dityp = c.dibuilder.CreateBasicType(llvm.DIBasicType{
 			Name:       name,
 			SizeInBits: sizeInBytes * 8,
 			Encoding:   encoding,
-		}), nil
+		})
 		c.ditypes[name] = dityp
 		return dityp, nil
 	}
@@ -835,7 +799,7 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 		frame.fn.LLVMFn = llvm.AddFunction(c.mod, name, fnType)
 	}
 
-	if c.debug && f.Syntax() != nil && len(f.Blocks) != 0 {
+	if c.Debug && f.Syntax() != nil && len(f.Blocks) != 0 {
 		// Create debug info file if needed.
 		pos := c.ir.Program.Fset.Position(f.Syntax().Pos())
 		if _, ok := c.difiles[pos.Filename]; !ok {
@@ -1165,14 +1129,14 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 }
 
 func (c *Compiler) parseFunc(frame *Frame) error {
-	if c.dumpSSA {
+	if c.DumpSSA {
 		fmt.Printf("\nfunc %s:\n", frame.fn.Function)
 	}
 	if !frame.fn.IsExported() {
 		frame.fn.LLVMFn.SetLinkage(llvm.InternalLinkage)
 	}
 
-	if c.debug {
+	if c.Debug {
 		pos := c.ir.Program.Fset.Position(frame.fn.Pos())
 		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), frame.difunc, llvm.Metadata{})
 	}
@@ -1204,7 +1168,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		frame.locals[param] = c.collapseFormalParam(llvmType, fields)
 
 		// Add debug information to this parameter (if available)
-		if c.debug && frame.fn.Syntax() != nil {
+		if c.Debug && frame.fn.Syntax() != nil {
 			pos := c.ir.Program.Fset.Position(frame.fn.Syntax().Pos())
 			dityp, err := c.getDIType(param.Type())
 			if err != nil {
@@ -1311,7 +1275,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 
 	// Fill blocks with instructions.
 	for _, block := range frame.fn.DomPreorder() {
-		if c.dumpSSA {
+		if c.DumpSSA {
 			fmt.Printf("%s:\n", block.Comment)
 		}
 		c.builder.SetInsertPointAtEnd(frame.blocks[block])
@@ -1320,7 +1284,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 			if _, ok := instr.(*ssa.DebugRef); ok {
 				continue
 			}
-			if c.dumpSSA {
+			if c.DumpSSA {
 				if val, ok := instr.(ssa.Value); ok && val.Name() != "" {
 					fmt.Printf("\t%s = %s\n", val.Name(), val.String())
 				} else {
@@ -1354,7 +1318,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 }
 
 func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
-	if c.debug {
+	if c.Debug {
 		pos := c.ir.Program.Fset.Position(instr.Pos())
 		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), frame.difunc, llvm.Metadata{})
 	}

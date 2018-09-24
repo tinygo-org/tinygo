@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/aykevl/llvm/bindings/go/llvm"
@@ -18,7 +17,14 @@ import (
 
 // Helper function for Compiler object.
 func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, printSizes string, action func(string) error) error {
-	c, err := compiler.NewCompiler(pkgName, spec.Triple, dumpSSA)
+	config := compiler.Config{
+		Triple:    spec.Triple,
+		Debug:     true, // TODO: make configurable
+		DumpSSA:   dumpSSA,
+		RootDir:   sourceDir(),
+		BuildTags: spec.BuildTags,
+	}
+	c, err := compiler.NewCompiler(pkgName, config)
 	if err != nil {
 		return err
 	}
@@ -26,13 +32,13 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, p
 	// Compile Go code to IR.
 	parseErr := func() error {
 		if printIR {
-			// Run this even if c.Parse() panics.
+			// Run this even if c.Compile() panics.
 			defer func() {
 				fmt.Println("Generated LLVM IR:")
 				fmt.Println(c.IR())
 			}()
 		}
-		return c.Parse(pkgName, sourceDir(), spec.BuildTags)
+		return c.Compile(pkgName)
 	}()
 	if parseErr != nil {
 		return parseErr
@@ -190,18 +196,24 @@ func Flash(pkgName, target, port string, printIR, dumpSSA bool, printSizes strin
 
 // Run the specified package directly (using JIT or interpretation).
 func Run(pkgName string) error {
-	c, err := compiler.NewCompiler(pkgName, llvm.DefaultTargetTriple(), false)
+	config := compiler.Config{
+		RootDir: sourceDir(),
+	}
+	c, err := compiler.NewCompiler(pkgName, config)
 	if err != nil {
 		return errors.New("compiler: " + err.Error())
 	}
-	err = c.Parse(pkgName, sourceDir(), []string{runtime.GOOS, runtime.GOARCH})
+	err = c.Compile(pkgName)
 	if err != nil {
 		return errors.New("compiler: " + err.Error())
 	}
 	if err := c.Verify(); err != nil {
 		return errors.New("compiler error: failed to verify module: " + err.Error())
 	}
-	c.Optimize(1, 0, 0) // -O1, the fastest optimization level that doesn't crash
+	// -Oz, which is the fastest optimization level (faster than -O0, -O1, -O2
+	// and -Os). Turn off the inliner, as the inliner increases optimization
+	// time.
+	c.Optimize(2, 2, 0)
 
 	engine, err := llvm.NewExecutionEngine(c.Module())
 	if err != nil {
@@ -285,7 +297,7 @@ func main() {
 			os.Exit(1)
 		}
 		if *target != llvm.DefaultTargetTriple() {
-			fmt.Fprintf(os.Stderr, "Cannot run %s: target triple does not match host triple.")
+			fmt.Fprintf(os.Stderr, "Cannot run %s: target triple does not match host triple.", *target)
 			os.Exit(1)
 		}
 		err := Run(flag.Arg(0))

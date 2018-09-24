@@ -109,15 +109,84 @@ func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 	program := ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions|ssa.BareInits|ssa.GlobalDebug)
 	program.Build()
 
-	return &Program{
+	// Find the main package, which is a bit difficult when running a .go file
+	// directly.
+	mainPkg := program.ImportedPackage(mainPath)
+	if mainPkg == nil {
+		for _, pkgInfo := range program.AllPackages() {
+			if pkgInfo.Pkg.Name() == "main" {
+				if mainPkg != nil {
+					panic("more than one main package found")
+				}
+				mainPkg = pkgInfo
+			}
+		}
+	}
+	if mainPkg == nil {
+		panic("could not find main package")
+	}
+
+	// Make a list of packages in import order.
+	packageList := []*ssa.Package{}
+	packageSet := map[string]struct{}{}
+	worklist := []string{"runtime", mainPath}
+	for len(worklist) != 0 {
+		pkgPath := worklist[0]
+		var pkg *ssa.Package
+		if pkgPath == mainPath {
+			pkg = mainPkg // necessary for compiling individual .go files
+		} else {
+			pkg = program.ImportedPackage(pkgPath)
+		}
+		if pkg == nil {
+			// Non-SSA package (e.g. cgo).
+			packageSet[pkgPath] = struct{}{}
+			worklist = worklist[1:]
+			continue
+		}
+		if _, ok := packageSet[pkgPath]; ok {
+			// Package already in the final package list.
+			worklist = worklist[1:]
+			continue
+		}
+
+		unsatisfiedImports := make([]string, 0)
+		imports := pkg.Pkg.Imports()
+		for _, pkg := range imports {
+			if _, ok := packageSet[pkg.Path()]; ok {
+				continue
+			}
+			unsatisfiedImports = append(unsatisfiedImports, pkg.Path())
+		}
+		if len(unsatisfiedImports) == 0 {
+			// All dependencies of this package are satisfied, so add this
+			// package to the list.
+			packageList = append(packageList, pkg)
+			packageSet[pkgPath] = struct{}{}
+			worklist = worklist[1:]
+		} else {
+			// Prepend all dependencies to the worklist and reconsider this
+			// package (by not removing it from the worklist). At that point, it
+			// must be possible to add it to packageList.
+			worklist = append(unsatisfiedImports, worklist...)
+		}
+	}
+
+	p := &Program{
 		Program:              program,
-		mainPkg:              program.ImportedPackage(mainPath),
+		mainPkg:              mainPkg,
 		functionMap:          make(map[*ssa.Function]*Function),
 		globalMap:            make(map[*ssa.Global]*Global),
 		methodSignatureNames: make(map[string]int),
 		interfaces:           make(map[string]*Interface),
 		comments:             comments,
 	}
+
+	for _, pkg := range packageList {
+		p.AddPackage(pkg)
+	}
+
+	return p
 }
 
 // Add a package to this Program. All packages need to be added first before any
