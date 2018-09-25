@@ -16,10 +16,10 @@ import (
 )
 
 // Helper function for Compiler object.
-func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, printSizes string, action func(string) error) error {
+func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA, debug bool, printSizes string, action func(string) error) error {
 	config := compiler.Config{
 		Triple:    spec.Triple,
-		Debug:     true, // TODO: make configurable
+		Debug:     debug,
 		DumpSSA:   dumpSSA,
 		RootDir:   sourceDir(),
 		BuildTags: spec.BuildTags,
@@ -139,13 +139,13 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA bool, p
 	}
 }
 
-func Build(pkgName, outpath, target string, printIR, dumpSSA bool, printSizes string) error {
+func Build(pkgName, outpath, target string, printIR, dumpSSA, debug bool, printSizes string) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
 	}
 
-	return Compile(pkgName, outpath, spec, printIR, dumpSSA, printSizes, func(tmppath string) error {
+	return Compile(pkgName, outpath, spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
 		if err := os.Rename(tmppath, outpath); err != nil {
 			// Moving failed. Do a file copy.
 			inf, err := os.Open(tmppath)
@@ -173,13 +173,13 @@ func Build(pkgName, outpath, target string, printIR, dumpSSA bool, printSizes st
 	})
 }
 
-func Flash(pkgName, target, port string, printIR, dumpSSA bool, printSizes string) error {
+func Flash(pkgName, target, port string, printIR, dumpSSA, debug bool, printSizes string) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
 	}
 
-	return Compile(pkgName, ".hex", spec, printIR, dumpSSA, printSizes, func(tmppath string) error {
+	return Compile(pkgName, ".hex", spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
 		// Create the command.
 		flashCmd := spec.Flasher
 		flashCmd = strings.Replace(flashCmd, "{hex}", tmppath, -1)
@@ -247,6 +247,7 @@ func main() {
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
+	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
 
 	if len(os.Args) < 2 {
@@ -272,7 +273,7 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Build(flag.Arg(0), *outpath, *target, *printIR, *dumpSSA, *printSize)
+		err := Build(flag.Arg(0), *outpath, *target, *printIR, *dumpSSA, !*nodebug, *printSize)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
@@ -283,7 +284,7 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Flash(flag.Arg(0), *target, *port, *printIR, *dumpSSA, *printSize)
+		err := Flash(flag.Arg(0), *target, *port, *printIR, *dumpSSA, !*nodebug, *printSize)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
