@@ -122,16 +122,6 @@ func (pwm PWM) Set(value uint16) {
 	}
 }
 
-// ADC on the Arduino
-const (
-	ADC0 = 0
-	ADC1 = 1
-	ADC2 = 2
-	ADC3 = 3
-	ADC4 = 4 // Used by TWI for SDA
-	ADC5 = 5 // Used by TWI for SCL
-)
-
 // InitADC initializes the registers needed for ADC.
 func InitADC() {
 	// set a2d prescaler so we are inside the desired 50-200 KHz range at 16MHz.

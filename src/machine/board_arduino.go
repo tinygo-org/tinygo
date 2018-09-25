@@ -13,6 +13,6 @@ const (
 	ADC1 = 1
 	ADC2 = 2
 	ADC3 = 3
-	ADC4 = 4
-	ADC5 = 5
+	ADC4 = 4 // Used by TWI for SDA
+	ADC5 = 5 // Used by TWI for SCL
 )
