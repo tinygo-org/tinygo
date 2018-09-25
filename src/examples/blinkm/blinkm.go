@@ -1,4 +1,5 @@
 // Connects to an BlinkM I2C RGB LED.
+// http://thingm.com/fileadmin/thingm/downloads/BlinkM_datasheet.pdf
 package main
 
 import (
@@ -23,13 +24,16 @@ func main() {
 
 		switch count {
 		case 0:
-			machine.I2C0.WriteTo(0x09, []byte{0x99, 0xff, 0x00})
+			// Crimson
+			machine.I2C0.WriteTo(0x09, []byte{0xdc, 0x14, 0x3c})
 			count = 1
 		case 1:
-			machine.I2C0.WriteTo(0x09, []byte{0x00, 0x99, 0xff})
+			// MediumPurple
+			machine.I2C0.WriteTo(0x09, []byte{0x93, 0x70, 0xdb})
 			count = 2
 		case 2:
-			machine.I2C0.WriteTo(0x09, []byte{0xff, 0x99, 0x00})
+			// MediumSeaGreen
+			machine.I2C0.WriteTo(0x09, []byte{0x3c, 0xb3, 0x71})
 			count = 0
 		}
 

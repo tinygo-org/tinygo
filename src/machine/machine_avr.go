@@ -6,8 +6,6 @@ import (
 	"device/avr"
 )
 
-const CPU_FREQUENCY = 16000000
-
 type GPIOMode uint8
 
 const (
@@ -251,7 +249,7 @@ func (i2c I2C) ReadFrom(address uint8, data []byte) {
 	i2c.Stop()
 }
 
-// CWriteByte writes a single byte to the I2C bus.
+// WriteByte writes a single byte to the I2C bus.
 func (i2c I2C) WriteByte(data byte) {
 	// Write data to register.
 	*avr.TWDR = avr.RegValue(data)
