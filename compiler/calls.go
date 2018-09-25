@@ -14,6 +14,7 @@ import (
 //       {i8*, i32}         -> i8*, i32
 //       {{i8*, i32}, i16}  -> i8*, i32, i16
 //       {{i64}}            -> i64
+//       {}                 ->
 //       {i8*, i32, i8, i8} -> {i8*, i32, i8, i8}
 //     Note that all native Go data types that don't exist in LLVM (string,
 //     slice, interface, fat function pointer) can be expanded this way, making
@@ -92,8 +93,8 @@ func (c *Compiler) expandFormalParam(v llvm.Value) []llvm.Value {
 func (c *Compiler) flattenAggregateType(t llvm.Type) []llvm.Type {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
-		fields := make([]llvm.Type, 0, len(t.Subtypes()))
-		for _, subfield := range t.Subtypes() {
+		fields := make([]llvm.Type, 0, t.StructElementTypesCount())
+		for _, subfield := range t.StructElementTypes() {
 			subfields := c.flattenAggregateType(subfield)
 			fields = append(fields, subfields...)
 		}
@@ -108,8 +109,8 @@ func (c *Compiler) flattenAggregateType(t llvm.Type) []llvm.Type {
 func (c *Compiler) flattenAggregate(v llvm.Value) []llvm.Value {
 	switch v.Type().TypeKind() {
 	case llvm.StructTypeKind:
-		fields := make([]llvm.Value, 0, len(v.Type().Subtypes()))
-		for i := range v.Type().Subtypes() {
+		fields := make([]llvm.Value, 0, v.Type().StructElementTypesCount())
+		for i := range v.Type().StructElementTypes() {
 			subfield := c.builder.CreateExtractValue(v, i, "")
 			subfields := c.flattenAggregate(subfield)
 			fields = append(fields, subfields...)
@@ -138,7 +139,7 @@ func (c *Compiler) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value)
 			if err != nil {
 				panic("could not get zero value of struct: " + err.Error())
 			}
-			for i, subtyp := range t.Subtypes() {
+			for i, subtyp := range t.StructElementTypes() {
 				structField, remaining := c.collapseFormalParamInternal(subtyp, fields)
 				fields = remaining
 				value = c.builder.CreateInsertValue(value, structField, i, "")
