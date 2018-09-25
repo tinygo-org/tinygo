@@ -29,6 +29,9 @@ func main() {
 	// print float64
 	println(3.14)
 
+	// print interface
+	println(interface{}(nil))
+
 	// print map
 	println(map[string]int{"three": 3, "five": 5})
 
