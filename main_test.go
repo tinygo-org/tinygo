@@ -56,6 +56,7 @@ func runTest(path, tmpdir string, t *testing.T) {
 	if err != nil {
 		t.Log("failed to build:", err)
 		t.Fail()
+		return
 	}
 
 	// Run the test.
