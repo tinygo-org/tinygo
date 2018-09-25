@@ -57,6 +57,9 @@ fmt:
 	@go fmt . ./compiler ./ir ./src/examples/* ./src/machine ./src/runtime ./src/sync
 	@go fmt ./testdata/*.go
 
+test:
+	@go test .
+
 gen-device: gen-device-nrf gen-device-avr
 
 gen-device-nrf:
