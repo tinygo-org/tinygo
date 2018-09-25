@@ -55,6 +55,7 @@ clean:
 
 fmt:
 	@go fmt . ./compiler ./ir ./src/examples/* ./src/machine ./src/runtime ./src/sync
+	@go fmt ./testdata/*.go
 
 gen-device: gen-device-nrf gen-device-avr
 
