@@ -157,3 +157,119 @@ func (a ADC) Get() uint16 {
 	high := uint16(*avr.ADCH)
 	return uint16(low) | uint16(high<<8)
 }
+
+// I2C on the Arduino
+type I2C struct {
+	// Cannot have just an empty struct or compile optimization fails.
+	Bus uint8
+}
+
+// I2C0 is the only I2C interface on the Arduino.
+var I2C0 = I2C{}
+
+// TWI_FREQ is the bus speed. Normally either 100 kHz, or 400 kHz for high-speed bus.
+const (
+	TWI_FREQ_100KHZ = 100000
+	TWI_FREQ_400KHZ = 400000
+)
+
+// I2CConfig does not do much of anything on Arduino.
+type I2CConfig struct {
+	Frequency uint32
+}
+
+// Configure is intended to setup the I2C interface.
+func (i2c I2C) Configure(config I2CConfig) {
+	// Default I2C bus speed is 100 kHz.
+	if config.Frequency == 0 {
+		config.Frequency = TWI_FREQ_100KHZ
+	}
+
+	// Activate internal pullups for twi.
+	*avr.PORTC |= (avr.DIDR0_ADC4D | avr.DIDR0_ADC5D)
+
+	// Initialize twi prescaler and bit rate.
+	*avr.TWSR |= (avr.TWSR_TWPS0 | avr.TWSR_TWPS1)
+
+	// twi bit rate formula from atmega128 manual pg. 204:
+	// SCL Frequency = CPU Clock Frequency / (16 + (2 * TWBR))
+	// NOTE: TWBR should be 10 or higher for master mode.
+	// It is 72 for a 16mhz board with 100kHz TWI
+	*avr.TWBR = avr.RegValue(((CPU_FREQUENCY / config.Frequency) - 16) / 2)
+
+	// Enable twi module.
+	*avr.TWCR = avr.TWCR_TWEN
+}
+
+// Start starts an I2C communication session.
+func (i2c I2C) Start() {
+	// Clear TWI interrupt flag, put start condition on SDA, and enable TWI.
+	*avr.TWCR = (avr.TWCR_TWINT | avr.TWCR_TWSTA | avr.TWCR_TWEN)
+
+	// Wait till start condition is transmitted.
+	for (*avr.TWCR & avr.TWCR_TWINT) == 0 {
+	}
+}
+
+// Stop ends an I2C communication session.
+func (i2c I2C) Stop() {
+	// Send stop condition.
+	*avr.TWCR = (avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWSTO)
+
+	// Wait for stop condition to be executed on bus.
+	for (*avr.TWCR & avr.TWCR_TWSTO) == 0 {
+	}
+}
+
+// WriteTo writes a slice of data bytes to a peripheral with a specific address.
+func (i2c I2C) WriteTo(address uint8, data []byte) {
+	i2c.Start()
+
+	// Write 7-bit shifted peripheral address plus write flag(0)
+	i2c.WriteByte(address << 1)
+
+	for _, v := range data {
+		i2c.WriteByte(v)
+	}
+
+	i2c.Stop()
+}
+
+// ReadFrom reads a slice of data bytes from an I2C peripheral with a specific address.
+func (i2c I2C) ReadFrom(address uint8, data []byte) {
+	i2c.Start()
+
+	// Write 7-bit shifted peripheral address + read flag(1)
+	i2c.WriteByte(address<<1 + 1)
+
+	for i, _ := range data {
+		data[i] = i2c.ReadByte()
+	}
+
+	i2c.Stop()
+}
+
+// WriteByte writes a single byte to the I2C bus.
+func (i2c I2C) WriteByte(data byte) {
+	// Write data to register.
+	*avr.TWDR = avr.RegValue(data)
+
+	// Clear TWI interrupt flag and enable TWI.
+	*avr.TWCR = (avr.TWCR_TWEN | avr.TWCR_TWINT)
+
+	// Wait till data is transmitted.
+	for (*avr.TWCR & avr.TWCR_TWINT) == 0 {
+	}
+}
+
+// ReadByte reads a single byte from the I2C bus.
+func (i2c I2C) ReadByte() byte {
+	// Clear TWI interrupt flag and enable TWI.
+	*avr.TWCR = (avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWEA)
+
+	// Wait till read request is transmitted.
+	for (*avr.TWCR & avr.TWCR_TWINT) == 0 {
+	}
+
+	return byte(*avr.TWDR)
+}

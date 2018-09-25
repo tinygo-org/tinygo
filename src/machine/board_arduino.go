@@ -2,6 +2,8 @@
 
 package machine
 
+const CPU_FREQUENCY = 16000000
+
 // LED on the Arduino
 const LED = 13
 
