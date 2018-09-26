@@ -54,9 +54,10 @@ func init() {
 }
 
 func initUART() {
-	// Initialize UART at 115200 baud when running at 16MHz.
+	// Initialize UART at 9600 baud when running at 16MHz.
 	*avr.UBRR0H = 0
-	*avr.UBRR0L = 8
+	*avr.UBRR0L = 0x67
+
 	*avr.UCSR0B = avr.UCSR0B_RXEN0 | avr.UCSR0B_TXEN0   // enable RX and TX
 	*avr.UCSR0C = avr.UCSR0C_UCSZ01 | avr.UCSR0C_UCSZ00 // 8-bits data
 }
