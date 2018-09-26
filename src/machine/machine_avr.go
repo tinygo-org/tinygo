@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/avr"
+	"errors"
 )
 
 type GPIOMode uint8
@@ -270,4 +271,110 @@ func (i2c I2C) ReadByte() byte {
 	}
 
 	return byte(*avr.TWDR)
+}
+
+// UART
+
+type UARTConfig struct {
+	Baudrate uint32
+}
+
+type UART struct {
+}
+
+var (
+	// UART0 is the hardware serial port on the AVR.
+	UART0 = &UART{}
+)
+
+// Configure the UART on the AVR.
+func (uart UART) Configure(config UARTConfig) {
+	// enable RX interrupt
+	*avr.UCSR0B |= avr.UCSR0B_RXCIE0
+}
+
+// Close the UART on the AVR.
+func (uart UART) Close() error {
+	return nil
+}
+
+// Read from the RX buffer.
+func (uart UART) Read(data []byte) (n int, err error) {
+	if len(data) > RXBufferSize {
+		return 0, errors.New("Read buffer cannot be larger than RXBuffer")
+	}
+
+	// check if RX buffer is empty
+	size := BufferUsed()
+	if size == 0 {
+		return 0, nil
+	}
+
+	// only read number of bytes used from buffer
+	for i := 0; uint8(i) < size; i++ {
+		data[i] = byte(bufferGet())
+	}
+
+	return len(data), nil
+}
+
+// Write data to the UART.
+func (uart UART) Write(data []byte) (n int, err error) {
+	for _, v := range data {
+		uart.WriteByte(v)
+	}
+	return len(data), nil
+}
+
+// ReadByte reads a single byte from the RX buffer.
+func (uart UART) ReadByte() (byte, error) {
+	return byte(bufferGet()), nil
+}
+
+// WriteByte writes a byte of data to the UART.
+func (uart UART) WriteByte(c byte) error {
+	// Wait until UART buffer is not busy.
+	for (*avr.UCSR0A & avr.UCSR0A_UDRE0) == 0 {
+	}
+	*avr.UDR0 = avr.RegValue(c) // send char
+	return nil
+}
+
+type __volatile byte
+
+const RXBufferSize = 64
+
+// Minimal ring buffer implementation inspired by post at
+// https://www.embeddedrelated.com/showthread/comp.arch.embedded/77084-1.php
+var rxbuffer [RXBufferSize]__volatile
+var head __volatile
+var tail __volatile
+
+func BufferUsed() uint8 {
+	return uint8(bufferUsed())
+}
+
+func bufferUsed() __volatile { return head - tail }
+func bufferPut(val __volatile) {
+	if bufferUsed() != RXBufferSize {
+		head++
+		rxbuffer[head%RXBufferSize] = val
+	}
+}
+func bufferGet() __volatile {
+	if bufferUsed() != 0 {
+		tail++
+		return rxbuffer[tail%RXBufferSize]
+	}
+	return 0
+}
+
+//go:interrupt USART_RX_vect
+func handleUSART_RX() {
+	// Wait until UART RX buffer is ready.
+	for (*avr.UCSR0A & avr.UCSR0A_RXC0) == 0 {
+	}
+
+	// Read data from UDR register.
+	bufferPut(__volatile(*avr.UDR0))
 }
