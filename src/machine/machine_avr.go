@@ -289,6 +289,17 @@ var (
 
 // Configure the UART on the AVR.
 func (uart UART) Configure(config UARTConfig) {
+	// default to 115200
+	if config.Baudrate == 0 {
+		config.Baudrate = 115200
+	}
+
+	// Set baud rate based on prescale formula:
+	// BAUD_PRESCALE = (((F_CPU / (BAUDRATE * 16UL))) - 1)
+	ps := (CPU_FREQUENCY / (config.Baudrate * 16)) - 1
+	*avr.UBRR0H = avr.RegValue(ps >> 8)
+	*avr.UBRR0L = avr.RegValue(ps)
+
 	// enable RX interrupt
 	*avr.UCSR0B |= avr.UCSR0B_RXCIE0
 }
@@ -371,10 +382,12 @@ func bufferGet() __volatile {
 
 //go:interrupt USART_RX_vect
 func handleUSART_RX() {
-	// Wait until UART RX buffer is ready.
-	for (*avr.UCSR0A & avr.UCSR0A_RXC0) == 0 {
+	// Wait until UART data buffer is ready.
+	for (*avr.UCSR0A & avr.UCSR0A_UDRE0) == 0 {
 	}
 
-	// Read data from UDR register.
-	bufferPut(__volatile(*avr.UDR0))
+	if (*avr.UCSR0A & (avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0)) == 0 {
+		// Read data from UDR register.
+		bufferPut(__volatile(*avr.UDR0))
+	}
 }
