@@ -1,4 +1,4 @@
-// This is a mini-console running on the device UART.
+// This is a echo console running on the device UART.
 // Connect using 57600 baud, 8-N-1 with your terminal program.
 package main
 
@@ -10,7 +10,7 @@ import (
 func main() {
 	// Set baudrate to 56k for an Arduino Uno to be error-free.
 	machine.UART0.Configure(machine.UARTConfig{Baudrate: 57600})
-	machine.UART0.Write([]byte("UART console enabled...\r\n"))
+	machine.UART0.Write([]byte("Echo console enabled. Type something then press enter:\r\n"))
 
 	input := make([]byte, 64)
 	i := 0
@@ -29,11 +29,8 @@ func main() {
 				// return key
 				machine.UART0.Write([]byte("\r\n"))
 				machine.UART0.Write([]byte("You typed: "))
-				machine.UART0.Write(input)
+				machine.UART0.Write(input[:i])
 				machine.UART0.Write([]byte("\r\n"))
-				for j := 0; j < len(input); j++ {
-					input[j] = 0
-				}
 				i = 0
 			default:
 				// just echo the character

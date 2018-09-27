@@ -311,12 +311,12 @@ func (uart UART) Close() error {
 
 // Read from the RX buffer.
 func (uart UART) Read(data []byte) (n int, err error) {
-	if len(data) > RXBufferSize {
-		return 0, errors.New("Read buffer cannot be larger than RXBuffer")
+	if len(data) > bufferSize {
+		return 0, errors.New("Read buffer cannot be larger than RX Buffer")
 	}
 
 	// check if RX buffer is empty
-	size := BufferUsed()
+	size := uart.BufferUsed()
 	if size == 0 {
 		return 0, nil
 	}
@@ -353,29 +353,29 @@ func (uart UART) WriteByte(c byte) error {
 
 type __volatile byte
 
-const RXBufferSize = 64
+const bufferSize = 64
 
 // Minimal ring buffer implementation inspired by post at
 // https://www.embeddedrelated.com/showthread/comp.arch.embedded/77084-1.php
-var rxbuffer [RXBufferSize]__volatile
+var rxbuffer [bufferSize]__volatile
 var head __volatile
 var tail __volatile
 
-func BufferUsed() uint8 {
-	return uint8(bufferUsed())
+func (uart UART) BufferUsed() uint8 {
+	return bufferUsed()
 }
 
-func bufferUsed() __volatile { return head - tail }
+func bufferUsed() uint8 { return uint8(head - tail) }
 func bufferPut(val __volatile) {
-	if bufferUsed() != RXBufferSize {
+	if bufferUsed() != bufferSize {
 		head++
-		rxbuffer[head%RXBufferSize] = val
+		rxbuffer[head%bufferSize] = val
 	}
 }
-func bufferGet() __volatile {
+func bufferGet() byte {
 	if bufferUsed() != 0 {
 		tail++
-		return rxbuffer[tail%RXBufferSize]
+		return byte(rxbuffer[tail%bufferSize])
 	}
 	return 0
 }
