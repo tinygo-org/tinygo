@@ -358,18 +358,20 @@ func (uart UART) Buffered() int {
 	return int(bufferUsed())
 }
 
-type __volatile byte
-
 const bufferSize = 64
 
 // Minimal ring buffer implementation inspired by post at
 // https://www.embeddedrelated.com/showthread/comp.arch.embedded/77084-1.php
-var rxbuffer [bufferSize]__volatile
-var head __volatile
-var tail __volatile
+
+//go:volatile
+type volatileByte byte
+
+var rxbuffer [bufferSize]volatileByte
+var head volatileByte
+var tail volatileByte
 
 func bufferUsed() uint8 { return uint8(head - tail) }
-func bufferPut(val __volatile) {
+func bufferPut(val volatileByte) {
 	if bufferUsed() != bufferSize {
 		head++
 		rxbuffer[head%bufferSize] = val
@@ -391,6 +393,6 @@ func handleUSART_RX() {
 
 	if (*avr.UCSR0A & (avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0)) == 0 {
 		// Read data from UDR register.
-		bufferPut(__volatile(*avr.UDR0))
+		bufferPut(volatileByte(*avr.UDR0))
 	}
 }
