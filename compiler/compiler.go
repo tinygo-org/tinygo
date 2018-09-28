@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aykevl/llvm/bindings/go/llvm"
+	"github.com/aykevl/go-llvm"
 	"github.com/aykevl/tinygo/ir"
 	"go/parser"
 	"golang.org/x/tools/go/loader"

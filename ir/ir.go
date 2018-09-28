@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aykevl/llvm/bindings/go/llvm"
+	"github.com/aykevl/go-llvm"
 	"golang.org/x/tools/go/loader"
 	"golang.org/x/tools/go/ssa"
 	"golang.org/x/tools/go/ssa/ssautil"
