@@ -4,7 +4,6 @@ package machine
 
 import (
 	"device/avr"
-	"errors"
 )
 
 type GPIOMode uint8
@@ -311,18 +310,14 @@ func (uart UART) Close() error {
 
 // Read from the RX buffer.
 func (uart UART) Read(data []byte) (n int, err error) {
-	if len(data) > bufferSize {
-		return 0, errors.New("Read buffer cannot be larger than RX Buffer")
-	}
-
 	// check if RX buffer is empty
-	size := uart.BufferUsed()
+	size := uart.Buffered()
 	if size == 0 {
 		return 0, nil
 	}
 
 	// only read number of bytes used from buffer
-	for i := 0; uint8(i) < size; i++ {
+	for i := 0; i < size; i++ {
 		data[i] = byte(bufferGet())
 	}
 
@@ -361,8 +356,8 @@ var rxbuffer [bufferSize]__volatile
 var head __volatile
 var tail __volatile
 
-func (uart UART) BufferUsed() uint8 {
-	return bufferUsed()
+func (uart UART) Buffered() int {
+	return int(bufferUsed())
 }
 
 func bufferUsed() uint8 { return uint8(head - tail) }
