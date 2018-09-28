@@ -17,13 +17,11 @@ func main() {
 	for {
 		if machine.UART0.Buffered() > 0 {
 			data, _ := machine.UART0.ReadByte()
-			// if err == nil {
+
 			// Remove high-order bit because 7-bit ascii
 			data &^= 0x80
 
 			switch data {
-			// case 0:
-			// 	break
 			case 13:
 				// return key
 				machine.UART0.Write([]byte("\r\n"))
