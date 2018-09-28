@@ -81,9 +81,10 @@ func ticks() timeUnit {
 	return timestamp
 }
 
-type __volatile bool
+//go:volatile
+type isrFlag bool
 
-var rtc_wakeup __volatile
+var rtc_wakeup isrFlag
 
 func rtc_sleep(ticks uint32) {
 	nrf.RTC0.INTENSET = nrf.RTC_INTENSET_COMPARE0

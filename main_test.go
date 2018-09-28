@@ -52,7 +52,7 @@ func runTest(path, tmpdir string, t *testing.T) {
 
 	// Build the test binary.
 	binary := filepath.Join(tmpdir, "test")
-	err = Build(path, binary, "", false, false, "")
+	err = Build(path, binary, "", false, false, false, "")
 	if err != nil {
 		t.Log("failed to build:", err)
 		t.Fail()

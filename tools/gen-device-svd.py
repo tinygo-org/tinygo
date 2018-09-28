@@ -216,11 +216,10 @@ package {pkgName}
 
 import "unsafe"
 
-// Magic type name for the compiler.
-type __volatile uint32
-
-// Export this magic type name.
-type RegValue = __volatile
+// Special type that causes loads/stores to be volatile (necessary for
+// memory-mapped registers).
+//go:volatile
+type RegValue uint32
 
 // Some information about this device.
 const (
@@ -255,14 +254,14 @@ const (
             if address < register['address']:
                 numSkip = (register['address'] - address) // 4
                 if numSkip == 1:
-                    out.write('\t_padding{padNumber} __volatile\n'.format(padNumber=padNumber))
+                    out.write('\t_padding{padNumber} RegValue\n'.format(padNumber=padNumber))
                 else:
-                    out.write('\t_padding{padNumber} [{num}]__volatile\n'.format(padNumber=padNumber, num=numSkip))
+                    out.write('\t_padding{padNumber} [{num}]RegValue\n'.format(padNumber=padNumber, num=numSkip))
                 padNumber += 1
 
-            regType = '__volatile'
+            regType = 'RegValue'
             if register['array'] is not None:
-                regType = '[{}]__volatile'.format(register['array'])
+                regType = '[{}]RegValue'.format(register['array'])
             out.write('\t{name} {regType}\n'.format(**register, regType=regType))
 
             # next address
