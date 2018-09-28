@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/aykevl/llvm/bindings/go/llvm"
+	"github.com/aykevl/go-llvm"
 	"github.com/aykevl/tinygo/compiler"
 )
 

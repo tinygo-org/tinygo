@@ -1,7 +1,7 @@
 package compiler
 
 import (
-	"github.com/aykevl/llvm/bindings/go/llvm"
+	"github.com/aykevl/go-llvm"
 	"golang.org/x/tools/go/ssa"
 )
 
