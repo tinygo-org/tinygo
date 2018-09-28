@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/avr"
+	"errors"
 )
 
 type GPIOMode uint8
@@ -318,7 +319,8 @@ func (uart UART) Read(data []byte) (n int, err error) {
 
 	// only read number of bytes used from buffer
 	for i := 0; i < size; i++ {
-		data[i] = byte(bufferGet())
+		v, _ := uart.ReadByte()
+		data[i] = byte(v)
 	}
 
 	return len(data), nil
@@ -334,7 +336,12 @@ func (uart UART) Write(data []byte) (n int, err error) {
 
 // ReadByte reads a single byte from the RX buffer.
 func (uart UART) ReadByte() (byte, error) {
-	return byte(bufferGet()), nil
+	// check if RX buffer is empty
+	if uart.Buffered() == 0 {
+		return 0, errors.New("Buffer empty")
+	}
+
+	return bufferGet(), nil
 }
 
 // WriteByte writes a byte of data to the UART.
@@ -346,6 +353,11 @@ func (uart UART) WriteByte(c byte) error {
 	return nil
 }
 
+// Buffered returns the number of bytes current stored in the RX buffer.
+func (uart UART) Buffered() int {
+	return int(bufferUsed())
+}
+
 type __volatile byte
 
 const bufferSize = 64
@@ -355,10 +367,6 @@ const bufferSize = 64
 var rxbuffer [bufferSize]__volatile
 var head __volatile
 var tail __volatile
-
-func (uart UART) Buffered() int {
-	return int(bufferUsed())
-}
 
 func bufferUsed() uint8 { return uint8(head - tail) }
 func bufferPut(val __volatile) {

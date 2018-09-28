@@ -15,16 +15,15 @@ func main() {
 	input := make([]byte, 64)
 	i := 0
 	for {
-		data, err := machine.UART0.ReadByte()
-		if err != nil {
-			machine.UART0.Write([]byte("input error!\r\n"))
-		} else {
+		if machine.UART0.Buffered() > 0 {
+			data, _ := machine.UART0.ReadByte()
+			// if err == nil {
 			// Remove high-order bit because 7-bit ascii
 			data &^= 0x80
 
 			switch data {
-			case 0:
-				break
+			// case 0:
+			// 	break
 			case 13:
 				// return key
 				machine.UART0.Write([]byte("\r\n"))
