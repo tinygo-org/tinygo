@@ -33,8 +33,8 @@ import (
 	"unsafe"
 )
 
-type __volatile uint32
-type RegValue = __volatile
+//go:volatile
+type RegValue uint32
 
 type __asm string
 
@@ -47,7 +47,7 @@ const (
 
 // Nested Vectored Interrupt Controller (NVIC).
 type NVIC_Type struct {
-	ISER [8]__volatile
+	ISER [8]RegValue
 }
 
 var NVIC = (*NVIC_Type)(unsafe.Pointer(uintptr(NVIC_BASE)))
