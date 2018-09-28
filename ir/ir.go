@@ -425,6 +425,9 @@ func (p *Program) IsVolatile(t types.Type) bool {
 	if t, ok := t.(*types.Named); !ok {
 		return false
 	} else {
+		if t.Obj().Pkg() == nil {
+			return false
+		}
 		id := t.Obj().Pkg().Path() + "." + t.Obj().Name()
 		doc := p.comments[id]
 		if doc == nil {
