@@ -181,6 +181,10 @@ func Flash(pkgName, target, port string, printIR, dumpSSA, debug bool, printSize
 	}
 
 	return Compile(pkgName, ".hex", spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
+		if spec.Flasher == "" {
+			return errors.New("no flash command specified - did you miss a -target flag?")
+		}
+
 		// Create the command.
 		flashCmd := spec.Flasher
 		flashCmd = strings.Replace(flashCmd, "{hex}", tmppath, -1)
