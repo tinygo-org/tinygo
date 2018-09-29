@@ -75,7 +75,7 @@ var (
 // handling the overflow event.
 func ticks() timeUnit {
 	rtcCounter := uint32(nrf.RTC0.COUNTER)
-	offset := (rtcCounter - rtcLastCounter) % 0xffffff // change since last measurement
+	offset := (rtcCounter - rtcLastCounter) & 0xffffff // change since last measurement
 	rtcLastCounter = rtcCounter
 	timestamp += timeUnit(offset) // TODO: not precise
 	return timestamp
