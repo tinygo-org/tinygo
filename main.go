@@ -22,6 +22,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA, debug 
 		Debug:     debug,
 		DumpSSA:   dumpSSA,
 		RootDir:   sourceDir(),
+		GOPATH:    getGopath(),
 		BuildTags: spec.BuildTags,
 	}
 	c, err := compiler.NewCompiler(pkgName, config)
@@ -198,6 +199,7 @@ func Flash(pkgName, target, port string, printIR, dumpSSA, debug bool, printSize
 func Run(pkgName string) error {
 	config := compiler.Config{
 		RootDir: sourceDir(),
+		GOPATH:  getGopath(),
 	}
 	c, err := compiler.NewCompiler(pkgName, config)
 	if err != nil {

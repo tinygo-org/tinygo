@@ -34,6 +34,7 @@ type Config struct {
 	DumpSSA   bool     // dump Go SSA, for compiler debugging
 	Debug     bool     // add debug symbols for gdb
 	RootDir   string   // GOROOT for TinyGo
+	GOPATH    string   // GOPATH, like `go env GOPATH`
 	BuildTags []string // build tags for TinyGo (empty means {runtime.GOOS/runtime.GOARCH})
 }
 
@@ -151,6 +152,15 @@ func (c *Compiler) Module() llvm.Module {
 func (c *Compiler) Compile(mainPath string) error {
 	tripleSplit := strings.Split(c.Triple, "-")
 
+	// Prefix the GOPATH with the system GOROOT, as GOROOT is already set to
+	// the TinyGo root.
+	gopath := c.GOPATH
+	if gopath == "" {
+		gopath = runtime.GOROOT()
+	} else {
+		gopath = runtime.GOROOT() + string(filepath.ListSeparator) + gopath
+	}
+
 	config := loader.Config{
 		TypeChecker: types.Config{
 			Sizes: &StdSizes{
@@ -163,7 +173,7 @@ func (c *Compiler) Compile(mainPath string) error {
 			GOARCH:      tripleSplit[0],
 			GOOS:        tripleSplit[2],
 			GOROOT:      c.RootDir,
-			GOPATH:      runtime.GOROOT(),
+			GOPATH:      gopath,
 			CgoEnabled:  true,
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers

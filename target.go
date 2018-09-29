@@ -58,3 +58,24 @@ func sourceDir() string {
 	_, path, _, _ := runtime.Caller(0)
 	return filepath.Dir(path)
 }
+
+func getGopath() string {
+	gopath := os.Getenv("GOPATH")
+	if gopath != "" {
+		return gopath
+	}
+
+	// fallback
+	var home string
+	if runtime.GOOS == "windows" {
+		home = os.Getenv("USERPROFILE")
+	} else {
+		home = os.Getenv("HOME")
+	}
+	if home == "" {
+		// This is very unlikely, so panic here.
+		// Not the nicest solution, however.
+		panic("no $HOME or %USERPROFILE% found")
+	}
+	return filepath.Join(home, "go")
+}
