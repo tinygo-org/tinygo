@@ -294,9 +294,10 @@ func (uart UART) Configure(config UARTConfig) {
 		config.Baudrate = 115200
 	}
 
-	// Set baud rate based on prescale formula:
-	// BAUD_PRESCALE = (((F_CPU / (BAUDRATE * 16UL))) - 1)
-	ps := (CPU_FREQUENCY / (config.Baudrate * 16)) - 1
+	// Set baud rate based on prescale formula from
+	// https://www.microchip.com/webdoc/AVRLibcReferenceManual/FAQ_1faq_wrong_baud_rate.html
+	// ((F_CPU + UART_BAUD_RATE * 8L) / (UART_BAUD_RATE * 16L) - 1)
+	ps := ((CPU_FREQUENCY+config.Baudrate*8)/(config.Baudrate*16) - 1)
 	*avr.UBRR0H = avr.RegValue(ps >> 8)
 	*avr.UBRR0L = avr.RegValue(ps)
 
