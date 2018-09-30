@@ -387,12 +387,12 @@ func bufferGet() byte {
 
 //go:interrupt USART_RX_vect
 func handleUSART_RX() {
-	// Wait until UART data buffer is ready.
-	for (*avr.UCSR0A & avr.UCSR0A_UDRE0) == 0 {
-	}
+	// Read register to clear it.
+	data := *avr.UDR0
 
+	// Ensure no error.
 	if (*avr.UCSR0A & (avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0)) == 0 {
 		// Read data from UDR register.
-		bufferPut(volatileByte(*avr.UDR0))
+		bufferPut(volatileByte(data))
 	}
 }
