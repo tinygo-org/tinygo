@@ -11,8 +11,7 @@ Requirements
 These are the base requirements and enough for most (desktop) use.
 
   * Go 1.11+
-  * LLVM dependencies, see the Software section in the `LLVM build guide
-    <https://llvm.org/docs/GettingStarted.html#software>`_.
+  * LLVM 7 (for example, from `apt.llvm.org <http://apt.llvm.org/>`_)
 
 Linking a binary needs an installed C compiler (``cc``). At the moment it
 expects GCC or a recent Clang.
@@ -45,52 +44,51 @@ needs the following tools:
 Installation
 ------------
 
-First download the sources. This may take a few minutes. ::
+First download the sources. This may take a while. ::
 
     go get -u github.com/aykevl/tinygo
 
-You'll get an error like the following, this is expected::
+If you get an error like this::
 
-    src/github.com/aykevl/llvm/bindings/go/llvm/analysis.go:17:10: fatal error: 'llvm-c/Analysis.h' file not found
-    #include "llvm-c/Analysis.h" // If you are getting an error here read bindings/go/README.txt
-             ^~~~~~~~~~~~~~~~~~~
-    1 error generated.
+    /usr/local/go/pkg/tool/linux_amd64/link: running g++ failed: exit status 1
+    /usr/bin/ld: error: cannot find -lLLVM-7
+    cgo-gcc-prolog:58: error: undefined reference to 'LLVMVerifyFunction'
+    cgo-gcc-prolog:80: error: undefined reference to 'LLVMVerifyModule'
+    [...etc...]
 
-To continue, you'll need to build LLVM. As a first step, modify
-github.com/aykevl/llvm/bindings/go/build.sh::
+It means something is wrong with your LLVM installation. Make sure LLVM 7 is
+installed (Debian package ``llvm-7-dev``). If it still doesn't work, you can
+try running::
 
-    cmake_flags="../../../../.. $@ -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR -DLLVM_LINK_LLVM_DYLIB=ON"
+    cd $GOPATH/github.com/aykevl/go-llvm
+    make config
 
-This will enable the experimental AVR backend (for Arduino support) and will
-make sure ``tinygo`` links to a shared library instead of a static library,
-greatly improving link time on every rebuild. This is especially useful during
-development.
+And retry::
 
-The next step is actually building LLVM. This is done by running this command
-inside github.com/aykevl/llvm/bindings/go::
+    go install github.com/aykevl/tinygo
 
-    $ ./build.sh
+Usage
+-----
 
-This will take about an hour and require a fair bit of RAM. In fact, I would
-recommend setting your ``ld`` binary to ``gold`` to speed up linking, especially
-on systems with less than 16GB RAM.
+TinyGo should now be installed. Test it by running a test program::
 
-After LLVM has been built, you can run an example with::
+    tinygo run examples/test
 
-    make run-test
+Before anything can be built for a bare-metal target, you need to generate some
+files first::
 
-For a blinky example on the PCA10040 development board, do this::
+    make gen-device
 
-    make flash-blinky2 TARGET=pca10040
+This will generate register descriptions, interrupt vectors, and linker scripts
+for various devices. Also, you may need to re-run this command after updates,
+as some updates cause changes to the generated files.
 
-Note that you will have to execute the following commands before the blinky
-example will work::
+Now you can run a blinky example. For the `PCA10040
+<https://www.nordicsemi.com/eng/Products/Bluetooth-low-energy/nRF52-DK>`_
+development board::
 
-    git submodule update --init
-    make gen-device-nrf
+    tinygo flash -target=pca10040 examples/blinky2
 
-You can also run a simpler blinky example (blinky1) on the Arduino::
+Or for an `Arduino Uno <https://store.arduino.cc/arduino-uno-rev3>`_::
 
-    git submodule update --init # only required the first time
-    make gen-device-avr         # only required the first time
-    make flash-blinky1 TARGET=arduino
+    tinygo flash -target=arduino examples/blinky1
