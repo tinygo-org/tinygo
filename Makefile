@@ -58,7 +58,7 @@ fmt:
 	@go fmt ./testdata/*.go
 
 test:
-	@go test .
+	@go test -v .
 
 gen-device: gen-device-nrf gen-device-avr
 
