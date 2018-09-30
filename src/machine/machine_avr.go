@@ -287,11 +287,10 @@ var (
 	UART0 = &UART{}
 )
 
-// Configure the UART on the AVR.
+// Configure the UART on the AVR. Defaults to 9600 baud on Arduino.
 func (uart UART) Configure(config UARTConfig) {
-	// default to 115200
 	if config.Baudrate == 0 {
-		config.Baudrate = 115200
+		config.Baudrate = 9600
 	}
 
 	// Set baud rate based on prescale formula from
@@ -299,7 +298,7 @@ func (uart UART) Configure(config UARTConfig) {
 	// ((F_CPU + UART_BAUD_RATE * 8L) / (UART_BAUD_RATE * 16L) - 1)
 	ps := ((CPU_FREQUENCY+config.Baudrate*8)/(config.Baudrate*16) - 1)
 	*avr.UBRR0H = avr.RegValue(ps >> 8)
-	*avr.UBRR0L = avr.RegValue(ps)
+	*avr.UBRR0L = avr.RegValue(ps & 0xff)
 
 	// enable RX interrupt
 	*avr.UCSR0B |= avr.UCSR0B_RXCIE0
@@ -336,6 +335,7 @@ func (uart UART) Write(data []byte) (n int, err error) {
 }
 
 // ReadByte reads a single byte from the RX buffer.
+// If there is no data in the buffer, returns an error.
 func (uart UART) ReadByte() (byte, error) {
 	// check if RX buffer is empty
 	if uart.Buffered() == 0 {
@@ -393,7 +393,7 @@ func handleUSART_RX() {
 
 	// Ensure no error.
 	if (*avr.UCSR0A & (avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0)) == 0 {
-		// Read data from UDR register.
+		// Put data from UDR register into buffer.
 		bufferPut(volatileByte(data))
 	}
 }
