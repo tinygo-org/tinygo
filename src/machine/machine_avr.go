@@ -312,6 +312,11 @@ func (uart UART) Read(data []byte) (n int, err error) {
 		return 0, nil
 	}
 
+	// Make sure we do not read more from buffer than the data slice can hold.
+	if len(data) < size {
+		size = len(data)
+	}
+
 	// only read number of bytes used from buffer
 	for i := 0; i < size; i++ {
 		v, _ := uart.ReadByte()
