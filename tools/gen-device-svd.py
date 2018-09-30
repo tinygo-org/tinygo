@@ -104,14 +104,34 @@ def readSVD(path, sourceURL):
             for register in regsEls[0].findall('register'):
                 peripheral['registers'].append(parseRegister(groupName or name, register, baseAddress))
             for cluster in regsEls[0].findall('cluster'):
-                if cluster.find('dim') is not None:
-                    continue # TODO
-                clusterPrefix = getText(cluster.find('name')) + '_'
+                clusterName = getText(cluster.find('name')).replace('[%s]', '')
+                clusterDescription = getText(cluster.find('description'))
+                clusterPrefix = clusterName + '_'
                 clusterOffset = int(getText(cluster.find('addressOffset')), 0)
-                for regEl in cluster.findall('register'):
-                    peripheral['registers'].append(parseRegister(groupName or name, regEl, baseAddress + clusterOffset, clusterPrefix))
+                if cluster.find('dim') is None:
+                    dim = None
+                    dimIncrement = None
                 else:
-                    continue
+                    dim = int(getText(cluster.find('dim')))
+                    dimIncrement = int(getText(cluster.find('dimIncrement')), 0)
+                clusterRegisters = []
+                for regEl in cluster.findall('register'):
+                    clusterRegisters.append(parseRegister(groupName or name, regEl, baseAddress + clusterOffset, clusterPrefix))
+                if dimIncrement is None:
+                    lastReg = clusterRegisters[-1]
+                    lastAddress = lastReg['address']
+                    if lastReg['array'] is not None:
+                        lastAddress = lastReg['address'] + lastReg['array'] * lastReg['elementsize']
+                    firstAddress = clusterRegisters[0]['address']
+                    dimIncrement = lastAddress - firstAddress
+                peripheral['registers'].append({
+                    'name':        clusterName,
+                    'address':     baseAddress + clusterOffset,
+                    'description': clusterDescription,
+                    'registers':   clusterRegisters,
+                    'array':       dim,
+                    'elementsize': dimIncrement,
+                })
 
     device.interrupts = sorted(interrupts.values(), key=lambda v: v['index'])
     licenseBlock = ''
@@ -129,7 +149,7 @@ def readSVD(path, sourceURL):
 
     return device
 
-def parseRegister(groupName, regEl, baseAddress, namePrefix=''):
+def parseRegister(groupName, regEl, baseAddress, bitfieldPrefix=''):
     regName = getText(regEl.find('name'))
     regDescription = getText(regEl.find('description'))
     offsetEls = regEl.findall('offset')
@@ -160,18 +180,18 @@ def parseRegister(groupName, regEl, baseAddress, namePrefix=''):
             else:
                 msb = int(getText(fieldEl.find('bitWidth'))) + lsb - 1
             fields.append({
-                'name':        '{}_{}{}_{}_Pos'.format(groupName, namePrefix, regName, fieldName),
+                'name':        '{}_{}{}_{}_Pos'.format(groupName, bitfieldPrefix, regName, fieldName),
                 'description': 'Position of %s field.' % fieldName,
                 'value':       lsb,
             })
             fields.append({
-                'name':        '{}_{}{}_{}_Msk'.format(groupName, namePrefix, regName, fieldName),
+                'name':        '{}_{}{}_{}_Msk'.format(groupName, bitfieldPrefix, regName, fieldName),
                 'description': 'Bit mask of %s field.' % fieldName,
                 'value':       (0xffffffff >> (31 - (msb - lsb))) << lsb,
             })
             if lsb == msb: # single bit
                 fields.append({
-                    'name':        '{}_{}{}_{}'.format(groupName, namePrefix, regName, fieldName),
+                    'name':        '{}_{}{}_{}'.format(groupName, bitfieldPrefix, regName, fieldName),
                     'description': 'Bit %s.' % fieldName,
                     'value':       1 << lsb,
                 })
@@ -180,17 +200,18 @@ def parseRegister(groupName, regEl, baseAddress, namePrefix=''):
                 enumDescription = getText(enumEl.find('description'))
                 enumValue = int(getText(enumEl.find('value')), 0)
                 fields.append({
-                    'name':        '{}_{}{}_{}_{}'.format(groupName, namePrefix, regName, fieldName, enumName),
+                    'name':        '{}_{}{}_{}_{}'.format(groupName, bitfieldPrefix, regName, fieldName, enumName),
                     'description': enumDescription,
                     'value':       enumValue,
                 })
 
     return {
-        'name':    namePrefix + regName,
-        'address': address,
+        'name':        regName,
+        'address':     address,
         'description': regDescription.replace('\n', ' '),
         'bitfields':   fields,
         'array':       array,
+        'elementsize': 4,
     }
 
 def writeGo(outdir, device):
@@ -260,15 +281,41 @@ const (
                 padNumber += 1
 
             regType = 'RegValue'
+            if 'registers' in register:
+                import pprint
+                #pprint.pprint(register)
+                # This is a cluster, not a register. Create the cluster type.
+                regType = 'struct {\n'
+                subaddress = register['address']
+                for subregister in register['registers']:
+                    subregType = 'RegValue'
+                    if subregister['array']:
+                        subregType = '[{}]{}'.format(subregister['array'], subregType)
+                        #raise NotImplementedError('array in cluster register')
+                    if subaddress != subregister['address']:
+                        raise NotImplementedError('gaps in cluster register')
+                    if subregister['array'] is not None:
+                        subaddress += subregister['elementsize'] * subregister['array']
+                    else:
+                        subaddress += subregister['elementsize']
+                    regType += '\t\t{name} {subregType}\n'.format(**subregister, subregType=subregType)
+                if register['array'] is not None:
+                    if subaddress != register['address'] + register['elementsize']:
+                        numSkip = ((register['address'] + register['elementsize']) - subaddress) // 4
+                        if numSkip == 1:
+                            regType += '\t\t_padding{padNumber} RegValue\n'.format(padNumber=padNumber)
+                        else:
+                            regType += '\t\t_padding{padNumber} [{num}]RegValue\n'.format(padNumber=padNumber, num=numSkip)
+                regType += '\t}'
             if register['array'] is not None:
-                regType = '[{}]RegValue'.format(register['array'])
+                regType = '[{}]{}'.format(register['array'], regType)
             out.write('\t{name} {regType}\n'.format(**register, regType=regType))
 
             # next address
             if register['array'] is not None:
-                address = register['address'] + 4 * register['array']
+                address = register['address'] + register['elementsize'] * register['array']
             else:
-                address = register['address'] + 4
+                address = register['address'] + register['elementsize']
         out.write('}\n')
 
     # Define bitfields.
@@ -277,20 +324,24 @@ const (
             # This peripheral was derived from another peripheral. Bitfields are
             # already defined.
             continue
-        if not sum(map(lambda r: len(r['bitfields']), peripheral['registers'])): continue
         out.write('\n// Bitfields for {name}: {description}\nconst('.format(**peripheral))
         for register in peripheral['registers']:
-            if not register['bitfields']: continue
-            out.write('\n\t// {name}'.format(**register))
-            if register['description']:
-                out.write(': {description}'.format(**register))
-            out.write('\n')
-            for bitfield in register['bitfields']:
-                out.write('\t{name} = 0x{value:x}'.format(**bitfield))
-                if bitfield['description']:
-                    out.write(' // {description}'.format(**bitfield))
-                out.write('\n')
+            if register.get('bitfields'):
+                writeGoRegisterBitfields(out, register, register['name'])
+            for subregister in register.get('registers', []):
+                writeGoRegisterBitfields(out, subregister, register['name'] + '.' + subregister['name'])
         out.write(')\n')
+
+def writeGoRegisterBitfields(out, register, name):
+    out.write('\n\t// {}'.format(name))
+    if register['description']:
+        out.write(': {description}'.format(**register))
+    out.write('\n')
+    for bitfield in register['bitfields']:
+        out.write('\t{name} = 0x{value:x}'.format(**bitfield))
+        if bitfield['description']:
+            out.write(' // {description}'.format(**bitfield))
+        out.write('\n')
 
 
 def writeAsm(outdir, device):
