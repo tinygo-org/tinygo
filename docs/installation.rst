@@ -56,6 +56,11 @@ If you get an error like this::
     cgo-gcc-prolog:80: error: undefined reference to 'LLVMVerifyModule'
     [...etc...]
 
+Or like this::
+
+    ../go-llvm/analysis.go:17:93: fatal error: llvm-c/Analysis.h: No such file or directory
+     #include "llvm-c/Analysis.h" // If you are getting an error here read bindings/go/README.txt
+
 It means something is wrong with your LLVM installation. Make sure LLVM 7 is
 installed (Debian package ``llvm-7-dev``). If it still doesn't work, you can
 try running::
