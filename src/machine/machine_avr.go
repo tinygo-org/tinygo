@@ -304,11 +304,6 @@ func (uart UART) Configure(config UARTConfig) {
 	*avr.UCSR0B |= avr.UCSR0B_RXCIE0
 }
 
-// Close the UART on the AVR.
-func (uart UART) Close() error {
-	return nil
-}
-
 // Read from the RX buffer.
 func (uart UART) Read(data []byte) (n int, err error) {
 	// check if RX buffer is empty
@@ -320,10 +315,10 @@ func (uart UART) Read(data []byte) (n int, err error) {
 	// only read number of bytes used from buffer
 	for i := 0; i < size; i++ {
 		v, _ := uart.ReadByte()
-		data[i] = byte(v)
+		data[i] = v
 	}
 
-	return len(data), nil
+	return size, nil
 }
 
 // Write data to the UART.
@@ -372,10 +367,10 @@ var head volatileByte
 var tail volatileByte
 
 func bufferUsed() uint8 { return uint8(head - tail) }
-func bufferPut(val volatileByte) {
+func bufferPut(val byte) {
 	if bufferUsed() != bufferSize {
 		head++
-		rxbuffer[head%bufferSize] = val
+		rxbuffer[head%bufferSize] = volatileByte(val)
 	}
 }
 func bufferGet() byte {
@@ -394,6 +389,6 @@ func handleUSART_RX() {
 	// Ensure no error.
 	if (*avr.UCSR0A & (avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0)) == 0 {
 		// Put data from UDR register into buffer.
-		bufferPut(volatileByte(data))
+		bufferPut(byte(data))
 	}
 }

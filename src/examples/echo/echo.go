@@ -1,5 +1,5 @@
 // This is a echo console running on the device UART.
-// Connect using 57600 baud, 8-N-1 with your terminal program.
+// Connect using default baudrate for this hardware, 8-N-1 with your terminal program.
 package main
 
 import (
@@ -8,8 +8,7 @@ import (
 )
 
 func main() {
-	// Set baudrate to 56k for an Arduino Uno to be error-free.
-	machine.UART0.Configure(machine.UARTConfig{Baudrate: 57600})
+	machine.UART0.Configure(machine.UARTConfig{})
 	machine.UART0.Write([]byte("Echo console enabled. Type something then press enter:\r\n"))
 
 	input := make([]byte, 64)
