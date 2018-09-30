@@ -1,6 +1,7 @@
 # TinyGo - Go compiler for microcontrollers
 
 [![Documentation Status](https://readthedocs.org/projects/tinygo/badge/?version=latest)](https://tinygo.readthedocs.io/)
+[![Build Status](https://travis-ci.com/aykevl/tinygo.svg?branch=master)](https://travis-ci.com/aykevl/tinygo)
 
 > We never expected Go to be an embedded language and so it's got serious
 > problems [...].
