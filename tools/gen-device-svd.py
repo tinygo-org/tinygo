@@ -228,6 +228,12 @@ const (
     out.write('\tIRQ_max = {} // Highest interrupt number on this device.\n'.format(intrMax))
     out.write(')\n')
 
+    # Define actual peripheral pointers.
+    out.write('\n// Peripherals.\nvar (\n')
+    for peripheral in device.peripherals:
+        out.write('\t{name} = (*{groupName}_Type)(unsafe.Pointer(uintptr(0x{baseAddress:x}))) // {description}\n'.format(**peripheral))
+    out.write(')\n')
+
     # Define peripheral struct types.
     for peripheral in device.peripherals:
         if 'registers' not in peripheral:
@@ -264,12 +270,6 @@ const (
             else:
                 address = register['address'] + 4
         out.write('}\n')
-
-    # Define actual peripheral pointers.
-    out.write('\n// Peripherals.\nvar (\n')
-    for peripheral in device.peripherals:
-        out.write('\t{name} = (*{groupName}_Type)(unsafe.Pointer(uintptr(0x{baseAddress:x}))) // {description}\n'.format(**peripheral))
-    out.write(')\n')
 
     # Define bitfields.
     for peripheral in device.peripherals:
