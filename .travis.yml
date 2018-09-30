@@ -1,0 +1,18 @@
+language: go
+
+go:
+  - "1.11"
+  - "master"
+
+before_install:
+  - echo "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-7 main"            | sudo tee -a /etc/apt/sources.list
+  - echo "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu trusty main" | sudo tee -a /etc/apt/sources.list
+  - sudo apt-get update -qq
+  - sudo apt-get install llvm-7-dev gcc-8 --allow-unauthenticated -y
+  - sudo ln -s /usr/bin/gcc-8 /usr/local/bin/cc # work around missing -no-pie in old GCC version
+
+install:
+  - go get github.com/aykevl/go-llvm
+  - go get golang.org/x/tools/go/ssa
+
+script: go test -v .
