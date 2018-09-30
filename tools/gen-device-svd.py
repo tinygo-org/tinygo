@@ -2,7 +2,7 @@
 
 import sys
 import os
-from xml.dom import minidom
+from xml.etree import ElementTree
 from glob import glob
 from collections import OrderedDict
 import re
@@ -13,11 +13,7 @@ class Device:
     pass
 
 def getText(element):
-    strings = []
-    for node in element.childNodes:
-        if node.nodeType == node.TEXT_NODE:
-            strings.append(node.data)
-    return ''.join(strings)
+    return ''.join(element.itertext())
 
 def formatText(text):
     text = re.sub('[ \t\n]+', ' ', text) # Collapse whitespace (like in HTML)
@@ -28,11 +24,11 @@ def formatText(text):
 def readSVD(path, sourceURL):
     # Read ARM SVD files.
     device = Device()
-    xml = minidom.parse(path)
-    root = xml.getElementsByTagName('device')[0]
-    deviceName = getText(root.getElementsByTagName('name')[0])
-    deviceDescription = getText(root.getElementsByTagName('description')[0]).strip()
-    licenseTexts = root.getElementsByTagName('licenseText')
+    xml = ElementTree.parse(path)
+    root = xml.getroot()
+    deviceName = getText(root.find('name'))
+    deviceDescription = getText(root.find('description')).strip()
+    licenseTexts = root.findall('licenseText')
     if len(licenseTexts) == 0:
         licenseText = None
     elif len(licenseTexts) == 1:
@@ -46,21 +42,21 @@ def readSVD(path, sourceURL):
 
     interrupts = OrderedDict()
 
-    for periphEl in root.getElementsByTagName('peripherals')[0].getElementsByTagName('peripheral'):
-        name = getText(periphEl.getElementsByTagName('name')[0])
-        descriptionTags = periphEl.getElementsByTagName('description')
+    for periphEl in root.findall('./peripherals/peripheral'):
+        name = getText(periphEl.find('name'))
+        descriptionTags = periphEl.findall('description')
         description = ''
         if descriptionTags:
             description = formatText(getText(descriptionTags[0]))
-        baseAddress = int(getText(periphEl.getElementsByTagName('baseAddress')[0]), 0)
-        groupNameTags = periphEl.getElementsByTagName('groupName')
+        baseAddress = int(getText(periphEl.find('baseAddress')), 0)
+        groupNameTags = periphEl.findall('groupName')
         groupName = None
         if groupNameTags:
             groupName = getText(groupNameTags[0])
 
-        if periphEl.hasAttribute('derivedFrom') or groupName in groups:
-            if periphEl.hasAttribute('derivedFrom'):
-                derivedFromName = periphEl.getAttribute('derivedFrom')
+        if periphEl.get('derivedFrom') or groupName in groups:
+            if periphEl.get('derivedFrom'):
+                derivedFromName = periphEl.get('derivedFrom')
                 derivedFrom = peripheralDict[derivedFromName]
             else:
                 derivedFrom = groups[groupName]
@@ -87,9 +83,9 @@ def readSVD(path, sourceURL):
         if groupName and groupName not in groups:
             groups[groupName] = peripheral
 
-        for interrupt in periphEl.getElementsByTagName('interrupt'):
-            intrName = getText(interrupt.getElementsByTagName('name')[0])
-            intrIndex = int(getText(interrupt.getElementsByTagName('value')[0]))
+        for interrupt in periphEl.findall('interrupt'):
+            intrName = getText(interrupt.find('name'))
+            intrIndex = int(getText(interrupt.find('value')))
             if intrName in interrupts:
                 if interrupts[intrName]['index'] != intrIndex:
                     raise ValueError('interrupt with the same name has different indexes: ' + intrName)
@@ -101,19 +97,19 @@ def readSVD(path, sourceURL):
                     'description': description,
                 }
 
-        regsEls = periphEl.getElementsByTagName('registers')
+        regsEls = periphEl.findall('registers')
         if regsEls:
-            for el in regsEls[0].childNodes:
-                if el.nodeName == 'register':
-                    peripheral['registers'].append(parseSVDRegister(groupName or name, el, baseAddress))
-                elif el.nodeName == 'cluster':
-                    if el.getElementsByTagName('dim'):
-                        continue # TODO
-                    clusterPrefix = getText(el.getElementsByTagName('name')[0]) + '_'
-                    clusterOffset = int(getText(el.getElementsByTagName('addressOffset')[0]), 0)
-                    for regEl in el.childNodes:
-                        if regEl.nodeName == 'register':
-                            peripheral['registers'].append(parseSVDRegister(groupName or name, regEl, baseAddress + clusterOffset, clusterPrefix))
+            if len(regsEls) != 1:
+                raise ValueError('expected just one <registers> in a <peripheral>')
+            for register in regsEls[0].findall('register'):
+                peripheral['registers'].append(parseRegister(groupName or name, register, baseAddress))
+            for cluster in regsEls[0].findall('cluster'):
+                if cluster.find('dim') is not None:
+                    continue # TODO
+                clusterPrefix = getText(cluster.find('name')) + '_'
+                clusterOffset = int(getText(cluster.find('addressOffset')), 0)
+                for regEl in cluster.findall('register'):
+                    peripheral['registers'].append(parseRegister(groupName or name, regEl, baseAddress + clusterOffset, clusterPrefix))
                 else:
                     continue
 
@@ -133,38 +129,36 @@ def readSVD(path, sourceURL):
 
     return device
 
-def parseSVDRegister(groupName, regEl, baseAddress, namePrefix=''):
-    regName = getText(regEl.getElementsByTagName('name')[0])
-    regDescription = getText(regEl.getElementsByTagName('description')[0])
-    offsetEls = regEl.getElementsByTagName('offset')
+def parseRegister(groupName, regEl, baseAddress, namePrefix=''):
+    regName = getText(regEl.find('name'))
+    regDescription = getText(regEl.find('description'))
+    offsetEls = regEl.findall('offset')
     if not offsetEls:
-        offsetEls = regEl.getElementsByTagName('addressOffset')
+        offsetEls = regEl.findall('addressOffset')
     address = baseAddress + int(getText(offsetEls[0]), 0)
 
-    dimEls = regEl.getElementsByTagName('dim')
+    dimEls = regEl.findall('dim')
     array = None
     if dimEls:
         array = int(getText(dimEls[0]), 0)
         regName = regName.replace('[%s]', '')
 
     fields = []
-    fieldsEls = regEl.getElementsByTagName('fields')
+    fieldsEls = regEl.findall('fields')
     if fieldsEls:
-        for fieldEl in fieldsEls[0].childNodes:
-            if fieldEl.nodeName != 'field':
-                continue
-            fieldName = getText(fieldEl.getElementsByTagName('name')[0])
-            descrEls = fieldEl.getElementsByTagName('description')
-            lsbTags = fieldEl.getElementsByTagName('lsb')
+        for fieldEl in fieldsEls[0].findall('field'):
+            fieldName = getText(fieldEl.find('name'))
+            descrEls = fieldEl.findall('description')
+            lsbTags = fieldEl.findall('lsb')
             if len(lsbTags) == 1:
                 lsb = int(getText(lsbTags[0]))
             else:
-                lsb = int(getText(fieldEl.getElementsByTagName('bitOffset')[0]))
-            msbTags = fieldEl.getElementsByTagName('msb')
+                lsb = int(getText(fieldEl.find('bitOffset')))
+            msbTags = fieldEl.findall('msb')
             if len(msbTags) == 1:
                 msb = int(getText(msbTags[0]))
             else:
-                msb = int(getText(fieldEl.getElementsByTagName('bitWidth')[0])) + lsb - 1
+                msb = int(getText(fieldEl.find('bitWidth'))) + lsb - 1
             fields.append({
                 'name':        '{}_{}{}_{}_Pos'.format(groupName, namePrefix, regName, fieldName),
                 'description': 'Position of %s field.' % fieldName,
@@ -181,10 +175,10 @@ def parseSVDRegister(groupName, regEl, baseAddress, namePrefix=''):
                     'description': 'Bit %s.' % fieldName,
                     'value':       1 << lsb,
                 })
-            for enumEl in fieldEl.getElementsByTagName('enumeratedValue'):
-                enumName = getText(enumEl.getElementsByTagName('name')[0])
-                enumDescription = getText(enumEl.getElementsByTagName('description')[0])
-                enumValue = int(getText(enumEl.getElementsByTagName('value')[0]), 0)
+            for enumEl in fieldEl.findall('enumeratedValues/enumeratedValue'):
+                enumName = getText(enumEl.find('name'))
+                enumDescription = getText(enumEl.find('description'))
+                enumValue = int(getText(enumEl.find('value')), 0)
                 fields.append({
                     'name':        '{}_{}{}_{}_{}'.format(groupName, namePrefix, regName, fieldName, enumName),
                     'description': enumDescription,
@@ -265,7 +259,7 @@ const (
             out.write('\t{name} {regType}\n'.format(**register, regType=regType))
 
             # next address
-            if register['array'] is not None and 1:
+            if register['array'] is not None:
                 address = register['address'] + 4 * register['array']
             else:
                 address = register['address'] + 4
