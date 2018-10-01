@@ -113,11 +113,6 @@ func (uart UART) SetBaudRate(br uint32) {
 	}
 }
 
-// Close the UART.
-func (uart UART) Close() error {
-	return nil
-}
-
 // Read from the RX buffer.
 func (uart UART) Read(data []byte) (n int, err error) {
 	// check if RX buffer is empty
