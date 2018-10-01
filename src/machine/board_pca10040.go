@@ -19,3 +19,9 @@ const (
 	BUTTON3 = 15
 	BUTTON4 = 16
 )
+
+// UART pins for NRF52840-DK
+const (
+	UART_TX_PIN = 6
+	UART_RX_PIN = 8
+)

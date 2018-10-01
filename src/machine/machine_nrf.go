@@ -60,9 +60,9 @@ func (uart UART) Configure(config UARTConfig) {
 
 	uart.SetBaudRate(config.Baudrate)
 
-	// TODO: Set TX and RX pins from config.
-	nrf.UART0.PSELTXD = 6 // pin 6 for NRF52840-DK
-	nrf.UART0.PSELRXD = 8 // pin 8 for NRF52840-DK
+	// Set TX and RX pins from board.
+	nrf.UART0.PSELTXD = UART_TX_PIN
+	nrf.UART0.PSELRXD = UART_RX_PIN
 
 	nrf.UART0.ENABLE = nrf.UART_ENABLE_ENABLE_Enabled
 	nrf.UART0.TASKS_STARTTX = 1
@@ -120,22 +120,24 @@ func (uart UART) Close() error {
 
 // Read from the RX buffer.
 func (uart UART) Read(data []byte) (n int, err error) {
-	if len(data) > RXBufferSize {
-		return 0, errors.New("Read buffer cannot be larger than RXBuffer")
-	}
-
 	// check if RX buffer is empty
-	size := BufferUsed()
+	size := uart.Buffered()
 	if size == 0 {
 		return 0, nil
 	}
 
-	// only read number of bytes used from buffer
-	for i := 0; uint8(i) < size; i++ {
-		data[i] = byte(bufferGet())
+	// Make sure we do not read more from buffer than the data slice can hold.
+	if len(data) < size {
+		size = len(data)
 	}
 
-	return len(data), nil
+	// only read number of bytes used from buffer
+	for i := 0; i < size; i++ {
+		v, _ := uart.ReadByte()
+		data[i] = v
+	}
+
+	return size, nil
 }
 
 // Write data to the UART.
@@ -147,8 +149,14 @@ func (uart UART) Write(data []byte) (n int, err error) {
 }
 
 // ReadByte reads a single byte from the RX buffer.
+// If there is no data in the buffer, returns an error.
 func (uart UART) ReadByte() (byte, error) {
-	return byte(bufferGet()), nil
+	// check if RX buffer is empty
+	if uart.Buffered() == 0 {
+		return 0, errors.New("Buffer empty")
+	}
+
+	return bufferGet(), nil
 }
 
 // WriteByte writes a byte of data to the UART.
@@ -160,31 +168,34 @@ func (uart UART) WriteByte(c byte) error {
 	return nil
 }
 
-type __volatile byte
-
-const RXBufferSize = 64
+// Buffered returns the number of bytes current stored in the RX buffer.
+func (uart UART) Buffered() int {
+	return int(bufferUsed())
+}
 
 // Minimal ring buffer implementation inspired by post at
 // https://www.embeddedrelated.com/showthread/comp.arch.embedded/77084-1.php
-var rxbuffer [RXBufferSize]__volatile
-var head __volatile
-var tail __volatile
 
-func BufferUsed() uint8 {
-	return uint8(bufferUsed())
-}
+const bufferSize = 64
 
-func bufferUsed() __volatile { return head - tail }
-func bufferPut(val __volatile) {
-	if bufferUsed() != RXBufferSize {
+//go:volatile
+type volatileByte byte
+
+var rxbuffer [bufferSize]volatileByte
+var head volatileByte
+var tail volatileByte
+
+func bufferUsed() uint8 { return uint8(head - tail) }
+func bufferPut(val byte) {
+	if bufferUsed() != bufferSize {
 		head++
-		rxbuffer[head%RXBufferSize] = val
+		rxbuffer[head%bufferSize] = volatileByte(val)
 	}
 }
-func bufferGet() __volatile {
+func bufferGet() byte {
 	if bufferUsed() != 0 {
 		tail++
-		return rxbuffer[tail%RXBufferSize]
+		return byte(rxbuffer[tail%bufferSize])
 	}
 	return 0
 }
@@ -192,7 +203,7 @@ func bufferGet() __volatile {
 //go:export UARTE0_UART0_IRQHandler
 func handleUART0() {
 	if nrf.UART0.EVENTS_RXDRDY == 1 {
-		bufferPut(__volatile(nrf.UART0.RXD))
+		bufferPut(byte(nrf.UART0.RXD))
 		nrf.UART0.EVENTS_RXDRDY = 0x0
 	}
 }
