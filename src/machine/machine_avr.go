@@ -4,7 +4,6 @@ package machine
 
 import (
 	"device/avr"
-	"errors"
 )
 
 type GPIOMode uint8
@@ -274,14 +273,6 @@ func (i2c I2C) ReadByte() byte {
 }
 
 // UART
-
-type UARTConfig struct {
-	Baudrate uint32
-}
-
-type UART struct {
-}
-
 var (
 	// UART0 is the hardware serial port on the AVR.
 	UART0 = &UART{}
@@ -289,60 +280,19 @@ var (
 
 // Configure the UART on the AVR. Defaults to 9600 baud on Arduino.
 func (uart UART) Configure(config UARTConfig) {
-	if config.Baudrate == 0 {
-		config.Baudrate = 9600
+	if config.BaudRate == 0 {
+		config.BaudRate = 9600
 	}
 
 	// Set baud rate based on prescale formula from
 	// https://www.microchip.com/webdoc/AVRLibcReferenceManual/FAQ_1faq_wrong_baud_rate.html
 	// ((F_CPU + UART_BAUD_RATE * 8L) / (UART_BAUD_RATE * 16L) - 1)
-	ps := ((CPU_FREQUENCY+config.Baudrate*8)/(config.Baudrate*16) - 1)
+	ps := ((CPU_FREQUENCY+config.BaudRate*8)/(config.BaudRate*16) - 1)
 	*avr.UBRR0H = avr.RegValue(ps >> 8)
 	*avr.UBRR0L = avr.RegValue(ps & 0xff)
 
 	// enable RX interrupt
 	*avr.UCSR0B |= avr.UCSR0B_RXCIE0
-}
-
-// Read from the RX buffer.
-func (uart UART) Read(data []byte) (n int, err error) {
-	// check if RX buffer is empty
-	size := uart.Buffered()
-	if size == 0 {
-		return 0, nil
-	}
-
-	// Make sure we do not read more from buffer than the data slice can hold.
-	if len(data) < size {
-		size = len(data)
-	}
-
-	// only read number of bytes used from buffer
-	for i := 0; i < size; i++ {
-		v, _ := uart.ReadByte()
-		data[i] = v
-	}
-
-	return size, nil
-}
-
-// Write data to the UART.
-func (uart UART) Write(data []byte) (n int, err error) {
-	for _, v := range data {
-		uart.WriteByte(v)
-	}
-	return len(data), nil
-}
-
-// ReadByte reads a single byte from the RX buffer.
-// If there is no data in the buffer, returns an error.
-func (uart UART) ReadByte() (byte, error) {
-	// check if RX buffer is empty
-	if uart.Buffered() == 0 {
-		return 0, errors.New("Buffer empty")
-	}
-
-	return bufferGet(), nil
 }
 
 // WriteByte writes a byte of data to the UART.
@@ -352,38 +302,6 @@ func (uart UART) WriteByte(c byte) error {
 	}
 	*avr.UDR0 = avr.RegValue(c) // send char
 	return nil
-}
-
-// Buffered returns the number of bytes current stored in the RX buffer.
-func (uart UART) Buffered() int {
-	return int(bufferUsed())
-}
-
-const bufferSize = 64
-
-// Minimal ring buffer implementation inspired by post at
-// https://www.embeddedrelated.com/showthread/comp.arch.embedded/77084-1.php
-
-//go:volatile
-type volatileByte byte
-
-var rxbuffer [bufferSize]volatileByte
-var head volatileByte
-var tail volatileByte
-
-func bufferUsed() uint8 { return uint8(head - tail) }
-func bufferPut(val byte) {
-	if bufferUsed() != bufferSize {
-		head++
-		rxbuffer[head%bufferSize] = volatileByte(val)
-	}
-}
-func bufferGet() byte {
-	if bufferUsed() != 0 {
-		tail++
-		return byte(rxbuffer[tail%bufferSize])
-	}
-	return 0
 }
 
 //go:interrupt USART_RX_vect

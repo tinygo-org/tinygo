@@ -5,7 +5,6 @@ package machine
 import (
 	"device/arm"
 	"device/nrf"
-	"errors"
 )
 
 type GPIOMode uint8
@@ -39,13 +38,6 @@ func (p GPIO) Get() bool {
 }
 
 // UART
-type UARTConfig struct {
-	Baudrate uint32
-}
-
-type UART struct {
-}
-
 var (
 	// UART0 is the hardware serial port on the NRF.
 	UART0 = &UART{}
@@ -54,11 +46,11 @@ var (
 // Configure the UART.
 func (uart UART) Configure(config UARTConfig) {
 	// Default baud rate to 115200.
-	if config.Baudrate == 0 {
-		config.Baudrate = 115200
+	if config.BaudRate == 0 {
+		config.BaudRate = 115200
 	}
 
-	uart.SetBaudRate(config.Baudrate)
+	uart.SetBaudRate(config.BaudRate)
 
 	// Set TX and RX pins from board.
 	nrf.UART0.PSELTXD = UART_TX_PIN
@@ -113,47 +105,6 @@ func (uart UART) SetBaudRate(br uint32) {
 	}
 }
 
-// Read from the RX buffer.
-func (uart UART) Read(data []byte) (n int, err error) {
-	// check if RX buffer is empty
-	size := uart.Buffered()
-	if size == 0 {
-		return 0, nil
-	}
-
-	// Make sure we do not read more from buffer than the data slice can hold.
-	if len(data) < size {
-		size = len(data)
-	}
-
-	// only read number of bytes used from buffer
-	for i := 0; i < size; i++ {
-		v, _ := uart.ReadByte()
-		data[i] = v
-	}
-
-	return size, nil
-}
-
-// Write data to the UART.
-func (uart UART) Write(data []byte) (n int, err error) {
-	for _, v := range data {
-		uart.WriteByte(v)
-	}
-	return len(data), nil
-}
-
-// ReadByte reads a single byte from the RX buffer.
-// If there is no data in the buffer, returns an error.
-func (uart UART) ReadByte() (byte, error) {
-	// check if RX buffer is empty
-	if uart.Buffered() == 0 {
-		return 0, errors.New("Buffer empty")
-	}
-
-	return bufferGet(), nil
-}
-
 // WriteByte writes a byte of data to the UART.
 func (uart UART) WriteByte(c byte) error {
 	nrf.UART0.EVENTS_TXDRDY = 0
@@ -163,41 +114,9 @@ func (uart UART) WriteByte(c byte) error {
 	return nil
 }
 
-// Buffered returns the number of bytes current stored in the RX buffer.
-func (uart UART) Buffered() int {
-	return int(bufferUsed())
-}
-
-// Minimal ring buffer implementation inspired by post at
-// https://www.embeddedrelated.com/showthread/comp.arch.embedded/77084-1.php
-
-const bufferSize = 64
-
-//go:volatile
-type volatileByte byte
-
-var rxbuffer [bufferSize]volatileByte
-var head volatileByte
-var tail volatileByte
-
-func bufferUsed() uint8 { return uint8(head - tail) }
-func bufferPut(val byte) {
-	if bufferUsed() != bufferSize {
-		head++
-		rxbuffer[head%bufferSize] = volatileByte(val)
-	}
-}
-func bufferGet() byte {
-	if bufferUsed() != 0 {
-		tail++
-		return byte(rxbuffer[tail%bufferSize])
-	}
-	return 0
-}
-
 //go:export UARTE0_UART0_IRQHandler
 func handleUART0() {
-	if nrf.UART0.EVENTS_RXDRDY == 1 {
+	if nrf.UART0.EVENTS_RXDRDY != 0 {
 		bufferPut(byte(nrf.UART0.RXD))
 		nrf.UART0.EVENTS_RXDRDY = 0x0
 	}
