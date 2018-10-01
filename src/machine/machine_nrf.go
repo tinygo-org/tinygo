@@ -67,42 +67,17 @@ func (uart UART) Configure(config UARTConfig) {
 
 // SetBaudRate sets the communication speed for the UART.
 func (uart UART) SetBaudRate(br uint32) {
-	switch br {
-	case 1200:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud1200
-	case 2400:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud2400
-	case 4800:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud4800
-	case 9600:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud9600
-	case 14400:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud14400
-	case 19200:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud19200
-	case 28800:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud28800
-	case 38400:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud38400
-	case 57600:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud57600
-	case 76800:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud76800
-	case 115200:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud115200
-	case 230400:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud230400
-	case 250000:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud250000
-	case 460800:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud460800
-	case 921600:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud921600
-	case 1000000:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud1M
-	default:
-		nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud115200
-	}
+	// Magic: calculate 'baudrate' register from the input number.
+	// Every value listed in the datasheet will be converted to the
+	// correct register value, except for 192600. I suspect the value
+	// listed in the nrf52 datasheet (0x0EBED000) is incorrectly rounded
+	// and should be 0x0EBEE000, as the nrf51 datasheet lists the
+	// nonrounded value 0x0EBEDFA4.
+	// Some background:
+	// https://devzone.nordicsemi.com/f/nordic-q-a/391/uart-baudrate-register-values/2046#2046
+	rate := uint32((uint64(br/400)*uint64(400*0xffffffff/16000000) + 0x800) & 0xffffff000)
+
+	nrf.UART0.BAUDRATE = nrf.RegValue(rate)
 }
 
 // WriteByte writes a byte of data to the UART.
