@@ -132,6 +132,7 @@ def readSVD(path, sourceURL):
                     'array':       dim,
                     'elementsize': dimIncrement,
                 })
+        peripheral['registers'].sort(key=lambda r: r['address'])
 
     device.interrupts = sorted(interrupts.values(), key=lambda v: v['index'])
     licenseBlock = ''
@@ -282,8 +283,6 @@ const (
 
             regType = 'RegValue'
             if 'registers' in register:
-                import pprint
-                #pprint.pprint(register)
                 # This is a cluster, not a register. Create the cluster type.
                 regType = 'struct {\n'
                 subaddress = register['address']
@@ -291,9 +290,12 @@ const (
                     subregType = 'RegValue'
                     if subregister['array']:
                         subregType = '[{}]{}'.format(subregister['array'], subregType)
-                        #raise NotImplementedError('array in cluster register')
                     if subaddress != subregister['address']:
-                        raise NotImplementedError('gaps in cluster register')
+                        numSkip = (subregister['address'] - subaddress) // 4
+                        if numSkip == 1:
+                            regType += '\t\t_padding{padNumber} RegValue\n'.format(padNumber=padNumber)
+                        else:
+                            regType += '\t\t_padding{padNumber} [{num}]RegValue\n'.format(padNumber=padNumber, num=numSkip)
                     if subregister['array'] is not None:
                         subaddress += subregister['elementsize'] * subregister['array']
                     else:
