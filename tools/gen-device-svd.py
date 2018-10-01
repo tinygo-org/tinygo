@@ -296,6 +296,7 @@ const (
                             regType += '\t\t_padding{padNumber} RegValue\n'.format(padNumber=padNumber)
                         else:
                             regType += '\t\t_padding{padNumber} [{num}]RegValue\n'.format(padNumber=padNumber, num=numSkip)
+                        padNumber += 1
                     if subregister['array'] is not None:
                         subaddress += subregister['elementsize'] * subregister['array']
                     else:
