@@ -21,6 +21,7 @@ script:
   - make gen-device
   - tinygo build -o blinky1.nrf.elf   -target=pca10040 examples/blinky1
   - tinygo build -o blinky2.nrf.elf   -target=pca10040 examples/blinky2
+  - tinygo build -o blinky2                            examples/blinky2
   - tinygo build -o test.nrf.elf      -target=pca10040 examples/test
   - tinygo build -o blinky1.stm32.elf -target=bluepill examples/blinky1
   - tinygo build -o blinky1.avr.o     -target=arduino  examples/blinky1 # TODO: avr-as/avr-gcc doesn't work
