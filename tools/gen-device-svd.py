@@ -301,7 +301,7 @@ const (
                         subaddress += subregister['elementsize'] * subregister['array']
                     else:
                         subaddress += subregister['elementsize']
-                    regType += '\t\t{name} {subregType}\n'.format(**subregister, subregType=subregType)
+                    regType += '\t\t{name} {subregType}\n'.format(name=subregister['name'], subregType=subregType)
                 if register['array'] is not None:
                     if subaddress != register['address'] + register['elementsize']:
                         numSkip = ((register['address'] + register['elementsize']) - subaddress) // 4
@@ -312,7 +312,7 @@ const (
                 regType += '\t}'
             if register['array'] is not None:
                 regType = '[{}]{}'.format(register['array'], regType)
-            out.write('\t{name} {regType}\n'.format(**register, regType=regType))
+            out.write('\t{name} {regType}\n'.format(name=register['name'], regType=regType))
 
             # next address
             if register['array'] is not None:
