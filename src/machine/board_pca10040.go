@@ -25,3 +25,13 @@ const (
 	UART_TX_PIN = 6
 	UART_RX_PIN = 8
 )
+
+// ADC pins
+const (
+	ADC0 = 3
+	ADC1 = 4
+	ADC2 = 28
+	ADC3 = 29
+	ADC4 = 30
+	ADC5 = 31
+)
