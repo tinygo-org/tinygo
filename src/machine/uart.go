@@ -1,3 +1,5 @@
+// +build avr nrf
+
 package machine
 
 import "errors"
