@@ -60,15 +60,15 @@ fmt:
 test:
 	@go test -v .
 
-gen-device: gen-device-nrf gen-device-avr
-
-gen-device-nrf:
-	./tools/gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/ --source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk
-	go fmt ./src/device/nrf
+gen-device: gen-device-avr gen-device-nrf gen-device-stm32
 
 gen-device-avr:
 	./tools/gen-device-avr.py lib/avr/packs/atmega src/device/avr/
 	go fmt ./src/device/avr
+
+gen-device-nrf:
+	./tools/gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/ --source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk
+	go fmt ./src/device/nrf
 
 gen-device-stm32:
 	./tools/gen-device-svd.py lib/cmsis-svd/data/STMicro/ src/device/stm32/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro
