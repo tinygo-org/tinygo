@@ -28,10 +28,10 @@ const (
 
 // ADC pins
 const (
-	ADCPin0 = 3
-	ADCPin1 = 4
-	ADCPin2 = 28
-	ADCPin3 = 29
-	ADCPin4 = 30
-	ADCPin5 = 31
+	ADC0 = 3
+	ADC1 = 4
+	ADC2 = 28
+	ADC3 = 29
+	ADC4 = 30
+	ADC5 = 31
 )

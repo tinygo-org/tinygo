@@ -129,7 +129,7 @@ func (pwm PWM) Set(value uint16) {
 	for i := 0; i < 3; i++ {
 		if pwmChannelPins[i] == 0xFFFFFFFF || pwmChannelPins[i] == uint32(pwm.Pin) {
 			pwmChannelPins[i] = uint32(pwm.Pin)
-			pwmChannelSequence[i] = value | 0x8000
+			pwmChannelSequence[i] = (value >> 2) | 0x8000 // set bit 15 to invert polarity
 
 			p := pwms[i]
 
@@ -138,9 +138,9 @@ func (pwm PWM) Set(value uint16) {
 			p.PSEL.OUT[2] = nrf.RegValue(pwm.Pin)
 			p.PSEL.OUT[3] = nrf.RegValue(pwm.Pin)
 			p.ENABLE = (nrf.PWM_ENABLE_ENABLE_Enabled << nrf.PWM_ENABLE_ENABLE_Pos)
-			p.PRESCALER = nrf.PWM_PRESCALER_PRESCALER_DIV_1
+			p.PRESCALER = nrf.PWM_PRESCALER_PRESCALER_DIV_2
 			p.MODE = nrf.PWM_MODE_UPDOWN_Up
-			p.COUNTERTOP = (1 << 8) - 1
+			p.COUNTERTOP = 16384 // frequency
 			p.LOOP = 0
 			p.DECODER = (nrf.PWM_DECODER_LOAD_Common << nrf.PWM_DECODER_LOAD_Pos) | (nrf.PWM_DECODER_MODE_RefreshCount << nrf.PWM_DECODER_MODE_Pos)
 			p.SEQ[0].PTR = nrf.RegValue(uintptr(unsafe.Pointer(&pwmChannelSequence[i])))
