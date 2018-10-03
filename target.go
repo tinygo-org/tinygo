@@ -20,6 +20,9 @@ type TargetSpec struct {
 	PreLinkArgs []string `json:"pre-link-args"`
 	Objcopy     string   `json:"objcopy"`
 	Flasher     string   `json:"flash"`
+	OCDDaemon   []string `json:"ocd-daemon"`
+	GDB         string   `json:"gdb"`
+	GDBCmds     []string `json:"gdb-initial-cmds"`
 }
 
 // Load a target specification
@@ -30,6 +33,8 @@ func LoadTarget(target string) (*TargetSpec, error) {
 		Linker:      "cc",
 		PreLinkArgs: []string{"-no-pie"}, // WARNING: clang < 5.0 requires -nopie
 		Objcopy:     "objcopy",
+		GDB:         "gdb",
+		GDBCmds:     []string{"run"},
 	}
 
 	// See whether there is a target specification for this target (e.g.
@@ -37,6 +42,7 @@ func LoadTarget(target string) (*TargetSpec, error) {
 	path := filepath.Join(sourceDir(), "targets", strings.ToLower(target)+".json")
 	if fp, err := os.Open(path); err == nil {
 		defer fp.Close()
+		*spec = TargetSpec{} // reset all fields
 		err := json.NewDecoder(fp).Decode(spec)
 		if err != nil {
 			return nil, err
