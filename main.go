@@ -205,7 +205,7 @@ func Flash(pkgName, target, port string, printIR, dumpSSA, debug bool, printSize
 //
 // Note: this command is expected to execute just before exiting, as it
 // modifies global state.
-func FlashGDB(pkgName, target, port string, printIR, dumpSSA bool, printSizes string) error {
+func FlashGDB(pkgName, target, port string, printIR, dumpSSA, ocdOutput bool, printSizes string) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
@@ -220,11 +220,15 @@ func FlashGDB(pkgName, target, port string, printIR, dumpSSA bool, printSizes st
 		if len(spec.OCDDaemon) != 0 {
 			// We need a separate debugging daemon for on-chip debugging.
 			daemon := exec.Command(spec.OCDDaemon[0], spec.OCDDaemon[1:]...)
-			// Make it clear which output is from the daemon.
-			daemon.Stderr = &ColorWriter{
-				Out:    os.Stderr,
-				Prefix: spec.OCDDaemon[0] + ": ",
-				Color:  TermColorYellow,
+			if ocdOutput {
+				// Make it clear which output is from the daemon.
+				w := &ColorWriter{
+					Out:    os.Stderr,
+					Prefix: spec.OCDDaemon[0] + ": ",
+					Color:  TermColorYellow,
+				}
+				daemon.Stdout = w
+				daemon.Stderr = w
 			}
 			// Make sure the daemon doesn't receive Ctrl-C that is intended for
 			// GDB (to break the currently executing program).
@@ -320,6 +324,7 @@ func main() {
 	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
+	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
 
 	if len(os.Args) < 2 {
@@ -360,7 +365,7 @@ func main() {
 		if command == "flash" {
 			err = Flash(flag.Arg(0), *target, *port, *printIR, *dumpSSA, !*nodebug, *printSize)
 		} else {
-			err = FlashGDB(flag.Arg(0), *target, *port, *printIR, *dumpSSA, *printSize)
+			err = FlashGDB(flag.Arg(0), *target, *port, *printIR, *dumpSSA, *ocdOutput, *printSize)
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
