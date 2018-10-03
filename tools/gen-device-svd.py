@@ -54,6 +54,20 @@ def readSVD(path, sourceURL):
         if groupNameTags:
             groupName = getText(groupNameTags[0])
 
+        for interrupt in periphEl.findall('interrupt'):
+            intrName = getText(interrupt.find('name'))
+            intrIndex = int(getText(interrupt.find('value')))
+            if intrName in interrupts:
+                if interrupts[intrName]['index'] != intrIndex:
+                    raise ValueError('interrupt with the same name has different indexes: ' + intrName)
+                interrupts[intrName]['description'] += ' // ' + description
+            else:
+                interrupts[intrName] = {
+                    'name':        intrName,
+                    'index':       intrIndex,
+                    'description': description,
+                }
+
         if periphEl.get('derivedFrom') or groupName in groups:
             if periphEl.get('derivedFrom'):
                 derivedFromName = periphEl.get('derivedFrom')
@@ -82,20 +96,6 @@ def readSVD(path, sourceURL):
 
         if groupName and groupName not in groups:
             groups[groupName] = peripheral
-
-        for interrupt in periphEl.findall('interrupt'):
-            intrName = getText(interrupt.find('name'))
-            intrIndex = int(getText(interrupt.find('value')))
-            if intrName in interrupts:
-                if interrupts[intrName]['index'] != intrIndex:
-                    raise ValueError('interrupt with the same name has different indexes: ' + intrName)
-                interrupts[intrName]['description'] += ' // ' + description
-            else:
-                interrupts[intrName] = {
-                    'name':        intrName,
-                    'index':       intrIndex,
-                    'description': description,
-                }
 
         regsEls = periphEl.findall('registers')
         if regsEls:
