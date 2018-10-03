@@ -5,6 +5,7 @@ package machine
 import (
 	"device/arm"
 	"device/nrf"
+	"unsafe"
 )
 
 type GPIOMode uint8
@@ -95,4 +96,127 @@ func handleUART0() {
 		bufferPut(byte(nrf.UART0.RXD))
 		nrf.UART0.EVENTS_RXDRDY = 0x0
 	}
+}
+
+// I2C0 is the only I2C interface on the NRF.
+var I2C0 = I2C{}
+
+// Configure is intended to setup the I2C interface.
+func (i2c I2C) Configure(config I2CConfig) {
+	// Default I2C bus speed is 100 kHz.
+	if config.Frequency == 0 {
+		config.Frequency = TWI_FREQ_100KHZ
+	}
+
+	// do config
+	nrf.P0.PIN_CNF[SCL_PIN] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
+		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
+		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
+		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
+		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos)
+
+	nrf.P0.PIN_CNF[SDA_PIN] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
+		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
+		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
+		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
+		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos)
+
+	if config.Frequency == TWI_FREQ_400KHZ {
+		nrf.TWIM1.FREQUENCY = nrf.TWIM_FREQUENCY_FREQUENCY_K400
+	} else {
+		nrf.TWIM1.FREQUENCY = nrf.TWIM_FREQUENCY_FREQUENCY_K100
+	}
+
+	nrf.TWIM1.ENABLE = nrf.TWIM_ENABLE_ENABLE_Enabled
+	nrf.TWIM1.PSEL.SCL = SCL_PIN
+	nrf.TWIM1.PSEL.SDA = SDA_PIN
+}
+
+// Start starts an I2C communication session.
+func (i2c I2C) Start() {
+	// do it
+}
+
+// Stop ends an I2C communication session.
+func (i2c I2C) Stop() {
+	// do it
+}
+
+var buf [4]volatileByte
+
+// WriteTo writes a slice of data bytes to a peripheral with a specific address.
+func (i2c I2C) WriteTo(address uint8, data []byte) {
+	// TODO: make sure we are not overwriting buf
+
+	for i, _ := range data {
+		buf[i] = volatileByte(data[i])
+	}
+
+	nrf.TWIM1.ADDRESS = nrf.RegValue(address)
+	nrf.TWIM1.TASKS_RESUME = 1
+
+	nrf.TWIM1.TXD.MAXCNT = nrf.RegValue(len(data))
+	nrf.TWIM1.TXD.PTR = nrf.RegValue(uintptr(unsafe.Pointer(&buf)))
+
+	println("TASKS_STARTTX")
+	nrf.TWIM1.EVENTS_LASTTX = 0
+	nrf.TWIM1.TASKS_STARTTX = 1
+	for nrf.TWIM1.EVENTS_TXSTARTED == 0 && nrf.TWIM1.EVENTS_ERROR == 0 {
+	}
+	nrf.TWIM1.EVENTS_TXSTARTED = 0
+
+	println("EVENTS_LASTTX?")
+	for nrf.TWIM1.EVENTS_LASTTX == 0 && nrf.TWIM1.EVENTS_ERROR == 0 {
+	}
+	nrf.TWIM1.EVENTS_LASTTX = 0
+
+	// Assume stop after write.
+	println("EVENTS_STOP")
+	nrf.TWIM1.TASKS_STOP = 1
+	for nrf.TWIM1.EVENTS_STOPPED == 0 {
+	}
+	nrf.TWIM1.EVENTS_STOPPED = 0
+}
+
+// ReadFrom reads a slice of data bytes from an I2C peripheral with a specific address.
+func (i2c I2C) ReadFrom(address uint8, data []byte) {
+	rxb := make([]byte, len(data))
+
+	nrf.TWIM1.ADDRESS = nrf.RegValue(address)
+	//nrf.TWIM1.TASKS_RESUME = 1
+	nrf.TWIM1.RXD.MAXCNT = nrf.RegValue(len(data))
+	nrf.TWIM1.RXD.PTR = nrf.RegValue(uintptr(unsafe.Pointer(&rxb)))
+
+	nrf.TWIM1.TASKS_STARTRX = 1
+	for nrf.TWIM1.EVENTS_RXSTARTED == 0 && nrf.TWIM1.EVENTS_ERROR == 0 {
+	}
+	nrf.TWIM1.EVENTS_RXSTARTED = 0
+
+	for nrf.TWIM1.EVENTS_LASTRX == 0 && nrf.TWIM1.EVENTS_ERROR == 0 {
+	}
+	nrf.TWIM1.EVENTS_LASTRX = 0
+
+	// Assume stop after read.
+	nrf.TWIM1.TASKS_STOP = 1
+	for nrf.TWIM1.EVENTS_STOPPED == 0 {
+	}
+	nrf.TWIM1.EVENTS_STOPPED = 0
+
+	br := int(nrf.TWIM1.RXD.AMOUNT)
+	for i := 0; i < br; i++ {
+		data[i] = rxb[i]
+	}
+
+	return
+}
+
+// WriteByte writes a single byte to the I2C bus.
+func (i2c I2C) WriteByte(data byte) {
+	// do it
+}
+
+// ReadByte reads a single byte from the I2C bus.
+func (i2c I2C) ReadByte() byte {
+	// do it
+	return 0
 }
