@@ -96,3 +96,93 @@ func handleUART0() {
 		nrf.UART0.EVENTS_RXDRDY = 0x0
 	}
 }
+
+// I2C on the NRF.
+type I2C struct {
+	Bus *nrf.TWI_Type
+}
+
+// There are 2 I2C interfaces on the NRF.
+var (
+	I2C0 = I2C{Bus: nrf.TWI0}
+	I2C1 = I2C{Bus: nrf.TWI1}
+)
+
+// I2CConfig is used to store config info for I2C.
+type I2CConfig struct {
+	Frequency uint32
+	SCL       uint8
+	SDA       uint8
+}
+
+// Configure is intended to setup the I2C interface.
+func (i2c I2C) Configure(config I2CConfig) {
+	// Default I2C bus speed is 100 kHz.
+	if config.Frequency == 0 {
+		config.Frequency = TWI_FREQ_100KHZ
+	}
+	// Default I2C pins if not set.
+	if config.SDA == 0 && config.SCL == 0 {
+		config.SDA = SDA_PIN
+		config.SCL = SCL_PIN
+	}
+
+	// do config
+	nrf.P0.PIN_CNF[config.SCL] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
+		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
+		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
+		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
+		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos)
+
+	nrf.P0.PIN_CNF[config.SDA] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
+		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
+		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
+		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
+		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos)
+
+	if config.Frequency == TWI_FREQ_400KHZ {
+		i2c.Bus.FREQUENCY = nrf.TWI_FREQUENCY_FREQUENCY_K400
+	} else {
+		i2c.Bus.FREQUENCY = nrf.TWI_FREQUENCY_FREQUENCY_K100
+	}
+
+	i2c.Bus.ENABLE = nrf.TWI_ENABLE_ENABLE_Enabled
+	i2c.Bus.PSELSCL = nrf.RegValue(config.SCL)
+	i2c.Bus.PSELSDA = nrf.RegValue(config.SDA)
+}
+
+// WriteTo writes a slice of data bytes to a peripheral with a specific address.
+func (i2c I2C) WriteTo(address uint8, data []byte) {
+	i2c.Bus.ADDRESS = nrf.RegValue(address)
+	i2c.Bus.TASKS_STARTTX = 1
+	for _, v := range data {
+		i2c.Bus.TXD = nrf.RegValue(v)
+		for i2c.Bus.EVENTS_TXDSENT == 0 {
+		}
+		i2c.Bus.EVENTS_TXDSENT = 0
+	}
+
+	// Assume stop after write.
+	i2c.Bus.TASKS_STOP = 1
+	for i2c.Bus.EVENTS_STOPPED == 0 {
+	}
+	i2c.Bus.EVENTS_STOPPED = 0
+}
+
+// ReadFrom reads a slice of data bytes from an I2C peripheral with a specific address.
+func (i2c I2C) ReadFrom(address uint8, data []byte) {
+	i2c.Bus.ADDRESS = nrf.RegValue(address)
+	i2c.Bus.TASKS_STARTRX = 1
+	for i, _ := range data {
+		for i2c.Bus.EVENTS_RXDREADY == 0 {
+		}
+		i2c.Bus.EVENTS_RXDREADY = 0
+		data[i] = byte(i2c.Bus.RXD)
+	}
+
+	// Assume stop after read.
+	i2c.Bus.TASKS_STOP = 1
+	for i2c.Bus.EVENTS_STOPPED == 0 {
+	}
+	i2c.Bus.EVENTS_STOPPED = 0
+}

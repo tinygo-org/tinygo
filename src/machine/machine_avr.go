@@ -158,20 +158,14 @@ func (a ADC) Get() uint16 {
 	return uint16(low) | uint16(high<<8)
 }
 
-// I2C on the Arduino
+// I2C on the Arduino.
 type I2C struct {
 }
 
 // I2C0 is the only I2C interface on the Arduino.
 var I2C0 = I2C{}
 
-// TWI_FREQ is the bus speed. Normally either 100 kHz, or 400 kHz for high-speed bus.
-const (
-	TWI_FREQ_100KHZ = 100000
-	TWI_FREQ_400KHZ = 400000
-)
-
-// I2CConfig does not do much of anything on Arduino.
+// I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
 	Frequency uint32
 }

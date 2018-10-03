@@ -35,3 +35,9 @@ const (
 	ADC4 = 30
 	ADC5 = 31
 )
+
+// I2C pins
+const (
+	SDA_PIN = 26
+	SCL_PIN = 27
+)
