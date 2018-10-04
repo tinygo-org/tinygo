@@ -117,15 +117,22 @@ func (i2c I2C) Configure(config I2CConfig) {
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
 	}
+	// Default I2C pins.
+	if config.SDA == 0 {
+		config.SDA = SDA_PIN
+	}
+	if config.SCL == 0 {
+		config.SCL = SCL_PIN
+	}
 
 	// do config
-	nrf.P0.PIN_CNF[SCL_PIN] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
+	nrf.P0.PIN_CNF[config.SCL] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
 		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
 		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
 		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos)
 
-	nrf.P0.PIN_CNF[SDA_PIN] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
+	nrf.P0.PIN_CNF[config.SDA] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
 		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
 		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
@@ -138,8 +145,8 @@ func (i2c I2C) Configure(config I2CConfig) {
 	}
 
 	i2c.register().ENABLE = nrf.TWI_ENABLE_ENABLE_Enabled
-	i2c.register().PSELSCL = SCL_PIN
-	i2c.register().PSELSDA = SDA_PIN
+	i2c.register().PSELSCL = nrf.RegValue(config.SCL)
+	i2c.register().PSELSDA = nrf.RegValue(config.SDA)
 }
 
 // Start starts an I2C communication session.

@@ -15,4 +15,6 @@ const (
 // I2CConfig does not do much of anything on Arduino.
 type I2CConfig struct {
 	Frequency uint32
+	SCL       uint8
+	SDA       uint8
 }
