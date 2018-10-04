@@ -362,9 +362,15 @@ func (c *Compiler) Compile(mainPath string) error {
 
 	// After all packages are imported, add a synthetic initializer function
 	// that calls the initializer of each package.
-	initFn := c.mod.NamedFunction("runtime.initAll")
-	initFn.SetLinkage(llvm.InternalLinkage)
-	block := c.ctx.AddBasicBlock(initFn, "entry")
+	initFn := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function))
+	initFn.LLVMFn.SetLinkage(llvm.InternalLinkage)
+	difunc, err := c.attachDebugInfo(initFn)
+	if err != nil {
+		return err
+	}
+	pos := c.ir.Program.Fset.Position(initFn.Pos())
+	c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
+	block := c.ctx.AddBasicBlock(initFn.LLVMFn, "entry")
 	c.builder.SetInsertPointAtEnd(block)
 	for _, fn := range c.initFuncs {
 		c.builder.CreateCall(fn, nil, "")
@@ -811,42 +817,51 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 
 	if c.Debug && f.Syntax() != nil && len(f.Blocks) != 0 {
 		// Create debug info file if needed.
-		pos := c.ir.Program.Fset.Position(f.Syntax().Pos())
-		if _, ok := c.difiles[pos.Filename]; !ok {
-			dir, file := filepath.Split(pos.Filename)
-			c.difiles[pos.Filename] = c.dibuilder.CreateFile(file, dir[:len(dir)-1])
+		difunc, err := c.attachDebugInfo(f)
+		if err != nil {
+			return nil, err
 		}
-
-		// Debug info for this function.
-		diparams := make([]llvm.Metadata, 0, len(f.Params))
-		for _, param := range f.Params {
-			ditype, err := c.getDIType(param.Type())
-			if err != nil {
-				return nil, err
-			}
-			diparams = append(diparams, ditype)
-		}
-		diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
-			File:       c.difiles[pos.Filename],
-			Parameters: diparams,
-			Flags:      0, // ?
-		})
-		frame.difunc = c.dibuilder.CreateFunction(c.difiles[pos.Filename], llvm.DIFunction{
-			Name:         f.RelString(nil),
-			LinkageName:  f.LinkName(),
-			File:         c.difiles[pos.Filename],
-			Line:         pos.Line,
-			Type:         diFuncType,
-			LocalToUnit:  true,
-			IsDefinition: true,
-			ScopeLine:    0,
-			Flags:        llvm.FlagPrototyped,
-			Optimized:    true,
-		})
-		frame.fn.LLVMFn.SetSubprogram(frame.difunc)
+		frame.difunc = difunc
 	}
 
 	return frame, nil
+}
+
+func (c *Compiler) attachDebugInfo(f *ir.Function) (llvm.Metadata, error) {
+	pos := c.ir.Program.Fset.Position(f.Syntax().Pos())
+	if _, ok := c.difiles[pos.Filename]; !ok {
+		dir, file := filepath.Split(pos.Filename)
+		c.difiles[pos.Filename] = c.dibuilder.CreateFile(file, dir[:len(dir)-1])
+	}
+
+	// Debug info for this function.
+	diparams := make([]llvm.Metadata, 0, len(f.Params))
+	for _, param := range f.Params {
+		ditype, err := c.getDIType(param.Type())
+		if err != nil {
+			return llvm.Metadata{}, err
+		}
+		diparams = append(diparams, ditype)
+	}
+	diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+		File:       c.difiles[pos.Filename],
+		Parameters: diparams,
+		Flags:      0, // ?
+	})
+	difunc := c.dibuilder.CreateFunction(c.difiles[pos.Filename], llvm.DIFunction{
+		Name:         f.RelString(nil),
+		LinkageName:  f.LinkName(),
+		File:         c.difiles[pos.Filename],
+		Line:         pos.Line,
+		Type:         diFuncType,
+		LocalToUnit:  true,
+		IsDefinition: true,
+		ScopeLine:    0,
+		Flags:        llvm.FlagPrototyped,
+		Optimized:    true,
+	})
+	f.LLVMFn.SetSubprogram(difunc)
+	return difunc, nil
 }
 
 // Create a new global hashmap bucket, for map initialization.

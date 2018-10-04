@@ -8,8 +8,10 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/aykevl/go-llvm"
 	"github.com/aykevl/tinygo/compiler"
@@ -199,6 +201,74 @@ func Flash(pkgName, target, port string, printIR, dumpSSA, debug bool, printSize
 	})
 }
 
+// Flash a program on a microcontroller and drop into a GDB shell.
+//
+// Note: this command is expected to execute just before exiting, as it
+// modifies global state.
+func FlashGDB(pkgName, target, port string, printIR, dumpSSA, ocdOutput bool, printSizes string) error {
+	spec, err := LoadTarget(target)
+	if err != nil {
+		return err
+	}
+
+	if spec.GDB == "" {
+		return errors.New("gdb not configured in the target specification")
+	}
+
+	debug := true // always enable debug symbols
+	return Compile(pkgName, "", spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
+		if len(spec.OCDDaemon) != 0 {
+			// We need a separate debugging daemon for on-chip debugging.
+			daemon := exec.Command(spec.OCDDaemon[0], spec.OCDDaemon[1:]...)
+			if ocdOutput {
+				// Make it clear which output is from the daemon.
+				w := &ColorWriter{
+					Out:    os.Stderr,
+					Prefix: spec.OCDDaemon[0] + ": ",
+					Color:  TermColorYellow,
+				}
+				daemon.Stdout = w
+				daemon.Stderr = w
+			}
+			// Make sure the daemon doesn't receive Ctrl-C that is intended for
+			// GDB (to break the currently executing program).
+			// https://stackoverflow.com/a/35435038/559350
+			daemon.SysProcAttr = &syscall.SysProcAttr{
+				Setpgid: true,
+				Pgid:    0,
+			}
+			// Start now, and kill it on exit.
+			daemon.Start()
+			defer func() {
+				daemon.Process.Signal(os.Interrupt)
+				// Maybe we should send a .Kill() after x seconds?
+				daemon.Wait()
+			}()
+		}
+
+		// Ignore Ctrl-C, it must be passed on to GDB.
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		go func() {
+			for range c {
+			}
+		}()
+
+		// Construct and execute a gdb command.
+		// By default: gdb -ex run <binary>
+		// Exit GDB with Ctrl-D.
+		params := []string{tmppath}
+		for _, cmd := range spec.GDBCmds {
+			params = append(params, "-ex", cmd)
+		}
+		cmd := exec.Command(spec.GDB, params...)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	})
+}
+
 // Run the specified package directly (using JIT or interpretation).
 func Run(pkgName string) error {
 	config := compiler.Config{
@@ -254,6 +324,7 @@ func main() {
 	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
+	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
 
 	if len(os.Args) < 2 {
@@ -284,13 +355,18 @@ func main() {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
-	case "flash":
+	case "flash", "gdb":
 		if *outpath != "" {
 			fmt.Fprintln(os.Stderr, "Output cannot be specified with the flash command.")
 			usage()
 			os.Exit(1)
 		}
-		err := Flash(flag.Arg(0), *target, *port, *printIR, *dumpSSA, !*nodebug, *printSize)
+		var err error
+		if command == "flash" {
+			err = Flash(flag.Arg(0), *target, *port, *printIR, *dumpSSA, !*nodebug, *printSize)
+		} else {
+			err = FlashGDB(flag.Arg(0), *target, *port, *printIR, *dumpSSA, *ocdOutput, *printSize)
+		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
