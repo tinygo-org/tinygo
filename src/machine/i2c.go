@@ -3,6 +3,7 @@
 package machine
 
 type I2C struct {
+	Bus uint8
 }
 
 // TWI_FREQ is the bus speed. Normally either 100 kHz, or 400 kHz for high-speed bus.
