@@ -5,7 +5,7 @@ package machine
 import (
 	"device/arm"
 	"device/nrf"
-	"unsafe"
+	"time"
 )
 
 type GPIOMode uint8
@@ -122,101 +122,71 @@ func (i2c I2C) Configure(config I2CConfig) {
 		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos)
 
 	if config.Frequency == TWI_FREQ_400KHZ {
-		nrf.TWIM1.FREQUENCY = nrf.TWIM_FREQUENCY_FREQUENCY_K400
+		nrf.TWI0.FREQUENCY = nrf.TWI_FREQUENCY_FREQUENCY_K400
 	} else {
-		nrf.TWIM1.FREQUENCY = nrf.TWIM_FREQUENCY_FREQUENCY_K100
+		nrf.TWI0.FREQUENCY = nrf.TWI_FREQUENCY_FREQUENCY_K100
 	}
 
-	nrf.TWIM1.ENABLE = nrf.TWIM_ENABLE_ENABLE_Enabled
-	nrf.TWIM1.PSEL.SCL = SCL_PIN
-	nrf.TWIM1.PSEL.SDA = SDA_PIN
+	nrf.TWI0.ENABLE = nrf.TWI_ENABLE_ENABLE_Enabled
+	nrf.TWI0.PSELSCL = SCL_PIN
+	nrf.TWI0.PSELSDA = SDA_PIN
 }
 
 // Start starts an I2C communication session.
+// Nothing to do here because start is handled differently for RX and TX on NRF.
+// Strictly here for interface compatibility with AVR.
 func (i2c I2C) Start() {
-	// do it
 }
 
 // Stop ends an I2C communication session.
 func (i2c I2C) Stop() {
-	// do it
+	nrf.TWI0.TASKS_STOP = 1
+	for nrf.TWI0.EVENTS_STOPPED == 0 {
+	}
+	nrf.TWI0.EVENTS_STOPPED = 0
 }
-
-var buf [4]volatileByte
 
 // WriteTo writes a slice of data bytes to a peripheral with a specific address.
 func (i2c I2C) WriteTo(address uint8, data []byte) {
-	// TODO: make sure we are not overwriting buf
-
-	for i, _ := range data {
-		buf[i] = volatileByte(data[i])
+	nrf.TWI0.ADDRESS = nrf.RegValue(address)
+	nrf.TWI0.TASKS_STARTTX = 1
+	for _, v := range data {
+		i2c.WriteByte(v)
 	}
 
-	nrf.TWIM1.ADDRESS = nrf.RegValue(address)
-	nrf.TWIM1.TASKS_RESUME = 1
-
-	nrf.TWIM1.TXD.MAXCNT = nrf.RegValue(len(data))
-	nrf.TWIM1.TXD.PTR = nrf.RegValue(uintptr(unsafe.Pointer(&buf)))
-
-	println("TASKS_STARTTX")
-	nrf.TWIM1.EVENTS_LASTTX = 0
-	nrf.TWIM1.TASKS_STARTTX = 1
-	for nrf.TWIM1.EVENTS_TXSTARTED == 0 && nrf.TWIM1.EVENTS_ERROR == 0 {
-	}
-	nrf.TWIM1.EVENTS_TXSTARTED = 0
-
-	println("EVENTS_LASTTX?")
-	for nrf.TWIM1.EVENTS_LASTTX == 0 && nrf.TWIM1.EVENTS_ERROR == 0 {
-	}
-	nrf.TWIM1.EVENTS_LASTTX = 0
+	// Approx. 300 us needed after ending write before sending stop.
+	time.Sleep(300 * time.Microsecond)
 
 	// Assume stop after write.
-	println("EVENTS_STOP")
-	nrf.TWIM1.TASKS_STOP = 1
-	for nrf.TWIM1.EVENTS_STOPPED == 0 {
-	}
-	nrf.TWIM1.EVENTS_STOPPED = 0
+	i2c.Stop()
 }
 
 // ReadFrom reads a slice of data bytes from an I2C peripheral with a specific address.
 func (i2c I2C) ReadFrom(address uint8, data []byte) {
-	rxb := make([]byte, len(data))
-
-	nrf.TWIM1.ADDRESS = nrf.RegValue(address)
-	//nrf.TWIM1.TASKS_RESUME = 1
-	nrf.TWIM1.RXD.MAXCNT = nrf.RegValue(len(data))
-	nrf.TWIM1.RXD.PTR = nrf.RegValue(uintptr(unsafe.Pointer(&rxb)))
-
-	nrf.TWIM1.TASKS_STARTRX = 1
-	for nrf.TWIM1.EVENTS_RXSTARTED == 0 && nrf.TWIM1.EVENTS_ERROR == 0 {
+	nrf.TWI0.ADDRESS = nrf.RegValue(address)
+	nrf.TWI0.TASKS_STARTRX = 1
+	for i, _ := range data {
+		data[i] = i2c.ReadByte()
 	}
-	nrf.TWIM1.EVENTS_RXSTARTED = 0
-
-	for nrf.TWIM1.EVENTS_LASTRX == 0 && nrf.TWIM1.EVENTS_ERROR == 0 {
-	}
-	nrf.TWIM1.EVENTS_LASTRX = 0
 
 	// Assume stop after read.
-	nrf.TWIM1.TASKS_STOP = 1
-	for nrf.TWIM1.EVENTS_STOPPED == 0 {
-	}
-	nrf.TWIM1.EVENTS_STOPPED = 0
-
-	br := int(nrf.TWIM1.RXD.AMOUNT)
-	for i := 0; i < br; i++ {
-		data[i] = rxb[i]
-	}
+	i2c.Stop()
 
 	return
 }
 
 // WriteByte writes a single byte to the I2C bus.
 func (i2c I2C) WriteByte(data byte) {
-	// do it
+	nrf.TWI0.TXD = nrf.RegValue(data)
+	for nrf.TWI0.EVENTS_TXDSENT == 0 {
+	}
+	nrf.TWI0.EVENTS_TXDSENT = 0
 }
 
 // ReadByte reads a single byte from the I2C bus.
 func (i2c I2C) ReadByte() byte {
-	// do it
-	return 0
+	for nrf.TWI0.EVENTS_RXDREADY == 0 {
+	}
+	nrf.TWI0.EVENTS_RXDREADY = 0
+	return byte(nrf.TWI0.RXD)
 }
