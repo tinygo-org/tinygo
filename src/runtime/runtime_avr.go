@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"device/avr"
+	"machine"
 	"unsafe"
 )
 
@@ -54,19 +55,11 @@ func init() {
 }
 
 func initUART() {
-	// Initialize UART at 9600 baud when running at 16MHz.
-	*avr.UBRR0H = 0
-	*avr.UBRR0L = 0x67
-
-	*avr.UCSR0B = avr.UCSR0B_RXEN0 | avr.UCSR0B_TXEN0   // enable RX and TX
-	*avr.UCSR0C = avr.UCSR0C_UCSZ01 | avr.UCSR0C_UCSZ00 // 8-bits data
+	machine.UART0.Configure(machine.UARTConfig{})
 }
 
 func putchar(c byte) {
-	for (*avr.UCSR0A & avr.UCSR0A_UDRE0) == 0 {
-		// Wait until previous char has been sent.
-	}
-	*avr.UDR0 = avr.RegValue(c) // send char
+	machine.UART0.WriteByte(c)
 }
 
 // Sleep this number of ticks of 16ms.

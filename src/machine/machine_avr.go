@@ -291,8 +291,11 @@ func (uart UART) Configure(config UARTConfig) {
 	*avr.UBRR0H = avr.RegValue(ps >> 8)
 	*avr.UBRR0L = avr.RegValue(ps & 0xff)
 
-	// enable RX interrupt
-	*avr.UCSR0B |= avr.UCSR0B_RXCIE0
+	// enable RX, TX and RX interrupt
+	*avr.UCSR0B = avr.UCSR0B_RXEN0 | avr.UCSR0B_TXEN0 | avr.UCSR0B_RXCIE0
+
+	// 8-bits data
+	*avr.UCSR0C = avr.UCSR0C_UCSZ01 | avr.UCSR0C_UCSZ00
 }
 
 // WriteByte writes a byte of data to the UART.
