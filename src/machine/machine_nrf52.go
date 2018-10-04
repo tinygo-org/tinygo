@@ -51,7 +51,6 @@ func (a ADC) Get() uint16 {
 		return 0
 	}
 
-	// Set 14-bit sample resolution.
 	nrf.SAADC.RESOLUTION = nrf.SAADC_RESOLUTION_VAL_12bit
 
 	// Enable ADC.
