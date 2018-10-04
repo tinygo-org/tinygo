@@ -5,7 +5,6 @@ package machine
 import (
 	"device/arm"
 	"device/nrf"
-	"time"
 )
 
 type GPIOMode uint8
@@ -154,9 +153,6 @@ func (i2c I2C) WriteTo(address uint8, data []byte) {
 		i2c.WriteByte(v)
 	}
 
-	// Approx. 300 us needed after ending write before sending stop.
-	time.Sleep(300 * time.Microsecond)
-
 	// Assume stop after write.
 	i2c.Stop()
 }
@@ -171,8 +167,6 @@ func (i2c I2C) ReadFrom(address uint8, data []byte) {
 
 	// Assume stop after read.
 	i2c.Stop()
-
-	return
 }
 
 // WriteByte writes a single byte to the I2C bus.
