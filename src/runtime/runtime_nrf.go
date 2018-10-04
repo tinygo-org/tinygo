@@ -5,6 +5,7 @@ package runtime
 import (
 	"device/arm"
 	"device/nrf"
+	"machine"
 )
 
 type timeUnit int64
@@ -21,17 +22,9 @@ func handleReset() {
 }
 
 func init() {
-	initUART()
+	machine.UART0.Configure(machine.UARTConfig{})
 	initLFCLK()
 	initRTC()
-}
-
-func initUART() {
-	nrf.UART0.ENABLE = nrf.UART_ENABLE_ENABLE_Enabled
-	nrf.UART0.BAUDRATE = nrf.UART_BAUDRATE_BAUDRATE_Baud115200
-	nrf.UART0.TASKS_STARTTX = 1
-	nrf.UART0.PSELTXD = 6 // pin 6 for NRF52840-DK
-	nrf.UART0.PSELRXD = 8 // pin 8 for NRF52840-DK
 }
 
 func initLFCLK() {
@@ -49,10 +42,7 @@ func initRTC() {
 }
 
 func putchar(c byte) {
-	nrf.UART0.TXD = nrf.RegValue(c)
-	for nrf.UART0.EVENTS_TXDRDY == 0 {
-	}
-	nrf.UART0.EVENTS_TXDRDY = 0
+	machine.UART0.WriteByte(c)
 }
 
 func sleepTicks(d timeUnit) {
