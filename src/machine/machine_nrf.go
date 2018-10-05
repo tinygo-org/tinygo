@@ -97,18 +97,22 @@ func handleUART0() {
 	}
 }
 
+// I2C on the NRF.
+type I2C struct {
+	Bus *nrf.TWI_Type
+}
+
 // There are 2 I2C interfaces on the NRF.
 var (
-	I2C0 = I2C{Bus: 0}
-	I2C1 = I2C{Bus: 1}
+	I2C0 = I2C{Bus: nrf.TWI0}
+	I2C1 = I2C{Bus: nrf.TWI1}
 )
 
-// register returns the I2C register that matches the current I2C bus.
-func (i2c I2C) register() *nrf.TWI_Type {
-	if i2c.Bus == 1 {
-		return nrf.TWI1
-	}
-	return nrf.TWI0
+// I2CConfig is used to store config info for I2C.
+type I2CConfig struct {
+	Frequency uint32
+	SCL       uint8
+	SDA       uint8
 }
 
 // Configure is intended to setup the I2C interface.
@@ -117,11 +121,9 @@ func (i2c I2C) Configure(config I2CConfig) {
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
 	}
-	// Default I2C pins.
-	if config.SDA == 0 {
+	// Default I2C pins if not set.
+	if config.SDA == 0 && config.SCL == 0 {
 		config.SDA = SDA_PIN
-	}
-	if config.SCL == 0 {
 		config.SCL = SCL_PIN
 	}
 
@@ -139,66 +141,48 @@ func (i2c I2C) Configure(config I2CConfig) {
 		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos)
 
 	if config.Frequency == TWI_FREQ_400KHZ {
-		i2c.register().FREQUENCY = nrf.TWI_FREQUENCY_FREQUENCY_K400
+		i2c.Bus.FREQUENCY = nrf.TWI_FREQUENCY_FREQUENCY_K400
 	} else {
-		i2c.register().FREQUENCY = nrf.TWI_FREQUENCY_FREQUENCY_K100
+		i2c.Bus.FREQUENCY = nrf.TWI_FREQUENCY_FREQUENCY_K100
 	}
 
-	i2c.register().ENABLE = nrf.TWI_ENABLE_ENABLE_Enabled
-	i2c.register().PSELSCL = nrf.RegValue(config.SCL)
-	i2c.register().PSELSDA = nrf.RegValue(config.SDA)
-}
-
-// Start starts an I2C communication session.
-// Nothing to do here because start is handled differently for RX and TX on NRF.
-// Strictly here for interface compatibility with AVR.
-func (i2c I2C) Start() {
-}
-
-// Stop ends an I2C communication session.
-func (i2c I2C) Stop() {
-	i2c.register().TASKS_STOP = 1
-	for i2c.register().EVENTS_STOPPED == 0 {
-	}
-	i2c.register().EVENTS_STOPPED = 0
+	i2c.Bus.ENABLE = nrf.TWI_ENABLE_ENABLE_Enabled
+	i2c.Bus.PSELSCL = nrf.RegValue(config.SCL)
+	i2c.Bus.PSELSDA = nrf.RegValue(config.SDA)
 }
 
 // WriteTo writes a slice of data bytes to a peripheral with a specific address.
 func (i2c I2C) WriteTo(address uint8, data []byte) {
-	i2c.register().ADDRESS = nrf.RegValue(address)
-	i2c.register().TASKS_STARTTX = 1
+	i2c.Bus.ADDRESS = nrf.RegValue(address)
+	i2c.Bus.TASKS_STARTTX = 1
 	for _, v := range data {
-		i2c.WriteByte(v)
+		i2c.Bus.TXD = nrf.RegValue(v)
+		for i2c.Bus.EVENTS_TXDSENT == 0 {
+		}
+		i2c.Bus.EVENTS_TXDSENT = 0
 	}
 
 	// Assume stop after write.
-	i2c.Stop()
+	i2c.Bus.TASKS_STOP = 1
+	for i2c.Bus.EVENTS_STOPPED == 0 {
+	}
+	i2c.Bus.EVENTS_STOPPED = 0
 }
 
 // ReadFrom reads a slice of data bytes from an I2C peripheral with a specific address.
 func (i2c I2C) ReadFrom(address uint8, data []byte) {
-	i2c.register().ADDRESS = nrf.RegValue(address)
-	i2c.register().TASKS_STARTRX = 1
+	i2c.Bus.ADDRESS = nrf.RegValue(address)
+	i2c.Bus.TASKS_STARTRX = 1
 	for i, _ := range data {
-		data[i] = i2c.ReadByte()
+		for i2c.Bus.EVENTS_RXDREADY == 0 {
+		}
+		i2c.Bus.EVENTS_RXDREADY = 0
+		data[i] = byte(i2c.Bus.RXD)
 	}
 
 	// Assume stop after read.
-	i2c.Stop()
-}
-
-// WriteByte writes a single byte to the I2C bus.
-func (i2c I2C) WriteByte(data byte) {
-	i2c.register().TXD = nrf.RegValue(data)
-	for i2c.register().EVENTS_TXDSENT == 0 {
+	i2c.Bus.TASKS_STOP = 1
+	for i2c.Bus.EVENTS_STOPPED == 0 {
 	}
-	i2c.register().EVENTS_TXDSENT = 0
-}
-
-// ReadByte reads a single byte from the I2C bus.
-func (i2c I2C) ReadByte() byte {
-	for i2c.register().EVENTS_RXDREADY == 0 {
-	}
-	i2c.register().EVENTS_RXDREADY = 0
-	return byte(i2c.register().RXD)
+	i2c.Bus.EVENTS_STOPPED = 0
 }

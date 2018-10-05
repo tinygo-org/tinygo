@@ -23,15 +23,15 @@ func main() {
 		switch count {
 		case 0:
 			// Crimson
-			machine.I2C0.WriteTo(0x09, []byte{byte('n'), 0xdc, 0x14, 0x3c})
+			machine.I2C0.WriteTo(0x09, []byte{'n', 0xdc, 0x14, 0x3c})
 			count = 1
 		case 1:
 			// MediumPurple
-			machine.I2C0.WriteTo(0x09, []byte{byte('n'), 0x93, 0x70, 0xdb})
+			machine.I2C0.WriteTo(0x09, []byte{'n', 0x93, 0x70, 0xdb})
 			count = 2
 		case 2:
 			// MediumSeaGreen
-			machine.I2C0.WriteTo(0x09, []byte{byte('n'), 0x3c, 0xb3, 0x71})
+			machine.I2C0.WriteTo(0x09, []byte{'n', 0x3c, 0xb3, 0x71})
 			count = 0
 		}
 

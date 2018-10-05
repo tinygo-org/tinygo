@@ -158,10 +158,17 @@ func (a ADC) Get() uint16 {
 	return uint16(low) | uint16(high<<8)
 }
 
-// I2C on the Arduino
+// I2C on the Arduino.
+type I2C struct {
+}
 
 // I2C0 is the only I2C interface on the Arduino.
 var I2C0 = I2C{}
+
+// I2CConfig is used to store config info for I2C.
+type I2CConfig struct {
+	Frequency uint32
+}
 
 // Configure is intended to setup the I2C interface.
 func (i2c I2C) Configure(config I2CConfig) {
