@@ -59,7 +59,10 @@ def readSVD(path, sourceURL):
             intrName = getText(interrupt.find('name'))
             intrIndex = int(getText(interrupt.find('value')))
             addInterrupt(interrupts, intrName, intrIndex, description)
-            if len(interruptEls) == 1:
+            # As a convenience, also use the peripheral name as the interrupt
+            # name. Only do that for the nrf for now, as the stm32 .svd files
+            # don't always put interrupts in the correct peripheral...
+            if len(interruptEls) == 1 and deviceName.startswith('nrf'):
                 addInterrupt(interrupts, name, intrIndex, description)
 
         if periphEl.get('derivedFrom') or groupName in groups:
