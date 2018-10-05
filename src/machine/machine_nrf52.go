@@ -12,6 +12,11 @@ func (p GPIO) getPortPin() (*nrf.GPIO_Type, uint8) {
 	return nrf.P0, p.Pin
 }
 
+//go:export UARTE0_UART0_IRQHandler
+func handleUART0() {
+	UART0.handleInterrupt()
+}
+
 // InitADC initializes the registers needed for ADC.
 func InitADC() {
 	return // no specific setup on nrf52 machine.

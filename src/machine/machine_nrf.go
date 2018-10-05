@@ -92,8 +92,7 @@ func (uart UART) WriteByte(c byte) error {
 	return nil
 }
 
-//go:export UARTE0_UART0_IRQHandler
-func handleUART0() {
+func (uart UART) handleInterrupt() {
 	if nrf.UART0.EVENTS_RXDRDY != 0 {
 		bufferPut(byte(nrf.UART0.RXD))
 		nrf.UART0.EVENTS_RXDRDY = 0x0
