@@ -54,19 +54,16 @@ def readSVD(path, sourceURL):
         if groupNameTags:
             groupName = getText(groupNameTags[0])
 
-        for interrupt in periphEl.findall('interrupt'):
+        interruptEls = periphEl.findall('interrupt')
+        for interrupt in interruptEls:
             intrName = getText(interrupt.find('name'))
             intrIndex = int(getText(interrupt.find('value')))
-            if intrName in interrupts:
-                if interrupts[intrName]['index'] != intrIndex:
-                    raise ValueError('interrupt with the same name has different indexes: ' + intrName)
-                interrupts[intrName]['description'] += ' // ' + description
-            else:
-                interrupts[intrName] = {
-                    'name':        intrName,
-                    'index':       intrIndex,
-                    'description': description,
-                }
+            addInterrupt(interrupts, intrName, intrIndex, description)
+            # As a convenience, also use the peripheral name as the interrupt
+            # name. Only do that for the nrf for now, as the stm32 .svd files
+            # don't always put interrupts in the correct peripheral...
+            if len(interruptEls) == 1 and deviceName.startswith('nrf'):
+                addInterrupt(interrupts, name, intrIndex, description)
 
         if periphEl.get('derivedFrom') or groupName in groups:
             if periphEl.get('derivedFrom'):
@@ -149,6 +146,20 @@ def readSVD(path, sourceURL):
     }
 
     return device
+
+def addInterrupt(interrupts, intrName, intrIndex, description):
+    if intrName in interrupts:
+        if interrupts[intrName]['index'] != intrIndex:
+            raise ValueError('interrupt with the same name has different indexes: %s (%d vs %d)'
+                % (intrName, interrupts[intrName]['index'], intrIndex))
+        if description not in interrupts[intrName]['description'].split(' // '):
+            interrupts[intrName]['description'] += ' // ' + description
+    else:
+        interrupts[intrName] = {
+            'name':        intrName,
+            'index':       intrIndex,
+            'description': description,
+        }
 
 def parseRegister(groupName, regEl, baseAddress, bitfieldPrefix=''):
     regName = getText(regEl.find('name'))
@@ -400,8 +411,10 @@ Default_Handler:
 '''.format(**device.metadata))
     num = 0
     for intr in device.interrupts:
+        if intr['index'] == num - 1:
+            continue
         if intr['index'] < num:
-            raise ValueError('interrupt numbers are not sorted or contain a duplicate')
+            raise ValueError('interrupt numbers are not sorted')
         while intr['index'] > num:
             out.write('    .long 0\n')
             num += 1

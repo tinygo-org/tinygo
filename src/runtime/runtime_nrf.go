@@ -28,7 +28,9 @@ func init() {
 }
 
 func initLFCLK() {
-	nrf.CLOCK.LFCLKSRC = nrf.CLOCK_LFCLKSTAT_SRC_Xtal
+	if machine.HasLowFrequencyCrystal {
+		nrf.CLOCK.LFCLKSRC = nrf.CLOCK_LFCLKSTAT_SRC_Xtal
+	}
 	nrf.CLOCK.TASKS_LFCLKSTART = 1
 	for nrf.CLOCK.EVENTS_LFCLKSTARTED == 0 {
 	}

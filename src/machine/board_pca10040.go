@@ -2,6 +2,9 @@
 
 package machine
 
+// The PCA10040 has a low-frequency (32kHz) crystal oscillator on board.
+const HasLowFrequencyCrystal = true
+
 // LEDs on the PCA10040 (nRF52832 dev board)
 const (
 	LED  = LED1
