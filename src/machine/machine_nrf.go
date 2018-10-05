@@ -19,22 +19,25 @@ const (
 // Configure this pin with the given configuration.
 func (p GPIO) Configure(config GPIOConfig) {
 	cfg := config.Mode | nrf.GPIO_PIN_CNF_DRIVE_S0S1 | nrf.GPIO_PIN_CNF_SENSE_Disabled
-	nrf.P0.PIN_CNF[p.Pin] = nrf.RegValue(cfg)
+	port, pin := p.getPortPin()
+	port.PIN_CNF[pin] = nrf.RegValue(cfg)
 }
 
 // Set the pin to high or low.
 // Warning: only use this on an output pin!
 func (p GPIO) Set(high bool) {
+	port, pin := p.getPortPin()
 	if high {
-		nrf.P0.OUTSET = 1 << p.Pin
+		port.OUTSET = 1 << pin
 	} else {
-		nrf.P0.OUTCLR = 1 << p.Pin
+		port.OUTCLR = 1 << pin
 	}
 }
 
 // Get returns the current value of a GPIO pin.
 func (p GPIO) Get() bool {
-	return (nrf.P0.IN>>p.Pin)&1 != 0
+	port, pin := p.getPortPin()
+	return (port.IN>>pin)&1 != 0
 }
 
 // UART
@@ -62,7 +65,7 @@ func (uart UART) Configure(config UARTConfig) {
 	nrf.UART0.INTENSET = nrf.UART_INTENSET_RXDRDY_Msk
 
 	// Enable RX IRQ.
-	arm.EnableIRQ(nrf.IRQ_UARTE0_UART0)
+	arm.EnableIRQ(nrf.IRQ_UART0)
 }
 
 // SetBaudRate sets the communication speed for the UART.
@@ -128,13 +131,15 @@ func (i2c I2C) Configure(config I2CConfig) {
 	}
 
 	// do config
-	nrf.P0.PIN_CNF[config.SCL] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
+	sclPort, sclPin := GPIO{config.SCL}.getPortPin()
+	sclPort.PIN_CNF[sclPin] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
 		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
 		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
 		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos)
 
-	nrf.P0.PIN_CNF[config.SDA] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
+	sdaPort, sdaPin := GPIO{config.SDA}.getPortPin()
+	sdaPort.PIN_CNF[sdaPin] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
 		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
 		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |

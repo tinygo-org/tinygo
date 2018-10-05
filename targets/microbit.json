@@ -1,0 +1,25 @@
+{
+	"llvm-target": "armv6m-none-eabi",
+	"build-tags": ["microbit", "nrf51822", "nrf51", "nrf", "arm", "js", "wasm"],
+	"linker": "arm-none-eabi-gcc",
+	"pre-link-args": [
+		"-nostdlib",
+		"-nostartfiles",
+		"-mcpu=cortex-m0",
+		"-mthumb",
+		"-T", "targets/nrf51.ld",
+		"-Wl,--gc-sections",
+		"-fno-exceptions", "-fno-unwind-tables",
+		"-ffunction-sections", "-fdata-sections",
+		"-Os",
+		"-DNRF51",
+		"-Ilib/CMSIS/CMSIS/Include",
+		"lib/nrfx/mdk/system_nrf51.c",
+		"src/device/nrf/nrf51.s"
+	],
+	"objcopy": "arm-none-eabi-objcopy",
+	"flash": "openocd -f interface/cmsis-dap.cfg -f target/nrf51.cfg -c 'program {hex} reset exit'",
+	"ocd-daemon": ["openocd", "-f", "interface/cmsis-dap.cfg", "-f", "target/nrf51.cfg"],
+	"gdb": "arm-none-eabi-gdb",
+	"gdb-initial-cmds": ["target remote :3333", "monitor halt", "load", "monitor reset", "c"]
+}
