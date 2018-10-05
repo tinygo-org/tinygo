@@ -10,6 +10,7 @@ SECTIONS
         *(.text*)
         *(.rodata)
         *(.rodata*)
+        . = ALIGN(4);
     } >FLASH_TEXT
 
     /* Put the stack at the bottom of RAM, so that the application will
