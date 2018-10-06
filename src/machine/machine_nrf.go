@@ -70,8 +70,7 @@ func (uart UART) Configure(config UARTConfig) {
 	uart.SetBaudRate(config.BaudRate)
 
 	// Set TX and RX pins from board.
-	nrf.UART0.PSELTXD = UART_TX_PIN
-	nrf.UART0.PSELRXD = UART_RX_PIN
+	uart.setPins(UART_TX_PIN, UART_RX_PIN)
 
 	nrf.UART0.ENABLE = nrf.UART_ENABLE_ENABLE_Enabled
 	nrf.UART0.TASKS_STARTTX = 1
@@ -165,8 +164,7 @@ func (i2c I2C) Configure(config I2CConfig) {
 	}
 
 	i2c.Bus.ENABLE = nrf.TWI_ENABLE_ENABLE_Enabled
-	i2c.Bus.PSELSCL = nrf.RegValue(config.SCL)
-	i2c.Bus.PSELSDA = nrf.RegValue(config.SDA)
+	i2c.setPins(config.SCL, config.SDA)
 }
 
 // WriteTo writes a slice of data bytes to a peripheral with a specific address.
