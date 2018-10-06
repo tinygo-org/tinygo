@@ -815,7 +815,13 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 		frame.fn.LLVMFn = llvm.AddFunction(c.mod, name, fnType)
 	}
 
-	if c.Debug && f.Syntax() != nil && len(f.Blocks) != 0 {
+	if c.Debug && f.Synthetic == "package initializer" {
+		difunc, err := c.attachDebugInfoRaw(f, "", 0)
+		if err != nil {
+			return nil, err
+		}
+		frame.difunc = difunc
+	} else if c.Debug && f.Syntax() != nil && len(f.Blocks) != 0 {
 		// Create debug info file if needed.
 		difunc, err := c.attachDebugInfo(f)
 		if err != nil {
@@ -829,9 +835,16 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 
 func (c *Compiler) attachDebugInfo(f *ir.Function) (llvm.Metadata, error) {
 	pos := c.ir.Program.Fset.Position(f.Syntax().Pos())
-	if _, ok := c.difiles[pos.Filename]; !ok {
-		dir, file := filepath.Split(pos.Filename)
-		c.difiles[pos.Filename] = c.dibuilder.CreateFile(file, dir[:len(dir)-1])
+	return c.attachDebugInfoRaw(f, pos.Filename, pos.Line)
+}
+
+func (c *Compiler) attachDebugInfoRaw(f *ir.Function, filename string, line int) (llvm.Metadata, error) {
+	if _, ok := c.difiles[filename]; !ok {
+		dir, file := filepath.Split(filename)
+		if dir != "" {
+			dir = dir[:len(dir)-1]
+		}
+		c.difiles[filename] = c.dibuilder.CreateFile(file, dir)
 	}
 
 	// Debug info for this function.
@@ -844,15 +857,15 @@ func (c *Compiler) attachDebugInfo(f *ir.Function) (llvm.Metadata, error) {
 		diparams = append(diparams, ditype)
 	}
 	diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
-		File:       c.difiles[pos.Filename],
+		File:       c.difiles[filename],
 		Parameters: diparams,
 		Flags:      0, // ?
 	})
-	difunc := c.dibuilder.CreateFunction(c.difiles[pos.Filename], llvm.DIFunction{
+	difunc := c.dibuilder.CreateFunction(c.difiles[filename], llvm.DIFunction{
 		Name:         f.RelString(nil),
 		LinkageName:  f.LinkName(),
-		File:         c.difiles[pos.Filename],
-		Line:         pos.Line,
+		File:         c.difiles[filename],
+		Line:         line,
 		Type:         diFuncType,
 		LocalToUnit:  true,
 		IsDefinition: true,
