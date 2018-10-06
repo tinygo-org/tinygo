@@ -75,9 +75,7 @@ func SetLEDMatrix(x, y uint8, on bool) error {
 		return errors.New("Invalid LED matrix row or column")
 	}
 
-	nrf.GPIO.OUTCLR = (1 << 13)
-	nrf.GPIO.OUTCLR = (1 << 14)
-	nrf.GPIO.OUTCLR = (1 << 15)
+	nrf.GPIO.OUTCLR = (1 << LED_ROW_1) | (1 << LED_ROW_2) | (1 << LED_ROW_3)
 	if on {
 		nrf.GPIO.OUTSET = (1 << matrixSettings[y][x][0])
 		nrf.GPIO.OUTCLR = (1 << matrixSettings[y][x][1])
