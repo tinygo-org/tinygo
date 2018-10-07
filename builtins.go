@@ -161,7 +161,7 @@ func loadBuiltins(target string) (path string, err error) {
 		objpath := filepath.Join(dir, name+".o")
 		objs = append(objs, objpath)
 		srcpath := filepath.Join(builtinsDir, name+".c")
-		cmd := exec.Command(commands["clang"], "-c", "-Oz", "-g", "-Werror", "-Wall", "-std=c11", "--target="+target, "-o", objpath, srcpath)
+		cmd := exec.Command(commands["clang"], "-c", "-Oz", "-g", "-Werror", "-Wall", "-std=c11", "-fshort-enums", "-nostdlibinc", "--target="+target, "-o", objpath, srcpath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Dir = dir

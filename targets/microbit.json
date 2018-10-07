@@ -12,7 +12,6 @@
 		"-Wl,--gc-sections",
 		"-fno-exceptions", "-fno-unwind-tables",
 		"-ffunction-sections", "-fdata-sections",
-		"-fno-short-enums",
 		"-Os",
 		"-DNRF51",
 		"-Ilib/CMSIS/CMSIS/Include",
