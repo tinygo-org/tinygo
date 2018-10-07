@@ -63,9 +63,11 @@ var matrixSettings = [5][5][2]uint8{
 // InitLEDMatrix initializes the LED matrix, by setting all of the row/col pins to output
 // then calling ClearLEDMatrix.
 func InitLEDMatrix() {
+	set := 0
 	for i := LED_COL_1; i <= LED_ROW_3; i++ {
-		nrf.GPIO.DIRSET = 1 << uint8(i)
+		set |= 1 << uint8(i)
 	}
+	nrf.GPIO.DIRSET = nrf.RegValue(set)
 	ClearLEDMatrix()
 }
 
