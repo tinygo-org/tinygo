@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -17,6 +18,7 @@ type TargetSpec struct {
 	Triple      string   `json:"llvm-target"`
 	BuildTags   []string `json:"build-tags"`
 	Linker      string   `json:"linker"`
+	CompilerRT  bool     `json:"compiler-rt"`
 	PreLinkArgs []string `json:"pre-link-args"`
 	Objcopy     string   `json:"objcopy"`
 	Flasher     string   `json:"flash"`
@@ -72,16 +74,19 @@ func getGopath() string {
 	}
 
 	// fallback
-	var home string
-	if runtime.GOOS == "windows" {
-		home = os.Getenv("USERPROFILE")
-	} else {
-		home = os.Getenv("HOME")
+	home := getHomeDir()
+	return filepath.Join(home, "go")
+}
+
+func getHomeDir() string {
+	u, err := user.Current()
+	if err != nil {
+		panic("cannot get current user: " + err.Error())
 	}
-	if home == "" {
+	if u.HomeDir == "" {
 		// This is very unlikely, so panic here.
 		// Not the nicest solution, however.
-		panic("no $HOME or %USERPROFILE% found")
+		panic("could not find home directory")
 	}
-	return filepath.Join(home, "go")
+	return u.HomeDir
 }

@@ -27,6 +27,8 @@ final binary and flashing it needs some extra tools.
     * binutils (``arm-none-eabi-objcopy``) for producing .hex files for
       flashing.
     * GCC (``arm-none-eabi-gcc``) for linking object files.
+    * Clang 7 (``clang-7``) for building the `compiler runtime library
+      <https://compiler-rt.llvm.org/>`_.
     * The flashing tool for the particular chip, like ``openocd`` or
       ``nrfjprog``.
 

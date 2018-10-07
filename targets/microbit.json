@@ -2,6 +2,7 @@
 	"llvm-target": "armv6m-none-eabi",
 	"build-tags": ["microbit", "nrf51822", "nrf51", "nrf", "arm", "js", "wasm"],
 	"linker": "arm-none-eabi-gcc",
+	"compiler-rt": true,
 	"pre-link-args": [
 		"-nostdlib",
 		"-nostartfiles",
@@ -11,6 +12,7 @@
 		"-Wl,--gc-sections",
 		"-fno-exceptions", "-fno-unwind-tables",
 		"-ffunction-sections", "-fdata-sections",
+		"-fno-short-enums",
 		"-Os",
 		"-DNRF51",
 		"-Ilib/CMSIS/CMSIS/Include",
