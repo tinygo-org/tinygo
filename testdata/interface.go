@@ -7,6 +7,7 @@ func main() {
 	printItf(5)
 	printItf(byte('x'))
 	printItf("foo")
+	printItf(Foo(18))
 	printItf(*thing)
 	printItf(thing)
 	printItf(Stringer(thing))

@@ -3,6 +3,7 @@ Thing.Print: foo
 is int: 5
 is byte: 120
 is string: foo
+is Foo: 18
 is Thing: foo
 is *Thing: foo
 is *Thing: foo
