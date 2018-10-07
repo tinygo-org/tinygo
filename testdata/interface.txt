@@ -1,0 +1,13 @@
+thing: foo
+Thing.Print: foo
+is int: 5
+is byte: 120
+is string: foo
+is Thing: foo
+is *Thing: foo
+is *Thing: foo
+is Doubler: 6
+is Tuple: 1 7 11 13
+Array len: 4
+Stringer.String(): foo
+Stringer.(*Thing).String(): foo

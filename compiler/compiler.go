@@ -419,8 +419,20 @@ func (c *Compiler) Compile(mainPath string) error {
 			if f.LLVMFn.IsNil() {
 				return errors.New("cannot find function: " + f.LinkName())
 			}
-			fn := llvm.ConstBitCast(f.LLVMFn, c.i8ptrType)
-			funcPointers = append(funcPointers, fn)
+			fn := f.LLVMFn
+			receiverType := fn.Type().ElementType().ParamTypes()[0]
+			if c.targetData.TypeAllocSize(receiverType) > c.targetData.TypeAllocSize(c.i8ptrType) {
+				// The receiver value doesn't fit in a pointer. This means that
+				// the interface contains a pointer to the receiver value
+				// instead of the value itself. Which means we have to create a
+				// wrapper function.
+				fn, err = c.wrapInterfaceInvoke(f)
+				if err != nil {
+					return err
+				}
+			}
+			fnPtr := llvm.ConstBitCast(fn, c.i8ptrType)
+			funcPointers = append(funcPointers, fnPtr)
 			signatureNum := c.ir.MethodNum(method.Obj().(*types.Func))
 			signature := llvm.ConstInt(llvm.Int16Type(), uint64(signatureNum), false)
 			signatures = append(signatures, signature)
@@ -754,6 +766,42 @@ func (c *Compiler) getDIType(typ types.Type) (llvm.Metadata, error) {
 	}
 }
 
+// Wrap an interface method function pointer. The wrapper takes in a pointer to
+// the underlying value, dereferences it, and calls the real method. This
+// wrapper is only needed when the interface value actually doesn't fit in a
+// pointer and a pointer to the value must be created.
+func (c *Compiler) wrapInterfaceInvoke(f *ir.Function) (llvm.Value, error) {
+	fnType := f.LLVMFn.Type().ElementType()
+	paramTypes := append([]llvm.Type{c.i8ptrType}, fnType.ParamTypes()[1:]...)
+	wrapFnType := llvm.FunctionType(fnType.ReturnType(), paramTypes, false)
+	wrapper := llvm.AddFunction(c.mod, f.LinkName()+"$invoke", wrapFnType)
+	wrapper.SetLinkage(llvm.InternalLinkage)
+
+	pos := c.ir.Program.Fset.Position(f.Pos())
+	difunc, err := c.attachDebugInfoRaw(f, wrapper, "$invoke", pos.Filename, pos.Line)
+	if err != nil {
+		return llvm.Value{}, err
+	}
+	c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
+
+	block := c.ctx.AddBasicBlock(wrapper, "entry")
+	c.builder.SetInsertPointAtEnd(block)
+	receiverType := fnType.ParamTypes()[0]
+	receiverPtrType := llvm.PointerType(receiverType, 0)
+	receiverPtr := c.builder.CreateBitCast(wrapper.Param(0), receiverPtrType, "receiver.ptr")
+	receiver := c.builder.CreateLoad(receiverPtr, "receiver")
+	params := append([]llvm.Value{receiver}, wrapper.Params()[1:]...)
+	if fnType.ReturnType().TypeKind() == llvm.VoidTypeKind {
+		c.builder.CreateCall(f.LLVMFn, params, "")
+		c.builder.CreateRetVoid()
+	} else {
+		ret := c.builder.CreateCall(f.LLVMFn, params, "ret")
+		c.builder.CreateRet(ret)
+	}
+
+	return wrapper, nil
+}
+
 func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 	frame := &Frame{
 		fn:       f,
@@ -816,7 +864,7 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 	}
 
 	if c.Debug && f.Synthetic == "package initializer" {
-		difunc, err := c.attachDebugInfoRaw(f, "", 0)
+		difunc, err := c.attachDebugInfoRaw(f, f.LLVMFn, "", "", 0)
 		if err != nil {
 			return nil, err
 		}
@@ -835,10 +883,10 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 
 func (c *Compiler) attachDebugInfo(f *ir.Function) (llvm.Metadata, error) {
 	pos := c.ir.Program.Fset.Position(f.Syntax().Pos())
-	return c.attachDebugInfoRaw(f, pos.Filename, pos.Line)
+	return c.attachDebugInfoRaw(f, f.LLVMFn, "", pos.Filename, pos.Line)
 }
 
-func (c *Compiler) attachDebugInfoRaw(f *ir.Function, filename string, line int) (llvm.Metadata, error) {
+func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix, filename string, line int) (llvm.Metadata, error) {
 	if _, ok := c.difiles[filename]; !ok {
 		dir, file := filepath.Split(filename)
 		if dir != "" {
@@ -862,8 +910,8 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, filename string, line int)
 		Flags:      0, // ?
 	})
 	difunc := c.dibuilder.CreateFunction(c.difiles[filename], llvm.DIFunction{
-		Name:         f.RelString(nil),
-		LinkageName:  f.LinkName(),
+		Name:         f.RelString(nil) + suffix,
+		LinkageName:  f.LinkName() + suffix,
 		File:         c.difiles[filename],
 		Line:         line,
 		Type:         diFuncType,
@@ -873,7 +921,7 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, filename string, line int)
 		Flags:        llvm.FlagPrototyped,
 		Optimized:    true,
 	})
-	f.LLVMFn.SetSubprogram(difunc)
+	llvmFn.SetSubprogram(difunc)
 	return difunc, nil
 }
 
