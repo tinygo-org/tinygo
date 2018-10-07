@@ -71,9 +71,11 @@ func InitLEDMatrix() {
 
 // ClearLEDMatrix clears the entire LED matrix.
 func ClearLEDMatrix() {
+	set := 0
 	for i := LED_COL_1; i <= LED_COL_9; i++ {
-		nrf.GPIO.OUTSET = 1 << uint8(i)
+		set |= 1 << uint8(i)
 	}
+	nrf.GPIO.OUTSET = nrf.RegValue(set)
 	nrf.GPIO.OUTCLR = (1 << LED_ROW_1) | (1 << LED_ROW_2) | (1 << LED_ROW_3)
 }
 
