@@ -13,6 +13,8 @@ func main() {
 	printItf(Number(3))
 	array := Array([4]uint32{1, 7, 11, 13})
 	printItf(array)
+	printItf(ArrayStruct{3, array})
+	printItf(SmallPair{3, 5})
 	s := Stringer(thing)
 	println("Stringer.String():", s.String())
 	var itf interface{} = s
@@ -84,4 +86,30 @@ func (a Array) Nth(n int) uint32 {
 
 func (a Array) Print() {
 	println("Array len:", len(a))
+}
+
+type ArrayStruct struct {
+	n int
+	a Array
+}
+
+func (a ArrayStruct) Nth(n int) uint32 {
+	return a.a[n]
+}
+
+func (a ArrayStruct) Print() {
+	println("ArrayStruct.Print:", len(a.a), a.n)
+}
+
+type SmallPair struct {
+	a byte
+	b byte
+}
+
+func (p SmallPair) Nth(n int) uint32 {
+	return uint32(int(p.a)*n + int(p.b)*n)
+}
+
+func (p SmallPair) Print() {
+	println("SmallPair.Print:", p.a, p.b)
 }
