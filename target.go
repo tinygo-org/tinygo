@@ -19,6 +19,7 @@ type TargetSpec struct {
 	BuildTags   []string `json:"build-tags"`
 	Linker      string   `json:"linker"`
 	PreLinkArgs []string `json:"pre-link-args"`
+	CompilerRT  bool     `json:"compiler-rt"`
 	Objcopy     string   `json:"objcopy"`
 	Flasher     string   `json:"flash"`
 	OCDDaemon   []string `json:"ocd-daemon"`

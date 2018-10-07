@@ -102,17 +102,22 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA, debug 
 
 		// Load builtins library from the cache, possibly compiling it on the
 		// fly.
-		librt, err := loadBuiltins(spec.Triple)
-		if err != nil {
-			return err
+		var cachePath string
+		if spec.CompilerRT {
+			librt, err := loadBuiltins(spec.Triple)
+			if err != nil {
+				return err
+			}
+			cachePath, _ = filepath.Split(librt)
 		}
-		cachePath, _ := filepath.Split(librt)
 
 		// Link the object file with the system compiler.
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
 		args := append(spec.PreLinkArgs, "-o", executable, objfile)
-		args = append(args, "-L", cachePath, "-lrt-"+spec.Triple)
+		if spec.CompilerRT {
+			args = append(args, "-L", cachePath, "-lrt-"+spec.Triple)
+		}
 		cmd := exec.Command(spec.Linker, args...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr

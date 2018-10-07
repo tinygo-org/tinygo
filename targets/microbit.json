@@ -2,6 +2,7 @@
 	"llvm-target": "armv6m-none-eabi",
 	"build-tags": ["microbit", "nrf51822", "nrf51", "nrf", "arm", "js", "wasm"],
 	"linker": "arm-none-eabi-gcc",
+	"compiler-rt": true,
 	"pre-link-args": [
 		"-nostdlib",
 		"-nostartfiles",
