@@ -40,6 +40,8 @@ needs the following tools:
 
     * binutils (``avr-objcopy``) for flashing.
     * GCC (``avr-gcc``) for linking object files.
+    * libc (``avr-libc``), which is not installed on Debian as a dependency of
+      ``avr-gcc``.
     * ``avrdude`` for flashing to an Arduino.
 
 
