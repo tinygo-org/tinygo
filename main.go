@@ -146,10 +146,15 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA, debug 
 			}
 		}
 
-		if strings.HasSuffix(outpath, ".hex") {
-			// Get an Intel .hex file from the .elf file.
-			tmppath = filepath.Join(dir, "main.hex")
-			cmd := exec.Command(spec.Objcopy, "-O", "ihex", executable, tmppath)
+		ext := filepath.Ext(outpath)
+		if ext == ".hex" || ext == ".bin" {
+			// Get an Intel .hex file or .bin file from the .elf file.
+			tmppath = filepath.Join(dir, "main"+ext)
+			format := map[string]string{
+				".hex": "ihex",
+				".bin": "binary",
+			}[ext]
+			cmd := exec.Command(spec.Objcopy, "-O", format, executable, tmppath)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			err = cmd.Run()
