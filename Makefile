@@ -49,7 +49,7 @@ flash-%: build/%.hex
 	nrfjprog -f nrf52 --sectorerase --program $< --reset
 else ifeq ($(TARGET),microbit)
 flash-%: build/%.hex
-	nrfjprog -f nrf51 --sectorerase --program $< --reset
+	openocd -f interface/cmsis-dap.cfg -f target/nrf51.cfg -c 'program $< reset exit'
 else ifeq ($(TARGET),arduino)
 flash-%: build/%.hex
 	avrdude -c arduino -p atmega328p -P /dev/ttyACM0 -U flash:w:$<
