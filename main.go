@@ -17,6 +17,11 @@ import (
 	"github.com/aykevl/tinygo/compiler"
 )
 
+var commands = map[string]string{
+	"ar":    "ar",
+	"clang": "clang-7",
+}
+
 // Helper function for Compiler object.
 func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA, debug bool, printSizes string, action func(string) error) error {
 	config := compiler.Config{
@@ -95,10 +100,19 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA, debug 
 			return err
 		}
 
+		// Load builtins library from the cache, possibly compiling it on the
+		// fly.
+		librt, err := loadBuiltins(spec.Triple)
+		if err != nil {
+			return err
+		}
+		cachePath, _ := filepath.Split(librt)
+
 		// Link the object file with the system compiler.
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
 		args := append(spec.PreLinkArgs, "-o", executable, objfile)
+		args = append(args, "-L", cachePath, "-lrt-"+spec.Triple)
 		cmd := exec.Command(spec.Linker, args...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -369,6 +383,14 @@ func main() {
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+	case "clean":
+		// remove cache directory
+		dir := cacheDir()
+		err := os.RemoveAll(dir)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "cannot clean cache:", err)
 			os.Exit(1)
 		}
 	case "help":
