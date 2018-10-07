@@ -60,29 +60,35 @@ var matrixSettings = [5][5][2]uint8{
 	{{LED_ROW_1, LED_COL_8}, {LED_ROW_1, LED_COL_7}, {LED_ROW_1, LED_COL_6}, {LED_ROW_1, LED_COL_5}, {LED_ROW_1, LED_COL_4}},
 	{{LED_ROW_3, LED_COL_3}, {LED_ROW_2, LED_COL_7}, {LED_ROW_3, LED_COL_1}, {LED_ROW_2, LED_COL_6}, {LED_ROW_3, LED_COL_2}}}
 
-// InitLEDMatrix initializes the LED matrix, by turning all of the row/col pins to output and high.
+// InitLEDMatrix initializes the LED matrix, by setting all of the row/col pins to output
+// then calling ClearLEDMatrix.
 func InitLEDMatrix() {
 	for i := LED_COL_1; i <= LED_ROW_3; i++ {
-		nrf.GPIO.OUTSET = 1 << uint8(i)
 		nrf.GPIO.DIRSET = 1 << uint8(i)
 	}
+	ClearLEDMatrix()
 }
 
-// SetLEDMatrix sets a single LED on the LED matrix either on or off.
-// Currently limited to a single LED at a time.
-func SetLEDMatrix(x, y uint8, on bool) error {
+// ClearLEDMatrix clears the entire LED matrix.
+func ClearLEDMatrix() {
+	for i := LED_COL_1; i <= LED_COL_9; i++ {
+		nrf.GPIO.OUTSET = 1 << uint8(i)
+	}
+	nrf.GPIO.OUTCLR = (1 << LED_ROW_1) | (1 << LED_ROW_2) | (1 << LED_ROW_3)
+}
+
+// SetLEDMatrix turns on a single LED on the LED matrix.
+// Currently limited to a single LED at a time, it will clear the matrix before setting it.
+func SetLEDMatrix(x, y uint8) error {
 	if x > 4 || y > 4 {
 		return errors.New("Invalid LED matrix row or column")
 	}
 
-	nrf.GPIO.OUTCLR = (1 << LED_ROW_1) | (1 << LED_ROW_2) | (1 << LED_ROW_3)
-	if on {
-		nrf.GPIO.OUTSET = (1 << matrixSettings[y][x][0])
-		nrf.GPIO.OUTCLR = (1 << matrixSettings[y][x][1])
-	} else {
-		nrf.GPIO.OUTCLR = (1 << matrixSettings[y][x][0])
-		nrf.GPIO.OUTSET = (1 << matrixSettings[y][x][1])
-	}
+	// Clear matrix
+	ClearLEDMatrix()
+
+	nrf.GPIO.OUTSET = (1 << matrixSettings[y][x][0])
+	nrf.GPIO.OUTCLR = (1 << matrixSettings[y][x][1])
 
 	return nil
 }
