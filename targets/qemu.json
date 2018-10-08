@@ -1,0 +1,20 @@
+{
+	"llvm-target": "armv7m-none-eabi",
+	"build-tags": ["qemu", "lm3s6965", "arm", "js", "wasm"],
+	"linker": "arm-none-eabi-gcc",
+	"compiler-rt": true,
+	"pre-link-args": [
+		"-nostdlib",
+		"-nostartfiles",
+		"-mcpu=cortex-m0",
+		"-mthumb",
+		"-T", "targets/lm3s6965.ld",
+		"-Wl,--gc-sections",
+		"-fno-exceptions", "-fno-unwind-tables",
+		"-ffunction-sections", "-fdata-sections",
+		"-Os",
+		"targets/cortex-m.s"
+	],
+	"objcopy": "arm-none-eabi-objcopy",
+	"emulator": ["qemu-system-arm", "-machine", "lm3s6965evb", "-semihosting", "-nographic", "-kernel"]
+}

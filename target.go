@@ -21,6 +21,7 @@ type TargetSpec struct {
 	CompilerRT  bool     `json:"compiler-rt"`
 	PreLinkArgs []string `json:"pre-link-args"`
 	Objcopy     string   `json:"objcopy"`
+	Emulator    []string `json:"emulator"`
 	Flasher     string   `json:"flash"`
 	OCDDaemon   []string `json:"ocd-daemon"`
 	GDB         string   `json:"gdb"`

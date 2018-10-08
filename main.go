@@ -330,6 +330,32 @@ func Run(pkgName string) error {
 	return nil
 }
 
+// Compile and run the given program in an emulator.
+func Emulate(pkgName, target string) error {
+	spec, err := LoadTarget(target)
+	if err != nil {
+		return err
+	}
+	if len(spec.Emulator) == 0 {
+		return errors.New("no emulator configured for this target")
+	}
+
+	return Compile(pkgName, ".elf", spec, false, false, false, "", func(tmppath string) error {
+		args := append(spec.Emulator[1:], tmppath)
+		cmd := exec.Command(spec.Emulator[0], args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
+		if err != nil {
+			if err, ok := err.(*exec.ExitError); ok && err.Exited() {
+				// Workaround for QEMU which always exits with an error.
+				return nil
+			}
+		}
+		return err
+	})
+}
+
 func usage() {
 	fmt.Fprintf(os.Stderr, "usage: %s command [-printir] [-target=<target>] -o <output> <input>\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "\ncommands:")
@@ -395,6 +421,22 @@ func main() {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
+	case "run":
+		if flag.NArg() != 1 {
+			fmt.Fprintln(os.Stderr, "No package specified.")
+			usage()
+			os.Exit(1)
+		}
+		var err error
+		if *target == llvm.DefaultTargetTriple() {
+			err = Run(flag.Arg(0))
+		} else {
+			err = Emulate(flag.Arg(0), *target)
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
 	case "clean":
 		// remove cache directory
 		dir := cacheDir()
@@ -405,21 +447,6 @@ func main() {
 		}
 	case "help":
 		usage()
-	case "run":
-		if flag.NArg() != 1 {
-			fmt.Fprintln(os.Stderr, "No package specified.")
-			usage()
-			os.Exit(1)
-		}
-		if *target != llvm.DefaultTargetTriple() {
-			fmt.Fprintf(os.Stderr, "Cannot run %s: target triple does not match host triple.", *target)
-			os.Exit(1)
-		}
-		err := Run(flag.Arg(0))
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
-		}
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown command:", command)
 		usage()

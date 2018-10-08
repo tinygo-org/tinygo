@@ -62,7 +62,7 @@ clean:
 	@rm -rf build
 
 fmt:
-	@go fmt . ./compiler ./ir ./src/examples/* ./src/machine ./src/runtime ./src/sync
+	@go fmt . ./compiler ./ir ./src/device/arm ./src/examples/* ./src/machine ./src/runtime ./src/sync
 	@go fmt ./testdata/*.go
 
 test:
