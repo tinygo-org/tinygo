@@ -31,14 +31,22 @@ func TestCompiler(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpdir)
 
+	t.Log("running tests on the host...")
 	for _, path := range matches {
 		t.Run(path, func(t *testing.T) {
-			runTest(path, tmpdir, t)
+			runTest(path, tmpdir, "", t)
+		})
+	}
+
+	t.Log("running tests on the qemu target...")
+	for _, path := range matches {
+		t.Run(path, func(t *testing.T) {
+			runTest(path, tmpdir, "qemu", t)
 		})
 	}
 }
 
-func runTest(path, tmpdir string, t *testing.T) {
+func runTest(path, tmpdir string, target string, t *testing.T) {
 	// Get the expected output for this test.
 	txtpath := path[:len(path)-3] + ".txt"
 	f, err := os.Open(txtpath)
@@ -52,7 +60,7 @@ func runTest(path, tmpdir string, t *testing.T) {
 
 	// Build the test binary.
 	binary := filepath.Join(tmpdir, "test")
-	err = Build(path, binary, "", false, false, false, "")
+	err = Build(path, binary, target, false, false, false, "")
 	if err != nil {
 		t.Log("failed to build:", err)
 		t.Fail()
@@ -60,10 +68,29 @@ func runTest(path, tmpdir string, t *testing.T) {
 	}
 
 	// Run the test.
-	cmd := exec.Command(binary)
+	var cmd *exec.Cmd
+	if target == "" {
+		cmd = exec.Command(binary)
+	} else {
+		spec, err := LoadTarget(target)
+		if err != nil {
+			t.Fatal("failed to load target spec:", err)
+		}
+		if len(spec.Emulator) == 0 {
+			t.Fatal("no emulator available for target:", target)
+		}
+		args := append(spec.Emulator[1:], binary)
+		cmd = exec.Command(spec.Emulator[0], args...)
+	}
 	stdout := &bytes.Buffer{}
 	cmd.Stdout = stdout
+	if target != "" {
+		cmd.Stderr = os.Stderr
+	}
 	err = cmd.Run()
+	if _, ok := err.(*exec.ExitError); ok && target != "" {
+		err = nil // workaround for QEMU
+	}
 
 	// putchar() prints CRLF, convert it to LF.
 	actual := bytes.Replace(stdout.Bytes(), []byte{'\r', '\n'}, []byte{'\n'}, -1)
