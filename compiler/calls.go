@@ -135,7 +135,7 @@ func (c *Compiler) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value)
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		if len(c.flattenAggregateType(t)) <= MaxFieldsPerParam {
-			value, err := getZeroValue(t)
+			value, err := c.getZeroValue(t)
 			if err != nil {
 				panic("could not get zero value of struct: " + err.Error())
 			}

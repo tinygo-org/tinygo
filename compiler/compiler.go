@@ -103,37 +103,37 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 	c.machine = target.CreateTargetMachine(config.Triple, "", "", llvm.CodeGenLevelDefault, llvm.RelocStatic, llvm.CodeModelDefault)
 	c.targetData = c.machine.CreateTargetData()
 
-	c.mod = llvm.NewModule(pkgName)
+	c.ctx = llvm.NewContext()
+	c.mod = c.ctx.NewModule(pkgName)
 	c.mod.SetTarget(config.Triple)
 	c.mod.SetDataLayout(c.targetData.String())
-	c.ctx = c.mod.Context()
 	c.builder = c.ctx.NewBuilder()
 	c.dibuilder = llvm.NewDIBuilder(c.mod)
 
 	// Depends on platform (32bit or 64bit), but fix it here for now.
-	c.intType = llvm.Int32Type()
-	c.uintptrType = c.targetData.IntPtrType()
+	c.intType = c.ctx.Int32Type()
+	c.uintptrType = c.ctx.IntType(c.targetData.PointerSize() * 8)
 	if c.targetData.PointerSize() < 4 {
 		// 16 or 8 bits target with smaller length type
 		c.lenType = c.uintptrType
 	} else {
-		c.lenType = llvm.Int32Type() // also defined as runtime.lenType
+		c.lenType = c.ctx.Int32Type() // also defined as runtime.lenType
 	}
-	c.i8ptrType = llvm.PointerType(llvm.Int8Type(), 0)
+	c.i8ptrType = llvm.PointerType(c.ctx.Int8Type(), 0)
 
-	coroIdType := llvm.FunctionType(c.ctx.TokenType(), []llvm.Type{llvm.Int32Type(), c.i8ptrType, c.i8ptrType, c.i8ptrType}, false)
+	coroIdType := llvm.FunctionType(c.ctx.TokenType(), []llvm.Type{c.ctx.Int32Type(), c.i8ptrType, c.i8ptrType, c.i8ptrType}, false)
 	c.coroIdFunc = llvm.AddFunction(c.mod, "llvm.coro.id", coroIdType)
 
-	coroSizeType := llvm.FunctionType(llvm.Int32Type(), nil, false)
+	coroSizeType := llvm.FunctionType(c.ctx.Int32Type(), nil, false)
 	c.coroSizeFunc = llvm.AddFunction(c.mod, "llvm.coro.size.i32", coroSizeType)
 
 	coroBeginType := llvm.FunctionType(c.i8ptrType, []llvm.Type{c.ctx.TokenType(), c.i8ptrType}, false)
 	c.coroBeginFunc = llvm.AddFunction(c.mod, "llvm.coro.begin", coroBeginType)
 
-	coroSuspendType := llvm.FunctionType(llvm.Int8Type(), []llvm.Type{c.ctx.TokenType(), llvm.Int1Type()}, false)
+	coroSuspendType := llvm.FunctionType(c.ctx.Int8Type(), []llvm.Type{c.ctx.TokenType(), c.ctx.Int1Type()}, false)
 	c.coroSuspendFunc = llvm.AddFunction(c.mod, "llvm.coro.suspend", coroSuspendType)
 
-	coroEndType := llvm.FunctionType(llvm.Int1Type(), []llvm.Type{c.i8ptrType, llvm.Int1Type()}, false)
+	coroEndType := llvm.FunctionType(c.ctx.Int1Type(), []llvm.Type{c.i8ptrType, c.ctx.Int1Type()}, false)
 	c.coroEndFunc = llvm.AddFunction(c.mod, "llvm.coro.end", coroEndType)
 
 	coroFreeType := llvm.FunctionType(c.i8ptrType, []llvm.Type{c.ctx.TokenType(), c.i8ptrType}, false)
@@ -251,7 +251,7 @@ func (c *Compiler) Compile(mainPath string) error {
 		g.LLVMGlobal = global
 		if !g.IsExtern() {
 			global.SetLinkage(llvm.InternalLinkage)
-			initializer, err := getZeroValue(llvmType)
+			initializer, err := c.getZeroValue(llvmType)
 			if err != nil {
 				return err
 			}
@@ -343,14 +343,14 @@ func (c *Compiler) Compile(mainPath string) error {
 			}
 			valueTypes = append(valueTypes, llvmType)
 		}
-		contextType := llvm.StructType(valueTypes, false)
+		contextType := c.ctx.StructType(valueTypes, false)
 		contextPtr := c.builder.CreateBitCast(deferRawPtr, llvm.PointerType(contextType, 0), "context")
 
 		// Extract the params from the struct.
 		forwardParams := []llvm.Value{}
-		zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 		for i := range fn.Params {
-			gep := c.builder.CreateGEP(contextPtr, []llvm.Value{zero, llvm.ConstInt(llvm.Int32Type(), uint64(i+2), false)}, "gep")
+			gep := c.builder.CreateGEP(contextPtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i+2), false)}, "gep")
 			forwardParam := c.builder.CreateLoad(gep, "param")
 			forwardParams = append(forwardParams, forwardParam)
 		}
@@ -404,8 +404,8 @@ func (c *Compiler) Compile(mainPath string) error {
 	rangeType := c.mod.GetTypeByName("runtime.methodSetRange")
 	for _, meta := range dynamicTypes {
 		rangeValues := []llvm.Value{
-			llvm.ConstInt(llvm.Int16Type(), uint64(startIndex), false),
-			llvm.ConstInt(llvm.Int16Type(), uint64(len(meta.Methods)), false),
+			llvm.ConstInt(c.ctx.Int16Type(), uint64(startIndex), false),
+			llvm.ConstInt(c.ctx.Int16Type(), uint64(len(meta.Methods)), false),
 		}
 		rangeValue := llvm.ConstNamedStruct(rangeType, rangeValues)
 		ranges = append(ranges, rangeValue)
@@ -426,7 +426,7 @@ func (c *Compiler) Compile(mainPath string) error {
 			fnPtr := llvm.ConstBitCast(fn, c.i8ptrType)
 			funcPointers = append(funcPointers, fnPtr)
 			signatureNum := c.ir.MethodNum(method.Obj().(*types.Func))
-			signature := llvm.ConstInt(llvm.Int16Type(), uint64(signatureNum), false)
+			signature := llvm.ConstInt(c.ctx.Int16Type(), uint64(signatureNum), false)
 			signatures = append(signatures, signature)
 		}
 		startIndex += len(meta.Methods)
@@ -440,15 +440,15 @@ func (c *Compiler) Compile(mainPath string) error {
 		if itfType.Type.NumMethods() > 0xff {
 			return errors.New("too many methods for interface " + itfType.Type.String())
 		}
-		interfaceIndex[i] = llvm.ConstInt(llvm.Int16Type(), uint64(i), false)
-		interfaceLengths[i] = llvm.ConstInt(llvm.Int8Type(), uint64(itfType.Type.NumMethods()), false)
+		interfaceIndex[i] = llvm.ConstInt(c.ctx.Int16Type(), uint64(i), false)
+		interfaceLengths[i] = llvm.ConstInt(c.ctx.Int8Type(), uint64(itfType.Type.NumMethods()), false)
 		funcs := make([]*types.Func, itfType.Type.NumMethods())
 		for i := range funcs {
 			funcs[i] = itfType.Type.Method(i)
 		}
 		c.ir.SortFuncs(funcs)
 		for _, f := range funcs {
-			id := llvm.ConstInt(llvm.Int16Type(), uint64(c.ir.MethodNum(f)), false)
+			id := llvm.ConstInt(c.ctx.Int16Type(), uint64(c.ir.MethodNum(f)), false)
 			interfaceMethods = append(interfaceMethods, id)
 		}
 	}
@@ -474,7 +474,7 @@ func (c *Compiler) Compile(mainPath string) error {
 	funcArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(funcArrayNewGlobal, funcArrayOldGlobal.Type()))
 	funcArrayOldGlobal.EraseFromParentAsGlobal()
 	funcArrayNewGlobal.SetName("runtime.methodSetFunctions")
-	signatureArray := llvm.ConstArray(llvm.Int16Type(), signatures)
+	signatureArray := llvm.ConstArray(c.ctx.Int16Type(), signatures)
 	signatureArrayNewGlobal := llvm.AddGlobal(c.mod, signatureArray.Type(), "runtime.methodSetSignatures.tmp")
 	signatureArrayNewGlobal.SetInitializer(signatureArray)
 	signatureArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
@@ -482,7 +482,7 @@ func (c *Compiler) Compile(mainPath string) error {
 	signatureArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(signatureArrayNewGlobal, signatureArrayOldGlobal.Type()))
 	signatureArrayOldGlobal.EraseFromParentAsGlobal()
 	signatureArrayNewGlobal.SetName("runtime.methodSetSignatures")
-	interfaceIndexArray := llvm.ConstArray(llvm.Int16Type(), interfaceIndex)
+	interfaceIndexArray := llvm.ConstArray(c.ctx.Int16Type(), interfaceIndex)
 	interfaceIndexArrayNewGlobal := llvm.AddGlobal(c.mod, interfaceIndexArray.Type(), "runtime.interfaceIndex.tmp")
 	interfaceIndexArrayNewGlobal.SetInitializer(interfaceIndexArray)
 	interfaceIndexArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
@@ -490,7 +490,7 @@ func (c *Compiler) Compile(mainPath string) error {
 	interfaceIndexArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(interfaceIndexArrayNewGlobal, interfaceIndexArrayOldGlobal.Type()))
 	interfaceIndexArrayOldGlobal.EraseFromParentAsGlobal()
 	interfaceIndexArrayNewGlobal.SetName("runtime.interfaceIndex")
-	interfaceLengthsArray := llvm.ConstArray(llvm.Int8Type(), interfaceLengths)
+	interfaceLengthsArray := llvm.ConstArray(c.ctx.Int8Type(), interfaceLengths)
 	interfaceLengthsArrayNewGlobal := llvm.AddGlobal(c.mod, interfaceLengthsArray.Type(), "runtime.interfaceLengths.tmp")
 	interfaceLengthsArrayNewGlobal.SetInitializer(interfaceLengthsArray)
 	interfaceLengthsArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
@@ -498,7 +498,7 @@ func (c *Compiler) Compile(mainPath string) error {
 	interfaceLengthsArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(interfaceLengthsArrayNewGlobal, interfaceLengthsArrayOldGlobal.Type()))
 	interfaceLengthsArrayOldGlobal.EraseFromParentAsGlobal()
 	interfaceLengthsArrayNewGlobal.SetName("runtime.interfaceLengths")
-	interfaceMethodsArray := llvm.ConstArray(llvm.Int16Type(), interfaceMethods)
+	interfaceMethodsArray := llvm.ConstArray(c.ctx.Int16Type(), interfaceMethods)
 	interfaceMethodsArrayNewGlobal := llvm.AddGlobal(c.mod, interfaceMethodsArray.Type(), "runtime.interfaceMethods.tmp")
 	interfaceMethodsArrayNewGlobal.SetInitializer(interfaceMethodsArray)
 	interfaceMethodsArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
@@ -507,14 +507,14 @@ func (c *Compiler) Compile(mainPath string) error {
 	interfaceMethodsArrayOldGlobal.EraseFromParentAsGlobal()
 	interfaceMethodsArrayNewGlobal.SetName("runtime.interfaceMethods")
 
-	c.mod.NamedGlobal("runtime.firstTypeWithMethods").SetInitializer(llvm.ConstInt(llvm.Int16Type(), uint64(c.ir.FirstDynamicType()), false))
+	c.mod.NamedGlobal("runtime.firstTypeWithMethods").SetInitializer(llvm.ConstInt(c.ctx.Int16Type(), uint64(c.ir.FirstDynamicType()), false))
 
 	// see: https://reviews.llvm.org/D18355
 	c.mod.AddNamedMetadataOperand("llvm.module.flags",
 		c.ctx.MDNode([]llvm.Metadata{
-			llvm.ConstInt(llvm.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
+			llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
 			llvm.GlobalContext().MDString("Debug Info Version"),
-			llvm.ConstInt(llvm.Int32Type(), 3, false).ConstantAsMetadata(), // DWARF version
+			llvm.ConstInt(c.ctx.Int32Type(), 3, false).ConstantAsMetadata(), // DWARF version
 		}),
 	)
 	c.dibuilder.Finalize()
@@ -533,25 +533,25 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 	case *types.Basic:
 		switch typ.Kind() {
 		case types.Bool, types.UntypedBool:
-			return llvm.Int1Type(), nil
+			return c.ctx.Int1Type(), nil
 		case types.Int8, types.Uint8:
-			return llvm.Int8Type(), nil
+			return c.ctx.Int8Type(), nil
 		case types.Int16, types.Uint16:
-			return llvm.Int16Type(), nil
+			return c.ctx.Int16Type(), nil
 		case types.Int32, types.Uint32:
-			return llvm.Int32Type(), nil
+			return c.ctx.Int32Type(), nil
 		case types.Int, types.Uint:
 			return c.intType, nil
 		case types.Int64, types.Uint64:
-			return llvm.Int64Type(), nil
+			return c.ctx.Int64Type(), nil
 		case types.Float32:
-			return llvm.FloatType(), nil
+			return c.ctx.FloatType(), nil
 		case types.Float64:
-			return llvm.DoubleType(), nil
+			return c.ctx.DoubleType(), nil
 		case types.Complex64:
-			return llvm.VectorType(llvm.FloatType(), 2), nil
+			return llvm.VectorType(c.ctx.FloatType(), 2), nil
 		case types.Complex128:
-			return llvm.VectorType(llvm.DoubleType(), 2), nil
+			return llvm.VectorType(c.ctx.DoubleType(), 2), nil
 		case types.String, types.UntypedString:
 			return c.mod.GetTypeByName("runtime._string"), nil
 		case types.Uintptr:
@@ -587,7 +587,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		var err error
 		var returnType llvm.Type
 		if typ.Results().Len() == 0 {
-			returnType = llvm.VoidType()
+			returnType = c.ctx.VoidType()
 		} else if typ.Results().Len() == 1 {
 			returnType, err = c.getLLVMType(typ.Results().At(0).Type())
 			if err != nil {
@@ -603,7 +603,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 				}
 				members[i] = returnType
 			}
-			returnType = llvm.StructType(members, false)
+			returnType = c.ctx.StructType(members, false)
 		}
 		// param values
 		var paramTypes []llvm.Type
@@ -647,7 +647,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			c.lenType, // len
 			c.lenType, // cap
 		}
-		return llvm.StructType(members, false), nil
+		return c.ctx.StructType(members, false), nil
 	case *types.Struct:
 		members := make([]llvm.Type, typ.NumFields())
 		for i := 0; i < typ.NumFields(); i++ {
@@ -657,7 +657,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			}
 			members[i] = member
 		}
-		return llvm.StructType(members, false), nil
+		return c.ctx.StructType(members, false), nil
 	default:
 		return llvm.Type{}, errors.New("todo: unknown type: " + goType.String())
 	}
@@ -667,13 +667,13 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 // initializer has the same effect as setting 'zeroinitializer' on a value.
 // Sadly, I haven't found a way to do it directly with the Go API but this works
 // just fine.
-func getZeroValue(typ llvm.Type) (llvm.Value, error) {
+func (c *Compiler) getZeroValue(typ llvm.Type) (llvm.Value, error) {
 	switch typ.TypeKind() {
 	case llvm.ArrayTypeKind:
 		subTyp := typ.ElementType()
 		vals := make([]llvm.Value, typ.ArrayLength())
 		for i := range vals {
-			val, err := getZeroValue(subTyp)
+			val, err := c.getZeroValue(subTyp)
 			if err != nil {
 				return llvm.Value{}, err
 			}
@@ -690,7 +690,7 @@ func getZeroValue(typ llvm.Type) (llvm.Value, error) {
 		types := typ.StructElementTypes()
 		vals := make([]llvm.Value, len(types))
 		for i, subTyp := range types {
-			val, err := getZeroValue(subTyp)
+			val, err := c.getZeroValue(subTyp)
 			if err != nil {
 				return llvm.Value{}, err
 			}
@@ -699,7 +699,7 @@ func getZeroValue(typ llvm.Type) (llvm.Value, error) {
 		if typ.StructName() != "" {
 			return llvm.ConstNamedStruct(typ, vals), nil
 		} else {
-			return llvm.ConstStruct(vals, false), nil
+			return c.ctx.ConstStruct(vals, false), nil
 		}
 	default:
 		return llvm.Value{}, errors.New("todo: LLVM zero initializer")
@@ -844,7 +844,7 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 		}
 		retType = c.i8ptrType
 	} else if f.Signature.Results() == nil {
-		retType = llvm.VoidType()
+		retType = c.ctx.VoidType()
 	} else if f.Signature.Results().Len() == 1 {
 		var err error
 		retType, err = c.getLLVMType(f.Signature.Results().At(0).Type())
@@ -860,7 +860,7 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 			}
 			results = append(results, typ)
 		}
-		retType = llvm.StructType(results, false)
+		retType = c.ctx.StructType(results, false)
 	}
 
 	var paramTypes []llvm.Type
@@ -964,13 +964,13 @@ func (c *Compiler) initMapNewBucket(prefix string, mapType *types.Map) (llvm.Val
 	}
 	keySize := c.targetData.TypeAllocSize(llvmKeyType)
 	valueSize := c.targetData.TypeAllocSize(llvmValueType)
-	bucketType := llvm.StructType([]llvm.Type{
-		llvm.ArrayType(llvm.Int8Type(), 8), // tophash
-		c.i8ptrType,                        // next bucket
-		llvm.ArrayType(llvmKeyType, 8),     // key type
-		llvm.ArrayType(llvmValueType, 8),   // value type
+	bucketType := c.ctx.StructType([]llvm.Type{
+		llvm.ArrayType(c.ctx.Int8Type(), 8), // tophash
+		c.i8ptrType,                         // next bucket
+		llvm.ArrayType(llvmKeyType, 8),      // key type
+		llvm.ArrayType(llvmValueType, 8),    // value type
 	}, false)
-	bucketValue, err := getZeroValue(bucketType)
+	bucketValue, err := c.getZeroValue(bucketType)
 	if err != nil {
 		return llvm.Value{}, 0, 0, err
 	}
@@ -1021,18 +1021,18 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			return getZeroValue(llvmType)
+			return c.getZeroValue(llvmType)
 		}
 		fn := c.ir.GetFunction(value.Elem)
 		ptr := fn.LLVMFn
 		if c.ir.SignatureNeedsContext(fn.Signature) {
 			// Create closure value: {context, function pointer}
-			ptr = llvm.ConstStruct([]llvm.Value{llvm.ConstPointerNull(c.i8ptrType), ptr}, false)
+			ptr = c.ctx.ConstStruct([]llvm.Value{llvm.ConstPointerNull(c.i8ptrType), ptr}, false)
 		}
 		return ptr, nil
 
 	case *ir.GlobalValue:
-		zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 		ptr := llvm.ConstInBoundsGEP(value.Global.LLVMGlobal, []llvm.Value{zero})
 		return ptr, nil
 
@@ -1089,7 +1089,7 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 				if err != nil {
 					return llvm.Value{}, err
 				}
-				zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+				zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 				newBucketPtr := llvm.ConstInBoundsGEP(newBucketGlobal, []llvm.Value{zero})
 				newBucketPtrCast := llvm.ConstBitCast(newBucketPtr, c.i8ptrType)
 				// insert pointer into old bucket
@@ -1100,7 +1100,7 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 				bucketGlobal = newBucketGlobal
 			}
 
-			tophashValue := llvm.ConstInt(llvm.Int8Type(), uint64(hashmapTopHash(hash)), false)
+			tophashValue := llvm.ConstInt(c.ctx.Int8Type(), uint64(hashmapTopHash(hash)), false)
 			bucket := bucketGlobal.Initializer()
 			bucket = llvm.ConstInsertValue(bucket, tophashValue, []uint32{0, uint32(i % 8)})
 			bucket = llvm.ConstInsertValue(bucket, llvmKey, []uint32{2, uint32(i % 8)})
@@ -1109,16 +1109,16 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 		}
 
 		// Create the hashmap itself.
-		zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 		bucketPtr := llvm.ConstInBoundsGEP(bucketGlobal, []llvm.Value{zero})
 		hashmapType := c.mod.GetTypeByName("runtime.hashmap")
 		hashmap := llvm.ConstNamedStruct(hashmapType, []llvm.Value{
 			llvm.ConstPointerNull(llvm.PointerType(hashmapType, 0)),  // next
 			llvm.ConstBitCast(bucketPtr, c.i8ptrType),                // buckets
 			llvm.ConstInt(c.lenType, uint64(len(value.Keys)), false), // count
-			llvm.ConstInt(llvm.Int8Type(), keySize, false),           // keySize
-			llvm.ConstInt(llvm.Int8Type(), valueSize, false),         // valueSize
-			llvm.ConstInt(llvm.Int8Type(), 0, false),                 // bucketBits
+			llvm.ConstInt(c.ctx.Int8Type(), keySize, false),          // keySize
+			llvm.ConstInt(c.ctx.Int8Type(), valueSize, false),        // valueSize
+			llvm.ConstInt(c.ctx.Int8Type(), 0, false),                // bucketBits
 		})
 
 		// Create a pointer to this hashmap.
@@ -1163,7 +1163,7 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 		obj.SetLinkage(llvm.InternalLinkage)
 		elem = obj
 
-		zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 		ptr := llvm.ConstInBoundsGEP(elem, []llvm.Value{zero})
 		return ptr, nil
 
@@ -1188,7 +1188,7 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 			global.SetLinkage(llvm.InternalLinkage)
 
 			// get pointer to global
-			zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 			globalPtr = c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
 
 			arrayLength = uint64(len(value.Array.Elems))
@@ -1224,7 +1224,7 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 			}
 			return llvm.ConstNamedStruct(llvmType, fields), nil
 		case *types.Struct:
-			return llvm.ConstStruct(fields, false), nil
+			return c.ctx.ConstStruct(fields, false), nil
 		default:
 			return llvm.Value{}, errors.New("init: unknown struct type: " + value.Type.String())
 		}
@@ -1234,7 +1234,7 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return getZeroValue(llvmType)
+		return c.getZeroValue(llvmType)
 
 	default:
 		return llvm.Value{}, errors.New("init: unknown initializer type: " + fmt.Sprintf("%#v", value))
@@ -1319,7 +1319,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 			}
 			freeVarTypes = append(freeVarTypes, typ)
 		}
-		contextType := llvm.StructType(freeVarTypes, false)
+		contextType := c.ctx.StructType(freeVarTypes, false)
 
 		// Get a correctly-typed pointer to the context.
 		contextAlloc := llvm.Value{}
@@ -1341,8 +1341,8 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		// wrappers are generated by the ssa package).
 		for i, freeVar := range frame.fn.FreeVars {
 			indices := []llvm.Value{
-				llvm.ConstInt(llvm.Int32Type(), 0, false),
-				llvm.ConstInt(llvm.Int32Type(), uint64(i), false),
+				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false),
 			}
 			gep := c.builder.CreateInBoundsGEP(contextAlloc, indices, "")
 			frame.locals[freeVar] = c.builder.CreateLoad(gep, "")
@@ -1361,7 +1361,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		taskState := c.builder.CreateAlloca(c.mod.GetTypeByName("runtime.taskState"), "task.state")
 		stateI8 := c.builder.CreateBitCast(taskState, c.i8ptrType, "task.state.i8")
 		id := c.builder.CreateCall(c.coroIdFunc, []llvm.Value{
-			llvm.ConstInt(llvm.Int32Type(), 0, false),
+			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 			stateI8,
 			llvm.ConstNull(c.i8ptrType),
 			llvm.ConstNull(c.i8ptrType),
@@ -1385,7 +1385,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 
 		// Coroutine suspend. A call to llvm.coro.suspend() will branch here.
 		c.builder.SetInsertPointAtEnd(frame.suspendBlock)
-		c.builder.CreateCall(c.coroEndFunc, []llvm.Value{frame.taskHandle, llvm.ConstInt(llvm.Int1Type(), 0, false)}, "unused")
+		c.builder.CreateCall(c.coroEndFunc, []llvm.Value{frame.taskHandle, llvm.ConstInt(c.ctx.Int1Type(), 0, false)}, "unused")
 		c.builder.CreateRet(frame.taskHandle)
 	}
 
@@ -1465,7 +1465,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		callback := c.mod.NamedFunction(deferName)
 		if callback.IsNil() {
 			// Not found, have to add it.
-			deferFuncType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{next.Type()}, false)
+			deferFuncType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{next.Type()}, false)
 			callback = llvm.AddFunction(c.mod, deferName, deferFuncType)
 			c.deferFuncs = append(c.deferFuncs, fn)
 		}
@@ -1484,8 +1484,8 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		}
 
 		// Make a struct out of it.
-		contextType := llvm.StructType(valueTypes, false)
-		context, err := getZeroValue(contextType)
+		contextType := c.ctx.StructType(valueTypes, false)
+		context, err := c.getZeroValue(contextType)
 		if err != nil {
 			return err
 		}
@@ -1589,10 +1589,10 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 			// Final suspend.
 			continuePoint := c.builder.CreateCall(c.coroSuspendFunc, []llvm.Value{
 				llvm.ConstNull(c.ctx.TokenType()),
-				llvm.ConstInt(llvm.Int1Type(), 1, false), // final=true
+				llvm.ConstInt(c.ctx.Int1Type(), 1, false), // final=true
 			}, "")
 			sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-			sw.AddCase(llvm.ConstInt(llvm.Int8Type(), 1, false), frame.cleanupBlock)
+			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
 			return nil
 		} else {
 			if len(instr.Results) == 0 {
@@ -1607,7 +1607,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 				return nil
 			} else {
 				// Multiple return values. Put them all in a struct.
-				retVal, err := getZeroValue(frame.fn.LLVMFn.Type().ElementType().ReturnType())
+				retVal, err := c.getZeroValue(frame.fn.LLVMFn.Type().ElementType().ReturnType())
 				if err != nil {
 					return err
 				}
@@ -1694,8 +1694,8 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			llvmLen = c.builder.CreateExtractValue(value, 1, "len")
 		case *types.Map:
 			indices := []llvm.Value{
-				llvm.ConstInt(llvm.Int32Type(), 0, false),
-				llvm.ConstInt(llvm.Int32Type(), 2, false), // hashmap.count
+				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(c.ctx.Int32Type(), 2, false), // hashmap.count
 			}
 			ptr := c.builder.CreateGEP(value, indices, "lenptr")
 			llvmLen = c.builder.CreateLoad(ptr, "len")
@@ -1802,12 +1802,12 @@ func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, con
 		// Yield to scheduler.
 		continuePoint := c.builder.CreateCall(c.coroSuspendFunc, []llvm.Value{
 			llvm.ConstNull(c.ctx.TokenType()),
-			llvm.ConstInt(llvm.Int1Type(), 0, false),
+			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
 		}, "")
 		wakeup := c.ctx.InsertBasicBlock(llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.wakeup")
 		sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-		sw.AddCase(llvm.ConstInt(llvm.Int8Type(), 0, false), wakeup)
-		sw.AddCase(llvm.ConstInt(llvm.Int8Type(), 1, false), frame.cleanupBlock)
+		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), wakeup)
+		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
 		c.builder.SetInsertPointAtEnd(wakeup)
 
 		return llvm.Value{}, nil
@@ -1829,12 +1829,12 @@ func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, con
 		// Yield to the scheduler.
 		continuePoint := c.builder.CreateCall(c.coroSuspendFunc, []llvm.Value{
 			llvm.ConstNull(c.ctx.TokenType()),
-			llvm.ConstInt(llvm.Int1Type(), 0, false),
+			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
 		}, "")
 		resume := c.ctx.InsertBasicBlock(llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.callComplete")
 		sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-		sw.AddCase(llvm.ConstInt(llvm.Int8Type(), 0, false), resume)
-		sw.AddCase(llvm.ConstInt(llvm.Int8Type(), 1, false), frame.cleanupBlock)
+		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), resume)
+		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
 		c.builder.SetInsertPointAtEnd(resume)
 	}
 	return result, nil
@@ -1865,7 +1865,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 
 		values := []llvm.Value{
 			itf,
-			llvm.ConstInt(llvm.Int16Type(), uint64(c.ir.MethodNum(instr.Method)), false),
+			llvm.ConstInt(c.ctx.Int16Type(), uint64(c.ir.MethodNum(instr.Method)), false),
 		}
 		fn := c.createRuntimeCall("interfaceMethod", values, "invoke.func")
 		fnCast := c.builder.CreateBitCast(fn, llvmFnType, "invoke.func.cast")
@@ -1895,7 +1895,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 		if fn.Name() == "Asm" && len(instr.Args) == 1 {
 			// Magic function: insert inline assembly instead of calling it.
 			if named, ok := instr.Args[0].Type().(*types.Named); ok && named.Obj().Name() == "__asm" {
-				fnType := llvm.FunctionType(llvm.VoidType(), []llvm.Type{}, false)
+				fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{}, false)
 				asm := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
 				target := llvm.InlineAsm(fnType, asm, "", true, false, 0)
 				return c.builder.CreateCall(target, nil, ""), nil
@@ -1919,7 +1919,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 				}
 				context = c.builder.CreateExtractValue(closure, 0, "")
 			} else {
-				context, err = getZeroValue(c.i8ptrType)
+				context, err = c.getZeroValue(c.i8ptrType)
 				if err != nil {
 					return llvm.Value{}, err
 				}
@@ -1992,7 +1992,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			buf = c.builder.CreateBitCast(buf, llvm.PointerType(typ, 0), "")
 		} else {
 			buf = c.builder.CreateAlloca(typ, expr.Comment)
-			zero, err := getZeroValue(typ)
+			zero, err := c.getZeroValue(typ)
 			if err != nil {
 				return llvm.Value{}, err
 			}
@@ -2057,8 +2057,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, err
 		}
 		indices := []llvm.Value{
-			llvm.ConstInt(llvm.Int32Type(), 0, false),
-			llvm.ConstInt(llvm.Int32Type(), uint64(expr.Field), false),
+			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(c.ctx.Int32Type(), uint64(expr.Field), false),
 		}
 		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Function:
@@ -2067,7 +2067,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if c.ir.FunctionNeedsContext(fn) {
 			// Create closure for function pointer.
 			// Closure is: {context, function pointer}
-			ptr = llvm.ConstStruct([]llvm.Value{
+			ptr = c.ctx.ConstStruct([]llvm.Value{
 				llvm.ConstPointerNull(c.i8ptrType),
 				ptr,
 			}, false)
@@ -2102,7 +2102,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// do it using an alloca+gep+load.
 		alloca := c.builder.CreateAlloca(array.Type(), "")
 		c.builder.CreateStore(array, alloca)
-		zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 		ptr := c.builder.CreateGEP(alloca, []llvm.Value{zero, index}, "")
 		return c.builder.CreateLoad(ptr, ""), nil
 	case *ssa.IndexAddr:
@@ -2141,7 +2141,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		switch expr.X.Type().(type) {
 		case *types.Pointer:
 			indices := []llvm.Value{
-				llvm.ConstInt(llvm.Int32Type(), 0, false),
+				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 				index,
 			}
 			return c.builder.CreateGEP(bufptr, indices, ""), nil
@@ -2232,8 +2232,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		keySize := c.targetData.TypeAllocSize(llvmKeyType)
 		valueSize := c.targetData.TypeAllocSize(llvmValueType)
-		llvmKeySize := llvm.ConstInt(llvm.Int8Type(), keySize, false)
-		llvmValueSize := llvm.ConstInt(llvm.Int8Type(), valueSize, false)
+		llvmKeySize := llvm.ConstInt(c.ctx.Int8Type(), keySize, false)
+		llvmValueSize := llvm.ConstInt(c.ctx.Int8Type(), valueSize, false)
 		hashmap := c.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize}, "")
 		return hashmap, nil
 	case *ssa.MakeSlice:
@@ -2274,7 +2274,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 
 		// Create the slice.
-		slice := llvm.ConstStruct([]llvm.Value{
+		slice := c.ctx.ConstStruct([]llvm.Value{
 			llvm.Undef(slicePtr.Type()),
 			llvm.Undef(c.lenType),
 			llvm.Undef(c.lenType),
@@ -2311,7 +2311,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "range.valueptr")
 			ok := c.createRuntimeCall("hashmapNext", []llvm.Value{llvmRangeVal, it, mapKeyPtr, mapValuePtr}, "range.next")
 
-			tuple := llvm.Undef(llvm.StructType([]llvm.Type{llvm.Int1Type(), llvmKeyType, llvmValueType}, false))
+			tuple := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.Int1Type(), llvmKeyType, llvmValueType}, false))
 			tuple = c.builder.CreateInsertValue(tuple, ok, 0, "")
 			tuple = c.builder.CreateInsertValue(tuple, c.builder.CreateLoad(mapKeyAlloca, ""), 1, "")
 			tuple = c.builder.CreateInsertValue(tuple, c.builder.CreateLoad(mapValueAlloca, ""), 2, "")
@@ -2336,7 +2336,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			panic("unknown type in range: " + typ.String())
 		}
 		it := c.builder.CreateAlloca(iteratorType, "range.it")
-		zero, err := getZeroValue(iteratorType)
+		zero, err := c.getZeroValue(iteratorType)
 		if err != nil {
 			return llvm.Value{}, nil
 		}
@@ -2375,7 +2375,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				high = llvmLenInt
 			}
 			indices := []llvm.Value{
-				llvm.ConstInt(llvm.Int32Type(), 0, false),
+				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 				low,
 			}
 			slicePtr := c.builder.CreateGEP(value, indices, "slice.ptr")
@@ -2392,7 +2392,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				sliceCap = c.builder.CreateTrunc(sliceCap, c.lenType, "")
 			}
 
-			slice := llvm.ConstStruct([]llvm.Value{
+			slice := c.ctx.ConstStruct([]llvm.Value{
 				llvm.Undef(slicePtr.Type()),
 				llvm.Undef(c.lenType),
 				llvm.Undef(c.lenType),
@@ -2425,7 +2425,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
 			newLen := c.builder.CreateSub(high, low, "")
 			newCap := c.builder.CreateSub(oldCap, low, "")
-			slice := llvm.ConstStruct([]llvm.Value{
+			slice := c.ctx.ConstStruct([]llvm.Value{
 				llvm.Undef(newPtr.Type()),
 				llvm.Undef(c.lenType),
 				llvm.Undef(c.lenType),
@@ -2452,7 +2452,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
 			newLen := c.builder.CreateSub(high, low, "")
-			str, err := getZeroValue(c.mod.GetTypeByName("runtime._string"))
+			str, err := c.getZeroValue(c.mod.GetTypeByName("runtime._string"))
 			if err != nil {
 				return llvm.Value{}, err
 			}
@@ -2473,7 +2473,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		valueNil, err := getZeroValue(assertedType)
+		valueNil, err := c.getZeroValue(assertedType)
 		if err != nil {
 			return llvm.Value{}, err
 		}
@@ -2486,7 +2486,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			// needs to be checked to see whether it implements the interface.
 			// At the same time, the interface value itself is unchanged.
 			itfTypeNum := c.ir.InterfaceNum(itf)
-			itfTypeNumValue := llvm.ConstInt(llvm.Int16Type(), uint64(itfTypeNum), false)
+			itfTypeNumValue := llvm.ConstInt(c.ctx.Int16Type(), uint64(itfTypeNum), false)
 			commaOk = c.createRuntimeCall("interfaceImplements", []llvm.Value{actualTypeNum, itfTypeNumValue}, "")
 
 		} else {
@@ -2498,9 +2498,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				// Using undef here so that LLVM knows we'll never get here and
 				// can optimize accordingly.
 				undef := llvm.Undef(assertedType)
-				commaOk := llvm.ConstInt(llvm.Int1Type(), 0, false)
+				commaOk := llvm.ConstInt(c.ctx.Int1Type(), 0, false)
 				if expr.CommaOk {
-					return llvm.ConstStruct([]llvm.Value{undef, commaOk}, false), nil
+					return c.ctx.ConstStruct([]llvm.Value{undef, commaOk}, false), nil
 				} else {
 					c.createRuntimeCall("interfaceTypeAssert", []llvm.Value{commaOk}, "")
 					return undef, nil
@@ -2510,7 +2510,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
 			}
 
-			assertedTypeNumValue := llvm.ConstInt(llvm.Int16Type(), uint64(assertedTypeNum), false)
+			assertedTypeNumValue := llvm.ConstInt(c.ctx.Int16Type(), uint64(assertedTypeNum), false)
 			commaOk = c.builder.CreateICmp(llvm.IntEQ, assertedTypeNumValue, actualTypeNum, "")
 		}
 
@@ -2575,9 +2575,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		phi.AddIncoming([]llvm.Value{valueNil, valueOk}, []llvm.BasicBlock{prevBlock, okBlock})
 
 		if expr.CommaOk {
-			tuple := llvm.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(llvm.Int1Type())}, false) // create empty tuple
-			tuple = c.builder.CreateInsertValue(tuple, phi, 0, "")                                                // insert value
-			tuple = c.builder.CreateInsertValue(tuple, commaOk, 1, "")                                            // insert 'comma ok' boolean
+			tuple := c.ctx.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(c.ctx.Int1Type())}, false) // create empty tuple
+			tuple = c.builder.CreateInsertValue(tuple, phi, 0, "")                                                  // insert value
+			tuple = c.builder.CreateInsertValue(tuple, commaOk, 1, "")                                              // insert 'comma ok' boolean
 			return tuple, nil
 		} else {
 			// This is kind of dirty as the branch above becomes mostly useless,
@@ -2809,12 +2809,12 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 			str := constant.StringVal(expr.Value)
 			strLen := llvm.ConstInt(c.lenType, uint64(len(str)), false)
 			objname := prefix + "$string"
-			global := llvm.AddGlobal(c.mod, llvm.ArrayType(llvm.Int8Type(), len(str)), objname)
+			global := llvm.AddGlobal(c.mod, llvm.ArrayType(c.ctx.Int8Type(), len(str)), objname)
 			global.SetInitializer(c.ctx.ConstString(str, false))
 			global.SetLinkage(llvm.InternalLinkage)
 			global.SetGlobalConstant(true)
 			global.SetUnnamedAddr(true)
-			zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 			strPtr := c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
 			strObj := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._string"), []llvm.Value{strPtr, strLen})
 			return strObj, nil
@@ -2844,14 +2844,14 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return getZeroValue(sig)
+		return c.getZeroValue(sig)
 	case *types.Interface:
 		if expr.Value != nil {
 			return llvm.Value{}, errors.New("non-nil interface constant")
 		}
 		// Create a generic nil interface with no dynamic type (typecode=0).
 		fields := []llvm.Value{
-			llvm.ConstInt(llvm.Int16Type(), 0, false),
+			llvm.ConstInt(c.ctx.Int16Type(), 0, false),
 			llvm.ConstPointerNull(c.i8ptrType),
 		}
 		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), fields)
@@ -2875,7 +2875,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 		}
 		llvmPtr := llvm.ConstPointerNull(llvm.PointerType(elemType, 0))
 		llvmLen := llvm.ConstInt(c.lenType, 0, false)
-		slice := llvm.ConstStruct([]llvm.Value{
+		slice := c.ctx.ConstStruct([]llvm.Value{
 			llvmPtr, // backing array
 			llvmLen, // len
 			llvmLen, // cap
@@ -2919,11 +2919,11 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 				// Cast to an i32 value as expected by
 				// runtime.stringFromUnicode.
 				if sizeFrom > 4 {
-					value = c.builder.CreateTrunc(value, llvm.Int32Type(), "")
+					value = c.builder.CreateTrunc(value, c.ctx.Int32Type(), "")
 				} else if sizeFrom < 4 && typeTo.Info()&types.IsUnsigned != 0 {
-					value = c.builder.CreateZExt(value, llvm.Int32Type(), "")
+					value = c.builder.CreateZExt(value, c.ctx.Int32Type(), "")
 				} else if sizeFrom < 4 {
-					value = c.builder.CreateSExt(value, llvm.Int32Type(), "")
+					value = c.builder.CreateSExt(value, c.ctx.Int32Type(), "")
 				}
 				return c.createRuntimeCall("stringFromUnicode", []llvm.Value{value}, ""), nil
 			case *types.Slice:
@@ -3023,7 +3023,7 @@ func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.V
 		boundVars = append(boundVars, llvmBoundVar)
 		boundVarTypes = append(boundVarTypes, llvmBoundVar.Type())
 	}
-	contextType := llvm.StructType(boundVarTypes, false)
+	contextType := c.ctx.StructType(boundVarTypes, false)
 
 	// Allocate memory for the context.
 	contextAlloc := llvm.Value{}
@@ -3045,8 +3045,8 @@ func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.V
 	// Store all bound variables in the alloca or heap pointer.
 	for i, boundVar := range boundVars {
 		indices := []llvm.Value{
-			llvm.ConstInt(llvm.Int32Type(), 0, false),
-			llvm.ConstInt(llvm.Int32Type(), uint64(i), false),
+			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false),
 		}
 		gep := c.builder.CreateInBoundsGEP(contextAlloc, indices, "")
 		c.builder.CreateStore(boundVar, gep)
@@ -3071,7 +3071,7 @@ func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.V
 	}
 
 	// Create the closure, which is a struct: {context, function pointer}.
-	closure, err := getZeroValue(typ)
+	closure, err := c.getZeroValue(typ)
 	if err != nil {
 		return llvm.Value{}, err
 	}
@@ -3090,7 +3090,7 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global str
 			global.SetInitializer(val)
 			global.SetLinkage(llvm.InternalLinkage)
 			global.SetGlobalConstant(true)
-			zero := llvm.ConstInt(llvm.Int32Type(), 0, false)
+			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 			itfValueRaw := llvm.ConstInBoundsGEP(global, []llvm.Value{zero, zero})
 			itfValue = llvm.ConstBitCast(itfValueRaw, c.i8ptrType)
 		} else {
@@ -3124,7 +3124,7 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global str
 	if itfTypeNum >= 1<<16 {
 		return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
 	}
-	itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), []llvm.Value{llvm.ConstInt(llvm.Int16Type(), uint64(itfTypeNum), false), llvm.Undef(c.i8ptrType)})
+	itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), []llvm.Value{llvm.ConstInt(c.ctx.Int16Type(), uint64(itfTypeNum), false), llvm.Undef(c.i8ptrType)})
 	itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
 	return itf, nil
 }
