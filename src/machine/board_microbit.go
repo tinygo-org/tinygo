@@ -96,3 +96,20 @@ func SetLEDMatrix(x, y uint8) error {
 
 	return nil
 }
+
+// SetEntireLEDMatrixOn turns on all of the LEDs on the LED matrix.
+func SetEntireLEDMatrixOn() error {
+	set := 0
+	for i := LED_ROW_1; i <= LED_ROW_3; i++ {
+		set |= 1 << uint8(i)
+	}
+	nrf.GPIO.OUTSET = nrf.RegValue(set)
+
+	set = 0
+	for i := LED_COL_1; i <= LED_COL_9; i++ {
+		set |= 1 << uint8(i)
+	}
+	nrf.GPIO.OUTCLR = nrf.RegValue(set)
+
+	return nil
+}
