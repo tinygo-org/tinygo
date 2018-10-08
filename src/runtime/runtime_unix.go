@@ -24,10 +24,17 @@ type timespec struct {
 
 const CLOCK_MONOTONIC_RAW = 4
 
-func preinit() {
-}
+// Entry point for Go. Initialize all packages and call main.main().
+//go:export main
+func main() int {
+	// Run initializers of all packages.
+	initAll()
 
-func postinit() {
+	// Compiler-generated wrapper to main.main().
+	mainWrapper()
+
+	// For libc compatibility.
+	return 0
 }
 
 func putchar(c byte) {

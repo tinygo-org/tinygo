@@ -16,9 +16,12 @@ const tickMicros = 1024 * 32
 func systemInit()
 
 //go:export Reset_Handler
-func handleReset() {
+func main() {
 	systemInit()
-	main()
+	preinit()
+	initAll()
+	mainWrapper()
+	abort()
 }
 
 func init() {

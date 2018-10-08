@@ -36,6 +36,15 @@ var _sbss unsafe.Pointer
 //go:extern _ebss
 var _ebss unsafe.Pointer
 
+//go:export main
+func main() {
+	preinit()
+	initAll()
+	postinit()
+	mainWrapper()
+	abort()
+}
+
 func preinit() {
 	// Initialize .bss: zero-initialized global variables.
 	ptr := uintptr(unsafe.Pointer(&_sbss))
@@ -107,7 +116,6 @@ func ticks() timeUnit {
 }
 
 func abort() {
-	avr.Asm("cli")
 	for {
 		sleepWDT(WDT_PERIOD_2S)
 	}

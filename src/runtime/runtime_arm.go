@@ -40,9 +40,6 @@ func preinit() {
 	}
 }
 
-func postinit() {
-}
-
 func abort() {
 	for {
 		arm.Asm("wfi")

@@ -11,11 +11,11 @@ type timeUnit int64
 const tickMicros = 1 // TODO
 
 //go:export Reset_Handler
-func handleReset() {
-	main()
-}
-
-func init() {
+func main() {
+	preinit()
+	initAll()
+	mainWrapper()
+	abort()
 }
 
 func putchar(c byte) {

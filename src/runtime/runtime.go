@@ -23,25 +23,6 @@ func initAll()
 //     scheduler(coroutine)
 func mainWrapper()
 
-// Entry point for Go. Initialize all packages and call main.main().
-//go:export main
-func main() int {
-	// Initialize memory etc.
-	preinit()
-
-	// Run initializers of all packages.
-	initAll()
-
-	// Enable interrupts etc.
-	postinit()
-
-	// Compiler-generated wrapper to main.main().
-	mainWrapper()
-
-	// For libc compatibility.
-	return 0
-}
-
 func GOMAXPROCS(n int) int {
 	// Note: setting GOMAXPROCS is ignored.
 	return 1
