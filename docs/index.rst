@@ -12,4 +12,5 @@ Contents:
    :maxdepth: 2
 
    installation
+   microcontrollers
    internals
