@@ -1110,7 +1110,7 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 
 		// Create the hashmap itself.
 		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-		bucketPtr := llvm.ConstInBoundsGEP(bucketGlobal, []llvm.Value{zero})
+		bucketPtr := llvm.ConstInBoundsGEP(firstBucketGlobal, []llvm.Value{zero})
 		hashmapType := c.mod.GetTypeByName("runtime.hashmap")
 		hashmap := llvm.ConstNamedStruct(hashmapType, []llvm.Value{
 			llvm.ConstPointerNull(llvm.PointerType(hashmapType, 0)),  // next
