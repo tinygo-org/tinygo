@@ -23,7 +23,7 @@ var commands = map[string]string{
 }
 
 // Helper function for Compiler object.
-func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA, debug bool, printSizes string, action func(string) error) error {
+func Compile(pkgName, outpath, opt string, spec *TargetSpec, printIR, dumpSSA, debug bool, printSizes string, action func(string) error) error {
 	config := compiler.Config{
 		Triple:    spec.Triple,
 		Debug:     debug,
@@ -58,8 +58,22 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA, debug 
 		return err
 	}
 
-	// TODO: provide a flag to disable (most) optimizations.
-	c.Optimize(2, 2, 5) // -Oz params
+	// Optimization levels here are roughly the same as Clang, but probably not
+	// exactly.
+	switch opt {
+	case "none:", "0":
+		c.Optimize(0, 0, 0) // -O0
+	case "1":
+		c.Optimize(1, 0, 0) // -O1
+	case "2":
+		c.Optimize(2, 0, 225) // -O2
+	case "s":
+		c.Optimize(2, 1, 225) // -Os
+	case "z":
+		c.Optimize(2, 2, 5) // -Oz, default
+	default:
+		return errors.New("unknown optimization level: -opt=" + opt)
+	}
 	if err := c.Verify(); err != nil {
 		return err
 	}
@@ -166,13 +180,13 @@ func Compile(pkgName, outpath string, spec *TargetSpec, printIR, dumpSSA, debug 
 	}
 }
 
-func Build(pkgName, outpath, target string, printIR, dumpSSA, debug bool, printSizes string) error {
+func Build(pkgName, outpath, target, opt string, printIR, dumpSSA, debug bool, printSizes string) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
 	}
 
-	return Compile(pkgName, outpath, spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
+	return Compile(pkgName, outpath, opt, spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
 		if err := os.Rename(tmppath, outpath); err != nil {
 			// Moving failed. Do a file copy.
 			inf, err := os.Open(tmppath)
@@ -200,13 +214,13 @@ func Build(pkgName, outpath, target string, printIR, dumpSSA, debug bool, printS
 	})
 }
 
-func Flash(pkgName, target, port string, printIR, dumpSSA, debug bool, printSizes string) error {
+func Flash(pkgName, target, opt, port string, printIR, dumpSSA, debug bool, printSizes string) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
 	}
 
-	return Compile(pkgName, ".hex", spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
+	return Compile(pkgName, ".hex", opt, spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
 		if spec.Flasher == "" {
 			return errors.New("no flash command specified - did you miss a -target flag?")
 		}
@@ -229,7 +243,7 @@ func Flash(pkgName, target, port string, printIR, dumpSSA, debug bool, printSize
 //
 // Note: this command is expected to execute just before exiting, as it
 // modifies global state.
-func FlashGDB(pkgName, target, port string, printIR, dumpSSA, ocdOutput bool, printSizes string) error {
+func FlashGDB(pkgName, target, opt, port string, printIR, dumpSSA, ocdOutput bool, printSizes string) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
@@ -240,7 +254,7 @@ func FlashGDB(pkgName, target, port string, printIR, dumpSSA, ocdOutput bool, pr
 	}
 
 	debug := true // always enable debug symbols
-	return Compile(pkgName, "", spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
+	return Compile(pkgName, "", opt, spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
 		if len(spec.OCDDaemon) != 0 {
 			// We need a separate debugging daemon for on-chip debugging.
 			daemon := exec.Command(spec.OCDDaemon[0], spec.OCDDaemon[1:]...)
@@ -331,7 +345,7 @@ func Run(pkgName string) error {
 }
 
 // Compile and run the given program in an emulator.
-func Emulate(pkgName, target string) error {
+func Emulate(pkgName, target, opt string) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
@@ -340,7 +354,7 @@ func Emulate(pkgName, target string) error {
 		return errors.New("no emulator configured for this target")
 	}
 
-	return Compile(pkgName, ".elf", spec, false, false, false, "", func(tmppath string) error {
+	return Compile(pkgName, ".elf", opt, spec, false, false, false, "", func(tmppath string) error {
 		args := append(spec.Emulator[1:], tmppath)
 		cmd := exec.Command(spec.Emulator[0], args...)
 		cmd.Stdout = os.Stdout
@@ -369,6 +383,7 @@ func usage() {
 
 func main() {
 	outpath := flag.String("o", "", "output filename")
+	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
@@ -400,7 +415,7 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Build(flag.Arg(0), *outpath, *target, *printIR, *dumpSSA, !*nodebug, *printSize)
+		err := Build(flag.Arg(0), *outpath, *target, *opt, *printIR, *dumpSSA, !*nodebug, *printSize)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
@@ -413,9 +428,9 @@ func main() {
 		}
 		var err error
 		if command == "flash" {
-			err = Flash(flag.Arg(0), *target, *port, *printIR, *dumpSSA, !*nodebug, *printSize)
+			err = Flash(flag.Arg(0), *target, *opt, *port, *printIR, *dumpSSA, !*nodebug, *printSize)
 		} else {
-			err = FlashGDB(flag.Arg(0), *target, *port, *printIR, *dumpSSA, *ocdOutput, *printSize)
+			err = FlashGDB(flag.Arg(0), *target, *opt, *port, *printIR, *dumpSSA, *ocdOutput, *printSize)
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
@@ -431,7 +446,7 @@ func main() {
 		if *target == llvm.DefaultTargetTriple() {
 			err = Run(flag.Arg(0))
 		} else {
-			err = Emulate(flag.Arg(0), *target)
+			err = Emulate(flag.Arg(0), *target, *opt)
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
