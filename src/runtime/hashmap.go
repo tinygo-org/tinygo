@@ -139,9 +139,9 @@ func hashmapGet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 	for bucket != nil {
 		for i := uintptr(0); i < 8; i++ {
 			slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*uintptr(i)
-			slotKey := unsafe.Pointer(bucketAddr + slotKeyOffset)
+			slotKey := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotKeyOffset)
 			slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*uintptr(i)
-			slotValue := unsafe.Pointer(bucketAddr + slotValueOffset)
+			slotValue := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotValueOffset)
 			if bucket.tophash[i] == tophash {
 				// This could be the key we're looking for.
 				if keyEqual(key, slotKey, uintptr(m.keySize)) {
