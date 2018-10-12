@@ -1688,7 +1688,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			return llvm.Value{}, err
 		}
 		var llvmLen llvm.Value
-		switch args[0].Type().(type) {
+		switch args[0].Type().Underlying().(type) {
 		case *types.Basic, *types.Slice:
 			// string or slice
 			llvmLen = c.builder.CreateExtractValue(value, 1, "len")
@@ -2138,7 +2138,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// LLVM optimizes this away in most cases.
 		c.emitBoundsCheck(frame, buflen, index)
 
-		switch expr.X.Type().(type) {
+		switch expr.X.Type().Underlying().(type) {
 		case *types.Pointer:
 			indices := []llvm.Value{
 				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
@@ -2162,7 +2162,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, nil
 		}
-		switch xType := expr.X.Type().(type) {
+		switch xType := expr.X.Type().Underlying().(type) {
 		case *types.Basic:
 			// Value type must be a string, which is a basic type.
 			if xType.Kind() != types.String {
