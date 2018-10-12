@@ -139,9 +139,12 @@ func (c *Compiler) OptimizeAllocs() {
 			// promote it to a SSA value.
 			fn := bitcast.InstructionParent().Parent()
 			c.builder.SetInsertPointBefore(fn.EntryBasicBlock().FirstInstruction())
-			allocaType := llvm.ArrayType(llvm.Int8Type(), int(size))
-			// TODO: alignment?
+			alignment := c.targetData.ABITypeAlignment(c.i8ptrType)
+			sizeInWords := (size + uint64(alignment) - 1) / uint64(alignment)
+			allocaType := llvm.ArrayType(c.ctx.IntType(alignment*8), int(sizeInWords))
 			alloca := c.builder.CreateAlloca(allocaType, "stackalloc.alloca")
+			zero, _ := c.getZeroValue(alloca.Type().ElementType())
+			c.builder.CreateStore(zero, alloca)
 			stackalloc := c.builder.CreateBitCast(alloca, bitcast.Type(), "stackalloc")
 			bitcast.ReplaceAllUsesWith(stackalloc)
 			if heapalloc != bitcast {
