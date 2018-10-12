@@ -37,6 +37,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) {
 		goPasses.Run(c.mod)
 
 		// Run Go-specific optimization passes.
+		c.OptimizeMaps()
 		c.OptimizeStringToBytes()
 		c.OptimizeAllocs()
 		c.Verify()
@@ -47,6 +48,44 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) {
 	defer modPasses.Dispose()
 	builder.Populate(modPasses)
 	modPasses.Run(c.mod)
+}
+
+// Eliminate created but not used maps.
+//
+// In the future, this should statically allocate created but never modified
+// maps. This has not yet been implemented, however.
+func (c *Compiler) OptimizeMaps() {
+	hashmapMake := c.mod.NamedFunction("runtime.hashmapMake")
+	if hashmapMake.IsNil() {
+		// nothing to optimize
+		return
+	}
+
+	hashmapBinarySet := c.mod.NamedFunction("runtime.hashmapBinarySet")
+	hashmapStringSet := c.mod.NamedFunction("runtime.hashmapStringSet")
+
+	for _, makeInst := range getUses(hashmapMake) {
+		updateInsts := []llvm.Value{}
+		unknownUses := false // are there any uses other than setting a value?
+
+		for _, use := range getUses(makeInst) {
+			switch use.CalledValue() {
+			case hashmapBinarySet, hashmapStringSet:
+				updateInsts = append(updateInsts, use)
+			default:
+				unknownUses = true
+			}
+		}
+
+		if !unknownUses {
+			// This map can be entirely removed, as it is only created but never
+			// used.
+			for _, inst := range updateInsts {
+				inst.EraseFromParentAsInstruction()
+			}
+			makeInst.EraseFromParentAsInstruction()
+		}
+	}
 }
 
 // Transform runtime.stringToBytes(...) calls into const []byte slices whenever
