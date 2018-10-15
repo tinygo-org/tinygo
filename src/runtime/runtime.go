@@ -98,3 +98,11 @@ func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen lenType, elemSize uintptr
 func sleep(d int64) {
 	sleepTicks(timeUnit(d / tickMicros))
 }
+
+//go:linkname now time.now
+func now() (sec int64, nsec int32, mono int64) {
+	mono = int64(ticks()) * tickMicros
+	sec = mono / (1000 * 1000 * 1000)
+	nsec = int32(mono - sec*(1000*1000*1000))
+	return
+}
