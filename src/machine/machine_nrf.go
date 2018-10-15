@@ -34,6 +34,20 @@ func (p GPIO) Set(high bool) {
 	}
 }
 
+// Return the register and mask to enable a given GPIO pin. This can be used to
+// implement bit-banged drivers.
+func (p GPIO) PortMaskSet() (*uint32, uint32) {
+	port, pin := p.getPortPin()
+	return (*uint32)(&port.OUTSET), 1 << pin
+}
+
+// Return the register and mask to disable a given port. This can be used to
+// implement bit-banged drivers.
+func (p GPIO) PortMaskClear() (*uint32, uint32) {
+	port, pin := p.getPortPin()
+	return (*uint32)(&port.OUTCLR), 1 << pin
+}
+
 // Get returns the current value of a GPIO pin.
 func (p GPIO) Get() bool {
 	port, pin := p.getPortPin()
