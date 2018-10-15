@@ -9,6 +9,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -1892,15 +1893,81 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 
 	// Try to call the function directly for trivially static calls.
 	if fn := instr.StaticCallee(); fn != nil {
-		if fn.Name() == "Asm" && len(instr.Args) == 1 {
+		if fn.RelString(nil) == "device/arm.Asm" || fn.RelString(nil) == "device/avr.Asm" {
 			// Magic function: insert inline assembly instead of calling it.
-			if named, ok := instr.Args[0].Type().(*types.Named); ok && named.Obj().Name() == "__asm" {
-				fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{}, false)
-				asm := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
-				target := llvm.InlineAsm(fnType, asm, "", true, false, 0)
-				return c.builder.CreateCall(target, nil, ""), nil
-			}
+			fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{}, false)
+			asm := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
+			target := llvm.InlineAsm(fnType, asm, "", true, false, 0)
+			return c.builder.CreateCall(target, nil, ""), nil
 		}
+
+		if fn.RelString(nil) == "device/arm.AsmFull" || fn.RelString(nil) == "device/avr.AsmFull" {
+			asmString := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
+			registers := map[string]llvm.Value{}
+			registerMap := instr.Args[1].(*ssa.MakeMap)
+			for _, r := range *registerMap.Referrers() {
+				switch r := r.(type) {
+				case *ssa.DebugRef:
+					// ignore
+				case *ssa.MapUpdate:
+					if r.Block() != registerMap.Block() {
+						return llvm.Value{}, errors.New("register value map must be created in the same basic block")
+					}
+					key := constant.StringVal(r.Key.(*ssa.Const).Value)
+					//println("value:", r.Value.(*ssa.MakeInterface).X.String())
+					value, err := c.parseExpr(frame, r.Value.(*ssa.MakeInterface).X)
+					if err != nil {
+						return llvm.Value{}, err
+					}
+					registers[key] = value
+				case *ssa.Call:
+					if r.Common() == instr {
+						break
+					}
+				default:
+					return llvm.Value{}, errors.New("don't know how to handle argument to inline assembly: " + r.String())
+				}
+			}
+			// TODO: handle dollar signs in asm string
+			registerNumbers := map[string]int{}
+			var err error
+			argTypes := []llvm.Type{}
+			args := []llvm.Value{}
+			constraints := []string{}
+			asmString = regexp.MustCompile("\\{[a-zA-Z]+\\}").ReplaceAllStringFunc(asmString, func(s string) string {
+				// TODO: skip strings like {r4} etc. that look like ARM push/pop
+				// instructions.
+				name := s[1 : len(s)-1]
+				if _, ok := registers[name]; !ok {
+					if err == nil {
+						err = errors.New("unknown register name: " + name)
+					}
+					return s
+				}
+				if _, ok := registerNumbers[name]; !ok {
+					registerNumbers[name] = len(registerNumbers)
+					argTypes = append(argTypes, registers[name].Type())
+					args = append(args, registers[name])
+					switch registers[name].Type().TypeKind() {
+					case llvm.IntegerTypeKind:
+						constraints = append(constraints, "r")
+					case llvm.PointerTypeKind:
+						constraints = append(constraints, "*m")
+					default:
+						err = errors.New("unknown type in inline assembly for value: " + name)
+						return s
+					}
+				}
+				return fmt.Sprintf("${%v}", registerNumbers[name])
+			})
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			fnType := llvm.FunctionType(c.ctx.VoidType(), argTypes, false)
+			target := llvm.InlineAsm(fnType, asmString, strings.Join(constraints, ","), true, false, 0)
+			return c.builder.CreateCall(target, args, ""), nil
+		}
+
 		targetFunc := c.ir.GetFunction(fn)
 		if targetFunc.LLVMFn.IsNil() {
 			return llvm.Value{}, errors.New("undefined function: " + targetFunc.LinkName())
