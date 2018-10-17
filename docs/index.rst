@@ -13,4 +13,5 @@ Contents:
 
    installation
    microcontrollers
+   faq
    internals
