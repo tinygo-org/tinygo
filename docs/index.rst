@@ -12,6 +12,7 @@ Contents:
    :maxdepth: 2
 
    installation
+   targets
    microcontrollers
    faq
    internals

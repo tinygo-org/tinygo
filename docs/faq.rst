@@ -141,6 +141,8 @@ At the same time, Rust has other advantages:
     Go can.
 
 
+.. _faq-esp:
+
 What about the ESP8266/ESP32?
 -----------------------------
 
