@@ -44,6 +44,13 @@ needs the following tools:
       ``avr-gcc``.
     * ``avrdude`` for flashing to an Arduino.
 
+WebAssembly
+~~~~~~~~~~~
+
+The WebAssembly backend only needs a special linker from the LLVM project:
+
+    * LLVM linker (``ld.lld-7``) for linking WebAssembly files together.
+
 
 Installation
 ------------

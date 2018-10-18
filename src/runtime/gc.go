@@ -6,9 +6,6 @@ import (
 	"unsafe"
 )
 
-//go:extern _heap_start
-var heapStart unsafe.Pointer
-
 var heapptr = uintptr(unsafe.Pointer(&heapStart))
 
 func alloc(size uintptr) unsafe.Pointer {

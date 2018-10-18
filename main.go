@@ -91,13 +91,15 @@ func Compile(pkgName, outpath, opt string, spec *TargetSpec, printIR, dumpSSA, d
 	}
 
 	// Generate output.
-	if strings.HasSuffix(outpath, ".o") {
+	outext := filepath.Ext(outpath)
+	switch outext {
+	case ".o":
 		return c.EmitObject(outpath)
-	} else if strings.HasSuffix(outpath, ".bc") {
+	case ".bc":
 		return c.EmitBitcode(outpath)
-	} else if strings.HasSuffix(outpath, ".ll") {
+	case ".ll":
 		return c.EmitText(outpath)
-	} else {
+	default:
 		// Act as a compiler driver.
 
 		// Create a temporary directory for intermediary files.
@@ -160,14 +162,13 @@ func Compile(pkgName, outpath, opt string, spec *TargetSpec, printIR, dumpSSA, d
 			}
 		}
 
-		ext := filepath.Ext(outpath)
-		if ext == ".hex" || ext == ".bin" {
+		if outext == ".hex" || outext == ".bin" {
 			// Get an Intel .hex file or .bin file from the .elf file.
-			tmppath = filepath.Join(dir, "main"+ext)
+			tmppath = filepath.Join(dir, "main"+outext)
 			format := map[string]string{
 				".hex": "ihex",
 				".bin": "binary",
-			}[ext]
+			}[outext]
 			cmd := exec.Command(spec.Objcopy, "-O", format, executable, tmppath)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
@@ -386,7 +387,7 @@ func main() {
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
-	target := flag.String("target", llvm.DefaultTargetTriple(), "LLVM target")
+	target := flag.String("target", "", "LLVM target")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
@@ -415,7 +416,11 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Build(flag.Arg(0), *outpath, *target, *opt, *printIR, *dumpSSA, !*nodebug, *printSize)
+		target := *target
+		if target == "" && filepath.Ext(*outpath) == ".wasm" {
+			target = "wasm"
+		}
+		err := Build(flag.Arg(0), *outpath, target, *opt, *printIR, *dumpSSA, !*nodebug, *printSize)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
@@ -443,7 +448,7 @@ func main() {
 			os.Exit(1)
 		}
 		var err error
-		if *target == llvm.DefaultTargetTriple() {
+		if *target == "" {
 			err = Run(flag.Arg(0))
 		} else {
 			err = Emulate(flag.Arg(0), *target, *opt)
