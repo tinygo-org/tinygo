@@ -1,0 +1,6 @@
+foo: len=4 cap=4 data: 1 2 4 5
+bar: len=3 cap=5 data: 0 0 0
+foo[1:2]: len=1 cap=3 data: 2
+sum foo: 12
+copy foo -> bar: 3
+bar: len=3 cap=5 data: 1 2 4
