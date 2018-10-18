@@ -1,8 +1,8 @@
-// +build wasm,!arm,!avr
+// +build arm
 
 package runtime
 
-const GOARCH = "wasm"
+const GOARCH = "arm"
 
 // The length type used inside strings and slices.
 type lenType uint32
