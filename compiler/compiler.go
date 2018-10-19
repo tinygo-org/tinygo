@@ -1654,6 +1654,34 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 
 func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string) (llvm.Value, error) {
 	switch callName {
+	case "append":
+		src, err := c.parseExpr(frame, args[0])
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		elems, err := c.parseExpr(frame, args[1])
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		srcBuf := c.builder.CreateExtractValue(src, 0, "append.srcBuf")
+		srcPtr := c.builder.CreateBitCast(srcBuf, c.i8ptrType, "append.srcPtr")
+		srcLen := c.builder.CreateExtractValue(src, 1, "append.srcLen")
+		srcCap := c.builder.CreateExtractValue(src, 2, "append.srcCap")
+		elemsBuf := c.builder.CreateExtractValue(elems, 0, "append.elemsBuf")
+		elemsPtr := c.builder.CreateBitCast(elemsBuf, c.i8ptrType, "append.srcPtr")
+		elemsLen := c.builder.CreateExtractValue(elems, 1, "append.elemsLen")
+		elemType := srcBuf.Type().ElementType()
+		elemSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(elemType), false)
+		result := c.createRuntimeCall("sliceAppend", []llvm.Value{srcPtr, elemsPtr, srcLen, srcCap, elemsLen, elemSize}, "append.new")
+		newPtr := c.builder.CreateExtractValue(result, 0, "append.newPtr")
+		newBuf := c.builder.CreateBitCast(newPtr, srcBuf.Type(), "append.newBuf")
+		newLen := c.builder.CreateExtractValue(result, 1, "append.newLen")
+		newCap := c.builder.CreateExtractValue(result, 2, "append.newCap")
+		newSlice := llvm.Undef(src.Type())
+		newSlice = c.builder.CreateInsertValue(newSlice, newBuf, 0, "")
+		newSlice = c.builder.CreateInsertValue(newSlice, newLen, 1, "")
+		newSlice = c.builder.CreateInsertValue(newSlice, newCap, 2, "")
+		return newSlice, nil
 	case "cap":
 		value, err := c.parseExpr(frame, args[0])
 		if err != nil {

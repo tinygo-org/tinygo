@@ -83,17 +83,6 @@ func memequal(x, y unsafe.Pointer, n uintptr) bool {
 	return true
 }
 
-// Builtin copy(dst, src) function: copy bytes from dst to src.
-func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen lenType, elemSize uintptr) lenType {
-	// n = min(srcLen, dstLen)
-	n := srcLen
-	if n > dstLen {
-		n = dstLen
-	}
-	memmove(dst, src, uintptr(n)*elemSize)
-	return n
-}
-
 //go:linkname sleep time.Sleep
 func sleep(d int64) {
 	sleepTicks(timeUnit(d / tickMicros))
