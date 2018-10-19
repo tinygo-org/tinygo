@@ -378,8 +378,15 @@ func (c *Compiler) Compile(mainPath string) error {
 	}
 	c.builder.CreateRetVoid()
 
-	mainWrapper := c.mod.NamedFunction("runtime.mainWrapper")
-	block = c.ctx.AddBasicBlock(mainWrapper, "entry")
+	mainWrapper := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["mainWrapper"].(*ssa.Function))
+	mainWrapper.LLVMFn.SetLinkage(llvm.InternalLinkage)
+	difunc, err = c.attachDebugInfo(mainWrapper)
+	if err != nil {
+		return err
+	}
+	pos = c.ir.Program.Fset.Position(mainWrapper.Pos())
+	c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
+	block = c.ctx.AddBasicBlock(mainWrapper.LLVMFn, "entry")
 	c.builder.SetInsertPointAtEnd(block)
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
 	if c.ir.NeedsScheduler() {
