@@ -2863,6 +2863,19 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 		default:
 			return llvm.Value{}, errors.New("todo: binop on pointer: " + binop.Op.String())
 		}
+	case *types.Slice:
+		// Slices are in general not comparable, but can be compared against
+		// nil. Assume at least one of them is nil to make the code easier.
+		xPtr := c.builder.CreateExtractValue(x, 0, "")
+		yPtr := c.builder.CreateExtractValue(y, 0, "")
+		switch binop.Op {
+		case token.EQL: // ==
+			return c.builder.CreateICmp(llvm.IntEQ, xPtr, yPtr, ""), nil
+		case token.NEQ: // !=
+			return c.builder.CreateICmp(llvm.IntNE, xPtr, yPtr, ""), nil
+		default:
+			return llvm.Value{}, errors.New("todo: binop on slice: " + binop.Op.String())
+		}
 	default:
 		return llvm.Value{}, errors.New("unknown binop type: " + binop.X.Type().String())
 	}

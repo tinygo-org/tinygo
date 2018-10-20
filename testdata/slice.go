@@ -4,6 +4,7 @@ func main() {
 	l := 5
 	foo := []int{1, 2, 4, 5}
 	bar := make([]int, l-2, l)
+	println("foo is nil?", foo == nil, nil == foo)
 	printslice("foo", foo)
 	printslice("bar", bar)
 	printslice("foo[1:2]", foo[1:2])
@@ -15,6 +16,7 @@ func main() {
 
 	// append
 	var grow []int
+	println("slice is nil?", grow == nil, nil == grow)
 	printslice("grow", grow)
 	grow = append(grow, 42)
 	printslice("grow", grow)
