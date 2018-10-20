@@ -66,6 +66,21 @@ Not yet supported:
   * introspection (if it ever gets implemented)
   * ...
 
+## Installation
+
+See the [installation instructions](https://tinygo.readthedocs.io/en/latest/installation.html).
+
+### Running with Docker
+
+A docker container exists for easy access to the `tinygo` CLI:
+
+```sh
+$ docker run --rm -v $(pwd):/src tinygo/tinygo build -o /src/blinky.elf -target arduino /src/examples/blinky
+```
+
+Note that you cannot run `tinygo flash` from inside the docker container,
+so it is less useful for microcontroller development.
+
 ## Supported targets
 
 The following architectures/systems are currently supported:
@@ -119,10 +134,6 @@ Non-goals:
     certain things so TinyGo might actually turn out to be faster for number
     crunching.
   * Be able to compile every Go program out there.
-
-## Building
-
-See the [installation instructions](https://tinygo.readthedocs.io/en/latest/installation.html).
 
 ## Documentation
 
