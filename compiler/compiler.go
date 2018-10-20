@@ -2049,8 +2049,8 @@ func (c *Compiler) emitBoundsCheck(frame *Frame, arrayLen, index llvm.Value) {
 	}
 	// Optimize away trivial cases.
 	// LLVM would do this anyway with interprocedural optimizations, but it
-	// helps to see cases where bounds checking would really help.
-	if index.IsConstant() && arrayLen.IsConstant() {
+	// helps to see cases where bounds check elimination would really help.
+	if index.IsConstant() && arrayLen.IsConstant() && !arrayLen.IsUndef() {
 		index := index.SExtValue()
 		arrayLen := arrayLen.SExtValue()
 		if index >= 0 && index < arrayLen {
