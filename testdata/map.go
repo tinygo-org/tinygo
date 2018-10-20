@@ -24,6 +24,8 @@ func main() {
 	readMap(testmap2, "ten")
 	delete(testmap2, "six")
 	readMap(testmap2, "seven")
+	lookup(testmap2, "eight")
+	lookup(testmap2, "nokey")
 }
 
 func readMap(m map[string]int, key string) {
@@ -32,4 +34,8 @@ func readMap(m map[string]int, key string) {
 	for k, v := range m {
 		println(" ", k, "=", v)
 	}
+}
+func lookup(m map[string]int, key string) {
+	value, ok := m[key]
+	println("lookup with comma-ok:", key, value, ok)
 }

@@ -46,3 +46,5 @@ map read: seven = 7
   ten = 10
   eleven = 11
   twelve = 12
+lookup with comma-ok: eight 8 true
+lookup with comma-ok: nokey 0 false

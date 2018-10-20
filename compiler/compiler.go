@@ -2242,9 +2242,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			panic("unreachable")
 		}
 	case *ssa.Lookup:
-		if expr.CommaOk {
-			return llvm.Value{}, errors.New("todo: lookup with comma-ok")
-		}
 		value, err := c.parseExpr(frame, expr.X)
 		if err != nil {
 			return llvm.Value{}, nil
@@ -2273,7 +2270,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			bufPtr := c.builder.CreateGEP(buf, []llvm.Value{index}, "")
 			return c.builder.CreateLoad(bufPtr, ""), nil
 		case *types.Map:
-			return c.emitMapLookup(xType.Key(), expr.Type(), value, index)
+			valueType := expr.Type()
+			if expr.CommaOk {
+				valueType = valueType.(*types.Tuple).At(0).Type()
+			}
+			return c.emitMapLookup(xType.Key(), valueType, value, index, expr.CommaOk)
 		default:
 			panic("unknown lookup type: " + expr.String())
 		}

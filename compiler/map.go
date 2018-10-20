@@ -9,28 +9,36 @@ import (
 	"github.com/aykevl/go-llvm"
 )
 
-func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Value) (llvm.Value, error) {
+func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Value, commaOk bool) (llvm.Value, error) {
 	llvmValueType, err := c.getLLVMType(valueType)
 	if err != nil {
 		return llvm.Value{}, err
 	}
 	mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "hashmap.value")
 	mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "hashmap.valueptr")
+	var commaOkValue llvm.Value
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
 		params := []llvm.Value{m, key, mapValuePtr}
-		c.createRuntimeCall("hashmapStringGet", params, "")
-		return c.builder.CreateLoad(mapValueAlloca, ""), nil
+		commaOkValue = c.createRuntimeCall("hashmapStringGet", params, "")
 	} else if hashmapIsBinaryKey(keyType) {
 		// key can be compared with runtime.memequal
 		keyAlloca := c.builder.CreateAlloca(key.Type(), "hashmap.key")
 		c.builder.CreateStore(key, keyAlloca)
 		keyPtr := c.builder.CreateBitCast(keyAlloca, c.i8ptrType, "hashmap.keyptr")
 		params := []llvm.Value{m, keyPtr, mapValuePtr}
-		c.createRuntimeCall("hashmapBinaryGet", params, "")
-		return c.builder.CreateLoad(mapValueAlloca, ""), nil
+		commaOkValue = c.createRuntimeCall("hashmapBinaryGet", params, "")
 	} else {
 		return llvm.Value{}, errors.New("todo: map lookup key type: " + keyType.String())
+	}
+	mapValue := c.builder.CreateLoad(mapValueAlloca, "")
+	if commaOk {
+		tuple := llvm.Undef(c.ctx.StructType([]llvm.Type{llvmValueType, c.ctx.Int1Type()}, false))
+		tuple = c.builder.CreateInsertValue(tuple, mapValue, 0, "")
+		tuple = c.builder.CreateInsertValue(tuple, commaOkValue, 1, "")
+		return tuple, nil
+	} else {
+		return mapValue, nil
 	}
 }
 
