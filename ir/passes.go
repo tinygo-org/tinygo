@@ -416,6 +416,12 @@ func (p *Program) AllInterfaces() []*Interface {
 
 func (p *Program) FunctionNeedsContext(f *Function) bool {
 	if !f.addressTaken {
+		if f.Signature.Recv() != nil {
+			_, hasInterfaceConversion := p.TypeNum(f.Signature.Recv().Type())
+			if hasInterfaceConversion && p.SignatureNeedsContext(f.Signature) {
+				return true
+			}
+		}
 		return false
 	}
 	return p.SignatureNeedsContext(f.Signature)
