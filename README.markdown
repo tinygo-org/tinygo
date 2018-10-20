@@ -108,6 +108,27 @@ See the [installation instructions](https://tinygo.readthedocs.io/en/latest/inst
 Documentation is currently maintained on a [dedicated ReadTheDocs
 page](https://tinygo.readthedocs.io/en/latest/).
 
+## Contributing
+
+Patches are welcome!
+
+If you want to contribute, here are some suggestions:
+
+  * A long tail of small (and large) language features haven't been implemented
+    yet. In almost all cases, the compiler will show a `todo:` error from
+    `compiler/compiler.go` when you try to use it. You can try implementing it,
+    or open a bug report with a small code sample that fails to compile.
+  * Lots of targets/boards are still unsupported. Adding an architecture often
+    requires a few compiler changes, but if the architecture is supported you
+    can try implementing support for a new chip or board in `src/runtime`. For
+    details, see [this wiki entry on adding
+    archs/chips/boards](https://github.com/aykevl/tinygo/wiki/Adding-a-new-board).
+  * Microcontrollers have lots of peripherals and many don't have an
+    implementation yet in the `machine` package. Adding support for new
+    peripherals is very useful.
+  * Just raising bugs for things you'd like to see implemented is also a form of
+    contributing! It helps prioritization.
+
 ## License
 
 This project is licensed under the BSD 3-clause license, just like the
