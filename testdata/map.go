@@ -22,6 +22,8 @@ func main() {
 	readMap(testmap1, "data")
 	readMap(testmap2, "three")
 	readMap(testmap2, "ten")
+	delete(testmap2, "six")
+	readMap(testmap2, "seven")
 }
 
 func readMap(m map[string]int, key string) {

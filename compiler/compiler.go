@@ -1559,28 +1559,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 			return err
 		}
 		mapType := instr.Map.Type().Underlying().(*types.Map)
-		switch keyType := mapType.Key().Underlying().(type) {
-		case *types.Basic:
-			valueAlloca := c.builder.CreateAlloca(value.Type(), "hashmap.value")
-			c.builder.CreateStore(value, valueAlloca)
-			valuePtr := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "hashmap.valueptr")
-			if keyType.Info()&types.IsString != 0 {
-				params := []llvm.Value{m, key, valuePtr}
-				c.createRuntimeCall("hashmapStringSet", params, "")
-				return nil
-			} else if keyType.Info()&(types.IsBoolean|types.IsInteger) != 0 {
-				keyAlloca := c.builder.CreateAlloca(key.Type(), "hashmap.key")
-				c.builder.CreateStore(key, keyAlloca)
-				keyPtr := c.builder.CreateBitCast(keyAlloca, c.i8ptrType, "hashmap.keyptr")
-				params := []llvm.Value{m, keyPtr, valuePtr}
-				c.createRuntimeCall("hashmapBinarySet", params, "")
-				return nil
-			} else {
-				return errors.New("todo: map update key type: " + keyType.String())
-			}
-		default:
-			return errors.New("todo: map update key type: " + keyType.String())
-		}
+		return c.emitMapUpdate(mapType.Key(), m, key, value)
 	case *ssa.Panic:
 		value, err := c.parseExpr(frame, instr.X)
 		if err != nil {
@@ -1718,6 +1697,16 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 		srcBuf = c.builder.CreateBitCast(srcBuf, c.i8ptrType, "copy.srcPtr")
 		elemSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(elemType), false)
 		return c.createRuntimeCall("sliceCopy", []llvm.Value{dstBuf, srcBuf, dstLen, srcLen, elemSize}, "copy.n"), nil
+	case "delete":
+		m, err := c.parseExpr(frame, args[0])
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		key, err := c.parseExpr(frame, args[1])
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		return llvm.Value{}, c.emitMapDelete(args[1].Type(), m, key)
 	case "len":
 		value, err := c.parseExpr(frame, args[0])
 		if err != nil {
@@ -2284,31 +2273,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			bufPtr := c.builder.CreateGEP(buf, []llvm.Value{index}, "")
 			return c.builder.CreateLoad(bufPtr, ""), nil
 		case *types.Map:
-			switch keyType := xType.Key().Underlying().(type) {
-			case *types.Basic:
-				llvmValueType, err := c.getLLVMType(expr.Type())
-				if err != nil {
-					return llvm.Value{}, err
-				}
-				mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "hashmap.value")
-				mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "hashmap.valueptr")
-				if keyType.Info()&types.IsString != 0 {
-					params := []llvm.Value{value, index, mapValuePtr}
-					c.createRuntimeCall("hashmapStringGet", params, "")
-					return c.builder.CreateLoad(mapValueAlloca, ""), nil
-				} else if keyType.Info()&(types.IsBoolean|types.IsInteger) != 0 {
-					keyAlloca := c.builder.CreateAlloca(index.Type(), "hashmap.key")
-					c.builder.CreateStore(index, keyAlloca)
-					keyPtr := c.builder.CreateBitCast(keyAlloca, c.i8ptrType, "hashmap.keyptr")
-					params := []llvm.Value{value, keyPtr, mapValuePtr}
-					c.createRuntimeCall("hashmapBinaryGet", params, "")
-					return c.builder.CreateLoad(mapValueAlloca, ""), nil
-				} else {
-					return llvm.Value{}, errors.New("todo: map lookup key type: " + keyType.String())
-				}
-			default:
-				return llvm.Value{}, errors.New("todo: map lookup key type: " + keyType.String())
-			}
+			return c.emitMapLookup(xType.Key(), expr.Type(), value, index)
 		default:
 			panic("unknown lookup type: " + expr.String())
 		}
