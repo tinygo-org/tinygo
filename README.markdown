@@ -99,6 +99,27 @@ Implemented compiler passes:
   * Do basic dead code elimination of functions. This pass makes later passes
     better and probably improves compile time as well.
 
+## Scope
+
+Goals:
+
+  * Have very small binary sizes. Don't pay for what you don't use.
+  * Support for most common microcontroller boards.
+  * Be usable on the web using WebAssembly.
+  * Good CGo support, with no more overhead than a regular function call.
+  * Support most standard library packages and compile most Go code without
+    modification.
+
+Non-goals:
+
+  * Using more than one core.
+  * Be efficient while using zillions of goroutines. However, good goroutine
+    support is certainly a goal.
+  * Be as fast as `gc`. However, LLVM will probably be better at optimizing
+    certain things so TinyGo might actually turn out to be faster for number
+    crunching.
+  * Be able to compile every Go program out there.
+
 ## Building
 
 See the [installation instructions](https://tinygo.readthedocs.io/en/latest/installation.html).
