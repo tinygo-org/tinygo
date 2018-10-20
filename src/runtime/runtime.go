@@ -95,3 +95,9 @@ func now() (sec int64, nsec int32, mono int64) {
 	nsec = int32(mono - sec*(1000*1000*1000))
 	return
 }
+
+// Copied from the Go runtime source code.
+//go:linkname os_sigpipe os.sigpipe
+func os_sigpipe() {
+	runtimePanic("too many writes on closed pipe")
+}
