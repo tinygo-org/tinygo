@@ -68,17 +68,15 @@ Not yet supported:
 
 ## Supported targets
 
-Most targets that are supported by LLVM should be supported by this compiler.
-This means amd64 (where most of the testing happens), ARM, and Cortex-M
-microcontrollers.
+The following architectures/systems are currently supported:
 
-The AVR platform (as used by the Arduino, for example) is also supported when
-support for it is enabled in LLVM. However, because it is a Harvard style
-architecture with different address spaces for code and data and because LLVM
-turns globals into const for you (moving them to
-[PROGMEM](https://www.nongnu.org/avr-libc/user-manual/pgmspace.html)) most real
-programs don't work unfortunately. This can be fixed but that can be difficult
-to do efficiently and hasn't been implemented yet.
+  * ARM (Cortex-M)
+  * AVR (Arduino Uno)
+  * Linux
+
+For more information, see [this list of targets and
+boards](https://tinygo.readthedocs.io/en/latest/targets.html). Pull requests for
+broader support are welcome!
 
 ## Analysis and optimizations
 
@@ -104,6 +102,11 @@ Implemented compiler passes:
 ## Building
 
 See the [installation instructions](https://tinygo.readthedocs.io/en/latest/installation.html).
+
+## Documentation
+
+Documentation is currently maintained on a [dedicated ReadTheDocs
+page](https://tinygo.readthedocs.io/en/latest/).
 
 ## License
 
