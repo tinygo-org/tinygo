@@ -1,0 +1,11 @@
+[[constraint]]
+  branch = "master"
+  name = "github.com/aykevl/go-llvm"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/tools"
+
+[prune]
+  go-tests = true
+  unused-packages = true

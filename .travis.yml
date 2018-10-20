@@ -12,8 +12,8 @@ before_install:
   - sudo ln -s /usr/bin/clang-7 /usr/local/bin/cc # work around missing -no-pie in old GCC version
 
 install:
-  - go get github.com/aykevl/go-llvm
-  - go get golang.org/x/tools/go/ssa
+  - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+  - dep ensure --vendor-only
 
 script:
   - go install github.com/aykevl/tinygo
