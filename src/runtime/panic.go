@@ -36,6 +36,13 @@ func sliceBoundsCheck(length lenType, low, high uint) {
 	}
 }
 
+// Check for bounds in *ssa.Slice. Supports 64-bit indexes.
+func sliceBoundsCheckLong(length lenType, low, high uint64) {
+	if !(0 <= low && low <= high && high <= uint64(length)) {
+		runtimePanic("slice out of range")
+	}
+}
+
 // Check for bounds in *ssa.MakeSlice.
 func sliceBoundsCheckMake(length, capacity uint) {
 	if !(0 <= length && length <= capacity) {

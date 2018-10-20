@@ -2062,6 +2062,26 @@ func (c *Compiler) emitBoundsCheck(frame *Frame, arrayLen, index llvm.Value) {
 	c.createRuntimeCall("lookupBoundsCheck", []llvm.Value{arrayLen, index}, "")
 }
 
+func (c *Compiler) emitSliceBoundsCheck(frame *Frame, length, low, high llvm.Value) {
+	if frame.fn.IsNoBounds() {
+		// The //go:nobounds pragma was added to the function to avoid bounds
+		// checking.
+		return
+	}
+
+	if low.Type().IntTypeWidth() > 32 || high.Type().IntTypeWidth() > 32 {
+		if low.Type().IntTypeWidth() < 64 {
+			low = c.builder.CreateSExt(low, c.ctx.Int64Type(), "")
+		}
+		if high.Type().IntTypeWidth() < 64 {
+			high = c.builder.CreateSExt(high, c.ctx.Int64Type(), "")
+		}
+		c.createRuntimeCall("sliceBoundsCheckLong", []llvm.Value{length, low, high}, "")
+	} else {
+		c.createRuntimeCall("sliceBoundsCheck", []llvm.Value{length, low, high}, "")
+	}
+}
+
 func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	if value, ok := frame.locals[expr]; ok {
 		// Value is a local variable that has already been computed.
@@ -2453,9 +2473,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			sliceCap := c.builder.CreateSub(llvmLenInt, low, "slice.cap")
 
 			// This check is optimized away in most cases.
-			if !frame.fn.IsNoBounds() {
-				c.createRuntimeCall("sliceBoundsCheck", []llvm.Value{llvmLen, low, high}, "")
-			}
+			c.emitSliceBoundsCheck(frame, llvmLen, low, high)
 
 			if c.targetData.TypeAllocSize(sliceLen.Type()) > c.targetData.TypeAllocSize(c.lenType) {
 				sliceLen = c.builder.CreateTrunc(sliceLen, c.lenType, "")
@@ -2481,9 +2499,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				high = oldLen
 			}
 
-			if !frame.fn.IsNoBounds() {
-				c.createRuntimeCall("sliceBoundsCheck", []llvm.Value{oldLen, low, high}, "")
-			}
+			c.emitSliceBoundsCheck(frame, oldLen, low, high)
 
 			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.lenType) {
 				low = c.builder.CreateTrunc(low, c.lenType, "")
@@ -2516,9 +2532,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				high = oldLen
 			}
 
-			if !frame.fn.IsNoBounds() {
-				c.createRuntimeCall("sliceBoundsCheck", []llvm.Value{oldLen, low, high}, "")
-			}
+			c.emitSliceBoundsCheck(frame, oldLen, low, high)
 
 			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
 			newLen := c.builder.CreateSub(high, low, "")
