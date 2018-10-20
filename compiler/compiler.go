@@ -1077,7 +1077,7 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 			constVal := key.(*ir.ConstValue).Expr
 			var keyBuf []byte
 			switch constVal.Type().Underlying().(*types.Basic).Kind() {
-			case types.String:
+			case types.String, types.UntypedString:
 				keyBuf = []byte(constant.StringVal(constVal.Value))
 			case types.Int:
 				keyBuf = make([]byte, c.targetData.TypeAllocSize(c.intType))
@@ -1755,7 +1755,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			switch typ := typ.(type) {
 			case *types.Basic:
 				switch typ.Kind() {
-				case types.String:
+				case types.String, types.UntypedString:
 					c.createRuntimeCall("printstring", []llvm.Value{value}, "")
 				case types.Uintptr:
 					c.createRuntimeCall("printptr", []llvm.Value{value}, "")
@@ -2267,7 +2267,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		switch xType := expr.X.Type().Underlying().(type) {
 		case *types.Basic:
 			// Value type must be a string, which is a basic type.
-			if xType.Kind() != types.String {
+			if xType.Info()&types.IsString == 0 {
 				panic("lookup on non-string?")
 			}
 
@@ -2538,7 +2538,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return slice, nil
 
 		case *types.Basic:
-			if typ.Kind() != types.String {
+			if typ.Info()&types.IsString == 0 {
 				return llvm.Value{}, errors.New("unknown slice type: " + typ.String())
 			}
 			// slice a string
@@ -3086,7 +3086,7 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 		return llvm.Value{}, errors.New("todo: convert: basic non-integer type: " + typeFrom.String() + " -> " + typeTo.String())
 
 	case *types.Slice:
-		if basic, ok := typeFrom.(*types.Basic); !ok || basic.Kind() != types.String {
+		if basic, ok := typeFrom.(*types.Basic); !ok || basic.Info()&types.IsString == 0 {
 			panic("can only convert from a string to a slice")
 		}
 
