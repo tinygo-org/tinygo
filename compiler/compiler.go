@@ -2823,6 +2823,16 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 			default:
 				return llvm.Value{}, errors.New("todo: binop on float: " + binop.Op.String())
 			}
+		} else if typ.Info()&types.IsBoolean != 0 {
+			// Operations on booleans
+			switch binop.Op {
+			case token.EQL: // ==
+				return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+			case token.NEQ: // !=
+				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+			default:
+				return llvm.Value{}, errors.New("todo: binop on boolean: " + binop.Op.String())
+			}
 		} else if typ.Kind() == types.UnsafePointer {
 			// Operations on pointers
 			switch binop.Op {
