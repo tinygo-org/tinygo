@@ -10,76 +10,68 @@ import (
 )
 
 func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Value) (llvm.Value, error) {
-	switch keyType := keyType.Underlying().(type) {
-	case *types.Basic:
-		llvmValueType, err := c.getLLVMType(valueType)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "hashmap.value")
-		mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "hashmap.valueptr")
-		if keyType.Info()&types.IsString != 0 {
-			params := []llvm.Value{m, key, mapValuePtr}
-			c.createRuntimeCall("hashmapStringGet", params, "")
-			return c.builder.CreateLoad(mapValueAlloca, ""), nil
-		} else if keyType.Info()&(types.IsBoolean|types.IsInteger) != 0 {
-			keyAlloca := c.builder.CreateAlloca(key.Type(), "hashmap.key")
-			c.builder.CreateStore(key, keyAlloca)
-			keyPtr := c.builder.CreateBitCast(keyAlloca, c.i8ptrType, "hashmap.keyptr")
-			params := []llvm.Value{m, keyPtr, mapValuePtr}
-			c.createRuntimeCall("hashmapBinaryGet", params, "")
-			return c.builder.CreateLoad(mapValueAlloca, ""), nil
-		} else {
-			return llvm.Value{}, errors.New("todo: map lookup key type: " + keyType.String())
-		}
-	default:
+	llvmValueType, err := c.getLLVMType(valueType)
+	if err != nil {
+		return llvm.Value{}, err
+	}
+	mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "hashmap.value")
+	mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "hashmap.valueptr")
+	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
+		// key is a string
+		params := []llvm.Value{m, key, mapValuePtr}
+		c.createRuntimeCall("hashmapStringGet", params, "")
+		return c.builder.CreateLoad(mapValueAlloca, ""), nil
+	} else if hashmapIsBinaryKey(keyType) {
+		// key can be compared with runtime.memequal
+		keyAlloca := c.builder.CreateAlloca(key.Type(), "hashmap.key")
+		c.builder.CreateStore(key, keyAlloca)
+		keyPtr := c.builder.CreateBitCast(keyAlloca, c.i8ptrType, "hashmap.keyptr")
+		params := []llvm.Value{m, keyPtr, mapValuePtr}
+		c.createRuntimeCall("hashmapBinaryGet", params, "")
+		return c.builder.CreateLoad(mapValueAlloca, ""), nil
+	} else {
 		return llvm.Value{}, errors.New("todo: map lookup key type: " + keyType.String())
 	}
 }
 
 func (c *Compiler) emitMapUpdate(keyType types.Type, m, key, value llvm.Value) error {
-	switch keyType := keyType.Underlying().(type) {
-	case *types.Basic:
-		valueAlloca := c.builder.CreateAlloca(value.Type(), "hashmap.value")
-		c.builder.CreateStore(value, valueAlloca)
-		valuePtr := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "hashmap.valueptr")
-		if keyType.Info()&types.IsString != 0 {
-			params := []llvm.Value{m, key, valuePtr}
-			c.createRuntimeCall("hashmapStringSet", params, "")
-			return nil
-		} else if keyType.Info()&(types.IsBoolean|types.IsInteger) != 0 {
-			keyAlloca := c.builder.CreateAlloca(key.Type(), "hashmap.key")
-			c.builder.CreateStore(key, keyAlloca)
-			keyPtr := c.builder.CreateBitCast(keyAlloca, c.i8ptrType, "hashmap.keyptr")
-			params := []llvm.Value{m, keyPtr, valuePtr}
-			c.createRuntimeCall("hashmapBinarySet", params, "")
-			return nil
-		} else {
-			return errors.New("todo: map update key type: " + keyType.String())
-		}
-	default:
+	valueAlloca := c.builder.CreateAlloca(value.Type(), "hashmap.value")
+	c.builder.CreateStore(value, valueAlloca)
+	valuePtr := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "hashmap.valueptr")
+	keyType = keyType.Underlying()
+	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
+		// key is a string
+		params := []llvm.Value{m, key, valuePtr}
+		c.createRuntimeCall("hashmapStringSet", params, "")
+		return nil
+	} else if hashmapIsBinaryKey(keyType) {
+		// key can be compared with runtime.memequal
+		keyAlloca := c.builder.CreateAlloca(key.Type(), "hashmap.key")
+		c.builder.CreateStore(key, keyAlloca)
+		keyPtr := c.builder.CreateBitCast(keyAlloca, c.i8ptrType, "hashmap.keyptr")
+		params := []llvm.Value{m, keyPtr, valuePtr}
+		c.createRuntimeCall("hashmapBinarySet", params, "")
+		return nil
+	} else {
 		return errors.New("todo: map update key type: " + keyType.String())
 	}
 }
 
 func (c *Compiler) emitMapDelete(keyType types.Type, m, key llvm.Value) error {
-	switch keyType := keyType.Underlying().(type) {
-	case *types.Basic:
-		if keyType.Info()&types.IsString != 0 {
-			params := []llvm.Value{m, key}
-			c.createRuntimeCall("hashmapStringDelete", params, "")
-			return nil
-		} else if keyType.Info()&(types.IsBoolean|types.IsInteger) != 0 {
-			keyAlloca := c.builder.CreateAlloca(key.Type(), "hashmap.key")
-			c.builder.CreateStore(key, keyAlloca)
-			keyPtr := c.builder.CreateBitCast(keyAlloca, c.i8ptrType, "hashmap.keyptr")
-			params := []llvm.Value{m, keyPtr}
-			c.createRuntimeCall("hashmapBinaryDelete", params, "")
-			return nil
-		} else {
-			return errors.New("todo: map lookup key type: " + keyType.String())
-		}
-	default:
+	keyType = keyType.Underlying()
+	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
+		// key is a string
+		params := []llvm.Value{m, key}
+		c.createRuntimeCall("hashmapStringDelete", params, "")
+		return nil
+	} else if hashmapIsBinaryKey(keyType) {
+		keyAlloca := c.builder.CreateAlloca(key.Type(), "hashmap.key")
+		c.builder.CreateStore(key, keyAlloca)
+		keyPtr := c.builder.CreateBitCast(keyAlloca, c.i8ptrType, "hashmap.keyptr")
+		params := []llvm.Value{m, keyPtr}
+		c.createRuntimeCall("hashmapBinaryDelete", params, "")
+		return nil
+	} else {
 		return errors.New("todo: map delete key type: " + keyType.String())
 	}
 }
@@ -104,4 +96,23 @@ func hashmapTopHash(hash uint32) uint8 {
 		tophash += 1
 	}
 	return tophash
+}
+
+// Returns true if this key type does not contain strings, interfaces etc., so
+// can be compared with runtime.memequal.
+func hashmapIsBinaryKey(keyType types.Type) bool {
+	switch keyType := keyType.(type) {
+	case *types.Basic:
+		return keyType.Info()&(types.IsBoolean|types.IsInteger) != 0
+	case *types.Struct:
+		for i := 0; i < keyType.NumFields(); i++ {
+			fieldType := keyType.Field(i).Type().Underlying()
+			if !hashmapIsBinaryKey(fieldType) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
 }
