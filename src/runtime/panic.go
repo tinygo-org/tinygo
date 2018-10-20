@@ -15,6 +15,13 @@ func runtimePanic(msg string) {
 	abort()
 }
 
+// Try to recover a panicking goroutine.
+func _recover() interface{} {
+	// Deferred functions are currently not executed during panic, so there is
+	// no way this can return anything besides nil.
+	return nil
+}
+
 // Check for bounds in *ssa.Index, *ssa.IndexAddr and *ssa.Lookup.
 func lookupBoundsCheck(length lenType, index int) {
 	if index < 0 || index >= int(length) {

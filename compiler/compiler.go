@@ -1787,6 +1787,8 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			c.createRuntimeCall("printnl", nil, "")
 		}
 		return llvm.Value{}, nil // print() or println() returns void
+	case "recover":
+		return c.createRuntimeCall("_recover", nil, ""), nil
 	case "ssa:wrapnilchk":
 		// TODO: do an actual nil check?
 		return c.parseExpr(frame, args[0])
