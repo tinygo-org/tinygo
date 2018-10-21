@@ -16,6 +16,8 @@ RUN cd /go/src/github.com/aykevl/tinygo/ && \
 FROM golang:latest
 
 COPY --from=0 /go/bin/tinygo /go/bin/tinygo
+COPY --from=0 /go/src/github.com/aykevl/tinygo/src /go/src/github.com/aykevl/tinygo/src
+COPY --from=0 /go/src/github.com/aykevl/tinygo/targets /go/src/github.com/aykevl/tinygo/targets
 
 RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
     echo "deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch-7 main" >> /etc/apt/sources.list && \
