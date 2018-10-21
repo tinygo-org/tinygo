@@ -7,12 +7,25 @@
 Supported targets
 =================
 
-The following boards are currently supported:
+TinyGo makes it easy to add new targets. If your target isn't listed here,
+please raise an issue in the `issue tracker
+<https://github.com/aykevl/tinygo/issues>`_.
 
-  * `Arduino Uno <https://store.arduino.cc/arduino-uno-rev3>`_ (`ATmega328p
-    <https://www.microchip.com/wwwproducts/en/ATmega328p>`_) |br|
-    Note: the AVR backend of LLVM is still experimental so you may encounter
-    bugs.
+
+POSIX-like
+----------
+
+Only Linux is supported at the moment, but it should be trivial to add support
+for more POSIX-like systems.
+
+
+ARM / Cortex-M
+--------------
+
+Cortex-M processors are well supported. There is support for multiple chips and
+the backend appears to be stable. In fact, it uses the same underlying
+technology (LLVM) as the proprietary ARM compiler for code generation.
+
   * `BBC micro:bit <https://microbit.org/>`_ (`nRF51822
     <https://www.nordicsemi.com/eng/Products/Bluetooth-low-energy/nRF51822>`_)
   * `Nordic PCA10040
@@ -25,6 +38,21 @@ The following boards are currently supported:
     <http://www.ti.com/product/LM3S6965>`_) |br|
     This target is supported only for testing purposes. It has not been tested
     on real hardware.
+
+
+AVR
+---
+
+Note: the AVR backend of LLVM is still experimental so you may encounter bugs.
+
+  * `Arduino Uno <https://store.arduino.cc/arduino-uno-rev3>`_ (`ATmega328p
+    <https://www.microchip.com/wwwproducts/en/ATmega328p>`_)
+
+
+WebAssembly
+-----------
+
+WebAssembly support is relatively new but appears to be stable.
 
 
 .. note::
