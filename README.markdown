@@ -88,6 +88,7 @@ The following architectures/systems are currently supported:
   * ARM (Cortex-M)
   * AVR (Arduino Uno)
   * Linux
+  * WebAssembly
 
 For more information, see [this list of targets and
 boards](https://tinygo.readthedocs.io/en/latest/targets.html). Pull requests for
