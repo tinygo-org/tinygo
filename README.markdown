@@ -56,10 +56,11 @@ Currently supported features:
   * defer
   * closures
   * bound methods
+  * complex numbers (except for arithmetic)
 
 Not yet supported:
 
-  * complex numbers
+  * complex arithmetic
   * garbage collection
   * recover
   * channels

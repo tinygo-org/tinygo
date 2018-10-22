@@ -174,6 +174,20 @@ func printfloat64(v float64) {
 	}
 }
 
+func printcomplex64(c complex64) {
+	putchar('(')
+	printfloat32(real(c))
+	printfloat32(imag(c))
+	printstring("i)")
+}
+
+func printcomplex128(c complex128) {
+	putchar('(')
+	printfloat64(real(c))
+	printfloat64(imag(c))
+	printstring("i)")
+}
+
 func printspace() {
 	putchar(' ')
 }
