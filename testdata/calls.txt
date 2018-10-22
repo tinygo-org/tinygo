@@ -1,0 +1,8 @@
+hello from function pointer: 5
+deferring...
+...run as defer 3
+...run closure deferred: 4
+...run as defer 1
+bound method: foo
+thing inside closure: foo
+inside fp closure: foo 3

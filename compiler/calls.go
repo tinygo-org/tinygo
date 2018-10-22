@@ -23,9 +23,28 @@ import (
 //     argument list.
 //   * Blocking functions have a coroutine pointer prepended to the argument
 //     list, see src/runtime/scheduler.go for details.
+//
+// Some further notes:
+//   * Function pointers are lowered to either a raw function pointer or a
+//     closure struct: { i8*, function pointer }
+//     The function pointer type depends on whether the exact same signature is
+//     used anywhere else in the program for a call that needs a context
+//     (closures, bound methods). If it isn't, it is lowered to a raw function
+//     pointer.
+//   * Defer statements are implemented by transforming the function in the
+//     following way:
+//       * Creating an alloca in the entry block that contains a pointer
+//         (initially null) to the linked list of defer frames.
+//       * Every time a defer statement is executed, a new defer frame is
+//         created using alloca with a pointer to the previous defer frame, and
+//         the head pointer in the entry block is replaced with a pointer to
+//         this defer frame.
+//       * On return, runtime.rundefers is called which calls all deferred
+//         functions from the head of the linked list until it has gone through
+//         all defer frames.
 
 // The maximum number of arguments that can be expanded from a single struct. If
-// a struct contains more fields, it is passed as value.
+// a struct contains more fields, it is passed as a struct without expanding.
 const MaxFieldsPerParam = 3
 
 // Shortcut: create a call to runtime.<fnName> with the given arguments.

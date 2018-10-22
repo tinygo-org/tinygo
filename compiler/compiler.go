@@ -62,6 +62,7 @@ type Compiler struct {
 	coroFreeFunc    llvm.Value
 	initFuncs       []llvm.Value
 	deferFuncs      []*ir.Function
+	ctxDeferFuncs   []ContextDeferFunction
 	ir              *ir.Program
 }
 
@@ -82,6 +83,13 @@ type Frame struct {
 type Phi struct {
 	ssa  *ssa.Phi
 	llvm llvm.Value
+}
+
+// A thunk for a defer that defers calling a function pointer with context.
+type ContextDeferFunction struct {
+	fn          llvm.Value
+	deferStruct []llvm.Type
+	signature   *types.Signature
 }
 
 func NewCompiler(pkgName string, config Config) (*Compiler, error) {
@@ -325,12 +333,14 @@ func (c *Compiler) Compile(mainPath string) error {
 
 	// Create deferred function wrappers.
 	for _, fn := range c.deferFuncs {
-		// This function gets a single parameter which is a pointer to a struct.
+		// This function gets a single parameter which is a pointer to a struct
+		// (the defer frame).
 		// This struct starts with the values of runtime._defer, but after that
-		// follow the real parameters.
+		// follow the real function parameters.
 		// The job of this wrapper is to extract these parameters and to call
 		// the real function with them.
 		llvmFn := c.mod.NamedFunction(fn.LinkName() + "$defer")
+		llvmFn.SetLinkage(llvm.InternalLinkage)
 		entry := c.ctx.AddBasicBlock(llvmFn, "entry")
 		c.builder.SetInsertPointAtEnd(entry)
 		deferRawPtr := llvmFn.Param(0)
@@ -344,20 +354,78 @@ func (c *Compiler) Compile(mainPath string) error {
 			}
 			valueTypes = append(valueTypes, llvmType)
 		}
-		contextType := c.ctx.StructType(valueTypes, false)
-		contextPtr := c.builder.CreateBitCast(deferRawPtr, llvm.PointerType(contextType, 0), "context")
+		deferFrameType := c.ctx.StructType(valueTypes, false)
+		deferFramePtr := c.builder.CreateBitCast(deferRawPtr, llvm.PointerType(deferFrameType, 0), "deferFrame")
 
 		// Extract the params from the struct.
 		forwardParams := []llvm.Value{}
 		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 		for i := range fn.Params {
-			gep := c.builder.CreateGEP(contextPtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i+2), false)}, "gep")
+			gep := c.builder.CreateGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i+2), false)}, "gep")
 			forwardParam := c.builder.CreateLoad(gep, "param")
 			forwardParams = append(forwardParams, forwardParam)
 		}
 
 		// Call real function (of which this is a wrapper).
 		c.createCall(fn.LLVMFn, forwardParams, "")
+		c.builder.CreateRetVoid()
+	}
+
+	// Create wrapper for deferred function pointer call.
+	for _, thunk := range c.ctxDeferFuncs {
+		// This function gets a single parameter which is a pointer to a struct
+		// (the defer frame).
+		// This struct starts with the values of runtime._defer, but after that
+		// follows the closure and then the real parameters.
+		// The job of this wrapper is to extract this closure and these
+		// parameters and to call the function pointer with them.
+		llvmFn := thunk.fn
+		llvmFn.SetLinkage(llvm.InternalLinkage)
+		entry := c.ctx.AddBasicBlock(llvmFn, "entry")
+		// TODO: set the debug location - perhaps the location of the rundefers
+		// call?
+		c.builder.SetInsertPointAtEnd(entry)
+		deferRawPtr := llvmFn.Param(0)
+
+		// Get the real param type and cast to it.
+		deferFrameType := c.ctx.StructType(thunk.deferStruct, false)
+		deferFramePtr := c.builder.CreateBitCast(deferRawPtr, llvm.PointerType(deferFrameType, 0), "defer.frame")
+
+		// Extract the params from the struct.
+		forwardParams := []llvm.Value{}
+		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
+		for i := 3; i < len(thunk.deferStruct); i++ {
+			gep := c.builder.CreateGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false)}, "")
+			forwardParam := c.builder.CreateLoad(gep, "param")
+			forwardParams = append(forwardParams, forwardParam)
+		}
+
+		// Extract the closure from the struct.
+		fpGEP := c.builder.CreateGEP(deferFramePtr, []llvm.Value{
+			zero,
+			llvm.ConstInt(c.ctx.Int32Type(), 2, false),
+			llvm.ConstInt(c.ctx.Int32Type(), 1, false),
+		}, "closure.fp.ptr")
+		fp := c.builder.CreateLoad(fpGEP, "closure.fp")
+		contextGEP := c.builder.CreateGEP(deferFramePtr, []llvm.Value{
+			zero,
+			llvm.ConstInt(c.ctx.Int32Type(), 2, false),
+			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+		}, "closure.context.ptr")
+		context := c.builder.CreateLoad(contextGEP, "closure.context")
+		forwardParams = append(forwardParams, context)
+
+		// Cast the function pointer in the closure to the correct function
+		// pointer type.
+		closureType, err := c.getLLVMType(thunk.signature)
+		if err != nil {
+			return err
+		}
+		fpType := closureType.StructElementTypes()[1]
+		fpCast := c.builder.CreateBitCast(fp, fpType, "closure.fp.cast")
+
+		// Call real function (of which this is a wrapper).
+		c.createCall(fpCast, forwardParams, "")
 		c.builder.CreateRetVoid()
 	}
 
@@ -1327,6 +1395,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 			panic("free variables on function without context")
 		}
 		context := frame.fn.LLVMFn.LastParam()
+		context.SetName("context")
 
 		// Determine the context type. It's a struct containing all variables.
 		freeVarTypes := make([]llvm.Type, 0, len(frame.fn.FreeVars))
@@ -1469,51 +1538,86 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 	case *ssa.DebugRef:
 		return nil // ignore
 	case *ssa.Defer:
-		if _, ok := instr.Call.Value.(*ssa.Function); !ok || instr.Call.IsInvoke() {
-			return errors.New("todo: non-direct function calls in defer")
-		}
-		fn := c.ir.GetFunction(instr.Call.Value.(*ssa.Function))
-
 		// The pointer to the previous defer struct, which we will replace to
 		// make a linked list.
 		next := c.builder.CreateLoad(frame.deferPtr, "defer.next")
 
-		// Try to find the wrapper $defer function.
-		deferName := fn.LinkName() + "$defer"
-		callback := c.mod.NamedFunction(deferName)
-		if callback.IsNil() {
-			// Not found, have to add it.
-			deferFuncType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{next.Type()}, false)
-			callback = llvm.AddFunction(c.mod, deferName, deferFuncType)
-			c.deferFuncs = append(c.deferFuncs, fn)
-		}
+		deferFuncType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{next.Type()}, false)
 
-		// Collect all values to be put in the struct (starting with
-		// runtime._defer fields).
-		values := []llvm.Value{callback, next}
-		valueTypes := []llvm.Type{callback.Type(), next.Type()}
-		for _, param := range instr.Call.Args {
-			llvmParam, err := c.parseExpr(frame, param)
+		var values []llvm.Value
+		var valueTypes []llvm.Type
+		if callee, ok := instr.Call.Value.(*ssa.Function); ok && !instr.Call.IsInvoke() {
+			// Regular function call.
+			fn := c.ir.GetFunction(callee)
+
+			// Try to find the wrapper $defer function.
+			deferName := fn.LinkName() + "$defer"
+			callback := c.mod.NamedFunction(deferName)
+			if callback.IsNil() {
+				// Not found, have to add it.
+				callback = llvm.AddFunction(c.mod, deferName, deferFuncType)
+				c.deferFuncs = append(c.deferFuncs, fn)
+			}
+
+			// Collect all values to be put in the struct (starting with
+			// runtime._defer fields).
+			values = []llvm.Value{callback, next}
+			valueTypes = []llvm.Type{callback.Type(), next.Type()}
+			for _, param := range instr.Call.Args {
+				llvmParam, err := c.parseExpr(frame, param)
+				if err != nil {
+					return err
+				}
+				values = append(values, llvmParam)
+				valueTypes = append(valueTypes, llvmParam.Type())
+			}
+		} else if makeClosure, ok := instr.Call.Value.(*ssa.MakeClosure); ok {
+			// Immediately applied function literal with free variables.
+			closure, err := c.parseExpr(frame, instr.Call.Value)
 			if err != nil {
 				return err
 			}
-			values = append(values, llvmParam)
-			valueTypes = append(valueTypes, llvmParam.Type())
+
+			// Hopefully, LLVM will merge equivalent functions.
+			deferName := frame.fn.LinkName() + "$fpdefer"
+			callback := llvm.AddFunction(c.mod, deferName, deferFuncType)
+
+			// Collect all values to be put in the struct (starting with
+			// runtime._defer fields, followed by the closure).
+			values = []llvm.Value{callback, next, closure}
+			valueTypes = []llvm.Type{callback.Type(), next.Type(), closure.Type()}
+			for _, param := range instr.Call.Args {
+				llvmParam, err := c.parseExpr(frame, param)
+				if err != nil {
+					return err
+				}
+				values = append(values, llvmParam)
+				valueTypes = append(valueTypes, llvmParam.Type())
+			}
+
+			thunk := ContextDeferFunction{
+				callback,
+				valueTypes,
+				makeClosure.Fn.(*ssa.Function).Signature,
+			}
+			c.ctxDeferFuncs = append(c.ctxDeferFuncs, thunk)
+		} else {
+			return errors.New("todo: defer on uncommon function call type")
 		}
 
-		// Make a struct out of it.
-		contextType := c.ctx.StructType(valueTypes, false)
-		context, err := c.getZeroValue(contextType)
+		// Make a struct out of the collected values to put in the defer frame.
+		deferFrameType := c.ctx.StructType(valueTypes, false)
+		deferFrame, err := c.getZeroValue(deferFrameType)
 		if err != nil {
 			return err
 		}
 		for i, value := range values {
-			context = c.builder.CreateInsertValue(context, value, i, "")
+			deferFrame = c.builder.CreateInsertValue(deferFrame, value, i, "")
 		}
 
 		// Put this struct in an alloca.
-		alloca := c.builder.CreateAlloca(contextType, "defer.alloca")
-		c.builder.CreateStore(context, alloca)
+		alloca := c.builder.CreateAlloca(deferFrameType, "defer.alloca")
+		c.builder.CreateStore(deferFrame, alloca)
 
 		// Push it on top of the linked list by replacing deferPtr.
 		allocaCast := c.builder.CreateBitCast(alloca, next.Type(), "defer.alloca.cast")
@@ -2354,6 +2458,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 
 	case *ssa.MakeClosure:
+		// A closure returns a function pointer with context:
+		// {context, fp}
 		return c.parseMakeClosure(frame, expr)
 
 	case *ssa.MakeInterface:
