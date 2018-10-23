@@ -20,6 +20,8 @@ func main() {
 	println("Stringer.String():", s.String())
 	var itf interface{} = s
 	println("Stringer.(*Thing).String():", itf.(Stringer).String())
+
+	println("nested switch:", nestedSwitch('v', 3))
 }
 
 func printItf(val interface{}) {
@@ -44,6 +46,17 @@ func printItf(val interface{}) {
 	default:
 		println("is ?")
 	}
+}
+
+func nestedSwitch(verb rune, arg interface{}) bool {
+	switch verb {
+	case 'v', 's':
+		switch arg.(type) {
+		case int:
+			return true
+		}
+	}
+	return false
 }
 
 type Thing struct {
