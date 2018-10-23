@@ -1803,20 +1803,18 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			return llvm.Value{}, err
 		}
 		t := args[0].Type().Underlying().(*types.Basic)
+		var cplx llvm.Value
 		switch t.Kind() {
 		case types.Float32:
-			cplx := llvm.Undef(llvm.VectorType(c.ctx.FloatType(), 2))
-			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
-			return cplx, nil
+			cplx = llvm.Undef(llvm.VectorType(c.ctx.FloatType(), 2))
 		case types.Float64:
-			cplx := llvm.Undef(llvm.VectorType(c.ctx.DoubleType(), 2))
-			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
-			return cplx, nil
+			cplx = llvm.Undef(llvm.VectorType(c.ctx.DoubleType(), 2))
 		default:
 			return llvm.Value{}, errors.New("unsupported type in complex builtin: " + t.String())
 		}
+		cplx = c.builder.CreateInsertElement(cplx, r, llvm.ConstInt(c.ctx.Int8Type(), 0, false), "")
+		cplx = c.builder.CreateInsertElement(cplx, i, llvm.ConstInt(c.ctx.Int8Type(), 1, false), "")
+		return cplx, nil
 	case "copy":
 		dst, err := c.parseExpr(frame, args[0])
 		if err != nil {
@@ -3295,8 +3293,8 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 			r = c.builder.CreateFPTrunc(r, c.ctx.FloatType(), "real.f32")
 			i = c.builder.CreateFPTrunc(i, c.ctx.FloatType(), "imag.f32")
 			cplx := llvm.Undef(llvm.VectorType(c.ctx.FloatType(), 2))
-			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+			cplx = c.builder.CreateInsertElement(cplx, r, llvm.ConstInt(c.ctx.Int8Type(), 0, false), "")
+			cplx = c.builder.CreateInsertElement(cplx, i, llvm.ConstInt(c.ctx.Int8Type(), 1, false), "")
 			return cplx, nil
 		}
 
@@ -3307,8 +3305,8 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 			r = c.builder.CreateFPExt(r, c.ctx.DoubleType(), "real.f64")
 			i = c.builder.CreateFPExt(i, c.ctx.DoubleType(), "imag.f64")
 			cplx := llvm.Undef(llvm.VectorType(c.ctx.DoubleType(), 2))
-			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+			cplx = c.builder.CreateInsertElement(cplx, r, llvm.ConstInt(c.ctx.Int8Type(), 0, false), "")
+			cplx = c.builder.CreateInsertElement(cplx, i, llvm.ConstInt(c.ctx.Int8Type(), 1, false), "")
 			return cplx, nil
 		}
 
