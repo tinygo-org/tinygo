@@ -8,7 +8,7 @@ before_install:
   - echo "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-7 main"            | sudo tee -a /etc/apt/sources.list
   - echo "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu trusty main" | sudo tee -a /etc/apt/sources.list
   - sudo apt-get update -qq
-  - sudo apt-get install llvm-7-dev clang-7 lld-7 gcc-arm-none-eabi qemu-system-arm --allow-unauthenticated -y
+  - sudo apt-get install llvm-7-dev clang-7 gcc-arm-none-eabi qemu-system-arm --allow-unauthenticated -y
   - sudo ln -s /usr/bin/clang-7 /usr/local/bin/cc # work around missing -no-pie in old GCC version
 
 install:
@@ -27,4 +27,3 @@ script:
   - tinygo build -o test.nrf.elf      -target=nrf52840-mdk examples/blinky1
   - tinygo build -o blinky1.stm32.elf -target=bluepill     examples/blinky1
   - tinygo build -o blinky1.avr.o     -target=arduino      examples/blinky1 # TODO: avr-as/avr-gcc doesn't work
-  - tinygo build -o test.wasm.wasm    -target=wasm         examples/test
