@@ -30,7 +30,7 @@ func main() {
 	println(3.14)
 
 	// print complex128
-	println(5+1.2345i)
+	println(5 + 1.2345i)
 
 	// print interface
 	println(interface{}(nil))
