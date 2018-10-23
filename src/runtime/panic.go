@@ -29,6 +29,14 @@ func lookupBoundsCheck(length lenType, index int) {
 	}
 }
 
+// Check for bounds in *ssa.Index, *ssa.IndexAddr and *ssa.Lookup.
+// Supports 64-bit indexes.
+func lookupBoundsCheckLong(length lenType, index int64) {
+	if index < 0 || index >= int64(length) {
+		runtimePanic("index out of range")
+	}
+}
+
 // Check for bounds in *ssa.Slice.
 func sliceBoundsCheck(length lenType, low, high uint) {
 	if !(0 <= low && low <= high && high <= uint(length)) {

@@ -2197,12 +2197,23 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 	}
 }
 
-func (c *Compiler) emitBoundsCheck(frame *Frame, arrayLen, index llvm.Value) {
+func (c *Compiler) emitBoundsCheck(frame *Frame, arrayLen, index llvm.Value, indexType types.Type) {
 	if frame.fn.IsNoBounds() {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
 		return
 	}
+
+	// Sometimes, the index can be e.g. an uint8 or int8, and we have to
+	// correctly extend that type.
+	if index.Type().IntTypeWidth() < arrayLen.Type().IntTypeWidth() {
+		if indexType.(*types.Basic).Info()&types.IsUnsigned == 0 {
+			index = c.builder.CreateZExt(index, arrayLen.Type(), "")
+		} else {
+			index = c.builder.CreateSExt(index, arrayLen.Type(), "")
+		}
+	}
+
 	// Optimize away trivial cases.
 	// LLVM would do this anyway with interprocedural optimizations, but it
 	// helps to see cases where bounds check elimination would really help.
@@ -2213,7 +2224,13 @@ func (c *Compiler) emitBoundsCheck(frame *Frame, arrayLen, index llvm.Value) {
 			return
 		}
 	}
-	c.createRuntimeCall("lookupBoundsCheck", []llvm.Value{arrayLen, index}, "")
+
+	if index.Type().IntTypeWidth() > c.intType.IntTypeWidth() {
+		// Index is too big for the regular bounds check. Use the one for int64.
+		c.createRuntimeCall("lookupBoundsCheckLong", []llvm.Value{arrayLen, index}, "")
+	} else {
+		c.createRuntimeCall("lookupBoundsCheck", []llvm.Value{arrayLen, index}, "")
+	}
 }
 
 func (c *Compiler) emitSliceBoundsCheck(frame *Frame, length, low, high llvm.Value) {
@@ -2371,7 +2388,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// Check bounds.
 		arrayLen := expr.X.Type().(*types.Array).Len()
 		arrayLenLLVM := llvm.ConstInt(c.lenType, uint64(arrayLen), false)
-		c.emitBoundsCheck(frame, arrayLenLLVM, index)
+		c.emitBoundsCheck(frame, arrayLenLLVM, index, expr.Index.Type())
 
 		// Can't load directly from array (as index is non-constant), so have to
 		// do it using an alloca+gep+load.
@@ -2411,7 +2428,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		// Bounds check.
 		// LLVM optimizes this away in most cases.
-		c.emitBoundsCheck(frame, buflen, index)
+		c.emitBoundsCheck(frame, buflen, index, expr.Index.Type())
 
 		switch expr.X.Type().Underlying().(type) {
 		case *types.Pointer:
@@ -2447,7 +2464,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			if err != nil {
 				return llvm.Value{}, err // shouldn't happen
 			}
-			c.emitBoundsCheck(frame, length, index)
+			c.emitBoundsCheck(frame, length, index, expr.Index.Type())
 
 			// Lookup byte
 			buf := c.builder.CreateExtractValue(value, 0, "")
