@@ -2269,7 +2269,15 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		return buf, nil
 	case *ssa.BinOp:
-		return c.parseBinOp(frame, expr)
+		x, err := c.parseExpr(frame, expr.X)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		y, err := c.parseExpr(frame, expr.Y)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		return c.parseBinOp(expr.Op, expr.X.Type().Underlying(), x, y)
 	case *ssa.Call:
 		// Passing the current task here to the subroutine. It is only used when
 		// the subroutine is blocking.
@@ -2834,21 +2842,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	}
 }
 
-func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error) {
-	x, err := c.parseExpr(frame, binop.X)
-	if err != nil {
-		return llvm.Value{}, err
-	}
-	y, err := c.parseExpr(frame, binop.Y)
-	if err != nil {
-		return llvm.Value{}, err
-	}
-	switch typ := binop.X.Type().Underlying().(type) {
+func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (llvm.Value, error) {
+	switch typ := typ.(type) {
 	case *types.Basic:
 		if typ.Info()&types.IsInteger != 0 {
 			// Operations on integers
 			signed := typ.Info()&types.IsUnsigned == 0
-			switch binop.Op {
+			switch op {
 			case token.ADD: // +
 				return c.builder.CreateAdd(x, y, ""), nil
 			case token.SUB: // -
@@ -2888,7 +2888,7 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 					// in Go.
 					y = c.builder.CreateTrunc(y, x.Type(), "")
 				}
-				switch binop.Op {
+				switch op {
 				case token.SHL: // <<
 					return c.builder.CreateShl(x, y, ""), nil
 				case token.SHR: // >>
@@ -2933,11 +2933,11 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 					return c.builder.CreateICmp(llvm.IntUGE, x, y, ""), nil
 				}
 			default:
-				return llvm.Value{}, errors.New("todo: binop on integer: " + binop.Op.String())
+				return llvm.Value{}, errors.New("todo: binop on integer: " + op.String())
 			}
 		} else if typ.Info()&types.IsFloat != 0 {
 			// Operations on floats
-			switch binop.Op {
+			switch op {
 			case token.ADD:
 				return c.builder.CreateFAdd(x, y, ""), nil
 			case token.SUB: // -
@@ -2961,41 +2961,41 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 			case token.GEQ: // >=
 				return c.builder.CreateFCmp(llvm.FloatOGE, x, y, ""), nil
 			default:
-				return llvm.Value{}, errors.New("todo: binop on float: " + binop.Op.String())
+				return llvm.Value{}, errors.New("todo: binop on float: " + op.String())
 			}
 		} else if typ.Info()&types.IsBoolean != 0 {
 			// Operations on booleans
-			switch binop.Op {
+			switch op {
 			case token.EQL: // ==
 				return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
 			case token.NEQ: // !=
 				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 			default:
-				return llvm.Value{}, errors.New("todo: binop on boolean: " + binop.Op.String())
+				return llvm.Value{}, errors.New("todo: binop on boolean: " + op.String())
 			}
 		} else if typ.Kind() == types.UnsafePointer {
 			// Operations on pointers
-			switch binop.Op {
+			switch op {
 			case token.EQL: // ==
 				return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
 			case token.NEQ: // !=
 				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 			default:
-				return llvm.Value{}, errors.New("todo: binop on pointer: " + binop.Op.String())
+				return llvm.Value{}, errors.New("todo: binop on pointer: " + op.String())
 			}
 		} else if typ.Info()&types.IsString != 0 {
 			// Operations on strings
-			switch binop.Op {
+			switch op {
 			case token.ADD:
 				return c.createRuntimeCall("stringConcat", []llvm.Value{x, y}, ""), nil
 			case token.EQL, token.NEQ: // ==, !=
 				result := c.createRuntimeCall("stringEqual", []llvm.Value{x, y}, "")
-				if binop.Op == token.NEQ {
+				if op == token.NEQ {
 					result = c.builder.CreateNot(result, "")
 				}
 				return result, nil
 			default:
-				return llvm.Value{}, errors.New("todo: binop on string: " + binop.Op.String())
+				return llvm.Value{}, errors.New("todo: binop on string: " + op.String())
 			}
 		} else {
 			return llvm.Value{}, errors.New("todo: unknown basic type in binop: " + typ.String())
@@ -3010,49 +3010,78 @@ func (c *Compiler) parseBinOp(frame *Frame, binop *ssa.BinOp) (llvm.Value, error
 			x = c.builder.CreateExtractValue(x, 1, "")
 			y = c.builder.CreateExtractValue(y, 1, "")
 		}
-		switch binop.Op {
+		switch op {
 		case token.EQL: // ==
 			return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
 		case token.NEQ: // !=
 			return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 		default:
-			return llvm.Value{}, errors.New("binop on signature: " + binop.Op.String())
+			return llvm.Value{}, errors.New("binop on signature: " + op.String())
 		}
 	case *types.Interface:
-		switch binop.Op {
+		switch op {
 		case token.EQL, token.NEQ: // ==, !=
 			result := c.createRuntimeCall("interfaceEqual", []llvm.Value{x, y}, "")
-			if binop.Op == token.NEQ {
+			if op == token.NEQ {
 				result = c.builder.CreateNot(result, "")
 			}
 			return result, nil
 		default:
-			return llvm.Value{}, errors.New("binop on interface: " + binop.Op.String())
+			return llvm.Value{}, errors.New("binop on interface: " + op.String())
 		}
 	case *types.Pointer:
-		switch binop.Op {
+		switch op {
 		case token.EQL: // ==
 			return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
 		case token.NEQ: // !=
 			return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 		default:
-			return llvm.Value{}, errors.New("todo: binop on pointer: " + binop.Op.String())
+			return llvm.Value{}, errors.New("todo: binop on pointer: " + op.String())
 		}
 	case *types.Slice:
 		// Slices are in general not comparable, but can be compared against
 		// nil. Assume at least one of them is nil to make the code easier.
 		xPtr := c.builder.CreateExtractValue(x, 0, "")
 		yPtr := c.builder.CreateExtractValue(y, 0, "")
-		switch binop.Op {
+		switch op {
 		case token.EQL: // ==
 			return c.builder.CreateICmp(llvm.IntEQ, xPtr, yPtr, ""), nil
 		case token.NEQ: // !=
 			return c.builder.CreateICmp(llvm.IntNE, xPtr, yPtr, ""), nil
 		default:
-			return llvm.Value{}, errors.New("todo: binop on slice: " + binop.Op.String())
+			return llvm.Value{}, errors.New("todo: binop on slice: " + op.String())
 		}
+	case *types.Struct:
+		// Compare each struct field and combine the result. From the spec:
+		//     Struct values are comparable if all their fields are comparable.
+		//     Two struct values are equal if their corresponding non-blank
+		//     fields are equal.
+		result := llvm.ConstInt(c.ctx.Int1Type(), 1, true)
+		for i := 0; i < typ.NumFields(); i++ {
+			if typ.Field(i).Name() == "_" {
+				// skip blank fields
+				continue
+			}
+			fieldType := typ.Field(i).Type()
+			xField := c.builder.CreateExtractValue(x, i, "")
+			yField := c.builder.CreateExtractValue(y, i, "")
+			fieldEqual, err := c.parseBinOp(token.EQL, fieldType, xField, yField)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			result = c.builder.CreateAnd(result, fieldEqual, "")
+		}
+		switch op {
+		case token.EQL: // ==
+			return result, nil
+		case token.NEQ: // !=
+			return c.builder.CreateNot(result, ""), nil
+		default:
+			return llvm.Value{}, errors.New("unknown: binop on struct: " + op.String())
+		}
+		return result, nil
 	default:
-		return llvm.Value{}, errors.New("unknown binop type: " + binop.X.Type().String())
+		return llvm.Value{}, errors.New("todo: binop type: " + typ.String())
 	}
 }
 
