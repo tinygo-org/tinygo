@@ -99,7 +99,7 @@ broader support are welcome!
 
 The goal is to reduce code size (and increase performance) by performing all
 kinds of whole-program analysis passes. The official Go compiler doesn't do a
-whole lot of analysis (except for escape analysis) becauses it needs to be fast,
+whole lot of analysis (except for escape analysis) because it needs to be fast,
 but embedded programs are necessarily smaller so it becomes practical. And I
 think especially program size can be reduced by a large margin when actually
 trying to optimize for it.
