@@ -382,9 +382,11 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "usage: %s command [-printir] [-target=<target>] -o <output> <input>\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "\ncommands:")
 	fmt.Fprintln(os.Stderr, "  build: compile packages and dependencies")
+	fmt.Fprintln(os.Stderr, "  run:   compile and run immediately")
 	fmt.Fprintln(os.Stderr, "  flash: compile and flash to the device")
+	fmt.Fprintln(os.Stderr, "  gdb:   run/flash and immediately enter GDB")
+	fmt.Fprintln(os.Stderr, "  clean: empty cache directory (" + cacheDir() + ")")
 	fmt.Fprintln(os.Stderr, "  help:  print this help text")
-	fmt.Fprintln(os.Stderr, "  run:   run package in an interpreter")
 	fmt.Fprintln(os.Stderr, "\nflags:")
 	flag.PrintDefaults()
 }
