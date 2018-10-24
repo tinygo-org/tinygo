@@ -142,6 +142,11 @@ Non-goals:
 Documentation is currently maintained on a [dedicated ReadTheDocs
 page](https://tinygo.readthedocs.io/en/latest/).
 
+## Running tests
+
+On Debian, you will need to install packages `clang-7` and `qemu-system-arm` in
+addition to `llvm-7-dev`.
+
 ## Contributing
 
 Patches are welcome!

@@ -14,9 +14,10 @@ import (
 	"strconv"
 	"strings"
 
+	"go/parser"
+
 	"github.com/aykevl/go-llvm"
 	"github.com/aykevl/tinygo/ir"
-	"go/parser"
 	"golang.org/x/tools/go/loader"
 	"golang.org/x/tools/go/ssa"
 )
@@ -282,22 +283,23 @@ func (c *Compiler) Compile(mainPath string) error {
 	for _, frame := range frames {
 		if frame.fn.Synthetic == "package initializer" {
 			c.initFuncs = append(c.initFuncs, frame.fn.LLVMFn)
-			if len(frame.fn.Blocks) != 1 {
-				panic("unexpected number of basic blocks in package initializer")
-			}
-			// Try to interpret as much as possible of the init() function.
-			// Whenever it hits an instruction that it doesn't understand, it
-			// bails out and leaves the rest to the compiler (so initialization
-			// continues at runtime).
-			// This should only happen when it hits a function call or the end
-			// of the block, ideally.
-			err := c.ir.Interpret(frame.fn.Blocks[0], c.DumpSSA)
-			if err != nil {
-				return err
-			}
-			err = c.parseFunc(frame)
-			if err != nil {
-				return err
+			// There can be multiple init functions. Concatenate them as if they were
+			// a single function.
+			for _, b := range frame.fn.Blocks {
+				// Try to interpret as much as possible of the init() function.
+				// Whenever it hits an instruction that it doesn't understand, it
+				// bails out and leaves the rest to the compiler (so initialization
+				// continues at runtime).
+				// This should only happen when it hits a function call or the end
+				// of the block, ideally.
+				err := c.ir.Interpret(b, c.DumpSSA)
+				if err != nil {
+					return err
+				}
+				err = c.parseFunc(frame)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

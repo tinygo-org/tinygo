@@ -101,7 +101,10 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 		t.Log("failed to run:", err)
 		fail = true
 	} else if !bytes.Equal(expected, actual) {
-		t.Log("output did not match")
+		t.Log("output did not match. Expected:")
+		t.Log(string(expected))
+		t.Log("Actual:")
+		t.Log(string(actual))
 		fail = true
 	}
 
