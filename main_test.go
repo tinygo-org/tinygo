@@ -59,8 +59,15 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 	}
 
 	// Build the test binary.
+	config := &BuildConfig{
+		opt:        "z",
+		printIR:    false,
+		dumpSSA:    false,
+		debug:      false,
+		printSizes: "",
+	}
 	binary := filepath.Join(tmpdir, "test")
-	err = Build(path, binary, target, "z", false, false, false, "")
+	err = Build(path, binary, target, config)
 	if err != nil {
 		t.Log("failed to build:", err)
 		t.Fail()

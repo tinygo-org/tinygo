@@ -22,24 +22,32 @@ var commands = map[string]string{
 	"clang": "clang-7",
 }
 
+type BuildConfig struct {
+	opt        string
+	printIR    bool
+	dumpSSA    bool
+	debug      bool
+	printSizes string
+}
+
 // Helper function for Compiler object.
-func Compile(pkgName, outpath, opt string, spec *TargetSpec, printIR, dumpSSA, debug bool, printSizes string, action func(string) error) error {
-	config := compiler.Config{
+func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, action func(string) error) error {
+	compilerConfig := compiler.Config{
 		Triple:    spec.Triple,
-		Debug:     debug,
-		DumpSSA:   dumpSSA,
+		Debug:     config.debug,
+		DumpSSA:   config.dumpSSA,
 		RootDir:   sourceDir(),
 		GOPATH:    getGopath(),
 		BuildTags: spec.BuildTags,
 	}
-	c, err := compiler.NewCompiler(pkgName, config)
+	c, err := compiler.NewCompiler(pkgName, compilerConfig)
 	if err != nil {
 		return err
 	}
 
 	// Compile Go code to IR.
 	parseErr := func() error {
-		if printIR {
+		if config.printIR {
 			// Run this even if c.Compile() panics.
 			defer func() {
 				fmt.Println("Generated LLVM IR:")
@@ -60,7 +68,7 @@ func Compile(pkgName, outpath, opt string, spec *TargetSpec, printIR, dumpSSA, d
 
 	// Optimization levels here are roughly the same as Clang, but probably not
 	// exactly.
-	switch opt {
+	switch config.opt {
 	case "none:", "0":
 		c.Optimize(0, 0, 0) // -O0
 	case "1":
@@ -72,7 +80,7 @@ func Compile(pkgName, outpath, opt string, spec *TargetSpec, printIR, dumpSSA, d
 	case "z":
 		c.Optimize(2, 2, 5) // -Oz, default
 	default:
-		return errors.New("unknown optimization level: -opt=" + opt)
+		return errors.New("unknown optimization level: -opt=" + config.opt)
 	}
 	if err := c.Verify(); err != nil {
 		return err
@@ -143,12 +151,12 @@ func Compile(pkgName, outpath, opt string, spec *TargetSpec, printIR, dumpSSA, d
 			return err
 		}
 
-		if printSizes == "short" || printSizes == "full" {
+		if config.printSizes == "short" || config.printSizes == "full" {
 			sizes, err := Sizes(executable)
 			if err != nil {
 				return err
 			}
-			if printSizes == "short" {
+			if config.printSizes == "short" {
 				fmt.Printf("   code    data     bss |   flash     ram\n")
 				fmt.Printf("%7d %7d %7d | %7d %7d\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
 			} else {
@@ -181,13 +189,13 @@ func Compile(pkgName, outpath, opt string, spec *TargetSpec, printIR, dumpSSA, d
 	}
 }
 
-func Build(pkgName, outpath, target, opt string, printIR, dumpSSA, debug bool, printSizes string) error {
+func Build(pkgName, outpath, target string, config *BuildConfig) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
 	}
 
-	return Compile(pkgName, outpath, opt, spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
+	return Compile(pkgName, outpath, spec, config, func(tmppath string) error {
 		if err := os.Rename(tmppath, outpath); err != nil {
 			// Moving failed. Do a file copy.
 			inf, err := os.Open(tmppath)
@@ -215,13 +223,13 @@ func Build(pkgName, outpath, target, opt string, printIR, dumpSSA, debug bool, p
 	})
 }
 
-func Flash(pkgName, target, opt, port string, printIR, dumpSSA, debug bool, printSizes string) error {
+func Flash(pkgName, target, port string, config *BuildConfig) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
 	}
 
-	return Compile(pkgName, ".hex", opt, spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
+	return Compile(pkgName, ".hex", spec, config, func(tmppath string) error {
 		if spec.Flasher == "" {
 			return errors.New("no flash command specified - did you miss a -target flag?")
 		}
@@ -244,7 +252,7 @@ func Flash(pkgName, target, opt, port string, printIR, dumpSSA, debug bool, prin
 //
 // Note: this command is expected to execute just before exiting, as it
 // modifies global state.
-func FlashGDB(pkgName, target, opt, port string, printIR, dumpSSA, ocdOutput bool, printSizes string) error {
+func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
@@ -254,8 +262,7 @@ func FlashGDB(pkgName, target, opt, port string, printIR, dumpSSA, ocdOutput boo
 		return errors.New("gdb not configured in the target specification")
 	}
 
-	debug := true // always enable debug symbols
-	return Compile(pkgName, "", opt, spec, printIR, dumpSSA, debug, printSizes, func(tmppath string) error {
+	return Compile(pkgName, "", spec, config, func(tmppath string) error {
 		if len(spec.OCDDaemon) != 0 {
 			// We need a separate debugging daemon for on-chip debugging.
 			daemon := exec.Command(spec.OCDDaemon[0], spec.OCDDaemon[1:]...)
@@ -346,7 +353,7 @@ func Run(pkgName string) error {
 }
 
 // Compile and run the given program in an emulator.
-func Emulate(pkgName, target, opt string) error {
+func Emulate(pkgName, target string, config *BuildConfig) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
@@ -355,7 +362,7 @@ func Emulate(pkgName, target, opt string) error {
 		return errors.New("no emulator configured for this target")
 	}
 
-	return Compile(pkgName, ".elf", opt, spec, false, false, false, "", func(tmppath string) error {
+	return Compile(pkgName, ".elf", spec, config, func(tmppath string) error {
 		args := append(spec.Emulator[1:], tmppath)
 		cmd := exec.Command(spec.Emulator[0], args...)
 		cmd.Stdout = os.Stdout
@@ -401,6 +408,13 @@ func main() {
 	command := os.Args[1]
 
 	flag.CommandLine.Parse(os.Args[2:])
+	config := &BuildConfig{
+		opt:        *opt,
+		printIR:    *printIR,
+		dumpSSA:    *dumpSSA,
+		debug:      !*nodebug,
+		printSizes: *printSize,
+	}
 
 	os.Setenv("CC", "clang -target="+*target)
 
@@ -420,7 +434,7 @@ func main() {
 		if target == "" && filepath.Ext(*outpath) == ".wasm" {
 			target = "wasm"
 		}
-		err := Build(flag.Arg(0), *outpath, target, *opt, *printIR, *dumpSSA, !*nodebug, *printSize)
+		err := Build(flag.Arg(0), *outpath, target, config)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
@@ -433,9 +447,14 @@ func main() {
 		}
 		var err error
 		if command == "flash" {
-			err = Flash(flag.Arg(0), *target, *opt, *port, *printIR, *dumpSSA, !*nodebug, *printSize)
+			err = Flash(flag.Arg(0), *target, *port, config)
 		} else {
-			err = FlashGDB(flag.Arg(0), *target, *opt, *port, *printIR, *dumpSSA, *ocdOutput, *printSize)
+			if !config.debug {
+				fmt.Fprintln(os.Stderr, "Debug disabled while running gdb?")
+				usage()
+				os.Exit(1)
+			}
+			err = FlashGDB(flag.Arg(0), *target, *port, *ocdOutput, config)
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
@@ -451,7 +470,7 @@ func main() {
 		if *target == "" {
 			err = Run(flag.Arg(0))
 		} else {
-			err = Emulate(flag.Arg(0), *target, *opt)
+			err = Emulate(flag.Arg(0), *target, config)
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
