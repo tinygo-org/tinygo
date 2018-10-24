@@ -3155,8 +3155,8 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 				return llvm.Value{}, err
 			}
 			cplx := llvm.Undef(llvm.VectorType(c.ctx.DoubleType(), 2))
-			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+			cplx = c.builder.CreateInsertElement(cplx, r, llvm.ConstInt(c.ctx.Int8Type(), 0, false), "")
+			cplx = c.builder.CreateInsertElement(cplx, i, llvm.ConstInt(c.ctx.Int8Type(), 1, false), "")
 			return cplx, nil
 		} else {
 			return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
