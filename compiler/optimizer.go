@@ -69,10 +69,14 @@ func (c *Compiler) OptimizeMaps() {
 		unknownUses := false // are there any uses other than setting a value?
 
 		for _, use := range getUses(makeInst) {
-			switch use.CalledValue() {
-			case hashmapBinarySet, hashmapStringSet:
-				updateInsts = append(updateInsts, use)
-			default:
+			if use := use.IsACallInst(); !use.IsNil() {
+				switch use.CalledValue() {
+				case hashmapBinarySet, hashmapStringSet:
+					updateInsts = append(updateInsts, use)
+				default:
+					unknownUses = true
+				}
+			} else {
 				unknownUses = true
 			}
 		}
