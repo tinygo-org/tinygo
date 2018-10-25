@@ -1,0 +1,3 @@
+init1
+init2
+main
