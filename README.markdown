@@ -142,6 +142,15 @@ Non-goals:
 Documentation is currently maintained on a [dedicated ReadTheDocs
 page](https://tinygo.readthedocs.io/en/latest/).
 
+## Getting help
+
+If you're looking for a more interactive way to discuss TinyGo usage or
+development, we have a [#TinyGo channel](https://gophers.slack.com/messages/CDJD3SUP6/)
+on the [Gophers Slack](https://gophers.slack.com).
+
+If you need an invitation for the Gophers Slack, you can generate one here which
+should arrive fairly quickly (under 1 min): https://invite.slack.golangbridge.org
+
 ## Contributing
 
 Patches are welcome!
