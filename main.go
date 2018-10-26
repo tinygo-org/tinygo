@@ -385,7 +385,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  run:   compile and run immediately")
 	fmt.Fprintln(os.Stderr, "  flash: compile and flash to the device")
 	fmt.Fprintln(os.Stderr, "  gdb:   run/flash and immediately enter GDB")
-	fmt.Fprintln(os.Stderr, "  clean: empty cache directory (" + cacheDir() + ")")
+	fmt.Fprintln(os.Stderr, "  clean: empty cache directory ("+cacheDir()+")")
 	fmt.Fprintln(os.Stderr, "  help:  print this help text")
 	fmt.Fprintln(os.Stderr, "\nflags:")
 	flag.PrintDefaults()
