@@ -71,6 +71,15 @@ func hashmapMake(keySize, valueSize uint8) *hashmap {
 	}
 }
 
+// Return the number of entries in this hashmap, called from the len builtin.
+// A nil hashmap is defined as having length 0.
+func hashmapLen(m *hashmap) int {
+	if m == nil {
+		return 0
+	}
+	return int(m.count)
+}
+
 // Set a specified key to a given value. Grow the map if necessary.
 //go:nobounds
 func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint32, keyEqual func(x, y unsafe.Pointer, n uintptr) bool) {

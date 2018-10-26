@@ -26,6 +26,11 @@ func main() {
 	readMap(testmap2, "seven")
 	lookup(testmap2, "eight")
 	lookup(testmap2, "nokey")
+
+	// operations on nil maps
+	var nilmap map[string]int
+	println(m == nil, m != nil, len(m))
+	println(nilmap == nil, nilmap != nil, len(nilmap))
 }
 
 func readMap(m map[string]int, key string) {

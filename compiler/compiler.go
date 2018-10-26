@@ -1870,12 +1870,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 			// string or slice
 			llvmLen = c.builder.CreateExtractValue(value, 1, "len")
 		case *types.Map:
-			indices := []llvm.Value{
-				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-				llvm.ConstInt(c.ctx.Int32Type(), 2, false), // hashmap.count
-			}
-			ptr := c.builder.CreateGEP(value, indices, "lenptr")
-			llvmLen = c.builder.CreateLoad(ptr, "len")
+			llvmLen = c.createRuntimeCall("hashmapLen", []llvm.Value{value}, "len")
 		default:
 			return llvm.Value{}, errors.New("todo: len: unknown type")
 		}
@@ -3053,7 +3048,10 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 		default:
 			return llvm.Value{}, errors.New("binop on interface: " + op.String())
 		}
-	case *types.Pointer:
+	case *types.Map, *types.Pointer:
+		// Maps are in general not comparable, but can be compared against nil
+		// (which is a nil pointer). This means they can be trivially compared
+		// by treating them as a pointer.
 		switch op {
 		case token.EQL: // ==
 			return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
@@ -3212,6 +3210,16 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 			llvmLen, // cap
 		}, false)
 		return slice, nil
+	case *types.Map:
+		if !expr.IsNil() {
+			// I believe this is not allowed by the Go spec.
+			panic("non-nil map constant")
+		}
+		llvmType, err := c.getLLVMType(typ)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		return c.getZeroValue(llvmType)
 	default:
 		return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
 	}
