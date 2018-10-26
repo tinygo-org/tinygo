@@ -434,12 +434,14 @@ func (c *Compiler) Compile(mainPath string) error {
 	// that calls the initializer of each package.
 	initFn := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function))
 	initFn.LLVMFn.SetLinkage(llvm.InternalLinkage)
-	difunc, err := c.attachDebugInfo(initFn)
-	if err != nil {
-		return err
+	if c.Debug {
+		difunc, err := c.attachDebugInfo(initFn)
+		if err != nil {
+			return err
+		}
+		pos := c.ir.Program.Fset.Position(initFn.Pos())
+		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
-	pos := c.ir.Program.Fset.Position(initFn.Pos())
-	c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	block := c.ctx.AddBasicBlock(initFn.LLVMFn, "entry")
 	c.builder.SetInsertPointAtEnd(block)
 	for _, fn := range c.initFuncs {
@@ -449,12 +451,14 @@ func (c *Compiler) Compile(mainPath string) error {
 
 	mainWrapper := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["mainWrapper"].(*ssa.Function))
 	mainWrapper.LLVMFn.SetLinkage(llvm.InternalLinkage)
-	difunc, err = c.attachDebugInfo(mainWrapper)
-	if err != nil {
-		return err
+	if c.Debug {
+		difunc, err := c.attachDebugInfo(mainWrapper)
+		if err != nil {
+			return err
+		}
+		pos := c.ir.Program.Fset.Position(mainWrapper.Pos())
+		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
-	pos = c.ir.Program.Fset.Position(mainWrapper.Pos())
-	c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	block = c.ctx.AddBasicBlock(mainWrapper.LLVMFn, "entry")
 	c.builder.SetInsertPointAtEnd(block)
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
@@ -869,12 +873,14 @@ func (c *Compiler) wrapInterfaceInvoke(f *ir.Function) (llvm.Value, error) {
 	wrapper.SetLinkage(llvm.InternalLinkage)
 
 	// add debug info
-	pos := c.ir.Program.Fset.Position(f.Pos())
-	difunc, err := c.attachDebugInfoRaw(f, wrapper, "$invoke", pos.Filename, pos.Line)
-	if err != nil {
-		return llvm.Value{}, err
+	if c.Debug {
+		pos := c.ir.Program.Fset.Position(f.Pos())
+		difunc, err := c.attachDebugInfoRaw(f, wrapper, "$invoke", pos.Filename, pos.Line)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
-	c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 
 	// set up IR builder
 	block := c.ctx.AddBasicBlock(wrapper, "entry")
