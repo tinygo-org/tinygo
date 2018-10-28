@@ -101,3 +101,8 @@ func now() (sec int64, nsec int32, mono int64) {
 func os_sigpipe() {
 	runtimePanic("too many writes on closed pipe")
 }
+
+//go:linkname syscall_runtime_envs syscall.runtime_envs
+func syscall_runtime_envs() []string {
+	return nil
+}
