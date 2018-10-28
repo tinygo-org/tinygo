@@ -3460,9 +3460,10 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global str
 			// Allocate on the heap and put a pointer in the interface.
 			// TODO: escape analysis.
 			sizeValue := llvm.ConstInt(c.uintptrType, size, false)
-			itfValue = c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "")
-			itfValueCast := c.builder.CreateBitCast(itfValue, llvm.PointerType(val.Type(), 0), "")
+			alloc := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "")
+			itfValueCast := c.builder.CreateBitCast(alloc, llvm.PointerType(val.Type(), 0), "")
 			c.builder.CreateStore(val, itfValueCast)
+			itfValue = c.builder.CreateBitCast(itfValueCast, c.i8ptrType, "")
 		}
 	} else {
 		// Directly place the value in the interface.
