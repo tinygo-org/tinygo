@@ -54,13 +54,9 @@ func memmove(dst, src unsafe.Pointer, size uintptr) {
 		return
 	}
 	// Copy backwards.
-	i := size
-	for {
+	for i := size; i != 0; {
 		i--
 		*(*uint8)(unsafe.Pointer(uintptr(dst) + i)) = *(*uint8)(unsafe.Pointer(uintptr(src) + i))
-		if i == 0 {
-			break
-		}
 	}
 }
 
