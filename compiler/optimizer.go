@@ -225,7 +225,6 @@ func (c *Compiler) doesEscape(value llvm.Value) bool {
 					// pointers escape.
 					// TODO: introduce //go:noescape that sets the 'nocapture'
 					// flag on each input parameter.
-					println("declaration:", use.CalledValue().Name())
 					continue
 				}
 			}
