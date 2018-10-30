@@ -4,7 +4,7 @@
 	"linker":        "ld.lld-7",
 	"pre-link-args": [
 		"-flavor", "wasm",
-		"-allow-undefined-file", "targets/wasm.syms"
+		"-allow-undefined"
 	],
 	"emulator":      ["cwa"]
 }
