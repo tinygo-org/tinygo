@@ -2237,7 +2237,7 @@ func (c *Compiler) emitBoundsCheck(frame *Frame, arrayLen, index llvm.Value, ind
 	}
 }
 
-func (c *Compiler) emitSliceBoundsCheck(frame *Frame, length, low, high llvm.Value) {
+func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high llvm.Value) {
 	if frame.fn.IsNoBounds() {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
@@ -2251,9 +2251,9 @@ func (c *Compiler) emitSliceBoundsCheck(frame *Frame, length, low, high llvm.Val
 		if high.Type().IntTypeWidth() < 64 {
 			high = c.builder.CreateSExt(high, c.ctx.Int64Type(), "")
 		}
-		c.createRuntimeCall("sliceBoundsCheckLong", []llvm.Value{length, low, high}, "")
+		c.createRuntimeCall("sliceBoundsCheckLong", []llvm.Value{capacity, low, high}, "")
 	} else {
-		c.createRuntimeCall("sliceBoundsCheck", []llvm.Value{length, low, high}, "")
+		c.createRuntimeCall("sliceBoundsCheck", []llvm.Value{capacity, low, high}, "")
 	}
 }
 
@@ -2684,7 +2684,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				high = oldLen
 			}
 
-			c.emitSliceBoundsCheck(frame, oldLen, low, high)
+			c.emitSliceBoundsCheck(frame, oldCap, low, high)
 
 			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.lenType) {
 				low = c.builder.CreateTrunc(low, c.lenType, "")
