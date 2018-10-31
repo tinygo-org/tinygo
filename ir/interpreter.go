@@ -206,7 +206,7 @@ func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter
 			switch typeTo := instr.Type().Underlying().(type) {
 			case *types.Basic:
 				if typeTo.Kind() == types.String {
-					return i, errors.New("todo: init: cannot convert string")
+					return i, nil
 				}
 
 				if _, ok := typeFrom.(*types.Pointer); ok && typeTo.Kind() == types.UnsafePointer {
@@ -217,10 +217,10 @@ func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter
 					} else if typeFrom.Info()&types.IsInteger != 0 && typeTo.Info()&types.IsInteger != 0 {
 						locals[instr] = &ConstValue{Expr: ssa.NewConst(x.(*ConstValue).Expr.Value, typeTo)}
 					} else {
-						return i, errors.New("todo: init: unknown basic-to-basic convert: " + instr.String())
+						return i, nil
 					}
 				} else {
-					return i, errors.New("todo: init: unknown basic convert: " + instr.String())
+					return i, nil
 				}
 			case *types.Pointer:
 				if typeFrom, ok := typeFrom.(*types.Basic); ok && typeFrom.Kind() == types.UnsafePointer {
@@ -229,7 +229,7 @@ func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter
 					panic("expected unsafe pointer conversion")
 				}
 			default:
-				return i, errors.New("todo: init: unknown convert: " + instr.String())
+				return i, nil
 			}
 		case *ssa.DebugRef:
 			// ignore
@@ -384,7 +384,6 @@ func canInterpret(callee *ssa.Function) bool {
 		// above.
 		case *ssa.Alloc:
 		case *ssa.ChangeType:
-		case *ssa.Convert:
 		case *ssa.DebugRef:
 		case *ssa.Extract:
 		case *ssa.FieldAddr:

@@ -1,2 +1,8 @@
 init
 main
+v1: 3
+v2: 2 5
+v3: 4 4 2 7
+v4: 0 true
+v5: 0 false
+v6: false
