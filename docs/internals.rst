@@ -1,7 +1,9 @@
 .. _internals:
 
+
 Compiler internals
 ==================
+
 
 Differences from ``go``
 -----------------------
@@ -30,6 +32,74 @@ Differences from ``go``
         RAM.
       * Global constants are useful for constant propagation and thus for dead
         code elimination (like an ``if`` that depends on a global variable).
+
+
+Datatypes
+---------
+
+TinyGo uses a different representation for some data types than standard Go.
+
+string
+    A string is encoded as a ``{ptr, len}`` tuple. The type is actually defined
+    in the runtime as ``runtime._string``, in `src/runtime/string.go
+    <https://github.com/aykevl/tinygo/blob/master/src/runtime/string.go>`_. That
+    file also contains some compiler intrinsics for dealing with strings and
+    UTF-8.
+
+slice
+    A slice is encoded as a ``{ptr, len, cap}`` tuple. There is no runtime
+    definition of it as slices are a generic type and the pointer type is
+    different for each slice. That said, the bit layout is exactly the same for
+    every slice and generic ``copy`` and ``append`` functions are implemented in
+    `src/runtime/slice.go
+    <https://github.com/aykevl/tinygo/blob/master/src/runtime/slice.go>`_.
+
+array
+    Arrays are simple: they are simply lowered to a LLVM array type.
+
+complex
+    Complex numbers are implemented in the most obvious way: as a vector of
+    floating point numbers with length 2.
+
+map
+    The map type is a very complex type and is implemented as an (incomplete)
+    hashmap. It is defined as ``runtime.hashmap`` in `src/runtime/hashmap.go
+    <https://github.com/aykevl/tinygo/blob/master/src/runtime/hashmap.go>`_. As
+    maps are reference types, they are lowered to a pointer to the
+    aforementioned struct. See for example ``runtime.hashmapMake`` that is the
+    compiler intrinsic to create a new hashmap.
+
+interface
+    An interface is a ``{typecode, value}`` tuple and is defined as
+    ``runtime._interface`` in `src/runtime/interface.go
+    <https://github.com/aykevl/tinygo/blob/master/src/runtime/interface.go>`_.
+    The typecode is a small integer unique to the type of the value. See
+    interface.go for a detailed description of how typeasserts and interface
+    calls are implemented.
+
+function pointer
+    A function pointer has two representations: a literal function pointer and a
+    tuple of ``{context, function pointer}``. Which representation is chosen
+    depends on the AnalyseFunctionPointers pass in `ir/passes.go
+    <https://github.com/aykevl/tinygo/blob/master/ir/passes.go>`_: it tries to
+    use a raw function pointer but will use a function pointer with context if
+    there is a closure or bound method somewhere in the program with the exact
+    same signature.
+
+goroutine
+    A goroutine is a linked list of `LLVM coroutines
+    <https://llvm.org/docs/Coroutines.html>`_. Every blocking call will create a
+    new coroutine, pass the resulting coroutine to the scheduler, and will mark
+    itself as waiting for a return. Once the called blocking function returns,
+    it re-activates its parent coroutine. Non-blocking calls are normal calls,
+    unaware of the fact that they're running on a particular goroutine. For
+    details, see `src/runtime/scheduler.go
+    <https://github.com/aykevl/tinygo/blob/master/src/runtime/scheduler.go>`_.
+
+    This is rather expensive and should be optimized in the future. But the way
+    it works now, a single stack can be used for all goroutines lowering memory
+    consumption.
+
 
 Pipeline
 --------
