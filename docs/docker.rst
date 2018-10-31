@@ -1,4 +1,4 @@
-.. docker:
+.. _docker:
 
 .. highlight:: none
 

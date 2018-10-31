@@ -1,4 +1,4 @@
-.. targets:
+.. _targets:
 
 .. |br| raw:: html
 

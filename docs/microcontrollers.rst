@@ -1,4 +1,4 @@
-.. microcontrollers:
+.. _microcontrollers:
 
 .. highlight:: go
 

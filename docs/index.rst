@@ -13,6 +13,7 @@ Contents:
 
    installation
    docker
+   usage
    targets
    microcontrollers
    webassembly

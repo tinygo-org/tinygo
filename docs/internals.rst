@@ -1,4 +1,4 @@
-.. internals:
+.. _internals:
 
 Compiler internals
 ==================
