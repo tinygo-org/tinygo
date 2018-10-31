@@ -46,22 +46,20 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	}
 
 	// Compile Go code to IR.
-	parseErr := func() error {
-		if config.printIR {
-			// Run this even if c.Compile() panics.
-			defer func() {
-				fmt.Println("Generated LLVM IR:")
-				fmt.Println(c.IR())
-			}()
-		}
-		return c.Compile(pkgName)
-	}()
-	if parseErr != nil {
-		return parseErr
+	err = c.Compile(pkgName)
+	if err != nil {
+		return err
+	}
+	if err := c.Verify(); err != nil {
+		return err
+	}
+
+	if config.printIR {
+		fmt.Println("Generated LLVM IR:")
+		fmt.Println(c.IR())
 	}
 
 	c.ApplyFunctionSections() // -ffunction-sections
-
 	if err := c.Verify(); err != nil {
 		return err
 	}
