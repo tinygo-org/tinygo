@@ -15,5 +15,6 @@ Contents:
    docker
    targets
    microcontrollers
+   webassembly
    faq
    internals
