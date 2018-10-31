@@ -3,11 +3,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:924b93e20c37a913b61d5cdb895e3c058d5e88e0baebdfa5813dcba4025679c9"
+  digest = "1:f250e2a6d7e4f9ebc5ba37e5e2ec91b46eb1399ee43f2fdaeb20cd4fd1aeee59"
   name = "github.com/aykevl/go-llvm"
   packages = ["."]
   pruneopts = "UT"
-  revision = "34571cdf380c5426708115e647b6fe0bb3bee3b5"
+  revision = "d8539684f173a591ea9474d6262ac47ef2277d64"
 
 [[projects]]
   branch = "master"

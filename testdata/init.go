@@ -12,6 +12,7 @@ func main() {
 	println("v4:", len(v4), v4 == nil)
 	println("v5:", len(v5), v5 == nil)
 	println("v6:", v6)
+	println("v7:", cap(v7), string(v7))
 }
 
 type (
@@ -28,4 +29,5 @@ var (
 	v4 map[string]int
 	v5 = map[string]int{}
 	v6 = float64(v1) < 2.6
+	v7 = []byte("foo")
 )

@@ -15,6 +15,7 @@ import (
 
 	"github.com/aykevl/go-llvm"
 	"github.com/aykevl/tinygo/compiler"
+	"github.com/aykevl/tinygo/interp"
 )
 
 var commands = map[string]string{
@@ -28,17 +29,19 @@ type BuildConfig struct {
 	dumpSSA    bool
 	debug      bool
 	printSizes string
+	initInterp bool
 }
 
 // Helper function for Compiler object.
 func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, action func(string) error) error {
 	compilerConfig := compiler.Config{
-		Triple:    spec.Triple,
-		Debug:     config.debug,
-		DumpSSA:   config.dumpSSA,
-		RootDir:   sourceDir(),
-		GOPATH:    getGopath(),
-		BuildTags: append(spec.BuildTags, "tinygo"),
+		Triple:     spec.Triple,
+		Debug:      config.debug,
+		DumpSSA:    config.dumpSSA,
+		RootDir:    sourceDir(),
+		GOPATH:     getGopath(),
+		BuildTags:  append(spec.BuildTags, "tinygo"),
+		InitInterp: config.initInterp,
 	}
 	c, err := compiler.NewCompiler(pkgName, compilerConfig)
 	if err != nil {
@@ -56,6 +59,16 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	}
 	if err := c.Verify(); err != nil {
 		return err
+	}
+
+	if config.initInterp {
+		err = interp.Run(c.Module(), c.TargetData(), config.dumpSSA)
+		if err != nil {
+			return err
+		}
+		if err := c.Verify(); err != nil {
+			return err
+		}
 	}
 
 	c.ApplyFunctionSections() // -ffunction-sections
@@ -399,6 +412,20 @@ func usage() {
 	flag.PrintDefaults()
 }
 
+func handleCompilerError(err error) {
+	if err != nil {
+		if errUnsupported, ok := err.(*interp.Unsupported); ok {
+			// hit an unknown/unsupported instruction
+			fmt.Fprintln(os.Stderr, "unsupported instruction during init evaluation:")
+			errUnsupported.Inst.Dump()
+			fmt.Fprintln(os.Stderr)
+		} else {
+			fmt.Fprintln(os.Stderr, "error:", err)
+		}
+		os.Exit(1)
+	}
+}
+
 func main() {
 	outpath := flag.String("o", "", "output filename")
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
@@ -408,6 +435,7 @@ func main() {
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
+	initInterp := flag.Bool("interp", false, "enable experimental partial evaluator of generated IR")
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
 
 	if len(os.Args) < 2 {
@@ -424,6 +452,7 @@ func main() {
 		dumpSSA:    *dumpSSA,
 		debug:      !*nodebug,
 		printSizes: *printSize,
+		initInterp: *initInterp,
 	}
 
 	os.Setenv("CC", "clang -target="+*target)
@@ -445,30 +474,24 @@ func main() {
 			target = "wasm"
 		}
 		err := Build(flag.Arg(0), *outpath, target, config)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
-		}
+		handleCompilerError(err)
 	case "flash", "gdb":
 		if *outpath != "" {
 			fmt.Fprintln(os.Stderr, "Output cannot be specified with the flash command.")
 			usage()
 			os.Exit(1)
 		}
-		var err error
 		if command == "flash" {
-			err = Flash(flag.Arg(0), *target, *port, config)
+			err := Flash(flag.Arg(0), *target, *port, config)
+			handleCompilerError(err)
 		} else {
 			if !config.debug {
 				fmt.Fprintln(os.Stderr, "Debug disabled while running gdb?")
 				usage()
 				os.Exit(1)
 			}
-			err = FlashGDB(flag.Arg(0), *target, *port, *ocdOutput, config)
-		}
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			err := FlashGDB(flag.Arg(0), *target, *port, *ocdOutput, config)
+			handleCompilerError(err)
 		}
 	case "run":
 		if flag.NArg() != 1 {
@@ -476,15 +499,12 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		var err error
 		if *target == "" {
-			err = Run(flag.Arg(0))
+			err := Run(flag.Arg(0))
+			handleCompilerError(err)
 		} else {
-			err = Emulate(flag.Arg(0), *target, config)
-		}
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			err := Emulate(flag.Arg(0), *target, config)
+			handleCompilerError(err)
 		}
 	case "clean":
 		// remove cache directory

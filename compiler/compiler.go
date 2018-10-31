@@ -31,12 +31,13 @@ func init() {
 
 // Configure the compiler.
 type Config struct {
-	Triple    string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
-	DumpSSA   bool     // dump Go SSA, for compiler debugging
-	Debug     bool     // add debug symbols for gdb
-	RootDir   string   // GOROOT for TinyGo
-	GOPATH    string   // GOPATH, like `go env GOPATH`
-	BuildTags []string // build tags for TinyGo (empty means {runtime.GOOS/runtime.GOARCH})
+	Triple     string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
+	DumpSSA    bool     // dump Go SSA, for compiler debugging
+	Debug      bool     // add debug symbols for gdb
+	RootDir    string   // GOROOT for TinyGo
+	GOPATH     string   // GOPATH, like `go env GOPATH`
+	BuildTags  []string // build tags for TinyGo (empty means {runtime.GOOS/runtime.GOARCH})
+	InitInterp bool     // use new init interpretation, meaning the old one is disabled
 }
 
 type Compiler struct {
@@ -162,6 +163,11 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 // Return the LLVM module. Only valid after a successful compile.
 func (c *Compiler) Module() llvm.Module {
 	return c.mod
+}
+
+// Return the LLVM target data object. Only valid after a successful compile.
+func (c *Compiler) TargetData() llvm.TargetData {
+	return c.targetData
 }
 
 // Compile the given package path or .go file path. Return an error when this
@@ -295,9 +301,11 @@ func (c *Compiler) Compile(mainPath string) error {
 			// continues at runtime).
 			// This should only happen when it hits a function call or the end
 			// of the block, ideally.
-			err := c.ir.Interpret(frame.fn.Blocks[0], c.DumpSSA)
-			if err != nil {
-				return err
+			if !c.InitInterp {
+				err := c.ir.Interpret(frame.fn.Blocks[0], c.DumpSSA)
+				if err != nil {
+					return err
+				}
 			}
 			err = c.parseFunc(frame)
 			if err != nil {
