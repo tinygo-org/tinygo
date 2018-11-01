@@ -5,32 +5,11 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-// This file implements the calling convention used by Go.
-// The calling convention is like the C calling convention (or, whatever LLVM
-// makes of it) with the following modifications:
-//   * Struct parameters are fully expanded to individual fields (recursively),
-//     when the number of fields (combined) is 3 or less.
-//     Examples:
-//       {i8*, i32}         -> i8*, i32
-//       {{i8*, i32}, i16}  -> i8*, i32, i16
-//       {{i64}}            -> i64
-//       {}                 ->
-//       {i8*, i32, i8, i8} -> {i8*, i32, i8, i8}
-//     Note that all native Go data types that don't exist in LLVM (string,
-//     slice, interface, fat function pointer) can be expanded this way, making
-//     the work of LLVM optimizers easier.
-//   * Closures have an extra context paramter appended at the end of the
-//     argument list.
-//   * Blocking functions have a coroutine pointer prepended to the argument
-//     list, see src/runtime/scheduler.go for details.
+// For a description of the calling convention in prose, see docs/internals.rst
+// or the online version of this document:
+// https://tinygo.readthedocs.io/en/latest/internals.html#calling-convention
 //
 // Some further notes:
-//   * Function pointers are lowered to either a raw function pointer or a
-//     closure struct: { i8*, function pointer }
-//     The function pointer type depends on whether the exact same signature is
-//     used anywhere else in the program for a call that needs a context
-//     (closures, bound methods). If it isn't, it is lowered to a raw function
-//     pointer.
 //   * Defer statements are implemented by transforming the function in the
 //     following way:
 //       * Creating an alloca in the entry block that contains a pointer

@@ -79,12 +79,12 @@ interface
 
 function pointer
     A function pointer has two representations: a literal function pointer and a
-    tuple of ``{context, function pointer}``. Which representation is chosen
-    depends on the AnalyseFunctionPointers pass in `ir/passes.go
-    <https://github.com/aykevl/tinygo/blob/master/ir/passes.go>`_: it tries to
-    use a raw function pointer but will use a function pointer with context if
-    there is a closure or bound method somewhere in the program with the exact
-    same signature.
+    fat function pointer in the form of ``{context, function pointer}``. Which
+    representation is chosen depends on the AnalyseFunctionPointers pass in
+    `ir/passes.go <https://github.com/aykevl/tinygo/blob/master/ir/passes.go>`_:
+    it tries to use a raw function pointer but will use a fat function pointer
+    if there is a closure or bound method somewhere in the program with the
+    exact same signature.
 
 goroutine
     A goroutine is a linked list of `LLVM coroutines
@@ -99,6 +99,66 @@ goroutine
     This is rather expensive and should be optimized in the future. But the way
     it works now, a single stack can be used for all goroutines lowering memory
     consumption.
+
+
+Calling convention
+------------------
+
+Go uses a stack-based calling convention and passes a pointer to the argument
+list as the first argument in the function. There were/are `plans to switch to a
+register-based calling convention <https://github.com/golang/go/issues/18597>`_
+but they're now on hold.
+
+.. highlight:: llvm
+
+TinyGo, however, uses a register based calling convention. In fact it is
+somewhat compatible with the C calling convention but with a few quirks:
+
+  * Struct parameters are split into separate arguments, if the number of fields
+    (after flattening recursively) is 3 or lower. This is similar to the `Swift
+    calling convention
+    <https://github.com/apple/swift/blob/master/docs/CallingConvention.rst#physical-conventions>`_.
+    In the case of TinyGo, the size of each field does not matter, a field can
+    even be an array. ::
+
+      {i8*, i32}           -> i8*, i32
+      {{i8*, i32}, i16}    -> i8*, i32, i16
+      {{i64}}              -> i64
+      {}                   ->
+      {i8*, i32, i8, i8}   -> {i8*, i32, i8, i8}
+      {{i8*, i32, i8}, i8} -> {i8*, i32, i8, i8}
+
+    Note that all native Go data types that are lowered to aggregate types in
+    LLVM are expanded this way: ``string``, slices, interfaces, and fat function
+    pointers. This avoids some overhead in the C calling convention and makes
+    the work of the LLVM optimizers easier.
+
+  * Some functions have an extra context parameter appended at the end of the
+    argument list. This only happens when both of these conditions hold:
+
+      * The address of the function is taken, for example when passing the
+        function as function pointer to another function or storing it in a
+        global variable.
+
+      * This function or another function somewhere in the compiled code has the
+        exact same signature and is used in a closure or bound method. Signature
+        matching is very strict: it is based on Go types including named types
+        and return types, although parameter names or the function name itself
+        are not included in the match.
+
+    Whether a function needs this is determined by `FunctionNeedsContext
+    <https://godoc.org/github.com/aykevl/tinygo/ir#Program.FunctionNeedsContext>`_,
+    which bases itself on analysis done by AnalyseFunctionPointers.
+
+  * Blocking functions have a coroutine pointer prepended to the argument list,
+    see `src/runtime/scheduler.go
+    <https://github.com/aykevl/tinygo/blob/master/src/runtime/scheduler.go>`_
+    for details. Whether a function is blocking is determined by the
+    AnalyseBlockingRecursive pass.
+
+This calling convention may change in the future. Changes will be documented
+here. However, even though it may change, it is expected that function
+signatures that only contain integers and pointers will remain stable.
 
 
 Pipeline
