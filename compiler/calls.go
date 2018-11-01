@@ -8,19 +8,6 @@ import (
 // For a description of the calling convention in prose, see docs/internals.rst
 // or the online version of this document:
 // https://tinygo.readthedocs.io/en/latest/internals.html#calling-convention
-//
-// Some further notes:
-//   * Defer statements are implemented by transforming the function in the
-//     following way:
-//       * Creating an alloca in the entry block that contains a pointer
-//         (initially null) to the linked list of defer frames.
-//       * Every time a defer statement is executed, a new defer frame is
-//         created using alloca with a pointer to the previous defer frame, and
-//         the head pointer in the entry block is replaced with a pointer to
-//         this defer frame.
-//       * On return, runtime.rundefers is called which calls all deferred
-//         functions from the head of the linked list until it has gone through
-//         all defer frames.
 
 // The maximum number of arguments that can be expanded from a single struct. If
 // a struct contains more fields, it is passed as a struct without expanding.
