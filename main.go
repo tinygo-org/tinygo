@@ -50,13 +50,12 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	if err != nil {
 		return err
 	}
-	if err := c.Verify(); err != nil {
-		return err
-	}
-
 	if config.printIR {
 		fmt.Println("Generated LLVM IR:")
 		fmt.Println(c.IR())
+	}
+	if err := c.Verify(); err != nil {
+		return err
 	}
 
 	c.ApplyFunctionSections() // -ffunction-sections
