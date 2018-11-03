@@ -3306,19 +3306,19 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 
 		if typeFrom.Info()&types.IsFloat != 0 && typeTo.Info()&types.IsInteger != 0 {
 			// Conversion from float to int.
-			if typeTo.Info()&types.IsUnsigned != 0 { // to signed int
-				return c.builder.CreateFPToSI(value, llvmTypeTo, ""), nil
-			} else { // to unsigned int
+			if typeTo.Info()&types.IsUnsigned != 0 { // if unsigned
 				return c.builder.CreateFPToUI(value, llvmTypeTo, ""), nil
+			} else { // if signed
+				return c.builder.CreateFPToSI(value, llvmTypeTo, ""), nil
 			}
 		}
 
 		if typeFrom.Info()&types.IsInteger != 0 && typeTo.Info()&types.IsFloat != 0 {
 			// Conversion from int to float.
-			if typeFrom.Info()&types.IsUnsigned != 0 { // from signed int
-				return c.builder.CreateSIToFP(value, llvmTypeTo, ""), nil
-			} else { // from unsigned int
+			if typeFrom.Info()&types.IsUnsigned != 0 { // if unsigned
 				return c.builder.CreateUIToFP(value, llvmTypeTo, ""), nil
+			} else { // if signed
+				return c.builder.CreateSIToFP(value, llvmTypeTo, ""), nil
 			}
 		}
 

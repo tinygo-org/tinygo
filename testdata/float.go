@@ -24,6 +24,19 @@ func main() {
 	println(float32(f64))
 	println(float64(f32))
 
+	// float -> int
+	var f1 float32 = 3.3
+	var f2 float32 = 5.7
+	var f3 float32 = -2.3
+	var f4 float32 = -11.8
+	println(int32(f1), int32(f2), int32(f3), int32(f4))
+
+	// int -> float
+	var i1 int32 = 53
+	var i2 int32 = -8
+	var i3 uint32 = 20
+	println(float32(i1), float32(i2), float32(i3))
+
 	// complex64
 	c64 := complex(f32, 1.2)
 	println(c64)
