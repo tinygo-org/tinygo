@@ -694,6 +694,8 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 				return llvm.Type{}, err
 			}
 			if recv.StructName() == "runtime._interface" {
+				// This is a call on an interface, not a concrete type.
+				// The receiver is not an interface, but a i8* type.
 				recv = c.i8ptrType
 			}
 			paramTypes = append(paramTypes, c.expandFormalParamType(recv)...)
