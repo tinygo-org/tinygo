@@ -342,6 +342,7 @@ func (c *Compiler) Compile(mainPath string) error {
 		// the real function with them.
 		llvmFn := c.mod.NamedFunction(fn.LinkName() + "$defer")
 		llvmFn.SetLinkage(llvm.InternalLinkage)
+		llvmFn.SetUnnamedAddr(true)
 		entry := c.ctx.AddBasicBlock(llvmFn, "entry")
 		c.builder.SetInsertPointAtEnd(entry)
 		deferRawPtr := llvmFn.Param(0)
@@ -382,6 +383,7 @@ func (c *Compiler) Compile(mainPath string) error {
 		// parameters and to call the function pointer with them.
 		llvmFn := thunk.fn
 		llvmFn.SetLinkage(llvm.InternalLinkage)
+		llvmFn.SetUnnamedAddr(true)
 		entry := c.ctx.AddBasicBlock(llvmFn, "entry")
 		// TODO: set the debug location - perhaps the location of the rundefers
 		// call?
@@ -434,6 +436,7 @@ func (c *Compiler) Compile(mainPath string) error {
 	// that calls the initializer of each package.
 	initFn := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function))
 	initFn.LLVMFn.SetLinkage(llvm.InternalLinkage)
+	initFn.LLVMFn.SetUnnamedAddr(true)
 	if c.Debug {
 		difunc, err := c.attachDebugInfo(initFn)
 		if err != nil {
@@ -451,6 +454,7 @@ func (c *Compiler) Compile(mainPath string) error {
 
 	mainWrapper := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["mainWrapper"].(*ssa.Function))
 	mainWrapper.LLVMFn.SetLinkage(llvm.InternalLinkage)
+	mainWrapper.LLVMFn.SetUnnamedAddr(true)
 	if c.Debug {
 		difunc, err := c.attachDebugInfo(mainWrapper)
 		if err != nil {
@@ -873,6 +877,7 @@ func (c *Compiler) wrapInterfaceInvoke(f *ir.Function) (llvm.Value, error) {
 	wrapFnType := llvm.FunctionType(fnType.ReturnType(), paramTypes, false)
 	wrapper := llvm.AddFunction(c.mod, f.LinkName()+"$invoke", wrapFnType)
 	wrapper.SetLinkage(llvm.InternalLinkage)
+	wrapper.SetUnnamedAddr(true)
 
 	// add debug info
 	if c.Debug {
@@ -1343,6 +1348,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 	}
 	if !frame.fn.IsExported() {
 		frame.fn.LLVMFn.SetLinkage(llvm.InternalLinkage)
+		frame.fn.LLVMFn.SetUnnamedAddr(true)
 	}
 	if frame.fn.IsInterrupt() && strings.HasPrefix(c.Triple, "avr") {
 		frame.fn.LLVMFn.SetFunctionCallConv(85) // CallingConv::AVR_SIGNAL
@@ -3636,6 +3642,7 @@ func (c *Compiler) ExternalInt64AsPtr() {
 			// better performance, but export a new wrapper function with the
 			// correct calling convention.
 			fn.SetLinkage(llvm.InternalLinkage)
+			fn.SetUnnamedAddr(true)
 			entryBlock := llvm.AddBasicBlock(externalFn, "entry")
 			c.builder.SetInsertPointAtEnd(entryBlock)
 			callParams := []llvm.Value{}
