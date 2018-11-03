@@ -3561,6 +3561,99 @@ func (c *Compiler) NonConstGlobals() {
 	}
 }
 
+// Replace i64 in an external function with a stack-allocated i64*, to work
+// around the lack of 64-bit integers in JavaScript (commonly used together with
+// WebAssembly). Once that's resolved, this pass may be avoided.
+// https://github.com/WebAssembly/design/issues/1172
+func (c *Compiler) ExternalInt64AsPtr() {
+	int64Type := c.ctx.Int64Type()
+	int64PtrType := llvm.PointerType(int64Type, 0)
+	for fn := c.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		if fn.Linkage() != llvm.ExternalLinkage {
+			// Only change externally visible functions (exports and imports).
+			continue
+		}
+		if strings.HasPrefix(fn.Name(), "llvm.") {
+			// Do not try to modify the signature of internal LLVM functions.
+			continue
+		}
+		hasInt64 := false
+		params := []llvm.Type{}
+		for param := fn.FirstParam(); !param.IsNil(); param = llvm.NextParam(param) {
+			if param.Type() == int64Type {
+				hasInt64 = true
+				params = append(params, int64PtrType)
+			} else {
+				params = append(params, param.Type())
+			}
+		}
+		if !hasInt64 {
+			// No i64 in the paramter list.
+			continue
+		}
+
+		// Add $i64param to the real function name as it is only used internally.
+		// Add a new function with the correct signature that is exported.
+		name := fn.Name()
+		fn.SetName(name + "$i64param")
+		fnType := fn.Type().ElementType()
+		externalFnType := llvm.FunctionType(fnType.ReturnType(), params, fnType.IsFunctionVarArg())
+		externalFn := llvm.AddFunction(c.mod, name, externalFnType)
+
+		if fn.IsDeclaration() {
+			// Just a declaration: the definition doesn't exist on the Go side
+			// so it cannot be called from external code.
+			// Update all users to call the external function.
+			// The old $i64param function could be removed, but it may as well
+			// be left in place.
+			for use := fn.FirstUse(); !use.IsNil(); use = use.NextUse() {
+				call := use.User()
+				c.builder.SetInsertPointBefore(call)
+				callParams := []llvm.Value{}
+				for i := 0; i < call.OperandsCount()-1; i++ {
+					operand := call.Operand(i)
+					if operand.Type() == int64Type {
+						// Pass a stack-allocated pointer instead of the value
+						// itself.
+						alloca := c.builder.CreateAlloca(int64Type, "i64asptr")
+						c.builder.CreateStore(operand, alloca)
+						callParams = append(callParams, alloca)
+					} else {
+						// Unchanged parameter.
+						callParams = append(callParams, operand)
+					}
+				}
+				newCall := c.builder.CreateCall(externalFn, callParams, call.Name())
+				call.ReplaceAllUsesWith(newCall)
+				call.EraseFromParentAsInstruction()
+			}
+		} else {
+			// The function has a definition in Go. This means that it may still
+			// be called both Go and from external code.
+			// Keep existing calls with the existing convention in place (for
+			// better performance, but export a new wrapper function with the
+			// correct calling convention.
+			fn.SetLinkage(llvm.InternalLinkage)
+			entryBlock := llvm.AddBasicBlock(externalFn, "entry")
+			c.builder.SetInsertPointAtEnd(entryBlock)
+			callParams := []llvm.Value{}
+			for i, origParam := range fn.Params() {
+				paramValue := externalFn.Param(i)
+				if origParam.Type() == int64Type {
+					paramValue = c.builder.CreateLoad(paramValue, "i64")
+				}
+				callParams = append(callParams, paramValue)
+			}
+			retval := c.builder.CreateCall(fn, callParams, "")
+			if retval.Type().TypeKind() == llvm.VoidTypeKind {
+				c.builder.CreateRetVoid()
+			} else {
+				c.builder.CreateRet(retval)
+			}
+		}
+	}
+}
+
 // Emit object file (.o).
 func (c *Compiler) EmitObject(path string) error {
 	llvmBuf, err := c.machine.EmitToMemoryBuffer(c.mod, llvm.ObjectFile)

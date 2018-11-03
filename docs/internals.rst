@@ -133,6 +133,20 @@ somewhat compatible with the C calling convention but with a few quirks:
     pointers. This avoids some overhead in the C calling convention and makes
     the work of the LLVM optimizers easier.
 
+  * The WebAssembly target never exports or imports a ``i64`` (``int64``,
+    ``uint64``) parameter. Instead, it replaces them with ``i64*``, allocating
+    the value on the stack. In other words, imported functions are called with a
+    64-bit integer on the stack and exported functions must be called with a
+    pointer to a 64-bit integer somewhere in linear memory.
+
+    This is a workaround for a limitation in JavaScript, which only deals with
+    doubles and can therefore only work with integers up to 32-bit in size (a
+    64-bit integer cannot be represented exactly in a double, a 32-bit integer
+    can). It is expected that 64-bit integers will be `added in the near future
+    <https://github.com/WebAssembly/design/issues/1172>`_ at which point this
+    calling convention workaround may be removed. Also see `this wasm-bindgen
+    issue <https://github.com/rustwasm/wasm-bindgen/issues/35>`_.
+
   * Some functions have an extra context parameter appended at the end of the
     argument list. This only happens when both of these conditions hold:
 

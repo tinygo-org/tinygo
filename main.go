@@ -64,6 +64,15 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		return err
 	}
 
+	// Browsers cannot handle external functions that have type i64 because it
+	// cannot be represented exactly in JavaScript (JS only has doubles). To
+	// keep functions interoperable, pass int64 types as pointers to
+	// stack-allocated values.
+	if strings.HasPrefix(spec.Triple, "wasm") {
+		c.ExternalInt64AsPtr()
+		c.Verify()
+	}
+
 	// Optimization levels here are roughly the same as Clang, but probably not
 	// exactly.
 	switch config.opt {
