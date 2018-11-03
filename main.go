@@ -70,7 +70,9 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	// stack-allocated values.
 	if strings.HasPrefix(spec.Triple, "wasm") {
 		c.ExternalInt64AsPtr()
-		c.Verify()
+		if err := c.Verify(); err != nil {
+			return err
+		}
 	}
 
 	// Optimization levels here are roughly the same as Clang, but probably not

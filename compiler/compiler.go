@@ -3536,7 +3536,7 @@ func (c *Compiler) IR() string {
 }
 
 func (c *Compiler) Verify() error {
-	return llvm.VerifyModule(c.mod, 0)
+	return llvm.VerifyModule(c.mod, llvm.PrintMessageAction)
 }
 
 func (c *Compiler) ApplyFunctionSections() {
