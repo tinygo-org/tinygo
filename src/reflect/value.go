@@ -10,6 +10,10 @@ type Value struct {
 	value    *uint8
 }
 
+func Indirect(v Value) Value {
+	return v
+}
+
 func ValueOf(i interface{}) Value
 
 //go:linkname _ValueOf reflect.ValueOf
@@ -49,6 +53,10 @@ func (v Value) CanAddr() bool {
 
 func (v Value) Addr() Value {
 	panic("unimplemented: (reflect.Value).Addr()")
+}
+
+func (v Value) CanSet() bool {
+	panic("unimplemented: (reflect.Value).CanSet()")
 }
 
 func (v Value) Bool() bool {

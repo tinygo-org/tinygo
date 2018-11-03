@@ -65,6 +65,19 @@ func (t Type) Bits() int {
 	panic("unimplemented: (reflect.Type).Bits()")
 }
 
+func (t Type) Len() int {
+	panic("unimplemented: (reflect.Type).Len()")
+}
+
+func (t Type) NumField() int {
+	panic("unimplemented: (reflect.Type).NumField()")
+}
+
+func (t Type) Size() uintptr {
+	panic("unimplemented: (reflect.Type).Size()")
+}
+
 type StructField struct {
 	Name string
+	Type Type
 }
