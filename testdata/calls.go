@@ -8,6 +8,14 @@ func (t Thing) String() string {
 	return t.name
 }
 
+func (t Thing) Print(arg string) {
+	println("Thing.Print:", t.name, "arg:", arg)
+}
+
+type Printer interface {
+	Print(string)
+}
+
 func main() {
 	thing := &Thing{"foo"}
 
@@ -48,6 +56,9 @@ func testDefer() {
 	i++
 	defer deferred("...run as defer", i)
 	i++
+
+	var t Printer = &Thing{"foo"}
+	defer t.Print("bar")
 
 	println("deferring...")
 }

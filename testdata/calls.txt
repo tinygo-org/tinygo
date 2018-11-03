@@ -1,5 +1,6 @@
 hello from function pointer: 5
 deferring...
+Thing.Print: foo arg: bar
 ...run as defer 3
 ...run closure deferred: 4
 ...run as defer 1
