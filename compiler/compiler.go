@@ -289,9 +289,6 @@ func (c *Compiler) Compile(mainPath string) error {
 	for _, frame := range frames {
 		if frame.fn.Synthetic == "package initializer" {
 			c.initFuncs = append(c.initFuncs, frame.fn.LLVMFn)
-			if len(frame.fn.Blocks) != 1 {
-				panic("unexpected number of basic blocks in package initializer")
-			}
 			// Try to interpret as much as possible of the init() function.
 			// Whenever it hits an instruction that it doesn't understand, it
 			// bails out and leaves the rest to the compiler (so initialization
