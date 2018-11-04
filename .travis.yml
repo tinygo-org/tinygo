@@ -2,7 +2,6 @@ language: go
 
 go:
   - "1.11"
-  - "master"
 
 before_install:
   - echo "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-7 main"            | sudo tee -a /etc/apt/sources.list
