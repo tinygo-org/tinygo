@@ -114,14 +114,15 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				llvmIndices[i] = inst.Operand(i + 1)
 			}
 			indices := make([]uint32, len(llvmIndices))
-			for i, operand := range llvmIndices {
+			for i, llvmIndex := range llvmIndices {
+				operand := fr.getLocal(llvmIndex)
 				if !operand.IsConstant() {
-					// not a constant operation, emit a low-level GEP
-					gep := fr.builder.CreateGEP(value.Value(), llvmIndices, inst.Name())
-					fr.locals[inst] = &LocalValue{fr.Eval, gep}
-					continue
+					// Not a constant operation.
+					// This should be detected by the scanner, but isn't at the
+					// moment.
+					panic("todo: non-const gep")
 				}
-				indices[i] = uint32(operand.ZExtValue())
+				indices[i] = uint32(operand.Value().ZExtValue())
 			}
 			result := value.GetElementPtr(indices)
 			if result.Type() != inst.Type() {
