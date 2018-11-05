@@ -2272,8 +2272,9 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 		llvmFnType = llvmFnType.Subtypes()[1]
 	}
 
+	typecode := c.builder.CreateExtractValue(itf, 0, "invoke.typecode")
 	values := []llvm.Value{
-		itf,
+		typecode,
 		llvm.ConstInt(c.ctx.Int16Type(), uint64(c.ir.MethodNum(instr.Method)), false),
 	}
 	fn := c.createRuntimeCall("interfaceMethod", values, "invoke.func")

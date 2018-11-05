@@ -48,12 +48,12 @@ var (
 // Get the function pointer for the method on the interface.
 // This is a compiler intrinsic.
 //go:nobounds
-func interfaceMethod(itf _interface, method uint16) *uint8 {
+func interfaceMethod(typecode uint16, method uint16) *uint8 {
 	// This function doesn't do bounds checking as the supplied method must be
 	// in the list of signatures. The compiler will only emit
 	// runtime.interfaceMethod calls when the method actually exists on this
 	// interface (proven by the typechecker).
-	i := methodSetRanges[itf.typecode-firstTypeWithMethods].index
+	i := methodSetRanges[typecode-firstTypeWithMethods].index
 	for {
 		if methodSetSignatures[i] == method {
 			return methodSetFunctions[i]
