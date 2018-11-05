@@ -38,10 +38,10 @@ AVR (Arduino)
 The AVR backend has similar requirements as the `ARM Cortex-M`_ backend. It
 needs the following tools:
 
-    * binutils (``avr-objcopy``) for flashing.
-    * GCC (``avr-gcc``) for linking object files.
+    * binutils (``binutils-avr``) for flashing.
+    * GCC (``gcc-avr``) for linking object files.
     * libc (``avr-libc``), which is not installed on Debian as a dependency of
-      ``avr-gcc``.
+      ``gcc-avr``.
     * ``avrdude`` for flashing to an Arduino.
 
 WebAssembly
