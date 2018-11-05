@@ -435,7 +435,7 @@ func main() {
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
-	initInterp := flag.Bool("interp", false, "enable experimental partial evaluator of generated IR")
+	initInterp := flag.Bool("initinterp", false, "enable experimental partial evaluator of generated IR")
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
 
 	if len(os.Args) < 2 {
