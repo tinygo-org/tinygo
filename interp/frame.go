@@ -215,6 +215,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				}
 				alloc := llvm.AddGlobal(fr.Mod, allocType, fr.pkgName+"$alloc")
 				alloc.SetInitializer(getZeroValue(allocType))
+				alloc.SetLinkage(llvm.InternalLinkage)
 				result := &GlobalValue{
 					Underlying: alloc,
 					Eval:       fr.Eval,
