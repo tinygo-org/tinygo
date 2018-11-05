@@ -16,3 +16,13 @@ func js_valueGet(v js_ref, p string) js_ref {
 func js_valueNew(v js_ref, args []js_ref) (js_ref, bool) {
 	return 0, true
 }
+
+//go:linkname js_valueCall syscall/js.valueCall
+func js_valueCall(v js_ref, m string, args []js_ref) (js_ref, bool) {
+	return 0, true
+}
+
+//go:linkname js_stringVal syscall/js.stringVal
+func js_stringVal(x string) js_ref {
+	return 0
+}
