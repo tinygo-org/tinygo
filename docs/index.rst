@@ -18,4 +18,6 @@ Contents:
    microcontrollers
    webassembly
    faq
+   adding-new-boards
+   buildtags
    internals
