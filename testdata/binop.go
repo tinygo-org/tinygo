@@ -1,13 +1,30 @@
 package main
 
 func main() {
-	// string equality
+	println("string equality")
 	println(a == "a")
 	println(a == "b")
 	println(a != "a")
 	println(a != "b")
+	println("string inequality")
+	println(a > "b")
+	println("b" > a)
+	println("b" > "b")
+	println(a <= "b")
+	println("b" <= a)
+	println("b" <= "b")
+	println(a > "b")
+	println("b" > a)
+	println("b" > "b")
+	println(a <= "b")
+	println("b" <= a)
+	println("b" <= "b")
+	println(a < "aa")
+	println("aa" < a)
+	println("ab" < "aa")
+	println("aa" < "ab")
 
-	// struct equality
+	println("struct equality")
 	println(s1 == Struct1{3, true})
 	println(s1 == Struct1{4, true})
 	println(s1 == Struct1{3, false})
@@ -17,7 +34,7 @@ func main() {
 	println(s1 != Struct1{3, false})
 	println(s1 != Struct1{4, false})
 
-	// blank fields in structs
+	println("blank fields in structs")
 	println(s2 == Struct2{"foo", 0.0, 5})
 	println(s2 == Struct2{"foo", 0.0, 7})
 	println(s2 == Struct2{"foo", 1.0, 5})

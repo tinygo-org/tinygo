@@ -32,6 +32,24 @@ func stringEqual(x, y string) bool {
 	return true
 }
 
+// Return true iff x < y.
+//go:nobounds
+func stringLess(x, y string) bool {
+	l := len(x)
+	if m := len(y); m < l {
+		l = m
+	}
+	for i := 0; i < l; i++ {
+		if x[i] < y[i] {
+			return true
+		}
+		if x[i] > y[i] {
+			return false
+		}
+	}
+	return len(x) < len(y)
+}
+
 // Add two strings together.
 func stringConcat(x, y _string) _string {
 	if x.length == 0 {

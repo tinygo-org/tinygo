@@ -1,7 +1,26 @@
+string equality
 true
 false
 false
 true
+string inequality
+false
+true
+false
+true
+false
+true
+false
+true
+false
+true
+false
+true
+true
+false
+false
+true
+struct equality
 true
 false
 false
@@ -10,6 +29,7 @@ false
 true
 true
 true
+blank fields in structs
 true
 false
 true

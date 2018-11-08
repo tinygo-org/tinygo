@@ -3054,7 +3054,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 		} else if typ.Info()&types.IsFloat != 0 {
 			// Operations on floats
 			switch op {
-			case token.ADD:
+			case token.ADD: // +
 				return c.builder.CreateFAdd(x, y, ""), nil
 			case token.SUB: // -
 				return c.builder.CreateFSub(x, y, ""), nil
@@ -3102,14 +3102,23 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 		} else if typ.Info()&types.IsString != 0 {
 			// Operations on strings
 			switch op {
-			case token.ADD:
+			case token.ADD: // +
 				return c.createRuntimeCall("stringConcat", []llvm.Value{x, y}, ""), nil
-			case token.EQL, token.NEQ: // ==, !=
+			case token.EQL: // ==
+				return c.createRuntimeCall("stringEqual", []llvm.Value{x, y}, ""), nil
+			case token.NEQ: // !=
 				result := c.createRuntimeCall("stringEqual", []llvm.Value{x, y}, "")
-				if op == token.NEQ {
-					result = c.builder.CreateNot(result, "")
-				}
-				return result, nil
+				return c.builder.CreateNot(result, ""), nil
+			case token.LSS: // <
+				return c.createRuntimeCall("stringLess", []llvm.Value{x, y}, ""), nil
+			case token.LEQ: // <=
+				result := c.createRuntimeCall("stringLess", []llvm.Value{y, x}, "")
+				return c.builder.CreateNot(result, ""), nil
+			case token.GTR: // >
+				result := c.createRuntimeCall("stringLess", []llvm.Value{x, y}, "")
+				return c.builder.CreateNot(result, ""), nil
+			case token.GEQ: // >=
+				return c.createRuntimeCall("stringLess", []llvm.Value{y, x}, ""), nil
 			default:
 				return llvm.Value{}, errors.New("todo: binop on string: " + op.String())
 			}
