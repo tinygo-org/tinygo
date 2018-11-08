@@ -14,8 +14,10 @@ RUN cd /go/src/github.com/aykevl/tinygo/ && \
     dep ensure --vendor-only && \
     go install /go/src/github.com/aykevl/tinygo/
 
-# tinygo-core stage installs the rest of TinyGo runtime. This is the default.
-FROM golang:latest AS tinygo-core
+ENTRYPOINT ["/go/bin/tinygo"]
+
+# tinygo-wasm stage installs the needed dependencies to compile TinyGo programs for WASM.
+FROM tinygo-base AS tinygo-wasm
 
 COPY --from=tinygo-base /go/bin/tinygo /go/bin/tinygo
 COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/src /go/src/github.com/aykevl/tinygo/src
@@ -26,11 +28,12 @@ RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
     apt-get update && \
     apt-get install -y libllvm7 lld-7
 
-ENTRYPOINT ["/go/bin/tinygo"]
-
 # tinygo-avr stage installs the needed dependencies to compile TinyGo programs for AVR microcontrollers.
-FROM tinygo-core AS tinygo-avr
+FROM tinygo-base AS tinygo-avr
 
+COPY --from=tinygo-base /go/bin/tinygo /go/bin/tinygo
+COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/src /go/src/github.com/aykevl/tinygo/src
+COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/targets /go/src/github.com/aykevl/tinygo/targets
 COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/Makefile /go/src/github.com/aykevl/tinygo/
 COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/tools /go/src/github.com/aykevl/tinygo/tools
 COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/lib /go/src/github.com/aykevl/tinygo/lib
@@ -41,8 +44,11 @@ RUN cd /go/src/github.com/aykevl/tinygo/ && \
     make gen-device-avr
 
 # tinygo-arm stage installs the needed dependencies to compile TinyGo programs for ARM microcontrollers.
-FROM tinygo-core AS tinygo-arm
+FROM tinygo-base AS tinygo-arm
 
+COPY --from=tinygo-base /go/bin/tinygo /go/bin/tinygo
+COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/src /go/src/github.com/aykevl/tinygo/src
+COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/targets /go/src/github.com/aykevl/tinygo/targets
 COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/Makefile /go/src/github.com/aykevl/tinygo/
 COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/tools /go/src/github.com/aykevl/tinygo/tools
 COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/lib /go/src/github.com/aykevl/tinygo/lib
@@ -52,5 +58,5 @@ RUN cd /go/src/github.com/aykevl/tinygo/ && \
     apt-get install -y apt-utils python3 make gcc-arm-none-eabi clang-7 && \
     make gen-device-nrf && make gen-device-stm32
 
-# Default to tinygo-core
-FROM tinygo-core
+# Default to tinygo-wasm stage for now...
+FROM tinygo-wasm
