@@ -1,4 +1,4 @@
-.. _installation:
+.. buildtags:
 
 .. highlight:: none
 

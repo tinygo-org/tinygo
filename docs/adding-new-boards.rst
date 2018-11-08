@@ -1,4 +1,4 @@
-.. _installation:
+.. adding-new-boards:
 
 .. highlight:: none
 
