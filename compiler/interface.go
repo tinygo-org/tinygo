@@ -37,6 +37,8 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global str
 			c.builder.CreateStore(val, itfValueCast)
 			itfValue = c.builder.CreateBitCast(itfValueCast, c.i8ptrType, "")
 		}
+	} else if size == 0 {
+		itfValue = llvm.ConstPointerNull(c.i8ptrType)
 	} else {
 		// Directly place the value in the interface.
 		switch val.Type().TypeKind() {
@@ -152,10 +154,16 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) (llvm.Val
 		// Type assert on concrete type. Extract the underlying type from
 		// the interface (but only after checking it matches).
 		valuePtr := c.builder.CreateExtractValue(itf, 1, "typeassert.value.ptr")
-		if c.targetData.TypeAllocSize(assertedType) > c.targetData.TypeAllocSize(c.i8ptrType) {
+		size := c.targetData.TypeAllocSize(assertedType)
+		if size > c.targetData.TypeAllocSize(c.i8ptrType) {
 			// Value was stored in an allocated buffer, load it from there.
 			valuePtrCast := c.builder.CreateBitCast(valuePtr, llvm.PointerType(assertedType, 0), "")
 			valueOk = c.builder.CreateLoad(valuePtrCast, "typeassert.value.ok")
+		} else if size == 0 {
+			valueOk, err = c.getZeroValue(assertedType)
+			if err == nil {
+				return llvm.Value{}, err
+			}
 		} else {
 			// Value was stored directly in the interface.
 			switch assertedType.TypeKind() {

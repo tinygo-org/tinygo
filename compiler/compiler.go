@@ -499,6 +499,8 @@ func (c *Compiler) Compile(mainPath string) error {
 	}
 	c.builder.CreateRetVoid()
 
+	// Add a wrapper for the main.main function, either calling it directly or
+	// setting up the scheduler with it.
 	mainWrapper := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["mainWrapper"].(*ssa.Function))
 	mainWrapper.LLVMFn.SetLinkage(llvm.InternalLinkage)
 	mainWrapper.LLVMFn.SetUnnamedAddr(true)
@@ -1650,6 +1652,10 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		if err != nil {
 			return err
 		}
+		if c.targetData.TypeAllocSize(llvmVal.Type()) == 0 {
+			// nothing to store
+			return nil
+		}
 		store := c.builder.CreateStore(llvmVal, llvmAddr)
 		valType := instr.Addr.Type().(*types.Pointer).Elem()
 		if c.ir.IsVolatile(valType) {
@@ -2141,11 +2147,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			buf = c.builder.CreateBitCast(buf, llvm.PointerType(typ, 0), "")
 		} else {
 			buf = c.builder.CreateAlloca(typ, expr.Comment)
-			zero, err := c.getZeroValue(typ)
-			if err != nil {
-				return llvm.Value{}, err
+			if c.targetData.TypeAllocSize(typ) != 0 {
+				zero, err := c.getZeroValue(typ)
+				if err != nil {
+					return llvm.Value{}, err
+				}
+				c.builder.CreateStore(zero, buf) // zero-initialize var
 			}
-			c.builder.CreateStore(zero, buf) // zero-initialize var
 		}
 		return buf, nil
 	case *ssa.BinOp:
@@ -3215,12 +3223,17 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 		}
 	case token.MUL: // *x, dereference pointer
 		valType := unop.X.Type().(*types.Pointer).Elem()
-		load := c.builder.CreateLoad(x, "")
-		if c.ir.IsVolatile(valType) {
-			// Volatile load, for memory-mapped registers.
-			load.SetVolatile(true)
+		if c.targetData.TypeAllocSize(x.Type().ElementType()) == 0 {
+			// zero-length data
+			return c.getZeroValue(x.Type().ElementType())
+		} else {
+			load := c.builder.CreateLoad(x, "")
+			if c.ir.IsVolatile(valType) {
+				// Volatile load, for memory-mapped registers.
+				load.SetVolatile(true)
+			}
+			return load, nil
 		}
-		return load, nil
 	case token.XOR: // ^x, toggle all bits in integer
 		return c.builder.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil
 	default:
