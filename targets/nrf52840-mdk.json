@@ -1,6 +1,6 @@
 {
 	"llvm-target": "armv7em-none-eabi",
-	"build-tags": ["nrf52840_mdk", "nrf52840", "nrf", "arm", "js", "wasm"],
+	"build-tags": ["nrf52840_mdk", "nrf52840", "nrf", "tinygo.arm", "js", "wasm"],
 	"linker": "arm-none-eabi-gcc",
 	"pre-link-args": [
 		"-nostdlib",

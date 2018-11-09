@@ -1,4 +1,4 @@
-// +build js,arm avr
+// +build js,tinygo.arm avr
 
 package runtime
 

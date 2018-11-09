@@ -1,4 +1,4 @@
-// +build arm
+// +build tinygo.arm
 
 package runtime
 

@@ -1,6 +1,6 @@
 {
 	"llvm-target": "armv7m-none-eabi",
-	"build-tags": ["qemu", "lm3s6965", "arm", "js", "wasm"],
+	"build-tags": ["qemu", "lm3s6965", "tinygo.arm", "js", "wasm"],
 	"linker": "arm-none-eabi-gcc",
 	"compiler-rt": true,
 	"pre-link-args": [

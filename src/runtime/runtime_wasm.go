@@ -1,4 +1,4 @@
-// +build wasm,!arm,!avr
+// +build wasm,!tinygo.arm,!avr
 
 package runtime
 
