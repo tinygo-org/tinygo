@@ -19,21 +19,18 @@ import (
 // View on all functions, types, and globals in a program, with analysis
 // results.
 type Program struct {
-	Program              *ssa.Program
-	mainPkg              *ssa.Package
-	Functions            []*Function
-	functionMap          map[*ssa.Function]*Function
-	Globals              []*Global
-	globalMap            map[*ssa.Global]*Global
-	comments             map[string]*ast.CommentGroup
-	NamedTypes           []*NamedType
-	needsScheduler       bool
-	goCalls              []*ssa.Go
-	typesWithMethods     map[string]*TypeWithMethods // see AnalyseInterfaceConversions
-	typesWithoutMethods  map[string]int              // see AnalyseInterfaceConversions
-	methodSignatureNames map[string]int              // see MethodNum
-	interfaces           map[string]*Interface       // see AnalyseInterfaceConversions
-	fpWithContext        map[string]struct{}         // see AnalyseFunctionPointers
+	Program           *ssa.Program
+	mainPkg           *ssa.Package
+	Functions         []*Function
+	functionMap       map[*ssa.Function]*Function
+	Globals           []*Global
+	globalMap         map[*ssa.Global]*Global
+	comments          map[string]*ast.CommentGroup
+	NamedTypes        []*NamedType
+	needsScheduler    bool
+	goCalls           []*ssa.Go
+	typesInInterfaces map[string]struct{} // see AnalyseInterfaceConversions
+	fpWithContext     map[string]struct{} // see AnalyseFunctionPointers
 }
 
 // Function or method.
@@ -179,13 +176,11 @@ func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 	}
 
 	p := &Program{
-		Program:              program,
-		mainPkg:              mainPkg,
-		functionMap:          make(map[*ssa.Function]*Function),
-		globalMap:            make(map[*ssa.Global]*Global),
-		methodSignatureNames: make(map[string]int),
-		interfaces:           make(map[string]*Interface),
-		comments:             comments,
+		Program:     program,
+		mainPkg:     mainPkg,
+		functionMap: make(map[*ssa.Function]*Function),
+		globalMap:   make(map[*ssa.Global]*Global),
+		comments:    comments,
 	}
 
 	for _, pkg := range packageList {
@@ -268,18 +263,6 @@ func (p *Program) GetFunction(ssaFn *ssa.Function) *Function {
 
 func (p *Program) GetGlobal(ssaGlobal *ssa.Global) *Global {
 	return p.globalMap[ssaGlobal]
-}
-
-// SortMethods sorts the list of methods by method ID.
-func (p *Program) SortMethods(methods []*types.Selection) {
-	m := &methodList{methods: methods, program: p}
-	sort.Sort(m)
-}
-
-// SortFuncs sorts the list of functions by method ID.
-func (p *Program) SortFuncs(funcs []*types.Func) {
-	m := &funcList{funcs: funcs, program: p}
-	sort.Sort(m)
 }
 
 func (p *Program) MainPkg() *ssa.Package {
@@ -440,46 +423,6 @@ func (p *Program) IsVolatile(t types.Type) bool {
 		}
 		return false
 	}
-}
-
-// Wrapper type to implement sort.Interface for []*types.Selection.
-type methodList struct {
-	methods []*types.Selection
-	program *Program
-}
-
-func (m *methodList) Len() int {
-	return len(m.methods)
-}
-
-func (m *methodList) Less(i, j int) bool {
-	iid := m.program.MethodNum(m.methods[i].Obj().(*types.Func))
-	jid := m.program.MethodNum(m.methods[j].Obj().(*types.Func))
-	return iid < jid
-}
-
-func (m *methodList) Swap(i, j int) {
-	m.methods[i], m.methods[j] = m.methods[j], m.methods[i]
-}
-
-// Wrapper type to implement sort.Interface for []*types.Func.
-type funcList struct {
-	funcs   []*types.Func
-	program *Program
-}
-
-func (fl *funcList) Len() int {
-	return len(fl.funcs)
-}
-
-func (fl *funcList) Less(i, j int) bool {
-	iid := fl.program.MethodNum(fl.funcs[i])
-	jid := fl.program.MethodNum(fl.funcs[j])
-	return iid < jid
-}
-
-func (fl *funcList) Swap(i, j int) {
-	fl.funcs[i], fl.funcs[j] = fl.funcs[j], fl.funcs[i]
 }
 
 // Return true if this is a CGo-internal function that can be ignored.

@@ -1,5 +1,10 @@
 package compiler
 
+// This file transforms interface-related instructions (*ssa.MakeInterface,
+// *ssa.TypeAssert, calls on interface types) to an intermediate IR form, to be
+// lowered to the final form by the interface lowering pass. See
+// interface-lowering.go for more details.
+
 import (
 	"errors"
 	"go/types"
@@ -32,10 +37,10 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global str
 			// Allocate on the heap and put a pointer in the interface.
 			// TODO: escape analysis.
 			sizeValue := llvm.ConstInt(c.uintptrType, size, false)
-			alloc := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "")
-			itfValueCast := c.builder.CreateBitCast(alloc, llvm.PointerType(val.Type(), 0), "")
+			alloc := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "makeinterface.alloc")
+			itfValueCast := c.builder.CreateBitCast(alloc, llvm.PointerType(val.Type(), 0), "makeinterface.cast.value")
 			c.builder.CreateStore(val, itfValueCast)
-			itfValue = c.builder.CreateBitCast(itfValueCast, c.i8ptrType, "")
+			itfValue = c.builder.CreateBitCast(itfValueCast, c.i8ptrType, "makeinterface.cast.i8ptr")
 		}
 	} else if size == 0 {
 		itfValue = llvm.ConstPointerNull(c.i8ptrType)
@@ -43,38 +48,136 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global str
 		// Directly place the value in the interface.
 		switch val.Type().TypeKind() {
 		case llvm.IntegerTypeKind:
-			itfValue = c.builder.CreateIntToPtr(val, c.i8ptrType, "")
+			itfValue = c.builder.CreateIntToPtr(val, c.i8ptrType, "makeinterface.cast.int")
 		case llvm.PointerTypeKind:
-			itfValue = c.builder.CreateBitCast(val, c.i8ptrType, "")
+			itfValue = c.builder.CreateBitCast(val, c.i8ptrType, "makeinterface.cast.ptr")
 		case llvm.StructTypeKind:
 			// A bitcast would be useful here, but bitcast doesn't allow
 			// aggregate types. So we'll bitcast it using an alloca.
 			// Hopefully this will get optimized away.
-			mem := c.builder.CreateAlloca(c.i8ptrType, "")
-			memStructPtr := c.builder.CreateBitCast(mem, llvm.PointerType(val.Type(), 0), "")
+			mem := c.builder.CreateAlloca(c.i8ptrType, "makeinterface.cast.struct")
+			memStructPtr := c.builder.CreateBitCast(mem, llvm.PointerType(val.Type(), 0), "makeinterface.cast.struct.cast")
 			c.builder.CreateStore(val, memStructPtr)
-			itfValue = c.builder.CreateLoad(mem, "")
+			itfValue = c.builder.CreateLoad(mem, "makeinterface.cast.load")
 		default:
 			return llvm.Value{}, errors.New("todo: makeinterface: cast small type to i8*")
 		}
 	}
-	itfTypeNum, _ := c.ir.TypeNum(typ)
-	if itfTypeNum >= 1<<16 {
-		return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
+	itfTypeCodeGlobal := c.getTypeCode(typ)
+	itfMethodSetGlobal, err := c.getTypeMethodSet(typ)
+	if err != nil {
+		return llvm.Value{}, nil
 	}
-	itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), []llvm.Value{llvm.ConstInt(c.ctx.Int16Type(), uint64(itfTypeNum), false), llvm.Undef(c.i8ptrType)})
+	itfTypeCode := c.createRuntimeCall("makeInterface", []llvm.Value{itfTypeCodeGlobal, itfMethodSetGlobal}, "makeinterface.typecode")
+	itf := llvm.Undef(c.mod.GetTypeByName("runtime._interface"))
+	itf = c.builder.CreateInsertValue(itf, itfTypeCode, 0, "")
 	itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
 	return itf, nil
 }
 
+// getTypeCode returns a reference to a type code.
+// It returns a pointer to an external global which should be replaced with the
+// real type in the interface lowering pass.
+func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
+	global := c.mod.NamedGlobal(typ.String() + "$type")
+	if global.IsNil() {
+		global = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), typ.String()+"$type")
+		global.SetGlobalConstant(true)
+	}
+	return global
+}
+
+// getTypeMethodSet returns a reference (GEP) to a global method set. This
+// method set should be unreferenced after the interface lowering pass.
+func (c *Compiler) getTypeMethodSet(typ types.Type) (llvm.Value, error) {
+	global := c.mod.NamedGlobal(typ.String() + "$methodset")
+	zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
+	if !global.IsNil() {
+		// the method set already exists
+		return llvm.ConstGEP(global, []llvm.Value{zero, zero}), nil
+	}
+
+	ms := c.ir.Program.MethodSets.MethodSet(typ)
+	if ms.Len() == 0 {
+		// no methods, so can leave that one out
+		return llvm.ConstPointerNull(llvm.PointerType(c.mod.GetTypeByName("runtime.interfaceMethodInfo"), 0)), nil
+	}
+
+	methods := make([]llvm.Value, ms.Len())
+	interfaceMethodInfoType := c.mod.GetTypeByName("runtime.interfaceMethodInfo")
+	for i := 0; i < ms.Len(); i++ {
+		method := ms.At(i)
+		signatureGlobal := c.getMethodSignature(method.Obj().(*types.Func))
+		f := c.ir.GetFunction(c.ir.Program.MethodValue(method))
+		if f.LLVMFn.IsNil() {
+			// compiler error, so panic
+			panic("cannot find function: " + f.LinkName())
+		}
+		fn, err := c.getInterfaceInvokeWrapper(f)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		methodInfo := llvm.ConstNamedStruct(interfaceMethodInfoType, []llvm.Value{
+			signatureGlobal,
+			llvm.ConstBitCast(fn, c.i8ptrType),
+		})
+		methods[i] = methodInfo
+	}
+	arrayType := llvm.ArrayType(interfaceMethodInfoType, len(methods))
+	value := llvm.ConstArray(interfaceMethodInfoType, methods)
+	global = llvm.AddGlobal(c.mod, arrayType, typ.String()+"$methodset")
+	global.SetInitializer(value)
+	global.SetGlobalConstant(true)
+	global.SetLinkage(llvm.PrivateLinkage)
+	return llvm.ConstGEP(global, []llvm.Value{zero, zero}), nil
+}
+
+// getInterfaceMethodSet returns a global variable with the method set of the
+// given named interface type. This method set is used by the interface lowering
+// pass.
+func (c *Compiler) getInterfaceMethodSet(typ *types.Named) llvm.Value {
+	global := c.mod.NamedGlobal(typ.String() + "$interface")
+	zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
+	if !global.IsNil() {
+		// method set already exist, return it
+		return llvm.ConstGEP(global, []llvm.Value{zero, zero})
+	}
+
+	// Every method is a *i16 reference indicating the signature of this method.
+	methods := make([]llvm.Value, typ.Underlying().(*types.Interface).NumMethods())
+	for i := range methods {
+		method := typ.Underlying().(*types.Interface).Method(i)
+		methods[i] = c.getMethodSignature(method)
+	}
+
+	value := llvm.ConstArray(methods[0].Type(), methods)
+	global = llvm.AddGlobal(c.mod, value.Type(), typ.String()+"$interface")
+	global.SetInitializer(value)
+	global.SetGlobalConstant(true)
+	global.SetLinkage(llvm.PrivateLinkage)
+	return llvm.ConstGEP(global, []llvm.Value{zero, zero})
+}
+
+// getMethodSignature returns a global variable which is a reference to an
+// external *i16 indicating the indicating the signature of this method. It is
+// used during the interface lowering pass.
+func (c *Compiler) getMethodSignature(method *types.Func) llvm.Value {
+	signature := ir.MethodSignature(method)
+	signatureGlobal := c.mod.NamedGlobal("func " + signature)
+	if signatureGlobal.IsNil() {
+		signatureGlobal = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), "func "+signature)
+		signatureGlobal.SetGlobalConstant(true)
+	}
+	return signatureGlobal
+}
+
 // parseTypeAssert will emit the code for a typeassert, used in if statements
-// and in switch statements (Go SSA does not have type switches, only if/else
+// and in type switches (Go SSA does not have type switches, only if/else
 // chains). Note that even though the Go SSA does not contain type switches,
 // LLVM will recognize the pattern and make it a real switch in many cases.
 //
 // Type asserts on concrete types are trivial: just compare type numbers. Type
-// asserts on interfaces are more difficult to implement and so are delegated to
-// a runtime library function.
+// asserts on interfaces are more difficult, see the comments in the function.
 func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) (llvm.Value, error) {
 	itf, err := c.parseExpr(frame, expr.X)
 	if err != nil {
@@ -91,38 +194,24 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) (llvm.Val
 
 	actualTypeNum := c.builder.CreateExtractValue(itf, 0, "interface.type")
 	commaOk := llvm.Value{}
-	if itf, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
+	if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
 		// Type assert on interface type.
-		// This is slightly non-trivial: at runtime the list of methods
-		// needs to be checked to see whether it implements the interface.
-		// At the same time, the interface value itself is unchanged.
-		itfTypeNum := c.ir.InterfaceNum(itf)
-		itfTypeNumValue := llvm.ConstInt(c.ctx.Int16Type(), uint64(itfTypeNum), false)
-		commaOk = c.createRuntimeCall("interfaceImplements", []llvm.Value{actualTypeNum, itfTypeNumValue}, "")
+		// This pseudo call will be lowered in the interface lowering pass to a
+		// real call which checks whether the provided typecode is any of the
+		// concrete types that implements this interface.
+		// This is very different from how interface asserts are implemented in
+		// the main Go compiler, where the runtime checks whether the type
+		// implements each method of the interface. See:
+		// https://research.swtch.com/interfaces
+		methodSet := c.getInterfaceMethodSet(expr.AssertedType.(*types.Named))
+		commaOk = c.createRuntimeCall("interfaceImplements", []llvm.Value{actualTypeNum, methodSet}, "")
 
 	} else {
 		// Type assert on concrete type.
-		// This is easy: just compare the type number.
-		assertedTypeNum, typeExists := c.ir.TypeNum(expr.AssertedType)
-		if !typeExists {
-			// Static analysis has determined this type assert will never apply.
-			// Using undef here so that LLVM knows we'll never get here and
-			// can optimize accordingly.
-			undef := llvm.Undef(assertedType)
-			commaOk := llvm.ConstInt(c.ctx.Int1Type(), 0, false)
-			if expr.CommaOk {
-				return c.ctx.ConstStruct([]llvm.Value{undef, commaOk}, false), nil
-			} else {
-				c.createRuntimeCall("interfaceTypeAssert", []llvm.Value{commaOk}, "")
-				return undef, nil
-			}
-		}
-		if assertedTypeNum >= 1<<16 {
-			return llvm.Value{}, errors.New("interface typecodes do not fit in a 16-bit integer")
-		}
-
-		assertedTypeNumValue := llvm.ConstInt(c.ctx.Int16Type(), uint64(assertedTypeNum), false)
-		commaOk = c.builder.CreateICmp(llvm.IntEQ, assertedTypeNumValue, actualTypeNum, "")
+		// Call runtime.typeAssert, which will be lowered to a simple icmp or
+		// const false in the interface lowering pass.
+		assertedTypeCodeGlobal := c.getTypeCode(expr.AssertedType)
+		commaOk = c.createRuntimeCall("typeAssert", []llvm.Value{actualTypeNum, assertedTypeCodeGlobal}, "typecode")
 	}
 
 	// Add 2 new basic blocks (that should get optimized away): one for the
@@ -171,16 +260,14 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) (llvm.Val
 				valueOk = c.builder.CreatePtrToInt(valuePtr, assertedType, "typeassert.value.ok")
 			case llvm.PointerTypeKind:
 				valueOk = c.builder.CreateBitCast(valuePtr, assertedType, "typeassert.value.ok")
-			case llvm.StructTypeKind:
+			default: // struct, float, etc.
 				// A bitcast would be useful here, but bitcast doesn't allow
 				// aggregate types. So we'll bitcast it using an alloca.
 				// Hopefully this will get optimized away.
 				mem := c.builder.CreateAlloca(c.i8ptrType, "")
 				c.builder.CreateStore(valuePtr, mem)
-				memStructPtr := c.builder.CreateBitCast(mem, llvm.PointerType(assertedType, 0), "")
-				valueOk = c.builder.CreateLoad(memStructPtr, "typeassert.value.ok")
-			default:
-				return llvm.Value{}, errors.New("todo: typeassert: bitcast small types")
+				memCast := c.builder.CreateBitCast(mem, llvm.PointerType(assertedType, 0), "")
+				valueOk = c.builder.CreateLoad(memCast, "typeassert.value.ok")
 			}
 		}
 	}
@@ -231,7 +318,8 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 	typecode := c.builder.CreateExtractValue(itf, 0, "invoke.typecode")
 	values := []llvm.Value{
 		typecode,
-		llvm.ConstInt(c.ctx.Int16Type(), uint64(c.ir.MethodNum(instr.Method)), false),
+		c.getInterfaceMethodSet(instr.Value.Type().(*types.Named)),
+		c.getMethodSignature(instr.Method),
 	}
 	fn := c.createRuntimeCall("interfaceMethod", values, "invoke.func")
 	fnCast := c.builder.CreateBitCast(fn, llvmFnType, "invoke.func.cast")
@@ -255,142 +343,40 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 	return fnCast, args, nil
 }
 
-// Initialize runtime type information, for interfaces.
-// See src/runtime/interface.go for more details.
-func (c *Compiler) createInterfaceRTTI() error {
-	dynamicTypes := c.ir.AllDynamicTypes()
-	numDynamicTypes := 0
-	for _, meta := range dynamicTypes {
-		numDynamicTypes += len(meta.Methods)
-	}
-	ranges := make([]llvm.Value, 0, len(dynamicTypes))
-	funcPointers := make([]llvm.Value, 0, numDynamicTypes)
-	signatures := make([]llvm.Value, 0, numDynamicTypes)
-	startIndex := 0
-	rangeType := c.mod.GetTypeByName("runtime.methodSetRange")
-	for _, meta := range dynamicTypes {
-		rangeValues := []llvm.Value{
-			llvm.ConstInt(c.ctx.Int16Type(), uint64(startIndex), false),
-			llvm.ConstInt(c.ctx.Int16Type(), uint64(len(meta.Methods)), false),
-		}
-		rangeValue := llvm.ConstNamedStruct(rangeType, rangeValues)
-		ranges = append(ranges, rangeValue)
-		methods := make([]*types.Selection, 0, len(meta.Methods))
-		for _, method := range meta.Methods {
-			methods = append(methods, method)
-		}
-		c.ir.SortMethods(methods)
-		for _, method := range methods {
-			f := c.ir.GetFunction(c.ir.Program.MethodValue(method))
-			if f.LLVMFn.IsNil() {
-				return errors.New("cannot find function: " + f.LinkName())
-			}
-			fn, err := c.wrapInterfaceInvoke(f)
-			if err != nil {
-				return err
-			}
-			fnPtr := llvm.ConstBitCast(fn, c.i8ptrType)
-			funcPointers = append(funcPointers, fnPtr)
-			signatureNum := c.ir.MethodNum(method.Obj().(*types.Func))
-			signature := llvm.ConstInt(c.ctx.Int16Type(), uint64(signatureNum), false)
-			signatures = append(signatures, signature)
-		}
-		startIndex += len(meta.Methods)
-	}
-
-	interfaceTypes := c.ir.AllInterfaces()
-	interfaceIndex := make([]llvm.Value, len(interfaceTypes))
-	interfaceLengths := make([]llvm.Value, len(interfaceTypes))
-	interfaceMethods := make([]llvm.Value, 0)
-	for i, itfType := range interfaceTypes {
-		if itfType.Type.NumMethods() > 0xff {
-			return errors.New("too many methods for interface " + itfType.Type.String())
-		}
-		interfaceIndex[i] = llvm.ConstInt(c.ctx.Int16Type(), uint64(i), false)
-		interfaceLengths[i] = llvm.ConstInt(c.ctx.Int8Type(), uint64(itfType.Type.NumMethods()), false)
-		funcs := make([]*types.Func, itfType.Type.NumMethods())
-		for i := range funcs {
-			funcs[i] = itfType.Type.Method(i)
-		}
-		c.ir.SortFuncs(funcs)
-		for _, f := range funcs {
-			id := llvm.ConstInt(c.ctx.Int16Type(), uint64(c.ir.MethodNum(f)), false)
-			interfaceMethods = append(interfaceMethods, id)
-		}
-	}
-
-	if len(ranges) >= 1<<16 {
-		return errors.New("method call numbers do not fit in a 16-bit integer")
-	}
-
-	// Replace the pre-created arrays with the generated arrays.
-	rangeArray := llvm.ConstArray(rangeType, ranges)
-	rangeArrayNewGlobal := llvm.AddGlobal(c.mod, rangeArray.Type(), "runtime.methodSetRanges.tmp")
-	rangeArrayNewGlobal.SetInitializer(rangeArray)
-	rangeArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
-	rangeArrayOldGlobal := c.mod.NamedGlobal("runtime.methodSetRanges")
-	rangeArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(rangeArrayNewGlobal, rangeArrayOldGlobal.Type()))
-	rangeArrayOldGlobal.EraseFromParentAsGlobal()
-	rangeArrayNewGlobal.SetName("runtime.methodSetRanges")
-	funcArray := llvm.ConstArray(c.i8ptrType, funcPointers)
-	funcArrayNewGlobal := llvm.AddGlobal(c.mod, funcArray.Type(), "runtime.methodSetFunctions.tmp")
-	funcArrayNewGlobal.SetInitializer(funcArray)
-	funcArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
-	funcArrayOldGlobal := c.mod.NamedGlobal("runtime.methodSetFunctions")
-	funcArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(funcArrayNewGlobal, funcArrayOldGlobal.Type()))
-	funcArrayOldGlobal.EraseFromParentAsGlobal()
-	funcArrayNewGlobal.SetName("runtime.methodSetFunctions")
-	signatureArray := llvm.ConstArray(c.ctx.Int16Type(), signatures)
-	signatureArrayNewGlobal := llvm.AddGlobal(c.mod, signatureArray.Type(), "runtime.methodSetSignatures.tmp")
-	signatureArrayNewGlobal.SetInitializer(signatureArray)
-	signatureArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
-	signatureArrayOldGlobal := c.mod.NamedGlobal("runtime.methodSetSignatures")
-	signatureArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(signatureArrayNewGlobal, signatureArrayOldGlobal.Type()))
-	signatureArrayOldGlobal.EraseFromParentAsGlobal()
-	signatureArrayNewGlobal.SetName("runtime.methodSetSignatures")
-	interfaceIndexArray := llvm.ConstArray(c.ctx.Int16Type(), interfaceIndex)
-	interfaceIndexArrayNewGlobal := llvm.AddGlobal(c.mod, interfaceIndexArray.Type(), "runtime.interfaceIndex.tmp")
-	interfaceIndexArrayNewGlobal.SetInitializer(interfaceIndexArray)
-	interfaceIndexArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
-	interfaceIndexArrayOldGlobal := c.mod.NamedGlobal("runtime.interfaceIndex")
-	interfaceIndexArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(interfaceIndexArrayNewGlobal, interfaceIndexArrayOldGlobal.Type()))
-	interfaceIndexArrayOldGlobal.EraseFromParentAsGlobal()
-	interfaceIndexArrayNewGlobal.SetName("runtime.interfaceIndex")
-	interfaceLengthsArray := llvm.ConstArray(c.ctx.Int8Type(), interfaceLengths)
-	interfaceLengthsArrayNewGlobal := llvm.AddGlobal(c.mod, interfaceLengthsArray.Type(), "runtime.interfaceLengths.tmp")
-	interfaceLengthsArrayNewGlobal.SetInitializer(interfaceLengthsArray)
-	interfaceLengthsArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
-	interfaceLengthsArrayOldGlobal := c.mod.NamedGlobal("runtime.interfaceLengths")
-	interfaceLengthsArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(interfaceLengthsArrayNewGlobal, interfaceLengthsArrayOldGlobal.Type()))
-	interfaceLengthsArrayOldGlobal.EraseFromParentAsGlobal()
-	interfaceLengthsArrayNewGlobal.SetName("runtime.interfaceLengths")
-	interfaceMethodsArray := llvm.ConstArray(c.ctx.Int16Type(), interfaceMethods)
-	interfaceMethodsArrayNewGlobal := llvm.AddGlobal(c.mod, interfaceMethodsArray.Type(), "runtime.interfaceMethods.tmp")
-	interfaceMethodsArrayNewGlobal.SetInitializer(interfaceMethodsArray)
-	interfaceMethodsArrayNewGlobal.SetLinkage(llvm.InternalLinkage)
-	interfaceMethodsArrayOldGlobal := c.mod.NamedGlobal("runtime.interfaceMethods")
-	interfaceMethodsArrayOldGlobal.ReplaceAllUsesWith(llvm.ConstBitCast(interfaceMethodsArrayNewGlobal, interfaceMethodsArrayOldGlobal.Type()))
-	interfaceMethodsArrayOldGlobal.EraseFromParentAsGlobal()
-	interfaceMethodsArrayNewGlobal.SetName("runtime.interfaceMethods")
-
-	c.mod.NamedGlobal("runtime.firstTypeWithMethods").SetInitializer(llvm.ConstInt(c.ctx.Int16Type(), uint64(c.ir.FirstDynamicType()), false))
-
-	return nil
+// interfaceInvokeWrapper keeps some state between getInterfaceInvokeWrapper and
+// createInterfaceInvokeWrapper. The former is called during IR construction
+// itself and the latter is called when finishing up the IR.
+type interfaceInvokeWrapper struct {
+	fn           *ir.Function
+	wrapper      llvm.Value
+	receiverType llvm.Type
 }
 
 // Wrap an interface method function pointer. The wrapper takes in a pointer to
 // the underlying value, dereferences it, and calls the real method. This
 // wrapper is only needed when the interface value actually doesn't fit in a
 // pointer and a pointer to the value must be created.
-func (c *Compiler) wrapInterfaceInvoke(f *ir.Function) (llvm.Value, error) {
+func (c *Compiler) getInterfaceInvokeWrapper(f *ir.Function) (llvm.Value, error) {
+	wrapperName := f.LinkName() + "$invoke"
+	wrapper := c.mod.NamedFunction(wrapperName)
+	if !wrapper.IsNil() {
+		// Wrapper already created. Return it directly.
+		return wrapper, nil
+	}
+
+	// Get the expanded receiver type.
 	receiverType, err := c.getLLVMType(f.Params[0].Type())
 	if err != nil {
 		return llvm.Value{}, err
 	}
 	expandedReceiverType := c.expandFormalParamType(receiverType)
 
-	if c.targetData.TypeAllocSize(receiverType) <= c.targetData.TypeAllocSize(c.i8ptrType) && len(expandedReceiverType) == 1 {
-		// nothing to wrap
+	// Does this method even need any wrapping?
+	if len(expandedReceiverType) == 1 && receiverType.TypeKind() == llvm.PointerTypeKind {
+		// Nothing to wrap.
+		// Casting a function signature to a different signature and calling it
+		// with a receiver pointer bitcasted to *i8 (as done in calls on an
+		// interface) is hopefully a safe (defined) operation.
 		return f.LLVMFn, nil
 	}
 
@@ -398,16 +384,30 @@ func (c *Compiler) wrapInterfaceInvoke(f *ir.Function) (llvm.Value, error) {
 	fnType := f.LLVMFn.Type().ElementType()
 	paramTypes := append([]llvm.Type{c.i8ptrType}, fnType.ParamTypes()[len(expandedReceiverType):]...)
 	wrapFnType := llvm.FunctionType(fnType.ReturnType(), paramTypes, false)
-	wrapper := llvm.AddFunction(c.mod, f.LinkName()+"$invoke", wrapFnType)
+	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
+	c.interfaceInvokeWrappers = append(c.interfaceInvokeWrappers, interfaceInvokeWrapper{
+		fn:           f,
+		wrapper:      wrapper,
+		receiverType: receiverType,
+	})
+	return wrapper, nil
+}
+
+// createInterfaceInvokeWrapper finishes the work of getInterfaceInvokeWrapper,
+// see that function for details.
+func (c *Compiler) createInterfaceInvokeWrapper(state interfaceInvokeWrapper) error {
+	wrapper := state.wrapper
+	fn := state.fn
+	receiverType := state.receiverType
 	wrapper.SetLinkage(llvm.InternalLinkage)
 	wrapper.SetUnnamedAddr(true)
 
-	// add debug info
+	// add debug info if needed
 	if c.Debug {
-		pos := c.ir.Program.Fset.Position(f.Pos())
-		difunc, err := c.attachDebugInfoRaw(f, wrapper, "$invoke", pos.Filename, pos.Line)
+		pos := c.ir.Program.Fset.Position(fn.Pos())
+		difunc, err := c.attachDebugInfoRaw(fn, wrapper, "$invoke", pos.Filename, pos.Line)
 		if err != nil {
-			return llvm.Value{}, err
+			return err
 		}
 		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
@@ -424,7 +424,7 @@ func (c *Compiler) wrapInterfaceInvoke(f *ir.Function) (llvm.Value, error) {
 		// Load the underlying value.
 		receiverPtrType := llvm.PointerType(receiverType, 0)
 		receiverPtr = c.builder.CreateBitCast(wrapper.Param(0), receiverPtrType, "receiver.ptr")
-	} else if len(expandedReceiverType) != 1 {
+	} else {
 		// The value is stored in the interface, but it is of type struct which
 		// is expanded to multiple parameters (e.g. {i8, i8}). So we have to
 		// receive the struct as parameter, expand it, and pass it on to the
@@ -435,19 +435,17 @@ func (c *Compiler) wrapInterfaceInvoke(f *ir.Function) (llvm.Value, error) {
 		alloca := c.builder.CreateAlloca(c.i8ptrType, "receiver.alloca")
 		c.builder.CreateStore(wrapper.Param(0), alloca)
 		receiverPtr = c.builder.CreateBitCast(alloca, llvm.PointerType(receiverType, 0), "receiver.ptr")
-	} else {
-		panic("unreachable")
 	}
 
 	receiverValue := c.builder.CreateLoad(receiverPtr, "receiver")
 	params := append(c.expandFormalParam(receiverValue), wrapper.Params()[1:]...)
-	if fnType.ReturnType().TypeKind() == llvm.VoidTypeKind {
-		c.builder.CreateCall(f.LLVMFn, params, "")
+	if fn.LLVMFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
+		c.builder.CreateCall(fn.LLVMFn, params, "")
 		c.builder.CreateRetVoid()
 	} else {
-		ret := c.builder.CreateCall(f.LLVMFn, params, "ret")
+		ret := c.builder.CreateCall(fn.LLVMFn, params, "ret")
 		c.builder.CreateRet(ret)
 	}
 
-	return wrapper, nil
+	return nil
 }

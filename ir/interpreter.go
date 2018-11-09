@@ -278,8 +278,6 @@ func (p *Program) interpret(instrs []ssa.Instruction, paramKeys []*ssa.Parameter
 			} else {
 				return i, errors.New("todo: init IndexAddr index: " + instr.Index.String())
 			}
-		case *ssa.MakeInterface:
-			locals[instr] = &InterfaceValue{instr.X.Type(), locals[instr.X]}
 		case *ssa.MakeMap:
 			locals[instr] = &MapValue{instr.Type().Underlying().(*types.Map), nil, nil}
 		case *ssa.MapUpdate:
@@ -388,7 +386,6 @@ func canInterpret(callee *ssa.Function) bool {
 		case *ssa.Extract:
 		case *ssa.FieldAddr:
 		case *ssa.IndexAddr:
-		case *ssa.MakeInterface:
 		case *ssa.MakeMap:
 		case *ssa.MapUpdate:
 		case *ssa.Return:
@@ -447,8 +444,6 @@ func (p *Program) getZeroValue(t types.Type) (Value, error) {
 		return &ZeroBasicValue{typ}, nil
 	case *types.Signature:
 		return &FunctionValue{typ, nil}, nil
-	case *types.Interface:
-		return &InterfaceValue{typ, nil}, nil
 	case *types.Map:
 		return &MapValue{typ, nil, nil}, nil
 	case *types.Pointer:
@@ -490,11 +485,6 @@ type PointerValue struct {
 type FunctionValue struct {
 	Type types.Type
 	Elem *ssa.Function
-}
-
-type InterfaceValue struct {
-	Type types.Type
-	Elem Value
 }
 
 type PointerBitCastValue struct {

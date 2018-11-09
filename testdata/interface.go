@@ -26,6 +26,8 @@ func main() {
 
 func printItf(val interface{}) {
 	switch val := val.(type) {
+	case Unmatched:
+		panic("matched the unmatchable")
 	case Doubler:
 		println("is Doubler:", val.Double())
 	case Tuple:
@@ -126,4 +128,9 @@ func (p SmallPair) Nth(n int) uint32 {
 
 func (p SmallPair) Print() {
 	println("SmallPair.Print:", p.a, p.b)
+}
+
+// There is no type that matches this method.
+type Unmatched interface {
+	NeverImplementedMethod()
 }

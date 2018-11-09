@@ -2,8 +2,6 @@ package ir
 
 import (
 	"go/types"
-	"sort"
-	"strings"
 
 	"golang.org/x/tools/go/ssa"
 )
@@ -59,18 +57,6 @@ func Signature(sig *types.Signature) string {
 	return s
 }
 
-// Convert an interface type to a string of all method strings, separated by
-// "; ". For example: "Read([]byte) (int, error); Close() error"
-func InterfaceKey(itf *types.Interface) string {
-	methodStrings := []string{}
-	for i := 0; i < itf.NumMethods(); i++ {
-		method := itf.Method(i)
-		methodStrings = append(methodStrings, MethodSignature(method))
-	}
-	sort.Strings(methodStrings)
-	return strings.Join(methodStrings, ";")
-}
-
 // Fill in parents of all functions.
 //
 // All packages need to be added before this pass can run, or it will produce
@@ -117,30 +103,17 @@ func (p *Program) AnalyseCallgraph() {
 
 // Find all types that are put in an interface.
 func (p *Program) AnalyseInterfaceConversions() {
-	// Clear, if AnalyseTypes has been called before.
-	p.typesWithoutMethods = map[string]int{"nil": 0}
-	p.typesWithMethods = map[string]*TypeWithMethods{}
+	// Clear, if AnalyseInterfaceConversions has been called before.
+	p.typesInInterfaces = map[string]struct{}{}
 
 	for _, f := range p.Functions {
 		for _, block := range f.Blocks {
 			for _, instr := range block.Instrs {
 				switch instr := instr.(type) {
 				case *ssa.MakeInterface:
-					methods := getAllMethods(f.Prog, instr.X.Type())
 					name := instr.X.Type().String()
-					if _, ok := p.typesWithMethods[name]; !ok && len(methods) > 0 {
-						t := &TypeWithMethods{
-							t:       instr.X.Type(),
-							Num:     len(p.typesWithMethods),
-							Methods: make(map[string]*types.Selection),
-						}
-						for _, sel := range methods {
-							name := MethodSignature(sel.Obj().(*types.Func))
-							t.Methods[name] = sel
-						}
-						p.typesWithMethods[name] = t
-					} else if _, ok := p.typesWithoutMethods[name]; !ok && len(methods) == 0 {
-						p.typesWithoutMethods[name] = len(p.typesWithoutMethods)
+					if _, ok := p.typesInInterfaces[name]; !ok {
+						p.typesInInterfaces[name] = struct{}{}
 					}
 				}
 			}
@@ -349,75 +322,10 @@ func (p *Program) IsBlocking(f *Function) bool {
 	return f.blocking
 }
 
-// Return the type number and whether this type is actually used. Used in
-// interface conversions (type is always used) and type asserts (type may not be
-// used, meaning assert is always false in this program).
-//
-// May only be used after all packages have been added to the analyser.
-func (p *Program) TypeNum(typ types.Type) (int, bool) {
-	if n, ok := p.typesWithoutMethods[typ.String()]; ok {
-		return n, true
-	} else if meta, ok := p.typesWithMethods[typ.String()]; ok {
-		return len(p.typesWithoutMethods) + meta.Num, true
-	} else {
-		return -1, false // type is never put in an interface
-	}
-}
-
-// InterfaceNum returns the numeric interface ID of this type, for use in type
-// asserts.
-func (p *Program) InterfaceNum(itfType *types.Interface) int {
-	key := InterfaceKey(itfType)
-	if itf, ok := p.interfaces[key]; !ok {
-		num := len(p.interfaces)
-		p.interfaces[key] = &Interface{Num: num, Type: itfType}
-		return num
-	} else {
-		return itf.Num
-	}
-}
-
-// MethodNum returns the numeric ID of this method, to be used in method lookups
-// on interfaces for example.
-func (p *Program) MethodNum(method *types.Func) int {
-	name := MethodSignature(method)
-	if _, ok := p.methodSignatureNames[name]; !ok {
-		p.methodSignatureNames[name] = len(p.methodSignatureNames)
-	}
-	return p.methodSignatureNames[MethodSignature(method)]
-}
-
-// The start index of the first dynamic type that has methods.
-// Types without methods always have a lower ID and types with methods have this
-// or a higher ID.
-//
-// May only be used after all packages have been added to the analyser.
-func (p *Program) FirstDynamicType() int {
-	return len(p.typesWithoutMethods)
-}
-
-// Return all types with methods, sorted by type ID.
-func (p *Program) AllDynamicTypes() []*TypeWithMethods {
-	l := make([]*TypeWithMethods, len(p.typesWithMethods))
-	for _, m := range p.typesWithMethods {
-		l[m.Num] = m
-	}
-	return l
-}
-
-// Return all interface types, sorted by interface ID.
-func (p *Program) AllInterfaces() []*Interface {
-	l := make([]*Interface, len(p.interfaces))
-	for _, itf := range p.interfaces {
-		l[itf.Num] = itf
-	}
-	return l
-}
-
 func (p *Program) FunctionNeedsContext(f *Function) bool {
 	if !f.addressTaken {
 		if f.Signature.Recv() != nil {
-			_, hasInterfaceConversion := p.TypeNum(f.Signature.Recv().Type())
+			_, hasInterfaceConversion := p.typesInInterfaces[f.Signature.Recv().Type().String()]
 			if hasInterfaceConversion && p.SignatureNeedsContext(f.Signature) {
 				return true
 			}

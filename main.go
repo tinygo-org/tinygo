@@ -64,7 +64,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		fmt.Println(c.IR())
 	}
 	if err := c.Verify(); err != nil {
-		return err
+		return errors.New("verification error after IR construction")
 	}
 
 	if config.initInterp {
@@ -73,13 +73,13 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 			return err
 		}
 		if err := c.Verify(); err != nil {
-			return err
+			return errors.New("verification error after interpreting runtime.initAll")
 		}
 	}
 
 	c.ApplyFunctionSections() // -ffunction-sections
 	if err := c.Verify(); err != nil {
-		return err
+		return errors.New("verification error after applying function sections")
 	}
 
 	// Browsers cannot handle external functions that have type i64 because it
@@ -92,7 +92,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 			return err
 		}
 		if err := c.Verify(); err != nil {
-			return err
+			return errors.New("verification error after running the wasm i64 hack")
 		}
 	}
 
@@ -100,20 +100,23 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	// exactly.
 	switch config.opt {
 	case "none:", "0":
-		c.Optimize(0, 0, 0) // -O0
+		err = c.Optimize(0, 0, 0) // -O0
 	case "1":
-		c.Optimize(1, 0, 0) // -O1
+		err = c.Optimize(1, 0, 0) // -O1
 	case "2":
-		c.Optimize(2, 0, 225) // -O2
+		err = c.Optimize(2, 0, 225) // -O2
 	case "s":
-		c.Optimize(2, 1, 225) // -Os
+		err = c.Optimize(2, 1, 225) // -Os
 	case "z":
-		c.Optimize(2, 2, 5) // -Oz, default
+		err = c.Optimize(2, 2, 5) // -Oz, default
 	default:
-		return errors.New("unknown optimization level: -opt=" + config.opt)
+		err = errors.New("unknown optimization level: -opt=" + config.opt)
+	}
+	if err != nil {
+		return err
 	}
 	if err := c.Verify(); err != nil {
-		return err
+		return errors.New("verification failure after LLVM optimization passes")
 	}
 
 	// On the AVR, pointers can point either to flash or to RAM, but we don't
@@ -124,7 +127,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	if strings.HasPrefix(spec.Triple, "avr") {
 		c.NonConstGlobals()
 		if err := c.Verify(); err != nil {
-			return err
+			return errors.New("verification error after making all globals non-constant on AVR")
 		}
 	}
 
@@ -382,7 +385,10 @@ func Run(pkgName string) error {
 	// -Oz, which is the fastest optimization level (faster than -O0, -O1, -O2
 	// and -Os). Turn off the inliner, as the inliner increases optimization
 	// time.
-	c.Optimize(2, 2, 0)
+	err = c.Optimize(2, 2, 0)
+	if err != nil {
+		return err
+	}
 
 	engine, err := llvm.NewExecutionEngine(c.Module())
 	if err != nil {

@@ -73,7 +73,12 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 					result.updateSeverity(sideEffectAll)
 					continue
 				}
+				name := child.Name()
 				if child.IsDeclaration() {
+					if name == "runtime.makeInterface" {
+						// Can be interpreted so does not have side effects.
+						continue
+					}
 					// External function call. Assume only limited side effects
 					// (no affected globals, etc.).
 					if result.hasLocalSideEffects(dirtyLocals, inst) {

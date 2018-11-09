@@ -300,6 +300,8 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{1}) // len
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{2}) // cap
 				fr.locals[inst] = &LocalValue{fr.Eval, ret}
+			case callee.Name() == "runtime.makeInterface":
+				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstPtrToInt(inst.Operand(0), fr.TargetData.IntPtrType())}
 			case strings.HasPrefix(callee.Name(), "runtime.print") || callee.Name() == "runtime._panic":
 				// all print instructions, which necessarily have side
 				// effects but no results

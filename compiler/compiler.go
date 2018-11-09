@@ -43,29 +43,30 @@ type Config struct {
 
 type Compiler struct {
 	Config
-	mod              llvm.Module
-	ctx              llvm.Context
-	builder          llvm.Builder
-	dibuilder        *llvm.DIBuilder
-	cu               llvm.Metadata
-	difiles          map[string]llvm.Metadata
-	ditypes          map[string]llvm.Metadata
-	machine          llvm.TargetMachine
-	targetData       llvm.TargetData
-	intType          llvm.Type
-	i8ptrType        llvm.Type // for convenience
-	uintptrType      llvm.Type
-	coroIdFunc       llvm.Value
-	coroSizeFunc     llvm.Value
-	coroBeginFunc    llvm.Value
-	coroSuspendFunc  llvm.Value
-	coroEndFunc      llvm.Value
-	coroFreeFunc     llvm.Value
-	initFuncs        []llvm.Value
-	deferFuncs       []*ir.Function
-	deferInvokeFuncs []InvokeDeferFunction
-	ctxDeferFuncs    []ContextDeferFunction
-	ir               *ir.Program
+	mod                     llvm.Module
+	ctx                     llvm.Context
+	builder                 llvm.Builder
+	dibuilder               *llvm.DIBuilder
+	cu                      llvm.Metadata
+	difiles                 map[string]llvm.Metadata
+	ditypes                 map[string]llvm.Metadata
+	machine                 llvm.TargetMachine
+	targetData              llvm.TargetData
+	intType                 llvm.Type
+	i8ptrType               llvm.Type // for convenience
+	uintptrType             llvm.Type
+	coroIdFunc              llvm.Value
+	coroSizeFunc            llvm.Value
+	coroBeginFunc           llvm.Value
+	coroSuspendFunc         llvm.Value
+	coroEndFunc             llvm.Value
+	coroFreeFunc            llvm.Value
+	initFuncs               []llvm.Value
+	deferFuncs              []*ir.Function
+	deferInvokeFuncs        []InvokeDeferFunction
+	ctxDeferFuncs           []ContextDeferFunction
+	interfaceInvokeWrappers []interfaceInvokeWrapper
+	ir                      *ir.Program
 }
 
 type Frame struct {
@@ -489,6 +490,15 @@ func (c *Compiler) Compile(mainPath string) error {
 		c.builder.CreateRetVoid()
 	}
 
+	// Define the already declared functions that wrap methods for use in
+	// interfaces.
+	for _, state := range c.interfaceInvokeWrappers {
+		err = c.createInterfaceInvokeWrapper(state)
+		if err != nil {
+			return err
+		}
+	}
+
 	// After all packages are imported, add a synthetic initializer function
 	// that calls the initializer of each package.
 	initFn := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function))
@@ -533,13 +543,6 @@ func (c *Compiler) Compile(mainPath string) error {
 		c.builder.CreateCall(realMain, nil, "")
 	}
 	c.builder.CreateRetVoid()
-
-	// Add runtime type information for interfaces: interface calls and type
-	// asserts.
-	err = c.createInterfaceRTTI()
-	if err != nil {
-		return err
-	}
 
 	// see: https://reviews.llvm.org/D18355
 	c.mod.AddNamedMetadataOperand("llvm.module.flags",
@@ -994,17 +997,6 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 		ptr := llvm.ConstInBoundsGEP(value.Global.LLVMGlobal, []llvm.Value{zero})
 		return ptr, nil
-
-	case *ir.InterfaceValue:
-		underlying := llvm.ConstPointerNull(c.i8ptrType) // could be any 0 value
-		if value.Elem != nil {
-			elem, err := c.getInterpretedValue(prefix, value.Elem)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			underlying = elem
-		}
-		return c.parseMakeInterface(underlying, value.Type, prefix)
 
 	case *ir.MapValue:
 		// Create initial bucket.
