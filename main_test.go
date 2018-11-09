@@ -65,7 +65,7 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 		dumpSSA:    false,
 		debug:      false,
 		printSizes: "",
-		initInterp: false,
+		initInterp: true,
 	}
 	binary := filepath.Join(tmpdir, "test")
 	err = Build(path, binary, target, config)
