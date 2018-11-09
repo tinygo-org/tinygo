@@ -135,31 +135,31 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 		// Cast operators
 		case !inst.IsATruncInst().IsNil():
 			value := fr.getLocal(inst.Operand(0))
-			fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstTrunc(value.(*LocalValue).Value(), inst.Type())}
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateTrunc(value.(*LocalValue).Value(), inst.Type(), "")}
 		case !inst.IsAZExtInst().IsNil():
 			value := fr.getLocal(inst.Operand(0))
-			fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstZExt(value.(*LocalValue).Value(), inst.Type())}
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateZExt(value.(*LocalValue).Value(), inst.Type(), "")}
 		case !inst.IsASExtInst().IsNil():
 			value := fr.getLocal(inst.Operand(0))
-			fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstSExt(value.(*LocalValue).Value(), inst.Type())}
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateSExt(value.(*LocalValue).Value(), inst.Type(), "")}
 		case !inst.IsAFPToUIInst().IsNil():
 			value := fr.getLocal(inst.Operand(0))
-			fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstFPToUI(value.(*LocalValue).Value(), inst.Type())}
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateFPToUI(value.(*LocalValue).Value(), inst.Type(), "")}
 		case !inst.IsAFPToSIInst().IsNil():
 			value := fr.getLocal(inst.Operand(0))
-			fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstFPToSI(value.(*LocalValue).Value(), inst.Type())}
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateFPToSI(value.(*LocalValue).Value(), inst.Type(), "")}
 		case !inst.IsAUIToFPInst().IsNil():
 			value := fr.getLocal(inst.Operand(0))
-			fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstUIToFP(value.(*LocalValue).Value(), inst.Type())}
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateUIToFP(value.(*LocalValue).Value(), inst.Type(), "")}
 		case !inst.IsASIToFPInst().IsNil():
 			value := fr.getLocal(inst.Operand(0))
-			fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstSIToFP(value.(*LocalValue).Value(), inst.Type())}
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateSIToFP(value.(*LocalValue).Value(), inst.Type(), "")}
 		case !inst.IsAFPTruncInst().IsNil():
 			value := fr.getLocal(inst.Operand(0))
-			fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstFPTrunc(value.(*LocalValue).Value(), inst.Type())}
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateFPTrunc(value.(*LocalValue).Value(), inst.Type(), "")}
 		case !inst.IsAFPExtInst().IsNil():
 			value := fr.getLocal(inst.Operand(0))
-			fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstFPExt(value.(*LocalValue).Value(), inst.Type())}
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateFPExt(value.(*LocalValue).Value(), inst.Type(), "")}
 		case !inst.IsABitCastInst().IsNil() && inst.Type().TypeKind() == llvm.PointerTypeKind:
 			operand := inst.Operand(0)
 			if !operand.IsACallInst().IsNil() {
@@ -179,12 +179,12 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			lhs := fr.getLocal(inst.Operand(0)).(*LocalValue).Underlying
 			rhs := fr.getLocal(inst.Operand(1)).(*LocalValue).Underlying
 			predicate := inst.IntPredicate()
-			fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstICmp(predicate, lhs, rhs)}
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateICmp(predicate, lhs, rhs, "")}
 		case !inst.IsAFCmpInst().IsNil():
 			lhs := fr.getLocal(inst.Operand(0)).(*LocalValue).Underlying
 			rhs := fr.getLocal(inst.Operand(1)).(*LocalValue).Underlying
 			predicate := inst.FloatPredicate()
-			fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstFCmp(predicate, lhs, rhs)}
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateFCmp(predicate, lhs, rhs, "")}
 		case !inst.IsAPHINode().IsNil():
 			for i := 0; i < inst.IncomingCount(); i++ {
 				if inst.IncomingBlock(i) == incoming {
