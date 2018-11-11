@@ -25,15 +25,15 @@ const (
 
 // ADC pins
 const (
-	ADC0 = 0
-	ADC1 = 1
-	ADC2 = 2
+	ADC0 = 3 // P0 on the board
+	ADC1 = 2 // P1 on the board
+	ADC2 = 1 // P2 on the board
 )
 
 // I2C pins
 const (
-	SDA_PIN = 20
-	SCL_PIN = 19
+	SDA_PIN = 30 // P20 on the board
+	SCL_PIN = 0  // P19 on the board
 )
 
 // LED matrix pins
