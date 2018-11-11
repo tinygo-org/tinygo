@@ -167,38 +167,68 @@ func (i2c I2C) Configure(config I2CConfig) {
 	i2c.setPins(config.SCL, config.SDA)
 }
 
-// WriteTo writes a slice of data bytes to a peripheral with a specific address.
-func (i2c I2C) WriteTo(address uint8, data []byte) {
-	i2c.Bus.ADDRESS = nrf.RegValue(address)
-	i2c.Bus.TASKS_STARTTX = 1
-	for _, v := range data {
-		i2c.Bus.TXD = nrf.RegValue(v)
-		for i2c.Bus.EVENTS_TXDSENT == 0 {
+// Tx does a single I2C transaction at the specified address.
+// It clocks out the given address, writes the bytes in w, reads back len(r)
+// bytes and stores them in r, and generates a stop condition on the bus.
+func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+	i2c.Bus.ADDRESS = nrf.RegValue(addr)
+	if len(w) != 0 {
+		i2c.Bus.TASKS_STARTTX = 1 // start transmission for writing
+		for _, b := range w {
+			i2c.writeByte(b)
 		}
-		i2c.Bus.EVENTS_TXDSENT = 0
 	}
+	if len(r) != 0 {
+		i2c.Bus.TASKS_STARTRX = 1 // re-start transmission for reading
+		for i := range r {        // read each char
+			if i+1 == len(r) {
+				// The 'stop' signal must be sent before reading back the last
+				// byte, so that it will be sent by the I2C peripheral right
+				// after the last byte has been read.
+				r[i] = i2c.readLastByte()
+			} else {
+				r[i] = i2c.readByte()
+			}
+		}
+	} else {
+		// Nothing to read back. Stop the transmission.
+		i2c.signalStop()
+	}
+	return nil
+}
 
-	// Assume stop after write.
+// signalStop sends a stop signal when writing or tells the I2C peripheral that
+// it must generate a stop condition after the next character is retrieved when
+// reading.
+func (i2c I2C) signalStop() {
 	i2c.Bus.TASKS_STOP = 1
 	for i2c.Bus.EVENTS_STOPPED == 0 {
 	}
 	i2c.Bus.EVENTS_STOPPED = 0
 }
 
-// ReadFrom reads a slice of data bytes from an I2C peripheral with a specific address.
-func (i2c I2C) ReadFrom(address uint8, data []byte) {
-	i2c.Bus.ADDRESS = nrf.RegValue(address)
-	i2c.Bus.TASKS_STARTRX = 1
-	for i, _ := range data {
-		for i2c.Bus.EVENTS_RXDREADY == 0 {
-		}
-		i2c.Bus.EVENTS_RXDREADY = 0
-		data[i] = byte(i2c.Bus.RXD)
+// writeByte writes a single byte to the I2C bus.
+func (i2c I2C) writeByte(data byte) {
+	i2c.Bus.TXD = nrf.RegValue(data)
+	for i2c.Bus.EVENTS_TXDSENT == 0 {
 	}
+	i2c.Bus.EVENTS_TXDSENT = 0
+}
 
-	// Assume stop after read.
-	i2c.Bus.TASKS_STOP = 1
-	for i2c.Bus.EVENTS_STOPPED == 0 {
+// readByte reads a single byte from the I2C bus.
+func (i2c I2C) readByte() byte {
+	for i2c.Bus.EVENTS_RXDREADY == 0 {
 	}
-	i2c.Bus.EVENTS_STOPPED = 0
+	i2c.Bus.EVENTS_RXDREADY = 0
+	return byte(i2c.Bus.RXD)
+}
+
+// readLastByte reads a single byte from the I2C bus, sending a stop signal
+// after it has been read.
+func (i2c I2C) readLastByte() byte {
+	for i2c.Bus.EVENTS_RXDREADY == 0 {
+	}
+	i2c.Bus.EVENTS_RXDREADY = 0
+	i2c.signalStop() // signal 'stop' now, so it is sent when reading RXD
+	return byte(i2c.Bus.RXD)
 }
