@@ -49,7 +49,7 @@ Currently supported features:
   * goroutines (very initial support)
   * function pointers (non-blocking)
   * interface methods
-  * standard library (but most packages won't work due to missing language
+  * standard library (but most packages will not work due to missing language
     features)
   * slices (partially)
   * maps (very rough, unfinished)
@@ -98,7 +98,7 @@ broader support are welcome!
 ## Analysis and optimizations
 
 The goal is to reduce code size (and increase performance) by performing all
-kinds of whole-program analysis passes. The official Go compiler doesn't do a
+kinds of whole-program analysis passes. The official Go compiler does not do a
 whole lot of analysis (except for escape analysis) because it needs to be fast,
 but embedded programs are necessarily smaller so it becomes practical. And I
 think especially program size can be reduced by a large margin when actually
@@ -120,7 +120,7 @@ Implemented compiler passes:
 
 Goals:
 
-  * Have very small binary sizes. Don't pay for what you don't use.
+  * Have very small binary sizes. Do not pay for what you do not use.
   * Support for most common microcontroller boards.
   * Be usable on the web using WebAssembly.
   * Good CGo support, with no more overhead than a regular function call.
@@ -144,7 +144,7 @@ page](https://tinygo.readthedocs.io/en/latest/).
 
 ## Getting help
 
-If you're looking for a more interactive way to discuss TinyGo usage or
+If you are looking for a more interactive way to discuss TinyGo usage or
 development, we have a [#TinyGo channel](https://gophers.slack.com/messages/CDJD3SUP6/)
 on the [Gophers Slack](https://gophers.slack.com).
 
@@ -157,7 +157,7 @@ Patches are welcome!
 
 If you want to contribute, here are some suggestions:
 
-  * A long tail of small (and large) language features haven't been implemented
+  * A long tail of small (and large) language features have not been implemented
     yet. In almost all cases, the compiler will show a `todo:` error from
     `compiler/compiler.go` when you try to use it. You can try implementing it,
     or open a bug report with a small code sample that fails to compile.
@@ -166,10 +166,10 @@ If you want to contribute, here are some suggestions:
     can try implementing support for a new chip or board in `src/runtime`. For
     details, see [this wiki entry on adding
     archs/chips/boards](https://github.com/aykevl/tinygo/wiki/Adding-a-new-board).
-  * Microcontrollers have lots of peripherals and many don't have an
+  * Microcontrollers have lots of peripherals and many do not have an
     implementation yet in the `machine` package. Adding support for new
     peripherals is very useful.
-  * Just raising bugs for things you'd like to see implemented is also a form of
+  * Just raising bugs for things you would like to see implemented is also a form of
     contributing! It helps prioritization.
 
 ## License
