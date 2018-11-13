@@ -81,7 +81,10 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	// keep functions interoperable, pass int64 types as pointers to
 	// stack-allocated values.
 	if strings.HasPrefix(spec.Triple, "wasm") {
-		c.ExternalInt64AsPtr()
+		err := c.ExternalInt64AsPtr()
+		if err != nil {
+			return err
+		}
 		if err := c.Verify(); err != nil {
 			return err
 		}

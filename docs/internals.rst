@@ -147,6 +147,14 @@ somewhat compatible with the C calling convention but with a few quirks:
     calling convention workaround may be removed. Also see `this wasm-bindgen
     issue <https://github.com/rustwasm/wasm-bindgen/issues/35>`_.
 
+  * The WebAssembly target does not return variables directly that cannot be
+    handled by JavaScript (``struct``, ``i64``, multiple return values, etc).
+    Instead, they are stored into a pointer passed as the first parameter by the
+    caller.
+
+    This is the calling convention as implemented by LLVM, with the extension
+    that ``i64`` return values are returned in the same way as aggregate types.
+
   * Some functions have an extra context parameter appended at the end of the
     argument list. This only happens when both of these conditions hold:
 

@@ -3278,7 +3278,7 @@ func (c *Compiler) NonConstGlobals() {
 // around the lack of 64-bit integers in JavaScript (commonly used together with
 // WebAssembly). Once that's resolved, this pass may be avoided.
 // https://github.com/WebAssembly/design/issues/1172
-func (c *Compiler) ExternalInt64AsPtr() {
+func (c *Compiler) ExternalInt64AsPtr() error {
 	int64Type := c.ctx.Int64Type()
 	int64PtrType := llvm.PointerType(int64Type, 0)
 	for fn := c.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
@@ -3290,39 +3290,57 @@ func (c *Compiler) ExternalInt64AsPtr() {
 			// Do not try to modify the signature of internal LLVM functions.
 			continue
 		}
+
 		hasInt64 := false
-		params := []llvm.Type{}
+		paramTypes := []llvm.Type{}
+
+		// Check return type for 64-bit integer.
+		fnType := fn.Type().ElementType()
+		returnType := fnType.ReturnType()
+		if returnType == int64Type {
+			hasInt64 = true
+			paramTypes = append(paramTypes, int64PtrType)
+			returnType = c.ctx.VoidType()
+		}
+
+		// Check param types for 64-bit integers.
 		for param := fn.FirstParam(); !param.IsNil(); param = llvm.NextParam(param) {
 			if param.Type() == int64Type {
 				hasInt64 = true
-				params = append(params, int64PtrType)
+				paramTypes = append(paramTypes, int64PtrType)
 			} else {
-				params = append(params, param.Type())
+				paramTypes = append(paramTypes, param.Type())
 			}
 		}
+
 		if !hasInt64 {
 			// No i64 in the paramter list.
 			continue
 		}
 
-		// Add $i64param to the real function name as it is only used internally.
+		// Add $i64wrapper to the real function name as it is only used
+		// internally.
 		// Add a new function with the correct signature that is exported.
 		name := fn.Name()
-		fn.SetName(name + "$i64param")
-		fnType := fn.Type().ElementType()
-		externalFnType := llvm.FunctionType(fnType.ReturnType(), params, fnType.IsFunctionVarArg())
+		fn.SetName(name + "$i64wrap")
+		externalFnType := llvm.FunctionType(returnType, paramTypes, fnType.IsFunctionVarArg())
 		externalFn := llvm.AddFunction(c.mod, name, externalFnType)
 
 		if fn.IsDeclaration() {
 			// Just a declaration: the definition doesn't exist on the Go side
 			// so it cannot be called from external code.
 			// Update all users to call the external function.
-			// The old $i64param function could be removed, but it may as well
+			// The old $i64wrapper function could be removed, but it may as well
 			// be left in place.
 			for use := fn.FirstUse(); !use.IsNil(); use = use.NextUse() {
 				call := use.User()
 				c.builder.SetInsertPointBefore(call)
 				callParams := []llvm.Value{}
+				var retvalAlloca llvm.Value
+				if fnType.ReturnType() == int64Type {
+					retvalAlloca = c.builder.CreateAlloca(int64Type, "i64asptr")
+					callParams = append(callParams, retvalAlloca)
+				}
 				for i := 0; i < call.OperandsCount()-1; i++ {
 					operand := call.Operand(i)
 					if operand.Type() == int64Type {
@@ -3336,21 +3354,34 @@ func (c *Compiler) ExternalInt64AsPtr() {
 						callParams = append(callParams, operand)
 					}
 				}
-				newCall := c.builder.CreateCall(externalFn, callParams, call.Name())
-				call.ReplaceAllUsesWith(newCall)
-				call.EraseFromParentAsInstruction()
+				if fnType.ReturnType() == int64Type {
+					// Pass a stack-allocated pointer as the first parameter
+					// where the return value should be stored, instead of using
+					// the regular return value.
+					c.builder.CreateCall(externalFn, callParams, call.Name())
+					returnValue := c.builder.CreateLoad(retvalAlloca, "retval")
+					call.ReplaceAllUsesWith(returnValue)
+					call.EraseFromParentAsInstruction()
+				} else {
+					newCall := c.builder.CreateCall(externalFn, callParams, call.Name())
+					call.ReplaceAllUsesWith(newCall)
+					call.EraseFromParentAsInstruction()
+				}
 			}
 		} else {
 			// The function has a definition in Go. This means that it may still
 			// be called both Go and from external code.
 			// Keep existing calls with the existing convention in place (for
-			// better performance, but export a new wrapper function with the
+			// better performance), but export a new wrapper function with the
 			// correct calling convention.
 			fn.SetLinkage(llvm.InternalLinkage)
 			fn.SetUnnamedAddr(true)
 			entryBlock := llvm.AddBasicBlock(externalFn, "entry")
 			c.builder.SetInsertPointAtEnd(entryBlock)
-			callParams := []llvm.Value{}
+			var callParams []llvm.Value
+			if fnType.ReturnType() == int64Type {
+				return errors.New("todo: i64 return value in exported function")
+			}
 			for i, origParam := range fn.Params() {
 				paramValue := externalFn.Param(i)
 				if origParam.Type() == int64Type {
@@ -3366,6 +3397,8 @@ func (c *Compiler) ExternalInt64AsPtr() {
 			}
 		}
 	}
+
+	return nil
 }
 
 // Emit object file (.o).
