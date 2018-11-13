@@ -11,5 +11,19 @@ repository::
 
     docker run --rm -v $(pwd):/src tinygo/tinygo build -o /src/wasm.wasm -target wasm examples/wasm
 
-Note that you cannot run ``tinygo flash`` from inside the docker container,
-so it is less useful for microcontroller development.
+To compile ``blinky1.hex`` targeting an ARM microcontroller, such as the PCA10040::
+
+    docker run --rm -v $(pwd):/src tinygo/tinygo build -o /src/blinky1.hex -size=short -target=pca10040 examples/blinky1
+
+To compile ``blinky1.hex`` targeting an AVR microcontroller such as the Arduino::
+
+    docker run --rm -v $(pwd):/src tinygo/tinygo build -o /src/blinky1.hex -size=short -target=arduino examples/blinky1
+
+Note that for microcontroller development you must flash your hardware devices 
+from your host environment, since you cannot run ``tinygo flash`` from inside 
+the docker container.
+
+So your workflow could be:
+
+- Compile TinyGo code using the Docker container into a HEX file.
+- Flash the HEX file from your host environment to the target microcontroller.
