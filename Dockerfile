@@ -58,5 +58,14 @@ RUN cd /go/src/github.com/aykevl/tinygo/ && \
     apt-get install -y apt-utils python3 make gcc-arm-none-eabi clang-7 && \
     make gen-device-nrf && make gen-device-stm32
 
-# Default to tinygo-wasm stage for now...
-FROM tinygo-wasm
+# tinygo-all stage installs the needed dependencies to compile TinyGo programs for all platforms.
+FROM tinygo-wasm AS tinygo-all
+
+COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/Makefile /go/src/github.com/aykevl/tinygo/
+COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/tools /go/src/github.com/aykevl/tinygo/tools
+COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/lib /go/src/github.com/aykevl/tinygo/lib
+
+RUN cd /go/src/github.com/aykevl/tinygo/ && \
+    apt-get update && \
+    apt-get install -y apt-utils python3 make gcc-arm-none-eabi clang-7 binutils-avr gcc-avr avr-libc && \
+    make gen-device
