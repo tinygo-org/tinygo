@@ -12,8 +12,8 @@ TinyGo is a project to bring Go to microcontrollers and small systems with a
 single processor core. It is similar to [emgo](https://github.com/ziutek/emgo)
 but a major difference is that I want to keep the Go memory model (which implies
 garbage collection of some sort). Another difference is that TinyGo uses LLVM
-internally instead of emitting C, which hopefully leads to smaller and more
-efficient code and certainly leads to more flexibility.
+internally instead of emitting C, which hopefully leads to small,
+efficient, and flexible code.
 
 My original reasoning was: if [Python](https://micropython.org/) can run on
 microcontrollers, then certainly [Go](https://golang.org/) should be able to and
