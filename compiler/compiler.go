@@ -2450,11 +2450,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if expr.IsString {
 			return c.createRuntimeCall("stringNext", []llvm.Value{llvmRangeVal, it}, "range.next"), nil
 		} else { // map
-			llvmKeyType, err := c.getLLVMType(rangeVal.Type().(*types.Map).Key())
+			llvmKeyType, err := c.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Key())
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			llvmValueType, err := c.getLLVMType(rangeVal.Type().(*types.Map).Elem())
+			llvmValueType, err := c.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Elem())
 			if err != nil {
 				return llvm.Value{}, err
 			}
