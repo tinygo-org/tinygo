@@ -119,7 +119,7 @@ Implemented compiler passes:
 
 Goals:
 
-  * Have very small binary sizes. Do not pay for what you do not use.
+  * Have very small binary sizes. Only pay for what you use.
   * Support for most common microcontroller boards.
   * Be usable on the web using WebAssembly.
   * Good CGo support, with no more overhead than a regular function call.
