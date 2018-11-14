@@ -129,7 +129,7 @@ Goals:
 Non-goals:
 
   * Using more than one core.
-  * Be efficient while using zillions of goroutines. However, good goroutine
+  * Be efficient while using many goroutines. However, good goroutine
     support is certainly a goal.
   * Be as fast as `gc`. However, LLVM will probably be better at optimizing
     certain things so TinyGo might actually turn out to be faster for number
