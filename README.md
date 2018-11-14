@@ -156,7 +156,7 @@ Patches are welcome!
 
 If you want to contribute, here are some suggestions:
 
-  * A long tail of small (and large) language features have not been implemented
+  * A long tail of language features have not been implemented
     yet. In almost all cases, the compiler will show a `todo:` error from
     `compiler/compiler.go` when you try to use it. You can try implementing it,
     or open a bug report with a small code sample that fails to compile.
