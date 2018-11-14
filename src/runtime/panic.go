@@ -43,14 +43,14 @@ func lookupBoundsCheckLong(length uintptr, index int64) {
 }
 
 // Check for bounds in *ssa.Slice.
-func sliceBoundsCheck(capacity uintptr, low, high uint) {
-	if !(0 <= low && low <= high && high <= uint(capacity)) {
+func sliceBoundsCheck(capacity, low, high uintptr) {
+	if !(0 <= low && low <= high && high <= capacity) {
 		runtimePanic("slice out of range")
 	}
 }
 
 // Check for bounds in *ssa.Slice. Supports 64-bit indexes.
-func sliceBoundsCheckLong(capacity uintptr, low, high uint64) {
+func sliceBoundsCheck64(capacity uintptr, low, high uint64) {
 	if !(0 <= low && low <= high && high <= uint64(capacity)) {
 		runtimePanic("slice out of range")
 	}

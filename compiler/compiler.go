@@ -2104,21 +2104,31 @@ func (c *Compiler) emitBoundsCheck(frame *Frame, arrayLen, index llvm.Value, ind
 	}
 }
 
-func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high llvm.Value) {
+func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high llvm.Value, lowType, highType *types.Basic) {
 	if frame.fn.IsNoBounds() {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
 		return
 	}
 
-	if low.Type().IntTypeWidth() > 32 || high.Type().IntTypeWidth() > 32 {
+	uintptrWidth := c.uintptrType.IntTypeWidth()
+	if low.Type().IntTypeWidth() > uintptrWidth || high.Type().IntTypeWidth() > uintptrWidth {
 		if low.Type().IntTypeWidth() < 64 {
-			low = c.builder.CreateSExt(low, c.ctx.Int64Type(), "")
+			if lowType.Info()&types.IsUnsigned != 0 {
+				low = c.builder.CreateZExt(low, c.ctx.Int64Type(), "")
+			} else {
+				low = c.builder.CreateSExt(low, c.ctx.Int64Type(), "")
+			}
 		}
 		if high.Type().IntTypeWidth() < 64 {
-			high = c.builder.CreateSExt(high, c.ctx.Int64Type(), "")
+			if highType.Info()&types.IsUnsigned != 0 {
+				high = c.builder.CreateZExt(high, c.ctx.Int64Type(), "")
+			} else {
+				high = c.builder.CreateSExt(high, c.ctx.Int64Type(), "")
+			}
 		}
-		c.createRuntimeCall("sliceBoundsCheckLong", []llvm.Value{capacity, low, high}, "")
+		// TODO: 32-bit or even 16-bit slice bounds checks for 8-bit platforms
+		c.createRuntimeCall("sliceBoundsCheck64", []llvm.Value{capacity, low, high}, "")
 	} else {
 		c.createRuntimeCall("sliceBoundsCheck", []llvm.Value{capacity, low, high}, "")
 	}
@@ -2494,45 +2504,71 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
+
+		var lowType, highType *types.Basic
 		var low, high llvm.Value
-		if expr.Low == nil {
-			low = llvm.ConstInt(c.intType, 0, false)
-		} else {
+
+		if expr.Low != nil {
+			lowType = expr.Low.Type().(*types.Basic)
 			low, err = c.parseExpr(frame, expr.Low)
 			if err != nil {
 				return llvm.Value{}, nil
 			}
+			if low.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
+				if lowType.Info()&types.IsUnsigned != 0 {
+					low = c.builder.CreateZExt(low, c.uintptrType, "")
+				} else {
+					low = c.builder.CreateSExt(low, c.uintptrType, "")
+				}
+			}
+		} else {
+			lowType = types.Typ[types.Int]
+			low = llvm.ConstInt(c.intType, 0, false)
 		}
+
 		if expr.High != nil {
+			highType = expr.High.Type().(*types.Basic)
 			high, err = c.parseExpr(frame, expr.High)
 			if err != nil {
 				return llvm.Value{}, nil
 			}
+			if high.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
+				if highType.Info()&types.IsUnsigned != 0 {
+					high = c.builder.CreateZExt(high, c.uintptrType, "")
+				} else {
+					high = c.builder.CreateSExt(high, c.uintptrType, "")
+				}
+			}
+		} else {
+			highType = types.Typ[types.Uintptr]
 		}
+
 		switch typ := expr.X.Type().Underlying().(type) {
 		case *types.Pointer: // pointer to array
 			// slice an array
 			length := typ.Elem().(*types.Array).Len()
 			llvmLen := llvm.ConstInt(c.uintptrType, uint64(length), false)
-			llvmLenInt := llvm.ConstInt(c.intType, uint64(length), false)
 			if high.IsNil() {
-				high = llvmLenInt
+				high = llvmLen
 			}
 			indices := []llvm.Value{
 				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 				low,
 			}
-			slicePtr := c.builder.CreateGEP(value, indices, "slice.ptr")
-			sliceLen := c.builder.CreateSub(high, low, "slice.len")
-			sliceCap := c.builder.CreateSub(llvmLenInt, low, "slice.cap")
 
 			// This check is optimized away in most cases.
-			c.emitSliceBoundsCheck(frame, llvmLen, low, high)
+			c.emitSliceBoundsCheck(frame, llvmLen, low, high, lowType, highType)
 
-			if c.targetData.TypeAllocSize(sliceLen.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-				sliceLen = c.builder.CreateTrunc(sliceLen, c.uintptrType, "")
-				sliceCap = c.builder.CreateTrunc(sliceCap, c.uintptrType, "")
+			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				high = c.builder.CreateTrunc(high, c.uintptrType, "")
 			}
+			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				low = c.builder.CreateTrunc(low, c.uintptrType, "")
+			}
+
+			sliceLen := c.builder.CreateSub(high, low, "slice.len")
+			slicePtr := c.builder.CreateGEP(value, indices, "slice.ptr")
+			sliceCap := c.builder.CreateSub(llvmLen, low, "slice.cap")
 
 			slice := c.ctx.ConstStruct([]llvm.Value{
 				llvm.Undef(slicePtr.Type()),
@@ -2553,7 +2589,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				high = oldLen
 			}
 
-			c.emitSliceBoundsCheck(frame, oldCap, low, high)
+			c.emitSliceBoundsCheck(frame, oldCap, low, high, lowType, highType)
 
 			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
 				low = c.builder.CreateTrunc(low, c.uintptrType, "")
@@ -2586,7 +2622,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				high = oldLen
 			}
 
-			c.emitSliceBoundsCheck(frame, oldLen, low, high)
+			c.emitSliceBoundsCheck(frame, oldLen, low, high, lowType, highType)
 
 			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
 			newLen := c.builder.CreateSub(high, low, "")

@@ -10,6 +10,46 @@ func main() {
 	printslice("foo[1:2]", foo[1:2])
 	println("sum foo:", sum(foo))
 
+	// indexing into a slice with uncommon index types
+	assert(foo[int(2)] == 4)
+	assert(foo[int8(2)] == 4)
+	assert(foo[int16(2)] == 4)
+	assert(foo[int32(2)] == 4)
+	assert(foo[int64(2)] == 4)
+	assert(foo[uint(2)] == 4)
+	assert(foo[uint8(2)] == 4)
+	assert(foo[uint16(2)] == 4)
+	assert(foo[uint32(2)] == 4)
+	assert(foo[uint64(2)] == 4)
+	assert(foo[uintptr(2)] == 4)
+
+	// slicing with uncommon low, high types
+	assert(len(foo[int(1):int(3)]) == 2)
+	assert(len(foo[int8(1):int8(3)]) == 2)
+	assert(len(foo[int16(1):int16(3)]) == 2)
+	assert(len(foo[int32(1):int32(3)]) == 2)
+	assert(len(foo[int64(1):int64(3)]) == 2)
+	assert(len(foo[uint(1):uint(3)]) == 2)
+	assert(len(foo[uint8(1):uint8(3)]) == 2)
+	assert(len(foo[uint16(1):uint16(3)]) == 2)
+	assert(len(foo[uint32(1):uint32(3)]) == 2)
+	assert(len(foo[uint64(1):uint64(3)]) == 2)
+	assert(len(foo[uintptr(1):uintptr(3)]) == 2)
+
+	// slicing an array with uncommon low, high types
+	arr := [4]int{1, 2, 4, 5}
+	assert(len(arr[int(1):int(3)]) == 2)
+	assert(len(arr[int8(1):int8(3)]) == 2)
+	assert(len(arr[int16(1):int16(3)]) == 2)
+	assert(len(arr[int32(1):int32(3)]) == 2)
+	assert(len(arr[int64(1):int64(3)]) == 2)
+	assert(len(arr[uint(1):uint(3)]) == 2)
+	assert(len(arr[uint8(1):uint8(3)]) == 2)
+	assert(len(arr[uint16(1):uint16(3)]) == 2)
+	assert(len(arr[uint32(1):uint32(3)]) == 2)
+	assert(len(arr[uint64(1):uint64(3)]) == 2)
+	assert(len(arr[uintptr(1):uintptr(3)]) == 2)
+
 	// copy
 	println("copy foo -> bar:", copy(bar, foo))
 	printslice("bar", bar)
@@ -52,4 +92,10 @@ func sum(l []int) int {
 		sum += n
 	}
 	return sum
+}
+
+func assert(ok bool) {
+	if !ok {
+		panic("assert failed")
+	}
 }
