@@ -8,7 +8,7 @@ import (
 
 // Builtin append(src, elements...) function: append elements to src and return
 // the modified (possibly expanded) slice.
-func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen lenType, elemSize uintptr) (unsafe.Pointer, lenType, lenType) {
+func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintptr, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr) {
 	if elemsLen == 0 {
 		// Nothing to append, return the input slice.
 		return srcBuf, srcLen, srcCap
@@ -27,27 +27,27 @@ func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen lenTy
 			// programs).
 			srcCap *= 2
 		}
-		buf := alloc(uintptr(srcCap) * elemSize)
+		buf := alloc(srcCap * elemSize)
 
 		// Copy the old slice to the new slice.
 		if srcLen != 0 {
-			memmove(buf, srcBuf, uintptr(srcLen)*elemSize)
+			memmove(buf, srcBuf, srcLen*elemSize)
 		}
 		srcBuf = buf
 	}
 
 	// The slice fits (after possibly allocating a new one), append it in-place.
-	memmove(unsafe.Pointer(uintptr(srcBuf)+uintptr(srcLen)*elemSize), elemsBuf, uintptr(elemsLen)*elemSize)
+	memmove(unsafe.Pointer(uintptr(srcBuf)+srcLen*elemSize), elemsBuf, elemsLen*elemSize)
 	return srcBuf, srcLen + elemsLen, srcCap
 }
 
 // Builtin copy(dst, src) function: copy bytes from dst to src.
-func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen lenType, elemSize uintptr) lenType {
+func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen uintptr, elemSize uintptr) uintptr {
 	// n = min(srcLen, dstLen)
 	n := srcLen
 	if n > dstLen {
 		n = dstLen
 	}
-	memmove(dst, src, uintptr(n)*elemSize)
+	memmove(dst, src, n*elemSize)
 	return n
 }

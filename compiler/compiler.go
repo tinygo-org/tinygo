@@ -54,7 +54,6 @@ type Compiler struct {
 	intType          llvm.Type
 	i8ptrType        llvm.Type // for convenience
 	uintptrType      llvm.Type
-	lenType          llvm.Type
 	coroIdFunc       llvm.Value
 	coroSizeFunc     llvm.Value
 	coroBeginFunc    llvm.Value
@@ -128,14 +127,15 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 	c.builder = c.ctx.NewBuilder()
 	c.dibuilder = llvm.NewDIBuilder(c.mod)
 
-	// Depends on platform (32bit or 64bit), but fix it here for now.
-	c.intType = c.ctx.Int32Type()
 	c.uintptrType = c.ctx.IntType(c.targetData.PointerSize() * 8)
-	if c.targetData.PointerSize() < 4 {
-		// 16 or 8 bits target with smaller length type
-		c.lenType = c.uintptrType
+	if c.targetData.PointerSize() <= 4 {
+		// 8, 16, 32 bits targets
+		c.intType = c.ctx.Int32Type()
+	} else if c.targetData.PointerSize() == 8 {
+		// 64 bits target
+		c.intType = c.ctx.Int64Type()
 	} else {
-		c.lenType = c.ctx.Int32Type() // also defined as runtime.lenType
+		panic("unknown pointer size")
 	}
 	c.i8ptrType = llvm.PointerType(c.ctx.Int8Type(), 0)
 
@@ -668,8 +668,8 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		}
 		members := []llvm.Type{
 			llvm.PointerType(elemType, 0),
-			c.lenType, // len
-			c.lenType, // cap
+			c.uintptrType, // len
+			c.uintptrType, // cap
 		}
 		return c.ctx.StructType(members, false), nil
 	case *types.Struct:
@@ -1077,12 +1077,12 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 		bucketPtr := llvm.ConstInBoundsGEP(firstBucketGlobal, []llvm.Value{zero})
 		hashmapType := c.mod.GetTypeByName("runtime.hashmap")
 		hashmap := llvm.ConstNamedStruct(hashmapType, []llvm.Value{
-			llvm.ConstPointerNull(llvm.PointerType(hashmapType, 0)),  // next
-			llvm.ConstBitCast(bucketPtr, c.i8ptrType),                // buckets
-			llvm.ConstInt(c.lenType, uint64(len(value.Keys)), false), // count
-			llvm.ConstInt(c.ctx.Int8Type(), keySize, false),          // keySize
-			llvm.ConstInt(c.ctx.Int8Type(), valueSize, false),        // valueSize
-			llvm.ConstInt(c.ctx.Int8Type(), 0, false),                // bucketBits
+			llvm.ConstPointerNull(llvm.PointerType(hashmapType, 0)),      // next
+			llvm.ConstBitCast(bucketPtr, c.i8ptrType),                    // buckets
+			llvm.ConstInt(c.uintptrType, uint64(len(value.Keys)), false), // count
+			llvm.ConstInt(c.ctx.Int8Type(), keySize, false),              // keySize
+			llvm.ConstInt(c.ctx.Int8Type(), valueSize, false),            // valueSize
+			llvm.ConstInt(c.ctx.Int8Type(), 0, false),                    // bucketBits
 		})
 
 		// Create a pointer to this hashmap.
@@ -1163,7 +1163,7 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		llvmLen := llvm.ConstInt(c.lenType, arrayLength, false)
+		llvmLen := llvm.ConstInt(c.uintptrType, arrayLength, false)
 		slice := llvm.ConstNamedStruct(sliceTyp, []llvm.Value{
 			globalPtr, // ptr
 			llvmLen,   // len
@@ -2260,7 +2260,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		// Check bounds.
 		arrayLen := expr.X.Type().(*types.Array).Len()
-		arrayLenLLVM := llvm.ConstInt(c.lenType, uint64(arrayLen), false)
+		arrayLenLLVM := llvm.ConstInt(c.uintptrType, uint64(arrayLen), false)
 		c.emitBoundsCheck(frame, arrayLenLLVM, index, expr.Index.Type())
 
 		// Can't load directly from array (as index is non-constant), so have to
@@ -2288,7 +2288,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			switch typ := typ.(type) {
 			case *types.Array:
 				bufptr = val
-				buflen = llvm.ConstInt(c.lenType, uint64(typ.Len()), false)
+				buflen = llvm.ConstInt(c.uintptrType, uint64(typ.Len()), false)
 			default:
 				return llvm.Value{}, errors.New("todo: indexaddr: " + typ.String())
 			}
@@ -2412,16 +2412,16 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		slicePtr := c.createRuntimeCall("alloc", []llvm.Value{sliceSize}, "makeslice.buf")
 		slicePtr = c.builder.CreateBitCast(slicePtr, llvm.PointerType(llvmElemType, 0), "makeslice.array")
 
-		if c.targetData.TypeAllocSize(sliceLen.Type()) > c.targetData.TypeAllocSize(c.lenType) {
-			sliceLen = c.builder.CreateTrunc(sliceLen, c.lenType, "")
-			sliceCap = c.builder.CreateTrunc(sliceCap, c.lenType, "")
+		if c.targetData.TypeAllocSize(sliceLen.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+			sliceLen = c.builder.CreateTrunc(sliceLen, c.uintptrType, "")
+			sliceCap = c.builder.CreateTrunc(sliceCap, c.uintptrType, "")
 		}
 
 		// Create the slice.
 		slice := c.ctx.ConstStruct([]llvm.Value{
 			llvm.Undef(slicePtr.Type()),
-			llvm.Undef(c.lenType),
-			llvm.Undef(c.lenType),
+			llvm.Undef(c.uintptrType),
+			llvm.Undef(c.uintptrType),
 		}, false)
 		slice = c.builder.CreateInsertValue(slice, slicePtr, 0, "")
 		slice = c.builder.CreateInsertValue(slice, sliceLen, 1, "")
@@ -2513,7 +2513,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		case *types.Pointer: // pointer to array
 			// slice an array
 			length := typ.Elem().(*types.Array).Len()
-			llvmLen := llvm.ConstInt(c.lenType, uint64(length), false)
+			llvmLen := llvm.ConstInt(c.uintptrType, uint64(length), false)
 			llvmLenInt := llvm.ConstInt(c.intType, uint64(length), false)
 			if high.IsNil() {
 				high = llvmLenInt
@@ -2529,15 +2529,15 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			// This check is optimized away in most cases.
 			c.emitSliceBoundsCheck(frame, llvmLen, low, high)
 
-			if c.targetData.TypeAllocSize(sliceLen.Type()) > c.targetData.TypeAllocSize(c.lenType) {
-				sliceLen = c.builder.CreateTrunc(sliceLen, c.lenType, "")
-				sliceCap = c.builder.CreateTrunc(sliceCap, c.lenType, "")
+			if c.targetData.TypeAllocSize(sliceLen.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				sliceLen = c.builder.CreateTrunc(sliceLen, c.uintptrType, "")
+				sliceCap = c.builder.CreateTrunc(sliceCap, c.uintptrType, "")
 			}
 
 			slice := c.ctx.ConstStruct([]llvm.Value{
 				llvm.Undef(slicePtr.Type()),
-				llvm.Undef(c.lenType),
-				llvm.Undef(c.lenType),
+				llvm.Undef(c.uintptrType),
+				llvm.Undef(c.uintptrType),
 			}, false)
 			slice = c.builder.CreateInsertValue(slice, slicePtr, 0, "")
 			slice = c.builder.CreateInsertValue(slice, sliceLen, 1, "")
@@ -2555,11 +2555,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			c.emitSliceBoundsCheck(frame, oldCap, low, high)
 
-			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.lenType) {
-				low = c.builder.CreateTrunc(low, c.lenType, "")
+			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				low = c.builder.CreateTrunc(low, c.uintptrType, "")
 			}
-			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.lenType) {
-				high = c.builder.CreateTrunc(high, c.lenType, "")
+			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				high = c.builder.CreateTrunc(high, c.uintptrType, "")
 			}
 
 			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
@@ -2567,8 +2567,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			newCap := c.builder.CreateSub(oldCap, low, "")
 			slice := c.ctx.ConstStruct([]llvm.Value{
 				llvm.Undef(newPtr.Type()),
-				llvm.Undef(c.lenType),
-				llvm.Undef(c.lenType),
+				llvm.Undef(c.uintptrType),
+				llvm.Undef(c.uintptrType),
 			}, false)
 			slice = c.builder.CreateInsertValue(slice, newPtr, 0, "")
 			slice = c.builder.CreateInsertValue(slice, newLen, 1, "")
@@ -2881,7 +2881,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 			return llvm.ConstInt(llvmType, n, false), nil
 		} else if typ.Info()&types.IsString != 0 {
 			str := constant.StringVal(expr.Value)
-			strLen := llvm.ConstInt(c.lenType, uint64(len(str)), false)
+			strLen := llvm.ConstInt(c.uintptrType, uint64(len(str)), false)
 			objname := prefix + "$string"
 			global := llvm.AddGlobal(c.mod, llvm.ArrayType(c.ctx.Int8Type(), len(str)), objname)
 			global.SetInitializer(c.ctx.ConstString(str, false))
@@ -2961,7 +2961,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 			return llvm.Value{}, err
 		}
 		llvmPtr := llvm.ConstPointerNull(llvm.PointerType(elemType, 0))
-		llvmLen := llvm.ConstInt(c.lenType, 0, false)
+		llvmLen := llvm.ConstInt(c.uintptrType, 0, false)
 		slice := c.ctx.ConstStruct([]llvm.Value{
 			llvmPtr, // backing array
 			llvmLen, // len

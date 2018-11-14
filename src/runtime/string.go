@@ -9,13 +9,13 @@ import (
 // The underlying struct for the Go string type.
 type _string struct {
 	ptr    *byte
-	length lenType
+	length uintptr
 }
 
 // The iterator state for a range over a string.
 type stringIterator struct {
-	byteindex  lenType
-	rangeindex lenType
+	byteindex  uintptr
+	rangeindex uintptr
 }
 
 // Return true iff the strings match.
@@ -57,33 +57,33 @@ func stringConcat(x, y _string) _string {
 	} else if y.length == 0 {
 		return x
 	} else {
-		length := uintptr(x.length + y.length)
+		length := x.length + y.length
 		buf := alloc(length)
-		memcpy(buf, unsafe.Pointer(x.ptr), uintptr(x.length))
-		memcpy(unsafe.Pointer(uintptr(buf)+uintptr(x.length)), unsafe.Pointer(y.ptr), uintptr(y.length))
-		return _string{ptr: (*byte)(buf), length: lenType(length)}
+		memcpy(buf, unsafe.Pointer(x.ptr), x.length)
+		memcpy(unsafe.Pointer(uintptr(buf)+x.length), unsafe.Pointer(y.ptr), y.length)
+		return _string{ptr: (*byte)(buf), length: length}
 	}
 }
 
 // Create a string from a []byte slice.
 func stringFromBytes(x struct {
 	ptr *byte
-	len lenType
-	cap lenType
+	len uintptr
+	cap uintptr
 }) _string {
-	buf := alloc(uintptr(x.len))
-	memcpy(buf, unsafe.Pointer(x.ptr), uintptr(x.len))
-	return _string{ptr: (*byte)(buf), length: lenType(x.len)}
+	buf := alloc(x.len)
+	memcpy(buf, unsafe.Pointer(x.ptr), x.len)
+	return _string{ptr: (*byte)(buf), length: x.len}
 }
 
 // Convert a string to a []byte slice.
 func stringToBytes(x _string) (slice struct {
 	ptr *byte
-	len lenType
-	cap lenType
+	len uintptr
+	cap uintptr
 }) {
-	buf := alloc(uintptr(x.length))
-	memcpy(buf, unsafe.Pointer(x.ptr), uintptr(x.length))
+	buf := alloc(x.length)
+	memcpy(buf, unsafe.Pointer(x.ptr), x.length)
 	slice.ptr = (*byte)(buf)
 	slice.len = x.length
 	slice.cap = x.length
@@ -112,7 +112,7 @@ func stringNext(s string, it *stringIterator) (bool, int, rune) {
 }
 
 // Convert a Unicode code point into an array of bytes and its length.
-func encodeUTF8(x rune) ([4]byte, lenType) {
+func encodeUTF8(x rune) ([4]byte, uintptr) {
 	// https://stackoverflow.com/questions/6240055/manually-converting-unicode-codepoints-into-utf-8-and-utf-16
 	// Note: this code can probably be optimized (in size and speed).
 	switch {
@@ -141,8 +141,8 @@ func encodeUTF8(x rune) ([4]byte, lenType) {
 
 // Decode a single UTF-8 character from a string.
 //go:nobounds
-func decodeUTF8(s string, index lenType) (rune, lenType) {
-	remaining := lenType(len(s)) - index // must be >= 1 before calling this function
+func decodeUTF8(s string, index uintptr) (rune, uintptr) {
+	remaining := uintptr(len(s)) - index // must be >= 1 before calling this function
 	x := s[index]
 	switch {
 	case x&0x80 == 0x00: // 0xxxxxxx

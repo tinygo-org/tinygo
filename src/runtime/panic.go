@@ -28,7 +28,7 @@ func _recover() interface{} {
 }
 
 // Check for bounds in *ssa.Index, *ssa.IndexAddr and *ssa.Lookup.
-func lookupBoundsCheck(length lenType, index int) {
+func lookupBoundsCheck(length uintptr, index int) {
 	if index < 0 || index >= int(length) {
 		runtimePanic("index out of range")
 	}
@@ -36,21 +36,21 @@ func lookupBoundsCheck(length lenType, index int) {
 
 // Check for bounds in *ssa.Index, *ssa.IndexAddr and *ssa.Lookup.
 // Supports 64-bit indexes.
-func lookupBoundsCheckLong(length lenType, index int64) {
+func lookupBoundsCheckLong(length uintptr, index int64) {
 	if index < 0 || index >= int64(length) {
 		runtimePanic("index out of range")
 	}
 }
 
 // Check for bounds in *ssa.Slice.
-func sliceBoundsCheck(capacity lenType, low, high uint) {
+func sliceBoundsCheck(capacity uintptr, low, high uint) {
 	if !(0 <= low && low <= high && high <= uint(capacity)) {
 		runtimePanic("slice out of range")
 	}
 }
 
 // Check for bounds in *ssa.Slice. Supports 64-bit indexes.
-func sliceBoundsCheckLong(capacity lenType, low, high uint64) {
+func sliceBoundsCheckLong(capacity uintptr, low, high uint64) {
 	if !(0 <= low && low <= high && high <= uint64(capacity)) {
 		runtimePanic("slice out of range")
 	}

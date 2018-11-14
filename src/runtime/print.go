@@ -217,7 +217,7 @@ func printmap(m *hashmap) {
 	if m == nil {
 		print("nil")
 	} else {
-		print(m.count)
+		print(uint(m.count))
 	}
 	putchar(']')
 }
