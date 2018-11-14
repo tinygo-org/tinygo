@@ -11,7 +11,7 @@ COPY . /go/src/github.com/aykevl/tinygo
 
 RUN cd /go/src/github.com/aykevl/tinygo/ && \
     dep ensure --vendor-only && \
-    go install /go/src/github.com/aykevl/tinygo/
+    go install github.com/aykevl/tinygo
 
 FROM golang:latest
 
