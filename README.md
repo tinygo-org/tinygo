@@ -98,10 +98,10 @@ broader support are welcome!
 ## Analysis and optimizations
 
 The goal is to reduce code size and increase performance by executing all
-kinds of whole-program analysis passes. The official Go compiler does not do a
-whole lot of analysis (except for escape analysis) because it needs to be fast.
-Embedded programs are necessarily smaller, so analysis becomes practical. Program
-size can be reduced by a large margin when actually trying to optimize for it.
+kinds of whole-program analysis passes. The official Go compiler only does escape
+analysis because it needs to be fast. Embedded programs are necessarily smaller, 
+so analysis becomes practical. Program size can be reduced by a large margin when
+actually trying to optimize for it.
 
 Implemented compiler passes:
 
