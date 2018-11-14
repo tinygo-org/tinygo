@@ -127,9 +127,9 @@ func (v *GlobalValue) Type() llvm.Type {
 // IsConstant returns true if this global is not dirty, false otherwise.
 func (v *GlobalValue) IsConstant() bool {
 	if _, ok := v.Eval.dirtyGlobals[v.Underlying]; ok {
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
 // Load returns the initializer of the global variable.

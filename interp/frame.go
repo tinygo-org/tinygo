@@ -38,43 +38,43 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			switch inst.InstructionOpcode() {
 			// Standard binary operators
 			case llvm.Add:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstAdd(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateAdd(lhs, rhs, "")}
 			case llvm.FAdd:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstFAdd(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateFAdd(lhs, rhs, "")}
 			case llvm.Sub:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstSub(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateSub(lhs, rhs, "")}
 			case llvm.FSub:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstFSub(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateFSub(lhs, rhs, "")}
 			case llvm.Mul:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstMul(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateMul(lhs, rhs, "")}
 			case llvm.FMul:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstFMul(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateFMul(lhs, rhs, "")}
 			case llvm.UDiv:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstUDiv(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateUDiv(lhs, rhs, "")}
 			case llvm.SDiv:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstSDiv(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateSDiv(lhs, rhs, "")}
 			case llvm.FDiv:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstFDiv(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateFDiv(lhs, rhs, "")}
 			case llvm.URem:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstURem(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateURem(lhs, rhs, "")}
 			case llvm.SRem:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstSRem(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateSRem(lhs, rhs, "")}
 			case llvm.FRem:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstFRem(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateFRem(lhs, rhs, "")}
 
 			// Logical operators
 			case llvm.Shl:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstShl(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateShl(lhs, rhs, "")}
 			case llvm.LShr:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstLShr(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateLShr(lhs, rhs, "")}
 			case llvm.AShr:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstAShr(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateAShr(lhs, rhs, "")}
 			case llvm.And:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstAnd(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateAnd(lhs, rhs, "")}
 			case llvm.Or:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstOr(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateOr(lhs, rhs, "")}
 			case llvm.Xor:
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstXor(lhs, rhs)}
+				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateXor(lhs, rhs, "")}
 
 			default:
 				return nil, nil, &Unsupported{inst}
@@ -90,7 +90,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 		case !inst.IsALoadInst().IsNil():
 			operand := fr.getLocal(inst.Operand(0))
 			var value llvm.Value
-			if inst.IsVolatile() {
+			if !operand.IsConstant() || inst.IsVolatile() {
 				value = fr.builder.CreateLoad(operand.Value(), inst.Name())
 			} else {
 				value = operand.Load()
@@ -325,12 +325,17 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			case !callee.IsAFunction().IsNil():
 				// regular function
 				var params []Value
+				dirtyParams := false
 				for i := 0; i < inst.OperandsCount()-1; i++ {
-					params = append(params, fr.getLocal(inst.Operand(i)))
+					local := fr.getLocal(inst.Operand(i))
+					if !local.IsConstant() {
+						dirtyParams = true
+					}
+					params = append(params, local)
 				}
 				var ret Value
 				scanResult := fr.Eval.hasSideEffects(callee)
-				if scanResult.severity == sideEffectLimited {
+				if scanResult.severity == sideEffectLimited || dirtyParams && scanResult.severity != sideEffectAll {
 					// Side effect is bounded. This means the operation invokes
 					// side effects (like calling an external function) but it
 					// is known at compile time which side effects it invokes.
