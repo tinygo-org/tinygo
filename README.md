@@ -16,7 +16,7 @@ internally instead of emitting C, which hopefully leads to small,
 efficient, and flexible code.
 
 My original reasoning was: if [Python](https://micropython.org/) can run on
-microcontrollers, then certainly [Go](https://golang.org/) should be able to and
+microcontrollers, then certainly [Go](https://golang.org/) should be able to
 run on even lower level micros.
 
 Example program (blinky):
