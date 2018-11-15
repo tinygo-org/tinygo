@@ -2867,6 +2867,30 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 		default:
 			return llvm.Value{}, errors.New("todo: binop on slice: " + op.String())
 		}
+	case *types.Array:
+		// Compare each array element and combine the result. From the spec:
+		//     Array values are comparable if values of the array element type
+		//     are comparable. Two array values are equal if their corresponding
+		//     elements are equal.
+		result := llvm.ConstInt(c.ctx.Int1Type(), 1, true)
+		for i := 0; i < int(typ.Len()); i++ {
+			xField := c.builder.CreateExtractValue(x, i, "")
+			yField := c.builder.CreateExtractValue(y, i, "")
+			fieldEqual, err := c.parseBinOp(token.EQL, typ.Elem(), xField, yField)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			result = c.builder.CreateAnd(result, fieldEqual, "")
+		}
+		switch op {
+		case token.EQL: // ==
+			return result, nil
+		case token.NEQ: // !=
+			return c.builder.CreateNot(result, ""), nil
+		default:
+			return llvm.Value{}, errors.New("unknown: binop on struct: " + op.String())
+		}
+		return result, nil
 	case *types.Struct:
 		// Compare each struct field and combine the result. From the spec:
 		//     Struct values are comparable if all their fields are comparable.

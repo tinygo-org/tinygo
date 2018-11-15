@@ -24,6 +24,14 @@ func main() {
 	println("ab" < "aa")
 	println("aa" < "ab")
 
+	println("array equality")
+	println(a1 == [2]int{1, 2})
+	println(a1 != [2]int{1, 2})
+	println(a1 == [2]int{1, 3})
+	println(a1 == [2]int{2, 2})
+	println(a1 == [2]int{2, 1})
+	println(a1 != [2]int{2, 1})
+
 	println("struct equality")
 	println(s1 == Struct1{3, true})
 	println(s1 == Struct1{4, true})
@@ -47,6 +55,8 @@ var y = false
 var a = "a"
 var s1 = Struct1{3, true}
 var s2 = Struct2{"foo", 0.0, 5}
+
+var a1 = [2]int{1, 2}
 
 type Struct1 struct {
 	i int
