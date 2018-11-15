@@ -41,7 +41,10 @@ COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/lib /go/src/github.com/
 RUN cd /go/src/github.com/aykevl/tinygo/ && \
     apt-get update && \
     apt-get install -y apt-utils python3 make binutils-avr gcc-avr avr-libc && \
-    make gen-device-avr
+    make gen-device-avr && \
+    apt-get remove -y python3 make && \
+    apt-get autoremove -y && \
+    apt-get clean
 
 # tinygo-arm stage installs the needed dependencies to compile TinyGo programs for ARM microcontrollers.
 FROM tinygo-base AS tinygo-arm
@@ -56,7 +59,10 @@ COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/lib /go/src/github.com/
 RUN cd /go/src/github.com/aykevl/tinygo/ && \
     apt-get update && \
     apt-get install -y apt-utils python3 make gcc-arm-none-eabi clang-7 && \
-    make gen-device-nrf && make gen-device-stm32
+    make gen-device-nrf && make gen-device-stm32 && \
+    apt-get remove -y python3 make && \
+    apt-get autoremove -y && \
+    apt-get clean
 
 # tinygo-all stage installs the needed dependencies to compile TinyGo programs for all platforms.
 FROM tinygo-wasm AS tinygo-all
@@ -68,4 +74,8 @@ COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/lib /go/src/github.com/
 RUN cd /go/src/github.com/aykevl/tinygo/ && \
     apt-get update && \
     apt-get install -y apt-utils python3 make gcc-arm-none-eabi clang-7 binutils-avr gcc-avr avr-libc && \
-    make gen-device
+    make gen-device && \
+    apt-get remove -y python3 make && \
+    apt-get autoremove -y && \
+    apt-get clean
+
