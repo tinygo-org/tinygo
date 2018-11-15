@@ -854,21 +854,6 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 		frame.fn.LLVMFn = llvm.AddFunction(c.mod, name, fnType)
 	}
 
-	if c.Debug && f.Synthetic == "package initializer" {
-		difunc, err := c.attachDebugInfoRaw(f, f.LLVMFn, "", "", 0)
-		if err != nil {
-			return nil, err
-		}
-		frame.difunc = difunc
-	} else if c.Debug && f.Syntax() != nil && len(f.Blocks) != 0 {
-		// Create debug info file if needed.
-		difunc, err := c.attachDebugInfo(f)
-		if err != nil {
-			return nil, err
-		}
-		frame.difunc = difunc
-	}
-
 	return frame, nil
 }
 
@@ -1217,7 +1202,24 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		frame.fn.LLVMFn.SetFunctionCallConv(85) // CallingConv::AVR_SIGNAL
 	}
 
+	// Add debug info, if needed.
 	if c.Debug {
+		if frame.fn.Synthetic == "package initializer" {
+			// Package initializers have no debug info. Create some fake debug
+			// info to at least have *something*.
+			difunc, err := c.attachDebugInfoRaw(frame.fn, frame.fn.LLVMFn, "", "", 0)
+			if err != nil {
+				return err
+			}
+			frame.difunc = difunc
+		} else if frame.fn.Syntax() != nil {
+			// Create debug info file if needed.
+			difunc, err := c.attachDebugInfo(frame.fn)
+			if err != nil {
+				return err
+			}
+			frame.difunc = difunc
+		}
 		pos := c.ir.Program.Fset.Position(frame.fn.Pos())
 		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), frame.difunc, llvm.Metadata{})
 	}
