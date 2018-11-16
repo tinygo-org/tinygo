@@ -207,6 +207,11 @@ func (c *Compiler) doesEscape(value llvm.Value) bool {
 			if c.doesEscape(use) {
 				return true
 			}
+		} else if use.IsABitCastInst() != nilValue {
+			// A bitcast escapes if the casted-to value escapes.
+			if c.doesEscape(use) {
+				return true
+			}
 		} else if use.IsALoadInst() != nilValue {
 			// Load does not escape.
 		} else if use.IsAStoreInst() != nilValue {
