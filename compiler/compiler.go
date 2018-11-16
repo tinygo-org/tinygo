@@ -2509,7 +2509,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		var low, high llvm.Value
 
 		if expr.Low != nil {
-			lowType = expr.Low.Type().(*types.Basic)
+			lowType = expr.Low.Type().Underlying().(*types.Basic)
 			low, err = c.parseExpr(frame, expr.Low)
 			if err != nil {
 				return llvm.Value{}, nil
@@ -2527,7 +2527,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 
 		if expr.High != nil {
-			highType = expr.High.Type().(*types.Basic)
+			highType = expr.High.Type().Underlying().(*types.Basic)
 			high, err = c.parseExpr(frame, expr.High)
 			if err != nil {
 				return llvm.Value{}, nil
