@@ -435,7 +435,7 @@ func handleCompilerError(err error) {
 func main() {
 	outpath := flag.String("o", "", "output filename")
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
-	gc := flag.String("gc", "dumb", "garbage collector to use (dumb)")
+	gc := flag.String("gc", "dumb", "garbage collector to use (none, dumb)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	target := flag.String("target", "", "LLVM target")
