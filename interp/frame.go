@@ -160,6 +160,9 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 		case !inst.IsAFPExtInst().IsNil():
 			value := fr.getLocal(inst.Operand(0))
 			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateFPExt(value.(*LocalValue).Value(), inst.Type(), "")}
+		case !inst.IsAPtrToIntInst().IsNil():
+			value := fr.getLocal(inst.Operand(0))
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreatePtrToInt(value.Value(), inst.Type(), "")}
 		case !inst.IsABitCastInst().IsNil() && inst.Type().TypeKind() == llvm.PointerTypeKind:
 			operand := inst.Operand(0)
 			if !operand.IsACallInst().IsNil() {
