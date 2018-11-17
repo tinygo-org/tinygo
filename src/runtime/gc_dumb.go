@@ -20,6 +20,9 @@ func alloc(size uintptr) unsafe.Pointer {
 	size = align(size)
 	addr := heapptr
 	heapptr += size
+	if heapptr >= heapEnd {
+		runtimePanic("out of memory")
+	}
 	for i := uintptr(0); i < uintptr(size); i += 4 {
 		ptr := (*uint32)(unsafe.Pointer(addr + i))
 		*ptr = 0

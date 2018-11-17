@@ -14,7 +14,10 @@ func _Cfunc_clock_gettime(clk_id uint, ts *timespec)
 
 const heapSize = 1 * 1024 * 1024 // 1MB to start
 
-var heapStart = uintptr(_Cfunc_malloc(heapSize))
+var (
+	heapStart = uintptr(_Cfunc_malloc(heapSize))
+	heapEnd   = heapStart + heapSize
+)
 
 type timeUnit int64
 
