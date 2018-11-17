@@ -342,8 +342,9 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig)
 // Run the specified package directly (using JIT or interpretation).
 func Run(pkgName string) error {
 	config := compiler.Config{
-		RootDir: sourceDir(),
-		GOPATH:  getGopath(),
+		RootDir:    sourceDir(),
+		GOPATH:     getGopath(),
+		InitInterp: true,
 	}
 	c, err := compiler.NewCompiler(pkgName, config)
 	if err != nil {
