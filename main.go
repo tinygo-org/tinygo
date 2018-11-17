@@ -40,7 +40,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		DumpSSA:    config.dumpSSA,
 		RootDir:    sourceDir(),
 		GOPATH:     getGopath(),
-		BuildTags:  append(spec.BuildTags, "tinygo"),
+		BuildTags:  spec.BuildTags,
 		InitInterp: config.initInterp,
 	}
 	c, err := compiler.NewCompiler(pkgName, compilerConfig)

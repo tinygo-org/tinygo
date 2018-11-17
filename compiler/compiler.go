@@ -200,7 +200,7 @@ func (c *Compiler) Compile(mainPath string) error {
 			CgoEnabled:  true,
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
-			BuildTags:   append([]string{"tgo"}, c.BuildTags...),
+			BuildTags:   append([]string{"tinygo"}, c.BuildTags...),
 		},
 		ParserMode: parser.ParseComments,
 	}
