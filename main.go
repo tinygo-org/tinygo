@@ -25,6 +25,7 @@ var commands = map[string]string{
 
 type BuildConfig struct {
 	opt        string
+	gc         string
 	printIR    bool
 	dumpSSA    bool
 	debug      bool
@@ -36,6 +37,7 @@ type BuildConfig struct {
 func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, action func(string) error) error {
 	compilerConfig := compiler.Config{
 		Triple:     spec.Triple,
+		GC:         config.gc,
 		Debug:      config.debug,
 		DumpSSA:    config.dumpSSA,
 		RootDir:    sourceDir(),
@@ -433,6 +435,7 @@ func handleCompilerError(err error) {
 func main() {
 	outpath := flag.String("o", "", "output filename")
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
+	gc := flag.String("gc", "dumb", "garbage collector to use (dumb)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	target := flag.String("target", "", "LLVM target")
@@ -452,6 +455,7 @@ func main() {
 	flag.CommandLine.Parse(os.Args[2:])
 	config := &BuildConfig{
 		opt:        *opt,
+		gc:         *gc,
 		printIR:    *printIR,
 		dumpSSA:    *dumpSSA,
 		debug:      !*nodebug,

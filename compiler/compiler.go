@@ -32,6 +32,7 @@ func init() {
 // Configure the compiler.
 type Config struct {
 	Triple     string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
+	GC         string   // garbage collection strategy
 	DumpSSA    bool     // dump Go SSA, for compiler debugging
 	Debug      bool     // add debug symbols for gdb
 	RootDir    string   // GOROOT for TinyGo
@@ -170,6 +171,15 @@ func (c *Compiler) TargetData() llvm.TargetData {
 	return c.targetData
 }
 
+// selectGC picks an appropriate GC strategy if none was provided.
+func (c *Compiler) selectGC() string {
+	gc := c.GC
+	if gc == "" {
+		gc = "dumb"
+	}
+	return gc
+}
+
 // Compile the given package path or .go file path. Return an error when this
 // fails (in any stage).
 func (c *Compiler) Compile(mainPath string) error {
@@ -200,7 +210,7 @@ func (c *Compiler) Compile(mainPath string) error {
 			CgoEnabled:  true,
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
-			BuildTags:   append([]string{"tinygo"}, c.BuildTags...),
+			BuildTags:   append([]string{"tinygo", "gc." + c.selectGC()}, c.BuildTags...),
 		},
 		ParserMode: parser.ParseComments,
 	}

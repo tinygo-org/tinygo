@@ -1,4 +1,10 @@
+// +build gc.dumb
+
 package runtime
+
+// This GC implementation is the simplest useful memory allocator possible: it
+// only allocates memory and never frees it. For some constrained systems, it
+// may be the only memory allocator possible.
 
 import (
 	"unsafe"
@@ -22,11 +28,11 @@ func alloc(size uintptr) unsafe.Pointer {
 }
 
 func free(ptr unsafe.Pointer) {
-	// TODO: use a GC
+	// Memory is never freed.
 }
 
 func GC() {
-	// Unimplemented.
+	// No-op.
 }
 
 func KeepAlive(x interface{}) {
