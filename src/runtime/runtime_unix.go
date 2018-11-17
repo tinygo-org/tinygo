@@ -8,9 +8,13 @@ import (
 
 func _Cfunc_putchar(c int) int
 func _Cfunc_usleep(usec uint) int
-func _Cfunc_calloc(nmemb, size uintptr) unsafe.Pointer
+func _Cfunc_malloc(size uintptr) unsafe.Pointer
 func _Cfunc_abort()
 func _Cfunc_clock_gettime(clk_id uint, ts *timespec)
+
+const heapSize = 1 * 1024 * 1024 // 1MB to start
+
+var heapStart = uintptr(_Cfunc_malloc(heapSize))
 
 type timeUnit int64
 
@@ -61,28 +65,4 @@ func ticks() timeUnit {
 func abort() {
 	// panic() exits with exit code 2.
 	_Cfunc_abort()
-}
-
-func alloc(size uintptr) unsafe.Pointer {
-	buf := _Cfunc_calloc(1, size)
-	if buf == nil {
-		runtimePanic("cannot allocate memory")
-	}
-	return buf
-}
-
-func free(ptr unsafe.Pointer) {
-	//C.free(ptr) // TODO
-}
-
-func GC() {
-	// Unimplemented.
-}
-
-func KeepAlive(x interface{}) {
-	// Unimplemented. Only required with SetFinalizer().
-}
-
-func SetFinalizer(obj interface{}, finalizer interface{}) {
-	// Unimplemented.
 }

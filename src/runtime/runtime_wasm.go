@@ -44,11 +44,6 @@ func ticks() timeUnit {
 	return timestamp
 }
 
-// Align on word boundary.
-func align(ptr uintptr) uintptr {
-	return (ptr + 3) &^ 3
-}
-
 // Abort executes the wasm 'unreachable' instruction.
 func abort() {
 	trap()

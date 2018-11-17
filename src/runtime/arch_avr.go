@@ -12,4 +12,12 @@ const GOARCH = "avr"
 const TargetBits = 8
 
 //go:extern _heap_start
-var heapStart unsafe.Pointer
+var heapStartSymbol unsafe.Pointer
+
+var heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
+
+// Align on a word boundary.
+func align(ptr uintptr) uintptr {
+	// No alignment necessary on the AVR.
+	return ptr
+}

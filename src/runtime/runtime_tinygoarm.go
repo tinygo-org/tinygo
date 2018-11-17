@@ -46,11 +46,6 @@ func abort() {
 	}
 }
 
-// Align on word boundary.
-func align(ptr uintptr) uintptr {
-	return (ptr + 3) &^ 3
-}
-
 // Implement memset for compiler-rt.
 //go:export memset
 func memset(ptr unsafe.Pointer, c byte, size uintptr) {

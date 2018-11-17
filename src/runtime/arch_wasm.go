@@ -12,4 +12,11 @@ const GOARCH = "wasm"
 const TargetBits = 32
 
 //go:extern __heap_base
-var heapStart unsafe.Pointer
+var heapStartSymbol unsafe.Pointer
+
+var heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
+
+// Align on word boundary.
+func align(ptr uintptr) uintptr {
+	return (ptr + 3) &^ 3
+}

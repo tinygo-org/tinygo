@@ -1,12 +1,11 @@
-// +build !linux
-
 package runtime
 
 import (
 	"unsafe"
 )
 
-var heapptr = uintptr(unsafe.Pointer(&heapStart))
+// Ever-incrementing pointer: no memory is freed.
+var heapptr = heapStart
 
 func alloc(size uintptr) unsafe.Pointer {
 	// TODO: this can be optimized by not casting between pointers and ints so

@@ -120,9 +120,3 @@ func abort() {
 		sleepWDT(WDT_PERIOD_2S)
 	}
 }
-
-// Align on a word boundary.
-func align(ptr uintptr) uintptr {
-	// No alignment necessary on the AVR.
-	return ptr
-}
