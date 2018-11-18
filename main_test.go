@@ -58,9 +58,19 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 		t.Fatal("could not read expected output file:", err)
 	}
 
+	var gc string
+	if target == "qemu" {
+		// make sure testdata/gc.go passes
+		gc = "marksweep"
+	} else {
+		// pick the default heap implementation
+		gc = ""
+	}
+
 	// Build the test binary.
 	config := &BuildConfig{
 		opt:        "z",
+		gc:         gc,
 		printIR:    false,
 		dumpSSA:    false,
 		debug:      false,
