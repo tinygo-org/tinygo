@@ -2420,6 +2420,20 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		// Bounds checking.
 		if !frame.fn.IsNoBounds() {
+			if sliceLen.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
+				if expr.Len.Type().(*types.Basic).Info()&types.IsUnsigned != 0 {
+					sliceLen = c.builder.CreateZExt(sliceLen, c.uintptrType, "")
+				} else {
+					sliceLen = c.builder.CreateSExt(sliceLen, c.uintptrType, "")
+				}
+			}
+			if sliceCap.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
+				if expr.Cap.Type().(*types.Basic).Info()&types.IsUnsigned != 0 {
+					sliceCap = c.builder.CreateZExt(sliceCap, c.uintptrType, "")
+				} else {
+					sliceCap = c.builder.CreateSExt(sliceCap, c.uintptrType, "")
+				}
+			}
 			c.createRuntimeCall("sliceBoundsCheckMake", []llvm.Value{sliceLen, sliceCap}, "")
 		}
 
