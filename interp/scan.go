@@ -92,6 +92,9 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 				if inst.IsVolatile() {
 					result.updateSeverity(sideEffectLimited)
 				}
+			case llvm.IntToPtr:
+				// Pointer casts are not yet supported.
+				result.updateSeverity(sideEffectLimited)
 			default:
 				// Ignore most instructions.
 				// Check this list for completeness:
