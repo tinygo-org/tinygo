@@ -1964,6 +1964,14 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 			return c.builder.CreateCall(target, nil, ""), nil
 		}
 
+		if fn.RelString(nil) == "device/arm.ReadRegister" {
+			// Magic function: return the given register.
+			fnType := llvm.FunctionType(c.uintptrType, []llvm.Type{}, false)
+			regname := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
+			target := llvm.InlineAsm(fnType, "mov $0, "+regname, "=r", false, false, 0)
+			return c.builder.CreateCall(target, nil, ""), nil
+		}
+
 		if fn.RelString(nil) == "device/arm.AsmFull" || fn.RelString(nil) == "device/avr.AsmFull" {
 			asmString := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
 			registers := map[string]llvm.Value{}
