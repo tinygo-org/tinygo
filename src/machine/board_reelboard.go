@@ -1,4 +1,4 @@
-// +build nrf,reelboard
+// +build reelboard
 
 package machine
 

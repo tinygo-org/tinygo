@@ -1,25 +1,7 @@
 {
-	"llvm-target": "armv7em-none-eabi",
-	"build-tags": ["reelboard", "nrf52840", "nrf", "tinygo.arm", "js", "wasm"],
-	"linker": "arm-none-eabi-gcc",
-	"pre-link-args": [
-		"-nostdlib",
-		"-nostartfiles",
-		"-mcpu=cortex-m4",
-		"-mthumb",
-		"-T", "targets/nrf52840.ld",
-		"-Wl,--gc-sections",
-		"-fno-exceptions", "-fno-unwind-tables",
-		"-ffunction-sections", "-fdata-sections",
-		"-Os",
-		"-DNRF52840_XXAA",
-		"-Ilib/CMSIS/CMSIS/Include",
-		"lib/nrfx/mdk/system_nrf52840.c",
-		"src/device/nrf/nrf52840.s"
-	],
-	"objcopy": "arm-none-eabi-objcopy",
+	"inherits": ["nrf52840"],
+	"build-tags": ["reelboard"],
 	"flash": "openocd -f interface/cmsis-dap.cfg -f target/nrf51.cfg -c 'program {hex} reset exit'",
 	"ocd-daemon": ["openocd", "-f", "interface/cmsis-dap.cfg", "-f", "target/nrf51.cfg"],
-	"gdb": "arm-none-eabi-gdb",
 	"gdb-initial-cmds": ["target remote :3333", "monitor halt", "load", "monitor reset", "c"]
 }
