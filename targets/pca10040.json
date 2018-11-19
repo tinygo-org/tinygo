@@ -1,26 +1,7 @@
 {
-	"llvm-target": "armv7em-none-eabi",
-	"build-tags": ["pca10040", "nrf52832", "nrf52", "nrf", "tinygo.arm", "js", "wasm"],
-	"linker": "arm-none-eabi-gcc",
-	"compiler-rt": true,
-	"pre-link-args": [
-		"-nostdlib",
-		"-nostartfiles",
-		"-mcpu=cortex-m4",
-		"-mthumb",
-		"-T", "targets/nrf52.ld",
-		"-Wl,--gc-sections",
-		"-fno-exceptions", "-fno-unwind-tables",
-		"-ffunction-sections", "-fdata-sections",
-		"-Os",
-		"-DNRF52832_XXAA",
-		"-Ilib/CMSIS/CMSIS/Include",
-		"lib/nrfx/mdk/system_nrf52.c",
-		"src/device/nrf/nrf52.s"
-	],
-	"objcopy": "arm-none-eabi-objcopy",
+	"inherits": ["nrf52"],
+	"build-tags": ["pca10040"],
 	"flash": "nrfjprog -f nrf52 --sectorerase --program {hex} --reset",
 	"ocd-daemon": ["openocd", "-f", "interface/jlink.cfg", "-c", "transport select swd", "-f", "target/nrf51.cfg"],
-	"gdb": "arm-none-eabi-gdb",
 	"gdb-initial-cmds": ["target remote :3333", "monitor halt", "load", "monitor reset", "c"]
 }

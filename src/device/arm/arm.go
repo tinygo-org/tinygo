@@ -50,6 +50,10 @@ func Asm(asm string)
 //         })
 func AsmFull(asm string, regs map[string]interface{})
 
+// ReadRegister returns the contents of the specified register. The register
+// must be a processor register, reachable with the "mov" instruction.
+func ReadRegister(name string) uintptr
+
 //go:volatile
 type RegValue uint32
 

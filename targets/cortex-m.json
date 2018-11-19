@@ -1,0 +1,7 @@
+{
+	"build-tags": ["tinygo.arm", "js", "wasm"],
+	"linker": "arm-none-eabi-gcc",
+	"rtlib": "compiler-rt",
+	"objcopy": "arm-none-eabi-objcopy",
+	"gdb": "arm-none-eabi-gdb"
+}

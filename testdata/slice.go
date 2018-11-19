@@ -10,6 +10,19 @@ func main() {
 	printslice("foo[1:2]", foo[1:2])
 	println("sum foo:", sum(foo))
 
+	// creating a slice with uncommon len, cap types
+	assert(len(make([]int, int(2), int(3))) == 2)
+	assert(len(make([]int, int8(2), int8(3))) == 2)
+	assert(len(make([]int, int16(2), int16(3))) == 2)
+	assert(len(make([]int, int32(2), int32(3))) == 2)
+	assert(len(make([]int, int64(2), int64(3))) == 2)
+	assert(len(make([]int, uint(2), uint(3))) == 2)
+	assert(len(make([]int, uint8(2), uint8(3))) == 2)
+	assert(len(make([]int, uint16(2), uint16(3))) == 2)
+	assert(len(make([]int, uint32(2), uint32(3))) == 2)
+	assert(len(make([]int, uint64(2), uint64(3))) == 2)
+	assert(len(make([]int, uintptr(2), uintptr(3))) == 2)
+
 	// indexing into a slice with uncommon index types
 	assert(foo[int(2)] == 4)
 	assert(foo[int8(2)] == 4)

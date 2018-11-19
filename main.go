@@ -153,7 +153,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		// Load builtins library from the cache, possibly compiling it on the
 		// fly.
 		var cachePath string
-		if spec.CompilerRT {
+		if spec.RTLib == "compiler-rt" {
 			librt, err := loadBuiltins(spec.Triple)
 			if err != nil {
 				return err
@@ -165,7 +165,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
 		args := append(spec.PreLinkArgs, "-o", executable, objfile)
-		if spec.CompilerRT {
+		if spec.RTLib == "compiler-rt" {
 			args = append(args, "-L", cachePath, "-lrt-"+spec.Triple)
 		}
 		cmd := exec.Command(spec.Linker, args...)
@@ -435,7 +435,7 @@ func handleCompilerError(err error) {
 func main() {
 	outpath := flag.String("o", "", "output filename")
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
-	gc := flag.String("gc", "dumb", "garbage collector to use (none, dumb)")
+	gc := flag.String("gc", "", "garbage collector to use (none, dumb, marksweep)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	target := flag.String("target", "", "LLVM target")
