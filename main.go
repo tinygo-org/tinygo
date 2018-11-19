@@ -153,7 +153,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		// Load builtins library from the cache, possibly compiling it on the
 		// fly.
 		var cachePath string
-		if spec.CompilerRT {
+		if spec.RTLib == "compiler-rt" {
 			librt, err := loadBuiltins(spec.Triple)
 			if err != nil {
 				return err
@@ -165,7 +165,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
 		args := append(spec.PreLinkArgs, "-o", executable, objfile)
-		if spec.CompilerRT {
+		if spec.RTLib == "compiler-rt" {
 			args = append(args, "-L", cachePath, "-lrt-"+spec.Triple)
 		}
 		cmd := exec.Command(spec.Linker, args...)

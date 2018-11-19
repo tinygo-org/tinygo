@@ -20,7 +20,7 @@ type TargetSpec struct {
 	Triple      string   `json:"llvm-target"`
 	BuildTags   []string `json:"build-tags"`
 	Linker      string   `json:"linker"`
-	CompilerRT  bool     `json:"compiler-rt"`
+	RTLib       string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
 	PreLinkArgs []string `json:"pre-link-args"`
 	Objcopy     string   `json:"objcopy"`
 	Emulator    []string `json:"emulator"`
