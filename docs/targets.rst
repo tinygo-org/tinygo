@@ -38,6 +38,8 @@ technology (LLVM) as the proprietary ARM compiler for code generation.
     <https://www.nordicsemi.com/eng/Products/Bluetooth-low-energy/nRF52832>`_)
   * `nRF52840-MDK <https://wiki.makerdiary.com/nrf52840-mdk/>`_ (`nRF52840
     <https://www.nordicsemi.com/eng/Products/nRF52840>`_)
+  * `reel board <https://www.phytec.eu/product-eu/internet-of-things/reelboard/>`_ (`nRF52840
+    <https://www.nordicsemi.com/eng/Products/nRF52840>`_)
   * `Nordic PCA10056 <https://www.nordicsemi.com/Software-and-Tools/Development-Kits/nRF52840-DK>`_ (`nRF52840
     <https://www.nordicsemi.com/eng/Products/nRF52840>`_)
   * `QEMU <https://wiki.qemu.org/Documentation/Platforms/ARM>`_ (`LM3S6965

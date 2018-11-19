@@ -20,6 +20,11 @@ else ifeq ($(TARGET),microbit)
 OBJCOPY = arm-none-eabi-objcopy
 TGOFLAGS += -target $(TARGET)
 
+else ifeq ($(TARGET),reelboard)
+# reel board
+OBJCOPY = arm-none-eabi-objcopy
+TGOFLAGS += -target $(TARGET)
+
 else ifeq ($(TARGET),bluepill)
 # "blue pill" development board
 # See: https://wiki.stm32duino.com/index.php?title=Blue_Pill
@@ -48,6 +53,9 @@ ifeq ($(TARGET),pca10040)
 flash-%: build/%.hex
 	nrfjprog -f nrf52 --sectorerase --program $< --reset
 else ifeq ($(TARGET),microbit)
+flash-%: build/%.hex
+	openocd -f interface/cmsis-dap.cfg -f target/nrf51.cfg -c 'program $< reset exit'
+else ifeq ($(TARGET),reelboard)
 flash-%: build/%.hex
 	openocd -f interface/cmsis-dap.cfg -f target/nrf51.cfg -c 'program $< reset exit'
 else ifeq ($(TARGET),arduino)
