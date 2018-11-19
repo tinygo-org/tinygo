@@ -1,0 +1,20 @@
+{
+	"inherits": ["cortex-m"],
+	"llvm-target": "armv7em-none-eabi",
+	"build-tags": ["nrf52", "nrf"],
+	"pre-link-args": [
+		"-nostdlib",
+		"-nostartfiles",
+		"-mcpu=cortex-m4",
+		"-mthumb",
+		"-T", "targets/nrf52.ld",
+		"-Wl,--gc-sections",
+		"-fno-exceptions", "-fno-unwind-tables",
+		"-ffunction-sections", "-fdata-sections",
+		"-Os",
+		"-DNRF52832_XXAA",
+		"-Ilib/CMSIS/CMSIS/Include",
+		"lib/nrfx/mdk/system_nrf52.c",
+		"src/device/nrf/nrf52.s"
+	]
+}

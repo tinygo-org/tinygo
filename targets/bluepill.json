@@ -1,9 +1,18 @@
 {
+	"inherits": ["cortex-m"],
 	"llvm-target": "armv7m-none-eabi",
-	"build-tags": ["bluepill", "stm32f103xx", "stm32", "tinygo.arm", "js", "wasm"],
-	"linker": "arm-none-eabi-gcc",
-	"rtlib": "compiler-rt",
-	"pre-link-args": ["-nostdlib", "-nostartfiles", "-mcpu=cortex-m3", "-mthumb", "-T", "targets/stm32.ld", "-Wl,--gc-sections", "-fno-exceptions", "-fno-unwind-tables", "-ffunction-sections", "-fdata-sections", "-Os", "src/device/stm32/stm32f103xx.s"],
-	"objcopy": "arm-none-eabi-objcopy",
+	"build-tags": ["bluepill", "stm32f103xx", "stm32"],
+	"pre-link-args": [
+		"-nostdlib",
+		"-nostartfiles",
+		"-mcpu=cortex-m3",
+		"-mthumb",
+		"-T", "targets/stm32.ld",
+		"-Wl,--gc-sections",
+		"-fno-exceptions", "-fno-unwind-tables",
+		"-ffunction-sections", "-fdata-sections",
+		"-Os",
+		"src/device/stm32/stm32f103xx.s"
+	],
 	"flash": "openocd -f interface/stlink-v2.cfg -f target/stm32f1x.cfg -c 'program {hex} reset exit'"
 }
