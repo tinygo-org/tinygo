@@ -5,8 +5,6 @@ MEMORY
     RAM (xrw)       : ORIGIN = 0, LENGTH = __ram_size
 }
 
-_stack_size = 512;
-
 SECTIONS
 {
     .text :
