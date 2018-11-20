@@ -25,4 +25,5 @@ script:
   - tinygo build -o blinky1.nrf51.elf -target=microbit     examples/echo
   - tinygo build -o test.nrf.elf      -target=nrf52840-mdk examples/blinky1
   - tinygo build -o blinky1.stm32.elf -target=bluepill     examples/blinky1
-  - tinygo build -o blinky1.avr.o     -target=arduino      examples/blinky1 # TODO: avr-as/avr-gcc doesn't work
+  - tinygo build -o blinky1.o         -target=arduino      examples/blinky1 # TODO: avr-as/avr-gcc doesn't work
+  - tinygo build -o blinky1.o         -target=digispark    examples/blinky1

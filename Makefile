@@ -72,6 +72,7 @@ gen-device: gen-device-avr gen-device-nrf gen-device-stm32
 
 gen-device-avr:
 	./tools/gen-device-avr.py lib/avr/packs/atmega src/device/avr/
+	./tools/gen-device-avr.py lib/avr/packs/tiny src/device/avr/
 	go fmt ./src/device/avr
 
 gen-device-nrf:

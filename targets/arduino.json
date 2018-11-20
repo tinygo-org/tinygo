@@ -1,7 +1,7 @@
 {
+	"inherits": ["avr"],
 	"llvm-target": "avr-atmel-none",
-	"build-tags": ["arduino", "atmega328p", "atmega", "avr5", "avr", "js", "wasm"],
-	"linker": "avr-gcc",
+	"build-tags": ["arduino", "atmega328p", "atmega", "avr5"],
 	"pre-link-args": [
 		"-nostartfiles",
 		"-mmcu=avr5",
@@ -13,6 +13,5 @@
 		"targets/avr.S",
 		"src/device/avr/atmega328p.s"
 	],
-	"objcopy": "avr-objcopy",
 	"flash": "avrdude -c arduino -p atmega328p -P {port} -U flash:w:{hex}"
 }
