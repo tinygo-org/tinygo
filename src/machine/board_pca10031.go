@@ -13,6 +13,7 @@ const (
 	LED       = LED_RED
 	LED1      = LED_RED
 	LED2      = LED_GREEN
+	LED3      = LED_BLUE
 	LED_RED   = 21
 	LED_GREEN = 22
 	LED_BLUE  = 23
@@ -26,6 +27,6 @@ const (
 
 // I2C pins (disabled)
 const (
-	SDA_PIN = 0xff
-	SCL_PIN = 0xff
+	SDA_PIN = 0xffffffff
+	SCL_PIN = 0xffffffff
 )
