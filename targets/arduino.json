@@ -6,6 +6,7 @@
 		"-nostartfiles",
 		"-mmcu=avr5",
 		"-Wl,--defsym=_bootloader_size=512",
+		"-Wl,--defsym=_stack_size=512",
 		"-T", "src/device/avr/atmega328p.ld",
 		"-T", "targets/avr.ld",
 		"-Wl,--gc-sections",
