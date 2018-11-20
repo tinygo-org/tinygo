@@ -28,6 +28,10 @@ technology (LLVM) as the proprietary ARM compiler for code generation.
 
   * `BBC micro:bit <https://microbit.org/>`_ (`nRF51822
     <https://www.nordicsemi.com/eng/Products/Bluetooth-low-energy/nRF51822>`_)
+  * `Nordic PCA10031
+    <https://www.nordicsemi.com/eng/Products/nRF51-Dongle>`_
+    (`nRF51422
+    <https://www.nordicsemi.com/eng/Products/ANT/nRF51422>`_)
   * `Nordic PCA10040
     <https://www.nordicsemi.com/eng/Products/Bluetooth-low-energy/nRF52-DK>`_
     (`nRF52832
