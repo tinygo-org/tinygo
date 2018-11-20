@@ -23,23 +23,6 @@ func (p GPIO) Configure(config GPIOConfig) {
 	}
 }
 
-// Set changes the value of the GPIO pin. The pin must be configured as output.
-func (p GPIO) Set(value bool) {
-	if value { // set bits
-		if p.Pin < 8 {
-			*avr.PORTD |= 1 << p.Pin
-		} else {
-			*avr.PORTB |= 1 << (p.Pin - 8)
-		}
-	} else { // clear bits
-		if p.Pin < 8 {
-			*avr.PORTD &^= 1 << p.Pin
-		} else {
-			*avr.PORTB &^= 1 << (p.Pin - 8)
-		}
-	}
-}
-
 // Get returns the current value of a GPIO pin.
 func (p GPIO) Get() bool {
 	if p.Pin < 8 {
@@ -48,6 +31,14 @@ func (p GPIO) Get() bool {
 	} else {
 		val := *avr.PINB & (1 << (p.Pin - 8))
 		return (val > 0)
+	}
+}
+
+func (p GPIO) getPortMask() (*avr.RegValue, uint8) {
+	if p.Pin < 8 {
+		return avr.PORTD, 1 << p.Pin
+	} else {
+		return avr.PORTB, 1 << (p.Pin - 8)
 	}
 }
 
