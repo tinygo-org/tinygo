@@ -27,6 +27,6 @@ const (
 
 // I2C pins (disabled)
 const (
-	SDA_PIN = 0xffffffff
-	SCL_PIN = 0xffffffff
+	SDA_PIN = 0xff
+	SCL_PIN = 0xff
 )
