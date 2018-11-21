@@ -51,6 +51,9 @@ Note: the AVR backend of LLVM is still experimental so you may encounter bugs.
 
   * `Arduino Uno <https://store.arduino.cc/arduino-uno-rev3>`_ (`ATmega328p
     <https://www.microchip.com/wwwproducts/en/ATmega328p>`_)
+  * `Digispark <http://digistump.com/products/1>`_ (`ATtiny85
+    <https://www.microchip.com/wwwproducts/en/ATtiny85>`_) |br|
+    Very limited support at the moment.
 
 
 WebAssembly

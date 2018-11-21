@@ -93,10 +93,16 @@ def readATDF(path):
                     continue
 
                 for bitfieldEl in regEl.getElementsByTagName('bitfield'):
+                    mask = bitfieldEl.getAttribute('mask')
+                    if len(mask) == 2:
+                        # Two devices (ATtiny102 and ATtiny104) appear to have
+                        # an error in the bitfields, leaving out the '0x'
+                        # prefix.
+                        mask = '0x' + mask
                     reg['bitfields'].append({
                         'name':        regName + '_' + bitfieldEl.getAttribute('name'),
                         'description': bitfieldEl.getAttribute('caption'),
-                        'value':       int(bitfieldEl.getAttribute('mask'), 0),
+                        'value':       int(mask, 0),
                     })
 
                 if regName in allRegisters:
@@ -112,6 +118,11 @@ def readATDF(path):
 
                 peripheral['registers'].append(reg)
 
+    ramSize = 0 # for devices with no RAM
+    for ramSegmentName in ['IRAM', 'INTERNAL_SRAM', 'SRAM']:
+        if ramSegmentName in memorySizes['data']['segments']:
+            ramSize = memorySizes['data']['segments'][ramSegmentName]
+
     device.metadata = {
         'file':             os.path.basename(path),
         'descriptorSource': 'http://packs.download.atmel.com/',
@@ -121,7 +132,7 @@ def readATDF(path):
         'arch':             arch,
         'family':           family,
         'flashSize':        memorySizes['prog']['size'],
-        'ramSize':          memorySizes['data']['segments'].get('IRAM', memorySizes['data']['segments'].get('INTERNAL_SRAM')),
+        'ramSize':          ramSize,
         'numInterrupts':    len(device.interrupts),
     }
 
@@ -228,15 +239,21 @@ __vector_default:
 '''.format(**device.metadata))
     num = 0
     for intr in device.interrupts:
+        jmp = 'jmp'
+        if device.metadata['flashSize'] <= 8 * 1024:
+            # When a device has 8kB or less flash, rjmp (2 bytes) must be used
+            # instead of jmp (4 bytes).
+            # https://www.avrfreaks.net/forum/rjmp-versus-jmp
+            jmp = 'rjmp'
         if intr['index'] < num:
             # Some devices have duplicate interrupts, probably for historical
             # reasons.
             continue
         while intr['index'] > num:
-            out.write('    jmp __vector_default\n')
+            out.write('    {jmp} __vector_default\n'.format(jmp=jmp))
             num += 1
         num += 1
-        out.write('    jmp __vector_{name}\n'.format(**intr))
+        out.write('    {jmp} __vector_{name}\n'.format(jmp=jmp, **intr))
 
     out.write('''
     ; Define default implementations for interrupts, redirecting to

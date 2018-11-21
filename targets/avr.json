@@ -1,0 +1,5 @@
+{
+	"build-tags": ["avr", "js", "wasm"],
+	"linker": "avr-gcc",
+	"objcopy": "avr-objcopy"
+}
