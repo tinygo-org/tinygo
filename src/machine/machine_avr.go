@@ -13,6 +13,39 @@ const (
 	GPIO_OUTPUT
 )
 
+// Set changes the value of the GPIO pin. The pin must be configured as output.
+func (p GPIO) Set(value bool) {
+	if value { // set bits
+		port, mask := p.PortMaskSet()
+		*port = mask
+	} else { // clear bits
+		port, mask := p.PortMaskClear()
+		*port = mask
+	}
+}
+
+// Return the register and mask to enable a given GPIO pin. This can be used to
+// implement bit-banged drivers.
+//
+// Warning: there are no separate pin set/clear registers on the AVR. The
+// returned mask is only valid as long as no other pin in the same port has been
+// changed.
+func (p GPIO) PortMaskSet() (*avr.RegValue, avr.RegValue) {
+	port, mask := p.getPortMask()
+	return port, *port | avr.RegValue(mask)
+}
+
+// Return the register and mask to disable a given port. This can be used to
+// implement bit-banged drivers.
+//
+// Warning: there are no separate pin set/clear registers on the AVR. The
+// returned mask is only valid as long as no other pin in the same port has been
+// changed.
+func (p GPIO) PortMaskClear() (*avr.RegValue, avr.RegValue) {
+	port, mask := p.getPortMask()
+	return port, *port &^ avr.RegValue(mask)
+}
+
 // InitADC initializes the registers needed for ADC.
 func InitADC() {
 	// set a2d prescaler so we are inside the desired 50-200 KHz range at 16MHz.

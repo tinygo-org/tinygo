@@ -15,13 +15,8 @@ func (p GPIO) Configure(config GPIOConfig) {
 	}
 }
 
-// Set changes the value of the GPIO pin. The pin must be configured as output.
-func (p GPIO) Set(value bool) {
-	if value { // set bits
-		*avr.PORTB |= 1 << p.Pin
-	} else { // clear bits
-		*avr.PORTB &^= 1 << p.Pin
-	}
+func (p GPIO) getPortMask() (*avr.RegValue, uint8) {
+	return avr.PORTB, 1 << p.Pin
 }
 
 // Get returns the current value of a GPIO pin.
