@@ -1972,6 +1972,36 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 			return c.builder.CreateCall(target, nil, ""), nil
 		}
 
+		if strings.HasPrefix(fn.RelString(nil), "device/arm.SVCall") {
+			// Magic function: inline this call as a SVC instruction.
+			num, _ := constant.Uint64Val(instr.Args[0].(*ssa.Const).Value)
+			args := []llvm.Value{}
+			argTypes := []llvm.Type{}
+			asm := "svc #" + strconv.FormatUint(num, 10)
+			constraints := "={r0}"
+			for i, arg := range instr.Args[1:] {
+				arg = arg.(*ssa.MakeInterface).X
+				if i == 0 {
+					constraints += ",0"
+				} else {
+					constraints += ",{r" + strconv.Itoa(i) + "}"
+				}
+				llvmValue, err := c.parseExpr(frame, arg)
+				if err != nil {
+					return llvm.Value{}, err
+				}
+				args = append(args, llvmValue)
+				argTypes = append(argTypes, llvmValue.Type())
+			}
+			// Implement the ARM calling convention by marking r1-r3 as
+			// clobbered. r0 is used as an output register so doesn't have to be
+			// marked as clobbered.
+			constraints += ",~{r1},~{r2},~{r3}"
+			fnType := llvm.FunctionType(c.uintptrType, argTypes, false)
+			target := llvm.InlineAsm(fnType, asm, constraints, true, false, 0)
+			return c.builder.CreateCall(target, args, ""), nil
+		}
+
 		if fn.RelString(nil) == "device/arm.AsmFull" || fn.RelString(nil) == "device/avr.AsmFull" {
 			asmString := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
 			registers := map[string]llvm.Value{}
