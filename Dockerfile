@@ -58,7 +58,7 @@ COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/lib /go/src/github.com/
 
 RUN cd /go/src/github.com/aykevl/tinygo/ && \
     apt-get update && \
-    apt-get install -y apt-utils python3 make gcc-arm-none-eabi clang-7 && \
+    apt-get install -y apt-utils python3 make binutils-arm-none-eabi clang-7 && \
     make gen-device-nrf && make gen-device-stm32 && \
     apt-get remove -y python3 make && \
     apt-get autoremove -y && \
@@ -73,7 +73,7 @@ COPY --from=tinygo-base /go/src/github.com/aykevl/tinygo/lib /go/src/github.com/
 
 RUN cd /go/src/github.com/aykevl/tinygo/ && \
     apt-get update && \
-    apt-get install -y apt-utils python3 make gcc-arm-none-eabi clang-7 binutils-avr gcc-avr avr-libc && \
+    apt-get install -y apt-utils python3 make binutils-arm-none-eabi clang-7 binutils-avr gcc-avr avr-libc && \
     make gen-device && \
     apt-get remove -y python3 make && \
     apt-get autoremove -y && \
