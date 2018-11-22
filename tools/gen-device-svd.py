@@ -385,7 +385,10 @@ Default_Handler:
     .set   \\handler, Default_Handler
 .endm
 
-.section .isr_vector
+// Must set the "a" flag on the section:
+// https://svnweb.freebsd.org/base/stable/11/sys/arm/arm/locore-v4.S?r1=321049&r2=321048&pathrev=321049
+// https://sourceware.org/binutils/docs/as/Section.html#ELF-Version
+.section .isr_vector, "a", %progbits
 .global  __isr_vector
     // Interrupt vector as defined by Cortex-M, starting with the stack top.
     // On reset, SP is initialized with *0x0 and PC is loaded with *0x4, loading
