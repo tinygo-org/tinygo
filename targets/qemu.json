@@ -2,16 +2,14 @@
 	"inherits": ["cortex-m"],
 	"llvm-target": "armv7m-none-eabi",
 	"build-tags": ["qemu", "lm3s6965"],
-	"pre-link-args": [
-		"-nostdlib",
-		"-nostartfiles",
-		"-mcpu=cortex-m0",
-		"-mthumb",
-		"-T", "targets/lm3s6965.ld",
-		"-Wl,--gc-sections",
-		"-fno-exceptions", "-fno-unwind-tables",
-		"-ffunction-sections", "-fdata-sections",
-		"-Os",
+	"cflags": [
+		"--target=armv7m-none-eabi",
+		"-Qunused-arguments"
+	],
+	"ldflags": [
+		"-T", "targets/lm3s6965.ld"
+	],
+	"extra-files": [
 		"targets/cortex-m.s"
 	],
 	"emulator": ["qemu-system-arm", "-machine", "lm3s6965evb", "-semihosting", "-nographic", "-kernel"]

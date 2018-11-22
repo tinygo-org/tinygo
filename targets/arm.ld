@@ -1,4 +1,7 @@
 
+/* Unused, but here to silence a linker warning. */
+ENTRY(Reset_Handler)
+
 /* define output sections */
 SECTIONS
 {

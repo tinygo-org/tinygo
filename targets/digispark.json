@@ -2,14 +2,15 @@
 	"inherits": ["avr"],
 	"llvm-target": "avr-atmel-none",
 	"build-tags": ["digispark", "attiny85", "attiny", "avr2", "avr25"],
-	"pre-link-args": [
-		"-nostartfiles",
-		"-mmcu=attiny85",
+	"cflags": [
+		"-mmcu=attiny85"
+	],
+	"ldflags": [
 		"-Wl,--defsym=_bootloader_size=2180",
 		"-Wl,--defsym=_stack_size=128",
-		"-T", "src/device/avr/attiny85.ld",
-		"-T", "targets/avr.ld",
-		"-Wl,--gc-sections",
+		"-T", "src/device/avr/attiny85.ld"
+	],
+	"extra-files": [
 		"targets/avr.S",
 		"src/device/avr/attiny85.s"
 	],

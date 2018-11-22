@@ -1,5 +1,10 @@
 {
 	"build-tags": ["avr", "js", "wasm"],
+	"compiler": "avr-gcc",
 	"linker": "avr-gcc",
-	"objcopy": "avr-objcopy"
+	"objcopy": "avr-objcopy",
+	"ldflags": [
+		"-T", "targets/avr.ld",
+		"-Wl,--gc-sections"
+	]
 }

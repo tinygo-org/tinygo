@@ -2,14 +2,15 @@
 	"inherits": ["avr"],
 	"llvm-target": "avr-atmel-none",
 	"build-tags": ["arduino", "atmega328p", "atmega", "avr5"],
-	"pre-link-args": [
-		"-nostartfiles",
-		"-mmcu=avr5",
+	"cflags": [
+		"-mmcu=atmega328p"
+	],
+	"ldflags": [
 		"-Wl,--defsym=_bootloader_size=512",
 		"-Wl,--defsym=_stack_size=512",
-		"-T", "src/device/avr/atmega328p.ld",
-		"-T", "targets/avr.ld",
-		"-Wl,--gc-sections",
+		"-T", "src/device/avr/atmega328p.ld"
+	],
+	"extra-files": [
 		"targets/avr.S",
 		"src/device/avr/atmega328p.s"
 	],
