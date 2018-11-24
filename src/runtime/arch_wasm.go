@@ -16,7 +16,7 @@ var heapStartSymbol unsafe.Pointer
 
 var (
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
-	heapEnd   = (heapStart + wasmPageSize - 1) & (wasmPageSize - 1) // conservative guess: one page of heap memory
+	heapEnd   = (heapStart + wasmPageSize - 1) &^ (wasmPageSize - 1) // conservative guess: one page of heap memory
 )
 
 const wasmPageSize = 64 * 1024
