@@ -58,8 +58,10 @@ var s2 = Struct2{"foo", 0.0, 5}
 
 var a1 = [2]int{1, 2}
 
+type Int int
+
 type Struct1 struct {
-	i int
+	i Int
 	b bool
 }
 

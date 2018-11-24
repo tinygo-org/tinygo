@@ -2225,7 +2225,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return c.parseBinOp(expr.Op, expr.X.Type().Underlying(), x, y)
+		return c.parseBinOp(expr.Op, expr.X.Type(), x, y)
 	case *ssa.Call:
 		// Passing the current task here to the subroutine. It is only used when
 		// the subroutine is blocking.
@@ -2711,7 +2711,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 }
 
 func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (llvm.Value, error) {
-	switch typ := typ.(type) {
+	switch typ := typ.Underlying().(type) {
 	case *types.Basic:
 		if typ.Info()&types.IsInteger != 0 {
 			// Operations on integers
