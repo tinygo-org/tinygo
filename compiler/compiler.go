@@ -149,6 +149,10 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 	return c, nil
 }
 
+func (c *Compiler) Packages() []*loader.Package {
+	return c.ir.LoaderProgram.Sorted()
+}
+
 // Return the LLVM module. Only valid after a successful compile.
 func (c *Compiler) Module() llvm.Module {
 	return c.mod

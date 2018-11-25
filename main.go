@@ -192,6 +192,23 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 			ldflags = append(ldflags, outpath)
 		}
 
+		// Compile C files in packages.
+		for i, pkg := range c.Packages() {
+			for _, file := range pkg.CFiles {
+				path := filepath.Join(pkg.Package.Dir, file)
+				outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"-"+file+".o")
+				cmd := exec.Command(spec.Compiler, append(spec.CFlags, "-c", "-o", outpath, path)...)
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				cmd.Dir = sourceDir()
+				err := cmd.Run()
+				if err != nil {
+					return err
+				}
+				ldflags = append(ldflags, outpath)
+			}
+		}
+
 		// Link the object files together.
 		cmd := exec.Command(spec.Linker, ldflags...)
 		cmd.Stdout = os.Stdout
