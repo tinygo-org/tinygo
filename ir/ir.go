@@ -8,9 +8,8 @@ import (
 	"strings"
 
 	"github.com/aykevl/go-llvm"
-	"golang.org/x/tools/go/loader"
+	"github.com/aykevl/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
-	"golang.org/x/tools/go/ssa/ssautil"
 )
 
 // This file provides a wrapper around go/ssa values and adds extra
@@ -78,7 +77,7 @@ type Interface struct {
 // Create and intialize a new *Program from a *ssa.Program.
 func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 	comments := map[string]*ast.CommentGroup{}
-	for _, pkgInfo := range lprogram.AllPackages {
+	for _, pkgInfo := range lprogram.Sorted() {
 		for _, file := range pkgInfo.Files {
 			for _, decl := range file.Decls {
 				switch decl := decl.(type) {
@@ -106,7 +105,7 @@ func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 		}
 	}
 
-	program := ssautil.CreateProgram(lprogram, ssa.SanityCheckFunctions|ssa.BareInits|ssa.GlobalDebug)
+	program := lprogram.LoadSSA()
 	program.Build()
 
 	// Find the main package, which is a bit difficult when running a .go file

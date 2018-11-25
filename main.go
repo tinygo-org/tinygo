@@ -18,6 +18,7 @@ import (
 	"github.com/aykevl/go-llvm"
 	"github.com/aykevl/tinygo/compiler"
 	"github.com/aykevl/tinygo/interp"
+	"github.com/aykevl/tinygo/loader"
 )
 
 var commands = map[string]string{
@@ -454,6 +455,11 @@ func handleCompilerError(err error) {
 			fmt.Fprintln(os.Stderr)
 		} else if errCompiler, ok := err.(types.Error); ok {
 			fmt.Fprintln(os.Stderr, errCompiler)
+		} else if errLoader, ok := err.(loader.Errors); ok {
+			fmt.Fprintln(os.Stderr, "#", errLoader.Pkg.ImportPath)
+			for _, err := range errLoader.Errs {
+				fmt.Fprintln(os.Stderr, err)
+			}
 		} else {
 			fmt.Fprintln(os.Stderr, "error:", err)
 		}

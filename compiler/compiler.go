@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go/build"
 	"go/constant"
-	"go/parser"
 	"go/token"
 	"go/types"
 	"os"
@@ -17,7 +16,7 @@ import (
 
 	"github.com/aykevl/go-llvm"
 	"github.com/aykevl/tinygo/ir"
-	"golang.org/x/tools/go/loader"
+	"github.com/aykevl/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
 )
 
@@ -183,14 +182,11 @@ func (c *Compiler) Compile(mainPath string) error {
 		gopath = runtime.GOROOT() + string(filepath.ListSeparator) + gopath
 	}
 
-	config := loader.Config{
-		TypeChecker: types.Config{
-			Sizes: &StdSizes{
-				IntSize:  int64(c.targetData.TypeAllocSize(c.intType)),
-				PtrSize:  int64(c.targetData.PointerSize()),
-				MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
-			},
-		},
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	lprogram := &loader.Program{
 		Build: &build.Context{
 			GOARCH:      tripleSplit[0],
 			GOOS:        tripleSplit[2],
@@ -201,15 +197,32 @@ func (c *Compiler) Compile(mainPath string) error {
 			Compiler:    "gc", // must be one of the recognized compilers
 			BuildTags:   append([]string{"tinygo", "gc." + c.selectGC()}, c.BuildTags...),
 		},
-		ParserMode: parser.ParseComments,
+		TypeChecker: types.Config{
+			Sizes: &StdSizes{
+				IntSize:  int64(c.targetData.TypeAllocSize(c.intType)),
+				PtrSize:  int64(c.targetData.PointerSize()),
+				MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
+			},
+		},
+		Dir: wd,
 	}
-	config.Import("runtime")
 	if strings.HasSuffix(mainPath, ".go") {
-		config.CreateFromFilenames("main", mainPath)
+		_, err = lprogram.ImportFile(mainPath)
+		if err != nil {
+			return err
+		}
 	} else {
-		config.Import(mainPath)
+		_, err = lprogram.Import(mainPath, wd)
+		if err != nil {
+			return err
+		}
 	}
-	lprogram, err := config.Load()
+	_, err = lprogram.Import("runtime", "")
+	if err != nil {
+		return err
+	}
+
+	err = lprogram.Parse()
 	if err != nil {
 		return err
 	}
