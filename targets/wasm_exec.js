@@ -196,7 +196,7 @@
 					resource_write: function(fd, ptr, len) {
 						if (fd == 1) {
 							for (let i=0; i<len; i++) {
-								let c = mem.getUint8(ptr+i);
+								let c = mem().getUint8(ptr+i);
 								if (c == 13) { // CR
 									// ignore
 								} else if (c == 10) { // LF
