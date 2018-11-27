@@ -1,0 +1,7 @@
+{
+	"inherits": ["nrf52840"],
+	"build-tags": ["pca10056"],
+	"flash": "nrfjprog -f nrf52 --sectorerase --program {hex} --reset",
+	"ocd-daemon": ["openocd", "-f", "interface/cmsis-dap.cfg", "-f", "target/nrf51.cfg"],
+	"gdb-initial-cmds": ["target remote :3333", "monitor halt", "load", "monitor reset", "c"]
+}

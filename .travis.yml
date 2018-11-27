@@ -27,3 +27,5 @@ script:
   - tinygo build -o blinky1.nrf51d.elf -target=pca10031     examples/blinky1
   - tinygo build -o blinky1.stm32.elf  -target=bluepill     examples/blinky1
   - tinygo build -o blinky1.avr.o      -target=arduino      examples/blinky1 # TODO: avr-as/avr-gcc doesn't work
+  - tinygo build -o blinky1.pca10056.elf    -target=pca10056     examples/blinky1
+  - tinygo build -o blinky2.pca10056.elf    -target=pca10056     examples/blinky2
