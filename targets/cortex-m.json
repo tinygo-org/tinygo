@@ -1,6 +1,7 @@
 {
 	"build-tags": ["tinygo.arm", "js", "wasm"],
 	"compiler": "clang-7",
+	"gc": "marksweep",
 	"linker": "arm-none-eabi-ld",
 	"rtlib": "compiler-rt",
 	"cflags": [
