@@ -1,7 +1,7 @@
 {
 	"inherits": ["nrf52840"],
 	"build-tags": ["reelboard"],
-	"flash": "nrfjprog -f nrf52 --sectorerase --program {hex} --reset",
+	"flash": "openocd -f interface/cmsis-dap.cfg -f target/nrf51.cfg -c 'program {hex} reset exit'",
 	"ocd-daemon": ["openocd", "-f", "interface/cmsis-dap.cfg", "-f", "target/nrf51.cfg"],
 	"gdb-initial-cmds": ["target remote :3333", "monitor halt", "load", "monitor reset", "c"]
 }
