@@ -36,6 +36,9 @@ type BuildConfig struct {
 
 // Helper function for Compiler object.
 func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, action func(string) error) error {
+	if config.gc == "" && spec.GC != "" {
+		config.gc = spec.GC
+	}
 	compilerConfig := compiler.Config{
 		Triple:     spec.Triple,
 		GC:         config.gc,

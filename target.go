@@ -21,6 +21,7 @@ type TargetSpec struct {
 	Inherits   []string `json:"inherits"`
 	Triple     string   `json:"llvm-target"`
 	BuildTags  []string `json:"build-tags"`
+	GC         string   `json:"gc"`
 	Compiler   string   `json:"compiler"`
 	Linker     string   `json:"linker"`
 	RTLib      string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
@@ -44,6 +45,9 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 		spec.Triple = spec2.Triple
 	}
 	spec.BuildTags = append(spec.BuildTags, spec2.BuildTags...)
+	if spec2.GC != "" {
+		spec.GC = spec2.GC
+	}
 	if spec2.Compiler != "" {
 		spec.Compiler = spec2.Compiler
 	}
