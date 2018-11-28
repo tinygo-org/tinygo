@@ -57,11 +57,11 @@ Currently supported features:
   * closures
   * bound methods
   * complex numbers (except for arithmetic)
+  * garbage collection (`mark & sweep`, `simple` or `none`)
 
 Not yet supported:
 
   * complex arithmetic
-  * garbage collection
   * recover
   * channels
   * introspection (if it ever gets implemented)
