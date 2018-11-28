@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -161,14 +162,30 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 			cachePath, _ = filepath.Split(librt)
 		}
 
-		// Link the object file with the system compiler.
+		// Prepare link command.
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
-		args := append(spec.PreLinkArgs, "-o", executable, objfile)
+		ldflags := append(spec.LDFlags, "-o", executable, objfile)
 		if spec.RTLib == "compiler-rt" {
-			args = append(args, "-L", cachePath, "-lrt-"+spec.Triple)
+			ldflags = append(ldflags, "-L", cachePath, "-lrt-"+spec.Triple)
 		}
-		cmd := exec.Command(spec.Linker, args...)
+
+		// Compile extra files.
+		for i, path := range spec.ExtraFiles {
+			outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
+			cmd := exec.Command(spec.Compiler, append(spec.CFlags, "-c", "-o", outpath, path)...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Dir = sourceDir()
+			err := cmd.Run()
+			if err != nil {
+				return err
+			}
+			ldflags = append(ldflags, outpath)
+		}
+
+		// Link the object files together.
+		cmd := exec.Command(spec.Linker, ldflags...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Dir = sourceDir()

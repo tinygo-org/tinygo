@@ -7,7 +7,7 @@ before_install:
   - echo "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-7 main"            | sudo tee -a /etc/apt/sources.list
   - echo "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu trusty main" | sudo tee -a /etc/apt/sources.list
   - sudo apt-get update -qq
-  - sudo apt-get install llvm-7-dev clang-7 gcc-arm-none-eabi qemu-system-arm --allow-unauthenticated -y
+  - sudo apt-get install llvm-7-dev clang-7 binutils-arm-none-eabi qemu-system-arm --allow-unauthenticated -y
   - sudo ln -s /usr/bin/clang-7 /usr/local/bin/cc # work around missing -no-pie in old GCC version
 
 install:
@@ -18,14 +18,14 @@ script:
   - go install github.com/aykevl/tinygo
   - go test -v .
   - make gen-device
-  - tinygo build -o blinky1.nrf.elf   -target=pca10040     examples/blinky1
-  - tinygo build -o blinky2.nrf.elf   -target=pca10040     examples/blinky2
-  - tinygo build -o blinky2                                examples/blinky2
-  - tinygo build -o test.nrf.elf      -target=pca10040     examples/test
-  - tinygo build -o blinky1.nrf51.elf -target=microbit     examples/echo
-  - tinygo build -o test.nrf.elf      -target=nrf52840-mdk examples/blinky1
-  - tinygo build -o blinky1.stm32.elf -target=bluepill     examples/blinky1
-  - tinygo build -o blinky1.o         -target=arduino      examples/blinky1 # TODO: avr-as/avr-gcc doesn't work
-  - tinygo build -o blinky1.o         -target=digispark    examples/blinky1
-  - tinygo build -o blinky1.reel.elf    -target=reelboard     examples/blinky1
-  - tinygo build -o blinky2.reel.elf    -target=reelboard     examples/blinky2
+  - tinygo build -o blinky1.nrf.elf    -target=pca10040     examples/blinky1
+  - tinygo build -o blinky2.nrf.elf    -target=pca10040     examples/blinky2
+  - tinygo build -o blinky2                                 examples/blinky2
+  - tinygo build -o test.nrf.elf       -target=pca10040     examples/test
+  - tinygo build -o blinky1.nrf51.elf  -target=microbit     examples/echo
+  - tinygo build -o test.nrf.elf       -target=nrf52840-mdk examples/blinky1
+  - tinygo build -o blinky1.nrf51d.elf -target=pca10031     examples/blinky1
+  - tinygo build -o blinky1.stm32.elf  -target=bluepill     examples/blinky1
+  - tinygo build -o blinky1.avr.o      -target=arduino      examples/blinky1 # TODO: avr-as/avr-gcc doesn't work
+  - tinygo build -o blinky1.reel.elf   -target=reelboard    examples/blinky1
+  - tinygo build -o blinky2.reel.elf   -target=reelboard    examples/blinky2

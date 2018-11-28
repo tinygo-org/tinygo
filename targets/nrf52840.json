@@ -2,18 +2,16 @@
 	"inherits": ["cortex-m"],
 	"llvm-target": "armv7em-none-eabi",
 	"build-tags": ["nrf52840", "nrf"],
-	"pre-link-args": [
-		"-nostdlib",
-		"-nostartfiles",
-		"-mcpu=cortex-m4",
-		"-mthumb",
-		"-T", "targets/nrf52840.ld",
-		"-Wl,--gc-sections",
-		"-fno-exceptions", "-fno-unwind-tables",
-		"-ffunction-sections", "-fdata-sections",
-		"-Os",
+	"cflags": [
+		"--target=armv7em-none-eabi",
+		"-Qunused-arguments",
 		"-DNRF52840_XXAA",
-		"-Ilib/CMSIS/CMSIS/Include",
+		"-Ilib/CMSIS/CMSIS/Include"
+	],
+	"ldflags": [
+		"-T", "targets/nrf52840.ld"
+	],
+	"extra-files": [
 		"lib/nrfx/mdk/system_nrf52840.c",
 		"src/device/nrf/nrf52840.s"
 	]

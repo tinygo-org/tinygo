@@ -2,7 +2,7 @@
 	"llvm-target":   "wasm32-unknown-unknown-wasm",
 	"build-tags":    ["js", "wasm"],
 	"linker":        "ld.lld-7",
-	"pre-link-args": [
+	"ldflags": [
 		"-flavor", "wasm",
 		"-allow-undefined"
 	],

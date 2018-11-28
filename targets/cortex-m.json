@@ -1,7 +1,18 @@
 {
 	"build-tags": ["tinygo.arm", "js", "wasm"],
-	"linker": "arm-none-eabi-gcc",
+	"compiler": "clang-7",
+	"linker": "arm-none-eabi-ld",
 	"rtlib": "compiler-rt",
+	"cflags": [
+		"-Oz",
+		"-mthumb",
+		"-fshort-enums",
+		"-fno-exceptions", "-fno-unwind-tables",
+		"-ffunction-sections", "-fdata-sections"
+	],
+	"ldflags": [
+		"--gc-sections"
+	],
 	"objcopy": "arm-none-eabi-objcopy",
 	"gdb": "arm-none-eabi-gdb"
 }

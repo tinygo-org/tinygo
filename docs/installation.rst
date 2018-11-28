@@ -24,11 +24,10 @@ ARM LLVM backend (which is even used in the propietary C compiler from ARM).
 Compiling to object code should be supported out of the box, but compiling the
 final binary and flashing it needs some extra tools.
 
-    * binutils (``arm-none-eabi-objcopy``) for producing .hex files for
-      flashing.
-    * GCC (``arm-none-eabi-gcc``) for linking object files.
-    * Clang 7 (``clang-7``) for building the `compiler runtime library
-      <https://compiler-rt.llvm.org/>`_.
+    * binutils (``arm-none-eabi-ld``, ``arm-none-eabi-objcopy``) for linking and
+      for producing .hex files for flashing.
+    * Clang 7 (``clang-7``) for building assembly files and the `compiler
+      runtime library <https://compiler-rt.llvm.org/>`_ .
     * The flashing tool for the particular chip, like ``openocd`` or
       ``nrfjprog``.
 
