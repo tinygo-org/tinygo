@@ -293,6 +293,7 @@ const (
                 padNumber += 1
 
             regType = 'RegValue'
+            lastCluster = False
             if 'registers' in register:
                 # This is a cluster, not a register. Create the cluster type.
                 regType = 'struct {\n'
@@ -320,13 +321,18 @@ const (
                             regType += '\t\t_padding{padNumber} RegValue\n'.format(padNumber=padNumber)
                         else:
                             regType += '\t\t_padding{padNumber} [{num}]RegValue\n'.format(padNumber=padNumber, num=numSkip)
+                else:
+                    lastCluster = True
                 regType += '\t}'
+                address = subaddress
             if register['array'] is not None:
                 regType = '[{}]{}'.format(register['array'], regType)
             out.write('\t{name} {regType}\n'.format(name=register['name'], regType=regType))
 
             # next address
-            if register['array'] is not None:
+            if lastCluster is True:
+                lastCluster = False
+            elif register['array'] is not None:
                 address = register['address'] + register['elementsize'] * register['array']
             else:
                 address = register['address'] + register['elementsize']
