@@ -362,7 +362,12 @@ func (f *Function) LinkName() string {
 func (f *Function) CName() string {
 	name := f.Name()
 	if strings.HasPrefix(name, "_Cfunc_") {
+		// emitted by `go tool cgo`
 		return name[len("_Cfunc_"):]
+	}
+	if strings.HasPrefix(name, "C.") {
+		// created by ../loader/cgo.go
+		return name[2:]
 	}
 	return ""
 }

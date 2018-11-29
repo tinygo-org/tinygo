@@ -268,10 +268,6 @@ func (p *Package) Check() error {
 
 // parseFiles parses the loaded list of files and returns this list.
 func (p *Package) parseFiles() ([]*ast.File, error) {
-	if len(p.CgoFiles) != 0 {
-		return nil, errors.New("loader: todo cgo: " + p.CgoFiles[0])
-	}
-
 	// TODO: do this concurrently.
 	var files []*ast.File
 	var fileErrs []error
@@ -279,9 +275,27 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		f, err := p.parseFile(filepath.Join(p.Package.Dir, file), parser.ParseComments)
 		if err != nil {
 			fileErrs = append(fileErrs, err)
-		} else {
-			files = append(files, f)
+			continue
 		}
+		if err != nil {
+			fileErrs = append(fileErrs, err)
+			continue
+		}
+		files = append(files, f)
+	}
+	for _, file := range p.CgoFiles {
+		path := filepath.Join(p.Package.Dir, file)
+		f, err := p.parseFile(path, parser.ParseComments)
+		if err != nil {
+			fileErrs = append(fileErrs, err)
+			continue
+		}
+		err = p.processCgo(path, f)
+		if err != nil {
+			fileErrs = append(fileErrs, err)
+			continue
+		}
+		files = append(files, f)
 	}
 	if len(fileErrs) != 0 {
 		return nil, Errors{p, fileErrs}
@@ -298,7 +312,7 @@ func (p *Package) Import(to string) (*types.Package, error) {
 	if _, ok := p.Imports[to]; ok {
 		return p.Imports[to].Pkg, nil
 	} else {
-		panic("package not imported: " + to)
+		return nil, errors.New("package not imported: " + to)
 	}
 }
 
@@ -309,6 +323,10 @@ func (p *Package) Import(to string) (*types.Package, error) {
 func (p *Package) importRecursively() error {
 	p.Importing = true
 	for _, to := range p.Package.Imports {
+		if to == "C" {
+			// Do Cgo processing in a later stage.
+			continue
+		}
 		if _, ok := p.Imports[to]; ok {
 			continue
 		}

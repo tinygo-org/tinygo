@@ -155,6 +155,7 @@ func LoadTarget(target string) (*TargetSpec, error) {
 		*spec = TargetSpec{
 			Triple:    target,
 			BuildTags: []string{runtime.GOOS, runtime.GOARCH},
+			Compiler:  commands["clang"],
 			Linker:    "cc",
 			LDFlags:   []string{"-no-pie"}, // WARNING: clang < 5.0 requires -nopie
 			Objcopy:   "objcopy",

@@ -1,0 +1,2 @@
+fortytwo: 42
+mul: 15
