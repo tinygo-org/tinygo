@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"testing"
 )
 
@@ -20,9 +21,16 @@ func TestCompiler(t *testing.T) {
 	if err != nil {
 		t.Fatal("could not read test files:", err)
 	}
-	if len(matches) == 0 {
+
+	dirMatches, err := filepath.Glob(TESTDATA + "/*/main.go")
+	if len(matches) == 0 || len(dirMatches) == 0 {
 		t.Fatal("no test files found")
 	}
+	for _, m := range dirMatches {
+		matches = append(matches, filepath.Dir(m)+string(filepath.Separator))
+	}
+
+	sort.Strings(matches)
 
 	// Create a temporary directory for test output files.
 	tmpdir, err := ioutil.TempDir("", "tinygo-test")
@@ -49,6 +57,9 @@ func TestCompiler(t *testing.T) {
 func runTest(path, tmpdir string, target string, t *testing.T) {
 	// Get the expected output for this test.
 	txtpath := path[:len(path)-3] + ".txt"
+	if path[len(path)-1] == '/' {
+		txtpath = path + "out.txt"
+	}
 	f, err := os.Open(txtpath)
 	if err != nil {
 		t.Fatal("could not open expected output file:", err)
@@ -68,7 +79,7 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 		initInterp: true,
 	}
 	binary := filepath.Join(tmpdir, "test")
-	err = Build(path, binary, target, config)
+	err = Build("./"+path, binary, target, config)
 	if err != nil {
 		t.Log("failed to build:", err)
 		t.Fail()
