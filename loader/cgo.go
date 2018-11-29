@@ -6,6 +6,7 @@ package loader
 import (
 	"go/ast"
 	"go/token"
+	"sort"
 	"strconv"
 )
 
@@ -14,7 +15,7 @@ type fileInfo struct {
 	*ast.File
 	filename   string
 	functions  []*functionInfo
-	types      []string
+	typedefs   []*typedefInfo
 	importCPos token.Pos
 }
 
@@ -32,11 +33,25 @@ type paramInfo struct {
 	typeName string
 }
 
-// aliasInfo encapsulates aliases between C and Go, like C.int32_t -> int32. See
-// addTypeAliases.
-type aliasInfo struct {
-	typeName   string
-	goTypeName string
+// typedefInfo contains information about a single typedef in C.
+type typedefInfo struct {
+	newName string // newly defined type name
+	oldName string // old type name, may be something like "unsigned long long"
+	size    int    // size in bytes
+}
+
+// cgoAliases list type aliases between Go and C, for types that are equivalent
+// in both languages. See addTypeAliases.
+var cgoAliases = map[string]string{
+	"C.int8_t":    "int8",
+	"C.int16_t":   "int16",
+	"C.int32_t":   "int32",
+	"C.int64_t":   "int64",
+	"C.uint8_t":   "uint8",
+	"C.uint16_t":  "uint16",
+	"C.uint32_t":  "uint32",
+	"C.uint64_t":  "uint64",
+	"C.uintptr_t": "uintptr",
 }
 
 // processCgo extracts the `import "C"` statement from the AST, parses the
@@ -92,6 +107,9 @@ func (p *Package) processCgo(filename string, f *ast.File) error {
 
 	// Forward C types to Go types (like C.uint32_t -> uint32).
 	info.addTypeAliases()
+
+	// Add type declarations for C types, declared using typeef in C.
+	info.addTypedefs()
 
 	// Patch the AST to use the declared types and functions.
 	ast.Inspect(f, info.walker)
@@ -168,38 +186,91 @@ func (info *fileInfo) addFuncDecls() {
 //         // ...
 //     )
 func (info *fileInfo) addTypeAliases() {
-	aliases := []aliasInfo{
-		aliasInfo{"C.int8_t", "int8"},
-		aliasInfo{"C.int16_t", "int16"},
-		aliasInfo{"C.int32_t", "int32"},
-		aliasInfo{"C.int64_t", "int64"},
-		aliasInfo{"C.uint8_t", "uint8"},
-		aliasInfo{"C.uint16_t", "uint16"},
-		aliasInfo{"C.uint32_t", "uint32"},
-		aliasInfo{"C.uint64_t", "uint64"},
-		aliasInfo{"C.uintptr_t", "uintptr"},
+	aliasKeys := make([]string, 0, len(cgoAliases))
+	for key := range cgoAliases {
+		aliasKeys = append(aliasKeys, key)
 	}
+	sort.Strings(aliasKeys)
 	gen := &ast.GenDecl{
 		TokPos: info.importCPos,
 		Tok:    token.TYPE,
 		Lparen: info.importCPos,
 		Rparen: info.importCPos,
 	}
-	for _, alias := range aliases {
+	for _, typeName := range aliasKeys {
+		goTypeName := cgoAliases[typeName]
 		obj := &ast.Object{
 			Kind: ast.Typ,
-			Name: alias.typeName,
+			Name: typeName,
 		}
 		typeSpec := &ast.TypeSpec{
 			Name: &ast.Ident{
 				NamePos: info.importCPos,
-				Name:    alias.typeName,
+				Name:    typeName,
 				Obj:     obj,
 			},
 			Assign: info.importCPos,
 			Type: &ast.Ident{
 				NamePos: info.importCPos,
-				Name:    alias.goTypeName,
+				Name:    goTypeName,
+			},
+		}
+		obj.Decl = typeSpec
+		gen.Specs = append(gen.Specs, typeSpec)
+	}
+	info.Decls = append(info.Decls, gen)
+}
+
+func (info *fileInfo) addTypedefs() {
+	gen := &ast.GenDecl{
+		TokPos: info.importCPos,
+		Tok:    token.TYPE,
+	}
+	for _, typedef := range info.typedefs {
+		newType := "C." + typedef.newName
+		oldType := "C." + typedef.oldName
+		if _, ok := cgoAliases[newType]; ok {
+			// This is a type that also exists in Go (defined in stdint.h).
+			continue
+		}
+		obj := &ast.Object{
+			Kind: ast.Typ,
+			Name: newType,
+		}
+		switch oldType {
+		// TODO: plain char (may be signed or unsigned)
+		case "C.signed char", "C.short", "C.int", "C.long", "C.long long":
+			switch typedef.size {
+			case 1:
+				oldType = "int8"
+			case 2:
+				oldType = "int16"
+			case 4:
+				oldType = "int32"
+			case 8:
+				oldType = "int64"
+			}
+		case "C.unsigned char", "C.unsigned short", "C.unsigned int", "C.unsigned long", "C.unsigned long long":
+			switch typedef.size {
+			case 1:
+				oldType = "uint8"
+			case 2:
+				oldType = "uint16"
+			case 4:
+				oldType = "uint32"
+			case 8:
+				oldType = "uint64"
+			}
+		}
+		typeSpec := &ast.TypeSpec{
+			Name: &ast.Ident{
+				NamePos: info.importCPos,
+				Name:    newType,
+				Obj:     obj,
+			},
+			Type: &ast.Ident{
+				NamePos: info.importCPos,
+				Name:    oldType,
 			},
 		}
 		obj.Decl = typeSpec
@@ -227,6 +298,21 @@ func (info *fileInfo) walker(node ast.Node) bool {
 			node.Fun = &ast.Ident{
 				NamePos: x.NamePos,
 				Name:    "C." + fun.Sel.Name,
+			}
+		}
+	case *ast.ValueSpec:
+		typ, ok := node.Type.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		x, ok := typ.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if x.Name == "C" {
+			node.Type = &ast.Ident{
+				NamePos: x.NamePos,
+				Name:    "C." + typ.Sel.Name,
 			}
 		}
 	}

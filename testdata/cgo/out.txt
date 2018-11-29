@@ -1,2 +1,3 @@
 fortytwo: 42
 mul: 15
+myint: 3 5

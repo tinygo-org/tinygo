@@ -93,6 +93,17 @@ func tinygo_clang_visitor(c, parent C.CXCursor, client_data C.CXClientData) C.in
 		resultType := C.clang_getCursorResultType(c)
 		resultTypeName := getString(C.clang_getTypeSpelling(resultType))
 		fn.result = resultTypeName
+	case C.CXCursor_TypedefDecl:
+		typedefType := C.clang_getCursorType(c)
+		name := getString(C.clang_getTypedefName(typedefType))
+		underlyingType := C.clang_getTypedefDeclUnderlyingType(c)
+		underlyingTypeName := getString(C.clang_getTypeSpelling(underlyingType))
+		typeSize := C.clang_Type_getSizeOf(underlyingType)
+		info.typedefs = append(info.typedefs, &typedefInfo{
+			newName: name,
+			oldName: underlyingTypeName,
+			size:    int(typeSize),
+		})
 	}
 	return C.CXChildVisit_Continue
 }
