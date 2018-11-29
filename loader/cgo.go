@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // fileInfo holds all Cgo-related information of a given *ast.File.
@@ -54,6 +55,22 @@ var cgoAliases = map[string]string{
 	"C.uintptr_t": "uintptr",
 }
 
+// cgoTypes lists some C types with ambiguous sizes that must be retrieved
+// somehow from C. This is done by adding some typedefs to get the size of each
+// type.
+const cgoTypes = `
+typedef signed char         _Cgo_schar;
+typedef unsigned char       _Cgo_uchar;
+typedef short               _Cgo_short;
+typedef unsigned short      _Cgo_ushort;
+typedef int                 _Cgo_int;
+typedef unsigned int        _Cgo_uint;
+typedef long                _Cgo_long;
+typedef unsigned long       _Cgo_ulong;
+typedef long long           _Cgo_longlong;
+typedef unsigned long long  _Cgo_ulonglong;
+`
+
 // processCgo extracts the `import "C"` statement from the AST, parses the
 // comment with libclang, and modifies the AST to use this information.
 func (p *Package) processCgo(filename string, f *ast.File) error {
@@ -89,7 +106,7 @@ func (p *Package) processCgo(filename string, f *ast.File) error {
 		// source location.
 		info.importCPos = spec.Path.ValuePos
 
-		err = info.parseFragment(cgoComment)
+		err = info.parseFragment(cgoComment + cgoTypes)
 		if err != nil {
 			return err
 		}
@@ -229,14 +246,6 @@ func (info *fileInfo) addTypedefs() {
 	for _, typedef := range info.typedefs {
 		newType := "C." + typedef.newName
 		oldType := "C." + typedef.oldName
-		if _, ok := cgoAliases[newType]; ok {
-			// This is a type that also exists in Go (defined in stdint.h).
-			continue
-		}
-		obj := &ast.Object{
-			Kind: ast.Typ,
-			Name: newType,
-		}
 		switch oldType {
 		// TODO: plain char (may be signed or unsigned)
 		case "C.signed char", "C.short", "C.int", "C.long", "C.long long":
@@ -261,6 +270,17 @@ func (info *fileInfo) addTypedefs() {
 			case 8:
 				oldType = "uint64"
 			}
+		}
+		if strings.HasPrefix(newType, "C._Cgo_") {
+			newType = "C." + newType[len("C._Cgo_"):]
+		}
+		if _, ok := cgoAliases[newType]; ok {
+			// This is a type that also exists in Go (defined in stdint.h).
+			continue
+		}
+		obj := &ast.Object{
+			Kind: ast.Typ,
+			Name: newType,
 		}
 		typeSpec := &ast.TypeSpec{
 			Name: &ast.Ident{
