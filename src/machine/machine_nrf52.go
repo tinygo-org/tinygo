@@ -27,6 +27,13 @@ func (i2c I2C) setPins(scl, sda uint8) {
 	i2c.Bus.PSELSDA = nrf.RegValue(sda)
 }
 
+// SPI
+func (spi SPI) setPins(sck, mosi, miso uint8) {
+	spi.Bus.PSEL.SCK = nrf.RegValue(sck)
+	spi.Bus.PSEL.MOSI = nrf.RegValue(mosi)
+	spi.Bus.PSEL.MISO = nrf.RegValue(miso)
+}
+
 // InitADC initializes the registers needed for ADC.
 func InitADC() {
 	return // no specific setup on nrf52 machine.

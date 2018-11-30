@@ -5,6 +5,7 @@ package machine
 import (
 	"device/arm"
 	"device/nrf"
+	"errors"
 )
 
 type GPIOMode uint8
@@ -231,4 +232,105 @@ func (i2c I2C) readLastByte() byte {
 	i2c.Bus.EVENTS_RXDREADY = 0
 	i2c.signalStop() // signal 'stop' now, so it is sent when reading RXD
 	return byte(i2c.Bus.RXD)
+}
+
+// SPI on the NRF.
+type SPI struct {
+	Bus *nrf.SPI_Type
+}
+
+// There are 2 SPI interfaces on the NRF5x.
+var (
+	SPI0 = SPI{Bus: nrf.SPI0}
+	SPI1 = SPI{Bus: nrf.SPI1}
+)
+
+// SPIConfig is used to store config info for SPI.
+type SPIConfig struct {
+	Frequency uint32
+	SCK       uint8
+	MOSI      uint8
+	MISO      uint8
+	LSBFirst  bool
+	Mode      uint8
+}
+
+// Configure is intended to setup the SPI interface.
+func (spi SPI) Configure(config SPIConfig) {
+	// enable
+	spi.Bus.ENABLE = nrf.SPI_ENABLE_ENABLE_Disabled
+
+	// set frequency
+	var freq uint32
+
+	switch config.Frequency {
+	case 125000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K125
+	case 250000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K250
+	case 500000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K500
+	case 1000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M1
+	case 2000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M2
+	case 4000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M4
+	case 8000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M8
+	default:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K125
+	}
+	spi.Bus.FREQUENCY = nrf.RegValue(freq)
+
+	// default to MSB and Mode0
+	conf := nrf.SPI_CONFIG_ORDER_MsbFirst | nrf.SPI_CONFIG_CPOL_ActiveHigh | nrf.SPI_CONFIG_CPHA_Leading
+
+	// set bit transfer order
+	if config.LSBFirst {
+		conf |= nrf.SPI_CONFIG_ORDER_LsbFirst
+	}
+
+	// set mode
+	switch config.Mode {
+	case 1:
+		conf |= (nrf.SPI_CONFIG_CPOL_ActiveHigh | nrf.SPI_CONFIG_CPHA_Trailing)
+	case 2:
+		conf |= (nrf.SPI_CONFIG_CPOL_ActiveLow | nrf.SPI_CONFIG_CPHA_Leading)
+	case 3:
+		conf |= (nrf.SPI_CONFIG_CPOL_ActiveLow | nrf.SPI_CONFIG_CPHA_Trailing)
+	}
+	spi.Bus.CONFIG = nrf.RegValue(conf)
+
+	// set pins
+	spi.setPins(config.SCK, config.MOSI, config.MISO)
+
+	// enable
+	spi.Bus.ENABLE = nrf.SPI_ENABLE_ENABLE_Enabled
+}
+
+// Tx handles read/write operation for SPI interface.
+func (spi SPI) Tx(w, r []byte) error {
+	if len(w) != len(r) {
+		return errors.New("SPI write and read slices must be same size")
+	}
+
+	for i, b := range w {
+		r[i], _ = spi.transferByte(b)
+	}
+
+	// TODO: handle SPI errors
+	return nil
+}
+
+// transferByte writes/reads a single byte using the SPI interface.
+func (spi SPI) transferByte(w byte) (byte, error) {
+	spi.Bus.TXD = nrf.RegValue(w)
+	for spi.Bus.EVENTS_READY == 0 {
+	}
+	r := spi.Bus.RXD
+	spi.Bus.EVENTS_READY = 0
+
+	// TODO: handle SPI errors
+	return byte(r), nil
 }

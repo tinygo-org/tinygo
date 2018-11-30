@@ -25,3 +25,10 @@ func (i2c I2C) setPins(scl, sda uint8) {
 	i2c.Bus.PSELSCL = nrf.RegValue(scl)
 	i2c.Bus.PSELSDA = nrf.RegValue(sda)
 }
+
+// SPI
+func (spi SPI) setPins(sck, mosi, miso uint8) {
+	spi.Bus.PSELSCK = nrf.RegValue(sck)
+	spi.Bus.PSELMOSI = nrf.RegValue(mosi)
+	spi.Bus.PSELMISO = nrf.RegValue(miso)
+}
