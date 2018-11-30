@@ -20,6 +20,7 @@ type Program struct {
 	fset        *token.FileSet
 	TypeChecker types.Config
 	Dir         string // current working directory (for error reporting)
+	CFlags      []string
 }
 
 // Package holds a loaded package, its imports, and its parsed files.
@@ -290,7 +291,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 			fileErrs = append(fileErrs, err)
 			continue
 		}
-		err = p.processCgo(path, f)
+		err = p.processCgo(path, f, append(p.CFlags, "-I"+p.Package.Dir))
 		if err != nil {
 			fileErrs = append(fileErrs, err)
 			continue

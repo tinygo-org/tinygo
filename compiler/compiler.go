@@ -32,6 +32,7 @@ func init() {
 type Config struct {
 	Triple     string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
 	GC         string   // garbage collection strategy
+	CFlags     []string // flags to pass to cgo
 	DumpSSA    bool     // dump Go SSA, for compiler debugging
 	Debug      bool     // add debug symbols for gdb
 	RootDir    string   // GOROOT for TinyGo
@@ -208,7 +209,8 @@ func (c *Compiler) Compile(mainPath string) error {
 				MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
 			},
 		},
-		Dir: wd,
+		Dir:    wd,
+		CFlags: c.CFlags,
 	}
 	if strings.HasSuffix(mainPath, ".go") {
 		_, err = lprogram.ImportFile(mainPath)

@@ -20,7 +20,7 @@ import "C"
 
 var globalFileInfo *fileInfo
 
-func (info *fileInfo) parseFragment(fragment string) error {
+func (info *fileInfo) parseFragment(fragment string, cflags []string) error {
 	index := C.clang_createIndex(0, 1)
 	defer C.clang_disposeIndex(index)
 
@@ -36,11 +36,21 @@ func (info *fileInfo) parseFragment(fragment string) error {
 		Contents: fragmentC,
 	}
 
+	// convert Go slice of strings to C array of strings.
+	cmdargsC := C.malloc(C.size_t(len(cflags)) * C.size_t(unsafe.Sizeof(uintptr(0))))
+	defer C.free(cmdargsC)
+	cmdargs := (*[1<<30 - 1]*C.char)(cmdargsC)
+	for i, cflag := range cflags {
+		s := C.CString(cflag)
+		cmdargs[i] = s
+		defer C.free(unsafe.Pointer(s))
+	}
+
 	var unit C.CXTranslationUnit
 	errCode := C.clang_parseTranslationUnit2(
 		index,
 		filenameC,
-		(**C.char)(unsafe.Pointer(uintptr(0))), 0, // command line args
+		(**C.char)(cmdargsC), C.int(len(cflags)), // command line args
 		&unsavedFile, 1, // unsaved files
 		C.CXTranslationUnit_None,
 		&unit)

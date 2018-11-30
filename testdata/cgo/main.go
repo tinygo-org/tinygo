@@ -2,8 +2,7 @@ package main
 
 /*
 int fortytwo(void);
-typedef short myint;
-int add(int a, int b);
+#include "main.h"
 */
 import "C"
 

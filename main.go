@@ -44,6 +44,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	compilerConfig := compiler.Config{
 		Triple:     spec.Triple,
 		GC:         config.gc,
+		CFlags:     spec.CFlags,
 		Debug:      config.debug,
 		DumpSSA:    config.dumpSSA,
 		RootDir:    sourceDir(),

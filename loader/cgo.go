@@ -73,7 +73,7 @@ typedef unsigned long long  _Cgo_ulonglong;
 
 // processCgo extracts the `import "C"` statement from the AST, parses the
 // comment with libclang, and modifies the AST to use this information.
-func (p *Package) processCgo(filename string, f *ast.File) error {
+func (p *Package) processCgo(filename string, f *ast.File, cflags []string) error {
 	info := &fileInfo{
 		File:     f,
 		filename: filename,
@@ -106,7 +106,7 @@ func (p *Package) processCgo(filename string, f *ast.File) error {
 		// source location.
 		info.importCPos = spec.Path.ValuePos
 
-		err = info.parseFragment(cgoComment + cgoTypes)
+		err = info.parseFragment(cgoComment+cgoTypes, cflags)
 		if err != nil {
 			return err
 		}

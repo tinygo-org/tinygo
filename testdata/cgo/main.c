@@ -1,3 +1,5 @@
+#include "main.h"
+
 int fortytwo() {
 	return 42;
 }
