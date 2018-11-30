@@ -30,3 +30,10 @@ const (
 	SDA_PIN = 0xff
 	SCL_PIN = 0xff
 )
+
+// SPI pins (unused)
+const (
+	SPI0_SCK_PIN  = 0
+	SPI0_MOSI_PIN = 0
+	SPI0_MISO_PIN = 0
+)

@@ -232,3 +232,98 @@ func (i2c I2C) readLastByte() byte {
 	i2c.signalStop() // signal 'stop' now, so it is sent when reading RXD
 	return byte(i2c.Bus.RXD)
 }
+
+// SPI on the NRF.
+type SPI struct {
+	Bus *nrf.SPI_Type
+}
+
+// There are 2 SPI interfaces on the NRF5x.
+var (
+	SPI0 = SPI{Bus: nrf.SPI0}
+	SPI1 = SPI{Bus: nrf.SPI1}
+)
+
+// SPIConfig is used to store config info for SPI.
+type SPIConfig struct {
+	Frequency uint32
+	SCK       uint8
+	MOSI      uint8
+	MISO      uint8
+	LSBFirst  bool
+	Mode      uint8
+}
+
+// Configure is intended to setup the SPI interface.
+func (spi SPI) Configure(config SPIConfig) {
+	// Disable bus to configure it
+	spi.Bus.ENABLE = nrf.SPI_ENABLE_ENABLE_Disabled
+
+	// set frequency
+	var freq uint32
+
+	switch config.Frequency {
+	case 125000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K125
+	case 250000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K250
+	case 500000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K500
+	case 1000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M1
+	case 2000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M2
+	case 4000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M4
+	case 8000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M8
+	default:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K500
+	}
+	spi.Bus.FREQUENCY = nrf.RegValue(freq)
+
+	var conf uint32
+
+	// set bit transfer order
+	if config.LSBFirst {
+		conf = (nrf.SPI_CONFIG_ORDER_LsbFirst << nrf.SPI_CONFIG_ORDER_Pos)
+	}
+
+	// set mode
+	switch config.Mode {
+	case 0:
+		conf &^= (nrf.SPI_CONFIG_CPOL_ActiveHigh << nrf.SPI_CONFIG_CPOL_Pos)
+		conf &^= (nrf.SPI_CONFIG_CPHA_Leading << nrf.SPI_CONFIG_CPHA_Pos)
+	case 1:
+		conf &^= (nrf.SPI_CONFIG_CPOL_ActiveHigh << nrf.SPI_CONFIG_CPOL_Pos)
+		conf |= (nrf.SPI_CONFIG_CPHA_Trailing << nrf.SPI_CONFIG_CPHA_Pos)
+	case 2:
+		conf |= (nrf.SPI_CONFIG_CPOL_ActiveLow << nrf.SPI_CONFIG_CPOL_Pos)
+		conf &^= (nrf.SPI_CONFIG_CPHA_Leading << nrf.SPI_CONFIG_CPHA_Pos)
+	case 3:
+		conf |= (nrf.SPI_CONFIG_CPOL_ActiveLow << nrf.SPI_CONFIG_CPOL_Pos)
+		conf |= (nrf.SPI_CONFIG_CPHA_Trailing << nrf.SPI_CONFIG_CPHA_Pos)
+	default: // to mode
+		conf &^= (nrf.SPI_CONFIG_CPOL_ActiveHigh << nrf.SPI_CONFIG_CPOL_Pos)
+		conf &^= (nrf.SPI_CONFIG_CPHA_Leading << nrf.SPI_CONFIG_CPHA_Pos)
+	}
+	spi.Bus.CONFIG = nrf.RegValue(conf)
+
+	// set pins
+	spi.setPins(config.SCK, config.MOSI, config.MISO)
+
+	// Re-enable bus now that it is configured.
+	spi.Bus.ENABLE = nrf.SPI_ENABLE_ENABLE_Enabled
+}
+
+// Transfer writes/reads a single byte using the SPI interface.
+func (spi SPI) Transfer(w byte) (byte, error) {
+	spi.Bus.TXD = nrf.RegValue(w)
+	for spi.Bus.EVENTS_READY == 0 {
+	}
+	r := spi.Bus.RXD
+	spi.Bus.EVENTS_READY = 0
+
+	// TODO: handle SPI errors
+	return byte(r), nil
+}

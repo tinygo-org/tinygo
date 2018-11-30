@@ -44,3 +44,10 @@ const (
 	SDA_PIN = 26
 	SCL_PIN = 27
 )
+
+// SPI pins
+const (
+	SPI0_SCK_PIN  = 25
+	SPI0_MOSI_PIN = 23
+	SPI0_MISO_PIN = 24
+)

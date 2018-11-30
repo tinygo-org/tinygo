@@ -30,6 +30,13 @@ const (
 
 // I2C pins
 const (
-	SDA_PIN = 26
-	SCL_PIN = 27
+	SDA_PIN = 26 // P0.26
+	SCL_PIN = 27 // P0.27
+)
+
+// SPI pins
+const (
+	SPI0_SCK_PIN  = 47 // P1.15
+	SPI0_MOSI_PIN = 45 // P1.13
+	SPI0_MISO_PIN = 46 // P1.14
 )
