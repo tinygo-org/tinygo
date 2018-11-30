@@ -1,5 +1,5 @@
 fortytwo: 42
-mul: 15
 add: 8
 myint: 3 5
+myint size: 2
 longlong: -1099511627776

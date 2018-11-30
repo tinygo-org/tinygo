@@ -142,13 +142,13 @@ func (info *fileInfo) addFuncDecls() {
 	for _, fn := range info.functions {
 		obj := &ast.Object{
 			Kind: ast.Fun,
-			Name: "C." + fn.name,
+			Name: mapCgoType(fn.name),
 		}
 		args := make([]*ast.Field, len(fn.args))
 		decl := &ast.FuncDecl{
 			Name: &ast.Ident{
 				NamePos: info.importCPos,
-				Name:    "C." + fn.name,
+				Name:    mapCgoType(fn.name),
 				Obj:     obj,
 			},
 			Type: &ast.FuncType{
@@ -163,7 +163,7 @@ func (info *fileInfo) addFuncDecls() {
 						&ast.Field{
 							Type: &ast.Ident{
 								NamePos: info.importCPos,
-								Name:    "C." + fn.result,
+								Name:    mapCgoType(fn.result),
 							},
 						},
 					},
@@ -179,14 +179,14 @@ func (info *fileInfo) addFuncDecls() {
 						Name:    arg.name,
 						Obj: &ast.Object{
 							Kind: ast.Var,
-							Name: "C." + arg.name,
+							Name: mapCgoType(arg.name),
 							Decl: decl,
 						},
 					},
 				},
 				Type: &ast.Ident{
 					NamePos: info.importCPos,
-					Name:    "C." + arg.typeName,
+					Name:    mapCgoType(arg.typeName),
 				},
 			}
 		}
@@ -244,11 +244,11 @@ func (info *fileInfo) addTypedefs() {
 		Tok:    token.TYPE,
 	}
 	for _, typedef := range info.typedefs {
-		newType := "C." + typedef.newName
-		oldType := "C." + typedef.oldName
+		newType := mapCgoType(typedef.newName)
+		oldType := mapCgoType(typedef.oldName)
 		switch oldType {
 		// TODO: plain char (may be signed or unsigned)
-		case "C.signed char", "C.short", "C.int", "C.long", "C.long long":
+		case "C.schar", "C.short", "C.int", "C.long", "C.longlong":
 			switch typedef.size {
 			case 1:
 				oldType = "int8"
@@ -259,7 +259,7 @@ func (info *fileInfo) addTypedefs() {
 			case 8:
 				oldType = "int64"
 			}
-		case "C.unsigned char", "C.unsigned short", "C.unsigned int", "C.unsigned long", "C.unsigned long long":
+		case "C.uchar", "C.ushort", "C.uint", "C.ulong", "C.ulonglong":
 			switch typedef.size {
 			case 1:
 				oldType = "uint8"
@@ -317,7 +317,7 @@ func (info *fileInfo) walker(node ast.Node) bool {
 		if x.Name == "C" {
 			node.Fun = &ast.Ident{
 				NamePos: x.NamePos,
-				Name:    "C." + fun.Sel.Name,
+				Name:    mapCgoType(fun.Sel.Name),
 			}
 		}
 	case *ast.ValueSpec:
@@ -332,9 +332,31 @@ func (info *fileInfo) walker(node ast.Node) bool {
 		if x.Name == "C" {
 			node.Type = &ast.Ident{
 				NamePos: x.NamePos,
-				Name:    "C." + typ.Sel.Name,
+				Name:    mapCgoType(typ.Sel.Name),
 			}
 		}
 	}
 	return true
+}
+
+// mapCgoType converts a C type name into a Go type name with a "C." prefix.
+func mapCgoType(t string) string {
+	switch t {
+	case "signed char":
+		return "C.schar"
+	case "long long":
+		return "C.longlong"
+	case "unsigned char":
+		return "C.schar"
+	case "unsigned short":
+		return "C.ushort"
+	case "unsigned int":
+		return "C.uint"
+	case "unsigned long":
+		return "C.ulong"
+	case "unsigned long long":
+		return "C.ulonglong"
+	default:
+		return "C." + t
+	}
 }
