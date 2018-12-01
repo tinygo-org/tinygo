@@ -29,9 +29,19 @@ func (i2c I2C) setPins(scl, sda uint8) {
 
 // SPI
 func (spi SPI) setPins(sck, mosi, miso uint8) {
-	spi.Bus.PSEL.SCK = nrf.RegValue(sck)
-	spi.Bus.PSEL.MOSI = nrf.RegValue(mosi)
-	spi.Bus.PSEL.MISO = nrf.RegValue(miso)
+	var s, mo, mi = sck, mosi, miso
+	if s == 0 {
+		s = SPI0_SCK_PIN
+	}
+	if mo == 0 {
+		mo = SPI0_MOSI_PIN
+	}
+	if mi == 0 {
+		mi = SPI0_MISO_PIN
+	}
+	spi.Bus.PSEL.SCK = nrf.RegValue(s)
+	spi.Bus.PSEL.MOSI = nrf.RegValue(mo)
+	spi.Bus.PSEL.MISO = nrf.RegValue(mi)
 }
 
 // InitADC initializes the registers needed for ADC.

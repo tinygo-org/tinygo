@@ -28,7 +28,17 @@ func (i2c I2C) setPins(scl, sda uint8) {
 
 // SPI
 func (spi SPI) setPins(sck, mosi, miso uint8) {
-	spi.Bus.PSELSCK = nrf.RegValue(sck)
-	spi.Bus.PSELMOSI = nrf.RegValue(mosi)
-	spi.Bus.PSELMISO = nrf.RegValue(miso)
+	var s, mo, mi = sck, mosi, miso
+	if s == 0 {
+		s = SPI0_SCK_PIN
+	}
+	if mo == 0 {
+		mo = SPI0_MOSI_PIN
+	}
+	if mi == 0 {
+		mi = SPI0_MISO_PIN
+	}
+	spi.Bus.PSELSCK = nrf.RegValue(s)
+	spi.Bus.PSELMOSI = nrf.RegValue(mo)
+	spi.Bus.PSELMISO = nrf.RegValue(mi)
 }

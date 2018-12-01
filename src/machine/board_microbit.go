@@ -36,6 +36,13 @@ const (
 	SCL_PIN = 0  // P19 on the board
 )
 
+// SPI pins
+const (
+	SPI0_SCK_PIN  = 0
+	SPI0_MOSI_PIN = 0
+	SPI0_MISO_PIN = 0
+)
+
 // LED matrix pins
 const (
 	LED_COL_1 = 4

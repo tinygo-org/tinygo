@@ -5,7 +5,6 @@ package machine
 import (
 	"device/arm"
 	"device/nrf"
-	"errors"
 )
 
 type GPIOMode uint8
@@ -317,22 +316,8 @@ func (spi SPI) Configure(config SPIConfig) {
 	spi.Bus.ENABLE = nrf.SPI_ENABLE_ENABLE_Enabled
 }
 
-// Tx handles read/write operation for SPI interface.
-func (spi SPI) Tx(w, r []byte) error {
-	if len(w) != len(r) {
-		return errors.New("SPI write and read slices must be same size")
-	}
-
-	for i, b := range w {
-		r[i], _ = spi.transferByte(b)
-	}
-
-	// TODO: handle SPI errors
-	return nil
-}
-
-// transferByte writes/reads a single byte using the SPI interface.
-func (spi SPI) transferByte(w byte) (byte, error) {
+// Transfer writes/reads a single byte using the SPI interface.
+func (spi SPI) Transfer(w byte) (byte, error) {
 	spi.Bus.TXD = nrf.RegValue(w)
 	for spi.Bus.EVENTS_READY == 0 {
 	}
