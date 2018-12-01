@@ -63,6 +63,9 @@ func Run(mod llvm.Module, targetData llvm.TargetData, debug bool) error {
 		}
 		pkgName := initName[:len(initName)-5]
 		_, err := e.Function(call.CalledValue(), nil, pkgName)
+		if err == ErrUnreachable {
+			break
+		}
 		if err != nil {
 			return err
 		}

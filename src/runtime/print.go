@@ -205,7 +205,14 @@ func printitf(msg interface{}) {
 		// cast to underlying type
 		itf := *(*_interface)(unsafe.Pointer(&msg))
 		putchar('(')
-		print(itf.typecode)
+		switch unsafe.Sizeof(itf.typecode) {
+		case 2:
+			printuint16(uint16(itf.typecode))
+		case 4:
+			printuint32(uint32(itf.typecode))
+		case 8:
+			printuint64(uint64(itf.typecode))
+		}
 		putchar(':')
 		print(itf.value)
 		putchar(')')

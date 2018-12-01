@@ -1,12 +1,14 @@
 package compiler
 
 import (
+	"errors"
+
 	"github.com/aykevl/go-llvm"
 )
 
 // Run the LLVM optimizer over the module.
 // The inliner can be disabled (if necessary) by passing 0 to the inlinerThreshold.
-func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) {
+func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) error {
 	builder := llvm.NewPassManagerBuilder()
 	defer builder.Dispose()
 	builder.SetOptLevel(optLevel)
@@ -40,7 +42,13 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) {
 		c.OptimizeMaps()
 		c.OptimizeStringToBytes()
 		c.OptimizeAllocs()
-		c.Verify()
+		c.LowerInterfaces()
+	} else {
+		// Must be run at any optimization level.
+		c.LowerInterfaces()
+	}
+	if err := c.Verify(); err != nil {
+		return errors.New("optimizations caused a verification failure")
 	}
 
 	// Run module passes.
@@ -48,6 +56,8 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) {
 	defer modPasses.Dispose()
 	builder.Populate(modPasses)
 	modPasses.Run(c.mod)
+
+	return nil
 }
 
 // Eliminate created but not used maps.
@@ -299,6 +309,9 @@ func (c *Compiler) hasFlag(call, param llvm.Value, kind string) bool {
 // Return a list of values (actually, instructions) where this value is used as
 // an operand.
 func getUses(value llvm.Value) []llvm.Value {
+	if value.IsNil() {
+		return nil
+	}
 	var uses []llvm.Value
 	use := value.FirstUse()
 	for !use.IsNil() {

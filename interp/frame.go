@@ -17,6 +17,8 @@ type frame struct {
 	locals  map[llvm.Value]Value
 }
 
+var ErrUnreachable = errors.New("interp: unreachable executed")
+
 // evalBasicBlock evaluates a single basic block, returning the return value (if
 // ending with a ret instruction), a list of outgoing basic blocks (if not
 // ending with a ret instruction), or an error on failure.
@@ -300,9 +302,13 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{1}) // len
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{2}) // cap
 				fr.locals[inst] = &LocalValue{fr.Eval, ret}
+			case callee.Name() == "runtime.makeInterface":
+				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstPtrToInt(inst.Operand(0), fr.TargetData.IntPtrType())}
 			case strings.HasPrefix(callee.Name(), "runtime.print") || callee.Name() == "runtime._panic":
-				// all print instructions, which necessarily have side
-				// effects but no results
+				// This are all print instructions, which necessarily have side
+				// effects but no results.
+				// TODO: print an error when executing runtime._panic (with the
+				// exact error message it would print at runtime).
 				var params []llvm.Value
 				for i := 0; i < inst.OperandsCount()-1; i++ {
 					operand := fr.getLocal(inst.Operand(i)).Value()
@@ -426,9 +432,9 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			// unconditional branch (goto)
 			return nil, []llvm.Value{inst.Operand(0)}, nil
 		case !inst.IsAUnreachableInst().IsNil():
-			// unreachable was reached (e.g. after a call to panic())
-			// assume this is actually unreachable when running
-			return &LocalValue{fr.Eval, llvm.Undef(fr.fn.Type())}, nil, nil
+			// Unreachable was reached (e.g. after a call to panic()).
+			// Report this as an error, as it is not supposed to happen.
+			return nil, nil, ErrUnreachable
 
 		default:
 			return nil, nil, &Unsupported{inst}

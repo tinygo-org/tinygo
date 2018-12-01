@@ -43,29 +43,30 @@ type Config struct {
 
 type Compiler struct {
 	Config
-	mod              llvm.Module
-	ctx              llvm.Context
-	builder          llvm.Builder
-	dibuilder        *llvm.DIBuilder
-	cu               llvm.Metadata
-	difiles          map[string]llvm.Metadata
-	ditypes          map[string]llvm.Metadata
-	machine          llvm.TargetMachine
-	targetData       llvm.TargetData
-	intType          llvm.Type
-	i8ptrType        llvm.Type // for convenience
-	uintptrType      llvm.Type
-	coroIdFunc       llvm.Value
-	coroSizeFunc     llvm.Value
-	coroBeginFunc    llvm.Value
-	coroSuspendFunc  llvm.Value
-	coroEndFunc      llvm.Value
-	coroFreeFunc     llvm.Value
-	initFuncs        []llvm.Value
-	deferFuncs       []*ir.Function
-	deferInvokeFuncs []InvokeDeferFunction
-	ctxDeferFuncs    []ContextDeferFunction
-	ir               *ir.Program
+	mod                     llvm.Module
+	ctx                     llvm.Context
+	builder                 llvm.Builder
+	dibuilder               *llvm.DIBuilder
+	cu                      llvm.Metadata
+	difiles                 map[string]llvm.Metadata
+	ditypes                 map[string]llvm.Metadata
+	machine                 llvm.TargetMachine
+	targetData              llvm.TargetData
+	intType                 llvm.Type
+	i8ptrType               llvm.Type // for convenience
+	uintptrType             llvm.Type
+	coroIdFunc              llvm.Value
+	coroSizeFunc            llvm.Value
+	coroBeginFunc           llvm.Value
+	coroSuspendFunc         llvm.Value
+	coroEndFunc             llvm.Value
+	coroFreeFunc            llvm.Value
+	initFuncs               []llvm.Value
+	deferFuncs              []*ir.Function
+	deferInvokeFuncs        []InvokeDeferFunction
+	ctxDeferFuncs           []ContextDeferFunction
+	interfaceInvokeWrappers []interfaceInvokeWrapper
+	ir                      *ir.Program
 }
 
 type Frame struct {
@@ -489,6 +490,15 @@ func (c *Compiler) Compile(mainPath string) error {
 		c.builder.CreateRetVoid()
 	}
 
+	// Define the already declared functions that wrap methods for use in
+	// interfaces.
+	for _, state := range c.interfaceInvokeWrappers {
+		err = c.createInterfaceInvokeWrapper(state)
+		if err != nil {
+			return err
+		}
+	}
+
 	// After all packages are imported, add a synthetic initializer function
 	// that calls the initializer of each package.
 	initFn := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function))
@@ -533,13 +543,6 @@ func (c *Compiler) Compile(mainPath string) error {
 		c.builder.CreateCall(realMain, nil, "")
 	}
 	c.builder.CreateRetVoid()
-
-	// Add runtime type information for interfaces: interface calls and type
-	// asserts.
-	err = c.createInterfaceRTTI()
-	if err != nil {
-		return err
-	}
 
 	// see: https://reviews.llvm.org/D18355
 	c.mod.AddNamedMetadataOperand("llvm.module.flags",
@@ -814,7 +817,7 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 	var retType llvm.Type
 	if frame.blocking {
 		if f.Signature.Results() != nil {
-			return nil, errors.New("todo: return values in blocking function")
+			return nil, c.makeError(f.Function.Pos(), "todo: return values in blocking function")
 		}
 		retType = c.i8ptrType
 	} else if f.Signature.Results() == nil {
@@ -994,17 +997,6 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 		ptr := llvm.ConstInBoundsGEP(value.Global.LLVMGlobal, []llvm.Value{zero})
 		return ptr, nil
-
-	case *ir.InterfaceValue:
-		underlying := llvm.ConstPointerNull(c.i8ptrType) // could be any 0 value
-		if value.Elem != nil {
-			elem, err := c.getInterpretedValue(prefix, value.Elem)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			underlying = elem
-		}
-		return c.parseMakeInterface(underlying, value.Type, prefix)
 
 	case *ir.MapValue:
 		// Create initial bucket.
@@ -1526,7 +1518,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 			c.ctxDeferFuncs = append(c.ctxDeferFuncs, thunk)
 
 		} else {
-			return errors.New("todo: defer on uncommon function call type")
+			return c.makeError(instr.Pos(), "todo: defer on uncommon function call type")
 		}
 
 		// Make a struct out of the collected values to put in the defer frame.
@@ -1550,7 +1542,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 
 	case *ssa.Go:
 		if instr.Common().Method != nil {
-			return errors.New("todo: go on method receiver")
+			return c.makeError(instr.Pos(), "todo: go on method receiver")
 		}
 
 		// Execute non-blocking calls (including builtins) directly.
@@ -1597,7 +1589,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 			return err
 		}
 		mapType := instr.Map.Type().Underlying().(*types.Map)
-		return c.emitMapUpdate(mapType.Key(), m, key, value)
+		return c.emitMapUpdate(mapType.Key(), m, key, value, instr.Pos())
 	case *ssa.Panic:
 		value, err := c.parseExpr(frame, instr.X)
 		if err != nil {
@@ -1609,7 +1601,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 	case *ssa.Return:
 		if frame.blocking {
 			if len(instr.Results) != 0 {
-				return errors.New("todo: return values from blocking function")
+				return c.makeError(instr.Pos(), "todo: return values from blocking function")
 			}
 			// Final suspend.
 			continuePoint := c.builder.CreateCall(c.coroSuspendFunc, []llvm.Value{
@@ -1676,11 +1668,11 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		}
 		return nil
 	default:
-		return errors.New("unknown instruction: " + instr.String())
+		return c.makeError(instr.Pos(), "unknown instruction: "+instr.String())
 	}
 }
 
-func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string) (llvm.Value, error) {
+func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string, pos token.Pos) (llvm.Value, error) {
 	switch callName {
 	case "append":
 		src, err := c.parseExpr(frame, args[0])
@@ -1719,7 +1711,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 		case *types.Slice:
 			return c.builder.CreateExtractValue(value, 2, "cap"), nil
 		default:
-			return llvm.Value{}, errors.New("todo: cap: unknown type")
+			return llvm.Value{}, c.makeError(pos, "todo: cap: unknown type")
 		}
 	case "complex":
 		r, err := c.parseExpr(frame, args[0])
@@ -1738,7 +1730,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 		case types.Float64:
 			cplx = llvm.Undef(llvm.VectorType(c.ctx.DoubleType(), 2))
 		default:
-			return llvm.Value{}, errors.New("unsupported type in complex builtin: " + t.String())
+			return llvm.Value{}, c.makeError(pos, "unsupported type in complex builtin: "+t.String())
 		}
 		cplx = c.builder.CreateInsertElement(cplx, r, llvm.ConstInt(c.ctx.Int8Type(), 0, false), "")
 		cplx = c.builder.CreateInsertElement(cplx, i, llvm.ConstInt(c.ctx.Int8Type(), 1, false), "")
@@ -1770,7 +1762,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return llvm.Value{}, c.emitMapDelete(args[1].Type(), m, key)
+		return llvm.Value{}, c.emitMapDelete(args[1].Type(), m, key, pos)
 	case "imag":
 		cplx, err := c.parseExpr(frame, args[0])
 		if err != nil {
@@ -1791,7 +1783,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 		case *types.Map:
 			llvmLen = c.createRuntimeCall("hashmapLen", []llvm.Value{value}, "len")
 		default:
-			return llvm.Value{}, errors.New("todo: len: unknown type")
+			return llvm.Value{}, c.makeError(pos, "todo: len: unknown type")
 		}
 		if c.targetData.TypeAllocSize(llvmLen.Type()) < c.targetData.TypeAllocSize(c.intType) {
 			llvmLen = c.builder.CreateZExt(llvmLen, c.intType, "len.int")
@@ -1839,7 +1831,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 					} else if typ.Kind() == types.Complex128 {
 						c.createRuntimeCall("printcomplex128", []llvm.Value{value}, "")
 					} else {
-						return llvm.Value{}, errors.New("unknown basic arg type: " + typ.String())
+						return llvm.Value{}, c.makeError(pos, "unknown basic arg type: "+typ.String())
 					}
 				}
 			case *types.Interface:
@@ -1850,7 +1842,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 				ptrValue := c.builder.CreatePtrToInt(value, c.uintptrType, "")
 				c.createRuntimeCall("printptr", []llvm.Value{ptrValue}, "")
 			default:
-				return llvm.Value{}, errors.New("unknown arg type: " + typ.String())
+				return llvm.Value{}, c.makeError(pos, "unknown arg type: "+typ.String())
 			}
 		}
 		if callName == "println" {
@@ -1870,7 +1862,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string)
 		// TODO: do an actual nil check?
 		return c.parseExpr(frame, args[0])
 	default:
-		return llvm.Value{}, errors.New("todo: builtin: " + callName)
+		return llvm.Value{}, c.makeError(pos, "todo: builtin: "+callName)
 	}
 }
 
@@ -2012,7 +2004,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 					// ignore
 				case *ssa.MapUpdate:
 					if r.Block() != registerMap.Block() {
-						return llvm.Value{}, errors.New("register value map must be created in the same basic block")
+						return llvm.Value{}, c.makeError(instr.Pos(), "register value map must be created in the same basic block")
 					}
 					key := constant.StringVal(r.Key.(*ssa.Const).Value)
 					//println("value:", r.Value.(*ssa.MakeInterface).X.String())
@@ -2026,7 +2018,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 						break
 					}
 				default:
-					return llvm.Value{}, errors.New("don't know how to handle argument to inline assembly: " + r.String())
+					return llvm.Value{}, c.makeError(instr.Pos(), "don't know how to handle argument to inline assembly: "+r.String())
 				}
 			}
 			// TODO: handle dollar signs in asm string
@@ -2041,7 +2033,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 				name := s[1 : len(s)-1]
 				if _, ok := registers[name]; !ok {
 					if err == nil {
-						err = errors.New("unknown register name: " + name)
+						err = c.makeError(instr.Pos(), "unknown register name: "+name)
 					}
 					return s
 				}
@@ -2055,7 +2047,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 					case llvm.PointerTypeKind:
 						constraints = append(constraints, "*m")
 					default:
-						err = errors.New("unknown type in inline assembly for value: " + name)
+						err = c.makeError(instr.Pos(), "unknown type in inline assembly for value: "+name)
 						return s
 					}
 				}
@@ -2071,7 +2063,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 
 		targetFunc := c.ir.GetFunction(fn)
 		if targetFunc.LLVMFn.IsNil() {
-			return llvm.Value{}, errors.New("undefined function: " + targetFunc.LinkName())
+			return llvm.Value{}, c.makeError(instr.Pos(), "undefined function: "+targetFunc.LinkName())
 		}
 		var context llvm.Value
 		if c.ir.FunctionNeedsContext(targetFunc) {
@@ -2099,7 +2091,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 	// Builtin or function pointer.
 	switch call := instr.Value.(type) {
 	case *ssa.Builtin:
-		return c.parseBuiltin(frame, instr.Args, call.Name())
+		return c.parseBuiltin(frame, instr.Args, call.Name(), instr.Pos())
 	default: // function pointer
 		value, err := c.parseExpr(frame, instr.Value)
 		if err != nil {
@@ -2188,7 +2180,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	if value, ok := frame.locals[expr]; ok {
 		// Value is a local variable that has already been computed.
 		if value.IsNil() {
-			return llvm.Value{}, errors.New("undefined local var (from cgo?)")
+			return llvm.Value{}, c.makeError(expr.Pos(), "undefined local var (from cgo?)")
 		}
 		return value, nil
 	}
@@ -2225,7 +2217,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return c.parseBinOp(expr.Op, expr.X.Type(), x, y)
+		return c.parseBinOp(expr.Op, expr.X.Type(), x, y, expr.Pos())
 	case *ssa.Call:
 		// Passing the current task here to the subroutine. It is only used when
 		// the subroutine is blocking.
@@ -2261,7 +2253,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return c.parseConvert(expr.X.Type(), expr.Type(), x)
+		return c.parseConvert(expr.X.Type(), expr.Type(), x, expr.Pos())
 	case *ssa.Extract:
 		value, err := c.parseExpr(frame, expr.Tuple)
 		if err != nil {
@@ -2288,6 +2280,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Function:
 		fn := c.ir.GetFunction(expr)
+		if fn.IsExported() {
+			return llvm.Value{}, c.makeError(expr.Pos(), "cannot use an exported function as value")
+		}
 		ptr := fn.LLVMFn
 		if c.ir.FunctionNeedsContext(fn) {
 			// Create closure for function pointer.
@@ -2305,7 +2300,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		value := c.ir.GetGlobal(expr).LLVMGlobal
 		if value.IsNil() {
-			return llvm.Value{}, errors.New("global not found: " + c.ir.GetGlobal(expr).LinkName())
+			return llvm.Value{}, c.makeError(expr.Pos(), "global not found: "+c.ir.GetGlobal(expr).LinkName())
 		}
 		return value, nil
 	case *ssa.Index:
@@ -2350,13 +2345,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				bufptr = val
 				buflen = llvm.ConstInt(c.uintptrType, uint64(typ.Len()), false)
 			default:
-				return llvm.Value{}, errors.New("todo: indexaddr: " + typ.String())
+				return llvm.Value{}, c.makeError(expr.Pos(), "todo: indexaddr: "+typ.String())
 			}
 		case *types.Slice:
 			bufptr = c.builder.CreateExtractValue(val, 0, "indexaddr.ptr")
 			buflen = c.builder.CreateExtractValue(val, 1, "indexaddr.len")
 		default:
-			return llvm.Value{}, errors.New("todo: indexaddr: " + ptrTyp.String())
+			return llvm.Value{}, c.makeError(expr.Pos(), "todo: indexaddr: "+ptrTyp.String())
 		}
 
 		// Bounds check.
@@ -2393,7 +2388,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			// Bounds check.
 			// LLVM optimizes this away in most cases.
-			length, err := c.parseBuiltin(frame, []ssa.Value{expr.X}, "len")
+			length, err := c.parseBuiltin(frame, []ssa.Value{expr.X}, "len", expr.Pos())
 			if err != nil {
 				return llvm.Value{}, err // shouldn't happen
 			}
@@ -2408,7 +2403,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			if expr.CommaOk {
 				valueType = valueType.(*types.Tuple).At(0).Type()
 			}
-			return c.emitMapLookup(xType.Key(), valueType, value, index, expr.CommaOk)
+			return c.emitMapLookup(xType.Key(), valueType, value, index, expr.CommaOk, expr.Pos())
 		default:
 			panic("unknown lookup type: " + expr.String())
 		}
@@ -2423,7 +2418,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return c.parseMakeInterface(val, expr.X.Type(), "")
+		return c.parseMakeInterface(val, expr.X.Type(), "", expr.Pos())
 	case *ssa.MakeMap:
 		mapType := expr.Type().Underlying().(*types.Map)
 		llvmKeyType, err := c.getLLVMType(mapType.Key().Underlying())
@@ -2478,7 +2473,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// Allocate the backing array.
 		// TODO: escape analysis
 		elemSizeValue := llvm.ConstInt(c.uintptrType, elemSize, false)
-		sliceCapCast, err := c.parseConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap)
+		sliceCapCast, err := c.parseConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
 		if err != nil {
 			return llvm.Value{}, err
 		}
@@ -2562,7 +2557,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return it, nil
 	case *ssa.Slice:
 		if expr.Max != nil {
-			return llvm.Value{}, errors.New("todo: full slice expressions (with max): " + expr.Type().String())
+			return llvm.Value{}, c.makeError(expr.Pos(), "todo: full slice expressions (with max): "+expr.Type().String())
 		}
 		value, err := c.parseExpr(frame, expr.X)
 		if err != nil {
@@ -2677,7 +2672,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		case *types.Basic:
 			if typ.Info()&types.IsString == 0 {
-				return llvm.Value{}, errors.New("unknown slice type: " + typ.String())
+				return llvm.Value{}, c.makeError(expr.Pos(), "unknown slice type: "+typ.String())
 			}
 			// slice a string
 			oldPtr := c.builder.CreateExtractValue(value, 0, "")
@@ -2699,18 +2694,18 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return str, nil
 
 		default:
-			return llvm.Value{}, errors.New("unknown slice type: " + typ.String())
+			return llvm.Value{}, c.makeError(expr.Pos(), "unknown slice type: "+typ.String())
 		}
 	case *ssa.TypeAssert:
 		return c.parseTypeAssert(frame, expr)
 	case *ssa.UnOp:
 		return c.parseUnOp(frame, expr)
 	default:
-		return llvm.Value{}, errors.New("todo: unknown expression: " + expr.String())
+		return llvm.Value{}, c.makeError(expr.Pos(), "todo: unknown expression: "+expr.String())
 	}
 }
 
-func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (llvm.Value, error) {
+func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, pos token.Pos) (llvm.Value, error) {
 	switch typ := typ.Underlying().(type) {
 	case *types.Basic:
 		if typ.Info()&types.IsInteger != 0 {
@@ -2801,7 +2796,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 					return c.builder.CreateICmp(llvm.IntUGE, x, y, ""), nil
 				}
 			default:
-				return llvm.Value{}, errors.New("todo: binop on integer: " + op.String())
+				return llvm.Value{}, c.makeError(pos, "todo: binop on integer: "+op.String())
 			}
 		} else if typ.Info()&types.IsFloat != 0 {
 			// Operations on floats
@@ -2829,7 +2824,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 			case token.GEQ: // >=
 				return c.builder.CreateFCmp(llvm.FloatOGE, x, y, ""), nil
 			default:
-				return llvm.Value{}, errors.New("todo: binop on float: " + op.String())
+				return llvm.Value{}, c.makeError(pos, "todo: binop on float: "+op.String())
 			}
 		} else if typ.Info()&types.IsBoolean != 0 {
 			// Operations on booleans
@@ -2839,7 +2834,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 			case token.NEQ: // !=
 				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 			default:
-				return llvm.Value{}, errors.New("todo: binop on boolean: " + op.String())
+				return llvm.Value{}, c.makeError(pos, "todo: binop on boolean: "+op.String())
 			}
 		} else if typ.Kind() == types.UnsafePointer {
 			// Operations on pointers
@@ -2849,7 +2844,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 			case token.NEQ: // !=
 				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 			default:
-				return llvm.Value{}, errors.New("todo: binop on pointer: " + op.String())
+				return llvm.Value{}, c.makeError(pos, "todo: binop on pointer: "+op.String())
 			}
 		} else if typ.Info()&types.IsString != 0 {
 			// Operations on strings
@@ -2872,10 +2867,10 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 			case token.GEQ: // >=
 				return c.createRuntimeCall("stringLess", []llvm.Value{y, x}, ""), nil
 			default:
-				return llvm.Value{}, errors.New("todo: binop on string: " + op.String())
+				return llvm.Value{}, c.makeError(pos, "todo: binop on string: "+op.String())
 			}
 		} else {
-			return llvm.Value{}, errors.New("todo: unknown basic type in binop: " + typ.String())
+			return llvm.Value{}, c.makeError(pos, "todo: unknown basic type in binop: "+typ.String())
 		}
 	case *types.Signature:
 		if c.ir.SignatureNeedsContext(typ) {
@@ -2893,7 +2888,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 		case token.NEQ: // !=
 			return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 		default:
-			return llvm.Value{}, errors.New("binop on signature: " + op.String())
+			return llvm.Value{}, c.makeError(pos, "binop on signature: "+op.String())
 		}
 	case *types.Interface:
 		switch op {
@@ -2904,7 +2899,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 			}
 			return result, nil
 		default:
-			return llvm.Value{}, errors.New("binop on interface: " + op.String())
+			return llvm.Value{}, c.makeError(pos, "binop on interface: "+op.String())
 		}
 	case *types.Map, *types.Pointer:
 		// Maps are in general not comparable, but can be compared against nil
@@ -2916,7 +2911,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 		case token.NEQ: // !=
 			return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 		default:
-			return llvm.Value{}, errors.New("todo: binop on pointer: " + op.String())
+			return llvm.Value{}, c.makeError(pos, "todo: binop on pointer: "+op.String())
 		}
 	case *types.Slice:
 		// Slices are in general not comparable, but can be compared against
@@ -2929,7 +2924,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 		case token.NEQ: // !=
 			return c.builder.CreateICmp(llvm.IntNE, xPtr, yPtr, ""), nil
 		default:
-			return llvm.Value{}, errors.New("todo: binop on slice: " + op.String())
+			return llvm.Value{}, c.makeError(pos, "todo: binop on slice: "+op.String())
 		}
 	case *types.Array:
 		// Compare each array element and combine the result. From the spec:
@@ -2940,7 +2935,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 		for i := 0; i < int(typ.Len()); i++ {
 			xField := c.builder.CreateExtractValue(x, i, "")
 			yField := c.builder.CreateExtractValue(y, i, "")
-			fieldEqual, err := c.parseBinOp(token.EQL, typ.Elem(), xField, yField)
+			fieldEqual, err := c.parseBinOp(token.EQL, typ.Elem(), xField, yField, pos)
 			if err != nil {
 				return llvm.Value{}, err
 			}
@@ -2952,7 +2947,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 		case token.NEQ: // !=
 			return c.builder.CreateNot(result, ""), nil
 		default:
-			return llvm.Value{}, errors.New("unknown: binop on struct: " + op.String())
+			return llvm.Value{}, c.makeError(pos, "unknown: binop on struct: "+op.String())
 		}
 		return result, nil
 	case *types.Struct:
@@ -2969,7 +2964,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 			fieldType := typ.Field(i).Type()
 			xField := c.builder.CreateExtractValue(x, i, "")
 			yField := c.builder.CreateExtractValue(y, i, "")
-			fieldEqual, err := c.parseBinOp(token.EQL, fieldType, xField, yField)
+			fieldEqual, err := c.parseBinOp(token.EQL, fieldType, xField, yField, pos)
 			if err != nil {
 				return llvm.Value{}, err
 			}
@@ -2981,11 +2976,11 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value) (
 		case token.NEQ: // !=
 			return c.builder.CreateNot(result, ""), nil
 		default:
-			return llvm.Value{}, errors.New("unknown: binop on struct: " + op.String())
+			return llvm.Value{}, c.makeError(pos, "unknown: binop on struct: "+op.String())
 		}
 		return result, nil
 	default:
-		return llvm.Value{}, errors.New("todo: binop type: " + typ.String())
+		return llvm.Value{}, c.makeError(pos, "todo: binop type: "+typ.String())
 	}
 }
 
@@ -3107,7 +3102,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 	}
 }
 
-func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (llvm.Value, error) {
+func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, pos token.Pos) (llvm.Value, error) {
 	llvmTypeFrom := value.Type()
 	llvmTypeTo, err := c.getLLVMType(typeTo)
 	if err != nil {
@@ -3152,10 +3147,10 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 				case types.Byte:
 					return c.createRuntimeCall("stringFromBytes", []llvm.Value{value}, ""), nil
 				default:
-					return llvm.Value{}, errors.New("todo: convert to string: " + typeFrom.String())
+					return llvm.Value{}, c.makeError(pos, "todo: convert to string: "+typeFrom.String())
 				}
 			default:
-				return llvm.Value{}, errors.New("todo: convert to string: " + typeFrom.String())
+				return llvm.Value{}, c.makeError(pos, "todo: convert to string: "+typeFrom.String())
 			}
 		}
 
@@ -3226,7 +3221,7 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 			return cplx, nil
 		}
 
-		return llvm.Value{}, errors.New("todo: convert: basic non-integer type: " + typeFrom.String() + " -> " + typeTo.String())
+		return llvm.Value{}, c.makeError(pos, "todo: convert: basic non-integer type: "+typeFrom.String()+" -> "+typeTo.String())
 
 	case *types.Slice:
 		if basic, ok := typeFrom.(*types.Basic); !ok || basic.Info()&types.IsString == 0 {
@@ -3238,11 +3233,11 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value) (
 		case types.Byte:
 			return c.createRuntimeCall("stringToBytes", []llvm.Value{value}, ""), nil
 		default:
-			return llvm.Value{}, errors.New("todo: convert from string: " + elemType.String())
+			return llvm.Value{}, c.makeError(pos, "todo: convert from string: "+elemType.String())
 		}
 
 	default:
-		return llvm.Value{}, errors.New("todo: convert " + typeTo.String() + " <- " + typeFrom.String())
+		return llvm.Value{}, c.makeError(pos, "todo: convert "+typeTo.String()+" <- "+typeFrom.String())
 	}
 }
 
@@ -3340,10 +3335,10 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 			} else if typ.Info()&types.IsFloat != 0 {
 				return c.builder.CreateFSub(llvm.ConstFloat(x.Type(), 0.0), x, ""), nil
 			} else {
-				return llvm.Value{}, errors.New("todo: unknown basic type for negate: " + typ.String())
+				return llvm.Value{}, c.makeError(unop.Pos(), "todo: unknown basic type for negate: "+typ.String())
 			}
 		} else {
-			return llvm.Value{}, errors.New("todo: unknown type for negate: " + unop.X.Type().Underlying().String())
+			return llvm.Value{}, c.makeError(unop.Pos(), "todo: unknown type for negate: "+unop.X.Type().Underlying().String())
 		}
 	case token.MUL: // *x, dereference pointer
 		valType := unop.X.Type().(*types.Pointer).Elem()
@@ -3361,7 +3356,7 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 	case token.XOR: // ^x, toggle all bits in integer
 		return c.builder.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil
 	default:
-		return llvm.Value{}, errors.New("todo: unknown unop")
+		return llvm.Value{}, c.makeError(unop.Pos(), "todo: unknown unop")
 	}
 }
 

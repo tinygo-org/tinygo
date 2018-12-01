@@ -3,13 +3,13 @@ package compiler
 // This file emits the correct map intrinsics for map operations.
 
 import (
-	"errors"
+	"go/token"
 	"go/types"
 
 	"github.com/aykevl/go-llvm"
 )
 
-func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Value, commaOk bool) (llvm.Value, error) {
+func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Value, commaOk bool, pos token.Pos) (llvm.Value, error) {
 	llvmValueType, err := c.getLLVMType(valueType)
 	if err != nil {
 		return llvm.Value{}, err
@@ -29,7 +29,7 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 		params := []llvm.Value{m, keyPtr, mapValuePtr}
 		commaOkValue = c.createRuntimeCall("hashmapBinaryGet", params, "")
 	} else {
-		return llvm.Value{}, errors.New("todo: map lookup key type: " + keyType.String())
+		return llvm.Value{}, c.makeError(pos, "todo: map lookup key type: "+keyType.String())
 	}
 	mapValue := c.builder.CreateLoad(mapValueAlloca, "")
 	if commaOk {
@@ -42,7 +42,7 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 	}
 }
 
-func (c *Compiler) emitMapUpdate(keyType types.Type, m, key, value llvm.Value) error {
+func (c *Compiler) emitMapUpdate(keyType types.Type, m, key, value llvm.Value, pos token.Pos) error {
 	valueAlloca := c.builder.CreateAlloca(value.Type(), "hashmap.value")
 	c.builder.CreateStore(value, valueAlloca)
 	valuePtr := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "hashmap.valueptr")
@@ -61,11 +61,11 @@ func (c *Compiler) emitMapUpdate(keyType types.Type, m, key, value llvm.Value) e
 		c.createRuntimeCall("hashmapBinarySet", params, "")
 		return nil
 	} else {
-		return errors.New("todo: map update key type: " + keyType.String())
+		return c.makeError(pos, "todo: map update key type: "+keyType.String())
 	}
 }
 
-func (c *Compiler) emitMapDelete(keyType types.Type, m, key llvm.Value) error {
+func (c *Compiler) emitMapDelete(keyType types.Type, m, key llvm.Value, pos token.Pos) error {
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
@@ -80,7 +80,7 @@ func (c *Compiler) emitMapDelete(keyType types.Type, m, key llvm.Value) error {
 		c.createRuntimeCall("hashmapBinaryDelete", params, "")
 		return nil
 	} else {
-		return errors.New("todo: map delete key type: " + keyType.String())
+		return c.makeError(pos, "todo: map delete key type: "+keyType.String())
 	}
 }
 

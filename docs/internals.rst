@@ -155,23 +155,6 @@ somewhat compatible with the C calling convention but with a few quirks:
     This is the calling convention as implemented by LLVM, with the extension
     that ``i64`` return values are returned in the same way as aggregate types.
 
-  * Some functions have an extra context parameter appended at the end of the
-    argument list. This only happens when both of these conditions hold:
-
-      * The address of the function is taken, for example when passing the
-        function as function pointer to another function or storing it in a
-        global variable.
-
-      * This function or another function somewhere in the compiled code has the
-        exact same signature and is used in a closure or bound method. Signature
-        matching is very strict: it is based on Go types including named types
-        and return types, although parameter names or the function name itself
-        are not included in the match.
-
-    Whether a function needs this is determined by `FunctionNeedsContext
-    <https://godoc.org/github.com/aykevl/tinygo/ir#Program.FunctionNeedsContext>`_,
-    which bases itself on analysis done by AnalyseFunctionPointers.
-
   * Blocking functions have a coroutine pointer prepended to the argument list,
     see `src/runtime/scheduler.go
     <https://github.com/aykevl/tinygo/blob/master/src/runtime/scheduler.go>`_
