@@ -296,7 +296,6 @@ const (
             lastCluster = False
             if 'registers' in register:
                 # This is a cluster, not a register. Create the cluster type.
-                lastCluster = True
                 regType = 'struct {\n'
                 subaddress = register['address']
                 for subregister in register['registers']:
@@ -322,6 +321,8 @@ const (
                             regType += '\t\t_padding{padNumber} RegValue\n'.format(padNumber=padNumber)
                         else:
                             regType += '\t\t_padding{padNumber} [{num}]RegValue\n'.format(padNumber=padNumber, num=numSkip)
+                else:
+                    lastCluster = True
                 regType += '\t}'
                 address = subaddress
             if register['array'] is not None:
