@@ -279,26 +279,34 @@ func (spi SPI) Configure(config SPIConfig) {
 	case 8000000:
 		freq = nrf.SPI_FREQUENCY_FREQUENCY_M8
 	default:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_K125
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K500
 	}
 	spi.Bus.FREQUENCY = nrf.RegValue(freq)
 
-	// default to MSB and Mode0
-	conf := nrf.SPI_CONFIG_ORDER_MsbFirst | nrf.SPI_CONFIG_CPOL_ActiveHigh | nrf.SPI_CONFIG_CPHA_Leading
+	var conf uint32
 
 	// set bit transfer order
 	if config.LSBFirst {
-		conf |= nrf.SPI_CONFIG_ORDER_LsbFirst
+		conf = (nrf.SPI_CONFIG_ORDER_LsbFirst << nrf.SPI_CONFIG_ORDER_Pos)
 	}
 
 	// set mode
 	switch config.Mode {
+	case 0:
+		conf &^= (nrf.SPI_CONFIG_CPOL_ActiveHigh << nrf.SPI_CONFIG_CPOL_Pos)
+		conf &^= (nrf.SPI_CONFIG_CPHA_Leading << nrf.SPI_CONFIG_CPHA_Pos)
 	case 1:
-		conf |= (nrf.SPI_CONFIG_CPOL_ActiveHigh | nrf.SPI_CONFIG_CPHA_Trailing)
+		conf &^= (nrf.SPI_CONFIG_CPOL_ActiveHigh << nrf.SPI_CONFIG_CPOL_Pos)
+		conf |= (nrf.SPI_CONFIG_CPHA_Trailing << nrf.SPI_CONFIG_CPHA_Pos)
 	case 2:
-		conf |= (nrf.SPI_CONFIG_CPOL_ActiveLow | nrf.SPI_CONFIG_CPHA_Leading)
+		conf |= (nrf.SPI_CONFIG_CPOL_ActiveLow << nrf.SPI_CONFIG_CPOL_Pos)
+		conf &^= (nrf.SPI_CONFIG_CPHA_Leading << nrf.SPI_CONFIG_CPHA_Pos)
 	case 3:
-		conf |= (nrf.SPI_CONFIG_CPOL_ActiveLow | nrf.SPI_CONFIG_CPHA_Trailing)
+		conf |= (nrf.SPI_CONFIG_CPOL_ActiveLow << nrf.SPI_CONFIG_CPOL_Pos)
+		conf |= (nrf.SPI_CONFIG_CPHA_Trailing << nrf.SPI_CONFIG_CPHA_Pos)
+	default: // to mode
+		conf &^= (nrf.SPI_CONFIG_CPOL_ActiveHigh << nrf.SPI_CONFIG_CPOL_Pos)
+		conf &^= (nrf.SPI_CONFIG_CPHA_Leading << nrf.SPI_CONFIG_CPHA_Pos)
 	}
 	spi.Bus.CONFIG = nrf.RegValue(conf)
 
