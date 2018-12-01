@@ -4,7 +4,7 @@ package reflect
 //
 // Not used directly. These types are all replaced with the number the compiler
 // uses internally for the type.
-type Kind uint16
+type Kind uintptr
 
 // Copied from reflect/type.go
 // https://golang.org/src/reflect/type.go?s=8302:8316#L217
@@ -39,7 +39,7 @@ const (
 )
 
 // The typecode as used in an interface{}.
-type Type uint16
+type Type uintptr
 
 func TypeOf(i interface{}) Type {
 	return ValueOf(i).typecode
