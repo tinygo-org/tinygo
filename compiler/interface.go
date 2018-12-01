@@ -6,7 +6,7 @@ package compiler
 // interface-lowering.go for more details.
 
 import (
-	"errors"
+	"go/token"
 	"go/types"
 
 	"github.com/aykevl/go-llvm"
@@ -20,7 +20,7 @@ import (
 // value field.
 //
 // An interface value is a {typecode, value} tuple, or {i16, i8*} to be exact.
-func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global string) (llvm.Value, error) {
+func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global string, pos token.Pos) (llvm.Value, error) {
 	var itfValue llvm.Value
 	size := c.targetData.TypeAllocSize(val.Type())
 	if size > c.targetData.TypeAllocSize(c.i8ptrType) {
@@ -60,7 +60,7 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global str
 			c.builder.CreateStore(val, memStructPtr)
 			itfValue = c.builder.CreateLoad(mem, "makeinterface.cast.load")
 		default:
-			return llvm.Value{}, errors.New("todo: makeinterface: cast small type to i8*")
+			return llvm.Value{}, c.makeError(pos, "todo: makeinterface: cast small type to i8*")
 		}
 	}
 	itfTypeCodeGlobal := c.getTypeCode(typ)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go/types"
 	"io"
 	"io/ioutil"
 	"os"
@@ -451,6 +452,8 @@ func handleCompilerError(err error) {
 			fmt.Fprintln(os.Stderr, "unsupported instruction during init evaluation:")
 			errUnsupported.Inst.Dump()
 			fmt.Fprintln(os.Stderr)
+		} else if errCompiler, ok := err.(types.Error); ok {
+			fmt.Fprintln(os.Stderr, errCompiler)
 		} else {
 			fmt.Fprintln(os.Stderr, "error:", err)
 		}
