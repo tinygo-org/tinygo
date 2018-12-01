@@ -1,5 +1,8 @@
 package compiler
 
+// This file implements the 'defer' keyword in Go. See src/runtime/defer.go for
+// details.
+
 import (
 	"go/types"
 
