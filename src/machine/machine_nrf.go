@@ -256,7 +256,7 @@ type SPIConfig struct {
 
 // Configure is intended to setup the SPI interface.
 func (spi SPI) Configure(config SPIConfig) {
-	// enable
+	// Disable bus to configure it
 	spi.Bus.ENABLE = nrf.SPI_ENABLE_ENABLE_Disabled
 
 	// set frequency
@@ -312,7 +312,7 @@ func (spi SPI) Configure(config SPIConfig) {
 	// set pins
 	spi.setPins(config.SCK, config.MOSI, config.MISO)
 
-	// enable
+	// Re-enable bus now that it is configured.
 	spi.Bus.ENABLE = nrf.SPI_ENABLE_ENABLE_Enabled
 }
 

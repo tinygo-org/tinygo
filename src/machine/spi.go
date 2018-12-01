@@ -4,6 +4,11 @@ package machine
 
 import "errors"
 
+var (
+	ErrTxSlicesRequired   = errors.New("SPI Tx requires a write or read slice, or both")
+	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")
+)
+
 // Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
 // interface, there must always be the same number of bytes written as bytes read.
 // The Tx method knows about this, and offers a few different ways of calling it.
@@ -17,7 +22,7 @@ import "errors"
 // spi.Tx(nil, rx)
 func (spi SPI) Tx(w, r []byte) error {
 	if w == nil && r == nil {
-		return errors.New("SPI Tx requires a write or read slice, or both")
+		return ErrTxSlicesRequired
 	}
 
 	var err error
@@ -43,7 +48,7 @@ func (spi SPI) Tx(w, r []byte) error {
 	default:
 		// write/read
 		if len(w) != len(r) {
-			return errors.New("SPI write and read slices must be same size")
+			return ErrTxInvalidSliceSize
 		}
 
 		for i, b := range w {
