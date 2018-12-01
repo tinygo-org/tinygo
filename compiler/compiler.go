@@ -1296,14 +1296,14 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		contextAlloc := llvm.Value{}
 		if c.targetData.TypeAllocSize(contextType) <= c.targetData.TypeAllocSize(c.i8ptrType) {
 			// Context stored directly in pointer. Load it using an alloca.
-			contextRawAlloc := c.builder.CreateAlloca(llvm.PointerType(c.i8ptrType, 0), "")
-			contextRawValue := c.builder.CreateBitCast(context, llvm.PointerType(c.i8ptrType, 0), "")
+			contextRawAlloc := c.builder.CreateAlloca(llvm.PointerType(c.i8ptrType, 0), "context.raw.alloc")
+			contextRawValue := c.builder.CreateBitCast(context, llvm.PointerType(c.i8ptrType, 0), "context.raw.value")
 			c.builder.CreateStore(contextRawValue, contextRawAlloc)
-			contextAlloc = c.builder.CreateBitCast(contextRawAlloc, llvm.PointerType(contextType, 0), "")
+			contextAlloc = c.builder.CreateBitCast(contextRawAlloc, llvm.PointerType(contextType, 0), "context.alloc")
 		} else {
 			// Context stored in the heap. Bitcast the passed-in pointer to the
 			// correct pointer type.
-			contextAlloc = c.builder.CreateBitCast(context, llvm.PointerType(contextType, 0), "")
+			contextAlloc = c.builder.CreateBitCast(context, llvm.PointerType(contextType, 0), "context.raw.ptr")
 		}
 
 		// Load each free variable from the context.
@@ -2320,11 +2320,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		// Can't load directly from array (as index is non-constant), so have to
 		// do it using an alloca+gep+load.
-		alloca := c.builder.CreateAlloca(array.Type(), "")
+		alloca := c.builder.CreateAlloca(array.Type(), "index.alloca")
 		c.builder.CreateStore(array, alloca)
 		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-		ptr := c.builder.CreateGEP(alloca, []llvm.Value{zero, index}, "")
-		return c.builder.CreateLoad(ptr, ""), nil
+		ptr := c.builder.CreateGEP(alloca, []llvm.Value{zero, index}, "index.gep")
+		return c.builder.CreateLoad(ptr, "index.load"), nil
 	case *ssa.IndexAddr:
 		val, err := c.parseExpr(frame, expr.X)
 		if err != nil {
