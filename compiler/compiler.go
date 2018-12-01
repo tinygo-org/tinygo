@@ -2280,6 +2280,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Function:
 		fn := c.ir.GetFunction(expr)
+		if fn.IsExported() {
+			return llvm.Value{}, c.makeError(expr.Pos(), "cannot use an exported function as value")
+		}
 		ptr := fn.LLVMFn
 		if c.ir.FunctionNeedsContext(fn) {
 			// Create closure for function pointer.
