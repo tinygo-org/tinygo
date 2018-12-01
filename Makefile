@@ -10,7 +10,7 @@ TARGET ?= unix
 ifeq ($(TARGET),unix)
 # Regular *nix system.
 
-else ifeq ($(TARGET),pca10056)
+else ifeq ($(TARGET),pca10040)
 # PCA10040: nRF52832 development board
 OBJCOPY = arm-none-eabi-objcopy
 TGOFLAGS += -target $(TARGET)
@@ -49,7 +49,7 @@ run-blinky: run-blinky2
 run-blinky2: build/blinky2
 	./build/blinky2
 
-ifeq ($(TARGET),pca10056)
+ifeq ($(TARGET),pca10040)
 flash-%: build/%.hex
 	nrfjprog -f nrf52 --sectorerase --program $< --reset
 else ifeq ($(TARGET),microbit)
