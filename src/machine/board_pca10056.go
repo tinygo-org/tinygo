@@ -28,6 +28,16 @@ const (
 	UART_RX_PIN = 8
 )
 
+// ADC pins
+const (
+	ADC0 = 3
+	ADC1 = 4
+	ADC2 = 28
+	ADC3 = 29
+	ADC4 = 30
+	ADC5 = 31
+)
+
 // I2C pins
 const (
 	SDA_PIN = 26 // P0.26
