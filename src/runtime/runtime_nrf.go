@@ -41,9 +41,9 @@ func initLFCLK() {
 }
 
 func initRTC() {
-	nrf.RTC0.TASKS_START = 1
+	nrf.RTC1.TASKS_START = 1
 	// TODO: set priority
-	arm.EnableIRQ(nrf.IRQ_RTC0)
+	arm.EnableIRQ(nrf.IRQ_RTC1)
 }
 
 func putchar(c byte) {
@@ -70,7 +70,7 @@ var (
 // overflow the counter, leading to incorrect results. This might be fixed by
 // handling the overflow event.
 func ticks() timeUnit {
-	rtcCounter := uint32(nrf.RTC0.COUNTER)
+	rtcCounter := uint32(nrf.RTC1.COUNTER)
 	offset := (rtcCounter - rtcLastCounter) & 0xffffff // change since last measurement
 	rtcLastCounter = rtcCounter
 	timestamp += timeUnit(offset) // TODO: not precise
@@ -83,7 +83,7 @@ type isrFlag bool
 var rtc_wakeup isrFlag
 
 func rtc_sleep(ticks uint32) {
-	nrf.RTC0.INTENSET = nrf.RTC_INTENSET_COMPARE0
+	nrf.RTC1.INTENSET = nrf.RTC_INTENSET_COMPARE0
 	rtc_wakeup = false
 	if ticks == 1 {
 		// Race condition (even in hardware) at ticks == 1.
@@ -91,15 +91,15 @@ func rtc_sleep(ticks uint32) {
 		// describes.
 		ticks = 2
 	}
-	nrf.RTC0.CC[0] = (nrf.RTC0.COUNTER + nrf.RegValue(ticks)) & 0x00ffffff
+	nrf.RTC1.CC[0] = (nrf.RTC1.COUNTER + nrf.RegValue(ticks)) & 0x00ffffff
 	for !rtc_wakeup {
 		arm.Asm("wfi")
 	}
 }
 
-//go:export RTC0_IRQHandler
-func handleRTC0() {
-	nrf.RTC0.INTENCLR = nrf.RTC_INTENSET_COMPARE0
-	nrf.RTC0.EVENTS_COMPARE[0] = 0
+//go:export RTC1_IRQHandler
+func handleRTC1() {
+	nrf.RTC1.INTENCLR = nrf.RTC_INTENSET_COMPARE0
+	nrf.RTC1.EVENTS_COMPARE[0] = 0
 	rtc_wakeup = true
 }
