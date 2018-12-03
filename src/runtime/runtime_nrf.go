@@ -42,7 +42,7 @@ func initLFCLK() {
 
 func initRTC() {
 	nrf.RTC1.TASKS_START = 1
-	// TODO: set priority
+	arm.SetPriority(nrf.IRQ_RTC1, 0xc0) // low priority
 	arm.EnableIRQ(nrf.IRQ_RTC1)
 }
 

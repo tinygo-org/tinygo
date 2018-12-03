@@ -78,6 +78,7 @@ func (uart UART) Configure(config UARTConfig) {
 	nrf.UART0.INTENSET = nrf.UART_INTENSET_RXDRDY_Msk
 
 	// Enable RX IRQ.
+	arm.SetPriority(nrf.IRQ_UART0, 0xc0) // low priority
 	arm.EnableIRQ(nrf.IRQ_UART0)
 }
 
