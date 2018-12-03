@@ -54,6 +54,9 @@ func AsmFull(asm string, regs map[string]interface{})
 // must be a processor register, reachable with the "mov" instruction.
 func ReadRegister(name string) uintptr
 
+// Run the following system call (SVCall) with 0 arguments.
+func SVCall0(num uintptr) uintptr
+
 // Run the following system call (SVCall) with 1 argument.
 func SVCall1(num uintptr, a1 interface{}) uintptr
 
