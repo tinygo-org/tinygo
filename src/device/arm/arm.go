@@ -75,8 +75,21 @@ const (
 )
 
 // Nested Vectored Interrupt Controller (NVIC).
+//
+// Source:
+// http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0553a/CIHIGCIF.html
 type NVIC_Type struct {
-	ISER [8]RegValue
+	ISER [8]RegValue // Interrupt Set-enable Registers
+	_    [24]uint32
+	ICER [8]RegValue // Interrupt Clear-enable Registers
+	_    [24]uint32
+	ISPR [8]RegValue // Interrupt Set-pending Registers
+	_    [24]uint32
+	ICPR [8]RegValue // Interrupt Clear-pending Registers
+	_    [24]uint32
+	IABR [8]RegValue // Interrupt Active Bit Registers
+	_    [56]uint32
+	IPR  [60]RegValue // Interrupt Priority Registers
 }
 
 var NVIC = (*NVIC_Type)(unsafe.Pointer(uintptr(NVIC_BASE)))
@@ -84,4 +97,21 @@ var NVIC = (*NVIC_Type)(unsafe.Pointer(uintptr(NVIC_BASE)))
 // Enable the given interrupt number.
 func EnableIRQ(irq uint32) {
 	NVIC.ISER[irq>>5] = 1 << (irq & 0x1F)
+}
+
+// Set the priority of the given interrupt number.
+// Note that the priority is given as a 0-255 number, where some of the lower
+// bits are not implemented by the hardware. For example, to set a low interrupt
+// priority, use 0xc0, which is equivalent to using priority level 5 when the
+// hardware has 8 priority levels. Also note that the priority level is inverted
+// in ARM: a lower number means it is a more important interrupt and will
+// interrupt ISRs with a higher interrupt priority.
+func SetPriority(irq uint32, priority uint32) {
+	// Details:
+	// http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0553a/Cihgjeed.html
+	regnum := irq / 4
+	regpos := irq % 4
+	mask := uint32(0xff) << (regpos * 8) // bits to clear
+	priority = priority << (regpos * 8)  // bits to set
+	NVIC.IPR[regnum] = RegValue((uint32(NVIC.IPR[regnum]) &^ mask) | priority)
 }
