@@ -62,26 +62,27 @@ type Compiler struct {
 	coroEndFunc             llvm.Value
 	coroFreeFunc            llvm.Value
 	initFuncs               []llvm.Value
-	deferFuncs              []*ir.Function
-	deferInvokeFuncs        []InvokeDeferFunction
-	ctxDeferFuncs           []ContextDeferFunction
 	interfaceInvokeWrappers []interfaceInvokeWrapper
 	ir                      *ir.Program
 }
 
 type Frame struct {
-	fn           *ir.Function
-	locals       map[ssa.Value]llvm.Value            // local variables
-	blockEntries map[*ssa.BasicBlock]llvm.BasicBlock // a *ssa.BasicBlock may be split up
-	blockExits   map[*ssa.BasicBlock]llvm.BasicBlock // these are the exit blocks
-	currentBlock *ssa.BasicBlock
-	phis         []Phi
-	blocking     bool
-	taskHandle   llvm.Value
-	cleanupBlock llvm.BasicBlock
-	suspendBlock llvm.BasicBlock
-	deferPtr     llvm.Value
-	difunc       llvm.Metadata
+	fn                *ir.Function
+	locals            map[ssa.Value]llvm.Value            // local variables
+	blockEntries      map[*ssa.BasicBlock]llvm.BasicBlock // a *ssa.BasicBlock may be split up
+	blockExits        map[*ssa.BasicBlock]llvm.BasicBlock // these are the exit blocks
+	currentBlock      *ssa.BasicBlock
+	phis              []Phi
+	blocking          bool
+	taskHandle        llvm.Value
+	cleanupBlock      llvm.BasicBlock
+	suspendBlock      llvm.BasicBlock
+	deferPtr          llvm.Value
+	difunc            llvm.Metadata
+	allDeferFuncs     []interface{}
+	deferFuncs        map[*ir.Function]int
+	deferInvokeFuncs  map[string]int
+	deferClosureFuncs map[*ir.Function]int
 }
 
 type Phi struct {
@@ -340,12 +341,6 @@ func (c *Compiler) Compile(mainPath string) error {
 		if err != nil {
 			return err
 		}
-	}
-
-	// Create thunks for deferred functions.
-	err = c.finalizeDefers()
-	if err != nil {
-		return err
 	}
 
 	// Define the already declared functions that wrap methods for use in
