@@ -31,16 +31,16 @@ const schedulerDebug = false
 // must not be used directly, it is meant to be used as an opaque *i8 in LLVM.
 type coroutine uint8
 
-//go:linkname resume llvm.coro.resume
+//go:export llvm.coro.resume
 func (t *coroutine) resume()
 
-//go:linkname destroy llvm.coro.destroy
+//go:export llvm.coro.destroy
 func (t *coroutine) destroy()
 
-//go:linkname done llvm.coro.done
+//go:export llvm.coro.done
 func (t *coroutine) done() bool
 
-//go:linkname _promise llvm.coro.promise
+//go:export llvm.coro.promise
 func (t *coroutine) _promise(alignment int32, from bool) unsafe.Pointer
 
 // Get the promise belonging to a task.

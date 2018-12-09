@@ -56,13 +56,14 @@ func Run(mod llvm.Module, targetData llvm.TargetData, debug bool) error {
 	}
 
 	// Do this in a separate step to avoid corrupting the iterator above.
+	undefPtr := llvm.Undef(llvm.PointerType(mod.Context().Int8Type(), 0))
 	for _, call := range initCalls {
 		initName := call.CalledValue().Name()
 		if !strings.HasSuffix(initName, ".init") {
 			return errors.New("expected all instructions in " + name + " to be *.init() calls")
 		}
 		pkgName := initName[:len(initName)-5]
-		_, err := e.Function(call.CalledValue(), nil, pkgName)
+		_, err := e.Function(call.CalledValue(), []Value{&LocalValue{e, undefPtr}}, pkgName)
 		if err == ErrUnreachable {
 			break
 		}

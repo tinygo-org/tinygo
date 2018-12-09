@@ -304,16 +304,10 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 	if err != nil {
 		return llvm.Value{}, nil, err
 	}
-	if c.ir.SignatureNeedsContext(instr.Method.Type().(*types.Signature)) {
-		// This is somewhat of a hack.
-		// getLLVMType() has created a closure type for us, but we don't
-		// actually want a closure type as an interface call can never be a
-		// closure call. So extract the function pointer type from the
-		// closure.
-		// This happens because somewhere the same function signature is
-		// used in a closure or bound method.
-		llvmFnType = llvmFnType.Subtypes()[1]
-	}
+	// getLLVMType() has created a closure type for us, but we don't actually
+	// want a closure type as an interface call can never be a closure call. So
+	// extract the function pointer type from the closure.
+	llvmFnType = llvmFnType.Subtypes()[1]
 
 	typecode := c.builder.CreateExtractValue(itf, 0, "invoke.typecode")
 	values := []llvm.Value{
@@ -333,12 +327,9 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 		}
 		args = append(args, val)
 	}
-	if c.ir.SignatureNeedsContext(instr.Method.Type().(*types.Signature)) {
-		// This function takes an extra context parameter. An interface call
-		// cannot also be a closure but we have to supply the nil pointer
-		// anyway.
-		args = append(args, llvm.ConstPointerNull(c.i8ptrType))
-	}
+	// Add the context parameter. An interface call never takes a context but we
+	// have to supply the parameter anyway.
+	args = append(args, llvm.Undef(c.i8ptrType))
 
 	return fnCast, args, nil
 }

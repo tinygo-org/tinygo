@@ -17,16 +17,15 @@ import (
 //     String() string
 //     Read([]byte) (int, error)
 func MethodSignature(method *types.Func) string {
-	return method.Name() + Signature(method.Type().(*types.Signature))
+	return method.Name() + signature(method.Type().(*types.Signature))
 }
 
-// Make a readable version of a function (pointer) signature. This string is
-// used internally to match signatures (like in AnalyseFunctionPointers).
+// Make a readable version of a function (pointer) signature.
 // Examples:
 //
 //     () string
 //     (string, int) (int, error)
-func Signature(sig *types.Signature) string {
+func signature(sig *types.Signature) string {
 	s := ""
 	if sig.Params().Len() == 0 {
 		s += "()"
@@ -97,69 +96,6 @@ func (p *Program) AnalyseCallgraph() {
 	for _, f := range p.Functions {
 		for _, child := range f.children {
 			child.parents = append(child.parents, f)
-		}
-	}
-}
-
-// Find all types that are put in an interface.
-func (p *Program) AnalyseInterfaceConversions() {
-	// Clear, if AnalyseInterfaceConversions has been called before.
-	p.typesInInterfaces = map[string]struct{}{}
-
-	for _, f := range p.Functions {
-		for _, block := range f.Blocks {
-			for _, instr := range block.Instrs {
-				switch instr := instr.(type) {
-				case *ssa.MakeInterface:
-					name := instr.X.Type().String()
-					if _, ok := p.typesInInterfaces[name]; !ok {
-						p.typesInInterfaces[name] = struct{}{}
-					}
-				}
-			}
-		}
-	}
-}
-
-// Analyse which function pointer signatures need a context parameter.
-// This makes calling function pointers more efficient.
-func (p *Program) AnalyseFunctionPointers() {
-	// Clear, if AnalyseFunctionPointers has been called before.
-	p.fpWithContext = map[string]struct{}{}
-
-	for _, f := range p.Functions {
-		for _, block := range f.Blocks {
-			for _, instr := range block.Instrs {
-				switch instr := instr.(type) {
-				case ssa.CallInstruction:
-					for _, arg := range instr.Common().Args {
-						switch arg := arg.(type) {
-						case *ssa.Function:
-							f := p.GetFunction(arg)
-							f.addressTaken = true
-						}
-					}
-				case *ssa.DebugRef:
-				default:
-					// For anything that isn't a call...
-					for _, operand := range instr.Operands(nil) {
-						if operand == nil || *operand == nil || isCGoInternal((*operand).Name()) {
-							continue
-						}
-						switch operand := (*operand).(type) {
-						case *ssa.Function:
-							f := p.GetFunction(operand)
-							f.addressTaken = true
-						}
-					}
-				}
-				switch instr := instr.(type) {
-				case *ssa.MakeClosure:
-					fn := instr.Fn.(*ssa.Function)
-					sig := Signature(fn.Signature)
-					p.fpWithContext[sig] = struct{}{}
-				}
-			}
 		}
 	}
 }
@@ -320,22 +256,4 @@ func (p *Program) IsBlocking(f *Function) bool {
 		return false
 	}
 	return f.blocking
-}
-
-func (p *Program) FunctionNeedsContext(f *Function) bool {
-	if !f.addressTaken {
-		if f.Signature.Recv() != nil {
-			_, hasInterfaceConversion := p.typesInInterfaces[f.Signature.Recv().Type().String()]
-			if hasInterfaceConversion && p.SignatureNeedsContext(f.Signature) {
-				return true
-			}
-		}
-		return false
-	}
-	return p.SignatureNeedsContext(f.Signature)
-}
-
-func (p *Program) SignatureNeedsContext(sig *types.Signature) bool {
-	_, needsContext := p.fpWithContext[Signature(sig)]
-	return needsContext
 }

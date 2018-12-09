@@ -218,12 +218,10 @@ func (c *Compiler) Compile(mainPath string) error {
 
 	// Run some DCE and analysis passes. The results are later used by the
 	// compiler.
-	c.ir.SimpleDCE()                   // remove most dead code
-	c.ir.AnalyseCallgraph()            // set up callgraph
-	c.ir.AnalyseInterfaceConversions() // determine which types are converted to an interface
-	c.ir.AnalyseFunctionPointers()     // determine which function pointer signatures need context
-	c.ir.AnalyseBlockingRecursive()    // make all parents of blocking calls blocking (transitively)
-	c.ir.AnalyseGoCalls()              // check whether we need a scheduler
+	c.ir.SimpleDCE()                // remove most dead code
+	c.ir.AnalyseCallgraph()         // set up callgraph
+	c.ir.AnalyseBlockingRecursive() // make all parents of blocking calls blocking (transitively)
+	c.ir.AnalyseGoCalls()           // check whether we need a scheduler
 
 	// Initialize debug information.
 	c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
@@ -368,7 +366,7 @@ func (c *Compiler) Compile(mainPath string) error {
 	block := c.ctx.AddBasicBlock(initFn.LLVMFn, "entry")
 	c.builder.SetInsertPointAtEnd(block)
 	for _, fn := range c.initFuncs {
-		c.builder.CreateCall(fn, nil, "")
+		c.builder.CreateCall(fn, []llvm.Value{llvm.Undef(c.i8ptrType)}, "")
 	}
 	c.builder.CreateRetVoid()
 
@@ -389,11 +387,10 @@ func (c *Compiler) Compile(mainPath string) error {
 	c.builder.SetInsertPointAtEnd(block)
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
 	if c.ir.NeedsScheduler() {
-		coroutine := c.builder.CreateCall(realMain, []llvm.Value{llvm.ConstPointerNull(c.i8ptrType)}, "")
-		scheduler := c.mod.NamedFunction("runtime.scheduler")
-		c.builder.CreateCall(scheduler, []llvm.Value{coroutine}, "")
+		coroutine := c.builder.CreateCall(realMain, []llvm.Value{llvm.ConstPointerNull(c.i8ptrType), llvm.Undef(c.i8ptrType)}, "")
+		c.createRuntimeCall("scheduler", []llvm.Value{coroutine}, "")
 	} else {
-		c.builder.CreateCall(realMain, nil, "")
+		c.builder.CreateCall(realMain, []llvm.Value{llvm.Undef(c.i8ptrType)}, "")
 	}
 	c.builder.CreateRetVoid()
 
@@ -515,17 +512,11 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			}
 			paramTypes = append(paramTypes, c.expandFormalParamType(subType)...)
 		}
-		var ptr llvm.Type
-		if c.ir.SignatureNeedsContext(typ) {
-			// make a closure type (with a function pointer type inside):
-			// {context, funcptr}
-			paramTypes = append(paramTypes, c.i8ptrType)
-			ptr = llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), 0)
-			ptr = c.ctx.StructType([]llvm.Type{c.i8ptrType, ptr}, false)
-		} else {
-			// make a simple function pointer
-			ptr = llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), 0)
-		}
+		// make a closure type (with a function pointer type inside):
+		// {context, funcptr}
+		paramTypes = append(paramTypes, c.i8ptrType)
+		ptr := llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), 0)
+		ptr = c.ctx.StructType([]llvm.Type{c.i8ptrType, ptr}, false)
 		return ptr, nil
 	case *types.Slice:
 		elemType, err := c.getLLVMType(typ.Elem())
@@ -706,9 +697,9 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 		paramTypes = append(paramTypes, paramTypeFragments...)
 	}
 
-	if c.ir.FunctionNeedsContext(f) {
-		// This function gets an extra parameter: the context pointer (for
-		// closures and bound methods). Add it as an extra paramter here.
+	// Add an extra parameter as the function context. This context is used in
+	// closures and bound methods, but should be optimized away when not used.
+	if !f.IsExported() {
 		paramTypes = append(paramTypes, c.i8ptrType)
 	}
 
@@ -840,10 +831,8 @@ func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Valu
 		}
 		fn := c.ir.GetFunction(value.Elem)
 		ptr := fn.LLVMFn
-		if c.ir.SignatureNeedsContext(fn.Signature) {
-			// Create closure value: {context, function pointer}
-			ptr = c.ctx.ConstStruct([]llvm.Value{llvm.ConstPointerNull(c.i8ptrType), ptr}, false)
-		}
+		// Create closure value: {context, function pointer}
+		ptr = c.ctx.ConstStruct([]llvm.Value{llvm.ConstPointerNull(c.i8ptrType), ptr}, false)
 		return ptr, nil
 
 	case *ir.GlobalValue:
@@ -1128,9 +1117,6 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 	// Load free variables from the context. This is a closure (or bound
 	// method).
 	if len(frame.fn.FreeVars) != 0 {
-		if !c.ir.FunctionNeedsContext(frame.fn) {
-			panic("free variables on function without context")
-		}
 		context := frame.fn.LLVMFn.LastParam()
 		context.SetName("context")
 
@@ -1799,24 +1785,20 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 			return llvm.Value{}, c.makeError(instr.Pos(), "undefined function: "+targetFunc.LinkName())
 		}
 		var context llvm.Value
-		if c.ir.FunctionNeedsContext(targetFunc) {
-			// This function call is to a (potential) closure, not a regular
-			// function. See whether it is a closure and if so, call it as such.
-			// Else, supply a dummy nil pointer as the last parameter.
-			var err error
-			if mkClosure, ok := instr.Value.(*ssa.MakeClosure); ok {
-				// closure is {context, function pointer}
-				closure, err := c.parseExpr(frame, mkClosure)
-				if err != nil {
-					return llvm.Value{}, err
-				}
-				context = c.builder.CreateExtractValue(closure, 0, "")
-			} else {
-				context, err = c.getZeroValue(c.i8ptrType)
-				if err != nil {
-					return llvm.Value{}, err
-				}
+		// This function call is to a (potential) closure, not a regular
+		// function. See whether it is a closure and if so, call it as such.
+		// Else, supply a dummy nil pointer as the last parameter.
+		if targetFunc.IsExported() {
+			// don't pass a context parameter
+		} else if mkClosure, ok := instr.Value.(*ssa.MakeClosure); ok {
+			// closure is {context, function pointer}
+			closure, err := c.parseExpr(frame, mkClosure)
+			if err != nil {
+				return llvm.Value{}, err
 			}
+			context = c.builder.CreateExtractValue(closure, 0, "")
+		} else {
+			context = llvm.Undef(c.i8ptrType)
 		}
 		return c.parseFunctionCall(frame, instr.Args, targetFunc.LLVMFn, context, c.ir.IsBlocking(targetFunc), parentHandle)
 	}
@@ -1831,14 +1813,11 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 			return llvm.Value{}, err
 		}
 		// TODO: blocking function pointers (needs analysis)
-		var context llvm.Value
-		if c.ir.SignatureNeedsContext(instr.Signature()) {
-			// 'value' is a closure, not a raw function pointer.
-			// Extract the function pointer and the context pointer.
-			// closure: {context, function pointer}
-			context = c.builder.CreateExtractValue(value, 0, "")
-			value = c.builder.CreateExtractValue(value, 1, "")
-		}
+		// 'value' is a closure, not a raw function pointer.
+		// Extract the function pointer and the context pointer.
+		// closure: {context, function pointer}
+		context := c.builder.CreateExtractValue(value, 0, "")
+		value = c.builder.CreateExtractValue(value, 1, "")
 		return c.parseFunctionCall(frame, instr.Args, value, context, false, parentHandle)
 	}
 }
@@ -2016,16 +1995,12 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if fn.IsExported() {
 			return llvm.Value{}, c.makeError(expr.Pos(), "cannot use an exported function as value")
 		}
-		ptr := fn.LLVMFn
-		if c.ir.FunctionNeedsContext(fn) {
-			// Create closure for function pointer.
-			// Closure is: {context, function pointer}
-			ptr = c.ctx.ConstStruct([]llvm.Value{
-				llvm.ConstPointerNull(c.i8ptrType),
-				ptr,
-			}, false)
-		}
-		return ptr, nil
+		// Create closure for function pointer.
+		// Closure is: {context, function pointer}
+		return c.ctx.ConstStruct([]llvm.Value{
+			llvm.Undef(c.i8ptrType),
+			fn.LLVMFn,
+		}, false), nil
 	case *ssa.Global:
 		if strings.HasPrefix(expr.Name(), "__cgofn__cgo_") || strings.HasPrefix(expr.Name(), "_cgo_") {
 			// Ignore CGo global variables which we don't use.
@@ -2606,15 +2581,12 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			return llvm.Value{}, c.makeError(pos, "todo: unknown basic type in binop: "+typ.String())
 		}
 	case *types.Signature:
-		if c.ir.SignatureNeedsContext(typ) {
-			// This is a closure, not a function pointer. Get the underlying
-			// function pointer.
-			// This is safe: function pointers are generally not comparable
-			// against each other, only against nil. So one or both has to be
-			// nil, so we can ignore the contents of the closure.
-			x = c.builder.CreateExtractValue(x, 1, "")
-			y = c.builder.CreateExtractValue(y, 1, "")
-		}
+		// Extract function pointers from the function values (closures).
+		// This is safe: function pointers are generally not comparable
+		// against each other, only against nil. So one or both has to be
+		// nil, so we can ignore the closure context.
+		x = c.builder.CreateExtractValue(x, 1, "")
+		y = c.builder.CreateExtractValue(y, 1, "")
 		switch op {
 		case token.EQL: // ==
 			return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
@@ -2790,7 +2762,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 		}
 		// Create a generic nil interface with no dynamic type (typecode=0).
 		fields := []llvm.Value{
-			llvm.ConstInt(c.ctx.Int16Type(), 0, false),
+			llvm.ConstInt(c.uintptrType, 0, false),
 			llvm.ConstPointerNull(c.i8ptrType),
 		}
 		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), fields)
@@ -2979,10 +2951,6 @@ func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.V
 		panic("unexpected: MakeClosure without bound variables")
 	}
 	f := c.ir.GetFunction(expr.Fn.(*ssa.Function))
-	if !c.ir.FunctionNeedsContext(f) {
-		// Maybe AnalyseFunctionPointers didn't run?
-		panic("MakeClosure on function signature without context")
-	}
 
 	// Collect all bound variables.
 	boundVars := make([]llvm.Value, 0, len(expr.Bindings))

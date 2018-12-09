@@ -6,16 +6,25 @@ import (
 	"unsafe"
 )
 
-func _Cfunc_putchar(c int) int
-func _Cfunc_usleep(usec uint) int
-func _Cfunc_malloc(size uintptr) unsafe.Pointer
-func _Cfunc_abort()
-func _Cfunc_clock_gettime(clk_id uint, ts *timespec)
+//go:export putchar
+func _putchar(c int) int
+
+//go:export usleep
+func usleep(usec uint) int
+
+//go:export malloc
+func malloc(size uintptr) unsafe.Pointer
+
+//go:export abort
+func abort()
+
+//go:export clock_gettime
+func clock_gettime(clk_id uint, ts *timespec)
 
 const heapSize = 1 * 1024 * 1024 // 1MB to start
 
 var (
-	heapStart = uintptr(_Cfunc_malloc(heapSize))
+	heapStart = uintptr(malloc(heapSize))
 	heapEnd   = heapStart + heapSize
 )
 
@@ -45,11 +54,11 @@ func main() int {
 }
 
 func putchar(c byte) {
-	_Cfunc_putchar(int(c))
+	_putchar(int(c))
 }
 
 func sleepTicks(d timeUnit) {
-	_Cfunc_usleep(uint(d) / 1000)
+	usleep(uint(d) / 1000)
 }
 
 // Return monotonic time in nanoseconds.
@@ -57,15 +66,10 @@ func sleepTicks(d timeUnit) {
 // TODO: noescape
 func monotime() uint64 {
 	ts := timespec{}
-	_Cfunc_clock_gettime(CLOCK_MONOTONIC_RAW, &ts)
+	clock_gettime(CLOCK_MONOTONIC_RAW, &ts)
 	return uint64(ts.tv_sec)*1000*1000*1000 + uint64(ts.tv_nsec)
 }
 
 func ticks() timeUnit {
 	return timeUnit(monotime())
-}
-
-func abort() {
-	// panic() exits with exit code 2.
-	_Cfunc_abort()
 }

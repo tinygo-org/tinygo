@@ -14,8 +14,6 @@ package compiler
 //     frames.
 
 import (
-	"go/types"
-
 	"github.com/aykevl/go-llvm"
 	"github.com/aykevl/tinygo/ir"
 	"golang.org/x/tools/go/ssa"
@@ -240,12 +238,10 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 				forwardParams = append(forwardParams, forwardParam)
 			}
 
-			if c.ir.SignatureNeedsContext(callback.Method.Type().(*types.Signature)) {
-				// This function takes an extra context parameter. An interface call
-				// cannot also be a closure but we have to supply the parameter
-				// anyway for platforms with a strict calling convention.
-				forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
-			}
+			// Add the context parameter. An interface call cannot also be a
+			// closure but we have to supply the parameter anyway for platforms
+			// with a strict calling convention.
+			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
 
 			fnPtr, _, err := c.getInvokeCall(frame, callback)
 			if err != nil {
@@ -276,6 +272,10 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 				forwardParam := c.builder.CreateLoad(gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
+
+			// Add the context parameter. We know it is ignored by the receiving
+			// function, but we have to pass one anyway.
+			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
 
 			// Call real function.
 			c.createCall(callback.LLVMFn, forwardParams, "")

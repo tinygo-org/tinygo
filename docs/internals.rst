@@ -77,14 +77,11 @@ interface
     interface.go for a detailed description of how typeasserts and interface
     calls are implemented.
 
-function pointer
-    A function pointer has two representations: a literal function pointer and a
-    fat function pointer in the form of ``{context, function pointer}``. Which
-    representation is chosen depends on the AnalyseFunctionPointers pass in
-    `ir/passes.go <https://github.com/aykevl/tinygo/blob/master/ir/passes.go>`_:
-    it tries to use a raw function pointer but will use a fat function pointer
-    if there is a closure or bound method somewhere in the program with the
-    exact same signature.
+function value
+    A function value is a fat function pointer in the form of  ``{context,
+    function pointer}`` where context is a pointer which may have any value.
+    The function pointer is expected to be called with the context as the last
+    parameter in all cases.
 
 goroutine
     A goroutine is a linked list of `LLVM coroutines

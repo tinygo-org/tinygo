@@ -21,6 +21,9 @@ func (c *Compiler) createRuntimeCall(fnName string, args []llvm.Value, name stri
 		panic("trying to call runtime." + fnName)
 	}
 	fn := c.ir.GetFunction(member.(*ssa.Function))
+	if !fn.IsExported() {
+		args = append(args, llvm.Undef(c.i8ptrType)) // unused context parameter
+	}
 	return c.createCall(fn.LLVMFn, args, name)
 }
 

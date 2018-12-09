@@ -8,16 +8,16 @@ const tickMicros = 1
 
 var timestamp timeUnit
 
-// CommonWA: io_get_stdout
-func _Cfunc_io_get_stdout() int32
+//go:export io_get_stdout
+func io_get_stdout() int32
 
-// CommonWA: resource_write
-func _Cfunc_resource_write(id int32, ptr *uint8, len int32) int32
+//go:export resource_write
+func resource_write(id int32, ptr *uint8, len int32) int32
 
 var stdout int32
 
 func init() {
-	stdout = _Cfunc_io_get_stdout()
+	stdout = io_get_stdout()
 }
 
 //go:export _start
@@ -32,7 +32,7 @@ func cwa_main() {
 }
 
 func putchar(c byte) {
-	_Cfunc_resource_write(stdout, &c, 1)
+	resource_write(stdout, &c, 1)
 }
 
 func sleepTicks(d timeUnit) {
