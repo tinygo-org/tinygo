@@ -32,7 +32,8 @@ func init() {
 type Config struct {
 	Triple     string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
 	GC         string   // garbage collection strategy
-	CFlags     []string // flags to pass to cgo
+	CFlags     []string // cflags to pass to cgo
+	LDFlags    []string // ldflags to pass to cgo
 	DumpSSA    bool     // dump Go SSA, for compiler debugging
 	Debug      bool     // add debug symbols for gdb
 	RootDir    string   // GOROOT for TinyGo

@@ -34,6 +34,8 @@ type BuildConfig struct {
 	debug      bool
 	printSizes string
 	initInterp bool
+	cFlags     []string
+	ldFlags    []string
 }
 
 // Helper function for Compiler object.
@@ -44,7 +46,8 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	compilerConfig := compiler.Config{
 		Triple:     spec.Triple,
 		GC:         config.gc,
-		CFlags:     spec.CFlags,
+		CFlags:     append(spec.CFlags, config.cFlags...),
+		LDFlags:    append(spec.LDFlags, config.ldFlags...),
 		Debug:      config.debug,
 		DumpSSA:    config.dumpSSA,
 		RootDir:    sourceDir(),
@@ -497,6 +500,8 @@ func main() {
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	initInterp := flag.Bool("initinterp", true, "enable/disable partial evaluator of generated IR")
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
+	cFlags := flag.String("cflags", "", "additional cflags for compiler")
+	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
 
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
@@ -514,6 +519,8 @@ func main() {
 		debug:      !*nodebug,
 		printSizes: *printSize,
 		initInterp: *initInterp,
+		cFlags:     strings.Split(*cFlags, " "),
+		ldFlags:    strings.Split(*ldFlags, " "),
 	}
 
 	os.Setenv("CC", "clang -target="+*target)
