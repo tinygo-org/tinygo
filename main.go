@@ -43,11 +43,21 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	if config.gc == "" && spec.GC != "" {
 		config.gc = spec.GC
 	}
+
+	// Append command line passed CFlags and LDFlags
+	if len(config.cFlags) > 0 && config.cFlags[0] != "" {
+		spec.CFlags = append(spec.CFlags, config.cFlags...)
+	}
+
+	if len(config.ldFlags) > 0 && config.ldFlags[0] != "" {
+		spec.LDFlags = append(spec.LDFlags, config.ldFlags...)
+	}
+
 	compilerConfig := compiler.Config{
 		Triple:     spec.Triple,
 		GC:         config.gc,
-		CFlags:     append(spec.CFlags, config.cFlags...),
-		LDFlags:    append(spec.LDFlags, config.ldFlags...),
+		CFlags:     spec.CFlags,
+		LDFlags:    spec.LDFlags,
 		Debug:      config.debug,
 		DumpSSA:    config.dumpSSA,
 		RootDir:    sourceDir(),

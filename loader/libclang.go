@@ -5,7 +5,6 @@ package loader
 
 import (
 	"errors"
-	"fmt"
 	"unsafe"
 )
 
@@ -46,9 +45,6 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string) error {
 		cmdargs[i] = s
 		defer C.free(unsafe.Pointer(s))
 	}
-
-	// TODO: remove this once cflags working as expected
-	fmt.Println(cflags)
 
 	var unit C.CXTranslationUnit
 	errCode := C.clang_parseTranslationUnit2(
