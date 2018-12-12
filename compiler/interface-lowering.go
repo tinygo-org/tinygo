@@ -104,15 +104,6 @@ func (t *typeInfo) getMethod(signature *signatureInfo) *methodInfo {
 	panic("could not find method")
 }
 
-// id returns the fully-qualified type name including import path, removing the
-// $type suffix.
-func (t *typeInfo) id() string {
-	if !strings.HasSuffix(t.name, "$type") {
-		panic("concrete type does not have $type suffix: " + t.name)
-	}
-	return t.name[:len(t.name)-len("$type")]
-}
-
 // typeInfoSlice implements sort.Slice, sorting the most commonly used types
 // first.
 type typeInfoSlice []*typeInfo
@@ -423,9 +414,7 @@ func (p *lowerInterfacesPass) run() {
 	}
 
 	// Assign a type code for each type.
-	for i, t := range typeSlice {
-		t.num = uint64(i + 1)
-	}
+	p.assignTypeCodes(typeSlice)
 
 	// Replace each call to runtime.makeInterface with the constant type code.
 	for _, use := range makeInterfaceUses {
@@ -691,7 +680,7 @@ func (p *lowerInterfacesPass) createInterfaceMethodFunc(itf *interfaceInfo, sign
 
 	// Define all possible functions that can be called.
 	for _, typ := range itf.types {
-		bb := llvm.AddBasicBlock(fn, typ.id())
+		bb := llvm.AddBasicBlock(fn, typ.name)
 		sw.AddCase(llvm.ConstInt(p.uintptrType, typ.num, false), bb)
 
 		// The function we will redirect to when the interface has this type.

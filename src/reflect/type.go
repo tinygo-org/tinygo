@@ -26,6 +26,8 @@ const (
 	Float64
 	Complex64
 	Complex128
+	String
+	UnsafePointer
 	Array
 	Chan
 	Func
@@ -33,10 +35,51 @@ const (
 	Map
 	Ptr
 	Slice
-	String
 	Struct
-	UnsafePointer
 )
+
+func (k Kind) String() string {
+	switch k {
+	case Bool:
+		return "bool"
+	case Int:
+		return "int"
+	case Int8:
+		return "int8"
+	case Int16:
+		return "int16"
+	case Int32:
+		return "int32"
+	case Int64:
+		return "int64"
+	case Uint:
+		return "uint"
+	case Uint8:
+		return "uint8"
+	case Uint16:
+		return "uint16"
+	case Uint32:
+		return "uint32"
+	case Uint64:
+		return "uint64"
+	case Uintptr:
+		return "uintptr"
+	case Float32:
+		return "float32"
+	case Float64:
+		return "float64"
+	case Complex64:
+		return "complex64"
+	case Complex128:
+		return "complex128"
+	case String:
+		return "string"
+	case UnsafePointer:
+		return "unsafe.Pointer"
+	default:
+		return "T"
+	}
+}
 
 // The typecode as used in an interface{}.
 type Type uintptr
@@ -50,7 +93,12 @@ func (t Type) String() string {
 }
 
 func (t Type) Kind() Kind {
-	return Invalid // TODO
+	if t & 1 == 0 {
+		// Basic type
+		return Kind(t >> 1)
+	} else {
+		return Invalid // TODO
+	}
 }
 
 func (t Type) Elem() Type {

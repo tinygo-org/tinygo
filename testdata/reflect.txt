@@ -2,3 +2,53 @@ matching types
 true
 false
 false
+
+values of interfaces
+reflect type: bool
+  bool: true
+reflect type: bool
+  bool: false
+reflect type: int
+  int: 2000
+reflect type: int
+  int: -2000
+reflect type: uint
+  uint: 2000
+reflect type: int8
+  int: -3
+reflect type: int8
+  int: 3
+reflect type: uint8
+  uint: 200
+reflect type: int16
+  int: -300
+reflect type: int16
+  int: 300
+reflect type: uint16
+  uint: 50000
+reflect type: int32
+  int: 7340032
+reflect type: int32
+  int: -7340032
+reflect type: uint32
+  uint: 7340032
+reflect type: int64
+  int: 9895604649984
+reflect type: int64
+  int: -9895604649984
+reflect type: uint64
+  uint: 9895604649984
+reflect type: uintptr
+  uint: 12345
+reflect type: float32
+  float: +3.140000e+000
+reflect type: float64
+  float: +3.140000e+000
+reflect type: complex64
+  complex: (+1.200000e+000+3.000000e-001i)
+reflect type: complex128
+  complex: (+1.300000e+000+4.000000e-001i)
+reflect type: string
+  string: foo
+reflect type: unsafe.Pointer
+  pointer: true
