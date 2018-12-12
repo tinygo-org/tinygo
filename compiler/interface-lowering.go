@@ -415,7 +415,7 @@ func (p *lowerInterfacesPass) run() {
 	for _, t := range p.types {
 		typeSlice = append(typeSlice, t)
 	}
-	sort.Sort(typeSlice)
+	sort.Sort(sort.Reverse(typeSlice))
 
 	// A type code must fit in 16 bits.
 	if len(typeSlice) >= 1<<16 {
