@@ -1,24 +1,21 @@
 package reflect
 
 import (
-	_ "unsafe" // for go:linkname
+	"unsafe"
 )
 
 // This is the same thing as an interface{}.
 type Value struct {
 	typecode Type
-	value    *uint8
+	value    unsafe.Pointer
 }
 
 func Indirect(v Value) Value {
 	return v
 }
 
-func ValueOf(i interface{}) Value
-
-//go:linkname _ValueOf reflect.ValueOf
-func _ValueOf(i Value) Value {
-	return i
+func ValueOf(i interface{}) Value {
+	return *(*Value)(unsafe.Pointer(&i))
 }
 
 func (v Value) Interface() interface{}

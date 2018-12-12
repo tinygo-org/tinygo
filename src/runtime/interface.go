@@ -5,9 +5,11 @@ package runtime
 // Interfaces are represented as a pair of {typecode, value}, where value can be
 // anything (including non-pointers).
 
+import "unsafe"
+
 type _interface struct {
 	typecode uintptr
-	value    *uint8
+	value    unsafe.Pointer
 }
 
 // Return true iff both interfaces are equal.
