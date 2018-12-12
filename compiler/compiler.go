@@ -2627,6 +2627,19 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 		} else if typ.Info()&types.IsFloat != 0 {
 			n, _ := constant.Float64Val(expr.Value)
 			return llvm.ConstFloat(llvmType, n), nil
+		} else if typ.Kind() == types.Complex64 {
+			r, err := c.parseConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]))
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			i, err := c.parseConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]))
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			cplx := llvm.Undef(llvm.VectorType(c.ctx.FloatType(), 2))
+			cplx = c.builder.CreateInsertElement(cplx, r, llvm.ConstInt(c.ctx.Int8Type(), 0, false), "")
+			cplx = c.builder.CreateInsertElement(cplx, i, llvm.ConstInt(c.ctx.Int8Type(), 1, false), "")
+			return cplx, nil
 		} else if typ.Kind() == types.Complex128 {
 			r, err := c.parseConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
 			if err != nil {
