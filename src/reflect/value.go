@@ -33,7 +33,14 @@ func (v Value) IsNil() bool {
 }
 
 func (v Value) Pointer() uintptr {
-	panic("unimplemented: (reflect.Value).Pointer()")
+	switch v.Type().Kind() {
+	case UnsafePointer:
+		return uintptr(v.value)
+	case Chan, Func, Map, Ptr, Slice:
+		panic("unimplemented: (reflect.Value).Pointer()")
+	default:
+		panic(&ValueError{"Pointer"})
+	}
 }
 
 func (v Value) IsValid() bool {
@@ -57,27 +64,132 @@ func (v Value) CanSet() bool {
 }
 
 func (v Value) Bool() bool {
-	panic("unimplemented: (reflect.Value).Bool()")
+	switch v.Type().Kind() {
+	case Bool:
+		return uintptr(v.value) != 0
+	default:
+		panic(&ValueError{"Bool"})
+	}
 }
 
 func (v Value) Int() int64 {
-	panic("unimplemented: (reflect.Value).Int()")
+	switch v.Type().Kind() {
+	case Int:
+		if unsafe.Sizeof(int(0)) <= unsafe.Sizeof(uintptr(0)) {
+			return int64(int(uintptr(v.value)))
+		} else {
+			return int64(*(*int)(v.value))
+		}
+	case Int8:
+		return int64(int8(uintptr(v.value)))
+	case Int16:
+		return int64(int16(uintptr(v.value)))
+	case Int32:
+		if unsafe.Sizeof(int32(0)) <= unsafe.Sizeof(uintptr(0)) {
+			return int64(int32(uintptr(v.value)))
+		} else {
+			return int64(*(*int32)(v.value))
+		}
+		return int64(uintptr(v.value))
+	case Int64:
+		if unsafe.Sizeof(int64(0)) <= unsafe.Sizeof(uintptr(0)) {
+			return int64(uintptr(v.value))
+		} else {
+			return *(*int64)(v.value)
+		}
+	default:
+		panic(&ValueError{"Int"})
+	}
 }
 
 func (v Value) Uint() uint64 {
-	panic("unimplemented: (reflect.Value).Uint()")
+	switch v.Type().Kind() {
+	case Uintptr, Uint8, Uint16:
+		return uint64(uintptr(v.value))
+	case Uint:
+		if unsafe.Sizeof(uint(0)) <= unsafe.Sizeof(uintptr(0)) {
+			return uint64(uintptr(v.value))
+		} else {
+			// For systems with 16-bit pointers.
+			return uint64(*(*uint)(v.value))
+		}
+	case Uint32:
+		if unsafe.Sizeof(uint32(0)) <= unsafe.Sizeof(uintptr(0)) {
+			return uint64(uintptr(v.value))
+		} else {
+			// For systems with 16-bit pointers.
+			return uint64(*(*uint32)(v.value))
+		}
+	case Uint64:
+		if unsafe.Sizeof(uint64(0)) <= unsafe.Sizeof(uintptr(0)) {
+			return uint64(uintptr(v.value))
+		} else {
+			// For systems with 16-bit or 32-bit pointers.
+			return *(*uint64)(v.value)
+		}
+	default:
+		panic(&ValueError{"Uint"})
+	}
 }
 
 func (v Value) Float() float64 {
-	panic("unimplemented: (reflect.Value).Float()")
+	switch v.Type().Kind() {
+	case Float32:
+		if unsafe.Sizeof(float32(0)) <= unsafe.Sizeof(uintptr(0)) {
+			// The float is directly stored in the interface value on systems
+			// with 32-bit and 64-bit pointers.
+			return float64(*(*float32)(unsafe.Pointer(&v.value)))
+		} else {
+			// The float is stored as an external value on systems with 16-bit
+			// pointers.
+			return float64(*(*float32)(v.value))
+		}
+	case Float64:
+		if unsafe.Sizeof(float64(0)) <= unsafe.Sizeof(uintptr(0)) {
+			// The float is directly stored in the interface value on systems
+			// with 64-bit pointers.
+			return *(*float64)(unsafe.Pointer(&v.value))
+		} else {
+			// For systems with 16-bit and 32-bit pointers.
+			return *(*float64)(v.value)
+		}
+	default:
+		panic(&ValueError{"Float"})
+	}
 }
 
 func (v Value) Complex() complex128 {
-	panic("unimplemented: (reflect.Value).Complex()")
+	switch v.Type().Kind() {
+	case Complex64:
+		if unsafe.Sizeof(complex64(0)) <= unsafe.Sizeof(uintptr(0)) {
+			// The complex number is directly stored in the interface value on
+			// systems with 64-bit pointers.
+			return complex128(*(*complex64)(unsafe.Pointer(&v.value)))
+		} else {
+			// The complex number is stored as an external value on systems with
+			// 16-bit and 32-bit pointers.
+			return complex128(*(*complex64)(v.value))
+		}
+	case Complex128:
+		// This is a 128-bit value, which is always stored as an external value.
+		// It may be stored in the pointer directly on very uncommon
+		// architectures with 128-bit pointers, however.
+		return *(*complex128)(v.value)
+	default:
+		panic(&ValueError{"Complex"})
+	}
 }
 
 func (v Value) String() string {
-	panic("unimplemented: (reflect.Value).String()")
+	switch v.Type().Kind() {
+	case String:
+		// A string value is always bigger than a pointer as it is made of a
+		// pointer and a length.
+		return *(*string)(v.value)
+	default:
+		// Special case because of the special treatment of .String() in Go.
+		return "<T>"
+	}
 }
 
 func (v Value) Bytes() []byte {
@@ -146,4 +258,12 @@ func (v Value) SetString(x string) {
 
 func MakeSlice(typ Type, len, cap int) Value {
 	panic("unimplemented: reflect.MakeSlice()")
+}
+
+type ValueError struct {
+	Method string
+}
+
+func (e *ValueError) Error() string {
+	return "reflect: call of reflect.Value." + e.Method + " on invalid type"
 }

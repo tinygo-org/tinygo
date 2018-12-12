@@ -79,9 +79,58 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global str
 // It returns a pointer to an external global which should be replaced with the
 // real type in the interface lowering pass.
 func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
-	global := c.mod.NamedGlobal(typ.String() + "$type")
+	var globalName string
+	switch typ := typ.(type) {
+	case *types.Basic:
+		var name string
+		switch typ.Kind() {
+		case types.Bool:
+			name = "bool"
+		case types.Int:
+			name = "int"
+		case types.Int8:
+			name = "int8"
+		case types.Int16:
+			name = "int16"
+		case types.Int32:
+			name = "int32"
+		case types.Int64:
+			name = "int64"
+		case types.Uint:
+			name = "uint"
+		case types.Uint8:
+			name = "uint8"
+		case types.Uint16:
+			name = "uint16"
+		case types.Uint32:
+			name = "uint32"
+		case types.Uint64:
+			name = "uint64"
+		case types.Uintptr:
+			name = "uintptr"
+		case types.Float32:
+			name = "float32"
+		case types.Float64:
+			name = "float64"
+		case types.Complex64:
+			name = "complex64"
+		case types.Complex128:
+			name = "complex128"
+		case types.String:
+			name = "string"
+		case types.UnsafePointer:
+			name = "unsafeptr"
+		default:
+			panic("unknown basic type: " + typ.Name())
+		}
+		globalName = "type:basic:" + name
+	default:
+		// Unknown type, fall back to the .String() method for identification.
+		globalName = "type:other:" + typ.String()
+	}
+	global := c.mod.NamedGlobal(globalName)
 	if global.IsNil() {
-		global = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), typ.String()+"$type")
+		global = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), globalName)
 		global.SetGlobalConstant(true)
 	}
 	return global
