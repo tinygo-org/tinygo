@@ -45,13 +45,8 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	}
 
 	// Append command line passed CFlags and LDFlags
-	if len(config.cFlags) > 0 && config.cFlags[0] != "" {
-		spec.CFlags = append(spec.CFlags, config.cFlags...)
-	}
-
-	if len(config.ldFlags) > 0 && config.ldFlags[0] != "" {
-		spec.LDFlags = append(spec.LDFlags, config.ldFlags...)
-	}
+	spec.CFlags = append(spec.CFlags, config.cFlags...)
+	spec.LDFlags = append(spec.LDFlags, config.ldFlags...)
 
 	compilerConfig := compiler.Config{
 		Triple:     spec.Triple,
@@ -529,8 +524,14 @@ func main() {
 		debug:      !*nodebug,
 		printSizes: *printSize,
 		initInterp: *initInterp,
-		cFlags:     strings.Split(*cFlags, " "),
-		ldFlags:    strings.Split(*ldFlags, " "),
+	}
+
+	if *cFlags != "" {
+		config.cFlags = strings.Split(*cFlags, " ")
+	}
+
+	if *ldFlags != "" {
+		config.ldFlags = strings.Split(*ldFlags, " ")
 	}
 
 	os.Setenv("CC", "clang -target="+*target)
