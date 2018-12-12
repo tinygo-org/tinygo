@@ -51,7 +51,7 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global str
 			itfValue = c.builder.CreateIntToPtr(val, c.i8ptrType, "makeinterface.cast.int")
 		case llvm.PointerTypeKind:
 			itfValue = c.builder.CreateBitCast(val, c.i8ptrType, "makeinterface.cast.ptr")
-		case llvm.StructTypeKind:
+		case llvm.StructTypeKind, llvm.FloatTypeKind, llvm.DoubleTypeKind, llvm.VectorTypeKind:
 			// A bitcast would be useful here, but bitcast doesn't allow
 			// aggregate types. So we'll bitcast it using an alloca.
 			// Hopefully this will get optimized away.
