@@ -23,6 +23,9 @@ func TestCompiler(t *testing.T) {
 	}
 
 	dirMatches, err := filepath.Glob(TESTDATA + "/*/main.go")
+	if err != nil {
+		t.Fatal("could not read test packages:", err)
+	}
 	if len(matches) == 0 || len(dirMatches) == 0 {
 		t.Fatal("no test files found")
 	}
