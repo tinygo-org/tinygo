@@ -39,34 +39,53 @@ func main() {
 		complex128(1.3 + 0.4i),
 		"foo",
 		unsafe.Pointer(new(int)),
+		[]byte{1, 2, 3},
+		make([]uint8, 2, 5),
+		[]rune{3, 5},
+		[]string{"xyz", "Z"},
 	} {
-		showValue(v)
+		showValue(v, "")
 	}
 }
 
-func showValue(v interface{}) {
+func showValue(v interface{}, indent string) {
 	rv := reflect.ValueOf(v)
 	rt := rv.Type()
 	if reflect.TypeOf(v) != rt {
 		panic("direct TypeOf() is different from ValueOf().Type()")
 	}
-	println("reflect type:", rt.Kind().String())
+	if rt.Kind() != rv.Kind() {
+		panic("type kind is different from value kind")
+	}
+	if reflect.ValueOf(rv.Interface()) != rv {
+		panic("reflect.ValueOf(Value.Interface()) did not return the same value")
+	}
+	println(indent+"reflect type:", rt.Kind().String())
 	switch rt.Kind() {
 	case reflect.Bool:
-		println("  bool:", rv.Bool())
+		println(indent+"  bool:", rv.Bool())
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		println("  int:", rv.Int())
+		println(indent+"  int:", rv.Int())
 	case reflect.Uint, reflect.Uintptr, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		println("  uint:", rv.Uint())
+		println(indent+"  uint:", rv.Uint())
 	case reflect.Float32, reflect.Float64:
-		println("  float:", rv.Float())
+		println(indent+"  float:", rv.Float())
 	case reflect.Complex64, reflect.Complex128:
-		println("  complex:", rv.Complex())
+		println(indent+"  complex:", rv.Complex())
 	case reflect.String:
-		println("  string:", rv.String())
+		println(indent+"  string:", rv.String(), rv.Len())
+		for i := 0; i < rv.Len(); i++ {
+			showValue(rv.Index(i).Interface(), indent+"  ")
+		}
 	case reflect.UnsafePointer:
-		println("  pointer:", rv.Pointer() != 0)
+		println(indent+"  pointer:", rv.Pointer() != 0)
+	case reflect.Slice:
+		println(indent+"  slice:", rt.Elem().Kind().String(), rv.Len(), rv.Cap())
+		for i := 0; i < rv.Len(); i++ {
+			println(indent+"  indexing:", i)
+			showValue(rv.Index(i).Interface(), indent+"  ")
+		}
 	default:
-		println("  unknown type kind!")
+		println(indent + "  unknown type kind!")
 	}
 }

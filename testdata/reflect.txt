@@ -49,6 +49,55 @@ reflect type: complex64
 reflect type: complex128
   complex: (+1.300000e+000+4.000000e-001i)
 reflect type: string
-  string: foo
+  string: foo 3
+  reflect type: uint8
+    uint: 102
+  reflect type: uint8
+    uint: 111
+  reflect type: uint8
+    uint: 111
 reflect type: unsafe.Pointer
   pointer: true
+reflect type: slice
+  slice: uint8 3 3
+  indexing: 0
+  reflect type: uint8
+    uint: 1
+  indexing: 1
+  reflect type: uint8
+    uint: 2
+  indexing: 2
+  reflect type: uint8
+    uint: 3
+reflect type: slice
+  slice: uint8 2 5
+  indexing: 0
+  reflect type: uint8
+    uint: 0
+  indexing: 1
+  reflect type: uint8
+    uint: 0
+reflect type: slice
+  slice: int32 2 2
+  indexing: 0
+  reflect type: int32
+    int: 3
+  indexing: 1
+  reflect type: int32
+    int: 5
+reflect type: slice
+  slice: string 2 2
+  indexing: 0
+  reflect type: string
+    string: xyz 3
+    reflect type: uint8
+      uint: 120
+    reflect type: uint8
+      uint: 121
+    reflect type: uint8
+      uint: 122
+  indexing: 1
+  reflect type: string
+    string: Z 1
+    reflect type: uint8
+      uint: 90
