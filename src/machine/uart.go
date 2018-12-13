@@ -1,4 +1,4 @@
-// +build avr nrf
+// +build avr nrf stm32
 
 package machine
 
