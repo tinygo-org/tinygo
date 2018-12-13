@@ -1,5 +1,9 @@
 package reflect
 
+import (
+	"unsafe"
+)
+
 // A Kind is the number that the compiler uses for this type.
 //
 // Not used directly. These types are all replaced with the number the compiler
@@ -76,9 +80,16 @@ func (k Kind) String() string {
 		return "string"
 	case UnsafePointer:
 		return "unsafe.Pointer"
+	case Slice:
+		return "slice"
 	default:
-		return "T"
+		return "invalid"
 	}
+}
+
+// basicType returns a new Type for this kind if Kind is a basic type.
+func (k Kind) basicType() Type {
+	return Type(k << 2 | 0)
 }
 
 // The typecode as used in an interface{}.
@@ -93,16 +104,24 @@ func (t Type) String() string {
 }
 
 func (t Type) Kind() Kind {
-	if t & 1 == 0 {
+	if t % 4 == 0 {
 		// Basic type
-		return Kind(t >> 1)
+		return Kind(t >> 2)
+	} else if t % 4 == 1 {
+		// Slice
+		return Slice
 	} else {
 		return Invalid // TODO
 	}
 }
 
 func (t Type) Elem() Type {
-	panic("unimplemented: (reflect.Type).Elem()")
+	switch t.Kind() {
+	case Slice:
+		return t >> 2
+	default: // not implemented: Array, Chan, Map, Ptr
+		panic("unimplemented: (reflect.Type).Elem()")
+	}
 }
 
 func (t Type) Field(i int) StructField {
@@ -122,7 +141,37 @@ func (t Type) NumField() int {
 }
 
 func (t Type) Size() uintptr {
-	panic("unimplemented: (reflect.Type).Size()")
+	switch t.Kind() {
+	case Bool, Int8, Uint8:
+		return 1
+	case Int16, Uint16:
+		return 2
+	case Int32, Uint32:
+		return 4
+	case Int64, Uint64:
+		return 8
+	case Int, Uint:
+		return unsafe.Sizeof(int(0))
+	case Uintptr:
+		return unsafe.Sizeof(uintptr(0))
+	case Float32:
+		return 4
+	case Float64:
+		return 8
+	case Complex64:
+		return 8
+	case Complex128:
+		return 16
+	case String:
+		return unsafe.Sizeof(StringHeader{})
+	case UnsafePointer:
+		return unsafe.Sizeof(uintptr(0))
+	case Slice:
+		return unsafe.Sizeof(SliceHeader{})
+	default:
+		// Size unknown.
+		return 0
+	}
 }
 
 type StructField struct {

@@ -79,11 +79,23 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global str
 // It returns a pointer to an external global which should be replaced with the
 // real type in the interface lowering pass.
 func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
-	var globalName string
-	switch typ := typ.(type) {
+	globalName := "type:" + getTypeCodeName(typ)
+	global := c.mod.NamedGlobal(globalName)
+	if global.IsNil() {
+		global = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), globalName)
+		global.SetGlobalConstant(true)
+	}
+	return global
+}
+
+// getTypeCodeName returns a name for this type that can be used in the
+// interface lowering pass to assign type codes as expected by the reflect
+// package. See getTypeCodeNum.
+func getTypeCodeName(t types.Type) string {
+	switch t := t.(type) {
 	case *types.Basic:
 		var name string
-		switch typ.Kind() {
+		switch t.Kind() {
 		case types.Bool:
 			name = "bool"
 		case types.Int:
@@ -121,19 +133,15 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 		case types.UnsafePointer:
 			name = "unsafeptr"
 		default:
-			panic("unknown basic type: " + typ.Name())
+			panic("unknown basic type: " + t.Name())
 		}
-		globalName = "type:basic:" + name
+		return "basic:" + name
+	case *types.Slice:
+		return "slice:" + getTypeCodeName(t.Elem())
 	default:
 		// Unknown type, fall back to the .String() method for identification.
-		globalName = "type:other:" + typ.String()
+		return "other:" + t.String()
 	}
-	global := c.mod.NamedGlobal(globalName)
-	if global.IsNil() {
-		global = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), globalName)
-		global.SetGlobalConstant(true)
-	}
-	return global
 }
 
 // getTypeMethodSet returns a reference (GEP) to a global method set. This

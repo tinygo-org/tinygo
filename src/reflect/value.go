@@ -18,14 +18,16 @@ func ValueOf(i interface{}) Value {
 	return *(*Value)(unsafe.Pointer(&i))
 }
 
-func (v Value) Interface() interface{}
+func (v Value) Interface() interface{} {
+	return *(*interface{})(unsafe.Pointer(&v))
+}
 
 func (v Value) Type() Type {
 	return v.typecode
 }
 
 func (v Value) Kind() Kind {
-	return Invalid // TODO
+	return v.Type().Kind()
 }
 
 func (v Value) IsNil() bool {
@@ -33,7 +35,7 @@ func (v Value) IsNil() bool {
 }
 
 func (v Value) Pointer() uintptr {
-	switch v.Type().Kind() {
+	switch v.Kind() {
 	case UnsafePointer:
 		return uintptr(v.value)
 	case Chan, Func, Map, Ptr, Slice:
@@ -48,7 +50,8 @@ func (v Value) IsValid() bool {
 }
 
 func (v Value) CanInterface() bool {
-	panic("unimplemented: (reflect.Value).CanInterface()")
+	// No Value types of private data can be constructed at the moment.
+	return true
 }
 
 func (v Value) CanAddr() bool {
@@ -64,7 +67,7 @@ func (v Value) CanSet() bool {
 }
 
 func (v Value) Bool() bool {
-	switch v.Type().Kind() {
+	switch v.Kind() {
 	case Bool:
 		return uintptr(v.value) != 0
 	default:
@@ -73,7 +76,7 @@ func (v Value) Bool() bool {
 }
 
 func (v Value) Int() int64 {
-	switch v.Type().Kind() {
+	switch v.Kind() {
 	case Int:
 		if unsafe.Sizeof(int(0)) <= unsafe.Sizeof(uintptr(0)) {
 			return int64(int(uintptr(v.value)))
@@ -103,7 +106,7 @@ func (v Value) Int() int64 {
 }
 
 func (v Value) Uint() uint64 {
-	switch v.Type().Kind() {
+	switch v.Kind() {
 	case Uintptr, Uint8, Uint16:
 		return uint64(uintptr(v.value))
 	case Uint:
@@ -133,7 +136,7 @@ func (v Value) Uint() uint64 {
 }
 
 func (v Value) Float() float64 {
-	switch v.Type().Kind() {
+	switch v.Kind() {
 	case Float32:
 		if unsafe.Sizeof(float32(0)) <= unsafe.Sizeof(uintptr(0)) {
 			// The float is directly stored in the interface value on systems
@@ -159,7 +162,7 @@ func (v Value) Float() float64 {
 }
 
 func (v Value) Complex() complex128 {
-	switch v.Type().Kind() {
+	switch v.Kind() {
 	case Complex64:
 		if unsafe.Sizeof(complex64(0)) <= unsafe.Sizeof(uintptr(0)) {
 			// The complex number is directly stored in the interface value on
@@ -181,7 +184,7 @@ func (v Value) Complex() complex128 {
 }
 
 func (v Value) String() string {
-	switch v.Type().Kind() {
+	switch v.Kind() {
 	case String:
 		// A string value is always bigger than a pointer as it is made of a
 		// pointer and a length.
@@ -201,7 +204,25 @@ func (v Value) Slice(i, j int) Value {
 }
 
 func (v Value) Len() int {
-	panic("unimplemented: (reflect.Value).Len()")
+	t := v.Type()
+	switch t.Kind() {
+	case Slice:
+		return int((*SliceHeader)(v.value).Len)
+	case String:
+		return int((*StringHeader)(v.value).Len)
+	default: // Array, Chan, Map
+		panic("unimplemented: (reflect.Value).Len()")
+	}
+}
+
+func (v Value) Cap() int {
+	t := v.Type()
+	switch t.Kind() {
+	case Slice:
+		return int((*SliceHeader)(v.value).Cap)
+	default: // Array, Chan
+		panic("unimplemented: (reflect.Value).Cap()")
+	}
 }
 
 func (v Value) NumField() int {
@@ -217,7 +238,48 @@ func (v Value) Field(i int) Value {
 }
 
 func (v Value) Index(i int) Value {
-	panic("unimplemented: (reflect.Value).Index()")
+	switch v.Kind() {
+	case Slice:
+		// Extract an element from the slice.
+		slice := *(*SliceHeader)(v.value)
+		if uint(i) >= uint(slice.Len) {
+			panic("reflect: slice index out of range")
+		}
+		elem := Value{
+			typecode: v.Type().Elem(),
+		}
+		addr := uintptr(slice.Data) + elem.Type().Size() * uintptr(i) // pointer to new value
+		if elem.Type().Size() <= unsafe.Sizeof(uintptr(0)) {
+			// Value fits inside interface value.
+			// Make sure to copy it from the slice to the interface value.
+			var value uintptr
+			for j := elem.Type().Size(); j != 0; j-- {
+				value = (value << 8) | uintptr(*(*uint8)(unsafe.Pointer(addr + j - 1)))
+			}
+			elem.value = unsafe.Pointer(value)
+		} else {
+			// Value doesn't fit in the interface.
+			// Store a pointer to the element in the interface.
+			elem.value = unsafe.Pointer(addr)
+		}
+		return elem
+	case String:
+		// Extract a character from a string.
+		// A string is never stored directly in the interface, but always as a
+		// pointer to the string value.
+		s := *(*StringHeader)(v.value)
+		if uint(i) >= uint(s.Len) {
+			panic("reflect: string index out of range")
+		}
+		return Value{
+			typecode: Uint8.basicType(),
+			value: unsafe.Pointer(uintptr(*(*uint8)(unsafe.Pointer(s.Data + uintptr(i))))),
+		}
+	case Array:
+		panic("unimplemented: (reflect.Value).Index()")
+	default:
+		panic(&ValueError{"Index"})
+	}
 }
 
 func (v Value) MapKeys() []Value {
@@ -258,6 +320,17 @@ func (v Value) SetString(x string) {
 
 func MakeSlice(typ Type, len, cap int) Value {
 	panic("unimplemented: reflect.MakeSlice()")
+}
+
+type SliceHeader struct {
+	Data uintptr
+	Len  uintptr
+	Cap  uintptr
+}
+
+type StringHeader struct {
+	Data uintptr
+	Len  uintptr
 }
 
 type ValueError struct {

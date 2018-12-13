@@ -1,10 +1,11 @@
 package compiler
 
 import (
+	"math/big"
 	"strings"
 )
 
-var basicTypes = map[string]uint64{
+var basicTypes = map[string]int64{
 	"bool":       1,
 	"int":        2,
 	"int8":       3,
@@ -39,17 +40,45 @@ func (c *Compiler) assignTypeCodes(typeSlice typeInfoSlice) {
 	// Assign typecodes the way the reflect package expects.
 	fallbackIndex := 1
 	for _, t := range typeSlice {
-		if strings.HasPrefix(t.name, "type:basic:") {
-			// Basic types have a typecode with the lowest bit set to 0.
-			num, ok := basicTypes[t.name[len("type:basic:"):]]
-			if !ok {
-				panic("invalid basic type: " + t.name)
-			}
-			t.num = num<<1 | 0
-		} else {
-			// Fallback types have a typecode with the lowest bit set to 1.
-			t.num = uint64(fallbackIndex<<1 | 1)
-			fallbackIndex++
+		if t.name[:5] != "type:" {
+			panic("expected type name to start with 'type:'")
 		}
+		num := c.getTypeCodeNum(t.name[5:])
+		if num == nil {
+			// Fallback/unsupported types have a typecode with the lowest bits
+			// set to 11.
+			t.num = uint64(fallbackIndex<<2 | 3)
+			fallbackIndex++
+			continue
+		}
+		if num.BitLen() > c.uintptrType.IntTypeWidth() || !num.IsUint64() {
+			// TODO: support this in some way, using a side table for example.
+			// That's less efficient but better than not working at all.
+			// Particularly important on systems with 16-bit pointers (e.g.
+			// AVR).
+			panic("compiler: could not store type code number inside interface type code")
+		}
+		t.num = num.Uint64()
+	}
+}
+
+// getTypeCodeNum returns the typecode for a given type as expected by the
+// reflect package. Also see getTypeCodeName, which serializes types to a string
+// based on a types.Type value for this function.
+func (c *Compiler) getTypeCodeNum(name string) *big.Int {
+	if strings.HasPrefix(name, "basic:") {
+		// Basic types have a typecode with the lowest bits set to 00.
+		num, ok := basicTypes[name[len("basic:"):]]
+		if !ok {
+			panic("invalid basic type: " + name)
+		}
+		return big.NewInt(num<<2 | 0)
+	} else if strings.HasPrefix(name, "slice:") {
+		// Slices have a typecode with the lowest bits set to 01.
+		num := c.getTypeCodeNum(name[len("slice:"):])
+		num.Lsh(num, 2).Or(num, big.NewInt(1))
+		return num
+	} else {
+		return nil
 	}
 }
