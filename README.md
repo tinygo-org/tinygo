@@ -76,7 +76,7 @@ See the [installation instructions](https://tinygo.readthedocs.io/en/latest/inst
 A docker container exists for easy access to the `tinygo` CLI:
 
 ```sh
-$ docker run --rm -v $(pwd):/src tinygo/tinygo build -o /src/wasm.wasm -target wasm examples/wasm
+$ docker run --rm -v $(pwd):/src tinygo/tinygo tinygo build -o /src/wasm.wasm -target wasm examples/wasm
 ```
 
 Note that you cannot run `tinygo flash` from inside the docker container,

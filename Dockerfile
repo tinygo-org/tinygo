@@ -14,8 +14,6 @@ RUN cd /go/src/github.com/aykevl/tinygo/ && \
     dep ensure --vendor-only && \
     go install /go/src/github.com/aykevl/tinygo/
 
-ENTRYPOINT ["/go/bin/tinygo"]
-
 # tinygo-wasm stage installs the needed dependencies to compile TinyGo programs for WASM.
 FROM tinygo-base AS tinygo-wasm
 
@@ -79,3 +77,4 @@ RUN cd /go/src/github.com/aykevl/tinygo/ && \
     apt-get autoremove -y && \
     apt-get clean
 
+CMD ["tinygo"]
