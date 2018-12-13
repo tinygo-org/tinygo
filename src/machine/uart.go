@@ -1,4 +1,4 @@
-// +build avr nrf
+// +build avr nrf stm32
 
 package machine
 
@@ -6,6 +6,8 @@ import "errors"
 
 type UARTConfig struct {
 	BaudRate uint32
+	TX       uint8
+	RX       uint8
 }
 
 type UART struct {
