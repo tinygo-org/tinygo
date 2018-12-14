@@ -6,6 +6,8 @@ import "errors"
 
 type UARTConfig struct {
 	BaudRate uint32
+	TXPin    uint8
+	RXPin    uint8
 }
 
 type UART struct {

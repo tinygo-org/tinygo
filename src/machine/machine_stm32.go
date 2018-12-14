@@ -11,6 +11,8 @@ import (
 
 type GPIOMode uint8
 
+const SystemClockSpeed = 72000000
+
 const (
 	GPIO_INPUT        = 0 // Input mode
 	GPIO_OUTPUT_10MHz = 1 // Output mode, max speed 10MHz
@@ -110,41 +112,45 @@ func (uart UART) Configure(config UARTConfig) {
 		config.BaudRate = 115200
 	}
 
+	// pins
+	switch config.TXPin {
+	case PB6:
+		// use alternate TX/RX pins PB6/PB7 via AFIO mapping
+		stm32.RCC.APB2ENR |= stm32.RCC_APB2ENR_AFIOEN
+		stm32.AFIO.MAPR |= stm32.AFIO_MAPR_USART1_REMAP
+		GPIO{PB6}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
+		GPIO{PB7}.Configure(GPIOConfig{Mode: GPIO_INPUT_MODE_FLOATING})
+	default:
+		// use standard TX/RX pins PA9 and PA10
+		GPIO{PA9}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
+		GPIO{PA10}.Configure(GPIOConfig{Mode: GPIO_INPUT_MODE_FLOATING})
+	}
+
 	// Enable USART1 clock
 	stm32.RCC.APB2ENR |= stm32.RCC_APB2ENR_USART1EN
-
-	// use standard pins PA9 and PA10
-	GPIO{PA9}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz & GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
-	GPIO{PA10}.Configure(GPIOConfig{Mode: GPIO_INPUT_MODE_FLOATING})
-
-	// uncomment to use alternate pins PB6/PB7 via AFIO mapping
-	// stm32.RCC.APB2ENR |= stm32.RCC_APB2ENR_AFIOEN
-	// stm32.AFIO.MAPR |= stm32.AFIO_MAPR_USART1_REMAP
-	// GPIO{PB6}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz & GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
-	// GPIO{PB7}.Configure(GPIOConfig{Mode: GPIO_INPUT_MODE_FLOATING})
 
 	// Set baud rate
 	uart.SetBaudRate(config.BaudRate)
 
-	// configure
+	// Enable USART1 port.
 	stm32.USART1.CR1 = stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE
 
 	// Enable RX IRQ.
-	arm.SetPriority(stm32.IRQ_USART1, 0x0) // low priority
 	arm.EnableIRQ(stm32.IRQ_USART1)
 }
 
 // SetBaudRate sets the communication speed for the UART.
 func (uart UART) SetBaudRate(br uint32) {
-	divider := 8000000 / br
+	divider := SystemClockSpeed / br
 	stm32.USART1.BRR = stm32.RegValue(divider)
 }
 
 // WriteByte writes a byte of data to the UART.
 func (uart UART) WriteByte(c byte) error {
+	stm32.USART1.DR = stm32.RegValue(c)
+
 	for (stm32.USART1.SR & stm32.USART_SR_TXE) == 0 {
 	}
-	stm32.USART1.DR = stm32.RegValue(c)
 	return nil
 }
 
