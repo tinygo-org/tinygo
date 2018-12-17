@@ -7,7 +7,7 @@ package stm32
 
 const (
 	// Flash Access Control Register flag values.
-	FLASH_ACR_LATENCY_0 = 0x00000004
+	FLASH_ACR_LATENCY_0 = 0x00000001
 	FLASH_ACR_LATENCY_1 = 0x00000002
 	FLASH_ACR_LATENCY_2 = 0x00000004
 
