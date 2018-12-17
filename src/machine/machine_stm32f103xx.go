@@ -156,10 +156,6 @@ func (uart UART) WriteByte(c byte) error {
 }
 
 //go:export USART1_IRQHandler
-func handleUART0() {
-	UART0.handleInterrupt()
-}
-
-func (uart UART) handleInterrupt() {
+func handleUART1() {
 	bufferPut(byte((stm32.USART1.DR & 0xFF)))
 }
