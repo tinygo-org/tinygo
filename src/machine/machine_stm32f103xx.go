@@ -9,7 +9,7 @@ import (
 	"device/stm32"
 )
 
-const SystemClockSpeed = 72000000
+const CPU_FREQUENCY = 72000000
 
 const (
 	GPIO_INPUT        = 0 // Input mode
@@ -142,7 +142,7 @@ func (uart UART) Configure(config UARTConfig) {
 
 // SetBaudRate sets the communication speed for the UART.
 func (uart UART) SetBaudRate(br uint32) {
-	divider := SystemClockSpeed / br
+	divider := CPU_FREQUENCY / br
 	stm32.USART1.BRR = stm32.RegValue(divider)
 }
 
