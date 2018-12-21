@@ -38,9 +38,9 @@ const (
 
 // SPI pins
 const (
-	SPI0_SCK_PIN  = 0
-	SPI0_MOSI_PIN = 0
-	SPI0_MISO_PIN = 0
+	SPI0_SCK_PIN  = 23 // P13 on the board
+	SPI0_MOSI_PIN = 21 // P15 on the board
+	SPI0_MISO_PIN = 22 // P14 on the board
 )
 
 // LED matrix pins
