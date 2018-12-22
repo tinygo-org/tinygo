@@ -43,6 +43,15 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		c.OptimizeStringToBytes()
 		c.OptimizeAllocs()
 		c.LowerInterfaces()
+
+		// After interfaces are lowered, there are many more opportunities for
+		// interprocedural optimizations. To get them to work, function
+		// attributes have to be updated first.
+		goPasses.Run(c.mod)
+
+		// Run TinyGo-specific interprocedural optimizations.
+		c.OptimizeAllocs()
+		c.OptimizeStringToBytes()
 	} else {
 		// Must be run at any optimization level.
 		c.LowerInterfaces()
