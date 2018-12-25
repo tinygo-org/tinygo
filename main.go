@@ -36,6 +36,7 @@ type BuildConfig struct {
 	initInterp bool
 	cFlags     []string
 	ldFlags    []string
+	wasmAbi    string
 }
 
 // Helper function for Compiler object.
@@ -97,7 +98,8 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	// cannot be represented exactly in JavaScript (JS only has doubles). To
 	// keep functions interoperable, pass int64 types as pointers to
 	// stack-allocated values.
-	if strings.HasPrefix(spec.Triple, "wasm") {
+	// Use -wasm-abi=generic to disable this behaviour.
+	if config.wasmAbi == "js" && strings.HasPrefix(spec.Triple, "wasm") {
 		err := c.ExternalInt64AsPtr()
 		if err != nil {
 			return err
@@ -507,6 +509,7 @@ func main() {
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
+	wasmAbi := flag.String("wasm-abi", "js", "WebAssembly ABI conventions: js (no i64 params) or generic")
 
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
@@ -524,6 +527,7 @@ func main() {
 		debug:      !*nodebug,
 		printSizes: *printSize,
 		initInterp: *initInterp,
+		wasmAbi:    *wasmAbi,
 	}
 
 	if *cFlags != "" {
