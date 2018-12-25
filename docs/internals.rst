@@ -130,8 +130,8 @@ somewhat compatible with the C calling convention but with a few quirks:
     pointers. This avoids some overhead in the C calling convention and makes
     the work of the LLVM optimizers easier.
 
-  * The WebAssembly target never exports or imports a ``i64`` (``int64``,
-    ``uint64``) parameter. Instead, it replaces them with ``i64*``, allocating
+  * The WebAssembly target by default doesn't export or import ``i64`` (``int64``,
+    ``uint64``) parameters. Instead, it replaces them with ``i64*``, allocating
     the value on the stack. In other words, imported functions are called with a
     64-bit integer on the stack and exported functions must be called with a
     pointer to a 64-bit integer somewhere in linear memory.
@@ -144,10 +144,15 @@ somewhat compatible with the C calling convention but with a few quirks:
     calling convention workaround may be removed. Also see `this wasm-bindgen
     issue <https://github.com/rustwasm/wasm-bindgen/issues/35>`_.
 
+    Currently there are also non-browser WebAssembly execution environments
+    that do not have this limitation. Use the `--wasmi64enable` flag to remove
+    the behavior described above and enable emitting functions with i64
+    parameters directly.
+
   * The WebAssembly target does not return variables directly that cannot be
-    handled by JavaScript (``struct``, ``i64``, multiple return values, etc).
-    Instead, they are stored into a pointer passed as the first parameter by the
-    caller.
+    handled by JavaScript (see above about ``i64``, also ``struct``, multiple
+    return values, etc). Instead, they are stored into a pointer passed as the
+    first parameter by the caller.
 
     This is the calling convention as implemented by LLVM, with the extension
     that ``i64`` return values are returned in the same way as aggregate types.

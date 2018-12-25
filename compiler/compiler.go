@@ -30,16 +30,17 @@ func init() {
 
 // Configure the compiler.
 type Config struct {
-	Triple     string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
-	GC         string   // garbage collection strategy
-	CFlags     []string // cflags to pass to cgo
-	LDFlags    []string // ldflags to pass to cgo
-	DumpSSA    bool     // dump Go SSA, for compiler debugging
-	Debug      bool     // add debug symbols for gdb
-	RootDir    string   // GOROOT for TinyGo
-	GOPATH     string   // GOPATH, like `go env GOPATH`
-	BuildTags  []string // build tags for TinyGo (empty means {runtime.GOOS/runtime.GOARCH})
-	InitInterp bool     // use new init interpretation, meaning the old one is disabled
+	Triple        string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
+	GC            string   // garbage collection strategy
+	CFlags        []string // cflags to pass to cgo
+	LDFlags       []string // ldflags to pass to cgo
+	DumpSSA       bool     // dump Go SSA, for compiler debugging
+	Debug         bool     // add debug symbols for gdb
+	RootDir       string   // GOROOT for TinyGo
+	GOPATH        string   // GOPATH, like `go env GOPATH`
+	BuildTags     []string // build tags for TinyGo (empty means {runtime.GOOS/runtime.GOARCH})
+	InitInterp    bool     // use new init interpretation, meaning the old one is disabled
+	WasmI64Enable bool     // enable returning i64 in exported WebAssembly functions
 }
 
 type Compiler struct {
@@ -3117,6 +3118,7 @@ func (c *Compiler) NonConstGlobals() {
 // Replace i64 in an external function with a stack-allocated i64*, to work
 // around the lack of 64-bit integers in JavaScript (commonly used together with
 // WebAssembly). Once that's resolved, this pass may be avoided.
+// See also the --wasmi64enable flag
 // https://github.com/WebAssembly/design/issues/1172
 func (c *Compiler) ExternalInt64AsPtr() error {
 	int64Type := c.ctx.Int64Type()
@@ -3219,8 +3221,8 @@ func (c *Compiler) ExternalInt64AsPtr() error {
 			entryBlock := llvm.AddBasicBlock(externalFn, "entry")
 			c.builder.SetInsertPointAtEnd(entryBlock)
 			var callParams []llvm.Value
-			if fnType.ReturnType() == int64Type {
-				return errors.New("todo: i64 return value in exported function")
+			if fnType.ReturnType() == int64Type && !c.Config.WasmI64Enable {
+				return errors.New("i64 return value in exported functions disallowed by default, use --wasmi64enable for non-JS wasm targets")
 			}
 			for i, origParam := range fn.Params() {
 				paramValue := externalFn.Param(i)
