@@ -74,8 +74,8 @@ func initRTC() {
 	stm32.RCC.BDCR |= stm32.RCC_RTCCLKSource_LSE
 
 	// set prescaler to "max" per datasheet
-	stm32.RTC.PRLH = 0x000f
-	stm32.RTC.PRLL = 0x7FFF
+	stm32.RTC.PRLH = stm32.RTC_PRLH_PRLH_Msk
+	stm32.RTC.PRLL = stm32.RTC_PRLL_PRLL_Msk
 
 	// set count to zero
 	stm32.RTC.CNTH = 0x0
@@ -155,7 +155,7 @@ func timerSleep(ticks uint32) {
 	// on the length of sleep time requested
 
 	// prescale counter down from 72mhz to 10khz aka 0.1 ms frequency.
-	stm32.TIM3.PSC = 7199
+	stm32.TIM3.PSC = machine.CPU_FREQUENCY/10000 - 1 // 7199
 
 	// set duty aka duration
 	stm32.TIM3.ARR = stm32.RegValue(ticks/100) - 1 // convert from microseconds to 0.1 ms
