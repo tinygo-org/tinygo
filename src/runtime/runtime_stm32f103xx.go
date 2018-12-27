@@ -152,7 +152,8 @@ func timerSleep(ticks uint32) {
 	// Set the timer prescaler/autoreload timing registers.
 
 	// TODO: support smaller or larger scales (autoscaling) based
-	// on the length of sleep time requested
+	// on the length of sleep time requested.
+	// The current scaling only supports a range of 100 usec to 6553 msec.
 
 	// prescale counter down from 72mhz to 10khz aka 0.1 ms frequency.
 	stm32.TIM3.PSC = machine.CPU_FREQUENCY/10000 - 1 // 7199
