@@ -137,6 +137,7 @@ func (uart UART) Configure(config UARTConfig) {
 	stm32.USART1.CR1 = stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE
 
 	// Enable RX IRQ.
+	arm.SetPriority(stm32.IRQ_USART1, 0xc0)
 	arm.EnableIRQ(stm32.IRQ_USART1)
 }
 
