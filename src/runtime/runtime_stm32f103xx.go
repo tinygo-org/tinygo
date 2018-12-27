@@ -44,8 +44,7 @@ func initCLK() {
 	}
 }
 
-const tickMicros = 1024 * 32 // how many clock "ticks" in one microsecond?
-//const tickMicros = 1 // 1024 * 32
+const tickMicros = 1000
 
 var (
 	timestamp        timeUnit // nanoseconds since boottime
@@ -91,20 +90,17 @@ func initRTC() {
 	// Wait till flag is set
 	for stm32.RTC.CRL&stm32.RTC_CRL_RSF == 0 {
 	}
-
-	// arm.SetPriority(stm32.IRQ_RTC, 0xc0) // low priority
-	// arm.EnableIRQ(stm32.IRQ_RTC)
 }
 
+// Enable the TIM3 clock.
 func initTIM() {
-	// Enable the TIM3 clock.
 	stm32.RCC.APB1ENR |= stm32.RCC_APB1ENR_TIM3EN
 
-	//arm.SetPriority(stm32.IRQ_TIM3, 0xc3)
+	arm.SetPriority(stm32.IRQ_TIM3, 0xc3)
 	arm.EnableIRQ(stm32.IRQ_TIM3)
 }
 
-// sleepTicks should sleep for specific number of nanoseconds.
+// sleepTicks should sleep for specific number of microseconds.
 func sleepTicks(d timeUnit) {
 	for d != 0 {
 		ticks()                       // update timestamp
@@ -114,20 +110,22 @@ func sleepTicks(d timeUnit) {
 	}
 }
 
-// number of ticks (ns) since start.
+// number of ticks (microseconds) since start.
 func ticks() timeUnit {
-	// convert RTC counter from seconds to ns
-	timerCounter := uint32(stm32.RTC.CNTH<<16|stm32.RTC.CNTL) * 1000 * 1000 * 1000
+	// convert RTC counter from seconds to microseconds
+	timerCounter := uint32(stm32.RTC.CNTH<<16|stm32.RTC.CNTL) * 1000 * 1000
 
-	// TODO: add the fractional part of current time using DIV registers
+	// add the fractional part of current time using DIV registers
+	timerCounter += (uint32(stm32.RTC.DIVH<<16|stm32.RTC.DIVL) / 1024 * 32 * 32) * 1000 * 1000
 
-	offset := (timerCounter - timerLastCounter) // change since last measurement
+	// change since last measurement
+	offset := (timerCounter - timerLastCounter)
 	timerLastCounter = timerCounter
 	timestamp += timeUnit(offset)
 	return timestamp
 }
 
-// ticks are in nsec
+// ticks are in microseconds
 func timerSleep(ticks uint32) {
 	timerWakeup = false
 
@@ -153,18 +151,17 @@ func timerSleep(ticks uint32) {
 	//
 	// Set the timer prescaler/autoreload timing registers.
 
+	// TODO: support smaller or larger scales (autoscaling) based
+	// on the length of sleep time requested
+
 	// prescale counter down from 72mhz to 10khz aka 0.1 ms frequency.
-	stm32.TIM3.PSC = 7199 //machine.CPU_FREQUENCY / 1000 ?
+	stm32.TIM3.PSC = 7199
 
 	// set duty aka duration
-	//stm32.TIM3.ARR = 4999 // sets to 500 ms (5000 x 0.1ms - 1)
-	stm32.TIM3.ARR = stm32.RegValue(ticks/1000*1000*1000*10) - 1 // convert from ns to 0.1ms
+	stm32.TIM3.ARR = stm32.RegValue(ticks/100) - 1 // convert from microseconds to 0.1 ms
 
 	// Enable the hardware interrupt.
 	stm32.TIM3.DIER |= stm32.TIM_DIER_UIE
-
-	// Send an update event to reset the timer and apply settings.
-	stm32.TIM3.EGR |= stm32.TIM_EGR_UG
 
 	// Enable the timer.
 	stm32.TIM3.CR1 |= stm32.TIM_CR1_CEN
