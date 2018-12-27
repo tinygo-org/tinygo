@@ -103,9 +103,9 @@ func initTIM() {
 // sleepTicks should sleep for specific number of microseconds.
 func sleepTicks(d timeUnit) {
 	for d != 0 {
-		ticks()                       // update timestamp
-		ticks := uint32(d) & 0x7fffff // 23 bits (to be on the safe side)
-		timerSleep(ticks)             // TODO: not accurate (must be d / 30.5175...)
+		ticks()            // update timestamp
+		ticks := uint32(d) // current scaling only supports 100 usec to 6553 msec
+		timerSleep(ticks)
 		d -= timeUnit(ticks)
 	}
 }
