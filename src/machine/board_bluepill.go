@@ -44,3 +44,16 @@ const (
 const (
 	LED = PC13
 )
+
+// UART pins
+const (
+	UART_TX_PIN = PA9
+	UART_RX_PIN = PA10
+)
+
+// SPI pins
+const (
+	SPI0_SCK_PIN  = PA5
+	SPI0_MOSI_PIN = PA7
+	SPI0_MISO_PIN = PA6
+)

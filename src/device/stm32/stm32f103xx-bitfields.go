@@ -58,4 +58,31 @@ const (
 	RCC_RTCCLKSource_LSE        = 0x00000100
 	RCC_RTCCLKSource_LSI        = 0x00000200
 	RCC_RTCCLKSource_HSE_Div128 = 0x00000300
+
+	// SPI settings
+	SPI_FirstBit_MSB = 0x0000
+	SPI_FirstBit_LSB = 0x0080
+
+	SPI_BaudRatePrescaler_2   = 0x0000
+	SPI_BaudRatePrescaler_4   = 0x0008
+	SPI_BaudRatePrescaler_8   = 0x0010
+	SPI_BaudRatePrescaler_16  = 0x0018
+	SPI_BaudRatePrescaler_32  = 0x0020
+	SPI_BaudRatePrescaler_64  = 0x0028
+	SPI_BaudRatePrescaler_128 = 0x0030
+	SPI_BaudRatePrescaler_256 = 0x0038
+
+	SPI_Direction_2Lines_FullDuplex = 0x0000
+	SPI_Direction_2Lines_RxOnly     = 0x0400
+	SPI_Direction_1Line_Rx          = 0x8000
+	SPI_Direction_1Line_Tx          = 0xC000
+
+	SPI_Mode_Master = 0x0104
+	SPI_Mode_Slave  = 0x0000
+
+	SPI_NSS_Soft = 0x0200
+	SPI_NSS_Hard = 0x0000
+
+	SPI_NSSInternalSoft_Set   = 0x0100
+	SPI_NSSInternalSoft_Reset = 0xFEFF
 )
