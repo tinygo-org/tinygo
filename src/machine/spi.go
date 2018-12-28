@@ -1,4 +1,4 @@
-// +build nrf
+// +build nrf stm32f103xx
 
 package machine
 

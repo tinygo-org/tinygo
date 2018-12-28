@@ -123,8 +123,8 @@ func (uart UART) Configure(config UARTConfig) {
 		GPIO{PB7}.Configure(GPIOConfig{Mode: GPIO_INPUT_MODE_FLOATING})
 	default:
 		// use standard TX/RX pins PA9 and PA10
-		GPIO{PA9}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
-		GPIO{PA10}.Configure(GPIOConfig{Mode: GPIO_INPUT_MODE_FLOATING})
+		GPIO{UART_TX_PIN}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
+		GPIO{UART_RX_PIN}.Configure(GPIOConfig{Mode: GPIO_INPUT_MODE_FLOATING})
 	}
 
 	// Enable USART1 clock
@@ -143,7 +143,8 @@ func (uart UART) Configure(config UARTConfig) {
 
 // SetBaudRate sets the communication speed for the UART.
 func (uart UART) SetBaudRate(br uint32) {
-	divider := CPU_FREQUENCY / br
+	// first divide by PCK2 prescaler (div 4) and then desired baudrate
+	divider := CPU_FREQUENCY / 4 / br
 	stm32.USART1.BRR = stm32.RegValue(divider)
 }
 
@@ -159,4 +160,133 @@ func (uart UART) WriteByte(c byte) error {
 //go:export USART1_IRQHandler
 func handleUART1() {
 	bufferPut(byte((stm32.USART1.DR & 0xFF)))
+}
+
+// SPI on the STM32.
+type SPI struct {
+	Bus *stm32.SPI_Type
+}
+
+// There are 3 SPI interfaces on the STM32F103xx.
+// Since the first interface is named SPI1, both SPI0 and SPI1 refer to SPI1.
+// TODO: implement SPI2 and SPI3.
+var (
+	SPI1 = SPI{Bus: stm32.SPI1}
+	SPI0 = SPI1
+)
+
+// SPIConfig is used to store config info for SPI.
+type SPIConfig struct {
+	Frequency uint32
+	SCK       uint8
+	MOSI      uint8
+	MISO      uint8
+	LSBFirst  bool
+	Mode      uint8
+}
+
+// Configure is intended to setup the STM32 SPI1 interface.
+// Features still TODO:
+// - support SPI2 and SPI3
+// - allow setting data size to 16 bits?
+// - allow setting direction in HW for additional optimization?
+// - hardware SS pin?
+func (spi SPI) Configure(config SPIConfig) {
+	// enable clock for SPI
+	stm32.RCC.APB2ENR |= stm32.RCC_APB2ENR_SPI1EN
+
+	var conf uint16
+
+	// set frequency
+	switch config.Frequency {
+	case 125000:
+		conf |= stm32.SPI_BaudRatePrescaler_128
+	case 250000:
+		conf |= stm32.SPI_BaudRatePrescaler_64
+	case 500000:
+		conf |= stm32.SPI_BaudRatePrescaler_32
+	case 1000000:
+		conf |= stm32.SPI_BaudRatePrescaler_16
+	case 2000000:
+		conf |= stm32.SPI_BaudRatePrescaler_8
+	case 4000000:
+		conf |= stm32.SPI_BaudRatePrescaler_4
+	case 8000000:
+		conf |= stm32.SPI_BaudRatePrescaler_2
+	default:
+		conf |= stm32.SPI_BaudRatePrescaler_128
+	}
+
+	// set bit transfer order
+	if config.LSBFirst {
+		conf |= stm32.SPI_FirstBit_LSB
+	}
+
+	// set mode
+	switch config.Mode {
+	case 0:
+		conf &^= (1 << stm32.SPI_CR1_CPOL_Pos)
+		conf &^= (1 << stm32.SPI_CR1_CPHA_Pos)
+	case 1:
+		conf &^= (1 << stm32.SPI_CR1_CPOL_Pos)
+		conf |= (1 << stm32.SPI_CR1_CPHA_Pos)
+	case 2:
+		conf |= (1 << stm32.SPI_CR1_CPOL_Pos)
+		conf &^= (1 << stm32.SPI_CR1_CPHA_Pos)
+	case 3:
+		conf |= (1 << stm32.SPI_CR1_CPOL_Pos)
+		conf |= (1 << stm32.SPI_CR1_CPHA_Pos)
+	default: // to mode 0
+		conf &^= (1 << stm32.SPI_CR1_CPOL_Pos)
+		conf &^= (1 << stm32.SPI_CR1_CPHA_Pos)
+	}
+
+	// set to SPI master
+	conf |= stm32.SPI_Mode_Master
+
+	// now set the configuration
+	spi.Bus.CR1 = stm32.RegValue(conf)
+
+	// init pins
+	spi.setPins(config.SCK, config.MOSI, config.MISO)
+
+	// enable SPI interface
+	spi.Bus.CR1 |= stm32.SPI_CR1_SPE
+}
+
+// Transfer writes/reads a single byte using the SPI interface.
+func (spi SPI) Transfer(w byte) (byte, error) {
+	// Write data to be transmitted to the SPI data register
+	spi.Bus.DR = stm32.RegValue(w)
+
+	// Wait until transmit complete
+	for (spi.Bus.SR & stm32.SPI_SR_TXE) == 0 {
+	}
+
+	// Wait until receive complete
+	for (spi.Bus.SR & stm32.SPI_SR_RXNE) == 0 {
+	}
+
+	// Wait until SPI is not busy
+	for (spi.Bus.SR & stm32.SPI_SR_BSY) > 0 {
+	}
+
+	// Return received data from SPI data register
+	return byte(spi.Bus.DR), nil
+}
+
+func (spi SPI) setPins(sck, mosi, miso uint8) {
+	if sck == 0 {
+		sck = SPI0_SCK_PIN
+	}
+	if mosi == 0 {
+		mosi = SPI0_MOSI_PIN
+	}
+	if miso == 0 {
+		miso = SPI0_MISO_PIN
+	}
+
+	GPIO{sck}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
+	GPIO{mosi}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
+	GPIO{miso}.Configure(GPIOConfig{Mode: GPIO_INPUT_MODE_FLOATING})
 }
