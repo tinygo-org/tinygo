@@ -3,7 +3,7 @@ package runtime
 // This is a hashmap implementation for the map[T]T type.
 // It is very rougly based on the implementation of the Go hashmap:
 //
-//     https://golang.org/src/runtime/hashmap.go
+//     https://golang.org/src/runtime/hash32.go
 
 import (
 	"unsafe"
