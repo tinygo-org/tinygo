@@ -47,8 +47,8 @@ func initCLK() {
 const tickMicros = 1000
 
 var (
-	timestamp        timeUnit // nanoseconds since boottime
-	timerLastCounter uint32   // 24 bits ticks
+	timestamp        timeUnit // microseconds since boottime
+	timerLastCounter uint64
 )
 
 //go:volatile
@@ -113,10 +113,10 @@ func sleepTicks(d timeUnit) {
 // number of ticks (microseconds) since start.
 func ticks() timeUnit {
 	// convert RTC counter from seconds to microseconds
-	timerCounter := uint32(stm32.RTC.CNTH<<16|stm32.RTC.CNTL) * 1000 * 1000
+	timerCounter := uint64(stm32.RTC.CNTH<<16|stm32.RTC.CNTL) * 1000 * 1000
 
 	// add the fractional part of current time using DIV registers
-	timerCounter += (uint32(stm32.RTC.DIVH<<16|stm32.RTC.DIVL) / 1024 * 32 * 32) * 1000 * 1000
+	timerCounter += (uint64(stm32.RTC.DIVH<<16|stm32.RTC.DIVL) / 1024 * 32 * 32) * 1000 * 1000
 
 	// change since last measurement
 	offset := (timerCounter - timerLastCounter)
