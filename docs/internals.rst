@@ -145,7 +145,7 @@ somewhat compatible with the C calling convention but with a few quirks:
     issue <https://github.com/rustwasm/wasm-bindgen/issues/35>`_.
 
     Currently there are also non-browser WebAssembly execution environments
-    that do not have this limitation. Use the `--wasmi64enable` flag to remove
+    that do not have this limitation. Use the `-wasm-abi=generic` flag to remove
     the behavior described above and enable emitting functions with i64
     parameters directly.
 

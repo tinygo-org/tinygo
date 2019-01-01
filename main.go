@@ -27,16 +27,16 @@ var commands = map[string]string{
 }
 
 type BuildConfig struct {
-	opt           string
-	gc            string
-	printIR       bool
-	dumpSSA       bool
-	debug         bool
-	printSizes    string
-	initInterp    bool
-	cFlags        []string
-	ldFlags       []string
-	wasmI64Enable bool
+	opt        string
+	gc         string
+	printIR    bool
+	dumpSSA    bool
+	debug      bool
+	printSizes string
+	initInterp bool
+	cFlags     []string
+	ldFlags    []string
+	wasmAbi    string
 }
 
 // Helper function for Compiler object.
@@ -50,17 +50,16 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	spec.LDFlags = append(spec.LDFlags, config.ldFlags...)
 
 	compilerConfig := compiler.Config{
-		Triple:        spec.Triple,
-		GC:            config.gc,
-		CFlags:        spec.CFlags,
-		LDFlags:       spec.LDFlags,
-		Debug:         config.debug,
-		DumpSSA:       config.dumpSSA,
-		RootDir:       sourceDir(),
-		GOPATH:        getGopath(),
-		BuildTags:     spec.BuildTags,
-		InitInterp:    config.initInterp,
-		WasmI64Enable: config.wasmI64Enable,
+		Triple:     spec.Triple,
+		GC:         config.gc,
+		CFlags:     spec.CFlags,
+		LDFlags:    spec.LDFlags,
+		Debug:      config.debug,
+		DumpSSA:    config.dumpSSA,
+		RootDir:    sourceDir(),
+		GOPATH:     getGopath(),
+		BuildTags:  spec.BuildTags,
+		InitInterp: config.initInterp,
 	}
 	c, err := compiler.NewCompiler(pkgName, compilerConfig)
 	if err != nil {
@@ -99,9 +98,8 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	// cannot be represented exactly in JavaScript (JS only has doubles). To
 	// keep functions interoperable, pass int64 types as pointers to
 	// stack-allocated values.
-	// The flag --wasmi64enable can be used to disable this behavior
-	// (e.g. for non-browser WebAssembly execution environments).
-	if !config.wasmI64Enable && strings.HasPrefix(spec.Triple, "wasm") {
+	// Use -wasm-abi=generic to disable this behaviour.
+	if config.wasmAbi == "js" && strings.HasPrefix(spec.Triple, "wasm") {
 		err := c.ExternalInt64AsPtr()
 		if err != nil {
 			return err
@@ -511,7 +509,7 @@ func main() {
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
-	wasmI64Enable := flag.Bool("wasmi64enable", false, "enable i64 in WebAssembly exports")
+	wasmAbi := flag.String("wasm-abi", "js", "WebAssembly ABI conventions: js (no i64 params) or generic")
 
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
@@ -522,14 +520,14 @@ func main() {
 
 	flag.CommandLine.Parse(os.Args[2:])
 	config := &BuildConfig{
-		opt:           *opt,
-		gc:            *gc,
-		printIR:       *printIR,
-		dumpSSA:       *dumpSSA,
-		debug:         !*nodebug,
-		printSizes:    *printSize,
-		initInterp:    *initInterp,
-		wasmI64Enable: *wasmI64Enable,
+		opt:        *opt,
+		gc:         *gc,
+		printIR:    *printIR,
+		dumpSSA:    *dumpSSA,
+		debug:      !*nodebug,
+		printSizes: *printSize,
+		initInterp: *initInterp,
+		wasmAbi:    *wasmAbi,
 	}
 
 	if *cFlags != "" {
