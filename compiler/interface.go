@@ -203,7 +203,7 @@ func (c *Compiler) getTypeMethodSet(typ types.Type) (llvm.Value, error) {
 		}
 		methodInfo := llvm.ConstNamedStruct(interfaceMethodInfoType, []llvm.Value{
 			signatureGlobal,
-			llvm.ConstBitCast(fn, c.i8ptrType),
+			llvm.ConstPtrToInt(fn, c.uintptrType),
 		})
 		methods[i] = methodInfo
 	}
@@ -400,7 +400,7 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 		c.getMethodSignature(instr.Method),
 	}
 	fn := c.createRuntimeCall("interfaceMethod", values, "invoke.func")
-	fnCast := c.builder.CreateBitCast(fn, llvmFnType, "invoke.func.cast")
+	fnCast := c.builder.CreateIntToPtr(fn, llvmFnType, "invoke.func.cast")
 	receiverValue := c.builder.CreateExtractValue(itf, 1, "invoke.func.receiver")
 
 	args := []llvm.Value{receiverValue}

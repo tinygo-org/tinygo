@@ -304,7 +304,7 @@ func (p *lowerInterfacesPass) run() {
 			// interface value should already have returned false.
 			// Replace the function pointer with undef (which will then be
 			// called), indicating to the optimizer this code is unreachable.
-			use.ReplaceAllUsesWith(llvm.Undef(p.i8ptrType))
+			use.ReplaceAllUsesWith(llvm.Undef(p.uintptrType))
 			use.EraseFromParentAsInstruction()
 		} else if len(itf.types) == 1 {
 			// There is only one implementation of the given type.
@@ -314,12 +314,12 @@ func (p *lowerInterfacesPass) run() {
 			// There are multiple types implementing this interface, thus there
 			// are multiple possible functions to call. Delegate calling the
 			// right function to a special wrapper function.
-			bitcasts := getUses(use)
-			if len(bitcasts) != 1 || bitcasts[0].IsABitCastInst().IsNil() {
-				panic("expected exactly one bitcast use of runtime.interfaceMethod")
+			inttoptrs := getUses(use)
+			if len(inttoptrs) != 1 || inttoptrs[0].IsAIntToPtrInst().IsNil() {
+				panic("expected exactly one inttoptr use of runtime.interfaceMethod")
 			}
-			bitcast := bitcasts[0]
-			calls := getUses(bitcast)
+			inttoptr := inttoptrs[0]
+			calls := getUses(inttoptr)
 			if len(calls) != 1 || calls[0].IsACallInst().IsNil() {
 				panic("expected exactly one call use of runtime.interfaceMethod")
 			}
@@ -340,14 +340,14 @@ func (p *lowerInterfacesPass) run() {
 			// call, after selecting the right concrete type.
 			redirector := p.getInterfaceMethodFunc(itf, signature, call.Type(), paramTypes)
 
-			// Replace the old lookup/bitcast/call with the new call.
+			// Replace the old lookup/inttoptr/call with the new call.
 			p.builder.SetInsertPointBefore(call)
 			retval := p.builder.CreateCall(redirector, params, "")
 			if retval.Type().TypeKind() != llvm.VoidTypeKind {
 				call.ReplaceAllUsesWith(retval)
 			}
 			call.EraseFromParentAsInstruction()
-			bitcast.EraseFromParentAsInstruction()
+			inttoptr.EraseFromParentAsInstruction()
 			use.EraseFromParentAsInstruction()
 		}
 	}
@@ -542,22 +542,22 @@ func (p *lowerInterfacesPass) getSignature(name string) *signatureInfo {
 	return p.signatures[name]
 }
 
-// replaceInvokeWithCall replaces a runtime.interfaceMethod + bitcast with a
+// replaceInvokeWithCall replaces a runtime.interfaceMethod + inttoptr with a
 // concrete method. This can be done when only one type implements the
 // interface.
 func (p *lowerInterfacesPass) replaceInvokeWithCall(use llvm.Value, typ *typeInfo, signature *signatureInfo) {
-	bitcasts := getUses(use)
-	if len(bitcasts) != 1 || bitcasts[0].IsABitCastInst().IsNil() {
-		panic("expected exactly one bitcast use of runtime.interfaceMethod")
+	inttoptrs := getUses(use)
+	if len(inttoptrs) != 1 || inttoptrs[0].IsAIntToPtrInst().IsNil() {
+		panic("expected exactly one inttoptr use of runtime.interfaceMethod")
 	}
-	bitcast := bitcasts[0]
+	inttoptr := inttoptrs[0]
 	function := typ.getMethod(signature).function
-	if bitcast.Type() != function.Type() {
+	if inttoptr.Type() != function.Type() {
 		p.builder.SetInsertPointBefore(use)
-		function = p.builder.CreateBitCast(function, bitcast.Type(), "")
+		function = p.builder.CreateBitCast(function, inttoptr.Type(), "")
 	}
-	bitcast.ReplaceAllUsesWith(function)
-	bitcast.EraseFromParentAsInstruction()
+	inttoptr.ReplaceAllUsesWith(function)
+	inttoptr.EraseFromParentAsInstruction()
 	use.EraseFromParentAsInstruction()
 }
 
