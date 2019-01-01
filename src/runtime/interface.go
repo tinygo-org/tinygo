@@ -39,8 +39,8 @@ func interfaceTypeAssert(ok bool) {
 // See compiler/interface-lowering.go for details.
 
 type interfaceMethodInfo struct {
-	signature *uint8 // external *i8 with a name identifying the Go function signature
-	funcptr   *uint8 // bitcast from the actual function pointer
+	signature *uint8  // external *i8 with a name identifying the Go function signature
+	funcptr   uintptr // bitcast from the actual function pointer
 }
 
 // Pseudo function call used while putting a concrete value in an interface,
@@ -59,4 +59,4 @@ func interfaceImplements(typecode uintptr, interfaceMethodSet **uint8) bool
 
 // Pseudo function that returns a function pointer to the method to call.
 // See the interface lowering pass for how this is lowered to a real call.
-func interfaceMethod(typecode uintptr, interfaceMethodSet **uint8, signature *uint8) *uint8
+func interfaceMethod(typecode uintptr, interfaceMethodSet **uint8, signature *uint8) uintptr

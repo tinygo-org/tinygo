@@ -57,6 +57,7 @@ type Compiler struct {
 	targetData              llvm.TargetData
 	intType                 llvm.Type
 	i8ptrType               llvm.Type // for convenience
+	funcPtrAddrSpace        int
 	uintptrType             llvm.Type
 	initFuncs               []llvm.Value
 	interfaceInvokeWrappers []interfaceInvokeWrapper
@@ -124,6 +125,11 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 		panic("unknown pointer size")
 	}
 	c.i8ptrType = llvm.PointerType(c.ctx.Int8Type(), 0)
+
+	dummyFuncType := llvm.FunctionType(c.ctx.VoidType(), nil, false)
+	dummyFunc := llvm.AddFunction(c.mod, "tinygo.dummy", dummyFuncType)
+	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
+	dummyFunc.EraseFromParentAsFunction()
 
 	return c, nil
 }
@@ -462,7 +468,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		// {context, funcptr}
 		paramTypes = append(paramTypes, c.i8ptrType) // context
 		paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
-		ptr := llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), 0)
+		ptr := llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), c.funcPtrAddrSpace)
 		ptr = c.ctx.StructType([]llvm.Type{c.i8ptrType, ptr}, false)
 		return ptr, nil
 	case *types.Slice:
