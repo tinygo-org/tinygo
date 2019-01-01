@@ -1,6 +1,7 @@
 {
 	"inherits": ["avr"],
 	"llvm-target": "avr-atmel-none",
+	"cpu": "attiny85",
 	"build-tags": ["digispark", "attiny85", "attiny", "avr2", "avr25"],
 	"cflags": [
 		"-mmcu=attiny85"
