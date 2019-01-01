@@ -3222,7 +3222,8 @@ func (c *Compiler) ExternalInt64AsPtr() error {
 			c.builder.SetInsertPointAtEnd(entryBlock)
 			var callParams []llvm.Value
 			if fnType.ReturnType() == int64Type {
-				return errors.New("i64 return value in exported functions disallowed by default, use -wasm-abi=generic to override")
+				return errors.New("not yet implemented: exported function returns i64 with -wasm-abi=js; " +
+					"see https://tinygo.org/compiler-internals/calling-convention/")
 			}
 			for i, origParam := range fn.Params() {
 				paramValue := externalFn.Param(i)
