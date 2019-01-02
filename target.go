@@ -2,14 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	"github.com/aykevl/go-llvm"
 )
 
 // Target specification for a given target. Used for bare metal targets.
@@ -21,6 +20,8 @@ type TargetSpec struct {
 	Inherits   []string `json:"inherits"`
 	Triple     string   `json:"llvm-target"`
 	CPU        string   `json:"cpu"`
+	GOOS       string   `json:"goos"`
+	GOARCH     string   `json:"goarch"`
 	BuildTags  []string `json:"build-tags"`
 	GC         string   `json:"gc"`
 	Compiler   string   `json:"compiler"`
@@ -47,6 +48,12 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if spec2.CPU != "" {
 		spec.CPU = spec2.CPU
+	}
+	if spec2.GOOS != "" {
+		spec.GOOS = spec2.GOOS
+	}
+	if spec2.GOARCH != "" {
+		spec.GOARCH = spec2.GOARCH
 	}
 	spec.BuildTags = append(spec.BuildTags, spec2.BuildTags...)
 	if spec2.GC != "" {
@@ -134,7 +141,27 @@ func (spec *TargetSpec) resolveInherits() error {
 // Load a target specification.
 func LoadTarget(target string) (*TargetSpec, error) {
 	if target == "" {
-		target = llvm.DefaultTargetTriple()
+		// Configure based on GOOS/GOARCH environment variables (falling back to
+		// runtime.GOOS/runtime.GOARCH), and generate a LLVM target based on it.
+		goos := os.Getenv("GOOS")
+		if goos == "" {
+			goos = runtime.GOOS
+		}
+		goarch := os.Getenv("GOARCH")
+		if goarch == "" {
+			goarch = runtime.GOARCH
+		}
+		llvmos := goos
+		llvmarch := map[string]string{
+			"386":   "i386",
+			"amd64": "x86_64",
+			"arm64": "aarch64",
+		}[goarch]
+		if llvmarch == "" {
+			llvmarch = goarch
+		}
+		target = llvmarch + "--" + llvmos
+		return defaultTarget(goos, goarch, target)
 	}
 
 	// See whether there is a target specification for this target (e.g.
@@ -154,20 +181,58 @@ func LoadTarget(target string) (*TargetSpec, error) {
 		// an error.
 		return nil, err
 	} else {
-		// No target spec available. Use the default one, useful on most systems
-		// with a regular OS.
-		*spec = TargetSpec{
-			Triple:    target,
-			BuildTags: []string{runtime.GOOS, runtime.GOARCH},
-			Compiler:  commands["clang"],
-			Linker:    "cc",
-			LDFlags:   []string{"-no-pie"}, // WARNING: clang < 5.0 requires -nopie
-			Objcopy:   "objcopy",
-			GDB:       "gdb",
-			GDBCmds:   []string{"run"},
+		// Load target from given triple, ignore GOOS/GOARCH environment
+		// variables.
+		tripleSplit := strings.Split(target, "-")
+		if len(tripleSplit) == 1 {
+			return nil, errors.New("expected a full LLVM target or a custom target in -target flag")
 		}
-		return spec, nil
+		goos := tripleSplit[2]
+		goarch := map[string]string{ // map from LLVM arch to Go arch
+			"i386":    "386",
+			"x86_64":  "amd64",
+			"aarch64": "arm64",
+		}[tripleSplit[0]]
+		if goarch == "" {
+			goarch = tripleSplit[0]
+		}
+		return defaultTarget(goos, goarch, target)
 	}
+}
+
+func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
+	// No target spec available. Use the default one, useful on most systems
+	// with a regular OS.
+	spec := TargetSpec{
+		Triple:    triple,
+		GOOS:      goos,
+		GOARCH:    goarch,
+		BuildTags: []string{goos, goarch},
+		Compiler:  commands["clang"],
+		Linker:    "cc",
+		LDFlags:   []string{"-no-pie"}, // WARNING: clang < 5.0 requires -nopie
+		Objcopy:   "objcopy",
+		GDB:       "gdb",
+		GDBCmds:   []string{"run"},
+	}
+	if goarch != runtime.GOARCH {
+		// Some educated guesses as to how to invoke helper programs.
+		if goarch == "arm" {
+			spec.Linker = "arm-linux-gnueabi-gcc"
+			spec.Objcopy = "arm-linux-gnueabi-objcopy"
+			spec.GDB = "arm-linux-gnueabi-gdb"
+		}
+		if goarch == "arm64" {
+			spec.Linker = "aarch64-linux-gnu-gcc"
+			spec.Objcopy = "aarch64-linux-gnu-objcopy"
+			spec.GDB = "aarch64-linux-gnu-gdb"
+		}
+		if goarch == "386" {
+			spec.CFlags = []string{"-m32"}
+			spec.LDFlags = []string{"-m32"}
+		}
+	}
+	return &spec, nil
 }
 
 // Return the source directory of this package, or "." when it cannot be

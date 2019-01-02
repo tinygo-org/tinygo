@@ -1,5 +1,7 @@
 {
 	"build-tags": ["tinygo.arm", "js", "wasm"],
+	"goos": "js",
+	"goarch": "wasm",
 	"compiler": "clang-7",
 	"gc": "marksweep",
 	"linker": "arm-none-eabi-ld",
