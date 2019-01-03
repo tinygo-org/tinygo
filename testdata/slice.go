@@ -1,5 +1,7 @@
 package main
 
+type MySlice [32]byte
+
 func main() {
 	l := 5
 	foo := []int{1, 2, 4, 5}
@@ -89,6 +91,12 @@ func main() {
 		print(" ", n)
 	}
 	println()
+
+	// Verify the fix in https://github.com/aykevl/tinygo/pull/119
+	var unnamed [32]byte
+	var named MySlice
+	assert(len(unnamed[:]) == 32)
+	assert(len(named[:]) == 32)
 }
 
 func printslice(name string, s []int) {
