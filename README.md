@@ -1,6 +1,5 @@
 # TinyGo - Go compiler for microcontrollers
 
-[![Documentation Status](https://readthedocs.org/projects/tinygo/badge/?version=latest)](https://tinygo.readthedocs.io/)
 [![Build Status](https://travis-ci.com/aykevl/tinygo.svg?branch=master)](https://travis-ci.com/aykevl/tinygo)
 
 > We never expected Go to be an embedded language and so it's got serious
@@ -69,7 +68,7 @@ Not yet supported:
 
 ## Installation
 
-See the [installation instructions](https://tinygo.readthedocs.io/en/latest/installation.html).
+See the [getting started instructions](https://tinygo.org/getting-started/).
 
 ### Running with Docker
 
@@ -92,7 +91,7 @@ The following architectures/systems are currently supported:
   * WebAssembly
 
 For more information, see [this list of targets and
-boards](https://tinygo.readthedocs.io/en/latest/targets.html). Pull requests for
+boards](https://tinygo.org/targets/). Pull requests for
 broader support are welcome!
 
 ## Analysis and optimizations
@@ -139,8 +138,9 @@ Non-goals:
 
 ## Documentation
 
-Documentation is currently maintained on a [dedicated ReadTheDocs
-page](https://tinygo.readthedocs.io/en/latest/).
+Documentation is currently maintained on a dedicated web site located at [https://tinygo.org/](https://tinygo.org/).
+
+You can find the web site code at [https://github.com/tinygo-org/tinygo-site](https://github.com/tinygo-org/tinygo-site).
 
 ## Getting help
 
