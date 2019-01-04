@@ -51,6 +51,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 
 	compilerConfig := compiler.Config{
 		Triple:     spec.Triple,
+		CPU:        spec.CPU,
 		GC:         config.gc,
 		CFlags:     spec.CFlags,
 		LDFlags:    spec.LDFlags,
