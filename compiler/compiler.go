@@ -2333,14 +2333,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		switch typ := expr.X.Type().Underlying().(type) {
 		case *types.Pointer: // pointer to array
 			// slice an array
-			array, ok := typ.Elem().(*types.Array)
-			if !ok {
-				// maybe it's a named array type?
-				array, ok = typ.Elem().Underlying().(*types.Array)
-				if !ok {
-					panic("slicing a value that is not an array at " + c.ir.Program.Fset.Position(expr.Pos()).String())
-				}
-			}
+			array := typ.Elem().Underlying().(*types.Array)
 			length := array.Len()
 			llvmLen := llvm.ConstInt(c.uintptrType, uint64(length), false)
 			if high.IsNil() {
