@@ -2333,8 +2333,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		switch typ := expr.X.Type().Underlying().(type) {
 		case *types.Pointer: // pointer to array
 			// slice an array
-			array := typ.Elem().Underlying().(*types.Array)
-			length := array.Len()
+			length := typ.Elem().Underlying().(*types.Array).Len()
 			llvmLen := llvm.ConstInt(c.uintptrType, uint64(length), false)
 			if high.IsNil() {
 				high = llvmLen
