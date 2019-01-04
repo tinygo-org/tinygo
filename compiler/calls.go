@@ -5,9 +5,8 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-// For a description of the calling convention in prose, see docs/internals.rst
-// or the online version of this document:
-// https://tinygo.readthedocs.io/en/latest/internals.html#calling-convention
+// For a description of the calling convention in prose, see:
+// https://tinygo.org/compiler-internals/calling-convention/
 
 // The maximum number of arguments that can be expanded from a single struct. If
 // a struct contains more fields, it is passed as a struct without expanding.
