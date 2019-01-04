@@ -2196,6 +2196,12 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 					sliceCap = c.builder.CreateSExt(sliceCap, c.uintptrType, "")
 				}
 			}
+			if sliceLen.Type().IntTypeWidth() > c.uintptrType.IntTypeWidth() {
+				sliceLen = c.builder.CreateTrunc(sliceLen, c.uintptrType, "")
+			}
+			if sliceCap.Type().IntTypeWidth() > c.uintptrType.IntTypeWidth() {
+				sliceCap = c.builder.CreateTrunc(sliceCap, c.uintptrType, "")
+			}
 			c.createRuntimeCall("sliceBoundsCheckMake", []llvm.Value{sliceLen, sliceCap}, "")
 		}
 
