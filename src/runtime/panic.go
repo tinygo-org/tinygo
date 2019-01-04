@@ -57,7 +57,7 @@ func sliceBoundsCheck64(capacity uintptr, low, high uint64) {
 }
 
 // Check for bounds in *ssa.MakeSlice.
-func sliceBoundsCheckMake(length, capacity uint) {
+func sliceBoundsCheckMake(length, capacity uintptr) {
 	if !(0 <= length && length <= capacity) {
 		runtimePanic("slice size out of range")
 	}
