@@ -1,6 +1,6 @@
 package runtime
 
-const GOARCH = "amd64"
+const GOARCH = "arm64"
 
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 64

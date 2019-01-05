@@ -32,6 +32,8 @@ func init() {
 type Config struct {
 	Triple     string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
 	CPU        string   // LLVM CPU name, e.g. atmega328p (empty string means default)
+	GOOS       string   //
+	GOARCH     string   //
 	GC         string   // garbage collection strategy
 	CFlags     []string // cflags to pass to cgo
 	LDFlags    []string // ldflags to pass to cgo
@@ -39,7 +41,7 @@ type Config struct {
 	Debug      bool     // add debug symbols for gdb
 	RootDir    string   // GOROOT for TinyGo
 	GOPATH     string   // GOPATH, like `go env GOPATH`
-	BuildTags  []string // build tags for TinyGo (empty means {runtime.GOOS/runtime.GOARCH})
+	BuildTags  []string // build tags for TinyGo (empty means {Config.GOOS/Config.GOARCH})
 	InitInterp bool     // use new init interpretation, meaning the old one is disabled
 }
 
@@ -97,7 +99,7 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 		config.Triple = llvm.DefaultTargetTriple()
 	}
 	if len(config.BuildTags) == 0 {
-		config.BuildTags = []string{runtime.GOOS, runtime.GOARCH}
+		config.BuildTags = []string{config.GOOS, config.GOARCH}
 	}
 	c := &Compiler{
 		Config:  config,
@@ -178,8 +180,6 @@ func (c *Compiler) selectGC() string {
 // Compile the given package path or .go file path. Return an error when this
 // fails (in any stage).
 func (c *Compiler) Compile(mainPath string) error {
-	tripleSplit := strings.Split(c.Triple, "-")
-
 	// Prefix the GOPATH with the system GOROOT, as GOROOT is already set to
 	// the TinyGo root.
 	gopath := c.GOPATH
@@ -195,8 +195,8 @@ func (c *Compiler) Compile(mainPath string) error {
 	}
 	lprogram := &loader.Program{
 		Build: &build.Context{
-			GOARCH:      tripleSplit[0],
-			GOOS:        tripleSplit[2],
+			GOARCH:      c.GOARCH,
+			GOOS:        c.GOOS,
 			GOROOT:      c.RootDir,
 			GOPATH:      gopath,
 			CgoEnabled:  true,
