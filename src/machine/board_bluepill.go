@@ -57,3 +57,9 @@ const (
 	SPI0_MOSI_PIN = PA7
 	SPI0_MISO_PIN = PA6
 )
+
+// I2C pins
+const (
+	SDA_PIN = PB7
+	SCL_PIN = PB6
+)
