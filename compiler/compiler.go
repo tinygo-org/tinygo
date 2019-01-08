@@ -2197,10 +2197,10 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				}
 			}
 			if sliceLen.Type().IntTypeWidth() > c.uintptrType.IntTypeWidth() {
-				sliceLen = c.builder.CreateTrunc(sliceLen, c.uintptrType, "")
+				return llvm.Value{}, c.makeError(expr.Pos(), "slice make() call: length type is wider than uintptr")
 			}
 			if sliceCap.Type().IntTypeWidth() > c.uintptrType.IntTypeWidth() {
-				sliceCap = c.builder.CreateTrunc(sliceCap, c.uintptrType, "")
+				return llvm.Value{}, c.makeError(expr.Pos(), "slice make() call: capacity type is wider than uintptr")
 			}
 			c.createRuntimeCall("sliceBoundsCheckMake", []llvm.Value{sliceLen, sliceCap}, "")
 		}
