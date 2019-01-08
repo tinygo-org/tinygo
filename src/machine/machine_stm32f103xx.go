@@ -7,6 +7,7 @@ package machine
 import (
 	"device/arm"
 	"device/stm32"
+	"errors"
 )
 
 const CPU_FREQUENCY = 72000000
@@ -143,8 +144,8 @@ func (uart UART) Configure(config UARTConfig) {
 
 // SetBaudRate sets the communication speed for the UART.
 func (uart UART) SetBaudRate(br uint32) {
-	// first divide by PCK2 prescaler (div 4) and then desired baudrate
-	divider := CPU_FREQUENCY / 4 / br
+	// first divide by PCLK2 prescaler (div 1) and then desired baudrate
+	divider := CPU_FREQUENCY / br
 	stm32.USART1.BRR = stm32.RegValue(divider)
 }
 
@@ -289,4 +290,294 @@ func (spi SPI) setPins(sck, mosi, miso uint8) {
 	GPIO{sck}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
 	GPIO{mosi}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
 	GPIO{miso}.Configure(GPIOConfig{Mode: GPIO_INPUT_MODE_FLOATING})
+}
+
+// I2C on the STM32F103xx.
+type I2C struct {
+	Bus *stm32.I2C_Type
+}
+
+// There are 2 I2C interfaces on the STM32F103xx.
+// Since the first interface is named I2C1, both I2C0 and I2C1 refer to I2C1.
+// TODO: implement I2C2.
+var (
+	I2C1 = I2C{Bus: stm32.I2C1}
+	I2C0 = I2C1
+)
+
+// I2CConfig is used to store config info for I2C.
+type I2CConfig struct {
+	Frequency uint32
+	SCL       uint8
+	SDA       uint8
+}
+
+// Configure is intended to setup the I2C interface.
+func (i2c I2C) Configure(config I2CConfig) {
+	// Default I2C bus speed is 100 kHz.
+	if config.Frequency == 0 {
+		config.Frequency = TWI_FREQ_100KHZ
+	}
+
+	// enable clock for I2C
+	stm32.RCC.APB1ENR |= stm32.RCC_APB1ENR_I2C1EN
+
+	// I2C1 pins
+	switch config.SDA {
+	case PB9:
+		config.SCL = PB8
+		// use alternate I2C1 pins PB8/PB9 via AFIO mapping
+		stm32.RCC.APB2ENR |= stm32.RCC_APB2ENR_AFIOEN
+		stm32.AFIO.MAPR |= stm32.AFIO_MAPR_I2C1_REMAP
+	default:
+		// use default I2C1 pins PB6/PB7
+		config.SDA = SDA_PIN
+		config.SCL = SCL_PIN
+	}
+
+	GPIO{config.SDA}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_OPEN_DRAIN})
+	GPIO{config.SCL}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_OPEN_DRAIN})
+
+	// Disable the selected I2C peripheral to configure
+	i2c.Bus.CR1 &^= stm32.I2C_CR1_PE
+
+	// pclk1 clock speed is main frequency divided by PCK1 prescaler (div 2)
+	pclk1 := uint32(CPU_FREQUENCY / 2)
+
+	// set freqency range to pclk1 clock speed in Mhz.
+	// aka setting the value 36 means to use 36MhZ clock.
+	pclk1Mhz := pclk1 / 1000000
+	i2c.Bus.CR2 |= stm32.RegValue(pclk1Mhz)
+
+	switch config.Frequency {
+	case TWI_FREQ_100KHZ:
+		// Normal mode speed calculation
+		ccr := pclk1 / (config.Frequency * 2)
+		i2c.Bus.CCR = stm32.RegValue(ccr)
+
+		// duty cycle 2
+		i2c.Bus.CCR &^= stm32.I2C_CCR_DUTY
+
+		// frequency standard mode
+		i2c.Bus.CCR &^= stm32.I2C_CCR_F_S
+
+		// Set Maximum Rise Time for standard mode
+		i2c.Bus.TRISE = stm32.RegValue(pclk1Mhz)
+
+	case TWI_FREQ_400KHZ:
+		// TODO: fast mode
+		// Set Maximum Rise Time for fast mode
+		//i2c.Bus.TRISE = stm32.RegValue(((freqRange * 300) / 1000) + 1)
+
+		// Fast mode speed calculation
+		//i2c.Bus.CCR = stm32.RegValue((pclk1 / (TWI_FREQ_400KHZ * 3)) | stm32.I2C_CCR_F_S)
+	}
+
+	// re-enable the selected I2C peripheral
+	i2c.Bus.CR1 |= stm32.I2C_CR1_PE
+}
+
+// Tx does a single I2C transaction at the specified address.
+// It clocks out the given address, writes the bytes in w, reads back len(r)
+// bytes and stores them in r, and generates a stop condition on the bus.
+func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+	var err error
+	if len(w) != 0 {
+		// start transmission for writing
+		err = i2c.signalStart()
+		if err != nil {
+			return err
+		}
+
+		// send address
+		err = i2c.sendAddress(uint8(addr), true)
+		if err != nil {
+			return err
+		}
+
+		for _, b := range w {
+			err = i2c.WriteByte(b)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if len(r) != 0 {
+		// re-start transmission for reading
+		err = i2c.signalStart()
+		if err != nil {
+			return err
+		}
+
+		// send address
+		err = i2c.sendAddress(uint8(addr), false)
+		if err != nil {
+			return err
+		}
+
+		for i := range r { // read each char
+			if i+1 == len(r) {
+				// The 'stop' signal must be sent before reading back the last
+				// byte, so that it will be sent by the I2C peripheral right
+				// after the last byte has been read.
+				r[i], err = i2c.ReadLastByte()
+				if err != nil {
+					return err
+				}
+			} else {
+				r[i], err = i2c.ReadByte()
+				if err != nil {
+					return err
+				}
+			}
+		}
+	} else {
+		// Nothing to read back. Stop the transmission.
+		err = i2c.signalStop()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+const TIMEOUT = 500
+
+// signalStart sends a start signal.
+func (i2c I2C) signalStart() error {
+	// Wait until I2C is not busy
+	timeout := TIMEOUT
+	for (i2c.Bus.SR2 & stm32.I2C_SR2_BUSY) > 0 {
+		timeout--
+		if timeout == 0 {
+			return errors.New("I2C busy on start")
+		}
+	}
+
+	// clear stop
+	i2c.Bus.CR1 &^= stm32.I2C_CR1_STOP
+
+	// Generate start condition
+	i2c.Bus.CR1 |= stm32.I2C_CR1_START
+
+	// Wait for I2C EV5 aka SB flag.
+	timeout = TIMEOUT
+	for (i2c.Bus.SR1 & stm32.I2C_SR1_SB) == 0 {
+		timeout--
+		if timeout == 0 {
+			return errors.New("I2C timeout on start")
+		}
+	}
+
+	return nil
+}
+
+// signalStop sends a stop signal.
+func (i2c I2C) signalStop() error {
+	// Generate stop condition
+	i2c.Bus.CR1 |= stm32.I2C_CR1_STOP
+
+	// Wait until I2C is stopped
+	timeout := TIMEOUT
+	for (i2c.Bus.SR1 & stm32.I2C_SR1_STOPF) > 0 {
+		timeout--
+		if timeout == 0 {
+			return errors.New("I2C timeout on stop")
+		}
+	}
+
+	return nil
+}
+
+// Send address of device we want to talk to
+func (i2c I2C) sendAddress(address uint8, write bool) error {
+	data := (address << 1)
+	if write {
+		data &^= stm32.I2C_OAR1_ADD0
+	} else {
+		data |= stm32.I2C_OAR1_ADD0
+	}
+
+	i2c.Bus.DR = stm32.RegValue(data)
+
+	// Wait for I2C EV6 event.
+	// Destination device acknowledges address
+	timeout := TIMEOUT
+	if write {
+		// EV6 which is ADDR flag.
+		for i2c.Bus.SR1&stm32.I2C_SR1_ADDR == 0 {
+			timeout--
+			if timeout == 0 {
+				return errors.New("I2C timeout on send write address")
+			}
+		}
+
+		timeout = TIMEOUT
+		for i2c.Bus.SR2&(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY|stm32.I2C_SR2_TRA) == 0 {
+			timeout--
+			if timeout == 0 {
+				return errors.New("I2C timeout on send write address")
+			}
+		}
+	} else {
+		// I2C_EVENT_MASTER_RECEIVER_MODE_SELECTED which is BUSY, MSL and ADDR flags.
+		//		for (i2c.Bus.SR1&stm32.I2C_SR1_ADDR) == 0 && (i2c.Bus.SR2&(stm32.I2C_SR2_BUSY|stm32.I2C_SR2_MSL) == 0) {
+		for (i2c.Bus.SR1 & stm32.I2C_SR1_ADDR) == 0 {
+			timeout--
+			if timeout == 0 {
+				return errors.New("I2C timeout on send read address")
+			}
+		}
+	}
+
+	return nil
+}
+
+// WriteByte writes a single byte to the I2C bus.
+func (i2c I2C) WriteByte(data byte) error {
+	// Send data byte
+	i2c.Bus.DR = stm32.RegValue(data)
+
+	// Wait for I2C EV8_2 when data has been physically shifted out and
+	// output on the bus.
+	// I2C_EVENT_MASTER_BYTE_TRANSMITTED is TXE flag.
+	timeout := TIMEOUT
+	for i2c.Bus.SR1&stm32.I2C_SR1_TxE == 0 {
+		timeout--
+		if timeout == 0 {
+			return errors.New("I2C timeout on write")
+		}
+	}
+
+	return nil
+}
+
+// ReadByte reads a single byte from the I2C bus.
+func (i2c I2C) ReadByte() (byte, error) {
+	// Enable ACK of received data
+	i2c.Bus.CR1 |= stm32.I2C_CR1_ACK
+
+	// Wait for I2C EV7 when the data has been received in I2C data register
+	// I2C_EVENT_MASTER_BYTE_RECEIVED is BUSY, MSL and RXNE flags.
+	for (i2c.Bus.SR1&stm32.I2C_SR1_RxNE) == 0 && (i2c.Bus.SR2&(stm32.I2C_SR2_BUSY|stm32.I2C_SR2_MSL) == 0) {
+	}
+
+	// Read and return data byte from I2C data register
+	return byte(i2c.Bus.DR), nil
+}
+
+// ReadLastByte reads last byte from the I2C bus.
+func (i2c I2C) ReadLastByte() (byte, error) {
+	// Disable ACK of received data
+	i2c.Bus.CR1 &^= stm32.I2C_CR1_ACK
+
+	// Wait for I2C EV7 when the data has been received in I2C data register
+	// I2C_EVENT_MASTER_BYTE_RECEIVED is BUSY, MSL and RXNE flags.
+	for (i2c.Bus.SR1&stm32.I2C_SR1_RxNE) == 0 && (i2c.Bus.SR2&(stm32.I2C_SR2_BUSY|stm32.I2C_SR2_MSL) == 0) {
+	}
+
+	i2c.signalStop() // signal 'stop' now, so it is sent when reading DR
+
+	// Read and return data byte from I2C data register
+	return byte(i2c.Bus.DR), nil
 }
