@@ -2196,11 +2196,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 					sliceCap = c.builder.CreateSExt(sliceCap, c.uintptrType, "")
 				}
 			}
-			if sliceLen.Type().IntTypeWidth() > c.uintptrType.IntTypeWidth() {
-				return llvm.Value{}, c.makeError(expr.Pos(), "slice make() call: length type is wider than uintptr")
-			}
-			if sliceCap.Type().IntTypeWidth() > c.uintptrType.IntTypeWidth() {
-				return llvm.Value{}, c.makeError(expr.Pos(), "slice make() call: capacity type is wider than uintptr")
+			if c.targetData.TypeAllocSize(sliceLen.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				sliceLen = c.builder.CreateTrunc(sliceLen, c.uintptrType, "")
+				sliceCap = c.builder.CreateTrunc(sliceCap, c.uintptrType, "")
 			}
 			c.createRuntimeCall("sliceBoundsCheckMake", []llvm.Value{sliceLen, sliceCap}, "")
 		}
@@ -2208,18 +2206,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// Allocate the backing array.
 		// TODO: escape analysis
 		elemSizeValue := llvm.ConstInt(c.uintptrType, elemSize, false)
-		sliceCapCast, err := c.parseConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		sliceSize := c.builder.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
+		sliceSize := c.builder.CreateBinOp(llvm.Mul, elemSizeValue, sliceCap, "makeslice.cap")
 		slicePtr := c.createRuntimeCall("alloc", []llvm.Value{sliceSize}, "makeslice.buf")
 		slicePtr = c.builder.CreateBitCast(slicePtr, llvm.PointerType(llvmElemType, 0), "makeslice.array")
-
-		if c.targetData.TypeAllocSize(sliceLen.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-			sliceLen = c.builder.CreateTrunc(sliceLen, c.uintptrType, "")
-			sliceCap = c.builder.CreateTrunc(sliceCap, c.uintptrType, "")
-		}
 
 		// Create the slice.
 		slice := c.ctx.ConstStruct([]llvm.Value{
