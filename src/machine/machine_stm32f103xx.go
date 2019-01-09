@@ -365,12 +365,18 @@ func (i2c I2C) Configure(config I2CConfig) {
 		i2c.Bus.TRISE = stm32.RegValue(pclk1Mhz)
 
 	case TWI_FREQ_400KHZ:
-		// TODO: fast mode
-		// Set Maximum Rise Time for fast mode
-		//i2c.Bus.TRISE = stm32.RegValue(((freqRange * 300) / 1000) + 1)
-
 		// Fast mode speed calculation
-		//i2c.Bus.CCR = stm32.RegValue((pclk1 / (TWI_FREQ_400KHZ * 3)) | stm32.I2C_CCR_F_S)
+		ccr := pclk1 / (config.Frequency * 3)
+		i2c.Bus.CCR = stm32.RegValue(ccr)
+
+		// duty cycle 2
+		i2c.Bus.CCR &^= stm32.I2C_CCR_DUTY
+
+		// frequency fast mode
+		i2c.Bus.CCR |= stm32.I2C_CCR_F_S
+
+		// Set Maximum Rise Time for fast mode
+		i2c.Bus.TRISE = stm32.RegValue(((pclk1Mhz * 300) / 1000))
 	}
 
 	// re-enable the selected I2C peripheral
