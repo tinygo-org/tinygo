@@ -560,7 +560,75 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			return i2c.waitForStop()
 
 		default:
-			return errors.New("I2C read of more than 3 bytes not yet implemented")
+			// more than 3 bytes of data to read
+
+			// send address
+			err = i2c.sendAddress(uint8(addr), false)
+			if err != nil {
+				return err
+			}
+
+			// clear address here
+			timeout := TIMEOUT
+			for i2c.Bus.SR2&(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY) == 0 {
+				timeout--
+				if timeout == 0 {
+					return errors.New("I2C timeout on read clear address")
+				}
+			}
+
+			for i := 0; i < len(r)-3; i++ {
+				// Enable ACK of received data
+				i2c.Bus.CR1 |= stm32.I2C_CR1_ACK
+
+				// wait for btf. we need a longer timeout here than normal.
+				timeout = 1000
+				for (i2c.Bus.SR1 & stm32.I2C_SR1_BTF) == 0 {
+					timeout--
+					if timeout == 0 {
+						println("I2C timeout on read 3 bytes")
+						return errors.New("I2C timeout on read 3 bytes")
+					}
+				}
+
+				// read the next byte
+				r[i] = byte(i2c.Bus.DR)
+			}
+
+			// wait for btf. we need a longer timeout here than normal.
+			timeout = 1000
+			for (i2c.Bus.SR1 & stm32.I2C_SR1_BTF) == 0 {
+				timeout--
+				if timeout == 0 {
+					return errors.New("I2C timeout on read more than 3 bytes")
+				}
+			}
+
+			// Disable ACK of received data
+			i2c.Bus.CR1 &^= stm32.I2C_CR1_ACK
+
+			// get third from last byte
+			r[len(r)-3] = byte(i2c.Bus.DR)
+
+			// Generate stop condition
+			i2c.Bus.CR1 |= stm32.I2C_CR1_STOP
+
+			// get second from last byte
+			r[len(r)-2] = byte(i2c.Bus.DR)
+
+			timeout = TIMEOUT
+			for (i2c.Bus.SR1 & stm32.I2C_SR1_RxNE) == 0 {
+				timeout--
+				if timeout == 0 {
+					return errors.New("I2C timeout on read last byte of more than 3")
+				}
+			}
+
+			// get last byte
+			r[len(r)-1] = byte(i2c.Bus.DR)
+
+			// wait for stop
+			return i2c.waitForStop()
 		}
 	}
 
@@ -682,42 +750,4 @@ func (i2c I2C) WriteByte(data byte) error {
 	}
 
 	return nil
-}
-
-// ReadByte reads a single byte from the I2C bus.
-func (i2c I2C) ReadByte() (byte, error) {
-	// Enable ACK of received data
-	i2c.Bus.CR1 |= stm32.I2C_CR1_ACK
-
-	// Wait for I2C EV7 when the data has been received in I2C data register
-	// I2C_EVENT_MASTER_BYTE_RECEIVED is RXNE flag.
-	timeout := TIMEOUT
-	for (i2c.Bus.SR1 & stm32.I2C_SR1_RxNE) == 0 {
-		timeout--
-		if timeout == 0 {
-			return 0, errors.New("I2C timeout on read")
-		}
-	}
-
-	// Read and return data byte from I2C data register
-	return byte(i2c.Bus.DR), nil
-}
-
-// ReadLastByte reads last byte from the I2C bus.
-func (i2c I2C) ReadLastByte() (byte, error) {
-	// Disable ACK of received data
-	i2c.Bus.CR1 &^= stm32.I2C_CR1_ACK
-
-	// Wait for I2C EV7 when the data has been received in I2C data register
-	// I2C_EVENT_MASTER_BYTE_RECEIVED is RXNE flag.
-	timeout := TIMEOUT
-	for (i2c.Bus.SR1 & stm32.I2C_SR1_RxNE) == 0 {
-		timeout--
-		if timeout == 0 {
-			return 0, errors.New("I2C timeout on read last byte")
-		}
-	}
-
-	// Read and return data byte from I2C data register
-	return byte(i2c.Bus.DR), nil
 }
