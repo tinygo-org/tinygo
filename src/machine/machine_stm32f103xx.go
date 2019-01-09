@@ -401,6 +401,12 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 				return err
 			}
 		}
+
+		// sending stop here for write
+		err = i2c.signalStop()
+		if err != nil {
+			return err
+		}
 	}
 	if len(r) != 0 {
 		// re-start transmission for reading
@@ -409,35 +415,149 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			return err
 		}
 
-		// send address
-		err = i2c.sendAddress(uint8(addr), false)
-		if err != nil {
-			return err
-		}
+		// 1 byte
+		switch len(r) {
+		case 1:
+			// send address
+			err = i2c.sendAddress(uint8(addr), false)
+			if err != nil {
+				return err
+			}
 
-		for i := range r { // read each char
-			if i+1 == len(r) {
-				// The 'stop' signal must be sent before reading back the last
-				// byte, so that it will be sent by the I2C peripheral right
-				// after the last byte has been read.
-				r[i], err = i2c.ReadLastByte()
-				if err != nil {
-					return err
-				}
-			} else {
-				r[i], err = i2c.ReadByte()
-				if err != nil {
-					return err
+			// Disable ACK of received data
+			i2c.Bus.CR1 &^= stm32.I2C_CR1_ACK
+
+			// clear address here
+			timeout := TIMEOUT
+			for i2c.Bus.SR2&(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY) == 0 {
+				timeout--
+				if timeout == 0 {
+					return errors.New("I2C timeout on read clear address")
 				}
 			}
-		}
-	} else {
-		// Nothing to read back. Stop the transmission.
-		err = i2c.signalStop()
-		if err != nil {
-			return err
+
+			// Generate stop condition
+			i2c.Bus.CR1 |= stm32.I2C_CR1_STOP
+
+			timeout = TIMEOUT
+			for (i2c.Bus.SR1 & stm32.I2C_SR1_RxNE) == 0 {
+				timeout--
+				if timeout == 0 {
+					return errors.New("I2C timeout on read 1 byte")
+				}
+			}
+
+			// Read and return data byte from I2C data register
+			r[0] = byte(i2c.Bus.DR)
+
+			// wait for stop
+			return i2c.waitForStop()
+
+		case 2:
+			// enable pos
+			i2c.Bus.CR1 |= stm32.I2C_CR1_POS
+
+			// Enable ACK of received data
+			i2c.Bus.CR1 |= stm32.I2C_CR1_ACK
+
+			// send address
+			err = i2c.sendAddress(uint8(addr), false)
+			if err != nil {
+				return err
+			}
+
+			// clear address here
+			timeout := TIMEOUT
+			for i2c.Bus.SR2&(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY) == 0 {
+				timeout--
+				if timeout == 0 {
+					return errors.New("I2C timeout on read clear address")
+				}
+			}
+
+			// Disable ACK of received data
+			i2c.Bus.CR1 &^= stm32.I2C_CR1_ACK
+
+			// wait for btf. we need a longer timeout here than normal.
+			timeout = 1000
+			for (i2c.Bus.SR1 & stm32.I2C_SR1_BTF) == 0 {
+				timeout--
+				if timeout == 0 {
+					return errors.New("I2C timeout on read 2 bytes")
+				}
+			}
+
+			// Generate stop condition
+			i2c.Bus.CR1 |= stm32.I2C_CR1_STOP
+
+			// read the 2 bytes by reading twice.
+			r[0] = byte(i2c.Bus.DR)
+			r[1] = byte(i2c.Bus.DR)
+
+			// wait for stop
+			return i2c.waitForStop()
+
+		case 3:
+			// Enable ACK of received data
+			i2c.Bus.CR1 |= stm32.I2C_CR1_ACK
+
+			// send address
+			err = i2c.sendAddress(uint8(addr), false)
+			if err != nil {
+				return err
+			}
+
+			// clear address here
+			timeout := TIMEOUT
+			for i2c.Bus.SR2&(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY) == 0 {
+				timeout--
+				if timeout == 0 {
+					return errors.New("I2C timeout on read clear address")
+				}
+			}
+
+			// Enable ACK of received data
+			i2c.Bus.CR1 |= stm32.I2C_CR1_ACK
+
+			// wait for btf. we need a longer timeout here than normal.
+			timeout = 1000
+			for (i2c.Bus.SR1 & stm32.I2C_SR1_BTF) == 0 {
+				timeout--
+				if timeout == 0 {
+					println("I2C timeout on read 3 bytes")
+					return errors.New("I2C timeout on read 3 bytes")
+				}
+			}
+
+			// Disable ACK of received data
+			i2c.Bus.CR1 &^= stm32.I2C_CR1_ACK
+
+			// read the first byte
+			r[0] = byte(i2c.Bus.DR)
+
+			timeout = 1000
+			for (i2c.Bus.SR1 & stm32.I2C_SR1_BTF) == 0 {
+				timeout--
+				if timeout == 0 {
+					return errors.New("I2C timeout on read 3 bytes")
+				}
+			}
+
+			// Generate stop condition
+			i2c.Bus.CR1 |= stm32.I2C_CR1_STOP
+
+			// read the last 2 bytes by reading twice.
+			r[1] = byte(i2c.Bus.DR)
+			r[2] = byte(i2c.Bus.DR)
+
+			// wait for stop
+			return i2c.waitForStop()
+
+		default:
+			return errors.New("I2C read of more than 3 bytes not yet implemented")
 		}
 	}
+
 	return nil
 }
 
@@ -472,17 +592,24 @@ func (i2c I2C) signalStart() error {
 	return nil
 }
 
-// signalStop sends a stop signal.
+// signalStop sends a stop signal and waits for it to succeed.
 func (i2c I2C) signalStop() error {
 	// Generate stop condition
 	i2c.Bus.CR1 |= stm32.I2C_CR1_STOP
 
+	// wait for stop
+	return i2c.waitForStop()
+}
+
+// waitForStop waits after a stop signal.
+func (i2c I2C) waitForStop() error {
 	// Wait until I2C is stopped
 	timeout := TIMEOUT
 	for (i2c.Bus.SR1 & stm32.I2C_SR1_STOPF) > 0 {
 		timeout--
 		if timeout == 0 {
-			return errors.New("I2C timeout on stop")
+			println("I2C timeout on wait for stop signal")
+			return errors.New("I2C timeout on wait for stop signal")
 		}
 	}
 
@@ -520,8 +647,7 @@ func (i2c I2C) sendAddress(address uint8, write bool) error {
 			}
 		}
 	} else {
-		// I2C_EVENT_MASTER_RECEIVER_MODE_SELECTED which is BUSY, MSL and ADDR flags.
-		//		for (i2c.Bus.SR1&stm32.I2C_SR1_ADDR) == 0 && (i2c.Bus.SR2&(stm32.I2C_SR2_BUSY|stm32.I2C_SR2_MSL) == 0) {
+		// I2C_EVENT_MASTER_RECEIVER_MODE_SELECTED which is ADDR flag.
 		for (i2c.Bus.SR1 & stm32.I2C_SR1_ADDR) == 0 {
 			timeout--
 			if timeout == 0 {
@@ -558,8 +684,13 @@ func (i2c I2C) ReadByte() (byte, error) {
 	i2c.Bus.CR1 |= stm32.I2C_CR1_ACK
 
 	// Wait for I2C EV7 when the data has been received in I2C data register
-	// I2C_EVENT_MASTER_BYTE_RECEIVED is BUSY, MSL and RXNE flags.
-	for (i2c.Bus.SR1&stm32.I2C_SR1_RxNE) == 0 && (i2c.Bus.SR2&(stm32.I2C_SR2_BUSY|stm32.I2C_SR2_MSL) == 0) {
+	// I2C_EVENT_MASTER_BYTE_RECEIVED is RXNE flag.
+	timeout := TIMEOUT
+	for (i2c.Bus.SR1 & stm32.I2C_SR1_RxNE) == 0 {
+		timeout--
+		if timeout == 0 {
+			return 0, errors.New("I2C timeout on read")
+		}
 	}
 
 	// Read and return data byte from I2C data register
@@ -572,11 +703,14 @@ func (i2c I2C) ReadLastByte() (byte, error) {
 	i2c.Bus.CR1 &^= stm32.I2C_CR1_ACK
 
 	// Wait for I2C EV7 when the data has been received in I2C data register
-	// I2C_EVENT_MASTER_BYTE_RECEIVED is BUSY, MSL and RXNE flags.
-	for (i2c.Bus.SR1&stm32.I2C_SR1_RxNE) == 0 && (i2c.Bus.SR2&(stm32.I2C_SR2_BUSY|stm32.I2C_SR2_MSL) == 0) {
+	// I2C_EVENT_MASTER_BYTE_RECEIVED is RXNE flag.
+	timeout := TIMEOUT
+	for (i2c.Bus.SR1 & stm32.I2C_SR1_RxNE) == 0 {
+		timeout--
+		if timeout == 0 {
+			return 0, errors.New("I2C timeout on read last byte")
+		}
 	}
-
-	i2c.signalStop() // signal 'stop' now, so it is sent when reading DR
 
 	// Read and return data byte from I2C data register
 	return byte(i2c.Bus.DR), nil
