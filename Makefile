@@ -76,7 +76,7 @@ fmt:
 test:
 	@go test -v .
 
-gen-device: gen-device-avr gen-device-nrf gen-device-stm32
+gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-stm32
 
 gen-device-avr:
 	./tools/gen-device-avr.py lib/avr/packs/atmega src/device/avr/
@@ -87,10 +87,13 @@ gen-device-nrf:
 	./tools/gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/ --source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk
 	go fmt ./src/device/nrf
 
+gen-device-sam:
+	./tools/gen-device-svd.py lib/cmsis-svd/data/Atmel/ src/device/sam/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel
+	go fmt ./src/device/sam
+
 gen-device-stm32:
 	./tools/gen-device-svd.py lib/cmsis-svd/data/STMicro/ src/device/stm32/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro
 	go fmt ./src/device/stm32
-
 
 # Build the Go compiler.
 build/tgo: *.go compiler/*.go interp/*.go loader/*.go ir/*.go
