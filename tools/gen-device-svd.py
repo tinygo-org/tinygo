@@ -13,6 +13,8 @@ class Device:
     pass
 
 def getText(element):
+    if element is None:
+        return "None"
     return ''.join(element.itertext())
 
 def formatText(text):
@@ -173,7 +175,7 @@ def parseRegister(groupName, regEl, baseAddress, bitfieldPrefix=''):
     array = None
     if dimEls:
         array = int(getText(dimEls[0]), 0)
-        regName = regName.replace('[%s]', '')
+        regName = regName.replace('[%s]', '').replace('_%s', '').replace('%s', '')
 
     fields = []
     fieldsEls = regEl.findall('fields')
