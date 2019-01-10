@@ -213,6 +213,17 @@
 						}
 					},
 
+					// func ticks() float64
+					"runtime.ticks": () => {
+						return timeOrigin + performance.now();
+					},
+
+					// func sleepTicks(timeout float64)
+					"runtime.sleepTicks": (timeout) => {
+						// Do not sleep, only reactivate scheduler after the given timeout.
+						setTimeout(this._inst.exports.go_scheduler, timeout);
+					},
+
 					// func stringVal(value string) ref
 					"syscall/js.stringVal": (ret_ptr, value_ptr, value_len) => {
 						const s = loadString(value_ptr, value_len);

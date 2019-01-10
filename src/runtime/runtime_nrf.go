@@ -20,7 +20,7 @@ func main() {
 	systemInit()
 	preinit()
 	initAll()
-	mainWrapper()
+	callMain()
 	abort()
 }
 
@@ -49,6 +49,8 @@ func initRTC() {
 func putchar(c byte) {
 	machine.UART0.WriteByte(c)
 }
+
+const asyncScheduler = false
 
 func sleepTicks(d timeUnit) {
 	for d != 0 {

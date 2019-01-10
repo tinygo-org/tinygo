@@ -3,30 +3,20 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:f250e2a6d7e4f9ebc5ba37e5e2ec91b46eb1399ee43f2fdaeb20cd4fd1aeee59"
+  digest = "1:747e7010f73dc26e5cb298444f6f1b4442ae155ab87e44080686b94a5f9d6c90"
   name = "github.com/aykevl/go-llvm"
   packages = ["."]
   pruneopts = "UT"
-  revision = "d8539684f173a591ea9474d6262ac47ef2277d64"
+  revision = "8a0a627130a54562f55b1c2a9d7b8019ff14d9f1"
 
 [[projects]]
   branch = "master"
-  digest = "1:d1102ae84d8c9318db4ce2ad2673eb2bf54569ab2a4a5d57e70d8aef726b681d"
+  digest = "1:84316faef4ea12d34dde3b3e6dab682715a23b1c2bb8ab82cec9ab619766e214"
   name = "golang.org/x/tools"
   packages = [
     "go/ast/astutil",
-    "go/buildutil",
-    "go/gcexportdata",
-    "go/internal/cgo",
-    "go/internal/gcimporter",
-    "go/loader",
-    "go/packages",
     "go/ssa",
-    "go/ssa/ssautil",
     "go/types/typeutil",
-    "internal/fastwalk",
-    "internal/gopathwalk",
-    "internal/semver",
   ]
   pruneopts = "UT"
   revision = "3e7aa9e59977626dc60433e9aeadf1bb63d28295"
@@ -36,9 +26,7 @@
   analyzer-version = 1
   input-imports = [
     "github.com/aykevl/go-llvm",
-    "golang.org/x/tools/go/loader",
     "golang.org/x/tools/go/ssa",
-    "golang.org/x/tools/go/ssa/ssautil",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

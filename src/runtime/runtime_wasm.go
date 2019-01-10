@@ -6,11 +6,9 @@ import (
 	"unsafe"
 )
 
-type timeUnit int64
+type timeUnit float64 // time in milliseconds, just like Date.now() in JavaScript
 
-const tickMicros = 1
-
-var timestamp timeUnit
+const tickMicros = 1000000
 
 //go:export io_get_stdout
 func io_get_stdout() int32
@@ -32,21 +30,27 @@ func _start() {
 //go:export cwa_main
 func cwa_main() {
 	initAll() // _start is not called by olin/cwa so has to be called here
-	mainWrapper()
+	callMain()
 }
 
 func putchar(c byte) {
 	resource_write(stdout, &c, 1)
 }
 
-func sleepTicks(d timeUnit) {
-	// TODO: actually sleep here for the given time.
-	timestamp += d
+//go:export go_scheduler
+func go_scheduler() {
+	scheduler()
 }
 
-func ticks() timeUnit {
-	return timestamp
-}
+const asyncScheduler = true
+
+// This function is called by the scheduler.
+// Schedule a call to runtime.scheduler, do not actually sleep.
+//go:export runtime.sleepTicks
+func sleepTicks(d timeUnit)
+
+//go:export runtime.ticks
+func ticks() timeUnit
 
 // Abort executes the wasm 'unreachable' instruction.
 func abort() {

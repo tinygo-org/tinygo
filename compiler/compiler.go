@@ -59,12 +59,6 @@ type Compiler struct {
 	intType                 llvm.Type
 	i8ptrType               llvm.Type // for convenience
 	uintptrType             llvm.Type
-	coroIdFunc              llvm.Value
-	coroSizeFunc            llvm.Value
-	coroBeginFunc           llvm.Value
-	coroSuspendFunc         llvm.Value
-	coroEndFunc             llvm.Value
-	coroFreeFunc            llvm.Value
 	initFuncs               []llvm.Value
 	interfaceInvokeWrappers []interfaceInvokeWrapper
 	ir                      *ir.Program
@@ -77,10 +71,7 @@ type Frame struct {
 	blockExits        map[*ssa.BasicBlock]llvm.BasicBlock // these are the exit blocks
 	currentBlock      *ssa.BasicBlock
 	phis              []Phi
-	blocking          bool
 	taskHandle        llvm.Value
-	cleanupBlock      llvm.BasicBlock
-	suspendBlock      llvm.BasicBlock
 	deferPtr          llvm.Value
 	difunc            llvm.Metadata
 	allDeferFuncs     []interface{}
@@ -132,24 +123,6 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 		panic("unknown pointer size")
 	}
 	c.i8ptrType = llvm.PointerType(c.ctx.Int8Type(), 0)
-
-	coroIdType := llvm.FunctionType(c.ctx.TokenType(), []llvm.Type{c.ctx.Int32Type(), c.i8ptrType, c.i8ptrType, c.i8ptrType}, false)
-	c.coroIdFunc = llvm.AddFunction(c.mod, "llvm.coro.id", coroIdType)
-
-	coroSizeType := llvm.FunctionType(c.ctx.Int32Type(), nil, false)
-	c.coroSizeFunc = llvm.AddFunction(c.mod, "llvm.coro.size.i32", coroSizeType)
-
-	coroBeginType := llvm.FunctionType(c.i8ptrType, []llvm.Type{c.ctx.TokenType(), c.i8ptrType}, false)
-	c.coroBeginFunc = llvm.AddFunction(c.mod, "llvm.coro.begin", coroBeginType)
-
-	coroSuspendType := llvm.FunctionType(c.ctx.Int8Type(), []llvm.Type{c.ctx.TokenType(), c.ctx.Int1Type()}, false)
-	c.coroSuspendFunc = llvm.AddFunction(c.mod, "llvm.coro.suspend", coroSuspendType)
-
-	coroEndType := llvm.FunctionType(c.ctx.Int1Type(), []llvm.Type{c.i8ptrType, c.ctx.Int1Type()}, false)
-	c.coroEndFunc = llvm.AddFunction(c.mod, "llvm.coro.end", coroEndType)
-
-	coroFreeType := llvm.FunctionType(c.i8ptrType, []llvm.Type{c.ctx.TokenType(), c.i8ptrType}, false)
-	c.coroFreeFunc = llvm.AddFunction(c.mod, "llvm.coro.free", coroFreeType)
 
 	return c, nil
 }
@@ -237,12 +210,8 @@ func (c *Compiler) Compile(mainPath string) error {
 
 	c.ir = ir.NewProgram(lprogram, mainPath)
 
-	// Run some DCE and analysis passes. The results are later used by the
-	// compiler.
-	c.ir.SimpleDCE()                // remove most dead code
-	c.ir.AnalyseCallgraph()         // set up callgraph
-	c.ir.AnalyseBlockingRecursive() // make all parents of blocking calls blocking (transitively)
-	c.ir.AnalyseGoCalls()           // check whether we need a scheduler
+	// Run a simple dead code elimination pass.
+	c.ir.SimpleDCE()
 
 	// Initialize debug information.
 	c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
@@ -387,33 +356,19 @@ func (c *Compiler) Compile(mainPath string) error {
 	block := c.ctx.AddBasicBlock(initFn.LLVMFn, "entry")
 	c.builder.SetInsertPointAtEnd(block)
 	for _, fn := range c.initFuncs {
-		c.builder.CreateCall(fn, []llvm.Value{llvm.Undef(c.i8ptrType)}, "")
+		c.builder.CreateCall(fn, []llvm.Value{llvm.Undef(c.i8ptrType), llvm.Undef(c.i8ptrType)}, "")
 	}
 	c.builder.CreateRetVoid()
 
-	// Add a wrapper for the main.main function, either calling it directly or
-	// setting up the scheduler with it.
-	mainWrapper := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["mainWrapper"].(*ssa.Function))
-	mainWrapper.LLVMFn.SetLinkage(llvm.InternalLinkage)
-	mainWrapper.LLVMFn.SetUnnamedAddr(true)
-	if c.Debug {
-		difunc, err := c.attachDebugInfo(mainWrapper)
-		if err != nil {
-			return err
-		}
-		pos := c.ir.Program.Fset.Position(mainWrapper.Pos())
-		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
-	}
-	block = c.ctx.AddBasicBlock(mainWrapper.LLVMFn, "entry")
-	c.builder.SetInsertPointAtEnd(block)
+	// Conserve for goroutine lowering. Without marking these as external, they
+	// would be optimized away.
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
-	if c.ir.NeedsScheduler() {
-		coroutine := c.builder.CreateCall(realMain, []llvm.Value{llvm.ConstPointerNull(c.i8ptrType), llvm.Undef(c.i8ptrType)}, "")
-		c.createRuntimeCall("scheduler", []llvm.Value{coroutine}, "")
-	} else {
-		c.builder.CreateCall(realMain, []llvm.Value{llvm.Undef(c.i8ptrType)}, "")
-	}
-	c.builder.CreateRetVoid()
+	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
+	c.mod.NamedFunction("runtime.alloc").SetLinkage(llvm.ExternalLinkage)
+	c.mod.NamedFunction("runtime.free").SetLinkage(llvm.ExternalLinkage)
+	c.mod.NamedFunction("runtime.sleepTask").SetLinkage(llvm.ExternalLinkage)
+	c.mod.NamedFunction("runtime.activateTask").SetLinkage(llvm.ExternalLinkage)
+	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.ExternalLinkage)
 
 	// see: https://reviews.llvm.org/D18355
 	c.mod.AddNamedMetadataOperand("llvm.module.flags",
@@ -535,7 +490,8 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		}
 		// make a closure type (with a function pointer type inside):
 		// {context, funcptr}
-		paramTypes = append(paramTypes, c.i8ptrType)
+		paramTypes = append(paramTypes, c.i8ptrType) // context
+		paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
 		ptr := llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), 0)
 		ptr = c.ctx.StructType([]llvm.Type{c.i8ptrType, ptr}, false)
 		return ptr, nil
@@ -676,16 +632,10 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 		locals:       make(map[ssa.Value]llvm.Value),
 		blockEntries: make(map[*ssa.BasicBlock]llvm.BasicBlock),
 		blockExits:   make(map[*ssa.BasicBlock]llvm.BasicBlock),
-		blocking:     c.ir.IsBlocking(f),
 	}
 
 	var retType llvm.Type
-	if frame.blocking {
-		if f.Signature.Results() != nil {
-			return nil, c.makeError(f.Function.Pos(), "todo: return values in blocking function")
-		}
-		retType = c.i8ptrType
-	} else if f.Signature.Results() == nil {
+	if f.Signature.Results() == nil {
 		retType = c.ctx.VoidType()
 	} else if f.Signature.Results().Len() == 1 {
 		var err error
@@ -706,9 +656,6 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 	}
 
 	var paramTypes []llvm.Type
-	if frame.blocking {
-		paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
-	}
 	for _, param := range f.Params {
 		paramType, err := c.getLLVMType(param.Type())
 		if err != nil {
@@ -721,7 +668,8 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 	// Add an extra parameter as the function context. This context is used in
 	// closures and bound methods, but should be optimized away when not used.
 	if !f.IsExported() {
-		paramTypes = append(paramTypes, c.i8ptrType)
+		paramTypes = append(paramTypes, c.i8ptrType) // context
+		paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
 	}
 
 	fnType := llvm.FunctionType(retType, paramTypes, false)
@@ -1095,10 +1043,6 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		frame.blockEntries[block] = llvmBlock
 		frame.blockExits[block] = llvmBlock
 	}
-	if frame.blocking {
-		frame.cleanupBlock = c.ctx.AddBasicBlock(frame.fn.LLVMFn, "task.cleanup")
-		frame.suspendBlock = c.ctx.AddBasicBlock(frame.fn.LLVMFn, "task.suspend")
-	}
 	entryBlock := frame.blockEntries[frame.fn.Blocks[0]]
 	c.builder.SetInsertPointAtEnd(entryBlock)
 
@@ -1137,10 +1081,14 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 
 	// Load free variables from the context. This is a closure (or bound
 	// method).
-	if len(frame.fn.FreeVars) != 0 {
-		context := frame.fn.LLVMFn.LastParam()
+	var context llvm.Value
+	if !frame.fn.IsExported() {
+		parentHandle := frame.fn.LLVMFn.LastParam()
+		parentHandle.SetName("parentHandle")
+		context = llvm.PrevParam(parentHandle)
 		context.SetName("context")
-
+	}
+	if len(frame.fn.FreeVars) != 0 {
 		// Determine the context type. It's a struct containing all variables.
 		freeVarTypes := make([]llvm.Type, 0, len(frame.fn.FreeVars))
 		for _, freeVar := range frame.fn.FreeVars {
@@ -1184,39 +1132,6 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		// This function has deferred function calls. Set some things up for
 		// them.
 		c.deferInitFunc(frame)
-	}
-
-	if frame.blocking {
-		// Coroutine initialization.
-		taskState := c.builder.CreateAlloca(c.mod.GetTypeByName("runtime.taskState"), "task.state")
-		stateI8 := c.builder.CreateBitCast(taskState, c.i8ptrType, "task.state.i8")
-		id := c.builder.CreateCall(c.coroIdFunc, []llvm.Value{
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			stateI8,
-			llvm.ConstNull(c.i8ptrType),
-			llvm.ConstNull(c.i8ptrType),
-		}, "task.token")
-		size := c.builder.CreateCall(c.coroSizeFunc, nil, "task.size")
-		if c.targetData.TypeAllocSize(size.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-			size = c.builder.CreateTrunc(size, c.uintptrType, "task.size.uintptr")
-		} else if c.targetData.TypeAllocSize(size.Type()) < c.targetData.TypeAllocSize(c.uintptrType) {
-			size = c.builder.CreateZExt(size, c.uintptrType, "task.size.uintptr")
-		}
-		data := c.createRuntimeCall("alloc", []llvm.Value{size}, "task.data")
-		frame.taskHandle = c.builder.CreateCall(c.coroBeginFunc, []llvm.Value{id, data}, "task.handle")
-
-		// Coroutine cleanup. Free resources associated with this coroutine.
-		c.builder.SetInsertPointAtEnd(frame.cleanupBlock)
-		mem := c.builder.CreateCall(c.coroFreeFunc, []llvm.Value{id, frame.taskHandle}, "task.data.free")
-		c.createRuntimeCall("free", []llvm.Value{mem}, "")
-		// re-insert parent coroutine
-		c.createRuntimeCall("yieldToScheduler", []llvm.Value{frame.fn.LLVMFn.FirstParam()}, "")
-		c.builder.CreateBr(frame.suspendBlock)
-
-		// Coroutine suspend. A call to llvm.coro.suspend() will branch here.
-		c.builder.SetInsertPointAtEnd(frame.suspendBlock)
-		c.builder.CreateCall(c.coroEndFunc, []llvm.Value{frame.taskHandle, llvm.ConstInt(c.ctx.Int1Type(), 0, false)}, "unused")
-		c.builder.CreateRet(frame.taskHandle)
 	}
 
 	// Fill blocks with instructions.
@@ -1283,25 +1198,38 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 	case *ssa.Defer:
 		return c.emitDefer(frame, instr)
 	case *ssa.Go:
-		if instr.Common().Method != nil {
+		if instr.Call.IsInvoke() {
 			return c.makeError(instr.Pos(), "todo: go on method receiver")
 		}
+		callee := instr.Call.StaticCallee()
+		if callee == nil {
+			return c.makeError(instr.Pos(), "todo: go on non-direct function (function pointer, etc.)")
+		}
+		calleeFn := c.ir.GetFunction(callee)
 
-		// Execute non-blocking calls (including builtins) directly.
-		// parentHandle param is ignored.
-		if !c.ir.IsBlocking(c.ir.GetFunction(instr.Common().Value.(*ssa.Function))) {
-			_, err := c.parseCall(frame, instr.Common(), llvm.Value{})
-			return err // probably nil
+		// Mark this function as a 'go' invocation and break invalid
+		// interprocedural optimizations. For example, heap-to-stack
+		// transformations are not sound as goroutines can outlive their parent.
+		calleeType := calleeFn.LLVMFn.Type()
+		calleeValue := c.builder.CreateBitCast(calleeFn.LLVMFn, c.i8ptrType, "")
+		calleeValue = c.createRuntimeCall("makeGoroutine", []llvm.Value{calleeValue}, "")
+		calleeValue = c.builder.CreateBitCast(calleeValue, calleeType, "")
+
+		// Get all function parameters to pass to the goroutine.
+		var params []llvm.Value
+		for _, param := range instr.Call.Args {
+			val, err := c.parseExpr(frame, param)
+			if err != nil {
+				return err
+			}
+			params = append(params, val)
+		}
+		if !calleeFn.IsExported() {
+			params = append(params, llvm.Undef(c.i8ptrType)) // context parameter
+			params = append(params, llvm.Undef(c.i8ptrType)) // parent coroutine handle
 		}
 
-		// Start this goroutine.
-		// parentHandle is nil, as the goroutine has no parent frame (it's a new
-		// stack).
-		handle, err := c.parseCall(frame, instr.Common(), llvm.Value{})
-		if err != nil {
-			return err
-		}
-		c.createRuntimeCall("yieldToScheduler", []llvm.Value{handle}, "")
+		c.createCall(calleeValue, params, "")
 		return nil
 	case *ssa.If:
 		cond, err := c.parseExpr(frame, instr.Cond)
@@ -1341,45 +1269,31 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		c.builder.CreateUnreachable()
 		return nil
 	case *ssa.Return:
-		if frame.blocking {
-			if len(instr.Results) != 0 {
-				return c.makeError(instr.Pos(), "todo: return values from blocking function")
+		if len(instr.Results) == 0 {
+			c.builder.CreateRetVoid()
+			return nil
+		} else if len(instr.Results) == 1 {
+			val, err := c.parseExpr(frame, instr.Results[0])
+			if err != nil {
+				return err
 			}
-			// Final suspend.
-			continuePoint := c.builder.CreateCall(c.coroSuspendFunc, []llvm.Value{
-				llvm.ConstNull(c.ctx.TokenType()),
-				llvm.ConstInt(c.ctx.Int1Type(), 1, false), // final=true
-			}, "")
-			sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
+			c.builder.CreateRet(val)
 			return nil
 		} else {
-			if len(instr.Results) == 0 {
-				c.builder.CreateRetVoid()
-				return nil
-			} else if len(instr.Results) == 1 {
-				val, err := c.parseExpr(frame, instr.Results[0])
-				if err != nil {
-					return err
-				}
-				c.builder.CreateRet(val)
-				return nil
-			} else {
-				// Multiple return values. Put them all in a struct.
-				retVal, err := c.getZeroValue(frame.fn.LLVMFn.Type().ElementType().ReturnType())
-				if err != nil {
-					return err
-				}
-				for i, result := range instr.Results {
-					val, err := c.parseExpr(frame, result)
-					if err != nil {
-						return err
-					}
-					retVal = c.builder.CreateInsertValue(retVal, val, i, "")
-				}
-				c.builder.CreateRet(retVal)
-				return nil
+			// Multiple return values. Put them all in a struct.
+			retVal, err := c.getZeroValue(frame.fn.LLVMFn.Type().ElementType().ReturnType())
+			if err != nil {
+				return err
 			}
+			for i, result := range instr.Results {
+				val, err := c.parseExpr(frame, result)
+				if err != nil {
+					return err
+				}
+				retVal = c.builder.CreateInsertValue(retVal, val, i, "")
+			}
+			c.builder.CreateRet(retVal)
+			return nil
 		}
 	case *ssa.RunDefers:
 		return c.emitRunDefers(frame)
@@ -1606,17 +1520,8 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 	}
 }
 
-func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, context llvm.Value, blocking bool, parentHandle llvm.Value) (llvm.Value, error) {
+func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, context llvm.Value, exported bool) (llvm.Value, error) {
 	var params []llvm.Value
-	if blocking {
-		if parentHandle.IsNil() {
-			// Started from 'go' statement.
-			params = append(params, llvm.ConstNull(c.i8ptrType))
-		} else {
-			// Blocking function calls another blocking function.
-			params = append(params, parentHandle)
-		}
-	}
 	for _, param := range args {
 		val, err := c.parseExpr(frame, param)
 		if err != nil {
@@ -1625,60 +1530,20 @@ func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, con
 		params = append(params, val)
 	}
 
-	if !context.IsNil() {
+	if !exported {
 		// This function takes a context parameter.
 		// Add it to the end of the parameter list.
 		params = append(params, context)
+
+		// Parent coroutine handle.
+		params = append(params, llvm.Undef(c.i8ptrType))
 	}
 
-	if frame.blocking && llvmFn.Name() == "time.Sleep" {
-		// Set task state to TASK_STATE_SLEEP and set the duration.
-		c.createRuntimeCall("sleepTask", []llvm.Value{frame.taskHandle, params[0]}, "")
-
-		// Yield to scheduler.
-		continuePoint := c.builder.CreateCall(c.coroSuspendFunc, []llvm.Value{
-			llvm.ConstNull(c.ctx.TokenType()),
-			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
-		}, "")
-		wakeup := c.ctx.InsertBasicBlock(llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.wakeup")
-		sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), wakeup)
-		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
-		c.builder.SetInsertPointAtEnd(wakeup)
-
-		return llvm.Value{}, nil
-	}
-
-	result := c.createCall(llvmFn, params, "")
-	if blocking && !parentHandle.IsNil() {
-		// Calling a blocking function as a regular function call.
-		// This is done by passing the current coroutine as a parameter to the
-		// new coroutine and dropping the current coroutine from the scheduler
-		// (with the TASK_STATE_CALL state). When the subroutine is finished, it
-		// will reactivate the parent (this frame) in it's destroy function.
-
-		c.createRuntimeCall("yieldToScheduler", []llvm.Value{result}, "")
-
-		// Set task state to TASK_STATE_CALL.
-		c.createRuntimeCall("waitForAsyncCall", []llvm.Value{frame.taskHandle}, "")
-
-		// Yield to the scheduler.
-		continuePoint := c.builder.CreateCall(c.coroSuspendFunc, []llvm.Value{
-			llvm.ConstNull(c.ctx.TokenType()),
-			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
-		}, "")
-		resume := c.ctx.InsertBasicBlock(llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.callComplete")
-		sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), resume)
-		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
-		c.builder.SetInsertPointAtEnd(resume)
-	}
-	return result, nil
+	return c.createCall(llvmFn, params, ""), nil
 }
 
-func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle llvm.Value) (llvm.Value, error) {
+func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, error) {
 	if instr.IsInvoke() {
-		// TODO: blocking methods (needs analysis)
 		fnCast, args, err := c.getInvokeCall(frame, instr)
 		if err != nil {
 			return llvm.Value{}, err
@@ -1821,7 +1686,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 		} else {
 			context = llvm.Undef(c.i8ptrType)
 		}
-		return c.parseFunctionCall(frame, instr.Args, targetFunc.LLVMFn, context, c.ir.IsBlocking(targetFunc), parentHandle)
+		return c.parseFunctionCall(frame, instr.Args, targetFunc.LLVMFn, context, targetFunc.IsExported())
 	}
 
 	// Builtin or function pointer.
@@ -1833,13 +1698,12 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon, parentHandle l
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		// TODO: blocking function pointers (needs analysis)
 		// 'value' is a closure, not a raw function pointer.
 		// Extract the function pointer and the context pointer.
 		// closure: {context, function pointer}
 		context := c.builder.CreateExtractValue(value, 0, "")
 		value = c.builder.CreateExtractValue(value, 1, "")
-		return c.parseFunctionCall(frame, instr.Args, value, context, false, parentHandle)
+		return c.parseFunctionCall(frame, instr.Args, value, context, false)
 	}
 }
 
@@ -1954,7 +1818,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	case *ssa.Call:
 		// Passing the current task here to the subroutine. It is only used when
 		// the subroutine is blocking.
-		return c.parseCall(frame, expr.Common(), frame.taskHandle)
+		return c.parseCall(frame, expr.Common())
 	case *ssa.ChangeInterface:
 		// Do not change between interface types: always use the underlying
 		// (concrete) type in the type number of the interface. Every method
@@ -3129,8 +2993,10 @@ func (c *Compiler) ExternalInt64AsPtr() error {
 			// Only change externally visible functions (exports and imports).
 			continue
 		}
-		if strings.HasPrefix(fn.Name(), "llvm.") {
-			// Do not try to modify the signature of internal LLVM functions.
+		if strings.HasPrefix(fn.Name(), "llvm.") || strings.HasPrefix(fn.Name(), "runtime.") {
+			// Do not try to modify the signature of internal LLVM functions and
+			// assume that runtime functions are only temporarily exported for
+			// coroutine lowering.
 			continue
 		}
 

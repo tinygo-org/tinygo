@@ -20,10 +20,12 @@ var timestamp timeUnit
 func main() {
 	preinit()
 	initAll()
-	mainWrapper()
+	callMain()
 	arm.SemihostingCall(arm.SemihostingReportException, arm.SemihostingApplicationExit)
 	abort()
 }
+
+const asyncScheduler = false
 
 func sleepTicks(d timeUnit) {
 	// TODO: actually sleep here for the given time.

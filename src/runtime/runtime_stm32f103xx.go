@@ -107,6 +107,8 @@ func initTIM() {
 	arm.EnableIRQ(stm32.IRQ_TIM3)
 }
 
+const asyncScheduler = false
+
 // sleepTicks should sleep for specific number of microseconds.
 func sleepTicks(d timeUnit) {
 	for d != 0 {

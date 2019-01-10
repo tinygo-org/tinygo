@@ -3,3 +3,9 @@ sub 1
 main 2
 sub 2
 main 3
+wait:
+  wait start
+  wait end
+end waiting
+non-blocking goroutine
+done with non-blocking goroutine

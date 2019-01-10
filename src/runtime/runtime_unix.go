@@ -46,8 +46,8 @@ func main() int {
 	// Run initializers of all packages.
 	initAll()
 
-	// Compiler-generated wrapper to main.main().
-	mainWrapper()
+	// Compiler-generated call to main.main().
+	callMain()
 
 	// For libc compatibility.
 	return 0
@@ -56,6 +56,8 @@ func main() int {
 func putchar(c byte) {
 	_putchar(int(c))
 }
+
+const asyncScheduler = false
 
 func sleepTicks(d timeUnit) {
 	usleep(uint(d) / 1000)

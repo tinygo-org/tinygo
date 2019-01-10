@@ -41,7 +41,7 @@ func main() {
 	preinit()
 	initAll()
 	postinit()
-	mainWrapper()
+	callMain()
 	abort()
 }
 
@@ -70,6 +70,8 @@ func initUART() {
 func putchar(c byte) {
 	machine.UART0.WriteByte(c)
 }
+
+const asyncScheduler = false
 
 // Sleep this number of ticks of 16ms.
 //

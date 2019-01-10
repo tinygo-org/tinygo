@@ -8,6 +8,6 @@ type timeUnit int64
 func main() {
 	preinit()
 	initAll()
-	mainWrapper()
+	callMain()
 	abort()
 }

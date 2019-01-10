@@ -63,7 +63,7 @@ func Run(mod llvm.Module, targetData llvm.TargetData, debug bool) error {
 			return errors.New("expected all instructions in " + name + " to be *.init() calls")
 		}
 		pkgName := initName[:len(initName)-5]
-		_, err := e.Function(call.CalledValue(), []Value{&LocalValue{e, undefPtr}}, pkgName)
+		_, err := e.Function(call.CalledValue(), []Value{&LocalValue{e, undefPtr}, &LocalValue{e, undefPtr}}, pkgName)
 		if err == ErrUnreachable {
 			break
 		}

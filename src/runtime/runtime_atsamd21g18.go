@@ -15,7 +15,7 @@ type timeUnit int64
 func main() {
 	preinit()
 	initAll()
-	mainWrapper()
+	callMain()
 	abort()
 }
 
@@ -237,6 +237,8 @@ var (
 type isrFlag bool
 
 var timerWakeup isrFlag
+
+const asyncScheduler = false
 
 // sleepTicks should sleep for d number of microseconds.
 func sleepTicks(d timeUnit) {

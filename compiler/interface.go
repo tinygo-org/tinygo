@@ -330,6 +330,8 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 	// Add the context parameter. An interface call never takes a context but we
 	// have to supply the parameter anyway.
 	args = append(args, llvm.Undef(c.i8ptrType))
+	// Add the parent goroutine handle.
+	args = append(args, llvm.Undef(c.i8ptrType))
 
 	return fnCast, args, nil
 }

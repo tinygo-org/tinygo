@@ -10,8 +10,8 @@ const Compiler = "tgo"
 // package.
 func initAll()
 
-// The compiler will insert the call to main.main() here, depending on whether
-// the scheduler is necessary.
+// A function call to this function is replaced withone of the following,
+// depending on whether the scheduler is necessary:
 //
 // Without scheduler:
 //
@@ -19,9 +19,9 @@ func initAll()
 //
 // With scheduler:
 //
-//     coroutine := main.main(nil)
-//     scheduler(coroutine)
-func mainWrapper()
+//     main.main()
+//     scheduler()
+func callMain()
 
 func GOMAXPROCS(n int) int {
 	// Note: setting GOMAXPROCS is ignored.

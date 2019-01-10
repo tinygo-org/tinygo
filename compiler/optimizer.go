@@ -52,9 +52,18 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		// Run TinyGo-specific interprocedural optimizations.
 		c.OptimizeAllocs()
 		c.OptimizeStringToBytes()
+
+		err := c.LowerGoroutines()
+		if err != nil {
+			return err
+		}
 	} else {
 		// Must be run at any optimization level.
 		c.LowerInterfaces()
+		err := c.LowerGoroutines()
+		if err != nil {
+			return err
+		}
 	}
 	if err := c.Verify(); err != nil {
 		return errors.New("optimizations caused a verification failure")
@@ -69,6 +78,13 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 			fn.AddFunctionAttr(attr)
 		}
 	}
+
+	// Run function passes again, because without it, llvm.coro.size.i32()
+	// doesn't get lowered.
+	for fn := c.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		funcPasses.RunFunc(fn)
+	}
+	funcPasses.FinalizeFunc()
 
 	// Run module passes.
 	modPasses := llvm.NewPassManager()
@@ -323,19 +339,4 @@ func (c *Compiler) hasFlag(call, param llvm.Value, kind string) bool {
 		}
 	}
 	return true
-}
-
-// Return a list of values (actually, instructions) where this value is used as
-// an operand.
-func getUses(value llvm.Value) []llvm.Value {
-	if value.IsNil() {
-		return nil
-	}
-	var uses []llvm.Value
-	use := value.FirstUse()
-	for !use.IsNil() {
-		uses = append(uses, use.User())
-		use = use.NextUse()
-	}
-	return uses
 }

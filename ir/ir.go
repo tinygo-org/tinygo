@@ -18,31 +18,26 @@ import (
 // View on all functions, types, and globals in a program, with analysis
 // results.
 type Program struct {
-	Program        *ssa.Program
-	LoaderProgram  *loader.Program
-	mainPkg        *ssa.Package
-	Functions      []*Function
-	functionMap    map[*ssa.Function]*Function
-	Globals        []*Global
-	globalMap      map[*ssa.Global]*Global
-	comments       map[string]*ast.CommentGroup
-	NamedTypes     []*NamedType
-	needsScheduler bool
-	goCalls        []*ssa.Go
+	Program       *ssa.Program
+	LoaderProgram *loader.Program
+	mainPkg       *ssa.Package
+	Functions     []*Function
+	functionMap   map[*ssa.Function]*Function
+	Globals       []*Global
+	globalMap     map[*ssa.Global]*Global
+	comments      map[string]*ast.CommentGroup
+	NamedTypes    []*NamedType
 }
 
 // Function or method.
 type Function struct {
 	*ssa.Function
 	LLVMFn    llvm.Value
-	linkName  string      // go:linkname, go:export, go:interrupt
-	exported  bool        // go:export
-	nobounds  bool        // go:nobounds
-	blocking  bool        // calculated by AnalyseBlockingRecursive
-	flag      bool        // used by dead code elimination
-	interrupt bool        // go:interrupt
-	parents   []*Function // calculated by AnalyseCallgraph
-	children  []*Function // calculated by AnalyseCallgraph
+	linkName  string // go:linkname, go:export, go:interrupt
+	exported  bool   // go:export
+	nobounds  bool   // go:nobounds
+	flag      bool   // used by dead code elimination
+	interrupt bool   // go:interrupt
 }
 
 // Global variable, possibly constant.

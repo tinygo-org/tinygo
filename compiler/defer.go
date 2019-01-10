@@ -243,6 +243,9 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			// with a strict calling convention.
 			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
 
+			// Parent coroutine handle.
+			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
+
 			fnPtr, _, err := c.getInvokeCall(frame, callback)
 			if err != nil {
 				return err
@@ -277,6 +280,9 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			// function, but we have to pass one anyway.
 			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
 
+			// Parent coroutine handle.
+			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
+
 			// Call real function.
 			c.createCall(callback.LLVMFn, forwardParams, "")
 
@@ -304,6 +310,9 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 				forwardParam := c.builder.CreateLoad(gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
+
+			// Parent coroutine handle.
+			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
 
 			// Call deferred function.
 			c.createCall(fn.LLVMFn, forwardParams, "")

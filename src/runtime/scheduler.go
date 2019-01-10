@@ -9,14 +9,13 @@ package runtime
 //   * A blocking function that calls a non-blocking function is called as
 //     usual.
 //   * A blocking function that calls a blocking function passes its own
-//     coroutine handle as a parameter to the subroutine and will make sure it's
-//     own coroutine is removed from the scheduler. When the subroutine returns,
-//     it will re-insert the parent into the scheduler.
+//     coroutine handle as a parameter to the subroutine. When the subroutine
+//     returns, it will re-insert the parent into the scheduler.
 // Note that a goroutine is generally called a 'task' for brevity and because
 // that's the more common term among RTOSes. But a goroutine and a task are
 // basically the same thing. Although, the code often uses the word 'task' to
-// refer to both a coroutine and a goroutine, as most of the scheduler isn't
-// aware of the difference.
+// refer to both a coroutine and a goroutine, as most of the scheduler doesn't
+// care about the difference.
 //
 // For more background on coroutines in LLVM:
 // https://llvm.org/docs/Coroutines.html
@@ -45,24 +44,18 @@ func (t *coroutine) _promise(alignment int32, from bool) unsafe.Pointer
 
 // Get the promise belonging to a task.
 func (t *coroutine) promise() *taskState {
-	return (*taskState)(t._promise(4, false))
+	return (*taskState)(t._promise(int32(unsafe.Alignof(taskState{})), false))
 }
+
+func makeGoroutine(*uint8) *uint8
 
 // State/promise of a task. Internally represented as:
 //
-//     {i8 state, i32 data, i8* next}
+//     {i8* next, i32/i64 data}
 type taskState struct {
-	state uint8
-	data  uint32
-	next  *coroutine
+	next *coroutine
+	data uint
 }
-
-// Various states a task can be in.
-const (
-	TASK_STATE_RUNNABLE = iota
-	TASK_STATE_SLEEP
-	TASK_STATE_CALL // waiting for a sub-coroutine
-)
 
 // Queues used by the scheduler.
 //
@@ -89,48 +82,28 @@ func scheduleLogTask(msg string, t *coroutine) {
 	}
 }
 
-// Set the task state to sleep for a given time.
+// Set the task to sleep for a given time.
 //
 // This is a compiler intrinsic.
 func sleepTask(caller *coroutine, duration int64) {
 	if schedulerDebug {
-		println("  set state sleep:", caller, uint32(duration/tickMicros))
+		println("  set sleep:", caller, uint(duration/tickMicros))
 	}
 	promise := caller.promise()
-	promise.state = TASK_STATE_SLEEP
-	promise.data = uint32(duration / tickMicros) // TODO: longer durations
+	promise.data = uint(duration / tickMicros) // TODO: longer durations
+	addSleepTask(caller)
 }
 
-// Wait for the result of an async call. This means that the parent goroutine
-// will be removed from the runqueue and be rescheduled by the callee.
+// Add a non-queued task to the run queue.
 //
-// This is a compiler intrinsic.
-func waitForAsyncCall(caller *coroutine) {
-	scheduleLogTask("  set state call:", caller)
-	promise := caller.promise()
-	promise.state = TASK_STATE_CALL
-}
-
-// Add a task to the runnable or sleep queue, depending on the state.
-//
-// This is a compiler intrinsic.
-func yieldToScheduler(t *coroutine) {
-	if t == nil {
+// This is a compiler intrinsic, and is called from a callee to reactivate the
+// caller.
+func activateTask(task *coroutine) {
+	if task == nil {
 		return
 	}
-	// See what we should do with this task: try to execute it directly
-	// again or let it sleep for a bit.
-	promise := t.promise()
-	if promise.state == TASK_STATE_CALL {
-		scheduleLogTask("  set waiting for call:", t)
-		return // calling an async task, the subroutine will re-active the parent
-	} else if promise.state == TASK_STATE_SLEEP && promise.data != 0 {
-		scheduleLogTask("  set sleeping:", t)
-		addSleepTask(t)
-	} else {
-		scheduleLogTask("  set runnable:", t)
-		runqueuePushBack(t)
-	}
+	scheduleLogTask("  set runnable:", task)
+	runqueuePushBack(task)
 }
 
 // Add this task to the end of the run queue. May also destroy the task if it's
@@ -144,9 +117,6 @@ func runqueuePushBack(t *coroutine) {
 	if schedulerDebug {
 		if t.promise().next != nil {
 			panic("runtime: runqueuePushBack: expected next task to be nil")
-		}
-		if t.promise().state != TASK_STATE_RUNNABLE {
-			panic("runtime: runqueuePushBack: expected task state to be runnable")
 		}
 	}
 	if runqueueBack == nil { // empty runqueue
@@ -169,10 +139,6 @@ func runqueuePopFront() *coroutine {
 	}
 	if schedulerDebug {
 		println("    runqueuePopFront:", t)
-		// Sanity checking.
-		if t.promise().state != TASK_STATE_RUNNABLE {
-			panic("runtime: runqueuePopFront: task not runnable")
-		}
 	}
 	promise := t.promise()
 	runqueueFront = promise.next
@@ -189,9 +155,6 @@ func addSleepTask(t *coroutine) {
 	if schedulerDebug {
 		if t.promise().next != nil {
 			panic("runtime: addSleepTask: expected next task to be nil")
-		}
-		if t.promise().state != TASK_STATE_SLEEP {
-			panic("runtime: addSleepTask: task not sleeping")
 		}
 	}
 	now := ticks()
@@ -236,11 +199,7 @@ func addSleepTask(t *coroutine) {
 }
 
 // Run the scheduler until all tasks have finished.
-// It takes an initial task (main.main) to bootstrap.
-func scheduler(main *coroutine) {
-	// Initial task.
-	yieldToScheduler(main)
-
+func scheduler() {
 	// Main scheduler loop.
 	for {
 		scheduleLog("\n  schedule")
@@ -254,7 +213,6 @@ func scheduler(main *coroutine) {
 			promise := t.promise()
 			sleepQueueBaseTime += timeUnit(promise.data)
 			sleepQueue = promise.next
-			promise.state = TASK_STATE_RUNNABLE
 			promise.next = nil
 			runqueuePushBack(t)
 		}
@@ -271,9 +229,15 @@ func scheduler(main *coroutine) {
 			}
 			timeLeft := timeUnit(sleepQueue.promise().data) - (now - sleepQueueBaseTime)
 			if schedulerDebug {
-				println("  sleeping...", sleepQueue, uint32(timeLeft))
+				println("  sleeping...", sleepQueue, uint(timeLeft))
 			}
 			sleepTicks(timeUnit(timeLeft))
+			if asyncScheduler {
+				// The sleepTicks function above only sets a timeout at which
+				// point the scheduler will be called again. It does not really
+				// sleep.
+				break
+			}
 			continue
 		}
 
@@ -281,8 +245,5 @@ func scheduler(main *coroutine) {
 		scheduleLog("  <- runqueuePopFront")
 		scheduleLogTask("  run:", t)
 		t.resume()
-
-		// Add the just resumed task to the run queue or the sleep queue.
-		yieldToScheduler(t)
 	}
 }
