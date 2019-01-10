@@ -433,8 +433,8 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			// Disable ACK of received data
 			i2c.Bus.CR1 &^= stm32.I2C_CR1_ACK
 
-			// clear address here
-			timeout := TIMEOUT
+			// clear timeout here
+			timeout := i2cTimeout
 			for i2c.Bus.SR2&(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY) == 0 {
 				timeout--
 				if timeout == 0 {
@@ -445,7 +445,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			// Generate stop condition
 			i2c.Bus.CR1 |= stm32.I2C_CR1_STOP
 
-			timeout = TIMEOUT
+			timeout = i2cTimeout
 			for (i2c.Bus.SR1 & stm32.I2C_SR1_RxNE) == 0 {
 				timeout--
 				if timeout == 0 {
@@ -473,7 +473,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			}
 
 			// clear address here
-			timeout := TIMEOUT
+			timeout := i2cTimeout
 			for i2c.Bus.SR2&(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY) == 0 {
 				timeout--
 				if timeout == 0 {
@@ -514,7 +514,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			}
 
 			// clear address here
-			timeout := TIMEOUT
+			timeout := i2cTimeout
 			for i2c.Bus.SR2&(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY) == 0 {
 				timeout--
 				if timeout == 0 {
@@ -569,7 +569,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			}
 
 			// clear address here
-			timeout := TIMEOUT
+			timeout := i2cTimeout
 			for i2c.Bus.SR2&(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY) == 0 {
 				timeout--
 				if timeout == 0 {
@@ -616,7 +616,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			// get second from last byte
 			r[len(r)-2] = byte(i2c.Bus.DR)
 
-			timeout = TIMEOUT
+			timeout = i2cTimeout
 			for (i2c.Bus.SR1 & stm32.I2C_SR1_RxNE) == 0 {
 				timeout--
 				if timeout == 0 {
@@ -635,12 +635,12 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	return nil
 }
 
-const TIMEOUT = 500
+const i2cTimeout = 500
 
 // signalStart sends a start signal.
 func (i2c I2C) signalStart() error {
 	// Wait until I2C is not busy
-	timeout := TIMEOUT
+	timeout := i2cTimeout
 	for (i2c.Bus.SR2 & stm32.I2C_SR2_BUSY) > 0 {
 		timeout--
 		if timeout == 0 {
@@ -655,7 +655,7 @@ func (i2c I2C) signalStart() error {
 	i2c.Bus.CR1 |= stm32.I2C_CR1_START
 
 	// Wait for I2C EV5 aka SB flag.
-	timeout = TIMEOUT
+	timeout = i2cTimeout
 	for (i2c.Bus.SR1 & stm32.I2C_SR1_SB) == 0 {
 		timeout--
 		if timeout == 0 {
@@ -678,7 +678,7 @@ func (i2c I2C) signalStop() error {
 // waitForStop waits after a stop signal.
 func (i2c I2C) waitForStop() error {
 	// Wait until I2C is stopped
-	timeout := TIMEOUT
+	timeout := i2cTimeout
 	for (i2c.Bus.SR1 & stm32.I2C_SR1_STOPF) > 0 {
 		timeout--
 		if timeout == 0 {
@@ -693,17 +693,15 @@ func (i2c I2C) waitForStop() error {
 // Send address of device we want to talk to
 func (i2c I2C) sendAddress(address uint8, write bool) error {
 	data := (address << 1)
-	if write {
-		data &^= stm32.I2C_OAR1_ADD0
-	} else {
-		data |= stm32.I2C_OAR1_ADD0
+	if !write {
+		data |= 1 // set read flag
 	}
 
 	i2c.Bus.DR = stm32.RegValue(data)
 
 	// Wait for I2C EV6 event.
 	// Destination device acknowledges address
-	timeout := TIMEOUT
+	timeout := i2cTimeout
 	if write {
 		// EV6 which is ADDR flag.
 		for i2c.Bus.SR1&stm32.I2C_SR1_ADDR == 0 {
@@ -713,7 +711,7 @@ func (i2c I2C) sendAddress(address uint8, write bool) error {
 			}
 		}
 
-		timeout = TIMEOUT
+		timeout = i2cTimeout
 		for i2c.Bus.SR2&(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY|stm32.I2C_SR2_TRA) == 0 {
 			timeout--
 			if timeout == 0 {
@@ -741,7 +739,7 @@ func (i2c I2C) WriteByte(data byte) error {
 	// Wait for I2C EV8_2 when data has been physically shifted out and
 	// output on the bus.
 	// I2C_EVENT_MASTER_BYTE_TRANSMITTED is TXE flag.
-	timeout := TIMEOUT
+	timeout := i2cTimeout
 	for i2c.Bus.SR1&stm32.I2C_SR1_TxE == 0 {
 		timeout--
 		if timeout == 0 {
