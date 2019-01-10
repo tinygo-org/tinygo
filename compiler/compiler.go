@@ -2068,21 +2068,31 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		// Bounds checking.
 		if !frame.fn.IsNoBounds() {
-			if sliceLen.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
+			checkFunc := "sliceBoundsCheckMake"
+			biggestInt := c.uintptrType
+			biggestIntWidth := biggestInt.IntTypeWidth()
+			if sliceLen.Type().IntTypeWidth() > biggestIntWidth || sliceCap.Type().IntTypeWidth() > biggestIntWidth {
+				// System that is less than 64bit, meaning that the slice make
+				// params are bigger than uintptr.
+				checkFunc = "sliceBoundsCheckMake64"
+				biggestInt = c.ctx.Int64Type()
+				biggestIntWidth = biggestInt.IntTypeWidth()
+			}
+			if sliceLen.Type().IntTypeWidth() < biggestIntWidth {
 				if expr.Len.Type().(*types.Basic).Info()&types.IsUnsigned != 0 {
-					sliceLen = c.builder.CreateZExt(sliceLen, c.uintptrType, "")
+					sliceLen = c.builder.CreateZExt(sliceLen, biggestInt, "")
 				} else {
-					sliceLen = c.builder.CreateSExt(sliceLen, c.uintptrType, "")
+					sliceLen = c.builder.CreateSExt(sliceLen, biggestInt, "")
 				}
 			}
-			if sliceCap.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
+			if sliceCap.Type().IntTypeWidth() < biggestIntWidth {
 				if expr.Cap.Type().(*types.Basic).Info()&types.IsUnsigned != 0 {
-					sliceCap = c.builder.CreateZExt(sliceCap, c.uintptrType, "")
+					sliceCap = c.builder.CreateZExt(sliceCap, biggestInt, "")
 				} else {
-					sliceCap = c.builder.CreateSExt(sliceCap, c.uintptrType, "")
+					sliceCap = c.builder.CreateSExt(sliceCap, biggestInt, "")
 				}
 			}
-			c.createRuntimeCall("sliceBoundsCheckMake", []llvm.Value{sliceLen, sliceCap}, "")
+			c.createRuntimeCall(checkFunc, []llvm.Value{sliceLen, sliceCap}, "")
 		}
 
 		// Allocate the backing array.
