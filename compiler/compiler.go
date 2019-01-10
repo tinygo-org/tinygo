@@ -30,6 +30,7 @@ func init() {
 type Config struct {
 	Triple        string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
 	CPU           string   // LLVM CPU name, e.g. atmega328p (empty string means default)
+	Features      []string // LLVM CPU features
 	GOOS          string   //
 	GOARCH        string   //
 	GC            string   // garbage collection strategy
@@ -101,7 +102,11 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.machine = target.CreateTargetMachine(config.Triple, config.CPU, "", llvm.CodeGenLevelDefault, llvm.RelocStatic, llvm.CodeModelDefault)
+	features := ""
+	if len(config.Features) > 0 {
+		features = strings.Join(config.Features, `,`)
+	}
+	c.machine = target.CreateTargetMachine(config.Triple, config.CPU, features, llvm.CodeGenLevelDefault, llvm.RelocStatic, llvm.CodeModelDefault)
 	c.targetData = c.machine.CreateTargetData()
 
 	c.ctx = llvm.NewContext()

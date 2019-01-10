@@ -24,6 +24,7 @@ type TargetSpec struct {
 	Inherits   []string `json:"inherits"`
 	Triple     string   `json:"llvm-target"`
 	CPU        string   `json:"cpu"`
+	Features   []string `json:"features"`
 	GOOS       string   `json:"goos"`
 	GOARCH     string   `json:"goarch"`
 	BuildTags  []string `json:"build-tags"`
@@ -52,6 +53,7 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	if spec2.CPU != "" {
 		spec.CPU = spec2.CPU
 	}
+	spec.Features = append(spec.Features, spec2.Features...)
 	if spec2.GOOS != "" {
 		spec.GOOS = spec2.GOOS
 	}
