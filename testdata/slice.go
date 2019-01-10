@@ -2,6 +2,10 @@ package main
 
 type MySlice [32]byte
 
+func returnUint64() uint64 {
+	return uint64(5)
+}
+
 func main() {
 	l := 5
 	foo := []int{1, 2, 4, 5}
@@ -24,6 +28,7 @@ func main() {
 	assert(len(make([]int, uint32(2), uint32(3))) == 2)
 	assert(len(make([]int, uint64(2), uint64(3))) == 2)
 	assert(len(make([]int, uintptr(2), uintptr(3))) == 2)
+	assert(len(make([]int, returnUint64(), returnUint64())) == 5)
 
 	// indexing into a slice with uncommon index types
 	assert(foo[int(2)] == 4)
