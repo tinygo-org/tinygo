@@ -76,7 +76,7 @@ fmt:
 test:
 	@go test -v .
 
-gen-device: gen-device-avr gen-device-nrf gen-device-stm32 gen-device-sam
+gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-stm32
 
 gen-device-avr:
 	./tools/gen-device-avr.py lib/avr/packs/atmega src/device/avr/
