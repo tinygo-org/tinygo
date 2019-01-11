@@ -101,7 +101,7 @@ def readSVD(path, sourceURL):
             if len(regsEls) != 1:
                 raise ValueError('expected just one <registers> in a <peripheral>')
             for register in regsEls[0].findall('register'):
-                peripheral['registers'].append(parseRegister(groupName or name, register, baseAddress))
+                peripheral['registers'].extend(parseRegister(groupName or name, register, baseAddress))
             for cluster in regsEls[0].findall('cluster'):
                 clusterName = getText(cluster.find('name')).replace('[%s]', '')
                 clusterDescription = getText(cluster.find('description'))
@@ -115,7 +115,7 @@ def readSVD(path, sourceURL):
                     dimIncrement = int(getText(cluster.find('dimIncrement')), 0)
                 clusterRegisters = []
                 for regEl in cluster.findall('register'):
-                    clusterRegisters.append(parseRegister(groupName or name, regEl, baseAddress + clusterOffset, clusterPrefix))
+                    clusterRegisters.extend(parseRegister(groupName or name, regEl, baseAddress + clusterOffset, clusterPrefix))
                 clusterRegisters.sort(key=lambda r: r['address'])
                 if dimIncrement is None:
                     lastReg = clusterRegisters[-1]
@@ -164,27 +164,8 @@ def addInterrupt(interrupts, intrName, intrIndex, description):
             'description': description,
         }
 
-def parseRegister(groupName, regEl, baseAddress, bitfieldPrefix=''):
-    regName = getText(regEl.find('name'))
-    regDescription = getText(regEl.find('description'))
-    offsetEls = regEl.findall('offset')
-    if not offsetEls:
-        offsetEls = regEl.findall('addressOffset')
-    address = baseAddress + int(getText(offsetEls[0]), 0)
-    
-    size = 4
-    elSizes = regEl.findall('size')
-    if elSizes:
-        size = int(getText(elSizes[0]), 0) // 8
-    
-    dimEls = regEl.findall('dim')
-    array = None
-    if dimEls:
-        array = int(getText(dimEls[0]), 0)
-        regName = regName.replace('[%s]', '').replace('_%s', '').replace('%s', '')
-
+def parseBitfields(groupName, regName, fieldsEls, bitfieldPrefix=''):
     fields = []
-    fieldsEls = regEl.findall('fields')
     if fieldsEls:
         for fieldEl in fieldsEls[0].findall('field'):
             fieldName = getText(fieldEl.find('name'))
@@ -224,15 +205,58 @@ def parseRegister(groupName, regEl, baseAddress, bitfieldPrefix=''):
                     'description': enumDescription,
                     'value':       enumValue,
                 })
+    return fields
 
-    return {
+def parseRegister(groupName, regEl, baseAddress, bitfieldPrefix=''):
+    regName = getText(regEl.find('name'))
+    regDescription = getText(regEl.find('description'))
+    offsetEls = regEl.findall('offset')
+    if not offsetEls:
+        offsetEls = regEl.findall('addressOffset')
+    address = baseAddress + int(getText(offsetEls[0]), 0)
+    
+    size = 4
+    elSizes = regEl.findall('size')
+    if elSizes:
+        size = int(getText(elSizes[0]), 0) // 8
+    
+    dimEls = regEl.findall('dim')
+    fieldsEls = regEl.findall('fields')
+
+    array = None
+    if dimEls:
+        array = int(getText(dimEls[0]), 0)
+        dimIncrement = int(getText(regEl.find('dimIncrement')), 0)
+        if "[%s]" in regName:
+            # just a normal array of registers
+            regName = regName.replace('[%s]', '')
+        elif "%s" in regName:
+            # a "spaced array" of registers, special processing required
+            # we need to generate a separate register for each "element"
+            results = []
+            for i in range(array):
+                regAddress = address + (i * dimIncrement)
+                results.append({
+                    'name':        regName.replace('%s', str(i)),
+                    'address':     regAddress,
+                    'description': regDescription.replace('\n', ' '),
+                    'bitfields':   [],
+                    'array':       None,
+                    'elementsize': size,
+                })
+            # set first result bitfield
+            shortName = regName.replace('_%s', '').replace('%s', '')
+            results[0]['bitfields'] = parseBitfields(groupName, shortName, fieldsEls, bitfieldPrefix)
+            return results
+
+    return [{
         'name':        regName,
         'address':     address,
         'description': regDescription.replace('\n', ' '),
-        'bitfields':   fields,
+        'bitfields':   parseBitfields(groupName, regName, fieldsEls, bitfieldPrefix),
         'array':       array,
         'elementsize': size,
-    }
+    }]
 
 def writeGo(outdir, device):
     # The Go module for this device.
@@ -291,10 +315,10 @@ const (
         address = peripheral['baseAddress']
         padNumber = 0
         for register in peripheral['registers']:
-            if address > register['address']:
+            if address > register['address'] and 'registers' not in register :
                 # In Nordic SVD files, these registers are deprecated or
                 # duplicates, so can be ignored.
-                #print('skip: %s.%s' % (peripheral['name'], register['name']))
+                #print('skip: %s.%s %s - %s %s' % (peripheral['name'], register['name'], address, register['address'], register['elementsize']))
                 continue
             eSize = register['elementsize']
             if eSize == 4:
