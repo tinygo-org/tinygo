@@ -444,7 +444,7 @@ func (p *lowerInterfacesPass) run() {
 		var commaOk llvm.Value
 		if t.countMakeInterfaces == 0 {
 			// impossible type assert: optimize accordingly
-			commaOk = llvm.ConstInt(llvm.Int1Type(), 0, false)
+			commaOk = llvm.ConstInt(p.ctx.Int1Type(), 0, false)
 		} else {
 			// regular type assert
 			p.builder.SetInsertPointBefore(use)
