@@ -1,6 +1,8 @@
 {
 	"llvm-target":   "wasm32-unknown-unknown-wasm",
 	"build-tags":    ["js", "wasm"],
+	"goos":          "js",
+	"goarch":        "wasm",
 	"compiler":      "clang-7",
 	"linker":        "ld.lld-7",
 	"cflags": [
