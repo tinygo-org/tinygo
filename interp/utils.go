@@ -63,6 +63,9 @@ func getZeroValue(typ llvm.Type) llvm.Value {
 // getStringBytes loads the byte slice of a Go string represented as a
 // {ptr, len} pair.
 func getStringBytes(strPtr Value, strLen llvm.Value) []byte {
+	if !strLen.IsConstant() {
+		panic("getStringBytes with a non-constant length")
+	}
 	buf := make([]byte, strLen.ZExtValue())
 	for i := range buf {
 		c := strPtr.GetElementPtr([]uint32{uint32(i)}).Load()
