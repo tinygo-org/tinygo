@@ -631,9 +631,9 @@ func (p *lowerInterfacesPass) createInterfaceImplementsFunc(itf *interfaceInfo) 
 	p.builder.CreateRet(llvm.ConstInt(p.ctx.Int1Type(), 0, false))
 }
 
-// getInterfaceMethodFunc return a function that returns a function pointer for
-// calling a method on an interface. It only declares the function,
-// createInterfaceMethodFunc actually defines the function.
+// getInterfaceMethodFunc returns a thunk for calling a method on an interface.
+// It only declares the function, createInterfaceMethodFunc actually defines the
+// function.
 func (p *lowerInterfacesPass) getInterfaceMethodFunc(itf *interfaceInfo, signature *signatureInfo, returnType llvm.Type, params []llvm.Type) llvm.Value {
 	if fn, ok := itf.methodFuncs[signature]; ok {
 		// This function has already been created.
