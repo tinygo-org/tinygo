@@ -383,8 +383,8 @@ const (
                     regType += '\t\t{name} {subregType}\n'.format(name=subregister['name'], subregType=subregType)
                 if register['array'] is not None:
                     if subaddress != register['address'] + register['elementsize']:
-                        numSkip = ((register['address'] + register['elementsize']) - subaddress) // register['elementsize']
-                        if numSkip == 1:
+                        numSkip = ((register['address'] + register['elementsize']) - subaddress) // 4
+                        if numSkip <= 1:
                             regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType=subregType)
                         else:
                             regType += '\t\t_padding{padNumber} [{num}]{subregType}\n'.format(padNumber=padNumber, num=numSkip, subregType=subregType)
