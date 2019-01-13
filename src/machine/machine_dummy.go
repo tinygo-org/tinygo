@@ -1,4 +1,4 @@
-// +build !avr,!nrf,!stm32
+// +build !avr,!nrf,!sam,!stm32
 
 package machine
 
