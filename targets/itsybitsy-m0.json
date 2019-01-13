@@ -1,0 +1,5 @@
+{
+	"inherits": ["atsamd21g18"],
+    "build-tags": ["itsybitsy_m0"],
+    "flash": "bossac -e -w -v -R {hex}"
+}
