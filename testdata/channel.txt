@@ -1,0 +1,21 @@
+len, cap of channel: 0 0
+recv from open channel: 1 true
+received num: 2
+received num: 3
+slept
+received num: 4
+received num: 5
+received num: 6
+received num: 7
+received num: 8
+recv from closed channel: 0 false
+got n: 10
+got n: 11
+got n: 10
+got n: 11
+got n: 10
+got n: 11
+sum: 25
+sum: 29
+sum: 33
+sum(100): 4950

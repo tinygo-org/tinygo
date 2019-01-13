@@ -56,13 +56,14 @@ Currently supported features:
   * closures
   * bound methods
   * complex numbers (except for arithmetic)
+  * channels (with some limitations)
 
 Not yet supported:
 
+  * select
   * complex arithmetic
   * garbage collection
   * recover
-  * channels
   * introspection (if it ever gets implemented)
   * ...
 

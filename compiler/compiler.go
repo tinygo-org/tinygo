@@ -366,6 +366,8 @@ func (c *Compiler) Compile(mainPath string) error {
 	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
 	c.mod.NamedFunction("runtime.alloc").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.free").SetLinkage(llvm.ExternalLinkage)
+	c.mod.NamedFunction("runtime.chanSend").SetLinkage(llvm.ExternalLinkage)
+	c.mod.NamedFunction("runtime.chanRecv").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.sleepTask").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.activateTask").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.ExternalLinkage)
@@ -1297,6 +1299,8 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		}
 	case *ssa.RunDefers:
 		return c.emitRunDefers(frame)
+	case *ssa.Send:
+		return c.emitChanSend(frame, instr)
 	case *ssa.Store:
 		llvmAddr, err := c.parseExpr(frame, instr.Addr)
 		if err == ir.ErrCGoWrapper {
@@ -1362,11 +1366,17 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 			return llvm.Value{}, err
 		}
 		switch args[0].Type().(type) {
+		case *types.Chan:
+			// Channel. Buffered channels haven't been implemented yet so always
+			// return 0.
+			return llvm.ConstInt(c.intType, 0, false), nil
 		case *types.Slice:
 			return c.builder.CreateExtractValue(value, 2, "cap"), nil
 		default:
 			return llvm.Value{}, c.makeError(pos, "todo: cap: unknown type")
 		}
+	case "close":
+		return llvm.Value{}, c.emitChanClose(frame, args[0])
 	case "complex":
 		r, err := c.parseExpr(frame, args[0])
 		if err != nil {
@@ -1434,6 +1444,10 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 		case *types.Basic, *types.Slice:
 			// string or slice
 			llvmLen = c.builder.CreateExtractValue(value, 1, "len")
+		case *types.Chan:
+			// Channel. Buffered channels haven't been implemented yet so always
+			// return 0.
+			llvmLen = llvm.ConstInt(c.intType, 0, false)
 		case *types.Map:
 			llvmLen = c.createRuntimeCall("hashmapLen", []llvm.Value{value}, "len")
 		default:
@@ -2000,12 +2014,12 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		default:
 			panic("unknown lookup type: " + expr.String())
 		}
-
+	case *ssa.MakeChan:
+		return c.emitMakeChan(expr)
 	case *ssa.MakeClosure:
 		// A closure returns a function pointer with context:
 		// {context, fp}
 		return c.parseMakeClosure(frame, expr)
-
 	case *ssa.MakeInterface:
 		val, err := c.parseExpr(frame, expr.X)
 		if err != nil {
@@ -2941,6 +2955,8 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 		}
 	case token.XOR: // ^x, toggle all bits in integer
 		return c.builder.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil
+	case token.ARROW: // <-x, receive from channel
+		return c.emitChanRecv(frame, unop)
 	default:
 		return llvm.Value{}, c.makeError(unop.Pos(), "todo: unknown unop")
 	}

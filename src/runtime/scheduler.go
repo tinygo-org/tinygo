@@ -51,10 +51,11 @@ func makeGoroutine(*uint8) *uint8
 
 // State/promise of a task. Internally represented as:
 //
-//     {i8* next, i32/i64 data}
+//     {i8* next, i1 commaOk, i32/i64 data}
 type taskState struct {
-	next *coroutine
-	data uint
+	next    *coroutine
+	commaOk bool // 'comma-ok' flag for channel receive operation
+	data    uint
 }
 
 // Queues used by the scheduler.
