@@ -250,7 +250,7 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) (llvm.Val
 			valueOk = c.builder.CreateLoad(valuePtrCast, "typeassert.value.ok")
 		} else if size == 0 {
 			valueOk, err = c.getZeroValue(assertedType)
-			if err == nil {
+			if err != nil {
 				return llvm.Value{}, err
 			}
 		} else {
