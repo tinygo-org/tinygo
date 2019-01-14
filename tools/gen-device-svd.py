@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 import sys
 import os
@@ -13,6 +13,8 @@ class Device:
     pass
 
 def getText(element):
+    if element is None:
+        return "None"
     return ''.join(element.itertext())
 
 def formatText(text):
@@ -99,7 +101,7 @@ def readSVD(path, sourceURL):
             if len(regsEls) != 1:
                 raise ValueError('expected just one <registers> in a <peripheral>')
             for register in regsEls[0].findall('register'):
-                peripheral['registers'].append(parseRegister(groupName or name, register, baseAddress))
+                peripheral['registers'].extend(parseRegister(groupName or name, register, baseAddress))
             for cluster in regsEls[0].findall('cluster'):
                 clusterName = getText(cluster.find('name')).replace('[%s]', '')
                 clusterDescription = getText(cluster.find('description'))
@@ -113,7 +115,8 @@ def readSVD(path, sourceURL):
                     dimIncrement = int(getText(cluster.find('dimIncrement')), 0)
                 clusterRegisters = []
                 for regEl in cluster.findall('register'):
-                    clusterRegisters.append(parseRegister(groupName or name, regEl, baseAddress + clusterOffset, clusterPrefix))
+                    clusterRegisters.extend(parseRegister(groupName or name, regEl, baseAddress + clusterOffset, clusterPrefix))
+                clusterRegisters.sort(key=lambda r: r['address'])
                 if dimIncrement is None:
                     lastReg = clusterRegisters[-1]
                     lastAddress = lastReg['address']
@@ -161,22 +164,8 @@ def addInterrupt(interrupts, intrName, intrIndex, description):
             'description': description,
         }
 
-def parseRegister(groupName, regEl, baseAddress, bitfieldPrefix=''):
-    regName = getText(regEl.find('name'))
-    regDescription = getText(regEl.find('description'))
-    offsetEls = regEl.findall('offset')
-    if not offsetEls:
-        offsetEls = regEl.findall('addressOffset')
-    address = baseAddress + int(getText(offsetEls[0]), 0)
-
-    dimEls = regEl.findall('dim')
-    array = None
-    if dimEls:
-        array = int(getText(dimEls[0]), 0)
-        regName = regName.replace('[%s]', '')
-
+def parseBitfields(groupName, regName, fieldsEls, bitfieldPrefix=''):
     fields = []
-    fieldsEls = regEl.findall('fields')
     if fieldsEls:
         for fieldEl in fieldsEls[0].findall('field'):
             fieldName = getText(fieldEl.find('name'))
@@ -216,15 +205,58 @@ def parseRegister(groupName, regEl, baseAddress, bitfieldPrefix=''):
                     'description': enumDescription,
                     'value':       enumValue,
                 })
+    return fields
 
-    return {
+def parseRegister(groupName, regEl, baseAddress, bitfieldPrefix=''):
+    regName = getText(regEl.find('name'))
+    regDescription = getText(regEl.find('description'))
+    offsetEls = regEl.findall('offset')
+    if not offsetEls:
+        offsetEls = regEl.findall('addressOffset')
+    address = baseAddress + int(getText(offsetEls[0]), 0)
+    
+    size = 4
+    elSizes = regEl.findall('size')
+    if elSizes:
+        size = int(getText(elSizes[0]), 0) // 8
+    
+    dimEls = regEl.findall('dim')
+    fieldsEls = regEl.findall('fields')
+
+    array = None
+    if dimEls:
+        array = int(getText(dimEls[0]), 0)
+        dimIncrement = int(getText(regEl.find('dimIncrement')), 0)
+        if "[%s]" in regName:
+            # just a normal array of registers
+            regName = regName.replace('[%s]', '')
+        elif "%s" in regName:
+            # a "spaced array" of registers, special processing required
+            # we need to generate a separate register for each "element"
+            results = []
+            for i in range(array):
+                regAddress = address + (i * dimIncrement)
+                results.append({
+                    'name':        regName.replace('%s', str(i)),
+                    'address':     regAddress,
+                    'description': regDescription.replace('\n', ' '),
+                    'bitfields':   [],
+                    'array':       None,
+                    'elementsize': size,
+                })
+            # set first result bitfield
+            shortName = regName.replace('_%s', '').replace('%s', '')
+            results[0]['bitfields'] = parseBitfields(groupName, shortName, fieldsEls, bitfieldPrefix)
+            return results
+
+    return [{
         'name':        regName,
         'address':     address,
         'description': regDescription.replace('\n', ' '),
-        'bitfields':   fields,
+        'bitfields':   parseBitfields(groupName, regName, fieldsEls, bitfieldPrefix),
         'array':       array,
-        'elementsize': 4,
-    }
+        'elementsize': size,
+    }]
 
 def writeGo(outdir, device):
     # The Go module for this device.
@@ -243,10 +275,16 @@ package {pkgName}
 
 import "unsafe"
 
-// Special type that causes loads/stores to be volatile (necessary for
+// Special types that cause loads/stores to be volatile (necessary for
 // memory-mapped registers).
 //go:volatile
 type RegValue uint32
+
+//go:volatile
+type RegValue16 uint16
+
+//go:volatile
+type RegValue8 uint8
 
 // Some information about this device.
 const (
@@ -277,38 +315,67 @@ const (
         address = peripheral['baseAddress']
         padNumber = 0
         for register in peripheral['registers']:
-            if address > register['address']:
+            if address > register['address'] and 'registers' not in register :
                 # In Nordic SVD files, these registers are deprecated or
                 # duplicates, so can be ignored.
-                #print('skip: %s.%s' % (peripheral['name'], register['name']))
+                #print('skip: %s.%s %s - %s %s' % (peripheral['name'], register['name'], address, register['address'], register['elementsize']))
                 continue
+            eSize = register['elementsize']
+            if eSize == 4:
+                regType = 'RegValue'
+            elif eSize == 2:
+                regType = 'RegValue16'
+            elif eSize == 1:
+                regType = 'RegValue8'        
+            else:
+                eSize = 4
+                regType = 'RegValue'
 
             # insert padding, if needed
             if address < register['address']:
-                numSkip = (register['address'] - address) // 4
-                if numSkip == 1:
-                    out.write('\t_padding{padNumber} RegValue\n'.format(padNumber=padNumber))
+                bytesNeeded = register['address'] - address
+                if bytesNeeded == 1:
+                    out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType='RegValue8'))
+                elif bytesNeeded == 2:
+                    out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType='RegValue16'))
                 else:
-                    out.write('\t_padding{padNumber} [{num}]RegValue\n'.format(padNumber=padNumber, num=numSkip))
+                    numSkip = (register['address'] - address) // eSize
+                    if numSkip == 1:
+                        out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType=regType))
+                    else:
+                        out.write('\t_padding{padNumber} [{num}]{regType}\n'.format(padNumber=padNumber, num=numSkip, regType=regType))
                 padNumber += 1
+                address = register['address']
 
-            regType = 'RegValue'
             lastCluster = False
             if 'registers' in register:
                 # This is a cluster, not a register. Create the cluster type.
                 regType = 'struct {\n'
                 subaddress = register['address']
                 for subregister in register['registers']:
-                    subregType = 'RegValue'
+                    if subregister['elementsize'] == 4:
+                        subregType = 'RegValue'
+                    elif subregister['elementsize'] == 2:
+                        subregType = 'RegValue16'
+                    else:
+                        subregType = 'RegValue8'
+
                     if subregister['array']:
                         subregType = '[{}]{}'.format(subregister['array'], subregType)
                     if subaddress != subregister['address']:
-                        numSkip = (subregister['address'] - subaddress) // 4
-                        if numSkip == 1:
-                            regType += '\t\t_padding{padNumber} RegValue\n'.format(padNumber=padNumber)
+                        bytesNeeded = subregister['address'] - subaddress
+                        if bytesNeeded == 1:
+                            regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='RegValue8')
+                        elif bytesNeeded == 2:
+                            regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='RegValue16')
                         else:
-                            regType += '\t\t_padding{padNumber} [{num}]RegValue\n'.format(padNumber=padNumber, num=numSkip)
+                            numSkip = (subregister['address'] - subaddress)
+                            if numSkip == 1:
+                                regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='RegValue8')
+                            else:
+                                regType += '\t\t_padding{padNumber} [{num}]{subregType}\n'.format(padNumber=padNumber, num=numSkip, subregType='RegValue8')
                         padNumber += 1
+                        subaddress += bytesNeeded
                     if subregister['array'] is not None:
                         subaddress += subregister['elementsize'] * subregister['array']
                     else:
@@ -317,10 +384,10 @@ const (
                 if register['array'] is not None:
                     if subaddress != register['address'] + register['elementsize']:
                         numSkip = ((register['address'] + register['elementsize']) - subaddress) // 4
-                        if numSkip == 1:
-                            regType += '\t\t_padding{padNumber} RegValue\n'.format(padNumber=padNumber)
+                        if numSkip <= 1:
+                            regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType=subregType)
                         else:
-                            regType += '\t\t_padding{padNumber} [{num}]RegValue\n'.format(padNumber=padNumber, num=numSkip)
+                            regType += '\t\t_padding{padNumber} [{num}]{subregType}\n'.format(padNumber=padNumber, num=numSkip, subregType=subregType)
                 else:
                     lastCluster = True
                 regType += '\t}'

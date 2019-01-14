@@ -61,4 +61,4 @@ other benefits:
     allocated in flash instead of RAM.
 
 For more details, see [this section of the
-documentation](https://tinygo.readthedocs.io/en/latest/internals.html#differences-from-go).
+documentation](https://tinygo.org/compiler-internals/differences-from-go/).
