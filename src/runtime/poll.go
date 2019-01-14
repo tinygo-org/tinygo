@@ -3,7 +3,7 @@ package runtime
 // This file implements stub functions for internal/poll.
 
 //go:linkname poll_runtime_pollServerInit internal/poll.runtime_pollServerInit
-func poll_runtime_pollServerInit(ctx *uint8) {
+func poll_runtime_pollServerInit() {
 	panic("todo: runtime_pollServerInit")
 }
 
