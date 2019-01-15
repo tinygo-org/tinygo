@@ -14,7 +14,7 @@ import (
 #include <clang-c/Index.h> // if this fails, install libclang-7-dev
 #include <stdlib.h>
 
-int tinygo_clang_visitor_cgo(CXCursor c, CXCursor parent, CXClientData client_data);
+int tinygo_clang_visitor(CXCursor c, CXCursor parent, CXClientData client_data);
 */
 import "C"
 
@@ -74,7 +74,7 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string) error {
 	}()
 
 	cursor := C.clang_getTranslationUnitCursor(unit)
-	C.clang_visitChildren(cursor, (*[0]byte)((unsafe.Pointer(C.tinygo_clang_visitor_cgo))), C.CXClientData(uintptr(0)))
+	C.clang_visitChildren(cursor, (*[0]byte)(unsafe.Pointer(C.tinygo_clang_visitor)), C.CXClientData(uintptr(0)))
 
 	return nil
 }

@@ -370,7 +370,9 @@ const (
                             regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='RegValue16')
                         else:
                             numSkip = (subregister['address'] - subaddress)
-                            if numSkip == 1:
+                            if numSkip < 1:
+                                continue
+                            elif numSkip == 1:
                                 regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='RegValue8')
                             else:
                                 regType += '\t\t_padding{padNumber} [{num}]{subregType}\n'.format(padNumber=padNumber, num=numSkip, subregType='RegValue8')
