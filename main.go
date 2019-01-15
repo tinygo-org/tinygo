@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -402,6 +403,8 @@ func Run(pkgName string) error {
 	config := compiler.Config{
 		RootDir:    sourceDir(),
 		GOPATH:     getGopath(),
+		GOARCH:     runtime.GOARCH,
+		GOOS:       runtime.GOOS,
 		InitInterp: true,
 	}
 	c, err := compiler.NewCompiler(pkgName, config)

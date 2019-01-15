@@ -204,16 +204,15 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	// No target spec available. Use the default one, useful on most systems
 	// with a regular OS.
 	spec := TargetSpec{
-		Triple:    triple,
-		GOOS:      goos,
-		GOARCH:    goarch,
-		BuildTags: []string{goos, goarch},
-		Compiler:  commands["clang"],
-		Linker:    "cc",
-		LDFlags:   []string{"-no-pie"}, // WARNING: clang < 5.0 requires -nopie
-		Objcopy:   "objcopy",
-		GDB:       "gdb",
-		GDBCmds:   []string{"run"},
+		Triple:   triple,
+		GOOS:     goos,
+		GOARCH:   goarch,
+		Compiler: commands["clang"],
+		Linker:   "cc",
+		LDFlags:  []string{"-no-pie"}, // WARNING: clang < 5.0 requires -nopie
+		Objcopy:  "objcopy",
+		GDB:      "gdb",
+		GDBCmds:  []string{"run"},
 	}
 	if goarch != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.

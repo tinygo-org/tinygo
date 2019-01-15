@@ -98,9 +98,7 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 	if config.Triple == "" {
 		config.Triple = llvm.DefaultTargetTriple()
 	}
-	if len(config.BuildTags) == 0 {
-		config.BuildTags = []string{config.GOOS, config.GOARCH}
-	}
+	config.BuildTags = append(config.BuildTags, config.GOOS, config.GOARCH)
 	c := &Compiler{
 		Config:  config,
 		difiles: make(map[string]llvm.Metadata),
