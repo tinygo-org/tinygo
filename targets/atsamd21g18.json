@@ -1,7 +1,7 @@
 {
 	"inherits": ["cortex-m"],
 	"llvm-target": "armv6m-none-eabi",
-	"build-tags": ["atsamd21g18", "atsamd21"],
+	"build-tags": ["atsamd21g18", "sam"],
 	"cflags": [
 		"--target=armv6m-none-eabi",
 		"-Qunused-arguments"
