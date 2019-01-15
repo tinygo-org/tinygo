@@ -15,7 +15,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/aykevl/go-llvm"
 	"github.com/aykevl/tinygo/compiler"
 	"github.com/aykevl/tinygo/interp"
 	"github.com/aykevl/tinygo/loader"
@@ -397,70 +396,42 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig)
 	})
 }
 
-// Run the specified package directly (using JIT or interpretation).
-func Run(pkgName string) error {
-	config := compiler.Config{
-		RootDir:    sourceDir(),
-		GOPATH:     getGopath(),
-		InitInterp: true,
-	}
-	c, err := compiler.NewCompiler(pkgName, config)
-	if err != nil {
-		return errors.New("compiler: " + err.Error())
-	}
-	err = c.Compile(pkgName)
-	if err != nil {
-		return errors.New("compiler: " + err.Error())
-	}
-	if err := c.Verify(); err != nil {
-		return errors.New("compiler error: failed to verify module: " + err.Error())
-	}
-	// -Oz, which is the fastest optimization level (faster than -O0, -O1, -O2
-	// and -Os). Turn off the inliner, as the inliner increases optimization
-	// time.
-	err = c.Optimize(2, 2, 0)
-	if err != nil {
-		return err
-	}
-
-	engine, err := llvm.NewExecutionEngine(c.Module())
-	if err != nil {
-		return errors.New("interpreter setup: " + err.Error())
-	}
-	defer engine.Dispose()
-
-	main := engine.FindFunction("main")
-	if main.IsNil() {
-		return errors.New("could not find main function")
-	}
-	engine.RunFunction(main, nil)
-
-	return nil
-}
-
-// Compile and run the given program in an emulator.
-func Emulate(pkgName, target string, config *BuildConfig) error {
+// Compile and run the given program, directly or in an emulator.
+func Run(pkgName, target string, config *BuildConfig) error {
 	spec, err := LoadTarget(target)
 	if err != nil {
 		return err
 	}
-	if len(spec.Emulator) == 0 {
-		return errors.New("no emulator configured for this target")
-	}
 
 	return Compile(pkgName, ".elf", spec, config, func(tmppath string) error {
-		args := append(spec.Emulator[1:], tmppath)
-		cmd := exec.Command(spec.Emulator[0], args...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		err := cmd.Run()
-		if err != nil {
-			if err, ok := err.(*exec.ExitError); ok && err.Exited() {
-				// Workaround for QEMU which always exits with an error.
-				return nil
+		if len(spec.Emulator) == 0 {
+			// Run directly.
+			cmd := exec.Command(tmppath)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err := cmd.Run()
+			if err != nil {
+				if err, ok := err.(*exec.ExitError); ok && err.Exited() {
+					// Workaround for QEMU which always exits with an error.
+					return nil
+				}
 			}
+			return err
+		} else {
+			// Run in an emulator.
+			args := append(spec.Emulator[1:], tmppath)
+			cmd := exec.Command(spec.Emulator[0], args...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err := cmd.Run()
+			if err != nil {
+				if err, ok := err.(*exec.ExitError); ok && err.Exited() {
+					// Workaround for QEMU which always exits with an error.
+					return nil
+				}
+			}
+			return err
 		}
-		return err
 	})
 }
 
@@ -585,13 +556,8 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		if *target == "" {
-			err := Run(flag.Arg(0))
-			handleCompilerError(err)
-		} else {
-			err := Emulate(flag.Arg(0), *target, config)
-			handleCompilerError(err)
-		}
+		err := Run(flag.Arg(0), *target, config)
+		handleCompilerError(err)
 	case "clean":
 		// remove cache directory
 		dir := cacheDir()
