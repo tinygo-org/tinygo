@@ -5,7 +5,6 @@ package runtime
 import (
 	"device/arm"
 	"device/sam"
-	"machine"
 	"unsafe"
 )
 
@@ -23,23 +22,23 @@ func init() {
 	initClocks()
 
 	// Clock for PORTS
-	sam.PM.APBBMASK |= sam.PM_APBBMASK_PORT_
+	// sam.PM.APBBMASK |= sam.PM_APBBMASK_PORT_
 
-	// Clock SERCOM for Serial
-	sam.PM.APBCMASK |= sam.PM_APBCMASK_SERCOM0_ |
-		sam.PM_APBCMASK_SERCOM1_ |
-		sam.PM_APBCMASK_SERCOM2_ |
-		sam.PM_APBCMASK_SERCOM3_ |
-		sam.PM_APBCMASK_SERCOM4_ |
-		sam.PM_APBCMASK_SERCOM5_
+	// // Clock SERCOM for Serial
+	// sam.PM.APBCMASK |= sam.PM_APBCMASK_SERCOM0_ |
+	// 	sam.PM_APBCMASK_SERCOM1_ |
+	// 	sam.PM_APBCMASK_SERCOM2_ |
+	// 	sam.PM_APBCMASK_SERCOM3_ |
+	// 	sam.PM_APBCMASK_SERCOM4_ |
+	// 	sam.PM_APBCMASK_SERCOM5_
 
-	// Clock TC/TCC for Pulse and Analog
-	sam.PM.APBCMASK |= sam.PM_APBCMASK_TCC0_ |
-		sam.PM_APBCMASK_TCC1_ |
-		sam.PM_APBCMASK_TCC2_ |
-		sam.PM_APBCMASK_TC3_ |
-		sam.PM_APBCMASK_TC4_ |
-		sam.PM_APBCMASK_TC5_
+	// // Clock TC/TCC for Pulse and Analog
+	// sam.PM.APBCMASK |= sam.PM_APBCMASK_TCC0_ |
+	// 	sam.PM_APBCMASK_TCC1_ |
+	// 	sam.PM_APBCMASK_TCC2_ |
+	// 	sam.PM_APBCMASK_TC3_ |
+	// 	sam.PM_APBCMASK_TC4_ |
+	// 	sam.PM_APBCMASK_TC5_
 
 	//machine.UART0.Configure(machine.UARTConfig{})
 }
@@ -49,16 +48,11 @@ func putchar(c byte) {
 }
 
 func initClocks() {
-	// ?
-	// Turn on the digital interface clock
-	sam.PM.APBAMASK |= sam.PM_APBAMASK_GCLK_
-
 	// Set 1 Flash Wait State for 48MHz, cf tables 20.9 and 35.27 in SAMD21 Datasheet */
 	sam.NVMCTRL.CTRLB |= (sam.NVMCTRL_CTRLB_RWS_HALF << sam.NVMCTRL_CTRLB_RWS_Pos)
 
-	// Modify PRESCaler value of OSC8M to have 8MHz
-	sam.SYSCTRL.OSC8M |= (sam.SYSCTRL_OSC8M_PRESC_0 << sam.SYSCTRL_OSC8M_PRESC_Pos)
-	sam.SYSCTRL.OSC8M &^= (1 << sam.SYSCTRL_OSC8M_ONDEMAND_Pos)
+	// Turn on the digital interface clock
+	sam.PM.APBAMASK |= sam.PM_APBAMASK_GCLK_
 
 	/* ----------------------------------------------------------------------------------------------
 	 * 1) Enable OSC32K clock (Internal 32.768Hz oscillator)
@@ -91,7 +85,6 @@ func initClocks() {
 	for (sam.SYSCTRL.PCLKSR & sam.SYSCTRL_PCLKSR_OSC32KRDY) == 0 {
 	}
 
-	// ??
 	/* Software reset the module to ensure it is re-initialized correctly */
 	/* Note: Due to synchronization, there is a delay from writing CTRL.SWRST until the reset is complete.
 	 * CTRL.SWRST and STATUS.SYNCBUSY will both be cleared when the reset is complete, as described in chapter 13.8.1
@@ -101,24 +94,24 @@ func initClocks() {
 	for (sam.GCLK.CTRL&sam.GCLK_CTRL_SWRST) > 0 && (sam.GCLK.STATUS&sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
 
-	// dfll_init
-	/* No prescaler */
+	// Put XOSC32K as source of Generic Clock Generator 1
 	sam.GCLK.GENDIV = sam.RegValue((1 << sam.GCLK_GENDIV_ID_Pos) |
 		(0 << sam.GCLK_GENDIV_DIV_Pos))
 	// Wait for synchronization
 	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
 
-	/* Route XOSC32K to GCLK1 */
+	/* Route OSC32K to GCLK1 */
 	// sam.GCLK.GENCTRL =
-	//     GCLK_GENCTRL_ID(1) | GCLK_GENCTRL_SRC_XOSC32K | GCLK_GENCTRL_GENEN;
+	//     GCLK_GENCTRL_ID(1) | GCLK_GENCTRL_SRC_OSC32K | GCLK_GENCTRL_GENEN;
 	sam.GCLK.GENCTRL = sam.RegValue((1 << sam.GCLK_GENCTRL_ID_Pos) |
-		(sam.GCLK_GENCTRL_SRC_XOSC32K << sam.GCLK_GENCTRL_SRC_Pos) |
+		(sam.GCLK_GENCTRL_SRC_OSC32K << sam.GCLK_GENCTRL_SRC_Pos) |
 		sam.GCLK_GENCTRL_GENEN)
 	// Wait for synchronization
 	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
 
+	// 3) Put Generic Clock Generator 1 as source for Generic Clock Multiplexer 0 (DFLL48M reference)
 	// Route GCLK1 to multiplexer 1
 	//GCLK->CLKCTRL.reg =
 	//GCLK_CLKCTRL_ID(0) | GCLK_CLKCTRL_GEN_GCLK1 | GCLK_CLKCTRL_CLKEN;
@@ -129,7 +122,7 @@ func initClocks() {
 	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
 
-	// enable dfll
+	// Remove the OnDemand mode, Bug http://avr32.icgroup.norway.atmel.com/bugzilla/show_bug.cgi?id=9905
 	sam.SYSCTRL.DFLLCTRL = sam.SYSCTRL_DFLLCTRL_ENABLE
 	// Wait for ready
 	for (sam.SYSCTRL.PCLKSR & sam.SYSCTRL_PCLKSR_DFLLRDY) == 0 {
@@ -142,11 +135,17 @@ func initClocks() {
 	// SYSCTRL->DFLLMUL.reg = SYSCTRL_DFLLMUL_CSTEP(31) |
 	// 			  SYSCTRL_DFLLMUL_FSTEP(511) |
 	// 			  SYSCTRL_DFLLMUL_MUL(mul);
-	mul := ((machine.CPU_FREQUENCY + machine.SOC_ATMEL_SAM0_GCLK1_FREQ_HZ) / 2) /
-		machine.SOC_ATMEL_SAM0_GCLK1_FREQ_HZ
+	// mul := ((machine.CPU_FREQUENCY + machine.SOC_ATMEL_SAM0_GCLK1_FREQ_HZ) / 2) /
+	// 	machine.SOC_ATMEL_SAM0_GCLK1_FREQ_HZ
+	sam.SYSCTRL.DFLLVAL |= (0x1f << sam.SYSCTRL_DFLLVAL_COARSE_Pos)
+	sam.SYSCTRL.DFLLVAL |= (0x1ff << sam.SYSCTRL_DFLLVAL_FINE_Pos)
+
+	mul := 48000
 	sam.SYSCTRL.DFLLMUL = sam.RegValue((31 << sam.SYSCTRL_DFLLMUL_CSTEP_Pos) |
-		(511 << sam.SYSCTRL_DFLLMUL_FSTEP_Pos) |
+		(10 << sam.SYSCTRL_DFLLMUL_FSTEP_Pos) |
 		(mul << sam.SYSCTRL_DFLLMUL_MUL_Pos))
+
+	sam.SYSCTRL.DFLLCTRL = 0
 	// Wait for synchronization
 	for (sam.SYSCTRL.PCLKSR & sam.SYSCTRL_PCLKSR_DFLLRDY) == 0 {
 	}
@@ -155,25 +154,20 @@ func initClocks() {
 	// 			 SYSCTRL_DFLLCTRL_WAITLOCK |
 	// 			 SYSCTRL_DFLLCTRL_QLDIS;
 	sam.SYSCTRL.DFLLCTRL |= sam.SYSCTRL_DFLLCTRL_MODE |
-		sam.SYSCTRL_DFLLCTRL_WAITLOCK |
-		sam.SYSCTRL_DFLLCTRL_QLDIS
+		sam.SYSCTRL_DFLLCTRL_CCDIS |
+		sam.SYSCTRL_DFLLCTRL_USBCRM |
+		sam.SYSCTRL_DFLLCTRL_BPLCKC
 	// Wait for ready
 	for (sam.SYSCTRL.PCLKSR & sam.SYSCTRL_PCLKSR_DFLLRDY) == 0 {
 	}
 
 	/* Enable the DFLL */
 	sam.SYSCTRL.DFLLCTRL |= sam.SYSCTRL_DFLLCTRL_ENABLE
-
-	// while (!SYSCTRL->PCLKSR.bit.DFLLLCKC || !SYSCTRL->PCLKSR.bit.DFLLLCKF) {
-	// }
-	for (sam.SYSCTRL.PCLKSR&sam.SYSCTRL_INTENCLR_DFLLLCKC) == 0 || (sam.SYSCTRL.PCLKSR&sam.SYSCTRL_INTENCLR_DFLLLCKF) == 0 {
-	}
 	// Wait for ready
 	for (sam.SYSCTRL.PCLKSR & sam.SYSCTRL_PCLKSR_DFLLRDY) == 0 {
 	}
-	// end dfll init
 
-	// gclks_init
+	// 5) Switch Generic Clock Generator 0 to DFLL48M. CPU will run at 48MHz.
 	/* DFLL/1 -> GCLK0 */
 	// GCLK->GENDIV.reg = GCLK_GENDIV_ID(0) | GCLK_GENDIV_DIV(0);
 	sam.GCLK.GENDIV = sam.RegValue((0 << sam.GCLK_GENDIV_ID_Pos) |
@@ -181,9 +175,10 @@ func initClocks() {
 	// Wait for synchronization
 	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
+
 	// GCLK->GENCTRL.reg = GCLK_GENCTRL_ID(0) | GCLK_GENCTRL_SRC_DFLL48M |
 	// 		    GCLK_GENCTRL_IDC | GCLK_GENCTRL_GENEN;
-	sam.GCLK.GENCTRL = sam.RegValue((1 << sam.GCLK_GENCTRL_ID_Pos) |
+	sam.GCLK.GENCTRL = sam.RegValue((0 << sam.GCLK_GENCTRL_ID_Pos) |
 		(sam.GCLK_GENCTRL_SRC_DFLL48M << sam.GCLK_GENCTRL_SRC_Pos) |
 		sam.GCLK_GENCTRL_IDC |
 		sam.GCLK_GENCTRL_GENEN)
@@ -191,7 +186,13 @@ func initClocks() {
 	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
 
+	// 6) Modify PRESCaler value of OSC8M to have 8MHz
+	sam.SYSCTRL.OSC8M |= (sam.SYSCTRL_OSC8M_PRESC_0 << sam.SYSCTRL_OSC8M_PRESC_Pos)
+	sam.SYSCTRL.OSC8M &^= (1 << sam.SYSCTRL_OSC8M_ONDEMAND_Pos)
+
+	// 7) Put OSC8M as source for Generic Clock Generator 3
 	/* OSC8M/1 -> GCLK3 */
+	sam.GCLK.GENDIV = sam.RegValue((3 << sam.GCLK_GENDIV_ID_Pos))
 	// GCLK->GENCTRL.reg =
 	//     GCLK_GENCTRL_ID(3) | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_GENEN;
 	sam.GCLK.GENCTRL = sam.RegValue((3 << sam.GCLK_GENCTRL_ID_Pos) |
@@ -201,24 +202,22 @@ func initClocks() {
 	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
 
-	/* OSCULP32K/32 -> GCLK2 */
-	//GCLK->GENDIV.reg = GCLK_GENDIV_ID(2) | GCLK_GENDIV_DIV(32 - 1);
+	// /* OSCULP32K/32 -> GCLK2 */
+	// // GCLK->GENDIV.reg = GCLK_GENDIV_ID(2) | GCLK_GENDIV_DIV(32 - 1);
 	sam.GCLK.GENDIV = sam.RegValue((2 << sam.GCLK_GENDIV_ID_Pos) |
 		(31 << sam.GCLK_GENDIV_DIV_Pos))
 	// Wait for synchronization
 	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
 
-	// GCLK->GENCTRL.reg =
-	//     GCLK_GENCTRL_ID(2) | GCLK_GENCTRL_SRC_OSC32K | GCLK_GENCTRL_GENEN;
+	// // GCLK->GENCTRL.reg =
+	// //     GCLK_GENCTRL_ID(2) | GCLK_GENCTRL_SRC_OSC32K | GCLK_GENCTRL_GENEN;
 	sam.GCLK.GENCTRL = sam.RegValue((2 << sam.GCLK_GENCTRL_ID_Pos) |
 		(sam.GCLK_GENCTRL_SRC_OSC32K << sam.GCLK_GENCTRL_SRC_Pos) |
 		sam.GCLK_GENCTRL_GENEN)
 	// Wait for synchronization
 	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
-
-	// end gclks_init
 
 	/* Set the CPU, APBA, B, and C dividers */
 	sam.PM.CPUSEL = sam.PM_CPUSEL_CPUDIV_DIV1
