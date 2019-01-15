@@ -107,6 +107,9 @@ func (s *StdSizes) Sizeof(T types.Type) int64 {
 		if k == types.Uintptr {
 			return s.PtrSize
 		}
+		if k == types.UnsafePointer {
+			return s.PtrSize
+		}
 		panic("unknown basic type: " + t.String())
 	case *types.Array:
 		n := t.Len()
@@ -134,6 +137,18 @@ func (s *StdSizes) Sizeof(T types.Type) int64 {
 		return s.PtrSize * 2
 	case *types.Pointer:
 		return s.PtrSize
+	case *types.Signature:
+		params := t.Params()
+		// We assume that function reference has the same size as the data pointer.
+		// This is not necessarily true for targets that use separate address space
+		// for functions (e.g. WebAssembly tables), but so far seems to be true
+		// for all supported targets.
+		useExportAbi := params.Len() > 0 && params.At(0).Name() == "_exportABI"
+		if useExportAbi {
+			return s.PtrSize
+		} else {
+			return s.PtrSize * 2
+		}
 	default:
 		panic("unknown type: " + t.String())
 	}

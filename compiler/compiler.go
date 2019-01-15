@@ -489,6 +489,7 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			paramTypes = append(paramTypes, c.expandFormalParamType(recv)...)
 		}
 		params := typ.Params()
+		useExportAbi := params.Len() > 0 && params.At(0).Name() == "_exportABI"
 		for i := 0; i < params.Len(); i++ {
 			subType, err := c.getLLVMType(params.At(i).Type())
 			if err != nil {
@@ -496,13 +497,17 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			}
 			paramTypes = append(paramTypes, c.expandFormalParamType(subType)...)
 		}
-		// make a closure type (with a function pointer type inside):
-		// {context, funcptr}
-		paramTypes = append(paramTypes, c.i8ptrType) // context
-		paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
-		ptr := llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), 0)
-		ptr = c.ctx.StructType([]llvm.Type{c.i8ptrType, ptr}, false)
-		return ptr, nil
+		if useExportAbi {
+			return llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), 0), nil
+		} else {
+			// make a closure type (with a function pointer type inside):
+			// {context, funcptr}
+			paramTypes = append(paramTypes, c.i8ptrType) // context
+			paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
+			ptr := llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), 0)
+			ptr = c.ctx.StructType([]llvm.Type{c.i8ptrType, ptr}, false)
+			return ptr, nil
+		}
 	case *types.Slice:
 		elemType, err := c.getLLVMType(typ.Elem())
 		if err != nil {
@@ -1723,12 +1728,23 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		// 'value' is a closure, not a raw function pointer.
-		// Extract the function pointer and the context pointer.
-		// closure: {context, function pointer}
-		context := c.builder.CreateExtractValue(value, 0, "")
-		value = c.builder.CreateExtractValue(value, 1, "")
-		return c.parseFunctionCall(frame, instr.Args, value, context, false)
+
+		// TODO: blocking function pointers (needs analysis)
+
+		if value.Type().TypeKind() == llvm.StructTypeKind {
+			// 'value' is a closure, not a raw function pointer.
+			// Extract the function pointer and the context pointer.
+			// closure: {context, function pointer}
+
+			context := c.builder.CreateExtractValue(value, 0, "")
+			value = c.builder.CreateExtractValue(value, 1, "")
+			return c.parseFunctionCall(frame, instr.Args, value, context, false)
+		} else if value.Type().TypeKind() == llvm.PointerTypeKind {
+			// function value uses export ABI (simple function pointer)
+			return c.parseFunctionCall(frame, instr.Args, value, llvm.Value{}, false)
+		} else {
+			panic("function value represented by an unsupported type: " + value.Type().String())
+		}
 	}
 }
 
@@ -1902,8 +1918,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Function:
 		fn := c.ir.GetFunction(expr)
-		if fn.IsExported() {
-			return llvm.Value{}, c.makeError(expr.Pos(), "cannot use an exported function as value")
+		params := fn.Signature.Params()
+		useExportAbi := params.Len() > 0 && params.At(0).Name() == "_exportABI"
+		if fn.IsExported() && !useExportAbi {
+			return llvm.Value{}, c.makeError(expr.Pos(), "to use an exported function as function value, it must have \"_exportABI struct{}\" as the first (dummy) parameter")
+		}
+		if useExportAbi {
+			return fn.LLVMFn, nil
 		}
 		// Create closure for function pointer.
 		// Closure is: {context, function pointer}
@@ -2895,6 +2916,12 @@ func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.V
 		panic("unexpected: MakeClosure without bound variables")
 	}
 	f := c.ir.GetFunction(expr.Fn.(*ssa.Function))
+
+	params := f.Signature.Params()
+	useExportAbi := params.Len() > 0 && params.At(0).Name() == "_exportABI"
+	if useExportAbi {
+		return llvm.Value{}, c.makeError(expr.Pos(), "attempt to make a closure from a function marked with _exportABI")
+	}
 
 	// Collect all bound variables.
 	boundVars := make([]llvm.Value, 0, len(expr.Bindings))
