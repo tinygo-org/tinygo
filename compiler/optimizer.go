@@ -52,6 +52,10 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		// Run TinyGo-specific interprocedural optimizations.
 		c.OptimizeAllocs()
 		c.OptimizeStringToBytes()
+
+		if c.selectGC() == "shadowstack" {
+			c.AddGCRoots()
+		}
 	} else {
 		// Must be run at any optimization level.
 		c.LowerInterfaces()

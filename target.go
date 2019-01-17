@@ -210,7 +210,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		BuildTags: []string{goos, goarch},
 		Compiler:  commands["clang"],
 		Linker:    "cc",
-		LDFlags:   []string{"-no-pie"}, // WARNING: clang < 5.0 requires -nopie
+		LDFlags:   []string{"-Wl,--defsym=tinygo_gc_root_chain=llvm_gc_root_chain", "-no-pie"}, // WARNING: clang < 5.0 requires -nopie
 		Objcopy:   "objcopy",
 		GDB:       "gdb",
 		GDBCmds:   []string{"run"},
