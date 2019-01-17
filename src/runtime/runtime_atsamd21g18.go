@@ -22,35 +22,19 @@ func init() {
 	initClocks()
 	initRTC()
 
-	// Clock for PORTS
-	// sam.PM.APBBMASK |= sam.PM_APBBMASK_PORT_
-
 	// Turn on clock to SERCOM0 for Serial
 	sam.PM.APBCMASK |= sam.PM_APBCMASK_SERCOM0_
-	// sam.PM.APBCMASK |= sam.PM_APBCMASK_SERCOM0_ |
-	// 	sam.PM_APBCMASK_SERCOM1_ |
-	// 	sam.PM_APBCMASK_SERCOM2_ |
-	// 	sam.PM_APBCMASK_SERCOM3_ |
-	// 	sam.PM_APBCMASK_SERCOM4_ |
-	// 	sam.PM_APBCMASK_SERCOM5_
 
-	// // Clock TC/TCC for Pulse and Analog
-	// sam.PM.APBCMASK |= sam.PM_APBCMASK_TCC0_ |
-	// 	sam.PM_APBCMASK_TCC1_ |
-	// 	sam.PM_APBCMASK_TCC2_ |
-	// 	sam.PM_APBCMASK_TC3_ |
-	// 	sam.PM_APBCMASK_TC4_ |
-	// 	sam.PM_APBCMASK_TC5_
-
-	//machine.UART0.Configure(machine.UARTConfig{})
+	// TODO: connect to UART
 }
 
 func putchar(c byte) {
+	// TODO: write byte to UART
 	//machine.UART0.WriteByte(c)
 }
 
 func initClocks() {
-	// Set 1 Flash Wait State for 48MHz, cf tables 20.9 and 35.27 in SAMD21 Datasheet
+	// Set 1 Flash Wait State for 48MHz, required for 3.3V operation according to SAMD21 Datasheet
 	sam.NVMCTRL.CTRLB |= (sam.NVMCTRL_CTRLB_RWS_HALF << sam.NVMCTRL_CTRLB_RWS_Pos)
 
 	// Turn on the digital interface clock
@@ -58,28 +42,26 @@ func initClocks() {
 	// turn off RTC
 	sam.PM.APBAMASK &^= sam.PM_APBAMASK_RTC_
 
-	// 1) Enable OSC32K clock (Internal 32.768Hz oscillator)
-	// requires registers that are not include in the SVD file.
-	// from samd21g18a.h and nvmctrl.h:
+	// Enable OSC32K clock (Internal 32.768Hz oscillator).
+	// This requires registers that are not included in the SVD file.
+	// This is from samd21g18a.h and nvmctrl.h:
 	//
 	// #define NVMCTRL_OTP4 0x00806020
 	//
 	// #define SYSCTRL_FUSES_OSC32K_CAL_ADDR (NVMCTRL_OTP4 + 4)
-	// #define SYSCTRL_FUSES_OSC32K_CAL_Pos 6            /**< \brief (NVMCTRL_OTP4) OSC32K Calibration */
+	// #define SYSCTRL_FUSES_OSC32K_CAL_Pos 6 /** (NVMCTRL_OTP4) OSC32K Calibration */
 	// #define SYSCTRL_FUSES_OSC32K_CAL_Msk (0x7Fu << SYSCTRL_FUSES_OSC32K_CAL_Pos)
 	// #define SYSCTRL_FUSES_OSC32K_CAL(value) ((SYSCTRL_FUSES_OSC32K_CAL_Msk & ((value) << SYSCTRL_FUSES_OSC32K_CAL_Pos)))
 	// u32_t fuse = *(u32_t *)FUSES_OSC32K_CAL_ADDR;
 	// u32_t calib = (fuse & FUSES_OSC32K_CAL_Msk) >> FUSES_OSC32K_CAL_Pos;
 	fuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020) + 4))
-	fuseMask := uint32(0x7f << 6)
-	calib := (fuse & fuseMask) >> 6
-	calib = 0x55
+	calib := (fuse & uint32(0x7f<<6)) >> 6
 
 	// SYSCTRL_OSC32K_CALIB(calib) |
-	// 		      SYSCTRL_OSC32K_STARTUP(0x6u) |
-	// 		      SYSCTRL_OSC32K_EN32K | SYSCTRL_OSC32K_ENABLE;
+	//  SYSCTRL_OSC32K_STARTUP(0x6u) |
+	//  SYSCTRL_OSC32K_EN32K | SYSCTRL_OSC32K_ENABLE;
 	sam.SYSCTRL.OSC32K = sam.RegValue((calib << sam.SYSCTRL_OSC32K_CALIB_Pos) |
-		(0x92 << sam.SYSCTRL_OSC32K_STARTUP_Pos) |
+		(0x6 << sam.SYSCTRL_OSC32K_STARTUP_Pos) |
 		sam.SYSCTRL_OSC32K_EN32K |
 		sam.SYSCTRL_OSC32K_EN1K |
 		sam.SYSCTRL_OSC32K_ENABLE)
@@ -93,7 +75,7 @@ func initClocks() {
 	for (sam.GCLK.CTRL&sam.GCLK_CTRL_SWRST) > 0 && (sam.GCLK.STATUS&sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
 
-	// 2) Put OSC32K as source of Generic Clock Generator 1
+	// Put OSC32K as source of Generic Clock Generator 1
 	sam.GCLK.GENDIV = sam.RegValue((1 << sam.GCLK_GENDIV_ID_Pos) |
 		(0 << sam.GCLK_GENDIV_DIV_Pos))
 	waitForSync()
@@ -104,9 +86,7 @@ func initClocks() {
 		sam.GCLK_GENCTRL_GENEN)
 	waitForSync()
 
-	// 3) Put Generic Clock Generator 1 as source for Generic Clock Multiplexer 0 (DFLL48M reference)
-	// Route GCLK1 to multiplexer 1
-	// GCLK_CLKCTRL_ID(0) | GCLK_CLKCTRL_GEN_GCLK1 | GCLK_CLKCTRL_CLKEN;
+	// Use Generic Clock Generator 1 as source for Generic Clock Multiplexer 0 (DFLL48M reference)
 	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_DFLL48 << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK1 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
@@ -120,8 +100,6 @@ func initClocks() {
 
 	// Handle DFLL calibration based on info learned from Arduino SAMD implementation,
 	// using default values.
-	// SYSCTRL->DFLLVAL.bit.COARSE = coarse;
-	// SYSCTRL->DFLLVAL.bit.FINE = fine;
 	sam.SYSCTRL.DFLLVAL |= (0x1f << sam.SYSCTRL_DFLLVAL_COARSE_Pos)
 	sam.SYSCTRL.DFLLVAL |= (0x1ff << sam.SYSCTRL_DFLLVAL_FINE_Pos)
 
@@ -137,9 +115,6 @@ func initClocks() {
 	sam.SYSCTRL.DFLLCTRL = 0
 	waitForSync()
 
-	// SYSCTRL->DFLLCTRL.reg |= SYSCTRL_DFLLCTRL_MODE |
-	// 			 SYSCTRL_DFLLCTRL_WAITLOCK |
-	// 			 SYSCTRL_DFLLCTRL_QLDIS;
 	sam.SYSCTRL.DFLLCTRL |= sam.SYSCTRL_DFLLCTRL_MODE |
 		sam.SYSCTRL_DFLLCTRL_CCDIS |
 		sam.SYSCTRL_DFLLCTRL_USBCRM |
@@ -154,40 +129,35 @@ func initClocks() {
 	for (sam.SYSCTRL.PCLKSR & sam.SYSCTRL_PCLKSR_DFLLRDY) == 0 {
 	}
 
-	// 5) Switch Generic Clock Generator 0 to DFLL48M. CPU will run at 48MHz.
-	// DFLL/1 -> GCLK0
+	// Switch Generic Clock Generator 0 to DFLL48M. CPU will run at 48MHz.
 	sam.GCLK.GENDIV = sam.RegValue((0 << sam.GCLK_GENDIV_ID_Pos) |
 		(0 << sam.GCLK_GENDIV_DIV_Pos))
 	waitForSync()
 
-	// GCLK_GENCTRL_ID(0) | GCLK_GENCTRL_SRC_DFLL48M |
-	// 		    GCLK_GENCTRL_IDC | GCLK_GENCTRL_GENEN;
 	sam.GCLK.GENCTRL = sam.RegValue((0 << sam.GCLK_GENCTRL_ID_Pos) |
 		(sam.GCLK_GENCTRL_SRC_DFLL48M << sam.GCLK_GENCTRL_SRC_Pos) |
 		sam.GCLK_GENCTRL_IDC |
 		sam.GCLK_GENCTRL_GENEN)
 	waitForSync()
 
-	// 6) Modify PRESCaler value of OSC8M to have 8MHz
+	// Modify PRESCaler value of OSC8M to have 8MHz
 	sam.SYSCTRL.OSC8M |= (sam.SYSCTRL_OSC8M_PRESC_0 << sam.SYSCTRL_OSC8M_PRESC_Pos)
 	sam.SYSCTRL.OSC8M &^= (1 << sam.SYSCTRL_OSC8M_ONDEMAND_Pos)
 	// Wait for oscillator stabilization
 	for (sam.SYSCTRL.PCLKSR & sam.SYSCTRL_PCLKSR_OSC8MRDY) == 0 {
 	}
 
-	// // 7) Put OSC8M as source for Generic Clock Generator 3
-	// // OSC8M/1 -> GCLK3
+	// Use OSC8M as source for Generic Clock Generator 3
 	sam.GCLK.GENDIV = sam.RegValue((3 << sam.GCLK_GENDIV_ID_Pos))
 	waitForSync()
 
-	// GCLK_GENCTRL_ID(3) | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_GENEN;
 	sam.GCLK.GENCTRL = sam.RegValue((3 << sam.GCLK_GENCTRL_ID_Pos) |
 		(sam.GCLK_GENCTRL_SRC_OSC8M << sam.GCLK_GENCTRL_SRC_Pos) |
 		sam.GCLK_GENCTRL_GENEN)
 	waitForSync()
 
-	// *8) clock for RTC
-	// OSC32K -> GCLK2 at 32KHz
+	// Use OSC32K as source for Generic Clock Generator 2
+	// OSC32K/1 -> GCLK2 at 32KHz
 	sam.GCLK.GENDIV = sam.RegValue(2 << sam.GCLK_GENDIV_ID_Pos)
 	waitForSync()
 
@@ -196,7 +166,7 @@ func initClocks() {
 		sam.GCLK_GENCTRL_GENEN)
 	waitForSync()
 
-	// ((GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK2 | (RTC_GCLK_ID << GCLK_CLKCTRL_ID_Pos)));
+	// Use GCLK2 for RTC
 	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_RTC << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK2 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
