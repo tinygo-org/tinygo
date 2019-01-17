@@ -37,11 +37,3 @@ func free(ptr unsafe.Pointer) {
 func GC() {
 	// No-op.
 }
-
-func KeepAlive(x interface{}) {
-	// Unimplemented. Only required with SetFinalizer().
-}
-
-func SetFinalizer(obj interface{}, finalizer interface{}) {
-	// Unimplemented.
-}
