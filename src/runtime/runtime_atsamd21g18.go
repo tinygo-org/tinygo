@@ -96,17 +96,13 @@ func initClocks() {
 	// 2) Put OSC32K as source of Generic Clock Generator 1
 	sam.GCLK.GENDIV = sam.RegValue((1 << sam.GCLK_GENDIV_ID_Pos) |
 		(0 << sam.GCLK_GENDIV_DIV_Pos))
-	// Wait for synchronization
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
 	// GCLK_GENCTRL_ID(1) | GCLK_GENCTRL_SRC_OSC32K | GCLK_GENCTRL_GENEN;
 	sam.GCLK.GENCTRL = sam.RegValue((1 << sam.GCLK_GENCTRL_ID_Pos) |
 		(sam.GCLK_GENCTRL_SRC_OSC32K << sam.GCLK_GENCTRL_SRC_Pos) |
 		sam.GCLK_GENCTRL_GENEN)
-	// Wait for synchronization
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
 	// 3) Put Generic Clock Generator 1 as source for Generic Clock Multiplexer 0 (DFLL48M reference)
 	// Route GCLK1 to multiplexer 1
@@ -114,9 +110,7 @@ func initClocks() {
 	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_DFLL48 << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK1 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
-	// Wait for synchronization
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
 	// Remove the OnDemand mode, Bug http://avr32.icgroup.norway.atmel.com/bugzilla/show_bug.cgi?id=9905
 	sam.SYSCTRL.DFLLCTRL = sam.SYSCTRL_DFLLCTRL_ENABLE
@@ -141,9 +135,7 @@ func initClocks() {
 
 	// disable DFLL
 	sam.SYSCTRL.DFLLCTRL = 0
-	// Wait for synchronization
-	for (sam.SYSCTRL.PCLKSR & sam.SYSCTRL_PCLKSR_DFLLRDY) == 0 {
-	}
+	waitForSync()
 
 	// SYSCTRL->DFLLCTRL.reg |= SYSCTRL_DFLLCTRL_MODE |
 	// 			 SYSCTRL_DFLLCTRL_WAITLOCK |
@@ -166,9 +158,7 @@ func initClocks() {
 	// DFLL/1 -> GCLK0
 	sam.GCLK.GENDIV = sam.RegValue((0 << sam.GCLK_GENDIV_ID_Pos) |
 		(0 << sam.GCLK_GENDIV_DIV_Pos))
-	// Wait for synchronization
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
 	// GCLK_GENCTRL_ID(0) | GCLK_GENCTRL_SRC_DFLL48M |
 	// 		    GCLK_GENCTRL_IDC | GCLK_GENCTRL_GENEN;
@@ -176,9 +166,7 @@ func initClocks() {
 		(sam.GCLK_GENCTRL_SRC_DFLL48M << sam.GCLK_GENCTRL_SRC_Pos) |
 		sam.GCLK_GENCTRL_IDC |
 		sam.GCLK_GENCTRL_GENEN)
-	// Wait for synchronization
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
 	// 6) Modify PRESCaler value of OSC8M to have 8MHz
 	sam.SYSCTRL.OSC8M |= (sam.SYSCTRL_OSC8M_PRESC_0 << sam.SYSCTRL_OSC8M_PRESC_Pos)
@@ -190,39 +178,29 @@ func initClocks() {
 	// // 7) Put OSC8M as source for Generic Clock Generator 3
 	// // OSC8M/1 -> GCLK3
 	sam.GCLK.GENDIV = sam.RegValue((3 << sam.GCLK_GENDIV_ID_Pos))
-	// Wait for synchronization
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
+
 	// GCLK_GENCTRL_ID(3) | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_GENEN;
 	sam.GCLK.GENCTRL = sam.RegValue((3 << sam.GCLK_GENCTRL_ID_Pos) |
 		(sam.GCLK_GENCTRL_SRC_OSC8M << sam.GCLK_GENCTRL_SRC_Pos) |
 		sam.GCLK_GENCTRL_GENEN)
-	// Wait for synchronization
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
 	// *8) clock for RTC
-	// OSC32K/32 -> GCLK2 at 1KHz
-	sam.GCLK.GENDIV = sam.RegValue((2 << sam.GCLK_GENDIV_ID_Pos) |
-		(31 << sam.GCLK_GENDIV_DIV_Pos))
-	// Wait for synchronization
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
-	}
+	// OSC32K -> GCLK2 at 32KHz
+	sam.GCLK.GENDIV = sam.RegValue(2 << sam.GCLK_GENDIV_ID_Pos)
+	waitForSync()
 
 	sam.GCLK.GENCTRL = sam.RegValue((2 << sam.GCLK_GENCTRL_ID_Pos) |
 		(sam.GCLK_GENCTRL_SRC_OSC32K << sam.GCLK_GENCTRL_SRC_Pos) |
 		sam.GCLK_GENCTRL_GENEN)
-	// Wait for synchronization
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
 	// ((GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK2 | (RTC_GCLK_ID << GCLK_CLKCTRL_ID_Pos)));
 	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_RTC << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK2 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
-	// Wait for synchronization
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
 	// Set the CPU, APBA, B, and C dividers
 	sam.PM.CPUSEL = sam.PM_CPUSEL_CPUDIV_DIV1
@@ -230,7 +208,7 @@ func initClocks() {
 	sam.PM.APBBSEL = sam.PM_APBBSEL_APBBDIV_DIV1
 	sam.PM.APBCSEL = sam.PM_APBCSEL_APBCDIV_DIV1
 
-	// NVMCTRL->CTRLB.bit.MANW = 1;
+	// Disable automatic NVM write operations
 	sam.NVMCTRL.CTRLB |= sam.NVMCTRL_CTRLB_MANW
 }
 
@@ -240,35 +218,34 @@ func initRTC() {
 
 	// disable RTC
 	sam.RTC.MODE0.CTRL = 0
-	for (sam.RTC.MODE0.STATUS & sam.RTC_MODE0_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
 	// reset RTC
 	sam.RTC.MODE0.CTRL |= sam.RTC_MODE0_CTRL_SWRST
-	for (sam.RTC.MODE0.STATUS & sam.RTC_MODE0_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
-	// set Mode0 to 32-bit counter (mode 0) with prescaler 1 and GCLK2 is 1KHz/1
-	mode := sam.RegValue16((sam.RTC_MODE0_CTRL_MODE_COUNT32 << sam.RTC_MODE0_CTRL_MODE_Pos) |
-		(sam.RTC_MODE0_CTRL_PRESCALER_DIV1 << sam.RTC_MODE0_CTRL_PRESCALER_Pos))
-	mode |= sam.RTC_MODE0_CTRL_MATCHCLR
-	sam.RTC.MODE0.CTRL = mode
-	for (sam.RTC.MODE0.STATUS & sam.RTC_MODE0_STATUS_SYNCBUSY) > 0 {
-	}
+	// set Mode0 to 32-bit counter (mode 0) with prescaler 1 and GCLK2 is 32KHz/1
+	sam.RTC.MODE0.CTRL = sam.RegValue16((sam.RTC_MODE0_CTRL_MODE_COUNT32 << sam.RTC_MODE0_CTRL_MODE_Pos) |
+		(sam.RTC_MODE0_CTRL_PRESCALER_DIV1 << sam.RTC_MODE0_CTRL_PRESCALER_Pos) |
+		sam.RTC_MODE0_CTRL_MATCHCLR)
+	waitForSync()
 
 	sam.RTC.MODE0.COMP0 = 0xffffffff
-	for (sam.RTC.MODE0.STATUS & sam.RTC_MODE0_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
 	// re-enable RTC
 	sam.RTC.MODE0.CTRL |= sam.RTC_MODE0_CTRL_ENABLE
-	for (sam.RTC.MODE0.STATUS & sam.RTC_MODE0_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
-	//arm.SetPriority(sam.IRQ_RTC, 0xc0) // low priority
 	arm.EnableIRQ(sam.IRQ_RTC)
 }
 
+func waitForSync() {
+	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
+	}
+}
+
+// treat all ticks params coming from runtime as being in microseconds
 const tickMicros = 1000
 
 var (
@@ -282,7 +259,7 @@ type isrFlag bool
 
 var timerWakeup isrFlag
 
-// sleepTicks should sleep for specific number of microseconds.
+// sleepTicks should sleep for d number of microseconds.
 func sleepTicks(d timeUnit) {
 	for d != 0 {
 		ticks() // update timestamp
@@ -292,15 +269,14 @@ func sleepTicks(d timeUnit) {
 	}
 }
 
-// number of ticks (microseconds) since start.
+// ticks returns number of microseconds since start.
 func ticks() timeUnit {
 	// request read of count
 	sam.RTC.MODE0.READREQ = sam.RTC_MODE0_READREQ_RREQ
-	for (sam.RTC.MODE0.STATUS & sam.RTC_MODE0_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
-	rtcCounter := uint64(sam.RTC.MODE0.COUNT) * 1000 // each counter tick == 30.5us?
-	offset := (rtcCounter - timerLastCounter)        // change since last measurement
+	rtcCounter := uint64(sam.RTC.MODE0.COUNT) * 30 // each counter tick == 30.5us
+	offset := (rtcCounter - timerLastCounter)      // change since last measurement
 	timerLastCounter = rtcCounter
 	timestamp += timeUnit(offset) // TODO: not precise
 	return timestamp
@@ -309,21 +285,19 @@ func ticks() timeUnit {
 // ticks are in microseconds
 func timerSleep(ticks uint32) {
 	timerWakeup = false
-	if ticks < 1000 {
+	if ticks < 30 {
 		// have to have at least one clock count
-		ticks = 1000
+		ticks = 30
 	}
 
 	// request read of count
 	sam.RTC.MODE0.READREQ = sam.RTC_MODE0_READREQ_RREQ
-	for (sam.RTC.MODE0.STATUS & sam.RTC_MODE0_STATUS_SYNCBUSY) > 0 {
-	}
+	waitForSync()
 
 	// set compare value
 	cnt := sam.RTC.MODE0.COUNT
-	sam.RTC.MODE0.COMP0 = sam.RegValue(uint32(cnt) + (ticks / 1000))
-	for (sam.RTC.MODE0.STATUS & sam.RTC_MODE0_STATUS_SYNCBUSY) > 0 {
-	}
+	sam.RTC.MODE0.COMP0 = sam.RegValue(uint32(cnt) + (ticks / 30)) // each counter tick == 30.5us
+	waitForSync()
 
 	// enable IRQ for CMP0 compare
 	sam.RTC.MODE0.INTENSET |= sam.RTC_MODE0_INTENSET_CMP0
@@ -335,8 +309,8 @@ func timerSleep(ticks uint32) {
 
 //go:export RTC_IRQHandler
 func handleRTC() {
-	// disable all IRQs for CMP0 compare
-	sam.RTC.MODE0.INTFLAG = 0xff
+	// disable IRQ for CMP0 compare
+	sam.RTC.MODE0.INTFLAG = sam.RTC_MODE0_INTENSET_CMP0
 
 	timerWakeup = true
 }
