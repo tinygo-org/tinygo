@@ -221,7 +221,6 @@ const tickMicros = 1000
 var (
 	timestamp        timeUnit // ticks since boottime
 	timerLastCounter uint64
-	timercalled      uint64
 )
 
 //go:volatile

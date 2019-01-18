@@ -1,5 +1,10 @@
 // +build sam,atsamd21g18a
 
+// Peripheral abstraction layer for the atsamd21g18.
+//
+// Datasheet:
+// http://ww1.microchip.com/downloads/en/DeviceDoc/SAMD21-Family-DataSheet-DS40001882D.pdf
+//
 package machine
 
 import (
@@ -7,8 +12,6 @@ import (
 )
 
 const CPU_FREQUENCY = 48000000
-
-// Peripheral abstraction layer for the atsamd21g18.
 
 type GPIOMode uint8
 
