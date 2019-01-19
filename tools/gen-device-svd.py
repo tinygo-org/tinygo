@@ -81,15 +81,15 @@ def readSVD(path, sourceURL):
             }
             device.peripherals.append(peripheral)
             peripheralDict[name] = peripheral
-            # TODO: handle peripheral "shadows" here.
-            for subtype in derivedFrom['subtypes']:
-                subp = {
-                    'name':        name + "_"+subtype['clusterName'],
-                    'groupName':   subtype['groupName'],
-                    'description': subtype['description'],
-                    'baseAddress': baseAddress,
-                }
-                device.peripherals.append(subp)
+            if 'subtypes' in derivedFrom:
+                for subtype in derivedFrom['subtypes']:
+                    subp = {
+                        'name':        name + "_"+subtype['clusterName'],
+                        'groupName':   subtype['groupName'],
+                        'description': subtype['description'],
+                        'baseAddress': baseAddress,
+                    }
+                    device.peripherals.append(subp)
             continue
 
         peripheral = {
