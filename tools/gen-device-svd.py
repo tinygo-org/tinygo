@@ -81,6 +81,15 @@ def readSVD(path, sourceURL):
             }
             device.peripherals.append(peripheral)
             peripheralDict[name] = peripheral
+            # TODO: handle peripheral "shadows" here.
+            for subtype in derivedFrom['subtypes']:
+                subp = {
+                    'name':        name + "_"+subtype['clusterName'],
+                    'groupName':   subtype['groupName'],
+                    'description': subtype['description'],
+                    'baseAddress': baseAddress,
+                }
+                device.peripherals.append(subp)
             continue
 
         peripheral = {
@@ -89,6 +98,7 @@ def readSVD(path, sourceURL):
             'description': description,
             'baseAddress': baseAddress,
             'registers':   [],
+            'subtypes':   [],
         }
         device.peripherals.append(peripheral)
         peripheralDict[name] = peripheral
@@ -108,6 +118,23 @@ def readSVD(path, sourceURL):
                 clusterPrefix = clusterName + '_'
                 clusterOffset = int(getText(cluster.find('addressOffset')), 0)
                 if cluster.find('dim') is None:
+                    if clusterOffset is 0:
+                        # make this a separate peripheral
+                        cpRegisters = []
+                        for regEl in cluster.findall('register'):
+                            cpRegisters.extend(parseRegister(groupName, regEl, baseAddress, clusterName+"_"))
+                        cpRegisters.sort(key=lambda r: r['address'])
+                        clusterPeripheral = {
+                            'name':        name+ "_" +clusterName,
+                            'groupName':   groupName+ "_" +clusterName,
+                            'description': description+ " - " +clusterName,
+                            'clusterName': clusterName,
+                            'baseAddress': baseAddress,
+                            'registers':   cpRegisters,
+                        }
+                        device.peripherals.append(clusterPeripheral)
+                        peripheral['subtypes'].append(clusterPeripheral)
+                        continue
                     dim = None
                     dimIncrement = None
                 else:

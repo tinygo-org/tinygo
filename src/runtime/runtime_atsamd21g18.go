@@ -187,24 +187,24 @@ func initRTC() {
 	sam.PM.APBAMASK |= sam.PM_APBAMASK_RTC_
 
 	// disable RTC
-	sam.RTC.MODE0.CTRL = 0
+	sam.RTC_MODE0.CTRL = 0
 	waitForSync()
 
 	// reset RTC
-	sam.RTC.MODE0.CTRL |= sam.RTC_MODE0_CTRL_SWRST
+	sam.RTC_MODE0.CTRL |= sam.RTC_MODE0_CTRL_SWRST
 	waitForSync()
 
 	// set Mode0 to 32-bit counter (mode 0) with prescaler 1 and GCLK2 is 32KHz/1
-	sam.RTC.MODE0.CTRL = sam.RegValue16((sam.RTC_MODE0_CTRL_MODE_COUNT32 << sam.RTC_MODE0_CTRL_MODE_Pos) |
+	sam.RTC_MODE0.CTRL = sam.RegValue16((sam.RTC_MODE0_CTRL_MODE_COUNT32 << sam.RTC_MODE0_CTRL_MODE_Pos) |
 		(sam.RTC_MODE0_CTRL_PRESCALER_DIV1 << sam.RTC_MODE0_CTRL_PRESCALER_Pos) |
 		sam.RTC_MODE0_CTRL_MATCHCLR)
 	waitForSync()
 
-	sam.RTC.MODE0.COMP0 = 0xffffffff
+	sam.RTC_MODE0.COMP0 = 0xffffffff
 	waitForSync()
 
 	// re-enable RTC
-	sam.RTC.MODE0.CTRL |= sam.RTC_MODE0_CTRL_ENABLE
+	sam.RTC_MODE0.CTRL |= sam.RTC_MODE0_CTRL_ENABLE
 	waitForSync()
 
 	arm.EnableIRQ(sam.IRQ_RTC)
@@ -241,10 +241,10 @@ func sleepTicks(d timeUnit) {
 // ticks returns number of microseconds since start.
 func ticks() timeUnit {
 	// request read of count
-	sam.RTC.MODE0.READREQ = sam.RTC_MODE0_READREQ_RREQ
+	sam.RTC_MODE0.READREQ = sam.RTC_MODE0_READREQ_RREQ
 	waitForSync()
 
-	rtcCounter := uint64(sam.RTC.MODE0.COUNT) * 30 // each counter tick == 30.5us
+	rtcCounter := uint64(sam.RTC_MODE0.COUNT) * 30 // each counter tick == 30.5us
 	offset := (rtcCounter - timerLastCounter)      // change since last measurement
 	timerLastCounter = rtcCounter
 	timestamp += timeUnit(offset) // TODO: not precise
@@ -260,16 +260,16 @@ func timerSleep(ticks uint32) {
 	}
 
 	// request read of count
-	sam.RTC.MODE0.READREQ = sam.RTC_MODE0_READREQ_RREQ
+	sam.RTC_MODE0.READREQ = sam.RTC_MODE0_READREQ_RREQ
 	waitForSync()
 
 	// set compare value
-	cnt := sam.RTC.MODE0.COUNT
-	sam.RTC.MODE0.COMP0 = sam.RegValue(uint32(cnt) + (ticks / 30)) // each counter tick == 30.5us
+	cnt := sam.RTC_MODE0.COUNT
+	sam.RTC_MODE0.COMP0 = sam.RegValue(uint32(cnt) + (ticks / 30)) // each counter tick == 30.5us
 	waitForSync()
 
 	// enable IRQ for CMP0 compare
-	sam.RTC.MODE0.INTENSET |= sam.RTC_MODE0_INTENSET_CMP0
+	sam.RTC_MODE0.INTENSET |= sam.RTC_MODE0_INTENSET_CMP0
 
 	for !timerWakeup {
 		arm.Asm("wfi")
@@ -279,7 +279,7 @@ func timerSleep(ticks uint32) {
 //go:export RTC_IRQHandler
 func handleRTC() {
 	// disable IRQ for CMP0 compare
-	sam.RTC.MODE0.INTFLAG = sam.RTC_MODE0_INTENSET_CMP0
+	sam.RTC_MODE0.INTFLAG = sam.RTC_MODE0_INTENSET_CMP0
 
 	timerWakeup = true
 }
