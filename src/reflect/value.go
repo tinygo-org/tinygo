@@ -31,16 +31,38 @@ func (v Value) Kind() Kind {
 }
 
 func (v Value) IsNil() bool {
-	panic("unimplemented: (reflect.Value).IsNil()")
+	switch v.Kind() {
+	case Chan, Map, Ptr:
+		return v.value == nil
+	case Func:
+		if v.value == nil {
+			return true
+		}
+		fn := (*funcHeader)(v.value)
+		return fn.Code == nil
+	case Slice:
+		if v.value == nil {
+			return true
+		}
+		slice := (*SliceHeader)(v.value)
+		return slice.Data == 0
+	case Interface:
+		panic("unimplemented: (reflect.Value).IsNil()")
+	default:
+		panic(&ValueError{"IsNil"})
+	}
 }
 
 func (v Value) Pointer() uintptr {
 	switch v.Kind() {
-	case UnsafePointer:
+	case Chan, Map, Ptr, UnsafePointer:
 		return uintptr(v.value)
-	case Chan, Func, Map, Ptr, Slice:
+	case Slice:
+		slice := (*SliceHeader)(v.value)
+		return slice.Data
+	case Func:
 		panic("unimplemented: (reflect.Value).Pointer()")
-	default:
+	default: // not implemented: Func
 		panic(&ValueError{"Pointer"})
 	}
 }
@@ -320,6 +342,11 @@ func (v Value) SetString(x string) {
 
 func MakeSlice(typ Type, len, cap int) Value {
 	panic("unimplemented: reflect.MakeSlice()")
+}
+
+type funcHeader struct {
+	Context unsafe.Pointer
+	Code    unsafe.Pointer
 }
 
 type SliceHeader struct {

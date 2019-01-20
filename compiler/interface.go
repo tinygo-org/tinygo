@@ -8,6 +8,8 @@ package compiler
 import (
 	"go/token"
 	"go/types"
+	"strconv"
+	"strings"
 
 	"github.com/aykevl/go-llvm"
 	"github.com/aykevl/tinygo/ir"
@@ -92,55 +94,91 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 // interface lowering pass to assign type codes as expected by the reflect
 // package. See getTypeCodeNum.
 func getTypeCodeName(t types.Type) string {
+	name := ""
+	if named, ok := t.(*types.Named); ok {
+		name = "~" + named.String() + ":"
+		t = t.Underlying()
+	}
 	switch t := t.(type) {
+	case *types.Array:
+		return "array:" + name + strconv.FormatInt(t.Len(), 10) + ":" + getTypeCodeName(t.Elem())
 	case *types.Basic:
-		var name string
+		var kind string
 		switch t.Kind() {
 		case types.Bool:
-			name = "bool"
+			kind = "bool"
 		case types.Int:
-			name = "int"
+			kind = "int"
 		case types.Int8:
-			name = "int8"
+			kind = "int8"
 		case types.Int16:
-			name = "int16"
+			kind = "int16"
 		case types.Int32:
-			name = "int32"
+			kind = "int32"
 		case types.Int64:
-			name = "int64"
+			kind = "int64"
 		case types.Uint:
-			name = "uint"
+			kind = "uint"
 		case types.Uint8:
-			name = "uint8"
+			kind = "uint8"
 		case types.Uint16:
-			name = "uint16"
+			kind = "uint16"
 		case types.Uint32:
-			name = "uint32"
+			kind = "uint32"
 		case types.Uint64:
-			name = "uint64"
+			kind = "uint64"
 		case types.Uintptr:
-			name = "uintptr"
+			kind = "uintptr"
 		case types.Float32:
-			name = "float32"
+			kind = "float32"
 		case types.Float64:
-			name = "float64"
+			kind = "float64"
 		case types.Complex64:
-			name = "complex64"
+			kind = "complex64"
 		case types.Complex128:
-			name = "complex128"
+			kind = "complex128"
 		case types.String:
-			name = "string"
+			kind = "string"
 		case types.UnsafePointer:
-			name = "unsafeptr"
+			kind = "unsafeptr"
 		default:
 			panic("unknown basic type: " + t.Name())
 		}
-		return "basic:" + name
+		return "basic:" + name + kind
+	case *types.Chan:
+		return "chan:" + name + getTypeCodeName(t.Elem())
+	case *types.Interface:
+		methods := make([]string, t.NumMethods())
+		for i := 0; i < t.NumMethods(); i++ {
+			methods[i] = getTypeCodeName(t.Method(i).Type())
+		}
+		return "interface:" + name + "{" + strings.Join(methods, ",") + "}"
+	case *types.Map:
+		keyType := getTypeCodeName(t.Key())
+		elemType := getTypeCodeName(t.Elem())
+		return "map:" + name + "{" + keyType + "," + elemType + "}"
+	case *types.Pointer:
+		return "pointer:" + name + getTypeCodeName(t.Elem())
+	case *types.Signature:
+		params := make([]string, t.Params().Len())
+		for i := 0; i < t.Params().Len(); i++ {
+			params[i] = getTypeCodeName(t.Params().At(i).Type())
+		}
+		results := make([]string, t.Results().Len())
+		for i := 0; i < t.Results().Len(); i++ {
+			results[i] = getTypeCodeName(t.Results().At(i).Type())
+		}
+		return "func:" + name + "{" + strings.Join(params, ",") + "}{" + strings.Join(results, ",") + "}"
 	case *types.Slice:
-		return "slice:" + getTypeCodeName(t.Elem())
+		return "slice:" + name + getTypeCodeName(t.Elem())
+	case *types.Struct:
+		elems := make([]string, t.NumFields())
+		for i := 0; i < t.NumFields(); i++ {
+			elems[i] = getTypeCodeName(t.Field(i).Type())
+		}
+		return "struct:" + name + "{" + strings.Join(elems, ",") + "}"
 	default:
-		// Unknown type, fall back to the .String() method for identification.
-		return "other:" + t.String()
+		panic("unknown type: " + t.String())
 	}
 }
 
