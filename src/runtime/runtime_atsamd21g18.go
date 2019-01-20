@@ -99,15 +99,24 @@ func initClocks() {
 	}
 
 	// Handle DFLL calibration based on info learned from Arduino SAMD implementation,
-	// using default values.
-	sam.SYSCTRL.DFLLVAL |= (0x1f << sam.SYSCTRL_DFLLVAL_COARSE_Pos)
+	// using value stored in fuse.
+	// #define SYSCTRL_FUSES_DFLL48M_COARSE_CAL_ADDR (NVMCTRL_OTP4 + 4)
+	// #define SYSCTRL_FUSES_DFLL48M_COARSE_CAL_Pos 26           /**< \brief (NVMCTRL_OTP4) DFLL48M Coarse Calibration */
+	// #define SYSCTRL_FUSES_DFLL48M_COARSE_CAL_Msk (0x3Fu << SYSCTRL_FUSES_DFLL48M_COARSE_CAL_Pos)
+	// #define SYSCTRL_FUSES_DFLL48M_COARSE_CAL(value) ((SYSCTRL_FUSES_DFLL48M_COARSE_CAL_Msk & ((value) << SYSCTRL_FUSES_DFLL48M_COARSE_CAL_Pos)))
+	coarse := (fuse >> 26) & 0x3F
+	if coarse == 0x3f {
+		coarse = 0x1f
+	}
+
+	sam.SYSCTRL.DFLLVAL |= sam.RegValue(coarse << sam.SYSCTRL_DFLLVAL_COARSE_Pos)
 	sam.SYSCTRL.DFLLVAL |= (0x1ff << sam.SYSCTRL_DFLLVAL_FINE_Pos)
 
 	// Write full configuration to DFLL control register
 	// SYSCTRL_DFLLMUL_CSTEP( 0x1f / 4 ) | // Coarse step is 31, half of the max value
 	// SYSCTRL_DFLLMUL_FSTEP( 10 ) |
 	// SYSCTRL_DFLLMUL_MUL( (48000) ) ;
-	sam.SYSCTRL.DFLLMUL = sam.RegValue((31 << sam.SYSCTRL_DFLLMUL_CSTEP_Pos) |
+	sam.SYSCTRL.DFLLMUL = sam.RegValue(((31 / 4) << sam.SYSCTRL_DFLLMUL_CSTEP_Pos) |
 		(10 << sam.SYSCTRL_DFLLMUL_FSTEP_Pos) |
 		(48000 << sam.SYSCTRL_DFLLMUL_MUL_Pos))
 
