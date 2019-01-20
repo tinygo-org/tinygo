@@ -5,6 +5,7 @@ package runtime
 import (
 	"device/arm"
 	"device/sam"
+	"machine"
 	"unsafe"
 )
 
@@ -21,16 +22,14 @@ func main() {
 func init() {
 	initClocks()
 	initRTC()
+	initUARTClock()
 
-	// Turn on clock to SERCOM0 for Serial
-	sam.PM.APBCMASK |= sam.PM_APBCMASK_SERCOM0_
-
-	// TODO: connect to UART
+	// connect to UART
+	machine.UART0.Configure(machine.UARTConfig{})
 }
 
 func putchar(c byte) {
-	// TODO: write byte to UART
-	//machine.UART0.WriteByte(c)
+	machine.UART0.WriteByte(c)
 }
 
 func initClocks() {
@@ -216,6 +215,7 @@ func initRTC() {
 	sam.RTC_MODE0.CTRL |= sam.RTC_MODE0_CTRL_ENABLE
 	waitForSync()
 
+	arm.SetPriority(sam.IRQ_RTC, 0xc0)
 	arm.EnableIRQ(sam.IRQ_RTC)
 }
 
@@ -291,4 +291,18 @@ func handleRTC() {
 	sam.RTC_MODE0.INTFLAG = sam.RTC_MODE0_INTENSET_CMP0
 
 	timerWakeup = true
+}
+
+func initUARTClock() {
+	// Turn on clock to SERCOM0 for Serial
+	sam.PM.APBCMASK |= sam.PM_APBCMASK_SERCOM0_
+
+	// Use GCLK0 for SERCOM0 aka UART0
+	// GCLK_CLKCTRL_ID( clockId ) | // Generic Clock 0 (SERCOMx)
+	// GCLK_CLKCTRL_GEN_GCLK0 | // Generic Clock Generator 0 is source
+	// GCLK_CLKCTRL_CLKEN ;
+	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_SERCOM0_CORE << sam.GCLK_CLKCTRL_ID_Pos) |
+		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
+		sam.GCLK_CLKCTRL_CLKEN)
+	waitForSync()
 }
