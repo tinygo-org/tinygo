@@ -2781,6 +2781,12 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 		} else {
 			return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
 		}
+	case *types.Chan:
+		sig, err := c.getLLVMType(expr.Type())
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		return c.getZeroValue(sig)
 	case *types.Signature:
 		if expr.Value != nil {
 			return llvm.Value{}, errors.New("non-nil signature constant")
