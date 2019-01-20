@@ -69,51 +69,58 @@ reflect type: chan
 reflect type: ptr
   pointer: true int
   nil: false
+  reflect type: int settable=true
+    int: 0
 reflect type: ptr
   pointer: true interface
   nil: false
+  reflect type: interface settable=true
+    interface
+    nil: true
 reflect type: ptr
   pointer: true int
   nil: false
+  reflect type: int settable=true
+    int: 42
 reflect type: slice
   slice: uint8 3 3
   pointer: true
   nil: false
   indexing: 0
-  reflect type: uint8
+  reflect type: uint8 settable=true
     uint: 1
   indexing: 1
-  reflect type: uint8
+  reflect type: uint8 settable=true
     uint: 2
   indexing: 2
-  reflect type: uint8
+  reflect type: uint8 settable=true
     uint: 3
 reflect type: slice
   slice: uint8 2 5
   pointer: true
   nil: false
   indexing: 0
-  reflect type: uint8
+  reflect type: uint8 settable=true
     uint: 0
   indexing: 1
-  reflect type: uint8
+  reflect type: uint8 settable=true
     uint: 0
 reflect type: slice
   slice: int32 2 2
   pointer: true
   nil: false
   indexing: 0
-  reflect type: int32
+  reflect type: int32 settable=true
     int: 3
   indexing: 1
-  reflect type: int32
+  reflect type: int32 settable=true
     int: 5
 reflect type: slice
   slice: string 2 2
   pointer: true
   nil: false
   indexing: 0
-  reflect type: string
+  reflect type: string settable=true
     string: xyz 3
     reflect type: uint8
       uint: 120
@@ -122,7 +129,7 @@ reflect type: slice
     reflect type: uint8
       uint: 122
   indexing: 1
-  reflect type: string
+  reflect type: string settable=true
     string: Z 1
     reflect type: uint8
       uint: 90
@@ -134,6 +141,46 @@ reflect type: slice
   slice: uint8 0 0
   pointer: true
   nil: false
+reflect type: slice
+  slice: float32 2 2
+  pointer: true
+  nil: false
+  indexing: 0
+  reflect type: float32 settable=true
+    float: +1.000000e+000
+  indexing: 1
+  reflect type: float32 settable=true
+    float: +1.320000e+000
+reflect type: slice
+  slice: float64 2 2
+  pointer: true
+  nil: false
+  indexing: 0
+  reflect type: float64 settable=true
+    float: +1.000000e+000
+  indexing: 1
+  reflect type: float64 settable=true
+    float: +1.640000e+000
+reflect type: slice
+  slice: complex64 2 2
+  pointer: true
+  nil: false
+  indexing: 0
+  reflect type: complex64 settable=true
+    complex: (+1.000000e+000+0.000000e+000i)
+  indexing: 1
+  reflect type: complex64 settable=true
+    complex: (+1.640000e+000+3.000000e-001i)
+reflect type: slice
+  slice: complex128 2 2
+  pointer: true
+  nil: false
+  indexing: 0
+  reflect type: complex128 settable=true
+    complex: (+1.000000e+000+0.000000e+000i)
+  indexing: 1
+  reflect type: complex128 settable=true
+    complex: (+1.128000e+000+4.000000e-001i)
 reflect type: array
   array
 reflect type: func

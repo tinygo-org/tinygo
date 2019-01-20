@@ -66,6 +66,10 @@ func main() {
 		[]string{"xyz", "Z"},
 		zeroSlice,
 		[]byte{},
+		[]float32{1, 1.32},
+		[]float64{1, 1.64},
+		[]complex64{1, 1.64 + 0.3i},
+		[]complex128{1, 1.128 + 0.4i},
 		// array
 		[4]int{1, 2, 3, 4},
 		// functions
@@ -78,7 +82,7 @@ func main() {
 		struct{}{},
 		struct{ error }{},
 	} {
-		showValue(v, "")
+		showValue(reflect.ValueOf(v), "")
 	}
 
 	// test sizes
@@ -98,24 +102,136 @@ func main() {
 	assertSize(reflect.TypeOf(uintptr(0)).Size() == unsafe.Sizeof(uintptr(0)), "uintptr")
 	assertSize(reflect.TypeOf("").Size() == unsafe.Sizeof(""), "string")
 	assertSize(reflect.TypeOf(new(int)).Size() == unsafe.Sizeof(new(int)), "*int")
+
+	// SetBool
+	rv := reflect.ValueOf(new(bool)).Elem()
+	rv.SetBool(true)
+	if rv.Bool() != true {
+		panic("could not set bool with SetBool()")
+	}
+
+	// SetInt
+	for _, v := range []interface{}{
+		new(int),
+		new(int8),
+		new(int16),
+		new(int32),
+		new(int64),
+	} {
+		rv := reflect.ValueOf(v).Elem()
+		rv.SetInt(99)
+		if rv.Int() != 99 {
+			panic("could not set integer with SetInt()")
+		}
+	}
+
+	// SetUint
+	for _, v := range []interface{}{
+		new(uint),
+		new(uint8),
+		new(uint16),
+		new(uint32),
+		new(uint64),
+		new(uintptr),
+	} {
+		rv := reflect.ValueOf(v).Elem()
+		rv.SetUint(99)
+		if rv.Uint() != 99 {
+			panic("could not set integer with SetUint()")
+		}
+	}
+
+	// SetFloat
+	for _, v := range []interface{}{
+		new(float32),
+		new(float64),
+	} {
+		rv := reflect.ValueOf(v).Elem()
+		rv.SetFloat(2.25)
+		if rv.Float() != 2.25 {
+			panic("could not set float with SetFloat()")
+		}
+	}
+
+	// SetComplex
+	for _, v := range []interface{}{
+		new(complex64),
+		new(complex128),
+	} {
+		rv := reflect.ValueOf(v).Elem()
+		rv.SetComplex(3 + 2i)
+		if rv.Complex() != 3+2i {
+			panic("could not set complex with SetComplex()")
+		}
+	}
+
+	// SetString
+	rv = reflect.ValueOf(new(string)).Elem()
+	rv.SetString("foo")
+	if rv.String() != "foo" {
+		panic("could not set string with SetString()")
+	}
+
+	// Set int
+	rv = reflect.ValueOf(new(int)).Elem()
+	rv.SetInt(33)
+	rv.Set(reflect.ValueOf(22))
+	if rv.Int() != 22 {
+		panic("could not set int with Set()")
+	}
+
+	// Set uint8
+	rv = reflect.ValueOf(new(uint8)).Elem()
+	rv.SetUint(33)
+	rv.Set(reflect.ValueOf(uint8(22)))
+	if rv.Uint() != 22 {
+		panic("could not set uint8 with Set()")
+	}
+
+	// Set string
+	rv = reflect.ValueOf(new(string)).Elem()
+	rv.SetString("foo")
+	rv.Set(reflect.ValueOf("bar"))
+	if rv.String() != "bar" {
+		panic("could not set string with Set()")
+	}
+
+	// Set complex128
+	rv = reflect.ValueOf(new(complex128)).Elem()
+	rv.SetComplex(3 + 2i)
+	rv.Set(reflect.ValueOf(4 + 8i))
+	if rv.Complex() != 4+8i {
+		panic("could not set complex128 with Set()")
+	}
+
+	// Set to slice
+	rv = reflect.ValueOf([]int{3, 5})
+	rv.Index(1).SetInt(7)
+	if rv.Index(1).Int() != 7 {
+		panic("could not set int in slice")
+	}
+	rv.Index(1).Set(reflect.ValueOf(8))
+	if rv.Index(1).Int() != 8 {
+		panic("could not set int in slice")
+	}
+	if rv.Len() != 2 || rv.Index(0).Int() != 3 {
+		panic("slice was changed while setting part of it")
+	}
 }
 
 func emptyFunc() {
 }
 
-func showValue(v interface{}, indent string) {
-	rv := reflect.ValueOf(v)
+func showValue(rv reflect.Value, indent string) {
 	rt := rv.Type()
-	if reflect.TypeOf(v) != rt {
-		panic("direct TypeOf() is different from ValueOf().Type()")
-	}
 	if rt.Kind() != rv.Kind() {
 		panic("type kind is different from value kind")
 	}
-	if reflect.ValueOf(rv.Interface()) != rv {
-		panic("reflect.ValueOf(Value.Interface()) did not return the same value")
+	print(indent+"reflect type: ", rt.Kind().String())
+	if rv.CanSet() {
+		print(" settable=", rv.CanSet())
 	}
-	println(indent+"reflect type:", rt.Kind().String())
+	println()
 	switch rt.Kind() {
 	case reflect.Bool:
 		println(indent+"  bool:", rv.Bool())
@@ -130,7 +246,7 @@ func showValue(v interface{}, indent string) {
 	case reflect.String:
 		println(indent+"  string:", rv.String(), rv.Len())
 		for i := 0; i < rv.Len(); i++ {
-			showValue(rv.Index(i).Interface(), indent+"  ")
+			showValue(rv.Index(i), indent+"  ")
 		}
 	case reflect.UnsafePointer:
 		println(indent+"  pointer:", rv.Pointer() != 0)
@@ -142,19 +258,25 @@ func showValue(v interface{}, indent string) {
 	case reflect.Func:
 		println(indent + "  func")
 		println(indent+"  nil:", rv.IsNil())
+	case reflect.Interface:
+		println(indent + "  interface")
+		println(indent+"  nil:", rv.IsNil())
 	case reflect.Map:
 		println(indent + "  map")
 		println(indent+"  nil:", rv.IsNil())
 	case reflect.Ptr:
 		println(indent+"  pointer:", rv.Pointer() != 0, rt.Elem().Kind().String())
 		println(indent+"  nil:", rv.IsNil())
+		if !rv.IsNil() {
+			showValue(rv.Elem(), indent+"  ")
+		}
 	case reflect.Slice:
 		println(indent+"  slice:", rt.Elem().Kind().String(), rv.Len(), rv.Cap())
 		println(indent+"  pointer:", rv.Pointer() != 0)
 		println(indent+"  nil:", rv.IsNil())
 		for i := 0; i < rv.Len(); i++ {
 			println(indent+"  indexing:", i)
-			showValue(rv.Index(i).Interface(), indent+"  ")
+			showValue(rv.Index(i), indent+"  ")
 		}
 	case reflect.Struct:
 		println(indent + "  struct")

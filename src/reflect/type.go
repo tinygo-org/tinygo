@@ -199,8 +199,7 @@ func (t Type) Size() uintptr {
 	case Slice:
 		return unsafe.Sizeof(SliceHeader{})
 	default:
-		// Size unknown.
-		return 0
+		panic("unimplemented: size of type")
 	}
 }
 
