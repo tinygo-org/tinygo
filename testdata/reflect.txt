@@ -2,6 +2,9 @@ matching types
 true
 false
 false
+false
+false
+false
 
 values of interfaces
 reflect type: bool
@@ -48,6 +51,8 @@ reflect type: complex64
   complex: (+1.200000e+000+3.000000e-001i)
 reflect type: complex128
   complex: (+1.300000e+000+4.000000e-001i)
+reflect type: int
+  int: 32
 reflect type: string
   string: foo 3
   reflect type: uint8
@@ -58,8 +63,22 @@ reflect type: string
     uint: 111
 reflect type: unsafe.Pointer
   pointer: true
+reflect type: chan
+  chan: int
+  nil: true
+reflect type: ptr
+  pointer: true int
+  nil: false
+reflect type: ptr
+  pointer: true interface
+  nil: false
+reflect type: ptr
+  pointer: true int
+  nil: false
 reflect type: slice
   slice: uint8 3 3
+  pointer: true
+  nil: false
   indexing: 0
   reflect type: uint8
     uint: 1
@@ -71,6 +90,8 @@ reflect type: slice
     uint: 3
 reflect type: slice
   slice: uint8 2 5
+  pointer: true
+  nil: false
   indexing: 0
   reflect type: uint8
     uint: 0
@@ -79,6 +100,8 @@ reflect type: slice
     uint: 0
 reflect type: slice
   slice: int32 2 2
+  pointer: true
+  nil: false
   indexing: 0
   reflect type: int32
     int: 3
@@ -87,6 +110,8 @@ reflect type: slice
     int: 5
 reflect type: slice
   slice: string 2 2
+  pointer: true
+  nil: false
   indexing: 0
   reflect type: string
     string: xyz 3
@@ -101,3 +126,43 @@ reflect type: slice
     string: Z 1
     reflect type: uint8
       uint: 90
+reflect type: slice
+  slice: uint8 0 0
+  pointer: false
+  nil: true
+reflect type: slice
+  slice: uint8 0 0
+  pointer: true
+  nil: false
+reflect type: array
+  array
+reflect type: func
+  func
+  nil: true
+reflect type: func
+  func
+  nil: false
+reflect type: map
+  map
+  nil: true
+reflect type: map
+  map
+  nil: false
+reflect type: struct
+  struct
+reflect type: struct
+  struct
+
+sizes:
+int8 1
+int16 2
+int32 4
+int64 8
+uint8 1
+uint16 2
+uint32 4
+uint64 8
+float32 4
+float64 8
+complex64 8
+complex128 16

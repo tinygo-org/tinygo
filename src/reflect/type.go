@@ -4,10 +4,26 @@ import (
 	"unsafe"
 )
 
-// A Kind is the number that the compiler uses for this type.
+// The compiler uses a compact encoding to store type information. Unlike the
+// main Go compiler, most of the types are stored directly in the type code.
 //
-// Not used directly. These types are all replaced with the number the compiler
-// uses internally for the type.
+// Type code bit allocation:
+// xxxxx0: basic types, where xxxxx is the basic type number (never 0).
+//         The higher bits indicate the named type, if any.
+//  nxxx1: complex types, where n indicates whether this is a named type (named
+//         if set) and xxx contains the type kind number:
+//             0 (0001): Chan
+//             1 (0011): Interface
+//             2 (0101): Ptr
+//             3 (0111): Slice
+//             4 (1001): Array
+//             5 (1011): Func
+//             6 (1101): Map
+//             7 (1111): Struct
+//         The higher bits are either the contents of the type depending on the
+//         type (if n is clear) or indicate the number of the named type (if n
+//         is set).
+
 type Kind uintptr
 
 // Copied from reflect/type.go
@@ -32,13 +48,13 @@ const (
 	Complex128
 	String
 	UnsafePointer
-	Array
 	Chan
-	Func
 	Interface
-	Map
 	Ptr
 	Slice
+	Array
+	Func
+	Map
 	Struct
 )
 
@@ -80,8 +96,22 @@ func (k Kind) String() string {
 		return "string"
 	case UnsafePointer:
 		return "unsafe.Pointer"
+	case Chan:
+		return "chan"
+	case Interface:
+		return "interface"
+	case Ptr:
+		return "ptr"
 	case Slice:
 		return "slice"
+	case Array:
+		return "array"
+	case Func:
+		return "func"
+	case Map:
+		return "map"
+	case Struct:
+		return "struct"
 	default:
 		return "invalid"
 	}
@@ -89,7 +119,7 @@ func (k Kind) String() string {
 
 // basicType returns a new Type for this kind if Kind is a basic type.
 func (k Kind) basicType() Type {
-	return Type(k << 2 | 0)
+	return Type(k << 1)
 }
 
 // The typecode as used in an interface{}.
@@ -104,22 +134,22 @@ func (t Type) String() string {
 }
 
 func (t Type) Kind() Kind {
-	if t % 4 == 0 {
-		// Basic type
-		return Kind(t >> 2)
-	} else if t % 4 == 1 {
-		// Slice
-		return Slice
+	if t % 2 == 0 {
+		// basic type
+		return Kind((t >> 1) % 32)
 	} else {
-		return Invalid // TODO
+		return Kind(t >> 1) % 8 + 19
 	}
 }
 
 func (t Type) Elem() Type {
 	switch t.Kind() {
-	case Slice:
-		return t >> 2
-	default: // not implemented: Array, Chan, Map, Ptr
+	case Chan, Ptr, Slice:
+		if (t >> 4) % 2 != 0 {
+			panic("unimplemented: (reflect.Type).Elem() for named types")
+		}
+		return t >> 5
+	default: // not implemented: Array, Map
 		panic("unimplemented: (reflect.Type).Elem()")
 	}
 }
@@ -164,7 +194,7 @@ func (t Type) Size() uintptr {
 		return 16
 	case String:
 		return unsafe.Sizeof(StringHeader{})
-	case UnsafePointer:
+	case UnsafePointer, Chan, Map, Ptr:
 		return unsafe.Sizeof(uintptr(0))
 	case Slice:
 		return unsafe.Sizeof(SliceHeader{})
