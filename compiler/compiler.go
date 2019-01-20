@@ -2400,7 +2400,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 					return c.builder.CreateICmp(llvm.IntUGE, x, y, ""), nil
 				}
 			default:
-				return llvm.Value{}, c.makeError(pos, "todo: binop on integer: "+op.String())
+				panic("binop on integer: " + op.String())
 			}
 		} else if typ.Info()&types.IsFloat != 0 {
 			// Operations on floats
@@ -2413,8 +2413,6 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 				return c.builder.CreateFMul(x, y, ""), nil
 			case token.QUO: // /
 				return c.builder.CreateFDiv(x, y, ""), nil
-			case token.REM: // %
-				return c.builder.CreateFRem(x, y, ""), nil
 			case token.EQL: // ==
 				return c.builder.CreateFCmp(llvm.FloatOEQ, x, y, ""), nil
 			case token.NEQ: // !=
@@ -2428,7 +2426,27 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			case token.GEQ: // >=
 				return c.builder.CreateFCmp(llvm.FloatOGE, x, y, ""), nil
 			default:
-				return llvm.Value{}, c.makeError(pos, "todo: binop on float: "+op.String())
+				panic("binop on float: " + op.String())
+			}
+		} else if typ.Info()&types.IsComplex != 0 {
+			indexr := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
+			indexi := llvm.ConstInt(c.ctx.Int32Type(), 1, false)
+			r1 := c.builder.CreateExtractElement(x, indexr, "r1")
+			r2 := c.builder.CreateExtractElement(y, indexr, "r2")
+			i1 := c.builder.CreateExtractElement(x, indexi, "i1")
+			i2 := c.builder.CreateExtractElement(y, indexi, "i2")
+			switch op {
+			case token.EQL: // ==
+				req := c.builder.CreateFCmp(llvm.FloatOEQ, r1, r2, "")
+				ieq := c.builder.CreateFCmp(llvm.FloatOEQ, i1, i2, "")
+				return c.builder.CreateAnd(req, ieq, ""), nil
+			case token.NEQ: // !=
+				req := c.builder.CreateFCmp(llvm.FloatOEQ, r1, r2, "")
+				ieq := c.builder.CreateFCmp(llvm.FloatOEQ, i1, i2, "")
+				neq := c.builder.CreateAnd(req, ieq, "")
+				return c.builder.CreateNot(neq, ""), nil
+			default:
+				return llvm.Value{}, c.makeError(pos, "todo: binop on complex number: "+op.String())
 			}
 		} else if typ.Info()&types.IsBoolean != 0 {
 			// Operations on booleans
@@ -2438,7 +2456,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			case token.NEQ: // !=
 				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 			default:
-				return llvm.Value{}, c.makeError(pos, "todo: binop on boolean: "+op.String())
+				panic("binop on bool: " + op.String())
 			}
 		} else if typ.Kind() == types.UnsafePointer {
 			// Operations on pointers
@@ -2448,7 +2466,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			case token.NEQ: // !=
 				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
 			default:
-				return llvm.Value{}, c.makeError(pos, "todo: binop on pointer: "+op.String())
+				panic("binop on pointer: " + op.String())
 			}
 		} else if typ.Info()&types.IsString != 0 {
 			// Operations on strings
@@ -2471,7 +2489,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			case token.GEQ: // >=
 				return c.createRuntimeCall("stringLess", []llvm.Value{y, x}, ""), nil
 			default:
-				return llvm.Value{}, c.makeError(pos, "todo: binop on string: "+op.String())
+				panic("binop on string: " + op.String())
 			}
 		} else {
 			return llvm.Value{}, c.makeError(pos, "todo: unknown basic type in binop: "+typ.String())

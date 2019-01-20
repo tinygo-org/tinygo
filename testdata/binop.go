@@ -47,6 +47,20 @@ func main() {
 	println(s2 == Struct2{"foo", 0.0, 7})
 	println(s2 == Struct2{"foo", 1.0, 5})
 	println(s2 == Struct2{"foo", 1.0, 7})
+
+	println("complex numbers")
+	println(c64 == 3+2i)
+	println(c64 == 4+2i)
+	println(c64 == 3+3i)
+	println(c64 != 3+2i)
+	println(c64 != 4+2i)
+	println(c64 != 3+3i)
+	println(c128 == 3+2i)
+	println(c128 == 4+2i)
+	println(c128 == 3+3i)
+	println(c128 != 3+2i)
+	println(c128 != 4+2i)
+	println(c128 != 3+3i)
 }
 
 var x = true
@@ -57,6 +71,9 @@ var s1 = Struct1{3, true}
 var s2 = Struct2{"foo", 0.0, 5}
 
 var a1 = [2]int{1, 2}
+
+var c64 = 3 + 2i
+var c128 = 4 + 3i
 
 type Int int
 
