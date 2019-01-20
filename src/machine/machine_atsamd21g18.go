@@ -8,6 +8,7 @@
 package machine
 
 import (
+	"device/arm"
 	"device/sam"
 )
 
@@ -54,7 +55,7 @@ func (p GPIO) Configure(config GPIOConfig) {
 			p.setPMux(val | (GPIO_SERCOM << sam.PORT_PMUX0_PMUXE_Pos))
 		}
 		// enable port config
-		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR)
+		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR | sam.PORT_PINCFG0_INEN)
 	}
 }
 
@@ -293,4 +294,116 @@ func (p GPIO) setPinCfg(val sam.RegValue8) {
 	case 31:
 		sam.PORT.PINCFG0_31 = val
 	}
+}
+
+// UART
+var (
+	// The first hardware serial port on the SAMD21. Uses the SERCOM0 interface.
+	UART0 = &UART{}
+)
+
+const (
+	SAMPLE_RATE_x16           = 16
+	LSB_FIRST                 = 1
+	SERCOM_RX_PAD_0           = 0
+	SERCOM_RX_PAD_1           = 1
+	SERCOM_RX_PAD_2           = 2
+	SERCOM_RX_PAD_3           = 3
+	UART_TX_PAD_0             = 0 // Only for UART
+	UART_TX_PAD_2             = 1 // Only for UART
+	UART_TX_RTS_CTS_PAD_0_2_3 = 2 // Only for UART with TX on PAD0, RTS on PAD2 and CTS on PAD3
+)
+
+// Configure the UART.
+func (uart UART) Configure(config UARTConfig) {
+	// Default baud rate to 115200.
+	if config.BaudRate == 0 {
+		config.BaudRate = 115200
+	}
+
+	// enable pins
+	GPIO{UART_TX_PIN}.Configure(GPIOConfig{Mode: GPIO_SERCOM})
+	GPIO{UART_RX_PIN}.Configure(GPIOConfig{Mode: GPIO_SERCOM})
+
+	// reset SERCOM0
+	sam.SERCOM0_USART.CTRLA |= sam.SERCOM_USART_CTRLA_SWRST
+	for (sam.SERCOM0_USART.CTRLA&sam.SERCOM_USART_CTRLA_SWRST) > 0 ||
+		(sam.SERCOM0_USART.SYNCBUSY&sam.SERCOM_USART_SYNCBUSY_SWRST) > 0 {
+	}
+
+	// set UART mode/sample rate
+	// SERCOM_USART_CTRLA_MODE(mode) |
+	// SERCOM_USART_CTRLA_SAMPR(sampleRate);
+	sam.SERCOM0_USART.CTRLA = (sam.SERCOM_USART_CTRLA_MODE_USART_INT_CLK << sam.SERCOM_USART_CTRLA_MODE_Pos) |
+		(1 << sam.SERCOM_USART_CTRLA_SAMPR_Pos) // sample rate of 16x
+
+	// Set baud rate
+	uart.SetBaudRate(config.BaudRate)
+
+	// setup UART frame
+	// SERCOM_USART_CTRLA_FORM( (parityMode == SERCOM_NO_PARITY ? 0 : 1) ) |
+	// dataOrder << SERCOM_USART_CTRLA_DORD_Pos;
+	sam.SERCOM0_USART.CTRLA |= (0 << sam.SERCOM_USART_CTRLA_FORM_Pos) | // no parity
+		(LSB_FIRST << sam.SERCOM_USART_CTRLA_DORD_Pos) // data order
+
+	// set UART stop bits/parity
+	// SERCOM_USART_CTRLB_CHSIZE(charSize) |
+	// 	nbStopBits << SERCOM_USART_CTRLB_SBMODE_Pos |
+	// 	(parityMode == SERCOM_NO_PARITY ? 0 : parityMode) << SERCOM_USART_CTRLB_PMODE_Pos; //If no parity use default value
+	sam.SERCOM0_USART.CTRLB |= (0 << sam.SERCOM_USART_CTRLB_CHSIZE_Pos) | // 8 bits is 0
+		(0 << sam.SERCOM_USART_CTRLB_SBMODE_Pos) | // 1 stop bit is zero
+		(0 << sam.SERCOM_USART_CTRLB_PMODE_Pos) // no parity
+
+	// set UART pads. This is not same as pins...
+	//  SERCOM_USART_CTRLA_TXPO(txPad) |
+	//   SERCOM_USART_CTRLA_RXPO(rxPad);
+	sam.SERCOM0_USART.CTRLA |= (UART_TX_PAD_2 << sam.SERCOM_USART_CTRLA_TXPO_Pos) |
+		(SERCOM_RX_PAD_3 << sam.SERCOM_USART_CTRLA_RXPO_Pos)
+
+	// Enable Transceiver and Receiver
+	//sercom->USART.CTRLB.reg |= SERCOM_USART_CTRLB_TXEN | SERCOM_USART_CTRLB_RXEN ;
+	sam.SERCOM0_USART.CTRLB |= (sam.SERCOM_USART_CTRLB_TXEN | sam.SERCOM_USART_CTRLB_RXEN)
+
+	// Enable USART1 port.
+	// sercom->USART.CTRLA.bit.ENABLE = 0x1u;
+	sam.SERCOM0_USART.CTRLA |= sam.SERCOM_USART_CTRLA_ENABLE
+	for (sam.SERCOM0_USART.SYNCBUSY & sam.SERCOM_USART_SYNCBUSY_ENABLE) > 0 {
+	}
+
+	// setup interrupt on receive
+	sam.SERCOM0_USART.INTENSET = sam.SERCOM_USART_INTENSET_RXC
+
+	// Enable RX IRQ.
+	//arm.SetPriority(sam.IRQ_SERCOM0, 0xc0)
+	arm.EnableIRQ(sam.IRQ_SERCOM0)
+}
+
+// SetBaudRate sets the communication speed for the UART.
+func (uart UART) SetBaudRate(br uint32) {
+	// Asynchronous fractional mode (Table 24-2 in datasheet)
+	//   BAUD = fref / (sampleRateValue * fbaud)
+	// (multiply by 8, to calculate fractional piece)
+	// uint32_t baudTimes8 = (SystemCoreClock * 8) / (16 * baudrate);
+	baud := (CPU_FREQUENCY * 8) / (SAMPLE_RATE_x16 * br)
+
+	// sercom->USART.BAUD.FRAC.FP   = (baudTimes8 % 8);
+	// sercom->USART.BAUD.FRAC.BAUD = (baudTimes8 / 8);
+	sam.SERCOM0_USART.BAUD = sam.RegValue16(((baud % 8) << sam.SERCOM_USART_BAUD_FRAC_MODE_FP_Pos) |
+		((baud / 8) << sam.SERCOM_USART_BAUD_FRAC_MODE_BAUD_Pos))
+}
+
+// WriteByte writes a byte of data to the UART.
+func (uart UART) WriteByte(c byte) error {
+	// wait until ready to receive
+	for (sam.SERCOM0_USART.INTFLAG & sam.SERCOM_USART_INTFLAG_DRE) == 0 {
+	}
+	sam.SERCOM0_USART.DATA = sam.RegValue16(c)
+	return nil
+}
+
+//go:export SERCOM0_IRQHandler
+func handleUART0() {
+	// should reset IRQ
+	bufferPut(byte((sam.SERCOM0_USART.DATA & 0xFF)))
+	sam.SERCOM0_USART.INTFLAG |= sam.SERCOM_USART_INTFLAG_RXC
 }
