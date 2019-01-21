@@ -10,6 +10,7 @@ package machine
 import (
 	"device/arm"
 	"device/sam"
+	"errors"
 )
 
 const CPU_FREQUENCY = 48000000
@@ -406,4 +407,254 @@ func handleUART0() {
 	// should reset IRQ
 	bufferPut(byte((sam.SERCOM0_USART.DATA & 0xFF)))
 	sam.SERCOM0_USART.INTFLAG |= sam.SERCOM_USART_INTFLAG_RXC
+}
+
+// I2C on the SAMD21.
+type I2C struct {
+	Bus *sam.SERCOM_I2CM_Type
+}
+
+// Since the I2C interfaces on the SAMD21 use the SERCOMx peripherals,
+// you can have multiple ones. we currently only implement one.
+var (
+	I2C0 = I2C{Bus: sam.SERCOM3_I2CM}
+)
+
+// I2CConfig is used to store config info for I2C.
+type I2CConfig struct {
+	Frequency uint32
+	SCL       uint8
+	SDA       uint8
+}
+
+const (
+	// Default rise time in nanoseconds, based on 4.7K ohm pull up resistors
+	WIRE_RISE_TIME_NANOSECONDS = 125
+
+	// wire bus states
+	WIRE_UNKNOWN_STATE = 0
+	WIRE_IDLE_STATE    = 1
+	WIRE_OWNER_STATE   = 2
+	WIRE_BUSY_STATE    = 3
+
+	// wire commands
+	WIRE_MASTER_ACT_NO_ACTION    = 0
+	WIRE_MASTER_ACT_REPEAT_START = 1
+	WIRE_MASTER_ACT_READ         = 2
+	WIRE_MASTER_ACT_STOP         = 3
+)
+
+const i2cTimeout = 500
+
+// Configure is intended to setup the I2C interface.
+func (i2c I2C) Configure(config I2CConfig) {
+	// Default I2C bus speed is 100 kHz.
+	if config.Frequency == 0 {
+		config.Frequency = TWI_FREQ_100KHZ
+	}
+
+	// reset SERCOM3
+	i2c.Bus.CTRLA |= sam.SERCOM_I2CM_CTRLA_SWRST
+	for (i2c.Bus.CTRLA&sam.SERCOM_I2CM_CTRLA_SWRST) > 0 ||
+		(i2c.Bus.SYNCBUSY&sam.SERCOM_I2CM_SYNCBUSY_SWRST) > 0 {
+	}
+
+	// Set master mode and enable SCL Clock Stretch mode (stretch after ACK bit)
+	//sercom->I2CM.CTRLA.reg =  SERCOM_I2CM_CTRLA_MODE( I2C_MASTER_OPERATION )/* |
+	//SERCOM_I2CM_CTRLA_SCLSM*/ ;
+	i2c.Bus.CTRLA = (sam.SERCOM_I2CM_CTRLA_MODE_I2C_MASTER << sam.SERCOM_I2CM_CTRLA_MODE_Pos) // |
+	//(sam.SERCOM_I2CM_CTRLA_MODE_I2C_MASTER << sam.SERCOM_I2CM_CTRLA_SAMPR_Pos) // sample rate of 16x
+
+	i2c.SetBaudRate(config.Frequency)
+
+	// Enable I2CM port.
+	// sercom->USART.CTRLA.bit.ENABLE = 0x1u;
+	i2c.Bus.CTRLA |= sam.SERCOM_I2CM_CTRLA_ENABLE
+	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_ENABLE) > 0 {
+	}
+
+	// set bus idle mode
+	i2c.Bus.STATUS |= (WIRE_IDLE_STATE << sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)
+	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
+	}
+
+	// enable pins
+	GPIO{SDA_PIN}.Configure(GPIOConfig{Mode: GPIO_SERCOM})
+	GPIO{SCL_PIN}.Configure(GPIOConfig{Mode: GPIO_SERCOM})
+}
+
+// SetBaudRate sets the communication speed for the I2C.
+func (i2c I2C) SetBaudRate(br uint32) {
+	// Synchronous arithmetic baudrate, via Arduino SAMD implementation:
+	// SystemCoreClock / ( 2 * baudrate) - 5 - (((SystemCoreClock / 1000000) * WIRE_RISE_TIME_NANOSECONDS) / (2 * 1000));
+	baud := CPU_FREQUENCY/(2*br) - 5 - (((CPU_FREQUENCY / 1000000) * WIRE_RISE_TIME_NANOSECONDS) / (2 * 1000))
+	i2c.Bus.BAUD = sam.RegValue(baud)
+}
+
+// Tx does a single I2C transaction at the specified address.
+// It clocks out the given address, writes the bytes in w, reads back len(r)
+// bytes and stores them in r, and generates a stop condition on the bus.
+func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+	var err error
+	if len(w) != 0 {
+		// send start/address for write
+		i2c.sendAddress(addr, true)
+
+		// wait until transmission complete
+		timeout := 1000
+		for (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_MB) == 0 {
+			timeout--
+			if timeout == 0 {
+				println("I2C timeout on ready to write data")
+				println(i2c.Bus.INTFLAG)
+				println(i2c.Bus.STATUS)
+				return errors.New("I2C timeout on ready to write data")
+			}
+		}
+
+		// ACK received (0: ACK, 1: NACK)
+		if (i2c.Bus.STATUS & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
+			println("I2C write error: expected ACK not NACK")
+			return errors.New("I2C write error: expected ACK not NACK")
+		}
+
+		// write data
+		for _, b := range w {
+			err = i2c.WriteByte(b)
+			if err != nil {
+				return err
+			}
+		}
+
+		err = i2c.signalStop()
+		if err != nil {
+			return err
+		}
+	}
+	if len(r) != 0 {
+		// send start/address for read
+		i2c.sendAddress(addr, false)
+
+		// wait transmission complete
+		for (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_SB) == 0 {
+			// If the slave NACKS the address, the MB bit will be set.
+			// In that case, send a stop condition and return error.
+			if (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_MB) > 0 {
+				i2c.Bus.CTRLB |= (WIRE_MASTER_ACT_STOP << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop condition
+				println("I2C read error: expected ACK not NACK")
+				return errors.New("I2C read error: expected ACK not NACK")
+			}
+		}
+
+		// ACK received (0: ACK, 1: NACK)
+		if (i2c.Bus.STATUS & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
+			println("I2C read error: expected ACK not NACK")
+			return errors.New("I2C read error: expected ACK not NACK")
+		}
+
+		// read first byte
+		r[0] = i2c.readByte()
+		for i := 1; i < len(r); i++ {
+			// Send an ACK
+			i2c.Bus.CTRLB &^= sam.SERCOM_I2CM_CTRLB_ACKACT
+
+			//sercom->prepareCommandBitsWire(WIRE_MASTER_ACT_READ); // Prepare the ACK command for the slave
+			i2c.signalRead()
+
+			// Read data and send the ACK
+			r[i] = i2c.readByte()
+		}
+
+		// Prepare NACK to stop slave transmission
+		i2c.Bus.CTRLB |= sam.SERCOM_I2CM_CTRLB_ACKACT
+
+		err = i2c.signalStop()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// WriteByte writes a single byte to the I2C bus.
+func (i2c I2C) WriteByte(data byte) error {
+	// Send data byte
+	i2c.Bus.DATA = sam.RegValue8(data)
+
+	// wait until transmission successful
+	timeout := i2cTimeout
+	for (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_MB) == 0 {
+		// check for bus error
+		if (sam.SERCOM3_I2CM.STATUS & sam.SERCOM_I2CM_STATUS_BUSERR) > 0 {
+			println("I2C bus error")
+			return errors.New("I2C bus error")
+		}
+		timeout--
+		if timeout == 0 {
+			println("I2C timeout on write data")
+			return errors.New("I2C timeout on write data")
+		}
+	}
+
+	if (i2c.Bus.STATUS & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
+		println("I2C write error: expected ACK not NACK")
+		return errors.New("I2C write error: expected ACK not NACK")
+	}
+
+	return nil
+}
+
+// sendAddress sends the address and start signal
+func (i2c I2C) sendAddress(address uint16, write bool) error {
+	data := (address << 1)
+	if !write {
+		data |= 1 // set read flag
+	}
+
+	// wait until bus ready
+	timeout := i2cTimeout
+	for (i2c.Bus.STATUS&(WIRE_IDLE_STATE<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)) == 0 &&
+		(i2c.Bus.STATUS&(WIRE_OWNER_STATE<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)) == 0 {
+		timeout--
+		if timeout == 0 {
+			println("I2C timeout on bus ready")
+			return errors.New("I2C timeout on bus ready")
+		}
+	}
+	i2c.Bus.ADDR |= sam.RegValue(data)
+
+	return nil
+}
+
+func (i2c I2C) signalStop() error {
+	i2c.Bus.CTRLB |= (WIRE_MASTER_ACT_STOP << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop condition
+	timeout := i2cTimeout
+	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) == 0 {
+		timeout--
+		if timeout == 0 {
+			println("I2C timeout on signal stop")
+			return errors.New("I2C timeout on signal stop")
+		}
+	}
+	return nil
+}
+
+func (i2c I2C) signalRead() error {
+	i2c.Bus.CTRLB |= (WIRE_MASTER_ACT_READ << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Read condition
+	timeout := i2cTimeout
+	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) == 0 {
+		timeout--
+		if timeout == 0 {
+			println("I2C timeout on signal read")
+			return errors.New("I2C timeout on signal read")
+		}
+	}
+	return nil
+}
+
+func (i2c I2C) readByte() byte {
+	for (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_SB) == 0 {
+	}
+	return byte(i2c.Bus.DATA)
 }

@@ -1,4 +1,4 @@
-// +build avr nrf stm32f103xx
+// +build avr nrf sam stm32f103xx
 
 package machine
 
