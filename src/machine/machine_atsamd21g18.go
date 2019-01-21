@@ -303,15 +303,15 @@ var (
 )
 
 const (
-	SAMPLE_RATE_x16           = 16
-	LSB_FIRST                 = 1
-	SERCOM_RX_PAD_0           = 0
-	SERCOM_RX_PAD_1           = 1
-	SERCOM_RX_PAD_2           = 2
-	SERCOM_RX_PAD_3           = 3
-	UART_TX_PAD_0             = 0 // Only for UART
-	UART_TX_PAD_2             = 1 // Only for UART
-	UART_TX_RTS_CTS_PAD_0_2_3 = 2 // Only for UART with TX on PAD0, RTS on PAD2 and CTS on PAD3
+	sampleRate16X  = 16
+	lsbFirst       = 1
+	sercomRXPad0   = 0
+	sercomRXPad1   = 1
+	sercomRXPad2   = 2
+	sercomRXPad3   = 3
+	sercomTXPad0   = 0 // Only for UART
+	sercomTXPad2   = 1 // Only for UART
+	sercomTXPad023 = 2 // Only for UART with TX on PAD0, RTS on PAD2 and CTS on PAD3
 )
 
 // Configure the UART.
@@ -344,7 +344,7 @@ func (uart UART) Configure(config UARTConfig) {
 	// SERCOM_USART_CTRLA_FORM( (parityMode == SERCOM_NO_PARITY ? 0 : 1) ) |
 	// dataOrder << SERCOM_USART_CTRLA_DORD_Pos;
 	sam.SERCOM0_USART.CTRLA |= (0 << sam.SERCOM_USART_CTRLA_FORM_Pos) | // no parity
-		(LSB_FIRST << sam.SERCOM_USART_CTRLA_DORD_Pos) // data order
+		(lsbFirst << sam.SERCOM_USART_CTRLA_DORD_Pos) // data order
 
 	// set UART stop bits/parity
 	// SERCOM_USART_CTRLB_CHSIZE(charSize) |
@@ -357,8 +357,8 @@ func (uart UART) Configure(config UARTConfig) {
 	// set UART pads. This is not same as pins...
 	//  SERCOM_USART_CTRLA_TXPO(txPad) |
 	//   SERCOM_USART_CTRLA_RXPO(rxPad);
-	sam.SERCOM0_USART.CTRLA |= (UART_TX_PAD_2 << sam.SERCOM_USART_CTRLA_TXPO_Pos) |
-		(SERCOM_RX_PAD_3 << sam.SERCOM_USART_CTRLA_RXPO_Pos)
+	sam.SERCOM0_USART.CTRLA |= (sercomTXPad2 << sam.SERCOM_USART_CTRLA_TXPO_Pos) |
+		(sercomRXPad3 << sam.SERCOM_USART_CTRLA_RXPO_Pos)
 
 	// Enable Transceiver and Receiver
 	//sercom->USART.CTRLB.reg |= SERCOM_USART_CTRLB_TXEN | SERCOM_USART_CTRLB_RXEN ;
@@ -384,7 +384,7 @@ func (uart UART) SetBaudRate(br uint32) {
 	//   BAUD = fref / (sampleRateValue * fbaud)
 	// (multiply by 8, to calculate fractional piece)
 	// uint32_t baudTimes8 = (SystemCoreClock * 8) / (16 * baudrate);
-	baud := (CPU_FREQUENCY * 8) / (SAMPLE_RATE_x16 * br)
+	baud := (CPU_FREQUENCY * 8) / (sampleRate16X * br)
 
 	// sercom->USART.BAUD.FRAC.FP   = (baudTimes8 % 8);
 	// sercom->USART.BAUD.FRAC.BAUD = (baudTimes8 / 8);
