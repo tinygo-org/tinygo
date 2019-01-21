@@ -429,22 +429,22 @@ type I2CConfig struct {
 
 const (
 	// Default rise time in nanoseconds, based on 4.7K ohm pull up resistors
-	WIRE_RISE_TIME_NANOSECONDS = 125
+	riseTimeNanoseconds = 125
 
 	// wire bus states
-	WIRE_UNKNOWN_STATE = 0
-	WIRE_IDLE_STATE    = 1
-	WIRE_OWNER_STATE   = 2
-	WIRE_BUSY_STATE    = 3
+	wireUnknownState = 0
+	wireIdleState    = 1
+	wireOwnerState   = 2
+	wireBusyState    = 3
 
 	// wire commands
-	WIRE_MASTER_ACT_NO_ACTION    = 0
-	WIRE_MASTER_ACT_REPEAT_START = 1
-	WIRE_MASTER_ACT_READ         = 2
-	WIRE_MASTER_ACT_STOP         = 3
+	wireCmdNoAction    = 0
+	wireCmdRepeatStart = 1
+	wireCmdRead        = 2
+	wireCmdStop        = 3
 )
 
-const i2cTimeout = 500
+const i2cTimeout = 1000
 
 // Configure is intended to setup the I2C interface.
 func (i2c I2C) Configure(config I2CConfig) {
@@ -459,11 +459,9 @@ func (i2c I2C) Configure(config I2CConfig) {
 		(i2c.Bus.SYNCBUSY&sam.SERCOM_I2CM_SYNCBUSY_SWRST) > 0 {
 	}
 
-	// Set master mode and enable SCL Clock Stretch mode (stretch after ACK bit)
-	//sercom->I2CM.CTRLA.reg =  SERCOM_I2CM_CTRLA_MODE( I2C_MASTER_OPERATION )/* |
-	//SERCOM_I2CM_CTRLA_SCLSM*/ ;
+	// Set i2c master mode
+	//SERCOM_I2CM_CTRLA_MODE( I2C_MASTER_OPERATION )
 	i2c.Bus.CTRLA = (sam.SERCOM_I2CM_CTRLA_MODE_I2C_MASTER << sam.SERCOM_I2CM_CTRLA_MODE_Pos) // |
-	//(sam.SERCOM_I2CM_CTRLA_MODE_I2C_MASTER << sam.SERCOM_I2CM_CTRLA_SAMPR_Pos) // sample rate of 16x
 
 	i2c.SetBaudRate(config.Frequency)
 
@@ -474,7 +472,7 @@ func (i2c I2C) Configure(config I2CConfig) {
 	}
 
 	// set bus idle mode
-	i2c.Bus.STATUS |= (WIRE_IDLE_STATE << sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)
+	i2c.Bus.STATUS |= (wireIdleState << sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)
 	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
 	}
 
@@ -487,7 +485,7 @@ func (i2c I2C) Configure(config I2CConfig) {
 func (i2c I2C) SetBaudRate(br uint32) {
 	// Synchronous arithmetic baudrate, via Arduino SAMD implementation:
 	// SystemCoreClock / ( 2 * baudrate) - 5 - (((SystemCoreClock / 1000000) * WIRE_RISE_TIME_NANOSECONDS) / (2 * 1000));
-	baud := CPU_FREQUENCY/(2*br) - 5 - (((CPU_FREQUENCY / 1000000) * WIRE_RISE_TIME_NANOSECONDS) / (2 * 1000))
+	baud := CPU_FREQUENCY/(2*br) - 5 - (((CPU_FREQUENCY / 1000000) * riseTimeNanoseconds) / (2 * 1000))
 	i2c.Bus.BAUD = sam.RegValue(baud)
 }
 
@@ -501,20 +499,16 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		i2c.sendAddress(addr, true)
 
 		// wait until transmission complete
-		timeout := 1000
+		timeout := i2cTimeout
 		for (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_MB) == 0 {
 			timeout--
 			if timeout == 0 {
-				println("I2C timeout on ready to write data")
-				println(i2c.Bus.INTFLAG)
-				println(i2c.Bus.STATUS)
 				return errors.New("I2C timeout on ready to write data")
 			}
 		}
 
 		// ACK received (0: ACK, 1: NACK)
 		if (i2c.Bus.STATUS & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
-			println("I2C write error: expected ACK not NACK")
 			return errors.New("I2C write error: expected ACK not NACK")
 		}
 
@@ -540,15 +534,13 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			// If the slave NACKS the address, the MB bit will be set.
 			// In that case, send a stop condition and return error.
 			if (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_MB) > 0 {
-				i2c.Bus.CTRLB |= (WIRE_MASTER_ACT_STOP << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop condition
-				println("I2C read error: expected ACK not NACK")
+				i2c.Bus.CTRLB |= (wireCmdStop << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop condition
 				return errors.New("I2C read error: expected ACK not NACK")
 			}
 		}
 
 		// ACK received (0: ACK, 1: NACK)
 		if (i2c.Bus.STATUS & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
-			println("I2C read error: expected ACK not NACK")
 			return errors.New("I2C read error: expected ACK not NACK")
 		}
 
@@ -558,14 +550,13 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			// Send an ACK
 			i2c.Bus.CTRLB &^= sam.SERCOM_I2CM_CTRLB_ACKACT
 
-			//sercom->prepareCommandBitsWire(WIRE_MASTER_ACT_READ); // Prepare the ACK command for the slave
 			i2c.signalRead()
 
 			// Read data and send the ACK
 			r[i] = i2c.readByte()
 		}
 
-		// Prepare NACK to stop slave transmission
+		// Send NACK to end transmission
 		i2c.Bus.CTRLB |= sam.SERCOM_I2CM_CTRLB_ACKACT
 
 		err = i2c.signalStop()
@@ -587,18 +578,15 @@ func (i2c I2C) WriteByte(data byte) error {
 	for (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_MB) == 0 {
 		// check for bus error
 		if (sam.SERCOM3_I2CM.STATUS & sam.SERCOM_I2CM_STATUS_BUSERR) > 0 {
-			println("I2C bus error")
 			return errors.New("I2C bus error")
 		}
 		timeout--
 		if timeout == 0 {
-			println("I2C timeout on write data")
 			return errors.New("I2C timeout on write data")
 		}
 	}
 
 	if (i2c.Bus.STATUS & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
-		println("I2C write error: expected ACK not NACK")
 		return errors.New("I2C write error: expected ACK not NACK")
 	}
 
@@ -614,26 +602,24 @@ func (i2c I2C) sendAddress(address uint16, write bool) error {
 
 	// wait until bus ready
 	timeout := i2cTimeout
-	for (i2c.Bus.STATUS&(WIRE_IDLE_STATE<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)) == 0 &&
-		(i2c.Bus.STATUS&(WIRE_OWNER_STATE<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)) == 0 {
+	for (i2c.Bus.STATUS&(wireIdleState<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)) == 0 &&
+		(i2c.Bus.STATUS&(wireOwnerState<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)) == 0 {
 		timeout--
 		if timeout == 0 {
-			println("I2C timeout on bus ready")
 			return errors.New("I2C timeout on bus ready")
 		}
 	}
-	i2c.Bus.ADDR |= sam.RegValue(data)
+	i2c.Bus.ADDR = sam.RegValue(data)
 
 	return nil
 }
 
 func (i2c I2C) signalStop() error {
-	i2c.Bus.CTRLB |= (WIRE_MASTER_ACT_STOP << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop condition
+	i2c.Bus.CTRLB |= (wireCmdStop << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop command
 	timeout := i2cTimeout
-	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) == 0 {
+	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
 		timeout--
 		if timeout == 0 {
-			println("I2C timeout on signal stop")
 			return errors.New("I2C timeout on signal stop")
 		}
 	}
@@ -641,12 +627,11 @@ func (i2c I2C) signalStop() error {
 }
 
 func (i2c I2C) signalRead() error {
-	i2c.Bus.CTRLB |= (WIRE_MASTER_ACT_READ << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Read condition
+	i2c.Bus.CTRLB |= (wireCmdRead << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Read command
 	timeout := i2cTimeout
-	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) == 0 {
+	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
 		timeout--
 		if timeout == 0 {
-			println("I2C timeout on signal read")
 			return errors.New("I2C timeout on signal read")
 		}
 	}
