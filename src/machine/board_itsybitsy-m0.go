@@ -29,3 +29,9 @@ const (
 	UART_TX_PIN = D1
 	UART_RX_PIN = D0
 )
+
+// I2C pins
+const (
+	SDA_PIN = 22 // // SDA: SERCOM3/PAD[0]
+	SCL_PIN = 23 // // SCL: SERCOM3/PAD[1]
+)
