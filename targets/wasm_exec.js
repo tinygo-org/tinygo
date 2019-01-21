@@ -427,7 +427,6 @@
 				if (code === 0 && !go.exited) {
 					// deadlock, make Go print error and stack traces
 					go._callbackShutdown = true;
-					go._inst.exports.run();
 				}
 			});
 			return go.run(result.instance);
