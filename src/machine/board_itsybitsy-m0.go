@@ -24,8 +24,8 @@ const (
 	LED = D13
 )
 
-// UART pins
+// UART0 pins
 const (
-	UART_TX_PIN = 0
-	UART_RX_PIN = 0
+	UART_TX_PIN = D1
+	UART_RX_PIN = D0
 )
