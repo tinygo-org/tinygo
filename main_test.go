@@ -82,6 +82,16 @@ func TestCompiler(t *testing.T) {
 			})
 		}
 	}
+
+	t.Log("running tests for WebAssembly...")
+	for _, path := range matches {
+		if path == "testdata/gc.go" {
+			continue // known to fail
+		}
+		t.Run(path, func(t *testing.T) {
+			runTest(path, tmpdir, "wasm", t)
+		})
+	}
 }
 
 func runTest(path, tmpdir string, target string, t *testing.T) {
@@ -106,6 +116,7 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 		dumpSSA:    false,
 		debug:      false,
 		printSizes: "",
+		wasmAbi:    "js",
 	}
 	binary := filepath.Join(tmpdir, "test")
 	err = Build("./"+path, binary, target, config)
