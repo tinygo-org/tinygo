@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/user"
@@ -235,12 +236,50 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	return &spec, nil
 }
 
-// Return the source directory of this package, or "." when it cannot be
-// recovered.
+// Return the TINYGOROOT, or exit with an error.
 func sourceDir() string {
+	// Use $TINYGOROOT as root, if available.
+	root := os.Getenv("TINYGOROOT")
+	if root != "" {
+		if !isSourceDir(root) {
+			fmt.Fprintln(os.Stderr, "error: $TINYGOROOT was not set to the correct root")
+			os.Exit(1)
+		}
+		return root
+	}
+
+	// Find root from executable path.
+	path, err := os.Executable()
+	if err != nil {
+		// Very unlikely. Bail out if it happens.
+		panic("could not get executable path: " + err.Error())
+	}
+	root = filepath.Dir(filepath.Dir(path))
+	if isSourceDir(root) {
+		return root
+	}
+
+	// Fallback: use the original directory from where it was built
 	// https://stackoverflow.com/a/32163888/559350
-	_, path, _, _ := runtime.Caller(0)
-	return filepath.Dir(path)
+	_, path, _, _ = runtime.Caller(0)
+	root = filepath.Dir(path)
+	if isSourceDir(root) {
+		return root
+	}
+
+	fmt.Fprintln(os.Stderr, "error: could not autodetect root directory, set the TINYGOROOT environment variable to override")
+	os.Exit(1)
+	panic("unreachable")
+}
+
+// isSourceDir returns true if the directory looks like a TinyGo source directory.
+func isSourceDir(root string) bool {
+	_, err := os.Stat(filepath.Join(root, "src/runtime/internal/sys/zversion.go"))
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(filepath.Join(root, "src/device/arm/arm.go"))
+	return err == nil
 }
 
 func getGopath() string {
