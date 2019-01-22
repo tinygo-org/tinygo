@@ -1,9 +1,9 @@
 
 # aliases
-all: tgo
-tgo: build/tgo
+all: tinygo
+tinygo: build/tinygo
 
-.PHONY: all tgo run-test run-blinky run-blinky2 clean fmt gen-device gen-device-nrf gen-device-avr
+.PHONY: all tinygo run-test run-blinky run-blinky2 clean fmt gen-device gen-device-nrf gen-device-avr
 
 TARGET ?= unix
 
@@ -96,17 +96,17 @@ gen-device-stm32:
 	go fmt ./src/device/stm32
 
 # Build the Go compiler.
-build/tgo: *.go compiler/*.go interp/*.go loader/*.go ir/*.go
+tinygo:
 	@mkdir -p build
-	go build -o build/tgo -i .
+	go build -o build/tinygo .
 
 # Binary that can run on the host.
-build/%: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go
-	./build/tgo build $(TGOFLAGS) -size=short -o $@ $(subst src/,,$<)
+build/%: src/examples/% src/examples/%/*.go build/tinygo src/runtime/*.go
+	./build/tinygo build $(TGOFLAGS) -size=short -o $@ $(subst src/,,$<)
 
 # ELF file that can run on a microcontroller.
-build/%.elf: src/examples/% src/examples/%/*.go build/tgo src/runtime/*.go
-	./build/tgo build $(TGOFLAGS) -size=short -o $@ $(subst src/,,$<)
+build/%.elf: src/examples/% src/examples/%/*.go build/tinygo src/runtime/*.go
+	./build/tinygo build $(TGOFLAGS) -size=short -o $@ $(subst src/,,$<)
 
 # Convert executable to Intel hex file (for flashing).
 build/%.hex: build/%.elf

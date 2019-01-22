@@ -4,7 +4,7 @@ import (
 	"unsafe"
 )
 
-const Compiler = "tgo"
+const Compiler = "tinygo"
 
 // The compiler will fill this with calls to the initialization function of each
 // package.
