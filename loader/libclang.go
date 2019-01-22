@@ -39,7 +39,7 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string) error {
 	// convert Go slice of strings to C array of strings.
 	cmdargsC := C.malloc(C.size_t(len(cflags)) * C.size_t(unsafe.Sizeof(uintptr(0))))
 	defer C.free(cmdargsC)
-	cmdargs := (*[1<<30 - 1]*C.char)(cmdargsC)
+	cmdargs := (*[1 << 16]*C.char)(cmdargsC)
 	for i, cflag := range cflags {
 		s := C.CString(cflag)
 		cmdargs[i] = s
