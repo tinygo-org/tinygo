@@ -3,14 +3,6 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:747e7010f73dc26e5cb298444f6f1b4442ae155ab87e44080686b94a5f9d6c90"
-  name = "tinygo.org/x/go-llvm"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "8a0a627130a54562f55b1c2a9d7b8019ff14d9f1"
-
-[[projects]]
-  branch = "master"
   digest = "1:84316faef4ea12d34dde3b3e6dab682715a23b1c2bb8ab82cec9ab619766e214"
   name = "golang.org/x/tools"
   packages = [
@@ -21,12 +13,20 @@
   pruneopts = "UT"
   revision = "3e7aa9e59977626dc60433e9aeadf1bb63d28295"
 
+[[projects]]
+  branch = "master"
+  digest = "1:3611159788efdd4e0cfae18b6ebcccbad25a2815968b0e4323b42647d201031a"
+  name = "tinygo.org/x/go-llvm"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "f420620d1a0f54417a5712260153fe861780d030"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "tinygo.org/x/go-llvm",
     "golang.org/x/tools/go/ssa",
+    "tinygo.org/x/go-llvm",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

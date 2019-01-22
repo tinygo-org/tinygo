@@ -3,7 +3,7 @@
 all: tinygo
 tinygo: build/tinygo
 
-.PHONY: all tinygo run-test run-blinky run-blinky2 clean fmt gen-device gen-device-nrf gen-device-avr
+.PHONY: all tinygo static run-test run-blinky run-blinky2 clean fmt gen-device gen-device-nrf gen-device-avr
 
 TARGET ?= unix
 
@@ -39,6 +39,15 @@ else
 $(error Unknown target)
 
 endif
+
+LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines debuginfodwarf executionengine instrumentation interpreter ipo irreader linker mc mcjit objcarcopts option profiledata scalaropts support target
+
+CLANG_LIBS = -Wl,--start-group $(abspath $(LLVM_BUILDDIR))/lib/libclang.a -lclangAnalysis -lclangARCMigrate -lclangAST -lclangASTMatchers -lclangBasic -lclangCodeGen -lclangCrossTU -lclangDriver -lclangDynamicASTMatchers -lclangEdit -lclangFormat -lclangFrontend -lclangFrontendTool -lclangHandleCXX -lclangHandleLLVM -lclangIndex -lclangLex -lclangParse -lclangRewrite -lclangRewriteFrontend -lclangSema -lclangSerialization -lclangStaticAnalyzerCheckers -lclangStaticAnalyzerCore -lclangStaticAnalyzerFrontend -lclangTooling -lclangToolingASTDiff -lclangToolingCore -lclangToolingInclusions -lclangToolingRefactor -Wl,--end-group -lstdc++
+
+# For static linking.
+CGO_CPPFLAGS=$(shell $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(CLANG_SRC))/include
+CGO_CXXFLAGS=-std=c++11
+CGO_LDFLAGS=-L$(LLVM_BUILDDIR)/lib $(CLANG_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS))
 
 
 
@@ -99,6 +108,25 @@ gen-device-stm32:
 tinygo:
 	@mkdir -p build
 	go build -o build/tinygo .
+
+static:
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go build -o build/tinygo -tags byollvm .
+
+release: static gen-device
+	@mkdir -p build/release/tinygo/bin
+	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
+	@mkdir -p build/release/tinygo/lib/compiler-rt/lib
+	@mkdir -p build/release/tinygo/lib/nrfx
+	@cp -p  build/tinygo                 build/release/tinygo/bin
+	@cp -rp lib/CMSIS/CMSIS/Include      build/release/tinygo/lib/CMSIS/CMSIS
+	@cp -rp lib/CMSIS/README.md          build/release/tinygo/lib/CMSIS
+	@cp -rp lib/compiler-rt/lib/builtins build/release/tinygo/lib/compiler-rt/lib
+	@cp -rp lib/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt
+	@cp -rp lib/compiler-rt/README.txt   build/release/tinygo/lib/compiler-rt
+	@cp -rp lib/nrfx/*                   build/release/tinygo/lib/nrfx
+	@cp -rp src                          build/release/tinygo/src
+	@cp -rp targets                      build/release/tinygo/targets
+	tar -czf build/release.tar.gz -C build/release tinygo
 
 # Binary that can run on the host.
 build/%: src/examples/% src/examples/%/*.go build/tinygo src/runtime/*.go
