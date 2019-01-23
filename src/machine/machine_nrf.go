@@ -54,6 +54,11 @@ func (p GPIO) Get() bool {
 	return (port.IN>>pin)&1 != 0
 }
 
+// UART on the NRF.
+type UART struct {
+	Buffer RingBuffer
+}
+
 // UART
 var (
 	// UART0 is the hardware serial port on the NRF.
@@ -108,7 +113,7 @@ func (uart UART) WriteByte(c byte) error {
 
 func (uart UART) handleInterrupt() {
 	if nrf.UART0.EVENTS_RXDRDY != 0 {
-		bufferPut(byte(nrf.UART0.RXD))
+		uart.Receive(byte(nrf.UART0.RXD))
 		nrf.UART0.EVENTS_RXDRDY = 0x0
 	}
 }

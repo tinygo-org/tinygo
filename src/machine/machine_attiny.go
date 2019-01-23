@@ -25,6 +25,11 @@ func (p GPIO) Get() bool {
 	return (val > 0)
 }
 
+// UART on the AVR is a dummy implementation. UART has not been implemented for ATtiny
+// devices.
+type UART struct {
+}
+
 // Configure is a dummy implementation. UART has not been implemented for ATtiny
 // devices.
 func (uart UART) Configure(config UARTConfig) {

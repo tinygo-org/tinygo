@@ -100,6 +100,10 @@ func (p GPIO) Set(high bool) {
 }
 
 // UART
+type UART struct {
+	Buffer RingBuffer
+}
+
 var (
 	// USART1 is the first hardware serial port on the STM32.
 	// Both UART0 and UART1 refers to USART1.
@@ -160,7 +164,7 @@ func (uart UART) WriteByte(c byte) error {
 
 //go:export USART1_IRQHandler
 func handleUART1() {
-	bufferPut(byte((stm32.USART1.DR & 0xFF)))
+	UART1.Receive(byte((stm32.USART1.DR & 0xFF)))
 }
 
 // SPI on the STM32.

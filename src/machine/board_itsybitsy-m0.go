@@ -4,8 +4,8 @@ package machine
 
 // GPIO Pins
 const (
-	D0  = 11 // RX: SERCOM0/PAD[3]
-	D1  = 10 // TX: SERCOM0/PAD[2]
+	D0  = 11 // UART0 RX: SERCOM0/PAD[3]
+	D1  = 10 // UART0 TX: SERCOM0/PAD[2]
 	D2  = 14
 	D3  = 9
 	D4  = 8
@@ -14,8 +14,8 @@ const (
 	D7  = 21
 	D8  = 6
 	D9  = 7
-	D10 = 18
-	D11 = 16
+	D10 = 18 // UART1 TX(1): SERCOM1/PAD[2] can be used for UART1 TX
+	D11 = 16 // UART1 TX(2): SERCOM1/PAD[0] can be used for UART1 TX
 	D12 = 19
 	D13 = 17
 )
