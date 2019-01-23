@@ -305,10 +305,10 @@ type UART struct {
 
 var (
 	// The first hardware serial port on the SAMD21. Uses the SERCOM0 interface.
-	UART0 = &UART{Bus: sam.SERCOM0_USART, Buffer: NewRingBuffer()}
+	UART0 = UART{Bus: sam.SERCOM0_USART, Buffer: NewRingBuffer()}
 
 	// The second hardware serial port on the SAMD21. Uses the SERCOM1 interface.
-	UART1 = &UART{Bus: sam.SERCOM1_USART, Buffer: NewRingBuffer()}
+	UART1 = UART{Bus: sam.SERCOM1_USART, Buffer: NewRingBuffer()}
 )
 
 const (

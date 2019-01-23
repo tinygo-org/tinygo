@@ -62,7 +62,7 @@ type UART struct {
 // UART
 var (
 	// UART0 is the hardware serial port on the NRF.
-	UART0 = &UART{Buffer: NewRingBuffer()}
+	UART0 = UART{Buffer: NewRingBuffer()}
 )
 
 // Configure the UART.

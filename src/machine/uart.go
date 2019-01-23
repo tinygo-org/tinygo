@@ -21,7 +21,7 @@ type UARTConfig struct {
 // When you are declaring your UARTs for your board, make sure that you also declare the
 // RingBuffer using the NewRingBuffer() function when you declare your UART:
 //
-//		&UART{Buffer: NewRingBuffer()}
+//		UART{Buffer: NewRingBuffer()}
 //
 
 // Read from the RX buffer.

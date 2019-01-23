@@ -106,9 +106,9 @@ type UART struct {
 
 var (
 	// USART1 is the first hardware serial port on the STM32.
-	// Both UART0 and UART1 refers to USART1.
-	UART0 = &UART{Buffer: NewRingBuffer()}
-	UART1 = UART0
+	// Both UART0 and UART1 refer to USART1.
+	UART0 = UART{Buffer: NewRingBuffer()}
+	UART1 = &UART0
 )
 
 // Configure the UART.
