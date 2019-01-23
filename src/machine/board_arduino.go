@@ -16,3 +16,9 @@ const (
 	ADC4 = 4 // Used by TWI for SDA
 	ADC5 = 5 // Used by TWI for SCL
 )
+
+// UART pins
+const (
+	UART_TX_PIN = 1
+	UART_RX_PIN = 0
+)

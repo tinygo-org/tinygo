@@ -28,6 +28,7 @@ func (p GPIO) Get() bool {
 // UART on the AVR is a dummy implementation. UART has not been implemented for ATtiny
 // devices.
 type UART struct {
+	Buffer *RingBuffer
 }
 
 // Configure is a dummy implementation. UART has not been implemented for ATtiny

@@ -14,13 +14,18 @@ type RingBuffer struct {
 	tail     volatileByte
 }
 
+// NewRingBuffer returns a new ring buffer.
+func NewRingBuffer() *RingBuffer {
+	return &RingBuffer{}
+}
+
 // Used returns how many bytes in buffer have been used.
-func (rb RingBuffer) Used() uint8 {
+func (rb *RingBuffer) Used() uint8 {
 	return uint8(rb.head - rb.tail)
 }
 
 // Put stores a byte in the buffer.
-func (rb RingBuffer) Put(val byte) {
+func (rb *RingBuffer) Put(val byte) {
 	if rb.Used() != bufferSize {
 		rb.head++
 		rb.rxbuffer[rb.head%bufferSize] = volatileByte(val)
@@ -28,7 +33,7 @@ func (rb RingBuffer) Put(val byte) {
 }
 
 // Get returns a byte from the buffer.
-func (rb RingBuffer) Get() byte {
+func (rb *RingBuffer) Get() byte {
 	if rb.Used() != 0 {
 		rb.tail++
 		return byte(rb.rxbuffer[rb.tail%bufferSize])

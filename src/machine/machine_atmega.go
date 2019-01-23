@@ -213,7 +213,7 @@ func (i2c I2C) readByte() byte {
 
 // UART on the AVR.
 type UART struct {
-	Buffer RingBuffer
+	Buffer *RingBuffer
 }
 
 // Configure the UART on the AVR. Defaults to 9600 baud on Arduino.

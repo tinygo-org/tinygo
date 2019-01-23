@@ -13,11 +13,16 @@ type UARTConfig struct {
 // To implement the UART interface for a board, you must declare a concrete type as follows:
 //
 // 		type UART struct {
-// 			Buffer RingBuffer
+// 			Buffer *RingBuffer
 // 		}
 //
 // You can also add additional members to this struct depending on your implementation,
-// but the RingBuffer is required.
+// but the *RingBuffer is required.
+// When you are declaring your UARTs for your board, make sure that you also declare the
+// RingBuffer using the NewRingBuffer() function when you declare your UART:
+//
+//		&UART{Buffer: NewRingBuffer()}
+//
 
 // Read from the RX buffer.
 func (uart UART) Read(data []byte) (n int, err error) {

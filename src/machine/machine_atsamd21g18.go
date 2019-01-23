@@ -299,16 +299,16 @@ func (p GPIO) setPinCfg(val sam.RegValue8) {
 
 // UART on the SAMD21.
 type UART struct {
-	Buffer RingBuffer
+	Buffer *RingBuffer
 	Bus    *sam.SERCOM_USART_Type
 }
 
 var (
 	// The first hardware serial port on the SAMD21. Uses the SERCOM0 interface.
-	UART0 = &UART{Bus: sam.SERCOM0_USART}
+	UART0 = &UART{Bus: sam.SERCOM0_USART, Buffer: NewRingBuffer()}
 
 	// The second hardware serial port on the SAMD21. Uses the SERCOM1 interface.
-	UART1 = &UART{Bus: sam.SERCOM1_USART}
+	UART1 = &UART{Bus: sam.SERCOM1_USART, Buffer: NewRingBuffer()}
 )
 
 const (
@@ -330,13 +330,42 @@ func (uart UART) Configure(config UARTConfig) {
 		config.BaudRate = 115200
 	}
 
-	// enable pins
+	// determine pins
 	if config.TX == 0 {
 		// use default pins
 		config.TX = UART_TX_PIN
 		config.RX = UART_RX_PIN
 	}
 
+	// determine pads
+	var txpad, rxpad int
+	switch config.TX {
+	case UART_TX_PIN:
+		txpad = sercomTXPad2
+	case D10:
+		txpad = sercomTXPad2
+	case D11:
+		txpad = sercomTXPad0
+	default:
+		panic("Invalid TX pin for UART")
+	}
+
+	switch config.RX {
+	case UART_RX_PIN:
+		rxpad = sercomRXPad3
+	case D10:
+		rxpad = sercomRXPad2
+	case D11:
+		rxpad = sercomRXPad0
+	case D12:
+		rxpad = sercomRXPad3
+	case D13:
+		rxpad = sercomRXPad1
+	default:
+		panic("Invalid RX pin for UART")
+	}
+
+	// configure pins
 	GPIO{config.TX}.Configure(GPIOConfig{Mode: GPIO_SERCOM})
 	GPIO{config.RX}.Configure(GPIOConfig{Mode: GPIO_SERCOM})
 
@@ -372,12 +401,8 @@ func (uart UART) Configure(config UARTConfig) {
 	// set UART pads. This is not same as pins...
 	//  SERCOM_USART_CTRLA_TXPO(txPad) |
 	//   SERCOM_USART_CTRLA_RXPO(rxPad);
-	txpad := sercomTXPad2
-	if config.TX == D11 {
-		txpad = sercomTXPad0
-	}
 	uart.Bus.CTRLA |= sam.RegValue((txpad << sam.SERCOM_USART_CTRLA_TXPO_Pos) |
-		(sercomRXPad3 << sam.SERCOM_USART_CTRLA_RXPO_Pos))
+		(rxpad << sam.SERCOM_USART_CTRLA_RXPO_Pos))
 
 	// Enable Transceiver and Receiver
 	//sercom->USART.CTRLB.reg |= SERCOM_USART_CTRLB_TXEN | SERCOM_USART_CTRLB_RXEN ;
