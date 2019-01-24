@@ -166,7 +166,9 @@ func (p *Program) Parse() error {
 		err := pkg.importRecursively()
 		if err != nil {
 			if err, ok := err.(*ImportCycleError); ok {
-				err.Packages = append([]string{pkg.ImportPath}, err.Packages...)
+				if pkg.ImportPath != err.Packages[0] {
+					err.Packages = append([]string{pkg.ImportPath}, err.Packages...)
+				}
 			}
 			return err
 		}
@@ -339,10 +341,13 @@ func (p *Package) importRecursively() error {
 			return err
 		}
 		if importedPkg.Importing {
-			return &ImportCycleError{[]string{p.ImportPath, importedPkg.ImportPath}}
+			return &ImportCycleError{[]string{p.ImportPath, importedPkg.ImportPath}, p.ImportPos[to]}
 		}
 		err = importedPkg.importRecursively()
 		if err != nil {
+			if err, ok := err.(*ImportCycleError); ok {
+				err.Packages = append([]string{p.ImportPath}, err.Packages...)
+			}
 			return err
 		}
 		p.Imports[to] = importedPkg
