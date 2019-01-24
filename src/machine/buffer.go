@@ -1,6 +1,6 @@
 package machine
 
-const bufferSize = 64
+const bufferSize = 128
 
 //go:volatile
 type volatileByte byte
