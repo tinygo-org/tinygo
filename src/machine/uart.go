@@ -58,11 +58,11 @@ func (uart UART) Write(data []byte) (n int, err error) {
 // If there is no data in the buffer, returns an error.
 func (uart UART) ReadByte() (byte, error) {
 	// check if RX buffer is empty
-	if uart.Buffered() == 0 {
+	buf, ok := uart.Buffer.Get()
+	if !ok {
 		return 0, errors.New("Buffer empty")
 	}
-
-	return uart.Buffer.Get(), nil
+	return buf, nil
 }
 
 // Buffered returns the number of bytes currently stored in the RX buffer.
