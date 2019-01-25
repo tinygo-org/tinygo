@@ -10,8 +10,19 @@ type UARTConfig struct {
 	RX       uint8
 }
 
-type UART struct {
-}
+// To implement the UART interface for a board, you must declare a concrete type as follows:
+//
+// 		type UART struct {
+// 			Buffer *RingBuffer
+// 		}
+//
+// You can also add additional members to this struct depending on your implementation,
+// but the *RingBuffer is required.
+// When you are declaring your UARTs for your board, make sure that you also declare the
+// RingBuffer using the NewRingBuffer() function when you declare your UART:
+//
+//		UART{Buffer: NewRingBuffer()}
+//
 
 // Read from the RX buffer.
 func (uart UART) Read(data []byte) (n int, err error) {
@@ -47,41 +58,20 @@ func (uart UART) Write(data []byte) (n int, err error) {
 // If there is no data in the buffer, returns an error.
 func (uart UART) ReadByte() (byte, error) {
 	// check if RX buffer is empty
-	if uart.Buffered() == 0 {
+	buf, ok := uart.Buffer.Get()
+	if !ok {
 		return 0, errors.New("Buffer empty")
 	}
-
-	return bufferGet(), nil
+	return buf, nil
 }
 
 // Buffered returns the number of bytes currently stored in the RX buffer.
 func (uart UART) Buffered() int {
-	return int(bufferUsed())
+	return int(uart.Buffer.Used())
 }
 
-const bufferSize = 64
-
-// Minimal ring buffer implementation inspired by post at
-// https://www.embeddedrelated.com/showthread/comp.arch.embedded/77084-1.php
-
-//go:volatile
-type volatileByte byte
-
-var rxbuffer [bufferSize]volatileByte
-var head volatileByte
-var tail volatileByte
-
-func bufferUsed() uint8 { return uint8(head - tail) }
-func bufferPut(val byte) {
-	if bufferUsed() != bufferSize {
-		head++
-		rxbuffer[head%bufferSize] = volatileByte(val)
-	}
-}
-func bufferGet() byte {
-	if bufferUsed() != 0 {
-		tail++
-		return byte(rxbuffer[tail%bufferSize])
-	}
-	return 0
+// Receive handles adding data to the UART's data buffer.
+// Usually called by the IRQ handler for a machine.
+func (uart UART) Receive(data byte) {
+	uart.Buffer.Put(data)
 }

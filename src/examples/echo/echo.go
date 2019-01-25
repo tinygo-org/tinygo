@@ -7,27 +7,34 @@ import (
 	"time"
 )
 
+// change these to test a different UART or pins if available
+var (
+	uart       = machine.UART0
+	tx   uint8 = machine.UART_TX_PIN
+	rx   uint8 = machine.UART_RX_PIN
+)
+
 func main() {
-	machine.UART0.Configure(machine.UARTConfig{})
-	machine.UART0.Write([]byte("Echo console enabled. Type something then press enter:\r\n"))
+	uart.Configure(machine.UARTConfig{TX: tx, RX: rx})
+	uart.Write([]byte("Echo console enabled. Type something then press enter:\r\n"))
 
 	input := make([]byte, 64)
 	i := 0
 	for {
-		if machine.UART0.Buffered() > 0 {
-			data, _ := machine.UART0.ReadByte()
+		if uart.Buffered() > 0 {
+			data, _ := uart.ReadByte()
 
 			switch data {
 			case 13:
 				// return key
-				machine.UART0.Write([]byte("\r\n"))
-				machine.UART0.Write([]byte("You typed: "))
-				machine.UART0.Write(input[:i])
-				machine.UART0.Write([]byte("\r\n"))
+				uart.Write([]byte("\r\n"))
+				uart.Write([]byte("You typed: "))
+				uart.Write(input[:i])
+				uart.Write([]byte("\r\n"))
 				i = 0
 			default:
 				// just echo the character
-				machine.UART0.WriteByte(data)
+				uart.WriteByte(data)
 				input[i] = data
 				i++
 			}

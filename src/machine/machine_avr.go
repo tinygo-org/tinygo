@@ -92,5 +92,5 @@ var I2C0 = I2C{}
 // UART
 var (
 	// UART0 is the hardware serial port on the AVR.
-	UART0 = &UART{}
+	UART0 = UART{Buffer: NewRingBuffer()}
 )

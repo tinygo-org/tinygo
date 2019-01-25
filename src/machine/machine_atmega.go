@@ -211,6 +211,11 @@ func (i2c I2C) readByte() byte {
 	return byte(*avr.TWDR)
 }
 
+// UART on the AVR.
+type UART struct {
+	Buffer *RingBuffer
+}
+
 // Configure the UART on the AVR. Defaults to 9600 baud on Arduino.
 func (uart UART) Configure(config UARTConfig) {
 	if config.BaudRate == 0 {
@@ -248,6 +253,6 @@ func handleUSART_RX() {
 	// Ensure no error.
 	if (*avr.UCSR0A & (avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0)) == 0 {
 		// Put data from UDR register into buffer.
-		bufferPut(byte(data))
+		UART0.Receive(byte(data))
 	}
 }
