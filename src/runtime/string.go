@@ -166,3 +166,14 @@ func decodeUTF8(s string, index uintptr) (rune, uintptr) {
 		return 0xfffd, 1
 	}
 }
+
+// indexByte returns the index of the first instance of c in s, or -1 if c is not present in s.
+//go:linkname indexByte strings.IndexByte
+func indexByte(s string, c byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
+}
