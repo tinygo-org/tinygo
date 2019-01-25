@@ -201,7 +201,7 @@ func loadBuiltins(target string) (path string, err error) {
 		cmd.Dir = dir
 		err = cmd.Run()
 		if err != nil {
-			return "", err
+			return "", &commandError{"failed to build", srcpath, err}
 		}
 	}
 
@@ -213,7 +213,7 @@ func loadBuiltins(target string) (path string, err error) {
 	cmd.Dir = dir
 	err = cmd.Run()
 	if err != nil {
-		return "", err
+		return "", &commandError{"failed to make static library", arpath, err}
 	}
 
 	return cacheStore(arpath, outfile, commands["clang"], srcs)

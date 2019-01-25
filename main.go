@@ -25,6 +25,18 @@ var commands = map[string]string{
 	"clang": "clang-7",
 }
 
+// commandError is an error type to wrap os/exec.Command errors. This provides
+// some more information regarding what went wrong while running a command.
+type commandError struct {
+	Msg  string
+	File string
+	Err  error
+}
+
+func (e *commandError) Error() string {
+	return e.Msg + " " + e.File + ": " + e.Err.Error()
+}
+
 type BuildConfig struct {
 	opt        string
 	gc         string
@@ -200,7 +212,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 			cmd.Dir = sourceDir()
 			err := cmd.Run()
 			if err != nil {
-				return err
+				return &commandError{"failed to build", path, err}
 			}
 			ldflags = append(ldflags, outpath)
 		}
@@ -216,7 +228,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 				cmd.Dir = sourceDir()
 				err := cmd.Run()
 				if err != nil {
-					return err
+					return &commandError{"failed to build", path, err}
 				}
 				ldflags = append(ldflags, outpath)
 			}
@@ -229,7 +241,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		cmd.Dir = sourceDir()
 		err = cmd.Run()
 		if err != nil {
-			return err
+			return &commandError{"failed to link", executable, err}
 		}
 
 		if config.printSizes == "short" || config.printSizes == "full" {
@@ -263,7 +275,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 			cmd.Stderr = os.Stderr
 			err = cmd.Run()
 			if err != nil {
-				return err
+				return &commandError{"failed to extract " + format + " from", executable, err}
 			}
 		}
 		return action(tmppath)
@@ -325,7 +337,11 @@ func Flash(pkgName, target, port string, config *BuildConfig) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Dir = sourceDir()
-		return cmd.Run()
+		err := cmd.Run()
+		if err != nil {
+			return &commandError{"failed to flash", tmppath, err}
+		}
+		return nil
 	})
 }
 
@@ -392,7 +408,11 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		return cmd.Run()
+		err := cmd.Run()
+		if err != nil {
+			return &commandError{"failed to run gdb with", tmppath, err}
+		}
+		return nil
 	})
 }
 
@@ -415,8 +435,9 @@ func Run(pkgName, target string, config *BuildConfig) error {
 					// Workaround for QEMU which always exits with an error.
 					return nil
 				}
+				return &commandError{"failed to run compiled binary", tmppath, err}
 			}
-			return err
+			return nil
 		} else {
 			// Run in an emulator.
 			args := append(spec.Emulator[1:], tmppath)
@@ -429,8 +450,9 @@ func Run(pkgName, target string, config *BuildConfig) error {
 					// Workaround for QEMU which always exits with an error.
 					return nil
 				}
+				return &commandError{"failed to run emulator with", tmppath, err}
 			}
-			return err
+			return nil
 		}
 	})
 }
