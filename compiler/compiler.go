@@ -1995,10 +1995,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			// Bounds check.
 			// LLVM optimizes this away in most cases.
-			length, err := c.parseBuiltin(frame, []ssa.Value{expr.X}, "len", expr.Pos())
-			if err != nil {
-				return llvm.Value{}, err // shouldn't happen
-			}
+			length := c.builder.CreateExtractValue(value, 1, "len")
 			c.emitBoundsCheck(frame, length, index, expr.Index.Type())
 
 			// Lookup byte
