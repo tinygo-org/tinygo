@@ -80,29 +80,45 @@ func cacheStore(tmppath, name, configKey string, sourceFiles []string) (string, 
 		return "", err
 	}
 	cachepath := filepath.Join(dir, name)
-	err = os.Rename(tmppath, cachepath)
+	err = moveFile(tmppath, cachepath)
 	if err != nil {
-		inf, err := os.Open(tmppath)
-		if err != nil {
-			return "", err
-		}
-		defer inf.Close()
-		outf, err := os.Create(cachepath + ".tmp")
-		if err != nil {
-			return "", err
-		}
-
-		_, err = io.Copy(outf, inf)
-		if err != nil {
-			return "", err
-		}
-
-		err = os.Rename(cachepath+".tmp", cachepath)
-		if err != nil {
-			return "", err
-		}
-
-		return cachepath, outf.Close()
+		return "", err
 	}
 	return cachepath, nil
+}
+
+// moveFile renames the file from src to dst. If renaming doesn't work (for
+// example, the rename crosses a filesystem boundary), the file is copied and
+// the old file is removed.
+func moveFile(src, dst string) error {
+	err := os.Rename(src, dst)
+	if err == nil {
+		// Success!
+		return nil
+	}
+	// Failed to move, probably a different filesystem.
+	// Do a copy + remove.
+	inf, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer inf.Close()
+	outpath := dst + ".tmp"
+	outf, err := os.Create(outpath)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(outf, inf)
+	if err != nil {
+		os.Remove(outpath)
+		return err
+	}
+
+	err = os.Rename(dst+".tmp", dst)
+	if err != nil {
+		return err
+	}
+
+	return outf.Close()
 }

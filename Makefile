@@ -117,6 +117,9 @@ release: static gen-device
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
 	@mkdir -p build/release/tinygo/lib/compiler-rt/lib
 	@mkdir -p build/release/tinygo/lib/nrfx
+	@mkdir -p build/release/tinygo/pkg/armv6m-none-eabi
+	@mkdir -p build/release/tinygo/pkg/armv7m-none-eabi
+	@mkdir -p build/release/tinygo/pkg/armv7em-none-eabi
 	@cp -p  build/tinygo                 build/release/tinygo/bin
 	@cp -rp lib/CMSIS/CMSIS/Include      build/release/tinygo/lib/CMSIS/CMSIS
 	@cp -rp lib/CMSIS/README.md          build/release/tinygo/lib/CMSIS
@@ -126,6 +129,9 @@ release: static gen-device
 	@cp -rp lib/nrfx/*                   build/release/tinygo/lib/nrfx
 	@cp -rp src                          build/release/tinygo/src
 	@cp -rp targets                      build/release/tinygo/targets
+	./build/tinygo build-builtins -target=armv6m-none-eabi  -o build/release/tinygo/pkg/armv6m-none-eabi/compiler-rt.a
+	./build/tinygo build-builtins -target=armv7m-none-eabi  -o build/release/tinygo/pkg/armv7m-none-eabi/compiler-rt.a
+	./build/tinygo build-builtins -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/compiler-rt.a
 	tar -czf build/release.tar.gz -C build/release tinygo
 
 # Binary that can run on the host.

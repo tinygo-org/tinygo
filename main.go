@@ -186,13 +186,12 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 
 		// Load builtins library from the cache, possibly compiling it on the
 		// fly.
-		var cachePath string
+		var librt string
 		if spec.RTLib == "compiler-rt" {
-			librt, err := loadBuiltins(spec.Triple)
+			librt, err = loadBuiltins(spec.Triple)
 			if err != nil {
 				return err
 			}
-			cachePath, _ = filepath.Split(librt)
 		}
 
 		// Prepare link command.
@@ -200,7 +199,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		tmppath := executable // final file
 		ldflags := append(spec.LDFlags, "-o", executable, objfile)
 		if spec.RTLib == "compiler-rt" {
-			ldflags = append(ldflags, "-L", cachePath, "-lrt-"+spec.Triple)
+			ldflags = append(ldflags, librt)
 		}
 
 		// Compile extra files.
@@ -553,6 +552,20 @@ func main() {
 			target = "wasm"
 		}
 		err := Build(flag.Arg(0), *outpath, target, config)
+		handleCompilerError(err)
+	case "build-builtins":
+		// Note: this command is only meant to be used while making a release!
+		if *outpath == "" {
+			fmt.Fprintln(os.Stderr, "No output filename supplied (-o).")
+			usage()
+			os.Exit(1)
+		}
+		if *target == "" {
+			fmt.Fprintln(os.Stderr, "No target (-target).")
+		}
+		err := compileBuiltins(*target, func(path string) error {
+			return moveFile(path, *outpath)
+		})
 		handleCompilerError(err)
 	case "flash", "gdb":
 		if *outpath != "" {

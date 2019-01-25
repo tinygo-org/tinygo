@@ -157,16 +157,29 @@ var aeabiBuiltins = []string{
 
 func builtinFiles(target string) []string {
 	builtins := append([]string{}, genericBuiltins...) // copy genericBuiltins
-	if target[:3] == "arm" {
+	if strings.HasPrefix(target, "arm") {
 		builtins = append(builtins, aeabiBuiltins...)
 	}
 	return builtins
 }
 
+// builtinsDir returns the directory where the sources for compiler-rt are kept.
+func builtinsDir() string {
+	return filepath.Join(sourceDir(), "lib", "compiler-rt", "lib", "builtins")
+}
+
 // Get the builtins archive, possibly generating it as needed.
 func loadBuiltins(target string) (path string, err error) {
+	// Try to load a precompiled compiler-rt library.
+	precompiledPath := filepath.Join(sourceDir(), "pkg", target, "compiler-rt.a")
+	if _, err := os.Stat(precompiledPath); err == nil {
+		// Found a precompiled compiler-rt for this OS/architecture. Return the
+		// path directly.
+		return precompiledPath, nil
+	}
+
 	outfile := "librt-" + target + ".a"
-	builtinsDir := filepath.Join(sourceDir(), "lib", "compiler-rt", "lib", "builtins")
+	builtinsDir := builtinsDir()
 
 	builtins := builtinFiles(target)
 	srcs := make([]string, len(builtins))
@@ -178,9 +191,33 @@ func loadBuiltins(target string) (path string, err error) {
 		return path, err
 	}
 
-	dir, err := ioutil.TempDir("", "tinygo-builtins")
+	var cachepath string
+	err = compileBuiltins(target, func(path string) error {
+		path, err := cacheStore(path, outfile, commands["clang"], srcs)
+		cachepath = path
+		return err
+	})
+	return cachepath, err
+}
+
+// compileBuiltins compiles builtins from compiler-rt into a static library.
+// When it succeeds, it will call the callback with the resulting path. The path
+// will be removed after callback returns. If callback returns an error, this is
+// passed through to the return value of this function.
+func compileBuiltins(target string, callback func(path string) error) error {
+	builtinsDir := builtinsDir()
+
+	builtins := builtinFiles(target)
+	srcs := make([]string, len(builtins))
+	for i, name := range builtins {
+		srcs[i] = filepath.Join(builtinsDir, name)
+	}
+
+	dirPrefix := "tinygo-builtins"
+	remapDir := filepath.Join(os.TempDir(), dirPrefix)
+	dir, err := ioutil.TempDir(os.TempDir(), dirPrefix)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer os.RemoveAll(dir)
 
@@ -195,13 +232,16 @@ func loadBuiltins(target string) (path string, err error) {
 		objpath := filepath.Join(dir, objname+".o")
 		objs = append(objs, objpath)
 		srcpath := filepath.Join(builtinsDir, name)
-		cmd := exec.Command(commands["clang"], "-c", "-Oz", "-g", "-Werror", "-Wall", "-std=c11", "-fshort-enums", "-nostdlibinc", "-ffunction-sections", "-fdata-sections", "--target="+target, "-o", objpath, srcpath)
+		// Note: -fdebug-prefix-map is necessary to make the output archive
+		// reproducible. Otherwise the temporary directory is stored in the
+		// archive itself, which varies each run.
+		cmd := exec.Command(commands["clang"], "-c", "-Oz", "-g", "-Werror", "-Wall", "-std=c11", "-fshort-enums", "-nostdlibinc", "-ffunction-sections", "-fdata-sections", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir, "-o", objpath, srcpath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Dir = dir
 		err = cmd.Run()
 		if err != nil {
-			return "", &commandError{"failed to build", srcpath, err}
+			return &commandError{"failed to build", srcpath, err}
 		}
 	}
 
@@ -213,8 +253,10 @@ func loadBuiltins(target string) (path string, err error) {
 	cmd.Dir = dir
 	err = cmd.Run()
 	if err != nil {
-		return "", &commandError{"failed to make static library", arpath, err}
+		return &commandError{"failed to make static library", arpath, err}
 	}
 
-	return cacheStore(arpath, outfile, commands["clang"], srcs)
+	// Give the caller the resulting file. The callback must copy the file,
+	// because after it returns the temporary directory will be removed.
+	return callback(arpath)
 }
