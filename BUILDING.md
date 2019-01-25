@@ -1,16 +1,17 @@
 # Building TinyGo
 
-TinyGo depends on LLVM and libclang, which are both big C++ libraries. There are
-two ways these can be linked: dynamically and statically. The default is dynamic
-linking because it is fast and works almost out of the box on Debian-based
-systems with the right libraries installed.
+TinyGo depends on LLVM and libclang, which are both big C++ libraries. It can
+also optionally use a built-in lld to ease cross compiling. There are two ways
+these can be linked: dynamically and statically. The default is dynamic linking
+because it is fast and works almost out of the box on Debian-based systems with
+the right libraries installed.
 
-This guide describes how to statically link TinyGo against LLVM and libclang so
-that the binary can be easily moved between systems.
+This guide describes how to statically link TinyGo against LLVM, libclang and
+lld so that the binary can be easily moved between systems.
 
 ## Dependencies
 
-LLVM and Clang are both quite light on dependencies, requiring only standard
+LLVM, Clang and LLD are quite light on dependencies, requiring only standard
 build tools to be built. Go is of course necessary to build TinyGo itself.
 
   * Go (1.11+)
@@ -30,14 +31,15 @@ The first step is to get the source code. Place it in some directory, assuming
 
     git clone -b release_70 https://github.com/llvm-mirror/llvm.git $HOME/src/llvm
     git clone -b release_70 https://github.com/llvm-mirror/clang.git $HOME/src/llvm/tools/clang
+    git clone -b release_70 https://github.com/llvm-mirror/lld.git $HOME/src/llvm/tools/lld
     go get -d github.com/tinygo-org/tinygo
     cd $HOME/go/src/github.com/tinygo-org/tinygo
     dep ensure -vendor-only # download dependencies
 
-Note that Clang must be placed inside the tools subdirectory of LLVM to be
-automatically built with the rest of the system.
+Note that Clang and LLD must be placed inside the tools subdirectory of LLVM to
+be automatically built with the rest of the system.
 
-## Build LLVM and Clang
+## Build LLVM, Clang, LLD
 
 Building LLVM is quite easy compared to some other software packages. However,
 the default configuration is _not_ optimized for distribution. It is optimized
@@ -86,10 +88,10 @@ This can take over an hour depending on the speed of your system.
 ## Build TinyGo
 
 Now that you have a working version of LLVM, build TinyGo using it. You need to
-specify the directories to the LLVM build directory and to the Clang source.
+specify the directories to the LLVM build directory and to the Clang and LLD source.
 
     cd $HOME/go/src/github.com/tinygo-org/tinygo
-    make static LLVM_BUILDDIR=$HOME/src/llvm-build CLANG_SRC=$HOME/src/llvm/tools/clang
+    make static LLVM_BUILDDIR=$HOME/src/llvm-build CLANG_SRC=$HOME/src/llvm/tools/clang LLD_SRC=$HOME/src/llvm/tools/lld
 
 ## Verify TinyGo
 
@@ -98,7 +100,7 @@ Try running TinyGo:
     ./build/tinygo help
 
 Also, make sure the `tinygo` binary really is statically linked. Check this
-using `ldd`:
+using `ldd` (not to be confused with `lld`):
 
     ldd ./build/tinygo
 

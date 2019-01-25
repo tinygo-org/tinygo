@@ -4,13 +4,12 @@
 	"goos":          "js",
 	"goarch":        "wasm",
 	"compiler":      "clang-7",
-	"linker":        "ld.lld-7",
+	"linker":        "wasm-ld-7",
 	"cflags": [
 		"--target=wasm32",
 		"-Oz"
 	],
 	"ldflags": [
-		"-flavor", "wasm",
 		"-allow-undefined"
 	],
 	"emulator":      ["cwa"]

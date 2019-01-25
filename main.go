@@ -21,8 +21,10 @@ import (
 )
 
 var commands = map[string]string{
-	"ar":    "ar",
-	"clang": "clang-7",
+	"ar":      "ar",
+	"clang":   "clang-7",
+	"ld.lld":  "ld.lld-7",
+	"wasm-ld": "wasm-ld-7",
 }
 
 // commandError is an error type to wrap os/exec.Command errors. This provides
@@ -234,11 +236,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		}
 
 		// Link the object files together.
-		cmd := exec.Command(spec.Linker, ldflags...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Dir = sourceDir()
-		err = cmd.Run()
+		err = Link(sourceDir(), spec.Linker, ldflags...)
 		if err != nil {
 			return &commandError{"failed to link", executable, err}
 		}
