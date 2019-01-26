@@ -14,8 +14,7 @@ type _string struct {
 
 // The iterator state for a range over a string.
 type stringIterator struct {
-	byteindex  uintptr
-	rangeindex uintptr
+	byteindex uintptr
 }
 
 // Return true iff the strings match.
@@ -105,10 +104,10 @@ func stringNext(s string, it *stringIterator) (bool, int, rune) {
 	if len(s) <= int(it.byteindex) {
 		return false, 0, 0
 	}
+	i := int(it.byteindex)
 	r, length := decodeUTF8(s, it.byteindex)
 	it.byteindex += length
-	it.rangeindex += 1
-	return true, int(it.rangeindex), r
+	return true, i, r
 }
 
 // Convert a Unicode code point into an array of bytes and its length.
