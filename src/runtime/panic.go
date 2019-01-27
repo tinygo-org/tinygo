@@ -57,15 +57,21 @@ func sliceBoundsCheck64(capacity uintptr, low, high uint64) {
 }
 
 // Check for bounds in *ssa.MakeSlice.
-func sliceBoundsCheckMake(length, capacity uint) {
-	if !(0 <= length && length <= capacity) {
+func sliceBoundsCheckMake(length, capacity uintptr, elementSizeDoubled uintptr) {
+	overflow := uint64(capacity*elementSizeDoubled) != uint64(capacity)*uint64(elementSizeDoubled)
+	if length > capacity || overflow {
 		runtimePanic("slice size out of range")
 	}
 }
 
 // Check for bounds in *ssa.MakeSlice. Supports 64-bit indexes.
-func sliceBoundsCheckMake64(length, capacity uint64) {
-	if !(0 <= length && length <= capacity) {
+func sliceBoundsCheckMake64(length, capacity uint64, elementSizeDoubled uintptr) {
+	// This function is only ever called on systems where uintptr is smaller
+	// than uint64 (thus must be 32-bit or less). So multiplying as uint64 will
+	// never overflow if we know that capacity fits in uintptr.
+	// That elementSizeDoubled fits in uintptr is checked by the compiler.
+	overflow := capacity != uint64(uintptr(capacity)) || capacity != uint64(uintptr(capacity*uint64(elementSizeDoubled)))
+	if length > capacity || overflow {
 		runtimePanic("slice size out of range")
 	}
 }

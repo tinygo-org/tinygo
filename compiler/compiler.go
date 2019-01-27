@@ -1481,9 +1481,16 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		var buf llvm.Value
 		if expr.Heap {
+			size := c.targetData.TypeAllocSize(typ)
+			// Calculate ^uintptr(0)
+			maxSize := llvm.ConstNot(llvm.ConstInt(c.uintptrType, 0, false)).ZExtValue()
+			if size > maxSize {
+				// Size would be truncated if truncated to uintptr.
+				return llvm.Value{}, c.makeError(expr.Pos(), fmt.Sprintf("value is too big (%v bytes)", size))
+			}
 			// TODO: escape analysis
-			size := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(typ), false)
-			buf = c.createRuntimeCall("alloc", []llvm.Value{size}, expr.Comment)
+			sizeValue := llvm.ConstInt(c.uintptrType, size, false)
+			buf = c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, expr.Comment)
 			buf = c.builder.CreateBitCast(buf, llvm.PointerType(typ, 0), "")
 		} else {
 			buf = c.builder.CreateAlloca(typ, expr.Comment)
@@ -1727,6 +1734,15 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, nil
 		}
 		elemSize := c.targetData.TypeAllocSize(llvmElemType)
+		elemSizeValue := llvm.ConstInt(c.uintptrType, elemSize, false)
+
+		// Calculate ^uintptr(0)
+		maxSize := llvm.ConstNot(llvm.ConstInt(c.uintptrType, 0, false)).ZExtValue()
+		if elemSize > maxSize {
+			// This seems to be checked by the typechecker already, but let's
+			// check it again just to be sure.
+			return llvm.Value{}, c.makeError(expr.Pos(), fmt.Sprintf("slice element type is too big (%v bytes)", elemSize))
+		}
 
 		// Bounds checking.
 		if !frame.fn.IsNoBounds() {
@@ -1754,12 +1770,14 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 					sliceCap = c.builder.CreateSExt(sliceCap, biggestInt, "")
 				}
 			}
-			c.createRuntimeCall(checkFunc, []llvm.Value{sliceLen, sliceCap}, "")
+			// Note: the max element size needs to be doubled to make sure it
+			// fits in an int for, for example, len().
+			elemSizeDoubled := c.builder.CreateMul(elemSizeValue, llvm.ConstInt(c.uintptrType, 2, false), "")
+			c.createRuntimeCall(checkFunc, []llvm.Value{sliceLen, sliceCap, elemSizeDoubled}, "")
 		}
 
 		// Allocate the backing array.
 		// TODO: escape analysis
-		elemSizeValue := llvm.ConstInt(c.uintptrType, elemSize, false)
 		sliceCapCast, err := c.parseConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
 		if err != nil {
 			return llvm.Value{}, err
