@@ -1,7 +1,7 @@
 package interp
 
 import (
-	"github.com/aykevl/go-llvm"
+	"tinygo.org/x/go-llvm"
 )
 
 type sideEffectSeverity int

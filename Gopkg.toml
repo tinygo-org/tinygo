@@ -1,6 +1,6 @@
 [[constraint]]
   branch = "master"
-  name = "github.com/aykevl/go-llvm"
+  name = "tinygo.org/x/go-llvm"
 
 [[constraint]]
   branch = "master"

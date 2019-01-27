@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aykevl/go-llvm"
+	"tinygo.org/x/go-llvm"
 	"github.com/aykevl/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
 )

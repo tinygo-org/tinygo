@@ -14,7 +14,7 @@ package compiler
 //     frames.
 
 import (
-	"github.com/aykevl/go-llvm"
+	"tinygo.org/x/go-llvm"
 	"github.com/aykevl/tinygo/ir"
 	"golang.org/x/tools/go/ssa"
 )

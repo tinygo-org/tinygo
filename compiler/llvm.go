@@ -1,7 +1,7 @@
 package compiler
 
 import (
-	"github.com/aykevl/go-llvm"
+	"tinygo.org/x/go-llvm"
 )
 
 // This file contains helper functions for LLVM that are not exposed in the Go

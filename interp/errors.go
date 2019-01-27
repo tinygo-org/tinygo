@@ -3,7 +3,7 @@ package interp
 // This file provides useful types for errors encountered during IR evaluation.
 
 import (
-	"github.com/aykevl/go-llvm"
+	"tinygo.org/x/go-llvm"
 )
 
 type Unsupported struct {

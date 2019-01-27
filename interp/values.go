@@ -5,7 +5,7 @@ package interp
 import (
 	"strconv"
 
-	"github.com/aykevl/go-llvm"
+	"tinygo.org/x/go-llvm"
 )
 
 // A Value is a LLVM value with some extra methods attached for easier

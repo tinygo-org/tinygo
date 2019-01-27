@@ -4,7 +4,7 @@
 [[projects]]
   branch = "master"
   digest = "1:747e7010f73dc26e5cb298444f6f1b4442ae155ab87e44080686b94a5f9d6c90"
-  name = "github.com/aykevl/go-llvm"
+  name = "tinygo.org/x/go-llvm"
   packages = ["."]
   pruneopts = "UT"
   revision = "8a0a627130a54562f55b1c2a9d7b8019ff14d9f1"
@@ -25,7 +25,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/aykevl/go-llvm",
+    "tinygo.org/x/go-llvm",
     "golang.org/x/tools/go/ssa",
   ]
   solver-name = "gps-cdcl"

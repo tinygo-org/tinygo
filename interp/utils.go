@@ -1,7 +1,7 @@
 package interp
 
 import (
-	"github.com/aykevl/go-llvm"
+	"tinygo.org/x/go-llvm"
 )
 
 // Return a list of values (actually, instructions) where this value is used as

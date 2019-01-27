@@ -3,7 +3,7 @@ package compiler
 import (
 	"errors"
 
-	"github.com/aykevl/go-llvm"
+	"tinygo.org/x/go-llvm"
 )
 
 // Run the LLVM optimizer over the module.

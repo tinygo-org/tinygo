@@ -49,7 +49,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aykevl/go-llvm"
+	"tinygo.org/x/go-llvm"
 )
 
 // signatureInfo is a Go signature of an interface method. It does not represent

@@ -10,7 +10,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/aykevl/go-llvm"
+	"tinygo.org/x/go-llvm"
 )
 
 type Eval struct {
