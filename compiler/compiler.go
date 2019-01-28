@@ -1554,7 +1554,6 @@ func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, con
 		}
 		params = append(params, val)
 	}
-
 	if !exported {
 		// This function takes a context parameter.
 		// Add it to the end of the parameter list.
@@ -1741,7 +1740,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 			return c.parseFunctionCall(frame, instr.Args, value, context, false)
 		} else if value.Type().TypeKind() == llvm.PointerTypeKind {
 			// function value uses export ABI (simple function pointer)
-			return c.parseFunctionCall(frame, instr.Args, value, llvm.Value{}, false)
+			return c.parseFunctionCall(frame, instr.Args, value, llvm.Value{}, true)
 		} else {
 			panic("function value represented by an unsupported type: " + value.Type().String())
 		}
