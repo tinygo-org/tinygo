@@ -879,7 +879,7 @@ func (pwm PWM) setChannel(val sam.RegValue) {
 	case 17:
 		pwm.getTimer().CC3 = val
 	case 18:
-		pwm.getTimer().CC1 = val
+		pwm.getTimer().CC2 = val
 	case 19:
 		pwm.getTimer().CC3 = val
 	case 20:
