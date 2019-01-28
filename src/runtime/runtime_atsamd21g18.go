@@ -24,7 +24,6 @@ func init() {
 	initRTC()
 	initUARTClock()
 	initI2CClock()
-	initPWMClocks()
 
 	// connect to UART
 	machine.UART0.Configure(machine.UARTConfig{})
@@ -332,23 +331,6 @@ func initI2CClock() {
 	// GCLK_CLKCTRL_GEN_GCLK0 | // Generic Clock Generator 0 is source
 	// GCLK_CLKCTRL_CLKEN ;
 	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_SERCOM3_CORE << sam.GCLK_CLKCTRL_ID_Pos) |
-		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
-		sam.GCLK_CLKCTRL_CLKEN)
-	waitForSync()
-}
-
-func initPWMClocks() {
-	// turn on digital interface clock
-	sam.PM.APBCMASK |= sam.PM_APBCMASK_TCC0_ | sam.PM_APBCMASK_TCC1_ | sam.PM_APBCMASK_TCC2_
-
-	// Use GCLK0 for TCC0/TCC1
-	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_TCC0_TCC1 << sam.GCLK_CLKCTRL_ID_Pos) |
-		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
-		sam.GCLK_CLKCTRL_CLKEN)
-	waitForSync()
-
-	// Use GCLK0 for TCC2/TC3
-	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_TCC2_TC3 << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
 	waitForSync()

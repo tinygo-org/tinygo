@@ -502,6 +502,22 @@ const period = 0xFFFF
 
 // InitPWM initializes the PWM interface.
 func InitPWM() {
+	// turn on timer clocks used for PWM
+	sam.PM.APBCMASK |= sam.PM_APBCMASK_TCC0_ | sam.PM_APBCMASK_TCC1_ | sam.PM_APBCMASK_TCC2_
+
+	// Use GCLK0 for TCC0/TCC1
+	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_TCC0_TCC1 << sam.GCLK_CLKCTRL_ID_Pos) |
+		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
+		sam.GCLK_CLKCTRL_CLKEN)
+	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
+	}
+
+	// Use GCLK0 for TCC2/TC3
+	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_TCC2_TC3 << sam.GCLK_CLKCTRL_ID_Pos) |
+		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
+		sam.GCLK_CLKCTRL_CLKEN)
+	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
+	}
 }
 
 // Configure configures a PWM pin for output.
