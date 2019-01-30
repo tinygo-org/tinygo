@@ -250,7 +250,11 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				m.PutString(keyBuf, keyLen, valPtr)
 			case callee.Name() == "runtime.hashmapBinarySet":
 				// set a binary (int etc.) key in the map
+
 				// TODO: unimplemented
+				// This should be a panic, but for some targets it would be triggered by imports
+				// from the standard library, which somehow pull in files like syscall/fs_js.go
+
 			case callee.Name() == "runtime.stringConcat":
 				// adding two strings together
 				buf1Ptr := fr.getLocal(inst.Operand(0))
