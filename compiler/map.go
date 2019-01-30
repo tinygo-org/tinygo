@@ -29,7 +29,7 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 		params := []llvm.Value{m, keyPtr, mapValuePtr}
 		commaOkValue = c.createRuntimeCall("hashmapBinaryGet", params, "")
 	} else {
-		return llvm.Value{}, c.makeError(pos, "todo: map lookup key type: "+keyType.String())
+		return llvm.Value{}, c.makeError(pos, "only strings, bools, ints or structs of bools/ints are supported as map keys, but got: "+keyType.String())
 	}
 	mapValue := c.builder.CreateLoad(mapValueAlloca, "")
 	if commaOk {
@@ -61,7 +61,7 @@ func (c *Compiler) emitMapUpdate(keyType types.Type, m, key, value llvm.Value, p
 		c.createRuntimeCall("hashmapBinarySet", params, "")
 		return nil
 	} else {
-		return c.makeError(pos, "todo: map update key type: "+keyType.String())
+		return c.makeError(pos, "only strings, bools, ints or structs of bools/ints are supported as map keys, but got: "+keyType.String())
 	}
 }
 
@@ -80,7 +80,7 @@ func (c *Compiler) emitMapDelete(keyType types.Type, m, key llvm.Value, pos toke
 		c.createRuntimeCall("hashmapBinaryDelete", params, "")
 		return nil
 	} else {
-		return c.makeError(pos, "todo: map delete key type: "+keyType.String())
+		return c.makeError(pos, "only strings, bools, ints or structs of bools/ints are supported as map keys, but got: "+keyType.String())
 	}
 }
 
