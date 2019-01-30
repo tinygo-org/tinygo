@@ -14,10 +14,10 @@ import (
 	"strconv"
 	"strings"
 
-	"tinygo.org/x/go-llvm"
 	"github.com/aykevl/tinygo/ir"
 	"github.com/aykevl/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
+	"tinygo.org/x/go-llvm"
 )
 
 func init() {

@@ -451,6 +451,13 @@ func (v *MapValue) Value() llvm.Value {
 				keyBuf[i] = byte(n)
 				n >>= 8
 			}
+		} else if key.Type().TypeKind() == llvm.ArrayTypeKind &&
+			key.Type().ElementType().TypeKind() == llvm.IntegerTypeKind &&
+			key.Type().ElementType().IntTypeWidth() == 8 {
+			keyBuf = make([]byte, v.Eval.TargetData.TypeAllocSize(key.Type()))
+			for i := range keyBuf {
+				keyBuf[i] = byte(llvm.ConstExtractValue(llvmKey, []uint32{uint32(i)}).ZExtValue())
+			}
 		} else {
 			panic("interp: map key type not implemented: " + key.Type().String())
 		}

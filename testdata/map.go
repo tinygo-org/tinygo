@@ -15,6 +15,13 @@ var testmap2 = map[string]int{
 	"eleven": 11,
 	"twelve": 12,
 }
+
+type ArrayKey [4]byte
+
+var testMapArrayKey = map[ArrayKey]int{
+	ArrayKey([4]byte{1, 2, 3, 4}): 1234,
+	ArrayKey([4]byte{4, 3, 2, 1}): 4321,
+}
 var testmapIntInt = map[int]int{1: 1, 2: 4, 3: 9}
 
 func main() {
@@ -35,6 +42,11 @@ func main() {
 	println(testmapIntInt[2])
 	testmapIntInt[2] = 42
 	println(testmapIntInt[2])
+
+	arrKey := ArrayKey([4]byte{4, 3, 2, 1})
+	println(testMapArrayKey[arrKey])
+	testMapArrayKey[arrKey] = 5555
+	println(testMapArrayKey[arrKey])
 }
 
 func readMap(m map[string]int, key string) {

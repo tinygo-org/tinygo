@@ -120,6 +120,10 @@ func hashmapIsBinaryKey(keyType types.Type) bool {
 			}
 		}
 		return true
+	case *types.Array:
+		return hashmapIsBinaryKey(keyType.Elem())
+	case *types.Named:
+		return hashmapIsBinaryKey(keyType.Underlying())
 	default:
 		return false
 	}
