@@ -561,6 +561,38 @@ func (v *MapValue) PutString(keyBuf, keyLen, valPtr Value) {
 	v.Values = append(v.Values, &LocalValue{v.Eval, value})
 }
 
+// PutBinary does a map assign operation.
+func (v *MapValue) PutBinary(keyPtr, valPtr Value) {
+	if !v.Underlying.IsNil() {
+		panic("map already created")
+	}
+
+	var value llvm.Value
+	switch valPtr := valPtr.(type) {
+	case *PointerCastValue:
+		value = valPtr.Underlying.Load()
+		if v.ValueType.IsNil() {
+			v.ValueType = value.Type()
+			if int(v.Eval.TargetData.TypeAllocSize(v.ValueType)) != v.ValueSize {
+				panic("interp: map store value type has the wrong size")
+			}
+		} else {
+			if value.Type() != v.ValueType {
+				panic("interp: map store value type is inconsistent")
+			}
+		}
+	default:
+		panic("interp: todo: handle map value pointer")
+	}
+
+	key := keyPtr.(*PointerCastValue).Underlying.Load()
+	v.KeyType = key.Type()
+
+	// TODO: avoid duplicate keys
+	v.Keys = append(v.Keys, &LocalValue{v.Eval, key})
+	v.Values = append(v.Values, &LocalValue{v.Eval, value})
+}
+
 // Get FNV-1a hash of this string.
 //
 // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1a_hash

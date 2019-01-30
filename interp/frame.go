@@ -244,13 +244,18 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			case callee.Name() == "runtime.hashmapStringSet":
 				// set a string key in the map
 				m := fr.getLocal(inst.Operand(0)).(*MapValue)
+				// "key" is a Go string value, which in the TinyGo calling convention is split up
+				// into separate pointer and length parameters.
 				keyBuf := fr.getLocal(inst.Operand(1))
 				keyLen := fr.getLocal(inst.Operand(2))
 				valPtr := fr.getLocal(inst.Operand(3))
 				m.PutString(keyBuf, keyLen, valPtr)
 			case callee.Name() == "runtime.hashmapBinarySet":
 				// set a binary (int etc.) key in the map
-				// TODO: unimplemented
+				m := fr.getLocal(inst.Operand(0)).(*MapValue)
+				keyBuf := fr.getLocal(inst.Operand(1))
+				valPtr := fr.getLocal(inst.Operand(2))
+				m.PutBinary(keyBuf, valPtr)
 			case callee.Name() == "runtime.stringConcat":
 				// adding two strings together
 				buf1Ptr := fr.getLocal(inst.Operand(0))
