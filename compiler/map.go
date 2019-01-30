@@ -29,7 +29,7 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 		params := []llvm.Value{m, keyPtr, mapValuePtr}
 		commaOkValue = c.createRuntimeCall("hashmapBinaryGet", params, "")
 	} else {
-		return llvm.Value{}, c.makeError(pos, "todo: map lookup key type: "+keyType.String())
+		return llvm.Value{}, c.makeError(pos, "only strings, bools, ints or structs of bools/ints are supported as map keys, but got: "+keyType.String())
 	}
 	mapValue := c.builder.CreateLoad(mapValueAlloca, "")
 	if commaOk {
