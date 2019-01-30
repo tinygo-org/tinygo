@@ -15,6 +15,7 @@ var testmap2 = map[string]int{
 	"eleven": 11,
 	"twelve": 12,
 }
+var testmapIntInt = map[int]int{1: 1, 2: 4, 3: 9}
 
 func main() {
 	m := map[string]int{"answer": 42, "foo": 3}
@@ -31,6 +32,9 @@ func main() {
 	var nilmap map[string]int
 	println(m == nil, m != nil, len(m))
 	println(nilmap == nil, nilmap != nil, len(nilmap))
+	println(testmapIntInt[2])
+	testmapIntInt[2] = 42
+	println(testmapIntInt[2])
 }
 
 func readMap(m map[string]int, key string) {

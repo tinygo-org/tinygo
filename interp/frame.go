@@ -244,17 +244,18 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			case callee.Name() == "runtime.hashmapStringSet":
 				// set a string key in the map
 				m := fr.getLocal(inst.Operand(0)).(*MapValue)
+				// "key" is a single LLVM value in emitMapUpdate, but in the frame it is
+				// represented by a (pointer, len) pair
 				keyBuf := fr.getLocal(inst.Operand(1))
 				keyLen := fr.getLocal(inst.Operand(2))
 				valPtr := fr.getLocal(inst.Operand(3))
 				m.PutString(keyBuf, keyLen, valPtr)
 			case callee.Name() == "runtime.hashmapBinarySet":
 				// set a binary (int etc.) key in the map
-
-				// TODO: unimplemented
-				// This should be a panic, but for some targets it would be triggered by imports
-				// from the standard library, which somehow pull in files like syscall/fs_js.go
-
+				m := fr.getLocal(inst.Operand(0)).(*MapValue)
+				keyBuf := fr.getLocal(inst.Operand(1))
+				valPtr := fr.getLocal(inst.Operand(2))
+				m.PutBinary(keyBuf, valPtr)
 			case callee.Name() == "runtime.stringConcat":
 				// adding two strings together
 				buf1Ptr := fr.getLocal(inst.Operand(0))
