@@ -1862,7 +1862,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// bitcast all struct types for ease of use.
 		if _, ok := expr.Type().Underlying().(*types.Struct); ok {
 			if expr.Type() != expr.X.Type() {
-				panic("converting between struct types is not yet supported; consider converting pointers as a workaround")
+				return llvm.Value{}, c.makeError(expr.Pos(),
+					"converting between struct types is not yet supported; consider converting pointers as a workaround")
 			}
 		}
 		return x, nil
