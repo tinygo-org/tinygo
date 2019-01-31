@@ -244,8 +244,8 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			case callee.Name() == "runtime.hashmapStringSet":
 				// set a string key in the map
 				m := fr.getLocal(inst.Operand(0)).(*MapValue)
-				// "key" is a single LLVM value in emitMapUpdate, but in the frame it is
-				// represented by a (pointer, len) pair
+				// "key" is a Go string value, which in the TinyGo calling convention is split up
+				// into separate pointer and length parameters.
 				keyBuf := fr.getLocal(inst.Operand(1))
 				keyLen := fr.getLocal(inst.Operand(2))
 				valPtr := fr.getLocal(inst.Operand(3))
