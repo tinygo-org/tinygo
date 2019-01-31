@@ -11,13 +11,23 @@ const (
 	D4  = 8  // PWM available
 	D5  = 15 // PWM available
 	D6  = 20 // PWM available
-	D7  = 21
+	D7  = 21 // PWM available
 	D8  = 6  // PWM available
 	D9  = 7  // PWM available
-	D10 = 18 // can be used for PWM or UART1 RX
-	D11 = 16 // can be used for PWM or UART1 TX
+	D10 = 18 // can be used for PWM or UART1 TX
+	D11 = 16 // can be used for PWM or UART1 RX
 	D12 = 19 // PWM available
 	D13 = 17 // PWM available
+)
+
+// Analog pins
+const (
+	A0 = 2 // ADC/AIN[0]
+	// A1 = 8 // ADC/AIN[2] TODO: requires PORTB
+	// A2 = 9 // ADC/AIN[3] TODO: requires PORTB
+	A3 = 4 // ADC/AIN[4]
+	A4 = 5 // ADC/AIN[5]
+	//A5 = 2 // ADC/AIN[10] TODO: requires PORTB
 )
 
 const (
