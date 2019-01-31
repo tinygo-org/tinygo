@@ -1861,11 +1861,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// struct types, as those are actually different in LLVM. Let's just
 		// bitcast all struct types for ease of use.
 		if _, ok := expr.Type().Underlying().(*types.Struct); ok {
-			llvmType, err := c.getLLVMType(expr.X.Type())
-			if err != nil {
-				return llvm.Value{}, err
+			if expr.Type() != expr.X.Type() {
+				panic("converting between struct types is not yet supported; consider converting pointers as a workaround")
 			}
-			return c.builder.CreateBitCast(x, llvmType, "changetype"), nil
 		}
 		return x, nil
 	case *ssa.Const:
