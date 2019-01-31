@@ -1857,13 +1857,23 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		// The only case when we need to bitcast is when casting between named
-		// struct types, as those are actually different in LLVM. Let's just
-		// bitcast all struct types for ease of use.
-		if _, ok := expr.Type().Underlying().(*types.Struct); ok {
+		// The only cases when we need to bitcast is when casting between named
+		// struct types or pointers to struct types, as those are actually different in LLVM.
+		// Unfortunately, we cannod bitcast structs, as they are "aggregate types" in LLVM.
+		// See https://github.com/aykevl/tinygo/issues/161
+		switch underlying := expr.Type().Underlying().(type) {
+		case *types.Struct:
 			if expr.Type() != expr.X.Type() {
 				return llvm.Value{}, c.makeError(expr.Pos(),
 					"converting between struct types is not yet supported; consider converting pointers as a workaround")
+			}
+		case *types.Pointer:
+			if _, ok := underlying.Elem().Underlying().(*types.Struct); ok {
+				llvmType, err := c.getLLVMType(expr.Type())
+				if err != nil {
+					return llvm.Value{}, err
+				}
+				return c.builder.CreateBitCast(x, llvmType, "changetype"), nil
 			}
 		}
 		return x, nil
