@@ -9,9 +9,9 @@ import (
 	"go/token"
 	"go/types"
 
-	"tinygo.org/x/go-llvm"
 	"github.com/aykevl/tinygo/ir"
 	"golang.org/x/tools/go/ssa"
+	"tinygo.org/x/go-llvm"
 )
 
 // parseMakeInterface emits the LLVM IR for the *ssa.MakeInterface instruction.

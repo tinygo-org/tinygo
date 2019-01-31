@@ -6,8 +6,8 @@ package compiler
 import (
 	"go/types"
 
-	"tinygo.org/x/go-llvm"
 	"golang.org/x/tools/go/ssa"
+	"tinygo.org/x/go-llvm"
 )
 
 // emitMakeChan returns a new channel value for the given channel type.

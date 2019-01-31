@@ -1,8 +1,8 @@
 package compiler
 
 import (
-	"tinygo.org/x/go-llvm"
 	"golang.org/x/tools/go/ssa"
+	"tinygo.org/x/go-llvm"
 )
 
 // For a description of the calling convention in prose, see:

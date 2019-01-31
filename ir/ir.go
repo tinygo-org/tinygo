@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"tinygo.org/x/go-llvm"
 	"github.com/aykevl/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
+	"tinygo.org/x/go-llvm"
 )
 
 // This file provides a wrapper around go/ssa values and adds extra

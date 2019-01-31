@@ -14,9 +14,9 @@ package compiler
 //     frames.
 
 import (
-	"tinygo.org/x/go-llvm"
 	"github.com/aykevl/tinygo/ir"
 	"golang.org/x/tools/go/ssa"
+	"tinygo.org/x/go-llvm"
 )
 
 // deferInitFunc sets up this function for future deferred calls. It must be
