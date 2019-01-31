@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aykevl/tinygo/ir"
-	"github.com/aykevl/tinygo/loader"
+	"github.com/tinygo-org/tinygo/ir"
+	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )

@@ -15,9 +15,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/aykevl/tinygo/compiler"
-	"github.com/aykevl/tinygo/interp"
-	"github.com/aykevl/tinygo/loader"
+	"github.com/tinygo-org/tinygo/compiler"
+	"github.com/tinygo-org/tinygo/interp"
+	"github.com/tinygo-org/tinygo/loader"
 )
 
 var commands = map[string]string{

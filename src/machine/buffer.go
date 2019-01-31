@@ -10,7 +10,7 @@ type volatileByte byte
 //
 // It has some limitations currently due to how "volatile" variables that are
 // members of a struct are not compiled correctly by TinyGo.
-// See https://github.com/aykevl/tinygo/issues/151 for details.
+// See https://github.com/tinygo-org/tinygo/issues/151 for details.
 type RingBuffer struct {
 	rxbuffer [bufferSize]volatileByte
 	head     volatileByte

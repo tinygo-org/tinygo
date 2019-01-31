@@ -92,7 +92,7 @@ func main() {
 	}
 	println()
 
-	// Verify the fix in https://github.com/aykevl/tinygo/pull/119
+	// Verify the fix in https://github.com/tinygo-org/tinygo/pull/119
 	var unnamed [32]byte
 	var named MySlice
 	assert(len(unnamed[:]) == 32)

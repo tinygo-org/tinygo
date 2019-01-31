@@ -1,6 +1,6 @@
 # TinyGo - Go compiler for microcontrollers
 
-[![Build Status](https://travis-ci.com/aykevl/tinygo.svg?branch=master)](https://travis-ci.com/aykevl/tinygo)
+[![Build Status](https://travis-ci.com/aykevl/tinygo.svg?branch=master)](https://travis-ci.com/tinygo-org/tinygo)
 
 > We never expected Go to be an embedded language and so it's got serious
 > problems [...].
@@ -166,7 +166,7 @@ If you want to contribute, here are some suggestions:
     requires a few compiler changes, but if the architecture is supported you
     can try implementing support for a new chip or board in `src/runtime`. For
     details, see [this wiki entry on adding
-    archs/chips/boards](https://github.com/aykevl/tinygo/wiki/Adding-a-new-board).
+    archs/chips/boards](https://github.com/tinygo-org/tinygo/wiki/Adding-a-new-board).
   * Microcontrollers have lots of peripherals and many don't have an
     implementation yet in the `machine` package. Adding support for new
     peripherals is very useful.

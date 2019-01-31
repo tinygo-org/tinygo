@@ -15,7 +15,7 @@ install:
   - dep ensure --vendor-only
 
 script:
-  - go install github.com/aykevl/tinygo
+  - go install github.com/tinygo-org/tinygo
   - go test -v .
   - make gen-device
   - tinygo build -o blinky1.nrf.elf    -target=pca10040     examples/blinky1
