@@ -68,10 +68,11 @@ func (p *Program) SimpleDCE() {
 	// functions.
 	main := p.mainPkg.Members["main"].(*ssa.Function)
 	runtimePkg := p.Program.ImportedPackage("runtime")
+	mathPkg := p.Program.ImportedPackage("math")
 	p.GetFunction(main).flag = true
 	worklist := []*ssa.Function{main}
 	for _, f := range p.Functions {
-		if f.exported || f.Synthetic == "package initializer" || f.Pkg == runtimePkg {
+		if f.exported || f.Synthetic == "package initializer" || f.Pkg == runtimePkg || (f.Pkg == mathPkg && f.Pkg != nil) {
 			if f.flag || isCGoInternal(f.Name()) {
 				continue
 			}
