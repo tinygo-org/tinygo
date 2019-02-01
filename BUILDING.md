@@ -7,7 +7,8 @@ because it is fast and works almost out of the box on Debian-based systems with
 the right libraries installed.
 
 This guide describes how to statically link TinyGo against LLVM, libclang and
-lld so that the binary can be easily moved between systems.
+lld so that the binary can be easily moved between systems. It also shows how to
+build a release tarball that includes this binary and all necessary extra files.
 
 ## Dependencies
 
@@ -105,3 +106,20 @@ using `ldd` (not to be confused with `lld`):
     ldd ./build/tinygo
 
 The result should not contain libclang or libLLVM.
+
+## Make a release tarball
+
+Now that we have a working static build, it's time to make a release tarball.
+This is just a slight change from the command to build TinyGo:
+
+    cd $HOME/go/src/github.com/tinygo-org/tinygo
+    make release LLVM_BUILDDIR=$HOME/src/llvm-build CLANG_SRC=$HOME/src/llvm/tools/clang LLD_SRC=$HOME/src/llvm/tools/lld
+
+The release tarball is stored in build/release.tar.gz, and can be extracted with
+the following command:
+
+    tar -xvf path/to/release.tar.gz
+
+TinyGo will get extracted to a `tinygo` directory. You can then call it with:
+
+    ./tinygo/bin/tinygo
