@@ -211,7 +211,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		BuildTags: []string{goos, goarch},
 		Compiler:  commands["clang"],
 		Linker:    "cc",
-		LDFlags:   []string{"-no-pie"}, // WARNING: clang < 5.0 requires -nopie
+		LDFlags:   []string{"-no-pie", "-Wl,--gc-sections"}, // WARNING: clang < 5.0 requires -nopie
 		Objcopy:   "objcopy",
 		GDB:       "gdb",
 		GDBCmds:   []string{"run"},
