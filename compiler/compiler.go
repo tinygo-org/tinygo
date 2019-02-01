@@ -2425,17 +2425,17 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			case token.QUO: // /
 				return c.builder.CreateFDiv(x, y, ""), nil
 			case token.EQL: // ==
-				return c.builder.CreateFCmp(llvm.FloatOEQ, x, y, ""), nil
+				return c.builder.CreateFCmp(llvm.FloatUEQ, x, y, ""), nil
 			case token.NEQ: // !=
-				return c.builder.CreateFCmp(llvm.FloatONE, x, y, ""), nil
+				return c.builder.CreateFCmp(llvm.FloatUNE, x, y, ""), nil
 			case token.LSS: // <
-				return c.builder.CreateFCmp(llvm.FloatOLT, x, y, ""), nil
+				return c.builder.CreateFCmp(llvm.FloatULT, x, y, ""), nil
 			case token.LEQ: // <=
-				return c.builder.CreateFCmp(llvm.FloatOLE, x, y, ""), nil
+				return c.builder.CreateFCmp(llvm.FloatULE, x, y, ""), nil
 			case token.GTR: // >
-				return c.builder.CreateFCmp(llvm.FloatOGT, x, y, ""), nil
+				return c.builder.CreateFCmp(llvm.FloatUGT, x, y, ""), nil
 			case token.GEQ: // >=
-				return c.builder.CreateFCmp(llvm.FloatOGE, x, y, ""), nil
+				return c.builder.CreateFCmp(llvm.FloatUGE, x, y, ""), nil
 			default:
 				panic("binop on float: " + op.String())
 			}
