@@ -1686,6 +1686,11 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 			return c.builder.CreateCall(target, args, ""), nil
 		}
 
+		switch fn.RelString(nil) {
+		case "syscall.Syscall", "syscall.Syscall6":
+			return c.emitSyscall(frame, instr)
+		}
+
 		targetFunc := c.ir.GetFunction(fn)
 		if targetFunc.LLVMFn.IsNil() {
 			return llvm.Value{}, c.makeError(instr.Pos(), "undefined function: "+targetFunc.LinkName())
