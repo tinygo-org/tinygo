@@ -24,6 +24,13 @@ type sideEffectResult struct {
 // returns whether this function has side effects and if it does, which globals
 // it mentions anywhere in this function or any called functions.
 func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
+	switch fn.Name() {
+	case "runtime.alloc":
+		// Cannot be scanned but can be interpreted.
+		return &sideEffectResult{severity: sideEffectNone}
+	case "runtime._panic":
+		return &sideEffectResult{severity: sideEffectLimited}
+	}
 	if e.sideEffectFuncs == nil {
 		e.sideEffectFuncs = make(map[llvm.Value]*sideEffectResult)
 	}
@@ -73,25 +80,32 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 					result.updateSeverity(sideEffectAll)
 					continue
 				}
-				name := child.Name()
 				if child.IsDeclaration() {
-					if name == "runtime.makeInterface" {
+					switch child.Name() {
+					case "runtime.makeInterface":
 						// Can be interpreted so does not have side effects.
 						continue
 					}
 					// External function call. Assume only limited side effects
 					// (no affected globals, etc.).
-					if result.hasLocalSideEffects(dirtyLocals, inst) {
+					if e.hasLocalSideEffects(dirtyLocals, inst) {
 						result.updateSeverity(sideEffectLimited)
 					}
 					continue
 				}
-				childSideEffects := e.hasSideEffects(fn)
+				childSideEffects := e.hasSideEffects(child)
 				switch childSideEffects.severity {
 				case sideEffectInProgress, sideEffectNone:
 					// no side effects or recursive function - continue scanning
+				case sideEffectLimited:
+					// The return value may be problematic.
+					if e.hasLocalSideEffects(dirtyLocals, inst) {
+						result.updateSeverity(sideEffectLimited)
+					}
+				case sideEffectAll:
+					result.updateSeverity(sideEffectAll)
 				default:
-					result.update(childSideEffects)
+					panic("unreachable")
 				}
 			case llvm.Load, llvm.Store:
 				if inst.IsVolatile() {
@@ -118,7 +132,7 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 // hasLocalSideEffects checks whether the given instruction flows into a branch
 // or return instruction, in which case the whole function must be marked as
 // having side effects and be called at runtime.
-func (r *sideEffectResult) hasLocalSideEffects(dirtyLocals map[llvm.Value]struct{}, inst llvm.Value) bool {
+func (e *Eval) hasLocalSideEffects(dirtyLocals map[llvm.Value]struct{}, inst llvm.Value) bool {
 	if _, ok := dirtyLocals[inst]; ok {
 		// It is already known that this local is dirty.
 		return true
@@ -156,7 +170,7 @@ func (r *sideEffectResult) hasLocalSideEffects(dirtyLocals map[llvm.Value]struct
 			// For a list:
 			// https://godoc.org/github.com/llvm-mirror/llvm/bindings/go/llvm#Opcode
 			dirtyLocals[user] = struct{}{}
-			if r.hasLocalSideEffects(dirtyLocals, user) {
+			if e.hasLocalSideEffects(dirtyLocals, user) {
 				return true
 			}
 		}
