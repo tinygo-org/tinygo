@@ -110,7 +110,9 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 	c.mod.SetTarget(config.Triple)
 	c.mod.SetDataLayout(c.targetData.String())
 	c.builder = c.ctx.NewBuilder()
-	c.dibuilder = llvm.NewDIBuilder(c.mod)
+	if c.Debug {
+		c.dibuilder = llvm.NewDIBuilder(c.mod)
+	}
 
 	c.uintptrType = c.ctx.IntType(c.targetData.PointerSize() * 8)
 	if c.targetData.PointerSize() <= 4 {
@@ -214,13 +216,15 @@ func (c *Compiler) Compile(mainPath string) error {
 	c.ir.SimpleDCE()
 
 	// Initialize debug information.
-	c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
-		Language:  llvm.DW_LANG_Go,
-		File:      mainPath,
-		Dir:       "",
-		Producer:  "TinyGo",
-		Optimized: true,
-	})
+	if c.Debug {
+		c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
+			Language:  llvm.DW_LANG_Go,
+			File:      mainPath,
+			Dir:       "",
+			Producer:  "TinyGo",
+			Optimized: true,
+		})
+	}
 
 	var frames []*Frame
 
@@ -373,14 +377,16 @@ func (c *Compiler) Compile(mainPath string) error {
 	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.ExternalLinkage)
 
 	// see: https://reviews.llvm.org/D18355
-	c.mod.AddNamedMetadataOperand("llvm.module.flags",
-		c.ctx.MDNode([]llvm.Metadata{
-			llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
-			llvm.GlobalContext().MDString("Debug Info Version"),
-			llvm.ConstInt(c.ctx.Int32Type(), 3, false).ConstantAsMetadata(), // DWARF version
-		}),
-	)
-	c.dibuilder.Finalize()
+	if c.Debug {
+		c.mod.AddNamedMetadataOperand("llvm.module.flags",
+			c.ctx.MDNode([]llvm.Metadata{
+				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
+				llvm.GlobalContext().MDString("Debug Info Version"),
+				llvm.ConstInt(c.ctx.Int32Type(), 3, false).ConstantAsMetadata(), // DWARF version
+			}),
+		)
+		c.dibuilder.Finalize()
+	}
 
 	return nil
 }
