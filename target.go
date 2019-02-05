@@ -224,10 +224,11 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			spec.GDB = "arm-linux-gnueabi-gdb"
 			spec.Emulator = []string{"qemu-arm", "-L", "/usr/arm-linux-gnueabi"}
 		}
-		if goarch == "arm64" {
+		if goarch == "arm64" && goos == "linux" {
 			spec.Linker = "aarch64-linux-gnu-gcc"
 			spec.Objcopy = "aarch64-linux-gnu-objcopy"
 			spec.GDB = "aarch64-linux-gnu-gdb"
+			spec.Emulator = []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"}
 		}
 		if goarch == "386" {
 			spec.CFlags = []string{"-m32"}

@@ -81,6 +81,41 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 		fnType := llvm.FunctionType(c.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0)
 		syscallResult = c.builder.CreateCall(target, args, "")
+	case c.GOARCH == "arm64" && c.GOOS == "linux":
+		// Source: syscall(2) man page.
+		args := []llvm.Value{}
+		argTypes := []llvm.Type{}
+		// Constraints will look something like:
+		//   ={x0},0,{x1},{x2},{x8},~{x3},~{x4},~{x5},~{x6},~{x7},~{x16},~{x17}
+		constraints := "={x0}"
+		for i, arg := range call.Args[1:] {
+			constraints += "," + [...]string{
+				"0", // tie to output
+				"{x1}",
+				"{x2}",
+				"{x3}",
+				"{x4}",
+				"{x5}",
+			}[i]
+			llvmValue, err := c.parseExpr(frame, arg)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			args = append(args, llvmValue)
+			argTypes = append(argTypes, llvmValue.Type())
+		}
+		args = append(args, llvm.ConstInt(c.uintptrType, num, false))
+		argTypes = append(argTypes, c.uintptrType)
+		constraints += ",{x8}" // syscall number
+		for i := len(call.Args) - 1; i < 8; i++ {
+			// x0-x7 may get clobbered during the syscall following the aarch64
+			// calling convention.
+			constraints += ",~{x" + strconv.Itoa(i) + "}"
+		}
+		constraints += ",~{x16},~{x17}" // scratch registers
+		fnType := llvm.FunctionType(c.uintptrType, argTypes, false)
+		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0)
+		syscallResult = c.builder.CreateCall(target, args, "")
 	default:
 		return llvm.Value{}, c.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+c.GOOS+"/"+c.GOARCH)
 	}
