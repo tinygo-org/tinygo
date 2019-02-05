@@ -4,11 +4,14 @@ FROM golang:latest AS tinygo-base
 RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
     echo "deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch-7 main" >> /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y llvm-7-dev libclang-7-dev
+    apt-get install -y llvm-7-dev libclang-7-dev git
 
 RUN wget -O- https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 
 COPY . /go/src/github.com/tinygo-org/tinygo
+
+RUN cd /go/src/github.com/tinygo-org/tinygo/ && \
+    git submodule update --init
 
 RUN cd /go/src/github.com/tinygo-org/tinygo/ && \
     dep ensure --vendor-only && \
