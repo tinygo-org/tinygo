@@ -15,8 +15,11 @@ addons:
     - llvm-7-dev
     - clang-7
     - libclang-7-dev
+    - gcc-arm-linux-gnueabi
     - binutils-arm-none-eabi
+    - libc6-dev-armel-cross
     - qemu-system-arm
+    - qemu-user
     - gcc-avr
     - avr-libc
 
