@@ -49,6 +49,10 @@ func TestCompiler(t *testing.T) {
 		})
 	}
 
+	if testing.Short() {
+		return
+	}
+
 	t.Log("running tests on the qemu target...")
 	for _, path := range matches {
 		t.Run(path, func(t *testing.T) {
