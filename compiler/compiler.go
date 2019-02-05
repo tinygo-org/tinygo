@@ -1868,13 +1868,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 					"converting between struct types is not yet supported; consider converting pointers as a workaround")
 			}
 		case *types.Pointer:
-			if _, ok := underlying.Elem().Underlying().(*types.Struct); ok {
-				llvmType, err := c.getLLVMType(expr.Type())
-				if err != nil {
-					return llvm.Value{}, err
-				}
-				return c.builder.CreateBitCast(x, llvmType, "changetype"), nil
+			llvmType, err := c.getLLVMType(expr.Type())
+			if err != nil {
+				return llvm.Value{}, err
 			}
+			return c.builder.CreateBitCast(x, llvmType, "changetype"), nil
 		}
 		return x, nil
 	case *ssa.Const:
