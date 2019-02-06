@@ -1861,7 +1861,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// struct types or pointers to struct types, as those are actually different in LLVM.
 		// Unfortunately, we cannod bitcast structs, as they are "aggregate types" in LLVM.
 		// See https://github.com/aykevl/tinygo/issues/161
-		switch underlying := expr.Type().Underlying().(type) {
+		switch expr.Type().Underlying().(type) {
 		case *types.Struct:
 			if expr.Type() != expr.X.Type() {
 				return llvm.Value{}, c.makeError(expr.Pos(),
