@@ -16,9 +16,15 @@ Please open a Github issue with your problem, and we will be happy to assist.
 
 We probably have not implemented it yet. Please take a look at our [Roadmap](https://github.com/tinygo-org/tinygo/wiki/Roadmap). Your pull request adding the functionality to TinyGo would be greatly appreciated.
 
+A long tail of small (and large) language features haven't been implemented yet. In almost all cases, the compiler will show a `todo:` error from `compiler/compiler.go` when you try to use it. You can try implementing it, or open a bug report with a small code sample that fails to compile.
+
 ### Some specific hardware you want to use does not appear to be in TinyGo
 
 As above, we probably have not implemented it yet. Your contribution adding the hardware support to TinyGo would be greatly appreciated.
+
+Lots of targets/boards are still unsupported. Adding an architecture often requires a few compiler changes, but if the architecture is supported you can try implementing support for a new chip or board in `src/runtime`. For details, see [this wiki entry on adding archs/chips/boards](https://github.com/tinygo-org/tinygo/wiki/Adding-a-new-board).
+
+Microcontrollers have lots of peripherals (I2C, SPI, ADC, etc.) and many don't have an implementation yet in the `machine` package. Adding support for new peripherals is very useful.
 
 ## How to use our Github repository
 
