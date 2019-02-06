@@ -389,11 +389,25 @@ func (g *Global) LinkName() string {
 	if g.linkName != "" {
 		return g.linkName
 	}
+	if name := g.CName(); name != "" {
+		return name
+	}
 	return g.RelString(nil)
 }
 
 func (g *Global) IsExtern() bool {
-	return g.extern
+	return g.extern || g.CName() != ""
+}
+
+// Return the name of the C global if this is a CGo wrapper. Otherwise, return a
+// zero-length string.
+func (g *Global) CName() string {
+	name := g.Name()
+	if strings.HasPrefix(name, "C.") {
+		// created by ../loader/cgo.go
+		return name[2:]
+	}
+	return ""
 }
 
 func (g *Global) Initializer() Value {

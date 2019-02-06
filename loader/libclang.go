@@ -112,6 +112,14 @@ func tinygo_clang_visitor(c, parent C.CXCursor, client_data C.CXClientData) C.in
 			oldName: underlyingTypeName,
 			size:    int(typeSize),
 		})
+	case C.CXCursor_VarDecl:
+		name := getString(C.clang_getCursorSpelling(c))
+		cursorType := C.clang_getCursorType(c)
+		cursorTypeName := getString(C.clang_getTypeSpelling(cursorType))
+		info.globals = append(info.globals, &globalInfo{
+			name:     name,
+			typeName: cursorTypeName,
+		})
 	}
 	return C.CXChildVisit_Continue
 }
