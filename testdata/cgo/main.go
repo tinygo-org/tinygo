@@ -3,6 +3,7 @@ package main
 /*
 int fortytwo(void);
 #include "main.h"
+int mul(int, int);
 */
 import "C"
 
@@ -23,4 +24,13 @@ func main() {
 	println("15:", *ptr)
 	C.store(25, &n)
 	println("25:", *ptr)
+	cb := C.binop_t(C.add)
+	println("callback 1:", C.doCallback(20, 30, cb))
+	cb = C.binop_t(C.mul)
+	println("callback 2:", C.doCallback(20, 30, cb))
+}
+
+//export mul
+func mul(a, b C.int) C.int {
+	return a * b
 }

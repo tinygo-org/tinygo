@@ -130,6 +130,9 @@ func (p *Package) processCgo(filename string, f *ast.File, cflags []string) erro
 	// Declare functions found by libclang.
 	info.addFuncDecls()
 
+	// Declare stub function pointer values found by libclang.
+	info.addFuncPtrDecls()
+
 	// Declare globals found by libclang.
 	info.addVarDecls()
 
@@ -197,6 +200,55 @@ func (info *fileInfo) addFuncDecls() {
 		}
 		info.Decls = append(info.Decls, decl)
 	}
+}
+
+// addFuncPtrDecls creates stub declarations of function pointer values. These
+// values will later be replaced with the real values in the compiler.
+// It adds code like the following to the AST:
+//
+//     var (
+//         C.add unsafe.Pointer
+//         C.mul unsafe.Pointer
+//         // ...
+//     )
+func (info *fileInfo) addFuncPtrDecls() {
+	gen := &ast.GenDecl{
+		TokPos: info.importCPos,
+		Tok:    token.VAR,
+		Lparen: info.importCPos,
+		Rparen: info.importCPos,
+	}
+	names := make([]string, 0, len(info.functions))
+	for name := range info.functions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		obj := &ast.Object{
+			Kind: ast.Typ,
+			Name: "C." + name + "$funcaddr",
+		}
+		valueSpec := &ast.ValueSpec{
+			Names: []*ast.Ident{&ast.Ident{
+				NamePos: info.importCPos,
+				Name:    "C." + name + "$funcaddr",
+				Obj:     obj,
+			}},
+			Type: &ast.SelectorExpr{
+				X: &ast.Ident{
+					NamePos: info.importCPos,
+					Name:    "unsafe",
+				},
+				Sel: &ast.Ident{
+					NamePos: info.importCPos,
+					Name:    "Pointer",
+				},
+			},
+		}
+		obj.Decl = valueSpec
+		gen.Specs = append(gen.Specs, valueSpec)
+	}
+	info.Decls = append(info.Decls, gen)
 }
 
 // addVarDecls declares external C globals in the Go source.
@@ -327,15 +379,34 @@ func (info *fileInfo) addTypedefs() {
 // separate namespace (no _Cgo_ hacks like in gc).
 func (info *fileInfo) walker(cursor *astutil.Cursor) bool {
 	switch node := cursor.Node().(type) {
+	case *ast.CallExpr:
+		fun, ok := node.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		x, ok := fun.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if _, ok := info.functions[fun.Sel.Name]; ok && x.Name == "C" {
+			node.Fun = &ast.Ident{
+				NamePos: x.NamePos,
+				Name:    "C." + fun.Sel.Name,
+			}
+		}
 	case *ast.SelectorExpr:
 		x, ok := node.X.(*ast.Ident)
 		if !ok {
 			return true
 		}
 		if x.Name == "C" {
+			name := "C." + node.Sel.Name
+			if _, ok := info.functions[node.Sel.Name]; ok {
+				name += "$funcaddr"
+			}
 			cursor.Replace(&ast.Ident{
 				NamePos: x.NamePos,
-				Name:    "C." + node.Sel.Name,
+				Name:    name,
 			})
 		}
 	}

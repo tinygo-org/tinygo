@@ -269,10 +269,16 @@ func (f *Function) parsePragmas() {
 	}
 	if decl, ok := f.Syntax().(*ast.FuncDecl); ok && decl.Doc != nil {
 		for _, comment := range decl.Doc.List {
-			if !strings.HasPrefix(comment.Text, "//go:") {
+			text := comment.Text
+			if strings.HasPrefix(text, "//export ") {
+				// Rewrite '//export' to '//go:export' for compatibility with
+				// gc.
+				text = "//go:" + text[2:]
+			}
+			if !strings.HasPrefix(text, "//go:") {
 				continue
 			}
-			parts := strings.Fields(comment.Text)
+			parts := strings.Fields(text)
 			switch parts[0] {
 			case "//go:export":
 				if len(parts) != 2 {
@@ -322,7 +328,7 @@ func (f *Function) IsNoBounds() bool {
 
 // Return true iff this function is externally visible.
 func (f *Function) IsExported() bool {
-	return f.exported
+	return f.exported || f.CName() != ""
 }
 
 // Return true for functions annotated with //go:interrupt. The function name is
@@ -330,7 +336,7 @@ func (f *Function) IsExported() bool {
 //
 // On some platforms (like AVR), interrupts need a special compiler flag.
 func (f *Function) IsInterrupt() bool {
-	return f.exported
+	return f.interrupt
 }
 
 // Return the link name for this function.

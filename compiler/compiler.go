@@ -2990,6 +2990,16 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 		if c.targetData.TypeAllocSize(x.Type().ElementType()) == 0 {
 			// zero-length data
 			return c.getZeroValue(x.Type().ElementType())
+		} else if strings.HasSuffix(unop.X.String(), "$funcaddr") {
+			// CGo function pointer. The cgo part has rewritten CGo function
+			// pointers as stub global variables of the form:
+			//     var C.add unsafe.Pointer
+			// Instead of a load from the global, create a bitcast of the
+			// function pointer itself.
+			global := c.ir.GetGlobal(unop.X.(*ssa.Global))
+			name := global.LinkName()[:len(global.LinkName())-len("$funcaddr")]
+			fn := c.mod.NamedFunction(name)
+			return c.builder.CreateBitCast(fn, c.i8ptrType, ""), nil
 		} else {
 			load := c.builder.CreateLoad(x, "")
 			if c.ir.IsVolatile(valType) {

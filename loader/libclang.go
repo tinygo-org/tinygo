@@ -6,6 +6,8 @@ package loader
 import (
 	"errors"
 	"go/ast"
+	"go/token"
+	"strconv"
 	"strings"
 	"unsafe"
 )
@@ -90,13 +92,16 @@ func tinygo_clang_visitor(c, parent C.CXCursor, client_data C.CXClientData) C.in
 		if C.clang_isFunctionTypeVariadic(cursorType) != 0 {
 			return C.CXChildVisit_Continue // not supported
 		}
-		numArgs := C.clang_Cursor_getNumArguments(c)
+		numArgs := int(C.clang_Cursor_getNumArguments(c))
 		fn := &functionInfo{}
 		info.functions[name] = fn
-		for i := C.int(0); i < numArgs; i++ {
+		for i := 0; i < numArgs; i++ {
 			arg := C.clang_Cursor_getArgument(c, C.uint(i))
 			argName := getString(C.clang_getCursorSpelling(arg))
 			argType := C.clang_getArgType(cursorType, C.uint(i))
+			if argName == "" {
+				argName = "$" + strconv.Itoa(i)
+			}
 			fn.args = append(fn.args, paramInfo{
 				name:     argName,
 				typeExpr: info.makeASTType(argType),
@@ -195,6 +200,23 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 		return &ast.StarExpr{
 			Star: info.importCPos,
 			X:    info.makeASTType(C.clang_getPointeeType(typ)),
+		}
+	case C.CXType_FunctionProto:
+		// Be compatible with gc, which uses the *[0]byte type for function
+		// pointer types.
+		// Return type [0]byte because this is a function type, not a pointer to
+		// this function type.
+		return &ast.ArrayType{
+			Lbrack: info.importCPos,
+			Len: &ast.BasicLit{
+				ValuePos: info.importCPos,
+				Kind:     token.INT,
+				Value:    "0",
+			},
+			Elt: &ast.Ident{
+				NamePos: info.importCPos,
+				Name:    "byte",
+			},
 		}
 	default:
 		// Fallback, probably incorrect but at least the error points to an odd

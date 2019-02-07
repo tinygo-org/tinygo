@@ -6,3 +6,5 @@ longlong: -1099511627776
 global: 3
 15: 15
 25: 25
+callback 1: 50
+callback 2: 600
