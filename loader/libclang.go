@@ -5,6 +5,8 @@ package loader
 
 import (
 	"errors"
+	"go/ast"
+	"strings"
 	"unsafe"
 )
 
@@ -89,37 +91,70 @@ func tinygo_clang_visitor(c, parent C.CXCursor, client_data C.CXClientData) C.in
 			return C.CXChildVisit_Continue // not supported
 		}
 		numArgs := C.clang_Cursor_getNumArguments(c)
-		fn := &functionInfo{name: name}
-		info.functions = append(info.functions, fn)
+		fn := &functionInfo{}
+		info.functions[name] = fn
 		for i := C.int(0); i < numArgs; i++ {
 			arg := C.clang_Cursor_getArgument(c, C.uint(i))
 			argName := getString(C.clang_getCursorSpelling(arg))
 			argType := C.clang_getArgType(cursorType, C.uint(i))
-			argTypeName := getString(C.clang_getTypeSpelling(argType))
-			fn.args = append(fn.args, paramInfo{argName, argTypeName})
+			fn.args = append(fn.args, paramInfo{
+				name:     argName,
+				typeExpr: info.makeASTType(argType),
+			})
 		}
 		resultType := C.clang_getCursorResultType(c)
-		resultTypeName := getString(C.clang_getTypeSpelling(resultType))
-		fn.result = resultTypeName
+		if resultType.kind != C.CXType_Void {
+			fn.results = &ast.FieldList{
+				List: []*ast.Field{
+					&ast.Field{
+						Type: info.makeASTType(resultType),
+					},
+				},
+			}
+		}
 	case C.CXCursor_TypedefDecl:
 		typedefType := C.clang_getCursorType(c)
 		name := getString(C.clang_getTypedefName(typedefType))
 		underlyingType := C.clang_getTypedefDeclUnderlyingType(c)
-		underlyingTypeName := getString(C.clang_getTypeSpelling(underlyingType))
-		typeSize := C.clang_Type_getSizeOf(underlyingType)
-		info.typedefs = append(info.typedefs, &typedefInfo{
-			newName: name,
-			oldName: underlyingTypeName,
-			size:    int(typeSize),
-		})
+		expr := info.makeASTType(underlyingType)
+		if strings.HasPrefix(name, "_Cgo_") {
+			expr := expr.(*ast.Ident)
+			typeSize := C.clang_Type_getSizeOf(underlyingType)
+			switch expr.Name {
+			// TODO: plain char (may be signed or unsigned)
+			case "C.schar", "C.short", "C.int", "C.long", "C.longlong":
+				switch typeSize {
+				case 1:
+					expr.Name = "int8"
+				case 2:
+					expr.Name = "int16"
+				case 4:
+					expr.Name = "int32"
+				case 8:
+					expr.Name = "int64"
+				}
+			case "C.uchar", "C.ushort", "C.uint", "C.ulong", "C.ulonglong":
+				switch typeSize {
+				case 1:
+					expr.Name = "uint8"
+				case 2:
+					expr.Name = "uint16"
+				case 4:
+					expr.Name = "uint32"
+				case 8:
+					expr.Name = "uint64"
+				}
+			}
+		}
+		info.typedefs[name] = &typedefInfo{
+			typeExpr: expr,
+		}
 	case C.CXCursor_VarDecl:
 		name := getString(C.clang_getCursorSpelling(c))
 		cursorType := C.clang_getCursorType(c)
-		cursorTypeName := getString(C.clang_getTypeSpelling(cursorType))
-		info.globals = append(info.globals, &globalInfo{
-			name:     name,
-			typeName: cursorTypeName,
-		})
+		info.globals[name] = &globalInfo{
+			typeExpr: info.makeASTType(cursorType),
+		}
 	}
 	return C.CXChildVisit_Continue
 }
@@ -129,4 +164,45 @@ func getString(clangString C.CXString) (s string) {
 	s = C.GoString(rawString)
 	C.clang_disposeString(clangString)
 	return
+}
+
+// makeASTType return the ast.Expr for the given libclang type. In other words,
+// it converts a libclang type to a type in the Go AST.
+func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
+	var typeName string
+	switch typ.kind {
+	case C.CXType_SChar:
+		typeName = "schar"
+	case C.CXType_UChar:
+		typeName = "uchar"
+	case C.CXType_Short:
+		typeName = "short"
+	case C.CXType_UShort:
+		typeName = "ushort"
+	case C.CXType_Int:
+		typeName = "int"
+	case C.CXType_UInt:
+		typeName = "uint"
+	case C.CXType_Long:
+		typeName = "long"
+	case C.CXType_ULong:
+		typeName = "ulong"
+	case C.CXType_LongLong:
+		typeName = "longlong"
+	case C.CXType_ULongLong:
+		typeName = "ulonglong"
+	case C.CXType_Pointer:
+		return &ast.StarExpr{
+			Star: info.importCPos,
+			X:    info.makeASTType(C.clang_getPointeeType(typ)),
+		}
+	default:
+		// Fallback, probably incorrect but at least the error points to an odd
+		// type name.
+		typeName = getString(C.clang_getTypeSpelling(typ))
+	}
+	return &ast.Ident{
+		NamePos: info.importCPos,
+		Name:    "C." + typeName,
+	}
 }

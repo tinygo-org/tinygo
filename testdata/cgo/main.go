@@ -17,4 +17,10 @@ func main() {
 	var y C.longlong = -(1 << 40)
 	println("longlong:", y)
 	println("global:", C.global)
+	var ptr C.intPointer
+	var n C.int = 15
+	ptr = C.intPointer(&n)
+	println("15:", *ptr)
+	C.store(25, &n)
+	println("25:", *ptr)
 }

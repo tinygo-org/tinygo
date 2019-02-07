@@ -17,37 +17,33 @@ import (
 type fileInfo struct {
 	*ast.File
 	filename   string
-	functions  []*functionInfo
-	typedefs   []*typedefInfo
-	globals    []*globalInfo
+	functions  map[string]*functionInfo
+	globals    map[string]*globalInfo
+	typedefs   map[string]*typedefInfo
 	importCPos token.Pos
 }
 
 // functionInfo stores some information about a Cgo function found by libclang
 // and declared in the AST.
 type functionInfo struct {
-	name   string
-	args   []paramInfo
-	result string
+	args    []paramInfo
+	results *ast.FieldList
 }
 
 // paramInfo is a parameter of a Cgo function (see functionInfo).
 type paramInfo struct {
 	name     string
-	typeName string
+	typeExpr ast.Expr
 }
 
 // typedefInfo contains information about a single typedef in C.
 type typedefInfo struct {
-	newName string // newly defined type name
-	oldName string // old type name, may be something like "unsigned long long"
-	size    int    // size in bytes
+	typeExpr ast.Expr
 }
 
 // globalInfo contains information about a declared global variable in C.
 type globalInfo struct {
-	name     string
-	typeName string
+	typeExpr ast.Expr
 }
 
 // cgoAliases list type aliases between Go and C, for types that are equivalent
@@ -84,8 +80,11 @@ typedef unsigned long long  _Cgo_ulonglong;
 // comment with libclang, and modifies the AST to use this information.
 func (p *Package) processCgo(filename string, f *ast.File, cflags []string) error {
 	info := &fileInfo{
-		File:     f,
-		filename: filename,
+		File:      f,
+		filename:  filename,
+		functions: map[string]*functionInfo{},
+		globals:   map[string]*globalInfo{},
+		typedefs:  map[string]*typedefInfo{},
 	}
 
 	// Find `import "C"` statements in the file.
@@ -151,16 +150,22 @@ func (p *Package) processCgo(filename string, f *ast.File, cflags []string) erro
 func (info *fileInfo) addFuncDecls() {
 	// TODO: replace all uses of importCPos with the real locations from
 	// libclang.
-	for _, fn := range info.functions {
+	names := make([]string, 0, len(info.functions))
+	for name := range info.functions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fn := info.functions[name]
 		obj := &ast.Object{
 			Kind: ast.Fun,
-			Name: mapCgoType(fn.name),
+			Name: "C." + name,
 		}
 		args := make([]*ast.Field, len(fn.args))
 		decl := &ast.FuncDecl{
 			Name: &ast.Ident{
 				NamePos: info.importCPos,
-				Name:    mapCgoType(fn.name),
+				Name:    "C." + name,
 				Obj:     obj,
 			},
 			Type: &ast.FuncType{
@@ -170,16 +175,7 @@ func (info *fileInfo) addFuncDecls() {
 					List:    args,
 					Closing: info.importCPos,
 				},
-				Results: &ast.FieldList{
-					List: []*ast.Field{
-						&ast.Field{
-							Type: &ast.Ident{
-								NamePos: info.importCPos,
-								Name:    mapCgoType(fn.result),
-							},
-						},
-					},
-				},
+				Results: fn.results,
 			},
 		}
 		obj.Decl = decl
@@ -191,15 +187,12 @@ func (info *fileInfo) addFuncDecls() {
 						Name:    arg.name,
 						Obj: &ast.Object{
 							Kind: ast.Var,
-							Name: mapCgoType(arg.name),
+							Name: arg.name,
 							Decl: decl,
 						},
 					},
 				},
-				Type: &ast.Ident{
-					NamePos: info.importCPos,
-					Name:    mapCgoType(arg.typeName),
-				},
+				Type: arg.typeExpr,
 			}
 		}
 		info.Decls = append(info.Decls, decl)
@@ -221,21 +214,24 @@ func (info *fileInfo) addVarDecls() {
 		Lparen: info.importCPos,
 		Rparen: info.importCPos,
 	}
-	for _, global := range info.globals {
+	names := make([]string, 0, len(info.globals))
+	for name := range info.globals {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		global := info.globals[name]
 		obj := &ast.Object{
 			Kind: ast.Typ,
-			Name: mapCgoType(global.name),
+			Name: "C." + name,
 		}
 		valueSpec := &ast.ValueSpec{
 			Names: []*ast.Ident{&ast.Ident{
 				NamePos: info.importCPos,
-				Name:    mapCgoType(global.name),
+				Name:    "C." + name,
 				Obj:     obj,
 			}},
-			Type: &ast.Ident{
-				NamePos: info.importCPos,
-				Name:    mapCgoType(global.typeName),
-			},
+			Type: global.typeExpr,
 		}
 		obj.Decl = valueSpec
 		gen.Specs = append(gen.Specs, valueSpec)
@@ -292,55 +288,32 @@ func (info *fileInfo) addTypedefs() {
 		TokPos: info.importCPos,
 		Tok:    token.TYPE,
 	}
-	for _, typedef := range info.typedefs {
-		newType := mapCgoType(typedef.newName)
-		oldType := mapCgoType(typedef.oldName)
-		switch oldType {
-		// TODO: plain char (may be signed or unsigned)
-		case "C.schar", "C.short", "C.int", "C.long", "C.longlong":
-			switch typedef.size {
-			case 1:
-				oldType = "int8"
-			case 2:
-				oldType = "int16"
-			case 4:
-				oldType = "int32"
-			case 8:
-				oldType = "int64"
-			}
-		case "C.uchar", "C.ushort", "C.uint", "C.ulong", "C.ulonglong":
-			switch typedef.size {
-			case 1:
-				oldType = "uint8"
-			case 2:
-				oldType = "uint16"
-			case 4:
-				oldType = "uint32"
-			case 8:
-				oldType = "uint64"
-			}
+	names := make([]string, 0, len(info.typedefs))
+	for name := range info.typedefs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		typedef := info.typedefs[name]
+		typeName := "C." + name
+		if strings.HasPrefix(name, "_Cgo_") {
+			typeName = "C." + name[len("_Cgo_"):]
 		}
-		if strings.HasPrefix(newType, "C._Cgo_") {
-			newType = "C." + newType[len("C._Cgo_"):]
-		}
-		if _, ok := cgoAliases[newType]; ok {
+		if _, ok := cgoAliases[typeName]; ok {
 			// This is a type that also exists in Go (defined in stdint.h).
 			continue
 		}
 		obj := &ast.Object{
 			Kind: ast.Typ,
-			Name: newType,
+			Name: typeName,
 		}
 		typeSpec := &ast.TypeSpec{
 			Name: &ast.Ident{
 				NamePos: info.importCPos,
-				Name:    newType,
+				Name:    typeName,
 				Obj:     obj,
 			},
-			Type: &ast.Ident{
-				NamePos: info.importCPos,
-				Name:    oldType,
-			},
+			Type: typedef.typeExpr,
 		}
 		obj.Decl = typeSpec
 		gen.Specs = append(gen.Specs, typeSpec)
@@ -362,31 +335,9 @@ func (info *fileInfo) walker(cursor *astutil.Cursor) bool {
 		if x.Name == "C" {
 			cursor.Replace(&ast.Ident{
 				NamePos: x.NamePos,
-				Name:    mapCgoType(node.Sel.Name),
+				Name:    "C." + node.Sel.Name,
 			})
 		}
 	}
 	return true
-}
-
-// mapCgoType converts a C type name into a Go type name with a "C." prefix.
-func mapCgoType(t string) string {
-	switch t {
-	case "signed char":
-		return "C.schar"
-	case "long long":
-		return "C.longlong"
-	case "unsigned char":
-		return "C.schar"
-	case "unsigned short":
-		return "C.ushort"
-	case "unsigned int":
-		return "C.uint"
-	case "unsigned long":
-		return "C.ulong"
-	case "unsigned long long":
-		return "C.ulonglong"
-	default:
-		return "C." + t
-	}
 }

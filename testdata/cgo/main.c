@@ -9,3 +9,7 @@ int fortytwo() {
 int add(int a, int b) {
 	return a + b;
 }
+
+void store(int value, int *ptr) {
+	*ptr = value;
+}

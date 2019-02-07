@@ -1325,7 +1325,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 			return nil
 		}
 		store := c.builder.CreateStore(llvmVal, llvmAddr)
-		valType := instr.Addr.Type().(*types.Pointer).Elem()
+		valType := instr.Addr.Type().Underlying().(*types.Pointer).Elem()
 		if c.ir.IsVolatile(valType) {
 			// Volatile store, for memory-mapped registers.
 			store.SetVolatile(true)
@@ -1957,7 +1957,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		var bufptr, buflen llvm.Value
 		switch ptrTyp := expr.X.Type().Underlying().(type) {
 		case *types.Pointer:
-			typ := expr.X.Type().(*types.Pointer).Elem().Underlying()
+			typ := expr.X.Type().Underlying().(*types.Pointer).Elem().Underlying()
 			switch typ := typ.(type) {
 			case *types.Array:
 				bufptr = val
@@ -2986,7 +2986,7 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 			return llvm.Value{}, c.makeError(unop.Pos(), "todo: unknown type for negate: "+unop.X.Type().Underlying().String())
 		}
 	case token.MUL: // *x, dereference pointer
-		valType := unop.X.Type().(*types.Pointer).Elem()
+		valType := unop.X.Type().Underlying().(*types.Pointer).Elem()
 		if c.targetData.TypeAllocSize(x.Type().ElementType()) == 0 {
 			// zero-length data
 			return c.getZeroValue(x.Type().ElementType())
