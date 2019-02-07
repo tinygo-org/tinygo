@@ -1736,9 +1736,10 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		elemSize := c.targetData.TypeAllocSize(llvmElemType)
 		elemSizeValue := llvm.ConstInt(c.uintptrType, elemSize, false)
 
-		// Calculate ^uintptr(0)
-		maxSize := llvm.ConstNot(llvm.ConstInt(c.uintptrType, 0, false)).ZExtValue()
-		if elemSize > maxSize {
+		// Calculate (^uintptr(0)) >> 1, which is the max value that fits in
+		// uintptr if uintptr were signed.
+		maxSize := llvm.ConstLShr(llvm.ConstNot(llvm.ConstInt(c.uintptrType, 0, false)), llvm.ConstInt(c.uintptrType, 1, false))
+		if elemSize > maxSize.ZExtValue() {
 			// This seems to be checked by the typechecker already, but let's
 			// check it again just to be sure.
 			return llvm.Value{}, c.makeError(expr.Pos(), fmt.Sprintf("slice element type is too big (%v bytes)", elemSize))
@@ -1770,10 +1771,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 					sliceCap = c.builder.CreateSExt(sliceCap, biggestInt, "")
 				}
 			}
-			// Note: the max element size needs to be doubled to make sure it
-			// fits in an int for, for example, len().
-			elemSizeDoubled := c.builder.CreateMul(elemSizeValue, llvm.ConstInt(c.uintptrType, 2, false), "")
-			c.createRuntimeCall(checkFunc, []llvm.Value{sliceLen, sliceCap, elemSizeDoubled}, "")
+			maxSliceSize := maxSize
+			if elemSize != 0 { // avoid divide by zero
+				maxSliceSize = llvm.ConstSDiv(maxSize, llvm.ConstInt(c.uintptrType, elemSize, false))
+			}
+			c.createRuntimeCall(checkFunc, []llvm.Value{sliceLen, sliceCap, maxSliceSize}, "")
 		}
 
 		// Allocate the backing array.
