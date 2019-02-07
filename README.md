@@ -4,9 +4,9 @@
 
 TinyGo is a Go compiler intended for use in small places such as microcontrollers, WebAssembly (WASM), and command-line tools.
 
-It uses the [Go compiler toolchain](https://golang.org/pkg/go/) alongside [LLVM](http://llvm.org) to provide an alternative way to compile programs written in the Go programming language.
+It reuses libraries used by the [Go language tools](https://golang.org/pkg/go/) alongside [LLVM](http://llvm.org) to provide an alternative way to compile programs written in the Go programming language.
 
-Here is an example program that blinks the built-in LED when run directly on an Arduino Uno microcontroller:
+Here is an example program that blinks the built-in LED when run directly on any supported board with onboard LED:
 
 ```go
 package main
@@ -27,6 +27,12 @@ func main() {
         time.Sleep(time.Millisecond * 1000)
     }
 }
+```
+
+The above program can be compiled and run without modification on an Arduino Uno, an Adafruit ItsyBitsy M0, or any of the supported boards that have a built-in LED, just by setting the correct TinyGo compiler target. For example, this compiles and flashes an Arduino Uno:
+
+```shell
+tinygo flash -target arduino examples/blinky1
 ```
 
 ## Installation
