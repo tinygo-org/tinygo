@@ -13,17 +13,17 @@ func main() {
 	println("sum foo:", sum(foo))
 
 	// creating a slice with uncommon len, cap types
-	assert(len(make([]int, int(2), int(3))) == 2)
-	assert(len(make([]int, int8(2), int8(3))) == 2)
-	assert(len(make([]int, int16(2), int16(3))) == 2)
-	assert(len(make([]int, int32(2), int32(3))) == 2)
-	assert(len(make([]int, int64(2), int64(3))) == 2)
-	assert(len(make([]int, uint(2), uint(3))) == 2)
-	assert(len(make([]int, uint8(2), uint8(3))) == 2)
-	assert(len(make([]int, uint16(2), uint16(3))) == 2)
-	assert(len(make([]int, uint32(2), uint32(3))) == 2)
-	assert(len(make([]int, uint64(2), uint64(3))) == 2)
-	assert(len(make([]int, uintptr(2), uintptr(3))) == 2)
+	assert(len(make([]int, makeInt(2), makeInt(3))) == 2)
+	assert(len(make([]int, makeInt8(2), makeInt8(3))) == 2)
+	assert(len(make([]int, makeInt16(2), makeInt16(3))) == 2)
+	assert(len(make([]int, makeInt32(2), makeInt32(3))) == 2)
+	assert(len(make([]int, makeInt64(2), makeInt64(3))) == 2)
+	assert(len(make([]int, makeUint(2), makeUint(3))) == 2)
+	assert(len(make([]int, makeUint8(2), makeUint8(3))) == 2)
+	assert(len(make([]int, makeUint16(2), makeUint16(3))) == 2)
+	assert(len(make([]int, makeUint32(2), makeUint32(3))) == 2)
+	assert(len(make([]int, makeUint64(2), makeUint64(3))) == 2)
+	assert(len(make([]int, makeUintptr(2), makeUintptr(3))) == 2)
 
 	// indexing into a slice with uncommon index types
 	assert(foo[int(2)] == 4)
@@ -120,3 +120,18 @@ func assert(ok bool) {
 		panic("assert failed")
 	}
 }
+
+// Helper functions used to hide const values from the compiler during IR
+// construction.
+
+func makeInt(x int) int             { return x }
+func makeInt8(x int8) int8          { return x }
+func makeInt16(x int16) int16       { return x }
+func makeInt32(x int32) int32       { return x }
+func makeInt64(x int64) int64       { return x }
+func makeUint(x uint) uint          { return x }
+func makeUint8(x uint8) uint8       { return x }
+func makeUint16(x uint16) uint16    { return x }
+func makeUint32(x uint32) uint32    { return x }
+func makeUint64(x uint64) uint64    { return x }
+func makeUintptr(x uintptr) uintptr { return x }
