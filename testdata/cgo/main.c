@@ -1,5 +1,7 @@
 #include "main.h"
 
+int global = 3;
+
 int fortytwo() {
 	return 42;
 }

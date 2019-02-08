@@ -3,7 +3,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:84316faef4ea12d34dde3b3e6dab682715a23b1c2bb8ab82cec9ab619766e214"
+  digest = "1:ba70784a3deee74c0ca3c87bcac3c2f93d3b2d27d8f237b768c358b45ba47da8"
   name = "golang.org/x/tools"
   packages = [
     "go/ast/astutil",
@@ -11,7 +11,7 @@
     "go/types/typeutil",
   ]
   pruneopts = "UT"
-  revision = "3e7aa9e59977626dc60433e9aeadf1bb63d28295"
+  revision = "40960b6deb8ecdb8bcde6a8f44722731939b8ddc"
 
 [[projects]]
   branch = "master"
@@ -25,6 +25,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "golang.org/x/tools/go/ast/astutil",
     "golang.org/x/tools/go/ssa",
     "tinygo.org/x/go-llvm",
   ]

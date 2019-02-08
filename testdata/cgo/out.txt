@@ -3,3 +3,4 @@ add: 8
 myint: 3 5
 myint size: 2
 longlong: -1099511627776
+global: 3

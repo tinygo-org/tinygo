@@ -16,4 +16,5 @@ func main() {
 	println("myint size:", int(unsafe.Sizeof(x)))
 	var y C.longlong = -(1 << 40)
 	println("longlong:", y)
+	println("global:", C.global)
 }

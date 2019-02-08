@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"golang.org/x/tools/go/ast/astutil"
 )
 
 // fileInfo holds all Cgo-related information of a given *ast.File.
@@ -17,6 +19,7 @@ type fileInfo struct {
 	filename   string
 	functions  []*functionInfo
 	typedefs   []*typedefInfo
+	globals    []*globalInfo
 	importCPos token.Pos
 }
 
@@ -39,6 +42,12 @@ type typedefInfo struct {
 	newName string // newly defined type name
 	oldName string // old type name, may be something like "unsigned long long"
 	size    int    // size in bytes
+}
+
+// globalInfo contains information about a declared global variable in C.
+type globalInfo struct {
+	name     string
+	typeName string
 }
 
 // cgoAliases list type aliases between Go and C, for types that are equivalent
@@ -122,6 +131,9 @@ func (p *Package) processCgo(filename string, f *ast.File, cflags []string) erro
 	// Declare functions found by libclang.
 	info.addFuncDecls()
 
+	// Declare globals found by libclang.
+	info.addVarDecls()
+
 	// Forward C types to Go types (like C.uint32_t -> uint32).
 	info.addTypeAliases()
 
@@ -129,7 +141,7 @@ func (p *Package) processCgo(filename string, f *ast.File, cflags []string) erro
 	info.addTypedefs()
 
 	// Patch the AST to use the declared types and functions.
-	ast.Inspect(f, info.walker)
+	f = astutil.Apply(f, info.walker, nil).(*ast.File)
 
 	return nil
 }
@@ -192,6 +204,43 @@ func (info *fileInfo) addFuncDecls() {
 		}
 		info.Decls = append(info.Decls, decl)
 	}
+}
+
+// addVarDecls declares external C globals in the Go source.
+// It adds code like the following to the AST:
+//
+//     var (
+//         C.globalInt  int
+//         C.globalBool bool
+//         // ...
+//     )
+func (info *fileInfo) addVarDecls() {
+	gen := &ast.GenDecl{
+		TokPos: info.importCPos,
+		Tok:    token.VAR,
+		Lparen: info.importCPos,
+		Rparen: info.importCPos,
+	}
+	for _, global := range info.globals {
+		obj := &ast.Object{
+			Kind: ast.Typ,
+			Name: mapCgoType(global.name),
+		}
+		valueSpec := &ast.ValueSpec{
+			Names: []*ast.Ident{&ast.Ident{
+				NamePos: info.importCPos,
+				Name:    mapCgoType(global.name),
+				Obj:     obj,
+			}},
+			Type: &ast.Ident{
+				NamePos: info.importCPos,
+				Name:    mapCgoType(global.typeName),
+			},
+		}
+		obj.Decl = valueSpec
+		gen.Specs = append(gen.Specs, valueSpec)
+	}
+	info.Decls = append(info.Decls, gen)
 }
 
 // addTypeAliases aliases some built-in Go types with their equivalent C types.
@@ -299,41 +348,22 @@ func (info *fileInfo) addTypedefs() {
 	info.Decls = append(info.Decls, gen)
 }
 
-// walker replaces all "C".<something> call expressions to literal
-// "C.<something>" expressions. This is impossible to write in Go (a dot cannot
-// be used in the middle of a name) so is used as a new namespace for C call
-// expressions.
-func (info *fileInfo) walker(node ast.Node) bool {
-	switch node := node.(type) {
-	case *ast.CallExpr:
-		fun, ok := node.Fun.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		x, ok := fun.X.(*ast.Ident)
+// walker replaces all "C".<something> expressions to literal "C.<something>"
+// expressions. Such expressions are impossible to write in Go (a dot cannot be
+// used in the middle of a name) so in practice all C identifiers live in a
+// separate namespace (no _Cgo_ hacks like in gc).
+func (info *fileInfo) walker(cursor *astutil.Cursor) bool {
+	switch node := cursor.Node().(type) {
+	case *ast.SelectorExpr:
+		x, ok := node.X.(*ast.Ident)
 		if !ok {
 			return true
 		}
 		if x.Name == "C" {
-			node.Fun = &ast.Ident{
+			cursor.Replace(&ast.Ident{
 				NamePos: x.NamePos,
-				Name:    mapCgoType(fun.Sel.Name),
-			}
-		}
-	case *ast.ValueSpec:
-		typ, ok := node.Type.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		x, ok := typ.X.(*ast.Ident)
-		if !ok {
-			return true
-		}
-		if x.Name == "C" {
-			node.Type = &ast.Ident{
-				NamePos: x.NamePos,
-				Name:    mapCgoType(typ.Sel.Name),
-			}
+				Name:    mapCgoType(node.Sel.Name),
+			})
 		}
 	}
 	return true
