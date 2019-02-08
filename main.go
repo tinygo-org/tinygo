@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -455,6 +456,8 @@ func Run(pkgName, target string, config *BuildConfig) error {
 }
 
 func usage() {
+	fmt.Fprintln(os.Stderr, "TinyGo is a Go compiler for small places.")
+	fmt.Fprintln(os.Stderr, "version:", version)
 	fmt.Fprintf(os.Stderr, "usage: %s command [-printir] [-target=<target>] -o <output> <input>\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "\ncommands:")
 	fmt.Fprintln(os.Stderr, "  build: compile packages and dependencies")
@@ -601,6 +604,8 @@ func main() {
 		}
 	case "help":
 		usage()
+	case "version":
+		fmt.Printf("tinygo version %s %s/%s\n", version, runtime.GOOS, runtime.GOARCH)
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown command:", command)
 		usage()
