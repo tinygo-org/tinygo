@@ -1,0 +1,17 @@
+0.2.0
+---
+- **command line**
+  - add version subcommand
+- **compiler**
+  - fix a bug in floating point comparisons with NaN values
+  - fix a bug when calling `panic` in package initialization code
+  - add support for comparing `complex64` and `complex128`
+- **cgo**
+  - add support for external globals
+  - add support for pointers and function pointers
+- **standard library**
+  - `fmt`: initial support, `fmt.Println` works
+  - `math`: support for most/all functions
+  - `os`: initial support (only stdin/stdout/stderr)
+  - `reflect`: initial support
+  - `syscall`: add support for amd64, arm, and arm64
