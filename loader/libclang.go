@@ -177,25 +177,44 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 	var typeName string
 	switch typ.kind {
 	case C.CXType_SChar:
-		typeName = "schar"
+		typeName = "C.schar"
 	case C.CXType_UChar:
-		typeName = "uchar"
+		typeName = "C.uchar"
 	case C.CXType_Short:
-		typeName = "short"
+		typeName = "C.short"
 	case C.CXType_UShort:
-		typeName = "ushort"
+		typeName = "C.ushort"
 	case C.CXType_Int:
-		typeName = "int"
+		typeName = "C.int"
 	case C.CXType_UInt:
-		typeName = "uint"
+		typeName = "C.uint"
 	case C.CXType_Long:
-		typeName = "long"
+		typeName = "C.long"
 	case C.CXType_ULong:
-		typeName = "ulong"
+		typeName = "C.ulong"
 	case C.CXType_LongLong:
-		typeName = "longlong"
+		typeName = "C.longlong"
 	case C.CXType_ULongLong:
-		typeName = "ulonglong"
+		typeName = "C.ulonglong"
+	case C.CXType_Bool:
+		typeName = "bool"
+	case C.CXType_Float, C.CXType_Double, C.CXType_LongDouble:
+		switch C.clang_Type_getSizeOf(typ) {
+		case 4:
+			typeName = "float32"
+		case 8:
+			typeName = "float64"
+		default:
+			// Don't do anything, rely on the fallback code to show a somewhat
+			// sensible error message like "undeclared name: C.long double".
+		}
+	case C.CXType_Complex:
+		switch C.clang_Type_getSizeOf(typ) {
+		case 8:
+			typeName = "complex64"
+		case 16:
+			typeName = "complex128"
+		}
 	case C.CXType_Pointer:
 		return &ast.StarExpr{
 			Star: info.importCPos,
@@ -218,13 +237,14 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 				Name:    "byte",
 			},
 		}
-	default:
+	}
+	if typeName == "" {
 		// Fallback, probably incorrect but at least the error points to an odd
 		// type name.
-		typeName = getString(C.clang_getTypeSpelling(typ))
+		typeName = "C." + getString(C.clang_getTypeSpelling(typ))
 	}
 	return &ast.Ident{
 		NamePos: info.importCPos,
-		Name:    "C." + typeName,
+		Name:    typeName,
 	}
 }
