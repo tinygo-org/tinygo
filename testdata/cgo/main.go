@@ -28,6 +28,14 @@ func main() {
 	println("callback 1:", C.doCallback(20, 30, cb))
 	cb = C.binop_t(C.mul)
 	println("callback 2:", C.doCallback(20, 30, cb))
+
+	// more globals
+	println("bool:", C.globalBool, C.globalBool2 == true)
+	println("float:", C.globalFloat)
+	println("double:", C.globalDouble)
+	println("complex float:", C.globalComplexFloat)
+	println("complex double:", C.globalComplexDouble)
+	println("complex long double:", C.globalComplexLongDouble)
 }
 
 //export mul
