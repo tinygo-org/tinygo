@@ -418,9 +418,9 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 		case types.Float64:
 			return c.ctx.DoubleType(), nil
 		case types.Complex64:
-			return llvm.VectorType(c.ctx.FloatType(), 2), nil
+			return c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false), nil
 		case types.Complex128:
-			return llvm.VectorType(c.ctx.DoubleType(), 2), nil
+			return c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false), nil
 		case types.String, types.UntypedString:
 			return c.mod.GetTypeByName("runtime._string"), nil
 		case types.Uintptr:
@@ -567,16 +567,6 @@ func (c *Compiler) getZeroValue(typ llvm.Type) (llvm.Value, error) {
 		} else {
 			return c.ctx.ConstStruct(vals, false), nil
 		}
-	case llvm.VectorTypeKind:
-		zero, err := c.getZeroValue(typ.ElementType())
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		vals := make([]llvm.Value, typ.VectorSize())
-		for i := range vals {
-			vals[i] = zero
-		}
-		return llvm.ConstVector(vals, false), nil
 	default:
 		return llvm.Value{}, errors.New("todo: LLVM zero initializer: " + typ.String())
 	}
@@ -1396,14 +1386,14 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 		var cplx llvm.Value
 		switch t.Kind() {
 		case types.Float32:
-			cplx = llvm.Undef(llvm.VectorType(c.ctx.FloatType(), 2))
+			cplx = llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false))
 		case types.Float64:
-			cplx = llvm.Undef(llvm.VectorType(c.ctx.DoubleType(), 2))
+			cplx = llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false))
 		default:
 			return llvm.Value{}, c.makeError(pos, "unsupported type in complex builtin: "+t.String())
 		}
-		cplx = c.builder.CreateInsertElement(cplx, r, llvm.ConstInt(c.ctx.Int8Type(), 0, false), "")
-		cplx = c.builder.CreateInsertElement(cplx, i, llvm.ConstInt(c.ctx.Int8Type(), 1, false), "")
+		cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
+		cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
 		return cplx, nil
 	case "copy":
 		dst, err := c.parseExpr(frame, args[0])
@@ -1438,8 +1428,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		index := llvm.ConstInt(c.ctx.Int32Type(), 1, false)
-		return c.builder.CreateExtractElement(cplx, index, "imag"), nil
+		return c.builder.CreateExtractValue(cplx, 1, "imag"), nil
 	case "len":
 		value, err := c.parseExpr(frame, args[0])
 		if err != nil {
@@ -1528,8 +1517,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		index := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-		return c.builder.CreateExtractElement(cplx, index, "real"), nil
+		return c.builder.CreateExtractValue(cplx, 0, "real"), nil
 	case "recover":
 		return c.createRuntimeCall("_recover", nil, ""), nil
 	case "ssa:wrapnilchk":
@@ -2440,12 +2428,10 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 				panic("binop on float: " + op.String())
 			}
 		} else if typ.Info()&types.IsComplex != 0 {
-			indexr := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-			indexi := llvm.ConstInt(c.ctx.Int32Type(), 1, false)
-			r1 := c.builder.CreateExtractElement(x, indexr, "r1")
-			r2 := c.builder.CreateExtractElement(y, indexr, "r2")
-			i1 := c.builder.CreateExtractElement(x, indexi, "i1")
-			i2 := c.builder.CreateExtractElement(y, indexi, "i2")
+			r1 := c.builder.CreateExtractValue(x, 0, "r1")
+			r2 := c.builder.CreateExtractValue(y, 0, "r2")
+			i1 := c.builder.CreateExtractValue(x, 1, "i1")
+			i2 := c.builder.CreateExtractValue(y, 1, "i2")
 			switch op {
 			case token.EQL: // ==
 				req := c.builder.CreateFCmp(llvm.FloatOEQ, r1, r2, "")
@@ -2665,9 +2651,9 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			cplx := llvm.Undef(llvm.VectorType(c.ctx.FloatType(), 2))
-			cplx = c.builder.CreateInsertElement(cplx, r, llvm.ConstInt(c.ctx.Int8Type(), 0, false), "")
-			cplx = c.builder.CreateInsertElement(cplx, i, llvm.ConstInt(c.ctx.Int8Type(), 1, false), "")
+			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false))
+			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
+			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
 			return cplx, nil
 		} else if typ.Kind() == types.Complex128 {
 			r, err := c.parseConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
@@ -2678,9 +2664,9 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			cplx := llvm.Undef(llvm.VectorType(c.ctx.DoubleType(), 2))
-			cplx = c.builder.CreateInsertElement(cplx, r, llvm.ConstInt(c.ctx.Int8Type(), 0, false), "")
-			cplx = c.builder.CreateInsertElement(cplx, i, llvm.ConstInt(c.ctx.Int8Type(), 1, false), "")
+			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false))
+			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
+			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
 			return cplx, nil
 		} else {
 			return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
@@ -2848,25 +2834,25 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 
 		if typeFrom.Kind() == types.Complex128 && typeTo.Kind() == types.Complex64 {
 			// Conversion from complex128 to complex64.
-			r := c.builder.CreateExtractElement(value, llvm.ConstInt(c.ctx.Int32Type(), 0, false), "real.f64")
-			i := c.builder.CreateExtractElement(value, llvm.ConstInt(c.ctx.Int32Type(), 1, false), "imag.f64")
+			r := c.builder.CreateExtractValue(value, 0, "real.f64")
+			i := c.builder.CreateExtractValue(value, 1, "imag.f64")
 			r = c.builder.CreateFPTrunc(r, c.ctx.FloatType(), "real.f32")
 			i = c.builder.CreateFPTrunc(i, c.ctx.FloatType(), "imag.f32")
-			cplx := llvm.Undef(llvm.VectorType(c.ctx.FloatType(), 2))
-			cplx = c.builder.CreateInsertElement(cplx, r, llvm.ConstInt(c.ctx.Int8Type(), 0, false), "")
-			cplx = c.builder.CreateInsertElement(cplx, i, llvm.ConstInt(c.ctx.Int8Type(), 1, false), "")
+			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false))
+			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
+			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
 			return cplx, nil
 		}
 
 		if typeFrom.Kind() == types.Complex64 && typeTo.Kind() == types.Complex128 {
 			// Conversion from complex64 to complex128.
-			r := c.builder.CreateExtractElement(value, llvm.ConstInt(c.ctx.Int32Type(), 0, false), "real.f32")
-			i := c.builder.CreateExtractElement(value, llvm.ConstInt(c.ctx.Int32Type(), 1, false), "imag.f32")
+			r := c.builder.CreateExtractValue(value, 0, "real.f32")
+			i := c.builder.CreateExtractValue(value, 1, "imag.f32")
 			r = c.builder.CreateFPExt(r, c.ctx.DoubleType(), "real.f64")
 			i = c.builder.CreateFPExt(i, c.ctx.DoubleType(), "imag.f64")
-			cplx := llvm.Undef(llvm.VectorType(c.ctx.DoubleType(), 2))
-			cplx = c.builder.CreateInsertElement(cplx, r, llvm.ConstInt(c.ctx.Int8Type(), 0, false), "")
-			cplx = c.builder.CreateInsertElement(cplx, i, llvm.ConstInt(c.ctx.Int8Type(), 1, false), "")
+			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false))
+			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
+			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
 			return cplx, nil
 		}
 
