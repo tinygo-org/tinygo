@@ -605,7 +605,7 @@ func main() {
 	case "help":
 		usage()
 	case "version":
-		fmt.Printf("TinyGo version %s %s/%s\n", version, runtime.GOOS, runtime.GOARCH)
+		fmt.Printf("tinygo version %s %s/%s\n", version, runtime.GOOS, runtime.GOARCH)
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown command:", command)
 		usage()
