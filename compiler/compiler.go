@@ -30,19 +30,18 @@ func init() {
 
 // Configure the compiler.
 type Config struct {
-	Triple     string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
-	CPU        string   // LLVM CPU name, e.g. atmega328p (empty string means default)
-	GOOS       string   //
-	GOARCH     string   //
-	GC         string   // garbage collection strategy
-	CFlags     []string // cflags to pass to cgo
-	LDFlags    []string // ldflags to pass to cgo
-	DumpSSA    bool     // dump Go SSA, for compiler debugging
-	Debug      bool     // add debug symbols for gdb
-	RootDir    string   // GOROOT for TinyGo
-	GOPATH     string   // GOPATH, like `go env GOPATH`
-	BuildTags  []string // build tags for TinyGo (empty means {Config.GOOS/Config.GOARCH})
-	InitInterp bool     // use new init interpretation, meaning the old one is disabled
+	Triple    string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
+	CPU       string   // LLVM CPU name, e.g. atmega328p (empty string means default)
+	GOOS      string   //
+	GOARCH    string   //
+	GC        string   // garbage collection strategy
+	CFlags    []string // cflags to pass to cgo
+	LDFlags   []string // ldflags to pass to cgo
+	DumpSSA   bool     // dump Go SSA, for compiler debugging
+	Debug     bool     // add debug symbols for gdb
+	RootDir   string   // GOROOT for TinyGo
+	GOPATH    string   // GOPATH, like `go env GOPATH`
+	BuildTags []string // build tags for TinyGo (empty means {Config.GOOS/Config.GOARCH})
 }
 
 type Compiler struct {
@@ -250,8 +249,7 @@ func (c *Compiler) Compile(mainPath string) error {
 		}
 	}
 
-	// Declare all globals. These will get an initializer when parsing "package
-	// initializer" functions.
+	// Declare all globals.
 	for _, g := range c.ir.Globals {
 		typ := g.Type().(*types.Pointer).Elem()
 		llvmType, err := c.getLLVMType(typ)
@@ -282,54 +280,18 @@ func (c *Compiler) Compile(mainPath string) error {
 		frames = append(frames, frame)
 	}
 
-	// Find and interpret package initializers.
+	// Add definitions to declarations.
 	for _, frame := range frames {
 		if frame.fn.Synthetic == "package initializer" {
 			c.initFuncs = append(c.initFuncs, frame.fn.LLVMFn)
-			// Try to interpret as much as possible of the init() function.
-			// Whenever it hits an instruction that it doesn't understand, it
-			// bails out and leaves the rest to the compiler (so initialization
-			// continues at runtime).
-			// This should only happen when it hits a function call or the end
-			// of the block, ideally.
-			if !c.InitInterp {
-				err := c.ir.Interpret(frame.fn.Blocks[0], c.DumpSSA)
-				if err != nil {
-					return err
-				}
-			}
-			err = c.parseFunc(frame)
-			if err != nil {
-				return err
-			}
 		}
-	}
-
-	// Set values for globals (after package initializer has been interpreted).
-	for _, g := range c.ir.Globals {
-		if g.Initializer() == nil {
-			continue
-		}
-		err := c.parseGlobalInitializer(g)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Add definitions to declarations.
-	for _, frame := range frames {
 		if frame.fn.CName() != "" {
 			continue
 		}
 		if frame.fn.Blocks == nil {
 			continue // external function
 		}
-		var err error
-		if frame.fn.Synthetic == "package initializer" {
-			continue // already done
-		} else {
-			err = c.parseFunc(frame)
-		}
+		err := c.parseFunc(frame)
 		if err != nil {
 			return err
 		}
@@ -735,282 +697,6 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix,
 	return difunc, nil
 }
 
-// Create a new global hashmap bucket, for map initialization.
-func (c *Compiler) initMapNewBucket(prefix string, mapType *types.Map) (llvm.Value, uint64, uint64, error) {
-	llvmKeyType, err := c.getLLVMType(mapType.Key().Underlying())
-	if err != nil {
-		return llvm.Value{}, 0, 0, err
-	}
-	llvmValueType, err := c.getLLVMType(mapType.Elem().Underlying())
-	if err != nil {
-		return llvm.Value{}, 0, 0, err
-	}
-	keySize := c.targetData.TypeAllocSize(llvmKeyType)
-	valueSize := c.targetData.TypeAllocSize(llvmValueType)
-	bucketType := c.ctx.StructType([]llvm.Type{
-		llvm.ArrayType(c.ctx.Int8Type(), 8), // tophash
-		c.i8ptrType,                         // next bucket
-		llvm.ArrayType(llvmKeyType, 8),      // key type
-		llvm.ArrayType(llvmValueType, 8),    // value type
-	}, false)
-	bucketValue, err := c.getZeroValue(bucketType)
-	if err != nil {
-		return llvm.Value{}, 0, 0, err
-	}
-	bucket := llvm.AddGlobal(c.mod, bucketType, prefix+"$hashmap$bucket")
-	bucket.SetInitializer(bucketValue)
-	bucket.SetLinkage(llvm.InternalLinkage)
-	return bucket, keySize, valueSize, nil
-}
-
-func (c *Compiler) parseGlobalInitializer(g *ir.Global) error {
-	if g.IsExtern() {
-		return nil
-	}
-	llvmValue, err := c.getInterpretedValue(g.LinkName(), g.Initializer())
-	if err != nil {
-		return err
-	}
-	g.LLVMGlobal.SetInitializer(llvmValue)
-	return nil
-}
-
-// Turn a computed Value type (ConstValue, ArrayValue, etc.) into a LLVM value.
-// This is used to set the initializer of globals after they have been
-// calculated by the package initializer interpreter.
-func (c *Compiler) getInterpretedValue(prefix string, value ir.Value) (llvm.Value, error) {
-	switch value := value.(type) {
-	case *ir.ArrayValue:
-		vals := make([]llvm.Value, len(value.Elems))
-		for i, elem := range value.Elems {
-			val, err := c.getInterpretedValue(prefix+"$arrayval", elem)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			vals[i] = val
-		}
-		subTyp, err := c.getLLVMType(value.ElemType)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		return llvm.ConstArray(subTyp, vals), nil
-
-	case *ir.ConstValue:
-		return c.parseConst(prefix, value.Expr)
-
-	case *ir.FunctionValue:
-		if value.Elem == nil {
-			llvmType, err := c.getLLVMType(value.Type)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			return c.getZeroValue(llvmType)
-		}
-		fn := c.ir.GetFunction(value.Elem)
-		ptr := fn.LLVMFn
-		// Create closure value: {context, function pointer}
-		ptr = c.ctx.ConstStruct([]llvm.Value{llvm.ConstPointerNull(c.i8ptrType), ptr}, false)
-		return ptr, nil
-
-	case *ir.GlobalValue:
-		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-		ptr := llvm.ConstInBoundsGEP(value.Global.LLVMGlobal, []llvm.Value{zero})
-		return ptr, nil
-
-	case *ir.MapValue:
-		// Create initial bucket.
-		firstBucketGlobal, keySize, valueSize, err := c.initMapNewBucket(prefix, value.Type)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-
-		// Insert each key/value pair in the hashmap.
-		bucketGlobal := firstBucketGlobal
-		for i, key := range value.Keys {
-			llvmKey, err := c.getInterpretedValue(prefix, key)
-			if err != nil {
-				return llvm.Value{}, nil
-			}
-			llvmValue, err := c.getInterpretedValue(prefix, value.Values[i])
-			if err != nil {
-				return llvm.Value{}, nil
-			}
-
-			constVal := key.(*ir.ConstValue).Expr
-			var keyBuf []byte
-			switch constVal.Type().Underlying().(*types.Basic).Kind() {
-			case types.String, types.UntypedString:
-				keyBuf = []byte(constant.StringVal(constVal.Value))
-			case types.Int:
-				keyBuf = make([]byte, c.targetData.TypeAllocSize(c.intType))
-				n, _ := constant.Uint64Val(constVal.Value)
-				for i := range keyBuf {
-					keyBuf[i] = byte(n)
-					n >>= 8
-				}
-			default:
-				return llvm.Value{}, errors.New("todo: init: map key not implemented: " + constVal.Type().Underlying().String())
-			}
-			hash := hashmapHash(keyBuf)
-
-			if i%8 == 0 && i != 0 {
-				// Bucket is full, create a new one.
-				newBucketGlobal, _, _, err := c.initMapNewBucket(prefix, value.Type)
-				if err != nil {
-					return llvm.Value{}, err
-				}
-				zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-				newBucketPtr := llvm.ConstInBoundsGEP(newBucketGlobal, []llvm.Value{zero})
-				newBucketPtrCast := llvm.ConstBitCast(newBucketPtr, c.i8ptrType)
-				// insert pointer into old bucket
-				bucket := bucketGlobal.Initializer()
-				bucket = llvm.ConstInsertValue(bucket, newBucketPtrCast, []uint32{1})
-				bucketGlobal.SetInitializer(bucket)
-				// switch to next bucket
-				bucketGlobal = newBucketGlobal
-			}
-
-			tophashValue := llvm.ConstInt(c.ctx.Int8Type(), uint64(hashmapTopHash(hash)), false)
-			bucket := bucketGlobal.Initializer()
-			bucket = llvm.ConstInsertValue(bucket, tophashValue, []uint32{0, uint32(i % 8)})
-			bucket = llvm.ConstInsertValue(bucket, llvmKey, []uint32{2, uint32(i % 8)})
-			bucket = llvm.ConstInsertValue(bucket, llvmValue, []uint32{3, uint32(i % 8)})
-			bucketGlobal.SetInitializer(bucket)
-		}
-
-		// Create the hashmap itself.
-		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-		bucketPtr := llvm.ConstInBoundsGEP(firstBucketGlobal, []llvm.Value{zero})
-		hashmapType := c.mod.GetTypeByName("runtime.hashmap")
-		hashmap := llvm.ConstNamedStruct(hashmapType, []llvm.Value{
-			llvm.ConstPointerNull(llvm.PointerType(hashmapType, 0)),      // next
-			llvm.ConstBitCast(bucketPtr, c.i8ptrType),                    // buckets
-			llvm.ConstInt(c.uintptrType, uint64(len(value.Keys)), false), // count
-			llvm.ConstInt(c.ctx.Int8Type(), keySize, false),              // keySize
-			llvm.ConstInt(c.ctx.Int8Type(), valueSize, false),            // valueSize
-			llvm.ConstInt(c.ctx.Int8Type(), 0, false),                    // bucketBits
-		})
-
-		// Create a pointer to this hashmap.
-		hashmapPtr := llvm.AddGlobal(c.mod, hashmap.Type(), prefix+"$hashmap")
-		hashmapPtr.SetInitializer(hashmap)
-		hashmapPtr.SetLinkage(llvm.InternalLinkage)
-		return llvm.ConstInBoundsGEP(hashmapPtr, []llvm.Value{zero}), nil
-
-	case *ir.PointerBitCastValue:
-		elem, err := c.getInterpretedValue(prefix, value.Elem)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		llvmType, err := c.getLLVMType(value.Type)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		return llvm.ConstBitCast(elem, llvmType), nil
-
-	case *ir.PointerToUintptrValue:
-		elem, err := c.getInterpretedValue(prefix, value.Elem)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		return llvm.ConstPtrToInt(elem, c.uintptrType), nil
-
-	case *ir.PointerValue:
-		if value.Elem == nil {
-			typ, err := c.getLLVMType(value.Type)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			return llvm.ConstPointerNull(typ), nil
-		}
-		elem, err := c.getInterpretedValue(prefix, *value.Elem)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-
-		obj := llvm.AddGlobal(c.mod, elem.Type(), prefix+"$ptrvalue")
-		obj.SetInitializer(elem)
-		obj.SetLinkage(llvm.InternalLinkage)
-		elem = obj
-
-		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-		ptr := llvm.ConstInBoundsGEP(elem, []llvm.Value{zero})
-		return ptr, nil
-
-	case *ir.SliceValue:
-		var globalPtr llvm.Value
-		var arrayLength uint64
-		if value.Array == nil {
-			arrayType, err := c.getLLVMType(value.Type.Elem())
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			globalPtr = llvm.ConstPointerNull(llvm.PointerType(arrayType, 0))
-		} else {
-			// make array
-			array, err := c.getInterpretedValue(prefix, value.Array)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			// make global from array
-			global := llvm.AddGlobal(c.mod, array.Type(), prefix+"$array")
-			global.SetInitializer(array)
-			global.SetLinkage(llvm.InternalLinkage)
-
-			// get pointer to global
-			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-			globalPtr = c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
-
-			arrayLength = uint64(len(value.Array.Elems))
-		}
-
-		// make slice
-		sliceTyp, err := c.getLLVMType(value.Type)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		llvmLen := llvm.ConstInt(c.uintptrType, arrayLength, false)
-		slice := llvm.ConstNamedStruct(sliceTyp, []llvm.Value{
-			globalPtr, // ptr
-			llvmLen,   // len
-			llvmLen,   // cap
-		})
-		return slice, nil
-
-	case *ir.StructValue:
-		fields := make([]llvm.Value, len(value.Fields))
-		for i, elem := range value.Fields {
-			field, err := c.getInterpretedValue(prefix, elem)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			fields[i] = field
-		}
-		switch value.Type.(type) {
-		case *types.Named:
-			llvmType, err := c.getLLVMType(value.Type)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			return llvm.ConstNamedStruct(llvmType, fields), nil
-		case *types.Struct:
-			return c.ctx.ConstStruct(fields, false), nil
-		default:
-			return llvm.Value{}, errors.New("init: unknown struct type: " + value.Type.String())
-		}
-
-	case *ir.ZeroBasicValue:
-		llvmType, err := c.getLLVMType(value.Type)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		return c.getZeroValue(llvmType)
-
-	default:
-		return llvm.Value{}, errors.New("init: unknown initializer type: " + fmt.Sprintf("%#v", value))
-	}
-}
-
 func (c *Compiler) parseFunc(frame *Frame) error {
 	if c.DumpSSA {
 		fmt.Printf("\nfunc %s:\n", frame.fn.Function)
@@ -1195,10 +881,6 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 	switch instr := instr.(type) {
 	case ssa.Value:
 		value, err := c.parseExpr(frame, instr)
-		if err == ir.ErrCGoWrapper {
-			// Ignore CGo global variables which we don't use.
-			return nil
-		}
 		frame.locals[instr] = value
 		return err
 	case *ssa.DebugRef:
@@ -1309,10 +991,6 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		return c.emitChanSend(frame, instr)
 	case *ssa.Store:
 		llvmAddr, err := c.parseExpr(frame, instr.Addr)
-		if err == ir.ErrCGoWrapper {
-			// Ignore CGo global variables which we don't use.
-			return nil
-		}
 		if err != nil {
 			return err
 		}
@@ -1912,10 +1590,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			fn.LLVMFn,
 		}, false), nil
 	case *ssa.Global:
-		if strings.HasPrefix(expr.Name(), "__cgofn__cgo_") || strings.HasPrefix(expr.Name(), "_cgo_") {
-			// Ignore CGo global variables which we don't use.
-			return llvm.Value{}, ir.ErrCGoWrapper
-		}
 		value := c.ir.GetGlobal(expr).LLVMGlobal
 		if value.IsNil() {
 			return llvm.Value{}, c.makeError(expr.Pos(), "global not found: "+c.ir.GetGlobal(expr).LinkName())
@@ -2033,7 +1707,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return c.parseMakeInterface(val, expr.X.Type(), "", expr.Pos())
+		return c.parseMakeInterface(val, expr.X.Type(), expr.Pos())
 	case *ssa.MakeMap:
 		mapType := expr.Type().Underlying().(*types.Map)
 		llvmKeyType, err := c.getLLVMType(mapType.Key().Underlying())

@@ -43,11 +43,10 @@ type Function struct {
 // Global variable, possibly constant.
 type Global struct {
 	*ssa.Global
-	program     *Program
-	LLVMGlobal  llvm.Value
-	linkName    string // go:extern
-	extern      bool   // go:extern
-	initializer Value
+	program    *Program
+	LLVMGlobal llvm.Value
+	linkName   string // go:extern
+	extern     bool   // go:extern
 }
 
 // Type with a name and possibly methods.
@@ -414,10 +413,6 @@ func (g *Global) CName() string {
 		return name[2:]
 	}
 	return ""
-}
-
-func (g *Global) Initializer() Value {
-	return g.initializer
 }
 
 // Return true if this named type is annotated with the //go:volatile pragma,
