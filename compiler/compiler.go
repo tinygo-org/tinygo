@@ -2253,7 +2253,6 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 		default:
 			return llvm.Value{}, c.makeError(pos, "unknown: binop on struct: "+op.String())
 		}
-		return result, nil
 	case *types.Struct:
 		// Compare each struct field and combine the result. From the spec:
 		//     Struct values are comparable if all their fields are comparable.
@@ -2282,7 +2281,6 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 		default:
 			return llvm.Value{}, c.makeError(pos, "unknown: binop on struct: "+op.String())
 		}
-		return result, nil
 	default:
 		return llvm.Value{}, c.makeError(pos, "todo: binop type: "+typ.String())
 	}
