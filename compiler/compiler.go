@@ -1353,7 +1353,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 		}
 
 		switch fn.RelString(nil) {
-		case "syscall.Syscall", "syscall.Syscall6":
+		case "syscall.Syscall", "syscall.Syscall6", "syscall.Syscall9":
 			return c.emitSyscall(frame, instr)
 		}
 

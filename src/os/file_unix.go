@@ -1,4 +1,4 @@
-// +build linux
+// +build darwin linux
 
 package os
 

@@ -22,7 +22,7 @@ import (
 )
 
 var commands = map[string]string{
-	"ar":      "ar",
+	"ar":      "llvm-ar",
 	"clang":   "clang-7",
 	"ld.lld":  "ld.lld-7",
 	"wasm-ld": "wasm-ld-7",
@@ -102,7 +102,9 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		return errors.New("verification error after interpreting runtime.initAll")
 	}
 
-	c.ApplyFunctionSections() // -ffunction-sections
+	if spec.GOOS != "darwin" {
+		c.ApplyFunctionSections() // -ffunction-sections
+	}
 	if err := c.Verify(); err != nil {
 		return errors.New("verification error after applying function sections")
 	}

@@ -17,7 +17,20 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 	num, _ := constant.Uint64Val(call.Args[0].(*ssa.Const).Value)
 	var syscallResult llvm.Value
 	switch {
-	case c.GOARCH == "amd64" && c.GOOS == "linux":
+	case c.GOARCH == "amd64":
+		if c.GOOS == "darwin" {
+			// Darwin adds this magic number to system call numbers:
+			//
+			// > Syscall classes for 64-bit system call entry.
+			// > For 64-bit users, the 32-bit syscall number is partitioned
+			// > with the high-order bits representing the class and low-order
+			// > bits being the syscall number within that class.
+			// > The high-order 32-bits of the 64-bit syscall number are unused.
+			// > All system classes enter the kernel via the syscall instruction.
+			//
+			// Source: https://opensource.apple.com/source/xnu/xnu-792.13.8/osfmk/mach/i386/syscall_sw.h
+			num += 0x2000000
+		}
 		// Sources:
 		//   https://stackoverflow.com/a/2538212
 		//   https://en.wikibooks.org/wiki/X86_Assembly/Interfacing_with_Linux#syscall
@@ -34,6 +47,9 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 				"{r10}",
 				"{r8}",
 				"{r9}",
+				"{r11}",
+				"{r12}",
+				"{r13}",
 			}[i]
 			llvmValue, err := c.parseExpr(frame, arg)
 			if err != nil {
@@ -119,21 +135,42 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 	default:
 		return llvm.Value{}, c.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+c.GOOS+"/"+c.GOARCH)
 	}
-	// Return values: r0, r1, err uintptr
-	// Pseudocode:
-	//     var err uintptr
-	//     if syscallResult < 0 && syscallResult > -4096 {
-	//         err = -syscallResult
-	//     }
-	//     return syscallResult, 0, err
-	zero := llvm.ConstInt(c.uintptrType, 0, false)
-	inrange1 := c.builder.CreateICmp(llvm.IntSLT, syscallResult, llvm.ConstInt(c.uintptrType, 0, false), "")
-	inrange2 := c.builder.CreateICmp(llvm.IntSGT, syscallResult, llvm.ConstInt(c.uintptrType, 0xfffffffffffff000, true), "") // -4096
-	hasError := c.builder.CreateAnd(inrange1, inrange2, "")
-	errResult := c.builder.CreateSelect(hasError, c.builder.CreateNot(syscallResult, ""), zero, "syscallError")
-	retval := llvm.Undef(llvm.StructType([]llvm.Type{c.uintptrType, c.uintptrType, c.uintptrType}, false))
-	retval = c.builder.CreateInsertValue(retval, syscallResult, 0, "")
-	retval = c.builder.CreateInsertValue(retval, zero, 1, "")
-	retval = c.builder.CreateInsertValue(retval, errResult, 2, "")
-	return retval, nil
+	switch c.GOOS {
+	case "linux":
+		// Return values: r0, r1 uintptr, err Errno
+		// Pseudocode:
+		//     var err uintptr
+		//     if syscallResult < 0 && syscallResult > -4096 {
+		//         err = -syscallResult
+		//     }
+		//     return syscallResult, 0, err
+		zero := llvm.ConstInt(c.uintptrType, 0, false)
+		inrange1 := c.builder.CreateICmp(llvm.IntSLT, syscallResult, llvm.ConstInt(c.uintptrType, 0, false), "")
+		inrange2 := c.builder.CreateICmp(llvm.IntSGT, syscallResult, llvm.ConstInt(c.uintptrType, 0xfffffffffffff000, true), "") // -4096
+		hasError := c.builder.CreateAnd(inrange1, inrange2, "")
+		errResult := c.builder.CreateSelect(hasError, c.builder.CreateSub(zero, syscallResult, ""), zero, "syscallError")
+		retval := llvm.Undef(llvm.StructType([]llvm.Type{c.uintptrType, c.uintptrType, c.uintptrType}, false))
+		retval = c.builder.CreateInsertValue(retval, syscallResult, 0, "")
+		retval = c.builder.CreateInsertValue(retval, zero, 1, "")
+		retval = c.builder.CreateInsertValue(retval, errResult, 2, "")
+		return retval, nil
+	case "darwin":
+		// Return values: r0, r1 uintptr, err Errno
+		// Pseudocode:
+		//     var err uintptr
+		//     if syscallResult != 0 {
+		//         err = syscallResult
+		//     }
+		//     return syscallResult, 0, err
+		zero := llvm.ConstInt(c.uintptrType, 0, false)
+		hasError := c.builder.CreateICmp(llvm.IntNE, syscallResult, llvm.ConstInt(c.uintptrType, 0, false), "")
+		errResult := c.builder.CreateSelect(hasError, syscallResult, zero, "syscallError")
+		retval := llvm.Undef(llvm.StructType([]llvm.Type{c.uintptrType, c.uintptrType, c.uintptrType}, false))
+		retval = c.builder.CreateInsertValue(retval, syscallResult, 0, "")
+		retval = c.builder.CreateInsertValue(retval, zero, 1, "")
+		retval = c.builder.CreateInsertValue(retval, errResult, 2, "")
+		return retval, nil
+	default:
+		return llvm.Value{}, c.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+c.GOOS+"/"+c.GOARCH)
+	}
 }
