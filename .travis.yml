@@ -4,6 +4,9 @@ matrix:
   include:
   - dist: xenial
     go: "1.11"
+  - os: osx
+    go: "1.11"
+    env: PATH="/usr/local/opt/llvm/bin:$PATH"
 
 addons:
   apt:
@@ -24,8 +27,16 @@ addons:
     - qemu-user
     - gcc-avr
     - avr-libc
+  homebrew:
+    update: true
+    taps: ArmMbed/homebrew-formulae
+    packages:
+    - llvm@7
+    - qemu
+    - arm-none-eabi-gcc
 
 install:
+  - if [ "$TRAVIS_OS_NAME" == "osx" ]; then mkdir -p /Users/travis/gopath/bin; fi
   - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
   - dep ensure --vendor-only
 
@@ -35,14 +46,14 @@ script:
   - make gen-device
   - tinygo build -size short -o blinky1.nrf.elf    -target=pca10040     examples/blinky1
   - tinygo build -size short -o blinky2.nrf.elf    -target=pca10040     examples/blinky2
-  - tinygo build -size short -o blinky2                                 examples/blinky2
+  - tinygo build             -o blinky2                                 examples/blinky2 # TODO: re-enable -size flag with MachO support
   - tinygo build -size short -o test.nrf.elf       -target=pca10040     examples/test
   - tinygo build -size short -o blinky1.nrf51.elf  -target=microbit     examples/echo
   - tinygo build -size short -o test.nrf.elf       -target=nrf52840-mdk examples/blinky1
   - tinygo build -size short -o blinky1.nrf51d.elf -target=pca10031     examples/blinky1
   - tinygo build -size short -o blinky1.stm32.elf  -target=bluepill     examples/blinky1
-  - tinygo build -size short -o blinky1.avr.elf    -target=arduino      examples/blinky1
-  - tinygo build -size short -o blinky1.avr.elf    -target=digispark    examples/blinky1
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then tinygo build -size short -o blinky1.avr.elf    -target=arduino      examples/blinky1; fi
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then tinygo build -size short -o blinky1.avr.elf    -target=digispark    examples/blinky1; fi
   - tinygo build -size short -o blinky1.reel.elf   -target=reelboard    examples/blinky1
   - tinygo build -size short -o blinky2.reel.elf   -target=reelboard    examples/blinky2
   - tinygo build -size short -o blinky1.pca10056.elf    -target=pca10056     examples/blinky1
