@@ -22,28 +22,17 @@ import (
 // value field.
 //
 // An interface value is a {typecode, value} tuple, or {i16, i8*} to be exact.
-func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, global string, pos token.Pos) (llvm.Value, error) {
+func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, pos token.Pos) (llvm.Value, error) {
 	var itfValue llvm.Value
 	size := c.targetData.TypeAllocSize(val.Type())
 	if size > c.targetData.TypeAllocSize(c.i8ptrType) {
-		if global != "" {
-			// Allocate in a global variable.
-			global := llvm.AddGlobal(c.mod, val.Type(), global+"$itfvalue")
-			global.SetInitializer(val)
-			global.SetLinkage(llvm.InternalLinkage)
-			global.SetGlobalConstant(true)
-			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-			itfValueRaw := llvm.ConstInBoundsGEP(global, []llvm.Value{zero, zero})
-			itfValue = llvm.ConstBitCast(itfValueRaw, c.i8ptrType)
-		} else {
-			// Allocate on the heap and put a pointer in the interface.
-			// TODO: escape analysis.
-			sizeValue := llvm.ConstInt(c.uintptrType, size, false)
-			alloc := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "makeinterface.alloc")
-			itfValueCast := c.builder.CreateBitCast(alloc, llvm.PointerType(val.Type(), 0), "makeinterface.cast.value")
-			c.builder.CreateStore(val, itfValueCast)
-			itfValue = c.builder.CreateBitCast(itfValueCast, c.i8ptrType, "makeinterface.cast.i8ptr")
-		}
+		// Allocate on the heap and put a pointer in the interface.
+		// TODO: escape analysis.
+		sizeValue := llvm.ConstInt(c.uintptrType, size, false)
+		alloc := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "makeinterface.alloc")
+		itfValueCast := c.builder.CreateBitCast(alloc, llvm.PointerType(val.Type(), 0), "makeinterface.cast.value")
+		c.builder.CreateStore(val, itfValueCast)
+		itfValue = c.builder.CreateBitCast(itfValueCast, c.i8ptrType, "makeinterface.cast.i8ptr")
 	} else if size == 0 {
 		itfValue = llvm.ConstPointerNull(c.i8ptrType)
 	} else {

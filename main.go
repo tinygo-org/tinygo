@@ -47,7 +47,6 @@ type BuildConfig struct {
 	dumpSSA    bool
 	debug      bool
 	printSizes string
-	initInterp bool
 	cFlags     []string
 	ldFlags    []string
 	wasmAbi    string
@@ -64,19 +63,18 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	spec.LDFlags = append(spec.LDFlags, config.ldFlags...)
 
 	compilerConfig := compiler.Config{
-		Triple:     spec.Triple,
-		CPU:        spec.CPU,
-		GOOS:       spec.GOOS,
-		GOARCH:     spec.GOARCH,
-		GC:         config.gc,
-		CFlags:     spec.CFlags,
-		LDFlags:    spec.LDFlags,
-		Debug:      config.debug,
-		DumpSSA:    config.dumpSSA,
-		RootDir:    sourceDir(),
-		GOPATH:     getGopath(),
-		BuildTags:  spec.BuildTags,
-		InitInterp: config.initInterp,
+		Triple:    spec.Triple,
+		CPU:       spec.CPU,
+		GOOS:      spec.GOOS,
+		GOARCH:    spec.GOARCH,
+		GC:        config.gc,
+		CFlags:    spec.CFlags,
+		LDFlags:   spec.LDFlags,
+		Debug:     config.debug,
+		DumpSSA:   config.dumpSSA,
+		RootDir:   sourceDir(),
+		GOPATH:    getGopath(),
+		BuildTags: spec.BuildTags,
 	}
 	c, err := compiler.NewCompiler(pkgName, compilerConfig)
 	if err != nil {
@@ -96,14 +94,12 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		return errors.New("verification error after IR construction")
 	}
 
-	if config.initInterp {
-		err = interp.Run(c.Module(), c.TargetData(), config.dumpSSA)
-		if err != nil {
-			return err
-		}
-		if err := c.Verify(); err != nil {
-			return errors.New("verification error after interpreting runtime.initAll")
-		}
+	err = interp.Run(c.Module(), c.TargetData(), config.dumpSSA)
+	if err != nil {
+		return err
+	}
+	if err := c.Verify(); err != nil {
+		return errors.New("verification error after interpreting runtime.initAll")
 	}
 
 	c.ApplyFunctionSections() // -ffunction-sections
@@ -501,7 +497,6 @@ func main() {
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
-	initInterp := flag.Bool("initinterp", true, "enable/disable partial evaluator of generated IR")
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
@@ -522,7 +517,6 @@ func main() {
 		dumpSSA:    *dumpSSA,
 		debug:      !*nodebug,
 		printSizes: *printSize,
-		initInterp: *initInterp,
 		wasmAbi:    *wasmAbi,
 	}
 
