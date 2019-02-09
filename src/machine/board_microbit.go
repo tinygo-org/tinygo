@@ -43,7 +43,7 @@ const (
 	SPI0_MISO_PIN = 22 // P14 on the board
 )
 
-// Regular pins
+// GPIO/Analog pins
 const (
 	P0  = 3
 	P1  = 2
