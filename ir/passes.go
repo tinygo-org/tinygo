@@ -73,7 +73,7 @@ func (p *Program) SimpleDCE() {
 	worklist := []*ssa.Function{main}
 	for _, f := range p.Functions {
 		if f.exported || f.Synthetic == "package initializer" || f.Pkg == runtimePkg || (f.Pkg == mathPkg && f.Pkg != nil) {
-			if f.flag || isCGoInternal(f.Name()) {
+			if f.flag {
 				continue
 			}
 			f.flag = true
@@ -103,7 +103,7 @@ func (p *Program) SimpleDCE() {
 					}
 				}
 				for _, operand := range instr.Operands(nil) {
-					if operand == nil || *operand == nil || isCGoInternal((*operand).Name()) {
+					if operand == nil || *operand == nil {
 						continue
 					}
 					switch operand := (*operand).(type) {

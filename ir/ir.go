@@ -187,9 +187,6 @@ func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 func (p *Program) AddPackage(pkg *ssa.Package) {
 	memberNames := make([]string, 0)
 	for name := range pkg.Members {
-		if isCGoInternal(name) {
-			continue
-		}
 		memberNames = append(memberNames, name)
 	}
 	sort.Strings(memberNames)
@@ -198,9 +195,6 @@ func (p *Program) AddPackage(pkg *ssa.Package) {
 		member := pkg.Members[name]
 		switch member := member.(type) {
 		case *ssa.Function:
-			if isCGoInternal(member.Name()) {
-				continue
-			}
 			p.addFunction(member)
 		case *ssa.Type:
 			t := &NamedType{Type: member}
@@ -436,18 +430,6 @@ func (p *Program) IsVolatile(t types.Type) bool {
 		}
 		return false
 	}
-}
-
-// Return true if this is a CGo-internal function that can be ignored.
-func isCGoInternal(name string) bool {
-	if strings.HasPrefix(name, "_Cgo_") || strings.HasPrefix(name, "_cgo") {
-		// _Cgo_ptr, _Cgo_use, _cgoCheckResult, _cgo_runtime_cgocall
-		return true // CGo-internal functions
-	}
-	if strings.HasPrefix(name, "__cgofn__cgo_") {
-		return true // CGo function pointer in global scope
-	}
-	return false
 }
 
 // Get all methods of a type.
