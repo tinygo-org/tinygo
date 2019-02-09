@@ -43,6 +43,27 @@ const (
 	SPI0_MISO_PIN = 22 // P14 on the board
 )
 
+// Regular pins
+const (
+	P0  = 3
+	P1  = 2
+	P2  = 1
+	P3  = 4
+	P4  = 5
+	P5  = 17
+	P6  = 12
+	P7  = 11
+	P8  = 18
+	P9  = 10
+	P10 = 6
+	P11 = 26
+	P12 = 20
+	P13 = 23
+	P14 = 22
+	P15 = 21
+	P16 = 16
+)
+
 // LED matrix pins
 const (
 	LED_COL_1 = 4
