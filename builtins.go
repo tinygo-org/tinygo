@@ -235,11 +235,7 @@ func compileBuiltins(target string, callback func(path string) error) error {
 		// Note: -fdebug-prefix-map is necessary to make the output archive
 		// reproducible. Otherwise the temporary directory is stored in the
 		// archive itself, which varies each run.
-		cmd := exec.Command(commands["clang"], "-c", "-Oz", "-g", "-Werror", "-Wall", "-std=c11", "-fshort-enums", "-nostdlibinc", "-ffunction-sections", "-fdata-sections", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir, "-o", objpath, srcpath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Dir = dir
-		err = cmd.Run()
+		err = CCompiler(sourceDir(), commands["clang"], srcpath, "-c", "-Oz", "-g", "-Werror", "-Wall", "-std=c11", "-fshort-enums", "-nostdlibinc", "-ffunction-sections", "-fdata-sections", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir, "-o", objpath)
 		if err != nil {
 			return &commandError{"failed to build", srcpath, err}
 		}

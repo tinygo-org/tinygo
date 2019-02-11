@@ -199,11 +199,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		// Compile extra files.
 		for i, path := range spec.ExtraFiles {
 			outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
-			cmd := exec.Command(spec.Compiler, append(spec.CFlags, "-c", "-o", outpath, path)...)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			cmd.Dir = sourceDir()
-			err := cmd.Run()
+			err := CCompiler(sourceDir(), spec.Compiler, path, append(spec.CFlags, "-c", "-o", outpath)...)
 			if err != nil {
 				return &commandError{"failed to build", path, err}
 			}
@@ -215,11 +211,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 			for _, file := range pkg.CFiles {
 				path := filepath.Join(pkg.Package.Dir, file)
 				outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"-"+file+".o")
-				cmd := exec.Command(spec.Compiler, append(spec.CFlags, "-c", "-o", outpath, path)...)
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				cmd.Dir = sourceDir()
-				err := cmd.Run()
+				err := CCompiler(sourceDir(), spec.Compiler, path, append(spec.CFlags, "-c", "-o", outpath)...)
 				if err != nil {
 					return &commandError{"failed to build", path, err}
 				}

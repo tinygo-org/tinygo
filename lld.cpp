@@ -16,4 +16,4 @@ bool tinygo_link_wasm(int argc, char **argv) {
 	return lld::wasm::link(args, false);
 }
 
-} // external "C"
+} // extern "C"
