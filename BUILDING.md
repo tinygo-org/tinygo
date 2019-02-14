@@ -30,9 +30,9 @@ on a different system like Mac.
 The first step is to get the source code. Place it in some directory, assuming
 `$HOME/src` here, but you can pick a different one of course:
 
-    git clone -b release_70 https://github.com/llvm-mirror/llvm.git $HOME/src/llvm
-    git clone -b release_70 https://github.com/llvm-mirror/clang.git $HOME/src/llvm/tools/clang
-    git clone -b release_70 https://github.com/llvm-mirror/lld.git $HOME/src/llvm/tools/lld
+    git clone -b release_80 https://github.com/llvm-mirror/llvm.git $HOME/src/llvm
+    git clone -b release_80 https://github.com/llvm-mirror/clang.git $HOME/src/llvm/tools/clang
+    git clone -b release_80 https://github.com/llvm-mirror/lld.git $HOME/src/llvm/tools/lld
     go get -d github.com/tinygo-org/tinygo
     cd $HOME/go/src/github.com/tinygo-org/tinygo
     dep ensure -vendor-only # download dependencies
@@ -62,7 +62,7 @@ Make a build directory. LLVM requires out-of-tree builds:
 
 Configure LLVM with CMake:
 
-    cmake -G Ninja ../llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR;WebAssembly" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON
+    cmake -G Ninja ../llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON
 
 You can also choose a different build system than Ninja, but Ninja is fast.
 

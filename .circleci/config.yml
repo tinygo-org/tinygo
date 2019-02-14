@@ -70,7 +70,7 @@ commands:
 
 
 jobs:
-  test-llvm7-go111:
+  test-llvm8-go111:
     docker:
       - image: circleci/golang:1.11
 
@@ -79,7 +79,7 @@ jobs:
       - checkout
       - submodules
       - apt-dependencies:
-          llvm: "-7"
+          llvm: "-8"
       - install-node
       - restore_cache:
           keys:
@@ -99,4 +99,4 @@ jobs:
 workflows:
   test-all:
     jobs:
-      - test-llvm7-go111
+      - test-llvm8-go111

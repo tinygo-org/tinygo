@@ -1,5 +1,5 @@
 [[constraint]]
-  branch = "master"
+  branch = "llvm8"
   name = "tinygo.org/x/go-llvm"
 
 [[constraint]]
