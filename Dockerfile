@@ -1,10 +1,10 @@
-# TinyGo base stage just installs LLVM 7 and the TinyGo compiler itself.
+# TinyGo base stage just installs LLVM 8 and the TinyGo compiler itself.
 FROM golang:latest AS tinygo-base
 
 RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
-    echo "deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch-7 main" >> /etc/apt/sources.list && \
+    echo "deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch-8 main" >> /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y llvm-7-dev libclang-7-dev git
+    apt-get install -y llvm-8-dev libclang-8-dev git
 
 RUN wget -O- https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 
@@ -25,9 +25,9 @@ COPY --from=tinygo-base /go/src/github.com/tinygo-org/tinygo/src /go/src/github.
 COPY --from=tinygo-base /go/src/github.com/tinygo-org/tinygo/targets /go/src/github.com/tinygo-org/tinygo/targets
 
 RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
-    echo "deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch-7 main" >> /etc/apt/sources.list && \
+    echo "deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch-8 main" >> /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y libllvm7 lld-7
+    apt-get install -y libllvm8 lld-8
 
 # tinygo-avr stage installs the needed dependencies to compile TinyGo programs for AVR microcontrollers.
 FROM tinygo-base AS tinygo-avr
@@ -59,7 +59,7 @@ COPY --from=tinygo-base /go/src/github.com/tinygo-org/tinygo/lib /go/src/github.
 
 RUN cd /go/src/github.com/tinygo-org/tinygo/ && \
     apt-get update && \
-    apt-get install -y apt-utils python3 make binutils-arm-none-eabi clang-7 && \
+    apt-get install -y apt-utils python3 make binutils-arm-none-eabi clang-8 && \
     make gen-device-nrf && make gen-device-stm32 && \
     apt-get remove -y python3 make && \
     apt-get autoremove -y && \
@@ -74,7 +74,7 @@ COPY --from=tinygo-base /go/src/github.com/tinygo-org/tinygo/lib /go/src/github.
 
 RUN cd /go/src/github.com/tinygo-org/tinygo/ && \
     apt-get update && \
-    apt-get install -y apt-utils python3 make binutils-arm-none-eabi clang-7 binutils-avr gcc-avr avr-libc && \
+    apt-get install -y apt-utils python3 make binutils-arm-none-eabi clang-8 binutils-avr gcc-avr avr-libc && \
     make gen-device && \
     apt-get remove -y python3 make && \
     apt-get autoremove -y && \

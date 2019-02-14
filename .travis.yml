@@ -13,7 +13,7 @@ addons:
     update: true
     taps: ArmMbed/homebrew-formulae
     packages:
-    - llvm@7
+    - llvm@8
     - qemu
     - arm-none-eabi-gcc
 

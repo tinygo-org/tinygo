@@ -13,7 +13,7 @@ import (
 )
 
 /*
-#include <clang-c/Index.h> // if this fails, install libclang-7-dev
+#include <clang-c/Index.h> // if this fails, install libclang-8-dev
 #include <stdlib.h>
 
 int tinygo_clang_visitor(CXCursor c, CXCursor parent, CXClientData client_data);
