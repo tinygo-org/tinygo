@@ -1,4 +1,4 @@
-// +build gc.dumb
+// +build gc.leaking
 
 package runtime
 
