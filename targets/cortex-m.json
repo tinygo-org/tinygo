@@ -3,7 +3,7 @@
 	"goos": "linux",
 	"goarch": "arm",
 	"compiler": "clang",
-	"gc": "marksweep",
+	"gc": "conservative",
 	"linker": "ld.lld",
 	"rtlib": "compiler-rt",
 	"cflags": [

@@ -1,4 +1,4 @@
-// +build gc.marksweep
+// +build gc.conservative
 
 package runtime
 
