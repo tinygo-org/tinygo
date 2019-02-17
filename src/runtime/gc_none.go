@@ -12,18 +12,6 @@ import (
 
 func alloc(size uintptr) unsafe.Pointer
 
-func free(ptr unsafe.Pointer) {
-	// Nothing to free when nothing gets allocated.
-}
-
 func GC() {
-	// Unimplemented.
-}
-
-func KeepAlive(x interface{}) {
-	// Unimplemented. Only required with SetFinalizer().
-}
-
-func SetFinalizer(obj interface{}, finalizer interface{}) {
 	// Unimplemented.
 }

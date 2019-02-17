@@ -30,18 +30,6 @@ func alloc(size uintptr) unsafe.Pointer {
 	return unsafe.Pointer(addr)
 }
 
-func free(ptr unsafe.Pointer) {
-	// Memory is never freed.
-}
-
 func GC() {
 	// No-op.
-}
-
-func KeepAlive(x interface{}) {
-	// Unimplemented. Only required with SetFinalizer().
-}
-
-func SetFinalizer(obj interface{}, finalizer interface{}) {
-	// Unimplemented.
 }
