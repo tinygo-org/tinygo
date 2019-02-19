@@ -346,35 +346,4 @@ func initUSBClock() {
 		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
 	waitForSync()
-
-	// GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(6)     | // Generic Clock Multiplexer 6
-	// GCLK_CLKCTRL_GEN_GCLK0 | // Generic Clock Generator 0 is source
-	// GCLK_CLKCTRL_CLKEN;
-	// while (GCLK->STATUS.bit.SYNCBUSY)
-	// ;
-
-	// configure pins
-	// machine.GPIO{24}.Configure(machine.GPIOConfig{Mode: machine.GPIO_COM})
-	// machine.GPIO{25}.Configure(machine.GPIOConfig{Mode: machine.GPIO_COM})
-	//GPIO{23}.Configure(GPIOConfig{Mode: GPIO_COM})
-
-	// Set up the USB DP/DN pins
-	// PORT->Group[0].PINCFG[PIN_PA24G_USB_DM].bit.PMUXEN = 1;
-	// PORT->Group[0].PMUX[PIN_PA24G_USB_DM/2].reg &= ~(0xF << (4 * (PIN_PA24G_USB_DM & 0x01u)));
-	// PORT->Group[0].PMUX[PIN_PA24G_USB_DM/2].reg |= MUX_PA24G_USB_DM << (4 * (PIN_PA24G_USB_DM & 0x01u));
-	// PORT->Group[0].PINCFG[PIN_PA25G_USB_DP].bit.PMUXEN = 1;
-	// PORT->Group[0].PMUX[PIN_PA25G_USB_DP/2].reg &= ~(0xF << (4 * (PIN_PA25G_USB_DP & 0x01u)));
-	// PORT->Group[0].PMUX[PIN_PA25G_USB_DP/2].reg |= MUX_PA25G_USB_DP << (4 * (PIN_PA25G_USB_DP & 0x01u));
-
-	// usb.CTRLA.bit.SWRST = 1;
-	// sam.USB_DEVICE.CTRLA |= sam.USB_DEVICE_CTRLA_SWRST
-	// for (sam.USB_DEVICE.SYNCBUSY&sam.USB_DEVICE_SYNCBUSY_SWRST) > 0 ||
-	// 	(sam.USB_DEVICE.SYNCBUSY&sam.USB_DEVICE_SYNCBUSY_ENABLE) > 0 {
-	// }
-
-	//sam.USB_DEVICE.DESCADD = 0
-
-	// memset(EP, 0, sizeof(EP));
-	// while (usb.SYNCBUSY.bit.SWRST || usb.SYNCBUSY.bit.ENABLE) {}
-	// usb.DESCADD.reg = (uint32_t)(&EP);
 }
