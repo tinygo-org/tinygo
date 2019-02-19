@@ -108,7 +108,7 @@ gen-device-stm32:
 	go fmt ./src/device/stm32
 
 # Build the Go compiler.
-tinygo:
+build/tinygo:
 	@mkdir -p build
 	go build -o build/tinygo .
 
