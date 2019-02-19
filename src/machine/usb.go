@@ -6,22 +6,28 @@ import (
 	"bytes"
 	"device/sam"
 	"encoding/binary"
+	"errors"
 )
 
 const deviceDescriptorSize = 18
 
-//	DeviceDescriptor
+// DeviceDescriptor implements the USB standard device descriptor.
+//
+// Table 9-8. Standard Device Descriptor
+// bLength, bDescriptorType, bcdUSB, bDeviceClass, bDeviceSubClass, bDeviceProtocol, bMaxPacketSize0,
+//    idVendor, idProduct, bcdDevice, iManufacturer, iProduct, iSerialNumber, bNumConfigurations */
+//
 type DeviceDescriptor struct {
-	len                uint8  // 18
-	dtype              uint8  // 1 USB_DEVICE_DESCRIPTOR_TYPE
-	usbVersion         uint16 // 0x200
-	deviceClass        uint8
-	deviceSubClass     uint8
-	deviceProtocol     uint8
-	packetSize0        uint8 // Packet 0
+	bLength            uint8  // 18
+	bDescriptorType    uint8  // 1 USB_DEVICE_DESCRIPTOR_TYPE
+	bcdUSB             uint16 // 0x200
+	bDeviceClass       uint8
+	bDeviceSubClass    uint8
+	bDeviceProtocol    uint8
+	bMaxPacketSize0    uint8 // Packet 0
 	idVendor           uint16
 	idProduct          uint16
-	deviceVersion      uint16 // 0x100
+	bcdDevice          uint16 // 0x100
 	iManufacturer      uint8
 	iProduct           uint8
 	iSerialNumber      uint8
@@ -30,9 +36,6 @@ type DeviceDescriptor struct {
 
 // usb_D_DEVICE(_class,_subClass,_proto,_packetSize0,_vid,_pid,_version,_im,_ip,_is,_configs) \
 // 	{ 18, 1, 0x200, _class,_subClass,_proto,_packetSize0,_vid,_pid,_version,_im,_ip,_is,_configs }
-/* Table 9-8. Standard Device Descriptor
- * bLength, bDescriptorType, bcdUSB, bDeviceClass, bDeviceSubClass, bDeviceProtocol, bMaxPacketSize0,
- *    idVendor, idProduct, bcdDevice, iManufacturer, iProduct, iSerialNumber, bNumConfigurations */
 func NewDeviceDescriptor(class, subClass, proto, packetSize0 uint8, vid, pid, version uint16, im, ip, is, configs uint8) DeviceDescriptor {
 	return DeviceDescriptor{deviceDescriptorSize, 1, 0x200, class, subClass, proto, packetSize0, vid, pid, version, im, ip, is, configs}
 }
@@ -40,16 +43,16 @@ func NewDeviceDescriptor(class, subClass, proto, packetSize0 uint8, vid, pid, ve
 // Bytes returns DeviceDescriptor data
 func (d DeviceDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, deviceDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.len)
-	binary.Write(buf, binary.LittleEndian, d.dtype)
-	binary.Write(buf, binary.LittleEndian, d.usbVersion)
-	binary.Write(buf, binary.LittleEndian, d.deviceClass)
-	binary.Write(buf, binary.LittleEndian, d.deviceSubClass)
-	binary.Write(buf, binary.LittleEndian, d.deviceProtocol)
-	binary.Write(buf, binary.LittleEndian, d.packetSize0)
+	binary.Write(buf, binary.LittleEndian, d.bLength)
+	binary.Write(buf, binary.LittleEndian, d.bDescriptorType)
+	binary.Write(buf, binary.LittleEndian, d.bcdUSB)
+	binary.Write(buf, binary.LittleEndian, d.bDeviceClass)
+	binary.Write(buf, binary.LittleEndian, d.bDeviceSubClass)
+	binary.Write(buf, binary.LittleEndian, d.bDeviceProtocol)
+	binary.Write(buf, binary.LittleEndian, d.bMaxPacketSize0)
 	binary.Write(buf, binary.LittleEndian, d.idVendor)
 	binary.Write(buf, binary.LittleEndian, d.idProduct)
-	binary.Write(buf, binary.LittleEndian, d.deviceVersion)
+	binary.Write(buf, binary.LittleEndian, d.bcdDevice)
 	binary.Write(buf, binary.LittleEndian, d.iManufacturer)
 	binary.Write(buf, binary.LittleEndian, d.iProduct)
 	binary.Write(buf, binary.LittleEndian, d.iSerialNumber)
@@ -59,23 +62,25 @@ func (d DeviceDescriptor) Bytes() []byte {
 
 const configDescriptorSize = 9
 
-//	ConfigDescriptor
+// ConfigDescriptor implements the standard USB configuration descriptor.
+//
+// Table 9-10. Standard Configuration Descriptor
+// bLength, bDescriptorType, wTotalLength, bNumInterfaces, bConfigurationValue, iConfiguration
+// bmAttributes, bMaxPower
+//
 type ConfigDescriptor struct {
-	len           uint8  // 9
-	dtype         uint8  // 2
-	clen          uint16 // total length
-	numInterfaces uint8
-	config        uint8
-	iconfig       uint8
-	attributes    uint8
-	maxPower      uint8
+	bLength             uint8  // 9
+	bDescriptorType     uint8  // 2
+	wTotalLength        uint16 // total length
+	bNumInterfaces      uint8
+	bConfigurationValue uint8
+	iConfiguration      uint8
+	bmAttributes        uint8
+	bMaxPower           uint8
 }
 
 // usb_D_CONFIG(_totalLength,_interfaces) \
 // 	{ 9, 2, _totalLength,_interfaces, 1, 0, USB_CONFIG_BUS_POWERED | USB_CONFIG_REMOTE_WAKEUP, USB_CONFIG_POWER_MA(USB_CONFIG_POWER) }
-/* Table 9-10. Standard Configuration Descriptor
- * bLength, bDescriptorType, wTotalLength, bNumInterfaces, bConfigurationValue, iConfiguration
- * bmAttributes, bMaxPower */
 func NewConfigDescriptor(totalLength uint16, interfaces uint8) ConfigDescriptor {
 	return ConfigDescriptor{configDescriptorSize, 2, totalLength, interfaces, 1, 0, usb_CONFIG_BUS_POWERED | usb_CONFIG_REMOTE_WAKEUP, 50}
 }
@@ -83,14 +88,14 @@ func NewConfigDescriptor(totalLength uint16, interfaces uint8) ConfigDescriptor 
 // Bytes returns ConfigDescriptor data
 func (d ConfigDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, configDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.len)
-	binary.Write(buf, binary.LittleEndian, d.dtype)
-	binary.Write(buf, binary.LittleEndian, d.clen)
-	binary.Write(buf, binary.LittleEndian, d.numInterfaces)
-	binary.Write(buf, binary.LittleEndian, d.config)
-	binary.Write(buf, binary.LittleEndian, d.iconfig)
-	binary.Write(buf, binary.LittleEndian, d.attributes)
-	binary.Write(buf, binary.LittleEndian, d.maxPower)
+	binary.Write(buf, binary.LittleEndian, d.bLength)
+	binary.Write(buf, binary.LittleEndian, d.bDescriptorType)
+	binary.Write(buf, binary.LittleEndian, d.wTotalLength)
+	binary.Write(buf, binary.LittleEndian, d.bNumInterfaces)
+	binary.Write(buf, binary.LittleEndian, d.bConfigurationValue)
+	binary.Write(buf, binary.LittleEndian, d.iConfiguration)
+	binary.Write(buf, binary.LittleEndian, d.bmAttributes)
+	binary.Write(buf, binary.LittleEndian, d.bMaxPower)
 	return buf.Bytes()
 }
 
@@ -98,24 +103,26 @@ func (d ConfigDescriptor) Bytes() []byte {
 
 const interfaceDescriptorSize = 9
 
-//	InterfaceDescriptor
+// InterfaceDescriptor implements the standard USB interface descriptor.
+//
+// Table 9-12. Standard Interface Descriptor
+// bLength, bDescriptorType, bInterfaceNumber, bAlternateSetting, bNumEndpoints, bInterfaceClass,
+// bInterfaceSubClass, bInterfaceProtocol, iInterface
+//
 type InterfaceDescriptor struct {
-	len               uint8 // 9
-	dtype             uint8 // 4
-	number            uint8
-	alternate         uint8
-	numEndpoints      uint8
-	interfaceClass    uint8
-	interfaceSubClass uint8
-	protocol          uint8
-	iInterface        uint8
+	bLength            uint8 // 9
+	bDescriptorType    uint8 // 4
+	bInterfaceNumber   uint8
+	bAlternateSetting  uint8
+	bNumEndpoints      uint8
+	bInterfaceClass    uint8
+	bInterfaceSubClass uint8
+	bInterfaceProtocol uint8
+	iInterface         uint8
 }
 
 // usb_D_INTERFACE(_n,_numEndpoints,_class,_subClass,_protocol) \
 // 	{ 9, 4, _n, 0, _numEndpoints, _class,_subClass, _protocol, 0 }
-/* Table 9-12. Standard Interface Descriptor
- * bLength, bDescriptorType, bInterfaceNumber, bAlternateSetting, bNumEndpoints, bInterfaceClass,
- * bInterfaceSubClass, bInterfaceProtocol, iInterface */
 func NewInterfaceDescriptor(n, numEndpoints, class, subClass, protocol uint8) InterfaceDescriptor {
 	return InterfaceDescriptor{interfaceDescriptorSize, 4, n, 0, numEndpoints, class, subClass, protocol, 0}
 }
@@ -123,34 +130,36 @@ func NewInterfaceDescriptor(n, numEndpoints, class, subClass, protocol uint8) In
 // Bytes returns InterfaceDescriptor data
 func (d InterfaceDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, interfaceDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.len)
-	binary.Write(buf, binary.LittleEndian, d.dtype)
-	binary.Write(buf, binary.LittleEndian, d.number)
-	binary.Write(buf, binary.LittleEndian, d.alternate)
-	binary.Write(buf, binary.LittleEndian, d.numEndpoints)
-	binary.Write(buf, binary.LittleEndian, d.interfaceClass)
-	binary.Write(buf, binary.LittleEndian, d.interfaceSubClass)
-	binary.Write(buf, binary.LittleEndian, d.protocol)
+	binary.Write(buf, binary.LittleEndian, d.bLength)
+	binary.Write(buf, binary.LittleEndian, d.bDescriptorType)
+	binary.Write(buf, binary.LittleEndian, d.bInterfaceNumber)
+	binary.Write(buf, binary.LittleEndian, d.bAlternateSetting)
+	binary.Write(buf, binary.LittleEndian, d.bNumEndpoints)
+	binary.Write(buf, binary.LittleEndian, d.bInterfaceClass)
+	binary.Write(buf, binary.LittleEndian, d.bInterfaceSubClass)
+	binary.Write(buf, binary.LittleEndian, d.bInterfaceProtocol)
 	binary.Write(buf, binary.LittleEndian, d.iInterface)
 	return buf.Bytes()
 }
 
 const endpointDescriptorSize = 7
 
-//	EndpointDescriptor
+// EndpointDescriptor implements the standard USB endpoint descriptor.
+//
+// Table 9-13. Standard Endpoint Descriptor
+// bLength, bDescriptorType, bEndpointAddress, bmAttributes, wMaxPacketSize, bInterval
+//
 type EndpointDescriptor struct {
-	len        uint8 // 7
-	dtype      uint8 // 5
-	addr       uint8
-	attr       uint8
-	packetSize uint16
-	interval   uint8
+	bLength          uint8 // 7
+	bDescriptorType  uint8 // 5
+	bEndpointAddress uint8
+	bmAttributes     uint8
+	wMaxPacketSize   uint16
+	bInterval        uint8
 }
 
 // usb_D_ENDPOINT(_addr,_attr,_packetSize, _interval) \
 // 	{ 7, 5, _addr,_attr,_packetSize, _interval }
-/* Table 9-13. Standard Endpoint Descriptor
- * bLength, bDescriptorType, bEndpointAddress, bmAttributes, wMaxPacketSize, bInterval */
 func NewEndpointDescriptor(addr, attr uint8, packetSize uint16, interval uint8) EndpointDescriptor {
 	return EndpointDescriptor{endpointDescriptorSize, 5, addr, attr, packetSize, interval}
 }
@@ -158,34 +167,37 @@ func NewEndpointDescriptor(addr, attr uint8, packetSize uint16, interval uint8) 
 // Bytes returns EndpointDescriptor data
 func (d EndpointDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, endpointDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.len)
-	binary.Write(buf, binary.LittleEndian, d.dtype)
-	binary.Write(buf, binary.LittleEndian, d.addr)
-	binary.Write(buf, binary.LittleEndian, d.attr)
-	binary.Write(buf, binary.LittleEndian, d.packetSize)
-	binary.Write(buf, binary.LittleEndian, d.interval)
+	binary.Write(buf, binary.LittleEndian, d.bLength)
+	binary.Write(buf, binary.LittleEndian, d.bDescriptorType)
+	binary.Write(buf, binary.LittleEndian, d.bEndpointAddress)
+	binary.Write(buf, binary.LittleEndian, d.bmAttributes)
+	binary.Write(buf, binary.LittleEndian, d.wMaxPacketSize)
+	binary.Write(buf, binary.LittleEndian, d.bInterval)
 	return buf.Bytes()
 }
 
 const iadDescriptorSize = 8
 
 // IADDescriptor is an Interface Association Descriptor
-// Used to bind 2 interfaces together in CDC composite device
+// Used to bind 2 interfaces together in CDC composite device.
+//
+// Standard Interface Association Descriptor:
+// bLength, bDescriptorType, bFirstInterface, bInterfaceCount, bFunctionClass, bFunctionSubClass,
+// bFunctionProtocol, iFunction
+//
 type IADDescriptor struct {
-	len              uint8 // 8
-	dtype            uint8 // 11
-	firstInterface   uint8
-	interfaceCount   uint8
-	functionClass    uint8
-	funtionSubClass  uint8
-	functionProtocol uint8
-	iInterface       uint8
+	bLength           uint8 // 8
+	bDescriptorType   uint8 // 11
+	bFirstInterface   uint8
+	bInterfaceCount   uint8
+	bFunctionClass    uint8
+	bFunctionSubClass uint8
+	bFunctionProtocol uint8
+	iFunction         uint8
 }
 
 // usb_D_IAD(_firstInterface, _count, _class, _subClass, _protocol) \
 // 	{ 8, 11, _firstInterface, _count, _class, _subClass, _protocol, 0 }
-/* iadclasscode_r10.pdf, Table 9\96Z. Standard Interface Association Descriptor
- * bLength, bDescriptorType, bFirstInterface, bInterfaceCount, bFunctionClass, bFunctionSubClass, bFunctionProtocol, iFunction */
 func NewIADDescriptor(firstInterface, count, class, subClass, protocol uint8) IADDescriptor {
 	return IADDescriptor{iadDescriptorSize, 11, firstInterface, count, class, subClass, protocol, 0}
 }
@@ -193,14 +205,14 @@ func NewIADDescriptor(firstInterface, count, class, subClass, protocol uint8) IA
 // Bytes returns IADDescriptor data
 func (d IADDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, iadDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.len)
-	binary.Write(buf, binary.LittleEndian, d.dtype)
-	binary.Write(buf, binary.LittleEndian, d.firstInterface)
-	binary.Write(buf, binary.LittleEndian, d.interfaceCount)
-	binary.Write(buf, binary.LittleEndian, d.functionClass)
-	binary.Write(buf, binary.LittleEndian, d.funtionSubClass)
-	binary.Write(buf, binary.LittleEndian, d.functionProtocol)
-	binary.Write(buf, binary.LittleEndian, d.iInterface)
+	binary.Write(buf, binary.LittleEndian, d.bLength)
+	binary.Write(buf, binary.LittleEndian, d.bDescriptorType)
+	binary.Write(buf, binary.LittleEndian, d.bFirstInterface)
+	binary.Write(buf, binary.LittleEndian, d.bInterfaceCount)
+	binary.Write(buf, binary.LittleEndian, d.bFunctionClass)
+	binary.Write(buf, binary.LittleEndian, d.bFunctionSubClass)
+	binary.Write(buf, binary.LittleEndian, d.bFunctionProtocol)
+	binary.Write(buf, binary.LittleEndian, d.iFunction)
 	return buf.Bytes()
 }
 
@@ -250,16 +262,15 @@ func (d CDCCSInterfaceDescriptor4) Bytes() []byte {
 	return buf.Bytes()
 }
 
-// Functional Descriptor General Format
-
 const cmFunctionalDescriptorSize = 5
 
+// CMFunctionalDescriptor is the functional descriptor general format
 type CMFunctionalDescriptor struct {
-	len            uint8
-	dtype          uint8 // 0x24
-	subtype        uint8 // 1
-	bmCapabilities uint8
-	bDataInterface uint8
+	bFunctionLength    uint8
+	bDescriptorType    uint8 // 0x24
+	bDescriptorSubtype uint8 // 1
+	bmCapabilities     uint8
+	bDataInterface     uint8
 }
 
 // D_CDCCS(_subtype,_d0,_d1)	{ 5, 0x24, _subtype, _d0, _d1 }
@@ -269,16 +280,13 @@ func NewCMFunctionalDescriptor(subtype, d0, d1 uint8) CMFunctionalDescriptor {
 
 func (d CMFunctionalDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, cmFunctionalDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.len)
-	binary.Write(buf, binary.LittleEndian, d.dtype)
-	binary.Write(buf, binary.LittleEndian, d.subtype)
+	binary.Write(buf, binary.LittleEndian, d.bFunctionLength)
+	binary.Write(buf, binary.LittleEndian, d.bDescriptorType)
+	binary.Write(buf, binary.LittleEndian, d.bDescriptorSubtype)
 	binary.Write(buf, binary.LittleEndian, d.bmCapabilities)
 	binary.Write(buf, binary.LittleEndian, d.bDataInterface)
 	return buf.Bytes()
 }
-
-/* bFunctionLength, bDescriptorType, bDescriptorSubtype, function specific data0, functional specific data N-1
- * CS_INTERFACE 24h */
 
 const acmFunctionalDescriptorSize = 4
 
@@ -306,16 +314,18 @@ func (d ACMFunctionalDescriptor) Bytes() []byte {
 type CDCDescriptor struct {
 	//	IAD
 	iad IADDescriptor // Only needed on compound device
+
 	//	Control
 	cif    InterfaceDescriptor
 	header CDCCSInterfaceDescriptor
 
+	// CDC control
 	controlManagement    ACMFunctionalDescriptor  // ACM
 	functionalDescriptor CDCCSInterfaceDescriptor // CDC_UNION
 	callManagement       CMFunctionalDescriptor   // Call Management
 	cifin                EndpointDescriptor
 
-	//	Data
+	//	CDC Data
 	dif InterfaceDescriptor
 	in  EndpointDescriptor
 	out EndpointDescriptor
@@ -369,39 +379,12 @@ func (d CDCDescriptor) Bytes() []byte {
 	return buf.Bytes()
 }
 
-// static CDCDescriptor _cdcInterface = {
-// 	D_IAD(0, 2, CDC_COMMUNICATION_INTERFACE_CLASS, CDC_ABSTRACT_CONTROL_MODEL, 0),
-
-// 	// CDC communication interface
-// 	D_INTERFACE(CDC_ACM_INTERFACE, 1, CDC_COMMUNICATION_INTERFACE_CLASS, CDC_ABSTRACT_CONTROL_MODEL, 0),
-// 	D_CDCCS(CDC_HEADER, CDC_V1_10 & 0xFF, (CDC_V1_10>>8) & 0x0FF), // Header (1.10 bcd)
-
-// 	D_CDCCS4(CDC_ABSTRACT_CONTROL_MANAGEMENT, 6), // SET_LINE_CODING, GET_LINE_CODING, SET_CONTROL_LINE_STATE supported
-// 	D_CDCCS(CDC_UNION, CDC_ACM_INTERFACE, CDC_DATA_INTERFACE), // Communication interface is master, data interface is slave 0
-// 	D_CDCCS(CDC_CALL_MANAGEMENT, 1, 1), // Device handles call management (not)
-// 	D_ENDPOINT(USB_ENDPOINT_IN(CDC_ENDPOINT_ACM), USB_ENDPOINT_TYPE_INTERRUPT, 0x10, 0x10),
-
-// 	// CDC data interface
-// 	D_INTERFACE(CDC_DATA_INTERFACE, 2, CDC_DATA_INTERFACE_CLASS, 0, 0),
-// 	D_ENDPOINT(USB_ENDPOINT_OUT(CDC_ENDPOINT_OUT), USB_ENDPOINT_TYPE_BULK, EPX_SIZE, 0),
-// 	D_ENDPOINT(USB_ENDPOINT_IN (CDC_ENDPOINT_IN ), USB_ENDPOINT_TYPE_BULK, EPX_SIZE, 0)
-// };
-
 // MSCDescriptor is not used yet.
 type MSCDescriptor struct {
 	msc InterfaceDescriptor
 	in  EndpointDescriptor
 	out EndpointDescriptor
 }
-
-// _Pragma("pack(1)")
-// static volatile LineInfo _usbLineInfo = {
-// 	115200, // dWDTERate
-// 	0x00,   // bCharFormat
-// 	0x00,   // bParityType
-// 	0x08,   // bDataBits
-// 	0x00    // lineState
-// };
 
 type cdcLineInfo struct {
 	dwDTERate   uint32
@@ -442,8 +425,8 @@ const (
 	usbEndpointOut = 0x00
 	usbEndpointIn  = 0x80
 
-	usb_EPX_SIZE = 64 // 64 for Full Speed, EPT size max is 1024
-	usb_EPT_NUM  = 7
+	usbEndpointPacketSize = 64 // 64 for Full Speed, EPT size max is 1024
+	usb_EPT_NUM           = 7
 
 	// standard requests
 	usb_GET_STATUS        = 0
@@ -570,6 +553,74 @@ func newUSBSetup(data []byte) usbSetup {
 	return u
 }
 
-func (u usbSetup) Print() {
-	println(u.bmRequestType, u.bRequest, u.wValueL, u.wValueH, u.wIndex, u.wLength)
+// USBCDC is the serial interface that works over the USB port.
+// To implement the USBCDC interface for a board, you must declare a concrete type as follows:
+//
+// 		type USBCDC struct {
+// 			Buffer *RingBuffer
+// 		}
+//
+// You can also add additional members to this struct depending on your implementation,
+// but the *RingBuffer is required.
+// When you are declaring the USBCDC for your board, make sure that you also declare the
+// RingBuffer using the NewRingBuffer() function:
+//
+//		USBCDC{Buffer: NewRingBuffer()}
+//
+
+// Configure is here for compatibility with the UART interface.
+func (usbcdc USBCDC) Configure(config UARTConfig) {
+	return
+}
+
+// Read from the RX buffer.
+func (usbcdc USBCDC) Read(data []byte) (n int, err error) {
+	// check if RX buffer is empty
+	size := usbcdc.Buffered()
+	if size == 0 {
+		return 0, nil
+	}
+
+	// Make sure we do not read more from buffer than the data slice can hold.
+	if len(data) < size {
+		size = len(data)
+	}
+
+	// only read number of bytes used from buffer
+	for i := 0; i < size; i++ {
+		v, _ := usbcdc.ReadByte()
+		data[i] = v
+	}
+
+	return size, nil
+}
+
+// Write data to the USBCDC.
+func (usbcdc USBCDC) Write(data []byte) (n int, err error) {
+	for _, v := range data {
+		usbcdc.WriteByte(v)
+	}
+	return len(data), nil
+}
+
+// ReadByte reads a single byte from the RX buffer.
+// If there is no data in the buffer, returns an error.
+func (usbcdc USBCDC) ReadByte() (byte, error) {
+	// check if RX buffer is empty
+	buf, ok := usbcdc.Buffer.Get()
+	if !ok {
+		return 0, errors.New("Buffer empty")
+	}
+	return buf, nil
+}
+
+// Buffered returns the number of bytes currently stored in the RX buffer.
+func (usbcdc USBCDC) Buffered() int {
+	return int(usbcdc.Buffer.Used())
+}
+
+// Receive handles adding data to the UART's data buffer.
+// Usually called by the IRQ handler for a machine.
+func (usbcdc USBCDC) Receive(data byte) {
+	usbcdc.Buffer.Put(data)
 }

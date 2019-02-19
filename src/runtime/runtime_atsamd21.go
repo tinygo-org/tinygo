@@ -31,7 +31,7 @@ func init() {
 }
 
 func putchar(c byte) {
-	machine.UART0.WriteUSBByte(c)
+	machine.UART0.WriteByte(c)
 }
 
 func initClocks() {
