@@ -34,8 +34,7 @@ type DeviceDescriptor struct {
 	bNumConfigurations uint8
 }
 
-// usb_D_DEVICE(_class,_subClass,_proto,_packetSize0,_vid,_pid,_version,_im,_ip,_is,_configs) \
-// 	{ 18, 1, 0x200, _class,_subClass,_proto,_packetSize0,_vid,_pid,_version,_im,_ip,_is,_configs }
+// NewDeviceDescriptor returns a USB DeviceDescriptor.
 func NewDeviceDescriptor(class, subClass, proto, packetSize0 uint8, vid, pid, version uint16, im, ip, is, configs uint8) DeviceDescriptor {
 	return DeviceDescriptor{deviceDescriptorSize, 1, 0x200, class, subClass, proto, packetSize0, vid, pid, version, im, ip, is, configs}
 }
@@ -79,13 +78,12 @@ type ConfigDescriptor struct {
 	bMaxPower           uint8
 }
 
-// usb_D_CONFIG(_totalLength,_interfaces) \
-// 	{ 9, 2, _totalLength,_interfaces, 1, 0, USB_CONFIG_BUS_POWERED | USB_CONFIG_REMOTE_WAKEUP, USB_CONFIG_POWER_MA(USB_CONFIG_POWER) }
+// NewConfigDescriptor returns a new USB ConfigDescriptor.
 func NewConfigDescriptor(totalLength uint16, interfaces uint8) ConfigDescriptor {
 	return ConfigDescriptor{configDescriptorSize, 2, totalLength, interfaces, 1, 0, usb_CONFIG_BUS_POWERED | usb_CONFIG_REMOTE_WAKEUP, 50}
 }
 
-// Bytes returns ConfigDescriptor data
+// Bytes returns ConfigDescriptor data.
 func (d ConfigDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, configDescriptorSize))
 	binary.Write(buf, binary.LittleEndian, d.bLength)
@@ -98,8 +96,6 @@ func (d ConfigDescriptor) Bytes() []byte {
 	binary.Write(buf, binary.LittleEndian, d.bMaxPower)
 	return buf.Bytes()
 }
-
-//	String
 
 const interfaceDescriptorSize = 9
 
@@ -121,13 +117,12 @@ type InterfaceDescriptor struct {
 	iInterface         uint8
 }
 
-// usb_D_INTERFACE(_n,_numEndpoints,_class,_subClass,_protocol) \
-// 	{ 9, 4, _n, 0, _numEndpoints, _class,_subClass, _protocol, 0 }
+// NewInterfaceDescriptor returns a new USB InterfaceDescriptor.
 func NewInterfaceDescriptor(n, numEndpoints, class, subClass, protocol uint8) InterfaceDescriptor {
 	return InterfaceDescriptor{interfaceDescriptorSize, 4, n, 0, numEndpoints, class, subClass, protocol, 0}
 }
 
-// Bytes returns InterfaceDescriptor data
+// Bytes returns InterfaceDescriptor data.
 func (d InterfaceDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, interfaceDescriptorSize))
 	binary.Write(buf, binary.LittleEndian, d.bLength)
@@ -158,13 +153,12 @@ type EndpointDescriptor struct {
 	bInterval        uint8
 }
 
-// usb_D_ENDPOINT(_addr,_attr,_packetSize, _interval) \
-// 	{ 7, 5, _addr,_attr,_packetSize, _interval }
+// NewEndpointDescriptor returns a new USB EndpointDescriptor.
 func NewEndpointDescriptor(addr, attr uint8, packetSize uint16, interval uint8) EndpointDescriptor {
 	return EndpointDescriptor{endpointDescriptorSize, 5, addr, attr, packetSize, interval}
 }
 
-// Bytes returns EndpointDescriptor data
+// Bytes returns EndpointDescriptor data.
 func (d EndpointDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, endpointDescriptorSize))
 	binary.Write(buf, binary.LittleEndian, d.bLength)
@@ -178,8 +172,8 @@ func (d EndpointDescriptor) Bytes() []byte {
 
 const iadDescriptorSize = 8
 
-// IADDescriptor is an Interface Association Descriptor
-// Used to bind 2 interfaces together in CDC composite device.
+// IADDescriptor is an Interface Association Descriptor, which is used
+// to bind 2 interfaces together in CDC composite device.
 //
 // Standard Interface Association Descriptor:
 // bLength, bDescriptorType, bFirstInterface, bInterfaceCount, bFunctionClass, bFunctionSubClass,
@@ -196,13 +190,12 @@ type IADDescriptor struct {
 	iFunction         uint8
 }
 
-// usb_D_IAD(_firstInterface, _count, _class, _subClass, _protocol) \
-// 	{ 8, 11, _firstInterface, _count, _class, _subClass, _protocol, 0 }
+// NewIADDescriptor returns a new USB IADDescriptor.
 func NewIADDescriptor(firstInterface, count, class, subClass, protocol uint8) IADDescriptor {
 	return IADDescriptor{iadDescriptorSize, 11, firstInterface, count, class, subClass, protocol, 0}
 }
 
-// Bytes returns IADDescriptor data
+// Bytes returns IADDescriptor data.
 func (d IADDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, iadDescriptorSize))
 	binary.Write(buf, binary.LittleEndian, d.bLength)
@@ -216,11 +209,9 @@ func (d IADDescriptor) Bytes() []byte {
 	return buf.Bytes()
 }
 
-// CDC interfaces
-// CDC CS interface descriptor
-
 const cdcCSInterfaceDescriptorSize = 5
 
+// CDCCSInterfaceDescriptor is a CDC CS interface descriptor.
 type CDCCSInterfaceDescriptor struct {
 	len     uint8 // 5
 	dtype   uint8 // 0x24
@@ -229,11 +220,12 @@ type CDCCSInterfaceDescriptor struct {
 	d1      uint8
 }
 
-// usb_D_CDCCS(_subtype,_d0,_d1)	{ 5, 0x24, _subtype, _d0, _d1 }
+// NewCDCCSInterfaceDescriptor returns a new USB CDCCSInterfaceDescriptor.
 func NewCDCCSInterfaceDescriptor(subtype, d0, d1 uint8) CDCCSInterfaceDescriptor {
 	return CDCCSInterfaceDescriptor{cdcCSInterfaceDescriptorSize, 0x24, subtype, d0, d1}
 }
 
+// Bytes returns CDCCSInterfaceDescriptor data.
 func (d CDCCSInterfaceDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, cdcCSInterfaceDescriptorSize))
 	binary.Write(buf, binary.LittleEndian, d.len)
@@ -244,27 +236,9 @@ func (d CDCCSInterfaceDescriptor) Bytes() []byte {
 	return buf.Bytes()
 }
 
-const cdcCSInterfaceDescriptor4Size = 4
-
-type CDCCSInterfaceDescriptor4 struct {
-	len     uint8 // 4
-	dtype   uint8 // 0x24
-	subtype uint8
-	d0      uint8
-}
-
-func (d CDCCSInterfaceDescriptor4) Bytes() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, cdcCSInterfaceDescriptor4Size))
-	binary.Write(buf, binary.LittleEndian, d.len)
-	binary.Write(buf, binary.LittleEndian, d.dtype)
-	binary.Write(buf, binary.LittleEndian, d.subtype)
-	binary.Write(buf, binary.LittleEndian, d.d0)
-	return buf.Bytes()
-}
-
 const cmFunctionalDescriptorSize = 5
 
-// CMFunctionalDescriptor is the functional descriptor general format
+// CMFunctionalDescriptor is the functional descriptor general format.
 type CMFunctionalDescriptor struct {
 	bFunctionLength    uint8
 	bDescriptorType    uint8 // 0x24
@@ -273,11 +247,12 @@ type CMFunctionalDescriptor struct {
 	bDataInterface     uint8
 }
 
-// D_CDCCS(_subtype,_d0,_d1)	{ 5, 0x24, _subtype, _d0, _d1 }
+// NewCMFunctionalDescriptor returns a new USB CMFunctionalDescriptor.
 func NewCMFunctionalDescriptor(subtype, d0, d1 uint8) CMFunctionalDescriptor {
 	return CMFunctionalDescriptor{5, 0x24, subtype, d0, d1}
 }
 
+// Bytes returns the CMFunctionalDescriptor data.
 func (d CMFunctionalDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, cmFunctionalDescriptorSize))
 	binary.Write(buf, binary.LittleEndian, d.bFunctionLength)
@@ -290,6 +265,7 @@ func (d CMFunctionalDescriptor) Bytes() []byte {
 
 const acmFunctionalDescriptorSize = 4
 
+// ACMFunctionalDescriptor is a Abstract Control Model (ACM) USB descriptor.
 type ACMFunctionalDescriptor struct {
 	len            uint8
 	dtype          uint8 // 0x24
@@ -297,11 +273,12 @@ type ACMFunctionalDescriptor struct {
 	bmCapabilities uint8
 }
 
-// #define D_CDCCS4(_subtype,_d0)		{ 4, 0x24, _subtype, _d0 }
+// NewACMFunctionalDescriptor returns a new USB ACMFunctionalDescriptor.
 func NewACMFunctionalDescriptor(subtype, d0 uint8) ACMFunctionalDescriptor {
 	return ACMFunctionalDescriptor{4, 0x24, subtype, d0}
 }
 
+// Bytes returns the ACMFunctionalDescriptor data.
 func (d ACMFunctionalDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, acmFunctionalDescriptorSize))
 	binary.Write(buf, binary.LittleEndian, d.len)
@@ -311,6 +288,7 @@ func (d ACMFunctionalDescriptor) Bytes() []byte {
 	return buf.Bytes()
 }
 
+// CDCDescriptor is the Communication Device Class (CDC) descriptor.
 type CDCDescriptor struct {
 	//	IAD
 	iad IADDescriptor // Only needed on compound device
@@ -363,7 +341,7 @@ const cdcSize = iadDescriptorSize +
 	endpointDescriptorSize +
 	endpointDescriptorSize
 
-// Bytes returns CDCDescriptor data
+// Bytes returns CDCDescriptor data.
 func (d CDCDescriptor) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, cdcSize))
 	buf.Write(d.iad.Bytes())

@@ -1406,14 +1406,11 @@ func cdcSetup(setup usbSetup) bool {
 		}
 
 		if setup.bRequest == usb_CDC_SET_LINE_CODING || setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
-			// auto-reset into the bootloader is triggered when the port, already
-			// open at 1200 bps, is closed. We check DTR state to determine if host
-			// port is open (bit 0 of lineState).
+			// auto-reset into the bootloader
 			if usbLineInfo.dwDTERate == 1200 && (usbLineInfo.lineState&0x01) == 0 {
 				// TODO: system reset
-				// initiateReset(250);
 			} else {
-				// cancelReset();
+				// TODO: cancel any reset
 			}
 		}
 
@@ -1461,16 +1458,16 @@ func armRecvCtrlOUT(ep uint32) uint32 {
 	usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR =
 		sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep])))
 
-	// usbd.epBank0SetMultiPacketSize(ep, 8);
+	// set multi-packet size which is total expected number of bytes to receive.
 	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE |=
 		sam.RegValue(8<<usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos) |
 			sam.RegValue(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos)
 
-	// usbd.epBank0SetByteCount(ep, 0);
+	// clear byte count of bytes received so far.
 	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE &^=
 		sam.RegValue(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 
-	// usbd.epBank0ResetReady(ep);
+	// clear ready state to start transfer
 	setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
 
 	// Wait until OUT transfer is ready.
