@@ -930,37 +930,30 @@ func (pwm PWM) setChannel(val sam.RegValue) {
 func (uart UART) WriteUSBByte(c byte) error {
 	// Supposedly to handle problem with Windows USB serial ports?
 	if usbLineInfo.lineState > 0 {
-		// 	if (usbd.epBank1IsReady(ep)) {
-		if (getEPSTATUS(usb_CDC_ENDPOINT_IN) & sam.USB_DEVICE_EPSTATUS_BK1RDY) > 0 {
-			// previous transfer is still not complete, so wait.
-			for (getEPINTFLAG(usb_CDC_ENDPOINT_IN) & sam.USB_DEVICE_EPINTFLAG_TRCPT1) == 0 {
-				// TODO: handle timeout by doing
-				// usbd.epBank1SetByteCount(ep, 0);
-			}
-		}
-
+		// set the data
 		udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN][0] = c
 
-		// 	usbd.epBank1SetAddress(ep, &udd_ep_in_cache_buffer[ep]);
-		// usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].ADDR =
-		// 	sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN])))
+		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].ADDR =
+			sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN])))
 
+		// clean multi packet size of bytes already sent
 		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].PCKSIZE &^=
 			sam.RegValue(usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
 
-		// 	usbd.epBank1SetByteCount(ep, length);
+		// set count of bytes to be sent
 		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].PCKSIZE |=
 			sam.RegValue((1&usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)<<usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) |
 				sam.RegValue(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos)
 
 		// clear transfer complete flag
-		// 	usbd.epBank1AckTransferComplete(ep);
-		// usb.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT(2);
-		//setEPINTFLAG(usb_CDC_ENDPOINT_IN, 2<<sam.USB_DEVICE_EPINTFLAG_TRCPT1_Pos)
-		setEPINTFLAG(usb_CDC_ENDPOINT_IN, sam.USB_DEVICE_EPINTFLAG_TRFAIL1)
+		setEPINTFLAG(usb_CDC_ENDPOINT_IN, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
 
 		// send data by setting bank ready
 		setEPSTATUSSET(usb_CDC_ENDPOINT_IN, sam.USB_DEVICE_EPSTATUSSET_BK1RDY)
+
+		// wait for transfer to complete
+		for (getEPINTFLAG(usb_CDC_ENDPOINT_IN) & sam.USB_DEVICE_EPINTFLAG_TRCPT1) == 0 {
+		}
 	}
 
 	return nil
@@ -1020,6 +1013,37 @@ func InitUSB() {
 	GPIO{24}.Configure(GPIOConfig{Mode: GPIO_COM})
 	GPIO{25}.Configure(GPIOConfig{Mode: GPIO_COM})
 
+	// performs pad calibration from store fuses
+	handlePadCalibration()
+
+	// set to "device" mode
+	// sb.CTRLA.bit.MODE = USB_CTRLA_MODE_DEVICE_Val;
+	// sam.USB_DEVICE.CTRLA |= (sam.USB_DEVICE_CTRLA_MODE_DEVICE << sam.USB_DEVICE_CTRLA_MODE_Pos)
+
+	// run in standby
+	sam.USB_DEVICE.CTRLA |= sam.USB_DEVICE_CTRLA_RUNSTDBY
+
+	// set full speed
+	sam.USB_DEVICE.CTRLB |= (sam.USB_DEVICE_CTRLB_SPDCONF_FS << sam.USB_DEVICE_CTRLB_SPDCONF_Pos)
+
+	// attach
+	// usb.CTRLB.bit.DETACH = 0;
+	sam.USB_DEVICE.CTRLB &^= sam.USB_DEVICE_CTRLB_DETACH
+
+	// enable interrupt for end of reset
+	sam.USB_DEVICE.INTENSET |= sam.USB_DEVICE_INTENSET_EORST
+
+	// enable interrupt for start of frame
+	sam.USB_DEVICE.INTENSET |= sam.USB_DEVICE_INTENSET_SOF
+
+	// enable USB
+	sam.USB_DEVICE.CTRLA |= sam.USB_DEVICE_CTRLA_ENABLE
+
+	// enable IRQ
+	arm.EnableIRQ(sam.IRQ_USB)
+}
+
+func handlePadCalibration() {
 	// Load Pad Calibration data from non-volatile memory
 	// This requires registers that are not included in the SVD file.
 	// Modeled after defines from samd21g18a.h and nvmctrl.h:
@@ -1060,44 +1084,21 @@ func InitUSB() {
 		calibTransN = 3
 	}
 	sam.USB_DEVICE.PADCAL |= (calibTrim << sam.USB_DEVICE_PADCAL_TRIM_Pos)
-
-	// set to "device" mode
-	// sb.CTRLA.bit.MODE = USB_CTRLA_MODE_DEVICE_Val;
-	// sam.USB_DEVICE.CTRLA |= (sam.USB_DEVICE_CTRLA_MODE_DEVICE << sam.USB_DEVICE_CTRLA_MODE_Pos)
-
-	// run in standby?
-	// usb.CTRLA.bit.RUNSTDBY = 1;
-	//sam.USB_DEVICE.CTRLA |= sam.USB_DEVICE_CTRLA_RUNSTDBY
-
-	// set full speed
-	sam.USB_DEVICE.CTRLB |= (sam.USB_DEVICE_CTRLB_SPDCONF_FS << sam.USB_DEVICE_CTRLB_SPDCONF_Pos)
-
-	// attach
-	// usb.CTRLB.bit.DETACH = 0;
-	sam.USB_DEVICE.CTRLB &^= sam.USB_DEVICE_CTRLB_DETACH
-
-	// enable interrupt for end of reset
-	sam.USB_DEVICE.INTENSET |= sam.USB_DEVICE_INTENSET_EORST
-
-	// enable interrupt for start of frame
-	sam.USB_DEVICE.INTENSET |= sam.USB_DEVICE_INTENSET_SOF
-
-	// enable USB
-	sam.USB_DEVICE.CTRLA |= sam.USB_DEVICE_CTRLA_ENABLE
-
-	// enable IRQ
-	arm.EnableIRQ(sam.IRQ_USB)
 }
 
 //go:export USB_IRQHandler
 func handleUSB() {
+	// reset all interrupt flags
+	flags := sam.USB_DEVICE.INTFLAG
+	sam.USB_DEVICE.INTFLAG = flags
+
 	// End-Of-Reset
-	if (sam.USB_DEVICE.INTFLAG & sam.USB_DEVICE_INTFLAG_EORST) > 0 {
+	if (flags & sam.USB_DEVICE_INTFLAG_EORST) > 0 {
 		// Configure EP 0 which is control endpoint
 		initEndpoint(0, usb_ENDPOINT_TYPE_CONTROL)
 
 		// Enable Setup-Received interrupt
-		setEPINTENSET(0, (getEPINTENSET(0) | sam.USB_DEVICE_EPINTENSET_RXSTP))
+		setEPINTENSET(0, sam.USB_DEVICE_EPINTENSET_RXSTP)
 
 		usbConfiguration = 0
 
@@ -1106,9 +1107,8 @@ func handleUSB() {
 	}
 
 	// Start-Of-Frame
-	if (sam.USB_DEVICE.INTFLAG & sam.USB_DEVICE_INTFLAG_SOF) > 0 {
-		// ack the start of frame interrupt
-		sam.USB_DEVICE.INTFLAG = sam.USB_DEVICE_INTFLAG_SOF
+	if (flags & sam.USB_DEVICE_INTFLAG_SOF) > 0 {
+		// if you want to blink LED showing traffic, this is the place...
 	}
 
 	// Endpoint 0 Setup interrupt
@@ -1135,10 +1135,10 @@ func handleUSB() {
 			// Class Interface Requests
 			if setup.wIndex == usb_CDC_ACM_INTERFACE {
 				ok = cdcSetup(setup)
-				if !ok {
-					sendZlp(0)
-					return
-				}
+				// if !ok {
+				// 	sendZlp(0)
+				// 	return
+				// }
 			}
 		}
 
@@ -1149,7 +1149,7 @@ func handleUSB() {
 			// stall(0);
 			// Stall endpoint
 			// USB->DEVICE.DeviceEndpoint[ep].EPSTATUSSET.reg = USB_DEVICE_EPSTATUSSET_STALLRQ(2);
-			setEPSTATUSSET(0, 2<<sam.USB_DEVICE_EPSTATUSSET_STALLRQ0_Pos)
+			setEPSTATUSSET(0, sam.USB_DEVICE_EPINTFLAG_STALL1)
 		}
 
 		// if (usbd.epBank1IsStalled(0))
@@ -1170,15 +1170,19 @@ func handleUSB() {
 	for i = 1; i < uint32(len(endPoints)); i++ {
 		// Check if endpoint has a pending interrupt
 		if eptInts&(1<<i) > 0 {
+			// yes, so handle flags
+			epFlags := getEPINTFLAG(i)
+			setEPINTFLAG(i, epFlags)
+
 			// Endpoint Transfer Complete (0/1) Interrupt
 			// if (usbd.epBank0IsTransferComplete(i) ||
 			// 	usbd.epBank1IsTransferComplete(i))
-			if (getEPINTFLAG(i) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 {
+			if (epFlags & sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 {
 				println("endpoint handler", i, "out of", eptInts)
 				handleEndpoint(i)
-			} else if (getEPINTFLAG(i) & sam.USB_DEVICE_EPINTFLAG_TRCPT1) > 0 {
-				setEPINTFLAG(i, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
-			}
+			} //else if (getEPINTFLAG(i) & sam.USB_DEVICE_EPINTFLAG_TRCPT1) > 0 {
+			//setEPINTFLAG(i, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
+			//}
 		}
 		// else {
 		// 	// clear any error flags
@@ -1223,6 +1227,8 @@ func initEndpoint(ep, config uint32) {
 
 		// Do we need the following line?
 		//release(ep)
+		setEPINTENSET(ep, sam.USB_DEVICE_EPINTENSET_TRCPT0)
+		setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
 
 	case usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointOut:
 		// TODO: not really, init() does not do anything.
@@ -1281,7 +1287,7 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE &^=
 			sam.RegValue(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 
-		// NAK on endpoint OUT to show we are ready
+		// NAK on endpoint OUT to show we are ready to receive control data
 		setEPSTATUSSET(ep, sam.USB_DEVICE_EPSTATUSSET_BK0RDY)
 	}
 }
@@ -1332,13 +1338,11 @@ func handleStandardSetup(setup usbSetup) bool {
 		// 	sendUSBPacket(0, buff, 1);
 		// 	return true;
 		// }
-		// if (setup.wValueL == 0) // ENDPOINTHALT
 		if setup.wValueL == 0 { // ENDPOINTHALT
 			// Halt endpoint
 			isEndpointHalt = true
-
-			sendZlp(0)
 		}
+		sendZlp(0)
 		return true
 
 	case usb_SET_ADDRESS:
@@ -1412,7 +1416,7 @@ func handleStandardSetup(setup usbSetup) bool {
 }
 
 func cdcSetup(setup usbSetup) bool {
-	println("cdcSetup")
+	//println("cdcSetup")
 	if setup.bmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
 		if setup.bRequest == usb_CDC_GET_LINE_CODING {
 			buf := bytes.NewBuffer(make([]byte, 0, 7))
@@ -1538,7 +1542,7 @@ func recv(ep uint32) []byte { //(uint32_t ep, void *_data, uint32_t len)
 
 	// usbd.epBank0DisableTransferComplete(ep);
 	// usb.DeviceEndpoint[ep].EPINTENCLR.bit.TRCPT0 = 1;
-	setEPINTENCLR(ep, getEPINTENCLR(ep)|sam.USB_DEVICE_EPINTENCLR_TRCPT0)
+	setEPINTENCLR(ep, sam.USB_DEVICE_EPINTENCLR_TRCPT0)
 
 	// memcpy(_data, udd_ep_out_cache_buffer[ep], len);
 
@@ -1551,12 +1555,12 @@ func recv(ep uint32) []byte { //(uint32_t ep, void *_data, uint32_t len)
 	// Clear Transfer complete 0 flag
 	// usbd.epBank0AckTransferComplete(ep);
 	// usb.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT(1);
-	setEPINTFLAG(ep, 1<<sam.USB_DEVICE_EPINTFLAG_TRCPT0_Pos)
+	setEPINTFLAG(ep, sam.USB_DEVICE_EPINTFLAG_TRCPT0)
 
 	// Enable Transfer complete 0 interrupt
 	// usbd.epBank0EnableTransferComplete(ep);
 	// usb.DeviceEndpoint[ep].EPINTENSET.bit.TRCPT0 = 1;
-	setEPINTENSET(ep, (getEPINTENSET(ep) | sam.USB_DEVICE_EPINTENSET_TRCPT0))
+	setEPINTENSET(ep, sam.USB_DEVICE_EPINTENSET_TRCPT0)
 
 	return nil
 }
@@ -1720,49 +1724,49 @@ func sendConfiguration(setup usbSetup) {
 }
 
 func handleEndpoint(ep uint32) {
-	if getEPINTFLAG(ep) > 0 {
-		println("handle endpoint println(getEPINTFLAG(ep))", ep, getEPINTFLAG(ep))
-	}
+	// if getEPINTFLAG(ep) > 0 {
+	// 	println("handle endpoint println(getEPINTFLAG(ep))", ep, getEPINTFLAG(ep))
+	// }
 	// R/W : incoming, ready0/1
 	//   W : last0/1, notify
 	// if (usbd.epBank0IsTransferComplete(ep))
-	if (getEPINTFLAG(ep) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 {
-		// Ack Transfer complete
-		// usbd.epBank0AckTransferComplete(ep);
-		setEPINTFLAG(ep, sam.USB_DEVICE_EPINTFLAG_TRCPT0)
+	//if (getEPINTFLAG(ep) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 {
+	// Ack Transfer complete
+	// usbd.epBank0AckTransferComplete(ep);
+	//	setEPINTFLAG(ep, sam.USB_DEVICE_EPINTFLAG_TRCPT0)
 
-		// Update counters and swap banks for non-ZLP's
-		// 	if (incoming == 0) {
-		// 		last0 = usbd.epBank0ByteCount(ep);
-		// 		if (last0 != 0) {
-		// 			incoming = 1;
-		// 			usbd.epBank0SetAddress(ep, const_cast<uint8_t *>(data1));
-		// 			synchronized {
-		// 				ready0 = true;
-		// 				if (ready1) {
-		// 					notify = true;
-		// 					return;
-		// 				}
-		// 				notify = false;
-		// 			}
-		// 		}
-		// 	} else {
-		// 		last1 = usbd.epBank0ByteCount(ep);
-		// 		if (last1 != 0) {
-		// 			incoming = 0;
-		// 			usbd.epBank0SetAddress(ep, const_cast<uint8_t *>(data0));
-		// 			synchronized {
-		// 				ready1 = true;
-		// 				if (ready0) {
-		// 					notify = true;
-		// 					return;
-		// 				}
-		// 				notify = false;
-		// 			}
-		// 		}
-		// 	}
-		//release(ep)
-	}
+	// Update counters and swap banks for non-ZLP's
+	// 	if (incoming == 0) {
+	// 		last0 = usbd.epBank0ByteCount(ep);
+	// 		if (last0 != 0) {
+	// 			incoming = 1;
+	// 			usbd.epBank0SetAddress(ep, const_cast<uint8_t *>(data1));
+	// 			synchronized {
+	// 				ready0 = true;
+	// 				if (ready1) {
+	// 					notify = true;
+	// 					return;
+	// 				}
+	// 				notify = false;
+	// 			}
+	// 		}
+	// 	} else {
+	// 		last1 = usbd.epBank0ByteCount(ep);
+	// 		if (last1 != 0) {
+	// 			incoming = 0;
+	// 			usbd.epBank0SetAddress(ep, const_cast<uint8_t *>(data0));
+	// 			synchronized {
+	// 				ready1 = true;
+	// 				if (ready0) {
+	// 					notify = true;
+	// 					return;
+	// 				}
+	// 				notify = false;
+	// 			}
+	// 		}
+	// 	}
+	//release(ep)
+	//}
 }
 
 func release(ep uint32) {
@@ -1973,29 +1977,6 @@ func setEPINTFLAG(ep uint32, val sam.RegValue8) {
 	}
 }
 
-func getEPINTENCLR(ep uint32) sam.RegValue8 {
-	switch ep {
-	case 0:
-		return sam.USB_DEVICE.EPINTENCLR0
-	case 1:
-		return sam.USB_DEVICE.EPINTENCLR1
-	case 2:
-		return sam.USB_DEVICE.EPINTENCLR2
-	case 3:
-		return sam.USB_DEVICE.EPINTENCLR3
-	case 4:
-		return sam.USB_DEVICE.EPINTENCLR4
-	case 5:
-		return sam.USB_DEVICE.EPINTENCLR5
-	case 6:
-		return sam.USB_DEVICE.EPINTENCLR6
-	case 7:
-		return sam.USB_DEVICE.EPINTENCLR7
-	default:
-		return 0
-	}
-}
-
 func setEPINTENCLR(ep uint32, val sam.RegValue8) {
 	switch ep {
 	case 0:
@@ -2016,29 +1997,6 @@ func setEPINTENCLR(ep uint32, val sam.RegValue8) {
 		sam.USB_DEVICE.EPINTENCLR7 = val
 	default:
 		return
-	}
-}
-
-func getEPINTENSET(ep uint32) sam.RegValue8 {
-	switch ep {
-	case 0:
-		return sam.USB_DEVICE.EPINTENSET0
-	case 1:
-		return sam.USB_DEVICE.EPINTENSET1
-	case 2:
-		return sam.USB_DEVICE.EPINTENSET2
-	case 3:
-		return sam.USB_DEVICE.EPINTENSET3
-	case 4:
-		return sam.USB_DEVICE.EPINTENSET4
-	case 5:
-		return sam.USB_DEVICE.EPINTENSET5
-	case 6:
-		return sam.USB_DEVICE.EPINTENSET6
-	case 7:
-		return sam.USB_DEVICE.EPINTENSET7
-	default:
-		return 0
 	}
 }
 

@@ -26,15 +26,11 @@ func init() {
 	initI2CClock()
 	initUSBClock()
 
-	// connect to UART
-	//machine.UART0.Configure(machine.UARTConfig{})
-	machine.UART1.Configure(machine.UARTConfig{})
-
+	// connect to USB CDC interface
 	machine.InitUSB()
 }
 
 func putchar(c byte) {
-	machine.UART1.WriteByte(c)
 	machine.UART0.WriteUSBByte(c)
 }
 
