@@ -8,9 +8,12 @@
 package machine
 
 import (
+	"bytes"
 	"device/arm"
 	"device/sam"
+	"encoding/binary"
 	"errors"
+	"unsafe"
 )
 
 const CPU_FREQUENCY = 48000000
@@ -57,6 +60,19 @@ func (p GPIO) Configure(config GPIOConfig) {
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR | sam.PORT_PINCFG0_INEN)
+
+	case GPIO_COM:
+		if p.Pin&1 > 0 {
+			// odd pin, so save the even pins
+			val := p.getPMux() & sam.PORT_PMUX0_PMUXE_Msk
+			p.setPMux(val | (GPIO_COM << sam.PORT_PMUX0_PMUXO_Pos))
+		} else {
+			// even pin, so save the odd pins
+			val := p.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
+			p.setPMux(val | (GPIO_COM << sam.PORT_PMUX0_PMUXE_Pos))
+		}
+		// enable port config
+		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN)
 	}
 }
 
@@ -102,11 +118,14 @@ type UART struct {
 }
 
 var (
+	// The UART0 uses the USB CDC interface.
+	UART0 = UART{Buffer: NewRingBuffer()}
+
 	// The first hardware serial port on the SAMD21. Uses the SERCOM0 interface.
-	UART0 = UART{Bus: sam.SERCOM0_USART, Buffer: NewRingBuffer()}
+	UART1 = UART{Bus: sam.SERCOM0_USART, Buffer: NewRingBuffer()}
 
 	// The second hardware serial port on the SAMD21. Uses the SERCOM1 interface.
-	UART1 = UART{Bus: sam.SERCOM1_USART, Buffer: NewRingBuffer()}
+	UART2 = UART{Bus: sam.SERCOM1_USART, Buffer: NewRingBuffer()}
 )
 
 const (
@@ -249,17 +268,17 @@ func (uart UART) WriteByte(c byte) error {
 }
 
 //go:export SERCOM0_IRQHandler
-func handleUART0() {
-	// should reset IRQ
-	UART0.Receive(byte((UART0.Bus.DATA & 0xFF)))
-	UART0.Bus.INTFLAG |= sam.SERCOM_USART_INTFLAG_RXC
-}
-
-//go:export SERCOM1_IRQHandler
 func handleUART1() {
 	// should reset IRQ
 	UART1.Receive(byte((UART1.Bus.DATA & 0xFF)))
 	UART1.Bus.INTFLAG |= sam.SERCOM_USART_INTFLAG_RXC
+}
+
+//go:export SERCOM1_IRQHandler
+func handleUART2() {
+	// should reset IRQ
+	UART2.Receive(byte((UART2.Bus.DATA & 0xFF)))
+	UART2.Bus.INTFLAG |= sam.SERCOM_USART_INTFLAG_RXC
 }
 
 // I2C on the SAMD21.
@@ -904,5 +923,1144 @@ func (pwm PWM) setChannel(val sam.RegValue) {
 		pwm.getTimer().CC3 = val
 	default:
 		return // not supported on this pin
+	}
+}
+
+// WriteUSBByte writes a byte of data to the USB CDC interface.
+func (uart UART) WriteUSBByte(c byte) error {
+	// Supposedly to handle problem with Windows USB serial ports?
+	if usbLineInfo.lineState > 0 {
+		// 	if (usbd.epBank1IsReady(ep)) {
+		if (getEPSTATUS(usb_CDC_ENDPOINT_IN) & sam.USB_DEVICE_EPSTATUS_BK1RDY) > 0 {
+			// previous transfer is still not complete, so wait.
+			for (getEPINTFLAG(usb_CDC_ENDPOINT_IN) & sam.USB_DEVICE_EPINTFLAG_TRCPT1) == 0 {
+				// TODO: handle timeout by doing
+				// usbd.epBank1SetByteCount(ep, 0);
+			}
+		}
+
+		udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN][0] = c
+
+		// 	usbd.epBank1SetAddress(ep, &udd_ep_in_cache_buffer[ep]);
+		// usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].ADDR =
+		// 	sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN])))
+
+		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].PCKSIZE &^=
+			sam.RegValue(usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
+
+		// 	usbd.epBank1SetByteCount(ep, length);
+		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].PCKSIZE |=
+			sam.RegValue((1&usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)<<usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) |
+				sam.RegValue(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos)
+
+		// clear transfer complete flag
+		// 	usbd.epBank1AckTransferComplete(ep);
+		// usb.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT(2);
+		//setEPINTFLAG(usb_CDC_ENDPOINT_IN, 2<<sam.USB_DEVICE_EPINTFLAG_TRCPT1_Pos)
+		setEPINTFLAG(usb_CDC_ENDPOINT_IN, sam.USB_DEVICE_EPINTFLAG_TRFAIL1)
+
+		// send data by setting bank ready
+		setEPSTATUSSET(usb_CDC_ENDPOINT_IN, sam.USB_DEVICE_EPSTATUSSET_BK1RDY)
+	}
+
+	return nil
+}
+
+const (
+	// these are SAMD21 specific.
+	usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos  = 0
+	usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask = 0x3FFF
+
+	usb_DEVICE_PCKSIZE_SIZE_Pos  = 28
+	usb_DEVICE_PCKSIZE_SIZE_Mask = 0x7
+
+	usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos  = 14
+	usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask = 0x3FFF
+
+	// usb_CDC_RX = usb_CDC_ENDPOINT_OUT
+	// usb_CDC_TX = usb_CDC_ENDPOINT_IN
+)
+
+var (
+	//go:volatile
+	usbEndpointDescriptors [8]usbDeviceDescriptor
+
+	//go:volatile
+	udd_ep_in_cache_buffer [7][128]uint8
+
+	//go:volatile
+	udd_ep_out_cache_buffer [7][128]uint8
+
+	isEndpointHalt = false
+	endPoints      = []uint32{usb_ENDPOINT_TYPE_CONTROL,
+		(usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn),
+		(usb_ENDPOINT_TYPE_BULK | usbEndpointOut),
+		(usb_ENDPOINT_TYPE_BULK | usbEndpointIn)}
+
+	//go:volatile
+	usbConfiguration uint8
+
+	//go:volatile
+	usbSetInterface uint8
+
+	//go:volatile
+	usbLineInfo = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
+)
+
+func InitUSB() {
+	// reset USB interface
+	sam.USB_DEVICE.CTRLA |= sam.USB_DEVICE_CTRLA_SWRST
+	for (sam.USB_DEVICE.SYNCBUSY&sam.USB_DEVICE_SYNCBUSY_SWRST) > 0 ||
+		(sam.USB_DEVICE.SYNCBUSY&sam.USB_DEVICE_SYNCBUSY_ENABLE) > 0 {
+	}
+
+	sam.USB_DEVICE.DESCADD = sam.RegValue(uintptr(unsafe.Pointer(&usbEndpointDescriptors)))
+
+	// configure pins
+	GPIO{24}.Configure(GPIOConfig{Mode: GPIO_COM})
+	GPIO{25}.Configure(GPIOConfig{Mode: GPIO_COM})
+
+	// Load Pad Calibration data from non-volatile memory
+	// This requires registers that are not included in the SVD file.
+	// Modeled after defines from samd21g18a.h and nvmctrl.h:
+	//
+	// #define NVMCTRL_OTP4 0x00806020
+	//
+	// #define USB_FUSES_TRANSN_ADDR       (NVMCTRL_OTP4 + 4)
+	// #define USB_FUSES_TRANSN_Pos        13           /**< \brief (NVMCTRL_OTP4) USB pad Transn calibration */
+	// #define USB_FUSES_TRANSN_Msk        (0x1Fu << USB_FUSES_TRANSN_Pos)
+	// #define USB_FUSES_TRANSN(value)     ((USB_FUSES_TRANSN_Msk & ((value) << USB_FUSES_TRANSN_Pos)))
+
+	// #define USB_FUSES_TRANSP_ADDR       (NVMCTRL_OTP4 + 4)
+	// #define USB_FUSES_TRANSP_Pos        18           /**< \brief (NVMCTRL_OTP4) USB pad Transp calibration */
+	// #define USB_FUSES_TRANSP_Msk        (0x1Fu << USB_FUSES_TRANSP_Pos)
+	// #define USB_FUSES_TRANSP(value)     ((USB_FUSES_TRANSP_Msk & ((value) << USB_FUSES_TRANSP_Pos)))
+
+	// #define USB_FUSES_TRIM_ADDR         (NVMCTRL_OTP4 + 4)
+	// #define USB_FUSES_TRIM_Pos          23           /**< \brief (NVMCTRL_OTP4) USB pad Trim calibration */
+	// #define USB_FUSES_TRIM_Msk          (0x7u << USB_FUSES_TRIM_Pos)
+	// #define USB_FUSES_TRIM(value)       ((USB_FUSES_TRIM_Msk & ((value) << USB_FUSES_TRIM_Pos)))
+	//
+	fuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020) + 4))
+	calibTransN := sam.RegValue16(uint16(fuse>>13) & uint16(0x1f))
+	calibTransP := sam.RegValue16(uint16(fuse>>18) & uint16(0x1f))
+	calibTrim := sam.RegValue16(uint16(fuse>>23) & uint16(0x7))
+
+	if calibTransN == 0x1f {
+		calibTransN = 5
+	}
+	sam.USB_DEVICE.PADCAL |= (calibTransN << sam.USB_DEVICE_PADCAL_TRANSN_Pos)
+
+	if calibTransP == 0x1f {
+		calibTransP = 29
+	}
+	sam.USB_DEVICE.PADCAL |= (calibTransP << sam.USB_DEVICE_PADCAL_TRANSP_Pos)
+
+	if calibTrim == 0x7 {
+		calibTransN = 3
+	}
+	sam.USB_DEVICE.PADCAL |= (calibTrim << sam.USB_DEVICE_PADCAL_TRIM_Pos)
+
+	// set to "device" mode
+	// sb.CTRLA.bit.MODE = USB_CTRLA_MODE_DEVICE_Val;
+	// sam.USB_DEVICE.CTRLA |= (sam.USB_DEVICE_CTRLA_MODE_DEVICE << sam.USB_DEVICE_CTRLA_MODE_Pos)
+
+	// run in standby?
+	// usb.CTRLA.bit.RUNSTDBY = 1;
+	//sam.USB_DEVICE.CTRLA |= sam.USB_DEVICE_CTRLA_RUNSTDBY
+
+	// set full speed
+	sam.USB_DEVICE.CTRLB |= (sam.USB_DEVICE_CTRLB_SPDCONF_FS << sam.USB_DEVICE_CTRLB_SPDCONF_Pos)
+
+	// attach
+	// usb.CTRLB.bit.DETACH = 0;
+	sam.USB_DEVICE.CTRLB &^= sam.USB_DEVICE_CTRLB_DETACH
+
+	// enable interrupt for end of reset
+	sam.USB_DEVICE.INTENSET |= sam.USB_DEVICE_INTENSET_EORST
+
+	// enable interrupt for start of frame
+	sam.USB_DEVICE.INTENSET |= sam.USB_DEVICE_INTENSET_SOF
+
+	// enable USB
+	sam.USB_DEVICE.CTRLA |= sam.USB_DEVICE_CTRLA_ENABLE
+
+	// enable IRQ
+	arm.EnableIRQ(sam.IRQ_USB)
+}
+
+//go:export USB_IRQHandler
+func handleUSB() {
+	// End-Of-Reset
+	if (sam.USB_DEVICE.INTFLAG & sam.USB_DEVICE_INTFLAG_EORST) > 0 {
+		// Configure EP 0 which is control endpoint
+		initEndpoint(0, usb_ENDPOINT_TYPE_CONTROL)
+
+		// Enable Setup-Received interrupt
+		setEPINTENSET(0, (getEPINTENSET(0) | sam.USB_DEVICE_EPINTENSET_RXSTP))
+
+		usbConfiguration = 0
+
+		// ack the End-Of-Reset interrupt
+		sam.USB_DEVICE.INTFLAG = sam.USB_DEVICE_INTFLAG_EORST
+	}
+
+	// Start-Of-Frame
+	if (sam.USB_DEVICE.INTFLAG & sam.USB_DEVICE_INTFLAG_SOF) > 0 {
+		// ack the start of frame interrupt
+		sam.USB_DEVICE.INTFLAG = sam.USB_DEVICE_INTFLAG_SOF
+	}
+
+	// Endpoint 0 Setup interrupt
+	if getEPINTFLAG(0)&sam.USB_DEVICE_EPINTFLAG_RXSTP > 0 {
+		if getEPINTFLAG(0) > 0 {
+			println("println(getEPINTFLAG(0))")
+			println(getEPINTFLAG(0))
+		}
+
+		// ack setup received
+		setEPINTFLAG(0, sam.USB_DEVICE_EPINTFLAG_RXSTP)
+
+		// parse setup
+		setup := newUSBSetup(udd_ep_out_cache_buffer[0][:])
+
+		// Clear the Bank 0 ready flag on Control OUT
+		setEPSTATUSCLR(0, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
+
+		ok := false
+		if (setup.bmRequestType & usb_REQUEST_TYPE) == usb_REQUEST_STANDARD {
+			// Standard Requests
+			ok = handleStandardSetup(setup)
+		} else {
+			// Class Interface Requests
+			if setup.wIndex == usb_CDC_ACM_INTERFACE {
+				ok = cdcSetup(setup)
+				if !ok {
+					sendZlp(0)
+					return
+				}
+			}
+		}
+
+		if ok {
+			// set Bank1 ready
+			setEPSTATUSSET(0, sam.USB_DEVICE_EPSTATUSSET_BK1RDY)
+		} else {
+			// stall(0);
+			// Stall endpoint
+			// USB->DEVICE.DeviceEndpoint[ep].EPSTATUSSET.reg = USB_DEVICE_EPSTATUSSET_STALLRQ(2);
+			setEPSTATUSSET(0, 2<<sam.USB_DEVICE_EPSTATUSSET_STALLRQ0_Pos)
+		}
+
+		// if (usbd.epBank1IsStalled(0))
+		// return usb.DeviceEndpoint[ep].EPINTFLAG.bit.STALL1;
+		if getEPINTFLAG(0)&sam.USB_DEVICE_EPINTFLAG_STALL1 > 0 {
+			// ack the stall
+			setEPINTFLAG(0, sam.USB_DEVICE_EPINTFLAG_STALL1)
+
+			// clear stall request
+			setEPINTENCLR(0, sam.USB_DEVICE_EPINTENCLR_STALL1)
+		}
+	}
+
+	// Now the actual transfer handlers
+	// uint8_t ept_int = usbd.epInterruptSummary() & 0xFE; // Remove endpoint number 0 (setup)
+	eptInts := sam.USB_DEVICE.EPINTSMRY & 0xFE // Remove endpoint number 0 (setup)
+	var i uint32
+	for i = 1; i < uint32(len(endPoints)); i++ {
+		// Check if endpoint has a pending interrupt
+		if eptInts&(1<<i) > 0 {
+			// Endpoint Transfer Complete (0/1) Interrupt
+			// if (usbd.epBank0IsTransferComplete(i) ||
+			// 	usbd.epBank1IsTransferComplete(i))
+			if (getEPINTFLAG(i) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 {
+				println("endpoint handler", i, "out of", eptInts)
+				handleEndpoint(i)
+			} else if (getEPINTFLAG(i) & sam.USB_DEVICE_EPINTFLAG_TRCPT1) > 0 {
+				setEPINTFLAG(i, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
+			}
+		}
+		// else {
+		// 	// clear any error flags
+		// 	flags := getEPINTFLAG(i)
+		// 	if flags&sam.USB_DEVICE_EPINTFLAG_TRFAIL0 > 0 {
+		// 		//println("clearing flags for USB_DEVICE_EPINTFLAG_TRFAIL0", i, flags)
+		// 		setEPINTFLAG(i, sam.USB_DEVICE_EPINTFLAG_TRFAIL0)
+		// 	}
+		// 	if flags&sam.USB_DEVICE_EPINTFLAG_TRFAIL1 > 0 {
+		// 		//println("clearing flags for USB_DEVICE_EPINTFLAG_TRFAIL1", i, flags)
+		// 		setEPINTFLAG(i, sam.USB_DEVICE_EPINTFLAG_TRFAIL1)
+		// 	}
+		// }
+	}
+}
+
+func initEndpoint(ep, config uint32) {
+	switch config {
+	case usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn:
+		// set packet size
+		usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE |=
+			sam.RegValue(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
+
+		// set data buffer address
+		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR =
+			sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep])))
+
+		// set endpoint type
+		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_INTERRUPT+1)<<sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
+
+	case usb_ENDPOINT_TYPE_BULK | usbEndpointOut:
+		// set packet size
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE |=
+			sam.RegValue(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
+
+		// set data buffer address
+		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR =
+			sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep])))
+
+		// set endpoint type
+		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_BULK+1)<<sam.USB_DEVICE_EPCFG_EPTYPE0_Pos))
+
+		// Do we need the following line?
+		//release(ep)
+
+	case usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointOut:
+		// TODO: not really, init() does not do anything.
+		//     if(epHandlers[ep]){
+		//         epHandlers[ep]->init();
+		//     }
+
+	case usb_ENDPOINT_TYPE_BULK | usbEndpointIn:
+		// set packet size
+		usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE |=
+			sam.RegValue(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
+
+		// set data buffer address
+		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR =
+			sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep])))
+
+		// set endpoint type
+		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_BULK+1)<<sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
+
+		// NAK on endpoint IN, the bank is not yet filled in.
+		// usbd.epBank1ResetReady(ep);
+		// usb.DeviceEndpoint[ep].EPSTATUSCLR.bit.BK1RDY = 1;
+		setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK1RDY)
+
+	case usb_ENDPOINT_TYPE_CONTROL:
+		// Setup Control OUT
+		// set packet size
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE |=
+			sam.RegValue(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
+
+		// set data buffer address
+		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR =
+			sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep])))
+
+		// set endpoint type
+		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_CONTROL+1)<<sam.USB_DEVICE_EPCFG_EPTYPE0_Pos))
+
+		// Setup Control IN
+		// set packet size
+		usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE |=
+			sam.RegValue(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
+
+		// set data buffer address
+		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR =
+			sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep])))
+
+		// set endpoint type
+		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_CONTROL+1)<<sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
+
+		// Prepare OUT endpoint for receive
+		// set multi packet size for expected number of receive bytes on control OUT
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE |=
+			sam.RegValue(64 << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
+
+		// set byte count to zero, we have not received anything yet
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE &^=
+			sam.RegValue(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+
+		// NAK on endpoint OUT to show we are ready
+		setEPSTATUSSET(ep, sam.USB_DEVICE_EPSTATUSSET_BK0RDY)
+	}
+}
+
+func handleStandardSetup(setup usbSetup) bool {
+	switch setup.bRequest {
+	case usb_GET_STATUS:
+		buf := []byte{0, 0}
+
+		if setup.bmRequestType != 0 { // endpoint
+			// check if the endpoint if currently halted
+			if isEndpointHalt {
+				buf[0] = 1
+			}
+		}
+
+		sendUSBPacket(0, buf)
+		return true
+
+	case usb_CLEAR_FEATURE:
+		// TODO: DEVICEREMOTEWAKEUP
+		// Check which is the selected feature
+		// if (setup.wValueL == 1) // DEVICEREMOTEWAKEUP
+		// {
+		// 	// Enable remote wake-up and send a ZLP
+		// 	uint8_t buff[] = { 0, 0 };
+		// 	if (isRemoteWakeUpEnabled == 1)
+		// 		buff[0] = 1;
+		// 	sendUSBPacket(0, buff, 2);
+		// 	return true;
+		// }
+		// else // if( setup.wValueL == 0) // ENDPOINTHALT
+		if setup.wValueL == 0 { // ENDPOINTHALT
+			isEndpointHalt = false
+
+			sendZlp(0)
+		}
+		return true
+
+	case usb_SET_FEATURE:
+		// TODO: DEVICEREMOTEWAKEUP
+		// Check which is the selected feature
+		// if (setup.wValueL == 1) // DEVICEREMOTEWAKEUP
+		// {
+		// 	// Enable remote wake-up and send a ZLP
+		// 	isRemoteWakeUpEnabled = 1;
+		// 	uint8_t buff[] = { 0 };
+		// 	sendUSBPacket(0, buff, 1);
+		// 	return true;
+		// }
+		// if (setup.wValueL == 0) // ENDPOINTHALT
+		if setup.wValueL == 0 { // ENDPOINTHALT
+			// Halt endpoint
+			isEndpointHalt = true
+
+			sendZlp(0)
+		}
+		return true
+
+	case usb_SET_ADDRESS:
+		// set packet size 64 with auto Zlp after transfer
+		usbEndpointDescriptors[0].DeviceDescBank[1].PCKSIZE =
+			sam.RegValue(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos) |
+				sam.RegValue(1<<31) // autozlp
+
+		// ack the transfer is complete from the request
+		setEPINTFLAG(0, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
+
+		// set bank ready for data
+		setEPSTATUSSET(0, sam.USB_DEVICE_EPSTATUSSET_BK1RDY)
+
+		// wait for transfer to complete
+		for (getEPINTFLAG(0) & sam.USB_DEVICE_EPINTFLAG_TRCPT1) == 0 {
+		}
+
+		// last, set the device address to that requested by host
+		sam.USB_DEVICE.DADD |= sam.RegValue8(setup.wValueL)
+		sam.USB_DEVICE.DADD |= sam.USB_DEVICE_DADD_ADDEN
+
+		return true
+
+	case usb_GET_DESCRIPTOR:
+		sendDescriptor(setup)
+		return true
+
+	case usb_SET_DESCRIPTOR:
+		return false
+
+	case usb_GET_CONFIGURATION:
+		buff := []byte{usbConfiguration}
+		sendUSBPacket(0, buff)
+		return true
+
+	case usb_SET_CONFIGURATION:
+		if setup.bmRequestType&usb_REQUEST_RECIPIENT == usb_REQUEST_DEVICE {
+			for i := 1; i < len(endPoints); i++ {
+				initEndpoint(uint32(i), endPoints[i])
+			}
+
+			usbConfiguration = setup.wValueL
+
+			// Enable interrupt for CDC control messages from host (OUT packet)
+			setEPINTENSET(usb_CDC_ENDPOINT_ACM, sam.USB_DEVICE_EPINTENSET_TRCPT1)
+
+			// Enable interrupt for CDC data messages from host
+			setEPINTENSET(usb_CDC_ENDPOINT_OUT, sam.USB_DEVICE_EPINTENSET_TRCPT0)
+
+			sendZlp(0)
+			return true
+		} else {
+			return false
+		}
+
+	case usb_GET_INTERFACE:
+		buff := []byte{usbSetInterface}
+		sendUSBPacket(0, buff)
+		return true
+
+	case usb_SET_INTERFACE:
+		usbSetInterface = setup.wValueL
+
+		sendZlp(0)
+		return true
+
+	default:
+		return true
+	}
+}
+
+func cdcSetup(setup usbSetup) bool {
+	println("cdcSetup")
+	if setup.bmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
+		if setup.bRequest == usb_CDC_GET_LINE_CODING {
+			buf := bytes.NewBuffer(make([]byte, 0, 7))
+			binary.Write(buf, binary.LittleEndian, usbLineInfo.dwDTERate)
+			binary.Write(buf, binary.LittleEndian, usbLineInfo.bCharFormat)
+			binary.Write(buf, binary.LittleEndian, usbLineInfo.bParityType)
+			binary.Write(buf, binary.LittleEndian, usbLineInfo.bDataBits)
+
+			sendUSBPacket(0, buf.Bytes())
+			return true
+		}
+	}
+
+	if setup.bmRequestType == usb_REQUEST_HOSTTODEVICE_CLASS_INTERFACE {
+		if setup.bRequest == usb_CDC_SET_LINE_CODING {
+			buf := bytes.NewBuffer(receiveUSBControlPacket())
+			binary.Read(buf, binary.LittleEndian, &(usbLineInfo.dwDTERate))
+			binary.Read(buf, binary.LittleEndian, &(usbLineInfo.bCharFormat))
+			binary.Read(buf, binary.LittleEndian, &(usbLineInfo.bParityType))
+			binary.Read(buf, binary.LittleEndian, &(usbLineInfo.bDataBits))
+		}
+
+		if setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
+			usbLineInfo.lineState = setup.wValueL
+		}
+
+		if setup.bRequest == usb_CDC_SET_LINE_CODING || setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
+			// auto-reset into the bootloader is triggered when the port, already
+			// open at 1200 bps, is closed. We check DTR state to determine if host
+			// port is open (bit 0 of lineState).
+			if usbLineInfo.dwDTERate == 1200 && (usbLineInfo.lineState&0x01) == 0 {
+				// TODO: system reset
+				// initiateReset(250);
+			} else {
+				// cancelReset();
+			}
+		}
+
+		if setup.bRequest == usb_CDC_SEND_BREAK {
+			// TODO: something with this value?
+			// breakValue = ((uint16_t)setup.wValueH << 8) | setup.wValueL;
+			// return false;
+		}
+		return true
+	}
+	return false
+}
+
+func sendUSBPacket(ep uint32, data []byte) {
+	copy(udd_ep_in_cache_buffer[ep][:], data)
+
+	// Set endpoint address for sending data
+	usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR =
+		sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep])))
+
+	// clear multi-packet size which is total bytes already sent
+	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE &^=
+		sam.RegValue(usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
+
+	// set byte count, which is total number of bytes to be sent
+	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE |=
+		sam.RegValue((len(data) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask) << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+}
+
+func receiveUSBControlPacket() []byte {
+	// set ready to receive data
+	setEPSTATUSCLR(0, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
+
+	// read the data
+	bytesread := armRecvCtrlOUT(0)
+
+	// return the data
+	data := make([]byte, 0, bytesread)
+	copy(data, udd_ep_out_cache_buffer[0][:bytesread])
+	return data
+}
+
+func armRecvCtrlOUT(ep uint32) uint32 {
+	// Set output address to receive data
+	usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR =
+		sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep])))
+
+	// usbd.epBank0SetMultiPacketSize(ep, 8);
+	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE |=
+		sam.RegValue(8<<usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos) |
+			sam.RegValue(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos)
+
+	// usbd.epBank0SetByteCount(ep, 0);
+	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE &^=
+		sam.RegValue(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+
+	// usbd.epBank0ResetReady(ep);
+	setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
+
+	// Wait until OUT transfer is ready.
+	for (getEPSTATUS(ep) & sam.USB_DEVICE_EPSTATUS_BK0RDY) == 0 {
+	}
+
+	// Wait until OUT transfer is completed.
+	for (getEPINTFLAG(ep) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) == 0 {
+	}
+
+	// return number of bytes received
+	return uint32((usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE >>
+		usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)
+}
+
+// recv returns a bytes slice with the data returned from the USB read.
+func recv(ep uint32) []byte { //(uint32_t ep, void *_data, uint32_t len)
+	// if (!_usbConfiguration)
+	// 	return -1;
+
+	// TODO: do this
+	// if (epHandlers[ep]) {
+	// 	return epHandlers[ep]->recv(_data, len);
+	// }
+
+	// TODO: figure out out how much data is in buffer?
+	// if (available(ep) < len)
+	// 	len = available(ep);
+
+	receiveUSBPacket(ep)
+
+	// usbd.epBank0DisableTransferComplete(ep);
+	// usb.DeviceEndpoint[ep].EPINTENCLR.bit.TRCPT0 = 1;
+	setEPINTENCLR(ep, getEPINTENCLR(ep)|sam.USB_DEVICE_EPINTENCLR_TRCPT0)
+
+	// memcpy(_data, udd_ep_out_cache_buffer[ep], len);
+
+	// release empty buffer
+	// if (len && !available(ep)) {
+	// The RAM Buffer is empty: we can receive data
+	// usbd.epBank0ResetReady(ep);
+	setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
+
+	// Clear Transfer complete 0 flag
+	// usbd.epBank0AckTransferComplete(ep);
+	// usb.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT(1);
+	setEPINTFLAG(ep, 1<<sam.USB_DEVICE_EPINTFLAG_TRCPT0_Pos)
+
+	// Enable Transfer complete 0 interrupt
+	// usbd.epBank0EnableTransferComplete(ep);
+	// usb.DeviceEndpoint[ep].EPINTENSET.bit.TRCPT0 = 1;
+	setEPINTENSET(ep, (getEPINTENSET(ep) | sam.USB_DEVICE_EPINTENSET_TRCPT0))
+
+	return nil
+}
+
+func receiveUSBPacket(ep uint32) sam.RegValue {
+	// 	uint16_t count = usbd.epBank0ByteCount(ep);
+	count := uint32((usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE >>
+		usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)
+	if count >= 64 {
+		// usbd.epBank0SetByteCount(ep, count - 64);
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE =
+			sam.RegValue(count-64<<usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) |
+				sam.RegValue(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos)
+	} else {
+		// usbd.epBank0SetByteCount(ep, 0);
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE =
+			sam.RegValue(0<<usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) |
+				sam.RegValue(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos)
+	}
+	// 	return usbd.epBank0ByteCount(ep);
+	return (usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE >>
+		usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask
+}
+
+// sendDescriptor creates and sends the various USB descriptor types that
+// can be requested by the host.
+func sendDescriptor(setup usbSetup) {
+	switch setup.wValueH {
+	case usb_CONFIGURATION_DESCRIPTOR_TYPE:
+		sendConfiguration(setup)
+		return
+	case usb_DEVICE_DESCRIPTOR_TYPE:
+		if setup.wLength == 8 {
+			// composite descriptor requested, so only send 8 bytes
+			// D_DEVICE(0xEF, 0x02, 0x01, 64, USB_VID, USB_PID, 0x100, IMANUFACTURER, IPRODUCT, ISERIAL, 1);
+			dd := NewDeviceDescriptor(0xEF, 0x02, 0x01, 64, usb_VID, usb_PID, 0x100, usb_IMANUFACTURER, usb_IPRODUCT, usb_ISERIAL, 1)
+			sendUSBPacket(0, dd.Bytes()[:8])
+		} else {
+			// complete descriptor requested so send entire packet
+			// D_DEVICE(0x00, 0x00, 0x00, 64, USB_VID, USB_PID, 0x100, IMANUFACTURER, IPRODUCT, ISERIAL, 1);
+			dd := NewDeviceDescriptor(0x00, 0x00, 0x00, 64, usb_VID, usb_PID, 0x100, usb_IMANUFACTURER, usb_IPRODUCT, usb_ISERIAL, 1)
+			sendUSBPacket(0, dd.Bytes())
+		}
+		return
+
+	case usb_STRING_DESCRIPTOR_TYPE:
+		switch setup.wValueL {
+		case 0:
+			b := make([]byte, 4)
+			b[0] = byte(usb_STRING_LANGUAGE[0] >> 8)
+			b[1] = byte(usb_STRING_LANGUAGE[0] & 0xff)
+			b[2] = byte(usb_STRING_LANGUAGE[1] >> 8)
+			b[3] = byte(usb_STRING_LANGUAGE[1] & 0xff)
+			sendUSBPacket(0, b)
+
+		case usb_IPRODUCT:
+			prod := []byte(usb_STRING_PRODUCT)
+			b := make([]byte, len(prod)*2+2)
+			b[0] = byte(len(prod)*2 + 2)
+			b[1] = 0x03
+
+			for i, val := range prod {
+				b[i*2] = 0
+				b[i*2+1] = val
+			}
+
+			sendUSBPacket(0, b)
+
+		case usb_IMANUFACTURER:
+			prod := []byte(usb_STRING_MANUFACTURER)
+			b := make([]byte, len(prod)*2+2)
+			b[0] = byte(len(prod)*2 + 2)
+			b[1] = 0x03
+
+			for i, val := range prod {
+				b[i*2] = 0
+				b[i*2+1] = val
+			}
+
+			sendUSBPacket(0, b)
+
+		case usb_ISERIAL:
+			// TODO: allow returning a product serial number
+			sendZlp(0)
+		}
+
+		// do not know how to handle, so return zero
+		sendZlp(0)
+		return
+	}
+
+	// do not know how to handle this message, so return zero
+	sendZlp(0)
+	return
+}
+
+// sendConfiguration creates and sends the configuration packet to the host.
+func sendConfiguration(setup usbSetup) {
+	if setup.wLength == 9 {
+		sz := uint16(configDescriptorSize + cdcSize)
+		config := NewConfigDescriptor(sz, 2)
+		sendUSBPacket(0, config.Bytes())
+	} else {
+		// D_IAD(0, 2, CDC_COMMUNICATION_INTERFACE_CLASS, CDC_ABSTRACT_CONTROL_MODEL, 0),
+		iad := NewIADDescriptor(0, 2, usb_CDC_COMMUNICATION_INTERFACE_CLASS, usb_CDC_ABSTRACT_CONTROL_MODEL, 0)
+
+		// CDC communication interface
+		// D_INTERFACE(CDC_ACM_INTERFACE, 1, CDC_COMMUNICATION_INTERFACE_CLASS, CDC_ABSTRACT_CONTROL_MODEL, 0),
+		cif := NewInterfaceDescriptor(usb_CDC_ACM_INTERFACE, 1, usb_CDC_COMMUNICATION_INTERFACE_CLASS, usb_CDC_ABSTRACT_CONTROL_MODEL, 0)
+
+		// D_CDCCS(CDC_HEADER, CDC_V1_10 & 0xFF, (CDC_V1_10>>8) & 0x0FF), // Header (1.10 bcd)
+		header := NewCDCCSInterfaceDescriptor(usb_CDC_HEADER, usb_CDC_V1_10&0xFF, (usb_CDC_V1_10>>8)&0x0FF)
+
+		// control CDCCSInterfaceDescriptor // CDC_UNION
+		// D_CDCCS4(CDC_ABSTRACT_CONTROL_MANAGEMENT, 6), // SET_LINE_CODING, GET_LINE_CODING, SET_CONTROL_LINE_STATE supported
+		controlManagement := NewACMFunctionalDescriptor(usb_CDC_ABSTRACT_CONTROL_MANAGEMENT, 6)
+
+		// functionalDescriptor CDCCSInterfaceDescriptor // CDC_UNION
+		// D_CDCCS(CDC_UNION, CDC_ACM_INTERFACE, CDC_DATA_INTERFACE), // Communication interface is master, data interface is slave 0
+		functionalDescriptor := NewCDCCSInterfaceDescriptor(usb_CDC_UNION, usb_CDC_ACM_INTERFACE, usb_CDC_DATA_INTERFACE)
+
+		// callManagement       CMFunctionalDescriptor   // Call Management
+		// D_CDCCS(CDC_CALL_MANAGEMENT, 1, 1), // Device handles call management (not)
+		callManagement := NewCMFunctionalDescriptor(usb_CDC_CALL_MANAGEMENT, 1, 1)
+
+		// cifin                EndpointDescriptor
+		// D_ENDPOINT(USB_ENDPOINT_IN(CDC_ENDPOINT_ACM), USB_ENDPOINT_TYPE_INTERRUPT, 0x10, 0x10),
+		cifin := NewEndpointDescriptor((usb_CDC_ENDPOINT_ACM | usbEndpointIn), usb_ENDPOINT_TYPE_INTERRUPT, 0x10, 0x10)
+
+		//	Data
+		// 	D_INTERFACE(CDC_DATA_INTERFACE, 2, CDC_DATA_INTERFACE_CLASS, 0, 0),
+		dif := NewInterfaceDescriptor(usb_CDC_DATA_INTERFACE, 2, usb_CDC_DATA_INTERFACE_CLASS, 0, 0)
+
+		// 	D_ENDPOINT(USB_ENDPOINT_OUT(CDC_ENDPOINT_OUT), USB_ENDPOINT_TYPE_BULK, EPX_SIZE, 0),
+		in := NewEndpointDescriptor((usb_CDC_ENDPOINT_OUT | usbEndpointOut), usb_ENDPOINT_TYPE_BULK, usb_EPX_SIZE, 0)
+
+		// out EndpointDescriptor
+		// 	D_ENDPOINT(USB_ENDPOINT_IN (CDC_ENDPOINT_IN ), USB_ENDPOINT_TYPE_BULK, EPX_SIZE, 0)
+		out := NewEndpointDescriptor((usb_CDC_ENDPOINT_IN | usbEndpointIn), usb_ENDPOINT_TYPE_BULK, usb_EPX_SIZE, 0)
+
+		cdc := NewCDCDescriptor(iad,
+			cif,
+			header,
+			controlManagement,
+			functionalDescriptor,
+			callManagement,
+			cifin,
+			dif,
+			in,
+			out)
+
+		sz := uint16(configDescriptorSize + cdcSize)
+		config := NewConfigDescriptor(sz, 2)
+
+		buf := make([]byte, 0, sz)
+		buf = append(buf, config.Bytes()...)
+		buf = append(buf, cdc.Bytes()...)
+
+		sendUSBPacket(0, buf)
+	}
+}
+
+func handleEndpoint(ep uint32) {
+	if getEPINTFLAG(ep) > 0 {
+		println("handle endpoint println(getEPINTFLAG(ep))", ep, getEPINTFLAG(ep))
+	}
+	// R/W : incoming, ready0/1
+	//   W : last0/1, notify
+	// if (usbd.epBank0IsTransferComplete(ep))
+	if (getEPINTFLAG(ep) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 {
+		// Ack Transfer complete
+		// usbd.epBank0AckTransferComplete(ep);
+		setEPINTFLAG(ep, sam.USB_DEVICE_EPINTFLAG_TRCPT0)
+
+		// Update counters and swap banks for non-ZLP's
+		// 	if (incoming == 0) {
+		// 		last0 = usbd.epBank0ByteCount(ep);
+		// 		if (last0 != 0) {
+		// 			incoming = 1;
+		// 			usbd.epBank0SetAddress(ep, const_cast<uint8_t *>(data1));
+		// 			synchronized {
+		// 				ready0 = true;
+		// 				if (ready1) {
+		// 					notify = true;
+		// 					return;
+		// 				}
+		// 				notify = false;
+		// 			}
+		// 		}
+		// 	} else {
+		// 		last1 = usbd.epBank0ByteCount(ep);
+		// 		if (last1 != 0) {
+		// 			incoming = 0;
+		// 			usbd.epBank0SetAddress(ep, const_cast<uint8_t *>(data0));
+		// 			synchronized {
+		// 				ready1 = true;
+		// 				if (ready0) {
+		// 					notify = true;
+		// 					return;
+		// 				}
+		// 				notify = false;
+		// 			}
+		// 		}
+		// 	}
+		//release(ep)
+	}
+}
+
+func release(ep uint32) {
+	//usbd.epBank0EnableTransferComplete(ep);
+	setEPINTENSET(ep, sam.USB_DEVICE_EPINTENSET_TRCPT0)
+
+	//usbd.epBank0SetMultiPacketSize(ep, size);
+	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE =
+		sam.RegValue(64<<usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos) |
+			sam.RegValue(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos)
+
+	//usbd.epBank0SetByteCount(ep, 0);
+	// usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE |=
+	// 	sam.RegValue(0 << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+	// usbEndpointDescriptors[0].DeviceDescBank[0].PCKSIZE &^=
+	// 	sam.RegValue(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+
+	//usbd.epBank0ResetReady(ep);
+	setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
+}
+
+func sendZlp(ep uint32) {
+	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE &^=
+		sam.RegValue(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+}
+
+func epPacketSize(size uint16) uint32 {
+	switch size {
+	case 8:
+		return 0
+	case 16:
+		return 1
+	case 32:
+		return 2
+	case 64:
+		return 3
+	case 128:
+		return 4
+	case 256:
+		return 5
+	case 512:
+		return 6
+	case 1023:
+		return 7
+	default:
+		return 0
+	}
+}
+
+func getEPCFG(ep uint32) sam.RegValue8 {
+	switch ep {
+	case 0:
+		return sam.USB_DEVICE.EPCFG0
+	case 1:
+		return sam.USB_DEVICE.EPCFG1
+	case 2:
+		return sam.USB_DEVICE.EPCFG2
+	case 3:
+		return sam.USB_DEVICE.EPCFG3
+	case 4:
+		return sam.USB_DEVICE.EPCFG4
+	case 5:
+		return sam.USB_DEVICE.EPCFG5
+	case 6:
+		return sam.USB_DEVICE.EPCFG6
+	case 7:
+		return sam.USB_DEVICE.EPCFG7
+	default:
+		return 0
+	}
+}
+
+func setEPCFG(ep uint32, val sam.RegValue8) {
+	switch ep {
+	case 0:
+		sam.USB_DEVICE.EPCFG0 = val
+	case 1:
+		sam.USB_DEVICE.EPCFG1 = val
+	case 2:
+		sam.USB_DEVICE.EPCFG2 = val
+	case 3:
+		sam.USB_DEVICE.EPCFG3 = val
+	case 4:
+		sam.USB_DEVICE.EPCFG4 = val
+	case 5:
+		sam.USB_DEVICE.EPCFG5 = val
+	case 6:
+		sam.USB_DEVICE.EPCFG6 = val
+	case 7:
+		sam.USB_DEVICE.EPCFG7 = val
+	default:
+		return
+	}
+}
+
+func setEPSTATUSCLR(ep uint32, val sam.RegValue8) {
+	switch ep {
+	case 0:
+		sam.USB_DEVICE.EPSTATUSCLR0 = val
+	case 1:
+		sam.USB_DEVICE.EPSTATUSCLR1 = val
+	case 2:
+		sam.USB_DEVICE.EPSTATUSCLR2 = val
+	case 3:
+		sam.USB_DEVICE.EPSTATUSCLR3 = val
+	case 4:
+		sam.USB_DEVICE.EPSTATUSCLR4 = val
+	case 5:
+		sam.USB_DEVICE.EPSTATUSCLR5 = val
+	case 6:
+		sam.USB_DEVICE.EPSTATUSCLR6 = val
+	case 7:
+		sam.USB_DEVICE.EPSTATUSCLR7 = val
+	default:
+		return
+	}
+}
+
+func setEPSTATUSSET(ep uint32, val sam.RegValue8) {
+	switch ep {
+	case 0:
+		sam.USB_DEVICE.EPSTATUSSET0 = val
+	case 1:
+		sam.USB_DEVICE.EPSTATUSSET1 = val
+	case 2:
+		sam.USB_DEVICE.EPSTATUSSET2 = val
+	case 3:
+		sam.USB_DEVICE.EPSTATUSSET3 = val
+	case 4:
+		sam.USB_DEVICE.EPSTATUSSET4 = val
+	case 5:
+		sam.USB_DEVICE.EPSTATUSSET5 = val
+	case 6:
+		sam.USB_DEVICE.EPSTATUSSET6 = val
+	case 7:
+		sam.USB_DEVICE.EPSTATUSSET7 = val
+	default:
+		return
+	}
+}
+
+func getEPSTATUS(ep uint32) sam.RegValue8 {
+	switch ep {
+	case 0:
+		return sam.USB_DEVICE.EPSTATUS0
+	case 1:
+		return sam.USB_DEVICE.EPSTATUS1
+	case 2:
+		return sam.USB_DEVICE.EPSTATUS2
+	case 3:
+		return sam.USB_DEVICE.EPSTATUS3
+	case 4:
+		return sam.USB_DEVICE.EPSTATUS4
+	case 5:
+		return sam.USB_DEVICE.EPSTATUS5
+	case 6:
+		return sam.USB_DEVICE.EPSTATUS6
+	case 7:
+		return sam.USB_DEVICE.EPSTATUS7
+	default:
+		return 0
+	}
+}
+
+func getEPINTFLAG(ep uint32) sam.RegValue8 {
+	switch ep {
+	case 0:
+		return sam.USB_DEVICE.EPINTFLAG0
+	case 1:
+		return sam.USB_DEVICE.EPINTFLAG1
+	case 2:
+		return sam.USB_DEVICE.EPINTFLAG2
+	case 3:
+		return sam.USB_DEVICE.EPINTFLAG3
+	case 4:
+		return sam.USB_DEVICE.EPINTFLAG4
+	case 5:
+		return sam.USB_DEVICE.EPINTFLAG5
+	case 6:
+		return sam.USB_DEVICE.EPINTFLAG6
+	case 7:
+		return sam.USB_DEVICE.EPINTFLAG7
+	default:
+		return 0
+	}
+}
+
+func setEPINTFLAG(ep uint32, val sam.RegValue8) {
+	switch ep {
+	case 0:
+		sam.USB_DEVICE.EPINTFLAG0 = val
+	case 1:
+		sam.USB_DEVICE.EPINTFLAG1 = val
+	case 2:
+		sam.USB_DEVICE.EPINTFLAG2 = val
+	case 3:
+		sam.USB_DEVICE.EPINTFLAG3 = val
+	case 4:
+		sam.USB_DEVICE.EPINTFLAG4 = val
+	case 5:
+		sam.USB_DEVICE.EPINTFLAG5 = val
+	case 6:
+		sam.USB_DEVICE.EPINTFLAG6 = val
+	case 7:
+		sam.USB_DEVICE.EPINTFLAG7 = val
+	default:
+		return
+	}
+}
+
+func getEPINTENCLR(ep uint32) sam.RegValue8 {
+	switch ep {
+	case 0:
+		return sam.USB_DEVICE.EPINTENCLR0
+	case 1:
+		return sam.USB_DEVICE.EPINTENCLR1
+	case 2:
+		return sam.USB_DEVICE.EPINTENCLR2
+	case 3:
+		return sam.USB_DEVICE.EPINTENCLR3
+	case 4:
+		return sam.USB_DEVICE.EPINTENCLR4
+	case 5:
+		return sam.USB_DEVICE.EPINTENCLR5
+	case 6:
+		return sam.USB_DEVICE.EPINTENCLR6
+	case 7:
+		return sam.USB_DEVICE.EPINTENCLR7
+	default:
+		return 0
+	}
+}
+
+func setEPINTENCLR(ep uint32, val sam.RegValue8) {
+	switch ep {
+	case 0:
+		sam.USB_DEVICE.EPINTENCLR0 = val
+	case 1:
+		sam.USB_DEVICE.EPINTENCLR1 = val
+	case 2:
+		sam.USB_DEVICE.EPINTENCLR2 = val
+	case 3:
+		sam.USB_DEVICE.EPINTENCLR3 = val
+	case 4:
+		sam.USB_DEVICE.EPINTENCLR4 = val
+	case 5:
+		sam.USB_DEVICE.EPINTENCLR5 = val
+	case 6:
+		sam.USB_DEVICE.EPINTENCLR6 = val
+	case 7:
+		sam.USB_DEVICE.EPINTENCLR7 = val
+	default:
+		return
+	}
+}
+
+func getEPINTENSET(ep uint32) sam.RegValue8 {
+	switch ep {
+	case 0:
+		return sam.USB_DEVICE.EPINTENSET0
+	case 1:
+		return sam.USB_DEVICE.EPINTENSET1
+	case 2:
+		return sam.USB_DEVICE.EPINTENSET2
+	case 3:
+		return sam.USB_DEVICE.EPINTENSET3
+	case 4:
+		return sam.USB_DEVICE.EPINTENSET4
+	case 5:
+		return sam.USB_DEVICE.EPINTENSET5
+	case 6:
+		return sam.USB_DEVICE.EPINTENSET6
+	case 7:
+		return sam.USB_DEVICE.EPINTENSET7
+	default:
+		return 0
+	}
+}
+
+func setEPINTENSET(ep uint32, val sam.RegValue8) {
+	switch ep {
+	case 0:
+		sam.USB_DEVICE.EPINTENSET0 = val
+	case 1:
+		sam.USB_DEVICE.EPINTENSET1 = val
+	case 2:
+		sam.USB_DEVICE.EPINTENSET2 = val
+	case 3:
+		sam.USB_DEVICE.EPINTENSET3 = val
+	case 4:
+		sam.USB_DEVICE.EPINTENSET4 = val
+	case 5:
+		sam.USB_DEVICE.EPINTENSET5 = val
+	case 6:
+		sam.USB_DEVICE.EPINTENSET6 = val
+	case 7:
+		sam.USB_DEVICE.EPINTENSET7 = val
+	default:
+		return
 	}
 }
