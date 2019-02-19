@@ -156,6 +156,10 @@ func (c *Compiler) selectGC() string {
 	return gc
 }
 
+func (c *Compiler) gcIsPrecise() bool {
+	return c.GC == "precise"
+}
+
 // Compile the given package path or .go file path. Return an error when this
 // fails (in any stage).
 func (c *Compiler) Compile(mainPath string) []error {

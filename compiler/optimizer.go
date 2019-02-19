@@ -37,6 +37,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		goPasses := llvm.NewPassManager()
 		defer goPasses.Dispose()
 		goPasses.AddGlobalOptimizerPass()
+		goPasses.AddGlobalDCEPass()
 		goPasses.AddConstantPropagationPass()
 		goPasses.AddAggressiveDCEPass()
 		goPasses.AddFunctionAttrsPass()
@@ -113,6 +114,13 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 	defer modPasses.Dispose()
 	builder.Populate(modPasses)
 	modPasses.Run(c.mod)
+
+	if c.gcIsPrecise() {
+		c.addGlobalsBitmap()
+		if err := c.Verify(); err != nil {
+			return errors.New("GC pass caused a verification failure")
+		}
+	}
 
 	return nil
 }

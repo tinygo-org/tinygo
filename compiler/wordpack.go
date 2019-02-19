@@ -25,7 +25,7 @@ func (c *Compiler) emitPointerPack(values []llvm.Value) llvm.Value {
 		return llvm.ConstPointerNull(c.i8ptrType)
 	} else if len(values) == 1 && values[0].Type().TypeKind() == llvm.PointerTypeKind {
 		return c.builder.CreateBitCast(values[0], c.i8ptrType, "pack.ptr")
-	} else if size <= c.targetData.TypeAllocSize(c.i8ptrType) {
+	} else if size <= c.targetData.TypeAllocSize(c.i8ptrType) && !c.gcIsPrecise() {
 		// Packed data fits in a pointer, so store it directly inside the
 		// pointer.
 		if len(values) == 1 && values[0].Type().TypeKind() == llvm.IntegerTypeKind {
@@ -57,7 +57,7 @@ func (c *Compiler) emitPointerPack(values []llvm.Value) llvm.Value {
 		return c.builder.CreateLoad(packedAlloc, "")
 	} else {
 		// Get the original heap allocation pointer, which already is an *i8.
-		return packedHeapAlloc
+		return c.builder.CreateBitCast(packedAlloc, c.i8ptrType, "")
 	}
 }
 
@@ -73,7 +73,7 @@ func (c *Compiler) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []l
 	} else if len(valueTypes) == 1 && valueTypes[0].TypeKind() == llvm.PointerTypeKind {
 		// A single pointer is always stored directly.
 		return []llvm.Value{c.builder.CreateBitCast(ptr, valueTypes[0], "unpack.ptr")}
-	} else if size <= c.targetData.TypeAllocSize(c.i8ptrType) {
+	} else if size <= c.targetData.TypeAllocSize(c.i8ptrType) && !c.gcIsPrecise() {
 		// Packed data stored directly in pointer.
 		if len(valueTypes) == 1 && valueTypes[0].TypeKind() == llvm.IntegerTypeKind {
 			// Keep this cast in SSA form.
