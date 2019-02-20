@@ -1,4 +1,4 @@
-// +build sam,atsamd21g18a
+// +build sam,atsamd21
 
 package runtime
 
