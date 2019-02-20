@@ -1,4 +1,4 @@
-// +build sam,atsamd21g18a,itsybitsy_m0
+// +build sam,atsamd21,itsybitsy_m0
 
 package machine
 
