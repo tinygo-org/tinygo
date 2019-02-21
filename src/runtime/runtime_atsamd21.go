@@ -24,9 +24,10 @@ func init() {
 	initRTC()
 	initUARTClock()
 	initI2CClock()
+	initUSBClock()
 
-	// connect to UART
-	machine.UART0.Configure(machine.UARTConfig{})
+	// connect to USB CDC interface
+	machine.InitUSB()
 }
 
 func putchar(c byte) {
@@ -331,6 +332,17 @@ func initI2CClock() {
 	// GCLK_CLKCTRL_GEN_GCLK0 | // Generic Clock Generator 0 is source
 	// GCLK_CLKCTRL_CLKEN ;
 	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_SERCOM3_CORE << sam.GCLK_CLKCTRL_ID_Pos) |
+		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
+		sam.GCLK_CLKCTRL_CLKEN)
+	waitForSync()
+}
+
+func initUSBClock() {
+	// Turn on clock for USB
+	sam.PM.APBBMASK |= sam.PM_APBBMASK_USB_
+
+	// Put Generic Clock Generator 0 as source for Generic Clock Multiplexer 6 (USB reference)
+	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_USB << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
 	waitForSync()
