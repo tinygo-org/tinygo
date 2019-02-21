@@ -119,7 +119,6 @@ type UART struct {
 
 var (
 	// UART0 is actually a USB CDC interface.
-	//UART0 = UART{Buffer: NewRingBuffer(), UsesUSB: true}
 	UART0 = USBCDC{Buffer: NewRingBuffer()}
 
 	// The first hardware serial port on the SAMD21. Uses the SERCOM0 interface.
@@ -978,13 +977,9 @@ const (
 )
 
 var (
-	//go:volatile
 	usbEndpointDescriptors [8]usbDeviceDescriptor
 
-	//go:volatile
-	udd_ep_in_cache_buffer [7][128]uint8
-
-	//go:volatile
+	udd_ep_in_cache_buffer  [7][128]uint8
 	udd_ep_out_cache_buffer [7][128]uint8
 
 	isEndpointHalt        = false
@@ -994,17 +989,13 @@ var (
 		(usb_ENDPOINT_TYPE_BULK | usbEndpointOut),
 		(usb_ENDPOINT_TYPE_BULK | usbEndpointIn)}
 
-	//go:volatile
 	usbConfiguration uint8
-
-	//go:volatile
-	usbSetInterface uint8
-
-	//go:volatile
-	usbLineInfo = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
+	usbSetInterface  uint8
+	usbLineInfo      = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
 )
 
-func InitUSB() {
+// Configure the USB CDC interface. The config is here for compatibility with the UART interface.
+func (usbcdc USBCDC) Configure(config UARTConfig) {
 	// reset USB interface
 	sam.USB_DEVICE.CTRLA |= sam.USB_DEVICE_CTRLA_SWRST
 	for (sam.USB_DEVICE.SYNCBUSY&sam.USB_DEVICE_SYNCBUSY_SWRST) > 0 ||
@@ -1014,8 +1005,8 @@ func InitUSB() {
 	sam.USB_DEVICE.DESCADD = sam.RegValue(uintptr(unsafe.Pointer(&usbEndpointDescriptors)))
 
 	// configure pins
-	GPIO{24}.Configure(GPIOConfig{Mode: GPIO_COM})
-	GPIO{25}.Configure(GPIOConfig{Mode: GPIO_COM})
+	GPIO{USBCDC_DM_PIN}.Configure(GPIOConfig{Mode: GPIO_COM})
+	GPIO{USBCDC_DP_PIN}.Configure(GPIOConfig{Mode: GPIO_COM})
 
 	// performs pad calibration from store fuses
 	handlePadCalibration()

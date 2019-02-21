@@ -546,11 +546,6 @@ func newUSBSetup(data []byte) usbSetup {
 //		USBCDC{Buffer: NewRingBuffer()}
 //
 
-// Configure is here for compatibility with the UART interface.
-func (usbcdc USBCDC) Configure(config UARTConfig) {
-	return
-}
-
 // Read from the RX buffer.
 func (usbcdc USBCDC) Read(data []byte) (n int, err error) {
 	// check if RX buffer is empty

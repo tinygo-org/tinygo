@@ -34,7 +34,13 @@ const (
 	LED = D13
 )
 
-// UART0 pins
+// UART0 aka USBCDC pins
+const (
+	USBCDC_DM_PIN = 24
+	USBCDC_DP_PIN = 25
+)
+
+// UART1 pins
 const (
 	UART_TX_PIN = D1
 	UART_RX_PIN = D0

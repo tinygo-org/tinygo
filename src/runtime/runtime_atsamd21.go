@@ -27,7 +27,7 @@ func init() {
 	initUSBClock()
 
 	// connect to USB CDC interface
-	machine.InitUSB()
+	machine.UART0.Configure(machine.UARTConfig{})
 }
 
 func putchar(c byte) {
