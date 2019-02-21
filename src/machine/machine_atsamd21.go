@@ -40,13 +40,24 @@ const (
 func (p GPIO) Configure(config GPIOConfig) {
 	switch config.Mode {
 	case GPIO_OUTPUT:
-		sam.PORT.DIRSET0 = (1 << p.Pin)
-		// output is also set to input enable so pin can read back its own value
-		p.setPinCfg(sam.PORT_PINCFG0_INEN)
+		if p.Pin < 32 {
+			sam.PORT.DIRSET0 = (1 << p.Pin)
+			// output is also set to input enable so pin can read back its own value
+			p.setPinCfg(sam.PORT_PINCFG0_INEN)
+		} else {
+			sam.PORT.DIRSET1 = (1 << (p.Pin - 32))
+			// output is also set to input enable so pin can read back its own value
+			p.setPinCfg(sam.PORT_PINCFG0_INEN)
+		}
 
 	case GPIO_INPUT:
-		sam.PORT.DIRCLR0 = (1 << p.Pin)
-		p.setPinCfg(sam.PORT_PINCFG0_INEN)
+		if p.Pin < 32 {
+			sam.PORT.DIRCLR0 = (1 << p.Pin)
+			p.setPinCfg(sam.PORT_PINCFG0_INEN)
+		} else {
+			sam.PORT.DIRCLR0 = (1 << p.Pin)
+			p.setPinCfg(sam.PORT_PINCFG0_INEN)
+		}
 
 	case GPIO_SERCOM:
 		if p.Pin&1 > 0 {
@@ -78,16 +89,48 @@ func (p GPIO) Configure(config GPIOConfig) {
 
 // Get returns the current value of a GPIO pin.
 func (p GPIO) Get() bool {
-	return (sam.PORT.IN0>>p.Pin)&1 > 0
+	if p.Pin < 32 {
+		return (sam.PORT.IN0>>p.Pin)&1 > 0
+	} else {
+		return (sam.PORT.IN1>>p.Pin)&1 > 0
+	}
 }
 
 // Set the pin to high or low.
 // Warning: only use this on an output pin!
 func (p GPIO) Set(high bool) {
-	if high {
-		sam.PORT.OUTSET0 = (1 << p.Pin)
+	if p.Pin < 32 {
+		if high {
+			sam.PORT.OUTSET0 = (1 << p.Pin)
+		} else {
+			sam.PORT.OUTCLR0 = (1 << p.Pin)
+		}
 	} else {
-		sam.PORT.OUTCLR0 = (1 << p.Pin)
+		if high {
+			sam.PORT.OUTSET1 = (1 << (p.Pin - 32))
+		} else {
+			sam.PORT.OUTCLR1 = (1 << (p.Pin - 32))
+		}
+	}
+}
+
+// Return the register and mask to enable a given GPIO pin. This can be used to
+// implement bit-banged drivers.
+func (p GPIO) PortMaskSet() (*uint32, uint32) {
+	if p.Pin < 32 {
+		return (*uint32)(&sam.PORT.OUTSET0), 1 << p.Pin
+	} else {
+		return (*uint32)(&sam.PORT.OUTSET1), 1 << (p.Pin - 32)
+	}
+}
+
+// Return the register and mask to disable a given port. This can be used to
+// implement bit-banged drivers.
+func (p GPIO) PortMaskClear() (*uint32, uint32) {
+	if p.Pin < 32 {
+		return (*uint32)(&sam.PORT.OUTCLR0), 1 << p.Pin
+	} else {
+		return (*uint32)(&sam.PORT.OUTCLR1), 1 << (p.Pin - 32)
 	}
 }
 
@@ -859,6 +902,70 @@ func setPinCfg(p uint8, val sam.RegValue8) {
 		sam.PORT.PINCFG0_30 = val
 	case 31:
 		sam.PORT.PINCFG0_31 = val
+	case 32: // PB00
+		sam.PORT.PINCFG1_0 = sam.RegValue(val) << 24
+	case 33: // PB01
+		sam.PORT.PINCFG1_0 = sam.RegValue(val) << 16
+	case 34: // PB02
+		sam.PORT.PINCFG1_0 = sam.RegValue(val) << 8
+	case 35: // PB03
+		sam.PORT.PINCFG1_0 = sam.RegValue(val)
+	case 36: // PB04
+		sam.PORT.PINCFG1_4 = sam.RegValue(val) << 24
+	case 37: // PB05
+		sam.PORT.PINCFG1_4 = sam.RegValue(val) << 16
+	case 38: // PB06
+		sam.PORT.PINCFG1_4 = sam.RegValue(val) << 8
+	case 39: // PB07
+		sam.PORT.PINCFG1_4 = sam.RegValue(val)
+	case 40: // PB08
+		sam.PORT.PINCFG1_8 = sam.RegValue(val) << 24
+	case 41: // PB09
+		sam.PORT.PINCFG1_8 = sam.RegValue(val) << 16
+	case 42: // PB10
+		sam.PORT.PINCFG1_8 = sam.RegValue(val) << 8
+	case 43: // PB11
+		sam.PORT.PINCFG1_8 = sam.RegValue(val)
+	case 44: // PB12
+		sam.PORT.PINCFG1_12 = sam.RegValue(val) << 24
+	case 45: // PB13
+		sam.PORT.PINCFG1_12 = sam.RegValue(val) << 16
+	case 46: // PB14
+		sam.PORT.PINCFG1_12 = sam.RegValue(val) << 8
+	case 47: // PB15
+		sam.PORT.PINCFG1_12 = sam.RegValue(val)
+	case 48: // PB16
+		sam.PORT.PINCFG1_16 = sam.RegValue(val) << 24
+	case 49: // PB17
+		sam.PORT.PINCFG1_16 = sam.RegValue(val) << 16
+	case 50: // PB18
+		sam.PORT.PINCFG1_16 = sam.RegValue(val) << 8
+	case 51: // PB19
+		sam.PORT.PINCFG1_16 = sam.RegValue(val)
+	case 52: // PB20
+		sam.PORT.PINCFG1_20 = sam.RegValue(val) << 24
+	case 53: // PB21
+		sam.PORT.PINCFG1_20 = sam.RegValue(val) << 16
+	case 54: // PB22
+		sam.PORT.PINCFG1_20 = sam.RegValue(val) << 8
+	case 55: // PB23
+		sam.PORT.PINCFG1_20 = sam.RegValue(val)
+	case 56: // PB24
+		sam.PORT.PINCFG1_24 = sam.RegValue(val) << 24
+	case 57: // PB25
+		sam.PORT.PINCFG1_24 = sam.RegValue(val) << 16
+	case 58: // PB26
+		sam.PORT.PINCFG1_24 = sam.RegValue(val) << 8
+	case 59: // PB27
+		sam.PORT.PINCFG1_24 = sam.RegValue(val)
+	case 60: // PB28
+		sam.PORT.PINCFG1_28 = sam.RegValue(val) << 24
+	case 61: // PB29
+		sam.PORT.PINCFG1_28 = sam.RegValue(val) << 16
+	case 62: // PB30
+		sam.PORT.PINCFG1_28 = sam.RegValue(val) << 8
+	case 63: // PB31
+		sam.PORT.PINCFG1_28 = sam.RegValue(val)
 	}
 }
 
