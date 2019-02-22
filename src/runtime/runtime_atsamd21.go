@@ -205,11 +205,7 @@ func initRTC() {
 
 	// set Mode0 to 32-bit counter (mode 0) with prescaler 1 and GCLK2 is 32KHz/1
 	sam.RTC_MODE0.CTRL = sam.RegValue16((sam.RTC_MODE0_CTRL_MODE_COUNT32 << sam.RTC_MODE0_CTRL_MODE_Pos) |
-		(sam.RTC_MODE0_CTRL_PRESCALER_DIV1 << sam.RTC_MODE0_CTRL_PRESCALER_Pos) |
-		sam.RTC_MODE0_CTRL_MATCHCLR)
-	waitForSync()
-
-	sam.RTC_MODE0.COMP0 = 0xffffffff
+		(sam.RTC_MODE0_CTRL_PRESCALER_DIV1 << sam.RTC_MODE0_CTRL_PRESCALER_Pos))
 	waitForSync()
 
 	// re-enable RTC
@@ -256,8 +252,8 @@ func ticks() timeUnit {
 	sam.RTC_MODE0.READREQ = sam.RTC_MODE0_READREQ_RREQ
 	waitForSync()
 
-	rtcCounter := uint64(sam.RTC_MODE0.COUNT) * 30 // each counter tick == 30.5us
-	offset := (rtcCounter - timerLastCounter)      // change since last measurement
+	rtcCounter := (uint64(sam.RTC_MODE0.COUNT) * 305) / 10 // each counter tick == 30.5us
+	offset := (rtcCounter - timerLastCounter)              // change since last measurement
 	timerLastCounter = rtcCounter
 	timestamp += timeUnit(offset) // TODO: not precise
 	return timestamp
@@ -277,7 +273,7 @@ func timerSleep(ticks uint32) {
 
 	// set compare value
 	cnt := sam.RTC_MODE0.COUNT
-	sam.RTC_MODE0.COMP0 = sam.RegValue(uint32(cnt) + (ticks / 30)) // each counter tick == 30.5us
+	sam.RTC_MODE0.COMP0 = sam.RegValue(uint32(cnt) + (ticks * 10 / 305)) // each counter tick == 30.5us
 	waitForSync()
 
 	// enable IRQ for CMP0 compare
