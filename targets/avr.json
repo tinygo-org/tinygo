@@ -4,7 +4,6 @@
 	"goarch": "wasm",
 	"compiler": "avr-gcc",
 	"linker": "avr-gcc",
-	"objcopy": "avr-objcopy",
 	"ldflags": [
 		"-T", "targets/avr.ld",
 		"-Wl,--gc-sections"

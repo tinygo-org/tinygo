@@ -16,6 +16,5 @@
 	"ldflags": [
 		"--gc-sections"
 	],
-	"objcopy": "arm-none-eabi-objcopy",
 	"gdb": "arm-none-eabi-gdb"
 }

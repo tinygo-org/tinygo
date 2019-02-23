@@ -31,7 +31,6 @@ type TargetSpec struct {
 	CFlags     []string `json:"cflags"`
 	LDFlags    []string `json:"ldflags"`
 	ExtraFiles []string `json:"extra-files"`
-	Objcopy    string   `json:"objcopy"`
 	Emulator   []string `json:"emulator"`
 	Flasher    string   `json:"flash"`
 	OCDDaemon  []string `json:"ocd-daemon"`
@@ -72,9 +71,6 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	spec.CFlags = append(spec.CFlags, spec2.CFlags...)
 	spec.LDFlags = append(spec.LDFlags, spec2.LDFlags...)
 	spec.ExtraFiles = append(spec.ExtraFiles, spec2.ExtraFiles...)
-	if spec2.Objcopy != "" {
-		spec.Objcopy = spec2.Objcopy
-	}
 	if len(spec2.Emulator) != 0 {
 		spec.Emulator = spec2.Emulator
 	}
@@ -217,7 +213,6 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		BuildTags: []string{goos, goarch},
 		Compiler:  commands["clang"],
 		Linker:    "cc",
-		Objcopy:   "objcopy",
 		GDB:       "gdb",
 		GDBCmds:   []string{"run"},
 	}
@@ -230,13 +225,11 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		// Some educated guesses as to how to invoke helper programs.
 		if goarch == "arm" && goos == "linux" {
 			spec.Linker = "arm-linux-gnueabihf-gcc"
-			spec.Objcopy = "arm-linux-gnueabihf-objcopy"
 			spec.GDB = "arm-linux-gnueabihf-gdb"
 			spec.Emulator = []string{"qemu-arm", "-L", "/usr/arm-linux-gnueabihf"}
 		}
 		if goarch == "arm64" && goos == "linux" {
 			spec.Linker = "aarch64-linux-gnu-gcc"
-			spec.Objcopy = "aarch64-linux-gnu-objcopy"
 			spec.GDB = "aarch64-linux-gnu-gdb"
 			spec.Emulator = []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"}
 		}
