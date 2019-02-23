@@ -259,19 +259,12 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 			}
 		}
 
+		// Get an Intel .hex file or .bin file from the .elf file.
 		if outext == ".hex" || outext == ".bin" {
-			// Get an Intel .hex file or .bin file from the .elf file.
 			tmppath = filepath.Join(dir, "main"+outext)
-			format := map[string]string{
-				".hex": "ihex",
-				".bin": "binary",
-			}[outext]
-			cmd := exec.Command(spec.Objcopy, "-O", format, executable, tmppath)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			err = cmd.Run()
+			err := Objcopy(executable, tmppath)
 			if err != nil {
-				return &commandError{"failed to extract " + format + " from", executable, err}
+				return err
 			}
 		}
 		return action(tmppath)
