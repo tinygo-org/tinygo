@@ -4,30 +4,30 @@ package machine
 
 // GPIO Pins
 const (
-	D0  = 11 // UART0 RX
-	D1  = 10 // UART0 TX
-	D2  = 14
-	D3  = 9  // PWM available
-	D4  = 8  // PWM available
-	D5  = 15 // PWM available
-	D6  = 20 // PWM available
-	D7  = 21 // PWM available
-	D8  = 6  // PWM available
-	D9  = 7  // PWM available
-	D10 = 18 // can be used for PWM or UART1 TX
-	D11 = 16 // can be used for PWM or UART1 RX
-	D12 = 19 // PWM available
-	D13 = 17 // PWM available
+	D0  = PA11 // UART0 RX
+	D1  = PA10 // UART0 TX
+	D2  = PA14
+	D3  = PA09 // PWM available
+	D4  = PA08 // PWM available
+	D5  = PA15 // PWM available
+	D6  = PA20 // PWM available
+	D7  = PA21 // PWM available
+	D8  = PA06 // PWM available
+	D9  = PA07 // PWM available
+	D10 = PA18 // can be used for PWM or UART1 TX
+	D11 = PA16 // can be used for PWM or UART1 RX
+	D12 = PA19 // PWM available
+	D13 = PA17 // PWM available
 )
 
 // Analog pins
 const (
-	A0 = 2 // ADC/AIN[0]
-	// A1 = 8 // ADC/AIN[2] TODO: requires PORTB
-	// A2 = 9 // ADC/AIN[3] TODO: requires PORTB
-	A3 = 4 // ADC/AIN[4]
-	A4 = 5 // ADC/AIN[5]
-	//A5 = 2 // ADC/AIN[10] TODO: requires PORTB
+	A0 = PA02 // ADC/AIN[0]
+	A1 = PB08 // ADC/AIN[2]
+	A2 = PB09 // ADC/AIN[3]
+	A3 = PA04 // ADC/AIN[4]
+	A4 = PA05 // ADC/AIN[5]
+	A5 = PB02 // ADC/AIN[10]
 )
 
 const (
@@ -36,8 +36,8 @@ const (
 
 // UART0 aka USBCDC pins
 const (
-	USBCDC_DM_PIN = 24
-	USBCDC_DP_PIN = 25
+	USBCDC_DM_PIN = PA24
+	USBCDC_DP_PIN = PA25
 )
 
 // UART1 pins
@@ -48,6 +48,6 @@ const (
 
 // I2C pins
 const (
-	SDA_PIN = 22 // SDA: SERCOM3/PAD[0]
-	SCL_PIN = 23 // SCL: SERCOM3/PAD[1]
+	SDA_PIN = PA22 // SDA: SERCOM3/PAD[0]
+	SCL_PIN = PA23 // SCL: SERCOM3/PAD[1]
 )

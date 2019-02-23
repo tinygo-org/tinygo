@@ -36,6 +36,74 @@ const (
 	GPIO_PWM_ALT      = GPIO_TIMER_ALT
 )
 
+// Hardware pins
+const (
+	PA00 = 0
+	PA01 = 1
+	PA02 = 2
+	PA03 = 3
+	PA04 = 4
+	PA05 = 5
+	PA06 = 6
+	PA07 = 7
+	PA08 = 8
+	PA09 = 9
+	PA10 = 10
+	PA11 = 11
+	PA12 = 12
+	PA13 = 13
+	PA14 = 14
+	PA15 = 15
+	PA16 = 16
+	PA17 = 17
+	PA18 = 18
+	PA19 = 19
+	PA20 = 20
+	PA21 = 21
+	PA22 = 22
+	PA23 = 23
+	PA24 = 24
+	PA25 = 25
+	PA26 = 26
+	PA27 = 27
+	PA28 = 28
+	PA29 = 29
+	PA30 = 30
+	PA31 = 31
+	PB00 = 32
+	PB01 = 33
+	PB02 = 34
+	PB03 = 35
+	PB04 = 36
+	PB05 = 37
+	PB06 = 38
+	PB07 = 39
+	PB08 = 40
+	PB09 = 41
+	PB10 = 42
+	PB11 = 43
+	PB12 = 44
+	PB13 = 45
+	PB14 = 46
+	PB15 = 47
+	PB16 = 48
+	PB17 = 49
+	PB18 = 50
+	PB19 = 51
+	PB20 = 52
+	PB21 = 53
+	PB22 = 54
+	PB23 = 55
+	PB24 = 56
+	PB25 = 57
+	PB26 = 58
+	PB27 = 59
+	PB28 = 60
+	PB29 = 61
+	PB30 = 62
+	PB31 = 63
+)
+
 // Configure this pin with the given configuration.
 func (p GPIO) Configure(config GPIOConfig) {
 	switch config.Mode {
