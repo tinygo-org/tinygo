@@ -118,3 +118,21 @@ func SetPriority(irq uint32, priority uint32) {
 	priority = priority << (regpos * 8)  // bits to set
 	NVIC.IPR[regnum] = RegValue((uint32(NVIC.IPR[regnum]) &^ mask) | priority)
 }
+
+// DisableInterrupts disables all interrupts, and returns the old state.
+//
+// TODO: it doesn't actually return the old state, meaning that it cannot be
+// nested.
+func DisableInterrupts() uintptr {
+	Asm("cpsid if")
+	return 0
+}
+
+// EnableInterrupts enables all interrupts again. The value passed in must be
+// the mask returned by DisableInterrupts.
+//
+// TODO: it doesn't actually use the old state, meaning that it cannot be
+// nested.
+func EnableInterrupts(mask uintptr) {
+	Asm("cpsie if")
+}
