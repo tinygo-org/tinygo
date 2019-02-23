@@ -6,6 +6,8 @@ import (
 	"device/nrf"
 )
 
+const CPU_FREQUENCY = 16000000
+
 // Get peripheral and pin number for this GPIO pin.
 func (p GPIO) getPortPin() (*nrf.GPIO_Type, uint8) {
 	return nrf.GPIO, p.Pin
