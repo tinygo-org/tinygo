@@ -318,14 +318,29 @@ func Flash(pkgName, target, port string, config *BuildConfig) error {
 		return err
 	}
 
-	return Compile(pkgName, ".hex", spec, config, func(tmppath string) error {
+	// determine the type of file to compile
+	var fileExt string
+
+	switch {
+	case strings.Contains(spec.Flasher, "{hex}"):
+		fileExt = ".hex"
+	case strings.Contains(spec.Flasher, "{elf}"):
+		fileExt = ".elf"
+	case strings.Contains(spec.Flasher, "{bin}"):
+		fileExt = ".bin"
+	default:
+		return errors.New("invalid target file - did you forget the {hex} token in the 'flash' section?")
+	}
+
+	return Compile(pkgName, fileExt, spec, config, func(tmppath string) error {
 		if spec.Flasher == "" {
 			return errors.New("no flash command specified - did you miss a -target flag?")
 		}
 
 		// Create the command.
 		flashCmd := spec.Flasher
-		flashCmd = strings.Replace(flashCmd, "{hex}", tmppath, -1)
+		fileToken := "{" + fileExt[1:] + "}"
+		flashCmd = strings.Replace(flashCmd, fileToken, tmppath, -1)
 		flashCmd = strings.Replace(flashCmd, "{port}", port, -1)
 
 		// Execute the command.
