@@ -7,6 +7,8 @@ import (
 	"unsafe"
 )
 
+const CPU_FREQUENCY = 64000000
+
 // Get peripheral and pin number for this GPIO pin.
 func (p GPIO) getPortPin() (*nrf.GPIO_Type, uint8) {
 	return nrf.P0, p.Pin
