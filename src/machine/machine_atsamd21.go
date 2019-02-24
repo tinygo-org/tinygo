@@ -21,19 +21,20 @@ const CPU_FREQUENCY = 48000000
 type GPIOMode uint8
 
 const (
-	GPIO_ANALOG       = 1
-	GPIO_SERCOM       = 2
-	GPIO_SERCOM_ALT   = 3
-	GPIO_TIMER        = 4
-	GPIO_TIMER_ALT    = 5
-	GPIO_COM          = 6
-	GPIO_AC_CLK       = 7
-	GPIO_DIGITAL      = 8
-	GPIO_INPUT        = 9
-	GPIO_INPUT_PULLUP = 10
-	GPIO_OUTPUT       = 11
-	GPIO_PWM          = GPIO_TIMER
-	GPIO_PWM_ALT      = GPIO_TIMER_ALT
+	GPIO_ANALOG         = 1
+	GPIO_SERCOM         = 2
+	GPIO_SERCOM_ALT     = 3
+	GPIO_TIMER          = 4
+	GPIO_TIMER_ALT      = 5
+	GPIO_COM            = 6
+	GPIO_AC_CLK         = 7
+	GPIO_DIGITAL        = 8
+	GPIO_INPUT          = 9
+	GPIO_INPUT_PULLUP   = 10
+	GPIO_OUTPUT         = 11
+	GPIO_PWM            = GPIO_TIMER
+	GPIO_PWM_ALT        = GPIO_TIMER_ALT
+	GPIO_INPUT_PULLDOWN = 12
 )
 
 // Hardware pins
@@ -125,6 +126,28 @@ func (p GPIO) Configure(config GPIOConfig) {
 		} else {
 			sam.PORT.DIRCLR1 = (1<<p.Pin - 32)
 			p.setPinCfg(sam.PORT_PINCFG0_INEN)
+		}
+
+	case GPIO_INPUT_PULLDOWN:
+		if p.Pin < 32 {
+			sam.PORT.DIRCLR0 = (1 << p.Pin)
+			sam.PORT.OUTCLR0 = (1 << p.Pin)
+			p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
+		} else {
+			sam.PORT.DIRCLR1 = (1<<p.Pin - 32)
+			sam.PORT.OUTCLR1 = (1<<p.Pin - 32)
+			p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
+		}
+
+	case GPIO_INPUT_PULLUP:
+		if p.Pin < 32 {
+			sam.PORT.DIRCLR0 = (1 << p.Pin)
+			sam.PORT.OUTSET0 = (1 << p.Pin)
+			p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
+		} else {
+			sam.PORT.DIRCLR1 = (1<<p.Pin - 32)
+			sam.PORT.OUTSET1 = (1<<p.Pin - 32)
+			p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
 		}
 
 	case GPIO_SERCOM:
