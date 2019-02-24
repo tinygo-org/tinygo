@@ -1,0 +1,5 @@
+{
+    "inherits": ["atsamd21g18a"],
+    "build-tags": ["sam", "atsamd21g18a", "circuitplay_express"],
+    "flash": "uf2conv.py {bin}"
+}
