@@ -123,7 +123,7 @@ func (p GPIO) Configure(config GPIOConfig) {
 			sam.PORT.DIRCLR0 = (1 << p.Pin)
 			p.setPinCfg(sam.PORT_PINCFG0_INEN)
 		} else {
-			sam.PORT.DIRCLR0 = (1 << p.Pin)
+			sam.PORT.DIRCLR1 = (1<<p.Pin - 32)
 			p.setPinCfg(sam.PORT_PINCFG0_INEN)
 		}
 
@@ -160,7 +160,7 @@ func (p GPIO) Get() bool {
 	if p.Pin < 32 {
 		return (sam.PORT.IN0>>p.Pin)&1 > 0
 	} else {
-		return (sam.PORT.IN1>>p.Pin)&1 > 0
+		return (sam.PORT.IN1>>(p.Pin-32))&1 > 0
 	}
 }
 
@@ -861,37 +861,37 @@ func setPMux(p uint8, val sam.RegValue8) {
 	case 15:
 		sam.PORT.PMUX0_15 = val
 	case 16:
-		sam.PORT.PMUX1_0 |= sam.RegValue(val&0xff) << 24
+		sam.PORT.PMUX1_0 = (sam.PORT.PMUX1_0 &^ (0xff << 24)) | (sam.RegValue(val) << 24)
 	case 17:
-		sam.PORT.PMUX1_0 |= sam.RegValue(val&0xff) << 16
+		sam.PORT.PMUX1_0 = (sam.PORT.PMUX1_0 &^ (0xff << 16)) | (sam.RegValue(val) << 16)
 	case 18:
-		sam.PORT.PMUX1_0 |= sam.RegValue(val&0xff) << 8
+		sam.PORT.PMUX1_0 = (sam.PORT.PMUX1_0 &^ (0xff << 8)) | (sam.RegValue(val) << 8)
 	case 19:
-		sam.PORT.PMUX1_0 |= sam.RegValue(val & 0xff)
+		sam.PORT.PMUX1_0 = (sam.PORT.PMUX1_0 &^ 0xff) | (sam.RegValue(val))
 	case 20:
-		sam.PORT.PMUX1_4 |= sam.RegValue(val&0xff) << 24
+		sam.PORT.PMUX1_4 = (sam.PORT.PMUX1_4 &^ (0xff << 24)) | (sam.RegValue(val) << 24)
 	case 21:
-		sam.PORT.PMUX1_4 |= sam.RegValue(val&0xff) << 16
+		sam.PORT.PMUX1_4 = (sam.PORT.PMUX1_4 &^ (0xff << 16)) | (sam.RegValue(val) << 16)
 	case 22:
-		sam.PORT.PMUX1_4 |= sam.RegValue(val&0xff) << 8
+		sam.PORT.PMUX1_4 = (sam.PORT.PMUX1_4 &^ (0xff << 8)) | (sam.RegValue(val) << 8)
 	case 23:
-		sam.PORT.PMUX1_4 |= sam.RegValue(val & 0xff)
+		sam.PORT.PMUX1_4 = (sam.PORT.PMUX1_4 &^ 0xff) | (sam.RegValue(val))
 	case 24:
-		sam.PORT.PMUX1_8 |= sam.RegValue(val&0xff) << 24
+		sam.PORT.PMUX1_8 = (sam.PORT.PMUX1_8 &^ (0xff << 24)) | (sam.RegValue(val) << 24)
 	case 25:
-		sam.PORT.PMUX1_8 |= sam.RegValue(val&0xff) << 16
+		sam.PORT.PMUX1_8 = (sam.PORT.PMUX1_8 &^ (0xff << 16)) | (sam.RegValue(val) << 16)
 	case 26:
-		sam.PORT.PMUX1_8 |= sam.RegValue(val&0xff) << 8
+		sam.PORT.PMUX1_8 = (sam.PORT.PMUX1_8 &^ (0xff << 8)) | (sam.RegValue(val) << 8)
 	case 27:
-		sam.PORT.PMUX1_8 |= sam.RegValue(val & 0xff)
+		sam.PORT.PMUX1_8 = (sam.PORT.PMUX1_8 &^ 0xff) | (sam.RegValue(val))
 	case 28:
-		sam.PORT.PMUX1_12 |= sam.RegValue(val&0xff) << 24
+		sam.PORT.PMUX1_12 = (sam.PORT.PMUX1_12 &^ (0xff << 24)) | (sam.RegValue(val) << 24)
 	case 29:
-		sam.PORT.PMUX1_12 |= sam.RegValue(val&0xff) << 16
+		sam.PORT.PMUX1_12 = (sam.PORT.PMUX1_12 &^ (0xff << 16)) | (sam.RegValue(val) << 16)
 	case 30:
-		sam.PORT.PMUX1_12 |= sam.RegValue(val&0xff) << 8
+		sam.PORT.PMUX1_12 = (sam.PORT.PMUX1_12 &^ (0xff << 8)) | (sam.RegValue(val) << 8)
 	case 31:
-		sam.PORT.PMUX1_12 |= sam.RegValue(val & 0xff)
+		sam.PORT.PMUX1_12 = (sam.PORT.PMUX1_12 &^ 0xff) | (sam.RegValue(val))
 	}
 }
 
@@ -1099,69 +1099,69 @@ func setPinCfg(p uint8, val sam.RegValue8) {
 	case 31:
 		sam.PORT.PINCFG0_31 = val
 	case 32: // PB00
-		sam.PORT.PINCFG1_0 |= sam.RegValue(val) << 24
+		sam.PORT.PINCFG1_0 = (sam.PORT.PINCFG1_0 &^ (0xff << 24)) | (sam.RegValue(val) << 24)
 	case 33: // PB01
-		sam.PORT.PINCFG1_0 |= sam.RegValue(val) << 16
+		sam.PORT.PINCFG1_0 = (sam.PORT.PINCFG1_0 &^ (0xff << 16)) | (sam.RegValue(val) << 16)
 	case 34: // PB02
-		sam.PORT.PINCFG1_0 |= sam.RegValue(val) << 8
+		sam.PORT.PINCFG1_0 = (sam.PORT.PINCFG1_0 &^ (0xff << 8)) | (sam.RegValue(val) << 8)
 	case 35: // PB03
-		sam.PORT.PINCFG1_0 |= sam.RegValue(val)
+		sam.PORT.PINCFG1_0 = (sam.PORT.PINCFG1_0 &^ 0xff) | (sam.RegValue(val))
 	case 36: // PB04
-		sam.PORT.PINCFG1_4 |= sam.RegValue(val) << 24
+		sam.PORT.PINCFG1_4 = (sam.PORT.PINCFG1_4 &^ (0xff << 24)) | (sam.RegValue(val) << 24)
 	case 37: // PB05
-		sam.PORT.PINCFG1_4 |= sam.RegValue(val) << 16
+		sam.PORT.PINCFG1_4 = (sam.PORT.PINCFG1_4 &^ (0xff << 16)) | (sam.RegValue(val) << 16)
 	case 38: // PB06
-		sam.PORT.PINCFG1_4 |= sam.RegValue(val) << 8
+		sam.PORT.PINCFG1_4 = (sam.PORT.PINCFG1_4 &^ (0xff << 8)) | (sam.RegValue(val) << 8)
 	case 39: // PB07
-		sam.PORT.PINCFG1_4 |= sam.RegValue(val)
+		sam.PORT.PINCFG1_4 = (sam.PORT.PINCFG1_4 &^ 0xff) | (sam.RegValue(val))
 	case 40: // PB08
-		sam.PORT.PINCFG1_8 |= sam.RegValue(val) << 24
+		sam.PORT.PINCFG1_8 = (sam.PORT.PINCFG1_8 &^ (0xff << 24)) | (sam.RegValue(val) << 24)
 	case 41: // PB09
-		sam.PORT.PINCFG1_8 |= sam.RegValue(val) << 16
+		sam.PORT.PINCFG1_8 = (sam.PORT.PINCFG1_8 &^ (0xff << 16)) | (sam.RegValue(val) << 16)
 	case 42: // PB10
-		sam.PORT.PINCFG1_8 |= sam.RegValue(val) << 8
+		sam.PORT.PINCFG1_8 = (sam.PORT.PINCFG1_8 &^ (0xff << 8)) | (sam.RegValue(val) << 8)
 	case 43: // PB11
-		sam.PORT.PINCFG1_8 |= sam.RegValue(val)
+		sam.PORT.PINCFG1_8 = (sam.PORT.PINCFG1_8 &^ 0xff) | (sam.RegValue(val))
 	case 44: // PB12
-		sam.PORT.PINCFG1_12 |= sam.RegValue(val) << 24
+		sam.PORT.PINCFG1_12 = (sam.PORT.PINCFG1_12 &^ (0xff << 24)) | (sam.RegValue(val) << 24)
 	case 45: // PB13
-		sam.PORT.PINCFG1_12 |= sam.RegValue(val) << 16
+		sam.PORT.PINCFG1_12 = (sam.PORT.PINCFG1_12 &^ (0xff << 16)) | (sam.RegValue(val) << 16)
 	case 46: // PB14
-		sam.PORT.PINCFG1_12 |= sam.RegValue(val) << 8
+		sam.PORT.PINCFG1_12 = (sam.PORT.PINCFG1_12 &^ (0xff << 8)) | (sam.RegValue(val) << 8)
 	case 47: // PB15
-		sam.PORT.PINCFG1_12 |= sam.RegValue(val)
+		sam.PORT.PINCFG1_12 = (sam.PORT.PINCFG1_12 &^ 0xff) | (sam.RegValue(val))
 	case 48: // PB16
-		sam.PORT.PINCFG1_16 |= sam.RegValue(val) << 24
+		sam.PORT.PINCFG1_16 = (sam.PORT.PINCFG1_16 &^ (0xff << 24)) | (sam.RegValue(val) << 24)
 	case 49: // PB17
-		sam.PORT.PINCFG1_16 |= sam.RegValue(val) << 16
+		sam.PORT.PINCFG1_16 = (sam.PORT.PINCFG1_16 &^ (0xff << 16)) | (sam.RegValue(val) << 16)
 	case 50: // PB18
-		sam.PORT.PINCFG1_16 |= sam.RegValue(val) << 8
+		sam.PORT.PINCFG1_16 = (sam.PORT.PINCFG1_16 &^ (0xff << 8)) | (sam.RegValue(val) << 8)
 	case 51: // PB19
-		sam.PORT.PINCFG1_16 |= sam.RegValue(val)
+		sam.PORT.PINCFG1_16 = (sam.PORT.PINCFG1_16 &^ 0xff) | (sam.RegValue(val))
 	case 52: // PB20
-		sam.PORT.PINCFG1_20 |= sam.RegValue(val) << 24
+		sam.PORT.PINCFG1_20 = (sam.PORT.PINCFG1_20 &^ (0xff << 24)) | (sam.RegValue(val) << 24)
 	case 53: // PB21
-		sam.PORT.PINCFG1_20 |= sam.RegValue(val) << 16
+		sam.PORT.PINCFG1_20 = (sam.PORT.PINCFG1_20 &^ (0xff << 16)) | (sam.RegValue(val) << 16)
 	case 54: // PB22
-		sam.PORT.PINCFG1_20 |= sam.RegValue(val) << 8
+		sam.PORT.PINCFG1_20 = (sam.PORT.PINCFG1_20 &^ (0xff << 8)) | (sam.RegValue(val) << 8)
 	case 55: // PB23
-		sam.PORT.PINCFG1_20 |= sam.RegValue(val)
+		sam.PORT.PINCFG1_20 = (sam.PORT.PINCFG1_20 &^ 0xff) | (sam.RegValue(val))
 	case 56: // PB24
-		sam.PORT.PINCFG1_24 |= sam.RegValue(val) << 24
+		sam.PORT.PINCFG1_24 = (sam.PORT.PINCFG1_24 &^ (0xff << 24)) | (sam.RegValue(val) << 24)
 	case 57: // PB25
-		sam.PORT.PINCFG1_24 |= sam.RegValue(val) << 16
+		sam.PORT.PINCFG1_24 = (sam.PORT.PINCFG1_24 &^ (0xff << 16)) | (sam.RegValue(val) << 16)
 	case 58: // PB26
-		sam.PORT.PINCFG1_24 |= sam.RegValue(val) << 8
+		sam.PORT.PINCFG1_24 = (sam.PORT.PINCFG1_24 &^ (0xff << 8)) | (sam.RegValue(val) << 8)
 	case 59: // PB27
-		sam.PORT.PINCFG1_24 |= sam.RegValue(val)
+		sam.PORT.PINCFG1_24 = (sam.PORT.PINCFG1_24 &^ 0xff) | (sam.RegValue(val))
 	case 60: // PB28
-		sam.PORT.PINCFG1_28 |= sam.RegValue(val) << 24
+		sam.PORT.PINCFG1_28 = (sam.PORT.PINCFG1_28 &^ (0xff << 24)) | (sam.RegValue(val) << 24)
 	case 61: // PB29
-		sam.PORT.PINCFG1_28 |= sam.RegValue(val) << 16
+		sam.PORT.PINCFG1_28 = (sam.PORT.PINCFG1_28 &^ (0xff << 16)) | (sam.RegValue(val) << 16)
 	case 62: // PB30
-		sam.PORT.PINCFG1_28 |= sam.RegValue(val) << 8
+		sam.PORT.PINCFG1_28 = (sam.PORT.PINCFG1_28 &^ (0xff << 8)) | (sam.RegValue(val) << 8)
 	case 63: // PB31
-		sam.PORT.PINCFG1_28 |= sam.RegValue(val)
+		sam.PORT.PINCFG1_28 = (sam.PORT.PINCFG1_28 &^ 0xff) | (sam.RegValue(val))
 	}
 }
 
