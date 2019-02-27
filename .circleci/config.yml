@@ -1,0 +1,91 @@
+version: 2.1
+
+commands:
+  submodules:
+    steps:
+      - run:
+          name: "Pull submodules"
+          command: git submodule update --init
+  apt-dependencies:
+    parameters:
+      llvm:
+        type: string
+    steps:
+      - run:
+          name: "Install apt dependencies"
+          command: |
+            echo 'deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch<<parameters.llvm>> main' | sudo tee /etc/apt/sources.list.d/llvm.list
+            wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
+            sudo apt-get update
+            sudo apt-get install \
+                llvm \
+                python3 \
+                llvm<<parameters.llvm>>-dev \
+                clang<<parameters.llvm>> \
+                libclang<<parameters.llvm>>-dev \
+                gcc-arm-linux-gnueabihf \
+                binutils-arm-none-eabi \
+                libc6-dev-armel-cross \
+                gcc-aarch64-linux-gnu \
+                libc6-dev-arm64-cross \
+                qemu-system-arm \
+                qemu-user \
+                gcc-avr \
+                avr-libc
+  dep:
+    steps:
+      - run:
+          name: "Install Go dependencies"
+          command: |
+            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+            dep ensure --vendor-only
+  smoketest:
+    steps:
+      - run: tinygo build -size short -o test.elf -target=pca10040            examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=pca10040            examples/blinky2
+      - run: tinygo build -size short -o blinky2                              examples/blinky2
+      - run: tinygo build -size short -o test.elf -target=pca10040            examples/test
+      - run: tinygo build -size short -o test.elf -target=microbit            examples/echo
+      - run: tinygo build -size short -o test.elf -target=nrf52840-mdk        examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=pca10031            examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=bluepill            examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=arduino             examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=digispark           examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=reelboard           examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=reelboard           examples/blinky2
+      - run: tinygo build -size short -o test.elf -target=pca10056            examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=pca10056            examples/blinky2
+      - run: tinygo build -size short -o test.elf -target=itsybitsy-m0        examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=circuitplay-express examples/blinky1
+
+
+jobs:
+  test-llvm7-go111:
+    docker:
+      - image: circleci/golang:1.11
+
+    working_directory: /go/src/github.com/tinygo-org/tinygo
+    steps:
+      - checkout
+      - submodules
+      - apt-dependencies:
+          llvm: "-7"
+      - restore_cache:
+          keys:
+            - go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-{{ checksum "Gopkg.lock" }}
+      - dep
+      - run: go install .
+      - run: make test
+      - run: make gen-device -j4
+      - smoketest
+      - save_cache:
+          key: go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
+          paths:
+            - ~/.cache/go-build
+            - ~/.cache/tinygo
+
+workflows:
+  test-all:
+    jobs:
+      - test-llvm7-go111
