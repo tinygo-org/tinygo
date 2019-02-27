@@ -28,6 +28,9 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 	case "runtime.alloc":
 		// Cannot be scanned but can be interpreted.
 		return &sideEffectResult{severity: sideEffectNone}
+	case "runtime.nanotime":
+		// Fixed value at compile time.
+		return &sideEffectResult{severity: sideEffectNone}
 	case "runtime._panic":
 		return &sideEffectResult{severity: sideEffectLimited}
 	}
