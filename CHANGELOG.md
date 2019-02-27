@@ -1,3 +1,24 @@
+0.3.0
+---
+- **compiler**
+  - remove old `-initinterp` flag
+  - add support for macOS
+- **cgo**
+  - add support for bool/float/complex types
+- **standard library**
+  - `device/arm`: add support to disable/enable hardware interrupts
+  - `machine`: add CPU frequency for nrf-based boards
+  - `syscall`: add support for darwin/amd64
+- **targets**
+  - `circuitplay_express`: add support for this board
+  - `microbit`: add regular pin constants
+  - `samd21`: fix time function for goroutine support
+  - `samd21`: add support for USB-CDC (serial over USB)
+  - `samd21`: add support for pins in port B
+  - `samd21`: add support for pullup and pulldown pins
+  - `wasm`: add support for Safari in example
+
+
 0.2.0
 ---
 - **command line**
