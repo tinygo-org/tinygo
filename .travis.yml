@@ -2,31 +2,13 @@ language: go
 
 matrix:
   include:
-  - dist: xenial
-    go: "1.11"
   - os: osx
     go: "1.11"
     env: PATH="/usr/local/opt/llvm/bin:$PATH"
+    before_install:
+    - mkdir -p /Users/travis/gopath/bin
 
 addons:
-  apt:
-    sources:
-    - sourceline: 'ppa:ubuntu-toolchain-r'
-    - sourceline: 'deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-7 main'
-      key_url: 'https://apt.llvm.org/llvm-snapshot.gpg.key'
-    packages:
-    - llvm-7-dev
-    - clang-7
-    - libclang-7-dev
-    - gcc-arm-linux-gnueabihf
-    - binutils-arm-none-eabi
-    - libc6-dev-armhf-cross
-    - gcc-aarch64-linux-gnu
-    - libc6-dev-arm64-cross
-    - qemu-system-arm
-    - qemu-user
-    - gcc-avr
-    - avr-libc
   homebrew:
     update: true
     taps: ArmMbed/homebrew-formulae
@@ -36,7 +18,6 @@ addons:
     - arm-none-eabi-gcc
 
 install:
-  - if [ "$TRAVIS_OS_NAME" == "osx" ]; then mkdir -p /Users/travis/gopath/bin; fi
   - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
   - dep ensure --vendor-only
 
@@ -52,8 +33,6 @@ script:
   - tinygo build -size short -o test.nrf.elf       -target=nrf52840-mdk examples/blinky1
   - tinygo build -size short -o blinky1.nrf51d.elf -target=pca10031     examples/blinky1
   - tinygo build -size short -o blinky1.stm32.elf  -target=bluepill     examples/blinky1
-  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then tinygo build -size short -o blinky1.avr.elf    -target=arduino      examples/blinky1; fi
-  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then tinygo build -size short -o blinky1.avr.elf    -target=digispark    examples/blinky1; fi
   - tinygo build -size short -o blinky1.reel.elf   -target=reelboard    examples/blinky1
   - tinygo build -size short -o blinky2.reel.elf   -target=reelboard    examples/blinky2
   - tinygo build -size short -o blinky1.pca10056.elf    -target=pca10056     examples/blinky1
