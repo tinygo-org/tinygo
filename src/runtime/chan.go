@@ -41,6 +41,7 @@ const (
 
 func chanSendStub(caller *coroutine, ch *channel, _ unsafe.Pointer, size uintptr)
 func chanRecvStub(caller *coroutine, ch *channel, _ unsafe.Pointer, _ *bool, size uintptr)
+func deadlockStub()
 
 // chanSend sends a single value over the channel. If this operation can
 // complete immediately (there is a goroutine waiting for a value), it sends the

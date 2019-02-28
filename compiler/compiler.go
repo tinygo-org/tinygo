@@ -500,6 +500,16 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			members[i] = member
 		}
 		return c.ctx.StructType(members, false), nil
+	case *types.Tuple:
+		members := make([]llvm.Type, typ.Len())
+		for i := 0; i < typ.Len(); i++ {
+			member, err := c.getLLVMType(typ.At(i).Type())
+			if err != nil {
+				return llvm.Type{}, err
+			}
+			members[i] = member
+		}
+		return c.ctx.StructType(members, false), nil
 	default:
 		return llvm.Type{}, errors.New("todo: unknown type: " + goType.String())
 	}
@@ -1821,6 +1831,29 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		c.builder.CreateStore(zero, it)
 		return it, nil
+	case *ssa.Select:
+		if len(expr.States) == 0 {
+			// Shortcuts for some simple selects.
+			llvmType, err := c.getLLVMType(expr.Type())
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			if expr.Blocking {
+				// Blocks forever:
+				//     select {}
+				c.createRuntimeCall("deadlockStub", nil, "")
+				return llvm.Undef(llvmType), nil
+			} else {
+				// No-op:
+				//     select {
+				//     default:
+				//     }
+				retval := llvm.Undef(llvmType)
+				retval = c.builder.CreateInsertValue(retval, llvm.ConstInt(c.intType, 0xffffffffffffffff, true), 0, "")
+				return retval, nil // {-1, false}
+			}
+		}
+		return llvm.Value{}, c.makeError(expr.Pos(), "unimplemented: "+expr.String())
 	case *ssa.Slice:
 		if expr.Max != nil {
 			return llvm.Value{}, c.makeError(expr.Pos(), "todo: full slice expressions (with max): "+expr.Type().String())
