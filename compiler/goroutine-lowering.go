@@ -170,6 +170,10 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 	if !sleep.IsNil() {
 		worklist = append(worklist, sleep)
 	}
+	deadlockStub := c.mod.NamedFunction("runtime.deadlockStub")
+	if !deadlockStub.IsNil() {
+		worklist = append(worklist, deadlockStub)
+	}
 	chanSendStub := c.mod.NamedFunction("runtime.chanSendStub")
 	if !chanSendStub.IsNil() {
 		worklist = append(worklist, chanSendStub)
@@ -288,7 +292,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 	// Transform all async functions into coroutines.
 	for _, f := range asyncList {
-		if f == sleep || f == chanSendStub || f == chanRecvStub {
+		if f == sleep || f == deadlockStub || f == chanSendStub || f == chanRecvStub {
 			continue
 		}
 
@@ -305,7 +309,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
 				if !inst.IsACallInst().IsNil() {
 					callee := inst.CalledValue()
-					if _, ok := asyncFuncs[callee]; !ok || callee == sleep || callee == chanSendStub || callee == chanRecvStub {
+					if _, ok := asyncFuncs[callee]; !ok || callee == sleep || callee == deadlockStub || callee == chanSendStub || callee == chanRecvStub {
 						continue
 					}
 					asyncCalls = append(asyncCalls, inst)
@@ -437,6 +441,26 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), wakeup)
 		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
 		sleepCall.EraseFromParentAsInstruction()
+	}
+
+	// Transform calls to runtime.deadlockStub into coroutine suspends (without
+	// resume).
+	for _, deadlockCall := range getUses(deadlockStub) {
+		// deadlockCall must be a call instruction.
+		frame := asyncFuncs[deadlockCall.InstructionParent().Parent()]
+
+		// Exit coroutine.
+		c.builder.SetInsertPointBefore(deadlockCall)
+		continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
+			llvm.ConstNull(c.ctx.TokenType()),
+			llvm.ConstInt(c.ctx.Int1Type(), 1, false), // final suspend
+		}, "")
+		c.splitBasicBlock(deadlockCall, llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.wakeup.dead")
+		c.builder.SetInsertPointBefore(deadlockCall)
+		sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
+		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), frame.unreachableBlock)
+		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
+		deadlockCall.EraseFromParentAsInstruction()
 	}
 
 	// Transform calls to runtime.chanSendStub into channel send operations.

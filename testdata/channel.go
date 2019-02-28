@@ -43,6 +43,10 @@ func main() {
 	}
 	println("sum(100):", sum)
 
+	// Test select
+	go selectDeadlock()
+	go selectNoOp()
+
 	// Allow goroutines to exit.
 	time.Sleep(time.Microsecond)
 }
@@ -92,4 +96,18 @@ func iterator(ch chan int, top int) {
 		ch <- i
 	}
 	close(ch)
+}
+
+func selectDeadlock() {
+	println("deadlocking")
+	select {}
+	println("unreachable")
+}
+
+func selectNoOp() {
+	println("select no-op")
+	select {
+	default:
+	}
+	println("after no-op")
 }
