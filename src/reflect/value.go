@@ -365,6 +365,25 @@ func (v Value) MapIndex(key Value) Value {
 	panic("unimplemented: (reflect.Value).MapIndex()")
 }
 
+func (v Value) MapRange() *MapIter {
+	panic("unimplemented: (reflect.Value).MapRange()")
+}
+
+type MapIter struct {
+}
+
+func (it *MapIter) Key() Value {
+	panic("unimplemented: (*reflect.MapIter).Key()")
+}
+
+func (it *MapIter) Value() Value {
+	panic("unimplemented: (*reflect.MapIter).Value()")
+}
+
+func (it *MapIter) Next() bool {
+	panic("unimplemented: (*reflect.MapIter).Next()")
+}
+
 func (v Value) Set(x Value) {
 	if !v.indirect {
 		panic("reflect: value is not addressable")
