@@ -53,13 +53,13 @@ const (
 	PROXIMITY   = A10
 )
 
-// USBCDC pins
+// USBCDC pins (logical UART0)
 const (
 	USBCDC_DM_PIN = PA24
 	USBCDC_DP_PIN = PA25
 )
 
-// UART0 pins
+// UART0 pins (logical UART1)
 const (
 	UART_TX_PIN = PB08 // PORTB
 	UART_RX_PIN = PB09 // PORTB
@@ -67,12 +67,27 @@ const (
 
 // I2C pins
 const (
-	SDA_PIN = PA00 // SDA: SERCOM3/PAD[0]
-	SCL_PIN = PA01 // SCL: SERCOM3/PAD[1]
+	SDA_PIN = PB02 // I2C0 external
+	SCL_PIN = PB03 // I2C0 external
+
+	SDA1_PIN = PA00 // I2C1 internal
+	SCL1_PIN = PA01 // I2C1 internal
 )
 
 // I2C on the Circuit Playground Express.
 var (
 	I2C0 = I2C{Bus: sam.SERCOM5_I2CM} // external device
 	I2C1 = I2C{Bus: sam.SERCOM1_I2CM} // internal device
+)
+
+// SPI pins (internal flash)
+const (
+	SPI0_SCK_PIN  = PA21 // SCK: SERCOM3/PAD[3]
+	SPI0_MOSI_PIN = PA20 // MOSI: SERCOM3/PAD[2]
+	SPI0_MISO_PIN = PA16 // MISO: SERCOM3/PAD[0]
+)
+
+// SPI on the Circuit Playground Express.
+var (
+	SPI0 = SPI{Bus: sam.SERCOM3_SPI}
 )

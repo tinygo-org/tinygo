@@ -58,3 +58,15 @@ const (
 var (
 	I2C0 = I2C{Bus: sam.SERCOM3_I2CM}
 )
+
+// SPI pins
+const (
+	SPI0_SCK_PIN  = PB11 // SCK: SERCOM4/PAD[3]
+	SPI0_MOSI_PIN = PB10 // MOSI: SERCOM4/PAD[2]
+	SPI0_MISO_PIN = PA12 // MISO: SERCOM4/PAD[0]
+)
+
+// SPI on the ItsyBitsy M0.
+var (
+	SPI0 = SPI{Bus: sam.SERCOM4_SPI}
+)

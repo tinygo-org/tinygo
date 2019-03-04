@@ -163,6 +163,19 @@ func (p GPIO) Configure(config GPIOConfig) {
 		// enable port config
 		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR | sam.PORT_PINCFG0_INEN)
 
+	case GPIO_SERCOM_ALT:
+		if p.Pin&1 > 0 {
+			// odd pin, so save the even pins
+			val := p.getPMux() & sam.PORT_PMUX0_PMUXE_Msk
+			p.setPMux(val | (GPIO_SERCOM_ALT << sam.PORT_PMUX0_PMUXO_Pos))
+		} else {
+			// even pin, so save the odd pins
+			val := p.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
+			p.setPMux(val | (GPIO_SERCOM_ALT << sam.PORT_PMUX0_PMUXE_Pos))
+		}
+		// enable port config
+		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR)
+
 	case GPIO_COM:
 		if p.Pin&1 > 0 {
 			// odd pin, so save the even pins
@@ -257,9 +270,6 @@ var (
 
 	// The first hardware serial port on the SAMD21. Uses the SERCOM0 interface.
 	UART1 = UART{Bus: sam.SERCOM0_USART, Buffer: NewRingBuffer()}
-
-	// The second hardware serial port on the SAMD21. Uses the SERCOM1 interface.
-	UART2 = UART{Bus: sam.SERCOM1_USART, Buffer: NewRingBuffer()}
 )
 
 const (
@@ -272,6 +282,11 @@ const (
 	sercomTXPad0   = 0 // Only for UART
 	sercomTXPad2   = 1 // Only for UART
 	sercomTXPad023 = 2 // Only for UART with TX on PAD0, RTS on PAD2 and CTS on PAD3
+
+	spiTXPad0SCK1 = 0
+	spiTXPad2SCK3 = 1
+	spiTXPad3SCK1 = 2
+	spiTXPad0SCK3 = 3
 )
 
 // Configure the UART.
@@ -406,13 +421,6 @@ func handleUART1() {
 	// should reset IRQ
 	UART1.Receive(byte((UART1.Bus.DATA & 0xFF)))
 	UART1.Bus.INTFLAG |= sam.SERCOM_USART_INTFLAG_RXC
-}
-
-//go:export SERCOM1_IRQHandler
-func handleUART2() {
-	// should reset IRQ
-	UART2.Receive(byte((UART2.Bus.DATA & 0xFF)))
-	UART2.Bus.INTFLAG |= sam.SERCOM_USART_INTFLAG_RXC
 }
 
 // I2C on the SAMD21.
@@ -642,6 +650,110 @@ func (i2c I2C) readByte() byte {
 	for (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_SB) == 0 {
 	}
 	return byte(i2c.Bus.DATA)
+}
+
+// SPI
+type SPI struct {
+	Bus *sam.SERCOM_SPI_Type
+}
+
+// SPIConfig is used to store config info for SPI.
+type SPIConfig struct {
+	Frequency uint32
+	SCK       uint8
+	MOSI      uint8
+	MISO      uint8
+	LSBFirst  bool
+	Mode      uint8
+}
+
+// Configure is intended to setup the SPI interface.
+func (spi SPI) Configure(config SPIConfig) {
+	config.SCK = SPI0_SCK_PIN
+	config.MOSI = SPI0_MOSI_PIN
+	config.MISO = SPI0_MISO_PIN
+
+	doPad := spiTXPad2SCK3
+	diPad := sercomRXPad0
+
+	// set default frequency
+	if config.Frequency == 0 {
+		config.Frequency = 4000000
+	}
+
+	// Disable SPI port.
+	spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_ENABLE
+	for (spi.Bus.SYNCBUSY & sam.SERCOM_SPI_SYNCBUSY_ENABLE) > 0 {
+	}
+
+	// enable pins
+	GPIO{config.SCK}.Configure(GPIOConfig{Mode: GPIO_SERCOM_ALT})
+	GPIO{config.MOSI}.Configure(GPIOConfig{Mode: GPIO_SERCOM_ALT})
+	GPIO{config.MISO}.Configure(GPIOConfig{Mode: GPIO_SERCOM_ALT})
+
+	// reset SERCOM
+	spi.Bus.CTRLA |= sam.SERCOM_SPI_CTRLA_SWRST
+	for (spi.Bus.CTRLA&sam.SERCOM_SPI_CTRLA_SWRST) > 0 ||
+		(spi.Bus.SYNCBUSY&sam.SERCOM_SPI_SYNCBUSY_SWRST) > 0 {
+	}
+
+	// set bit transfer order
+	dataOrder := 0
+	if config.LSBFirst {
+		dataOrder = 1
+	}
+
+	// Set SPI master
+	spi.Bus.CTRLA = (sam.SERCOM_SPI_CTRLA_MODE_SPI_MASTER << sam.SERCOM_SPI_CTRLA_MODE_Pos) |
+		sam.RegValue(doPad<<sam.SERCOM_SPI_CTRLA_DOPO_Pos) |
+		sam.RegValue(diPad<<sam.SERCOM_SPI_CTRLA_DIPO_Pos) |
+		sam.RegValue(dataOrder<<sam.SERCOM_SPI_CTRLA_DORD_Pos)
+
+	spi.Bus.CTRLB |= (0 << sam.SERCOM_SPI_CTRLB_CHSIZE_Pos) | // 8bit char size
+		sam.SERCOM_SPI_CTRLB_RXEN // receive enable
+
+	for (spi.Bus.SYNCBUSY & sam.SERCOM_SPI_SYNCBUSY_CTRLB) > 0 {
+	}
+
+	// set mode
+	switch config.Mode {
+	case 0:
+		spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_CPHA
+		spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_CPOL
+	case 1:
+		spi.Bus.CTRLA |= sam.SERCOM_SPI_CTRLA_CPHA
+		spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_CPOL
+	case 2:
+		spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_CPHA
+		spi.Bus.CTRLA |= sam.SERCOM_SPI_CTRLA_CPOL
+	case 3:
+		spi.Bus.CTRLA |= sam.SERCOM_SPI_CTRLA_CPHA | sam.SERCOM_SPI_CTRLA_CPOL
+	default: // to mode 0
+		spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_CPHA
+		spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_CPOL
+	}
+
+	// Set synch speed for SPI
+	baudRate := (CPU_FREQUENCY / (2 * config.Frequency)) - 1
+	spi.Bus.BAUD = sam.RegValue8(baudRate)
+
+	// Enable SPI port.
+	spi.Bus.CTRLA |= sam.SERCOM_SPI_CTRLA_ENABLE
+	for (spi.Bus.SYNCBUSY & sam.SERCOM_SPI_SYNCBUSY_ENABLE) > 0 {
+	}
+}
+
+// Transfer writes/reads a single byte using the SPI interface.
+func (spi SPI) Transfer(w byte) (byte, error) {
+	// write data
+	spi.Bus.DATA = sam.RegValue(w)
+
+	// wait for receive
+	for (spi.Bus.INTFLAG & sam.SERCOM_SPI_INTFLAG_RXC) == 0 {
+	}
+
+	// return data
+	return byte(spi.Bus.DATA), nil
 }
 
 // PWM
