@@ -420,12 +420,6 @@ type I2C struct {
 	Bus *sam.SERCOM_I2CM_Type
 }
 
-// Since the I2C interfaces on the SAMD21 use the SERCOMx peripherals,
-// you can have multiple ones. we currently only implement one.
-var (
-	I2C0 = I2C{Bus: sam.SERCOM3_I2CM}
-)
-
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
 	Frequency uint32
