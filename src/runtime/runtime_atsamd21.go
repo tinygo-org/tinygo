@@ -22,8 +22,7 @@ func main() {
 func init() {
 	initClocks()
 	initRTC()
-	initUARTClock()
-	initI2CClock()
+	initSERCOMClocks()
 	initUSBClock()
 
 	// connect to USB CDC interface
@@ -293,7 +292,7 @@ func handleRTC() {
 	timerWakeup = true
 }
 
-func initUARTClock() {
+func initSERCOMClocks() {
 	// Turn on clock to SERCOM0 for UART0
 	sam.PM.APBCMASK |= sam.PM_APBCMASK_SERCOM0_
 
@@ -306,28 +305,41 @@ func initUARTClock() {
 		sam.GCLK_CLKCTRL_CLKEN)
 	waitForSync()
 
-	// Turn on clock to SERCOM1 for UART1
+	// Turn on clock to SERCOM1
 	sam.PM.APBCMASK |= sam.PM_APBCMASK_SERCOM1_
-
-	// Use GCLK0 for SERCOM1 aka UART1
-	// GCLK_CLKCTRL_ID( clockId ) | // Generic Clock 0 (SERCOMx)
-	// GCLK_CLKCTRL_GEN_GCLK0 | // Generic Clock Generator 0 is source
-	// GCLK_CLKCTRL_CLKEN ;
 	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_SERCOM1_CORE << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
 	waitForSync()
-}
 
-func initI2CClock() {
-	// Turn on clock to SERCOM3 for I2C0
+	// Turn on clock to SERCOM2
+	sam.PM.APBCMASK |= sam.PM_APBCMASK_SERCOM2_
+	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_SERCOM2_CORE << sam.GCLK_CLKCTRL_ID_Pos) |
+		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
+		sam.GCLK_CLKCTRL_CLKEN)
+	waitForSync()
+
+	// Turn on clock to SERCOM3
 	sam.PM.APBCMASK |= sam.PM_APBCMASK_SERCOM3_
-
-	// Use GCLK0 for SERCOM3 aka I2C0
-	// GCLK_CLKCTRL_ID( clockId ) | // Generic Clock 0 (SERCOMx)
-	// GCLK_CLKCTRL_GEN_GCLK0 | // Generic Clock Generator 0 is source
-	// GCLK_CLKCTRL_CLKEN ;
 	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_SERCOM3_CORE << sam.GCLK_CLKCTRL_ID_Pos) |
+		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
+		sam.GCLK_CLKCTRL_CLKEN)
+	waitForSync()
+
+	// Turn on clock to SERCOM4
+	sam.PM.APBCMASK |= sam.PM_APBCMASK_SERCOM4_
+
+	// Use GCLK0 for SERCOM4
+	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_SERCOM4_CORE << sam.GCLK_CLKCTRL_ID_Pos) |
+		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
+		sam.GCLK_CLKCTRL_CLKEN)
+	waitForSync()
+
+	// Turn on clock to SERCOM5
+	sam.PM.APBCMASK |= sam.PM_APBCMASK_SERCOM5_
+
+	// Use GCLK0 for SERCOM5
+	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_SERCOM5_CORE << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
 	waitForSync()
