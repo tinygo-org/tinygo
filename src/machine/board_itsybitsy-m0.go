@@ -2,6 +2,8 @@
 
 package machine
 
+import "device/sam"
+
 // GPIO Pins
 const (
 	D0  = PA11 // UART0 RX
@@ -50,4 +52,9 @@ const (
 const (
 	SDA_PIN = PA22 // SDA: SERCOM3/PAD[0]
 	SCL_PIN = PA23 // SCL: SERCOM3/PAD[1]
+)
+
+// I2C on the ItsyBitsy M0.
+var (
+	I2C0 = I2C{Bus: sam.SERCOM3_I2CM}
 )

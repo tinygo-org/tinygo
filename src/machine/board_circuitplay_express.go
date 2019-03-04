@@ -2,6 +2,8 @@
 
 package machine
 
+import "device/sam"
+
 // GPIO Pins
 const (
 	D0  = PB09
@@ -67,4 +69,10 @@ const (
 const (
 	SDA_PIN = PA00 // SDA: SERCOM3/PAD[0]
 	SCL_PIN = PA01 // SCL: SERCOM3/PAD[1]
+)
+
+// I2C on the Circuit Playground Express.
+var (
+	I2C0 = I2C{Bus: sam.SERCOM5_I2CM} // external device
+	I2C1 = I2C{Bus: sam.SERCOM1_I2CM} // internal device
 )
