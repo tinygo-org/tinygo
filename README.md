@@ -46,6 +46,7 @@ You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
 The following microcontroller boards are currently supported:
 
+* [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
 * [Adafruit ItsyBitsy M0](https://www.adafruit.com/product/3727)
 * [Arduino Uno](https://store.arduino.cc/arduino-uno-rev3)
 * [BBC:Microbit](https://microbit.org/)
