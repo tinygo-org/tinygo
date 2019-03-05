@@ -266,6 +266,13 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 			if err != nil {
 				return err
 			}
+		} else if outext == ".uf2" {
+			// Get UF2 from the .elf file.
+			tmppath = filepath.Join(dir, "main"+outext)
+			err := ConvertELFFileToUF2File(executable, tmppath)
+			if err != nil {
+				return err
+			}
 		}
 		return action(tmppath)
 	}
@@ -321,6 +328,8 @@ func Flash(pkgName, target, port string, config *BuildConfig) error {
 		fileExt = ".elf"
 	case strings.Contains(spec.Flasher, "{bin}"):
 		fileExt = ".bin"
+	case strings.Contains(spec.Flasher, "{uf2}"):
+		fileExt = ".uf2"
 	default:
 		return errors.New("invalid target file - did you forget the {hex} token in the 'flash' section?")
 	}
