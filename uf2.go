@@ -70,7 +70,7 @@ type UF2Block struct {
 	blockNo     uint32
 	numBlocks   uint32
 	familyID    uint32
-	data        [476]uint8
+	data        []uint8
 	magicEnd    uint32
 }
 
@@ -83,6 +83,7 @@ func NewUF2Block() *UF2Block {
 		flags:       0x0,
 		familyID:    0x0,
 		payloadSize: 256,
+		data:        make([]byte, 476),
 	}
 }
 
@@ -110,6 +111,7 @@ func (b *UF2Block) IncrementAddress(count uint32) {
 
 // SetData sets the data to be used for the current block.
 func (b *UF2Block) SetData(d []byte) {
+	b.data = make([]byte, 476)
 	copy(b.data[:], d)
 }
 
