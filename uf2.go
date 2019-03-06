@@ -10,31 +10,27 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io/ioutil"
-	"os"
 )
 
 // ConvertELFFileToUF2File converts an ELF file to a UF2 file.
 func ConvertELFFileToUF2File(infile, outfile string) error {
-	f, err := os.OpenFile(outfile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
 	// Read the .text segment.
 	_, data, err := ExtractTextSegment(infile)
 	if err != nil {
 		return err
 	}
 
-	output, _, _ := ConvertBinToUF2(data)
-	ioutil.WriteFile(outfile, output, 0644)
+	output, _ := ConvertBinToUF2(data)
+	err = ioutil.WriteFile(outfile, output, 0644)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 // ConvertBinToUF2 converts the binary bytes in input to UF2 formatted data.
-func ConvertBinToUF2(input []byte) ([]byte, int, error) {
+func ConvertBinToUF2(input []byte) ([]byte, int) {
 	blocks := split(input, 256)
 	output := make([]byte, 0)
 
@@ -45,12 +41,11 @@ func ConvertBinToUF2(input []byte) ([]byte, int, error) {
 		bl.SetBlockNo(i)
 		bl.SetData(blocks[i])
 
-		b, _ := bl.Bytes()
-		output = append(output, b...)
+		output = append(output, bl.Bytes()...)
 		bl.IncrementAddress(bl.payloadSize)
 	}
 
-	return output, len(blocks), nil
+	return output, len(blocks)
 }
 
 const (
@@ -88,7 +83,7 @@ func NewUF2Block() *UF2Block {
 }
 
 // Bytes converts the UF2Block to a slice of bytes that can be written to file.
-func (b *UF2Block) Bytes() ([]byte, error) {
+func (b *UF2Block) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, 512))
 	binary.Write(buf, binary.LittleEndian, b.magicStart0)
 	binary.Write(buf, binary.LittleEndian, b.magicStart1)
@@ -101,7 +96,7 @@ func (b *UF2Block) Bytes() ([]byte, error) {
 	binary.Write(buf, binary.LittleEndian, b.data)
 	binary.Write(buf, binary.LittleEndian, b.magicEnd)
 
-	return buf.Bytes(), nil
+	return buf.Bytes()
 }
 
 // IncrementAddress moves the target address pointer forward by count bytes.
