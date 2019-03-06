@@ -84,15 +84,18 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 
 		// Memory operators
 		case !inst.IsAAllocaInst().IsNil():
-			fr.locals[inst] = &AllocaValue{
-				Underlying: getZeroValue(inst.Type().ElementType()),
-				Dirty:      false,
+			allocType := inst.Type().ElementType()
+			alloca := llvm.AddGlobal(fr.Mod, allocType, fr.pkgName+"$alloca")
+			alloca.SetInitializer(getZeroValue(allocType))
+			alloca.SetLinkage(llvm.InternalLinkage)
+			fr.locals[inst] = &LocalValue{
+				Underlying: alloca,
 				Eval:       fr.Eval,
 			}
 		case !inst.IsALoadInst().IsNil():
-			operand := fr.getLocal(inst.Operand(0))
+			operand := fr.getLocal(inst.Operand(0)).(*LocalValue)
 			var value llvm.Value
-			if !operand.IsConstant() || inst.IsVolatile() {
+			if !operand.IsConstant() || inst.IsVolatile() || operand.Underlying.Opcode() == llvm.BitCast {
 				value = fr.builder.CreateLoad(operand.Value(), inst.Name())
 			} else {
 				value = operand.Load()
@@ -173,11 +176,8 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					continue // special case: bitcast of alloc
 				}
 			}
-			value := fr.getLocal(operand)
-			if bc, ok := value.(*PointerCastValue); ok {
-				value = bc.Underlying // avoid double bitcasts
-			}
-			fr.locals[inst] = &PointerCastValue{Eval: fr.Eval, Underlying: value, CastType: inst.Type()}
+			value := fr.getLocal(operand).(*LocalValue)
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateBitCast(value.Value(), inst.Type(), "")}
 
 		// Other operators
 		case !inst.IsAICmpInst().IsNil():
@@ -222,7 +222,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				alloc := llvm.AddGlobal(fr.Mod, allocType, fr.pkgName+"$alloc")
 				alloc.SetInitializer(getZeroValue(allocType))
 				alloc.SetLinkage(llvm.InternalLinkage)
-				result := &GlobalValue{
+				result := &LocalValue{
 					Underlying: alloc,
 					Eval:       fr.Eval,
 				}
@@ -246,15 +246,15 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				m := fr.getLocal(inst.Operand(0)).(*MapValue)
 				// "key" is a Go string value, which in the TinyGo calling convention is split up
 				// into separate pointer and length parameters.
-				keyBuf := fr.getLocal(inst.Operand(1))
-				keyLen := fr.getLocal(inst.Operand(2))
-				valPtr := fr.getLocal(inst.Operand(3))
+				keyBuf := fr.getLocal(inst.Operand(1)).(*LocalValue)
+				keyLen := fr.getLocal(inst.Operand(2)).(*LocalValue)
+				valPtr := fr.getLocal(inst.Operand(3)).(*LocalValue)
 				m.PutString(keyBuf, keyLen, valPtr)
 			case callee.Name() == "runtime.hashmapBinarySet":
 				// set a binary (int etc.) key in the map
 				m := fr.getLocal(inst.Operand(0)).(*MapValue)
-				keyBuf := fr.getLocal(inst.Operand(1))
-				valPtr := fr.getLocal(inst.Operand(2))
+				keyBuf := fr.getLocal(inst.Operand(1)).(*LocalValue)
+				valPtr := fr.getLocal(inst.Operand(2)).(*LocalValue)
 				m.PutBinary(keyBuf, valPtr)
 			case callee.Name() == "runtime.stringConcat":
 				// adding two strings together

@@ -36,11 +36,17 @@ func (v *LocalValue) Type() llvm.Type {
 }
 
 func (v *LocalValue) IsConstant() bool {
+	if _, ok := v.Eval.dirtyGlobals[v.Underlying]; ok {
+		return false
+	}
 	return v.Underlying.IsConstant()
 }
 
-// Load loads a constant value if this is a constant GEP, otherwise it panics.
+// Load loads a constant value if this is a constant pointer.
 func (v *LocalValue) Load() llvm.Value {
+	if !v.Underlying.IsAGlobalVariable().IsNil() {
+		return v.Underlying.Initializer()
+	}
 	switch v.Underlying.Opcode() {
 	case llvm.GetElementPtr:
 		indices := v.getConstGEPIndices()
@@ -50,21 +56,32 @@ func (v *LocalValue) Load() llvm.Value {
 		global := v.Eval.getValue(v.Underlying.Operand(0))
 		agg := global.Load()
 		return llvm.ConstExtractValue(agg, indices[1:])
+	case llvm.BitCast:
+		panic("interp: load from a bitcast")
 	default:
 		panic("interp: load from a constant")
 	}
 }
 
-// Store stores to the underlying value if the value type is a constant GEP,
+// Store stores to the underlying value if the value type is a pointer type,
 // otherwise it panics.
 func (v *LocalValue) Store(value llvm.Value) {
+	if !v.Underlying.IsAGlobalVariable().IsNil() {
+		if !value.IsConstant() {
+			v.MarkDirty()
+			v.Eval.builder.CreateStore(value, v.Underlying)
+		} else {
+			v.Underlying.SetInitializer(value)
+		}
+		return
+	}
 	switch v.Underlying.Opcode() {
 	case llvm.GetElementPtr:
 		indices := v.getConstGEPIndices()
 		if indices[0] != 0 {
 			panic("invalid GEP")
 		}
-		global := &GlobalValue{v.Eval, v.Underlying.Operand(0)}
+		global := &LocalValue{v.Eval, v.Underlying.Operand(0)}
 		agg := global.Load()
 		agg = llvm.ConstInsertValue(agg, value, indices[1:])
 		global.Store(agg)
@@ -74,10 +91,13 @@ func (v *LocalValue) Store(value llvm.Value) {
 	}
 }
 
-// GetElementPtr returns a constant GEP when the underlying value is also a
-// constant GEP. It panics when the underlying value is not a constant GEP:
-// getting the pointer to a constant is not possible.
+// GetElementPtr returns a GEP when the underlying value is of pointer type.
 func (v *LocalValue) GetElementPtr(indices []uint32) Value {
+	if !v.Underlying.IsAGlobalVariable().IsNil() {
+		int32Type := v.Underlying.Type().Context().Int32Type()
+		gep := llvm.ConstGEP(v.Underlying, getLLVMIndices(int32Type, indices))
+		return &LocalValue{v.Eval, gep}
+	}
 	switch v.Underlying.Opcode() {
 	case llvm.GetElementPtr, llvm.IntToPtr:
 		int32Type := v.Underlying.Type().Context().Int32Type()
@@ -107,281 +127,16 @@ func (v *LocalValue) getConstGEPIndices() []uint32 {
 	return indices
 }
 
-// GlobalValue wraps a LLVM global variable.
-type GlobalValue struct {
-	Eval       *Eval
-	Underlying llvm.Value
-}
-
-// Value returns the initializer for this global variable.
-func (v *GlobalValue) Value() llvm.Value {
-	return v.Underlying
-}
-
-// Type returns the type of this global variable, which is a pointer type. Use
-// Type().ElementType() to get the actual global variable type.
-func (v *GlobalValue) Type() llvm.Type {
-	return v.Underlying.Type()
-}
-
-// IsConstant returns true if this global is not dirty, false otherwise.
-func (v *GlobalValue) IsConstant() bool {
-	if _, ok := v.Eval.dirtyGlobals[v.Underlying]; ok {
-		return false
-	}
-	return true
-}
-
-// Load returns the initializer of the global variable.
-func (v *GlobalValue) Load() llvm.Value {
-	return v.Underlying.Initializer()
-}
-
-// Store sets the initializer of the global variable.
-func (v *GlobalValue) Store(value llvm.Value) {
-	if !value.IsConstant() {
-		v.MarkDirty()
-		v.Eval.builder.CreateStore(value, v.Underlying)
-	} else {
-		v.Underlying.SetInitializer(value)
-	}
-}
-
-// GetElementPtr returns a constant GEP on this global, which can be used in
-// load and store instructions.
-func (v *GlobalValue) GetElementPtr(indices []uint32) Value {
-	int32Type := v.Underlying.Type().Context().Int32Type()
-	gep := llvm.ConstGEP(v.Underlying, getLLVMIndices(int32Type, indices))
-	return &LocalValue{v.Eval, gep}
-}
-
-func (v *GlobalValue) String() string {
-	return "&GlobalValue{" + v.Underlying.Name() + "}"
-}
-
 // MarkDirty marks this global as dirty, meaning that every load from and store
 // to this global (from now on) must be performed at runtime.
-func (v *GlobalValue) MarkDirty() {
+func (v *LocalValue) MarkDirty() {
+	if v.Underlying.IsAGlobalVariable().IsNil() {
+		panic("trying to mark a non-global as dirty")
+	}
 	if !v.IsConstant() {
 		return // already dirty
 	}
 	v.Eval.dirtyGlobals[v.Underlying] = struct{}{}
-}
-
-// An alloca represents a local alloca, which is a stack allocated variable.
-// It is emulated by storing the constant of the alloca.
-type AllocaValue struct {
-	Eval       *Eval
-	Underlying llvm.Value // the constant value itself if not dirty, otherwise the alloca instruction
-	Dirty      bool       // this value must be evaluated at runtime
-}
-
-// Value turns this alloca into a runtime alloca instead of a compile-time
-// constant (if not already converted), and returns the alloca itself.
-func (v *AllocaValue) Value() llvm.Value {
-	if !v.Dirty {
-		// Mark this alloca a dirty, meaning it is run at runtime instead of
-		// compile time.
-		alloca := v.Eval.builder.CreateAlloca(v.Underlying.Type(), "")
-		v.Eval.builder.CreateStore(v.Underlying, alloca)
-		v.Dirty = true
-		v.Underlying = alloca
-	}
-	return v.Underlying
-}
-
-// Type returns the type of this alloca, which is always a pointer.
-func (v *AllocaValue) Type() llvm.Type {
-	if v.Dirty {
-		return v.Underlying.Type()
-	} else {
-		return llvm.PointerType(v.Underlying.Type(), 0)
-	}
-}
-
-func (v *AllocaValue) IsConstant() bool {
-	return !v.Dirty
-}
-
-// Load returns the value this alloca contains, which may be evaluated at
-// runtime.
-func (v *AllocaValue) Load() llvm.Value {
-	if v.Dirty {
-		ret := v.Eval.builder.CreateLoad(v.Underlying, "")
-		if ret.IsNil() {
-			panic("alloca is nil")
-		}
-		return ret
-	} else {
-		if v.Underlying.IsNil() {
-			panic("alloca is nil")
-		}
-		return v.Underlying
-	}
-}
-
-// Store updates the value of this alloca.
-func (v *AllocaValue) Store(value llvm.Value) {
-	if v.Underlying.Type() != value.Type() {
-		panic("interp: trying to store to an alloca with a different type")
-	}
-	if v.Dirty || !value.IsConstant() {
-		v.Eval.builder.CreateStore(value, v.Value())
-	} else {
-		v.Underlying = value
-	}
-}
-
-// GetElementPtr returns a value (a *GetElementPtrValue) that keeps a reference
-// to this alloca, so that Load() and Store() continue to work.
-func (v *AllocaValue) GetElementPtr(indices []uint32) Value {
-	return &GetElementPtrValue{v, indices}
-}
-
-func (v *AllocaValue) String() string {
-	return "&AllocaValue{Type: " + v.Type().String() + "}"
-}
-
-// GetElementPtrValue wraps an alloca, keeping track of what the GEP points to
-// so it can be used as a pointer value (with Load() and Store()).
-type GetElementPtrValue struct {
-	Alloca  *AllocaValue
-	Indices []uint32
-}
-
-// Type returns the type of this GEP, which is always of type pointer.
-func (v *GetElementPtrValue) Type() llvm.Type {
-	if v.Alloca.Dirty {
-		return v.Value().Type()
-	} else {
-		return llvm.PointerType(v.Load().Type(), 0)
-	}
-}
-
-func (v *GetElementPtrValue) IsConstant() bool {
-	return v.Alloca.IsConstant()
-}
-
-// Value creates the LLVM GEP instruction of this GetElementPtrValue wrapper and
-// returns it.
-func (v *GetElementPtrValue) Value() llvm.Value {
-	if v.Alloca.Dirty {
-		alloca := v.Alloca.Value()
-		int32Type := v.Alloca.Type().Context().Int32Type()
-		llvmIndices := getLLVMIndices(int32Type, v.Indices)
-		return v.Alloca.Eval.builder.CreateGEP(alloca, llvmIndices, "")
-	} else {
-		panic("interp: todo: pointer to alloca gep")
-	}
-}
-
-// Load deferences the pointer this GEP points to. For a constant GEP, it
-// extracts the value from the underlying alloca.
-func (v *GetElementPtrValue) Load() llvm.Value {
-	if v.Alloca.Dirty {
-		gep := v.Value()
-		return v.Alloca.Eval.builder.CreateLoad(gep, "")
-	} else {
-		underlying := v.Alloca.Load()
-		indices := v.Indices
-		if indices[0] != 0 {
-			panic("invalid GEP")
-		}
-		return llvm.ConstExtractValue(underlying, indices[1:])
-	}
-}
-
-// Store stores to the pointer this GEP points to. For a constant GEP, it
-// updates the underlying allloca.
-func (v *GetElementPtrValue) Store(value llvm.Value) {
-	if v.Alloca.Dirty || !value.IsConstant() {
-		alloca := v.Alloca.Value()
-		int32Type := v.Alloca.Type().Context().Int32Type()
-		llvmIndices := getLLVMIndices(int32Type, v.Indices)
-		gep := v.Alloca.Eval.builder.CreateGEP(alloca, llvmIndices, "")
-		v.Alloca.Eval.builder.CreateStore(value, gep)
-	} else {
-		underlying := v.Alloca.Load()
-		indices := v.Indices
-		if indices[0] != 0 {
-			panic("invalid GEP")
-		}
-		underlying = llvm.ConstInsertValue(underlying, value, indices[1:])
-		v.Alloca.Store(underlying)
-	}
-}
-
-func (v *GetElementPtrValue) GetElementPtr(indices []uint32) Value {
-	if v.Alloca.Dirty {
-		panic("interp: todo: gep on a dirty gep")
-	} else {
-		combined := append([]uint32{}, v.Indices...)
-		combined[len(combined)-1] += indices[0]
-		combined = append(combined, indices[1:]...)
-		return &GetElementPtrValue{v.Alloca, combined}
-	}
-}
-
-func (v *GetElementPtrValue) String() string {
-	indices := ""
-	for _, n := range v.Indices {
-		if indices != "" {
-			indices += ", "
-		}
-		indices += strconv.Itoa(int(n))
-	}
-	return "&GetElementPtrValue{Alloca: " + v.Alloca.String() + ", Indices: [" + indices + "]}"
-}
-
-// PointerCastValue represents a bitcast operation on a pointer.
-type PointerCastValue struct {
-	Eval       *Eval
-	Underlying Value
-	CastType   llvm.Type
-}
-
-// Value returns a constant bitcast value.
-func (v *PointerCastValue) Value() llvm.Value {
-	from := v.Underlying.Value()
-	return llvm.ConstBitCast(from, v.CastType)
-}
-
-// Type returns the type this pointer has been cast to.
-func (v *PointerCastValue) Type() llvm.Type {
-	return v.CastType
-}
-
-func (v *PointerCastValue) IsConstant() bool {
-	return v.Underlying.IsConstant()
-}
-
-// Load tries to load and bitcast the given value. If this value cannot be
-// bitcasted, Load panics.
-func (v *PointerCastValue) Load() llvm.Value {
-	if v.Underlying.IsConstant() {
-		typeFrom := v.Underlying.Type().ElementType()
-		typeTo := v.CastType.ElementType()
-		if isScalar(typeFrom) && isScalar(typeTo) && v.Eval.TargetData.TypeAllocSize(typeFrom) == v.Eval.TargetData.TypeAllocSize(typeTo) {
-			return llvm.ConstBitCast(v.Underlying.Load(), v.CastType.ElementType())
-		}
-	}
-
-	panic("interp: load from a pointer bitcast: " + v.String())
-}
-
-// Store panics: it is not (yet) possible to store directly to a bitcast.
-func (v *PointerCastValue) Store(value llvm.Value) {
-	panic("interp: store on a pointer bitcast")
-}
-
-// GetElementPtr panics: it is not (yet) possible to do a GEP operation on a
-// bitcast.
-func (v *PointerCastValue) GetElementPtr(indices []uint32) Value {
-	panic("interp: GEP on a pointer bitcast")
-}
-
-func (v *PointerCastValue) String() string {
-	return "&PointerCastValue{Value: " + v.Underlying.String() + ", CastType: " + v.CastType.String() + "}"
 }
 
 // MapValue implements a Go map which is created at compile time and stored as a
@@ -534,27 +289,24 @@ func (v *MapValue) GetElementPtr(indices []uint32) Value {
 
 // PutString does a map assign operation, assuming that the map is of type
 // map[string]T.
-func (v *MapValue) PutString(keyBuf, keyLen, valPtr Value) {
+func (v *MapValue) PutString(keyBuf, keyLen, valPtr *LocalValue) {
 	if !v.Underlying.IsNil() {
 		panic("map already created")
 	}
 
-	var value llvm.Value
-	switch valPtr := valPtr.(type) {
-	case *PointerCastValue:
-		value = valPtr.Underlying.Load()
-		if v.ValueType.IsNil() {
-			v.ValueType = value.Type()
-			if int(v.Eval.TargetData.TypeAllocSize(v.ValueType)) != v.ValueSize {
-				panic("interp: map store value type has the wrong size")
-			}
-		} else {
-			if value.Type() != v.ValueType {
-				panic("interp: map store value type is inconsistent")
-			}
+	if valPtr.Underlying.Opcode() == llvm.BitCast {
+		valPtr = &LocalValue{v.Eval, valPtr.Underlying.Operand(0)}
+	}
+	value := valPtr.Load()
+	if v.ValueType.IsNil() {
+		v.ValueType = value.Type()
+		if int(v.Eval.TargetData.TypeAllocSize(v.ValueType)) != v.ValueSize {
+			panic("interp: map store value type has the wrong size")
 		}
-	default:
-		panic("interp: todo: handle map value pointer")
+	} else {
+		if value.Type() != v.ValueType {
+			panic("interp: map store value type is inconsistent")
+		}
 	}
 
 	keyType := v.Eval.Mod.GetTypeByName("runtime._string")
@@ -569,31 +321,42 @@ func (v *MapValue) PutString(keyBuf, keyLen, valPtr Value) {
 }
 
 // PutBinary does a map assign operation.
-func (v *MapValue) PutBinary(keyPtr, valPtr Value) {
+func (v *MapValue) PutBinary(keyPtr, valPtr *LocalValue) {
 	if !v.Underlying.IsNil() {
 		panic("map already created")
 	}
 
-	var value llvm.Value
-	switch valPtr := valPtr.(type) {
-	case *PointerCastValue:
-		value = valPtr.Underlying.Load()
-		if v.ValueType.IsNil() {
-			v.ValueType = value.Type()
-			if int(v.Eval.TargetData.TypeAllocSize(v.ValueType)) != v.ValueSize {
-				panic("interp: map store value type has the wrong size")
-			}
-		} else {
-			if value.Type() != v.ValueType {
-				panic("interp: map store value type is inconsistent")
-			}
+	if valPtr.Underlying.Opcode() == llvm.BitCast {
+		valPtr = &LocalValue{v.Eval, valPtr.Underlying.Operand(0)}
+	}
+	value := valPtr.Load()
+	if v.ValueType.IsNil() {
+		v.ValueType = value.Type()
+		if int(v.Eval.TargetData.TypeAllocSize(v.ValueType)) != v.ValueSize {
+			panic("interp: map store value type has the wrong size")
 		}
-	default:
-		panic("interp: todo: handle map value pointer")
+	} else {
+		if value.Type() != v.ValueType {
+			panic("interp: map store value type is inconsistent")
+		}
 	}
 
-	key := keyPtr.(*PointerCastValue).Underlying.Load()
-	v.KeyType = key.Type()
+	if keyPtr.Underlying.Opcode() == llvm.BitCast {
+		keyPtr = &LocalValue{v.Eval, keyPtr.Underlying.Operand(0)}
+	} else if keyPtr.Underlying.Opcode() == llvm.GetElementPtr {
+		keyPtr = &LocalValue{v.Eval, keyPtr.Underlying.Operand(0)}
+	}
+	key := keyPtr.Load()
+	if v.KeyType.IsNil() {
+		v.KeyType = key.Type()
+		if int(v.Eval.TargetData.TypeAllocSize(v.KeyType)) != v.KeySize {
+			panic("interp: map store key type has the wrong size")
+		}
+	} else {
+		if key.Type() != v.KeyType {
+			panic("interp: map store key type is inconsistent")
+		}
+	}
 
 	// TODO: avoid duplicate keys
 	v.Keys = append(v.Keys, &LocalValue{v.Eval, key})
