@@ -21,12 +21,7 @@ func ConvertELFFileToUF2File(infile, outfile string) error {
 	}
 
 	output, _ := ConvertBinToUF2(data)
-	err = ioutil.WriteFile(outfile, output, 0644)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return ioutil.WriteFile(outfile, output, 0644)
 }
 
 // ConvertBinToUF2 converts the binary bytes in input to UF2 formatted data.
