@@ -81,16 +81,16 @@ func TestCompiler(t *testing.T) {
 				runTest(path, tmpdir, "aarch64--linux-gnu", t)
 			})
 		}
-	}
 
-	t.Log("running tests for WebAssembly...")
-	for _, path := range matches {
-		if path == "testdata/gc.go" {
-			continue // known to fail
+		t.Log("running tests for WebAssembly...")
+		for _, path := range matches {
+			if path == "testdata/gc.go" {
+				continue // known to fail
+			}
+			t.Run(path, func(t *testing.T) {
+				runTest(path, tmpdir, "wasm", t)
+			})
 		}
-		t.Run(path, func(t *testing.T) {
-			runTest(path, tmpdir, "wasm", t)
-		})
 	}
 }
 
