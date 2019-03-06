@@ -73,13 +73,6 @@
 
 	global.Go = class {
 		constructor() {
-			this.argv = ["js"];
-			this.env = {};
-			this.exit = (code) => {
-				if (code !== 0) {
-					console.warn("exit code:", code);
-				}
-			};
 			this._callbackTimeouts = new Map();
 			this._nextCallbackTimeoutID = 1;
 
@@ -342,36 +335,6 @@
 
 			const mem = new DataView(this._inst.exports.memory.buffer)
 
-			// Pass command line arguments and environment variables to WebAssembly by writing them to the linear memory.
-			let offset = 4096;
-
-			const strPtr = (str) => {
-				let ptr = offset;
-				new Uint8Array(mem.buffer, offset, str.length + 1).set(encoder.encode(str + "\0"));
-				offset += str.length + (8 - (str.length % 8));
-				return ptr;
-			};
-
-			const argc = this.argv.length;
-
-			const argvPtrs = [];
-			this.argv.forEach((arg) => {
-				argvPtrs.push(strPtr(arg));
-			});
-
-			const keys = Object.keys(this.env).sort();
-			argvPtrs.push(keys.length);
-			keys.forEach((key) => {
-				argvPtrs.push(strPtr(`${key}=${this.env[key]}`));
-			});
-
-			const argv = offset;
-			argvPtrs.forEach((ptr) => {
-				mem.setUint32(offset, ptr, true);
-				mem.setUint32(offset + 4, 0, true);
-				offset += 8;
-			});
-
 			while (true) {
 				const callbackPromise = new Promise((resolve) => {
 					this._resolveCallbackPromise = () => {
@@ -381,7 +344,7 @@
 						setTimeout(resolve, 0); // make sure it is asynchronous
 					};
 				});
-				this._inst.exports.cwa_main(argc, argv);
+				this._inst.exports.cwa_main();
 				if (this.exited) {
 					break;
 				}
@@ -413,15 +376,12 @@
 	}
 
 	if (isNodeJS) {
-		if (process.argv.length < 3) {
+		if (process.argv.length != 3) {
 			process.stderr.write("usage: go_js_wasm_exec [wasm binary] [arguments]\n");
 			process.exit(1);
 		}
 
 		const go = new Go();
-		go.argv = process.argv.slice(2);
-		go.env = process.env;
-		go.exit = process.exit;
 		WebAssembly.instantiate(fs.readFileSync(process.argv[2]), go.importObject).then((result) => {
 			process.on("exit", (code) => { // Node.js exits if no callback is pending
 				if (code === 0 && !go.exited) {
