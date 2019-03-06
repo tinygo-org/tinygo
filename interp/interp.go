@@ -115,11 +115,7 @@ func (e *Eval) function(fn llvm.Value, params []Value, pkgName, indent string) (
 // getValue determines what kind of LLVM value it gets and returns the
 // appropriate Value type.
 func (e *Eval) getValue(v llvm.Value) Value {
-	if !v.IsAGlobalVariable().IsNil() {
-		return &GlobalValue{e, v}
-	} else {
-		return &LocalValue{e, v}
-	}
+	return &LocalValue{e, v}
 }
 
 // markDirty marks the passed-in LLVM value dirty, recursively. For example,
