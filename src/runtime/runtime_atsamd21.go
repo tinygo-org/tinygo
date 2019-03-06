@@ -24,6 +24,7 @@ func init() {
 	initRTC()
 	initSERCOMClocks()
 	initUSBClock()
+	initADCClock()
 
 	// connect to USB CDC interface
 	machine.UART0.Configure(machine.UARTConfig{})
@@ -351,6 +352,17 @@ func initUSBClock() {
 
 	// Put Generic Clock Generator 0 as source for Generic Clock Multiplexer 6 (USB reference)
 	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_USB << sam.GCLK_CLKCTRL_ID_Pos) |
+		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
+		sam.GCLK_CLKCTRL_CLKEN)
+	waitForSync()
+}
+
+func initADCClock() {
+	// Turn on clock for ADC
+	sam.PM.APBCMASK |= sam.PM_APBCMASK_ADC_
+
+	// Put Generic Clock Generator 0 as source for Generic Clock Multiplexer for ADC.
+	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_ADC << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
 	waitForSync()

@@ -188,6 +188,18 @@ func (p GPIO) Configure(config GPIOConfig) {
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN)
+	case GPIO_ANALOG:
+		if p.Pin&1 > 0 {
+			// odd pin, so save the even pins
+			val := p.getPMux() & sam.PORT_PMUX0_PMUXE_Msk
+			p.setPMux(val | (GPIO_ANALOG << sam.PORT_PMUX0_PMUXO_Pos))
+		} else {
+			// even pin, so save the odd pins
+			val := p.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
+			p.setPMux(val | (GPIO_COM << sam.PORT_PMUX0_PMUXE_Pos))
+		}
+		// enable port config
+		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR)
 	}
 }
 
@@ -256,6 +268,141 @@ func (p GPIO) getPinCfg() sam.RegValue8 {
 // setPinCfg sets the value for the correct PINCFG register for this pin.
 func (p GPIO) setPinCfg(val sam.RegValue8) {
 	setPinCfg(p.Pin, val)
+}
+
+// InitADC initializes the ADC.
+func InitADC() {
+	// ADC Bias Calibration
+	// #define ADC_FUSES_BIASCAL_ADDR      (NVMCTRL_OTP4 + 4)
+	// #define ADC_FUSES_BIASCAL_Pos       3            /**< \brief (NVMCTRL_OTP4) ADC Bias Calibration */
+	// #define ADC_FUSES_BIASCAL_Msk       (0x7u << ADC_FUSES_BIASCAL_Pos)
+	// #define ADC_FUSES_BIASCAL(value)    ((ADC_FUSES_BIASCAL_Msk & ((value) << ADC_FUSES_BIASCAL_Pos)))
+	// #define ADC_FUSES_LINEARITY_0_ADDR  NVMCTRL_OTP4
+	// #define ADC_FUSES_LINEARITY_0_Pos   27           /**< \brief (NVMCTRL_OTP4) ADC Linearity bits 4:0 */
+	// #define ADC_FUSES_LINEARITY_0_Msk   (0x1Fu << ADC_FUSES_LINEARITY_0_Pos)
+	// #define ADC_FUSES_LINEARITY_0(value) ((ADC_FUSES_LINEARITY_0_Msk & ((value) << ADC_FUSES_LINEARITY_0_Pos)))
+	// #define ADC_FUSES_LINEARITY_1_ADDR  (NVMCTRL_OTP4 + 4)
+	// #define ADC_FUSES_LINEARITY_1_Pos   0            /**< \brief (NVMCTRL_OTP4) ADC Linearity bits 7:5 */
+	// #define ADC_FUSES_LINEARITY_1_Msk   (0x7u << ADC_FUSES_LINEARITY_1_Pos)
+	// #define ADC_FUSES_LINEARITY_1(value) ((ADC_FUSES_LINEARITY_1_Msk & ((value) << ADC_FUSES_LINEARITY_1_Pos)))
+
+	biasFuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020) + 4))
+	bias := sam.RegValue16(uint16(biasFuse>>3) & uint16(0x7))
+
+	// ADC Linearity bits 4:0
+	linearity0Fuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020)))
+	linearity := sam.RegValue16(uint16(linearity0Fuse>>27) & uint16(0x1f))
+
+	// ADC Linearity bits 7:5
+	linearity1Fuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020) + 4))
+	linearity |= sam.RegValue16(uint16(linearity1Fuse)&uint16(0x7)) << 5
+
+	// set calibration
+	sam.ADC.CALIB = (bias << 8) | linearity
+
+	// Wait for synchronization
+	waitADCSync()
+
+	// Divide Clock by 32 with 12 bits resolution as default
+	sam.ADC.CTRLB = (sam.ADC_CTRLB_PRESCALER_DIV32 << sam.ADC_CTRLB_PRESCALER_Pos) |
+		(sam.ADC_CTRLB_RESSEL_12BIT << sam.ADC_CTRLB_RESSEL_Pos)
+
+	// Sampling Time Length
+	sam.ADC.SAMPCTRL = 5
+
+	// Wait for synchronization
+	waitADCSync()
+
+	// Use internal ground
+	sam.ADC.INPUTCTRL = (sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
+
+	// Averaging (see datasheet table in AVGCTRL register description)
+	sam.ADC.AVGCTRL = (sam.ADC_AVGCTRL_SAMPLENUM_1 << sam.ADC_AVGCTRL_SAMPLENUM_Pos) |
+		(0x0 << sam.ADC_AVGCTRL_ADJRES_Pos)
+
+	// Analog Reference is AREF pin (3.3v)
+	sam.ADC.INPUTCTRL |= (sam.ADC_INPUTCTRL_GAIN_DIV2 << sam.ADC_INPUTCTRL_GAIN_Pos)
+
+	// 1/2 VDDANA = 0.5 * 3V3 = 1.65V
+	sam.ADC.REFCTRL |= (sam.ADC_REFCTRL_REFSEL_INTVCC1 << sam.ADC_REFCTRL_REFSEL_Pos)
+}
+
+// Configure configures a ADCPin to be able to be used to read data.
+func (a ADC) Configure() {
+	GPIO{a.Pin}.Configure(GPIOConfig{Mode: GPIO_ANALOG})
+	return
+}
+
+// Get returns the current value of a ADC pin, in the range 0..0xffff.
+func (a ADC) Get() uint16 {
+	ch := a.getADCChannel()
+
+	// Selection for the positive ADC input
+	sam.ADC.INPUTCTRL &^= sam.ADC_INPUTCTRL_MUXPOS_Msk
+	waitADCSync()
+	sam.ADC.INPUTCTRL |= sam.RegValue(ch << sam.ADC_INPUTCTRL_MUXPOS_Pos)
+	waitADCSync()
+
+	// Enable ADC
+	sam.ADC.CTRLA |= sam.ADC_CTRLA_ENABLE
+	waitADCSync()
+
+	// Start conversion
+	sam.ADC.SWTRIG |= sam.ADC_SWTRIG_START
+	waitADCSync()
+
+	// Clear the Data Ready flag
+	sam.ADC.INTFLAG = sam.ADC_INTFLAG_RESRDY
+	waitADCSync()
+
+	// Start conversion again, since first conversion after reference voltage changed is invalid.
+	sam.ADC.SWTRIG |= sam.ADC_SWTRIG_START
+	waitADCSync()
+
+	// Waiting for conversion to complete
+	for (sam.ADC.INTFLAG & sam.ADC_INTFLAG_RESRDY) == 0 {
+	}
+	val := sam.ADC.RESULT
+
+	// Disable ADC
+	sam.ADC.CTRLA &^= sam.ADC_CTRLA_ENABLE
+	waitADCSync()
+
+	return uint16(val)
+}
+
+func (a ADC) getADCChannel() uint8 {
+	switch a.Pin {
+	case PA02:
+		return 0
+	case PB08:
+		return 2
+	case PB09:
+		return 3
+	case PA04:
+		return 4
+	case PA05:
+		return 5
+	case PA06:
+		return 6
+	case PA07:
+		return 7
+	case PB02:
+		return 10
+	case PB03:
+		return 11
+	case PA09:
+		return 17
+	case PA11:
+		return 19
+	default:
+		return 0
+	}
+}
+
+func waitADCSync() {
+	for (sam.ADC.STATUS & sam.ADC_STATUS_SYNCBUSY) > 0 {
+	}
 }
 
 // UART on the SAMD21.
