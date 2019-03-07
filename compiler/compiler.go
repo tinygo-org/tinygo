@@ -1603,7 +1603,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 
 		// Bounds check.
-		// LLVM optimizes this away in most cases.
 		c.emitLookupBoundsCheck(frame, buflen, index, expr.Index.Type())
 
 		switch expr.X.Type().Underlying().(type) {
@@ -1635,7 +1634,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			}
 
 			// Bounds check.
-			// LLVM optimizes this away in most cases.
 			length := c.builder.CreateExtractValue(value, 1, "len")
 			c.emitLookupBoundsCheck(frame, length, index, expr.Index.Type())
 
@@ -1883,7 +1881,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				low,
 			}
 
-			// This check is optimized away in most cases.
 			c.emitSliceBoundsCheck(frame, llvmLen, low, high, lowType, highType)
 
 			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
