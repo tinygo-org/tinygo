@@ -42,10 +42,19 @@ func Run(mod llvm.Module, targetData llvm.TargetData, debug bool) error {
 
 	initAll := mod.NamedFunction(name)
 	bb := initAll.EntryBasicBlock()
-	e.builder.SetInsertPointBefore(bb.LastInstruction())
+	// Create a dummy alloca in the entry block that we can set the insert point
+	// to. This is necessary because otherwise we might be removing the
+	// instruction (init call) that we are removing after successful
+	// interpretation.
+	e.builder.SetInsertPointBefore(bb.FirstInstruction())
+	dummy := e.builder.CreateAlloca(e.Mod.Context().Int8Type(), "dummy")
+	e.builder.SetInsertPointBefore(dummy)
 	e.builder.SetInstDebugLocation(bb.FirstInstruction())
 	var initCalls []llvm.Value
 	for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+		if inst == dummy {
+			continue
+		}
 		if !inst.IsAReturnInst().IsNil() {
 			break // ret void
 		}
