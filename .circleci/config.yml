@@ -66,19 +66,15 @@ commands:
       - run: tinygo build -size short -o test.elf -target=pca10056            examples/blinky2
       - run: tinygo build -size short -o test.elf -target=itsybitsy-m0        examples/blinky1
       - run: tinygo build -size short -o test.elf -target=circuitplay-express examples/blinky1
-
-
-jobs:
-  test-llvm8-go111:
-    docker:
-      - image: circleci/golang:1.11
-
-    working_directory: /go/src/github.com/tinygo-org/tinygo
+  test-linux:
+    parameters:
+      llvm:
+        type: string
     steps:
       - checkout
       - submodules
       - apt-dependencies:
-          llvm: "-8"
+          llvm: <<parameters.llvm>>
       - install-node
       - restore_cache:
           keys:
@@ -95,7 +91,24 @@ jobs:
             - ~/.cache/go-build
             - ~/.cache/tinygo
 
+jobs:
+  test-llvm8-go111:
+    docker:
+      - image: circleci/golang:1.11
+    working_directory: /go/src/github.com/tinygo-org/tinygo
+    steps:
+      - test-linux:
+          llvm: "-8"
+  test-llvm8-go112:
+    docker:
+      - image: circleci/golang:1.12
+    working_directory: /go/src/github.com/tinygo-org/tinygo
+    steps:
+      - test-linux:
+          llvm: "-8"
+
 workflows:
   test-all:
     jobs:
       - test-llvm8-go111
+      - test-llvm8-go112
