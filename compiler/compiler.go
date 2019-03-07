@@ -344,6 +344,14 @@ func (c *Compiler) Compile(mainPath string) error {
 	c.mod.NamedFunction("runtime.activateTask").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.ExternalLinkage)
 
+	// Tell the optimizer that runtime.alloc is an allocator, meaning that it
+	// returns values that are never null and never alias to an existing value.
+	for _, name := range []string{"noalias", "nonnull"} {
+		attrKind := llvm.AttributeKindID(name)
+		attr := c.ctx.CreateEnumAttribute(attrKind, 0)
+		c.mod.NamedFunction("runtime.alloc").AddAttributeAtIndex(0, attr)
+	}
+
 	// see: https://reviews.llvm.org/D18355
 	if c.Debug {
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
@@ -1400,6 +1408,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 		// closure: {context, function pointer}
 		context := c.builder.CreateExtractValue(value, 0, "")
 		value = c.builder.CreateExtractValue(value, 1, "")
+		c.emitNilCheck(frame, value, "fpcall")
 		return c.parseFunctionCall(frame, instr.Args, value, context, false)
 	}
 }
@@ -1578,6 +1587,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 			llvm.ConstInt(c.ctx.Int32Type(), uint64(expr.Field), false),
 		}
+		// Check for nil pointer before calculating the address, from the spec:
+		// > For an operand x of type T, the address operation &x generates a
+		// > pointer of type *T to x. [...] If the evaluation of x would cause a
+		// > run-time panic, then the evaluation of &x does too.
+		c.emitNilCheck(frame, val, "gep")
 		return c.builder.CreateGEP(val, indices, ""), nil
 	case *ssa.Function:
 		fn := c.ir.GetFunction(expr)
@@ -1637,6 +1651,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			case *types.Array:
 				bufptr = val
 				buflen = llvm.ConstInt(c.uintptrType, uint64(typ.Len()), false)
+				// Check for nil pointer before calculating the address, from
+				// the spec:
+				// > For an operand x of type T, the address operation &x
+				// > generates a pointer of type *T to x. [...] If the
+				// > evaluation of x would cause a run-time panic, then the
+				// > evaluation of &x does too.
+				c.emitNilCheck(frame, bufptr, "gep")
 			default:
 				return llvm.Value{}, c.makeError(expr.Pos(), "todo: indexaddr: "+typ.String())
 			}
@@ -2695,6 +2716,7 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 			fn := c.mod.NamedFunction(name)
 			return c.builder.CreateBitCast(fn, c.i8ptrType, ""), nil
 		} else {
+			c.emitNilCheck(frame, x, "deref")
 			load := c.builder.CreateLoad(x, "")
 			if c.ir.IsVolatile(valType) {
 				// Volatile load, for memory-mapped registers.

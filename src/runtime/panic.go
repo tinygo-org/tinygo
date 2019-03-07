@@ -27,6 +27,11 @@ func _recover() interface{} {
 	return nil
 }
 
+// Panic when trying to dereference a nil pointer.
+func nilpanic() {
+	runtimePanic("nil pointer dereference")
+}
+
 // Check for bounds in *ssa.Index, *ssa.IndexAddr and *ssa.Lookup.
 func lookupBoundsCheck(length uintptr, index int) {
 	if index < 0 || index >= int(length) {
