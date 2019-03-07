@@ -1413,72 +1413,6 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 	}
 }
 
-func (c *Compiler) emitBoundsCheck(frame *Frame, arrayLen, index llvm.Value, indexType types.Type) {
-	if frame.fn.IsNoBounds() {
-		// The //go:nobounds pragma was added to the function to avoid bounds
-		// checking.
-		return
-	}
-
-	// Sometimes, the index can be e.g. an uint8 or int8, and we have to
-	// correctly extend that type.
-	if index.Type().IntTypeWidth() < arrayLen.Type().IntTypeWidth() {
-		if indexType.(*types.Basic).Info()&types.IsUnsigned == 0 {
-			index = c.builder.CreateZExt(index, arrayLen.Type(), "")
-		} else {
-			index = c.builder.CreateSExt(index, arrayLen.Type(), "")
-		}
-	}
-
-	// Optimize away trivial cases.
-	// LLVM would do this anyway with interprocedural optimizations, but it
-	// helps to see cases where bounds check elimination would really help.
-	if index.IsConstant() && arrayLen.IsConstant() && !arrayLen.IsUndef() {
-		index := index.SExtValue()
-		arrayLen := arrayLen.SExtValue()
-		if index >= 0 && index < arrayLen {
-			return
-		}
-	}
-
-	if index.Type().IntTypeWidth() > c.intType.IntTypeWidth() {
-		// Index is too big for the regular bounds check. Use the one for int64.
-		c.createRuntimeCall("lookupBoundsCheckLong", []llvm.Value{arrayLen, index}, "")
-	} else {
-		c.createRuntimeCall("lookupBoundsCheck", []llvm.Value{arrayLen, index}, "")
-	}
-}
-
-func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high llvm.Value, lowType, highType *types.Basic) {
-	if frame.fn.IsNoBounds() {
-		// The //go:nobounds pragma was added to the function to avoid bounds
-		// checking.
-		return
-	}
-
-	uintptrWidth := c.uintptrType.IntTypeWidth()
-	if low.Type().IntTypeWidth() > uintptrWidth || high.Type().IntTypeWidth() > uintptrWidth {
-		if low.Type().IntTypeWidth() < 64 {
-			if lowType.Info()&types.IsUnsigned != 0 {
-				low = c.builder.CreateZExt(low, c.ctx.Int64Type(), "")
-			} else {
-				low = c.builder.CreateSExt(low, c.ctx.Int64Type(), "")
-			}
-		}
-		if high.Type().IntTypeWidth() < 64 {
-			if highType.Info()&types.IsUnsigned != 0 {
-				high = c.builder.CreateZExt(high, c.ctx.Int64Type(), "")
-			} else {
-				high = c.builder.CreateSExt(high, c.ctx.Int64Type(), "")
-			}
-		}
-		// TODO: 32-bit or even 16-bit slice bounds checks for 8-bit platforms
-		c.createRuntimeCall("sliceBoundsCheck64", []llvm.Value{capacity, low, high}, "")
-	} else {
-		c.createRuntimeCall("sliceBoundsCheck", []llvm.Value{capacity, low, high}, "")
-	}
-}
-
 func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	if value, ok := frame.locals[expr]; ok {
 		// Value is a local variable that has already been computed.
@@ -1623,7 +1557,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// Check bounds.
 		arrayLen := expr.X.Type().(*types.Array).Len()
 		arrayLenLLVM := llvm.ConstInt(c.uintptrType, uint64(arrayLen), false)
-		c.emitBoundsCheck(frame, arrayLenLLVM, index, expr.Index.Type())
+		c.emitLookupBoundsCheck(frame, arrayLenLLVM, index, expr.Index.Type())
 
 		// Can't load directly from array (as index is non-constant), so have to
 		// do it using an alloca+gep+load.
@@ -1670,7 +1604,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		// Bounds check.
 		// LLVM optimizes this away in most cases.
-		c.emitBoundsCheck(frame, buflen, index, expr.Index.Type())
+		c.emitLookupBoundsCheck(frame, buflen, index, expr.Index.Type())
 
 		switch expr.X.Type().Underlying().(type) {
 		case *types.Pointer:
@@ -1703,7 +1637,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			// Bounds check.
 			// LLVM optimizes this away in most cases.
 			length := c.builder.CreateExtractValue(value, 1, "len")
-			c.emitBoundsCheck(frame, length, index, expr.Index.Type())
+			c.emitLookupBoundsCheck(frame, length, index, expr.Index.Type())
 
 			// Lookup byte
 			buf := c.builder.CreateExtractValue(value, 0, "")
