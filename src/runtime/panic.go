@@ -32,33 +32,14 @@ func nilpanic() {
 	runtimePanic("nil pointer dereference")
 }
 
-// Check for bounds in *ssa.Index, *ssa.IndexAddr and *ssa.Lookup.
-func lookupBoundsCheck(length uintptr, index int) {
-	if index < 0 || index >= int(length) {
-		runtimePanic("index out of range")
-	}
+// Panic when trying to acces an array or slice out of bounds.
+func lookuppanic() {
+	runtimePanic("index out of range")
 }
 
-// Check for bounds in *ssa.Index, *ssa.IndexAddr and *ssa.Lookup.
-// Supports 64-bit indexes.
-func lookupBoundsCheckLong(length uintptr, index int64) {
-	if index < 0 || index >= int64(length) {
-		runtimePanic("index out of range")
-	}
-}
-
-// Check for bounds in *ssa.Slice.
-func sliceBoundsCheck(capacity, low, high uintptr) {
-	if !(0 <= low && low <= high && high <= capacity) {
-		runtimePanic("slice out of range")
-	}
-}
-
-// Check for bounds in *ssa.Slice. Supports 64-bit indexes.
-func sliceBoundsCheck64(capacity uintptr, low, high uint64) {
-	if !(0 <= low && low <= high && high <= uint64(capacity)) {
-		runtimePanic("slice out of range")
-	}
+// Panic when trying to slice a slice out of bounds.
+func slicepanic() {
+	runtimePanic("slice out of range")
 }
 
 // Check for bounds in *ssa.MakeSlice.

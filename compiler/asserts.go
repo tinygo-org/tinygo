@@ -19,33 +19,34 @@ func (c *Compiler) emitLookupBoundsCheck(frame *Frame, arrayLen, index llvm.Valu
 		return
 	}
 
-	// Sometimes, the index can be e.g. an uint8 or int8, and we have to
-	// correctly extend that type.
 	if index.Type().IntTypeWidth() < arrayLen.Type().IntTypeWidth() {
+		// Sometimes, the index can be e.g. an uint8 or int8, and we have to
+		// correctly extend that type.
 		if indexType.(*types.Basic).Info()&types.IsUnsigned == 0 {
 			index = c.builder.CreateZExt(index, arrayLen.Type(), "")
 		} else {
 			index = c.builder.CreateSExt(index, arrayLen.Type(), "")
 		}
+	} else if index.Type().IntTypeWidth() > arrayLen.Type().IntTypeWidth() {
+		// The index is bigger than the array length type, so extend it.
+		arrayLen = c.builder.CreateZExt(arrayLen, index.Type(), "")
 	}
 
-	// Optimize away trivial cases.
-	// LLVM would do this anyway with interprocedural optimizations, but it
-	// helps to see cases where bounds check elimination would really help.
-	if index.IsConstant() && arrayLen.IsConstant() && !arrayLen.IsUndef() {
-		index := index.SExtValue()
-		arrayLen := arrayLen.SExtValue()
-		if index >= 0 && index < arrayLen {
-			return
-		}
-	}
+	faultBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "lookup.outofbounds")
+	nextBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "lookup.next")
+	frame.blockExits[frame.currentBlock] = nextBlock // adjust outgoing block for phi nodes
 
-	if index.Type().IntTypeWidth() > c.intType.IntTypeWidth() {
-		// Index is too big for the regular bounds check. Use the one for int64.
-		c.createRuntimeCall("lookupBoundsCheckLong", []llvm.Value{arrayLen, index}, "")
-	} else {
-		c.createRuntimeCall("lookupBoundsCheck", []llvm.Value{arrayLen, index}, "")
-	}
+	// Now do the bounds check: index >= arrayLen
+	outOfBounds := c.builder.CreateICmp(llvm.IntUGE, index, arrayLen, "")
+	c.builder.CreateCondBr(outOfBounds, faultBlock, nextBlock)
+
+	// Fail: this is a nil pointer, exit with a panic.
+	c.builder.SetInsertPointAtEnd(faultBlock)
+	c.createRuntimeCall("lookuppanic", nil, "")
+	c.builder.CreateUnreachable()
+
+	// Ok: this is a valid pointer.
+	c.builder.SetInsertPointAtEnd(nextBlock)
 }
 
 // emitSliceBoundsCheck emits a bounds check before a slicing operation to make
@@ -57,27 +58,51 @@ func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high llvm.V
 		return
 	}
 
-	uintptrWidth := c.uintptrType.IntTypeWidth()
-	if low.Type().IntTypeWidth() > uintptrWidth || high.Type().IntTypeWidth() > uintptrWidth {
-		if low.Type().IntTypeWidth() < 64 {
-			if lowType.Info()&types.IsUnsigned != 0 {
-				low = c.builder.CreateZExt(low, c.ctx.Int64Type(), "")
-			} else {
-				low = c.builder.CreateSExt(low, c.ctx.Int64Type(), "")
-			}
-		}
-		if high.Type().IntTypeWidth() < 64 {
-			if highType.Info()&types.IsUnsigned != 0 {
-				high = c.builder.CreateZExt(high, c.ctx.Int64Type(), "")
-			} else {
-				high = c.builder.CreateSExt(high, c.ctx.Int64Type(), "")
-			}
-		}
-		// TODO: 32-bit or even 16-bit slice bounds checks for 8-bit platforms
-		c.createRuntimeCall("sliceBoundsCheck64", []llvm.Value{capacity, low, high}, "")
-	} else {
-		c.createRuntimeCall("sliceBoundsCheck", []llvm.Value{capacity, low, high}, "")
+	// Extend the capacity integer to be at least as wide as low and high.
+	capacityType := capacity.Type()
+	if low.Type().IntTypeWidth() > capacityType.IntTypeWidth() {
+		capacityType = low.Type()
 	}
+	if high.Type().IntTypeWidth() > capacityType.IntTypeWidth() {
+		capacityType = high.Type()
+	}
+	if capacityType != capacity.Type() {
+		capacity = c.builder.CreateZExt(capacity, capacityType, "")
+	}
+
+	// Extend low and high to be the same size as capacity.
+	if low.Type().IntTypeWidth() < capacityType.IntTypeWidth() {
+		if lowType.Info()&types.IsUnsigned != 0 {
+			low = c.builder.CreateZExt(low, capacityType, "")
+		} else {
+			low = c.builder.CreateSExt(low, capacityType, "")
+		}
+	}
+	if high.Type().IntTypeWidth() < capacityType.IntTypeWidth() {
+		if highType.Info()&types.IsUnsigned != 0 {
+			high = c.builder.CreateZExt(high, capacityType, "")
+		} else {
+			high = c.builder.CreateSExt(high, capacityType, "")
+		}
+	}
+
+	faultBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "slice.outofbounds")
+	nextBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "slice.next")
+	frame.blockExits[frame.currentBlock] = nextBlock // adjust outgoing block for phi nodes
+
+	// Now do the bounds check: low > high || high > capacity
+	outOfBounds1 := c.builder.CreateICmp(llvm.IntUGT, low, high, "slice.lowhigh")
+	outOfBounds2 := c.builder.CreateICmp(llvm.IntUGT, high, capacity, "slice.highcap")
+	outOfBounds := c.builder.CreateOr(outOfBounds1, outOfBounds2, "slice.outofbounds")
+	c.builder.CreateCondBr(outOfBounds, faultBlock, nextBlock)
+
+	// Fail: this is a nil pointer, exit with a panic.
+	c.builder.SetInsertPointAtEnd(faultBlock)
+	c.createRuntimeCall("slicepanic", nil, "")
+	c.builder.CreateUnreachable()
+
+	// Ok: this is a valid pointer.
+	c.builder.SetInsertPointAtEnd(nextBlock)
 }
 
 // emitNilCheck checks whether the given pointer is nil, and panics if it is. It
