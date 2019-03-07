@@ -19,7 +19,7 @@
     "go/types/typeutil",
   ]
   pruneopts = "UT"
-  revision = "3744606dbb67b99c60d3f11cb10bd3f9e6dad472"
+  revision = "8dcc6e70cdefe9a82236b6e195e4f4e2108fcb9f"
 
 [[projects]]
   branch = "llvm8"
