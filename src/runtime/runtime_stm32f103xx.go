@@ -124,8 +124,8 @@ func ticks() timeUnit {
 	// convert RTC counter from seconds to microseconds
 	timerCounter := uint64(stm32.RTC.CNTH<<16|stm32.RTC.CNTL) * 1000 * 1000
 
-	// add the fractional part of current time using DIV registers
-	timerCounter += (uint64(stm32.RTC.DIVH<<16|stm32.RTC.DIVL) / 1024 * 32 * 32) * 1000 * 1000
+	// add the fractional part of current time using DIV register
+	timerCounter += uint64(0x8000-stm32.RTC.DIVL) * 31
 
 	// change since last measurement
 	offset := (timerCounter - timerLastCounter)
