@@ -1,3 +1,22 @@
+0.4.0
+---
+- **compiler**
+  - switch to the hardfloat ABI on ARM, which is more widely used
+  - avoid a dependency on `objcopy` (`arm-none-eabi-objcopy` etc.)
+  - fix a bug in `make([]T, n)` where `n` is 64-bits on a 32-bit platform
+  - adapt to a change in the AVR backend in LLVM 8
+  - directly support the .uf2 firmware format as used on Adafruit boards
+  - fix a bug when calling `panic()` at init time outside of the main package
+  - implement nil checks, which results in a ~5% increase in code size
+  - inline slice bounds checking, which results in a ~1% decrease in code size
+- **targets**
+  - `samd21`: fix a bug in port B pins
+  - `samd21`: implement SPI peripheral
+  - `samd21`: implement ADC peripheral
+  - `stm32`: fix a bug in timekeeping
+  - `wasm`: fix a bug in `wasm_exec.js` that caused corruption in linear memory
+     when running on Node.js.
+
 0.3.0
 ---
 - **compiler**
