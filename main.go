@@ -19,6 +19,7 @@ import (
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
+	"github.com/tinygo-org/tinygo/src/cmd/tinygo/test"
 )
 
 // commandError is an error type to wrap os/exec.Command errors. This provides
@@ -656,6 +657,9 @@ func main() {
 		}
 		err := Run(flag.Arg(0), *target, config)
 		handleCompilerError(err)
+	case "test":
+		test.RunTests()
+		os.Exit(0)
 	case "clean":
 		// remove cache directory
 		dir := cacheDir()
