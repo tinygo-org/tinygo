@@ -1,4 +1,4 @@
-package test
+package main
 
 import (
 	"fmt"
@@ -8,7 +8,13 @@ import (
 )
 
 func RunTests() error {
-	_, err := findTestFiles()
+
+	_, err := getPackageRoot()
+	if err != nil {
+		return err
+	}
+
+	_, err = findTestFiles()
 	if err != nil {
 		return err
 	}
