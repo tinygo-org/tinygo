@@ -15,7 +15,7 @@ import (
 // ConvertELFFileToUF2File converts an ELF file to a UF2 file.
 func ConvertELFFileToUF2File(infile, outfile string) error {
 	// Read the .text segment.
-	_, data, err := ExtractTextSegment(infile)
+	_, data, err := ExtractROM(infile)
 	if err != nil {
 		return err
 	}
