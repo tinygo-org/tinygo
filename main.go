@@ -22,7 +22,7 @@ import (
 )
 
 var commands = map[string]string{
-	"ar":      "llvm-ar",
+	"ar":      "llvm-ar-7",
 	"clang":   "clang-7",
 	"ld.lld":  "ld.lld-7",
 	"wasm-ld": "wasm-ld-7",
