@@ -21,13 +21,6 @@ import (
 	"github.com/tinygo-org/tinygo/loader"
 )
 
-var commands = map[string]string{
-	"ar":      "llvm-ar",
-	"clang":   "clang-7",
-	"ld.lld":  "ld.lld-7",
-	"wasm-ld": "wasm-ld-7",
-}
-
 // commandError is an error type to wrap os/exec.Command errors. This provides
 // some more information regarding what went wrong while running a command.
 type commandError struct {
