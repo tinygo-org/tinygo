@@ -1,3 +1,9 @@
+0.4.1
+---
+- **compiler**
+  - fix `objcopy` replacement to include the .data section in the firmware image
+  - use `llvm-ar-7` on Linux to fix the Docker image
+
 0.4.0
 ---
 - **compiler**
