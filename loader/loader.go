@@ -64,6 +64,7 @@ func (p *Program) Import(path, srcDir string) (*Package, error) {
 	p.sorted = nil // invalidate the sorted order of packages
 	pkg := p.newPackage(buildPkg)
 	p.Packages[buildPkg.ImportPath] = pkg
+
 	return pkg, nil
 }
 
@@ -171,10 +172,10 @@ func (p *Program) sort() {
 // The returned error may be an Errors error, which contains a list of errors.
 //
 // Idempotent.
-func (p *Program) Parse() error {
+func (p *Program) Parse(includeTests bool) error {
 	// Load all imports
 	for _, pkg := range p.Sorted() {
-		err := pkg.importRecursively()
+		err := pkg.importRecursively(includeTests)
 		if err != nil {
 			if err, ok := err.(*ImportCycleError); ok {
 				if pkg.ImportPath != err.Packages[0] {
@@ -187,7 +188,7 @@ func (p *Program) Parse() error {
 
 	// Parse all packages.
 	for _, pkg := range p.Sorted() {
-		err := pkg.Parse()
+		err := pkg.Parse(includeTests)
 		if err != nil {
 			return err
 		}
@@ -228,7 +229,7 @@ func (p *Program) parseFile(path string, mode parser.Mode) (*ast.File, error) {
 // Parse parses and typechecks this package.
 //
 // Idempotent.
-func (p *Package) Parse() error {
+func (p *Package) Parse(includeTests bool) error {
 	if len(p.Files) != 0 {
 		return nil
 	}
@@ -242,7 +243,7 @@ func (p *Package) Parse() error {
 		return nil
 	}
 
-	files, err := p.parseFiles()
+	files, err := p.parseFiles(includeTests)
 	if err != nil {
 		return err
 	}
@@ -281,11 +282,21 @@ func (p *Package) Check() error {
 }
 
 // parseFiles parses the loaded list of files and returns this list.
-func (p *Package) parseFiles() ([]*ast.File, error) {
+func (p *Package) parseFiles(includeTests bool) ([]*ast.File, error) {
 	// TODO: do this concurrently.
 	var files []*ast.File
 	var fileErrs []error
-	for _, file := range p.GoFiles {
+
+	var gofiles []string
+	if includeTests {
+		gofiles = make([]string, 0, len(p.GoFiles)+len(p.TestGoFiles))
+		gofiles = append(gofiles, p.GoFiles...)
+		gofiles = append(gofiles, p.TestGoFiles...)
+	} else {
+		gofiles = p.GoFiles
+	}
+
+	for _, file := range gofiles {
 		f, err := p.parseFile(filepath.Join(p.Package.Dir, file), parser.ParseComments)
 		if err != nil {
 			fileErrs = append(fileErrs, err)
@@ -340,9 +351,15 @@ func (p *Package) Import(to string) (*types.Package, error) {
 // importRecursively() on the imported packages as well.
 //
 // Idempotent.
-func (p *Package) importRecursively() error {
+func (p *Package) importRecursively(includeTests bool) error {
 	p.Importing = true
-	for _, to := range p.Package.Imports {
+
+	imports := p.Package.Imports
+	if includeTests {
+		imports = append(imports, p.Package.TestImports...)
+	}
+
+	for _, to := range imports {
 		if to == "C" {
 			// Do CGo processing in a later stage.
 			continue
@@ -360,7 +377,7 @@ func (p *Package) importRecursively() error {
 		if importedPkg.Importing {
 			return &ImportCycleError{[]string{p.ImportPath, importedPkg.ImportPath}, p.ImportPos[to]}
 		}
-		err = importedPkg.importRecursively()
+		err = importedPkg.importRecursively(includeTests)
 		if err != nil {
 			if err, ok := err.(*ImportCycleError); ok {
 				err.Packages = append([]string{p.ImportPath}, err.Packages...)

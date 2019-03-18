@@ -92,7 +92,7 @@ func (v Value) Pointer() uintptr {
 }
 
 func (v Value) IsValid() bool {
-	panic("unimplemented: (reflect.Value).IsValid()")
+	return v.typecode != 0
 }
 
 func (v Value) CanInterface() bool {
