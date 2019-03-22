@@ -18,7 +18,6 @@ commands:
             wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
             sudo apt-get update
             sudo apt-get install \
-                llvm \
                 python3 \
                 llvm<<parameters.llvm>>-dev \
                 clang<<parameters.llvm>> \
