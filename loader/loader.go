@@ -14,13 +14,15 @@ import (
 
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
-	Build       *build.Context
-	Packages    map[string]*Package
-	sorted      []*Package
-	fset        *token.FileSet
-	TypeChecker types.Config
-	Dir         string // current working directory (for error reporting)
-	CFlags      []string
+	Build         *build.Context
+	OverlayBuild  *build.Context
+	ShouldOverlay func(path string) bool
+	Packages      map[string]*Package
+	sorted        []*Package
+	fset          *token.FileSet
+	TypeChecker   types.Config
+	Dir           string // current working directory (for error reporting)
+	CFlags        []string
 }
 
 // Package holds a loaded package, its imports, and its parsed files.
@@ -42,7 +44,11 @@ func (p *Program) Import(path, srcDir string) (*Package, error) {
 	}
 
 	// Load this package.
-	buildPkg, err := p.Build.Import(path, srcDir, build.ImportComment)
+	ctx := p.Build
+	if p.ShouldOverlay(path) {
+		ctx = p.OverlayBuild
+	}
+	buildPkg, err := ctx.Import(path, srcDir, build.ImportComment)
 	if err != nil {
 		return nil, err
 	}

@@ -1,3 +1,5 @@
+// +build arm,!avr,!cortexm
+
 package runtime
 
 const GOARCH = "arm"

@@ -162,11 +162,11 @@ func (c *Compiler) selectGC() string {
 func (c *Compiler) Compile(mainPath string) error {
 	// Prefix the GOPATH with the system GOROOT, as GOROOT is already set to
 	// the TinyGo root.
-	gopath := c.GOPATH
-	if gopath == "" {
-		gopath = runtime.GOROOT()
+	overlayGopath := c.GOPATH
+	if overlayGopath == "" {
+		overlayGopath = runtime.GOROOT()
 	} else {
-		gopath = runtime.GOROOT() + string(filepath.ListSeparator) + gopath
+		overlayGopath = runtime.GOROOT() + string(filepath.ListSeparator) + overlayGopath
 	}
 
 	wd, err := os.Getwd()
@@ -177,12 +177,39 @@ func (c *Compiler) Compile(mainPath string) error {
 		Build: &build.Context{
 			GOARCH:      c.GOARCH,
 			GOOS:        c.GOOS,
-			GOROOT:      c.RootDir,
-			GOPATH:      gopath,
+			GOROOT:      runtime.GOROOT(),
+			GOPATH:      c.GOPATH,
 			CgoEnabled:  true,
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
 			BuildTags:   append([]string{"tinygo", "gc." + c.selectGC()}, c.BuildTags...),
+		},
+		OverlayBuild: &build.Context{
+			GOARCH:      c.GOARCH,
+			GOOS:        c.GOOS,
+			GOROOT:      c.RootDir,
+			GOPATH:      overlayGopath,
+			CgoEnabled:  true,
+			UseAllFiles: false,
+			Compiler:    "gc", // must be one of the recognized compilers
+			BuildTags:   append([]string{"tinygo", "gc." + c.selectGC()}, c.BuildTags...),
+		},
+		ShouldOverlay: func(path string) bool {
+			switch path {
+			case "machine", "os", "reflect", "runtime", "sync":
+				return true
+			default:
+				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
+					return true
+				} else if path == "syscall" {
+					for _, tag := range c.BuildTags {
+						if tag == "avr" || tag == "cortexm" {
+							return true
+						}
+					}
+				}
+			}
+			return false
 		},
 		TypeChecker: types.Config{
 			Sizes: &StdSizes{
