@@ -1,4 +1,4 @@
-// +build wasm
+// +build avr cortexm wasm
 
 package os
 

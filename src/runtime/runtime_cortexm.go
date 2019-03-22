@@ -1,4 +1,4 @@
-// +build tinygo.arm
+// +build cortexm
 
 package runtime
 
