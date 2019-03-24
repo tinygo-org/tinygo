@@ -220,7 +220,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 				path = path[len(tinygoPath+"/src/"):]
 			}
 			switch path {
-			case "machine", "os", "reflect", "runtime", "runtime/volatile", "sync":
+			case "machine", "os", "reflect", "runtime", "runtime/volatile", "sync", "testing":
 				return path
 			default:
 				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
@@ -247,6 +247,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 		CFlags:       c.CFlags,
 		ClangHeaders: c.ClangHeaders,
 	}
+
 	if strings.HasSuffix(mainPath, ".go") {
 		_, err = lprogram.ImportFile(mainPath)
 		if err != nil {
@@ -331,16 +332,9 @@ func (c *Compiler) Compile(mainPath string) []error {
 	}
 	c.builder.CreateRetVoid()
 
-	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
-
-	// Swap the main impl with the TestMain block
-	// TODO: generate a TestMain
-	//l := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".TestMain")
-	// TODO: why is this nil?
-	//fmt.Println("DEBUG TestMain: ", l)
-
 	// Conserve for goroutine lowering. Without marking these as external, they
 	// would be optimized away.
+	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
 	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
 	c.mod.NamedFunction("runtime.alloc").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.free").SetLinkage(llvm.ExternalLinkage)

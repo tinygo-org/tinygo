@@ -6,6 +6,9 @@ import (
 
 // T is a test helper.
 type T struct {
+
+	// flags the test as having failed when non-zero
+	failed int
 }
 
 // TestToCall is a reference to a test that should be called during a test suite run.
@@ -24,31 +27,24 @@ type M struct {
 
 // Run the test suite.
 func (m *M) Run() int {
+	failures := 0
 	for _, test := range m.Tests {
 		t := &T{}
 		test.Func(t)
+
+		failures += t.failed
 	}
-	// TODO: detect failures and return a failing exit code
-	// Right now we can't handle one anyway so it doesn't matter much
-	return 0
+
+	return failures
 }
 
-// Fatal is equivalent to Log followed by FailNow
-func (t *T) Fatal(args ...string) {
+// Fatal is equivalent to Log followed by Fail
+func (t *T) Error(args ...string) {
 	// This doesn't print the same as in upstream go, but works good enough
 	fmt.Print(args)
-	//t.FailNow()
+	t.Fail()
 }
 
-/*
-func (t *T) FailNow() {
-	// This fails with
-Undefined symbols for architecture x86_64:
-"_syscall.Exit", referenced from:
-  _main in main.o
-ld: symbol(s) not found for architecture x86_64
-clang: error: linker command failed with exit code 1 (use -v to see invocation)
-error: failed to link /var/folders/_t/fbw4wf_s42dfqdfjq7shdfm40000gn/T/tinygo382510652/main: exit status 1
-	os.Exit(12)
+func (t *T) Fail() {
+	t.failed = 1
 }
-*/
