@@ -281,6 +281,9 @@ func (c *Compiler) doesEscape(value llvm.Value) bool {
 			if !c.hasFlag(use, value, "nocapture") {
 				return true
 			}
+		} else if use.IsAICmpInst() != nilValue {
+			// Comparing pointers don't let the pointer escape.
+			// This is often a compiler-inserted nil check.
 		} else {
 			// Unknown instruction, might escape.
 			return true
