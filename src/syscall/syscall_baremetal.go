@@ -1,3 +1,5 @@
+// +build avr cortexm
+
 package syscall
 
 // Most code here has been copied from the Go sources:
@@ -7,33 +9,6 @@ package syscall
 //     Copyright 2018 The Go Authors. All rights reserved.
 //     Use of this source code is governed by a BSD-style
 //     license that can be found in the LICENSE file.
-
-// An Errno is an unsigned number describing an error condition.
-// It implements the error interface. The zero Errno is by convention
-// a non-error, so code to convert from Errno to error should use:
-//      err = nil
-//      if errno != 0 {
-//              err = errno
-//      }
-type Errno uintptr
-
-func (e Errno) Error() string {
-        if 0 <= int(e) && int(e) < len(errorstr) {
-                s := errorstr[e]
-                if s != "" {
-                        return s
-                }
-        }
-        return "errno " + itoa(int(e))
-}
-
-func (e Errno) Temporary() bool {
-        return e == EINTR || e == EMFILE || e.Timeout()
-}
-
-func (e Errno) Timeout() bool {
-        return e == EAGAIN || e == EWOULDBLOCK || e == ETIMEDOUT
-}
 
 // A Signal is a number describing a process signal.
 // It implements the os.Signal interface.

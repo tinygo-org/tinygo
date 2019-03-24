@@ -203,7 +203,7 @@ func (c *Compiler) Compile(mainPath string) error {
 					return true
 				} else if path == "syscall" {
 					for _, tag := range c.BuildTags {
-						if tag == "avr" || tag == "cortexm" {
+						if tag == "avr" || tag == "cortexm" || tag == "darwin" {
 							return true
 						}
 					}
