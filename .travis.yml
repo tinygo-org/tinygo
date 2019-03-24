@@ -3,7 +3,7 @@ language: go
 matrix:
   include:
   - os: osx
-    go: "1.11"
+    go: "1.12"
     env: PATH="/usr/local/opt/llvm/bin:$PATH"
     before_install:
     - mkdir -p /Users/travis/gopath/bin
