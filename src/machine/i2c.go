@@ -1,4 +1,4 @@
-// +build !stm32f4disco
+// +build !stm32f4disco,!hifive1b
 
 package machine
 

@@ -2,25 +2,10 @@
 
 package runtime
 
-import (
-	"unsafe"
-)
-
-const GOARCH = "avr"
+const GOARCH = "arm" // avr pretends to be arm
 
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 8
-
-//go:extern _heap_start
-var heapStartSymbol unsafe.Pointer
-
-//go:extern _heap_end
-var heapEndSymbol unsafe.Pointer
-
-var (
-	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
-	heapEnd   = uintptr(unsafe.Pointer(&heapEndSymbol))
-)
 
 // Align on a word boundary.
 func align(ptr uintptr) uintptr {
