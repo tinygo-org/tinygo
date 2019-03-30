@@ -53,6 +53,22 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		c.OptimizeAllocs()
 		c.OptimizeStringToBytes()
 
+		// Lower runtime.isnil calls to regular nil comparisons.
+		isnil := c.mod.NamedFunction("runtime.isnil")
+		if !isnil.IsNil() {
+			for _, use := range getUses(isnil) {
+				c.builder.SetInsertPointBefore(use)
+				ptr := use.Operand(0)
+				if !ptr.IsABitCastInst().IsNil() {
+					ptr = ptr.Operand(0)
+				}
+				nilptr := llvm.ConstPointerNull(ptr.Type())
+				icmp := c.builder.CreateICmp(llvm.IntEQ, ptr, nilptr, "")
+				use.ReplaceAllUsesWith(icmp)
+				use.EraseFromParentAsInstruction()
+			}
+		}
+
 		err := c.LowerGoroutines()
 		if err != nil {
 			return err

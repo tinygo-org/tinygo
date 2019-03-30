@@ -115,8 +115,23 @@ func (c *Compiler) emitNilCheck(frame *Frame, ptr llvm.Value, blockPrefix string
 	frame.blockExits[frame.currentBlock] = nextBlock // adjust outgoing block for phi nodes
 
 	// Compare against nil.
-	nilptr := llvm.ConstPointerNull(ptr.Type())
-	isnil := c.builder.CreateICmp(llvm.IntEQ, ptr, nilptr, "")
+	var isnil llvm.Value
+	if ptr.Type().PointerAddressSpace() == 0 {
+		// Do the nil check using the isnil builtin, which marks the parameter
+		// as nocapture.
+		// The reason it has to go through a builtin, is that a regular icmp
+		// instruction may capture the pointer in LLVM semantics, see
+		// https://reviews.llvm.org/D60047 for details. Pointer capturing
+		// unfortunately breaks escape analysis, so we use this trick to let the
+		// functionattr pass know that this pointer doesn't really escape.
+		ptr = c.builder.CreateBitCast(ptr, c.i8ptrType, "")
+		isnil = c.createRuntimeCall("isnil", []llvm.Value{ptr}, "")
+	} else {
+		// Do the nil check using a regular icmp. This can happen with function
+		// pointers on AVR, which don't benefit from escape analysis anyway.
+		nilptr := llvm.ConstPointerNull(ptr.Type())
+		isnil = c.builder.CreateICmp(llvm.IntEQ, ptr, nilptr, "")
+	}
 	c.builder.CreateCondBr(isnil, faultBlock, nextBlock)
 
 	// Fail: this is a nil pointer, exit with a panic.
