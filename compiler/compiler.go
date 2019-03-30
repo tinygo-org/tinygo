@@ -226,7 +226,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 					return path
 				} else if path == "syscall" {
 					for _, tag := range c.BuildTags {
-						if tag == "avr" || tag == "cortexm" || tag == "darwin" {
+						if tag == "avr" || tag == "cortexm" || tag == "darwin" || tag == "riscv" {
 							return path
 						}
 					}
@@ -1304,11 +1304,11 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 	if fn := instr.StaticCallee(); fn != nil {
 		name := fn.RelString(nil)
 		switch {
-		case name == "device/arm.ReadRegister":
-			return c.emitReadRegister(instr.Args)
-		case name == "device/arm.Asm" || name == "device/avr.Asm":
+		case name == "device/arm.ReadRegister" || name == "device/riscv.ReadRegister":
+			return c.emitReadRegister(name, instr.Args)
+		case name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
 			return c.emitAsm(instr.Args)
-		case name == "device/arm.AsmFull" || name == "device/avr.AsmFull":
+		case name == "device/arm.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
 			return c.emitAsmFull(frame, instr)
 		case strings.HasPrefix(name, "device/arm.SVCall"):
 			return c.emitSVCall(frame, instr.Args)

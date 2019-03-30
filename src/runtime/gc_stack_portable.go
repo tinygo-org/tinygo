@@ -1,5 +1,5 @@
 // +build gc.conservative
-// +build !cortexm
+// +build !cortexm,!tinygo.riscv
 
 package runtime
 

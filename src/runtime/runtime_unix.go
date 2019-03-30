@@ -1,4 +1,4 @@
-// +build darwin linux,!avr,!cortexm
+// +build darwin linux,!avr,!cortexm,!tinygo.riscv
 
 package runtime
 

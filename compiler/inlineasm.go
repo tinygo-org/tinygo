@@ -18,10 +18,19 @@ import (
 //     func ReadRegister(name string) uintptr
 //
 // The register name must be a constant, for example "sp".
-func (c *Compiler) emitReadRegister(args []ssa.Value) (llvm.Value, error) {
+func (c *Compiler) emitReadRegister(name string, args []ssa.Value) (llvm.Value, error) {
 	fnType := llvm.FunctionType(c.uintptrType, []llvm.Type{}, false)
 	regname := constant.StringVal(args[0].(*ssa.Const).Value)
-	target := llvm.InlineAsm(fnType, "mov $0, "+regname, "=r", false, false, 0)
+	var asm string
+	switch name {
+	case "device/arm.ReadRegister":
+		asm = "mov $0, " + regname
+	case "device/riscv.ReadRegister":
+		asm = "mv $0, " + regname
+	default:
+		panic("unknown architecture")
+	}
+	target := llvm.InlineAsm(fnType, asm, "=r", false, false, 0)
 	return c.builder.CreateCall(target, nil, ""), nil
 }
 

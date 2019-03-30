@@ -1,4 +1,4 @@
-// +build !stm32f407,!avr
+// +build !stm32f407,!avr,!hifive1b
 
 package machine
 

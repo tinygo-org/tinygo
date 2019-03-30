@@ -67,7 +67,7 @@ commands:
       - run: go install .
       - run: go test -v
       - run: make gen-device -j4
-      - run: make smoketest
+      - run: make smoketest RISCV=0
       - save_cache:
           key: go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
@@ -100,7 +100,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-8-linux-v6
+            - llvm-build-8-linux-v7
       - run:
           name: "Build LLVM"
           command: |
@@ -118,7 +118,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-8-linux-v6
+          key: llvm-build-8-linux-v7
           paths:
             llvm-build
       - run:
@@ -149,6 +149,11 @@ commands:
             tar -C ~/lib -xf /tmp/tinygo.linux-amd64.tar.gz
             ln -s ~/lib/tinygo/bin/tinygo /go/bin/tinygo
             tinygo version
+      - run:
+          name: "Download SiFive GNU toolchain"
+          command: |
+            curl -O https://static.dev.sifive.com/dev-tools/riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-linux-ubuntu14.tar.gz
+            sudo tar -C /usr/local --strip-components=1 -xf riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-linux-ubuntu14.tar.gz
       - run: make smoketest
   build-macos:
     steps:
@@ -173,7 +178,7 @@ commands:
             - llvm-project
       - restore_cache:
           keys:
-            - llvm-build-8-macos-v5
+            - llvm-build-8-macos-v6
       - run:
           name: "Build LLVM"
           command: |
@@ -185,7 +190,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-8-macos-v5
+          key: llvm-build-8-macos-v6
           paths:
             llvm-build
       - run:
@@ -209,6 +214,11 @@ commands:
             tar -C /usr/local/opt -xf /tmp/tinygo.darwin-amd64.tar.gz
             ln -s /usr/local/opt/tinygo/bin/tinygo /usr/local/bin/tinygo
             tinygo version
+      - run:
+          name: "Download SiFive GNU toolchain"
+          command: |
+            curl -O https://static.dev.sifive.com/dev-tools/riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-apple-darwin.tar.gz
+            sudo tar -C /usr/local --strip-components=1 -xf riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-apple-darwin.tar.gz
       - run: make smoketest AVR=0
 
 

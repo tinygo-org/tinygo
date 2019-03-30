@@ -5,10 +5,12 @@ src/device/avr/*.ld
 src/device/avr/*.s
 src/device/nrf/*.go
 src/device/nrf/*.s
-src/device/stm32/*.go
-src/device/stm32/*.s
 src/device/sam/*.go
 src/device/sam/*.s
+src/device/sifive/*.go
+src/device/sifive/*.s
+src/device/stm32/*.go
+src/device/stm32/*.s
 vendor
 llvm
 llvm-build

@@ -1,8 +1,10 @@
-// +build arm,!avr,!cortexm,!tinygo.riscv
+// +build tinygo.riscv
 
 package runtime
 
-const GOARCH = "arm"
+import "device/riscv"
+
+const GOARCH = "arm" // riscv pretends to be arm
 
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 32
@@ -10,4 +12,8 @@ const TargetBits = 32
 // Align on word boundary.
 func align(ptr uintptr) uintptr {
 	return (ptr + 3) &^ 3
+}
+
+func getCurrentStackPointer() uintptr {
+	return riscv.ReadRegister("sp")
 }

@@ -1,4 +1,4 @@
-// +build avr cortexm wasm
+// +build avr cortexm tinygo.riscv wasm
 
 package os
 
