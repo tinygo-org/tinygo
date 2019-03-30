@@ -27,6 +27,14 @@ func _recover() interface{} {
 	return nil
 }
 
+// See emitNilCheck in compiler/asserts.go.
+// This function is a dummy function that has its first and only parameter
+// marked 'nocapture' to work around a limitation in LLVM: a regular pointer
+// comparison captures the pointer.
+func isnil(ptr *uint8) bool {
+	return ptr == nil
+}
+
 // Panic when trying to dereference a nil pointer.
 func nilpanic() {
 	runtimePanic("nil pointer dereference")
