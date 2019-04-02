@@ -54,6 +54,7 @@ SECTIONS
 
     /DISCARD/ :
     {
+        *(.ARM.exidx)      /* causes 'no memory region specified' error in lld */
         *(.ARM.exidx.*)    /* causes spurious 'undefined reference' errors */
     }
 }
