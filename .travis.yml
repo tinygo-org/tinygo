@@ -11,11 +11,9 @@ matrix:
 addons:
   homebrew:
     update: true
-    taps: ArmMbed/homebrew-formulae
     packages:
     - llvm@8
     - qemu
-    - arm-none-eabi-gcc
 
 install:
   - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh

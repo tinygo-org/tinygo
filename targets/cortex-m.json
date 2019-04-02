@@ -4,7 +4,7 @@
 	"goarch": "arm",
 	"compiler": "clang-8",
 	"gc": "marksweep",
-	"linker": "arm-none-eabi-ld",
+	"linker": "ld.lld",
 	"rtlib": "compiler-rt",
 	"cflags": [
 		"-Oz",

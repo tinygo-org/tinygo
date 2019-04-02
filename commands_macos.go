@@ -6,6 +6,6 @@ package main
 var commands = map[string]string{
 	"ar":      "llvm-ar",
 	"clang":   "clang-8",
-	"ld.lld":  "ld.lld-8",
+	"ld.lld":  "ld.lld",
 	"wasm-ld": "wasm-ld",
 }
