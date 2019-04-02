@@ -4,7 +4,7 @@
 	"goos":          "js",
 	"goarch":        "wasm",
 	"compiler":      "clang-8",
-	"linker":        "wasm-ld-8",
+	"linker":        "wasm-ld",
 	"cflags": [
 		"--target=wasm32",
 		"-Oz"

@@ -228,7 +228,11 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		}
 
 		// Link the object files together.
-		err = Link(sourceDir(), spec.Linker, ldflags...)
+		if linker, ok := commands[spec.Linker]; ok {
+			err = Link(sourceDir(), linker, ldflags...)
+		} else {
+			err = Link(sourceDir(), spec.Linker, ldflags...)
+		}
 		if err != nil {
 			return &commandError{"failed to link", executable, err}
 		}
