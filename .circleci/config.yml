@@ -90,6 +90,95 @@ commands:
           paths:
             - ~/.cache/go-build
             - ~/.cache/tinygo
+  build-release:
+    steps:
+      - checkout
+      - submodules
+      - run:
+          name: "Install apt dependencies"
+          command: |
+            sudo apt-get install \
+                libtinfo-dev \
+                python3 \
+                gcc-arm-linux-gnueabihf \
+                binutils-arm-none-eabi \
+                libc6-dev-armel-cross \
+                gcc-aarch64-linux-gnu \
+                libc6-dev-arm64-cross \
+                qemu-system-arm \
+                qemu-user \
+                gcc-avr \
+                avr-libc
+      - install-node
+      - restore_cache:
+          keys:
+            - go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-{{ checksum "Gopkg.lock" }}
+      - restore_cache:
+          keys:
+            - llvm-source-8-v2
+      - run:
+          name: "Fetch LLVM source"
+          command: make llvm-source
+      - save_cache:
+          key: llvm-source-8-v2
+          paths:
+            - llvm
+      - restore_cache:
+          keys:
+            - llvm-build-8-v2
+      - run:
+          name: "Build LLVM"
+          command: |
+            if [ ! -f llvm-build/lib/liblldELF.a ]
+            then
+              # install dependencies
+              sudo apt-get install cmake clang ninja-build
+              # make build faster
+              export CC=clang
+              export CXX=clang++
+              # hack ninja to use less jobs
+              echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
+              chmod +x /go/bin/ninja
+              # build!
+              make llvm-build
+            fi
+      - save_cache:
+          key: llvm-build-8-v2
+          paths:
+            llvm-build
+      - run:
+          name: "Create LLVM symlinks"
+          command: |
+            ln -s $PWD/llvm-build/bin/clang-8 /go/bin/clang-8
+            ln -s $PWD/llvm-build/bin/llvm-ar /go/bin/llvm-ar-8
+            ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-8
+            ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-8
+      - dep
+      - run:
+          name: "Test TinyGo"
+          command: make static-test
+      - run:
+          name: "Build TinyGo release"
+          command: |
+            make release -j3
+            cp -p build/release.tar.gz /tmp/release.tar.gz
+      - store_artifacts:
+          path: /tmp/release.tar.gz
+      - save_cache:
+          key: go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
+          paths:
+            - ~/.cache/go-build
+            - ~/.cache/tinygo
+      - run:
+          name: "Extract release tarball"
+          command: |
+            mkdir -p ~/lib
+            tar -C ~/lib -xf /tmp/release.tar.gz
+            ln -s ~/lib/tinygo/bin/tinygo /go/bin/tinygo
+            tinygo version
+      - smoketest
+
 
 jobs:
   test-llvm8-go111:
@@ -106,9 +195,17 @@ jobs:
     steps:
       - test-linux:
           llvm: "-8"
+  build-release:
+    docker:
+      - image: circleci/golang:1.12
+    working_directory: /go/src/github.com/tinygo-org/tinygo
+    steps:
+      - build-release
+
 
 workflows:
   test-all:
     jobs:
       - test-llvm8-go111
       - test-llvm8-go112
+      - build-release
