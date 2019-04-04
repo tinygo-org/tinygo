@@ -87,6 +87,7 @@ func fuzzyEqualIR(s1, s2 string) bool {
 func filterIrrelevantIRLines(lines []string) []string {
 	var out []string
 	for _, line := range lines {
+		line = strings.TrimSpace(line) // drop '\r' on Windows
 		if line == "" || line[0] == ';' {
 			continue
 		}
