@@ -3,7 +3,7 @@
 all: tinygo
 tinygo: build/tinygo
 
-.PHONY: all tinygo static run-test run-blinky run-blinky2 clean fmt gen-device gen-device-nrf gen-device-avr
+.PHONY: all tinygo llvm-build llvm-source static run-test run-blinky run-blinky2 clean fmt gen-device gen-device-nrf gen-device-avr
 
 TARGET ?= unix
 
@@ -39,6 +39,11 @@ else
 $(error Unknown target)
 
 endif
+
+# Default build and source directories, as created by `make llvm-build`.
+LLVM_BUILDDIR ?= llvm-build
+CLANG_SRC ?= llvm/tools/clang
+LLD_SRC ?= llvm/tools/lld
 
 LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines debuginfodwarf executionengine instrumentation interpreter ipo irreader linker lto mc mcjit objcarcopts option profiledata scalaropts support target
 
@@ -107,6 +112,25 @@ gen-device-stm32:
 	./tools/gen-device-svd.py lib/cmsis-svd/data/STMicro/ src/device/stm32/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro
 	go fmt ./src/device/stm32
 
+
+# Get LLVM sources.
+llvm/README.txt:
+	git clone -b release_80 https://github.com/llvm-mirror/llvm.git llvm
+llvm/tools/clang/README.txt:
+	git clone -b release_80 https://github.com/llvm-mirror/clang.git llvm/tools/clang
+llvm/tools/lld/README.md:
+	git clone -b release_80 https://github.com/llvm-mirror/lld.git llvm/tools/lld
+llvm-source: llvm/README.txt llvm/tools/clang/README.txt llvm/tools/lld/README.md
+
+# Configure LLVM.
+llvm-build/build.ninja: llvm-source
+	mkdir -p llvm-build; cd llvm-build; cmake -G Ninja ../llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON
+
+# Build LLVM.
+llvm-build: llvm-build/build.ninja
+	cd llvm-build; ninja
+
+
 # Build the Go compiler.
 build/tinygo:
 	@mkdir -p build
@@ -114,6 +138,9 @@ build/tinygo:
 
 static:
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go build -o build/tinygo -tags byollvm .
+
+static-test:
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go test -tags byollvm .
 
 release: static gen-device
 	@mkdir -p build/release/tinygo/bin
