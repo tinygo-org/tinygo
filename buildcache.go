@@ -109,10 +109,10 @@ func moveFile(src, dst string) error {
 		return err
 	}
 
-	err = os.Rename(dst+".tmp", dst)
+	err = outf.Close()
 	if err != nil {
 		return err
 	}
 
-	return outf.Close()
+	return os.Rename(dst+".tmp", dst)
 }

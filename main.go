@@ -552,11 +552,7 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig)
 			}
 			// Make sure the daemon doesn't receive Ctrl-C that is intended for
 			// GDB (to break the currently executing program).
-			// https://stackoverflow.com/a/35435038/559350
-			daemon.SysProcAttr = &syscall.SysProcAttr{
-				Setpgid: true,
-				Pgid:    0,
-			}
+			setCommandAsDaemon(daemon)
 			// Start now, and kill it on exit.
 			daemon.Start()
 			defer func() {

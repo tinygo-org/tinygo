@@ -45,11 +45,13 @@ func TestCompiler(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpdir)
 
-	t.Log("running tests on host...")
-	for _, path := range matches {
-		t.Run(path, func(t *testing.T) {
-			runTest(path, tmpdir, "", t)
-		})
+	if runtime.GOOS != "windows" {
+		t.Log("running tests on host...")
+		for _, path := range matches {
+			t.Run(path, func(t *testing.T) {
+				runTest(path, tmpdir, "", t)
+			})
+		}
 	}
 
 	if testing.Short() {
@@ -162,6 +164,7 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 
 	// putchar() prints CRLF, convert it to LF.
 	actual := bytes.Replace(stdout.Bytes(), []byte{'\r', '\n'}, []byte{'\n'}, -1)
+	expected = bytes.Replace(expected, []byte{'\r', '\n'}, []byte{'\n'}, -1) // for Windows
 
 	// Check whether the command ran successfully.
 	fail := false

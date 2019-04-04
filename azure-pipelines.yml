@@ -1,0 +1,61 @@
+jobs:
+- job: Build
+  timeoutInMinutes: 180
+  pool:
+    vmImage: 'VS2017-Win2016'
+  steps:
+    - checkout: self
+    - task: CacheBeta@0
+      displayName: Cache LLVM source
+      inputs:
+        key: llvm-source-8-windows-v0
+        path: llvm-project
+    - task: Bash@3
+      displayName: Download LLVM source
+      inputs:
+        targetType: inline
+        script: make llvm-source
+    - task: CacheBeta@0
+      displayName: Cache LLVM build
+      inputs:
+        key: llvm-build-8-windows-v1
+        path: llvm-build
+    - task: Bash@3
+      displayName: Build LLVM
+      inputs:
+        targetType: inline
+        script: |
+          if [ ! -f llvm-build/lib/liblldELF.a ]
+          then
+            choco install ninja
+            make llvm-build
+          fi
+    - task: Bash@3
+      displayName: Install QEMU
+      inputs:
+        targetType: inline
+        script: choco install qemu
+    - task: Bash@3
+      displayName: Test TinyGo
+      inputs:
+        targetType: inline
+        script: |
+          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          make test
+    - task: Bash@3
+      displayName: Build TinyGo release tarball
+      inputs:
+        targetType: inline
+        script: |
+          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          make release -j4
+    - publish: $(System.DefaultWorkingDirectory)/build/release.tar.gz
+      displayName: Publish tarball as artifact
+      artifact: tinygo.windows-amd64.tar.gz
+    - task: Bash@3
+      displayName: Smoke tests
+      inputs:
+        targetType: inline
+        script: |
+          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          make smoketest TINYGO=build/tinygo AVR=0 RISCV=0

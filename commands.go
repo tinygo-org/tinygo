@@ -24,6 +24,14 @@ func init() {
 		commands["ld.lld"] = append(commands["ld.lld"], "/usr/local/opt/llvm/bin/ld.lld")
 		commands["wasm-ld"] = append(commands["wasm-ld"], "/usr/local/opt/llvm/bin/wasm-ld")
 	}
+	// Add the path for when LLVM was installed with the installer from
+	// llvm.org, which by default doesn't add LLVM to the $PATH environment
+	// variable.
+	if runtime.GOOS == "windows" {
+		commands["clang"] = append(commands["clang"], "clang", "C:\\Program Files\\LLVM\\bin\\clang.exe")
+		commands["ld.lld"] = append(commands["ld.lld"], "lld", "C:\\Program Files\\LLVM\\bin\\lld.exe")
+		commands["wasm-ld"] = append(commands["wasm-ld"], "C:\\Program Files\\LLVM\\bin\\wasm-ld.exe")
+	}
 }
 
 func execCommand(cmdNames []string, args ...string) error {
@@ -33,7 +41,7 @@ func execCommand(cmdNames []string, args ...string) error {
 		cmd.Stderr = os.Stderr
 		err := cmd.Run()
 		if err != nil {
-			if err, ok := err.(*exec.Error); ok && err.Err == exec.ErrNotFound {
+			if err, ok := err.(*exec.Error); ok && (err.Err == exec.ErrNotFound || err.Err.Error() == "file does not exist") {
 				// this command was not found, try the next
 				continue
 			}

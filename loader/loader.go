@@ -317,9 +317,9 @@ func (p *Program) parseFile(path string, mode parser.Mode) (*ast.File, error) {
 	defer rd.Close()
 	relpath := path
 	if filepath.IsAbs(path) {
-		relpath, err = filepath.Rel(p.Dir, path)
-		if err != nil {
-			return nil, err
+		rp, err := filepath.Rel(p.Dir, path)
+		if err == nil {
+			relpath = rp
 		}
 	}
 	return parser.ParseFile(p.fset, relpath, rd, mode)
