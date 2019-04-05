@@ -2539,7 +2539,7 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 			// Conversion between two integers.
 			if sizeFrom > sizeTo {
 				return c.builder.CreateTrunc(value, llvmTypeTo, ""), nil
-			} else if typeTo.Info()&types.IsUnsigned != 0 { // if unsigned
+			} else if typeFrom.Info()&types.IsUnsigned != 0 { // if unsigned
 				return c.builder.CreateZExt(value, llvmTypeTo, ""), nil
 			} else { // if signed
 				return c.builder.CreateSExt(value, llvmTypeTo, ""), nil

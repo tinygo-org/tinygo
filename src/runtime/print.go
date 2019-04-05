@@ -39,7 +39,7 @@ func printuint16(n uint16) {
 	printuint32(uint32(n))
 }
 
-func printint16(n uint16) {
+func printint16(n int16) {
 	printint32(int32(n))
 }
 
