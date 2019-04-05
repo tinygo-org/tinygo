@@ -1095,16 +1095,21 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 		if err != nil {
 			return llvm.Value{}, err
 		}
+		var llvmCap llvm.Value
 		switch args[0].Type().(type) {
 		case *types.Chan:
 			// Channel. Buffered channels haven't been implemented yet so always
 			// return 0.
-			return llvm.ConstInt(c.intType, 0, false), nil
+			llvmCap = llvm.ConstInt(c.intType, 0, false)
 		case *types.Slice:
-			return c.builder.CreateExtractValue(value, 2, "cap"), nil
+			llvmCap = c.builder.CreateExtractValue(value, 2, "cap")
 		default:
 			return llvm.Value{}, c.makeError(pos, "todo: cap: unknown type")
 		}
+		if c.targetData.TypeAllocSize(llvmCap.Type()) < c.targetData.TypeAllocSize(c.intType) {
+			llvmCap = c.builder.CreateZExt(llvmCap, c.intType, "len.int")
+		}
+		return llvmCap, nil
 	case "close":
 		return llvm.Value{}, c.emitChanClose(frame, args[0])
 	case "complex":
