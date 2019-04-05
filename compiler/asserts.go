@@ -51,6 +51,11 @@ func (c *Compiler) emitLookupBoundsCheck(frame *Frame, arrayLen, index llvm.Valu
 
 // emitSliceBoundsCheck emits a bounds check before a slicing operation to make
 // sure it is within bounds.
+//
+// This function is both used for slicing a slice (low and high have their
+// normal meaning) and for creating a new slice, where 'capacity' means the
+// biggest possible slice capacity, 'low' means len and 'high' means cap. The
+// logic is the same in both cases.
 func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high llvm.Value, lowType, highType *types.Basic) {
 	if frame.fn.IsNoBounds() {
 		// The //go:nobounds pragma was added to the function to avoid bounds
