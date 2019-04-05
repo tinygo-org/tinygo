@@ -49,16 +49,19 @@ commands:
             dep ensure --vendor-only
   smoketest:
     steps:
+      - smoketest-no-avr
+      - run: tinygo build -size short -o test.elf -target=arduino             examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=digispark           examples/blinky1
+  smoketest-no-avr:
+    steps:
       - run: tinygo build -size short -o test.elf -target=pca10040            examples/blinky1
       - run: tinygo build -size short -o test.elf -target=pca10040            examples/blinky2
-      - run: tinygo build -size short -o blinky2                              examples/blinky2
+      - run: tinygo build             -o blinky2                              examples/blinky2 # TODO: re-enable -size flag with MachO support
       - run: tinygo build -size short -o test.elf -target=pca10040            examples/test
       - run: tinygo build -size short -o test.elf -target=microbit            examples/echo
       - run: tinygo build -size short -o test.elf -target=nrf52840-mdk        examples/blinky1
       - run: tinygo build -size short -o test.elf -target=pca10031            examples/blinky1
       - run: tinygo build -size short -o test.elf -target=bluepill            examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=arduino             examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=digispark           examples/blinky1
       - run: tinygo build -size short -o test.elf -target=reelboard           examples/blinky1
       - run: tinygo build -size short -o test.elf -target=reelboard           examples/blinky2
       - run: tinygo build -size short -o test.elf -target=pca10056            examples/blinky1
@@ -90,7 +93,7 @@ commands:
           paths:
             - ~/.cache/go-build
             - ~/.cache/tinygo
-  build-release:
+  build-linux:
     steps:
       - checkout
       - submodules
@@ -162,9 +165,9 @@ commands:
           name: "Build TinyGo release"
           command: |
             make release -j3
-            cp -p build/release.tar.gz /tmp/release.tar.gz
+            cp -p build/release.tar.gz /tmp/tinygo.linux-amd64.tar.gz
       - store_artifacts:
-          path: /tmp/release.tar.gz
+          path: /tmp/tinygo.linux-amd64.tar.gz
       - save_cache:
           key: go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
@@ -174,10 +177,71 @@ commands:
           name: "Extract release tarball"
           command: |
             mkdir -p ~/lib
-            tar -C ~/lib -xf /tmp/release.tar.gz
+            tar -C ~/lib -xf /tmp/tinygo.linux-amd64.tar.gz
             ln -s ~/lib/tinygo/bin/tinygo /go/bin/tinygo
             tinygo version
       - smoketest
+  build-macos:
+    steps:
+      - checkout
+      - submodules
+      - run:
+          name: "Install dependencies"
+          command: |
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install go dep qemu
+      - restore_cache:
+          keys:
+            - llvm-source-8-macos-v2
+      - run:
+          name: "Fetch LLVM source"
+          command: make llvm-source
+      - save_cache:
+          key: llvm-source-8-macos-v2
+          paths:
+            - llvm
+      - restore_cache:
+          keys:
+            - llvm-build-8-macos-v2
+      - run:
+          name: "Build LLVM"
+          command: |
+            if [ ! -f llvm-build/lib/liblldELF.a ]
+            then
+              # install dependencies
+              HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
+              # build!
+              make llvm-build
+            fi
+      - save_cache:
+          key: llvm-build-8-macos-v2
+          paths:
+            llvm-build
+      - run:
+          name: "Create LLVM symlinks"
+          command: |
+            ln -s $PWD/llvm-build/bin/clang-8 /usr/local/bin/clang-8
+            ln -s $PWD/llvm-build/bin/llvm-ar /usr/local/bin/llvm-ar
+      - run:
+          name: "Install Go dependencies"
+          command: dep ensure --vendor-only
+      - run:
+          name: "Test TinyGo"
+          command: make static-test
+      - run:
+          name: "Build TinyGo release"
+          command: |
+            make release -j3
+            cp -p build/release.tar.gz /tmp/tinygo.darwin-amd64.tar.gz
+      - store_artifacts:
+          path: /tmp/tinygo.darwin-amd64.tar.gz
+      - run:
+          name: "Extract release tarball"
+          command: |
+            mkdir -p ~/lib
+            tar -C /usr/local/opt -xf /tmp/tinygo.darwin-amd64.tar.gz
+            ln -s /usr/local/opt/tinygo/bin/tinygo /usr/local/bin/tinygo
+            tinygo version
+      - smoketest-no-avr
 
 
 jobs:
@@ -195,12 +259,20 @@ jobs:
     steps:
       - test-linux:
           llvm: "-8"
-  build-release:
+  build-linux:
     docker:
       - image: circleci/golang:1.12
     working_directory: /go/src/github.com/tinygo-org/tinygo
     steps:
-      - build-release
+      - build-linux
+  build-macos:
+    macos:
+      xcode: "10.1.0"
+    working_directory: ~/go/src/github.com/tinygo-org/tinygo
+    steps:
+      - build-macos
+
+
 
 
 workflows:
@@ -208,4 +280,5 @@ workflows:
     jobs:
       - test-llvm8-go111
       - test-llvm8-go112
-      - build-release
+      - build-linux
+      - build-macos

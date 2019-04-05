@@ -1,6 +1,5 @@
 # TinyGo - Go compiler for small places
 
-[![Travis CI](https://travis-ci.com/tinygo-org/tinygo.svg?branch=dev)](https://travis-ci.com/tinygo-org/tinygo)
 [![CircleCI](https://circleci.com/gh/tinygo-org/tinygo/tree/dev.svg?style=svg)](https://circleci.com/gh/tinygo-org/tinygo/tree/dev)
 
 TinyGo is a Go compiler intended for use in small places such as microcontrollers, WebAssembly (WASM), and command-line tools.
