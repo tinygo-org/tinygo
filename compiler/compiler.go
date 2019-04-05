@@ -1917,8 +1917,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				}
 			}
 		} else {
-			lowType = types.Typ[types.Int]
-			low = llvm.ConstInt(c.intType, 0, false)
+			lowType = types.Typ[types.Uintptr]
+			low = llvm.ConstInt(c.uintptrType, 0, false)
 		}
 
 		if expr.High != nil {
