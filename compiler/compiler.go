@@ -1953,6 +1953,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			c.emitSliceBoundsCheck(frame, llvmLen, low, high, lowType, highType)
 
+			// Truncate ints bigger than uintptr. This is after the bounds
+			// check so it's safe.
 			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
 				high = c.builder.CreateTrunc(high, c.uintptrType, "")
 			}
@@ -1985,6 +1987,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			c.emitSliceBoundsCheck(frame, oldCap, low, high, lowType, highType)
 
+			// Truncate ints bigger than uintptr. This is after the bounds
+			// check so it's safe.
 			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
 				low = c.builder.CreateTrunc(low, c.uintptrType, "")
 			}
@@ -2017,6 +2021,15 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			}
 
 			c.emitSliceBoundsCheck(frame, oldLen, low, high, lowType, highType)
+
+			// Truncate ints bigger than uintptr. This is after the bounds
+			// check so it's safe.
+			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				low = c.builder.CreateTrunc(low, c.uintptrType, "")
+			}
+			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				high = c.builder.CreateTrunc(high, c.uintptrType, "")
+			}
 
 			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
 			newLen := c.builder.CreateSub(high, low, "")
