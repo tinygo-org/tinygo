@@ -1772,37 +1772,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 
 		// Bounds checking.
-		if !frame.fn.IsNoBounds() {
-			checkFunc := "sliceBoundsCheckMake"
-			capacityType := c.uintptrType
-			capacityTypeWidth := capacityType.IntTypeWidth()
-			if sliceLen.Type().IntTypeWidth() > capacityTypeWidth || sliceCap.Type().IntTypeWidth() > capacityTypeWidth {
-				// System that is less than 64bit, meaning that the slice make
-				// params are bigger than uintptr.
-				checkFunc = "sliceBoundsCheckMake64"
-				capacityType = c.ctx.Int64Type()
-				capacityTypeWidth = capacityType.IntTypeWidth()
-			}
-			if sliceLen.Type().IntTypeWidth() < capacityTypeWidth {
-				if expr.Len.Type().(*types.Basic).Info()&types.IsUnsigned != 0 {
-					sliceLen = c.builder.CreateZExt(sliceLen, capacityType, "")
-				} else {
-					sliceLen = c.builder.CreateSExt(sliceLen, capacityType, "")
-				}
-			}
-			if sliceCap.Type().IntTypeWidth() < capacityTypeWidth {
-				if expr.Cap.Type().(*types.Basic).Info()&types.IsUnsigned != 0 {
-					sliceCap = c.builder.CreateZExt(sliceCap, capacityType, "")
-				} else {
-					sliceCap = c.builder.CreateSExt(sliceCap, capacityType, "")
-				}
-			}
-			maxSliceSize := maxSize
-			if elemSize != 0 { // avoid divide by zero
-				maxSliceSize = llvm.ConstSDiv(maxSize, llvm.ConstInt(c.uintptrType, elemSize, false))
-			}
-			c.createRuntimeCall(checkFunc, []llvm.Value{sliceLen, sliceCap, maxSliceSize}, "")
-		}
+		c.emitSliceBoundsCheck(frame, maxSize, sliceLen, sliceCap, expr.Len.Type().(*types.Basic), expr.Cap.Type().(*types.Basic))
 
 		// Allocate the backing array.
 		// TODO: escape analysis
@@ -1814,9 +1784,15 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		slicePtr := c.createRuntimeCall("alloc", []llvm.Value{sliceSize}, "makeslice.buf")
 		slicePtr = c.builder.CreateBitCast(slicePtr, llvm.PointerType(llvmElemType, 0), "makeslice.array")
 
-		if c.targetData.TypeAllocSize(sliceLen.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-			sliceLen = c.builder.CreateTrunc(sliceLen, c.uintptrType, "")
-			sliceCap = c.builder.CreateTrunc(sliceCap, c.uintptrType, "")
+		// Extend or truncate if necessary. This is safe as we've already done
+		// the bounds check.
+		sliceLen, err = c.parseConvert(expr.Len.Type(), types.Typ[types.Uintptr], sliceLen, expr.Pos())
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		sliceCap, err = c.parseConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
+		if err != nil {
+			return llvm.Value{}, err
 		}
 
 		// Create the slice.

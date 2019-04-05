@@ -49,17 +49,3 @@ func lookuppanic() {
 func slicepanic() {
 	runtimePanic("slice out of range")
 }
-
-// Check for bounds in *ssa.MakeSlice.
-func sliceBoundsCheckMake(length, capacity uintptr, max uintptr) {
-	if length > capacity || capacity > max {
-		runtimePanic("slice size out of range")
-	}
-}
-
-// Check for bounds in *ssa.MakeSlice. Supports 64-bit indexes.
-func sliceBoundsCheckMake64(length, capacity uint64, max uintptr) {
-	if length > capacity || capacity > uint64(max) {
-		runtimePanic("slice size out of range")
-	}
-}
