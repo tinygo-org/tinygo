@@ -28,6 +28,14 @@ type s4 struct {
 	d byte
 }
 
+// same struct, different type
+type s4b struct {
+	a byte
+	b byte
+	c byte
+	d byte
+}
+
 type s5 struct {
 	a struct {
 		aa byte
@@ -70,6 +78,16 @@ func test3(s s3) {
 
 func test4(s s4) {
 	println("test4", s.a, s.b, s.c, s.d)
+	test4b(s4b(s))
+	test4bp((*s4b)(&s))
+}
+
+func test4b(s s4b) {
+	println("test4b", s.a, s.b, s.c, s.d)
+}
+
+func test4bp(s *s4b) {
+	println("test4bp", s.a, s.b, s.c, s.d)
 }
 
 func test5(s s5) {

@@ -1517,21 +1517,41 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// https://research.swtch.com/interfaces
 		return c.parseExpr(frame, expr.X)
 	case *ssa.ChangeType:
+		// This instruction changes the type, but the underlying value remains
+		// the same. This is often a no-op, but sometimes we have to change the
+		// LLVM type as well.
 		x, err := c.parseExpr(frame, expr.X)
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		// The only case when we need to bitcast is when casting between named
-		// struct types, as those are actually different in LLVM. Let's just
-		// bitcast all struct types for ease of use.
-		if _, ok := expr.Type().Underlying().(*types.Struct); ok {
-			llvmType, err := c.getLLVMType(expr.X.Type())
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			return c.builder.CreateBitCast(x, llvmType, "changetype"), nil
+		llvmType, err := c.getLLVMType(expr.Type())
+		if err != nil {
+			return llvm.Value{}, err
 		}
-		return x, nil
+		if x.Type() == llvmType {
+			// Different Go type but same LLVM type (for example, named int).
+			// This is the common case.
+			return x, nil
+		}
+		// Figure out what kind of type we need to cast.
+		switch llvmType.TypeKind() {
+		case llvm.StructTypeKind:
+			// Unfortunately, we can't just bitcast structs. We have to
+			// actually create a new struct of the correct type and insert the
+			// values from the previous struct in there.
+			value := llvm.Undef(llvmType)
+			for i := 0; i < llvmType.StructElementTypesCount(); i++ {
+				field := c.builder.CreateExtractValue(x, i, "changetype.field")
+				value = c.builder.CreateInsertValue(value, field, i, "changetype.struct")
+			}
+			return value, nil
+		case llvm.PointerTypeKind:
+			// This can happen with pointers to structs. This case is easy:
+			// simply bitcast the pointer to the destination type.
+			return c.builder.CreateBitCast(x, llvmType, "changetype.pointer"), nil
+		default:
+			return llvm.Value{}, errors.New("todo: unknown ChangeType type: " + expr.X.Type().String())
+		}
 	case *ssa.Const:
 		return c.parseConst(frame.fn.LinkName(), expr)
 	case *ssa.Convert:
