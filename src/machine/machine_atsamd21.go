@@ -572,7 +572,10 @@ func handleUART1() {
 
 // I2C on the SAMD21.
 type I2C struct {
-	Bus *sam.SERCOM_I2CM_Type
+	Bus     *sam.SERCOM_I2CM_Type
+	SCL     uint8
+	SDA     uint8
+	PinMode GPIOMode
 }
 
 // I2CConfig is used to store config info for I2C.
@@ -608,7 +611,7 @@ func (i2c I2C) Configure(config I2CConfig) {
 		config.Frequency = TWI_FREQ_100KHZ
 	}
 
-	// reset SERCOM3
+	// reset SERCOM
 	i2c.Bus.CTRLA |= sam.SERCOM_I2CM_CTRLA_SWRST
 	for (i2c.Bus.CTRLA&sam.SERCOM_I2CM_CTRLA_SWRST) > 0 ||
 		(i2c.Bus.SYNCBUSY&sam.SERCOM_I2CM_SYNCBUSY_SWRST) > 0 {
@@ -632,8 +635,8 @@ func (i2c I2C) Configure(config I2CConfig) {
 	}
 
 	// enable pins
-	GPIO{SDA_PIN}.Configure(GPIOConfig{Mode: GPIO_SERCOM})
-	GPIO{SCL_PIN}.Configure(GPIOConfig{Mode: GPIO_SERCOM})
+	GPIO{i2c.SDA}.Configure(GPIOConfig{Mode: i2c.PinMode})
+	GPIO{i2c.SCL}.Configure(GPIOConfig{Mode: i2c.PinMode})
 }
 
 // SetBaudRate sets the communication speed for the I2C.
