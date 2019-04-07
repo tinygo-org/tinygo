@@ -371,18 +371,33 @@ func (c *Compiler) Compile(mainPath string) error {
 	c.mod.NamedFunction("runtime.activateTask").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.ExternalLinkage)
 
+	// Load some attributes
+	getAttr := func(attrName string) llvm.Attribute {
+		attrKind := llvm.AttributeKindID(attrName)
+		return c.ctx.CreateEnumAttribute(attrKind, 0)
+	}
+	nocapture := getAttr("nocapture")
+	writeonly := getAttr("writeonly")
+	readonly := getAttr("readonly")
+
 	// Tell the optimizer that runtime.alloc is an allocator, meaning that it
 	// returns values that are never null and never alias to an existing value.
-	for _, name := range []string{"noalias", "nonnull"} {
-		attrKind := llvm.AttributeKindID(name)
-		attr := c.ctx.CreateEnumAttribute(attrKind, 0)
-		c.mod.NamedFunction("runtime.alloc").AddAttributeAtIndex(0, attr)
+	for _, attrName := range []string{"noalias", "nonnull"} {
+		c.mod.NamedFunction("runtime.alloc").AddAttributeAtIndex(0, getAttr(attrName))
 	}
 
 	// See emitNilCheck in asserts.go.
-	attrKind := llvm.AttributeKindID("nocapture")
-	attr := c.ctx.CreateEnumAttribute(attrKind, 0)
-	c.mod.NamedFunction("runtime.isnil").AddAttributeAtIndex(1, attr)
+	c.mod.NamedFunction("runtime.isnil").AddAttributeAtIndex(1, nocapture)
+
+	// Memory copy operations do not capture pointers, even though some weird
+	// pointer arithmetic is happening in the Go implementation.
+	for _, fnName := range []string{"runtime.memcpy", "runtime.memmove"} {
+		fn := c.mod.NamedFunction(fnName)
+		fn.AddAttributeAtIndex(1, nocapture)
+		fn.AddAttributeAtIndex(1, writeonly)
+		fn.AddAttributeAtIndex(2, nocapture)
+		fn.AddAttributeAtIndex(2, readonly)
+	}
 
 	// see: https://reviews.llvm.org/D18355
 	if c.Debug {
