@@ -3,6 +3,14 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:06519a2ec1d59040eaccec40206f9d0b59dc662db2a032f974d6d6b9a2bcb839"
+  name = "github.com/blakesmith/ar"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "8bd4349a67f2533b078dbc524689d15dba0f4659"
+
+[[projects]]
+  branch = "master"
   digest = "1:00b45e06c7843541372fc17d982242bd6adfc2fc382b6f2e9ef9ce53d87a50b9"
   name = "github.com/marcinbor85/gohex"
   packages = ["."]
@@ -33,6 +41,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/blakesmith/ar",
     "github.com/marcinbor85/gohex",
     "golang.org/x/tools/go/ast/astutil",
     "golang.org/x/tools/go/ssa",
