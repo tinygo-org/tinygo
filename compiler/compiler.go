@@ -2510,6 +2510,27 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 	if isPtrFrom && !isPtrTo {
 		return c.builder.CreatePtrToInt(value, llvmTypeTo, ""), nil
 	} else if !isPtrFrom && isPtrTo {
+		if !value.IsABinaryOperator().IsNil() && value.InstructionOpcode() == llvm.Add {
+			// This is probably a pattern like the following:
+			// unsafe.Pointer(uintptr(ptr) + index)
+			// Used in functions like memmove etc. for lack of pointer
+			// arithmetic. Convert it to real pointer arithmatic here.
+			ptr := value.Operand(0)
+			index := value.Operand(1)
+			if !index.IsAPtrToIntInst().IsNil() {
+				// Swap if necessary, if ptr and index are reversed.
+				ptr, index = index, ptr
+			}
+			if !ptr.IsAPtrToIntInst().IsNil() {
+				origptr := ptr.Operand(0)
+				if origptr.Type() == c.i8ptrType {
+					// This pointer can be calculated from the original
+					// ptrtoint instruction with a GEP. The leftover inttoptr
+					// instruction is trivial to optimize away.
+					return c.builder.CreateGEP(origptr, []llvm.Value{index}, ""), nil
+				}
+			}
+		}
 		return c.builder.CreateIntToPtr(value, llvmTypeTo, ""), nil
 	}
 
