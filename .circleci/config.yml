@@ -154,7 +154,6 @@ commands:
           name: "Create LLVM symlinks"
           command: |
             ln -s $PWD/llvm-build/bin/clang-8 /go/bin/clang-8
-            ln -s $PWD/llvm-build/bin/llvm-ar /go/bin/llvm-ar-8
             ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-8
             ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-8
       - dep
@@ -220,7 +219,6 @@ commands:
           name: "Create LLVM symlinks"
           command: |
             ln -s $PWD/llvm-build/bin/clang-8 /usr/local/bin/clang-8
-            ln -s $PWD/llvm-build/bin/llvm-ar /usr/local/bin/llvm-ar
       - run:
           name: "Install Go dependencies"
           command: dep ensure --vendor-only
