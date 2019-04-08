@@ -232,6 +232,7 @@ commands:
           command: |
             make release -j3
             cp -p build/release.tar.gz /tmp/tinygo.darwin-amd64.tar.gz
+            openssl sha256 < /tmp/tinygo.darwin-amd64.tar.gz
       - store_artifacts:
           path: /tmp/tinygo.darwin-amd64.tar.gz
       - run:
