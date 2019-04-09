@@ -170,6 +170,10 @@ release: static gen-device
 	./build/tinygo build-builtins -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/compiler-rt.a
 	tar -czf build/release.tar.gz -C build/release tinygo
 
+homebrew: release
+	@echo "Use the following SHA256 for the release build:"
+	openssl sha256 < build/release.tar.gz
+
 # Binary that can run on the host.
 build/%: src/examples/% src/examples/%/*.go build/tinygo src/runtime/*.go
 	./build/tinygo build $(TGOFLAGS) -size=short -o $@ $(subst src/,,$<)
