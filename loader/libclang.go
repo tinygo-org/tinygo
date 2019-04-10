@@ -4,9 +4,10 @@ package loader
 // modification. It does not touch the AST itself.
 
 import (
-	"errors"
 	"go/ast"
+	"go/scanner"
 	"go/token"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -22,11 +23,19 @@ import "C"
 
 var globalFileInfo *fileInfo
 
-func (info *fileInfo) parseFragment(fragment string, cflags []string) error {
-	index := C.clang_createIndex(0, 1)
+var diagnosticSeverity = [...]string{
+	C.CXDiagnostic_Ignored: "ignored",
+	C.CXDiagnostic_Note:    "note",
+	C.CXDiagnostic_Warning: "warning",
+	C.CXDiagnostic_Error:   "error",
+	C.CXDiagnostic_Fatal:   "fatal",
+}
+
+func (info *fileInfo) parseFragment(fragment string, cflags []string, posFilename string, posLine int) []error {
+	index := C.clang_createIndex(0, 0)
 	defer C.clang_disposeIndex(index)
 
-	filenameC := C.CString("cgo-fake.c")
+	filenameC := C.CString(posFilename+"!cgo.c")
 	defer C.free(unsafe.Pointer(filenameC))
 
 	fragmentC := C.CString(fragment)
@@ -61,8 +70,53 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string) error {
 	}
 	defer C.clang_disposeTranslationUnit(unit)
 
-	if C.clang_getNumDiagnostics(unit) != 0 {
-		return errors.New("cgo: libclang cannot parse fragment")
+	if numDiagnostics := int(C.clang_getNumDiagnostics(unit)); numDiagnostics != 0 {
+		errs := []error{}
+		addDiagnostic := func(diagnostic C.CXDiagnostic) {
+			spelling := getString(C.clang_getDiagnosticSpelling(diagnostic))
+			severity := diagnosticSeverity[C.clang_getDiagnosticSeverity(diagnostic)]
+			location := C.clang_getDiagnosticLocation(diagnostic)
+			var file C.CXFile
+			var line C.unsigned
+			var column C.unsigned
+			var offset C.unsigned
+			C.clang_getExpansionLocation(location, &file, &line, &column, &offset)
+			filename := getString(C.clang_getFileName(file))
+			if filename == posFilename+"!cgo.c" {
+				// Adjust errors from the `import "C"` snippet.
+				// Note: doesn't adjust filenames inside the error message
+				// itself.
+				filename = posFilename
+				line += C.uint(posLine)
+				offset = 0 // hard to calculate
+			} else if filepath.IsAbs(filename) {
+				// Relative paths for readability, like other Go parser errors.
+				relpath, err := filepath.Rel(info.Program.Dir, filename)
+				if err == nil {
+					filename = relpath
+				}
+			}
+			errs = append(errs, &scanner.Error{
+				Pos: token.Position{
+					Filename: filename,
+					Offset:   int(offset),
+					Line:     int(line),
+					Column:   int(column),
+				},
+				Msg: severity + ": " + spelling,
+			})
+		}
+		for i := 0; i < numDiagnostics; i++ {
+			diagnostic := C.clang_getDiagnostic(unit, C.uint(i))
+			addDiagnostic(diagnostic)
+
+			// Child diagnostics (like notes on redefinitions).
+			diagnostics := C.clang_getChildDiagnostics(diagnostic)
+			for j := 0; j < int(C.clang_getNumDiagnosticsInSet(diagnostics)); j++ {
+				addDiagnostic(C.clang_getDiagnosticInSet(diagnostics, C.uint(j)))
+			}
+		}
+		return errs
 	}
 
 	if globalFileInfo != nil {
