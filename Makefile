@@ -170,6 +170,19 @@ release: static gen-device
 	./build/tinygo build-builtins -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/compiler-rt.a
 	tar -czf build/release.tar.gz -C build/release tinygo
 
+# Override this to match the version of software being released.
+RELEASE_VERSION ?= 1.0.0
+
+# Override this to match the arch for software being released.
+RELEASE_ARCH ?= amd64
+
+# Override this to match the tar with the software being released.
+RELEASE_TAR ?= ./build/release.tar.gz
+
+# Create debian DEB installer file. Requires fpm (https://github.com/jordansissel/fpm)
+deb:
+	fpm -s tar -t deb -n tinygo -v $(RELEASE_VERSION) -a $(RELEASE_ARCH) --prefix=/usr/local --deb-custom-control=./DEBIAN/control $(RELEASE_TAR)
+
 # Binary that can run on the host.
 build/%: src/examples/% src/examples/%/*.go build/tinygo src/runtime/*.go
 	./build/tinygo build $(TGOFLAGS) -size=short -o $@ $(subst src/,,$<)

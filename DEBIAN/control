@@ -1,0 +1,8 @@
+Package: tinygo
+Architecture: all
+Maintainer: @tinygo-org
+Priority: optional
+Version: 0.4.2
+License: BSD 3-Clause
+Homepage: https://tinygo.org
+Description: TinyGo is a Go compiler for small places.
