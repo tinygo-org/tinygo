@@ -95,7 +95,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 		case !inst.IsALoadInst().IsNil():
 			operand := fr.getLocal(inst.Operand(0)).(*LocalValue)
 			var value llvm.Value
-			if !operand.IsConstant() || inst.IsVolatile() || operand.Underlying.Opcode() == llvm.BitCast {
+			if !operand.IsConstant() || inst.IsVolatile() || (!operand.Underlying.IsAConstantExpr().IsNil() && operand.Underlying.Opcode() == llvm.BitCast) {
 				value = fr.builder.CreateLoad(operand.Value(), inst.Name())
 			} else {
 				value = operand.Load()
