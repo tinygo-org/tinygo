@@ -268,6 +268,16 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 			Star: info.importCPos,
 			X:    info.makeASTType(C.clang_getPointeeType(typ)),
 		}
+	case C.CXType_ConstantArray:
+		return &ast.ArrayType{
+			Lbrack: info.importCPos,
+			Len: &ast.BasicLit{
+				ValuePos: info.importCPos,
+				Kind:     token.INT,
+				Value:    strconv.FormatInt(int64(C.clang_getArraySize(typ)), 10),
+			},
+			Elt: info.makeASTType(C.clang_getElementType(typ)),
+		}
 	case C.CXType_FunctionProto:
 		// Be compatible with gc, which uses the *[0]byte type for function
 		// pointer types.

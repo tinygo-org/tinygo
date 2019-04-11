@@ -37,6 +37,8 @@ func main() {
 	println("complex double:", C.globalComplexDouble)
 	println("complex long double:", C.globalComplexLongDouble)
 	println("struct:", C.globalStruct.s, C.globalStruct.l, C.globalStruct.f)
+	var _ [3]C.short = C.globalArray
+	println("array:", C.globalArray[0], C.globalArray[1], C.globalArray[2])
 }
 
 //export mul
