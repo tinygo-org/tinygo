@@ -21,7 +21,8 @@ int tinygo_clang_visitor(CXCursor c, CXCursor parent, CXClientData client_data);
 */
 import "C"
 
-var globalFileInfo *fileInfo
+// refMap stores references to types, used for clang_visitChildren.
+var refMap RefMap
 
 var diagnosticSeverity = [...]string{
 	C.CXDiagnostic_Ignored: "ignored",
@@ -119,25 +120,17 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string, posFilenam
 		return errs
 	}
 
-	if globalFileInfo != nil {
-		// There is a race condition here but that doesn't really matter as it
-		// is a sanity check anyway.
-		panic("libclang.go cannot be used concurrently yet")
-	}
-	globalFileInfo = info
-	defer func() {
-		globalFileInfo = nil
-	}()
-
+	ref := refMap.Put(info)
+	defer refMap.Remove(ref)
 	cursor := C.clang_getTranslationUnitCursor(unit)
-	C.clang_visitChildren(cursor, (*[0]byte)(unsafe.Pointer(C.tinygo_clang_visitor)), C.CXClientData(uintptr(0)))
+	C.clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_visitor), C.CXClientData(ref))
 
 	return nil
 }
 
 //export tinygo_clang_visitor
 func tinygo_clang_visitor(c, parent C.CXCursor, client_data C.CXClientData) C.int {
-	info := globalFileInfo
+	info := refMap.Get(unsafe.Pointer(client_data)).(*fileInfo)
 	kind := C.clang_getCursorKind(c)
 	switch kind {
 	case C.CXCursor_FunctionDecl:
