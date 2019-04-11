@@ -63,6 +63,12 @@ func (s *StdSizes) Alignof(T types.Type) int64 {
 
 func (s *StdSizes) Offsetsof(fields []*types.Var) []int64 {
 	offsets := make([]int64, len(fields))
+	if len(fields) > 1 && fields[0].Name() == "C union" {
+		// This struct contains the magic "C union" field which indicates that
+		// this is actually a union from CGo.
+		// All fields in the union start at 0 so return that.
+		return offsets // all fields are still set to 0
+	}
 	var o int64
 	for i, f := range fields {
 		a := s.Alignof(f.Type())
@@ -125,11 +131,38 @@ func (s *StdSizes) Sizeof(T types.Type) int64 {
 			return 0
 		}
 		fields := make([]*types.Var, t.NumFields())
+		maxAlign := int64(1)
 		for i := range fields {
-			fields[i] = t.Field(i)
+			field := t.Field(i)
+			fields[i] = field
+			al := s.Alignof(field.Type())
+			if al > maxAlign {
+				maxAlign = al
+			}
 		}
-		offsets := s.Offsetsof(fields)
-		return offsets[n-1] + s.Sizeof(fields[n-1].Type())
+		if fields[0].Name() == "C union" {
+			// Magic field that indicates this is a CGo union and not a struct.
+			// The size is the biggest element, aligned to the element with the
+			// biggest alignment. This is not necessarily the same, for example
+			// in the following union:
+			//     union { int32_t l; int16_t s[3] }
+			maxSize := int64(0)
+			for _, field := range fields[1:] {
+				si := s.Sizeof(field.Type())
+				if si > maxSize {
+					maxSize = si
+				}
+			}
+			return align(maxSize, maxAlign)
+		} else {
+			// This is a regular struct.
+			// Pick the size that fits this struct and add some alignment. Some
+			// structs have some extra padding at the end which should also be
+			// taken care of:
+			//     struct { int32 n; byte b }
+			offsets := s.Offsetsof(fields)
+			return align(offsets[n-1]+s.Sizeof(fields[n-1].Type()), maxAlign)
+		}
 	case *types.Interface:
 		return s.PtrSize * 2
 	case *types.Pointer:
