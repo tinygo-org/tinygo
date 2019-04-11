@@ -21,6 +21,7 @@ extern _Complex float globalComplexFloat;
 extern _Complex double globalComplexDouble;
 extern _Complex double globalComplexLongDouble;
 extern collection_t globalStruct;
+extern short globalArray[3];
 
 // test duplicate definitions
 int add(int a, int b);

@@ -9,6 +9,7 @@ _Complex float globalComplexFloat = 4.1+3.3i;
 _Complex double globalComplexDouble = 4.2+3.4i;
 _Complex double globalComplexLongDouble = 4.3+3.5i;
 collection_t globalStruct = {256, -123456, 3.14};
+short globalArray[3] = {5, 6, 7};
 
 int fortytwo() {
 	return 42;
