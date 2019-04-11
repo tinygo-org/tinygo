@@ -36,6 +36,7 @@ func main() {
 	println("complex float:", C.globalComplexFloat)
 	println("complex double:", C.globalComplexDouble)
 	println("complex long double:", C.globalComplexLongDouble)
+	println("struct:", C.globalStruct.s, C.globalStruct.l, C.globalStruct.f)
 }
 
 //export mul
