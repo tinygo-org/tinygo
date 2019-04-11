@@ -9,6 +9,10 @@ import "C"
 
 import "unsafe"
 
+func (s C.myint) Int() int {
+	return int(s)
+}
+
 func main() {
 	println("fortytwo:", C.fortytwo())
 	println("add:", C.add(C.int(3), 5))
@@ -36,9 +40,28 @@ func main() {
 	println("complex float:", C.globalComplexFloat)
 	println("complex double:", C.globalComplexDouble)
 	println("complex long double:", C.globalComplexLongDouble)
-	println("struct:", C.globalStruct.s, C.globalStruct.l, C.globalStruct.f)
+
+	// complex types
+	println("struct:", C.int(unsafe.Sizeof(C.globalStruct)) == C.globalStructSize, C.globalStruct.s, C.globalStruct.l, C.globalStruct.f)
 	var _ [3]C.short = C.globalArray
 	println("array:", C.globalArray[0], C.globalArray[1], C.globalArray[2])
+	println("union:", C.int(unsafe.Sizeof(C.globalUnion)) == C.globalUnionSize)
+	C.unionSetShort(22)
+	println("union s:", C.globalUnion.s)
+	C.unionSetFloat(3.14)
+	println("union f:", C.globalUnion.f)
+	C.unionSetData(5, 8, 1)
+	println("union global data:", C.globalUnion.data[0], C.globalUnion.data[1], C.globalUnion.data[2])
+	println("union field:", printUnion(C.globalUnion).f)
+}
+
+func printUnion(union C.joined_t) C.joined_t {
+	println("union local data: ", union.data[0], union.data[1], union.data[2])
+	union.s = -33
+	println("union s method:", union.s.Int(), union.data[0] == 5)
+	union.f = 6.28
+	println("union f:", union.f)
+	return union
 }
 
 //export mul

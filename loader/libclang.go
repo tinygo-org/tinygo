@@ -306,18 +306,50 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 		return info.makeASTType(underlying)
 	case C.CXType_Record:
 		cursor := C.clang_getTypeDeclaration(typ)
+		fieldList := &ast.FieldList{
+			Opening: info.importCPos,
+			Closing: info.importCPos,
+		}
+		ref := refMap.Put(struct {
+			fieldList *ast.FieldList
+			info      *fileInfo
+		}{fieldList, info})
+		defer refMap.Remove(ref)
+		C.clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(uintptr(ref)))
 		switch C.clang_getCursorKind(cursor) {
 		case C.CXCursor_StructDecl:
-			fieldList := &ast.FieldList{
-				Opening: info.importCPos,
-				Closing: info.importCPos,
+			return &ast.StructType{
+				Struct: info.importCPos,
+				Fields: fieldList,
 			}
-			ref := refMap.Put(struct {
-				fieldList *ast.FieldList
-				info      *fileInfo
-			}{fieldList, info})
-			defer refMap.Remove(ref)
-			C.clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(uintptr(ref)))
+		case C.CXCursor_UnionDecl:
+			if len(fieldList.List) > 1 {
+				// Insert a special field at the front (of zero width) as a
+				// marker that this is struct is actually a union. This is done
+				// by giving the field a name that cannot be expressed directly
+				// in Go.
+				// Other parts of the compiler look at the first element in a
+				// struct (of size > 2) to know whether this is a union.
+				// Note that we don't have to insert it for single-element
+				// unions as they're basically equivalent to a struct.
+				unionMarker := &ast.Field{
+					Type: &ast.StructType{
+						Struct: info.importCPos,
+					},
+				}
+				unionMarker.Names = []*ast.Ident{
+					&ast.Ident{
+						NamePos: info.importCPos,
+						Name:    "C union",
+						Obj: &ast.Object{
+							Kind: ast.Var,
+							Name: "C union",
+							Decl: unionMarker,
+						},
+					},
+				}
+				fieldList.List = append([]*ast.Field{unionMarker}, fieldList.List...)
+			}
 			return &ast.StructType{
 				Struct: info.importCPos,
 				Fields: fieldList,

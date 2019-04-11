@@ -14,3 +14,13 @@ double: +3.200000e+000
 complex float: (+4.100000e+000+3.300000e+000i)
 complex double: (+4.200000e+000+3.400000e+000i)
 complex long double: (+4.300000e+000+3.500000e+000i)
+struct: true 256 -123456 +3.140000e+000
+array: 5 6 7
+union: true
+union s: 22
+union f: +3.140000e+000
+union global data: 5 8 1
+union local data:  5 8 1
+union s method: -33 false
+union f: +6.280000e+000
+union field: +6.280000e+000

@@ -546,6 +546,33 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			}
 			members[i] = member
 		}
+		if len(members) > 2 && typ.Field(0).Name() == "C union" {
+			// Not a normal struct but a C union emitted by cgo.
+			// Such a field name cannot be entered in regular Go code, this must
+			// be manually inserted in the AST so this is safe.
+			maxAlign := 0
+			maxSize := uint64(0)
+			mainType := members[0]
+			for _, member := range members {
+				align := c.targetData.ABITypeAlignment(member)
+				size := c.targetData.TypeAllocSize(member)
+				if align > maxAlign {
+					maxAlign = align
+					mainType = member
+				} else if align == maxAlign && size > maxSize {
+					maxAlign = align
+					maxSize = size
+					mainType = member
+				} else if size > maxSize {
+					maxSize = size
+				}
+			}
+			members = []llvm.Type{mainType}
+			mainTypeSize := c.targetData.TypeAllocSize(mainType)
+			if mainTypeSize < maxSize {
+				members = append(members, llvm.ArrayType(c.ctx.Int8Type(), int(maxSize-mainTypeSize)))
+			}
+		}
 		return c.ctx.StructType(members, false), nil
 	case *types.Tuple:
 		members := make([]llvm.Type, typ.Len())
@@ -1592,6 +1619,19 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
+		if s := expr.X.Type().Underlying().(*types.Struct); s.NumFields() > 2 && s.Field(0).Name() == "C union" {
+			// Extract a field from a CGo union.
+			// This could be done directly, but as this is a very infrequent
+			// operation it's much easier to bitcast it through an alloca.
+			resultType, err := c.getLLVMType(expr.Type())
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			alloca := c.builder.CreateAlloca(value.Type(), "")
+			c.builder.CreateStore(value, alloca)
+			bitcast := c.builder.CreateBitCast(alloca, llvm.PointerType(resultType, 0), "")
+			return c.builder.CreateLoad(bitcast, ""), nil
+		}
 		result := c.builder.CreateExtractValue(value, expr.Field, "")
 		return result, nil
 	case *ssa.FieldAddr:
@@ -1599,16 +1639,28 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		indices := []llvm.Value{
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(c.ctx.Int32Type(), uint64(expr.Field), false),
-		}
 		// Check for nil pointer before calculating the address, from the spec:
 		// > For an operand x of type T, the address operation &x generates a
 		// > pointer of type *T to x. [...] If the evaluation of x would cause a
 		// > run-time panic, then the evaluation of &x does too.
 		c.emitNilCheck(frame, val, "gep")
-		return c.builder.CreateGEP(val, indices, ""), nil
+		if s := expr.X.Type().(*types.Pointer).Elem().Underlying().(*types.Struct); s.NumFields() > 2 && s.Field(0).Name() == "C union" {
+			// This is not a regular struct but actually an union.
+			// That simplifies things, as we can just bitcast the pointer to the
+			// right type.
+			ptrType, err := c.getLLVMType(expr.Type())
+			if err != nil {
+				return llvm.Value{}, nil
+			}
+			return c.builder.CreateBitCast(val, ptrType, ""), nil
+		} else {
+			// Do a GEP on the pointer to get the field address.
+			indices := []llvm.Value{
+				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(c.ctx.Int32Type(), uint64(expr.Field), false),
+			}
+			return c.builder.CreateGEP(val, indices, ""), nil
+		}
 	case *ssa.Function:
 		fn := c.ir.GetFunction(expr)
 		if fn.IsExported() {
