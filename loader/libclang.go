@@ -17,7 +17,8 @@ import (
 #include <clang-c/Index.h> // if this fails, install libclang-8-dev
 #include <stdlib.h>
 
-int tinygo_clang_visitor(CXCursor c, CXCursor parent, CXClientData client_data);
+int tinygo_clang_globals_visitor(CXCursor c, CXCursor parent, CXClientData client_data);
+int tinygo_clang_struct_visitor(CXCursor c, CXCursor parent, CXClientData client_data);
 */
 import "C"
 
@@ -123,13 +124,13 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string, posFilenam
 	ref := refMap.Put(info)
 	defer refMap.Remove(ref)
 	cursor := C.clang_getTranslationUnitCursor(unit)
-	C.clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_visitor), C.CXClientData(ref))
+	C.clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_globals_visitor), C.CXClientData(ref))
 
 	return nil
 }
 
-//export tinygo_clang_visitor
-func tinygo_clang_visitor(c, parent C.CXCursor, client_data C.CXClientData) C.int {
+//export tinygo_clang_globals_visitor
+func tinygo_clang_globals_visitor(c, parent C.CXCursor, client_data C.CXClientData) C.int {
 	info := refMap.Get(unsafe.Pointer(client_data)).(*fileInfo)
 	kind := C.clang_getCursorKind(c)
 	switch kind {
@@ -284,6 +285,34 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 				Name:    "byte",
 			},
 		}
+	case C.CXType_Typedef:
+		typedefName := getString(C.clang_getTypedefName(typ))
+		return &ast.Ident{
+			NamePos: info.importCPos,
+			Name:    "C." + typedefName,
+		}
+	case C.CXType_Elaborated:
+		underlying := C.clang_Type_getNamedType(typ)
+		return info.makeASTType(underlying)
+	case C.CXType_Record:
+		cursor := C.clang_getTypeDeclaration(typ)
+		switch C.clang_getCursorKind(cursor) {
+		case C.CXCursor_StructDecl:
+			fieldList := &ast.FieldList{
+				Opening: info.importCPos,
+				Closing: info.importCPos,
+			}
+			ref := refMap.Put(struct {
+				fieldList *ast.FieldList
+				info      *fileInfo
+			}{fieldList, info})
+			defer refMap.Remove(ref)
+			C.clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(uintptr(ref)))
+			return &ast.StructType{
+				Struct: info.importCPos,
+				Fields: fieldList,
+			}
+		}
 	}
 	if typeName == "" {
 		// Fallback, probably incorrect but at least the error points to an odd
@@ -294,4 +323,35 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 		NamePos: info.importCPos,
 		Name:    typeName,
 	}
+}
+
+//export tinygo_clang_struct_visitor
+func tinygo_clang_struct_visitor(c, parent C.CXCursor, client_data C.CXClientData) C.int {
+	passed := refMap.Get(unsafe.Pointer(client_data)).(struct {
+		fieldList *ast.FieldList
+		info      *fileInfo
+	})
+	fieldList := passed.fieldList
+	info := passed.info
+	if C.clang_getCursorKind(c) != C.CXCursor_FieldDecl {
+		panic("expected field inside cursor")
+	}
+	name := getString(C.clang_getCursorSpelling(c))
+	typ := C.clang_getCursorType(c)
+	field := &ast.Field{
+		Type: info.makeASTType(typ),
+	}
+	field.Names = []*ast.Ident{
+		&ast.Ident{
+			NamePos: info.importCPos,
+			Name:    name,
+			Obj: &ast.Object{
+				Kind: ast.Var,
+				Name: name,
+				Decl: field,
+			},
+		},
+	}
+	fieldList.List = append(fieldList.List, field)
+	return C.CXChildVisit_Continue
 }
