@@ -89,23 +89,22 @@ const (
 	PE14 = portE + 14
 	PE15 = portE + 15
 
-	PH0  = portH + 0
-	PH1  = portH + 1
+	PH0 = portH + 0
+	PH1 = portH + 1
 )
 
 const (
-	LED  = LED_BUILTIN
-	LED1 = LED_GREEN
-	LED2 = LED_ORANGE
-	LED3 = LED_RED
-	LED4 = LED_BLUE
+	LED         = LED_BUILTIN
+	LED1        = LED_GREEN
+	LED2        = LED_ORANGE
+	LED3        = LED_RED
+	LED4        = LED_BLUE
 	LED_BUILTIN = LED_GREEN
-	LED_GREEN  = PD12
-	LED_ORANGE = PD13
-	LED_RED    = PD14
-	LED_BLUE   = PD15
+	LED_GREEN   = PD12
+	LED_ORANGE  = PD13
+	LED_RED     = PD14
+	LED_BLUE    = PD15
 )
-
 
 // UART pins
 const (

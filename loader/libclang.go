@@ -35,7 +35,7 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string, posFilenam
 	index := C.clang_createIndex(0, 0)
 	defer C.clang_disposeIndex(index)
 
-	filenameC := C.CString(posFilename+"!cgo.c")
+	filenameC := C.CString(posFilename + "!cgo.c")
 	defer C.free(unsafe.Pointer(filenameC))
 
 	fragmentC := C.CString(fragment)

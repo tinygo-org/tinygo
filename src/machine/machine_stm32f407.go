@@ -13,8 +13,8 @@ const CPU_FREQUENCY = 168000000
 
 const (
 	// Mode Flag
-	GPIO_OUTPUT = 0
-	GPIO_INPUT  = GPIO_INPUT_PULLDOWN
+	GPIO_OUTPUT         = 0
+	GPIO_INPUT          = GPIO_INPUT_PULLDOWN
 	GPIO_INPUT_FLOATING = 1
 	GPIO_INPUT_PULLDOWN = 2
 	GPIO_INPUT_PULLUP   = 3
@@ -44,8 +44,6 @@ const (
 	GPIO_PULL_UP   = 1
 	GPIO_PULL_DOWN = 2
 )
-
-
 
 func (p GPIO) getPort() *stm32.GPIO_Type {
 	switch p.Pin / 16 {
@@ -110,21 +108,21 @@ func (p GPIO) Configure(config GPIOConfig) {
 		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
 		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_FLOATING) << pos)))
 	} else if config.Mode == GPIO_INPUT_PULLDOWN {
-		port.MODER = stm32.RegValue((uint32(port.MODER) &^ (0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
-		port.PUPDR = stm32.RegValue((uint32(port.PUPDR) &^ (0x3<<pos) | (uint32(GPIO_PULL_DOWN) << pos)))
+		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
+		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_PULL_DOWN) << pos)))
 	} else if config.Mode == GPIO_INPUT_PULLUP {
-		port.MODER = stm32.RegValue((uint32(port.MODER) &^ (0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
-		port.PUPDR = stm32.RegValue((uint32(port.PUPDR) &^ (0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
+		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
+		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
 	} else if config.Mode == GPIO_OUTPUT {
-		port.MODER   = stm32.RegValue((uint32(port.MODER)   &^ (0x3<<pos) | (uint32(GPIO_MODE_GENERAL_OUTPUT) << pos)))
-		port.OSPEEDR = stm32.RegValue((uint32(port.OSPEEDR) &^ (0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
+		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_GENERAL_OUTPUT) << pos)))
+		port.OSPEEDR = stm32.RegValue((uint32(port.OSPEEDR)&^(0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
 	} else if config.Mode == GPIO_UART_TX {
-		port.MODER   = stm32.RegValue((uint32(port.MODER)   &^ (0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
-		port.OSPEEDR = stm32.RegValue((uint32(port.OSPEEDR) &^ (0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
-		port.PUPDR = stm32.RegValue((uint32(port.PUPDR) &^ (0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
+		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
+		port.OSPEEDR = stm32.RegValue((uint32(port.OSPEEDR)&^(0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
+		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
 		p.setAltFunc(0x7)
 	} else if config.Mode == GPIO_UART_RX {
-		port.MODER   = stm32.RegValue((uint32(port.MODER)   &^ (0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
+		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
 		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_FLOATING) << pos)))
 		p.setAltFunc(0x7)
 	}
@@ -134,13 +132,12 @@ func (p GPIO) setAltFunc(af uint32) {
 	port := p.getPort()
 	pin := p.Pin % 16
 	pos := pin * 4
-	if (pin >= 8) {
-		port.AFRH = stm32.RegValue(uint32(port.AFRH) &^ (0xF << pos) | ((af&0xF)<<pos))
+	if pin >= 8 {
+		port.AFRH = stm32.RegValue(uint32(port.AFRH)&^(0xF<<pos) | ((af & 0xF) << pos))
 	} else {
-		port.AFRL = stm32.RegValue(uint32(port.AFRL) &^ (0xF << pos) | ((af&0xF)<<pos))
+		port.AFRL = stm32.RegValue(uint32(port.AFRL)&^(0xF<<pos) | ((af & 0xF) << pos))
 	}
 }
-
 
 // Set the pin to high or low.
 // Warning: only use this on an output pin!

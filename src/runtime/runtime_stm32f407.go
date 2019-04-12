@@ -22,22 +22,22 @@ func putchar(c byte) {
 const (
 	HSE_STARTUP_TIMEOUT = 0x0500
 	/* PLL Options - See RM0090 Reference Manual pg. 95 */
-	PLL_M = 8    /* PLL_VCO = (HSE_VALUE or HSI_VLAUE / PLL_M) * PLL_N */
+	PLL_M = 8 /* PLL_VCO = (HSE_VALUE or HSI_VLAUE / PLL_M) * PLL_N */
 	PLL_N = 336
-	PLL_P = 2    /* SYSCLK = PLL_VCO / PLL_P */
-	PLL_Q = 7    /* USB OTS FS, SDIO and RNG Clock = PLL_VCO / PLL_Q */
+	PLL_P = 2 /* SYSCLK = PLL_VCO / PLL_P */
+	PLL_Q = 7 /* USB OTS FS, SDIO and RNG Clock = PLL_VCO / PLL_Q */
 )
 
 /*
-    clock settings
-    +-------------+--------+
-    | HSE         | 8mhz   |
-    | SYSCLK      | 168mhz |
-    | HCLK        | 168mhz |
-    | APB2(PCLK2) | 84mhz  |
-    | APB1(PCLK1) | 42mhz  |
-    +-------------+--------+
- */
+   clock settings
+   +-------------+--------+
+   | HSE         | 8mhz   |
+   | SYSCLK      | 168mhz |
+   | HCLK        | 168mhz |
+   | APB2(PCLK2) | 84mhz  |
+   | APB1(PCLK1) | 42mhz  |
+   +-------------+--------+
+*/
 func initCLK() {
 
 	// Reset clock registers
@@ -65,7 +65,7 @@ func initCLK() {
 	// Wait till HSE is ready and if timeout is reached exit
 	for {
 		startupCounter++
-		if  (stm32.RCC.CR & stm32.RCC_CR_HSERDY != 0) || (startupCounter == HSE_STARTUP_TIMEOUT) {
+		if (stm32.RCC.CR&stm32.RCC_CR_HSERDY != 0) || (startupCounter == HSE_STARTUP_TIMEOUT) {
 			break
 		}
 	}
@@ -81,7 +81,7 @@ func initCLK() {
 		stm32.RCC.CFGR |= (0x5 << stm32.RCC_CFGR_PPRE1_Pos)
 		// Configure the main PLL
 		// PLL Options - See RM0090 Reference Manual pg. 95
-		stm32.RCC.PLLCFGR = PLL_M | (PLL_N << 6) | (((PLL_P >> 1) -1) << 16) |
+		stm32.RCC.PLLCFGR = PLL_M | (PLL_N << 6) | (((PLL_P >> 1) - 1) << 16) |
 			(1 << stm32.RCC_PLLCFGR_PLLSRC_Pos) | (PLL_Q << 24)
 		// Enable main PLL
 		stm32.RCC.CR |= stm32.RCC_CR_PLLON
@@ -98,10 +98,11 @@ func initCLK() {
 
 	} else {
 		// If HSE failed to start up, the application will have wrong clock configuration
-		for {}
+		for {
+		}
 	}
 	// Enable the CCM RAM clock
-	stm32.RCC.AHB1ENR |= (1<<20)
+	stm32.RCC.AHB1ENR |= (1 << 20)
 
 }
 
@@ -109,7 +110,7 @@ const tickMicros = 1000
 
 var (
 	// tick in milliseconds
-	tickCount          timeUnit
+	tickCount timeUnit
 )
 
 //go:volatile
@@ -130,8 +131,8 @@ func initTIM7() {
 	stm32.RCC.APB1ENR |= stm32.RCC_APB1ENR_TIM7EN
 
 	// CK_INT = APB1 x2 = 84mhz
-	stm32.TIM7.PSC = 84000000/10000 - 1   // 84mhz to 10khz(0.1ms)
-	stm32.TIM7.ARR = stm32.RegValue(10)-1 // interrupt per 1ms
+	stm32.TIM7.PSC = 84000000/10000 - 1     // 84mhz to 10khz(0.1ms)
+	stm32.TIM7.ARR = stm32.RegValue(10) - 1 // interrupt per 1ms
 
 	// Enable the hardware interrupt.
 	stm32.TIM7.DIER |= stm32.TIM_DIER_UIE
@@ -165,7 +166,7 @@ func timerSleep(ticks uint32) {
 	stm32.TIM3.PSC = 84000000/10000 - 1 // 8399
 
 	// set duty aka duration
-	arr := (ticks/100) - 1 // convert from microseconds to 0.1 ms
+	arr := (ticks / 100) - 1 // convert from microseconds to 0.1 ms
 	if arr == 0 {
 		arr = 1 // avoid blocking
 	}
