@@ -92,9 +92,11 @@ endif
 clean:
 	@rm -rf build
 
+FMT_PATHS = ./*.go compiler interp ir loader src/device/arm src/examples src/machine src/os src/reflect src/runtime src/sync src/syscall
 fmt:
-	@go fmt . ./compiler ./interp ./loader ./ir ./src/device/arm ./src/examples/* ./src/machine ./src/os ./src/runtime ./src/sync ./src/syscall
-	@go fmt ./testdata/*.go
+	@gofmt -l -w $(FMT_PATHS)
+fmt-check:
+	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
 
 test:
 	@go test -v .
