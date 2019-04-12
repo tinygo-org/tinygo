@@ -93,6 +93,7 @@ commands:
           paths:
             - ~/.cache/go-build
             - ~/.cache/tinygo
+      - run: make fmt-check
   build-linux:
     steps:
       - checkout

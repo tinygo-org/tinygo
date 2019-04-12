@@ -335,7 +335,7 @@ func (v Value) Index(i int) Value {
 			typecode: v.Type().Elem(),
 			indirect: true,
 		}
-		addr := uintptr(slice.Data) + elem.Type().Size() * uintptr(i) // pointer to new value
+		addr := uintptr(slice.Data) + elem.Type().Size()*uintptr(i) // pointer to new value
 		elem.value = unsafe.Pointer(addr)
 		return elem
 	case String:
@@ -348,7 +348,7 @@ func (v Value) Index(i int) Value {
 		}
 		return Value{
 			typecode: Uint8.basicType(),
-			value: unsafe.Pointer(uintptr(*(*uint8)(unsafe.Pointer(s.Data + uintptr(i))))),
+			value:    unsafe.Pointer(uintptr(*(*uint8)(unsafe.Pointer(s.Data + uintptr(i))))),
 		}
 	case Array:
 		panic("unimplemented: (reflect.Value).Index()")
