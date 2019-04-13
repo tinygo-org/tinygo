@@ -43,15 +43,22 @@ type interfaceMethodInfo struct {
 	funcptr   uintptr // bitcast from the actual function pointer
 }
 
-// Pseudo function call used while putting a concrete value in an interface,
-// that must be lowered to a constant uintptr.
-func makeInterface(typecode *uint8, methodSet *interfaceMethodInfo) uintptr
+type typecodeID struct{}
+
+// Pseudo type used before interface lowering. By using a struct instead of a
+// function call, this is simpler to reason about during init interpretation
+// than a function call. Also, by keeping the method set around it is easier to
+// implement interfaceImplements in the interp package.
+type typeInInterface struct {
+	typecode  *typecodeID
+	methodSet *interfaceMethodInfo // nil or a GEP of an array
+}
 
 // Pseudo function call used during a type assert. It is used during interface
 // lowering, to assign the lowest type numbers to the types with the most type
 // asserts. Also, it is replaced with const false if this type assert can never
 // happen.
-func typeAssert(actualType uintptr, assertedType *uint8) bool
+func typeAssert(actualType uintptr, assertedType *typecodeID) bool
 
 // Pseudo function call that returns whether a given type implements all methods
 // of the given interface.

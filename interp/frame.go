@@ -307,9 +307,44 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{1}) // len
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{2}) // cap
 				fr.locals[inst] = &LocalValue{fr.Eval, ret}
-			case callee.Name() == "runtime.makeInterface":
-				uintptrType := callee.Type().Context().IntType(fr.TargetData.PointerSize() * 8)
-				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstPtrToInt(inst.Operand(0), uintptrType)}
+			case callee.Name() == "runtime.interfaceImplements":
+				typecode := fr.getLocal(inst.Operand(0)).(*LocalValue).Underlying
+				interfaceMethodSet := fr.getLocal(inst.Operand(1)).(*LocalValue).Underlying
+				if typecode.IsAConstantExpr().IsNil() || typecode.Opcode() != llvm.PtrToInt {
+					panic("interp: expected typecode to be a ptrtoint")
+				}
+				typecode = typecode.Operand(0)
+				if interfaceMethodSet.IsAConstantExpr().IsNil() || interfaceMethodSet.Opcode() != llvm.GetElementPtr {
+					panic("interp: expected method set in runtime.interfaceImplements to be a constant gep")
+				}
+				interfaceMethodSet = interfaceMethodSet.Operand(0).Initializer()
+				methodSet := llvm.ConstExtractValue(typecode.Initializer(), []uint32{1})
+				if methodSet.IsAConstantExpr().IsNil() || methodSet.Opcode() != llvm.GetElementPtr {
+					panic("interp: expected method set to be a constant gep")
+				}
+				methodSet = methodSet.Operand(0).Initializer()
+
+				// Make a set of all the methods on the concrete type, for
+				// easier checking in the next step.
+				definedMethods := map[string]struct{}{}
+				for i := 0; i < methodSet.Type().ArrayLength(); i++ {
+					methodInfo := llvm.ConstExtractValue(methodSet, []uint32{uint32(i)})
+					name := llvm.ConstExtractValue(methodInfo, []uint32{0}).Name()
+					definedMethods[name] = struct{}{}
+				}
+				// Check whether all interface methods are also in the list
+				// of defined methods calculated above.
+				implements := uint64(1) // i1 true
+				for i := 0; i < interfaceMethodSet.Type().ArrayLength(); i++ {
+					name := llvm.ConstExtractValue(interfaceMethodSet, []uint32{uint32(i)}).Name()
+					if _, ok := definedMethods[name]; !ok {
+						// There is a method on the interface that is not
+						// implemented by the type.
+						implements = 0 // i1 false
+						break
+					}
+				}
+				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstInt(fr.Mod.Context().Int1Type(), implements, false)}
 			case callee.Name() == "runtime.nanotime":
 				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstInt(fr.Mod.Context().Int64Type(), 0, false)}
 			case strings.HasPrefix(callee.Name(), "runtime.print") || callee.Name() == "runtime._panic":
