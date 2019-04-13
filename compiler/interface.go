@@ -59,7 +59,15 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, pos token.
 	if err != nil {
 		return llvm.Value{}, nil
 	}
-	itfTypeCode := c.createRuntimeCall("makeInterface", []llvm.Value{itfTypeCodeGlobal, itfMethodSetGlobal}, "makeinterface.typecode")
+	itfConcreteTypeGlobal := c.mod.NamedGlobal("typeInInterface:" + itfTypeCodeGlobal.Name())
+	if itfConcreteTypeGlobal.IsNil() {
+		typeInInterface := c.mod.GetTypeByName("runtime.typeInInterface")
+		itfConcreteTypeGlobal = llvm.AddGlobal(c.mod, typeInInterface, "typeInInterface:"+itfTypeCodeGlobal.Name())
+		itfConcreteTypeGlobal.SetInitializer(llvm.ConstNamedStruct(typeInInterface, []llvm.Value{itfTypeCodeGlobal, itfMethodSetGlobal}))
+		itfConcreteTypeGlobal.SetGlobalConstant(true)
+		itfConcreteTypeGlobal.SetLinkage(llvm.PrivateLinkage)
+	}
+	itfTypeCode := c.builder.CreatePtrToInt(itfConcreteTypeGlobal, c.uintptrType, "")
 	itf := llvm.Undef(c.mod.GetTypeByName("runtime._interface"))
 	itf = c.builder.CreateInsertValue(itf, itfTypeCode, 0, "")
 	itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
@@ -73,7 +81,7 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 	globalName := "type:" + getTypeCodeName(typ)
 	global := c.mod.NamedGlobal(globalName)
 	if global.IsNil() {
-		global = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), globalName)
+		global = llvm.AddGlobal(c.mod, c.mod.GetTypeByName("runtime.typecodeID"), globalName)
 		global.SetGlobalConstant(true)
 	}
 	return global

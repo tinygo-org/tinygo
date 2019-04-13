@@ -33,6 +33,8 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 		return &sideEffectResult{severity: sideEffectNone}
 	case "runtime._panic":
 		return &sideEffectResult{severity: sideEffectLimited}
+	case "runtime.interfaceImplements":
+		return &sideEffectResult{severity: sideEffectNone}
 	}
 	if e.sideEffectFuncs == nil {
 		e.sideEffectFuncs = make(map[llvm.Value]*sideEffectResult)
@@ -84,11 +86,6 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 					continue
 				}
 				if child.IsDeclaration() {
-					switch child.Name() {
-					case "runtime.makeInterface":
-						// Can be interpreted so does not have side effects.
-						continue
-					}
 					// External function call. Assume only limited side effects
 					// (no affected globals, etc.).
 					if e.hasLocalSideEffects(dirtyLocals, inst) {
