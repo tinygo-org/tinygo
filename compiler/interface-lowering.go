@@ -440,10 +440,16 @@ func (p *lowerInterfacesPass) run() {
 	// numbers.
 	for _, typ := range p.types {
 		for _, use := range getUses(typ.typecode) {
-			if use.IsConstant() && use.Opcode() == llvm.PtrToInt {
+			if !use.IsAConstantExpr().IsNil() && use.Opcode() == llvm.PtrToInt {
 				use.ReplaceAllUsesWith(llvm.ConstInt(p.uintptrType, typ.num, false))
 			}
 		}
+	}
+
+	// Remove stray runtime.typeInInterface globals. Required for the following
+	// cleanup.
+	for _, global := range typesInInterfaces {
+		global.EraseFromParentAsGlobal()
 	}
 
 	// Remove method sets of types. Unnecessary, but cleans up the IR for
