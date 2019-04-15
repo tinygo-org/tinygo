@@ -43,6 +43,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		c.OptimizeStringToBytes()
 		c.OptimizeAllocs()
 		c.LowerInterfaces()
+		c.LowerFuncValues()
 
 		// After interfaces are lowered, there are many more opportunities for
 		// interprocedural optimizations. To get them to work, function
@@ -76,6 +77,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 	} else {
 		// Must be run at any optimization level.
 		c.LowerInterfaces()
+		c.LowerFuncValues()
 		err := c.LowerGoroutines()
 		if err != nil {
 			return err
