@@ -1338,7 +1338,10 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 		}
 		// This is a func value, which cannot be called directly. We have to
 		// extract the function pointer and context first from the func value.
-		funcPtr, context := c.decodeFuncValue(value)
+		funcPtr, context, err := c.decodeFuncValue(value, instr.Value.Type().(*types.Signature))
+		if err != nil {
+			return llvm.Value{}, err
+		}
 		c.emitNilCheck(frame, funcPtr, "fpcall")
 		return c.parseFunctionCall(frame, instr.Args, funcPtr, context, false)
 	}
@@ -1508,7 +1511,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if fn.IsExported() {
 			return llvm.Value{}, c.makeError(expr.Pos(), "cannot use an exported function as value")
 		}
-		return c.createFuncValue(fn.LLVMFn)
+		return c.createFuncValue(fn.LLVMFn, llvm.Undef(c.i8ptrType), fn.Signature)
 	case *ssa.Global:
 		value := c.ir.GetGlobal(expr).LLVMGlobal
 		if value.IsNil() {

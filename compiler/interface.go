@@ -396,14 +396,10 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 		return llvm.Value{}, nil, err
 	}
 
-	llvmFnType, err := c.getLLVMType(instr.Method.Type())
+	llvmFnType, err := c.getRawFuncType(instr.Method.Type().(*types.Signature))
 	if err != nil {
 		return llvm.Value{}, nil, err
 	}
-	// getLLVMType() has created a closure type for us, but we don't actually
-	// want a closure type as an interface call can never be a closure call. So
-	// extract the function pointer type from the closure.
-	llvmFnType = llvmFnType.Subtypes()[1]
 
 	typecode := c.builder.CreateExtractValue(itf, 0, "invoke.typecode")
 	values := []llvm.Value{

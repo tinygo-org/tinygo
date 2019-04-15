@@ -1,10 +1,7 @@
 package compiler
 
-// This file implements function values and closures. A func value is
-// implemented as a pair of pointers: {context, function pointer}, where the
-// context may be a pointer to a heap-allocated struct containing the free
-// variables, or it may be undef if the function being pointed to doesn't need a
-// context.
+// This file implements function values and closures. It may need some lowering
+// in a later step, see func-lowering.go.
 
 import (
 	"go/types"
@@ -13,14 +10,86 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+type funcValueImplementation int
+
+const (
+	funcValueNone funcValueImplementation = iota
+
+	// A func value is implemented as a pair of pointers:
+	//     {context, function pointer}
+	// where the context may be a pointer to a heap-allocated struct containing
+	// the free variables, or it may be undef if the function being pointed to
+	// doesn't need a context. The function pointer is a regular function
+	// pointer.
+	funcValueDoubleword
+
+	// As funcValueDoubleword, but with the function pointer replaced by a
+	// unique ID per function signature. Function values are called by using a
+	// switch statement and choosing which function to call.
+	funcValueSwitch
+)
+
+// funcImplementation picks an appropriate func value implementation for the
+// target.
+func (c *Compiler) funcImplementation() funcValueImplementation {
+	if c.GOARCH == "wasm" {
+		return funcValueSwitch
+	} else {
+		return funcValueDoubleword
+	}
+}
+
 // createFuncValue creates a function value from a raw function pointer with no
 // context.
-func (c *Compiler) createFuncValue(funcPtr llvm.Value) (llvm.Value, error) {
-	// Closure is: {context, function pointer}
-	return c.ctx.ConstStruct([]llvm.Value{
-		llvm.Undef(c.i8ptrType),
-		funcPtr,
-	}, false), nil
+func (c *Compiler) createFuncValue(funcPtr, context llvm.Value, sig *types.Signature) (llvm.Value, error) {
+	var funcValueScalar llvm.Value
+	switch c.funcImplementation() {
+	case funcValueDoubleword:
+		// Closure is: {context, function pointer}
+		funcValueScalar = funcPtr
+	case funcValueSwitch:
+		sigGlobal := c.getFuncSignature(sig)
+		funcValueWithSignatureGlobalName := funcPtr.Name() + "$withSignature"
+		funcValueWithSignatureGlobal := c.mod.NamedGlobal(funcValueWithSignatureGlobalName)
+		if funcValueWithSignatureGlobal.IsNil() {
+			funcValueWithSignatureType := c.mod.GetTypeByName("runtime.funcValueWithSignature")
+			funcValueWithSignature := llvm.ConstNamedStruct(funcValueWithSignatureType, []llvm.Value{
+				llvm.ConstPtrToInt(funcPtr, c.uintptrType),
+				sigGlobal,
+			})
+			funcValueWithSignatureGlobal = llvm.AddGlobal(c.mod, funcValueWithSignatureType, funcValueWithSignatureGlobalName)
+			funcValueWithSignatureGlobal.SetInitializer(funcValueWithSignature)
+			funcValueWithSignatureGlobal.SetGlobalConstant(true)
+			funcValueWithSignatureGlobal.SetLinkage(llvm.InternalLinkage)
+		}
+		funcValueScalar = llvm.ConstPtrToInt(funcValueWithSignatureGlobal, c.uintptrType)
+	default:
+		panic("unimplemented func value variant")
+	}
+	funcValueType, err := c.getFuncType(sig)
+	if err != nil {
+		return llvm.Value{}, err
+	}
+	funcValue := llvm.Undef(funcValueType)
+	funcValue = c.builder.CreateInsertValue(funcValue, context, 0, "")
+	funcValue = c.builder.CreateInsertValue(funcValue, funcValueScalar, 1, "")
+	return funcValue, nil
+}
+
+// getFuncSignature returns a global for identification of a particular function
+// signature. It is used in runtime.funcValueWithSignature and in calls to
+// getFuncPtr.
+func (c *Compiler) getFuncSignature(sig *types.Signature) llvm.Value {
+	typeCodeName := getTypeCodeName(sig)
+	sigGlobalName := "reflect/types.type:" + typeCodeName
+	sigGlobal := c.mod.NamedGlobal(sigGlobalName)
+	if sigGlobal.IsNil() {
+		sigGlobal = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), sigGlobalName)
+		sigGlobal.SetInitializer(llvm.Undef(c.ctx.Int8Type()))
+		sigGlobal.SetGlobalConstant(true)
+		sigGlobal.SetLinkage(llvm.InternalLinkage)
+	}
+	return sigGlobal
 }
 
 // extractFuncScalar returns some scalar that can be used in comparisons. It is
@@ -37,19 +106,39 @@ func (c *Compiler) extractFuncContext(funcValue llvm.Value) llvm.Value {
 
 // decodeFuncValue extracts the context and the function pointer from this func
 // value. This may be an expensive operation.
-func (c *Compiler) decodeFuncValue(funcValue llvm.Value) (funcPtr, context llvm.Value) {
+func (c *Compiler) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcPtr, context llvm.Value, err error) {
 	context = c.builder.CreateExtractValue(funcValue, 0, "")
-	funcPtr = c.builder.CreateExtractValue(funcValue, 1, "")
+	switch c.funcImplementation() {
+	case funcValueDoubleword:
+		funcPtr = c.builder.CreateExtractValue(funcValue, 1, "")
+	case funcValueSwitch:
+		llvmSig, err := c.getRawFuncType(sig)
+		if err != nil {
+			return llvm.Value{}, llvm.Value{}, err
+		}
+		sigGlobal := c.getFuncSignature(sig)
+		funcPtr = c.createRuntimeCall("getFuncPtr", []llvm.Value{funcValue, sigGlobal}, "")
+		funcPtr = c.builder.CreateIntToPtr(funcPtr, llvmSig, "")
+	default:
+		panic("unimplemented func value variant")
+	}
 	return
 }
 
 // getFuncType returns the type of a func value given a signature.
 func (c *Compiler) getFuncType(typ *types.Signature) (llvm.Type, error) {
-	rawPtr, err := c.getRawFuncType(typ)
-	if err != nil {
-		return llvm.Type{}, err
+	switch c.funcImplementation() {
+	case funcValueDoubleword:
+		rawPtr, err := c.getRawFuncType(typ)
+		if err != nil {
+			return llvm.Type{}, err
+		}
+		return c.ctx.StructType([]llvm.Type{c.i8ptrType, rawPtr}, false), nil
+	case funcValueSwitch:
+		return c.mod.GetTypeByName("runtime.funcValue"), nil
+	default:
+		panic("unimplemented func value variant")
 	}
-	return c.ctx.StructType([]llvm.Type{c.i8ptrType, rawPtr}, false), nil
 }
 
 // getRawFuncType returns a LLVM function pointer type for a given signature.
@@ -171,19 +260,6 @@ func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.V
 		context = contextHeapAlloc
 	}
 
-	// Get the function signature type, which is a closure type.
-	// A closure is a tuple of {context, function pointer}.
-	typ, err := c.getFuncType(f.Signature)
-	if err != nil {
-		return llvm.Value{}, err
-	}
-
-	// Create the closure, which is a struct: {context, function pointer}.
-	closure, err := c.getZeroValue(typ)
-	if err != nil {
-		return llvm.Value{}, err
-	}
-	closure = c.builder.CreateInsertValue(closure, f.LLVMFn, 1, "")
-	closure = c.builder.CreateInsertValue(closure, context, 0, "")
-	return closure, nil
+	// Create the closure.
+	return c.createFuncValue(f.LLVMFn, context, f.Signature)
 }
