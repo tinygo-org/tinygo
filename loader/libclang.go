@@ -16,9 +16,38 @@ import (
 /*
 #include <clang-c/Index.h> // if this fails, install libclang-8-dev
 #include <stdlib.h>
+#include <stdint.h>
 
-int tinygo_clang_globals_visitor(CXCursor c, CXCursor parent, CXClientData client_data);
-int tinygo_clang_struct_visitor(CXCursor c, CXCursor parent, CXClientData client_data);
+// This struct should be ABI-compatible on all platforms (uintptr_t has the same
+// alignment etc. as void*) but does not include void* pointers that are not
+// always real pointers.
+// The Go garbage collector assumes that all non-nil pointer-typed integers are
+// actually pointers. This is not always true, as data[1] often contains 0x1,
+// which is clearly not a valid pointer. Usually the GC won't catch this issue,
+// but occasionally it will leading to a crash with a vague error message.
+typedef struct {
+	enum CXCursorKind kind;
+	int xdata;
+	uintptr_t data[3];
+} GoCXCursor;
+
+// Forwarding functions. They are implemented in libclang_stubs.c and forward to
+// the real functions without doing anything else, thus they are entirely
+// compatible with the versions without tinygo_ prefix. The only difference is
+// the CXCursor type, which has been replaced with GoCXCursor.
+GoCXCursor tinygo_clang_getTranslationUnitCursor(CXTranslationUnit tu);
+unsigned tinygo_clang_visitChildren(GoCXCursor parent, CXCursorVisitor visitor, CXClientData client_data);
+CXString tinygo_clang_getCursorSpelling(GoCXCursor c);
+enum CXCursorKind tinygo_clang_getCursorKind(GoCXCursor c);
+CXType tinygo_clang_getCursorType(GoCXCursor c);
+GoCXCursor tinygo_clang_getTypeDeclaration(CXType t);
+CXType tinygo_clang_getTypedefDeclUnderlyingType(GoCXCursor c);
+CXType tinygo_clang_getCursorResultType(GoCXCursor c);
+int tinygo_clang_Cursor_getNumArguments(GoCXCursor c);
+GoCXCursor tinygo_clang_Cursor_getArgument(GoCXCursor c, unsigned i);
+
+int tinygo_clang_globals_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
+int tinygo_clang_struct_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
 */
 import "C"
 
@@ -123,29 +152,29 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string, posFilenam
 
 	ref := refMap.Put(info)
 	defer refMap.Remove(ref)
-	cursor := C.clang_getTranslationUnitCursor(unit)
-	C.clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_globals_visitor), C.CXClientData(ref))
+	cursor := C.tinygo_clang_getTranslationUnitCursor(unit)
+	C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_globals_visitor), C.CXClientData(ref))
 
 	return nil
 }
 
 //export tinygo_clang_globals_visitor
-func tinygo_clang_globals_visitor(c, parent C.CXCursor, client_data C.CXClientData) C.int {
+func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClientData) C.int {
 	info := refMap.Get(unsafe.Pointer(client_data)).(*fileInfo)
-	kind := C.clang_getCursorKind(c)
+	kind := C.tinygo_clang_getCursorKind(c)
 	switch kind {
 	case C.CXCursor_FunctionDecl:
-		name := getString(C.clang_getCursorSpelling(c))
-		cursorType := C.clang_getCursorType(c)
+		name := getString(C.tinygo_clang_getCursorSpelling(c))
+		cursorType := C.tinygo_clang_getCursorType(c)
 		if C.clang_isFunctionTypeVariadic(cursorType) != 0 {
 			return C.CXChildVisit_Continue // not supported
 		}
-		numArgs := int(C.clang_Cursor_getNumArguments(c))
+		numArgs := int(C.tinygo_clang_Cursor_getNumArguments(c))
 		fn := &functionInfo{}
 		info.functions[name] = fn
 		for i := 0; i < numArgs; i++ {
-			arg := C.clang_Cursor_getArgument(c, C.uint(i))
-			argName := getString(C.clang_getCursorSpelling(arg))
+			arg := C.tinygo_clang_Cursor_getArgument(c, C.uint(i))
+			argName := getString(C.tinygo_clang_getCursorSpelling(arg))
 			argType := C.clang_getArgType(cursorType, C.uint(i))
 			if argName == "" {
 				argName = "$" + strconv.Itoa(i)
@@ -155,7 +184,7 @@ func tinygo_clang_globals_visitor(c, parent C.CXCursor, client_data C.CXClientDa
 				typeExpr: info.makeASTType(argType),
 			})
 		}
-		resultType := C.clang_getCursorResultType(c)
+		resultType := C.tinygo_clang_getCursorResultType(c)
 		if resultType.kind != C.CXType_Void {
 			fn.results = &ast.FieldList{
 				List: []*ast.Field{
@@ -166,9 +195,9 @@ func tinygo_clang_globals_visitor(c, parent C.CXCursor, client_data C.CXClientDa
 			}
 		}
 	case C.CXCursor_TypedefDecl:
-		typedefType := C.clang_getCursorType(c)
+		typedefType := C.tinygo_clang_getCursorType(c)
 		name := getString(C.clang_getTypedefName(typedefType))
-		underlyingType := C.clang_getTypedefDeclUnderlyingType(c)
+		underlyingType := C.tinygo_clang_getTypedefDeclUnderlyingType(c)
 		expr := info.makeASTType(underlyingType)
 		if strings.HasPrefix(name, "_Cgo_") {
 			expr := expr.(*ast.Ident)
@@ -203,8 +232,8 @@ func tinygo_clang_globals_visitor(c, parent C.CXCursor, client_data C.CXClientDa
 			typeExpr: expr,
 		}
 	case C.CXCursor_VarDecl:
-		name := getString(C.clang_getCursorSpelling(c))
-		cursorType := C.clang_getCursorType(c)
+		name := getString(C.tinygo_clang_getCursorSpelling(c))
+		cursorType := C.tinygo_clang_getCursorType(c)
 		info.globals[name] = &globalInfo{
 			typeExpr: info.makeASTType(cursorType),
 		}
@@ -305,7 +334,7 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 		underlying := C.clang_Type_getNamedType(typ)
 		return info.makeASTType(underlying)
 	case C.CXType_Record:
-		cursor := C.clang_getTypeDeclaration(typ)
+		cursor := C.tinygo_clang_getTypeDeclaration(typ)
 		fieldList := &ast.FieldList{
 			Opening: info.importCPos,
 			Closing: info.importCPos,
@@ -315,8 +344,8 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 			info      *fileInfo
 		}{fieldList, info})
 		defer refMap.Remove(ref)
-		C.clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(uintptr(ref)))
-		switch C.clang_getCursorKind(cursor) {
+		C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(ref))
+		switch C.tinygo_clang_getCursorKind(cursor) {
 		case C.CXCursor_StructDecl:
 			return &ast.StructType{
 				Struct: info.importCPos,
@@ -368,18 +397,18 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 }
 
 //export tinygo_clang_struct_visitor
-func tinygo_clang_struct_visitor(c, parent C.CXCursor, client_data C.CXClientData) C.int {
+func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientData) C.int {
 	passed := refMap.Get(unsafe.Pointer(client_data)).(struct {
 		fieldList *ast.FieldList
 		info      *fileInfo
 	})
 	fieldList := passed.fieldList
 	info := passed.info
-	if C.clang_getCursorKind(c) != C.CXCursor_FieldDecl {
+	if C.tinygo_clang_getCursorKind(c) != C.CXCursor_FieldDecl {
 		panic("expected field inside cursor")
 	}
-	name := getString(C.clang_getCursorSpelling(c))
-	typ := C.clang_getCursorType(c)
+	name := getString(C.tinygo_clang_getCursorSpelling(c))
+	typ := C.tinygo_clang_getCursorType(c)
 	field := &ast.Field{
 		Type: info.makeASTType(typ),
 	}
