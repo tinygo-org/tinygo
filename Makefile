@@ -3,7 +3,7 @@
 all: tinygo
 tinygo: build/tinygo
 
-.PHONY: all tinygo llvm-build llvm-source static run-test clean fmt gen-device gen-device-nrf gen-device-avr
+.PHONY: all tinygo build/tinygo test llvm-build llvm-source clean fmt gen-device gen-device-nrf gen-device-avr
 
 # Default build and source directories, as created by `make llvm-build`.
 LLVM_BUILDDIR ?= llvm-build
@@ -37,9 +37,6 @@ fmt:
 	@gofmt -l -w $(FMT_PATHS)
 fmt-check:
 	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
-
-test:
-	@go test -v .
 
 gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-stm32
 
@@ -81,17 +78,13 @@ llvm-build: llvm-build/build.ninja
 
 # Build the Go compiler.
 build/tinygo:
-	@mkdir -p build
-	go build -o build/tinygo .
-
-static:
 	@if [ ! -f llvm-build/bin/llvm-config ]; then echo "Fetch and build LLVM first by running:\n  make llvm-source\n  make llvm-build"; exit 1; fi
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go build -o build/tinygo -tags byollvm .
 
-static-test:
+test:
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go test -v -tags byollvm .
 
-release: static gen-device
+release: build/tinygo gen-device
 	@mkdir -p build/release/tinygo/bin
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
 	@mkdir -p build/release/tinygo/lib/compiler-rt/lib
