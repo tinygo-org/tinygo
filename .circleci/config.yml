@@ -87,7 +87,7 @@ commands:
             - go-cache-{{ checksum "Gopkg.lock" }}
       - dep
       - run: go install .
-      - run: make test
+      - run: go test -v
       - run: make gen-device -j4
       - smoketest
       - save_cache:
@@ -162,7 +162,7 @@ commands:
       - dep
       - run:
           name: "Test TinyGo"
-          command: make static-test
+          command: make test
       - run:
           name: "Build TinyGo release"
           command: |
@@ -227,7 +227,7 @@ commands:
           command: dep ensure --vendor-only
       - run:
           name: "Test TinyGo"
-          command: make static-test
+          command: make test
       - run:
           name: "Build TinyGo release"
           command: |

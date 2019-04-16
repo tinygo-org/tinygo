@@ -92,7 +92,7 @@ Now that you have a working version of LLVM, build TinyGo using it. You need to
 specify the directories to the LLVM build directory and to the Clang and LLD source.
 
     cd $HOME/go/src/github.com/tinygo-org/tinygo
-    make static LLVM_BUILDDIR=$HOME/src/llvm-build CLANG_SRC=$HOME/src/llvm/tools/clang LLD_SRC=$HOME/src/llvm/tools/lld
+    make LLVM_BUILDDIR=$HOME/src/llvm-build CLANG_SRC=$HOME/src/llvm/tools/clang LLD_SRC=$HOME/src/llvm/tools/lld
 
 ## Verify TinyGo
 
