@@ -191,7 +191,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		// Prepare link command.
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
-		ldflags := append(spec.LDFlags, "-o", executable, objfile)
+		ldflags := append(spec.LDFlags, "-o", executable, objfile, "-L", sourceDir())
 		if spec.RTLib == "compiler-rt" {
 			ldflags = append(ldflags, librt)
 		}
@@ -229,9 +229,9 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 
 		// Link the object files together.
 		if linker, ok := commands[spec.Linker]; ok {
-			err = Link(sourceDir(), linker, ldflags...)
+			err = Link(linker, ldflags...)
 		} else {
-			err = Link(sourceDir(), spec.Linker, ldflags...)
+			err = Link(spec.Linker, ldflags...)
 		}
 		if err != nil {
 			return &commandError{"failed to link", executable, err}
