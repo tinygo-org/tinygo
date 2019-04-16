@@ -22,7 +22,7 @@ import "C"
 // Link invokes a linker with the given name and flags.
 //
 // This version uses the built-in linker when trying to use lld.
-func Link(dir, linker string, flags ...string) error {
+func Link(linker string, flags ...string) error {
 	switch linker {
 	case "ld.lld", commands["ld.lld"]:
 		flags = append([]string{"tinygo:" + linker}, flags...)
@@ -60,7 +60,6 @@ func Link(dir, linker string, flags ...string) error {
 		cmd := exec.Command(linker, flags...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		cmd.Dir = dir
 		return cmd.Run()
 	}
 }
