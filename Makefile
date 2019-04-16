@@ -3,42 +3,7 @@
 all: tinygo
 tinygo: build/tinygo
 
-.PHONY: all tinygo llvm-build llvm-source static run-test run-blinky run-blinky2 clean fmt gen-device gen-device-nrf gen-device-avr
-
-TARGET ?= unix
-
-ifeq ($(TARGET),unix)
-# Regular *nix system.
-
-else ifeq ($(TARGET),pca10040)
-# PCA10040: nRF52832 development board
-OBJCOPY = arm-none-eabi-objcopy
-TGOFLAGS += -target $(TARGET)
-
-else ifeq ($(TARGET),microbit)
-# BBC micro:bit
-OBJCOPY = arm-none-eabi-objcopy
-TGOFLAGS += -target $(TARGET)
-
-else ifeq ($(TARGET),reelboard)
-# reel board
-OBJCOPY = arm-none-eabi-objcopy
-TGOFLAGS += -target $(TARGET)
-
-else ifeq ($(TARGET),bluepill)
-# "blue pill" development board
-# See: https://wiki.stm32duino.com/index.php?title=Blue_Pill
-OBJCOPY = arm-none-eabi-objcopy
-TGOFLAGS += -target $(TARGET)
-
-else ifeq ($(TARGET),arduino)
-OBJCOPY = avr-objcopy
-TGOFLAGS += -target $(TARGET)
-
-else
-$(error Unknown target)
-
-endif
+.PHONY: all tinygo llvm-build llvm-source static run-test clean fmt gen-device gen-device-nrf gen-device-avr
 
 # Default build and source directories, as created by `make llvm-build`.
 LLVM_BUILDDIR ?= llvm-build
@@ -63,31 +28,6 @@ CGO_CPPFLAGS=$(shell $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(
 CGO_CXXFLAGS=-std=c++11
 CGO_LDFLAGS=-L$(LLVM_BUILDDIR)/lib $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS))
 
-
-
-run-test: build/test
-	./build/test
-
-run-blinky: run-blinky2
-run-blinky2: build/blinky2
-	./build/blinky2
-
-ifeq ($(TARGET),pca10040)
-flash-%: build/%.hex
-	nrfjprog -f nrf52 --sectorerase --program $< --reset
-else ifeq ($(TARGET),microbit)
-flash-%: build/%.hex
-	openocd -f interface/cmsis-dap.cfg -f target/nrf51.cfg -c 'program $< reset exit'
-else ifeq ($(TARGET),reelboard)
-flash-%: build/%.hex
-	openocd -f interface/cmsis-dap.cfg -f target/nrf51.cfg -c 'program $< reset exit'
-else ifeq ($(TARGET),arduino)
-flash-%: build/%.hex
-	avrdude -c arduino -p atmega328p -P /dev/ttyACM0 -U flash:w:$<
-else ifeq ($(TARGET),bluepill)
-flash-%: build/%.hex
-	openocd -f interface/stlink-v2.cfg -f target/stm32f1x.cfg -c 'program $< reset exit'
-endif
 
 clean:
 	@rm -rf build
@@ -171,15 +111,3 @@ release: static gen-device
 	./build/tinygo build-builtins -target=armv7m-none-eabi  -o build/release/tinygo/pkg/armv7m-none-eabi/compiler-rt.a
 	./build/tinygo build-builtins -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/compiler-rt.a
 	tar -czf build/release.tar.gz -C build/release tinygo
-
-# Binary that can run on the host.
-build/%: src/examples/% src/examples/%/*.go build/tinygo src/runtime/*.go
-	./build/tinygo build $(TGOFLAGS) -size=short -o $@ $(subst src/,,$<)
-
-# ELF file that can run on a microcontroller.
-build/%.elf: src/examples/% src/examples/%/*.go build/tinygo src/runtime/*.go
-	./build/tinygo build $(TGOFLAGS) -size=short -o $@ $(subst src/,,$<)
-
-# Convert executable to Intel hex file (for flashing).
-build/%.hex: build/%.elf
-	$(OBJCOPY) -O ihex $^ $@
