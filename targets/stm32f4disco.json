@@ -1,0 +1,18 @@
+{
+  "inherits": ["cortex-m"],
+  "llvm-target": "armv7em-none-eabi",
+  "build-tags": ["stm32f4disco", "stm32f407", "stm32"],
+  "cflags": [
+    "--target=armv7em-none-eabi",
+    "-Qunused-arguments"
+  ],
+  "ldflags": [
+    "-T", "targets/stm32f407.ld"
+  ],
+  "extra-files": [
+    "src/device/stm32/stm32f407.s"
+  ],
+  "flash": "openocd -f interface/stlink-v2.cfg -f target/stm32f4x.cfg -c 'program {hex} reset exit'",
+  "ocd-daemon": ["openocd", "-f", "interface/stlink.cfg", "-f", "target/stm32f4x.cfg"],
+  "gdb-initial-cmds": ["target remote :3333", "monitor halt", "load", "monitor reset", "c"]
+}

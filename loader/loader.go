@@ -299,9 +299,9 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 			fileErrs = append(fileErrs, err)
 			continue
 		}
-		err = p.processCgo(path, f, append(p.CFlags, "-I"+p.Package.Dir))
-		if err != nil {
-			fileErrs = append(fileErrs, err)
+		errs := p.processCgo(path, f, append(p.CFlags, "-I"+p.Package.Dir))
+		if errs != nil {
+			fileErrs = append(fileErrs, errs...)
 			continue
 		}
 		files = append(files, f)

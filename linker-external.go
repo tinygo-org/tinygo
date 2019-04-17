@@ -13,10 +13,9 @@ import (
 // Link invokes a linker with the given name and arguments.
 //
 // This version always runs the linker as an external command.
-func Link(dir, linker string, flags ...string) error {
+func Link(linker string, flags ...string) error {
 	cmd := exec.Command(linker, flags...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Dir = dir
 	return cmd.Run()
 }

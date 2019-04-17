@@ -134,18 +134,18 @@ func (t Type) String() string {
 }
 
 func (t Type) Kind() Kind {
-	if t % 2 == 0 {
+	if t%2 == 0 {
 		// basic type
 		return Kind((t >> 1) % 32)
 	} else {
-		return Kind(t >> 1) % 8 + 19
+		return Kind(t>>1)%8 + 19
 	}
 }
 
 func (t Type) Elem() Type {
 	switch t.Kind() {
 	case Chan, Ptr, Slice:
-		if (t >> 4) % 2 != 0 {
+		if (t>>4)%2 != 0 {
 			panic("unimplemented: (reflect.Type).Elem() for named types")
 		}
 		return t >> 5

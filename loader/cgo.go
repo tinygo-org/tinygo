@@ -16,6 +16,7 @@ import (
 // fileInfo holds all Cgo-related information of a given *ast.File.
 type fileInfo struct {
 	*ast.File
+	*Package
 	filename   string
 	functions  map[string]*functionInfo
 	globals    map[string]*globalInfo
@@ -78,9 +79,10 @@ typedef unsigned long long  _Cgo_ulonglong;
 
 // processCgo extracts the `import "C"` statement from the AST, parses the
 // comment with libclang, and modifies the AST to use this information.
-func (p *Package) processCgo(filename string, f *ast.File, cflags []string) error {
+func (p *Package) processCgo(filename string, f *ast.File, cflags []string) []error {
 	info := &fileInfo{
 		File:      f,
+		Package:   p,
 		filename:  filename,
 		functions: map[string]*functionInfo{},
 		globals:   map[string]*globalInfo{},
@@ -114,9 +116,10 @@ func (p *Package) processCgo(filename string, f *ast.File, cflags []string) erro
 		// source location.
 		info.importCPos = spec.Path.ValuePos
 
-		err = info.parseFragment(cgoComment+cgoTypes, cflags)
-		if err != nil {
-			return err
+		pos := info.fset.PositionFor(genDecl.Doc.Pos(), true)
+		errs := info.parseFragment(cgoComment+cgoTypes, cflags, pos.Filename, pos.Line)
+		if errs != nil {
+			return errs
 		}
 
 		// Remove this import declaration.

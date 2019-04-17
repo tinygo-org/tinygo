@@ -1,11 +1,16 @@
 package main
 
 import (
+	"errors"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/blakesmith/ar"
 )
 
 // These are the GENERIC_SOURCES according to CMakeList.txt.
@@ -246,14 +251,45 @@ func compileBuiltins(target string, callback func(path string) error) error {
 	}
 
 	// Put all builtins in an archive to link as a static library.
+	// Note: this does not create a symbol index, but ld.lld doesn't seem to
+	// care.
 	arpath := filepath.Join(dir, "librt.a")
-	cmd := exec.Command(commands["ar"], append([]string{"cr", arpath}, objs...)...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Dir = dir
-	err = cmd.Run()
+	arfile, err := os.Create(arpath)
 	if err != nil {
-		return &commandError{"failed to make static library", arpath, err}
+		return err
+	}
+	defer arfile.Close()
+	arwriter := ar.NewWriter(arfile)
+	err = arwriter.WriteGlobalHeader()
+	if err != nil {
+		return &os.PathError{"write ar header", arpath, err}
+	}
+	for _, objpath := range objs {
+		name := filepath.Base(objpath)
+		objfile, err := os.Open(objpath)
+		if err != nil {
+			return err
+		}
+		defer objfile.Close()
+		st, err := objfile.Stat()
+		if err != nil {
+			return err
+		}
+		arwriter.WriteHeader(&ar.Header{
+			Name:    name,
+			ModTime: time.Unix(0, 0),
+			Uid:     0,
+			Gid:     0,
+			Mode:    0644,
+			Size:    st.Size(),
+		})
+		n, err := io.Copy(arwriter, objfile)
+		if err != nil {
+			return err
+		}
+		if n != st.Size() {
+			return errors.New("file modified during ar creation: " + arpath)
+		}
 	}
 
 	// Give the caller the resulting file. The callback must copy the file,

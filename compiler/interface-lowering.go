@@ -4,7 +4,6 @@ package compiler
 // form, optimizing them in the process.
 //
 // During SSA construction, the following pseudo-calls are created:
-//     runtime.makeInterface(typecode, methodSet)
 //     runtime.typeAssert(typecode, assertedType)
 //     runtime.interfaceImplements(typecode, interfaceMethodSet)
 //     runtime.interfaceMethod(typecode, interfaceMethodSet, signature)
@@ -14,16 +13,13 @@ package compiler
 //
 // This pass lowers the above functions to their final form:
 //
-// makeInterface:
-//     Replaced with a constant typecode.
-//
 // typeAssert:
 //     Replaced with an icmp instruction so it can be directly used in a type
 //     switch. This is very easy to optimize for LLVM: it will often translate a
 //     type switch into a regular switch statement.
 //     When this type assert is not possible (the type is never used in an
-//     interface with makeInterface), this call is replaced with a constant
-//     false to optimize the type assert away completely.
+//     interface), this call is replaced with a constant false to optimize the
+//     type assert away completely.
 //
 // interfaceImplements:
 //     This call is translated into a call that checks whether the underlying
@@ -166,25 +162,36 @@ func (c *Compiler) LowerInterfaces() {
 
 // run runs the pass itself.
 func (p *lowerInterfacesPass) run() {
-	// Count per type how often it is put in an interface. Also, collect all
-	// methods this type has (if it is named).
-	makeInterface := p.mod.NamedFunction("runtime.makeInterface")
-	makeInterfaceUses := getUses(makeInterface)
-	for _, use := range makeInterfaceUses {
-		typecode := use.Operand(0)
-		name := typecode.Name()
-		if t, ok := p.types[name]; !ok {
-			// This is the first time this type has been seen, add it to the
-			// list of types.
-			t = p.addType(typecode)
-			p.addTypeMethods(t, use.Operand(1))
-		} else {
-			p.addTypeMethods(t, use.Operand(1))
-		}
+	// Collect all type codes.
+	typecodeIDPtr := llvm.PointerType(p.mod.GetTypeByName("runtime.typecodeID"), 0)
+	typeInInterfacePtr := llvm.PointerType(p.mod.GetTypeByName("runtime.typeInInterface"), 0)
+	var typesInInterfaces []llvm.Value
+	for global := p.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+		switch global.Type() {
+		case typecodeIDPtr:
+			// Retrieve Go type information based on an opaque global variable.
+			// Only the name of the global is relevant, the object itself is
+			// discarded afterwards.
+			name := global.Name()
+			t := &typeInfo{
+				name:     name,
+				typecode: global,
+			}
+			p.types[name] = t
+		case typeInInterfacePtr:
+			// Count per type how often it is put in an interface. Also, collect
+			// all methods this type has (if it is named).
+			typesInInterfaces = append(typesInInterfaces, global)
+			initializer := global.Initializer()
+			typecode := llvm.ConstExtractValue(initializer, []uint32{0})
+			methodSet := llvm.ConstExtractValue(initializer, []uint32{1})
+			t := p.types[typecode.Name()]
+			p.addTypeMethods(t, methodSet)
 
-		// Count the number of MakeInterface instructions, for sorting the
-		// typecodes later.
-		p.types[name].countMakeInterfaces++
+			// Count the number of MakeInterface instructions, for sorting the
+			// typecodes later.
+			t.countMakeInterfaces += len(getUses(global))
+		}
 	}
 
 	// Count per type how often it is type asserted on (e.g. in a switch
@@ -194,9 +201,6 @@ func (p *lowerInterfacesPass) run() {
 	for _, use := range typeAssertUses {
 		typecode := use.Operand(1)
 		name := typecode.Name()
-		if _, ok := p.types[name]; !ok {
-			p.addType(typecode)
-		}
 		p.types[name].countTypeAsserts++
 	}
 
@@ -286,16 +290,6 @@ func (p *lowerInterfacesPass) run() {
 		typecode := use.Operand(0)
 		signature := p.signatures[use.Operand(2).Name()]
 
-		// If the interface was created in the same function, we can insert a
-		// direct call. This may not happen often but it is an easy
-		// optimization so let's do it anyway.
-		if !typecode.IsACallInst().IsNil() && typecode.CalledValue() == makeInterface {
-			name := typecode.Operand(0).Name()
-			typ := p.types[name]
-			p.replaceInvokeWithCall(use, typ, signature)
-			continue
-		}
-
 		methodSet := use.Operand(1).Operand(0) // global variable
 		itf := p.interfaces[methodSet.Name()]
 		if len(itf.types) == 0 {
@@ -356,20 +350,6 @@ func (p *lowerInterfacesPass) run() {
 	// types, if possible.
 	for _, use := range interfaceImplementsUses {
 		actualType := use.Operand(0)
-		if !actualType.IsACallInst().IsNil() && actualType.CalledValue() == makeInterface {
-			// Type assert is in the same function that creates the interface
-			// value. This means the underlying type is already known so match
-			// on that.
-			// This may not happen often but it is an easy optimization.
-			name := actualType.Operand(0).Name()
-			typ := p.types[name]
-			p.builder.SetInsertPointBefore(use)
-			assertedType := p.builder.CreatePtrToInt(typ.typecode, p.uintptrType, "typeassert.typecode")
-			commaOk := p.builder.CreateICmp(llvm.IntEQ, assertedType, actualType, "typeassert.ok")
-			use.ReplaceAllUsesWith(commaOk)
-			use.EraseFromParentAsInstruction()
-			continue
-		}
 
 		methodSet := use.Operand(1).Operand(0) // global variable
 		itf := p.interfaces[methodSet.Name()]
@@ -416,12 +396,14 @@ func (p *lowerInterfacesPass) run() {
 	// Assign a type code for each type.
 	p.assignTypeCodes(typeSlice)
 
-	// Replace each call to runtime.makeInterface with the constant type code.
-	for _, use := range makeInterfaceUses {
-		global := use.Operand(0)
-		t := p.types[global.Name()]
-		use.ReplaceAllUsesWith(llvm.ConstPtrToInt(t.typecode, p.uintptrType))
-		use.EraseFromParentAsInstruction()
+	// Replace each use of a runtime.typeInInterface with the constant type
+	// code.
+	for _, global := range typesInInterfaces {
+		for _, use := range getUses(global) {
+			t := p.types[llvm.ConstExtractValue(global.Initializer(), []uint32{0}).Name()]
+			typecode := llvm.ConstInt(p.uintptrType, t.num, false)
+			use.ReplaceAllUsesWith(typecode)
+		}
 	}
 
 	// Replace each type assert with an actual type comparison or (if the type
@@ -458,10 +440,16 @@ func (p *lowerInterfacesPass) run() {
 	// numbers.
 	for _, typ := range p.types {
 		for _, use := range getUses(typ.typecode) {
-			if use.IsConstant() && use.Opcode() == llvm.PtrToInt {
+			if !use.IsAConstantExpr().IsNil() && use.Opcode() == llvm.PtrToInt {
 				use.ReplaceAllUsesWith(llvm.ConstInt(p.uintptrType, typ.num, false))
 			}
 		}
+	}
+
+	// Remove stray runtime.typeInInterface globals. Required for the following
+	// cleanup.
+	for _, global := range typesInInterfaces {
+		global.EraseFromParentAsGlobal()
 	}
 
 	// Remove method sets of types. Unnecessary, but cleans up the IR for
@@ -472,19 +460,6 @@ func (p *lowerInterfacesPass) run() {
 			typ.methodSet = llvm.Value{}
 		}
 	}
-}
-
-// addType retrieves Go type information based on a i16 global variable.
-// Only the name of the i16 is relevant, the object itself is const-propagated
-// and discared afterwards.
-func (p *lowerInterfacesPass) addType(typecode llvm.Value) *typeInfo {
-	name := typecode.Name()
-	t := &typeInfo{
-		name:     name,
-		typecode: typecode,
-	}
-	p.types[name] = t
-	return t
 }
 
 // addTypeMethods reads the method set of the given type info struct. It

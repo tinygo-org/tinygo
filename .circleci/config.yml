@@ -68,6 +68,8 @@ commands:
       - run: tinygo build -size short -o test.elf -target=pca10056            examples/blinky2
       - run: tinygo build -size short -o test.elf -target=itsybitsy-m0        examples/blinky1
       - run: tinygo build -size short -o test.elf -target=circuitplay-express examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky2
       - run: tinygo build             -o wasm.wasm -target=wasm               examples/wasm
   test-linux:
     parameters:
@@ -85,7 +87,7 @@ commands:
             - go-cache-{{ checksum "Gopkg.lock" }}
       - dep
       - run: go install .
-      - run: make test
+      - run: go test -v
       - run: make gen-device -j4
       - smoketest
       - save_cache:
@@ -93,6 +95,7 @@ commands:
           paths:
             - ~/.cache/go-build
             - ~/.cache/tinygo
+      - run: make fmt-check
   build-linux:
     steps:
       - checkout
@@ -154,13 +157,12 @@ commands:
           name: "Create LLVM symlinks"
           command: |
             ln -s $PWD/llvm-build/bin/clang-8 /go/bin/clang-8
-            ln -s $PWD/llvm-build/bin/llvm-ar /go/bin/llvm-ar-8
             ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-8
             ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-8
       - dep
       - run:
           name: "Test TinyGo"
-          command: make static-test
+          command: make test
       - run:
           name: "Build TinyGo release"
           command: |
@@ -220,13 +222,12 @@ commands:
           name: "Create LLVM symlinks"
           command: |
             ln -s $PWD/llvm-build/bin/clang-8 /usr/local/bin/clang-8
-            ln -s $PWD/llvm-build/bin/llvm-ar /usr/local/bin/llvm-ar
       - run:
           name: "Install Go dependencies"
           command: dep ensure --vendor-only
       - run:
           name: "Test TinyGo"
-          command: make static-test
+          command: make test
       - run:
           name: "Build TinyGo release"
           command: |

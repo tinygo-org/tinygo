@@ -59,7 +59,15 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, pos token.
 	if err != nil {
 		return llvm.Value{}, nil
 	}
-	itfTypeCode := c.createRuntimeCall("makeInterface", []llvm.Value{itfTypeCodeGlobal, itfMethodSetGlobal}, "makeinterface.typecode")
+	itfConcreteTypeGlobal := c.mod.NamedGlobal("typeInInterface:" + itfTypeCodeGlobal.Name())
+	if itfConcreteTypeGlobal.IsNil() {
+		typeInInterface := c.mod.GetTypeByName("runtime.typeInInterface")
+		itfConcreteTypeGlobal = llvm.AddGlobal(c.mod, typeInInterface, "typeInInterface:"+itfTypeCodeGlobal.Name())
+		itfConcreteTypeGlobal.SetInitializer(llvm.ConstNamedStruct(typeInInterface, []llvm.Value{itfTypeCodeGlobal, itfMethodSetGlobal}))
+		itfConcreteTypeGlobal.SetGlobalConstant(true)
+		itfConcreteTypeGlobal.SetLinkage(llvm.PrivateLinkage)
+	}
+	itfTypeCode := c.builder.CreatePtrToInt(itfConcreteTypeGlobal, c.uintptrType, "")
 	itf := llvm.Undef(c.mod.GetTypeByName("runtime._interface"))
 	itf = c.builder.CreateInsertValue(itf, itfTypeCode, 0, "")
 	itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
@@ -73,7 +81,7 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 	globalName := "type:" + getTypeCodeName(typ)
 	global := c.mod.NamedGlobal(globalName)
 	if global.IsNil() {
-		global = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), globalName)
+		global = llvm.AddGlobal(c.mod, c.mod.GetTypeByName("runtime.typecodeID"), globalName)
 		global.SetGlobalConstant(true)
 	}
 	return global
@@ -162,6 +170,10 @@ func getTypeCodeName(t types.Type) string {
 		return "slice:" + name + getTypeCodeName(t.Elem())
 	case *types.Struct:
 		elems := make([]string, t.NumFields())
+		if t.NumFields() > 2 && t.Field(0).Name() == "C union" {
+			// TODO: report this as a normal error instead of panicking.
+			panic("cgo unions are not allowed in interfaces")
+		}
 		for i := 0; i < t.NumFields(); i++ {
 			elems[i] = getTypeCodeName(t.Field(i).Type())
 		}
@@ -384,14 +396,10 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 		return llvm.Value{}, nil, err
 	}
 
-	llvmFnType, err := c.getLLVMType(instr.Method.Type())
+	llvmFnType, err := c.getRawFuncType(instr.Method.Type().(*types.Signature))
 	if err != nil {
 		return llvm.Value{}, nil, err
 	}
-	// getLLVMType() has created a closure type for us, but we don't actually
-	// want a closure type as an interface call can never be a closure call. So
-	// extract the function pointer type from the closure.
-	llvmFnType = llvmFnType.Subtypes()[1]
 
 	typecode := c.builder.CreateExtractValue(itf, 0, "invoke.typecode")
 	values := []llvm.Value{

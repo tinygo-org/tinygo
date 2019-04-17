@@ -3,42 +3,7 @@
 all: tinygo
 tinygo: build/tinygo
 
-.PHONY: all tinygo llvm-build llvm-source static run-test run-blinky run-blinky2 clean fmt gen-device gen-device-nrf gen-device-avr
-
-TARGET ?= unix
-
-ifeq ($(TARGET),unix)
-# Regular *nix system.
-
-else ifeq ($(TARGET),pca10040)
-# PCA10040: nRF52832 development board
-OBJCOPY = arm-none-eabi-objcopy
-TGOFLAGS += -target $(TARGET)
-
-else ifeq ($(TARGET),microbit)
-# BBC micro:bit
-OBJCOPY = arm-none-eabi-objcopy
-TGOFLAGS += -target $(TARGET)
-
-else ifeq ($(TARGET),reelboard)
-# reel board
-OBJCOPY = arm-none-eabi-objcopy
-TGOFLAGS += -target $(TARGET)
-
-else ifeq ($(TARGET),bluepill)
-# "blue pill" development board
-# See: https://wiki.stm32duino.com/index.php?title=Blue_Pill
-OBJCOPY = arm-none-eabi-objcopy
-TGOFLAGS += -target $(TARGET)
-
-else ifeq ($(TARGET),arduino)
-OBJCOPY = avr-objcopy
-TGOFLAGS += -target $(TARGET)
-
-else
-$(error Unknown target)
-
-endif
+.PHONY: all tinygo build/tinygo test llvm-build llvm-source clean fmt gen-device gen-device-nrf gen-device-avr
 
 # Default build and source directories, as created by `make llvm-build`.
 LLVM_BUILDDIR ?= llvm-build
@@ -64,40 +29,14 @@ CGO_CXXFLAGS=-std=c++11
 CGO_LDFLAGS=-L$(LLVM_BUILDDIR)/lib $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS))
 
 
-
-run-test: build/test
-	./build/test
-
-run-blinky: run-blinky2
-run-blinky2: build/blinky2
-	./build/blinky2
-
-ifeq ($(TARGET),pca10040)
-flash-%: build/%.hex
-	nrfjprog -f nrf52 --sectorerase --program $< --reset
-else ifeq ($(TARGET),microbit)
-flash-%: build/%.hex
-	openocd -f interface/cmsis-dap.cfg -f target/nrf51.cfg -c 'program $< reset exit'
-else ifeq ($(TARGET),reelboard)
-flash-%: build/%.hex
-	openocd -f interface/cmsis-dap.cfg -f target/nrf51.cfg -c 'program $< reset exit'
-else ifeq ($(TARGET),arduino)
-flash-%: build/%.hex
-	avrdude -c arduino -p atmega328p -P /dev/ttyACM0 -U flash:w:$<
-else ifeq ($(TARGET),bluepill)
-flash-%: build/%.hex
-	openocd -f interface/stlink-v2.cfg -f target/stm32f1x.cfg -c 'program $< reset exit'
-endif
-
 clean:
 	@rm -rf build
 
+FMT_PATHS = ./*.go compiler interp ir loader src/device/arm src/examples src/machine src/os src/reflect src/runtime src/sync src/syscall
 fmt:
-	@go fmt . ./compiler ./interp ./loader ./ir ./src/device/arm ./src/examples/* ./src/machine ./src/os ./src/runtime ./src/sync ./src/syscall
-	@go fmt ./testdata/*.go
-
-test:
-	@go test -v .
+	@gofmt -l -w $(FMT_PATHS)
+fmt-check:
+	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
 
 gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-stm32
 
@@ -139,16 +78,13 @@ llvm-build: llvm-build/build.ninja
 
 # Build the Go compiler.
 build/tinygo:
-	@mkdir -p build
-	go build -o build/tinygo .
-
-static:
+	@if [ ! -f llvm-build/bin/llvm-config ]; then echo "Fetch and build LLVM first by running:\n  make llvm-source\n  make llvm-build"; exit 1; fi
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go build -o build/tinygo -tags byollvm .
 
-static-test:
+test:
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go test -v -tags byollvm .
 
-release: static gen-device
+release: build/tinygo gen-device
 	@mkdir -p build/release/tinygo/bin
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
 	@mkdir -p build/release/tinygo/lib/compiler-rt/lib
@@ -182,15 +118,3 @@ RELEASE_TAR ?= ./build/release.tar.gz
 # Create debian DEB installer file. Requires fpm (https://github.com/jordansissel/fpm)
 deb:
 	fpm -s tar -t deb -n tinygo -v $(RELEASE_VERSION) -a $(RELEASE_ARCH) --prefix=/usr/local --deb-custom-control=./DEBIAN/control $(RELEASE_TAR)
-
-# Binary that can run on the host.
-build/%: src/examples/% src/examples/%/*.go build/tinygo src/runtime/*.go
-	./build/tinygo build $(TGOFLAGS) -size=short -o $@ $(subst src/,,$<)
-
-# ELF file that can run on a microcontroller.
-build/%.elf: src/examples/% src/examples/%/*.go build/tinygo src/runtime/*.go
-	./build/tinygo build $(TGOFLAGS) -size=short -o $@ $(subst src/,,$<)
-
-# Convert executable to Intel hex file (for flashing).
-build/%.hex: build/%.elf
-	$(OBJCOPY) -O ihex $^ $@

@@ -1,0 +1,220 @@
+// +build stm32,stm32f407
+
+package machine
+
+// Peripheral abstraction layer for the stm32.
+
+import (
+	"device/arm"
+	"device/stm32"
+)
+
+const CPU_FREQUENCY = 168000000
+
+const (
+	// Mode Flag
+	GPIO_OUTPUT         = 0
+	GPIO_INPUT          = GPIO_INPUT_PULLDOWN
+	GPIO_INPUT_FLOATING = 1
+	GPIO_INPUT_PULLDOWN = 2
+	GPIO_INPUT_PULLUP   = 3
+
+	// for UART
+	GPIO_UART_TX = 4
+	GPIO_UART_RX = 5
+
+	//GPIOx_MODER
+	GPIO_MODE_INPUT          = 0
+	GPIO_MODE_GENERAL_OUTPUT = 1
+	GPIO_MODE_ALTERNABTIVE   = 2
+	GPIO_MODE_ANALOG         = 3
+
+	//GPIOx_OTYPER
+	GPIO_OUTPUT_MODE_PUSH_PULL  = 0
+	GPIO_OUTPUT_MODE_OPEN_DRAIN = 1
+
+	// GPIOx_OSPEEDR
+	GPIO_SPEED_LOW     = 0
+	GPIO_SPEED_MID     = 1
+	GPIO_SPEED_HI      = 2
+	GPIO_SPEED_VERY_HI = 3
+
+	// GPIOx_PUPDR
+	GPIO_FLOATING  = 0
+	GPIO_PULL_UP   = 1
+	GPIO_PULL_DOWN = 2
+)
+
+func (p GPIO) getPort() *stm32.GPIO_Type {
+	switch p.Pin / 16 {
+	case 0:
+		return stm32.GPIOA
+	case 1:
+		return stm32.GPIOB
+	case 2:
+		return stm32.GPIOC
+	case 3:
+		return stm32.GPIOD
+	case 4:
+		return stm32.GPIOE
+	case 5:
+		return stm32.GPIOF
+	case 6:
+		return stm32.GPIOG
+	case 7:
+		return stm32.GPIOH
+	case 8:
+		return stm32.GPIOI
+	default:
+		panic("machine: unknown port")
+	}
+}
+
+// enableClock enables the clock for this desired GPIO port.
+func (p GPIO) enableClock() {
+	switch p.Pin / 16 {
+	case 0:
+		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOAEN
+	case 1:
+		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOBEN
+	case 2:
+		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOCEN
+	case 3:
+		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIODEN
+	case 4:
+		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOEEN
+	case 5:
+		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOFEN
+	case 6:
+		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOGEN
+	case 7:
+		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOHEN
+	case 8:
+		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOIEN
+	default:
+		panic("machine: unknown port")
+	}
+}
+
+// Configure this pin with the given configuration.
+func (p GPIO) Configure(config GPIOConfig) {
+	// Configure the GPIO pin.
+	p.enableClock()
+	port := p.getPort()
+	pin := p.Pin % 16
+	pos := pin * 2
+
+	if config.Mode == GPIO_INPUT_FLOATING {
+		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
+		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_FLOATING) << pos)))
+	} else if config.Mode == GPIO_INPUT_PULLDOWN {
+		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
+		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_PULL_DOWN) << pos)))
+	} else if config.Mode == GPIO_INPUT_PULLUP {
+		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
+		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
+	} else if config.Mode == GPIO_OUTPUT {
+		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_GENERAL_OUTPUT) << pos)))
+		port.OSPEEDR = stm32.RegValue((uint32(port.OSPEEDR)&^(0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
+	} else if config.Mode == GPIO_UART_TX {
+		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
+		port.OSPEEDR = stm32.RegValue((uint32(port.OSPEEDR)&^(0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
+		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
+		p.setAltFunc(0x7)
+	} else if config.Mode == GPIO_UART_RX {
+		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
+		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_FLOATING) << pos)))
+		p.setAltFunc(0x7)
+	}
+}
+
+func (p GPIO) setAltFunc(af uint32) {
+	port := p.getPort()
+	pin := p.Pin % 16
+	pos := pin * 4
+	if pin >= 8 {
+		port.AFRH = stm32.RegValue(uint32(port.AFRH)&^(0xF<<pos) | ((af & 0xF) << pos))
+	} else {
+		port.AFRL = stm32.RegValue(uint32(port.AFRL)&^(0xF<<pos) | ((af & 0xF) << pos))
+	}
+}
+
+// Set the pin to high or low.
+// Warning: only use this on an output pin!
+func (p GPIO) Set(high bool) {
+	port := p.getPort()
+	pin := p.Pin % 16
+	if high {
+		port.BSRR = 1 << pin
+	} else {
+		port.BSRR = 1 << (pin + 16)
+	}
+}
+
+// UART
+type UART struct {
+	Buffer *RingBuffer
+}
+
+var (
+	// Both UART0 and UART1 refer to USART2.
+	UART0 = UART{Buffer: NewRingBuffer()}
+	UART1 = &UART0
+)
+
+// Configure the UART.
+func (uart UART) Configure(config UARTConfig) {
+	// Default baud rate to 115200.
+	if config.BaudRate == 0 {
+		config.BaudRate = 115200
+	}
+
+	// pins
+	switch config.TX {
+	default:
+		// use standard TX/RX pins PA2 and PA3
+		GPIO{UART_TX_PIN}.Configure(GPIOConfig{Mode: GPIO_UART_TX})
+		GPIO{UART_RX_PIN}.Configure(GPIOConfig{Mode: GPIO_UART_RX})
+	}
+
+	// Enable USART2 clock
+	stm32.RCC.APB1ENR |= stm32.RCC_APB1ENR_USART2EN
+
+	/*
+	  Set baud rate(115200)
+	  OVER8 = 0, APB2 = 42mhz
+	  +----------+--------+
+	  | baudrate | BRR    |
+	  +----------+--------+
+	  | 1200     | 0x88B8 |
+	  | 2400     | 0x445C |
+	  | 9600     | 0x1117 |
+	  | 19200    | 0x88C  |
+	  | 38400    | 0x446  |
+	  | 57600    | 0x2D9  |
+	  | 115200   | 0x16D  |
+	  +----------+--------+
+	*/
+	stm32.USART2.BRR = 0x16c
+
+	// Enable USART2 port.
+	stm32.USART2.CR1 = stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE
+
+	// Enable RX IRQ.
+	arm.SetPriority(stm32.IRQ_USART2, 0xc0)
+	arm.EnableIRQ(stm32.IRQ_USART2)
+}
+
+// WriteByte writes a byte of data to the UART.
+func (uart UART) WriteByte(c byte) error {
+	stm32.USART2.DR = stm32.RegValue(c)
+
+	for (stm32.USART2.SR & stm32.USART_SR_TXE) == 0 {
+	}
+	return nil
+}
+
+//go:export USART2_IRQHandler
+func handleUSART2() {
+	UART1.Receive(byte((stm32.USART2.DR & 0xFF)))
+}

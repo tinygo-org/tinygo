@@ -9,7 +9,6 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -371,18 +370,33 @@ func (c *Compiler) Compile(mainPath string) error {
 	c.mod.NamedFunction("runtime.activateTask").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.ExternalLinkage)
 
+	// Load some attributes
+	getAttr := func(attrName string) llvm.Attribute {
+		attrKind := llvm.AttributeKindID(attrName)
+		return c.ctx.CreateEnumAttribute(attrKind, 0)
+	}
+	nocapture := getAttr("nocapture")
+	writeonly := getAttr("writeonly")
+	readonly := getAttr("readonly")
+
 	// Tell the optimizer that runtime.alloc is an allocator, meaning that it
 	// returns values that are never null and never alias to an existing value.
-	for _, name := range []string{"noalias", "nonnull"} {
-		attrKind := llvm.AttributeKindID(name)
-		attr := c.ctx.CreateEnumAttribute(attrKind, 0)
-		c.mod.NamedFunction("runtime.alloc").AddAttributeAtIndex(0, attr)
+	for _, attrName := range []string{"noalias", "nonnull"} {
+		c.mod.NamedFunction("runtime.alloc").AddAttributeAtIndex(0, getAttr(attrName))
 	}
 
 	// See emitNilCheck in asserts.go.
-	attrKind := llvm.AttributeKindID("nocapture")
-	attr := c.ctx.CreateEnumAttribute(attrKind, 0)
-	c.mod.NamedFunction("runtime.isnil").AddAttributeAtIndex(1, attr)
+	c.mod.NamedFunction("runtime.isnil").AddAttributeAtIndex(1, nocapture)
+
+	// Memory copy operations do not capture pointers, even though some weird
+	// pointer arithmetic is happening in the Go implementation.
+	for _, fnName := range []string{"runtime.memcpy", "runtime.memmove"} {
+		fn := c.mod.NamedFunction(fnName)
+		fn.AddAttributeAtIndex(1, nocapture)
+		fn.AddAttributeAtIndex(1, writeonly)
+		fn.AddAttributeAtIndex(2, nocapture)
+		fn.AddAttributeAtIndex(2, readonly)
+	}
 
 	// see: https://reviews.llvm.org/D18355
 	if c.Debug {
@@ -459,58 +473,8 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 			return llvm.Type{}, err
 		}
 		return llvm.PointerType(ptrTo, 0), nil
-	case *types.Signature: // function pointer
-		// return value
-		var err error
-		var returnType llvm.Type
-		if typ.Results().Len() == 0 {
-			returnType = c.ctx.VoidType()
-		} else if typ.Results().Len() == 1 {
-			returnType, err = c.getLLVMType(typ.Results().At(0).Type())
-			if err != nil {
-				return llvm.Type{}, err
-			}
-		} else {
-			// Multiple return values. Put them together in a struct.
-			members := make([]llvm.Type, typ.Results().Len())
-			for i := 0; i < typ.Results().Len(); i++ {
-				returnType, err := c.getLLVMType(typ.Results().At(i).Type())
-				if err != nil {
-					return llvm.Type{}, err
-				}
-				members[i] = returnType
-			}
-			returnType = c.ctx.StructType(members, false)
-		}
-		// param values
-		var paramTypes []llvm.Type
-		if typ.Recv() != nil {
-			recv, err := c.getLLVMType(typ.Recv().Type())
-			if err != nil {
-				return llvm.Type{}, err
-			}
-			if recv.StructName() == "runtime._interface" {
-				// This is a call on an interface, not a concrete type.
-				// The receiver is not an interface, but a i8* type.
-				recv = c.i8ptrType
-			}
-			paramTypes = append(paramTypes, c.expandFormalParamType(recv)...)
-		}
-		params := typ.Params()
-		for i := 0; i < params.Len(); i++ {
-			subType, err := c.getLLVMType(params.At(i).Type())
-			if err != nil {
-				return llvm.Type{}, err
-			}
-			paramTypes = append(paramTypes, c.expandFormalParamType(subType)...)
-		}
-		// make a closure type (with a function pointer type inside):
-		// {context, funcptr}
-		paramTypes = append(paramTypes, c.i8ptrType) // context
-		paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
-		ptr := llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), c.funcPtrAddrSpace)
-		ptr = c.ctx.StructType([]llvm.Type{c.i8ptrType, ptr}, false)
-		return ptr, nil
+	case *types.Signature: // function value
+		return c.getFuncType(typ)
 	case *types.Slice:
 		elemType, err := c.getLLVMType(typ.Elem())
 		if err != nil {
@@ -530,6 +494,33 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 				return llvm.Type{}, err
 			}
 			members[i] = member
+		}
+		if len(members) > 2 && typ.Field(0).Name() == "C union" {
+			// Not a normal struct but a C union emitted by cgo.
+			// Such a field name cannot be entered in regular Go code, this must
+			// be manually inserted in the AST so this is safe.
+			maxAlign := 0
+			maxSize := uint64(0)
+			mainType := members[0]
+			for _, member := range members {
+				align := c.targetData.ABITypeAlignment(member)
+				size := c.targetData.TypeAllocSize(member)
+				if align > maxAlign {
+					maxAlign = align
+					mainType = member
+				} else if align == maxAlign && size > maxSize {
+					maxAlign = align
+					maxSize = size
+					mainType = member
+				} else if size > maxSize {
+					maxSize = size
+				}
+			}
+			members = []llvm.Type{mainType}
+			mainTypeSize := c.targetData.TypeAllocSize(mainType)
+			if mainTypeSize < maxSize {
+				members = append(members, llvm.ArrayType(c.ctx.Int8Type(), int(maxSize-mainTypeSize)))
+			}
 		}
 		return c.ctx.StructType(members, false), nil
 	case *types.Tuple:
@@ -1095,16 +1086,21 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 		if err != nil {
 			return llvm.Value{}, err
 		}
+		var llvmCap llvm.Value
 		switch args[0].Type().(type) {
 		case *types.Chan:
 			// Channel. Buffered channels haven't been implemented yet so always
 			// return 0.
-			return llvm.ConstInt(c.intType, 0, false), nil
+			llvmCap = llvm.ConstInt(c.intType, 0, false)
 		case *types.Slice:
-			return c.builder.CreateExtractValue(value, 2, "cap"), nil
+			llvmCap = c.builder.CreateExtractValue(value, 2, "cap")
 		default:
 			return llvm.Value{}, c.makeError(pos, "todo: cap: unknown type")
 		}
+		if c.targetData.TypeAllocSize(llvmCap.Type()) < c.targetData.TypeAllocSize(c.intType) {
+			llvmCap = c.builder.CreateZExt(llvmCap, c.intType, "len.int")
+		}
+		return llvmCap, nil
 	case "close":
 		return llvm.Value{}, c.emitChanClose(frame, args[0])
 	case "complex":
@@ -1295,120 +1291,15 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 
 	// Try to call the function directly for trivially static calls.
 	if fn := instr.StaticCallee(); fn != nil {
-		if fn.RelString(nil) == "device/arm.Asm" || fn.RelString(nil) == "device/avr.Asm" {
-			// Magic function: insert inline assembly instead of calling it.
-			fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{}, false)
-			asm := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
-			target := llvm.InlineAsm(fnType, asm, "", true, false, 0)
-			return c.builder.CreateCall(target, nil, ""), nil
-		}
-
-		if fn.RelString(nil) == "device/arm.ReadRegister" {
-			// Magic function: return the given register.
-			fnType := llvm.FunctionType(c.uintptrType, []llvm.Type{}, false)
-			regname := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
-			target := llvm.InlineAsm(fnType, "mov $0, "+regname, "=r", false, false, 0)
-			return c.builder.CreateCall(target, nil, ""), nil
-		}
-
-		if strings.HasPrefix(fn.RelString(nil), "device/arm.SVCall") {
-			// Magic function: inline this call as a SVC instruction.
-			num, _ := constant.Uint64Val(instr.Args[0].(*ssa.Const).Value)
-			args := []llvm.Value{}
-			argTypes := []llvm.Type{}
-			asm := "svc #" + strconv.FormatUint(num, 10)
-			constraints := "={r0}"
-			for i, arg := range instr.Args[1:] {
-				arg = arg.(*ssa.MakeInterface).X
-				if i == 0 {
-					constraints += ",0"
-				} else {
-					constraints += ",{r" + strconv.Itoa(i) + "}"
-				}
-				llvmValue, err := c.parseExpr(frame, arg)
-				if err != nil {
-					return llvm.Value{}, err
-				}
-				args = append(args, llvmValue)
-				argTypes = append(argTypes, llvmValue.Type())
-			}
-			// Implement the ARM calling convention by marking r1-r3 as
-			// clobbered. r0 is used as an output register so doesn't have to be
-			// marked as clobbered.
-			constraints += ",~{r1},~{r2},~{r3}"
-			fnType := llvm.FunctionType(c.uintptrType, argTypes, false)
-			target := llvm.InlineAsm(fnType, asm, constraints, true, false, 0)
-			return c.builder.CreateCall(target, args, ""), nil
-		}
-
-		if fn.RelString(nil) == "device/arm.AsmFull" || fn.RelString(nil) == "device/avr.AsmFull" {
-			asmString := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
-			registers := map[string]llvm.Value{}
-			registerMap := instr.Args[1].(*ssa.MakeMap)
-			for _, r := range *registerMap.Referrers() {
-				switch r := r.(type) {
-				case *ssa.DebugRef:
-					// ignore
-				case *ssa.MapUpdate:
-					if r.Block() != registerMap.Block() {
-						return llvm.Value{}, c.makeError(instr.Pos(), "register value map must be created in the same basic block")
-					}
-					key := constant.StringVal(r.Key.(*ssa.Const).Value)
-					//println("value:", r.Value.(*ssa.MakeInterface).X.String())
-					value, err := c.parseExpr(frame, r.Value.(*ssa.MakeInterface).X)
-					if err != nil {
-						return llvm.Value{}, err
-					}
-					registers[key] = value
-				case *ssa.Call:
-					if r.Common() == instr {
-						break
-					}
-				default:
-					return llvm.Value{}, c.makeError(instr.Pos(), "don't know how to handle argument to inline assembly: "+r.String())
-				}
-			}
-			// TODO: handle dollar signs in asm string
-			registerNumbers := map[string]int{}
-			var err error
-			argTypes := []llvm.Type{}
-			args := []llvm.Value{}
-			constraints := []string{}
-			asmString = regexp.MustCompile("\\{[a-zA-Z]+\\}").ReplaceAllStringFunc(asmString, func(s string) string {
-				// TODO: skip strings like {r4} etc. that look like ARM push/pop
-				// instructions.
-				name := s[1 : len(s)-1]
-				if _, ok := registers[name]; !ok {
-					if err == nil {
-						err = c.makeError(instr.Pos(), "unknown register name: "+name)
-					}
-					return s
-				}
-				if _, ok := registerNumbers[name]; !ok {
-					registerNumbers[name] = len(registerNumbers)
-					argTypes = append(argTypes, registers[name].Type())
-					args = append(args, registers[name])
-					switch registers[name].Type().TypeKind() {
-					case llvm.IntegerTypeKind:
-						constraints = append(constraints, "r")
-					case llvm.PointerTypeKind:
-						constraints = append(constraints, "*m")
-					default:
-						err = c.makeError(instr.Pos(), "unknown type in inline assembly for value: "+name)
-						return s
-					}
-				}
-				return fmt.Sprintf("${%v}", registerNumbers[name])
-			})
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			fnType := llvm.FunctionType(c.ctx.VoidType(), argTypes, false)
-			target := llvm.InlineAsm(fnType, asmString, strings.Join(constraints, ","), true, false, 0)
-			return c.builder.CreateCall(target, args, ""), nil
-		}
-
 		switch fn.RelString(nil) {
+		case "device/arm.ReadRegister":
+			return c.emitReadRegister(instr.Args)
+		case "device/arm.Asm", "device/avr.Asm":
+			return c.emitAsm(instr.Args)
+		case "device/arm.AsmFull", "device/avr.AsmFull":
+			return c.emitAsmFull(frame, instr)
+		case "device/arm.SVCall0", "device/arm.SVCall1", "device/arm.SVCall2", "device/arm.SVCall3", "device/arm.SVCall4":
+			return c.emitSVCall(frame, instr.Args)
 		case "syscall.Syscall", "syscall.Syscall6", "syscall.Syscall9":
 			return c.emitSyscall(frame, instr)
 		}
@@ -1418,20 +1309,20 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 			return llvm.Value{}, c.makeError(instr.Pos(), "undefined function: "+targetFunc.LinkName())
 		}
 		var context llvm.Value
-		// This function call is to a (potential) closure, not a regular
-		// function. See whether it is a closure and if so, call it as such.
-		// Else, supply a dummy nil pointer as the last parameter.
-		if targetFunc.IsExported() {
-			// don't pass a context parameter
-		} else if mkClosure, ok := instr.Value.(*ssa.MakeClosure); ok {
-			// closure is {context, function pointer}
-			closure, err := c.parseExpr(frame, mkClosure)
+		switch value := instr.Value.(type) {
+		case *ssa.Function:
+			// Regular function call. No context is necessary.
+			context = llvm.Undef(c.i8ptrType)
+		case *ssa.MakeClosure:
+			// A call on a func value, but the callee is trivial to find. For
+			// example: immediately applied functions.
+			funcValue, err := c.parseExpr(frame, value)
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			context = c.builder.CreateExtractValue(closure, 0, "")
-		} else {
-			context = llvm.Undef(c.i8ptrType)
+			context = c.extractFuncContext(funcValue)
+		default:
+			panic("StaticCallee returned an unexpected value")
 		}
 		return c.parseFunctionCall(frame, instr.Args, targetFunc.LLVMFn, context, targetFunc.IsExported())
 	}
@@ -1445,13 +1336,14 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		// 'value' is a closure, not a raw function pointer.
-		// Extract the function pointer and the context pointer.
-		// closure: {context, function pointer}
-		context := c.builder.CreateExtractValue(value, 0, "")
-		value = c.builder.CreateExtractValue(value, 1, "")
-		c.emitNilCheck(frame, value, "fpcall")
-		return c.parseFunctionCall(frame, instr.Args, value, context, false)
+		// This is a func value, which cannot be called directly. We have to
+		// extract the function pointer and context first from the func value.
+		funcPtr, context, err := c.decodeFuncValue(value, instr.Value.Type().(*types.Signature))
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		c.emitNilCheck(frame, funcPtr, "fpcall")
+		return c.parseFunctionCall(frame, instr.Args, funcPtr, context, false)
 	}
 }
 
@@ -1572,6 +1464,19 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
+		if s := expr.X.Type().Underlying().(*types.Struct); s.NumFields() > 2 && s.Field(0).Name() == "C union" {
+			// Extract a field from a CGo union.
+			// This could be done directly, but as this is a very infrequent
+			// operation it's much easier to bitcast it through an alloca.
+			resultType, err := c.getLLVMType(expr.Type())
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			alloca := c.builder.CreateAlloca(value.Type(), "")
+			c.builder.CreateStore(value, alloca)
+			bitcast := c.builder.CreateBitCast(alloca, llvm.PointerType(resultType, 0), "")
+			return c.builder.CreateLoad(bitcast, ""), nil
+		}
 		result := c.builder.CreateExtractValue(value, expr.Field, "")
 		return result, nil
 	case *ssa.FieldAddr:
@@ -1579,27 +1484,34 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		indices := []llvm.Value{
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(c.ctx.Int32Type(), uint64(expr.Field), false),
-		}
 		// Check for nil pointer before calculating the address, from the spec:
 		// > For an operand x of type T, the address operation &x generates a
 		// > pointer of type *T to x. [...] If the evaluation of x would cause a
 		// > run-time panic, then the evaluation of &x does too.
 		c.emitNilCheck(frame, val, "gep")
-		return c.builder.CreateGEP(val, indices, ""), nil
+		if s := expr.X.Type().(*types.Pointer).Elem().Underlying().(*types.Struct); s.NumFields() > 2 && s.Field(0).Name() == "C union" {
+			// This is not a regular struct but actually an union.
+			// That simplifies things, as we can just bitcast the pointer to the
+			// right type.
+			ptrType, err := c.getLLVMType(expr.Type())
+			if err != nil {
+				return llvm.Value{}, nil
+			}
+			return c.builder.CreateBitCast(val, ptrType, ""), nil
+		} else {
+			// Do a GEP on the pointer to get the field address.
+			indices := []llvm.Value{
+				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(c.ctx.Int32Type(), uint64(expr.Field), false),
+			}
+			return c.builder.CreateGEP(val, indices, ""), nil
+		}
 	case *ssa.Function:
 		fn := c.ir.GetFunction(expr)
 		if fn.IsExported() {
 			return llvm.Value{}, c.makeError(expr.Pos(), "cannot use an exported function as value")
 		}
-		// Create closure for function pointer.
-		// Closure is: {context, function pointer}
-		return c.ctx.ConstStruct([]llvm.Value{
-			llvm.Undef(c.i8ptrType),
-			fn.LLVMFn,
-		}, false), nil
+		return c.createFuncValue(fn.LLVMFn, llvm.Undef(c.i8ptrType), fn.Signature)
 	case *ssa.Global:
 		value := c.ir.GetGlobal(expr).LLVMGlobal
 		if value.IsNil() {
@@ -1715,8 +1627,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	case *ssa.MakeChan:
 		return c.emitMakeChan(expr)
 	case *ssa.MakeClosure:
-		// A closure returns a function pointer with context:
-		// {context, fp}
 		return c.parseMakeClosure(frame, expr)
 	case *ssa.MakeInterface:
 		val, err := c.parseExpr(frame, expr.X)
@@ -1767,37 +1677,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 
 		// Bounds checking.
-		if !frame.fn.IsNoBounds() {
-			checkFunc := "sliceBoundsCheckMake"
-			capacityType := c.uintptrType
-			capacityTypeWidth := capacityType.IntTypeWidth()
-			if sliceLen.Type().IntTypeWidth() > capacityTypeWidth || sliceCap.Type().IntTypeWidth() > capacityTypeWidth {
-				// System that is less than 64bit, meaning that the slice make
-				// params are bigger than uintptr.
-				checkFunc = "sliceBoundsCheckMake64"
-				capacityType = c.ctx.Int64Type()
-				capacityTypeWidth = capacityType.IntTypeWidth()
-			}
-			if sliceLen.Type().IntTypeWidth() < capacityTypeWidth {
-				if expr.Len.Type().(*types.Basic).Info()&types.IsUnsigned != 0 {
-					sliceLen = c.builder.CreateZExt(sliceLen, capacityType, "")
-				} else {
-					sliceLen = c.builder.CreateSExt(sliceLen, capacityType, "")
-				}
-			}
-			if sliceCap.Type().IntTypeWidth() < capacityTypeWidth {
-				if expr.Cap.Type().(*types.Basic).Info()&types.IsUnsigned != 0 {
-					sliceCap = c.builder.CreateZExt(sliceCap, capacityType, "")
-				} else {
-					sliceCap = c.builder.CreateSExt(sliceCap, capacityType, "")
-				}
-			}
-			maxSliceSize := maxSize
-			if elemSize != 0 { // avoid divide by zero
-				maxSliceSize = llvm.ConstSDiv(maxSize, llvm.ConstInt(c.uintptrType, elemSize, false))
-			}
-			c.createRuntimeCall(checkFunc, []llvm.Value{sliceLen, sliceCap, maxSliceSize}, "")
-		}
+		c.emitSliceBoundsCheck(frame, maxSize, sliceLen, sliceCap, expr.Len.Type().(*types.Basic), expr.Cap.Type().(*types.Basic))
 
 		// Allocate the backing array.
 		// TODO: escape analysis
@@ -1809,9 +1689,15 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		slicePtr := c.createRuntimeCall("alloc", []llvm.Value{sliceSize}, "makeslice.buf")
 		slicePtr = c.builder.CreateBitCast(slicePtr, llvm.PointerType(llvmElemType, 0), "makeslice.array")
 
-		if c.targetData.TypeAllocSize(sliceLen.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-			sliceLen = c.builder.CreateTrunc(sliceLen, c.uintptrType, "")
-			sliceCap = c.builder.CreateTrunc(sliceCap, c.uintptrType, "")
+		// Extend or truncate if necessary. This is safe as we've already done
+		// the bounds check.
+		sliceLen, err = c.parseConvert(expr.Len.Type(), types.Typ[types.Uintptr], sliceLen, expr.Pos())
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		sliceCap, err = c.parseConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
+		if err != nil {
+			return llvm.Value{}, err
 		}
 
 		// Create the slice.
@@ -1932,8 +1818,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				}
 			}
 		} else {
-			lowType = types.Typ[types.Int]
-			low = llvm.ConstInt(c.intType, 0, false)
+			lowType = types.Typ[types.Uintptr]
+			low = llvm.ConstInt(c.uintptrType, 0, false)
 		}
 
 		if expr.High != nil {
@@ -1968,6 +1854,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			c.emitSliceBoundsCheck(frame, llvmLen, low, high, lowType, highType)
 
+			// Truncate ints bigger than uintptr. This is after the bounds
+			// check so it's safe.
 			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
 				high = c.builder.CreateTrunc(high, c.uintptrType, "")
 			}
@@ -2000,6 +1888,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			c.emitSliceBoundsCheck(frame, oldCap, low, high, lowType, highType)
 
+			// Truncate ints bigger than uintptr. This is after the bounds
+			// check so it's safe.
 			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
 				low = c.builder.CreateTrunc(low, c.uintptrType, "")
 			}
@@ -2032,6 +1922,15 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			}
 
 			c.emitSliceBoundsCheck(frame, oldLen, low, high, lowType, highType)
+
+			// Truncate ints bigger than uintptr. This is after the bounds
+			// check so it's safe.
+			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				low = c.builder.CreateTrunc(low, c.uintptrType, "")
+			}
+			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				high = c.builder.CreateTrunc(high, c.uintptrType, "")
+			}
 
 			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
 			newLen := c.builder.CreateSub(high, low, "")
@@ -2239,12 +2138,13 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			return llvm.Value{}, c.makeError(pos, "todo: unknown basic type in binop: "+typ.String())
 		}
 	case *types.Signature:
-		// Extract function pointers from the function values (closures).
+		// Get raw scalars from the function value and compare those.
+		// Function values may be implemented in multiple ways, but they all
+		// have some way of getting a scalar value identifying the function.
 		// This is safe: function pointers are generally not comparable
-		// against each other, only against nil. So one or both has to be
-		// nil, so we can ignore the closure context.
-		x = c.builder.CreateExtractValue(x, 1, "")
-		y = c.builder.CreateExtractValue(y, 1, "")
+		// against each other, only against nil. So one of these has to be nil.
+		x = c.extractFuncScalar(x)
+		y = c.extractFuncScalar(y)
 		switch op {
 		case token.EQL: // ==
 			return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
@@ -2495,6 +2395,27 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 	if isPtrFrom && !isPtrTo {
 		return c.builder.CreatePtrToInt(value, llvmTypeTo, ""), nil
 	} else if !isPtrFrom && isPtrTo {
+		if !value.IsABinaryOperator().IsNil() && value.InstructionOpcode() == llvm.Add {
+			// This is probably a pattern like the following:
+			// unsafe.Pointer(uintptr(ptr) + index)
+			// Used in functions like memmove etc. for lack of pointer
+			// arithmetic. Convert it to real pointer arithmatic here.
+			ptr := value.Operand(0)
+			index := value.Operand(1)
+			if !index.IsAPtrToIntInst().IsNil() {
+				// Swap if necessary, if ptr and index are reversed.
+				ptr, index = index, ptr
+			}
+			if !ptr.IsAPtrToIntInst().IsNil() {
+				origptr := ptr.Operand(0)
+				if origptr.Type() == c.i8ptrType {
+					// This pointer can be calculated from the original
+					// ptrtoint instruction with a GEP. The leftover inttoptr
+					// instruction is trivial to optimize away.
+					return c.builder.CreateGEP(origptr, []llvm.Value{index}, ""), nil
+				}
+			}
+		}
 		return c.builder.CreateIntToPtr(value, llvmTypeTo, ""), nil
 	}
 
@@ -2541,7 +2462,7 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 			// Conversion between two integers.
 			if sizeFrom > sizeTo {
 				return c.builder.CreateTrunc(value, llvmTypeTo, ""), nil
-			} else if typeTo.Info()&types.IsUnsigned != 0 { // if unsigned
+			} else if typeFrom.Info()&types.IsUnsigned != 0 { // if unsigned
 				return c.builder.CreateZExt(value, llvmTypeTo, ""), nil
 			} else { // if signed
 				return c.builder.CreateSExt(value, llvmTypeTo, ""), nil
@@ -2619,81 +2540,6 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 	default:
 		return llvm.Value{}, c.makeError(pos, "todo: convert "+typeTo.String()+" <- "+typeFrom.String())
 	}
-}
-
-func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.Value, error) {
-	if len(expr.Bindings) == 0 {
-		panic("unexpected: MakeClosure without bound variables")
-	}
-	f := c.ir.GetFunction(expr.Fn.(*ssa.Function))
-
-	// Collect all bound variables.
-	boundVars := make([]llvm.Value, 0, len(expr.Bindings))
-	boundVarTypes := make([]llvm.Type, 0, len(expr.Bindings))
-	for _, binding := range expr.Bindings {
-		// The context stores the bound variables.
-		llvmBoundVar, err := c.parseExpr(frame, binding)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		boundVars = append(boundVars, llvmBoundVar)
-		boundVarTypes = append(boundVarTypes, llvmBoundVar.Type())
-	}
-	contextType := c.ctx.StructType(boundVarTypes, false)
-
-	// Allocate memory for the context.
-	contextAlloc := llvm.Value{}
-	contextHeapAlloc := llvm.Value{}
-	if c.targetData.TypeAllocSize(contextType) <= c.targetData.TypeAllocSize(c.i8ptrType) {
-		// Context fits in a pointer - e.g. when it is a pointer. Store it
-		// directly in the stack after a convert.
-		// Because contextType is a struct and we have to cast it to a *i8,
-		// store it in an alloca first for bitcasting (store+bitcast+load).
-		contextAlloc = c.builder.CreateAlloca(contextType, "")
-	} else {
-		// Context is bigger than a pointer, so allocate it on the heap.
-		size := c.targetData.TypeAllocSize(contextType)
-		sizeValue := llvm.ConstInt(c.uintptrType, size, false)
-		contextHeapAlloc = c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "")
-		contextAlloc = c.builder.CreateBitCast(contextHeapAlloc, llvm.PointerType(contextType, 0), "")
-	}
-
-	// Store all bound variables in the alloca or heap pointer.
-	for i, boundVar := range boundVars {
-		indices := []llvm.Value{
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false),
-		}
-		gep := c.builder.CreateInBoundsGEP(contextAlloc, indices, "")
-		c.builder.CreateStore(boundVar, gep)
-	}
-
-	context := llvm.Value{}
-	if c.targetData.TypeAllocSize(contextType) <= c.targetData.TypeAllocSize(c.i8ptrType) {
-		// Load value (as *i8) from the alloca.
-		contextAlloc = c.builder.CreateBitCast(contextAlloc, llvm.PointerType(c.i8ptrType, 0), "")
-		context = c.builder.CreateLoad(contextAlloc, "")
-	} else {
-		// Get the original heap allocation pointer, which already is an
-		// *i8.
-		context = contextHeapAlloc
-	}
-
-	// Get the function signature type, which is a closure type.
-	// A closure is a tuple of {context, function pointer}.
-	typ, err := c.getLLVMType(f.Signature)
-	if err != nil {
-		return llvm.Value{}, err
-	}
-
-	// Create the closure, which is a struct: {context, function pointer}.
-	closure, err := c.getZeroValue(typ)
-	if err != nil {
-		return llvm.Value{}, err
-	}
-	closure = c.builder.CreateInsertValue(closure, f.LLVMFn, 1, "")
-	closure = c.builder.CreateInsertValue(closure, context, 0, "")
-	return closure, nil
 }
 
 func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
