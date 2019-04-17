@@ -416,7 +416,7 @@ var (
 	UART0 = USBCDC{Buffer: NewRingBuffer()}
 
 	// The first hardware serial port on the SAMD21. Uses the SERCOM0 interface.
-	UART1 = UART{Bus: sam.SERCOM0_USART, Buffer: NewRingBuffer()}
+	UART1 = UART{Bus: sam.SERCOM1_USART, Buffer: NewRingBuffer()}
 )
 
 const (
@@ -453,26 +453,26 @@ func (uart UART) Configure(config UARTConfig) {
 	// determine pads
 	var txpad, rxpad int
 	switch config.TX {
-	case UART_TX_PIN:
+	case PA10:
 		txpad = sercomTXPad2
-	case D10:
+	case PA18:
 		txpad = sercomTXPad2
-	case D11:
+	case PA16:
 		txpad = sercomTXPad0
 	default:
 		panic("Invalid TX pin for UART")
 	}
 
 	switch config.RX {
-	case UART_RX_PIN:
+	case PA11:
 		rxpad = sercomRXPad3
-	case D10:
+	case PA18:
 		rxpad = sercomRXPad2
-	case D11:
+	case PA16:
 		rxpad = sercomRXPad0
-	case D12:
+	case PA19:
 		rxpad = sercomRXPad3
-	case D13:
+	case PA17:
 		rxpad = sercomRXPad1
 	default:
 		panic("Invalid RX pin for UART")
@@ -531,11 +531,11 @@ func (uart UART) Configure(config UARTConfig) {
 	uart.Bus.INTENSET = sam.SERCOM_USART_INTENSET_RXC
 
 	// Enable RX IRQ.
-	if config.TX == UART_TX_PIN {
+	if config.TX == PA10 {
 		// UART0
 		arm.EnableIRQ(sam.IRQ_SERCOM0)
 	} else {
-		// UART1
+		// UART1 which is the normal default, since UART0 is used for USBCDC.
 		arm.EnableIRQ(sam.IRQ_SERCOM1)
 	}
 }
@@ -563,7 +563,7 @@ func (uart UART) WriteByte(c byte) error {
 	return nil
 }
 
-//go:export SERCOM0_IRQHandler
+//go:export SERCOM1_IRQHandler
 func handleUART1() {
 	// should reset IRQ
 	UART1.Receive(byte((UART1.Bus.DATA & 0xFF)))
