@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"sort"
 	"testing"
+
+	"github.com/tinygo-org/tinygo/loader"
 )
 
 const TESTDATA = "testdata"
@@ -121,7 +123,13 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 	binary := filepath.Join(tmpdir, "test")
 	err = Build("./"+path, binary, target, config)
 	if err != nil {
-		t.Log("failed to build:", err)
+		if errLoader, ok := err.(loader.Errors); ok {
+			for _, err := range errLoader.Errs {
+				t.Log("failed to build:", err)
+			}
+		} else {
+			t.Log("failed to build:", err)
+		}
 		t.Fail()
 		return
 	}
