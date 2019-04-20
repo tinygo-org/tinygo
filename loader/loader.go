@@ -30,10 +30,11 @@ type Program struct {
 type Package struct {
 	*Program
 	*build.Package
-	Imports   map[string]*Package
-	Importing bool
-	Files     []*ast.File
-	Pkg       *types.Package
+	Imports    map[string]*Package
+	Importing  bool
+	Files      []*ast.File
+	tokenFiles map[string]*token.File
+	Pkg        *types.Package
 	types.Info
 }
 
@@ -106,6 +107,7 @@ func (p *Program) newPackage(pkg *build.Package) *Package {
 			Scopes:     make(map[ast.Node]*types.Scope),
 			Selections: make(map[*ast.SelectorExpr]*types.Selection),
 		},
+		tokenFiles: map[string]*token.File{},
 	}
 }
 
