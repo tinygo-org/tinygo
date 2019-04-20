@@ -2576,6 +2576,9 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 			global := c.ir.GetGlobal(unop.X.(*ssa.Global))
 			name := global.LinkName()[:len(global.LinkName())-len("$funcaddr")]
 			fn := c.mod.NamedFunction(name)
+			if fn.IsNil() {
+				return llvm.Value{}, c.makeError(unop.Pos(), "cgo function not found: "+name)
+			}
 			return c.builder.CreateBitCast(fn, c.i8ptrType, ""), nil
 		} else {
 			c.emitNilCheck(frame, x, "deref")
