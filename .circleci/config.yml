@@ -47,6 +47,18 @@ commands:
           command: |
             curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
             dep ensure --vendor-only
+  llvm-source-linux:
+    steps:
+      - restore_cache:
+          keys:
+            - llvm-source-8-v2
+      - run:
+          name: "Fetch LLVM source"
+          command: make llvm-source
+      - save_cache:
+          key: llvm-source-8-v2
+          paths:
+            - llvm
   smoketest:
     steps:
       - smoketest-no-avr
@@ -86,6 +98,7 @@ commands:
           keys:
             - go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
             - go-cache-{{ checksum "Gopkg.lock" }}
+      - llvm-source-linux
       - dep
       - run: go install .
       - run: go test -v
@@ -121,16 +134,7 @@ commands:
           keys:
             - go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
             - go-cache-{{ checksum "Gopkg.lock" }}
-      - restore_cache:
-          keys:
-            - llvm-source-8-v2
-      - run:
-          name: "Fetch LLVM source"
-          command: make llvm-source
-      - save_cache:
-          key: llvm-source-8-v2
-          paths:
-            - llvm
+      - llvm-source-linux
       - restore_cache:
           keys:
             - llvm-build-8-v2

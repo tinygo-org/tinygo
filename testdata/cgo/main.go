@@ -43,6 +43,7 @@ func main() {
 	println("char match:", C.globalChar == 100)
 	var voidPtr unsafe.Pointer = C.globalVoidPtrNull
 	println("void* match:", voidPtr == nil, C.globalVoidPtrNull == nil, (*C.int)(C.globalVoidPtrSet) == &C.global)
+	println("int64_t match:", C.globalInt64 == C.int64_t(-(2<<40)))
 
 	// complex types
 	println("struct:", C.int(unsafe.Sizeof(C.globalStruct)) == C.globalStructSize, C.globalStruct.s, C.globalStruct.l, C.globalStruct.f)

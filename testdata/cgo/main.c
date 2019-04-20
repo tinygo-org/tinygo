@@ -1,8 +1,8 @@
 #include "main.h"
 
 int global = 3;
-_Bool globalBool = 1;
-_Bool globalBool2 = 10; // test narrowing
+bool globalBool = 1;
+bool globalBool2 = 10; // test narrowing
 float globalFloat = 3.1;
 double globalDouble = 3.2;
 _Complex float globalComplexFloat = 4.1+3.3i;
@@ -11,6 +11,7 @@ _Complex double globalComplexLongDouble = 4.3+3.5i;
 char globalChar = 100;
 void *globalVoidPtrSet = &global;
 void *globalVoidPtrNull;
+int64_t globalInt64 = -(2LL << 40);
 collection_t globalStruct = {256, -123456, 3.14, 88};
 int globalStructSize = sizeof(globalStruct);
 short globalArray[3] = {5, 6, 7};

@@ -1,3 +1,6 @@
+#include <stdbool.h>
+#include <stdint.h>
+
 typedef short myint;
 int add(int a, int b);
 typedef int (*binop_t) (int, int);
@@ -27,10 +30,10 @@ void unionSetShort(short s);
 void unionSetFloat(float f);
 void unionSetData(short f0, short f1, short f2);
 
-// test globals
+// test globals and datatypes
 extern int global;
-extern _Bool globalBool;
-extern _Bool globalBool2;
+extern bool globalBool;
+extern bool globalBool2;
 extern float globalFloat;
 extern double globalDouble;
 extern _Complex float globalComplexFloat;
@@ -39,6 +42,7 @@ extern _Complex double globalComplexLongDouble;
 extern char globalChar;
 extern void *globalVoidPtrSet;
 extern void *globalVoidPtrNull;
+extern int64_t globalInt64;
 extern collection_t globalStruct;
 extern int globalStructSize;
 extern short globalArray[3];

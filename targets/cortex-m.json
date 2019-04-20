@@ -9,7 +9,10 @@
 	"cflags": [
 		"-Oz",
 		"-mthumb",
+		"-Werror",
 		"-fshort-enums",
+		"-nostdlibinc",
+		"-Wno-macro-redefined",
 		"-fno-exceptions", "-fno-unwind-tables",
 		"-ffunction-sections", "-fdata-sections"
 	],
