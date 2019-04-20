@@ -41,6 +41,8 @@ func main() {
 	println("complex double:", C.globalComplexDouble)
 	println("complex long double:", C.globalComplexLongDouble)
 	println("char match:", C.globalChar == 100)
+	var voidPtr unsafe.Pointer = C.globalVoidPtrNull
+	println("void* match:", voidPtr == nil, C.globalVoidPtrNull == nil, (*C.int)(C.globalVoidPtrSet) == &C.global)
 
 	// complex types
 	println("struct:", C.int(unsafe.Sizeof(C.globalStruct)) == C.globalStructSize, C.globalStruct.s, C.globalStruct.l, C.globalStruct.f)

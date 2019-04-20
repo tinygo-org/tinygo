@@ -307,9 +307,23 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 			typeName = "complex128"
 		}
 	case C.CXType_Pointer:
+		pointeeType := C.clang_getPointeeType(typ)
+		if pointeeType.kind == C.CXType_Void {
+			// void* type is translated to Go as unsafe.Pointer
+			return &ast.SelectorExpr{
+				X: &ast.Ident{
+					NamePos: info.importCPos,
+					Name:    "unsafe",
+				},
+				Sel: &ast.Ident{
+					NamePos: info.importCPos,
+					Name:    "Pointer",
+				},
+			}
+		}
 		return &ast.StarExpr{
 			Star: info.importCPos,
-			X:    info.makeASTType(C.clang_getPointeeType(typ)),
+			X:    info.makeASTType(pointeeType),
 		}
 	case C.CXType_ConstantArray:
 		return &ast.ArrayType{

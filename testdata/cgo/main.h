@@ -37,6 +37,8 @@ extern _Complex float globalComplexFloat;
 extern _Complex double globalComplexDouble;
 extern _Complex double globalComplexLongDouble;
 extern char globalChar;
+extern void *globalVoidPtrSet;
+extern void *globalVoidPtrNull;
 extern collection_t globalStruct;
 extern int globalStructSize;
 extern short globalArray[3];
