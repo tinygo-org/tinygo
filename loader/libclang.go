@@ -332,7 +332,25 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 		}
 	case C.CXType_Elaborated:
 		underlying := C.clang_Type_getNamedType(typ)
-		return info.makeASTType(underlying)
+		switch underlying.kind {
+		case C.CXType_Record:
+			cursor := C.tinygo_clang_getTypeDeclaration(typ)
+			name := getString(C.tinygo_clang_getCursorSpelling(cursor))
+			// It is possible that this is a recursive definition, for example
+			// in linked lists (structs contain a pointer to the next element
+			// of the same type). If the name exists in info.elaboratedTypes,
+			// it is being processed, although it may not be fully defined yet.
+			if _, ok := info.elaboratedTypes[name]; !ok {
+				info.elaboratedTypes[name] = nil // predeclare (to avoid endless recursion)
+				info.elaboratedTypes[name] = info.makeASTType(underlying)
+			}
+			return &ast.Ident{
+				NamePos: info.importCPos,
+				Name:    "C.struct_" + name,
+			}
+		default:
+			panic("unknown elaborated type")
+		}
 	case C.CXType_Record:
 		cursor := C.tinygo_clang_getTypeDeclaration(typ)
 		fieldList := &ast.FieldList{

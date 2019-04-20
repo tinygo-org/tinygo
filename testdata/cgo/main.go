@@ -53,6 +53,14 @@ func main() {
 	C.unionSetData(5, 8, 1)
 	println("union global data:", C.globalUnion.data[0], C.globalUnion.data[1], C.globalUnion.data[2])
 	println("union field:", printUnion(C.globalUnion).f)
+
+	// recursive types, test using a linked list
+	lastElement := &C.list_t{n: 7, next: nil}
+	list := &C.list_t{n: 3, next: &C.struct_list_t{n: 6, next: (*C.struct_list_t)(lastElement)}}
+	for list != nil {
+		println("n in chain:", list.n)
+		list = (*C.list_t)(list.next)
+	}
 }
 
 func printUnion(union C.joined_t) C.joined_t {
