@@ -217,8 +217,9 @@ func (c *Compiler) Compile(mainPath string) error {
 				MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
 			},
 		},
-		Dir:    wd,
-		CFlags: c.CFlags,
+		Dir:        wd,
+		TinyGoRoot: c.RootDir,
+		CFlags:     c.CFlags,
 	}
 	if strings.HasSuffix(mainPath, ".go") {
 		_, err = lprogram.ImportFile(mainPath)
