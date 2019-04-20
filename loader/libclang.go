@@ -203,7 +203,19 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 			expr := expr.(*ast.Ident)
 			typeSize := C.clang_Type_getSizeOf(underlyingType)
 			switch expr.Name {
-			// TODO: plain char (may be signed or unsigned)
+			case "C.char":
+				if typeSize != 1 {
+					// This happens for some very special purpose architectures
+					// (DSPs etc.) that are not currently targeted.
+					// https://www.embecosm.com/2017/04/18/non-8-bit-char-support-in-clang-and-llvm/
+					panic("unknown char width")
+				}
+				switch underlyingType.kind {
+				case C.CXType_Char_S:
+					expr.Name = "int8"
+				case C.CXType_Char_U:
+					expr.Name = "uint8"
+				}
 			case "C.schar", "C.short", "C.int", "C.long", "C.longlong":
 				switch typeSize {
 				case 1:
@@ -253,6 +265,8 @@ func getString(clangString C.CXString) (s string) {
 func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 	var typeName string
 	switch typ.kind {
+	case C.CXType_Char_S, C.CXType_Char_U:
+		typeName = "C.char"
 	case C.CXType_SChar:
 		typeName = "C.schar"
 	case C.CXType_UChar:

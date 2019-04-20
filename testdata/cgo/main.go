@@ -40,6 +40,7 @@ func main() {
 	println("complex float:", C.globalComplexFloat)
 	println("complex double:", C.globalComplexDouble)
 	println("complex long double:", C.globalComplexLongDouble)
+	println("char match:", C.globalChar == 100)
 
 	// complex types
 	println("struct:", C.int(unsafe.Sizeof(C.globalStruct)) == C.globalStructSize, C.globalStruct.s, C.globalStruct.l, C.globalStruct.f)

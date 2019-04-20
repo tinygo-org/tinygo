@@ -66,6 +66,7 @@ var cgoAliases = map[string]string{
 // somehow from C. This is done by adding some typedefs to get the size of each
 // type.
 const cgoTypes = `
+typedef char                _Cgo_char;
 typedef signed char         _Cgo_schar;
 typedef unsigned char       _Cgo_uchar;
 typedef short               _Cgo_short;
