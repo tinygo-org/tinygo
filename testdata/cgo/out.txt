@@ -24,3 +24,6 @@ union local data:  5 8 1
 union s method: -33 false
 union f: +6.280000e+000
 union field: +6.280000e+000
+n in chain: 3
+n in chain: 6
+n in chain: 7

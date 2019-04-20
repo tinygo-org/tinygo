@@ -17,11 +17,12 @@ import (
 type fileInfo struct {
 	*ast.File
 	*Package
-	filename   string
-	functions  map[string]*functionInfo
-	globals    map[string]*globalInfo
-	typedefs   map[string]*typedefInfo
-	importCPos token.Pos
+	filename        string
+	functions       map[string]*functionInfo
+	globals         map[string]*globalInfo
+	typedefs        map[string]*typedefInfo
+	elaboratedTypes map[string]ast.Expr
+	importCPos      token.Pos
 }
 
 // functionInfo stores some information about a Cgo function found by libclang
@@ -81,12 +82,13 @@ typedef unsigned long long  _Cgo_ulonglong;
 // comment with libclang, and modifies the AST to use this information.
 func (p *Package) processCgo(filename string, f *ast.File, cflags []string) []error {
 	info := &fileInfo{
-		File:      f,
-		Package:   p,
-		filename:  filename,
-		functions: map[string]*functionInfo{},
-		globals:   map[string]*globalInfo{},
-		typedefs:  map[string]*typedefInfo{},
+		File:            f,
+		Package:         p,
+		filename:        filename,
+		functions:       map[string]*functionInfo{},
+		globals:         map[string]*globalInfo{},
+		typedefs:        map[string]*typedefInfo{},
+		elaboratedTypes: map[string]ast.Expr{},
 	}
 
 	// Find `import "C"` statements in the file.
@@ -142,8 +144,11 @@ func (p *Package) processCgo(filename string, f *ast.File, cflags []string) []er
 	// Forward C types to Go types (like C.uint32_t -> uint32).
 	info.addTypeAliases()
 
-	// Add type declarations for C types, declared using typeef in C.
+	// Add type declarations for C types, declared using typedef in C.
 	info.addTypedefs()
+
+	// Add elaborated types for C structs and unions.
+	info.addElaboratedTypes()
 
 	// Patch the AST to use the declared types and functions.
 	f = astutil.Apply(f, info.walker, nil).(*ast.File)
@@ -369,6 +374,42 @@ func (info *fileInfo) addTypedefs() {
 				Obj:     obj,
 			},
 			Type: typedef.typeExpr,
+		}
+		obj.Decl = typeSpec
+		gen.Specs = append(gen.Specs, typeSpec)
+	}
+	info.Decls = append(info.Decls, gen)
+}
+
+// addElaboratedTypes adds C elaborated types as aliases. These are the "struct
+// foo" or "union foo" types, often used in a typedef.
+//
+// See also:
+// https://en.cppreference.com/w/cpp/language/elaborated_type_specifier
+func (info *fileInfo) addElaboratedTypes() {
+	gen := &ast.GenDecl{
+		TokPos: info.importCPos,
+		Tok:    token.TYPE,
+	}
+	names := make([]string, 0, len(info.elaboratedTypes))
+	for name := range info.elaboratedTypes {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		typ := info.elaboratedTypes[name]
+		typeName := "C.struct_" + name
+		obj := &ast.Object{
+			Kind: ast.Typ,
+			Name: typeName,
+		}
+		typeSpec := &ast.TypeSpec{
+			Name: &ast.Ident{
+				NamePos: info.importCPos,
+				Name:    typeName,
+				Obj:     obj,
+			},
+			Type: typ,
 		}
 		obj.Decl = typeSpec
 		gen.Specs = append(gen.Specs, typeSpec)

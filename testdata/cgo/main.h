@@ -12,6 +12,12 @@ typedef struct collection {
 	unsigned char c;
 } collection_t;
 
+// linked list
+typedef struct list_t {
+	int           n;
+	struct list_t *next;
+} list_t;
+
 typedef union joined {
 	myint s;
 	float f;
