@@ -190,10 +190,7 @@ func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.V
 	boundVarTypes := make([]llvm.Type, 0, len(expr.Bindings))
 	for _, binding := range expr.Bindings {
 		// The context stores the bound variables.
-		llvmBoundVar, err := c.parseExpr(frame, binding)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		llvmBoundVar := c.getValue(frame, binding)
 		boundVars = append(boundVars, llvmBoundVar)
 		boundVarTypes = append(boundVarTypes, llvmBoundVar.Type())
 	}

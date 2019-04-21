@@ -51,10 +51,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 				"{r12}",
 				"{r13}",
 			}[i]
-			llvmValue, err := c.parseExpr(frame, arg)
-			if err != nil {
-				return llvm.Value{}, err
-			}
+			llvmValue := c.getValue(frame, arg)
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
@@ -80,10 +77,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 				"{r5}",
 				"{r6}",
 			}[i]
-			llvmValue, err := c.parseExpr(frame, arg)
-			if err != nil {
-				return llvm.Value{}, err
-			}
+			llvmValue := c.getValue(frame, arg)
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
@@ -113,10 +107,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 				"{x4}",
 				"{x5}",
 			}[i]
-			llvmValue, err := c.parseExpr(frame, arg)
-			if err != nil {
-				return llvm.Value{}, err
-			}
+			llvmValue := c.getValue(frame, arg)
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
