@@ -10,10 +10,7 @@ import (
 )
 
 func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Value, commaOk bool, pos token.Pos) (llvm.Value, error) {
-	llvmValueType, err := c.getLLVMType(valueType)
-	if err != nil {
-		return llvm.Value{}, err
-	}
+	llvmValueType := c.getLLVMType(valueType)
 	mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "hashmap.value")
 	mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "hashmap.valueptr")
 	var commaOkValue llvm.Value

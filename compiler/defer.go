@@ -217,11 +217,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			// Get the real defer struct type and cast to it.
 			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.mod.GetTypeByName("runtime._defer"), 0), c.i8ptrType}
 			for _, arg := range callback.Args {
-				llvmType, err := c.getLLVMType(arg.Type())
-				if err != nil {
-					return err
-				}
-				valueTypes = append(valueTypes, llvmType)
+				valueTypes = append(valueTypes, c.getLLVMType(arg.Type()))
 			}
 			deferFrameType := c.ctx.StructType(valueTypes, false)
 			deferFramePtr := c.builder.CreateBitCast(deferData, llvm.PointerType(deferFrameType, 0), "deferFrame")
@@ -255,11 +251,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			// Get the real defer struct type and cast to it.
 			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.mod.GetTypeByName("runtime._defer"), 0)}
 			for _, param := range callback.Params {
-				llvmType, err := c.getLLVMType(param.Type())
-				if err != nil {
-					return err
-				}
-				valueTypes = append(valueTypes, llvmType)
+				valueTypes = append(valueTypes, c.getLLVMType(param.Type()))
 			}
 			deferFrameType := c.ctx.StructType(valueTypes, false)
 			deferFramePtr := c.builder.CreateBitCast(deferData, llvm.PointerType(deferFrameType, 0), "deferFrame")
@@ -289,11 +281,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.mod.GetTypeByName("runtime._defer"), 0)}
 			params := fn.Signature.Params()
 			for i := 0; i < params.Len(); i++ {
-				llvmType, err := c.getLLVMType(params.At(i).Type())
-				if err != nil {
-					return err
-				}
-				valueTypes = append(valueTypes, llvmType)
+				valueTypes = append(valueTypes, c.getLLVMType(params.At(i).Type()))
 			}
 			valueTypes = append(valueTypes, c.i8ptrType) // closure
 			deferFrameType := c.ctx.StructType(valueTypes, false)

@@ -41,7 +41,7 @@ func (c *Compiler) funcImplementation() funcValueImplementation {
 
 // createFuncValue creates a function value from a raw function pointer with no
 // context.
-func (c *Compiler) createFuncValue(funcPtr, context llvm.Value, sig *types.Signature) (llvm.Value, error) {
+func (c *Compiler) createFuncValue(funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
 	var funcValueScalar llvm.Value
 	switch c.funcImplementation() {
 	case funcValueDoubleword:
@@ -66,14 +66,11 @@ func (c *Compiler) createFuncValue(funcPtr, context llvm.Value, sig *types.Signa
 	default:
 		panic("unimplemented func value variant")
 	}
-	funcValueType, err := c.getFuncType(sig)
-	if err != nil {
-		return llvm.Value{}, err
-	}
+	funcValueType := c.getFuncType(sig)
 	funcValue := llvm.Undef(funcValueType)
 	funcValue = c.builder.CreateInsertValue(funcValue, context, 0, "")
 	funcValue = c.builder.CreateInsertValue(funcValue, funcValueScalar, 1, "")
-	return funcValue, nil
+	return funcValue
 }
 
 // getFuncSignature returns a global for identification of a particular function
@@ -112,10 +109,7 @@ func (c *Compiler) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (
 	case funcValueDoubleword:
 		funcPtr = c.builder.CreateExtractValue(funcValue, 1, "")
 	case funcValueSwitch:
-		llvmSig, err := c.getRawFuncType(sig)
-		if err != nil {
-			return llvm.Value{}, llvm.Value{}, err
-		}
+		llvmSig := c.getRawFuncType(sig)
 		sigGlobal := c.getFuncSignature(sig)
 		funcPtr = c.createRuntimeCall("getFuncPtr", []llvm.Value{funcValue, sigGlobal}, "")
 		funcPtr = c.builder.CreateIntToPtr(funcPtr, llvmSig, "")
@@ -126,25 +120,21 @@ func (c *Compiler) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (
 }
 
 // getFuncType returns the type of a func value given a signature.
-func (c *Compiler) getFuncType(typ *types.Signature) (llvm.Type, error) {
+func (c *Compiler) getFuncType(typ *types.Signature) llvm.Type {
 	switch c.funcImplementation() {
 	case funcValueDoubleword:
-		rawPtr, err := c.getRawFuncType(typ)
-		if err != nil {
-			return llvm.Type{}, err
-		}
-		return c.ctx.StructType([]llvm.Type{c.i8ptrType, rawPtr}, false), nil
+		rawPtr := c.getRawFuncType(typ)
+		return c.ctx.StructType([]llvm.Type{c.i8ptrType, rawPtr}, false)
 	case funcValueSwitch:
-		return c.mod.GetTypeByName("runtime.funcValue"), nil
+		return c.mod.GetTypeByName("runtime.funcValue")
 	default:
 		panic("unimplemented func value variant")
 	}
 }
 
 // getRawFuncType returns a LLVM function pointer type for a given signature.
-func (c *Compiler) getRawFuncType(typ *types.Signature) (llvm.Type, error) {
+func (c *Compiler) getRawFuncType(typ *types.Signature) llvm.Type {
 	// Get the return type.
-	var err error
 	var returnType llvm.Type
 	switch typ.Results().Len() {
 	case 0:
@@ -152,21 +142,14 @@ func (c *Compiler) getRawFuncType(typ *types.Signature) (llvm.Type, error) {
 		returnType = c.ctx.VoidType()
 	case 1:
 		// Just one return value.
-		returnType, err = c.getLLVMType(typ.Results().At(0).Type())
-		if err != nil {
-			return llvm.Type{}, err
-		}
+		returnType = c.getLLVMType(typ.Results().At(0).Type())
 	default:
 		// Multiple return values. Put them together in a struct.
 		// This appears to be the common way to handle multiple return values in
 		// LLVM.
 		members := make([]llvm.Type, typ.Results().Len())
 		for i := 0; i < typ.Results().Len(); i++ {
-			returnType, err := c.getLLVMType(typ.Results().At(i).Type())
-			if err != nil {
-				return llvm.Type{}, err
-			}
-			members[i] = returnType
+			members[i] = c.getLLVMType(typ.Results().At(i).Type())
 		}
 		returnType = c.ctx.StructType(members, false)
 	}
@@ -174,10 +157,7 @@ func (c *Compiler) getRawFuncType(typ *types.Signature) (llvm.Type, error) {
 	// Get the parameter types.
 	var paramTypes []llvm.Type
 	if typ.Recv() != nil {
-		recv, err := c.getLLVMType(typ.Recv().Type())
-		if err != nil {
-			return llvm.Type{}, err
-		}
+		recv := c.getLLVMType(typ.Recv().Type())
 		if recv.StructName() == "runtime._interface" {
 			// This is a call on an interface, not a concrete type.
 			// The receiver is not an interface, but a i8* type.
@@ -186,10 +166,7 @@ func (c *Compiler) getRawFuncType(typ *types.Signature) (llvm.Type, error) {
 		paramTypes = append(paramTypes, c.expandFormalParamType(recv)...)
 	}
 	for i := 0; i < typ.Params().Len(); i++ {
-		subType, err := c.getLLVMType(typ.Params().At(i).Type())
-		if err != nil {
-			return llvm.Type{}, err
-		}
+		subType := c.getLLVMType(typ.Params().At(i).Type())
 		paramTypes = append(paramTypes, c.expandFormalParamType(subType)...)
 	}
 	// All functions take these parameters at the end.
@@ -197,7 +174,7 @@ func (c *Compiler) getRawFuncType(typ *types.Signature) (llvm.Type, error) {
 	paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
 
 	// Make a func type out of the signature.
-	return llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), c.funcPtrAddrSpace), nil
+	return llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), c.funcPtrAddrSpace)
 }
 
 // parseMakeClosure makes a function value (with context) from the given
@@ -261,5 +238,5 @@ func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.V
 	}
 
 	// Create the closure.
-	return c.createFuncValue(f.LLVMFn, context, f.Signature)
+	return c.createFuncValue(f.LLVMFn, context, f.Signature), nil
 }

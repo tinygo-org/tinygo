@@ -274,10 +274,7 @@ func (c *Compiler) Compile(mainPath string) error {
 	for _, t := range c.ir.NamedTypes {
 		if named, ok := t.Type.Type().(*types.Named); ok {
 			if st, ok := named.Underlying().(*types.Struct); ok {
-				llvmType, err := c.getLLVMType(st)
-				if err != nil {
-					return err
-				}
+				llvmType := c.getLLVMType(st)
 				t.LLVMType.StructSetBody(llvmType.StructElementTypes(), false)
 			}
 		}
@@ -286,10 +283,7 @@ func (c *Compiler) Compile(mainPath string) error {
 	// Declare all globals.
 	for _, g := range c.ir.Globals {
 		typ := g.Type().(*types.Pointer).Elem()
-		llvmType, err := c.getLLVMType(typ)
-		if err != nil {
-			return err
-		}
+		llvmType := c.getLLVMType(typ)
 		global := c.mod.NamedGlobal(g.LinkName())
 		if global.IsNil() {
 			global = llvm.AddGlobal(c.mod, llvmType, g.LinkName())
@@ -303,11 +297,7 @@ func (c *Compiler) Compile(mainPath string) error {
 
 	// Declare all functions.
 	for _, f := range c.ir.Functions {
-		frame, err := c.parseFuncDecl(f)
-		if err != nil {
-			return err
-		}
-		frames = append(frames, frame)
+		frames = append(frames, c.parseFuncDecl(f))
 	}
 
 	// Add definitions to declarations.
@@ -330,10 +320,7 @@ func (c *Compiler) Compile(mainPath string) error {
 	// Define the already declared functions that wrap methods for use in
 	// interfaces.
 	for _, state := range c.interfaceInvokeWrappers {
-		err = c.createInterfaceInvokeWrapper(state)
-		if err != nil {
-			return err
-		}
+		c.createInterfaceInvokeWrapper(state)
 	}
 
 	// After all packages are imported, add a synthetic initializer function
@@ -342,10 +329,7 @@ func (c *Compiler) Compile(mainPath string) error {
 	initFn.LLVMFn.SetLinkage(llvm.InternalLinkage)
 	initFn.LLVMFn.SetUnnamedAddr(true)
 	if c.Debug {
-		difunc, err := c.attachDebugInfo(initFn)
-		if err != nil {
-			return err
-		}
+		difunc := c.attachDebugInfo(initFn)
 		pos := c.ir.Program.Fset.Position(initFn.Pos())
 		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
@@ -411,87 +395,74 @@ func (c *Compiler) Compile(mainPath string) error {
 	return nil
 }
 
-func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
+func (c *Compiler) getLLVMType(goType types.Type) llvm.Type {
 	switch typ := goType.(type) {
 	case *types.Array:
-		elemType, err := c.getLLVMType(typ.Elem())
-		if err != nil {
-			return llvm.Type{}, err
-		}
-		return llvm.ArrayType(elemType, int(typ.Len())), nil
+		elemType := c.getLLVMType(typ.Elem())
+		return llvm.ArrayType(elemType, int(typ.Len()))
 	case *types.Basic:
 		switch typ.Kind() {
 		case types.Bool, types.UntypedBool:
-			return c.ctx.Int1Type(), nil
+			return c.ctx.Int1Type()
 		case types.Int8, types.Uint8:
-			return c.ctx.Int8Type(), nil
+			return c.ctx.Int8Type()
 		case types.Int16, types.Uint16:
-			return c.ctx.Int16Type(), nil
+			return c.ctx.Int16Type()
 		case types.Int32, types.Uint32:
-			return c.ctx.Int32Type(), nil
+			return c.ctx.Int32Type()
 		case types.Int, types.Uint:
-			return c.intType, nil
+			return c.intType
 		case types.Int64, types.Uint64:
-			return c.ctx.Int64Type(), nil
+			return c.ctx.Int64Type()
 		case types.Float32:
-			return c.ctx.FloatType(), nil
+			return c.ctx.FloatType()
 		case types.Float64:
-			return c.ctx.DoubleType(), nil
+			return c.ctx.DoubleType()
 		case types.Complex64:
-			return c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false), nil
+			return c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false)
 		case types.Complex128:
-			return c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false), nil
+			return c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false)
 		case types.String, types.UntypedString:
-			return c.mod.GetTypeByName("runtime._string"), nil
+			return c.mod.GetTypeByName("runtime._string")
 		case types.Uintptr:
-			return c.uintptrType, nil
+			return c.uintptrType
 		case types.UnsafePointer:
-			return c.i8ptrType, nil
+			return c.i8ptrType
 		default:
-			return llvm.Type{}, errors.New("todo: unknown basic type: " + typ.String())
+			panic("unknown basic type: " + typ.String())
 		}
 	case *types.Chan:
-		return llvm.PointerType(c.mod.GetTypeByName("runtime.channel"), 0), nil
+		return llvm.PointerType(c.mod.GetTypeByName("runtime.channel"), 0)
 	case *types.Interface:
-		return c.mod.GetTypeByName("runtime._interface"), nil
+		return c.mod.GetTypeByName("runtime._interface")
 	case *types.Map:
-		return llvm.PointerType(c.mod.GetTypeByName("runtime.hashmap"), 0), nil
+		return llvm.PointerType(c.mod.GetTypeByName("runtime.hashmap"), 0)
 	case *types.Named:
 		if _, ok := typ.Underlying().(*types.Struct); ok {
 			llvmType := c.mod.GetTypeByName(typ.Obj().Pkg().Path() + "." + typ.Obj().Name())
 			if llvmType.IsNil() {
-				return llvm.Type{}, errors.New("type not found: " + typ.Obj().Pkg().Path() + "." + typ.Obj().Name())
+				panic("underlying type not found: " + typ.Obj().Pkg().Path() + "." + typ.Obj().Name())
 			}
-			return llvmType, nil
+			return llvmType
 		}
 		return c.getLLVMType(typ.Underlying())
 	case *types.Pointer:
-		ptrTo, err := c.getLLVMType(typ.Elem())
-		if err != nil {
-			return llvm.Type{}, err
-		}
-		return llvm.PointerType(ptrTo, 0), nil
+		ptrTo := c.getLLVMType(typ.Elem())
+		return llvm.PointerType(ptrTo, 0)
 	case *types.Signature: // function value
 		return c.getFuncType(typ)
 	case *types.Slice:
-		elemType, err := c.getLLVMType(typ.Elem())
-		if err != nil {
-			return llvm.Type{}, err
-		}
+		elemType := c.getLLVMType(typ.Elem())
 		members := []llvm.Type{
 			llvm.PointerType(elemType, 0),
 			c.uintptrType, // len
 			c.uintptrType, // cap
 		}
-		return c.ctx.StructType(members, false), nil
+		return c.ctx.StructType(members, false)
 	case *types.Struct:
 		members := make([]llvm.Type, typ.NumFields())
 		for i := 0; i < typ.NumFields(); i++ {
-			member, err := c.getLLVMType(typ.Field(i).Type())
-			if err != nil {
-				return llvm.Type{}, err
-			}
-			members[i] = member
+			members[i] = c.getLLVMType(typ.Field(i).Type())
 		}
 		if len(members) > 2 && typ.Field(0).Name() == "C union" {
 			// Not a normal struct but a C union emitted by cgo.
@@ -520,19 +491,15 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 				members = append(members, llvm.ArrayType(c.ctx.Int8Type(), int(maxSize-mainTypeSize)))
 			}
 		}
-		return c.ctx.StructType(members, false), nil
+		return c.ctx.StructType(members, false)
 	case *types.Tuple:
 		members := make([]llvm.Type, typ.Len())
 		for i := 0; i < typ.Len(); i++ {
-			member, err := c.getLLVMType(typ.At(i).Type())
-			if err != nil {
-				return llvm.Type{}, err
-			}
-			members[i] = member
+			members[i] = c.getLLVMType(typ.At(i).Type())
 		}
-		return c.ctx.StructType(members, false), nil
+		return c.ctx.StructType(members, false)
 	default:
-		return llvm.Type{}, errors.New("todo: unknown type: " + goType.String())
+		panic("unknown type: " + goType.String())
 	}
 }
 
@@ -584,15 +551,12 @@ func isPointer(typ types.Type) bool {
 }
 
 // Get the DWARF type for this Go type.
-func (c *Compiler) getDIType(typ types.Type) (llvm.Metadata, error) {
+func (c *Compiler) getDIType(typ types.Type) llvm.Metadata {
 	name := typ.String()
 	if dityp, ok := c.ditypes[name]; ok {
-		return dityp, nil
+		return dityp
 	} else {
-		llvmType, err := c.getLLVMType(typ)
-		if err != nil {
-			return llvm.Metadata{}, err
-		}
+		llvmType := c.getLLVMType(typ)
 		sizeInBytes := c.targetData.TypeAllocSize(llvmType)
 		var encoding llvm.DwarfTypeEncoding
 		switch typ := typ.(type) {
@@ -620,11 +584,11 @@ func (c *Compiler) getDIType(typ types.Type) (llvm.Metadata, error) {
 			Encoding:   encoding,
 		})
 		c.ditypes[name] = dityp
-		return dityp, nil
+		return dityp
 	}
 }
 
-func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
+func (c *Compiler) parseFuncDecl(f *ir.Function) *Frame {
 	frame := &Frame{
 		fn:           f,
 		locals:       make(map[ssa.Value]llvm.Value),
@@ -636,29 +600,18 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 	if f.Signature.Results() == nil {
 		retType = c.ctx.VoidType()
 	} else if f.Signature.Results().Len() == 1 {
-		var err error
-		retType, err = c.getLLVMType(f.Signature.Results().At(0).Type())
-		if err != nil {
-			return nil, err
-		}
+		retType = c.getLLVMType(f.Signature.Results().At(0).Type())
 	} else {
 		results := make([]llvm.Type, 0, f.Signature.Results().Len())
 		for i := 0; i < f.Signature.Results().Len(); i++ {
-			typ, err := c.getLLVMType(f.Signature.Results().At(i).Type())
-			if err != nil {
-				return nil, err
-			}
-			results = append(results, typ)
+			results = append(results, c.getLLVMType(f.Signature.Results().At(i).Type()))
 		}
 		retType = c.ctx.StructType(results, false)
 	}
 
 	var paramTypes []llvm.Type
 	for _, param := range f.Params {
-		paramType, err := c.getLLVMType(param.Type())
-		if err != nil {
-			return nil, err
-		}
+		paramType := c.getLLVMType(param.Type())
 		paramTypeFragments := c.expandFormalParamType(paramType)
 		paramTypes = append(paramTypes, paramTypeFragments...)
 	}
@@ -678,15 +631,15 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) (*Frame, error) {
 		frame.fn.LLVMFn = llvm.AddFunction(c.mod, name, fnType)
 	}
 
-	return frame, nil
+	return frame
 }
 
-func (c *Compiler) attachDebugInfo(f *ir.Function) (llvm.Metadata, error) {
+func (c *Compiler) attachDebugInfo(f *ir.Function) llvm.Metadata {
 	pos := c.ir.Program.Fset.Position(f.Syntax().Pos())
 	return c.attachDebugInfoRaw(f, f.LLVMFn, "", pos.Filename, pos.Line)
 }
 
-func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix, filename string, line int) (llvm.Metadata, error) {
+func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix, filename string, line int) llvm.Metadata {
 	if _, ok := c.difiles[filename]; !ok {
 		dir, file := filepath.Split(filename)
 		if dir != "" {
@@ -698,11 +651,7 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix,
 	// Debug info for this function.
 	diparams := make([]llvm.Metadata, 0, len(f.Params))
 	for _, param := range f.Params {
-		ditype, err := c.getDIType(param.Type())
-		if err != nil {
-			return llvm.Metadata{}, err
-		}
-		diparams = append(diparams, ditype)
+		diparams = append(diparams, c.getDIType(param.Type()))
 	}
 	diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
 		File:       c.difiles[filename],
@@ -722,7 +671,7 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix,
 		Optimized:    true,
 	})
 	llvmFn.SetSubprogram(difunc)
-	return difunc, nil
+	return difunc
 }
 
 func (c *Compiler) parseFunc(frame *Frame) error {
@@ -742,18 +691,10 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		if frame.fn.Synthetic == "package initializer" {
 			// Package initializers have no debug info. Create some fake debug
 			// info to at least have *something*.
-			difunc, err := c.attachDebugInfoRaw(frame.fn, frame.fn.LLVMFn, "", "", 0)
-			if err != nil {
-				return err
-			}
-			frame.difunc = difunc
+			frame.difunc = c.attachDebugInfoRaw(frame.fn, frame.fn.LLVMFn, "", "", 0)
 		} else if frame.fn.Syntax() != nil {
 			// Create debug info file if needed.
-			difunc, err := c.attachDebugInfo(frame.fn)
-			if err != nil {
-				return err
-			}
-			frame.difunc = difunc
+			frame.difunc = c.attachDebugInfo(frame.fn)
 		}
 		pos := c.ir.Program.Fset.Position(frame.fn.Pos())
 		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), frame.difunc, llvm.Metadata{})
@@ -771,10 +712,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 	// Load function parameters
 	llvmParamIndex := 0
 	for i, param := range frame.fn.Params {
-		llvmType, err := c.getLLVMType(param.Type())
-		if err != nil {
-			return err
-		}
+		llvmType := c.getLLVMType(param.Type())
 		fields := make([]llvm.Value, 0, 1)
 		for range c.expandFormalParamType(llvmType) {
 			fields = append(fields, frame.fn.LLVMFn.Param(llvmParamIndex))
@@ -785,15 +723,11 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		// Add debug information to this parameter (if available)
 		if c.Debug && frame.fn.Syntax() != nil {
 			pos := c.ir.Program.Fset.Position(frame.fn.Syntax().Pos())
-			dityp, err := c.getDIType(param.Type())
-			if err != nil {
-				return err
-			}
 			c.dibuilder.CreateParameterVariable(frame.difunc, llvm.DIParameterVariable{
 				Name:           param.Name(),
 				File:           c.difiles[pos.Filename],
 				Line:           pos.Line,
-				Type:           dityp,
+				Type:           c.getDIType(param.Type()),
 				AlwaysPreserve: true,
 				ArgNo:          i + 1,
 			})
@@ -814,11 +748,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 		// Determine the context type. It's a struct containing all variables.
 		freeVarTypes := make([]llvm.Type, 0, len(frame.fn.FreeVars))
 		for _, freeVar := range frame.fn.FreeVars {
-			typ, err := c.getLLVMType(freeVar.Type())
-			if err != nil {
-				return err
-			}
-			freeVarTypes = append(freeVarTypes, typ)
+			freeVarTypes = append(freeVarTypes, c.getLLVMType(freeVar.Type()))
 		}
 		contextType := c.ctx.StructType(freeVarTypes, false)
 
@@ -1346,10 +1276,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 	switch expr := expr.(type) {
 	case *ssa.Alloc:
-		typ, err := c.getLLVMType(expr.Type().Underlying().(*types.Pointer).Elem())
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		typ := c.getLLVMType(expr.Type().Underlying().(*types.Pointer).Elem())
 		var buf llvm.Value
 		if expr.Heap {
 			size := c.targetData.TypeAllocSize(typ)
@@ -1400,10 +1327,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		llvmType, err := c.getLLVMType(expr.Type())
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		llvmType := c.getLLVMType(expr.Type())
 		if x.Type() == llvmType {
 			// Different Go type but same LLVM type (for example, named int).
 			// This is the common case.
@@ -1452,10 +1376,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			// Extract a field from a CGo union.
 			// This could be done directly, but as this is a very infrequent
 			// operation it's much easier to bitcast it through an alloca.
-			resultType, err := c.getLLVMType(expr.Type())
-			if err != nil {
-				return llvm.Value{}, err
-			}
+			resultType := c.getLLVMType(expr.Type())
 			alloca := c.builder.CreateAlloca(value.Type(), "")
 			c.builder.CreateStore(value, alloca)
 			bitcast := c.builder.CreateBitCast(alloca, llvm.PointerType(resultType, 0), "")
@@ -1477,10 +1398,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			// This is not a regular struct but actually an union.
 			// That simplifies things, as we can just bitcast the pointer to the
 			// right type.
-			ptrType, err := c.getLLVMType(expr.Type())
-			if err != nil {
-				return llvm.Value{}, nil
-			}
+			ptrType := c.getLLVMType(expr.Type())
 			return c.builder.CreateBitCast(val, ptrType, ""), nil
 		} else {
 			// Do a GEP on the pointer to get the field address.
@@ -1495,7 +1413,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if fn.IsExported() {
 			return llvm.Value{}, c.makeError(expr.Pos(), "cannot use an exported function as value")
 		}
-		return c.createFuncValue(fn.LLVMFn, llvm.Undef(c.i8ptrType), fn.Signature)
+		return c.createFuncValue(fn.LLVMFn, llvm.Undef(c.i8ptrType), fn.Signature), nil
 	case *ssa.Global:
 		value := c.ir.GetGlobal(expr).LLVMGlobal
 		if value.IsNil() {
@@ -1620,14 +1538,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return c.parseMakeInterface(val, expr.X.Type(), expr.Pos())
 	case *ssa.MakeMap:
 		mapType := expr.Type().Underlying().(*types.Map)
-		llvmKeyType, err := c.getLLVMType(mapType.Key().Underlying())
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		llvmValueType, err := c.getLLVMType(mapType.Elem().Underlying())
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		llvmKeyType := c.getLLVMType(mapType.Key().Underlying())
+		llvmValueType := c.getLLVMType(mapType.Elem().Underlying())
 		keySize := c.targetData.TypeAllocSize(llvmKeyType)
 		valueSize := c.targetData.TypeAllocSize(llvmValueType)
 		llvmKeySize := llvm.ConstInt(c.ctx.Int8Type(), keySize, false)
@@ -1644,10 +1556,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, nil
 		}
 		sliceType := expr.Type().Underlying().(*types.Slice)
-		llvmElemType, err := c.getLLVMType(sliceType.Elem())
-		if err != nil {
-			return llvm.Value{}, nil
-		}
+		llvmElemType := c.getLLVMType(sliceType.Elem())
 		elemSize := c.targetData.TypeAllocSize(llvmElemType)
 		elemSizeValue := llvm.ConstInt(c.uintptrType, elemSize, false)
 
@@ -1707,14 +1616,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if expr.IsString {
 			return c.createRuntimeCall("stringNext", []llvm.Value{llvmRangeVal, it}, "range.next"), nil
 		} else { // map
-			llvmKeyType, err := c.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Key())
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			llvmValueType, err := c.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Elem())
-			if err != nil {
-				return llvm.Value{}, err
-			}
+			llvmKeyType := c.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Key())
+			llvmValueType := c.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Elem())
 
 			mapKeyAlloca := c.builder.CreateAlloca(llvmKeyType, "range.key")
 			mapKeyPtr := c.builder.CreateBitCast(mapKeyAlloca, c.i8ptrType, "range.keyptr")
@@ -1729,11 +1632,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return tuple, nil
 		}
 	case *ssa.Phi:
-		t, err := c.getLLVMType(expr.Type())
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		phi := c.builder.CreatePHI(t, "")
+		phi := c.builder.CreatePHI(c.getLLVMType(expr.Type()), "")
 		frame.phis = append(frame.phis, Phi{expr, phi})
 		return phi, nil
 	case *ssa.Range:
@@ -1752,10 +1651,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	case *ssa.Select:
 		if len(expr.States) == 0 {
 			// Shortcuts for some simple selects.
-			llvmType, err := c.getLLVMType(expr.Type())
-			if err != nil {
-				return llvm.Value{}, err
-			}
+			llvmType := c.getLLVMType(expr.Type())
 			if expr.Blocking {
 				// Blocks forever:
 				//     select {}
@@ -2225,10 +2121,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error) {
 	switch typ := expr.Type().Underlying().(type) {
 	case *types.Basic:
-		llvmType, err := c.getLLVMType(typ)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		llvmType := c.getLLVMType(typ)
 		if typ.Info()&types.IsBoolean != 0 {
 			b := constant.BoolVal(expr.Value)
 			n := uint64(0)
@@ -2294,20 +2187,12 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 			return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
 		}
 	case *types.Chan:
-		sig, err := c.getLLVMType(expr.Type())
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		return c.getZeroValue(sig), nil
+		return c.getZeroValue(c.getLLVMType(expr.Type())), nil
 	case *types.Signature:
 		if expr.Value != nil {
 			return llvm.Value{}, errors.New("non-nil signature constant")
 		}
-		sig, err := c.getLLVMType(expr.Type())
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		return c.getZeroValue(sig), nil
+		return c.getZeroValue(c.getLLVMType(expr.Type())), nil
 	case *types.Interface:
 		if expr.Value != nil {
 			return llvm.Value{}, errors.New("non-nil interface constant")
@@ -2323,19 +2208,12 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 		if expr.Value != nil {
 			return llvm.Value{}, errors.New("non-nil pointer constant")
 		}
-		llvmType, err := c.getLLVMType(typ)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		return llvm.ConstPointerNull(llvmType), nil
+		return llvm.ConstPointerNull(c.getLLVMType(typ)), nil
 	case *types.Slice:
 		if expr.Value != nil {
 			return llvm.Value{}, errors.New("non-nil slice constant")
 		}
-		elemType, err := c.getLLVMType(typ.Elem())
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		elemType := c.getLLVMType(typ.Elem())
 		llvmPtr := llvm.ConstPointerNull(llvm.PointerType(elemType, 0))
 		llvmLen := llvm.ConstInt(c.uintptrType, 0, false)
 		slice := c.ctx.ConstStruct([]llvm.Value{
@@ -2349,10 +2227,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 			// I believe this is not allowed by the Go spec.
 			panic("non-nil map constant")
 		}
-		llvmType, err := c.getLLVMType(typ)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		llvmType := c.getLLVMType(typ)
 		return c.getZeroValue(llvmType), nil
 	default:
 		return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
@@ -2361,10 +2236,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 
 func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, pos token.Pos) (llvm.Value, error) {
 	llvmTypeFrom := value.Type()
-	llvmTypeTo, err := c.getLLVMType(typeTo)
-	if err != nil {
-		return llvm.Value{}, err
-	}
+	llvmTypeTo := c.getLLVMType(typeTo)
 
 	// Conversion between unsafe.Pointer and uintptr.
 	isPtrFrom := isPointer(typeFrom.Underlying())
