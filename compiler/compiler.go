@@ -61,6 +61,7 @@ type Compiler struct {
 	initFuncs               []llvm.Value
 	interfaceInvokeWrappers []interfaceInvokeWrapper
 	ir                      *ir.Program
+	diagnostics             []error
 }
 
 type Frame struct {
@@ -158,7 +159,7 @@ func (c *Compiler) selectGC() string {
 
 // Compile the given package path or .go file path. Return an error when this
 // fails (in any stage).
-func (c *Compiler) Compile(mainPath string) error {
+func (c *Compiler) Compile(mainPath string) []error {
 	// Prefix the GOPATH with the system GOROOT, as GOROOT is already set to
 	// the TinyGo root.
 	overlayGopath := c.GOPATH
@@ -170,7 +171,7 @@ func (c *Compiler) Compile(mainPath string) error {
 
 	wd, err := os.Getwd()
 	if err != nil {
-		return err
+		return []error{err}
 	}
 	lprogram := &loader.Program{
 		Build: &build.Context{
@@ -223,22 +224,22 @@ func (c *Compiler) Compile(mainPath string) error {
 	if strings.HasSuffix(mainPath, ".go") {
 		_, err = lprogram.ImportFile(mainPath)
 		if err != nil {
-			return err
+			return []error{err}
 		}
 	} else {
 		_, err = lprogram.Import(mainPath, wd)
 		if err != nil {
-			return err
+			return []error{err}
 		}
 	}
 	_, err = lprogram.Import("runtime", "")
 	if err != nil {
-		return err
+		return []error{err}
 	}
 
 	err = lprogram.Parse()
 	if err != nil {
-		return err
+		return []error{err}
 	}
 
 	c.ir = ir.NewProgram(lprogram, mainPath)
@@ -309,10 +310,7 @@ func (c *Compiler) Compile(mainPath string) error {
 		if frame.fn.Blocks == nil {
 			continue // external function
 		}
-		err := c.parseFunc(frame)
-		if err != nil {
-			return err
-		}
+		c.parseFunc(frame)
 	}
 
 	// Define the already declared functions that wrap methods for use in
@@ -390,7 +388,7 @@ func (c *Compiler) Compile(mainPath string) error {
 		c.dibuilder.Finalize()
 	}
 
-	return nil
+	return c.diagnostics
 }
 
 func (c *Compiler) getLLVMType(goType types.Type) llvm.Type {
@@ -672,7 +670,7 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix,
 	return difunc
 }
 
-func (c *Compiler) parseFunc(frame *Frame) error {
+func (c *Compiler) parseFunc(frame *Frame) {
 	if c.DumpSSA {
 		fmt.Printf("\nfunc %s:\n", frame.fn.Function)
 	}
@@ -802,10 +800,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 					fmt.Printf("\t%s\n", instr.String())
 				}
 			}
-			err := c.parseInstr(frame, instr)
-			if err != nil {
-				return err
-			}
+			c.parseInstr(frame, instr)
 		}
 		if frame.fn.Name() == "init" && len(block.Instrs) == 0 {
 			c.builder.CreateRetVoid()
@@ -821,11 +816,9 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 			phi.llvm.AddIncoming([]llvm.Value{llvmVal}, []llvm.BasicBlock{llvmBlock})
 		}
 	}
-
-	return nil
 }
 
-func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
+func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 	if c.Debug {
 		pos := c.ir.Program.Fset.Position(instr.Pos())
 		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), frame.difunc, llvm.Metadata{})
@@ -833,20 +826,31 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 
 	switch instr := instr.(type) {
 	case ssa.Value:
-		value, err := c.parseExpr(frame, instr)
-		frame.locals[instr] = value
-		return err
+		if value, err := c.parseExpr(frame, instr); err != nil {
+			// This expression could not be parsed. Add the error to the list
+			// of diagnostics and continue with an undef value.
+			// The resulting IR will be incorrect (but valid). However,
+			// compilation can proceed which is useful because there may be
+			// more compilation errors which can then all be shown together to
+			// the user.
+			c.diagnostics = append(c.diagnostics, err)
+			frame.locals[instr] = llvm.Undef(c.getLLVMType(instr.Type()))
+		} else {
+			frame.locals[instr] = value
+		}
 	case *ssa.DebugRef:
-		return nil // ignore
+		// ignore
 	case *ssa.Defer:
-		return c.emitDefer(frame, instr)
+		c.emitDefer(frame, instr)
 	case *ssa.Go:
 		if instr.Call.IsInvoke() {
-			return c.makeError(instr.Pos(), "todo: go on method receiver")
+			c.addError(instr.Pos(), "todo: go on method receiver")
+			return
 		}
 		callee := instr.Call.StaticCallee()
 		if callee == nil {
-			return c.makeError(instr.Pos(), "todo: go on non-direct function (function pointer, etc.)")
+			c.addError(instr.Pos(), "todo: go on non-direct function (function pointer, etc.)")
+			return
 		}
 		calleeFn := c.ir.GetFunction(callee)
 
@@ -869,36 +873,30 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		}
 
 		c.createCall(calleeValue, params, "")
-		return nil
 	case *ssa.If:
 		cond := c.getValue(frame, instr.Cond)
 		block := instr.Block()
 		blockThen := frame.blockEntries[block.Succs[0]]
 		blockElse := frame.blockEntries[block.Succs[1]]
 		c.builder.CreateCondBr(cond, blockThen, blockElse)
-		return nil
 	case *ssa.Jump:
 		blockJump := frame.blockEntries[instr.Block().Succs[0]]
 		c.builder.CreateBr(blockJump)
-		return nil
 	case *ssa.MapUpdate:
 		m := c.getValue(frame, instr.Map)
 		key := c.getValue(frame, instr.Key)
 		value := c.getValue(frame, instr.Value)
 		mapType := instr.Map.Type().Underlying().(*types.Map)
-		return c.emitMapUpdate(mapType.Key(), m, key, value, instr.Pos())
+		c.emitMapUpdate(mapType.Key(), m, key, value, instr.Pos())
 	case *ssa.Panic:
 		value := c.getValue(frame, instr.X)
 		c.createRuntimeCall("_panic", []llvm.Value{value}, "")
 		c.builder.CreateUnreachable()
-		return nil
 	case *ssa.Return:
 		if len(instr.Results) == 0 {
 			c.builder.CreateRetVoid()
-			return nil
 		} else if len(instr.Results) == 1 {
 			c.builder.CreateRet(c.getValue(frame, instr.Results[0]))
-			return nil
 		} else {
 			// Multiple return values. Put them all in a struct.
 			retVal := c.getZeroValue(frame.fn.LLVMFn.Type().ElementType().ReturnType())
@@ -907,19 +905,17 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 				retVal = c.builder.CreateInsertValue(retVal, val, i, "")
 			}
 			c.builder.CreateRet(retVal)
-			return nil
 		}
 	case *ssa.RunDefers:
-		return c.emitRunDefers(frame)
+		c.emitRunDefers(frame)
 	case *ssa.Send:
 		c.emitChanSend(frame, instr)
-		return nil
 	case *ssa.Store:
 		llvmAddr := c.getValue(frame, instr.Addr)
 		llvmVal := c.getValue(frame, instr.Val)
 		if c.targetData.TypeAllocSize(llvmVal.Type()) == 0 {
 			// nothing to store
-			return nil
+			return
 		}
 		store := c.builder.CreateStore(llvmVal, llvmAddr)
 		valType := instr.Addr.Type().Underlying().(*types.Pointer).Elem()
@@ -927,9 +923,8 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 			// Volatile store, for memory-mapped registers.
 			store.SetVolatile(true)
 		}
-		return nil
 	default:
-		return c.makeError(instr.Pos(), "unknown instruction: "+instr.String())
+		c.addError(instr.Pos(), "unknown instruction: "+instr.String())
 	}
 }
 
@@ -1187,15 +1182,15 @@ func (c *Compiler) getValue(frame *Frame, expr ssa.Value) llvm.Value {
 	case *ssa.Function:
 		fn := c.ir.GetFunction(expr)
 		if fn.IsExported() {
-			// TODO: report this as a compiler diagnostic
-			panic("cannot use an exported function as value: " + expr.String())
+			c.addError(expr.Pos(), "cannot use an exported function as value: "+expr.String())
+			return llvm.Undef(c.getLLVMType(expr.Type()))
 		}
 		return c.createFuncValue(fn.LLVMFn, llvm.Undef(c.i8ptrType), fn.Signature)
 	case *ssa.Global:
 		value := c.ir.GetGlobal(expr).LLVMGlobal
 		if value.IsNil() {
-			// TODO: report this as a compiler diagnostic
-			panic("global not found: " + c.ir.GetGlobal(expr).LinkName())
+			c.addError(expr.Pos(), "global not found: "+c.ir.GetGlobal(expr).LinkName())
+			return llvm.Undef(c.getLLVMType(expr.Type()))
 		}
 		return value
 	default:

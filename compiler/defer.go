@@ -36,7 +36,7 @@ func (c *Compiler) deferInitFunc(frame *Frame) {
 
 // emitDefer emits a single defer instruction, to be run when this function
 // returns.
-func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
+func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) {
 	// The pointer to the previous defer struct, which we will replace to
 	// make a linked list.
 	next := c.builder.CreateLoad(frame.deferPtr, "defer.next")
@@ -116,7 +116,8 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
 		valueTypes = append(valueTypes, context.Type())
 
 	} else {
-		return c.makeError(instr.Pos(), "todo: defer on uncommon function call type")
+		c.addError(instr.Pos(), "todo: defer on uncommon function call type")
+		return
 	}
 
 	// Make a struct out of the collected values to put in the defer frame.
@@ -133,11 +134,10 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
 	// Push it on top of the linked list by replacing deferPtr.
 	allocaCast := c.builder.CreateBitCast(alloca, next.Type(), "defer.alloca.cast")
 	c.builder.CreateStore(allocaCast, frame.deferPtr)
-	return nil
 }
 
 // emitRunDefers emits code to run all deferred functions.
-func (c *Compiler) emitRunDefers(frame *Frame) error {
+func (c *Compiler) emitRunDefers(frame *Frame) {
 	// Add a loop like the following:
 	//     for stack != nil {
 	//         _stack := stack
@@ -301,5 +301,4 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 
 	// End of loop.
 	c.builder.SetInsertPointAtEnd(end)
-	return nil
 }

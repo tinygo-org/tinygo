@@ -33,6 +33,16 @@ func (e *commandError) Error() string {
 	return e.Msg + " " + e.File + ": " + e.Err.Error()
 }
 
+// multiError is a list of multiple errors (actually: diagnostics) returned
+// during LLVM IR generation.
+type multiError struct {
+	Errs []error
+}
+
+func (e *multiError) Error() string {
+	return e.Errs[0].Error()
+}
+
 type BuildConfig struct {
 	opt        string
 	gc         string
@@ -75,9 +85,9 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	}
 
 	// Compile Go code to IR.
-	err = c.Compile(pkgName)
-	if err != nil {
-		return err
+	errs := c.Compile(pkgName)
+	if errs != nil {
+		return &multiError{errs}
 	}
 	if config.printIR {
 		fmt.Println("Generated LLVM IR:")
@@ -494,6 +504,10 @@ func handleCompilerError(err error) {
 		} else if errLoader, ok := err.(loader.Errors); ok {
 			fmt.Fprintln(os.Stderr, "#", errLoader.Pkg.ImportPath)
 			for _, err := range errLoader.Errs {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		} else if errMulti, ok := err.(*multiError); ok {
+			for _, err := range errMulti.Errs {
 				fmt.Fprintln(os.Stderr, err)
 			}
 		} else {
