@@ -12,10 +12,7 @@ import (
 
 // emitMakeChan returns a new channel value for the given channel type.
 func (c *Compiler) emitMakeChan(expr *ssa.MakeChan) (llvm.Value, error) {
-	valueType, err := c.getLLVMType(expr.Type().(*types.Chan).Elem())
-	if err != nil {
-		return llvm.Value{}, err
-	}
+	valueType := c.getLLVMType(expr.Type().(*types.Chan).Elem())
 	if c.targetData.TypeAllocSize(valueType) > c.targetData.TypeAllocSize(c.intType) {
 		// Values bigger than int overflow the data part of the coroutine.
 		// TODO: make the coroutine data part big enough to hold these bigger
@@ -33,10 +30,7 @@ func (c *Compiler) emitMakeChan(expr *ssa.MakeChan) (llvm.Value, error) {
 // emitChanSend emits a pseudo chan send operation. It is lowered to the actual
 // channel send operation during goroutine lowering.
 func (c *Compiler) emitChanSend(frame *Frame, instr *ssa.Send) error {
-	valueType, err := c.getLLVMType(instr.Chan.Type().(*types.Chan).Elem())
-	if err != nil {
-		return err
-	}
+	valueType := c.getLLVMType(instr.Chan.Type().(*types.Chan).Elem())
 	ch, err := c.parseExpr(frame, instr.Chan)
 	if err != nil {
 		return err
@@ -56,10 +50,7 @@ func (c *Compiler) emitChanSend(frame *Frame, instr *ssa.Send) error {
 // emitChanRecv emits a pseudo chan receive operation. It is lowered to the
 // actual channel receive operation during goroutine lowering.
 func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
-	valueType, err := c.getLLVMType(unop.X.Type().(*types.Chan).Elem())
-	if err != nil {
-		return llvm.Value{}, err
-	}
+	valueType := c.getLLVMType(unop.X.Type().(*types.Chan).Elem())
 	valueSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(valueType), false)
 	ch, err := c.parseExpr(frame, unop.X)
 	if err != nil {
@@ -83,11 +74,8 @@ func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) (llvm.Value, error
 
 // emitChanClose closes the given channel.
 func (c *Compiler) emitChanClose(frame *Frame, param ssa.Value) error {
-	valueType, err := c.getLLVMType(param.Type().(*types.Chan).Elem())
+	valueType := c.getLLVMType(param.Type().(*types.Chan).Elem())
 	valueSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(valueType), false)
-	if err != nil {
-		return err
-	}
 	ch, err := c.parseExpr(frame, param)
 	if err != nil {
 		return err

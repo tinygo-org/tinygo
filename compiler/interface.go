@@ -279,10 +279,7 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) (llvm.Val
 	if err != nil {
 		return llvm.Value{}, err
 	}
-	assertedType, err := c.getLLVMType(expr.AssertedType)
-	if err != nil {
-		return llvm.Value{}, err
-	}
+	assertedType := c.getLLVMType(expr.AssertedType)
 
 	actualTypeNum := c.builder.CreateExtractValue(itf, 0, "interface.type")
 	commaOk := llvm.Value{}
@@ -389,10 +386,7 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 		return llvm.Value{}, nil, err
 	}
 
-	llvmFnType, err := c.getRawFuncType(instr.Method.Type().(*types.Signature))
-	if err != nil {
-		return llvm.Value{}, nil, err
-	}
+	llvmFnType := c.getRawFuncType(instr.Method.Type().(*types.Signature))
 
 	typecode := c.builder.CreateExtractValue(itf, 0, "invoke.typecode")
 	values := []llvm.Value{
@@ -443,10 +437,7 @@ func (c *Compiler) getInterfaceInvokeWrapper(f *ir.Function) (llvm.Value, error)
 	}
 
 	// Get the expanded receiver type.
-	receiverType, err := c.getLLVMType(f.Params[0].Type())
-	if err != nil {
-		return llvm.Value{}, err
-	}
+	receiverType := c.getLLVMType(f.Params[0].Type())
 	expandedReceiverType := c.expandFormalParamType(receiverType)
 
 	// Does this method even need any wrapping?
@@ -473,7 +464,7 @@ func (c *Compiler) getInterfaceInvokeWrapper(f *ir.Function) (llvm.Value, error)
 
 // createInterfaceInvokeWrapper finishes the work of getInterfaceInvokeWrapper,
 // see that function for details.
-func (c *Compiler) createInterfaceInvokeWrapper(state interfaceInvokeWrapper) error {
+func (c *Compiler) createInterfaceInvokeWrapper(state interfaceInvokeWrapper) {
 	wrapper := state.wrapper
 	fn := state.fn
 	receiverType := state.receiverType
@@ -483,10 +474,7 @@ func (c *Compiler) createInterfaceInvokeWrapper(state interfaceInvokeWrapper) er
 	// add debug info if needed
 	if c.Debug {
 		pos := c.ir.Program.Fset.Position(fn.Pos())
-		difunc, err := c.attachDebugInfoRaw(fn, wrapper, "$invoke", pos.Filename, pos.Line)
-		if err != nil {
-			return err
-		}
+		difunc := c.attachDebugInfoRaw(fn, wrapper, "$invoke", pos.Filename, pos.Line)
 		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
 
@@ -524,6 +512,4 @@ func (c *Compiler) createInterfaceInvokeWrapper(state interfaceInvokeWrapper) er
 		ret := c.builder.CreateCall(fn.LLVMFn, params, "ret")
 		c.builder.CreateRet(ret)
 	}
-
-	return nil
 }
