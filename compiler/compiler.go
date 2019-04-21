@@ -295,11 +295,7 @@ func (c *Compiler) Compile(mainPath string) error {
 		g.LLVMGlobal = global
 		if !g.IsExtern() {
 			global.SetLinkage(llvm.InternalLinkage)
-			initializer, err := c.getZeroValue(llvmType)
-			if err != nil {
-				return err
-			}
-			global.SetInitializer(initializer)
+			global.SetInitializer(c.getZeroValue(llvmType))
 		}
 	}
 
@@ -542,42 +538,35 @@ func (c *Compiler) getLLVMType(goType types.Type) (llvm.Type, error) {
 // initializer has the same effect as setting 'zeroinitializer' on a value.
 // Sadly, I haven't found a way to do it directly with the Go API but this works
 // just fine.
-func (c *Compiler) getZeroValue(typ llvm.Type) (llvm.Value, error) {
+func (c *Compiler) getZeroValue(typ llvm.Type) llvm.Value {
 	switch typ.TypeKind() {
 	case llvm.ArrayTypeKind:
 		subTyp := typ.ElementType()
-		subVal, err := c.getZeroValue(subTyp)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		subVal := c.getZeroValue(subTyp)
 		vals := make([]llvm.Value, typ.ArrayLength())
 		for i := range vals {
 			vals[i] = subVal
 		}
-		return llvm.ConstArray(subTyp, vals), nil
+		return llvm.ConstArray(subTyp, vals)
 	case llvm.FloatTypeKind, llvm.DoubleTypeKind:
-		return llvm.ConstFloat(typ, 0.0), nil
+		return llvm.ConstFloat(typ, 0.0)
 	case llvm.IntegerTypeKind:
-		return llvm.ConstInt(typ, 0, false), nil
+		return llvm.ConstInt(typ, 0, false)
 	case llvm.PointerTypeKind:
-		return llvm.ConstPointerNull(typ), nil
+		return llvm.ConstPointerNull(typ)
 	case llvm.StructTypeKind:
 		types := typ.StructElementTypes()
 		vals := make([]llvm.Value, len(types))
 		for i, subTyp := range types {
-			val, err := c.getZeroValue(subTyp)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			vals[i] = val
+			vals[i] = c.getZeroValue(subTyp)
 		}
 		if typ.StructName() != "" {
-			return llvm.ConstNamedStruct(typ, vals), nil
+			return llvm.ConstNamedStruct(typ, vals)
 		} else {
-			return c.ctx.ConstStruct(vals, false), nil
+			return c.ctx.ConstStruct(vals, false)
 		}
 	default:
-		return llvm.Value{}, errors.New("todo: LLVM zero initializer: " + typ.String())
+		panic("unknown LLVM zero inititializer: " + typ.String())
 	}
 }
 
@@ -1008,10 +997,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 			return nil
 		} else {
 			// Multiple return values. Put them all in a struct.
-			retVal, err := c.getZeroValue(frame.fn.LLVMFn.Type().ElementType().ReturnType())
-			if err != nil {
-				return err
-			}
+			retVal := c.getZeroValue(frame.fn.LLVMFn.Type().ElementType().ReturnType())
 			for i, result := range instr.Results {
 				val, err := c.parseExpr(frame, result)
 				if err != nil {
@@ -1378,11 +1364,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		} else {
 			buf = c.builder.CreateAlloca(typ, expr.Comment)
 			if c.targetData.TypeAllocSize(typ) != 0 {
-				zero, err := c.getZeroValue(typ)
-				if err != nil {
-					return llvm.Value{}, err
-				}
-				c.builder.CreateStore(zero, buf) // zero-initialize var
+				c.builder.CreateStore(c.getZeroValue(typ), buf) // zero-initialize var
 			}
 		}
 		return buf, nil
@@ -1763,11 +1745,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			panic("unknown type in range: " + typ.String())
 		}
 		it := c.builder.CreateAlloca(iteratorType, "range.it")
-		zero, err := c.getZeroValue(iteratorType)
-		if err != nil {
-			return llvm.Value{}, nil
-		}
-		c.builder.CreateStore(zero, it)
+		c.builder.CreateStore(c.getZeroValue(iteratorType), it)
 		return it, nil
 	case *ssa.Select:
 		if len(expr.States) == 0 {
@@ -1934,10 +1912,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
 			newLen := c.builder.CreateSub(high, low, "")
-			str, err := c.getZeroValue(c.mod.GetTypeByName("runtime._string"))
-			if err != nil {
-				return llvm.Value{}, err
-			}
+			str := llvm.Undef(c.mod.GetTypeByName("runtime._string"))
 			str = c.builder.CreateInsertValue(str, newPtr, 0, "")
 			str = c.builder.CreateInsertValue(str, newLen, 1, "")
 			return str, nil
@@ -2321,7 +2296,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return c.getZeroValue(sig)
+		return c.getZeroValue(sig), nil
 	case *types.Signature:
 		if expr.Value != nil {
 			return llvm.Value{}, errors.New("non-nil signature constant")
@@ -2330,7 +2305,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return c.getZeroValue(sig)
+		return c.getZeroValue(sig), nil
 	case *types.Interface:
 		if expr.Value != nil {
 			return llvm.Value{}, errors.New("non-nil interface constant")
@@ -2376,7 +2351,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		return c.getZeroValue(llvmType)
+		return c.getZeroValue(llvmType), nil
 	default:
 		return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
 	}
@@ -2566,7 +2541,7 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 		valType := unop.X.Type().Underlying().(*types.Pointer).Elem()
 		if c.targetData.TypeAllocSize(x.Type().ElementType()) == 0 {
 			// zero-length data
-			return c.getZeroValue(x.Type().ElementType())
+			return c.getZeroValue(x.Type().ElementType()), nil
 		} else if strings.HasSuffix(unop.X.String(), "$funcaddr") {
 			// CGo function pointer. The cgo part has rewritten CGo function
 			// pointers as stub global variables of the form:

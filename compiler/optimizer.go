@@ -249,7 +249,7 @@ func (c *Compiler) OptimizeAllocs() {
 			sizeInWords := (size + uint64(alignment) - 1) / uint64(alignment)
 			allocaType := llvm.ArrayType(c.ctx.IntType(alignment*8), int(sizeInWords))
 			alloca := c.builder.CreateAlloca(allocaType, "stackalloc.alloca")
-			zero, _ := c.getZeroValue(alloca.Type().ElementType())
+			zero := c.getZeroValue(alloca.Type().ElementType())
 			c.builder.CreateStore(zero, alloca)
 			stackalloc := c.builder.CreateBitCast(alloca, bitcast.Type(), "stackalloc")
 			bitcast.ReplaceAllUsesWith(stackalloc)

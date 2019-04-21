@@ -283,10 +283,6 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) (llvm.Val
 	if err != nil {
 		return llvm.Value{}, err
 	}
-	valueNil, err := c.getZeroValue(assertedType)
-	if err != nil {
-		return llvm.Value{}, err
-	}
 
 	actualTypeNum := c.builder.CreateExtractValue(itf, 0, "interface.type")
 	commaOk := llvm.Value{}
@@ -345,10 +341,7 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) (llvm.Val
 			valuePtrCast := c.builder.CreateBitCast(valuePtr, llvm.PointerType(assertedType, 0), "")
 			valueOk = c.builder.CreateLoad(valuePtrCast, "typeassert.value.ok")
 		} else if size == 0 {
-			valueOk, err = c.getZeroValue(assertedType)
-			if err != nil {
-				return llvm.Value{}, err
-			}
+			valueOk = c.getZeroValue(assertedType)
 		} else {
 			// Value was stored directly in the interface.
 			switch assertedType.TypeKind() {
@@ -372,7 +365,7 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) (llvm.Val
 	// Continue after the if statement.
 	c.builder.SetInsertPointAtEnd(nextBlock)
 	phi := c.builder.CreatePHI(assertedType, "typeassert.value")
-	phi.AddIncoming([]llvm.Value{valueNil, valueOk}, []llvm.BasicBlock{prevBlock, okBlock})
+	phi.AddIncoming([]llvm.Value{c.getZeroValue(assertedType), valueOk}, []llvm.BasicBlock{prevBlock, okBlock})
 
 	if expr.CommaOk {
 		tuple := c.ctx.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(c.ctx.Int1Type())}, false) // create empty tuple
