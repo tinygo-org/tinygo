@@ -12,3 +12,7 @@ func (c *Compiler) makeError(pos token.Pos, msg string) types.Error {
 		Msg:  msg,
 	}
 }
+
+func (c *Compiler) addError(pos token.Pos, msg string) {
+	c.diagnostics = append(c.diagnostics, c.makeError(pos, msg))
+}
