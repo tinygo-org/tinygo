@@ -818,10 +818,7 @@ func (c *Compiler) parseFunc(frame *Frame) error {
 	for _, phi := range frame.phis {
 		block := phi.ssa.Block()
 		for i, edge := range phi.ssa.Edges {
-			llvmVal, err := c.parseExpr(frame, edge)
-			if err != nil {
-				return err
-			}
+			llvmVal := c.getValue(frame, edge)
 			llvmBlock := frame.blockExits[block.Preds[i]]
 			phi.llvm.AddIncoming([]llvm.Value{llvmVal}, []llvm.BasicBlock{llvmBlock})
 		}
@@ -866,11 +863,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		// Get all function parameters to pass to the goroutine.
 		var params []llvm.Value
 		for _, param := range instr.Call.Args {
-			val, err := c.parseExpr(frame, param)
-			if err != nil {
-				return err
-			}
-			params = append(params, val)
+			params = append(params, c.getValue(frame, param))
 		}
 		if !calleeFn.IsExported() {
 			params = append(params, llvm.Undef(c.i8ptrType)) // context parameter
@@ -880,10 +873,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		c.createCall(calleeValue, params, "")
 		return nil
 	case *ssa.If:
-		cond, err := c.parseExpr(frame, instr.Cond)
-		if err != nil {
-			return err
-		}
+		cond := c.getValue(frame, instr.Cond)
 		block := instr.Block()
 		blockThen := frame.blockEntries[block.Succs[0]]
 		blockElse := frame.blockEntries[block.Succs[1]]
@@ -894,25 +884,13 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 		c.builder.CreateBr(blockJump)
 		return nil
 	case *ssa.MapUpdate:
-		m, err := c.parseExpr(frame, instr.Map)
-		if err != nil {
-			return err
-		}
-		key, err := c.parseExpr(frame, instr.Key)
-		if err != nil {
-			return err
-		}
-		value, err := c.parseExpr(frame, instr.Value)
-		if err != nil {
-			return err
-		}
+		m := c.getValue(frame, instr.Map)
+		key := c.getValue(frame, instr.Key)
+		value := c.getValue(frame, instr.Value)
 		mapType := instr.Map.Type().Underlying().(*types.Map)
 		return c.emitMapUpdate(mapType.Key(), m, key, value, instr.Pos())
 	case *ssa.Panic:
-		value, err := c.parseExpr(frame, instr.X)
-		if err != nil {
-			return err
-		}
+		value := c.getValue(frame, instr.X)
 		c.createRuntimeCall("_panic", []llvm.Value{value}, "")
 		c.builder.CreateUnreachable()
 		return nil
@@ -921,20 +899,13 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 			c.builder.CreateRetVoid()
 			return nil
 		} else if len(instr.Results) == 1 {
-			val, err := c.parseExpr(frame, instr.Results[0])
-			if err != nil {
-				return err
-			}
-			c.builder.CreateRet(val)
+			c.builder.CreateRet(c.getValue(frame, instr.Results[0]))
 			return nil
 		} else {
 			// Multiple return values. Put them all in a struct.
 			retVal := c.getZeroValue(frame.fn.LLVMFn.Type().ElementType().ReturnType())
 			for i, result := range instr.Results {
-				val, err := c.parseExpr(frame, result)
-				if err != nil {
-					return err
-				}
+				val := c.getValue(frame, result)
 				retVal = c.builder.CreateInsertValue(retVal, val, i, "")
 			}
 			c.builder.CreateRet(retVal)
@@ -943,16 +914,11 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 	case *ssa.RunDefers:
 		return c.emitRunDefers(frame)
 	case *ssa.Send:
-		return c.emitChanSend(frame, instr)
+		c.emitChanSend(frame, instr)
+		return nil
 	case *ssa.Store:
-		llvmAddr, err := c.parseExpr(frame, instr.Addr)
-		if err != nil {
-			return err
-		}
-		llvmVal, err := c.parseExpr(frame, instr.Val)
-		if err != nil {
-			return err
-		}
+		llvmAddr := c.getValue(frame, instr.Addr)
+		llvmVal := c.getValue(frame, instr.Val)
 		if c.targetData.TypeAllocSize(llvmVal.Type()) == 0 {
 			// nothing to store
 			return nil
@@ -972,14 +938,8 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) error {
 func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string, pos token.Pos) (llvm.Value, error) {
 	switch callName {
 	case "append":
-		src, err := c.parseExpr(frame, args[0])
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		elems, err := c.parseExpr(frame, args[1])
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		src := c.getValue(frame, args[0])
+		elems := c.getValue(frame, args[1])
 		srcBuf := c.builder.CreateExtractValue(src, 0, "append.srcBuf")
 		srcPtr := c.builder.CreateBitCast(srcBuf, c.i8ptrType, "append.srcPtr")
 		srcLen := c.builder.CreateExtractValue(src, 1, "append.srcLen")
@@ -1000,10 +960,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 		newSlice = c.builder.CreateInsertValue(newSlice, newCap, 2, "")
 		return newSlice, nil
 	case "cap":
-		value, err := c.parseExpr(frame, args[0])
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		value := c.getValue(frame, args[0])
 		var llvmCap llvm.Value
 		switch args[0].Type().(type) {
 		case *types.Chan:
@@ -1020,16 +977,11 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 		}
 		return llvmCap, nil
 	case "close":
-		return llvm.Value{}, c.emitChanClose(frame, args[0])
+		c.emitChanClose(frame, args[0])
+		return llvm.Value{}, nil
 	case "complex":
-		r, err := c.parseExpr(frame, args[0])
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		i, err := c.parseExpr(frame, args[1])
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		r := c.getValue(frame, args[0])
+		i := c.getValue(frame, args[1])
 		t := args[0].Type().Underlying().(*types.Basic)
 		var cplx llvm.Value
 		switch t.Kind() {
@@ -1044,14 +996,8 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 		cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
 		return cplx, nil
 	case "copy":
-		dst, err := c.parseExpr(frame, args[0])
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		src, err := c.parseExpr(frame, args[1])
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		dst := c.getValue(frame, args[0])
+		src := c.getValue(frame, args[1])
 		dstLen := c.builder.CreateExtractValue(dst, 1, "copy.dstLen")
 		srcLen := c.builder.CreateExtractValue(src, 1, "copy.srcLen")
 		dstBuf := c.builder.CreateExtractValue(dst, 0, "copy.dstArray")
@@ -1062,26 +1008,14 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 		elemSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(elemType), false)
 		return c.createRuntimeCall("sliceCopy", []llvm.Value{dstBuf, srcBuf, dstLen, srcLen, elemSize}, "copy.n"), nil
 	case "delete":
-		m, err := c.parseExpr(frame, args[0])
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		key, err := c.parseExpr(frame, args[1])
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		m := c.getValue(frame, args[0])
+		key := c.getValue(frame, args[1])
 		return llvm.Value{}, c.emitMapDelete(args[1].Type(), m, key, pos)
 	case "imag":
-		cplx, err := c.parseExpr(frame, args[0])
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		cplx := c.getValue(frame, args[0])
 		return c.builder.CreateExtractValue(cplx, 1, "imag"), nil
 	case "len":
-		value, err := c.parseExpr(frame, args[0])
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		value := c.getValue(frame, args[0])
 		var llvmLen llvm.Value
 		switch args[0].Type().Underlying().(type) {
 		case *types.Basic, *types.Slice:
@@ -1105,10 +1039,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 			if i >= 1 && callName == "println" {
 				c.createRuntimeCall("printspace", nil, "")
 			}
-			value, err := c.parseExpr(frame, arg)
-			if err != nil {
-				return llvm.Value{}, err
-			}
+			value := c.getValue(frame, arg)
 			typ := arg.Type().Underlying()
 			switch typ := typ.(type) {
 			case *types.Basic:
@@ -1161,29 +1092,22 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 		}
 		return llvm.Value{}, nil // print() or println() returns void
 	case "real":
-		cplx, err := c.parseExpr(frame, args[0])
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		cplx := c.getValue(frame, args[0])
 		return c.builder.CreateExtractValue(cplx, 0, "real"), nil
 	case "recover":
 		return c.createRuntimeCall("_recover", nil, ""), nil
 	case "ssa:wrapnilchk":
 		// TODO: do an actual nil check?
-		return c.parseExpr(frame, args[0])
+		return c.getValue(frame, args[0]), nil
 	default:
 		return llvm.Value{}, c.makeError(pos, "todo: builtin: "+callName)
 	}
 }
 
-func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, context llvm.Value, exported bool) (llvm.Value, error) {
+func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, context llvm.Value, exported bool) llvm.Value {
 	var params []llvm.Value
 	for _, param := range args {
-		val, err := c.parseExpr(frame, param)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		params = append(params, val)
+		params = append(params, c.getValue(frame, param))
 	}
 
 	if !exported {
@@ -1195,15 +1119,12 @@ func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, con
 		params = append(params, llvm.Undef(c.i8ptrType))
 	}
 
-	return c.createCall(llvmFn, params, ""), nil
+	return c.createCall(llvmFn, params, "")
 }
 
 func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, error) {
 	if instr.IsInvoke() {
-		fnCast, args, err := c.getInvokeCall(frame, instr)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		fnCast, args := c.getInvokeCall(frame, instr)
 		return c.createCall(fnCast, args, ""), nil
 	}
 
@@ -1234,15 +1155,12 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 		case *ssa.MakeClosure:
 			// A call on a func value, but the callee is trivial to find. For
 			// example: immediately applied functions.
-			funcValue, err := c.parseExpr(frame, value)
-			if err != nil {
-				return llvm.Value{}, err
-			}
+			funcValue := c.getValue(frame, value)
 			context = c.extractFuncContext(funcValue)
 		default:
 			panic("StaticCallee returned an unexpected value")
 		}
-		return c.parseFunctionCall(frame, instr.Args, targetFunc.LLVMFn, context, targetFunc.IsExported())
+		return c.parseFunctionCall(frame, instr.Args, targetFunc.LLVMFn, context, targetFunc.IsExported()), nil
 	}
 
 	// Builtin or function pointer.
@@ -1250,10 +1168,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 	case *ssa.Builtin:
 		return c.parseBuiltin(frame, instr.Args, call.Name(), instr.Pos())
 	default: // function pointer
-		value, err := c.parseExpr(frame, instr.Value)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		value := c.getValue(frame, instr.Value)
 		// This is a func value, which cannot be called directly. We have to
 		// extract the function pointer and context first from the func value.
 		funcPtr, context, err := c.decodeFuncValue(value, instr.Value.Type().(*types.Signature))
@@ -1261,17 +1176,46 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 			return llvm.Value{}, err
 		}
 		c.emitNilCheck(frame, funcPtr, "fpcall")
-		return c.parseFunctionCall(frame, instr.Args, funcPtr, context, false)
+		return c.parseFunctionCall(frame, instr.Args, funcPtr, context, false), nil
 	}
 }
 
-func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
-	if value, ok := frame.locals[expr]; ok {
-		// Value is a local variable that has already been computed.
-		if value.IsNil() {
-			return llvm.Value{}, c.makeError(expr.Pos(), "undefined local var (from cgo?)")
+// getValue returns the LLVM value of a constant, function value, global, or
+// already processed SSA expression.
+func (c *Compiler) getValue(frame *Frame, expr ssa.Value) llvm.Value {
+	switch expr := expr.(type) {
+	case *ssa.Const:
+		return c.parseConst(frame.fn.LinkName(), expr)
+	case *ssa.Function:
+		fn := c.ir.GetFunction(expr)
+		if fn.IsExported() {
+			// TODO: report this as a compiler diagnostic
+			panic("cannot use an exported function as value: " + expr.String())
 		}
-		return value, nil
+		return c.createFuncValue(fn.LLVMFn, llvm.Undef(c.i8ptrType), fn.Signature)
+	case *ssa.Global:
+		value := c.ir.GetGlobal(expr).LLVMGlobal
+		if value.IsNil() {
+			// TODO: report this as a compiler diagnostic
+			panic("global not found: " + c.ir.GetGlobal(expr).LinkName())
+		}
+		return value
+	default:
+		// other (local) SSA value
+		if value, ok := frame.locals[expr]; ok {
+			return value
+		} else {
+			// indicates a compiler bug
+			panic("local has not been parsed: " + expr.String())
+		}
+	}
+}
+
+// parseExpr translates a Go SSA expression to a LLVM instruction.
+func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
+	if _, ok := frame.locals[expr]; ok {
+		// sanity check
+		panic("local has already been parsed: " + expr.String())
 	}
 
 	switch expr := expr.(type) {
@@ -1298,14 +1242,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 		return buf, nil
 	case *ssa.BinOp:
-		x, err := c.parseExpr(frame, expr.X)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		y, err := c.parseExpr(frame, expr.Y)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		x := c.getValue(frame, expr.X)
+		y := c.getValue(frame, expr.Y)
 		return c.parseBinOp(expr.Op, expr.X.Type(), x, y, expr.Pos())
 	case *ssa.Call:
 		// Passing the current task here to the subroutine. It is only used when
@@ -1318,15 +1256,12 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// This is different from how the official Go compiler works, because of
 		// heap allocation and because it's easier to implement, see:
 		// https://research.swtch.com/interfaces
-		return c.parseExpr(frame, expr.X)
+		return c.getValue(frame, expr.X), nil
 	case *ssa.ChangeType:
 		// This instruction changes the type, but the underlying value remains
 		// the same. This is often a no-op, but sometimes we have to change the
 		// LLVM type as well.
-		x, err := c.parseExpr(frame, expr.X)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		x := c.getValue(frame, expr.X)
 		llvmType := c.getLLVMType(expr.Type())
 		if x.Type() == llvmType {
 			// Different Go type but same LLVM type (for example, named int).
@@ -1353,25 +1288,16 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, errors.New("todo: unknown ChangeType type: " + expr.X.Type().String())
 		}
 	case *ssa.Const:
-		return c.parseConst(frame.fn.LinkName(), expr)
+		panic("const is not an expression")
 	case *ssa.Convert:
-		x, err := c.parseExpr(frame, expr.X)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		x := c.getValue(frame, expr.X)
 		return c.parseConvert(expr.X.Type(), expr.Type(), x, expr.Pos())
 	case *ssa.Extract:
-		value, err := c.parseExpr(frame, expr.Tuple)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		value := c.getValue(frame, expr.Tuple)
 		result := c.builder.CreateExtractValue(value, expr.Index, "")
 		return result, nil
 	case *ssa.Field:
-		value, err := c.parseExpr(frame, expr.X)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		value := c.getValue(frame, expr.X)
 		if s := expr.X.Type().Underlying().(*types.Struct); s.NumFields() > 2 && s.Field(0).Name() == "C union" {
 			// Extract a field from a CGo union.
 			// This could be done directly, but as this is a very infrequent
@@ -1385,10 +1311,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		result := c.builder.CreateExtractValue(value, expr.Field, "")
 		return result, nil
 	case *ssa.FieldAddr:
-		val, err := c.parseExpr(frame, expr.X)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		val := c.getValue(frame, expr.X)
 		// Check for nil pointer before calculating the address, from the spec:
 		// > For an operand x of type T, the address operation &x generates a
 		// > pointer of type *T to x. [...] If the evaluation of x would cause a
@@ -1409,26 +1332,12 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return c.builder.CreateGEP(val, indices, ""), nil
 		}
 	case *ssa.Function:
-		fn := c.ir.GetFunction(expr)
-		if fn.IsExported() {
-			return llvm.Value{}, c.makeError(expr.Pos(), "cannot use an exported function as value")
-		}
-		return c.createFuncValue(fn.LLVMFn, llvm.Undef(c.i8ptrType), fn.Signature), nil
+		panic("function is not an expression")
 	case *ssa.Global:
-		value := c.ir.GetGlobal(expr).LLVMGlobal
-		if value.IsNil() {
-			return llvm.Value{}, c.makeError(expr.Pos(), "global not found: "+c.ir.GetGlobal(expr).LinkName())
-		}
-		return value, nil
+		panic("global is not an expression")
 	case *ssa.Index:
-		array, err := c.parseExpr(frame, expr.X)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		index, err := c.parseExpr(frame, expr.Index)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		array := c.getValue(frame, expr.X)
+		index := c.getValue(frame, expr.Index)
 
 		// Check bounds.
 		arrayLen := expr.X.Type().(*types.Array).Len()
@@ -1443,14 +1352,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		ptr := c.builder.CreateGEP(alloca, []llvm.Value{zero, index}, "index.gep")
 		return c.builder.CreateLoad(ptr, "index.load"), nil
 	case *ssa.IndexAddr:
-		val, err := c.parseExpr(frame, expr.X)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		index, err := c.parseExpr(frame, expr.Index)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		val := c.getValue(frame, expr.X)
+		index := c.getValue(frame, expr.Index)
 
 		// Get buffer pointer and length
 		var bufptr, buflen llvm.Value
@@ -1494,14 +1397,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			panic("unreachable")
 		}
 	case *ssa.Lookup:
-		value, err := c.parseExpr(frame, expr.X)
-		if err != nil {
-			return llvm.Value{}, nil
-		}
-		index, err := c.parseExpr(frame, expr.Index)
-		if err != nil {
-			return llvm.Value{}, nil
-		}
+		value := c.getValue(frame, expr.X)
+		index := c.getValue(frame, expr.Index)
 		switch xType := expr.X.Type().Underlying().(type) {
 		case *types.Basic:
 			// Value type must be a string, which is a basic type.
@@ -1531,10 +1428,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	case *ssa.MakeClosure:
 		return c.parseMakeClosure(frame, expr)
 	case *ssa.MakeInterface:
-		val, err := c.parseExpr(frame, expr.X)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		val := c.getValue(frame, expr.X)
 		return c.parseMakeInterface(val, expr.X.Type(), expr.Pos())
 	case *ssa.MakeMap:
 		mapType := expr.Type().Underlying().(*types.Map)
@@ -1547,14 +1441,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		hashmap := c.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize}, "")
 		return hashmap, nil
 	case *ssa.MakeSlice:
-		sliceLen, err := c.parseExpr(frame, expr.Len)
-		if err != nil {
-			return llvm.Value{}, nil
-		}
-		sliceCap, err := c.parseExpr(frame, expr.Cap)
-		if err != nil {
-			return llvm.Value{}, nil
-		}
+		sliceLen := c.getValue(frame, expr.Len)
+		sliceCap := c.getValue(frame, expr.Cap)
 		sliceType := expr.Type().Underlying().(*types.Slice)
 		llvmElemType := c.getLLVMType(sliceType.Elem())
 		elemSize := c.targetData.TypeAllocSize(llvmElemType)
@@ -1605,14 +1493,8 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return slice, nil
 	case *ssa.Next:
 		rangeVal := expr.Iter.(*ssa.Range).X
-		llvmRangeVal, err := c.parseExpr(frame, rangeVal)
-		if err != nil {
-			return llvm.Value{}, err
-		}
-		it, err := c.parseExpr(frame, expr.Iter)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		llvmRangeVal := c.getValue(frame, rangeVal)
+		it := c.getValue(frame, expr.Iter)
 		if expr.IsString {
 			return c.createRuntimeCall("stringNext", []llvm.Value{llvmRangeVal, it}, "range.next"), nil
 		} else { // map
@@ -1672,20 +1554,14 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		if expr.Max != nil {
 			return llvm.Value{}, c.makeError(expr.Pos(), "todo: full slice expressions (with max): "+expr.Type().String())
 		}
-		value, err := c.parseExpr(frame, expr.X)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		value := c.getValue(frame, expr.X)
 
 		var lowType, highType *types.Basic
 		var low, high llvm.Value
 
 		if expr.Low != nil {
 			lowType = expr.Low.Type().Underlying().(*types.Basic)
-			low, err = c.parseExpr(frame, expr.Low)
-			if err != nil {
-				return llvm.Value{}, nil
-			}
+			low = c.getValue(frame, expr.Low)
 			if low.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
 				if lowType.Info()&types.IsUnsigned != 0 {
 					low = c.builder.CreateZExt(low, c.uintptrType, "")
@@ -1700,10 +1576,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		if expr.High != nil {
 			highType = expr.High.Type().Underlying().(*types.Basic)
-			high, err = c.parseExpr(frame, expr.High)
-			if err != nil {
-				return llvm.Value{}, nil
-			}
+			high = c.getValue(frame, expr.High)
 			if high.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
 				if highType.Info()&types.IsUnsigned != 0 {
 					high = c.builder.CreateZExt(high, c.uintptrType, "")
@@ -1819,7 +1692,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, c.makeError(expr.Pos(), "unknown slice type: "+typ.String())
 		}
 	case *ssa.TypeAssert:
-		return c.parseTypeAssert(frame, expr)
+		return c.parseTypeAssert(frame, expr), nil
 	case *ssa.UnOp:
 		return c.parseUnOp(frame, expr)
 	default:
@@ -2118,7 +1991,7 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 	}
 }
 
-func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error) {
+func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 	switch typ := expr.Type().Underlying().(type) {
 	case *types.Basic:
 		llvmType := c.getLLVMType(typ)
@@ -2128,7 +2001,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 			if b {
 				n = 1
 			}
-			return llvm.ConstInt(llvmType, n, false), nil
+			return llvm.ConstInt(llvmType, n, false)
 		} else if typ.Info()&types.IsString != 0 {
 			str := constant.StringVal(expr.Value)
 			strLen := llvm.ConstInt(c.uintptrType, uint64(len(str)), false)
@@ -2141,77 +2014,67 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 			strPtr := c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
 			strObj := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._string"), []llvm.Value{strPtr, strLen})
-			return strObj, nil
+			return strObj
 		} else if typ.Kind() == types.UnsafePointer {
 			if !expr.IsNil() {
 				value, _ := constant.Uint64Val(expr.Value)
-				return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, value, false), c.i8ptrType), nil
+				return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, value, false), c.i8ptrType)
 			}
-			return llvm.ConstNull(c.i8ptrType), nil
+			return llvm.ConstNull(c.i8ptrType)
 		} else if typ.Info()&types.IsUnsigned != 0 {
 			n, _ := constant.Uint64Val(expr.Value)
-			return llvm.ConstInt(llvmType, n, false), nil
+			return llvm.ConstInt(llvmType, n, false)
 		} else if typ.Info()&types.IsInteger != 0 { // signed
 			n, _ := constant.Int64Val(expr.Value)
-			return llvm.ConstInt(llvmType, uint64(n), true), nil
+			return llvm.ConstInt(llvmType, uint64(n), true)
 		} else if typ.Info()&types.IsFloat != 0 {
 			n, _ := constant.Float64Val(expr.Value)
-			return llvm.ConstFloat(llvmType, n), nil
+			return llvm.ConstFloat(llvmType, n)
 		} else if typ.Kind() == types.Complex64 {
-			r, err := c.parseConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]))
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			i, err := c.parseConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]))
-			if err != nil {
-				return llvm.Value{}, err
-			}
+			r := c.parseConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]))
+			i := c.parseConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]))
 			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false))
 			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
 			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
-			return cplx, nil
+			return cplx
 		} else if typ.Kind() == types.Complex128 {
-			r, err := c.parseConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			i, err := c.parseConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float64]))
-			if err != nil {
-				return llvm.Value{}, err
-			}
+			r := c.parseConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
+			i := c.parseConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float64]))
 			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false))
 			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
 			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
-			return cplx, nil
+			return cplx
 		} else {
-			return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
+			panic("unknown constant of basic type: " + expr.String())
 		}
 	case *types.Chan:
-		return c.getZeroValue(c.getLLVMType(expr.Type())), nil
+		if expr.Value != nil {
+			panic("expected nil chan constant")
+		}
+		return c.getZeroValue(c.getLLVMType(expr.Type()))
 	case *types.Signature:
 		if expr.Value != nil {
-			return llvm.Value{}, errors.New("non-nil signature constant")
+			panic("expected nil signature constant")
 		}
-		return c.getZeroValue(c.getLLVMType(expr.Type())), nil
+		return c.getZeroValue(c.getLLVMType(expr.Type()))
 	case *types.Interface:
 		if expr.Value != nil {
-			return llvm.Value{}, errors.New("non-nil interface constant")
+			panic("expected nil interface constant")
 		}
 		// Create a generic nil interface with no dynamic type (typecode=0).
 		fields := []llvm.Value{
 			llvm.ConstInt(c.uintptrType, 0, false),
 			llvm.ConstPointerNull(c.i8ptrType),
 		}
-		itf := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), fields)
-		return itf, nil
+		return llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), fields)
 	case *types.Pointer:
 		if expr.Value != nil {
-			return llvm.Value{}, errors.New("non-nil pointer constant")
+			panic("expected nil pointer constant")
 		}
-		return llvm.ConstPointerNull(c.getLLVMType(typ)), nil
+		return llvm.ConstPointerNull(c.getLLVMType(typ))
 	case *types.Slice:
 		if expr.Value != nil {
-			return llvm.Value{}, errors.New("non-nil slice constant")
+			panic("expected nil slice constant")
 		}
 		elemType := c.getLLVMType(typ.Elem())
 		llvmPtr := llvm.ConstPointerNull(llvm.PointerType(elemType, 0))
@@ -2221,16 +2084,16 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) (llvm.Value, error
 			llvmLen, // len
 			llvmLen, // cap
 		}, false)
-		return slice, nil
+		return slice
 	case *types.Map:
 		if !expr.IsNil() {
 			// I believe this is not allowed by the Go spec.
 			panic("non-nil map constant")
 		}
 		llvmType := c.getLLVMType(typ)
-		return c.getZeroValue(llvmType), nil
+		return c.getZeroValue(llvmType)
 	default:
-		return llvm.Value{}, errors.New("todo: unknown constant: " + expr.String())
+		panic("unknown constant: " + expr.String())
 	}
 }
 
@@ -2392,10 +2255,7 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 }
 
 func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
-	x, err := c.parseExpr(frame, unop.X)
-	if err != nil {
-		return llvm.Value{}, err
-	}
+	x := c.getValue(frame, unop.X)
 	switch unop.Op {
 	case token.NOT: // !x
 		return c.builder.CreateNot(x, ""), nil
@@ -2441,7 +2301,7 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 	case token.XOR: // ^x, toggle all bits in integer
 		return c.builder.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil
 	case token.ARROW: // <-x, receive from channel
-		return c.emitChanRecv(frame, unop)
+		return c.emitChanRecv(frame, unop), nil
 	default:
 		return llvm.Value{}, c.makeError(unop.Pos(), "todo: unknown unop")
 	}

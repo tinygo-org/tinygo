@@ -274,11 +274,8 @@ func (c *Compiler) getMethodSignature(method *types.Func) llvm.Value {
 //
 // Type asserts on concrete types are trivial: just compare type numbers. Type
 // asserts on interfaces are more difficult, see the comments in the function.
-func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) (llvm.Value, error) {
-	itf, err := c.parseExpr(frame, expr.X)
-	if err != nil {
-		return llvm.Value{}, err
-	}
+func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) llvm.Value {
+	itf := c.getValue(frame, expr.X)
 	assertedType := c.getLLVMType(expr.AssertedType)
 
 	actualTypeNum := c.builder.CreateExtractValue(itf, 0, "interface.type")
@@ -368,23 +365,20 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) (llvm.Val
 		tuple := c.ctx.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(c.ctx.Int1Type())}, false) // create empty tuple
 		tuple = c.builder.CreateInsertValue(tuple, phi, 0, "")                                                  // insert value
 		tuple = c.builder.CreateInsertValue(tuple, commaOk, 1, "")                                              // insert 'comma ok' boolean
-		return tuple, nil
+		return tuple
 	} else {
 		// This is kind of dirty as the branch above becomes mostly useless,
 		// but hopefully this gets optimized away.
 		c.createRuntimeCall("interfaceTypeAssert", []llvm.Value{commaOk}, "")
-		return phi, nil
+		return phi
 	}
 }
 
 // getInvokeCall creates and returns the function pointer and parameters of an
 // interface call. It can be used in a call or defer instruction.
-func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, []llvm.Value, error) {
+func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, []llvm.Value) {
 	// Call an interface method with dynamic dispatch.
-	itf, err := c.parseExpr(frame, instr.Value) // interface
-	if err != nil {
-		return llvm.Value{}, nil, err
-	}
+	itf := c.getValue(frame, instr.Value) // interface
 
 	llvmFnType := c.getRawFuncType(instr.Method.Type().(*types.Signature))
 
@@ -400,11 +394,7 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 
 	args := []llvm.Value{receiverValue}
 	for _, arg := range instr.Args {
-		val, err := c.parseExpr(frame, arg)
-		if err != nil {
-			return llvm.Value{}, nil, err
-		}
-		args = append(args, val)
+		args = append(args, c.getValue(frame, arg))
 	}
 	// Add the context parameter. An interface call never takes a context but we
 	// have to supply the parameter anyway.
@@ -412,7 +402,7 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 	// Add the parent goroutine handle.
 	args = append(args, llvm.Undef(c.i8ptrType))
 
-	return fnCast, args, nil
+	return fnCast, args
 }
 
 // interfaceInvokeWrapper keeps some state between getInterfaceInvokeWrapper and

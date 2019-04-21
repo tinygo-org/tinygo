@@ -29,33 +29,23 @@ func (c *Compiler) emitMakeChan(expr *ssa.MakeChan) (llvm.Value, error) {
 
 // emitChanSend emits a pseudo chan send operation. It is lowered to the actual
 // channel send operation during goroutine lowering.
-func (c *Compiler) emitChanSend(frame *Frame, instr *ssa.Send) error {
+func (c *Compiler) emitChanSend(frame *Frame, instr *ssa.Send) {
 	valueType := c.getLLVMType(instr.Chan.Type().(*types.Chan).Elem())
-	ch, err := c.parseExpr(frame, instr.Chan)
-	if err != nil {
-		return err
-	}
-	chanValue, err := c.parseExpr(frame, instr.X)
-	if err != nil {
-		return err
-	}
+	ch := c.getValue(frame, instr.Chan)
+	chanValue := c.getValue(frame, instr.X)
 	valueSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(chanValue.Type()), false)
 	valueAlloca := c.builder.CreateAlloca(valueType, "chan.value")
 	c.builder.CreateStore(chanValue, valueAlloca)
 	valueAllocaCast := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "chan.value.i8ptr")
 	c.createRuntimeCall("chanSendStub", []llvm.Value{llvm.Undef(c.i8ptrType), ch, valueAllocaCast, valueSize}, "")
-	return nil
 }
 
 // emitChanRecv emits a pseudo chan receive operation. It is lowered to the
 // actual channel receive operation during goroutine lowering.
-func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
+func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) llvm.Value {
 	valueType := c.getLLVMType(unop.X.Type().(*types.Chan).Elem())
 	valueSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(valueType), false)
-	ch, err := c.parseExpr(frame, unop.X)
-	if err != nil {
-		return llvm.Value{}, err
-	}
+	ch := c.getValue(frame, unop.X)
 	valueAlloca := c.builder.CreateAlloca(valueType, "chan.value")
 	valueAllocaCast := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "chan.value.i8ptr")
 	valueOk := c.builder.CreateAlloca(c.ctx.Int1Type(), "chan.comma-ok.alloca")
@@ -66,20 +56,16 @@ func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) (llvm.Value, error
 		tuple := llvm.Undef(c.ctx.StructType([]llvm.Type{valueType, c.ctx.Int1Type()}, false))
 		tuple = c.builder.CreateInsertValue(tuple, received, 0, "")
 		tuple = c.builder.CreateInsertValue(tuple, commaOk, 1, "")
-		return tuple, nil
+		return tuple
 	} else {
-		return received, nil
+		return received
 	}
 }
 
 // emitChanClose closes the given channel.
-func (c *Compiler) emitChanClose(frame *Frame, param ssa.Value) error {
+func (c *Compiler) emitChanClose(frame *Frame, param ssa.Value) {
 	valueType := c.getLLVMType(param.Type().(*types.Chan).Elem())
 	valueSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(valueType), false)
-	ch, err := c.parseExpr(frame, param)
-	if err != nil {
-		return err
-	}
+	ch := c.getValue(frame, param)
 	c.createRuntimeCall("chanClose", []llvm.Value{ch, valueSize}, "")
-	return nil
 }

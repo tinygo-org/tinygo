@@ -56,18 +56,12 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields, followed by the call parameters).
-		itf, err := c.parseExpr(frame, instr.Call.Value) // interface
-		if err != nil {
-			return err
-		}
+		itf := c.getValue(frame, instr.Call.Value) // interface
 		receiverValue := c.builder.CreateExtractValue(itf, 1, "invoke.func.receiver")
 		values = []llvm.Value{callback, next, receiverValue}
 		valueTypes = append(valueTypes, c.i8ptrType)
 		for _, arg := range instr.Call.Args {
-			val, err := c.parseExpr(frame, arg)
-			if err != nil {
-				return err
-			}
+			val := c.getValue(frame, arg)
 			values = append(values, val)
 			valueTypes = append(valueTypes, val.Type())
 		}
@@ -86,10 +80,7 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
 		// runtime._defer fields).
 		values = []llvm.Value{callback, next}
 		for _, param := range instr.Call.Args {
-			llvmParam, err := c.parseExpr(frame, param)
-			if err != nil {
-				return err
-			}
+			llvmParam := c.getValue(frame, param)
 			values = append(values, llvmParam)
 			valueTypes = append(valueTypes, llvmParam.Type())
 		}
@@ -101,10 +92,7 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
 		// pointer.
 		// TODO: ignore this closure entirely and put pointers to the free
 		// variables directly in the defer struct, avoiding a memory allocation.
-		closure, err := c.parseExpr(frame, instr.Call.Value)
-		if err != nil {
-			return err
-		}
+		closure := c.getValue(frame, instr.Call.Value)
 		context := c.builder.CreateExtractValue(closure, 0, "")
 
 		// Get the callback number.
@@ -120,10 +108,7 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
 		// context pointer).
 		values = []llvm.Value{callback, next}
 		for _, param := range instr.Call.Args {
-			llvmParam, err := c.parseExpr(frame, param)
-			if err != nil {
-				return err
-			}
+			llvmParam := c.getValue(frame, param)
 			values = append(values, llvmParam)
 			valueTypes = append(valueTypes, llvmParam.Type())
 		}
@@ -239,10 +224,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			// Parent coroutine handle.
 			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
 
-			fnPtr, _, err := c.getInvokeCall(frame, callback)
-			if err != nil {
-				return err
-			}
+			fnPtr, _ := c.getInvokeCall(frame, callback)
 			c.createCall(fnPtr, forwardParams, "")
 
 		case *ir.Function:
