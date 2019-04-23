@@ -56,6 +56,9 @@ func TestCompiler(t *testing.T) {
 
 	t.Log("running tests for emulated cortex-m3...")
 	for _, path := range matches {
+		if path == "testdata/atomic.go" {
+			continue // TODO: add builtins to compiler-rt
+		}
 		t.Run(path, func(t *testing.T) {
 			runTest(path, tmpdir, "qemu", t)
 		})

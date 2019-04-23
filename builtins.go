@@ -140,7 +140,7 @@ var genericBuiltins = []string{
 	"umodti3.c",
 }
 
-var aeabiBuiltins = []string{
+var armBuiltins = []string{
 	"arm/aeabi_cdcmp.S",
 	"arm/aeabi_cdcmpeq_check_nan.c",
 	"arm/aeabi_cfcmp.S",
@@ -158,12 +158,24 @@ var aeabiBuiltins = []string{
 	"arm/aeabi_memset.S",
 	"arm/aeabi_uidivmod.S",
 	"arm/aeabi_uldivmod.S",
+	"arm/sync_fetch_and_add_4.S",
+	"arm/sync_fetch_and_add_8.S",
+	"arm/sync_fetch_and_and_4.S",
+	"arm/sync_fetch_and_and_8.S",
+	"arm/sync_fetch_and_nand_4.S",
+	"arm/sync_fetch_and_nand_8.S",
+	"arm/sync_fetch_and_or_4.S",
+	"arm/sync_fetch_and_or_8.S",
+	"arm/sync_fetch_and_sub_4.S",
+	"arm/sync_fetch_and_sub_8.S",
+	"arm/sync_fetch_and_xor_4.S",
+	"arm/sync_fetch_and_xor_8.S",
 }
 
 func builtinFiles(target string) []string {
 	builtins := append([]string{}, genericBuiltins...) // copy genericBuiltins
 	if strings.HasPrefix(target, "arm") {
-		builtins = append(builtins, aeabiBuiltins...)
+		builtins = append(builtins, armBuiltins...)
 	}
 	return builtins
 }

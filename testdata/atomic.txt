@@ -1,0 +1,35 @@
+AddInt32: 3 3
+AddInt64: 3 3
+AddUint32: 13 13
+AddUint64: 13 13
+AddUintptr: 13 13
+SwapInt32: 3 33
+SwapInt64: 3 33
+SwapUint32: 13 33
+SwapUint64: 13 33
+SwapUintptr: 13 33
+SwapPointer: true true
+CompareAndSwapInt32: false -5
+CompareAndSwapInt32: true 3
+CompareAndSwapInt64: false -5
+CompareAndSwapInt64: true 3
+CompareAndSwapUint32: false 5
+CompareAndSwapUint32: true 3
+CompareAndSwapUint64: false 5
+CompareAndSwapUint64: true 3
+CompareAndSwapUintptr: false 5
+CompareAndSwapUintptr: true 3
+CompareAndSwapPointer: false true
+CompareAndSwapPointer: true true
+LoadInt32: 3
+LoadInt64: 3
+LoadUint32: 3
+LoadUint64: 3
+LoadUintptr: 3
+LoadPointer: true
+StoreInt32: -20
+StoreInt64: -20
+StoreUint32: 20
+StoreUint64: 20
+StoreUintptr: 20
+StorePointer: true
