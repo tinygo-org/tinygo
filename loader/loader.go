@@ -3,6 +3,7 @@ package loader
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/build"
 	"go/parser"
@@ -11,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
+	"text/template"
 
 	"github.com/tinygo-org/tinygo/cgo"
 )
@@ -223,11 +226,23 @@ func (p *Program) Parse(compileTestBinary bool) error {
 }
 
 func (p *Program) SwapTestMain() error {
+	var tests []string
+
+	isTestFunc := func(f *ast.FuncDecl) bool {
+		// TODO: improve signature check
+		if strings.HasPrefix(f.Name.Name, "Test") && f.Name.Name != "TestMain" {
+			return true
+		}
+		return false
+	}
 	mainPkg := p.Packages[p.mainPkg]
 	for _, f := range mainPkg.Files {
 		for i, d := range f.Decls {
 			switch v := d.(type) {
 			case *ast.FuncDecl:
+				if isTestFunc(v) {
+					tests = append(tests, v.Name.Name)
+				}
 				if v.Name.Name == "main" {
 					// Remove main
 					if len(f.Decls) == 1 {
@@ -243,11 +258,35 @@ func (p *Program) SwapTestMain() error {
 
 	// TODO: generate a new main all fancy like, but for now assume that they wrote one
 	const mainBody = `package main
+
 func main () {
-	TestMain()
+	m := &testing.M{
+		Tests: []testing.TestToCall{
+{{range .TestFunctions}}
+			{Name: "{{.}}", Func: {{.}}},
+{{end}}
+		},
+	}
+	TestMain(m)
 }
 `
-	b := bytes.NewBufferString(mainBody)
+	tmpl := template.Must(template.New("testmain").Parse(mainBody))
+	b := bytes.Buffer{}
+	tmplData := struct {
+		// NOTE: this isn't necessary when we are only testing the main package
+		// but will be needed later when we are testing multiple packages
+		TestPkg       string
+		TestFunctions []string
+	}{
+		TestFunctions: tests,
+	}
+
+	err := tmpl.Execute(&b, tmplData)
+	if err != nil {
+		return err
+	}
+	fmt.Println("DEBUG: TEST MAIN CONTENTS")
+	fmt.Println(string(b.Bytes()))
 	path := filepath.Join(p.mainPkg, "$testmain.go")
 
 	if p.fset == nil {

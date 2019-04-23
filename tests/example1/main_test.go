@@ -11,12 +11,7 @@ func TestFoo(t *testing.T) {
 }
 
 // TODO: change signature to accept a prepopulated test suite
-func TestMain() {
+func TestMain(m *testing.M) {
 	fmt.Println("running tests...")
-	m := testing.M{
-		Tests: []testing.TestToCall{
-			{Name: "TestFoo", Func: TestFoo},
-		},
-	}
 	os.Exit(m.Run())
 }
