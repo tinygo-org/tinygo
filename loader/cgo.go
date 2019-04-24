@@ -51,15 +51,16 @@ type globalInfo struct {
 // cgoAliases list type aliases between Go and C, for types that are equivalent
 // in both languages. See addTypeAliases.
 var cgoAliases = map[string]string{
-	"C.int8_t":    "int8",
-	"C.int16_t":   "int16",
-	"C.int32_t":   "int32",
-	"C.int64_t":   "int64",
-	"C.uint8_t":   "uint8",
-	"C.uint16_t":  "uint16",
-	"C.uint32_t":  "uint32",
-	"C.uint64_t":  "uint64",
-	"C.uintptr_t": "uintptr",
+	"C.int8_t":            "int8",
+	"C.int16_t":           "int16",
+	"C.int32_t":           "int32",
+	"C.int64_t":           "int64",
+	"C.uint8_t":           "uint8",
+	"C.uint16_t":          "uint16",
+	"C.uint32_t":          "uint32",
+	"C.uint64_t":          "uint64",
+	"C.uintptr_t":         "uintptr",
+	"C.__builtin_va_list": "uintptr", // dummy value until fully implemented
 }
 
 // cgoTypes lists some C types with ambiguous sizes that must be retrieved
