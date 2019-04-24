@@ -29,18 +29,19 @@ func init() {
 
 // Configure the compiler.
 type Config struct {
-	Triple    string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
-	CPU       string   // LLVM CPU name, e.g. atmega328p (empty string means default)
-	GOOS      string   //
-	GOARCH    string   //
-	GC        string   // garbage collection strategy
-	CFlags    []string // cflags to pass to cgo
-	LDFlags   []string // ldflags to pass to cgo
-	DumpSSA   bool     // dump Go SSA, for compiler debugging
-	Debug     bool     // add debug symbols for gdb
-	RootDir   string   // GOROOT for TinyGo
-	GOPATH    string   // GOPATH, like `go env GOPATH`
-	BuildTags []string // build tags for TinyGo (empty means {Config.GOOS/Config.GOARCH})
+	Triple        string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
+	CPU           string   // LLVM CPU name, e.g. atmega328p (empty string means default)
+	GOOS          string   //
+	GOARCH        string   //
+	GC            string   // garbage collection strategy
+	PanicStrategy string   // panic strategy ("abort" or "trap")
+	CFlags        []string // cflags to pass to cgo
+	LDFlags       []string // ldflags to pass to cgo
+	DumpSSA       bool     // dump Go SSA, for compiler debugging
+	Debug         bool     // add debug symbols for gdb
+	RootDir       string   // GOROOT for TinyGo
+	GOPATH        string   // GOPATH, like `go env GOPATH`
+	BuildTags     []string // build tags for TinyGo (empty means {Config.GOOS/Config.GOARCH})
 }
 
 type Compiler struct {

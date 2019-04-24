@@ -18,6 +18,10 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 	}
 	builder.AddCoroutinePassesToExtensionPoints()
 
+	if c.PanicStrategy == "trap" {
+		c.replacePanicsWithTrap() // -panic=trap
+	}
+
 	// Run function passes for each function.
 	funcPasses := llvm.NewFunctionPassManagerForModule(c.mod)
 	defer funcPasses.Dispose()
@@ -111,6 +115,25 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 	modPasses.Run(c.mod)
 
 	return nil
+}
+
+// Replace panic calls with calls to llvm.trap, to reduce code size. This is the
+// -panic=trap intrinsic.
+func (c *Compiler) replacePanicsWithTrap() {
+	trap := c.mod.NamedFunction("llvm.trap")
+	for _, name := range []string{"runtime._panic", "runtime.runtimePanic"} {
+		fn := c.mod.NamedFunction(name)
+		if fn.IsNil() {
+			continue
+		}
+		for _, use := range getUses(fn) {
+			if use.IsACallInst().IsNil() || use.CalledValue() != fn {
+				panic("expected use of a panic function to be a call")
+			}
+			c.builder.SetInsertPointBefore(use)
+			c.builder.CreateCall(trap, nil, "")
+		}
+	}
 }
 
 // Eliminate created but not used maps.

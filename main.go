@@ -34,15 +34,16 @@ func (e *commandError) Error() string {
 }
 
 type BuildConfig struct {
-	opt        string
-	gc         string
-	printIR    bool
-	dumpSSA    bool
-	debug      bool
-	printSizes string
-	cFlags     []string
-	ldFlags    []string
-	wasmAbi    string
+	opt           string
+	gc            string
+	panicStrategy string
+	printIR       bool
+	dumpSSA       bool
+	debug         bool
+	printSizes    string
+	cFlags        []string
+	ldFlags       []string
+	wasmAbi       string
 }
 
 // Helper function for Compiler object.
@@ -56,18 +57,19 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	spec.LDFlags = append(spec.LDFlags, config.ldFlags...)
 
 	compilerConfig := compiler.Config{
-		Triple:    spec.Triple,
-		CPU:       spec.CPU,
-		GOOS:      spec.GOOS,
-		GOARCH:    spec.GOARCH,
-		GC:        config.gc,
-		CFlags:    spec.CFlags,
-		LDFlags:   spec.LDFlags,
-		Debug:     config.debug,
-		DumpSSA:   config.dumpSSA,
-		RootDir:   sourceDir(),
-		GOPATH:    getGopath(),
-		BuildTags: spec.BuildTags,
+		Triple:        spec.Triple,
+		CPU:           spec.CPU,
+		GOOS:          spec.GOOS,
+		GOARCH:        spec.GOARCH,
+		GC:            config.gc,
+		PanicStrategy: config.panicStrategy,
+		CFlags:        spec.CFlags,
+		LDFlags:       spec.LDFlags,
+		Debug:         config.debug,
+		DumpSSA:       config.dumpSSA,
+		RootDir:       sourceDir(),
+		GOPATH:        getGopath(),
+		BuildTags:     spec.BuildTags,
 	}
 	c, err := compiler.NewCompiler(pkgName, compilerConfig)
 	if err != nil {
@@ -507,6 +509,7 @@ func main() {
 	outpath := flag.String("o", "", "output filename")
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, dumb, marksweep)")
+	panicStrategy := flag.String("panic", "print", "panic strategy (abort, trap)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	target := flag.String("target", "", "LLVM target")
@@ -527,13 +530,14 @@ func main() {
 
 	flag.CommandLine.Parse(os.Args[2:])
 	config := &BuildConfig{
-		opt:        *opt,
-		gc:         *gc,
-		printIR:    *printIR,
-		dumpSSA:    *dumpSSA,
-		debug:      !*nodebug,
-		printSizes: *printSize,
-		wasmAbi:    *wasmAbi,
+		opt:           *opt,
+		gc:            *gc,
+		panicStrategy: *panicStrategy,
+		printIR:       *printIR,
+		dumpSSA:       *dumpSSA,
+		debug:         !*nodebug,
+		printSizes:    *printSize,
+		wasmAbi:       *wasmAbi,
 	}
 
 	if *cFlags != "" {
@@ -542,6 +546,12 @@ func main() {
 
 	if *ldFlags != "" {
 		config.ldFlags = strings.Split(*ldFlags, " ")
+	}
+
+	if *panicStrategy != "print" && *panicStrategy != "trap" {
+		fmt.Fprintln(os.Stderr, "Panic strategy must be either print or trap.")
+		usage()
+		os.Exit(1)
 	}
 
 	os.Setenv("CC", "clang -target="+*target)
