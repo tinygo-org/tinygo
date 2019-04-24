@@ -4,6 +4,10 @@ import (
 	"unsafe"
 )
 
+type stringer interface {
+	String() string
+}
+
 //go:nobounds
 func printstring(s string) {
 	for i := 0; i < len(s); i++ {
@@ -199,8 +203,44 @@ func printnl() {
 
 func printitf(msg interface{}) {
 	switch msg := msg.(type) {
+	case bool:
+		print(msg)
+	case int:
+		print(msg)
+	case int8:
+		print(msg)
+	case int16:
+		print(msg)
+	case int32:
+		print(msg)
+	case int64:
+		print(msg)
+	case uint:
+		print(msg)
+	case uint8:
+		print(msg)
+	case uint16:
+		print(msg)
+	case uint32:
+		print(msg)
+	case uint64:
+		print(msg)
+	case uintptr:
+		print(msg)
+	case float32:
+		print(msg)
+	case float64:
+		print(msg)
+	case complex64:
+		print(msg)
+	case complex128:
+		print(msg)
 	case string:
 		print(msg)
+	case error:
+		print(msg.Error())
+	case stringer:
+		print(msg.String())
 	default:
 		// cast to underlying type
 		itf := *(*_interface)(unsafe.Pointer(&msg))
