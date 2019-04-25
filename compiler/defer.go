@@ -172,13 +172,13 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 	//     stack = stack.next
 	//     switch stack.callback {
 	c.builder.SetInsertPointAtEnd(loop)
-	nextStackGEP := c.builder.CreateGEP(deferData, []llvm.Value{
+	nextStackGEP := c.builder.CreateInBoundsGEP(deferData, []llvm.Value{
 		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 		llvm.ConstInt(c.ctx.Int32Type(), 1, false), // .next field
 	}, "stack.next.gep")
 	nextStack := c.builder.CreateLoad(nextStackGEP, "stack.next")
 	c.builder.CreateStore(nextStack, frame.deferPtr)
-	gep := c.builder.CreateGEP(deferData, []llvm.Value{
+	gep := c.builder.CreateInBoundsGEP(deferData, []llvm.Value{
 		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 		llvm.ConstInt(c.ctx.Int32Type(), 0, false), // .callback field
 	}, "callback.gep")
@@ -211,7 +211,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 			for i := 2; i < len(valueTypes); i++ {
-				gep := c.builder.CreateGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false)}, "gep")
+				gep := c.builder.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false)}, "gep")
 				forwardParam := c.builder.CreateLoad(gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
@@ -242,7 +242,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 			for i := range callback.Params {
-				gep := c.builder.CreateGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i+2), false)}, "gep")
+				gep := c.builder.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i+2), false)}, "gep")
 				forwardParam := c.builder.CreateLoad(gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
@@ -273,7 +273,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 			for i := 2; i < len(valueTypes); i++ {
-				gep := c.builder.CreateGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false)}, "")
+				gep := c.builder.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false)}, "")
 				forwardParam := c.builder.CreateLoad(gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}

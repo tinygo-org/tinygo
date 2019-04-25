@@ -485,7 +485,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
 		}, "task.promise.raw")
 		promise := c.builder.CreateBitCast(promiseRaw, llvm.PointerType(promiseType, 0), "task.promise")
-		dataPtr := c.builder.CreateGEP(promise, []llvm.Value{
+		dataPtr := c.builder.CreateInBoundsGEP(promise, []llvm.Value{
 			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 			llvm.ConstInt(c.ctx.Int32Type(), 2, false),
 		}, "task.promise.data")
@@ -546,13 +546,13 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
 		}, "task.promise.raw")
 		promise := c.builder.CreateBitCast(promiseRaw, llvm.PointerType(promiseType, 0), "task.promise")
-		dataPtr := c.builder.CreateGEP(promise, []llvm.Value{
+		dataPtr := c.builder.CreateInBoundsGEP(promise, []llvm.Value{
 			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 			llvm.ConstInt(c.ctx.Int32Type(), 2, false),
 		}, "task.promise.data")
 		valueAlloca.ReplaceAllUsesWith(c.builder.CreateBitCast(dataPtr, valueAlloca.Type(), ""))
 		valueAlloca.EraseFromParentAsInstruction()
-		commaOkPtr := c.builder.CreateGEP(promise, []llvm.Value{
+		commaOkPtr := c.builder.CreateInBoundsGEP(promise, []llvm.Value{
 			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 			llvm.ConstInt(c.ctx.Int32Type(), 1, false),
 		}, "task.promise.comma-ok")

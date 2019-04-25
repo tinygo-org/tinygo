@@ -1324,7 +1324,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 				llvm.ConstInt(c.ctx.Int32Type(), uint64(expr.Field), false),
 			}
-			return c.builder.CreateGEP(val, indices, ""), nil
+			return c.builder.CreateInBoundsGEP(val, indices, ""), nil
 		}
 	case *ssa.Function:
 		panic("function is not an expression")
@@ -1344,7 +1344,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		alloca := c.builder.CreateAlloca(array.Type(), "index.alloca")
 		c.builder.CreateStore(array, alloca)
 		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-		ptr := c.builder.CreateGEP(alloca, []llvm.Value{zero, index}, "index.gep")
+		ptr := c.builder.CreateInBoundsGEP(alloca, []llvm.Value{zero, index}, "index.gep")
 		return c.builder.CreateLoad(ptr, "index.load"), nil
 	case *ssa.IndexAddr:
 		val := c.getValue(frame, expr.X)
@@ -1385,9 +1385,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 				index,
 			}
-			return c.builder.CreateGEP(bufptr, indices, ""), nil
+			return c.builder.CreateInBoundsGEP(bufptr, indices, ""), nil
 		case *types.Slice:
-			return c.builder.CreateGEP(bufptr, []llvm.Value{index}, ""), nil
+			return c.builder.CreateInBoundsGEP(bufptr, []llvm.Value{index}, ""), nil
 		default:
 			panic("unreachable")
 		}
@@ -1407,7 +1407,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			// Lookup byte
 			buf := c.builder.CreateExtractValue(value, 0, "")
-			bufPtr := c.builder.CreateGEP(buf, []llvm.Value{index}, "")
+			bufPtr := c.builder.CreateInBoundsGEP(buf, []llvm.Value{index}, "")
 			return c.builder.CreateLoad(bufPtr, ""), nil
 		case *types.Map:
 			valueType := expr.Type()
@@ -1608,7 +1608,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			}
 
 			sliceLen := c.builder.CreateSub(high, low, "slice.len")
-			slicePtr := c.builder.CreateGEP(value, indices, "slice.ptr")
+			slicePtr := c.builder.CreateInBoundsGEP(value, indices, "slice.ptr")
 			sliceCap := c.builder.CreateSub(llvmLen, low, "slice.cap")
 
 			slice := c.ctx.ConstStruct([]llvm.Value{
@@ -1641,7 +1641,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				high = c.builder.CreateTrunc(high, c.uintptrType, "")
 			}
 
-			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
+			newPtr := c.builder.CreateInBoundsGEP(oldPtr, []llvm.Value{low}, "")
 			newLen := c.builder.CreateSub(high, low, "")
 			newCap := c.builder.CreateSub(oldCap, low, "")
 			slice := c.ctx.ConstStruct([]llvm.Value{
@@ -1676,7 +1676,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				high = c.builder.CreateTrunc(high, c.uintptrType, "")
 			}
 
-			newPtr := c.builder.CreateGEP(oldPtr, []llvm.Value{low}, "")
+			newPtr := c.builder.CreateInBoundsGEP(oldPtr, []llvm.Value{low}, "")
 			newLen := c.builder.CreateSub(high, low, "")
 			str := llvm.Undef(c.mod.GetTypeByName("runtime._string"))
 			str = c.builder.CreateInsertValue(str, newPtr, 0, "")
@@ -2119,7 +2119,11 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 					// This pointer can be calculated from the original
 					// ptrtoint instruction with a GEP. The leftover inttoptr
 					// instruction is trivial to optimize away.
-					return c.builder.CreateGEP(origptr, []llvm.Value{index}, ""), nil
+					// Making it an in bounds GEP even though it's easy to
+					// create a GEP that is not in bounds. However, we're
+					// talking about unsafe code here so the programmer has to
+					// be careful anyway.
+					return c.builder.CreateInBoundsGEP(origptr, []llvm.Value{index}, ""), nil
 				}
 			}
 		}
