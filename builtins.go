@@ -294,5 +294,6 @@ func compileBuiltins(target string, callback func(path string) error) error {
 
 	// Give the caller the resulting file. The callback must copy the file,
 	// because after it returns the temporary directory will be removed.
+	arfile.Close()
 	return callback(arpath)
 }
