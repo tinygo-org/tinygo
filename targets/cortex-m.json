@@ -2,7 +2,7 @@
 	"build-tags": ["cortexm", "linux", "arm"],
 	"goos": "linux",
 	"goarch": "arm",
-	"compiler": "clang-8",
+	"compiler": "clang",
 	"gc": "marksweep",
 	"linker": "ld.lld",
 	"rtlib": "compiler-rt",
