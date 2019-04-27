@@ -23,6 +23,7 @@ type fileInfo struct {
 	typedefs        map[string]*typedefInfo
 	elaboratedTypes map[string]ast.Expr
 	importCPos      token.Pos
+	missingSymbols  map[string]struct{}
 }
 
 // functionInfo stores some information about a Cgo function found by libclang
@@ -51,16 +52,31 @@ type globalInfo struct {
 // cgoAliases list type aliases between Go and C, for types that are equivalent
 // in both languages. See addTypeAliases.
 var cgoAliases = map[string]string{
-	"C.int8_t":            "int8",
-	"C.int16_t":           "int16",
-	"C.int32_t":           "int32",
-	"C.int64_t":           "int64",
-	"C.uint8_t":           "uint8",
-	"C.uint16_t":          "uint16",
-	"C.uint32_t":          "uint32",
-	"C.uint64_t":          "uint64",
-	"C.uintptr_t":         "uintptr",
-	"C.__builtin_va_list": "uintptr", // dummy value until fully implemented
+	"C.int8_t":    "int8",
+	"C.int16_t":   "int16",
+	"C.int32_t":   "int32",
+	"C.int64_t":   "int64",
+	"C.uint8_t":   "uint8",
+	"C.uint16_t":  "uint16",
+	"C.uint32_t":  "uint32",
+	"C.uint64_t":  "uint64",
+	"C.uintptr_t": "uintptr",
+}
+
+// cgoBuiltinAliases are handled specially because they only exist on the Go
+// side of CGo, not on the CGo (they're prefixed with "_Cgo_" there).
+var cgoBuiltinAliases = map[string]struct{}{
+	"char":      struct{}{},
+	"schar":     struct{}{},
+	"uchar":     struct{}{},
+	"short":     struct{}{},
+	"ushort":    struct{}{},
+	"int":       struct{}{},
+	"uint":      struct{}{},
+	"long":      struct{}{},
+	"ulong":     struct{}{},
+	"longlong":  struct{}{},
+	"ulonglong": struct{}{},
 }
 
 // cgoTypes lists some C types with ambiguous sizes that must be retrieved
@@ -91,6 +107,13 @@ func (p *Package) processCgo(filename string, f *ast.File, cflags []string) []er
 		globals:         map[string]*globalInfo{},
 		typedefs:        map[string]*typedefInfo{},
 		elaboratedTypes: map[string]ast.Expr{},
+		missingSymbols:  map[string]struct{}{},
+	}
+
+	// Find all C.* symbols.
+	f = astutil.Apply(f, info.findMissingCGoNames, nil).(*ast.File)
+	for name := range cgoBuiltinAliases {
+		info.missingSymbols["_Cgo_"+name] = struct{}{}
 	}
 
 	// Find `import "C"` statements in the file.
@@ -222,6 +245,9 @@ func (info *fileInfo) addFuncDecls() {
 //         // ...
 //     )
 func (info *fileInfo) addFuncPtrDecls() {
+	if len(info.functions) == 0 {
+		return
+	}
 	gen := &ast.GenDecl{
 		TokPos: info.importCPos,
 		Tok:    token.VAR,
@@ -270,6 +296,9 @@ func (info *fileInfo) addFuncPtrDecls() {
 //         // ...
 //     )
 func (info *fileInfo) addVarDecls() {
+	if len(info.globals) == 0 {
+		return
+	}
 	gen := &ast.GenDecl{
 		TokPos: info.importCPos,
 		Tok:    token.VAR,
@@ -346,6 +375,9 @@ func (info *fileInfo) addTypeAliases() {
 }
 
 func (info *fileInfo) addTypedefs() {
+	if len(info.typedefs) == 0 {
+		return
+	}
 	gen := &ast.GenDecl{
 		TokPos: info.importCPos,
 		Tok:    token.TYPE,
@@ -394,6 +426,9 @@ func (info *fileInfo) addTypedefs() {
 // See also:
 // https://en.cppreference.com/w/cpp/language/elaborated_type_specifier
 func (info *fileInfo) addElaboratedTypes() {
+	if len(info.elaboratedTypes) == 0 {
+		return
+	}
 	gen := &ast.GenDecl{
 		TokPos: info.importCPos,
 		Tok:    token.TYPE,
@@ -422,6 +457,27 @@ func (info *fileInfo) addElaboratedTypes() {
 		gen.Specs = append(gen.Specs, typeSpec)
 	}
 	info.Decls = append(info.Decls, gen)
+}
+
+// findMissingCGoNames traverses the AST and finds all C.something names. Only
+// these symbols are extracted from the parsed C AST and converted to the Go
+// equivalent.
+func (info *fileInfo) findMissingCGoNames(cursor *astutil.Cursor) bool {
+	switch node := cursor.Node().(type) {
+	case *ast.SelectorExpr:
+		x, ok := node.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if x.Name == "C" {
+			name := node.Sel.Name
+			if _, ok := cgoBuiltinAliases[name]; ok {
+				name = "_Cgo_" + name
+			}
+			info.missingSymbols[name] = struct{}{}
+		}
+	}
+	return true
 }
 
 // walker replaces all "C".<something> expressions to literal "C.<something>"

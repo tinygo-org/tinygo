@@ -2,11 +2,16 @@
 #include <stdint.h>
 
 typedef short myint;
+typedef short unusedTypedef;
 int add(int a, int b);
+int unusedFunction(void);
 typedef int (*binop_t) (int, int);
 int doCallback(int a, int b, binop_t cb);
 typedef int * intPointer;
 void store(int value, int *ptr);
+
+// this signature should not be included by CGo
+void unusedFunction2(int x, __builtin_va_list args);
 
 typedef struct collection {
 	short         s;
@@ -37,6 +42,7 @@ void unionSetData(short f0, short f1, short f2);
 
 // test globals and datatypes
 extern int global;
+extern int unusedGlobal;
 extern bool globalBool;
 extern bool globalBool2;
 extern float globalFloat;
