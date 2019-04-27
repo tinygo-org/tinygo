@@ -168,6 +168,9 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 	switch kind {
 	case C.CXCursor_FunctionDecl:
 		name := getString(C.tinygo_clang_getCursorSpelling(c))
+		if _, required := info.missingSymbols[name]; !required {
+			return C.CXChildVisit_Continue
+		}
 		cursorType := C.tinygo_clang_getCursorType(c)
 		if C.clang_isFunctionTypeVariadic(cursorType) != 0 {
 			return C.CXChildVisit_Continue // not supported
@@ -199,58 +202,23 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 		}
 	case C.CXCursor_StructDecl:
 		typ := C.tinygo_clang_getCursorType(c)
+		name := getString(C.tinygo_clang_getCursorSpelling(c))
+		if _, required := info.missingSymbols["struct_"+name]; !required {
+			return C.CXChildVisit_Continue
+		}
 		info.makeASTType(typ, pos)
 	case C.CXCursor_TypedefDecl:
 		typedefType := C.tinygo_clang_getCursorType(c)
 		name := getString(C.clang_getTypedefName(typedefType))
-		underlyingType := C.tinygo_clang_getTypedefDeclUnderlyingType(c)
-		expr := info.makeASTType(underlyingType, pos)
-		if strings.HasPrefix(name, "_Cgo_") {
-			expr := expr.(*ast.Ident)
-			typeSize := C.clang_Type_getSizeOf(underlyingType)
-			switch expr.Name {
-			case "C.char":
-				if typeSize != 1 {
-					// This happens for some very special purpose architectures
-					// (DSPs etc.) that are not currently targeted.
-					// https://www.embecosm.com/2017/04/18/non-8-bit-char-support-in-clang-and-llvm/
-					panic("unknown char width")
-				}
-				switch underlyingType.kind {
-				case C.CXType_Char_S:
-					expr.Name = "int8"
-				case C.CXType_Char_U:
-					expr.Name = "uint8"
-				}
-			case "C.schar", "C.short", "C.int", "C.long", "C.longlong":
-				switch typeSize {
-				case 1:
-					expr.Name = "int8"
-				case 2:
-					expr.Name = "int16"
-				case 4:
-					expr.Name = "int32"
-				case 8:
-					expr.Name = "int64"
-				}
-			case "C.uchar", "C.ushort", "C.uint", "C.ulong", "C.ulonglong":
-				switch typeSize {
-				case 1:
-					expr.Name = "uint8"
-				case 2:
-					expr.Name = "uint16"
-				case 4:
-					expr.Name = "uint32"
-				case 8:
-					expr.Name = "uint64"
-				}
-			}
+		if _, required := info.missingSymbols[name]; !required {
+			return C.CXChildVisit_Continue
 		}
-		info.typedefs[name] = &typedefInfo{
-			typeExpr: expr,
-		}
+		info.makeASTType(typedefType, pos)
 	case C.CXCursor_VarDecl:
 		name := getString(C.tinygo_clang_getCursorSpelling(c))
+		if _, required := info.missingSymbols[name]; !required {
+			return C.CXChildVisit_Continue
+		}
 		cursorType := C.tinygo_clang_getCursorType(c)
 		info.globals[name] = &globalInfo{
 			typeExpr: info.makeASTType(cursorType, pos),
@@ -394,10 +362,60 @@ func (info *fileInfo) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 			},
 		}
 	case C.CXType_Typedef:
-		typedefName := getString(C.clang_getTypedefName(typ))
+		name := getString(C.clang_getTypedefName(typ))
+		if _, ok := info.typedefs[name]; !ok {
+			info.typedefs[name] = nil // don't recurse
+			c := C.tinygo_clang_getTypeDeclaration(typ)
+			underlyingType := C.tinygo_clang_getTypedefDeclUnderlyingType(c)
+			expr := info.makeASTType(underlyingType, pos)
+			if strings.HasPrefix(name, "_Cgo_") {
+				expr := expr.(*ast.Ident)
+				typeSize := C.clang_Type_getSizeOf(underlyingType)
+				switch expr.Name {
+				case "C.char":
+					if typeSize != 1 {
+						// This happens for some very special purpose architectures
+						// (DSPs etc.) that are not currently targeted.
+						// https://www.embecosm.com/2017/04/18/non-8-bit-char-support-in-clang-and-llvm/
+						panic("unknown char width")
+					}
+					switch underlyingType.kind {
+					case C.CXType_Char_S:
+						expr.Name = "int8"
+					case C.CXType_Char_U:
+						expr.Name = "uint8"
+					}
+				case "C.schar", "C.short", "C.int", "C.long", "C.longlong":
+					switch typeSize {
+					case 1:
+						expr.Name = "int8"
+					case 2:
+						expr.Name = "int16"
+					case 4:
+						expr.Name = "int32"
+					case 8:
+						expr.Name = "int64"
+					}
+				case "C.uchar", "C.ushort", "C.uint", "C.ulong", "C.ulonglong":
+					switch typeSize {
+					case 1:
+						expr.Name = "uint8"
+					case 2:
+						expr.Name = "uint16"
+					case 4:
+						expr.Name = "uint32"
+					case 8:
+						expr.Name = "uint64"
+					}
+				}
+			}
+			info.typedefs[name] = &typedefInfo{
+				typeExpr: expr,
+			}
+		}
 		return &ast.Ident{
 			NamePos: pos,
-			Name:    "C." + typedefName,
+			Name:    "C." + name,
 		}
 	case C.CXType_Elaborated:
 		underlying := C.clang_Type_getNamedType(typ)
