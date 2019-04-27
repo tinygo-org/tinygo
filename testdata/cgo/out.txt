@@ -24,9 +24,10 @@ union s: 22
 union f: +3.140000e+000
 union global data: 5 8 1
 union local data:  5 8 1
-union s method: -33 false
+union s: true
 union f: +6.280000e+000
 union field: +6.280000e+000
+struct: 3 5
 n in chain: 3
 n in chain: 6
 n in chain: 7

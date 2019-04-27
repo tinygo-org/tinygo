@@ -197,6 +197,9 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 				},
 			}
 		}
+	case C.CXCursor_StructDecl:
+		typ := C.tinygo_clang_getCursorType(c)
+		info.makeASTType(typ, pos)
 	case C.CXCursor_TypedefDecl:
 		typedefType := C.tinygo_clang_getCursorType(c)
 		name := getString(C.clang_getTypedefName(typedefType))
@@ -400,73 +403,79 @@ func (info *fileInfo) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 		underlying := C.clang_Type_getNamedType(typ)
 		switch underlying.kind {
 		case C.CXType_Record:
-			cursor := C.tinygo_clang_getTypeDeclaration(typ)
-			name := getString(C.tinygo_clang_getCursorSpelling(cursor))
-			// It is possible that this is a recursive definition, for example
-			// in linked lists (structs contain a pointer to the next element
-			// of the same type). If the name exists in info.elaboratedTypes,
-			// it is being processed, although it may not be fully defined yet.
-			if _, ok := info.elaboratedTypes[name]; !ok {
-				info.elaboratedTypes[name] = nil // predeclare (to avoid endless recursion)
-				info.elaboratedTypes[name] = info.makeASTType(underlying, info.getCursorPosition(cursor))
-			}
-			return &ast.Ident{
-				NamePos: pos,
-				Name:    "C.struct_" + name,
-			}
+			return info.makeASTType(underlying, pos)
 		default:
 			panic("unknown elaborated type")
 		}
 	case C.CXType_Record:
 		cursor := C.tinygo_clang_getTypeDeclaration(typ)
-		fieldList := &ast.FieldList{
-			Opening: pos,
-			Closing: pos,
-		}
-		ref := refMap.Put(struct {
-			fieldList *ast.FieldList
-			info      *fileInfo
-		}{fieldList, info})
-		defer refMap.Remove(ref)
-		C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(ref))
+		name := getString(C.tinygo_clang_getCursorSpelling(cursor))
+		var cgoName string
 		switch C.tinygo_clang_getCursorKind(cursor) {
 		case C.CXCursor_StructDecl:
-			return &ast.StructType{
-				Struct: pos,
-				Fields: fieldList,
-			}
+			cgoName = "struct_" + name
 		case C.CXCursor_UnionDecl:
-			if len(fieldList.List) > 1 {
-				// Insert a special field at the front (of zero width) as a
-				// marker that this is struct is actually a union. This is done
-				// by giving the field a name that cannot be expressed directly
-				// in Go.
-				// Other parts of the compiler look at the first element in a
-				// struct (of size > 2) to know whether this is a union.
-				// Note that we don't have to insert it for single-element
-				// unions as they're basically equivalent to a struct.
-				unionMarker := &ast.Field{
-					Type: &ast.StructType{
-						Struct: pos,
-					},
+			cgoName = "union_" + name
+		default:
+			panic("unknown record declaration")
+		}
+		if _, ok := info.elaboratedTypes[cgoName]; !ok {
+			info.elaboratedTypes[cgoName] = nil // predeclare (to avoid endless recursion)
+			fieldList := &ast.FieldList{
+				Opening: pos,
+				Closing: pos,
+			}
+			ref := refMap.Put(struct {
+				fieldList *ast.FieldList
+				info      *fileInfo
+			}{fieldList, info})
+			defer refMap.Remove(ref)
+			C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(ref))
+			switch C.tinygo_clang_getCursorKind(cursor) {
+			case C.CXCursor_StructDecl:
+				info.elaboratedTypes[cgoName] = &ast.StructType{
+					Struct: pos,
+					Fields: fieldList,
 				}
-				unionMarker.Names = []*ast.Ident{
-					&ast.Ident{
-						NamePos: pos,
-						Name:    "C union",
-						Obj: &ast.Object{
-							Kind: ast.Var,
-							Name: "C union",
-							Decl: unionMarker,
+			case C.CXCursor_UnionDecl:
+				if len(fieldList.List) > 1 {
+					// Insert a special field at the front (of zero width) as a
+					// marker that this is struct is actually a union. This is done
+					// by giving the field a name that cannot be expressed directly
+					// in Go.
+					// Other parts of the compiler look at the first element in a
+					// struct (of size > 2) to know whether this is a union.
+					// Note that we don't have to insert it for single-element
+					// unions as they're basically equivalent to a struct.
+					unionMarker := &ast.Field{
+						Type: &ast.StructType{
+							Struct: pos,
 						},
-					},
+					}
+					unionMarker.Names = []*ast.Ident{
+						&ast.Ident{
+							NamePos: pos,
+							Name:    "C union",
+							Obj: &ast.Object{
+								Kind: ast.Var,
+								Name: "C union",
+								Decl: unionMarker,
+							},
+						},
+					}
+					fieldList.List = append([]*ast.Field{unionMarker}, fieldList.List...)
 				}
-				fieldList.List = append([]*ast.Field{unionMarker}, fieldList.List...)
+				info.elaboratedTypes[cgoName] = &ast.StructType{
+					Struct: pos,
+					Fields: fieldList,
+				}
+			default:
+				panic("unreachable")
 			}
-			return &ast.StructType{
-				Struct: pos,
-				Fields: fieldList,
-			}
+		}
+		return &ast.Ident{
+			NamePos: pos,
+			Name:    "C." + cgoName,
 		}
 	}
 	if typeName == "" {

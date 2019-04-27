@@ -358,8 +358,10 @@ func (info *fileInfo) addTypedefs() {
 	for _, name := range names {
 		typedef := info.typedefs[name]
 		typeName := "C." + name
+		isAlias := true
 		if strings.HasPrefix(name, "_Cgo_") {
 			typeName = "C." + name[len("_Cgo_"):]
+			isAlias = false // C.short etc. should not be aliased to the equivalent Go type (not portable)
 		}
 		if _, ok := cgoAliases[typeName]; ok {
 			// This is a type that also exists in Go (defined in stdint.h).
@@ -376,6 +378,9 @@ func (info *fileInfo) addTypedefs() {
 				Obj:     obj,
 			},
 			Type: typedef.typeExpr,
+		}
+		if isAlias {
+			typeSpec.Assign = info.importCPos
 		}
 		obj.Decl = typeSpec
 		gen.Specs = append(gen.Specs, typeSpec)
@@ -400,7 +405,7 @@ func (info *fileInfo) addElaboratedTypes() {
 	sort.Strings(names)
 	for _, name := range names {
 		typ := info.elaboratedTypes[name]
-		typeName := "C.struct_" + name
+		typeName := "C." + name
 		obj := &ast.Object{
 			Kind: ast.Typ,
 			Name: typeName,
