@@ -1,0 +1,4 @@
+{
+	"inherits": ["pca10040", "nrf52-s132v6"],
+	"ldscript": "targets/nrf52-s132v6.ld"
+}
