@@ -1,3 +1,3 @@
 package sys
 
-const TheVersion = `go0.1.0`
+const TheVersion = `go0.5.0`
