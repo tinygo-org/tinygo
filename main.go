@@ -62,9 +62,19 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		config.gc = spec.GC
 	}
 
-	// Append command line passed CFlags and LDFlags
-	spec.CFlags = append(spec.CFlags, config.cFlags...)
-	spec.LDFlags = append(spec.LDFlags, config.ldFlags...)
+	root := sourceDir()
+
+	// Merge and adjust CFlags.
+	cflags := append([]string{}, config.cFlags...)
+	for _, flag := range spec.CFlags {
+		cflags = append(cflags, strings.Replace(flag, "{root}", root, -1))
+	}
+
+	// Merge and adjust LDFlags.
+	ldflags := append([]string{}, config.ldFlags...)
+	for _, flag := range spec.LDFlags {
+		ldflags = append(ldflags, strings.Replace(flag, "{root}", root, -1))
+	}
 
 	compilerConfig := compiler.Config{
 		Triple:        spec.Triple,
@@ -73,11 +83,11 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		GOARCH:        spec.GOARCH,
 		GC:            config.gc,
 		PanicStrategy: config.panicStrategy,
-		CFlags:        spec.CFlags,
-		LDFlags:       spec.LDFlags,
+		CFlags:        cflags,
+		LDFlags:       ldflags,
 		Debug:         config.debug,
 		DumpSSA:       config.dumpSSA,
-		RootDir:       sourceDir(),
+		RootDir:       root,
 		GOPATH:        getGopath(),
 		BuildTags:     spec.BuildTags,
 	}
@@ -203,22 +213,22 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		// Prepare link command.
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
-		ldflags := append(spec.LDFlags, "-o", executable, objfile, "-L", sourceDir())
+		ldflags := append(ldflags, "-o", executable, objfile, "-L", root)
 		if spec.RTLib == "compiler-rt" {
 			ldflags = append(ldflags, librt)
 		}
 
 		// Compile extra files.
 		for i, path := range spec.ExtraFiles {
+			abspath := filepath.Join(root, path)
 			outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
 			cmdName := spec.Compiler
 			if name, ok := commands[cmdName]; ok {
 				cmdName = name
 			}
-			cmd := exec.Command(cmdName, append(spec.CFlags, "-c", "-o", outpath, path)...)
+			cmd := exec.Command(cmdName, append(cflags, "-c", "-o", outpath, abspath)...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
-			cmd.Dir = sourceDir()
 			err := cmd.Run()
 			if err != nil {
 				return &commandError{"failed to build", path, err}
@@ -235,10 +245,9 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 				if name, ok := commands[cmdName]; ok {
 					cmdName = name
 				}
-				cmd := exec.Command(cmdName, append(spec.CFlags, "-c", "-o", outpath, path)...)
+				cmd := exec.Command(cmdName, append(cflags, "-c", "-o", outpath, path)...)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
-				cmd.Dir = sourceDir()
 				err := cmd.Run()
 				if err != nil {
 					return &commandError{"failed to build", path, err}

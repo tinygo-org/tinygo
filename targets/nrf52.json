@@ -7,7 +7,7 @@
 		"-mfloat-abi=soft",
 		"-Qunused-arguments",
 		"-DNRF52832_XXAA",
-		"-Ilib/CMSIS/CMSIS/Include"
+		"-I{root}/lib/CMSIS/CMSIS/Include"
 	],
 	"ldflags": [
 		"-T", "targets/nrf52.ld"
