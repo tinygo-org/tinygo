@@ -243,7 +243,6 @@ func compileBuiltins(target string, callback func(path string) error) error {
 		cmd := exec.Command(commands["clang"], "-c", "-Oz", "-g", "-Werror", "-Wall", "-std=c11", "-fshort-enums", "-nostdlibinc", "-ffunction-sections", "-fdata-sections", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir, "-o", objpath, srcpath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		cmd.Dir = dir
 		err = cmd.Run()
 		if err != nil {
 			return &commandError{"failed to build", srcpath, err}
