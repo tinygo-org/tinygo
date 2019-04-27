@@ -244,7 +244,7 @@ func (info *fileInfo) getCursorPosition(cursor C.GoCXCursor) token.Pos {
 	var column C.unsigned
 	var offset C.unsigned
 	C.clang_getExpansionLocation(location, &file, &line, &column, &offset)
-	if line == 0 {
+	if line == 0 || file == nil {
 		// Invalid token.
 		return token.NoPos
 	}
