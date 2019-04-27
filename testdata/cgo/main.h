@@ -15,6 +15,11 @@ typedef struct collection {
 	unsigned char c;
 } collection_t;
 
+struct point {
+	int x;
+	int y;
+};
+
 // linked list
 typedef struct list_t {
 	int           n;
