@@ -7,7 +7,8 @@
 		"-mfloat-abi=soft",
 		"-Qunused-arguments",
 		"-DNRF52832_XXAA",
-		"-I{root}/lib/CMSIS/CMSIS/Include"
+		"-I{root}/lib/CMSIS/CMSIS/Include",
+		"-I{root}/lib/nrfx/mdk"
 	],
 	"linkerscript": "targets/nrf52.ld",
 	"extra-files": [

@@ -1,0 +1,4 @@
+{
+	"build-tags": ["softdevice"],
+	"linkerscript": "targets/nrf52-s132v6.ld"
+}
