@@ -16,8 +16,8 @@ func main() {
 }
 
 func led1() {
-	led := machine.GPIO{machine.LED}
-	led.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
+	led := machine.LED1
+	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	for {
 		println("+")
 		led.Low()
@@ -30,8 +30,8 @@ func led1() {
 }
 
 func led2() {
-	led := machine.GPIO{machine.LED2}
-	led.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
+	led := machine.LED2
+	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	for {
 		println("  +")
 		led.Low()

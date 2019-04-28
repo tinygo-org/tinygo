@@ -7,17 +7,17 @@ import (
 	"device/nrf"
 )
 
-type GPIOMode uint8
+type PinMode uint8
 
 const (
-	GPIO_INPUT          = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) | (nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos)
-	GPIO_INPUT_PULLUP   = GPIO_INPUT | (nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos)
-	GPIO_INPUT_PULLDOWN = GPIO_INPUT | (nrf.GPIO_PIN_CNF_PULL_Pulldown << nrf.GPIO_PIN_CNF_PULL_Pos)
-	GPIO_OUTPUT         = (nrf.GPIO_PIN_CNF_DIR_Output << nrf.GPIO_PIN_CNF_DIR_Pos) | (nrf.GPIO_PIN_CNF_INPUT_Disconnect << nrf.GPIO_PIN_CNF_INPUT_Pos)
+	PinInput         PinMode = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) | (nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos)
+	PinInputPullup   PinMode = PinInput | (nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos)
+	PinInputPulldown PinMode = PinOutput | (nrf.GPIO_PIN_CNF_PULL_Pulldown << nrf.GPIO_PIN_CNF_PULL_Pos)
+	PinOutput        PinMode = (nrf.GPIO_PIN_CNF_DIR_Output << nrf.GPIO_PIN_CNF_DIR_Pos) | (nrf.GPIO_PIN_CNF_INPUT_Disconnect << nrf.GPIO_PIN_CNF_INPUT_Pos)
 )
 
 // Configure this pin with the given configuration.
-func (p GPIO) Configure(config GPIOConfig) {
+func (p Pin) Configure(config PinConfig) {
 	cfg := config.Mode | nrf.GPIO_PIN_CNF_DRIVE_S0S1 | nrf.GPIO_PIN_CNF_SENSE_Disabled
 	port, pin := p.getPortPin()
 	port.PIN_CNF[pin].Set(uint32(cfg))
@@ -25,7 +25,7 @@ func (p GPIO) Configure(config GPIOConfig) {
 
 // Set the pin to high or low.
 // Warning: only use this on an output pin!
-func (p GPIO) Set(high bool) {
+func (p Pin) Set(high bool) {
 	port, pin := p.getPortPin()
 	if high {
 		port.OUTSET.Set(1 << pin)
@@ -36,20 +36,20 @@ func (p GPIO) Set(high bool) {
 
 // Return the register and mask to enable a given GPIO pin. This can be used to
 // implement bit-banged drivers.
-func (p GPIO) PortMaskSet() (*uint32, uint32) {
+func (p Pin) PortMaskSet() (*uint32, uint32) {
 	port, pin := p.getPortPin()
 	return &port.OUTSET.Reg, 1 << pin
 }
 
 // Return the register and mask to disable a given port. This can be used to
 // implement bit-banged drivers.
-func (p GPIO) PortMaskClear() (*uint32, uint32) {
+func (p Pin) PortMaskClear() (*uint32, uint32) {
 	port, pin := p.getPortPin()
 	return &port.OUTCLR.Reg, 1 << pin
 }
 
 // Get returns the current value of a GPIO pin.
-func (p GPIO) Get() bool {
+func (p Pin) Get() bool {
 	port, pin := p.getPortPin()
 	return (port.IN.Get()>>pin)&1 != 0
 }
@@ -132,8 +132,8 @@ var (
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
 	Frequency uint32
-	SCL       uint8
-	SDA       uint8
+	SCL       Pin
+	SDA       Pin
 }
 
 // Configure is intended to setup the I2C interface.
@@ -149,14 +149,14 @@ func (i2c I2C) Configure(config I2CConfig) {
 	}
 
 	// do config
-	sclPort, sclPin := GPIO{config.SCL}.getPortPin()
+	sclPort, sclPin := config.SCL.getPortPin()
 	sclPort.PIN_CNF[sclPin].Set((nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
 		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
 		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
 		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos))
 
-	sdaPort, sdaPin := GPIO{config.SDA}.getPortPin()
+	sdaPort, sdaPin := config.SDA.getPortPin()
 	sdaPort.PIN_CNF[sdaPin].Set((nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
 		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
 		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
@@ -242,9 +242,9 @@ var (
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {
 	Frequency uint32
-	SCK       uint8
-	MOSI      uint8
-	MISO      uint8
+	SCK       Pin
+	MOSI      Pin
+	MISO      Pin
 	LSBFirst  bool
 	Mode      uint8
 }

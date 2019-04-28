@@ -7,38 +7,38 @@ import (
 )
 
 // Configure sets the pin to input or output.
-func (p GPIO) Configure(config GPIOConfig) {
-	if config.Mode == GPIO_OUTPUT { // set output bit
-		if p.Pin < 8 {
-			avr.DDRD.SetBits(1 << p.Pin)
+func (p Pin) Configure(config PinConfig) {
+	if config.Mode == PinOutput { // set output bit
+		if p < 8 {
+			avr.DDRD.SetBits(1 << uint8(p))
 		} else {
-			avr.DDRB.SetBits(1 << (p.Pin - 8))
+			avr.DDRB.SetBits(1 << uint8(p-8))
 		}
 	} else { // configure input: clear output bit
-		if p.Pin < 8 {
-			avr.DDRD.ClearBits(1 << p.Pin)
+		if p < 8 {
+			avr.DDRD.ClearBits(1 << uint8(p))
 		} else {
-			avr.DDRB.ClearBits(1 << (p.Pin - 8))
+			avr.DDRB.ClearBits(1 << uint8(p-8))
 		}
 	}
 }
 
 // Get returns the current value of a GPIO pin.
-func (p GPIO) Get() bool {
-	if p.Pin < 8 {
-		val := avr.PIND.Get() & (1 << p.Pin)
+func (p Pin) Get() bool {
+	if p < 8 {
+		val := avr.PIND.Get() & (1 << uint8(p))
 		return (val > 0)
 	} else {
-		val := avr.PINB.Get() & (1 << (p.Pin - 8))
+		val := avr.PINB.Get() & (1 << uint8(p-8))
 		return (val > 0)
 	}
 }
 
-func (p GPIO) getPortMask() (*avr.Register8, uint8) {
-	if p.Pin < 8 {
-		return avr.PORTD, 1 << p.Pin
+func (p Pin) getPortMask() (*avr.Register8, uint8) {
+	if p < 8 {
+		return avr.PORTD, 1 << uint8(p)
 	} else {
-		return avr.PORTB, 1 << (p.Pin - 8)
+		return avr.PORTB, 1 << uint8(p-8)
 	}
 }
 
@@ -66,9 +66,9 @@ func InitPWM() {
 // Configure configures a PWM pin for output.
 func (pwm PWM) Configure() {
 	if pwm.Pin < 8 {
-		avr.DDRD.SetBits(1 << pwm.Pin)
+		avr.DDRD.SetBits(1 << uint8(pwm.Pin))
 	} else {
-		avr.DDRB.SetBits(1 << (pwm.Pin - 8))
+		avr.DDRB.SetBits(1 << uint8(pwm.Pin-8))
 	}
 }
 

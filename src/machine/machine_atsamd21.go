@@ -18,112 +18,92 @@ import (
 
 const CPU_FREQUENCY = 48000000
 
-type GPIOMode uint8
+type PinMode uint8
 
 const (
-	GPIO_ANALOG         = 1
-	GPIO_SERCOM         = 2
-	GPIO_SERCOM_ALT     = 3
-	GPIO_TIMER          = 4
-	GPIO_TIMER_ALT      = 5
-	GPIO_COM            = 6
-	GPIO_AC_CLK         = 7
-	GPIO_DIGITAL        = 8
-	GPIO_INPUT          = 9
-	GPIO_INPUT_PULLUP   = 10
-	GPIO_OUTPUT         = 11
-	GPIO_PWM            = GPIO_TIMER
-	GPIO_PWM_ALT        = GPIO_TIMER_ALT
-	GPIO_INPUT_PULLDOWN = 12
+	PinAnalog    PinMode = 1
+	PinSERCOM    PinMode = 2
+	PinSERCOMAlt PinMode = 3
+	PinTimer     PinMode = 4
+	PinTimerAlt  PinMode = 5
+	PinCom       PinMode = 6
+	//PinAC_CLK        PinMode = 7
+	PinDigital       PinMode = 8
+	PinInput         PinMode = 9
+	PinInputPullup   PinMode = 10
+	PinOutput        PinMode = 11
+	PinPWM           PinMode = PinTimer
+	PinPWMAlt        PinMode = PinTimerAlt
+	PinInputPulldown PinMode = 12
 )
 
 // Hardware pins
 const (
-	PA00 = 0
-	PA01 = 1
-	PA02 = 2
-	PA03 = 3
-	PA04 = 4
-	PA05 = 5
-	PA06 = 6
-	PA07 = 7
-	PA08 = 8
-	PA09 = 9
-	PA10 = 10
-	PA11 = 11
-	PA12 = 12
-	PA13 = 13
-	PA14 = 14
-	PA15 = 15
-	PA16 = 16
-	PA17 = 17
-	PA18 = 18
-	PA19 = 19
-	PA20 = 20
-	PA21 = 21
-	PA22 = 22
-	PA23 = 23
-	PA24 = 24
-	PA25 = 25
-	PA26 = 26
-	PA27 = 27
-	PA28 = 28
-	PA29 = 29
-	PA30 = 30
-	PA31 = 31
-	PB00 = 32
-	PB01 = 33
-	PB02 = 34
-	PB03 = 35
-	PB04 = 36
-	PB05 = 37
-	PB06 = 38
-	PB07 = 39
-	PB08 = 40
-	PB09 = 41
-	PB10 = 42
-	PB11 = 43
-	PB12 = 44
-	PB13 = 45
-	PB14 = 46
-	PB15 = 47
-	PB16 = 48
-	PB17 = 49
-	PB18 = 50
-	PB19 = 51
-	PB20 = 52
-	PB21 = 53
-	PB22 = 54
-	PB23 = 55
-	PB24 = 56
-	PB25 = 57
-	PB26 = 58
-	PB27 = 59
-	PB28 = 60
-	PB29 = 61
-	PB30 = 62
-	PB31 = 63
+	PA00 Pin = 0
+	PA01 Pin = 1
+	PA02 Pin = 2
+	PA03 Pin = 3
+	PA04 Pin = 4
+	PA05 Pin = 5
+	PA06 Pin = 6
+	PA07 Pin = 7
+	PA08 Pin = 8
+	PA09 Pin = 9
+	PA10 Pin = 10
+	PA11 Pin = 11
+	PA12 Pin = 12
+	PA13 Pin = 13
+	PA14 Pin = 14
+	PA15 Pin = 15
+	PA16 Pin = 16
+	PA17 Pin = 17
+	PA18 Pin = 18
+	PA19 Pin = 19
+	PA20 Pin = 20
+	PA21 Pin = 21
+	PA22 Pin = 22
+	PA23 Pin = 23
+	PA24 Pin = 24
+	PA25 Pin = 25
+	PA26 Pin = 26
+	PA27 Pin = 27
+	PA28 Pin = 28
+	PA29 Pin = 29
+	PA30 Pin = 30
+	PA31 Pin = 31
+	PB00 Pin = 32
+	PB01 Pin = 33
+	PB02 Pin = 34
+	PB03 Pin = 35
+	PB04 Pin = 36
+	PB05 Pin = 37
+	PB06 Pin = 38
+	PB07 Pin = 39
+	PB08 Pin = 40
+	PB09 Pin = 41
+	PB10 Pin = 42
+	PB11 Pin = 43
+	PB12 Pin = 44
+	PB13 Pin = 45
+	PB14 Pin = 46
+	PB15 Pin = 47
+	PB16 Pin = 48
+	PB17 Pin = 49
+	PB18 Pin = 50
+	PB19 Pin = 51
+	PB20 Pin = 52
+	PB21 Pin = 53
+	PB22 Pin = 54
+	PB23 Pin = 55
+	PB24 Pin = 56
+	PB25 Pin = 57
+	PB26 Pin = 58
+	PB27 Pin = 59
+	PB28 Pin = 60
+	PB29 Pin = 61
+	PB30 Pin = 62
+	PB31 Pin = 63
 )
-
-// getPMux returns the value for the correct PMUX register for this pin.
-func (p GPIO) getPMux() uint8 {
-	return getPMux(p.Pin)
-}
-
-// setPMux sets the value for the correct PMUX register for this pin.
-func (p GPIO) setPMux(val uint8) {
-	setPMux(p.Pin, val)
-}
-
-// getPinCfg returns the value for the correct PINCFG register for this pin.
-func (p GPIO) getPinCfg() uint8 {
-	return getPinCfg(p.Pin)
-}
-
-// setPinCfg sets the value for the correct PINCFG register for this pin.
-func (p GPIO) setPinCfg(val uint8) {
-	setPinCfg(p.Pin, val)
-}
 
 // InitADC initializes the ADC.
 func InitADC() {
@@ -184,7 +164,7 @@ func InitADC() {
 
 // Configure configures a ADCPin to be able to be used to read data.
 func (a ADC) Configure() {
-	GPIO{a.Pin}.Configure(GPIOConfig{Mode: GPIO_ANALOG})
+	a.Pin.Configure(PinConfig{Mode: PinAnalog})
 	return
 }
 
@@ -340,8 +320,8 @@ func (uart UART) Configure(config UARTConfig) {
 	}
 
 	// configure pins
-	GPIO{config.TX}.Configure(GPIOConfig{Mode: GPIO_SERCOM})
-	GPIO{config.RX}.Configure(GPIOConfig{Mode: GPIO_SERCOM})
+	config.TX.Configure(PinConfig{Mode: PinSERCOM})
+	config.RX.Configure(PinConfig{Mode: PinSERCOM})
 
 	// reset SERCOM0
 	uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_CTRLA_SWRST)
@@ -434,16 +414,16 @@ func handleUART1() {
 // I2C on the SAMD21.
 type I2C struct {
 	Bus     *sam.SERCOM_I2CM_Type
-	SCL     uint8
-	SDA     uint8
-	PinMode GPIOMode
+	SCL     Pin
+	SDA     Pin
+	PinMode PinMode
 }
 
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
 	Frequency uint32
-	SCL       uint8
-	SDA       uint8
+	SCL       Pin
+	SDA       Pin
 }
 
 const (
@@ -496,8 +476,8 @@ func (i2c I2C) Configure(config I2CConfig) {
 	}
 
 	// enable pins
-	GPIO{i2c.SDA}.Configure(GPIOConfig{Mode: i2c.PinMode})
-	GPIO{i2c.SCL}.Configure(GPIOConfig{Mode: i2c.PinMode})
+	i2c.SDA.Configure(PinConfig{Mode: i2c.PinMode})
+	i2c.SCL.Configure(PinConfig{Mode: i2c.PinMode})
 }
 
 // SetBaudRate sets the communication speed for the I2C.
@@ -770,11 +750,11 @@ func (i2s I2S) Configure(config I2SConfig) {
 	}
 
 	// configure pin for clock
-	GPIO{config.SCK}.Configure(GPIOConfig{Mode: GPIO_COM})
+	config.SCK.Configure(PinConfig{Mode: PinCom})
 
 	// configure pin for WS, if needed
-	if config.WS != 0xff {
-		GPIO{config.WS}.Configure(GPIOConfig{Mode: GPIO_COM})
+	if config.WS != NoPin {
+		config.WS.Configure(PinConfig{Mode: PinCom})
 	}
 
 	// now set serializer data size.
@@ -813,7 +793,7 @@ func (i2s I2S) Configure(config I2SConfig) {
 	}
 
 	// configure data pin
-	GPIO{config.SD}.Configure(GPIOConfig{Mode: GPIO_COM})
+	config.SD.Configure(PinConfig{Mode: PinCom})
 
 	// re-enable
 	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_ENABLE)
@@ -900,9 +880,9 @@ type SPI struct {
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {
 	Frequency uint32
-	SCK       uint8
-	MOSI      uint8
-	MISO      uint8
+	SCK       Pin
+	MOSI      Pin
+	MISO      Pin
 	LSBFirst  bool
 	Mode      uint8
 }
@@ -927,9 +907,9 @@ func (spi SPI) Configure(config SPIConfig) {
 	}
 
 	// enable pins
-	GPIO{config.SCK}.Configure(GPIOConfig{Mode: GPIO_SERCOM_ALT})
-	GPIO{config.MOSI}.Configure(GPIOConfig{Mode: GPIO_SERCOM_ALT})
-	GPIO{config.MISO}.Configure(GPIOConfig{Mode: GPIO_SERCOM_ALT})
+	config.SCK.Configure(PinConfig{Mode: PinSERCOMAlt})
+	config.MOSI.Configure(PinConfig{Mode: PinSERCOMAlt})
+	config.MISO.Configure(PinConfig{Mode: PinSERCOMAlt})
 
 	// reset SERCOM
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_SWRST)
@@ -1044,20 +1024,20 @@ func (pwm PWM) Configure() {
 	}
 
 	// Set pin as output
-	sam.PORT.DIRSET0.Set(1 << pwm.Pin)
+	sam.PORT.DIRSET0.Set(1 << uint8(pwm.Pin))
 	// Set pin to low
-	sam.PORT.OUTCLR0.Set(1 << pwm.Pin)
+	sam.PORT.OUTCLR0.Set(1 << uint8(pwm.Pin))
 
 	// Enable the port multiplexer for pin
 	pwm.setPinCfg(sam.PORT_PINCFG0_PMUXEN)
 
 	// Connect TCCX timer to pin.
 	// we normally use the F channel aka ALT
-	pwmConfig := GPIO_PWM_ALT
+	pwmConfig := PinPWMAlt
 
 	// in the case of PA6 or PA7 we have to use E channel
 	if pwm.Pin == 6 || pwm.Pin == 7 {
-		pwmConfig = GPIO_PWM
+		pwmConfig = PinPWM
 	}
 
 	if pwm.Pin&1 > 0 {
@@ -1102,22 +1082,22 @@ func (pwm PWM) Set(value uint16) {
 
 // getPMux returns the value for the correct PMUX register for this pin.
 func (pwm PWM) getPMux() uint8 {
-	return getPMux(pwm.Pin)
+	return pwm.Pin.getPMux()
 }
 
 // setPMux sets the value for the correct PMUX register for this pin.
 func (pwm PWM) setPMux(val uint8) {
-	setPMux(pwm.Pin, val)
+	pwm.Pin.setPMux(val)
 }
 
 // getPinCfg returns the value for the correct PINCFG register for this pin.
 func (pwm PWM) getPinCfg() uint8 {
-	return getPinCfg(pwm.Pin)
+	return pwm.Pin.getPinCfg()
 }
 
 // setPinCfg sets the value for the correct PINCFG register for this pin.
 func (pwm PWM) setPinCfg(val uint8) {
-	setPinCfg(pwm.Pin, val)
+	pwm.Pin.setPinCfg(val)
 }
 
 // getTimer returns the timer to be used for PWM on this pin
@@ -1260,8 +1240,8 @@ func (usbcdc USBCDC) Configure(config UARTConfig) {
 	sam.USB_DEVICE.DESCADD.Set(uint32(uintptr(unsafe.Pointer(&usbEndpointDescriptors))))
 
 	// configure pins
-	GPIO{USBCDC_DM_PIN}.Configure(GPIOConfig{Mode: GPIO_COM})
-	GPIO{USBCDC_DP_PIN}.Configure(GPIOConfig{Mode: GPIO_COM})
+	USBCDC_DM_PIN.Configure(PinConfig{Mode: PinCom})
+	USBCDC_DP_PIN.Configure(PinConfig{Mode: PinCom})
 
 	// performs pad calibration from store fuses
 	handlePadCalibration()

@@ -41,9 +41,9 @@ const (
 
 // All fields are optional and may not be required or used on a particular platform.
 type I2SConfig struct {
-	SCK               uint8
-	WS                uint8
-	SD                uint8
+	SCK               Pin
+	WS                Pin
+	SD                Pin
 	Mode              I2SMode
 	Standard          I2SStandard
 	ClockSource       I2SClockSource

@@ -1,25 +1,36 @@
 package machine
 
-type GPIOConfig struct {
-	Mode GPIOMode
+type PinConfig struct {
+	Mode PinMode
 }
 
-type GPIO struct {
-	Pin uint8
-}
+// Pin is a single pin on a chip, which may be connected to other hardware
+// devices. It can either be used directly as GPIO pin or it can be used in
+// other peripherals like ADC, I2C, etc.
+type Pin int8
 
-func (p GPIO) High() {
+// NoPin explicitly indicates "not a pin". Use this pin if you want to leave one
+// of the pins in a peripheral unconfigured (if supported by the hardware).
+const NoPin = Pin(-1)
+
+// High sets this GPIO pin to high, assuming it has been configured as an output
+// pin. It is hardware dependent (and often undefined) what happens if you set a
+// pin to high that is not configured as an output pin.
+func (p Pin) High() {
 	p.Set(true)
 }
 
-func (p GPIO) Low() {
+// Low sets this GPIO pin to low, assuming it has been configured as an output
+// pin. It is hardware dependent (and often undefined) what happens if you set a
+// pin to low that is not configured as an output pin.
+func (p Pin) Low() {
 	p.Set(false)
 }
 
 type PWM struct {
-	Pin uint8
+	Pin Pin
 }
 
 type ADC struct {
-	Pin uint8
+	Pin Pin
 }

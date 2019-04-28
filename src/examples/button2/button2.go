@@ -8,29 +8,29 @@ import (
 // This example assumes that you are using the pca10040 board
 
 func main() {
-	led1 := machine.GPIO{machine.LED1}
-	led1.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
+	led1 := machine.LED1
+	led1.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
-	led2 := machine.GPIO{machine.LED2}
-	led2.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
+	led2 := machine.LED2
+	led2.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
-	led3 := machine.GPIO{machine.LED3}
-	led3.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
+	led3 := machine.LED3
+	led3.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
-	led4 := machine.GPIO{machine.LED4}
-	led4.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
+	led4 := machine.LED4
+	led4.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
-	button1 := machine.GPIO{machine.BUTTON1}
-	button1.Configure(machine.GPIOConfig{Mode: machine.GPIO_INPUT_PULLUP})
+	button1 := machine.BUTTON1
+	button1.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 
-	button2 := machine.GPIO{machine.BUTTON2}
-	button2.Configure(machine.GPIOConfig{Mode: machine.GPIO_INPUT_PULLUP})
+	button2 := machine.BUTTON2
+	button2.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 
-	button3 := machine.GPIO{machine.BUTTON3}
-	button3.Configure(machine.GPIOConfig{Mode: machine.GPIO_INPUT_PULLUP})
+	button3 := machine.BUTTON3
+	button3.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 
-	button4 := machine.GPIO{machine.BUTTON4}
-	button4.Configure(machine.GPIOConfig{Mode: machine.GPIO_INPUT_PULLUP})
+	button4 := machine.BUTTON4
+	button4.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 
 	for {
 		led1.Set(button1.Get())

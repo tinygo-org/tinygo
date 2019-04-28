@@ -7,14 +7,14 @@ import (
 
 // This example assumes that the button is connected to pin 8. Change the value
 // below to use a different pin.
-const buttonPin = 8
+const (
+	led    = machine.LED
+	button = machine.Pin(8)
+)
 
 func main() {
-	led := machine.GPIO{machine.LED}
-	led.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
-
-	button := machine.GPIO{buttonPin}
-	button.Configure(machine.GPIOConfig{Mode: machine.GPIO_INPUT})
+	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	button.Configure(machine.PinConfig{Mode: machine.PinInput})
 
 	for {
 		if button.Get() {

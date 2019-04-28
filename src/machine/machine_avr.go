@@ -6,15 +6,15 @@ import (
 	"device/avr"
 )
 
-type GPIOMode uint8
+type PinMode uint8
 
 const (
-	GPIO_INPUT = iota
-	GPIO_OUTPUT
+	PinInput PinMode = iota
+	PinOutput
 )
 
 // Set changes the value of the GPIO pin. The pin must be configured as output.
-func (p GPIO) Set(value bool) {
+func (p Pin) Set(value bool) {
 	if value { // set bits
 		port, mask := p.PortMaskSet()
 		port.Set(mask)
@@ -30,7 +30,7 @@ func (p GPIO) Set(value bool) {
 // Warning: there are no separate pin set/clear registers on the AVR. The
 // returned mask is only valid as long as no other pin in the same port has been
 // changed.
-func (p GPIO) PortMaskSet() (*avr.Register8, uint8) {
+func (p Pin) PortMaskSet() (*avr.Register8, uint8) {
 	port, mask := p.getPortMask()
 	return port, port.Get() | mask
 }
@@ -41,7 +41,7 @@ func (p GPIO) PortMaskSet() (*avr.Register8, uint8) {
 // Warning: there are no separate pin set/clear registers on the AVR. The
 // returned mask is only valid as long as no other pin in the same port has been
 // changed.
-func (p GPIO) PortMaskClear() (*avr.Register8, uint8) {
+func (p Pin) PortMaskClear() (*avr.Register8, uint8) {
 	port, mask := p.getPortMask()
 	return port, port.Get() &^ mask
 }
@@ -68,7 +68,7 @@ func (a ADC) Get() uint16 {
 	// set the ADLAR bit (left-adjusted result) to get a value scaled to 16
 	// bits. This has the same effect as shifting the return value left by 6
 	// bits.
-	avr.ADMUX.Set(avr.ADMUX_REFS0 | avr.ADMUX_ADLAR | (a.Pin & 0x07))
+	avr.ADMUX.Set(avr.ADMUX_REFS0 | avr.ADMUX_ADLAR | (uint8(a.Pin) & 0x07))
 
 	// start the conversion
 	avr.ADCSRA.SetBits(avr.ADCSRA_ADSC)

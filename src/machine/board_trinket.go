@@ -62,12 +62,12 @@ var (
 	I2C0 = I2C{Bus: sam.SERCOM2_I2CM,
 		SDA:     SDA_PIN,
 		SCL:     SCL_PIN,
-		PinMode: GPIO_SERCOM_ALT}
+		PinMode: PinSERCOMAlt}
 )
 
 // I2S pins
 const (
 	I2S_SCK_PIN = PA10
 	I2S_SD_PIN  = PA08
-	I2S_WS_PIN  = 0xff // TODO: figure out what this is on Trinket M0.
+	I2S_WS_PIN  = NoPin // TODO: figure out what this is on Trinket M0.
 )

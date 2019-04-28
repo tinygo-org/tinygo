@@ -6,27 +6,27 @@ const HasLowFrequencyCrystal = true
 
 // LEDs on the nrf52840-mdk (nRF52840 dev board)
 const (
-	LED       = LED_GREEN
-	LED_GREEN = 22
-	LED_RED   = 23
-	LED_BLUE  = 24
+	LED       Pin = LED_GREEN
+	LED_GREEN Pin = 22
+	LED_RED   Pin = 23
+	LED_BLUE  Pin = 24
 )
 
 // UART pins
 const (
-	UART_TX_PIN = 20
-	UART_RX_PIN = 19
+	UART_TX_PIN Pin = 20
+	UART_RX_PIN Pin = 19
 )
 
 // I2C pins (unused)
 const (
-	SDA_PIN = 0xff
-	SCL_PIN = 0xff
+	SDA_PIN = NoPin
+	SCL_PIN = NoPin
 )
 
 // SPI pins (unused)
 const (
-	SPI0_SCK_PIN  = 0
-	SPI0_MOSI_PIN = 0
-	SPI0_MISO_PIN = 0
+	SPI0_SCK_PIN  = NoPin
+	SPI0_MOSI_PIN = NoPin
+	SPI0_MISO_PIN = NoPin
 )

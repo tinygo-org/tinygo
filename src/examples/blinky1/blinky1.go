@@ -8,8 +8,8 @@ import (
 )
 
 func main() {
-	led := machine.GPIO{machine.LED}
-	led.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
+	led := machine.LED
+	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	for {
 		led.Low()
 		time.Sleep(time.Millisecond * 500)

@@ -9,9 +9,9 @@ import (
 
 // change these to test a different UART or pins if available
 var (
-	uart       = machine.UART0
-	tx   uint8 = machine.UART_TX_PIN
-	rx   uint8 = machine.UART_RX_PIN
+	uart = machine.UART0
+	tx   = machine.UART_TX_PIN
+	rx   = machine.UART_RX_PIN
 )
 
 func main() {
