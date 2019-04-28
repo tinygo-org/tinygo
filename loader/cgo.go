@@ -18,6 +18,7 @@ type fileInfo struct {
 	*ast.File
 	*Package
 	filename        string
+	constants       map[string]*ast.BasicLit
 	functions       map[string]*functionInfo
 	globals         map[string]*globalInfo
 	typedefs        map[string]*typedefInfo
@@ -103,6 +104,7 @@ func (p *Package) processCgo(filename string, f *ast.File, cflags []string) []er
 		File:            f,
 		Package:         p,
 		filename:        filename,
+		constants:       map[string]*ast.BasicLit{},
 		functions:       map[string]*functionInfo{},
 		globals:         map[string]*globalInfo{},
 		typedefs:        map[string]*typedefInfo{},
@@ -162,6 +164,9 @@ func (p *Package) processCgo(filename string, f *ast.File, cflags []string) []er
 
 	// Declare stub function pointer values found by libclang.
 	info.addFuncPtrDecls()
+
+	// Declare globals found by libclang.
+	info.addConstDecls()
 
 	// Declare globals found by libclang.
 	info.addVarDecls()
@@ -287,6 +292,49 @@ func (info *fileInfo) addFuncPtrDecls() {
 	info.Decls = append(info.Decls, gen)
 }
 
+// addConstDecls declares external C constants in the Go source.
+// It adds code like the following to the AST:
+//
+//     const (
+//         C.CONST_INT = 5
+//         C.CONST_FLOAT = 5.8
+//         // ...
+//     )
+func (info *fileInfo) addConstDecls() {
+	if len(info.constants) == 0 {
+		return
+	}
+	gen := &ast.GenDecl{
+		TokPos: info.importCPos,
+		Tok:    token.CONST,
+		Lparen: info.importCPos,
+		Rparen: info.importCPos,
+	}
+	names := make([]string, 0, len(info.constants))
+	for name := range info.constants {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		constVal := info.constants[name]
+		obj := &ast.Object{
+			Kind: ast.Con,
+			Name: "C." + name,
+		}
+		valueSpec := &ast.ValueSpec{
+			Names: []*ast.Ident{&ast.Ident{
+				NamePos: info.importCPos,
+				Name:    "C." + name,
+				Obj:     obj,
+			}},
+			Values: []ast.Expr{constVal},
+		}
+		obj.Decl = valueSpec
+		gen.Specs = append(gen.Specs, valueSpec)
+	}
+	info.Decls = append(info.Decls, gen)
+}
+
 // addVarDecls declares external C globals in the Go source.
 // It adds code like the following to the AST:
 //
@@ -313,7 +361,7 @@ func (info *fileInfo) addVarDecls() {
 	for _, name := range names {
 		global := info.globals[name]
 		obj := &ast.Object{
-			Kind: ast.Typ,
+			Kind: ast.Var,
 			Name: "C." + name,
 		}
 		valueSpec := &ast.ValueSpec{

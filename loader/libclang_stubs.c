@@ -49,6 +49,10 @@ CXSourceLocation tinygo_clang_getCursorLocation(CXCursor c) {
 	return clang_getCursorLocation(c);
 }
 
+CXSourceRange tinygo_clang_getCursorExtent(CXCursor c) {
+	return clang_getCursorExtent(c);
+}
+
 CXTranslationUnit tinygo_clang_Cursor_getTranslationUnit(CXCursor c) {
 	return clang_Cursor_getTranslationUnit(c);
 }
