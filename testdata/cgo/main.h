@@ -10,6 +10,13 @@ int doCallback(int a, int b, binop_t cb);
 typedef int * intPointer;
 void store(int value, int *ptr);
 
+# define CONST_INT 5
+# define CONST_INT2 5llu
+# define CONST_FLOAT 5.8
+# define CONST_FLOAT2 5.8f
+# define CONST_CHAR 'c'
+# define CONST_STRING "defined string"
+
 // this signature should not be included by CGo
 void unusedFunction2(int x, __builtin_va_list args);
 

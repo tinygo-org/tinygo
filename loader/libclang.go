@@ -47,6 +47,7 @@ CXType tinygo_clang_getCursorResultType(GoCXCursor c);
 int tinygo_clang_Cursor_getNumArguments(GoCXCursor c);
 GoCXCursor tinygo_clang_Cursor_getArgument(GoCXCursor c, unsigned i);
 CXSourceLocation tinygo_clang_getCursorLocation(GoCXCursor c);
+CXSourceRange tinygo_clang_getCursorExtent(GoCXCursor c);
 CXTranslationUnit tinygo_clang_Cursor_getTranslationUnit(GoCXCursor c);
 
 int tinygo_clang_globals_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
@@ -101,7 +102,7 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string, posFilenam
 		filenameC,
 		(**C.char)(cmdargsC), C.int(len(cflags)), // command line args
 		&unsavedFile, 1, // unsaved files
-		C.CXTranslationUnit_None,
+		C.CXTranslationUnit_DetailedPreprocessingRecord,
 		&unit)
 	if errCode != 0 {
 		panic("loader: failed to parse source with libclang")
@@ -219,6 +220,86 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 		cursorType := C.tinygo_clang_getCursorType(c)
 		info.globals[name] = &globalInfo{
 			typeExpr: info.makeASTType(cursorType, pos),
+		}
+	case C.CXCursor_MacroDefinition:
+		name := getString(C.tinygo_clang_getCursorSpelling(c))
+		if _, required := info.missingSymbols[name]; !required {
+			return C.CXChildVisit_Continue
+		}
+		sourceRange := C.tinygo_clang_getCursorExtent(c)
+		start := C.clang_getRangeStart(sourceRange)
+		end := C.clang_getRangeEnd(sourceRange)
+		var file, endFile C.CXFile
+		var startOffset, endOffset C.unsigned
+		C.clang_getExpansionLocation(start, &file, nil, nil, &startOffset)
+		if file == nil {
+			panic("could not find file where macro is defined")
+		}
+		C.clang_getExpansionLocation(end, &endFile, nil, nil, &endOffset)
+		if file != endFile {
+			panic("expected start and end location of a #define to be in the same file")
+		}
+		if startOffset > endOffset {
+			panic("startOffset > endOffset")
+		}
+
+		// read file contents and extract the relevant byte range
+		tu := C.tinygo_clang_Cursor_getTranslationUnit(c)
+		var size C.size_t
+		sourcePtr := C.clang_getFileContents(tu, file, &size)
+		if endOffset >= C.uint(size) {
+			panic("endOffset lies after end of file")
+		}
+		source := string(((*[1 << 28]byte)(unsafe.Pointer(sourcePtr)))[startOffset:endOffset:endOffset])
+		if !strings.HasPrefix(source, name) {
+			panic(fmt.Sprintf("expected #define value to start with %#v, got %#v", name, source))
+		}
+		value := strings.TrimSpace(source[len(name):])
+		for len(value) != 0 && value[0] == '(' && value[len(value)-1] == ')' {
+			value = strings.TrimSpace(value[1 : len(value)-1])
+		}
+		if len(value) == 0 {
+			// Pretend it doesn't exist at all.
+			return C.CXChildVisit_Continue
+		}
+		// For information about integer literals:
+		// https://en.cppreference.com/w/cpp/language/integer_literal
+		if value[0] == '"' {
+			// string constant
+			info.constants[name] = &ast.BasicLit{pos, token.STRING, value}
+			return C.CXChildVisit_Continue
+		}
+		if value[0] == '\'' {
+			// char constant
+			info.constants[name] = &ast.BasicLit{pos, token.CHAR, value}
+			return C.CXChildVisit_Continue
+		}
+		// assume it's a number (int or float)
+		value = strings.Replace(value, "'", "", -1) // remove ' chars
+		value = strings.TrimRight(value, "lu")      // remove llu suffixes etc.
+		// find the first non-number
+		nonnum := byte(0)
+		for i := 0; i < len(value); i++ {
+			if value[i] < '0' || value[i] > '9' {
+				nonnum = value[i]
+				break
+			}
+		}
+		// determine number type based on the first non-number
+		switch nonnum {
+		case 0:
+			// no non-number found, must be an integer
+			info.constants[name] = &ast.BasicLit{pos, token.INT, value}
+		case 'x', 'X':
+			// hex integer constant
+			// TODO: may also be a floating point number per C++17.
+			info.constants[name] = &ast.BasicLit{pos, token.INT, value}
+		case '.', 'e':
+			// float constant
+			value = strings.TrimRight(value, "fFlL")
+			info.constants[name] = &ast.BasicLit{pos, token.FLOAT, value}
+		default:
+			// unknown type, ignore
 		}
 	}
 	return C.CXChildVisit_Continue
