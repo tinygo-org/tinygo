@@ -18,6 +18,10 @@ func main() {
 	var y C.longlong = -(1 << 40)
 	println("longlong:", y)
 	println("global:", C.global)
+	println("defined ints:", C.CONST_INT, C.CONST_INT2)
+	println("defined floats:", C.CONST_FLOAT, C.CONST_FLOAT2)
+	println("defined string:", C.CONST_STRING)
+	println("defined char:", C.CONST_CHAR)
 	var ptr C.intPointer
 	var n C.int = 15
 	ptr = C.intPointer(&n)
