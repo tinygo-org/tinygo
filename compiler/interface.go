@@ -23,37 +23,7 @@ import (
 //
 // An interface value is a {typecode, value} tuple, or {i16, i8*} to be exact.
 func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, pos token.Pos) (llvm.Value, error) {
-	var itfValue llvm.Value
-	size := c.targetData.TypeAllocSize(val.Type())
-	if size > c.targetData.TypeAllocSize(c.i8ptrType) {
-		// Allocate on the heap and put a pointer in the interface.
-		// TODO: escape analysis.
-		sizeValue := llvm.ConstInt(c.uintptrType, size, false)
-		alloc := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "makeinterface.alloc")
-		itfValueCast := c.builder.CreateBitCast(alloc, llvm.PointerType(val.Type(), 0), "makeinterface.cast.value")
-		c.builder.CreateStore(val, itfValueCast)
-		itfValue = c.builder.CreateBitCast(itfValueCast, c.i8ptrType, "makeinterface.cast.i8ptr")
-	} else if size == 0 {
-		itfValue = llvm.ConstPointerNull(c.i8ptrType)
-	} else {
-		// Directly place the value in the interface.
-		switch val.Type().TypeKind() {
-		case llvm.IntegerTypeKind:
-			itfValue = c.builder.CreateIntToPtr(val, c.i8ptrType, "makeinterface.cast.int")
-		case llvm.PointerTypeKind:
-			itfValue = c.builder.CreateBitCast(val, c.i8ptrType, "makeinterface.cast.ptr")
-		case llvm.StructTypeKind, llvm.FloatTypeKind, llvm.DoubleTypeKind:
-			// A bitcast would be useful here, but bitcast doesn't allow
-			// aggregate types. So we'll bitcast it using an alloca.
-			// Hopefully this will get optimized away.
-			mem := c.builder.CreateAlloca(c.i8ptrType, "makeinterface.cast.struct")
-			memStructPtr := c.builder.CreateBitCast(mem, llvm.PointerType(val.Type(), 0), "makeinterface.cast.struct.cast")
-			c.builder.CreateStore(val, memStructPtr)
-			itfValue = c.builder.CreateLoad(mem, "makeinterface.cast.load")
-		default:
-			return llvm.Value{}, c.makeError(pos, "todo: makeinterface: cast small type to i8*")
-		}
-	}
+	itfValue := c.emitPointerPack([]llvm.Value{val})
 	itfTypeCodeGlobal := c.getTypeCode(typ)
 	itfMethodSetGlobal, err := c.getTypeMethodSet(typ)
 	if err != nil {
@@ -329,30 +299,7 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) llvm.Valu
 		// Type assert on concrete type. Extract the underlying type from
 		// the interface (but only after checking it matches).
 		valuePtr := c.builder.CreateExtractValue(itf, 1, "typeassert.value.ptr")
-		size := c.targetData.TypeAllocSize(assertedType)
-		if size > c.targetData.TypeAllocSize(c.i8ptrType) {
-			// Value was stored in an allocated buffer, load it from there.
-			valuePtrCast := c.builder.CreateBitCast(valuePtr, llvm.PointerType(assertedType, 0), "")
-			valueOk = c.builder.CreateLoad(valuePtrCast, "typeassert.value.ok")
-		} else if size == 0 {
-			valueOk = c.getZeroValue(assertedType)
-		} else {
-			// Value was stored directly in the interface.
-			switch assertedType.TypeKind() {
-			case llvm.IntegerTypeKind:
-				valueOk = c.builder.CreatePtrToInt(valuePtr, assertedType, "typeassert.value.ok")
-			case llvm.PointerTypeKind:
-				valueOk = c.builder.CreateBitCast(valuePtr, assertedType, "typeassert.value.ok")
-			default: // struct, float, etc.
-				// A bitcast would be useful here, but bitcast doesn't allow
-				// aggregate types. So we'll bitcast it using an alloca.
-				// Hopefully this will get optimized away.
-				mem := c.builder.CreateAlloca(c.i8ptrType, "")
-				c.builder.CreateStore(valuePtr, mem)
-				memCast := c.builder.CreateBitCast(mem, llvm.PointerType(assertedType, 0), "")
-				valueOk = c.builder.CreateLoad(memCast, "typeassert.value.ok")
-			}
-		}
+		valueOk = c.emitPointerUnpack(valuePtr, []llvm.Type{assertedType})[0]
 	}
 	c.builder.CreateBr(nextBlock)
 
@@ -472,28 +419,7 @@ func (c *Compiler) createInterfaceInvokeWrapper(state interfaceInvokeWrapper) {
 	block := c.ctx.AddBasicBlock(wrapper, "entry")
 	c.builder.SetInsertPointAtEnd(block)
 
-	var receiverPtr llvm.Value
-	if c.targetData.TypeAllocSize(receiverType) > c.targetData.TypeAllocSize(c.i8ptrType) {
-		// The receiver is passed in using a pointer. We have to load it here
-		// and pass it by value to the real function.
-
-		// Load the underlying value.
-		receiverPtrType := llvm.PointerType(receiverType, 0)
-		receiverPtr = c.builder.CreateBitCast(wrapper.Param(0), receiverPtrType, "receiver.ptr")
-	} else {
-		// The value is stored in the interface, but it is of type struct which
-		// is expanded to multiple parameters (e.g. {i8, i8}). So we have to
-		// receive the struct as parameter, expand it, and pass it on to the
-		// real function.
-
-		// Cast the passed-in i8* to the struct value (using an alloca) and
-		// extract its values.
-		alloca := c.builder.CreateAlloca(c.i8ptrType, "receiver.alloca")
-		c.builder.CreateStore(wrapper.Param(0), alloca)
-		receiverPtr = c.builder.CreateBitCast(alloca, llvm.PointerType(receiverType, 0), "receiver.ptr")
-	}
-
-	receiverValue := c.builder.CreateLoad(receiverPtr, "receiver")
+	receiverValue := c.emitPointerUnpack(wrapper.Param(0), []llvm.Type{receiverType})[0]
 	params := append(c.expandFormalParam(receiverValue), wrapper.Params()[1:]...)
 	if fn.LLVMFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
 		c.builder.CreateCall(fn.LLVMFn, params, "")
