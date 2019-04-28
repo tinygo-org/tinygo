@@ -9,3 +9,4 @@ wait:
 end waiting
 non-blocking goroutine
 done with non-blocking goroutine
+async interface method call
