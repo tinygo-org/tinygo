@@ -186,53 +186,16 @@ func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.V
 	f := c.ir.GetFunction(expr.Fn.(*ssa.Function))
 
 	// Collect all bound variables.
-	boundVars := make([]llvm.Value, 0, len(expr.Bindings))
-	boundVarTypes := make([]llvm.Type, 0, len(expr.Bindings))
-	for _, binding := range expr.Bindings {
+	boundVars := make([]llvm.Value, len(expr.Bindings))
+	for i, binding := range expr.Bindings {
 		// The context stores the bound variables.
 		llvmBoundVar := c.getValue(frame, binding)
-		boundVars = append(boundVars, llvmBoundVar)
-		boundVarTypes = append(boundVarTypes, llvmBoundVar.Type())
-	}
-	contextType := c.ctx.StructType(boundVarTypes, false)
-
-	// Allocate memory for the context.
-	contextAlloc := llvm.Value{}
-	contextHeapAlloc := llvm.Value{}
-	if c.targetData.TypeAllocSize(contextType) <= c.targetData.TypeAllocSize(c.i8ptrType) {
-		// Context fits in a pointer - e.g. when it is a pointer. Store it
-		// directly in the stack after a convert.
-		// Because contextType is a struct and we have to cast it to a *i8,
-		// store it in an alloca first for bitcasting (store+bitcast+load).
-		contextAlloc = c.builder.CreateAlloca(contextType, "")
-	} else {
-		// Context is bigger than a pointer, so allocate it on the heap.
-		size := c.targetData.TypeAllocSize(contextType)
-		sizeValue := llvm.ConstInt(c.uintptrType, size, false)
-		contextHeapAlloc = c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "")
-		contextAlloc = c.builder.CreateBitCast(contextHeapAlloc, llvm.PointerType(contextType, 0), "")
+		boundVars[i] = llvmBoundVar
 	}
 
-	// Store all bound variables in the alloca or heap pointer.
-	for i, boundVar := range boundVars {
-		indices := []llvm.Value{
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false),
-		}
-		gep := c.builder.CreateInBoundsGEP(contextAlloc, indices, "")
-		c.builder.CreateStore(boundVar, gep)
-	}
-
-	context := llvm.Value{}
-	if c.targetData.TypeAllocSize(contextType) <= c.targetData.TypeAllocSize(c.i8ptrType) {
-		// Load value (as *i8) from the alloca.
-		contextAlloc = c.builder.CreateBitCast(contextAlloc, llvm.PointerType(c.i8ptrType, 0), "")
-		context = c.builder.CreateLoad(contextAlloc, "")
-	} else {
-		// Get the original heap allocation pointer, which already is an
-		// *i8.
-		context = contextHeapAlloc
-	}
+	// Store the bound variables in a single object, allocating it on the heap
+	// if necessary.
+	context := c.emitPointerPack(boundVars)
 
 	// Create the closure.
 	return c.createFuncValue(f.LLVMFn, context, f.Signature), nil
