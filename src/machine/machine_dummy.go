@@ -4,37 +4,37 @@ package machine
 
 // Dummy machine package, filled with no-ops.
 
-type GPIOMode uint8
+type PinMode uint8
 
 const (
-	GPIO_INPUT = iota
-	GPIO_OUTPUT
+	PinInput PinMode = iota
+	PinOutput
 )
 
 // Fake LED numbers, for testing.
 const (
-	LED  = LED1
-	LED1 = 0
-	LED2 = 0
-	LED3 = 0
-	LED4 = 0
+	LED  Pin = LED1
+	LED1 Pin = 0
+	LED2 Pin = 0
+	LED3 Pin = 0
+	LED4 Pin = 0
 )
 
 // Fake button numbers, for testing.
 const (
-	BUTTON  = BUTTON1
-	BUTTON1 = 0
-	BUTTON2 = 0
-	BUTTON3 = 0
-	BUTTON4 = 0
+	BUTTON  Pin = BUTTON1
+	BUTTON1 Pin = 0
+	BUTTON2 Pin = 0
+	BUTTON3 Pin = 0
+	BUTTON4 Pin = 0
 )
 
-func (p GPIO) Configure(config GPIOConfig) {
+func (p Pin) Configure(config PinConfig) {
 }
 
-func (p GPIO) Set(value bool) {
+func (p Pin) Set(value bool) {
 }
 
-func (p GPIO) Get() bool {
+func (p Pin) Get() bool {
 	return false
 }

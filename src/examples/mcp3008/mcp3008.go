@@ -8,19 +8,17 @@ import (
 	"time"
 )
 
-// CS_PIN is the pin used for Chip Select (CS). Change to whatever is in use on your board.
-const CS_PIN = 3
+// cs is the pin used for Chip Select (CS). Change to whatever is in use on your board.
+const cs = machine.Pin(3)
 
 var (
 	tx          []byte
 	rx          []byte
 	val, result uint16
-	cs          machine.GPIO
 )
 
 func main() {
-	cs = machine.GPIO{CS_PIN}
-	cs.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
+	cs.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	machine.SPI0.Configure(machine.SPIConfig{
 		Frequency: 4000000,

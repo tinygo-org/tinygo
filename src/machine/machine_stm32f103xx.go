@@ -13,25 +13,25 @@ import (
 const CPU_FREQUENCY = 72000000
 
 const (
-	GPIO_INPUT        = 0 // Input mode
-	GPIO_OUTPUT_10MHz = 1 // Output mode, max speed 10MHz
-	GPIO_OUTPUT_2MHz  = 2 // Output mode, max speed 2MHz
-	GPIO_OUTPUT_50MHz = 3 // Output mode, max speed 50MHz
-	GPIO_OUTPUT       = GPIO_OUTPUT_2MHz
+	PinInput       PinMode = 0 // Input mode
+	PinOutput10MHz PinMode = 1 // Output mode, max speed 10MHz
+	PinOutput2MHz  PinMode = 2 // Output mode, max speed 2MHz
+	PinOutput50MHz PinMode = 3 // Output mode, max speed 50MHz
+	PinOutput      PinMode = PinOutput2MHz
 
-	GPIO_INPUT_MODE_ANALOG       = 0  // Input analog mode
-	GPIO_INPUT_MODE_FLOATING     = 4  // Input floating mode
-	GPIO_INPUT_MODE_PULL_UP_DOWN = 8  // Input pull up/down mode
-	GPIO_INPUT_MODE_RESERVED     = 12 // Input mode (reserved)
+	PinInputModeAnalog     PinMode = 0  // Input analog mode
+	PinInputModeFloating   PinMode = 4  // Input floating mode
+	PinInputModePullUpDown PinMode = 8  // Input pull up/down mode
+	PinInputModeReserved   PinMode = 12 // Input mode (reserved)
 
-	GPIO_OUTPUT_MODE_GP_PUSH_PULL   = 0  // Output mode general purpose push/pull
-	GPIO_OUTPUT_MODE_GP_OPEN_DRAIN  = 4  // Output mode general purpose open drain
-	GPIO_OUTPUT_MODE_ALT_PUSH_PULL  = 8  // Output mode alt. purpose push/pull
-	GPIO_OUTPUT_MODE_ALT_OPEN_DRAIN = 12 // Output mode alt. purpose open drain
+	PinOutputModeGPPushPull   PinMode = 0  // Output mode general purpose push/pull
+	PinOutputModeGPOpenDrain  PinMode = 4  // Output mode general purpose open drain
+	PinOutputModeAltPushPull  PinMode = 8  // Output mode alt. purpose push/pull
+	PinOutputModeAltOpenDrain PinMode = 12 // Output mode alt. purpose open drain
 )
 
-func (p GPIO) getPort() *stm32.GPIO_Type {
-	switch p.Pin / 16 {
+func (p Pin) getPort() *stm32.GPIO_Type {
+	switch p / 16 {
 	case 0:
 		return stm32.GPIOA
 	case 1:
@@ -52,8 +52,8 @@ func (p GPIO) getPort() *stm32.GPIO_Type {
 }
 
 // enableClock enables the clock for this desired GPIO port.
-func (p GPIO) enableClock() {
-	switch p.Pin / 16 {
+func (p Pin) enableClock() {
+	switch p / 16 {
 	case 0:
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_IOPAEN)
 	case 1:
@@ -74,12 +74,12 @@ func (p GPIO) enableClock() {
 }
 
 // Configure this pin with the given configuration.
-func (p GPIO) Configure(config GPIOConfig) {
+func (p Pin) Configure(config PinConfig) {
 	// Configure the GPIO pin.
 	p.enableClock()
 	port := p.getPort()
-	pin := p.Pin % 16
-	pos := p.Pin % 8 * 4
+	pin := uint8(p) % 16
+	pos := uint8(p) % 8 * 4
 	if pin < 8 {
 		port.CRL.Set((uint32(port.CRL.Get()) &^ (0xf << pos)) | (uint32(config.Mode) << pos))
 	} else {
@@ -89,9 +89,9 @@ func (p GPIO) Configure(config GPIOConfig) {
 
 // Set the pin to high or low.
 // Warning: only use this on an output pin!
-func (p GPIO) Set(high bool) {
+func (p Pin) Set(high bool) {
 	port := p.getPort()
-	pin := p.Pin % 16
+	pin := uint8(p) % 16
 	if high {
 		port.BSRR.Set(1 << pin)
 	} else {
@@ -124,12 +124,12 @@ func (uart UART) Configure(config UARTConfig) {
 		// use alternate TX/RX pins PB6/PB7 via AFIO mapping
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_AFIOEN)
 		stm32.AFIO.MAPR.SetBits(stm32.AFIO_MAPR_USART1_REMAP)
-		GPIO{PB6}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
-		GPIO{PB7}.Configure(GPIOConfig{Mode: GPIO_INPUT_MODE_FLOATING})
+		PB6.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
+		PB7.Configure(PinConfig{Mode: PinInputModeFloating})
 	default:
 		// use standard TX/RX pins PA9 and PA10
-		GPIO{UART_TX_PIN}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
-		GPIO{UART_RX_PIN}.Configure(GPIOConfig{Mode: GPIO_INPUT_MODE_FLOATING})
+		UART_TX_PIN.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
+		UART_RX_PIN.Configure(PinConfig{Mode: PinInputModeFloating})
 	}
 
 	// Enable USART1 clock
@@ -183,9 +183,9 @@ var (
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {
 	Frequency uint32
-	SCK       uint8
-	MOSI      uint8
-	MISO      uint8
+	SCK       Pin
+	MOSI      Pin
+	MISO      Pin
 	LSBFirst  bool
 	Mode      uint8
 }
@@ -280,7 +280,7 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return byte(spi.Bus.DR.Get()), nil
 }
 
-func (spi SPI) setPins(sck, mosi, miso uint8) {
+func (spi SPI) setPins(sck, mosi, miso Pin) {
 	if sck == 0 {
 		sck = SPI0_SCK_PIN
 	}
@@ -291,9 +291,9 @@ func (spi SPI) setPins(sck, mosi, miso uint8) {
 		miso = SPI0_MISO_PIN
 	}
 
-	GPIO{sck}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
-	GPIO{mosi}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_PUSH_PULL})
-	GPIO{miso}.Configure(GPIOConfig{Mode: GPIO_INPUT_MODE_FLOATING})
+	sck.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
+	mosi.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
+	miso.Configure(PinConfig{Mode: PinInputModeFloating})
 }
 
 // I2C on the STM32F103xx.
@@ -312,8 +312,8 @@ var (
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
 	Frequency uint32
-	SCL       uint8
-	SDA       uint8
+	SCL       Pin
+	SDA       Pin
 }
 
 // Configure is intended to setup the I2C interface.
@@ -339,8 +339,8 @@ func (i2c I2C) Configure(config I2CConfig) {
 		config.SCL = SCL_PIN
 	}
 
-	GPIO{config.SDA}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_OPEN_DRAIN})
-	GPIO{config.SCL}.Configure(GPIOConfig{Mode: GPIO_OUTPUT_50MHz + GPIO_OUTPUT_MODE_ALT_OPEN_DRAIN})
+	config.SDA.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltOpenDrain})
+	config.SCL.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltOpenDrain})
 
 	// Disable the selected I2C peripheral to configure
 	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_PE)

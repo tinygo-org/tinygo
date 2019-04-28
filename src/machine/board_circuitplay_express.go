@@ -17,7 +17,7 @@ const (
 	D8  = PB23
 	D9  = PA06
 	D10 = PA07
-	D11 = 0xff // does not seem to exist
+	D11 = NoPin // does not seem to exist
 	D12 = PA02
 	D13 = PA17 // PWM available
 )
@@ -80,12 +80,12 @@ var (
 	I2C0 = I2C{Bus: sam.SERCOM5_I2CM,
 		SDA:     SDA_PIN,
 		SCL:     SCL_PIN,
-		PinMode: GPIO_SERCOM}
+		PinMode: PinSERCOM}
 	// internal device
 	I2C1 = I2C{Bus: sam.SERCOM1_I2CM,
 		SDA:     SDA1_PIN,
 		SCL:     SCL1_PIN,
-		PinMode: GPIO_SERCOM_ALT}
+		PinMode: PinSERCOMAlt}
 )
 
 // SPI pins (internal flash)
@@ -104,7 +104,7 @@ var (
 const (
 	I2S_SCK_PIN = PA10
 	I2S_SD_PIN  = PA08
-	I2S_WS_PIN  = 0xff // no WS, instead uses SCK to sync
+	I2S_WS_PIN  = NoPin // no WS, instead uses SCK to sync
 )
 
 // I2S on the Circuit Playground Express.

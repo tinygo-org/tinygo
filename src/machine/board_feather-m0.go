@@ -6,14 +6,14 @@ import "device/sam"
 
 // GPIO Pins
 const (
-	D0  = PA11 // UART0 RX
-	D1  = PA10 // UART0 TX
-	D2  = 0xff // does not seem to exist
+	D0  = PA11  // UART0 RX
+	D1  = PA10  // UART0 TX
+	D2  = NoPin // does not seem to exist
 	D3  = PA09
 	D4  = PA08
-	D5  = PA15 // PWM available
-	D6  = PA20 // PWM available
-	D7  = 0xff // does not seem to exist
+	D5  = PA15  // PWM available
+	D6  = PA20  // PWM available
+	D7  = NoPin // does not seem to exist
 	D8  = PA06
 	D9  = PA07 // PWM available
 	D10 = PA18 // can be used for PWM or UART1 TX
@@ -59,7 +59,7 @@ var (
 	I2C0 = I2C{Bus: sam.SERCOM3_I2CM,
 		SDA:     SDA_PIN,
 		SCL:     SCL_PIN,
-		PinMode: GPIO_SERCOM}
+		PinMode: PinSERCOM}
 )
 
 // SPI pins
@@ -78,5 +78,5 @@ var (
 const (
 	I2S_SCK_PIN = PA10
 	I2S_SD_PIN  = PA08
-	I2S_WS_PIN  = 0xff // TODO: figure out what this is on Feather M0.
+	I2S_WS_PIN  = NoPin // TODO: figure out what this is on Feather M0.
 )

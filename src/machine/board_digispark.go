@@ -3,5 +3,5 @@
 package machine
 
 const (
-	LED = 1
+	LED Pin = 1
 )

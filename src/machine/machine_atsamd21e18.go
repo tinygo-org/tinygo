@@ -13,100 +13,100 @@ import (
 
 // Return the register and mask to enable a given GPIO pin. This can be used to
 // implement bit-banged drivers.
-func (p GPIO) PortMaskSet() (*uint32, uint32) {
-	return &sam.PORT.OUTSET0.Reg, 1 << p.Pin
+func (p Pin) PortMaskSet() (*uint32, uint32) {
+	return &sam.PORT.OUTSET0.Reg, 1 << uint8(p)
 }
 
 // Return the register and mask to disable a given port. This can be used to
 // implement bit-banged drivers.
-func (p GPIO) PortMaskClear() (*uint32, uint32) {
-	return &sam.PORT.OUTCLR0.Reg, 1 << p.Pin
+func (p Pin) PortMaskClear() (*uint32, uint32) {
+	return &sam.PORT.OUTCLR0.Reg, 1 << uint8(p)
 }
 
 // Set the pin to high or low.
 // Warning: only use this on an output pin!
-func (p GPIO) Set(high bool) {
+func (p Pin) Set(high bool) {
 	if high {
-		sam.PORT.OUTSET0.Set(1 << p.Pin)
+		sam.PORT.OUTSET0.Set(1 << uint8(p))
 	} else {
-		sam.PORT.OUTCLR0.Set(1 << p.Pin)
+		sam.PORT.OUTCLR0.Set(1 << uint8(p))
 	}
 }
 
 // Get returns the current value of a GPIO pin.
-func (p GPIO) Get() bool {
-	return (sam.PORT.IN0.Get()>>p.Pin)&1 > 0
+func (p Pin) Get() bool {
+	return (sam.PORT.IN0.Get()>>uint8(p))&1 > 0
 }
 
 // Configure this pin with the given configuration.
-func (p GPIO) Configure(config GPIOConfig) {
+func (p Pin) Configure(config PinConfig) {
 	switch config.Mode {
-	case GPIO_OUTPUT:
-		sam.PORT.DIRSET0.Set(1 << p.Pin)
+	case PinOutput:
+		sam.PORT.DIRSET0.Set(1 << uint8(p))
 		// output is also set to input enable so pin can read back its own value
 		p.setPinCfg(sam.PORT_PINCFG0_INEN)
 
-	case GPIO_INPUT:
-		sam.PORT.DIRCLR0.Set(1 << p.Pin)
+	case PinInput:
+		sam.PORT.DIRCLR0.Set(1 << uint8(p))
 		p.setPinCfg(sam.PORT_PINCFG0_INEN)
 
-	case GPIO_INPUT_PULLDOWN:
-		sam.PORT.DIRCLR0.Set(1 << p.Pin)
-		sam.PORT.OUTCLR0.Set(1 << p.Pin)
+	case PinInputPulldown:
+		sam.PORT.DIRCLR0.Set(1 << uint8(p))
+		sam.PORT.OUTCLR0.Set(1 << uint8(p))
 		p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
 
-	case GPIO_INPUT_PULLUP:
-		sam.PORT.DIRCLR0.Set(1 << p.Pin)
-		sam.PORT.OUTSET0.Set(1 << p.Pin)
+	case PinInputPullup:
+		sam.PORT.DIRCLR0.Set(1 << uint8(p))
+		sam.PORT.OUTSET0.Set(1 << uint8(p))
 		p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
 
-	case GPIO_SERCOM:
-		if p.Pin&1 > 0 {
+	case PinSERCOM:
+		if uint8(p)&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXE_Msk
-			p.setPMux(val | (GPIO_SERCOM << sam.PORT_PMUX0_PMUXO_Pos))
+			p.setPMux(val | (uint8(PinSERCOM) << sam.PORT_PMUX0_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
-			p.setPMux(val | (GPIO_SERCOM << sam.PORT_PMUX0_PMUXE_Pos))
+			p.setPMux(val | (uint8(PinSERCOM) << sam.PORT_PMUX0_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR | sam.PORT_PINCFG0_INEN)
 
-	case GPIO_SERCOM_ALT:
-		if p.Pin&1 > 0 {
+	case PinSERCOMAlt:
+		if uint8(p)&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXE_Msk
-			p.setPMux(val | (GPIO_SERCOM_ALT << sam.PORT_PMUX0_PMUXO_Pos))
+			p.setPMux(val | (uint8(PinSERCOMAlt) << sam.PORT_PMUX0_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
-			p.setPMux(val | (GPIO_SERCOM_ALT << sam.PORT_PMUX0_PMUXE_Pos))
+			p.setPMux(val | (uint8(PinSERCOMAlt) << sam.PORT_PMUX0_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR)
 
-	case GPIO_COM:
-		if p.Pin&1 > 0 {
+	case PinCom:
+		if uint8(p)&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXE_Msk
-			p.setPMux(val | (GPIO_COM << sam.PORT_PMUX0_PMUXO_Pos))
+			p.setPMux(val | (uint8(PinCom) << sam.PORT_PMUX0_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
-			p.setPMux(val | (GPIO_COM << sam.PORT_PMUX0_PMUXE_Pos))
+			p.setPMux(val | (uint8(PinCom) << sam.PORT_PMUX0_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN)
-	case GPIO_ANALOG:
-		if p.Pin&1 > 0 {
+	case PinAnalog:
+		if uint8(p)&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXE_Msk
-			p.setPMux(val | (GPIO_ANALOG << sam.PORT_PMUX0_PMUXO_Pos))
+			p.setPMux(val | (uint8(PinAnalog) << sam.PORT_PMUX0_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
-			p.setPMux(val | (GPIO_ANALOG << sam.PORT_PMUX0_PMUXE_Pos))
+			p.setPMux(val | (uint8(PinAnalog) << sam.PORT_PMUX0_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR)
@@ -114,9 +114,8 @@ func (p GPIO) Configure(config GPIOConfig) {
 }
 
 // getPMux returns the value for the correct PMUX register for this pin.
-func getPMux(p uint8) uint8 {
-	pin := p >> 1
-	switch pin {
+func (p Pin) getPMux() uint8 {
+	switch p >> 1 {
 	case 0:
 		return sam.PORT.PMUX0_0.Get()
 	case 1:
@@ -155,9 +154,8 @@ func getPMux(p uint8) uint8 {
 }
 
 // setPMux sets the value for the correct PMUX register for this pin.
-func setPMux(p uint8, val uint8) {
-	pin := p >> 1
-	switch pin {
+func (p Pin) setPMux(val uint8) {
+	switch p >> 1 {
 	case 0:
 		sam.PORT.PMUX0_0.Set(val)
 	case 1:
@@ -194,7 +192,7 @@ func setPMux(p uint8, val uint8) {
 }
 
 // getPinCfg returns the value for the correct PINCFG register for this pin.
-func getPinCfg(p uint8) uint8 {
+func (p Pin) getPinCfg() uint8 {
 	switch p {
 	case 0:
 		return sam.PORT.PINCFG0_0.Get()
@@ -266,7 +264,7 @@ func getPinCfg(p uint8) uint8 {
 }
 
 // setPinCfg sets the value for the correct PINCFG register for this pin.
-func setPinCfg(p uint8, val uint8) {
+func (p Pin) setPinCfg(val uint8) {
 	switch p {
 	case 0:
 		sam.PORT.PINCFG0_0.Set(val)

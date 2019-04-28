@@ -13,15 +13,15 @@ const CPU_FREQUENCY = 168000000
 
 const (
 	// Mode Flag
-	GPIO_OUTPUT         = 0
-	GPIO_INPUT          = GPIO_INPUT_PULLDOWN
-	GPIO_INPUT_FLOATING = 1
-	GPIO_INPUT_PULLDOWN = 2
-	GPIO_INPUT_PULLUP   = 3
+	PinOutput        PinMode = 0
+	PinInput         PinMode = PinInputFloating
+	PinInputFloating PinMode = 1
+	PinInputPulldown PinMode = 2
+	PinInputPullup   PinMode = 3
 
 	// for UART
-	GPIO_UART_TX = 4
-	GPIO_UART_RX = 5
+	PinModeUartTX PinMode = 4
+	PinModeUartRX PinMode = 5
 
 	//GPIOx_MODER
 	GPIO_MODE_INPUT          = 0
@@ -45,8 +45,8 @@ const (
 	GPIO_PULL_DOWN = 2
 )
 
-func (p GPIO) getPort() *stm32.GPIO_Type {
-	switch p.Pin / 16 {
+func (p Pin) getPort() *stm32.GPIO_Type {
+	switch p / 16 {
 	case 0:
 		return stm32.GPIOA
 	case 1:
@@ -71,8 +71,8 @@ func (p GPIO) getPort() *stm32.GPIO_Type {
 }
 
 // enableClock enables the clock for this desired GPIO port.
-func (p GPIO) enableClock() {
-	switch p.Pin / 16 {
+func (p Pin) enableClock() {
+	switch p / 16 {
 	case 0:
 		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOAEN)
 	case 1:
@@ -97,40 +97,40 @@ func (p GPIO) enableClock() {
 }
 
 // Configure this pin with the given configuration.
-func (p GPIO) Configure(config GPIOConfig) {
+func (p Pin) Configure(config PinConfig) {
 	// Configure the GPIO pin.
 	p.enableClock()
 	port := p.getPort()
-	pin := p.Pin % 16
+	pin := uint8(p) % 16
 	pos := pin * 2
 
-	if config.Mode == GPIO_INPUT_FLOATING {
+	if config.Mode == PinInputFloating {
 		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
 		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_FLOATING) << pos)))
-	} else if config.Mode == GPIO_INPUT_PULLDOWN {
+	} else if config.Mode == PinInputPulldown {
 		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
 		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_PULL_DOWN) << pos)))
-	} else if config.Mode == GPIO_INPUT_PULLUP {
+	} else if config.Mode == PinInputPullup {
 		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
 		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
-	} else if config.Mode == GPIO_OUTPUT {
+	} else if config.Mode == PinOutput {
 		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_GENERAL_OUTPUT) << pos)))
 		port.OSPEEDR.Set((uint32(port.OSPEEDR.Get())&^(0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
-	} else if config.Mode == GPIO_UART_TX {
+	} else if config.Mode == PinModeUartTX {
 		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
 		port.OSPEEDR.Set((uint32(port.OSPEEDR.Get())&^(0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
 		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
 		p.setAltFunc(0x7)
-	} else if config.Mode == GPIO_UART_RX {
+	} else if config.Mode == PinModeUartRX {
 		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
 		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_FLOATING) << pos)))
 		p.setAltFunc(0x7)
 	}
 }
 
-func (p GPIO) setAltFunc(af uint32) {
+func (p Pin) setAltFunc(af uint32) {
 	port := p.getPort()
-	pin := p.Pin % 16
+	pin := uint8(p) % 16
 	pos := pin * 4
 	if pin >= 8 {
 		port.AFRH.Set(uint32(port.AFRH.Get())&^(0xF<<pos) | ((af & 0xF) << pos))
@@ -141,13 +141,13 @@ func (p GPIO) setAltFunc(af uint32) {
 
 // Set the pin to high or low.
 // Warning: only use this on an output pin!
-func (p GPIO) Set(high bool) {
+func (p Pin) Set(high bool) {
 	port := p.getPort()
-	pin := p.Pin % 16
+	pin := p % 16
 	if high {
-		port.BSRR.Set(1 << pin)
+		port.BSRR.Set(1 << uint8(pin))
 	} else {
-		port.BSRR.Set(1 << (pin + 16))
+		port.BSRR.Set(1 << uint8(pin+16))
 	}
 }
 
@@ -173,8 +173,8 @@ func (uart UART) Configure(config UARTConfig) {
 	switch config.TX {
 	default:
 		// use standard TX/RX pins PA2 and PA3
-		GPIO{UART_TX_PIN}.Configure(GPIOConfig{Mode: GPIO_UART_TX})
-		GPIO{UART_RX_PIN}.Configure(GPIOConfig{Mode: GPIO_UART_RX})
+		UART_TX_PIN.Configure(PinConfig{Mode: PinModeUartTX})
+		UART_RX_PIN.Configure(PinConfig{Mode: PinModeUartRX})
 	}
 
 	// Enable USART2 clock

@@ -11,8 +11,8 @@ import (
 func main() {
 	machine.InitADC()
 
-	led := machine.GPIO{machine.LED}
-	led.Configure(machine.GPIOConfig{Mode: machine.GPIO_OUTPUT})
+	led := machine.LED
+	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	sensor := machine.ADC{machine.ADC2}
 	sensor.Configure()
