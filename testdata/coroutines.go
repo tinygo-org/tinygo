@@ -21,6 +21,10 @@ func main() {
 	go nowait()
 	time.Sleep(time.Millisecond)
 	println("done with non-blocking goroutine")
+
+	var printer Printer
+	printer = &myPrinter{}
+	printer.Print()
 }
 
 func sub() {
@@ -37,4 +41,16 @@ func wait() {
 
 func nowait() {
 	println("non-blocking goroutine")
+}
+
+type Printer interface {
+	Print()
+}
+
+type myPrinter struct{
+}
+
+func (i *myPrinter) Print() {
+	time.Sleep(time.Millisecond)
+	println("async interface method call")
 }
