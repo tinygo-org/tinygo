@@ -7,5 +7,6 @@ wait:
   wait start
   wait end
 end waiting
+value produced after some time: 42
 non-blocking goroutine
 done with non-blocking goroutine

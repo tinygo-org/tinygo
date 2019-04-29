@@ -107,6 +107,14 @@ func activateTask(task *coroutine) {
 	runqueuePushBack(task)
 }
 
+func setTaskData(task *coroutine, value unsafe.Pointer) {
+	task.promise().data = uint(uintptr(value))
+}
+
+func getTaskData(task *coroutine) unsafe.Pointer {
+	return unsafe.Pointer(uintptr(task.promise().data))
+}
+
 // Add this task to the end of the run queue. May also destroy the task if it's
 // done.
 func runqueuePushBack(t *coroutine) {

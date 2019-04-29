@@ -10,8 +10,8 @@ package compiler
 //         go foo()
 //         time.Sleep(2 * time.Second)
 //         println("some other operation")
-//         bar()
-//         println("done")
+//         i := bar()
+//         println("done", *i)
 //     }
 //
 //     func foo() {
@@ -21,9 +21,10 @@ package compiler
 //         }
 //     }
 //
-//     func bar() {
+//     func bar() *int {
 //         time.Sleep(time.Second)
 //         println("blocking operation completed)
+//         return new(int)
 //     }
 //
 // It is transformed by the IR generator in compiler.go into the following
@@ -34,8 +35,8 @@ package compiler
 //         fn()
 //         time.Sleep(2 * time.Second)
 //         println("some other operation")
-//         bar() // imagine an 'await' keyword in front of this call
-//         println("done")
+//         i := bar() // imagine an 'await' keyword in front of this call
+//         println("done", *i)
 //     }
 //
 //     func foo() {
@@ -45,9 +46,10 @@ package compiler
 //         }
 //     }
 //
-//     func bar() {
+//     func bar() *int {
 //         time.Sleep(time.Second)
 //         println("blocking operation completed)
+//         return new(int)
 //     }
 //
 // The pass in this file transforms this code even further, to the following
@@ -59,9 +61,11 @@ package compiler
 //         runtime.sleepTask(hdl, 2 * time.Second) // ask the scheduler to re-activate this coroutine at the right time
 //         llvm.suspend(hdl)                       // suspend point
 //         println("some other operation")
+//         var i *int                              // allocate space on the stack for the return value
+//         runtime.setTaskData(hdl, &i)            // store return value alloca in our coroutine promise
 //         bar(hdl)                                // await, pass a continuation (hdl) to bar
 //         llvm.suspend(hdl)                       // suspend point, wait for the callee to re-activate
-//         println("done")
+//         println("done", *i)
 //         runtime.activateTask(parent)            // re-activate the parent (nop, there is no parent)
 //     }
 //
@@ -145,7 +149,8 @@ func (c *Compiler) LowerGoroutines() error {
 	c.mod.NamedFunction("runtime.chanSend").SetLinkage(llvm.InternalLinkage)
 	c.mod.NamedFunction("runtime.chanRecv").SetLinkage(llvm.InternalLinkage)
 	c.mod.NamedFunction("runtime.sleepTask").SetLinkage(llvm.InternalLinkage)
-	c.mod.NamedFunction("runtime.activateTask").SetLinkage(llvm.InternalLinkage)
+	c.mod.NamedFunction("runtime.setTaskData").SetLinkage(llvm.InternalLinkage)
+	c.mod.NamedFunction("runtime.getTaskData").SetLinkage(llvm.InternalLinkage)
 	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.InternalLinkage)
 
 	return nil
@@ -347,10 +352,18 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			// Split this basic block.
 			await := c.splitBasicBlock(inst, llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.await")
 
-			// Set task state to TASK_STATE_CALL.
-			c.builder.SetInsertPointAtEnd(inst.InstructionParent())
+			// Allocate space for the return value.
+			var retvalAlloca llvm.Value
+			if inst.Type().TypeKind() != llvm.VoidTypeKind {
+				c.builder.SetInsertPointBefore(inst.InstructionParent().Parent().EntryBasicBlock().FirstInstruction())
+				retvalAlloca = c.builder.CreateAlloca(inst.Type(), "coro.retvalAlloca")
+				c.builder.SetInsertPointBefore(inst)
+				data := c.builder.CreateBitCast(retvalAlloca, c.i8ptrType, "")
+				c.createRuntimeCall("setTaskData", []llvm.Value{frame.taskHandle, data}, "")
+			}
 
 			// Suspend.
+			c.builder.SetInsertPointAtEnd(inst.InstructionParent())
 			continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
 				llvm.ConstNull(c.ctx.TokenType()),
 				llvm.ConstInt(c.ctx.Int1Type(), 0, false),
@@ -358,44 +371,63 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
 			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), await)
 			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
+
+			if inst.Type().TypeKind() != llvm.VoidTypeKind {
+				// Load the return value from the alloca. The callee has
+				// written the return value to it.
+				c.builder.SetInsertPointBefore(await.FirstInstruction())
+				retval := c.builder.CreateLoad(retvalAlloca, "coro.retval")
+				inst.ReplaceAllUsesWith(retval)
+			}
 		}
 
 		// Replace return instructions with suspend points that should
 		// reactivate the parent coroutine.
 		for _, inst := range returns {
-			if inst.OperandsCount() == 0 {
-				// These properties were added by the functionattrs pass.
-				// Remove them, because now we start using the parameter.
-				// https://llvm.org/docs/Passes.html#functionattrs-deduce-function-attributes
-				for _, kind := range []string{"nocapture", "readnone"} {
-					kindID := llvm.AttributeKindID(kind)
-					f.RemoveEnumAttributeAtIndex(f.ParamsCount(), kindID)
-				}
-
-				// Reactivate the parent coroutine. This adds it back to
-				// the run queue, so it is started again by the
-				// scheduler when possible (possibly right after the
-				// following suspend).
-				c.builder.SetInsertPointBefore(inst)
-
-				parentHandle := f.LastParam()
-				c.createRuntimeCall("activateTask", []llvm.Value{parentHandle}, "")
-
-				// Suspend this coroutine.
-				// It would look like this is unnecessary, but if this
-				// suspend point is left out, it leads to undefined
-				// behavior somehow (with the unreachable instruction).
-				continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
-					llvm.ConstNull(c.ctx.TokenType()),
-					llvm.ConstInt(c.ctx.Int1Type(), 1, false),
-				}, "ret")
-				sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-				sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), frame.unreachableBlock)
-				sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
-				inst.EraseFromParentAsInstruction()
-			} else {
-				panic("todo: return value from coroutine")
+			// These properties were added by the functionattrs pass. Remove
+			// them, because now we start using the parameter.
+			// https://llvm.org/docs/Passes.html#functionattrs-deduce-function-attributes
+			for _, kind := range []string{"nocapture", "readnone"} {
+				kindID := llvm.AttributeKindID(kind)
+				f.RemoveEnumAttributeAtIndex(f.ParamsCount(), kindID)
 			}
+
+			c.builder.SetInsertPointBefore(inst)
+
+			parentHandle := f.LastParam()
+
+			// Store return values.
+			switch inst.OperandsCount() {
+			case 0:
+				// Nothing to return.
+			case 1:
+				// Return this value by writing to the pointer stored in the
+				// parent handle. The parent coroutine has made an alloca that
+				// we can write to to store our return value.
+				returnValuePtr := c.createRuntimeCall("getTaskData", []llvm.Value{parentHandle}, "coro.parentData")
+				alloca := c.builder.CreateBitCast(returnValuePtr, llvm.PointerType(inst.Operand(0).Type(), 0), "coro.parentAlloca")
+				c.builder.CreateStore(inst.Operand(0), alloca)
+			default:
+				panic("unreachable")
+			}
+
+			// Reactivate the parent coroutine. This adds it back to the run
+			// queue, so it is started again by the scheduler when possible
+			// (possibly right after the following suspend).
+			c.createRuntimeCall("activateTask", []llvm.Value{parentHandle}, "")
+
+			// Suspend this coroutine.
+			// It would look like this is unnecessary, but if this
+			// suspend point is left out, it leads to undefined
+			// behavior somehow (with the unreachable instruction).
+			continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
+				llvm.ConstNull(c.ctx.TokenType()),
+				llvm.ConstInt(c.ctx.Int1Type(), 1, false),
+			}, "ret")
+			sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
+			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), frame.unreachableBlock)
+			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
+			inst.EraseFromParentAsInstruction()
 		}
 
 		// Coroutine cleanup. Free resources associated with this coroutine.
