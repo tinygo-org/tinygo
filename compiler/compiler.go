@@ -347,6 +347,8 @@ func (c *Compiler) Compile(mainPath string) []error {
 	c.mod.NamedFunction("runtime.chanSend").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.chanRecv").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.sleepTask").SetLinkage(llvm.ExternalLinkage)
+	c.mod.NamedFunction("runtime.setTaskData").SetLinkage(llvm.ExternalLinkage)
+	c.mod.NamedFunction("runtime.getTaskData").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.activateTask").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.ExternalLinkage)
 

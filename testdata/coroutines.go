@@ -15,6 +15,9 @@ func main() {
 	wait()
 	println("end waiting")
 
+	value := delayedValue()
+	println("value produced after some time:", value)
+
 	// Run a non-blocking call in a goroutine. This should be turned into a
 	// regular call, so should be equivalent to calling nowait() without 'go'
 	// prefix.
@@ -37,6 +40,11 @@ func wait() {
 	println("  wait start")
 	time.Sleep(time.Millisecond)
 	println("  wait end")
+}
+
+func delayedValue() int {
+	time.Sleep(time.Millisecond)
+	return 42
 }
 
 func nowait() {
