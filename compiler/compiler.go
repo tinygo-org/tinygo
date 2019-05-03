@@ -197,7 +197,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 		},
 		ShouldOverlay: func(path string) bool {
 			switch path {
-			case "machine", "os", "reflect", "runtime", "sync":
+			case "machine", "os", "reflect", "runtime", "runtime/volatile", "sync":
 				return true
 			default:
 				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
@@ -1106,17 +1106,22 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 
 	// Try to call the function directly for trivially static calls.
 	if fn := instr.StaticCallee(); fn != nil {
-		switch fn.RelString(nil) {
-		case "device/arm.ReadRegister":
+		name := fn.RelString(nil)
+		switch {
+		case name == "device/arm.ReadRegister":
 			return c.emitReadRegister(instr.Args)
-		case "device/arm.Asm", "device/avr.Asm":
+		case name == "device/arm.Asm" || name == "device/avr.Asm":
 			return c.emitAsm(instr.Args)
-		case "device/arm.AsmFull", "device/avr.AsmFull":
+		case name == "device/arm.AsmFull" || name == "device/avr.AsmFull":
 			return c.emitAsmFull(frame, instr)
-		case "device/arm.SVCall0", "device/arm.SVCall1", "device/arm.SVCall2", "device/arm.SVCall3", "device/arm.SVCall4":
+		case strings.HasPrefix(name, "device/arm.SVCall"):
 			return c.emitSVCall(frame, instr.Args)
-		case "syscall.Syscall", "syscall.Syscall6", "syscall.Syscall9":
+		case strings.HasPrefix(name, "syscall.Syscall"):
 			return c.emitSyscall(frame, instr)
+		case strings.HasPrefix(name, "runtime/volatile.Load"):
+			return c.emitVolatileLoad(frame, instr)
+		case strings.HasPrefix(name, "runtime/volatile.Store"):
+			return c.emitVolatileStore(frame, instr)
 		}
 
 		targetFunc := c.ir.GetFunction(fn)
