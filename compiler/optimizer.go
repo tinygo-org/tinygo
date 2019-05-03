@@ -307,18 +307,6 @@ func (c *Compiler) doesEscape(value llvm.Value) bool {
 				return true
 			}
 		} else if use.IsACallInst() != nilValue {
-			// Call only escapes when the (pointer) parameter is not marked
-			// "nocapture". This flag means that the parameter does not escape
-			// the give function.
-			if use.CalledValue().IsAFunction() != nilValue {
-				if use.CalledValue().IsDeclaration() {
-					// Kind of dirty: assume external functions don't let
-					// pointers escape.
-					// TODO: introduce //go:noescape that sets the 'nocapture'
-					// flag on each input parameter.
-					continue
-				}
-			}
 			if !c.hasFlag(use, value, "nocapture") {
 				return true
 			}

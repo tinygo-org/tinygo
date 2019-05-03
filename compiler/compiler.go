@@ -629,6 +629,18 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) *Frame {
 		frame.fn.LLVMFn = llvm.AddFunction(c.mod, name, fnType)
 	}
 
+	// External/exported functions may not retain pointer values.
+	// https://golang.org/cmd/cgo/#hdr-Passing_pointers
+	if f.IsExported() {
+		nocaptureKind := llvm.AttributeKindID("nocapture")
+		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
+		for i, typ := range paramTypes {
+			if typ.TypeKind() == llvm.PointerTypeKind {
+				frame.fn.LLVMFn.AddAttributeAtIndex(i+1, nocapture)
+			}
+		}
+	}
+
 	return frame
 }
 
