@@ -82,6 +82,7 @@ commands:
       - run: tinygo build -size short -o test.elf -target=circuitplay-express examples/blinky1
       - run: tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky1
       - run: tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky2
+      - run: tinygo build -size short -o test.elf -target=circuitplay-express examples/i2s
       - run: tinygo build             -o wasm.wasm -target=wasm               examples/wasm/export
       - run: tinygo build             -o wasm.wasm -target=wasm               examples/wasm/main
   test-linux:
