@@ -153,11 +153,6 @@ package {pkgName}
 
 import "unsafe"
 
-// Special type that causes loads/stores to be volatile (necessary for
-// memory-mapped registers).
-//go:volatile
-type RegValue uint8
-
 // Some information about this device.
 const (
 	DEVICE     = "{name}"
@@ -179,7 +174,7 @@ const (
         out.write('\n\t// {description}\n'.format(**peripheral))
         for register in peripheral['registers']:
             for variant in register['variants']:
-                out.write('\t{name} = (*RegValue)(unsafe.Pointer(uintptr(0x{address:x})))\n'.format(**variant))
+                out.write('\t{name} = (*uint8)(unsafe.Pointer(uintptr(0x{address:x})))\n'.format(**variant))
     out.write(')\n')
 
     for peripheral in device.peripherals:

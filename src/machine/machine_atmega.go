@@ -4,21 +4,22 @@ package machine
 
 import (
 	"device/avr"
+	"runtime/volatile"
 )
 
 // Configure sets the pin to input or output.
 func (p GPIO) Configure(config GPIOConfig) {
 	if config.Mode == GPIO_OUTPUT { // set output bit
 		if p.Pin < 8 {
-			*avr.DDRD |= 1 << p.Pin
+			volatile.StoreUint8(avr.DDRD, *avr.DDRD|1<<p.Pin)
 		} else {
-			*avr.DDRB |= 1 << (p.Pin - 8)
+			volatile.StoreUint8(avr.DDRB, *avr.DDRB|1<<(p.Pin-8))
 		}
 	} else { // configure input: clear output bit
 		if p.Pin < 8 {
-			*avr.DDRD &^= 1 << p.Pin
+			volatile.StoreUint8(avr.DDRD, *avr.DDRD&^1<<p.Pin)
 		} else {
-			*avr.DDRB &^= 1 << (p.Pin - 8)
+			volatile.StoreUint8(avr.DDRB, *avr.DDRB&^1<<(p.Pin-8))
 		}
 	}
 }
@@ -26,15 +27,15 @@ func (p GPIO) Configure(config GPIOConfig) {
 // Get returns the current value of a GPIO pin.
 func (p GPIO) Get() bool {
 	if p.Pin < 8 {
-		val := *avr.PIND & (1 << p.Pin)
+		val := volatile.LoadUint8(avr.PIND) & (1 << p.Pin)
 		return (val > 0)
 	} else {
-		val := *avr.PINB & (1 << (p.Pin - 8))
+		val := volatile.LoadUint8(avr.PINB) & (1 << (p.Pin - 8))
 		return (val > 0)
 	}
 }
 
-func (p GPIO) getPortMask() (*avr.RegValue, uint8) {
+func (p GPIO) getPortMask() (*uint8, uint8) {
 	if p.Pin < 8 {
 		return avr.PORTD, 1 << p.Pin
 	} else {
@@ -45,30 +46,30 @@ func (p GPIO) getPortMask() (*avr.RegValue, uint8) {
 // InitPWM initializes the registers needed for PWM.
 func InitPWM() {
 	// use waveform generation
-	*avr.TCCR0A |= avr.TCCR0A_WGM00
+	volatile.StoreUint8(avr.TCCR0A, volatile.LoadUint8(avr.TCCR0A)|avr.TCCR0A_WGM00)
 
 	// set timer 0 prescale factor to 64
-	*avr.TCCR0B |= avr.TCCR0B_CS01 | avr.TCCR0B_CS00
+	volatile.StoreUint8(avr.TCCR0B, volatile.LoadUint8(avr.TCCR0B)|avr.TCCR0B_CS01|avr.TCCR0B_CS00)
 
 	// set timer 1 prescale factor to 64
-	*avr.TCCR1B |= avr.TCCR1B_CS11
+	volatile.StoreUint8(avr.TCCR1B, volatile.LoadUint8(avr.TCCR1B)|avr.TCCR1B_CS11)
 
 	// put timer 1 in 8-bit phase correct pwm mode
-	*avr.TCCR1A |= avr.TCCR1A_WGM10
+	volatile.StoreUint8(avr.TCCR1A, volatile.LoadUint8(avr.TCCR1A)|avr.TCCR1A_WGM10)
 
 	// set timer 2 prescale factor to 64
-	*avr.TCCR2B |= avr.TCCR2B_CS22
+	volatile.StoreUint8(avr.TCCR2B, volatile.LoadUint8(avr.TCCR2B)|avr.TCCR2B_CS22)
 
 	// configure timer 2 for phase correct pwm (8-bit)
-	*avr.TCCR2A |= avr.TCCR2A_WGM20
+	volatile.StoreUint8(avr.TCCR2A, volatile.LoadUint8(avr.TCCR2A)|avr.TCCR2A_WGM20)
 }
 
 // Configure configures a PWM pin for output.
 func (pwm PWM) Configure() {
 	if pwm.Pin < 8 {
-		*avr.DDRD |= 1 << pwm.Pin
+		volatile.StoreUint8(avr.DDRD, volatile.LoadUint8(avr.DDRD)|1<<pwm.Pin)
 	} else {
-		*avr.DDRB |= 1 << (pwm.Pin - 8)
+		volatile.StoreUint8(avr.DDRB, volatile.LoadUint8(avr.DDRB)|1<<(pwm.Pin-8))
 	}
 }
 
@@ -79,30 +80,30 @@ func (pwm PWM) Set(value uint16) {
 	switch pwm.Pin {
 	case 3:
 		// connect pwm to pin on timer 2, channel B
-		*avr.TCCR2A |= avr.TCCR2A_COM2B1
-		*avr.OCR2B = avr.RegValue(value8) // set pwm duty
+		volatile.StoreUint8(avr.TCCR2A, volatile.LoadUint8(avr.TCCR2A)|avr.TCCR2A_COM2B1)
+		volatile.StoreUint8(avr.OCR2B, uint8(value8)) // set pwm duty
 	case 5:
 		// connect pwm to pin on timer 0, channel B
-		*avr.TCCR0A |= avr.TCCR0A_COM0B1
-		*avr.OCR0B = avr.RegValue(value8) // set pwm duty
+		volatile.StoreUint8(avr.TCCR0A, volatile.LoadUint8(avr.TCCR0A)|avr.TCCR0A_COM0B1)
+		volatile.StoreUint8(avr.OCR0B, uint8(value8)) // set pwm duty
 	case 6:
 		// connect pwm to pin on timer 0, channel A
-		*avr.TCCR0A |= avr.TCCR0A_COM0A1
-		*avr.OCR0A = avr.RegValue(value8) // set pwm duty
+		volatile.StoreUint8(avr.TCCR0A, volatile.LoadUint8(avr.TCCR0A)|avr.TCCR0A_COM0A1)
+		volatile.StoreUint8(avr.OCR0A, uint8(value8)) // set pwm duty
 	case 9:
 		// connect pwm to pin on timer 1, channel A
-		*avr.TCCR1A |= avr.TCCR1A_COM1A1
+		volatile.StoreUint8(avr.TCCR1A, volatile.LoadUint8(avr.TCCR1A)|avr.TCCR1A_COM1A1)
 		// this is a 16-bit value, but we only currently allow the low order bits to be set
-		*avr.OCR1AL = avr.RegValue(value8) // set pwm duty
+		volatile.StoreUint8(avr.OCR1AL, uint8(value8)) // set pwm duty
 	case 10:
 		// connect pwm to pin on timer 1, channel B
-		*avr.TCCR1A |= avr.TCCR1A_COM1B1
+		volatile.StoreUint8(avr.TCCR1A, volatile.LoadUint8(avr.TCCR1A)|avr.TCCR1A_COM1B1)
 		// this is a 16-bit value, but we only currently allow the low order bits to be set
-		*avr.OCR1BL = avr.RegValue(value8) // set pwm duty
+		volatile.StoreUint8(avr.OCR1BL, uint8(value8)) // set pwm duty
 	case 11:
 		// connect pwm to pin on timer 2, channel A
-		*avr.TCCR2A |= avr.TCCR2A_COM2A1
-		*avr.OCR2A = avr.RegValue(value8) // set pwm duty
+		volatile.StoreUint8(avr.TCCR2A, volatile.LoadUint8(avr.TCCR2A)|avr.TCCR2A_COM2A1)
+		volatile.StoreUint8(avr.OCR2A, uint8(value8)) // set pwm duty
 	default:
 		panic("Invalid PWM pin")
 	}
@@ -121,19 +122,19 @@ func (i2c I2C) Configure(config I2CConfig) {
 	}
 
 	// Activate internal pullups for twi.
-	*avr.PORTC |= (avr.DIDR0_ADC4D | avr.DIDR0_ADC5D)
+	volatile.StoreUint8(avr.PORTC, volatile.LoadUint8(avr.PORTC)|(avr.DIDR0_ADC4D|avr.DIDR0_ADC5D))
 
 	// Initialize twi prescaler and bit rate.
-	*avr.TWSR |= (avr.TWSR_TWPS0 | avr.TWSR_TWPS1)
+	volatile.StoreUint8(avr.TWSR, volatile.LoadUint8(avr.TWSR)|(avr.TWSR_TWPS0|avr.TWSR_TWPS1))
 
 	// twi bit rate formula from atmega128 manual pg. 204:
 	// SCL Frequency = CPU Clock Frequency / (16 + (2 * TWBR))
 	// NOTE: TWBR should be 10 or higher for master mode.
 	// It is 72 for a 16mhz board with 100kHz TWI
-	*avr.TWBR = avr.RegValue(((CPU_FREQUENCY / config.Frequency) - 16) / 2)
+	volatile.StoreUint8(avr.TWBR, uint8(((CPU_FREQUENCY)/config.Frequency)-16)/2)
 
 	// Enable twi module.
-	*avr.TWCR = avr.TWCR_TWEN
+	volatile.StoreUint8(avr.TWCR, avr.TWCR_TWEN)
 }
 
 // Tx does a single I2C transaction at the specified address.
@@ -162,10 +163,10 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 // start starts an I2C communication session.
 func (i2c I2C) start(address uint8, write bool) {
 	// Clear TWI interrupt flag, put start condition on SDA, and enable TWI.
-	*avr.TWCR = (avr.TWCR_TWINT | avr.TWCR_TWSTA | avr.TWCR_TWEN)
+	volatile.StoreUint8(avr.TWCR, (avr.TWCR_TWINT | avr.TWCR_TWSTA | avr.TWCR_TWEN))
 
 	// Wait till start condition is transmitted.
-	for (*avr.TWCR & avr.TWCR_TWINT) == 0 {
+	for (volatile.LoadUint8(avr.TWCR) & avr.TWCR_TWINT) == 0 {
 	}
 
 	// Write 7-bit shifted peripheral address.
@@ -179,36 +180,36 @@ func (i2c I2C) start(address uint8, write bool) {
 // stop ends an I2C communication session.
 func (i2c I2C) stop() {
 	// Send stop condition.
-	*avr.TWCR = (avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWSTO)
+	volatile.StoreUint8(avr.TWCR, (avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWSTO))
 
 	// Wait for stop condition to be executed on bus.
-	for (*avr.TWCR & avr.TWCR_TWSTO) == 0 {
+	for (volatile.LoadUint8(avr.TWCR) & avr.TWCR_TWSTO) == 0 {
 	}
 }
 
 // writeByte writes a single byte to the I2C bus.
 func (i2c I2C) writeByte(data byte) {
 	// Write data to register.
-	*avr.TWDR = avr.RegValue(data)
+	volatile.StoreUint8(avr.TWDR, uint8(data))
 
 	// Clear TWI interrupt flag and enable TWI.
-	*avr.TWCR = (avr.TWCR_TWEN | avr.TWCR_TWINT)
+	volatile.StoreUint8(avr.TWCR, (avr.TWCR_TWEN | avr.TWCR_TWINT))
 
 	// Wait till data is transmitted.
-	for (*avr.TWCR & avr.TWCR_TWINT) == 0 {
+	for (volatile.LoadUint8(avr.TWCR) & avr.TWCR_TWINT) == 0 {
 	}
 }
 
 // readByte reads a single byte from the I2C bus.
 func (i2c I2C) readByte() byte {
 	// Clear TWI interrupt flag and enable TWI.
-	*avr.TWCR = (avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWEA)
+	volatile.StoreUint8(avr.TWCR, (avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWEA))
 
 	// Wait till read request is transmitted.
-	for (*avr.TWCR & avr.TWCR_TWINT) == 0 {
+	for (volatile.LoadUint8(avr.TWCR) & avr.TWCR_TWINT) == 0 {
 	}
 
-	return byte(*avr.TWDR)
+	return volatile.LoadUint8(avr.TWDR)
 }
 
 // UART on the AVR.
@@ -226,32 +227,32 @@ func (uart UART) Configure(config UARTConfig) {
 	// https://www.microchip.com/webdoc/AVRLibcReferenceManual/FAQ_1faq_wrong_baud_rate.html
 	// ((F_CPU + UART_BAUD_RATE * 8L) / (UART_BAUD_RATE * 16L) - 1)
 	ps := ((CPU_FREQUENCY+config.BaudRate*8)/(config.BaudRate*16) - 1)
-	*avr.UBRR0H = avr.RegValue(ps >> 8)
-	*avr.UBRR0L = avr.RegValue(ps & 0xff)
+	volatile.StoreUint8(avr.UBRR0H, uint8(ps>>8))
+	volatile.StoreUint8(avr.UBRR0L, uint8(ps&0xff))
 
 	// enable RX, TX and RX interrupt
-	*avr.UCSR0B = avr.UCSR0B_RXEN0 | avr.UCSR0B_TXEN0 | avr.UCSR0B_RXCIE0
+	volatile.StoreUint8(avr.UCSR0B, avr.UCSR0B_RXEN0|avr.UCSR0B_TXEN0|avr.UCSR0B_RXCIE0)
 
 	// 8-bits data
-	*avr.UCSR0C = avr.UCSR0C_UCSZ01 | avr.UCSR0C_UCSZ00
+	volatile.StoreUint8(avr.UCSR0C, avr.UCSR0C_UCSZ01|avr.UCSR0C_UCSZ00)
 }
 
 // WriteByte writes a byte of data to the UART.
 func (uart UART) WriteByte(c byte) error {
 	// Wait until UART buffer is not busy.
-	for (*avr.UCSR0A & avr.UCSR0A_UDRE0) == 0 {
+	for (volatile.LoadUint8(avr.UCSR0A) & avr.UCSR0A_UDRE0) == 0 {
 	}
-	*avr.UDR0 = avr.RegValue(c) // send char
+	volatile.StoreUint8(avr.UDR0, c) // send char
 	return nil
 }
 
 //go:interrupt USART_RX_vect
 func handleUSART_RX() {
 	// Read register to clear it.
-	data := *avr.UDR0
+	data := volatile.LoadUint8(avr.UDR0)
 
 	// Ensure no error.
-	if (*avr.UCSR0A & (avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0)) == 0 {
+	if (volatile.LoadUint8(avr.UCSR0A) & (avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0)) == 0 {
 		// Put data from UDR register into buffer.
 		UART0.Receive(byte(data))
 	}

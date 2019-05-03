@@ -4,24 +4,25 @@ package machine
 
 import (
 	"device/avr"
+	"runtime/volatile"
 )
 
 // Configure sets the pin to input or output.
 func (p GPIO) Configure(config GPIOConfig) {
 	if config.Mode == GPIO_OUTPUT { // set output bit
-		*avr.DDRB |= 1 << p.Pin
+		volatile.StoreUint8(avr.DDRB, *avr.DDRB|1<<p.Pin)
 	} else { // configure input: clear output bit
-		*avr.DDRB &^= 1 << p.Pin
+		volatile.StoreUint8(avr.DDRB, *avr.DDRB&^1<<p.Pin)
 	}
 }
 
-func (p GPIO) getPortMask() (*avr.RegValue, uint8) {
+func (p GPIO) getPortMask() (*uint8, uint8) {
 	return avr.PORTB, 1 << p.Pin
 }
 
 // Get returns the current value of a GPIO pin.
 func (p GPIO) Get() bool {
-	val := *avr.PINB & (1 << p.Pin)
+	val := volatile.LoadUint8(avr.PINB) & (1 << p.Pin)
 	return (val > 0)
 }
 
