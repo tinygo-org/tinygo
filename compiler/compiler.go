@@ -1146,7 +1146,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 		value := c.getValue(frame, instr.Value)
 		// This is a func value, which cannot be called directly. We have to
 		// extract the function pointer and context first from the func value.
-		funcPtr, context, err := c.decodeFuncValue(value, instr.Value.Type().(*types.Signature))
+		funcPtr, context, err := c.decodeFuncValue(value, instr.Value.Type().Underlying().(*types.Signature))
 		if err != nil {
 			return llvm.Value{}, err
 		}
