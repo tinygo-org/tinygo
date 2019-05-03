@@ -24,7 +24,7 @@ import "C"
 // This version uses the built-in linker when trying to use lld.
 func Link(linker string, flags ...string) error {
 	switch linker {
-	case "ld.lld", commands["ld.lld"]:
+	case "ld.lld":
 		flags = append([]string{"tinygo:" + linker}, flags...)
 		var cflag *C.char
 		buf := C.calloc(C.size_t(len(flags)), C.size_t(unsafe.Sizeof(cflag)))
@@ -39,7 +39,7 @@ func Link(linker string, flags ...string) error {
 			return errors.New("failed to link using built-in ld.lld")
 		}
 		return nil
-	case "wasm-ld", commands["wasm-ld"]:
+	case "wasm-ld":
 		flags = append([]string{"tinygo:" + linker}, flags...)
 		var cflag *C.char
 		buf := C.calloc(C.size_t(len(flags)), C.size_t(unsafe.Sizeof(cflag)))
@@ -57,6 +57,9 @@ func Link(linker string, flags ...string) error {
 		return nil
 	default:
 		// Fall back to external command.
+		if cmdNames, ok := commands[linker]; ok {
+			return execCommand(cmdNames, flags...)
+		}
 		cmd := exec.Command(linker, flags...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr

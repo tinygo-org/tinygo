@@ -14,6 +14,9 @@ import (
 //
 // This version always runs the linker as an external command.
 func Link(linker string, flags ...string) error {
+	if cmdNames, ok := commands[linker]; ok {
+		return execCommand(cmdNames, flags...)
+	}
 	cmd := exec.Command(linker, flags...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
