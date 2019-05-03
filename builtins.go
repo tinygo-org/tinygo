@@ -5,7 +5,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -192,13 +191,13 @@ func loadBuiltins(target string) (path string, err error) {
 		srcs[i] = filepath.Join(builtinsDir, name)
 	}
 
-	if path, err := cacheLoad(outfile, commands["clang"], srcs); path != "" || err != nil {
+	if path, err := cacheLoad(outfile, commands["clang"][0], srcs); path != "" || err != nil {
 		return path, err
 	}
 
 	var cachepath string
 	err = compileBuiltins(target, func(path string) error {
-		path, err := cacheStore(path, outfile, commands["clang"], srcs)
+		path, err := cacheStore(path, outfile, commands["clang"][0], srcs)
 		cachepath = path
 		return err
 	})
@@ -240,10 +239,7 @@ func compileBuiltins(target string, callback func(path string) error) error {
 		// Note: -fdebug-prefix-map is necessary to make the output archive
 		// reproducible. Otherwise the temporary directory is stored in the
 		// archive itself, which varies each run.
-		cmd := exec.Command(commands["clang"], "-c", "-Oz", "-g", "-Werror", "-Wall", "-std=c11", "-fshort-enums", "-nostdlibinc", "-ffunction-sections", "-fdata-sections", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir, "-o", objpath, srcpath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		err = cmd.Run()
+		err := execCommand(commands["clang"], "-c", "-Oz", "-g", "-Werror", "-Wall", "-std=c11", "-fshort-enums", "-nostdlibinc", "-ffunction-sections", "-fdata-sections", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir, "-o", objpath, srcpath)
 		if err != nil {
 			return &commandError{"failed to build", srcpath, err}
 		}

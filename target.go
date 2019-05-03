@@ -211,7 +211,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		GOOS:      goos,
 		GOARCH:    goarch,
 		BuildTags: []string{goos, goarch},
-		Compiler:  commands["clang"],
+		Compiler:  "clang",
 		Linker:    "cc",
 		GDB:       "gdb",
 		GDBCmds:   []string{"run"},
