@@ -895,6 +895,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 	case *ssa.Store:
 		llvmAddr := c.getValue(frame, instr.Addr)
 		llvmVal := c.getValue(frame, instr.Val)
+		c.emitNilCheck(frame, llvmAddr, "store")
 		if c.targetData.TypeAllocSize(llvmVal.Type()) == 0 {
 			// nothing to store
 			return
