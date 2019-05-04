@@ -62,8 +62,10 @@ func main() {
 	println("complex64 add: ", c64 + -3+8i)
 	println("complex64 sub: ", c64 - -3+8i)
 	println("complex64 mul: ", c64 * -3+8i)
+	println("complex64 div: ", c64 / -3+8i)
 	c128 = -5+2i
 	println("complex128 add:", c128 + 2+6i)
 	println("complex128 sub:", c128 - 2+6i)
 	println("complex128 mul:", c128 * 2+6i)
+	println("complex128 div:", c128 / 2+6i)
 }
