@@ -1821,6 +1821,22 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 				ieq := c.builder.CreateFCmp(llvm.FloatOEQ, i1, i2, "")
 				neq := c.builder.CreateAnd(req, ieq, "")
 				return c.builder.CreateNot(neq, ""), nil
+			case token.ADD, token.SUB:
+				var r, i llvm.Value
+				switch op {
+				case token.ADD:
+					r = c.builder.CreateFAdd(r1, r2, "")
+					i = c.builder.CreateFAdd(i1, i2, "")
+				case token.SUB:
+					r = c.builder.CreateFSub(r1, r2, "")
+					i = c.builder.CreateFSub(i1, i2, "")
+				default:
+					panic("unreachable")
+				}
+				cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{r.Type(), i.Type()}, false))
+				cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
+				cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+				return cplx, nil
 			default:
 				return llvm.Value{}, c.makeError(pos, "todo: binop on complex number: "+op.String())
 			}
