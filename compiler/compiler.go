@@ -1856,8 +1856,20 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 				cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
 				cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
 				return cplx, nil
+			case token.QUO:
+				// Complex division.
+				// Do this in a library call because it's too difficult to do
+				// inline.
+				switch r1.Type().TypeKind() {
+				case llvm.FloatTypeKind:
+					return c.createRuntimeCall("complex64div", []llvm.Value{x, y}, ""), nil
+				case llvm.DoubleTypeKind:
+					return c.createRuntimeCall("complex128div", []llvm.Value{x, y}, ""), nil
+				default:
+					panic("unexpected complex type")
+				}
 			default:
-				return llvm.Value{}, c.makeError(pos, "todo: binop on complex number: "+op.String())
+				panic("binop on complex: " + op.String())
 			}
 		} else if typ.Info()&types.IsBoolean != 0 {
 			// Operations on booleans
