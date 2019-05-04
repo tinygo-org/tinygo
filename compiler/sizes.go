@@ -113,6 +113,9 @@ func (s *StdSizes) Sizeof(T types.Type) int64 {
 		if k == types.Uintptr {
 			return s.PtrSize
 		}
+		if k == types.UnsafePointer {
+			return s.PtrSize
+		}
 		panic("unknown basic type: " + t.String())
 	case *types.Array:
 		n := t.Len()
