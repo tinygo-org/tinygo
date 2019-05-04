@@ -344,11 +344,9 @@ func (c *Compiler) Compile(mainPath string) []error {
 	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
 	c.mod.NamedFunction("runtime.alloc").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.free").SetLinkage(llvm.ExternalLinkage)
-	c.mod.NamedFunction("runtime.chanSend").SetLinkage(llvm.ExternalLinkage)
-	c.mod.NamedFunction("runtime.chanRecv").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.sleepTask").SetLinkage(llvm.ExternalLinkage)
-	c.mod.NamedFunction("runtime.setTaskData").SetLinkage(llvm.ExternalLinkage)
-	c.mod.NamedFunction("runtime.getTaskData").SetLinkage(llvm.ExternalLinkage)
+	c.mod.NamedFunction("runtime.setTaskPromisePtr").SetLinkage(llvm.ExternalLinkage)
+	c.mod.NamedFunction("runtime.getTaskPromisePtr").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.activateTask").SetLinkage(llvm.ExternalLinkage)
 	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.ExternalLinkage)
 
