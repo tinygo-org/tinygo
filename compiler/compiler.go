@@ -1825,6 +1825,25 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 				cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
 				cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
 				return cplx, nil
+			case token.MUL:
+				// Complex multiplication follows the current implementation in
+				// the Go compiler, with the difference that complex64
+				// components are not first scaled up to float64 for increased
+				// precision.
+				// https://github.com/golang/go/blob/170b8b4b12be50eeccbcdadb8523fb4fc670ca72/src/cmd/compile/internal/gc/ssa.go#L2089-L2127
+				// The implementation is as follows:
+				//   r := real(a) * real(b) - imag(a) * imag(b)
+				//   i := real(a) * imag(b) + imag(a) * real(b)
+				// Note: this does NOT follow the C11 specification (annex G):
+				// http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1548.pdf#page=549
+				// See https://github.com/golang/go/issues/29846 for a related
+				// discussion.
+				r := c.builder.CreateFSub(c.builder.CreateFMul(r1, r2, ""), c.builder.CreateFMul(i1, i2, ""), "")
+				i := c.builder.CreateFAdd(c.builder.CreateFMul(r1, i2, ""), c.builder.CreateFMul(i1, r2, ""), "")
+				cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{r.Type(), i.Type()}, false))
+				cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
+				cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+				return cplx, nil
 			default:
 				return llvm.Value{}, c.makeError(pos, "todo: binop on complex number: "+op.String())
 			}
