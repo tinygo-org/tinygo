@@ -76,6 +76,10 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		ldflags = append(ldflags, strings.Replace(flag, "{root}", root, -1))
 	}
 
+	goroot := getGoroot()
+	if goroot == "" {
+		return errors.New("cannot locate $GOROOT, please set it manually")
+	}
 	compilerConfig := compiler.Config{
 		Triple:        spec.Triple,
 		CPU:           spec.CPU,
@@ -87,7 +91,8 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		LDFlags:       ldflags,
 		Debug:         config.debug,
 		DumpSSA:       config.dumpSSA,
-		RootDir:       root,
+		TINYGOROOT:    root,
+		GOROOT:        goroot,
 		GOPATH:        getGopath(),
 		BuildTags:     spec.BuildTags,
 	}
