@@ -10,8 +10,11 @@ RUN wget -O- https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 
 COPY . /go/src/github.com/tinygo-org/tinygo
 
+# remove submodules directories and re-init them to fix any hard-coded paths
+# after copying the tinygo directory in the previous step.
 RUN cd /go/src/github.com/tinygo-org/tinygo/ && \
-    git submodule update --init
+    rm -rf ./lib/* && \
+    git submodule update --init --recursive --force
 
 RUN cd /go/src/github.com/tinygo-org/tinygo/ && \
     dep ensure --vendor-only && \
