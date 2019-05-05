@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"runtime"
@@ -309,4 +310,61 @@ func getHomeDir() string {
 		panic("could not find home directory")
 	}
 	return u.HomeDir
+}
+
+// getGoroot returns an appropriate GOROOT from various sources. If it can't be
+// found, it returns an empty string.
+func getGoroot() string {
+	goroot := os.Getenv("GOROOT")
+	if goroot != "" {
+		// An explicitly set GOROOT always has preference.
+		return goroot
+	}
+
+	// Check for the location of the 'go' binary and base GOROOT on that.
+	binpath, err := exec.LookPath("go")
+	if err == nil {
+		binpath, err = filepath.EvalSymlinks(binpath)
+		if err == nil {
+			goroot := filepath.Dir(filepath.Dir(binpath))
+			if isGoroot(goroot) {
+				return goroot
+			}
+		}
+	}
+
+	// Check what GOROOT was at compile time.
+	if isGoroot(runtime.GOROOT()) {
+		return runtime.GOROOT()
+	}
+
+	// Check for some standard locations, as a last resort.
+	var candidates []string
+	switch runtime.GOOS {
+	case "linux":
+		candidates = []string{
+			"/usr/local/go", // manually installed
+			"/usr/lib/go",   // from the distribution
+		}
+	case "darwin":
+		candidates = []string{
+			"/usr/local/go",             // manually installed
+			"/usr/local/opt/go/libexec", // from Homebrew
+		}
+	}
+
+	for _, candidate := range candidates {
+		if isGoroot(candidate) {
+			return candidate
+		}
+	}
+
+	// Can't find GOROOT...
+	return ""
+}
+
+// isGoroot checks whether the given path looks like a GOROOT.
+func isGoroot(goroot string) bool {
+	_, err := os.Stat(filepath.Join(goroot, "src", "runtime", "internal", "sys", "zversion.go"))
+	return err == nil
 }

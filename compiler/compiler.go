@@ -9,7 +9,6 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -39,7 +38,8 @@ type Config struct {
 	LDFlags       []string // ldflags to pass to cgo
 	DumpSSA       bool     // dump Go SSA, for compiler debugging
 	Debug         bool     // add debug symbols for gdb
-	RootDir       string   // GOROOT for TinyGo
+	GOROOT        string   // GOROOT
+	TINYGOROOT    string   // GOROOT for TinyGo
 	GOPATH        string   // GOPATH, like `go env GOPATH`
 	BuildTags     []string // build tags for TinyGo (empty means {Config.GOOS/Config.GOARCH})
 }
@@ -165,9 +165,9 @@ func (c *Compiler) Compile(mainPath string) []error {
 	// the TinyGo root.
 	overlayGopath := c.GOPATH
 	if overlayGopath == "" {
-		overlayGopath = runtime.GOROOT()
+		overlayGopath = c.GOROOT
 	} else {
-		overlayGopath = runtime.GOROOT() + string(filepath.ListSeparator) + overlayGopath
+		overlayGopath = c.GOROOT + string(filepath.ListSeparator) + overlayGopath
 	}
 
 	wd, err := os.Getwd()
@@ -178,7 +178,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 		Build: &build.Context{
 			GOARCH:      c.GOARCH,
 			GOOS:        c.GOOS,
-			GOROOT:      runtime.GOROOT(),
+			GOROOT:      c.GOROOT,
 			GOPATH:      c.GOPATH,
 			CgoEnabled:  true,
 			UseAllFiles: false,
@@ -188,7 +188,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 		OverlayBuild: &build.Context{
 			GOARCH:      c.GOARCH,
 			GOOS:        c.GOOS,
-			GOROOT:      c.RootDir,
+			GOROOT:      c.TINYGOROOT,
 			GOPATH:      overlayGopath,
 			CgoEnabled:  true,
 			UseAllFiles: false,
@@ -220,7 +220,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 			},
 		},
 		Dir:        wd,
-		TinyGoRoot: c.RootDir,
+		TINYGOROOT: c.TINYGOROOT,
 		CFlags:     c.CFlags,
 	}
 	if strings.HasSuffix(mainPath, ".go") {

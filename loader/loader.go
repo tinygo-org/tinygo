@@ -22,7 +22,7 @@ type Program struct {
 	fset          *token.FileSet
 	TypeChecker   types.Config
 	Dir           string // current working directory (for error reporting)
-	TinyGoRoot    string // root of the TinyGo installation or root of the source code
+	TINYGOROOT    string // root of the TinyGo installation or root of the source code
 	CFlags        []string
 }
 
@@ -297,12 +297,12 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 	}
 	clangIncludes := ""
 	if len(p.CgoFiles) != 0 {
-		if _, err := os.Stat(filepath.Join(p.TinyGoRoot, "llvm", "tools", "clang", "lib", "Headers")); !os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(p.TINYGOROOT, "llvm", "tools", "clang", "lib", "Headers")); !os.IsNotExist(err) {
 			// Running from the source directory.
-			clangIncludes = filepath.Join(p.TinyGoRoot, "llvm", "tools", "clang", "lib", "Headers")
+			clangIncludes = filepath.Join(p.TINYGOROOT, "llvm", "tools", "clang", "lib", "Headers")
 		} else {
 			// Running from the installation directory.
-			clangIncludes = filepath.Join(p.TinyGoRoot, "lib", "clang", "include")
+			clangIncludes = filepath.Join(p.TINYGOROOT, "lib", "clang", "include")
 		}
 	}
 	for _, file := range p.CgoFiles {
