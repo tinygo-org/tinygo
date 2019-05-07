@@ -69,7 +69,7 @@ llvm-source: llvm/README.txt llvm/tools/clang/README.txt llvm/tools/lld/README.m
 
 # Configure LLVM.
 llvm-build/build.ninja: llvm-source
-	mkdir -p llvm-build; cd llvm-build; cmake -G Ninja ../llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON
+	mkdir -p llvm-build; cd llvm-build; cmake -G Ninja ../llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF
 
 # Build LLVM.
 llvm-build: llvm-build/build.ninja
