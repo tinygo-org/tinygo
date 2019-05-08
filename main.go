@@ -103,7 +103,10 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 
 	// Compile Go code to IR.
 	errs := c.Compile(pkgName)
-	if errs != nil {
+	if len(errs) != 0 {
+		if len(errs) == 1 {
+			return errs[0]
+		}
 		return &multiError{errs}
 	}
 	if config.printIR {
