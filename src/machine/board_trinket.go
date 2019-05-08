@@ -27,6 +27,12 @@ const (
 	LED = D13
 )
 
+// UART0 aka USBCDC pins
+const (
+	USBCDC_DM_PIN = PA24
+	USBCDC_DP_PIN = PA25
+)
+
 // UART1 pins
 const (
 	UART_TX_PIN = D4
@@ -42,7 +48,7 @@ const (
 
 // SPI on the Trinket M0.
 var (
-	SPI0 = SPI{Bus: sam.SERCOM4_SPI}
+	SPI0 = SPI{Bus: sam.SERCOM0_SPI}
 )
 
 // I2C pins
@@ -53,7 +59,7 @@ const (
 
 // I2C on the Trinket M0.
 var (
-	I2C0 = I2C{Bus: sam.SERCOM3_I2CM,
+	I2C0 = I2C{Bus: sam.SERCOM2_I2CM,
 		SDA:     SDA_PIN,
 		SCL:     SCL_PIN,
 		PinMode: GPIO_SERCOM}
