@@ -4,6 +4,7 @@ package loader
 // modification. It does not touch the AST itself.
 
 import (
+	"fmt"
 	"go/ast"
 	"go/scanner"
 	"go/token"
@@ -45,6 +46,8 @@ CXType tinygo_clang_getTypedefDeclUnderlyingType(GoCXCursor c);
 CXType tinygo_clang_getCursorResultType(GoCXCursor c);
 int tinygo_clang_Cursor_getNumArguments(GoCXCursor c);
 GoCXCursor tinygo_clang_Cursor_getArgument(GoCXCursor c, unsigned i);
+CXSourceLocation tinygo_clang_getCursorLocation(GoCXCursor c);
+CXTranslationUnit tinygo_clang_Cursor_getTranslationUnit(GoCXCursor c);
 
 int tinygo_clang_globals_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
 int tinygo_clang_struct_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
@@ -66,8 +69,12 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string, posFilenam
 	index := C.clang_createIndex(0, 0)
 	defer C.clang_disposeIndex(index)
 
+	// pretend to be a .c file
 	filenameC := C.CString(posFilename + "!cgo.c")
 	defer C.free(unsafe.Pointer(filenameC))
+
+	// fix up error locations
+	fragment = fmt.Sprintf("# %d %#v\n", posLine+1, posFilename) + fragment
 
 	fragmentC := C.CString(fragment)
 	defer C.free(unsafe.Pointer(fragmentC))
@@ -107,20 +114,12 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string, posFilenam
 			spelling := getString(C.clang_getDiagnosticSpelling(diagnostic))
 			severity := diagnosticSeverity[C.clang_getDiagnosticSeverity(diagnostic)]
 			location := C.clang_getDiagnosticLocation(diagnostic)
-			var file C.CXFile
+			var libclangFilename C.CXString
 			var line C.unsigned
 			var column C.unsigned
-			var offset C.unsigned
-			C.clang_getExpansionLocation(location, &file, &line, &column, &offset)
-			filename := getString(C.clang_getFileName(file))
-			if filename == posFilename+"!cgo.c" {
-				// Adjust errors from the `import "C"` snippet.
-				// Note: doesn't adjust filenames inside the error message
-				// itself.
-				filename = posFilename
-				line += C.uint(posLine)
-				offset = 0 // hard to calculate
-			} else if filepath.IsAbs(filename) {
+			C.clang_getPresumedLocation(location, &libclangFilename, &line, &column)
+			filename := getString(libclangFilename)
+			if filepath.IsAbs(filename) {
 				// Relative paths for readability, like other Go parser errors.
 				relpath, err := filepath.Rel(info.Program.Dir, filename)
 				if err == nil {
@@ -130,7 +129,7 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string, posFilenam
 			errs = append(errs, &scanner.Error{
 				Pos: token.Position{
 					Filename: filename,
-					Offset:   int(offset),
+					Offset:   0, // not provided by clang_getPresumedLocation
 					Line:     int(line),
 					Column:   int(column),
 				},
@@ -162,9 +161,13 @@ func (info *fileInfo) parseFragment(fragment string, cflags []string, posFilenam
 func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClientData) C.int {
 	info := refMap.Get(unsafe.Pointer(client_data)).(*fileInfo)
 	kind := C.tinygo_clang_getCursorKind(c)
+	pos := info.getCursorPosition(c)
 	switch kind {
 	case C.CXCursor_FunctionDecl:
 		name := getString(C.tinygo_clang_getCursorSpelling(c))
+		if _, required := info.missingSymbols[name]; !required {
+			return C.CXChildVisit_Continue
+		}
 		cursorType := C.tinygo_clang_getCursorType(c)
 		if C.clang_isFunctionTypeVariadic(cursorType) != 0 {
 			return C.CXChildVisit_Continue // not supported
@@ -181,7 +184,7 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 			}
 			fn.args = append(fn.args, paramInfo{
 				name:     argName,
-				typeExpr: info.makeASTType(argType),
+				typeExpr: info.makeASTType(argType, pos),
 			})
 		}
 		resultType := C.tinygo_clang_getCursorResultType(c)
@@ -189,53 +192,33 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 			fn.results = &ast.FieldList{
 				List: []*ast.Field{
 					&ast.Field{
-						Type: info.makeASTType(resultType),
+						Type: info.makeASTType(resultType, pos),
 					},
 				},
 			}
 		}
+	case C.CXCursor_StructDecl:
+		typ := C.tinygo_clang_getCursorType(c)
+		name := getString(C.tinygo_clang_getCursorSpelling(c))
+		if _, required := info.missingSymbols["struct_"+name]; !required {
+			return C.CXChildVisit_Continue
+		}
+		info.makeASTType(typ, pos)
 	case C.CXCursor_TypedefDecl:
 		typedefType := C.tinygo_clang_getCursorType(c)
 		name := getString(C.clang_getTypedefName(typedefType))
-		underlyingType := C.tinygo_clang_getTypedefDeclUnderlyingType(c)
-		expr := info.makeASTType(underlyingType)
-		if strings.HasPrefix(name, "_Cgo_") {
-			expr := expr.(*ast.Ident)
-			typeSize := C.clang_Type_getSizeOf(underlyingType)
-			switch expr.Name {
-			// TODO: plain char (may be signed or unsigned)
-			case "C.schar", "C.short", "C.int", "C.long", "C.longlong":
-				switch typeSize {
-				case 1:
-					expr.Name = "int8"
-				case 2:
-					expr.Name = "int16"
-				case 4:
-					expr.Name = "int32"
-				case 8:
-					expr.Name = "int64"
-				}
-			case "C.uchar", "C.ushort", "C.uint", "C.ulong", "C.ulonglong":
-				switch typeSize {
-				case 1:
-					expr.Name = "uint8"
-				case 2:
-					expr.Name = "uint16"
-				case 4:
-					expr.Name = "uint32"
-				case 8:
-					expr.Name = "uint64"
-				}
-			}
+		if _, required := info.missingSymbols[name]; !required {
+			return C.CXChildVisit_Continue
 		}
-		info.typedefs[name] = &typedefInfo{
-			typeExpr: expr,
-		}
+		info.makeASTType(typedefType, pos)
 	case C.CXCursor_VarDecl:
 		name := getString(C.tinygo_clang_getCursorSpelling(c))
+		if _, required := info.missingSymbols[name]; !required {
+			return C.CXChildVisit_Continue
+		}
 		cursorType := C.tinygo_clang_getCursorType(c)
 		info.globals[name] = &globalInfo{
-			typeExpr: info.makeASTType(cursorType),
+			typeExpr: info.makeASTType(cursorType, pos),
 		}
 	}
 	return C.CXChildVisit_Continue
@@ -248,11 +231,48 @@ func getString(clangString C.CXString) (s string) {
 	return
 }
 
+// getCursorPosition returns a usable token.Pos from a libclang cursor. If the
+// file for this cursor has not been seen before, it is read from libclang
+// (which already has the file in memory) and added to the token.FileSet.
+func (info *fileInfo) getCursorPosition(cursor C.GoCXCursor) token.Pos {
+	location := C.tinygo_clang_getCursorLocation(cursor)
+	var file C.CXFile
+	var line C.unsigned
+	var column C.unsigned
+	var offset C.unsigned
+	C.clang_getExpansionLocation(location, &file, &line, &column, &offset)
+	if line == 0 || file == nil {
+		// Invalid token.
+		return token.NoPos
+	}
+	filename := getString(C.clang_getFileName(file))
+	if _, ok := info.tokenFiles[filename]; !ok {
+		// File has not been seen before in this package, add line information
+		// now by reading the file from libclang.
+		tu := C.tinygo_clang_Cursor_getTranslationUnit(cursor)
+		var size C.size_t
+		sourcePtr := C.clang_getFileContents(tu, file, &size)
+		source := ((*[1 << 28]byte)(unsafe.Pointer(sourcePtr)))[:size:size]
+		lines := []int{0}
+		for i := 0; i < len(source)-1; i++ {
+			if source[i] == '\n' {
+				lines = append(lines, i+1)
+			}
+		}
+		f := info.fset.AddFile(filename, -1, int(size))
+		f.SetLines(lines)
+		info.tokenFiles[filename] = f
+	}
+	return info.tokenFiles[filename].Pos(int(offset))
+}
+
 // makeASTType return the ast.Expr for the given libclang type. In other words,
 // it converts a libclang type to a type in the Go AST.
-func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
+func (info *fileInfo) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 	var typeName string
 	switch typ.kind {
+	case C.CXType_Char_S, C.CXType_Char_U:
+		typeName = "C.char"
 	case C.CXType_SChar:
 		typeName = "C.schar"
 	case C.CXType_UChar:
@@ -293,19 +313,33 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 			typeName = "complex128"
 		}
 	case C.CXType_Pointer:
+		pointeeType := C.clang_getPointeeType(typ)
+		if pointeeType.kind == C.CXType_Void {
+			// void* type is translated to Go as unsafe.Pointer
+			return &ast.SelectorExpr{
+				X: &ast.Ident{
+					NamePos: pos,
+					Name:    "unsafe",
+				},
+				Sel: &ast.Ident{
+					NamePos: pos,
+					Name:    "Pointer",
+				},
+			}
+		}
 		return &ast.StarExpr{
-			Star: info.importCPos,
-			X:    info.makeASTType(C.clang_getPointeeType(typ)),
+			Star: pos,
+			X:    info.makeASTType(pointeeType, pos),
 		}
 	case C.CXType_ConstantArray:
 		return &ast.ArrayType{
-			Lbrack: info.importCPos,
+			Lbrack: pos,
 			Len: &ast.BasicLit{
-				ValuePos: info.importCPos,
+				ValuePos: pos,
 				Kind:     token.INT,
 				Value:    strconv.FormatInt(int64(C.clang_getArraySize(typ)), 10),
 			},
-			Elt: info.makeASTType(C.clang_getElementType(typ)),
+			Elt: info.makeASTType(C.clang_getElementType(typ), pos),
 		}
 	case C.CXType_FunctionProto:
 		// Be compatible with gc, which uses the *[0]byte type for function
@@ -313,94 +347,150 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 		// Return type [0]byte because this is a function type, not a pointer to
 		// this function type.
 		return &ast.ArrayType{
-			Lbrack: info.importCPos,
+			Lbrack: pos,
 			Len: &ast.BasicLit{
-				ValuePos: info.importCPos,
+				ValuePos: pos,
 				Kind:     token.INT,
 				Value:    "0",
 			},
 			Elt: &ast.Ident{
-				NamePos: info.importCPos,
+				NamePos: pos,
 				Name:    "byte",
 			},
 		}
 	case C.CXType_Typedef:
-		typedefName := getString(C.clang_getTypedefName(typ))
+		name := getString(C.clang_getTypedefName(typ))
+		if _, ok := info.typedefs[name]; !ok {
+			info.typedefs[name] = nil // don't recurse
+			c := C.tinygo_clang_getTypeDeclaration(typ)
+			underlyingType := C.tinygo_clang_getTypedefDeclUnderlyingType(c)
+			expr := info.makeASTType(underlyingType, pos)
+			if strings.HasPrefix(name, "_Cgo_") {
+				expr := expr.(*ast.Ident)
+				typeSize := C.clang_Type_getSizeOf(underlyingType)
+				switch expr.Name {
+				case "C.char":
+					if typeSize != 1 {
+						// This happens for some very special purpose architectures
+						// (DSPs etc.) that are not currently targeted.
+						// https://www.embecosm.com/2017/04/18/non-8-bit-char-support-in-clang-and-llvm/
+						panic("unknown char width")
+					}
+					switch underlyingType.kind {
+					case C.CXType_Char_S:
+						expr.Name = "int8"
+					case C.CXType_Char_U:
+						expr.Name = "uint8"
+					}
+				case "C.schar", "C.short", "C.int", "C.long", "C.longlong":
+					switch typeSize {
+					case 1:
+						expr.Name = "int8"
+					case 2:
+						expr.Name = "int16"
+					case 4:
+						expr.Name = "int32"
+					case 8:
+						expr.Name = "int64"
+					}
+				case "C.uchar", "C.ushort", "C.uint", "C.ulong", "C.ulonglong":
+					switch typeSize {
+					case 1:
+						expr.Name = "uint8"
+					case 2:
+						expr.Name = "uint16"
+					case 4:
+						expr.Name = "uint32"
+					case 8:
+						expr.Name = "uint64"
+					}
+				}
+			}
+			info.typedefs[name] = &typedefInfo{
+				typeExpr: expr,
+			}
+		}
 		return &ast.Ident{
-			NamePos: info.importCPos,
-			Name:    "C." + typedefName,
+			NamePos: pos,
+			Name:    "C." + name,
 		}
 	case C.CXType_Elaborated:
 		underlying := C.clang_Type_getNamedType(typ)
 		switch underlying.kind {
 		case C.CXType_Record:
-			cursor := C.tinygo_clang_getTypeDeclaration(typ)
-			name := getString(C.tinygo_clang_getCursorSpelling(cursor))
-			// It is possible that this is a recursive definition, for example
-			// in linked lists (structs contain a pointer to the next element
-			// of the same type). If the name exists in info.elaboratedTypes,
-			// it is being processed, although it may not be fully defined yet.
-			if _, ok := info.elaboratedTypes[name]; !ok {
-				info.elaboratedTypes[name] = nil // predeclare (to avoid endless recursion)
-				info.elaboratedTypes[name] = info.makeASTType(underlying)
-			}
-			return &ast.Ident{
-				NamePos: info.importCPos,
-				Name:    "C.struct_" + name,
-			}
+			return info.makeASTType(underlying, pos)
 		default:
 			panic("unknown elaborated type")
 		}
 	case C.CXType_Record:
 		cursor := C.tinygo_clang_getTypeDeclaration(typ)
-		fieldList := &ast.FieldList{
-			Opening: info.importCPos,
-			Closing: info.importCPos,
-		}
-		ref := refMap.Put(struct {
-			fieldList *ast.FieldList
-			info      *fileInfo
-		}{fieldList, info})
-		defer refMap.Remove(ref)
-		C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(ref))
+		name := getString(C.tinygo_clang_getCursorSpelling(cursor))
+		var cgoName string
 		switch C.tinygo_clang_getCursorKind(cursor) {
 		case C.CXCursor_StructDecl:
-			return &ast.StructType{
-				Struct: info.importCPos,
-				Fields: fieldList,
-			}
+			cgoName = "struct_" + name
 		case C.CXCursor_UnionDecl:
-			if len(fieldList.List) > 1 {
-				// Insert a special field at the front (of zero width) as a
-				// marker that this is struct is actually a union. This is done
-				// by giving the field a name that cannot be expressed directly
-				// in Go.
-				// Other parts of the compiler look at the first element in a
-				// struct (of size > 2) to know whether this is a union.
-				// Note that we don't have to insert it for single-element
-				// unions as they're basically equivalent to a struct.
-				unionMarker := &ast.Field{
-					Type: &ast.StructType{
-						Struct: info.importCPos,
-					},
+			cgoName = "union_" + name
+		default:
+			panic("unknown record declaration")
+		}
+		if _, ok := info.elaboratedTypes[cgoName]; !ok {
+			info.elaboratedTypes[cgoName] = nil // predeclare (to avoid endless recursion)
+			fieldList := &ast.FieldList{
+				Opening: pos,
+				Closing: pos,
+			}
+			ref := refMap.Put(struct {
+				fieldList *ast.FieldList
+				info      *fileInfo
+			}{fieldList, info})
+			defer refMap.Remove(ref)
+			C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(ref))
+			switch C.tinygo_clang_getCursorKind(cursor) {
+			case C.CXCursor_StructDecl:
+				info.elaboratedTypes[cgoName] = &ast.StructType{
+					Struct: pos,
+					Fields: fieldList,
 				}
-				unionMarker.Names = []*ast.Ident{
-					&ast.Ident{
-						NamePos: info.importCPos,
-						Name:    "C union",
-						Obj: &ast.Object{
-							Kind: ast.Var,
-							Name: "C union",
-							Decl: unionMarker,
+			case C.CXCursor_UnionDecl:
+				if len(fieldList.List) > 1 {
+					// Insert a special field at the front (of zero width) as a
+					// marker that this is struct is actually a union. This is done
+					// by giving the field a name that cannot be expressed directly
+					// in Go.
+					// Other parts of the compiler look at the first element in a
+					// struct (of size > 2) to know whether this is a union.
+					// Note that we don't have to insert it for single-element
+					// unions as they're basically equivalent to a struct.
+					unionMarker := &ast.Field{
+						Type: &ast.StructType{
+							Struct: pos,
 						},
-					},
+					}
+					unionMarker.Names = []*ast.Ident{
+						&ast.Ident{
+							NamePos: pos,
+							Name:    "C union",
+							Obj: &ast.Object{
+								Kind: ast.Var,
+								Name: "C union",
+								Decl: unionMarker,
+							},
+						},
+					}
+					fieldList.List = append([]*ast.Field{unionMarker}, fieldList.List...)
 				}
-				fieldList.List = append([]*ast.Field{unionMarker}, fieldList.List...)
+				info.elaboratedTypes[cgoName] = &ast.StructType{
+					Struct: pos,
+					Fields: fieldList,
+				}
+			default:
+				panic("unreachable")
 			}
-			return &ast.StructType{
-				Struct: info.importCPos,
-				Fields: fieldList,
-			}
+		}
+		return &ast.Ident{
+			NamePos: pos,
+			Name:    "C." + cgoName,
 		}
 	}
 	if typeName == "" {
@@ -409,7 +499,7 @@ func (info *fileInfo) makeASTType(typ C.CXType) ast.Expr {
 		typeName = "C." + getString(C.clang_getTypeSpelling(typ))
 	}
 	return &ast.Ident{
-		NamePos: info.importCPos,
+		NamePos: pos,
 		Name:    typeName,
 	}
 }
@@ -428,11 +518,11 @@ func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientD
 	name := getString(C.tinygo_clang_getCursorSpelling(c))
 	typ := C.tinygo_clang_getCursorType(c)
 	field := &ast.Field{
-		Type: info.makeASTType(typ),
+		Type: info.makeASTType(typ, info.getCursorPosition(c)),
 	}
 	field.Names = []*ast.Ident{
 		&ast.Ident{
-			NamePos: info.importCPos,
+			NamePos: info.getCursorPosition(c),
 			Name:    name,
 			Obj: &ast.Object{
 				Kind: ast.Var,

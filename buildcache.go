@@ -9,9 +9,11 @@ import (
 
 // Get the cache directory, usually ~/.cache/tinygo
 func cacheDir() string {
-	home := getHomeDir()
-	dir := filepath.Join(home, ".cache", "tinygo")
-	return dir
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		panic("could not find cache dir: " + err.Error())
+	}
+	return filepath.Join(dir, "tinygo")
 }
 
 // Return the newest timestamp of all the file paths passed in. Used to check

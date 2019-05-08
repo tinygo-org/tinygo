@@ -44,3 +44,11 @@ int tinygo_clang_Cursor_getNumArguments(CXCursor c) {
 CXCursor tinygo_clang_Cursor_getArgument(CXCursor c, unsigned i) {
 	return clang_Cursor_getArgument(c, i);
 }
+
+CXSourceLocation tinygo_clang_getCursorLocation(CXCursor c) {
+	return clang_getCursorLocation(c);
+}
+
+CXTranslationUnit tinygo_clang_Cursor_getTranslationUnit(CXCursor c) {
+	return clang_Cursor_getTranslationUnit(c);
+}

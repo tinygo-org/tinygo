@@ -10,10 +10,7 @@ import (
 )
 
 func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Value, commaOk bool, pos token.Pos) (llvm.Value, error) {
-	llvmValueType, err := c.getLLVMType(valueType)
-	if err != nil {
-		return llvm.Value{}, err
-	}
+	llvmValueType := c.getLLVMType(valueType)
 	mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "hashmap.value")
 	mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "hashmap.valueptr")
 	var commaOkValue llvm.Value
@@ -42,7 +39,7 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 	}
 }
 
-func (c *Compiler) emitMapUpdate(keyType types.Type, m, key, value llvm.Value, pos token.Pos) error {
+func (c *Compiler) emitMapUpdate(keyType types.Type, m, key, value llvm.Value, pos token.Pos) {
 	valueAlloca := c.builder.CreateAlloca(value.Type(), "hashmap.value")
 	c.builder.CreateStore(value, valueAlloca)
 	valuePtr := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "hashmap.valueptr")
@@ -51,7 +48,6 @@ func (c *Compiler) emitMapUpdate(keyType types.Type, m, key, value llvm.Value, p
 		// key is a string
 		params := []llvm.Value{m, key, valuePtr}
 		c.createRuntimeCall("hashmapStringSet", params, "")
-		return nil
 	} else if hashmapIsBinaryKey(keyType) {
 		// key can be compared with runtime.memequal
 		keyAlloca := c.builder.CreateAlloca(key.Type(), "hashmap.key")
@@ -59,9 +55,8 @@ func (c *Compiler) emitMapUpdate(keyType types.Type, m, key, value llvm.Value, p
 		keyPtr := c.builder.CreateBitCast(keyAlloca, c.i8ptrType, "hashmap.keyptr")
 		params := []llvm.Value{m, keyPtr, valuePtr}
 		c.createRuntimeCall("hashmapBinarySet", params, "")
-		return nil
 	} else {
-		return c.makeError(pos, "only strings, bools, ints or structs of bools/ints are supported as map keys, but got: "+keyType.String())
+		c.addError(pos, "only strings, bools, ints or structs of bools/ints are supported as map keys, but got: "+keyType.String())
 	}
 }
 

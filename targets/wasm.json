@@ -3,10 +3,12 @@
 	"build-tags":    ["js", "wasm"],
 	"goos":          "js",
 	"goarch":        "wasm",
-	"compiler":      "clang-8",
+	"compiler":      "clang",
 	"linker":        "wasm-ld",
 	"cflags": [
 		"--target=wasm32",
+		"-nostdlibinc",
+		"-Wno-macro-redefined",
 		"-Oz"
 	],
 	"ldflags": [

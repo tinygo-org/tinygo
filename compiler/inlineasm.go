@@ -68,11 +68,7 @@ func (c *Compiler) emitAsmFull(frame *Frame, instr *ssa.CallCommon) (llvm.Value,
 			}
 			key := constant.StringVal(r.Key.(*ssa.Const).Value)
 			//println("value:", r.Value.(*ssa.MakeInterface).X.String())
-			value, err := c.parseExpr(frame, r.Value.(*ssa.MakeInterface).X)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			registers[key] = value
+			registers[key] = c.getValue(frame, r.Value.(*ssa.MakeInterface).X)
 		case *ssa.Call:
 			if r.Common() == instr {
 				break
@@ -145,10 +141,7 @@ func (c *Compiler) emitSVCall(frame *Frame, args []ssa.Value) (llvm.Value, error
 		} else {
 			constraints += ",{r" + strconv.Itoa(i) + "}"
 		}
-		llvmValue, err := c.parseExpr(frame, arg)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		llvmValue := c.getValue(frame, arg)
 		llvmArgs = append(llvmArgs, llvmValue)
 		argTypes = append(argTypes, llvmValue.Type())
 	}

@@ -39,33 +39,27 @@ const (
 	chanStateClosed
 )
 
-func chanSendStub(caller *coroutine, ch *channel, _ unsafe.Pointer, size uintptr)
-func chanRecvStub(caller *coroutine, ch *channel, _ unsafe.Pointer, _ *bool, size uintptr)
 func deadlockStub()
 
 // chanSend sends a single value over the channel. If this operation can
 // complete immediately (there is a goroutine waiting for a value), it sends the
 // value and re-activates both goroutines. If not, it sets itself as waiting on
 // a value.
-//
-// The unsafe.Pointer value is used during lowering. During IR generation, it
-// points to the to-be-received value. During coroutine lowering, this value is
-// replaced with a read from the coroutine promise.
-func chanSend(sender *coroutine, ch *channel, _ unsafe.Pointer, size uintptr) {
+func chanSend(sender *coroutine, ch *channel, value unsafe.Pointer, size uintptr) {
 	if ch == nil {
 		// A nil channel blocks forever. Do not scheduler this goroutine again.
 		return
 	}
 	switch ch.state {
 	case chanStateEmpty:
+		sender.promise().ptr = value
 		ch.state = chanStateSend
 		ch.blocked = sender
 	case chanStateRecv:
 		receiver := ch.blocked
 		receiverPromise := receiver.promise()
-		senderPromise := sender.promise()
-		memcpy(unsafe.Pointer(&receiverPromise.data), unsafe.Pointer(&senderPromise.data), size)
-		receiverPromise.commaOk = true
+		memcpy(receiverPromise.ptr, value, size)
+		receiverPromise.data = 1 // commaOk = true
 		ch.blocked = receiverPromise.next
 		receiverPromise.next = nil
 		activateTask(receiver)
@@ -76,6 +70,7 @@ func chanSend(sender *coroutine, ch *channel, _ unsafe.Pointer, size uintptr) {
 	case chanStateClosed:
 		runtimePanic("send on closed channel")
 	case chanStateSend:
+		sender.promise().ptr = value
 		sender.promise().next = ch.blocked
 		ch.blocked = sender
 	}
@@ -85,11 +80,7 @@ func chanSend(sender *coroutine, ch *channel, _ unsafe.Pointer, size uintptr) {
 // sender, it receives the value immediately and re-activates both coroutines.
 // If not, it sets itself as available for receiving. If the channel is closed,
 // it immediately activates itself with a zero value as the result.
-//
-// The two unnamed values exist to help during lowering. The unsafe.Pointer
-// points to the value, and the *bool points to the comma-ok value. Both are
-// replaced by reads from the coroutine promise.
-func chanRecv(receiver *coroutine, ch *channel, _ unsafe.Pointer, _ *bool, size uintptr) {
+func chanRecv(receiver *coroutine, ch *channel, value unsafe.Pointer, size uintptr) {
 	if ch == nil {
 		// A nil channel blocks forever. Do not scheduler this goroutine again.
 		return
@@ -97,10 +88,9 @@ func chanRecv(receiver *coroutine, ch *channel, _ unsafe.Pointer, _ *bool, size 
 	switch ch.state {
 	case chanStateSend:
 		sender := ch.blocked
-		receiverPromise := receiver.promise()
 		senderPromise := sender.promise()
-		memcpy(unsafe.Pointer(&receiverPromise.data), unsafe.Pointer(&senderPromise.data), size)
-		receiverPromise.commaOk = true
+		memcpy(value, senderPromise.ptr, size)
+		receiver.promise().data = 1 // commaOk = true
 		ch.blocked = senderPromise.next
 		senderPromise.next = nil
 		activateTask(receiver)
@@ -109,14 +99,15 @@ func chanRecv(receiver *coroutine, ch *channel, _ unsafe.Pointer, _ *bool, size 
 			ch.state = chanStateEmpty
 		}
 	case chanStateEmpty:
+		receiver.promise().ptr = value
 		ch.state = chanStateRecv
 		ch.blocked = receiver
 	case chanStateClosed:
-		receiverPromise := receiver.promise()
-		memzero(unsafe.Pointer(&receiverPromise.data), size)
-		receiverPromise.commaOk = false
+		memzero(value, size)
+		receiver.promise().data = 0 // commaOk = false
 		activateTask(receiver)
 	case chanStateRecv:
+		receiver.promise().ptr = value
 		receiver.promise().next = ch.blocked
 		ch.blocked = receiver
 	}
@@ -142,8 +133,8 @@ func chanClose(ch *channel, size uintptr) {
 	case chanStateRecv:
 		// The receiver must be re-activated with a zero value.
 		receiverPromise := ch.blocked.promise()
-		memzero(unsafe.Pointer(&receiverPromise.data), size)
-		receiverPromise.commaOk = false
+		memzero(receiverPromise.ptr, size)
+		receiverPromise.data = 0 // commaOk = false
 		activateTask(ch.blocked)
 		ch.state = chanStateClosed
 		ch.blocked = nil

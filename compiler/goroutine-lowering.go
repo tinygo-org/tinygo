@@ -10,8 +10,8 @@ package compiler
 //         go foo()
 //         time.Sleep(2 * time.Second)
 //         println("some other operation")
-//         bar()
-//         println("done")
+//         i := bar()
+//         println("done", *i)
 //     }
 //
 //     func foo() {
@@ -21,9 +21,10 @@ package compiler
 //         }
 //     }
 //
-//     func bar() {
+//     func bar() *int {
 //         time.Sleep(time.Second)
 //         println("blocking operation completed)
+//         return new(int)
 //     }
 //
 // It is transformed by the IR generator in compiler.go into the following
@@ -34,8 +35,8 @@ package compiler
 //         fn()
 //         time.Sleep(2 * time.Second)
 //         println("some other operation")
-//         bar() // imagine an 'await' keyword in front of this call
-//         println("done")
+//         i := bar() // imagine an 'await' keyword in front of this call
+//         println("done", *i)
 //     }
 //
 //     func foo() {
@@ -45,9 +46,10 @@ package compiler
 //         }
 //     }
 //
-//     func bar() {
+//     func bar() *int {
 //         time.Sleep(time.Second)
 //         println("blocking operation completed)
+//         return new(int)
 //     }
 //
 // The pass in this file transforms this code even further, to the following
@@ -59,9 +61,11 @@ package compiler
 //         runtime.sleepTask(hdl, 2 * time.Second) // ask the scheduler to re-activate this coroutine at the right time
 //         llvm.suspend(hdl)                       // suspend point
 //         println("some other operation")
+//         var i *int                              // allocate space on the stack for the return value
+//         runtime.setTaskPromisePtr(hdl, &i)      // store return value alloca in our coroutine promise
 //         bar(hdl)                                // await, pass a continuation (hdl) to bar
 //         llvm.suspend(hdl)                       // suspend point, wait for the callee to re-activate
-//         println("done")
+//         println("done", *i)
 //         runtime.activateTask(parent)            // re-activate the parent (nop, there is no parent)
 //     }
 //
@@ -142,10 +146,9 @@ func (c *Compiler) LowerGoroutines() error {
 	realMain.SetLinkage(llvm.InternalLinkage)
 	c.mod.NamedFunction("runtime.alloc").SetLinkage(llvm.InternalLinkage)
 	c.mod.NamedFunction("runtime.free").SetLinkage(llvm.InternalLinkage)
-	c.mod.NamedFunction("runtime.chanSend").SetLinkage(llvm.InternalLinkage)
-	c.mod.NamedFunction("runtime.chanRecv").SetLinkage(llvm.InternalLinkage)
 	c.mod.NamedFunction("runtime.sleepTask").SetLinkage(llvm.InternalLinkage)
-	c.mod.NamedFunction("runtime.activateTask").SetLinkage(llvm.InternalLinkage)
+	c.mod.NamedFunction("runtime.setTaskPromisePtr").SetLinkage(llvm.InternalLinkage)
+	c.mod.NamedFunction("runtime.getTaskPromisePtr").SetLinkage(llvm.InternalLinkage)
 	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.InternalLinkage)
 
 	return nil
@@ -174,13 +177,13 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 	if !deadlockStub.IsNil() {
 		worklist = append(worklist, deadlockStub)
 	}
-	chanSendStub := c.mod.NamedFunction("runtime.chanSendStub")
-	if !chanSendStub.IsNil() {
-		worklist = append(worklist, chanSendStub)
+	chanSend := c.mod.NamedFunction("runtime.chanSend")
+	if !chanSend.IsNil() {
+		worklist = append(worklist, chanSend)
 	}
-	chanRecvStub := c.mod.NamedFunction("runtime.chanRecvStub")
-	if !chanRecvStub.IsNil() {
-		worklist = append(worklist, chanRecvStub)
+	chanRecv := c.mod.NamedFunction("runtime.chanRecv")
+	if !chanRecv.IsNil() {
+		worklist = append(worklist, chanRecv)
 	}
 
 	if len(worklist) == 0 {
@@ -278,9 +281,6 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 	coroBeginType := llvm.FunctionType(c.i8ptrType, []llvm.Type{c.ctx.TokenType(), c.i8ptrType}, false)
 	coroBeginFunc := llvm.AddFunction(c.mod, "llvm.coro.begin", coroBeginType)
 
-	coroPromiseType := llvm.FunctionType(c.i8ptrType, []llvm.Type{c.i8ptrType, c.ctx.Int32Type(), c.ctx.Int1Type()}, false)
-	coroPromiseFunc := llvm.AddFunction(c.mod, "llvm.coro.promise", coroPromiseType)
-
 	coroSuspendType := llvm.FunctionType(c.ctx.Int8Type(), []llvm.Type{c.ctx.TokenType(), c.ctx.Int1Type()}, false)
 	coroSuspendFunc := llvm.AddFunction(c.mod, "llvm.coro.suspend", coroSuspendType)
 
@@ -292,7 +292,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 	// Transform all async functions into coroutines.
 	for _, f := range asyncList {
-		if f == sleep || f == deadlockStub || f == chanSendStub || f == chanRecvStub {
+		if f == sleep || f == deadlockStub || f == chanSend || f == chanRecv {
 			continue
 		}
 
@@ -309,7 +309,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
 				if !inst.IsACallInst().IsNil() {
 					callee := inst.CalledValue()
-					if _, ok := asyncFuncs[callee]; !ok || callee == sleep || callee == deadlockStub || callee == chanSendStub || callee == chanRecvStub {
+					if _, ok := asyncFuncs[callee]; !ok || callee == sleep || callee == deadlockStub || callee == chanSend || callee == chanRecv {
 						continue
 					}
 					asyncCalls = append(asyncCalls, inst)
@@ -347,10 +347,18 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			// Split this basic block.
 			await := c.splitBasicBlock(inst, llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.await")
 
-			// Set task state to TASK_STATE_CALL.
-			c.builder.SetInsertPointAtEnd(inst.InstructionParent())
+			// Allocate space for the return value.
+			var retvalAlloca llvm.Value
+			if inst.Type().TypeKind() != llvm.VoidTypeKind {
+				c.builder.SetInsertPointBefore(inst.InstructionParent().Parent().EntryBasicBlock().FirstInstruction())
+				retvalAlloca = c.builder.CreateAlloca(inst.Type(), "coro.retvalAlloca")
+				c.builder.SetInsertPointBefore(inst)
+				data := c.builder.CreateBitCast(retvalAlloca, c.i8ptrType, "")
+				c.createRuntimeCall("setTaskPromisePtr", []llvm.Value{frame.taskHandle, data}, "")
+			}
 
 			// Suspend.
+			c.builder.SetInsertPointAtEnd(inst.InstructionParent())
 			continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
 				llvm.ConstNull(c.ctx.TokenType()),
 				llvm.ConstInt(c.ctx.Int1Type(), 0, false),
@@ -358,44 +366,63 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
 			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), await)
 			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
+
+			if inst.Type().TypeKind() != llvm.VoidTypeKind {
+				// Load the return value from the alloca. The callee has
+				// written the return value to it.
+				c.builder.SetInsertPointBefore(await.FirstInstruction())
+				retval := c.builder.CreateLoad(retvalAlloca, "coro.retval")
+				inst.ReplaceAllUsesWith(retval)
+			}
 		}
 
 		// Replace return instructions with suspend points that should
 		// reactivate the parent coroutine.
 		for _, inst := range returns {
-			if inst.OperandsCount() == 0 {
-				// These properties were added by the functionattrs pass.
-				// Remove them, because now we start using the parameter.
-				// https://llvm.org/docs/Passes.html#functionattrs-deduce-function-attributes
-				for _, kind := range []string{"nocapture", "readnone"} {
-					kindID := llvm.AttributeKindID(kind)
-					f.RemoveEnumAttributeAtIndex(f.ParamsCount(), kindID)
-				}
-
-				// Reactivate the parent coroutine. This adds it back to
-				// the run queue, so it is started again by the
-				// scheduler when possible (possibly right after the
-				// following suspend).
-				c.builder.SetInsertPointBefore(inst)
-
-				parentHandle := f.LastParam()
-				c.createRuntimeCall("activateTask", []llvm.Value{parentHandle}, "")
-
-				// Suspend this coroutine.
-				// It would look like this is unnecessary, but if this
-				// suspend point is left out, it leads to undefined
-				// behavior somehow (with the unreachable instruction).
-				continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
-					llvm.ConstNull(c.ctx.TokenType()),
-					llvm.ConstInt(c.ctx.Int1Type(), 1, false),
-				}, "ret")
-				sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-				sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), frame.unreachableBlock)
-				sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
-				inst.EraseFromParentAsInstruction()
-			} else {
-				panic("todo: return value from coroutine")
+			// These properties were added by the functionattrs pass. Remove
+			// them, because now we start using the parameter.
+			// https://llvm.org/docs/Passes.html#functionattrs-deduce-function-attributes
+			for _, kind := range []string{"nocapture", "readnone"} {
+				kindID := llvm.AttributeKindID(kind)
+				f.RemoveEnumAttributeAtIndex(f.ParamsCount(), kindID)
 			}
+
+			c.builder.SetInsertPointBefore(inst)
+
+			parentHandle := f.LastParam()
+
+			// Store return values.
+			switch inst.OperandsCount() {
+			case 0:
+				// Nothing to return.
+			case 1:
+				// Return this value by writing to the pointer stored in the
+				// parent handle. The parent coroutine has made an alloca that
+				// we can write to to store our return value.
+				returnValuePtr := c.createRuntimeCall("getTaskPromisePtr", []llvm.Value{parentHandle}, "coro.parentData")
+				alloca := c.builder.CreateBitCast(returnValuePtr, llvm.PointerType(inst.Operand(0).Type(), 0), "coro.parentAlloca")
+				c.builder.CreateStore(inst.Operand(0), alloca)
+			default:
+				panic("unreachable")
+			}
+
+			// Reactivate the parent coroutine. This adds it back to the run
+			// queue, so it is started again by the scheduler when possible
+			// (possibly right after the following suspend).
+			c.createRuntimeCall("activateTask", []llvm.Value{parentHandle}, "")
+
+			// Suspend this coroutine.
+			// It would look like this is unnecessary, but if this
+			// suspend point is left out, it leads to undefined
+			// behavior somehow (with the unreachable instruction).
+			continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
+				llvm.ConstNull(c.ctx.TokenType()),
+				llvm.ConstInt(c.ctx.Int1Type(), 1, false),
+			}, "ret")
+			sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
+			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), frame.unreachableBlock)
+			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
+			inst.EraseFromParentAsInstruction()
 		}
 
 		// Coroutine cleanup. Free resources associated with this coroutine.
@@ -418,6 +445,14 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		// here.
 		c.builder.SetInsertPointAtEnd(frame.unreachableBlock)
 		c.builder.CreateUnreachable()
+	}
+
+	// Replace calls to runtime.getCoroutineCall with the coroutine of this
+	// frame.
+	for _, getCoroutineCall := range getUses(c.mod.NamedFunction("runtime.getCoroutine")) {
+		frame := asyncFuncs[getCoroutineCall.InstructionParent().Parent()]
+		getCoroutineCall.ReplaceAllUsesWith(frame.taskHandle)
+		getCoroutineCall.EraseFromParentAsInstruction()
 	}
 
 	// Transform calls to time.Sleep() into coroutine suspend points.
@@ -463,36 +498,10 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		deadlockCall.EraseFromParentAsInstruction()
 	}
 
-	// Transform calls to runtime.chanSendStub into channel send operations.
-	for _, sendOp := range getUses(chanSendStub) {
+	// Transform calls to runtime.chanSend into channel send operations.
+	for _, sendOp := range getUses(chanSend) {
 		// sendOp must be a call instruction.
 		frame := asyncFuncs[sendOp.InstructionParent().Parent()]
-
-		// Send the value over the channel, or block.
-		sendOp.SetOperand(0, frame.taskHandle)
-		sendOp.SetOperand(sendOp.OperandsCount()-1, c.mod.NamedFunction("runtime.chanSend"))
-
-		// Use taskState.data to store the value to send:
-		//     *(*valueType)(&coroutine.promise().data) = valueToSend
-		//     runtime.chanSend(coroutine, ch)
-		bitcast := sendOp.Operand(2)
-		valueAlloca := bitcast.Operand(0)
-		c.builder.SetInsertPointBefore(valueAlloca)
-		promiseType := c.mod.GetTypeByName("runtime.taskState")
-		promiseRaw := c.builder.CreateCall(coroPromiseFunc, []llvm.Value{
-			frame.taskHandle,
-			llvm.ConstInt(c.ctx.Int32Type(), uint64(c.targetData.PrefTypeAlignment(promiseType)), false),
-			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
-		}, "task.promise.raw")
-		promise := c.builder.CreateBitCast(promiseRaw, llvm.PointerType(promiseType, 0), "task.promise")
-		dataPtr := c.builder.CreateGEP(promise, []llvm.Value{
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(c.ctx.Int32Type(), 2, false),
-		}, "task.promise.data")
-		sendOp.SetOperand(2, llvm.Undef(c.i8ptrType))
-		valueAlloca.ReplaceAllUsesWith(c.builder.CreateBitCast(dataPtr, valueAlloca.Type(), ""))
-		bitcast.EraseFromParentAsInstruction()
-		valueAlloca.EraseFromParentAsInstruction()
 
 		// Yield to scheduler.
 		c.builder.SetInsertPointBefore(llvm.NextInstruction(sendOp))
@@ -506,20 +515,10 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
 	}
 
-	// Transform calls to runtime.chanRecvStub into channel receive operations.
-	for _, recvOp := range getUses(chanRecvStub) {
+	// Transform calls to runtime.chanRecv into channel receive operations.
+	for _, recvOp := range getUses(chanRecv) {
 		// recvOp must be a call instruction.
 		frame := asyncFuncs[recvOp.InstructionParent().Parent()]
-
-		bitcast := recvOp.Operand(2)
-		commaOk := recvOp.Operand(3)
-		valueAlloca := bitcast.Operand(0)
-
-		// Receive the value over the channel, or block.
-		recvOp.SetOperand(0, frame.taskHandle)
-		recvOp.SetOperand(recvOp.OperandsCount()-1, c.mod.NamedFunction("runtime.chanRecv"))
-		recvOp.SetOperand(2, llvm.Undef(c.i8ptrType))
-		bitcast.EraseFromParentAsInstruction()
 
 		// Yield to scheduler.
 		c.builder.SetInsertPointBefore(llvm.NextInstruction(recvOp))
@@ -532,32 +531,6 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		c.builder.SetInsertPointAtEnd(recvOp.InstructionParent())
 		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), wakeup)
 		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
-
-		// The value to receive is stored in taskState.data:
-		//     runtime.chanRecv(coroutine, ch)
-		//     promise := coroutine.promise()
-		//     valueReceived := *(*valueType)(&promise.data)
-		//     ok := promise.commaOk
-		c.builder.SetInsertPointBefore(wakeup.FirstInstruction())
-		promiseType := c.mod.GetTypeByName("runtime.taskState")
-		promiseRaw := c.builder.CreateCall(coroPromiseFunc, []llvm.Value{
-			frame.taskHandle,
-			llvm.ConstInt(c.ctx.Int32Type(), uint64(c.targetData.PrefTypeAlignment(promiseType)), false),
-			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
-		}, "task.promise.raw")
-		promise := c.builder.CreateBitCast(promiseRaw, llvm.PointerType(promiseType, 0), "task.promise")
-		dataPtr := c.builder.CreateGEP(promise, []llvm.Value{
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(c.ctx.Int32Type(), 2, false),
-		}, "task.promise.data")
-		valueAlloca.ReplaceAllUsesWith(c.builder.CreateBitCast(dataPtr, valueAlloca.Type(), ""))
-		valueAlloca.EraseFromParentAsInstruction()
-		commaOkPtr := c.builder.CreateGEP(promise, []llvm.Value{
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(c.ctx.Int32Type(), 1, false),
-		}, "task.promise.comma-ok")
-		commaOk.ReplaceAllUsesWith(commaOkPtr)
-		recvOp.SetOperand(3, llvm.Undef(commaOk.Type()))
 	}
 
 	return true, c.lowerMakeGoroutineCalls()

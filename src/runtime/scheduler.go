@@ -49,13 +49,17 @@ func (t *coroutine) promise() *taskState {
 
 func makeGoroutine(*uint8) *uint8
 
+// Compiler stub to get the current goroutine. Calls to this function are
+// removed in the goroutine lowering pass.
+func getCoroutine() *coroutine
+
 // State/promise of a task. Internally represented as:
 //
 //     {i8* next, i1 commaOk, i32/i64 data}
 type taskState struct {
-	next    *coroutine
-	commaOk bool // 'comma-ok' flag for channel receive operation
-	data    uint
+	next *coroutine
+	ptr  unsafe.Pointer
+	data uint
 }
 
 // Queues used by the scheduler.
@@ -105,6 +109,24 @@ func activateTask(task *coroutine) {
 	}
 	scheduleLogTask("  set runnable:", task)
 	runqueuePushBack(task)
+}
+
+// getTaskPromisePtr is a helper function to set the current .ptr field of a
+// coroutine promise.
+func setTaskPromisePtr(task *coroutine, value unsafe.Pointer) {
+	task.promise().ptr = value
+}
+
+// getTaskPromisePtr is a helper function to get the current .ptr field from a
+// coroutine promise.
+func getTaskPromisePtr(task *coroutine) unsafe.Pointer {
+	return task.promise().ptr
+}
+
+// getTaskPromiseData is a helper function to get the current .data field of a
+// coroutine promise.
+func getTaskPromiseData(task *coroutine) uint {
+	return task.promise().data
 }
 
 // Add this task to the end of the run queue. May also destroy the task if it's

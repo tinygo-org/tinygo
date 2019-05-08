@@ -33,16 +33,27 @@ func (e *commandError) Error() string {
 	return e.Msg + " " + e.File + ": " + e.Err.Error()
 }
 
+// multiError is a list of multiple errors (actually: diagnostics) returned
+// during LLVM IR generation.
+type multiError struct {
+	Errs []error
+}
+
+func (e *multiError) Error() string {
+	return e.Errs[0].Error()
+}
+
 type BuildConfig struct {
-	opt        string
-	gc         string
-	printIR    bool
-	dumpSSA    bool
-	debug      bool
-	printSizes string
-	cFlags     []string
-	ldFlags    []string
-	wasmAbi    string
+	opt           string
+	gc            string
+	panicStrategy string
+	printIR       bool
+	dumpSSA       bool
+	debug         bool
+	printSizes    string
+	cFlags        []string
+	ldFlags       []string
+	wasmAbi       string
 }
 
 // Helper function for Compiler object.
@@ -51,23 +62,39 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		config.gc = spec.GC
 	}
 
-	// Append command line passed CFlags and LDFlags
-	spec.CFlags = append(spec.CFlags, config.cFlags...)
-	spec.LDFlags = append(spec.LDFlags, config.ldFlags...)
+	root := sourceDir()
 
+	// Merge and adjust CFlags.
+	cflags := append([]string{}, config.cFlags...)
+	for _, flag := range spec.CFlags {
+		cflags = append(cflags, strings.Replace(flag, "{root}", root, -1))
+	}
+
+	// Merge and adjust LDFlags.
+	ldflags := append([]string{}, config.ldFlags...)
+	for _, flag := range spec.LDFlags {
+		ldflags = append(ldflags, strings.Replace(flag, "{root}", root, -1))
+	}
+
+	goroot := getGoroot()
+	if goroot == "" {
+		return errors.New("cannot locate $GOROOT, please set it manually")
+	}
 	compilerConfig := compiler.Config{
-		Triple:    spec.Triple,
-		CPU:       spec.CPU,
-		GOOS:      spec.GOOS,
-		GOARCH:    spec.GOARCH,
-		GC:        config.gc,
-		CFlags:    spec.CFlags,
-		LDFlags:   spec.LDFlags,
-		Debug:     config.debug,
-		DumpSSA:   config.dumpSSA,
-		RootDir:   sourceDir(),
-		GOPATH:    getGopath(),
-		BuildTags: spec.BuildTags,
+		Triple:        spec.Triple,
+		CPU:           spec.CPU,
+		GOOS:          spec.GOOS,
+		GOARCH:        spec.GOARCH,
+		GC:            config.gc,
+		PanicStrategy: config.panicStrategy,
+		CFlags:        cflags,
+		LDFlags:       ldflags,
+		Debug:         config.debug,
+		DumpSSA:       config.dumpSSA,
+		TINYGOROOT:    root,
+		GOROOT:        goroot,
+		GOPATH:        getGopath(),
+		BuildTags:     spec.BuildTags,
 	}
 	c, err := compiler.NewCompiler(pkgName, compilerConfig)
 	if err != nil {
@@ -75,9 +102,9 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	}
 
 	// Compile Go code to IR.
-	err = c.Compile(pkgName)
-	if err != nil {
-		return err
+	errs := c.Compile(pkgName)
+	if errs != nil {
+		return &multiError{errs}
 	}
 	if config.printIR {
 		fmt.Println("Generated LLVM IR:")
@@ -191,19 +218,20 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		// Prepare link command.
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
-		ldflags := append(spec.LDFlags, "-o", executable, objfile, "-L", sourceDir())
+		ldflags := append(ldflags, "-o", executable, objfile, "-L", root)
 		if spec.RTLib == "compiler-rt" {
 			ldflags = append(ldflags, librt)
 		}
 
 		// Compile extra files.
 		for i, path := range spec.ExtraFiles {
+			abspath := filepath.Join(root, path)
 			outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
-			cmd := exec.Command(spec.Compiler, append(spec.CFlags, "-c", "-o", outpath, path)...)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			cmd.Dir = sourceDir()
-			err := cmd.Run()
+			cmdNames := []string{spec.Compiler}
+			if names, ok := commands[spec.Compiler]; ok {
+				cmdNames = names
+			}
+			err := execCommand(cmdNames, append(cflags, "-c", "-o", outpath, abspath)...)
 			if err != nil {
 				return &commandError{"failed to build", path, err}
 			}
@@ -215,11 +243,11 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 			for _, file := range pkg.CFiles {
 				path := filepath.Join(pkg.Package.Dir, file)
 				outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"-"+file+".o")
-				cmd := exec.Command(spec.Compiler, append(spec.CFlags, "-c", "-o", outpath, path)...)
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				cmd.Dir = sourceDir()
-				err := cmd.Run()
+				cmdNames := []string{spec.Compiler}
+				if names, ok := commands[spec.Compiler]; ok {
+					cmdNames = names
+				}
+				err := execCommand(cmdNames, append(cflags, "-c", "-o", outpath, path)...)
 				if err != nil {
 					return &commandError{"failed to build", path, err}
 				}
@@ -228,11 +256,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		}
 
 		// Link the object files together.
-		if linker, ok := commands[spec.Linker]; ok {
-			err = Link(linker, ldflags...)
-		} else {
-			err = Link(spec.Linker, ldflags...)
-		}
+		err = Link(spec.Linker, ldflags...)
 		if err != nil {
 			return &commandError{"failed to link", executable, err}
 		}
@@ -496,6 +520,10 @@ func handleCompilerError(err error) {
 			for _, err := range errLoader.Errs {
 				fmt.Fprintln(os.Stderr, err)
 			}
+		} else if errMulti, ok := err.(*multiError); ok {
+			for _, err := range errMulti.Errs {
+				fmt.Fprintln(os.Stderr, err)
+			}
 		} else {
 			fmt.Fprintln(os.Stderr, "error:", err)
 		}
@@ -507,6 +535,7 @@ func main() {
 	outpath := flag.String("o", "", "output filename")
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, dumb, marksweep)")
+	panicStrategy := flag.String("panic", "print", "panic strategy (abort, trap)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	target := flag.String("target", "", "LLVM target")
@@ -527,13 +556,14 @@ func main() {
 
 	flag.CommandLine.Parse(os.Args[2:])
 	config := &BuildConfig{
-		opt:        *opt,
-		gc:         *gc,
-		printIR:    *printIR,
-		dumpSSA:    *dumpSSA,
-		debug:      !*nodebug,
-		printSizes: *printSize,
-		wasmAbi:    *wasmAbi,
+		opt:           *opt,
+		gc:            *gc,
+		panicStrategy: *panicStrategy,
+		printIR:       *printIR,
+		dumpSSA:       *dumpSSA,
+		debug:         !*nodebug,
+		printSizes:    *printSize,
+		wasmAbi:       *wasmAbi,
 	}
 
 	if *cFlags != "" {
@@ -542,6 +572,12 @@ func main() {
 
 	if *ldFlags != "" {
 		config.ldFlags = strings.Split(*ldFlags, " ")
+	}
+
+	if *panicStrategy != "print" && *panicStrategy != "trap" {
+		fmt.Fprintln(os.Stderr, "Panic strategy must be either print or trap.")
+		usage()
+		os.Exit(1)
 	}
 
 	os.Setenv("CC", "clang -target="+*target)

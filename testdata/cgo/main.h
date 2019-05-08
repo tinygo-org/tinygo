@@ -1,9 +1,17 @@
+#include <stdbool.h>
+#include <stdint.h>
+
 typedef short myint;
+typedef short unusedTypedef;
 int add(int a, int b);
+int unusedFunction(void);
 typedef int (*binop_t) (int, int);
 int doCallback(int a, int b, binop_t cb);
 typedef int * intPointer;
 void store(int value, int *ptr);
+
+// this signature should not be included by CGo
+void unusedFunction2(int x, __builtin_va_list args);
 
 typedef struct collection {
 	short         s;
@@ -11,6 +19,11 @@ typedef struct collection {
 	float         f;
 	unsigned char c;
 } collection_t;
+
+struct point {
+	int x;
+	int y;
+};
 
 // linked list
 typedef struct list_t {
@@ -27,15 +40,20 @@ void unionSetShort(short s);
 void unionSetFloat(float f);
 void unionSetData(short f0, short f1, short f2);
 
-// test globals
+// test globals and datatypes
 extern int global;
-extern _Bool globalBool;
-extern _Bool globalBool2;
+extern int unusedGlobal;
+extern bool globalBool;
+extern bool globalBool2;
 extern float globalFloat;
 extern double globalDouble;
 extern _Complex float globalComplexFloat;
 extern _Complex double globalComplexDouble;
 extern _Complex double globalComplexLongDouble;
+extern char globalChar;
+extern void *globalVoidPtrSet;
+extern void *globalVoidPtrNull;
+extern int64_t globalInt64;
 extern collection_t globalStruct;
 extern int globalStructSize;
 extern short globalArray[3];

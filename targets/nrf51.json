@@ -6,7 +6,7 @@
 		"--target=armv6m-none-eabi",
 		"-Qunused-arguments",
 		"-DNRF51",
-		"-Ilib/CMSIS/CMSIS/Include"
+		"-I{root}/lib/CMSIS/CMSIS/Include"
 	],
 	"ldflags": [
 		"-T", "targets/nrf51.ld"

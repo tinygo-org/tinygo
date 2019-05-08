@@ -13,17 +13,19 @@ import (
 	"runtime"
 	"sort"
 	"testing"
+
+	"github.com/tinygo-org/tinygo/loader"
 )
 
 const TESTDATA = "testdata"
 
 func TestCompiler(t *testing.T) {
-	matches, err := filepath.Glob(TESTDATA + "/*.go")
+	matches, err := filepath.Glob(filepath.Join(TESTDATA, "*.go"))
 	if err != nil {
 		t.Fatal("could not read test files:", err)
 	}
 
-	dirMatches, err := filepath.Glob(TESTDATA + "/*/main.go")
+	dirMatches, err := filepath.Glob(filepath.Join(TESTDATA, "*", "main.go"))
 	if err != nil {
 		t.Fatal("could not read test packages:", err)
 	}
@@ -64,7 +66,7 @@ func TestCompiler(t *testing.T) {
 	if runtime.GOOS == "linux" {
 		t.Log("running tests for linux/arm...")
 		for _, path := range matches {
-			if path == "testdata/cgo/" {
+			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
 				continue // TODO: improve CGo
 			}
 			t.Run(path, func(t *testing.T) {
@@ -74,7 +76,7 @@ func TestCompiler(t *testing.T) {
 
 		t.Log("running tests for linux/arm64...")
 		for _, path := range matches {
-			if path == "testdata/cgo/" {
+			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
 				continue // TODO: improve CGo
 			}
 			t.Run(path, func(t *testing.T) {
@@ -84,7 +86,7 @@ func TestCompiler(t *testing.T) {
 
 		t.Log("running tests for WebAssembly...")
 		for _, path := range matches {
-			if path == "testdata/gc.go" {
+			if path == filepath.Join("testdata", "gc.go") {
 				continue // known to fail
 			}
 			t.Run(path, func(t *testing.T) {
@@ -97,7 +99,7 @@ func TestCompiler(t *testing.T) {
 func runTest(path, tmpdir string, target string, t *testing.T) {
 	// Get the expected output for this test.
 	txtpath := path[:len(path)-3] + ".txt"
-	if path[len(path)-1] == '/' {
+	if path[len(path)-1] == os.PathSeparator {
 		txtpath = path + "out.txt"
 	}
 	f, err := os.Open(txtpath)
@@ -121,7 +123,13 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 	binary := filepath.Join(tmpdir, "test")
 	err = Build("./"+path, binary, target, config)
 	if err != nil {
-		t.Log("failed to build:", err)
+		if errLoader, ok := err.(loader.Errors); ok {
+			for _, err := range errLoader.Errs {
+				t.Log("failed to build:", err)
+			}
+		} else {
+			t.Log("failed to build:", err)
+		}
 		t.Fail()
 		return
 	}

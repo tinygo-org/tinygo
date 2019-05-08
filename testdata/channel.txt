@@ -9,6 +9,7 @@ received num: 6
 received num: 7
 received num: 8
 recv from closed channel: 0 false
+complex128: (+7.000000e+000+1.050000e+001i)
 got n: 10
 got n: 11
 got n: 10

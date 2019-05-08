@@ -36,7 +36,7 @@ func (c *Compiler) deferInitFunc(frame *Frame) {
 
 // emitDefer emits a single defer instruction, to be run when this function
 // returns.
-func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
+func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) {
 	// The pointer to the previous defer struct, which we will replace to
 	// make a linked list.
 	next := c.builder.CreateLoad(frame.deferPtr, "defer.next")
@@ -56,18 +56,12 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields, followed by the call parameters).
-		itf, err := c.parseExpr(frame, instr.Call.Value) // interface
-		if err != nil {
-			return err
-		}
+		itf := c.getValue(frame, instr.Call.Value) // interface
 		receiverValue := c.builder.CreateExtractValue(itf, 1, "invoke.func.receiver")
 		values = []llvm.Value{callback, next, receiverValue}
 		valueTypes = append(valueTypes, c.i8ptrType)
 		for _, arg := range instr.Call.Args {
-			val, err := c.parseExpr(frame, arg)
-			if err != nil {
-				return err
-			}
+			val := c.getValue(frame, arg)
 			values = append(values, val)
 			valueTypes = append(valueTypes, val.Type())
 		}
@@ -86,10 +80,7 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
 		// runtime._defer fields).
 		values = []llvm.Value{callback, next}
 		for _, param := range instr.Call.Args {
-			llvmParam, err := c.parseExpr(frame, param)
-			if err != nil {
-				return err
-			}
+			llvmParam := c.getValue(frame, param)
 			values = append(values, llvmParam)
 			valueTypes = append(valueTypes, llvmParam.Type())
 		}
@@ -101,10 +92,7 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
 		// pointer.
 		// TODO: ignore this closure entirely and put pointers to the free
 		// variables directly in the defer struct, avoiding a memory allocation.
-		closure, err := c.parseExpr(frame, instr.Call.Value)
-		if err != nil {
-			return err
-		}
+		closure := c.getValue(frame, instr.Call.Value)
 		context := c.builder.CreateExtractValue(closure, 0, "")
 
 		// Get the callback number.
@@ -120,10 +108,7 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
 		// context pointer).
 		values = []llvm.Value{callback, next}
 		for _, param := range instr.Call.Args {
-			llvmParam, err := c.parseExpr(frame, param)
-			if err != nil {
-				return err
-			}
+			llvmParam := c.getValue(frame, param)
 			values = append(values, llvmParam)
 			valueTypes = append(valueTypes, llvmParam.Type())
 		}
@@ -131,15 +116,13 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
 		valueTypes = append(valueTypes, context.Type())
 
 	} else {
-		return c.makeError(instr.Pos(), "todo: defer on uncommon function call type")
+		c.addError(instr.Pos(), "todo: defer on uncommon function call type")
+		return
 	}
 
 	// Make a struct out of the collected values to put in the defer frame.
 	deferFrameType := c.ctx.StructType(valueTypes, false)
-	deferFrame, err := c.getZeroValue(deferFrameType)
-	if err != nil {
-		return err
-	}
+	deferFrame := c.getZeroValue(deferFrameType)
 	for i, value := range values {
 		deferFrame = c.builder.CreateInsertValue(deferFrame, value, i, "")
 	}
@@ -151,11 +134,10 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) error {
 	// Push it on top of the linked list by replacing deferPtr.
 	allocaCast := c.builder.CreateBitCast(alloca, next.Type(), "defer.alloca.cast")
 	c.builder.CreateStore(allocaCast, frame.deferPtr)
-	return nil
 }
 
 // emitRunDefers emits code to run all deferred functions.
-func (c *Compiler) emitRunDefers(frame *Frame) error {
+func (c *Compiler) emitRunDefers(frame *Frame) {
 	// Add a loop like the following:
 	//     for stack != nil {
 	//         _stack := stack
@@ -190,13 +172,13 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 	//     stack = stack.next
 	//     switch stack.callback {
 	c.builder.SetInsertPointAtEnd(loop)
-	nextStackGEP := c.builder.CreateGEP(deferData, []llvm.Value{
+	nextStackGEP := c.builder.CreateInBoundsGEP(deferData, []llvm.Value{
 		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 		llvm.ConstInt(c.ctx.Int32Type(), 1, false), // .next field
 	}, "stack.next.gep")
 	nextStack := c.builder.CreateLoad(nextStackGEP, "stack.next")
 	c.builder.CreateStore(nextStack, frame.deferPtr)
-	gep := c.builder.CreateGEP(deferData, []llvm.Value{
+	gep := c.builder.CreateInBoundsGEP(deferData, []llvm.Value{
 		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 		llvm.ConstInt(c.ctx.Int32Type(), 0, false), // .callback field
 	}, "callback.gep")
@@ -220,11 +202,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			// Get the real defer struct type and cast to it.
 			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.mod.GetTypeByName("runtime._defer"), 0), c.i8ptrType}
 			for _, arg := range callback.Args {
-				llvmType, err := c.getLLVMType(arg.Type())
-				if err != nil {
-					return err
-				}
-				valueTypes = append(valueTypes, llvmType)
+				valueTypes = append(valueTypes, c.getLLVMType(arg.Type()))
 			}
 			deferFrameType := c.ctx.StructType(valueTypes, false)
 			deferFramePtr := c.builder.CreateBitCast(deferData, llvm.PointerType(deferFrameType, 0), "deferFrame")
@@ -233,7 +211,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 			for i := 2; i < len(valueTypes); i++ {
-				gep := c.builder.CreateGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false)}, "gep")
+				gep := c.builder.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false)}, "gep")
 				forwardParam := c.builder.CreateLoad(gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
@@ -246,10 +224,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			// Parent coroutine handle.
 			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
 
-			fnPtr, _, err := c.getInvokeCall(frame, callback)
-			if err != nil {
-				return err
-			}
+			fnPtr, _ := c.getInvokeCall(frame, callback)
 			c.createCall(fnPtr, forwardParams, "")
 
 		case *ir.Function:
@@ -258,11 +233,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			// Get the real defer struct type and cast to it.
 			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.mod.GetTypeByName("runtime._defer"), 0)}
 			for _, param := range callback.Params {
-				llvmType, err := c.getLLVMType(param.Type())
-				if err != nil {
-					return err
-				}
-				valueTypes = append(valueTypes, llvmType)
+				valueTypes = append(valueTypes, c.getLLVMType(param.Type()))
 			}
 			deferFrameType := c.ctx.StructType(valueTypes, false)
 			deferFramePtr := c.builder.CreateBitCast(deferData, llvm.PointerType(deferFrameType, 0), "deferFrame")
@@ -271,7 +242,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 			for i := range callback.Params {
-				gep := c.builder.CreateGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i+2), false)}, "gep")
+				gep := c.builder.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i+2), false)}, "gep")
 				forwardParam := c.builder.CreateLoad(gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
@@ -292,11 +263,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.mod.GetTypeByName("runtime._defer"), 0)}
 			params := fn.Signature.Params()
 			for i := 0; i < params.Len(); i++ {
-				llvmType, err := c.getLLVMType(params.At(i).Type())
-				if err != nil {
-					return err
-				}
-				valueTypes = append(valueTypes, llvmType)
+				valueTypes = append(valueTypes, c.getLLVMType(params.At(i).Type()))
 			}
 			valueTypes = append(valueTypes, c.i8ptrType) // closure
 			deferFrameType := c.ctx.StructType(valueTypes, false)
@@ -306,7 +273,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 			for i := 2; i < len(valueTypes); i++ {
-				gep := c.builder.CreateGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false)}, "")
+				gep := c.builder.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false)}, "")
 				forwardParam := c.builder.CreateLoad(gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
@@ -334,5 +301,4 @@ func (c *Compiler) emitRunDefers(frame *Frame) error {
 
 	// End of loop.
 	c.builder.SetInsertPointAtEnd(end)
-	return nil
 }

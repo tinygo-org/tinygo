@@ -198,6 +198,12 @@ func (a ADC) Get() uint16 {
 	sam.ADC.INPUTCTRL |= sam.RegValue(ch << sam.ADC_INPUTCTRL_MUXPOS_Pos)
 	waitADCSync()
 
+	// Select internal ground for ADC input
+	sam.ADC.INPUTCTRL &^= sam.ADC_INPUTCTRL_MUXNEG_Msk
+	waitADCSync()
+	sam.ADC.INPUTCTRL |= sam.RegValue(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
+	waitADCSync()
+
 	// Enable ADC
 	sam.ADC.CTRLA |= sam.ADC_CTRLA_ENABLE
 	waitADCSync()
@@ -223,7 +229,7 @@ func (a ADC) Get() uint16 {
 	sam.ADC.CTRLA &^= sam.ADC_CTRLA_ENABLE
 	waitADCSync()
 
-	return uint16(val)
+	return uint16(val) << 4 // scales from 12 to 16-bit result
 }
 
 func (a ADC) getADCChannel() uint8 {

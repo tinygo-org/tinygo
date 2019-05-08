@@ -22,6 +22,7 @@ type Program struct {
 	fset          *token.FileSet
 	TypeChecker   types.Config
 	Dir           string // current working directory (for error reporting)
+	TINYGOROOT    string // root of the TinyGo installation or root of the source code
 	CFlags        []string
 }
 
@@ -29,10 +30,11 @@ type Program struct {
 type Package struct {
 	*Program
 	*build.Package
-	Imports   map[string]*Package
-	Importing bool
-	Files     []*ast.File
-	Pkg       *types.Package
+	Imports    map[string]*Package
+	Importing  bool
+	Files      []*ast.File
+	tokenFiles map[string]*token.File
+	Pkg        *types.Package
 	types.Info
 }
 
@@ -105,6 +107,7 @@ func (p *Program) newPackage(pkg *build.Package) *Package {
 			Scopes:     make(map[ast.Node]*types.Scope),
 			Selections: make(map[*ast.SelectorExpr]*types.Selection),
 		},
+		tokenFiles: map[string]*token.File{},
 	}
 }
 
@@ -292,6 +295,16 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		}
 		files = append(files, f)
 	}
+	clangIncludes := ""
+	if len(p.CgoFiles) != 0 {
+		if _, err := os.Stat(filepath.Join(p.TINYGOROOT, "llvm", "tools", "clang", "lib", "Headers")); !os.IsNotExist(err) {
+			// Running from the source directory.
+			clangIncludes = filepath.Join(p.TINYGOROOT, "llvm", "tools", "clang", "lib", "Headers")
+		} else {
+			// Running from the installation directory.
+			clangIncludes = filepath.Join(p.TINYGOROOT, "lib", "clang", "include")
+		}
+	}
 	for _, file := range p.CgoFiles {
 		path := filepath.Join(p.Package.Dir, file)
 		f, err := p.parseFile(path, parser.ParseComments)
@@ -299,7 +312,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 			fileErrs = append(fileErrs, err)
 			continue
 		}
-		errs := p.processCgo(path, f, append(p.CFlags, "-I"+p.Package.Dir))
+		errs := p.processCgo(path, f, append(p.CFlags, "-I"+p.Package.Dir, "-I"+clangIncludes))
 		if errs != nil {
 			fileErrs = append(fileErrs, errs...)
 			continue

@@ -22,6 +22,17 @@ func getUses(value llvm.Value) []llvm.Value {
 	return uses
 }
 
+// getLifetimeEndFunc returns the llvm.lifetime.end intrinsic and creates it
+// first if it doesn't exist yet.
+func (c *Compiler) getLifetimeEndFunc() llvm.Value {
+	fn := c.mod.NamedFunction("llvm.lifetime.end.p0i8")
+	if fn.IsNil() {
+		fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.ctx.Int64Type(), c.i8ptrType}, false)
+		fn = llvm.AddFunction(c.mod, "llvm.lifetime.end.p0i8", fnType)
+	}
+	return fn
+}
+
 // splitBasicBlock splits a LLVM basic block into two parts. All instructions
 // after afterInst are moved into a new basic block (created right after the
 // current one) with the given name.

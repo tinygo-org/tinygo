@@ -20,6 +20,11 @@ func main() {
 	n, ok = <-ch
 	println("recv from closed channel:", n, ok)
 
+	// Test bigger values
+	ch2 := make(chan complex128)
+	go sendComplex(ch2)
+	println("complex128:", <-ch2)
+
 	// Test multi-sender.
 	ch = make(chan int)
 	go fastsender(ch)
@@ -60,6 +65,10 @@ func sender(ch chan int) {
 		ch <- i
 	}
 	close(ch)
+}
+
+func sendComplex(ch chan complex128) {
+	ch <- 7+10.5i
 }
 
 func fastsender(ch chan int) {
