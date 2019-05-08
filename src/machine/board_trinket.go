@@ -62,5 +62,5 @@ var (
 	I2C0 = I2C{Bus: sam.SERCOM2_I2CM,
 		SDA:     SDA_PIN,
 		SCL:     SCL_PIN,
-		PinMode: GPIO_SERCOM}
+		PinMode: GPIO_SERCOM_ALT}
 )
