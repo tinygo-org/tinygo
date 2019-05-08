@@ -1,6 +1,5 @@
 build
 docs/_build
-llvm*/
 src/device/avr/*.go
 src/device/avr/*.ld
 src/device/avr/*.s
