@@ -38,59 +38,45 @@ func TestCompiler(t *testing.T) {
 
 	sort.Strings(matches)
 
-	t.Log("running tests on host...")
+	targets := []string{""} // always test the native host
+
+	if !testing.Short() {
+		targets = append(targets, "qemu") // emulated cortex-m3
+	}
+
+	if !testing.Short() && runtime.GOOS == "linux" {
+		targets = append(targets,
+			"arm--linux-gnueabihf", // emulated linux/arm
+			"aarch64--linux-gnu",   // "linux/arm"
+			"wasm",                 // "WebAssembly"
+		)
+	}
+
 	for _, path := range matches {
-		t.Run(path, func(t *testing.T) {
-			runTest(path, "", t)
-		})
-	}
-
-	if testing.Short() {
-		return
-	}
-
-	t.Log("running tests for emulated cortex-m3...")
-	for _, path := range matches {
-		t.Run(path, func(t *testing.T) {
-			runTest(path, "qemu", t)
-		})
-	}
-
-	if runtime.GOOS == "linux" {
-		t.Log("running tests for linux/arm...")
-		for _, path := range matches {
-			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
-				continue // TODO: improve CGo
-			}
-			t.Run(path, func(t *testing.T) {
-				runTest(path, "arm--linux-gnueabihf", t)
-			})
-		}
-
-		t.Log("running tests for linux/arm64...")
-		for _, path := range matches {
-			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
-				continue // TODO: improve CGo
-			}
-			t.Run(path, func(t *testing.T) {
-				runTest(path, "aarch64--linux-gnu", t)
-			})
-		}
-
-		t.Log("running tests for WebAssembly...")
-		for _, path := range matches {
-			if path == filepath.Join("testdata", "gc.go") {
-				continue // known to fail
-			}
-			t.Run(path, func(t *testing.T) {
-				runTest(path, "wasm", t)
+		for _, target := range targets {
+			testName := filepath.Join(target, path)
+			t.Run(testName, func(t *testing.T) {
+				runTest(path, target, t)
 			})
 		}
 	}
+
 }
 
 func runTest(path string, target string, t *testing.T) {
 	t.Parallel()
+
+	if target == "arm--linux-gnueabihf" && path == "testdata/cgo/" {
+		t.Skip("TODO: improve CGo")
+	}
+
+	if target == "aarch64--linux-gnu" && path == "testdata/cgo/" {
+		t.Skip("TODO: improve CGo")
+	}
+
+	if target == "wasm" && path == "testdata/gc.go" {
+		t.Skip("known to fail")
+	}
 
 	tmpFile, err := ioutil.TempFile("", "tinygo-test-build")
 	if err != nil {
