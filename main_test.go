@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/loader"
@@ -66,15 +67,15 @@ func TestCompiler(t *testing.T) {
 func runTest(path string, target string, t *testing.T) {
 	t.Parallel()
 
-	if target == "arm--linux-gnueabihf" && path == "testdata/cgo/" {
+	if target == "arm--linux-gnueabihf" && strings.HasPrefix(path, "testdata/cgo/") {
 		t.Skip("TODO: improve CGo")
 	}
 
-	if target == "aarch64--linux-gnu" && path == "testdata/cgo/" {
+	if target == "aarch64--linux-gnu" && strings.HasPrefix(path, "testdata/cgo/") {
 		t.Skip("TODO: improve CGo")
 	}
 
-	if target == "wasm" && path == "testdata/gc.go" {
+	if target == "wasm" && strings.HasPrefix(path, "testdata/gc.go") {
 		t.Skip("known to fail")
 	}
 
