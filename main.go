@@ -110,7 +110,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		return &multiError{errs}
 	}
 	if config.printIR {
-		fmt.Println("Generated LLVM IR:")
+		fmt.Println("; Generated LLVM IR:")
 		fmt.Println(c.IR())
 	}
 	if err := c.Verify(); err != nil {
