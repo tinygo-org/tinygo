@@ -94,7 +94,7 @@ func runTest(path string, target string, t *testing.T) {
 
 	tmpFile, err := ioutil.TempFile("", "tinygo-test-build")
 	if err != nil {
-		t.Fatal("could not create temporary directory:", err)
+		t.Fatal("could not create temporary file:", err)
 	}
 	defer os.Remove(tmpFile.Name())
 
