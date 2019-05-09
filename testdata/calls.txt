@@ -7,3 +7,5 @@ Thing.Print: foo arg: bar
 bound method: foo
 thing inside closure: foo
 inside fp closure: foo 3
+Thing.Print:  arg: functional args 1
+Thing.Print: named thing arg: functional args 2

@@ -1,6 +1,0 @@
-Case 1
-false 0
-Case 2
-true 0
-Case 3
-true 42
