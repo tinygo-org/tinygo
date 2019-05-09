@@ -38,17 +38,10 @@ func TestCompiler(t *testing.T) {
 
 	sort.Strings(matches)
 
-	// Create a temporary directory for test output files.
-	tmpdir, err := ioutil.TempDir("", "tinygo-test")
-	if err != nil {
-		t.Fatal("could not create temporary directory:", err)
-	}
-	defer os.RemoveAll(tmpdir)
-
 	t.Log("running tests on host...")
 	for _, path := range matches {
 		t.Run(path, func(t *testing.T) {
-			runTest(path, tmpdir, "", t)
+			runTest(path, "", t)
 		})
 	}
 
@@ -59,7 +52,7 @@ func TestCompiler(t *testing.T) {
 	t.Log("running tests for emulated cortex-m3...")
 	for _, path := range matches {
 		t.Run(path, func(t *testing.T) {
-			runTest(path, tmpdir, "qemu", t)
+			runTest(path, "qemu", t)
 		})
 	}
 
@@ -70,7 +63,7 @@ func TestCompiler(t *testing.T) {
 				continue // TODO: improve CGo
 			}
 			t.Run(path, func(t *testing.T) {
-				runTest(path, tmpdir, "arm--linux-gnueabihf", t)
+				runTest(path, "arm--linux-gnueabihf", t)
 			})
 		}
 
@@ -80,7 +73,7 @@ func TestCompiler(t *testing.T) {
 				continue // TODO: improve CGo
 			}
 			t.Run(path, func(t *testing.T) {
-				runTest(path, tmpdir, "aarch64--linux-gnu", t)
+				runTest(path, "aarch64--linux-gnu", t)
 			})
 		}
 
@@ -90,13 +83,21 @@ func TestCompiler(t *testing.T) {
 				continue // known to fail
 			}
 			t.Run(path, func(t *testing.T) {
-				runTest(path, tmpdir, "wasm", t)
+				runTest(path, "wasm", t)
 			})
 		}
 	}
 }
 
-func runTest(path, tmpdir string, target string, t *testing.T) {
+func runTest(path string, target string, t *testing.T) {
+	t.Parallel()
+
+	tmpFile, err := ioutil.TempFile("", "tinygo-test-build")
+	if err != nil {
+		t.Fatal("could not create temporary directory:", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
 	// Get the expected output for this test.
 	txtpath := path[:len(path)-3] + ".txt"
 	if path[len(path)-1] == os.PathSeparator {
@@ -120,7 +121,8 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 		printSizes: "",
 		wasmAbi:    "js",
 	}
-	binary := filepath.Join(tmpdir, "test")
+
+	binary := tmpFile.Name()
 	err = Build("./"+path, binary, target, config)
 	if err != nil {
 		if errLoader, ok := err.(loader.Errors); ok {

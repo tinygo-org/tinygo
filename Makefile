@@ -6,6 +6,7 @@ tinygo: build/tinygo
 .PHONY: all tinygo build/tinygo test llvm-build llvm-source clean fmt gen-device gen-device-nrf gen-device-avr
 
 # Default build and source directories, as created by `make llvm-build`.
+BASE_DIR ?= $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 LLVM_BUILDDIR ?= llvm-build
 CLANG_SRC ?= llvm/tools/clang
 LLD_SRC ?= llvm/tools/lld
@@ -21,6 +22,9 @@ endif
 CLANG_LIBS = $(START_GROUP) $(abspath $(LLVM_BUILDDIR))/lib/libclang.a -lclangAnalysis -lclangARCMigrate -lclangAST -lclangASTMatchers -lclangBasic -lclangCodeGen -lclangCrossTU -lclangDriver -lclangDynamicASTMatchers -lclangEdit -lclangFormat -lclangFrontend -lclangFrontendTool -lclangHandleCXX -lclangHandleLLVM -lclangIndex -lclangLex -lclangParse -lclangRewrite -lclangRewriteFrontend -lclangSema -lclangSerialization -lclangStaticAnalyzerCheckers -lclangStaticAnalyzerCore -lclangStaticAnalyzerFrontend -lclangTooling -lclangToolingASTDiff -lclangToolingCore -lclangToolingInclusions -lclangToolingRefactor $(END_GROUP) -lstdc++
 
 LLD_LIBS = $(START_GROUP) -llldCOFF -llldCommon -llldCore -llldDriver -llldELF -llldMachO -llldMinGW -llldReaderWriter -llldWasm -llldYAML $(END_GROUP)
+
+# Set path to include the llvm build
+PATH := $(PATH):$(BASE_DIR)/$(LLVM_BUILDDIR)/bin
 
 
 # For static linking.
@@ -81,8 +85,14 @@ build/tinygo:
 	@if [ ! -f llvm-build/bin/llvm-config ]; then echo "Fetch and build LLVM first by running:\n  make llvm-source\n  make llvm-build"; exit 1; fi
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go build -o build/tinygo -tags byollvm .
 
+
+# `TESTSHORT=1 make test` will run the tests in short mode.  This is a
+# ternary on whether $(TESTSHORT) is empty. There are no quotes here,
+# because make syntax is weird
+test: SHORTFLAG = $(if $(TESTSHORT), -short, )
 test:
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go test -v -tags byollvm .
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go test -v $(SHORTFLAG) -tags byollvm .
+
 
 release: build/tinygo gen-device
 	@mkdir -p build/release/tinygo/bin
