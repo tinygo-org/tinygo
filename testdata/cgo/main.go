@@ -7,6 +7,8 @@ int mul(int, int);
 */
 import "C"
 
+import "C"
+
 import "unsafe"
 
 func main() {

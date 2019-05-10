@@ -145,8 +145,12 @@ func (p *Package) processCgo(filename string, f *ast.File, cflags []string) []er
 		// source location.
 		info.importCPos = spec.Path.ValuePos
 
-		pos := info.fset.PositionFor(genDecl.Doc.Pos(), true)
-		errs := info.parseFragment(cgoComment+cgoTypes, cflags, pos.Filename, pos.Line)
+		pos := genDecl.Pos()
+		if genDecl.Doc != nil {
+			pos = genDecl.Doc.Pos()
+		}
+		position := info.fset.PositionFor(pos, true)
+		errs := info.parseFragment(cgoComment+cgoTypes, cflags, position.Filename, position.Line)
 		if errs != nil {
 			return errs
 		}
