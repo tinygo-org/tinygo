@@ -151,12 +151,54 @@ def writeGo(outdir, device):
 // {description}
 package {pkgName}
 
-import "unsafe"
+import (
+	"runtime/volatile"
+	"unsafe"
+)
 
 // Special type that causes loads/stores to be volatile (necessary for
 // memory-mapped registers).
-//go:volatile
-type RegValue uint8
+type Register8 struct {{
+	Reg uint8
+}}
+
+// Get returns the value in the register. It is the volatile equivalent of:
+//
+//     *r.Reg
+//
+//go:inline
+func (r *Register8) Get() uint8 {{
+	return volatile.LoadUint8(&r.Reg)
+}}
+
+// Set updates the register value. It is the volatile equivalent of:
+//
+//     *r.Reg = value
+//
+//go:inline
+func (r *Register8) Set(value uint8) {{
+	volatile.StoreUint8(&r.Reg, value)
+}}
+
+// SetBits reads the register, sets the given bits, and writes it back. It is
+// the volatile equivalent of:
+//
+//     r.Reg |= value
+//
+//go:inline
+func (r *Register8) SetBits(value uint8) {{
+	volatile.StoreUint8(&r.Reg, volatile.LoadUint8(&r.Reg) | value)
+}}
+
+// ClearBits reads the register, clears the given bits, and writes it back. It
+// is the volatile equivalent of:
+//
+//     r.Reg &^= value
+//
+//go:inline
+func (r *Register8) ClearBits(value uint8) {{
+	volatile.StoreUint8(&r.Reg, volatile.LoadUint8(&r.Reg) &^ value)
+}}
 
 // Some information about this device.
 const (
@@ -179,7 +221,7 @@ const (
         out.write('\n\t// {description}\n'.format(**peripheral))
         for register in peripheral['registers']:
             for variant in register['variants']:
-                out.write('\t{name} = (*RegValue)(unsafe.Pointer(uintptr(0x{address:x})))\n'.format(**variant))
+                out.write('\t{name} = (*Register8)(unsafe.Pointer(uintptr(0x{address:x})))\n'.format(**variant))
     out.write(')\n')
 
     for peripheral in device.peripherals:
