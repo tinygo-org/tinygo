@@ -17,19 +17,19 @@ func sleepWDT(period uint8) {
 	avr.Asm("cli")
 	avr.Asm("wdr")
 	// Start timed sequence.
-	*avr.WDTCSR |= avr.WDTCSR_WDCE | avr.WDTCSR_WDE
+	avr.WDTCSR.SetBits(avr.WDTCSR_WDCE | avr.WDTCSR_WDE)
 	// Enable WDT and set new timeout
-	*avr.WDTCSR = avr.WDTCSR_WDIE | avr.RegValue(period)
+	avr.WDTCSR.SetBits(avr.WDTCSR_WDIE | period)
 	avr.Asm("sei")
 
 	// Set sleep mode to idle and enable sleep mode.
 	// Note: when using something other than idle, the UART won't work
 	// correctly. This needs to be fixed, though, so we can truly sleep.
-	*avr.SMCR = (0 << 1) | avr.SMCR_SE
+	avr.SMCR.Set((0 << 1) | avr.SMCR_SE)
 
 	// go to sleep
 	avr.Asm("sleep")
 
 	// disable sleep
-	*avr.SMCR = 0
+	avr.SMCR.Set(0)
 }
