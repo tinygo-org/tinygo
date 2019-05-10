@@ -696,6 +696,14 @@ func (c *Compiler) parseFunc(frame *Frame) {
 		frame.fn.LLVMFn.SetFunctionCallConv(85) // CallingConv::AVR_SIGNAL
 	}
 
+	// Some functions have a pragma controlling the inlining level.
+	switch frame.fn.Inline() {
+	case ir.InlineHint:
+		// Add LLVM inline hint to functions with //go:inline pragma.
+		inline := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("inlinehint"), 0)
+		frame.fn.LLVMFn.AddFunctionAttr(inline)
+	}
+
 	// Add debug info, if needed.
 	if c.Debug {
 		if frame.fn.Synthetic == "package initializer" {
