@@ -1,6 +1,6 @@
 // +build !byollvm
 
-package loader
+package cgo
 
 /*
 #cgo linux  CFLAGS: -I/usr/lib/llvm-8/include

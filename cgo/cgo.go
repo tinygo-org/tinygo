@@ -1,7 +1,15 @@
-package loader
+// Package cgo implements CGo by modifying a loaded AST. It does this by parsing
+// the `import "C"` statements found in the source code with libclang and
+// generating stub function and global declarations.
+//
+// There are a few advantages to modifying the AST directly instead of doing CGo
+// as a preprocessing step, with the main advantage being that debug information
+// is kept intact as much as possible.
+package cgo
 
 // This file extracts the `import "C"` statement from the source and modifies
-// the AST for Cgo. It does not use libclang directly (see libclang.go).
+// the AST for CCo. It does not use libclang directly: see libclang.go for the C
+// source file parsing.
 
 import (
 	"go/ast"
@@ -13,25 +21,35 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
-// fileInfo holds all Cgo-related information of a given *ast.File.
-type fileInfo struct {
-	*ast.File
-	*Package
-	filename        string
-	constants       map[string]*ast.BasicLit
-	functions       map[string]*functionInfo
-	globals         map[string]*globalInfo
-	typedefs        map[string]*typedefInfo
-	elaboratedTypes map[string]ast.Expr
-	importCPos      token.Pos
+// cgoPackage holds all CCo-related information of a package.
+type cgoPackage struct {
+	generated       *ast.File
+	generatedPos    token.Pos
+	errors          []error
+	dir             string
+	fset            *token.FileSet
+	tokenFiles      map[string]*token.File
 	missingSymbols  map[string]struct{}
+	constants       map[string]constantInfo
+	functions       map[string]*functionInfo
+	globals         map[string]globalInfo
+	typedefs        map[string]*typedefInfo
+	elaboratedTypes map[string]*elaboratedTypeInfo
 }
 
-// functionInfo stores some information about a Cgo function found by libclang
+// constantInfo stores some information about a CGo constant found by libclang
+// and declared in the Go AST.
+type constantInfo struct {
+	expr *ast.BasicLit
+	pos  token.Pos
+}
+
+// functionInfo stores some information about a CCo function found by libclang
 // and declared in the AST.
 type functionInfo struct {
 	args    []paramInfo
 	results *ast.FieldList
+	pos     token.Pos
 }
 
 // paramInfo is a parameter of a Cgo function (see functionInfo).
@@ -43,11 +61,20 @@ type paramInfo struct {
 // typedefInfo contains information about a single typedef in C.
 type typedefInfo struct {
 	typeExpr ast.Expr
+	pos      token.Pos
+}
+
+// elaboratedTypeInfo contains some information about an elaborated type
+// (struct, union) found in the C AST.
+type elaboratedTypeInfo struct {
+	typeExpr ast.Expr
+	pos      token.Pos
 }
 
 // globalInfo contains information about a declared global variable in C.
 type globalInfo struct {
 	typeExpr ast.Expr
+	pos      token.Pos
 }
 
 // cgoAliases list type aliases between Go and C, for types that are equivalent
@@ -64,9 +91,9 @@ var cgoAliases = map[string]string{
 	"C.uintptr_t": "uintptr",
 }
 
-// cgoBuiltinAliases are handled specially because they only exist on the Go
-// side of CGo, not on the CGo (they're prefixed with "_Cgo_" there).
-var cgoBuiltinAliases = map[string]struct{}{
+// builtinAliases are handled specially because they only exist on the Go side
+// of CGo, not on the CGo side (they're prefixed with "_Cgo_" there).
+var builtinAliases = map[string]struct{}{
 	"char":      struct{}{},
 	"schar":     struct{}{},
 	"uchar":     struct{}{},
@@ -97,111 +124,146 @@ typedef long long           _Cgo_longlong;
 typedef unsigned long long  _Cgo_ulonglong;
 `
 
-// processCgo extracts the `import "C"` statement from the AST, parses the
-// comment with libclang, and modifies the AST to use this information.
-func (p *Package) processCgo(filename string, f *ast.File, cflags []string) []error {
-	info := &fileInfo{
-		File:            f,
-		Package:         p,
-		filename:        filename,
-		constants:       map[string]*ast.BasicLit{},
-		functions:       map[string]*functionInfo{},
-		globals:         map[string]*globalInfo{},
-		typedefs:        map[string]*typedefInfo{},
-		elaboratedTypes: map[string]ast.Expr{},
+// Process extracts `import "C"` statements from the AST, parses the comment
+// with libclang, and modifies the AST to use this information. It returns a
+// newly created *ast.File that should be added to the list of to-be-parsed
+// files. If there is one or more error, it returns these in the []error slice
+// but still modifies the AST.
+func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string) (*ast.File, []error) {
+	p := &cgoPackage{
+		dir:             dir,
+		fset:            fset,
+		tokenFiles:      map[string]*token.File{},
 		missingSymbols:  map[string]struct{}{},
+		constants:       map[string]constantInfo{},
+		functions:       map[string]*functionInfo{},
+		globals:         map[string]globalInfo{},
+		typedefs:        map[string]*typedefInfo{},
+		elaboratedTypes: map[string]*elaboratedTypeInfo{},
+	}
+
+	// Add a new location for the following file.
+	generatedTokenPos := p.fset.AddFile(dir+"/!cgo.go", -1, 0)
+	generatedTokenPos.SetLines([]int{0})
+	p.generatedPos = generatedTokenPos.Pos(0)
+
+	// Construct a new in-memory AST for CGo declarations of this package.
+	unsafeImport := &ast.ImportSpec{
+		Path: &ast.BasicLit{
+			ValuePos: p.generatedPos,
+			Kind:     token.STRING,
+			Value:    "\"unsafe\"",
+		},
+		EndPos: p.generatedPos,
+	}
+	p.generated = &ast.File{
+		Package: p.generatedPos,
+		Name: &ast.Ident{
+			NamePos: p.generatedPos,
+			Name:    files[0].Name.Name,
+		},
+		Decls: []ast.Decl{
+			&ast.GenDecl{
+				TokPos: p.generatedPos,
+				Tok:    token.IMPORT,
+				Specs: []ast.Spec{
+					unsafeImport,
+				},
+			},
+		},
+		Imports: []*ast.ImportSpec{unsafeImport},
 	}
 
 	// Find all C.* symbols.
-	f = astutil.Apply(f, info.findMissingCGoNames, nil).(*ast.File)
-	for name := range cgoBuiltinAliases {
-		info.missingSymbols["_Cgo_"+name] = struct{}{}
+	for _, f := range files {
+		astutil.Apply(f, p.findMissingCGoNames, nil)
+	}
+	for name := range builtinAliases {
+		p.missingSymbols["_Cgo_"+name] = struct{}{}
 	}
 
 	// Find `import "C"` statements in the file.
-	for i := 0; i < len(f.Decls); i++ {
-		decl := f.Decls[i]
-		genDecl, ok := decl.(*ast.GenDecl)
-		if !ok {
-			continue
-		}
-		if len(genDecl.Specs) != 1 {
-			continue
-		}
-		spec, ok := genDecl.Specs[0].(*ast.ImportSpec)
-		if !ok {
-			continue
-		}
-		path, err := strconv.Unquote(spec.Path.Value)
-		if err != nil {
-			panic("could not parse import path: " + err.Error())
-		}
-		if path != "C" {
-			continue
-		}
-		cgoComment := genDecl.Doc.Text()
+	for _, f := range files {
+		for i := 0; i < len(f.Decls); i++ {
+			decl := f.Decls[i]
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			if len(genDecl.Specs) != 1 {
+				continue
+			}
+			spec, ok := genDecl.Specs[0].(*ast.ImportSpec)
+			if !ok {
+				continue
+			}
+			path, err := strconv.Unquote(spec.Path.Value)
+			if err != nil {
+				panic("could not parse import path: " + err.Error())
+			}
+			if path != "C" {
+				continue
+			}
+			cgoComment := genDecl.Doc.Text()
 
-		// Stored for later use by generated functions, to use a somewhat sane
-		// source location.
-		info.importCPos = spec.Path.ValuePos
+			pos := genDecl.Pos()
+			if genDecl.Doc != nil {
+				pos = genDecl.Doc.Pos()
+			}
+			position := fset.PositionFor(pos, true)
+			p.parseFragment(cgoComment+cgoTypes, cflags, position.Filename, position.Line)
 
-		pos := genDecl.Pos()
-		if genDecl.Doc != nil {
-			pos = genDecl.Doc.Pos()
-		}
-		position := info.fset.PositionFor(pos, true)
-		errs := info.parseFragment(cgoComment+cgoTypes, cflags, position.Filename, position.Line)
-		if errs != nil {
-			return errs
+			// Remove this import declaration.
+			f.Decls = append(f.Decls[:i], f.Decls[i+1:]...)
+			i--
 		}
 
-		// Remove this import declaration.
-		f.Decls = append(f.Decls[:i], f.Decls[i+1:]...)
-		i--
+		// Print the AST, for debugging.
+		//ast.Print(fset, f)
 	}
 
-	// Print the AST, for debugging.
-	//ast.Print(p.fset, f)
-
 	// Declare functions found by libclang.
-	info.addFuncDecls()
+	p.addFuncDecls()
 
 	// Declare stub function pointer values found by libclang.
-	info.addFuncPtrDecls()
+	p.addFuncPtrDecls()
 
 	// Declare globals found by libclang.
-	info.addConstDecls()
+	p.addConstDecls()
 
 	// Declare globals found by libclang.
-	info.addVarDecls()
+	p.addVarDecls()
 
 	// Forward C types to Go types (like C.uint32_t -> uint32).
-	info.addTypeAliases()
+	p.addTypeAliases()
 
 	// Add type declarations for C types, declared using typedef in C.
-	info.addTypedefs()
+	p.addTypedefs()
 
 	// Add elaborated types for C structs and unions.
-	info.addElaboratedTypes()
+	p.addElaboratedTypes()
 
 	// Patch the AST to use the declared types and functions.
-	f = astutil.Apply(f, info.walker, nil).(*ast.File)
+	for _, f := range files {
+		astutil.Apply(f, p.walker, nil)
+	}
 
-	return nil
+	// Print the newly generated in-memory AST, for debugging.
+	//ast.Print(fset, p.generated)
+
+	return p.generated, p.errors
 }
 
 // addFuncDecls adds the C function declarations found by libclang in the
 // comment above the `import "C"` statement.
-func (info *fileInfo) addFuncDecls() {
-	// TODO: replace all uses of importCPos with the real locations from
-	// libclang.
-	names := make([]string, 0, len(info.functions))
-	for name := range info.functions {
+func (p *cgoPackage) addFuncDecls() {
+	names := make([]string, 0, len(p.functions))
+	for name := range p.functions {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		fn := info.functions[name]
+		fn := p.functions[name]
 		obj := &ast.Object{
 			Kind: ast.Fun,
 			Name: "C." + name,
@@ -209,16 +271,16 @@ func (info *fileInfo) addFuncDecls() {
 		args := make([]*ast.Field, len(fn.args))
 		decl := &ast.FuncDecl{
 			Name: &ast.Ident{
-				NamePos: info.importCPos,
+				NamePos: fn.pos,
 				Name:    "C." + name,
 				Obj:     obj,
 			},
 			Type: &ast.FuncType{
-				Func: info.importCPos,
+				Func: fn.pos,
 				Params: &ast.FieldList{
-					Opening: info.importCPos,
+					Opening: fn.pos,
 					List:    args,
-					Closing: info.importCPos,
+					Closing: fn.pos,
 				},
 				Results: fn.results,
 			},
@@ -228,7 +290,7 @@ func (info *fileInfo) addFuncDecls() {
 			args[i] = &ast.Field{
 				Names: []*ast.Ident{
 					&ast.Ident{
-						NamePos: info.importCPos,
+						NamePos: fn.pos,
 						Name:    arg.name,
 						Obj: &ast.Object{
 							Kind: ast.Var,
@@ -240,7 +302,7 @@ func (info *fileInfo) addFuncDecls() {
 				Type: arg.typeExpr,
 			}
 		}
-		info.Decls = append(info.Decls, decl)
+		p.generated.Decls = append(p.generated.Decls, decl)
 	}
 }
 
@@ -253,39 +315,40 @@ func (info *fileInfo) addFuncDecls() {
 //         C.mul unsafe.Pointer
 //         // ...
 //     )
-func (info *fileInfo) addFuncPtrDecls() {
-	if len(info.functions) == 0 {
+func (p *cgoPackage) addFuncPtrDecls() {
+	if len(p.functions) == 0 {
 		return
 	}
 	gen := &ast.GenDecl{
-		TokPos: info.importCPos,
+		TokPos: token.NoPos,
 		Tok:    token.VAR,
-		Lparen: info.importCPos,
-		Rparen: info.importCPos,
+		Lparen: token.NoPos,
+		Rparen: token.NoPos,
 	}
-	names := make([]string, 0, len(info.functions))
-	for name := range info.functions {
+	names := make([]string, 0, len(p.functions))
+	for name := range p.functions {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		fn := p.functions[name]
 		obj := &ast.Object{
 			Kind: ast.Typ,
 			Name: "C." + name + "$funcaddr",
 		}
 		valueSpec := &ast.ValueSpec{
 			Names: []*ast.Ident{&ast.Ident{
-				NamePos: info.importCPos,
+				NamePos: fn.pos,
 				Name:    "C." + name + "$funcaddr",
 				Obj:     obj,
 			}},
 			Type: &ast.SelectorExpr{
 				X: &ast.Ident{
-					NamePos: info.importCPos,
+					NamePos: fn.pos,
 					Name:    "unsafe",
 				},
 				Sel: &ast.Ident{
-					NamePos: info.importCPos,
+					NamePos: fn.pos,
 					Name:    "Pointer",
 				},
 			},
@@ -293,7 +356,7 @@ func (info *fileInfo) addFuncPtrDecls() {
 		obj.Decl = valueSpec
 		gen.Specs = append(gen.Specs, valueSpec)
 	}
-	info.Decls = append(info.Decls, gen)
+	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
 // addConstDecls declares external C constants in the Go source.
@@ -304,39 +367,39 @@ func (info *fileInfo) addFuncPtrDecls() {
 //         C.CONST_FLOAT = 5.8
 //         // ...
 //     )
-func (info *fileInfo) addConstDecls() {
-	if len(info.constants) == 0 {
+func (p *cgoPackage) addConstDecls() {
+	if len(p.constants) == 0 {
 		return
 	}
 	gen := &ast.GenDecl{
-		TokPos: info.importCPos,
+		TokPos: token.NoPos,
 		Tok:    token.CONST,
-		Lparen: info.importCPos,
-		Rparen: info.importCPos,
+		Lparen: token.NoPos,
+		Rparen: token.NoPos,
 	}
-	names := make([]string, 0, len(info.constants))
-	for name := range info.constants {
+	names := make([]string, 0, len(p.constants))
+	for name := range p.constants {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		constVal := info.constants[name]
+		constVal := p.constants[name]
 		obj := &ast.Object{
 			Kind: ast.Con,
 			Name: "C." + name,
 		}
 		valueSpec := &ast.ValueSpec{
 			Names: []*ast.Ident{&ast.Ident{
-				NamePos: info.importCPos,
+				NamePos: constVal.pos,
 				Name:    "C." + name,
 				Obj:     obj,
 			}},
-			Values: []ast.Expr{constVal},
+			Values: []ast.Expr{constVal.expr},
 		}
 		obj.Decl = valueSpec
 		gen.Specs = append(gen.Specs, valueSpec)
 	}
-	info.Decls = append(info.Decls, gen)
+	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
 // addVarDecls declares external C globals in the Go source.
@@ -347,30 +410,30 @@ func (info *fileInfo) addConstDecls() {
 //         C.globalBool bool
 //         // ...
 //     )
-func (info *fileInfo) addVarDecls() {
-	if len(info.globals) == 0 {
+func (p *cgoPackage) addVarDecls() {
+	if len(p.globals) == 0 {
 		return
 	}
 	gen := &ast.GenDecl{
-		TokPos: info.importCPos,
+		TokPos: token.NoPos,
 		Tok:    token.VAR,
-		Lparen: info.importCPos,
-		Rparen: info.importCPos,
+		Lparen: token.NoPos,
+		Rparen: token.NoPos,
 	}
-	names := make([]string, 0, len(info.globals))
-	for name := range info.globals {
+	names := make([]string, 0, len(p.globals))
+	for name := range p.globals {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		global := info.globals[name]
+		global := p.globals[name]
 		obj := &ast.Object{
 			Kind: ast.Var,
 			Name: "C." + name,
 		}
 		valueSpec := &ast.ValueSpec{
 			Names: []*ast.Ident{&ast.Ident{
-				NamePos: info.importCPos,
+				NamePos: global.pos,
 				Name:    "C." + name,
 				Obj:     obj,
 			}},
@@ -379,7 +442,7 @@ func (info *fileInfo) addVarDecls() {
 		obj.Decl = valueSpec
 		gen.Specs = append(gen.Specs, valueSpec)
 	}
-	info.Decls = append(info.Decls, gen)
+	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
 // addTypeAliases aliases some built-in Go types with their equivalent C types.
@@ -390,17 +453,17 @@ func (info *fileInfo) addVarDecls() {
 //         C.int16_t = int16
 //         // ...
 //     )
-func (info *fileInfo) addTypeAliases() {
+func (p *cgoPackage) addTypeAliases() {
 	aliasKeys := make([]string, 0, len(cgoAliases))
 	for key := range cgoAliases {
 		aliasKeys = append(aliasKeys, key)
 	}
 	sort.Strings(aliasKeys)
 	gen := &ast.GenDecl{
-		TokPos: info.importCPos,
+		TokPos: token.NoPos,
 		Tok:    token.TYPE,
-		Lparen: info.importCPos,
-		Rparen: info.importCPos,
+		Lparen: token.NoPos,
+		Rparen: token.NoPos,
 	}
 	for _, typeName := range aliasKeys {
 		goTypeName := cgoAliases[typeName]
@@ -410,37 +473,37 @@ func (info *fileInfo) addTypeAliases() {
 		}
 		typeSpec := &ast.TypeSpec{
 			Name: &ast.Ident{
-				NamePos: info.importCPos,
+				NamePos: token.NoPos,
 				Name:    typeName,
 				Obj:     obj,
 			},
-			Assign: info.importCPos,
+			Assign: p.generatedPos,
 			Type: &ast.Ident{
-				NamePos: info.importCPos,
+				NamePos: token.NoPos,
 				Name:    goTypeName,
 			},
 		}
 		obj.Decl = typeSpec
 		gen.Specs = append(gen.Specs, typeSpec)
 	}
-	info.Decls = append(info.Decls, gen)
+	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
-func (info *fileInfo) addTypedefs() {
-	if len(info.typedefs) == 0 {
+func (p *cgoPackage) addTypedefs() {
+	if len(p.typedefs) == 0 {
 		return
 	}
 	gen := &ast.GenDecl{
-		TokPos: info.importCPos,
+		TokPos: token.NoPos,
 		Tok:    token.TYPE,
 	}
-	names := make([]string, 0, len(info.typedefs))
-	for name := range info.typedefs {
+	names := make([]string, 0, len(p.typedefs))
+	for name := range p.typedefs {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		typedef := info.typedefs[name]
+		typedef := p.typedefs[name]
 		typeName := "C." + name
 		isAlias := true
 		if strings.HasPrefix(name, "_Cgo_") {
@@ -457,19 +520,19 @@ func (info *fileInfo) addTypedefs() {
 		}
 		typeSpec := &ast.TypeSpec{
 			Name: &ast.Ident{
-				NamePos: info.importCPos,
+				NamePos: typedef.pos,
 				Name:    typeName,
 				Obj:     obj,
 			},
 			Type: typedef.typeExpr,
 		}
 		if isAlias {
-			typeSpec.Assign = info.importCPos
+			typeSpec.Assign = typedef.pos
 		}
 		obj.Decl = typeSpec
 		gen.Specs = append(gen.Specs, typeSpec)
 	}
-	info.Decls = append(info.Decls, gen)
+	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
 // addElaboratedTypes adds C elaborated types as aliases. These are the "struct
@@ -477,21 +540,21 @@ func (info *fileInfo) addTypedefs() {
 //
 // See also:
 // https://en.cppreference.com/w/cpp/language/elaborated_type_specifier
-func (info *fileInfo) addElaboratedTypes() {
-	if len(info.elaboratedTypes) == 0 {
+func (p *cgoPackage) addElaboratedTypes() {
+	if len(p.elaboratedTypes) == 0 {
 		return
 	}
 	gen := &ast.GenDecl{
-		TokPos: info.importCPos,
+		TokPos: token.NoPos,
 		Tok:    token.TYPE,
 	}
-	names := make([]string, 0, len(info.elaboratedTypes))
-	for name := range info.elaboratedTypes {
+	names := make([]string, 0, len(p.elaboratedTypes))
+	for name := range p.elaboratedTypes {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		typ := info.elaboratedTypes[name]
+		typ := p.elaboratedTypes[name]
 		typeName := "C." + name
 		obj := &ast.Object{
 			Kind: ast.Typ,
@@ -499,22 +562,22 @@ func (info *fileInfo) addElaboratedTypes() {
 		}
 		typeSpec := &ast.TypeSpec{
 			Name: &ast.Ident{
-				NamePos: info.importCPos,
+				NamePos: typ.pos,
 				Name:    typeName,
 				Obj:     obj,
 			},
-			Type: typ,
+			Type: typ.typeExpr,
 		}
 		obj.Decl = typeSpec
 		gen.Specs = append(gen.Specs, typeSpec)
 	}
-	info.Decls = append(info.Decls, gen)
+	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
 // findMissingCGoNames traverses the AST and finds all C.something names. Only
 // these symbols are extracted from the parsed C AST and converted to the Go
 // equivalent.
-func (info *fileInfo) findMissingCGoNames(cursor *astutil.Cursor) bool {
+func (p *cgoPackage) findMissingCGoNames(cursor *astutil.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *ast.SelectorExpr:
 		x, ok := node.X.(*ast.Ident)
@@ -523,10 +586,10 @@ func (info *fileInfo) findMissingCGoNames(cursor *astutil.Cursor) bool {
 		}
 		if x.Name == "C" {
 			name := node.Sel.Name
-			if _, ok := cgoBuiltinAliases[name]; ok {
+			if _, ok := builtinAliases[name]; ok {
 				name = "_Cgo_" + name
 			}
-			info.missingSymbols[name] = struct{}{}
+			p.missingSymbols[name] = struct{}{}
 		}
 	}
 	return true
@@ -536,7 +599,7 @@ func (info *fileInfo) findMissingCGoNames(cursor *astutil.Cursor) bool {
 // expressions. Such expressions are impossible to write in Go (a dot cannot be
 // used in the middle of a name) so in practice all C identifiers live in a
 // separate namespace (no _Cgo_ hacks like in gc).
-func (info *fileInfo) walker(cursor *astutil.Cursor) bool {
+func (p *cgoPackage) walker(cursor *astutil.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *ast.CallExpr:
 		fun, ok := node.Fun.(*ast.SelectorExpr)
@@ -547,7 +610,7 @@ func (info *fileInfo) walker(cursor *astutil.Cursor) bool {
 		if !ok {
 			return true
 		}
-		if _, ok := info.functions[fun.Sel.Name]; ok && x.Name == "C" {
+		if _, ok := p.functions[fun.Sel.Name]; ok && x.Name == "C" {
 			node.Fun = &ast.Ident{
 				NamePos: x.NamePos,
 				Name:    "C." + fun.Sel.Name,
@@ -560,7 +623,7 @@ func (info *fileInfo) walker(cursor *astutil.Cursor) bool {
 		}
 		if x.Name == "C" {
 			name := "C." + node.Sel.Name
-			if _, ok := info.functions[node.Sel.Name]; ok {
+			if _, ok := p.functions[node.Sel.Name]; ok {
 				name += "$funcaddr"
 			}
 			cursor.Replace(&ast.Ident{

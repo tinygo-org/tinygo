@@ -32,7 +32,7 @@ CGO_LDFLAGS=-L$(LLVM_BUILDDIR)/lib $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUIL
 clean:
 	@rm -rf build
 
-FMT_PATHS = ./*.go compiler interp ir loader src/device/arm src/examples src/machine src/os src/reflect src/runtime src/sync src/syscall
+FMT_PATHS = ./*.go cgo compiler interp ir loader src/device/arm src/examples src/machine src/os src/reflect src/runtime src/sync src/syscall
 fmt:
 	@gofmt -l -w $(FMT_PATHS)
 fmt-check:
