@@ -232,10 +232,10 @@ func (i2c I2C) readByte() byte {
 // readLastByte reads a single byte from the I2C bus, sending a stop signal
 // after it has been read.
 func (i2c I2C) readLastByte() byte {
+	i2c.signalStop() // signal 'stop' now, so it is sent when reading RXD
 	for i2c.Bus.EVENTS_RXDREADY == 0 {
 	}
 	i2c.Bus.EVENTS_RXDREADY = 0
-	i2c.signalStop() // signal 'stop' now, so it is sent when reading RXD
 	return byte(i2c.Bus.RXD)
 }
 
