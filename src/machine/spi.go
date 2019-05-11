@@ -1,4 +1,4 @@
-// +build nrf stm32f103xx atsamd21g18a
+// +build js,wasm nrf stm32f103xx atsamd21g18a
 
 package machine
 
