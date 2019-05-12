@@ -185,19 +185,21 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		}
 	}
 	if len(r) != 0 {
-		i2c.Bus.SHORTS = 1        // To trigger suspend task when a byte is received
+		// To trigger suspend task when a byte is received
+		i2c.Bus.SHORTS &^= (nrf.TWI_SHORTS_BB_STOP << nrf.TWI_SHORTS_BB_STOP_Pos)
 		i2c.Bus.TASKS_STARTRX = 1 // re-start transmission for reading
 		for i := range r {        // read each char
+			// i2c.Bus.TASKS_RESUME = 1 // re-start transmission for reading
 			if i+1 == len(r) {
 				// To trigger stop task when last byte is received, set before resume task.
-				i2c.Bus.SHORTS = 2
+				i2c.Bus.SHORTS = nrf.TWI_SHORTS_BB_STOP
 			}
 			i2c.Bus.TASKS_RESUME = 1 // re-start transmission for reading
 			r[i] = i2c.readByte()
 		}
 	}
 	i2c.signalStop()
-	i2c.Bus.SHORTS = 0
+	i2c.Bus.SHORTS &^= nrf.TWI_SHORTS_BB_STOP
 	return nil
 }
 
