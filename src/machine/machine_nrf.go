@@ -198,7 +198,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		}
 	}
 	i2c.signalStop()
-	i2c.Bus.SHORTS &^= nrf.TWI_SHORTS_BB_STOP
+	i2c.Bus.SHORTS = nrf.TWI_SHORTS_BB_SUSPEND_Disabled
 	return nil
 }
 
