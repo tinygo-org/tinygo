@@ -185,21 +185,20 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		}
 	}
 	if len(r) != 0 {
+		i2c.Bus.SHORTS = 1        // To trigger suspend task when a byte is received
 		i2c.Bus.TASKS_STARTRX = 1 // re-start transmission for reading
 		for i := range r {        // read each char
+			// i2c.Bus.TASKS_RESUME = 1 // re-start transmission for reading
 			if i+1 == len(r) {
-				// The 'stop' signal must be sent before reading back the last
-				// byte, so that it will be sent by the I2C peripheral right
-				// after the last byte has been read.
-				r[i] = i2c.readLastByte()
-			} else {
-				r[i] = i2c.readByte()
+				// To trigger stop task when last byte is received, set before resume task.
+				i2c.Bus.SHORTS = 2
 			}
+			i2c.Bus.TASKS_RESUME = 1 // re-start transmission for reading
+			r[i] = i2c.readByte()
 		}
-	} else {
-		// Nothing to read back. Stop the transmission.
-		i2c.signalStop()
 	}
+	i2c.signalStop()
+	i2c.Bus.SHORTS = 0
 	return nil
 }
 
@@ -225,16 +224,6 @@ func (i2c I2C) writeByte(data byte) {
 func (i2c I2C) readByte() byte {
 	for i2c.Bus.EVENTS_RXDREADY == 0 {
 	}
-	i2c.Bus.EVENTS_RXDREADY = 0
-	return byte(i2c.Bus.RXD)
-}
-
-// readLastByte reads a single byte from the I2C bus, sending a stop signal
-// after it has been read.
-func (i2c I2C) readLastByte() byte {
-	for i2c.Bus.EVENTS_RXDREADY == 0 {
-	}
-	i2c.signalStop() // signal 'stop' now, so it is sent when reading RXD
 	i2c.Bus.EVENTS_RXDREADY = 0
 	return byte(i2c.Bus.RXD)
 }
