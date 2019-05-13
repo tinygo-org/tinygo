@@ -69,7 +69,7 @@ type Interface struct {
 	Type *types.Interface
 }
 
-// Create and intialize a new *Program from a *ssa.Program.
+// Create and initialize a new *Program from a *ssa.Program.
 func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 	comments := map[string]*ast.CommentGroup{}
 	for _, pkgInfo := range lprogram.Sorted() {
