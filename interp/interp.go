@@ -18,7 +18,6 @@ type Eval struct {
 	TargetData      llvm.TargetData
 	Debug           bool
 	builder         llvm.Builder
-	dibuilder       *llvm.DIBuilder
 	dirtyGlobals    map[llvm.Value]struct{}
 	sideEffectFuncs map[llvm.Value]*sideEffectResult // cache of side effect scan results
 }
@@ -38,7 +37,6 @@ func Run(mod llvm.Module, targetData llvm.TargetData, debug bool) error {
 		dirtyGlobals: map[llvm.Value]struct{}{},
 	}
 	e.builder = mod.Context().NewBuilder()
-	e.dibuilder = llvm.NewDIBuilder(mod)
 
 	initAll := mod.NamedFunction(name)
 	bb := initAll.EntryBasicBlock()
@@ -49,7 +47,6 @@ func Run(mod llvm.Module, targetData llvm.TargetData, debug bool) error {
 	e.builder.SetInsertPointBefore(bb.FirstInstruction())
 	dummy := e.builder.CreateAlloca(e.Mod.Context().Int8Type(), "dummy")
 	e.builder.SetInsertPointBefore(dummy)
-	e.builder.SetInstDebugLocation(bb.FirstInstruction())
 	var initCalls []llvm.Value
 	for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
 		if inst == dummy {
