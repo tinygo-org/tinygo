@@ -60,14 +60,20 @@ func hashmapTopHash(hash uint32) uint8 {
 }
 
 // Create a new hashmap with the given keySize and valueSize.
-func hashmapMake(keySize, valueSize uint8) *hashmap {
+func hashmapMake(keySize, valueSize uint8, sizeHint uintptr) *hashmap {
+	numBuckets := sizeHint / 8
+	bucketBits := uint8(0)
+	for numBuckets != 0 {
+		numBuckets /= 2
+		bucketBits++
+	}
 	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(keySize)*8 + uintptr(valueSize)*8
-	bucket := alloc(bucketBufSize)
+	buckets := alloc(bucketBufSize * (1 << bucketBits))
 	return &hashmap{
-		buckets:    bucket,
+		buckets:    buckets,
 		keySize:    keySize,
 		valueSize:  valueSize,
-		bucketBits: 0,
+		bucketBits: bucketBits,
 	}
 }
 
