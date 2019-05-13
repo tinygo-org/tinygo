@@ -50,15 +50,15 @@ func main() {
 
 	// test preallocated map
 	squares := make(map[int]int, 200)
-	for i := 0; i < 100; i++ {
-		squares[i] = i*i
-		for j := 0; j <= i; j++ {
-			if v := squares[j]; v != j*j {
-				println("unexpected value read back from squares map:", j, v)
-			}
-		}
-	}
+	testBigMap(squares, 100)
 	println("tested preallocated map")
+
+	// test growing maps
+	squares = make(map[int]int, 0)
+	testBigMap(squares, 10)
+	squares = make(map[int]int, 20)
+	testBigMap(squares, 40)
+	println("tested growing of a map")
 }
 
 func readMap(m map[string]int, key string) {
@@ -72,4 +72,23 @@ func readMap(m map[string]int, key string) {
 func lookup(m map[string]int, key string) {
 	value, ok := m[key]
 	println("lookup with comma-ok:", key, value, ok)
+}
+
+func testBigMap(squares map[int]int, n int) {
+	for i := 0; i < n; i++ {
+		if len(squares) != i {
+			println("unexpected length:", len(squares), "at i =", i)
+		}
+		squares[i] = i*i
+		for j := 0; j <= i; j++ {
+			if v, ok := squares[j]; !ok || v != j*j {
+				if !ok {
+					println("key not found in squares map:", j)
+				} else {
+					println("unexpected value read back from squares map:", j, v)
+				}
+				return
+			}
+		}
+	}
 }
