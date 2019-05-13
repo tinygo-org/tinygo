@@ -55,6 +55,25 @@ func (c *Compiler) expandFormalParamType(t llvm.Type) []llvm.Type {
 	}
 }
 
+// Expand an argument type to a list of offsets from the start of the object.
+// Used together with expandFormalParam to get the offset of each value from the
+// start of the non-expanded value.
+func (c *Compiler) expandFormalParamOffsets(t llvm.Type) []uint64 {
+	switch t.TypeKind() {
+	case llvm.StructTypeKind:
+		fields := c.flattenAggregateTypeOffsets(t)
+		if len(fields) <= MaxFieldsPerParam {
+			return fields
+		} else {
+			// failed to lower
+			return []uint64{0}
+		}
+	default:
+		// TODO: split small arrays
+		return []uint64{0}
+	}
+}
+
 // Equivalent of expandFormalParamType for parameter values.
 func (c *Compiler) expandFormalParam(v llvm.Value) []llvm.Value {
 	switch v.Type().TypeKind() {
@@ -89,6 +108,27 @@ func (c *Compiler) flattenAggregateType(t llvm.Type) []llvm.Type {
 		return fields
 	default:
 		return []llvm.Type{t}
+	}
+}
+
+// Return the offsets from the start of the object if this object type were
+// flattened like in flattenAggregate. Used together with flattenAggregate to
+// know the start indices of each value in the non-flattened object.
+func (c *Compiler) flattenAggregateTypeOffsets(t llvm.Type) []uint64 {
+	switch t.TypeKind() {
+	case llvm.StructTypeKind:
+		fields := make([]uint64, 0, t.StructElementTypesCount())
+		for fieldIndex, field := range t.StructElementTypes() {
+			suboffsets := c.flattenAggregateTypeOffsets(field)
+			offset := c.targetData.ElementOffset(t, fieldIndex)
+			for i := range suboffsets {
+				suboffsets[i] += offset
+			}
+			fields = append(fields, suboffsets...)
+		}
+		return fields
+	default:
+		return []uint64{0}
 	}
 }
 
