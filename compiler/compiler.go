@@ -1425,7 +1425,16 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		valueSize := c.targetData.TypeAllocSize(llvmValueType)
 		llvmKeySize := llvm.ConstInt(c.ctx.Int8Type(), keySize, false)
 		llvmValueSize := llvm.ConstInt(c.ctx.Int8Type(), valueSize, false)
-		hashmap := c.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize}, "")
+		sizeHint := llvm.ConstInt(c.uintptrType, 8, false)
+		if expr.Reserve != nil {
+			sizeHint = c.getValue(frame, expr.Reserve)
+			var err error
+			sizeHint, err = c.parseConvert(expr.Reserve.Type(), types.Typ[types.Uintptr], sizeHint, expr.Pos())
+			if err != nil {
+				return llvm.Value{}, err
+			}
+		}
+		hashmap := c.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize, sizeHint}, "")
 		return hashmap, nil
 	case *ssa.MakeSlice:
 		sliceLen := c.getValue(frame, expr.Len)
