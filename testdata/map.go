@@ -47,6 +47,18 @@ func main() {
 	println(testMapArrayKey[arrKey])
 	testMapArrayKey[arrKey] = 5555
 	println(testMapArrayKey[arrKey])
+
+	// test preallocated map
+	squares := make(map[int]int, 200)
+	for i := 0; i < 100; i++ {
+		squares[i] = i*i
+		for j := 0; j <= i; j++ {
+			if v := squares[j]; v != j*j {
+				println("unexpected value read back from squares map:", j, v)
+			}
+		}
+	}
+	println("tested preallocated map")
 }
 
 func readMap(m map[string]int, key string) {
@@ -56,6 +68,7 @@ func readMap(m map[string]int, key string) {
 		println(" ", k, "=", v)
 	}
 }
+
 func lookup(m map[string]int, key string) {
 	value, ok := m[key]
 	println("lookup with comma-ok:", key, value, ok)
