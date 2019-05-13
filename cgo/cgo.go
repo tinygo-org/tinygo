@@ -8,7 +8,7 @@
 package cgo
 
 // This file extracts the `import "C"` statement from the source and modifies
-// the AST for CCo. It does not use libclang directly: see libclang.go for the C
+// the AST for CGo. It does not use libclang directly: see libclang.go for the C
 // source file parsing.
 
 import (
@@ -21,7 +21,7 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
-// cgoPackage holds all CCo-related information of a package.
+// cgoPackage holds all CGo-related information of a package.
 type cgoPackage struct {
 	generated       *ast.File
 	generatedPos    token.Pos
@@ -44,7 +44,7 @@ type constantInfo struct {
 	pos  token.Pos
 }
 
-// functionInfo stores some information about a CCo function found by libclang
+// functionInfo stores some information about a CGo function found by libclang
 // and declared in the AST.
 type functionInfo struct {
 	args    []paramInfo
@@ -52,7 +52,7 @@ type functionInfo struct {
 	pos     token.Pos
 }
 
-// paramInfo is a parameter of a Cgo function (see functionInfo).
+// paramInfo is a parameter of a CGo function (see functionInfo).
 type paramInfo struct {
 	name     string
 	typeExpr ast.Expr

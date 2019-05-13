@@ -346,7 +346,7 @@ func (p *Package) importRecursively() error {
 	p.Importing = true
 	for _, to := range p.Package.Imports {
 		if to == "C" {
-			// Do Cgo processing in a later stage.
+			// Do CGo processing in a later stage.
 			continue
 		}
 		if _, ok := p.Imports[to]; ok {
