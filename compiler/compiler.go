@@ -1944,10 +1944,12 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 		default:
 			return llvm.Value{}, c.makeError(pos, "binop on interface: "+op.String())
 		}
-	case *types.Map, *types.Pointer:
+	case *types.Chan, *types.Map, *types.Pointer:
 		// Maps are in general not comparable, but can be compared against nil
 		// (which is a nil pointer). This means they can be trivially compared
 		// by treating them as a pointer.
+		// Channels behave as pointers in that they are equal as long as they
+		// are created with the same call to make or if both are nil.
 		switch op {
 		case token.EQL: // ==
 			return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil

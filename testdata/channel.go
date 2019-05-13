@@ -4,7 +4,7 @@ import "time"
 
 func main() {
 	ch := make(chan int)
-	println("len, cap of channel:", len(ch), cap(ch))
+	println("len, cap of channel:", len(ch), cap(ch), ch == nil)
 	go sender(ch)
 
 	n, ok := <-ch
