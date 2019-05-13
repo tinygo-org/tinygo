@@ -1416,7 +1416,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return c.parseMakeClosure(frame, expr)
 	case *ssa.MakeInterface:
 		val := c.getValue(frame, expr.X)
-		return c.parseMakeInterface(val, expr.X.Type(), expr.Pos())
+		return c.parseMakeInterface(val, expr.X.Type(), expr.Pos()), nil
 	case *ssa.MakeMap:
 		mapType := expr.Type().Underlying().(*types.Map)
 		llvmKeyType := c.getLLVMType(mapType.Key().Underlying())
