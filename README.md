@@ -47,9 +47,11 @@ The following microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
 * [Adafruit ItsyBitsy M0](https://www.adafruit.com/product/3727)
+* [Adafruit Trinket M0](https://www.adafruit.com/product/3500)
 * [Arduino Uno](https://store.arduino.cc/arduino-uno-rev3)
 * [BBC:Microbit](https://microbit.org/)
 * [ST Micro STM32F103XX "Bluepill"](http://wiki.stm32duino.com/index.php?title=Blue_Pill)
+* [ST Micro STM32F407 "Discovery"](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
 * [Digispark](http://digistump.com/products/1)
 * [Nordic Semiconductor PCA10031](https://www.nordicsemi.com/eng/Products/nRF51-Dongle)
 * [Nordic Semiconductor PCA10040](https://www.nordicsemi.com/eng/Products/Bluetooth-low-energy/nRF52-DK)
