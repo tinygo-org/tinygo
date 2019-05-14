@@ -3,6 +3,7 @@
 	"goos": "linux",
 	"goarch": "arm",
 	"compiler": "avr-gcc",
+	"gc": "leaking",
 	"linker": "avr-gcc",
 	"ldflags": [
 		"-T", "targets/avr.ld",

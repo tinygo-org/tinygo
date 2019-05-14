@@ -176,6 +176,20 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					continue // special case: bitcast of alloc
 				}
 			}
+			if _, ok := fr.getLocal(operand).(*MapValue); ok {
+				// Special case for runtime.trackPointer calls.
+				// Note: this might not be entirely sound in some rare cases
+				// where the map is stored in a dirty global.
+				uses := getUses(inst)
+				if len(uses) == 1 {
+					use := uses[0]
+					if !use.IsACallInst().IsNil() && !use.CalledValue().IsAFunction().IsNil() && use.CalledValue().Name() == "runtime.trackPointer" {
+						continue
+					}
+				}
+				// It is not possible in Go to bitcast a map value to a pointer.
+				panic("unimplemented: bitcast of map")
+			}
 			value := fr.getLocal(operand).(*LocalValue)
 			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateBitCast(value.Value(), inst.Type(), "")}
 
@@ -367,6 +381,8 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			case callee.Name() == "runtime.nanotime":
 				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstInt(fr.Mod.Context().Int64Type(), 0, false)}
 			case callee.Name() == "llvm.dbg.value":
+				// do nothing
+			case callee.Name() == "runtime.trackPointer":
 				// do nothing
 			case strings.HasPrefix(callee.Name(), "runtime.print") || callee.Name() == "runtime._panic":
 				// This are all print instructions, which necessarily have side

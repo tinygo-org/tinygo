@@ -130,6 +130,9 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) {
 	// Put this struct in an alloca.
 	alloca := c.builder.CreateAlloca(deferFrameType, "defer.alloca")
 	c.builder.CreateStore(deferFrame, alloca)
+	if c.needsStackObjects() {
+		c.trackPointer(alloca)
+	}
 
 	// Push it on top of the linked list by replacing deferPtr.
 	allocaCast := c.builder.CreateBitCast(alloca, next.Type(), "defer.alloca.cast")

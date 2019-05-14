@@ -35,6 +35,8 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 		return &sideEffectResult{severity: sideEffectLimited}
 	case "runtime.interfaceImplements":
 		return &sideEffectResult{severity: sideEffectNone}
+	case "runtime.trackPointer":
+		return &sideEffectResult{severity: sideEffectNone}
 	case "llvm.dbg.value":
 		return &sideEffectResult{severity: sideEffectNone}
 	}
