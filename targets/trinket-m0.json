@@ -1,0 +1,5 @@
+{
+    "inherits": ["atsamd21e18a"],
+    "build-tags": ["sam", "atsamd21e18a", "trinket_m0"],
+    "flash": "bossac -d -i -e -w -v -R --offset=0x2000 {hex}"
+}
