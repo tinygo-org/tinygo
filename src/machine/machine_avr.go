@@ -17,10 +17,10 @@ const (
 func (p GPIO) Set(value bool) {
 	if value { // set bits
 		port, mask := p.PortMaskSet()
-		*port = mask
+		port.Set(mask)
 	} else { // clear bits
 		port, mask := p.PortMaskClear()
-		*port = mask
+		port.Set(mask)
 	}
 }
 
@@ -30,9 +30,9 @@ func (p GPIO) Set(value bool) {
 // Warning: there are no separate pin set/clear registers on the AVR. The
 // returned mask is only valid as long as no other pin in the same port has been
 // changed.
-func (p GPIO) PortMaskSet() (*avr.RegValue, avr.RegValue) {
+func (p GPIO) PortMaskSet() (*avr.Register8, uint8) {
 	port, mask := p.getPortMask()
-	return port, *port | avr.RegValue(mask)
+	return port, port.Get() | mask
 }
 
 // Return the register and mask to disable a given port. This can be used to
@@ -41,18 +41,18 @@ func (p GPIO) PortMaskSet() (*avr.RegValue, avr.RegValue) {
 // Warning: there are no separate pin set/clear registers on the AVR. The
 // returned mask is only valid as long as no other pin in the same port has been
 // changed.
-func (p GPIO) PortMaskClear() (*avr.RegValue, avr.RegValue) {
+func (p GPIO) PortMaskClear() (*avr.Register8, uint8) {
 	port, mask := p.getPortMask()
-	return port, *port &^ avr.RegValue(mask)
+	return port, port.Get() &^ mask
 }
 
 // InitADC initializes the registers needed for ADC.
 func InitADC() {
 	// set a2d prescaler so we are inside the desired 50-200 KHz range at 16MHz.
-	*avr.ADCSRA |= (avr.ADCSRA_ADPS2 | avr.ADCSRA_ADPS1 | avr.ADCSRA_ADPS0)
+	avr.ADCSRA.SetBits(avr.ADCSRA_ADPS2 | avr.ADCSRA_ADPS1 | avr.ADCSRA_ADPS0)
 
 	// enable a2d conversions
-	*avr.ADCSRA |= avr.ADCSRA_ADEN
+	avr.ADCSRA.SetBits(avr.ADCSRA_ADEN)
 }
 
 // Configure configures a ADCPin to be able to be used to read data.
@@ -68,18 +68,16 @@ func (a ADC) Get() uint16 {
 	// set the ADLAR bit (left-adjusted result) to get a value scaled to 16
 	// bits. This has the same effect as shifting the return value left by 6
 	// bits.
-	*avr.ADMUX = avr.RegValue(avr.ADMUX_REFS0 | avr.ADMUX_ADLAR | (a.Pin & 0x07))
+	avr.ADMUX.Set(avr.ADMUX_REFS0 | avr.ADMUX_ADLAR | (a.Pin & 0x07))
 
 	// start the conversion
-	*avr.ADCSRA |= avr.ADCSRA_ADSC
+	avr.ADCSRA.SetBits(avr.ADCSRA_ADSC)
 
 	// ADSC is cleared when the conversion finishes
-	for ok := true; ok; ok = (*avr.ADCSRA & avr.ADCSRA_ADSC) > 0 {
+	for ok := true; ok; ok = (avr.ADCSRA.Get() & avr.ADCSRA_ADSC) > 0 {
 	}
 
-	low := uint16(*avr.ADCL)
-	high := uint16(*avr.ADCH)
-	return uint16(low) | uint16(high<<8)
+	return uint16(avr.ADCL.Get()) | uint16(avr.ADCH.Get())<<8
 }
 
 // I2C on AVR.

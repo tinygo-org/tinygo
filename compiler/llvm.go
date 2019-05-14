@@ -22,6 +22,36 @@ func getUses(value llvm.Value) []llvm.Value {
 	return uses
 }
 
+// createEntryBlockAlloca creates a new alloca in the entry block, even though
+// the IR builder is located elsewhere. It assumes that the insert point is
+// after the last instruction in the current block. Also, it adds lifetime
+// information to the IR signalling that the alloca won't be used before this
+// point.
+//
+// This is useful for creating temporary allocas for intrinsics. Don't forget to
+// end the lifetime after you're done with it.
+func (c *Compiler) createEntryBlockAlloca(t llvm.Type, name string) (alloca, bitcast, size llvm.Value) {
+	currentBlock := c.builder.GetInsertBlock()
+	c.builder.SetInsertPointBefore(currentBlock.Parent().EntryBasicBlock().FirstInstruction())
+	alloca = c.builder.CreateAlloca(t, name)
+	c.builder.SetInsertPointAtEnd(currentBlock)
+	bitcast = c.builder.CreateBitCast(alloca, c.i8ptrType, name+".bitcast")
+	size = llvm.ConstInt(c.ctx.Int64Type(), c.targetData.TypeAllocSize(t), false)
+	c.builder.CreateCall(c.getLifetimeStartFunc(), []llvm.Value{size, bitcast}, "")
+	return
+}
+
+// getLifetimeStartFunc returns the llvm.lifetime.start intrinsic and creates it
+// first if it doesn't exist yet.
+func (c *Compiler) getLifetimeStartFunc() llvm.Value {
+	fn := c.mod.NamedFunction("llvm.lifetime.start.p0i8")
+	if fn.IsNil() {
+		fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.ctx.Int64Type(), c.i8ptrType}, false)
+		fn = llvm.AddFunction(c.mod, "llvm.lifetime.start.p0i8", fnType)
+	}
+	return fn
+}
+
 // getLifetimeEndFunc returns the llvm.lifetime.end intrinsic and creates it
 // first if it doesn't exist yet.
 func (c *Compiler) getLifetimeEndFunc() llvm.Value {

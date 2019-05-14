@@ -4,6 +4,10 @@ myint: 3 5
 myint size: 2
 longlong: -1099511627776
 global: 3
+defined ints: 5 5
+defined floats: +5.800000e+000 +5.800000e+000
+defined string: defined string
+defined char: 99
 15: 15
 25: 25
 callback 1: 50

@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/tinygo-org/tinygo/cgo"
 )
 
 // Program holds all packages and some metadata about the program as a whole.
@@ -30,11 +32,10 @@ type Program struct {
 type Package struct {
 	*Program
 	*build.Package
-	Imports    map[string]*Package
-	Importing  bool
-	Files      []*ast.File
-	tokenFiles map[string]*token.File
-	Pkg        *types.Package
+	Imports   map[string]*Package
+	Importing bool
+	Files     []*ast.File
+	Pkg       *types.Package
 	types.Info
 }
 
@@ -107,7 +108,6 @@ func (p *Program) newPackage(pkg *build.Package) *Package {
 			Scopes:     make(map[ast.Node]*types.Scope),
 			Selections: make(map[*ast.SelectorExpr]*types.Selection),
 		},
-		tokenFiles: map[string]*token.File{},
 	}
 }
 
@@ -295,16 +295,6 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		}
 		files = append(files, f)
 	}
-	clangIncludes := ""
-	if len(p.CgoFiles) != 0 {
-		if _, err := os.Stat(filepath.Join(p.TINYGOROOT, "llvm", "tools", "clang", "lib", "Headers")); !os.IsNotExist(err) {
-			// Running from the source directory.
-			clangIncludes = filepath.Join(p.TINYGOROOT, "llvm", "tools", "clang", "lib", "Headers")
-		} else {
-			// Running from the installation directory.
-			clangIncludes = filepath.Join(p.TINYGOROOT, "lib", "clang", "include")
-		}
-	}
 	for _, file := range p.CgoFiles {
 		path := filepath.Join(p.Package.Dir, file)
 		f, err := p.parseFile(path, parser.ParseComments)
@@ -312,12 +302,22 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 			fileErrs = append(fileErrs, err)
 			continue
 		}
-		errs := p.processCgo(path, f, append(p.CFlags, "-I"+p.Package.Dir, "-I"+clangIncludes))
+		files = append(files, f)
+	}
+	if len(p.CgoFiles) != 0 {
+		clangIncludes := ""
+		if _, err := os.Stat(filepath.Join(p.TINYGOROOT, "llvm", "tools", "clang", "lib", "Headers")); !os.IsNotExist(err) {
+			// Running from the source directory.
+			clangIncludes = filepath.Join(p.TINYGOROOT, "llvm", "tools", "clang", "lib", "Headers")
+		} else {
+			// Running from the installation directory.
+			clangIncludes = filepath.Join(p.TINYGOROOT, "lib", "clang", "include")
+		}
+		generated, errs := cgo.Process(files, p.Program.Dir, p.fset, append(p.CFlags, "-I"+p.Package.Dir, "-I"+clangIncludes))
 		if errs != nil {
 			fileErrs = append(fileErrs, errs...)
-			continue
 		}
-		files = append(files, f)
+		files = append(files, generated)
 	}
 	if len(fileErrs) != 0 {
 		return nil, Errors{p, fileErrs}
@@ -346,7 +346,7 @@ func (p *Package) importRecursively() error {
 	p.Importing = true
 	for _, to := range p.Package.Imports {
 		if to == "C" {
-			// Do Cgo processing in a later stage.
+			// Do CGo processing in a later stage.
 			continue
 		}
 		if _, ok := p.Imports[to]; ok {

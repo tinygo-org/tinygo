@@ -22,13 +22,10 @@ import (
 // value field.
 //
 // An interface value is a {typecode, value} tuple, or {i16, i8*} to be exact.
-func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, pos token.Pos) (llvm.Value, error) {
+func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, pos token.Pos) llvm.Value {
 	itfValue := c.emitPointerPack([]llvm.Value{val})
 	itfTypeCodeGlobal := c.getTypeCode(typ)
-	itfMethodSetGlobal, err := c.getTypeMethodSet(typ)
-	if err != nil {
-		return llvm.Value{}, nil
-	}
+	itfMethodSetGlobal := c.getTypeMethodSet(typ)
 	itfConcreteTypeGlobal := c.mod.NamedGlobal("typeInInterface:" + itfTypeCodeGlobal.Name())
 	if itfConcreteTypeGlobal.IsNil() {
 		typeInInterface := c.mod.GetTypeByName("runtime.typeInInterface")
@@ -41,7 +38,7 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, pos token.
 	itf := llvm.Undef(c.mod.GetTypeByName("runtime._interface"))
 	itf = c.builder.CreateInsertValue(itf, itfTypeCode, 0, "")
 	itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
-	return itf, nil
+	return itf
 }
 
 // getTypeCode returns a reference to a type code.
@@ -155,18 +152,18 @@ func getTypeCodeName(t types.Type) string {
 
 // getTypeMethodSet returns a reference (GEP) to a global method set. This
 // method set should be unreferenced after the interface lowering pass.
-func (c *Compiler) getTypeMethodSet(typ types.Type) (llvm.Value, error) {
+func (c *Compiler) getTypeMethodSet(typ types.Type) llvm.Value {
 	global := c.mod.NamedGlobal(typ.String() + "$methodset")
 	zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 	if !global.IsNil() {
 		// the method set already exists
-		return llvm.ConstGEP(global, []llvm.Value{zero, zero}), nil
+		return llvm.ConstGEP(global, []llvm.Value{zero, zero})
 	}
 
 	ms := c.ir.Program.MethodSets.MethodSet(typ)
 	if ms.Len() == 0 {
 		// no methods, so can leave that one out
-		return llvm.ConstPointerNull(llvm.PointerType(c.mod.GetTypeByName("runtime.interfaceMethodInfo"), 0)), nil
+		return llvm.ConstPointerNull(llvm.PointerType(c.mod.GetTypeByName("runtime.interfaceMethodInfo"), 0))
 	}
 
 	methods := make([]llvm.Value, ms.Len())
@@ -179,10 +176,7 @@ func (c *Compiler) getTypeMethodSet(typ types.Type) (llvm.Value, error) {
 			// compiler error, so panic
 			panic("cannot find function: " + f.LinkName())
 		}
-		fn, err := c.getInterfaceInvokeWrapper(f)
-		if err != nil {
-			return llvm.Value{}, err
-		}
+		fn := c.getInterfaceInvokeWrapper(f)
 		methodInfo := llvm.ConstNamedStruct(interfaceMethodInfoType, []llvm.Value{
 			signatureGlobal,
 			llvm.ConstPtrToInt(fn, c.uintptrType),
@@ -195,7 +189,7 @@ func (c *Compiler) getTypeMethodSet(typ types.Type) (llvm.Value, error) {
 	global.SetInitializer(value)
 	global.SetGlobalConstant(true)
 	global.SetLinkage(llvm.PrivateLinkage)
-	return llvm.ConstGEP(global, []llvm.Value{zero, zero}), nil
+	return llvm.ConstGEP(global, []llvm.Value{zero, zero})
 }
 
 // getInterfaceMethodSet returns a global variable with the method set of the
@@ -365,12 +359,12 @@ type interfaceInvokeWrapper struct {
 // the underlying value, dereferences it, and calls the real method. This
 // wrapper is only needed when the interface value actually doesn't fit in a
 // pointer and a pointer to the value must be created.
-func (c *Compiler) getInterfaceInvokeWrapper(f *ir.Function) (llvm.Value, error) {
+func (c *Compiler) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 	wrapperName := f.LinkName() + "$invoke"
 	wrapper := c.mod.NamedFunction(wrapperName)
 	if !wrapper.IsNil() {
 		// Wrapper already created. Return it directly.
-		return wrapper, nil
+		return wrapper
 	}
 
 	// Get the expanded receiver type.
@@ -383,7 +377,7 @@ func (c *Compiler) getInterfaceInvokeWrapper(f *ir.Function) (llvm.Value, error)
 		// Casting a function signature to a different signature and calling it
 		// with a receiver pointer bitcasted to *i8 (as done in calls on an
 		// interface) is hopefully a safe (defined) operation.
-		return f.LLVMFn, nil
+		return f.LLVMFn
 	}
 
 	// create wrapper function
@@ -396,7 +390,7 @@ func (c *Compiler) getInterfaceInvokeWrapper(f *ir.Function) (llvm.Value, error)
 		wrapper:      wrapper,
 		receiverType: receiverType,
 	})
-	return wrapper, nil
+	return wrapper
 }
 
 // createInterfaceInvokeWrapper finishes the work of getInterfaceInvokeWrapper,

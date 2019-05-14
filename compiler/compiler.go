@@ -52,7 +52,6 @@ type Compiler struct {
 	dibuilder               *llvm.DIBuilder
 	cu                      llvm.Metadata
 	difiles                 map[string]llvm.Metadata
-	ditypes                 map[string]llvm.Metadata
 	machine                 llvm.TargetMachine
 	targetData              llvm.TargetData
 	intType                 llvm.Type
@@ -96,7 +95,6 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 	c := &Compiler{
 		Config:  config,
 		difiles: make(map[string]llvm.Metadata),
-		ditypes: make(map[string]llvm.Metadata),
 	}
 
 	target, err := llvm.GetTargetFromTriple(config.Triple)
@@ -197,7 +195,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 		},
 		ShouldOverlay: func(path string) bool {
 			switch path {
-			case "machine", "os", "reflect", "runtime", "sync":
+			case "machine", "os", "reflect", "runtime", "runtime/volatile", "sync":
 				return true
 			default:
 				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
@@ -252,7 +250,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 	// Initialize debug information.
 	if c.Debug {
 		c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
-			Language:  llvm.DW_LANG_Go,
+			Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
 			File:      mainPath,
 			Dir:       "",
 			Producer:  "TinyGo",
@@ -385,6 +383,13 @@ func (c *Compiler) Compile(mainPath string) []error {
 				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
 				llvm.GlobalContext().MDString("Debug Info Version"),
 				llvm.ConstInt(c.ctx.Int32Type(), 3, false).ConstantAsMetadata(), // DWARF version
+			}),
+		)
+		c.mod.AddNamedMetadataOperand("llvm.module.flags",
+			c.ctx.MDNode([]llvm.Metadata{
+				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(),
+				llvm.GlobalContext().MDString("Dwarf Version"),
+				llvm.ConstInt(c.ctx.Int32Type(), 4, false).ConstantAsMetadata(),
 			}),
 		)
 		c.dibuilder.Finalize()
@@ -550,39 +555,166 @@ func isPointer(typ types.Type) bool {
 
 // Get the DWARF type for this Go type.
 func (c *Compiler) getDIType(typ types.Type) llvm.Metadata {
-	name := typ.String()
-	if dityp, ok := c.ditypes[name]; ok {
-		return dityp
-	} else {
-		llvmType := c.getLLVMType(typ)
-		sizeInBytes := c.targetData.TypeAllocSize(llvmType)
+	llvmType := c.getLLVMType(typ)
+	sizeInBytes := c.targetData.TypeAllocSize(llvmType)
+	switch typ := typ.(type) {
+	case *types.Array:
+		return c.dibuilder.CreateArrayType(llvm.DIArrayType{
+			SizeInBits:  sizeInBytes * 8,
+			AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
+			ElementType: c.getDIType(typ.Elem()),
+			Subscripts: []llvm.DISubrange{
+				llvm.DISubrange{
+					Lo:    0,
+					Count: typ.Len(),
+				},
+			},
+		})
+	case *types.Basic:
 		var encoding llvm.DwarfTypeEncoding
-		switch typ := typ.(type) {
-		case *types.Basic:
-			if typ.Info()&types.IsBoolean != 0 {
-				encoding = llvm.DW_ATE_boolean
-			} else if typ.Info()&types.IsFloat != 0 {
-				encoding = llvm.DW_ATE_float
-			} else if typ.Info()&types.IsComplex != 0 {
-				encoding = llvm.DW_ATE_complex_float
-			} else if typ.Info()&types.IsUnsigned != 0 {
-				encoding = llvm.DW_ATE_unsigned
-			} else if typ.Info()&types.IsInteger != 0 {
-				encoding = llvm.DW_ATE_signed
-			} else if typ.Kind() == types.UnsafePointer {
-				encoding = llvm.DW_ATE_address
-			}
-		case *types.Pointer:
-			encoding = llvm.DW_ATE_address
+		if typ.Info()&types.IsBoolean != 0 {
+			encoding = llvm.DW_ATE_boolean
+		} else if typ.Info()&types.IsFloat != 0 {
+			encoding = llvm.DW_ATE_float
+		} else if typ.Info()&types.IsComplex != 0 {
+			encoding = llvm.DW_ATE_complex_float
+		} else if typ.Info()&types.IsUnsigned != 0 {
+			encoding = llvm.DW_ATE_unsigned
+		} else if typ.Info()&types.IsInteger != 0 {
+			encoding = llvm.DW_ATE_signed
+		} else if typ.Kind() == types.UnsafePointer {
+			return c.dibuilder.CreatePointerType(llvm.DIPointerType{
+				Name:         "unsafe.Pointer",
+				SizeInBits:   c.targetData.TypeAllocSize(llvmType) * 8,
+				AlignInBits:  uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
+				AddressSpace: 0,
+			})
+		} else if typ.Info()&types.IsString != 0 {
+			return c.dibuilder.CreateStructType(llvm.Metadata{}, llvm.DIStructType{
+				Name:        "string",
+				SizeInBits:  sizeInBytes * 8,
+				AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
+				Elements: []llvm.Metadata{
+					c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
+						Name:         "ptr",
+						SizeInBits:   c.targetData.TypeAllocSize(c.i8ptrType) * 8,
+						AlignInBits:  uint32(c.targetData.ABITypeAlignment(c.i8ptrType)) * 8,
+						OffsetInBits: 0,
+						Type:         c.getDIType(types.NewPointer(types.Typ[types.Byte])),
+					}),
+					c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
+						Name:         "len",
+						SizeInBits:   c.targetData.TypeAllocSize(c.uintptrType) * 8,
+						AlignInBits:  uint32(c.targetData.ABITypeAlignment(c.uintptrType)) * 8,
+						OffsetInBits: c.targetData.ElementOffset(llvmType, 1) * 8,
+						Type:         c.getDIType(types.Typ[types.Uintptr]),
+					}),
+				},
+			})
+		} else {
+			panic("unknown basic type")
 		}
-		// TODO: other types
-		dityp = c.dibuilder.CreateBasicType(llvm.DIBasicType{
-			Name:       name,
+		return c.dibuilder.CreateBasicType(llvm.DIBasicType{
+			Name:       typ.String(),
 			SizeInBits: sizeInBytes * 8,
 			Encoding:   encoding,
 		})
-		c.ditypes[name] = dityp
-		return dityp
+	case *types.Chan:
+		return c.getDIType(types.NewPointer(c.ir.Program.ImportedPackage("runtime").Members["channel"].(*ssa.Type).Type()))
+	case *types.Interface:
+		return c.getDIType(c.ir.Program.ImportedPackage("runtime").Members["_interface"].(*ssa.Type).Type())
+	case *types.Map:
+		return c.getDIType(types.NewPointer(c.ir.Program.ImportedPackage("runtime").Members["hashmap"].(*ssa.Type).Type()))
+	case *types.Named:
+		return c.dibuilder.CreateTypedef(llvm.DITypedef{
+			Type: c.getDIType(typ.Underlying()),
+			Name: typ.String(),
+		})
+	case *types.Pointer:
+		return c.dibuilder.CreatePointerType(llvm.DIPointerType{
+			Pointee:      c.getDIType(typ.Elem()),
+			SizeInBits:   c.targetData.TypeAllocSize(llvmType) * 8,
+			AlignInBits:  uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
+			AddressSpace: 0,
+		})
+	case *types.Signature:
+		// actually a closure
+		fields := llvmType.StructElementTypes()
+		return c.dibuilder.CreateStructType(llvm.Metadata{}, llvm.DIStructType{
+			SizeInBits:  sizeInBytes * 8,
+			AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
+			Elements: []llvm.Metadata{
+				c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
+					Name:         "context",
+					SizeInBits:   c.targetData.TypeAllocSize(fields[1]) * 8,
+					AlignInBits:  uint32(c.targetData.ABITypeAlignment(fields[1])) * 8,
+					OffsetInBits: 0,
+					Type:         c.getDIType(types.Typ[types.UnsafePointer]),
+				}),
+				c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
+					Name:         "fn",
+					SizeInBits:   c.targetData.TypeAllocSize(fields[0]) * 8,
+					AlignInBits:  uint32(c.targetData.ABITypeAlignment(fields[0])) * 8,
+					OffsetInBits: c.targetData.ElementOffset(llvmType, 1) * 8,
+					Type:         c.getDIType(types.Typ[types.UnsafePointer]),
+				}),
+			},
+		})
+	case *types.Slice:
+		fields := llvmType.StructElementTypes()
+		return c.dibuilder.CreateStructType(llvm.Metadata{}, llvm.DIStructType{
+			Name:        typ.String(),
+			SizeInBits:  sizeInBytes * 8,
+			AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
+			Elements: []llvm.Metadata{
+				c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
+					Name:         "ptr",
+					SizeInBits:   c.targetData.TypeAllocSize(fields[0]) * 8,
+					AlignInBits:  uint32(c.targetData.ABITypeAlignment(fields[0])) * 8,
+					OffsetInBits: 0,
+					Type:         c.getDIType(types.NewPointer(typ.Elem())),
+				}),
+				c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
+					Name:         "len",
+					SizeInBits:   c.targetData.TypeAllocSize(c.uintptrType) * 8,
+					AlignInBits:  uint32(c.targetData.ABITypeAlignment(c.uintptrType)) * 8,
+					OffsetInBits: c.targetData.ElementOffset(llvmType, 1) * 8,
+					Type:         c.getDIType(types.Typ[types.Uintptr]),
+				}),
+				c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
+					Name:         "cap",
+					SizeInBits:   c.targetData.TypeAllocSize(c.uintptrType) * 8,
+					AlignInBits:  uint32(c.targetData.ABITypeAlignment(c.uintptrType)) * 8,
+					OffsetInBits: c.targetData.ElementOffset(llvmType, 2) * 8,
+					Type:         c.getDIType(types.Typ[types.Uintptr]),
+				}),
+			},
+		})
+	case *types.Struct:
+		elements := make([]llvm.Metadata, typ.NumFields())
+		for i := range elements {
+			field := typ.Field(i)
+			fieldType := field.Type()
+			if _, ok := fieldType.Underlying().(*types.Pointer); ok {
+				// XXX hack to avoid recursive types
+				fieldType = types.Typ[types.UnsafePointer]
+			}
+			llvmField := c.getLLVMType(fieldType)
+			elements[i] = c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
+				Name:         field.Name(),
+				SizeInBits:   c.targetData.TypeAllocSize(llvmField) * 8,
+				AlignInBits:  uint32(c.targetData.ABITypeAlignment(llvmField)) * 8,
+				OffsetInBits: c.targetData.ElementOffset(llvmType, i) * 8,
+				Type:         c.getDIType(fieldType),
+			})
+		}
+		return c.dibuilder.CreateStructType(llvm.Metadata{}, llvm.DIStructType{
+			SizeInBits:  sizeInBytes * 8,
+			AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
+			Elements:    elements,
+		})
+	default:
+		panic("unknown type while generating DWARF debug type: " + typ.String())
 	}
 }
 
@@ -696,6 +828,14 @@ func (c *Compiler) parseFunc(frame *Frame) {
 		frame.fn.LLVMFn.SetFunctionCallConv(85) // CallingConv::AVR_SIGNAL
 	}
 
+	// Some functions have a pragma controlling the inlining level.
+	switch frame.fn.Inline() {
+	case ir.InlineHint:
+		// Add LLVM inline hint to functions with //go:inline pragma.
+		inline := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("inlinehint"), 0)
+		frame.fn.LLVMFn.AddFunctionAttr(inline)
+	}
+
 	// Add debug info, if needed.
 	if c.Debug {
 		if frame.fn.Synthetic == "package initializer" {
@@ -733,15 +873,30 @@ func (c *Compiler) parseFunc(frame *Frame) {
 		// Add debug information to this parameter (if available)
 		if c.Debug && frame.fn.Syntax() != nil {
 			pos := c.ir.Program.Fset.Position(frame.fn.Syntax().Pos())
-			c.dibuilder.CreateParameterVariable(frame.difunc, llvm.DIParameterVariable{
+			diType := c.getDIType(param.Type())
+			dbgParam := c.dibuilder.CreateParameterVariable(frame.difunc, llvm.DIParameterVariable{
 				Name:           param.Name(),
 				File:           c.difiles[pos.Filename],
 				Line:           pos.Line,
-				Type:           c.getDIType(param.Type()),
+				Type:           diType,
 				AlwaysPreserve: true,
 				ArgNo:          i + 1,
 			})
-			// TODO: set the value of this parameter.
+			loc := c.builder.GetCurrentDebugLocation()
+			if len(fields) == 1 {
+				expr := c.dibuilder.CreateExpression(nil)
+				c.dibuilder.InsertValueAtEnd(fields[0], dbgParam, expr, loc, entryBlock)
+			} else {
+				fieldOffsets := c.expandFormalParamOffsets(llvmType)
+				for i, field := range fields {
+					expr := c.dibuilder.CreateExpression([]int64{
+						0x1000,                     // DW_OP_LLVM_fragment
+						int64(fieldOffsets[i]) * 8, // offset in bits
+						int64(c.targetData.TypeAllocSize(field.Type())) * 8, // size in bits
+					})
+					c.dibuilder.InsertValueAtEnd(field, dbgParam, expr, loc, entryBlock)
+				}
+			}
 		}
 	}
 
@@ -907,6 +1062,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 	case *ssa.Store:
 		llvmAddr := c.getValue(frame, instr.Addr)
 		llvmVal := c.getValue(frame, instr.Val)
+		c.emitNilCheck(frame, llvmAddr, "store")
 		if c.targetData.TypeAllocSize(llvmVal.Type()) == 0 {
 			// nothing to store
 			return
@@ -1117,17 +1273,22 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 
 	// Try to call the function directly for trivially static calls.
 	if fn := instr.StaticCallee(); fn != nil {
-		switch fn.RelString(nil) {
-		case "device/arm.ReadRegister":
+		name := fn.RelString(nil)
+		switch {
+		case name == "device/arm.ReadRegister":
 			return c.emitReadRegister(instr.Args)
-		case "device/arm.Asm", "device/avr.Asm":
+		case name == "device/arm.Asm" || name == "device/avr.Asm":
 			return c.emitAsm(instr.Args)
-		case "device/arm.AsmFull", "device/avr.AsmFull":
+		case name == "device/arm.AsmFull" || name == "device/avr.AsmFull":
 			return c.emitAsmFull(frame, instr)
-		case "device/arm.SVCall0", "device/arm.SVCall1", "device/arm.SVCall2", "device/arm.SVCall3", "device/arm.SVCall4":
+		case strings.HasPrefix(name, "device/arm.SVCall"):
 			return c.emitSVCall(frame, instr.Args)
-		case "syscall.Syscall", "syscall.Syscall6", "syscall.Syscall9":
+		case strings.HasPrefix(name, "syscall.Syscall"):
 			return c.emitSyscall(frame, instr)
+		case strings.HasPrefix(name, "runtime/volatile.Load"):
+			return c.emitVolatileLoad(frame, instr)
+		case strings.HasPrefix(name, "runtime/volatile.Store"):
+			return c.emitVolatileStore(frame, instr)
 		}
 
 		targetFunc := c.ir.GetFunction(fn)
@@ -1416,7 +1577,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return c.parseMakeClosure(frame, expr)
 	case *ssa.MakeInterface:
 		val := c.getValue(frame, expr.X)
-		return c.parseMakeInterface(val, expr.X.Type(), expr.Pos())
+		return c.parseMakeInterface(val, expr.X.Type(), expr.Pos()), nil
 	case *ssa.MakeMap:
 		mapType := expr.Type().Underlying().(*types.Map)
 		llvmKeyType := c.getLLVMType(mapType.Key().Underlying())
@@ -1425,7 +1586,16 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		valueSize := c.targetData.TypeAllocSize(llvmValueType)
 		llvmKeySize := llvm.ConstInt(c.ctx.Int8Type(), keySize, false)
 		llvmValueSize := llvm.ConstInt(c.ctx.Int8Type(), valueSize, false)
-		hashmap := c.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize}, "")
+		sizeHint := llvm.ConstInt(c.uintptrType, 8, false)
+		if expr.Reserve != nil {
+			sizeHint = c.getValue(frame, expr.Reserve)
+			var err error
+			sizeHint, err = c.parseConvert(expr.Reserve.Type(), types.Typ[types.Uintptr], sizeHint, expr.Pos())
+			if err != nil {
+				return llvm.Value{}, err
+			}
+		}
+		hashmap := c.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize, sizeHint}, "")
 		return hashmap, nil
 	case *ssa.MakeSlice:
 		sliceLen := c.getValue(frame, expr.Len)
@@ -1821,8 +1991,55 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 				ieq := c.builder.CreateFCmp(llvm.FloatOEQ, i1, i2, "")
 				neq := c.builder.CreateAnd(req, ieq, "")
 				return c.builder.CreateNot(neq, ""), nil
+			case token.ADD, token.SUB:
+				var r, i llvm.Value
+				switch op {
+				case token.ADD:
+					r = c.builder.CreateFAdd(r1, r2, "")
+					i = c.builder.CreateFAdd(i1, i2, "")
+				case token.SUB:
+					r = c.builder.CreateFSub(r1, r2, "")
+					i = c.builder.CreateFSub(i1, i2, "")
+				default:
+					panic("unreachable")
+				}
+				cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{r.Type(), i.Type()}, false))
+				cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
+				cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+				return cplx, nil
+			case token.MUL:
+				// Complex multiplication follows the current implementation in
+				// the Go compiler, with the difference that complex64
+				// components are not first scaled up to float64 for increased
+				// precision.
+				// https://github.com/golang/go/blob/170b8b4b12be50eeccbcdadb8523fb4fc670ca72/src/cmd/compile/internal/gc/ssa.go#L2089-L2127
+				// The implementation is as follows:
+				//   r := real(a) * real(b) - imag(a) * imag(b)
+				//   i := real(a) * imag(b) + imag(a) * real(b)
+				// Note: this does NOT follow the C11 specification (annex G):
+				// http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1548.pdf#page=549
+				// See https://github.com/golang/go/issues/29846 for a related
+				// discussion.
+				r := c.builder.CreateFSub(c.builder.CreateFMul(r1, r2, ""), c.builder.CreateFMul(i1, i2, ""), "")
+				i := c.builder.CreateFAdd(c.builder.CreateFMul(r1, i2, ""), c.builder.CreateFMul(i1, r2, ""), "")
+				cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{r.Type(), i.Type()}, false))
+				cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
+				cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+				return cplx, nil
+			case token.QUO:
+				// Complex division.
+				// Do this in a library call because it's too difficult to do
+				// inline.
+				switch r1.Type().TypeKind() {
+				case llvm.FloatTypeKind:
+					return c.createRuntimeCall("complex64div", []llvm.Value{x, y}, ""), nil
+				case llvm.DoubleTypeKind:
+					return c.createRuntimeCall("complex128div", []llvm.Value{x, y}, ""), nil
+				default:
+					panic("unexpected complex type")
+				}
 			default:
-				return llvm.Value{}, c.makeError(pos, "todo: binop on complex number: "+op.String())
+				panic("binop on complex: " + op.String())
 			}
 		} else if typ.Info()&types.IsBoolean != 0 {
 			// Operations on booleans
@@ -1897,10 +2114,12 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 		default:
 			return llvm.Value{}, c.makeError(pos, "binop on interface: "+op.String())
 		}
-	case *types.Map, *types.Pointer:
+	case *types.Chan, *types.Map, *types.Pointer:
 		// Maps are in general not comparable, but can be compared against nil
 		// (which is a nil pointer). This means they can be trivially compared
 		// by treating them as a pointer.
+		// Channels behave as pointers in that they are equal as long as they
+		// are created with the same call to make or if both are nil.
 		switch op {
 		case token.EQL: // ==
 			return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil

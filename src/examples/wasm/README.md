@@ -107,15 +107,10 @@ func main() {
 	fs := http.FileServer(http.Dir(dir))
 	log.Print("Serving " + dir + " on http://localhost:8080")
 	http.ListenAndServe(":8080", http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
-		resp.Header().Set("Cache-Control", "max-age=0")
-		resp.Header().Add("Cache-Control", "no-store")
 		resp.Header().Add("Cache-Control", "no-cache")
-		resp.Header().Add("Cache-Control", "must-revalidate")
-		resp.Header().Set("Expires", "Thu, 01 Jan 1970 00:00:00 GMT")
 		if strings.HasSuffix(req.URL.Path, ".wasm") {
 			resp.Header().Set("content-type", "application/wasm")
 		}
-
 		fs.ServeHTTP(resp, req)
 	}))}
 ```
@@ -123,15 +118,14 @@ func main() {
 This simple server serves anything inside the `./html` directory on port
 `8080`, setting any `*.wasm` files `Content-Type` header appropriately.
 
-For development purposes (**only!**), it also sets various `Cache-Control` and
-`Expires` headers so your browser doesn't cache the files.  This is useful
-while developing, to ensure your browser displays the newest wasm when you
-recompile.
+For development purposes (**only!**), it also sets the `Cache-Control` header
+so your browser doesn't cache the files.  This is useful while developing, to
+ensure your browser displays the newest wasm when you recompile.
 
-In a production environment you **probably wouldn't** want to set the `Cache-Control`
-and `Expires` headers like this.  Caching is generally beneficial for end users.
+In a production environment you **probably wouldn't** want to set the
+`Cache-Control` header like this.  Caching is generally beneficial for end
+users.
 
-Further information on these two headers can be found here:
+Further information on the `Cache-Control` header can be found here:
 
 * https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
-* https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Expires

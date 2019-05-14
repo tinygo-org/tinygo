@@ -99,3 +99,15 @@ const (
 var (
 	SPI0 = SPI{Bus: sam.SERCOM3_SPI}
 )
+
+// I2S pins
+const (
+	I2S_SCK_PIN = PA10
+	I2S_SD_PIN  = PA08
+	I2S_WS_PIN  = 0xff // no WS, instead uses SCK to sync
+)
+
+// I2S on the Circuit Playground Express.
+var (
+	I2S0 = I2S{Bus: sam.I2S}
+)

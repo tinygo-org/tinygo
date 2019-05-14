@@ -33,11 +33,12 @@ type Program struct {
 type Function struct {
 	*ssa.Function
 	LLVMFn    llvm.Value
-	linkName  string // go:linkname, go:export, go:interrupt
-	exported  bool   // go:export
-	nobounds  bool   // go:nobounds
-	flag      bool   // used by dead code elimination
-	interrupt bool   // go:interrupt
+	linkName  string     // go:linkname, go:export, go:interrupt
+	exported  bool       // go:export
+	nobounds  bool       // go:nobounds
+	flag      bool       // used by dead code elimination
+	interrupt bool       // go:interrupt
+	inline    InlineType // go:inline
 }
 
 // Global variable, possibly constant.
@@ -69,7 +70,22 @@ type Interface struct {
 	Type *types.Interface
 }
 
-// Create and intialize a new *Program from a *ssa.Program.
+type InlineType int
+
+// How much to inline.
+const (
+	// Default behavior. The compiler decides for itself whether any given
+	// function will be inlined. Whether any function is inlined depends on the
+	// optimization level.
+	InlineDefault InlineType = iota
+
+	// Inline hint, just like the C inline keyword (signalled using
+	// //go:inline). The compiler will be more likely to inline this function,
+	// but it is not a guarantee.
+	InlineHint
+)
+
+// Create and initialize a new *Program from a *ssa.Program.
 func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 	comments := map[string]*ast.CommentGroup{}
 	for _, pkgInfo := range lprogram.Sorted() {
@@ -279,6 +295,8 @@ func (f *Function) parsePragmas() {
 				}
 				f.linkName = parts[1]
 				f.exported = true
+			case "//go:inline":
+				f.inline = InlineHint
 			case "//go:interrupt":
 				if len(parts) != 2 {
 					continue
@@ -330,6 +348,11 @@ func (f *Function) IsExported() bool {
 // On some platforms (like AVR), interrupts need a special compiler flag.
 func (f *Function) IsInterrupt() bool {
 	return f.interrupt
+}
+
+// Return the inline directive of this function.
+func (f *Function) Inline() InlineType {
+	return f.inline
 }
 
 // Return the link name for this function.

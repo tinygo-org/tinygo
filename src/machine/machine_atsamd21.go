@@ -663,6 +663,235 @@ func (i2c I2C) readByte() byte {
 	return byte(i2c.Bus.DATA)
 }
 
+// I2S on the SAMD21.
+
+// I2S
+type I2S struct {
+	Bus *sam.I2S_Type
+}
+
+// Configure is used to configure the I2S interface. You must call this
+// before you can use the I2S bus.
+func (i2s I2S) Configure(config I2SConfig) {
+	// handle defaults
+	if config.SCK == 0 {
+		config.SCK = I2S_SCK_PIN
+		config.WS = I2S_WS_PIN
+		config.SD = I2S_SD_PIN
+	}
+
+	if config.AudioFrequency == 0 {
+		config.AudioFrequency = 48000
+	}
+
+	if config.DataFormat == I2SDataFormatDefault {
+		if config.Stereo {
+			config.DataFormat = I2SDataFormat16bit
+		} else {
+			config.DataFormat = I2SDataFormat32bit
+		}
+	}
+
+	// Turn on clock for I2S
+	sam.PM.APBCMASK |= sam.PM_APBCMASK_I2S_
+
+	// setting clock rate for sample.
+	division_factor := CPU_FREQUENCY / (config.AudioFrequency * uint32(config.DataFormat))
+
+	// Switch Generic Clock Generator 3 to DFLL48M.
+	sam.GCLK.GENDIV = sam.RegValue((sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_GENDIV_ID_Pos) |
+		(division_factor << sam.GCLK_GENDIV_DIV_Pos))
+	waitForSync()
+
+	sam.GCLK.GENCTRL = sam.RegValue((sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_GENCTRL_ID_Pos) |
+		(sam.GCLK_GENCTRL_SRC_DFLL48M << sam.GCLK_GENCTRL_SRC_Pos) |
+		sam.GCLK_GENCTRL_IDC |
+		sam.GCLK_GENCTRL_GENEN)
+	waitForSync()
+
+	// Use Generic Clock Generator 3 as source for I2S.
+	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_I2S_0 << sam.GCLK_CLKCTRL_ID_Pos) |
+		(sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_CLKCTRL_GEN_Pos) |
+		sam.GCLK_CLKCTRL_CLKEN)
+	waitForSync()
+
+	// reset the device
+	i2s.Bus.CTRLA |= sam.I2S_CTRLA_SWRST
+	for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_SWRST) > 0 {
+	}
+
+	// disable device before continuing
+	for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_ENABLE) > 0 {
+	}
+	i2s.Bus.CTRLA &^= sam.I2S_CTRLA_ENABLE
+
+	// setup clock
+	if config.ClockSource == I2SClockSourceInternal {
+		// TODO: make sure correct for I2S output
+
+		// set serial clock select pin
+		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_SCKSEL
+
+		// set frame select pin
+		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_FSSEL
+	} else {
+		// Configure FS generation from SCK clock.
+		i2s.Bus.CLKCTRL0 &^= sam.I2S_CLKCTRL_FSSEL
+	}
+
+	if config.Standard == I2StandardPhilips {
+		// set 1-bit delay
+		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_BITDELAY
+	} else {
+		// set 0-bit delay
+		i2s.Bus.CLKCTRL0 &^= sam.I2S_CLKCTRL_BITDELAY
+	}
+
+	// set number of slots.
+	if config.Stereo {
+		i2s.Bus.CLKCTRL0 |= (1 << sam.I2S_CLKCTRL_NBSLOTS_Pos)
+	} else {
+		i2s.Bus.CLKCTRL0 &^= (1 << sam.I2S_CLKCTRL_NBSLOTS_Pos)
+	}
+
+	// set slot size
+	switch config.DataFormat {
+	case I2SDataFormat8bit:
+		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_SLOTSIZE_8
+
+	case I2SDataFormat16bit:
+		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_SLOTSIZE_16
+
+	case I2SDataFormat24bit:
+		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_SLOTSIZE_24
+
+	case I2SDataFormat32bit:
+		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_SLOTSIZE_32
+	}
+
+	// configure pin for clock
+	GPIO{config.SCK}.Configure(GPIOConfig{Mode: GPIO_COM})
+
+	// configure pin for WS, if needed
+	if config.WS != 0xff {
+		GPIO{config.WS}.Configure(GPIOConfig{Mode: GPIO_COM})
+	}
+
+	// now set serializer data size.
+	switch config.DataFormat {
+	case I2SDataFormat8bit:
+		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_DATASIZE_8
+
+	case I2SDataFormat16bit:
+		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_DATASIZE_16
+
+	case I2SDataFormat24bit:
+		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_DATASIZE_24
+
+	case I2SDataFormat32bit:
+	case I2SDataFormatDefault:
+		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_DATASIZE_32
+	}
+
+	// set serializer slot adjustment
+	if config.Standard == I2SStandardLSB {
+		// adjust right
+		i2s.Bus.SERCTRL1 &^= sam.I2S_SERCTRL_SLOTADJ
+	} else {
+		// adjust left
+		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_SLOTADJ
+
+		// reverse bit order?
+		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_BITREV
+	}
+
+	// set serializer mode.
+	if config.Mode == I2SModePDM {
+		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_SERMODE_PDM2
+	} else {
+		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_SERMODE_RX
+	}
+
+	// configure data pin
+	GPIO{config.SD}.Configure(GPIOConfig{Mode: GPIO_COM})
+
+	// re-enable
+	i2s.Bus.CTRLA |= sam.I2S_CTRLA_ENABLE
+	for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_ENABLE) > 0 {
+	}
+
+	// enable i2s clock
+	i2s.Bus.CTRLA |= sam.I2S_CTRLA_CKEN0
+	for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_CKEN0) > 0 {
+	}
+
+	// enable i2s serializer
+	i2s.Bus.CTRLA |= sam.I2S_CTRLA_SEREN1
+	for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_SEREN1) > 0 {
+	}
+}
+
+// Read data from the I2S bus into the provided slice.
+// The I2S bus must already have been configured correctly.
+func (i2s I2S) Read(p []uint32) (n int, err error) {
+	i := 0
+	for i = 0; i < len(p); i++ {
+		// Wait until ready
+		for (i2s.Bus.INTFLAG & sam.I2S_INTFLAG_RXRDY1) == 0 {
+		}
+
+		for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_DATA1) > 0 {
+		}
+
+		// read data
+		p[i] = uint32(i2s.Bus.DATA1)
+
+		// indicate read complete
+		i2s.Bus.INTFLAG = sam.I2S_INTFLAG_RXRDY1
+	}
+
+	return i, nil
+}
+
+// Write data to the I2S bus from the provided slice.
+// The I2S bus must already have been configured correctly.
+func (i2s I2S) Write(p []uint32) (n int, err error) {
+	i := 0
+	for i = 0; i < len(p); i++ {
+		// Wait until ready
+		for (i2s.Bus.INTFLAG & sam.I2S_INTFLAG_TXRDY1) == 0 {
+		}
+
+		for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_DATA1) > 0 {
+		}
+
+		// write data
+		i2s.Bus.DATA1 = sam.RegValue(p[i])
+
+		// indicate write complete
+		i2s.Bus.INTFLAG = sam.I2S_INTFLAG_TXRDY1
+	}
+
+	return i, nil
+}
+
+// Close the I2S bus.
+func (i2s I2S) Close() error {
+	// Sync wait
+	for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_ENABLE) > 0 {
+	}
+
+	// disable I2S
+	i2s.Bus.CTRLA &^= sam.I2S_CTRLA_ENABLE
+
+	return nil
+}
+
+func waitForSync() {
+	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
+	}
+}
+
 // SPI
 type SPI struct {
 	Bus *sam.SERCOM_SPI_Type

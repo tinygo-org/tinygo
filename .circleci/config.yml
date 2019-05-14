@@ -83,6 +83,7 @@ commands:
       - run: tinygo build -size short -o test.elf -target=circuitplay-express examples/blinky1
       - run: tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky1
       - run: tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky2
+      - run: tinygo build -size short -o test.elf -target=circuitplay-express examples/i2s
       - run: tinygo build             -o wasm.wasm -target=wasm               examples/wasm/export
       - run: tinygo build             -o wasm.wasm -target=wasm               examples/wasm/main
   test-linux:
@@ -119,7 +120,6 @@ commands:
           name: "Install apt dependencies"
           command: |
             sudo apt-get install \
-                libtinfo-dev \
                 python3 \
                 gcc-arm-linux-gnueabihf \
                 binutils-arm-none-eabi \
@@ -138,7 +138,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-8-v2
+            - llvm-build-8-linux-v4
       - run:
           name: "Build LLVM"
           command: |
@@ -156,7 +156,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-8-v2
+          key: llvm-build-8-linux-v4
           paths:
             llvm-build
       - run:
@@ -209,7 +209,7 @@ commands:
             - llvm
       - restore_cache:
           keys:
-            - llvm-build-8-macos-v2
+            - llvm-build-8-macos-v3
       - run:
           name: "Build LLVM"
           command: |
@@ -221,7 +221,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-8-macos-v2
+          key: llvm-build-8-macos-v3
           paths:
             llvm-build
       - run:

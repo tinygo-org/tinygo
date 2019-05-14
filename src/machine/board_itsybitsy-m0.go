@@ -73,3 +73,15 @@ const (
 var (
 	SPI0 = SPI{Bus: sam.SERCOM4_SPI}
 )
+
+// I2S pins
+const (
+	I2S_SCK_PIN = PA10
+	I2S_SD_PIN  = PA08
+	I2S_WS_PIN  = 0xff // TODO: figure out what this is on ItsyBitsy M0.
+)
+
+// I2S on the ItsyBitsy M0.
+var (
+	I2S0 = I2S{Bus: sam.I2S}
+)

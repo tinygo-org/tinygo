@@ -32,7 +32,7 @@ CGO_LDFLAGS=-L$(LLVM_BUILDDIR)/lib $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUIL
 clean:
 	@rm -rf build
 
-FMT_PATHS = ./*.go compiler interp ir loader src/device/arm src/examples src/machine src/os src/reflect src/runtime src/sync src/syscall
+FMT_PATHS = ./*.go cgo compiler interp ir loader src/device/arm src/examples src/machine src/os src/reflect src/runtime src/sync src/syscall
 fmt:
 	@gofmt -l -w $(FMT_PATHS)
 fmt-check:
@@ -69,7 +69,7 @@ llvm-source: llvm/README.txt llvm/tools/clang/README.txt llvm/tools/lld/README.m
 
 # Configure LLVM.
 llvm-build/build.ninja: llvm-source
-	mkdir -p llvm-build; cd llvm-build; cmake -G Ninja ../llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON
+	mkdir -p llvm-build; cd llvm-build; cmake -G Ninja ../llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF
 
 # Build LLVM.
 llvm-build: llvm-build/build.ninja

@@ -54,3 +54,5 @@ true false 0
 42
 4321
 5555
+tested preallocated map
+tested growing of a map
