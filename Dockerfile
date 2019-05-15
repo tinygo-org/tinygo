@@ -46,7 +46,7 @@ RUN cd /go/src/github.com/tinygo-org/tinygo/ && \
     apt-get update && \
     apt-get install -y apt-utils python3 make binutils-avr gcc-avr avr-libc && \
     make gen-device-avr && \
-    apt-get remove -y python3 make && \
+    apt-get remove -y python3 && \
     apt-get autoremove -y && \
     apt-get clean
 
@@ -64,7 +64,7 @@ RUN cd /go/src/github.com/tinygo-org/tinygo/ && \
     apt-get update && \
     apt-get install -y apt-utils python3 make clang-8 && \
     make gen-device-nrf && make gen-device-stm32 && \
-    apt-get remove -y python3 make && \
+    apt-get remove -y python3 && \
     apt-get autoremove -y && \
     apt-get clean
 
@@ -79,7 +79,7 @@ RUN cd /go/src/github.com/tinygo-org/tinygo/ && \
     apt-get update && \
     apt-get install -y apt-utils python3 make clang-8 binutils-avr gcc-avr avr-libc && \
     make gen-device && \
-    apt-get remove -y python3 make && \
+    apt-get remove -y python3 && \
     apt-get autoremove -y && \
     apt-get clean
 
