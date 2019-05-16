@@ -484,11 +484,11 @@ const (
 // 		 RoReg8                    Reserved1[0x5];
 //   } UsbDeviceDescBank;
 type usbDeviceDescBank struct {
-	ADDR      sam.RegValue
-	PCKSIZE   sam.RegValue
-	EXTREG    sam.RegValue16
-	STATUS_BK sam.RegValue8
-	_reserved [5]sam.RegValue8
+	ADDR      sam.Register32
+	PCKSIZE   sam.Register32
+	EXTREG    sam.Register16
+	STATUS_BK sam.Register8
+	_reserved [5]sam.Register8
 }
 
 type usbDeviceDescriptor struct {

@@ -50,7 +50,7 @@ gen-device-nrf:
 	go fmt ./src/device/nrf
 
 gen-device-sam:
-	./tools/gen-device-svd.py lib/cmsis-svd/data/Atmel/ src/device/sam/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel
+	./tools/gen-device-svd-vol.py lib/cmsis-svd/data/Atmel/ src/device/sam/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel
 	go fmt ./src/device/sam
 
 gen-device-stm32:

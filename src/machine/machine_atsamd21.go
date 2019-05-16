@@ -106,22 +106,22 @@ const (
 )
 
 // getPMux returns the value for the correct PMUX register for this pin.
-func (p GPIO) getPMux() sam.RegValue8 {
+func (p GPIO) getPMux() uint8 {
 	return getPMux(p.Pin)
 }
 
 // setPMux sets the value for the correct PMUX register for this pin.
-func (p GPIO) setPMux(val sam.RegValue8) {
+func (p GPIO) setPMux(val uint8) {
 	setPMux(p.Pin, val)
 }
 
 // getPinCfg returns the value for the correct PINCFG register for this pin.
-func (p GPIO) getPinCfg() sam.RegValue8 {
+func (p GPIO) getPinCfg() uint8 {
 	return getPinCfg(p.Pin)
 }
 
 // setPinCfg sets the value for the correct PINCFG register for this pin.
-func (p GPIO) setPinCfg(val sam.RegValue8) {
+func (p GPIO) setPinCfg(val uint8) {
 	setPinCfg(p.Pin, val)
 }
 
@@ -142,44 +142,44 @@ func InitADC() {
 	// #define ADC_FUSES_LINEARITY_1(value) ((ADC_FUSES_LINEARITY_1_Msk & ((value) << ADC_FUSES_LINEARITY_1_Pos)))
 
 	biasFuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020) + 4))
-	bias := sam.RegValue16(uint16(biasFuse>>3) & uint16(0x7))
+	bias := uint16(biasFuse>>3) & uint16(0x7)
 
 	// ADC Linearity bits 4:0
 	linearity0Fuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020)))
-	linearity := sam.RegValue16(uint16(linearity0Fuse>>27) & uint16(0x1f))
+	linearity := uint16(linearity0Fuse>>27) & uint16(0x1f)
 
 	// ADC Linearity bits 7:5
 	linearity1Fuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020) + 4))
-	linearity |= sam.RegValue16(uint16(linearity1Fuse)&uint16(0x7)) << 5
+	linearity |= uint16(linearity1Fuse) & uint16(0x7) << 5
 
 	// set calibration
-	sam.ADC.CALIB = (bias << 8) | linearity
+	sam.ADC.CALIB.Set((bias << 8) | linearity)
 
 	// Wait for synchronization
 	waitADCSync()
 
 	// Divide Clock by 32 with 12 bits resolution as default
-	sam.ADC.CTRLB = (sam.ADC_CTRLB_PRESCALER_DIV32 << sam.ADC_CTRLB_PRESCALER_Pos) |
-		(sam.ADC_CTRLB_RESSEL_12BIT << sam.ADC_CTRLB_RESSEL_Pos)
+	sam.ADC.CTRLB.Set((sam.ADC_CTRLB_PRESCALER_DIV32 << sam.ADC_CTRLB_PRESCALER_Pos) |
+		(sam.ADC_CTRLB_RESSEL_12BIT << sam.ADC_CTRLB_RESSEL_Pos))
 
 	// Sampling Time Length
-	sam.ADC.SAMPCTRL = 5
+	sam.ADC.SAMPCTRL.Set(5)
 
 	// Wait for synchronization
 	waitADCSync()
 
 	// Use internal ground
-	sam.ADC.INPUTCTRL = (sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
+	sam.ADC.INPUTCTRL.Set(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
 
 	// Averaging (see datasheet table in AVGCTRL register description)
-	sam.ADC.AVGCTRL = (sam.ADC_AVGCTRL_SAMPLENUM_1 << sam.ADC_AVGCTRL_SAMPLENUM_Pos) |
-		(0x0 << sam.ADC_AVGCTRL_ADJRES_Pos)
+	sam.ADC.AVGCTRL.Set((sam.ADC_AVGCTRL_SAMPLENUM_1 << sam.ADC_AVGCTRL_SAMPLENUM_Pos) |
+		(0x0 << sam.ADC_AVGCTRL_ADJRES_Pos))
 
 	// Analog Reference is AREF pin (3.3v)
-	sam.ADC.INPUTCTRL |= (sam.ADC_INPUTCTRL_GAIN_DIV2 << sam.ADC_INPUTCTRL_GAIN_Pos)
+	sam.ADC.INPUTCTRL.SetBits(sam.ADC_INPUTCTRL_GAIN_DIV2 << sam.ADC_INPUTCTRL_GAIN_Pos)
 
 	// 1/2 VDDANA = 0.5 * 3V3 = 1.65V
-	sam.ADC.REFCTRL |= (sam.ADC_REFCTRL_REFSEL_INTVCC1 << sam.ADC_REFCTRL_REFSEL_Pos)
+	sam.ADC.REFCTRL.SetBits(sam.ADC_REFCTRL_REFSEL_INTVCC1 << sam.ADC_REFCTRL_REFSEL_Pos)
 }
 
 // Configure configures a ADCPin to be able to be used to read data.
@@ -193,40 +193,40 @@ func (a ADC) Get() uint16 {
 	ch := a.getADCChannel()
 
 	// Selection for the positive ADC input
-	sam.ADC.INPUTCTRL &^= sam.ADC_INPUTCTRL_MUXPOS_Msk
+	sam.ADC.INPUTCTRL.ClearBits(sam.ADC_INPUTCTRL_MUXPOS_Msk)
 	waitADCSync()
-	sam.ADC.INPUTCTRL |= sam.RegValue(ch << sam.ADC_INPUTCTRL_MUXPOS_Pos)
+	sam.ADC.INPUTCTRL.SetBits(uint32(ch << sam.ADC_INPUTCTRL_MUXPOS_Pos))
 	waitADCSync()
 
 	// Select internal ground for ADC input
-	sam.ADC.INPUTCTRL &^= sam.ADC_INPUTCTRL_MUXNEG_Msk
+	sam.ADC.INPUTCTRL.ClearBits(sam.ADC_INPUTCTRL_MUXNEG_Msk)
 	waitADCSync()
-	sam.ADC.INPUTCTRL |= sam.RegValue(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
+	sam.ADC.INPUTCTRL.SetBits(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
 	waitADCSync()
 
 	// Enable ADC
-	sam.ADC.CTRLA |= sam.ADC_CTRLA_ENABLE
+	sam.ADC.CTRLA.SetBits(sam.ADC_CTRLA_ENABLE)
 	waitADCSync()
 
 	// Start conversion
-	sam.ADC.SWTRIG |= sam.ADC_SWTRIG_START
+	sam.ADC.SWTRIG.SetBits(sam.ADC_SWTRIG_START)
 	waitADCSync()
 
 	// Clear the Data Ready flag
-	sam.ADC.INTFLAG = sam.ADC_INTFLAG_RESRDY
+	sam.ADC.INTFLAG.SetBits(sam.ADC_INTFLAG_RESRDY)
 	waitADCSync()
 
 	// Start conversion again, since first conversion after reference voltage changed is invalid.
-	sam.ADC.SWTRIG |= sam.ADC_SWTRIG_START
+	sam.ADC.SWTRIG.SetBits(sam.ADC_SWTRIG_START)
 	waitADCSync()
 
 	// Waiting for conversion to complete
-	for (sam.ADC.INTFLAG & sam.ADC_INTFLAG_RESRDY) == 0 {
+	for (sam.ADC.INTFLAG.Get() & sam.ADC_INTFLAG_RESRDY) == 0 {
 	}
-	val := sam.ADC.RESULT
+	val := sam.ADC.RESULT.Get()
 
 	// Disable ADC
-	sam.ADC.CTRLA &^= sam.ADC_CTRLA_ENABLE
+	sam.ADC.CTRLA.ClearBits(sam.ADC_CTRLA_ENABLE)
 	waitADCSync()
 
 	return uint16(val) << 4 // scales from 12 to 16-bit result
@@ -262,7 +262,7 @@ func (a ADC) getADCChannel() uint8 {
 }
 
 func waitADCSync() {
-	for (sam.ADC.STATUS & sam.ADC_STATUS_SYNCBUSY) > 0 {
+	for (sam.ADC.STATUS.Get() & sam.ADC_STATUS_SYNCBUSY) > 0 {
 	}
 }
 
@@ -344,16 +344,16 @@ func (uart UART) Configure(config UARTConfig) {
 	GPIO{config.RX}.Configure(GPIOConfig{Mode: GPIO_SERCOM})
 
 	// reset SERCOM0
-	uart.Bus.CTRLA |= sam.SERCOM_USART_CTRLA_SWRST
-	for (uart.Bus.CTRLA&sam.SERCOM_USART_CTRLA_SWRST) > 0 ||
-		(uart.Bus.SYNCBUSY&sam.SERCOM_USART_SYNCBUSY_SWRST) > 0 {
+	uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_CTRLA_SWRST)
+	for (uart.Bus.CTRLA.Get()&sam.SERCOM_USART_CTRLA_SWRST) > 0 ||
+		(uart.Bus.SYNCBUSY.Get()&sam.SERCOM_USART_SYNCBUSY_SWRST) > 0 {
 	}
 
 	// set UART mode/sample rate
 	// SERCOM_USART_CTRLA_MODE(mode) |
 	// SERCOM_USART_CTRLA_SAMPR(sampleRate);
-	uart.Bus.CTRLA = (sam.SERCOM_USART_CTRLA_MODE_USART_INT_CLK << sam.SERCOM_USART_CTRLA_MODE_Pos) |
-		(1 << sam.SERCOM_USART_CTRLA_SAMPR_Pos) // sample rate of 16x
+	uart.Bus.CTRLA.Set((sam.SERCOM_USART_CTRLA_MODE_USART_INT_CLK << sam.SERCOM_USART_CTRLA_MODE_Pos) |
+		(1 << sam.SERCOM_USART_CTRLA_SAMPR_Pos)) // sample rate of 16x
 
 	// Set baud rate
 	uart.SetBaudRate(config.BaudRate)
@@ -361,35 +361,35 @@ func (uart UART) Configure(config UARTConfig) {
 	// setup UART frame
 	// SERCOM_USART_CTRLA_FORM( (parityMode == SERCOM_NO_PARITY ? 0 : 1) ) |
 	// dataOrder << SERCOM_USART_CTRLA_DORD_Pos;
-	uart.Bus.CTRLA |= (0 << sam.SERCOM_USART_CTRLA_FORM_Pos) | // no parity
-		(lsbFirst << sam.SERCOM_USART_CTRLA_DORD_Pos) // data order
+	uart.Bus.CTRLA.SetBits((0 << sam.SERCOM_USART_CTRLA_FORM_Pos) | // no parity
+		(lsbFirst << sam.SERCOM_USART_CTRLA_DORD_Pos)) // data order
 
 	// set UART stop bits/parity
 	// SERCOM_USART_CTRLB_CHSIZE(charSize) |
 	// 	nbStopBits << SERCOM_USART_CTRLB_SBMODE_Pos |
 	// 	(parityMode == SERCOM_NO_PARITY ? 0 : parityMode) << SERCOM_USART_CTRLB_PMODE_Pos; //If no parity use default value
-	uart.Bus.CTRLB |= (0 << sam.SERCOM_USART_CTRLB_CHSIZE_Pos) | // 8 bits is 0
+	uart.Bus.CTRLB.SetBits((0 << sam.SERCOM_USART_CTRLB_CHSIZE_Pos) | // 8 bits is 0
 		(0 << sam.SERCOM_USART_CTRLB_SBMODE_Pos) | // 1 stop bit is zero
-		(0 << sam.SERCOM_USART_CTRLB_PMODE_Pos) // no parity
+		(0 << sam.SERCOM_USART_CTRLB_PMODE_Pos)) // no parity
 
 	// set UART pads. This is not same as pins...
 	//  SERCOM_USART_CTRLA_TXPO(txPad) |
 	//   SERCOM_USART_CTRLA_RXPO(rxPad);
-	uart.Bus.CTRLA |= sam.RegValue((txpad << sam.SERCOM_USART_CTRLA_TXPO_Pos) |
-		(rxpad << sam.SERCOM_USART_CTRLA_RXPO_Pos))
+	uart.Bus.CTRLA.SetBits(uint32((txpad << sam.SERCOM_USART_CTRLA_TXPO_Pos) |
+		(rxpad << sam.SERCOM_USART_CTRLA_RXPO_Pos)))
 
 	// Enable Transceiver and Receiver
 	//sercom->USART.CTRLB.reg |= SERCOM_USART_CTRLB_TXEN | SERCOM_USART_CTRLB_RXEN ;
-	uart.Bus.CTRLB |= (sam.SERCOM_USART_CTRLB_TXEN | sam.SERCOM_USART_CTRLB_RXEN)
+	uart.Bus.CTRLB.SetBits(sam.SERCOM_USART_CTRLB_TXEN | sam.SERCOM_USART_CTRLB_RXEN)
 
 	// Enable USART1 port.
 	// sercom->USART.CTRLA.bit.ENABLE = 0x1u;
-	uart.Bus.CTRLA |= sam.SERCOM_USART_CTRLA_ENABLE
-	for (uart.Bus.SYNCBUSY & sam.SERCOM_USART_SYNCBUSY_ENABLE) > 0 {
+	uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_CTRLA_ENABLE)
+	for (uart.Bus.SYNCBUSY.Get() & sam.SERCOM_USART_SYNCBUSY_ENABLE) > 0 {
 	}
 
 	// setup interrupt on receive
-	uart.Bus.INTENSET = sam.SERCOM_USART_INTENSET_RXC
+	uart.Bus.INTENSET.Set(sam.SERCOM_USART_INTENSET_RXC)
 
 	// Enable RX IRQ.
 	if config.TX == PA10 {
@@ -411,24 +411,24 @@ func (uart UART) SetBaudRate(br uint32) {
 
 	// sercom->USART.BAUD.FRAC.FP   = (baudTimes8 % 8);
 	// sercom->USART.BAUD.FRAC.BAUD = (baudTimes8 / 8);
-	uart.Bus.BAUD = sam.RegValue16(((baud % 8) << sam.SERCOM_USART_BAUD_FRAC_MODE_FP_Pos) |
-		((baud / 8) << sam.SERCOM_USART_BAUD_FRAC_MODE_BAUD_Pos))
+	uart.Bus.BAUD.Set(uint16(((baud % 8) << sam.SERCOM_USART_BAUD_FRAC_MODE_FP_Pos) |
+		((baud / 8) << sam.SERCOM_USART_BAUD_FRAC_MODE_BAUD_Pos)))
 }
 
 // WriteByte writes a byte of data to the UART.
 func (uart UART) WriteByte(c byte) error {
 	// wait until ready to receive
-	for (uart.Bus.INTFLAG & sam.SERCOM_USART_INTFLAG_DRE) == 0 {
+	for (uart.Bus.INTFLAG.Get() & sam.SERCOM_USART_INTFLAG_DRE) == 0 {
 	}
-	uart.Bus.DATA = sam.RegValue16(c)
+	uart.Bus.DATA.Set(uint16(c))
 	return nil
 }
 
 //go:export SERCOM1_IRQHandler
 func handleUART1() {
 	// should reset IRQ
-	UART1.Receive(byte((UART1.Bus.DATA & 0xFF)))
-	UART1.Bus.INTFLAG |= sam.SERCOM_USART_INTFLAG_RXC
+	UART1.Receive(byte((UART1.Bus.DATA.Get() & 0xFF)))
+	UART1.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INTFLAG_RXC)
 }
 
 // I2C on the SAMD21.
@@ -473,26 +473,26 @@ func (i2c I2C) Configure(config I2CConfig) {
 	}
 
 	// reset SERCOM
-	i2c.Bus.CTRLA |= sam.SERCOM_I2CM_CTRLA_SWRST
-	for (i2c.Bus.CTRLA&sam.SERCOM_I2CM_CTRLA_SWRST) > 0 ||
-		(i2c.Bus.SYNCBUSY&sam.SERCOM_I2CM_SYNCBUSY_SWRST) > 0 {
+	i2c.Bus.CTRLA.SetBits(sam.SERCOM_I2CM_CTRLA_SWRST)
+	for (i2c.Bus.CTRLA.Get()&sam.SERCOM_I2CM_CTRLA_SWRST) > 0 ||
+		(i2c.Bus.SYNCBUSY.Get()&sam.SERCOM_I2CM_SYNCBUSY_SWRST) > 0 {
 	}
 
 	// Set i2c master mode
 	//SERCOM_I2CM_CTRLA_MODE( I2C_MASTER_OPERATION )
-	i2c.Bus.CTRLA = (sam.SERCOM_I2CM_CTRLA_MODE_I2C_MASTER << sam.SERCOM_I2CM_CTRLA_MODE_Pos) // |
+	i2c.Bus.CTRLA.Set(sam.SERCOM_I2CM_CTRLA_MODE_I2C_MASTER << sam.SERCOM_I2CM_CTRLA_MODE_Pos) // |
 
 	i2c.SetBaudRate(config.Frequency)
 
 	// Enable I2CM port.
 	// sercom->USART.CTRLA.bit.ENABLE = 0x1u;
-	i2c.Bus.CTRLA |= sam.SERCOM_I2CM_CTRLA_ENABLE
-	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_ENABLE) > 0 {
+	i2c.Bus.CTRLA.SetBits(sam.SERCOM_I2CM_CTRLA_ENABLE)
+	for (i2c.Bus.SYNCBUSY.Get() & sam.SERCOM_I2CM_SYNCBUSY_ENABLE) > 0 {
 	}
 
 	// set bus idle mode
-	i2c.Bus.STATUS |= (wireIdleState << sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)
-	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
+	i2c.Bus.STATUS.SetBits(wireIdleState << sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)
+	for (i2c.Bus.SYNCBUSY.Get() & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
 	}
 
 	// enable pins
@@ -505,7 +505,7 @@ func (i2c I2C) SetBaudRate(br uint32) {
 	// Synchronous arithmetic baudrate, via Arduino SAMD implementation:
 	// SystemCoreClock / ( 2 * baudrate) - 5 - (((SystemCoreClock / 1000000) * WIRE_RISE_TIME_NANOSECONDS) / (2 * 1000));
 	baud := CPU_FREQUENCY/(2*br) - 5 - (((CPU_FREQUENCY / 1000000) * riseTimeNanoseconds) / (2 * 1000))
-	i2c.Bus.BAUD = sam.RegValue(baud)
+	i2c.Bus.BAUD.Set(baud)
 }
 
 // Tx does a single I2C transaction at the specified address.
@@ -519,7 +519,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 		// wait until transmission complete
 		timeout := i2cTimeout
-		for (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_MB) == 0 {
+		for (i2c.Bus.INTFLAG.Get() & sam.SERCOM_I2CM_INTFLAG_MB) == 0 {
 			timeout--
 			if timeout == 0 {
 				return errors.New("I2C timeout on ready to write data")
@@ -527,7 +527,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		}
 
 		// ACK received (0: ACK, 1: NACK)
-		if (i2c.Bus.STATUS & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
+		if (i2c.Bus.STATUS.Get() & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
 			return errors.New("I2C write error: expected ACK not NACK")
 		}
 
@@ -549,17 +549,17 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		i2c.sendAddress(addr, false)
 
 		// wait transmission complete
-		for (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_SB) == 0 {
+		for (i2c.Bus.INTFLAG.Get() & sam.SERCOM_I2CM_INTFLAG_SB) == 0 {
 			// If the slave NACKS the address, the MB bit will be set.
 			// In that case, send a stop condition and return error.
-			if (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_MB) > 0 {
-				i2c.Bus.CTRLB |= (wireCmdStop << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop condition
+			if (i2c.Bus.INTFLAG.Get() & sam.SERCOM_I2CM_INTFLAG_MB) > 0 {
+				i2c.Bus.CTRLB.SetBits(wireCmdStop << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop condition
 				return errors.New("I2C read error: expected ACK not NACK")
 			}
 		}
 
 		// ACK received (0: ACK, 1: NACK)
-		if (i2c.Bus.STATUS & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
+		if (i2c.Bus.STATUS.Get() & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
 			return errors.New("I2C read error: expected ACK not NACK")
 		}
 
@@ -567,7 +567,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		r[0] = i2c.readByte()
 		for i := 1; i < len(r); i++ {
 			// Send an ACK
-			i2c.Bus.CTRLB &^= sam.SERCOM_I2CM_CTRLB_ACKACT
+			i2c.Bus.CTRLB.ClearBits(sam.SERCOM_I2CM_CTRLB_ACKACT)
 
 			i2c.signalRead()
 
@@ -576,7 +576,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		}
 
 		// Send NACK to end transmission
-		i2c.Bus.CTRLB |= sam.SERCOM_I2CM_CTRLB_ACKACT
+		i2c.Bus.CTRLB.SetBits(sam.SERCOM_I2CM_CTRLB_ACKACT)
 
 		err = i2c.signalStop()
 		if err != nil {
@@ -590,13 +590,13 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 // WriteByte writes a single byte to the I2C bus.
 func (i2c I2C) WriteByte(data byte) error {
 	// Send data byte
-	i2c.Bus.DATA = sam.RegValue8(data)
+	i2c.Bus.DATA.Set(data)
 
 	// wait until transmission successful
 	timeout := i2cTimeout
-	for (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_MB) == 0 {
+	for (i2c.Bus.INTFLAG.Get() & sam.SERCOM_I2CM_INTFLAG_MB) == 0 {
 		// check for bus error
-		if (sam.SERCOM3_I2CM.STATUS & sam.SERCOM_I2CM_STATUS_BUSERR) > 0 {
+		if (sam.SERCOM3_I2CM.STATUS.Get() & sam.SERCOM_I2CM_STATUS_BUSERR) > 0 {
 			return errors.New("I2C bus error")
 		}
 		timeout--
@@ -605,7 +605,7 @@ func (i2c I2C) WriteByte(data byte) error {
 		}
 	}
 
-	if (i2c.Bus.STATUS & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
+	if (i2c.Bus.STATUS.Get() & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
 		return errors.New("I2C write error: expected ACK not NACK")
 	}
 
@@ -621,22 +621,22 @@ func (i2c I2C) sendAddress(address uint16, write bool) error {
 
 	// wait until bus ready
 	timeout := i2cTimeout
-	for (i2c.Bus.STATUS&(wireIdleState<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)) == 0 &&
-		(i2c.Bus.STATUS&(wireOwnerState<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)) == 0 {
+	for (i2c.Bus.STATUS.Get()&(wireIdleState<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)) == 0 &&
+		(i2c.Bus.STATUS.Get()&(wireOwnerState<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)) == 0 {
 		timeout--
 		if timeout == 0 {
 			return errors.New("I2C timeout on bus ready")
 		}
 	}
-	i2c.Bus.ADDR = sam.RegValue(data)
+	i2c.Bus.ADDR.Set(uint32(data))
 
 	return nil
 }
 
 func (i2c I2C) signalStop() error {
-	i2c.Bus.CTRLB |= (wireCmdStop << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop command
+	i2c.Bus.CTRLB.SetBits(wireCmdStop << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop command
 	timeout := i2cTimeout
-	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
+	for (i2c.Bus.SYNCBUSY.Get() & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
 		timeout--
 		if timeout == 0 {
 			return errors.New("I2C timeout on signal stop")
@@ -646,9 +646,9 @@ func (i2c I2C) signalStop() error {
 }
 
 func (i2c I2C) signalRead() error {
-	i2c.Bus.CTRLB |= (wireCmdRead << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Read command
+	i2c.Bus.CTRLB.SetBits(wireCmdRead << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Read command
 	timeout := i2cTimeout
-	for (i2c.Bus.SYNCBUSY & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
+	for (i2c.Bus.SYNCBUSY.Get() & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
 		timeout--
 		if timeout == 0 {
 			return errors.New("I2C timeout on signal read")
@@ -658,9 +658,9 @@ func (i2c I2C) signalRead() error {
 }
 
 func (i2c I2C) readByte() byte {
-	for (i2c.Bus.INTFLAG & sam.SERCOM_I2CM_INTFLAG_SB) == 0 {
+	for (i2c.Bus.INTFLAG.Get() & sam.SERCOM_I2CM_INTFLAG_SB) == 0 {
 	}
-	return byte(i2c.Bus.DATA)
+	return byte(i2c.Bus.DATA.Get())
 }
 
 // I2S on the SAMD21.
@@ -693,80 +693,80 @@ func (i2s I2S) Configure(config I2SConfig) {
 	}
 
 	// Turn on clock for I2S
-	sam.PM.APBCMASK |= sam.PM_APBCMASK_I2S_
+	sam.PM.APBCMASK.SetBits(sam.PM_APBCMASK_I2S_)
 
 	// setting clock rate for sample.
 	division_factor := CPU_FREQUENCY / (config.AudioFrequency * uint32(config.DataFormat))
 
 	// Switch Generic Clock Generator 3 to DFLL48M.
-	sam.GCLK.GENDIV = sam.RegValue((sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_GENDIV_ID_Pos) |
+	sam.GCLK.GENDIV.Set((sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_GENDIV_ID_Pos) |
 		(division_factor << sam.GCLK_GENDIV_DIV_Pos))
 	waitForSync()
 
-	sam.GCLK.GENCTRL = sam.RegValue((sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_GENCTRL_ID_Pos) |
+	sam.GCLK.GENCTRL.Set((sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_GENCTRL_ID_Pos) |
 		(sam.GCLK_GENCTRL_SRC_DFLL48M << sam.GCLK_GENCTRL_SRC_Pos) |
 		sam.GCLK_GENCTRL_IDC |
 		sam.GCLK_GENCTRL_GENEN)
 	waitForSync()
 
 	// Use Generic Clock Generator 3 as source for I2S.
-	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_I2S_0 << sam.GCLK_CLKCTRL_ID_Pos) |
+	sam.GCLK.CLKCTRL.Set((sam.GCLK_CLKCTRL_ID_I2S_0 << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
 	waitForSync()
 
 	// reset the device
-	i2s.Bus.CTRLA |= sam.I2S_CTRLA_SWRST
-	for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_SWRST) > 0 {
+	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_SWRST)
+	for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_SWRST) > 0 {
 	}
 
 	// disable device before continuing
-	for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_ENABLE) > 0 {
+	for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_ENABLE) > 0 {
 	}
-	i2s.Bus.CTRLA &^= sam.I2S_CTRLA_ENABLE
+	i2s.Bus.CTRLA.ClearBits(sam.I2S_CTRLA_ENABLE)
 
 	// setup clock
 	if config.ClockSource == I2SClockSourceInternal {
 		// TODO: make sure correct for I2S output
 
 		// set serial clock select pin
-		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_SCKSEL
+		i2s.Bus.CLKCTRL0.SetBits(sam.I2S_CLKCTRL_SCKSEL)
 
 		// set frame select pin
-		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_FSSEL
+		i2s.Bus.CLKCTRL0.SetBits(sam.I2S_CLKCTRL_FSSEL)
 	} else {
 		// Configure FS generation from SCK clock.
-		i2s.Bus.CLKCTRL0 &^= sam.I2S_CLKCTRL_FSSEL
+		i2s.Bus.CLKCTRL0.ClearBits(sam.I2S_CLKCTRL_FSSEL)
 	}
 
 	if config.Standard == I2StandardPhilips {
 		// set 1-bit delay
-		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_BITDELAY
+		i2s.Bus.CLKCTRL0.SetBits(sam.I2S_CLKCTRL_BITDELAY)
 	} else {
 		// set 0-bit delay
-		i2s.Bus.CLKCTRL0 &^= sam.I2S_CLKCTRL_BITDELAY
+		i2s.Bus.CLKCTRL0.ClearBits(sam.I2S_CLKCTRL_BITDELAY)
 	}
 
 	// set number of slots.
 	if config.Stereo {
-		i2s.Bus.CLKCTRL0 |= (1 << sam.I2S_CLKCTRL_NBSLOTS_Pos)
+		i2s.Bus.CLKCTRL0.SetBits(1 << sam.I2S_CLKCTRL_NBSLOTS_Pos)
 	} else {
-		i2s.Bus.CLKCTRL0 &^= (1 << sam.I2S_CLKCTRL_NBSLOTS_Pos)
+		i2s.Bus.CLKCTRL0.ClearBits(1 << sam.I2S_CLKCTRL_NBSLOTS_Pos)
 	}
 
 	// set slot size
 	switch config.DataFormat {
 	case I2SDataFormat8bit:
-		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_SLOTSIZE_8
+		i2s.Bus.CLKCTRL0.SetBits(sam.I2S_CLKCTRL_SLOTSIZE_8)
 
 	case I2SDataFormat16bit:
-		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_SLOTSIZE_16
+		i2s.Bus.CLKCTRL0.SetBits(sam.I2S_CLKCTRL_SLOTSIZE_16)
 
 	case I2SDataFormat24bit:
-		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_SLOTSIZE_24
+		i2s.Bus.CLKCTRL0.SetBits(sam.I2S_CLKCTRL_SLOTSIZE_24)
 
 	case I2SDataFormat32bit:
-		i2s.Bus.CLKCTRL0 |= sam.I2S_CLKCTRL_SLOTSIZE_32
+		i2s.Bus.CLKCTRL0.SetBits(sam.I2S_CLKCTRL_SLOTSIZE_32)
 	}
 
 	// configure pin for clock
@@ -780,54 +780,54 @@ func (i2s I2S) Configure(config I2SConfig) {
 	// now set serializer data size.
 	switch config.DataFormat {
 	case I2SDataFormat8bit:
-		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_DATASIZE_8
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_DATASIZE_8)
 
 	case I2SDataFormat16bit:
-		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_DATASIZE_16
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_DATASIZE_16)
 
 	case I2SDataFormat24bit:
-		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_DATASIZE_24
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_DATASIZE_24)
 
 	case I2SDataFormat32bit:
 	case I2SDataFormatDefault:
-		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_DATASIZE_32
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_DATASIZE_32)
 	}
 
 	// set serializer slot adjustment
 	if config.Standard == I2SStandardLSB {
 		// adjust right
-		i2s.Bus.SERCTRL1 &^= sam.I2S_SERCTRL_SLOTADJ
+		i2s.Bus.SERCTRL1.ClearBits(sam.I2S_SERCTRL_SLOTADJ)
 	} else {
 		// adjust left
-		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_SLOTADJ
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_SLOTADJ)
 
 		// reverse bit order?
-		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_BITREV
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_BITREV)
 	}
 
 	// set serializer mode.
 	if config.Mode == I2SModePDM {
-		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_SERMODE_PDM2
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_SERMODE_PDM2)
 	} else {
-		i2s.Bus.SERCTRL1 |= sam.I2S_SERCTRL_SERMODE_RX
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_SERMODE_RX)
 	}
 
 	// configure data pin
 	GPIO{config.SD}.Configure(GPIOConfig{Mode: GPIO_COM})
 
 	// re-enable
-	i2s.Bus.CTRLA |= sam.I2S_CTRLA_ENABLE
-	for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_ENABLE) > 0 {
+	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_ENABLE)
+	for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_ENABLE) > 0 {
 	}
 
 	// enable i2s clock
-	i2s.Bus.CTRLA |= sam.I2S_CTRLA_CKEN0
-	for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_CKEN0) > 0 {
+	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_CKEN0)
+	for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_CKEN0) > 0 {
 	}
 
 	// enable i2s serializer
-	i2s.Bus.CTRLA |= sam.I2S_CTRLA_SEREN1
-	for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_SEREN1) > 0 {
+	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_SEREN1)
+	for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_SEREN1) > 0 {
 	}
 }
 
@@ -837,17 +837,17 @@ func (i2s I2S) Read(p []uint32) (n int, err error) {
 	i := 0
 	for i = 0; i < len(p); i++ {
 		// Wait until ready
-		for (i2s.Bus.INTFLAG & sam.I2S_INTFLAG_RXRDY1) == 0 {
+		for (i2s.Bus.INTFLAG.Get() & sam.I2S_INTFLAG_RXRDY1) == 0 {
 		}
 
-		for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_DATA1) > 0 {
+		for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_DATA1) > 0 {
 		}
 
 		// read data
-		p[i] = uint32(i2s.Bus.DATA1)
+		p[i] = i2s.Bus.DATA1.Get()
 
 		// indicate read complete
-		i2s.Bus.INTFLAG = sam.I2S_INTFLAG_RXRDY1
+		i2s.Bus.INTFLAG.Set(sam.I2S_INTFLAG_RXRDY1)
 	}
 
 	return i, nil
@@ -859,17 +859,17 @@ func (i2s I2S) Write(p []uint32) (n int, err error) {
 	i := 0
 	for i = 0; i < len(p); i++ {
 		// Wait until ready
-		for (i2s.Bus.INTFLAG & sam.I2S_INTFLAG_TXRDY1) == 0 {
+		for (i2s.Bus.INTFLAG.Get() & sam.I2S_INTFLAG_TXRDY1) == 0 {
 		}
 
-		for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_DATA1) > 0 {
+		for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_DATA1) > 0 {
 		}
 
 		// write data
-		i2s.Bus.DATA1 = sam.RegValue(p[i])
+		i2s.Bus.DATA1.Set(p[i])
 
 		// indicate write complete
-		i2s.Bus.INTFLAG = sam.I2S_INTFLAG_TXRDY1
+		i2s.Bus.INTFLAG.Set(sam.I2S_INTFLAG_TXRDY1)
 	}
 
 	return i, nil
@@ -878,17 +878,17 @@ func (i2s I2S) Write(p []uint32) (n int, err error) {
 // Close the I2S bus.
 func (i2s I2S) Close() error {
 	// Sync wait
-	for (i2s.Bus.SYNCBUSY & sam.I2S_SYNCBUSY_ENABLE) > 0 {
+	for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_ENABLE) > 0 {
 	}
 
 	// disable I2S
-	i2s.Bus.CTRLA &^= sam.I2S_CTRLA_ENABLE
+	i2s.Bus.CTRLA.ClearBits(sam.I2S_CTRLA_ENABLE)
 
 	return nil
 }
 
 func waitForSync() {
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
+	for (sam.GCLK.STATUS.Get() & sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
 }
 
@@ -922,8 +922,8 @@ func (spi SPI) Configure(config SPIConfig) {
 	}
 
 	// Disable SPI port.
-	spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_ENABLE
-	for (spi.Bus.SYNCBUSY & sam.SERCOM_SPI_SYNCBUSY_ENABLE) > 0 {
+	spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPI_CTRLA_ENABLE)
+	for (spi.Bus.SYNCBUSY.Get() & sam.SERCOM_SPI_SYNCBUSY_ENABLE) > 0 {
 	}
 
 	// enable pins
@@ -932,9 +932,9 @@ func (spi SPI) Configure(config SPIConfig) {
 	GPIO{config.MISO}.Configure(GPIOConfig{Mode: GPIO_SERCOM_ALT})
 
 	// reset SERCOM
-	spi.Bus.CTRLA |= sam.SERCOM_SPI_CTRLA_SWRST
-	for (spi.Bus.CTRLA&sam.SERCOM_SPI_CTRLA_SWRST) > 0 ||
-		(spi.Bus.SYNCBUSY&sam.SERCOM_SPI_SYNCBUSY_SWRST) > 0 {
+	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_SWRST)
+	for (spi.Bus.CTRLA.Get()&sam.SERCOM_SPI_CTRLA_SWRST) > 0 ||
+		(spi.Bus.SYNCBUSY.Get()&sam.SERCOM_SPI_SYNCBUSY_SWRST) > 0 {
 	}
 
 	// set bit transfer order
@@ -944,56 +944,56 @@ func (spi SPI) Configure(config SPIConfig) {
 	}
 
 	// Set SPI master
-	spi.Bus.CTRLA = (sam.SERCOM_SPI_CTRLA_MODE_SPI_MASTER << sam.SERCOM_SPI_CTRLA_MODE_Pos) |
-		sam.RegValue(doPad<<sam.SERCOM_SPI_CTRLA_DOPO_Pos) |
-		sam.RegValue(diPad<<sam.SERCOM_SPI_CTRLA_DIPO_Pos) |
-		sam.RegValue(dataOrder<<sam.SERCOM_SPI_CTRLA_DORD_Pos)
+	spi.Bus.CTRLA.Set(uint32((sam.SERCOM_SPI_CTRLA_MODE_SPI_MASTER << sam.SERCOM_SPI_CTRLA_MODE_Pos) |
+		(doPad << sam.SERCOM_SPI_CTRLA_DOPO_Pos) |
+		(diPad << sam.SERCOM_SPI_CTRLA_DIPO_Pos) |
+		(dataOrder << sam.SERCOM_SPI_CTRLA_DORD_Pos)))
 
-	spi.Bus.CTRLB |= (0 << sam.SERCOM_SPI_CTRLB_CHSIZE_Pos) | // 8bit char size
-		sam.SERCOM_SPI_CTRLB_RXEN // receive enable
+	spi.Bus.CTRLB.SetBits((0 << sam.SERCOM_SPI_CTRLB_CHSIZE_Pos) | // 8bit char size
+		sam.SERCOM_SPI_CTRLB_RXEN) // receive enable
 
-	for (spi.Bus.SYNCBUSY & sam.SERCOM_SPI_SYNCBUSY_CTRLB) > 0 {
+	for (spi.Bus.SYNCBUSY.Get() & sam.SERCOM_SPI_SYNCBUSY_CTRLB) > 0 {
 	}
 
 	// set mode
 	switch config.Mode {
 	case 0:
-		spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_CPHA
-		spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_CPOL
+		spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPI_CTRLA_CPHA)
+		spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPI_CTRLA_CPOL)
 	case 1:
-		spi.Bus.CTRLA |= sam.SERCOM_SPI_CTRLA_CPHA
-		spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_CPOL
+		spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_CPHA)
+		spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPI_CTRLA_CPOL)
 	case 2:
-		spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_CPHA
-		spi.Bus.CTRLA |= sam.SERCOM_SPI_CTRLA_CPOL
+		spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPI_CTRLA_CPHA)
+		spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_CPOL)
 	case 3:
-		spi.Bus.CTRLA |= sam.SERCOM_SPI_CTRLA_CPHA | sam.SERCOM_SPI_CTRLA_CPOL
+		spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_CPHA | sam.SERCOM_SPI_CTRLA_CPOL)
 	default: // to mode 0
-		spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_CPHA
-		spi.Bus.CTRLA &^= sam.SERCOM_SPI_CTRLA_CPOL
+		spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPI_CTRLA_CPHA)
+		spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPI_CTRLA_CPOL)
 	}
 
 	// Set synch speed for SPI
 	baudRate := (CPU_FREQUENCY / (2 * config.Frequency)) - 1
-	spi.Bus.BAUD = sam.RegValue8(baudRate)
+	spi.Bus.BAUD.Set(uint8(baudRate))
 
 	// Enable SPI port.
-	spi.Bus.CTRLA |= sam.SERCOM_SPI_CTRLA_ENABLE
-	for (spi.Bus.SYNCBUSY & sam.SERCOM_SPI_SYNCBUSY_ENABLE) > 0 {
+	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_ENABLE)
+	for (spi.Bus.SYNCBUSY.Get() & sam.SERCOM_SPI_SYNCBUSY_ENABLE) > 0 {
 	}
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
 func (spi SPI) Transfer(w byte) (byte, error) {
 	// write data
-	spi.Bus.DATA = sam.RegValue(w)
+	spi.Bus.DATA.Set(uint32(w))
 
 	// wait for receive
-	for (spi.Bus.INTFLAG & sam.SERCOM_SPI_INTFLAG_RXC) == 0 {
+	for (spi.Bus.INTFLAG.Get() & sam.SERCOM_SPI_INTFLAG_RXC) == 0 {
 	}
 
 	// return data
-	return byte(spi.Bus.DATA), nil
+	return byte(spi.Bus.DATA.Get()), nil
 }
 
 // PWM
@@ -1002,20 +1002,20 @@ const period = 0xFFFF
 // InitPWM initializes the PWM interface.
 func InitPWM() {
 	// turn on timer clocks used for PWM
-	sam.PM.APBCMASK |= sam.PM_APBCMASK_TCC0_ | sam.PM_APBCMASK_TCC1_ | sam.PM_APBCMASK_TCC2_
+	sam.PM.APBCMASK.SetBits(sam.PM_APBCMASK_TCC0_ | sam.PM_APBCMASK_TCC1_ | sam.PM_APBCMASK_TCC2_)
 
 	// Use GCLK0 for TCC0/TCC1
-	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_TCC0_TCC1 << sam.GCLK_CLKCTRL_ID_Pos) |
+	sam.GCLK.CLKCTRL.Set((sam.GCLK_CLKCTRL_ID_TCC0_TCC1 << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
+	for (sam.GCLK.STATUS.Get() & sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
 
 	// Use GCLK0 for TCC2/TC3
-	sam.GCLK.CLKCTRL = sam.RegValue16((sam.GCLK_CLKCTRL_ID_TCC2_TC3 << sam.GCLK_CLKCTRL_ID_Pos) |
+	sam.GCLK.CLKCTRL.Set((sam.GCLK_CLKCTRL_ID_TCC2_TC3 << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
-	for (sam.GCLK.STATUS & sam.GCLK_STATUS_SYNCBUSY) > 0 {
+	for (sam.GCLK.STATUS.Get() & sam.GCLK_STATUS_SYNCBUSY) > 0 {
 	}
 }
 
@@ -1025,28 +1025,28 @@ func (pwm PWM) Configure() {
 	timer := pwm.getTimer()
 
 	// disable timer
-	timer.CTRLA &^= sam.TCC_CTRLA_ENABLE
+	timer.CTRLA.ClearBits(sam.TCC_CTRLA_ENABLE)
 	// Wait for synchronization
-	for (timer.SYNCBUSY & sam.TCC_SYNCBUSY_ENABLE) > 0 {
+	for (timer.SYNCBUSY.Get() & sam.TCC_SYNCBUSY_ENABLE) > 0 {
 	}
 
 	// Use "Normal PWM" (single-slope PWM)
-	timer.WAVE |= sam.TCC_WAVE_WAVEGEN_NPWM
+	timer.WAVE.SetBits(sam.TCC_WAVE_WAVEGEN_NPWM)
 	// Wait for synchronization
-	for (timer.SYNCBUSY & sam.TCC_SYNCBUSY_WAVE) > 0 {
+	for (timer.SYNCBUSY.Get() & sam.TCC_SYNCBUSY_WAVE) > 0 {
 	}
 
 	// Set the period (the number to count to (TOP) before resetting timer)
 	//TCC0->PER.reg = period;
-	timer.PER = period
+	timer.PER.Set(period)
 	// Wait for synchronization
-	for (timer.SYNCBUSY & sam.TCC_SYNCBUSY_PER) > 0 {
+	for (timer.SYNCBUSY.Get() & sam.TCC_SYNCBUSY_PER) > 0 {
 	}
 
 	// Set pin as output
-	sam.PORT.DIRSET0 = (1 << pwm.Pin)
+	sam.PORT.DIRSET0.Set(1 << pwm.Pin)
 	// Set pin to low
-	sam.PORT.OUTCLR0 = (1 << pwm.Pin)
+	sam.PORT.OUTCLR0.Set(1 << pwm.Pin)
 
 	// Enable the port multiplexer for pin
 	pwm.setPinCfg(sam.PORT_PINCFG0_PMUXEN)
@@ -1063,11 +1063,11 @@ func (pwm PWM) Configure() {
 	if pwm.Pin&1 > 0 {
 		// odd pin, so save the even pins
 		val := pwm.getPMux() & sam.PORT_PMUX0_PMUXE_Msk
-		pwm.setPMux(val | sam.RegValue8(pwmConfig<<sam.PORT_PMUX0_PMUXO_Pos))
+		pwm.setPMux(val | uint8(pwmConfig<<sam.PORT_PMUX0_PMUXO_Pos))
 	} else {
 		// even pin, so save the odd pins
 		val := pwm.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
-		pwm.setPMux(val | sam.RegValue8(pwmConfig<<sam.PORT_PMUX0_PMUXE_Pos))
+		pwm.setPMux(val | uint8(pwmConfig<<sam.PORT_PMUX0_PMUXE_Pos))
 	}
 }
 
@@ -1077,46 +1077,46 @@ func (pwm PWM) Set(value uint16) {
 	timer := pwm.getTimer()
 
 	// disable output
-	timer.CTRLA &^= sam.TCC_CTRLA_ENABLE
+	timer.CTRLA.ClearBits(sam.TCC_CTRLA_ENABLE)
 
 	// Wait for synchronization
-	for (timer.SYNCBUSY & sam.TCC_SYNCBUSY_ENABLE) > 0 {
+	for (timer.SYNCBUSY.Get() & sam.TCC_SYNCBUSY_ENABLE) > 0 {
 	}
 
 	// Set PWM signal to output duty cycle
-	pwm.setChannel(sam.RegValue(value))
+	pwm.setChannel(uint32(value))
 
 	// Wait for synchronization on all channels
-	for (timer.SYNCBUSY & (sam.TCC_SYNCBUSY_CC0 |
+	for (timer.SYNCBUSY.Get() & (sam.TCC_SYNCBUSY_CC0 |
 		sam.TCC_SYNCBUSY_CC1 |
 		sam.TCC_SYNCBUSY_CC2 |
 		sam.TCC_SYNCBUSY_CC3)) > 0 {
 	}
 
 	// enable
-	timer.CTRLA |= sam.TCC_CTRLA_ENABLE
+	timer.CTRLA.SetBits(sam.TCC_CTRLA_ENABLE)
 	// Wait for synchronization
-	for (timer.SYNCBUSY & sam.TCC_SYNCBUSY_ENABLE) > 0 {
+	for (timer.SYNCBUSY.Get() & sam.TCC_SYNCBUSY_ENABLE) > 0 {
 	}
 }
 
 // getPMux returns the value for the correct PMUX register for this pin.
-func (pwm PWM) getPMux() sam.RegValue8 {
+func (pwm PWM) getPMux() uint8 {
 	return getPMux(pwm.Pin)
 }
 
 // setPMux sets the value for the correct PMUX register for this pin.
-func (pwm PWM) setPMux(val sam.RegValue8) {
+func (pwm PWM) setPMux(val uint8) {
 	setPMux(pwm.Pin, val)
 }
 
 // getPinCfg returns the value for the correct PINCFG register for this pin.
-func (pwm PWM) getPinCfg() sam.RegValue8 {
+func (pwm PWM) getPinCfg() uint8 {
 	return getPinCfg(pwm.Pin)
 }
 
 // setPinCfg sets the value for the correct PINCFG register for this pin.
-func (pwm PWM) setPinCfg(val sam.RegValue8) {
+func (pwm PWM) setPinCfg(val uint8) {
 	setPinCfg(pwm.Pin, val)
 }
 
@@ -1153,32 +1153,32 @@ func (pwm PWM) getTimer() *sam.TCC_Type {
 }
 
 // setChannel sets the value for the correct channel for PWM on this pin
-func (pwm PWM) setChannel(val sam.RegValue) {
+func (pwm PWM) setChannel(val uint32) {
 	switch pwm.Pin {
 	case 6:
-		pwm.getTimer().CC0 = val
+		pwm.getTimer().CC0.Set(val)
 	case 7:
-		pwm.getTimer().CC1 = val
+		pwm.getTimer().CC1.Set(val)
 	case 8:
-		pwm.getTimer().CC0 = val
+		pwm.getTimer().CC0.Set(val)
 	case 9:
-		pwm.getTimer().CC1 = val
+		pwm.getTimer().CC1.Set(val)
 	case 14:
-		pwm.getTimer().CC0 = val
+		pwm.getTimer().CC0.Set(val)
 	case 15:
-		pwm.getTimer().CC1 = val
+		pwm.getTimer().CC1.Set(val)
 	case 16:
-		pwm.getTimer().CC2 = val
+		pwm.getTimer().CC2.Set(val)
 	case 17:
-		pwm.getTimer().CC3 = val
+		pwm.getTimer().CC3.Set(val)
 	case 18:
-		pwm.getTimer().CC2 = val
+		pwm.getTimer().CC2.Set(val)
 	case 19:
-		pwm.getTimer().CC3 = val
+		pwm.getTimer().CC3.Set(val)
 	case 20:
-		pwm.getTimer().CC2 = val
+		pwm.getTimer().CC2.Set(val)
 	case 21:
-		pwm.getTimer().CC3 = val
+		pwm.getTimer().CC3.Set(val)
 	default:
 		return // not supported on this pin
 	}
@@ -1196,17 +1196,14 @@ func (usbcdc USBCDC) WriteByte(c byte) error {
 		// set the data
 		udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN][0] = c
 
-		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].ADDR =
-			sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN])))
+		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN]))))
 
 		// clean multi packet size of bytes already sent
-		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].PCKSIZE &^=
-			sam.RegValue(usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
+		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
 
 		// set count of bytes to be sent
-		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].PCKSIZE |=
-			sam.RegValue((1&usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)<<usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) |
-				sam.RegValue(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos)
+		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].PCKSIZE.SetBits((1&usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)<<usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos |
+			(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos))
 
 		// ack transfer complete flag
 		setEPINTFLAG(usb_CDC_ENDPOINT_IN, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
@@ -1255,12 +1252,12 @@ var (
 // Configure the USB CDC interface. The config is here for compatibility with the UART interface.
 func (usbcdc USBCDC) Configure(config UARTConfig) {
 	// reset USB interface
-	sam.USB_DEVICE.CTRLA |= sam.USB_DEVICE_CTRLA_SWRST
-	for (sam.USB_DEVICE.SYNCBUSY&sam.USB_DEVICE_SYNCBUSY_SWRST) > 0 ||
-		(sam.USB_DEVICE.SYNCBUSY&sam.USB_DEVICE_SYNCBUSY_ENABLE) > 0 {
+	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_SWRST)
+	for (sam.USB_DEVICE.SYNCBUSY.Get()&sam.USB_DEVICE_SYNCBUSY_SWRST) > 0 ||
+		(sam.USB_DEVICE.SYNCBUSY.Get()&sam.USB_DEVICE_SYNCBUSY_ENABLE) > 0 {
 	}
 
-	sam.USB_DEVICE.DESCADD = sam.RegValue(uintptr(unsafe.Pointer(&usbEndpointDescriptors)))
+	sam.USB_DEVICE.DESCADD.Set(uint32(uintptr(unsafe.Pointer(&usbEndpointDescriptors))))
 
 	// configure pins
 	GPIO{USBCDC_DM_PIN}.Configure(GPIOConfig{Mode: GPIO_COM})
@@ -1270,22 +1267,22 @@ func (usbcdc USBCDC) Configure(config UARTConfig) {
 	handlePadCalibration()
 
 	// run in standby
-	sam.USB_DEVICE.CTRLA |= sam.USB_DEVICE_CTRLA_RUNSTDBY
+	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_RUNSTDBY)
 
 	// set full speed
-	sam.USB_DEVICE.CTRLB |= (sam.USB_DEVICE_CTRLB_SPDCONF_FS << sam.USB_DEVICE_CTRLB_SPDCONF_Pos)
+	sam.USB_DEVICE.CTRLB.SetBits(sam.USB_DEVICE_CTRLB_SPDCONF_FS << sam.USB_DEVICE_CTRLB_SPDCONF_Pos)
 
 	// attach
-	sam.USB_DEVICE.CTRLB &^= sam.USB_DEVICE_CTRLB_DETACH
+	sam.USB_DEVICE.CTRLB.ClearBits(sam.USB_DEVICE_CTRLB_DETACH)
 
 	// enable interrupt for end of reset
-	sam.USB_DEVICE.INTENSET |= sam.USB_DEVICE_INTENSET_EORST
+	sam.USB_DEVICE.INTENSET.SetBits(sam.USB_DEVICE_INTENSET_EORST)
 
 	// enable interrupt for start of frame
-	sam.USB_DEVICE.INTENSET |= sam.USB_DEVICE_INTENSET_SOF
+	sam.USB_DEVICE.INTENSET.SetBits(sam.USB_DEVICE_INTENSET_SOF)
 
 	// enable USB
-	sam.USB_DEVICE.CTRLA |= sam.USB_DEVICE_CTRLA_ENABLE
+	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_ENABLE)
 
 	// enable IRQ
 	arm.EnableIRQ(sam.IRQ_USB)
@@ -1314,31 +1311,31 @@ func handlePadCalibration() {
 	// #define USB_FUSES_TRIM(value)       ((USB_FUSES_TRIM_Msk & ((value) << USB_FUSES_TRIM_Pos)))
 	//
 	fuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020) + 4))
-	calibTransN := sam.RegValue16(uint16(fuse>>13) & uint16(0x1f))
-	calibTransP := sam.RegValue16(uint16(fuse>>18) & uint16(0x1f))
-	calibTrim := sam.RegValue16(uint16(fuse>>23) & uint16(0x7))
+	calibTransN := uint16(fuse>>13) & uint16(0x1f)
+	calibTransP := uint16(fuse>>18) & uint16(0x1f)
+	calibTrim := uint16(fuse>>23) & uint16(0x7)
 
 	if calibTransN == 0x1f {
 		calibTransN = 5
 	}
-	sam.USB_DEVICE.PADCAL |= (calibTransN << sam.USB_DEVICE_PADCAL_TRANSN_Pos)
+	sam.USB_DEVICE.PADCAL.SetBits(calibTransN << sam.USB_DEVICE_PADCAL_TRANSN_Pos)
 
 	if calibTransP == 0x1f {
 		calibTransP = 29
 	}
-	sam.USB_DEVICE.PADCAL |= (calibTransP << sam.USB_DEVICE_PADCAL_TRANSP_Pos)
+	sam.USB_DEVICE.PADCAL.SetBits(calibTransP << sam.USB_DEVICE_PADCAL_TRANSP_Pos)
 
 	if calibTrim == 0x7 {
 		calibTransN = 3
 	}
-	sam.USB_DEVICE.PADCAL |= (calibTrim << sam.USB_DEVICE_PADCAL_TRIM_Pos)
+	sam.USB_DEVICE.PADCAL.SetBits(calibTrim << sam.USB_DEVICE_PADCAL_TRIM_Pos)
 }
 
 //go:export USB_IRQHandler
 func handleUSB() {
 	// reset all interrupt flags
-	flags := sam.USB_DEVICE.INTFLAG
-	sam.USB_DEVICE.INTFLAG = flags
+	flags := sam.USB_DEVICE.INTFLAG.Get()
+	sam.USB_DEVICE.INTFLAG.Set(flags)
 
 	// End of reset
 	if (flags & sam.USB_DEVICE_INTFLAG_EORST) > 0 {
@@ -1351,7 +1348,7 @@ func handleUSB() {
 		usbConfiguration = 0
 
 		// ack the End-Of-Reset interrupt
-		sam.USB_DEVICE.INTFLAG = sam.USB_DEVICE_INTFLAG_EORST
+		sam.USB_DEVICE.INTFLAG.Set(sam.USB_DEVICE_INTFLAG_EORST)
 	}
 
 	// Start of frame
@@ -1399,7 +1396,7 @@ func handleUSB() {
 	}
 
 	// Now the actual transfer handlers
-	eptInts := sam.USB_DEVICE.EPINTSMRY & 0xFE // Remove endpoint number 0 (setup)
+	eptInts := sam.USB_DEVICE.EPINTSMRY.Get() & 0xFE // Remove endpoint number 0 (setup)
 	var i uint32
 	for i = 1; i < uint32(len(endPoints)); i++ {
 		// Check if endpoint has a pending interrupt
@@ -1420,24 +1417,20 @@ func initEndpoint(ep, config uint32) {
 	switch config {
 	case usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn:
 		// set packet size
-		usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE |=
-			sam.RegValue(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
+		usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.SetBits(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
 
 		// set data buffer address
-		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR =
-			sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep])))
+		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
 
 		// set endpoint type
 		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_INTERRUPT+1)<<sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
 
 	case usb_ENDPOINT_TYPE_BULK | usbEndpointOut:
 		// set packet size
-		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE |=
-			sam.RegValue(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.SetBits(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
 
 		// set data buffer address
-		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR =
-			sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep])))
+		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
 
 		// set endpoint type
 		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_BULK+1)<<sam.USB_DEVICE_EPCFG_EPTYPE0_Pos))
@@ -1453,12 +1446,10 @@ func initEndpoint(ep, config uint32) {
 
 	case usb_ENDPOINT_TYPE_BULK | usbEndpointIn:
 		// set packet size
-		usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE |=
-			sam.RegValue(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
+		usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.SetBits(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
 
 		// set data buffer address
-		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR =
-			sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep])))
+		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
 
 		// set endpoint type
 		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_BULK+1)<<sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
@@ -1469,36 +1460,30 @@ func initEndpoint(ep, config uint32) {
 	case usb_ENDPOINT_TYPE_CONTROL:
 		// Control OUT
 		// set packet size
-		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE |=
-			sam.RegValue(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.SetBits(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
 
 		// set data buffer address
-		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR =
-			sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep])))
+		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
 
 		// set endpoint type
 		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_CONTROL+1)<<sam.USB_DEVICE_EPCFG_EPTYPE0_Pos))
 
 		// Control IN
 		// set packet size
-		usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE |=
-			sam.RegValue(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
+		usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.SetBits(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
 
 		// set data buffer address
-		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR =
-			sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep])))
+		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
 
 		// set endpoint type
 		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_CONTROL+1)<<sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
 
 		// Prepare OUT endpoint for receive
 		// set multi packet size for expected number of receive bytes on control OUT
-		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE |=
-			sam.RegValue(64 << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.SetBits(64 << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
 
 		// set byte count to zero, we have not received anything yet
-		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE &^=
-			sam.RegValue(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 
 		// NAK on endpoint OUT to show we are ready to receive control data
 		setEPSTATUSSET(ep, sam.USB_DEVICE_EPSTATUSSET_BK0RDY)
@@ -1540,9 +1525,8 @@ func handleStandardSetup(setup usbSetup) bool {
 
 	case usb_SET_ADDRESS:
 		// set packet size 64 with auto Zlp after transfer
-		usbEndpointDescriptors[0].DeviceDescBank[1].PCKSIZE =
-			sam.RegValue(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos) |
-				sam.RegValue(1<<31) // autozlp
+		usbEndpointDescriptors[0].DeviceDescBank[1].PCKSIZE.Set((epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos) |
+			uint32(1<<31)) // autozlp
 
 		// ack the transfer is complete from the request
 		setEPINTFLAG(0, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
@@ -1555,8 +1539,8 @@ func handleStandardSetup(setup usbSetup) bool {
 		}
 
 		// last, set the device address to that requested by host
-		sam.USB_DEVICE.DADD |= sam.RegValue8(setup.wValueL)
-		sam.USB_DEVICE.DADD |= sam.USB_DEVICE_DADD_ADDEN
+		sam.USB_DEVICE.DADD.SetBits(setup.wValueL)
+		sam.USB_DEVICE.DADD.SetBits(sam.USB_DEVICE_DADD_ADDEN)
 
 		return true
 
@@ -1658,16 +1642,13 @@ func sendUSBPacket(ep uint32, data []byte) {
 	copy(udd_ep_in_cache_buffer[ep][:], data)
 
 	// Set endpoint address for sending data
-	usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR =
-		sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep])))
+	usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
 
 	// clear multi-packet size which is total bytes already sent
-	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE &^=
-		sam.RegValue(usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
+	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
 
 	// set byte count, which is total number of bytes to be sent
-	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE |=
-		sam.RegValue((len(data) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask) << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.SetBits(uint32((len(data) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask) << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos))
 }
 
 func receiveUSBControlPacket() []byte {
@@ -1685,17 +1666,14 @@ func receiveUSBControlPacket() []byte {
 
 func armRecvCtrlOUT(ep uint32) uint32 {
 	// Set output address to receive data
-	usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR =
-		sam.RegValue(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep])))
+	usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
 
 	// set multi-packet size which is total expected number of bytes to receive.
-	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE |=
-		sam.RegValue(8<<usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos) |
-			sam.RegValue(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos)
+	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.SetBits((8 << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos) |
+		uint32(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos))
 
 	// clear byte count of bytes received so far.
-	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE &^=
-		sam.RegValue(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 
 	// clear ready state to start transfer
 	setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
@@ -1709,8 +1687,8 @@ func armRecvCtrlOUT(ep uint32) uint32 {
 	}
 
 	// return number of bytes received
-	return uint32((usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE >>
-		usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)
+	return (usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.Get() >>
+		usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask
 }
 
 // sendDescriptor creates and sends the various USB descriptor types that
@@ -1834,7 +1812,7 @@ func sendConfiguration(setup usbSetup) {
 
 func handleEndpoint(ep uint32) {
 	// get data
-	count := int((usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE >>
+	count := int((usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.Get() >>
 		usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)
 
 	// move to ring buffer
@@ -1848,8 +1826,7 @@ func handleEndpoint(ep uint32) {
 }
 
 func sendZlp(ep uint32) {
-	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE &^=
-		sam.RegValue(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 }
 
 func epPacketSize(size uint16) uint32 {
@@ -1875,208 +1852,208 @@ func epPacketSize(size uint16) uint32 {
 	}
 }
 
-func getEPCFG(ep uint32) sam.RegValue8 {
+func getEPCFG(ep uint32) uint8 {
 	switch ep {
 	case 0:
-		return sam.USB_DEVICE.EPCFG0
+		return sam.USB_DEVICE.EPCFG0.Get()
 	case 1:
-		return sam.USB_DEVICE.EPCFG1
+		return sam.USB_DEVICE.EPCFG1.Get()
 	case 2:
-		return sam.USB_DEVICE.EPCFG2
+		return sam.USB_DEVICE.EPCFG2.Get()
 	case 3:
-		return sam.USB_DEVICE.EPCFG3
+		return sam.USB_DEVICE.EPCFG3.Get()
 	case 4:
-		return sam.USB_DEVICE.EPCFG4
+		return sam.USB_DEVICE.EPCFG4.Get()
 	case 5:
-		return sam.USB_DEVICE.EPCFG5
+		return sam.USB_DEVICE.EPCFG5.Get()
 	case 6:
-		return sam.USB_DEVICE.EPCFG6
+		return sam.USB_DEVICE.EPCFG6.Get()
 	case 7:
-		return sam.USB_DEVICE.EPCFG7
+		return sam.USB_DEVICE.EPCFG7.Get()
 	default:
 		return 0
 	}
 }
 
-func setEPCFG(ep uint32, val sam.RegValue8) {
+func setEPCFG(ep uint32, val uint8) {
 	switch ep {
 	case 0:
-		sam.USB_DEVICE.EPCFG0 = val
+		sam.USB_DEVICE.EPCFG0.Set(val)
 	case 1:
-		sam.USB_DEVICE.EPCFG1 = val
+		sam.USB_DEVICE.EPCFG1.Set(val)
 	case 2:
-		sam.USB_DEVICE.EPCFG2 = val
+		sam.USB_DEVICE.EPCFG2.Set(val)
 	case 3:
-		sam.USB_DEVICE.EPCFG3 = val
+		sam.USB_DEVICE.EPCFG3.Set(val)
 	case 4:
-		sam.USB_DEVICE.EPCFG4 = val
+		sam.USB_DEVICE.EPCFG4.Set(val)
 	case 5:
-		sam.USB_DEVICE.EPCFG5 = val
+		sam.USB_DEVICE.EPCFG5.Set(val)
 	case 6:
-		sam.USB_DEVICE.EPCFG6 = val
+		sam.USB_DEVICE.EPCFG6.Set(val)
 	case 7:
-		sam.USB_DEVICE.EPCFG7 = val
+		sam.USB_DEVICE.EPCFG7.Set(val)
 	default:
 		return
 	}
 }
 
-func setEPSTATUSCLR(ep uint32, val sam.RegValue8) {
+func setEPSTATUSCLR(ep uint32, val uint8) {
 	switch ep {
 	case 0:
-		sam.USB_DEVICE.EPSTATUSCLR0 = val
+		sam.USB_DEVICE.EPSTATUSCLR0.Set(val)
 	case 1:
-		sam.USB_DEVICE.EPSTATUSCLR1 = val
+		sam.USB_DEVICE.EPSTATUSCLR1.Set(val)
 	case 2:
-		sam.USB_DEVICE.EPSTATUSCLR2 = val
+		sam.USB_DEVICE.EPSTATUSCLR2.Set(val)
 	case 3:
-		sam.USB_DEVICE.EPSTATUSCLR3 = val
+		sam.USB_DEVICE.EPSTATUSCLR3.Set(val)
 	case 4:
-		sam.USB_DEVICE.EPSTATUSCLR4 = val
+		sam.USB_DEVICE.EPSTATUSCLR4.Set(val)
 	case 5:
-		sam.USB_DEVICE.EPSTATUSCLR5 = val
+		sam.USB_DEVICE.EPSTATUSCLR5.Set(val)
 	case 6:
-		sam.USB_DEVICE.EPSTATUSCLR6 = val
+		sam.USB_DEVICE.EPSTATUSCLR6.Set(val)
 	case 7:
-		sam.USB_DEVICE.EPSTATUSCLR7 = val
+		sam.USB_DEVICE.EPSTATUSCLR7.Set(val)
 	default:
 		return
 	}
 }
 
-func setEPSTATUSSET(ep uint32, val sam.RegValue8) {
+func setEPSTATUSSET(ep uint32, val uint8) {
 	switch ep {
 	case 0:
-		sam.USB_DEVICE.EPSTATUSSET0 = val
+		sam.USB_DEVICE.EPSTATUSSET0.Set(val)
 	case 1:
-		sam.USB_DEVICE.EPSTATUSSET1 = val
+		sam.USB_DEVICE.EPSTATUSSET1.Set(val)
 	case 2:
-		sam.USB_DEVICE.EPSTATUSSET2 = val
+		sam.USB_DEVICE.EPSTATUSSET2.Set(val)
 	case 3:
-		sam.USB_DEVICE.EPSTATUSSET3 = val
+		sam.USB_DEVICE.EPSTATUSSET3.Set(val)
 	case 4:
-		sam.USB_DEVICE.EPSTATUSSET4 = val
+		sam.USB_DEVICE.EPSTATUSSET4.Set(val)
 	case 5:
-		sam.USB_DEVICE.EPSTATUSSET5 = val
+		sam.USB_DEVICE.EPSTATUSSET5.Set(val)
 	case 6:
-		sam.USB_DEVICE.EPSTATUSSET6 = val
+		sam.USB_DEVICE.EPSTATUSSET6.Set(val)
 	case 7:
-		sam.USB_DEVICE.EPSTATUSSET7 = val
+		sam.USB_DEVICE.EPSTATUSSET7.Set(val)
 	default:
 		return
 	}
 }
 
-func getEPSTATUS(ep uint32) sam.RegValue8 {
+func getEPSTATUS(ep uint32) uint8 {
 	switch ep {
 	case 0:
-		return sam.USB_DEVICE.EPSTATUS0
+		return sam.USB_DEVICE.EPSTATUS0.Get()
 	case 1:
-		return sam.USB_DEVICE.EPSTATUS1
+		return sam.USB_DEVICE.EPSTATUS1.Get()
 	case 2:
-		return sam.USB_DEVICE.EPSTATUS2
+		return sam.USB_DEVICE.EPSTATUS2.Get()
 	case 3:
-		return sam.USB_DEVICE.EPSTATUS3
+		return sam.USB_DEVICE.EPSTATUS3.Get()
 	case 4:
-		return sam.USB_DEVICE.EPSTATUS4
+		return sam.USB_DEVICE.EPSTATUS4.Get()
 	case 5:
-		return sam.USB_DEVICE.EPSTATUS5
+		return sam.USB_DEVICE.EPSTATUS5.Get()
 	case 6:
-		return sam.USB_DEVICE.EPSTATUS6
+		return sam.USB_DEVICE.EPSTATUS6.Get()
 	case 7:
-		return sam.USB_DEVICE.EPSTATUS7
+		return sam.USB_DEVICE.EPSTATUS7.Get()
 	default:
 		return 0
 	}
 }
 
-func getEPINTFLAG(ep uint32) sam.RegValue8 {
+func getEPINTFLAG(ep uint32) uint8 {
 	switch ep {
 	case 0:
-		return sam.USB_DEVICE.EPINTFLAG0
+		return sam.USB_DEVICE.EPINTFLAG0.Get()
 	case 1:
-		return sam.USB_DEVICE.EPINTFLAG1
+		return sam.USB_DEVICE.EPINTFLAG1.Get()
 	case 2:
-		return sam.USB_DEVICE.EPINTFLAG2
+		return sam.USB_DEVICE.EPINTFLAG2.Get()
 	case 3:
-		return sam.USB_DEVICE.EPINTFLAG3
+		return sam.USB_DEVICE.EPINTFLAG3.Get()
 	case 4:
-		return sam.USB_DEVICE.EPINTFLAG4
+		return sam.USB_DEVICE.EPINTFLAG4.Get()
 	case 5:
-		return sam.USB_DEVICE.EPINTFLAG5
+		return sam.USB_DEVICE.EPINTFLAG5.Get()
 	case 6:
-		return sam.USB_DEVICE.EPINTFLAG6
+		return sam.USB_DEVICE.EPINTFLAG6.Get()
 	case 7:
-		return sam.USB_DEVICE.EPINTFLAG7
+		return sam.USB_DEVICE.EPINTFLAG7.Get()
 	default:
 		return 0
 	}
 }
 
-func setEPINTFLAG(ep uint32, val sam.RegValue8) {
+func setEPINTFLAG(ep uint32, val uint8) {
 	switch ep {
 	case 0:
-		sam.USB_DEVICE.EPINTFLAG0 = val
+		sam.USB_DEVICE.EPINTFLAG0.Set(val)
 	case 1:
-		sam.USB_DEVICE.EPINTFLAG1 = val
+		sam.USB_DEVICE.EPINTFLAG1.Set(val)
 	case 2:
-		sam.USB_DEVICE.EPINTFLAG2 = val
+		sam.USB_DEVICE.EPINTFLAG2.Set(val)
 	case 3:
-		sam.USB_DEVICE.EPINTFLAG3 = val
+		sam.USB_DEVICE.EPINTFLAG3.Set(val)
 	case 4:
-		sam.USB_DEVICE.EPINTFLAG4 = val
+		sam.USB_DEVICE.EPINTFLAG4.Set(val)
 	case 5:
-		sam.USB_DEVICE.EPINTFLAG5 = val
+		sam.USB_DEVICE.EPINTFLAG5.Set(val)
 	case 6:
-		sam.USB_DEVICE.EPINTFLAG6 = val
+		sam.USB_DEVICE.EPINTFLAG6.Set(val)
 	case 7:
-		sam.USB_DEVICE.EPINTFLAG7 = val
+		sam.USB_DEVICE.EPINTFLAG7.Set(val)
 	default:
 		return
 	}
 }
 
-func setEPINTENCLR(ep uint32, val sam.RegValue8) {
+func setEPINTENCLR(ep uint32, val uint8) {
 	switch ep {
 	case 0:
-		sam.USB_DEVICE.EPINTENCLR0 = val
+		sam.USB_DEVICE.EPINTENCLR0.Set(val)
 	case 1:
-		sam.USB_DEVICE.EPINTENCLR1 = val
+		sam.USB_DEVICE.EPINTENCLR1.Set(val)
 	case 2:
-		sam.USB_DEVICE.EPINTENCLR2 = val
+		sam.USB_DEVICE.EPINTENCLR2.Set(val)
 	case 3:
-		sam.USB_DEVICE.EPINTENCLR3 = val
+		sam.USB_DEVICE.EPINTENCLR3.Set(val)
 	case 4:
-		sam.USB_DEVICE.EPINTENCLR4 = val
+		sam.USB_DEVICE.EPINTENCLR4.Set(val)
 	case 5:
-		sam.USB_DEVICE.EPINTENCLR5 = val
+		sam.USB_DEVICE.EPINTENCLR5.Set(val)
 	case 6:
-		sam.USB_DEVICE.EPINTENCLR6 = val
+		sam.USB_DEVICE.EPINTENCLR6.Set(val)
 	case 7:
-		sam.USB_DEVICE.EPINTENCLR7 = val
+		sam.USB_DEVICE.EPINTENCLR7.Set(val)
 	default:
 		return
 	}
 }
 
-func setEPINTENSET(ep uint32, val sam.RegValue8) {
+func setEPINTENSET(ep uint32, val uint8) {
 	switch ep {
 	case 0:
-		sam.USB_DEVICE.EPINTENSET0 = val
+		sam.USB_DEVICE.EPINTENSET0.Set(val)
 	case 1:
-		sam.USB_DEVICE.EPINTENSET1 = val
+		sam.USB_DEVICE.EPINTENSET1.Set(val)
 	case 2:
-		sam.USB_DEVICE.EPINTENSET2 = val
+		sam.USB_DEVICE.EPINTENSET2.Set(val)
 	case 3:
-		sam.USB_DEVICE.EPINTENSET3 = val
+		sam.USB_DEVICE.EPINTENSET3.Set(val)
 	case 4:
-		sam.USB_DEVICE.EPINTENSET4 = val
+		sam.USB_DEVICE.EPINTENSET4.Set(val)
 	case 5:
-		sam.USB_DEVICE.EPINTENSET5 = val
+		sam.USB_DEVICE.EPINTENSET5.Set(val)
 	case 6:
-		sam.USB_DEVICE.EPINTENSET6 = val
+		sam.USB_DEVICE.EPINTENSET6.Set(val)
 	case 7:
-		sam.USB_DEVICE.EPINTENSET7 = val
+		sam.USB_DEVICE.EPINTENSET7.Set(val)
 	default:
 		return
 	}

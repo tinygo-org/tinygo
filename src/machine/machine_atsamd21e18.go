@@ -14,50 +14,50 @@ import (
 // Return the register and mask to enable a given GPIO pin. This can be used to
 // implement bit-banged drivers.
 func (p GPIO) PortMaskSet() (*uint32, uint32) {
-	return (*uint32)(&sam.PORT.OUTSET0), 1 << p.Pin
+	return &sam.PORT.OUTSET0.Reg, 1 << p.Pin
 }
 
 // Return the register and mask to disable a given port. This can be used to
 // implement bit-banged drivers.
 func (p GPIO) PortMaskClear() (*uint32, uint32) {
-	return (*uint32)(&sam.PORT.OUTCLR0), 1 << p.Pin
+	return &sam.PORT.OUTCLR0.Reg, 1 << p.Pin
 }
 
 // Set the pin to high or low.
 // Warning: only use this on an output pin!
 func (p GPIO) Set(high bool) {
 	if high {
-		sam.PORT.OUTSET0 = (1 << p.Pin)
+		sam.PORT.OUTSET0.Set(1 << p.Pin)
 	} else {
-		sam.PORT.OUTCLR0 = (1 << p.Pin)
+		sam.PORT.OUTCLR0.Set(1 << p.Pin)
 	}
 }
 
 // Get returns the current value of a GPIO pin.
 func (p GPIO) Get() bool {
-	return (sam.PORT.IN0>>p.Pin)&1 > 0
+	return (sam.PORT.IN0.Get()>>p.Pin)&1 > 0
 }
 
 // Configure this pin with the given configuration.
 func (p GPIO) Configure(config GPIOConfig) {
 	switch config.Mode {
 	case GPIO_OUTPUT:
-		sam.PORT.DIRSET0 = (1 << p.Pin)
+		sam.PORT.DIRSET0.Set(1 << p.Pin)
 		// output is also set to input enable so pin can read back its own value
 		p.setPinCfg(sam.PORT_PINCFG0_INEN)
 
 	case GPIO_INPUT:
-		sam.PORT.DIRCLR0 = (1 << p.Pin)
+		sam.PORT.DIRCLR0.Set(1 << p.Pin)
 		p.setPinCfg(sam.PORT_PINCFG0_INEN)
 
 	case GPIO_INPUT_PULLDOWN:
-		sam.PORT.DIRCLR0 = (1 << p.Pin)
-		sam.PORT.OUTCLR0 = (1 << p.Pin)
+		sam.PORT.DIRCLR0.Set(1 << p.Pin)
+		sam.PORT.OUTCLR0.Set(1 << p.Pin)
 		p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
 
 	case GPIO_INPUT_PULLUP:
-		sam.PORT.DIRCLR0 = (1 << p.Pin)
-		sam.PORT.OUTSET0 = (1 << p.Pin)
+		sam.PORT.DIRCLR0.Set(1 << p.Pin)
+		sam.PORT.OUTSET0.Set(1 << p.Pin)
 		p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
 
 	case GPIO_SERCOM:
@@ -114,223 +114,223 @@ func (p GPIO) Configure(config GPIOConfig) {
 }
 
 // getPMux returns the value for the correct PMUX register for this pin.
-func getPMux(p uint8) sam.RegValue8 {
+func getPMux(p uint8) uint8 {
 	pin := p >> 1
 	switch pin {
 	case 0:
-		return sam.PORT.PMUX0_0
+		return sam.PORT.PMUX0_0.Get()
 	case 1:
-		return sam.PORT.PMUX0_1
+		return sam.PORT.PMUX0_1.Get()
 	case 2:
-		return sam.PORT.PMUX0_2
+		return sam.PORT.PMUX0_2.Get()
 	case 3:
-		return sam.PORT.PMUX0_3
+		return sam.PORT.PMUX0_3.Get()
 	case 4:
-		return sam.PORT.PMUX0_4
+		return sam.PORT.PMUX0_4.Get()
 	case 5:
-		return sam.PORT.PMUX0_5
+		return sam.PORT.PMUX0_5.Get()
 	case 6:
-		return sam.PORT.PMUX0_6
+		return sam.PORT.PMUX0_6.Get()
 	case 7:
-		return sam.PORT.PMUX0_7
+		return sam.PORT.PMUX0_7.Get()
 	case 8:
-		return sam.PORT.PMUX0_8
+		return sam.PORT.PMUX0_8.Get()
 	case 9:
-		return sam.PORT.PMUX0_9
+		return sam.PORT.PMUX0_9.Get()
 	case 10:
-		return sam.PORT.PMUX0_10
+		return sam.PORT.PMUX0_10.Get()
 	case 11:
-		return sam.PORT.PMUX0_11
+		return sam.PORT.PMUX0_11.Get()
 	case 12:
-		return sam.PORT.PMUX0_12
+		return sam.PORT.PMUX0_12.Get()
 	case 13:
-		return sam.PORT.PMUX0_13
+		return sam.PORT.PMUX0_13.Get()
 	case 14:
-		return sam.PORT.PMUX0_14
+		return sam.PORT.PMUX0_14.Get()
 	case 15:
-		return sam.PORT.PMUX0_15
+		return sam.PORT.PMUX0_15.Get()
 	default:
 		return 0
 	}
 }
 
 // setPMux sets the value for the correct PMUX register for this pin.
-func setPMux(p uint8, val sam.RegValue8) {
+func setPMux(p uint8, val uint8) {
 	pin := p >> 1
 	switch pin {
 	case 0:
-		sam.PORT.PMUX0_0 = val
+		sam.PORT.PMUX0_0.Set(val)
 	case 1:
-		sam.PORT.PMUX0_1 = val
+		sam.PORT.PMUX0_1.Set(val)
 	case 2:
-		sam.PORT.PMUX0_2 = val
+		sam.PORT.PMUX0_2.Set(val)
 	case 3:
-		sam.PORT.PMUX0_3 = val
+		sam.PORT.PMUX0_3.Set(val)
 	case 4:
-		sam.PORT.PMUX0_4 = val
+		sam.PORT.PMUX0_4.Set(val)
 	case 5:
-		sam.PORT.PMUX0_5 = val
+		sam.PORT.PMUX0_5.Set(val)
 	case 6:
-		sam.PORT.PMUX0_6 = val
+		sam.PORT.PMUX0_6.Set(val)
 	case 7:
-		sam.PORT.PMUX0_7 = val
+		sam.PORT.PMUX0_7.Set(val)
 	case 8:
-		sam.PORT.PMUX0_8 = val
+		sam.PORT.PMUX0_8.Set(val)
 	case 9:
-		sam.PORT.PMUX0_9 = val
+		sam.PORT.PMUX0_9.Set(val)
 	case 10:
-		sam.PORT.PMUX0_10 = val
+		sam.PORT.PMUX0_10.Set(val)
 	case 11:
-		sam.PORT.PMUX0_11 = val
+		sam.PORT.PMUX0_11.Set(val)
 	case 12:
-		sam.PORT.PMUX0_12 = val
+		sam.PORT.PMUX0_12.Set(val)
 	case 13:
-		sam.PORT.PMUX0_13 = val
+		sam.PORT.PMUX0_13.Set(val)
 	case 14:
-		sam.PORT.PMUX0_14 = val
+		sam.PORT.PMUX0_14.Set(val)
 	case 15:
-		sam.PORT.PMUX0_15 = val
+		sam.PORT.PMUX0_15.Set(val)
 	}
 }
 
 // getPinCfg returns the value for the correct PINCFG register for this pin.
-func getPinCfg(p uint8) sam.RegValue8 {
+func getPinCfg(p uint8) uint8 {
 	switch p {
 	case 0:
-		return sam.PORT.PINCFG0_0
+		return sam.PORT.PINCFG0_0.Get()
 	case 1:
-		return sam.PORT.PINCFG0_1
+		return sam.PORT.PINCFG0_1.Get()
 	case 2:
-		return sam.PORT.PINCFG0_2
+		return sam.PORT.PINCFG0_2.Get()
 	case 3:
-		return sam.PORT.PINCFG0_3
+		return sam.PORT.PINCFG0_3.Get()
 	case 4:
-		return sam.PORT.PINCFG0_4
+		return sam.PORT.PINCFG0_4.Get()
 	case 5:
-		return sam.PORT.PINCFG0_5
+		return sam.PORT.PINCFG0_5.Get()
 	case 6:
-		return sam.PORT.PINCFG0_6
+		return sam.PORT.PINCFG0_6.Get()
 	case 7:
-		return sam.PORT.PINCFG0_7
+		return sam.PORT.PINCFG0_7.Get()
 	case 8:
-		return sam.PORT.PINCFG0_8
+		return sam.PORT.PINCFG0_8.Get()
 	case 9:
-		return sam.PORT.PINCFG0_9
+		return sam.PORT.PINCFG0_9.Get()
 	case 10:
-		return sam.PORT.PINCFG0_10
+		return sam.PORT.PINCFG0_10.Get()
 	case 11:
-		return sam.PORT.PINCFG0_11
+		return sam.PORT.PINCFG0_11.Get()
 	case 12:
-		return sam.PORT.PINCFG0_12
+		return sam.PORT.PINCFG0_12.Get()
 	case 13:
-		return sam.PORT.PINCFG0_13
+		return sam.PORT.PINCFG0_13.Get()
 	case 14:
-		return sam.PORT.PINCFG0_14
+		return sam.PORT.PINCFG0_14.Get()
 	case 15:
-		return sam.PORT.PINCFG0_15
+		return sam.PORT.PINCFG0_15.Get()
 	case 16:
-		return sam.PORT.PINCFG0_16
+		return sam.PORT.PINCFG0_16.Get()
 	case 17:
-		return sam.PORT.PINCFG0_17
+		return sam.PORT.PINCFG0_17.Get()
 	case 18:
-		return sam.PORT.PINCFG0_18
+		return sam.PORT.PINCFG0_18.Get()
 	case 19:
-		return sam.PORT.PINCFG0_19
+		return sam.PORT.PINCFG0_19.Get()
 	case 20:
-		return sam.PORT.PINCFG0_20
+		return sam.PORT.PINCFG0_20.Get()
 	case 21:
-		return sam.PORT.PINCFG0_21
+		return sam.PORT.PINCFG0_21.Get()
 	case 22:
-		return sam.PORT.PINCFG0_22
+		return sam.PORT.PINCFG0_22.Get()
 	case 23:
-		return sam.PORT.PINCFG0_23
+		return sam.PORT.PINCFG0_23.Get()
 	case 24:
-		return sam.PORT.PINCFG0_24
+		return sam.PORT.PINCFG0_24.Get()
 	case 25:
-		return sam.PORT.PINCFG0_25
+		return sam.PORT.PINCFG0_25.Get()
 	case 26:
-		return sam.PORT.PINCFG0_26
+		return sam.PORT.PINCFG0_26.Get()
 	case 27:
-		return sam.PORT.PINCFG0_27
+		return sam.PORT.PINCFG0_27.Get()
 	case 28:
-		return sam.PORT.PINCFG0_28
+		return sam.PORT.PINCFG0_28.Get()
 	case 29:
-		return sam.PORT.PINCFG0_29
+		return sam.PORT.PINCFG0_29.Get()
 	case 30:
-		return sam.PORT.PINCFG0_30
+		return sam.PORT.PINCFG0_30.Get()
 	case 31:
-		return sam.PORT.PINCFG0_31
+		return sam.PORT.PINCFG0_31.Get()
 	default:
 		return 0
 	}
 }
 
 // setPinCfg sets the value for the correct PINCFG register for this pin.
-func setPinCfg(p uint8, val sam.RegValue8) {
+func setPinCfg(p uint8, val uint8) {
 	switch p {
 	case 0:
-		sam.PORT.PINCFG0_0 = val
+		sam.PORT.PINCFG0_0.Set(val)
 	case 1:
-		sam.PORT.PINCFG0_1 = val
+		sam.PORT.PINCFG0_1.Set(val)
 	case 2:
-		sam.PORT.PINCFG0_2 = val
+		sam.PORT.PINCFG0_2.Set(val)
 	case 3:
-		sam.PORT.PINCFG0_3 = val
+		sam.PORT.PINCFG0_3.Set(val)
 	case 4:
-		sam.PORT.PINCFG0_4 = val
+		sam.PORT.PINCFG0_4.Set(val)
 	case 5:
-		sam.PORT.PINCFG0_5 = val
+		sam.PORT.PINCFG0_5.Set(val)
 	case 6:
-		sam.PORT.PINCFG0_6 = val
+		sam.PORT.PINCFG0_6.Set(val)
 	case 7:
-		sam.PORT.PINCFG0_7 = val
+		sam.PORT.PINCFG0_7.Set(val)
 	case 8:
-		sam.PORT.PINCFG0_8 = val
+		sam.PORT.PINCFG0_8.Set(val)
 	case 9:
-		sam.PORT.PINCFG0_9 = val
+		sam.PORT.PINCFG0_9.Set(val)
 	case 10:
-		sam.PORT.PINCFG0_10 = val
+		sam.PORT.PINCFG0_10.Set(val)
 	case 11:
-		sam.PORT.PINCFG0_11 = val
+		sam.PORT.PINCFG0_11.Set(val)
 	case 12:
-		sam.PORT.PINCFG0_12 = val
+		sam.PORT.PINCFG0_12.Set(val)
 	case 13:
-		sam.PORT.PINCFG0_13 = val
+		sam.PORT.PINCFG0_13.Set(val)
 	case 14:
-		sam.PORT.PINCFG0_14 = val
+		sam.PORT.PINCFG0_14.Set(val)
 	case 15:
-		sam.PORT.PINCFG0_15 = val
+		sam.PORT.PINCFG0_15.Set(val)
 	case 16:
-		sam.PORT.PINCFG0_16 = val
+		sam.PORT.PINCFG0_16.Set(val)
 	case 17:
-		sam.PORT.PINCFG0_17 = val
+		sam.PORT.PINCFG0_17.Set(val)
 	case 18:
-		sam.PORT.PINCFG0_18 = val
+		sam.PORT.PINCFG0_18.Set(val)
 	case 19:
-		sam.PORT.PINCFG0_19 = val
+		sam.PORT.PINCFG0_19.Set(val)
 	case 20:
-		sam.PORT.PINCFG0_20 = val
+		sam.PORT.PINCFG0_20.Set(val)
 	case 21:
-		sam.PORT.PINCFG0_21 = val
+		sam.PORT.PINCFG0_21.Set(val)
 	case 22:
-		sam.PORT.PINCFG0_22 = val
+		sam.PORT.PINCFG0_22.Set(val)
 	case 23:
-		sam.PORT.PINCFG0_23 = val
+		sam.PORT.PINCFG0_23.Set(val)
 	case 24:
-		sam.PORT.PINCFG0_24 = val
+		sam.PORT.PINCFG0_24.Set(val)
 	case 25:
-		sam.PORT.PINCFG0_25 = val
+		sam.PORT.PINCFG0_25.Set(val)
 	case 26:
-		sam.PORT.PINCFG0_26 = val
+		sam.PORT.PINCFG0_26.Set(val)
 	case 27:
-		sam.PORT.PINCFG0_27 = val
+		sam.PORT.PINCFG0_27.Set(val)
 	case 28:
-		sam.PORT.PINCFG0_28 = val
+		sam.PORT.PINCFG0_28.Set(val)
 	case 29:
-		sam.PORT.PINCFG0_29 = val
+		sam.PORT.PINCFG0_29.Set(val)
 	case 30:
-		sam.PORT.PINCFG0_30 = val
+		sam.PORT.PINCFG0_30.Set(val)
 	case 31:
-		sam.PORT.PINCFG0_31 = val
+		sam.PORT.PINCFG0_31.Set(val)
 	}
 }
