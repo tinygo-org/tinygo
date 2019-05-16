@@ -47,6 +47,24 @@ void unionSetShort(short s);
 void unionSetFloat(float f);
 void unionSetData(short f0, short f1, short f2);
 
+typedef enum option {
+	optionA,
+	optionB,
+	optionC = -5,
+	optionD,
+	optionE = 10,
+	optionF,
+	optionG,
+} option_t;
+
+typedef enum {
+	option2A = 20,
+} option2_t;
+
+typedef enum {
+	option3A = 21,
+} option3_t;
+
 // test globals and datatypes
 extern int global;
 extern int unusedGlobal;
@@ -66,6 +84,7 @@ extern int globalStructSize;
 extern short globalArray[3];
 extern joined_t globalUnion;
 extern int globalUnionSize;
+extern option_t globalOption;
 
 // test duplicate definitions
 int add(int a, int b);

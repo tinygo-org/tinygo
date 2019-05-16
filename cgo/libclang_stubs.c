@@ -56,3 +56,11 @@ CXSourceRange tinygo_clang_getCursorExtent(CXCursor c) {
 CXTranslationUnit tinygo_clang_Cursor_getTranslationUnit(CXCursor c) {
 	return clang_Cursor_getTranslationUnit(c);
 }
+
+long long tinygo_clang_getEnumConstantDeclValue(CXCursor c) {
+	return clang_getEnumConstantDeclValue(c);
+}
+
+CXType tinygo_clang_getEnumDeclIntegerType(CXCursor c) {
+	return clang_getEnumDeclIntegerType(c);
+}

@@ -35,6 +35,7 @@ type cgoPackage struct {
 	globals         map[string]globalInfo
 	typedefs        map[string]*typedefInfo
 	elaboratedTypes map[string]*elaboratedTypeInfo
+	enums           map[string]enumInfo
 }
 
 // constantInfo stores some information about a CGo constant found by libclang
@@ -67,6 +68,12 @@ type typedefInfo struct {
 // elaboratedTypeInfo contains some information about an elaborated type
 // (struct, union) found in the C AST.
 type elaboratedTypeInfo struct {
+	typeExpr ast.Expr
+	pos      token.Pos
+}
+
+// enumInfo contains information about an enum in the C.
+type enumInfo struct {
 	typeExpr ast.Expr
 	pos      token.Pos
 }
@@ -140,6 +147,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 		globals:         map[string]globalInfo{},
 		typedefs:        map[string]*typedefInfo{},
 		elaboratedTypes: map[string]*elaboratedTypeInfo{},
+		enums:           map[string]enumInfo{},
 	}
 
 	// Add a new location for the following file.
@@ -242,6 +250,9 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 
 	// Add elaborated types for C structs and unions.
 	p.addElaboratedTypes()
+
+	// Add enum types and enum constants for C enums.
+	p.addEnumTypes()
 
 	// Patch the AST to use the declared types and functions.
 	for _, f := range files {
@@ -556,6 +567,54 @@ func (p *cgoPackage) addElaboratedTypes() {
 	for _, name := range names {
 		typ := p.elaboratedTypes[name]
 		typeName := "C." + name
+		obj := &ast.Object{
+			Kind: ast.Typ,
+			Name: typeName,
+		}
+		typeSpec := &ast.TypeSpec{
+			Name: &ast.Ident{
+				NamePos: typ.pos,
+				Name:    typeName,
+				Obj:     obj,
+			},
+			Type: typ.typeExpr,
+		}
+		obj.Decl = typeSpec
+		gen.Specs = append(gen.Specs, typeSpec)
+	}
+	p.generated.Decls = append(p.generated.Decls, gen)
+}
+
+// addEnumTypes adds C enums to the AST. For example, the following C code:
+//
+//     enum option {
+//         optionA,
+//         optionB = 5,
+//     };
+//
+// is translated to the following Go code equivalent:
+//
+//     type C.enum_option int32
+//
+// The constants are treated just like macros so are inserted into the AST by
+// addConstDecls.
+// See also: https://en.cppreference.com/w/c/language/enum
+func (p *cgoPackage) addEnumTypes() {
+	if len(p.enums) == 0 {
+		return
+	}
+	gen := &ast.GenDecl{
+		TokPos: token.NoPos,
+		Tok:    token.TYPE,
+	}
+	names := make([]string, 0, len(p.enums))
+	for name := range p.enums {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		typ := p.enums[name]
+		typeName := "C.enum_" + name
 		obj := &ast.Object{
 			Kind: ast.Typ,
 			Name: typeName,
