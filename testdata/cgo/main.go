@@ -75,6 +75,24 @@ func main() {
 		println("n in chain:", list.n)
 		list = (*C.list_t)(list.next)
 	}
+
+	// named enum
+	var _ C.enum_option = C.optionA
+	var _ C.option_t = C.optionA
+	println("option:", C.globalOption)
+	println("option A:", C.optionA)
+	println("option B:", C.optionB)
+	println("option C:", C.optionC)
+	println("option D:", C.optionD)
+	println("option E:", C.optionE)
+	println("option F:", C.optionF)
+	println("option G:", C.optionG)
+
+	// anonymous enum
+	var _ C.option2_t = C.option2A
+	var _ C.option3_t = C.option3A
+	println("option 2A:", C.option2A)
+	println("option 3A:", C.option3A)
 }
 
 func printUnion(union C.joined_t) C.joined_t {

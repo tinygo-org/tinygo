@@ -35,3 +35,13 @@ struct: 3 5
 n in chain: 3
 n in chain: 6
 n in chain: 7
+option: 12
+option A: 0
+option B: 1
+option C: -5
+option D: -4
+option E: 10
+option F: 11
+option G: 12
+option 2A: 20
+option 3A: 21

@@ -17,6 +17,7 @@ int globalStructSize = sizeof(globalStruct);
 short globalArray[3] = {5, 6, 7};
 joined_t globalUnion;
 int globalUnionSize = sizeof(globalUnion);
+option_t globalOption = optionG;
 
 int fortytwo() {
 	return 42;
