@@ -49,9 +49,12 @@ GoCXCursor tinygo_clang_Cursor_getArgument(GoCXCursor c, unsigned i);
 CXSourceLocation tinygo_clang_getCursorLocation(GoCXCursor c);
 CXSourceRange tinygo_clang_getCursorExtent(GoCXCursor c);
 CXTranslationUnit tinygo_clang_Cursor_getTranslationUnit(GoCXCursor c);
+long long tinygo_clang_getEnumConstantDeclValue(GoCXCursor c);
+CXType tinygo_clang_getEnumDeclIntegerType(GoCXCursor c);
 
 int tinygo_clang_globals_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
 int tinygo_clang_struct_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
+int tinygo_clang_enum_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
 */
 import "C"
 
@@ -501,6 +504,8 @@ func (p *cgoPackage) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 		switch underlying.kind {
 		case C.CXType_Record:
 			return p.makeASTType(underlying, pos)
+		case C.CXType_Enum:
+			return p.makeASTType(underlying, pos)
 		default:
 			panic("unknown elaborated type")
 		}
@@ -580,6 +585,32 @@ func (p *cgoPackage) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 			NamePos: pos,
 			Name:    "C." + cgoName,
 		}
+	case C.CXType_Enum:
+		cursor := C.tinygo_clang_getTypeDeclaration(typ)
+		name := getString(C.tinygo_clang_getCursorSpelling(cursor))
+		underlying := C.tinygo_clang_getEnumDeclIntegerType(cursor)
+		if name == "" {
+			// anonymous enum
+			ref := storedRefs.Put(p)
+			defer storedRefs.Remove(ref)
+			C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_enum_visitor), C.CXClientData(ref))
+			return p.makeASTType(underlying, pos)
+		} else {
+			// named enum
+			if _, ok := p.enums[name]; !ok {
+				ref := storedRefs.Put(p)
+				defer storedRefs.Remove(ref)
+				C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_enum_visitor), C.CXClientData(ref))
+				p.enums[name] = enumInfo{
+					typeExpr: p.makeASTType(underlying, pos),
+					pos:      pos,
+				}
+			}
+			return &ast.Ident{
+				NamePos: pos,
+				Name:    "C.enum_" + name,
+			}
+		}
 	}
 	if typeName == "" {
 		// Fallback, probably incorrect but at least the error points to an odd
@@ -620,5 +651,18 @@ func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientD
 		},
 	}
 	fieldList.List = append(fieldList.List, field)
+	return C.CXChildVisit_Continue
+}
+
+//export tinygo_clang_enum_visitor
+func tinygo_clang_enum_visitor(c, parent C.GoCXCursor, client_data C.CXClientData) C.int {
+	p := storedRefs.Get(unsafe.Pointer(client_data)).(*cgoPackage)
+	name := getString(C.tinygo_clang_getCursorSpelling(c))
+	pos := p.getCursorPosition(c)
+	value := C.tinygo_clang_getEnumConstantDeclValue(c)
+	p.constants[name] = constantInfo{
+		expr: &ast.BasicLit{pos, token.INT, strconv.FormatInt(int64(value), 10)},
+		pos:  pos,
+	}
 	return C.CXChildVisit_Continue
 }
