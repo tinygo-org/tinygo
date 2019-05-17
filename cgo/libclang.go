@@ -613,9 +613,15 @@ func (p *cgoPackage) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 		}
 	}
 	if typeName == "" {
+		// Report this as an error.
+		spelling := getString(C.clang_getTypeSpelling(typ))
+		p.errors = append(p.errors, scanner.Error{
+			Pos: p.fset.PositionFor(pos, true),
+			Msg: fmt.Sprintf("unknown C type: %v (libclang type kind %d)", spelling, typ.kind),
+		})
 		// Fallback, probably incorrect but at least the error points to an odd
 		// type name.
-		typeName = "C." + getString(C.clang_getTypeSpelling(typ))
+		typeName = "C." + spelling
 	}
 	return &ast.Ident{
 		NamePos: pos,
