@@ -9,12 +9,12 @@ const (
 	D0  = PA11 // UART0 RX
 	D1  = PA10 // UART0 TX
 	D2  = 0xff // does not seem to exist
-	D3  = 0xff // does not seem to exist
-	D4  = 0xff // does not seem to exist
+	D3  = PA09
+	D4  = PA08
 	D5  = PA15 // PWM available
 	D6  = PA20 // PWM available
 	D7  = 0xff // does not seem to exist
-	D8  = 0xff // does not seem to exist
+	D8  = PA06
 	D9  = PA07 // PWM available
 	D10 = PA18 // can be used for PWM or UART1 TX
 	D11 = PA16 // can be used for PWM or UART1 RX
