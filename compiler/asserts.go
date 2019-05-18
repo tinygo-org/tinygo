@@ -114,6 +114,11 @@ func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high llvm.V
 // has no effect in well-behaved programs, but makes sure no uncaught nil
 // pointer dereferences exist in valid Go code.
 func (c *Compiler) emitNilCheck(frame *Frame, ptr llvm.Value, blockPrefix string) {
+	// Check whether we need to emit this check at all.
+	if !ptr.IsAGlobalValue().IsNil() {
+		return
+	}
+
 	// Check whether this is a nil pointer.
 	faultBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, blockPrefix+".nil")
 	nextBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, blockPrefix+".next")
