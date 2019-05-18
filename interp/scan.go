@@ -109,7 +109,16 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 				default:
 					panic("unreachable")
 				}
-			case llvm.Load, llvm.Store:
+			case llvm.Load:
+				if inst.IsVolatile() {
+					result.updateSeverity(sideEffectLimited)
+				}
+				if _, ok := e.dirtyGlobals[inst.Operand(0)]; ok {
+					if e.hasLocalSideEffects(dirtyLocals, inst) {
+						result.updateSeverity(sideEffectLimited)
+					}
+				}
+			case llvm.Store:
 				if inst.IsVolatile() {
 					result.updateSeverity(sideEffectLimited)
 				}
