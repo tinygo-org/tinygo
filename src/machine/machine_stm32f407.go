@@ -74,23 +74,23 @@ func (p GPIO) getPort() *stm32.GPIO_Type {
 func (p GPIO) enableClock() {
 	switch p.Pin / 16 {
 	case 0:
-		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOAEN
+		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOAEN)
 	case 1:
-		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOBEN
+		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOBEN)
 	case 2:
-		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOCEN
+		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOCEN)
 	case 3:
-		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIODEN
+		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIODEN)
 	case 4:
-		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOEEN
+		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOEEN)
 	case 5:
-		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOFEN
+		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOFEN)
 	case 6:
-		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOGEN
+		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOGEN)
 	case 7:
-		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOHEN
+		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOHEN)
 	case 8:
-		stm32.RCC.AHB1ENR |= stm32.RCC_AHB1ENR_GPIOIEN
+		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOIEN)
 	default:
 		panic("machine: unknown port")
 	}
@@ -105,25 +105,25 @@ func (p GPIO) Configure(config GPIOConfig) {
 	pos := pin * 2
 
 	if config.Mode == GPIO_INPUT_FLOATING {
-		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
-		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_FLOATING) << pos)))
+		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
+		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_FLOATING) << pos)))
 	} else if config.Mode == GPIO_INPUT_PULLDOWN {
-		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
-		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_PULL_DOWN) << pos)))
+		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
+		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_PULL_DOWN) << pos)))
 	} else if config.Mode == GPIO_INPUT_PULLUP {
-		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
-		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
+		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
+		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
 	} else if config.Mode == GPIO_OUTPUT {
-		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_GENERAL_OUTPUT) << pos)))
-		port.OSPEEDR = stm32.RegValue((uint32(port.OSPEEDR)&^(0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
+		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_GENERAL_OUTPUT) << pos)))
+		port.OSPEEDR.Set((uint32(port.OSPEEDR.Get())&^(0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
 	} else if config.Mode == GPIO_UART_TX {
-		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
-		port.OSPEEDR = stm32.RegValue((uint32(port.OSPEEDR)&^(0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
-		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
+		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
+		port.OSPEEDR.Set((uint32(port.OSPEEDR.Get())&^(0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
+		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
 		p.setAltFunc(0x7)
 	} else if config.Mode == GPIO_UART_RX {
-		port.MODER = stm32.RegValue((uint32(port.MODER)&^(0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
-		port.PUPDR = stm32.RegValue((uint32(port.PUPDR)&^(0x3<<pos) | (uint32(GPIO_FLOATING) << pos)))
+		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
+		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_FLOATING) << pos)))
 		p.setAltFunc(0x7)
 	}
 }
@@ -133,9 +133,9 @@ func (p GPIO) setAltFunc(af uint32) {
 	pin := p.Pin % 16
 	pos := pin * 4
 	if pin >= 8 {
-		port.AFRH = stm32.RegValue(uint32(port.AFRH)&^(0xF<<pos) | ((af & 0xF) << pos))
+		port.AFRH.Set(uint32(port.AFRH.Get())&^(0xF<<pos) | ((af & 0xF) << pos))
 	} else {
-		port.AFRL = stm32.RegValue(uint32(port.AFRL)&^(0xF<<pos) | ((af & 0xF) << pos))
+		port.AFRL.Set(uint32(port.AFRL.Get())&^(0xF<<pos) | ((af & 0xF) << pos))
 	}
 }
 
@@ -145,9 +145,9 @@ func (p GPIO) Set(high bool) {
 	port := p.getPort()
 	pin := p.Pin % 16
 	if high {
-		port.BSRR = 1 << pin
+		port.BSRR.Set(1 << pin)
 	} else {
-		port.BSRR = 1 << (pin + 16)
+		port.BSRR.Set(1 << (pin + 16))
 	}
 }
 
@@ -178,7 +178,7 @@ func (uart UART) Configure(config UARTConfig) {
 	}
 
 	// Enable USART2 clock
-	stm32.RCC.APB1ENR |= stm32.RCC_APB1ENR_USART2EN
+	stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_USART2EN)
 
 	/*
 	  Set baud rate(115200)
@@ -195,10 +195,10 @@ func (uart UART) Configure(config UARTConfig) {
 	  | 115200   | 0x16D  |
 	  +----------+--------+
 	*/
-	stm32.USART2.BRR = 0x16c
+	stm32.USART2.BRR.Set(0x16c)
 
 	// Enable USART2 port.
-	stm32.USART2.CR1 = stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE
+	stm32.USART2.CR1.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
 
 	// Enable RX IRQ.
 	arm.SetPriority(stm32.IRQ_USART2, 0xc0)
@@ -207,14 +207,14 @@ func (uart UART) Configure(config UARTConfig) {
 
 // WriteByte writes a byte of data to the UART.
 func (uart UART) WriteByte(c byte) error {
-	stm32.USART2.DR = stm32.RegValue(c)
+	stm32.USART2.DR.Set(uint32(c))
 
-	for (stm32.USART2.SR & stm32.USART_SR_TXE) == 0 {
+	for (stm32.USART2.SR.Get() & stm32.USART_SR_TXE) == 0 {
 	}
 	return nil
 }
 
 //go:export USART2_IRQHandler
 func handleUSART2() {
-	UART1.Receive(byte((stm32.USART2.DR & 0xFF)))
+	UART1.Receive(byte((stm32.USART2.DR.Get() & 0xFF)))
 }
