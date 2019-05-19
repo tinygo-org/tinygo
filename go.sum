@@ -1,0 +1,14 @@
+github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2 h1:oMCHnXa6CCCafdPDbMh/lWRhRByN0VFLvv+g+ayx1SI=
+github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2/go.mod h1:PkYb9DJNAwrSvRx5DYA+gUcOIgTGVMNkfSCbZM8cWpI=
+github.com/golang/protobuf v1.2.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
+github.com/marcinbor85/gohex v0.0.0-20180128172054-7a43cd876e46 h1:wXG2bA8fO7Vv7lLk2PihFMTqmbT173Tje39oKzQ50Mo=
+github.com/marcinbor85/gohex v0.0.0-20180128172054-7a43cd876e46/go.mod h1:Pb6XcsXyropB9LNHhnqaknG/vEwYztLkQzVCHv8sQ3M=
+golang.org/x/net v0.0.0-20180724234803-3673e40ba225/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
+golang.org/x/net v0.0.0-20190213061140-3a22650c66bd/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
+golang.org/x/sync v0.0.0-20181108010431-42b317875d0f/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
+golang.org/x/tools v0.0.0-20190227180812-8dcc6e70cdef h1:ymc9FeDom3RIEA3coKokSllBB1hRcMT0tZ1W3Jf9Ids=
+golang.org/x/tools v0.0.0-20190227180812-8dcc6e70cdef/go.mod h1:9Yl7xja0Znq3iFh3HoIrodX9oNMXvdceNzlUR8zjMvY=
+google.golang.org/appengine v1.4.0/go.mod h1:xpcJRLb0r/rnEns0DIKYYv+WjYCduHsrkT7/EB5XEv4=
+tinygo.org/x/go-llvm v0.0.0-20190224120431-7707ae5d1261 h1:rJS2Hga39YAnm7DE4qrPm6Dr/67EOojL0XPzvbEeBiw=
+tinygo.org/x/go-llvm v0.0.0-20190224120431-7707ae5d1261/go.mod h1:fv1F0BSNpxMfCL0zF3M4OPFbgYHnhtB6ST0HvUtu/LE=
