@@ -19,5 +19,8 @@
 	"ldflags": [
 		"--gc-sections"
 	],
+	"extra-files": [
+		"src/device/arm/cortexm.s"
+	],
 	"gdb": "arm-none-eabi-gdb"
 }
