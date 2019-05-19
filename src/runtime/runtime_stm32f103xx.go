@@ -21,33 +21,33 @@ func putchar(c byte) {
 
 // initCLK sets clock to 72MHz using HSE 8MHz crystal w/ PLL X 9 (8MHz x 9 = 72MHz).
 func initCLK() {
-	stm32.FLASH.ACR |= stm32.FLASH_ACR_LATENCY_2    // Two wait states, per datasheet
-	stm32.RCC.CFGR |= stm32.RCC_CFGR_PPRE1_DIV_2    // prescale PCLK1 = HCLK/2
-	stm32.RCC.CFGR |= stm32.RCC_CFGR_PPRE2_DIV_NONE // prescale PCLK2 = HCLK/1
-	stm32.RCC.CR |= stm32.RCC_CR_HSEON              // enable HSE clock
+	stm32.FLASH.ACR.SetBits(stm32.FLASH_ACR_LATENCY_2)    // Two wait states, per datasheet
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE1_DIV_2)    // prescale PCLK1 = HCLK/2
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE2_DIV_NONE) // prescale PCLK2 = HCLK/1
+	stm32.RCC.CR.SetBits(stm32.RCC_CR_HSEON)              // enable HSE clock
 
 	// wait for the HSEREADY flag
-	for (stm32.RCC.CR & stm32.RCC_CR_HSERDY) == 0 {
+	for (stm32.RCC.CR.Get() & stm32.RCC_CR_HSERDY) == 0 {
 	}
 
-	stm32.RCC.CR |= stm32.RCC_CR_HSION // enable HSI clock
+	stm32.RCC.CR.SetBits(stm32.RCC_CR_HSION) // enable HSI clock
 
 	// wait for the HSIREADY flag
-	for (stm32.RCC.CR & stm32.RCC_CR_HSIRDY) == 0 {
+	for (stm32.RCC.CR.Get() & stm32.RCC_CR_HSIRDY) == 0 {
 	}
 
-	stm32.RCC.CFGR |= stm32.RCC_CFGR_PLLSRC   // set PLL source to HSE
-	stm32.RCC.CFGR |= stm32.RCC_CFGR_PLLMUL_9 // multiply by 9
-	stm32.RCC.CR |= stm32.RCC_CR_PLLON        // enable the PLL
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PLLSRC)   // set PLL source to HSE
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PLLMUL_9) // multiply by 9
+	stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)        // enable the PLL
 
 	// wait for the PLLRDY flag
-	for (stm32.RCC.CR & stm32.RCC_CR_PLLRDY) == 0 {
+	for (stm32.RCC.CR.Get() & stm32.RCC_CR_PLLRDY) == 0 {
 	}
 
-	stm32.RCC.CFGR |= stm32.RCC_CFGR_SW_PLL // set clock source to pll
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_SW_PLL) // set clock source to pll
 
 	// wait for PLL to be CLK
-	for (stm32.RCC.CFGR & stm32.RCC_CFGR_SWS_PLL) == 0 {
+	for (stm32.RCC.CFGR.Get() & stm32.RCC_CFGR_SWS_PLL) == 0 {
 	}
 }
 
@@ -65,43 +65,43 @@ var timerWakeup isrFlag
 
 func initRTC() {
 	// Enable the PWR and BKP.
-	stm32.RCC.APB1ENR |= stm32.RCC_APB1ENR_PWREN | stm32.RCC_APB1ENR_BKPEN
+	stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_PWREN | stm32.RCC_APB1ENR_BKPEN)
 
 	// access to backup register
-	stm32.PWR.CR |= stm32.PWR_CR_DBP
+	stm32.PWR.CR.SetBits(stm32.PWR_CR_DBP)
 
 	// Enable LSE
-	stm32.RCC.BDCR |= stm32.RCC_BDCR_LSEON
+	stm32.RCC.BDCR.SetBits(stm32.RCC_BDCR_LSEON)
 
 	// wait until LSE is ready
-	for stm32.RCC.BDCR&stm32.RCC_BDCR_LSERDY == 0 {
+	for stm32.RCC.BDCR.Get()&stm32.RCC_BDCR_LSERDY == 0 {
 	}
 
 	// Select LSE
-	stm32.RCC.BDCR |= stm32.RCC_RTCCLKSource_LSE
+	stm32.RCC.BDCR.SetBits(stm32.RCC_RTCCLKSource_LSE)
 
 	// set prescaler to "max" per datasheet
-	stm32.RTC.PRLH = stm32.RTC_PRLH_PRLH_Msk
-	stm32.RTC.PRLL = stm32.RTC_PRLL_PRLL_Msk
+	stm32.RTC.PRLH.Set(stm32.RTC_PRLH_PRLH_Msk)
+	stm32.RTC.PRLL.Set(stm32.RTC_PRLL_PRLL_Msk)
 
 	// set count to zero
-	stm32.RTC.CNTH = 0x0
-	stm32.RTC.CNTL = 0x0
+	stm32.RTC.CNTH.Set(0x0)
+	stm32.RTC.CNTL.Set(0x0)
 
 	// Enable RTC
-	stm32.RCC.BDCR |= stm32.RCC_BDCR_RTCEN
+	stm32.RCC.BDCR.SetBits(stm32.RCC_BDCR_RTCEN)
 
 	// Clear RSF
-	stm32.RTC.CRL &^= stm32.RTC_CRL_RSF
+	stm32.RTC.CRL.ClearBits(stm32.RTC_CRL_RSF)
 
 	// Wait till flag is set
-	for stm32.RTC.CRL&stm32.RTC_CRL_RSF == 0 {
+	for stm32.RTC.CRL.Get()&stm32.RTC_CRL_RSF == 0 {
 	}
 }
 
 // Enable the TIM3 clock.
 func initTIM() {
-	stm32.RCC.APB1ENR |= stm32.RCC_APB1ENR_TIM3EN
+	stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_TIM3EN)
 
 	arm.SetPriority(stm32.IRQ_TIM3, 0xc3)
 	arm.EnableIRQ(stm32.IRQ_TIM3)
@@ -122,10 +122,10 @@ func sleepTicks(d timeUnit) {
 // number of ticks (microseconds) since start.
 func ticks() timeUnit {
 	// convert RTC counter from seconds to microseconds
-	timerCounter := uint64(stm32.RTC.CNTH<<16|stm32.RTC.CNTL) * 1000 * 1000
+	timerCounter := uint64(stm32.RTC.CNTH.Get()<<16|stm32.RTC.CNTL.Get()) * 1000 * 1000
 
 	// add the fractional part of current time using DIV register
-	timerCounter += uint64(0x8000-stm32.RTC.DIVL) * 31
+	timerCounter += uint64(0x8000-stm32.RTC.DIVL.Get()) * 31
 
 	// change since last measurement
 	offset := (timerCounter - timerLastCounter)
@@ -165,16 +165,16 @@ func timerSleep(ticks uint32) {
 	// The current scaling only supports a range of 100 usec to 6553 msec.
 
 	// prescale counter down from 72mhz to 10khz aka 0.1 ms frequency.
-	stm32.TIM3.PSC = machine.CPU_FREQUENCY/10000 - 1 // 7199
+	stm32.TIM3.PSC.Set(machine.CPU_FREQUENCY/10000 - 1) // 7199
 
 	// set duty aka duration
-	stm32.TIM3.ARR = stm32.RegValue(ticks/100) - 1 // convert from microseconds to 0.1 ms
+	stm32.TIM3.ARR.Set(ticks/100 - 1) // convert from microseconds to 0.1 ms
 
 	// Enable the hardware interrupt.
-	stm32.TIM3.DIER |= stm32.TIM_DIER_UIE
+	stm32.TIM3.DIER.SetBits(stm32.TIM_DIER_UIE)
 
 	// Enable the timer.
-	stm32.TIM3.CR1 |= stm32.TIM_CR1_CEN
+	stm32.TIM3.CR1.SetBits(stm32.TIM_CR1_CEN)
 
 	// wait till timer wakes up
 	for !timerWakeup {
@@ -184,12 +184,12 @@ func timerSleep(ticks uint32) {
 
 //go:export TIM3_IRQHandler
 func handleTIM3() {
-	if (stm32.TIM3.SR & stm32.TIM_SR_UIF) > 0 {
+	if (stm32.TIM3.SR.Get() & stm32.TIM_SR_UIF) > 0 {
 		// Disable the timer.
-		stm32.TIM3.CR1 &^= stm32.TIM_CR1_CEN
+		stm32.TIM3.CR1.ClearBits(stm32.TIM_CR1_CEN)
 
 		// clear the update flag
-		stm32.TIM3.SR &^= stm32.TIM_SR_UIF
+		stm32.TIM3.SR.ClearBits(stm32.TIM_SR_UIF)
 
 		// timer was triggered
 		timerWakeup = true
