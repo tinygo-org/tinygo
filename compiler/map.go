@@ -15,7 +15,7 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 	// Allocate the memory for the resulting type. Do not zero this memory: it
 	// will be zeroed by the hashmap get implementation if the key is not
 	// present in the map.
-	mapValueAlloca, mapValuePtr, mapValueSize := c.createEntryBlockAlloca(llvmValueType, "hashmap.value")
+	mapValueAlloca, mapValuePtr, mapValueSize := c.createTemporaryAlloca(llvmValueType, "hashmap.value")
 
 	// Do the lookup. How it is done depends on the key type.
 	var commaOkValue llvm.Value
@@ -27,12 +27,12 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 		// key can be compared with runtime.memequal
 		// Store the key in an alloca, in the entry block to avoid dynamic stack
 		// growth.
-		mapKeyAlloca, mapKeyPtr, mapKeySize := c.createEntryBlockAlloca(key.Type(), "hashmap.key")
+		mapKeyAlloca, mapKeyPtr, mapKeySize := c.createTemporaryAlloca(key.Type(), "hashmap.key")
 		c.builder.CreateStore(key, mapKeyAlloca)
 		// Fetch the value from the hashmap.
 		params := []llvm.Value{m, mapKeyPtr, mapValuePtr}
 		commaOkValue = c.createRuntimeCall("hashmapBinaryGet", params, "")
-		c.builder.CreateCall(c.getLifetimeEndFunc(), []llvm.Value{mapKeySize, mapKeyPtr}, "")
+		c.emitLifetimeEnd(mapKeyPtr, mapKeySize)
 	} else {
 		// Not trivially comparable using memcmp.
 		return llvm.Value{}, c.makeError(pos, "only strings, bools, ints or structs of bools/ints are supported as map keys, but got: "+keyType.String())
@@ -41,7 +41,7 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 	// Load the resulting value from the hashmap. The value is set to the zero
 	// value if the key doesn't exist in the hashmap.
 	mapValue := c.builder.CreateLoad(mapValueAlloca, "")
-	c.builder.CreateCall(c.getLifetimeEndFunc(), []llvm.Value{mapValueSize, mapValuePtr}, "")
+	c.emitLifetimeEnd(mapValuePtr, mapValueSize)
 
 	if commaOk {
 		tuple := llvm.Undef(c.ctx.StructType([]llvm.Type{llvmValueType, c.ctx.Int1Type()}, false))
@@ -54,7 +54,7 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 }
 
 func (c *Compiler) emitMapUpdate(keyType types.Type, m, key, value llvm.Value, pos token.Pos) {
-	valueAlloca, valuePtr, valueSize := c.createEntryBlockAlloca(value.Type(), "hashmap.value")
+	valueAlloca, valuePtr, valueSize := c.createTemporaryAlloca(value.Type(), "hashmap.value")
 	c.builder.CreateStore(value, valueAlloca)
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
@@ -63,15 +63,15 @@ func (c *Compiler) emitMapUpdate(keyType types.Type, m, key, value llvm.Value, p
 		c.createRuntimeCall("hashmapStringSet", params, "")
 	} else if hashmapIsBinaryKey(keyType) {
 		// key can be compared with runtime.memequal
-		keyAlloca, keyPtr, keySize := c.createEntryBlockAlloca(key.Type(), "hashmap.key")
+		keyAlloca, keyPtr, keySize := c.createTemporaryAlloca(key.Type(), "hashmap.key")
 		c.builder.CreateStore(key, keyAlloca)
 		params := []llvm.Value{m, keyPtr, valuePtr}
 		c.createRuntimeCall("hashmapBinarySet", params, "")
-		c.builder.CreateCall(c.getLifetimeEndFunc(), []llvm.Value{keySize, keyPtr}, "")
+		c.emitLifetimeEnd(keyPtr, keySize)
 	} else {
 		c.addError(pos, "only strings, bools, ints or structs of bools/ints are supported as map keys, but got: "+keyType.String())
 	}
-	c.builder.CreateCall(c.getLifetimeEndFunc(), []llvm.Value{valueSize, valuePtr}, "")
+	c.emitLifetimeEnd(valuePtr, valueSize)
 }
 
 func (c *Compiler) emitMapDelete(keyType types.Type, m, key llvm.Value, pos token.Pos) error {
@@ -82,11 +82,11 @@ func (c *Compiler) emitMapDelete(keyType types.Type, m, key llvm.Value, pos toke
 		c.createRuntimeCall("hashmapStringDelete", params, "")
 		return nil
 	} else if hashmapIsBinaryKey(keyType) {
-		keyAlloca, keyPtr, keySize := c.createEntryBlockAlloca(key.Type(), "hashmap.key")
+		keyAlloca, keyPtr, keySize := c.createTemporaryAlloca(key.Type(), "hashmap.key")
 		c.builder.CreateStore(key, keyAlloca)
 		params := []llvm.Value{m, keyPtr}
 		c.createRuntimeCall("hashmapBinaryDelete", params, "")
-		c.builder.CreateCall(c.getLifetimeEndFunc(), []llvm.Value{keySize, keyPtr}, "")
+		c.emitLifetimeEnd(keyPtr, keySize)
 		return nil
 	} else {
 		return c.makeError(pos, "only strings, bools, ints or structs of bools/ints are supported as map keys, but got: "+keyType.String())

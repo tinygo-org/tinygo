@@ -1369,7 +1369,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	switch expr := expr.(type) {
 	case *ssa.Alloc:
 		typ := c.getLLVMType(expr.Type().Underlying().(*types.Pointer).Elem())
-		var buf llvm.Value
 		if expr.Heap {
 			size := c.targetData.TypeAllocSize(typ)
 			// Calculate ^uintptr(0)
@@ -1380,15 +1379,16 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			}
 			// TODO: escape analysis
 			sizeValue := llvm.ConstInt(c.uintptrType, size, false)
-			buf = c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, expr.Comment)
+			buf := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, expr.Comment)
 			buf = c.builder.CreateBitCast(buf, llvm.PointerType(typ, 0), "")
+			return buf, nil
 		} else {
-			buf = c.builder.CreateAlloca(typ, expr.Comment)
+			buf := c.createEntryBlockAlloca(typ, expr.Comment)
 			if c.targetData.TypeAllocSize(typ) != 0 {
 				c.builder.CreateStore(c.getZeroValue(typ), buf) // zero-initialize var
 			}
+			return buf, nil
 		}
-		return buf, nil
 	case *ssa.BinOp:
 		x := c.getValue(frame, expr.X)
 		y := c.getValue(frame, expr.Y)
@@ -1451,10 +1451,12 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			// This could be done directly, but as this is a very infrequent
 			// operation it's much easier to bitcast it through an alloca.
 			resultType := c.getLLVMType(expr.Type())
-			alloca := c.builder.CreateAlloca(value.Type(), "")
+			alloca, allocaPtr, allocaSize := c.createTemporaryAlloca(value.Type(), "union.alloca")
 			c.builder.CreateStore(value, alloca)
-			bitcast := c.builder.CreateBitCast(alloca, llvm.PointerType(resultType, 0), "")
-			return c.builder.CreateLoad(bitcast, ""), nil
+			bitcast := c.builder.CreateBitCast(alloca, llvm.PointerType(resultType, 0), "union.bitcast")
+			result := c.builder.CreateLoad(bitcast, "union.result")
+			c.emitLifetimeEnd(allocaPtr, allocaSize)
+			return result, nil
 		}
 		result := c.builder.CreateExtractValue(value, expr.Field, "")
 		return result, nil
@@ -1494,11 +1496,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		// Can't load directly from array (as index is non-constant), so have to
 		// do it using an alloca+gep+load.
-		alloca := c.builder.CreateAlloca(array.Type(), "index.alloca")
+		alloca, allocaPtr, allocaSize := c.createTemporaryAlloca(array.Type(), "index.alloca")
 		c.builder.CreateStore(array, alloca)
 		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 		ptr := c.builder.CreateInBoundsGEP(alloca, []llvm.Value{zero, index}, "index.gep")
-		return c.builder.CreateLoad(ptr, "index.load"), nil
+		result := c.builder.CreateLoad(ptr, "index.load")
+		c.emitLifetimeEnd(allocaPtr, allocaSize)
+		return result, nil
 	case *ssa.IndexAddr:
 		val := c.getValue(frame, expr.X)
 		index := c.getValue(frame, expr.Index)
@@ -1658,16 +1662,16 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			llvmKeyType := c.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Key())
 			llvmValueType := c.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Elem())
 
-			mapKeyAlloca := c.builder.CreateAlloca(llvmKeyType, "range.key")
-			mapKeyPtr := c.builder.CreateBitCast(mapKeyAlloca, c.i8ptrType, "range.keyptr")
-			mapValueAlloca := c.builder.CreateAlloca(llvmValueType, "range.value")
-			mapValuePtr := c.builder.CreateBitCast(mapValueAlloca, c.i8ptrType, "range.valueptr")
+			mapKeyAlloca, mapKeyPtr, mapKeySize := c.createTemporaryAlloca(llvmKeyType, "range.key")
+			mapValueAlloca, mapValuePtr, mapValueSize := c.createTemporaryAlloca(llvmValueType, "range.value")
 			ok := c.createRuntimeCall("hashmapNext", []llvm.Value{llvmRangeVal, it, mapKeyPtr, mapValuePtr}, "range.next")
 
 			tuple := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.Int1Type(), llvmKeyType, llvmValueType}, false))
 			tuple = c.builder.CreateInsertValue(tuple, ok, 0, "")
 			tuple = c.builder.CreateInsertValue(tuple, c.builder.CreateLoad(mapKeyAlloca, ""), 1, "")
 			tuple = c.builder.CreateInsertValue(tuple, c.builder.CreateLoad(mapValueAlloca, ""), 2, "")
+			c.emitLifetimeEnd(mapKeyPtr, mapKeySize)
+			c.emitLifetimeEnd(mapValuePtr, mapValueSize)
 			return tuple, nil
 		}
 	case *ssa.Phi:
@@ -1684,7 +1688,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		default:
 			panic("unknown type in range: " + typ.String())
 		}
-		it := c.builder.CreateAlloca(iteratorType, "range.it")
+		it, _, _ := c.createTemporaryAlloca(iteratorType, "range.it")
 		c.builder.CreateStore(c.getZeroValue(iteratorType), it)
 		return it, nil
 	case *ssa.Select:
