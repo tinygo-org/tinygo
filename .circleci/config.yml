@@ -79,6 +79,7 @@ commands:
       - run: tinygo build -size short -o test.elf -target=pca10056            examples/blinky1
       - run: tinygo build -size short -o test.elf -target=pca10056            examples/blinky2
       - run: tinygo build -size short -o test.elf -target=itsybitsy-m0        examples/blinky1
+      - run: tinygo build -size short -o test.elf -target=feather-m0          examples/blinky1
       - run: tinygo build -size short -o test.elf -target=trinket-m0          examples/blinky1
       - run: tinygo build -size short -o test.elf -target=circuitplay-express examples/blinky1
       - run: tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky1
