@@ -23,47 +23,41 @@ func (c *Compiler) emitMakeChan(expr *ssa.MakeChan) (llvm.Value, error) {
 // emitChanSend emits a pseudo chan send operation. It is lowered to the actual
 // channel send operation during goroutine lowering.
 func (c *Compiler) emitChanSend(frame *Frame, instr *ssa.Send) {
-	valueType := c.getLLVMType(instr.X.Type())
 	ch := c.getValue(frame, instr.Chan)
 	chanValue := c.getValue(frame, instr.X)
-	valueSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(chanValue.Type()), false)
-	coroutine := c.createRuntimeCall("getCoroutine", nil, "")
 
 	// store value-to-send
-	c.builder.SetInsertPointBefore(coroutine.InstructionParent().Parent().EntryBasicBlock().FirstInstruction())
-	valueAlloca := c.builder.CreateAlloca(valueType, "chan.value")
-	c.builder.SetInsertPointBefore(coroutine)
-	c.builder.SetInsertPointAtEnd(coroutine.InstructionParent())
+	valueType := c.getLLVMType(instr.X.Type())
+	valueAlloca, valueAllocaCast, valueAllocaSize := c.createTemporaryAlloca(valueType, "chan.value")
 	c.builder.CreateStore(chanValue, valueAlloca)
-	valueAllocaCast := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "chan.value.i8ptr")
 
 	// Do the send.
+	coroutine := c.createRuntimeCall("getCoroutine", nil, "")
+	valueSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(chanValue.Type()), false)
 	c.createRuntimeCall("chanSend", []llvm.Value{coroutine, ch, valueAllocaCast, valueSize}, "")
 
-	// Make sure CoroSplit includes the alloca in the coroutine frame.
-	// This is a bit dirty, but it works (at least in LLVM 8).
-	valueSizeI64 := llvm.ConstInt(c.ctx.Int64Type(), c.targetData.TypeAllocSize(chanValue.Type()), false)
-	c.builder.CreateCall(c.getLifetimeEndFunc(), []llvm.Value{valueSizeI64, valueAllocaCast}, "")
+	// End the lifetime of the alloca.
+	// This also works around a bug in CoroSplit, at least in LLVM 8:
+	// https://bugs.llvm.org/show_bug.cgi?id=41742
+	c.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
 }
 
 // emitChanRecv emits a pseudo chan receive operation. It is lowered to the
 // actual channel receive operation during goroutine lowering.
 func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) llvm.Value {
 	valueType := c.getLLVMType(unop.X.Type().(*types.Chan).Elem())
-	valueSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(valueType), false)
 	ch := c.getValue(frame, unop.X)
-	coroutine := c.createRuntimeCall("getCoroutine", nil, "")
 
 	// Allocate memory to receive into.
-	c.builder.SetInsertPointBefore(coroutine.InstructionParent().Parent().EntryBasicBlock().FirstInstruction())
-	valueAlloca := c.builder.CreateAlloca(valueType, "chan.value")
-	c.builder.SetInsertPointBefore(coroutine)
-	c.builder.SetInsertPointAtEnd(coroutine.InstructionParent())
-	valueAllocaCast := c.builder.CreateBitCast(valueAlloca, c.i8ptrType, "chan.value.i8ptr")
+	valueAlloca, valueAllocaCast, valueAllocaSize := c.createTemporaryAlloca(valueType, "chan.value")
 
 	// Do the receive.
+	coroutine := c.createRuntimeCall("getCoroutine", nil, "")
+	valueSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(valueType), false)
 	c.createRuntimeCall("chanRecv", []llvm.Value{coroutine, ch, valueAllocaCast, valueSize}, "")
 	received := c.builder.CreateLoad(valueAlloca, "chan.received")
+	c.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
+
 	if unop.CommaOk {
 		commaOk := c.createRuntimeCall("getTaskPromiseData", []llvm.Value{coroutine}, "chan.commaOk.wide")
 		commaOk = c.builder.CreateTrunc(commaOk, c.ctx.Int1Type(), "chan.commaOk")

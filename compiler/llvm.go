@@ -24,21 +24,39 @@ func getUses(value llvm.Value) []llvm.Value {
 
 // createEntryBlockAlloca creates a new alloca in the entry block, even though
 // the IR builder is located elsewhere. It assumes that the insert point is
-// after the last instruction in the current block. Also, it adds lifetime
-// information to the IR signalling that the alloca won't be used before this
-// point.
+// at the end of the current block.
+func (c *Compiler) createEntryBlockAlloca(t llvm.Type, name string) llvm.Value {
+	currentBlock := c.builder.GetInsertBlock()
+	entryBlock := currentBlock.Parent().EntryBasicBlock()
+	if entryBlock.FirstInstruction().IsNil() {
+		c.builder.SetInsertPointAtEnd(entryBlock)
+	} else {
+		c.builder.SetInsertPointBefore(entryBlock.FirstInstruction())
+	}
+	alloca := c.builder.CreateAlloca(t, name)
+	c.builder.SetInsertPointAtEnd(currentBlock)
+	return alloca
+}
+
+// createTemporaryAlloca creates a new alloca in the entry block and adds
+// lifetime start infromation in the IR signalling that the alloca won't be used
+// before this point.
 //
 // This is useful for creating temporary allocas for intrinsics. Don't forget to
-// end the lifetime after you're done with it.
-func (c *Compiler) createEntryBlockAlloca(t llvm.Type, name string) (alloca, bitcast, size llvm.Value) {
-	currentBlock := c.builder.GetInsertBlock()
-	c.builder.SetInsertPointBefore(currentBlock.Parent().EntryBasicBlock().FirstInstruction())
-	alloca = c.builder.CreateAlloca(t, name)
-	c.builder.SetInsertPointAtEnd(currentBlock)
+// end the lifetime using emitLifetimeEnd after you're done with it.
+func (c *Compiler) createTemporaryAlloca(t llvm.Type, name string) (alloca, bitcast, size llvm.Value) {
+	alloca = c.createEntryBlockAlloca(t, name)
 	bitcast = c.builder.CreateBitCast(alloca, c.i8ptrType, name+".bitcast")
 	size = llvm.ConstInt(c.ctx.Int64Type(), c.targetData.TypeAllocSize(t), false)
 	c.builder.CreateCall(c.getLifetimeStartFunc(), []llvm.Value{size, bitcast}, "")
 	return
+}
+
+// emitLifetimeEnd signals the end of an (alloca) lifetime by calling the
+// llvm.lifetime.end intrinsic. It is commonly used together with
+// createTemporaryAlloca.
+func (c *Compiler) emitLifetimeEnd(ptr, size llvm.Value) {
+	c.builder.CreateCall(c.getLifetimeEndFunc(), []llvm.Value{size, ptr}, "")
 }
 
 // getLifetimeStartFunc returns the llvm.lifetime.start intrinsic and creates it

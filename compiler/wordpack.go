@@ -34,7 +34,7 @@ func (c *Compiler) emitPointerPack(values []llvm.Value) llvm.Value {
 		}
 		// Because packedType is a struct and we have to cast it to a *i8, store
 		// it in an alloca first for bitcasting (store+bitcast+load).
-		packedAlloc = c.builder.CreateAlloca(packedType, "")
+		packedAlloc, _, _ = c.createTemporaryAlloca(packedType, "")
 	} else {
 		// Packed data is bigger than a pointer, so allocate it on the heap.
 		sizeValue := llvm.ConstInt(c.uintptrType, size, false)
@@ -54,7 +54,11 @@ func (c *Compiler) emitPointerPack(values []llvm.Value) llvm.Value {
 	if packedHeapAlloc.IsNil() {
 		// Load value (as *i8) from the alloca.
 		packedAlloc = c.builder.CreateBitCast(packedAlloc, llvm.PointerType(c.i8ptrType, 0), "")
-		return c.builder.CreateLoad(packedAlloc, "")
+		result := c.builder.CreateLoad(packedAlloc, "")
+		packedPtr := c.builder.CreateBitCast(packedAlloc, c.i8ptrType, "")
+		packedSize := llvm.ConstInt(c.ctx.Int64Type(), c.targetData.TypeAllocSize(packedAlloc.Type()), false)
+		c.emitLifetimeEnd(packedPtr, packedSize)
+		return result
 	} else {
 		// Get the original heap allocation pointer, which already is an *i8.
 		return packedHeapAlloc
@@ -66,7 +70,7 @@ func (c *Compiler) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []l
 	packedType := c.ctx.StructType(valueTypes, false)
 
 	// Get a correctly-typed pointer to the packed data.
-	var packedAlloc llvm.Value
+	var packedAlloc, packedRawAlloc llvm.Value
 	size := c.targetData.TypeAllocSize(packedType)
 	if size == 0 {
 		// No data to unpack.
@@ -80,7 +84,7 @@ func (c *Compiler) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []l
 			return []llvm.Value{c.builder.CreatePtrToInt(ptr, valueTypes[0], "unpack.int")}
 		}
 		// Fallback: load it using an alloca.
-		packedRawAlloc := c.builder.CreateAlloca(llvm.PointerType(c.i8ptrType, 0), "unpack.raw.alloc")
+		packedRawAlloc, _, _ = c.createTemporaryAlloca(llvm.PointerType(c.i8ptrType, 0), "unpack.raw.alloc")
 		packedRawValue := c.builder.CreateBitCast(ptr, llvm.PointerType(c.i8ptrType, 0), "unpack.raw.value")
 		c.builder.CreateStore(packedRawValue, packedRawAlloc)
 		packedAlloc = c.builder.CreateBitCast(packedRawAlloc, llvm.PointerType(packedType, 0), "unpack.alloc")
@@ -103,6 +107,11 @@ func (c *Compiler) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []l
 		}
 		gep := c.builder.CreateInBoundsGEP(packedAlloc, indices, "")
 		values[i] = c.builder.CreateLoad(gep, "")
+	}
+	if !packedRawAlloc.IsNil() {
+		allocPtr := c.builder.CreateBitCast(packedRawAlloc, c.i8ptrType, "")
+		allocSize := llvm.ConstInt(c.ctx.Int64Type(), c.targetData.TypeAllocSize(c.uintptrType), false)
+		c.emitLifetimeEnd(allocPtr, allocSize)
 	}
 	return values
 }
