@@ -1,4 +1,4 @@
-// +build sam,atsamd21,itsybitsy_m0
+// +build sam,atsamd21,feather_m0
 
 package machine
 
@@ -72,4 +72,11 @@ const (
 // SPI on the Feather M0.
 var (
 	SPI0 = SPI{Bus: sam.SERCOM4_SPI}
+)
+
+// I2S pins
+const (
+	I2S_SCK_PIN = PA10
+	I2S_SD_PIN  = PA08
+	I2S_WS_PIN  = 0xff // TODO: figure out what this is on Feather M0.
 )
