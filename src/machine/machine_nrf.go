@@ -20,7 +20,7 @@ const (
 func (p GPIO) Configure(config GPIOConfig) {
 	cfg := config.Mode | nrf.GPIO_PIN_CNF_DRIVE_S0S1 | nrf.GPIO_PIN_CNF_SENSE_Disabled
 	port, pin := p.getPortPin()
-	port.PIN_CNF[pin] = nrf.RegValue(cfg)
+	port.PIN_CNF[pin].Set(uint32(cfg))
 }
 
 // Set the pin to high or low.
@@ -28,9 +28,9 @@ func (p GPIO) Configure(config GPIOConfig) {
 func (p GPIO) Set(high bool) {
 	port, pin := p.getPortPin()
 	if high {
-		port.OUTSET = 1 << pin
+		port.OUTSET.Set(1 << pin)
 	} else {
-		port.OUTCLR = 1 << pin
+		port.OUTCLR.Set(1 << pin)
 	}
 }
 
@@ -38,20 +38,20 @@ func (p GPIO) Set(high bool) {
 // implement bit-banged drivers.
 func (p GPIO) PortMaskSet() (*uint32, uint32) {
 	port, pin := p.getPortPin()
-	return (*uint32)(&port.OUTSET), 1 << pin
+	return &port.OUTSET.Reg, 1 << pin
 }
 
 // Return the register and mask to disable a given port. This can be used to
 // implement bit-banged drivers.
 func (p GPIO) PortMaskClear() (*uint32, uint32) {
 	port, pin := p.getPortPin()
-	return (*uint32)(&port.OUTCLR), 1 << pin
+	return &port.OUTCLR.Reg, 1 << pin
 }
 
 // Get returns the current value of a GPIO pin.
 func (p GPIO) Get() bool {
 	port, pin := p.getPortPin()
-	return (port.IN>>pin)&1 != 0
+	return (port.IN.Get()>>pin)&1 != 0
 }
 
 // UART on the NRF.
@@ -77,10 +77,10 @@ func (uart UART) Configure(config UARTConfig) {
 	// Set TX and RX pins from board.
 	uart.setPins(UART_TX_PIN, UART_RX_PIN)
 
-	nrf.UART0.ENABLE = nrf.UART_ENABLE_ENABLE_Enabled
-	nrf.UART0.TASKS_STARTTX = 1
-	nrf.UART0.TASKS_STARTRX = 1
-	nrf.UART0.INTENSET = nrf.UART_INTENSET_RXDRDY_Msk
+	nrf.UART0.ENABLE.Set(nrf.UART_ENABLE_ENABLE_Enabled)
+	nrf.UART0.TASKS_STARTTX.Set(1)
+	nrf.UART0.TASKS_STARTRX.Set(1)
+	nrf.UART0.INTENSET.Set(nrf.UART_INTENSET_RXDRDY_Msk)
 
 	// Enable RX IRQ.
 	arm.SetPriority(nrf.IRQ_UART0, 0xc0) // low priority
@@ -99,22 +99,22 @@ func (uart UART) SetBaudRate(br uint32) {
 	// https://devzone.nordicsemi.com/f/nordic-q-a/391/uart-baudrate-register-values/2046#2046
 	rate := uint32((uint64(br/400)*uint64(400*0xffffffff/16000000) + 0x800) & 0xffffff000)
 
-	nrf.UART0.BAUDRATE = nrf.RegValue(rate)
+	nrf.UART0.BAUDRATE.Set(rate)
 }
 
 // WriteByte writes a byte of data to the UART.
 func (uart UART) WriteByte(c byte) error {
-	nrf.UART0.EVENTS_TXDRDY = 0
-	nrf.UART0.TXD = nrf.RegValue(c)
-	for nrf.UART0.EVENTS_TXDRDY == 0 {
+	nrf.UART0.EVENTS_TXDRDY.Set(0)
+	nrf.UART0.TXD.Set(uint32(c))
+	for nrf.UART0.EVENTS_TXDRDY.Get() == 0 {
 	}
 	return nil
 }
 
 func (uart UART) handleInterrupt() {
-	if nrf.UART0.EVENTS_RXDRDY != 0 {
-		uart.Receive(byte(nrf.UART0.RXD))
-		nrf.UART0.EVENTS_RXDRDY = 0x0
+	if nrf.UART0.EVENTS_RXDRDY.Get() != 0 {
+		uart.Receive(byte(nrf.UART0.RXD.Get()))
+		nrf.UART0.EVENTS_RXDRDY.Set(0x0)
 	}
 }
 
@@ -150,26 +150,26 @@ func (i2c I2C) Configure(config I2CConfig) {
 
 	// do config
 	sclPort, sclPin := GPIO{config.SCL}.getPortPin()
-	sclPort.PIN_CNF[sclPin] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
+	sclPort.PIN_CNF[sclPin].Set((nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
 		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
 		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
-		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos)
+		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos))
 
 	sdaPort, sdaPin := GPIO{config.SDA}.getPortPin()
-	sdaPort.PIN_CNF[sdaPin] = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
+	sdaPort.PIN_CNF[sdaPin].Set((nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
 		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
 		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
-		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos)
+		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos))
 
 	if config.Frequency == TWI_FREQ_400KHZ {
-		i2c.Bus.FREQUENCY = nrf.TWI_FREQUENCY_FREQUENCY_K400
+		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K400)
 	} else {
-		i2c.Bus.FREQUENCY = nrf.TWI_FREQUENCY_FREQUENCY_K100
+		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K100)
 	}
 
-	i2c.Bus.ENABLE = nrf.TWI_ENABLE_ENABLE_Enabled
+	i2c.Bus.ENABLE.Set(nrf.TWI_ENABLE_ENABLE_Enabled)
 	i2c.setPins(config.SCL, config.SDA)
 }
 
@@ -177,28 +177,28 @@ func (i2c I2C) Configure(config I2CConfig) {
 // It clocks out the given address, writes the bytes in w, reads back len(r)
 // bytes and stores them in r, and generates a stop condition on the bus.
 func (i2c I2C) Tx(addr uint16, w, r []byte) error {
-	i2c.Bus.ADDRESS = nrf.RegValue(addr)
+	i2c.Bus.ADDRESS.Set(uint32(addr))
 	if len(w) != 0 {
-		i2c.Bus.TASKS_STARTTX = 1 // start transmission for writing
+		i2c.Bus.TASKS_STARTTX.Set(1) // start transmission for writing
 		for _, b := range w {
 			i2c.writeByte(b)
 		}
 	}
 	if len(r) != 0 {
 		// To trigger suspend task when a byte is received
-		i2c.Bus.SHORTS = nrf.TWI_SHORTS_BB_SUSPEND
-		i2c.Bus.TASKS_STARTRX = 1 // re-start transmission for reading
-		for i := range r {        // read each char
+		i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND)
+		i2c.Bus.TASKS_STARTRX.Set(1) // re-start transmission for reading
+		for i := range r {           // read each char
 			if i+1 == len(r) {
 				// To trigger stop task when last byte is received, set before resume task.
-				i2c.Bus.SHORTS = nrf.TWI_SHORTS_BB_STOP
+				i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_STOP)
 			}
-			i2c.Bus.TASKS_RESUME = 1 // re-start transmission for reading
+			i2c.Bus.TASKS_RESUME.Set(1) // re-start transmission for reading
 			r[i] = i2c.readByte()
 		}
 	}
 	i2c.signalStop()
-	i2c.Bus.SHORTS = nrf.TWI_SHORTS_BB_SUSPEND_Disabled
+	i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND_Disabled)
 	return nil
 }
 
@@ -206,26 +206,26 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 // it must generate a stop condition after the next character is retrieved when
 // reading.
 func (i2c I2C) signalStop() {
-	i2c.Bus.TASKS_STOP = 1
-	for i2c.Bus.EVENTS_STOPPED == 0 {
+	i2c.Bus.TASKS_STOP.Set(1)
+	for i2c.Bus.EVENTS_STOPPED.Get() == 0 {
 	}
-	i2c.Bus.EVENTS_STOPPED = 0
+	i2c.Bus.EVENTS_STOPPED.Set(0)
 }
 
 // writeByte writes a single byte to the I2C bus.
 func (i2c I2C) writeByte(data byte) {
-	i2c.Bus.TXD = nrf.RegValue(data)
-	for i2c.Bus.EVENTS_TXDSENT == 0 {
+	i2c.Bus.TXD.Set(uint32(data))
+	for i2c.Bus.EVENTS_TXDSENT.Get() == 0 {
 	}
-	i2c.Bus.EVENTS_TXDSENT = 0
+	i2c.Bus.EVENTS_TXDSENT.Set(0)
 }
 
 // readByte reads a single byte from the I2C bus.
 func (i2c I2C) readByte() byte {
-	for i2c.Bus.EVENTS_RXDREADY == 0 {
+	for i2c.Bus.EVENTS_RXDREADY.Get() == 0 {
 	}
-	i2c.Bus.EVENTS_RXDREADY = 0
-	return byte(i2c.Bus.RXD)
+	i2c.Bus.EVENTS_RXDREADY.Set(0)
+	return byte(i2c.Bus.RXD.Get())
 }
 
 // SPI on the NRF.
@@ -252,7 +252,7 @@ type SPIConfig struct {
 // Configure is intended to setup the SPI interface.
 func (spi SPI) Configure(config SPIConfig) {
 	// Disable bus to configure it
-	spi.Bus.ENABLE = nrf.SPI_ENABLE_ENABLE_Disabled
+	spi.Bus.ENABLE.Set(nrf.SPI_ENABLE_ENABLE_Disabled)
 
 	// set frequency
 	var freq uint32
@@ -275,7 +275,7 @@ func (spi SPI) Configure(config SPIConfig) {
 	default:
 		freq = nrf.SPI_FREQUENCY_FREQUENCY_K500
 	}
-	spi.Bus.FREQUENCY = nrf.RegValue(freq)
+	spi.Bus.FREQUENCY.Set(freq)
 
 	var conf uint32
 
@@ -302,22 +302,22 @@ func (spi SPI) Configure(config SPIConfig) {
 		conf &^= (nrf.SPI_CONFIG_CPOL_ActiveHigh << nrf.SPI_CONFIG_CPOL_Pos)
 		conf &^= (nrf.SPI_CONFIG_CPHA_Leading << nrf.SPI_CONFIG_CPHA_Pos)
 	}
-	spi.Bus.CONFIG = nrf.RegValue(conf)
+	spi.Bus.CONFIG.Set(conf)
 
 	// set pins
 	spi.setPins(config.SCK, config.MOSI, config.MISO)
 
 	// Re-enable bus now that it is configured.
-	spi.Bus.ENABLE = nrf.SPI_ENABLE_ENABLE_Enabled
+	spi.Bus.ENABLE.Set(nrf.SPI_ENABLE_ENABLE_Enabled)
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
 func (spi SPI) Transfer(w byte) (byte, error) {
-	spi.Bus.TXD = nrf.RegValue(w)
-	for spi.Bus.EVENTS_READY == 0 {
+	spi.Bus.TXD.Set(uint32(w))
+	for spi.Bus.EVENTS_READY.Get() == 0 {
 	}
-	r := spi.Bus.RXD
-	spi.Bus.EVENTS_READY = 0
+	r := spi.Bus.RXD.Get()
+	spi.Bus.EVENTS_READY.Set(0)
 
 	// TODO: handle SPI errors
 	return byte(r), nil

@@ -46,7 +46,7 @@ gen-device-avr:
 	go fmt ./src/device/avr
 
 gen-device-nrf:
-	./tools/gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/ --source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk
+	./tools/gen-device-svd-vol.py lib/nrfx/mdk/ src/device/nrf/ --source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk
 	go fmt ./src/device/nrf
 
 gen-device-sam:
