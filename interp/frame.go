@@ -461,17 +461,21 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			}
 			thenBB := inst.Operand(1)
 			elseBB := inst.Operand(2)
-			if !cond.IsConstant() {
+			if !cond.IsAInstruction().IsNil() {
 				return nil, nil, errors.New("interp: branch on a non-constant")
-			} else {
-				switch cond.ZExtValue() {
-				case 0: // false
-					return nil, []llvm.Value{thenBB}, nil // then
-				case 1: // true
-					return nil, []llvm.Value{elseBB}, nil // else
-				default:
-					panic("branch was not true or false")
-				}
+			}
+			if !cond.IsAConstantExpr().IsNil() {
+				// This may happen when the instruction builder could not
+				// const-fold some instructions.
+				return nil, nil, errors.New("interp: branch on a non-const-propagated constant expression")
+			}
+			switch cond {
+			case llvm.ConstInt(fr.Mod.Context().Int1Type(), 0, false): // false
+				return nil, []llvm.Value{thenBB}, nil // then
+			case llvm.ConstInt(fr.Mod.Context().Int1Type(), 1, false): // true
+				return nil, []llvm.Value{elseBB}, nil // else
+			default:
+				panic("branch was not true or false")
 			}
 		case !inst.IsABranchInst().IsNil() && inst.OperandsCount() == 1:
 			// unconditional branch (goto)
