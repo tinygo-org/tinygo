@@ -184,6 +184,40 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			lhs := fr.getLocal(inst.Operand(0)).(*LocalValue).Underlying
 			rhs := fr.getLocal(inst.Operand(1)).(*LocalValue).Underlying
 			predicate := inst.IntPredicate()
+			if predicate == llvm.IntEQ && lhs.Type().TypeKind() == llvm.PointerTypeKind {
+				// Unfortunately, the const propagation in the IR builder
+				// doesn't handle pointer compares of inttoptr values. So we
+				// implement it manually here.
+				isNil := func(v llvm.Value) (result bool, ok bool) {
+					if !v.IsAConstantExpr().IsNil() && v.Opcode() == llvm.IntToPtr {
+						// Whether a constant inttoptr is nil is easy to
+						// determine.
+						operand := v.Operand(0)
+						if operand.IsConstant() {
+							return operand.ZExtValue() == 0, true
+						}
+					}
+					if !v.IsAConstantPointerNull().IsNil() {
+						// A constant pointer null is always null, of course.
+						return true, true
+					}
+					return false, false // not valid
+				}
+				lhsNil, ok1 := isNil(lhs)
+				rhsNil, ok2 := isNil(rhs)
+				if ok1 && ok2 {
+					if lhsNil && rhsNil {
+						// Both are nil, so this icmp is always evaluated to true.
+						fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstInt(fr.Mod.Context().Int1Type(), 1, false)}
+						continue
+					}
+					if lhsNil != rhsNil {
+						// Only one of them is nil, so this comparison must return false.
+						fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstInt(fr.Mod.Context().Int1Type(), 0, false)}
+						continue
+					}
+				}
+			}
 			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateICmp(predicate, lhs, rhs, "")}
 		case !inst.IsAFCmpInst().IsNil():
 			lhs := fr.getLocal(inst.Operand(0)).(*LocalValue).Underlying
