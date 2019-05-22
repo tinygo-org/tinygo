@@ -61,32 +61,10 @@ commands:
             - llvm
   smoketest:
     steps:
-      - smoketest-no-avr
-      - run: tinygo build -size short -o test.elf -target=arduino             examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=digispark           examples/blinky1
+      - run: make smoketest
   smoketest-no-avr:
     steps:
-      - run: tinygo build -size short -o test.elf -target=pca10040            examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=pca10040            examples/blinky2
-      - run: tinygo build             -o blinky2                              examples/blinky2 # TODO: re-enable -size flag with MachO support
-      - run: tinygo build -size short -o test.elf -target=pca10040            examples/test
-      - run: tinygo build -size short -o test.elf -target=microbit            examples/echo
-      - run: tinygo build -size short -o test.elf -target=nrf52840-mdk        examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=pca10031            examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=bluepill            examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=reelboard           examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=reelboard           examples/blinky2
-      - run: tinygo build -size short -o test.elf -target=pca10056            examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=pca10056            examples/blinky2
-      - run: tinygo build -size short -o test.elf -target=itsybitsy-m0        examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=feather-m0          examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=trinket-m0          examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=circuitplay-express examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky1
-      - run: tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky2
-      - run: tinygo build -size short -o test.elf -target=circuitplay-express examples/i2s
-      - run: tinygo build             -o wasm.wasm -target=wasm               examples/wasm/export
-      - run: tinygo build             -o wasm.wasm -target=wasm               examples/wasm/main
+      - run: make smoketest-no-avr
   test-linux:
     parameters:
       llvm:
