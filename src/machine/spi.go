@@ -1,4 +1,4 @@
-// +build nrf stm32f103xx atsamd21g18a
+// +build !stm32f407,!avr
 
 package machine
 

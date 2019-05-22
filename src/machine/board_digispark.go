@@ -1,4 +1,4 @@
-// +build attiny85,digispark
+// +build digispark
 
 package machine
 

@@ -1,4 +1,4 @@
-// +build stm32,bluepill
+// +build bluepill
 
 package machine
 
