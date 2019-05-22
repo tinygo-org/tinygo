@@ -1,4 +1,4 @@
-// +build stm32,stm32f4disco
+// +build stm32f4disco
 
 package machine
 

@@ -107,7 +107,7 @@ smoketest-no-avr:
 	tinygo build -size short -o test.elf -target=pca10040            examples/serial
 	tinygo build -size short -o test.elf -target=pca10040            examples/test
 	# test all targets/boards
-	tinygo build             -o test.elf                             examples/blinky2 # TODO: re-enable -size flag with MachO support
+	tinygo build             -o test.wasm -tags=pca10040             examples/blinky2
 	tinygo build -size short -o test.elf -target=microbit            examples/echo
 	tinygo build -size short -o test.elf -target=nrf52840-mdk        examples/blinky1
 	tinygo build -size short -o test.elf -target=pca10031            examples/blinky1

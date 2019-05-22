@@ -1,4 +1,4 @@
-// +build nrf51,microbit
+// +build microbit
 
 package machine
 

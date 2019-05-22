@@ -1,4 +1,4 @@
-// +build avr,arduino
+// +build arduino
 
 package machine
 
