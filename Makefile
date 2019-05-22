@@ -84,6 +84,33 @@ build/tinygo:
 test:
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go test -v -tags byollvm .
 
+.PHONY: smoketest smoketest-no-avr
+smoketest: smoketest-no-avr
+	tinygo build -size short -o test.elf -target=arduino             examples/blinky1
+	tinygo build -size short -o test.elf -target=digispark           examples/blinky1
+smoketest-no-avr:
+	tinygo build -size short -o test.elf -target=pca10040            examples/blinky1
+	tinygo build -size short -o test.elf -target=pca10040            examples/blinky2
+	tinygo build             -o test.elf                             examples/blinky2 # TODO: re-enable -size flag with MachO support
+	tinygo build -size short -o test.elf -target=pca10040            examples/test
+	tinygo build -size short -o test.elf -target=microbit            examples/echo
+	tinygo build -size short -o test.elf -target=nrf52840-mdk        examples/blinky1
+	tinygo build -size short -o test.elf -target=pca10031            examples/blinky1
+	tinygo build -size short -o test.elf -target=bluepill            examples/blinky1
+	tinygo build -size short -o test.elf -target=reelboard           examples/blinky1
+	tinygo build -size short -o test.elf -target=reelboard           examples/blinky2
+	tinygo build -size short -o test.elf -target=pca10056            examples/blinky1
+	tinygo build -size short -o test.elf -target=pca10056            examples/blinky2
+	tinygo build -size short -o test.elf -target=itsybitsy-m0        examples/blinky1
+	tinygo build -size short -o test.elf -target=feather-m0          examples/blinky1
+	tinygo build -size short -o test.elf -target=trinket-m0          examples/blinky1
+	tinygo build -size short -o test.elf -target=circuitplay-express examples/blinky1
+	tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky1
+	tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky2
+	tinygo build -size short -o test.elf -target=circuitplay-express examples/i2s
+	tinygo build             -o wasm.wasm -target=wasm               examples/wasm/export
+	tinygo build             -o wasm.wasm -target=wasm               examples/wasm/main
+
 release: build/tinygo gen-device
 	@mkdir -p build/release/tinygo/bin
 	@mkdir -p build/release/tinygo/lib/clang/include
