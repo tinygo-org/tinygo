@@ -53,6 +53,7 @@ type BuildConfig struct {
 	printSizes    string
 	cFlags        []string
 	ldFlags       []string
+	tags          string
 	wasmAbi       string
 	testConfig    compiler.TestConfig
 }
@@ -91,6 +92,9 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	}
 	for i := 1; i <= minor; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
+	}
+	if extraTags := strings.Fields(config.tags); len(extraTags) != 0 {
+		tags = append(tags, extraTags...)
 	}
 	compilerConfig := compiler.Config{
 		Triple:        spec.Triple,
@@ -584,6 +588,7 @@ func main() {
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	target := flag.String("target", "", "LLVM target")
+	tags := flag.String("tags", "", "a space-separated list of extra build tags")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
@@ -608,6 +613,7 @@ func main() {
 		dumpSSA:       *dumpSSA,
 		debug:         !*nodebug,
 		printSizes:    *printSize,
+		tags:          *tags,
 		wasmAbi:       *wasmAbi,
 	}
 
