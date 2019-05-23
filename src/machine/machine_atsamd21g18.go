@@ -149,7 +149,7 @@ func (p GPIO) Configure(config GPIOConfig) {
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
-			p.setPMux(val | (GPIO_COM << sam.PORT_PMUX0_PMUXE_Pos))
+			p.setPMux(val | (GPIO_ANALOG << sam.PORT_PMUX0_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR)
