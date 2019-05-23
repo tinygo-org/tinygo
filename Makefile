@@ -89,10 +89,22 @@ smoketest: smoketest-no-avr
 	tinygo build -size short -o test.elf -target=arduino             examples/blinky1
 	tinygo build -size short -o test.elf -target=digispark           examples/blinky1
 smoketest-no-avr:
+	# test all examples
 	tinygo build -size short -o test.elf -target=pca10040            examples/blinky1
+	tinygo build -size short -o test.elf -target=pca10040            examples/adc
+	tinygo build -size short -o test.elf -target=pca10040            examples/blinkm
 	tinygo build -size short -o test.elf -target=pca10040            examples/blinky2
-	tinygo build             -o test.elf                             examples/blinky2 # TODO: re-enable -size flag with MachO support
+	tinygo build -size short -o test.elf -target=pca10040            examples/button
+	tinygo build -size short -o test.elf -target=pca10040            examples/button2
+	tinygo build -size short -o test.elf -target=pca10040            examples/echo
+	tinygo build -size short -o test.elf -target=circuitplay-express examples/i2s
+	tinygo build -size short -o test.elf -target=pca10040            examples/mcp3008
+	tinygo build -size short -o test.elf -target=microbit            examples/microbit-blink
+	tinygo build -size short -o test.elf -target=pca10040            examples/pwm
+	tinygo build -size short -o test.elf -target=pca10040            examples/serial
 	tinygo build -size short -o test.elf -target=pca10040            examples/test
+	# test all targets/boards
+	tinygo build             -o test.elf                             examples/blinky2 # TODO: re-enable -size flag with MachO support
 	tinygo build -size short -o test.elf -target=microbit            examples/echo
 	tinygo build -size short -o test.elf -target=nrf52840-mdk        examples/blinky1
 	tinygo build -size short -o test.elf -target=pca10031            examples/blinky1
