@@ -94,3 +94,29 @@ func isScalar(t llvm.Type) bool {
 		return false
 	}
 }
+
+// isPointerNil returns whether this is a nil pointer or not. The ok value
+// indicates whether the result is certain: if it is false the result boolean is
+// not valid.
+func isPointerNil(v llvm.Value) (result bool, ok bool) {
+	if !v.IsAConstantExpr().IsNil() {
+		switch v.Opcode() {
+		case llvm.IntToPtr:
+			// Whether a constant inttoptr is nil is easy to
+			// determine.
+			operand := v.Operand(0)
+			if operand.IsConstant() {
+				return operand.ZExtValue() == 0, true
+			}
+		case llvm.BitCast, llvm.GetElementPtr:
+			// These const instructions are just a kind of wrappers for the
+			// underlying pointer.
+			return isPointerNil(v.Operand(0))
+		}
+	}
+	if !v.IsAConstantPointerNull().IsNil() {
+		// A constant pointer null is always null, of course.
+		return true, true
+	}
+	return false, false // not valid
+}

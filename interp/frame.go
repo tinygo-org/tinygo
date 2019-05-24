@@ -188,23 +188,8 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				// Unfortunately, the const propagation in the IR builder
 				// doesn't handle pointer compares of inttoptr values. So we
 				// implement it manually here.
-				isNil := func(v llvm.Value) (result bool, ok bool) {
-					if !v.IsAConstantExpr().IsNil() && v.Opcode() == llvm.IntToPtr {
-						// Whether a constant inttoptr is nil is easy to
-						// determine.
-						operand := v.Operand(0)
-						if operand.IsConstant() {
-							return operand.ZExtValue() == 0, true
-						}
-					}
-					if !v.IsAConstantPointerNull().IsNil() {
-						// A constant pointer null is always null, of course.
-						return true, true
-					}
-					return false, false // not valid
-				}
-				lhsNil, ok1 := isNil(lhs)
-				rhsNil, ok2 := isNil(rhs)
+				lhsNil, ok1 := isPointerNil(lhs)
+				rhsNil, ok2 := isPointerNil(rhs)
 				if ok1 && ok2 {
 					if lhsNil && rhsNil {
 						// Both are nil, so this icmp is always evaluated to true.
