@@ -42,7 +42,7 @@ func (c *Compiler) emitLookupBoundsCheck(frame *Frame, arrayLen, index llvm.Valu
 
 	// Fail: this is a nil pointer, exit with a panic.
 	c.builder.SetInsertPointAtEnd(faultBlock)
-	c.createRuntimeCall("lookuppanic", nil, "")
+	c.createRuntimeCall("lookupPanic", nil, "")
 	c.builder.CreateUnreachable()
 
 	// Ok: this is a valid pointer.
@@ -103,7 +103,7 @@ func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high llvm.V
 
 	// Fail: this is a nil pointer, exit with a panic.
 	c.builder.SetInsertPointAtEnd(faultBlock)
-	c.createRuntimeCall("slicepanic", nil, "")
+	c.createRuntimeCall("slicePanic", nil, "")
 	c.builder.CreateUnreachable()
 
 	// Ok: this is a valid pointer.
@@ -146,7 +146,7 @@ func (c *Compiler) emitNilCheck(frame *Frame, ptr llvm.Value, blockPrefix string
 
 	// Fail: this is a nil pointer, exit with a panic.
 	c.builder.SetInsertPointAtEnd(faultBlock)
-	c.createRuntimeCall("nilpanic", nil, "")
+	c.createRuntimeCall("nilPanic", nil, "")
 	c.builder.CreateUnreachable()
 
 	// Ok: this is a valid pointer.

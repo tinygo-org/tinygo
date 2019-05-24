@@ -36,16 +36,16 @@ func isnil(ptr *uint8) bool {
 }
 
 // Panic when trying to dereference a nil pointer.
-func nilpanic() {
+func nilPanic() {
 	runtimePanic("nil pointer dereference")
 }
 
 // Panic when trying to acces an array or slice out of bounds.
-func lookuppanic() {
+func lookupPanic() {
 	runtimePanic("index out of range")
 }
 
 // Panic when trying to slice a slice out of bounds.
-func slicepanic() {
+func slicePanic() {
 	runtimePanic("slice out of range")
 }
