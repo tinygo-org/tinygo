@@ -154,17 +154,17 @@ func (c *Compiler) LowerFuncValues() {
 				// What we'll do is transform the following:
 				//     rawPtr := runtime.getFuncPtr(fn)
 				//     if func.rawPtr == nil {
-				//         runtime.nilpanic()
+				//         runtime.nilPanic()
 				//     }
 				//     result := func.rawPtr(...args, func.context)
 				// into this:
 				//     if false {
-				//         runtime.nilpanic()
+				//         runtime.nilPanic()
 				//     }
 				//     var result // Phi
 				//     switch fn.id {
 				//     case 0:
-				//         runtime.nilpanic()
+				//         runtime.nilPanic()
 				//     case 1:
 				//         result = call first implementation...
 				//     case 2:
@@ -222,7 +222,7 @@ func (c *Compiler) LowerFuncValues() {
 				// The 0 case, which is actually a nil check.
 				nilBlock := llvm.InsertBasicBlock(nextBlock, "func.nil")
 				c.builder.SetInsertPointAtEnd(nilBlock)
-				c.createRuntimeCall("nilpanic", nil, "")
+				c.createRuntimeCall("nilPanic", nil, "")
 				c.builder.CreateUnreachable()
 				sw.AddCase(llvm.ConstInt(c.uintptrType, 0, false), nilBlock)
 
