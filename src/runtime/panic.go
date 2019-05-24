@@ -49,3 +49,7 @@ func lookupPanic() {
 func slicePanic() {
 	runtimePanic("slice out of range")
 }
+
+func blockingPanic() {
+	runtimePanic("trying to do blocking operation in exported function")
+}

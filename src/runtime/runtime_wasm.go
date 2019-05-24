@@ -37,9 +37,16 @@ func putchar(c byte) {
 	resource_write(stdout, &c, 1)
 }
 
+var handleEvent func()
+
 //go:linkname setEventHandler syscall/js.setEventHandler
 func setEventHandler(fn func()) {
-	// TODO
+	handleEvent = fn
+}
+
+//go:export resume
+func resume() {
+	handleEvent()
 }
 
 //go:export go_scheduler
