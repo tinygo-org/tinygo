@@ -389,7 +389,20 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 			c.builder.SetInsertPointBefore(inst)
 
-			parentHandle := f.LastParam()
+			var parentHandle llvm.Value
+			if f.Linkage() == llvm.ExternalLinkage {
+				// Exported function.
+				// Note that getTaskPromisePtr will panic if it is called with
+				// a nil pointer, so blocking exported functions that try to
+				// return anything will not work.
+				parentHandle = llvm.ConstPointerNull(c.i8ptrType)
+			} else {
+				parentHandle = f.LastParam()
+				if parentHandle.IsNil() || parentHandle.Name() != "parentHandle" {
+					// sanity check
+					panic("trying to make exported function async")
+				}
+			}
 
 			// Store return values.
 			switch inst.OperandsCount() {
@@ -417,7 +430,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			// behavior somehow (with the unreachable instruction).
 			continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
 				llvm.ConstNull(c.ctx.TokenType()),
-				llvm.ConstInt(c.ctx.Int1Type(), 1, false),
+				llvm.ConstInt(c.ctx.Int1Type(), 0, false),
 			}, "ret")
 			sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
 			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), frame.unreachableBlock)
@@ -488,7 +501,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		c.builder.SetInsertPointBefore(deadlockCall)
 		continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
 			llvm.ConstNull(c.ctx.TokenType()),
-			llvm.ConstInt(c.ctx.Int1Type(), 1, false), // final suspend
+			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
 		}, "")
 		c.splitBasicBlock(deadlockCall, llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.wakeup.dead")
 		c.builder.SetInsertPointBefore(deadlockCall)

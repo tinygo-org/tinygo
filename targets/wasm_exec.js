@@ -240,9 +240,9 @@
 					},
 
 					// func valueIndex(v ref, i int) ref
-					//"syscall/js.valueIndex": (sp) => {
-					//	storeValue(sp + 24, Reflect.get(loadValue(sp + 8), getInt64(sp + 16)));
-					//},
+					"syscall/js.valueIndex": (ret_addr, v_addr, i) => {
+						storeValue(ret_addr, Reflect.get(loadValue(v_addr), i));
+					},
 
 					// valueSetIndex(v ref, i int, x ref)
 					//"syscall/js.valueSetIndex": (sp) => {
@@ -291,9 +291,9 @@
 					},
 
 					// func valueLength(v ref) int
-					//"syscall/js.valueLength": (sp) => {
-					//	setInt64(sp + 16, parseInt(loadValue(sp + 8).length));
-					//},
+					"syscall/js.valueLength": (v_addr) => {
+						return loadValue(v_addr).length;
+					},
 
 					// valuePrepareString(v ref) (ref, int)
 					"syscall/js.valuePrepareString": (ret_addr, v_addr) => {
@@ -352,25 +352,23 @@
 			}
 		}
 
-		static _makeCallbackHelper(id, pendingCallbacks, go) {
-			return function () {
-				pendingCallbacks.push({ id: id, args: arguments });
-				go._resolveCallbackPromise();
-			};
+		_resume() {
+			if (this.exited) {
+				throw new Error("Go program has already exited");
+			}
+			this._inst.exports.resume();
+			if (this.exited) {
+				this._resolveExitPromise();
+			}
 		}
 
-		static _makeEventCallbackHelper(preventDefault, stopPropagation, stopImmediatePropagation, fn) {
-			return function (event) {
-				if (preventDefault) {
-					event.preventDefault();
-				}
-				if (stopPropagation) {
-					event.stopPropagation();
-				}
-				if (stopImmediatePropagation) {
-					event.stopImmediatePropagation();
-				}
-				fn(event);
+		_makeFuncWrapper(id) {
+			const go = this;
+			return function () {
+				const event = { id: id, this: this, args: arguments };
+				go._pendingEvent = event;
+				go._resume();
+				return event.result;
 			};
 		}
 	}

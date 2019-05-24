@@ -120,6 +120,9 @@ func setTaskPromisePtr(task *coroutine, value unsafe.Pointer) {
 // getTaskPromisePtr is a helper function to get the current .ptr field from a
 // coroutine promise.
 func getTaskPromisePtr(task *coroutine) unsafe.Pointer {
+	if task == nil {
+		blockingPanic()
+	}
 	return task.promise().ptr
 }
 
