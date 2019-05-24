@@ -505,7 +505,12 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			r[1] = byte(i2c.Bus.DR.Get())
 
 			// wait for stop
-			return i2c.waitForStop()
+			err = i2c.waitForStop()
+
+			//disable pos
+			i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_POS)
+
+			return err
 
 		case 3:
 			// Enable ACK of received data
