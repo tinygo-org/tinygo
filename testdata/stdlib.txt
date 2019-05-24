@@ -2,3 +2,4 @@ stdin:  0
 stdout: 1
 stderr: 2
 pseudorandom number: 1298498081
+strings.IndexByte: 2
