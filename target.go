@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -367,4 +369,27 @@ func getGoroot() string {
 func isGoroot(goroot string) bool {
 	_, err := os.Stat(filepath.Join(goroot, "src", "runtime", "internal", "sys", "zversion.go"))
 	return err == nil
+}
+
+// getGorootVersion returns the major and minor version for a given GOROOT path.
+// If the goroot cannot be determined, (0, 0) is returned.
+func getGorootVersion(goroot string) (major, minor int) {
+	data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION"))
+	if err != nil {
+		return
+	}
+	s := string(data)
+	if s[:2] != "go" {
+		return
+	}
+	parts := strings.Split(s[2:], ".")
+	if len(parts) < 2 {
+		return
+	}
+
+	// Ignore the errors, strconv.Atoi will return 0 on most errors and we
+	// don't really handle errors here anyway.
+	major, _ = strconv.Atoi(parts[0])
+	minor, _ = strconv.Atoi(parts[1])
+	return
 }

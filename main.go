@@ -80,6 +80,17 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	if goroot == "" {
 		return errors.New("cannot locate $GOROOT, please set it manually")
 	}
+	tags := spec.BuildTags
+	major, minor := getGorootVersion(goroot)
+	if major != 1 {
+		if major == 0 {
+			return errors.New("could not read version from GOROOT: " + goroot)
+		}
+		return fmt.Errorf("expected major version 1, got go%d.%d", major, minor)
+	}
+	for i := 1; i <= minor; i++ {
+		tags = append(tags, fmt.Sprintf("go1.%d", i))
+	}
 	compilerConfig := compiler.Config{
 		Triple:        spec.Triple,
 		CPU:           spec.CPU,
@@ -94,7 +105,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		TINYGOROOT:    root,
 		GOROOT:        goroot,
 		GOPATH:        getGopath(),
-		BuildTags:     spec.BuildTags,
+		BuildTags:     tags,
 	}
 	c, err := compiler.NewCompiler(pkgName, compilerConfig)
 	if err != nil {
