@@ -13,6 +13,7 @@
 	],
 	"ldflags": [
 		"--allow-undefined",
+		"--no-threads",
 		"--export-all"
 	],
 	"emulator":      ["node", "targets/wasm_exec.js"]
