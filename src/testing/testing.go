@@ -63,7 +63,7 @@ func TestMain(m *M) {
 	os.Exit(m.Run())
 }
 
-// Fatal is equivalent to Log followed by Fail
+// Error is equivalent to Log followed by Fail
 func (t *T) Error(args ...interface{}) {
 	// This doesn't print the same as in upstream go, but works good enough
 	// TODO: buffer test output like go does
