@@ -18,6 +18,9 @@ func malloc(size uintptr) unsafe.Pointer
 //go:export abort
 func abort()
 
+//go:export exit
+func exit(code int)
+
 //go:export clock_gettime
 func clock_gettime(clk_id uint, ts *timespec)
 
@@ -74,4 +77,9 @@ func monotime() uint64 {
 
 func ticks() timeUnit {
 	return timeUnit(monotime())
+}
+
+//go:linkname syscall_Exit syscall.Exit
+func syscall_Exit(code int) {
+	exit(code)
 }
