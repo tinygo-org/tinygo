@@ -7,6 +7,7 @@ import (
 
 // T is a test helper.
 type T struct {
+	name string
 
 	// flags the test as having failed when non-zero
 	failed int
@@ -30,12 +31,18 @@ type M struct {
 func (m *M) Run() int {
 	failures := 0
 	for _, test := range m.Tests {
-		t := &T{}
+		t := &T{
+			name: test.Name,
+		}
 		test.Func(t)
 
 		failures += t.failed
 	}
 
+	if failures > 0 {
+		fmt.Printf("exit status %d\n", failures)
+		fmt.Println("FAIL")
+	}
 	return failures
 }
 
@@ -44,9 +51,12 @@ func TestMain(m *M) {
 }
 
 // Fatal is equivalent to Log followed by Fail
-func (t *T) Error(args ...string) {
+func (t *T) Error(args ...interface{}) {
 	// This doesn't print the same as in upstream go, but works good enough
-	fmt.Print(args)
+	// TODO: buffer test output like go does
+	fmt.Printf("--- FAIL: %s\n", t.name)
+	fmt.Printf("\t")
+	fmt.Println(args...)
 	t.Fail()
 }
 
