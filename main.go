@@ -365,9 +365,9 @@ func Test(pkgName, target string, config *BuildConfig) error {
 		cmd.Stderr = os.Stderr
 		err := cmd.Run()
 		if err != nil {
-			if err, ok := err.(*exec.ExitError); ok && err.Exited() {
-				// Workaround for QEMU which always exits with an error.
-				return nil
+			// Propagate the exit code
+			if err, ok := err.(*exec.ExitError); ok {
+				os.Exit(err.ExitCode())
 			}
 			return &commandError{"failed to run compiled binary", tmppath, err}
 		}
