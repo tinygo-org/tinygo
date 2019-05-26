@@ -32,23 +32,23 @@ const tinygoPath = "github.com/tinygo-org/tinygo"
 
 // Configure the compiler.
 type Config struct {
-	Triple    string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
-	CPU       string   // LLVM CPU name, e.g. atmega328p (empty string means default)
+	Triple        string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
+	CPU           string   // LLVM CPU name, e.g. atmega328p (empty string means default)
 	Features      []string // LLVM CPU features
-	GOOS      string   //
-	GOARCH    string   //
-	GC        string   // garbage collection strategy
+	GOOS          string   //
+	GOARCH        string   //
+	GC            string   // garbage collection strategy
 	PanicStrategy string   // panic strategy ("abort" or "trap")
-	CFlags    []string // cflags to pass to cgo
-	LDFlags   []string // ldflags to pass to cgo
+	CFlags        []string // cflags to pass to cgo
+	LDFlags       []string // ldflags to pass to cgo
 	ClangHeaders  string   // Clang built-in header include path
-	DumpSSA   bool     // dump Go SSA, for compiler debugging
-	Debug     bool     // add debug symbols for gdb
+	DumpSSA       bool     // dump Go SSA, for compiler debugging
+	Debug         bool     // add debug symbols for gdb
 	GOROOT        string   // GOROOT
 	TINYGOROOT    string   // GOROOT for TinyGo
-	GOPATH    string   // GOPATH, like `go env GOPATH`
-	BuildTags []string // build tags for TinyGo (empty means {Config.GOOS/Config.GOARCH})
-	TestConfig TestConfig
+	GOPATH        string   // GOPATH, like `go env GOPATH`
+	BuildTags     []string // build tags for TinyGo (empty means {Config.GOOS/Config.GOARCH})
+	TestConfig    TestConfig
 }
 
 type TestConfig struct {

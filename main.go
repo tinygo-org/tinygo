@@ -54,7 +54,7 @@ type BuildConfig struct {
 	cFlags        []string
 	ldFlags       []string
 	wasmAbi       string
-	testConfig compiler.TestConfig
+	testConfig    compiler.TestConfig
 }
 
 // Helper function for Compiler object.
@@ -93,23 +93,23 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
 	compilerConfig := compiler.Config{
-		Triple:    spec.Triple,
-		CPU:       spec.CPU,
+		Triple:        spec.Triple,
+		CPU:           spec.CPU,
 		Features:      spec.Features,
-		GOOS:      spec.GOOS,
-		GOARCH:    spec.GOARCH,
-		GC:        config.gc,
+		GOOS:          spec.GOOS,
+		GOARCH:        spec.GOARCH,
+		GC:            config.gc,
 		PanicStrategy: config.panicStrategy,
 		CFlags:        cflags,
 		LDFlags:       ldflags,
 		ClangHeaders:  getClangHeaderPath(root),
-		Debug:     config.debug,
-		DumpSSA:   config.dumpSSA,
+		Debug:         config.debug,
+		DumpSSA:       config.dumpSSA,
 		TINYGOROOT:    root,
 		GOROOT:        goroot,
-		GOPATH:    getGopath(),
+		GOPATH:        getGopath(),
 		BuildTags:     tags,
-		TestConfig: config.testConfig,
+		TestConfig:    config.testConfig,
 	}
 	c, err := compiler.NewCompiler(pkgName, compilerConfig)
 	if err != nil {
