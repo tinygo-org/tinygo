@@ -85,10 +85,9 @@ build/tinygo:
 
 test:
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go test -v -tags byollvm .
-	$(MAKE) tinygo-test
 
-tinygo-test: build/tinygo
-	cd tests/example1 && ../../build/tinygo test
+tinygo-test:
+	cd tests/tinygotest && tinygo test
 
 .PHONY: smoketest smoketest-no-avr
 smoketest: smoketest-no-avr
