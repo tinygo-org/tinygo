@@ -2,6 +2,7 @@ package testing
 
 import (
 	"fmt"
+	"os"
 )
 
 // T is a test helper.
@@ -36,6 +37,10 @@ func (m *M) Run() int {
 	}
 
 	return failures
+}
+
+func TestMain(m *M) {
+	os.Exit(m.Run())
 }
 
 // Fatal is equivalent to Log followed by Fail

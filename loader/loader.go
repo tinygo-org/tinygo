@@ -3,7 +3,6 @@ package loader
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"go/ast"
 	"go/build"
 	"go/parser"
@@ -20,7 +19,7 @@ import (
 
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
-	mainPkg       string
+	mainPkg      string
 	Build        *build.Context
 	OverlayBuild *build.Context
 	OverlayPath  func(path string) string
@@ -211,7 +210,10 @@ func (p *Program) Parse(compileTestBinary bool) error {
 	}
 
 	if compileTestBinary {
-		p.SwapTestMain()
+		err := p.SwapTestMain()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Typecheck all packages.
@@ -256,8 +258,12 @@ func (p *Program) SwapTestMain() error {
 		}
 	}
 
-	// TODO: generate a new main all fancy like, but for now assume that they wrote one
+	// TODO: Check if they defined a TestMain and call it instead of testing.TestMain
 	const mainBody = `package main
+
+import (
+	"testing"
+)
 
 func main () {
 	m := &testing.M{
@@ -267,15 +273,13 @@ func main () {
 {{end}}
 		},
 	}
-	TestMain(m)
+
+	testing.TestMain(m)
 }
 `
 	tmpl := template.Must(template.New("testmain").Parse(mainBody))
 	b := bytes.Buffer{}
 	tmplData := struct {
-		// NOTE: this isn't necessary when we are only testing the main package
-		// but will be needed later when we are testing multiple packages
-		TestPkg       string
 		TestFunctions []string
 	}{
 		TestFunctions: tests,
@@ -285,15 +289,13 @@ func main () {
 	if err != nil {
 		return err
 	}
-	fmt.Println("DEBUG: TEST MAIN CONTENTS")
-	fmt.Println(string(b.Bytes()))
 	path := filepath.Join(p.mainPkg, "$testmain.go")
 
 	if p.fset == nil {
 		p.fset = token.NewFileSet()
 	}
 
-	newMain, err := parser.ParseFile(p.fset, path, b, parser.ParseComments)
+	newMain, err := parser.ParseFile(p.fset, path, b.Bytes(), parser.AllErrors)
 	if err != nil {
 		return err
 	}
