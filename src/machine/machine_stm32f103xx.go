@@ -439,7 +439,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 			// clear timeout here
 			timeout := i2cTimeout
-			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY) {
+			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY) {
 				timeout--
 				if timeout == 0 {
 					return errors.New("I2C timeout on read clear address")
@@ -478,7 +478,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 			// clear address here
 			timeout := i2cTimeout
-			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY) {
+			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY) {
 				timeout--
 				if timeout == 0 {
 					return errors.New("I2C timeout on read clear address")
@@ -524,7 +524,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 			// clear address here
 			timeout := i2cTimeout
-			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY) {
+			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY) {
 				timeout--
 				if timeout == 0 {
 					return errors.New("I2C timeout on read clear address")
@@ -579,7 +579,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 			// clear address here
 			timeout := i2cTimeout
-			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY) {
+			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY) {
 				timeout--
 				if timeout == 0 {
 					return errors.New("I2C timeout on read clear address")
@@ -721,7 +721,7 @@ func (i2c I2C) sendAddress(address uint8, write bool) error {
 		}
 
 		timeout = i2cTimeout
-		for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL|stm32.I2C_SR2_BUSY|stm32.I2C_SR2_TRA) {
+		for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY | stm32.I2C_SR2_TRA) {
 			timeout--
 			if timeout == 0 {
 				return errors.New("I2C timeout on send write address")

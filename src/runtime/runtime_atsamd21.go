@@ -67,13 +67,13 @@ func initClocks() {
 		sam.SYSCTRL_OSC32K_EN1K |
 		sam.SYSCTRL_OSC32K_ENABLE)
 	// Wait for oscillator stabilization
-	for (sam.SYSCTRL.PCLKSR.Get() & sam.SYSCTRL_PCLKSR_OSC32KRDY) == 0 {
+	for !sam.SYSCTRL.PCLKSR.HasBits(sam.SYSCTRL_PCLKSR_OSC32KRDY) {
 	}
 
 	// Software reset the module to ensure it is re-initialized correctly
 	sam.GCLK.CTRL.Set(sam.GCLK_CTRL_SWRST)
 	// Wait for reset to complete
-	for (sam.GCLK.CTRL.Get()&sam.GCLK_CTRL_SWRST) > 0 && (sam.GCLK.STATUS.Get()&sam.GCLK_STATUS_SYNCBUSY) > 0 {
+	for sam.GCLK.CTRL.HasBits(sam.GCLK_CTRL_SWRST) && sam.GCLK.STATUS.HasBits(sam.GCLK_STATUS_SYNCBUSY) {
 	}
 
 	// Put OSC32K as source of Generic Clock Generator 1
@@ -96,7 +96,7 @@ func initClocks() {
 	// Remove the OnDemand mode, Bug http://avr32.icgroup.norway.atmel.com/bugzilla/show_bug.cgi?id=9905
 	sam.SYSCTRL.DFLLCTRL.Set(sam.SYSCTRL_DFLLCTRL_ENABLE)
 	// Wait for ready
-	for (sam.SYSCTRL.PCLKSR.Get() & sam.SYSCTRL_PCLKSR_DFLLRDY) == 0 {
+	for !sam.SYSCTRL.PCLKSR.HasBits(sam.SYSCTRL_PCLKSR_DFLLRDY) {
 	}
 
 	// Handle DFLL calibration based on info learned from Arduino SAMD implementation,
@@ -130,13 +130,13 @@ func initClocks() {
 		sam.SYSCTRL_DFLLCTRL_USBCRM |
 		sam.SYSCTRL_DFLLCTRL_BPLCKC)
 	// Wait for ready
-	for (sam.SYSCTRL.PCLKSR.Get() & sam.SYSCTRL_PCLKSR_DFLLRDY) == 0 {
+	for !sam.SYSCTRL.PCLKSR.HasBits(sam.SYSCTRL_PCLKSR_DFLLRDY) {
 	}
 
 	// Re-enable the DFLL
 	sam.SYSCTRL.DFLLCTRL.SetBits(sam.SYSCTRL_DFLLCTRL_ENABLE)
 	// Wait for ready
-	for (sam.SYSCTRL.PCLKSR.Get() & sam.SYSCTRL_PCLKSR_DFLLRDY) == 0 {
+	for !sam.SYSCTRL.PCLKSR.HasBits(sam.SYSCTRL_PCLKSR_DFLLRDY) {
 	}
 
 	// Switch Generic Clock Generator 0 to DFLL48M. CPU will run at 48MHz.
@@ -154,7 +154,7 @@ func initClocks() {
 	sam.SYSCTRL.OSC8M.SetBits(sam.SYSCTRL_OSC8M_PRESC_0 << sam.SYSCTRL_OSC8M_PRESC_Pos)
 	sam.SYSCTRL.OSC8M.ClearBits(1 << sam.SYSCTRL_OSC8M_ONDEMAND_Pos)
 	// Wait for oscillator stabilization
-	for (sam.SYSCTRL.PCLKSR.Get() & sam.SYSCTRL_PCLKSR_OSC8MRDY) == 0 {
+	for !sam.SYSCTRL.PCLKSR.HasBits(sam.SYSCTRL_PCLKSR_OSC8MRDY) {
 	}
 
 	// Use OSC8M as source for Generic Clock Generator 3
@@ -218,7 +218,7 @@ func initRTC() {
 }
 
 func waitForSync() {
-	for (sam.GCLK.STATUS.Get() & sam.GCLK_STATUS_SYNCBUSY) > 0 {
+	for sam.GCLK.STATUS.HasBits(sam.GCLK_STATUS_SYNCBUSY) {
 	}
 }
 
