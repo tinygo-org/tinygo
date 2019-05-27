@@ -165,7 +165,7 @@ func (i2c I2C) start(address uint8, write bool) {
 	avr.TWCR.Set((avr.TWCR_TWINT | avr.TWCR_TWSTA | avr.TWCR_TWEN))
 
 	// Wait till start condition is transmitted.
-	for (avr.TWCR.Get() & avr.TWCR_TWINT) == 0 {
+	for !avr.TWCR.HasBits(avr.TWCR_TWINT) {
 	}
 
 	// Write 7-bit shifted peripheral address.
@@ -182,7 +182,7 @@ func (i2c I2C) stop() {
 	avr.TWCR.Set(avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWSTO)
 
 	// Wait for stop condition to be executed on bus.
-	for (avr.TWCR.Get() & avr.TWCR_TWSTO) == 0 {
+	for !avr.TWCR.HasBits(avr.TWCR_TWSTO) {
 	}
 }
 
@@ -195,7 +195,7 @@ func (i2c I2C) writeByte(data byte) {
 	avr.TWCR.Set(avr.TWCR_TWEN | avr.TWCR_TWINT)
 
 	// Wait till data is transmitted.
-	for (avr.TWCR.Get() & avr.TWCR_TWINT) == 0 {
+	for !avr.TWCR.HasBits(avr.TWCR_TWINT) {
 	}
 }
 
@@ -205,7 +205,7 @@ func (i2c I2C) readByte() byte {
 	avr.TWCR.Set(avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWEA)
 
 	// Wait till read request is transmitted.
-	for (avr.TWCR.Get() & avr.TWCR_TWINT) == 0 {
+	for !avr.TWCR.HasBits(avr.TWCR_TWINT) {
 	}
 
 	return byte(avr.TWDR.Get())
@@ -239,7 +239,7 @@ func (uart UART) Configure(config UARTConfig) {
 // WriteByte writes a byte of data to the UART.
 func (uart UART) WriteByte(c byte) error {
 	// Wait until UART buffer is not busy.
-	for (avr.UCSR0A.Get() & avr.UCSR0A_UDRE0) == 0 {
+	for !avr.UCSR0A.HasBits(avr.UCSR0A_UDRE0) {
 	}
 	avr.UDR0.Set(c) // send char
 	return nil
@@ -251,7 +251,7 @@ func handleUSART_RX() {
 	data := avr.UDR0.Get()
 
 	// Ensure no error.
-	if (avr.UCSR0A.Get() & (avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0)) == 0 {
+	if !avr.UCSR0A.HasBits(avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0) {
 		// Put data from UDR register into buffer.
 		UART0.Receive(byte(data))
 	}

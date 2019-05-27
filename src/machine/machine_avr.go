@@ -74,7 +74,7 @@ func (a ADC) Get() uint16 {
 	avr.ADCSRA.SetBits(avr.ADCSRA_ADSC)
 
 	// ADSC is cleared when the conversion finishes
-	for ok := true; ok; ok = (avr.ADCSRA.Get() & avr.ADCSRA_ADSC) > 0 {
+	for ok := true; ok; ok = avr.ADCSRA.HasBits(avr.ADCSRA_ADSC) {
 	}
 
 	return uint16(avr.ADCL.Get()) | uint16(avr.ADCH.Get())<<8
