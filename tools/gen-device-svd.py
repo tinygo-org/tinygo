@@ -349,6 +349,16 @@ func (r *Register8) ClearBits(value uint8) {{
 	volatile.StoreUint8(&r.Reg, volatile.LoadUint8(&r.Reg) &^ value)
 }}
 
+// HasBits reads the register and then checks to see if the passed bits are set. It
+// is the volatile equivalent of:
+//
+//     (*r.Reg & value) > 0
+//
+//go:inline
+func (r *Register8) HasBits(value uint8) bool {{
+	return (r.Get() & value) > 0
+}}
+
 type Register16 struct {{
 	Reg uint16
 }}
@@ -391,6 +401,16 @@ func (r *Register16) ClearBits(value uint16) {{
 	volatile.StoreUint16(&r.Reg, volatile.LoadUint16(&r.Reg) &^ value)
 }}
 
+// HasBits reads the register and then checks to see if the passed bits are set. It
+// is the volatile equivalent of:
+//
+//     (*r.Reg & value) > 0
+//
+//go:inline
+func (r *Register16) HasBits(value uint16) bool {{
+	return (r.Get() & value) > 0
+}}
+
 type Register32 struct {{
 	Reg uint32
 }}
@@ -431,6 +451,16 @@ func (r *Register32) SetBits(value uint32) {{
 //go:inline
 func (r *Register32) ClearBits(value uint32) {{
 	volatile.StoreUint32(&r.Reg, volatile.LoadUint32(&r.Reg) &^ value)
+}}
+
+// HasBits reads the register and then checks to see if the passed bits are set. It
+// is the volatile equivalent of:
+//
+//     (*r.Reg & value) > 0
+//
+//go:inline
+func (r *Register32) HasBits(value uint32) bool {{
+	return (r.Get() & value) > 0
 }}
 
 // Some information about this device.
