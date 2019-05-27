@@ -201,7 +201,7 @@ func (a ADC) Get() uint16 {
 	waitADCSync()
 
 	// Waiting for conversion to complete
-	for (sam.ADC.INTFLAG.Get() & sam.ADC_INTFLAG_RESRDY) == 0 {
+	for !sam.ADC.INTFLAG.HasBits(sam.ADC_INTFLAG_RESRDY) {
 	}
 	val := sam.ADC.RESULT.Get()
 
@@ -242,7 +242,7 @@ func (a ADC) getADCChannel() uint8 {
 }
 
 func waitADCSync() {
-	for (sam.ADC.STATUS.Get() & sam.ADC_STATUS_SYNCBUSY) > 0 {
+	for sam.ADC.STATUS.HasBits(sam.ADC_STATUS_SYNCBUSY) {
 	}
 }
 
@@ -325,8 +325,8 @@ func (uart UART) Configure(config UARTConfig) {
 
 	// reset SERCOM0
 	uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_CTRLA_SWRST)
-	for (uart.Bus.CTRLA.Get()&sam.SERCOM_USART_CTRLA_SWRST) > 0 ||
-		(uart.Bus.SYNCBUSY.Get()&sam.SERCOM_USART_SYNCBUSY_SWRST) > 0 {
+	for uart.Bus.CTRLA.HasBits(sam.SERCOM_USART_CTRLA_SWRST) ||
+		uart.Bus.SYNCBUSY.HasBits(sam.SERCOM_USART_SYNCBUSY_SWRST) {
 	}
 
 	// set UART mode/sample rate
@@ -365,7 +365,7 @@ func (uart UART) Configure(config UARTConfig) {
 	// Enable USART1 port.
 	// sercom->USART.CTRLA.bit.ENABLE = 0x1u;
 	uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_CTRLA_ENABLE)
-	for (uart.Bus.SYNCBUSY.Get() & sam.SERCOM_USART_SYNCBUSY_ENABLE) > 0 {
+	for uart.Bus.SYNCBUSY.HasBits(sam.SERCOM_USART_SYNCBUSY_ENABLE) {
 	}
 
 	// setup interrupt on receive
@@ -398,7 +398,7 @@ func (uart UART) SetBaudRate(br uint32) {
 // WriteByte writes a byte of data to the UART.
 func (uart UART) WriteByte(c byte) error {
 	// wait until ready to receive
-	for (uart.Bus.INTFLAG.Get() & sam.SERCOM_USART_INTFLAG_DRE) == 0 {
+	for !uart.Bus.INTFLAG.HasBits(sam.SERCOM_USART_INTFLAG_DRE) {
 	}
 	uart.Bus.DATA.Set(uint16(c))
 	return nil
@@ -454,8 +454,8 @@ func (i2c I2C) Configure(config I2CConfig) {
 
 	// reset SERCOM
 	i2c.Bus.CTRLA.SetBits(sam.SERCOM_I2CM_CTRLA_SWRST)
-	for (i2c.Bus.CTRLA.Get()&sam.SERCOM_I2CM_CTRLA_SWRST) > 0 ||
-		(i2c.Bus.SYNCBUSY.Get()&sam.SERCOM_I2CM_SYNCBUSY_SWRST) > 0 {
+	for i2c.Bus.CTRLA.HasBits(sam.SERCOM_I2CM_CTRLA_SWRST) ||
+		i2c.Bus.SYNCBUSY.HasBits(sam.SERCOM_I2CM_SYNCBUSY_SWRST) {
 	}
 
 	// Set i2c master mode
@@ -467,12 +467,12 @@ func (i2c I2C) Configure(config I2CConfig) {
 	// Enable I2CM port.
 	// sercom->USART.CTRLA.bit.ENABLE = 0x1u;
 	i2c.Bus.CTRLA.SetBits(sam.SERCOM_I2CM_CTRLA_ENABLE)
-	for (i2c.Bus.SYNCBUSY.Get() & sam.SERCOM_I2CM_SYNCBUSY_ENABLE) > 0 {
+	for i2c.Bus.SYNCBUSY.HasBits(sam.SERCOM_I2CM_SYNCBUSY_ENABLE) {
 	}
 
 	// set bus idle mode
 	i2c.Bus.STATUS.SetBits(wireIdleState << sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)
-	for (i2c.Bus.SYNCBUSY.Get() & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
+	for i2c.Bus.SYNCBUSY.HasBits(sam.SERCOM_I2CM_SYNCBUSY_SYSOP) {
 	}
 
 	// enable pins
@@ -499,7 +499,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 		// wait until transmission complete
 		timeout := i2cTimeout
-		for (i2c.Bus.INTFLAG.Get() & sam.SERCOM_I2CM_INTFLAG_MB) == 0 {
+		for !i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_MB) {
 			timeout--
 			if timeout == 0 {
 				return errors.New("I2C timeout on ready to write data")
@@ -507,7 +507,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		}
 
 		// ACK received (0: ACK, 1: NACK)
-		if (i2c.Bus.STATUS.Get() & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
+		if i2c.Bus.STATUS.HasBits(sam.SERCOM_I2CM_STATUS_RXNACK) {
 			return errors.New("I2C write error: expected ACK not NACK")
 		}
 
@@ -529,17 +529,17 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		i2c.sendAddress(addr, false)
 
 		// wait transmission complete
-		for (i2c.Bus.INTFLAG.Get() & sam.SERCOM_I2CM_INTFLAG_SB) == 0 {
+		for !i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_SB) {
 			// If the slave NACKS the address, the MB bit will be set.
 			// In that case, send a stop condition and return error.
-			if (i2c.Bus.INTFLAG.Get() & sam.SERCOM_I2CM_INTFLAG_MB) > 0 {
+			if i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_MB) {
 				i2c.Bus.CTRLB.SetBits(wireCmdStop << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop condition
 				return errors.New("I2C read error: expected ACK not NACK")
 			}
 		}
 
 		// ACK received (0: ACK, 1: NACK)
-		if (i2c.Bus.STATUS.Get() & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
+		if i2c.Bus.STATUS.HasBits(sam.SERCOM_I2CM_STATUS_RXNACK) {
 			return errors.New("I2C read error: expected ACK not NACK")
 		}
 
@@ -574,9 +574,9 @@ func (i2c I2C) WriteByte(data byte) error {
 
 	// wait until transmission successful
 	timeout := i2cTimeout
-	for (i2c.Bus.INTFLAG.Get() & sam.SERCOM_I2CM_INTFLAG_MB) == 0 {
+	for !i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_MB) {
 		// check for bus error
-		if (sam.SERCOM3_I2CM.STATUS.Get() & sam.SERCOM_I2CM_STATUS_BUSERR) > 0 {
+		if sam.SERCOM3_I2CM.STATUS.HasBits(sam.SERCOM_I2CM_STATUS_BUSERR) {
 			return errors.New("I2C bus error")
 		}
 		timeout--
@@ -585,7 +585,7 @@ func (i2c I2C) WriteByte(data byte) error {
 		}
 	}
 
-	if (i2c.Bus.STATUS.Get() & sam.SERCOM_I2CM_STATUS_RXNACK) > 0 {
+	if i2c.Bus.STATUS.HasBits(sam.SERCOM_I2CM_STATUS_RXNACK) {
 		return errors.New("I2C write error: expected ACK not NACK")
 	}
 
@@ -601,8 +601,8 @@ func (i2c I2C) sendAddress(address uint16, write bool) error {
 
 	// wait until bus ready
 	timeout := i2cTimeout
-	for (i2c.Bus.STATUS.Get()&(wireIdleState<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)) == 0 &&
-		(i2c.Bus.STATUS.Get()&(wireOwnerState<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos)) == 0 {
+	for !i2c.Bus.STATUS.HasBits(wireIdleState<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos) &&
+		!i2c.Bus.STATUS.HasBits(wireOwnerState<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos) {
 		timeout--
 		if timeout == 0 {
 			return errors.New("I2C timeout on bus ready")
@@ -616,7 +616,7 @@ func (i2c I2C) sendAddress(address uint16, write bool) error {
 func (i2c I2C) signalStop() error {
 	i2c.Bus.CTRLB.SetBits(wireCmdStop << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop command
 	timeout := i2cTimeout
-	for (i2c.Bus.SYNCBUSY.Get() & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
+	for i2c.Bus.SYNCBUSY.HasBits(sam.SERCOM_I2CM_SYNCBUSY_SYSOP) {
 		timeout--
 		if timeout == 0 {
 			return errors.New("I2C timeout on signal stop")
@@ -628,7 +628,7 @@ func (i2c I2C) signalStop() error {
 func (i2c I2C) signalRead() error {
 	i2c.Bus.CTRLB.SetBits(wireCmdRead << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Read command
 	timeout := i2cTimeout
-	for (i2c.Bus.SYNCBUSY.Get() & sam.SERCOM_I2CM_SYNCBUSY_SYSOP) > 0 {
+	for i2c.Bus.SYNCBUSY.HasBits(sam.SERCOM_I2CM_SYNCBUSY_SYSOP) {
 		timeout--
 		if timeout == 0 {
 			return errors.New("I2C timeout on signal read")
@@ -638,7 +638,7 @@ func (i2c I2C) signalRead() error {
 }
 
 func (i2c I2C) readByte() byte {
-	for (i2c.Bus.INTFLAG.Get() & sam.SERCOM_I2CM_INTFLAG_SB) == 0 {
+	for !i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_SB) {
 	}
 	return byte(i2c.Bus.DATA.Get())
 }
@@ -697,11 +697,11 @@ func (i2s I2S) Configure(config I2SConfig) {
 
 	// reset the device
 	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_SWRST)
-	for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_SWRST) > 0 {
+	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_SWRST) {
 	}
 
 	// disable device before continuing
-	for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_ENABLE) > 0 {
+	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_ENABLE) {
 	}
 	i2s.Bus.CTRLA.ClearBits(sam.I2S_CTRLA_ENABLE)
 
@@ -797,17 +797,17 @@ func (i2s I2S) Configure(config I2SConfig) {
 
 	// re-enable
 	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_ENABLE)
-	for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_ENABLE) > 0 {
+	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_ENABLE) {
 	}
 
 	// enable i2s clock
 	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_CKEN0)
-	for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_CKEN0) > 0 {
+	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_CKEN0) {
 	}
 
 	// enable i2s serializer
 	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_SEREN1)
-	for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_SEREN1) > 0 {
+	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_SEREN1) {
 	}
 }
 
@@ -817,10 +817,10 @@ func (i2s I2S) Read(p []uint32) (n int, err error) {
 	i := 0
 	for i = 0; i < len(p); i++ {
 		// Wait until ready
-		for (i2s.Bus.INTFLAG.Get() & sam.I2S_INTFLAG_RXRDY1) == 0 {
+		for !i2s.Bus.INTFLAG.HasBits(sam.I2S_INTFLAG_RXRDY1) {
 		}
 
-		for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_DATA1) > 0 {
+		for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_DATA1) {
 		}
 
 		// read data
@@ -839,10 +839,10 @@ func (i2s I2S) Write(p []uint32) (n int, err error) {
 	i := 0
 	for i = 0; i < len(p); i++ {
 		// Wait until ready
-		for (i2s.Bus.INTFLAG.Get() & sam.I2S_INTFLAG_TXRDY1) == 0 {
+		for !i2s.Bus.INTFLAG.HasBits(sam.I2S_INTFLAG_TXRDY1) {
 		}
 
-		for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_DATA1) > 0 {
+		for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_DATA1) {
 		}
 
 		// write data
@@ -858,7 +858,7 @@ func (i2s I2S) Write(p []uint32) (n int, err error) {
 // Close the I2S bus.
 func (i2s I2S) Close() error {
 	// Sync wait
-	for (i2s.Bus.SYNCBUSY.Get() & sam.I2S_SYNCBUSY_ENABLE) > 0 {
+	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_ENABLE) {
 	}
 
 	// disable I2S
@@ -868,7 +868,7 @@ func (i2s I2S) Close() error {
 }
 
 func waitForSync() {
-	for (sam.GCLK.STATUS.Get() & sam.GCLK_STATUS_SYNCBUSY) > 0 {
+	for sam.GCLK.STATUS.HasBits(sam.GCLK_STATUS_SYNCBUSY) {
 	}
 }
 
@@ -903,7 +903,7 @@ func (spi SPI) Configure(config SPIConfig) {
 
 	// Disable SPI port.
 	spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPI_CTRLA_ENABLE)
-	for (spi.Bus.SYNCBUSY.Get() & sam.SERCOM_SPI_SYNCBUSY_ENABLE) > 0 {
+	for spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPI_SYNCBUSY_ENABLE) {
 	}
 
 	// enable pins
@@ -913,8 +913,8 @@ func (spi SPI) Configure(config SPIConfig) {
 
 	// reset SERCOM
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_SWRST)
-	for (spi.Bus.CTRLA.Get()&sam.SERCOM_SPI_CTRLA_SWRST) > 0 ||
-		(spi.Bus.SYNCBUSY.Get()&sam.SERCOM_SPI_SYNCBUSY_SWRST) > 0 {
+	for spi.Bus.CTRLA.HasBits(sam.SERCOM_SPI_CTRLA_SWRST) ||
+		spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPI_SYNCBUSY_SWRST) {
 	}
 
 	// set bit transfer order
@@ -932,7 +932,7 @@ func (spi SPI) Configure(config SPIConfig) {
 	spi.Bus.CTRLB.SetBits((0 << sam.SERCOM_SPI_CTRLB_CHSIZE_Pos) | // 8bit char size
 		sam.SERCOM_SPI_CTRLB_RXEN) // receive enable
 
-	for (spi.Bus.SYNCBUSY.Get() & sam.SERCOM_SPI_SYNCBUSY_CTRLB) > 0 {
+	for spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPI_SYNCBUSY_CTRLB) {
 	}
 
 	// set mode
@@ -959,7 +959,7 @@ func (spi SPI) Configure(config SPIConfig) {
 
 	// Enable SPI port.
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_ENABLE)
-	for (spi.Bus.SYNCBUSY.Get() & sam.SERCOM_SPI_SYNCBUSY_ENABLE) > 0 {
+	for spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPI_SYNCBUSY_ENABLE) {
 	}
 }
 
@@ -969,7 +969,7 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	spi.Bus.DATA.Set(uint32(w))
 
 	// wait for receive
-	for (spi.Bus.INTFLAG.Get() & sam.SERCOM_SPI_INTFLAG_RXC) == 0 {
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_RXC) {
 	}
 
 	// return data
@@ -988,14 +988,14 @@ func InitPWM() {
 	sam.GCLK.CLKCTRL.Set((sam.GCLK_CLKCTRL_ID_TCC0_TCC1 << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
-	for (sam.GCLK.STATUS.Get() & sam.GCLK_STATUS_SYNCBUSY) > 0 {
+	for sam.GCLK.STATUS.HasBits(sam.GCLK_STATUS_SYNCBUSY) {
 	}
 
 	// Use GCLK0 for TCC2/TC3
 	sam.GCLK.CLKCTRL.Set((sam.GCLK_CLKCTRL_ID_TCC2_TC3 << sam.GCLK_CLKCTRL_ID_Pos) |
 		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
 		sam.GCLK_CLKCTRL_CLKEN)
-	for (sam.GCLK.STATUS.Get() & sam.GCLK_STATUS_SYNCBUSY) > 0 {
+	for sam.GCLK.STATUS.HasBits(sam.GCLK_STATUS_SYNCBUSY) {
 	}
 }
 
@@ -1007,20 +1007,20 @@ func (pwm PWM) Configure() {
 	// disable timer
 	timer.CTRLA.ClearBits(sam.TCC_CTRLA_ENABLE)
 	// Wait for synchronization
-	for (timer.SYNCBUSY.Get() & sam.TCC_SYNCBUSY_ENABLE) > 0 {
+	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_ENABLE) {
 	}
 
 	// Use "Normal PWM" (single-slope PWM)
 	timer.WAVE.SetBits(sam.TCC_WAVE_WAVEGEN_NPWM)
 	// Wait for synchronization
-	for (timer.SYNCBUSY.Get() & sam.TCC_SYNCBUSY_WAVE) > 0 {
+	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_WAVE) {
 	}
 
 	// Set the period (the number to count to (TOP) before resetting timer)
 	//TCC0->PER.reg = period;
 	timer.PER.Set(period)
 	// Wait for synchronization
-	for (timer.SYNCBUSY.Get() & sam.TCC_SYNCBUSY_PER) > 0 {
+	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_PER) {
 	}
 
 	// Set pin as output
@@ -1060,23 +1060,23 @@ func (pwm PWM) Set(value uint16) {
 	timer.CTRLA.ClearBits(sam.TCC_CTRLA_ENABLE)
 
 	// Wait for synchronization
-	for (timer.SYNCBUSY.Get() & sam.TCC_SYNCBUSY_ENABLE) > 0 {
+	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_ENABLE) {
 	}
 
 	// Set PWM signal to output duty cycle
 	pwm.setChannel(uint32(value))
 
 	// Wait for synchronization on all channels
-	for (timer.SYNCBUSY.Get() & (sam.TCC_SYNCBUSY_CC0 |
+	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_CC0 |
 		sam.TCC_SYNCBUSY_CC1 |
 		sam.TCC_SYNCBUSY_CC2 |
-		sam.TCC_SYNCBUSY_CC3)) > 0 {
+		sam.TCC_SYNCBUSY_CC3) {
 	}
 
 	// enable
 	timer.CTRLA.SetBits(sam.TCC_CTRLA_ENABLE)
 	// Wait for synchronization
-	for (timer.SYNCBUSY.Get() & sam.TCC_SYNCBUSY_ENABLE) > 0 {
+	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_ENABLE) {
 	}
 }
 
@@ -1233,8 +1233,8 @@ var (
 func (usbcdc USBCDC) Configure(config UARTConfig) {
 	// reset USB interface
 	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_SWRST)
-	for (sam.USB_DEVICE.SYNCBUSY.Get()&sam.USB_DEVICE_SYNCBUSY_SWRST) > 0 ||
-		(sam.USB_DEVICE.SYNCBUSY.Get()&sam.USB_DEVICE_SYNCBUSY_ENABLE) > 0 {
+	for sam.USB_DEVICE.SYNCBUSY.HasBits(sam.USB_DEVICE_SYNCBUSY_SWRST) ||
+		sam.USB_DEVICE.SYNCBUSY.HasBits(sam.USB_DEVICE_SYNCBUSY_ENABLE) {
 	}
 
 	sam.USB_DEVICE.DESCADD.Set(uint32(uintptr(unsafe.Pointer(&usbEndpointDescriptors))))
