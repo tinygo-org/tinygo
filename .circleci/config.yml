@@ -40,23 +40,16 @@ commands:
             sudo tar -C /usr/local -xf node-v10.15.1-linux-x64.tar.xz
             sudo ln -s /usr/local/node-v10.15.1-linux-x64/bin/node /usr/bin/node
             rm node-v10.15.1-linux-x64.tar.xz
-  dep:
-    steps:
-      - run:
-          name: "Install Go dependencies"
-          command: |
-            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-            dep ensure --vendor-only
   llvm-source-linux:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-8-v2
+            - llvm-source-8-v3
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-8-v2
+          key: llvm-source-8-v3
           paths:
             - llvm
   smoketest:
@@ -66,21 +59,17 @@ commands:
     steps:
       - run: make smoketest-no-avr
   test-linux:
-    parameters:
-      llvm:
-        type: string
     steps:
       - checkout
       - submodules
       - apt-dependencies:
-          llvm: <<parameters.llvm>>
+          llvm: "-8"
       - install-node
       - restore_cache:
           keys:
             - go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
             - go-cache-{{ checksum "Gopkg.lock" }}
       - llvm-source-linux
-      - dep
       - run: go install .
       - run: go test -v
       - run: make gen-device -j4
@@ -117,7 +106,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-8-linux-v4
+            - llvm-build-8-linux-v5
       - run:
           name: "Build LLVM"
           command: |
@@ -135,7 +124,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-8-linux-v4
+          key: llvm-build-8-linux-v5
           paths:
             llvm-build
       - run:
@@ -144,7 +133,6 @@ commands:
             ln -s $PWD/llvm-build/bin/clang-8 /go/bin/clang-8
             ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-8
             ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-8
-      - dep
       - run:
           name: "Test TinyGo"
           command: make test
@@ -175,20 +163,20 @@ commands:
       - run:
           name: "Install dependencies"
           command: |
-            HOMEBREW_NO_AUTO_UPDATE=1 brew install go dep qemu
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install go qemu
       - restore_cache:
           keys:
-            - llvm-source-8-macos-v2
+            - llvm-source-8-macos-v3
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-8-macos-v2
+          key: llvm-source-8-macos-v3
           paths:
             - llvm
       - restore_cache:
           keys:
-            - llvm-build-8-macos-v3
+            - llvm-build-8-macos-v4
       - run:
           name: "Build LLVM"
           command: |
@@ -200,16 +188,13 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-8-macos-v3
+          key: llvm-build-8-macos-v4
           paths:
             llvm-build
       - run:
           name: "Create LLVM symlinks"
           command: |
             ln -s $PWD/llvm-build/bin/clang-8 /usr/local/bin/clang-8
-      - run:
-          name: "Install Go dependencies"
-          command: dep ensure --vendor-only
       - run:
           name: "Test TinyGo"
           command: make test
@@ -234,27 +219,21 @@ jobs:
   test-llvm8-go111:
     docker:
       - image: circleci/golang:1.11
-    working_directory: /go/src/github.com/tinygo-org/tinygo
     steps:
-      - test-linux:
-          llvm: "-8"
+      - test-linux
   test-llvm8-go112:
     docker:
       - image: circleci/golang:1.12
-    working_directory: /go/src/github.com/tinygo-org/tinygo
     steps:
-      - test-linux:
-          llvm: "-8"
+      - test-linux
   build-linux:
     docker:
       - image: circleci/golang:1.12
-    working_directory: /go/src/github.com/tinygo-org/tinygo
     steps:
       - build-linux
   build-macos:
     macos:
       xcode: "10.1.0"
-    working_directory: ~/go/src/github.com/tinygo-org/tinygo
     steps:
       - build-macos
 
