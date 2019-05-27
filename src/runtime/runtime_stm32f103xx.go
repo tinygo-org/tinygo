@@ -27,13 +27,13 @@ func initCLK() {
 	stm32.RCC.CR.SetBits(stm32.RCC_CR_HSEON)              // enable HSE clock
 
 	// wait for the HSEREADY flag
-	for (stm32.RCC.CR.Get() & stm32.RCC_CR_HSERDY) == 0 {
+	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_HSERDY) {
 	}
 
 	stm32.RCC.CR.SetBits(stm32.RCC_CR_HSION) // enable HSI clock
 
 	// wait for the HSIREADY flag
-	for (stm32.RCC.CR.Get() & stm32.RCC_CR_HSIRDY) == 0 {
+	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_HSIRDY) {
 	}
 
 	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PLLSRC)   // set PLL source to HSE
@@ -41,13 +41,13 @@ func initCLK() {
 	stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)        // enable the PLL
 
 	// wait for the PLLRDY flag
-	for (stm32.RCC.CR.Get() & stm32.RCC_CR_PLLRDY) == 0 {
+	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_PLLRDY) {
 	}
 
 	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_SW_PLL) // set clock source to pll
 
 	// wait for PLL to be CLK
-	for (stm32.RCC.CFGR.Get() & stm32.RCC_CFGR_SWS_PLL) == 0 {
+	for !stm32.RCC.CFGR.HasBits(stm32.RCC_CFGR_SWS_PLL) {
 	}
 }
 
@@ -74,7 +74,7 @@ func initRTC() {
 	stm32.RCC.BDCR.SetBits(stm32.RCC_BDCR_LSEON)
 
 	// wait until LSE is ready
-	for stm32.RCC.BDCR.Get()&stm32.RCC_BDCR_LSERDY == 0 {
+	for !stm32.RCC.BDCR.HasBits(stm32.RCC_BDCR_LSERDY) {
 	}
 
 	// Select LSE
@@ -95,7 +95,7 @@ func initRTC() {
 	stm32.RTC.CRL.ClearBits(stm32.RTC_CRL_RSF)
 
 	// Wait till flag is set
-	for stm32.RTC.CRL.Get()&stm32.RTC_CRL_RSF == 0 {
+	for !stm32.RTC.CRL.HasBits(stm32.RTC_CRL_RSF) {
 	}
 }
 
@@ -184,7 +184,7 @@ func timerSleep(ticks uint32) {
 
 //go:export TIM3_IRQHandler
 func handleTIM3() {
-	if (stm32.TIM3.SR.Get() & stm32.TIM_SR_UIF) > 0 {
+	if stm32.TIM3.SR.HasBits(stm32.TIM_SR_UIF) {
 		// Disable the timer.
 		stm32.TIM3.CR1.ClearBits(stm32.TIM_CR1_CEN)
 

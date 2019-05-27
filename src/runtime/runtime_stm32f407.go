@@ -43,7 +43,7 @@ func initCLK() {
 	// Reset clock registers
 	// Set HSION
 	stm32.RCC.CR.SetBits(stm32.RCC_CR_HSION)
-	for (stm32.RCC.CR.Get() & stm32.RCC_CR_HSIRDY) == 0 {
+	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_HSIRDY) {
 	}
 
 	// Reset CFGR
@@ -66,11 +66,11 @@ func initCLK() {
 	// Wait till HSE is ready and if timeout is reached exit
 	for {
 		startupCounter++
-		if (stm32.RCC.CR.Get()&stm32.RCC_CR_HSERDY != 0) || (startupCounter == HSE_STARTUP_TIMEOUT) {
+		if stm32.RCC.CR.HasBits(stm32.RCC_CR_HSERDY) || (startupCounter == HSE_STARTUP_TIMEOUT) {
 			break
 		}
 	}
-	if (stm32.RCC.CR.Get() & stm32.RCC_CR_HSERDY) != 0 {
+	if stm32.RCC.CR.HasBits(stm32.RCC_CR_HSERDY) {
 		// Enable high performance mode, System frequency up to 168MHz
 		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_PWREN)
 		stm32.PWR.CR.SetBits(0x4000) // PWR_CR_VOS
@@ -187,7 +187,7 @@ func timerSleep(ticks uint32) {
 
 //go:export TIM3_IRQHandler
 func handleTIM3() {
-	if (stm32.TIM3.SR.Get() & stm32.TIM_SR_UIF) > 0 {
+	if stm32.TIM3.SR.HasBits(stm32.TIM_SR_UIF) {
 		// Disable the timer.
 		stm32.TIM3.CR1.ClearBits(stm32.TIM_CR1_CEN)
 
@@ -201,7 +201,7 @@ func handleTIM3() {
 
 //go:export TIM7_IRQHandler
 func handleTIM7() {
-	if (stm32.TIM7.SR.Get() & stm32.TIM_SR_UIF) > 0 {
+	if stm32.TIM7.SR.HasBits(stm32.TIM_SR_UIF) {
 		// clear the update flag
 		stm32.TIM7.SR.ClearBits(stm32.TIM_SR_UIF)
 		tickCount++
