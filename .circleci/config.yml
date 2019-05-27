@@ -163,7 +163,10 @@ commands:
       - run:
           name: "Install dependencies"
           command: |
-            HOMEBREW_NO_AUTO_UPDATE=1 brew install go qemu
+            curl https://dl.google.com/go/go1.12.5.darwin-amd64.tar.gz -o go1.12.5.darwin-amd64.tar.gz
+            sudo tar -C /usr/local -xzf go1.12.5.darwin-amd64.tar.gz
+            ln -s /usr/local/go/bin/go /usr/local/bin/go
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
       - restore_cache:
           keys:
             - llvm-source-8-macos-v3
