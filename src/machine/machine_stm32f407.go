@@ -209,7 +209,7 @@ func (uart UART) Configure(config UARTConfig) {
 func (uart UART) WriteByte(c byte) error {
 	stm32.USART2.DR.Set(uint32(c))
 
-	for (stm32.USART2.SR.Get() & stm32.USART_SR_TXE) == 0 {
+	for !stm32.USART2.SR.HasBits(stm32.USART_SR_TXE) {
 	}
 	return nil
 }
