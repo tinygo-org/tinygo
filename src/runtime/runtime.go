@@ -10,7 +10,7 @@ const Compiler = "tinygo"
 // package.
 func initAll()
 
-// A function call to this function is replaced withone of the following,
+// A function call to this function is replaced with one of the following,
 // depending on whether the scheduler is necessary:
 //
 // Without scheduler:
