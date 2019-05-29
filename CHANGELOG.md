@@ -1,3 +1,52 @@
+0.6.0
+---
+* **command line**
+  - some portability improvements
+  - make `$GOROOT` more robust and configurable
+  - check for Clang at the Homebrew install location as fallback
+* **compiler driver**
+  - support multiple variations of LLVM commands, for non-Debian distributions
+* **compiler**
+  - improve code quality in multiple ways
+  - make panic configurable, adding trap on panic
+  - refactor many internal parts of the compiler
+  - print all errors encountered during compilation
+  - implement calling function values of a named type
+  - implement returning values from blocking functions
+  - allow larger-than-int values to be sent across a channel
+  - implement complex arithmetic
+  - improve hashmap support
+  - add debuginfo for function arguments
+  - insert nil checks on stores (increasing code size)
+  - implement volatile operations as compiler builtins
+  - add `//go:inline` pragma
+  - add build tags for the Go stdlib version
+* **cgo**
+  - implement `char`, `enum` and `void*` types
+  - support `#include` for builtin headers
+  - improve typedef/struct/enum support
+  - only include symbols that are necessary, for broader support
+  - mark external function args as `nocapture`
+  - implement support for some `#define` constants
+  - implement support for multiple CGo files in a single package
+- **standard library**
+  - `machine`: remove microbit matrix (moved to drivers repository)
+  - `machine`: refactor pins to use `Pin` type instead of `GPIO`
+  - `runtime`: print more interface types on panic, including `error`
+* **targets**
+  - `arm`: print an error on HardFault (including stack overflows)
+  - `atsamd21`: fix a bug in the ADC peripheral
+  - `atsamd21`: add support for I2S
+  - `feather-m0`: add support for this board
+  - `nrf51`: fix a bug in I2C
+  - `stm32f103xx`: fix a bug in I2C
+  - `syscall`: implement `Exit` on unix
+  - `trinket-m0`: add support for this board
+  - `wasm`: make _main_ example smaller
+  - `wasm`: don't cache wasm file in the server, for ease of debugging
+  - `wasm`: work around bug #41508 that caused a deadlock while linking
+  - `wasm`: add support for `js.FuncOf`
+
 0.5.0
 ---
 - **compiler driver**
