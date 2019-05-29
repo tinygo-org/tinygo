@@ -64,6 +64,11 @@ func main() {
 	println("union global data:", C.globalUnion.data[0], C.globalUnion.data[1], C.globalUnion.data[2])
 	println("union field:", printUnion(C.globalUnion).f)
 	var _ C.union_joined = C.globalUnion
+	printBitfield(&C.globalBitfield)
+	C.globalBitfield.set_bitfield_a(7)
+	C.globalBitfield.set_bitfield_b(0)
+	C.globalBitfield.set_bitfield_c(0xff)
+	printBitfield(&C.globalBitfield)
 
 	// elaborated type
 	p := C.struct_point{x: 3, y: 5}
@@ -107,4 +112,12 @@ func printUnion(union C.joined_t) C.joined_t {
 //export mul
 func mul(a, b C.int) C.int {
 	return a * b
+}
+
+func printBitfield(bitfield *C.bitfield_t) {
+	println("bitfield a:", bitfield.bitfield_a())
+	println("bitfield b:", bitfield.bitfield_b())
+	println("bitfield c:", bitfield.bitfield_c())
+	println("bitfield d:", bitfield.d)
+	println("bitfield e:", bitfield.e)
 }

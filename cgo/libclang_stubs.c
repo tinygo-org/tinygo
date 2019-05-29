@@ -64,3 +64,7 @@ long long tinygo_clang_getEnumConstantDeclValue(CXCursor c) {
 CXType tinygo_clang_getEnumDeclIntegerType(CXCursor c) {
 	return clang_getEnumDeclIntegerType(c);
 }
+
+unsigned tinygo_clang_Cursor_isBitField(CXCursor c) {
+	return clang_Cursor_isBitField(c);
+}
