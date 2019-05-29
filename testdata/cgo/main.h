@@ -65,6 +65,17 @@ typedef enum {
 	option3A = 21,
 } option3_t;
 
+typedef struct {
+	unsigned char start;
+	unsigned char a : 5;
+	unsigned char b : 1;
+	unsigned char c : 2;
+	unsigned char :0; // new field
+	unsigned char d : 6;
+	unsigned char e : 3;
+	// Note that C++ allows bitfields bigger than the underlying type.
+} bitfield_t;
+
 // test globals and datatypes
 extern int global;
 extern int unusedGlobal;
@@ -85,6 +96,7 @@ extern short globalArray[3];
 extern joined_t globalUnion;
 extern int globalUnionSize;
 extern option_t globalOption;
+extern bitfield_t globalBitfield;
 
 // test duplicate definitions
 int add(int a, int b);

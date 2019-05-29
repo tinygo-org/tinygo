@@ -68,8 +68,20 @@ type typedefInfo struct {
 // elaboratedTypeInfo contains some information about an elaborated type
 // (struct, union) found in the C AST.
 type elaboratedTypeInfo struct {
-	typeExpr ast.Expr
+	typeExpr  ast.Expr
+	pos       token.Pos
+	bitfields []bitfieldInfo
+}
+
+// bitfieldInfo contains information about a single bitfield in a struct. It
+// keeps information about the start, end, and the special (renamed) base field
+// of this bitfield.
+type bitfieldInfo struct {
+	field    *ast.Field
+	name     string
 	pos      token.Pos
+	startBit int64
+	endBit   int64 // may be 0 meaning "until the end of the field"
 }
 
 // enumInfo contains information about an enum in the C.
@@ -581,8 +593,297 @@ func (p *cgoPackage) addElaboratedTypes() {
 		}
 		obj.Decl = typeSpec
 		gen.Specs = append(gen.Specs, typeSpec)
+		// If this struct has bitfields, create getters for them.
+		for _, bitfield := range typ.bitfields {
+			p.createBitfieldGetter(bitfield, typeName)
+			p.createBitfieldSetter(bitfield, typeName)
+		}
 	}
 	p.generated.Decls = append(p.generated.Decls, gen)
+}
+
+// createBitfieldGetter creates a bitfield getter function like the following:
+//
+//     func (s *C.struct_foo) bitfield_b() byte {
+//         return (s.__bitfield_1 >> 5) & 0x1
+//     }
+func (p *cgoPackage) createBitfieldGetter(bitfield bitfieldInfo, typeName string) {
+	// The value to return from the getter.
+	// Not complete: this is just an expression to get the complete field.
+	var result ast.Expr = &ast.SelectorExpr{
+		X: &ast.Ident{
+			NamePos: bitfield.pos,
+			Name:    "s",
+			Obj:     nil,
+		},
+		Sel: &ast.Ident{
+			NamePos: bitfield.pos,
+			Name:    bitfield.field.Names[0].Name,
+		},
+	}
+	if bitfield.startBit != 0 {
+		// Shift to the right by .startBit so that fields that come before are
+		// shifted off.
+		result = &ast.BinaryExpr{
+			X:     result,
+			OpPos: bitfield.pos,
+			Op:    token.SHR,
+			Y: &ast.BasicLit{
+				ValuePos: bitfield.pos,
+				Kind:     token.INT,
+				Value:    strconv.FormatInt(bitfield.startBit, 10),
+			},
+		}
+	}
+	if bitfield.endBit != 0 {
+		// Mask off the high bits so that fields that come after this field are
+		// masked off.
+		and := (uint64(1) << uint64(bitfield.endBit-bitfield.startBit)) - 1
+		result = &ast.BinaryExpr{
+			X:     result,
+			OpPos: bitfield.pos,
+			Op:    token.AND,
+			Y: &ast.BasicLit{
+				ValuePos: bitfield.pos,
+				Kind:     token.INT,
+				Value:    "0x" + strconv.FormatUint(and, 16),
+			},
+		}
+	}
+
+	// Create the getter function.
+	getter := &ast.FuncDecl{
+		Recv: &ast.FieldList{
+			Opening: bitfield.pos,
+			List: []*ast.Field{
+				&ast.Field{
+					Names: []*ast.Ident{
+						&ast.Ident{
+							NamePos: bitfield.pos,
+							Name:    "s",
+							Obj: &ast.Object{
+								Kind: ast.Var,
+								Name: "s",
+								Decl: nil,
+							},
+						},
+					},
+					Type: &ast.StarExpr{
+						Star: bitfield.pos,
+						X: &ast.Ident{
+							NamePos: bitfield.pos,
+							Name:    typeName,
+							Obj:     nil,
+						},
+					},
+				},
+			},
+			Closing: bitfield.pos,
+		},
+		Name: &ast.Ident{
+			NamePos: bitfield.pos,
+			Name:    "bitfield_" + bitfield.name,
+		},
+		Type: &ast.FuncType{
+			Func: bitfield.pos,
+			Params: &ast.FieldList{
+				Opening: bitfield.pos,
+				Closing: bitfield.pos,
+			},
+			Results: &ast.FieldList{
+				List: []*ast.Field{
+					&ast.Field{
+						Type: bitfield.field.Type,
+					},
+				},
+			},
+		},
+		Body: &ast.BlockStmt{
+			Lbrace: bitfield.pos,
+			List: []ast.Stmt{
+				&ast.ReturnStmt{
+					Return: bitfield.pos,
+					Results: []ast.Expr{
+						result,
+					},
+				},
+			},
+			Rbrace: bitfield.pos,
+		},
+	}
+	p.generated.Decls = append(p.generated.Decls, getter)
+}
+
+// createBitfieldSetter creates a bitfield setter function like the following:
+//
+//     func (s *C.struct_foo) set_bitfield_b(value byte) {
+//         s.__bitfield_1 = s.__bitfield_1 ^ 0x60 | ((value & 1) << 5)
+//     }
+//
+// Or the following:
+//
+//     func (s *C.struct_foo) set_bitfield_c(value byte) {
+//         s.__bitfield_1 = s.__bitfield_1 & 0x3f | (value << 6)
+//     }
+func (p *cgoPackage) createBitfieldSetter(bitfield bitfieldInfo, typeName string) {
+	// The full field with all bitfields.
+	var field ast.Expr = &ast.SelectorExpr{
+		X: &ast.Ident{
+			NamePos: bitfield.pos,
+			Name:    "s",
+			Obj:     nil,
+		},
+		Sel: &ast.Ident{
+			NamePos: bitfield.pos,
+			Name:    bitfield.field.Names[0].Name,
+		},
+	}
+	// The value to insert into the field.
+	var valueToInsert ast.Expr = &ast.Ident{
+		NamePos: bitfield.pos,
+		Name:    "value",
+	}
+
+	if bitfield.endBit != 0 {
+		// Make sure the value is in range with a mask.
+		valueToInsert = &ast.BinaryExpr{
+			X:     valueToInsert,
+			OpPos: bitfield.pos,
+			Op:    token.AND,
+			Y: &ast.BasicLit{
+				ValuePos: bitfield.pos,
+				Kind:     token.INT,
+				Value:    "0x" + strconv.FormatUint((uint64(1)<<uint64(bitfield.endBit-bitfield.startBit))-1, 16),
+			},
+		}
+		// Create a mask for the AND NOT operation.
+		mask := ((uint64(1) << uint64(bitfield.endBit-bitfield.startBit)) - 1) << uint64(bitfield.startBit)
+		// Zero the bits in the field that will soon be inserted.
+		field = &ast.BinaryExpr{
+			X:     field,
+			OpPos: bitfield.pos,
+			Op:    token.AND_NOT,
+			Y: &ast.BasicLit{
+				ValuePos: bitfield.pos,
+				Kind:     token.INT,
+				Value:    "0x" + strconv.FormatUint(mask, 16),
+			},
+		}
+	} else { // bitfield.endBit == 0
+		// We don't know exactly how many high bits should be zeroed. So we do
+		// something different: keep the low bits with a mask and OR the new
+		// value with it.
+		mask := (uint64(1) << uint64(bitfield.startBit)) - 1
+		// Extract the lower bits.
+		field = &ast.BinaryExpr{
+			X:     field,
+			OpPos: bitfield.pos,
+			Op:    token.AND,
+			Y: &ast.BasicLit{
+				ValuePos: bitfield.pos,
+				Kind:     token.INT,
+				Value:    "0x" + strconv.FormatUint(mask, 16),
+			},
+		}
+	}
+
+	// Bitwise OR with the new value (after the new value has been shifted).
+	field = &ast.BinaryExpr{
+		X:     field,
+		OpPos: bitfield.pos,
+		Op:    token.OR,
+		Y: &ast.BinaryExpr{
+			X:     valueToInsert,
+			OpPos: bitfield.pos,
+			Op:    token.SHL,
+			Y: &ast.BasicLit{
+				ValuePos: bitfield.pos,
+				Kind:     token.INT,
+				Value:    strconv.FormatInt(bitfield.startBit, 10),
+			},
+		},
+	}
+
+	// Create the setter function.
+	setter := &ast.FuncDecl{
+		Recv: &ast.FieldList{
+			Opening: bitfield.pos,
+			List: []*ast.Field{
+				&ast.Field{
+					Names: []*ast.Ident{
+						&ast.Ident{
+							NamePos: bitfield.pos,
+							Name:    "s",
+							Obj: &ast.Object{
+								Kind: ast.Var,
+								Name: "s",
+								Decl: nil,
+							},
+						},
+					},
+					Type: &ast.StarExpr{
+						Star: bitfield.pos,
+						X: &ast.Ident{
+							NamePos: bitfield.pos,
+							Name:    typeName,
+							Obj:     nil,
+						},
+					},
+				},
+			},
+			Closing: bitfield.pos,
+		},
+		Name: &ast.Ident{
+			NamePos: bitfield.pos,
+			Name:    "set_bitfield_" + bitfield.name,
+		},
+		Type: &ast.FuncType{
+			Func: bitfield.pos,
+			Params: &ast.FieldList{
+				Opening: bitfield.pos,
+				List: []*ast.Field{
+					&ast.Field{
+						Names: []*ast.Ident{
+							&ast.Ident{
+								NamePos: bitfield.pos,
+								Name:    "value",
+								Obj:     nil,
+							},
+						},
+						Type: bitfield.field.Type,
+					},
+				},
+				Closing: bitfield.pos,
+			},
+		},
+		Body: &ast.BlockStmt{
+			Lbrace: bitfield.pos,
+			List: []ast.Stmt{
+				&ast.AssignStmt{
+					Lhs: []ast.Expr{
+						&ast.SelectorExpr{
+							X: &ast.Ident{
+								NamePos: bitfield.pos,
+								Name:    "s",
+								Obj:     nil,
+							},
+							Sel: &ast.Ident{
+								NamePos: bitfield.pos,
+								Name:    bitfield.field.Names[0].Name,
+							},
+						},
+					},
+					TokPos: bitfield.pos,
+					Tok:    token.ASSIGN,
+					Rhs: []ast.Expr{
+						field,
+					},
+				},
+			},
+			Rbrace: bitfield.pos,
+		},
+	}
+	p.generated.Decls = append(p.generated.Decls, setter)
 }
 
 // addEnumTypes adds C enums to the AST. For example, the following C code:

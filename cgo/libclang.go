@@ -51,6 +51,7 @@ CXSourceRange tinygo_clang_getCursorExtent(GoCXCursor c);
 CXTranslationUnit tinygo_clang_Cursor_getTranslationUnit(GoCXCursor c);
 long long tinygo_clang_getEnumConstantDeclValue(GoCXCursor c);
 CXType tinygo_clang_getEnumDeclIntegerType(GoCXCursor c);
+unsigned tinygo_clang_Cursor_isBitField(GoCXCursor c);
 
 int tinygo_clang_globals_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
 int tinygo_clang_struct_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
@@ -527,10 +528,16 @@ func (p *cgoPackage) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 				Opening: pos,
 				Closing: pos,
 			}
+			var bitfieldList []bitfieldInfo
+			inBitfield := false
+			bitfieldNum := 0
 			ref := storedRefs.Put(struct {
-				fieldList *ast.FieldList
-				pkg       *cgoPackage
-			}{fieldList, p})
+				fieldList    *ast.FieldList
+				pkg          *cgoPackage
+				inBitfield   *bool
+				bitfieldNum  *int
+				bitfieldList *[]bitfieldInfo
+			}{fieldList, p, &inBitfield, &bitfieldNum, &bitfieldList})
 			defer storedRefs.Remove(ref)
 			C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(ref))
 			switch C.tinygo_clang_getCursorKind(cursor) {
@@ -540,9 +547,17 @@ func (p *cgoPackage) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 						Struct: pos,
 						Fields: fieldList,
 					},
-					pos: pos,
+					pos:       pos,
+					bitfields: bitfieldList,
 				}
 			case C.CXCursor_UnionDecl:
+				if bitfieldList != nil {
+					// This is valid C... but please don't do this.
+					p.errors = append(p.errors, scanner.Error{
+						Pos: p.fset.PositionFor(pos, true),
+						Msg: fmt.Sprintf("bitfield in a union is not supported"),
+					})
+				}
 				if len(fieldList.List) > 1 {
 					// Insert a special field at the front (of zero width) as a
 					// marker that this is struct is actually a union. This is done
@@ -632,22 +647,70 @@ func (p *cgoPackage) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 //export tinygo_clang_struct_visitor
 func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientData) C.int {
 	passed := storedRefs.Get(unsafe.Pointer(client_data)).(struct {
-		fieldList *ast.FieldList
-		pkg       *cgoPackage
+		fieldList    *ast.FieldList
+		pkg          *cgoPackage
+		inBitfield   *bool
+		bitfieldNum  *int
+		bitfieldList *[]bitfieldInfo
 	})
 	fieldList := passed.fieldList
 	p := passed.pkg
+	inBitfield := passed.inBitfield
+	bitfieldNum := passed.bitfieldNum
+	bitfieldList := passed.bitfieldList
 	if C.tinygo_clang_getCursorKind(c) != C.CXCursor_FieldDecl {
 		panic("expected field inside cursor")
 	}
 	name := getString(C.tinygo_clang_getCursorSpelling(c))
+	if name == "" {
+		// Assume this is a bitfield of 0 bits.
+		// Warning: this is not necessarily true!
+		return C.CXChildVisit_Continue
+	}
 	typ := C.tinygo_clang_getCursorType(c)
+	pos := p.getCursorPosition(c)
 	field := &ast.Field{
 		Type: p.makeASTType(typ, p.getCursorPosition(c)),
 	}
+	offsetof := int64(C.clang_Type_getOffsetOf(C.tinygo_clang_getCursorType(parent), C.CString(name)))
+	alignOf := int64(C.clang_Type_getAlignOf(typ) * 8)
+	bitfieldOffset := offsetof % alignOf
+	if bitfieldOffset != 0 {
+		if C.tinygo_clang_Cursor_isBitField(c) != 1 {
+			panic("expected a bitfield")
+		}
+		if !*inBitfield {
+			*bitfieldNum++
+		}
+		bitfieldName := "__bitfield_" + strconv.Itoa(*bitfieldNum)
+		prevField := fieldList.List[len(fieldList.List)-1]
+		if !*inBitfield {
+			// The previous element also was a bitfield, but wasn't noticed
+			// then. Add it now.
+			*inBitfield = true
+			*bitfieldList = append(*bitfieldList, bitfieldInfo{
+				field:    prevField,
+				name:     prevField.Names[0].Name,
+				startBit: 0,
+				pos:      prevField.Names[0].NamePos,
+			})
+			prevField.Names[0].Name = bitfieldName
+			prevField.Names[0].Obj.Name = bitfieldName
+		}
+		prevBitfield := &(*bitfieldList)[len(*bitfieldList)-1]
+		prevBitfield.endBit = bitfieldOffset
+		*bitfieldList = append(*bitfieldList, bitfieldInfo{
+			field:    prevField,
+			name:     name,
+			startBit: bitfieldOffset,
+			pos:      pos,
+		})
+		return C.CXChildVisit_Continue
+	}
+	*inBitfield = false
 	field.Names = []*ast.Ident{
 		&ast.Ident{
-			NamePos: p.getCursorPosition(c),
+			NamePos: pos,
 			Name:    name,
 			Obj: &ast.Object{
 				Kind: ast.Var,
