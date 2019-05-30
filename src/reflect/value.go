@@ -502,6 +502,14 @@ func MakeSlice(typ Type, len, cap int) Value {
 	panic("unimplemented: reflect.MakeSlice()")
 }
 
+func Zero(typ Type) Value {
+	panic("unimplemented: reflect.Zero()")
+}
+
+func New(typ Type) Value {
+	panic("unimplemented: reflect.New()")
+}
+
 type funcHeader struct {
 	Context unsafe.Pointer
 	Code    unsafe.Pointer
