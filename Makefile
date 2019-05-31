@@ -3,12 +3,12 @@
 all: tinygo
 tinygo: build/tinygo
 
-.PHONY: all tinygo build/tinygo test llvm-build llvm-source clean fmt gen-device gen-device-nrf gen-device-avr
-
 # Default build and source directories, as created by `make llvm-build`.
 LLVM_BUILDDIR ?= llvm-build
 CLANG_SRC ?= llvm/tools/clang
 LLD_SRC ?= llvm/tools/lld
+
+.PHONY: all tinygo build/tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-avr
 
 LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines debuginfodwarf executionengine instrumentation interpreter ipo irreader linker lto mc mcjit objcarcopts option profiledata scalaropts support target
 
@@ -68,17 +68,18 @@ llvm/tools/lld/README.md:
 llvm-source: llvm/README.txt llvm/tools/clang/README.txt llvm/tools/lld/README.md
 
 # Configure LLVM.
-llvm-build/build.ninja: llvm-source
-	mkdir -p llvm-build; cd llvm-build; cmake -G Ninja ../llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF
+TINYGO_SOURCE_DIR=$(shell pwd)
+$(LLVM_BUILDDIR)/build.ninja: llvm-source
+	mkdir -p $(LLVM_BUILDDIR); cd $(LLVM_BUILDDIR); cmake -G Ninja $(TINYGO_SOURCE_DIR)/llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF
 
 # Build LLVM.
-llvm-build: llvm-build/build.ninja
-	cd llvm-build; ninja
+$(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
+	cd $(LLVM_BUILDDIR); ninja
 
 
 # Build the Go compiler.
 build/tinygo:
-	@if [ ! -f llvm-build/bin/llvm-config ]; then echo "Fetch and build LLVM first by running:\n  make llvm-source\n  make llvm-build"; exit 1; fi
+	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:\n  make llvm-source\n  make $(LLVM_BUILDDIR)"; exit 1; fi
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go build -o build/tinygo -tags byollvm .
 
 test:
