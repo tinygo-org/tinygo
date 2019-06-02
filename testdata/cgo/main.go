@@ -71,8 +71,12 @@ func main() {
 	printBitfield(&C.globalBitfield)
 
 	// elaborated type
-	p := C.struct_point{x: 3, y: 5}
+	p := C.struct_point2d{x: 3, y: 5}
 	println("struct:", p.x, p.y)
+
+	// multiple anonymous structs (inside a typedef)
+	var _ C.point2d_t = C.point2d_t{x: 3, y: 5}
+	var _ C.point3d_t = C.point3d_t{x: 3, y: 5, z: 7}
 
 	// recursive types, test using a linked list
 	list := &C.list_t{n: 3, next: &C.struct_list_t{n: 6, next: &C.list_t{n: 7, next: nil}}}

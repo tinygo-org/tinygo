@@ -513,92 +513,48 @@ func (p *cgoPackage) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 	case C.CXType_Record:
 		cursor := C.tinygo_clang_getTypeDeclaration(typ)
 		name := getString(C.tinygo_clang_getCursorSpelling(cursor))
-		var cgoName string
-		switch C.tinygo_clang_getCursorKind(cursor) {
-		case C.CXCursor_StructDecl:
-			cgoName = "struct_" + name
-		case C.CXCursor_UnionDecl:
-			cgoName = "union_" + name
-		default:
-			panic("unknown record declaration")
-		}
-		if _, ok := p.elaboratedTypes[cgoName]; !ok {
-			p.elaboratedTypes[cgoName] = nil // predeclare (to avoid endless recursion)
-			fieldList := &ast.FieldList{
-				Opening: pos,
-				Closing: pos,
-			}
-			var bitfieldList []bitfieldInfo
-			inBitfield := false
-			bitfieldNum := 0
-			ref := storedRefs.Put(struct {
-				fieldList    *ast.FieldList
-				pkg          *cgoPackage
-				inBitfield   *bool
-				bitfieldNum  *int
-				bitfieldList *[]bitfieldInfo
-			}{fieldList, p, &inBitfield, &bitfieldNum, &bitfieldList})
-			defer storedRefs.Remove(ref)
-			C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(ref))
-			switch C.tinygo_clang_getCursorKind(cursor) {
-			case C.CXCursor_StructDecl:
+		if name == "" {
+			// Anonymous record, probably inside a typedef.
+			typeExpr, bitfieldList := p.makeASTRecordType(cursor, pos)
+			if bitfieldList != nil {
+				// This struct has bitfields, so we have to declare it as a
+				// named type (for bitfield getters/setters to work).
+				p.anonStructNum++
+				cgoName := "struct_" + strconv.Itoa(p.anonStructNum)
 				p.elaboratedTypes[cgoName] = &elaboratedTypeInfo{
-					typeExpr: &ast.StructType{
-						Struct: pos,
-						Fields: fieldList,
-					},
+					typeExpr:  typeExpr,
 					pos:       pos,
 					bitfields: bitfieldList,
 				}
-			case C.CXCursor_UnionDecl:
-				if bitfieldList != nil {
-					// This is valid C... but please don't do this.
-					p.errors = append(p.errors, scanner.Error{
-						Pos: p.fset.PositionFor(pos, true),
-						Msg: fmt.Sprintf("bitfield in a union is not supported"),
-					})
+				return &ast.Ident{
+					NamePos: pos,
+					Name:    "C." + cgoName,
 				}
-				if len(fieldList.List) > 1 {
-					// Insert a special field at the front (of zero width) as a
-					// marker that this is struct is actually a union. This is done
-					// by giving the field a name that cannot be expressed directly
-					// in Go.
-					// Other parts of the compiler look at the first element in a
-					// struct (of size > 2) to know whether this is a union.
-					// Note that we don't have to insert it for single-element
-					// unions as they're basically equivalent to a struct.
-					unionMarker := &ast.Field{
-						Type: &ast.StructType{
-							Struct: pos,
-						},
-					}
-					unionMarker.Names = []*ast.Ident{
-						&ast.Ident{
-							NamePos: pos,
-							Name:    "C union",
-							Obj: &ast.Object{
-								Kind: ast.Var,
-								Name: "C union",
-								Decl: unionMarker,
-							},
-						},
-					}
-					fieldList.List = append([]*ast.Field{unionMarker}, fieldList.List...)
-				}
-				p.elaboratedTypes[cgoName] = &elaboratedTypeInfo{
-					typeExpr: &ast.StructType{
-						Struct: pos,
-						Fields: fieldList,
-					},
-					pos: pos,
-				}
-			default:
-				panic("unreachable")
 			}
-		}
-		return &ast.Ident{
-			NamePos: pos,
-			Name:    "C." + cgoName,
+			return typeExpr
+		} else {
+			var cgoName string
+			switch C.tinygo_clang_getCursorKind(cursor) {
+			case C.CXCursor_StructDecl:
+				cgoName = "struct_" + name
+			case C.CXCursor_UnionDecl:
+				cgoName = "union_" + name
+			default:
+				panic("unknown record declaration")
+			}
+			if _, ok := p.elaboratedTypes[cgoName]; !ok {
+				p.elaboratedTypes[cgoName] = nil // predeclare (to avoid endless recursion)
+				typeExpr, bitfieldList := p.makeASTRecordType(cursor, pos)
+				p.elaboratedTypes[cgoName] = &elaboratedTypeInfo{
+					typeExpr:  typeExpr,
+					pos:       pos,
+					bitfields: bitfieldList,
+				}
+			}
+			return &ast.Ident{
+				NamePos: pos,
+				Name:    "C." + cgoName,
+			}
 		}
 	case C.CXType_Enum:
 		cursor := C.tinygo_clang_getTypeDeclaration(typ)
@@ -641,6 +597,76 @@ func (p *cgoPackage) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 	return &ast.Ident{
 		NamePos: pos,
 		Name:    typeName,
+	}
+}
+
+// makeASTRecordType parses a C record (struct or union) and translates it into
+// a Go struct type. Unions are implemented by setting the first field to a
+// zero-lengt "C union" field, which cannot be written in Go directly.
+func (p *cgoPackage) makeASTRecordType(cursor C.GoCXCursor, pos token.Pos) (*ast.StructType, []bitfieldInfo) {
+	fieldList := &ast.FieldList{
+		Opening: pos,
+		Closing: pos,
+	}
+	var bitfieldList []bitfieldInfo
+	inBitfield := false
+	bitfieldNum := 0
+	ref := storedRefs.Put(struct {
+		fieldList    *ast.FieldList
+		pkg          *cgoPackage
+		inBitfield   *bool
+		bitfieldNum  *int
+		bitfieldList *[]bitfieldInfo
+	}{fieldList, p, &inBitfield, &bitfieldNum, &bitfieldList})
+	defer storedRefs.Remove(ref)
+	C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(ref))
+	switch C.tinygo_clang_getCursorKind(cursor) {
+	case C.CXCursor_StructDecl:
+		return &ast.StructType{
+			Struct: pos,
+			Fields: fieldList,
+		}, bitfieldList
+	case C.CXCursor_UnionDecl:
+		if bitfieldList != nil {
+			// This is valid C... but please don't do this.
+			p.errors = append(p.errors, scanner.Error{
+				Pos: p.fset.PositionFor(pos, true),
+				Msg: fmt.Sprintf("bitfield in a union is not supported"),
+			})
+		}
+		if len(fieldList.List) > 1 {
+			// Insert a special field at the front (of zero width) as a
+			// marker that this is struct is actually a union. This is done
+			// by giving the field a name that cannot be expressed directly
+			// in Go.
+			// Other parts of the compiler look at the first element in a
+			// struct (of size > 2) to know whether this is a union.
+			// Note that we don't have to insert it for single-element
+			// unions as they're basically equivalent to a struct.
+			unionMarker := &ast.Field{
+				Type: &ast.StructType{
+					Struct: pos,
+				},
+			}
+			unionMarker.Names = []*ast.Ident{
+				&ast.Ident{
+					NamePos: pos,
+					Name:    "C union",
+					Obj: &ast.Object{
+						Kind: ast.Var,
+						Name: "C union",
+						Decl: unionMarker,
+					},
+				},
+			}
+			fieldList.List = append([]*ast.Field{unionMarker}, fieldList.List...)
+		}
+		return &ast.StructType{
+			Struct: pos,
+			Fields: fieldList,
+		}, bitfieldList
+	default:
+		panic("unknown record declaration")
 	}
 }
 

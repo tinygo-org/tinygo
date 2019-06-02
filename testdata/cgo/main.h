@@ -27,10 +27,21 @@ typedef struct collection {
 	unsigned char c;
 } collection_t;
 
-struct point {
+struct point2d {
 	int x;
 	int y;
 };
+
+typedef struct {
+	int x;
+	int y;
+} point2d_t;
+
+typedef struct {
+	int x;
+	int y;
+	int z;
+} point3d_t;
 
 // linked list
 typedef struct list_t {

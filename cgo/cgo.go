@@ -36,6 +36,7 @@ type cgoPackage struct {
 	typedefs        map[string]*typedefInfo
 	elaboratedTypes map[string]*elaboratedTypeInfo
 	enums           map[string]enumInfo
+	anonStructNum   int
 }
 
 // constantInfo stores some information about a CGo constant found by libclang
@@ -68,7 +69,7 @@ type typedefInfo struct {
 // elaboratedTypeInfo contains some information about an elaborated type
 // (struct, union) found in the C AST.
 type elaboratedTypeInfo struct {
-	typeExpr  ast.Expr
+	typeExpr  *ast.StructType
 	pos       token.Pos
 	bitfields []bitfieldInfo
 }
