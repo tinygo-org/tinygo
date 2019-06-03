@@ -131,6 +131,7 @@ var builtinAliases = map[string]struct{}{
 // somehow from C. This is done by adding some typedefs to get the size of each
 // type.
 const cgoTypes = `
+# 1 "<cgo>"
 typedef char                _Cgo_char;
 typedef signed char         _Cgo_schar;
 typedef unsigned char       _Cgo_uchar;
@@ -220,6 +221,8 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 			}
 			path, err := strconv.Unquote(spec.Path.Value)
 			if err != nil {
+				// This should not happen. An import path that is not properly
+				// quoted should not exist in a correct AST.
 				panic("could not parse import path: " + err.Error())
 			}
 			if path != "C" {
