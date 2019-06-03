@@ -109,7 +109,8 @@ func (p *cgoPackage) parseFragment(fragment string, cflags []string, posFilename
 		C.CXTranslationUnit_DetailedPreprocessingRecord,
 		&unit)
 	if errCode != 0 {
-		panic("loader: failed to parse source with libclang")
+		// This is probably a bug in the usage of libclang.
+		panic("cgo: failed to parse source with libclang")
 	}
 	defer C.clang_disposeTranslationUnit(unit)
 
@@ -118,27 +119,8 @@ func (p *cgoPackage) parseFragment(fragment string, cflags []string, posFilename
 			spelling := getString(C.clang_getDiagnosticSpelling(diagnostic))
 			severity := diagnosticSeverity[C.clang_getDiagnosticSeverity(diagnostic)]
 			location := C.clang_getDiagnosticLocation(diagnostic)
-			var libclangFilename C.CXString
-			var line C.unsigned
-			var column C.unsigned
-			C.clang_getPresumedLocation(location, &libclangFilename, &line, &column)
-			filename := getString(libclangFilename)
-			if filepath.IsAbs(filename) {
-				// Relative paths for readability, like other Go parser errors.
-				relpath, err := filepath.Rel(p.dir, filename)
-				if err == nil {
-					filename = relpath
-				}
-			}
-			p.errors = append(p.errors, &scanner.Error{
-				Pos: token.Position{
-					Filename: filename,
-					Offset:   0, // not provided by clang_getPresumedLocation
-					Line:     int(line),
-					Column:   int(column),
-				},
-				Msg: severity + ": " + spelling,
-			})
+			pos := p.getClangLocationPosition(location, unit)
+			p.addError(pos, severity+": "+spelling)
 		}
 		for i := 0; i < numDiagnostics; i++ {
 			diagnostic := C.clang_getDiagnostic(unit, C.uint(i))
@@ -237,14 +219,17 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 		var startOffset, endOffset C.unsigned
 		C.clang_getExpansionLocation(start, &file, nil, nil, &startOffset)
 		if file == nil {
-			panic("could not find file where macro is defined")
+			p.addError(pos, "internal error: could not find file where macro is defined")
+			break
 		}
 		C.clang_getExpansionLocation(end, &endFile, nil, nil, &endOffset)
 		if file != endFile {
-			panic("expected start and end location of a #define to be in the same file")
+			p.addError(pos, "internal error: expected start and end location of a macro to be in the same file")
+			break
 		}
 		if startOffset > endOffset {
-			panic("startOffset > endOffset")
+			p.addError(pos, "internal error: start offset of macro is after end offset")
+			break
 		}
 
 		// read file contents and extract the relevant byte range
@@ -252,11 +237,13 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 		var size C.size_t
 		sourcePtr := C.clang_getFileContents(tu, file, &size)
 		if endOffset >= C.uint(size) {
-			panic("endOffset lies after end of file")
+			p.addError(pos, "internal error: end offset of macro lies after end of file")
+			break
 		}
 		source := string(((*[1 << 28]byte)(unsafe.Pointer(sourcePtr)))[startOffset:endOffset:endOffset])
 		if !strings.HasPrefix(source, name) {
-			panic(fmt.Sprintf("expected #define value to start with %#v, got %#v", name, source))
+			p.addError(pos, fmt.Sprintf("internal error: expected macro value to start with %#v, got %#v", name, source))
+			break
 		}
 		value := strings.TrimSpace(source[len(name):])
 		for len(value) != 0 && value[0] == '(' && value[len(value)-1] == ')' {
@@ -316,11 +303,16 @@ func getString(clangString C.CXString) (s string) {
 	return
 }
 
-// getCursorPosition returns a usable token.Pos from a libclang cursor. If the
-// file for this cursor has not been seen before, it is read from libclang
-// (which already has the file in memory) and added to the token.FileSet.
+// getCursorPosition returns a usable token.Pos from a libclang cursor.
 func (p *cgoPackage) getCursorPosition(cursor C.GoCXCursor) token.Pos {
-	location := C.tinygo_clang_getCursorLocation(cursor)
+	return p.getClangLocationPosition(C.tinygo_clang_getCursorLocation(cursor), C.tinygo_clang_Cursor_getTranslationUnit(cursor))
+}
+
+// getClangLocationPosition returns a usable token.Pos based on a libclang
+// location and translation unit. If the file for this cursor has not been seen
+// before, it is read from libclang (which already has the file in memory) and
+// added to the token.FileSet.
+func (p *cgoPackage) getClangLocationPosition(location C.CXSourceLocation, tu C.CXTranslationUnit) token.Pos {
 	var file C.CXFile
 	var line C.unsigned
 	var column C.unsigned
@@ -334,7 +326,6 @@ func (p *cgoPackage) getCursorPosition(cursor C.GoCXCursor) token.Pos {
 	if _, ok := p.tokenFiles[filename]; !ok {
 		// File has not been seen before in this package, add line information
 		// now by reading the file from libclang.
-		tu := C.tinygo_clang_Cursor_getTranslationUnit(cursor)
 		var size C.size_t
 		sourcePtr := C.clang_getFileContents(tu, file, &size)
 		source := ((*[1 << 28]byte)(unsafe.Pointer(sourcePtr)))[:size:size]
@@ -348,7 +339,39 @@ func (p *cgoPackage) getCursorPosition(cursor C.GoCXCursor) token.Pos {
 		f.SetLines(lines)
 		p.tokenFiles[filename] = f
 	}
-	return p.tokenFiles[filename].Pos(int(offset))
+	positionFile := p.tokenFiles[filename]
+
+	// Check for alternative line/column information (set with a line directive).
+	var filename2String C.CXString
+	var line2 C.unsigned
+	var column2 C.unsigned
+	C.clang_getPresumedLocation(location, &filename2String, &line2, &column2)
+	filename2 := getString(filename2String)
+	if filename2 != filename || line2 != line || column2 != column {
+		// The location was changed with a preprocessor directive.
+		// TODO: this only works for locations that are added in order. Adding
+		// line/column info to a file that already has line/column info after
+		// the given offset is ignored.
+		positionFile.AddLineColumnInfo(int(offset), filename2, int(line2), int(column2))
+	}
+
+	return positionFile.Pos(int(offset))
+}
+
+// addError is a utility function to add an error to the list of errors.
+func (p *cgoPackage) addError(pos token.Pos, msg string) {
+	position := p.fset.PositionFor(pos, true)
+	if filepath.IsAbs(position.Filename) {
+		// Relative paths for readability, like other Go parser errors.
+		relpath, err := filepath.Rel(p.dir, position.Filename)
+		if err == nil {
+			position.Filename = relpath
+		}
+	}
+	p.errors = append(p.errors, scanner.Error{
+		Pos: position,
+		Msg: msg,
+	})
 }
 
 // makeASTType return the ast.Expr for the given libclang type. In other words,
@@ -459,7 +482,7 @@ func (p *cgoPackage) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 						// This happens for some very special purpose architectures
 						// (DSPs etc.) that are not currently targeted.
 						// https://www.embecosm.com/2017/04/18/non-8-bit-char-support-in-clang-and-llvm/
-						panic("unknown char width")
+						p.addError(pos, fmt.Sprintf("unknown char width: %d", typeSize))
 					}
 					switch underlyingType.kind {
 					case C.CXType_Char_S:
@@ -508,7 +531,9 @@ func (p *cgoPackage) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 		case C.CXType_Enum:
 			return p.makeASTType(underlying, pos)
 		default:
-			panic("unknown elaborated type")
+			typeKindSpelling := getString(C.clang_getTypeKindSpelling(underlying.kind))
+			p.addError(pos, fmt.Sprintf("unknown elaborated type (libclang type kind %s)", typeKindSpelling))
+			typeName = "<unknown>"
 		}
 	case C.CXType_Record:
 		cursor := C.tinygo_clang_getTypeDeclaration(typ)
@@ -540,7 +565,8 @@ func (p *cgoPackage) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 			case C.CXCursor_UnionDecl:
 				cgoName = "union_" + name
 			default:
-				panic("unknown record declaration")
+				// makeASTRecordType will create an appropriate error.
+				cgoName = "record_" + name
 			}
 			if _, ok := p.elaboratedTypes[cgoName]; !ok {
 				p.elaboratedTypes[cgoName] = nil // predeclare (to avoid endless recursion)
@@ -585,14 +611,10 @@ func (p *cgoPackage) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 	}
 	if typeName == "" {
 		// Report this as an error.
-		spelling := getString(C.clang_getTypeSpelling(typ))
-		p.errors = append(p.errors, scanner.Error{
-			Pos: p.fset.PositionFor(pos, true),
-			Msg: fmt.Sprintf("unknown C type: %v (libclang type kind %d)", spelling, typ.kind),
-		})
-		// Fallback, probably incorrect but at least the error points to an odd
-		// type name.
-		typeName = "C." + spelling
+		typeSpelling := getString(C.clang_getTypeSpelling(typ))
+		typeKindSpelling := getString(C.clang_getTypeKindSpelling(typ.kind))
+		p.addError(pos, fmt.Sprintf("unknown C type: %v (libclang type kind %s)", typeSpelling, typeKindSpelling))
+		typeName = "C.<unknown>"
 	}
 	return &ast.Ident{
 		NamePos: pos,
@@ -629,10 +651,7 @@ func (p *cgoPackage) makeASTRecordType(cursor C.GoCXCursor, pos token.Pos) (*ast
 	case C.CXCursor_UnionDecl:
 		if bitfieldList != nil {
 			// This is valid C... but please don't do this.
-			p.errors = append(p.errors, scanner.Error{
-				Pos: p.fset.PositionFor(pos, true),
-				Msg: fmt.Sprintf("bitfield in a union is not supported"),
-			})
+			p.addError(pos, "bitfield in a union is not supported")
 		}
 		if len(fieldList.List) > 1 {
 			// Insert a special field at the front (of zero width) as a
@@ -666,7 +685,12 @@ func (p *cgoPackage) makeASTRecordType(cursor C.GoCXCursor, pos token.Pos) (*ast
 			Fields: fieldList,
 		}, bitfieldList
 	default:
-		panic("unknown record declaration")
+		cursorKind := C.tinygo_clang_getCursorKind(cursor)
+		cursorKindSpelling := getString(C.clang_getCursorKindSpelling(cursorKind))
+		p.addError(pos, fmt.Sprintf("expected StructDecl or UnionDecl, not %s", cursorKindSpelling))
+		return &ast.StructType{
+			Struct: pos,
+		}, nil
 	}
 }
 
@@ -684,8 +708,11 @@ func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientD
 	inBitfield := passed.inBitfield
 	bitfieldNum := passed.bitfieldNum
 	bitfieldList := passed.bitfieldList
-	if C.tinygo_clang_getCursorKind(c) != C.CXCursor_FieldDecl {
-		panic("expected field inside cursor")
+	pos := p.getCursorPosition(c)
+	if cursorKind := C.tinygo_clang_getCursorKind(c); cursorKind != C.CXCursor_FieldDecl {
+		cursorKindSpelling := getString(C.clang_getCursorKindSpelling(cursorKind))
+		p.addError(pos, fmt.Sprintf("expected FieldDecl in struct or union, not %s", cursorKindSpelling))
+		return C.CXChildVisit_Continue
 	}
 	name := getString(C.tinygo_clang_getCursorSpelling(c))
 	if name == "" {
@@ -694,7 +721,6 @@ func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientD
 		return C.CXChildVisit_Continue
 	}
 	typ := C.tinygo_clang_getCursorType(c)
-	pos := p.getCursorPosition(c)
 	field := &ast.Field{
 		Type: p.makeASTType(typ, p.getCursorPosition(c)),
 	}
@@ -703,7 +729,8 @@ func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientD
 	bitfieldOffset := offsetof % alignOf
 	if bitfieldOffset != 0 {
 		if C.tinygo_clang_Cursor_isBitField(c) != 1 {
-			panic("expected a bitfield")
+			p.addError(pos, "expected a bitfield")
+			return C.CXChildVisit_Continue
 		}
 		if !*inBitfield {
 			*bitfieldNum++
