@@ -37,6 +37,7 @@ func execCommand(cmdNames []string, args ...string) error {
 				// this command was not found, try the next
 				continue
 			}
+			return err
 		}
 		return nil
 	}
