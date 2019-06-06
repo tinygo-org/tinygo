@@ -1086,12 +1086,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			// nothing to store
 			return
 		}
-		store := c.builder.CreateStore(llvmVal, llvmAddr)
-		valType := instr.Addr.Type().Underlying().(*types.Pointer).Elem()
-		if c.ir.IsVolatile(valType) {
-			// Volatile store, for memory-mapped registers.
-			store.SetVolatile(true)
-		}
+		c.builder.CreateStore(llvmVal, llvmAddr)
 	default:
 		c.addError(instr.Pos(), "unknown instruction: "+instr.String())
 	}
@@ -2505,7 +2500,7 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 			return llvm.Value{}, c.makeError(unop.Pos(), "todo: unknown type for negate: "+unop.X.Type().Underlying().String())
 		}
 	case token.MUL: // *x, dereference pointer
-		valType := unop.X.Type().Underlying().(*types.Pointer).Elem()
+		unop.X.Type().Underlying().(*types.Pointer).Elem()
 		if c.targetData.TypeAllocSize(x.Type().ElementType()) == 0 {
 			// zero-length data
 			return c.getZeroValue(x.Type().ElementType()), nil
@@ -2525,10 +2520,6 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 		} else {
 			c.emitNilCheck(frame, x, "deref")
 			load := c.builder.CreateLoad(x, "")
-			if c.ir.IsVolatile(valType) {
-				// Volatile load, for memory-mapped registers.
-				load.SetVolatile(true)
-			}
 			return load, nil
 		}
 	case token.XOR: // ^x, toggle all bits in integer
