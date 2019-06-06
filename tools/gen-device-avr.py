@@ -156,60 +156,6 @@ import (
 	"unsafe"
 )
 
-// Special type that causes loads/stores to be volatile (necessary for
-// memory-mapped registers).
-type Register8 struct {{
-	Reg uint8
-}}
-
-// Get returns the value in the register. It is the volatile equivalent of:
-//
-//     *r.Reg
-//
-//go:inline
-func (r *Register8) Get() uint8 {{
-	return volatile.LoadUint8(&r.Reg)
-}}
-
-// Set updates the register value. It is the volatile equivalent of:
-//
-//     *r.Reg = value
-//
-//go:inline
-func (r *Register8) Set(value uint8) {{
-	volatile.StoreUint8(&r.Reg, value)
-}}
-
-// SetBits reads the register, sets the given bits, and writes it back. It is
-// the volatile equivalent of:
-//
-//     r.Reg |= value
-//
-//go:inline
-func (r *Register8) SetBits(value uint8) {{
-	volatile.StoreUint8(&r.Reg, volatile.LoadUint8(&r.Reg) | value)
-}}
-
-// ClearBits reads the register, clears the given bits, and writes it back. It
-// is the volatile equivalent of:
-//
-//     r.Reg &^= value
-//
-//go:inline
-func (r *Register8) ClearBits(value uint8) {{
-	volatile.StoreUint8(&r.Reg, volatile.LoadUint8(&r.Reg) &^ value)
-}}
-
-// HasBits reads the register and then checks to see if the passed bits are set. It
-// is the volatile equivalent of:
-//
-//     (*r.Reg & value) > 0
-//
-//go:inline
-func (r *Register8) HasBits(value uint8) bool {{
-	return (r.Get() & value) > 0
-}}
-
 // Some information about this device.
 const (
 	DEVICE     = "{name}"
@@ -231,7 +177,7 @@ const (
         out.write('\n\t// {description}\n'.format(**peripheral))
         for register in peripheral['registers']:
             for variant in register['variants']:
-                out.write('\t{name} = (*Register8)(unsafe.Pointer(uintptr(0x{address:x})))\n'.format(**variant))
+                out.write('\t{name} = (*volatile.Register8)(unsafe.Pointer(uintptr(0x{address:x})))\n'.format(**variant))
     out.write(')\n')
 
     for peripheral in device.peripherals:

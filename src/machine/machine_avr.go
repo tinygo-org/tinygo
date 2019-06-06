@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/avr"
+	"runtime/volatile"
 )
 
 type PinMode uint8
@@ -30,7 +31,7 @@ func (p Pin) Set(value bool) {
 // Warning: there are no separate pin set/clear registers on the AVR. The
 // returned mask is only valid as long as no other pin in the same port has been
 // changed.
-func (p Pin) PortMaskSet() (*avr.Register8, uint8) {
+func (p Pin) PortMaskSet() (*volatile.Register8, uint8) {
 	port, mask := p.getPortMask()
 	return port, port.Get() | mask
 }
@@ -41,7 +42,7 @@ func (p Pin) PortMaskSet() (*avr.Register8, uint8) {
 // Warning: there are no separate pin set/clear registers on the AVR. The
 // returned mask is only valid as long as no other pin in the same port has been
 // changed.
-func (p Pin) PortMaskClear() (*avr.Register8, uint8) {
+func (p Pin) PortMaskClear() (*volatile.Register8, uint8) {
 	port, mask := p.getPortMask()
 	return port, port.Get() &^ mask
 }
