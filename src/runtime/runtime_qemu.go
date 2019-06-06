@@ -7,6 +7,7 @@ package runtime
 
 import (
 	"device/arm"
+	"runtime/volatile"
 	"unsafe"
 )
 
@@ -36,12 +37,9 @@ func ticks() timeUnit {
 	return timestamp
 }
 
-//go:volatile
-type regValue uint32
-
 // UART0 output register.
-var stdoutWrite *regValue = (*regValue)(unsafe.Pointer(uintptr(0x4000c000)))
+var stdoutWrite = (*volatile.Register8)(unsafe.Pointer(uintptr(0x4000c000)))
 
 func putchar(c byte) {
-	*stdoutWrite = regValue(c)
+	stdoutWrite.Set(uint8(c))
 }

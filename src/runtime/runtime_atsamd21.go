@@ -6,6 +6,7 @@ import (
 	"device/arm"
 	"device/sam"
 	"machine"
+	"runtime/volatile"
 	"unsafe"
 )
 
@@ -230,10 +231,7 @@ var (
 	timerLastCounter uint64
 )
 
-//go:volatile
-type isrFlag bool
-
-var timerWakeup isrFlag
+var timerWakeup volatile.Register8
 
 const asyncScheduler = false
 
@@ -262,7 +260,7 @@ func ticks() timeUnit {
 
 // ticks are in microseconds
 func timerSleep(ticks uint32) {
-	timerWakeup = false
+	timerWakeup.Set(0)
 	if ticks < 30 {
 		// have to have at least one clock count
 		ticks = 30
@@ -280,7 +278,7 @@ func timerSleep(ticks uint32) {
 	// enable IRQ for CMP0 compare
 	sam.RTC_MODE0.INTENSET.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
 
-	for !timerWakeup {
+	for timerWakeup.Get() == 0 {
 		arm.Asm("wfi")
 	}
 }
@@ -290,7 +288,7 @@ func handleRTC() {
 	// disable IRQ for CMP0 compare
 	sam.RTC_MODE0.INTFLAG.Set(sam.RTC_MODE0_INTENSET_CMP0)
 
-	timerWakeup = true
+	timerWakeup.Set(1)
 }
 
 func initUSBClock() {

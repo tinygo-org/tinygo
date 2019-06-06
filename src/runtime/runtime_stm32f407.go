@@ -6,6 +6,7 @@ import (
 	"device/arm"
 	"device/stm32"
 	"machine"
+	"runtime/volatile"
 )
 
 func init() {
@@ -114,10 +115,7 @@ var (
 	tickCount timeUnit
 )
 
-//go:volatile
-type isrFlag bool
-
-var timerWakeup isrFlag
+var timerWakeup volatile.Register8
 
 // Enable the TIM3 clock.(sleep count)
 func initTIM3() {
@@ -160,7 +158,7 @@ func ticks() timeUnit {
 
 // ticks are in microseconds
 func timerSleep(ticks uint32) {
-	timerWakeup = false
+	timerWakeup.Set(0)
 
 	// CK_INT = APB1 x2 = 84mhz
 	// prescale counter down from 84mhz to 10khz aka 0.1 ms frequency.
@@ -180,7 +178,7 @@ func timerSleep(ticks uint32) {
 	stm32.TIM3.CR1.SetBits(stm32.TIM_CR1_CEN)
 
 	// wait till timer wakes up
-	for !timerWakeup {
+	for timerWakeup.Get() == 0 {
 		arm.Asm("wfi")
 	}
 }
@@ -195,7 +193,7 @@ func handleTIM3() {
 		stm32.TIM3.SR.ClearBits(stm32.TIM_SR_UIF)
 
 		// timer was triggered
-		timerWakeup = true
+		timerWakeup.Set(1)
 	}
 }
 
