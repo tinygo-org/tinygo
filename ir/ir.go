@@ -100,9 +100,6 @@ func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 						}
 						for _, spec := range decl.Specs {
 							switch spec := spec.(type) {
-							case *ast.TypeSpec: // decl.Tok == token.TYPE
-								id := pkgInfo.Pkg.Path() + "." + spec.Name.Name
-								comments[id] = decl.Doc
 							case *ast.ValueSpec: // decl.Tok == token.VAR
 								for _, name := range spec.Names {
 									id := pkgInfo.Pkg.Path() + "." + name.Name
@@ -430,29 +427,6 @@ func (g *Global) CName() string {
 		return name[2:]
 	}
 	return ""
-}
-
-// Return true if this named type is annotated with the //go:volatile pragma,
-// for volatile loads and stores.
-func (p *Program) IsVolatile(t types.Type) bool {
-	if t, ok := t.(*types.Named); !ok {
-		return false
-	} else {
-		if t.Obj().Pkg() == nil {
-			return false
-		}
-		id := t.Obj().Pkg().Path() + "." + t.Obj().Name()
-		doc := p.comments[id]
-		if doc == nil {
-			return false
-		}
-		for _, line := range doc.List {
-			if strings.TrimSpace(line.Text) == "//go:volatile" {
-				return true
-			}
-		}
-		return false
-	}
 }
 
 // Get all methods of a type.
