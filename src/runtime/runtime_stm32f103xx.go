@@ -6,6 +6,7 @@ import (
 	"device/arm"
 	"device/stm32"
 	"machine"
+	"runtime/volatile"
 )
 
 func init() {
@@ -58,10 +59,7 @@ var (
 	timerLastCounter uint64
 )
 
-//go:volatile
-type isrFlag bool
-
-var timerWakeup isrFlag
+var timerWakeup volatile.Register8
 
 func initRTC() {
 	// Enable the PWR and BKP.
@@ -136,7 +134,7 @@ func ticks() timeUnit {
 
 // ticks are in microseconds
 func timerSleep(ticks uint32) {
-	timerWakeup = false
+	timerWakeup.Set(0)
 
 	// STM32 timer update event period is calculated as follows:
 	//
@@ -177,7 +175,7 @@ func timerSleep(ticks uint32) {
 	stm32.TIM3.CR1.SetBits(stm32.TIM_CR1_CEN)
 
 	// wait till timer wakes up
-	for !timerWakeup {
+	for timerWakeup.Get() == 0 {
 		arm.Asm("wfi")
 	}
 }
@@ -192,6 +190,6 @@ func handleTIM3() {
 		stm32.TIM3.SR.ClearBits(stm32.TIM_SR_UIF)
 
 		// timer was triggered
-		timerWakeup = true
+		timerWakeup.Set(1)
 	}
 }
