@@ -26,6 +26,9 @@ func init() {
 	llvm.InitializeAllAsmPrinters()
 }
 
+// The TinyGo import path.
+const tinygoPath = "github.com/tinygo-org/tinygo"
+
 // Configure the compiler.
 type Config struct {
 	Triple        string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
@@ -198,22 +201,29 @@ func (c *Compiler) Compile(mainPath string) []error {
 			Compiler:    "gc", // must be one of the recognized compilers
 			BuildTags:   append([]string{"tinygo", "gc." + c.selectGC()}, c.BuildTags...),
 		},
-		ShouldOverlay: func(path string) bool {
+		OverlayPath: func(path string) string {
+			// Return the (overlay) import path when it should be overlaid, and
+			// "" if it should not.
+			if strings.HasPrefix(path, tinygoPath+"/src/") {
+				// Avoid issues with packages that are imported twice, one from
+				// GOPATH and one from TINYGOPATH.
+				path = path[len(tinygoPath+"/src/"):]
+			}
 			switch path {
 			case "machine", "os", "reflect", "runtime", "runtime/volatile", "sync":
-				return true
+				return path
 			default:
 				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
-					return true
+					return path
 				} else if path == "syscall" {
 					for _, tag := range c.BuildTags {
 						if tag == "avr" || tag == "cortexm" || tag == "darwin" {
-							return true
+							return path
 						}
 					}
 				}
 			}
-			return false
+			return ""
 		},
 		TypeChecker: types.Config{
 			Sizes: &StdSizes{
