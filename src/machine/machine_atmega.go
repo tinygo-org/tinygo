@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/avr"
+	"runtime/volatile"
 )
 
 // Configure sets the pin to input or output.
@@ -34,7 +35,7 @@ func (p Pin) Get() bool {
 	}
 }
 
-func (p Pin) getPortMask() (*avr.Register8, uint8) {
+func (p Pin) getPortMask() (*volatile.Register8, uint8) {
 	if p < 8 {
 		return avr.PORTD, 1 << uint8(p)
 	} else {

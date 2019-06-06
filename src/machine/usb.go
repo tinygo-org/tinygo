@@ -4,9 +4,9 @@ package machine
 
 import (
 	"bytes"
-	"device/sam"
 	"encoding/binary"
 	"errors"
+	"runtime/volatile"
 )
 
 const deviceDescriptorSize = 18
@@ -484,11 +484,11 @@ const (
 // 		 RoReg8                    Reserved1[0x5];
 //   } UsbDeviceDescBank;
 type usbDeviceDescBank struct {
-	ADDR      sam.Register32
-	PCKSIZE   sam.Register32
-	EXTREG    sam.Register16
-	STATUS_BK sam.Register8
-	_reserved [5]sam.Register8
+	ADDR      volatile.Register32
+	PCKSIZE   volatile.Register32
+	EXTREG    volatile.Register16
+	STATUS_BK volatile.Register8
+	_reserved [5]volatile.Register8
 }
 
 type usbDeviceDescriptor struct {

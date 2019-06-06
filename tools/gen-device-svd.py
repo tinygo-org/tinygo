@@ -305,164 +305,6 @@ import (
 	"unsafe"
 )
 
-// Special types that causes loads/stores to be volatile (necessary for
-// memory-mapped registers).
-type Register8 struct {{
-	Reg uint8
-}}
-
-// Get returns the value in the register. It is the volatile equivalent of:
-//
-//     *r.Reg
-//
-//go:inline
-func (r *Register8) Get() uint8 {{
-	return volatile.LoadUint8(&r.Reg)
-}}
-
-// Set updates the register value. It is the volatile equivalent of:
-//
-//     *r.Reg = value
-//
-//go:inline
-func (r *Register8) Set(value uint8) {{
-	volatile.StoreUint8(&r.Reg, value)
-}}
-
-// SetBits reads the register, sets the given bits, and writes it back. It is
-// the volatile equivalent of:
-//
-//     r.Reg |= value
-//
-//go:inline
-func (r *Register8) SetBits(value uint8) {{
-	volatile.StoreUint8(&r.Reg, volatile.LoadUint8(&r.Reg) | value)
-}}
-
-// ClearBits reads the register, clears the given bits, and writes it back. It
-// is the volatile equivalent of:
-//
-//     r.Reg &^= value
-//
-//go:inline
-func (r *Register8) ClearBits(value uint8) {{
-	volatile.StoreUint8(&r.Reg, volatile.LoadUint8(&r.Reg) &^ value)
-}}
-
-// HasBits reads the register and then checks to see if the passed bits are set. It
-// is the volatile equivalent of:
-//
-//     (*r.Reg & value) > 0
-//
-//go:inline
-func (r *Register8) HasBits(value uint8) bool {{
-	return (r.Get() & value) > 0
-}}
-
-type Register16 struct {{
-	Reg uint16
-}}
-
-// Get returns the value in the register. It is the volatile equivalent of:
-//
-//     *r.Reg
-//
-//go:inline
-func (r *Register16) Get() uint16 {{
-	return volatile.LoadUint16(&r.Reg)
-}}
-
-// Set updates the register value. It is the volatile equivalent of:
-//
-//     *r.Reg = value
-//
-//go:inline
-func (r *Register16) Set(value uint16) {{
-	volatile.StoreUint16(&r.Reg, value)
-}}
-
-// SetBits reads the register, sets the given bits, and writes it back. It is
-// the volatile equivalent of:
-//
-//     r.Reg |= value
-//
-//go:inline
-func (r *Register16) SetBits(value uint16) {{
-	volatile.StoreUint16(&r.Reg, volatile.LoadUint16(&r.Reg) | value)
-}}
-
-// ClearBits reads the register, clears the given bits, and writes it back. It
-// is the volatile equivalent of:
-//
-//     r.Reg &^= value
-//
-//go:inline
-func (r *Register16) ClearBits(value uint16) {{
-	volatile.StoreUint16(&r.Reg, volatile.LoadUint16(&r.Reg) &^ value)
-}}
-
-// HasBits reads the register and then checks to see if the passed bits are set. It
-// is the volatile equivalent of:
-//
-//     (*r.Reg & value) > 0
-//
-//go:inline
-func (r *Register16) HasBits(value uint16) bool {{
-	return (r.Get() & value) > 0
-}}
-
-type Register32 struct {{
-	Reg uint32
-}}
-
-// Get returns the value in the register. It is the volatile equivalent of:
-//
-//     *r.Reg
-//
-//go:inline
-func (r *Register32) Get() uint32 {{
-	return volatile.LoadUint32(&r.Reg)
-}}
-
-// Set updates the register value. It is the volatile equivalent of:
-//
-//     *r.Reg = value
-//
-//go:inline
-func (r *Register32) Set(value uint32) {{
-	volatile.StoreUint32(&r.Reg, value)
-}}
-
-// SetBits reads the register, sets the given bits, and writes it back. It is
-// the volatile equivalent of:
-//
-//     r.Reg |= value
-//
-//go:inline
-func (r *Register32) SetBits(value uint32) {{
-	volatile.StoreUint32(&r.Reg, volatile.LoadUint32(&r.Reg) | value)
-}}
-
-// ClearBits reads the register, clears the given bits, and writes it back. It
-// is the volatile equivalent of:
-//
-//     r.Reg &^= value
-//
-//go:inline
-func (r *Register32) ClearBits(value uint32) {{
-	volatile.StoreUint32(&r.Reg, volatile.LoadUint32(&r.Reg) &^ value)
-}}
-
-// HasBits reads the register and then checks to see if the passed bits are set. It
-// is the volatile equivalent of:
-//
-//     (*r.Reg & value) > 0
-//
-//go:inline
-func (r *Register32) HasBits(value uint32) bool {{
-	return (r.Get() & value) > 0
-}}
-
 // Some information about this device.
 const (
 	DEVICE     = "{name}"
@@ -499,22 +341,22 @@ const (
                 continue
             eSize = register['elementsize']
             if eSize == 4:
-                regType = 'Register32'
+                regType = 'volatile.Register32'
             elif eSize == 2:
-                regType = 'Register16'
+                regType = 'volatile.Register16'
             elif eSize == 1:
-                regType = 'Register8'        
+                regType = 'volatile.Register8'
             else:
                 eSize = 4
-                regType = 'Register32'
+                regType = 'volatile.Register32'
 
             # insert padding, if needed
             if address < register['address']:
                 bytesNeeded = register['address'] - address
                 if bytesNeeded == 1:
-                    out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType='Register8'))
+                    out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType='volatile.Register8'))
                 elif bytesNeeded == 2:
-                    out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType='Register16'))
+                    out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType='volatile.Register16'))
                 else:
                     numSkip = (register['address'] - address) // eSize
                     if numSkip == 1:
@@ -531,28 +373,28 @@ const (
                 subaddress = register['address']
                 for subregister in register['registers']:
                     if subregister['elementsize'] == 4:
-                        subregType = 'Register32'
+                        subregType = 'volatile.Register32'
                     elif subregister['elementsize'] == 2:
-                        subregType = 'Register16'
+                        subregType = 'volatile.Register16'
                     else:
-                        subregType = 'Register8'
+                        subregType = 'volatile.Register8'
 
                     if subregister['array']:
                         subregType = '[{}]{}'.format(subregister['array'], subregType)
                     if subaddress != subregister['address']:
                         bytesNeeded = subregister['address'] - subaddress
                         if bytesNeeded == 1:
-                            regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='Register8')
+                            regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='volatile.Register8')
                         elif bytesNeeded == 2:
-                            regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='Register16')
+                            regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='volatile.Register16')
                         else:
                             numSkip = (subregister['address'] - subaddress)
                             if numSkip < 1:
                                 continue
                             elif numSkip == 1:
-                                regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='Register8')
+                                regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='volatile.Register8')
                             else:
-                                regType += '\t\t_padding{padNumber} [{num}]{subregType}\n'.format(padNumber=padNumber, num=numSkip, subregType='Register8')
+                                regType += '\t\t_padding{padNumber} [{num}]{subregType}\n'.format(padNumber=padNumber, num=numSkip, subregType='volatile.Register8')
                         padNumber += 1
                         subaddress += bytesNeeded
                     if subregister['array'] is not None:
