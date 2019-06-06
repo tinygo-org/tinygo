@@ -30,6 +30,7 @@
 package arm
 
 import (
+	"runtime/volatile"
 	"unsafe"
 )
 
@@ -69,9 +70,6 @@ func SVCall3(num uintptr, a1, a2, a3 interface{}) uintptr
 // Run the following system call (SVCall) with 4 arguments.
 func SVCall4(num uintptr, a1, a2, a3, a4 interface{}) uintptr
 
-//go:volatile
-type RegValue uint32
-
 const (
 	SCS_BASE  = 0xE000E000
 	NVIC_BASE = SCS_BASE + 0x0100
@@ -82,24 +80,24 @@ const (
 // Source:
 // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0553a/CIHIGCIF.html
 type NVIC_Type struct {
-	ISER [8]RegValue // Interrupt Set-enable Registers
+	ISER [8]volatile.Register32 // Interrupt Set-enable Registers
 	_    [24]uint32
-	ICER [8]RegValue // Interrupt Clear-enable Registers
+	ICER [8]volatile.Register32 // Interrupt Clear-enable Registers
 	_    [24]uint32
-	ISPR [8]RegValue // Interrupt Set-pending Registers
+	ISPR [8]volatile.Register32 // Interrupt Set-pending Registers
 	_    [24]uint32
-	ICPR [8]RegValue // Interrupt Clear-pending Registers
+	ICPR [8]volatile.Register32 // Interrupt Clear-pending Registers
 	_    [24]uint32
-	IABR [8]RegValue // Interrupt Active Bit Registers
+	IABR [8]volatile.Register32 // Interrupt Active Bit Registers
 	_    [56]uint32
-	IPR  [60]RegValue // Interrupt Priority Registers
+	IPR  [60]volatile.Register32 // Interrupt Priority Registers
 }
 
 var NVIC = (*NVIC_Type)(unsafe.Pointer(uintptr(NVIC_BASE)))
 
 // Enable the given interrupt number.
 func EnableIRQ(irq uint32) {
-	NVIC.ISER[irq>>5] = 1 << (irq & 0x1F)
+	NVIC.ISER[irq>>5].Set(1 << (irq & 0x1F))
 }
 
 // Set the priority of the given interrupt number.
@@ -116,7 +114,7 @@ func SetPriority(irq uint32, priority uint32) {
 	regpos := irq % 4
 	mask := uint32(0xff) << (regpos * 8) // bits to clear
 	priority = priority << (regpos * 8)  // bits to set
-	NVIC.IPR[regnum] = RegValue((uint32(NVIC.IPR[regnum]) &^ mask) | priority)
+	NVIC.IPR[regnum].Set((uint32(NVIC.IPR[regnum].Get()) &^ mask) | priority)
 }
 
 // DisableInterrupts disables all interrupts, and returns the old state.
