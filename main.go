@@ -81,11 +81,11 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		return errors.New("cannot locate $GOROOT, please set it manually")
 	}
 	tags := spec.BuildTags
-	major, minor := getGorootVersion(goroot)
+	major, minor, err := getGorootVersion(goroot)
+	if err != nil {
+		return fmt.Errorf("could not read version from GOROOT (%v): %v", goroot, err)
+	}
 	if major != 1 {
-		if major == 0 {
-			return errors.New("could not read version from GOROOT: " + goroot)
-		}
 		return fmt.Errorf("expected major version 1, got go%d.%d", major, minor)
 	}
 	for i := 1; i <= minor; i++ {

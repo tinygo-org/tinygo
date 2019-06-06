@@ -375,23 +375,29 @@ func isGoroot(goroot string) bool {
 
 // getGorootVersion returns the major and minor version for a given GOROOT path.
 // If the goroot cannot be determined, (0, 0) is returned.
-func getGorootVersion(goroot string) (major, minor int) {
+func getGorootVersion(goroot string) (major, minor int, err error) {
 	data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION"))
 	if err != nil {
-		return
+		return 0, 0, err
 	}
 	s := string(data)
 	if s[:2] != "go" {
-		return
+		return 0, 0, errors.New("could not parse Go version: version does not start with 'go' prefix")
 	}
 	parts := strings.Split(s[2:], ".")
 	if len(parts) < 2 {
-		return
+		return 0, 0, errors.New("could not parse Go version: version has less than two parts")
 	}
 
 	// Ignore the errors, strconv.Atoi will return 0 on most errors and we
 	// don't really handle errors here anyway.
-	major, _ = strconv.Atoi(parts[0])
-	minor, _ = strconv.Atoi(parts[1])
+	major, err = strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to parse major version: %s", err)
+	}
+	minor, err = strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to parse minor version: %s", err)
+	}
 	return
 }
