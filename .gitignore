@@ -1,3 +1,4 @@
+bin/go
 build
 docs/_build
 src/device/avr/*.go

@@ -78,8 +78,14 @@ llvm-build: llvm-build/build.ninja
 
 # Build the Go compiler.
 build/tinygo:
-	@if [ ! -f llvm-build/bin/llvm-config ]; then echo "Fetch and build LLVM first by running:\n  make llvm-source\n  make llvm-build"; exit 1; fi
+	@if [ ! -f $(LLVM_BUILDDIR)/bin/llvm-config ]; then echo "Fetch and build LLVM first by running:\n  make llvm-source\n  make llvm-build"; exit 1; fi
+	# Generate src/runtime/internal/sys/zversion.go with TinyGo version number, for GoLand and IDEA
+	echo 'package sys' > src/runtime/internal/sys/zversion.go
+	echo >> src/runtime/internal/sys/zversion.go
+	echo "const TheVersion = \`go`grep '^const version' version.go|sed 's/const version = "//'|sed 's/"//'`\`" >> src/runtime/internal/sys/zversion.go
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go build -o build/tinygo -tags byollvm .
+	# GoLand and IDEA expect a "go" binary under bin
+	ln -s "../build/tinygo" bin/go
 
 test:
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go test -v -tags byollvm .
