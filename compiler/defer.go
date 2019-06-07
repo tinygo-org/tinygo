@@ -29,7 +29,7 @@ func (c *Compiler) deferInitFunc(frame *Frame) {
 	frame.deferClosureFuncs = make(map[*ir.Function]int)
 
 	// Create defer list pointer.
-	deferType := llvm.PointerType(c.mod.GetTypeByName("runtime._defer"), 0)
+	deferType := llvm.PointerType(c.getLLVMRuntimeType("_defer"), 0)
 	frame.deferPtr = c.builder.CreateAlloca(deferType, "deferPtr")
 	c.builder.CreateStore(llvm.ConstPointerNull(deferType), frame.deferPtr)
 }
@@ -200,7 +200,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 			}
 
 			// Get the real defer struct type and cast to it.
-			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.mod.GetTypeByName("runtime._defer"), 0), c.i8ptrType}
+			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.getLLVMRuntimeType("_defer"), 0), c.i8ptrType}
 			for _, arg := range callback.Args {
 				valueTypes = append(valueTypes, c.getLLVMType(arg.Type()))
 			}
@@ -231,7 +231,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 			// Direct call.
 
 			// Get the real defer struct type and cast to it.
-			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.mod.GetTypeByName("runtime._defer"), 0)}
+			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.getLLVMRuntimeType("_defer"), 0)}
 			for _, param := range callback.Params {
 				valueTypes = append(valueTypes, c.getLLVMType(param.Type()))
 			}
@@ -260,7 +260,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 		case *ssa.MakeClosure:
 			// Get the real defer struct type and cast to it.
 			fn := c.ir.GetFunction(callback.Fn.(*ssa.Function))
-			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.mod.GetTypeByName("runtime._defer"), 0)}
+			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.getLLVMRuntimeType("_defer"), 0)}
 			params := fn.Signature.Params()
 			for i := 0; i < params.Len(); i++ {
 				valueTypes = append(valueTypes, c.getLLVMType(params.At(i).Type()))

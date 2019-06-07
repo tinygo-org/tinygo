@@ -12,7 +12,7 @@ import (
 
 // emitMakeChan returns a new channel value for the given channel type.
 func (c *Compiler) emitMakeChan(expr *ssa.MakeChan) (llvm.Value, error) {
-	chanType := c.mod.GetTypeByName("runtime.channel")
+	chanType := c.getLLVMType(c.getRuntimeType("channel"))
 	size := c.targetData.TypeAllocSize(chanType)
 	sizeValue := llvm.ConstInt(c.uintptrType, size, false)
 	ptr := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "chan.alloc")

@@ -28,14 +28,14 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, pos token.
 	itfMethodSetGlobal := c.getTypeMethodSet(typ)
 	itfConcreteTypeGlobal := c.mod.NamedGlobal("typeInInterface:" + itfTypeCodeGlobal.Name())
 	if itfConcreteTypeGlobal.IsNil() {
-		typeInInterface := c.mod.GetTypeByName("runtime.typeInInterface")
+		typeInInterface := c.getLLVMRuntimeType("typeInInterface")
 		itfConcreteTypeGlobal = llvm.AddGlobal(c.mod, typeInInterface, "typeInInterface:"+itfTypeCodeGlobal.Name())
 		itfConcreteTypeGlobal.SetInitializer(llvm.ConstNamedStruct(typeInInterface, []llvm.Value{itfTypeCodeGlobal, itfMethodSetGlobal}))
 		itfConcreteTypeGlobal.SetGlobalConstant(true)
 		itfConcreteTypeGlobal.SetLinkage(llvm.PrivateLinkage)
 	}
 	itfTypeCode := c.builder.CreatePtrToInt(itfConcreteTypeGlobal, c.uintptrType, "")
-	itf := llvm.Undef(c.mod.GetTypeByName("runtime._interface"))
+	itf := llvm.Undef(c.getLLVMRuntimeType("_interface"))
 	itf = c.builder.CreateInsertValue(itf, itfTypeCode, 0, "")
 	itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
 	return itf
@@ -48,7 +48,7 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 	globalName := "type:" + getTypeCodeName(typ)
 	global := c.mod.NamedGlobal(globalName)
 	if global.IsNil() {
-		global = llvm.AddGlobal(c.mod, c.mod.GetTypeByName("runtime.typecodeID"), globalName)
+		global = llvm.AddGlobal(c.mod, c.getLLVMRuntimeType("typecodeID"), globalName)
 		global.SetGlobalConstant(true)
 	}
 	return global
@@ -163,11 +163,11 @@ func (c *Compiler) getTypeMethodSet(typ types.Type) llvm.Value {
 	ms := c.ir.Program.MethodSets.MethodSet(typ)
 	if ms.Len() == 0 {
 		// no methods, so can leave that one out
-		return llvm.ConstPointerNull(llvm.PointerType(c.mod.GetTypeByName("runtime.interfaceMethodInfo"), 0))
+		return llvm.ConstPointerNull(llvm.PointerType(c.getLLVMRuntimeType("interfaceMethodInfo"), 0))
 	}
 
 	methods := make([]llvm.Value, ms.Len())
-	interfaceMethodInfoType := c.mod.GetTypeByName("runtime.interfaceMethodInfo")
+	interfaceMethodInfoType := c.getLLVMRuntimeType("interfaceMethodInfo")
 	for i := 0; i < ms.Len(); i++ {
 		method := ms.At(i)
 		signatureGlobal := c.getMethodSignature(method.Obj().(*types.Func))

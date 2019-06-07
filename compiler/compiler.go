@@ -275,25 +275,6 @@ func (c *Compiler) Compile(mainPath string) []error {
 
 	var frames []*Frame
 
-	// Declare all named struct types.
-	for _, t := range c.ir.NamedTypes {
-		if named, ok := t.Type.Type().(*types.Named); ok {
-			if _, ok := named.Underlying().(*types.Struct); ok {
-				t.LLVMType = c.ctx.StructCreateNamed(named.Obj().Pkg().Path() + "." + named.Obj().Name())
-			}
-		}
-	}
-
-	// Define all named struct types.
-	for _, t := range c.ir.NamedTypes {
-		if named, ok := t.Type.Type().(*types.Named); ok {
-			if st, ok := named.Underlying().(*types.Struct); ok {
-				llvmType := c.getLLVMType(st)
-				t.LLVMType.StructSetBody(llvmType.StructElementTypes(), false)
-			}
-		}
-	}
-
 	// Declare all globals.
 	for _, g := range c.ir.Globals {
 		typ := g.Type().(*types.Pointer).Elem()
@@ -413,6 +394,22 @@ func (c *Compiler) Compile(mainPath string) []error {
 	return c.diagnostics
 }
 
+// getRuntimeType obtains a named type from the runtime package and returns it
+// as a Go type.
+func (c *Compiler) getRuntimeType(name string) types.Type {
+	return c.ir.Program.ImportedPackage("runtime").Type(name).Type()
+}
+
+// getLLVMRuntimeType obtains a named type from the runtime package and returns
+// it as a LLVM type, creating it if necessary. It is a shorthand for
+// getLLVMType(getRuntimeType(name)).
+func (c *Compiler) getLLVMRuntimeType(name string) llvm.Type {
+	return c.getLLVMType(c.getRuntimeType(name))
+}
+
+// getLLVMType creates and returns a LLVM type for a Go type. In the case of
+// named struct types (or Go types implemented as named LLVM structs such as
+// strings) it also creates it first if necessary.
 func (c *Compiler) getLLVMType(goType types.Type) llvm.Type {
 	switch typ := goType.(type) {
 	case *types.Array:
@@ -441,7 +438,7 @@ func (c *Compiler) getLLVMType(goType types.Type) llvm.Type {
 		case types.Complex128:
 			return c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false)
 		case types.String, types.UntypedString:
-			return c.mod.GetTypeByName("runtime._string")
+			return c.getLLVMRuntimeType("_string")
 		case types.Uintptr:
 			return c.uintptrType
 		case types.UnsafePointer:
@@ -450,16 +447,23 @@ func (c *Compiler) getLLVMType(goType types.Type) llvm.Type {
 			panic("unknown basic type: " + typ.String())
 		}
 	case *types.Chan:
-		return llvm.PointerType(c.mod.GetTypeByName("runtime.channel"), 0)
+		return llvm.PointerType(c.getLLVMRuntimeType("channel"), 0)
 	case *types.Interface:
-		return c.mod.GetTypeByName("runtime._interface")
+		return c.getLLVMRuntimeType("_interface")
 	case *types.Map:
-		return llvm.PointerType(c.mod.GetTypeByName("runtime.hashmap"), 0)
+		return llvm.PointerType(c.getLLVMRuntimeType("hashmap"), 0)
 	case *types.Named:
-		if _, ok := typ.Underlying().(*types.Struct); ok {
-			llvmType := c.mod.GetTypeByName(typ.Obj().Pkg().Path() + "." + typ.Obj().Name())
+		if st, ok := typ.Underlying().(*types.Struct); ok {
+			// Structs are a special case. While other named types are ignored
+			// in LLVM IR, named structs are implemented as named structs in
+			// LLVM. This is because it is otherwise impossible to create
+			// self-referencing types such as linked lists.
+			llvmName := typ.Obj().Pkg().Path() + "." + typ.Obj().Name()
+			llvmType := c.mod.GetTypeByName(llvmName)
 			if llvmType.IsNil() {
-				panic("underlying type not found: " + typ.Obj().Pkg().Path() + "." + typ.Obj().Name())
+				llvmType = c.ctx.StructCreateNamed(llvmName)
+				underlying := c.getLLVMType(st)
+				llvmType.StructSetBody(underlying.StructElementTypes(), false)
 			}
 			return llvmType
 		}
@@ -1696,9 +1700,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		var iteratorType llvm.Type
 		switch typ := expr.X.Type().Underlying().(type) {
 		case *types.Basic: // string
-			iteratorType = c.mod.GetTypeByName("runtime.stringIterator")
+			iteratorType = c.getLLVMRuntimeType("stringIterator")
 		case *types.Map:
-			iteratorType = c.mod.GetTypeByName("runtime.hashmapIterator")
+			iteratorType = c.getLLVMRuntimeType("hashmapIterator")
 		default:
 			panic("unknown type in range: " + typ.String())
 		}
@@ -1858,7 +1862,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			newPtr := c.builder.CreateInBoundsGEP(oldPtr, []llvm.Value{low}, "")
 			newLen := c.builder.CreateSub(high, low, "")
-			str := llvm.Undef(c.mod.GetTypeByName("runtime._string"))
+			str := llvm.Undef(c.getLLVMRuntimeType("_string"))
 			str = c.builder.CreateInsertValue(str, newPtr, 0, "")
 			str = c.builder.CreateInsertValue(str, newLen, 1, "")
 			return str, nil
@@ -2237,7 +2241,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 			global.SetUnnamedAddr(true)
 			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 			strPtr := c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
-			strObj := llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._string"), []llvm.Value{strPtr, strLen})
+			strObj := llvm.ConstNamedStruct(c.getLLVMRuntimeType("_string"), []llvm.Value{strPtr, strLen})
 			return strObj
 		} else if typ.Kind() == types.UnsafePointer {
 			if !expr.IsNil() {
@@ -2290,7 +2294,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 			llvm.ConstInt(c.uintptrType, 0, false),
 			llvm.ConstPointerNull(c.i8ptrType),
 		}
-		return llvm.ConstNamedStruct(c.mod.GetTypeByName("runtime._interface"), fields)
+		return llvm.ConstNamedStruct(c.getLLVMRuntimeType("_interface"), fields)
 	case *types.Pointer:
 		if expr.Value != nil {
 			panic("expected nil pointer constant")

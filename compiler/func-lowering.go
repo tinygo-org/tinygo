@@ -51,7 +51,7 @@ func (c *Compiler) LowerFuncValues() {
 	}
 
 	// Find all func values used in the program with their signatures.
-	funcValueWithSignaturePtr := llvm.PointerType(c.mod.GetTypeByName("runtime.funcValueWithSignature"), 0)
+	funcValueWithSignaturePtr := llvm.PointerType(c.getLLVMRuntimeType("funcValueWithSignature"), 0)
 	signatures := map[string]*funcSignatureInfo{}
 	for global := c.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
 		if global.Type() != funcValueWithSignaturePtr {
