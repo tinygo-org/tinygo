@@ -3,6 +3,7 @@ package compiler
 import (
 	"errors"
 	"fmt"
+	"go/ast"
 	"go/build"
 	"go/constant"
 	"go/token"
@@ -66,6 +67,7 @@ type Compiler struct {
 	interfaceInvokeWrappers []interfaceInvokeWrapper
 	ir                      *ir.Program
 	diagnostics             []error
+	astComments             map[string]*ast.CommentGroup
 }
 
 type Frame struct {
@@ -275,20 +277,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 
 	var frames []*Frame
 
-	// Declare all globals.
-	for _, g := range c.ir.Globals {
-		typ := g.Type().(*types.Pointer).Elem()
-		llvmType := c.getLLVMType(typ)
-		global := c.mod.NamedGlobal(g.LinkName())
-		if global.IsNil() {
-			global = llvm.AddGlobal(c.mod, llvmType, g.LinkName())
-		}
-		g.LLVMGlobal = global
-		if !g.IsExtern() {
-			global.SetLinkage(llvm.InternalLinkage)
-			global.SetInitializer(c.getZeroValue(llvmType))
-		}
-	}
+	c.loadASTComments(lprogram)
 
 	// Declare all functions.
 	for _, f := range c.ir.Functions {
@@ -1357,9 +1346,9 @@ func (c *Compiler) getValue(frame *Frame, expr ssa.Value) llvm.Value {
 		}
 		return c.createFuncValue(fn.LLVMFn, llvm.Undef(c.i8ptrType), fn.Signature)
 	case *ssa.Global:
-		value := c.ir.GetGlobal(expr).LLVMGlobal
+		value := c.getGlobal(expr)
 		if value.IsNil() {
-			c.addError(expr.Pos(), "global not found: "+c.ir.GetGlobal(expr).LinkName())
+			c.addError(expr.Pos(), "global not found: "+expr.RelString(nil))
 			return llvm.Undef(c.getLLVMType(expr.Type()))
 		}
 		return value
@@ -2511,8 +2500,8 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 			//     var C.add unsafe.Pointer
 			// Instead of a load from the global, create a bitcast of the
 			// function pointer itself.
-			global := c.ir.GetGlobal(unop.X.(*ssa.Global))
-			name := global.LinkName()[:len(global.LinkName())-len("$funcaddr")]
+			globalName := c.getGlobalInfo(unop.X.(*ssa.Global)).linkName
+			name := globalName[:len(globalName)-len("$funcaddr")]
 			fn := c.mod.NamedFunction(name)
 			if fn.IsNil() {
 				return llvm.Value{}, c.makeError(unop.Pos(), "cgo function not found: "+name)
