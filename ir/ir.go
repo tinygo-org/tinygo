@@ -2,7 +2,6 @@ package ir
 
 import (
 	"go/ast"
-	"go/token"
 	"go/types"
 	"sort"
 	"strings"
@@ -23,9 +22,6 @@ type Program struct {
 	mainPkg       *ssa.Package
 	Functions     []*Function
 	functionMap   map[*ssa.Function]*Function
-	Globals       []*Global
-	globalMap     map[*ssa.Global]*Global
-	comments      map[string]*ast.CommentGroup
 }
 
 // Function or method.
@@ -38,15 +34,6 @@ type Function struct {
 	flag      bool       // used by dead code elimination
 	interrupt bool       // go:interrupt
 	inline    InlineType // go:inline
-}
-
-// Global variable, possibly constant.
-type Global struct {
-	*ssa.Global
-	program    *Program
-	LLVMGlobal llvm.Value
-	linkName   string // go:extern
-	extern     bool   // go:extern
 }
 
 // Interface type that is at some point used in a type assert (to check whether
@@ -73,32 +60,6 @@ const (
 
 // Create and initialize a new *Program from a *ssa.Program.
 func NewProgram(lprogram *loader.Program, mainPath string) *Program {
-	comments := map[string]*ast.CommentGroup{}
-	for _, pkgInfo := range lprogram.Sorted() {
-		for _, file := range pkgInfo.Files {
-			for _, decl := range file.Decls {
-				switch decl := decl.(type) {
-				case *ast.GenDecl:
-					switch decl.Tok {
-					case token.TYPE, token.VAR:
-						if len(decl.Specs) != 1 {
-							continue
-						}
-						for _, spec := range decl.Specs {
-							switch spec := spec.(type) {
-							case *ast.ValueSpec: // decl.Tok == token.VAR
-								for _, name := range spec.Names {
-									id := pkgInfo.Pkg.Path() + "." + name.Name
-									comments[id] = decl.Doc
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
 	program := lprogram.LoadSSA()
 	program.Build()
 
@@ -170,8 +131,6 @@ func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 		LoaderProgram: lprogram,
 		mainPkg:       mainPkg,
 		functionMap:   make(map[*ssa.Function]*Function),
-		globalMap:     make(map[*ssa.Global]*Global),
-		comments:      comments,
 	}
 
 	for _, pkg := range packageList {
@@ -204,13 +163,7 @@ func (p *Program) AddPackage(pkg *ssa.Package) {
 				}
 			}
 		case *ssa.Global:
-			g := &Global{program: p, Global: member}
-			doc := p.comments[g.RelString(nil)]
-			if doc != nil {
-				g.parsePragmas(doc)
-			}
-			p.Globals = append(p.Globals, g)
-			p.globalMap[member] = g
+			// Ignore. Globals are not handled here.
 		case *ssa.NamedConst:
 			// Ignore: these are already resolved.
 		default:
@@ -242,10 +195,6 @@ func hasUnsafeImport(pkg *types.Package) bool {
 
 func (p *Program) GetFunction(ssaFn *ssa.Function) *Function {
 	return p.functionMap[ssaFn]
-}
-
-func (p *Program) GetGlobal(ssaGlobal *ssa.Global) *Global {
-	return p.globalMap[ssaGlobal]
 }
 
 func (p *Program) MainPkg() *ssa.Package {
@@ -363,49 +312,6 @@ func (f *Function) CName() string {
 		// emitted by `go tool cgo`
 		return name[len("_Cfunc_"):]
 	}
-	if strings.HasPrefix(name, "C.") {
-		// created by ../loader/cgo.go
-		return name[2:]
-	}
-	return ""
-}
-
-// Parse //go: pragma comments from the source.
-func (g *Global) parsePragmas(doc *ast.CommentGroup) {
-	for _, comment := range doc.List {
-		if !strings.HasPrefix(comment.Text, "//go:") {
-			continue
-		}
-		parts := strings.Fields(comment.Text)
-		switch parts[0] {
-		case "//go:extern":
-			g.extern = true
-			if len(parts) == 2 {
-				g.linkName = parts[1]
-			}
-		}
-	}
-}
-
-// Return the link name for this global.
-func (g *Global) LinkName() string {
-	if g.linkName != "" {
-		return g.linkName
-	}
-	if name := g.CName(); name != "" {
-		return name
-	}
-	return g.RelString(nil)
-}
-
-func (g *Global) IsExtern() bool {
-	return g.extern || g.CName() != ""
-}
-
-// Return the name of the C global if this is a CGo wrapper. Otherwise, return a
-// zero-length string.
-func (g *Global) CName() string {
-	name := g.Name()
 	if strings.HasPrefix(name, "C.") {
 		// created by ../loader/cgo.go
 		return name[2:]
