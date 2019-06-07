@@ -35,7 +35,7 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 		c.emitLifetimeEnd(mapKeyPtr, mapKeySize)
 	} else {
 		// Not trivially comparable using memcmp.
-		return llvm.Value{}, c.makeError(pos, "only strings, bools, ints or structs of bools/ints are supported as map keys, but got: "+keyType.String())
+		return llvm.Value{}, c.makeError(pos, "only strings, bools, ints, pointers or structs of bools/ints are supported as map keys, but got: "+keyType.String())
 	}
 
 	// Load the resulting value from the hashmap. The value is set to the zero
@@ -69,7 +69,7 @@ func (c *Compiler) emitMapUpdate(keyType types.Type, m, key, value llvm.Value, p
 		c.createRuntimeCall("hashmapBinarySet", params, "")
 		c.emitLifetimeEnd(keyPtr, keySize)
 	} else {
-		c.addError(pos, "only strings, bools, ints or structs of bools/ints are supported as map keys, but got: "+keyType.String())
+		c.addError(pos, "only strings, bools, ints, pointers or structs of bools/ints are supported as map keys, but got: "+keyType.String())
 	}
 	c.emitLifetimeEnd(valuePtr, valueSize)
 }
@@ -89,7 +89,7 @@ func (c *Compiler) emitMapDelete(keyType types.Type, m, key llvm.Value, pos toke
 		c.emitLifetimeEnd(keyPtr, keySize)
 		return nil
 	} else {
-		return c.makeError(pos, "only strings, bools, ints or structs of bools/ints are supported as map keys, but got: "+keyType.String())
+		return c.makeError(pos, "only strings, bools, ints, pointers or structs of bools/ints are supported as map keys, but got: "+keyType.String())
 	}
 }
 
@@ -121,6 +121,8 @@ func hashmapIsBinaryKey(keyType types.Type) bool {
 	switch keyType := keyType.(type) {
 	case *types.Basic:
 		return keyType.Info()&(types.IsBoolean|types.IsInteger) != 0
+	case *types.Pointer:
+		return true
 	case *types.Struct:
 		for i := 0; i < keyType.NumFields(); i++ {
 			fieldType := keyType.Field(i).Type().Underlying()
