@@ -4,7 +4,6 @@ package compiler
 // compiler builtins.
 
 import (
-	"go/constant"
 	"strconv"
 
 	"golang.org/x/tools/go/ssa"
@@ -14,7 +13,7 @@ import (
 // emitSyscall emits an inline system call instruction, depending on the target
 // OS/arch.
 func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, error) {
-	num, _ := constant.Uint64Val(call.Args[0].(*ssa.Const).Value)
+	num := c.getValue(frame, call.Args[0])
 	var syscallResult llvm.Value
 	switch {
 	case c.GOARCH == "amd64":
@@ -29,12 +28,12 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 			// > All system classes enter the kernel via the syscall instruction.
 			//
 			// Source: https://opensource.apple.com/source/xnu/xnu-792.13.8/osfmk/mach/i386/syscall_sw.h
-			num += 0x2000000
+			num = c.builder.CreateOr(num, llvm.ConstInt(c.uintptrType, 0x2000000, false), "")
 		}
 		// Sources:
 		//   https://stackoverflow.com/a/2538212
 		//   https://en.wikibooks.org/wiki/X86_Assembly/Interfacing_with_Linux#syscall
-		args := []llvm.Value{llvm.ConstInt(c.uintptrType, num, false)}
+		args := []llvm.Value{num}
 		argTypes := []llvm.Type{c.uintptrType}
 		// Constraints will look something like:
 		//   "={rax},0,{rdi},{rsi},{rdx},{r10},{r8},{r9},~{rcx},~{r11}"
@@ -81,7 +80,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
-		args = append(args, llvm.ConstInt(c.uintptrType, num, false))
+		args = append(args, num)
 		argTypes = append(argTypes, c.uintptrType)
 		constraints += ",{r7}" // syscall number
 		for i := len(call.Args) - 1; i < 4; i++ {
@@ -111,7 +110,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
-		args = append(args, llvm.ConstInt(c.uintptrType, num, false))
+		args = append(args, num)
 		argTypes = append(argTypes, c.uintptrType)
 		constraints += ",{x8}" // syscall number
 		for i := len(call.Args) - 1; i < 8; i++ {
