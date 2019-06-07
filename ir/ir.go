@@ -26,7 +26,6 @@ type Program struct {
 	Globals       []*Global
 	globalMap     map[*ssa.Global]*Global
 	comments      map[string]*ast.CommentGroup
-	NamedTypes    []*NamedType
 }
 
 // Function or method.
@@ -48,19 +47,6 @@ type Global struct {
 	LLVMGlobal llvm.Value
 	linkName   string // go:extern
 	extern     bool   // go:extern
-}
-
-// Type with a name and possibly methods.
-type NamedType struct {
-	*ssa.Type
-	LLVMType llvm.Type
-}
-
-// Type that is at some point put in an interface.
-type TypeWithMethods struct {
-	t       types.Type
-	Num     int
-	Methods map[string]*types.Selection
 }
 
 // Interface type that is at some point used in a type assert (to check whether
@@ -210,8 +196,6 @@ func (p *Program) AddPackage(pkg *ssa.Package) {
 		case *ssa.Function:
 			p.addFunction(member)
 		case *ssa.Type:
-			t := &NamedType{Type: member}
-			p.NamedTypes = append(p.NamedTypes, t)
 			methods := getAllMethods(pkg.Prog, member.Type())
 			if !types.IsInterface(member.Type()) {
 				// named type

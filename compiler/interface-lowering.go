@@ -163,8 +163,8 @@ func (c *Compiler) LowerInterfaces() {
 // run runs the pass itself.
 func (p *lowerInterfacesPass) run() {
 	// Collect all type codes.
-	typecodeIDPtr := llvm.PointerType(p.mod.GetTypeByName("runtime.typecodeID"), 0)
-	typeInInterfacePtr := llvm.PointerType(p.mod.GetTypeByName("runtime.typeInInterface"), 0)
+	typecodeIDPtr := llvm.PointerType(p.getLLVMRuntimeType("typecodeID"), 0)
+	typeInInterfacePtr := llvm.PointerType(p.getLLVMRuntimeType("typeInInterface"), 0)
 	var typesInInterfaces []llvm.Value
 	for global := p.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
 		switch global.Type() {

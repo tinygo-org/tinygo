@@ -52,7 +52,7 @@ func (c *Compiler) createFuncValue(funcPtr, context llvm.Value, sig *types.Signa
 		funcValueWithSignatureGlobalName := funcPtr.Name() + "$withSignature"
 		funcValueWithSignatureGlobal := c.mod.NamedGlobal(funcValueWithSignatureGlobalName)
 		if funcValueWithSignatureGlobal.IsNil() {
-			funcValueWithSignatureType := c.mod.GetTypeByName("runtime.funcValueWithSignature")
+			funcValueWithSignatureType := c.getLLVMRuntimeType("funcValueWithSignature")
 			funcValueWithSignature := llvm.ConstNamedStruct(funcValueWithSignatureType, []llvm.Value{
 				llvm.ConstPtrToInt(funcPtr, c.uintptrType),
 				sigGlobal,
@@ -126,7 +126,7 @@ func (c *Compiler) getFuncType(typ *types.Signature) llvm.Type {
 		rawPtr := c.getRawFuncType(typ)
 		return c.ctx.StructType([]llvm.Type{c.i8ptrType, rawPtr}, false)
 	case funcValueSwitch:
-		return c.mod.GetTypeByName("runtime.funcValue")
+		return c.getLLVMRuntimeType("funcValue")
 	default:
 		panic("unimplemented func value variant")
 	}

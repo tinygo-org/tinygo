@@ -321,7 +321,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 		// Coroutine setup.
 		c.builder.SetInsertPointBefore(f.EntryBasicBlock().FirstInstruction())
-		taskState := c.builder.CreateAlloca(c.mod.GetTypeByName("runtime.taskState"), "task.state")
+		taskState := c.builder.CreateAlloca(c.getLLVMRuntimeType("taskState"), "task.state")
 		stateI8 := c.builder.CreateBitCast(taskState, c.i8ptrType, "task.state.i8")
 		id := c.builder.CreateCall(coroIdFunc, []llvm.Value{
 			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
