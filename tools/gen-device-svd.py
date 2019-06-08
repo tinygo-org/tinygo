@@ -396,6 +396,8 @@ const (
                     out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType='volatile.Register8'))
                 elif bytesNeeded == 2:
                     out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType='volatile.Register16'))
+                elif bytesNeeded == 3:
+                    out.write('\t_padding{padNumber} [3]{regType}\n'.format(padNumber=padNumber, regType='volatile.Register8'))
                 else:
                     numSkip = (register['address'] - address) // eSize
                     if numSkip == 1:
