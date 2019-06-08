@@ -48,9 +48,62 @@ func main() {
 	}
 	println("sum(100):", sum)
 
-	// Test select
+	// Test simple selects.
 	go selectDeadlock()
 	go selectNoOp()
+
+	// Test select with a single send operation (transformed into chan send).
+	ch = make(chan int)
+	go fastreceiver(ch)
+	select {
+	case ch <- 5:
+		println("select one sent")
+	}
+	close(ch)
+
+	// Test select with a single recv operation (transformed into chan recv).
+	select {
+	case n := <-ch:
+		println("select one n:", n)
+	}
+
+	// Test select recv with channel that has one entry.
+	ch = make(chan int)
+	go func(ch chan int) {
+		ch <- 55
+	}(ch)
+	time.Sleep(time.Millisecond)
+	select {
+	case make(chan int) <- 3:
+		println("unreachable")
+	case n := <-ch:
+		println("select n from chan:", n)
+	case n := <-make(chan int):
+		println("unreachable:", n)
+	}
+
+	// Test select recv with closed channel.
+	close(ch)
+	select {
+	case make(chan int) <- 3:
+		println("unreachable")
+	case n := <-ch:
+		println("select n from closed chan:", n)
+	case n := <-make(chan int):
+		println("unreachable:", n)
+	}
+
+	// Test select send.
+	ch = make(chan int)
+	go fastreceiver(ch)
+	time.Sleep(time.Millisecond)
+	select {
+	case ch <- 235:
+		println("select send")
+	case n := <-make(chan int):
+		println("unreachable:", n)
+	}
+	close(ch)
 
 	// Allow goroutines to exit.
 	time.Sleep(time.Microsecond)
@@ -68,7 +121,7 @@ func sender(ch chan int) {
 }
 
 func sendComplex(ch chan complex128) {
-	ch <- 7+10.5i
+	ch <- 7 + 10.5i
 }
 
 func fastsender(ch chan int) {

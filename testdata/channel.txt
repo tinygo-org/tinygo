@@ -23,3 +23,10 @@ sum(100): 4950
 deadlocking
 select no-op
 after no-op
+select one sent
+sum: 5
+select one n: 0
+select n from chan: 55
+select n from closed chan: 0
+select send
+sum: 235

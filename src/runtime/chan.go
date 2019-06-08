@@ -29,16 +29,26 @@ import (
 
 type channel struct {
 	elementSize uint16 // the size of one value in this channel
-	state       uint8
+	state       chanState
 	blocked     *coroutine
 }
 
+type chanState uint8
+
 const (
-	chanStateEmpty = iota
+	chanStateEmpty chanState = iota
 	chanStateRecv
 	chanStateSend
 	chanStateClosed
 )
+
+// chanSelectState is a single channel operation (send/recv) in a select
+// statement. The value pointer is either nil (for receives) or points to the
+// value to send (for sends).
+type chanSelectState struct {
+	ch    *channel
+	value unsafe.Pointer
+}
 
 func deadlockStub()
 
@@ -143,4 +153,64 @@ func chanClose(ch *channel) {
 		// Easy case. No available sender or receiver.
 		ch.state = chanStateClosed
 	}
+}
+
+// chanSelect is the runtime implementation of the select statement. This is
+// perhaps the most complicated statement in the Go spec. It returns the
+// selected index and the 'comma-ok' value.
+//
+// TODO: do this in a round-robin fashion (as specified in the Go spec) instead
+// of picking the first one that can proceed.
+func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, blocking bool) (uintptr, bool) {
+	// See whether we can receive from one of the channels.
+	for i, state := range states {
+		if state.ch == nil {
+			// A nil channel blocks forever, so don't consider it here.
+			continue
+		}
+		if state.value == nil {
+			// A receive operation.
+			switch state.ch.state {
+			case chanStateSend:
+				// We can receive immediately.
+				sender := state.ch.blocked
+				senderPromise := sender.promise()
+				memcpy(recvbuf, senderPromise.ptr, uintptr(state.ch.elementSize))
+				state.ch.blocked = senderPromise.next
+				senderPromise.next = nil
+				activateTask(sender)
+				if state.ch.blocked == nil {
+					state.ch.state = chanStateEmpty
+				}
+				return uintptr(i), true // commaOk = true
+			case chanStateClosed:
+				// Receive the zero value.
+				memzero(recvbuf, uintptr(state.ch.elementSize))
+				return uintptr(i), false // commaOk = false
+			}
+		} else {
+			// A send operation: state.value is not nil.
+			switch state.ch.state {
+			case chanStateRecv:
+				receiver := state.ch.blocked
+				receiverPromise := receiver.promise()
+				memcpy(receiverPromise.ptr, state.value, uintptr(state.ch.elementSize))
+				receiverPromise.data = 1 // commaOk = true
+				state.ch.blocked = receiverPromise.next
+				receiverPromise.next = nil
+				activateTask(receiver)
+				if state.ch.blocked == nil {
+					state.ch.state = chanStateEmpty
+				}
+				return uintptr(i), false
+			case chanStateClosed:
+				runtimePanic("send on closed channel")
+			}
+		}
+	}
+
+	if !blocking {
+		return ^uintptr(0), false
+	}
+	panic("unimplemented: blocking select")
 }
