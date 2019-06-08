@@ -1721,7 +1721,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				return retval, nil // {-1, false}
 			}
 		}
-		return llvm.Value{}, c.makeError(expr.Pos(), "unimplemented: "+expr.String())
+		return llvm.Undef(c.getLLVMType(expr.Type())), c.makeError(expr.Pos(), "unimplemented: "+expr.String())
 	case *ssa.Slice:
 		if expr.Max != nil {
 			return llvm.Value{}, c.makeError(expr.Pos(), "todo: full slice expressions (with max): "+expr.Type().String())
