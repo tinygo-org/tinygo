@@ -27,8 +27,8 @@ on a different system like Mac.
 
 ## Download the source
 
-The first step is to download the TinyGo sources. Then, inside the directory,
-perform these steps:
+The first step is to download the TinyGo sources (use `--recursive` if you clone
+the git repository). Then, inside the directory, perform these steps:
 
     dep ensure -vendor-only # download Go dependencies
     make llvm-source        # download LLVM
