@@ -28,8 +28,9 @@ import (
 )
 
 type channel struct {
-	state   uint8
-	blocked *coroutine
+	elementSize uint16 // the size of one value in this channel
+	state       uint8
+	blocked     *coroutine
 }
 
 const (
@@ -45,7 +46,7 @@ func deadlockStub()
 // complete immediately (there is a goroutine waiting for a value), it sends the
 // value and re-activates both goroutines. If not, it sets itself as waiting on
 // a value.
-func chanSend(sender *coroutine, ch *channel, value unsafe.Pointer, size uintptr) {
+func chanSend(sender *coroutine, ch *channel, value unsafe.Pointer) {
 	if ch == nil {
 		// A nil channel blocks forever. Do not scheduler this goroutine again.
 		return
@@ -58,7 +59,7 @@ func chanSend(sender *coroutine, ch *channel, value unsafe.Pointer, size uintptr
 	case chanStateRecv:
 		receiver := ch.blocked
 		receiverPromise := receiver.promise()
-		memcpy(receiverPromise.ptr, value, size)
+		memcpy(receiverPromise.ptr, value, uintptr(ch.elementSize))
 		receiverPromise.data = 1 // commaOk = true
 		ch.blocked = receiverPromise.next
 		receiverPromise.next = nil
@@ -80,7 +81,7 @@ func chanSend(sender *coroutine, ch *channel, value unsafe.Pointer, size uintptr
 // sender, it receives the value immediately and re-activates both coroutines.
 // If not, it sets itself as available for receiving. If the channel is closed,
 // it immediately activates itself with a zero value as the result.
-func chanRecv(receiver *coroutine, ch *channel, value unsafe.Pointer, size uintptr) {
+func chanRecv(receiver *coroutine, ch *channel, value unsafe.Pointer) {
 	if ch == nil {
 		// A nil channel blocks forever. Do not scheduler this goroutine again.
 		return
@@ -89,7 +90,7 @@ func chanRecv(receiver *coroutine, ch *channel, value unsafe.Pointer, size uintp
 	case chanStateSend:
 		sender := ch.blocked
 		senderPromise := sender.promise()
-		memcpy(value, senderPromise.ptr, size)
+		memcpy(value, senderPromise.ptr, uintptr(ch.elementSize))
 		receiver.promise().data = 1 // commaOk = true
 		ch.blocked = senderPromise.next
 		senderPromise.next = nil
@@ -103,7 +104,7 @@ func chanRecv(receiver *coroutine, ch *channel, value unsafe.Pointer, size uintp
 		ch.state = chanStateRecv
 		ch.blocked = receiver
 	case chanStateClosed:
-		memzero(value, size)
+		memzero(value, uintptr(ch.elementSize))
 		receiver.promise().data = 0 // commaOk = false
 		activateTask(receiver)
 	case chanStateRecv:
@@ -115,7 +116,7 @@ func chanRecv(receiver *coroutine, ch *channel, value unsafe.Pointer, size uintp
 
 // chanClose closes the given channel. If this channel has a receiver or is
 // empty, it closes the channel. Else, it panics.
-func chanClose(ch *channel, size uintptr) {
+func chanClose(ch *channel) {
 	if ch == nil {
 		// Not allowed by the language spec.
 		runtimePanic("close of nil channel")
@@ -133,7 +134,7 @@ func chanClose(ch *channel, size uintptr) {
 	case chanStateRecv:
 		// The receiver must be re-activated with a zero value.
 		receiverPromise := ch.blocked.promise()
-		memzero(receiverPromise.ptr, size)
+		memzero(receiverPromise.ptr, uintptr(ch.elementSize))
 		receiverPromise.data = 0 // commaOk = false
 		activateTask(ch.blocked)
 		ch.state = chanStateClosed

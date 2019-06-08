@@ -4,6 +4,7 @@ package compiler
 // or pseudo-operations that are lowered during goroutine lowering.
 
 import (
+	"fmt"
 	"go/types"
 
 	"golang.org/x/tools/go/ssa"
@@ -12,11 +13,22 @@ import (
 
 // emitMakeChan returns a new channel value for the given channel type.
 func (c *Compiler) emitMakeChan(expr *ssa.MakeChan) (llvm.Value, error) {
-	chanType := c.getLLVMType(c.getRuntimeType("channel"))
-	size := c.targetData.TypeAllocSize(chanType)
+	chanType := c.getLLVMType(expr.Type())
+	size := c.targetData.TypeAllocSize(chanType.ElementType())
 	sizeValue := llvm.ConstInt(c.uintptrType, size, false)
 	ptr := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "chan.alloc")
-	ptr = c.builder.CreateBitCast(ptr, llvm.PointerType(chanType, 0), "chan")
+	ptr = c.builder.CreateBitCast(ptr, chanType, "chan")
+	// Set the elementSize field
+	elementSizePtr := c.builder.CreateGEP(ptr, []llvm.Value{
+		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+	}, "")
+	elementSize := c.targetData.TypeAllocSize(c.getLLVMType(expr.Type().(*types.Chan).Elem()))
+	if elementSize > 0xffff {
+		return ptr, c.makeError(expr.Pos(), fmt.Sprintf("element size is %d bytes, which is bigger than the maximum of %d bytes", elementSize, 0xffff))
+	}
+	elementSizeValue := llvm.ConstInt(c.ctx.Int16Type(), elementSize, false)
+	c.builder.CreateStore(elementSizeValue, elementSizePtr)
 	return ptr, nil
 }
 
@@ -33,8 +45,7 @@ func (c *Compiler) emitChanSend(frame *Frame, instr *ssa.Send) {
 
 	// Do the send.
 	coroutine := c.createRuntimeCall("getCoroutine", nil, "")
-	valueSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(chanValue.Type()), false)
-	c.createRuntimeCall("chanSend", []llvm.Value{coroutine, ch, valueAllocaCast, valueSize}, "")
+	c.createRuntimeCall("chanSend", []llvm.Value{coroutine, ch, valueAllocaCast}, "")
 
 	// End the lifetime of the alloca.
 	// This also works around a bug in CoroSplit, at least in LLVM 8:
@@ -53,8 +64,7 @@ func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) llvm.Value {
 
 	// Do the receive.
 	coroutine := c.createRuntimeCall("getCoroutine", nil, "")
-	valueSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(valueType), false)
-	c.createRuntimeCall("chanRecv", []llvm.Value{coroutine, ch, valueAllocaCast, valueSize}, "")
+	c.createRuntimeCall("chanRecv", []llvm.Value{coroutine, ch, valueAllocaCast}, "")
 	received := c.builder.CreateLoad(valueAlloca, "chan.received")
 	c.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
 
@@ -72,8 +82,6 @@ func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) llvm.Value {
 
 // emitChanClose closes the given channel.
 func (c *Compiler) emitChanClose(frame *Frame, param ssa.Value) {
-	valueType := c.getLLVMType(param.Type().(*types.Chan).Elem())
-	valueSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(valueType), false)
 	ch := c.getValue(frame, param)
-	c.createRuntimeCall("chanClose", []llvm.Value{ch, valueSize}, "")
+	c.createRuntimeCall("chanClose", []llvm.Value{ch}, "")
 }
