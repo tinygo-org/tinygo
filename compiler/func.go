@@ -103,7 +103,7 @@ func (c *Compiler) extractFuncContext(funcValue llvm.Value) llvm.Value {
 
 // decodeFuncValue extracts the context and the function pointer from this func
 // value. This may be an expensive operation.
-func (c *Compiler) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcPtr, context llvm.Value, err error) {
+func (c *Compiler) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcPtr, context llvm.Value) {
 	context = c.builder.CreateExtractValue(funcValue, 0, "")
 	switch c.funcImplementation() {
 	case funcValueDoubleword:
