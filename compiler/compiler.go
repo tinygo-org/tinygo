@@ -84,6 +84,7 @@ type Frame struct {
 	deferFuncs        map[*ir.Function]int
 	deferInvokeFuncs  map[string]int
 	deferClosureFuncs map[*ir.Function]int
+	selectRecvBuf     map[*ssa.Select]llvm.Value
 }
 
 type Phi struct {
@@ -1445,9 +1446,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		x := c.getValue(frame, expr.X)
 		return c.parseConvert(expr.X.Type(), expr.Type(), x, expr.Pos())
 	case *ssa.Extract:
+		if _, ok := expr.Tuple.(*ssa.Select); ok {
+			return c.getChanSelectResult(frame, expr), nil
+		}
 		value := c.getValue(frame, expr.Tuple)
-		result := c.builder.CreateExtractValue(value, expr.Index, "")
-		return result, nil
+		return c.builder.CreateExtractValue(value, expr.Index, ""), nil
 	case *ssa.Field:
 		value := c.getValue(frame, expr.X)
 		if s := expr.X.Type().Underlying().(*types.Struct); s.NumFields() > 2 && s.Field(0).Name() == "C union" {
@@ -1696,25 +1699,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		c.builder.CreateStore(c.getZeroValue(iteratorType), it)
 		return it, nil
 	case *ssa.Select:
-		if len(expr.States) == 0 {
-			// Shortcuts for some simple selects.
-			llvmType := c.getLLVMType(expr.Type())
-			if expr.Blocking {
-				// Blocks forever:
-				//     select {}
-				c.createRuntimeCall("deadlockStub", nil, "")
-				return llvm.Undef(llvmType), nil
-			} else {
-				// No-op:
-				//     select {
-				//     default:
-				//     }
-				retval := llvm.Undef(llvmType)
-				retval = c.builder.CreateInsertValue(retval, llvm.ConstInt(c.intType, 0xffffffffffffffff, true), 0, "")
-				return retval, nil // {-1, false}
-			}
-		}
-		return llvm.Undef(c.getLLVMType(expr.Type())), c.makeError(expr.Pos(), "unimplemented: "+expr.String())
+		return c.emitSelect(frame, expr), nil
 	case *ssa.Slice:
 		if expr.Max != nil {
 			return llvm.Value{}, c.makeError(expr.Pos(), "todo: full slice expressions (with max): "+expr.Type().String())
