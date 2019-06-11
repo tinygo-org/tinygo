@@ -2473,6 +2473,8 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 		switch elemType.Kind() {
 		case types.Byte:
 			return c.createRuntimeCall("stringToBytes", []llvm.Value{value}, ""), nil
+		case types.Rune:
+			return c.createRuntimeCall("stringToRunes", []llvm.Value{value}, ""), nil
 		default:
 			return llvm.Value{}, c.makeError(pos, "todo: convert from string: "+elemType.String())
 		}

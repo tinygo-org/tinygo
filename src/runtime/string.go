@@ -89,6 +89,21 @@ func stringToBytes(x _string) (slice struct {
 	return
 }
 
+// Convert a string to []rune slice.
+func stringToRunes(s string) []rune {
+	var n = 0
+	for range s {
+		n++
+	}
+	var r = make([]rune, n)
+	n = 0
+	for _, e := range s {
+		r[n] = e
+		n++
+	}
+	return r
+}
+
 // Create a string from a Unicode code point.
 func stringFromUnicode(x rune) _string {
 	array, length := encodeUTF8(x)
