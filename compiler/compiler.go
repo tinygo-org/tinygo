@@ -2476,7 +2476,7 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 		case types.Rune:
 			return c.createRuntimeCall("stringToRunes", []llvm.Value{value}, ""), nil
 		default:
-			panic("compiler error")
+			panic("unexpected type in string to slice conversion")
 		}
 
 	default:
