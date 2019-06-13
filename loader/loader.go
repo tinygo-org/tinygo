@@ -26,6 +26,7 @@ type Program struct {
 	Dir          string // current working directory (for error reporting)
 	TINYGOROOT   string // root of the TinyGo installation or root of the source code
 	CFlags       []string
+	ClangHeaders string
 }
 
 // Package holds a loaded package, its imports, and its parsed files.
@@ -306,15 +307,11 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		files = append(files, f)
 	}
 	if len(p.CgoFiles) != 0 {
-		clangIncludes := ""
-		if _, err := os.Stat(filepath.Join(p.TINYGOROOT, "llvm", "tools", "clang", "lib", "Headers")); !os.IsNotExist(err) {
-			// Running from the source directory.
-			clangIncludes = filepath.Join(p.TINYGOROOT, "llvm", "tools", "clang", "lib", "Headers")
-		} else {
-			// Running from the installation directory.
-			clangIncludes = filepath.Join(p.TINYGOROOT, "lib", "clang", "include")
+		cflags := append(p.CFlags, "-I"+p.Package.Dir)
+		if p.ClangHeaders != "" {
+			cflags = append(cflags, "-I"+p.ClangHeaders)
 		}
-		generated, errs := cgo.Process(files, p.Program.Dir, p.fset, append(p.CFlags, "-I"+p.Package.Dir, "-I"+clangIncludes))
+		generated, errs := cgo.Process(files, p.Program.Dir, p.fset, cflags)
 		if errs != nil {
 			fileErrs = append(fileErrs, errs...)
 		}
