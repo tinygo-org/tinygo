@@ -41,6 +41,7 @@ type Config struct {
 	PanicStrategy string   // panic strategy ("abort" or "trap")
 	CFlags        []string // cflags to pass to cgo
 	LDFlags       []string // ldflags to pass to cgo
+	ClangHeaders  string   // Clang built-in header include path
 	DumpSSA       bool     // dump Go SSA, for compiler debugging
 	Debug         bool     // add debug symbols for gdb
 	GOROOT        string   // GOROOT
@@ -235,9 +236,10 @@ func (c *Compiler) Compile(mainPath string) []error {
 				MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
 			},
 		},
-		Dir:        wd,
-		TINYGOROOT: c.TINYGOROOT,
-		CFlags:     c.CFlags,
+		Dir:          wd,
+		TINYGOROOT:   c.TINYGOROOT,
+		CFlags:       c.CFlags,
+		ClangHeaders: c.ClangHeaders,
 	}
 	if strings.HasSuffix(mainPath, ".go") {
 		_, err = lprogram.ImportFile(mainPath)

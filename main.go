@@ -101,6 +101,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		PanicStrategy: config.panicStrategy,
 		CFlags:        cflags,
 		LDFlags:       ldflags,
+		ClangHeaders:  getClangHeaderPath(root),
 		Debug:         config.debug,
 		DumpSSA:       config.dumpSSA,
 		TINYGOROOT:    root,
