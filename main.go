@@ -683,12 +683,11 @@ func main() {
 		err := Run(flag.Arg(0), *target, config)
 		handleCompilerError(err)
 	case "test":
-		pkgRoot, err := getPackageRoot()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+		pkgRoot := "."
+		if flag.NArg() == 1 {
+			pkgRoot = flag.Arg(0)
 		}
-		err = Test(pkgRoot, *target, config)
+		err := Test(pkgRoot, *target, config)
 		handleCompilerError(err)
 	case "clean":
 		// remove cache directory

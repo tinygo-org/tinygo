@@ -477,7 +477,7 @@ func (p *Package) importRecursively(includeTests bool) error {
 		if importedPkg.Importing {
 			return &ImportCycleError{[]string{p.ImportPath, importedPkg.ImportPath}, p.ImportPos[to]}
 		}
-		err = importedPkg.importRecursively(includeTests)
+		err = importedPkg.importRecursively(false)
 		if err != nil {
 			if err, ok := err.(*ImportCycleError); ok {
 				err.Packages = append([]string{p.ImportPath}, err.Packages...)

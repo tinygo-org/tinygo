@@ -303,30 +303,6 @@ func getGopath() string {
 	return filepath.Join(home, "go")
 }
 
-func getPackageRoot() (string, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	if rwd, err := filepath.EvalSymlinks(wd); err == nil {
-		wd = rwd
-	}
-
-	// TODO: This assumes a single gopath
-	// A more robust solution can be found in golang/dep, and probably golang/go.
-	// See https://github.com/golang/dep/blob/9227ca64191910befb850cfc4dc85fd93e12ba68/context.go#L256
-	gopath := getGopath()
-	if rgopath, err := filepath.EvalSymlinks(gopath); err == nil {
-		gopath = rgopath
-	}
-
-	src := filepath.Join(gopath, "src") + string(os.PathSeparator)
-	if strings.HasPrefix(wd, src) {
-		return strings.TrimPrefix(wd, src), nil
-	}
-	return "", fmt.Errorf("could not determine the package root from the current directory %q and gopath %q", wd, gopath)
-}
-
 func getHomeDir() string {
 	u, err := user.Current()
 	if err != nil {
