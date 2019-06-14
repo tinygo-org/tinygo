@@ -104,10 +104,18 @@ func (spec *TargetSpec) load(r io.Reader) error {
 	return nil
 }
 
-// loadFromName loads the given target from the targets/ directory inside the
-// compiler sources.
-func (spec *TargetSpec) loadFromName(name string) error {
-	path := filepath.Join(sourceDir(), "targets", strings.ToLower(name)+".json")
+// loadFromGivenStr loads the TargetSpec from the given string that could be:
+// - targets/ directory inside the compiler sources
+// - a relative or absolute path to custom (project specific) target specification .json file;
+//   the Inherits[] could contain the files from target folder (ex. stm32f4disco)
+//   as well as path to custom files (ex. myAwesomeProject.json)
+func (spec *TargetSpec) loadFromGivenStr(str string) error {
+	path := ""
+	if strings.HasSuffix(str, ".json") {
+		path, _ = filepath.Abs(str)
+	} else {
+		path = filepath.Join(sourceDir(), "targets", strings.ToLower(str)+".json")
+	}
 	fp, err := os.Open(path)
 	if err != nil {
 		return err
@@ -122,7 +130,7 @@ func (spec *TargetSpec) resolveInherits() error {
 	newSpec := &TargetSpec{}
 	for _, name := range spec.Inherits {
 		subtarget := &TargetSpec{}
-		err := subtarget.loadFromName(name)
+		err := subtarget.loadFromGivenStr(name)
 		if err != nil {
 			return err
 		}
@@ -172,7 +180,7 @@ func LoadTarget(target string) (*TargetSpec, error) {
 	// See whether there is a target specification for this target (e.g.
 	// Arduino).
 	spec := &TargetSpec{}
-	err := spec.loadFromName(target)
+	err := spec.loadFromGivenStr(target)
 	if err == nil {
 		// Successfully loaded this target from a built-in .json file. Make sure
 		// it includes all parents as specified in the "inherits" key.
