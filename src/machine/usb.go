@@ -473,6 +473,9 @@ const (
 	usb_CDC_CS_INTERFACE                = 0x24
 	usb_CDC_CS_ENDPOINT                 = 0x25
 	usb_CDC_DATA_INTERFACE_CLASS        = 0x0A
+
+	usb_CDC_LINESTATE_DTR = 0x01
+	usb_CDC_LINESTATE_RTS = 0x02
 )
 
 // usbDeviceDescBank is the USB device endpoint descriptor.

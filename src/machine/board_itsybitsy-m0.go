@@ -48,6 +48,20 @@ const (
 	UART_RX_PIN = D11
 )
 
+// UART1 on the ItsyBitsy M0.
+var (
+	UART1 = UART{Bus: sam.SERCOM1_USART,
+		Buffer: NewRingBuffer(),
+		Mode:   PinSERCOM,
+		IRQVal: sam.IRQ_SERCOM1,
+	}
+)
+
+//go:export SERCOM1_IRQHandler
+func handleUART1() {
+	defaultUART1Handler()
+}
+
 // I2C pins
 const (
 	SDA_PIN = PA22 // SDA: SERCOM3/PAD[0]

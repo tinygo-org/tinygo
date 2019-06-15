@@ -250,14 +250,13 @@ func waitADCSync() {
 type UART struct {
 	Buffer *RingBuffer
 	Bus    *sam.SERCOM_USART_Type
+	Mode   PinMode
+	IRQVal uint32
 }
 
 var (
 	// UART0 is actually a USB CDC interface.
 	UART0 = USBCDC{Buffer: NewRingBuffer()}
-
-	// The first hardware serial port on the SAMD21. Uses the SERCOM0 interface.
-	UART1 = UART{Bus: sam.SERCOM1_USART, Buffer: NewRingBuffer()}
 )
 
 const (
@@ -300,6 +299,8 @@ func (uart UART) Configure(config UARTConfig) {
 		txpad = sercomTXPad2
 	case PA16:
 		txpad = sercomTXPad0
+	case PA22:
+		txpad = sercomTXPad0
 	default:
 		panic("Invalid TX pin for UART")
 	}
@@ -315,13 +316,15 @@ func (uart UART) Configure(config UARTConfig) {
 		rxpad = sercomRXPad3
 	case PA17:
 		rxpad = sercomRXPad1
+	case PA23:
+		rxpad = sercomRXPad1
 	default:
 		panic("Invalid RX pin for UART")
 	}
 
 	// configure pins
-	config.TX.Configure(PinConfig{Mode: PinSERCOM})
-	config.RX.Configure(PinConfig{Mode: PinSERCOM})
+	config.TX.Configure(PinConfig{Mode: uart.Mode})
+	config.RX.Configure(PinConfig{Mode: uart.Mode})
 
 	// reset SERCOM0
 	uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_CTRLA_SWRST)
@@ -372,13 +375,7 @@ func (uart UART) Configure(config UARTConfig) {
 	uart.Bus.INTENSET.Set(sam.SERCOM_USART_INTENSET_RXC)
 
 	// Enable RX IRQ.
-	if config.TX == PA10 {
-		// UART0
-		arm.EnableIRQ(sam.IRQ_SERCOM0)
-	} else {
-		// UART1 which is the normal default, since UART0 is used for USBCDC.
-		arm.EnableIRQ(sam.IRQ_SERCOM1)
-	}
+	arm.EnableIRQ(uart.IRQVal)
 }
 
 // SetBaudRate sets the communication speed for the UART.
@@ -404,8 +401,8 @@ func (uart UART) WriteByte(c byte) error {
 	return nil
 }
 
-//go:export SERCOM1_IRQHandler
-func handleUART1() {
+// defaultUART1Handler handles the UART1 IRQ.
+func defaultUART1Handler() {
 	// should reset IRQ
 	UART1.Receive(byte((UART1.Bus.DATA.Get() & 0xFF)))
 	UART1.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INTFLAG_RXC)
@@ -1182,21 +1179,33 @@ func (usbcdc USBCDC) WriteByte(c byte) error {
 		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
 
 		// set count of bytes to be sent
-		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].PCKSIZE.SetBits((1&usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)<<usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos |
-			(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos))
+		usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].PCKSIZE.SetBits((1 & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask) << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 
-		// ack transfer complete flag
+		// clear transfer complete flag
 		setEPINTFLAG(usb_CDC_ENDPOINT_IN, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
 
 		// send data by setting bank ready
 		setEPSTATUSSET(usb_CDC_ENDPOINT_IN, sam.USB_DEVICE_EPSTATUSSET_BK1RDY)
 
 		// wait for transfer to complete
+		timeout := 3000
 		for (getEPINTFLAG(usb_CDC_ENDPOINT_IN) & sam.USB_DEVICE_EPINTFLAG_TRCPT1) == 0 {
+			timeout--
+			if timeout == 0 {
+				return errors.New("USBCDC write byte timeout")
+			}
 		}
 	}
 
 	return nil
+}
+
+func (usbcdc USBCDC) DTR() bool {
+	return (usbLineInfo.lineState & usb_CDC_LINESTATE_DTR) > 0
+}
+
+func (usbcdc USBCDC) RTS() bool {
+	return (usbLineInfo.lineState & usb_CDC_LINESTATE_RTS) > 0
 }
 
 const (
@@ -1346,6 +1355,7 @@ func handleUSB() {
 
 		// Clear the Bank 0 ready flag on Control OUT
 		setEPSTATUSCLR(0, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
+		usbEndpointDescriptors[0].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 
 		ok := false
 		if (setup.bmRequestType & usb_REQUEST_TYPE) == usb_REQUEST_STANDARD {
@@ -1375,19 +1385,24 @@ func handleUSB() {
 		}
 	}
 
-	// Now the actual transfer handlers
-	eptInts := sam.USB_DEVICE.EPINTSMRY.Get() & 0xFE // Remove endpoint number 0 (setup)
+	// Now the actual transfer handlers, ignore endpoint number 0 (setup)
 	var i uint32
 	for i = 1; i < uint32(len(endPoints)); i++ {
 		// Check if endpoint has a pending interrupt
-		if eptInts&(1<<i) > 0 {
-			// yes, so handle flags
-			epFlags := getEPINTFLAG(i)
-			setEPINTFLAG(i, epFlags)
+		epFlags := getEPINTFLAG(i)
+		if epFlags > 0 {
+			switch i {
+			case usb_CDC_ENDPOINT_OUT:
+				if (epFlags & sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 {
+					handleEndpoint(i)
+				}
+				setEPINTFLAG(i, epFlags)
+			case usb_CDC_ENDPOINT_IN, usb_CDC_ENDPOINT_ACM:
+				// set bank ready
+				setEPSTATUSCLR(i, sam.USB_DEVICE_EPSTATUSCLR_BK1RDY)
 
-			// Endpoint Transfer Complete Interrupt
-			if (epFlags & sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 {
-				handleEndpoint(i)
+				// ack transfer complete
+				setEPINTFLAG(i, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
 			}
 		}
 	}
@@ -1403,7 +1418,7 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_INTERRUPT+1)<<sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
+		setEPCFG(ep, ((usb_ENDPOINT_TYPE_INTERRUPT + 1) << sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
 
 	case usb_ENDPOINT_TYPE_BULK | usbEndpointOut:
 		// set packet size
@@ -1413,10 +1428,13 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_BULK+1)<<sam.USB_DEVICE_EPCFG_EPTYPE0_Pos))
+		setEPCFG(ep, ((usb_ENDPOINT_TYPE_BULK + 1) << sam.USB_DEVICE_EPCFG_EPTYPE0_Pos))
 
-		// ack the current transfer
+		// receive interrupts when current transfer complete
 		setEPINTENSET(ep, sam.USB_DEVICE_EPINTENSET_TRCPT0)
+
+		// set byte count to zero, we have not received anything yet
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 
 		// ready for next transfer
 		setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
@@ -1432,7 +1450,7 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, getEPCFG(ep)|((usb_ENDPOINT_TYPE_BULK+1)<<sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
+		setEPCFG(ep, ((usb_ENDPOINT_TYPE_BULK + 1) << sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
 
 		// NAK on endpoint IN, the bank is not yet filled in.
 		setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK1RDY)
@@ -1515,7 +1533,12 @@ func handleStandardSetup(setup usbSetup) bool {
 		setEPSTATUSSET(0, sam.USB_DEVICE_EPSTATUSSET_BK1RDY)
 
 		// wait for transfer to complete
+		timeout := 3000
 		for (getEPINTFLAG(0) & sam.USB_DEVICE_EPINTFLAG_TRCPT1) == 0 {
+			timeout--
+			if timeout == 0 {
+				return true
+			}
 		}
 
 		// last, set the device address to that requested by host
@@ -1659,11 +1682,21 @@ func armRecvCtrlOUT(ep uint32) uint32 {
 	setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
 
 	// Wait until OUT transfer is ready.
+	timeout := 3000
 	for (getEPSTATUS(ep) & sam.USB_DEVICE_EPSTATUS_BK0RDY) == 0 {
+		timeout--
+		if timeout == 0 {
+			return 0
+		}
 	}
 
 	// Wait until OUT transfer is completed.
+	timeout = 3000
 	for (getEPINTFLAG(ep) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) == 0 {
+		timeout--
+		if timeout == 0 {
+			return 0
+		}
 	}
 
 	// return number of bytes received
@@ -1800,9 +1833,14 @@ func handleEndpoint(ep uint32) {
 		UART0.Receive(byte((udd_ep_out_cache_buffer[ep][i] & 0xFF)))
 	}
 
+	// set byte count to zero
+	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+
+	// set multi packet size to 64
+	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.SetBits(64 << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
+
 	// set ready for next data
 	setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
-
 }
 
 func sendZlp(ep uint32) {

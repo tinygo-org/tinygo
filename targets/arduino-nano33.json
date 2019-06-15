@@ -1,0 +1,5 @@
+{
+    "inherits": ["atsamd21g18a"],
+    "build-tags": ["sam", "atsamd21g18a", "arduino_nano33"],
+    "flash": "bossac -d -i -e -w -v -R --offset=0x2000 {bin}"
+}
