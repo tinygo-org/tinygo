@@ -39,6 +39,20 @@ const (
 	UART_RX_PIN = D3
 )
 
+// UART1 on the Trinket M0.
+var (
+	UART1 = UART{Bus: sam.SERCOM1_USART,
+		Buffer: NewRingBuffer(),
+		Mode:   PinSERCOM,
+		IRQVal: sam.IRQ_SERCOM1,
+	}
+)
+
+//go:export SERCOM1_IRQHandler
+func handleUART1() {
+	defaultUART1Handler()
+}
+
 // SPI pins
 const (
 	SPI0_SCK_PIN  = D3

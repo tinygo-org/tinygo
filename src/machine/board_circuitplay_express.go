@@ -65,6 +65,20 @@ const (
 	UART_RX_PIN = PB09 // PORTB
 )
 
+// UART1 on the Circuit Playground Express.
+var (
+	UART1 = UART{Bus: sam.SERCOM1_USART,
+		Buffer: NewRingBuffer(),
+		Mode:   PinSERCOM,
+		IRQVal: sam.IRQ_SERCOM1,
+	}
+)
+
+//go:export SERCOM1_IRQHandler
+func handleUART1() {
+	defaultUART1Handler()
+}
+
 // I2C pins
 const (
 	SDA_PIN = PB02 // I2C0 external
