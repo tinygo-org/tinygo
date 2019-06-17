@@ -5,8 +5,8 @@ tinygo: build/tinygo
 
 # Default build and source directories, as created by `make llvm-build`.
 LLVM_BUILDDIR ?= llvm-build
-CLANG_SRC ?= llvm/tools/clang
-LLD_SRC ?= llvm/tools/lld
+CLANG_SRC ?= llvm-project/clang
+LLD_SRC ?= llvm-project/lld
 
 .PHONY: all tinygo build/tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-avr
 
@@ -24,9 +24,11 @@ LLD_LIBS = $(START_GROUP) -llldCOFF -llldCommon -llldCore -llldDriver -llldELF -
 
 
 # For static linking.
-CGO_CPPFLAGS=$(shell $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(CLANG_SRC))/include -I$(abspath $(LLD_SRC))/include
-CGO_CXXFLAGS=-std=c++11
-CGO_LDFLAGS=-L$(LLVM_BUILDDIR)/lib $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS))
+ifneq ("$(wildcard $(LLVM_BUILDDIR)/bin/llvm-config)","")
+    CGO_CPPFLAGS=$(shell $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(CLANG_SRC))/include -I$(abspath $(LLD_SRC))/include
+    CGO_CXXFLAGS=-std=c++11
+    CGO_LDFLAGS=-L$(LLVM_BUILDDIR)/lib $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS))
+endif
 
 
 clean:
@@ -59,18 +61,14 @@ gen-device-stm32:
 
 
 # Get LLVM sources.
-llvm/README.txt:
-	git clone -b release_80 https://github.com/llvm-mirror/llvm.git llvm
-llvm/tools/clang/README.txt:
-	git clone -b release_80 https://github.com/llvm-mirror/clang.git llvm/tools/clang
-llvm/tools/lld/README.md:
-	git clone -b release_80 https://github.com/llvm-mirror/lld.git llvm/tools/lld
-llvm-source: llvm/README.txt llvm/tools/clang/README.txt llvm/tools/lld/README.md
+llvm-project/README.md:
+	git clone -b release/8.x https://github.com/llvm/llvm-project
+llvm-source: llvm-project/README.md
 
 # Configure LLVM.
 TINYGO_SOURCE_DIR=$(shell pwd)
 $(LLVM_BUILDDIR)/build.ninja: llvm-source
-	mkdir -p $(LLVM_BUILDDIR); cd $(LLVM_BUILDDIR); cmake -G Ninja $(TINYGO_SOURCE_DIR)/llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF
+	mkdir -p $(LLVM_BUILDDIR); cd $(LLVM_BUILDDIR); cmake -G Ninja $(TINYGO_SOURCE_DIR)/llvm-project/llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_PROJECTS="clang;lld" -DLLVM_TOOL_CLANG_TOOLS_EXTRA_BUILD=OFF
 
 # Build LLVM.
 $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
@@ -79,7 +77,7 @@ $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
 
 # Build the Go compiler.
 build/tinygo:
-	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:\n  make llvm-source\n  make $(LLVM_BUILDDIR)"; exit 1; fi
+	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  make llvm-source"; echo "  make $(LLVM_BUILDDIR)"; exit 1; fi
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go build -o build/tinygo -tags byollvm .
 
 test:
