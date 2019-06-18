@@ -48,6 +48,12 @@ type Config struct {
 	TINYGOROOT    string   // GOROOT for TinyGo
 	GOPATH        string   // GOPATH, like `go env GOPATH`
 	BuildTags     []string // build tags for TinyGo (empty means {Config.GOOS/Config.GOARCH})
+	TestConfig    TestConfig
+}
+
+type TestConfig struct {
+	CompileTestBinary bool
+	// TODO: Filter the test functions to run, include verbose flag, etc
 }
 
 type Compiler struct {
@@ -214,7 +220,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 				path = path[len(tinygoPath+"/src/"):]
 			}
 			switch path {
-			case "machine", "os", "reflect", "runtime", "runtime/volatile", "sync":
+			case "machine", "os", "reflect", "runtime", "runtime/volatile", "sync", "testing":
 				return path
 			default:
 				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
@@ -241,6 +247,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 		CFlags:       c.CFlags,
 		ClangHeaders: c.ClangHeaders,
 	}
+
 	if strings.HasSuffix(mainPath, ".go") {
 		_, err = lprogram.ImportFile(mainPath)
 		if err != nil {
@@ -252,12 +259,13 @@ func (c *Compiler) Compile(mainPath string) []error {
 			return []error{err}
 		}
 	}
+
 	_, err = lprogram.Import("runtime", "")
 	if err != nil {
 		return []error{err}
 	}
 
-	err = lprogram.Parse()
+	err = lprogram.Parse(c.TestConfig.CompileTestBinary)
 	if err != nil {
 		return []error{err}
 	}

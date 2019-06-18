@@ -38,6 +38,7 @@ fmt:
 fmt-check:
 	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
 
+
 gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-stm32
 
 gen-device-avr:
@@ -84,6 +85,9 @@ build/tinygo:
 
 test:
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go test -v -tags byollvm .
+
+tinygo-test:
+	cd tests/tinygotest && tinygo test
 
 .PHONY: smoketest smoketest-no-avr
 smoketest: smoketest-no-avr

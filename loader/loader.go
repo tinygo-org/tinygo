@@ -1,6 +1,7 @@
 package loader
 
 import (
+	"bytes"
 	"errors"
 	"go/ast"
 	"go/build"
@@ -10,12 +11,15 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
+	"text/template"
 
 	"github.com/tinygo-org/tinygo/cgo"
 )
 
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
+	mainPkg      string
 	Build        *build.Context
 	OverlayBuild *build.Context
 	OverlayPath  func(path string) string
@@ -64,6 +68,11 @@ func (p *Program) Import(path, srcDir string) (*Package, error) {
 	p.sorted = nil // invalidate the sorted order of packages
 	pkg := p.newPackage(buildPkg)
 	p.Packages[buildPkg.ImportPath] = pkg
+
+	if p.mainPkg == "" {
+		p.mainPkg = buildPkg.ImportPath
+	}
+
 	return pkg, nil
 }
 
@@ -93,6 +102,11 @@ func (p *Program) ImportFile(path string) (*Package, error) {
 	p.sorted = nil // invalidate the sorted order of packages
 	pkg := p.newPackage(buildPkg)
 	p.Packages[buildPkg.ImportPath] = pkg
+
+	if p.mainPkg == "" {
+		p.mainPkg = buildPkg.ImportPath
+	}
+
 	return pkg, nil
 }
 
@@ -171,10 +185,12 @@ func (p *Program) sort() {
 // The returned error may be an Errors error, which contains a list of errors.
 //
 // Idempotent.
-func (p *Program) Parse() error {
+func (p *Program) Parse(compileTestBinary bool) error {
+	includeTests := compileTestBinary
+
 	// Load all imports
 	for _, pkg := range p.Sorted() {
-		err := pkg.importRecursively()
+		err := pkg.importRecursively(includeTests)
 		if err != nil {
 			if err, ok := err.(*ImportCycleError); ok {
 				if pkg.ImportPath != err.Packages[0] {
@@ -187,7 +203,14 @@ func (p *Program) Parse() error {
 
 	// Parse all packages.
 	for _, pkg := range p.Sorted() {
-		err := pkg.Parse()
+		err := pkg.Parse(includeTests)
+		if err != nil {
+			return err
+		}
+	}
+
+	if compileTestBinary {
+		err := p.SwapTestMain()
 		if err != nil {
 			return err
 		}
@@ -200,6 +223,83 @@ func (p *Program) Parse() error {
 			return err
 		}
 	}
+
+	return nil
+}
+
+func (p *Program) SwapTestMain() error {
+	var tests []string
+
+	isTestFunc := func(f *ast.FuncDecl) bool {
+		// TODO: improve signature check
+		if strings.HasPrefix(f.Name.Name, "Test") && f.Name.Name != "TestMain" {
+			return true
+		}
+		return false
+	}
+	mainPkg := p.Packages[p.mainPkg]
+	for _, f := range mainPkg.Files {
+		for i, d := range f.Decls {
+			switch v := d.(type) {
+			case *ast.FuncDecl:
+				if isTestFunc(v) {
+					tests = append(tests, v.Name.Name)
+				}
+				if v.Name.Name == "main" {
+					// Remove main
+					if len(f.Decls) == 1 {
+						f.Decls = make([]ast.Decl, 0)
+					} else {
+						f.Decls[i] = f.Decls[len(f.Decls)-1]
+						f.Decls = f.Decls[:len(f.Decls)-1]
+					}
+				}
+			}
+		}
+	}
+
+	// TODO: Check if they defined a TestMain and call it instead of testing.TestMain
+	const mainBody = `package main
+
+import (
+	"testing"
+)
+
+func main () {
+	m := &testing.M{
+		Tests: []testing.TestToCall{
+{{range .TestFunctions}}
+			{Name: "{{.}}", Func: {{.}}},
+{{end}}
+		},
+	}
+
+	testing.TestMain(m)
+}
+`
+	tmpl := template.Must(template.New("testmain").Parse(mainBody))
+	b := bytes.Buffer{}
+	tmplData := struct {
+		TestFunctions []string
+	}{
+		TestFunctions: tests,
+	}
+
+	err := tmpl.Execute(&b, tmplData)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(p.mainPkg, "$testmain.go")
+
+	if p.fset == nil {
+		p.fset = token.NewFileSet()
+	}
+
+	newMain, err := parser.ParseFile(p.fset, path, b.Bytes(), parser.AllErrors)
+	if err != nil {
+		return err
+	}
+	mainPkg.Files = append(mainPkg.Files, newMain)
 
 	return nil
 }
@@ -228,7 +328,7 @@ func (p *Program) parseFile(path string, mode parser.Mode) (*ast.File, error) {
 // Parse parses and typechecks this package.
 //
 // Idempotent.
-func (p *Package) Parse() error {
+func (p *Package) Parse(includeTests bool) error {
 	if len(p.Files) != 0 {
 		return nil
 	}
@@ -242,7 +342,7 @@ func (p *Package) Parse() error {
 		return nil
 	}
 
-	files, err := p.parseFiles()
+	files, err := p.parseFiles(includeTests)
 	if err != nil {
 		return err
 	}
@@ -281,11 +381,21 @@ func (p *Package) Check() error {
 }
 
 // parseFiles parses the loaded list of files and returns this list.
-func (p *Package) parseFiles() ([]*ast.File, error) {
+func (p *Package) parseFiles(includeTests bool) ([]*ast.File, error) {
 	// TODO: do this concurrently.
 	var files []*ast.File
 	var fileErrs []error
-	for _, file := range p.GoFiles {
+
+	var gofiles []string
+	if includeTests {
+		gofiles = make([]string, 0, len(p.GoFiles)+len(p.TestGoFiles))
+		gofiles = append(gofiles, p.GoFiles...)
+		gofiles = append(gofiles, p.TestGoFiles...)
+	} else {
+		gofiles = p.GoFiles
+	}
+
+	for _, file := range gofiles {
 		f, err := p.parseFile(filepath.Join(p.Package.Dir, file), parser.ParseComments)
 		if err != nil {
 			fileErrs = append(fileErrs, err)
@@ -320,6 +430,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 	if len(fileErrs) != 0 {
 		return nil, Errors{p, fileErrs}
 	}
+
 	return files, nil
 }
 
@@ -340,9 +451,15 @@ func (p *Package) Import(to string) (*types.Package, error) {
 // importRecursively() on the imported packages as well.
 //
 // Idempotent.
-func (p *Package) importRecursively() error {
+func (p *Package) importRecursively(includeTests bool) error {
 	p.Importing = true
-	for _, to := range p.Package.Imports {
+
+	imports := p.Package.Imports
+	if includeTests {
+		imports = append(imports, p.Package.TestImports...)
+	}
+
+	for _, to := range imports {
 		if to == "C" {
 			// Do CGo processing in a later stage.
 			continue
@@ -360,7 +477,7 @@ func (p *Package) importRecursively() error {
 		if importedPkg.Importing {
 			return &ImportCycleError{[]string{p.ImportPath, importedPkg.ImportPath}, p.ImportPos[to]}
 		}
-		err = importedPkg.importRecursively()
+		err = importedPkg.importRecursively(false)
 		if err != nil {
 			if err, ok := err.(*ImportCycleError); ok {
 				err.Packages = append([]string{p.ImportPath}, err.Packages...)

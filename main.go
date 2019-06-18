@@ -54,6 +54,7 @@ type BuildConfig struct {
 	cFlags        []string
 	ldFlags       []string
 	wasmAbi       string
+	testConfig    compiler.TestConfig
 }
 
 // Helper function for Compiler object.
@@ -108,6 +109,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		GOROOT:        goroot,
 		GOPATH:        getGopath(),
 		BuildTags:     tags,
+		TestConfig:    config.testConfig,
 	}
 	c, err := compiler.NewCompiler(pkgName, compilerConfig)
 	if err != nil {
@@ -346,6 +348,30 @@ func Build(pkgName, outpath, target string, config *BuildConfig) error {
 			// Move was successful.
 			return nil
 		}
+	})
+}
+
+func Test(pkgName, target string, config *BuildConfig) error {
+	spec, err := LoadTarget(target)
+	if err != nil {
+		return err
+	}
+
+	spec.BuildTags = append(spec.BuildTags, "test")
+	config.testConfig.CompileTestBinary = true
+	return Compile(pkgName, ".elf", spec, config, func(tmppath string) error {
+		cmd := exec.Command(tmppath)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
+		if err != nil {
+			// Propagate the exit code
+			if err, ok := err.(*exec.ExitError); ok {
+				os.Exit(err.ExitCode())
+			}
+			return &commandError{"failed to run compiled binary", tmppath, err}
+		}
+		return nil
 	})
 }
 
@@ -655,6 +681,13 @@ func main() {
 			os.Exit(1)
 		}
 		err := Run(flag.Arg(0), *target, config)
+		handleCompilerError(err)
+	case "test":
+		pkgRoot := "."
+		if flag.NArg() == 1 {
+			pkgRoot = flag.Arg(0)
+		}
+		err := Test(pkgRoot, *target, config)
 		handleCompilerError(err)
 	case "clean":
 		// remove cache directory
