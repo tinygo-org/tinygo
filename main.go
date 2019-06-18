@@ -367,7 +367,10 @@ func Test(pkgName, target string, config *BuildConfig) error {
 		if err != nil {
 			// Propagate the exit code
 			if err, ok := err.(*exec.ExitError); ok {
-				os.Exit(err.ExitCode())
+				if status, ok := err.Sys().(syscall.WaitStatus); ok {
+					os.Exit(status.ExitStatus())
+				}
+				os.Exit(1)
 			}
 			return &commandError{"failed to run compiled binary", tmppath, err}
 		}
