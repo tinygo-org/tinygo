@@ -634,8 +634,11 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		if flag.NArg() != 1 {
-			fmt.Fprintln(os.Stderr, "No package specified.")
+		pkgName := "."
+		if flag.NArg() == 1 {
+			pkgName = flag.Arg(0)
+		} else if flag.NArg() > 1 {
+			fmt.Fprintln(os.Stderr, "build only accepts a single positional argument: package name, but multiple were specified")
 			usage()
 			os.Exit(1)
 		}
@@ -643,7 +646,7 @@ func main() {
 		if target == "" && filepath.Ext(*outpath) == ".wasm" {
 			target = "wasm"
 		}
-		err := Build(flag.Arg(0), *outpath, target, config)
+		err := Build(pkgName, *outpath, target, config)
 		handleCompilerError(err)
 	case "build-builtins":
 		// Note: this command is only meant to be used while making a release!
@@ -686,11 +689,15 @@ func main() {
 		err := Run(flag.Arg(0), *target, config)
 		handleCompilerError(err)
 	case "test":
-		pkgRoot := "."
+		pkgName := "."
 		if flag.NArg() == 1 {
-			pkgRoot = flag.Arg(0)
+			pkgName = flag.Arg(0)
+		} else if flag.NArg() > 1 {
+			fmt.Fprintln(os.Stderr, "test only accepts a single positional argument: package name, but multiple were specified")
+			usage()
+			os.Exit(1)
 		}
-		err := Test(pkgRoot, *target, config)
+		err := Test(pkgName, *target, config)
 		handleCompilerError(err)
 	case "clean":
 		// remove cache directory
