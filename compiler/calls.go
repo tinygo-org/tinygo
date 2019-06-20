@@ -38,7 +38,7 @@ func (c *Compiler) createCall(fn llvm.Value, args []llvm.Value, name string) llv
 }
 
 // Expand an argument type to a list that can be used in a function call
-// paramter list.
+// parameter list.
 func (c *Compiler) expandFormalParamType(t llvm.Type) []llvm.Type {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
