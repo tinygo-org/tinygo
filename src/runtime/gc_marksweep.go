@@ -119,7 +119,7 @@ func (b gcBlock) findHead() gcBlock {
 // findNext returns the first block just past the end of the tail. This may or
 // may not be the head of an object.
 func (b gcBlock) findNext() gcBlock {
-	if b.state() == blockStateHead {
+	if b.state() == blockStateHead || b.state() == blockStateMark {
 		b++
 	}
 	for b.state() == blockStateTail {
@@ -302,6 +302,11 @@ func GC() {
 func markRoots(start, end uintptr) {
 	if gcDebug {
 		println("mark from", start, "to", end, int(end-start))
+	}
+	if gcAsserts {
+		if start >= end {
+			runtimePanic("gc: unexpected range to mark")
+		}
 	}
 
 	for addr := start; addr != end; addr += unsafe.Sizeof(addr) {
