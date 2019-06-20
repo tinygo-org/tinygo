@@ -543,6 +543,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "\ncommands:")
 	fmt.Fprintln(os.Stderr, "  build: compile packages and dependencies")
 	fmt.Fprintln(os.Stderr, "  run:   compile and run immediately")
+	fmt.Fprintln(os.Stderr, "  test:  test packages")
 	fmt.Fprintln(os.Stderr, "  flash: compile and flash to the device")
 	fmt.Fprintln(os.Stderr, "  gdb:   run/flash and immediately enter GDB")
 	fmt.Fprintln(os.Stderr, "  clean: empty cache directory ("+cacheDir()+")")
