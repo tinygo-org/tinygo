@@ -278,7 +278,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 	// Initialize debug information.
 	if c.Debug {
 		c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
-			Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
+			Language:  0x15, // DW_LANG_OpenCL (0x16, off-by-one?)
 			File:      mainPath,
 			Dir:       "",
 			Producer:  "TinyGo",
