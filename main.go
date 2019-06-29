@@ -558,23 +558,24 @@ func usage() {
 
 func handleCompilerError(err error) {
 	if err != nil {
-		if errUnsupported, ok := err.(*interp.Unsupported); ok {
+		switch err := err.(type) {
+		case *interp.Unsupported:
 			// hit an unknown/unsupported instruction
 			fmt.Fprintln(os.Stderr, "unsupported instruction during init evaluation:")
-			errUnsupported.Inst.Dump()
+			err.Inst.Dump()
 			fmt.Fprintln(os.Stderr)
-		} else if errCompiler, ok := err.(types.Error); ok {
-			fmt.Fprintln(os.Stderr, errCompiler)
-		} else if errLoader, ok := err.(loader.Errors); ok {
-			fmt.Fprintln(os.Stderr, "#", errLoader.Pkg.ImportPath)
-			for _, err := range errLoader.Errs {
+		case types.Error:
+			fmt.Fprintln(os.Stderr, err)
+		case loader.Errors:
+			fmt.Fprintln(os.Stderr, "#", err.Pkg.ImportPath)
+			for _, err := range err.Errs {
 				fmt.Fprintln(os.Stderr, err)
 			}
-		} else if errMulti, ok := err.(*multiError); ok {
-			for _, err := range errMulti.Errs {
+		case *multiError:
+			for _, err := range err.Errs {
 				fmt.Fprintln(os.Stderr, err)
 			}
-		} else {
+		default:
 			fmt.Fprintln(os.Stderr, "error:", err)
 		}
 		os.Exit(1)
