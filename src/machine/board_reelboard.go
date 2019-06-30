@@ -49,6 +49,8 @@ const (
 )
 
 // PowerSupplyActive enables the supply voltages for nRF52840 and peripherals (true) or only for nRF52840 (false)
+// This controls the TPS610981 boost converter. You must turn the power supply active in order to use the EPD and
+// other onboard peripherals.
 func PowerSupplyActive(active bool) {
 	POWER_SUPPLY_PIN.Configure(PinConfig{Mode: PinOutput})
 	if active {
