@@ -4,7 +4,7 @@ package machine
 
 const HasLowFrequencyCrystal = true
 
-// LEDs on the reel board
+// Pins on the reel board
 const (
 	LED              Pin = LED1
 	LED1             Pin = LED_YELLOW
@@ -47,3 +47,15 @@ const (
 	SPI0_MOSI_PIN Pin = 45
 	SPI0_MISO_PIN Pin = 46
 )
+
+// PowerSupplyActive enables the supply voltages for nRF52840 and peripherals (true) or only for nRF52840 (false)
+// This controls the TPS610981 boost converter. You must turn the power supply active in order to use the EPD and
+// other onboard peripherals.
+func PowerSupplyActive(active bool) {
+	POWER_SUPPLY_PIN.Configure(PinConfig{Mode: PinOutput})
+	if active {
+		POWER_SUPPLY_PIN.High()
+	} else {
+		POWER_SUPPLY_PIN.Low()
+	}
+}
