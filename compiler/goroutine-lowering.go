@@ -336,6 +336,9 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			size = c.builder.CreateZExt(size, c.uintptrType, "task.size.uintptr")
 		}
 		data := c.createRuntimeCall("alloc", []llvm.Value{size}, "task.data")
+		if c.needsStackObjects() {
+			c.trackPointer(data)
+		}
 		frame.taskHandle = c.builder.CreateCall(coroBeginFunc, []llvm.Value{id, data}, "task.handle")
 
 		// Modify async calls so this function suspends right after the child
