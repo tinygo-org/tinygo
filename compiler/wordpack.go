@@ -39,6 +39,9 @@ func (c *Compiler) emitPointerPack(values []llvm.Value) llvm.Value {
 		// Packed data is bigger than a pointer, so allocate it on the heap.
 		sizeValue := llvm.ConstInt(c.uintptrType, size, false)
 		packedHeapAlloc = c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "")
+		if c.needsStackObjects() {
+			c.trackPointer(packedHeapAlloc)
+		}
 		packedAlloc = c.builder.CreateBitCast(packedHeapAlloc, llvm.PointerType(packedType, 0), "")
 	}
 	// Store all values in the alloca or heap pointer.
