@@ -1403,7 +1403,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				// Size would be truncated if truncated to uintptr.
 				return llvm.Value{}, c.makeError(expr.Pos(), fmt.Sprintf("value is too big (%v bytes)", size))
 			}
-			// TODO: escape analysis
 			sizeValue := llvm.ConstInt(c.uintptrType, size, false)
 			buf := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, expr.Comment)
 			buf = c.builder.CreateBitCast(buf, llvm.PointerType(typ, 0), "")
@@ -1650,7 +1649,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		c.emitSliceBoundsCheck(frame, maxSize, sliceLen, sliceCap, expr.Len.Type().(*types.Basic), expr.Cap.Type().(*types.Basic))
 
 		// Allocate the backing array.
-		// TODO: escape analysis
 		sliceCapCast, err := c.parseConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
 		if err != nil {
 			return llvm.Value{}, err
