@@ -391,7 +391,7 @@ func getGorootVersion(goroot string) (major, minor int, err error) {
 		s = strings.Fields(out)[2]
 
 	} else if data, err := ioutil.ReadFile(filepath.Join(
-		goroot, "src", "runtime", "internal", "sys", "zversion.go")); err != nil {
+		goroot, "src", "runtime", "internal", "sys", "zversion.go")); err == nil {
 
 		r := regexp.MustCompile("const TheVersion = `(.*)`")
 		matches := r.FindSubmatch(data)
@@ -401,7 +401,7 @@ func getGorootVersion(goroot string) (major, minor int, err error) {
 
 		s = string(matches[1])
 
-	} else if data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION")); err != nil {
+	} else if data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION")); err == nil {
 		s = string(data)
 	}
 
