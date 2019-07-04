@@ -389,14 +389,24 @@ func getGorootVersion(goroot string) (major, minor int, err error) {
 
 	if out, err := exec.Command("go", "version"); err == nil {
 		s = strings.Fields(out)[2]
-	} else {
-		data, err := ioutil.ReadFile(filepath.Join(goroot, "src", "runtime", "internal", "sys", "zversion.go"))
-		if err != nil {
-			return 0, 0, err
-		}
+
+	} else if data, err := ioutil.ReadFile(filepath.Join(
+		goroot, "src", "runtime", "internal", "sys", "zversion.go")); err != nil {
 
 		r := regexp.MustCompile("const TheVersion = `(.*)`")
-		s = string(r.FindSubmatch(data)[1])
+		matches := r.FindSubmatch(data)
+		if len(matches) != 2 {
+			return 0, 0, errors.New("Invalid go version output: " + data)
+		}
+
+		s = string(matches[1])
+
+	} else if data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION")); err != nil {
+		s = string(data)
+	}
+
+	if err != nil {
+		return
 	}
 
 	if s == "" || s[:2] != "go" {
