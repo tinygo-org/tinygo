@@ -403,10 +403,9 @@ func getGorootVersion(goroot string) (major, minor int, err error) {
 
 	} else if data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION")); err == nil {
 		s = string(data)
-	}
 
-	if err != nil {
-		return
+	} else {
+		return 0, 0, err
 	}
 
 	if s == "" || s[:2] != "go" {
