@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -384,14 +385,30 @@ func isGoroot(goroot string) bool {
 // getGorootVersion returns the major and minor version for a given GOROOT path.
 // If the goroot cannot be determined, (0, 0) is returned.
 func getGorootVersion(goroot string) (major, minor int, err error) {
-	data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION"))
-	if err != nil {
+	var s string
+
+	if data, err := ioutil.ReadFile(filepath.Join(
+		goroot, "src", "runtime", "internal", "sys", "zversion.go")); err == nil {
+
+		r := regexp.MustCompile("const TheVersion = `(.*)`")
+		matches := r.FindSubmatch(data)
+		if len(matches) != 2 {
+			return 0, 0, errors.New("Invalid go version output:\n" + string(data))
+		}
+
+		s = string(matches[1])
+
+	} else if data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION")); err == nil {
+		s = string(data)
+
+	} else {
 		return 0, 0, err
 	}
-	s := string(data)
-	if s[:2] != "go" {
+
+	if s == "" || s[:2] != "go" {
 		return 0, 0, errors.New("could not parse Go version: version does not start with 'go' prefix")
 	}
+
 	parts := strings.Split(s[2:], ".")
 	if len(parts) < 2 {
 		return 0, 0, errors.New("could not parse Go version: version has less than two parts")
