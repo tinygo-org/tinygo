@@ -8,6 +8,9 @@ from collections import OrderedDict
 import re
 import argparse
 
+validName = re.compile('^[a-zA-Z0-9_]+$')
+
+
 class Device:
     # dummy
     pass
@@ -21,6 +24,13 @@ def formatText(text):
     text = re.sub('[ \t\n]+', ' ', text) # Collapse whitespace (like in HTML)
     text = text.replace('\\n ', '\n')
     text = text.strip()
+    return text
+
+# Replace characters that are not allowed in a symbol name with a '_'. This is
+# useful to be able to process SVD files with errors.
+def cleanName(text):
+    if not validName.match(text):
+        return ''.join(list(map(lambda c: c if validName.match(c) else '_', text)))
     return text
 
 def readSVD(path, sourceURL):
@@ -54,7 +64,9 @@ def readSVD(path, sourceURL):
         groupNameTags = periphEl.findall('groupName')
         groupName = None
         if groupNameTags:
-            groupName = getText(groupNameTags[0])
+            # Some group names (for example the STM32H7A3x) have an invalid
+            # group name. Replace invalid characters with '_'.
+            groupName = cleanName(getText(groupNameTags[0]))
 
         interruptEls = periphEl.findall('interrupt')
         for interrupt in interruptEls:
@@ -180,7 +192,9 @@ def readSVD(path, sourceURL):
 def addInterrupt(interrupts, intrName, intrIndex, description):
     if intrName in interrupts:
         if interrupts[intrName]['index'] != intrIndex:
-            raise ValueError('interrupt with the same name has different indexes: %s (%d vs %d)'
+            # Note: some SVD files like the one for STM32H7x7 contain mistakes.
+            # Instead of throwing an error, simply log it.
+            print ('interrupt with the same name has different indexes: %s (%d vs %d)'
                 % (intrName, interrupts[intrName]['index'], intrIndex))
         if description not in interrupts[intrName]['description'].split(' // '):
             interrupts[intrName]['description'] += ' // ' + description
@@ -195,8 +209,10 @@ def parseBitfields(groupName, regName, fieldsEls, bitfieldPrefix=''):
     fields = []
     if fieldsEls:
         for fieldEl in fieldsEls[0].findall('field'):
-            fieldName = getText(fieldEl.find('name'))
-            descrEls = fieldEl.findall('description')
+            # Some bitfields (like the STM32H7x7) contain invalid bitfield
+            # names like 'CNT[31]'. Replace invalid characters with '_' when
+            # needed.
+            fieldName = cleanName(getText(fieldEl.find('name')))
             lsbTags = fieldEl.findall('lsb')
             if len(lsbTags) == 1:
                 lsb = int(getText(lsbTags[0]))
