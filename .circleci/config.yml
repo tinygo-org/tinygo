@@ -44,14 +44,14 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-8-v4
+            - llvm-source-8-v5
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-8-v4
+          key: llvm-source-8-v5
           paths:
-            - llvm
+            - llvm-project
   smoketest:
     steps:
       - run: make smoketest
@@ -169,14 +169,14 @@ commands:
             HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
       - restore_cache:
           keys:
-            - llvm-source-8-macos-v4
+            - llvm-source-8-macos-v5
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-8-macos-v4
+          key: llvm-source-8-macos-v5
           paths:
-            - llvm
+            - llvm-project
       - restore_cache:
           keys:
             - llvm-build-8-macos-v5
