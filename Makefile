@@ -87,11 +87,8 @@ test:
 tinygo-test:
 	cd tests/tinygotest && tinygo test
 
-.PHONY: smoketest smoketest-no-avr
-smoketest: smoketest-no-avr
-	tinygo build -size short -o test.elf -target=arduino             examples/blinky1
-	tinygo build -size short -o test.elf -target=digispark           examples/blinky1
-smoketest-no-avr:
+.PHONY: smoketest
+smoketest:
 	# test all examples
 	tinygo build -size short -o test.elf -target=pca10040            examples/blinky1
 	tinygo build -size short -o test.elf -target=pca10040            examples/adc
@@ -123,6 +120,10 @@ smoketest-no-avr:
 	tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky1
 	tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky2
 	tinygo build -size short -o test.elf -target=circuitplay-express examples/i2s
+ifneq ($(AVR), 0)
+	tinygo build -size short -o test.elf -target=arduino             examples/blinky1
+	tinygo build -size short -o test.elf -target=digispark           examples/blinky1
+endif
 	tinygo build             -o wasm.wasm -target=wasm               examples/wasm/export
 	tinygo build             -o wasm.wasm -target=wasm               examples/wasm/main
 
