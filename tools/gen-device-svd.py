@@ -234,55 +234,73 @@ def parseBitfields(groupName, regName, fieldsEls, bitfieldPrefix=''):
                 })
     return fields
 
+class Register:
+    def __init__(self, element, baseAddress):
+        self.element = element
+        self.baseAddress = baseAddress
+
+    def name(self):
+        return getText(self.element.find('name')).replace('[%s]', '')
+
+    def description(self):
+        return getText(self.element.find('description')).replace('\n', ' ')
+
+    def address(self):
+        offsetEls = self.element.findall('offset')
+        if not offsetEls:
+            offsetEls = self.element.findall('addressOffset')
+        return self.baseAddress + int(getText(offsetEls[0]), 0)
+
+    def dim(self):
+        dimEls = self.element.findall('dim')
+        if len(dimEls) == 0:
+            return None
+        elif len(dimEls) == 1:
+            return int(getText(dimEls[0]), 0)
+        else:
+            raise ValueError('expected at most one <dim> element in %s register' % self.name())
+
+    def size(self):
+        size = 4
+        elSizes = self.element.findall('size')
+        if elSizes:
+            size = int(getText(elSizes[0]), 0) // 8
+        return size
+
+
 def parseRegister(groupName, regEl, baseAddress, bitfieldPrefix=''):
-    regName = getText(regEl.find('name'))
-    regDescription = getText(regEl.find('description'))
-    offsetEls = regEl.findall('offset')
-    if not offsetEls:
-        offsetEls = regEl.findall('addressOffset')
-    address = baseAddress + int(getText(offsetEls[0]), 0)
-    
-    size = 4
-    elSizes = regEl.findall('size')
-    if elSizes:
-        size = int(getText(elSizes[0]), 0) // 8
-    
-    dimEls = regEl.findall('dim')
+    reg = Register(regEl, baseAddress)
+
     fieldsEls = regEl.findall('fields')
 
-    array = None
-    if dimEls:
-        array = int(getText(dimEls[0]), 0)
+    if reg.dim() is not None:
         dimIncrement = int(getText(regEl.find('dimIncrement')), 0)
-        if "[%s]" in regName:
-            # just a normal array of registers
-            regName = regName.replace('[%s]', '')
-        elif "%s" in regName:
+        if "%s" in reg.name():
             # a "spaced array" of registers, special processing required
             # we need to generate a separate register for each "element"
             results = []
-            for i in range(array):
-                regAddress = address + (i * dimIncrement)
+            for i in range(reg.dim()):
+                regAddress = reg.address() + (i * dimIncrement)
                 results.append({
-                    'name':        regName.replace('%s', str(i)),
+                    'name':        reg.name().replace('%s', str(i)),
                     'address':     regAddress,
-                    'description': regDescription.replace('\n', ' '),
+                    'description': reg.description(),
                     'bitfields':   [],
                     'array':       None,
-                    'elementsize': size,
+                    'elementsize': reg.size(),
                 })
             # set first result bitfield
-            shortName = regName.replace('_%s', '').replace('%s', '')
+            shortName = reg.name().replace('_%s', '').replace('%s', '')
             results[0]['bitfields'] = parseBitfields(groupName, shortName, fieldsEls, bitfieldPrefix)
             return results
 
     return [{
-        'name':        regName,
-        'address':     address,
-        'description': regDescription.replace('\n', ' '),
-        'bitfields':   parseBitfields(groupName, regName, fieldsEls, bitfieldPrefix),
-        'array':       array,
-        'elementsize': size,
+        'name':        reg.name(),
+        'address':     reg.address(),
+        'description': reg.description(),
+        'bitfields':   parseBitfields(groupName, reg.name(), fieldsEls, bitfieldPrefix),
+        'array':       reg.dim(),
+        'elementsize': reg.size(),
     }]
 
 def writeGo(outdir, device):
