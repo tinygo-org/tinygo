@@ -865,6 +865,10 @@ func (c *Compiler) parseFunc(frame *Frame) {
 		// Add LLVM inline hint to functions with //go:inline pragma.
 		inline := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("inlinehint"), 0)
 		frame.fn.LLVMFn.AddFunctionAttr(inline)
+	case ir.InlineNone:
+		// Add LLVM attribute to always avoid inlining this function.
+		noinline := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
+		frame.fn.LLVMFn.AddFunctionAttr(noinline)
 	}
 
 	// Add debug info, if needed.
