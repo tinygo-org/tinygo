@@ -56,6 +56,10 @@ const (
 	// //go:inline). The compiler will be more likely to inline this function,
 	// but it is not a guarantee.
 	InlineHint
+
+	// Don't inline, just like the GCC noinline attribute. Signalled using
+	// //go:noinline.
+	InlineNone
 )
 
 // Create and initialize a new *Program from a *ssa.Program.
@@ -227,6 +231,8 @@ func (f *Function) parsePragmas() {
 				f.exported = true
 			case "//go:inline":
 				f.inline = InlineHint
+			case "//go:noinline":
+				f.inline = InlineNone
 			case "//go:interrupt":
 				if len(parts) != 2 {
 					continue
