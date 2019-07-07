@@ -55,6 +55,7 @@ type BuildConfig struct {
 	ldFlags       []string
 	tags          string
 	wasmAbi       string
+	heapSize      int64
 	testConfig    compiler.TestConfig
 }
 
@@ -240,9 +241,15 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		// Prepare link command.
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
-		ldflags := append(ldflags, "-o", executable, objfile, "-L", root)
+		ldflags = append(ldflags, "-o", executable, objfile, "-L", root)
 		if spec.RTLib == "compiler-rt" {
 			ldflags = append(ldflags, librt)
+		}
+		if spec.GOARCH == "wasm" {
+			// Round heap size to next multiple of 65536 (the WebAssembly page
+			// size).
+			heapSize := (config.heapSize + (65536 - 1)) &^ (65536 - 1)
+			ldflags = append(ldflags, "--initial-memory="+strconv.FormatInt(heapSize, 10))
 		}
 
 		// Compile extra files.
@@ -540,6 +547,30 @@ func Run(pkgName, target string, config *BuildConfig) error {
 	})
 }
 
+// parseSize converts a human-readable size (with k/m/g suffix) into a plain
+// number.
+func parseSize(s string) (int64, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if len(s) == 0 {
+		return 0, errors.New("no size provided")
+	}
+	multiply := int64(1)
+	switch s[len(s)-1] {
+	case 'k':
+		multiply = 1 << 10
+	case 'm':
+		multiply = 1 << 20
+	case 'g':
+		multiply = 1 << 30
+	}
+	if multiply != 1 {
+		s = s[:len(s)-1]
+	}
+	n, err := strconv.ParseInt(s, 0, 64)
+	n *= multiply
+	return n, err
+}
+
 func usage() {
 	fmt.Fprintln(os.Stderr, "TinyGo is a Go compiler for small places.")
 	fmt.Fprintln(os.Stderr, "version:", version)
@@ -598,6 +629,7 @@ func main() {
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
 	wasmAbi := flag.String("wasm-abi", "js", "WebAssembly ABI conventions: js (no i64 params) or generic")
+	heapSize := flag.String("heap-size", "1M", "default heap size in bytes (only supported by WebAssembly)")
 
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
@@ -629,6 +661,13 @@ func main() {
 
 	if *panicStrategy != "print" && *panicStrategy != "trap" {
 		fmt.Fprintln(os.Stderr, "Panic strategy must be either print or trap.")
+		usage()
+		os.Exit(1)
+	}
+
+	var err error
+	if config.heapSize, err = parseSize(*heapSize); err != nil {
+		fmt.Fprintln(os.Stderr, "Could not read heap size:", *heapSize)
 		usage()
 		os.Exit(1)
 	}
