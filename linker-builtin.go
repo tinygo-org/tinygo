@@ -63,6 +63,7 @@ func Link(linker string, flags ...string) error {
 		cmd := exec.Command(linker, flags...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+		cmd.Dir = sourceDir()
 		return cmd.Run()
 	}
 }
