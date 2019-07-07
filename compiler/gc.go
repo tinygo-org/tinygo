@@ -124,7 +124,9 @@ func typeHasPointers(t llvm.Type) bool {
 // makeGCStackSlots converts all calls to runtime.trackPointer to explicit
 // stores to stack slots that are scannable by the GC.
 func (c *Compiler) makeGCStackSlots() bool {
-	if c.mod.NamedFunction("runtime.alloc").IsNil() {
+	// Check whether there are allocations at all.
+	alloc := c.mod.NamedFunction("runtime.alloc")
+	if alloc.IsNil() {
 		// Nothing to. Make sure all remaining bits and pieces for stack
 		// chains are neutralized.
 		for _, call := range getUses(c.mod.NamedFunction("runtime.trackPointer")) {
@@ -140,6 +142,54 @@ func (c *Compiler) makeGCStackSlots() bool {
 	trackPointer := c.mod.NamedFunction("runtime.trackPointer")
 	if trackPointer.IsNil() || trackPointer.FirstUse().IsNil() {
 		return false // nothing to do
+	}
+
+	// Look at *all* functions to see whether they are free of function pointer
+	// calls.
+	// This takes less than 5ms for ~100kB of WebAssembly but would perhaps be
+	// faster when written in C++ (to avoid the CGo overhead).
+	funcsWithFPCall := map[llvm.Value]struct{}{}
+	n := 0
+	for fn := c.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		n++
+		if _, ok := funcsWithFPCall[fn]; ok {
+			continue // already found
+		}
+		done := false
+		for bb := fn.FirstBasicBlock(); !bb.IsNil() && !done; bb = llvm.NextBasicBlock(bb) {
+			for call := bb.FirstInstruction(); !call.IsNil() && !done; call = llvm.NextInstruction(call) {
+				if call.IsACallInst().IsNil() {
+					continue // only looking at calls
+				}
+				called := call.CalledValue()
+				if !called.IsAFunction().IsNil() {
+					continue // only looking for function pointers
+				}
+				funcsWithFPCall[fn] = struct{}{}
+				markParentFunctions(funcsWithFPCall, fn)
+				done = true
+			}
+		}
+	}
+
+	// Determine which functions need stack objects. Many leaf functions don't
+	// need it: it only causes overhead for them.
+	// Actually, in one test it was only able to eliminate stack object from 12%
+	// of functions that had a call to runtime.trackPointer (8 out of 68
+	// functions), so this optimization is not as big as it may seem.
+	allocatingFunctions := map[llvm.Value]struct{}{} // set of allocating functions
+
+	// Work from runtime.alloc and trace all parents to check which functions do
+	// a heap allocation (and thus which functions do not).
+	markParentFunctions(allocatingFunctions, alloc)
+
+	// Also trace all functions that call a function pointer.
+	for fn := range funcsWithFPCall {
+		// Assume that functions that call a function pointer do a heap
+		// allocation as a conservative guess because the called function might
+		// do a heap allocation.
+		allocatingFunctions[fn] = struct{}{}
+		markParentFunctions(allocatingFunctions, fn)
 	}
 
 	// Collect some variables used below in the loop.
@@ -160,6 +210,18 @@ func (c *Compiler) makeGCStackSlots() bool {
 
 		// Pick the parent function.
 		fn := call.InstructionParent().Parent()
+
+		if _, ok := allocatingFunctions[fn]; !ok {
+			// This function nor any of the functions it calls (recursively)
+			// allocate anything from the heap, so it will not trigger a garbage
+			// collection cycle. Thus, it does not need to track local pointer
+			// values.
+			// This is a useful optimization but not as big as you might guess,
+			// as described above (it avoids stack objects for ~12% of
+			// functions).
+			call.EraseFromParentAsInstruction()
+			continue
+		}
 
 		// Find all calls to runtime.trackPointer in this function.
 		var calls []llvm.Value
@@ -383,5 +445,27 @@ func (c *Compiler) getPointerBitmap(typ llvm.Type, name string) *big.Int {
 		return ptrs
 	default:
 		panic("unknown type kind of global: " + name)
+	}
+}
+
+// markParentFunctions traverses all parent function calls (recursively) and
+// adds them to the set of marked functions. It only considers function calls:
+// any other uses of such a function is ignored.
+func markParentFunctions(marked map[llvm.Value]struct{}, fn llvm.Value) {
+	worklist := []llvm.Value{fn}
+	for len(worklist) != 0 {
+		fn := worklist[len(worklist)-1]
+		worklist = worklist[:len(worklist)-1]
+		for _, use := range getUses(fn) {
+			if use.IsACallInst().IsNil() || use.CalledValue() != fn {
+				// Not the parent function.
+				continue
+			}
+			parent := use.InstructionParent().Parent()
+			if _, ok := marked[parent]; !ok {
+				marked[parent] = struct{}{}
+				worklist = append(worklist, parent)
+			}
+		}
 	}
 }
