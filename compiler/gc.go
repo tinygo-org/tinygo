@@ -187,8 +187,28 @@ func (c *Compiler) makeGCStackSlots() bool {
 			}
 
 			// Some trivial optimizations.
-			if ptr.IsAInstruction().IsNil() || !ptr.IsAPHINode().IsNil() {
+			if ptr.IsAInstruction().IsNil() {
 				continue
+			}
+			switch ptr.InstructionOpcode() {
+			case llvm.PHI, llvm.GetElementPtr:
+				// These values do not create new values: the values already
+				// existed locally in this function so must have been tracked
+				// already.
+				continue
+			case llvm.ExtractValue, llvm.BitCast:
+				// These instructions do not create new values, but their
+				// original value may not be tracked. So keep tracking them for
+				// now.
+				// With more analysis, it should be possible to optimize a
+				// significant chunk of these away.
+			case llvm.Call, llvm.Load, llvm.IntToPtr:
+				// These create new values so must be stored locally. But
+				// perhaps some of these can be fused when they actually refer
+				// to the same value.
+			default:
+				// Ambiguous. These instructions are uncommon, but perhaps could
+				// be optimized if needed.
 			}
 
 			if !ptr.IsAAllocaInst().IsNil() {
