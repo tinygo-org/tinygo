@@ -11,7 +11,8 @@ import (
 
 // Portable analogs of some common system call errors.
 var (
-	ErrUnsupported = errors.New("operation not supported")
+	errUnsupported = errors.New("operation not supported")
+	notImplemented = errors.New("os: not implemented")
 )
 
 // Stdin, Stdout, and Stderr are open Files pointing to the standard input,
@@ -28,19 +29,19 @@ type File struct {
 	name string
 }
 
-// Readdir is a stub (for now), always returning nil for both the slice of FileInfo and the error
+// Readdir is a stub, not yet implemented
 func (f *File) Readdir(n int) ([]FileInfo, error) {
-	return nil, nil
+	return nil, notImplemented
 }
 
-// Readdirnames is a stub (for now), always returning nil for both the slice of names and the error
+// Readdirnames is a stub, not yet implemented
 func (f *File) Readdirnames(n int) (names []string, err error) {
-	return nil, nil
+	return nil, notImplemented
 }
 
-// Stat is a stub (for now), always returning nil for both the FileInfo and the error
+// Stat is a stub, not yet implemented
 func (f *File) Stat() (FileInfo, error) {
-	return nil, nil
+	return nil, notImplemented
 }
 
 // NewFile returns a new File with the given file descriptor and name.
@@ -64,6 +65,15 @@ func IsPathSeparator(c uint8) bool {
 	return PathSeparator == c
 }
 
+// PathError records an error and the operation and file path that caused it.
+type PathError struct {
+	Op   string
+	Path string
+	Err  error
+}
+
+func (e *PathError) Error() string { return e.Op + " " + e.Path + ": " + e.Err.Error() }
+
 // Open is a super simple stub function (for now), only capable of opening stdin, stdout, and stderr
 func Open(name string) (*File, error) {
 	fd := uintptr(999)
@@ -75,7 +85,7 @@ func Open(name string) (*File, error) {
 	case "/dev/stderr":
 		fd = 2
 	default:
-		return nil, errors.New("unknown file: '" + name + "'")
+		return nil, &PathError{"open", name, notImplemented}
 	}
 	return &File{fd, name}, nil
 }
@@ -92,7 +102,8 @@ func Create(name string) (*File, error) {
 
 type FileMode uint32
 
-// Mode constants
+// Mode constants, copied from the mainline Go source
+// https://github.com/golang/go/blob/4ce6a8e89668b87dce67e2f55802903d6eb9110a/src/os/types.go#L35-L63
 const (
 	// The single letters are the abbreviations used by the String method's formatting.
 	ModeDir        FileMode = 1 << (32 - 1 - iota) // d: is a directory
@@ -142,19 +153,19 @@ type FileInfo interface {
 	Sys() interface{}   // underlying data source (can return nil)
 }
 
-// Stat is a stub (for now), always returning nil
+// Stat is a stub, not yet implemented
 func Stat(name string) (FileInfo, error) {
-	return nil, nil
+	return nil, notImplemented
 }
 
-// Lstat is a stub (for now), always returning nil
+// Lstat is a stub, not yet implemented
 func Lstat(name string) (FileInfo, error) {
-	return nil, nil
+	return nil, notImplemented
 }
 
-// Getwd is a stub (for now), always returning the string it was given
-func Getwd() (dir string, err error) {
-	return dir, nil
+// Getwd is a stub (for now), always returning an empty string
+func Getwd() (string, error) {
+	return "", nil
 }
 
 // Readlink is a stub (for now), always returning the string it was given
@@ -162,14 +173,14 @@ func Readlink(name string) (string, error) {
 	return name, nil
 }
 
-// TempDir is a stub (for now), always returning the string "/tmp/tinygo-tmp"
+// TempDir is a stub (for now), always returning the string "/tmp"
 func TempDir() string {
-	return "/tmp/tinygo-tmp"
+	return "/tmp"
 }
 
-// Mkdir is a stub (for now), always returning nil
+// Mkdir is a stub, not yet implemented
 func Mkdir(name string, perm FileMode) error {
-	return nil
+	return notImplemented
 }
 
 // IsExist is a stub (for now), always returning false
