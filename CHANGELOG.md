@@ -1,3 +1,45 @@
+0.7.0
+---
+* **command line**
+  - try more locations to find Clang built-in headers
+  - add support for `tinygo test`
+  - build current directory if no package is specified
+  - support custom .json target spec with `-target` flag
+  - use zversion.go to detect version of GOROOT version
+  - make initial heap size configurable for some targets (currently WebAssembly
+    only)
+* **cgo**
+  - add support for bitfields using generated getters and setters
+  - add support for anonymous structs
+* **compiler**
+  - show an error instead of panicking on duplicate function definitions
+  - allow packages like github.com/tinygo-org/tinygo/src/\* by aliasing it
+  - remove `//go:volatile` support  
+    It has been replaced with the runtime/volatile package.
+  - allow poiners in map keys
+  - support non-constant syscall numbers
+  - implement non-blocking selects
+  - add support for the `-tags` flag
+  - add support for `string` to `[]rune` conversion
+  - implement a portable conservative garbage collector (with support for wasm)
+  - add the `//go:noinline` pragma
+* **standard library**
+  - `os`: add `os.Exit` and `syscall.Exit`
+  - `os`: add several stubs
+  - `runtime`: fix heap corruption in conservative GC
+  - `runtime`: add support for math intrinsics where supported, massively
+    speeding up some benchmarks
+  - `testing`: add basic support for testing
+* **targets**
+  - add support for a generic target that calls `__tinygo_*` functions for
+    peripheral access
+  - `arduino-nano33`: add support for this board
+  - `hifive1`: add support for this RISC-V board
+  - `reelboard`: add e-paper pins
+  - `reelboard`: add `PowerSupplyActive` to enable voltage for on-board devices
+  - `wasm`: put the stack at the start of linear memory, to detect stack
+    overflows
+
 0.6.0
 ---
 * **command line**
