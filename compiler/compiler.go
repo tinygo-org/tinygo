@@ -10,6 +10,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -91,10 +92,14 @@ type Compiler struct {
 	ir                      *ir.Program
 	diagnostics             []error
 	astComments             map[string]*ast.CommentGroup
+	functionsToCompile      []*ssa.Function            // list of functions to define
+	functionsToCompileSet   map[*ssa.Function]struct{} // set of functions to define (for fast checks)
 }
 
 type Frame struct {
-	fn                *ir.Function
+	fn                *ssa.Function
+	llvmFn            llvm.Value
+	info              functionInfo
 	locals            map[ssa.Value]llvm.Value            // local variables
 	blockEntries      map[*ssa.BasicBlock]llvm.BasicBlock // a *ssa.BasicBlock may be split up
 	blockExits        map[*ssa.BasicBlock]llvm.BasicBlock // these are the exit blocks
@@ -104,9 +109,9 @@ type Frame struct {
 	deferPtr          llvm.Value
 	difunc            llvm.Metadata
 	allDeferFuncs     []interface{}
-	deferFuncs        map[*ir.Function]int
+	deferFuncs        map[*ssa.Function]int
 	deferInvokeFuncs  map[string]int
-	deferClosureFuncs map[*ir.Function]int
+	deferClosureFuncs map[*ssa.Function]int
 	selectRecvBuf     map[*ssa.Select]llvm.Value
 }
 
@@ -123,8 +128,9 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 		config.BuildTags = []string{config.GOOS, config.GOARCH}
 	}
 	c := &Compiler{
-		Config:  config,
-		difiles: make(map[string]llvm.Metadata),
+		Config:                config,
+		difiles:               make(map[string]llvm.Metadata),
+		functionsToCompileSet: make(map[*ssa.Function]struct{}),
 	}
 
 	target, err := llvm.GetTargetFromTriple(config.Triple)
@@ -299,9 +305,6 @@ func (c *Compiler) Compile(mainPath string) []error {
 
 	c.ir = ir.NewProgram(lprogram, mainPath)
 
-	// Run a simple dead code elimination pass.
-	c.ir.SimpleDCE()
-
 	// Initialize debug information.
 	if c.Debug {
 		c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
@@ -313,27 +316,10 @@ func (c *Compiler) Compile(mainPath string) []error {
 		})
 	}
 
-	var frames []*Frame
-
 	c.loadASTComments(lprogram)
 
-	// Declare all functions.
-	for _, f := range c.ir.Functions {
-		frames = append(frames, c.parseFuncDecl(f))
-	}
-
-	// Add definitions to declarations.
-	for _, frame := range frames {
-		if frame.fn.Synthetic == "package initializer" {
-			c.initFuncs = append(c.initFuncs, frame.fn.LLVMFn)
-		}
-		if frame.fn.CName() != "" {
-			continue
-		}
-		if frame.fn.Blocks == nil {
-			continue // external function
-		}
-		c.parseFunc(frame)
+	for _, pkg := range c.ir.Packages() {
+		c.parsePackage(pkg)
 	}
 
 	// Define the already declared functions that wrap methods for use in
@@ -344,15 +330,16 @@ func (c *Compiler) Compile(mainPath string) []error {
 
 	// After all packages are imported, add a synthetic initializer function
 	// that calls the initializer of each package.
-	initFn := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function))
-	initFn.LLVMFn.SetLinkage(llvm.InternalLinkage)
-	initFn.LLVMFn.SetUnnamedAddr(true)
+	initFn := c.ir.Program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function)
+	llvmInitFn := c.getFunction(initFn)
+	llvmInitFn.SetLinkage(llvm.InternalLinkage)
+	llvmInitFn.SetUnnamedAddr(true)
 	if c.Debug {
 		difunc := c.attachDebugInfo(initFn)
 		pos := c.ir.Program.Fset.Position(initFn.Pos())
 		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
-	block := c.ctx.AddBasicBlock(initFn.LLVMFn, "entry")
+	block := c.ctx.AddBasicBlock(llvmInitFn, "entry")
 	c.builder.SetInsertPointAtEnd(block)
 	for _, fn := range c.initFuncs {
 		c.builder.CreateCall(fn, []llvm.Value{llvm.Undef(c.i8ptrType), llvm.Undef(c.i8ptrType)}, "")
@@ -739,75 +726,55 @@ func (c *Compiler) getDIType(typ types.Type) llvm.Metadata {
 	}
 }
 
-func (c *Compiler) parseFuncDecl(f *ir.Function) *Frame {
-	frame := &Frame{
-		fn:           f,
-		locals:       make(map[ssa.Value]llvm.Value),
-		blockEntries: make(map[*ssa.BasicBlock]llvm.BasicBlock),
-		blockExits:   make(map[*ssa.BasicBlock]llvm.BasicBlock),
+func (c *Compiler) parsePackage(pkg *ssa.Package) {
+	memberNames := make([]string, 0)
+	for name := range pkg.Members {
+		memberNames = append(memberNames, name)
 	}
+	sort.Strings(memberNames)
 
-	var retType llvm.Type
-	if f.Signature.Results() == nil {
-		retType = c.ctx.VoidType()
-	} else if f.Signature.Results().Len() == 1 {
-		retType = c.getLLVMType(f.Signature.Results().At(0).Type())
-	} else {
-		results := make([]llvm.Type, 0, f.Signature.Results().Len())
-		for i := 0; i < f.Signature.Results().Len(); i++ {
-			results = append(results, c.getLLVMType(f.Signature.Results().At(i).Type()))
-		}
-		retType = c.ctx.StructType(results, false)
-	}
-
-	var paramTypes []llvm.Type
-	for _, param := range f.Params {
-		paramType := c.getLLVMType(param.Type())
-		paramTypeFragments := c.expandFormalParamType(paramType)
-		paramTypes = append(paramTypes, paramTypeFragments...)
-	}
-
-	// Add an extra parameter as the function context. This context is used in
-	// closures and bound methods, but should be optimized away when not used.
-	if !f.IsExported() {
-		paramTypes = append(paramTypes, c.i8ptrType) // context
-		paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
-	}
-
-	fnType := llvm.FunctionType(retType, paramTypes, false)
-
-	name := f.LinkName()
-	frame.fn.LLVMFn = c.mod.NamedFunction(name)
-	if frame.fn.LLVMFn.IsNil() {
-		frame.fn.LLVMFn = llvm.AddFunction(c.mod, name, fnType)
-	}
-
-	// External/exported functions may not retain pointer values.
-	// https://golang.org/cmd/cgo/#hdr-Passing_pointers
-	if f.IsExported() {
-		// Set the wasm-import-module attribute if the function's module is set.
-		if f.Module() != "" {
-			wasmImportModuleAttr := c.ctx.CreateStringAttribute("wasm-import-module", f.Module())
-			frame.fn.LLVMFn.AddFunctionAttr(wasmImportModuleAttr)
-		}
-		nocaptureKind := llvm.AttributeKindID("nocapture")
-		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
-		for i, typ := range paramTypes {
-			if typ.TypeKind() == llvm.PointerTypeKind {
-				frame.fn.LLVMFn.AddAttributeAtIndex(i+1, nocapture)
+	for _, name := range memberNames {
+		member := pkg.Members[name]
+		switch member := member.(type) {
+		case *ssa.Function:
+			// Parse this function.
+			fn := c.getFunction(member)
+			if member.Synthetic == "package initializer" {
+				c.initFuncs = append(c.initFuncs, fn)
 			}
+			c.flushFunctionWorklist()
+		case *ssa.Type:
+			if !types.IsInterface(member.Type()) {
+				// Named type. We should make sure all methods are parsed.
+				methods := getAllMethods(pkg.Prog, member.Type())
+				for _, method := range methods {
+					// Parse this method.
+					c.getFunction(pkg.Prog.MethodValue(method))
+					c.flushFunctionWorklist()
+				}
+			}
+		case *ssa.Global:
+			c.getGlobal(member)
+		case *ssa.NamedConst:
+			// Ignore: these are already resolved.
+		default:
+			panic("unknown member type: " + member.String())
 		}
 	}
-
-	return frame
+}
+func (c *Compiler) flushFunctionWorklist() {
+	for i := 0; i < len(c.functionsToCompile); i++ {
+		c.parseFunc(c.functionsToCompile[i])
+	}
+	c.functionsToCompile = c.functionsToCompile[:0]
 }
 
-func (c *Compiler) attachDebugInfo(f *ir.Function) llvm.Metadata {
+func (c *Compiler) attachDebugInfo(f *ssa.Function) llvm.Metadata {
 	pos := c.ir.Program.Fset.Position(f.Syntax().Pos())
-	return c.attachDebugInfoRaw(f, f.LLVMFn, "", pos.Filename, pos.Line)
+	return c.attachDebugInfoRaw(f, c.getFunction(f), "", pos.Filename, pos.Line)
 }
 
-func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix, filename string, line int) llvm.Metadata {
+func (c *Compiler) attachDebugInfoRaw(f *ssa.Function, llvmFn llvm.Value, suffix, filename string, line int) llvm.Metadata {
 	if _, ok := c.difiles[filename]; !ok {
 		dir, file := filepath.Split(filename)
 		if dir != "" {
@@ -828,7 +795,7 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix,
 	})
 	difunc := c.dibuilder.CreateFunction(c.difiles[filename], llvm.DIFunction{
 		Name:         f.RelString(nil) + suffix,
-		LinkageName:  f.LinkName() + suffix,
+		LinkageName:  c.getFunctionInfo(f).linkName + suffix,
 		File:         c.difiles[filename],
 		Line:         line,
 		Type:         diFuncType,
@@ -842,32 +809,40 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix,
 	return difunc
 }
 
-func (c *Compiler) parseFunc(frame *Frame) {
+func (c *Compiler) parseFunc(f *ssa.Function) {
 	if c.DumpSSA {
-		fmt.Printf("\nfunc %s:\n", frame.fn.Function)
+		fmt.Printf("\nfunc %s:\n", f)
 	}
-	if !frame.fn.LLVMFn.IsDeclaration() {
-		c.addError(frame.fn.Pos(), "function is already defined:"+frame.fn.LLVMFn.Name())
+	frame := &Frame{
+		fn:           f,
+		info:         c.getFunctionInfo(f),
+		llvmFn:       c.getFunction(f),
+		locals:       make(map[ssa.Value]llvm.Value),
+		blockEntries: make(map[*ssa.BasicBlock]llvm.BasicBlock),
+		blockExits:   make(map[*ssa.BasicBlock]llvm.BasicBlock),
+	}
+	if !frame.llvmFn.IsDeclaration() {
+		c.addError(frame.fn.Pos(), "function is already defined:"+frame.llvmFn.Name())
 		return
 	}
-	if !frame.fn.IsExported() {
-		frame.fn.LLVMFn.SetLinkage(llvm.InternalLinkage)
-		frame.fn.LLVMFn.SetUnnamedAddr(true)
+	if !frame.info.exported {
+		frame.llvmFn.SetLinkage(llvm.InternalLinkage)
+		frame.llvmFn.SetUnnamedAddr(true)
 	}
-	if frame.fn.IsInterrupt() && strings.HasPrefix(c.Triple, "avr") {
-		frame.fn.LLVMFn.SetFunctionCallConv(85) // CallingConv::AVR_SIGNAL
+	if frame.info.interrupt && strings.HasPrefix(c.Triple, "avr") {
+		frame.llvmFn.SetFunctionCallConv(85) // CallingConv::AVR_SIGNAL
 	}
 
 	// Some functions have a pragma controlling the inlining level.
-	switch frame.fn.Inline() {
-	case ir.InlineHint:
+	switch frame.info.inline {
+	case inlineHint:
 		// Add LLVM inline hint to functions with //go:inline pragma.
 		inline := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("inlinehint"), 0)
-		frame.fn.LLVMFn.AddFunctionAttr(inline)
-	case ir.InlineNone:
+		frame.llvmFn.AddFunctionAttr(inline)
+	case inlineNone:
 		// Add LLVM attribute to always avoid inlining this function.
 		noinline := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
-		frame.fn.LLVMFn.AddFunctionAttr(noinline)
+		frame.llvmFn.AddFunctionAttr(noinline)
 	}
 
 	// Add debug info, if needed.
@@ -875,7 +850,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 		if frame.fn.Synthetic == "package initializer" {
 			// Package initializers have no debug info. Create some fake debug
 			// info to at least have *something*.
-			frame.difunc = c.attachDebugInfoRaw(frame.fn, frame.fn.LLVMFn, "", "", 0)
+			frame.difunc = c.attachDebugInfoRaw(frame.fn, frame.llvmFn, "", "", 0)
 		} else if frame.fn.Syntax() != nil {
 			// Create debug info file if needed.
 			frame.difunc = c.attachDebugInfo(frame.fn)
@@ -886,7 +861,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 
 	// Pre-create all basic blocks in the function.
 	for _, block := range frame.fn.DomPreorder() {
-		llvmBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, block.Comment)
+		llvmBlock := c.ctx.AddBasicBlock(frame.llvmFn, block.Comment)
 		frame.blockEntries[block] = llvmBlock
 		frame.blockExits[block] = llvmBlock
 	}
@@ -899,7 +874,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 		llvmType := c.getLLVMType(param.Type())
 		fields := make([]llvm.Value, 0, 1)
 		for range c.expandFormalParamType(llvmType) {
-			fields = append(fields, frame.fn.LLVMFn.Param(llvmParamIndex))
+			fields = append(fields, frame.llvmFn.Param(llvmParamIndex))
 			llvmParamIndex++
 		}
 		frame.locals[param] = c.collapseFormalParam(llvmType, fields)
@@ -937,8 +912,8 @@ func (c *Compiler) parseFunc(frame *Frame) {
 	// Load free variables from the context. This is a closure (or bound
 	// method).
 	var context llvm.Value
-	if !frame.fn.IsExported() {
-		parentHandle := frame.fn.LLVMFn.LastParam()
+	if !frame.info.exported {
+		parentHandle := frame.llvmFn.LastParam()
 		parentHandle.SetName("parentHandle")
 		context = llvm.PrevParam(parentHandle)
 		context.SetName("context")
@@ -1039,16 +1014,16 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 		if callee := instr.Call.StaticCallee(); callee != nil {
 			// Static callee is known. This makes it easier to start a new
 			// goroutine.
-			calleeFn := c.ir.GetFunction(callee)
-			if !calleeFn.IsExported() && c.selectScheduler() != "tasks" {
+			if !c.getFunctionInfo(callee).exported && c.selectScheduler() != "tasks" {
 				// For coroutine scheduling, this is only required when calling
 				// an external function.
 				// For tasks, because all params are stored in a single object,
 				// no unnecessary parameters should be stored anyway.
 				params = append(params, llvm.Undef(c.i8ptrType))            // context parameter
 				params = append(params, llvm.ConstPointerNull(c.i8ptrType)) // parent coroutine handle
+
 			}
-			c.emitStartGoroutine(calleeFn.LLVMFn, params)
+			c.emitStartGoroutine(c.getFunction(callee), params)
 		} else if !instr.Call.IsInvoke() {
 			// This is a function pointer.
 			// At the moment, two extra params are passed to the newly started
@@ -1096,7 +1071,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			c.builder.CreateRet(c.getValue(frame, instr.Results[0]))
 		} else {
 			// Multiple return values. Put them all in a struct.
-			retVal := llvm.ConstNull(frame.fn.LLVMFn.Type().ElementType().ReturnType())
+			retVal := llvm.ConstNull(frame.llvmFn.Type().ElementType().ReturnType())
 			for i, result := range instr.Results {
 				val := c.getValue(frame, result)
 				retVal = c.builder.CreateInsertValue(retVal, val, i, "")
@@ -1334,9 +1309,9 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 			return c.emitVolatileStore(frame, instr)
 		}
 
-		targetFunc := c.ir.GetFunction(fn)
-		if targetFunc.LLVMFn.IsNil() {
-			return llvm.Value{}, c.makeError(instr.Pos(), "undefined function: "+targetFunc.LinkName())
+		targetFunc := c.getFunction(fn)
+		if targetFunc.IsNil() {
+			return llvm.Value{}, c.makeError(instr.Pos(), "undefined function: "+c.getFunctionInfo(fn).linkName)
 		}
 		var context llvm.Value
 		switch value := instr.Value.(type) {
@@ -1351,7 +1326,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 		default:
 			panic("StaticCallee returned an unexpected value")
 		}
-		return c.parseFunctionCall(frame, instr.Args, targetFunc.LLVMFn, context, targetFunc.IsExported()), nil
+		return c.parseFunctionCall(frame, instr.Args, targetFunc, context, c.getFunctionInfo(fn).exported), nil
 	}
 
 	// Builtin or function pointer.
@@ -1373,14 +1348,13 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 func (c *Compiler) getValue(frame *Frame, expr ssa.Value) llvm.Value {
 	switch expr := expr.(type) {
 	case *ssa.Const:
-		return c.parseConst(frame.fn.LinkName(), expr)
+		return c.parseConst(frame.info.linkName, expr)
 	case *ssa.Function:
-		fn := c.ir.GetFunction(expr)
-		if fn.IsExported() {
+		if c.getFunctionInfo(expr).exported {
 			c.addError(expr.Pos(), "cannot use an exported function as value: "+expr.String())
 			return llvm.Undef(c.getLLVMType(expr.Type()))
 		}
-		return c.createFuncValue(fn.LLVMFn, llvm.Undef(c.i8ptrType), fn.Signature)
+		return c.createFuncValue(c.getFunction(expr), llvm.Undef(c.i8ptrType), expr.Signature)
 	case *ssa.Global:
 		value := c.getGlobal(expr)
 		if value.IsNil() {

@@ -251,10 +251,10 @@ func (c *Compiler) getTypeMethodSet(typ types.Type) llvm.Value {
 	for i := 0; i < ms.Len(); i++ {
 		method := ms.At(i)
 		signatureGlobal := c.getMethodSignature(method.Obj().(*types.Func))
-		f := c.ir.GetFunction(c.ir.Program.MethodValue(method))
-		if f.LLVMFn.IsNil() {
+		f := c.ir.Program.MethodValue(method)
+		if c.getFunction(f).IsNil() {
 			// compiler error, so panic
-			panic("cannot find function: " + f.LinkName())
+			panic("cannot find function: " + c.getFunctionInfo(f).linkName)
 		}
 		fn := c.getInterfaceInvokeWrapper(f)
 		methodInfo := llvm.ConstNamedStruct(interfaceMethodInfoType, []llvm.Value{
@@ -356,8 +356,8 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) llvm.Valu
 	// value.
 
 	prevBlock := c.builder.GetInsertBlock()
-	okBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "typeassert.ok")
-	nextBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "typeassert.next")
+	okBlock := c.ctx.AddBasicBlock(frame.llvmFn, "typeassert.ok")
+	nextBlock := c.ctx.AddBasicBlock(frame.llvmFn, "typeassert.next")
 	frame.blockExits[frame.currentBlock] = nextBlock // adjust outgoing block for phi nodes
 	c.builder.CreateCondBr(commaOk, okBlock, nextBlock)
 
@@ -430,7 +430,7 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 // createInterfaceInvokeWrapper. The former is called during IR construction
 // itself and the latter is called when finishing up the IR.
 type interfaceInvokeWrapper struct {
-	fn           *ir.Function
+	fn           *ssa.Function
 	wrapper      llvm.Value
 	receiverType llvm.Type
 }
@@ -439,8 +439,8 @@ type interfaceInvokeWrapper struct {
 // the underlying value, dereferences it, and calls the real method. This
 // wrapper is only needed when the interface value actually doesn't fit in a
 // pointer and a pointer to the value must be created.
-func (c *Compiler) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
-	wrapperName := f.LinkName() + "$invoke"
+func (c *Compiler) getInterfaceInvokeWrapper(f *ssa.Function) llvm.Value {
+	wrapperName := c.getFunctionInfo(f).linkName + "$invoke"
 	wrapper := c.mod.NamedFunction(wrapperName)
 	if !wrapper.IsNil() {
 		// Wrapper already created. Return it directly.
@@ -457,11 +457,11 @@ func (c *Compiler) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 		// Casting a function signature to a different signature and calling it
 		// with a receiver pointer bitcasted to *i8 (as done in calls on an
 		// interface) is hopefully a safe (defined) operation.
-		return f.LLVMFn
+		return c.getFunction(f)
 	}
 
 	// create wrapper function
-	fnType := f.LLVMFn.Type().ElementType()
+	fnType := c.getFunction(f).Type().ElementType()
 	paramTypes := append([]llvm.Type{c.i8ptrType}, fnType.ParamTypes()[len(expandedReceiverType):]...)
 	wrapFnType := llvm.FunctionType(fnType.ReturnType(), paramTypes, false)
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
@@ -495,11 +495,12 @@ func (c *Compiler) createInterfaceInvokeWrapper(state interfaceInvokeWrapper) {
 
 	receiverValue := c.emitPointerUnpack(wrapper.Param(0), []llvm.Type{receiverType})[0]
 	params := append(c.expandFormalParam(receiverValue), wrapper.Params()[1:]...)
-	if fn.LLVMFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
-		c.builder.CreateCall(fn.LLVMFn, params, "")
+	llvmFn := c.getFunction(fn)
+	if llvmFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
+		c.builder.CreateCall(llvmFn, params, "")
 		c.builder.CreateRetVoid()
 	} else {
-		ret := c.builder.CreateCall(fn.LLVMFn, params, "ret")
+		ret := c.builder.CreateCall(llvmFn, params, "ret")
 		c.builder.CreateRet(ret)
 	}
 }

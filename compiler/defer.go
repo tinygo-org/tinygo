@@ -14,7 +14,6 @@ package compiler
 //     frames.
 
 import (
-	"github.com/tinygo-org/tinygo/ir"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -24,9 +23,9 @@ import (
 // calls.
 func (c *Compiler) deferInitFunc(frame *Frame) {
 	// Some setup.
-	frame.deferFuncs = make(map[*ir.Function]int)
+	frame.deferFuncs = make(map[*ssa.Function]int)
 	frame.deferInvokeFuncs = make(map[string]int)
-	frame.deferClosureFuncs = make(map[*ir.Function]int)
+	frame.deferClosureFuncs = make(map[*ssa.Function]int)
 
 	// Create defer list pointer.
 	deferType := llvm.PointerType(c.getLLVMRuntimeType("_defer"), 0)
@@ -68,13 +67,11 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) {
 
 	} else if callee, ok := instr.Call.Value.(*ssa.Function); ok {
 		// Regular function call.
-		fn := c.ir.GetFunction(callee)
-
-		if _, ok := frame.deferFuncs[fn]; !ok {
-			frame.deferFuncs[fn] = len(frame.allDeferFuncs)
-			frame.allDeferFuncs = append(frame.allDeferFuncs, fn)
+		if _, ok := frame.deferFuncs[callee]; !ok {
+			frame.deferFuncs[callee] = len(frame.allDeferFuncs)
+			frame.allDeferFuncs = append(frame.allDeferFuncs, callee)
 		}
-		callback := llvm.ConstInt(c.uintptrType, uint64(frame.deferFuncs[fn]), false)
+		callback := llvm.ConstInt(c.uintptrType, uint64(frame.deferFuncs[callee]), false)
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields).
@@ -96,7 +93,7 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) {
 		context := c.builder.CreateExtractValue(closure, 0, "")
 
 		// Get the callback number.
-		fn := c.ir.GetFunction(makeClosure.Fn.(*ssa.Function))
+		fn := makeClosure.Fn.(*ssa.Function)
 		if _, ok := frame.deferClosureFuncs[fn]; !ok {
 			frame.deferClosureFuncs[fn] = len(frame.allDeferFuncs)
 			frame.allDeferFuncs = append(frame.allDeferFuncs, makeClosure)
@@ -157,10 +154,10 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 	//     }
 
 	// Create loop.
-	loophead := llvm.AddBasicBlock(frame.fn.LLVMFn, "rundefers.loophead")
-	loop := llvm.AddBasicBlock(frame.fn.LLVMFn, "rundefers.loop")
-	unreachable := llvm.AddBasicBlock(frame.fn.LLVMFn, "rundefers.default")
-	end := llvm.AddBasicBlock(frame.fn.LLVMFn, "rundefers.end")
+	loophead := llvm.AddBasicBlock(frame.llvmFn, "rundefers.loophead")
+	loop := llvm.AddBasicBlock(frame.llvmFn, "rundefers.loop")
+	unreachable := llvm.AddBasicBlock(frame.llvmFn, "rundefers.default")
+	end := llvm.AddBasicBlock(frame.llvmFn, "rundefers.end")
 	c.builder.CreateBr(loophead)
 
 	// Create loop head:
@@ -192,7 +189,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 		// Create switch case, for example:
 		//     case 0:
 		//         // run first deferred call
-		block := llvm.AddBasicBlock(frame.fn.LLVMFn, "rundefers.callback")
+		block := llvm.AddBasicBlock(frame.llvmFn, "rundefers.callback")
 		sw.AddCase(llvm.ConstInt(c.uintptrType, uint64(i), false), block)
 		c.builder.SetInsertPointAtEnd(block)
 		switch callback := callback.(type) {
@@ -230,7 +227,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 			fnPtr, _ := c.getInvokeCall(frame, callback)
 			c.createCall(fnPtr, forwardParams, "")
 
-		case *ir.Function:
+		case *ssa.Function:
 			// Direct call.
 
 			// Get the real defer struct type and cast to it.
@@ -258,11 +255,11 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
 
 			// Call real function.
-			c.createCall(callback.LLVMFn, forwardParams, "")
+			c.createCall(c.getFunction(callback), forwardParams, "")
 
 		case *ssa.MakeClosure:
 			// Get the real defer struct type and cast to it.
-			fn := c.ir.GetFunction(callback.Fn.(*ssa.Function))
+			fn := callback.Fn.(*ssa.Function)
 			valueTypes := []llvm.Type{c.uintptrType, llvm.PointerType(c.getLLVMRuntimeType("_defer"), 0)}
 			params := fn.Signature.Params()
 			for i := 0; i < params.Len(); i++ {
@@ -285,7 +282,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
 
 			// Call deferred function.
-			c.createCall(fn.LLVMFn, forwardParams, "")
+			c.createCall(c.getFunction(fn), forwardParams, "")
 
 		default:
 			panic("unknown deferred function type")

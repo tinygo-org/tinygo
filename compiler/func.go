@@ -166,13 +166,36 @@ func (c *Compiler) getRawFuncType(typ *types.Signature) llvm.Type {
 	return llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), c.funcPtrAddrSpace)
 }
 
+// getFuncReturnType converts zero, one, or more return values in an appropriate
+// LLVM type. A signature with zero return values is translated into void, one
+// is returned normally, and multiple are returned as a struct.
+func (c *Compiler) getFuncReturnType(typ *types.Signature) llvm.Type {
+	switch typ.Results().Len() {
+	case 0:
+		// No return values.
+		return c.ctx.VoidType()
+	case 1:
+		// Just one return value.
+		return c.getLLVMType(typ.Results().At(0).Type())
+	default:
+		// Multiple return values. Put them together in a struct.
+		// This appears to be the common way to handle multiple return values in
+		// LLVM.
+		members := make([]llvm.Type, typ.Results().Len())
+		for i := 0; i < typ.Results().Len(); i++ {
+			members[i] = c.getLLVMType(typ.Results().At(i).Type())
+		}
+		return c.ctx.StructType(members, false)
+	}
+}
+
 // parseMakeClosure makes a function value (with context) from the given
 // closure expression.
 func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.Value, error) {
 	if len(expr.Bindings) == 0 {
 		panic("unexpected: MakeClosure without bound variables")
 	}
-	f := c.ir.GetFunction(expr.Fn.(*ssa.Function))
+	f := expr.Fn.(*ssa.Function)
 
 	// Collect all bound variables.
 	boundVars := make([]llvm.Value, len(expr.Bindings))
@@ -187,5 +210,5 @@ func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.V
 	context := c.emitPointerPack(boundVars)
 
 	// Create the closure.
-	return c.createFuncValue(f.LLVMFn, context, f.Signature), nil
+	return c.createFuncValue(c.getFunction(f), context, f.Signature), nil
 }
