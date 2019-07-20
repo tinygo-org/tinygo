@@ -791,6 +791,11 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) *Frame {
 	// External/exported functions may not retain pointer values.
 	// https://golang.org/cmd/cgo/#hdr-Passing_pointers
 	if f.IsExported() {
+		// Set the wasm-import-module attribute if the function's module is set.
+		if f.Module() != "" {
+			wasmImportModuleAttr := c.ctx.CreateStringAttribute("wasm-import-module", f.Module())
+			frame.fn.LLVMFn.AddFunctionAttr(wasmImportModuleAttr)
+		}
 		nocaptureKind := llvm.AttributeKindID("nocapture")
 		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
 		for i, typ := range paramTypes {
