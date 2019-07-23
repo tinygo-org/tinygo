@@ -38,7 +38,7 @@ type Config struct {
 	GOOS          string   //
 	GOARCH        string   //
 	GC            string   // garbage collection strategy
-	PanicStrategy string   // panic strategy ("abort" or "trap")
+	PanicStrategy string   // panic strategy ("print" or "trap")
 	CFlags        []string // cflags to pass to cgo
 	LDFlags       []string // ldflags to pass to cgo
 	ClangHeaders  string   // Clang built-in header include path

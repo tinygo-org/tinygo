@@ -617,7 +617,7 @@ func main() {
 	outpath := flag.String("o", "", "output filename")
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, conservative)")
-	panicStrategy := flag.String("panic", "print", "panic strategy (abort, trap)")
+	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	tags := flag.String("tags", "", "a space-separated list of extra build tags")
