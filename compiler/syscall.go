@@ -58,6 +58,32 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 		fnType := llvm.FunctionType(c.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "syscall", constraints, true, false, llvm.InlineAsmDialectIntel)
 		syscallResult = c.builder.CreateCall(target, args, "")
+	case c.GOARCH == "386" && c.GOOS == "linux":
+		// Sources:
+		//   syscall(2) man page
+		//   https://stackoverflow.com/a/2538212
+		//   https://en.wikibooks.org/wiki/X86_Assembly/Interfacing_with_Linux#int_0x80
+		args := []llvm.Value{num}
+		argTypes := []llvm.Type{c.uintptrType}
+		// Constraints will look something like:
+		//   "={eax},0,{ebx},{ecx},{edx},{esi},{edi},{ebp}"
+		constraints := "={eax},0"
+		for i, arg := range call.Args[1:] {
+			constraints += "," + [...]string{
+				"{ebx}",
+				"{ecx}",
+				"{edx}",
+				"{esi}",
+				"{edi}",
+				"{ebp}",
+			}[i]
+			llvmValue := c.getValue(frame, arg)
+			args = append(args, llvmValue)
+			argTypes = append(argTypes, llvmValue.Type())
+		}
+		fnType := llvm.FunctionType(c.uintptrType, argTypes, false)
+		target := llvm.InlineAsm(fnType, "int 0x80", constraints, true, false, llvm.InlineAsmDialectIntel)
+		syscallResult = c.builder.CreateCall(target, args, "")
 	case c.GOARCH == "arm" && c.GOOS == "linux":
 		// Implement the EABI system call convention for Linux.
 		// Source: syscall(2) man page.
