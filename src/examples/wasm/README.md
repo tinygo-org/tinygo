@@ -34,7 +34,7 @@ $ make main
 Start the local web server:
 
 ```bash
-$ go run main.go
+$ go run server.go
 Serving ./html on http://localhost:8080
 ```
 
