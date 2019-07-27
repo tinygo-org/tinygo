@@ -225,17 +225,17 @@ commands:
 jobs:
   test-llvm8-go111:
     docker:
-      - image: circleci/golang:1.11
+      - image: circleci/golang:1.11-stretch
     steps:
       - test-linux
   test-llvm8-go112:
     docker:
-      - image: circleci/golang:1.12
+      - image: circleci/golang:1.12-stretch
     steps:
       - test-linux
   build-linux:
     docker:
-      - image: circleci/golang:1.12
+      - image: circleci/golang:1.12-stretch
     steps:
       - build-linux
   build-macos:
