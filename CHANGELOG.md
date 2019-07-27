@@ -1,3 +1,8 @@
+0.7.1
+---
+* **targets**
+  - `atsamd21`: add support for the `-port` flag in the flash subcommand
+
 0.7.0
 ---
 * **command line**
