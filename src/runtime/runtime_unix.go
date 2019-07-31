@@ -1,4 +1,4 @@
-// +build darwin linux,!avr,!cortexm,!tinygo.riscv
+// +build darwin linux,!baremetal
 
 package runtime
 

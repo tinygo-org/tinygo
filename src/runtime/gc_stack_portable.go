@@ -1,5 +1,5 @@
 // +build gc.conservative
-// +build !cortexm,!tinygo.riscv
+// +build !baremetal
 
 package runtime
 

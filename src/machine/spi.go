@@ -1,4 +1,4 @@
-// +build !stm32f407,!avr,!hifive1b
+// +build nrf sam stm32,!stm32f407
 
 package machine
 

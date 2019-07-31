@@ -1,5 +1,5 @@
 {
-	"build-tags": ["cortexm", "linux", "arm"],
+	"build-tags": ["cortexm", "baremetal", "linux", "arm"],
 	"goos": "linux",
 	"goarch": "arm",
 	"compiler": "clang",

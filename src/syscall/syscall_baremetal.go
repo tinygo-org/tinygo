@@ -1,4 +1,4 @@
-// +build avr cortexm
+// +build baremetal
 
 package syscall
 

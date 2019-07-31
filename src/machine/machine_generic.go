@@ -1,4 +1,4 @@
-// +build !avr,!nrf,!sam,!sifive,!stm32
+// +build !baremetal
 
 package machine
 

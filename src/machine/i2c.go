@@ -1,4 +1,4 @@
-// +build !stm32f4disco,!hifive1b
+// +build avr nrf sam stm32,!stm32f4disco
 
 package machine
 
