@@ -1,4 +1,4 @@
-// +build arm,!avr,!cortexm,!tinygo.riscv
+// +build arm,!baremetal
 
 package runtime
 

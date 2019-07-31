@@ -1,4 +1,4 @@
-// +build avr cortexm tinygo.riscv
+// +build baremetal
 
 package runtime
 

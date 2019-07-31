@@ -1,5 +1,5 @@
 {
-	"build-tags": ["avr", "linux", "arm"],
+	"build-tags": ["avr", "baremetal", "linux", "arm"],
 	"goos": "linux",
 	"goarch": "arm",
 	"compiler": "avr-gcc",

@@ -226,7 +226,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 					return path
 				} else if path == "syscall" {
 					for _, tag := range c.BuildTags {
-						if tag == "avr" || tag == "cortexm" || tag == "darwin" || tag == "riscv" {
+						if tag == "baremetal" || tag == "darwin" {
 							return path
 						}
 					}
