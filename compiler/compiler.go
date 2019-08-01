@@ -1308,7 +1308,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 	if fn := instr.StaticCallee(); fn != nil {
 		name := fn.RelString(nil)
 		switch {
-		case name == "device/arm.ReadRegister" || name == "device/riscv.ReadRegister":
+		case name == "device/arm.ReadRegister" || name == "device/riscv.ReadRegister" || name == "device/x86.ReadRegister":
 			return c.emitReadRegister(name, instr.Args)
 		case name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
 			return c.emitAsm(instr.Args)

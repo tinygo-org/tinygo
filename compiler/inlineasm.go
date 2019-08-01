@@ -27,6 +27,8 @@ func (c *Compiler) emitReadRegister(name string, args []ssa.Value) (llvm.Value, 
 		asm = "mov $0, " + regname
 	case "device/riscv.ReadRegister":
 		asm = "mv $0, " + regname
+	case "device/x86.ReadRegister":
+		asm = "mov $0, " + regname
 	default:
 		panic("unknown architecture")
 	}

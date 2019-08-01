@@ -1,0 +1,24 @@
+{
+    "llvm-target": "i686-pc-none-elf",
+    "build-tags": ["baremetal", "linux", "386"],
+    "goos": "linux",
+    "goarch": "386",
+    "compiler": "clang",
+    "linker": "ld.lld",
+    "cflags": [
+        "--target=i686-pc-none-elf",
+        "-Oz",
+        "-Werror",
+        "-Qunused-arguments",
+        "-fno-exceptions", "-fno-unwind-tables",
+        "-ffunction-sections", "-fdata-sections"
+    ],
+    "ldflags": [
+        "--gc-sections",
+        "-Ttargets/i386-baremetal.ld"
+    ],
+    "extra-files": [
+        "targets/i386-baremetal.s"
+    ],
+    "emulator": ["qemu-system-i386", "-nographic", "-serial", "stdio", "-monitor", "none", "-kernel"]
+}
