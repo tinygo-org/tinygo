@@ -2,4 +2,4 @@ package main
 
 // version of this package.
 // Update this value before release of new version of software.
-const version = "0.7.1"
+const version = "0.8.0-dev"
