@@ -65,6 +65,20 @@ func main() {
 	assert(len(arr[uint64(1):uint64(3)]) == 2)
 	assert(len(arr[uintptr(1):uintptr(3)]) == 2)
 
+	// slicing with max parameter (added in Go 1.2)
+	longfoo := []int{1, 2, 4, 5, 10, 11}
+	assert(cap(longfoo[int(1):int(3):int(5)]) == 4)
+	assert(cap(longfoo[int8(1):int8(3):int8(5)]) == 4)
+	assert(cap(longfoo[int16(1):int16(3):int16(5)]) == 4)
+	assert(cap(longfoo[int32(1):int32(3):int32(5)]) == 4)
+	assert(cap(longfoo[int64(1):int64(3):int64(5)]) == 4)
+	assert(cap(longfoo[uint(1):uint(3):uint(5)]) == 4)
+	assert(cap(longfoo[uint8(1):uint8(3):uint8(5)]) == 4)
+	assert(cap(longfoo[uint16(1):uint16(3):uint16(5)]) == 4)
+	assert(cap(longfoo[uint32(1):uint32(3):uint32(5)]) == 4)
+	assert(cap(longfoo[uint64(1):uint64(3):uint64(5)]) == 4)
+	assert(cap(longfoo[uintptr(1):uintptr(3):uintptr(5)]) == 4)
+
 	// copy
 	println("copy foo -> bar:", copy(bar, foo))
 	printslice("bar", bar)
