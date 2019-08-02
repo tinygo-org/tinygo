@@ -22,6 +22,10 @@ func main() {
 	println("Stringer.(*Thing).String():", itf.(Stringer).String())
 
 	println("nested switch:", nestedSwitch('v', 3))
+
+	// Try putting a linked list in an interface:
+	// https://github.com/tinygo-org/tinygo/issues/309
+	itf = linkedList{}
 }
 
 func printItf(val interface{}) {
@@ -133,4 +137,8 @@ func (p SmallPair) Print() {
 // There is no type that matches this method.
 type Unmatched interface {
 	NeverImplementedMethod()
+}
+
+type linkedList struct {
+	addr *linkedList
 }

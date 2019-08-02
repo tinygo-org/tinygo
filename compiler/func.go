@@ -48,7 +48,7 @@ func (c *Compiler) createFuncValue(funcPtr, context llvm.Value, sig *types.Signa
 		// Closure is: {context, function pointer}
 		funcValueScalar = funcPtr
 	case funcValueSwitch:
-		sigGlobal := c.getFuncSignature(sig)
+		sigGlobal := c.getTypeCode(sig)
 		funcValueWithSignatureGlobalName := funcPtr.Name() + "$withSignature"
 		funcValueWithSignatureGlobal := c.mod.NamedGlobal(funcValueWithSignatureGlobalName)
 		if funcValueWithSignatureGlobal.IsNil() {
@@ -73,22 +73,6 @@ func (c *Compiler) createFuncValue(funcPtr, context llvm.Value, sig *types.Signa
 	return funcValue
 }
 
-// getFuncSignature returns a global for identification of a particular function
-// signature. It is used in runtime.funcValueWithSignature and in calls to
-// getFuncPtr.
-func (c *Compiler) getFuncSignature(sig *types.Signature) llvm.Value {
-	typeCodeName := getTypeCodeName(sig)
-	sigGlobalName := "reflect/types.type:" + typeCodeName
-	sigGlobal := c.mod.NamedGlobal(sigGlobalName)
-	if sigGlobal.IsNil() {
-		sigGlobal = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), sigGlobalName)
-		sigGlobal.SetInitializer(llvm.Undef(c.ctx.Int8Type()))
-		sigGlobal.SetGlobalConstant(true)
-		sigGlobal.SetLinkage(llvm.InternalLinkage)
-	}
-	return sigGlobal
-}
-
 // extractFuncScalar returns some scalar that can be used in comparisons. It is
 // a cheap operation.
 func (c *Compiler) extractFuncScalar(funcValue llvm.Value) llvm.Value {
@@ -110,7 +94,7 @@ func (c *Compiler) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (
 		funcPtr = c.builder.CreateExtractValue(funcValue, 1, "")
 	case funcValueSwitch:
 		llvmSig := c.getRawFuncType(sig)
-		sigGlobal := c.getFuncSignature(sig)
+		sigGlobal := c.getTypeCode(sig)
 		funcPtr = c.createRuntimeCall("getFuncPtr", []llvm.Value{funcValue, sigGlobal}, "")
 		funcPtr = c.builder.CreateIntToPtr(funcPtr, llvmSig, "")
 	default:
