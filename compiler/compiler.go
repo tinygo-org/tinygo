@@ -1650,7 +1650,9 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 
 		// Bounds checking.
-		c.emitSliceBoundsCheck(frame, maxSize, sliceLen, sliceCap, expr.Len.Type().(*types.Basic), expr.Cap.Type().(*types.Basic))
+		lenType := expr.Len.Type().(*types.Basic)
+		capType := expr.Cap.Type().(*types.Basic)
+		c.emitSliceBoundsCheck(frame, maxSize, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
 
 		// Allocate the backing array.
 		sliceCapCast, err := c.parseConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
@@ -1724,13 +1726,10 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	case *ssa.Select:
 		return c.emitSelect(frame, expr), nil
 	case *ssa.Slice:
-		if expr.Max != nil {
-			return llvm.Value{}, c.makeError(expr.Pos(), "todo: full slice expressions (with max): "+expr.Type().String())
-		}
 		value := c.getValue(frame, expr.X)
 
-		var lowType, highType *types.Basic
-		var low, high llvm.Value
+		var lowType, highType, maxType *types.Basic
+		var low, high, max llvm.Value
 
 		if expr.Low != nil {
 			lowType = expr.Low.Type().Underlying().(*types.Basic)
@@ -1761,33 +1760,56 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			highType = types.Typ[types.Uintptr]
 		}
 
+		if expr.Max != nil {
+			maxType = expr.Max.Type().Underlying().(*types.Basic)
+			max = c.getValue(frame, expr.Max)
+			if max.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
+				if maxType.Info()&types.IsUnsigned != 0 {
+					max = c.builder.CreateZExt(max, c.uintptrType, "")
+				} else {
+					max = c.builder.CreateSExt(max, c.uintptrType, "")
+				}
+			}
+		} else {
+			maxType = types.Typ[types.Uintptr]
+		}
+
 		switch typ := expr.X.Type().Underlying().(type) {
 		case *types.Pointer: // pointer to array
+			if expr.Max != nil {
+				return llvm.Value{}, c.makeError(expr.Pos(), "todo: full slice expressions (with max): "+expr.Type().String())
+			}
 			// slice an array
 			length := typ.Elem().Underlying().(*types.Array).Len()
 			llvmLen := llvm.ConstInt(c.uintptrType, uint64(length), false)
 			if high.IsNil() {
 				high = llvmLen
 			}
+			if max.IsNil() {
+				max = llvmLen
+			}
 			indices := []llvm.Value{
 				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 				low,
 			}
 
-			c.emitSliceBoundsCheck(frame, llvmLen, low, high, lowType, highType)
+			c.emitSliceBoundsCheck(frame, llvmLen, low, high, max, lowType, highType, maxType)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
+			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				low = c.builder.CreateTrunc(low, c.uintptrType, "")
+			}
 			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
 				high = c.builder.CreateTrunc(high, c.uintptrType, "")
 			}
-			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-				low = c.builder.CreateTrunc(low, c.uintptrType, "")
+			if c.targetData.TypeAllocSize(max.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				max = c.builder.CreateTrunc(max, c.uintptrType, "")
 			}
 
 			sliceLen := c.builder.CreateSub(high, low, "slice.len")
 			slicePtr := c.builder.CreateInBoundsGEP(value, indices, "slice.ptr")
-			sliceCap := c.builder.CreateSub(llvmLen, low, "slice.cap")
+			sliceCap := c.builder.CreateSub(max, low, "slice.cap")
 
 			slice := c.ctx.ConstStruct([]llvm.Value{
 				llvm.Undef(slicePtr.Type()),
@@ -1807,8 +1829,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			if high.IsNil() {
 				high = oldLen
 			}
+			if max.IsNil() {
+				max = oldCap
+			}
 
-			c.emitSliceBoundsCheck(frame, oldCap, low, high, lowType, highType)
+			c.emitSliceBoundsCheck(frame, oldCap, low, high, max, lowType, highType, maxType)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
@@ -1818,10 +1843,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
 				high = c.builder.CreateTrunc(high, c.uintptrType, "")
 			}
+			if c.targetData.TypeAllocSize(max.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
+				max = c.builder.CreateTrunc(max, c.uintptrType, "")
+			}
 
 			newPtr := c.builder.CreateInBoundsGEP(oldPtr, []llvm.Value{low}, "")
 			newLen := c.builder.CreateSub(high, low, "")
-			newCap := c.builder.CreateSub(oldCap, low, "")
+			newCap := c.builder.CreateSub(max, low, "")
 			slice := c.ctx.ConstStruct([]llvm.Value{
 				llvm.Undef(newPtr.Type()),
 				llvm.Undef(c.uintptrType),
@@ -1837,13 +1865,18 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				return llvm.Value{}, c.makeError(expr.Pos(), "unknown slice type: "+typ.String())
 			}
 			// slice a string
+			if expr.Max != nil {
+				// This might as well be a panic, as the frontend should have
+				// handled this already.
+				return llvm.Value{}, c.makeError(expr.Pos(), "slicing a string with a max parameter is not allowed by the spec")
+			}
 			oldPtr := c.builder.CreateExtractValue(value, 0, "")
 			oldLen := c.builder.CreateExtractValue(value, 1, "")
 			if high.IsNil() {
 				high = oldLen
 			}
 
-			c.emitSliceBoundsCheck(frame, oldLen, low, high, lowType, highType)
+			c.emitSliceBoundsCheck(frame, oldLen, low, high, high, lowType, highType, maxType)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.

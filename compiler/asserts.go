@@ -56,7 +56,7 @@ func (c *Compiler) emitLookupBoundsCheck(frame *Frame, arrayLen, index llvm.Valu
 // normal meaning) and for creating a new slice, where 'capacity' means the
 // biggest possible slice capacity, 'low' means len and 'high' means cap. The
 // logic is the same in both cases.
-func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high llvm.Value, lowType, highType *types.Basic) {
+func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high, max llvm.Value, lowType, highType, maxType *types.Basic) {
 	if frame.fn.IsNoBounds() {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
@@ -70,6 +70,9 @@ func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high llvm.V
 	}
 	if high.Type().IntTypeWidth() > capacityType.IntTypeWidth() {
 		capacityType = high.Type()
+	}
+	if max.Type().IntTypeWidth() > capacityType.IntTypeWidth() {
+		capacityType = max.Type()
 	}
 	if capacityType != capacity.Type() {
 		capacity = c.builder.CreateZExt(capacity, capacityType, "")
@@ -90,6 +93,13 @@ func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high llvm.V
 			high = c.builder.CreateSExt(high, capacityType, "")
 		}
 	}
+	if max.Type().IntTypeWidth() < capacityType.IntTypeWidth() {
+		if maxType.Info()&types.IsUnsigned != 0 {
+			max = c.builder.CreateZExt(max, capacityType, "")
+		} else {
+			max = c.builder.CreateSExt(max, capacityType, "")
+		}
+	}
 
 	faultBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "slice.outofbounds")
 	nextBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "slice.next")
@@ -97,8 +107,10 @@ func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high llvm.V
 
 	// Now do the bounds check: low > high || high > capacity
 	outOfBounds1 := c.builder.CreateICmp(llvm.IntUGT, low, high, "slice.lowhigh")
-	outOfBounds2 := c.builder.CreateICmp(llvm.IntUGT, high, capacity, "slice.highcap")
-	outOfBounds := c.builder.CreateOr(outOfBounds1, outOfBounds2, "slice.outofbounds")
+	outOfBounds2 := c.builder.CreateICmp(llvm.IntUGT, high, max, "slice.highmax")
+	outOfBounds3 := c.builder.CreateICmp(llvm.IntUGT, max, capacity, "slice.maxcap")
+	outOfBounds := c.builder.CreateOr(outOfBounds1, outOfBounds2, "slice.lowmax")
+	outOfBounds = c.builder.CreateOr(outOfBounds, outOfBounds3, "slice.lowcap")
 	c.builder.CreateCondBr(outOfBounds, faultBlock, nextBlock)
 
 	// Fail: this is a nil pointer, exit with a panic.
