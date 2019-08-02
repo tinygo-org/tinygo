@@ -3,6 +3,8 @@ package compiler
 import (
 	"math/big"
 	"strings"
+
+	"tinygo.org/x/go-llvm"
 )
 
 var basicTypes = map[string]int64{
@@ -41,10 +43,7 @@ func (c *Compiler) assignTypeCodes(typeSlice typeInfoSlice) {
 	fallbackIndex := 1
 	namedTypes := make(map[string]int)
 	for _, t := range typeSlice {
-		if t.name[:5] != "type:" {
-			panic("expected type name to start with 'type:'")
-		}
-		num := c.getTypeCodeNum(t.name[5:], &fallbackIndex, namedTypes)
+		num := c.getTypeCodeNum(t.typecode, &fallbackIndex, namedTypes)
 		if num.BitLen() > c.uintptrType.IntTypeWidth() || !num.IsUint64() {
 			// TODO: support this in some way, using a side table for example.
 			// That's less efficient but better than not working at all.
@@ -59,20 +58,14 @@ func (c *Compiler) assignTypeCodes(typeSlice typeInfoSlice) {
 // getTypeCodeNum returns the typecode for a given type as expected by the
 // reflect package. Also see getTypeCodeName, which serializes types to a string
 // based on a types.Type value for this function.
-func (c *Compiler) getTypeCodeNum(id string, fallbackIndex *int, namedTypes map[string]int) *big.Int {
+func (c *Compiler) getTypeCodeNum(typecode llvm.Value, fallbackIndex *int, namedTypes map[string]int) *big.Int {
 	// Note: see src/reflect/type.go for bit allocations.
-	// A type can be named or unnamed. Example of both:
-	//     basic:~foo:uint64
-	//     basic:uint64
-	// Extract the class (basic, slice, pointer, etc.), the name, and the
-	// contents of this type ID string. Allocate bits based on that, as
-	// src/runtime/types.go expects.
-	class := id[:strings.IndexByte(id, ':')]
-	value := id[len(class)+1:]
+	class, value := getClassAndValueFromTypeCode(typecode)
 	name := ""
-	if value[0] == '~' {
-		name = value[1:strings.IndexByte(value, ':')]
-		value = value[len(name)+2:]
+	if class == "named" {
+		name = value
+		typecode = llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
+		class, value = getClassAndValueFromTypeCode(typecode)
 	}
 	if class == "basic" {
 		// Basic types follow the following bit pattern:
@@ -81,7 +74,7 @@ func (c *Compiler) getTypeCodeNum(id string, fallbackIndex *int, namedTypes map[
 		// upper bits are used to indicate the named type.
 		num, ok := basicTypes[value]
 		if !ok {
-			panic("invalid basic type: " + id)
+			panic("invalid basic type: " + value)
 		}
 		if name != "" {
 			// This type is named, set the upper bits to the name ID.
@@ -100,17 +93,20 @@ func (c *Compiler) getTypeCodeNum(id string, fallbackIndex *int, namedTypes map[
 		var classNumber int64
 		switch class {
 		case "chan":
-			num = c.getTypeCodeNum(value, fallbackIndex, namedTypes)
+			sub := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
+			num = c.getTypeCodeNum(sub, fallbackIndex, namedTypes)
 			classNumber = 0
 		case "interface":
 			num = big.NewInt(int64(*fallbackIndex))
 			*fallbackIndex++
 			classNumber = 1
 		case "pointer":
-			num = c.getTypeCodeNum(value, fallbackIndex, namedTypes)
+			sub := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
+			num = c.getTypeCodeNum(sub, fallbackIndex, namedTypes)
 			classNumber = 2
 		case "slice":
-			num = c.getTypeCodeNum(value, fallbackIndex, namedTypes)
+			sub := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
+			num = c.getTypeCodeNum(sub, fallbackIndex, namedTypes)
 			classNumber = 3
 		case "array":
 			num = big.NewInt(int64(*fallbackIndex))
@@ -129,7 +125,7 @@ func (c *Compiler) getTypeCodeNum(id string, fallbackIndex *int, namedTypes map[
 			*fallbackIndex++
 			classNumber = 7
 		default:
-			panic("unknown type kind: " + id)
+			panic("unknown type kind: " + class)
 		}
 		if name == "" {
 			num.Lsh(num, 5).Or(num, big.NewInt((classNumber<<1)+1))
@@ -140,6 +136,25 @@ func (c *Compiler) getTypeCodeNum(id string, fallbackIndex *int, namedTypes map[
 		}
 		return num
 	}
+}
+
+// getClassAndValueFromTypeCode takes a typecode (a llvm.Value of type
+// runtime.typecodeID), looks at the name, and extracts the typecode class and
+// value from it. For example, for a typecode with the following name:
+//     reflect/types.type:pointer:named:reflect.ValueError
+// It extracts:
+//     class = "pointer"
+//     value = "named:reflect.ValueError"
+func getClassAndValueFromTypeCode(typecode llvm.Value) (class, value string) {
+	typecodeName := typecode.Name()
+	const prefix = "reflect/types.type:"
+	if !strings.HasPrefix(typecodeName, prefix) {
+		panic("unexpected typecode name: " + typecodeName)
+	}
+	id := typecodeName[len(prefix):]
+	class = id[:strings.IndexByte(id, ':')]
+	value = id[len(class)+1:]
+	return
 }
 
 // getNamedTypeNum returns an appropriate (unique) number for the given named

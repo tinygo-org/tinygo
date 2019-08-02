@@ -45,10 +45,32 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, pos token.
 // It returns a pointer to an external global which should be replaced with the
 // real type in the interface lowering pass.
 func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
-	globalName := "type:" + getTypeCodeName(typ)
+	globalName := "reflect/types.type:" + getTypeCodeName(typ)
 	global := c.mod.NamedGlobal(globalName)
 	if global.IsNil() {
+		// Create a new typecode global.
 		global = llvm.AddGlobal(c.mod, c.getLLVMRuntimeType("typecodeID"), globalName)
+		// Some type classes contain more information for underlying types or
+		// element types. Store it directly in the typecode global to make
+		// reflect lowering simpler.
+		var elementType types.Type
+		switch typ := typ.(type) {
+		case *types.Named:
+			elementType = typ.Underlying()
+		case *types.Chan:
+			elementType = typ.Elem()
+		case *types.Pointer:
+			elementType = typ.Elem()
+		case *types.Slice:
+			elementType = typ.Elem()
+		}
+		if elementType != nil {
+			// Set the 'references' field of the runtime.typecodeID struct.
+			globalValue := c.getZeroValue(global.Type().ElementType())
+			globalValue = llvm.ConstInsertValue(globalValue, c.getTypeCode(elementType), []uint32{0})
+			global.SetInitializer(globalValue)
+			global.SetLinkage(llvm.PrivateLinkage)
+		}
 		global.SetGlobalConstant(true)
 	}
 	return global
@@ -58,14 +80,11 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 // interface lowering pass to assign type codes as expected by the reflect
 // package. See getTypeCodeNum.
 func getTypeCodeName(t types.Type) string {
-	name := ""
-	if named, ok := t.(*types.Named); ok {
-		name = "~" + named.String() + ":"
-		t = t.Underlying()
-	}
 	switch t := t.(type) {
+	case *types.Named:
+		return "named:" + t.String()
 	case *types.Array:
-		return "array:" + name + strconv.FormatInt(t.Len(), 10) + ":" + getTypeCodeName(t.Elem())
+		return "array:" + strconv.FormatInt(t.Len(), 10) + ":" + getTypeCodeName(t.Elem())
 	case *types.Basic:
 		var kind string
 		switch t.Kind() {
@@ -108,21 +127,21 @@ func getTypeCodeName(t types.Type) string {
 		default:
 			panic("unknown basic type: " + t.Name())
 		}
-		return "basic:" + name + kind
+		return "basic:" + kind
 	case *types.Chan:
-		return "chan:" + name + getTypeCodeName(t.Elem())
+		return "chan:" + getTypeCodeName(t.Elem())
 	case *types.Interface:
 		methods := make([]string, t.NumMethods())
 		for i := 0; i < t.NumMethods(); i++ {
 			methods[i] = getTypeCodeName(t.Method(i).Type())
 		}
-		return "interface:" + name + "{" + strings.Join(methods, ",") + "}"
+		return "interface:" + "{" + strings.Join(methods, ",") + "}"
 	case *types.Map:
 		keyType := getTypeCodeName(t.Key())
 		elemType := getTypeCodeName(t.Elem())
-		return "map:" + name + "{" + keyType + "," + elemType + "}"
+		return "map:" + "{" + keyType + "," + elemType + "}"
 	case *types.Pointer:
-		return "pointer:" + name + getTypeCodeName(t.Elem())
+		return "pointer:" + getTypeCodeName(t.Elem())
 	case *types.Signature:
 		params := make([]string, t.Params().Len())
 		for i := 0; i < t.Params().Len(); i++ {
@@ -132,9 +151,9 @@ func getTypeCodeName(t types.Type) string {
 		for i := 0; i < t.Results().Len(); i++ {
 			results[i] = getTypeCodeName(t.Results().At(i).Type())
 		}
-		return "func:" + name + "{" + strings.Join(params, ",") + "}{" + strings.Join(results, ",") + "}"
+		return "func:" + "{" + strings.Join(params, ",") + "}{" + strings.Join(results, ",") + "}"
 	case *types.Slice:
-		return "slice:" + name + getTypeCodeName(t.Elem())
+		return "slice:" + getTypeCodeName(t.Elem())
 	case *types.Struct:
 		elems := make([]string, t.NumFields())
 		if t.NumFields() > 2 && t.Field(0).Name() == "C union" {
@@ -144,7 +163,7 @@ func getTypeCodeName(t types.Type) string {
 		for i := 0; i < t.NumFields(); i++ {
 			elems[i] = getTypeCodeName(t.Field(i).Type())
 		}
-		return "struct:" + name + "{" + strings.Join(elems, ",") + "}"
+		return "struct:" + "{" + strings.Join(elems, ",") + "}"
 	default:
 		panic("unknown type: " + t.String())
 	}

@@ -43,7 +43,16 @@ type interfaceMethodInfo struct {
 	funcptr   uintptr // bitcast from the actual function pointer
 }
 
-type typecodeID struct{}
+type typecodeID struct {
+	// Depending on the type kind of this typecodeID, this pointer is something
+	// different:
+	// * basic types: null
+	// * named type: the underlying type
+	// * interface: null
+	// * chan/pointer/slice: the element type
+	// * array/func/map/struct: TODO
+	references *typecodeID
+}
 
 // Pseudo type used before interface lowering. By using a struct instead of a
 // function call, this is simpler to reason about during init interpretation
