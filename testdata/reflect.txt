@@ -66,6 +66,9 @@ reflect type: unsafe.Pointer
 reflect type: chan
   chan: int
   nil: true
+reflect type: chan
+  chan: int
+  nil: true
 reflect type: ptr
   pointer: true int
   nil: false
@@ -82,6 +85,11 @@ reflect type: ptr
   nil: false
   reflect type: int settable=true
     int: 42
+reflect type: ptr
+  pointer: true int
+  nil: false
+  reflect type: int settable=true
+    int: 0
 reflect type: slice
   slice: uint8 3 3
   pointer: true
@@ -181,6 +189,19 @@ reflect type: slice
   indexing: 1
   reflect type: complex128 settable=true
     complex: (+1.128000e+000+4.000000e-001i)
+reflect type: slice
+  slice: uint8 3 3
+  pointer: true
+  nil: false
+  indexing: 0
+  reflect type: uint8 settable=true
+    uint: 5
+  indexing: 1
+  reflect type: uint8 settable=true
+    uint: 3
+  indexing: 2
+  reflect type: uint8 settable=true
+    uint: 11
 reflect type: array
   array
 reflect type: func
