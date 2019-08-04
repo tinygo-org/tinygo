@@ -47,10 +47,10 @@ func main() {
 
 func preinit() {
 	// Initialize .bss: zero-initialized global variables.
-	ptr := uintptr(unsafe.Pointer(&_sbss))
-	for ptr != uintptr(unsafe.Pointer(&_ebss)) {
-		*(*uint8)(unsafe.Pointer(ptr)) = 0
-		ptr += 1
+	ptr := unsafe.Pointer(&_sbss)
+	for ptr != unsafe.Pointer(&_ebss) {
+		*(*uint32)(ptr) = 0
+		ptr = unsafe.Pointer(uintptr(ptr) + 4)
 	}
 }
 
