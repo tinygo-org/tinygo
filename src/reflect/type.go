@@ -145,9 +145,15 @@ func (t Type) Kind() Kind {
 func (t Type) Elem() Type {
 	switch t.Kind() {
 	case Chan, Ptr, Slice:
+		// Look at the 'n' bit in the type code (see the top of this file) to
+		// see whether this is a named type.
 		if (t>>4)%2 != 0 {
-			panic("unimplemented: (reflect.Type).Elem() for named types")
+			// This is a named type. The element type is stored in a sidetable.
+			namedTypeNum := t >> 5
+			return readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&namedNonBasicTypesSidetable)) + uintptr(namedTypeNum)))
 		}
+		// Not a named type, so the element type is stored directly in the type
+		// code.
 		return t >> 5
 	default: // not implemented: Array, Map
 		panic("unimplemented: (reflect.Type).Elem()")

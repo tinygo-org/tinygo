@@ -9,6 +9,8 @@ type (
 	myint    int
 	myslice  []byte
 	myslice2 []myint
+	mychan   chan int
+	myptr    *int
 )
 
 func main() {
@@ -55,10 +57,12 @@ func main() {
 		unsafe.Pointer(new(int)),
 		// channels
 		zeroChan,
+		mychan(zeroChan),
 		// pointers
 		new(int),
 		new(error),
 		&n,
+		myptr(new(int)),
 		// slices
 		[]byte{1, 2, 3},
 		make([]uint8, 2, 5),
@@ -70,6 +74,7 @@ func main() {
 		[]float64{1, 1.64},
 		[]complex64{1, 1.64 + 0.3i},
 		[]complex128{1, 1.128 + 0.4i},
+		myslice{5, 3, 11},
 		// array
 		[4]int{1, 2, 3, 4},
 		// functions
