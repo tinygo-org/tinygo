@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 )
 
@@ -386,6 +385,8 @@ func isGoroot(goroot string) bool {
 // If the goroot cannot be determined, (0, 0) is returned.
 func getGorootVersion(goroot string) (major, minor int, err error) {
 	var s string
+	var n int
+	var trailing string
 
 	if data, err := ioutil.ReadFile(filepath.Join(
 		goroot, "src", "runtime", "internal", "sys", "zversion.go")); err == nil {
@@ -414,15 +415,14 @@ func getGorootVersion(goroot string) (major, minor int, err error) {
 		return 0, 0, errors.New("could not parse Go version: version has less than two parts")
 	}
 
-	// Ignore the errors, strconv.Atoi will return 0 on most errors and we
-	// don't really handle errors here anyway.
-	major, err = strconv.Atoi(parts[0])
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to parse major version: %s", err)
+	// Ignore the errors, we don't really handle errors here anyway.
+	n, err = fmt.Sscanf(s, "go%d.%d%s", &major, &minor, &trailing)
+	if n == 2 && err == io.EOF {
+		// Means there were no trailing characters (i.e., not an alpha/beta)
+		err = nil
 	}
-	minor, err = strconv.Atoi(parts[1])
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to parse minor version: %s", err)
+		return 0, 0, fmt.Errorf("failed to parse version: %s", err)
 	}
 	return
 }
