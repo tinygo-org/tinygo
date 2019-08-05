@@ -33,6 +33,16 @@ func test() ([]byte, color.RGBA) {
 		{"IO.Int.Request", unsafe.Pointer(&machine.IO.Int.Request), 0x4000200},
 		{"IO.Int.Ack", unsafe.Pointer(&machine.IO.Int.Ack), 0x4000202},
 		{"IO.Int.Enable", unsafe.Pointer(&machine.IO.Int.Enable), 0x4000208},
+		{"Tiles.Block4[S0][0]", unsafe.Pointer(&machine.Tiles.Block4[machine.TILE_BLOCK_S0][0]), 0x06010000},
+		{"Tiles.Block4[S1][0]", unsafe.Pointer(&machine.Tiles.Block4[machine.TILE_BLOCK_S1][0]), 0x06014000},
+		{"Tiles.Block8[S0][0]", unsafe.Pointer(&machine.Tiles.Block8[machine.TILE_BLOCK_S0][0]), 0x06010000},
+		{"Tiles.Block8[S1][0]", unsafe.Pointer(&machine.Tiles.Block8[machine.TILE_BLOCK_S1][0]), 0x06014000},
+		{"Sprites.Sprite[0].Y", unsafe.Pointer(&machine.Sprites.Sprite[0].Y), 0x07000000},
+		{"Sprites.Sprite[127].Y", unsafe.Pointer(&machine.Sprites.Sprite[127].Y), 0x070003F8},
+		{"Backgrounds.ScreenBlocks[0]", unsafe.Pointer(&machine.Backgrounds.ScreenBlocks[0]), 0x06000000},
+		{"Backgrounds.Control[0]", unsafe.Pointer(&machine.Backgrounds.Control[0]), 0x04000008},
+		{"Backgrounds.Offset[0].X", unsafe.Pointer(&machine.Backgrounds.Offset[0].X), 0x04000010},
+		{"Backgrounds.Offset[0].Y", unsafe.Pointer(&machine.Backgrounds.Offset[0].Y), 0x04000012},
 	} {
 		if uintptr(assert.got) == assert.want {
 			continue

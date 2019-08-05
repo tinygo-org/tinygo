@@ -16,6 +16,39 @@ var (
 	// Display maps the display memory in various modes.
 	Display Displays
 
+	// Tile maps the VRAM as tiles.
+	//
+	// Indices 0-3 of both Block arrays map to the background tiles.
+	// Indices 4-5 of both block arrays map the sprite tiles.
+	//
+	// Block4 maps VRAM as 4bpp tiles, Block8 maps it as 8bpp tiles, and as such
+	// they overlap.  Callers who plan to use both 4bpp and 8bpp tiles should
+	// take care that the tiles used do not conflict.
+	//
+	// To make matters more interesting, these blocks are *also* aliased by
+	// backgrounds.ScreenBlocks, which are also used in conjunction with the
+	// tiled background modes, so they are required to coexist.
+	Tiles = TileRAM{
+		Block4: (*[6]TileBlock4)(unsafe.Pointer(uintptr(0x06000000))),
+		Block8: (*[6]TileBlock8)(unsafe.Pointer(uintptr(0x06000000))),
+	}
+
+	// BackgroundPalette maps the Background PaletteRAM as palettes.
+	BackgroundPalette = PaletteRAM{
+		Full: (*Palette)(unsafe.Pointer(uintptr(0x05000000))),
+		Bank: (*[16]PaletteBank)(unsafe.Pointer(uintptr(0x05000000))),
+	}
+
+	// SpritePalette maps the Sprite PaletteRAM.
+	SpritePalette = PaletteRAM{
+		Full: (*Palette)(unsafe.Pointer(uintptr(0x05000200))),
+		Bank: (*[16]PaletteBank)(unsafe.Pointer(uintptr(0x05000200))),
+	}
+
+	// Sprites maps the Object Attribute Memory for managing sprites.
+	Sprites = SpriteRAM{
+		Sprite: (*[128]SpriteAttrs)(unsafe.Pointer(uintptr(0x07000000))),
+	}
 )
 
 // IOMap is the memory mapping of the IO Registers.
@@ -185,6 +218,157 @@ func (DisplayMode3) SetPixel(x, y int16, c color.RGBA) {
 func (DisplayMode3) Display() error {
 	// Nothing to do here.
 	return nil
+}
+
+
+// Types for handling 8x8 4bpp tiles.
+type (
+	Tile4      [8]volatile.Register32
+	TileBlock4 [32 * 16]Tile4
+)
+
+// Types for handling 8x8 8bpp tiles.
+type (
+	Tile8      [16]volatile.Register32
+	TileBlock8 [16 * 16]Tile8
+)
+
+// TileRAM provides access to the tilesets.
+//
+// Be VERY careful if you use both 4bpp and 8bpp tiles!  They overlap in memory,
+// so if you are not careful you may alias your tiles.
+type TileRAM struct {
+	Block4 *[6]TileBlock4 // tile memory mapped to 4bpp tiles (alias of Block8!)
+	Block8 *[6]TileBlock8 // tile memory mapped to 8bpp tiles (alias of Block4!)
+}
+
+// TileRAM Block index constants.
+const (
+	TILE_BLOCK_B0 = iota // tile index starts from CBB and counts bitdepth
+	TILE_BLOCK_B1        // tile index starts from CBB and counts bitdepth
+	TILE_BLOCK_B2        // tile index starts from CBB and counts bitdepth
+	TILE_BLOCK_B3        // tile index starts from CBB and counts bitdepth
+	TILE_BLOCK_S0        // tile index starts from S0 and counts Tile4s
+	TILE_BLOCK_S1        // tile index starts from S0 and counts Tile4s
+)
+
+// Types for handling palettes.
+type (
+	Palette     [256]volatile.Register16
+	PaletteBank [16]volatile.Register16
+)
+
+// PaletteRAM provides access to the palettes.
+//
+// Note that sprites and background sprites have separate ones!
+type PaletteRAM struct {
+	Full *Palette         // Full[PAL_BG | PAL_SPRITE][index] = color
+	Bank *[16]PaletteBank // Bank[PAL_BG | PAL_SPRITE][bank][index] = color
+}
+
+// PaletteRAM index constants.
+const (
+	PAL_BG     = 0 // index for the background palette
+	PAL_SPRITE = 1 // index for the sprite palette
+)
+
+type SpriteRAM struct {
+	Sprite *[128]SpriteAttrs
+}
+
+// Enable2D sets the display to assume 2D sprites.
+func (SpriteRAM) Enable2D() {
+	IO.LCD.DISPCNT.ClearBits(DISPCNT_OBJ_VRAM_MAP_1D)
+	IO.LCD.DISPCNT.SetBits(DISPCNT_DISPLAY_OBJ)
+}
+
+// Enable1D sets the display to assume 1D sprites.
+func (SpriteRAM) Enable1D() {
+	IO.LCD.DISPCNT.SetBits(DISPCNT_DISPLAY_OBJ | DISPCNT_OBJ_VRAM_MAP_1D)
+}
+
+// Disable disables sprite rendering.
+func (SpriteRAM) Disable() {
+	IO.LCD.DISPCNT.ClearBits(DISPCNT_DISPLAY_OBJ)
+}
+
+// SpriteAttrs map the Object Attribute registers for a single sprite.
+type SpriteAttrs struct {
+	Y volatile.Register16 // Y offset, mode, flags, bitdepth, shape, etc
+	X volatile.Register16 // X offset, flipping, size, etc
+	T volatile.Register16 // Tile offset, priority, etc
+	_ volatile.Register16 // affine transform interleaved
+}
+
+// Sprite*Attrs constants help the compiler ensure that these otherwise-unitless
+// values are only passed for the correct configuration options.
+type (
+	SpriteYAttrs uint16
+	SpriteXAttrs uint16
+)
+
+// Sprite Attribute Constants
+const (
+	// Bit Depth (selected by SetupN, no need to pass them in)
+	SPRITE_4BPP = 0 << 13
+	SPRITE_8BPP = 1 << 13
+
+	// Offsets (add to tile index if using TILE_BLOCK_S1)
+	SPRITE_4BPP_S1_OFFSET = 512
+	SPRITE_8BPP_S1_OFFSET = 256
+
+	// Shape (Y Atribute)
+	SPRITE_SQUARE SpriteYAttrs = 0 << 14
+	SPRITE_WIDE   SpriteYAttrs = 1 << 14
+	SPRITE_TALL   SpriteYAttrs = 2 << 14
+
+	// Size (X Attribute)
+	SPRITE_SIZE_S  SpriteXAttrs = 0 << 14
+	SPRITE_SIZE_M  SpriteXAttrs = 1 << 14
+	SPRITE_SIZE_L  SpriteXAttrs = 2 << 14
+	SPRITE_SIZE_XL SpriteXAttrs = 3 << 14
+
+	// Flipping (X Attribute, non-affine only)
+	SPRITE_FLIP_H SpriteXAttrs = 1 << 12
+	SPRITE_FLIP_V SpriteXAttrs = 1 << 13
+)
+
+// Setup4 sets up a 4bpp sprite.
+//
+// Note that if your tiles are in the second sprite tile block, you will need to
+// add SPRITE_4BPP_S1_OFFSET before passing it in.
+func (s *SpriteAttrs) Setup4(priority, tile, bank int, y SpriteYAttrs, x SpriteXAttrs) {
+	s.Y.Set(uint16(y))
+	s.X.Set(uint16(x))
+	s.T.Set(uint16(bank&0xF)<<12 | uint16(priority&0x3)<<10 | uint16(tile&0x3FF))
+}
+
+// Setup4 sets up a 8bpp sprite.
+//
+// The tile index will be automatically scaled for 8bpp tiles, so this index
+// will match the one used for the tile block.
+//
+// Note that if your tiles are in the second sprite tile block, you will need to
+// add SPRITE_8BPP_S1_OFFSET before passing it in.
+func (s *SpriteAttrs) Setup8(priority, tile int, y SpriteYAttrs, x SpriteXAttrs) {
+	tile *= 2 // tile offset counts Tile4s
+	s.Y.Set(uint16(y | SPRITE_8BPP))
+	s.X.Set(uint16(x))
+	s.T.Set(uint16(priority&0x3)<<10 | uint16(tile&0x3FF))
+}
+
+// TODO(kevlar): helpers for setting setup fields after setup:
+//   - SetFlip
+
+// SetPos sets the position of the sprite.
+//
+// The x coordinate is in the range [0,512).
+// The y coordinate is in the range [0,256).
+func (s *SpriteAttrs) SetPos(x, y int) {
+	s.Y.ClearBits(0xFF)
+	s.Y.SetBits(uint16(y & 0xFF))
+	s.X.ClearBits(0xFF)
+	s.X.SetBits(uint16(x & 0x1FF))
 }
 
 type Keypad struct {
