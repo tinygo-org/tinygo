@@ -7,6 +7,8 @@ is Foo: 18
 is Thing: foo
 is *Thing: foo
 is *Thing: foo
+is struct{n int}
+is struct{n int `foo:"bar"`}
 is Doubler: 6
 is Tuple: 1 7 11 13
 Array len: 4
