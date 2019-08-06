@@ -161,7 +161,14 @@ func getTypeCodeName(t types.Type) string {
 			panic("cgo unions are not allowed in interfaces")
 		}
 		for i := 0; i < t.NumFields(); i++ {
-			elems[i] = getTypeCodeName(t.Field(i).Type())
+			embedded := ""
+			if t.Field(i).Embedded() {
+				embedded = "#"
+			}
+			elems[i] = embedded + t.Field(i).Name() + ":" + getTypeCodeName(t.Field(i).Type())
+			if t.Tag(i) != "" {
+				elems[i] += "`" + t.Tag(i) + "`"
+			}
 		}
 		return "struct:" + "{" + strings.Join(elems, ",") + "}"
 	default:
