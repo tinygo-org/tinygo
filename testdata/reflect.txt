@@ -222,15 +222,15 @@ reflect type: struct
   struct
 
 sizes:
-int8 1
-int16 2
-int32 4
-int64 8
-uint8 1
-uint16 2
-uint32 4
-uint64 8
-float32 4
-float64 8
-complex64 8
-complex128 16
+int8 1 8
+int16 2 16
+int32 4 32
+int64 8 64
+uint8 1 8
+uint16 2 16
+uint32 4 32
+uint64 8 64
+float32 4 32
+float64 8 64
+complex64 8 64
+complex128 16 128
