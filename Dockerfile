@@ -2,7 +2,7 @@
 FROM golang:latest AS tinygo-base
 
 RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
-    echo "deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch-8 main" >> /etc/apt/sources.list && \
+    echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-8 main" >> /etc/apt/sources.list && \
     apt-get update && \
     apt-get install -y llvm-8-dev libclang-8-dev git
 
@@ -28,7 +28,7 @@ COPY --from=tinygo-base /go/src/github.com/tinygo-org/tinygo/src /go/src/github.
 COPY --from=tinygo-base /go/src/github.com/tinygo-org/tinygo/targets /go/src/github.com/tinygo-org/tinygo/targets
 
 RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
-    echo "deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch-8 main" >> /etc/apt/sources.list && \
+    echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-8 main" >> /etc/apt/sources.list && \
     apt-get update && \
     apt-get install -y libllvm8 lld-8
 
