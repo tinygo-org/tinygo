@@ -164,8 +164,15 @@ func (t Type) Field(i int) StructField {
 	panic("unimplemented: (reflect.Type).Field()")
 }
 
+// Bits returns the number of bits that this type uses. It is only valid for
+// arithmetic types (integers, floats, and complex numbers). For other types, it
+// will panic.
 func (t Type) Bits() int {
-	panic("unimplemented: (reflect.Type).Bits()")
+	kind := t.Kind()
+	if kind >= Int && kind <= Complex128 {
+		return int(t.Size()) * 8
+	}
+	panic(TypeError{"Bits"})
 }
 
 func (t Type) Len() int {
@@ -212,4 +219,18 @@ func (t Type) Size() uintptr {
 type StructField struct {
 	Name string
 	Type Type
+}
+
+// TypeError is the error that is used in a panic when invoking a method on a
+// type that is not applicable to that type.
+type TypeError struct {
+	Method string
+}
+
+func (e *TypeError) Error() string {
+	return "reflect: call of reflect.Type." + e.Method + " on invalid type"
+}
+
+func align(offset uintptr, alignment uintptr) uintptr {
+	return (offset + alignment - 1) &^ (alignment - 1)
 }
