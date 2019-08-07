@@ -403,7 +403,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 				parentHandle = f.LastParam()
 				if parentHandle.IsNil() || parentHandle.Name() != "parentHandle" {
 					// sanity check
-					panic("trying to make exported function async")
+					panic("trying to make exported function async: " + f.Name())
 				}
 			}
 
