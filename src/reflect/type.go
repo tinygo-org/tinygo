@@ -216,6 +216,47 @@ func (t Type) Size() uintptr {
 	}
 }
 
+// Align returns the alignment of this type. It is similar to calling
+// unsafe.Alignof.
+func (t Type) Align() int {
+	switch t.Kind() {
+	case Bool, Int8, Uint8:
+		return int(unsafe.Alignof(int8(0)))
+	case Int16, Uint16:
+		return int(unsafe.Alignof(int16(0)))
+	case Int32, Uint32:
+		return int(unsafe.Alignof(int32(0)))
+	case Int64, Uint64:
+		return int(unsafe.Alignof(int64(0)))
+	case Int, Uint:
+		return int(unsafe.Alignof(int(0)))
+	case Uintptr:
+		return int(unsafe.Alignof(uintptr(0)))
+	case Float32:
+		return int(unsafe.Alignof(float32(0)))
+	case Float64:
+		return int(unsafe.Alignof(float64(0)))
+	case Complex64:
+		return int(unsafe.Alignof(complex64(0)))
+	case Complex128:
+		return int(unsafe.Alignof(complex128(0)))
+	case String:
+		return int(unsafe.Alignof(StringHeader{}))
+	case UnsafePointer, Chan, Map, Ptr:
+		return int(unsafe.Alignof(uintptr(0)))
+	case Slice:
+		return int(unsafe.Alignof(SliceHeader{}))
+	default:
+		panic("unimplemented: alignment of type")
+	}
+}
+
+// FieldAlign returns the alignment if this type is used in a struct field. It
+// is currently an alias for Align() but this might change in the future.
+func (t Type) FieldAlign() int {
+	return t.Align()
+}
+
 // AssignableTo returns whether a value of type u can be assigned to a variable
 // of type t.
 func (t Type) AssignableTo(u Type) bool {
