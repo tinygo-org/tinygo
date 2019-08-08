@@ -216,6 +216,18 @@ func (t Type) Size() uintptr {
 	}
 }
 
+// AssignableTo returns whether a value of type u can be assigned to a variable
+// of type t.
+func (t Type) AssignableTo(u Type) bool {
+	if t == u {
+		return true
+	}
+	if t.Kind() == Interface {
+		panic("reflect: unimplemented: assigning to interface of different type")
+	}
+	return false
+}
+
 type StructField struct {
 	Name string
 	Type Type
