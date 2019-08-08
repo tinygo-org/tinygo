@@ -50,8 +50,18 @@ type typecodeID struct {
 	// * named type: the underlying type
 	// * interface: null
 	// * chan/pointer/slice: the element type
-	// * array/func/map/struct: TODO
+	// * struct: GEP of structField array (to typecode field)
+	// * array/func/map: TODO
 	references *typecodeID
+}
+
+// structField is used by the compiler to pass information to the interface
+// lowering pass. It is not used in the final binary.
+type structField struct {
+	typecode *typecodeID // type of this struct field
+	name     *uint8      // pointer to char array
+	tag      *uint8      // pointer to char array, or nil
+	embedded bool
 }
 
 // Pseudo type used before interface lowering. By using a struct instead of a

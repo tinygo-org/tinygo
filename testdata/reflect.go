@@ -11,6 +11,17 @@ type (
 	myslice2 []myint
 	mychan   chan int
 	myptr    *int
+	point    struct {
+		X int16
+		Y int16
+	}
+	mystruct struct {
+		n    int `foo:"bar"`
+		some point
+		zero struct{}
+		buf  []byte
+		Buf  []byte
+	}
 )
 
 func main() {
@@ -86,6 +97,12 @@ func main() {
 		// structs
 		struct{}{},
 		struct{ error }{},
+		struct {
+			a uint8
+			b int16
+			c int8
+		}{42, 321, 123},
+		mystruct{5, point{-5, 3}, struct{}{}, []byte{'G', 'o'}, []byte{'X'}},
 	} {
 		showValue(reflect.ValueOf(v), "")
 	}
@@ -291,7 +308,14 @@ func showValue(rv reflect.Value, indent string) {
 			showValue(rv.Index(i), indent+"  ")
 		}
 	case reflect.Struct:
-		println(indent + "  struct")
+		println(indent+"  struct:", rt.NumField())
+		for i := 0; i < rv.NumField(); i++ {
+			field := rt.Field(i)
+			println(indent+"  field:", i, field.Name)
+			println(indent+"  tag:", field.Tag)
+			println(indent+"  embedded:", field.Anonymous)
+			showValue(rv.Field(i), indent+"  ")
+		}
 	default:
 		println(indent + "  unknown type kind!")
 	}

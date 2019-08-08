@@ -4,10 +4,28 @@ import (
 	"unsafe"
 )
 
+type valueFlags uint8
+
+// Flags list some useful flags that contain some extra information not
+// contained in an interface{} directly, like whether this value was exported at
+// all (it is possible to read unexported fields using reflection, but it is not
+// possible to modify them).
+const (
+	valueFlagIndirect valueFlags = 1 << iota
+	valueFlagExported
+)
+
 type Value struct {
 	typecode Type
 	value    unsafe.Pointer
-	indirect bool
+	flags    valueFlags
+}
+
+// isIndirect returns whether the value pointer in this Value is always a
+// pointer to the value. If it is false, it is only a pointer to the value if
+// the value is bigger than a pointer.
+func (v Value) isIndirect() bool {
+	return v.flags&valueFlagIndirect != 0
 }
 
 func Indirect(v Value) Value {
@@ -22,6 +40,7 @@ func ValueOf(i interface{}) Value {
 	return Value{
 		typecode: v.typecode,
 		value:    v.value,
+		flags:    valueFlagExported,
 	}
 }
 
@@ -30,7 +49,7 @@ func (v Value) Interface() interface{} {
 		typecode: v.typecode,
 		value:    v.value,
 	}
-	if v.indirect && v.Type().Size() <= unsafe.Sizeof(uintptr(0)) {
+	if v.isIndirect() && v.Type().Size() <= unsafe.Sizeof(uintptr(0)) {
 		// Value was indirect but must be put back directly in the interface
 		// value.
 		var value uintptr
@@ -109,13 +128,13 @@ func (v Value) Addr() Value {
 }
 
 func (v Value) CanSet() bool {
-	return v.indirect
+	return v.flags&(valueFlagExported|valueFlagIndirect) == valueFlagExported|valueFlagIndirect
 }
 
 func (v Value) Bool() bool {
 	switch v.Kind() {
 	case Bool:
-		if v.indirect {
+		if v.isIndirect() {
 			return *((*bool)(v.value))
 		} else {
 			return uintptr(v.value) != 0
@@ -128,31 +147,31 @@ func (v Value) Bool() bool {
 func (v Value) Int() int64 {
 	switch v.Kind() {
 	case Int:
-		if v.indirect || unsafe.Sizeof(int(0)) > unsafe.Sizeof(uintptr(0)) {
+		if v.isIndirect() || unsafe.Sizeof(int(0)) > unsafe.Sizeof(uintptr(0)) {
 			return int64(*(*int)(v.value))
 		} else {
 			return int64(int(uintptr(v.value)))
 		}
 	case Int8:
-		if v.indirect {
+		if v.isIndirect() {
 			return int64(*(*int8)(v.value))
 		} else {
 			return int64(int8(uintptr(v.value)))
 		}
 	case Int16:
-		if v.indirect {
+		if v.isIndirect() {
 			return int64(*(*int16)(v.value))
 		} else {
 			return int64(int16(uintptr(v.value)))
 		}
 	case Int32:
-		if v.indirect || unsafe.Sizeof(int32(0)) > unsafe.Sizeof(uintptr(0)) {
+		if v.isIndirect() || unsafe.Sizeof(int32(0)) > unsafe.Sizeof(uintptr(0)) {
 			return int64(*(*int32)(v.value))
 		} else {
 			return int64(int32(uintptr(v.value)))
 		}
 	case Int64:
-		if v.indirect || unsafe.Sizeof(int64(0)) > unsafe.Sizeof(uintptr(0)) {
+		if v.isIndirect() || unsafe.Sizeof(int64(0)) > unsafe.Sizeof(uintptr(0)) {
 			return int64(*(*int64)(v.value))
 		} else {
 			return int64(int64(uintptr(v.value)))
@@ -165,37 +184,37 @@ func (v Value) Int() int64 {
 func (v Value) Uint() uint64 {
 	switch v.Kind() {
 	case Uintptr:
-		if v.indirect {
+		if v.isIndirect() {
 			return uint64(*(*uintptr)(v.value))
 		} else {
 			return uint64(uintptr(v.value))
 		}
 	case Uint8:
-		if v.indirect {
+		if v.isIndirect() {
 			return uint64(*(*uint8)(v.value))
 		} else {
 			return uint64(uintptr(v.value))
 		}
 	case Uint16:
-		if v.indirect {
+		if v.isIndirect() {
 			return uint64(*(*uint16)(v.value))
 		} else {
 			return uint64(uintptr(v.value))
 		}
 	case Uint:
-		if v.indirect || unsafe.Sizeof(uint(0)) > unsafe.Sizeof(uintptr(0)) {
+		if v.isIndirect() || unsafe.Sizeof(uint(0)) > unsafe.Sizeof(uintptr(0)) {
 			return uint64(*(*uint)(v.value))
 		} else {
 			return uint64(uintptr(v.value))
 		}
 	case Uint32:
-		if v.indirect || unsafe.Sizeof(uint32(0)) > unsafe.Sizeof(uintptr(0)) {
+		if v.isIndirect() || unsafe.Sizeof(uint32(0)) > unsafe.Sizeof(uintptr(0)) {
 			return uint64(*(*uint32)(v.value))
 		} else {
 			return uint64(uintptr(v.value))
 		}
 	case Uint64:
-		if v.indirect || unsafe.Sizeof(uint64(0)) > unsafe.Sizeof(uintptr(0)) {
+		if v.isIndirect() || unsafe.Sizeof(uint64(0)) > unsafe.Sizeof(uintptr(0)) {
 			return uint64(*(*uint64)(v.value))
 		} else {
 			return uint64(uintptr(v.value))
@@ -208,7 +227,7 @@ func (v Value) Uint() uint64 {
 func (v Value) Float() float64 {
 	switch v.Kind() {
 	case Float32:
-		if v.indirect || unsafe.Sizeof(float32(0)) > unsafe.Sizeof(uintptr(0)) {
+		if v.isIndirect() || unsafe.Sizeof(float32(0)) > unsafe.Sizeof(uintptr(0)) {
 			// The float is stored as an external value on systems with 16-bit
 			// pointers.
 			return float64(*(*float32)(v.value))
@@ -218,7 +237,7 @@ func (v Value) Float() float64 {
 			return float64(*(*float32)(unsafe.Pointer(&v.value)))
 		}
 	case Float64:
-		if v.indirect || unsafe.Sizeof(float64(0)) > unsafe.Sizeof(uintptr(0)) {
+		if v.isIndirect() || unsafe.Sizeof(float64(0)) > unsafe.Sizeof(uintptr(0)) {
 			// For systems with 16-bit and 32-bit pointers.
 			return *(*float64)(v.value)
 		} else {
@@ -234,7 +253,7 @@ func (v Value) Float() float64 {
 func (v Value) Complex() complex128 {
 	switch v.Kind() {
 	case Complex64:
-		if v.indirect || unsafe.Sizeof(complex64(0)) > unsafe.Sizeof(uintptr(0)) {
+		if v.isIndirect() || unsafe.Sizeof(complex64(0)) > unsafe.Sizeof(uintptr(0)) {
 			// The complex number is stored as an external value on systems with
 			// 16-bit and 32-bit pointers.
 			return complex128(*(*complex64)(v.value))
@@ -295,15 +314,17 @@ func (v Value) Cap() int {
 	}
 }
 
+// NumField returns the number of fields of this struct. It panics for other
+// value types.
 func (v Value) NumField() int {
-	panic("unimplemented: (reflect.Value).NumField()")
+	return v.Type().NumField()
 }
 
 func (v Value) Elem() Value {
 	switch v.Kind() {
 	case Ptr:
 		ptr := v.value
-		if v.indirect {
+		if v.isIndirect() {
 			ptr = *(*unsafe.Pointer)(ptr)
 		}
 		if ptr == nil {
@@ -312,15 +333,77 @@ func (v Value) Elem() Value {
 		return Value{
 			typecode: v.Type().Elem(),
 			value:    ptr,
-			indirect: true,
+			flags:    v.flags | valueFlagIndirect,
 		}
 	default: // not implemented: Interface
 		panic(&ValueError{"Elem"})
 	}
 }
 
+// Field returns the value of the i'th field of this struct.
 func (v Value) Field(i int) Value {
-	panic("unimplemented: (reflect.Value).Field()")
+	structField := v.Type().Field(i)
+	flags := v.flags
+	if structField.PkgPath != "" {
+		// The fact that PkgPath is present means that this field is not
+		// exported.
+		flags &^= valueFlagExported
+	}
+
+	size := v.Type().Size()
+	fieldSize := structField.Type.Size()
+	if v.isIndirect() || fieldSize > unsafe.Sizeof(uintptr(0)) {
+		// v.value was already a pointer to the value and it should stay that
+		// way.
+		return Value{
+			flags:    flags,
+			typecode: structField.Type,
+			value:    unsafe.Pointer(uintptr(v.value) + structField.Offset),
+		}
+	}
+
+	// The fieldSize is smaller than uintptr, which means that the value will
+	// have to be stored directly in the interface value.
+
+	if fieldSize == 0 {
+		// The struct field is zero sized.
+		// This is a rare situation, but because it's undefined behavior
+		// to shift the size of the value (zeroing the value), handle this
+		// situation explicitly.
+		return Value{
+			flags:    flags,
+			typecode: structField.Type,
+			value:    unsafe.Pointer(uintptr(0)),
+		}
+	}
+
+	if size > unsafe.Sizeof(uintptr(0)) {
+		// The value was not stored in the interface before but will be
+		// afterwards, so load the value (from the correct offset) and return
+		// it.
+		ptr := unsafe.Pointer(uintptr(v.value) + structField.Offset)
+		loadedValue := uintptr(0)
+		shift := uintptr(0)
+		for i := uintptr(0); i < fieldSize; i++ {
+			loadedValue |= uintptr(*(*byte)(ptr)) << shift
+			shift += 8
+			ptr = unsafe.Pointer(uintptr(ptr) + 1)
+		}
+		return Value{
+			flags:    0,
+			typecode: structField.Type,
+			value:    unsafe.Pointer(loadedValue),
+		}
+	}
+
+	// The value was already stored directly in the interface and it still
+	// is. Cut out the part of the value that we need.
+	mask := ^uintptr(0) >> ((unsafe.Sizeof(uintptr(0)) - fieldSize) * 8)
+	return Value{
+		flags:    flags,
+		typecode: structField.Type,
+		value:    unsafe.Pointer((uintptr(v.value) >> (structField.Offset * 8)) & mask),
+	}
 }
 
 func (v Value) Index(i int) Value {
@@ -333,7 +416,7 @@ func (v Value) Index(i int) Value {
 		}
 		elem := Value{
 			typecode: v.Type().Elem(),
-			indirect: true,
+			flags:    v.flags | valueFlagIndirect,
 		}
 		addr := uintptr(slice.Data) + elem.Type().Size()*uintptr(i) // pointer to new value
 		elem.value = unsafe.Pointer(addr)
@@ -385,15 +468,13 @@ func (it *MapIter) Next() bool {
 }
 
 func (v Value) Set(x Value) {
-	if !v.indirect {
-		panic("reflect: value is not addressable")
-	}
+	v.checkAddressable()
 	if !v.Type().AssignableTo(x.Type()) {
 		panic("reflect: cannot set")
 	}
 	size := v.Type().Size()
 	xptr := x.value
-	if size <= unsafe.Sizeof(uintptr(0)) && !x.indirect {
+	if size <= unsafe.Sizeof(uintptr(0)) && !x.isIndirect() {
 		value := x.value
 		xptr = unsafe.Pointer(&value)
 	}
@@ -401,9 +482,7 @@ func (v Value) Set(x Value) {
 }
 
 func (v Value) SetBool(x bool) {
-	if !v.indirect {
-		panic("reflect: value is not addressable")
-	}
+	v.checkAddressable()
 	switch v.Kind() {
 	case Bool:
 		*(*bool)(v.value) = x
@@ -413,9 +492,7 @@ func (v Value) SetBool(x bool) {
 }
 
 func (v Value) SetInt(x int64) {
-	if !v.indirect {
-		panic("reflect: value is not addressable")
-	}
+	v.checkAddressable()
 	switch v.Kind() {
 	case Int:
 		*(*int)(v.value) = int(x)
@@ -433,9 +510,7 @@ func (v Value) SetInt(x int64) {
 }
 
 func (v Value) SetUint(x uint64) {
-	if !v.indirect {
-		panic("reflect: value is not addressable")
-	}
+	v.checkAddressable()
 	switch v.Kind() {
 	case Uint:
 		*(*uint)(v.value) = uint(x)
@@ -455,9 +530,7 @@ func (v Value) SetUint(x uint64) {
 }
 
 func (v Value) SetFloat(x float64) {
-	if !v.indirect {
-		panic("reflect: value is not addressable")
-	}
+	v.checkAddressable()
 	switch v.Kind() {
 	case Float32:
 		*(*float32)(v.value) = float32(x)
@@ -469,9 +542,7 @@ func (v Value) SetFloat(x float64) {
 }
 
 func (v Value) SetComplex(x complex128) {
-	if !v.indirect {
-		panic("reflect: value is not addressable")
-	}
+	v.checkAddressable()
 	switch v.Kind() {
 	case Complex64:
 		*(*complex64)(v.value) = complex64(x)
@@ -483,14 +554,18 @@ func (v Value) SetComplex(x complex128) {
 }
 
 func (v Value) SetString(x string) {
-	if !v.indirect {
-		panic("reflect: value is not addressable")
-	}
+	v.checkAddressable()
 	switch v.Kind() {
 	case String:
 		*(*string)(v.value) = x
 	default:
 		panic(&ValueError{"SetString"})
+	}
+}
+
+func (v Value) checkAddressable() {
+	if !v.isIndirect() {
+		panic("reflect: value is not addressable")
 	}
 }
 

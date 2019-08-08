@@ -217,9 +217,82 @@ reflect type: map
   map
   nil: false
 reflect type: struct
-  struct
+  struct: 0
 reflect type: struct
-  struct
+  struct: 1
+  field: 0 error
+  tag: 
+  embedded: true
+  reflect type: interface
+    interface
+    nil: true
+reflect type: struct
+  struct: 3
+  field: 0 a
+  tag: 
+  embedded: false
+  reflect type: uint8
+    uint: 42
+  field: 1 b
+  tag: 
+  embedded: false
+  reflect type: int16
+    int: 321
+  field: 2 c
+  tag: 
+  embedded: false
+  reflect type: int8
+    int: 123
+reflect type: struct
+  struct: 5
+  field: 0 n
+  tag: foo:"bar"
+  embedded: false
+  reflect type: int
+    int: 5
+  field: 1 some
+  tag: 
+  embedded: false
+  reflect type: struct
+    struct: 2
+    field: 0 X
+    tag: 
+    embedded: false
+    reflect type: int16
+      int: -5
+    field: 1 Y
+    tag: 
+    embedded: false
+    reflect type: int16
+      int: 3
+  field: 2 zero
+  tag: 
+  embedded: false
+  reflect type: struct
+    struct: 0
+  field: 3 buf
+  tag: 
+  embedded: false
+  reflect type: slice
+    slice: uint8 2 2
+    pointer: true
+    nil: false
+    indexing: 0
+    reflect type: uint8
+      uint: 71
+    indexing: 1
+    reflect type: uint8
+      uint: 111
+  field: 4 Buf
+  tag: 
+  embedded: false
+  reflect type: slice
+    slice: uint8 1 1
+    pointer: true
+    nil: false
+    indexing: 0
+    reflect type: uint8 settable=true
+      uint: 88
 
 sizes:
 int8 1 8
