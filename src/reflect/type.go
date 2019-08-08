@@ -145,23 +145,102 @@ func (t Type) Kind() Kind {
 func (t Type) Elem() Type {
 	switch t.Kind() {
 	case Chan, Ptr, Slice:
-		// Look at the 'n' bit in the type code (see the top of this file) to
-		// see whether this is a named type.
-		if (t>>4)%2 != 0 {
-			// This is a named type. The element type is stored in a sidetable.
-			namedTypeNum := t >> 5
-			return readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&namedNonBasicTypesSidetable)) + uintptr(namedTypeNum)))
-		}
-		// Not a named type, so the element type is stored directly in the type
-		// code.
-		return t >> 5
+		return t.stripPrefix()
 	default: // not implemented: Array, Map
 		panic("unimplemented: (reflect.Type).Elem()")
 	}
 }
 
+// stripPrefix removes the "prefix" (the first 5 bytes of the type code) from
+// the type code. If this is a named type, it will resolve the underlying type
+// (which is the data for this named type). If it is not, the lower bits are
+// simply shifted off.
+//
+// The behavior is only defined for non-basic types.
+func (t Type) stripPrefix() Type {
+	// Look at the 'n' bit in the type code (see the top of this file) to see
+	// whether this is a named type.
+	if (t>>4)%2 != 0 {
+		// This is a named type. The data is stored in a sidetable.
+		namedTypeNum := t >> 5
+		n, _ := readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&namedNonBasicTypesSidetable)) + uintptr(namedTypeNum)))
+		return Type(n)
+	}
+	// Not a named type, so the value is stored directly in the type code.
+	return t >> 5
+}
+
+// Field returns the type of the i'th field of this struct type. It panics if t
+// is not a struct type.
 func (t Type) Field(i int) StructField {
-	panic("unimplemented: (reflect.Type).Field()")
+	if t.Kind() != Struct {
+		panic(&TypeError{"Field"})
+	}
+	structIdentifier := t.stripPrefix()
+
+	numField, p := readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&structTypesSidetable)) + uintptr(structIdentifier)))
+	if uint(i) >= uint(numField) {
+		panic("reflect: field index out of range")
+	}
+
+	// Iterate over every field in the struct and update the StructField each
+	// time, until the target field has been reached. This is very much not
+	// efficient, but it is easy to implement.
+	// Adding a jump table at the start to jump to the field directly would
+	// make this much faster, but that would also impact code size.
+	field := StructField{}
+	offset := uintptr(0)
+	for fieldNum := 0; fieldNum <= i; fieldNum++ {
+		// Read some flags of this field, like whether the field is an
+		// embedded field.
+		flagsByte := *(*uint8)(p)
+		p = unsafe.Pointer(uintptr(p) + 1)
+
+		// Read the type of this struct field.
+		var fieldType uintptr
+		fieldType, p = readVarint(p)
+		field.Type = Type(fieldType)
+
+		// Move Offset forward to align it to this field's alignment.
+		// Assume alignment is a power of two.
+		offset = align(offset, uintptr(field.Type.Align()))
+		field.Offset = offset
+		offset += field.Type.Size() // starting (unaligned) offset for next field
+
+		// Read the field name.
+		var nameNum uintptr
+		nameNum, p = readVarint(p)
+		field.Name = readStringSidetable(unsafe.Pointer(&structNamesSidetable), nameNum)
+
+		// The first bit in the flagsByte indicates whether this is an embedded
+		// field.
+		field.Anonymous = flagsByte&1 != 0
+
+		// The second bit indicates whether there is a tag.
+		if flagsByte&2 != 0 {
+			// There is a tag.
+			var tagNum uintptr
+			tagNum, p = readVarint(p)
+			field.Tag = readStringSidetable(unsafe.Pointer(&structNamesSidetable), tagNum)
+		} else {
+			// There is no tag.
+			field.Tag = ""
+		}
+
+		// The third bit indicates whether this field is exported.
+		if flagsByte&4 != 0 {
+			// This field is exported.
+			field.PkgPath = ""
+		} else {
+			// This field is unexported.
+			// TODO: list the real package path here. Storing it should not
+			// significantly impact binary size as there is only a limited
+			// number of packages in any program.
+			field.PkgPath = "<unimplemented>"
+		}
+	}
+
+	return field
 }
 
 // Bits returns the number of bits that this type uses. It is only valid for
@@ -179,10 +258,19 @@ func (t Type) Len() int {
 	panic("unimplemented: (reflect.Type).Len()")
 }
 
+// NumField returns the number of fields of a struct type. It panics for other
+// type kinds.
 func (t Type) NumField() int {
-	panic("unimplemented: (reflect.Type).NumField()")
+	if t.Kind() != Struct {
+		panic(&TypeError{"NumField"})
+	}
+	structIdentifier := t.stripPrefix()
+	n, _ := readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&structTypesSidetable)) + uintptr(structIdentifier)))
+	return int(n)
 }
 
+// Size returns the size in bytes of a given type. It is similar to
+// unsafe.Sizeof.
 func (t Type) Size() uintptr {
 	switch t.Kind() {
 	case Bool, Int8, Uint8:
@@ -211,6 +299,15 @@ func (t Type) Size() uintptr {
 		return unsafe.Sizeof(uintptr(0))
 	case Slice:
 		return unsafe.Sizeof(SliceHeader{})
+	case Interface:
+		return unsafe.Sizeof(interfaceHeader{})
+	case Struct:
+		numField := t.NumField()
+		if numField == 0 {
+			return 0
+		}
+		lastField := t.Field(numField - 1)
+		return lastField.Offset + lastField.Type.Size()
 	default:
 		panic("unimplemented: size of type")
 	}
@@ -246,6 +343,18 @@ func (t Type) Align() int {
 		return int(unsafe.Alignof(uintptr(0)))
 	case Slice:
 		return int(unsafe.Alignof(SliceHeader{}))
+	case Interface:
+		return int(unsafe.Alignof(interfaceHeader{}))
+	case Struct:
+		numField := t.NumField()
+		alignment := 1
+		for i := 0; i < numField; i++ {
+			fieldAlignment := t.Field(i).Type.Align()
+			if fieldAlignment > alignment {
+				alignment = fieldAlignment
+			}
+		}
+		return alignment
 	default:
 		panic("unimplemented: alignment of type")
 	}
@@ -269,9 +378,19 @@ func (t Type) AssignableTo(u Type) bool {
 	return false
 }
 
+// A StructField describes a single field in a struct.
 type StructField struct {
+	// Name indicates the field name.
 	Name string
-	Type Type
+
+	// PkgPath is the package path where the struct containing this field is
+	// declared for unexported fields, or the empty string for exported fields.
+	PkgPath string
+
+	Type      Type
+	Tag       string
+	Anonymous bool
+	Offset    uintptr
 }
 
 // TypeError is the error that is used in a panic when invoking a method on a

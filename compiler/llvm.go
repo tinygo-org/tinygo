@@ -152,3 +152,46 @@ func (c *Compiler) splitBasicBlock(afterInst llvm.Value, insertAfter llvm.BasicB
 
 	return newBlock
 }
+
+// makeGlobalBytes creates a new LLVM global with the given name and bytes as
+// contents, and returns the global.
+// Note that it is left with the default linkage etc., you should set
+// linkage/constant/etc properties yourself.
+func (c *Compiler) makeGlobalBytes(buf []byte, name string) llvm.Value {
+	globalType := llvm.ArrayType(c.ctx.Int8Type(), len(buf))
+	global := llvm.AddGlobal(c.mod, globalType, name)
+	value := llvm.Undef(globalType)
+	for i, ch := range buf {
+		value = llvm.ConstInsertValue(value, llvm.ConstInt(c.ctx.Int8Type(), uint64(ch), false), []uint32{uint32(i)})
+	}
+	global.SetInitializer(value)
+	return global
+}
+
+// getGlobalBytes returns the byte slice contained in the i8 array of the
+// provided global. It can recover the bytes originally created using
+// makeGlobalBytes.
+func getGlobalBytes(global llvm.Value) []byte {
+	value := global.Initializer()
+	buf := make([]byte, value.Type().ArrayLength())
+	for i := range buf {
+		buf[i] = byte(llvm.ConstExtractValue(value, []uint32{uint32(i)}).ZExtValue())
+	}
+	return buf
+}
+
+// replaceGlobalByteWithArray replaces a global i8 in the module with a byte
+// array, using a GEP to make the types match. It is a convenience function used
+// for creating reflection sidetables, for example.
+func (c *Compiler) replaceGlobalByteWithArray(name string, buf []byte) llvm.Value {
+	global := c.makeGlobalBytes(buf, name+".tmp")
+	oldGlobal := c.mod.NamedGlobal(name)
+	gep := llvm.ConstGEP(global, []llvm.Value{
+		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+	})
+	oldGlobal.ReplaceAllUsesWith(gep)
+	oldGlobal.EraseFromParentAsGlobal()
+	global.SetName(name)
+	return global
+}

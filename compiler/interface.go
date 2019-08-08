@@ -53,27 +53,76 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 		// Some type classes contain more information for underlying types or
 		// element types. Store it directly in the typecode global to make
 		// reflect lowering simpler.
-		var elementType types.Type
+		var references llvm.Value
 		switch typ := typ.(type) {
 		case *types.Named:
-			elementType = typ.Underlying()
+			references = c.getTypeCode(typ.Underlying())
 		case *types.Chan:
-			elementType = typ.Elem()
+			references = c.getTypeCode(typ.Elem())
 		case *types.Pointer:
-			elementType = typ.Elem()
+			references = c.getTypeCode(typ.Elem())
 		case *types.Slice:
-			elementType = typ.Elem()
+			references = c.getTypeCode(typ.Elem())
+		case *types.Struct:
+			// Take a pointer to the typecodeID of the first field (if it exists).
+			structGlobal := c.makeStructTypeFields(typ)
+			references = llvm.ConstGEP(structGlobal, []llvm.Value{
+				llvm.ConstInt(llvm.Int32Type(), 0, false),
+				llvm.ConstInt(llvm.Int32Type(), 0, false),
+			})
 		}
-		if elementType != nil {
+		if !references.IsNil() {
 			// Set the 'references' field of the runtime.typecodeID struct.
 			globalValue := c.getZeroValue(global.Type().ElementType())
-			globalValue = llvm.ConstInsertValue(globalValue, c.getTypeCode(elementType), []uint32{0})
+			globalValue = llvm.ConstInsertValue(globalValue, references, []uint32{0})
 			global.SetInitializer(globalValue)
 			global.SetLinkage(llvm.PrivateLinkage)
 		}
 		global.SetGlobalConstant(true)
 	}
 	return global
+}
+
+// makeStructTypeFields creates a new global that stores all type information
+// related to this struct type, and returns the resulting global. This global is
+// actually an array of all the fields in the structs.
+func (c *Compiler) makeStructTypeFields(typ *types.Struct) llvm.Value {
+	// The global is an array of runtime.structField structs.
+	runtimeStructField := c.getLLVMRuntimeType("structField")
+	structGlobalType := llvm.ArrayType(runtimeStructField, typ.NumFields())
+	structGlobal := llvm.AddGlobal(c.mod, structGlobalType, "reflect/types.structFields")
+	structGlobalValue := c.getZeroValue(structGlobalType)
+	for i := 0; i < typ.NumFields(); i++ {
+		fieldGlobalValue := c.getZeroValue(runtimeStructField)
+		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, c.getTypeCode(typ.Field(i).Type()), []uint32{0})
+		fieldName := c.makeGlobalBytes([]byte(typ.Field(i).Name()), "reflect/types.structFieldName")
+		fieldName = llvm.ConstGEP(fieldName, []llvm.Value{
+			llvm.ConstInt(llvm.Int32Type(), 0, false),
+			llvm.ConstInt(llvm.Int32Type(), 0, false),
+		})
+		fieldName.SetLinkage(llvm.PrivateLinkage)
+		fieldName.SetUnnamedAddr(true)
+		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldName, []uint32{1})
+		if typ.Tag(i) != "" {
+			fieldTag := c.makeGlobalBytes([]byte(typ.Tag(i)), "reflect/types.structFieldTag")
+			fieldTag = llvm.ConstGEP(fieldTag, []llvm.Value{
+				llvm.ConstInt(llvm.Int32Type(), 0, false),
+				llvm.ConstInt(llvm.Int32Type(), 0, false),
+			})
+			fieldTag.SetLinkage(llvm.PrivateLinkage)
+			fieldTag.SetUnnamedAddr(true)
+			fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldTag, []uint32{2})
+		}
+		if typ.Field(i).Embedded() {
+			fieldEmbedded := llvm.ConstInt(c.ctx.Int1Type(), 1, false)
+			fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldEmbedded, []uint32{3})
+		}
+		structGlobalValue = llvm.ConstInsertValue(structGlobalValue, fieldGlobalValue, []uint32{uint32(i)})
+	}
+	structGlobal.SetInitializer(structGlobalValue)
+	structGlobal.SetUnnamedAddr(true)
+	structGlobal.SetLinkage(llvm.PrivateLinkage)
+	return structGlobal
 }
 
 // getTypeCodeName returns a name for this type that can be used in the
