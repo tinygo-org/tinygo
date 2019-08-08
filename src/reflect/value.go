@@ -388,12 +388,8 @@ func (v Value) Set(x Value) {
 	if !v.indirect {
 		panic("reflect: value is not addressable")
 	}
-	if v.Type() != x.Type() {
-		if v.Kind() == Interface {
-			panic("reflect: unimplemented: assigning to interface of different type")
-		} else {
-			panic("reflect: cannot assign")
-		}
+	if !v.Type().AssignableTo(x.Type()) {
+		panic("reflect: cannot set")
 	}
 	size := v.Type().Size()
 	xptr := x.value
