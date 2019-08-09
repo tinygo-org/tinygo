@@ -20,10 +20,10 @@
 	],
 	"ldflags": [
 		"--gc-sections",
-		"-Ttargets/gameboy-advance.ld"
+		"-Ttargets/gameboy-advance/link.ld"
 	],
 	"extra-files": [
-		"targets/gameboy-advance.s"
+		"targets/gameboy-advance/entry.s"
 	],
 	"emulator": ["mgba-qt"]
 }
