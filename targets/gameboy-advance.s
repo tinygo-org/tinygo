@@ -27,7 +27,72 @@ start_vector:
     msr     cpsr, r0
     ldr     sp, =__sp_usr                  // Set user stack
 
+    // Register the interrupt handler
+    mov     r0, #0x3000000
+    add     r0, #0x0008000
+    ldr     r3, =_gba_asm_interrupt_handler
+    str     r3, [r0, #-4]
+
     // Jump to user code (switching to Thumb mode)
     ldr     r3, =main
     bx      r3
 
+.section .data._gba_asm_interrupt_handler
+.global  _gba_asm_interrupt_handler
+.type    _gba_asm_interrupt_handler, %function
+.align
+.arm
+
+_gba_asm_interrupt_handler:
+    // Registers:
+    //   r0 = IOREG
+    // NOTE:
+    //   BIOS has saved r0-r3
+    //   Must save/restore r4-r11 if used
+
+    // Disable IME.
+    mov     r0, #0x04000000
+    str     r0, [r0, #0x208] // only uses lower bits, aka 0
+
+    // Save registers to be nuked by context switching.
+    mrs     r2, spsr
+    stmfd   sp!, {r2, lr} // Stack: spsr, lr_irq
+
+    // Switch to SYS mode.
+    mrs     r3, cpsr
+    bic     r3, r3, #0xdf
+    orr     r3, r3, #0x1f
+    msr     cpsr, r3
+
+    // Save registers before call.
+    //   We save r0 because we need it as soon as we return.
+    //   We save lr again because they're different between modes.
+    stmfd   sp!, {r0,lr} // Stack: [IOREG, lr_sys, spsr, lr_irq]
+
+    // Call the user-space handler.
+    ldr     r3, =runtime_isr_trampoline
+    mov     lr,pc
+    bx      r3
+
+    // Restore our registers.
+    ldmfd   sp!, {r0,lr} // Stack: [spsr, lr_irq]
+
+    // Disable IME again, for safety.
+    str     r0, [r0, #0x208] // only uses lower bits, aka 0
+
+    // Switch to INT mode.
+    mrs     r3, cpsr
+    bic     r3, r3, #0xdf  // Clear all mode bits (except the ARM/THUMB state bit 6)
+    orr     r3, r3, #0x92  // Set M1, THUMB, reserved (bits 2, 5, and 8)
+    msr     cpsr, r3
+
+    // Restore registers that were nuked by context switch.
+    ldmfd   sp!, {r2, lr} // Stack: []
+    msr     spsr, r2
+
+    // Enable IME.
+    mov     r3, #1
+    str     r3, [r0, #0x208]
+
+    // We're done!  Back to the BIOS.
+    bx      lr

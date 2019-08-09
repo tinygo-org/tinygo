@@ -4,6 +4,7 @@ package machine
 
 import (
 	"image/color"
+	"runtime"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -287,4 +288,107 @@ func (t *Timer) Start() {
 }
 func (t *Timer) Stop() {
 	t.Control.ClearBits(TIMER_START)
+}
+
+type Interrupt int
+
+// Interrupt constants
+const (
+	INT_VBLANK   Interrupt = iota // LCD V-Blank
+	INT_HBLANK                    // LCD H-Blank
+	INT_VCOUNTER                  // LCD V-Counter Match
+	INT_TIMER0                    // Timer 0 Overflow
+	INT_TIMER1                    // Timer 1 Overflow
+	INT_TIMER2                    // Timer 2 Overflow
+	INT_TIMER3                    // Timer 3 Overflow
+	INT_SERIAL                    // Serial Communication
+	INT_DMA0                      // DMA 0
+	INT_DMA1                      // DMA 1
+	INT_DMA2                      // DMA 2
+	INT_DMA3                      // DMA 3
+	INT_KEYPAD                    // Keypad
+	INT_GAMEPAK                   // Game Pak (external IRQ source)
+	InterruptCount
+)
+
+type InterruptController struct {
+	handlers [InterruptCount]func(Interrupt)
+}
+
+// Interrupts is a static interrupt controller.
+var Interrupts InterruptController
+
+var interruptEnabler = [InterruptCount]struct {
+	Register *volatile.Register16
+	Bit      uint16
+}{
+	INT_VBLANK:   {&IO.LCD.DISPSTAT, DISPSTAT_VBLANK_IRQ},
+	INT_HBLANK:   {&IO.LCD.DISPSTAT, DISPSTAT_HBLANK_IRQ},
+	INT_VCOUNTER: {&IO.LCD.DISPSTAT, DISPSTAT_VCOUNTER_IRQ},
+	INT_TIMER0:   {&IO.Timer[0].Control, TIMER_IRQ_ENABLE},
+	INT_TIMER1:   {&IO.Timer[1].Control, TIMER_IRQ_ENABLE},
+	INT_TIMER2:   {&IO.Timer[2].Control, TIMER_IRQ_ENABLE},
+	INT_TIMER3:   {&IO.Timer[3].Control, TIMER_IRQ_ENABLE},
+	INT_SERIAL:   {}, // TODO
+	INT_DMA0:     {}, // TODO
+	INT_DMA1:     {}, // TODO
+	INT_DMA2:     {}, // TODO
+	INT_DMA3:     {}, // TODO
+	INT_KEYPAD:   {&IO.Keypad.Control, KEY_IRQ_ENABLE},
+	INT_GAMEPAK:  {}, // TODO
+}
+
+func (ic *InterruptController) Enable(f func(Interrupt), ints ...Interrupt) {
+	IO.Int.Enable.Set(0)
+
+	for _, intr := range ints {
+		enabler := interruptEnabler[int(intr)]
+		if enabler.Register != nil {
+			enabler.Register.SetBits(enabler.Bit)
+		}
+
+		IO.Int.Request.SetBits(1 << uint16(intr))
+		ic.handlers[intr] = f
+	}
+
+	IO.Int.Enable.Set(1)
+}
+
+func (ic *InterruptController) Disable(ints ...Interrupt) {
+	ime := IO.Int.Enable.Get()
+	IO.Int.Enable.Set(0)
+	defer IO.Int.Enable.Set(ime)
+
+	for _, intr := range ints {
+		enabler := interruptEnabler[int(intr)]
+		if enabler.Register != nil {
+			enabler.Register.ClearBits(enabler.Bit)
+		}
+
+		IO.Int.Request.ClearBits(1 << uint16(intr))
+		ic.handlers[intr] = nil
+	}
+}
+
+func (ic *InterruptController) DisableAll() {
+	IO.Int.Enable.Set(0)
+	ic.handlers = [InterruptCount]func(Interrupt){}
+}
+
+func (ic *InterruptController) handle(caught uint16) {
+	for i := Interrupt(0); i < InterruptCount; i++ {
+		if caught&(1<<uint16(i)) != 0 && ic.handlers[i] != nil {
+			ic.handlers[i](i)
+		}
+	}
+}
+
+func init() {
+	runtime.UserISR = isr
+}
+
+func isr() {
+	caught := IO.Int.Ack.Get()
+	IO.Int.Ack.SetBits(caught) // ack all interrupts
+	Interrupts.handle(caught)
 }
