@@ -47,7 +47,7 @@ func (t *coroutine) promise() *taskState {
 	return (*taskState)(t._promise(int32(unsafe.Alignof(taskState{})), false))
 }
 
-func makeGoroutine(*uint8) *uint8
+func makeGoroutine(uintptr) uintptr
 
 // Compiler stub to get the current goroutine. Calls to this function are
 // removed in the goroutine lowering pass.

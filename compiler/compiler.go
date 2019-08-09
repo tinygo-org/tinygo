@@ -1045,9 +1045,9 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 		// interprocedural optimizations. For example, heap-to-stack
 		// transformations are not sound as goroutines can outlive their parent.
 		calleeType := calleeFn.LLVMFn.Type()
-		calleeValue := c.builder.CreateBitCast(calleeFn.LLVMFn, c.i8ptrType, "")
+		calleeValue := c.builder.CreatePtrToInt(calleeFn.LLVMFn, c.uintptrType, "")
 		calleeValue = c.createRuntimeCall("makeGoroutine", []llvm.Value{calleeValue}, "")
-		calleeValue = c.builder.CreateBitCast(calleeValue, calleeType, "")
+		calleeValue = c.builder.CreateIntToPtr(calleeValue, calleeType, "")
 
 		// Get all function parameters to pass to the goroutine.
 		var params []llvm.Value
