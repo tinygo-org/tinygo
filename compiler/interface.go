@@ -66,10 +66,7 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 		case *types.Struct:
 			// Take a pointer to the typecodeID of the first field (if it exists).
 			structGlobal := c.makeStructTypeFields(typ)
-			references = llvm.ConstGEP(structGlobal, []llvm.Value{
-				llvm.ConstInt(llvm.Int32Type(), 0, false),
-				llvm.ConstInt(llvm.Int32Type(), 0, false),
-			})
+			references = llvm.ConstBitCast(structGlobal, global.Type())
 		}
 		if !references.IsNil() {
 			// Set the 'references' field of the runtime.typecodeID struct.
@@ -96,12 +93,12 @@ func (c *Compiler) makeStructTypeFields(typ *types.Struct) llvm.Value {
 		fieldGlobalValue := c.getZeroValue(runtimeStructField)
 		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, c.getTypeCode(typ.Field(i).Type()), []uint32{0})
 		fieldName := c.makeGlobalBytes([]byte(typ.Field(i).Name()), "reflect/types.structFieldName")
+		fieldName.SetLinkage(llvm.PrivateLinkage)
+		fieldName.SetUnnamedAddr(true)
 		fieldName = llvm.ConstGEP(fieldName, []llvm.Value{
 			llvm.ConstInt(llvm.Int32Type(), 0, false),
 			llvm.ConstInt(llvm.Int32Type(), 0, false),
 		})
-		fieldName.SetLinkage(llvm.PrivateLinkage)
-		fieldName.SetUnnamedAddr(true)
 		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldName, []uint32{1})
 		if typ.Tag(i) != "" {
 			fieldTag := c.makeGlobalBytes([]byte(typ.Tag(i)), "reflect/types.structFieldTag")
