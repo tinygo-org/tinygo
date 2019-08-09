@@ -211,16 +211,24 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 		// Add all callees to the worklist.
 		for _, use := range getUses(f) {
-			if use.IsConstant() && use.Opcode() == llvm.BitCast {
-				bitcastUses := getUses(use)
-				for _, call := range bitcastUses {
+			if use.IsConstant() && use.Opcode() == llvm.PtrToInt {
+				for _, call := range getUses(use) {
 					if call.IsACallInst().IsNil() || call.CalledValue().Name() != "runtime.makeGoroutine" {
-						return false, errors.New("async function " + f.Name() + " incorrectly used in bitcast, expected runtime.makeGoroutine")
+						return false, errors.New("async function " + f.Name() + " incorrectly used in ptrtoint, expected runtime.makeGoroutine")
 					}
 				}
 				// This is a go statement. Do not mark the parent as async, as
 				// starting a goroutine is not a blocking operation.
 				continue
+			}
+			if use.IsConstant() && use.Opcode() == llvm.BitCast {
+				// Not sure why this const bitcast is here but as long as it
+				// has no uses it can be ignored, I guess?
+				// I think it was created for the runtime.isnil check but
+				// somehow wasn't removed when all these checks are removed.
+				if len(getUses(use)) == 0 {
+					continue
+				}
 			}
 			if use.IsACallInst().IsNil() {
 				// Not a call instruction. Maybe a store to a global? In any
@@ -250,12 +258,12 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		// goroutine is not async (does not do any blocking operation), no
 		// scheduler is necessary as it can be called directly.
 		for _, use := range getUses(makeGoroutine) {
-			// Input param must be const bitcast of function.
-			bitcast := use.Operand(0)
-			if !bitcast.IsConstant() || bitcast.Opcode() != llvm.BitCast {
-				panic("expected const bitcast operand of runtime.makeGoroutine")
+			// Input param must be const ptrtoint of function.
+			ptrtoint := use.Operand(0)
+			if !ptrtoint.IsConstant() || ptrtoint.Opcode() != llvm.PtrToInt {
+				panic("expected const ptrtoint operand of runtime.makeGoroutine")
 			}
-			goroutine := bitcast.Operand(0)
+			goroutine := ptrtoint.Operand(0)
 			if _, ok := asyncFuncs[goroutine]; ok {
 				needsScheduler = true
 				break
@@ -571,14 +579,14 @@ func (c *Compiler) lowerMakeGoroutineCalls() error {
 
 	makeGoroutine := c.mod.NamedFunction("runtime.makeGoroutine")
 	for _, goroutine := range getUses(makeGoroutine) {
-		bitcastIn := goroutine.Operand(0)
-		origFunc := bitcastIn.Operand(0)
+		ptrtointIn := goroutine.Operand(0)
+		origFunc := ptrtointIn.Operand(0)
 		uses := getUses(goroutine)
-		if len(uses) != 1 || uses[0].IsABitCastInst().IsNil() {
-			return errors.New("expected exactly 1 bitcast use of runtime.makeGoroutine")
+		if len(uses) != 1 || uses[0].IsAIntToPtrInst().IsNil() {
+			return errors.New("expected exactly 1 inttoptr use of runtime.makeGoroutine")
 		}
-		bitcastOut := uses[0]
-		uses = getUses(bitcastOut)
+		inttoptrOut := uses[0]
+		uses = getUses(inttoptrOut)
 		if len(uses) != 1 || uses[0].IsACallInst().IsNil() {
 			return errors.New("expected exactly 1 call use of runtime.makeGoroutine bitcast")
 		}
@@ -593,7 +601,7 @@ func (c *Compiler) lowerMakeGoroutineCalls() error {
 		c.builder.SetInsertPointBefore(realCall)
 		c.builder.CreateCall(origFunc, params, "")
 		realCall.EraseFromParentAsInstruction()
-		bitcastOut.EraseFromParentAsInstruction()
+		inttoptrOut.EraseFromParentAsInstruction()
 		goroutine.EraseFromParentAsInstruction()
 	}
 
