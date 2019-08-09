@@ -47,6 +47,17 @@ func main() {
 	callMain()
 }
 
+var UserISR func()
+
+// Entry point for interrupt service routines.
+//go:export runtime_isr_trampoline
+func isr() {
+	if UserISR == nil {
+		return
+	}
+	UserISR()
+}
+
 func preinit() {
 	// Initialize .bss: zero-initialized global variables.
 	ptr := unsafe.Pointer(&_sbss)
