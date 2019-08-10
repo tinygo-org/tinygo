@@ -5,10 +5,10 @@ import (
 )
 
 // This stores a varint for each named type. Named types are identified by their
-// name instead of by their type. The named types stored in this struct are the
-// simpler non-basic types: pointer, struct, and channel.
+// name instead of by their type. The named types stored in this struct are
+// non-basic types: pointer, struct, and channel.
 //go:extern reflect.namedNonBasicTypesSidetable
-var namedNonBasicTypesSidetable byte
+var namedNonBasicTypesSidetable uintptr
 
 //go:extern reflect.structTypesSidetable
 var structTypesSidetable byte

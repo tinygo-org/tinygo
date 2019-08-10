@@ -163,7 +163,7 @@ func (t Type) stripPrefix() Type {
 	if (t>>4)%2 != 0 {
 		// This is a named type. The data is stored in a sidetable.
 		namedTypeNum := t >> 5
-		n, _ := readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&namedNonBasicTypesSidetable)) + uintptr(namedTypeNum)))
+		n := *(*uintptr)(unsafe.Pointer(uintptr(unsafe.Pointer(&namedNonBasicTypesSidetable)) + uintptr(namedTypeNum)*unsafe.Sizeof(uintptr(0))))
 		return Type(n)
 	}
 	// Not a named type, so the value is stored directly in the type code.

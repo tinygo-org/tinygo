@@ -37,7 +37,7 @@ import (
 )
 
 // A list of basic types and their numbers. This list should be kept in sync
-// with the list of Kind constants of type.go in the runtime package.
+// with the list of Kind constants of type.go in the reflect package.
 var basicTypes = map[string]int64{
 	"bool":       1,
 	"int":        2,
@@ -57,6 +57,19 @@ var basicTypes = map[string]int64{
 	"complex128": 16,
 	"string":     17,
 	"unsafeptr":  18,
+}
+
+// A list of non-basic types. Adding 19 to this number will give the Kind as
+// used in src/reflect/types.go, and it must be kept in sync with that list.
+var nonBasicTypes = map[string]int64{
+	"chan":      0,
+	"interface": 1,
+	"pointer":   2,
+	"slice":     3,
+	"array":     4,
+	"func":      5,
+	"map":       6,
+	"struct":    7,
 }
 
 // typeCodeAssignmentState keeps some global state around for type code
@@ -96,7 +109,7 @@ type typeCodeAssignmentState struct {
 	// Note that this byte buffer is not created when it is not needed
 	// (reflect.namedNonBasicTypesSidetable has no uses), see
 	// needsNamedTypesSidetable.
-	namedNonBasicTypesSidetable []byte
+	namedNonBasicTypesSidetable []uint64
 
 	// This indicates whether namedNonBasicTypesSidetable needs to be created at
 	// all. If it is false, namedNonBasicTypesSidetable will contain simple
@@ -144,17 +157,17 @@ func (c *Compiler) assignTypeCodes(typeSlice typeInfoSlice) {
 
 	// Only create this sidetable when it is necessary.
 	if state.needsNamedNonBasicTypesSidetable {
-		global := c.replaceGlobalByteWithArray("reflect.namedNonBasicTypesSidetable", state.namedNonBasicTypesSidetable)
+		global := c.replaceGlobalIntWithArray("reflect.namedNonBasicTypesSidetable", state.namedNonBasicTypesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 	}
 	if state.needsStructTypesSidetable {
-		global := c.replaceGlobalByteWithArray("reflect.structTypesSidetable", state.structTypesSidetable)
+		global := c.replaceGlobalIntWithArray("reflect.structTypesSidetable", state.structTypesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 	}
 	if state.needsStructNamesSidetable {
-		global := c.replaceGlobalByteWithArray("reflect.structNamesSidetable", state.structNamesSidetable)
+		global := c.replaceGlobalIntWithArray("reflect.structNamesSidetable", state.structNamesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 	}
@@ -194,49 +207,76 @@ func (state *typeCodeAssignmentState) getTypeCodeNum(typecode llvm.Value) *big.I
 		// (channel, interface, pointer, slice) just contain the bits of the
 		// wrapped type. Other types (like struct) need more fields and thus
 		// cannot be encoded as a simple prefix.
-		var num *big.Int
 		var classNumber int64
-		switch class {
-		case "chan":
-			sub := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
-			num = state.getTypeCodeNum(sub)
-			classNumber = 0
-		case "interface":
-			num = big.NewInt(int64(state.fallbackIndex))
-			state.fallbackIndex++
-			classNumber = 1
-		case "pointer":
-			sub := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
-			num = state.getTypeCodeNum(sub)
-			classNumber = 2
-		case "slice":
-			sub := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
-			num = state.getTypeCodeNum(sub)
-			classNumber = 3
-		case "array":
-			num = big.NewInt(int64(state.fallbackIndex))
-			state.fallbackIndex++
-			classNumber = 4
-		case "func":
-			num = big.NewInt(int64(state.fallbackIndex))
-			state.fallbackIndex++
-			classNumber = 5
-		case "map":
-			num = big.NewInt(int64(state.fallbackIndex))
-			state.fallbackIndex++
-			classNumber = 6
-		case "struct":
-			num = big.NewInt(int64(state.getStructTypeNum(typecode)))
-			classNumber = 7
-		default:
+		if n, ok := nonBasicTypes[class]; ok {
+			classNumber = n
+		} else {
 			panic("unknown type kind: " + class)
 		}
+		var num *big.Int
+		lowBits := (classNumber << 1) + 1 // the 5 low bits of the typecode
 		if name == "" {
-			num.Lsh(num, 5).Or(num, big.NewInt((classNumber<<1)+1))
+			num = state.getNonBasicTypeCode(class, typecode)
 		} else {
-			num = big.NewInt(int64(state.getNonBasicNamedTypeNum(name, num))<<1 | 1)
-			num.Lsh(num, 4).Or(num, big.NewInt((classNumber<<1)+1))
+			// We must return a named type here. But first check whether it
+			// has already been defined.
+			if index, ok := state.namedNonBasicTypes[name]; ok {
+				num := big.NewInt(int64(index))
+				num.Lsh(num, 5).Or(num, big.NewInt((classNumber<<1)+1+(1<<4)))
+				return num
+			}
+			lowBits |= 1 << 4 // set the 'n' bit (see above)
+			if !state.needsNamedNonBasicTypesSidetable {
+				// Use simple small integers in this case, to make these numbers
+				// smaller.
+				index := len(state.namedNonBasicTypes) + 1
+				state.namedNonBasicTypes[name] = index
+				num = big.NewInt(int64(index))
+			} else {
+				// We need to store full type information.
+				// First allocate a number in the named non-basic type
+				// sidetable.
+				index := len(state.namedNonBasicTypesSidetable)
+				state.namedNonBasicTypesSidetable = append(state.namedNonBasicTypesSidetable, 0)
+				state.namedNonBasicTypes[name] = index
+				// Get the typecode of the underlying type (which could be the
+				// element type in the case of pointers, for example).
+				num = state.getNonBasicTypeCode(class, typecode)
+				if num.BitLen() > state.uintptrLen || !num.IsUint64() {
+					panic("cannot store value in sidetable")
+				}
+				// Now update the side table with the number we just
+				// determined. We need this multi-step approach to avoid stack
+				// overflow due to adding types recursively in the case of
+				// linked lists (a pointer which points to a struct that
+				// contains that same pointer).
+				state.namedNonBasicTypesSidetable[index] = num.Uint64()
+				num = big.NewInt(int64(index))
+			}
 		}
+		// Concatenate the 'num' and 'lowBits' bitstrings.
+		num.Lsh(num, 5).Or(num, big.NewInt(lowBits))
+		return num
+	}
+}
+
+// getNonBasicTypeCode is used by getTypeCodeNum. It returns the upper bits of
+// the type code used there in the type code.
+func (state *typeCodeAssignmentState) getNonBasicTypeCode(class string, typecode llvm.Value) *big.Int {
+	switch class {
+	case "chan", "pointer", "slice":
+		// Prefix-style type kinds. The upper bits contain the element type.
+		sub := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
+		return state.getTypeCodeNum(sub)
+	case "struct":
+		// More complicated type kind. The upper bits contain the index to the
+		// struct type in the struct types sidetable.
+		return big.NewInt(int64(state.getStructTypeNum(typecode)))
+	default:
+		// Type has not yet been implemented, so fall back by using a unique
+		// number.
+		num := big.NewInt(int64(state.fallbackIndex))
+		state.fallbackIndex++
 		return num
 	}
 }
@@ -269,29 +309,6 @@ func (state *typeCodeAssignmentState) getBasicNamedTypeNum(name string) int {
 	}
 	num := len(state.namedBasicTypes) + 1
 	state.namedBasicTypes[name] = num
-	return num
-}
-
-// getNonBasicNamedTypeNum returns a number unique for this named type. It tries
-// to return the smallest number possible to make encoding of this type code
-// easier.
-func (state *typeCodeAssignmentState) getNonBasicNamedTypeNum(name string, value *big.Int) int {
-	if num, ok := state.namedNonBasicTypes[name]; ok {
-		return num
-	}
-	if !state.needsNamedNonBasicTypesSidetable {
-		// Use simple small integers in this case, to make these numbers
-		// smaller.
-		num := len(state.namedNonBasicTypes) + 1
-		state.namedNonBasicTypes[name] = num
-		return num
-	}
-	num := len(state.namedNonBasicTypesSidetable)
-	if value.BitLen() > state.uintptrLen || !value.IsUint64() {
-		panic("cannot store value in sidetable")
-	}
-	state.namedNonBasicTypesSidetable = append(state.namedNonBasicTypesSidetable, makeVarint(value.Uint64())...)
-	state.namedNonBasicTypes[name] = num
 	return num
 }
 
