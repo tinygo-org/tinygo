@@ -398,6 +398,44 @@ func (t Type) AssignableTo(u Type) bool {
 	return false
 }
 
+// Comparable returns whether values of this type can be compared to each other.
+func (t Type) Comparable() bool {
+	switch t.Kind() {
+	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
+		return true
+	case Float32, Float64, Complex64, Complex128:
+		return true
+	case String:
+		return true
+	case UnsafePointer:
+		return true
+	case Chan:
+		return true
+	case Interface:
+		return true
+	case Ptr:
+		return true
+	case Slice:
+		return false
+	case Array:
+		return t.Elem().Comparable()
+	case Func:
+		return false
+	case Map:
+		return false
+	case Struct:
+		numField := t.NumField()
+		for i := 0; i < numField; i++ {
+			if !t.Field(i).Type.Comparable() {
+				return false
+			}
+		}
+		return true
+	default:
+		panic(TypeError{"Comparable"})
+	}
+}
+
 // A StructField describes a single field in a struct.
 type StructField struct {
 	// Name indicates the field name.

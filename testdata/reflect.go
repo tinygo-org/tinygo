@@ -268,6 +268,9 @@ func showValue(rv reflect.Value, indent string) {
 	if rv.CanSet() {
 		print(" settable=", rv.CanSet())
 	}
+	if !rt.Comparable() {
+		print(" comparable=false")
+	}
 	println()
 	switch rt.Kind() {
 	case reflect.Bool:
