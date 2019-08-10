@@ -293,6 +293,22 @@ reflect type: struct
     indexing: 0
     reflect type: uint8 settable=true
       uint: 88
+reflect type: ptr
+  pointer: true struct
+  nil: false
+  reflect type: struct settable=true
+    struct: 2
+    field: 0 next
+    tag: description:"chain"
+    embedded: false
+    reflect type: ptr
+      pointer: false struct
+      nil: true
+    field: 1 foo
+    tag: 
+    embedded: false
+    reflect type: int
+      int: 42
 
 sizes:
 int8 1 8

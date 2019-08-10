@@ -22,6 +22,10 @@ type (
 		buf  []byte
 		Buf  []byte
 	}
+	linkedList struct {
+		next *linkedList `description:"chain"`
+		foo  int
+	}
 )
 
 func main() {
@@ -103,6 +107,9 @@ func main() {
 			c int8
 		}{42, 321, 123},
 		mystruct{5, point{-5, 3}, struct{}{}, []byte{'G', 'o'}, []byte{'X'}},
+		&linkedList{
+			foo: 42,
+		},
 	} {
 		showValue(reflect.ValueOf(v), "")
 	}
