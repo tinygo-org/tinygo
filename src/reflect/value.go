@@ -69,9 +69,14 @@ func (v Value) Kind() Kind {
 	return v.Type().Kind()
 }
 
+// IsNil returns whether the value is the nil value. It panics if the value Kind
+// is not a channel, map, pointer, function, slice, or interface.
 func (v Value) IsNil() bool {
 	switch v.Kind() {
 	case Chan, Map, Ptr:
+		if v.isIndirect() {
+			return *(*uintptr)(v.value) == 0
+		}
 		return v.value == nil
 	case Func:
 		if v.value == nil {
@@ -96,9 +101,14 @@ func (v Value) IsNil() bool {
 	}
 }
 
+// Pointer returns the underlying pointer of the given value for the following
+// types: chan, map, pointer, unsafe.Pointer, slice, func.
 func (v Value) Pointer() uintptr {
 	switch v.Kind() {
 	case Chan, Map, Ptr, UnsafePointer:
+		if v.isIndirect() {
+			return *(*uintptr)(v.value)
+		}
 		return uintptr(v.value)
 	case Slice:
 		slice := (*SliceHeader)(v.value)
