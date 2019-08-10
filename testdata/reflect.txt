@@ -90,7 +90,7 @@ reflect type: ptr
   nil: false
   reflect type: int settable=true
     int: 0
-reflect type: slice
+reflect type: slice comparable=false
   slice: uint8 3 3
   pointer: true
   nil: false
@@ -103,7 +103,7 @@ reflect type: slice
   indexing: 2
   reflect type: uint8 settable=true
     uint: 3
-reflect type: slice
+reflect type: slice comparable=false
   slice: uint8 2 5
   pointer: true
   nil: false
@@ -113,7 +113,7 @@ reflect type: slice
   indexing: 1
   reflect type: uint8 settable=true
     uint: 0
-reflect type: slice
+reflect type: slice comparable=false
   slice: int32 2 2
   pointer: true
   nil: false
@@ -123,7 +123,7 @@ reflect type: slice
   indexing: 1
   reflect type: int32 settable=true
     int: 5
-reflect type: slice
+reflect type: slice comparable=false
   slice: string 2 2
   pointer: true
   nil: false
@@ -141,15 +141,15 @@ reflect type: slice
     string: Z 1
     reflect type: uint8
       uint: 90
-reflect type: slice
+reflect type: slice comparable=false
   slice: uint8 0 0
   pointer: false
   nil: true
-reflect type: slice
+reflect type: slice comparable=false
   slice: uint8 0 0
   pointer: true
   nil: false
-reflect type: slice
+reflect type: slice comparable=false
   slice: float32 2 2
   pointer: true
   nil: false
@@ -159,7 +159,7 @@ reflect type: slice
   indexing: 1
   reflect type: float32 settable=true
     float: +1.320000e+000
-reflect type: slice
+reflect type: slice comparable=false
   slice: float64 2 2
   pointer: true
   nil: false
@@ -169,7 +169,7 @@ reflect type: slice
   indexing: 1
   reflect type: float64 settable=true
     float: +1.640000e+000
-reflect type: slice
+reflect type: slice comparable=false
   slice: complex64 2 2
   pointer: true
   nil: false
@@ -179,7 +179,7 @@ reflect type: slice
   indexing: 1
   reflect type: complex64 settable=true
     complex: (+1.640000e+000+3.000000e-001i)
-reflect type: slice
+reflect type: slice comparable=false
   slice: complex128 2 2
   pointer: true
   nil: false
@@ -189,7 +189,7 @@ reflect type: slice
   indexing: 1
   reflect type: complex128 settable=true
     complex: (+1.128000e+000+4.000000e-001i)
-reflect type: slice
+reflect type: slice comparable=false
   slice: uint8 3 3
   pointer: true
   nil: false
@@ -216,16 +216,16 @@ reflect type: array
     uint: 3
   reflect type: uint8
     uint: 5
-reflect type: func
+reflect type: func comparable=false
   func
   nil: true
-reflect type: func
+reflect type: func comparable=false
   func
   nil: false
-reflect type: map
+reflect type: map comparable=false
   map
   nil: true
-reflect type: map
+reflect type: map comparable=false
   map
   nil: false
 reflect type: struct
@@ -255,7 +255,7 @@ reflect type: struct
   embedded: false
   reflect type: int8
     int: 123
-reflect type: struct
+reflect type: struct comparable=false
   struct: 5
   field: 0 n
   tag: foo:"bar"
@@ -285,7 +285,7 @@ reflect type: struct
   field: 3 buf
   tag: 
   embedded: false
-  reflect type: slice
+  reflect type: slice comparable=false
     slice: uint8 2 2
     pointer: true
     nil: false
@@ -298,7 +298,7 @@ reflect type: struct
   field: 4 Buf
   tag: 
   embedded: false
-  reflect type: slice
+  reflect type: slice comparable=false
     slice: uint8 1 1
     pointer: true
     nil: false
