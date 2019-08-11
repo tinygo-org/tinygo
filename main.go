@@ -53,6 +53,7 @@ type BuildConfig struct {
 	printSizes    string
 	cFlags        []string
 	ldFlags       []string
+	extraFiles    []string
 	tags          string
 	wasmAbi       string
 	heapSize      int64
@@ -253,18 +254,32 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		}
 
 		// Compile extra files.
-		for i, path := range spec.ExtraFiles {
-			abspath := filepath.Join(root, path)
-			outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
+		var extraIndex int
+		compileExtra := func(path, abspath string) error {
+			outpath := filepath.Join(dir, fmt.Sprintf("extra-%d-%s.o", extraIndex, filepath.Base(path)))
+			ldflags = append(ldflags, outpath)
+			extraIndex++
+
 			cmdNames := []string{spec.Compiler}
 			if names, ok := commands[spec.Compiler]; ok {
 				cmdNames = names
 			}
-			err := execCommand(cmdNames, append(cflags, "-c", "-o", outpath, abspath)...)
-			if err != nil {
+			return execCommand(cmdNames, append(cflags, "-c", "-o", outpath, abspath)...)
+		}
+		for _, path := range spec.ExtraFiles {
+			abspath := filepath.Join(root, path)
+			if err := compileExtra(path, abspath); err != nil {
 				return &commandError{"failed to build", path, err}
 			}
-			ldflags = append(ldflags, outpath)
+		}
+		for _, path := range config.extraFiles {
+			abspath, err := filepath.Abs(path)
+			if err != nil {
+				return &commandError{"failed to locate file", path, err}
+			}
+			if err := compileExtra(path, abspath); err != nil {
+				return &commandError{"failed to build", path, err}
+			}
 		}
 
 		// Compile C files in packages.
@@ -630,6 +645,7 @@ func main() {
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
 	wasmAbi := flag.String("wasm-abi", "js", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	heapSize := flag.String("heap-size", "1M", "default heap size in bytes (only supported by WebAssembly)")
+	extra := flag.String("extra", "", "Space-separated list of extra files to compile.")
 
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
@@ -649,6 +665,7 @@ func main() {
 		printSizes:    *printSize,
 		tags:          *tags,
 		wasmAbi:       *wasmAbi,
+		extraFiles:    strings.Fields(*extra),
 	}
 
 	if *cFlags != "" {
