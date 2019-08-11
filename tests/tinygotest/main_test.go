@@ -14,3 +14,6 @@ func TestFail2(t *testing.T) {
 
 func TestPass(t *testing.T) {
 }
+
+func BenchmarkNotImplemented(b *testing.B) {
+}
