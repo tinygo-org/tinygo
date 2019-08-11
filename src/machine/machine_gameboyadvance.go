@@ -39,6 +39,15 @@ var (
 		Bank: (*[16]PaletteBank)(unsafe.Pointer(uintptr(0x05000000))),
 	}
 
+	// Backgrounds map the background control registers.
+	//
+	// ScreenBlocks alias the entirety of VRAM, so callers must take
+	Backgrounds = BackgroundRegs{
+		Control:      (*[4]BackgroundControl)(unsafe.Pointer(uintptr(0x04000008))),
+		Offset:       (*[4]BackgroundOffset)(unsafe.Pointer(uintptr(0x04000010))),
+		ScreenBlocks: (*[32]ScreenBlock)(unsafe.Pointer(uintptr(0x06000000))),
+	}
+
 	// SpritePalette maps the Sprite PaletteRAM.
 	SpritePalette = PaletteRAM{
 		Full: (*Palette)(unsafe.Pointer(uintptr(0x05000200))),
@@ -156,11 +165,13 @@ func (p Pin) Set(value bool) {
 
 // Displays is a convenience container for the various mode-based displays.
 type Displays struct {
+	Mode0 DisplayMode0
 	Mode3 DisplayMode3
 }
 
 // DISPCNT Register Constants
 const (
+	DISPCNT_MODE0 = 0
 	DISPCNT_MODE1 = 1
 	DISPCNT_MODE2 = 2
 	DISPCNT_MODE3 = 3
@@ -220,6 +231,90 @@ func (DisplayMode3) Display() error {
 	return nil
 }
 
+type DisplayMode0 struct{}
+
+func (DisplayMode0) Configure4(tileBlock, screenBlock, sizeID int) {
+	control := uint16(0)<<0 |
+		uint16(tileBlock&0x3)<<2 |
+		uint16(1)<<7 |
+		uint16(screenBlock&0x1F)<<8 |
+		uint16(sizeID&0x3)<<15
+	IO.LCD.BG0CNT.Set(control)
+
+	IO.LCD.DISPCNT.ClearBits(DISPCNT_MODE_MASK | DISPCNT_DISPLAY_BG_MASK | DISPCNT_FORCED_BLANK)
+	IO.LCD.DISPCNT.SetBits(DISPCNT_MODE0 | DISPCNT_DISPLAY_BG0)
+}
+
+func (DisplayMode0) Configure() {
+	IO.LCD.DISPCNT.ClearBits(DISPCNT_MODE_MASK | DISPCNT_FORCED_BLANK)
+	IO.LCD.DISPCNT.SetBits(DISPCNT_MODE0)
+}
+
+type BackgroundControl struct {
+	Reg volatile.Register16
+}
+
+func (bc *BackgroundControl) Configure8(priority, cbb, sbb, sizeID int) {
+	control := uint16(priority&0x3) |
+		uint16(cbb&0x3)<<2 |
+		uint16(1)<<7 |
+		uint16(sbb&0x1F)<<8 |
+		uint16(sizeID&0x3)<<15
+	bc.Reg.Set(control)
+
+	IO.LCD.DISPCNT.ClearBits(DISPCNT_DISPLAY_BG_MASK)
+	IO.LCD.DISPCNT.SetBits(DISPCNT_DISPLAY_BG0)
+}
+
+func (bc *BackgroundControl) Configure4(priority, cbb, sbb, sizeID int) {
+	control := uint16(priority&0x3) |
+		uint16(cbb&0x3)<<2 |
+		uint16(sbb&0x1F)<<8 |
+		uint16(sizeID&0x3)<<15
+	bc.Reg.Set(control)
+
+	IO.LCD.DISPCNT.ClearBits(DISPCNT_DISPLAY_BG_MASK)
+	IO.LCD.DISPCNT.SetBits(DISPCNT_DISPLAY_BG0)
+}
+
+type BackgroundOffset struct {
+	X volatile.Register16 // write only
+	Y volatile.Register16 // write only
+}
+
+type BackgroundRegs struct {
+	Control      *[4]BackgroundControl
+	Offset       *[4]BackgroundOffset
+	ScreenBlocks *[32]ScreenBlock
+}
+
+// ScreenBlock maps screenblock entries, which tells the GBA display
+// driver which tile to display for the corresponding 8x8 pixel square.
+type ScreenBlock struct {
+	Regular [32][32]ScreenEntry // non-affine
+
+	// TODO(kevlar): affine
+}
+
+// A ScreenEntry controls a non-affine scren
+type ScreenEntry struct {
+	Reg volatile.Register16
+}
+
+// Set4 sets the 4bpp tile index and palette bank index.
+//
+// The indices given should match the index of the tile in Tiles.Block4 and of
+// the palette in BackgroundPalette.Bank.
+func (se *ScreenEntry) Set4(paletteIndex, tileIndex int) {
+	se.Reg.Set(uint16(tileIndex&0x3FF) | uint16(paletteIndex&0xF)<<12)
+}
+
+// Set8 sets the 8bpp tile index to use.
+//
+// The index given here should match the index in Tiles.Block8 of the tile data.
+func (se *ScreenEntry) Set8(tileIndex int) {
+	se.Reg.Set(uint16(tileIndex & 0x3FF))
+}
 
 // Types for handling 8x8 4bpp tiles.
 type (
@@ -227,11 +322,29 @@ type (
 	TileBlock4 [32 * 16]Tile4
 )
 
+func (t *Tile4) Init(data []uint32) {
+	if len(data) != 8 {
+		return
+	}
+	for i := range data {
+		t[i].Set(data[i])
+	}
+}
+
 // Types for handling 8x8 8bpp tiles.
 type (
 	Tile8      [16]volatile.Register32
 	TileBlock8 [16 * 16]Tile8
 )
+
+func (t *Tile8) Init(data []uint32) {
+	if len(data) != 16 {
+		return
+	}
+	for i := range data {
+		t[i].Set(data[i])
+	}
+}
 
 // TileRAM provides access to the tilesets.
 //
@@ -257,6 +370,26 @@ type (
 	Palette     [256]volatile.Register16
 	PaletteBank [16]volatile.Register16
 )
+
+// Init initializes a portion of the palette from 32-bit packed palette data.
+//
+// The amount by which offset should be incremented for a subsequent call to
+// Init is returned, in case different ranges of the palette are in use --
+// though note that the background tiles would need to be created with this in
+// mind in order for it to make sense.
+func (p *Palette) Init(mem []uint16, offset int) (offsetIncr int) {
+	for i, packed := range mem {
+		p[offset+i].Set(packed)
+	}
+	return len(mem)
+}
+
+// Init initializes a portion of the palette from existing palette data.
+func (p *PaletteBank) Init(mem []uint16) {
+	for i, color := range mem {
+		p[i].Set(color)
+	}
+}
 
 // PaletteRAM provides access to the palettes.
 //
