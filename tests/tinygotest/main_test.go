@@ -9,10 +9,16 @@ func TestFail1(t *testing.T) {
 }
 
 func TestFail2(t *testing.T) {
-	t.Error("TestFail2 failed for reasons")
+	t.Fatalf("TestFail2 failed for %v ", "reasons")
+}
+
+func TestFail3(t *testing.T) {
+	t.Fail()
+	t.Logf("TestFail3 failed for %v ", "reasons")
 }
 
 func TestPass(t *testing.T) {
+	t.Log("TestPass passed")
 }
 
 func BenchmarkNotImplemented(b *testing.B) {
