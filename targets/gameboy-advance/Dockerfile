@@ -24,6 +24,7 @@ ADD . .
 RUN git submodule deinit --force --all
 RUN go mod download
 RUN go build -o bin/tinygo
+RUN go build -o bin/tileprep ./tools/tileprep/
 ENV PATH="/tinygo/bin:${PATH}"
 
 WORKDIR /skel
