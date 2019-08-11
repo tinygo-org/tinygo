@@ -2415,6 +2415,8 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 				switch typeFrom.Elem().(*types.Basic).Kind() {
 				case types.Byte:
 					return c.createRuntimeCall("stringFromBytes", []llvm.Value{value}, ""), nil
+				case types.Rune:
+					return c.createRuntimeCall("stringFromRunes", []llvm.Value{value}, ""), nil
 				default:
 					return llvm.Value{}, c.makeError(pos, "todo: convert to string: "+typeFrom.String())
 				}
