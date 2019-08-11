@@ -16,3 +16,4 @@
 6 66376
 7 176
 8 120
+string from runes: abcü¢€𐍈°x
