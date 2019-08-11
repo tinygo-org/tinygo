@@ -1776,9 +1776,6 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		switch typ := expr.X.Type().Underlying().(type) {
 		case *types.Pointer: // pointer to array
-			if expr.Max != nil {
-				return llvm.Value{}, c.makeError(expr.Pos(), "todo: full slice expressions (with max): "+expr.Type().String())
-			}
 			// slice an array
 			length := typ.Elem().Underlying().(*types.Array).Len()
 			llvmLen := llvm.ConstInt(c.uintptrType, uint64(length), false)
