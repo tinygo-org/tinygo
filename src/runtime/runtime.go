@@ -79,11 +79,6 @@ func memequal(x, y unsafe.Pointer, n uintptr) bool {
 	return true
 }
 
-//go:linkname sleep time.Sleep
-func sleep(d int64) {
-	sleepTicks(timeUnit(d / tickMicros))
-}
-
 func nanotime() int64 {
 	return int64(ticks()) * tickMicros
 }

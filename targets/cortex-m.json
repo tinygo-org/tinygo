@@ -4,6 +4,7 @@
 	"goarch": "arm",
 	"compiler": "clang",
 	"gc": "conservative",
+	"scheduler": "tasks",
 	"linker": "ld.lld",
 	"rtlib": "compiler-rt",
 	"cflags": [
@@ -20,7 +21,8 @@
 		"--gc-sections"
 	],
 	"extra-files": [
-		"src/device/arm/cortexm.s"
+		"src/device/arm/cortexm.s",
+		"src/runtime/scheduler_cortexm.S"
 	],
 	"gdb": "arm-none-eabi-gdb"
 }

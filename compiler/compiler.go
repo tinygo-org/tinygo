@@ -30,6 +30,20 @@ func init() {
 // The TinyGo import path.
 const tinygoPath = "github.com/tinygo-org/tinygo"
 
+// functionsUsedInTransform is a list of function symbols that may be used
+// during TinyGo optimization passes so they have to be marked as external
+// linkage until all TinyGo passes have finished.
+var functionsUsedInTransforms = []string{
+	"runtime.alloc",
+	"runtime.free",
+	"runtime.sleepTask",
+	"runtime.setTaskStatePtr",
+	"runtime.getTaskStatePtr",
+	"runtime.activateTask",
+	"runtime.scheduler",
+	"runtime.startGoroutine",
+}
+
 // Configure the compiler.
 type Config struct {
 	Triple        string   // LLVM target triple, e.g. x86_64-unknown-linux-gnu (empty string means default)
@@ -38,6 +52,7 @@ type Config struct {
 	GOOS          string   //
 	GOARCH        string   //
 	GC            string   // garbage collection strategy
+	Scheduler     string   // scheduler implementation ("coroutines" or "tasks")
 	PanicStrategy string   // panic strategy ("print" or "trap")
 	CFlags        []string // cflags to pass to cgo
 	LDFlags       []string // ldflags to pass to cgo
@@ -173,6 +188,17 @@ func (c *Compiler) selectGC() string {
 	return "conservative"
 }
 
+// selectScheduler picks an appropriate scheduler for the target if none was
+// given.
+func (c *Compiler) selectScheduler() string {
+	if c.Scheduler != "" {
+		// A scheduler was specified in the target description.
+		return c.Scheduler
+	}
+	// Fall back to coroutines, which are supported everywhere.
+	return "coroutines"
+}
+
 // Compile the given package path or .go file path. Return an error when this
 // fails (in any stage).
 func (c *Compiler) Compile(mainPath string) []error {
@@ -189,6 +215,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 	if err != nil {
 		return []error{err}
 	}
+	buildTags := append([]string{"tinygo", "gc." + c.selectGC(), "scheduler." + c.selectScheduler()}, c.BuildTags...)
 	lprogram := &loader.Program{
 		Build: &build.Context{
 			GOARCH:      c.GOARCH,
@@ -198,7 +225,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 			CgoEnabled:  true,
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
-			BuildTags:   append([]string{"tinygo", "gc." + c.selectGC()}, c.BuildTags...),
+			BuildTags:   buildTags,
 		},
 		OverlayBuild: &build.Context{
 			GOARCH:      c.GOARCH,
@@ -208,7 +235,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 			CgoEnabled:  true,
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
-			BuildTags:   append([]string{"tinygo", "gc." + c.selectGC()}, c.BuildTags...),
+			BuildTags:   buildTags,
 		},
 		OverlayPath: func(path string) string {
 			// Return the (overlay) import path when it should be overlaid, and
@@ -335,13 +362,15 @@ func (c *Compiler) Compile(mainPath string) []error {
 	// would be optimized away.
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
 	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
-	c.mod.NamedFunction("runtime.alloc").SetLinkage(llvm.ExternalLinkage)
-	c.mod.NamedFunction("runtime.free").SetLinkage(llvm.ExternalLinkage)
-	c.mod.NamedFunction("runtime.sleepTask").SetLinkage(llvm.ExternalLinkage)
-	c.mod.NamedFunction("runtime.setTaskPromisePtr").SetLinkage(llvm.ExternalLinkage)
-	c.mod.NamedFunction("runtime.getTaskPromisePtr").SetLinkage(llvm.ExternalLinkage)
-	c.mod.NamedFunction("runtime.activateTask").SetLinkage(llvm.ExternalLinkage)
-	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.ExternalLinkage)
+
+	// Make sure these functions are kept in tact during TinyGo transformation passes.
+	for _, name := range functionsUsedInTransforms {
+		fn := c.mod.NamedFunction(name)
+		if fn.IsNil() {
+			continue
+		}
+		fn.SetLinkage(llvm.ExternalLinkage)
+	}
 
 	// Load some attributes
 	getAttr := func(attrName string) llvm.Attribute {
@@ -1041,25 +1070,21 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 		}
 		calleeFn := c.ir.GetFunction(callee)
 
-		// Mark this function as a 'go' invocation and break invalid
-		// interprocedural optimizations. For example, heap-to-stack
-		// transformations are not sound as goroutines can outlive their parent.
-		calleeType := calleeFn.LLVMFn.Type()
-		calleeValue := c.builder.CreatePtrToInt(calleeFn.LLVMFn, c.uintptrType, "")
-		calleeValue = c.createRuntimeCall("makeGoroutine", []llvm.Value{calleeValue}, "")
-		calleeValue = c.builder.CreateIntToPtr(calleeValue, calleeType, "")
-
 		// Get all function parameters to pass to the goroutine.
 		var params []llvm.Value
 		for _, param := range instr.Call.Args {
 			params = append(params, c.getValue(frame, param))
 		}
-		if !calleeFn.IsExported() {
+		if !calleeFn.IsExported() && c.selectScheduler() != "tasks" {
+			// For coroutine scheduling, this is only required when calling an
+			// external function.
+			// For tasks, because all params are stored in a single object, no
+			// unnecessary parameters should be stored anyway.
 			params = append(params, llvm.Undef(c.i8ptrType)) // context parameter
 			params = append(params, llvm.Undef(c.i8ptrType)) // parent coroutine handle
 		}
 
-		c.createCall(calleeValue, params, "")
+		c.emitStartGoroutine(calleeFn.LLVMFn, params)
 	case *ssa.If:
 		cond := c.getValue(frame, instr.Cond)
 		block := instr.Block()

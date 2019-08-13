@@ -1,5 +1,16 @@
 package compiler
 
+// This file implements lowering for the goroutine scheduler. There are two
+// scheduler implementations, one based on tasks (like RTOSes and the main Go
+// runtime) and one based on a coroutine compiler transformation. The task based
+// implementation requires very little work from the compiler but is not very
+// portable (in particular, it is very hard if not impossible to support on
+// WebAssembly). The coroutine based one requires a lot of work by the compiler
+// to implement, but can run virtually anywhere with a single scheduler
+// implementation.
+//
+// The below description is for the coroutine based scheduler.
+//
 // This file lowers goroutine pseudo-functions into coroutines scheduled by a
 // scheduler at runtime. It uses coroutine support in LLVM for this
 // transformation: https://llvm.org/docs/Coroutines.html
@@ -62,7 +73,7 @@ package compiler
 //         llvm.suspend(hdl)                       // suspend point
 //         println("some other operation")
 //         var i *int                              // allocate space on the stack for the return value
-//         runtime.setTaskPromisePtr(hdl, &i)      // store return value alloca in our coroutine promise
+//         runtime.setTaskStatePtr(hdl, &i)        // store return value alloca in our coroutine promise
 //         bar(hdl)                                // await, pass a continuation (hdl) to bar
 //         llvm.suspend(hdl)                       // suspend point, wait for the callee to re-activate
 //         println("done", *i)
@@ -106,10 +117,65 @@ type asyncFunc struct {
 	unreachableBlock llvm.BasicBlock
 }
 
-// LowerGoroutines is a pass called during optimization that transforms the IR
-// into one where all blocking functions are turned into goroutines and blocking
-// calls into await calls.
+// LowerGoroutines performs some IR transformations necessary to support
+// goroutines. It does something different based on whether it uses the
+// coroutine or the tasks implementation of goroutines, and whether goroutines
+// are necessary at all.
 func (c *Compiler) LowerGoroutines() error {
+	switch c.selectScheduler() {
+	case "coroutines":
+		return c.lowerCoroutines()
+	case "tasks":
+		return c.lowerTasks()
+	default:
+		panic("unknown scheduler type")
+	}
+}
+
+// lowerTasks starts the main goroutine and then runs the scheduler.
+// This is enough compiler-level transformation for the task-based scheduler.
+func (c *Compiler) lowerTasks() error {
+	uses := getUses(c.mod.NamedFunction("runtime.callMain"))
+	if len(uses) != 1 || uses[0].IsACallInst().IsNil() {
+		panic("expected exactly 1 call of runtime.callMain, check the entry point")
+	}
+	mainCall := uses[0]
+
+	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
+	if len(getUses(c.mod.NamedFunction("runtime.startGoroutine"))) != 0 {
+		// Program needs a scheduler. Start main.main as a goroutine and start
+		// the scheduler.
+		realMainWrapper := c.createGoroutineStartWrapper(realMain)
+		c.builder.SetInsertPointBefore(mainCall)
+		zero := llvm.ConstInt(c.uintptrType, 0, false)
+		c.createRuntimeCall("startGoroutine", []llvm.Value{realMainWrapper, zero}, "")
+		c.createRuntimeCall("scheduler", nil, "")
+	} else {
+		// Program doesn't need a scheduler. Call main.main directly.
+		c.builder.SetInsertPointBefore(mainCall)
+		params := []llvm.Value{
+			llvm.Undef(c.i8ptrType), // unused context parameter
+			llvm.Undef(c.i8ptrType), // unused coroutine handle
+		}
+		c.createCall(realMain, params, "")
+		// runtime.Goexit isn't needed so let it be optimized away by
+		// globalopt.
+		c.mod.NamedFunction("runtime.Goexit").SetLinkage(llvm.InternalLinkage)
+	}
+	mainCall.EraseFromParentAsInstruction()
+
+	// main.main was set to external linkage during IR construction. Set it to
+	// internal linkage to enable interprocedural optimizations.
+	realMain.SetLinkage(llvm.InternalLinkage)
+
+	return nil
+}
+
+// lowerCoroutines transforms the IR into one where all blocking functions are
+// turned into goroutines and blocking calls into await calls. It also makes
+// sure that the first coroutine is started and the coroutine scheduler will be
+// run.
+func (c *Compiler) lowerCoroutines() error {
 	needsScheduler, err := c.markAsyncFunctions()
 	if err != nil {
 		return err
@@ -144,12 +210,6 @@ func (c *Compiler) LowerGoroutines() error {
 	// main.main was set to external linkage during IR construction. Set it to
 	// internal linkage to enable interprocedural optimizations.
 	realMain.SetLinkage(llvm.InternalLinkage)
-	c.mod.NamedFunction("runtime.alloc").SetLinkage(llvm.InternalLinkage)
-	c.mod.NamedFunction("runtime.free").SetLinkage(llvm.InternalLinkage)
-	c.mod.NamedFunction("runtime.sleepTask").SetLinkage(llvm.InternalLinkage)
-	c.mod.NamedFunction("runtime.setTaskPromisePtr").SetLinkage(llvm.InternalLinkage)
-	c.mod.NamedFunction("runtime.getTaskPromisePtr").SetLinkage(llvm.InternalLinkage)
-	c.mod.NamedFunction("runtime.scheduler").SetLinkage(llvm.InternalLinkage)
 
 	return nil
 }
@@ -173,9 +233,9 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 	if !sleep.IsNil() {
 		worklist = append(worklist, sleep)
 	}
-	deadlockStub := c.mod.NamedFunction("runtime.deadlockStub")
-	if !deadlockStub.IsNil() {
-		worklist = append(worklist, deadlockStub)
+	deadlock := c.mod.NamedFunction("runtime.deadlock")
+	if !deadlock.IsNil() {
+		worklist = append(worklist, deadlock)
 	}
 	chanSend := c.mod.NamedFunction("runtime.chanSend")
 	if !chanSend.IsNil() {
@@ -300,7 +360,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 	// Transform all async functions into coroutines.
 	for _, f := range asyncList {
-		if f == sleep || f == deadlockStub || f == chanSend || f == chanRecv {
+		if f == sleep || f == deadlock || f == chanSend || f == chanRecv {
 			continue
 		}
 
@@ -317,7 +377,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
 				if !inst.IsACallInst().IsNil() {
 					callee := inst.CalledValue()
-					if _, ok := asyncFuncs[callee]; !ok || callee == sleep || callee == deadlockStub || callee == chanSend || callee == chanRecv {
+					if _, ok := asyncFuncs[callee]; !ok || callee == sleep || callee == deadlock || callee == chanSend || callee == chanRecv {
 						continue
 					}
 					asyncCalls = append(asyncCalls, inst)
@@ -365,7 +425,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 				retvalAlloca = c.builder.CreateAlloca(inst.Type(), "coro.retvalAlloca")
 				c.builder.SetInsertPointBefore(inst)
 				data := c.builder.CreateBitCast(retvalAlloca, c.i8ptrType, "")
-				c.createRuntimeCall("setTaskPromisePtr", []llvm.Value{frame.taskHandle, data}, "")
+				c.createRuntimeCall("setTaskStatePtr", []llvm.Value{frame.taskHandle, data}, "")
 			}
 
 			// Suspend.
@@ -403,7 +463,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			var parentHandle llvm.Value
 			if f.Linkage() == llvm.ExternalLinkage {
 				// Exported function.
-				// Note that getTaskPromisePtr will panic if it is called with
+				// Note that getTaskStatePtr will panic if it is called with
 				// a nil pointer, so blocking exported functions that try to
 				// return anything will not work.
 				parentHandle = llvm.ConstPointerNull(c.i8ptrType)
@@ -423,7 +483,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 				// Return this value by writing to the pointer stored in the
 				// parent handle. The parent coroutine has made an alloca that
 				// we can write to to store our return value.
-				returnValuePtr := c.createRuntimeCall("getTaskPromisePtr", []llvm.Value{parentHandle}, "coro.parentData")
+				returnValuePtr := c.createRuntimeCall("getTaskStatePtr", []llvm.Value{parentHandle}, "coro.parentData")
 				alloca := c.builder.CreateBitCast(returnValuePtr, llvm.PointerType(inst.Operand(0).Type(), 0), "coro.parentAlloca")
 				c.builder.CreateStore(inst.Operand(0), alloca)
 			default:
@@ -502,9 +562,9 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		sleepCall.EraseFromParentAsInstruction()
 	}
 
-	// Transform calls to runtime.deadlockStub into coroutine suspends (without
+	// Transform calls to runtime.deadlock into coroutine suspends (without
 	// resume).
-	for _, deadlockCall := range getUses(deadlockStub) {
+	for _, deadlockCall := range getUses(deadlock) {
 		// deadlockCall must be a call instruction.
 		frame := asyncFuncs[deadlockCall.InstructionParent().Parent()]
 

@@ -27,9 +27,9 @@ func main() {
 
 	// Test multi-sender.
 	ch = make(chan int)
-	go fastsender(ch)
-	go fastsender(ch)
-	go fastsender(ch)
+	go fastsender(ch, 10)
+	go fastsender(ch, 23)
+	go fastsender(ch, 40)
 	slowreceiver(ch)
 
 	// Test multi-receiver.
@@ -57,9 +57,10 @@ func main() {
 	go fastreceiver(ch)
 	select {
 	case ch <- 5:
-		println("select one sent")
 	}
 	close(ch)
+	time.Sleep(time.Millisecond)
+	println("did send one")
 
 	// Test select with a single recv operation (transformed into chan recv).
 	select {
@@ -124,17 +125,18 @@ func sendComplex(ch chan complex128) {
 	ch <- 7 + 10.5i
 }
 
-func fastsender(ch chan int) {
-	ch <- 10
-	ch <- 11
+func fastsender(ch chan int, n int) {
+	ch <- n
+	ch <- n + 1
 }
 
 func slowreceiver(ch chan int) {
+	sum := 0
 	for i := 0; i < 6; i++ {
-		n := <-ch
-		println("got n:", n)
+		sum += <-ch
 		time.Sleep(time.Microsecond)
 	}
+	println("sum of n:", sum)
 }
 
 func slowsender(ch chan int) {
