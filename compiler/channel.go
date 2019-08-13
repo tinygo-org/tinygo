@@ -69,7 +69,7 @@ func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) llvm.Value {
 	c.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
 
 	if unop.CommaOk {
-		commaOk := c.createRuntimeCall("getTaskPromiseData", []llvm.Value{coroutine}, "chan.commaOk.wide")
+		commaOk := c.createRuntimeCall("getTaskStateData", []llvm.Value{coroutine}, "chan.commaOk.wide")
 		commaOk = c.builder.CreateTrunc(commaOk, c.ctx.Int1Type(), "chan.commaOk")
 		tuple := llvm.Undef(c.ctx.StructType([]llvm.Type{valueType, c.ctx.Int1Type()}, false))
 		tuple = c.builder.CreateInsertValue(tuple, received, 0, "")
@@ -95,7 +95,7 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 		if expr.Blocking {
 			// Blocks forever:
 			//     select {}
-			c.createRuntimeCall("deadlockStub", nil, "")
+			c.createRuntimeCall("deadlock", nil, "")
 			return llvm.Undef(llvmType)
 		} else {
 			// No-op:

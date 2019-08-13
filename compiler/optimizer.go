@@ -101,6 +101,15 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		}
 	}
 
+	// After TinyGo-specific transforms have finished, undo exporting these functions.
+	for _, name := range functionsUsedInTransforms {
+		fn := c.mod.NamedFunction(name)
+		if fn.IsNil() {
+			continue
+		}
+		fn.SetLinkage(llvm.InternalLinkage)
+	}
+
 	// Run function passes again, because without it, llvm.coro.size.i32()
 	// doesn't get lowered.
 	for fn := c.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {

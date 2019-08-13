@@ -40,6 +40,29 @@ func preinit() {
 	}
 }
 
+// calleeSavedRegs is the list of registers that must be saved and restored when
+// switching between tasks. Also see scheduler_cortexm.S that relies on the
+// exact layout of this struct.
+type calleeSavedRegs struct {
+	r4  uintptr
+	r5  uintptr
+	r6  uintptr
+	r7  uintptr
+	r8  uintptr
+	r9  uintptr
+	r10 uintptr
+	r11 uintptr
+}
+
+// prepareStartTask stores fn and args in some callee-saved registers that can
+// then be used by the startTask function (implemented in assembly) to set up
+// the initial stack pointer and initial argument with the pointer to the object
+// with the goroutine start arguments.
+func (r *calleeSavedRegs) prepareStartTask(fn, args uintptr) {
+	r.r4 = fn
+	r.r5 = args
+}
+
 func abort() {
 	// disable all interrupts
 	arm.DisableInterrupts()

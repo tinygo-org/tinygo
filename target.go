@@ -29,6 +29,7 @@ type TargetSpec struct {
 	GOARCH     string   `json:"goarch"`
 	BuildTags  []string `json:"build-tags"`
 	GC         string   `json:"gc"`
+	Scheduler  string   `json:"scheduler"`
 	Compiler   string   `json:"compiler"`
 	Linker     string   `json:"linker"`
 	RTLib      string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
@@ -63,6 +64,9 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	spec.BuildTags = append(spec.BuildTags, spec2.BuildTags...)
 	if spec2.GC != "" {
 		spec.GC = spec2.GC
+	}
+	if spec2.Scheduler != "" {
+		spec.Scheduler = spec2.Scheduler
 	}
 	if spec2.Compiler != "" {
 		spec.Compiler = spec2.Compiler
