@@ -1059,32 +1059,47 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 	case *ssa.Defer:
 		c.emitDefer(frame, instr)
 	case *ssa.Go:
-		if instr.Call.IsInvoke() {
-			c.addError(instr.Pos(), "todo: go on method receiver")
-			return
-		}
-		callee := instr.Call.StaticCallee()
-		if callee == nil {
-			c.addError(instr.Pos(), "todo: go on non-direct function (function pointer, etc.)")
-			return
-		}
-		calleeFn := c.ir.GetFunction(callee)
-
 		// Get all function parameters to pass to the goroutine.
 		var params []llvm.Value
 		for _, param := range instr.Call.Args {
 			params = append(params, c.getValue(frame, param))
 		}
-		if !calleeFn.IsExported() && c.selectScheduler() != "tasks" {
-			// For coroutine scheduling, this is only required when calling an
-			// external function.
-			// For tasks, because all params are stored in a single object, no
-			// unnecessary parameters should be stored anyway.
-			params = append(params, llvm.Undef(c.i8ptrType)) // context parameter
-			params = append(params, llvm.Undef(c.i8ptrType)) // parent coroutine handle
-		}
 
-		c.emitStartGoroutine(calleeFn.LLVMFn, params)
+		// Start a new goroutine.
+		if callee := instr.Call.StaticCallee(); callee != nil {
+			// Static callee is known. This makes it easier to start a new
+			// goroutine.
+			calleeFn := c.ir.GetFunction(callee)
+			if !calleeFn.IsExported() && c.selectScheduler() != "tasks" {
+				// For coroutine scheduling, this is only required when calling
+				// an external function.
+				// For tasks, because all params are stored in a single object,
+				// no unnecessary parameters should be stored anyway.
+				params = append(params, llvm.Undef(c.i8ptrType))            // context parameter
+				params = append(params, llvm.ConstPointerNull(c.i8ptrType)) // parent coroutine handle
+			}
+			c.emitStartGoroutine(calleeFn.LLVMFn, params)
+		} else if !instr.Call.IsInvoke() {
+			// This is a function pointer.
+			// At the moment, two extra params are passed to the newly started
+			// goroutine:
+			//   * The function context, for closures.
+			//   * The parent handle (for coroutines) or the function pointer
+			//     itself (for tasks).
+			funcPtr, context := c.decodeFuncValue(c.getValue(frame, instr.Call.Value), instr.Call.Value.Type().(*types.Signature))
+			params = append(params, context) // context parameter
+			switch c.selectScheduler() {
+			case "coroutines":
+				params = append(params, llvm.ConstPointerNull(c.i8ptrType)) // parent coroutine handle
+			case "tasks":
+				params = append(params, funcPtr)
+			default:
+				panic("unknown scheduler type")
+			}
+			c.emitStartGoroutine(funcPtr, params)
+		} else {
+			c.addError(instr.Pos(), "todo: go on interface call")
+		}
 	case *ssa.If:
 		cond := c.getValue(frame, instr.Cond)
 		block := instr.Block()

@@ -152,11 +152,11 @@ func (c *Compiler) LowerFuncValues() {
 				// There are multiple functions used in a func value that
 				// implement this signature.
 				// What we'll do is transform the following:
-				//     rawPtr := runtime.getFuncPtr(fn)
-				//     if func.rawPtr == nil {
+				//     rawPtr := runtime.getFuncPtr(func.ptr)
+				//     if rawPtr == nil {
 				//         runtime.nilPanic()
 				//     }
-				//     result := func.rawPtr(...args, func.context)
+				//     result := rawPtr(...args, func.context)
 				// into this:
 				//     if false {
 				//         runtime.nilPanic()
@@ -175,95 +175,111 @@ func (c *Compiler) LowerFuncValues() {
 
 				// Remove some casts, checks, and the old call which we're going
 				// to replace.
-				var funcCall llvm.Value
-				for _, inttoptr := range getUses(getFuncPtrCall) {
-					if inttoptr.IsAIntToPtrInst().IsNil() {
+				for _, callIntPtr := range getUses(getFuncPtrCall) {
+					if !callIntPtr.IsACallInst().IsNil() && callIntPtr.CalledValue().Name() == "runtime.makeGoroutine" {
+						for _, inttoptr := range getUses(callIntPtr) {
+							if inttoptr.IsAIntToPtrInst().IsNil() {
+								panic("expected a inttoptr")
+							}
+							for _, use := range getUses(inttoptr) {
+								c.addFuncLoweringSwitch(funcID, use, c.emitStartGoroutine, functions)
+								use.EraseFromParentAsInstruction()
+							}
+							inttoptr.EraseFromParentAsInstruction()
+						}
+						callIntPtr.EraseFromParentAsInstruction()
+						continue
+					}
+					if callIntPtr.IsAIntToPtrInst().IsNil() {
 						panic("expected inttoptr")
 					}
-					for _, ptrUse := range getUses(inttoptr) {
+					for _, ptrUse := range getUses(callIntPtr) {
 						if !ptrUse.IsABitCastInst().IsNil() {
 							for _, bitcastUse := range getUses(ptrUse) {
-								if bitcastUse.IsACallInst().IsNil() || bitcastUse.CalledValue().Name() != "runtime.isnil" {
+								if bitcastUse.IsACallInst().IsNil() || bitcastUse.CalledValue().IsAFunction().IsNil() {
+									panic("expected a call instruction")
+								}
+								switch bitcastUse.CalledValue().Name() {
+								case "runtime.isnil":
+									bitcastUse.ReplaceAllUsesWith(llvm.ConstInt(c.ctx.Int1Type(), 0, false))
+									bitcastUse.EraseFromParentAsInstruction()
+								default:
 									panic("expected a call to runtime.isnil")
 								}
-								bitcastUse.ReplaceAllUsesWith(llvm.ConstInt(c.ctx.Int1Type(), 0, false))
-								bitcastUse.EraseFromParentAsInstruction()
 							}
-							ptrUse.EraseFromParentAsInstruction()
-						} else if !ptrUse.IsACallInst().IsNil() && ptrUse.CalledValue() == inttoptr {
-							if !funcCall.IsNil() {
-								panic("multiple calls on a single runtime.getFuncPtr")
-							}
-							funcCall = ptrUse
+						} else if !ptrUse.IsACallInst().IsNil() && ptrUse.CalledValue() == callIntPtr {
+							c.addFuncLoweringSwitch(funcID, ptrUse, func(funcPtr llvm.Value, params []llvm.Value) llvm.Value {
+								return c.builder.CreateCall(funcPtr, params, "")
+							}, functions)
 						} else {
 							panic("unexpected getFuncPtrCall")
 						}
+						ptrUse.EraseFromParentAsInstruction()
 					}
-				}
-				if funcCall.IsNil() {
-					panic("expected exactly one call use of a runtime.getFuncPtr")
-				}
-
-				// The block that cannot be reached with correct funcValues (to
-				// help the optimizer).
-				c.builder.SetInsertPointBefore(funcCall)
-				defaultBlock := llvm.AddBasicBlock(funcCall.InstructionParent().Parent(), "func.default")
-				c.builder.SetInsertPointAtEnd(defaultBlock)
-				c.builder.CreateUnreachable()
-
-				// Create the switch.
-				c.builder.SetInsertPointBefore(funcCall)
-				sw := c.builder.CreateSwitch(funcID, defaultBlock, len(functions)+1)
-
-				// Split right after the switch. We will need to insert a few
-				// basic blocks in this gap.
-				nextBlock := c.splitBasicBlock(sw, llvm.NextBasicBlock(sw.InstructionParent()), "func.next")
-
-				// The 0 case, which is actually a nil check.
-				nilBlock := llvm.InsertBasicBlock(nextBlock, "func.nil")
-				c.builder.SetInsertPointAtEnd(nilBlock)
-				c.createRuntimeCall("nilPanic", nil, "")
-				c.builder.CreateUnreachable()
-				sw.AddCase(llvm.ConstInt(c.uintptrType, 0, false), nilBlock)
-
-				// Gather the list of parameters for every call we're going to
-				// make.
-				callParams := make([]llvm.Value, funcCall.OperandsCount()-1)
-				for i := range callParams {
-					callParams[i] = funcCall.Operand(i)
-				}
-
-				// If the call produces a value, we need to get it using a PHI
-				// node.
-				phiBlocks := make([]llvm.BasicBlock, len(functions))
-				phiValues := make([]llvm.Value, len(functions))
-				for i, fn := range functions {
-					// Insert a switch case.
-					bb := llvm.InsertBasicBlock(nextBlock, "func.call"+strconv.Itoa(fn.id))
-					c.builder.SetInsertPointAtEnd(bb)
-					result := c.builder.CreateCall(fn.funcPtr, callParams, "")
-					c.builder.CreateBr(nextBlock)
-					sw.AddCase(llvm.ConstInt(c.uintptrType, uint64(fn.id), false), bb)
-					phiBlocks[i] = bb
-					phiValues[i] = result
-				}
-				// Create the PHI node so that the call result flows into the
-				// next block (after the split). This is only necessary when the
-				// call produced a value.
-				if funcCall.Type().TypeKind() != llvm.VoidTypeKind {
-					c.builder.SetInsertPointBefore(nextBlock.FirstInstruction())
-					phi := c.builder.CreatePHI(funcCall.Type(), "")
-					phi.AddIncoming(phiValues, phiBlocks)
-					funcCall.ReplaceAllUsesWith(phi)
-				}
-
-				// Finally, remove the old instructions.
-				funcCall.EraseFromParentAsInstruction()
-				for _, inttoptr := range getUses(getFuncPtrCall) {
-					inttoptr.EraseFromParentAsInstruction()
+					callIntPtr.EraseFromParentAsInstruction()
 				}
 				getFuncPtrCall.EraseFromParentAsInstruction()
 			}
 		}
+	}
+}
+
+// addFuncLoweringSwitch creates a new switch on a function ID and inserts calls
+// to the newly created direct calls. The funcID is the number to switch on,
+// call is the call instruction to replace, and createCall is the callback that
+// actually creates the new call. By changing createCall to something other than
+// c.builder.CreateCall, instead of calling a function it can start a new
+// goroutine for example.
+func (c *Compiler) addFuncLoweringSwitch(funcID, call llvm.Value, createCall func(funcPtr llvm.Value, params []llvm.Value) llvm.Value, functions funcWithUsesList) {
+	// The block that cannot be reached with correct funcValues (to help the
+	// optimizer).
+	c.builder.SetInsertPointBefore(call)
+	defaultBlock := llvm.AddBasicBlock(call.InstructionParent().Parent(), "func.default")
+	c.builder.SetInsertPointAtEnd(defaultBlock)
+	c.builder.CreateUnreachable()
+
+	// Create the switch.
+	c.builder.SetInsertPointBefore(call)
+	sw := c.builder.CreateSwitch(funcID, defaultBlock, len(functions)+1)
+
+	// Split right after the switch. We will need to insert a few basic blocks
+	// in this gap.
+	nextBlock := c.splitBasicBlock(sw, llvm.NextBasicBlock(sw.InstructionParent()), "func.next")
+
+	// The 0 case, which is actually a nil check.
+	nilBlock := llvm.InsertBasicBlock(nextBlock, "func.nil")
+	c.builder.SetInsertPointAtEnd(nilBlock)
+	c.createRuntimeCall("nilPanic", nil, "")
+	c.builder.CreateUnreachable()
+	sw.AddCase(llvm.ConstInt(c.uintptrType, 0, false), nilBlock)
+
+	// Gather the list of parameters for every call we're going to make.
+	callParams := make([]llvm.Value, call.OperandsCount()-1)
+	for i := range callParams {
+		callParams[i] = call.Operand(i)
+	}
+
+	// If the call produces a value, we need to get it using a PHI
+	// node.
+	phiBlocks := make([]llvm.BasicBlock, len(functions))
+	phiValues := make([]llvm.Value, len(functions))
+	for i, fn := range functions {
+		// Insert a switch case.
+		bb := llvm.InsertBasicBlock(nextBlock, "func.call"+strconv.Itoa(fn.id))
+		c.builder.SetInsertPointAtEnd(bb)
+		result := createCall(fn.funcPtr, callParams)
+		c.builder.CreateBr(nextBlock)
+		sw.AddCase(llvm.ConstInt(c.uintptrType, uint64(fn.id), false), bb)
+		phiBlocks[i] = bb
+		phiValues[i] = result
+	}
+	// Create the PHI node so that the call result flows into the
+	// next block (after the split). This is only necessary when the
+	// call produced a value.
+	if call.Type().TypeKind() != llvm.VoidTypeKind {
+		c.builder.SetInsertPointBefore(nextBlock.FirstInstruction())
+		phi := c.builder.CreatePHI(call.Type(), "")
+		phi.AddIncoming(phiValues, phiBlocks)
+		call.ReplaceAllUsesWith(phi)
 	}
 }
