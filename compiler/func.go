@@ -32,10 +32,15 @@ const (
 // funcImplementation picks an appropriate func value implementation for the
 // target.
 func (c *Compiler) funcImplementation() funcValueImplementation {
-	if c.GOARCH == "wasm" {
+	// Always pick the switch implementation, as it allows the use of blocking
+	// inside a function that is used as a func value.
+	switch c.selectScheduler() {
+	case "coroutines":
 		return funcValueSwitch
-	} else {
+	case "tasks":
 		return funcValueDoubleword
+	default:
+		panic("unknown scheduler type")
 	}
 }
 

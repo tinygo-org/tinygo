@@ -28,6 +28,19 @@ func main() {
 	var printer Printer
 	printer = &myPrinter{}
 	printer.Print()
+
+	sleepFuncValue(func(x int) {
+		time.Sleep(1 * time.Millisecond)
+		println("slept inside func pointer", x)
+	})
+	time.Sleep(1 * time.Millisecond)
+	n := 20
+	sleepFuncValue(func(x int) {
+		time.Sleep(1 * time.Millisecond)
+		println("slept inside closure, with value:", n, x)
+	})
+
+	time.Sleep(2 * time.Millisecond)
 }
 
 func sub() {
@@ -47,6 +60,10 @@ func delayedValue() int {
 	return 42
 }
 
+func sleepFuncValue(fn func(int)) {
+	go fn(8)
+}
+
 func nowait() {
 	println("non-blocking goroutine")
 }
@@ -55,7 +72,7 @@ type Printer interface {
 	Print()
 }
 
-type myPrinter struct{
+type myPrinter struct {
 }
 
 func (i *myPrinter) Print() {
