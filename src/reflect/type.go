@@ -142,11 +142,17 @@ func (t Type) Kind() Kind {
 	}
 }
 
+// Elem returns the element type for channel, slice and array types, the
+// pointed-to value for pointer types, and the key type for map types.
 func (t Type) Elem() Type {
 	switch t.Kind() {
 	case Chan, Ptr, Slice:
 		return t.stripPrefix()
-	default: // not implemented: Array, Map
+	case Array:
+		index := t.stripPrefix()
+		elem, _ := readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&arrayTypesSidetable)) + uintptr(index)))
+		return Type(elem)
+	default: // not implemented: Map
 		panic("unimplemented: (reflect.Type).Elem()")
 	}
 }
@@ -254,8 +260,20 @@ func (t Type) Bits() int {
 	panic(TypeError{"Bits"})
 }
 
+// Len returns the number of elements in this array. It panics of the type kind
+// is not Array.
 func (t Type) Len() int {
-	panic("unimplemented: (reflect.Type).Len()")
+	if t.Kind() != Array {
+		panic(TypeError{"Len"})
+	}
+
+	// skip past the element type
+	arrayIdentifier := t.stripPrefix()
+	_, p := readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&arrayTypesSidetable)) + uintptr(arrayIdentifier)))
+
+	// Read the array length.
+	arrayLen, _ := readVarint(p)
+	return int(arrayLen)
 }
 
 // NumField returns the number of fields of a struct type. It panics for other
@@ -301,6 +319,8 @@ func (t Type) Size() uintptr {
 		return unsafe.Sizeof(SliceHeader{})
 	case Interface:
 		return unsafe.Sizeof(interfaceHeader{})
+	case Array:
+		return t.Elem().Size() * uintptr(t.Len())
 	case Struct:
 		numField := t.NumField()
 		if numField == 0 {

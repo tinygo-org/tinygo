@@ -89,6 +89,11 @@ type typeCodeAssignmentState struct {
 	namedBasicTypes    map[string]int
 	namedNonBasicTypes map[string]int
 
+	// Map of array types to their type code.
+	arrayTypes               map[string]int
+	arrayTypesSidetable      []byte
+	needsArrayTypesSidetable bool
+
 	// Map of struct types to their type code.
 	structTypes               map[string]int
 	structTypesSidetable      []byte
@@ -137,11 +142,13 @@ func (c *Compiler) assignTypeCodes(typeSlice typeInfoSlice) {
 		uintptrLen:                       c.uintptrType.IntTypeWidth(),
 		namedBasicTypes:                  make(map[string]int),
 		namedNonBasicTypes:               make(map[string]int),
+		arrayTypes:                       make(map[string]int),
 		structTypes:                      make(map[string]int),
 		structNames:                      make(map[string]int),
 		needsNamedNonBasicTypesSidetable: len(getUses(c.mod.NamedGlobal("reflect.namedNonBasicTypesSidetable"))) != 0,
 		needsStructTypesSidetable:        len(getUses(c.mod.NamedGlobal("reflect.structTypesSidetable"))) != 0,
 		needsStructNamesSidetable:        len(getUses(c.mod.NamedGlobal("reflect.structNamesSidetable"))) != 0,
+		needsArrayTypesSidetable:         len(getUses(c.mod.NamedGlobal("reflect.arrayTypesSidetable"))) != 0,
 	}
 	for _, t := range typeSlice {
 		num := state.getTypeCodeNum(t.typecode)
@@ -158,6 +165,11 @@ func (c *Compiler) assignTypeCodes(typeSlice typeInfoSlice) {
 	// Only create this sidetable when it is necessary.
 	if state.needsNamedNonBasicTypesSidetable {
 		global := c.replaceGlobalIntWithArray("reflect.namedNonBasicTypesSidetable", state.namedNonBasicTypesSidetable)
+		global.SetLinkage(llvm.InternalLinkage)
+		global.SetUnnamedAddr(true)
+	}
+	if state.needsArrayTypesSidetable {
+		global := c.replaceGlobalIntWithArray("reflect.arrayTypesSidetable", state.arrayTypesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 	}
@@ -268,6 +280,10 @@ func (state *typeCodeAssignmentState) getNonBasicTypeCode(class string, typecode
 		// Prefix-style type kinds. The upper bits contain the element type.
 		sub := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
 		return state.getTypeCodeNum(sub)
+	case "array":
+		// An array is basically a pair of (typecode, length) stored in a
+		// sidetable.
+		return big.NewInt(int64(state.getArrayTypeNum(typecode)))
 	case "struct":
 		// More complicated type kind. The upper bits contain the index to the
 		// struct type in the struct types sidetable.
@@ -310,6 +326,43 @@ func (state *typeCodeAssignmentState) getBasicNamedTypeNum(name string) int {
 	num := len(state.namedBasicTypes) + 1
 	state.namedBasicTypes[name] = num
 	return num
+}
+
+// getArrayTypeNum returns the array type number, which is an index into the
+// reflect.arrayTypesSidetable or a unique number for this type if this table is
+// not used.
+func (state *typeCodeAssignmentState) getArrayTypeNum(typecode llvm.Value) int {
+	name := typecode.Name()
+	if num, ok := state.arrayTypes[name]; ok {
+		// This array type already has an entry in the sidetable. Don't store
+		// it twice.
+		return num
+	}
+
+	if !state.needsArrayTypesSidetable {
+		// We don't need array sidetables, so we can just assign monotonically
+		// increasing numbers to each array type.
+		num := len(state.arrayTypes)
+		state.arrayTypes[name] = num
+		return num
+	}
+
+	elemTypeCode := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
+	elemTypeNum := state.getTypeCodeNum(elemTypeCode)
+	if elemTypeNum.BitLen() > state.uintptrLen || !elemTypeNum.IsUint64() {
+		// TODO: make this a regular error
+		panic("array element type has a type code that is too big")
+	}
+
+	// The array side table is a sequence of {element type, array length}.
+	arrayLength := llvm.ConstExtractValue(typecode.Initializer(), []uint32{1}).ZExtValue()
+	buf := makeVarint(elemTypeNum.Uint64())
+	buf = append(buf, makeVarint(arrayLength)...)
+
+	index := len(state.arrayTypesSidetable)
+	state.arrayTypes[name] = index
+	state.arrayTypesSidetable = append(state.arrayTypesSidetable, buf...)
+	return index
 }
 
 // getStructTypeNum returns the struct type number, which is an index into

@@ -16,6 +16,9 @@ var structTypesSidetable byte
 //go:extern reflect.structNamesSidetable
 var structNamesSidetable byte
 
+//go:extern reflect.arrayTypesSidetable
+var arrayTypesSidetable byte
+
 // readStringSidetable reads a string from the given table (like
 // structNamesSidetable) and returns this string. No heap allocation is
 // necessary because it makes the string point directly to the raw bytes of the

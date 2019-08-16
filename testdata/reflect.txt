@@ -203,7 +203,19 @@ reflect type: slice
   reflect type: uint8 settable=true
     uint: 11
 reflect type: array
-  array
+  array: 3 int64 24
+  reflect type: int64
+    int: 5
+  reflect type: int64
+    int: 8
+  reflect type: int64
+    int: 2
+reflect type: array
+  array: 2 uint8 2
+  reflect type: uint8
+    uint: 3
+  reflect type: uint8
+    uint: 5
 reflect type: func
   func
   nil: true

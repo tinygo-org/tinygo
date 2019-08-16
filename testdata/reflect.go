@@ -91,7 +91,8 @@ func main() {
 		[]complex128{1, 1.128 + 0.4i},
 		myslice{5, 3, 11},
 		// array
-		[4]int{1, 2, 3, 4},
+		[3]int64{5, 8, 2},
+		[2]uint8{3, 5},
 		// functions
 		zeroFunc,
 		emptyFunc,
@@ -287,7 +288,10 @@ func showValue(rv reflect.Value, indent string) {
 	case reflect.UnsafePointer:
 		println(indent+"  pointer:", rv.Pointer() != 0)
 	case reflect.Array:
-		println(indent + "  array")
+		println(indent+"  array:", rt.Len(), rt.Elem().Kind().String(), int(rt.Size()))
+		for i := 0; i < rv.Len(); i++ {
+			showValue(rv.Index(i), indent+"  ")
+		}
 	case reflect.Chan:
 		println(indent+"  chan:", rt.Elem().Kind().String())
 		println(indent+"  nil:", rv.IsNil())
