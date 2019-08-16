@@ -37,6 +37,7 @@ var functionsUsedInTransforms = []string{
 	"runtime.alloc",
 	"runtime.free",
 	"runtime.sleepTask",
+	"runtime.sleepCurrentTask",
 	"runtime.setTaskStatePtr",
 	"runtime.getTaskStatePtr",
 	"runtime.activateTask",

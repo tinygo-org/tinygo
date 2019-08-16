@@ -98,6 +98,12 @@ func startGoroutine(fn, args uintptr) {
 
 //go:linkname sleep time.Sleep
 func sleep(d int64) {
+	sleepTicks(timeUnit(d / tickMicros))
+}
+
+// sleepCurrentTask suspends the current goroutine. This is a compiler
+// intrinsic. It replaces calls to time.Sleep when a scheduler is in use.
+func sleepCurrentTask(d int64) {
 	sleepTask(currentTask, d)
 	swapTask(currentTask, &schedulerState)
 }

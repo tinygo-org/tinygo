@@ -150,6 +150,10 @@ func (c *Compiler) lowerTasks() error {
 		zero := llvm.ConstInt(c.uintptrType, 0, false)
 		c.createRuntimeCall("startGoroutine", []llvm.Value{realMainWrapper, zero}, "")
 		c.createRuntimeCall("scheduler", nil, "")
+		sleep := c.mod.NamedFunction("time.Sleep")
+		if !sleep.IsNil() {
+			sleep.ReplaceAllUsesWith(c.mod.NamedFunction("runtime.sleepCurrentTask"))
+		}
 	} else {
 		// Program doesn't need a scheduler. Call main.main directly.
 		c.builder.SetInsertPointBefore(mainCall)
