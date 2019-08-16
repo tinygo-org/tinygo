@@ -302,6 +302,8 @@ func (v Value) Slice(i, j int) Value {
 	panic("unimplemented: (reflect.Value).Slice()")
 }
 
+// Len returns the length of this value for slices, strings, arrays, channels,
+// and maps. For oter types, it panics.
 func (v Value) Len() int {
 	t := v.Type()
 	switch t.Kind() {
@@ -309,7 +311,9 @@ func (v Value) Len() int {
 		return int((*SliceHeader)(v.value).Len)
 	case String:
 		return int((*StringHeader)(v.value).Len)
-	default: // Array, Chan, Map
+	case Array:
+		return v.Type().Len()
+	default: // Chan, Map
 		panic("unimplemented: (reflect.Value).Len()")
 	}
 }
@@ -392,27 +396,21 @@ func (v Value) Field(i int) Value {
 		// afterwards, so load the value (from the correct offset) and return
 		// it.
 		ptr := unsafe.Pointer(uintptr(v.value) + structField.Offset)
-		loadedValue := uintptr(0)
-		shift := uintptr(0)
-		for i := uintptr(0); i < fieldSize; i++ {
-			loadedValue |= uintptr(*(*byte)(ptr)) << shift
-			shift += 8
-			ptr = unsafe.Pointer(uintptr(ptr) + 1)
-		}
+		value := unsafe.Pointer(loadValue(ptr, fieldSize))
 		return Value{
 			flags:    0,
 			typecode: structField.Type,
-			value:    unsafe.Pointer(loadedValue),
+			value:    value,
 		}
 	}
 
 	// The value was already stored directly in the interface and it still
 	// is. Cut out the part of the value that we need.
-	mask := ^uintptr(0) >> ((unsafe.Sizeof(uintptr(0)) - fieldSize) * 8)
+	value := maskAndShift(uintptr(v.value), structField.Offset, fieldSize)
 	return Value{
 		flags:    flags,
 		typecode: structField.Type,
-		value:    unsafe.Pointer((uintptr(v.value) >> (structField.Offset * 8)) & mask),
+		value:    unsafe.Pointer(value),
 	}
 }
 
@@ -444,10 +442,73 @@ func (v Value) Index(i int) Value {
 			value:    unsafe.Pointer(uintptr(*(*uint8)(unsafe.Pointer(s.Data + uintptr(i))))),
 		}
 	case Array:
-		panic("unimplemented: (reflect.Value).Index()")
+		// Extract an element from the array.
+		elemType := v.Type().Elem()
+		elemSize := elemType.Size()
+		size := v.Type().Size()
+		if size == 0 {
+			// The element size is 0 and/or the length of the array is 0.
+			return Value{
+				typecode: v.Type().Elem(),
+				flags:    v.flags,
+			}
+		}
+		if elemSize > unsafe.Sizeof(uintptr(0)) {
+			// The resulting value doesn't fit in a pointer so must be
+			// indirect. Also, because size != 0 this implies that the array
+			// length must be != 0, and thus that the total size is at least
+			// elemSize.
+			addr := uintptr(v.value) + elemSize*uintptr(i) // pointer to new value
+			return Value{
+				typecode: v.Type().Elem(),
+				flags:    v.flags,
+				value:    unsafe.Pointer(addr),
+			}
+		}
+
+		if size > unsafe.Sizeof(uintptr(0)) {
+			// The element fits in a pointer, but the array does not.
+			// Load the value from the pointer.
+			addr := uintptr(v.value) + elemSize*uintptr(i) // pointer to new value
+			return Value{
+				typecode: v.Type().Elem(),
+				flags:    v.flags,
+				value:    unsafe.Pointer(loadValue(unsafe.Pointer(addr), elemSize)),
+			}
+		}
+
+		// The value fits in a pointer, so extract it with some shifting and
+		// masking.
+		offset := elemSize * uintptr(i)
+		value := maskAndShift(uintptr(v.value), offset, elemSize)
+		return Value{
+			typecode: v.Type().Elem(),
+			flags:    v.flags,
+			value:    unsafe.Pointer(value),
+		}
 	default:
 		panic(&ValueError{"Index"})
 	}
+}
+
+// loadValue loads a value that may or may not be word-aligned. The number of
+// bytes given in size are loaded. The biggest possible size it can load is that
+// of an uintptr.
+func loadValue(ptr unsafe.Pointer, size uintptr) uintptr {
+	loadedValue := uintptr(0)
+	shift := uintptr(0)
+	for i := uintptr(0); i < size; i++ {
+		loadedValue |= uintptr(*(*byte)(ptr)) << shift
+		shift += 8
+		ptr = unsafe.Pointer(uintptr(ptr) + 1)
+	}
+	return loadedValue
+}
+
+// maskAndShift cuts out a part of a uintptr. Note that the offset may not be 0.
+func maskAndShift(value, offset, size uintptr) uintptr {
+	mask := ^uintptr(0) >> ((unsafe.Sizeof(uintptr(0)) - size) * 8)
+	return (uintptr(value) >> (offset * 8)) & mask
 }
 
 func (v Value) MapKeys() []Value {

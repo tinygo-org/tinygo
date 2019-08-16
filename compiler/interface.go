@@ -54,6 +54,7 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 		// element types. Store it directly in the typecode global to make
 		// reflect lowering simpler.
 		var references llvm.Value
+		var length int64
 		switch typ := typ.(type) {
 		case *types.Named:
 			references = c.getTypeCode(typ.Underlying())
@@ -63,6 +64,9 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 			references = c.getTypeCode(typ.Elem())
 		case *types.Slice:
 			references = c.getTypeCode(typ.Elem())
+		case *types.Array:
+			references = c.getTypeCode(typ.Elem())
+			length = typ.Len()
 		case *types.Struct:
 			// Take a pointer to the typecodeID of the first field (if it exists).
 			structGlobal := c.makeStructTypeFields(typ)
@@ -72,6 +76,10 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 			// Set the 'references' field of the runtime.typecodeID struct.
 			globalValue := c.getZeroValue(global.Type().ElementType())
 			globalValue = llvm.ConstInsertValue(globalValue, references, []uint32{0})
+			if length != 0 {
+				lengthValue := llvm.ConstInt(c.uintptrType, uint64(length), false)
+				globalValue = llvm.ConstInsertValue(globalValue, lengthValue, []uint32{1})
+			}
 			global.SetInitializer(globalValue)
 			global.SetLinkage(llvm.PrivateLinkage)
 		}

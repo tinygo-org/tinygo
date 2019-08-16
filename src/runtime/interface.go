@@ -49,10 +49,13 @@ type typecodeID struct {
 	// * basic types: null
 	// * named type: the underlying type
 	// * interface: null
-	// * chan/pointer/slice: the element type
-	// * struct: GEP of structField array (to typecode field)
-	// * array/func/map: TODO
+	// * chan/pointer/slice/array: the element type
+	// * struct: bitcast of global with structField array
+	// * func/map: TODO
 	references *typecodeID
+
+	// The array length, for array types.
+	length uintptr
 }
 
 // structField is used by the compiler to pass information to the interface
