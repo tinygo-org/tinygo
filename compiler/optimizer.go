@@ -3,6 +3,7 @@ package compiler
 import (
 	"errors"
 
+	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -45,7 +46,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		// Run Go-specific optimization passes.
 		c.OptimizeMaps()
 		c.OptimizeStringToBytes()
-		c.OptimizeAllocs()
+		transform.OptimizeAllocs(c.mod)
 		c.LowerInterfaces()
 		c.LowerFuncValues()
 
@@ -55,7 +56,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		goPasses.Run(c.mod)
 
 		// Run TinyGo-specific interprocedural optimizations.
-		c.OptimizeAllocs()
+		transform.OptimizeAllocs(c.mod)
 		c.OptimizeStringToBytes()
 
 		// Lower runtime.isnil calls to regular nil comparisons.
@@ -243,101 +244,6 @@ func (c *Compiler) OptimizeStringToBytes() {
 			call.EraseFromParentAsInstruction()
 		}
 	}
-}
-
-// Basic escape analysis: translate runtime.alloc calls into alloca
-// instructions.
-func (c *Compiler) OptimizeAllocs() {
-	allocator := c.mod.NamedFunction("runtime.alloc")
-	if allocator.IsNil() {
-		// nothing to optimize
-		return
-	}
-
-	heapallocs := getUses(allocator)
-	for _, heapalloc := range heapallocs {
-		nilValue := llvm.Value{}
-		if heapalloc.Operand(0).IsAConstant() == nilValue {
-			// Do not allocate variable length arrays on the stack.
-			continue
-		}
-		size := heapalloc.Operand(0).ZExtValue()
-		if size > 256 {
-			// The maximum value for a stack allocation.
-			// TODO: tune this, this is just a random value.
-			continue
-		}
-
-		// In general the pattern is:
-		//     %0 = call i8* @runtime.alloc(i32 %size)
-		//     %1 = bitcast i8* %0 to type*
-		//     (use %1 only)
-		// But the bitcast might sometimes be dropped when allocating an *i8.
-		// The 'bitcast' variable below is thus usually a bitcast of the
-		// heapalloc but not always.
-		bitcast := heapalloc // instruction that creates the value
-		if uses := getUses(heapalloc); len(uses) == 1 && uses[0].IsABitCastInst() != nilValue {
-			// getting only bitcast use
-			bitcast = uses[0]
-		}
-		if !c.doesEscape(bitcast) {
-			// Insert alloca in the entry block. Do it here so that mem2reg can
-			// promote it to a SSA value.
-			fn := bitcast.InstructionParent().Parent()
-			c.builder.SetInsertPointBefore(fn.EntryBasicBlock().FirstInstruction())
-			alignment := c.targetData.ABITypeAlignment(c.i8ptrType)
-			sizeInWords := (size + uint64(alignment) - 1) / uint64(alignment)
-			allocaType := llvm.ArrayType(c.ctx.IntType(alignment*8), int(sizeInWords))
-			alloca := c.builder.CreateAlloca(allocaType, "stackalloc.alloca")
-			zero := llvm.ConstNull(alloca.Type().ElementType())
-			c.builder.CreateStore(zero, alloca)
-			stackalloc := c.builder.CreateBitCast(alloca, bitcast.Type(), "stackalloc")
-			bitcast.ReplaceAllUsesWith(stackalloc)
-			if heapalloc != bitcast {
-				bitcast.EraseFromParentAsInstruction()
-			}
-			heapalloc.EraseFromParentAsInstruction()
-		}
-	}
-}
-
-// Very basic escape analysis.
-func (c *Compiler) doesEscape(value llvm.Value) bool {
-	uses := getUses(value)
-	for _, use := range uses {
-		nilValue := llvm.Value{}
-		if use.IsAGetElementPtrInst() != nilValue {
-			if c.doesEscape(use) {
-				return true
-			}
-		} else if use.IsABitCastInst() != nilValue {
-			// A bitcast escapes if the casted-to value escapes.
-			if c.doesEscape(use) {
-				return true
-			}
-		} else if use.IsALoadInst() != nilValue {
-			// Load does not escape.
-		} else if use.IsAStoreInst() != nilValue {
-			// Store only escapes when the value is stored to, not when the
-			// value is stored into another value.
-			if use.Operand(0) == value {
-				return true
-			}
-		} else if use.IsACallInst() != nilValue {
-			if !c.hasFlag(use, value, "nocapture") {
-				return true
-			}
-		} else if use.IsAICmpInst() != nilValue {
-			// Comparing pointers don't let the pointer escape.
-			// This is often a compiler-inserted nil check.
-		} else {
-			// Unknown instruction, might escape.
-			return true
-		}
-	}
-
-	// does not escape
-	return false
 }
 
 // Check whether the given value (which is of pointer type) is never stored to.
