@@ -61,18 +61,19 @@ commands:
       - install-node
       - restore_cache:
           keys:
-            - go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
-            - go-cache-{{ checksum "Gopkg.lock" }}
+            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-v2-{{ checksum "go.mod" }}
       - llvm-source-linux
       - run: go install .
       - run: go test -v
       - run: make gen-device -j4
       - run: make smoketest RISCV=0
       - save_cache:
-          key: go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
+          key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
             - ~/.cache/tinygo
+            - /go/pkg/mod
       - run: make fmt-check
   build-linux:
     steps:
@@ -95,8 +96,8 @@ commands:
       - install-node
       - restore_cache:
           keys:
-            - go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
-            - go-cache-{{ checksum "Gopkg.lock" }}
+            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-v2-{{ checksum "go.mod" }}
       - llvm-source-linux
       - restore_cache:
           keys:
@@ -138,10 +139,11 @@ commands:
       - store_artifacts:
           path: /tmp/tinygo.linux-amd64.tar.gz
       - save_cache:
-          key: go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
+          key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
             - ~/.cache/tinygo
+            - /go/pkg/mod
       - run:
           name: "Extract release tarball"
           command: |
