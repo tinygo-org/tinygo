@@ -9,3 +9,5 @@ const TargetBits = 64
 func align(ptr uintptr) uintptr {
 	return (ptr + 7) &^ 7
 }
+
+func getCurrentStackPointer() uintptr
