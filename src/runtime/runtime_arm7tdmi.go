@@ -3,13 +3,8 @@
 package runtime
 
 import (
-	"device/arm"
 	"unsafe"
 )
-
-const TargetBits = 32
-
-const GOARCH = "arm"
 
 type timeUnit int64
 
@@ -80,10 +75,6 @@ func abort() {
 	// TODO
 	for {
 	}
-}
-
-func getCurrentStackPointer() uintptr {
-	return arm.ReadRegister("sp")
 }
 
 // Implement memset for LLVM and compiler-rt.
