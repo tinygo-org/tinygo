@@ -8,6 +8,9 @@ package machine
 
 import "device/sam"
 
+// used to reset into bootloader
+const RESET_MAGIC_VALUE = 0x07738135
+
 // GPIO Pins
 const (
 	RX0 Pin = PB23 // UART2 RX
@@ -34,7 +37,7 @@ const (
 	A0 Pin = PA02 // ADC/AIN[0]
 	A1 Pin = PB02 // ADC/AIN[10]
 	A2 Pin = PA11 // ADC/AIN[19]
-	A3 Pin = PA10 // ADC/AIN[18]
+	A3 Pin = PA10 // ADC/AIN[18],
 	A4 Pin = PB08 // ADC/AIN[2], SCL:  SERCOM2/PAD[1]
 	A5 Pin = PB09 // ADC/AIN[3], SDA:  SERCOM2/PAD[1]
 	A6 Pin = PA09 // ADC/AIN[17]
@@ -115,14 +118,20 @@ var (
 
 // SPI pins
 const (
-	SPI0_SCK_PIN  Pin = PB11 // SCK: SERCOM4/PAD[3]
-	SPI0_MOSI_PIN Pin = PB10 // MOSI: SERCOM4/PAD[2]
-	SPI0_MISO_PIN Pin = PA12 // MISO: SERCOM4/PAD[0]
+	SPI0_SCK_PIN  Pin = A2 // SCK: SERCOM0/PAD[3]
+	SPI0_MOSI_PIN Pin = A3 // MOSI: SERCOM0/PAD[2]
+	SPI0_MISO_PIN Pin = A6 // MISO: SERCOM0/PAD[1]
 )
 
 // SPI on the Arduino Nano 33.
 var (
-	SPI0 = SPI{Bus: sam.SERCOM1_SPI}
+	SPI0 = SPI{Bus: sam.SERCOM0_SPI,
+		SCK:     SPI0_SCK_PIN,
+		MOSI:    SPI0_MOSI_PIN,
+		MISO:    SPI0_MISO_PIN,
+		DOpad:   spiTXPad2SCK3,
+		DIpad:   sercomRXPad0,
+		PinMode: PinSERCOM}
 )
 
 // I2S pins

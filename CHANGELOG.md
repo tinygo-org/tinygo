@@ -1,3 +1,52 @@
+0.8.0
+---
+* **command line**
+  - fix parsing of beta Go versions
+  - check the major/minor installed version of Go before compiling
+  - validate `-target` flag better to not panic on an invalid target
+* **compiler**
+  - implement full slice expression: `s[:2:4]`
+  - fix a crash when storing a linked list in an interface
+  - fix comparing struct types by making type IDs more unique
+  - fix some bugs in IR generation
+  - add support for linked lists in reflect data
+  - implement `[]rune` to string conversion
+  - implement support for `go` on func values
+* **standard library**
+  - `reflect`: add support for named types
+  - `reflect`: add support for `t.Bits()`
+  - `reflect`: add basic support for `t.AssignableTo()`
+  - `reflect`: implement `t.Align()`
+  - `reflect`: add support for struct types
+  - `reflect`: fix bug in `v.IsNil` and `v.Pointer` for addressable values
+  - `reflect`: implement support for array types
+  - `reflect`: implement `t.Comparable()`
+  - `runtime`: implement stack-based scheduler
+  - `runtime`: fix bug in the sleep queue of the scheduler
+  - `runtime`: implement `memcpy` for Cortex-M
+  - `testing`: implement stub `testing.B` struct
+  - `testing`: add common test logging methods such as Errorf/Fatalf/Printf
+* **targets**
+  - `386`: add support for linux/386 syscalls
+  - `atsamd21`: make SPI pins configurable so that multiple SPI ports can be
+    used
+  - `atsamd21`: correct issue with invalid first reading coming from ADC
+  - `atsamd21`: add support for reset-to-bootloader using 1200baud over USB-CDC
+  - `atsamd21`: make pin selection more flexible for peripherals
+  - `atsamd21`: fix minimum delay in `time.Sleep`
+  - `atsamd51`: fix minimum delay in `time.Sleep`
+  - `nrf`: improve SPI write-only speed, by making use of double buffering
+  - `stm32f103`: fix SPI frequency selection
+  - `stm32f103`: add machine.Pin.Get method for reading GPIO values
+  - `stm32f103`: allow board specific UART usage
+  - `nucleo-f103rb`: add support for NUCLEO-F103RB board
+  - `itsybitsy-m4`: add support for this board with a SAMD51 family chip
+  - `cortex-m`: add support for `arm.SystemReset()`
+  - `gameboy-advance`: add initial support for the GameBoy Advance
+  - `wasm`: add `//go:wasm-module` magic comment to set the wasm module name
+  - `wasm`: add syscall/js.valueSetIndex support
+  - `wasm`: add syscall/js.valueInvoke support
+
 0.7.1
 ---
 * **targets**

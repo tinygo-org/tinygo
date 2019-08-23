@@ -16,7 +16,7 @@ import (
 	"github.com/tinygo-org/tinygo/ir"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
-	"tinygo.org/x/go-llvm"
+	llvm "tinygo.org/x/go-llvm"
 )
 
 func init() {
@@ -36,13 +36,23 @@ const tinygoPath = "github.com/tinygo-org/tinygo"
 var functionsUsedInTransforms = []string{
 	"runtime.alloc",
 	"runtime.free",
-	"runtime.sleepTask",
-	"runtime.sleepCurrentTask",
+	"runtime.scheduler",
+}
+
+var taskFunctionsUsedInTransforms = []string{
+	"runtime.startGoroutine",
+}
+
+var coroFunctionsUsedInTransforms = []string{
+	"runtime.avrSleep",
+	"runtime.getFakeCoroutine",
 	"runtime.setTaskStatePtr",
 	"runtime.getTaskStatePtr",
 	"runtime.activateTask",
-	"runtime.scheduler",
-	"runtime.startGoroutine",
+	"runtime.noret",
+	"runtime.getParentHandle",
+	"runtime.getCoroutine",
+	"runtime.llvmCoroRefHolder",
 }
 
 // Configure the compiler.
@@ -59,6 +69,7 @@ type Config struct {
 	LDFlags       []string // ldflags to pass to cgo
 	ClangHeaders  string   // Clang built-in header include path
 	DumpSSA       bool     // dump Go SSA, for compiler debugging
+	VerifyIR      bool     // run extra checks on the IR
 	Debug         bool     // add debug symbols for gdb
 	GOROOT        string   // GOROOT
 	TINYGOROOT    string   // GOROOT for TinyGo
@@ -119,6 +130,7 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 	if config.Triple == "" {
 		config.Triple = llvm.DefaultTargetTriple()
 	}
+
 	if len(config.BuildTags) == 0 {
 		config.BuildTags = []string{config.GOOS, config.GOARCH}
 	}
@@ -176,11 +188,6 @@ func (c *Compiler) Module() llvm.Module {
 	return c.mod
 }
 
-// Return the LLVM target data object. Only valid after a successful compile.
-func (c *Compiler) TargetData() llvm.TargetData {
-	return c.targetData
-}
-
 // selectGC picks an appropriate GC strategy if none was provided.
 func (c *Compiler) selectGC() string {
 	if c.GC != "" {
@@ -198,6 +205,20 @@ func (c *Compiler) selectScheduler() string {
 	}
 	// Fall back to coroutines, which are supported everywhere.
 	return "coroutines"
+}
+
+// getFunctionsUsedInTransforms gets a list of all special functions that should be preserved during transforms and optimization.
+func (c *Compiler) getFunctionsUsedInTransforms() []string {
+	fnused := functionsUsedInTransforms
+	switch c.selectScheduler() {
+	case "coroutines":
+		fnused = append(append([]string{}, fnused...), coroFunctionsUsedInTransforms...)
+	case "tasks":
+		fnused = append(append([]string{}, fnused...), taskFunctionsUsedInTransforms...)
+	default:
+		panic(fmt.Errorf("invalid scheduler %q", c.selectScheduler()))
+	}
+	return fnused
 }
 
 // Compile the given package path or .go file path. Return an error when this
@@ -247,7 +268,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 				path = path[len(tinygoPath+"/src/"):]
 			}
 			switch path {
-			case "machine", "os", "reflect", "runtime", "runtime/volatile", "sync", "testing":
+			case "machine", "os", "reflect", "runtime", "runtime/volatile", "sync", "testing", "internal/reflectlite":
 				return path
 			default:
 				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
@@ -365,10 +386,10 @@ func (c *Compiler) Compile(mainPath string) []error {
 	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
 
 	// Make sure these functions are kept in tact during TinyGo transformation passes.
-	for _, name := range functionsUsedInTransforms {
+	for _, name := range c.getFunctionsUsedInTransforms() {
 		fn := c.mod.NamedFunction(name)
 		if fn.IsNil() {
-			continue
+			panic(fmt.Errorf("missing core function %q", name))
 		}
 		fn.SetLinkage(llvm.ExternalLinkage)
 	}
@@ -385,6 +406,9 @@ func (c *Compiler) Compile(mainPath string) []error {
 	// Tell the optimizer that runtime.alloc is an allocator, meaning that it
 	// returns values that are never null and never alias to an existing value.
 	for _, attrName := range []string{"noalias", "nonnull"} {
+		if c.mod.NamedFunction("runtime.alloc").IsNil() {
+			panic("no runtime.alloc")
+		}
 		c.mod.NamedFunction("runtime.alloc").AddAttributeAtIndex(0, getAttr(attrName))
 	}
 
@@ -560,42 +584,6 @@ func (c *Compiler) getLLVMType(goType types.Type) llvm.Type {
 		return c.ctx.StructType(members, false)
 	default:
 		panic("unknown type: " + goType.String())
-	}
-}
-
-// Return a zero LLVM value for any LLVM type. Setting this value as an
-// initializer has the same effect as setting 'zeroinitializer' on a value.
-// Sadly, I haven't found a way to do it directly with the Go API but this works
-// just fine.
-func (c *Compiler) getZeroValue(typ llvm.Type) llvm.Value {
-	switch typ.TypeKind() {
-	case llvm.ArrayTypeKind:
-		subTyp := typ.ElementType()
-		subVal := c.getZeroValue(subTyp)
-		vals := make([]llvm.Value, typ.ArrayLength())
-		for i := range vals {
-			vals[i] = subVal
-		}
-		return llvm.ConstArray(subTyp, vals)
-	case llvm.FloatTypeKind, llvm.DoubleTypeKind:
-		return llvm.ConstFloat(typ, 0.0)
-	case llvm.IntegerTypeKind:
-		return llvm.ConstInt(typ, 0, false)
-	case llvm.PointerTypeKind:
-		return llvm.ConstPointerNull(typ)
-	case llvm.StructTypeKind:
-		types := typ.StructElementTypes()
-		vals := make([]llvm.Value, len(types))
-		for i, subTyp := range types {
-			vals[i] = c.getZeroValue(subTyp)
-		}
-		if typ.StructName() != "" {
-			return llvm.ConstNamedStruct(typ, vals)
-		} else {
-			return c.ctx.ConstStruct(vals, false)
-		}
-	default:
-		panic("unknown LLVM zero inititializer: " + typ.String())
 	}
 }
 
@@ -821,6 +809,11 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) *Frame {
 	// External/exported functions may not retain pointer values.
 	// https://golang.org/cmd/cgo/#hdr-Passing_pointers
 	if f.IsExported() {
+		// Set the wasm-import-module attribute if the function's module is set.
+		if f.Module() != "" {
+			wasmImportModuleAttr := c.ctx.CreateStringAttribute("wasm-import-module", f.Module())
+			frame.fn.LLVMFn.AddFunctionAttr(wasmImportModuleAttr)
+		}
 		nocaptureKind := llvm.AttributeKindID("nocapture")
 		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
 		for i, typ := range paramTypes {
@@ -1127,7 +1120,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			c.builder.CreateRet(c.getValue(frame, instr.Results[0]))
 		} else {
 			// Multiple return values. Put them all in a struct.
-			retVal := c.getZeroValue(frame.fn.LLVMFn.Type().ElementType().ReturnType())
+			retVal := llvm.ConstNull(frame.fn.LLVMFn.Type().ElementType().ReturnType())
 			for i, result := range instr.Results {
 				val := c.getValue(frame, result)
 				retVal = c.builder.CreateInsertValue(retVal, val, i, "")
@@ -1349,11 +1342,11 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 	if fn := instr.StaticCallee(); fn != nil {
 		name := fn.RelString(nil)
 		switch {
-		case name == "device/arm.ReadRegister" || name == "device/riscv.ReadRegister":
+		case name == "device/arm.ReadRegister" || name == "device/riscv.ReadRegister" || name == "device/rpi3.ReadRegister":
 			return c.emitReadRegister(name, instr.Args)
-		case name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
+		case name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm" || name == "device/rpi3.Asm":
 			return c.emitAsm(instr.Args)
-		case name == "device/arm.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
+		case name == "device/arm.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull" || name == "device/rpi3.AsmFull":
 			return c.emitAsmFull(frame, instr)
 		case strings.HasPrefix(name, "device/arm.SVCall"):
 			return c.emitSVCall(frame, instr.Args)
@@ -1455,7 +1448,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		} else {
 			buf := c.createEntryBlockAlloca(typ, expr.Comment)
 			if c.targetData.TypeAllocSize(typ) != 0 {
-				c.builder.CreateStore(c.getZeroValue(typ), buf) // zero-initialize var
+				c.builder.CreateStore(llvm.ConstNull(typ), buf) // zero-initialize var
 			}
 			return buf, nil
 		}
@@ -1648,7 +1641,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			panic("unknown lookup type: " + expr.String())
 		}
 	case *ssa.MakeChan:
-		return c.emitMakeChan(expr)
+		return c.emitMakeChan(frame, expr), nil
 	case *ssa.MakeClosure:
 		return c.parseMakeClosure(frame, expr)
 	case *ssa.MakeInterface:
@@ -1762,7 +1755,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			panic("unknown type in range: " + typ.String())
 		}
 		it, _, _ := c.createTemporaryAlloca(iteratorType, "range.it")
-		c.builder.CreateStore(c.getZeroValue(iteratorType), it)
+		c.builder.CreateStore(llvm.ConstNull(iteratorType), it)
 		return it, nil
 	case *ssa.Select:
 		return c.emitSelect(frame, expr), nil
@@ -2344,12 +2337,12 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 		if expr.Value != nil {
 			panic("expected nil chan constant")
 		}
-		return c.getZeroValue(c.getLLVMType(expr.Type()))
+		return llvm.ConstNull(c.getLLVMType(expr.Type()))
 	case *types.Signature:
 		if expr.Value != nil {
 			panic("expected nil signature constant")
 		}
-		return c.getZeroValue(c.getLLVMType(expr.Type()))
+		return llvm.ConstNull(c.getLLVMType(expr.Type()))
 	case *types.Interface:
 		if expr.Value != nil {
 			panic("expected nil interface constant")
@@ -2384,7 +2377,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 			panic("non-nil map constant")
 		}
 		llvmType := c.getLLVMType(typ)
-		return c.getZeroValue(llvmType)
+		return llvm.ConstNull(llvmType)
 	default:
 		panic("unknown constant: " + expr.String())
 	}
@@ -2576,7 +2569,7 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 		unop.X.Type().Underlying().(*types.Pointer).Elem()
 		if c.targetData.TypeAllocSize(x.Type().ElementType()) == 0 {
 			// zero-length data
-			return c.getZeroValue(x.Type().ElementType()), nil
+			return llvm.ConstNull(x.Type().ElementType()), nil
 		} else if strings.HasSuffix(unop.X.String(), "$funcaddr") {
 			// CGo function pointer. The cgo part has rewritten CGo function
 			// pointers as stub global variables of the form:
@@ -2741,9 +2734,12 @@ func (c *Compiler) ExternalInt64AsPtr() error {
 			// Keep existing calls with the existing convention in place (for
 			// better performance), but export a new wrapper function with the
 			// correct calling convention.
+			if fn.IsNil() {
+				panic("fn inside compiler is null")
+			}
 			fn.SetLinkage(llvm.InternalLinkage)
 			fn.SetUnnamedAddr(true)
-			entryBlock := llvm.AddBasicBlock(externalFn, "entry")
+			entryBlock := c.ctx.AddBasicBlock(externalFn, "entry")
 			c.builder.SetInsertPointAtEnd(entryBlock)
 			var callParams []llvm.Value
 			if fnType.ReturnType() == int64Type {

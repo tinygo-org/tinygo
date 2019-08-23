@@ -74,7 +74,7 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 		}
 		if !references.IsNil() {
 			// Set the 'references' field of the runtime.typecodeID struct.
-			globalValue := c.getZeroValue(global.Type().ElementType())
+			globalValue := llvm.ConstNull(global.Type().ElementType())
 			globalValue = llvm.ConstInsertValue(globalValue, references, []uint32{0})
 			if length != 0 {
 				lengthValue := llvm.ConstInt(c.uintptrType, uint64(length), false)
@@ -96,9 +96,9 @@ func (c *Compiler) makeStructTypeFields(typ *types.Struct) llvm.Value {
 	runtimeStructField := c.getLLVMRuntimeType("structField")
 	structGlobalType := llvm.ArrayType(runtimeStructField, typ.NumFields())
 	structGlobal := llvm.AddGlobal(c.mod, structGlobalType, "reflect/types.structFields")
-	structGlobalValue := c.getZeroValue(structGlobalType)
+	structGlobalValue := llvm.ConstNull(structGlobalType)
 	for i := 0; i < typ.NumFields(); i++ {
-		fieldGlobalValue := c.getZeroValue(runtimeStructField)
+		fieldGlobalValue := llvm.ConstNull(runtimeStructField)
 		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, c.getTypeCode(typ.Field(i).Type()), []uint32{0})
 		fieldName := c.makeGlobalArray([]byte(typ.Field(i).Name()), "reflect/types.structFieldName", c.ctx.Int8Type())
 		fieldName.SetLinkage(llvm.PrivateLinkage)
@@ -110,12 +110,12 @@ func (c *Compiler) makeStructTypeFields(typ *types.Struct) llvm.Value {
 		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldName, []uint32{1})
 		if typ.Tag(i) != "" {
 			fieldTag := c.makeGlobalArray([]byte(typ.Tag(i)), "reflect/types.structFieldTag", c.ctx.Int8Type())
+			fieldTag.SetLinkage(llvm.PrivateLinkage)
+			fieldTag.SetUnnamedAddr(true)
 			fieldTag = llvm.ConstGEP(fieldTag, []llvm.Value{
 				llvm.ConstInt(llvm.Int32Type(), 0, false),
 				llvm.ConstInt(llvm.Int32Type(), 0, false),
 			})
-			fieldTag.SetLinkage(llvm.PrivateLinkage)
-			fieldTag.SetUnnamedAddr(true)
 			fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldTag, []uint32{2})
 		}
 		if typ.Field(i).Embedded() {
@@ -380,7 +380,7 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) llvm.Valu
 	// Continue after the if statement.
 	c.builder.SetInsertPointAtEnd(nextBlock)
 	phi := c.builder.CreatePHI(assertedType, "typeassert.value")
-	phi.AddIncoming([]llvm.Value{c.getZeroValue(assertedType), valueOk}, []llvm.BasicBlock{prevBlock, okBlock})
+	phi.AddIncoming([]llvm.Value{llvm.ConstNull(assertedType), valueOk}, []llvm.BasicBlock{prevBlock, okBlock})
 
 	if expr.CommaOk {
 		tuple := c.ctx.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(c.ctx.Int1Type())}, false) // create empty tuple

@@ -1,4 +1,6 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
+
+from __future__ import print_function
 
 import sys
 import os
@@ -130,7 +132,7 @@ def readSVD(path, sourceURL):
                 clusterPrefix = clusterName + '_'
                 clusterOffset = int(getText(cluster.find('addressOffset')), 0)
                 if cluster.find('dim') is None:
-                    if clusterOffset is 0:
+                    if clusterOffset == 0:
                         # make this a separate peripheral
                         cpRegisters = []
                         for regEl in cluster.findall('register'):
@@ -394,6 +396,8 @@ const (
                     out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType='volatile.Register8'))
                 elif bytesNeeded == 2:
                     out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType='volatile.Register16'))
+                elif bytesNeeded == 3:
+                    out.write('\t_padding{padNumber} [3]{regType}\n'.format(padNumber=padNumber, regType='volatile.Register8'))
                 else:
                     numSkip = (register['address'] - address) // eSize
                     if numSkip == 1:

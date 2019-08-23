@@ -1,0 +1,5 @@
+{
+    "inherits": ["atsamd51g19a"],
+    "build-tags": ["sam", "atsamd51g19a", "itsybitsy_m4"],
+    "flash": "bossac -d -i -e -w -v -R --offset=0x4000 {bin}"
+}

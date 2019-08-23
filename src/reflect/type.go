@@ -318,7 +318,7 @@ func (t Type) Size() uintptr {
 	case Slice:
 		return unsafe.Sizeof(SliceHeader{})
 	case Interface:
-		return unsafe.Sizeof(interfaceHeader{})
+		return unsafe.Sizeof(interface{}(nil))
 	case Array:
 		return t.Elem().Size() * uintptr(t.Len())
 	case Struct:
@@ -364,7 +364,7 @@ func (t Type) Align() int {
 	case Slice:
 		return int(unsafe.Alignof(SliceHeader{}))
 	case Interface:
-		return int(unsafe.Alignof(interfaceHeader{}))
+		return int(unsafe.Alignof(interface{}(nil)))
 	case Struct:
 		numField := t.NumField()
 		alignment := 1
@@ -396,6 +396,13 @@ func (t Type) AssignableTo(u Type) bool {
 		panic("reflect: unimplemented: assigning to interface of different type")
 	}
 	return false
+}
+
+func (t Type) Implements(u Type) bool {
+	if t.Kind() != Interface {
+		panic("reflect: non-interface type passed to Type.Implements")
+	}
+	return u.AssignableTo(t)
 }
 
 // Comparable returns whether values of this type can be compared to each other.

@@ -245,9 +245,9 @@
 					},
 
 					// valueSetIndex(v ref, i int, x ref)
-					//"syscall/js.valueSetIndex": (sp) => {
-					//	Reflect.set(loadValue(sp + 8), getInt64(sp + 16), loadValue(sp + 24));
-					//},
+					"syscall/js.valueSetIndex": (v_addr, i, x_addr) => {
+						Reflect.set(loadValue(v_addr), i, loadValue(x_addr));
+					},
 
 					// func valueCall(v ref, m string, args []ref) (ref, bool)
 					"syscall/js.valueCall": (ret_addr, v_addr, m_ptr, m_len, args_ptr, args_len, args_cap) => {
@@ -265,17 +265,17 @@
 					},
 
 					// func valueInvoke(v ref, args []ref) (ref, bool)
-					//"syscall/js.valueInvoke": (sp) => {
-					//	try {
-					//		const v = loadValue(sp + 8);
-					//		const args = loadSliceOfValues(sp + 16);
-					//		storeValue(sp + 40, Reflect.apply(v, undefined, args));
-					//		mem().setUint8(sp + 48, 1);
-					//	} catch (err) {
-					//		storeValue(sp + 40, err);
-					//		mem().setUint8(sp + 48, 0);
-					//	}
-					//},
+					"syscall/js.valueInvoke": (ret_addr, v_addr, args_ptr, args_len, args_cap) => {
+						try {
+							const v = loadValue(v_addr);
+							const args = loadSliceOfValues(args_ptr, args_len, args_cap);
+							storeValue(ret_addr, Reflect.apply(v, undefined, args));
+							mem().setUint8(ret_addr + 8, 1);
+						} catch (err) {
+							storeValue(ret_addr, err);
+							mem().setUint8(ret_addr + 8, 0);
+						}
+					},
 
 					// func valueNew(v ref, args []ref) (ref, bool)
 					"syscall/js.valueNew": (ret_addr, v_addr, args_ptr, args_len, args_cap) => {

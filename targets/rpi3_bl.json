@@ -1,0 +1,8 @@
+{
+	"inherits": ["rpi3"],
+	"linkerscript": "targets/rpi3_bl.ld",
+	"extra-files": [
+		"src/device/rpi3/rpi3_bl.S",
+		"src/device/rpi3/entry.S"
+	]
+}

@@ -86,7 +86,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 		case !inst.IsAAllocaInst().IsNil():
 			allocType := inst.Type().ElementType()
 			alloca := llvm.AddGlobal(fr.Mod, allocType, fr.pkgName+"$alloca")
-			alloca.SetInitializer(getZeroValue(allocType))
+			alloca.SetInitializer(llvm.ConstNull(allocType))
 			alloca.SetLinkage(llvm.InternalLinkage)
 			fr.locals[inst] = &LocalValue{
 				Underlying: alloca,
@@ -253,7 +253,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					allocType = llvm.ArrayType(allocType, elementCount)
 				}
 				alloc := llvm.AddGlobal(fr.Mod, allocType, fr.pkgName+"$alloc")
-				alloc.SetInitializer(getZeroValue(allocType))
+				alloc.SetInitializer(llvm.ConstNull(allocType))
 				alloc.SetLinkage(llvm.InternalLinkage)
 				result := &LocalValue{
 					Underlying: alloc,
@@ -312,10 +312,53 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				stringType := fr.Mod.GetTypeByName("runtime._string")
 				retPtr := llvm.ConstGEP(global, getLLVMIndices(fr.Mod.Context().Int32Type(), []uint32{0, 0}))
 				retLen := llvm.ConstInt(stringType.StructElementTypes()[1], uint64(len(result)), false)
-				ret := getZeroValue(stringType)
+				ret := llvm.ConstNull(stringType)
 				ret = llvm.ConstInsertValue(ret, retPtr, []uint32{0})
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{1})
 				fr.locals[inst] = &LocalValue{fr.Eval, ret}
+			case callee.Name() == "runtime.sliceCopy":
+				elementSize := fr.getLocal(inst.Operand(4)).(*LocalValue).Value().ZExtValue()
+				dstArray := fr.getLocal(inst.Operand(0)).(*LocalValue).stripPointerCasts()
+				srcArray := fr.getLocal(inst.Operand(1)).(*LocalValue).stripPointerCasts()
+				dstLen := fr.getLocal(inst.Operand(2)).(*LocalValue)
+				srcLen := fr.getLocal(inst.Operand(3)).(*LocalValue)
+				if elementSize != 1 && dstArray.Type().ElementType().TypeKind() == llvm.ArrayTypeKind && srcArray.Type().ElementType().TypeKind() == llvm.ArrayTypeKind {
+					// Slice data pointers are created by adding a global array
+					// and getting the address of the first element using a GEP.
+					// However, before the compiler can pass it to
+					// runtime.sliceCopy, it has to perform a bitcast to a *i8,
+					// to make it a unsafe.Pointer. Now, when the IR builder
+					// sees a bitcast of a GEP with zero indices, it will make
+					// a bitcast of the original array instead of the GEP,
+					// which breaks our assumptions.
+					// Re-add this GEP, in the hope that it it is then of the correct type...
+					dstArray = dstArray.GetElementPtr([]uint32{0, 0}).(*LocalValue)
+					srcArray = srcArray.GetElementPtr([]uint32{0, 0}).(*LocalValue)
+				}
+				if fr.Eval.TargetData.TypeAllocSize(dstArray.Type().ElementType()) != elementSize {
+					return nil, nil, errors.New("interp: slice dst element size does not match pointer type")
+				}
+				if fr.Eval.TargetData.TypeAllocSize(srcArray.Type().ElementType()) != elementSize {
+					return nil, nil, errors.New("interp: slice src element size does not match pointer type")
+				}
+				if dstArray.Type() != srcArray.Type() {
+					return nil, nil, errors.New("interp: slice element types don't match")
+				}
+				length := dstLen.Value().SExtValue()
+				if srcLength := srcLen.Value().SExtValue(); srcLength < length {
+					length = srcLength
+				}
+				if length < 0 {
+					return nil, nil, errors.New("interp: trying to copy a slice with negative length?")
+				}
+				for i := int64(0); i < length; i++ {
+					// *dst = *src
+					dstArray.Store(srcArray.Load())
+					// dst++
+					dstArray = dstArray.GetElementPtr([]uint32{1}).(*LocalValue)
+					// src++
+					srcArray = srcArray.GetElementPtr([]uint32{1}).(*LocalValue)
+				}
 			case callee.Name() == "runtime.stringToBytes":
 				// convert a string to a []byte
 				bufPtr := fr.getLocal(inst.Operand(0))
@@ -335,7 +378,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				sliceType := inst.Type()
 				retPtr := llvm.ConstGEP(global, getLLVMIndices(fr.Mod.Context().Int32Type(), []uint32{0, 0}))
 				retLen := llvm.ConstInt(sliceType.StructElementTypes()[1], uint64(len(result)), false)
-				ret := getZeroValue(sliceType)
+				ret := llvm.ConstNull(sliceType)
 				ret = llvm.ConstInsertValue(ret, retPtr, []uint32{0}) // ptr
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{1}) // len
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{2}) // cap

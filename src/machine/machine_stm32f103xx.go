@@ -99,17 +99,20 @@ func (p Pin) Set(high bool) {
 	}
 }
 
+// Get returns the current value of a GPIO pin.
+func (p Pin) Get() bool {
+	port := p.getPort()
+	pin := uint8(p) % 16
+	val := port.IDR.Get() & (1 << pin)
+	return (val > 0)
+}
+
 // UART
 type UART struct {
 	Buffer *RingBuffer
+	Bus    *stm32.USART_Type
+	IRQVal uint32
 }
-
-var (
-	// USART1 is the first hardware serial port on the STM32.
-	// Both UART0 and UART1 refer to USART1.
-	UART0 = UART{Buffer: NewRingBuffer()}
-	UART1 = &UART0
-)
 
 // Configure the UART.
 func (uart UART) Configure(config UARTConfig) {
@@ -120,51 +123,61 @@ func (uart UART) Configure(config UARTConfig) {
 
 	// pins
 	switch config.TX {
-	case PB6:
-		// use alternate TX/RX pins PB6/PB7 via AFIO mapping
+	case UART_ALT_TX_PIN:
+		// use alternate TX/RX pins via AFIO mapping
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_AFIOEN)
-		stm32.AFIO.MAPR.SetBits(stm32.AFIO_MAPR_USART1_REMAP)
-		PB6.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
-		PB7.Configure(PinConfig{Mode: PinInputModeFloating})
+		if uart.Bus == stm32.USART1 {
+			stm32.AFIO.MAPR.SetBits(stm32.AFIO_MAPR_USART1_REMAP)
+		} else if uart.Bus == stm32.USART2 {
+			stm32.AFIO.MAPR.SetBits(stm32.AFIO_MAPR_USART2_REMAP)
+		}
+		UART_ALT_TX_PIN.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
+		UART_ALT_RX_PIN.Configure(PinConfig{Mode: PinInputModeFloating})
 	default:
 		// use standard TX/RX pins PA9 and PA10
 		UART_TX_PIN.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
 		UART_RX_PIN.Configure(PinConfig{Mode: PinInputModeFloating})
 	}
 
-	// Enable USART1 clock
-	stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_USART1EN)
+	// Enable USART clock
+	if uart.Bus == stm32.USART1 {
+		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_USART1EN)
+	} else if uart.Bus == stm32.USART2 {
+		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_USART2EN)
+	}
 
 	// Set baud rate
 	uart.SetBaudRate(config.BaudRate)
 
-	// Enable USART1 port.
-	stm32.USART1.CR1.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
+	// Enable USART port
+	uart.Bus.CR1.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
 
-	// Enable RX IRQ.
-	arm.SetPriority(stm32.IRQ_USART1, 0xc0)
-	arm.EnableIRQ(stm32.IRQ_USART1)
+	// Enable RX IRQ
+	arm.SetPriority(uart.IRQVal, 0xc0)
+	arm.EnableIRQ(uart.IRQVal)
 }
 
 // SetBaudRate sets the communication speed for the UART.
 func (uart UART) SetBaudRate(br uint32) {
-	// first divide by PCLK2 prescaler (div 1) and then desired baudrate
-	divider := CPU_FREQUENCY / br
-	stm32.USART1.BRR.Set(divider)
+	// Note: PCLK2 (from APB2) used for USART1 and PCLK1 for USART2, 3, 4, 5
+	var divider uint32
+	if uart.Bus == stm32.USART1 {
+		// first divide by PCLK2 prescaler (div 1) and then desired baudrate
+		divider = CPU_FREQUENCY / br
+	} else {
+		// first divide by PCLK1 prescaler (div 2) and then desired baudrate
+		divider = CPU_FREQUENCY / 2 / br
+	}
+	uart.Bus.BRR.Set(divider)
 }
 
 // WriteByte writes a byte of data to the UART.
 func (uart UART) WriteByte(c byte) error {
-	stm32.USART1.DR.Set(uint32(c))
+	uart.Bus.DR.Set(uint32(c))
 
-	for !stm32.USART1.SR.HasBits(stm32.USART_SR_TXE) {
+	for !uart.Bus.SR.HasBits(stm32.USART_SR_TXE) {
 	}
 	return nil
-}
-
-//go:export USART1_IRQHandler
-func handleUART1() {
-	UART1.Receive(byte((stm32.USART1.DR.Get() & 0xFF)))
 }
 
 // SPI on the STM32.
@@ -202,24 +215,25 @@ func (spi SPI) Configure(config SPIConfig) {
 
 	var conf uint32
 
-	// set frequency
+	// set frequency dependent on PCLK2 prescaler (div 1)
 	switch config.Frequency {
 	case 125000:
-		conf |= stm32.SPI_BaudRatePrescaler_128
+		// Note: impossible to achieve lower frequency with current PCLK2!
+		conf |= stm32.SPI_BaudRatePrescaler_256
 	case 250000:
-		conf |= stm32.SPI_BaudRatePrescaler_64
+		conf |= stm32.SPI_BaudRatePrescaler_256
 	case 500000:
-		conf |= stm32.SPI_BaudRatePrescaler_32
-	case 1000000:
-		conf |= stm32.SPI_BaudRatePrescaler_16
-	case 2000000:
-		conf |= stm32.SPI_BaudRatePrescaler_8
-	case 4000000:
-		conf |= stm32.SPI_BaudRatePrescaler_4
-	case 8000000:
-		conf |= stm32.SPI_BaudRatePrescaler_2
-	default:
 		conf |= stm32.SPI_BaudRatePrescaler_128
+	case 1000000:
+		conf |= stm32.SPI_BaudRatePrescaler_64
+	case 2000000:
+		conf |= stm32.SPI_BaudRatePrescaler_32
+	case 4000000:
+		conf |= stm32.SPI_BaudRatePrescaler_16
+	case 8000000:
+		conf |= stm32.SPI_BaudRatePrescaler_8
+	default:
+		conf |= stm32.SPI_BaudRatePrescaler_256
 	}
 
 	// set bit transfer order
@@ -345,11 +359,11 @@ func (i2c I2C) Configure(config I2CConfig) {
 	// Disable the selected I2C peripheral to configure
 	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_PE)
 
-	// pclk1 clock speed is main frequency divided by PCK1 prescaler (div 2)
+	// pclk1 clock speed is main frequency divided by PCLK1 prescaler (div 2)
 	pclk1 := uint32(CPU_FREQUENCY / 2)
 
-	// set freqency range to pclk1 clock speed in Mhz.
-	// aka setting the value 36 means to use 36MhZ clock.
+	// set freqency range to PCLK1 clock speed in MHz
+	// aka setting the value 36 means to use 36 MHz clock
 	pclk1Mhz := pclk1 / 1000000
 	i2c.Bus.CR2.SetBits(pclk1Mhz)
 

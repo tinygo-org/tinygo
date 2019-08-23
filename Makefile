@@ -8,6 +8,18 @@ LLVM_BUILDDIR ?= llvm-build
 CLANG_SRC ?= llvm-project/clang
 LLD_SRC ?= llvm-project/lld
 
+# Go binary and GOROOT to select
+GO ?= go
+export GOROOT = $(shell $(GO) env GOROOT)
+
+# md5sum binary
+MD5SUM = md5sum
+
+# Use CCACHE for LLVM if possible
+ifneq (, $(shell which ccache))
+CCACHE_LLVM_OPTION = '-DLLVM_CCACHE_BUILD=ON'
+endif
+
 .PHONY: all tinygo build/tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-avr
 
 LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines debuginfodwarf executionengine instrumentation interpreter ipo irreader linker lto mc mcjit objcarcopts option profiledata scalaropts support target
@@ -16,6 +28,8 @@ UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
     START_GROUP = -Wl,--start-group
     END_GROUP = -Wl,--end-group
+else ifeq ($(UNAME_S),Darwin)
+    MD5SUM = md5
 endif
 
 CLANG_LIBS = $(START_GROUP) $(abspath $(LLVM_BUILDDIR))/lib/libclang.a -lclangAnalysis -lclangARCMigrate -lclangAST -lclangASTMatchers -lclangBasic -lclangCodeGen -lclangCrossTU -lclangDriver -lclangDynamicASTMatchers -lclangEdit -lclangFormat -lclangFrontend -lclangFrontendTool -lclangHandleCXX -lclangHandleLLVM -lclangIndex -lclangLex -lclangParse -lclangRewrite -lclangRewriteFrontend -lclangSema -lclangSerialization -lclangStaticAnalyzerCheckers -lclangStaticAnalyzerCore -lclangStaticAnalyzerFrontend -lclangTooling -lclangToolingASTDiff -lclangToolingCore -lclangToolingInclusions $(END_GROUP) -lstdc++
@@ -34,7 +48,7 @@ endif
 clean:
 	@rm -rf build
 
-FMT_PATHS = ./*.go cgo compiler interp ir loader src/device/arm src/examples src/machine src/os src/reflect src/runtime src/sync src/syscall
+FMT_PATHS = ./*.go cgo compiler interp ir loader src/device/arm src/examples src/machine src/os src/reflect src/runtime src/sync src/syscall src/internal/reflectlite transform
 fmt:
 	@gofmt -l -w $(FMT_PATHS)
 fmt-check:
@@ -46,23 +60,23 @@ gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-sifive gen-d
 gen-device-avr:
 	./tools/gen-device-avr.py lib/avr/packs/atmega src/device/avr/
 	./tools/gen-device-avr.py lib/avr/packs/tiny src/device/avr/
-	go fmt ./src/device/avr
+	GO111MODULE=off $(GO) fmt ./src/device/avr
 
 gen-device-nrf:
 	./tools/gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/ --source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk
-	go fmt ./src/device/nrf
+	GO111MODULE=off $(GO) fmt ./src/device/nrf
 
 gen-device-sam:
 	./tools/gen-device-svd.py lib/cmsis-svd/data/Atmel/ src/device/sam/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel
-	go fmt ./src/device/sam
+	GO111MODULE=off $(GO) fmt ./src/device/sam
 
 gen-device-sifive:
 	./tools/gen-device-svd.py lib/cmsis-svd/data/SiFive-Community/ src/device/sifive/ --source=https://github.com/AdaCore/svd2ada/tree/master/CMSIS-SVD/SiFive-Community
-	go fmt ./src/device/sifive
+	GO111MODULE=off $(GO) fmt ./src/device/sifive
 
 gen-device-stm32:
 	./tools/gen-device-svd.py lib/cmsis-svd/data/STMicro/ src/device/stm32/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro
-	go fmt ./src/device/stm32
+	GO111MODULE=off $(GO) fmt ./src/device/stm32
 
 
 # Get LLVM sources.
@@ -73,7 +87,7 @@ llvm-source: llvm-project/README.md
 # Configure LLVM.
 TINYGO_SOURCE_DIR=$(shell pwd)
 $(LLVM_BUILDDIR)/build.ninja: llvm-source
-	mkdir -p $(LLVM_BUILDDIR); cd $(LLVM_BUILDDIR); cmake -G Ninja $(TINYGO_SOURCE_DIR)/llvm-project/llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR;RISCV" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_PROJECTS="clang;lld" -DLLVM_TOOL_CLANG_TOOLS_EXTRA_BUILD=OFF
+	mkdir -p $(LLVM_BUILDDIR); cd $(LLVM_BUILDDIR); cmake -G Ninja $(TINYGO_SOURCE_DIR)/llvm-project/llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR;RISCV" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_PROJECTS="clang;lld" -DLLVM_TOOL_CLANG_TOOLS_EXTRA_BUILD=OFF $(CCACHE_LLVM_OPTION)
 
 # Build LLVM.
 $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
@@ -83,10 +97,10 @@ $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
 # Build the Go compiler.
 build/tinygo:
 	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  make llvm-source"; echo "  make $(LLVM_BUILDDIR)"; exit 1; fi
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go build -o build/tinygo -tags byollvm .
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) build -o build/tinygo -tags byollvm .
 
 test:
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" go test -v -tags byollvm .
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test -v -tags byollvm ./interp ./transform .
 
 tinygo-test:
 	cd tests/tinygotest && tinygo test
@@ -94,43 +108,79 @@ tinygo-test:
 .PHONY: smoketest
 smoketest:
 	# test all examples
-	tinygo build -size short -o test.elf -target=pca10040            examples/blinky1
-	tinygo build -size short -o test.elf -target=pca10040            examples/adc
-	tinygo build -size short -o test.elf -target=pca10040            examples/blinkm
-	tinygo build -size short -o test.elf -target=pca10040            examples/blinky2
-	tinygo build -size short -o test.elf -target=pca10040            examples/button
-	tinygo build -size short -o test.elf -target=pca10040            examples/button2
-	tinygo build -size short -o test.elf -target=pca10040            examples/echo
-	tinygo build -size short -o test.elf -target=circuitplay-express examples/i2s
-	tinygo build -size short -o test.elf -target=pca10040            examples/mcp3008
-	tinygo build -size short -o test.elf -target=microbit            examples/microbit-blink
-	tinygo build -size short -o test.elf -target=pca10040            examples/pwm
-	tinygo build -size short -o test.elf -target=pca10040            examples/serial
-	tinygo build -size short -o test.elf -target=pca10040            examples/test
+	tinygo build -size short -o test.hex -target=pca10040            examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10040            examples/adc
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10040            examples/blinkm
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10040            examples/blinky2
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10040            examples/button
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10040            examples/button2
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10040            examples/echo
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=circuitplay-express examples/i2s
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10040            examples/mcp3008
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=microbit            examples/microbit-blink
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10040            examples/pwm
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10040            examples/serial
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10040            examples/test
+	@$(MD5SUM) test.hex
 	# test all targets/boards
 	tinygo build             -o test.wasm -tags=pca10040             examples/blinky2
-	tinygo build -size short -o test.elf -target=microbit            examples/echo
-	tinygo build -size short -o test.elf -target=nrf52840-mdk        examples/blinky1
-	tinygo build -size short -o test.elf -target=pca10031            examples/blinky1
-	tinygo build -size short -o test.elf -target=bluepill            examples/blinky1
-	tinygo build -size short -o test.elf -target=reelboard           examples/blinky1
-	tinygo build -size short -o test.elf -target=reelboard           examples/blinky2
-	tinygo build -size short -o test.elf -target=pca10056            examples/blinky1
-	tinygo build -size short -o test.elf -target=pca10056            examples/blinky2
-	tinygo build -size short -o test.elf -target=itsybitsy-m0        examples/blinky1
-	tinygo build -size short -o test.elf -target=feather-m0          examples/blinky1
-	tinygo build -size short -o test.elf -target=trinket-m0          examples/blinky1
-	tinygo build -size short -o test.elf -target=circuitplay-express examples/blinky1
-	tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky1
-	tinygo build -size short -o test.elf -target=stm32f4disco        examples/blinky2
-	tinygo build -size short -o test.elf -target=circuitplay-express examples/i2s
-	tinygo build -size short -o test.elf -target=gameboy-advance     examples/gba-display
+	tinygo build -size short -o test.hex -target=microbit            examples/echo
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=nrf52840-mdk        examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10031            examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=bluepill            examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=reelboard           examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=reelboard           examples/blinky2
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10056            examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=pca10056            examples/blinky2
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=itsybitsy-m0        examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=feather-m0          examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=trinket-m0          examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=circuitplay-express examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=stm32f4disco        examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=stm32f4disco        examples/blinky2
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=circuitplay-express examples/i2s
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.gba -target=gameboy-advance     examples/gba-display
+	@$(MD5SUM) test.gba
+	tinygo build -size short -o test.hex -target=itsybitsy-m4        examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=nucleo-f103rb       examples/blinky1
+	@$(MD5SUM) test.hex
 ifneq ($(AVR), 0)
-	tinygo build -size short -o test.elf -target=arduino             examples/blinky1
-	tinygo build -size short -o test.elf -target=digispark           examples/blinky1
+	tinygo build -size short -o test.hex -target=arduino             examples/blinky1
+	@$(MD5SUM) test.hex
+	tinygo build -size short -o test.hex -target=digispark           examples/blinky1
+	@$(MD5SUM) test.hex
 endif
 ifneq ($(RISCV), 0)
-	tinygo build -size short -o test.elf -target=hifive1b            examples/blinky1
+	tinygo build -size short -o test.hex -target=hifive1b            examples/blinky1
+	@$(MD5SUM) test.hex
 endif
 	tinygo build             -o wasm.wasm -target=wasm               examples/wasm/export
 	tinygo build             -o wasm.wasm -target=wasm               examples/wasm/main

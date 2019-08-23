@@ -61,18 +61,19 @@ commands:
       - install-node
       - restore_cache:
           keys:
-            - go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
-            - go-cache-{{ checksum "Gopkg.lock" }}
+            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-v2-{{ checksum "go.mod" }}
       - llvm-source-linux
       - run: go install .
-      - run: go test -v
+      - run: go test -v ./interp ./transform .
       - run: make gen-device -j4
       - run: make smoketest RISCV=0
       - save_cache:
-          key: go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
+          key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
             - ~/.cache/tinygo
+            - /go/pkg/mod
       - run: make fmt-check
   build-linux:
     steps:
@@ -95,8 +96,8 @@ commands:
       - install-node
       - restore_cache:
           keys:
-            - go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
-            - go-cache-{{ checksum "Gopkg.lock" }}
+            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-v2-{{ checksum "go.mod" }}
       - llvm-source-linux
       - restore_cache:
           keys:
@@ -138,10 +139,11 @@ commands:
       - store_artifacts:
           path: /tmp/tinygo.linux-amd64.tar.gz
       - save_cache:
-          key: go-cache-{{ checksum "Gopkg.lock" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
+          key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
             - ~/.cache/tinygo
+            - /go/pkg/mod
       - run:
           name: "Extract release tarball"
           command: |
@@ -162,10 +164,14 @@ commands:
       - run:
           name: "Install dependencies"
           command: |
-            curl https://dl.google.com/go/go1.12.5.darwin-amd64.tar.gz -o go1.12.5.darwin-amd64.tar.gz
-            sudo tar -C /usr/local -xzf go1.12.5.darwin-amd64.tar.gz
+            curl https://dl.google.com/go/go1.13.darwin-amd64.tar.gz -o go1.13.darwin-amd64.tar.gz
+            sudo tar -C /usr/local -xzf go1.13.darwin-amd64.tar.gz
             ln -s /usr/local/go/bin/go /usr/local/bin/go
             HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
+      - restore_cache:
+          keys:
+            - go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-macos-v2-{{ checksum "go.mod" }}
       - restore_cache:
           keys:
             - llvm-source-8-macos-v5
@@ -220,6 +226,12 @@ commands:
             curl -O https://static.dev.sifive.com/dev-tools/riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-apple-darwin.tar.gz
             sudo tar -C /usr/local --strip-components=1 -xf riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-apple-darwin.tar.gz
       - run: make smoketest AVR=0
+      - save_cache:
+          key: go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
+          paths:
+            - ~/.cache/go-build
+            - ~/.cache/tinygo
+            - /go/pkg/mod
 
 
 jobs:
@@ -233,9 +245,14 @@ jobs:
       - image: circleci/golang:1.12-stretch
     steps:
       - test-linux
+  test-llvm8-go113:
+    docker:
+      - image: circleci/golang:1.13-stretch
+    steps:
+      - test-linux
   build-linux:
     docker:
-      - image: circleci/golang:1.12-stretch
+      - image: circleci/golang:1.13-stretch
     steps:
       - build-linux
   build-macos:
@@ -252,5 +269,6 @@ workflows:
     jobs:
       - test-llvm8-go111
       - test-llvm8-go112
+      - test-llvm8-go113
       - build-linux
       - build-macos

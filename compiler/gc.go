@@ -8,7 +8,7 @@ import (
 	"math/big"
 
 	"golang.org/x/tools/go/ssa"
-	"tinygo.org/x/go-llvm"
+	llvm "tinygo.org/x/go-llvm"
 )
 
 // needsStackObjects returns true if the compiler should insert stack objects
@@ -134,7 +134,7 @@ func (c *Compiler) makeGCStackSlots() bool {
 		}
 		stackChainStart := c.mod.NamedGlobal("runtime.stackChainStart")
 		if !stackChainStart.IsNil() {
-			stackChainStart.SetInitializer(c.getZeroValue(stackChainStart.Type().ElementType()))
+			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.Type().ElementType()))
 			stackChainStart.SetGlobalConstant(true)
 		}
 	}
@@ -198,7 +198,7 @@ func (c *Compiler) makeGCStackSlots() bool {
 		panic("stack chain start not found!")
 	}
 	stackChainStartType := stackChainStart.Type().ElementType()
-	stackChainStart.SetInitializer(c.getZeroValue(stackChainStartType))
+	stackChainStart.SetInitializer(llvm.ConstNull(stackChainStartType))
 
 	// Iterate until runtime.trackPointer has no uses left.
 	for use := trackPointer.FirstUse(); !use.IsNil(); use = trackPointer.FirstUse() {
@@ -303,7 +303,7 @@ func (c *Compiler) makeGCStackSlots() bool {
 		// Create the stack object at the function entry.
 		c.builder.SetInsertPointBefore(fn.EntryBasicBlock().FirstInstruction())
 		stackObject := c.builder.CreateAlloca(stackObjectType, "gc.stackobject")
-		initialStackObject := c.getZeroValue(stackObjectType)
+		initialStackObject := llvm.ConstNull(stackObjectType)
 		numSlots := (c.targetData.TypeAllocSize(stackObjectType) - c.targetData.TypeAllocSize(c.i8ptrType)*2) / uint64(c.targetData.ABITypeAlignment(c.uintptrType))
 		numSlotsValue := llvm.ConstInt(c.uintptrType, numSlots, false)
 		initialStackObject = llvm.ConstInsertValue(initialStackObject, numSlotsValue, []uint32{1})
@@ -398,10 +398,10 @@ func (c *Compiler) addGlobalsBitmap() bool {
 	for i, b := range bitmapBytes {
 		bitmapValues[len(bitmapBytes)-i-1] = llvm.ConstInt(c.ctx.Int8Type(), uint64(b), false)
 	}
-	bitmapArray := llvm.ConstArray(llvm.ArrayType(c.ctx.Int8Type(), len(bitmapBytes)), bitmapValues)
+	bitmapArray := llvm.ConstArray(c.ctx.Int8Type(), bitmapValues)
 	bitmapNew := llvm.AddGlobal(c.mod, bitmapArray.Type(), "runtime.trackedGlobalsBitmap.tmp")
 	bitmapOld := c.mod.NamedGlobal("runtime.trackedGlobalsBitmap")
-	bitmapOld.ReplaceAllUsesWith(bitmapNew)
+	bitmapOld.ReplaceAllUsesWith(llvm.ConstBitCast(bitmapNew, bitmapOld.Type()))
 	bitmapNew.SetInitializer(bitmapArray)
 	bitmapNew.SetName("runtime.trackedGlobalsBitmap")
 

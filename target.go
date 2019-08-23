@@ -15,32 +15,38 @@ import (
 	"strings"
 )
 
+// TINYGOROOT is the path to the final location for checking tinygo files. If
+// unset (by a -X ldflag), then sourceDir() will fallback to the original build
+// directory.
+var TINYGOROOT string
+
 // Target specification for a given target. Used for bare metal targets.
 //
 // The target specification is mostly inspired by Rust:
 // https://doc.rust-lang.org/nightly/nightly-rustc/rustc_target/spec/struct.TargetOptions.html
 // https://github.com/shepmaster/rust-arduino-blink-led-no-core-with-cargo/blob/master/blink/arduino.json
 type TargetSpec struct {
-	Inherits   []string `json:"inherits"`
-	Triple     string   `json:"llvm-target"`
-	CPU        string   `json:"cpu"`
-	Features   []string `json:"features"`
-	GOOS       string   `json:"goos"`
-	GOARCH     string   `json:"goarch"`
-	BuildTags  []string `json:"build-tags"`
-	GC         string   `json:"gc"`
-	Scheduler  string   `json:"scheduler"`
-	Compiler   string   `json:"compiler"`
-	Linker     string   `json:"linker"`
-	RTLib      string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
-	CFlags     []string `json:"cflags"`
-	LDFlags    []string `json:"ldflags"`
-	ExtraFiles []string `json:"extra-files"`
-	Emulator   []string `json:"emulator"`
-	Flasher    string   `json:"flash"`
-	OCDDaemon  []string `json:"ocd-daemon"`
-	GDB        string   `json:"gdb"`
-	GDBCmds    []string `json:"gdb-initial-cmds"`
+	Inherits     []string `json:"inherits"`
+	Triple       string   `json:"llvm-target"`
+	CPU          string   `json:"cpu"`
+	Features     []string `json:"features"`
+	GOOS         string   `json:"goos"`
+	GOARCH       string   `json:"goarch"`
+	BuildTags    []string `json:"build-tags"`
+	GC           string   `json:"gc"`
+	Scheduler    string   `json:"scheduler"`
+	Compiler     string   `json:"compiler"`
+	Linker       string   `json:"linker"`
+	RTLib        string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
+	CFlags       []string `json:"cflags"`
+	LDFlags      []string `json:"ldflags"`
+	LinkerScript string   `json:linkerscript`
+	ExtraFiles   []string `json:"extra-files"`
+	Emulator     []string `json:"emulator"`
+	Flasher      string   `json:"flash"`
+	OCDDaemon    []string `json:"ocd-daemon"`
+	GDB          string   `json:"gdb"`
+	GDBCmds      []string `json:"gdb-initial-cmds"`
 }
 
 // copyProperties copies all properties that are set in spec2 into itself.
@@ -76,6 +82,9 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if spec2.RTLib != "" {
 		spec.RTLib = spec2.RTLib
+	}
+	if spec2.LinkerScript != "" {
+		spec.LinkerScript = spec2.LinkerScript
 	}
 	spec.CFlags = append(spec.CFlags, spec2.CFlags...)
 	spec.LDFlags = append(spec.LDFlags, spec2.LDFlags...)
@@ -201,7 +210,7 @@ func LoadTarget(target string) (*TargetSpec, error) {
 		// Load target from given triple, ignore GOOS/GOARCH environment
 		// variables.
 		tripleSplit := strings.Split(target, "-")
-		if len(tripleSplit) == 1 {
+		if len(tripleSplit) < 3 {
 			return nil, errors.New("expected a full LLVM target or a custom target in -target flag")
 		}
 		goos := tripleSplit[2]
@@ -268,6 +277,14 @@ func sourceDir() string {
 			os.Exit(1)
 		}
 		return root
+	}
+
+	if TINYGOROOT != "" {
+		if !isSourceDir(TINYGOROOT) {
+			fmt.Fprintln(os.Stderr, "error: TINYGOROOT was not set to the correct root")
+			os.Exit(1)
+		}
+		return TINYGOROOT
 	}
 
 	// Find root from executable path.

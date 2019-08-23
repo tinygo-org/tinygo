@@ -8,9 +8,9 @@
 	],
 	"ldflags": [
 		"-Wl,--defsym=_bootloader_size=512",
-		"-Wl,--defsym=_stack_size=512",
-		"-T", "src/device/avr/atmega328p.ld"
+		"-Wl,--defsym=_stack_size=512"
 	],
+	"linkerscript": "src/device/avr/atmega328p.ld",
 	"extra-files": [
 		"targets/avr.S",
 		"src/device/avr/atmega328p.s"

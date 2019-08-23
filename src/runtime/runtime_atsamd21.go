@@ -261,9 +261,12 @@ func ticks() timeUnit {
 // ticks are in microseconds
 func timerSleep(ticks uint32) {
 	timerWakeup.Set(0)
-	if ticks < 30 {
-		// have to have at least one clock count
-		ticks = 30
+	if ticks < 214 {
+		// due to around 183us delay waiting for the register value to sync, the minimum sleep value
+		// for the SAMD21 is 214us.
+		// For related info, see:
+		// https://community.atmel.com/comment/2507091#comment-2507091
+		ticks = 214
 	}
 
 	// request read of count

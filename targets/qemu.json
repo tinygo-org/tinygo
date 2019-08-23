@@ -6,9 +6,7 @@
 		"--target=armv7m-none-eabi",
 		"-Qunused-arguments"
 	],
-	"ldflags": [
-		"-T", "targets/lm3s6965.ld"
-	],
+	"linkerscript":  "targets/lm3s6965.ld",
 	"extra-files": [
 		"targets/cortex-m.s"
 	],

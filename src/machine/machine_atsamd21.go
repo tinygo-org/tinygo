@@ -8,10 +8,8 @@
 package machine
 
 import (
-	"bytes"
 	"device/arm"
 	"device/sam"
-	"encoding/binary"
 	"errors"
 	"unsafe"
 )
@@ -191,6 +189,11 @@ func (a ADC) Get() uint16 {
 	// Start conversion
 	sam.ADC.SWTRIG.SetBits(sam.ADC_SWTRIG_START)
 	waitADCSync()
+
+	// wait for first conversion to finish to fix same issue as
+	// https://github.com/arduino/ArduinoCore-samd/issues/446
+	for !sam.ADC.INTFLAG.HasBits(sam.ADC_INTFLAG_RESRDY) {
+	}
 
 	// Clear the Data Ready flag
 	sam.ADC.INTFLAG.SetBits(sam.ADC_INTFLAG_RESRDY)
@@ -871,7 +874,13 @@ func waitForSync() {
 
 // SPI
 type SPI struct {
-	Bus *sam.SERCOM_SPI_Type
+	Bus     *sam.SERCOM_SPI_Type
+	SCK     Pin
+	MOSI    Pin
+	MISO    Pin
+	DOpad   int
+	DIpad   int
+	PinMode PinMode
 }
 
 // SPIConfig is used to store config info for SPI.
@@ -886,12 +895,14 @@ type SPIConfig struct {
 
 // Configure is intended to setup the SPI interface.
 func (spi SPI) Configure(config SPIConfig) {
-	config.SCK = SPI0_SCK_PIN
-	config.MOSI = SPI0_MOSI_PIN
-	config.MISO = SPI0_MISO_PIN
+	config.SCK = spi.SCK
+	config.MOSI = spi.MOSI
+	config.MISO = spi.MISO
 
-	doPad := spiTXPad2SCK3
-	diPad := sercomRXPad0
+	doPad := spi.DOpad
+	diPad := spi.DIpad
+
+	pinMode := spi.PinMode
 
 	// set default frequency
 	if config.Frequency == 0 {
@@ -904,9 +915,9 @@ func (spi SPI) Configure(config SPIConfig) {
 	}
 
 	// enable pins
-	config.SCK.Configure(PinConfig{Mode: PinSERCOMAlt})
-	config.MOSI.Configure(PinConfig{Mode: PinSERCOMAlt})
-	config.MISO.Configure(PinConfig{Mode: PinSERCOMAlt})
+	config.SCK.Configure(PinConfig{Mode: pinMode})
+	config.MOSI.Configure(PinConfig{Mode: pinMode})
+	config.MISO.Configure(PinConfig{Mode: pinMode})
 
 	// reset SERCOM
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_SWRST)
@@ -1390,18 +1401,14 @@ func handleUSB() {
 	for i = 1; i < uint32(len(endPoints)); i++ {
 		// Check if endpoint has a pending interrupt
 		epFlags := getEPINTFLAG(i)
-		if epFlags > 0 {
+		if (epFlags&sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 ||
+			(epFlags&sam.USB_DEVICE_EPINTFLAG_TRCPT1) > 0 {
 			switch i {
 			case usb_CDC_ENDPOINT_OUT:
-				if (epFlags & sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 {
-					handleEndpoint(i)
-				}
+				handleEndpoint(i)
 				setEPINTFLAG(i, epFlags)
 			case usb_CDC_ENDPOINT_IN, usb_CDC_ENDPOINT_ACM:
-				// set bank ready
 				setEPSTATUSCLR(i, sam.USB_DEVICE_EPSTATUSCLR_BK1RDY)
-
-				// ack transfer complete
 				setEPINTFLAG(i, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
 			}
 		}
@@ -1598,24 +1605,27 @@ func handleStandardSetup(setup usbSetup) bool {
 func cdcSetup(setup usbSetup) bool {
 	if setup.bmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
 		if setup.bRequest == usb_CDC_GET_LINE_CODING {
-			buf := bytes.NewBuffer(make([]byte, 0, 7))
-			binary.Write(buf, binary.LittleEndian, usbLineInfo.dwDTERate)
-			binary.Write(buf, binary.LittleEndian, usbLineInfo.bCharFormat)
-			binary.Write(buf, binary.LittleEndian, usbLineInfo.bParityType)
-			binary.Write(buf, binary.LittleEndian, usbLineInfo.bDataBits)
+			b := make([]byte, 0, 7)
+			b[0] = byte(usbLineInfo.dwDTERate)
+			b[1] = byte(usbLineInfo.dwDTERate >> 8)
+			b[2] = byte(usbLineInfo.dwDTERate >> 16)
+			b[3] = byte(usbLineInfo.dwDTERate >> 24)
+			b[4] = byte(usbLineInfo.bCharFormat)
+			b[5] = byte(usbLineInfo.bParityType)
+			b[6] = byte(usbLineInfo.bDataBits)
 
-			sendUSBPacket(0, buf.Bytes())
+			sendUSBPacket(0, b)
 			return true
 		}
 	}
 
 	if setup.bmRequestType == usb_REQUEST_HOSTTODEVICE_CLASS_INTERFACE {
 		if setup.bRequest == usb_CDC_SET_LINE_CODING {
-			buf := bytes.NewBuffer(receiveUSBControlPacket())
-			binary.Read(buf, binary.LittleEndian, &(usbLineInfo.dwDTERate))
-			binary.Read(buf, binary.LittleEndian, &(usbLineInfo.bCharFormat))
-			binary.Read(buf, binary.LittleEndian, &(usbLineInfo.bParityType))
-			binary.Read(buf, binary.LittleEndian, &(usbLineInfo.bDataBits))
+			b := receiveUSBControlPacket()
+			usbLineInfo.dwDTERate = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
+			usbLineInfo.bCharFormat = b[4]
+			usbLineInfo.bParityType = b[5]
+			usbLineInfo.bDataBits = b[6]
 		}
 
 		if setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
@@ -1624,17 +1634,19 @@ func cdcSetup(setup usbSetup) bool {
 
 		if setup.bRequest == usb_CDC_SET_LINE_CODING || setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
 			// auto-reset into the bootloader
-			if usbLineInfo.dwDTERate == 1200 && (usbLineInfo.lineState&0x01) == 0 {
-				// TODO: system reset
+			if usbLineInfo.dwDTERate == 1200 && usbLineInfo.lineState&usb_CDC_LINESTATE_DTR == 0 {
+				ResetProcessor()
 			} else {
 				// TODO: cancel any reset
 			}
+			sendZlp(0)
 		}
 
 		if setup.bRequest == usb_CDC_SEND_BREAK {
 			// TODO: something with this value?
 			// breakValue = ((uint16_t)setup.wValueH << 8) | setup.wValueL;
 			// return false;
+			sendZlp(0)
 		}
 		return true
 	}
@@ -1655,53 +1667,41 @@ func sendUSBPacket(ep uint32, data []byte) {
 }
 
 func receiveUSBControlPacket() []byte {
-	// set ready to receive data
+	// address
+	usbEndpointDescriptors[0].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[0]))))
+
+	// set byte count to zero
+	usbEndpointDescriptors[0].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+
+	// set ready for next data
 	setEPSTATUSCLR(0, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
-
-	// read the data
-	bytesread := armRecvCtrlOUT(0)
-
-	// return the data
-	data := make([]byte, 0, bytesread)
-	copy(data, udd_ep_out_cache_buffer[0][:bytesread])
-	return data
-}
-
-func armRecvCtrlOUT(ep uint32) uint32 {
-	// Set output address to receive data
-	usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
-
-	// set multi-packet size which is total expected number of bytes to receive.
-	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.SetBits((8 << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos) |
-		uint32(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos))
-
-	// clear byte count of bytes received so far.
-	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
-
-	// clear ready state to start transfer
-	setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
 
 	// Wait until OUT transfer is ready.
 	timeout := 3000
-	for (getEPSTATUS(ep) & sam.USB_DEVICE_EPSTATUS_BK0RDY) == 0 {
+	for (getEPSTATUS(0) & sam.USB_DEVICE_EPSTATUS_BK0RDY) == 0 {
 		timeout--
 		if timeout == 0 {
-			return 0
+			return []byte{}
 		}
 	}
 
 	// Wait until OUT transfer is completed.
-	timeout = 3000
-	for (getEPINTFLAG(ep) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) == 0 {
+	timeout = 300000
+	for (getEPINTFLAG(0) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) == 0 {
 		timeout--
 		if timeout == 0 {
-			return 0
+			return []byte{}
 		}
 	}
 
-	// return number of bytes received
-	return (usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.Get() >>
-		usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask
+	// get data
+	bytesread := uint32((usbEndpointDescriptors[0].DeviceDescBank[0].PCKSIZE.Get() >>
+		usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)
+
+	data := make([]byte, bytesread)
+	copy(data, udd_ep_out_cache_buffer[0][:])
+
+	return data
 }
 
 // sendDescriptor creates and sends the various USB descriptor types that
@@ -1797,9 +1797,9 @@ func sendConfiguration(setup usbSetup) {
 
 		dif := NewInterfaceDescriptor(usb_CDC_DATA_INTERFACE, 2, usb_CDC_DATA_INTERFACE_CLASS, 0, 0)
 
-		in := NewEndpointDescriptor((usb_CDC_ENDPOINT_OUT | usbEndpointOut), usb_ENDPOINT_TYPE_BULK, usbEndpointPacketSize, 0)
+		out := NewEndpointDescriptor((usb_CDC_ENDPOINT_OUT | usbEndpointOut), usb_ENDPOINT_TYPE_BULK, usbEndpointPacketSize, 0)
 
-		out := NewEndpointDescriptor((usb_CDC_ENDPOINT_IN | usbEndpointIn), usb_ENDPOINT_TYPE_BULK, usbEndpointPacketSize, 0)
+		in := NewEndpointDescriptor((usb_CDC_ENDPOINT_IN | usbEndpointIn), usb_ENDPOINT_TYPE_BULK, usbEndpointPacketSize, 0)
 
 		cdc := NewCDCDescriptor(iad,
 			cif,
@@ -1809,13 +1809,13 @@ func sendConfiguration(setup usbSetup) {
 			callManagement,
 			cifin,
 			dif,
-			in,
-			out)
+			out,
+			in)
 
 		sz := uint16(configDescriptorSize + cdcSize)
 		config := NewConfigDescriptor(sz, 2)
 
-		buf := make([]byte, 0, sz)
+		buf := make([]byte, 0)
 		buf = append(buf, config.Bytes()...)
 		buf = append(buf, cdc.Bytes()...)
 
@@ -2075,4 +2075,16 @@ func setEPINTENSET(ep uint32, val uint8) {
 	default:
 		return
 	}
+}
+
+// ResetProcessor should perform a system reset in preperation
+// to switch to the bootloader to flash new firmware.
+func ResetProcessor() {
+	arm.DisableInterrupts()
+
+	// Perform magic reset into bootloader, as mentioned in
+	// https://github.com/arduino/ArduinoCore-samd/issues/197
+	*(*uint32)(unsafe.Pointer(uintptr(0x20007FFC))) = RESET_MAGIC_VALUE
+
+	arm.SystemReset()
 }

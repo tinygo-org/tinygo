@@ -10,7 +10,7 @@ import (
 	"errors"
 	"strings"
 
-	"tinygo.org/x/go-llvm"
+	llvm "tinygo.org/x/go-llvm"
 )
 
 type Eval struct {
@@ -24,7 +24,7 @@ type Eval struct {
 
 // Run evaluates the function with the given name and then eliminates all
 // callers.
-func Run(mod llvm.Module, targetData llvm.TargetData, debug bool) error {
+func Run(mod llvm.Module, debug bool) error {
 	if debug {
 		println("\ncompile-time evaluation:")
 	}
@@ -32,7 +32,7 @@ func Run(mod llvm.Module, targetData llvm.TargetData, debug bool) error {
 	name := "runtime.initAll"
 	e := &Eval{
 		Mod:          mod,
-		TargetData:   targetData,
+		TargetData:   llvm.NewTargetData(mod.DataLayout()),
 		Debug:        debug,
 		dirtyGlobals: map[llvm.Value]struct{}{},
 	}

@@ -50,10 +50,12 @@ type BuildConfig struct {
 	scheduler     string
 	printIR       bool
 	dumpSSA       bool
+	verifyIR      bool
 	debug         bool
 	printSizes    string
 	cFlags        []string
 	ldFlags       []string
+	linkerScript  string
 	tags          string
 	wasmAbi       string
 	heapSize      int64
@@ -74,6 +76,10 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		cflags = append(cflags, strings.Replace(flag, "{root}", root, -1))
 	}
 
+	linkerScript := spec.LinkerScript
+	if config.linkerScript != "" {
+		linkerScript = config.linkerScript
+	}
 	// Merge and adjust LDFlags.
 	ldflags := append([]string{}, config.ldFlags...)
 	for _, flag := range spec.LDFlags {
@@ -89,8 +95,8 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	if err != nil {
 		return fmt.Errorf("could not read version from GOROOT (%v): %v", goroot, err)
 	}
-	if major != 1 {
-		return fmt.Errorf("expected major version 1, got go%d.%d", major, minor)
+	if major != 1 || (minor != 11 && minor != 12 && minor != 13) {
+		return fmt.Errorf("requires go version 1.11, 1.12, or 1.13, got go%d.%d", major, minor)
 	}
 	for i := 1; i <= minor; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
@@ -116,6 +122,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		ClangHeaders:  getClangHeaderPath(root),
 		Debug:         config.debug,
 		DumpSSA:       config.dumpSSA,
+		VerifyIR:      config.verifyIR,
 		TINYGOROOT:    root,
 		GOROOT:        goroot,
 		GOPATH:        getGopath(),
@@ -143,7 +150,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		return errors.New("verification error after IR construction")
 	}
 
-	err = interp.Run(c.Module(), c.TargetData(), config.dumpSSA)
+	err = interp.Run(c.Module(), config.dumpSSA)
 	if err != nil {
 		return err
 	}
@@ -153,9 +160,6 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 
 	if spec.GOOS != "darwin" {
 		c.ApplyFunctionSections() // -ffunction-sections
-	}
-	if err := c.Verify(); err != nil {
-		return errors.New("verification error after applying function sections")
 	}
 
 	// Browsers cannot handle external functions that have type i64 because it
@@ -167,9 +171,6 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		err := c.ExternalInt64AsPtr()
 		if err != nil {
 			return err
-		}
-		if err := c.Verify(); err != nil {
-			return errors.New("verification error after running the wasm i64 hack")
 		}
 	}
 
@@ -251,6 +252,13 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		if spec.RTLib == "compiler-rt" {
 			ldflags = append(ldflags, librt)
 		}
+		lscript := spec.LinkerScript
+		if linkerScript != "" {
+			lscript = linkerScript //override via command line
+		}
+		if lscript != "" {
+			ldflags = append(ldflags, "-T", lscript)
+		}
 		if spec.GOARCH == "wasm" {
 			// Round heap size to next multiple of 65536 (the WebAssembly page
 			// size).
@@ -316,7 +324,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		}
 
 		// Get an Intel .hex file or .bin file from the .elf file.
-		if outext == ".hex" || outext == ".bin" {
+		if outext == ".hex" || outext == ".bin" || outext == ".gba" {
 			tmppath = filepath.Join(dir, "main"+outext)
 			err := Objcopy(executable, tmppath)
 			if err != nil {
@@ -627,6 +635,7 @@ func main() {
 	scheduler := flag.String("scheduler", "", "which scheduler to use (coroutines, tasks)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
+	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
 	tags := flag.String("tags", "", "a space-separated list of extra build tags")
 	target := flag.String("target", "", "LLVM target | .json file with TargetSpec")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
@@ -635,6 +644,7 @@ func main() {
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
+	linkerScript := flag.String("linkerscript", "", "use a non-standard linker script")
 	wasmAbi := flag.String("wasm-abi", "js", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	heapSize := flag.String("heap-size", "1M", "default heap size in bytes (only supported by WebAssembly)")
 
@@ -653,9 +663,11 @@ func main() {
 		scheduler:     *scheduler,
 		printIR:       *printIR,
 		dumpSSA:       *dumpSSA,
+		verifyIR:      *verifyIR,
 		debug:         !*nodebug,
 		printSizes:    *printSize,
 		tags:          *tags,
+		linkerScript:  *linkerScript,
 		wasmAbi:       *wasmAbi,
 	}
 

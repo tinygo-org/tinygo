@@ -31,6 +31,7 @@ type task struct {
 // getCoroutine returns the currently executing goroutine. It is used as an
 // intrinsic when compiling channel operations, but is not necessary with the
 // task-based scheduler.
+//go:inline
 func getCoroutine() *task {
 	return currentTask
 }
@@ -67,15 +68,6 @@ func swapTask(oldTask, newTask *task) {
 //go:linkname swapTaskLower tinygo_swapTask
 func swapTaskLower(oldTask, newTask *task)
 
-// Goexit terminates the currently running goroutine. No other goroutines are affected.
-//
-// Unlike the main Go implementation, no deffered calls will be run.
-//export runtime.Goexit
-func Goexit() {
-	// Swap without rescheduling first, effectively exiting the goroutine.
-	swapTask(currentTask, &schedulerState)
-}
-
 // startTask is a small wrapper function that sets up the first (and only)
 // argument to the new goroutine and makes sure it is exited when the goroutine
 // finishes.
@@ -96,38 +88,11 @@ func startGoroutine(fn, args uintptr) {
 	runqueuePushBack(t)
 }
 
-//go:linkname sleep time.Sleep
-func sleep(d int64) {
-	sleepTicks(timeUnit(d / tickMicros))
-}
-
-// sleepCurrentTask suspends the current goroutine. This is a compiler
-// intrinsic. It replaces calls to time.Sleep when a scheduler is in use.
-func sleepCurrentTask(d int64) {
-	sleepTask(currentTask, d)
+// yield suspends execution of the current goroutine
+// any wakeups must be configured before calling yield
+//export runtime.yield
+func yield() {
 	swapTask(currentTask, &schedulerState)
-}
-
-// deadlock is called when a goroutine cannot proceed any more, but is in theory
-// not exited (so deferred calls won't run). This can happen for example in code
-// like this, that blocks forever:
-//
-//     select{}
-func deadlock() {
-	Goexit()
-}
-
-// reactivateParent reactivates the parent goroutine. It is a no-op for the task
-// based scheduler.
-func reactivateParent(t *task) {
-	// Nothing to do here, tasks don't stop automatically.
-}
-
-// chanYield exits the current goroutine. Used in the channel implementation, to
-// suspend the current goroutine until it is reactivated by a channel operation
-// of a different goroutine.
-func chanYield() {
-	Goexit()
 }
 
 // getSystemStackPointer returns the current stack pointer of the system stack.

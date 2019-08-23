@@ -4,6 +4,9 @@ package machine
 
 import "device/sam"
 
+// used to reset into bootloader
+const RESET_MAGIC_VALUE = 0xf01669ef
+
 // GPIO Pins
 const (
 	D0  = PA08 // PWM available
@@ -62,7 +65,13 @@ const (
 
 // SPI on the Trinket M0.
 var (
-	SPI0 = SPI{Bus: sam.SERCOM0_SPI}
+	SPI0 = SPI{Bus: sam.SERCOM0_SPI,
+		SCK:     SPI0_SCK_PIN,
+		MOSI:    SPI0_MOSI_PIN,
+		MISO:    SPI0_MISO_PIN,
+		DOpad:   spiTXPad2SCK3,
+		DIpad:   sercomRXPad0,
+		PinMode: PinSERCOMAlt}
 )
 
 // I2C pins

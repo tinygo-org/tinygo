@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"fmt"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -20,6 +21,9 @@ func (c *Compiler) createRuntimeCall(fnName string, args []llvm.Value, name stri
 		panic("trying to call runtime." + fnName)
 	}
 	fn := c.ir.GetFunction(member.(*ssa.Function))
+	if fn.LLVMFn.IsNil() {
+		panic(fmt.Errorf("function %s does not appear in LLVM IR", fnName))
+	}
 	if !fn.IsExported() {
 		args = append(args, llvm.Undef(c.i8ptrType))            // unused context parameter
 		args = append(args, llvm.ConstPointerNull(c.i8ptrType)) // coroutine handle
@@ -163,7 +167,7 @@ func (c *Compiler) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value)
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		if len(c.flattenAggregateType(t)) <= MaxFieldsPerParam {
-			value := c.getZeroValue(t)
+			value := llvm.ConstNull(t)
 			for i, subtyp := range t.StructElementTypes() {
 				structField, remaining := c.collapseFormalParamInternal(subtyp, fields)
 				fields = remaining

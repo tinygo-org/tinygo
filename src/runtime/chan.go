@@ -27,20 +27,244 @@ import (
 	"unsafe"
 )
 
+func chanDebug(ch *channel) {
+	if schedulerDebug {
+		if ch.bufSize > 0 {
+			println("--- channel update:", ch, ch.state.String(), ch.bufSize, ch.bufUsed)
+		} else {
+			println("--- channel update:", ch, ch.state.String())
+		}
+	}
+}
+
 type channel struct {
-	elementSize uint16 // the size of one value in this channel
+	elementSize uintptr // the size of one value in this channel
+	bufSize     uintptr // size of buffer (in elements)
 	state       chanState
 	blocked     *task
+	bufHead     uintptr        // head index of buffer (next push index)
+	bufTail     uintptr        // tail index of buffer (next pop index)
+	bufUsed     uintptr        // number of elements currently in buffer
+	buf         unsafe.Pointer // pointer to first element of buffer
+}
+
+// chanMake creates a new channel with the given element size and buffer length in number of elements.
+// This is a compiler intrinsic.
+func chanMake(elementSize uintptr, bufSize uintptr) *channel {
+	return &channel{
+		elementSize: elementSize,
+		bufSize:     bufSize,
+		buf:         alloc(elementSize * bufSize),
+	}
+}
+
+// push value to end of channel if space is available
+// returns whether there was space for the value in the buffer
+func (ch *channel) push(value unsafe.Pointer) bool {
+	// immediately return false if the channel is not buffered
+	if ch.bufSize == 0 {
+		return false
+	}
+
+	// ensure space is available
+	if ch.bufUsed == ch.bufSize {
+		return false
+	}
+
+	// copy value to buffer
+	memcpy(
+		unsafe.Pointer( // pointer to the base of the buffer + offset = pointer to destination element
+			uintptr(ch.buf)+
+				uintptr( // element size * equivalent slice index = offset
+					ch.elementSize* // element size (bytes)
+						ch.bufHead, // index of first available buffer entry
+				),
+		),
+		value,
+		ch.elementSize,
+	)
+
+	// update buffer state
+	ch.bufUsed++
+	ch.bufHead++
+	if ch.bufHead == ch.bufSize {
+		ch.bufHead = 0
+	}
+
+	return true
+}
+
+// pop value from channel buffer if one is available
+// returns whether a value was popped or not
+// result is stored into value pointer
+func (ch *channel) pop(value unsafe.Pointer) bool {
+	// channel is empty
+	if ch.bufUsed == 0 {
+		return false
+	}
+
+	// compute address of source
+	addr := unsafe.Pointer(uintptr(ch.buf) + (ch.elementSize * ch.bufTail))
+
+	// copy value from buffer
+	memcpy(
+		value,
+		addr,
+		ch.elementSize,
+	)
+
+	// zero buffer element to allow garbage collection of value
+	memzero(
+		addr,
+		ch.elementSize,
+	)
+
+	// update buffer state
+	ch.bufUsed--
+
+	// move tail up
+	ch.bufTail++
+	if ch.bufTail == ch.bufSize {
+		ch.bufTail = 0
+	}
+
+	return true
+}
+
+// try to send a value to a channel, without actually blocking
+// returns whether the value was sent
+// will panic if channel is closed
+func (ch *channel) trySend(value unsafe.Pointer) bool {
+	if ch == nil {
+		// send to nil channel blocks forever
+		// this is non-blocking, so just say no
+		return false
+	}
+
+	switch ch.state {
+	case chanStateEmpty, chanStateBuf:
+		// try to dump the value directly into the buffer
+		if ch.push(value) {
+			ch.state = chanStateBuf
+			return true
+		}
+		return false
+	case chanStateRecv:
+		// unblock reciever
+		receiver := unblockChain(&ch.blocked, nil)
+
+		// copy value to reciever
+		receiverState := receiver.state()
+		memcpy(receiverState.ptr, value, ch.elementSize)
+		receiverState.data = 1 // commaOk = true
+
+		// change state to empty if there are no more receivers
+		if ch.blocked == nil {
+			ch.state = chanStateEmpty
+		}
+
+		return true
+	case chanStateSend:
+		// something else is already waiting to send
+		return false
+	case chanStateClosed:
+		runtimePanic("send on closed channel")
+	default:
+		runtimePanic("invalid channel state")
+	}
+
+	return false
+}
+
+// try to recieve a value from a channel, without really blocking
+// returns whether a value was recieved
+// second return is the comma-ok value
+func (ch *channel) tryRecv(value unsafe.Pointer) (bool, bool) {
+	if ch == nil {
+		// recieve from nil channel blocks forever
+		// this is non-blocking, so just say no
+		return false, false
+	}
+
+	switch ch.state {
+	case chanStateBuf, chanStateSend:
+		// try to pop the value directly from the buffer
+		if ch.pop(value) {
+			// unblock next sender if applicable
+			if sender := unblockChain(&ch.blocked, nil); sender != nil {
+				// push sender's value into buffer
+				ch.push(sender.state().ptr)
+
+				if ch.blocked == nil {
+					// last sender unblocked - update state
+					ch.state = chanStateBuf
+				}
+			}
+
+			if ch.bufUsed == 0 {
+				// channel empty - update state
+				ch.state = chanStateEmpty
+			}
+
+			return true, true
+		} else if sender := unblockChain(&ch.blocked, nil); sender != nil {
+			// unblock next sender if applicable
+			// copy sender's value
+			memcpy(value, sender.state().ptr, ch.elementSize)
+
+			if ch.blocked == nil {
+				// last sender unblocked - update state
+				ch.state = chanStateEmpty
+			}
+
+			return true, true
+		}
+		return false, false
+	case chanStateRecv, chanStateEmpty:
+		// something else is already waiting to recieve
+		return false, false
+	case chanStateClosed:
+		if ch.pop(value) {
+			return true, true
+		}
+
+		// channel closed - nothing to recieve
+		memzero(value, ch.elementSize)
+		return true, false
+	default:
+		runtimePanic("invalid channel state")
+	}
+
+	runtimePanic("unreachable")
+	return false, false
 }
 
 type chanState uint8
 
 const (
-	chanStateEmpty chanState = iota
-	chanStateRecv
-	chanStateSend
-	chanStateClosed
+	chanStateEmpty  chanState = iota // nothing in channel, no senders/recievers
+	chanStateRecv                    // nothing in channel, recievers waiting
+	chanStateSend                    // senders waiting, buffer full if present
+	chanStateBuf                     // buffer not empty, no senders waiting
+	chanStateClosed                  // channel closed
 )
+
+func (s chanState) String() string {
+	switch s {
+	case chanStateEmpty:
+		return "empty"
+	case chanStateRecv:
+		return "recv"
+	case chanStateSend:
+		return "send"
+	case chanStateBuf:
+		return "buffered"
+	case chanStateClosed:
+		return "closed"
+	default:
+		return "invalid"
+	}
+}
 
 // chanSelectState is a single channel operation (send/recv) in a select
 // statement. The value pointer is either nil (for receives) or points to the
@@ -50,89 +274,59 @@ type chanSelectState struct {
 	value unsafe.Pointer
 }
 
-// chanSend sends a single value over the channel. If this operation can
-// complete immediately (there is a goroutine waiting for a value), it sends the
-// value and re-activates both goroutines. If not, it sets itself as waiting on
-// a value.
-func chanSend(sender *task, ch *channel, value unsafe.Pointer) {
-	if ch == nil {
-		// A nil channel blocks forever. Do not scheduler this goroutine again.
-		chanYield()
+// chanSend sends a single value over the channel.
+// This operation will block unless a value is immediately available.
+// May panic if the channel is closed.
+func chanSend(ch *channel, value unsafe.Pointer) {
+	if ch.trySend(value) {
+		// value immediately sent
+		chanDebug(ch)
 		return
 	}
-	switch ch.state {
-	case chanStateEmpty:
-		scheduleLogChan("  send: chan is empty    ", ch, sender)
-		sender.state().ptr = value
-		ch.state = chanStateSend
-		ch.blocked = sender
-		chanYield()
-	case chanStateRecv:
-		scheduleLogChan("  send: chan in recv mode", ch, sender)
-		receiver := ch.blocked
-		receiverState := receiver.state()
-		memcpy(receiverState.ptr, value, uintptr(ch.elementSize))
-		receiverState.data = 1 // commaOk = true
-		ch.blocked = receiverState.next
-		receiverState.next = nil
-		activateTask(receiver)
-		reactivateParent(sender)
-		if ch.blocked == nil {
-			ch.state = chanStateEmpty
-		}
-	case chanStateClosed:
-		runtimePanic("send on closed channel")
-	case chanStateSend:
-		scheduleLogChan("  send: chan in send mode", ch, sender)
-		sender.state().ptr = value
-		sender.state().next = ch.blocked
-		ch.blocked = sender
-		chanYield()
+
+	if ch == nil {
+		// A nil channel blocks forever. Do not schedule this goroutine again.
+		deadlock()
 	}
+
+	// wait for reciever
+	sender := getCoroutine()
+	ch.state = chanStateSend
+	senderState := sender.state()
+	senderState.ptr = value
+	ch.blocked, senderState.next = sender, ch.blocked
+	chanDebug(ch)
+	yield()
+	senderState.ptr = nil
 }
 
-// chanRecv receives a single value over a channel. If there is an available
-// sender, it receives the value immediately and re-activates both coroutines.
-// If not, it sets itself as available for receiving. If the channel is closed,
-// it immediately activates itself with a zero value as the result.
-func chanRecv(receiver *task, ch *channel, value unsafe.Pointer) {
+// chanRecv receives a single value over a channel.
+// It blocks if there is no available value to recieve.
+// The recieved value is copied into the value pointer.
+// Returns the comma-ok value.
+func chanRecv(ch *channel, value unsafe.Pointer) bool {
+	if rx, ok := ch.tryRecv(value); rx {
+		// value immediately available
+		chanDebug(ch)
+		return ok
+	}
+
 	if ch == nil {
-		// A nil channel blocks forever. Do not scheduler this goroutine again.
-		chanYield()
-		return
+		// A nil channel blocks forever. Do not schedule this goroutine again.
+		deadlock()
 	}
-	switch ch.state {
-	case chanStateSend:
-		scheduleLogChan("  recv: chan in send mode", ch, receiver)
-		sender := ch.blocked
-		senderState := sender.state()
-		memcpy(value, senderState.ptr, uintptr(ch.elementSize))
-		receiver.state().data = 1 // commaOk = true
-		ch.blocked = senderState.next
-		senderState.next = nil
-		reactivateParent(receiver)
-		activateTask(sender)
-		if ch.blocked == nil {
-			ch.state = chanStateEmpty
-		}
-	case chanStateEmpty:
-		scheduleLogChan("  recv: chan is empty    ", ch, receiver)
-		receiver.state().ptr = value
-		ch.state = chanStateRecv
-		ch.blocked = receiver
-		chanYield()
-	case chanStateClosed:
-		scheduleLogChan("  recv: chan is closed   ", ch, receiver)
-		memzero(value, uintptr(ch.elementSize))
-		receiver.state().data = 0 // commaOk = false
-		reactivateParent(receiver)
-	case chanStateRecv:
-		scheduleLogChan("  recv: chan in recv mode", ch, receiver)
-		receiver.state().ptr = value
-		receiver.state().next = ch.blocked
-		ch.blocked = receiver
-		chanYield()
-	}
+
+	// wait for a value
+	receiver := getCoroutine()
+	ch.state = chanStateRecv
+	receiverState := receiver.state()
+	receiverState.ptr, receiverState.data = value, 0
+	ch.blocked, receiverState.next = receiver, ch.blocked
+	chanDebug(ch)
+	yield()
+	ok := receiverState.data == 1
+	receiverState.ptr, receiverState.data = nil, 0
+	return ok
 }
 
 // chanClose closes the given channel. If this channel has a receiver or is
@@ -153,17 +347,22 @@ func chanClose(ch *channel) {
 		// before the close.
 		runtimePanic("close channel during send")
 	case chanStateRecv:
-		// The receiver must be re-activated with a zero value.
-		receiverState := ch.blocked.state()
-		memzero(receiverState.ptr, uintptr(ch.elementSize))
-		receiverState.data = 0 // commaOk = false
-		activateTask(ch.blocked)
-		ch.state = chanStateClosed
-		ch.blocked = nil
-	case chanStateEmpty:
+		// unblock all receivers with the zero value
+		for rx := unblockChain(&ch.blocked, nil); rx != nil; rx = unblockChain(&ch.blocked, nil) {
+			// get receiver state
+			state := rx.state()
+
+			// store the zero value
+			memzero(state.ptr, ch.elementSize)
+
+			// set the comma-ok value to false (channel closed)
+			state.data = 0
+		}
+	case chanStateEmpty, chanStateBuf:
 		// Easy case. No available sender or receiver.
-		ch.state = chanStateClosed
 	}
+	ch.state = chanStateClosed
+	chanDebug(ch)
 }
 
 // chanSelect is the runtime implementation of the select statement. This is
@@ -175,47 +374,17 @@ func chanClose(ch *channel) {
 func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, blocking bool) (uintptr, bool) {
 	// See whether we can receive from one of the channels.
 	for i, state := range states {
-		if state.ch == nil {
-			// A nil channel blocks forever, so don't consider it here.
-			continue
-		}
 		if state.value == nil {
 			// A receive operation.
-			switch state.ch.state {
-			case chanStateSend:
-				// We can receive immediately.
-				sender := state.ch.blocked
-				senderState := sender.state()
-				memcpy(recvbuf, senderState.ptr, uintptr(state.ch.elementSize))
-				state.ch.blocked = senderState.next
-				senderState.next = nil
-				activateTask(sender)
-				if state.ch.blocked == nil {
-					state.ch.state = chanStateEmpty
-				}
-				return uintptr(i), true // commaOk = true
-			case chanStateClosed:
-				// Receive the zero value.
-				memzero(recvbuf, uintptr(state.ch.elementSize))
-				return uintptr(i), false // commaOk = false
+			if rx, ok := state.ch.tryRecv(recvbuf); rx {
+				chanDebug(state.ch)
+				return uintptr(i), ok
 			}
 		} else {
 			// A send operation: state.value is not nil.
-			switch state.ch.state {
-			case chanStateRecv:
-				receiver := state.ch.blocked
-				receiverState := receiver.state()
-				memcpy(receiverState.ptr, state.value, uintptr(state.ch.elementSize))
-				receiverState.data = 1 // commaOk = true
-				state.ch.blocked = receiverState.next
-				receiverState.next = nil
-				activateTask(receiver)
-				if state.ch.blocked == nil {
-					state.ch.state = chanStateEmpty
-				}
-				return uintptr(i), false
-			case chanStateClosed:
-				runtimePanic("send on closed channel")
+			if state.ch.trySend(state.value) {
+				chanDebug(state.ch)
+				return uintptr(i), true
 			}
 		}
 	}

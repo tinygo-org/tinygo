@@ -108,6 +108,10 @@ func Objcopy(infile, outfile string) error {
 
 	// Write to the file, in the correct format.
 	switch filepath.Ext(outfile) {
+	case ".gba":
+		// The address is not stored in a .gba file.
+		_, err := f.Write(data)
+		return err
 	case ".bin":
 		// The address is not stored in a .bin file (therefore you
 		// should use .hex files in most cases).

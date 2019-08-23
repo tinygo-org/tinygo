@@ -1,0 +1,13 @@
+{
+	"inherits": ["aarch64"],
+	"build-tags": ["rpi3"],
+	"cflags": [
+		"-mcpu=cortex-a53",
+		"-march=armv8-a"
+	],
+	"linkerscript": "targets/rpi3.ld",
+	"extra-files": [
+		"src/device/rpi3/start.S"
+	],
+	"linkerscript": "targets/rpi3.ld"
+}

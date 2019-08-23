@@ -6,9 +6,7 @@
 		"--target=armv7m-none-eabi",
 		"-Qunused-arguments"
 	],
-	"ldflags": [
-		"-T", "targets/stm32.ld"
-	],
+	"linkerscript": "targets/stm32.ld",
 	"extra-files": [
 		"src/device/stm32/stm32f103xx.s"
 	],
