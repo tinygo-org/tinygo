@@ -129,3 +129,15 @@ func reactivateParent(t *task) {
 func chanYield() {
 	Goexit()
 }
+
+// getSystemStackPointer returns the current stack pointer of the system stack.
+// This is not necessarily the same as the current stack pointer.
+func getSystemStackPointer() uintptr {
+	if currentTask == nil {
+		// Currently on the system stack.
+		return getCurrentStackPointer()
+	} else {
+		// Currently in a goroutine.
+		return schedulerState.sp
+	}
+}

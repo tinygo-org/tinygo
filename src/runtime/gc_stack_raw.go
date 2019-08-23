@@ -9,5 +9,6 @@ package runtime
 // the linker) and getting the current stack pointer from a register. Also, it
 // assumes a descending stack. Thus, it is not very portable.
 func markStack() {
-	markRoots(getCurrentStackPointer(), stackTop)
+	// Mark system stack.
+	markRoots(getSystemStackPointer(), stackTop)
 }
