@@ -28,3 +28,5 @@ const wasmPageSize = 64 * 1024
 func align(ptr uintptr) uintptr {
 	return (ptr + 3) &^ 3
 }
+
+func getCurrentStackPointer() uintptr

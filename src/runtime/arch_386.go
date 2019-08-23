@@ -9,3 +9,5 @@ const TargetBits = 32
 func align(ptr uintptr) uintptr {
 	return (ptr + 3) &^ 3
 }
+
+func getCurrentStackPointer() uintptr

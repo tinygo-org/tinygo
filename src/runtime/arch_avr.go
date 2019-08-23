@@ -12,3 +12,5 @@ func align(ptr uintptr) uintptr {
 	// No alignment necessary on the AVR.
 	return ptr
 }
+
+func getCurrentStackPointer() uintptr
