@@ -327,6 +327,12 @@ func markRoots(start, end uintptr) {
 func markRoot(addr, root uintptr) {
 	if looksLikePointer(root) {
 		block := blockFromAddr(root)
+		if block.state() == blockStateFree {
+			// The to-be-marked object doesn't actually exist.
+			// This could either be a dangling pointer (oops!) but most likely
+			// just a false positive.
+			return
+		}
 		head := block.findHead()
 		if head.state() != blockStateMark {
 			if gcDebug {
