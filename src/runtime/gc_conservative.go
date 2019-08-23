@@ -93,6 +93,9 @@ type gcBlock uintptr
 // blockFromAddr returns a block given an address somewhere in the heap (which
 // might not be heap-aligned).
 func blockFromAddr(addr uintptr) gcBlock {
+	if gcAsserts && (addr < poolStart || addr >= heapEnd) {
+		runtimePanic("gc: trying to get block from invalid address")
+	}
 	return gcBlock((addr - poolStart) / bytesPerBlock)
 }
 
@@ -112,6 +115,11 @@ func (b gcBlock) address() uintptr {
 func (b gcBlock) findHead() gcBlock {
 	for b.state() == blockStateTail {
 		b--
+	}
+	if gcAsserts {
+		if b.state() != blockStateHead && b.state() != blockStateMark {
+			runtimePanic("gc: found tail without head")
+		}
 	}
 	return b
 }
