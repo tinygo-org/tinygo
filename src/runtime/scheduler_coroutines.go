@@ -93,3 +93,9 @@ func chanYield() {
 	// Nothing to do here, simply returning from the channel operation also exits
 	// the goroutine temporarily.
 }
+
+// getSystemStackPointer returns the current stack pointer of the system stack.
+// This is always the current stack pointer.
+func getSystemStackPointer() uintptr {
+	return getCurrentStackPointer()
+}
