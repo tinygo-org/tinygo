@@ -132,7 +132,7 @@ def readSVD(path, sourceURL):
                 clusterPrefix = clusterName + '_'
                 clusterOffset = int(getText(cluster.find('addressOffset')), 0)
                 if cluster.find('dim') is None:
-                    if clusterOffset is 0:
+                    if clusterOffset == 0:
                         # make this a separate peripheral
                         cpRegisters = []
                         for regEl in cluster.findall('register'):
