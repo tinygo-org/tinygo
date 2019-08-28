@@ -2,7 +2,9 @@
 
 package machine
 
-import "device/sam"
+import (
+	"device/sam"
+)
 
 // GPIO Pins
 const (
@@ -85,7 +87,30 @@ const (
 
 // SPI on the ItsyBitsy M0.
 var (
-	SPI0 = SPI{Bus: sam.SERCOM4_SPI}
+	SPI0 = SPI{Bus: sam.SERCOM4_SPI,
+		SCK:   SPI0_SCK_PIN,
+		MOSI:  SPI0_MOSI_PIN,
+		MISO:  SPI0_MISO_PIN,
+		DOpad: spiTXPad2SCK3,
+		DIpad: sercomRXPad0}
+)
+
+// "Internal" SPI pins; SPI flash is attached to these on ItsyBitsy M0
+const (
+	SPI1_CS_PIN   = PA27
+	SPI1_SCK_PIN  = PB23
+	SPI1_MOSI_PIN = PB22
+	SPI1_MISO_PIN = PB03
+)
+
+// "Internal" SPI on Sercom 5
+var (
+	SPI1 = SPI{Bus: sam.SERCOM5_SPI,
+		SCK:   SPI1_SCK_PIN,
+		MOSI:  SPI1_MOSI_PIN,
+		MISO:  SPI1_MISO_PIN,
+		DOpad: spiTXPad2SCK3,
+		DIpad: sercomRXPad1}
 )
 
 // I2S pins
