@@ -871,7 +871,12 @@ func waitForSync() {
 
 // SPI
 type SPI struct {
-	Bus *sam.SERCOM_SPI_Type
+	Bus   *sam.SERCOM_SPI_Type
+	SCK   Pin
+	MOSI  Pin
+	MISO  Pin
+	DOpad int
+	DIpad int
 }
 
 // SPIConfig is used to store config info for SPI.
@@ -886,12 +891,13 @@ type SPIConfig struct {
 
 // Configure is intended to setup the SPI interface.
 func (spi SPI) Configure(config SPIConfig) {
-	config.SCK = SPI0_SCK_PIN
-	config.MOSI = SPI0_MOSI_PIN
-	config.MISO = SPI0_MISO_PIN
 
-	doPad := spiTXPad2SCK3
-	diPad := sercomRXPad0
+	config.SCK = spi.SCK
+	config.MOSI = spi.MOSI
+	config.MISO = spi.MISO
+
+	doPad := spi.DOpad
+	diPad := spi.DIpad
 
 	// set default frequency
 	if config.Frequency == 0 {
