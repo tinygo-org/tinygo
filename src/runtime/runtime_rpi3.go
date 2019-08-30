@@ -3,6 +3,7 @@
 package runtime
 
 import _ "unsafe"
+import dev "device/rpi3"
 
 //const GOOS = "linux"
 const tickMicros = int64(1)
@@ -24,10 +25,14 @@ func ticks() timeUnit {
 }
 
 func abort() {
+	dev.UARTPuts("program aborted")
+	for {
+
+	}
 }
 
 func preinit() {
-	x = x + 1
+	dev.UARTInit()
 }
 
 //go:export main
@@ -39,5 +44,5 @@ func main() {
 }
 
 func putchar(c byte) {
-	x = c
+	dev.UARTSend(c)
 }

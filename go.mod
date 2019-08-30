@@ -8,3 +8,5 @@ require (
 	golang.org/x/tools v0.0.0-20190227180812-8dcc6e70cdef
 	tinygo.org/x/go-llvm v0.0.0-20190818154551-95bc4ffe1add
 )
+
+replace tinygo.org/x/go-llvm => /Users/iansmith/go-llvm.src
