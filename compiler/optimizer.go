@@ -113,6 +113,9 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		if fn.IsNil() {
 			continue
 		}
+		if fn.IsNil() {
+			panic("fn TinyGo-specific transforms is nil")
+		}
 		fn.SetLinkage(llvm.InternalLinkage)
 	}
 

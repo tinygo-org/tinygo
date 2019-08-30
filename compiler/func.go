@@ -65,6 +65,9 @@ func (c *Compiler) createFuncValue(funcPtr, context llvm.Value, sig *types.Signa
 			funcValueWithSignatureGlobal = llvm.AddGlobal(c.mod, funcValueWithSignatureType, funcValueWithSignatureGlobalName)
 			funcValueWithSignatureGlobal.SetInitializer(funcValueWithSignature)
 			funcValueWithSignatureGlobal.SetGlobalConstant(true)
+			if funcValueWithSignatureGlobal.IsNil() {
+				panic("funcValueWithSignatureGlobal is nil")
+			}
 			funcValueWithSignatureGlobal.SetLinkage(llvm.InternalLinkage)
 		}
 		funcValueScalar = llvm.ConstPtrToInt(funcValueWithSignatureGlobal, c.uintptrType)

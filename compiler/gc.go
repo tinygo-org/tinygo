@@ -8,7 +8,7 @@ import (
 	"math/big"
 
 	"golang.org/x/tools/go/ssa"
-	"tinygo.org/x/go-llvm"
+	llvm "tinygo.org/x/go-llvm"
 )
 
 // needsStackObjects returns true if the compiler should insert stack objects
@@ -372,6 +372,9 @@ func (c *Compiler) addGlobalsBitmap() bool {
 
 	globalsBundleType := c.ctx.StructType(trackedGlobalTypes, false)
 	globalsBundle := llvm.AddGlobal(c.mod, globalsBundleType, "tinygo.trackedGlobals")
+	if globalsBundle.IsNil() {
+		panic("globalsBundle is nil")
+	}
 	globalsBundle.SetLinkage(llvm.InternalLinkage)
 	globalsBundle.SetUnnamedAddr(true)
 	initializer := llvm.Undef(globalsBundleType)

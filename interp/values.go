@@ -165,6 +165,9 @@ func (v *MapValue) newBucket() llvm.Value {
 	bucketValue := llvm.ConstNull(bucketType)
 	bucket := llvm.AddGlobal(v.Eval.Mod, bucketType, v.PkgName+"$mapbucket")
 	bucket.SetInitializer(bucketValue)
+	if bucket.IsNil() {
+		panic("bucket is nil")
+	}
 	bucket.SetLinkage(llvm.InternalLinkage)
 	bucket.SetUnnamedAddr(true)
 	return bucket
@@ -256,6 +259,9 @@ func (v *MapValue) Value() llvm.Value {
 	// Create a pointer to this hashmap.
 	hashmapPtr := llvm.AddGlobal(v.Eval.Mod, hashmap.Type(), v.PkgName+"$map")
 	hashmapPtr.SetInitializer(hashmap)
+	if hashmapPtr.IsNil() {
+		panic("hashmapptr is nil")
+	}
 	hashmapPtr.SetLinkage(llvm.InternalLinkage)
 	hashmapPtr.SetUnnamedAddr(true)
 	v.Underlying = llvm.ConstInBoundsGEP(hashmapPtr, []llvm.Value{zero})

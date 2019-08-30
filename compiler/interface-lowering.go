@@ -597,6 +597,9 @@ func (p *lowerInterfacesPass) getInterfaceImplementsFunc(itf *interfaceInfo) llv
 // types.
 func (p *lowerInterfacesPass) createInterfaceImplementsFunc(itf *interfaceInfo) {
 	fn := itf.assertFunc
+	if fn.IsNil() {
+		panic("fn createInterfaceImplementsFunc is nil ")
+	}
 	fn.SetLinkage(llvm.InternalLinkage)
 	fn.SetUnnamedAddr(true)
 
@@ -655,6 +658,9 @@ func (p *lowerInterfacesPass) getInterfaceMethodFunc(itf *interfaceInfo, signatu
 // possible types.
 func (p *lowerInterfacesPass) createInterfaceMethodFunc(itf *interfaceInfo, signature *signatureInfo) {
 	fn := itf.methodFuncs[signature]
+	if fn.IsNil() {
+		panic("createInterfaceMethodFunc fn is nil")
+	}
 	fn.SetLinkage(llvm.InternalLinkage)
 	fn.SetUnnamedAddr(true)
 

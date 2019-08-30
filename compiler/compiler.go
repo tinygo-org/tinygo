@@ -16,7 +16,7 @@ import (
 	"github.com/tinygo-org/tinygo/ir"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
-	"tinygo.org/x/go-llvm"
+	llvm "tinygo.org/x/go-llvm"
 )
 
 func init() {
@@ -120,6 +120,7 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 	if config.Triple == "" {
 		config.Triple = llvm.DefaultTargetTriple()
 	}
+
 	if len(config.BuildTags) == 0 {
 		config.BuildTags = []string{config.GOOS, config.GOARCH}
 	}
@@ -346,6 +347,12 @@ func (c *Compiler) Compile(mainPath string) []error {
 	// After all packages are imported, add a synthetic initializer function
 	// that calls the initializer of each package.
 	initFn := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function))
+	if initFn == nil {
+		panic("synthetic init function is nil")
+	}
+	if initFn.LLVMFn.IsNil() {
+		panic("synthetic init function LLVMFn is nil")
+	}
 	initFn.LLVMFn.SetLinkage(llvm.InternalLinkage)
 	initFn.LLVMFn.SetUnnamedAddr(true)
 	if c.Debug {
@@ -363,7 +370,11 @@ func (c *Compiler) Compile(mainPath string) []error {
 	// Conserve for goroutine lowering. Without marking these as external, they
 	// would be optimized away.
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
-	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
+	if realMain.IsNil() {
+		panic("realMain is nil so setting external linkage will result in a failure in EmitToMemoryBuffer")
+	} else {
+		realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
+	}
 
 	// Make sure these functions are kept in tact during TinyGo transformation passes.
 	for _, name := range functionsUsedInTransforms {
@@ -386,6 +397,9 @@ func (c *Compiler) Compile(mainPath string) []error {
 	// Tell the optimizer that runtime.alloc is an allocator, meaning that it
 	// returns values that are never null and never alias to an existing value.
 	for _, attrName := range []string{"noalias", "nonnull"} {
+		if c.mod.NamedFunction("runtime.alloc").IsNil() {
+			panic("no runtime.alloc")
+		}
 		c.mod.NamedFunction("runtime.alloc").AddAttributeAtIndex(0, getAttr(attrName))
 	}
 
@@ -852,6 +866,9 @@ func (c *Compiler) parseFunc(frame *Frame) {
 		return
 	}
 	if !frame.fn.IsExported() {
+		if frame.fn.LLVMFn.IsNil() {
+			panic("LLVM fn is nil")
+		}
 		frame.fn.LLVMFn.SetLinkage(llvm.InternalLinkage)
 		frame.fn.LLVMFn.SetUnnamedAddr(true)
 	}
@@ -2271,6 +2288,9 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 			objname := prefix + "$string"
 			global := llvm.AddGlobal(c.mod, llvm.ArrayType(c.ctx.Int8Type(), len(str)), objname)
 			global.SetInitializer(c.ctx.ConstString(str, false))
+			if global.IsNil() {
+				panic("global is nil")
+			}
 			global.SetLinkage(llvm.InternalLinkage)
 			global.SetGlobalConstant(true)
 			global.SetUnnamedAddr(true)
@@ -2711,6 +2731,9 @@ func (c *Compiler) ExternalInt64AsPtr() error {
 			// Keep existing calls with the existing convention in place (for
 			// better performance), but export a new wrapper function with the
 			// correct calling convention.
+			if fn.IsNil() {
+				panic("fn inside compiler is null")
+			}
 			fn.SetLinkage(llvm.InternalLinkage)
 			fn.SetUnnamedAddr(true)
 			entryBlock := c.ctx.AddBasicBlock(externalFn, "entry")

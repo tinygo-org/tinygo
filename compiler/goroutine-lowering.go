@@ -1,5 +1,7 @@
 package compiler
 
+import llvm "tinygo.org/x/go-llvm"
+
 // This file implements lowering for the goroutine scheduler. There are two
 // scheduler implementations, one based on tasks (like RTOSes and the main Go
 // runtime) and one based on a coroutine compiler transformation. The task based
@@ -106,8 +108,6 @@ package compiler
 import (
 	"errors"
 	"strings"
-
-	"tinygo.org/x/go-llvm"
 )
 
 type asyncFunc struct {
@@ -164,12 +164,18 @@ func (c *Compiler) lowerTasks() error {
 		c.createCall(realMain, params, "")
 		// runtime.Goexit isn't needed so let it be optimized away by
 		// globalopt.
+		if c.mod.NamedFunction("runtime.Goexit").IsNil() {
+			panic("runtime.Goexit is nil")
+		}
 		c.mod.NamedFunction("runtime.Goexit").SetLinkage(llvm.InternalLinkage)
 	}
 	mainCall.EraseFromParentAsInstruction()
 
 	// main.main was set to external linkage during IR construction. Set it to
 	// internal linkage to enable interprocedural optimizations.
+	if realMain.IsNil() {
+		panic("realMain is nil")
+	}
 	realMain.SetLinkage(llvm.InternalLinkage)
 
 	return nil
@@ -186,6 +192,7 @@ func (c *Compiler) lowerCoroutines() error {
 	}
 
 	uses := getUses(c.mod.NamedFunction("runtime.callMain"))
+
 	if len(uses) != 1 || uses[0].IsACallInst().IsNil() {
 		panic("expected exactly 1 call of runtime.callMain, check the entry point")
 	}
@@ -213,6 +220,9 @@ func (c *Compiler) lowerCoroutines() error {
 
 	// main.main was set to external linkage during IR construction. Set it to
 	// internal linkage to enable interprocedural optimizations.
+	if realMain.IsNil() {
+		panic("real main is nil during IR const")
+	}
 	realMain.SetLinkage(llvm.InternalLinkage)
 
 	return nil

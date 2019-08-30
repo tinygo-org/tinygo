@@ -165,21 +165,34 @@ func (c *Compiler) assignTypeCodes(typeSlice typeInfoSlice) {
 	// Only create this sidetable when it is necessary.
 	if state.needsNamedNonBasicTypesSidetable {
 		global := c.replaceGlobalIntWithArray("reflect.namedNonBasicTypesSidetable", state.namedNonBasicTypesSidetable)
+		if global.IsNil() {
+			panic("global namedNonBasicTypesSidetable is nil")
+		}
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 	}
 	if state.needsArrayTypesSidetable {
 		global := c.replaceGlobalIntWithArray("reflect.arrayTypesSidetable", state.arrayTypesSidetable)
+		if global.IsNil() {
+			panic("global  arrayTypesSidetable is nil")
+
+		}
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 	}
 	if state.needsStructTypesSidetable {
 		global := c.replaceGlobalIntWithArray("reflect.structTypesSidetable", state.structTypesSidetable)
+		if global.IsNil() {
+			panic("global structTypesSidetable is nil")
+		}
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 	}
 	if state.needsStructNamesSidetable {
 		global := c.replaceGlobalIntWithArray("reflect.structNamesSidetable", state.structNamesSidetable)
+		if global.IsNil() {
+			panic("global  structNamesSidetable is nil")
+		}
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 	}

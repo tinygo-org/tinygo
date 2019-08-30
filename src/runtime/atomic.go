@@ -1,5 +1,7 @@
 package runtime
 
+import _ "unsafe"
+
 // This file contains implementations for the sync/atomic package.
 
 // All implementations assume there are no goroutines, threads or interrupts.
