@@ -33,6 +33,11 @@ func abort() {
 
 func preinit() {
 	dev.UARTInit()
+	heapStart := 0x90000
+	heapEnd = 0xAFFF8
+	heapptr = uintptr(heapStart)
+	globalsStart = 0xB0000
+	globalsEnd = 0xB0FF8
 }
 
 //go:export main
