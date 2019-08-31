@@ -59,16 +59,78 @@ func scheduleLogChan(msg string, ch *channel, t *task) {
 	}
 }
 
-// Set the task to sleep for a given time.
+// deadlock is called when a goroutine cannot proceed any more, but is in theory
+// not exited (so deferred calls won't run). This can happen for example in code
+// like this, that blocks forever:
 //
-// This is a compiler intrinsic.
-func sleepTask(caller *task, duration int64) {
-	if schedulerDebug {
-		println("  set sleep:", caller, uint(duration/tickMicros))
+//     select{}
+//go:noinline
+func deadlock() {
+	// call yield without requesting a wakeup
+	yield()
+	panic("unreachable")
+}
+
+// Goexit terminates the currently running goroutine. No other goroutines are affected.
+//
+// Unlike the main Go implementation, no deffered calls will be run.
+//go:inline
+func Goexit() {
+	// its really just a deadlock
+	deadlock()
+}
+
+// unblock unblocks a task and returns the next value
+func unblock(t *task) *task {
+	state := t.state()
+	next := state.next
+	state.next = nil
+	activateTask(t)
+	return next
+}
+
+// unblockChain unblocks the next task on the stack/queue, returning it
+// also updates the chain, putting the next element into the chain pointer
+// if the chain is used as a queue, tail is used as a pointer to the final insertion point
+// if the chain is used as a stack, tail should be nil
+func unblockChain(chain **task, tail ***task) *task {
+	t := *chain
+	if t == nil {
+		return nil
 	}
-	state := caller.state()
-	state.data = uint(duration / tickMicros) // TODO: longer durations
-	addSleepTask(caller)
+	*chain = unblock(t)
+	if tail != nil && *chain == nil {
+		*tail = chain
+	}
+	return t
+}
+
+// dropChain drops a task from the given stack or queue
+// if the chain is used as a queue, tail is used as a pointer to the field containing a pointer to the next insertion point
+// if the chain is used as a stack, tail should be nil
+func dropChain(t *task, chain **task, tail ***task) {
+	for c := chain; *c != nil; c = &((*c).state().next) {
+		if *c == t {
+			next := (*c).state().next
+			if next == nil && tail != nil {
+				*tail = c
+			}
+			*c = next
+			return
+		}
+	}
+	panic("runtime: task not in chain")
+}
+
+// Pause the current task for a given time.
+//go:linkname sleep time.Sleep
+func sleep(duration int64) {
+	addSleepTask(getCoroutine(), duration)
+	yield()
+}
+
+func avrSleep(duration int64) {
+	sleepTicks(timeUnit(duration / tickMicros))
 }
 
 // Add a non-queued task to the run queue.
@@ -85,6 +147,7 @@ func activateTask(t *task) {
 
 // getTaskStateData is a helper function to get the current .data field of the
 // goroutine state.
+//go:inline
 func getTaskStateData(t *task) uint {
 	return t.state().data
 }
@@ -93,6 +156,7 @@ func getTaskStateData(t *task) uint {
 // done.
 func runqueuePushBack(t *task) {
 	if schedulerDebug {
+		scheduleLogTask("  pushing back:", t)
 		if t.state().next != nil {
 			panic("runtime: runqueuePushBack: expected next task to be nil")
 		}
@@ -124,12 +188,15 @@ func runqueuePopFront() *task {
 }
 
 // Add this task to the sleep queue, assuming its state is set to sleeping.
-func addSleepTask(t *task) {
+func addSleepTask(t *task, duration int64) {
 	if schedulerDebug {
+		println("  set sleep:", t, uint(duration/tickMicros))
 		if t.state().next != nil {
 			panic("runtime: addSleepTask: expected next task to be nil")
 		}
 	}
+	state := t.state()
+	state.data = uint(duration / tickMicros) // TODO: longer durations
 	now := ticks()
 	if sleepQueue == nil {
 		scheduleLog("  -> sleep new queue")
@@ -138,9 +205,6 @@ func addSleepTask(t *task) {
 		sleepQueueBaseTime = now
 		return
 	}
-
-	// Make sure state.data is relative to the queue time base.
-	state := t.state()
 
 	// Insert at front of sleep queue.
 	if state.data < sleepQueue.state().data {
@@ -219,4 +283,9 @@ func scheduler() {
 		scheduleLogTask("  run:", t)
 		t.resume()
 	}
+}
+
+func Gosched() {
+	runqueuePushBack(getCoroutine())
+	yield()
 }

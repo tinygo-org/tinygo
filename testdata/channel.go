@@ -1,6 +1,8 @@
 package main
 
-import "time"
+import (
+	"time"
+)
 
 func main() {
 	ch := make(chan int)
@@ -107,7 +109,22 @@ func main() {
 	close(ch)
 
 	// Allow goroutines to exit.
-	time.Sleep(time.Microsecond)
+	time.Sleep(time.Millisecond)
+
+	// test non-concurrent buffered channels
+	ch = make(chan int, 2)
+	ch <- 1
+	ch <- 2
+	println("non-concurrent channel recieve:", <-ch)
+	println("non-concurrent channel recieve:", <-ch)
+
+	// test closing channels with buffered data
+	ch <- 3
+	ch <- 4
+	close(ch)
+	println("closed buffered channel recieve:", <-ch)
+	println("closed buffered channel recieve:", <-ch)
+	println("closed buffered channel recieve:", <-ch)
 }
 
 func sender(ch chan int) {

@@ -105,16 +105,16 @@ package compiler
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
 )
 
 type asyncFunc struct {
-	taskHandle       llvm.Value
-	cleanupBlock     llvm.BasicBlock
-	suspendBlock     llvm.BasicBlock
-	unreachableBlock llvm.BasicBlock
+	taskHandle   llvm.Value
+	cleanupBlock llvm.BasicBlock
+	suspendBlock llvm.BasicBlock
 }
 
 // LowerGoroutines performs some IR transformations necessary to support
@@ -150,10 +150,6 @@ func (c *Compiler) lowerTasks() error {
 		zero := llvm.ConstInt(c.uintptrType, 0, false)
 		c.createRuntimeCall("startGoroutine", []llvm.Value{realMainWrapper, zero}, "")
 		c.createRuntimeCall("scheduler", nil, "")
-		sleep := c.mod.NamedFunction("time.Sleep")
-		if !sleep.IsNil() {
-			sleep.ReplaceAllUsesWith(c.mod.NamedFunction("runtime.sleepCurrentTask"))
-		}
 	} else {
 		// Program doesn't need a scheduler. Call main.main directly.
 		c.builder.SetInsertPointBefore(mainCall)
@@ -162,9 +158,6 @@ func (c *Compiler) lowerTasks() error {
 			llvm.Undef(c.i8ptrType), // unused coroutine handle
 		}
 		c.createCall(realMain, params, "")
-		// runtime.Goexit isn't needed so let it be optimized away by
-		// globalopt.
-		c.mod.NamedFunction("runtime.Goexit").SetLinkage(llvm.InternalLinkage)
 	}
 	mainCall.EraseFromParentAsInstruction()
 
@@ -195,7 +188,7 @@ func (c *Compiler) lowerCoroutines() error {
 	// optionally followed by a call to runtime.scheduler().
 	c.builder.SetInsertPointBefore(mainCall)
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
-	c.builder.CreateCall(realMain, []llvm.Value{llvm.Undef(c.i8ptrType), llvm.ConstPointerNull(c.i8ptrType)}, "")
+	c.builder.CreateCall(realMain, []llvm.Value{llvm.Undef(c.i8ptrType), c.createRuntimeCall("getFakeCoroutine", []llvm.Value{}, "")}, "")
 	if needsScheduler {
 		c.createRuntimeCall("scheduler", nil, "")
 	}
@@ -218,6 +211,14 @@ func (c *Compiler) lowerCoroutines() error {
 	return nil
 }
 
+const coroDebug = false
+
+func coroDebugPrintln(s ...interface{}) {
+	if coroDebug {
+		fmt.Println(s...)
+	}
+}
+
 // markAsyncFunctions does the bulk of the work of lowering goroutines. It
 // determines whether a scheduler is needed, and if it is, it transforms
 // blocking operations into goroutines and blocking calls into await calls.
@@ -233,21 +234,9 @@ func (c *Compiler) lowerCoroutines() error {
 func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 	var worklist []llvm.Value
 
-	sleep := c.mod.NamedFunction("time.Sleep")
-	if !sleep.IsNil() {
-		worklist = append(worklist, sleep)
-	}
-	deadlock := c.mod.NamedFunction("runtime.deadlock")
-	if !deadlock.IsNil() {
-		worklist = append(worklist, deadlock)
-	}
-	chanSend := c.mod.NamedFunction("runtime.chanSend")
-	if !chanSend.IsNil() {
-		worklist = append(worklist, chanSend)
-	}
-	chanRecv := c.mod.NamedFunction("runtime.chanRecv")
-	if !chanRecv.IsNil() {
-		worklist = append(worklist, chanRecv)
+	yield := c.mod.NamedFunction("runtime.yield")
+	if !yield.IsNil() {
+		worklist = append(worklist, yield)
 	}
 
 	if len(worklist) == 0 {
@@ -268,6 +257,9 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		worklist = worklist[:len(worklist)-1]
 		if _, ok := asyncFuncs[f]; ok {
 			continue // already processed
+		}
+		if f.Name() == "resume" {
+			continue
 		}
 		// Add to set of async functions.
 		asyncFuncs[f] = &asyncFunc{}
@@ -317,6 +309,23 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		// operations are possible. Blocking operations block the browser UI,
 		// which is very bad.
 		needsScheduler = true
+	} else if c.GOARCH == "avr" {
+		needsScheduler = false
+		getCoroutine := c.mod.NamedFunction("runtime.getCoroutine")
+		for _, inst := range getUses(getCoroutine) {
+			inst.ReplaceAllUsesWith(llvm.Undef(inst.Type()))
+			inst.EraseFromParentAsInstruction()
+		}
+		yield := c.mod.NamedFunction("runtime.yield")
+		for _, inst := range getUses(yield) {
+			inst.EraseFromParentAsInstruction()
+		}
+		sleep := c.mod.NamedFunction("time.Sleep")
+		for _, inst := range getUses(sleep) {
+			c.builder.SetInsertPointBefore(inst)
+			c.createRuntimeCall("avrSleep", []llvm.Value{inst.Operand(0)}, "")
+			inst.EraseFromParentAsInstruction()
+		}
 	} else {
 		// Only use a scheduler when an async goroutine is started. When the
 		// goroutine is not async (does not do any blocking operation), no
@@ -342,6 +351,324 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		return false, c.lowerMakeGoroutineCalls()
 	}
 
+	// replace indefinitely blocking yields
+	getCoroutine := c.mod.NamedFunction("runtime.getCoroutine")
+	coroDebugPrintln("replace indefinitely blocking yields")
+	nonReturning := map[llvm.Value]bool{}
+	for _, f := range asyncList {
+		if f == yield {
+			continue
+		}
+		coroDebugPrintln("scanning", f.Name())
+
+		var callsAsyncNotYield bool
+		var callsYield bool
+		var getsCoroutine bool
+		for bb := f.EntryBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				if !inst.IsACallInst().IsNil() {
+					callee := inst.CalledValue()
+					if callee == yield {
+						callsYield = true
+					} else if callee == getCoroutine {
+						getsCoroutine = true
+					} else if _, ok := asyncFuncs[callee]; ok {
+						callsAsyncNotYield = true
+					}
+				}
+			}
+		}
+
+		coroDebugPrintln("result", f.Name(), callsYield, getsCoroutine, callsAsyncNotYield)
+
+		if callsYield && !getsCoroutine && !callsAsyncNotYield {
+			coroDebugPrintln("optimizing", f.Name())
+			// calls yield without registering for a wakeup
+			// this actually could otherwise wake up, but only in the case of really messed up undefined behavior
+			// so everything after a yield is unreachable, so we can just inject a fake return
+			delQueue := []llvm.Value{}
+			for bb := f.EntryBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+				var broken bool
+
+				for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+					if !broken && !inst.IsACallInst().IsNil() && inst.CalledValue() == yield {
+						coroDebugPrintln("broke", f.Name(), bb.AsValue().Name())
+						broken = true
+						c.builder.SetInsertPointBefore(inst)
+						c.createRuntimeCall("noret", []llvm.Value{}, "")
+						if f.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
+							c.builder.CreateRetVoid()
+						} else {
+							c.builder.CreateRet(llvm.Undef(f.Type().ElementType().ReturnType()))
+						}
+					}
+					if broken {
+						if inst.Type().TypeKind() != llvm.VoidTypeKind {
+							inst.ReplaceAllUsesWith(llvm.Undef(inst.Type()))
+						}
+						delQueue = append(delQueue, inst)
+					}
+				}
+				if !broken {
+					coroDebugPrintln("did not break", f.Name(), bb.AsValue().Name())
+				}
+			}
+
+			for _, v := range delQueue {
+				v.EraseFromParentAsInstruction()
+			}
+
+			nonReturning[f] = true
+		}
+	}
+
+	// convert direct calls into an async call followed by a yield operation
+	coroDebugPrintln("convert direct calls into an async call followed by a yield operation")
+	for _, f := range asyncList {
+		if f == yield {
+			continue
+		}
+		coroDebugPrintln("scanning", f.Name())
+
+		var retAlloc llvm.Value
+
+		// Rewrite async calls
+		for bb := f.EntryBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				if !inst.IsACallInst().IsNil() {
+					callee := inst.CalledValue()
+					if _, ok := asyncFuncs[callee]; !ok || callee == yield {
+						continue
+					}
+
+					uses := getUses(inst)
+					next := llvm.NextInstruction(inst)
+					switch {
+					case nonReturning[callee]:
+						// callee blocks forever
+						coroDebugPrintln("optimizing indefinitely blocking call", f.Name(), callee.Name())
+
+						// never calls getCoroutine - coroutine handle is irrelevant
+						inst.SetOperand(inst.OperandsCount()-2, llvm.Undef(c.i8ptrType))
+
+						// insert return
+						c.builder.SetInsertPointBefore(next)
+						c.createRuntimeCall("noret", []llvm.Value{}, "")
+						var retInst llvm.Value
+						if f.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
+							retInst = c.builder.CreateRetVoid()
+						} else {
+							retInst = c.builder.CreateRet(llvm.Undef(f.Type().ElementType().ReturnType()))
+						}
+
+						// delete everything after return
+						for next := llvm.NextInstruction(retInst); !next.IsNil(); next = llvm.NextInstruction(retInst) {
+							next.ReplaceAllUsesWith(llvm.Undef(retInst.Type()))
+							next.EraseFromParentAsInstruction()
+						}
+
+						continue
+					case next.IsAReturnInst().IsNil():
+						// not a return instruction
+						coroDebugPrintln("not a return instruction", f.Name(), callee.Name())
+					case callee.Type().ElementType().ReturnType() != f.Type().ElementType().ReturnType():
+						// return types do not match
+						coroDebugPrintln("return types do not match", f.Name(), callee.Name())
+					case callee.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind:
+						fallthrough
+					case next.Operand(0) == inst:
+						// async tail call optimization - just pass parent handle
+						coroDebugPrintln("doing async tail call opt", f.Name())
+
+						// insert before call
+						c.builder.SetInsertPointBefore(inst)
+
+						// get parent handle
+						parentHandle := c.createRuntimeCall("getParentHandle", []llvm.Value{}, "")
+
+						// pass parent handle directly into function
+						inst.SetOperand(inst.OperandsCount()-2, parentHandle)
+
+						if inst.Type().TypeKind() != llvm.VoidTypeKind {
+							// delete return value
+							uses[0].SetOperand(0, llvm.Undef(inst.Type()))
+						}
+
+						c.builder.SetInsertPointBefore(next)
+						c.createRuntimeCall("yield", []llvm.Value{}, "")
+						c.createRuntimeCall("noret", []llvm.Value{}, "")
+
+						continue
+					}
+
+					coroDebugPrintln("inserting regular call", f.Name(), callee.Name())
+					c.builder.SetInsertPointBefore(inst)
+
+					// insert call to getCoroutine, this will be lowered later
+					coro := c.createRuntimeCall("getCoroutine", []llvm.Value{}, "")
+
+					// provide coroutine handle to function
+					inst.SetOperand(inst.OperandsCount()-2, coro)
+
+					// Allocate space for the return value.
+					var retvalAlloca llvm.Value
+					if inst.Type().TypeKind() != llvm.VoidTypeKind {
+						if retAlloc.IsNil() {
+							// insert at start of function
+							c.builder.SetInsertPointBefore(f.EntryBasicBlock().FirstInstruction())
+
+							// allocate return value buffer
+							retAlloc = c.builder.CreateAlloca(inst.Type(), "coro.retvalAlloca")
+						}
+						retvalAlloca = retAlloc
+
+						// call before function
+						c.builder.SetInsertPointBefore(inst)
+
+						// cast buffer pointer to *i8
+						data := c.builder.CreateBitCast(retvalAlloca, c.i8ptrType, "")
+
+						// set state pointer to return value buffer so it can be written back
+						c.createRuntimeCall("setTaskStatePtr", []llvm.Value{coro, data}, "")
+					}
+
+					// insert yield after starting function
+					c.builder.SetInsertPointBefore(llvm.NextInstruction(inst))
+					yieldCall := c.createRuntimeCall("yield", []llvm.Value{}, "")
+
+					if !retvalAlloca.IsNil() && !inst.FirstUse().IsNil() {
+						// Load the return value from the alloca.
+						// The callee has written the return value to it.
+						c.builder.SetInsertPointBefore(llvm.NextInstruction(yieldCall))
+						retval := c.builder.CreateLoad(retvalAlloca, "coro.retval")
+						inst.ReplaceAllUsesWith(retval)
+					}
+				}
+			}
+		}
+	}
+
+	// ditch unnecessary tail yields
+	coroDebugPrintln("ditch unnecessary tail yields")
+	noret := c.mod.NamedFunction("runtime.noret")
+	for _, f := range asyncList {
+		if f == yield {
+			continue
+		}
+		coroDebugPrintln("scanning", f.Name())
+
+		// we can only ditch a yield if we can ditch all yields
+		var yields []llvm.Value
+		var canDitch bool
+	scanYields:
+		for bb := f.EntryBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				if inst.IsACallInst().IsNil() || inst.CalledValue() != yield {
+					continue
+				}
+
+				yields = append(yields, inst)
+
+				// we can only ditch the yield if the next instruction is a void return *or* noret
+				next := llvm.NextInstruction(inst)
+				ditchable := false
+				switch {
+				case !next.IsACallInst().IsNil() && next.CalledValue() == noret:
+					coroDebugPrintln("ditching yield with noret", f.Name())
+					ditchable = true
+				case !next.IsAReturnInst().IsNil() && f.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind:
+					coroDebugPrintln("ditching yield with void return", f.Name())
+					ditchable = true
+				case !next.IsAReturnInst().IsNil():
+					coroDebugPrintln("not ditching because return is not void", f.Name(), f.Type().ElementType().ReturnType().String())
+				default:
+					coroDebugPrintln("not ditching", f.Name())
+				}
+				if !ditchable {
+					// unditchable yield
+					canDitch = false
+					break scanYields
+				}
+
+				// ditchable yield
+				canDitch = true
+			}
+		}
+
+		if canDitch {
+			coroDebugPrintln("ditching all in", f.Name())
+			for _, inst := range yields {
+				if !llvm.NextInstruction(inst).IsAReturnInst().IsNil() {
+					// insert noret
+					coroDebugPrintln("insering noret", f.Name())
+					c.builder.SetInsertPointBefore(inst)
+					c.createRuntimeCall("noret", []llvm.Value{}, "")
+				}
+
+				// delete original yield
+				inst.EraseFromParentAsInstruction()
+			}
+		}
+	}
+
+	// generate return reactivations
+	coroDebugPrintln("generate return reactivations")
+	for _, f := range asyncList {
+		if f == yield {
+			continue
+		}
+		coroDebugPrintln("scanning", f.Name())
+
+		var retPtr llvm.Value
+		for bb := f.EntryBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+		block:
+			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				switch {
+				case !inst.IsACallInst().IsNil() && inst.CalledValue() == noret:
+					// does not return normally - skip this basic block
+					coroDebugPrintln("noret found - skipping", f.Name(), bb.AsValue().Name())
+					break block
+				case !inst.IsAReturnInst().IsNil():
+					// return instruction - rewrite to reactivation
+					coroDebugPrintln("adding return reactivation", f.Name(), bb.AsValue().Name())
+					if f.Type().ElementType().ReturnType().TypeKind() != llvm.VoidTypeKind {
+						// returns something
+						if retPtr.IsNil() {
+							coroDebugPrintln("adding return pointer get", f.Name())
+
+							// get return pointer in entry block
+							c.builder.SetInsertPointBefore(f.EntryBasicBlock().FirstInstruction())
+							parentHandle := c.createRuntimeCall("getParentHandle", []llvm.Value{}, "")
+							ptr := c.createRuntimeCall("getTaskStatePtr", []llvm.Value{parentHandle}, "")
+							retPtr = c.builder.CreateBitCast(ptr, llvm.PointerType(f.Type().ElementType().ReturnType(), 0), "retPtr")
+						}
+
+						coroDebugPrintln("adding return store", f.Name(), bb.AsValue().Name())
+
+						// store result into return pointer
+						c.builder.SetInsertPointBefore(inst)
+						c.builder.CreateStore(inst.Operand(0), retPtr)
+
+						// delete return value
+						inst.SetOperand(0, llvm.Undef(inst.Type()))
+					}
+
+					// insert reactivation call
+					c.builder.SetInsertPointBefore(inst)
+					parentHandle := c.createRuntimeCall("getParentHandle", []llvm.Value{}, "")
+					c.createRuntimeCall("activateTask", []llvm.Value{parentHandle}, "")
+
+					// mark as noret
+					c.builder.SetInsertPointBefore(inst)
+					c.createRuntimeCall("noret", []llvm.Value{}, "")
+					break block
+
+					// DO NOT ERASE THE RETURN!!!!!!!
+				}
+			}
+		}
+	}
+
 	// Create a few LLVM intrinsics for coroutine support.
 
 	coroIdType := llvm.FunctionType(c.ctx.TokenType(), []llvm.Type{c.ctx.Int32Type(), c.i8ptrType, c.i8ptrType, c.i8ptrType}, false)
@@ -362,45 +689,62 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 	coroFreeType := llvm.FunctionType(c.i8ptrType, []llvm.Type{c.ctx.TokenType(), c.i8ptrType}, false)
 	coroFreeFunc := llvm.AddFunction(c.mod, "llvm.coro.free", coroFreeType)
 
-	// Transform all async functions into coroutines.
+	// split blocks and add LLVM coroutine intrinsics
+	coroDebugPrintln("split blocks and add LLVM coroutine intrinsics")
 	for _, f := range asyncList {
-		if f == sleep || f == deadlock || f == chanSend || f == chanRecv {
+		if f == yield {
 			continue
 		}
 
-		frame := asyncFuncs[f]
-		frame.cleanupBlock = c.ctx.AddBasicBlock(f, "task.cleanup")
-		frame.suspendBlock = c.ctx.AddBasicBlock(f, "task.suspend")
-		frame.unreachableBlock = c.ctx.AddBasicBlock(f, "task.unreachable")
-
-		// Scan for async calls and return instructions that need to have
-		// suspend points inserted.
-		var asyncCalls []llvm.Value
-		var returns []llvm.Value
+		// find calls to yield
+		var yieldCalls []llvm.Value
 		for bb := f.EntryBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
 			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
-				if !inst.IsACallInst().IsNil() {
-					callee := inst.CalledValue()
-					if _, ok := asyncFuncs[callee]; !ok || callee == sleep || callee == deadlock || callee == chanSend || callee == chanRecv {
-						continue
-					}
-					asyncCalls = append(asyncCalls, inst)
-				} else if !inst.IsAReturnInst().IsNil() {
-					returns = append(returns, inst)
+				if !inst.IsACallInst().IsNil() && inst.CalledValue() == yield {
+					yieldCalls = append(yieldCalls, inst)
 				}
 			}
 		}
 
-		// Coroutine setup.
+		if len(yieldCalls) == 0 {
+			// no yields - we do not have to LLVM-ify this
+			coroDebugPrintln("skipping", f.Name())
+			for bb := f.EntryBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+				for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+					if !inst.IsACallInst().IsNil() && inst.CalledValue() == getCoroutine {
+						// no seperate local task - replace getCoroutine with getParentHandle
+						c.builder.SetInsertPointBefore(inst)
+						inst.ReplaceAllUsesWith(c.createRuntimeCall("getParentHandle", []llvm.Value{}, ""))
+						inst.EraseFromParentAsInstruction()
+					}
+				}
+			}
+			continue
+		}
+
+		coroDebugPrintln("converting", f.Name())
+
+		// get frame data to mess with
+		frame := asyncFuncs[f]
+
+		// add basic blocks to put cleanup and suspend code
+		frame.cleanupBlock = c.ctx.AddBasicBlock(f, "task.cleanup")
+		frame.suspendBlock = c.ctx.AddBasicBlock(f, "task.suspend")
+
+		// at start of function
 		c.builder.SetInsertPointBefore(f.EntryBasicBlock().FirstInstruction())
 		taskState := c.builder.CreateAlloca(c.getLLVMRuntimeType("taskState"), "task.state")
 		stateI8 := c.builder.CreateBitCast(taskState, c.i8ptrType, "task.state.i8")
+
+		// get LLVM-assigned coroutine ID
 		id := c.builder.CreateCall(coroIdFunc, []llvm.Value{
 			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 			stateI8,
 			llvm.ConstNull(c.i8ptrType),
 			llvm.ConstNull(c.i8ptrType),
 		}, "task.token")
+
+		// allocate buffer for task struct
 		size := c.builder.CreateCall(coroSizeFunc, nil, "task.size")
 		if c.targetData.TypeAllocSize(size.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
 			size = c.builder.CreateTrunc(size, c.uintptrType, "task.size.uintptr")
@@ -411,107 +755,9 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		if c.needsStackObjects() {
 			c.trackPointer(data)
 		}
+
+		// invoke llvm.coro.begin intrinsic and save task pointer
 		frame.taskHandle = c.builder.CreateCall(coroBeginFunc, []llvm.Value{id, data}, "task.handle")
-
-		// Modify async calls so this function suspends right after the child
-		// returns, because the child is probably not finished yet. Wait until
-		// the child reactivates the parent.
-		for _, inst := range asyncCalls {
-			inst.SetOperand(inst.OperandsCount()-2, frame.taskHandle)
-
-			// Split this basic block.
-			await := c.splitBasicBlock(inst, llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.await")
-
-			// Allocate space for the return value.
-			var retvalAlloca llvm.Value
-			if inst.Type().TypeKind() != llvm.VoidTypeKind {
-				c.builder.SetInsertPointBefore(inst.InstructionParent().Parent().EntryBasicBlock().FirstInstruction())
-				retvalAlloca = c.builder.CreateAlloca(inst.Type(), "coro.retvalAlloca")
-				c.builder.SetInsertPointBefore(inst)
-				data := c.builder.CreateBitCast(retvalAlloca, c.i8ptrType, "")
-				c.createRuntimeCall("setTaskStatePtr", []llvm.Value{frame.taskHandle, data}, "")
-			}
-
-			// Suspend.
-			c.builder.SetInsertPointAtEnd(inst.InstructionParent())
-			continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
-				llvm.ConstNull(c.ctx.TokenType()),
-				llvm.ConstInt(c.ctx.Int1Type(), 0, false),
-			}, "")
-			sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), await)
-			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
-
-			if inst.Type().TypeKind() != llvm.VoidTypeKind {
-				// Load the return value from the alloca. The callee has
-				// written the return value to it.
-				c.builder.SetInsertPointBefore(await.FirstInstruction())
-				retval := c.builder.CreateLoad(retvalAlloca, "coro.retval")
-				inst.ReplaceAllUsesWith(retval)
-			}
-		}
-
-		// Replace return instructions with suspend points that should
-		// reactivate the parent coroutine.
-		for _, inst := range returns {
-			// These properties were added by the functionattrs pass. Remove
-			// them, because now we start using the parameter.
-			// https://llvm.org/docs/Passes.html#functionattrs-deduce-function-attributes
-			for _, kind := range []string{"nocapture", "readnone"} {
-				kindID := llvm.AttributeKindID(kind)
-				f.RemoveEnumAttributeAtIndex(f.ParamsCount(), kindID)
-			}
-
-			c.builder.SetInsertPointBefore(inst)
-
-			var parentHandle llvm.Value
-			if f.Linkage() == llvm.ExternalLinkage {
-				// Exported function.
-				// Note that getTaskStatePtr will panic if it is called with
-				// a nil pointer, so blocking exported functions that try to
-				// return anything will not work.
-				parentHandle = llvm.ConstPointerNull(c.i8ptrType)
-			} else {
-				parentHandle = f.LastParam()
-				if parentHandle.IsNil() || parentHandle.Name() != "parentHandle" {
-					// sanity check
-					panic("trying to make exported function async: " + f.Name())
-				}
-			}
-
-			// Store return values.
-			switch inst.OperandsCount() {
-			case 0:
-				// Nothing to return.
-			case 1:
-				// Return this value by writing to the pointer stored in the
-				// parent handle. The parent coroutine has made an alloca that
-				// we can write to to store our return value.
-				returnValuePtr := c.createRuntimeCall("getTaskStatePtr", []llvm.Value{parentHandle}, "coro.parentData")
-				alloca := c.builder.CreateBitCast(returnValuePtr, llvm.PointerType(inst.Operand(0).Type(), 0), "coro.parentAlloca")
-				c.builder.CreateStore(inst.Operand(0), alloca)
-			default:
-				panic("unreachable")
-			}
-
-			// Reactivate the parent coroutine. This adds it back to the run
-			// queue, so it is started again by the scheduler when possible
-			// (possibly right after the following suspend).
-			c.createRuntimeCall("activateTask", []llvm.Value{parentHandle}, "")
-
-			// Suspend this coroutine.
-			// It would look like this is unnecessary, but if this
-			// suspend point is left out, it leads to undefined
-			// behavior somehow (with the unreachable instruction).
-			continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
-				llvm.ConstNull(c.ctx.TokenType()),
-				llvm.ConstInt(c.ctx.Int1Type(), 0, false),
-			}, "ret")
-			sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), frame.unreachableBlock)
-			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
-			inst.EraseFromParentAsInstruction()
-		}
 
 		// Coroutine cleanup. Free resources associated with this coroutine.
 		c.builder.SetInsertPointAtEnd(frame.cleanupBlock)
@@ -529,96 +775,81 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			c.builder.CreateRet(llvm.Undef(returnType))
 		}
 
-		// Coroutine exit. All final suspends (return instructions) will branch
-		// here.
-		c.builder.SetInsertPointAtEnd(frame.unreachableBlock)
-		c.builder.CreateUnreachable()
+		for _, inst := range yieldCalls {
+			// Replace call to yield with a suspension of the coroutine.
+			c.builder.SetInsertPointBefore(inst)
+			continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
+				llvm.ConstNull(c.ctx.TokenType()),
+				llvm.ConstInt(c.ctx.Int1Type(), 0, false),
+			}, "")
+			wakeup := c.splitBasicBlock(inst, llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.wakeup")
+			c.builder.SetInsertPointBefore(inst)
+			sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
+			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), wakeup)
+			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
+			inst.EraseFromParentAsInstruction()
+		}
+		ditchQueue := []llvm.Value{}
+		for bb := f.EntryBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				if !inst.IsACallInst().IsNil() && inst.CalledValue() == getCoroutine {
+					// replace getCoroutine calls with the task handle
+					inst.ReplaceAllUsesWith(frame.taskHandle)
+					ditchQueue = append(ditchQueue, inst)
+				}
+				if !inst.IsACallInst().IsNil() && inst.CalledValue() == noret {
+					// replace tail yield with jump to cleanup, otherwise we end up with undefined behavior
+					c.builder.SetInsertPointBefore(inst)
+					c.builder.CreateBr(frame.cleanupBlock)
+					ditchQueue = append(ditchQueue, inst, llvm.NextInstruction(inst))
+				}
+			}
+		}
+		for _, v := range ditchQueue {
+			v.EraseFromParentAsInstruction()
+		}
 	}
 
-	// Replace calls to runtime.getCoroutineCall with the coroutine of this
-	// frame.
-	for _, getCoroutineCall := range getUses(c.mod.NamedFunction("runtime.getCoroutine")) {
-		frame := asyncFuncs[getCoroutineCall.InstructionParent().Parent()]
-		getCoroutineCall.ReplaceAllUsesWith(frame.taskHandle)
-		getCoroutineCall.EraseFromParentAsInstruction()
+	// check for leftover calls to getCoroutine
+	if uses := getUses(getCoroutine); len(uses) > 0 {
+		useNames := make([]string, len(uses))
+		for i, u := range uses {
+			useNames[i] = u.InstructionParent().Parent().Name()
+		}
+		panic("bad use of getCoroutine: " + strings.Join(useNames, ","))
 	}
 
-	// Transform calls to time.Sleep() into coroutine suspend points.
-	for _, sleepCall := range getUses(sleep) {
-		// sleepCall must be a call instruction.
-		frame := asyncFuncs[sleepCall.InstructionParent().Parent()]
-		duration := sleepCall.Operand(0)
-
-		// Set task state to TASK_STATE_SLEEP and set the duration.
-		c.builder.SetInsertPointBefore(sleepCall)
-		c.createRuntimeCall("sleepTask", []llvm.Value{frame.taskHandle, duration}, "")
-
-		// Yield to scheduler.
-		continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
-			llvm.ConstNull(c.ctx.TokenType()),
-			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
-		}, "")
-		wakeup := c.splitBasicBlock(sleepCall, llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.wakeup")
-		c.builder.SetInsertPointBefore(sleepCall)
-		sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), wakeup)
-		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
-		sleepCall.EraseFromParentAsInstruction()
+	// rewrite calls to getParentHandle
+	for _, inst := range getUses(c.mod.NamedFunction("runtime.getParentHandle")) {
+		f := inst.InstructionParent().Parent()
+		var parentHandle llvm.Value
+		parentHandle = f.LastParam()
+		if parentHandle.IsNil() || parentHandle.Name() != "parentHandle" {
+			// sanity check
+			panic("trying to make exported function async: " + f.Name())
+		}
+		inst.ReplaceAllUsesWith(parentHandle)
+		inst.EraseFromParentAsInstruction()
 	}
 
-	// Transform calls to runtime.deadlock into coroutine suspends (without
-	// resume).
-	for _, deadlockCall := range getUses(deadlock) {
-		// deadlockCall must be a call instruction.
-		frame := asyncFuncs[deadlockCall.InstructionParent().Parent()]
-
-		// Exit coroutine.
-		c.builder.SetInsertPointBefore(deadlockCall)
-		continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
-			llvm.ConstNull(c.ctx.TokenType()),
-			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
-		}, "")
-		c.splitBasicBlock(deadlockCall, llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.wakeup.dead")
-		c.builder.SetInsertPointBefore(deadlockCall)
-		sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), frame.unreachableBlock)
-		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
-		deadlockCall.EraseFromParentAsInstruction()
+	// ditch invalid function attributes
+	bads := []llvm.Value{c.mod.NamedFunction("runtime.setTaskStatePtr")}
+	for _, f := range append(bads, asyncList...) {
+		// These properties were added by the functionattrs pass. Remove
+		// them, because now we start using the parameter.
+		// https://llvm.org/docs/Passes.html#functionattrs-deduce-function-attributes
+		for _, kind := range []string{"nocapture", "readnone"} {
+			kindID := llvm.AttributeKindID(kind)
+			n := f.ParamsCount()
+			for i := 0; i <= n; i++ {
+				f.RemoveEnumAttributeAtIndex(i, kindID)
+			}
+		}
 	}
 
-	// Transform calls to runtime.chanSend into channel send operations.
-	for _, sendOp := range getUses(chanSend) {
-		// sendOp must be a call instruction.
-		frame := asyncFuncs[sendOp.InstructionParent().Parent()]
-
-		// Yield to scheduler.
-		c.builder.SetInsertPointBefore(llvm.NextInstruction(sendOp))
-		continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
-			llvm.ConstNull(c.ctx.TokenType()),
-			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
-		}, "")
-		sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-		wakeup := c.splitBasicBlock(sw, llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.sent")
-		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), wakeup)
-		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
-	}
-
-	// Transform calls to runtime.chanRecv into channel receive operations.
-	for _, recvOp := range getUses(chanRecv) {
-		// recvOp must be a call instruction.
-		frame := asyncFuncs[recvOp.InstructionParent().Parent()]
-
-		// Yield to scheduler.
-		c.builder.SetInsertPointBefore(llvm.NextInstruction(recvOp))
-		continuePoint := c.builder.CreateCall(coroSuspendFunc, []llvm.Value{
-			llvm.ConstNull(c.ctx.TokenType()),
-			llvm.ConstInt(c.ctx.Int1Type(), 0, false),
-		}, "")
-		sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
-		wakeup := c.splitBasicBlock(sw, llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.received")
-		c.builder.SetInsertPointAtEnd(recvOp.InstructionParent())
-		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), wakeup)
-		sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), frame.cleanupBlock)
+	// eliminate noret
+	for _, inst := range getUses(noret) {
+		inst.EraseFromParentAsInstruction()
 	}
 
 	return true, c.lowerMakeGoroutineCalls()
@@ -661,8 +892,12 @@ func (c *Compiler) lowerMakeGoroutineCalls() error {
 		for i := 0; i < realCall.OperandsCount()-1; i++ {
 			params = append(params, realCall.Operand(i))
 		}
-		params[len(params)-1] = llvm.ConstPointerNull(c.i8ptrType) // parent coroutine handle (must be nil)
 		c.builder.SetInsertPointBefore(realCall)
+		if goroutine.InstructionParent().Parent() == c.mod.NamedFunction("runtime.getFakeCoroutine") {
+			params[len(params)-1] = llvm.Undef(c.i8ptrType)
+		} else {
+			params[len(params)-1] = c.createRuntimeCall("getFakeCoroutine", []llvm.Value{}, "") // parent coroutine handle (must not be nil)
+		}
 		c.builder.CreateCall(origFunc, params, "")
 		realCall.EraseFromParentAsInstruction()
 		inttoptrOut.EraseFromParentAsInstruction()

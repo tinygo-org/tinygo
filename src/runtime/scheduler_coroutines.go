@@ -46,11 +46,16 @@ func (t *task) state() *taskState {
 
 func makeGoroutine(uintptr) uintptr
 
+func badbad(*task) *task
+
 // Compiler stub to get the current goroutine. Calls to this function are
 // removed in the goroutine lowering pass.
-func getCoroutine() *task
+//go:noinline
+func getCoroutine() *task {
+	return badbad(nil)
+}
 
-// getTaskStatePtr is a helper function to set the current .ptr field of a
+// setTaskStatePtr is a helper function to set the current .ptr field of a
 // coroutine promise.
 func setTaskStatePtr(t *task, value unsafe.Pointer) {
 	t.state().ptr = value
@@ -65,34 +70,9 @@ func getTaskStatePtr(t *task) unsafe.Pointer {
 	return t.state().ptr
 }
 
-//go:linkname sleep time.Sleep
-func sleep(d int64) {
-	sleepTicks(timeUnit(d / tickMicros))
-}
-
-// deadlock is called when a goroutine cannot proceed any more, but is in theory
-// not exited (so deferred calls won't run). This can happen for example in code
-// like this, that blocks forever:
-//
-//     select{}
-//
-// The coroutine version is implemented directly in the compiler but it needs
-// this definition to work.
-func deadlock()
-
-// reactivateParent reactivates the parent goroutine. It is necessary in case of
-// the coroutine-based scheduler.
-func reactivateParent(t *task) {
-	activateTask(t)
-}
-
-// chanYield exits the current goroutine. Used in the channel implementation, to
-// suspend the current goroutine until it is reactivated by a channel operation
-// of a different goroutine. It is a no-op in the coroutine implementation.
-func chanYield() {
-	// Nothing to do here, simply returning from the channel operation also exits
-	// the goroutine temporarily.
-}
+// yield suspends execution of the current goroutine
+// any wakeups must be configured before calling yield
+func yield()
 
 // getSystemStackPointer returns the current stack pointer of the system stack.
 // This is always the current stack pointer.

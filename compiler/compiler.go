@@ -35,9 +35,12 @@ const tinygoPath = "github.com/tinygo-org/tinygo"
 // linkage until all TinyGo passes have finished.
 var functionsUsedInTransforms = []string{
 	"runtime.alloc",
+	"runtime.avrSleep",
 	"runtime.free",
-	"runtime.sleepTask",
-	"runtime.sleepCurrentTask",
+	"runtime.getCoroutine",
+	"runtime.getFakeCoroutine",
+	"runtime.getParentHandle",
+	"runtime.noret",
 	"runtime.setTaskStatePtr",
 	"runtime.getTaskStatePtr",
 	"runtime.activateTask",
@@ -1648,7 +1651,10 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			panic("unknown lookup type: " + expr.String())
 		}
 	case *ssa.MakeChan:
-		return c.emitMakeChan(expr)
+		elementSize := c.targetData.TypeAllocSize(c.getLLVMType(expr.Type().(*types.Chan).Elem()))
+		elementSizeValue := llvm.ConstInt(c.uintptrType, elementSize, false)
+		bufSize := c.getValue(frame, expr.Size)
+		return c.createRuntimeCall("chanMake", []llvm.Value{elementSizeValue, bufSize}, ""), nil
 	case *ssa.MakeClosure:
 		return c.parseMakeClosure(frame, expr)
 	case *ssa.MakeInterface:

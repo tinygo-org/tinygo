@@ -4,33 +4,11 @@ package compiler
 // or pseudo-operations that are lowered during goroutine lowering.
 
 import (
-	"fmt"
 	"go/types"
 
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
-
-// emitMakeChan returns a new channel value for the given channel type.
-func (c *Compiler) emitMakeChan(expr *ssa.MakeChan) (llvm.Value, error) {
-	chanType := c.getLLVMType(expr.Type())
-	size := c.targetData.TypeAllocSize(chanType.ElementType())
-	sizeValue := llvm.ConstInt(c.uintptrType, size, false)
-	ptr := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "chan.alloc")
-	ptr = c.builder.CreateBitCast(ptr, chanType, "chan")
-	// Set the elementSize field
-	elementSizePtr := c.builder.CreateGEP(ptr, []llvm.Value{
-		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-	}, "")
-	elementSize := c.targetData.TypeAllocSize(c.getLLVMType(expr.Type().(*types.Chan).Elem()))
-	if elementSize > 0xffff {
-		return ptr, c.makeError(expr.Pos(), fmt.Sprintf("element size is %d bytes, which is bigger than the maximum of %d bytes", elementSize, 0xffff))
-	}
-	elementSizeValue := llvm.ConstInt(c.ctx.Int16Type(), elementSize, false)
-	c.builder.CreateStore(elementSizeValue, elementSizePtr)
-	return ptr, nil
-}
 
 // emitChanSend emits a pseudo chan send operation. It is lowered to the actual
 // channel send operation during goroutine lowering.
@@ -44,8 +22,7 @@ func (c *Compiler) emitChanSend(frame *Frame, instr *ssa.Send) {
 	c.builder.CreateStore(chanValue, valueAlloca)
 
 	// Do the send.
-	coroutine := c.createRuntimeCall("getCoroutine", nil, "")
-	c.createRuntimeCall("chanSend", []llvm.Value{coroutine, ch, valueAllocaCast}, "")
+	c.createRuntimeCall("chanSend", []llvm.Value{ch, valueAllocaCast}, "")
 
 	// End the lifetime of the alloca.
 	// This also works around a bug in CoroSplit, at least in LLVM 8:
@@ -63,14 +40,11 @@ func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) llvm.Value {
 	valueAlloca, valueAllocaCast, valueAllocaSize := c.createTemporaryAlloca(valueType, "chan.value")
 
 	// Do the receive.
-	coroutine := c.createRuntimeCall("getCoroutine", nil, "")
-	c.createRuntimeCall("chanRecv", []llvm.Value{coroutine, ch, valueAllocaCast}, "")
+	commaOk := c.createRuntimeCall("chanRecv", []llvm.Value{ch, valueAllocaCast}, "")
 	received := c.builder.CreateLoad(valueAlloca, "chan.received")
 	c.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
 
 	if unop.CommaOk {
-		commaOk := c.createRuntimeCall("getTaskStateData", []llvm.Value{coroutine}, "chan.commaOk.wide")
-		commaOk = c.builder.CreateTrunc(commaOk, c.ctx.Int1Type(), "chan.commaOk")
 		tuple := llvm.Undef(c.ctx.StructType([]llvm.Type{valueType, c.ctx.Int1Type()}, false))
 		tuple = c.builder.CreateInsertValue(tuple, received, 0, "")
 		tuple = c.builder.CreateInsertValue(tuple, commaOk, 1, "")

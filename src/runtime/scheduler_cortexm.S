@@ -17,7 +17,7 @@ tinygo_startTask:
     blx   r4
 
     // After return, exit this goroutine. This is a tail call.
-    bl    runtime.Goexit
+    bl    runtime.yield
 
 .section .text.tinygo_swapTask
 .global  tinygo_swapTask

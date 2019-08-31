@@ -1,7 +1,7 @@
 {
-	"build-tags": ["avr", "baremetal", "linux", "arm"],
+	"build-tags": ["avr", "baremetal"],
 	"goos": "linux",
-	"goarch": "arm",
+	"goarch": "avr",
 	"compiler": "avr-gcc",
 	"gc": "leaking",
 	"linker": "avr-gcc",
