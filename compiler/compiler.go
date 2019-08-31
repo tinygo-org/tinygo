@@ -347,12 +347,6 @@ func (c *Compiler) Compile(mainPath string) []error {
 	// After all packages are imported, add a synthetic initializer function
 	// that calls the initializer of each package.
 	initFn := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function))
-	if initFn == nil {
-		panic("synthetic init function is nil")
-	}
-	if initFn.LLVMFn.IsNil() {
-		panic("synthetic init function LLVMFn is nil")
-	}
 	initFn.LLVMFn.SetLinkage(llvm.InternalLinkage)
 	initFn.LLVMFn.SetUnnamedAddr(true)
 	if c.Debug {
@@ -370,11 +364,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 	// Conserve for goroutine lowering. Without marking these as external, they
 	// would be optimized away.
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
-	if realMain.IsNil() {
-		panic("realMain is nil so setting external linkage will result in a failure in EmitToMemoryBuffer")
-	} else {
-		realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
-	}
+	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
 
 	// Make sure these functions are kept in tact during TinyGo transformation passes.
 	for _, name := range functionsUsedInTransforms {
@@ -866,9 +856,6 @@ func (c *Compiler) parseFunc(frame *Frame) {
 		return
 	}
 	if !frame.fn.IsExported() {
-		if frame.fn.LLVMFn.IsNil() {
-			panic("LLVM fn is nil")
-		}
 		frame.fn.LLVMFn.SetLinkage(llvm.InternalLinkage)
 		frame.fn.LLVMFn.SetUnnamedAddr(true)
 	}
@@ -2288,9 +2275,6 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 			objname := prefix + "$string"
 			global := llvm.AddGlobal(c.mod, llvm.ArrayType(c.ctx.Int8Type(), len(str)), objname)
 			global.SetInitializer(c.ctx.ConstString(str, false))
-			if global.IsNil() {
-				panic("global is nil")
-			}
 			global.SetLinkage(llvm.InternalLinkage)
 			global.SetGlobalConstant(true)
 			global.SetUnnamedAddr(true)

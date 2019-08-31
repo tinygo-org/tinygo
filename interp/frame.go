@@ -306,9 +306,6 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				globalValue := llvm.ConstArray(fr.Mod.Context().Int8Type(), vals)
 				global := llvm.AddGlobal(fr.Mod, globalType, fr.pkgName+"$stringconcat")
 				global.SetInitializer(globalValue)
-				if global.IsNil() {
-					panic("global near stringconcat is nil")
-				}
 				global.SetLinkage(llvm.InternalLinkage)
 				global.SetGlobalConstant(true)
 				global.SetUnnamedAddr(true)
@@ -332,9 +329,6 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				globalValue := llvm.ConstArray(fr.Mod.Context().Int8Type(), vals)
 				global := llvm.AddGlobal(fr.Mod, globalType, fr.pkgName+"$bytes")
 				global.SetInitializer(globalValue)
-				if global.IsNil() {
-					panic("gloabl near $bytes is nil")
-				}
 				global.SetLinkage(llvm.InternalLinkage)
 				global.SetGlobalConstant(true)
 				global.SetUnnamedAddr(true)

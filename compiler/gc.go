@@ -372,9 +372,6 @@ func (c *Compiler) addGlobalsBitmap() bool {
 
 	globalsBundleType := c.ctx.StructType(trackedGlobalTypes, false)
 	globalsBundle := llvm.AddGlobal(c.mod, globalsBundleType, "tinygo.trackedGlobals")
-	if globalsBundle.IsNil() {
-		panic("globalsBundle is nil")
-	}
 	globalsBundle.SetLinkage(llvm.InternalLinkage)
 	globalsBundle.SetUnnamedAddr(true)
 	initializer := llvm.Undef(globalsBundleType)

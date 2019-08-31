@@ -67,9 +67,6 @@ func (c *Compiler) createGoroutineStartWrapper(fn llvm.Value) llvm.Value {
 		// Create the wrapper.
 		wrapperType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.i8ptrType}, false)
 		wrapper = llvm.AddFunction(c.mod, name+"$gowrapper", wrapperType)
-		if wrapper.IsNil() {
-			panic("wrapper ($gowrapper) is nil")
-		}
 		wrapper.SetLinkage(llvm.PrivateLinkage)
 		wrapper.SetUnnamedAddr(true)
 		entry := c.ctx.AddBasicBlock(wrapper, "entry")

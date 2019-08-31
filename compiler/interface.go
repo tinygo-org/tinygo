@@ -32,9 +32,6 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, pos token.
 		itfConcreteTypeGlobal = llvm.AddGlobal(c.mod, typeInInterface, "typeInInterface:"+itfTypeCodeGlobal.Name())
 		itfConcreteTypeGlobal.SetInitializer(llvm.ConstNamedStruct(typeInInterface, []llvm.Value{itfTypeCodeGlobal, itfMethodSetGlobal}))
 		itfConcreteTypeGlobal.SetGlobalConstant(true)
-		if itfConcreteTypeGlobal.IsNil() {
-			panic("itfConcreteTypeGlobal is nil")
-		}
 		itfConcreteTypeGlobal.SetLinkage(llvm.PrivateLinkage)
 	}
 	itfTypeCode := c.builder.CreatePtrToInt(itfConcreteTypeGlobal, c.uintptrType, "")
@@ -84,9 +81,6 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 				globalValue = llvm.ConstInsertValue(globalValue, lengthValue, []uint32{1})
 			}
 			global.SetInitializer(globalValue)
-			if global.IsNil() {
-				panic("global set initializer is nil")
-			}
 			global.SetLinkage(llvm.PrivateLinkage)
 		}
 		global.SetGlobalConstant(true)
@@ -107,9 +101,6 @@ func (c *Compiler) makeStructTypeFields(typ *types.Struct) llvm.Value {
 		fieldGlobalValue := llvm.ConstNull(runtimeStructField)
 		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, c.getTypeCode(typ.Field(i).Type()), []uint32{0})
 		fieldName := c.makeGlobalArray([]byte(typ.Field(i).Name()), "reflect/types.structFieldName", c.ctx.Int8Type())
-		if fieldName.IsNil() {
-			panic("fieldName is nil")
-		}
 		fieldName.SetLinkage(llvm.PrivateLinkage)
 		fieldName.SetUnnamedAddr(true)
 		fieldName = llvm.ConstGEP(fieldName, []llvm.Value{
@@ -135,9 +126,6 @@ func (c *Compiler) makeStructTypeFields(typ *types.Struct) llvm.Value {
 	}
 	structGlobal.SetInitializer(structGlobalValue)
 	structGlobal.SetUnnamedAddr(true)
-	if structGlobal.IsNil() {
-		panic("structGlobal is nil")
-	}
 	structGlobal.SetLinkage(llvm.PrivateLinkage)
 	return structGlobal
 }
@@ -280,9 +268,6 @@ func (c *Compiler) getTypeMethodSet(typ types.Type) llvm.Value {
 	global = llvm.AddGlobal(c.mod, arrayType, typ.String()+"$methodset")
 	global.SetInitializer(value)
 	global.SetGlobalConstant(true)
-	if global.IsNil() {
-		panic("global SetGlobalConstant is nil")
-	}
 	global.SetLinkage(llvm.PrivateLinkage)
 	return llvm.ConstGEP(global, []llvm.Value{zero, zero})
 }
@@ -309,9 +294,6 @@ func (c *Compiler) getInterfaceMethodSet(typ *types.Named) llvm.Value {
 	global = llvm.AddGlobal(c.mod, value.Type(), typ.String()+"$interface")
 	global.SetInitializer(value)
 	global.SetGlobalConstant(true)
-	if global.IsNil() {
-		panic("global below menthods is nil")
-	}
 	global.SetLinkage(llvm.PrivateLinkage)
 	return llvm.ConstGEP(global, []llvm.Value{zero, zero})
 }
@@ -497,9 +479,6 @@ func (c *Compiler) createInterfaceInvokeWrapper(state interfaceInvokeWrapper) {
 	wrapper := state.wrapper
 	fn := state.fn
 	receiverType := state.receiverType
-	if wrapper.IsNil() {
-		panic("wrapper createInterfaceInvokeWrapper is nil")
-	}
 	wrapper.SetLinkage(llvm.InternalLinkage)
 	wrapper.SetUnnamedAddr(true)
 

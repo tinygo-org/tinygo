@@ -164,18 +164,12 @@ func (c *Compiler) lowerTasks() error {
 		c.createCall(realMain, params, "")
 		// runtime.Goexit isn't needed so let it be optimized away by
 		// globalopt.
-		if c.mod.NamedFunction("runtime.Goexit").IsNil() {
-			panic("runtime.Goexit is nil")
-		}
 		c.mod.NamedFunction("runtime.Goexit").SetLinkage(llvm.InternalLinkage)
 	}
 	mainCall.EraseFromParentAsInstruction()
 
 	// main.main was set to external linkage during IR construction. Set it to
 	// internal linkage to enable interprocedural optimizations.
-	if realMain.IsNil() {
-		panic("realMain is nil")
-	}
 	realMain.SetLinkage(llvm.InternalLinkage)
 
 	return nil
@@ -220,9 +214,6 @@ func (c *Compiler) lowerCoroutines() error {
 
 	// main.main was set to external linkage during IR construction. Set it to
 	// internal linkage to enable interprocedural optimizations.
-	if realMain.IsNil() {
-		panic("real main is nil during IR const")
-	}
 	realMain.SetLinkage(llvm.InternalLinkage)
 
 	return nil
