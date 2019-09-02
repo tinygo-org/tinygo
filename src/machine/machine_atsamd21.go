@@ -1408,12 +1408,8 @@ func handleUSB() {
 					handleEndpoint(i)
 				}
 				setEPINTFLAG(i, epFlags)
-			case usb_CDC_ENDPOINT_IN, usb_CDC_ENDPOINT_ACM:
-				// set bank ready
-				setEPSTATUSCLR(i, sam.USB_DEVICE_EPSTATUSCLR_BK1RDY)
-
-				// ack transfer complete
-				setEPINTFLAG(i, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
+			case usb_CDC_ENDPOINT_ACM:
+				setEPINTFLAG(i, epFlags)
 			}
 		}
 	}
@@ -1808,9 +1804,9 @@ func sendConfiguration(setup usbSetup) {
 
 		dif := NewInterfaceDescriptor(usb_CDC_DATA_INTERFACE, 2, usb_CDC_DATA_INTERFACE_CLASS, 0, 0)
 
-		in := NewEndpointDescriptor((usb_CDC_ENDPOINT_OUT | usbEndpointOut), usb_ENDPOINT_TYPE_BULK, usbEndpointPacketSize, 0)
+		out := NewEndpointDescriptor((usb_CDC_ENDPOINT_OUT | usbEndpointOut), usb_ENDPOINT_TYPE_BULK, usbEndpointPacketSize, 0)
 
-		out := NewEndpointDescriptor((usb_CDC_ENDPOINT_IN | usbEndpointIn), usb_ENDPOINT_TYPE_BULK, usbEndpointPacketSize, 0)
+		in := NewEndpointDescriptor((usb_CDC_ENDPOINT_IN | usbEndpointIn), usb_ENDPOINT_TYPE_BULK, usbEndpointPacketSize, 0)
 
 		cdc := NewCDCDescriptor(iad,
 			cif,
@@ -1820,8 +1816,8 @@ func sendConfiguration(setup usbSetup) {
 			callManagement,
 			cifin,
 			dif,
-			in,
-			out)
+			out,
+			in)
 
 		sz := uint16(configDescriptorSize + cdcSize)
 		config := NewConfigDescriptor(sz, 2)
