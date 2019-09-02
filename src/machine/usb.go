@@ -316,8 +316,8 @@ func NewCDCDescriptor(i IADDescriptor, c InterfaceDescriptor,
 	callm CMFunctionalDescriptor,
 	ci EndpointDescriptor,
 	di InterfaceDescriptor,
-	inp EndpointDescriptor,
-	outp EndpointDescriptor) CDCDescriptor {
+	outp EndpointDescriptor,
+	inp EndpointDescriptor) CDCDescriptor {
 	return CDCDescriptor{iad: i,
 		cif:                  c,
 		header:               h,
@@ -352,8 +352,8 @@ func (d CDCDescriptor) Bytes() []byte {
 	buf.Write(d.callManagement.Bytes())
 	buf.Write(d.cifin.Bytes())
 	buf.Write(d.dif.Bytes())
-	buf.Write(d.in.Bytes())
 	buf.Write(d.out.Bytes())
+	buf.Write(d.in.Bytes())
 	return buf.Bytes()
 }
 
