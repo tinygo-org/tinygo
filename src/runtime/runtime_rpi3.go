@@ -3,7 +3,6 @@
 package runtime
 
 import dev "device/rpi3"
-import "runtime/volatile"
 
 //const GOOS = "linux"
 const tickMicros = int64(1)
@@ -24,20 +23,9 @@ func ticks() timeUnit {
 	return timeUnit(0) //current time in tickts
 }
 
-func abort() {
-	print("program aborted\n")
-	for {
-
-	}
-}
-
-func Abort() {
-	abort()
-}
-
 func preinit() {
-	UART0Init()
-	//UART0Init()
+	dev.UART0Init()
+	//MinuUARTInit() if you prefer the MiniUart
 	heapStart := 0x90000
 	heapEnd = 0xAFFF8
 	heapptr = uintptr(heapStart)
@@ -54,60 +42,11 @@ func main() {
 }
 
 func putchar(c byte) {
-	//MiniUARTSend(c)
-	UART0Send(c)
+	//MiniUARTSend(c) if you prefer the mini uart
+	dev.UART0Send(c)
 }
 
-// wait a given number of CPU cycles (at least)
-func WaitCycles(n int) {
-	for n > 0 {
-		dev.Asm("nop")
-		n--
-	}
-}
-
-func WaitMuSec(n uint32) {
-	var f, t, r uint64
-	dev.AsmFull(`mrs x28, cntfrq_el0
-		str x28,{f}
-		mrs x27, cntpct_el0
-		str x27,{t}`, map[string]interface{}{"f": &f, "t": &t})
-	//expires at t
-	t += ((f / 1000) * uint64(n)) / 1000
-	for r < t {
-		dev.AsmFull(`mrs x27, cntpct_el0
-			str x27,{r}`, map[string]interface{}{"r": &r})
-	}
-}
-
-func SysTimer() uint64 {
-	h := uint32(0xffffffff)
-	var l uint32
-
-	// the reads from MMIO are are two separate 32 bit reads
-	h = volatile.LoadUint32((*uint32)(dev.SYSTMR_HI))
-	l = volatile.LoadUint32((*uint32)(dev.SYSTMR_LO))
-	//the read of h can fail
-	again := volatile.LoadUint32((*uint32)(dev.SYSTMR_HI))
-	if h != again {
-		h = volatile.LoadUint32((*uint32)(dev.SYSTMR_HI))
-		l = volatile.LoadUint32((*uint32)(dev.SYSTMR_LO))
-	}
-	high := uint64(h << 32)
-	return high | uint64(l)
-}
-
-/**
- * Wait N microsec (with BCM System Timer)
- */
-func WaitMuSecST(n uint32) {
-	t := SysTimer()
-	// we must check if it's non-zero, because qemu does not emulate
-	// system timer, and returning constant zero would mean infinite loop
-	if t == 0 {
-		return
-	}
-	for SysTimer() < t+uint64(n) {
-
-	}
+// just send to device coode which ends up calling WFE
+func abort() {
+	dev.Abort()
 }
