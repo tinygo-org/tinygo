@@ -3,7 +3,6 @@
 package runtime
 
 import _ "unsafe"
-import dev "device/rpi3"
 
 //const GOOS = "linux"
 const tickMicros = int64(1)
@@ -25,14 +24,16 @@ func ticks() timeUnit {
 }
 
 func abort() {
-	dev.UARTPuts("program aborted")
+	print("program aborted\n")
 	for {
 
 	}
 }
 
 func preinit() {
-	dev.UARTInit()
+	UART0Init()
+	UART0Hex(0x1234)
+	//UART0Init()
 	heapStart := 0x90000
 	heapEnd = 0xAFFF8
 	heapptr = uintptr(heapStart)
@@ -49,5 +50,6 @@ func main() {
 }
 
 func putchar(c byte) {
-	dev.UARTSend(c)
+	//MiniUARTSend(c)
+	UART0Send(c)
 }

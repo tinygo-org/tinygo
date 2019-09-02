@@ -46,3 +46,54 @@ var AUX_MU_SCRATCH = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x0021505C))
 var AUX_MU_CNTL = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x00215060))
 var AUX_MU_STAT = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x00215064))
 var AUX_MU_BAUD = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x00215068))
+
+
+/*
+ * PL011 UART registers
+ */
+var UART0_DR =       unsafe.Pointer(uintptr(MMIO_BASE)+uintptr(0x00201000))
+var UART0_FR =       unsafe.Pointer(uintptr(MMIO_BASE)+uintptr(0x00201018))
+var UART0_IBRD =       unsafe.Pointer(uintptr(MMIO_BASE)+uintptr(0x00201024))
+var UART0_FBRD =       unsafe.Pointer(uintptr(MMIO_BASE)+uintptr(0x00201028))
+var UART0_LCRH =       unsafe.Pointer(uintptr(MMIO_BASE)+uintptr(0x0020102C))
+var UART0_CR =       unsafe.Pointer(uintptr(MMIO_BASE)+uintptr(0x00201030))
+var UART0_IMSC =       unsafe.Pointer(uintptr(MMIO_BASE)+uintptr(0x00201038))
+var UART0_ICR =       unsafe.Pointer(uintptr(MMIO_BASE)+uintptr(0x00201044))
+
+/*
+ * Mailboxes
+ */
+
+const MBOX_REQUEST   =  0
+
+/* channels */
+const MBOX_CH_POWER  = 0
+const MBOX_CH_FB     = 1
+const MBOX_CH_VUART  = 2
+const MBOX_CH_VCHIQ  = 3
+const MBOX_CH_LEDS   = 4
+const MBOX_CH_BTNS   = 5
+const MBOX_CH_TOUCH  = 6
+const MBOX_CH_COUNT  = 7
+const MBOX_CH_PROP   = 8
+
+/* tags */
+const MBOX_TAG_GETSERIAL =     0x10004
+const MBOX_TAG_SETCLKRATE =     0x38002
+const MBOX_TAG_LAST=           0
+
+
+/*
+ * mbox
+ */
+
+var VIDEOCORE_MBOX =       unsafe.Pointer(uintptr(MMIO_BASE)+uintptr(0x0000B880))
+var MBOX_READ =       unsafe.Pointer(uintptr(VIDEOCORE_MBOX)+uintptr(0x0))
+var MBOX_POLL =       unsafe.Pointer(uintptr(VIDEOCORE_MBOX)+uintptr(0x10))
+var MBOX_SENDER =       unsafe.Pointer(uintptr(VIDEOCORE_MBOX)+uintptr(0x14))
+var MBOX_STATUS =       unsafe.Pointer(uintptr(VIDEOCORE_MBOX)+uintptr(0x18))
+var MBOX_CONFIG =       unsafe.Pointer(uintptr(VIDEOCORE_MBOX)+uintptr(0x1C))
+var MBOX_WRITE =       unsafe.Pointer(uintptr(VIDEOCORE_MBOX)+uintptr(0x20))
+const MBOX_FULL =     0x80000000
+const MBOX_RESPONSE = 0x80000000
+const MBOX_EMPTY =    0x40000000
