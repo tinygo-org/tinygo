@@ -223,6 +223,25 @@ func UART0Hex(d uint32) {
 }
 
 /**
+ * Display a 64 bit binary value in hexadecimal
+ */
+func UART0Hex64(d uint64) {
+
+	for c := 60; c >= 0; c -= 4 {
+		// get highest tetrad
+		n := (d >> uint32(c)) & 0xF
+		// 0-9 => '0'-'9', 10-15 => 'A'-'F'
+		if n > 9 {
+			n += 0x37
+		} else {
+			n += 0x30
+		}
+		UART0Send(byte(n))
+	}
+	UART0Send('\n')
+}
+
+/**
  * Display a binary value in hexadecimal
  */
 func MiniUARTHex(d uint32) {

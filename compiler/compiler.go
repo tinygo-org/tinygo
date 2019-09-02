@@ -1323,11 +1323,11 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 	if fn := instr.StaticCallee(); fn != nil {
 		name := fn.RelString(nil)
 		switch {
-		case name == "device/arm.ReadRegister" || name == "device/riscv.ReadRegister":
+		case name == "device/arm.ReadRegister" || name == "device/riscv.ReadRegister" || name == "device/rpi3.ReadRegister":
 			return c.emitReadRegister(name, instr.Args)
-		case name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
+		case name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm" || name == "device/rpi3.Asm":
 			return c.emitAsm(instr.Args)
-		case name == "device/arm.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
+		case name == "device/arm.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull" || name == "device/rpi3.AsmFull":
 			return c.emitAsmFull(frame, instr)
 		case strings.HasPrefix(name, "device/arm.SVCall"):
 			return c.emitSVCall(frame, instr.Args)

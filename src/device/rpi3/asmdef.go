@@ -21,3 +21,22 @@ func Asm(asm string)
 //             "result": &dest,
 //         })
 func AsmFull(asm string, regs map[string]interface{})
+
+// ReadRegister returns the contents of the specified register. The register
+// must be a processor register, reachable with the "mov" instruction.
+func ReadRegister(name string) uintptr
+
+// Run the following system call (SVCall) with 0 arguments.
+func SVCall0(num uintptr) uintptr
+
+// Run the following system call (SVCall) with 1 argument.
+func SVCall1(num uintptr, a1 interface{}) uintptr
+
+// Run the following system call (SVCall) with 2 arguments.
+func SVCall2(num uintptr, a1, a2 interface{}) uintptr
+
+// Run the following system call (SVCall) with 3 arguments.
+func SVCall3(num uintptr, a1, a2, a3 interface{}) uintptr
+
+// Run the following system call (SVCall) with 4 arguments.
+func SVCall4(num uintptr, a1, a2, a3, a4 interface{}) uintptr
