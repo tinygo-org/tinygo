@@ -5,6 +5,9 @@ package rpi3
 // derived from the execellent tutorial by bzt
 // https://github.com/bztsrc/raspi3-tutorial/
 
+// also derived from excellent howto on OS
+// https://github.com/s-matyukevich/raspberry-pi-os
+
 import "unsafe"
 
 var MMIO_BASE = unsafe.Pointer(uintptr(0x3F000000))
@@ -103,3 +106,86 @@ const MBOX_EMPTY = 0x40000000
 
 var SYSTMR_LO = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x00003004))
 var SYSTMR_HI = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x00003008))
+
+/*
+ * System Control Register
+ */
+
+var SCTLR_RESERVED uint32 = (3 << 28) | (3 << 22) | (1 << 20) | (1 << 11)
+var SCTLR_EE_LITTLE_ENDIAN uint32 = (0 << 25)
+var SCTLR_EOE_LITTLE_ENDIAN uint32 = (0 << 24)
+var SCTLR_I_CACHE_DISABLED uint32 = (0 << 12)
+var SCTLR_D_CACHE_DISABLED uint32 = (0 << 2)
+var SCTLR_MMU_DISABLED uint32 = (0 << 0)
+var SCTLR_MMU_ENABLED uint32 = (1 << 0)
+var SCTLR_VALUE_MMU_DISABLED uint32 = (SCTLR_RESERVED | SCTLR_EE_LITTLE_ENDIAN | SCTLR_I_CACHE_DISABLED | SCTLR_D_CACHE_DISABLED | SCTLR_MMU_DISABLED)
+
+/*
+ * Interrupts for all 4 levels
+ */
+
+const S_FRAME_SIZE = 256 // size of all saved registers
+
+const SYNC_INVALID_EL1t = 0
+const IRQ_INVALID_EL1t = 1
+const FIQ_INVALID_EL1t = 2
+const ERROR_INVALID_EL1t = 3
+
+const SYNC_INVALID_EL1h = 4
+const IRQ_INVALID_EL1h = 5
+const FIQ_INVALID_EL1h = 6
+const ERROR_INVALID_EL1h = 7
+
+const SYNC_INVALID_EL0_64 = 8
+const IRQ_INVALID_EL0_64 = 9
+const FIQ_INVALID_EL0_64 = 10
+const ERROR_INVALID_EL0_64 = 11
+
+const SYNC_INVALID_EL0_32 = 12
+const IRQ_INVALID_EL0_32 = 13
+const FIQ_INVALID_EL0_32 = 14
+const ERROR_INVALID_EL0_32 = 15
+
+/*
+ * IRQ
+ */
+
+var IRQ_BASIC_PENDING = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x0000B200))
+var IRQ_PENDING_1 = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x0000B204))
+var IRQ_PENDING_2 = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x0000B208))
+var FIQ_CONTROL = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x0000B20C))
+var ENABLE_IRQS_1 = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x0000B210))
+var ENABLE_IRQS_2 = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x0000B214))
+var ENABLE_BASIC_IRQS = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x0000B218))
+var DISABLE_IRQS_1 = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x0000B21C))
+var DISABLE_IRQS_2 = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x0000B220))
+var DISABLE_BASIC_IRQS = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x0000B224))
+
+const SYSTEM_TIMER_IRQ_0 = (1 << 0)
+const SYSTEM_TIMER_IRQ_1 = (1 << 1)
+const SYSTEM_TIMER_IRQ_2 = (1 << 2)
+const SYSTEM_TIMER_IRQ_3 = (1 << 3)
+
+/*
+ * Timer
+ */
+
+var TIMER_CS = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x00003000))
+var TIMER_CLO = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x00003004))
+var TIMER_CHI = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x00003008))
+var TIMER_C0 = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x0000300C))
+var TIMER_C1 = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x00003010))
+var TIMER_C2 = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x00003014))
+var TIMER_C3 = unsafe.Pointer(uintptr(MMIO_BASE) + uintptr(0x00003018))
+
+const TIMER_CS_M0 = (1 << 0)
+const TIMER_CS_M1 = (1 << 1)
+const TIMER_CS_M2 = (1 << 2)
+const TIMER_CS_M3 = (1 << 3)
+
+/*
+ * These timer controls are probably not on the RPI3 hardware, just QEMU
+ * Note that these are at 0x40000000
+ */
+var CORE0_TIMER_IRQCNTL = unsafe.Pointer(uintptr(0x40000000) + uintptr(0x40))
+var CORE0_IRQ_SOURCE = unsafe.Pointer(uintptr(0x40000000) + uintptr(0x60))

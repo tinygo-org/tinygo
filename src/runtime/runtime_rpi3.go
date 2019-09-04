@@ -15,22 +15,25 @@ var x byte
 
 //go:export sleepticks sleepticks
 func sleepTicks(n timeUnit) {
-	//sleep this long
-	z = n
+	dev.WaitMuSec(uint32(n))
 }
 
 func ticks() timeUnit {
-	return timeUnit(0) //current time in tickts
+	return timeUnit(dev.SysTimer())
 }
 
 func preinit() {
+
 	dev.UART0Init()
 	//MinuUARTInit() if you prefer the MiniUart
+
+	// XXX what should we do for a bootloader?
 	heapStart := 0x90000
 	heapEnd = 0xAFFF8
 	heapptr = uintptr(heapStart)
 	globalsStart = 0xB0000
 	globalsEnd = 0xB0FF8
+
 }
 
 //go:export main
@@ -46,7 +49,7 @@ func putchar(c byte) {
 	dev.UART0Send(c)
 }
 
-// just send to device coode which ends up calling WFE
+// just send to device code which ends up calling WFE
 func abort() {
 	dev.Abort()
 }

@@ -9,7 +9,6 @@
 	"cflags": [
 		"--target=aarch64-elf",
 		"-Oz",
-		"-Werror",
 		"-fshort-enums",
 		"-nostdlibinc",
 		"-Wno-macro-redefined",
@@ -23,7 +22,8 @@
 		 "-T", "targets/rpi3.ld"
 	],
 	"extra-files": [
-		"src/device/rpi3/start.S"
+		"src/device/rpi3/start.S",
+		"src/device/rpi3/entry.S"
 	],
 	"gdb": ""
 }
