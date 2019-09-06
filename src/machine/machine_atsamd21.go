@@ -1401,15 +1401,15 @@ func handleUSB() {
 	for i = 1; i < uint32(len(endPoints)); i++ {
 		// Check if endpoint has a pending interrupt
 		epFlags := getEPINTFLAG(i)
-		if epFlags > 0 {
+		if (epFlags&sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 ||
+			(epFlags&sam.USB_DEVICE_EPINTFLAG_TRCPT1) > 0 {
 			switch i {
 			case usb_CDC_ENDPOINT_OUT:
-				if (epFlags & sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 {
-					handleEndpoint(i)
-				}
+				handleEndpoint(i)
 				setEPINTFLAG(i, epFlags)
-			case usb_CDC_ENDPOINT_ACM:
-				setEPINTFLAG(i, epFlags)
+			case usb_CDC_ENDPOINT_IN, usb_CDC_ENDPOINT_ACM:
+				setEPSTATUSCLR(i, sam.USB_DEVICE_EPSTATUSCLR_BK1RDY)
+				setEPINTFLAG(i, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
 			}
 		}
 	}
@@ -1631,17 +1631,19 @@ func cdcSetup(setup usbSetup) bool {
 
 		if setup.bRequest == usb_CDC_SET_LINE_CODING || setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
 			// auto-reset into the bootloader
-			if usbLineInfo.dwDTERate == 1200 && (usbLineInfo.lineState&0x01) == 0 {
-				// TODO: system reset
+			if usbLineInfo.dwDTERate == 1200 && usbLineInfo.lineState&usb_CDC_LINESTATE_DTR == 0 {
+				ResetProcessor()
 			} else {
 				// TODO: cancel any reset
 			}
+			sendZlp(0)
 		}
 
 		if setup.bRequest == usb_CDC_SEND_BREAK {
 			// TODO: something with this value?
 			// breakValue = ((uint16_t)setup.wValueH << 8) | setup.wValueL;
 			// return false;
+			sendZlp(0)
 		}
 		return true
 	}
@@ -1662,53 +1664,41 @@ func sendUSBPacket(ep uint32, data []byte) {
 }
 
 func receiveUSBControlPacket() []byte {
-	// set ready to receive data
+	// address
+	usbEndpointDescriptors[0].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[0]))))
+
+	// set byte count to zero
+	usbEndpointDescriptors[0].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+
+	// set ready for next data
 	setEPSTATUSCLR(0, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
-
-	// read the data
-	bytesread := armRecvCtrlOUT(0)
-
-	// return the data
-	data := make([]byte, 0, bytesread)
-	copy(data, udd_ep_out_cache_buffer[0][:bytesread])
-	return data
-}
-
-func armRecvCtrlOUT(ep uint32) uint32 {
-	// Set output address to receive data
-	usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
-
-	// set multi-packet size which is total expected number of bytes to receive.
-	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.SetBits((8 << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos) |
-		uint32(epPacketSize(64)<<usb_DEVICE_PCKSIZE_SIZE_Pos))
-
-	// clear byte count of bytes received so far.
-	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
-
-	// clear ready state to start transfer
-	setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
 
 	// Wait until OUT transfer is ready.
 	timeout := 3000
-	for (getEPSTATUS(ep) & sam.USB_DEVICE_EPSTATUS_BK0RDY) == 0 {
+	for (getEPSTATUS(0) & sam.USB_DEVICE_EPSTATUS_BK0RDY) == 0 {
 		timeout--
 		if timeout == 0 {
-			return 0
+			return []byte{}
 		}
 	}
 
 	// Wait until OUT transfer is completed.
-	timeout = 3000
-	for (getEPINTFLAG(ep) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) == 0 {
+	timeout = 300000
+	for (getEPINTFLAG(0) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) == 0 {
 		timeout--
 		if timeout == 0 {
-			return 0
+			return []byte{}
 		}
 	}
 
-	// return number of bytes received
-	return (usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.Get() >>
-		usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask
+	// get data
+	bytesread := uint32((usbEndpointDescriptors[0].DeviceDescBank[0].PCKSIZE.Get() >>
+		usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)
+
+	data := make([]byte, bytesread)
+	copy(data, udd_ep_out_cache_buffer[0][:])
+
+	return data
 }
 
 // sendDescriptor creates and sends the various USB descriptor types that
@@ -2082,4 +2072,16 @@ func setEPINTENSET(ep uint32, val uint8) {
 	default:
 		return
 	}
+}
+
+// ResetProcessor should perform a system reset in preperation
+// to switch to the bootloader to flash new firmware.
+func ResetProcessor() {
+	arm.DisableInterrupts()
+
+	// Perform magic reset into bootloader, as mentioned in
+	// https://github.com/arduino/ArduinoCore-samd/issues/197
+	*(*uint32)(unsafe.Pointer(uintptr(0x20007FFC))) = 0x07738135
+
+	arm.SystemReset()
 }
