@@ -195,44 +195,32 @@ func addSleepTask(t *task, duration int64) {
 			panic("runtime: addSleepTask: expected next task to be nil")
 		}
 	}
-	state := t.state()
-	state.data = uint(duration / tickMicros) // TODO: longer durations
+	t.state().data = uint(duration / tickMicros) // TODO: longer durations
 	now := ticks()
 	if sleepQueue == nil {
 		scheduleLog("  -> sleep new queue")
-		// Create new linked list for the sleep queue.
-		sleepQueue = t
+
+		// set new base time
 		sleepQueueBaseTime = now
-		return
 	}
 
-	// Insert at front of sleep queue.
-	if state.data < sleepQueue.state().data {
-		scheduleLog("  -> sleep at start")
-		sleepQueue.state().data -= state.data
-		state.next = sleepQueue
-		sleepQueue = t
-		return
-	}
-
-	// Add to sleep queue (in the middle or at the end).
-	queueIndex := sleepQueue
-	for {
-		state.data -= queueIndex.state().data
-		if queueIndex.state().next == nil || queueIndex.state().data > state.data {
-			if queueIndex.state().next == nil {
-				scheduleLog("  -> sleep at end")
-				state.next = nil
-			} else {
-				scheduleLog("  -> sleep in middle")
-				state.next = queueIndex.state().next
-				state.next.state().data -= state.data
-			}
-			queueIndex.state().next = t
+	// Add to sleep queue.
+	q := &sleepQueue
+	for ; *q != nil; q = &((*q).state()).next {
+		if t.state().data < (*q).state().data {
+			// this will finish earlier than the next - insert here
 			break
+		} else {
+			// this will finish later - adjust delay
+			t.state().data -= (*q).state().data
 		}
-		queueIndex = queueIndex.state().next
 	}
+	if *q != nil {
+		// cut delay time between this sleep task and the next
+		(*q).state().data -= t.state().data
+	}
+	t.state().next = *q
+	*q = t
 }
 
 // Run the scheduler until all tasks have finished.
@@ -268,8 +256,11 @@ func scheduler() {
 			timeLeft := timeUnit(sleepQueue.state().data) - (now - sleepQueueBaseTime)
 			if schedulerDebug {
 				println("  sleeping...", sleepQueue, uint(timeLeft))
+				for t := sleepQueue; t != nil; t = t.state().next {
+					println("    task sleeping:", t, timeUnit(t.state().data))
+				}
 			}
-			sleepTicks(timeUnit(timeLeft))
+			sleepTicks(timeLeft)
 			if asyncScheduler {
 				// The sleepTicks function above only sets a timeout at which
 				// point the scheduler will be called again. It does not really
