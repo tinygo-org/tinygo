@@ -155,14 +155,15 @@ func UART0Send(c byte) {
 	volatile.StoreUint32((*uint32)(UART0_DR), uint32(c))
 }
 
-/**
- * Receive a character
- */
+func UART0DataAvailable() bool {
+	return (volatile.LoadUint32((*uint32)(UART0_FR)) & 0x10) == 0
+}
+
 func UART0Getc() byte {
 	var r byte
 	var a = uint32(0)
 	for {
-		if (volatile.LoadUint32((*uint32)(UART0_FR)) & 0x10) != 0 {
+		if (volatile.LoadUint32((*uint32)(UART0_FR)) & 0x10) == 0 {
 			break
 		}
 		a = volatile.LoadUint32(&a) + 1

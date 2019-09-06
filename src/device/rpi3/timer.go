@@ -202,21 +202,8 @@ func QEMUHandleTimerInterrupt() {
 	EnableTimerIRQ()
 }
 
-// uint32_t cntvct;
-// uint32_t val;
-//
-// disable_irq();
-// if (read_core0timer_pending() & 0x08 ) {
-// 		uart_puts("handler CNTV_TVAL: ");
-// 		val = read_cntv_tval();
-// 		uart_hex_puts(val);
-//
-// 		write_cntv_tval(cntfrq);    // clear cntv interrupt and set next 1sec timer.
-//
-// 		uart_puts("handler CNTVCT   : ");
-// 		cntvct = read_cntvct();
-// 		uart_hex_puts(cntvct);
-// }
-// enable_irq();
-// return;
-// }
+func QEMUTryExit() {
+	Asm(`ldr x0,0x18
+	ldr x1,=0x20026
+	svc =0x00123456`)
+}

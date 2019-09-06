@@ -18,9 +18,9 @@
 		"-fdata-sections"
 	],
 	"ldflags": [
-		"--gc-sections",
-		 "-T", "targets/rpi3.ld"
+		"--gc-sections"
 	],
+	"linkerscript": "targets/rpi3.ld",
 	"extra-files": [
 		"src/device/rpi3/start.S",
 		"src/device/rpi3/entry.S"
