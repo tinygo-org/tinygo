@@ -192,6 +192,11 @@ func (a ADC) Get() uint16 {
 	sam.ADC.SWTRIG.SetBits(sam.ADC_SWTRIG_START)
 	waitADCSync()
 
+	// wait for first conversion to finish to fix same issue as
+	// https://github.com/arduino/ArduinoCore-samd/issues/446
+	for !sam.ADC.INTFLAG.HasBits(sam.ADC_INTFLAG_RESRDY) {
+	}
+
 	// Clear the Data Ready flag
 	sam.ADC.INTFLAG.SetBits(sam.ADC_INTFLAG_RESRDY)
 	waitADCSync()
