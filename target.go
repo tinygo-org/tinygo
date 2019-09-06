@@ -15,6 +15,11 @@ import (
 	"strings"
 )
 
+// TINYGOROOT is the path to the final location for checking tinygo files. If
+// unset (by a -X ldflag), then sourceDir() will fallback to the original build
+// directory.
+var TINYGOROOT string
+
 // Target specification for a given target. Used for bare metal targets.
 //
 // The target specification is mostly inspired by Rust:
@@ -268,6 +273,14 @@ func sourceDir() string {
 			os.Exit(1)
 		}
 		return root
+	}
+
+	if TINYGOROOT != "" {
+		if !isSourceDir(TINYGOROOT) {
+			fmt.Fprintln(os.Stderr, "error: TINYGOROOT was not set to the correct root")
+			os.Exit(1)
+		}
+		return TINYGOROOT
 	}
 
 	// Find root from executable path.
