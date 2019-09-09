@@ -55,6 +55,7 @@ type BuildConfig struct {
 	printSizes    string
 	cFlags        []string
 	ldFlags       []string
+	linkerScript  string
 	tags          string
 	wasmAbi       string
 	heapSize      int64
@@ -75,6 +76,10 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		cflags = append(cflags, strings.Replace(flag, "{root}", root, -1))
 	}
 
+	linkerScript := spec.LinkerScript
+	if config.linkerScript != "" {
+		linkerScript = config.linkerScript
+	}
 	// Merge and adjust LDFlags.
 	ldflags := append([]string{}, config.ldFlags...)
 	for _, flag := range spec.LDFlags {
@@ -246,6 +251,13 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		ldflags = append(ldflags, "-o", executable, objfile, "-L", root)
 		if spec.RTLib == "compiler-rt" {
 			ldflags = append(ldflags, librt)
+		}
+		lscript := spec.LinkerScript
+		if linkerScript != "" {
+			lscript = linkerScript //override via command line
+		}
+		if lscript != "" {
+			ldflags = append(ldflags, "-T", lscript)
 		}
 		if spec.GOARCH == "wasm" {
 			// Round heap size to next multiple of 65536 (the WebAssembly page
@@ -632,6 +644,7 @@ func main() {
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
+	linkerScript := flag.String("linkerscript", "", "use a non-standard linker script")
 	wasmAbi := flag.String("wasm-abi", "js", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	heapSize := flag.String("heap-size", "1M", "default heap size in bytes (only supported by WebAssembly)")
 
@@ -654,6 +667,7 @@ func main() {
 		debug:         !*nodebug,
 		printSizes:    *printSize,
 		tags:          *tags,
+		linkerScript:  *linkerScript,
 		wasmAbi:       *wasmAbi,
 	}
 

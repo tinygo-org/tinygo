@@ -20,7 +20,7 @@
  2:  // cpu id == 0
 
      // set stack before our code
-     mov     x1, #0x90000
+		 bl setupStack
 
      // set up EL1
      mrs     x0, CurrentEL
@@ -54,7 +54,7 @@
      msr     hcr_el2, x0
      mrs     x0, hcr_el2
 
-		 //insert default vectors
+		 //insert default vectors for core 0
 		 ldr x0, =vectors
      msr vbar_el1, x0
 
@@ -79,8 +79,14 @@
      sub     w2, w2, #1
      cbnz    w2, 3b
 
-		 // jump to C code, should not return
+		 // jump to GO code, should not return
  4:
  		bl      main
 		// for failsafe, halt this core too
   	wfe
+
+.weak setupStack
+.set setupStack, stackNoBL
+stackNoBL:
+	mov     x1, #0x90000
+	ret

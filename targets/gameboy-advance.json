@@ -19,9 +19,9 @@
 		"-ffunction-sections", "-fdata-sections"
 	],
 	"ldflags": [
-		"--gc-sections",
-		"-Ttargets/gameboy-advance.ld"
+		"--gc-sections"
 	],
+	"linkerscript":"targets/gameboy-advance.ld",
 	"extra-files": [
 		"targets/gameboy-advance.s"
 	],

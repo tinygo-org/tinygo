@@ -26,26 +26,27 @@ var TINYGOROOT string
 // https://doc.rust-lang.org/nightly/nightly-rustc/rustc_target/spec/struct.TargetOptions.html
 // https://github.com/shepmaster/rust-arduino-blink-led-no-core-with-cargo/blob/master/blink/arduino.json
 type TargetSpec struct {
-	Inherits   []string `json:"inherits"`
-	Triple     string   `json:"llvm-target"`
-	CPU        string   `json:"cpu"`
-	Features   []string `json:"features"`
-	GOOS       string   `json:"goos"`
-	GOARCH     string   `json:"goarch"`
-	BuildTags  []string `json:"build-tags"`
-	GC         string   `json:"gc"`
-	Scheduler  string   `json:"scheduler"`
-	Compiler   string   `json:"compiler"`
-	Linker     string   `json:"linker"`
-	RTLib      string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
-	CFlags     []string `json:"cflags"`
-	LDFlags    []string `json:"ldflags"`
-	ExtraFiles []string `json:"extra-files"`
-	Emulator   []string `json:"emulator"`
-	Flasher    string   `json:"flash"`
-	OCDDaemon  []string `json:"ocd-daemon"`
-	GDB        string   `json:"gdb"`
-	GDBCmds    []string `json:"gdb-initial-cmds"`
+	Inherits     []string `json:"inherits"`
+	Triple       string   `json:"llvm-target"`
+	CPU          string   `json:"cpu"`
+	Features     []string `json:"features"`
+	GOOS         string   `json:"goos"`
+	GOARCH       string   `json:"goarch"`
+	BuildTags    []string `json:"build-tags"`
+	GC           string   `json:"gc"`
+	Scheduler    string   `json:"scheduler"`
+	Compiler     string   `json:"compiler"`
+	Linker       string   `json:"linker"`
+	RTLib        string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
+	CFlags       []string `json:"cflags"`
+	LDFlags      []string `json:"ldflags"`
+	LinkerScript string   `json:linkerscript`
+	ExtraFiles   []string `json:"extra-files"`
+	Emulator     []string `json:"emulator"`
+	Flasher      string   `json:"flash"`
+	OCDDaemon    []string `json:"ocd-daemon"`
+	GDB          string   `json:"gdb"`
+	GDBCmds      []string `json:"gdb-initial-cmds"`
 }
 
 // copyProperties copies all properties that are set in spec2 into itself.
@@ -81,6 +82,9 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if spec2.RTLib != "" {
 		spec.RTLib = spec2.RTLib
+	}
+	if spec2.LinkerScript != "" {
+		spec.LinkerScript = spec2.LinkerScript
 	}
 	spec.CFlags = append(spec.CFlags, spec2.CFlags...)
 	spec.LDFlags = append(spec.LDFlags, spec2.LDFlags...)

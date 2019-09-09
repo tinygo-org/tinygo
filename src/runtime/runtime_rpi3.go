@@ -39,9 +39,27 @@ func preinit() {
 //go:export main
 func main() {
 	preinit()
+	primaryMain()
+}
+
+// main on non bootloader (the bootloader itself uses this path)
+func primaryMain() {
 	initAll()
 	callMain()
 	abort()
+}
+
+//go:export mainFromBootloader
+func mainFromBootloader() {
+	heapStart := dev.ReadRegister("x2")
+	heapEnd = heapStart + 0x8000
+	heapptr = uintptr(heapStart)
+	//globalsStart = 0xB0000
+	//globalsEnd = 0xB0FF8
+	// XXX FIXME XXX
+	// need to do something with time
+	//time:=dev.ReadRegister("x3")
+	primaryMain()
 }
 
 func putchar(c byte) {

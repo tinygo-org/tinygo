@@ -168,9 +168,10 @@ func UART0Getc() byte {
 		}
 		a = volatile.LoadUint32(&a) + 1
 	}
+skip:
 	r = byte(volatile.LoadUint32((*uint32)(UART0_DR)))
 	if r == '\r' {
-		return '\n'
+		goto skip
 	}
 	return r
 }
@@ -181,10 +182,6 @@ func UART0Getc() byte {
 func UART0Puts(s string) {
 
 	for _, c := range []byte(s) {
-		if c == '\n' {
-			UART0Send('\r')
-			continue
-		}
 		UART0Send(c)
 	}
 }
