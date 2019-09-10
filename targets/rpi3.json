@@ -22,8 +22,7 @@
 	],
 	"linkerscript": "targets/rpi3.ld",
 	"extra-files": [
-		"src/device/rpi3/start.S",
-		"src/device/rpi3/entry.S"
+		"src/device/rpi3/start.S"
 	],
 	"gdb": ""
 }

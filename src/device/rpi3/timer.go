@@ -150,6 +150,7 @@ func QEMUSetCounterTargetInterval(val uint32, fn func(uint32, uint64) uint32) {
 	AsmFull(`mov x28,{val}
 		msr cntv_tval_el0, x28`, map[string]interface{}{"val": val})
 	userCallbackFunc = fn
+	print("user callback function set\n")
 }
 
 func QEMUCounterTargetVal() uint32 {
@@ -190,13 +191,27 @@ func QEMUVirtualTimer() uint64 {
 //go:extern
 func QEMUHandleTimerInterrupt() {
 	DisableTimerIRQ()
+	//defer EnableTimerIRQ() --->  crashes the compiler
+	//defer func() {
+	// EnableTimerIRQ()
+	//}()                    ---> also crashes the compiler
+	// error:
+	// tinygo build --target=rpi3_bl -o kernel8.elf .
+	// Assertion failed: (From->getType() == To->getType()), function replaceDominatedUsesWith, file /Users/iansmith/tinygo.src/src/github.com/tinygo/tinygo/llvm-project/llvm/lib/Transforms/Utils/Local.cpp, line 2401.
+	// SIGABRT: abort
+	// PC=0x7fff6e16c2c6 m=3 sigcode=0
 	pending := QEMUCore0TimerPending()
 	if pending&0x08 != 0 {
 		val := QEMUCounterTargetVal()
 		virtual := QEMUVirtualTimer()
-		next := userCallbackFunc(val, virtual)
-		if next > 0 {
-			QEMUSetCounterTargetInterval(next, userCallbackFunc)
+		if userCallbackFunc == nil {
+			print("no int handler set for timer, aborting----\n")
+			Abort()
+		} else {
+			next := userCallbackFunc(val, virtual)
+			if next > 0 {
+				QEMUSetCounterTargetInterval(next, userCallbackFunc)
+			}
 		}
 	}
 	EnableTimerIRQ()
@@ -205,5 +220,5 @@ func QEMUHandleTimerInterrupt() {
 func QEMUTryExit() {
 	Asm(`ldr x0,0x18
 	ldr x1,=0x20026
-	svc =0x00123456`)
+	svc 0x123456`)
 }

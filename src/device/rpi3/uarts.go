@@ -5,8 +5,10 @@ package rpi3
 // derived from the execellent tutorial by bzt
 // https://github.com/bztsrc/raspi3-tutorial/
 
-import "unsafe"
-import "runtime/volatile"
+import (
+	"runtime/volatile"
+	"unsafe"
+)
 
 func align16bytes(ptr uintptr) uintptr {
 	return (ptr + 15) &^ 15
@@ -74,72 +76,6 @@ func MiniUARTPuts(s string) {
 		}
 		MiniUARTSend(c)
 	}
-}
-
-//this is really a C-style array with 36 elements of type uint32
-var mboxData [256]byte
-
-func UART0Init() {
-	volatile.StoreUint32((*uint32)(UART0_CR), 0) // turn off UART0
-
-	//32 bit units
-	mbox := align16bytes(uintptr(unsafe.Pointer(&mboxData)))
-
-	/* set up clock for consistent divisor values */
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(0*4))), 9*4)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(1*4))), MBOX_REQUEST)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(2*4))), MBOX_TAG_SETCLKRATE)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(3*4))), 12)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(4*4))), 8)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(5*4))), 2)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(6*4))), 4000000)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(7*4))), 0)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(8*4))), MBOX_TAG_LAST)
-	MboxCall(MBOX_CH_PROP)
-
-	/* map UART0 to GPIO pins */
-	var r uint32
-	r = volatile.LoadUint32((*uint32)(GPFSEL1))
-	r &= ^(uint32(uint32((7 << 12) | (7 << 15)))) // gpio14, gpio15
-	r |= (4 << 12) | (4 << 15)                    // alt0
-	volatile.StoreUint32((*uint32)(GPFSEL1), r)
-	volatile.StoreUint32((*uint32)(GPPUD), 0)
-
-	WaitCycles(150)
-	volatile.StoreUint32((*uint32)(GPPUDCLK0), (1<<14)|(1<<15))
-	WaitCycles(150)
-	volatile.StoreUint32((*uint32)(GPPUDCLK0), 0) // flush GPIO setup
-
-	volatile.StoreUint32((*uint32)(UART0_ICR), 0x7FF) //clear interrupts
-	volatile.StoreUint32((*uint32)(UART0_IBRD), 2)    //115200 baud
-	volatile.StoreUint32((*uint32)(UART0_FBRD), 0xB)
-	volatile.StoreUint32((*uint32)(UART0_LCRH), 3<<5) // 8n1
-	volatile.StoreUint32((*uint32)(UART0_CR), 0x301)  // enable Tx, Rx, FIFO
-}
-
-/**
- * Make a mailbox call. Returns true if the message has been returned successfully.
- */
-func MboxCall(ch byte) bool {
-	q := uint32(0)
-	mbox := uintptr(unsafe.Pointer(&mboxData)) //64 is bigger than 36 needed, but alloc produces only 4 byte aligned
-	//addrMbox := uintptr(unsafe.Pointer(mbox)) & uintptr(f)
-	//or on the channel number to he end
-	r := (uint32)(mbox | uintptr(uint64(ch)&0xF))
-	for volatile.LoadUint32((*uint32)(MBOX_STATUS))&MBOX_FULL != 0 {
-		volatile.StoreUint32(&q, volatile.LoadUint32(&q)+1)
-	}
-	volatile.StoreUint32((*uint32)(MBOX_WRITE), r)
-	for {
-		for volatile.LoadUint32((*uint32)(MBOX_STATUS))&MBOX_EMPTY != 0 {
-			volatile.StoreUint32(&q, volatile.LoadUint32(&q)+1)
-		}
-		if r == volatile.LoadUint32((*uint32)(MBOX_READ)) {
-			resp := volatile.LoadUint32((*uint32)(unsafe.Pointer(uintptr(mbox) + uintptr(1*4))))
-			return resp == MBOX_RESPONSE
-		}
-	}
-	return false
 }
 
 /**
@@ -242,4 +178,42 @@ func MiniUARTHex(d uint32) {
 		shiftRight -= 4
 	}
 	MiniUARTSend('\n')
+}
+
+func UART0Init() {
+	volatile.StoreUint32((*uint32)(UART0_CR), 0) // turn off UART0
+
+	//32 bit units
+	mbox := align16bytes(uintptr(unsafe.Pointer(&mboxData)))
+
+	/* set up clock for consistent divisor values */
+	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(0*4))), 9*4)
+	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(1*4))), MBOX_REQUEST)
+	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(2*4))), MBOX_TAG_SETCLKRATE)
+	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(3*4))), 12)
+	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(4*4))), 8)
+	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(5*4))), 2)
+	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(6*4))), 4000000)
+	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(7*4))), 0)
+	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(8*4))), MBOX_TAG_LAST)
+	MboxCall(MBOX_CH_PROP)
+
+	/* map UART0 to GPIO pins */
+	var r uint32
+	r = volatile.LoadUint32((*uint32)(GPFSEL1))
+	r &= ^(uint32(uint32((7 << 12) | (7 << 15)))) // gpio14, gpio15
+	r |= (4 << 12) | (4 << 15)                    // alt0
+	volatile.StoreUint32((*uint32)(GPFSEL1), r)
+	volatile.StoreUint32((*uint32)(GPPUD), 0)
+
+	WaitCycles(150)
+	volatile.StoreUint32((*uint32)(GPPUDCLK0), (1<<14)|(1<<15))
+	WaitCycles(150)
+	volatile.StoreUint32((*uint32)(GPPUDCLK0), 0) // flush GPIO setup
+
+	volatile.StoreUint32((*uint32)(UART0_ICR), 0x7FF) //clear interrupts
+	volatile.StoreUint32((*uint32)(UART0_IBRD), 2)    //115200 baud
+	volatile.StoreUint32((*uint32)(UART0_FBRD), 0xB)
+	volatile.StoreUint32((*uint32)(UART0_LCRH), 3<<5) // 8n1
+	volatile.StoreUint32((*uint32)(UART0_CR), 0x301)  // enable Tx, Rx, FIFO
 }
