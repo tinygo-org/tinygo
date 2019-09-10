@@ -33,6 +33,7 @@ var unexpectedInterruptNames = []string{
 //go:export abort
 func Abort() {
 	print("program aborted\n")
+	// QEMUTryExit()
 	for {
 
 	}
@@ -93,8 +94,7 @@ func WaitMuSecST(n uint32) {
 }
 
 /*
- * Timer on IRQ
- */
+ * This code refers to a separate time on the Broadcom chip.
 
 var curVal uint32 = 0
 
@@ -108,7 +108,7 @@ func HandleTimerIRQ(interval uint32) {
 	curVal += interval
 	volatile.StoreUint32((*uint32)(TIMER_C1), curVal)
 	volatile.StoreUint32((*uint32)(TIMER_CS), TIMER_CS_M1)
-}
+}*/
 
 func EnableTimerIRQ() {
 	Asm("msr daifclr, #2")
@@ -122,6 +122,7 @@ func EnableInterruptController() {
 	volatile.StoreUint32((*uint32)(ENABLE_IRQS_1), SYSTEM_TIMER_IRQ_1)
 }
 
+// the exported name is what connects it to the interrupt vector
 //go:export unexpectedInterrupt
 func UnexpectedInterrupt(n int, esr uint64, address uint64) {
 	if n < 0 || n >= len(unexpectedInterruptNames) {
@@ -133,7 +134,7 @@ func UnexpectedInterrupt(n int, esr uint64, address uint64) {
 }
 
 // get the counter frequency
-func QEMUCounterFreq() uint32 {
+func CounterFreq() uint32 {
 	var val uint32
 	AsmFull(`mrs x28, cntfrq_el0
 		str x28,{val}`, map[string]interface{}{"val": &val})
@@ -144,31 +145,28 @@ func QEMUCounterFreq() uint32 {
 var userCallbackFunc func(uint32, uint64) uint32
 
 // clears the interrupt and writes target value (which is a time distance from now)
-func QEMUSetCounterTargetInterval(val uint32, fn func(uint32, uint64) uint32) {
-	print("setting target value:")
-	UART0Hex(val)
+func SetCounterTargetInterval(val uint32, fn func(uint32, uint64) uint32) {
 	AsmFull(`mov x28,{val}
 		msr cntv_tval_el0, x28`, map[string]interface{}{"val": val})
 	userCallbackFunc = fn
-	print("user callback function set\n")
 }
 
-func QEMUCounterTargetVal() uint32 {
+func CounterTargetVal() uint32 {
 	var val uint32
 	AsmFull(`mrs x28,cntv_tval_el0
 		str x28,{val}`, map[string]interface{}{"val": &val})
 	return val
 }
 
-func QEMUCore0CounterToCore0Irq() {
+func Core0CounterToCore0Irq() {
 	volatile.StoreUint32((*uint32)(CORE0_TIMER_IRQCNTL), 0x08)
 }
 
-func QEMUEnableCounter() {
+func EnableCounter() {
 	Asm(`orr x29, xzr, #1
 		msr cntv_ctl_el0, x29`)
 }
-func QEMUDisableCounter() {
+func UDisableCounter() {
 	Asm("msr cntv_ctl_el0, #0")
 }
 
@@ -176,20 +174,21 @@ func WaitForInterrupt() {
 	Asm("wfi")
 }
 
-func QEMUCore0TimerPending() uint32 {
+func Core0TimerPending() uint32 {
 	return volatile.LoadUint32((*uint32)(CORE0_IRQ_SOURCE))
 }
 
-func QEMUVirtualTimer() uint64 {
+func VirtualTimer() uint64 {
 	var val uint64
 	AsmFull(`mrs x28, cntvct_el0
 		str x28,{val}`, map[string]interface{}{"val": &val})
 	return val
 }
 
+// the export name is what connects it to the list of interrupt handlers
 //go:export irq_el1h_handler
 //go:extern
-func QEMUHandleTimerInterrupt() {
+func HandleTimerInterrupt() {
 	DisableTimerIRQ()
 	//defer EnableTimerIRQ() --->  crashes the compiler
 	//defer func() {
@@ -200,25 +199,27 @@ func QEMUHandleTimerInterrupt() {
 	// Assertion failed: (From->getType() == To->getType()), function replaceDominatedUsesWith, file /Users/iansmith/tinygo.src/src/github.com/tinygo/tinygo/llvm-project/llvm/lib/Transforms/Utils/Local.cpp, line 2401.
 	// SIGABRT: abort
 	// PC=0x7fff6e16c2c6 m=3 sigcode=0
-	pending := QEMUCore0TimerPending()
+	pending := Core0TimerPending()
 	if pending&0x08 != 0 {
-		val := QEMUCounterTargetVal()
-		virtual := QEMUVirtualTimer()
+		val := CounterTargetVal()
+		virtual := VirtualTimer()
 		if userCallbackFunc == nil {
 			print("no int handler set for timer, aborting----\n")
 			Abort()
 		} else {
 			next := userCallbackFunc(val, virtual)
 			if next > 0 {
-				QEMUSetCounterTargetInterval(next, userCallbackFunc)
+				SetCounterTargetInterval(next, userCallbackFunc)
 			}
 		}
 	}
 	EnableTimerIRQ()
 }
 
-func QEMUTryExit() {
-	Asm(`ldr x0,0x18
-	ldr x1,=0x20026
-	svc 0x123456`)
-}
+// appears to be a bug in the compiler (LLVM) because it sys the svc code must be
+// a 16 bit value, but the ARM docs say it can be 24 bits (which would allow this one)
+// func QEMUTryExit() {
+// 	Asm(`ldr x0,0x18
+// 	ldr x1,=0x20026
+// 	svc 0x123456`)
+// }

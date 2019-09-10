@@ -7,7 +7,6 @@ package rpi3
 
 import (
 	"runtime/volatile"
-	"unsafe"
 )
 
 func align16bytes(ptr uintptr) uintptr {
@@ -184,18 +183,16 @@ func UART0Init() {
 	volatile.StoreUint32((*uint32)(UART0_CR), 0) // turn off UART0
 
 	//32 bit units
-	mbox := align16bytes(uintptr(unsafe.Pointer(&mboxData)))
 
-	/* set up clock for consistent divisor values */
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(0*4))), 9*4)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(1*4))), MBOX_REQUEST)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(2*4))), MBOX_TAG_SETCLKRATE)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(3*4))), 12)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(4*4))), 8)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(5*4))), 2)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(6*4))), 4000000)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(7*4))), 0)
-	volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(8*4))), MBOX_TAG_LAST)
+	mboxSetupData(9*4,
+		MBOX_REQUEST,
+		MBOX_TAG_SETCLKRATE,
+		12,
+		8,
+		2,
+		4000000,
+		0,
+		MBOX_TAG_LAST)
 	MboxCall(MBOX_CH_PROP)
 
 	/* map UART0 to GPIO pins */
