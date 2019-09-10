@@ -8,6 +8,9 @@ package machine
 
 import "device/sam"
 
+// used to reset into bootloader
+const RESET_MAGIC_VALUE = 0x07738135
+
 // GPIO Pins
 const (
 	RX0 Pin = PB23 // UART2 RX

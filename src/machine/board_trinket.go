@@ -4,6 +4,9 @@ package machine
 
 import "device/sam"
 
+// used to reset into bootloader
+const RESET_MAGIC_VALUE = 0xf01669ef
+
 // GPIO Pins
 const (
 	D0  = PA08 // PWM available
