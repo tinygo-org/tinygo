@@ -15,21 +15,21 @@ import (
 // ConvertELFFileToUF2File converts an ELF file to a UF2 file.
 func ConvertELFFileToUF2File(infile, outfile string) error {
 	// Read the .text segment.
-	_, data, err := ExtractROM(infile)
+	targetAddress, data, err := ExtractROM(infile)
 	if err != nil {
 		return err
 	}
 
-	output, _ := ConvertBinToUF2(data)
+	output, _ := ConvertBinToUF2(data, uint32(targetAddress))
 	return ioutil.WriteFile(outfile, output, 0644)
 }
 
 // ConvertBinToUF2 converts the binary bytes in input to UF2 formatted data.
-func ConvertBinToUF2(input []byte) ([]byte, int) {
+func ConvertBinToUF2(input []byte, targetAddr uint32) ([]byte, int) {
 	blocks := split(input, 256)
 	output := make([]byte, 0)
 
-	bl := NewUF2Block()
+	bl := NewUF2Block(targetAddr)
 	bl.SetNumBlocks(len(blocks))
 
 	for i := 0; i < len(blocks); i++ {
@@ -44,10 +44,9 @@ func ConvertBinToUF2(input []byte) ([]byte, int) {
 }
 
 const (
-	uf2MagicStart0  = 0x0A324655 // "UF2\n"
-	uf2MagicStart1  = 0x9E5D5157 // Randomly selected
-	uf2MagicEnd     = 0x0AB16F30 // Ditto
-	uf2StartAddress = 0x2000
+	uf2MagicStart0 = 0x0A324655 // "UF2\n"
+	uf2MagicStart1 = 0x9E5D5157 // Randomly selected
+	uf2MagicEnd    = 0x0AB16F30 // Ditto
 )
 
 // UF2Block is the structure used for each UF2 code block sent to device.
@@ -65,11 +64,11 @@ type UF2Block struct {
 }
 
 // NewUF2Block returns a new UF2Block struct that has been correctly populated
-func NewUF2Block() *UF2Block {
+func NewUF2Block(targetAddr uint32) *UF2Block {
 	return &UF2Block{magicStart0: uf2MagicStart0,
 		magicStart1: uf2MagicStart1,
 		magicEnd:    uf2MagicEnd,
-		targetAddr:  uf2StartAddress,
+		targetAddr:  targetAddr,
 		flags:       0x0,
 		familyID:    0x0,
 		payloadSize: 256,
