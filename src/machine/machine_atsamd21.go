@@ -2081,7 +2081,7 @@ func ResetProcessor() {
 
 	// Perform magic reset into bootloader, as mentioned in
 	// https://github.com/arduino/ArduinoCore-samd/issues/197
-	*(*uint32)(unsafe.Pointer(uintptr(0x20007FFC))) = 0x07738135
+	*(*uint32)(unsafe.Pointer(uintptr(0x20007FFC))) = RESET_MAGIC_VALUE
 
 	arm.SystemReset()
 }
