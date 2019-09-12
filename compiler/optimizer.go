@@ -22,6 +22,11 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		c.replacePanicsWithTrap() // -panic=trap
 	}
 
+	// run a check of all of our code
+	if c.VerifyIR {
+		c.checkModule()
+	}
+
 	// Run function passes for each function.
 	funcPasses := llvm.NewFunctionPassManagerForModule(c.mod)
 	defer funcPasses.Dispose()

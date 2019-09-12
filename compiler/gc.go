@@ -398,10 +398,10 @@ func (c *Compiler) addGlobalsBitmap() bool {
 	for i, b := range bitmapBytes {
 		bitmapValues[len(bitmapBytes)-i-1] = llvm.ConstInt(c.ctx.Int8Type(), uint64(b), false)
 	}
-	bitmapArray := llvm.ConstArray(llvm.ArrayType(c.ctx.Int8Type(), len(bitmapBytes)), bitmapValues)
+	bitmapArray := llvm.ConstArray(c.ctx.Int8Type(), bitmapValues)
 	bitmapNew := llvm.AddGlobal(c.mod, bitmapArray.Type(), "runtime.trackedGlobalsBitmap.tmp")
 	bitmapOld := c.mod.NamedGlobal("runtime.trackedGlobalsBitmap")
-	bitmapOld.ReplaceAllUsesWith(bitmapNew)
+	bitmapOld.ReplaceAllUsesWith(llvm.ConstBitCast(bitmapNew, bitmapOld.Type()))
 	bitmapNew.SetInitializer(bitmapArray)
 	bitmapNew.SetName("runtime.trackedGlobalsBitmap")
 

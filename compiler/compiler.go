@@ -59,6 +59,7 @@ type Config struct {
 	LDFlags       []string // ldflags to pass to cgo
 	ClangHeaders  string   // Clang built-in header include path
 	DumpSSA       bool     // dump Go SSA, for compiler debugging
+	VerifyIR      bool     // run extra checks on the IR
 	Debug         bool     // add debug symbols for gdb
 	GOROOT        string   // GOROOT
 	TINYGOROOT    string   // GOROOT for TinyGo
@@ -2743,7 +2744,7 @@ func (c *Compiler) ExternalInt64AsPtr() error {
 			// correct calling convention.
 			fn.SetLinkage(llvm.InternalLinkage)
 			fn.SetUnnamedAddr(true)
-			entryBlock := llvm.AddBasicBlock(externalFn, "entry")
+			entryBlock := c.ctx.AddBasicBlock(externalFn, "entry")
 			c.builder.SetInsertPointAtEnd(entryBlock)
 			var callParams []llvm.Value
 			if fnType.ReturnType() == int64Type {

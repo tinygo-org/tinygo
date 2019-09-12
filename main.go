@@ -50,6 +50,7 @@ type BuildConfig struct {
 	scheduler     string
 	printIR       bool
 	dumpSSA       bool
+	verifyIR      bool
 	debug         bool
 	printSizes    string
 	cFlags        []string
@@ -116,6 +117,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		ClangHeaders:  getClangHeaderPath(root),
 		Debug:         config.debug,
 		DumpSSA:       config.dumpSSA,
+		VerifyIR:      config.verifyIR,
 		TINYGOROOT:    root,
 		GOROOT:        goroot,
 		GOPATH:        getGopath(),
@@ -627,6 +629,7 @@ func main() {
 	scheduler := flag.String("scheduler", "", "which scheduler to use (coroutines, tasks)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
+	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
 	tags := flag.String("tags", "", "a space-separated list of extra build tags")
 	target := flag.String("target", "", "LLVM target | .json file with TargetSpec")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
@@ -653,6 +656,7 @@ func main() {
 		scheduler:     *scheduler,
 		printIR:       *printIR,
 		dumpSSA:       *dumpSSA,
+		verifyIR:      *verifyIR,
 		debug:         !*nodebug,
 		printSizes:    *printSize,
 		tags:          *tags,

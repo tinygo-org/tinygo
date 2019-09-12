@@ -165,7 +165,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 		inrange2 := c.builder.CreateICmp(llvm.IntSGT, syscallResult, llvm.ConstInt(c.uintptrType, 0xfffffffffffff000, true), "") // -4096
 		hasError := c.builder.CreateAnd(inrange1, inrange2, "")
 		errResult := c.builder.CreateSelect(hasError, c.builder.CreateSub(zero, syscallResult, ""), zero, "syscallError")
-		retval := llvm.Undef(llvm.StructType([]llvm.Type{c.uintptrType, c.uintptrType, c.uintptrType}, false))
+		retval := llvm.Undef(c.ctx.StructType([]llvm.Type{c.uintptrType, c.uintptrType, c.uintptrType}, false))
 		retval = c.builder.CreateInsertValue(retval, syscallResult, 0, "")
 		retval = c.builder.CreateInsertValue(retval, zero, 1, "")
 		retval = c.builder.CreateInsertValue(retval, errResult, 2, "")
@@ -181,7 +181,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 		zero := llvm.ConstInt(c.uintptrType, 0, false)
 		hasError := c.builder.CreateICmp(llvm.IntNE, syscallResult, llvm.ConstInt(c.uintptrType, 0, false), "")
 		errResult := c.builder.CreateSelect(hasError, syscallResult, zero, "syscallError")
-		retval := llvm.Undef(llvm.StructType([]llvm.Type{c.uintptrType, c.uintptrType, c.uintptrType}, false))
+		retval := llvm.Undef(c.ctx.StructType([]llvm.Type{c.uintptrType, c.uintptrType, c.uintptrType}, false))
 		retval = c.builder.CreateInsertValue(retval, syscallResult, 0, "")
 		retval = c.builder.CreateInsertValue(retval, zero, 1, "")
 		retval = c.builder.CreateInsertValue(retval, errResult, 2, "")
