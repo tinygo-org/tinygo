@@ -603,9 +603,9 @@ func (p *lowerInterfacesPass) createInterfaceImplementsFunc(itf *interfaceInfo) 
 	// TODO: debug info
 
 	// Create all used basic blocks.
-	entry := llvm.AddBasicBlock(fn, "entry")
-	thenBlock := llvm.AddBasicBlock(fn, "then")
-	elseBlock := llvm.AddBasicBlock(fn, "else")
+	entry := p.ctx.AddBasicBlock(fn, "entry")
+	thenBlock := p.ctx.AddBasicBlock(fn, "then")
+	elseBlock := p.ctx.AddBasicBlock(fn, "else")
 
 	// Add all possible types as cases.
 	p.builder.SetInsertPointAtEnd(entry)
@@ -661,11 +661,11 @@ func (p *lowerInterfacesPass) createInterfaceMethodFunc(itf *interfaceInfo, sign
 	// TODO: debug info
 
 	// Create entry block.
-	entry := llvm.AddBasicBlock(fn, "entry")
+	entry := p.ctx.AddBasicBlock(fn, "entry")
 
 	// Create default block and make it unreachable (which it is, because all
 	// possible types are checked).
-	defaultBlock := llvm.AddBasicBlock(fn, "default")
+	defaultBlock := p.ctx.AddBasicBlock(fn, "default")
 	p.builder.SetInsertPointAtEnd(defaultBlock)
 	p.builder.CreateUnreachable()
 
@@ -684,7 +684,7 @@ func (p *lowerInterfacesPass) createInterfaceMethodFunc(itf *interfaceInfo, sign
 
 	// Define all possible functions that can be called.
 	for _, typ := range itf.types {
-		bb := llvm.AddBasicBlock(fn, typ.name)
+		bb := p.ctx.AddBasicBlock(fn, typ.name)
 		sw.AddCase(llvm.ConstInt(p.uintptrType, typ.num, false), bb)
 
 		// The function we will redirect to when the interface has this type.

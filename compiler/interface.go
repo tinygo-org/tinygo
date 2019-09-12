@@ -110,12 +110,12 @@ func (c *Compiler) makeStructTypeFields(typ *types.Struct) llvm.Value {
 		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldName, []uint32{1})
 		if typ.Tag(i) != "" {
 			fieldTag := c.makeGlobalArray([]byte(typ.Tag(i)), "reflect/types.structFieldTag", c.ctx.Int8Type())
+			fieldTag.SetLinkage(llvm.PrivateLinkage)
+			fieldTag.SetUnnamedAddr(true)
 			fieldTag = llvm.ConstGEP(fieldTag, []llvm.Value{
 				llvm.ConstInt(llvm.Int32Type(), 0, false),
 				llvm.ConstInt(llvm.Int32Type(), 0, false),
 			})
-			fieldTag.SetLinkage(llvm.PrivateLinkage)
-			fieldTag.SetUnnamedAddr(true)
 			fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldTag, []uint32{2})
 		}
 		if typ.Field(i).Embedded() {

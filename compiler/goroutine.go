@@ -57,7 +57,7 @@ func (c *Compiler) createGoroutineStartWrapper(fn llvm.Value) llvm.Value {
 		name := fn.Name()
 		wrapper = c.mod.NamedFunction(name + "$gowrapper")
 		if !wrapper.IsNil() {
-			return c.builder.CreateIntToPtr(wrapper, c.uintptrType, "")
+			return c.builder.CreatePtrToInt(wrapper, c.uintptrType, "")
 		}
 
 		// Save the current position in the IR builder.
@@ -69,7 +69,7 @@ func (c *Compiler) createGoroutineStartWrapper(fn llvm.Value) llvm.Value {
 		wrapper = llvm.AddFunction(c.mod, name+"$gowrapper", wrapperType)
 		wrapper.SetLinkage(llvm.PrivateLinkage)
 		wrapper.SetUnnamedAddr(true)
-		entry := llvm.AddBasicBlock(wrapper, "entry")
+		entry := c.ctx.AddBasicBlock(wrapper, "entry")
 		c.builder.SetInsertPointAtEnd(entry)
 
 		// Create the list of params for the call.
@@ -107,7 +107,7 @@ func (c *Compiler) createGoroutineStartWrapper(fn llvm.Value) llvm.Value {
 		wrapper = llvm.AddFunction(c.mod, ".gowrapper", wrapperType)
 		wrapper.SetLinkage(llvm.InternalLinkage)
 		wrapper.SetUnnamedAddr(true)
-		entry := llvm.AddBasicBlock(wrapper, "entry")
+		entry := c.ctx.AddBasicBlock(wrapper, "entry")
 		c.builder.SetInsertPointAtEnd(entry)
 
 		// Get the list of parameters, with the extra parameters at the end.

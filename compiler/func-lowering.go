@@ -234,7 +234,7 @@ func (c *Compiler) addFuncLoweringSwitch(funcID, call llvm.Value, createCall fun
 	// The block that cannot be reached with correct funcValues (to help the
 	// optimizer).
 	c.builder.SetInsertPointBefore(call)
-	defaultBlock := llvm.AddBasicBlock(call.InstructionParent().Parent(), "func.default")
+	defaultBlock := c.ctx.AddBasicBlock(call.InstructionParent().Parent(), "func.default")
 	c.builder.SetInsertPointAtEnd(defaultBlock)
 	c.builder.CreateUnreachable()
 
@@ -247,7 +247,7 @@ func (c *Compiler) addFuncLoweringSwitch(funcID, call llvm.Value, createCall fun
 	nextBlock := c.splitBasicBlock(sw, llvm.NextBasicBlock(sw.InstructionParent()), "func.next")
 
 	// The 0 case, which is actually a nil check.
-	nilBlock := llvm.InsertBasicBlock(nextBlock, "func.nil")
+	nilBlock := c.ctx.InsertBasicBlock(nextBlock, "func.nil")
 	c.builder.SetInsertPointAtEnd(nilBlock)
 	c.createRuntimeCall("nilPanic", nil, "")
 	c.builder.CreateUnreachable()
@@ -265,7 +265,7 @@ func (c *Compiler) addFuncLoweringSwitch(funcID, call llvm.Value, createCall fun
 	phiValues := make([]llvm.Value, len(functions))
 	for i, fn := range functions {
 		// Insert a switch case.
-		bb := llvm.InsertBasicBlock(nextBlock, "func.call"+strconv.Itoa(fn.id))
+		bb := c.ctx.InsertBasicBlock(nextBlock, "func.call"+strconv.Itoa(fn.id))
 		c.builder.SetInsertPointAtEnd(bb)
 		result := createCall(fn.funcPtr, callParams)
 		c.builder.CreateBr(nextBlock)

@@ -116,6 +116,7 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 		opt:        "z",
 		printIR:    false,
 		dumpSSA:    false,
+		verifyIR:   true,
 		debug:      false,
 		printSizes: "",
 		wasmAbi:    "js",

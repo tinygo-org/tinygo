@@ -157,10 +157,10 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 	//     }
 
 	// Create loop.
-	loophead := llvm.AddBasicBlock(frame.fn.LLVMFn, "rundefers.loophead")
-	loop := llvm.AddBasicBlock(frame.fn.LLVMFn, "rundefers.loop")
-	unreachable := llvm.AddBasicBlock(frame.fn.LLVMFn, "rundefers.default")
-	end := llvm.AddBasicBlock(frame.fn.LLVMFn, "rundefers.end")
+	loophead := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "rundefers.loophead")
+	loop := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "rundefers.loop")
+	unreachable := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "rundefers.default")
+	end := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "rundefers.end")
 	c.builder.CreateBr(loophead)
 
 	// Create loop head:
@@ -192,7 +192,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 		// Create switch case, for example:
 		//     case 0:
 		//         // run first deferred call
-		block := llvm.AddBasicBlock(frame.fn.LLVMFn, "rundefers.callback")
+		block := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "rundefers.callback")
 		sw.AddCase(llvm.ConstInt(c.uintptrType, uint64(i), false), block)
 		c.builder.SetInsertPointAtEnd(block)
 		switch callback := callback.(type) {
