@@ -28,6 +28,7 @@ type Program struct {
 type Function struct {
 	*ssa.Function
 	LLVMFn    llvm.Value
+	module    string     // go:wasm-module
 	linkName  string     // go:linkname, go:export, go:interrupt
 	exported  bool       // go:export
 	nobounds  bool       // go:nobounds
@@ -229,6 +230,12 @@ func (f *Function) parsePragmas() {
 				}
 				f.linkName = parts[1]
 				f.exported = true
+			case "//go:wasm-module":
+				// Alternative comment for setting the import module.
+				if len(parts) != 2 {
+					continue
+				}
+				f.module = parts[1]
 			case "//go:inline":
 				f.inline = InlineHint
 			case "//go:noinline":
@@ -289,6 +296,11 @@ func (f *Function) IsInterrupt() bool {
 // Return the inline directive of this function.
 func (f *Function) Inline() InlineType {
 	return f.inline
+}
+
+// Return the module name if not the default.
+func (f *Function) Module() string {
+	return f.module
 }
 
 // Return the link name for this function.
