@@ -28,7 +28,7 @@ type Program struct {
 type Function struct {
 	*ssa.Function
 	LLVMFn    llvm.Value
-	module    string     // go:module, go:export
+	module    string     // go:wasm-module
 	linkName  string     // go:linkname, go:export, go:interrupt
 	exported  bool       // go:export
 	nobounds  bool       // go:nobounds
@@ -224,26 +224,18 @@ func (f *Function) parsePragmas() {
 			}
 			parts := strings.Fields(text)
 			switch parts[0] {
-			case "//go:module":
+			case "//go:export":
+				if len(parts) != 2 {
+					continue
+				}
+				f.linkName = parts[1]
+				f.exported = true
+			case "//go:wasm-module":
 				// Alternative comment for setting the import module.
 				if len(parts) != 2 {
 					continue
 				}
 				f.module = parts[1]
-			case "//go:export":
-				// Accept:
-				// [module] linkName
-				// where module is an optional WASM import module name.
-				switch len(parts) {
-				case 2:
-					f.linkName = parts[1]
-				case 3:
-					f.module = parts[1]
-					f.linkName = parts[2]
-				default:
-					continue
-				}
-				f.exported = true
 			case "//go:inline":
 				f.inline = InlineHint
 			case "//go:noinline":

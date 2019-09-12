@@ -2,9 +2,10 @@
 
 The examples here show two different ways of using WebAssembly with TinyGo:
 
-1. Defining and exporting functions via the `//go:export [module] <name>` directive. See
-[the export folder](./export) for an example of this.  `module` is optional and overrides
-the default module name of "env".
+1. Defining and exporting functions via the `//go:export <name>` directive. See
+[the export folder](./export) for an example of this.  Additionally, the Wasm
+module (which has a default value of `env`) can be specified using
+`//go:wasm-module <module>`.
 1. Defining and executing a `func main()`. This is similar to how the Go
 standard library implementation works. See [the main folder](./main) for an
 example of this.
