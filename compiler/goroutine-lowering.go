@@ -188,7 +188,13 @@ func (c *Compiler) lowerCoroutines() error {
 	// optionally followed by a call to runtime.scheduler().
 	c.builder.SetInsertPointBefore(mainCall)
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
-	c.builder.CreateCall(realMain, []llvm.Value{llvm.Undef(c.i8ptrType), c.createRuntimeCall("getFakeCoroutine", []llvm.Value{}, "")}, "")
+	var ph llvm.Value
+	if needsScheduler {
+		ph = c.createRuntimeCall("getFakeCoroutine", []llvm.Value{}, "")
+	} else {
+		ph = llvm.Undef(c.i8ptrType)
+	}
+	c.builder.CreateCall(realMain, []llvm.Value{llvm.Undef(c.i8ptrType), ph}, "")
 	if needsScheduler {
 		c.createRuntimeCall("scheduler", nil, "")
 	}
@@ -241,7 +247,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 	if len(worklist) == 0 {
 		// There are no blocking operations, so no need to transform anything.
-		return false, c.lowerMakeGoroutineCalls()
+		return false, c.lowerMakeGoroutineCalls(false)
 	}
 
 	// Find all async functions.
@@ -304,12 +310,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 	// Check whether a scheduler is needed.
 	makeGoroutine := c.mod.NamedFunction("runtime.makeGoroutine")
-	if c.GOOS == "js" && strings.HasPrefix(c.Triple, "wasm") {
-		// JavaScript always needs a scheduler, as in general no blocking
-		// operations are possible. Blocking operations block the browser UI,
-		// which is very bad.
-		needsScheduler = true
-	} else if c.GOARCH == "avr" {
+	if c.GOARCH == "avr" {
 		needsScheduler = false
 		getCoroutine := c.mod.NamedFunction("runtime.getCoroutine")
 		for _, inst := range getUses(getCoroutine) {
@@ -337,6 +338,9 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 				panic("expected const ptrtoint operand of runtime.makeGoroutine")
 			}
 			goroutine := ptrtoint.Operand(0)
+			if strings.HasPrefix(goroutine.Name(), "runtime.") {
+				continue
+			}
 			if _, ok := asyncFuncs[goroutine]; ok {
 				needsScheduler = true
 				break
@@ -345,10 +349,25 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 	}
 
 	if !needsScheduler {
+		// on wasm, we need to clear the resume function
+		if resume := c.mod.NamedFunction("resume"); !resume.IsNil() {
+			entry := resume.FirstBasicBlock()
+			delQueue := []llvm.Value{}
+			for inst := entry.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				delQueue = append(delQueue, inst)
+			}
+			for _, v := range delQueue {
+				v.ReplaceAllUsesWith(llvm.Undef(v.Type()))
+				v.EraseFromParentAsInstruction()
+			}
+			c.builder.SetInsertPointAtEnd(entry)
+			c.builder.CreateRetVoid()
+		}
+
 		// No scheduler is needed. Do not transform all functions here.
 		// However, make sure that all go calls (which are all non-async) are
 		// transformed into regular calls.
-		return false, c.lowerMakeGoroutineCalls()
+		return false, c.lowerMakeGoroutineCalls(false)
 	}
 
 	// replace indefinitely blocking yields
@@ -852,14 +871,14 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		inst.EraseFromParentAsInstruction()
 	}
 
-	return true, c.lowerMakeGoroutineCalls()
+	return true, c.lowerMakeGoroutineCalls(true)
 }
 
 // Lower runtime.makeGoroutine calls to regular call instructions. This is done
 // after the regular goroutine transformations. The started goroutines are
 // either non-blocking (in which case they can be called directly) or blocking,
 // in which case they will ask the scheduler themselves to be rescheduled.
-func (c *Compiler) lowerMakeGoroutineCalls() error {
+func (c *Compiler) lowerMakeGoroutineCalls(sched bool) error {
 	// The following Go code:
 	//   go startedGoroutine()
 	//
@@ -893,7 +912,7 @@ func (c *Compiler) lowerMakeGoroutineCalls() error {
 			params = append(params, realCall.Operand(i))
 		}
 		c.builder.SetInsertPointBefore(realCall)
-		if goroutine.InstructionParent().Parent() == c.mod.NamedFunction("runtime.getFakeCoroutine") {
+		if (!sched) || goroutine.InstructionParent().Parent() == c.mod.NamedFunction("runtime.getFakeCoroutine") {
 			params[len(params)-1] = llvm.Undef(c.i8ptrType)
 		} else {
 			params[len(params)-1] = c.createRuntimeCall("getFakeCoroutine", []llvm.Value{}, "") // parent coroutine handle (must not be nil)
@@ -902,6 +921,10 @@ func (c *Compiler) lowerMakeGoroutineCalls() error {
 		realCall.EraseFromParentAsInstruction()
 		inttoptrOut.EraseFromParentAsInstruction()
 		goroutine.EraseFromParentAsInstruction()
+	}
+
+	if !sched && len(getUses(c.mod.NamedFunction("runtime.getFakeCoroutine"))) > 0 {
+		panic("getFakeCoroutine used without scheduler")
 	}
 
 	return nil
