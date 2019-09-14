@@ -89,8 +89,8 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	if err != nil {
 		return fmt.Errorf("could not read version from GOROOT (%v): %v", goroot, err)
 	}
-	if major != 1 {
-		return fmt.Errorf("expected major version 1, got go%d.%d", major, minor)
+	if major != 1 || (minor != 11 && minor != 12) {
+		return fmt.Errorf("requires go version 1.11 or 1.12, got go%d.%d", major, minor)
 	}
 	for i := 1; i <= minor; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
