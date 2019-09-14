@@ -53,6 +53,7 @@ The following 15 microcontroller boards are currently supported:
 * [Arduino Uno](https://store.arduino.cc/arduino-uno-rev3)
 * [BBC micro:bit](https://microbit.org/)
 * [ST Micro STM32F103XX "Bluepill"](http://wiki.stm32duino.com/index.php?title=Blue_Pill)
+* [ST Micro "Nucleo F103RB"](https://www.st.com/en/evaluation-tools/nucleo-f103rb.html)
 * [ST Micro STM32F407 "Discovery"](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
 * [Digispark](http://digistump.com/products/1)
 * [Nordic Semiconductor PCA10031](https://www.nordicsemi.com/eng/Products/nRF51-Dongle)
