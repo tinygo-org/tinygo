@@ -126,6 +126,7 @@ smoketest:
 	tinygo build -size short -o test.elf -target=circuitplay-express examples/i2s
 	tinygo build -size short -o test.elf -target=gameboy-advance     examples/gba-display
 	tinygo build -size short -o test.elf -target=itsybitsy-m4        examples/blinky1
+	tinygo build -size short -o test.elf -target=nucleo-f103rb       examples/blinky1
 ifneq ($(AVR), 0)
 	tinygo build -size short -o test.elf -target=arduino             examples/blinky1
 	tinygo build -size short -o test.elf -target=digispark           examples/blinky1

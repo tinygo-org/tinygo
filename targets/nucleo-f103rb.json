@@ -1,0 +1,18 @@
+{
+  "inherits": ["cortex-m"],
+  "llvm-target": "armv7m-none-eabi",
+  "build-tags": ["nucleof103rb", "stm32f103xx", "stm32"],
+  "cflags": [
+    "--target=armv7m-none-eabi",
+    "-Qunused-arguments"
+  ],
+  "ldflags": [
+    "-T", "targets/stm32f103rb.ld"
+  ],
+  "extra-files": [
+    "src/device/stm32/stm32f103xx.s"
+  ],
+  "flash": "openocd -f interface/stlink-v2-1.cfg -f target/stm32f1x.cfg -c 'program {hex} reset exit'",
+  "ocd-daemon": ["openocd", "-f", "interface/stlink-v2-1.cfg", "-f", "target/stm32f1x.cfg"],
+  "gdb-initial-cmds": ["target remote :3333", "monitor halt", "load", "monitor reset", "c"]
+}
