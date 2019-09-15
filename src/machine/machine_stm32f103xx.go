@@ -202,24 +202,25 @@ func (spi SPI) Configure(config SPIConfig) {
 
 	var conf uint32
 
-	// set frequency
+	// set frequency dependent on PCLK2 prescaler (div 1)
 	switch config.Frequency {
 	case 125000:
-		conf |= stm32.SPI_BaudRatePrescaler_128
+		// Note: impossible to achieve lower frequency with current PCLK2!
+		conf |= stm32.SPI_BaudRatePrescaler_256
 	case 250000:
-		conf |= stm32.SPI_BaudRatePrescaler_64
+		conf |= stm32.SPI_BaudRatePrescaler_256
 	case 500000:
-		conf |= stm32.SPI_BaudRatePrescaler_32
-	case 1000000:
-		conf |= stm32.SPI_BaudRatePrescaler_16
-	case 2000000:
-		conf |= stm32.SPI_BaudRatePrescaler_8
-	case 4000000:
-		conf |= stm32.SPI_BaudRatePrescaler_4
-	case 8000000:
-		conf |= stm32.SPI_BaudRatePrescaler_2
-	default:
 		conf |= stm32.SPI_BaudRatePrescaler_128
+	case 1000000:
+		conf |= stm32.SPI_BaudRatePrescaler_64
+	case 2000000:
+		conf |= stm32.SPI_BaudRatePrescaler_32
+	case 4000000:
+		conf |= stm32.SPI_BaudRatePrescaler_16
+	case 8000000:
+		conf |= stm32.SPI_BaudRatePrescaler_8
+	default:
+		conf |= stm32.SPI_BaudRatePrescaler_256
 	}
 
 	// set bit transfer order
@@ -345,11 +346,11 @@ func (i2c I2C) Configure(config I2CConfig) {
 	// Disable the selected I2C peripheral to configure
 	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_PE)
 
-	// pclk1 clock speed is main frequency divided by PCK1 prescaler (div 2)
+	// pclk1 clock speed is main frequency divided by PCLK1 prescaler (div 2)
 	pclk1 := uint32(CPU_FREQUENCY / 2)
 
-	// set freqency range to pclk1 clock speed in Mhz.
-	// aka setting the value 36 means to use 36MhZ clock.
+	// set freqency range to PCLK1 clock speed in MHz
+	// aka setting the value 36 means to use 36 MHz clock
 	pclk1Mhz := pclk1 / 1000000
 	i2c.Bus.CR2.SetBits(pclk1Mhz)
 
