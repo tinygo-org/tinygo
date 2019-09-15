@@ -349,19 +349,11 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 	}
 
 	if !needsScheduler {
-		// on wasm, we need to clear the resume function
-		if resume := c.mod.NamedFunction("resume"); !resume.IsNil() {
-			entry := resume.FirstBasicBlock()
-			delQueue := []llvm.Value{}
-			for inst := entry.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
-				delQueue = append(delQueue, inst)
-			}
-			for _, v := range delQueue {
-				v.ReplaceAllUsesWith(llvm.Undef(v.Type()))
-				v.EraseFromParentAsInstruction()
-			}
-			c.builder.SetInsertPointAtEnd(entry)
-			c.builder.CreateRetVoid()
+		// on wasm, we may still have calls to deadlock
+		// replace these with an abort
+		abort := c.mod.NamedFunction("runtime.abort")
+		if deadlock := c.mod.NamedFunction("runtime.deadlock"); !deadlock.IsNil() {
+			deadlock.ReplaceAllUsesWith(abort)
 		}
 
 		// No scheduler is needed. Do not transform all functions here.
