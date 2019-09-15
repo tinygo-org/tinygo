@@ -79,3 +79,13 @@ func yield()
 func getSystemStackPointer() uintptr {
 	return getCurrentStackPointer()
 }
+
+func getFakeCoroutine() *task {
+	// this isnt defined behavior, but this is what our implementation does
+	// this is really a horrible hack
+	var t *task
+	go fakeCoroutine(&t)
+
+	// the first line of fakeCoroutine will have completed by now
+	return t
+}
