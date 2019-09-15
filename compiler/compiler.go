@@ -2743,7 +2743,7 @@ func (c *Compiler) ExternalInt64AsPtr() error {
 			// correct calling convention.
 			fn.SetLinkage(llvm.InternalLinkage)
 			fn.SetUnnamedAddr(true)
-			entryBlock := llvm.AddBasicBlock(externalFn, "entry")
+			entryBlock := c.ctx.AddBasicBlock(externalFn, "entry")
 			c.builder.SetInsertPointAtEnd(entryBlock)
 			var callParams []llvm.Value
 			if fnType.ReturnType() == int64Type {
