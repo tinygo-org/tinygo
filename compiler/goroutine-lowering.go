@@ -346,6 +346,9 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 				break
 			}
 		}
+		if _, ok := asyncFuncs[c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path()+".main")]; ok {
+			needsScheduler = true
+		}
 	}
 
 	if !needsScheduler {
