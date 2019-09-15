@@ -13,10 +13,6 @@ func (c *Compiler) checkType(t llvm.Type, checked map[llvm.Type]struct{}, specia
 	}
 
 	// prevent infinite recursion for self-referential types
-	if checked == nil {
-		// base of type-check stack
-		checked = map[llvm.Type]struct{}{}
-	}
 	if _, ok := checked[t]; ok {
 		return
 	}
@@ -70,29 +66,17 @@ func (c *Compiler) checkType(t llvm.Type, checked map[llvm.Type]struct{}, specia
 	}
 }
 
-func (c *Compiler) checkValue(v llvm.Value, checked map[llvm.Value]struct{}, specials map[llvm.TypeKind]llvm.Type) {
-	// avoid infinite recursion by marking values that are being checked
-	// values are left in so that this also avoids checking a value twice
-	if _, ok := checked[v]; ok {
-		return
-	}
-	checked[v] = struct{}{}
-
+func (c *Compiler) checkValue(v llvm.Value, checked map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) {
 	// check type
-	c.checkType(v.Type(), nil, specials)
+	c.checkType(v.Type(), checked, specials)
 }
 
-func (c *Compiler) checkInstruction(inst llvm.Value, checked map[llvm.Value]struct{}, specials map[llvm.TypeKind]llvm.Type) {
+func (c *Compiler) checkInstruction(inst llvm.Value, checked map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) {
 	// check value properties
 	c.checkValue(inst, checked, specials)
-
-	// check operands
-	for i := 0; i < inst.OperandsCount(); i++ {
-		c.checkValue(inst.Operand(i), checked, specials)
-	}
 }
 
-func (c *Compiler) checkBasicBlock(bb llvm.BasicBlock, checked map[llvm.Value]struct{}, specials map[llvm.TypeKind]llvm.Type) {
+func (c *Compiler) checkBasicBlock(bb llvm.BasicBlock, checked map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) {
 	// check basic block value and type
 	c.checkValue(bb.AsValue(), checked, specials)
 
@@ -102,7 +86,7 @@ func (c *Compiler) checkBasicBlock(bb llvm.BasicBlock, checked map[llvm.Value]st
 	}
 }
 
-func (c *Compiler) checkFunction(fn llvm.Value, checked map[llvm.Value]struct{}, specials map[llvm.TypeKind]llvm.Type) {
+func (c *Compiler) checkFunction(fn llvm.Value, checked map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) {
 	// check function value and type
 	c.checkValue(fn, checked, specials)
 
@@ -125,7 +109,8 @@ func (c *Compiler) check() {
 		panic(fmt.Errorf("module uses context %v instead of the main context %v", c.mod.Context(), c.ctx))
 	}
 
-	checked := map[llvm.Value]struct{}{}
+	// base of type-check stack
+	checked := map[llvm.Type]struct{}{}
 	specials := map[llvm.TypeKind]llvm.Type{}
 	for fn := c.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
 		c.checkFunction(fn, checked, specials)
