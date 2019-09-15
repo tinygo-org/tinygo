@@ -122,7 +122,7 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) {
 
 	// Make a struct out of the collected values to put in the defer frame.
 	deferFrameType := c.ctx.StructType(valueTypes, false)
-	deferFrame := c.getZeroValue(deferFrameType)
+	deferFrame := llvm.ConstNull(deferFrameType)
 	for i, value := range values {
 		deferFrame = c.builder.CreateInsertValue(deferFrame, value, i, "")
 	}

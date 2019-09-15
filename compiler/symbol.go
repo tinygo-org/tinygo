@@ -61,7 +61,7 @@ func (c *Compiler) getGlobal(g *ssa.Global) llvm.Value {
 		llvmType := c.getLLVMType(g.Type().(*types.Pointer).Elem())
 		llvmGlobal = llvm.AddGlobal(c.mod, llvmType, info.linkName)
 		if !info.extern {
-			llvmGlobal.SetInitializer(c.getZeroValue(llvmType))
+			llvmGlobal.SetInitializer(llvm.ConstNull(llvmType))
 			llvmGlobal.SetLinkage(llvm.InternalLinkage)
 		}
 	}

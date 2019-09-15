@@ -134,7 +134,7 @@ func (c *Compiler) makeGCStackSlots() bool {
 		}
 		stackChainStart := c.mod.NamedGlobal("runtime.stackChainStart")
 		if !stackChainStart.IsNil() {
-			stackChainStart.SetInitializer(c.getZeroValue(stackChainStart.Type().ElementType()))
+			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.Type().ElementType()))
 			stackChainStart.SetGlobalConstant(true)
 		}
 	}
@@ -198,7 +198,7 @@ func (c *Compiler) makeGCStackSlots() bool {
 		panic("stack chain start not found!")
 	}
 	stackChainStartType := stackChainStart.Type().ElementType()
-	stackChainStart.SetInitializer(c.getZeroValue(stackChainStartType))
+	stackChainStart.SetInitializer(llvm.ConstNull(stackChainStartType))
 
 	// Iterate until runtime.trackPointer has no uses left.
 	for use := trackPointer.FirstUse(); !use.IsNil(); use = trackPointer.FirstUse() {
@@ -303,7 +303,7 @@ func (c *Compiler) makeGCStackSlots() bool {
 		// Create the stack object at the function entry.
 		c.builder.SetInsertPointBefore(fn.EntryBasicBlock().FirstInstruction())
 		stackObject := c.builder.CreateAlloca(stackObjectType, "gc.stackobject")
-		initialStackObject := c.getZeroValue(stackObjectType)
+		initialStackObject := llvm.ConstNull(stackObjectType)
 		numSlots := (c.targetData.TypeAllocSize(stackObjectType) - c.targetData.TypeAllocSize(c.i8ptrType)*2) / uint64(c.targetData.ABITypeAlignment(c.uintptrType))
 		numSlotsValue := llvm.ConstInt(c.uintptrType, numSlots, false)
 		initialStackObject = llvm.ConstInsertValue(initialStackObject, numSlotsValue, []uint32{1})

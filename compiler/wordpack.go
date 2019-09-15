@@ -101,7 +101,7 @@ func (c *Compiler) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []l
 	for i, valueType := range valueTypes {
 		if c.targetData.TypeAllocSize(valueType) == 0 {
 			// This value has length zero, so there's nothing to load.
-			values[i] = c.getZeroValue(valueType)
+			values[i] = llvm.ConstNull(valueType)
 			continue
 		}
 		indices := []llvm.Value{

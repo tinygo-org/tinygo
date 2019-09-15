@@ -162,7 +162,7 @@ func (v *MapValue) newBucket() llvm.Value {
 		llvm.ArrayType(v.KeyType, 8),      // key type
 		llvm.ArrayType(v.ValueType, 8),    // value type
 	}, false)
-	bucketValue := getZeroValue(bucketType)
+	bucketValue := llvm.ConstNull(bucketType)
 	bucket := llvm.AddGlobal(v.Eval.Mod, bucketType, v.PkgName+"$mapbucket")
 	bucket.SetInitializer(bucketValue)
 	bucket.SetLinkage(llvm.InternalLinkage)
@@ -311,7 +311,7 @@ func (v *MapValue) PutString(keyBuf, keyLen, valPtr *LocalValue) {
 
 	keyType := v.Eval.Mod.GetTypeByName("runtime._string")
 	v.KeyType = keyType
-	key := getZeroValue(keyType)
+	key := llvm.ConstNull(keyType)
 	key = llvm.ConstInsertValue(key, keyBuf.Value(), []uint32{0})
 	key = llvm.ConstInsertValue(key, keyLen.Value(), []uint32{1})
 
