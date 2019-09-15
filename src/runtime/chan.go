@@ -48,6 +48,8 @@ type channel struct {
 	buf         unsafe.Pointer // pointer to first element of buffer
 }
 
+// chanMake creates a new channel with the given element size and buffer length in number of elements.
+// This is a compiler intrinsic.
 func chanMake(elementSize uintptr, bufSize uintptr) *channel {
 	return &channel{
 		elementSize: elementSize,
@@ -119,15 +121,11 @@ func (ch *channel) pop(value unsafe.Pointer) bool {
 
 	// update buffer state
 	ch.bufUsed--
-	if ch.bufUsed == 0 {
-		// reset when empty
-		ch.bufHead, ch.bufTail = 0, 0
-	} else {
-		// move tail up
-		ch.bufTail++
-		if ch.bufTail == ch.bufSize {
-			ch.bufTail = 0
-		}
+
+	// move tail up
+	ch.bufTail++
+	if ch.bufTail == ch.bufSize {
+		ch.bufTail = 0
 	}
 
 	return true

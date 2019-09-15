@@ -30,3 +30,4 @@ non-concurrent channel recieve: 2
 closed buffered channel recieve: 3
 closed buffered channel recieve: 4
 closed buffered channel recieve: 0
+hybrid buffered channel recieve: 2

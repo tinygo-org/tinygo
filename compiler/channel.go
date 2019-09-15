@@ -10,6 +10,13 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+func (c *Compiler) emitMakeChan(frame *Frame, expr *ssa.MakeChan) llvm.Value {
+	elementSize := c.targetData.TypeAllocSize(c.getLLVMType(expr.Type().(*types.Chan).Elem()))
+	elementSizeValue := llvm.ConstInt(c.uintptrType, elementSize, false)
+	bufSize := c.getValue(frame, expr.Size)
+	return c.createRuntimeCall("chanMake", []llvm.Value{elementSizeValue, bufSize}, "")
+}
+
 // emitChanSend emits a pseudo chan send operation. It is lowered to the actual
 // channel send operation during goroutine lowering.
 func (c *Compiler) emitChanSend(frame *Frame, instr *ssa.Send) {

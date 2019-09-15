@@ -111,6 +111,10 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// setting this to true will cause the compiler to spew tons of information about coroutine transformations
+// this can be useful when debugging coroutine lowering or looking for potential missed optimizations
+const coroDebug = false
+
 type asyncFunc struct {
 	taskHandle   llvm.Value
 	cleanupBlock llvm.BasicBlock
@@ -216,8 +220,6 @@ func (c *Compiler) lowerCoroutines() error {
 
 	return nil
 }
-
-const coroDebug = false
 
 func coroDebugPrintln(s ...interface{}) {
 	if coroDebug {

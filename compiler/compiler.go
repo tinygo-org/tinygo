@@ -1651,10 +1651,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			panic("unknown lookup type: " + expr.String())
 		}
 	case *ssa.MakeChan:
-		elementSize := c.targetData.TypeAllocSize(c.getLLVMType(expr.Type().(*types.Chan).Elem()))
-		elementSizeValue := llvm.ConstInt(c.uintptrType, elementSize, false)
-		bufSize := c.getValue(frame, expr.Size)
-		return c.createRuntimeCall("chanMake", []llvm.Value{elementSizeValue, bufSize}, ""), nil
+		return c.emitMakeChan(frame, expr), nil
 	case *ssa.MakeClosure:
 		return c.parseMakeClosure(frame, expr)
 	case *ssa.MakeInterface:

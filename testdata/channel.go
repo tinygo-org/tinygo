@@ -171,6 +171,33 @@ func main() {
 	println("closed buffered channel recieve:", <-ch)
 	println("closed buffered channel recieve:", <-ch)
 	println("closed buffered channel recieve:", <-ch)
+
+	// test using buffered channels as regular channels with special properties
+	wg.add(6)
+	ch = make(chan int, 2)
+	go send(ch)
+	go send(ch)
+	go send(ch)
+	go send(ch)
+	go receive(ch)
+	go receive(ch)
+	wg.wait()
+	close(ch)
+	var count int
+	for range ch {
+		count++
+	}
+	println("hybrid buffered channel recieve:", count)
+}
+
+func send(ch chan<- int) {
+	ch <- 1
+	wg.done()
+}
+
+func receive(ch <-chan int) {
+	<-ch
+	wg.done()
 }
 
 func sender(ch chan int) {
