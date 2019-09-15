@@ -124,7 +124,7 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 	chanSelectStateType := c.getLLVMRuntimeType("chanSelectState")
 	for _, state := range expr.States {
 		ch := c.getValue(frame, state.Chan)
-		selectState := c.getZeroValue(chanSelectStateType)
+		selectState := llvm.ConstNull(chanSelectStateType)
 		selectState = c.builder.CreateInsertValue(selectState, ch, 0, "")
 		switch state.Dir {
 		case types.RecvOnly:

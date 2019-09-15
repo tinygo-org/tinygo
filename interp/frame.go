@@ -86,7 +86,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 		case !inst.IsAAllocaInst().IsNil():
 			allocType := inst.Type().ElementType()
 			alloca := llvm.AddGlobal(fr.Mod, allocType, fr.pkgName+"$alloca")
-			alloca.SetInitializer(getZeroValue(allocType))
+			alloca.SetInitializer(llvm.ConstNull(allocType))
 			alloca.SetLinkage(llvm.InternalLinkage)
 			fr.locals[inst] = &LocalValue{
 				Underlying: alloca,
@@ -253,7 +253,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					allocType = llvm.ArrayType(allocType, elementCount)
 				}
 				alloc := llvm.AddGlobal(fr.Mod, allocType, fr.pkgName+"$alloc")
-				alloc.SetInitializer(getZeroValue(allocType))
+				alloc.SetInitializer(llvm.ConstNull(allocType))
 				alloc.SetLinkage(llvm.InternalLinkage)
 				result := &LocalValue{
 					Underlying: alloc,
@@ -312,7 +312,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				stringType := fr.Mod.GetTypeByName("runtime._string")
 				retPtr := llvm.ConstGEP(global, getLLVMIndices(fr.Mod.Context().Int32Type(), []uint32{0, 0}))
 				retLen := llvm.ConstInt(stringType.StructElementTypes()[1], uint64(len(result)), false)
-				ret := getZeroValue(stringType)
+				ret := llvm.ConstNull(stringType)
 				ret = llvm.ConstInsertValue(ret, retPtr, []uint32{0})
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{1})
 				fr.locals[inst] = &LocalValue{fr.Eval, ret}
@@ -335,7 +335,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				sliceType := inst.Type()
 				retPtr := llvm.ConstGEP(global, getLLVMIndices(fr.Mod.Context().Int32Type(), []uint32{0, 0}))
 				retLen := llvm.ConstInt(sliceType.StructElementTypes()[1], uint64(len(result)), false)
-				ret := getZeroValue(sliceType)
+				ret := llvm.ConstNull(sliceType)
 				ret = llvm.ConstInsertValue(ret, retPtr, []uint32{0}) // ptr
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{1}) // len
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{2}) // cap

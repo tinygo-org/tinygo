@@ -163,7 +163,7 @@ func (c *Compiler) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value)
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		if len(c.flattenAggregateType(t)) <= MaxFieldsPerParam {
-			value := c.getZeroValue(t)
+			value := llvm.ConstNull(t)
 			for i, subtyp := range t.StructElementTypes() {
 				structField, remaining := c.collapseFormalParamInternal(subtyp, fields)
 				fields = remaining

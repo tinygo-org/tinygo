@@ -563,42 +563,6 @@ func (c *Compiler) getLLVMType(goType types.Type) llvm.Type {
 	}
 }
 
-// Return a zero LLVM value for any LLVM type. Setting this value as an
-// initializer has the same effect as setting 'zeroinitializer' on a value.
-// Sadly, I haven't found a way to do it directly with the Go API but this works
-// just fine.
-func (c *Compiler) getZeroValue(typ llvm.Type) llvm.Value {
-	switch typ.TypeKind() {
-	case llvm.ArrayTypeKind:
-		subTyp := typ.ElementType()
-		subVal := c.getZeroValue(subTyp)
-		vals := make([]llvm.Value, typ.ArrayLength())
-		for i := range vals {
-			vals[i] = subVal
-		}
-		return llvm.ConstArray(subTyp, vals)
-	case llvm.FloatTypeKind, llvm.DoubleTypeKind:
-		return llvm.ConstFloat(typ, 0.0)
-	case llvm.IntegerTypeKind:
-		return llvm.ConstInt(typ, 0, false)
-	case llvm.PointerTypeKind:
-		return llvm.ConstPointerNull(typ)
-	case llvm.StructTypeKind:
-		types := typ.StructElementTypes()
-		vals := make([]llvm.Value, len(types))
-		for i, subTyp := range types {
-			vals[i] = c.getZeroValue(subTyp)
-		}
-		if typ.StructName() != "" {
-			return llvm.ConstNamedStruct(typ, vals)
-		} else {
-			return c.ctx.ConstStruct(vals, false)
-		}
-	default:
-		panic("unknown LLVM zero inititializer: " + typ.String())
-	}
-}
-
 // Is this a pointer type of some sort? Can be unsafe.Pointer or any *T pointer.
 func isPointer(typ types.Type) bool {
 	if _, ok := typ.(*types.Pointer); ok {
@@ -1132,7 +1096,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			c.builder.CreateRet(c.getValue(frame, instr.Results[0]))
 		} else {
 			// Multiple return values. Put them all in a struct.
-			retVal := c.getZeroValue(frame.fn.LLVMFn.Type().ElementType().ReturnType())
+			retVal := llvm.ConstNull(frame.fn.LLVMFn.Type().ElementType().ReturnType())
 			for i, result := range instr.Results {
 				val := c.getValue(frame, result)
 				retVal = c.builder.CreateInsertValue(retVal, val, i, "")
@@ -1460,7 +1424,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		} else {
 			buf := c.createEntryBlockAlloca(typ, expr.Comment)
 			if c.targetData.TypeAllocSize(typ) != 0 {
-				c.builder.CreateStore(c.getZeroValue(typ), buf) // zero-initialize var
+				c.builder.CreateStore(llvm.ConstNull(typ), buf) // zero-initialize var
 			}
 			return buf, nil
 		}
@@ -1767,7 +1731,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			panic("unknown type in range: " + typ.String())
 		}
 		it, _, _ := c.createTemporaryAlloca(iteratorType, "range.it")
-		c.builder.CreateStore(c.getZeroValue(iteratorType), it)
+		c.builder.CreateStore(llvm.ConstNull(iteratorType), it)
 		return it, nil
 	case *ssa.Select:
 		return c.emitSelect(frame, expr), nil
@@ -2349,12 +2313,12 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 		if expr.Value != nil {
 			panic("expected nil chan constant")
 		}
-		return c.getZeroValue(c.getLLVMType(expr.Type()))
+		return llvm.ConstNull(c.getLLVMType(expr.Type()))
 	case *types.Signature:
 		if expr.Value != nil {
 			panic("expected nil signature constant")
 		}
-		return c.getZeroValue(c.getLLVMType(expr.Type()))
+		return llvm.ConstNull(c.getLLVMType(expr.Type()))
 	case *types.Interface:
 		if expr.Value != nil {
 			panic("expected nil interface constant")
@@ -2389,7 +2353,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 			panic("non-nil map constant")
 		}
 		llvmType := c.getLLVMType(typ)
-		return c.getZeroValue(llvmType)
+		return llvm.ConstNull(llvmType)
 	default:
 		panic("unknown constant: " + expr.String())
 	}
@@ -2581,7 +2545,7 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 		unop.X.Type().Underlying().(*types.Pointer).Elem()
 		if c.targetData.TypeAllocSize(x.Type().ElementType()) == 0 {
 			// zero-length data
-			return c.getZeroValue(x.Type().ElementType()), nil
+			return llvm.ConstNull(x.Type().ElementType()), nil
 		} else if strings.HasSuffix(unop.X.String(), "$funcaddr") {
 			// CGo function pointer. The cgo part has rewritten CGo function
 			// pointers as stub global variables of the form:
