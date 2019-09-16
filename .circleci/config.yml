@@ -170,6 +170,10 @@ commands:
             HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
       - restore_cache:
           keys:
+            - go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-macos-v2-{{ checksum "go.mod" }}
+      - restore_cache:
+          keys:
             - llvm-source-8-macos-v5
       - run:
           name: "Fetch LLVM source"
@@ -222,6 +226,12 @@ commands:
             curl -O https://static.dev.sifive.com/dev-tools/riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-apple-darwin.tar.gz
             sudo tar -C /usr/local --strip-components=1 -xf riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-apple-darwin.tar.gz
       - run: make smoketest AVR=0
+      - save_cache:
+          key: go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
+          paths:
+            - ~/.cache/go-build
+            - ~/.cache/tinygo
+            - /go/pkg/mod
 
 
 jobs:
