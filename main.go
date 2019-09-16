@@ -154,9 +154,6 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	if spec.GOOS != "darwin" {
 		c.ApplyFunctionSections() // -ffunction-sections
 	}
-	if err := c.Verify(); err != nil {
-		return errors.New("verification error after applying function sections")
-	}
 
 	// Browsers cannot handle external functions that have type i64 because it
 	// cannot be represented exactly in JavaScript (JS only has doubles). To
@@ -167,9 +164,6 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		err := c.ExternalInt64AsPtr()
 		if err != nil {
 			return err
-		}
-		if err := c.Verify(); err != nil {
-			return errors.New("verification error after running the wasm i64 hack")
 		}
 	}
 
