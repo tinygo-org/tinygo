@@ -99,6 +99,14 @@ func (p Pin) Set(high bool) {
 	}
 }
 
+// Get returns the current value of a GPIO pin.
+func (p Pin) Get() bool {
+	port := p.getPort()
+	pin := uint8(p) % 16
+	val := port.IDR.Get() & (1 << pin)
+	return (val > 0)
+}
+
 // UART
 type UART struct {
 	Buffer *RingBuffer
