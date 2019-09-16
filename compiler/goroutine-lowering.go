@@ -146,7 +146,7 @@ func (c *Compiler) lowerTasks() error {
 	mainCall := uses[0]
 
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
-	if len(getUses(c.mod.NamedFunction("runtime.startGoroutine"))) != 0 {
+	if len(getUses(c.mod.NamedFunction("runtime.startGoroutine"))) != 0 || len(getUses(c.mod.NamedFunction("runtime.yield"))) != 0 {
 		// Program needs a scheduler. Start main.main as a goroutine and start
 		// the scheduler.
 		realMainWrapper := c.createGoroutineStartWrapper(realMain)
