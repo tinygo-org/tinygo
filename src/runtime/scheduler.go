@@ -38,6 +38,9 @@ var (
 	sleepQueueBaseTime timeUnit
 )
 
+// variable set to true after main returns, to indicate that the scheduler should exit
+var schedDone bool
+
 // Simple logging, for debugging.
 func scheduleLog(msg string) {
 	if schedulerDebug {
@@ -226,10 +229,19 @@ func addSleepTask(t *task, duration int64) {
 // Run the scheduler until all tasks have finished.
 func scheduler() {
 	// Main scheduler loop.
+	var now timeUnit
+	var intCycle uint8
 	for {
+		if schedDone {
+			scheduleLog("  done")
+			return
+		}
+
 		scheduleLog("")
 		scheduleLog("  schedule")
-		now := ticks()
+		if sleepQueue != nil {
+			now = ticks()
+		}
 
 		// Add tasks that are done sleeping to the end of the runqueue so they
 		// will be executed soon.
@@ -244,15 +256,29 @@ func scheduler() {
 		}
 
 		t := runqueuePopFront()
-		if t == nil {
-			if sleepQueue == nil {
-				// No more tasks to execute.
-				// It would be nice if we could detect deadlocks here, because
-				// there might still be functions waiting on each other in a
-				// deadlock.
-				scheduleLog("  no tasks left!")
-				return
+		switch {
+		case t != nil:
+			// Run the given task.
+			scheduleLogTask("  run:", t)
+			t.resume()
+		case intCycle < 2:
+			intCycle++
+
+			// get interrupt wakeup chain
+			head := popInt()
+
+			if head == nil {
+				// no interrupts found, skip
+				break
 			}
+
+			// find tail of interrupt chain
+			tail := head
+			for ; tail.state().next != nil; tail = tail.state().next {}
+
+			// glue interrupt chain into scheduler queue
+			runqueueFront, runqueueBack = head, tail
+		case sleepQueue != nil:
 			timeLeft := timeUnit(sleepQueue.state().data) - (now - sleepQueueBaseTime)
 			if schedulerDebug {
 				println("  sleeping...", sleepQueue, uint(timeLeft))
@@ -260,19 +286,26 @@ func scheduler() {
 					println("    task sleeping:", t, timeUnit(t.state().data))
 				}
 			}
+			intCycle = 0
 			sleepTicks(timeLeft)
 			if asyncScheduler {
 				// The sleepTicks function above only sets a timeout at which
 				// point the scheduler will be called again. It does not really
 				// sleep.
-				break
+				return
 			}
-			continue
+		default:
+			// No more tasks to execute.
+			// It would be nice if we could detect deadlocks here, because
+			// there might still be functions waiting on each other in a
+			// deadlock.
+			// Now, due to the addition of interrupts, we have to sleep here.
+			scheduleLog("  no tasks left!")
+			sleepTicks(0)
+			if asyncScheduler {
+				return
+			}
 		}
-
-		// Run the given task.
-		scheduleLogTask("  run:", t)
-		t.resume()
 	}
 }
 

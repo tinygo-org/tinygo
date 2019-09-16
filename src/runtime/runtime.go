@@ -15,13 +15,26 @@ func initAll()
 //
 // Without scheduler:
 //
-//     main.main()
+//     mainFunc()
 //
 // With scheduler:
 //
-//     main.main()
+//     go wrapMain()
 //     scheduler()
 func callMain()
+
+// mainFunc is a temporary value that will be later replaced with the actual user-provided main function
+func mainFunc()
+
+// wrapMain is a wrapper which is used for invoking main.
+// When main completes, this allows the program to return.
+func wrapMain() {
+	// run main
+	mainFunc()
+
+	// when main is done, let the scheduler exit
+	schedDone = true
+}
 
 func GOMAXPROCS(n int) int {
 	// Note: setting GOMAXPROCS is ignored.

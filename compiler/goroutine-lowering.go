@@ -126,6 +126,8 @@ type asyncFunc struct {
 // coroutine or the tasks implementation of goroutines, and whether goroutines
 // are necessary at all.
 func (c *Compiler) LowerGoroutines() error {
+	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
+	c.mod.NamedFunction("runtime.mainFunc").ReplaceAllUsesWith(realMain)
 	switch c.selectScheduler() {
 	case "coroutines":
 		return c.lowerCoroutines()
@@ -146,10 +148,11 @@ func (c *Compiler) lowerTasks() error {
 	mainCall := uses[0]
 
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
+	wrapMain := c.mod.NamedFunction("runtime.wrapMain")
 	if len(getUses(c.mod.NamedFunction("runtime.startGoroutine"))) != 0 || len(getUses(c.mod.NamedFunction("runtime.yield"))) != 0 {
 		// Program needs a scheduler. Start main.main as a goroutine and start
 		// the scheduler.
-		realMainWrapper := c.createGoroutineStartWrapper(realMain)
+		realMainWrapper := c.createGoroutineStartWrapper(wrapMain)
 		c.builder.SetInsertPointBefore(mainCall)
 		zero := llvm.ConstInt(c.uintptrType, 0, false)
 		c.createRuntimeCall("startGoroutine", []llvm.Value{realMainWrapper, zero}, "")
@@ -192,13 +195,14 @@ func (c *Compiler) lowerCoroutines() error {
 	// optionally followed by a call to runtime.scheduler().
 	c.builder.SetInsertPointBefore(mainCall)
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
-	var ph llvm.Value
+	wrapMain := c.mod.NamedFunction("runtime.wrapMain")
+	var ph, mainCallFn llvm.Value
 	if needsScheduler {
-		ph = c.createRuntimeCall("getFakeCoroutine", []llvm.Value{}, "")
+		ph, mainCallFn = c.createRuntimeCall("getFakeCoroutine", []llvm.Value{}, ""), wrapMain
 	} else {
-		ph = llvm.Undef(c.i8ptrType)
+		ph, mainCallFn = llvm.Undef(c.i8ptrType), realMain
 	}
-	c.builder.CreateCall(realMain, []llvm.Value{llvm.Undef(c.i8ptrType), ph}, "")
+	c.builder.CreateCall(mainCallFn, []llvm.Value{llvm.Undef(c.i8ptrType), ph}, "")
 	if needsScheduler {
 		c.createRuntimeCall("scheduler", nil, "")
 	}
