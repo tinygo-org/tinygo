@@ -245,9 +245,9 @@
 					},
 
 					// valueSetIndex(v ref, i int, x ref)
-					//"syscall/js.valueSetIndex": (sp) => {
-					//	Reflect.set(loadValue(sp + 8), getInt64(sp + 16), loadValue(sp + 24));
-					//},
+					"syscall/js.valueSetIndex": (v_addr, i, x_addr) => {
+						Reflect.set(loadValue(v_addr), i, loadValue(x_addr));
+					},
 
 					// func valueCall(v ref, m string, args []ref) (ref, bool)
 					"syscall/js.valueCall": (ret_addr, v_addr, m_ptr, m_len, args_ptr, args_len, args_cap) => {
