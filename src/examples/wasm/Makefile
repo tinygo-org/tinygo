@@ -8,6 +8,12 @@ callback: clean wasm_exec
 	cp ./callback/wasm.js ./html/
 	cp ./callback/index.html ./html/
 
+slices: clean wasm_exec
+	tinygo build -o ./html/wasm.wasm -target wasm -no-debug ./slices/wasm.go
+	cp ./slices/wasm.js ./html/
+	cp ./slices/index.html ./html/
+
+
 main: clean wasm_exec
 	tinygo build -o ./html/wasm.wasm -target wasm -no-debug ./main/main.go
 	cp ./main/index.html ./html/
