@@ -876,12 +876,13 @@ func waitForSync() {
 
 // SPI
 type SPI struct {
-	Bus   *sam.SERCOM_SPI_Type
-	SCK   Pin
-	MOSI  Pin
-	MISO  Pin
-	DOpad int
-	DIpad int
+	Bus     *sam.SERCOM_SPI_Type
+	SCK     Pin
+	MOSI    Pin
+	MISO    Pin
+	DOpad   int
+	DIpad   int
+	PinMode PinMode
 }
 
 // SPIConfig is used to store config info for SPI.
@@ -896,13 +897,14 @@ type SPIConfig struct {
 
 // Configure is intended to setup the SPI interface.
 func (spi SPI) Configure(config SPIConfig) {
-
 	config.SCK = spi.SCK
 	config.MOSI = spi.MOSI
 	config.MISO = spi.MISO
 
 	doPad := spi.DOpad
 	diPad := spi.DIpad
+
+	pinMode := spi.PinMode
 
 	// set default frequency
 	if config.Frequency == 0 {
@@ -915,9 +917,9 @@ func (spi SPI) Configure(config SPIConfig) {
 	}
 
 	// enable pins
-	config.SCK.Configure(PinConfig{Mode: PinSERCOMAlt})
-	config.MOSI.Configure(PinConfig{Mode: PinSERCOMAlt})
-	config.MISO.Configure(PinConfig{Mode: PinSERCOMAlt})
+	config.SCK.Configure(PinConfig{Mode: pinMode})
+	config.MOSI.Configure(PinConfig{Mode: pinMode})
+	config.MISO.Configure(PinConfig{Mode: pinMode})
 
 	// reset SERCOM
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_SWRST)

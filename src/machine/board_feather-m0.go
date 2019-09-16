@@ -89,11 +89,12 @@ const (
 // SPI on the Feather M0.
 var (
 	SPI0 = SPI{Bus: sam.SERCOM4_SPI,
-		SCK:   SPI0_SCK_PIN,
-		MOSI:  SPI0_MOSI_PIN,
-		MISO:  SPI0_MISO_PIN,
-		DOpad: spiTXPad2SCK3,
-		DIpad: sercomRXPad0}
+		SCK:     SPI0_SCK_PIN,
+		MOSI:    SPI0_MOSI_PIN,
+		MISO:    SPI0_MISO_PIN,
+		DOpad:   spiTXPad2SCK3,
+		DIpad:   sercomRXPad0,
+		PinMode: PinSERCOMAlt}
 )
 
 // I2S pins
