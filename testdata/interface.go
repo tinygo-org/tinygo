@@ -30,6 +30,62 @@ func main() {
 	// Try putting a linked list in an interface:
 	// https://github.com/tinygo-org/tinygo/issues/309
 	itf = linkedList{}
+
+	var n int
+	var f float32
+	var interfaceEqualTests = []struct {
+		equal bool
+		lhs   interface{}
+		rhs   interface{}
+	}{
+		{true, true, true},
+		{true, int(1), int(1)},
+		{true, int8(1), int8(1)},
+		{true, int16(1), int16(1)},
+		{true, int32(1), int32(1)},
+		{true, int64(1), int64(1)},
+		{true, uint(1), uint(1)},
+		{false, uint(1), uint(2)},
+		{true, uint8(1), uint8(1)},
+		{true, uint16(1), uint16(1)},
+		{true, uint32(1), uint32(1)},
+		{true, uint64(1), uint64(1)},
+		{true, float32(1.1), float32(1.1)},
+		{true, float64(1.1), float64(1.1)},
+		{true, complex(100, 8), complex(100, 8)},
+		{false, complex(100, 8), complex(101, 8)},
+		{false, complex(100, 8), complex(100, 9)},
+		{true, complex64(8), complex64(8)},
+		{true, complex128(8), complex128(8)},
+		{true, "string", "string"},
+		{false, "string", "stringx"},
+		{true, [2]int16{-5, 201}, [2]int16{-5, 201}},
+		{false, [2]int16{-5, 201}, [2]int16{-5, 202}},
+		{false, [2]int16{-5, 201}, [2]int16{5, 201}},
+		{true, &n, &n},
+		{false, &n, new(int)},
+		{false, new(int), new(int)},
+		{false, &n, &f},
+		{true, struct {
+			a int
+			b int
+		}{3, 5}, struct {
+			a int
+			b int
+		}{3, 5}},
+		{false, struct {
+			a int
+			b int
+		}{3, 5}, struct {
+			a int
+			b int
+		}{3, 6}},
+	}
+	for i, tc := range interfaceEqualTests {
+		if (tc.lhs == tc.rhs) != tc.equal {
+			println("test", i, "of interfaceEqualTests failed")
+		}
+	}
 }
 
 func printItf(val interface{}) {
