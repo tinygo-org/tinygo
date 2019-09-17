@@ -2,6 +2,8 @@
 
 package machine
 
+import "device/stm32"
+
 // https://wiki.stm32duino.com/index.php?title=File:Bluepillpinout.gif
 const (
 	PA0  = portA + 0
@@ -47,9 +49,27 @@ const (
 
 // UART pins
 const (
-	UART_TX_PIN = PA9
-	UART_RX_PIN = PA10
+	UART_TX_PIN     = PA9
+	UART_RX_PIN     = PA10
+	UART_ALT_TX_PIN = PB6
+	UART_ALT_RX_PIN = PB7
 )
+
+var (
+	// USART1 is the first hardware serial port on the STM32.
+	// Both UART0 and UART1 refer to USART1.
+	UART0 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    stm32.USART1,
+		IRQVal: stm32.IRQ_USART1,
+	}
+	UART1 = &UART0
+)
+
+//go:export USART1_IRQHandler
+func handleUART1() {
+	UART1.Receive(byte((UART1.Bus.DR.Get() & 0xFF)))
+}
 
 // SPI pins
 const (
