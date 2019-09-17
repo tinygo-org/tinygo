@@ -5,7 +5,10 @@ package runtime
 // Interfaces are represented as a pair of {typecode, value}, where value can be
 // anything (including non-pointers).
 
-import "unsafe"
+import (
+	"reflect"
+	"unsafe"
+)
 
 type _interface struct {
 	typecode uintptr
@@ -23,17 +26,51 @@ func decomposeInterface(i _interface) (uintptr, unsafe.Pointer) {
 }
 
 // Return true iff both interfaces are equal.
-func interfaceEqual(x, y _interface) bool {
-	if x.typecode != y.typecode {
-		// Different dynamic type so always unequal.
+func interfaceEqual(x, y interface{}) bool {
+	return shallowEqual(reflect.ValueOf(x), reflect.ValueOf(y))
+}
+
+func shallowEqual(x, y reflect.Value) bool {
+	if x.Type() == 0 || y.Type() == 0 {
+		return x.Type() == y.Type()
+	}
+
+	if x.Type() != y.Type() {
 		return false
 	}
-	if x.typecode == 0 {
-		// Both interfaces are nil, so they are equal.
+
+	switch x.Type().Kind() {
+	case reflect.Bool:
+		return x.Bool() == y.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return x.Int() == y.Int()
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return x.Uint() == y.Uint()
+	case reflect.Float32, reflect.Float64:
+		return x.Float() == y.Float()
+	case reflect.Complex64, reflect.Complex128:
+		return x.Complex() == y.Complex()
+	case reflect.String:
+		return x.String() == y.String()
+	case reflect.Chan, reflect.Ptr, reflect.UnsafePointer:
+		return x.Pointer() == y.Pointer()
+	case reflect.Array:
+		for i := 0; i < x.Len(); i++ {
+			if !shallowEqual(x.Index(i), y.Index(i)) {
+				return false
+			}
+		}
 		return true
+	case reflect.Struct:
+		for i := 0; i < x.NumField(); i++ {
+			if shallowEqual(x.Field(i), y.Field(i)) {
+				return true
+			}
+		}
+		return false
+	default:
+		panic("comparing un-comparable type")
 	}
-	// TODO: depends on reflection.
-	panic("unimplemented: interface equality")
 }
 
 // interfaceTypeAssert is called when a type assert without comma-ok still

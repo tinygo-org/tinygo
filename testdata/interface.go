@@ -1,5 +1,29 @@
 package main
 
+// var interfaceEqualTests = []struct {
+// 	shouldFail bool
+// 	lhs        interface{}
+// 	rhs        interface{}
+// }{
+// 	{false, true, true},
+// 	{false, int(1), int(1)},
+// 	{false, int8(1), int8(1)},
+// 	{false, int16(1), int16(1)},
+// 	{false, int32(1), int32(1)},
+// 	{false, int64(1), int64(1)},
+// 	{false, uint(1), uint(1)},
+// 	{false, uint8(1), uint8(1)},
+// 	{false, uint16(1), uint16(1)},
+// 	{false, uint32(1), uint32(1)},
+// 	{false, uint64(1), uint64(1)},
+// 	{false, float32(1.1), float32(1.1)},
+// 	{false, float64(1.1), float64(1.1)},
+// 	{false, complex(100, 8), complex(100, 8)},
+// 	{false, complex64(8), complex64(8)},
+// 	{false, complex128(8), complex128(8)},
+// 	{false, "string", "string"},
+// }
+
 func main() {
 	thing := &Thing{"foo"}
 	println("thing:", thing.String())
@@ -30,6 +54,12 @@ func main() {
 	// Try putting a linked list in an interface:
 	// https://github.com/tinygo-org/tinygo/issues/309
 	itf = linkedList{}
+
+	// for i, tc := range interfaceEqualTests {
+	// 	if (tc.lhs != tc.rhs) != tc.shouldFail {
+	// 		panic("test '" + strconv.Itoa(i) + "' of interfaceEqualTests failed")
+	// 	}
+	// }
 }
 
 func printItf(val interface{}) {
