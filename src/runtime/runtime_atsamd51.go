@@ -201,8 +201,8 @@ func initRTC() {
 }
 
 func waitForSync() {
-	// for sam.GCLK.STATUS.HasBits(sam.GCLK_STATUS_SYNCBUSY) {
-	// }
+	for sam.RTC_MODE0.SYNCBUSY.HasBits(sam.RTC_MODE0_SYNCBUSY_COUNT) {
+	}
 }
 
 // treat all ticks params coming from runtime as being in microseconds
@@ -232,9 +232,7 @@ func sleepTicks(d timeUnit) {
 
 // ticks returns number of microseconds since start.
 func ticks() timeUnit {
-	// request read of count
-	// sam.RTC_MODE0.READREQ.Set(sam.RTC_MODE0_READREQ_RREQ)
-	// waitForSync()
+	waitForSync()
 
 	rtcCounter := (uint64(sam.RTC_MODE0.COUNT.Get()) * 305) / 10 // each counter tick == 30.5us
 	offset := (rtcCounter - timerLastCounter)                    // change since last measurement
@@ -246,19 +244,21 @@ func ticks() timeUnit {
 // ticks are in microseconds
 func timerSleep(ticks uint32) {
 	timerWakeup = false
-	if ticks < 30 {
-		// have to have at least one clock count
-		ticks = 30
+	if ticks < 260 {
+		// due to delay waiting for the register value to sync, the minimum sleep value
+		// for the SAMD51 is 260us.
+		// For related info for SAMD21, see:
+		// https://community.atmel.com/comment/2507091#comment-2507091
+		ticks = 260
 	}
 
 	// request read of count
-	// sam.RTC_MODE0.READREQ.Set(sam.RTC_MODE0_READREQ_RREQ)
-	// waitForSync()
+	waitForSync()
 
 	// set compare value
 	cnt := sam.RTC_MODE0.COUNT.Get()
+
 	sam.RTC_MODE0.COMP0.Set(uint32(cnt) + (ticks * 10 / 305)) // each counter tick == 30.5us
-	waitForSync()
 
 	// enable IRQ for CMP0 compare
 	sam.RTC_MODE0.INTENSET.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
