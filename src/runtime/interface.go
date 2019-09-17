@@ -5,7 +5,10 @@ package runtime
 // Interfaces are represented as a pair of {typecode, value}, where value can be
 // anything (including non-pointers).
 
-import "unsafe"
+import (
+	"reflect"
+	"unsafe"
+)
 
 type _interface struct {
 	typecode uintptr
@@ -23,17 +26,55 @@ func decomposeInterface(i _interface) (uintptr, unsafe.Pointer) {
 }
 
 // Return true iff both interfaces are equal.
-func interfaceEqual(x, y _interface) bool {
-	if x.typecode != y.typecode {
-		// Different dynamic type so always unequal.
+func interfaceEqual(x, y interface{}) bool {
+	return reflectValueEqual(reflect.ValueOf(x), reflect.ValueOf(y))
+}
+
+func reflectValueEqual(x, y reflect.Value) bool {
+	if x.Type() == 0 || y.Type() == 0 {
+		// One of them is nil.
+		return x.Type() == y.Type()
+	}
+
+	if x.Type() != y.Type() {
+		// The type is not the same, which means the interfaces are definitely
+		// not the same.
 		return false
 	}
-	if x.typecode == 0 {
-		// Both interfaces are nil, so they are equal.
+
+	switch x.Type().Kind() {
+	case reflect.Bool:
+		return x.Bool() == y.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return x.Int() == y.Int()
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return x.Uint() == y.Uint()
+	case reflect.Float32, reflect.Float64:
+		return x.Float() == y.Float()
+	case reflect.Complex64, reflect.Complex128:
+		return x.Complex() == y.Complex()
+	case reflect.String:
+		return x.String() == y.String()
+	case reflect.Chan, reflect.Ptr, reflect.UnsafePointer:
+		return x.Pointer() == y.Pointer()
+	case reflect.Array:
+		for i := 0; i < x.Len(); i++ {
+			if !reflectValueEqual(x.Index(i), y.Index(i)) {
+				return false
+			}
+		}
 		return true
+	case reflect.Struct:
+		for i := 0; i < x.NumField(); i++ {
+			if !reflectValueEqual(x.Field(i), y.Field(i)) {
+				return false
+			}
+		}
+		return true
+	default:
+		runtimePanic("comparing un-comparable type")
+		return false // unreachable
 	}
-	// TODO: depends on reflection.
-	panic("unimplemented: interface equality")
 }
 
 // interfaceTypeAssert is called when a type assert without comma-ok still
