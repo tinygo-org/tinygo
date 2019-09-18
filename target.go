@@ -206,7 +206,7 @@ func LoadTarget(target string) (*TargetSpec, error) {
 		// Load target from given triple, ignore GOOS/GOARCH environment
 		// variables.
 		tripleSplit := strings.Split(target, "-")
-		if len(tripleSplit) == 1 {
+		if len(tripleSplit) < 3 {
 			return nil, errors.New("expected a full LLVM target or a custom target in -target flag")
 		}
 		goos := tripleSplit[2]
