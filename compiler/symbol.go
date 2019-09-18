@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"strconv"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/loader"
@@ -20,6 +21,7 @@ import (
 type globalInfo struct {
 	linkName string // go:extern
 	extern   bool   // go:extern
+	align    int    // go:align
 }
 
 // loadASTComments loads comments on globals from the AST, for use later in the
@@ -64,6 +66,9 @@ func (c *Compiler) getGlobal(g *ssa.Global) llvm.Value {
 			llvmGlobal.SetInitializer(llvm.ConstNull(llvmType))
 			llvmGlobal.SetLinkage(llvm.InternalLinkage)
 		}
+		if info.align > c.targetData.ABITypeAlignment(llvmType) {
+			llvmGlobal.SetAlignment(info.align)
+		}
 	}
 	return llvmGlobal
 }
@@ -101,6 +106,11 @@ func (info *globalInfo) parsePragmas(doc *ast.CommentGroup) {
 			info.extern = true
 			if len(parts) == 2 {
 				info.linkName = parts[1]
+			}
+		case "//go:align":
+			align, err := strconv.Atoi(parts[1])
+			if err == nil {
+				info.align = align
 			}
 		}
 	}
