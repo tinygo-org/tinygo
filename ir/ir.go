@@ -178,6 +178,9 @@ func (p *Program) AddPackage(pkg *ssa.Package) {
 }
 
 func (p *Program) addFunction(ssaFn *ssa.Function) {
+	if _, ok := p.functionMap[ssaFn]; ok {
+		return
+	}
 	f := &Function{Function: ssaFn}
 	f.parsePragmas()
 	p.Functions = append(p.Functions, f)
