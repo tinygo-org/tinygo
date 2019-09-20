@@ -1,10 +1,3 @@
-/*
- * This is partially derived from excellent RPI3 tutorial
- * https://github.com/bztsrc/raspi3-tutorial/tree/master/05_uart0
- * and partially from the super os examples of
- * https://github.com/s-matyukevich/raspberry-pi-os
- */
-
  .section ".text.boot"
 
  .global _start

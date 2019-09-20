@@ -121,11 +121,7 @@ func UART0Puts(s string) {
 	}
 }
 
-/**
- * Display a binary value in hexadecimal
- */
 func UART0Hex(d uint32) {
-
 	for c := 28; c >= 0; c -= 4 {
 		// get highest tetrad
 		n := (d >> uint32(c)) & 0xF
@@ -213,4 +209,5 @@ func UART0Init() {
 	volatile.StoreUint32((*uint32)(UART0_FBRD), 0xB)
 	volatile.StoreUint32((*uint32)(UART0_LCRH), 3<<5) // 8n1
 	volatile.StoreUint32((*uint32)(UART0_CR), 0x301)  // enable Tx, Rx, FIFO
+
 }

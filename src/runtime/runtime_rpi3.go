@@ -3,6 +3,7 @@
 package runtime
 
 import dev "device/rpi3"
+import "unsafe"
 
 //const GOOS = "linux"
 const tickMicros = int64(1)
@@ -36,13 +37,13 @@ func preinit() {
 
 }
 
+// main on non bootloader (the bootloader itself uses this path)
 //go:export main
 func main() {
 	preinit()
 	primaryMain()
 }
 
-// main on non bootloader (the bootloader itself uses this path)
 func primaryMain() {
 	initAll()
 	callMain()
@@ -54,15 +55,18 @@ func mainFromBootloader() {
 	heapStart := dev.ReadRegister("x2")
 	heapEnd = heapStart + 0x8000
 	heapptr = uintptr(heapStart)
+	// not sure what to set these two to
 	//globalsStart = 0xB0000
 	//globalsEnd = 0xB0FF8
-	// XXX FIXME XXX
-	// need to do something with time
-	//time:=dev.ReadRegister("x3")
+	t := dev.ReadRegister("x3")
+	dev.SetStartTime(uint32(t))
 	primaryMain()
 }
 
+//go:extern
 func putchar(c byte) {
+	c++
+	c--
 	//MiniUARTSend(c) if you prefer the mini uart
 	dev.UART0Send(c)
 }
@@ -70,4 +74,18 @@ func putchar(c byte) {
 // just send to device code which ends up calling WFE
 func abort() {
 	dev.Abort()
+}
+
+// Implement memset for LLVM and compiler-rt.
+//go:export memset
+func libc_memset(ptr unsafe.Pointer, c byte, size uintptr) {
+	for i := uintptr(0); i < size; i++ {
+		*(*byte)(unsafe.Pointer(uintptr(ptr) + i)) = c
+	}
+}
+
+// Implement memmove for LLVM and compiler-rt.
+//go:export memmove
+func libc_memmove(dst, src unsafe.Pointer, size uintptr) {
+	memmove(dst, src, size)
 }

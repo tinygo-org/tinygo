@@ -96,3 +96,75 @@ func LEDSet(on bool) bool {
 	}
 	return false
 }
+
+// FBInfo is a struct that holds the parameters of the screen as well as a
+//pointer to the framebuffer  itself.
+type FBInfo struct {
+	Height int
+	Width int
+	Pitch int
+	Ptr unsafe.Pointer
+}
+
+//FrameBufferInfo is an FBInfo struct that gets filled in by a successful
+//call to InitFramebuffer.
+var FrameBufferInfo FBInfo
+
+//InitFramebuffer does a series of Mbox calls to the GPU to init the framebuffer
+//hardware. On success, results are placed into FrameBufferInfo.
+func InitFramebuffer() bool {
+	mboxSetupData(
+	35*4,
+	MBOX_REQUEST,
+
+	0x48003,  //set phy wh
+	8,
+	8,
+	1024,         //FrameBufferInfo.width
+	768,          //FrameBufferInfo.height
+
+	0x48004,   //set virt wh
+	8,
+	8,
+	1024,        //FrameBufferInfo.virtual_width
+	768,         //FrameBufferInfo.virtual_height
+
+	0x48009, //set virt offset
+	8,
+	8,
+	0,           //FrameBufferInfo.x_offset
+	0,           //FrameBufferInfo.y.offset
+
+	0x48005, //set depth
+	4,
+	4,
+	32,          //FrameBufferInfo.depth
+
+	0x48006, //set pixel order
+	4,
+	4,
+	1,           //RGB, not BGR preferably
+
+	0x40001, //get framebuffer, gets alignment on request
+	8,
+	8,
+	4096,        //FrameBufferInfo.pointer
+	0,           //FrameBufferInfo.size
+
+	0x40008, //get pitch
+	4,
+	4,
+	0,           //FrameBufferInfo.pitch
+	MBOX_TAG_LAST)
+
+	channel := byte(MBOX_CH_PROP)
+	if(MboxCall(byte(channel)) && MboxResultSlot(20)==32 && MboxResultSlot(28)!=0) {
+		FrameBufferInfo.Ptr = unsafe.Pointer(uintptr(MboxResultSlot(28)&0x3FFFFFFF))
+		FrameBufferInfo.Width=int(MboxResultSlot(5))
+		FrameBufferInfo.Height=int(MboxResultSlot(6))
+		FrameBufferInfo.Pitch=int(MboxResultSlot(33))
+		return true
+	}
+
+	return false
+}
