@@ -32,3 +32,24 @@ func hasFlag(call, param llvm.Value, kind string) bool {
 	}
 	return true
 }
+
+// isReadOnly returns true if the given value (which must be of pointer type) is
+// never stored to, and false if this cannot be proven.
+func isReadOnly(value llvm.Value) bool {
+	uses := getUses(value)
+	for _, use := range uses {
+		if !use.IsAGetElementPtrInst().IsNil() {
+			if !isReadOnly(use) {
+				return false
+			}
+		} else if !use.IsACallInst().IsNil() {
+			if !hasFlag(use, value, "readonly") {
+				return false
+			}
+		} else {
+			// Unknown instruction, might not be readonly.
+			return false
+		}
+	}
+	return true
+}
