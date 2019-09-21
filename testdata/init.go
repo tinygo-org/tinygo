@@ -13,6 +13,11 @@ func main() {
 	println("v5:", len(v5), v5 == nil)
 	println("v6:", v6)
 	println("v7:", cap(v7), string(v7))
+
+	println(uint8SliceSrc[0])
+	println(uint8SliceDst[0])
+	println(intSliceSrc[0])
+	println(intSliceDst[0])
 }
 
 type (
@@ -30,4 +35,17 @@ var (
 	v5 = map[string]int{}
 	v6 = float64(v1) < 2.6
 	v7 = []byte("foo")
+
+	uint8SliceSrc = []uint8{3, 100}
+	uint8SliceDst []uint8
+	intSliceSrc = []int16{5, 123, 1024}
+	intSliceDst []int16
 )
+
+func init() {
+	uint8SliceDst = make([]uint8, len(uint8SliceSrc))
+	copy(uint8SliceDst, uint8SliceSrc)
+
+	intSliceDst = make([]int16, len(intSliceSrc))
+	copy(intSliceDst, intSliceSrc)
+}

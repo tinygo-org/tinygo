@@ -98,13 +98,33 @@ func (v *LocalValue) GetElementPtr(indices []uint32) Value {
 		gep := llvm.ConstGEP(v.Underlying, getLLVMIndices(int32Type, indices))
 		return &LocalValue{v.Eval, gep}
 	}
-	switch v.Underlying.Opcode() {
-	case llvm.GetElementPtr, llvm.IntToPtr, llvm.BitCast:
-		int32Type := v.Underlying.Type().Context().Int32Type()
-		llvmIndices := getLLVMIndices(int32Type, indices)
-		return &LocalValue{v.Eval, llvm.ConstGEP(v.Underlying, llvmIndices)}
-	default:
-		panic("interp: GEP on a constant")
+	if !v.Underlying.IsAConstantExpr().IsNil() {
+		switch v.Underlying.Opcode() {
+		case llvm.GetElementPtr, llvm.IntToPtr, llvm.BitCast:
+			int32Type := v.Underlying.Type().Context().Int32Type()
+			llvmIndices := getLLVMIndices(int32Type, indices)
+			return &LocalValue{v.Eval, llvm.ConstGEP(v.Underlying, llvmIndices)}
+		}
+	}
+	panic("interp: unknown GEP")
+}
+
+// stripPointerCasts removes all const bitcasts from pointer values, if there
+// are any.
+func (v *LocalValue) stripPointerCasts() *LocalValue {
+	value := v.Underlying
+	for {
+		if !value.IsAConstantExpr().IsNil() {
+			switch value.Opcode() {
+			case llvm.BitCast:
+				value = value.Operand(0)
+				continue
+			}
+		}
+		return &LocalValue{
+			Eval:       v.Eval,
+			Underlying: value,
+		}
 	}
 }
 
