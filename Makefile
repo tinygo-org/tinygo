@@ -43,7 +43,7 @@ endif
 clean:
 	@rm -rf build
 
-FMT_PATHS = ./*.go cgo compiler interp ir loader src/device/arm src/examples src/machine src/os src/reflect src/runtime src/sync src/syscall
+FMT_PATHS = ./*.go cgo compiler interp ir loader src/device/arm src/examples src/machine src/os src/reflect src/runtime src/sync src/syscall transform
 fmt:
 	@gofmt -l -w $(FMT_PATHS)
 fmt-check:
