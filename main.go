@@ -312,7 +312,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		}
 
 		// Get an Intel .hex file or .bin file from the .elf file.
-		if outext == ".hex" || outext == ".bin" {
+		if outext == ".hex" || outext == ".bin" || outext == ".gba" {
 			tmppath = filepath.Join(dir, "main"+outext)
 			err := Objcopy(executable, tmppath)
 			if err != nil {
