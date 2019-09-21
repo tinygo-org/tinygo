@@ -145,7 +145,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		return errors.New("verification error after IR construction")
 	}
 
-	err = interp.Run(c.Module(), c.TargetData(), config.dumpSSA)
+	err = interp.Run(c.Module(), config.dumpSSA)
 	if err != nil {
 		return err
 	}
