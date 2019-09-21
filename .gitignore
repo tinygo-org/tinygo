@@ -12,5 +12,5 @@ src/device/sifive/*.s
 src/device/stm32/*.go
 src/device/stm32/*.s
 vendor
-llvm
 llvm-build
+llvm-project
