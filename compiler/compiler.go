@@ -187,11 +187,6 @@ func (c *Compiler) Module() llvm.Module {
 	return c.mod
 }
 
-// Return the LLVM target data object. Only valid after a successful compile.
-func (c *Compiler) TargetData() llvm.TargetData {
-	return c.targetData
-}
-
 // selectGC picks an appropriate GC strategy if none was provided.
 func (c *Compiler) selectGC() string {
 	if c.GC != "" {
