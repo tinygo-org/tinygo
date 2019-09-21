@@ -21,12 +21,12 @@ func (c *Compiler) createRuntimeCall(fnName string, args []llvm.Value, name stri
 		panic("trying to call runtime." + fnName)
 	}
 	fn := c.ir.GetFunction(member.(*ssa.Function))
+	if fn.LLVMFn.IsNil() {
+		panic(fmt.Errorf("function %s does not appear in LLVM IR", fnName))
+	}
 	if !fn.IsExported() {
 		args = append(args, llvm.Undef(c.i8ptrType))            // unused context parameter
 		args = append(args, llvm.ConstPointerNull(c.i8ptrType)) // coroutine handle
-	}
-	if fn.LLVMFn.IsNil() {
-		panic(fmt.Errorf("function %s does not appear in LLVM IR", fnName))
 	}
 	return c.createCall(fn.LLVMFn, args, name)
 }

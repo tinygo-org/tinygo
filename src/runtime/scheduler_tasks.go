@@ -106,7 +106,3 @@ func getSystemStackPointer() uintptr {
 		return schedulerState.sp
 	}
 }
-
-func getFakeCoroutine() *task {
-	return nil
-}

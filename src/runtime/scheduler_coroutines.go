@@ -46,14 +46,9 @@ func (t *task) state() *taskState {
 
 func makeGoroutine(uintptr) uintptr
 
-func badbad(*task) *task
-
 // Compiler stub to get the current goroutine. Calls to this function are
 // removed in the goroutine lowering pass.
-//go:noinline
-func getCoroutine() *task {
-	return badbad(nil)
-}
+func getCoroutine() *task
 
 // setTaskStatePtr is a helper function to set the current .ptr field of a
 // coroutine promise.
@@ -80,6 +75,13 @@ func getSystemStackPointer() uintptr {
 	return getCurrentStackPointer()
 }
 
+func fakeCoroutine(dst **task) {
+	*dst = getCoroutine()
+	for {
+		yield()
+	}
+}
+
 func getFakeCoroutine() *task {
 	// this isnt defined behavior, but this is what our implementation does
 	// this is really a horrible hack
@@ -88,4 +90,15 @@ func getFakeCoroutine() *task {
 
 	// the first line of fakeCoroutine will have completed by now
 	return t
+}
+
+// noret is a placeholder that can be used to indicate that an async function is not going to directly return here
+func noret()
+
+func getParentHandle() *task
+
+func llvmCoroRefHolder() {
+	noret()
+	getParentHandle()
+	getCoroutine()
 }

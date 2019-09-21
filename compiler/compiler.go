@@ -35,17 +35,24 @@ const tinygoPath = "github.com/tinygo-org/tinygo"
 // linkage until all TinyGo passes have finished.
 var functionsUsedInTransforms = []string{
 	"runtime.alloc",
-	"runtime.avrSleep",
 	"runtime.free",
-	"runtime.getCoroutine",
+	"runtime.scheduler",
+}
+
+var taskFunctionsUsedInTransforms = []string{
+	"runtime.startGoroutine",
+}
+
+var coroFunctionsUsedInTransforms = []string{
+	"runtime.avrSleep",
 	"runtime.getFakeCoroutine",
-	"runtime.getParentHandle",
-	"runtime.noret",
 	"runtime.setTaskStatePtr",
 	"runtime.getTaskStatePtr",
 	"runtime.activateTask",
-	"runtime.scheduler",
-	"runtime.startGoroutine",
+	"runtime.noret",
+	"runtime.getParentHandle",
+	"runtime.getCoroutine",
+	"runtime.llvmCoroRefHolder",
 }
 
 // Configure the compiler.
@@ -201,6 +208,20 @@ func (c *Compiler) selectScheduler() string {
 	}
 	// Fall back to coroutines, which are supported everywhere.
 	return "coroutines"
+}
+
+// getFunctionsUsedInTransforms gets a list of all special functions that should be preserved during transforms and optimization.
+func (c *Compiler) getFunctionsUsedInTransforms() []string {
+	fnused := functionsUsedInTransforms
+	switch c.selectScheduler() {
+	case "coroutines":
+		fnused = append(append([]string{}, fnused...), coroFunctionsUsedInTransforms...)
+	case "tasks":
+		fnused = append(append([]string{}, fnused...), taskFunctionsUsedInTransforms...)
+	default:
+		panic(fmt.Errorf("invalid scheduler %q", c.selectScheduler()))
+	}
+	return fnused
 }
 
 // Compile the given package path or .go file path. Return an error when this
@@ -368,10 +389,10 @@ func (c *Compiler) Compile(mainPath string) []error {
 	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
 
 	// Make sure these functions are kept in tact during TinyGo transformation passes.
-	for _, name := range functionsUsedInTransforms {
+	for _, name := range c.getFunctionsUsedInTransforms() {
 		fn := c.mod.NamedFunction(name)
 		if fn.IsNil() {
-			continue
+			panic(fmt.Errorf("missing core function %q", name))
 		}
 		fn.SetLinkage(llvm.ExternalLinkage)
 	}

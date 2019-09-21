@@ -312,7 +312,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 	// Check whether a scheduler is needed.
 	makeGoroutine := c.mod.NamedFunction("runtime.makeGoroutine")
-	if c.GOARCH == "avr" {
+	if strings.HasPrefix(c.Triple, "avr") {
 		needsScheduler = false
 		getCoroutine := c.mod.NamedFunction("runtime.getCoroutine")
 		for _, inst := range getUses(getCoroutine) {
@@ -340,7 +340,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 				panic("expected const ptrtoint operand of runtime.makeGoroutine")
 			}
 			goroutine := ptrtoint.Operand(0)
-			if strings.HasPrefix(goroutine.Name(), "runtime.") {
+			if goroutine.Name() == "runtime.fakeCoroutine" {
 				continue
 			}
 			if _, ok := asyncFuncs[goroutine]; ok {
@@ -365,6 +365,10 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		// However, make sure that all go calls (which are all non-async) are
 		// transformed into regular calls.
 		return false, c.lowerMakeGoroutineCalls(false)
+	}
+
+	if noret := c.mod.NamedFunction("runtime.noret"); noret.IsNil() {
+		panic("missing noret")
 	}
 
 	// replace indefinitely blocking yields
@@ -828,11 +832,16 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 	// check for leftover calls to getCoroutine
 	if uses := getUses(getCoroutine); len(uses) > 0 {
-		useNames := make([]string, len(uses))
-		for i, u := range uses {
-			useNames[i] = u.InstructionParent().Parent().Name()
+		useNames := make([]string, 0, len(uses))
+		for _, u := range uses {
+			if u.InstructionParent().Parent().Name() == "runtime.llvmCoroRefHolder" {
+				continue
+			}
+			useNames = append(useNames, u.InstructionParent().Parent().Name())
 		}
-		panic("bad use of getCoroutine: " + strings.Join(useNames, ","))
+		if len(useNames) > 0 {
+			panic("bad use of getCoroutine: " + strings.Join(useNames, ","))
+		}
 	}
 
 	// rewrite calls to getParentHandle

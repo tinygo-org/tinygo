@@ -8,8 +8,6 @@ import (
 	"unsafe"
 )
 
-const isAVR = true
-
 const BOARD = "arduino"
 
 type timeUnit uint32
