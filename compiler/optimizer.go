@@ -50,7 +50,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 
 		// Run Go-specific optimization passes.
 		transform.OptimizeMaps(c.mod)
-		c.OptimizeStringToBytes()
+		transform.OptimizeStringToBytes(c.mod)
 		transform.OptimizeAllocs(c.mod)
 		c.LowerInterfaces()
 		c.LowerFuncValues()
@@ -62,7 +62,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 
 		// Run TinyGo-specific interprocedural optimizations.
 		transform.OptimizeAllocs(c.mod)
-		c.OptimizeStringToBytes()
+		transform.OptimizeStringToBytes(c.mod)
 
 		// Lower runtime.isnil calls to regular nil comparisons.
 		isnil := c.mod.NamedFunction("runtime.isnil")
@@ -157,104 +157,4 @@ func (c *Compiler) replacePanicsWithTrap() {
 			c.builder.CreateCall(trap, nil, "")
 		}
 	}
-}
-
-// Transform runtime.stringToBytes(...) calls into const []byte slices whenever
-// possible. This optimizes the following pattern:
-//     w.Write([]byte("foo"))
-// where Write does not store to the slice.
-func (c *Compiler) OptimizeStringToBytes() {
-	stringToBytes := c.mod.NamedFunction("runtime.stringToBytes")
-	if stringToBytes.IsNil() {
-		// nothing to optimize
-		return
-	}
-
-	for _, call := range getUses(stringToBytes) {
-		strptr := call.Operand(0)
-		strlen := call.Operand(1)
-
-		// strptr is always constant because strings are always constant.
-
-		convertedAllUses := true
-		for _, use := range getUses(call) {
-			nilValue := llvm.Value{}
-			if use.IsAExtractValueInst() == nilValue {
-				convertedAllUses = false
-				continue
-			}
-			switch use.Type().TypeKind() {
-			case llvm.IntegerTypeKind:
-				// A length (len or cap). Propagate the length value.
-				use.ReplaceAllUsesWith(strlen)
-				use.EraseFromParentAsInstruction()
-			case llvm.PointerTypeKind:
-				// The string pointer itself.
-				if !c.isReadOnly(use) {
-					convertedAllUses = false
-					continue
-				}
-				use.ReplaceAllUsesWith(strptr)
-				use.EraseFromParentAsInstruction()
-			default:
-				// should not happen
-				panic("unknown return type of runtime.stringToBytes: " + use.Type().String())
-			}
-		}
-		if convertedAllUses {
-			// Call to runtime.stringToBytes can be eliminated: both the input
-			// and the output is constant.
-			call.EraseFromParentAsInstruction()
-		}
-	}
-}
-
-// Check whether the given value (which is of pointer type) is never stored to.
-func (c *Compiler) isReadOnly(value llvm.Value) bool {
-	uses := getUses(value)
-	for _, use := range uses {
-		nilValue := llvm.Value{}
-		if use.IsAGetElementPtrInst() != nilValue {
-			if !c.isReadOnly(use) {
-				return false
-			}
-		} else if use.IsACallInst() != nilValue {
-			if !c.hasFlag(use, value, "readonly") {
-				return false
-			}
-		} else {
-			// Unknown instruction, might not be readonly.
-			return false
-		}
-	}
-	return true
-}
-
-// Check whether all uses of this param as parameter to the call have the given
-// flag. In most cases, there will only be one use but a function could take the
-// same parameter twice, in which case both must have the flag.
-// A flag can be any enum flag, like "readonly".
-func (c *Compiler) hasFlag(call, param llvm.Value, kind string) bool {
-	fn := call.CalledValue()
-	nilValue := llvm.Value{}
-	if fn.IsAFunction() == nilValue {
-		// This is not a function but something else, like a function pointer.
-		return false
-	}
-	kindID := llvm.AttributeKindID(kind)
-	for i := 0; i < fn.ParamsCount(); i++ {
-		if call.Operand(i) != param {
-			// This is not the parameter we're checking.
-			continue
-		}
-		index := i + 1 // param attributes start at 1
-		attr := fn.GetEnumAttributeAtIndex(index, kindID)
-		nilAttribute := llvm.Attribute{}
-		if attr == nilAttribute {
-			// At least one parameter doesn't have the flag (there may be
-			// multiple).
-			return false
-		}
-	}
-	return true
 }
