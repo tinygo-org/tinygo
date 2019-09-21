@@ -12,6 +12,7 @@ import (
 func TestInterp(t *testing.T) {
 	for _, name := range []string{
 		"basic",
+		"slice-copy",
 	} {
 		name := name // make tc local to this closure
 		t.Run(name, func(t *testing.T) {
