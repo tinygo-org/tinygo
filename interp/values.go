@@ -99,7 +99,7 @@ func (v *LocalValue) GetElementPtr(indices []uint32) Value {
 		return &LocalValue{v.Eval, gep}
 	}
 	switch v.Underlying.Opcode() {
-	case llvm.GetElementPtr, llvm.IntToPtr:
+	case llvm.GetElementPtr, llvm.IntToPtr, llvm.BitCast:
 		int32Type := v.Underlying.Type().Context().Int32Type()
 		llvmIndices := getLLVMIndices(int32Type, indices)
 		return &LocalValue{v.Eval, llvm.ConstGEP(v.Underlying, llvmIndices)}
