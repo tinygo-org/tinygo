@@ -12,6 +12,16 @@ type _interface struct {
 	value    unsafe.Pointer
 }
 
+//go:inline
+func composeInterface(typecode uintptr, value unsafe.Pointer) _interface {
+	return _interface{typecode, value}
+}
+
+//go:inline
+func decomposeInterface(i _interface) (uintptr, unsafe.Pointer) {
+	return i.typecode, i.value
+}
+
 // Return true iff both interfaces are equal.
 func interfaceEqual(x, y _interface) bool {
 	if x.typecode != y.typecode {
