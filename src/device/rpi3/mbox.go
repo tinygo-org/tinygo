@@ -111,59 +111,63 @@ type FBInfo struct {
 //call to InitFramebuffer.
 var FrameBufferInfo FBInfo
 
+// this is called hackdata because it SHOULD be the case that we can put this inside
+// the function below.  However, we cannot because tinygo+llvm will generate an
+// unaligned access (sp + constant that is not aligned) and the code generates
+// an exception.  For some reason, it's ok when the code is here.
+var hackdata = []uint32{
+	35 * 4,
+	MBOX_REQUEST,
+
+	0x48003, //set phy wh
+	8,
+	8,
+	1024, //FrameBufferInfo.width
+	768,  //FrameBufferInfo.height
+
+	0x48004, //set virt wh
+	8,
+	8,
+	1024, //FrameBufferInfo.virtual_width
+	768,  //FrameBufferInfo.virtual_height
+
+	0x48009, //set virt offset
+	8,
+	8,
+	0, //FrameBufferInfo.x_offset
+	0, //FrameBufferInfo.y.offset
+
+	0x48005, //set depth
+	4,
+	4,
+	32, //FrameBufferInfo.depth
+
+	0x48006, //set pixel order
+	4,
+	4,
+	1, //RGB, not BGR preferably
+
+	0x40001, //get framebuffer, gets alignment on request
+	8,
+	8,
+	4096, //FrameBufferInfo.pointer
+	0,    //FrameBufferInfo.size
+
+	0x40008, //get pitch
+	4,
+	4,
+	0, //FrameBufferInfo.pitch
+	MBOX_TAG_LAST,
+}
+
 //InitFramebuffer does a series of Mbox calls to the GPU to init the framebuffer
 //hardware. On success, results are placed into FrameBufferInfo.
-//   bbbbb go:export InitFramebuffer
-func xxxInitFramebuffer() bool {
+//go:export InitFramebuffer
+func InitFramebuffer() bool {
 	mbox := align16bytes(uintptr(unsafe.Pointer(&mboxData)))
 
-	data := []uint32{
-		35 * 4,
-		MBOX_REQUEST,
-
-		0x48003, //set phy wh
-		8,
-		8,
-		1024, //FrameBufferInfo.width
-		768,  //FrameBufferInfo.height
-
-		0x48004, //set virt wh
-		8,
-		8,
-		1024, //FrameBufferInfo.virtual_width
-		768,  //FrameBufferInfo.virtual_height
-
-		0x48009, //set virt offset
-		8,
-		8,
-		0, //FrameBufferInfo.x_offset
-		0, //FrameBufferInfo.y.offset
-
-		0x48005, //set depth
-		4,
-		4,
-		32, //FrameBufferInfo.depth
-
-		0x48006, //set pixel order
-		4,
-		4,
-		1, //RGB, not BGR preferably
-
-		0x40001, //get framebuffer, gets alignment on request
-		8,
-		8,
-		4096, //FrameBufferInfo.pointer
-		0,    //FrameBufferInfo.size
-
-		0x40008, //get pitch
-		4,
-		4,
-		0, //FrameBufferInfo.pitch
-		MBOX_TAG_LAST,
-	}
-
-	for i := range data {
-		volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(i*4))), data[i])
+	for i := range hackdata {
+		volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(i*4))), hackdata[i])
 	}
 
 	channel := byte(MBOX_CH_PROP)
@@ -178,8 +182,7 @@ func xxxInitFramebuffer() bool {
 	return false
 }
 
-// go:export InitFramebuffer
-func InitFramebuffer() bool {
+func piecesInitFramebuffer() bool {
 	channel := byte(MBOX_CH_PROP)
 
 	mboxSetupData(
