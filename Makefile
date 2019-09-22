@@ -48,7 +48,7 @@ endif
 clean:
 	@rm -rf build
 
-FMT_PATHS = ./*.go cgo compiler interp ir loader src/device/arm src/examples src/machine src/os src/reflect src/runtime src/sync src/syscall transform
+FMT_PATHS = ./*.go cgo compiler interp ir loader src/device/arm src/examples src/machine src/os src/reflect src/runtime src/sync src/syscall src/internal/reflectlite transform
 fmt:
 	@gofmt -l -w $(FMT_PATHS)
 fmt-check:
@@ -60,23 +60,23 @@ gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-sifive gen-d
 gen-device-avr:
 	./tools/gen-device-avr.py lib/avr/packs/atmega src/device/avr/
 	./tools/gen-device-avr.py lib/avr/packs/tiny src/device/avr/
-	$(GO) fmt ./src/device/avr
+	GO111MODULE=off $(GO) fmt ./src/device/avr
 
 gen-device-nrf:
 	./tools/gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/ --source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk
-	$(GO) fmt ./src/device/nrf
+	GO111MODULE=off $(GO) fmt ./src/device/nrf
 
 gen-device-sam:
 	./tools/gen-device-svd.py lib/cmsis-svd/data/Atmel/ src/device/sam/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel
-	$(GO) fmt ./src/device/sam
+	GO111MODULE=off $(GO) fmt ./src/device/sam
 
 gen-device-sifive:
 	./tools/gen-device-svd.py lib/cmsis-svd/data/SiFive-Community/ src/device/sifive/ --source=https://github.com/AdaCore/svd2ada/tree/master/CMSIS-SVD/SiFive-Community
-	$(GO) fmt ./src/device/sifive
+	GO111MODULE=off $(GO) fmt ./src/device/sifive
 
 gen-device-stm32:
 	./tools/gen-device-svd.py lib/cmsis-svd/data/STMicro/ src/device/stm32/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro
-	$(GO) fmt ./src/device/stm32
+	GO111MODULE=off $(GO) fmt ./src/device/stm32
 
 
 # Get LLVM sources.

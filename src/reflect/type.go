@@ -398,6 +398,13 @@ func (t Type) AssignableTo(u Type) bool {
 	return false
 }
 
+func (t Type) Implements(u Type) bool {
+	if t.Kind() != Interface {
+		panic("reflect: non-interface type passed to Type.Implements")
+	}
+	return u.AssignableTo(t)
+}
+
 // Comparable returns whether values of this type can be compared to each other.
 func (t Type) Comparable() bool {
 	switch t.Kind() {
