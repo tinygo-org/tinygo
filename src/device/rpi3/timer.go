@@ -149,6 +149,9 @@ func UnexpectedInterrupt(n int, esr uint64, address uint64) {
 	}
 	print("unexpected interrupt:", unexpectedInterruptNames[n], " esr:", esr, " address 0x")
 	UART0Hex64(address)
+	sp := ReadRegister("sp")
+	print("sp is ")
+	UART0Hex64(uint64(sp))
 	Asm("eret")
 }
 
@@ -277,19 +280,18 @@ func UART0TimeDateString(t uint32) {
 	for _, m := range monthSeq {
 		switch m {
 		case "sep":
-			length=30
+			length = 30
 		case "feb":
-			length=lengthOfFebruary(yr)
+			length = lengthOfFebruary(yr)
 		default:
 			length, ok = monthLen[m]
-		 	if !ok {
-		 		print("bad month: '", m, "'\n")
-		 		Abort()
-		 }
+			if !ok {
+				print("bad month: '", m, "'\n")
+				Abort()
+			}
 		}
 		length = length * 24 * 60 * 60
 		if current < length {
-			print("bailing out ",current," ",length," ",m," feb=", lengthOfFebruary(yr), "\n")
 			break
 		}
 		current -= length

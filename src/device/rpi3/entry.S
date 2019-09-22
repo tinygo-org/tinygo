@@ -39,8 +39,16 @@ add     sp, sp, #256
 eret
 .endm
 
-.macro handle_invalid_entry type
+.macro xxxold_handle_invalid_entry type
 kernel_entry
+mov	x0, #\type
+mrs	x1, esr_el1
+mrs	x2, elr_el1
+bl	unexpectedInterrupt
+b abort
+.endm
+
+.macro handle_invalid_entry type
 mov	x0, #\type
 mrs	x1, esr_el1
 mrs	x2, elr_el1

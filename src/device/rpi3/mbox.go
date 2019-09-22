@@ -3,9 +3,9 @@ package rpi3
 import "unsafe"
 import "runtime/volatile"
 
-//this is really a C-style array with 36 elements of type uint32
+//this is really a C-style array with 128 elements of type uint32
 // xxx not concurrent safe! xxx
-var mboxData [256]byte
+var mboxData [512]byte
 
 //
 // Make a mailbox call. Returns true if the message has been returned successfully.
@@ -101,9 +101,10 @@ func LEDSet(on bool) bool {
 //pointer to the framebuffer  itself.
 type FBInfo struct {
 	Height int
-	Width int
-	Pitch int
-	Ptr unsafe.Pointer
+	Width  int
+	Pitch  int
+	Ptr    unsafe.Pointer
+	Size   int
 }
 
 //FrameBufferInfo is an FBInfo struct that gets filled in by a successful
@@ -112,59 +113,160 @@ var FrameBufferInfo FBInfo
 
 //InitFramebuffer does a series of Mbox calls to the GPU to init the framebuffer
 //hardware. On success, results are placed into FrameBufferInfo.
-func InitFramebuffer() bool {
-	mboxSetupData(
-	35*4,
-	MBOX_REQUEST,
+//   bbbbb go:export InitFramebuffer
+func xxxInitFramebuffer() bool {
+	mbox := align16bytes(uintptr(unsafe.Pointer(&mboxData)))
 
-	0x48003,  //set phy wh
-	8,
-	8,
-	1024,         //FrameBufferInfo.width
-	768,          //FrameBufferInfo.height
+	data := []uint32{
+		35 * 4,
+		MBOX_REQUEST,
 
-	0x48004,   //set virt wh
-	8,
-	8,
-	1024,        //FrameBufferInfo.virtual_width
-	768,         //FrameBufferInfo.virtual_height
+		0x48003, //set phy wh
+		8,
+		8,
+		1024, //FrameBufferInfo.width
+		768,  //FrameBufferInfo.height
 
-	0x48009, //set virt offset
-	8,
-	8,
-	0,           //FrameBufferInfo.x_offset
-	0,           //FrameBufferInfo.y.offset
+		0x48004, //set virt wh
+		8,
+		8,
+		1024, //FrameBufferInfo.virtual_width
+		768,  //FrameBufferInfo.virtual_height
 
-	0x48005, //set depth
-	4,
-	4,
-	32,          //FrameBufferInfo.depth
+		0x48009, //set virt offset
+		8,
+		8,
+		0, //FrameBufferInfo.x_offset
+		0, //FrameBufferInfo.y.offset
 
-	0x48006, //set pixel order
-	4,
-	4,
-	1,           //RGB, not BGR preferably
+		0x48005, //set depth
+		4,
+		4,
+		32, //FrameBufferInfo.depth
 
-	0x40001, //get framebuffer, gets alignment on request
-	8,
-	8,
-	4096,        //FrameBufferInfo.pointer
-	0,           //FrameBufferInfo.size
+		0x48006, //set pixel order
+		4,
+		4,
+		1, //RGB, not BGR preferably
 
-	0x40008, //get pitch
-	4,
-	4,
-	0,           //FrameBufferInfo.pitch
-	MBOX_TAG_LAST)
+		0x40001, //get framebuffer, gets alignment on request
+		8,
+		8,
+		4096, //FrameBufferInfo.pointer
+		0,    //FrameBufferInfo.size
+
+		0x40008, //get pitch
+		4,
+		4,
+		0, //FrameBufferInfo.pitch
+		MBOX_TAG_LAST,
+	}
+
+	for i := range data {
+		volatile.StoreUint32((*uint32)(unsafe.Pointer(uintptr(mbox)+uintptr(i*4))), data[i])
+	}
 
 	channel := byte(MBOX_CH_PROP)
-	if(MboxCall(byte(channel)) && MboxResultSlot(20)==32 && MboxResultSlot(28)!=0) {
-		FrameBufferInfo.Ptr = unsafe.Pointer(uintptr(MboxResultSlot(28)&0x3FFFFFFF))
-		FrameBufferInfo.Width=int(MboxResultSlot(5))
-		FrameBufferInfo.Height=int(MboxResultSlot(6))
-		FrameBufferInfo.Pitch=int(MboxResultSlot(33))
+	if MboxCall(byte(channel)) && MboxResultSlot(20) == 32 && MboxResultSlot(28) != 0 {
+		FrameBufferInfo.Ptr = unsafe.Pointer(uintptr(MboxResultSlot(28) & 0x3FFFFFFF))
+		FrameBufferInfo.Width = int(MboxResultSlot(5))
+		FrameBufferInfo.Height = int(MboxResultSlot(6))
+		FrameBufferInfo.Pitch = int(MboxResultSlot(33))
 		return true
 	}
 
 	return false
+}
+
+// go:export InitFramebuffer
+func InitFramebuffer() bool {
+	channel := byte(MBOX_CH_PROP)
+
+	mboxSetupData(
+		8*4,
+		MBOX_REQUEST,
+		0x48003, //set phy wh
+		8,
+		8,
+		1024, //FrameBufferInfo.width
+		768,  //FrameBufferInfo.height
+		MBOX_TAG_LAST)
+	MboxCall(channel)
+
+	FrameBufferInfo.Width = int(MboxResultSlot(5))
+	FrameBufferInfo.Height = int(MboxResultSlot(6))
+
+	mboxSetupData(
+		8*4,
+		MBOX_REQUEST,
+		0x48004, //set virt wh
+		8,
+		8,
+		1024, //FrameBufferInfo.virtual_width
+		768,  //FrameBufferInfo.virtual_height
+		MBOX_TAG_LAST)
+	MboxCall(channel)
+
+	mboxSetupData(
+		8*4,
+		MBOX_REQUEST,
+		0x48009, //set virt offset
+		8,
+		8,
+		0, //FrameBufferInfo.x_offset
+		0, //FrameBufferInfo.y.offset
+		MBOX_TAG_LAST)
+	MboxCall(channel)
+
+	mboxSetupData(
+		7*4,
+		MBOX_REQUEST,
+		0x48005, //set depth
+		4,
+		4,
+		32, //FrameBufferInfo.depth
+		MBOX_TAG_LAST)
+	MboxCall(channel)
+	if MboxResultSlot(5) != 32 {
+		return false
+	}
+
+	mboxSetupData(
+		7*4,
+		MBOX_REQUEST,
+		0x48006, //set pixel order
+		4,
+		4,
+		1, //RGB, not BGR preferably
+		MBOX_TAG_LAST)
+	MboxCall(channel)
+
+	mboxSetupData(
+		8*4,
+		MBOX_REQUEST,
+		0x40001, //get framebuffer, gets alignment on request
+		8,
+		8,
+		4096, //FrameBufferInfo.pointer
+		0,    //FrameBufferInfo.size
+		MBOX_TAG_LAST)
+	MboxCall(channel)
+	FrameBufferInfo.Ptr = unsafe.Pointer(uintptr(MboxResultSlot(5)))
+	FrameBufferInfo.Size = int(MboxResultSlot(6))
+	if FrameBufferInfo.Ptr == nil || FrameBufferInfo.Size == 0 {
+		return false
+	}
+
+	mboxSetupData(
+		7*4,
+		MBOX_REQUEST,
+		0x40008, //get pitch
+		4,
+		4,
+		0, //FrameBufferInfo.pitch
+		MBOX_TAG_LAST)
+	MboxCall(channel)
+	FrameBufferInfo.Pitch = int(MboxResultSlot(5))
+
+	return true
 }
