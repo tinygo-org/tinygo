@@ -35,20 +35,22 @@ func Indirect(v Value) Value {
 	return v.Elem()
 }
 
+//go:linkname composeInterface runtime.composeInterface
+func composeInterface(Type, unsafe.Pointer) interface{}
+
+//go:linkname decomposeInterface runtime.decomposeInterface
+func decomposeInterface(i interface{}) (Type, unsafe.Pointer)
+
 func ValueOf(i interface{}) Value {
-	v := (*interfaceHeader)(unsafe.Pointer(&i))
+	typecode, value := decomposeInterface(i)
 	return Value{
-		typecode: v.typecode,
-		value:    v.value,
+		typecode: typecode,
+		value:    value,
 		flags:    valueFlagExported,
 	}
 }
 
 func (v Value) Interface() interface{} {
-	i := interfaceHeader{
-		typecode: v.typecode,
-		value:    v.value,
-	}
 	if v.isIndirect() && v.Type().Size() <= unsafe.Sizeof(uintptr(0)) {
 		// Value was indirect but must be put back directly in the interface
 		// value.
@@ -56,9 +58,9 @@ func (v Value) Interface() interface{} {
 		for j := v.Type().Size(); j != 0; j-- {
 			value = (value << 8) | uintptr(*(*uint8)(unsafe.Pointer(uintptr(v.value) + j - 1)))
 		}
-		i.value = unsafe.Pointer(value)
+		v.value = unsafe.Pointer(value)
 	}
-	return *(*interface{})(unsafe.Pointer(&i))
+	return composeInterface(v.typecode, v.value)
 }
 
 func (v Value) Type() Type {
@@ -94,8 +96,8 @@ func (v Value) IsNil() bool {
 		if v.value == nil {
 			return true
 		}
-		itf := (*interfaceHeader)(v.value)
-		return itf.value == nil
+		_, val := decomposeInterface(*(*interface{})(v.value))
+		return val == nil
 	default:
 		panic(&ValueError{"IsNil"})
 	}
@@ -655,12 +657,6 @@ func New(typ Type) Value {
 type funcHeader struct {
 	Context unsafe.Pointer
 	Code    unsafe.Pointer
-}
-
-// This is the same thing as an interface{}.
-type interfaceHeader struct {
-	typecode Type
-	value    unsafe.Pointer
 }
 
 type SliceHeader struct {
