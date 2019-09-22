@@ -50,7 +50,7 @@ func makeGoroutine(uintptr) uintptr
 // removed in the goroutine lowering pass.
 func getCoroutine() *task
 
-// getTaskStatePtr is a helper function to set the current .ptr field of a
+// setTaskStatePtr is a helper function to set the current .ptr field of a
 // coroutine promise.
 func setTaskStatePtr(t *task, value unsafe.Pointer) {
 	t.state().ptr = value
@@ -65,37 +65,40 @@ func getTaskStatePtr(t *task) unsafe.Pointer {
 	return t.state().ptr
 }
 
-//go:linkname sleep time.Sleep
-func sleep(d int64) {
-	sleepTicks(timeUnit(d / tickMicros))
-}
-
-// deadlock is called when a goroutine cannot proceed any more, but is in theory
-// not exited (so deferred calls won't run). This can happen for example in code
-// like this, that blocks forever:
-//
-//     select{}
-//
-// The coroutine version is implemented directly in the compiler but it needs
-// this definition to work.
-func deadlock()
-
-// reactivateParent reactivates the parent goroutine. It is necessary in case of
-// the coroutine-based scheduler.
-func reactivateParent(t *task) {
-	activateTask(t)
-}
-
-// chanYield exits the current goroutine. Used in the channel implementation, to
-// suspend the current goroutine until it is reactivated by a channel operation
-// of a different goroutine. It is a no-op in the coroutine implementation.
-func chanYield() {
-	// Nothing to do here, simply returning from the channel operation also exits
-	// the goroutine temporarily.
-}
+// yield suspends execution of the current goroutine
+// any wakeups must be configured before calling yield
+func yield()
 
 // getSystemStackPointer returns the current stack pointer of the system stack.
 // This is always the current stack pointer.
 func getSystemStackPointer() uintptr {
 	return getCurrentStackPointer()
+}
+
+func fakeCoroutine(dst **task) {
+	*dst = getCoroutine()
+	for {
+		yield()
+	}
+}
+
+func getFakeCoroutine() *task {
+	// this isnt defined behavior, but this is what our implementation does
+	// this is really a horrible hack
+	var t *task
+	go fakeCoroutine(&t)
+
+	// the first line of fakeCoroutine will have completed by now
+	return t
+}
+
+// noret is a placeholder that can be used to indicate that an async function is not going to directly return here
+func noret()
+
+func getParentHandle() *task
+
+func llvmCoroRefHolder() {
+	noret()
+	getParentHandle()
+	getCoroutine()
 }

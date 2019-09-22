@@ -108,7 +108,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 	}
 
 	// After TinyGo-specific transforms have finished, undo exporting these functions.
-	for _, name := range functionsUsedInTransforms {
+	for _, name := range c.getFunctionsUsedInTransforms() {
 		fn := c.mod.NamedFunction(name)
 		if fn.IsNil() {
 			continue
