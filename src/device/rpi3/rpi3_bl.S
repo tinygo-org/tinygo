@@ -30,9 +30,9 @@
 	mrs     x27, hcr_el2
 
 	// system control register
-	mov     x4, #0x0800
-	movk    x4, #0x30d0, lsl #16
-	msr     sctlr_el1, x4
+//	mov     x4, #0x0800
+//	movk    x4, #0x30d0, lsl #16
+//	msr     sctlr_el1, x4
 
 	//insert default vectors for core 0
 	ldr x27, =vectors
@@ -61,7 +61,7 @@
 	//fp points to bottom (x29) (for Bootloaded code 0x30000 - 0x10)
 
 	//tell hardware that EL0 has own stack
-	msr SPSel, #1
+	//msr SPSel, #1
 
 	// jump to go code
 	bl      mainFromBootloader
