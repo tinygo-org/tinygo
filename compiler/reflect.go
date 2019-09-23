@@ -126,15 +126,8 @@ type typeCodeAssignmentState struct {
 // that is ever stored in an interface. It tries to use the smallest possible
 // numbers to make the code that works with interfaces as small as possible.
 func (c *Compiler) assignTypeCodes(typeSlice typeInfoSlice) {
-	fn := c.mod.NamedFunction("reflect.ValueOf")
-	if fn.IsNil() {
-		// reflect.ValueOf is never used, so we can use the most efficient
-		// encoding possible.
-		for i, t := range typeSlice {
-			t.num = uint64(i + 1)
-		}
-		return
-	}
+	// if reflect were not used, we could skip generating the sidetable
+	// this does not help in practice, and is difficult to do correctly
 
 	// Assign typecodes the way the reflect package expects.
 	state := typeCodeAssignmentState{
