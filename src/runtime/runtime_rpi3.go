@@ -74,11 +74,6 @@ func putchar(c byte) {
 	dev.UART0Send(c)
 }
 
-// just send to device code which ends up calling WFE
-func abort() {
-	dev.Abort()
-}
-
 // Implement memset for LLVM and compiler-rt.
 //go:export memset
 func libc_memset(ptr unsafe.Pointer, c byte, size uintptr) {

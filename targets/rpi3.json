@@ -7,7 +7,8 @@
 	],
 	"linkerscript": "targets/rpi3.ld",
 	"extra-files": [
-		"src/device/rpi3/start.S"
+		"src/device/rpi3/start.S",
+		"src/device/rpi3/entry.S"
 	],
 	"linkerscript": "targets/rpi3.ld"
 }

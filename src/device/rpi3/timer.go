@@ -29,10 +29,6 @@ var unexpectedInterruptNames = []string{
 	"error el0 32bit",
 }
 
-// for computing the current time
-var startTime uint32
-var startTicks uint64
-
 //go:export abort
 func Abort() {
 	print("program aborted\n")
@@ -40,13 +36,6 @@ func Abort() {
 	for {
 		Asm("WFE")
 	}
-}
-
-//SetStartTime should be called exactly once, at boot time of a program that
-//is loaded by the bootloader.
-func SetStartTime(nowUnix uint32) {
-	startTime = nowUnix
-	startTicks = SysTimer()
 }
 
 // wait a given number of CPU cycles (at least)
