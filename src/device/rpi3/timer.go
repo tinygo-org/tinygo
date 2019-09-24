@@ -3,6 +3,7 @@
 package rpi3
 
 import (
+	"device/aarch64"
 	"runtime/volatile"
 )
 
@@ -34,28 +35,28 @@ func Abort() {
 	print("program aborted\n")
 	// QEMUTryExit()
 	for {
-		Asm("WFE")
+		aarch64.Asm("WFE")
 	}
 }
 
 // wait a given number of CPU cycles (at least)
 func WaitCycles(n int) {
 	for n > 0 {
-		Asm("nop")
+		aarch64.Asm("nop")
 		n--
 	}
 }
 
 func WaitMuSec(n uint32) {
 	var f, t, r uint64
-	AsmFull(`mrs x28, cntfrq_el0
+	aarch64.AsmFull(`mrs x28, cntfrq_el0
 		str x28,{f}
 		mrs x27, cntpct_el0
 		str x27,{t}`, map[string]interface{}{"f": &f, "t": &t})
 	//expires at t
 	t += ((f / 1000) * uint64(n)) / 1000
 	for r < t {
-		AsmFull(`mrs x27, cntpct_el0
+		aarch64.AsmFull(`mrs x27, cntpct_el0
 			str x27,{r}`, map[string]interface{}{"r": &r})
 	}
 }
@@ -118,11 +119,11 @@ func BComHandleTimerIRQ(interval uint32) {
 }
 
 func EnableTimerIRQ() {
-	Asm("msr daifclr, #2")
+	aarch64.Asm("msr daifclr, #2")
 }
 
 func DisableTimerIRQ() {
-	Asm("msr daifset, #2")
+	aarch64.Asm("msr daifset, #2")
 }
 
 func EnableInterruptController() {
@@ -138,16 +139,16 @@ func UnexpectedInterrupt(n int, esr uint64, address uint64) {
 	}
 	print("unexpected interrupt:", unexpectedInterruptNames[n], " esr:", esr, " address 0x")
 	UART0Hex64(address)
-	sp := ReadRegister("sp")
+	sp := aarch64.ReadRegister("sp")
 	print("sp is ")
 	UART0Hex64(uint64(sp))
-	Asm("eret")
+	aarch64.Asm("eret")
 }
 
 // get the counter frequency
 func CounterFreq() uint32 {
 	var val uint32
-	AsmFull(`mrs x28, cntfrq_el0
+	aarch64.AsmFull(`mrs x28, cntfrq_el0
 		str x28,{val}`, map[string]interface{}{"val": &val})
 	return val
 }
@@ -157,14 +158,14 @@ var userCallbackFunc func(uint32, uint64) uint32
 
 // clears the interrupt and writes target value (which is a time distance from now)
 func SetCounterTargetInterval(val uint32, fn func(uint32, uint64) uint32) {
-	AsmFull(`mov x28,{val}
+	aarch64.AsmFull(`mov x28,{val}
 		msr cntv_tval_el0, x28`, map[string]interface{}{"val": val})
 	userCallbackFunc = fn
 }
 
 func CounterTargetVal() uint32 {
 	var val uint32
-	AsmFull(`mrs x28,cntv_tval_el0
+	aarch64.AsmFull(`mrs x28,cntv_tval_el0
 		str x28,{val}`, map[string]interface{}{"val": &val})
 	return val
 }
@@ -174,15 +175,15 @@ func Core0CounterToCore0Irq() {
 }
 
 func EnableCounter() {
-	Asm(`orr x27, xzr, #1
+	aarch64.Asm(`orr x27, xzr, #1
 		msr cntv_ctl_el0, x27`)
 }
 func UDisableCounter() {
-	Asm("msr cntv_ctl_el0, #0")
+	aarch64.Asm("msr cntv_ctl_el0, #0")
 }
 
 func WaitForInterrupt() {
-	Asm("wfi")
+	aarch64.Asm("wfi")
 }
 
 func Core0TimerPending() uint32 {
@@ -191,7 +192,7 @@ func Core0TimerPending() uint32 {
 
 func VirtualTimer() uint64 {
 	var val uint64
-	AsmFull(`mrs x28, cntvct_el0
+	aarch64.AsmFull(`mrs x28, cntvct_el0
 		str x28,{val}`, map[string]interface{}{"val": &val})
 	return val
 }
@@ -221,7 +222,7 @@ func HandleTimerInterrupt() {
 // appears to be a bug in the compiler (LLVM) because it sys the svc code must be
 // a 16 bit value, but the ARM docs say it can be 24 bits (which would allow this one)
 // func QEMUTryExit() {
-// 	Asm(`ldr x0,0x18
+// 	aarch64.Asm(`ldr x0,0x18
 // 	ldr x1,=0x20026
 // 	svc 0x123456`)
 // }

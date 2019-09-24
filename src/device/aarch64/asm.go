@@ -1,6 +1,6 @@
-// +build rpi3
+// +build aarch64
 
-package rpi3
+package aarch64
 
 // Try to keep go vet from complaining about empty function bodies
 import _ "unsafe"

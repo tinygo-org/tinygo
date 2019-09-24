@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	"device/aarch64"
 	dev "device/rpi3"
 	"runtime/volatile"
 	"unsafe"
@@ -55,13 +56,13 @@ func primaryMain() {
 
 //go:export mainFromBootloader
 func mainFromBootloader() {
-	heapStart := dev.ReadRegister("x2")
+	heapStart := aarch64.ReadRegister("x2")
 	heapEnd = heapStart + 0x8000
 	heapptr = uintptr(heapStart)
 	// not sure what to set these two to
 	//globalsStart = 0xB0000
 	//globalsEnd = 0xB0FF8
-	t := dev.ReadRegister("x3")
+	t := aarch64.ReadRegister("x3")
 	dev.SetStartTime(uint32(t))
 	primaryMain()
 }
@@ -91,21 +92,21 @@ func libc_memmove(dst, src unsafe.Pointer, size uintptr) {
 // wait a given number of CPU cycles (at least)
 func WaitCycles(n int) {
 	for n > 0 {
-		dev.Asm("nop")
+		aarch64.Asm("nop")
 		n--
 	}
 }
 
 func WaitMuSec(n uint32) {
 	var f, t, r uint64
-	dev.AsmFull(`mrs x28, cntfrq_el0
+	aarch64.AsmFull(`mrs x28, cntfrq_el0
 		str x28,{f}
 		mrs x27, cntpct_el0
 		str x27,{t}`, map[string]interface{}{"f": &f, "t": &t})
 	//expires at t
 	t += ((f / 1000) * uint64(n)) / 1000
 	for r < t {
-		dev.AsmFull(`mrs x27, cntpct_el0
+		aarch64.AsmFull(`mrs x27, cntpct_el0
 			str x27,{r}`, map[string]interface{}{"r": &r})
 	}
 }
