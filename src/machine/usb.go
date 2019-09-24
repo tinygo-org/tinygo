@@ -4,7 +4,6 @@ package machine
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"runtime/volatile"
 )
@@ -41,22 +40,26 @@ func NewDeviceDescriptor(class, subClass, proto, packetSize0 uint8, vid, pid, ve
 
 // Bytes returns DeviceDescriptor data
 func (d DeviceDescriptor) Bytes() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, deviceDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.bLength)
-	binary.Write(buf, binary.LittleEndian, d.bDescriptorType)
-	binary.Write(buf, binary.LittleEndian, d.bcdUSB)
-	binary.Write(buf, binary.LittleEndian, d.bDeviceClass)
-	binary.Write(buf, binary.LittleEndian, d.bDeviceSubClass)
-	binary.Write(buf, binary.LittleEndian, d.bDeviceProtocol)
-	binary.Write(buf, binary.LittleEndian, d.bMaxPacketSize0)
-	binary.Write(buf, binary.LittleEndian, d.idVendor)
-	binary.Write(buf, binary.LittleEndian, d.idProduct)
-	binary.Write(buf, binary.LittleEndian, d.bcdDevice)
-	binary.Write(buf, binary.LittleEndian, d.iManufacturer)
-	binary.Write(buf, binary.LittleEndian, d.iProduct)
-	binary.Write(buf, binary.LittleEndian, d.iSerialNumber)
-	binary.Write(buf, binary.LittleEndian, d.bNumConfigurations)
-	return buf.Bytes()
+	b := make([]byte, deviceDescriptorSize)
+	b[0] = byte(d.bLength)
+	b[1] = byte(d.bDescriptorType)
+	b[2] = byte(d.bcdUSB)
+	b[3] = byte(d.bcdUSB >> 8)
+	b[4] = byte(d.bDeviceClass)
+	b[5] = byte(d.bDeviceSubClass)
+	b[6] = byte(d.bDeviceProtocol)
+	b[7] = byte(d.bMaxPacketSize0)
+	b[8] = byte(d.idVendor)
+	b[9] = byte(d.idVendor >> 8)
+	b[10] = byte(d.idProduct)
+	b[11] = byte(d.idProduct >> 8)
+	b[12] = byte(d.bcdDevice)
+	b[13] = byte(d.bcdDevice >> 8)
+	b[14] = byte(d.iManufacturer)
+	b[15] = byte(d.iProduct)
+	b[16] = byte(d.iSerialNumber)
+	b[17] = byte(d.bNumConfigurations)
+	return b
 }
 
 const configDescriptorSize = 9
@@ -85,16 +88,17 @@ func NewConfigDescriptor(totalLength uint16, interfaces uint8) ConfigDescriptor 
 
 // Bytes returns ConfigDescriptor data.
 func (d ConfigDescriptor) Bytes() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, configDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.bLength)
-	binary.Write(buf, binary.LittleEndian, d.bDescriptorType)
-	binary.Write(buf, binary.LittleEndian, d.wTotalLength)
-	binary.Write(buf, binary.LittleEndian, d.bNumInterfaces)
-	binary.Write(buf, binary.LittleEndian, d.bConfigurationValue)
-	binary.Write(buf, binary.LittleEndian, d.iConfiguration)
-	binary.Write(buf, binary.LittleEndian, d.bmAttributes)
-	binary.Write(buf, binary.LittleEndian, d.bMaxPower)
-	return buf.Bytes()
+	b := make([]byte, configDescriptorSize)
+	b[0] = byte(d.bLength)
+	b[1] = byte(d.bDescriptorType)
+	b[2] = byte(d.wTotalLength)
+	b[3] = byte(d.wTotalLength >> 8)
+	b[4] = byte(d.bNumInterfaces)
+	b[5] = byte(d.bConfigurationValue)
+	b[6] = byte(d.iConfiguration)
+	b[7] = byte(d.bmAttributes)
+	b[8] = byte(d.bMaxPower)
+	return b
 }
 
 const interfaceDescriptorSize = 9
@@ -124,17 +128,17 @@ func NewInterfaceDescriptor(n, numEndpoints, class, subClass, protocol uint8) In
 
 // Bytes returns InterfaceDescriptor data.
 func (d InterfaceDescriptor) Bytes() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, interfaceDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.bLength)
-	binary.Write(buf, binary.LittleEndian, d.bDescriptorType)
-	binary.Write(buf, binary.LittleEndian, d.bInterfaceNumber)
-	binary.Write(buf, binary.LittleEndian, d.bAlternateSetting)
-	binary.Write(buf, binary.LittleEndian, d.bNumEndpoints)
-	binary.Write(buf, binary.LittleEndian, d.bInterfaceClass)
-	binary.Write(buf, binary.LittleEndian, d.bInterfaceSubClass)
-	binary.Write(buf, binary.LittleEndian, d.bInterfaceProtocol)
-	binary.Write(buf, binary.LittleEndian, d.iInterface)
-	return buf.Bytes()
+	b := make([]byte, interfaceDescriptorSize)
+	b[0] = byte(d.bLength)
+	b[1] = byte(d.bDescriptorType)
+	b[2] = byte(d.bInterfaceNumber)
+	b[3] = byte(d.bAlternateSetting)
+	b[4] = byte(d.bNumEndpoints)
+	b[5] = byte(d.bInterfaceClass)
+	b[6] = byte(d.bInterfaceSubClass)
+	b[7] = byte(d.bInterfaceProtocol)
+	b[8] = byte(d.iInterface)
+	return b
 }
 
 const endpointDescriptorSize = 7
@@ -160,14 +164,15 @@ func NewEndpointDescriptor(addr, attr uint8, packetSize uint16, interval uint8) 
 
 // Bytes returns EndpointDescriptor data.
 func (d EndpointDescriptor) Bytes() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, endpointDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.bLength)
-	binary.Write(buf, binary.LittleEndian, d.bDescriptorType)
-	binary.Write(buf, binary.LittleEndian, d.bEndpointAddress)
-	binary.Write(buf, binary.LittleEndian, d.bmAttributes)
-	binary.Write(buf, binary.LittleEndian, d.wMaxPacketSize)
-	binary.Write(buf, binary.LittleEndian, d.bInterval)
-	return buf.Bytes()
+	b := make([]byte, endpointDescriptorSize)
+	b[0] = byte(d.bLength)
+	b[1] = byte(d.bDescriptorType)
+	b[2] = byte(d.bEndpointAddress)
+	b[3] = byte(d.bmAttributes)
+	b[4] = byte(d.wMaxPacketSize)
+	b[5] = byte(d.wMaxPacketSize >> 8)
+	b[6] = byte(d.bInterval)
+	return b
 }
 
 const iadDescriptorSize = 8
@@ -197,16 +202,16 @@ func NewIADDescriptor(firstInterface, count, class, subClass, protocol uint8) IA
 
 // Bytes returns IADDescriptor data.
 func (d IADDescriptor) Bytes() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, iadDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.bLength)
-	binary.Write(buf, binary.LittleEndian, d.bDescriptorType)
-	binary.Write(buf, binary.LittleEndian, d.bFirstInterface)
-	binary.Write(buf, binary.LittleEndian, d.bInterfaceCount)
-	binary.Write(buf, binary.LittleEndian, d.bFunctionClass)
-	binary.Write(buf, binary.LittleEndian, d.bFunctionSubClass)
-	binary.Write(buf, binary.LittleEndian, d.bFunctionProtocol)
-	binary.Write(buf, binary.LittleEndian, d.iFunction)
-	return buf.Bytes()
+	b := make([]byte, iadDescriptorSize)
+	b[0] = byte(d.bLength)
+	b[1] = byte(d.bDescriptorType)
+	b[2] = byte(d.bFirstInterface)
+	b[3] = byte(d.bInterfaceCount)
+	b[4] = byte(d.bFunctionClass)
+	b[5] = byte(d.bFunctionSubClass)
+	b[6] = byte(d.bFunctionProtocol)
+	b[7] = byte(d.iFunction)
+	return b
 }
 
 const cdcCSInterfaceDescriptorSize = 5
@@ -227,13 +232,13 @@ func NewCDCCSInterfaceDescriptor(subtype, d0, d1 uint8) CDCCSInterfaceDescriptor
 
 // Bytes returns CDCCSInterfaceDescriptor data.
 func (d CDCCSInterfaceDescriptor) Bytes() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, cdcCSInterfaceDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.len)
-	binary.Write(buf, binary.LittleEndian, d.dtype)
-	binary.Write(buf, binary.LittleEndian, d.subtype)
-	binary.Write(buf, binary.LittleEndian, d.d0)
-	binary.Write(buf, binary.LittleEndian, d.d1)
-	return buf.Bytes()
+	b := make([]byte, cdcCSInterfaceDescriptorSize)
+	b[0] = byte(d.len)
+	b[1] = byte(d.dtype)
+	b[2] = byte(d.subtype)
+	b[3] = byte(d.d0)
+	b[4] = byte(d.d1)
+	return b
 }
 
 const cmFunctionalDescriptorSize = 5
@@ -254,13 +259,13 @@ func NewCMFunctionalDescriptor(subtype, d0, d1 uint8) CMFunctionalDescriptor {
 
 // Bytes returns the CMFunctionalDescriptor data.
 func (d CMFunctionalDescriptor) Bytes() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, cmFunctionalDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.bFunctionLength)
-	binary.Write(buf, binary.LittleEndian, d.bDescriptorType)
-	binary.Write(buf, binary.LittleEndian, d.bDescriptorSubtype)
-	binary.Write(buf, binary.LittleEndian, d.bmCapabilities)
-	binary.Write(buf, binary.LittleEndian, d.bDataInterface)
-	return buf.Bytes()
+	b := make([]byte, cmFunctionalDescriptorSize)
+	b[0] = byte(d.bFunctionLength)
+	b[1] = byte(d.bDescriptorType)
+	b[2] = byte(d.bDescriptorSubtype)
+	b[3] = byte(d.bmCapabilities)
+	b[4] = byte(d.bDescriptorSubtype)
+	return b
 }
 
 const acmFunctionalDescriptorSize = 4
@@ -280,12 +285,12 @@ func NewACMFunctionalDescriptor(subtype, d0 uint8) ACMFunctionalDescriptor {
 
 // Bytes returns the ACMFunctionalDescriptor data.
 func (d ACMFunctionalDescriptor) Bytes() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, acmFunctionalDescriptorSize))
-	binary.Write(buf, binary.LittleEndian, d.len)
-	binary.Write(buf, binary.LittleEndian, d.dtype)
-	binary.Write(buf, binary.LittleEndian, d.subtype)
-	binary.Write(buf, binary.LittleEndian, d.bmCapabilities)
-	return buf.Bytes()
+	b := make([]byte, acmFunctionalDescriptorSize)
+	b[0] = byte(d.len)
+	b[1] = byte(d.dtype)
+	b[2] = byte(d.subtype)
+	b[3] = byte(d.bmCapabilities)
+	return b
 }
 
 // CDCDescriptor is the Communication Device Class (CDC) descriptor.
@@ -343,7 +348,7 @@ const cdcSize = iadDescriptorSize +
 
 // Bytes returns CDCDescriptor data.
 func (d CDCDescriptor) Bytes() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, cdcSize))
+	buf := bytes.NewBuffer(make([]byte, 0))
 	buf.Write(d.iad.Bytes())
 	buf.Write(d.cif.Bytes())
 	buf.Write(d.header.Bytes())
@@ -523,14 +528,13 @@ type usbSetup struct {
 }
 
 func newUSBSetup(data []byte) usbSetup {
-	buf := bytes.NewBuffer(data)
 	u := usbSetup{}
-	binary.Read(buf, binary.LittleEndian, &(u.bmRequestType))
-	binary.Read(buf, binary.LittleEndian, &(u.bRequest))
-	binary.Read(buf, binary.LittleEndian, &(u.wValueL))
-	binary.Read(buf, binary.LittleEndian, &(u.wValueH))
-	binary.Read(buf, binary.LittleEndian, &(u.wIndex))
-	binary.Read(buf, binary.LittleEndian, &(u.wLength))
+	u.bmRequestType = uint8(data[0])
+	u.bRequest = uint8(data[1])
+	u.wValueL = uint8(data[2])
+	u.wValueH = uint8(data[3])
+	u.wIndex = uint16(data[4]) | uint16(data[5]<<8)
+	u.wLength = uint16(data[6]) | uint16(data[7]<<8)
 	return u
 }
 
