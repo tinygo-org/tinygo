@@ -8,10 +8,8 @@
 package machine
 
 import (
-	"bytes"
 	"device/arm"
 	"device/sam"
-	"encoding/binary"
 	"errors"
 	"unsafe"
 )
@@ -1607,24 +1605,27 @@ func handleStandardSetup(setup usbSetup) bool {
 func cdcSetup(setup usbSetup) bool {
 	if setup.bmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
 		if setup.bRequest == usb_CDC_GET_LINE_CODING {
-			buf := bytes.NewBuffer(make([]byte, 0, 7))
-			binary.Write(buf, binary.LittleEndian, usbLineInfo.dwDTERate)
-			binary.Write(buf, binary.LittleEndian, usbLineInfo.bCharFormat)
-			binary.Write(buf, binary.LittleEndian, usbLineInfo.bParityType)
-			binary.Write(buf, binary.LittleEndian, usbLineInfo.bDataBits)
+			b := make([]byte, 0, 7)
+			b[0] = byte(usbLineInfo.dwDTERate)
+			b[1] = byte(usbLineInfo.dwDTERate >> 8)
+			b[2] = byte(usbLineInfo.dwDTERate >> 16)
+			b[3] = byte(usbLineInfo.dwDTERate >> 24)
+			b[4] = byte(usbLineInfo.bCharFormat)
+			b[5] = byte(usbLineInfo.bParityType)
+			b[6] = byte(usbLineInfo.bDataBits)
 
-			sendUSBPacket(0, buf.Bytes())
+			sendUSBPacket(0, b)
 			return true
 		}
 	}
 
 	if setup.bmRequestType == usb_REQUEST_HOSTTODEVICE_CLASS_INTERFACE {
 		if setup.bRequest == usb_CDC_SET_LINE_CODING {
-			buf := bytes.NewBuffer(receiveUSBControlPacket())
-			binary.Read(buf, binary.LittleEndian, &(usbLineInfo.dwDTERate))
-			binary.Read(buf, binary.LittleEndian, &(usbLineInfo.bCharFormat))
-			binary.Read(buf, binary.LittleEndian, &(usbLineInfo.bParityType))
-			binary.Read(buf, binary.LittleEndian, &(usbLineInfo.bDataBits))
+			b := receiveUSBControlPacket()
+			usbLineInfo.dwDTERate = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
+			usbLineInfo.bCharFormat = b[4]
+			usbLineInfo.bParityType = b[5]
+			usbLineInfo.bDataBits = b[6]
 		}
 
 		if setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
@@ -1814,7 +1815,7 @@ func sendConfiguration(setup usbSetup) {
 		sz := uint16(configDescriptorSize + cdcSize)
 		config := NewConfigDescriptor(sz, 2)
 
-		buf := make([]byte, 0, sz)
+		buf := make([]byte, 0)
 		buf = append(buf, config.Bytes()...)
 		buf = append(buf, cdc.Bytes()...)
 
