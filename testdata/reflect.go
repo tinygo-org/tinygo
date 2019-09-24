@@ -254,6 +254,16 @@ func main() {
 	if rv.Len() != 2 || rv.Index(0).Int() != 3 {
 		panic("slice was changed while setting part of it")
 	}
+
+	// Test types that are created in reflect and never created elsewhere in a
+	// value-to-interface conversion.
+	v := reflect.ValueOf(new(unreferencedType))
+	switch v.Elem().Interface().(type) {
+	case unreferencedType:
+		println("type assertion succeeded for unreferenced type")
+	default:
+		println("type assertion failed (but should succeed)")
+	}
 }
 
 func emptyFunc() {
@@ -340,3 +350,5 @@ func assertSize(ok bool, typ string) {
 		panic("size mismatch for type " + typ)
 	}
 }
+
+type unreferencedType int

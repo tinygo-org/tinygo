@@ -17,17 +17,10 @@ package compiler
 //     Replaced with an icmp instruction so it can be directly used in a type
 //     switch. This is very easy to optimize for LLVM: it will often translate a
 //     type switch into a regular switch statement.
-//     When this type assert is not possible (the type is never used in an
-//     interface), this call is replaced with a constant false to optimize the
-//     type assert away completely.
 //
 // interfaceImplements:
 //     This call is translated into a call that checks whether the underlying
 //     type is one of the types implementing this interface.
-//     When there is only one type implementing this interface, the check is
-//     replaced with a simple icmp instruction, just like a type assert.
-//     When there is no type at all that implements this interface, it is
-//     replaced with a constant false to optimize it completely.
 //
 // interfaceMethod:
 //     This call is replaced with a call to a function that calls the
@@ -353,32 +346,13 @@ func (p *lowerInterfacesPass) run() {
 
 		methodSet := use.Operand(1).Operand(0) // global variable
 		itf := p.interfaces[methodSet.Name()]
-		if len(itf.types) == 0 {
-			// There are no types implementing this interface, so this assert
-			// can never succeed.
-			// Signal this to the optimizer by branching on constant false. It
-			// should remove the "then" block.
-			use.ReplaceAllUsesWith(llvm.ConstInt(p.ctx.Int1Type(), 0, false))
-			use.EraseFromParentAsInstruction()
-		} else if len(itf.types) == 1 {
-			// There is only one type implementing this interface.
-			// Transform this interface assert into comparison against a
-			// constant.
-			p.builder.SetInsertPointBefore(use)
-			assertedType := p.builder.CreatePtrToInt(itf.types[0].typecode, p.uintptrType, "typeassert.typecode")
-			commaOk := p.builder.CreateICmp(llvm.IntEQ, assertedType, actualType, "typeassert.ok")
-			use.ReplaceAllUsesWith(commaOk)
-			use.EraseFromParentAsInstruction()
-		} else {
-			// There are multiple possible types implementing this interface.
-			// Create a function that does a type switch on all available types
-			// that implement this interface.
-			fn := p.getInterfaceImplementsFunc(itf)
-			p.builder.SetInsertPointBefore(use)
-			commaOk := p.builder.CreateCall(fn, []llvm.Value{actualType}, "typeassert.ok")
-			use.ReplaceAllUsesWith(commaOk)
-			use.EraseFromParentAsInstruction()
-		}
+		// Create a function that does a type switch on all available types
+		// that implement this interface.
+		fn := p.getInterfaceImplementsFunc(itf)
+		p.builder.SetInsertPointBefore(use)
+		commaOk := p.builder.CreateCall(fn, []llvm.Value{actualType}, "typeassert.ok")
+		use.ReplaceAllUsesWith(commaOk)
+		use.EraseFromParentAsInstruction()
 	}
 
 	// Make a slice of types sorted by frequency of use.
@@ -411,16 +385,8 @@ func (p *lowerInterfacesPass) run() {
 	for _, use := range typeAssertUses {
 		actualType := use.Operand(0)
 		assertedTypeGlobal := use.Operand(1)
-		t := p.types[assertedTypeGlobal.Name()]
-		var commaOk llvm.Value
-		if t.countMakeInterfaces == 0 {
-			// impossible type assert: optimize accordingly
-			commaOk = llvm.ConstInt(p.ctx.Int1Type(), 0, false)
-		} else {
-			// regular type assert
-			p.builder.SetInsertPointBefore(use)
-			commaOk = p.builder.CreateICmp(llvm.IntEQ, llvm.ConstPtrToInt(assertedTypeGlobal, p.uintptrType), actualType, "typeassert.ok")
-		}
+		p.builder.SetInsertPointBefore(use)
+		commaOk := p.builder.CreateICmp(llvm.IntEQ, llvm.ConstPtrToInt(assertedTypeGlobal, p.uintptrType), actualType, "typeassert.ok")
 		use.ReplaceAllUsesWith(commaOk)
 		use.EraseFromParentAsInstruction()
 	}
