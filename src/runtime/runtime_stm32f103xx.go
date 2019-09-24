@@ -160,12 +160,18 @@ func timerSleep(ticks uint32) {
 
 	// TODO: support smaller or larger scales (autoscaling) based
 	// on the length of sleep time requested.
-	// The current scaling only supports a range of 100 usec to 6553 msec.
+	// The current scaling only supports a range of 200 usec to 6553 msec.
 
 	// prescale counter down from 72mhz to 10khz aka 0.1 ms frequency.
 	stm32.TIM3.PSC.Set(machine.CPU_FREQUENCY/10000 - 1) // 7199
 
-	// set duty aka duration
+	// Set duty aka duration.
+	// STM32 dividers use n-1, i.e. n counts from 0 to n-1.
+	// As a result, with these prescaler settings,
+	// the minimum allowed duration is 200 microseconds.
+	if ticks < 200 {
+		ticks = 200
+	}
 	stm32.TIM3.ARR.Set(ticks/100 - 1) // convert from microseconds to 0.1 ms
 
 	// Enable the hardware interrupt.
