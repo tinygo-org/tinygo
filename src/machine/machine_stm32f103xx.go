@@ -196,9 +196,6 @@ var (
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {
 	Frequency uint32
-	SCK       Pin
-	MOSI      Pin
-	MISO      Pin
 	LSBFirst  bool
 	Mode      uint8
 }
@@ -209,7 +206,7 @@ type SPIConfig struct {
 // - allow setting data size to 16 bits?
 // - allow setting direction in HW for additional optimization?
 // - hardware SS pin?
-func (spi SPI) Configure(config SPIConfig) {
+func (spi SPI) Configure(sck, mosi, miso Pin, config SPIConfig) {
 	// enable clock for SPI
 	stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_SPI1EN)
 
@@ -267,7 +264,7 @@ func (spi SPI) Configure(config SPIConfig) {
 	spi.Bus.CR1.Set(conf)
 
 	// init pins
-	spi.setPins(config.SCK, config.MOSI, config.MISO)
+	spi.setPins(sck, mosi, miso)
 
 	// enable SPI interface
 	spi.Bus.CR1.SetBits(stm32.SPI_CR1_SPE)
@@ -295,16 +292,6 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 }
 
 func (spi SPI) setPins(sck, mosi, miso Pin) {
-	if sck == 0 {
-		sck = SPI0_SCK_PIN
-	}
-	if mosi == 0 {
-		mosi = SPI0_MOSI_PIN
-	}
-	if miso == 0 {
-		miso = SPI0_MISO_PIN
-	}
-
 	sck.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
 	mosi.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
 	miso.Configure(PinConfig{Mode: PinInputModeFloating})

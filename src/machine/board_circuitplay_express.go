@@ -115,6 +115,7 @@ const (
 // SPI on the Circuit Playground Express.
 var (
 	SPI0 = SPI{Bus: sam.SERCOM3_SPI,
+		SERCOM: 3,
 		SCK:     SPI0_SCK_PIN,
 		MOSI:    SPI0_MOSI_PIN,
 		MISO:    SPI0_MISO_PIN,

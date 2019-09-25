@@ -26,7 +26,7 @@ func main() {
 }
 
 func init() {
-	machine.UART0.Configure(machine.UARTConfig{})
+	machine.UART0.Configure(machine.UART_TX_PIN, machine.UART_RX_PIN, machine.UARTConfig{})
 	initLFCLK()
 	initRTC()
 }

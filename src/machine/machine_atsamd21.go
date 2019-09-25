@@ -875,34 +875,58 @@ func waitForSync() {
 // SPI
 type SPI struct {
 	Bus     *sam.SERCOM_SPI_Type
-	SCK     Pin
-	MOSI    Pin
-	MISO    Pin
-	DOpad   int
-	DIpad   int
 	PinMode PinMode
 }
 
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {
 	Frequency uint32
-	SCK       Pin
-	MOSI      Pin
-	MISO      Pin
 	LSBFirst  bool
 	Mode      uint8
 }
 
+var sercoms = [6]uint32{}
+
 // Configure is intended to setup the SPI interface.
-func (spi SPI) Configure(config SPIConfig) {
-	config.SCK = spi.SCK
-	config.MOSI = spi.MOSI
-	config.MISO = spi.MISO
-
+func (spi SPI) Configure(sck, mosi, miso Pin, config SPIConfig) error {
+	var diPad uint32
+	var pinMode PinMode
+	switch spi.SERCOM {
+	case 3:
+		switch miso {
+		case PA16:
+			diPad = 0
+			pinMode = PinSERCOMAlt
+		case PA17:
+			diPad = 1
+			pinMode = PinSERCOMAlt
+		case PA18:
+			diPad = 2
+			pinMode = PinSERCOMAlt
+		case PA19:
+			diPad = 3
+			pinMode = PinSERCOMAlt
+		case PA20:
+			diPad = 2
+			pinMode = PinSERCOMAlt
+		case PA21:
+			diPad = 3
+			pinMode = PinSERCOMAlt
+		case PA22:
+			diPad = 0
+		case PA23:
+			diPad = 1
+		case PA24:
+			diPad = 2
+		case PA25:
+			diPad = 3
+		default:
+			return ErrInvalidInputPin
+		}
+	default:
+		panic("machine: invalid SERCOM")
+	}
 	doPad := spi.DOpad
-	diPad := spi.DIpad
-
-	pinMode := spi.PinMode
 
 	// set default frequency
 	if config.Frequency == 0 {
@@ -969,6 +993,8 @@ func (spi SPI) Configure(config SPIConfig) {
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_ENABLE)
 	for spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPI_SYNCBUSY_ENABLE) {
 	}
+
+	return nil
 }
 
 // Transfer writes/reads a single byte using the SPI interface.

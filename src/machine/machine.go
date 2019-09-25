@@ -1,5 +1,17 @@
 package machine
 
+import (
+	"errors"
+)
+
+// These errors may be returned by SPI.Configure, I2C.Configure, or
+// UART.Configure. They indicate that one of the pins (input/output) are
+// incorrect.
+var (
+	ErrInvalidOutputPin = errors.New("machine: invalid output pin")
+	ErrInvalidInputPin  = errors.New("machine: invalid input pin")
+)
+
 type PinConfig struct {
 	Mode PinMode
 }
