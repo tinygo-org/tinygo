@@ -483,7 +483,9 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 						// delete everything after return
 						for next := llvm.NextInstruction(retInst); !next.IsNil(); next = llvm.NextInstruction(retInst) {
-							next.ReplaceAllUsesWith(llvm.Undef(retInst.Type()))
+							if next.Type().TypeKind() != llvm.VoidTypeKind {
+								next.ReplaceAllUsesWith(llvm.Undef(next.Type()))
+							}
 							next.EraseFromParentAsInstruction()
 						}
 
@@ -729,15 +731,19 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		if len(yieldCalls) == 0 {
 			// no yields - we do not have to LLVM-ify this
 			coroDebugPrintln("skipping", f.Name())
+			deleteQueue := []llvm.Value{}
 			for bb := f.EntryBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
 				for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
 					if !inst.IsACallInst().IsNil() && inst.CalledValue() == getCoroutine {
 						// no seperate local task - replace getCoroutine with getParentHandle
 						c.builder.SetInsertPointBefore(inst)
 						inst.ReplaceAllUsesWith(c.createRuntimeCall("getParentHandle", []llvm.Value{}, ""))
-						inst.EraseFromParentAsInstruction()
+						deleteQueue = append(deleteQueue, inst)
 					}
 				}
+			}
+			for _, v := range deleteQueue {
+				v.EraseFromParentAsInstruction()
 			}
 			continue
 		}
