@@ -15,6 +15,9 @@ export GOROOT = $(shell $(GO) env GOROOT)
 # md5sum binary
 MD5SUM = md5sum
 
+# Python binary
+PYTHON ?= python
+
 # Use CCACHE for LLVM if possible
 ifneq (, $(shell which ccache))
 CCACHE_LLVM_OPTION = '-DLLVM_CCACHE_BUILD=ON'
@@ -58,24 +61,24 @@ fmt-check:
 gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-sifive gen-device-stm32
 
 gen-device-avr:
-	./tools/gen-device-avr.py lib/avr/packs/atmega src/device/avr/
-	./tools/gen-device-avr.py lib/avr/packs/tiny src/device/avr/
+	$(PYTHON) ./tools/gen-device-avr.py lib/avr/packs/atmega src/device/avr/
+	$(PYTHON) ./tools/gen-device-avr.py lib/avr/packs/tiny src/device/avr/
 	GO111MODULE=off $(GO) fmt ./src/device/avr
 
 gen-device-nrf:
-	./tools/gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/ --source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk
+	$(PYTHON) ./tools/gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/ --source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk
 	GO111MODULE=off $(GO) fmt ./src/device/nrf
 
 gen-device-sam:
-	./tools/gen-device-svd.py lib/cmsis-svd/data/Atmel/ src/device/sam/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel
+	$(PYTHON) ./tools/gen-device-svd.py lib/cmsis-svd/data/Atmel/ src/device/sam/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel
 	GO111MODULE=off $(GO) fmt ./src/device/sam
 
 gen-device-sifive:
-	./tools/gen-device-svd.py lib/cmsis-svd/data/SiFive-Community/ src/device/sifive/ --source=https://github.com/AdaCore/svd2ada/tree/master/CMSIS-SVD/SiFive-Community
+	$(PYTHON) ./tools/gen-device-svd.py lib/cmsis-svd/data/SiFive-Community/ src/device/sifive/ --source=https://github.com/AdaCore/svd2ada/tree/master/CMSIS-SVD/SiFive-Community
 	GO111MODULE=off $(GO) fmt ./src/device/sifive
 
 gen-device-stm32:
-	./tools/gen-device-svd.py lib/cmsis-svd/data/STMicro/ src/device/stm32/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro
+	$(PYTHON) ./tools/gen-device-svd.py lib/cmsis-svd/data/STMicro/ src/device/stm32/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro
 	GO111MODULE=off $(GO) fmt ./src/device/stm32
 
 
