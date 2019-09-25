@@ -75,6 +75,71 @@ commands:
             - ~/.cache/tinygo
             - /go/pkg/mod
       - run: make fmt-check
+  assert-test-linux:
+    steps:
+      - checkout
+      - submodules
+      - run:
+          name: "Install apt dependencies"
+          command: |
+            sudo apt-get install \
+                python3 \
+                gcc-arm-linux-gnueabihf \
+                binutils-arm-none-eabi \
+                libc6-dev-armel-cross \
+                gcc-aarch64-linux-gnu \
+                libc6-dev-arm64-cross \
+                qemu-system-arm \
+                qemu-user \
+                gcc-avr \
+                avr-libc
+      - install-node
+      - restore_cache:
+          keys:
+            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-v2-{{ checksum "go.mod" }}
+      - llvm-source-linux
+      - restore_cache:
+          keys:
+            - llvm-build-8-linux-v7-assert
+      - run:
+          name: "Build LLVM"
+          command: |
+            if [ ! -f llvm-build/lib/liblldELF.a ]
+            then
+              # install dependencies
+              sudo apt-get install cmake clang ninja-build
+              # make build faster
+              export CC=clang
+              export CXX=clang++
+              # hack ninja to use less jobs
+              echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
+              chmod +x /go/bin/ninja
+              # build!
+              make ASSERT=1 llvm-build
+            fi
+      - save_cache:
+          key: llvm-build-8-linux-v7-assert
+          paths:
+            llvm-build
+      - run:
+          name: "Create LLVM symlinks"
+          command: |
+            ln -s $PWD/llvm-build/bin/clang-8 /go/bin/clang-8
+            ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-8
+            ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-8
+      - run: make ASSERT=1
+      - run:
+          name: "Test TinyGo"
+          command: make ASSERT=1 test
+      - save_cache:
+          key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
+          paths:
+            - ~/.cache/go-build
+            - ~/.cache/tinygo
+            - /go/pkg/mod
+      - run: make gen-device -j4
+      - run: make smoketest TINYGO=build/tinygo RISCV=0
   build-linux:
     steps:
       - checkout
@@ -250,6 +315,11 @@ jobs:
       - image: circleci/golang:1.13-stretch
     steps:
       - test-linux
+  assert-test-linux:
+    docker:
+      - image: circleci/golang:1.13-stretch
+    steps:
+      - assert-test-linux
   build-linux:
     docker:
       - image: circleci/golang:1.13-stretch
@@ -272,3 +342,4 @@ workflows:
       - test-llvm8-go113
       - build-linux
       - build-macos
+      - assert-test-linux
