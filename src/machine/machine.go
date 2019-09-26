@@ -1,5 +1,12 @@
 package machine
 
+import "errors"
+
+var (
+	ErrInvalidInputPin  = errors.New("machine: invalid input pin")
+	ErrInvalidOutputPin = errors.New("machine: invalid output pin")
+)
+
 type PinConfig struct {
 	Mode PinMode
 }

@@ -114,13 +114,10 @@ const (
 
 // SPI on the Circuit Playground Express.
 var (
-	SPI0 = SPI{Bus: sam.SERCOM3_SPI,
-		SCK:     SPI0_SCK_PIN,
-		MOSI:    SPI0_MOSI_PIN,
-		MISO:    SPI0_MISO_PIN,
-		DOpad:   spiTXPad2SCK3,
-		DIpad:   sercomRXPad0,
-		PinMode: PinSERCOMAlt}
+	SPI0 = SPI{
+		Bus:    sam.SERCOM3_SPI,
+		SERCOM: 3,
+	}
 )
 
 // I2S pins
