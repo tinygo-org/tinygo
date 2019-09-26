@@ -22,7 +22,7 @@ func (c *Compiler) emitLookupBoundsCheck(frame *Frame, arrayLen, index llvm.Valu
 	if index.Type().IntTypeWidth() < arrayLen.Type().IntTypeWidth() {
 		// Sometimes, the index can be e.g. an uint8 or int8, and we have to
 		// correctly extend that type.
-		if indexType.(*types.Basic).Info()&types.IsUnsigned == 0 {
+		if indexType.Underlying().(*types.Basic).Info()&types.IsUnsigned == 0 {
 			index = c.builder.CreateZExt(index, arrayLen.Type(), "")
 		} else {
 			index = c.builder.CreateSExt(index, arrayLen.Type(), "")

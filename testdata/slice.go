@@ -2,6 +2,13 @@ package main
 
 type MySlice [32]byte
 
+type myUint8 uint8
+
+// Indexing into slice with named type (regression test).
+var array = [4]int{
+	myUint8(2): 3,
+}
+
 func main() {
 	l := 5
 	foo := []int{1, 2, 4, 5}
