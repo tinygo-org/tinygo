@@ -737,32 +737,18 @@ func (i2c I2C) readByte() byte {
 
 // SPI
 type SPI struct {
-	Bus   *sam.SERCOM_SPI_Type
-	SCK   Pin
-	MOSI  Pin
-	MISO  Pin
-	DOpad int
-	DIpad int
+	Bus *sam.SERCOM_SPI_Type
 }
 
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {
 	Frequency uint32
-	SCK       Pin
-	MOSI      Pin
-	MISO      Pin
 	LSBFirst  bool
 	Mode      uint8
 }
 
 // Configure is intended to setup the SPI interface.
-func (spi SPI) Configure(config SPIConfig) {
-	config.SCK = spi.SCK
-	config.MOSI = spi.MOSI
-	config.MISO = spi.MISO
-
-	doPad := spi.DOpad
-	diPad := spi.DIpad
+func (spi SPI) Configure(sck, mosi, miso Pin, config SPIConfig) error {
 
 	// set default frequency
 	if config.Frequency == 0 {
@@ -775,9 +761,9 @@ func (spi SPI) Configure(config SPIConfig) {
 	}
 
 	// enable pins
-	config.SCK.Configure(PinConfig{Mode: PinSERCOMAlt})
-	config.MOSI.Configure(PinConfig{Mode: PinSERCOMAlt})
-	config.MISO.Configure(PinConfig{Mode: PinSERCOMAlt})
+	sck.Configure(PinConfig{Mode: PinSERCOMAlt})
+	mosi.Configure(PinConfig{Mode: PinSERCOMAlt})
+	miso.Configure(PinConfig{Mode: PinSERCOMAlt})
 
 	// reset SERCOM
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_SWRST)
@@ -830,6 +816,8 @@ func (spi SPI) Configure(config SPIConfig) {
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_ENABLE)
 	for spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPI_SYNCBUSY_ENABLE) {
 	}
+
+	return nil
 }
 
 // Transfer writes/reads a single byte using the SPI interface.

@@ -72,7 +72,7 @@ var (
 )
 
 // Configure the UART.
-func (uart UART) Configure(config UARTConfig) {
+func (uart UART) Configure(tx, rx Pin, config UARTConfig) {
 	// Default baud rate to 115200.
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
@@ -81,7 +81,7 @@ func (uart UART) Configure(config UARTConfig) {
 	uart.SetBaudRate(config.BaudRate)
 
 	// Set TX and RX pins from board.
-	uart.setPins(UART_TX_PIN, UART_RX_PIN)
+	uart.setPins(tx, rx)
 
 	nrf.UART0.ENABLE.Set(nrf.UART_ENABLE_ENABLE_Enabled)
 	nrf.UART0.TASKS_STARTTX.Set(1)
@@ -138,31 +138,24 @@ var (
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
 	Frequency uint32
-	SCL       Pin
-	SDA       Pin
 }
 
 // Configure is intended to setup the I2C interface.
-func (i2c I2C) Configure(config I2CConfig) {
+func (i2c I2C) Configure(scl, sda Pin, config I2CConfig) {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
 	}
-	// Default I2C pins if not set.
-	if config.SDA == 0 && config.SCL == 0 {
-		config.SDA = SDA_PIN
-		config.SCL = SCL_PIN
-	}
 
 	// do config
-	sclPort, sclPin := config.SCL.getPortPin()
+	sclPort, sclPin := scl.getPortPin()
 	sclPort.PIN_CNF[sclPin].Set((nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
 		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
 		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
 		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos))
 
-	sdaPort, sdaPin := config.SDA.getPortPin()
+	sdaPort, sdaPin := sda.getPortPin()
 	sdaPort.PIN_CNF[sdaPin].Set((nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) |
 		(nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos) |
 		(nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos) |
@@ -176,7 +169,7 @@ func (i2c I2C) Configure(config I2CConfig) {
 	}
 
 	i2c.Bus.ENABLE.Set(nrf.TWI_ENABLE_ENABLE_Enabled)
-	i2c.setPins(config.SCL, config.SDA)
+	i2c.setPins(scl, sda)
 }
 
 // Tx does a single I2C transaction at the specified address.
@@ -248,15 +241,12 @@ var (
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {
 	Frequency uint32
-	SCK       Pin
-	MOSI      Pin
-	MISO      Pin
 	LSBFirst  bool
 	Mode      uint8
 }
 
 // Configure is intended to setup the SPI interface.
-func (spi SPI) Configure(config SPIConfig) {
+func (spi SPI) Configure(sck, mosi, miso Pin, config SPIConfig) {
 	// Disable bus to configure it
 	spi.Bus.ENABLE.Set(nrf.SPI_ENABLE_ENABLE_Disabled)
 
@@ -311,7 +301,7 @@ func (spi SPI) Configure(config SPIConfig) {
 	spi.Bus.CONFIG.Set(conf)
 
 	// set pins
-	spi.setPins(config.SCK, config.MOSI, config.MISO)
+	spi.setPins(sck, mosi, miso)
 
 	// Re-enable bus now that it is configured.
 	spi.Bus.ENABLE.Set(nrf.SPI_ENABLE_ENABLE_Enabled)

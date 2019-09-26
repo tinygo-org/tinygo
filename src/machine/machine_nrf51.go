@@ -30,15 +30,6 @@ func (i2c I2C) setPins(scl, sda Pin) {
 
 // SPI
 func (spi SPI) setPins(sck, mosi, miso Pin) {
-	if sck == 0 {
-		sck = SPI0_SCK_PIN
-	}
-	if mosi == 0 {
-		mosi = SPI0_MOSI_PIN
-	}
-	if miso == 0 {
-		miso = SPI0_MISO_PIN
-	}
 	spi.Bus.PSELSCK.Set(uint32(sck))
 	spi.Bus.PSELMOSI.Set(uint32(mosi))
 	spi.Bus.PSELMISO.Set(uint32(miso))
