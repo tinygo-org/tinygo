@@ -1349,13 +1349,15 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 	if fn := instr.StaticCallee(); fn != nil {
 		name := fn.RelString(nil)
 		switch {
-		case name == "device/arm.ReadRegister" || name == "device/riscv.ReadRegister":
+		case name == "device/arm.ReadRegister" || name == "device/arm64.ReadRegister" || name == "device/riscv.ReadRegister":
 			return c.emitReadRegister(name, instr.Args)
-		case name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
+		case name == "device/arm.Asm" || name == "device/arm64.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
 			return c.emitAsm(instr.Args)
-		case name == "device/arm.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
+		case name == "device/arm.AsmFull" || name == "device/arm64.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
 			return c.emitAsmFull(frame, instr)
 		case strings.HasPrefix(name, "device/arm.SVCall"):
+			return c.emitSVCall(frame, instr.Args)
+		case strings.HasPrefix(name, "device/arm64.SVCall"):
 			return c.emitSVCall(frame, instr.Args)
 		case strings.HasPrefix(name, "syscall.Syscall"):
 			return c.emitSyscall(frame, instr)

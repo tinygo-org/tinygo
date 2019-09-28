@@ -1,0 +1,24 @@
+{
+	"build-tags": ["aarch64"],
+	"goarch":"arm64",
+	"goos":"linux",
+	"llvm-target":"aarch64-elf",
+	"tags":"arm64",
+	"compiler":"clang",
+	"linker":"ld.lld",
+	"rtlib": "compiler-rt",
+	"cflags": [
+		"--target=aarch64-elf",
+		"-fshort-enums",
+		"-nostdlibinc",
+		"-Wno-macro-redefined",
+		"-fno-exceptions",
+		"-fno-unwind-tables",
+		"-ffunction-sections",
+		"-fdata-sections"
+	],
+	"ldflags": [
+		"--gc-sections"
+	],
+	"gdb": ""
+}
