@@ -128,6 +128,8 @@ def readSVD(path, sourceURL):
                 peripheral['registers'].extend(parseRegister(groupName or name, register, baseAddress))
             for cluster in regsEls[0].findall('cluster'):
                 clusterName = getText(cluster.find('name')).replace('[%s]', '')
+                if cluster.find('dimIndex') is not None:
+                    clusterName = clusterName.replace('%s', '')
                 clusterDescription = getText(cluster.find('description'))
                 clusterPrefix = clusterName + '_'
                 clusterOffset = int(getText(cluster.find('addressOffset')), 0)
@@ -137,6 +139,33 @@ def readSVD(path, sourceURL):
                         cpRegisters = []
                         for regEl in cluster.findall('register'):
                             cpRegisters.extend(parseRegister(groupName, regEl, baseAddress, clusterName+"_"))
+                        # handle sub-clusters of registers
+                        for subClusterEl in cluster.findall('cluster'):
+                            subclusterName = getText(subClusterEl.find('name')).replace('[%s]', '')
+                            subclusterDescription = getText(subClusterEl.find('description'))
+                            subclusterPrefix = subclusterName + '_'
+                            subclusterOffset = int(getText(subClusterEl.find('addressOffset')), 0)
+                            subdim = int(getText(subClusterEl.find('dim')))
+                            subdimIncrement = int(getText(subClusterEl.find('dimIncrement')), 16)
+
+                            if subdim > 1:
+                                subcpRegisters = []
+                                subregSize = 0
+                                for regEl in subClusterEl.findall('register'):
+                                    subregSize += int(getText(regEl.find('size')))
+                                    subcpRegisters.extend(parseRegister(groupName, regEl, baseAddress + subclusterOffset, subclusterPrefix))
+                                cpRegisters.append({
+                                    'name':        subclusterName,
+                                    'address':     baseAddress + subclusterOffset,
+                                    'description': subclusterDescription,
+                                    'registers':   subcpRegisters,
+                                    'array':       subdim,
+                                    'elementsize': subdimIncrement,
+                                })
+                            else:
+                                for regEl in subClusterEl.findall('register'):
+                                    cpRegisters.extend(parseRegister(getText(regEl.find('name')), regEl, baseAddress + subclusterOffset, subclusterPrefix))
+
                         cpRegisters.sort(key=lambda r: r['address'])
                         clusterPeripheral = {
                             'name':        name+ "_" +clusterName,
@@ -218,16 +247,25 @@ def parseBitfields(groupName, regName, fieldsEls, bitfieldPrefix=''):
             # names like 'CNT[31]'. Replace invalid characters with '_' when
             # needed.
             fieldName = cleanName(getText(fieldEl.find('name')))
-            lsbTags = fieldEl.findall('lsb')
-            if len(lsbTags) == 1:
-                lsb = int(getText(lsbTags[0]))
-            else:
+            if not fieldName[0].isupper() and not fieldName[0].isdigit():
+                fieldName = fieldName.upper()
+            if len(fieldEl.findall('lsb')) == 1 and len(fieldEl.findall('msb')) == 1:
+                # try to use lsb/msb tags
+                lsb = int(getText(fieldEl.findall('lsb')[0]))
+                msb = int(getText(fieldEl.findall('msb')[0]))
+            elif len(fieldEl.findall('bitOffset')) > 0 and len(fieldEl.findall('bitWidth')) > 0:
+                # try to use bitOffset/bitWidth tags
                 lsb = int(getText(fieldEl.find('bitOffset')))
-            msbTags = fieldEl.findall('msb')
-            if len(msbTags) == 1:
-                msb = int(getText(msbTags[0]))
-            else:
                 msb = int(getText(fieldEl.find('bitWidth'))) + lsb - 1
+            elif len(fieldEl.findall('bitRange')) > 0:
+                # try use bitRange
+                bitRangeTags = fieldEl.findall('bitRange')
+                lsb = int(getText(bitRangeTags[0]).split(":")[1][:-1])
+                msb = int(getText(bitRangeTags[0]).split(":")[0][1:])
+            else:
+                # this is an error. what to do?
+                print("unable to find lsb/msb in field:", fieldName)
+
             fields.append({
                 'name':        '{}_{}{}_{}_Pos'.format(groupName, bitfieldPrefix, regName, fieldName),
                 'description': 'Position of %s field.' % fieldName,
@@ -246,6 +284,8 @@ def parseBitfields(groupName, regName, fieldsEls, bitfieldPrefix=''):
                 })
             for enumEl in fieldEl.findall('enumeratedValues/enumeratedValue'):
                 enumName = getText(enumEl.find('name'))
+                if not enumName[0].isupper() and not enumName[0].isdigit():
+                    enumName = enumName.upper()
                 enumDescription = getText(enumEl.find('description')).replace('\n', ' ')
                 enumValue = int(getText(enumEl.find('value')), 0)
                 fields.append({
@@ -311,15 +351,17 @@ def parseRegister(groupName, regEl, baseAddress, bitfieldPrefix=''):
                     'elementsize': reg.size(),
                 })
             # set first result bitfield
-            shortName = reg.name().replace('_%s', '').replace('%s', '')
+            shortName = reg.name().replace('_%s', '').replace('%s', '').upper()
             results[0]['bitfields'] = parseBitfields(groupName, shortName, fieldsEls, bitfieldPrefix)
             return results
-
+    regName = reg.name()
+    if not regName[0].isupper() and not regName[0].isdigit():
+        regName = regName.upper()
     return [{
-        'name':        reg.name(),
+        'name':        regName,
         'address':     reg.address(),
         'description': reg.description(),
-        'bitfields':   parseBitfields(groupName, reg.name(), fieldsEls, bitfieldPrefix),
+        'bitfields':   parseBitfields(groupName, regName, fieldsEls, bitfieldPrefix),
         'array':       reg.dim(),
         'elementsize': reg.size(),
     }]
@@ -417,7 +459,7 @@ const (
                         subregType = 'volatile.Register32'
                     elif subregister['elementsize'] == 2:
                         subregType = 'volatile.Register16'
-                    else:
+                    elif subregister['elementsize'] == 1:
                         subregType = 'volatile.Register8'
 
                     if subregister['array']:
@@ -439,13 +481,14 @@ const (
                         padNumber += 1
                         subaddress += bytesNeeded
                     if subregister['array'] is not None:
-                        subaddress += subregister['elementsize'] * subregister['array']
+                        subregSize = subregister['array'] * subregister['elementsize']
                     else:
-                        subaddress += subregister['elementsize']
+                        subregSize = subregister['elementsize']
+                    subaddress += subregSize
                     regType += '\t\t{name} {subregType}\n'.format(name=subregister['name'], subregType=subregType)
                 if register['array'] is not None:
                     if subaddress != register['address'] + register['elementsize']:
-                        numSkip = ((register['address'] + register['elementsize']) - subaddress) // 4
+                        numSkip = ((register['address'] + register['elementsize']) - subaddress) // subregSize
                         if numSkip <= 1:
                             regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType=subregType)
                         else:
