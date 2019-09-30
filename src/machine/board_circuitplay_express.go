@@ -94,15 +94,15 @@ const (
 // I2C on the Circuit Playground Express.
 var (
 	// external device
-	I2C0 = I2C{Bus: sam.SERCOM5_I2CM,
-		SDA:     SDA_PIN,
-		SCL:     SCL_PIN,
-		PinMode: PinSERCOM}
+	I2C0 = I2C{
+		Bus:    sam.SERCOM5_I2CM,
+		SERCOM: 5,
+	}
 	// internal device
-	I2C1 = I2C{Bus: sam.SERCOM1_I2CM,
-		SDA:     SDA1_PIN,
-		SCL:     SCL1_PIN,
-		PinMode: PinSERCOMAlt}
+	I2C1 = I2C{
+		Bus:    sam.SERCOM1_I2CM,
+		SERCOM: 1,
+	}
 )
 
 // SPI pins (internal flash)
