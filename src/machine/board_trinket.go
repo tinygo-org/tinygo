@@ -79,10 +79,10 @@ const (
 
 // I2C on the Trinket M0.
 var (
-	I2C0 = I2C{Bus: sam.SERCOM2_I2CM,
-		SDA:     SDA_PIN,
-		SCL:     SCL_PIN,
-		PinMode: PinSERCOMAlt}
+	I2C0 = I2C{
+		Bus:    sam.SERCOM2_I2CM,
+		SERCOM: 2,
+	}
 )
 
 // I2S pins

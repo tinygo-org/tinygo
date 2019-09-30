@@ -5,6 +5,8 @@ import "errors"
 var (
 	ErrInvalidInputPin  = errors.New("machine: invalid input pin")
 	ErrInvalidOutputPin = errors.New("machine: invalid output pin")
+	ErrInvalidClockPin  = errors.New("machine: invalid clock pin")
+	ErrInvalidDataPin   = errors.New("machine: invalid data pin")
 )
 
 type PinConfig struct {
