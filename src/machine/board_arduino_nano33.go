@@ -68,10 +68,10 @@ const (
 
 // UART1 on the Arduino Nano 33 connects to the onboard NINA-W102 WiFi chip.
 var (
-	UART1 = UART{Bus: sam.SERCOM5_USART,
+	UART1 = UART{
 		Buffer: NewRingBuffer(),
-		Mode:   PinSERCOMAlt,
-		IRQVal: sam.IRQ_SERCOM5,
+		Bus:    sam.SERCOM5_USART,
+		SERCOM: 5,
 	}
 )
 
@@ -88,10 +88,10 @@ func handleUART1() {
 
 // UART2 on the Arduino Nano 33 connects to the normal TX/RX pins.
 var (
-	UART2 = UART{Bus: sam.SERCOM3_USART,
+	UART2 = UART{
 		Buffer: NewRingBuffer(),
-		Mode:   PinSERCOMAlt,
-		IRQVal: sam.IRQ_SERCOM3,
+		Bus:    sam.SERCOM3_USART,
+		SERCOM: 3,
 	}
 )
 

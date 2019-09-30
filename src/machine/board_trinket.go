@@ -44,10 +44,10 @@ const (
 
 // UART1 on the Trinket M0.
 var (
-	UART1 = UART{Bus: sam.SERCOM1_USART,
+	UART1 = UART{
 		Buffer: NewRingBuffer(),
-		Mode:   PinSERCOM,
-		IRQVal: sam.IRQ_SERCOM1,
+		Bus:    sam.SERCOM0_USART,
+		SERCOM: 0,
 	}
 )
 
