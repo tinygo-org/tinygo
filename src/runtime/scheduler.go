@@ -92,6 +92,11 @@ func unblock(t *task) *task {
 	return next
 }
 
+// blockTask is a helper for task resume stacks which can be accessed via linkname for use in sync primitives
+func blockTask(t *task, chain **task) {
+	*chain, t.state().next = t, *chain
+}
+
 // unblockChain unblocks the next task on the stack/queue, returning it
 // also updates the chain, putting the next element into the chain pointer
 // if the chain is used as a queue, tail is used as a pointer to the final insertion point
@@ -258,6 +263,7 @@ func scheduler() {
 		t := runqueuePopFront()
 		switch {
 		case t != nil:
+			intCycle = 0
 			// Run the given task.
 			scheduleLogTask("  run:", t)
 			t.resume()
