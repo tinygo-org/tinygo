@@ -1,0 +1,4 @@
+pointer mismatch!
+pointer matches
+7 1
+3 2

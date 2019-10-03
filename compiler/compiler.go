@@ -102,6 +102,7 @@ type Compiler struct {
 	ir                      *ir.Program
 	diagnostics             []error
 	astComments             map[string]*ast.CommentGroup
+	linknameExportTable     map[string]bool
 }
 
 type Frame struct {
@@ -337,10 +338,31 @@ func (c *Compiler) Compile(mainPath string) []error {
 
 	c.loadASTComments(lprogram)
 
-	// Declare all functions.
+	// Declare functions with a body.
+	// This is necessary so that the correct types are used across linkname.
 	for _, f := range c.ir.Functions {
+		if f.Blocks == nil {
+			continue
+		}
 		frames = append(frames, c.parseFuncDecl(f))
 	}
+
+	// Declare all functions that do not have a body.
+	for _, f := range c.ir.Functions {
+		if f.Blocks != nil {
+			continue
+		}
+		frames = append(frames, c.parseFuncDecl(f))
+	}
+
+	// Record linknames of exports. Necessary for linknaming an exported function.
+	linknameExpTbl := map[string]bool{}
+	for _, f := range c.ir.Functions {
+		if f.IsExported() {
+			linknameExpTbl[f.LinkName()] = true
+		}
+	}
+	c.linknameExportTable = linknameExpTbl
 
 	// Add definitions to declarations.
 	for _, frame := range frames {
@@ -573,6 +595,9 @@ func (c *Compiler) getLLVMType(goType types.Type) llvm.Type {
 		}
 		return c.ctx.StructType(members, false)
 	case *types.Tuple:
+		if typ == nil {
+			return c.ctx.VoidType()
+		}
 		members := make([]llvm.Type, typ.Len())
 		for i := 0; i < typ.Len(); i++ {
 			members[i] = c.getLLVMType(typ.At(i).Type())
@@ -1371,7 +1396,25 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 		default:
 			panic("StaticCallee returned an unexpected value")
 		}
-		return c.parseFunctionCall(frame, instr.Args, targetFunc.LLVMFn, context, targetFunc.IsExported()), nil
+		ret := c.parseFunctionCall(frame, instr.Args, targetFunc.LLVMFn, context, c.linknameExportTable[targetFunc.LinkName()])
+		retTSSA := instr.Signature().Results()
+		var retT llvm.Type
+		switch retTSSA.Len() {
+		case 0:
+			retT = c.ctx.VoidType()
+		case 1:
+			retT = c.getLLVMType(retTSSA.At(0).Type())
+		default:
+			retT = c.getLLVMType(retTSSA)
+		}
+		if retT != ret.Type() {
+			var err error
+			ret, err = c.deepCast(ret, retT)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+		}
+		return ret, nil
 	}
 
 	// Builtin or function pointer.

@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"errors"
 	"reflect"
 
 	"tinygo.org/x/go-llvm"
@@ -198,4 +199,113 @@ func (c *Compiler) replaceGlobalIntWithArray(name string, buf interface{}) llvm.
 	oldGlobal.EraseFromParentAsGlobal()
 	global.SetName(name)
 	return global
+}
+
+// decomposeValue breaks an aggregate value into primitive values.
+func (c *Compiler) decomposeValue(v llvm.Value) []llvm.Value {
+	t := v.Type()
+	switch t.TypeKind() {
+	case llvm.StructTypeKind:
+		n := t.StructElementTypesCount()
+		fields := make([]llvm.Value, 0, n)
+		for i := 0; i < n; i++ {
+			fields = append(fields, c.decomposeValue(c.builder.CreateExtractValue(v, i, ""))...)
+		}
+		return fields
+	case llvm.ArrayTypeKind:
+		n := t.ArrayLength()
+		elems := make([]llvm.Value, 0, n)
+		for i := 0; i < n; i++ {
+			elems = append(elems, c.decomposeValue(c.builder.CreateExtractValue(v, i, ""))...)
+		}
+		return elems
+	case llvm.VectorTypeKind:
+		n := t.VectorSize()
+		elems := make([]llvm.Value, 0, n)
+		for i := 0; i < n; i++ {
+			elems = append(elems, c.decomposeValue(c.builder.CreateExtractElement(v, llvm.ConstInt(c.intType, uint64(i), false), ""))...)
+		}
+		return elems
+	}
+	return []llvm.Value{v}
+}
+
+// composeValue composes a value of the specified type from the set of primitive values provided.
+// Returns the constructed value and remaining values.
+// Appropriate conversions are added as needed.
+func (c *Compiler) composeValue(t llvm.Type, vals ...llvm.Value) (llvm.Value, []llvm.Value, error) {
+	switch t.TypeKind() {
+	case llvm.StructTypeKind:
+		fieldTypes := t.StructElementTypes()
+		fields := make([]llvm.Value, len(fieldTypes))
+		for i, t := range fieldTypes {
+			var err error
+			fields[i], vals, err = c.composeValue(t, vals...)
+			if err != nil {
+				return llvm.Value{}, nil, err
+			}
+		}
+		s := llvm.ConstNull(t)
+		for i, v := range fields {
+			s = c.builder.CreateInsertValue(s, v, i, "")
+		}
+		return s, vals, nil
+	case llvm.ArrayTypeKind:
+		elemType := t.ElementType()
+		elems := make([]llvm.Value, t.ArrayLength())
+		for i := range elems {
+			var err error
+			elems[i], vals, err = c.composeValue(elemType, vals...)
+			if err != nil {
+				return llvm.Value{}, nil, err
+			}
+		}
+		a := llvm.ConstNull(t)
+		for i, e := range elems {
+			a = c.builder.CreateInsertValue(a, e, i, "")
+		}
+		return a, vals, nil
+	case llvm.VectorTypeKind:
+		elemType := t.ElementType()
+		elems := make([]llvm.Value, t.VectorSize())
+		for i := range elems {
+			var err error
+			elems[i], vals, err = c.composeValue(elemType, vals...)
+			if err != nil {
+				return llvm.Value{}, nil, err
+			}
+		}
+		v := llvm.ConstNull(t)
+		for i, e := range elems {
+			v = c.builder.CreateInsertElement(v, e, llvm.ConstInt(c.intType, uint64(i), false), "")
+		}
+		return v, vals, nil
+	}
+
+	if len(vals) < 1 {
+		return llvm.Value{}, nil, errors.New("insufficient values to compose type")
+	}
+
+	if vals[0].Type() == t {
+		// type already matches
+		return vals[0], vals[1:], nil
+	}
+
+	return c.builder.CreateBitCast(vals[0], t, ""), vals[1:], nil
+}
+
+// deepCast converts the given value to the given type, recursively if necessary.
+func (c *Compiler) deepCast(v llvm.Value, t llvm.Type) (llvm.Value, error) {
+	if v.Type() == t {
+		return v, nil
+	}
+	vals := c.decomposeValue(v)
+	res, extra, err := c.composeValue(t, vals...)
+	if err != nil {
+		return llvm.Value{}, err
+	}
+	if len(extra) > 0 {
+		return llvm.Value{}, errors.New("too many values")
+	}
+	return res, nil
 }

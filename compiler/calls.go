@@ -38,6 +38,17 @@ func (c *Compiler) createCall(fn llvm.Value, args []llvm.Value, name string) llv
 		fragments := c.expandFormalParam(arg)
 		expanded = append(expanded, fragments...)
 	}
+	fnParams := fn.Type().ElementType().ParamTypes()
+	for i, param := range expanded {
+		srcT, dstT := param.Type(), fnParams[i]
+		if srcT != dstT {
+			var err error
+			expanded[i], err = c.deepCast(param, dstT)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
 	return c.builder.CreateCall(fn, expanded, name)
 }
 
