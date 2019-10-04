@@ -1747,7 +1747,7 @@ func handleStandardSetup(setup usbSetup) bool {
 func cdcSetup(setup usbSetup) bool {
 	if setup.bmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
 		if setup.bRequest == usb_CDC_GET_LINE_CODING {
-			b := make([]byte, 0, 7)
+			b := make([]byte, 7)
 			b[0] = byte(usbLineInfo.dwDTERate)
 			b[1] = byte(usbLineInfo.dwDTERate >> 8)
 			b[2] = byte(usbLineInfo.dwDTERate >> 16)
@@ -1819,7 +1819,7 @@ func receiveUSBControlPacket() []byte {
 	setEPSTATUSCLR(0, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
 
 	// Wait until OUT transfer is ready.
-	timeout := 3000
+	timeout := 300000
 	for (getEPSTATUS(0) & sam.USB_DEVICE_EPSTATUS_BK0RDY) == 0 {
 		timeout--
 		if timeout == 0 {
@@ -1957,7 +1957,7 @@ func sendConfiguration(setup usbSetup) {
 		sz := uint16(configDescriptorSize + cdcSize)
 		config := NewConfigDescriptor(sz, 2)
 
-		buf := make([]byte, 0)
+		buf := make([]byte, 0, sz)
 		buf = append(buf, config.Bytes()...)
 		buf = append(buf, cdc.Bytes()...)
 
