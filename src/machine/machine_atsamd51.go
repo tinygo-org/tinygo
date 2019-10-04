@@ -1614,7 +1614,7 @@ func receiveUSBControlPacket() []byte {
 	setEPSTATUSCLR(0, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
 
 	// Wait until OUT transfer is ready.
-	timeout := 3000
+	timeout := 300000
 	for (getEPSTATUS(0) & sam.USB_DEVICE_EPSTATUS_BK0RDY) == 0 {
 		timeout--
 		if timeout == 0 {
