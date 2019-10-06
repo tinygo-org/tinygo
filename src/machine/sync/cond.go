@@ -19,31 +19,41 @@ func unblock(t unsafe.Pointer) unsafe.Pointer
 
 // Cond is a condition variable that can be used by interrupts to notify goroutines.
 type Cond struct {
-	fired, fireAck bool
+	state condState
 	t unsafe.Pointer
 	chain unsafe.Pointer
 }
+
+type condState uint8
+
+const (
+	condStateReady condState = iota
+	condStateFired
+	condStateFiredAck
+)
 
 // Notify marks the Cond as completed, and unblocks all blockers.
 // An interruptor of this call must not try to notify.
 // Returns true if and only if the condition had not previously been notified.
 func (c *Cond) Notify() bool {
-	if c.fired {
-		// already fired once - do nothing
+	switch c.state {
+	case condStateReady:
+		// condition variable has not been previously notified
+		if c.t != nil {
+			// there is a task blocked on this Cond, push it into the wakeup queue and acknowledge that we noticed it
+			pushInt(c.t)
+			c.state = condStateFiredAck
+		} else {
+			// the Cond has not yet been blocked on, mark it as notified
+			c.state = condStateFired
+		}
+
+		// we think we did something
+		return true
+	default:
+		// already fired, we did nothing
 		return false
 	}
-
-	// set flag so that no additional tasks block on this cond
-	c.fired = true
-
-	if c.t != nil {
-		// there is a task blocked on this Cond, push it into the wakeup queue
-		pushInt(c.t)
-		c.fireAck = true
-	}
-
-	// we think we did something
-	return true
 }
 
 // Wait blocks until the Cond is notified.
@@ -64,13 +74,13 @@ func (c *Cond) Wait() {
 	// we need to do this before checking c.fired, in case an interrupt fires here
 	c.t = getCoroutine()
 
-	switch {
-	case c.fireAck:
+	switch c.state {
+	case condStateFiredAck:
 		// an interrupt called notify and saw our coroutine
 		// we are on the wakeup queue
 		// we need to yield, and will be immediately awoken
 		yield()
-	case c.fired:
+	case condStateFired:
 		// an interrupt called notify but did not see our coroutine
 		// we are not on the wakeup queue
 		// we do not need to wait
@@ -88,8 +98,8 @@ func (c *Cond) Wait() {
 	for t := c.chain; t != nil; t = unblock(t) {}
 	c.chain = nil
 
-	// acknowledge ack
-	c.fireAck = false
+	// finalize state
+	c.state = condStateFired
 }
 
 // Clear resets the condition variable.
@@ -98,5 +108,5 @@ func (c *Cond) Clear() {
 	if c.t != nil {
 		panic("cannot clear a blocked condition variable")
 	}
-	c.fired, c.fireAck = false, false
+	c.state = condStateReady
 }
