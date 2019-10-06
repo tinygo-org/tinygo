@@ -54,6 +54,22 @@ func (c *Compiler) createTemporaryAlloca(t llvm.Type, name string) (alloca, bitc
 	return
 }
 
+// createInstructionAlloca creates an alloca in the entry block, and places lifetime control intrinsics around the instruction
+func (c *Compiler) createInstructionAlloca(t llvm.Type, inst llvm.Value, name string) llvm.Value {
+	alloca := c.createEntryBlockAlloca(t, name)
+	c.builder.SetInsertPointBefore(inst)
+	bitcast := c.builder.CreateBitCast(alloca, c.i8ptrType, name+".bitcast")
+	size := llvm.ConstInt(c.ctx.Int64Type(), c.targetData.TypeAllocSize(t), false)
+	c.builder.CreateCall(c.getLifetimeStartFunc(), []llvm.Value{size, bitcast}, "")
+	if next := llvm.NextInstruction(inst); !next.IsNil() {
+		c.builder.SetInsertPointBefore(next)
+	} else {
+		c.builder.SetInsertPointAtEnd(inst.InstructionParent())
+	}
+	c.builder.CreateCall(c.getLifetimeEndFunc(), []llvm.Value{size, bitcast}, "")
+	return alloca
+}
+
 // emitLifetimeEnd signals the end of an (alloca) lifetime by calling the
 // llvm.lifetime.end intrinsic. It is commonly used together with
 // createTemporaryAlloca.

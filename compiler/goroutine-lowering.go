@@ -450,8 +450,6 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 		}
 		coroDebugPrintln("scanning", f.Name())
 
-		var retAlloc llvm.Value
-
 		// Rewrite async calls
 		for bb := f.EntryBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
 			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
@@ -511,9 +509,9 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 						// pass parent handle directly into function
 						inst.SetOperand(inst.OperandsCount()-2, parentHandle)
 
-						if inst.Type().TypeKind() != llvm.VoidTypeKind {
+						if callee.Type().ElementType().ReturnType().TypeKind() != llvm.VoidTypeKind {
 							// delete return value
-							uses[0].SetOperand(0, llvm.Undef(inst.Type()))
+							uses[0].SetOperand(0, llvm.Undef(callee.Type().ElementType().ReturnType()))
 						}
 
 						c.builder.SetInsertPointBefore(next)
@@ -534,15 +532,9 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 					// Allocate space for the return value.
 					var retvalAlloca llvm.Value
-					if inst.Type().TypeKind() != llvm.VoidTypeKind {
-						if retAlloc.IsNil() {
-							// insert at start of function
-							c.builder.SetInsertPointBefore(f.EntryBasicBlock().FirstInstruction())
-
-							// allocate return value buffer
-							retAlloc = c.builder.CreateAlloca(inst.Type(), "coro.retvalAlloca")
-						}
-						retvalAlloca = retAlloc
+					if callee.Type().ElementType().ReturnType().TypeKind() != llvm.VoidTypeKind {
+						// allocate return value buffer
+						retvalAlloca = c.createInstructionAlloca(callee.Type().ElementType().ReturnType(), inst, "coro.retvalAlloca")
 
 						// call before function
 						c.builder.SetInsertPointBefore(inst)
@@ -672,7 +664,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 						c.builder.CreateStore(inst.Operand(0), retPtr)
 
 						// delete return value
-						inst.SetOperand(0, llvm.Undef(inst.Type()))
+						inst.SetOperand(0, llvm.Undef(f.Type().ElementType().ReturnType()))
 					}
 
 					// insert reactivation call
