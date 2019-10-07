@@ -10,6 +10,7 @@ package machine
 import (
 	"device/arm"
 	"device/sam"
+	"machine/sync"
 	"errors"
 	"unsafe"
 )
@@ -369,7 +370,7 @@ type UART struct {
 
 var (
 	// UART0 is actually a USB CDC interface.
-	UART0 = USBCDC{Buffer: NewRingBuffer()}
+	UART0 = USBCDC{Buffer: NewRingBuffer(), Cond: &sync.Cond{}}
 )
 
 const (
@@ -1328,6 +1329,7 @@ func (pwm PWM) setChannel(val uint32) {
 // USBCDC is the USB CDC aka serial over USB interface on the SAMD21.
 type USBCDC struct {
 	Buffer *RingBuffer
+	Cond *sync.Cond
 }
 
 // WriteByte writes a byte of data to the USB CDC interface.
@@ -1984,6 +1986,9 @@ func handleEndpoint(ep uint32) {
 	// move to ring buffer
 	for i := 0; i < count; i++ {
 		UART0.Receive(byte((udd_ep_out_cache_buffer[ep][i] & 0xFF)))
+	}
+	if UART0.Cond.Notify() {
+		LED.High()
 	}
 
 	// set byte count to zero
