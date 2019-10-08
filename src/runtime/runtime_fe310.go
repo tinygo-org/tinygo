@@ -47,17 +47,17 @@ func init() {
 
 func pric_init() {
 	// Make sure the HFROSC is on
-	sifive.PRIC.HFROSCCFG.SetBits(sifive.PRIC_HFROSCCFG_ENABLE)
+	sifive.PRCI.HFROSCCFG.SetBits(sifive.PRCI_HFROSCCFG_ENABLE)
 
 	// Run off 16 MHz Crystal for accuracy.
-	sifive.PRIC.PLLCFG.SetBits(sifive.PRIC_PLLCFG_REFSEL | sifive.PRIC_PLLCFG_BYPASS)
-	sifive.PRIC.PLLCFG.SetBits(sifive.PRIC_PLLCFG_SEL)
+	sifive.PRCI.PLLCFG.SetBits(sifive.PRCI_PLLCFG_REFSEL | sifive.PRCI_PLLCFG_BYPASS)
+	sifive.PRCI.PLLCFG.SetBits(sifive.PRCI_PLLCFG_SEL)
 
 	// Turn off HFROSC to save power
-	sifive.PRIC.HFROSCCFG.ClearBits(sifive.PRIC_HFROSCCFG_ENABLE)
+	sifive.PRCI.HFROSCCFG.ClearBits(sifive.PRCI_HFROSCCFG_ENABLE)
 
 	// Enable the RTC.
-	sifive.RTC.CONFIG.Set(sifive.RTC_CONFIG_ENALWAYS)
+	sifive.RTC.RTCCFG.Set(sifive.RTC_RTCCFG_ENALWAYS)
 }
 
 func preinit() {
@@ -85,10 +85,10 @@ func putchar(c byte) {
 func ticks() timeUnit {
 	// Combining the low bits and the high bits yields a time span of over 270
 	// years without counter rollover.
-	highBits := sifive.RTC.HI.Get()
+	highBits := sifive.RTC.RTCHI.Get()
 	for {
-		lowBits := sifive.RTC.LO.Get()
-		newHighBits := sifive.RTC.HI.Get()
+		lowBits := sifive.RTC.RTCLO.Get()
+		newHighBits := sifive.RTC.RTCHI.Get()
 		if newHighBits == highBits {
 			// High bits stayed the same.
 			return timeUnit(lowBits) | (timeUnit(highBits) << 32)

@@ -30,6 +30,13 @@ func (p Pin) Set(high bool) {
 	}
 }
 
+// Get returns the current value of a GPIO pin.
+func (p Pin) Get() bool {
+	val := sifive.GPIO0.VALUE.Get() & (1 << uint8(p))
+	println(sifive.GPIO0.VALUE.Get())
+	return (val > 0)
+}
+
 type UART struct {
 	Bus    *sifive.UART_Type
 	Buffer *RingBuffer
