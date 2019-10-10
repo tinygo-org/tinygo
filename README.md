@@ -54,6 +54,7 @@ The following 18 microcontroller boards are currently supported:
 * [Arduino Uno](https://store.arduino.cc/arduino-uno-rev3)
 * [BBC micro:bit](https://microbit.org/)
 * [Game Boy Advance](https://en.wikipedia.org/wiki/Game_Boy_Advance)
+* [SiFIve HiFive1](https://www.sifive.com/boards/hifive1)
 * [ST Micro STM32F103XX "Bluepill"](http://wiki.stm32duino.com/index.php?title=Blue_Pill)
 * [ST Micro "Nucleo F103RB"](https://www.st.com/en/evaluation-tools/nucleo-f103rb.html)
 * [ST Micro STM32F407 "Discovery"](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
