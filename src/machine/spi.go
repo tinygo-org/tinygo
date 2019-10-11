@@ -5,7 +5,6 @@ package machine
 import "errors"
 
 var (
-	ErrTxSlicesRequired   = errors.New("SPI Tx requires a write or read slice, or both")
 	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")
 )
 
@@ -28,10 +27,6 @@ var (
 // 		spi.Tx(nil, rx)
 //
 func (spi SPI) Tx(w, r []byte) error {
-	if w == nil && r == nil {
-		return ErrTxSlicesRequired
-	}
-
 	var err error
 
 	switch {
