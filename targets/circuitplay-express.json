@@ -1,5 +1,8 @@
 {
     "inherits": ["atsamd21g18a"],
     "build-tags": ["sam", "atsamd21g18a", "circuitplay_express"],
-    "flash": "uf2conv.py {bin}"
+    "flash": "{uf2}",
+    "flash-1200-bps-reset": "true",
+    "flash-method": "msd",
+    "flash-msd-volume-name": "CPLAYBOOT"
 }

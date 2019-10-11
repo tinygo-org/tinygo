@@ -26,27 +26,29 @@ var TINYGOROOT string
 // https://doc.rust-lang.org/nightly/nightly-rustc/rustc_target/spec/struct.TargetOptions.html
 // https://github.com/shepmaster/rust-arduino-blink-led-no-core-with-cargo/blob/master/blink/arduino.json
 type TargetSpec struct {
-	Inherits   []string `json:"inherits"`
-	Triple     string   `json:"llvm-target"`
-	CPU        string   `json:"cpu"`
-	Features   []string `json:"features"`
-	GOOS       string   `json:"goos"`
-	GOARCH     string   `json:"goarch"`
-	BuildTags  []string `json:"build-tags"`
-	GC         string   `json:"gc"`
-	Scheduler  string   `json:"scheduler"`
-	Compiler   string   `json:"compiler"`
-	Linker     string   `json:"linker"`
-	RTLib      string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
-	CFlags     []string `json:"cflags"`
-	LDFlags    []string `json:"ldflags"`
-	ExtraFiles []string `json:"extra-files"`
-	Emulator   []string `json:"emulator"`
-	Flasher    string   `json:"flash"`
-	OCDDaemon  []string `json:"ocd-daemon"`
-	GDB        string   `json:"gdb"`
-	GDBCmds    []string `json:"gdb-initial-cmds"`
-	PortReset  string   `json:"flash-1200-bps-reset"`
+	Inherits    []string `json:"inherits"`
+	Triple      string   `json:"llvm-target"`
+	CPU         string   `json:"cpu"`
+	Features    []string `json:"features"`
+	GOOS        string   `json:"goos"`
+	GOARCH      string   `json:"goarch"`
+	BuildTags   []string `json:"build-tags"`
+	GC          string   `json:"gc"`
+	Scheduler   string   `json:"scheduler"`
+	Compiler    string   `json:"compiler"`
+	Linker      string   `json:"linker"`
+	RTLib       string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
+	CFlags      []string `json:"cflags"`
+	LDFlags     []string `json:"ldflags"`
+	ExtraFiles  []string `json:"extra-files"`
+	Emulator    []string `json:"emulator"`
+	Flasher     string   `json:"flash"`
+	OCDDaemon   []string `json:"ocd-daemon"`
+	GDB         string   `json:"gdb"`
+	GDBCmds     []string `json:"gdb-initial-cmds"`
+	PortReset   string   `json:"flash-1200-bps-reset"`
+	FlashMethod string   `json:"flash-method"`
+	FlashVolume string   `json:"flash-msd-volume-name"`
 }
 
 // copyProperties copies all properties that are set in spec2 into itself.
@@ -103,6 +105,12 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if spec2.PortReset != "" {
 		spec.PortReset = spec2.PortReset
+	}
+	if spec2.FlashMethod != "" {
+		spec.FlashMethod = spec2.FlashMethod
+	}
+	if spec2.FlashVolume != "" {
+		spec.FlashVolume = spec2.FlashVolume
 	}
 }
 
@@ -233,15 +241,16 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	// No target spec available. Use the default one, useful on most systems
 	// with a regular OS.
 	spec := TargetSpec{
-		Triple:    triple,
-		GOOS:      goos,
-		GOARCH:    goarch,
-		BuildTags: []string{goos, goarch},
-		Compiler:  "clang",
-		Linker:    "cc",
-		GDB:       "gdb",
-		GDBCmds:   []string{"run"},
-		PortReset: "false",
+		Triple:      triple,
+		GOOS:        goos,
+		GOARCH:      goarch,
+		BuildTags:   []string{goos, goarch},
+		Compiler:    "clang",
+		Linker:      "cc",
+		GDB:         "gdb",
+		GDBCmds:     []string{"run"},
+		PortReset:   "false",
+		FlashMethod: "command",
 	}
 	if goos == "darwin" {
 		spec.LDFlags = append(spec.LDFlags, "-Wl,-dead_strip")

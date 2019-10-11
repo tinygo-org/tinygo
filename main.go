@@ -431,6 +431,26 @@ func Flash(pkgName, target, port string, config *BuildConfig) error {
 			time.Sleep(3 * time.Second)
 		}
 
+		// this flashing method copies the binary data to a Mass Storage Device (msd)
+		if spec.FlashMethod == "msd" {
+			switch fileExt {
+			case ".uf2":
+				err := flashUF2UsingMSD(spec.FlashVolume, tmppath)
+				if err != nil {
+					return &commandError{"failed to flash", tmppath, err}
+				}
+				return nil
+			case ".hex":
+				err := flashHexUsingMSD(spec.FlashVolume, tmppath)
+				if err != nil {
+					return &commandError{"failed to flash", tmppath, err}
+				}
+				return nil
+			default:
+				return errors.New("mass storage device flashing currently only supports uf2 and hex")
+			}
+		}
+
 		// Create the command.
 		flashCmd := spec.Flasher
 		fileToken := "{" + fileExt[1:] + "}"
@@ -572,6 +592,42 @@ func touchSerialPortAt1200bps(port string) error {
 
 	p.SetDTR(false)
 	return nil
+}
+
+func flashUF2UsingMSD(volume, tmppath string) error {
+	// find standard UF2 info path
+	infoPath := "/media/*/" + volume + "/INFO_UF2.TXT"
+	if runtime.GOOS == "darwin" {
+		infoPath = "/Volumes/" + volume + "/INFO_UF2.TXT"
+	}
+
+	d, err := filepath.Glob(infoPath)
+	if err != nil {
+		return err
+	}
+	if d == nil {
+		return errors.New("unable to locate UF2 device:" + volume)
+	}
+
+	return moveFile(tmppath, filepath.Dir(d[0])+"/flash.uf2")
+}
+
+func flashHexUsingMSD(volume, tmppath string) error {
+	// find expected volume path
+	destPath := "/media/*/" + volume
+	if runtime.GOOS == "darwin" {
+		destPath = "/Volumes/" + volume
+	}
+
+	d, err := filepath.Glob(destPath)
+	if err != nil {
+		return err
+	}
+	if d == nil {
+		return errors.New("unable to locate device:" + volume)
+	}
+
+	return moveFile(tmppath, d[0]+"/flash.hex")
 }
 
 // parseSize converts a human-readable size (with k/m/g suffix) into a plain
