@@ -46,6 +46,7 @@ type TargetSpec struct {
 	OCDDaemon  []string `json:"ocd-daemon"`
 	GDB        string   `json:"gdb"`
 	GDBCmds    []string `json:"gdb-initial-cmds"`
+	PortReset  string   `json:"flash-1200-bps-reset"`
 }
 
 // copyProperties copies all properties that are set in spec2 into itself.
@@ -99,6 +100,9 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if len(spec2.GDBCmds) != 0 {
 		spec.GDBCmds = spec2.GDBCmds
+	}
+	if spec2.PortReset != "" {
+		spec.PortReset = spec2.PortReset
 	}
 }
 
@@ -237,6 +241,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		Linker:    "cc",
 		GDB:       "gdb",
 		GDBCmds:   []string{"run"},
+		PortReset: "false",
 	}
 	if goos == "darwin" {
 		spec.LDFlags = append(spec.LDFlags, "-Wl,-dead_strip")

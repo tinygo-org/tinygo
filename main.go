@@ -15,10 +15,13 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
+
+	serial "go.bug.st/serial.v1"
 )
 
 // commandError is an error type to wrap os/exec.Command errors. This provides
@@ -418,6 +421,16 @@ func Flash(pkgName, target, port string, config *BuildConfig) error {
 			return errors.New("no flash command specified - did you miss a -target flag?")
 		}
 
+		// do we need port reset to put MCU into bootloader mode?
+		if spec.PortReset == "true" {
+			err := touchSerialPortAt1200bps(port)
+			if err != nil {
+				return &commandError{"failed to reset port", tmppath, err}
+			}
+			// give the target MCU a chance to restart into bootloader
+			time.Sleep(3 * time.Second)
+		}
+
 		// Create the command.
 		flashCmd := spec.Flasher
 		fileToken := "{" + fileExt[1:] + "}"
@@ -547,6 +560,18 @@ func Run(pkgName, target string, config *BuildConfig) error {
 			return nil
 		}
 	})
+}
+
+func touchSerialPortAt1200bps(port string) error {
+	// Open port
+	p, err := serial.Open(port, &serial.Mode{BaudRate: 1200})
+	if err != nil {
+		return fmt.Errorf("opening port: %s", err)
+	}
+	defer p.Close()
+
+	p.SetDTR(false)
+	return nil
 }
 
 // parseSize converts a human-readable size (with k/m/g suffix) into a plain
