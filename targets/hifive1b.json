@@ -3,5 +3,8 @@
 	"build-tags": ["hifive1b"],
 	"ldflags": [
 		"-T", "targets/hifive1b.ld"
-	]
+	],
+	"flash": "{hex}",
+	"flash-method": "msd",
+    "flash-msd-volume-name": "HiFive"
 }

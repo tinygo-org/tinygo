@@ -1,5 +1,8 @@
 {
     "inherits": ["atsamd51g19a"],
     "build-tags": ["sam", "atsamd51g19a", "itsybitsy_m4"],
-    "flash": "bossac -d -i -e -w -v -R --offset=0x4000 {bin}"
+    "flash": "{uf2}",
+    "flash-1200-bps-reset": "true",
+    "flash-method": "msd",
+    "flash-msd-volume-name": "ITSYM4BOOT"
 }
