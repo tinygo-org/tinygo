@@ -15,5 +15,5 @@
 		"targets/avr.S",
 		"src/device/avr/attiny85.s"
 	],
-	"flash": "micronucleus --run {hex}"
+	"flash-command": "micronucleus --run {hex}"
 }

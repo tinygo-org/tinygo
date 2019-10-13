@@ -1,8 +1,8 @@
 {
     "inherits": ["atsamd21e18a"],
     "build-tags": ["sam", "atsamd21e18a", "trinket_m0"],
-    "flash": "{uf2}",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "flash-msd-volume-name": "TRINKETBOOT"
+    "msd-volume-name": "TRINKETBOOT",
+    "msd-firmware-name": "firmware.uf2"
 }

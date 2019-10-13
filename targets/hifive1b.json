@@ -4,7 +4,7 @@
 	"ldflags": [
 		"-T", "targets/hifive1b.ld"
 	],
-	"flash": "{hex}",
 	"flash-method": "msd",
-    "flash-msd-volume-name": "HiFive"
+	"msd-volume-name": "HiFive",
+	"msd-firmware-name": "firmware.hex"
 }
