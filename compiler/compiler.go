@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"debug/dwarf"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -91,6 +92,7 @@ type Compiler struct {
 	dibuilder               *llvm.DIBuilder
 	cu                      llvm.Metadata
 	difiles                 map[string]llvm.Metadata
+	ditypes                 map[types.Type]llvm.Metadata
 	machine                 llvm.TargetMachine
 	targetData              llvm.TargetData
 	intType                 llvm.Type
@@ -136,6 +138,7 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 	c := &Compiler{
 		Config:  config,
 		difiles: make(map[string]llvm.Metadata),
+		ditypes: make(map[types.Type]llvm.Metadata),
 	}
 
 	target, err := llvm.GetTargetFromTriple(config.Triple)
@@ -596,6 +599,17 @@ func isPointer(typ types.Type) bool {
 
 // Get the DWARF type for this Go type.
 func (c *Compiler) getDIType(typ types.Type) llvm.Metadata {
+	if md, ok := c.ditypes[typ]; ok {
+		return md
+	}
+	md := c.createDIType(typ)
+	c.ditypes[typ] = md
+	return md
+}
+
+// createDIType creates a new DWARF type. Don't call this function directly,
+// call getDIType instead.
+func (c *Compiler) createDIType(typ types.Type) llvm.Metadata {
 	llvmType := c.getLLVMType(typ)
 	sizeInBytes := c.targetData.TypeAllocSize(llvmType)
 	switch typ := typ.(type) {
@@ -732,14 +746,17 @@ func (c *Compiler) getDIType(typ types.Type) llvm.Metadata {
 			},
 		})
 	case *types.Struct:
+		// Placeholder metadata node, to be replaced afterwards.
+		temporaryMDNode := c.dibuilder.CreateReplaceableCompositeType(llvm.Metadata{}, llvm.DIReplaceableCompositeType{
+			Tag:         dwarf.TagStructType,
+			SizeInBits:  sizeInBytes * 8,
+			AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
+		})
+		c.ditypes[typ] = temporaryMDNode
 		elements := make([]llvm.Metadata, typ.NumFields())
 		for i := range elements {
 			field := typ.Field(i)
 			fieldType := field.Type()
-			if _, ok := fieldType.Underlying().(*types.Pointer); ok {
-				// XXX hack to avoid recursive types
-				fieldType = types.Typ[types.UnsafePointer]
-			}
 			llvmField := c.getLLVMType(fieldType)
 			elements[i] = c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
 				Name:         field.Name(),
@@ -749,11 +766,13 @@ func (c *Compiler) getDIType(typ types.Type) llvm.Metadata {
 				Type:         c.getDIType(fieldType),
 			})
 		}
-		return c.dibuilder.CreateStructType(llvm.Metadata{}, llvm.DIStructType{
+		md := c.dibuilder.CreateStructType(llvm.Metadata{}, llvm.DIStructType{
 			SizeInBits:  sizeInBytes * 8,
 			AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
 			Elements:    elements,
 		})
+		temporaryMDNode.ReplaceAllUsesWith(md)
+		return md
 	default:
 		panic("unknown type while generating DWARF debug type: " + typ.String())
 	}

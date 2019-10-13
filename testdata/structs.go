@@ -60,6 +60,13 @@ type s8 struct {
 	b byte   // 1 element
 }
 
+// linked list (recursive type)
+type s9 struct {
+	n    int
+	next *s9
+	s    []*s9
+}
+
 func test0(s s0) {
 	println("test0")
 }
@@ -106,6 +113,10 @@ func test8(s s8) {
 	println("test8", len(s.a), cap(s.a), s.a[0], s.a[1], s.b)
 }
 
+func test9(s s9) {
+	println("test9", s.next.next)
+}
+
 func main() {
 	test0(s0{})
 	test1(s1{1})
@@ -119,4 +130,5 @@ func main() {
 	test6(s6{"foo", 5})
 	test7(s7{a: nil, b: 8})
 	test8(s8{[]byte{12, 13, 14}[:2], 6})
+	test9(s9{next: &s9{}})
 }
