@@ -26,29 +26,32 @@ var TINYGOROOT string
 // https://doc.rust-lang.org/nightly/nightly-rustc/rustc_target/spec/struct.TargetOptions.html
 // https://github.com/shepmaster/rust-arduino-blink-led-no-core-with-cargo/blob/master/blink/arduino.json
 type TargetSpec struct {
-	Inherits    []string `json:"inherits"`
-	Triple      string   `json:"llvm-target"`
-	CPU         string   `json:"cpu"`
-	Features    []string `json:"features"`
-	GOOS        string   `json:"goos"`
-	GOARCH      string   `json:"goarch"`
-	BuildTags   []string `json:"build-tags"`
-	GC          string   `json:"gc"`
-	Scheduler   string   `json:"scheduler"`
-	Compiler    string   `json:"compiler"`
-	Linker      string   `json:"linker"`
-	RTLib       string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
-	CFlags      []string `json:"cflags"`
-	LDFlags     []string `json:"ldflags"`
-	ExtraFiles  []string `json:"extra-files"`
-	Emulator    []string `json:"emulator"`
-	Flasher     string   `json:"flash"`
-	OCDDaemon   []string `json:"ocd-daemon"`
-	GDB         string   `json:"gdb"`
-	GDBCmds     []string `json:"gdb-initial-cmds"`
-	PortReset   string   `json:"flash-1200-bps-reset"`
-	FlashMethod string   `json:"flash-method"`
-	FlashVolume string   `json:"flash-msd-volume-name"`
+	Inherits         []string `json:"inherits"`
+	Triple           string   `json:"llvm-target"`
+	CPU              string   `json:"cpu"`
+	Features         []string `json:"features"`
+	GOOS             string   `json:"goos"`
+	GOARCH           string   `json:"goarch"`
+	BuildTags        []string `json:"build-tags"`
+	GC               string   `json:"gc"`
+	Scheduler        string   `json:"scheduler"`
+	Compiler         string   `json:"compiler"`
+	Linker           string   `json:"linker"`
+	RTLib            string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
+	CFlags           []string `json:"cflags"`
+	LDFlags          []string `json:"ldflags"`
+	ExtraFiles       []string `json:"extra-files"`
+	Emulator         []string `json:"emulator"`
+	FlashCommand     string   `json:"flash-command"`
+	OCDDaemon        []string `json:"ocd-daemon"`
+	GDB              string   `json:"gdb"`
+	PortReset        string   `json:"flash-1200-bps-reset"`
+	FlashMethod      string   `json:"flash-method"`
+	FlashVolume      string   `json:"msd-volume-name"`
+	FlashFilename    string   `json:"msd-firmware-name"`
+	OpenOCDInterface string   `json:"openocd-interface"`
+	OpenOCDTarget    string   `json:"openocd-target"`
+	OpenOCDTransport string   `json:"openocd-transport"`
 }
 
 // copyProperties copies all properties that are set in spec2 into itself.
@@ -91,17 +94,14 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	if len(spec2.Emulator) != 0 {
 		spec.Emulator = spec2.Emulator
 	}
-	if spec2.Flasher != "" {
-		spec.Flasher = spec2.Flasher
+	if spec2.FlashCommand != "" {
+		spec.FlashCommand = spec2.FlashCommand
 	}
 	if len(spec2.OCDDaemon) != 0 {
 		spec.OCDDaemon = spec2.OCDDaemon
 	}
 	if spec2.GDB != "" {
 		spec.GDB = spec2.GDB
-	}
-	if len(spec2.GDBCmds) != 0 {
-		spec.GDBCmds = spec2.GDBCmds
 	}
 	if spec2.PortReset != "" {
 		spec.PortReset = spec2.PortReset
@@ -111,6 +111,18 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if spec2.FlashVolume != "" {
 		spec.FlashVolume = spec2.FlashVolume
+	}
+	if spec2.FlashFilename != "" {
+		spec.FlashFilename = spec2.FlashFilename
+	}
+	if spec2.OpenOCDInterface != "" {
+		spec.OpenOCDInterface = spec2.OpenOCDInterface
+	}
+	if spec2.OpenOCDTarget != "" {
+		spec.OpenOCDTarget = spec2.OpenOCDTarget
+	}
+	if spec2.OpenOCDTransport != "" {
+		spec.OpenOCDTransport = spec2.OpenOCDTransport
 	}
 }
 
@@ -248,9 +260,8 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		Compiler:    "clang",
 		Linker:      "cc",
 		GDB:         "gdb",
-		GDBCmds:     []string{"run"},
 		PortReset:   "false",
-		FlashMethod: "command",
+		FlashMethod: "native",
 	}
 	if goos == "darwin" {
 		spec.LDFlags = append(spec.LDFlags, "-Wl,-dead_strip")
@@ -275,6 +286,33 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		}
 	}
 	return &spec, nil
+}
+
+// OpenOCDConfiguration returns a list of command line arguments to OpenOCD.
+// This list of command-line arguments is based on the various OpenOCD-related
+// flags in the target specification.
+func (spec *TargetSpec) OpenOCDConfiguration() (args []string, err error) {
+	if spec.OpenOCDInterface == "" {
+		return nil, errors.New("OpenOCD programmer not set")
+	}
+	if !regexp.MustCompile("^[\\p{L}0-9_-]+$").MatchString(spec.OpenOCDInterface) {
+		return nil, fmt.Errorf("OpenOCD programmer has an invalid name: %#v", spec.OpenOCDInterface)
+	}
+	if spec.OpenOCDTarget == "" {
+		return nil, errors.New("OpenOCD chip not set")
+	}
+	if !regexp.MustCompile("^[\\p{L}0-9_-]+$").MatchString(spec.OpenOCDTarget) {
+		return nil, fmt.Errorf("OpenOCD target has an invalid name: %#v", spec.OpenOCDTarget)
+	}
+	if spec.OpenOCDTransport != "" && spec.OpenOCDTransport != "swd" {
+		return nil, fmt.Errorf("unknown OpenOCD transport: %#v", spec.OpenOCDTransport)
+	}
+	args = []string{"-f", "interface/" + spec.OpenOCDInterface + ".cfg"}
+	if spec.OpenOCDTransport != "" {
+		args = append(args, "-c", "transport select "+spec.OpenOCDTransport)
+	}
+	args = append(args, "-f", "target/"+spec.OpenOCDTarget+".cfg")
+	return args, nil
 }
 
 // Return the TINYGOROOT, or exit with an error.

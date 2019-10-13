@@ -403,24 +403,34 @@ func Flash(pkgName, target, port string, config *BuildConfig) error {
 	// determine the type of file to compile
 	var fileExt string
 
-	switch {
-	case strings.Contains(spec.Flasher, "{hex}"):
+	switch spec.FlashMethod {
+	case "command", "":
+		switch {
+		case strings.Contains(spec.FlashCommand, "{hex}"):
+			fileExt = ".hex"
+		case strings.Contains(spec.FlashCommand, "{elf}"):
+			fileExt = ".elf"
+		case strings.Contains(spec.FlashCommand, "{bin}"):
+			fileExt = ".bin"
+		case strings.Contains(spec.FlashCommand, "{uf2}"):
+			fileExt = ".uf2"
+		default:
+			return errors.New("invalid target file - did you forget the {hex} token in the 'flash-command' section?")
+		}
+	case "msd":
+		if spec.FlashFilename == "" {
+			return errors.New("invalid target file: flash-method was set to \"msd\" but no msd-firmware-name was set")
+		}
+		fileExt = filepath.Ext(spec.FlashFilename)
+	case "openocd":
 		fileExt = ".hex"
-	case strings.Contains(spec.Flasher, "{elf}"):
-		fileExt = ".elf"
-	case strings.Contains(spec.Flasher, "{bin}"):
-		fileExt = ".bin"
-	case strings.Contains(spec.Flasher, "{uf2}"):
-		fileExt = ".uf2"
+	case "native":
+		return errors.New("unknown flash method \"native\" - did you miss a -target flag?")
 	default:
-		return errors.New("invalid target file - did you forget the {hex} token in the 'flash' section?")
+		return errors.New("unknown flash method: " + spec.FlashMethod)
 	}
 
 	return Compile(pkgName, fileExt, spec, config, func(tmppath string) error {
-		if spec.Flasher == "" {
-			return errors.New("no flash command specified - did you miss a -target flag?")
-		}
-
 		// do we need port reset to put MCU into bootloader mode?
 		if spec.PortReset == "true" {
 			err := touchSerialPortAt1200bps(port)
@@ -432,7 +442,25 @@ func Flash(pkgName, target, port string, config *BuildConfig) error {
 		}
 
 		// this flashing method copies the binary data to a Mass Storage Device (msd)
-		if spec.FlashMethod == "msd" {
+		switch spec.FlashMethod {
+		case "", "command":
+			// Create the command.
+			flashCmd := spec.FlashCommand
+			fileToken := "{" + fileExt[1:] + "}"
+			flashCmd = strings.Replace(flashCmd, fileToken, tmppath, -1)
+			flashCmd = strings.Replace(flashCmd, "{port}", port, -1)
+
+			// Execute the command.
+			cmd := exec.Command("/bin/sh", "-c", flashCmd)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Dir = sourceDir()
+			err := cmd.Run()
+			if err != nil {
+				return &commandError{"failed to flash", tmppath, err}
+			}
+			return nil
+		case "msd":
 			switch fileExt {
 			case ".uf2":
 				err := flashUF2UsingMSD(spec.FlashVolume, tmppath)
@@ -449,24 +477,23 @@ func Flash(pkgName, target, port string, config *BuildConfig) error {
 			default:
 				return errors.New("mass storage device flashing currently only supports uf2 and hex")
 			}
+		case "openocd":
+			args, err := spec.OpenOCDConfiguration()
+			if err != nil {
+				return err
+			}
+			args = append(args, "-c", "program "+tmppath+" reset exit")
+			cmd := exec.Command("openocd", args...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err = cmd.Run()
+			if err != nil {
+				return &commandError{"failed to flash", tmppath, err}
+			}
+			return nil
+		default:
+			return fmt.Errorf("unknown flash method: %s", spec.FlashMethod)
 		}
-
-		// Create the command.
-		flashCmd := spec.Flasher
-		fileToken := "{" + fileExt[1:] + "}"
-		flashCmd = strings.Replace(flashCmd, fileToken, tmppath, -1)
-		flashCmd = strings.Replace(flashCmd, "{port}", port, -1)
-
-		// Execute the command.
-		cmd := exec.Command("/bin/sh", "-c", flashCmd)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Dir = sourceDir()
-		err := cmd.Run()
-		if err != nil {
-			return &commandError{"failed to flash", tmppath, err}
-		}
-		return nil
 	})
 }
 
@@ -485,9 +512,33 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig)
 	}
 
 	return Compile(pkgName, "", spec, config, func(tmppath string) error {
-		if len(spec.OCDDaemon) != 0 {
+		// Find a good way to run GDB.
+		gdbInterface := spec.FlashMethod
+		switch gdbInterface {
+		case "msd", "command", "":
+			if gdbInterface == "" {
+				gdbInterface = "command"
+			}
+			if spec.OpenOCDInterface != "" && spec.OpenOCDTarget != "" {
+				gdbInterface = "openocd"
+			}
+		}
+
+		// Run the GDB server, if necessary.
+		var gdbCommands []string
+		switch gdbInterface {
+		case "native":
+			// Run GDB directly.
+			gdbCommands = append(gdbCommands, "run")
+		case "openocd":
+			gdbCommands = append(gdbCommands, "target remote :3333", "monitor halt", "load", "monitor reset", "c")
+
 			// We need a separate debugging daemon for on-chip debugging.
-			daemon := exec.Command(spec.OCDDaemon[0], spec.OCDDaemon[1:]...)
+			args, err := spec.OpenOCDConfiguration()
+			if err != nil {
+				return err
+			}
+			daemon := exec.Command("openocd", args...)
 			if ocdOutput {
 				// Make it clear which output is from the daemon.
 				w := &ColorWriter{
@@ -512,6 +563,10 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig)
 				// Maybe we should send a .Kill() after x seconds?
 				daemon.Wait()
 			}()
+		case "msd":
+			return errors.New("gdb is not supported for drag-and-drop programmable devices")
+		default:
+			return fmt.Errorf("gdb is not supported with interface %#v", gdbInterface)
 		}
 
 		// Ignore Ctrl-C, it must be passed on to GDB.
@@ -526,7 +581,7 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig)
 		// By default: gdb -ex run <binary>
 		// Exit GDB with Ctrl-D.
 		params := []string{tmppath}
-		for _, cmd := range spec.GDBCmds {
+		for _, cmd := range gdbCommands {
 			params = append(params, "-ex", cmd)
 		}
 		cmd := exec.Command(spec.GDB, params...)
@@ -606,7 +661,7 @@ func flashUF2UsingMSD(volume, tmppath string) error {
 		return err
 	}
 	if d == nil {
-		return errors.New("unable to locate UF2 device:" + volume)
+		return errors.New("unable to locate UF2 device: " + volume)
 	}
 
 	return moveFile(tmppath, filepath.Dir(d[0])+"/flash.uf2")
@@ -624,7 +679,7 @@ func flashHexUsingMSD(volume, tmppath string) error {
 		return err
 	}
 	if d == nil {
-		return errors.New("unable to locate device:" + volume)
+		return errors.New("unable to locate device: " + volume)
 	}
 
 	return moveFile(tmppath, d[0]+"/flash.hex")
