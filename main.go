@@ -720,6 +720,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  test:  test packages")
 	fmt.Fprintln(os.Stderr, "  flash: compile and flash to the device")
 	fmt.Fprintln(os.Stderr, "  gdb:   run/flash and immediately enter GDB")
+	fmt.Fprintln(os.Stderr, "  env:   list environment variables used during build")
 	fmt.Fprintln(os.Stderr, "  clean: empty cache directory ("+goenv.Get("GOCACHE")+")")
 	fmt.Fprintln(os.Stderr, "  help:  print this help text")
 	fmt.Fprintln(os.Stderr, "\nflags:")
@@ -900,6 +901,18 @@ func main() {
 		usage()
 	case "version":
 		fmt.Printf("tinygo version %s %s/%s\n", version, runtime.GOOS, runtime.GOARCH)
+	case "env":
+		if flag.NArg() == 0 {
+			// Show all environment variables.
+			for _, key := range goenv.Keys {
+				fmt.Printf("%s=%#v\n", key, goenv.Get(key))
+			}
+		} else {
+			// Show only one (or a few) environment variables.
+			for i := 0; i < flag.NArg(); i++ {
+				fmt.Println(goenv.Get(flag.Arg(i)))
+			}
+		}
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown command:", command)
 		usage()
