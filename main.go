@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/tinygo-org/tinygo/compiler"
+	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
 
@@ -70,7 +71,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		config.gc = spec.GC
 	}
 
-	root := sourceDir()
+	root := goenv.Get("TINYGOROOT")
 
 	// Merge and adjust CFlags.
 	cflags := append([]string{}, config.cFlags...)
@@ -84,7 +85,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		ldflags = append(ldflags, strings.Replace(flag, "{root}", root, -1))
 	}
 
-	goroot := getGoroot()
+	goroot := goenv.Get("GOROOT")
 	if goroot == "" {
 		return errors.New("cannot locate $GOROOT, please set it manually")
 	}
@@ -123,7 +124,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 		VerifyIR:      config.verifyIR,
 		TINYGOROOT:    root,
 		GOROOT:        goroot,
-		GOPATH:        getGopath(),
+		GOPATH:        goenv.Get("GOPATH"),
 		BuildTags:     tags,
 		TestConfig:    config.testConfig,
 	}
@@ -454,7 +455,7 @@ func Flash(pkgName, target, port string, config *BuildConfig) error {
 			cmd := exec.Command("/bin/sh", "-c", flashCmd)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
-			cmd.Dir = sourceDir()
+			cmd.Dir = goenv.Get("TINYGOROOT")
 			err := cmd.Run()
 			if err != nil {
 				return &commandError{"failed to flash", tmppath, err}
@@ -719,7 +720,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  test:  test packages")
 	fmt.Fprintln(os.Stderr, "  flash: compile and flash to the device")
 	fmt.Fprintln(os.Stderr, "  gdb:   run/flash and immediately enter GDB")
-	fmt.Fprintln(os.Stderr, "  clean: empty cache directory ("+cacheDir()+")")
+	fmt.Fprintln(os.Stderr, "  clean: empty cache directory ("+goenv.Get("GOCACHE")+")")
 	fmt.Fprintln(os.Stderr, "  help:  print this help text")
 	fmt.Fprintln(os.Stderr, "\nflags:")
 	flag.PrintDefaults()
@@ -890,8 +891,7 @@ func main() {
 		handleCompilerError(err)
 	case "clean":
 		// remove cache directory
-		dir := cacheDir()
-		err := os.RemoveAll(dir)
+		err := os.RemoveAll(goenv.Get("GOCACHE"))
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "cannot clean cache:", err)
 			os.Exit(1)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/blakesmith/ar"
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 // These are the GENERIC_SOURCES according to CMakeList.txt.
@@ -169,13 +170,13 @@ func builtinFiles(target string) []string {
 
 // builtinsDir returns the directory where the sources for compiler-rt are kept.
 func builtinsDir() string {
-	return filepath.Join(sourceDir(), "lib", "compiler-rt", "lib", "builtins")
+	return filepath.Join(goenv.Get("TINYGOROOT"), "lib", "compiler-rt", "lib", "builtins")
 }
 
 // Get the builtins archive, possibly generating it as needed.
 func loadBuiltins(target string) (path string, err error) {
 	// Try to load a precompiled compiler-rt library.
-	precompiledPath := filepath.Join(sourceDir(), "pkg", target, "compiler-rt.a")
+	precompiledPath := filepath.Join(goenv.Get("TINYGOROOT"), "pkg", target, "compiler-rt.a")
 	if _, err := os.Stat(precompiledPath); err == nil {
 		// Found a precompiled compiler-rt for this OS/architecture. Return the
 		// path directly.

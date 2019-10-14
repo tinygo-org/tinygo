@@ -8,6 +8,8 @@ package main
 import (
 	"os"
 	"os/exec"
+
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 // Link invokes a linker with the given name and arguments.
@@ -20,6 +22,6 @@ func Link(linker string, flags ...string) error {
 	cmd := exec.Command(linker, flags...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Dir = sourceDir()
+	cmd.Dir = goenv.Get("TINYGOROOT")
 	return cmd.Run()
 }

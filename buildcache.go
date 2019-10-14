@@ -5,16 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-)
 
-// Get the cache directory, usually ~/.cache/tinygo
-func cacheDir() string {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		panic("could not find cache dir: " + err.Error())
-	}
-	return filepath.Join(dir, "tinygo")
-}
+	"github.com/tinygo-org/tinygo/goenv"
+)
 
 // Return the newest timestamp of all the file paths passed in. Used to check
 // for stale caches.
@@ -41,8 +34,7 @@ func cacheTimestamp(paths []string) (time.Time, error) {
 // TODO: the configKey is currently ignored. It is supposed to be used as extra
 // data for the cache key, like the compiler version and arguments.
 func cacheLoad(name, configKey string, sourceFiles []string) (string, error) {
-	dir := cacheDir()
-	cachepath := filepath.Join(dir, name)
+	cachepath := filepath.Join(goenv.Get("GOCACHE"), name)
 	cacheStat, err := os.Stat(cachepath)
 	if os.IsNotExist(err) {
 		return "", nil // does not exist
@@ -76,7 +68,7 @@ func cacheStore(tmppath, name, configKey string, sourceFiles []string) (string, 
 
 	// TODO: check the config key
 
-	dir := cacheDir()
+	dir := goenv.Get("GOCACHE")
 	err := os.MkdirAll(dir, 0777)
 	if err != nil {
 		return "", err
