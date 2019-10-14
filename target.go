@@ -8,17 +8,13 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
-)
 
-// TINYGOROOT is the path to the final location for checking tinygo files. If
-// unset (by a -X ldflag), then sourceDir() will fallback to the original build
-// directory.
-var TINYGOROOT string
+	"github.com/tinygo-org/tinygo/goenv"
+)
 
 // Target specification for a given target. Used for bare metal targets.
 //
@@ -147,7 +143,7 @@ func (spec *TargetSpec) loadFromGivenStr(str string) error {
 	if strings.HasSuffix(str, ".json") {
 		path, _ = filepath.Abs(str)
 	} else {
-		path = filepath.Join(sourceDir(), "targets", strings.ToLower(str)+".json")
+		path = filepath.Join(goenv.Get("TINYGOROOT"), "targets", strings.ToLower(str)+".json")
 	}
 	fp, err := os.Open(path)
 	if err != nil {
@@ -186,14 +182,8 @@ func LoadTarget(target string) (*TargetSpec, error) {
 	if target == "" {
 		// Configure based on GOOS/GOARCH environment variables (falling back to
 		// runtime.GOOS/runtime.GOARCH), and generate a LLVM target based on it.
-		goos := os.Getenv("GOOS")
-		if goos == "" {
-			goos = runtime.GOOS
-		}
-		goarch := os.Getenv("GOARCH")
-		if goarch == "" {
-			goarch = runtime.GOARCH
-		}
+		goos := goenv.Get("GOOS")
+		goarch := goenv.Get("GOARCH")
 		llvmos := goos
 		llvmarch := map[string]string{
 			"386":   "i386",
@@ -313,141 +303,6 @@ func (spec *TargetSpec) OpenOCDConfiguration() (args []string, err error) {
 	}
 	args = append(args, "-f", "target/"+spec.OpenOCDTarget+".cfg")
 	return args, nil
-}
-
-// Return the TINYGOROOT, or exit with an error.
-func sourceDir() string {
-	// Use $TINYGOROOT as root, if available.
-	root := os.Getenv("TINYGOROOT")
-	if root != "" {
-		if !isSourceDir(root) {
-			fmt.Fprintln(os.Stderr, "error: $TINYGOROOT was not set to the correct root")
-			os.Exit(1)
-		}
-		return root
-	}
-
-	if TINYGOROOT != "" {
-		if !isSourceDir(TINYGOROOT) {
-			fmt.Fprintln(os.Stderr, "error: TINYGOROOT was not set to the correct root")
-			os.Exit(1)
-		}
-		return TINYGOROOT
-	}
-
-	// Find root from executable path.
-	path, err := os.Executable()
-	if err != nil {
-		// Very unlikely. Bail out if it happens.
-		panic("could not get executable path: " + err.Error())
-	}
-	root = filepath.Dir(filepath.Dir(path))
-	if isSourceDir(root) {
-		return root
-	}
-
-	// Fallback: use the original directory from where it was built
-	// https://stackoverflow.com/a/32163888/559350
-	_, path, _, _ = runtime.Caller(0)
-	root = filepath.Dir(path)
-	if isSourceDir(root) {
-		return root
-	}
-
-	fmt.Fprintln(os.Stderr, "error: could not autodetect root directory, set the TINYGOROOT environment variable to override")
-	os.Exit(1)
-	panic("unreachable")
-}
-
-// isSourceDir returns true if the directory looks like a TinyGo source directory.
-func isSourceDir(root string) bool {
-	_, err := os.Stat(filepath.Join(root, "src/runtime/internal/sys/zversion.go"))
-	if err != nil {
-		return false
-	}
-	_, err = os.Stat(filepath.Join(root, "src/device/arm/arm.go"))
-	return err == nil
-}
-
-func getGopath() string {
-	gopath := os.Getenv("GOPATH")
-	if gopath != "" {
-		return gopath
-	}
-
-	// fallback
-	home := getHomeDir()
-	return filepath.Join(home, "go")
-}
-
-func getHomeDir() string {
-	u, err := user.Current()
-	if err != nil {
-		panic("cannot get current user: " + err.Error())
-	}
-	if u.HomeDir == "" {
-		// This is very unlikely, so panic here.
-		// Not the nicest solution, however.
-		panic("could not find home directory")
-	}
-	return u.HomeDir
-}
-
-// getGoroot returns an appropriate GOROOT from various sources. If it can't be
-// found, it returns an empty string.
-func getGoroot() string {
-	goroot := os.Getenv("GOROOT")
-	if goroot != "" {
-		// An explicitly set GOROOT always has preference.
-		return goroot
-	}
-
-	// Check for the location of the 'go' binary and base GOROOT on that.
-	binpath, err := exec.LookPath("go")
-	if err == nil {
-		binpath, err = filepath.EvalSymlinks(binpath)
-		if err == nil {
-			goroot := filepath.Dir(filepath.Dir(binpath))
-			if isGoroot(goroot) {
-				return goroot
-			}
-		}
-	}
-
-	// Check what GOROOT was at compile time.
-	if isGoroot(runtime.GOROOT()) {
-		return runtime.GOROOT()
-	}
-
-	// Check for some standard locations, as a last resort.
-	var candidates []string
-	switch runtime.GOOS {
-	case "linux":
-		candidates = []string{
-			"/usr/local/go", // manually installed
-			"/usr/lib/go",   // from the distribution
-		}
-	case "darwin":
-		candidates = []string{
-			"/usr/local/go",             // manually installed
-			"/usr/local/opt/go/libexec", // from Homebrew
-		}
-	}
-
-	for _, candidate := range candidates {
-		if isGoroot(candidate) {
-			return candidate
-		}
-	}
-
-	// Can't find GOROOT...
-	return ""
-}
-
-// isGoroot checks whether the given path looks like a GOROOT.
-func isGoroot(goroot string) bool {
-	_, err := os.Stat(filepath.Join(goroot, "src", "runtime", "internal", "sys", "zversion.go"))
-	return err == nil
 }
 
 // getGorootVersion returns the major and minor version for a given GOROOT path.

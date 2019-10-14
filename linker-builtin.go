@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"unsafe"
+
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 /*
@@ -63,7 +65,7 @@ func Link(linker string, flags ...string) error {
 		cmd := exec.Command(linker, flags...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		cmd.Dir = sourceDir()
+		cmd.Dir = goenv.Get("TINYGOROOT")
 		return cmd.Run()
 	}
 }
