@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 18 microcontroller boards are currently supported:
+The following 19 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
 * [Adafruit Feather M0](https://www.adafruit.com/product/2772)
@@ -53,17 +53,17 @@ The following 18 microcontroller boards are currently supported:
 * [Arduino Nano33 IoT](https://store.arduino.cc/nano-33-iot)
 * [Arduino Uno](https://store.arduino.cc/arduino-uno-rev3)
 * [BBC micro:bit](https://microbit.org/)
-* [Game Boy Advance](https://en.wikipedia.org/wiki/Game_Boy_Advance)
-* [SiFIve HiFive1](https://www.sifive.com/boards/hifive1)
-* [ST Micro STM32F103XX "Bluepill"](http://wiki.stm32duino.com/index.php?title=Blue_Pill)
-* [ST Micro "Nucleo F103RB"](https://www.st.com/en/evaluation-tools/nucleo-f103rb.html)
-* [ST Micro STM32F407 "Discovery"](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
 * [Digispark](http://digistump.com/products/1)
+* [Game Boy Advance](https://en.wikipedia.org/wiki/Game_Boy_Advance)
+* [Makerdiary nRF52840-MDK](https://wiki.makerdiary.com/nrf52840-mdk/)
 * [Nordic Semiconductor PCA10031](https://www.nordicsemi.com/eng/Products/nRF51-Dongle)
 * [Nordic Semiconductor PCA10040](https://www.nordicsemi.com/eng/Products/Bluetooth-low-energy/nRF52-DK)
 * [Nordic Semiconductor PCA10056](https://www.nordicsemi.com/Software-and-Tools/Development-Kits/nRF52840-DK)
-* [Makerdiary nRF52840-MDK](https://wiki.makerdiary.com/nrf52840-mdk/)
 * [Phytec reel board](https://www.phytec.eu/product-eu/internet-of-things/reelboard/)
+* [SiFIve HiFive1](https://www.sifive.com/boards/hifive1)
+* [ST Micro "Nucleo F103RB"](https://www.st.com/en/evaluation-tools/nucleo-f103rb.html)
+* [ST Micro STM32F103XX "Bluepill"](http://wiki.stm32duino.com/index.php?title=Blue_Pill)
+* [ST Micro STM32F407 "Discovery"](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
 
 For more information, see [this list of boards](https://tinygo.org/microcontrollers/). Pull requests for additional support are welcome!
 
