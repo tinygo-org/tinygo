@@ -1,3 +1,36 @@
+0.9.0
+---
+* **command line**
+  - implement 1200-baud UART bootloader reset when flashing boards that support
+    it
+  - flash using mass-storage device for boards that support it
+  - implement `tinygo env`
+  - add support for Windows (but not yet producing Windows binaries)
+  - add Go version to `tinygo env`
+  - update SVD files for up-to-date peripheral interfaces
+* **compiler**
+  - add `//go:align` pragma
+  - fix bug related to type aliases
+  - add support for buffered channels
+  - remove incorrect reflect optimization
+  - implement copying slices in init interpretation
+  - add support for constant indices with a named type
+  - add support for recursive types like linked lists
+  - fix miscompile of function nil panics
+  - fix bug related to goroutines
+* **standard library**
+  - `machine`: do not check for nil slices in `SPI.Tx`
+  - `reflectlite`: add support for Go 1.13
+  - `runtime`: implement `internal/bytealg.CountString`
+  - `sync`: properly handle nil `New` func in `sync.Pool`
+* **targets**
+  - `arduino`: fix .bss section initialization
+  - `fe310`: implement `Pin.Get`
+  - `gameboy-advance`: support directly outputting .gba files
+  - `samd`: reduce code size by avoiding reflection
+  - `samd21`: do not hardcode pin numbers for peripherals
+  - `stm32f103`: avoid issue with `time.Sleep` less than 200µs
+
 0.8.0
 ---
 * **command line**
