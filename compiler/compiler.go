@@ -38,6 +38,7 @@ var functionsUsedInTransforms = []string{
 	"runtime.alloc",
 	"runtime.free",
 	"runtime.scheduler",
+	"runtime.nilPanic",
 }
 
 var taskFunctionsUsedInTransforms = []string{
