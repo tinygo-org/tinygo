@@ -8,6 +8,9 @@ type Pool struct {
 
 // Get returns the value of calling Pool.New().
 func (p *Pool) Get() interface{} {
+	if p.New == nil {
+		return nil
+	}
 	return p.New()
 }
 
