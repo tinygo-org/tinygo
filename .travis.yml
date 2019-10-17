@@ -1,0 +1,31 @@
+dist: xenial
+arch: arm64
+os: linux
+language: go
+go:  1.13.x
+addons:
+  apt:
+    sources:
+      - sourceline: 'ppa:ubuntu-toolchain-r'
+      - llvm-toolchain-xenial-8
+      - sourceline: 'deb https://deb.nodesource.com/node_10.x bionic main'
+        key_url: 'https://deb.nodesource.com/gpgkey/nodesource.gpg.key'
+    packages:
+      - clang-8
+      - llvm-8-dev
+      - libclang-8-dev
+      - lld-8
+      - gcc-arm-linux-gnueabihf
+      - libc6-dev-armhf-cross
+      - gcc
+      - libc6-dev
+      - qemu-system-arm
+      - qemu-user
+      - gcc-avr
+      - avr-libc
+      - nodejs
+script:
+  - go install -v
+  - go test -v ./interp ./transform .
+  - make gen-device -j4
+  - make smoketest RISCV=0

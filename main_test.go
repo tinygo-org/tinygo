@@ -66,24 +66,28 @@ func TestCompiler(t *testing.T) {
 	}
 
 	if runtime.GOOS == "linux" {
-		t.Log("running tests for linux/arm...")
-		for _, path := range matches {
-			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
-				continue // TODO: improve CGo
+		if runtime.GOARCH != "arm" {
+			t.Log("running tests for linux/arm...")
+			for _, path := range matches {
+				if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
+					continue // TODO: improve CGo
+				}
+				t.Run(path, func(t *testing.T) {
+					runTest(path, tmpdir, "arm--linux-gnueabihf", t)
+				})
 			}
-			t.Run(path, func(t *testing.T) {
-				runTest(path, tmpdir, "arm--linux-gnueabihf", t)
-			})
 		}
 
-		t.Log("running tests for linux/arm64...")
-		for _, path := range matches {
-			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
-				continue // TODO: improve CGo
+		if runtime.GOARCH != "arm64" {
+			t.Log("running tests for linux/arm64...")
+			for _, path := range matches {
+				if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
+					continue // TODO: improve CGo
+				}
+				t.Run(path, func(t *testing.T) {
+					runTest(path, tmpdir, "aarch64--linux-gnu", t)
+				})
 			}
-			t.Run(path, func(t *testing.T) {
-				runTest(path, tmpdir, "aarch64--linux-gnu", t)
-			})
 		}
 
 		t.Log("running tests for WebAssembly...")
