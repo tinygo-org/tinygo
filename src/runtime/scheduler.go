@@ -226,10 +226,13 @@ func addSleepTask(t *task, duration int64) {
 // Run the scheduler until all tasks have finished.
 func scheduler() {
 	// Main scheduler loop.
+	var now timeUnit
 	for {
 		scheduleLog("")
 		scheduleLog("  schedule")
-		now := ticks()
+		if sleepQueue != nil {
+			now = ticks()
+		}
 
 		// Add tasks that are done sleeping to the end of the runqueue so they
 		// will be executed soon.
