@@ -896,7 +896,11 @@ func main() {
 	case "help":
 		usage()
 	case "version":
-		fmt.Printf("tinygo version %s %s/%s\n", version, runtime.GOOS, runtime.GOARCH)
+		goversion := "<unknown>"
+		if s, err := getGorootVersionString(goenv.Get("GOROOT")); err == nil {
+			goversion = s
+		}
+		fmt.Printf("tinygo version %s %s/%s (using go version %s)\n", version, runtime.GOOS, runtime.GOARCH, goversion)
 	case "env":
 		if flag.NArg() == 0 {
 			// Show all environment variables.
