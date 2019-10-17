@@ -38,6 +38,9 @@ var (
 	sleepQueueBaseTime timeUnit
 )
 
+// variable set to true after main returns, to indicate that the scheduler should exit
+var schedulerDone bool
+
 // Simple logging, for debugging.
 func scheduleLog(msg string) {
 	if schedulerDebug {
@@ -228,6 +231,11 @@ func scheduler() {
 	// Main scheduler loop.
 	var now timeUnit
 	for {
+		if schedulerDone {
+			scheduleLog("  done")
+			return
+		}
+
 		scheduleLog("")
 		scheduleLog("  schedule")
 		if sleepQueue != nil {
@@ -253,8 +261,13 @@ func scheduler() {
 				// It would be nice if we could detect deadlocks here, because
 				// there might still be functions waiting on each other in a
 				// deadlock.
+				// Due to interrupts, we may actually not be done - so we need to sleep.
 				scheduleLog("  no tasks left!")
-				return
+				sleepTicks(0)
+				if asyncScheduler {
+					break
+				}
+				continue
 			}
 			timeLeft := timeUnit(sleepQueue.state().data) - (now - sleepQueueBaseTime)
 			if schedulerDebug {

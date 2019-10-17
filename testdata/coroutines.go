@@ -47,10 +47,18 @@ func main() {
 		time.Sleep(2 * time.Millisecond)
 		x = 1
 	}()
-	time.Sleep(time.Second/2)
+	time.Sleep(time.Second / 2)
 	println("closure go call result:", x)
 
 	time.Sleep(2 * time.Millisecond)
+
+	// should not print anything, because we should exit as soon as we return
+	go delayedPrint()
+}
+
+func delayedPrint() {
+	time.Sleep(time.Second)
+	println("should have already exited")
 }
 
 func sub() {

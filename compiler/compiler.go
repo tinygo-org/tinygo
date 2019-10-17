@@ -38,6 +38,7 @@ const tinygoPath = "github.com/tinygo-org/tinygo"
 // during TinyGo optimization passes so they have to be marked as external
 // linkage until all TinyGo passes have finished.
 var functionsUsedInTransforms = []string{
+	"runtime.wrapMain",
 	"runtime.alloc",
 	"runtime.free",
 	"runtime.scheduler",
