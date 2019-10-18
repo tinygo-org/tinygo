@@ -37,11 +37,86 @@ func chanDebug(ch *channel) {
 	}
 }
 
+// channelBlockedList is a list of channel operations on a specific channel which are currently blocked.
+type channelBlockedList struct {
+	// next is a pointer to the next blocked channel operation on the same channel.
+	next *channelBlockedList
+
+	// t is the task associated with this channel operation.
+	// If this channel operation is not part of a select, then the pointer field of the state holds the data buffer.
+	// If this channel operation is part of a select, then the pointer field of the state holds the recieve buffer.
+	// If this channel operation is a receive, then the data field should be set to zero when resuming due to channel closure.
+	t *task
+
+	// s is a pointer to the channel select state corresponding to this operation.
+	// This will be nil if and only if this channel operation is not part of a select statement.
+	// If this is a send operation, then the send buffer can be found in this select state.
+	s *chanSelectState
+
+	// allSelectOps is a slice containing all of the channel operations involved with this select statement.
+	// Before resuming the task, all other channel operations on this select statement should be canceled by removing them from their corresponding lists.
+	allSelectOps []channelBlockedList
+}
+
+// remove takes the current list of blocked channel operations and removes the specified operation.
+// This returns the resulting list, or nil if the resulting list is empty.
+// A nil receiver is treated as an empty list.
+func (b *channelBlockedList) remove(old *channelBlockedList) *channelBlockedList {
+	if b == old {
+		return b.next
+	}
+	c := b
+	for ; c != nil && c.next != old; c = c.next {
+	}
+	if c != nil {
+		c.next = old.next
+	}
+	return b
+}
+
+// detatch removes all other channel operations that are part of the same select statement.
+// If the input is not part of a select statement, this is a no-op.
+// This must be called before resuming any task blocked on a channel operation in order to ensure that it is not placed on the runqueue twice.
+func (b *channelBlockedList) detach() {
+	if b.allSelectOps == nil {
+		// nothing to do
+		return
+	}
+	for i, v := range b.allSelectOps {
+		// cancel all other channel operations that are part of this select statement
+		if &b.allSelectOps[i] == b {
+			continue
+		}
+		if v.s.ch == nil {
+			continue
+		}
+		v.s.ch.blocked = v.s.ch.blocked.remove(&b.allSelectOps[i])
+		if v.s.ch.blocked == nil {
+			if v.s.value == nil {
+				// recv operation
+				if v.s.ch.state != chanStateClosed {
+					v.s.ch.state = chanStateEmpty
+				}
+			} else {
+				// send operation
+				if v.s.ch.bufUsed == 0 {
+					// unbuffered channel
+					v.s.ch.state = chanStateEmpty
+				} else {
+					// buffered channel
+					v.s.ch.state = chanStateBuf
+				}
+			}
+		}
+		chanDebug(v.s.ch)
+	}
+}
+
 type channel struct {
 	elementSize uintptr // the size of one value in this channel
 	bufSize     uintptr // size of buffer (in elements)
 	state       chanState
-	blocked     *task
+	blocked     *channelBlockedList
 	bufHead     uintptr        // head index of buffer (next push index)
 	bufTail     uintptr        // tail index of buffer (next pop index)
 	bufUsed     uintptr        // number of elements currently in buffer
@@ -56,6 +131,63 @@ func chanMake(elementSize uintptr, bufSize uintptr) *channel {
 		bufSize:     bufSize,
 		buf:         alloc(elementSize * bufSize),
 	}
+}
+
+// resumeRX resumes the next receiver and returns the destination pointer.
+// If the ok value is true, then the caller is expected to store a value into this pointer.
+func (ch *channel) resumeRX(ok bool) unsafe.Pointer {
+	// pop a blocked goroutine off the stack
+	var b *channelBlockedList
+	b, ch.blocked = ch.blocked, ch.blocked.next
+
+	// get destination pointer
+	dst := b.t.state().ptr
+
+	if !ok {
+		// the result value is zero
+		memzero(dst, ch.elementSize)
+		b.t.state().data = 0
+	}
+
+	if b.s != nil {
+		// tell the select op which case resumed
+		b.t.state().ptr = unsafe.Pointer(b.s)
+
+		// detach associated operations
+		b.detach()
+	}
+
+	// push task onto runqueue
+	runqueuePushBack(b.t)
+
+	return dst
+}
+
+// resumeTX resumes the next sender and returns the source pointer.
+// The caller is expected to read from the value in this pointer before yielding.
+func (ch *channel) resumeTX() unsafe.Pointer {
+	// pop a blocked goroutine off the stack
+	var b *channelBlockedList
+	b, ch.blocked = ch.blocked, ch.blocked.next
+
+	// get source pointer
+	src := b.t.state().ptr
+
+	if b.s != nil {
+		// use state's source pointer
+		src = b.s.value
+
+		// tell the select op which case resumed
+		b.t.state().ptr = unsafe.Pointer(b.s)
+
+		// detach associated operations
+		b.detach()
+	}
+
+	// push task onto runqueue
+	runqueuePushBack(b.t)
+
+	return src
 }
 
 // push value to end of channel if space is available
@@ -151,12 +283,10 @@ func (ch *channel) trySend(value unsafe.Pointer) bool {
 		return false
 	case chanStateRecv:
 		// unblock reciever
-		receiver := unblockChain(&ch.blocked, nil)
+		dst := ch.resumeRX(true)
 
 		// copy value to reciever
-		receiverState := receiver.state()
-		memcpy(receiverState.ptr, value, ch.elementSize)
-		receiverState.data = 1 // commaOk = true
+		memcpy(dst, value, ch.elementSize)
 
 		// change state to empty if there are no more receivers
 		if ch.blocked == nil {
@@ -191,9 +321,11 @@ func (ch *channel) tryRecv(value unsafe.Pointer) (bool, bool) {
 		// try to pop the value directly from the buffer
 		if ch.pop(value) {
 			// unblock next sender if applicable
-			if sender := unblockChain(&ch.blocked, nil); sender != nil {
+			if ch.blocked != nil {
+				src := ch.resumeTX()
+
 				// push sender's value into buffer
-				ch.push(sender.state().ptr)
+				ch.push(src)
 
 				if ch.blocked == nil {
 					// last sender unblocked - update state
@@ -207,10 +339,12 @@ func (ch *channel) tryRecv(value unsafe.Pointer) (bool, bool) {
 			}
 
 			return true, true
-		} else if sender := unblockChain(&ch.blocked, nil); sender != nil {
+		} else if ch.blocked != nil {
 			// unblock next sender if applicable
+			src := ch.resumeTX()
+
 			// copy sender's value
-			memcpy(value, sender.state().ptr, ch.elementSize)
+			memcpy(value, src, ch.elementSize)
 
 			if ch.blocked == nil {
 				// last sender unblocked - update state
@@ -294,7 +428,10 @@ func chanSend(ch *channel, value unsafe.Pointer) {
 	ch.state = chanStateSend
 	senderState := sender.state()
 	senderState.ptr = value
-	ch.blocked, senderState.next = sender, ch.blocked
+	ch.blocked = &channelBlockedList{
+		next: ch.blocked,
+		t:    sender,
+	}
 	chanDebug(ch)
 	yield()
 	senderState.ptr = nil
@@ -320,8 +457,11 @@ func chanRecv(ch *channel, value unsafe.Pointer) bool {
 	receiver := getCoroutine()
 	ch.state = chanStateRecv
 	receiverState := receiver.state()
-	receiverState.ptr, receiverState.data = value, 0
-	ch.blocked, receiverState.next = receiver, ch.blocked
+	receiverState.ptr, receiverState.data = value, 1
+	ch.blocked = &channelBlockedList{
+		next: ch.blocked,
+		t:    receiver,
+	}
 	chanDebug(ch)
 	yield()
 	ok := receiverState.data == 1
@@ -348,15 +488,9 @@ func chanClose(ch *channel) {
 		runtimePanic("close channel during send")
 	case chanStateRecv:
 		// unblock all receivers with the zero value
-		for rx := unblockChain(&ch.blocked, nil); rx != nil; rx = unblockChain(&ch.blocked, nil) {
-			// get receiver state
-			state := rx.state()
-
-			// store the zero value
-			memzero(state.ptr, ch.elementSize)
-
-			// set the comma-ok value to false (channel closed)
-			state.data = 0
+		ch.state = chanStateClosed
+		for ch.blocked != nil {
+			ch.resumeRX(false)
 		}
 	case chanStateEmpty, chanStateBuf:
 		// Easy case. No available sender or receiver.
@@ -371,7 +505,60 @@ func chanClose(ch *channel) {
 //
 // TODO: do this in a round-robin fashion (as specified in the Go spec) instead
 // of picking the first one that can proceed.
-func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, blocking bool) (uintptr, bool) {
+func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelBlockedList) (uintptr, bool) {
+	if selected, ok := tryChanSelect(recvbuf, states); selected != ^uintptr(0) {
+		// one channel was immediately ready
+		return selected, ok
+	}
+
+	// construct blocked operations
+	for i, v := range states {
+		ops[i] = channelBlockedList{
+			next:         v.ch.blocked,
+			t:            getCoroutine(),
+			s:            &states[i],
+			allSelectOps: ops,
+		}
+		v.ch.blocked = &ops[i]
+		if v.value == nil {
+			// recv
+			switch v.ch.state {
+			case chanStateEmpty:
+				v.ch.state = chanStateRecv
+			case chanStateRecv:
+				// already in correct state
+			default:
+				runtimePanic("invalid channel state")
+			}
+		} else {
+			// send
+			switch v.ch.state {
+			case chanStateEmpty:
+				v.ch.state = chanStateSend
+			case chanStateSend:
+				// already in correct state
+			case chanStateBuf:
+				// already in correct state
+			default:
+				runtimePanic("invalid channel state")
+			}
+		}
+		chanDebug(v.ch)
+	}
+
+	// expose rx buffer
+	getCoroutine().state().ptr = recvbuf
+	getCoroutine().state().data = 1
+
+	// wait for one case to fire
+	yield()
+
+	// figure out which one fired and return the ok value
+	return (uintptr(getCoroutine().state().ptr) - uintptr(unsafe.Pointer(&states[0]))) / unsafe.Sizeof(chanSelectState{}), getCoroutine().state().data != 0
+}
+
+// tryChanSelect is like chanSelect, but it does a non-blocking select operation.
+func tryChanSelect(recvbuf unsafe.Pointer, states []chanSelectState) (uintptr, bool) {
 	// See whether we can receive from one of the channels.
 	for i, state := range states {
 		if state.value == nil {
@@ -389,8 +576,5 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, blocking bool)
 		}
 	}
 
-	if !blocking {
-		return ^uintptr(0), false
-	}
-	panic("unimplemented: blocking select")
+	return ^uintptr(0), false
 }
