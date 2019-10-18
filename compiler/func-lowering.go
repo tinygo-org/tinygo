@@ -98,6 +98,10 @@ func (c *Compiler) LowerFuncValues() {
 					continue
 				}
 				for _, funcValueWithSignatureConstant := range getUses(ptrtoint) {
+					if !funcValueWithSignatureConstant.IsACallInst().IsNil() && funcValueWithSignatureConstant.CalledValue().Name() == "runtime.makeGoroutine" {
+						// makeGoroutine calls are handled seperately
+						continue
+					}
 					for _, funcValueWithSignatureGlobal := range getUses(funcValueWithSignatureConstant) {
 						for _, use := range getUses(funcValueWithSignatureGlobal) {
 							if ptrtoint.IsAConstantExpr().IsNil() || ptrtoint.Opcode() != llvm.PtrToInt {
@@ -182,7 +186,11 @@ func (c *Compiler) LowerFuncValues() {
 								panic("expected a inttoptr")
 							}
 							for _, use := range getUses(inttoptr) {
-								c.addFuncLoweringSwitch(funcID, use, c.emitStartGoroutine, functions)
+								c.addFuncLoweringSwitch(funcID, use, func(funcPtr llvm.Value, params []llvm.Value) llvm.Value {
+									// The function lowering switch code passes in a parent handle value.
+									// Strip the parent handle off here because it is irrelevant to goroutine starts.
+									return c.emitStartGoroutine(funcPtr, params[:len(params)-1])
+								}, functions)
 								use.EraseFromParentAsInstruction()
 							}
 							inttoptr.EraseFromParentAsInstruction()
