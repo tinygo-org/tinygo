@@ -13,3 +13,4 @@ done with non-blocking goroutine
 async interface method call
 slept inside func pointer 8
 slept inside closure, with value: 20 8
+closure go call result: 1

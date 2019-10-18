@@ -1080,28 +1080,34 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			// Static callee is known. This makes it easier to start a new
 			// goroutine.
 			calleeFn := c.ir.GetFunction(callee)
-			if !calleeFn.IsExported() && c.selectScheduler() != "tasks" {
-				// For coroutine scheduling, this is only required when calling
-				// an external function.
-				// For tasks, because all params are stored in a single object,
-				// no unnecessary parameters should be stored anyway.
-				params = append(params, llvm.Undef(c.i8ptrType))            // context parameter
-				params = append(params, llvm.ConstPointerNull(c.i8ptrType)) // parent coroutine handle
+			var context llvm.Value
+			switch value := instr.Call.Value.(type) {
+			case *ssa.Function:
+				// Goroutine call is regular function call. No context is necessary.
+				context = llvm.Undef(c.i8ptrType)
+			case *ssa.MakeClosure:
+				// A goroutine call on a func value, but the callee is trivial to find. For
+				// example: immediately applied functions.
+				funcValue := c.getValue(frame, value)
+				context = c.extractFuncContext(funcValue)
+			default:
+				panic("StaticCallee returned an unexpected value")
 			}
+			params = append(params, context) // context parameter
 			c.emitStartGoroutine(calleeFn.LLVMFn, params)
 		} else if !instr.Call.IsInvoke() {
 			// This is a function pointer.
 			// At the moment, two extra params are passed to the newly started
 			// goroutine:
 			//   * The function context, for closures.
-			//   * The parent handle (for coroutines) or the function pointer
-			//     itself (for tasks).
+			//   * The function pointer (for tasks).
 			funcPtr, context := c.decodeFuncValue(c.getValue(frame, instr.Call.Value), instr.Call.Value.Type().(*types.Signature))
 			params = append(params, context) // context parameter
 			switch c.selectScheduler() {
 			case "coroutines":
-				params = append(params, llvm.ConstPointerNull(c.i8ptrType)) // parent coroutine handle
+				// There are no additional parameters needed for the goroutine start operation.
 			case "tasks":
+				// Add the function pointer as a parameter to start the goroutine.
 				params = append(params, funcPtr)
 			default:
 				panic("unknown scheduler type")

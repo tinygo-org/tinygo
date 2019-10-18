@@ -7,6 +7,9 @@ import "tinygo.org/x/go-llvm"
 
 // emitStartGoroutine starts a new goroutine with the provided function pointer
 // and parameters.
+// In general, you should pass all regular parameters plus the context parameter.
+// There is one exception: the task-based scheduler needs to have the function
+// pointer passed in as a parameter too in addition to the context.
 //
 // Because a go statement doesn't return anything, return undef.
 func (c *Compiler) emitStartGoroutine(funcPtr llvm.Value, params []llvm.Value) llvm.Value {
@@ -24,7 +27,7 @@ func (c *Compiler) emitStartGoroutine(funcPtr llvm.Value, params []llvm.Value) l
 		calleeValue := c.builder.CreatePtrToInt(funcPtr, c.uintptrType, "")
 		calleeValue = c.createRuntimeCall("makeGoroutine", []llvm.Value{calleeValue}, "")
 		calleeValue = c.builder.CreateIntToPtr(calleeValue, funcPtr.Type(), "")
-		c.createCall(calleeValue, params, "")
+		c.createCall(calleeValue, append(params, llvm.ConstPointerNull(c.i8ptrType)), "")
 	default:
 		panic("unreachable")
 	}
@@ -74,8 +77,8 @@ func (c *Compiler) createGoroutineStartWrapper(fn llvm.Value) llvm.Value {
 
 		// Create the list of params for the call.
 		paramTypes := fn.Type().ElementType().ParamTypes()
-		params := c.emitPointerUnpack(wrapper.Param(0), paramTypes[:len(paramTypes)-2])
-		params = append(params, llvm.Undef(c.i8ptrType), llvm.ConstPointerNull(c.i8ptrType))
+		params := c.emitPointerUnpack(wrapper.Param(0), paramTypes[:len(paramTypes)-1])
+		params = append(params, llvm.Undef(c.i8ptrType))
 
 		// Create the call.
 		c.builder.CreateCall(fn, params, "")
