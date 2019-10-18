@@ -25,7 +25,10 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 
 	// run a check of all of our code
 	if c.VerifyIR {
-		c.checkModule()
+		err := c.checkModule()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Run function passes for each function.
@@ -90,6 +93,11 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		c.LowerFuncValues()
 		err := c.LowerGoroutines()
 		if err != nil {
+			return err
+		}
+	}
+	if c.VerifyIR {
+		if err := c.checkModule(); err != nil {
 			return err
 		}
 	}
