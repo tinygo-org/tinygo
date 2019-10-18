@@ -1,8 +1,8 @@
 package main
 
 import (
-	"time"
 	"runtime"
+	"time"
 )
 
 // waitGroup is a small type reimplementing some of the behavior of sync.WaitGroup
@@ -91,7 +91,7 @@ func main() {
 	println("sum(100):", sum)
 
 	// Test simple selects.
-	go selectDeadlock()	// cannot use waitGroup here - never terminates
+	go selectDeadlock() // cannot use waitGroup here - never terminates
 	wg.add(1)
 	go selectNoOp()
 	wg.wait()
@@ -117,11 +117,10 @@ func main() {
 	ch = make(chan int)
 	wg.add(1)
 	go func(ch chan int) {
+		runtime.Gosched()
 		ch <- 55
 		wg.done()
 	}(ch)
-	// not defined behavior, but we cant really fix this until select has been fixed
-	time.Sleep(time.Millisecond)
 	select {
 	case make(chan int) <- 3:
 		println("unreachable")
@@ -147,7 +146,6 @@ func main() {
 	ch = make(chan int)
 	wg.add(1)
 	go fastreceiver(ch)
-	time.Sleep(time.Millisecond)
 	select {
 	case ch <- 235:
 		println("select send")
@@ -188,6 +186,50 @@ func main() {
 		count++
 	}
 	println("hybrid buffered channel recieve:", count)
+
+	// test blocking selects
+	ch = make(chan int)
+	sch1 := make(chan int)
+	sch2 := make(chan int)
+	sch3 := make(chan int)
+	wg.add(3)
+	go func() {
+		defer wg.done()
+		time.Sleep(time.Millisecond)
+		sch1 <- 1
+	}()
+	go func() {
+		defer wg.done()
+		time.Sleep(time.Millisecond)
+		sch2 <- 2
+	}()
+	go func() {
+		defer wg.done()
+		// merge sch2 and sch3 into ch
+		for i := 0; i < 2; i++ {
+			var v int
+			select {
+			case v = <-sch1:
+			case v = <-sch2:
+			}
+			select {
+			case sch3 <- v:
+				panic("sent to unused channel")
+			case ch <- v:
+			}
+		}
+	}()
+	sum = 0
+	for i := 0; i < 2; i++ {
+		select {
+		case sch3 <- sum:
+			panic("sent to unused channel")
+		case v := <-ch:
+			sum += v
+		}
+	}
+	wg.wait()
+	println("blocking select sum:", sum)
 }
 
 func send(ch chan<- int) {

@@ -136,7 +136,7 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 	recvbuf := llvm.Undef(c.i8ptrType)
 	if hasReceives {
 		allocaType := llvm.ArrayType(c.ctx.Int8Type(), int(recvbufSize))
-		recvbufAlloca := c.builder.CreateAlloca(allocaType, "select.recvbuf.alloca")
+		recvbufAlloca, _, _ := c.createTemporaryAlloca(allocaType, "select.recvbuf.alloca")
 		recvbufAlloca.SetAlignment(recvbufAlign)
 		recvbuf = c.builder.CreateGEP(recvbufAlloca, []llvm.Value{
 			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
@@ -146,7 +146,7 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 
 	// Create the states slice (allocated on the stack).
 	statesAllocaType := llvm.ArrayType(chanSelectStateType, len(selectStates))
-	statesAlloca := c.builder.CreateAlloca(statesAllocaType, "select.states.alloca")
+	statesAlloca, statesI8, statesSize := c.createTemporaryAlloca(statesAllocaType, "select.states.alloca")
 	for i, state := range selectStates {
 		// Set each slice element to the appropriate channel.
 		gep := c.builder.CreateGEP(statesAlloca, []llvm.Value{
@@ -161,19 +161,36 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 	}, "select.states")
 	statesLen := llvm.ConstInt(c.uintptrType, uint64(len(selectStates)), false)
 
-	// Convert the 'blocking' flag on this select into a LLVM value.
-	blockingInt := uint64(0)
-	if expr.Blocking {
-		blockingInt = 1
-	}
-	blockingValue := llvm.ConstInt(c.ctx.Int1Type(), blockingInt, false)
-
 	// Do the select in the runtime.
-	results := c.createRuntimeCall("chanSelect", []llvm.Value{
-		recvbuf,
-		statesPtr, statesLen, statesLen, // []chanSelectState
-		blockingValue,
-	}, "")
+	var results llvm.Value
+	if expr.Blocking {
+		// Stack-allocate operation structures.
+		// If these were simply created as a slice, they would heap-allocate.
+		chBlockAllocaType := llvm.ArrayType(c.getLLVMRuntimeType("channelBlockedList"), len(selectStates))
+		chBlockAlloca, chBlockAllocaPtr, chBlockSize := c.createTemporaryAlloca(chBlockAllocaType, "select.block.alloca")
+		chBlockLen := llvm.ConstInt(c.uintptrType, uint64(len(selectStates)), false)
+		chBlockPtr := c.builder.CreateGEP(chBlockAlloca, []llvm.Value{
+			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+		}, "select.block")
+
+		results = c.createRuntimeCall("chanSelect", []llvm.Value{
+			recvbuf,
+			statesPtr, statesLen, statesLen, // []chanSelectState
+			chBlockPtr, chBlockLen, chBlockLen, // []channelBlockList
+		}, "select.result")
+
+		// Terminate the lifetime of the operation structures.
+		c.emitLifetimeEnd(chBlockAllocaPtr, chBlockSize)
+	} else {
+		results = c.createRuntimeCall("tryChanSelect", []llvm.Value{
+			recvbuf,
+			statesPtr, statesLen, statesLen, // []chanSelectState
+		}, "select.result")
+	}
+
+	// Terminate the lifetime of the states alloca.
+	c.emitLifetimeEnd(statesI8, statesSize)
 
 	// The result value does not include all the possible received values,
 	// because we can't load them in advance. Instead, the *ssa.Extract
