@@ -1,3 +1,9 @@
+# Avoid lengthy LLVM rebuilds on each newly pushed branch. Pull requests will
+# be built anyway.
+trigger:
+- master
+- dev
+
 jobs:
 - job: Build
   timeoutInMinutes: 180
