@@ -182,6 +182,11 @@ func NewCompiler(pkgName string, config Config) (*Compiler, error) {
 	return c, nil
 }
 
+func (c *Compiler) Dispose() {
+	c.mod.Dispose()
+	c.ctx.Dispose()
+}
+
 func (c *Compiler) Packages() []*loader.Package {
 	return c.ir.LoaderProgram.Sorted()
 }
@@ -439,14 +444,14 @@ func (c *Compiler) Compile(mainPath string) []error {
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
 			c.ctx.MDNode([]llvm.Metadata{
 				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
-				llvm.GlobalContext().MDString("Debug Info Version"),
+				c.ctx.MDString("Debug Info Version"),
 				llvm.ConstInt(c.ctx.Int32Type(), 3, false).ConstantAsMetadata(), // DWARF version
 			}),
 		)
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
 			c.ctx.MDNode([]llvm.Metadata{
 				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(),
-				llvm.GlobalContext().MDString("Dwarf Version"),
+				c.ctx.MDString("Dwarf Version"),
 				llvm.ConstInt(c.ctx.Int32Type(), 4, false).ConstantAsMetadata(),
 			}),
 		)

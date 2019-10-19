@@ -104,8 +104,8 @@ func (c *Compiler) makeStructTypeFields(typ *types.Struct) llvm.Value {
 		fieldName.SetLinkage(llvm.PrivateLinkage)
 		fieldName.SetUnnamedAddr(true)
 		fieldName = llvm.ConstGEP(fieldName, []llvm.Value{
-			llvm.ConstInt(llvm.Int32Type(), 0, false),
-			llvm.ConstInt(llvm.Int32Type(), 0, false),
+			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 		})
 		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldName, []uint32{1})
 		if typ.Tag(i) != "" {
@@ -113,8 +113,8 @@ func (c *Compiler) makeStructTypeFields(typ *types.Struct) llvm.Value {
 			fieldTag.SetLinkage(llvm.PrivateLinkage)
 			fieldTag.SetUnnamedAddr(true)
 			fieldTag = llvm.ConstGEP(fieldTag, []llvm.Value{
-				llvm.ConstInt(llvm.Int32Type(), 0, false),
-				llvm.ConstInt(llvm.Int32Type(), 0, false),
+				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 			})
 			fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldTag, []uint32{2})
 		}

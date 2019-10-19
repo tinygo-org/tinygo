@@ -21,7 +21,7 @@ func (c *Compiler) checkType(t llvm.Type, checked map[llvm.Type]struct{}, specia
 	switch {
 	case t.Context() == c.ctx:
 		// this is correct
-	case t.Context() == llvm.GlobalContext():
+	case t.Context() == globalCtx:
 		// somewhere we accidentally used the global context instead of a real context
 		return fmt.Errorf("type %q uses global context", t.String())
 	default:
@@ -148,7 +148,7 @@ func (c *Compiler) checkModule() error {
 	switch {
 	case c.mod.Context() == c.ctx:
 		// this is correct
-	case c.mod.Context() == llvm.GlobalContext():
+	case c.mod.Context() == globalCtx:
 		// somewhere we accidentally used the global context instead of a real context
 		return errors.New("module uses global context")
 	default:

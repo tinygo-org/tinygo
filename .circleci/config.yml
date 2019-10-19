@@ -44,12 +44,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-8-v5
+            - llvm-source-8-v6
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-8-v5
+          key: llvm-source-8-v6
           paths:
             - llvm-project
   test-linux:
@@ -101,7 +101,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-8-linux-v7-assert
+            - llvm-build-8-linux-v9-assert
       - run:
           name: "Build LLVM"
           command: |
@@ -109,9 +109,9 @@ commands:
             then
               # install dependencies
               sudo apt-get install cmake clang ninja-build
-              # make build faster
-              export CC=clang
-              export CXX=clang++
+              # make build faster - disabled for now due to a bug
+              # export CC=clang
+              # export CXX=clang++
               # hack ninja to use less jobs
               echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
               chmod +x /go/bin/ninja
@@ -119,7 +119,7 @@ commands:
               make ASSERT=1 llvm-build
             fi
       - save_cache:
-          key: llvm-build-8-linux-v7-assert
+          key: llvm-build-8-linux-v9-assert
           paths:
             llvm-build
       - run:
@@ -166,7 +166,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-8-linux-v7
+            - llvm-build-8-linux-v9
       - run:
           name: "Build LLVM"
           command: |
@@ -174,9 +174,9 @@ commands:
             then
               # install dependencies
               sudo apt-get install cmake clang ninja-build
-              # make build faster
-              export CC=clang
-              export CXX=clang++
+              # make build faster - disabled for now due to a bug
+              # export CC=clang
+              # export CXX=clang++
               # hack ninja to use less jobs
               echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
               chmod +x /go/bin/ninja
@@ -184,7 +184,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-8-linux-v7
+          key: llvm-build-8-linux-v9
           paths:
             llvm-build
       - run:
@@ -239,17 +239,17 @@ commands:
             - go-cache-macos-v2-{{ checksum "go.mod" }}
       - restore_cache:
           keys:
-            - llvm-source-8-macos-v5
+            - llvm-source-8-macos-v6
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-8-macos-v5
+          key: llvm-source-8-macos-v6
           paths:
             - llvm-project
       - restore_cache:
           keys:
-            - llvm-build-8-macos-v6
+            - llvm-build-8-macos-v7
       - run:
           name: "Build LLVM"
           command: |
@@ -261,7 +261,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-8-macos-v6
+          key: llvm-build-8-macos-v7
           paths:
             llvm-build
       - run:

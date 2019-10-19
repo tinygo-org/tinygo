@@ -132,6 +132,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 	if err != nil {
 		return err
 	}
+	defer c.Dispose()
 
 	// Compile Go code to IR.
 	errs := c.Compile(pkgName)
