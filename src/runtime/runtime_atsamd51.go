@@ -83,7 +83,7 @@ func initClocks() {
 
 	// set GCLK7 to use DFLL48M as clock source
 	sam.GCLK.GENCTRL[7].Set((sam.GCLK_GENCTRL_SRC_DFLL << sam.GCLK_GENCTRL_SRC_Pos) |
-		(24 << sam.GCLK_GENCTRL_DIVSEL_Pos) |
+		(24 << sam.GCLK_GENCTRL_DIV_Pos) |
 		sam.GCLK_GENCTRL_GENEN)
 	for sam.GCLK.SYNCBUSY.HasBits(sam.GCLK_SYNCBUSY_GENCTRL_GCLK7) {
 	}
