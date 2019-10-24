@@ -168,7 +168,6 @@ const (
 	SYST_CALIB_NOREF     = 0x80000000 // Bit NOREF.
 )
 
-
 // Enable the given interrupt number.
 func EnableIRQ(irq uint32) {
 	NVIC.ISER[irq>>5].Set(1 << (irq & 0x1F))
@@ -220,7 +219,6 @@ func SystemReset() {
 	}
 }
 
-
 func SetupSystemTimer(cycle_count uint32) error {
 	// turn it off
 	SYST.SYST_CSR.ClearBits(SYST_CSR_TICKINT | SYST_CSR_ENABLE)
@@ -228,7 +226,7 @@ func SetupSystemTimer(cycle_count uint32) error {
 		// leave the system timer turned off.
 		return nil
 	}
-	if cycle_count & SYST_RVR_RELOAD_Msk != cycle_count {
+	if cycle_count&SYST_RVR_RELOAD_Msk != cycle_count {
 		// The cycle refresh register is only 24 bits wide.  The user-specified value will overflow.
 		return errors.New("requested cycle count is too large, overflows 24 bit counter")
 	}
