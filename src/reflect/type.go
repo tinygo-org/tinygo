@@ -375,6 +375,8 @@ func (t Type) Align() int {
 			}
 		}
 		return alignment
+	case Array:
+		return t.Elem().Align()
 	default:
 		panic("unimplemented: alignment of type")
 	}
