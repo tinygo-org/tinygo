@@ -219,22 +219,26 @@ func SystemReset() {
 	}
 }
 
-func SetupSystemTimer(cycle_count uint32) error {
+// Set up the system timer to generate periodic tick events.
+// This will cause SysTick_Handler to fire once per tick.
+// The cyclecount parameter is a counter value which can range from 0 to
+// 0xffffff.  A value of 0 disables the timer.
+func SetupSystemTimer(cyclecount uint32) error {
 	// turn it off
 	SYST.SYST_CSR.ClearBits(SYST_CSR_TICKINT | SYST_CSR_ENABLE)
-	if cycle_count == 0 {
+	if cyclecount == 0 {
 		// leave the system timer turned off.
 		return nil
 	}
-	if cycle_count&SYST_RVR_RELOAD_Msk != cycle_count {
+	if cyclecount&SYST_RVR_RELOAD_Msk != cyclecount {
 		// The cycle refresh register is only 24 bits wide.  The user-specified value will overflow.
 		return errors.New("requested cycle count is too large, overflows 24 bit counter")
 	}
 
 	// set refresh count
-	SYST.SYST_RVR.Set(cycle_count)
+	SYST.SYST_RVR.Set(cyclecount)
 	// set current counter value
-	SYST.SYST_CVR.Set(cycle_count)
+	SYST.SYST_CVR.Set(cyclecount)
 	// enable clock, enable SysTick interrupt when clock reaches 0, run it off of the processor clock
 	SYST.SYST_CSR.SetBits(SYST_CSR_TICKINT | SYST_CSR_ENABLE | SYST_CSR_CLKSOURCE)
 	return nil
