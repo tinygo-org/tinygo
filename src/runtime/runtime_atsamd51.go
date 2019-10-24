@@ -81,21 +81,24 @@ func initClocks() {
 	for !sam.OSCCTRL.STATUS.HasBits(sam.OSCCTRL_STATUS_DFLLRDY) {
 	}
 
-	// set GCLK7 to use DFLL48M as clock source
+	// set GCLK7 to run at 2MHz, using DFLL48M as clock source
+	// GCLK7 = 48MHz / 24 = 2MHz
 	sam.GCLK.GENCTRL[7].Set((sam.GCLK_GENCTRL_SRC_DFLL << sam.GCLK_GENCTRL_SRC_Pos) |
-		(24 << sam.GCLK_GENCTRL_DIVSEL_Pos) |
+		(24 << sam.GCLK_GENCTRL_DIV_Pos) |
 		sam.GCLK_GENCTRL_GENEN)
 	for sam.GCLK.SYNCBUSY.HasBits(sam.GCLK_SYNCBUSY_GENCTRL_GCLK7) {
 	}
 
 	// Set up the PLLs
 
-	// Set PLL0 at 120MHz
+	// Set PLL0 to run at 120MHz, using GCLK7 as clock source
 	sam.GCLK.PCHCTRL[1].Set(sam.GCLK_PCHCTRL_CHEN |
 		(sam.GCLK_PCHCTRL_GEN_GCLK7 << sam.GCLK_PCHCTRL_GEN_Pos))
 
+	// multiplier = 59 + 1 + (0/32) = 60
+	// PLL0 = 2MHz * 60 = 120MHz
 	sam.OSCCTRL.DPLL[0].DPLLRATIO.Set((0x0 << sam.OSCCTRL_DPLL_DPLLRATIO_LDRFRAC_Pos) |
-		(59 << sam.OSCCTRL_DPLL_DPLLRATIO_LDRFRAC_Pos))
+		(59 << sam.OSCCTRL_DPLL_DPLLRATIO_LDR_Pos))
 	for sam.OSCCTRL.DPLL[0].DPLLSYNCBUSY.HasBits(sam.OSCCTRL_DPLL_DPLLSYNCBUSY_DPLLRATIO) {
 	}
 
@@ -108,12 +111,14 @@ func initClocks() {
 		!sam.OSCCTRL.DPLL[0].DPLLSTATUS.HasBits(sam.OSCCTRL_DPLL_DPLLSTATUS_LOCK) {
 	}
 
-	// // Set PLL1 to 100MHz
+	// Set PLL1 to run at 100MHz, using GCLK7 as clock source
 	sam.GCLK.PCHCTRL[2].Set(sam.GCLK_PCHCTRL_CHEN |
 		(sam.GCLK_PCHCTRL_GEN_GCLK7 << sam.GCLK_PCHCTRL_GEN_Pos))
 
+	// multiplier = 49 + 1 + (0/32) = 50
+	// PLL1 = 2MHz * 50 = 100MHz
 	sam.OSCCTRL.DPLL[1].DPLLRATIO.Set((0x0 << sam.OSCCTRL_DPLL_DPLLRATIO_LDRFRAC_Pos) |
-		(49 << sam.OSCCTRL_DPLL_DPLLRATIO_LDR_Pos)) // this means 100 Mhz?
+		(49 << sam.OSCCTRL_DPLL_DPLLRATIO_LDR_Pos))
 	for sam.OSCCTRL.DPLL[1].DPLLSYNCBUSY.HasBits(sam.OSCCTRL_DPLL_DPLLSYNCBUSY_DPLLRATIO) {
 	}
 
