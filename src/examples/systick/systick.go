@@ -11,8 +11,8 @@ func main() {
 	// timer fires 10 times per second
 	arm.SetupSystemTimer(machine.CPU_FREQUENCY / 10)
 
-   for {
-   }
+	for {
+	}
 }
 
 var led_state bool
