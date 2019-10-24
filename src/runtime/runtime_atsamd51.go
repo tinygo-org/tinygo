@@ -188,7 +188,7 @@ func initRTC() {
 	}
 
 	// set to use ulp 32k oscillator
-	sam.OSC32KCTRL.OSCULP32K.Set(sam.OSC32KCTRL_OSCULP32K_EN32K)
+	sam.OSC32KCTRL.OSCULP32K.SetBits(sam.OSC32KCTRL_OSCULP32K_EN32K)
 	sam.OSC32KCTRL.RTCCTRL.Set(sam.OSC32KCTRL_RTCCTRL_RTCSEL_ULP32K)
 
 	// set Mode0 to 32-bit counter (mode 0) with prescaler 1 and GCLK2 is 32KHz/1
