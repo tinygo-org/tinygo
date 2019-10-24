@@ -30,6 +30,7 @@
 package arm
 
 import (
+	"errors"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -72,6 +73,7 @@ func SVCall4(num uintptr, a1, a2, a3, a4 interface{}) uintptr
 
 const (
 	SCS_BASE  = 0xE000E000
+	SYST_BASE = SCS_BASE + 0x0010
 	NVIC_BASE = SCS_BASE + 0x0100
 	SCB_BASE  = SCS_BASE + 0x0D00
 )
@@ -118,6 +120,54 @@ type NVIC_Type struct {
 }
 
 var NVIC = (*NVIC_Type)(unsafe.Pointer(uintptr(NVIC_BASE)))
+
+// System Timer (SYST)
+//
+// Source: https://static.docs.arm.com/ddi0403/e/DDI0403E_d_armv7m_arm.pdf B3.3
+type SYST_Type struct {
+	SYST_CSR   volatile.Register32
+	SYST_RVR   volatile.Register32
+	SYST_CVR   volatile.Register32
+	SYST_CALIB volatile.Register32
+}
+
+var SYST = (*SYST_Type)(unsafe.Pointer(uintptr(SYST_BASE)))
+
+// Bitfields for SYST: System Timer
+const (
+	// SYST.SYST_CSR: SysTick Control and Status Register
+	SYST_CSR_ENABLE_Pos    = 0x0     // Position of ENABLE field.
+	SYST_CSR_ENABLE_Msk    = 0x1     // Bit mask of ENABLE field.
+	SYST_CSR_ENABLE        = 0x1     // Bit ENABLE.
+	SYST_CSR_TICKINT_Pos   = 0x1     // Position of TICKINT field.
+	SYST_CSR_TICKINT_Msk   = 0x2     // Bit mask of TICKINT field.
+	SYST_CSR_TICKINT       = 0x2     // Bit TICKINT.
+	SYST_CSR_CLKSOURCE_Pos = 0x2     // Position of CLKSOURCE field.
+	SYST_CSR_CLKSOURCE_Msk = 0x4     // Bit mask of CLKSOURCE field.
+	SYST_CSR_CLKSOURCE     = 0x4     // Bit CLKSOURCE.
+	SYST_CSR_COUNTFLAG_Pos = 0x10    // Position of COUNTFLAG field.
+	SYST_CSR_COUNTFLAG_Msk = 0x10000 // Bit mask of COUNTFLAG field.
+	SYST_CSR_COUNTFLAG     = 0x10000 // Bit COUNTFLAG.
+
+	// SYST.SYST_RVR: SysTick Reload Value Register
+	SYST_RVR_RELOAD_Pos = 0x0      // Position of RELOAD field.
+	SYST_RVR_RELOAD_Msk = 0xffffff // Bit mask of RELOAD field.
+
+	// SYST.SYST_CVR: SysTick Current Value Register
+	SYST_CVR_CURRENT_Pos = 0x0      // Position of CURRENT field.
+	SYST_CVR_CURRENT_Msk = 0xffffff // Bit mask of CURRENT field.
+
+	// SYST.SYST_CALIB: SysTick Calibration Value Register
+	SYST_CALIB_TENMS_Pos = 0x0        // Position of TENMS field.
+	SYST_CALIB_TENMS_Msk = 0xffffff   // Bit mask of TENMS field.
+	SYST_CALIB_SKEW_Pos  = 0x1e       // Position of SKEW field.
+	SYST_CALIB_SKEW_Msk  = 0x40000000 // Bit mask of SKEW field.
+	SYST_CALIB_SKEW      = 0x40000000 // Bit SKEW.
+	SYST_CALIB_NOREF_Pos = 0x1f       // Position of NOREF field.
+	SYST_CALIB_NOREF_Msk = 0x80000000 // Bit mask of NOREF field.
+	SYST_CALIB_NOREF     = 0x80000000 // Bit NOREF.
+)
+
 
 // Enable the given interrupt number.
 func EnableIRQ(irq uint32) {
@@ -168,4 +218,26 @@ func SystemReset() {
 	for {
 		Asm("wfi")
 	}
+}
+
+
+func SetupSystemTimer(cycle_count uint32) error {
+	// turn it off
+	SYST.SYST_CSR.ClearBits(SYST_CSR_TICKINT | SYST_CSR_ENABLE)
+	if cycle_count == 0 {
+		// leave the system timer turned off.
+		return nil
+	}
+	if cycle_count & SYST_RVR_RELOAD_Msk != cycle_count {
+		// The cycle refresh register is only 24 bits wide.  The user-specified value will overflow.
+		return errors.New("requested cycle count is too large, overflows 24 bit counter")
+	}
+
+	// set refresh count
+	SYST.SYST_RVR.Set(cycle_count)
+	// set current counter value
+	SYST.SYST_CVR.Set(cycle_count)
+	// enable clock, enable SysTick interrupt when clock reaches 0, run it off of the processor clock
+	SYST.SYST_CSR.SetBits(SYST_CSR_TICKINT | SYST_CSR_ENABLE | SYST_CSR_CLKSOURCE)
+	return nil
 }
