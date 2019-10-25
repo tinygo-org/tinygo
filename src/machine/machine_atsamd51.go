@@ -155,7 +155,6 @@ func (p Pin) Configure(config PinConfig) {
 		// output is also set to input enable so pin can read back its own value
 		p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN)
 
-
 	case PinInput:
 		sam.PORT.GROUP[group].DIRCLR.Set(1 << pin_in_group)
 		p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN)
