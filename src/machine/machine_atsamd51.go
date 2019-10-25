@@ -141,6 +141,13 @@ func (p Pin) Get() bool {
 	return (sam.PORT.GROUP[group].IN.Get()>>pin_in_group)&1 > 0
 }
 
+// Invert the current value of a GPIO pin.
+// Warning: only use this on an output pin!
+func (p Pin) Toggle() {
+	group, pin_in_group := p.getPinGrouping()
+	sam.PORT.GROUP[group].OUTTGL.Set(1 << pin_in_group)
+}
+
 // Configure this pin with the given configuration.
 func (p Pin) Configure(config PinConfig) {
 	group, pin_in_group := p.getPinGrouping()
