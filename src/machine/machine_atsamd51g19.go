@@ -14,94 +14,62 @@ import (
 // Return the register and mask to enable a given GPIO pin. This can be used to
 // implement bit-banged drivers.
 func (p Pin) PortMaskSet() (*uint32, uint32) {
-	if p < 32 {
-		return &sam.PORT.GROUP[0].OUTSET.Reg, 1 << uint8(p)
-	} else {
-		return &sam.PORT.GROUP[1].OUTSET.Reg, 1 << uint8(p-32)
-	}
+	group := uint8(p) >> 5
+	pin_in_group := uint8(p) & 0x1f
+	return &sam.PORT.GROUP[group].OUTSET.Reg, 1 << pin_in_group
 }
 
 // Return the register and mask to disable a given port. This can be used to
 // implement bit-banged drivers.
 func (p Pin) PortMaskClear() (*uint32, uint32) {
-	if p < 32 {
-		return &sam.PORT.GROUP[0].OUTCLR.Reg, 1 << uint8(p)
-	} else {
-		return &sam.PORT.GROUP[1].OUTCLR.Reg, 1 << uint8(p-32)
-	}
+	group := uint8(p) >> 5
+	pin_in_group := uint8(p) & 0x1f
+	return &sam.PORT.GROUP[group].OUTCLR.Reg, 1 << pin_in_group
 }
 
 // Set the pin to high or low.
 // Warning: only use this on an output pin!
 func (p Pin) Set(high bool) {
-	if p < 32 {
-		if high {
-			sam.PORT.GROUP[0].OUTSET.Set(1 << uint8(p))
-		} else {
-			sam.PORT.GROUP[0].OUTCLR.Set(1 << uint8(p))
-		}
+	group := uint8(p) >> 5
+	pin_in_group := uint8(p) & 0x1f
+	if high {
+		sam.PORT.GROUP[group].OUTSET.Set(1 << pin_in_group)
 	} else {
-		if high {
-			sam.PORT.GROUP[1].OUTSET.Set(1 << uint8(p-32))
-		} else {
-			sam.PORT.GROUP[1].OUTCLR.Set(1 << uint8(p-32))
-		}
+		sam.PORT.GROUP[group].OUTCLR.Set(1 << pin_in_group)
 	}
 }
 
 // Get returns the current value of a GPIO pin.
 func (p Pin) Get() bool {
-	if p < 32 {
-		return (sam.PORT.GROUP[0].IN.Get()>>uint8(p))&1 > 0
-	} else {
-		return (sam.PORT.GROUP[1].IN.Get()>>(uint8(p)-32))&1 > 0
-	}
+	group := uint8(p) >> 5
+	pin_in_group := uint8(p) & 0x1f
+	return (sam.PORT.GROUP[group].IN.Get()>>pin_in_group)&1 > 0
 }
 
 // Configure this pin with the given configuration.
 func (p Pin) Configure(config PinConfig) {
+	group := uint8(p) >> 5
+	pin_in_group := uint8(p) & 0x1f
 	switch config.Mode {
 	case PinOutput:
-		if p < 32 {
-			sam.PORT.GROUP[0].DIRSET.Set(1 << uint8(p))
-			// output is also set to input enable so pin can read back its own value
-			p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN)
-		} else {
-			sam.PORT.GROUP[1].DIRSET.Set(1 << uint8(p-32))
-			// output is also set to input enable so pin can read back its own value
-			p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN)
-		}
+		sam.PORT.GROUP[group].DIRSET.Set(1 << pin_in_group)
+		// output is also set to input enable so pin can read back its own value
+		p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN)
+
 
 	case PinInput:
-		if p < 32 {
-			sam.PORT.GROUP[0].DIRCLR.Set(1 << uint8(p))
-			p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN)
-		} else {
-			sam.PORT.GROUP[1].DIRCLR.Set(1 << uint8(p-32))
-			p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN)
-		}
+		sam.PORT.GROUP[group].DIRCLR.Set(1 << pin_in_group)
+		p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN)
 
 	case PinInputPulldown:
-		if p < 32 {
-			sam.PORT.GROUP[0].DIRCLR.Set(1 << uint8(p))
-			sam.PORT.GROUP[0].OUTCLR.Set(1 << uint8(p))
-			p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN | sam.PORT_GROUP_PINCFG_PULLEN)
-		} else {
-			sam.PORT.GROUP[1].DIRCLR.Set(1 << uint8(p-32))
-			sam.PORT.GROUP[1].OUTCLR.Set(1 << uint8(p-32))
-			p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN | sam.PORT_GROUP_PINCFG_PULLEN)
-		}
+		sam.PORT.GROUP[group].DIRCLR.Set(1 << pin_in_group)
+		sam.PORT.GROUP[group].OUTCLR.Set(1 << pin_in_group)
+		p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN | sam.PORT_GROUP_PINCFG_PULLEN)
 
 	case PinInputPullup:
-		if p < 32 {
-			sam.PORT.GROUP[0].DIRCLR.Set(1 << uint8(p))
-			sam.PORT.GROUP[0].OUTSET.Set(1 << uint8(p))
-			p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN | sam.PORT_GROUP_PINCFG_PULLEN)
-		} else {
-			sam.PORT.GROUP[1].DIRCLR.Set(1 << uint8(p-32))
-			sam.PORT.GROUP[1].OUTSET.Set(1 << uint8(p-32))
-			p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN | sam.PORT_GROUP_PINCFG_PULLEN)
-		}
+		sam.PORT.GROUP[group].DIRCLR.Set(1 << pin_in_group)
+		sam.PORT.GROUP[group].OUTSET.Set(1 << pin_in_group)
+		p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN | sam.PORT_GROUP_PINCFG_PULLEN)
 
 	case PinSERCOM:
 		if p&1 > 0 {
@@ -158,44 +126,28 @@ func (p Pin) Configure(config PinConfig) {
 
 // getPMux returns the value for the correct PMUX register for this pin.
 func (p Pin) getPMux() uint8 {
-	switch {
-	case p < 32:
-		return sam.PORT.GROUP[0].PMUX[uint8(p)>>1].Get()
-	case p >= 32 && p < 64:
-		return sam.PORT.GROUP[1].PMUX[uint8(p-32)>>1].Get()
-	default:
-		return 0
-	}
+	group := uint8(p) >> 5
+	pin_in_group := uint8(p) & 0x1f
+	return sam.PORT.GROUP[group].PMUX[pin_in_group>>1].Get()
 }
 
 // setPMux sets the value for the correct PMUX register for this pin.
 func (p Pin) setPMux(val uint8) {
-	switch {
-	case p < 32:
-		sam.PORT.GROUP[0].PMUX[uint8(p)>>1].Set(val)
-	case p >= 32 && p < 64:
-		sam.PORT.GROUP[1].PMUX[uint8(p-32)>>1].Set(val)
-	}
+	group := uint8(p) >> 5
+	pin_in_group := uint8(p) & 0x1f
+	sam.PORT.GROUP[group].PMUX[pin_in_group>>1].Set(val)
 }
 
 // getPinCfg returns the value for the correct PINCFG register for this pin.
 func (p Pin) getPinCfg() uint8 {
-	switch {
-	case p < 32:
-		return sam.PORT.GROUP[0].PINCFG[p].Get()
-	case p >= 32 && p <= 64:
-		return sam.PORT.GROUP[1].PINCFG[p-32].Get()
-	default:
-		return 0
-	}
+	group := uint8(p) >> 5
+	pin_in_group := uint8(p) & 0x1f
+	return sam.PORT.GROUP[group].PINCFG[pin_in_group].Get()
 }
 
 // setPinCfg sets the value for the correct PINCFG register for this pin.
 func (p Pin) setPinCfg(val uint8) {
-	switch {
-	case p < 32:
-		sam.PORT.GROUP[0].PINCFG[p].Set(val)
-	case p >= 32 && p <= 64:
-		sam.PORT.GROUP[1].PINCFG[p-32].Set(val)
-	}
+	group := uint8(p) >> 5
+	pin_in_group := uint8(p) & 0x1f
+	sam.PORT.GROUP[group].PINCFG[pin_in_group].Set(val)
 }
