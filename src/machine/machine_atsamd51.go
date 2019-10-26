@@ -113,24 +113,21 @@ const (
 // Return the register and mask to enable a given GPIO pin. This can be used to
 // implement bit-banged drivers.
 func (p Pin) PortMaskSet() (*uint32, uint32) {
-	group := uint8(p) >> 5
-	pin_in_group := uint8(p) & 0x1f
+	group, pin_in_group := p.getPinGrouping()
 	return &sam.PORT.GROUP[group].OUTSET.Reg, 1 << pin_in_group
 }
 
 // Return the register and mask to disable a given port. This can be used to
 // implement bit-banged drivers.
 func (p Pin) PortMaskClear() (*uint32, uint32) {
-	group := uint8(p) >> 5
-	pin_in_group := uint8(p) & 0x1f
+	group, pin_in_group := p.getPinGrouping()
 	return &sam.PORT.GROUP[group].OUTCLR.Reg, 1 << pin_in_group
 }
 
 // Set the pin to high or low.
 // Warning: only use this on an output pin!
 func (p Pin) Set(high bool) {
-	group := uint8(p) >> 5
-	pin_in_group := uint8(p) & 0x1f
+	group, pin_in_group := p.getPinGrouping()
 	if high {
 		sam.PORT.GROUP[group].OUTSET.Set(1 << pin_in_group)
 	} else {
@@ -140,15 +137,13 @@ func (p Pin) Set(high bool) {
 
 // Get returns the current value of a GPIO pin.
 func (p Pin) Get() bool {
-	group := uint8(p) >> 5
-	pin_in_group := uint8(p) & 0x1f
+	group, pin_in_group := p.getPinGrouping()
 	return (sam.PORT.GROUP[group].IN.Get()>>pin_in_group)&1 > 0
 }
 
 // Configure this pin with the given configuration.
 func (p Pin) Configure(config PinConfig) {
-	group := uint8(p) >> 5
-	pin_in_group := uint8(p) & 0x1f
+	group, pin_in_group := p.getPinGrouping()
 	switch config.Mode {
 	case PinOutput:
 		sam.PORT.GROUP[group].DIRSET.Set(1 << pin_in_group)
@@ -224,30 +219,35 @@ func (p Pin) Configure(config PinConfig) {
 
 // getPMux returns the value for the correct PMUX register for this pin.
 func (p Pin) getPMux() uint8 {
-	group := uint8(p) >> 5
-	pin_in_group := uint8(p) & 0x1f
+	group, pin_in_group := p.getPinGrouping()
 	return sam.PORT.GROUP[group].PMUX[pin_in_group>>1].Get()
 }
 
 // setPMux sets the value for the correct PMUX register for this pin.
 func (p Pin) setPMux(val uint8) {
-	group := uint8(p) >> 5
-	pin_in_group := uint8(p) & 0x1f
+	group, pin_in_group := p.getPinGrouping()
 	sam.PORT.GROUP[group].PMUX[pin_in_group>>1].Set(val)
 }
 
 // getPinCfg returns the value for the correct PINCFG register for this pin.
 func (p Pin) getPinCfg() uint8 {
-	group := uint8(p) >> 5
-	pin_in_group := uint8(p) & 0x1f
+	group, pin_in_group := p.getPinGrouping()
 	return sam.PORT.GROUP[group].PINCFG[pin_in_group].Get()
 }
 
 // setPinCfg sets the value for the correct PINCFG register for this pin.
 func (p Pin) setPinCfg(val uint8) {
+	group, pin_in_group := p.getPinGrouping()
+	sam.PORT.GROUP[group].PINCFG[pin_in_group].Set(val)
+}
+
+// getPinGrouping calculates the gpio group and pin id from the pin number.
+// Pins are split into groups of 32, and each group has its own set of
+// control registers.
+func (p Pin) getPinGrouping() (uint8, uint8) {
 	group := uint8(p) >> 5
 	pin_in_group := uint8(p) & 0x1f
-	sam.PORT.GROUP[group].PINCFG[pin_in_group].Set(val)
+	return group, pin_in_group
 }
 
 // InitADC initializes the ADC.
