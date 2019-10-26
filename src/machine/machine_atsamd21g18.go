@@ -54,7 +54,7 @@ func (p Pin) Get() bool {
 	if p < 32 {
 		return (sam.PORT.IN0.Get()>>uint8(p))&1 > 0
 	} else {
-		return (sam.PORT.IN1.Get()>>(uint8(p)-32))&1 > 0
+		return (sam.PORT.IN1.Get()>>uint8(p-32))&1 > 0
 	}
 }
 
@@ -77,7 +77,7 @@ func (p Pin) Configure(config PinConfig) {
 			sam.PORT.DIRCLR0.Set(1 << uint8(p))
 			p.setPinCfg(sam.PORT_PINCFG0_INEN)
 		} else {
-			sam.PORT.DIRCLR1.Set(1<<uint8(p) - 32)
+			sam.PORT.DIRCLR1.Set(1 << uint8(p-32))
 			p.setPinCfg(sam.PORT_PINCFG0_INEN)
 		}
 
@@ -87,8 +87,8 @@ func (p Pin) Configure(config PinConfig) {
 			sam.PORT.OUTCLR0.Set(1 << uint8(p))
 			p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
 		} else {
-			sam.PORT.DIRCLR1.Set(1<<uint8(p) - 32)
-			sam.PORT.OUTCLR1.Set(1<<uint8(p) - 32)
+			sam.PORT.DIRCLR1.Set(1 << uint8(p-32))
+			sam.PORT.OUTCLR1.Set(1 << uint8(p-32))
 			p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
 		}
 
@@ -98,8 +98,8 @@ func (p Pin) Configure(config PinConfig) {
 			sam.PORT.OUTSET0.Set(1 << uint8(p))
 			p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
 		} else {
-			sam.PORT.DIRCLR1.Set(1<<uint8(p) - 32)
-			sam.PORT.OUTSET1.Set(1<<uint8(p) - 32)
+			sam.PORT.DIRCLR1.Set(1 << uint8(p-32))
+			sam.PORT.OUTSET1.Set(1 << uint8(p-32))
 			p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
 		}
 
