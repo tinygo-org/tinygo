@@ -141,7 +141,7 @@ func (p Pin) Get() bool {
 	return (sam.PORT.GROUP[group].IN.Get()>>pin_in_group)&1 > 0
 }
 
-// Invert the current value of a GPIO pin.
+// Toggle switches an output pin from low to high or from high to low.
 // Warning: only use this on an output pin!
 func (p Pin) Toggle() {
 	group, pin_in_group := p.getPinGrouping()
