@@ -68,6 +68,8 @@ commands:
       - run: go test -v ./interp ./transform .
       - run: make gen-device -j4
       - run: make smoketest RISCV=0
+      - run: (cd / && go get honnef.co/go/tools/cmd/staticcheck)
+      - run: staticcheck . ./interp ./cgo ./compiler ./ir ./loader ./transform
       - save_cache:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
