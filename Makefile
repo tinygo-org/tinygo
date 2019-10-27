@@ -213,6 +213,8 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nucleo-f103rb       examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pinetime-devkit0    examples/blinky1
+	@$(MD5SUM) test.hex
 ifneq ($(AVR), 0)
 	$(TINYGO) build -size short -o test.hex -target=arduino             examples/blinky1
 	@$(MD5SUM) test.hex
