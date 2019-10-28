@@ -2,6 +2,8 @@
 
 package machine
 
+import "device/sifive"
+
 const (
 	P00 Pin = 0
 	P01 Pin = 1
@@ -35,4 +37,11 @@ const (
 	P29 Pin = 29
 	P30 Pin = 30
 	P31 Pin = 31
+)
+
+// SPI on the HiFive1.
+var (
+	SPI1 = SPI{
+		Bus: sifive.QSPI1,
+	}
 )
