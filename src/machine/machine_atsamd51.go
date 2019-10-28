@@ -386,11 +386,8 @@ func (a ADC) Get() uint16 {
 	for bus.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_INPUTCTRL) {
 	}
 
-	// Selection for the positive ADC input
-	bus.INPUTCTRL.ClearBits(sam.ADC_INPUTCTRL_MUXPOS_Msk)
-	for bus.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_ENABLE) {
-	}
-	bus.INPUTCTRL.SetBits(uint16(ch << sam.ADC_INPUTCTRL_MUXPOS_Pos))
+	// Selection for the positive ADC input channel
+	bus.INPUTCTRL.SetBits((uint16(ch) & sam.ADC_INPUTCTRL_MUXPOS_Msk) << sam.ADC_INPUTCTRL_MUXPOS_Pos)
 	for bus.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_ENABLE) {
 	}
 

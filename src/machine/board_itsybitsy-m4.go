@@ -28,7 +28,7 @@ const (
 // Analog pins
 const (
 	A0 = PA02 // ADC/AIN[0]
-	A1 = PB05 // ADC/AIN[2]
+	A1 = PA05 // ADC/AIN[2]
 	A2 = PB08 // ADC/AIN[3]
 	A3 = PB09 // ADC/AIN[4]
 	A4 = PA04 // ADC/AIN[5]
