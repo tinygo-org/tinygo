@@ -884,12 +884,15 @@ func (i2c I2C) readByte() byte {
 
 // SPI
 type SPI struct {
-	Bus   *sam.SERCOM_SPIM_Type
-	SCK   Pin
-	MOSI  Pin
-	MISO  Pin
-	DOpad int
-	DIpad int
+	Bus         *sam.SERCOM_SPIM_Type
+	SCK         Pin
+	MOSI        Pin
+	MISO        Pin
+	DOpad       int
+	DIpad       int
+	SCKPinMode  PinMode
+	MOSIPinMode PinMode
+	MISOPinMode PinMode
 }
 
 // SPIConfig is used to store config info for SPI.
@@ -904,10 +907,6 @@ type SPIConfig struct {
 
 // Configure is intended to setup the SPI interface.
 func (spi SPI) Configure(config SPIConfig) {
-	config.SCK = spi.SCK
-	config.MOSI = spi.MOSI
-	config.MISO = spi.MISO
-
 	doPad := spi.DOpad
 	diPad := spi.DIpad
 
@@ -922,9 +921,19 @@ func (spi SPI) Configure(config SPIConfig) {
 	}
 
 	// enable pins
-	config.SCK.Configure(PinConfig{Mode: PinSERCOMAlt})
-	config.MOSI.Configure(PinConfig{Mode: PinSERCOMAlt})
-	config.MISO.Configure(PinConfig{Mode: PinSERCOMAlt})
+	if spi.SCKPinMode == 0 {
+		spi.SCKPinMode = PinSERCOMAlt
+	}
+	if spi.MOSIPinMode == 0 {
+		spi.MOSIPinMode = PinSERCOMAlt
+	}
+	if spi.MISOPinMode == 0 {
+		spi.MISOPinMode = PinSERCOMAlt
+	}
+
+	spi.SCK.Configure(PinConfig{Mode: spi.SCKPinMode})
+	spi.MOSI.Configure(PinConfig{Mode: spi.MOSIPinMode})
+	spi.MISO.Configure(PinConfig{Mode: spi.MISOPinMode})
 
 	// reset SERCOM
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPIM_CTRLA_SWRST)
