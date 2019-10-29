@@ -178,8 +178,6 @@ smoketest:
 	# test simulated boards on play.tinygo.org
 	$(TINYGO) build             -o test.wasm -tags=arduino              examples/blinky1
 	@$(MD5SUM) test.wasm
-	$(TINYGO) build             -o test.wasm -tags=hifive1b             examples/blinky1
-	@$(MD5SUM) test.wasm
 	$(TINYGO) build             -o test.wasm -tags=reelboard            examples/blinky1
 	@$(MD5SUM) test.wasm
 	$(TINYGO) build             -o test.wasm -tags=pca10040             examples/blinky2
@@ -234,6 +232,8 @@ endif
 ifneq ($(RISCV), 0)
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build             -o test.wasm -tags=hifive1b             examples/blinky1
+	@$(MD5SUM) test.wasm
 endif
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/export
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/main
