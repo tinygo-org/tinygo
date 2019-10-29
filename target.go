@@ -39,7 +39,6 @@ type TargetSpec struct {
 	ExtraFiles       []string `json:"extra-files"`
 	Emulator         []string `json:"emulator"`
 	FlashCommand     string   `json:"flash-command"`
-	OCDDaemon        []string `json:"ocd-daemon"`
 	GDB              string   `json:"gdb"`
 	PortReset        string   `json:"flash-1200-bps-reset"`
 	FlashMethod      string   `json:"flash-method"`
@@ -92,9 +91,6 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if spec2.FlashCommand != "" {
 		spec.FlashCommand = spec2.FlashCommand
-	}
-	if len(spec2.OCDDaemon) != 0 {
-		spec.OCDDaemon = spec2.OCDDaemon
 	}
 	if spec2.GDB != "" {
 		spec.GDB = spec2.GDB
