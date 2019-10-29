@@ -175,8 +175,18 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/test
 	@$(MD5SUM) test.hex
-	# test all targets/boards
+	# test simulated boards on play.tinygo.org
+	$(TINYGO) build             -o test.wasm -tags=arduino              examples/blinky1
+	@$(MD5SUM) test.wasm
+	$(TINYGO) build             -o test.wasm -tags=hifive1b             examples/blinky1
+	@$(MD5SUM) test.wasm
+	$(TINYGO) build             -o test.wasm -tags=reelboard            examples/blinky1
+	@$(MD5SUM) test.wasm
 	$(TINYGO) build             -o test.wasm -tags=pca10040             examples/blinky2
+	@$(MD5SUM) test.wasm
+	$(TINYGO) build             -o test.wasm -tags=pca10056             examples/blinky2
+	@$(MD5SUM) test.wasm
+	# test all targets/boards
 	$(TINYGO) build -size short -o test.hex -target=microbit            examples/echo
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nrf52840-mdk        examples/blinky1
