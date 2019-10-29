@@ -530,9 +530,8 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig)
 		switch gdbInterface {
 		case "native":
 			// Run GDB directly.
-			gdbCommands = append(gdbCommands, "run")
 		case "openocd":
-			gdbCommands = append(gdbCommands, "target remote :3333", "monitor halt", "load", "monitor reset", "c")
+			gdbCommands = append(gdbCommands, "target remote :3333", "monitor halt", "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
 			args, err := spec.OpenOCDConfiguration()
