@@ -543,7 +543,7 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig)
 				// Make it clear which output is from the daemon.
 				w := &ColorWriter{
 					Out:    os.Stderr,
-					Prefix: spec.OCDDaemon[0] + ": ",
+					Prefix: "openocd: ",
 					Color:  TermColorYellow,
 				}
 				daemon.Stdout = w
