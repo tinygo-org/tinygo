@@ -110,7 +110,7 @@ gen-device-sam:
 	GO111MODULE=off $(GO) fmt ./src/device/sam
 
 gen-device-sifive:
-	$(PYTHON) ./tools/gen-device-svd.py lib/cmsis-svd/data/SiFive-Community/ src/device/sifive/ --source=https://github.com/AdaCore/svd2ada/tree/master/CMSIS-SVD/SiFive-Community
+	$(PYTHON) ./tools/gen-device-svd.py lib/cmsis-svd/data/SiFive-Community/ src/device/sifive/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/SiFive-Community
 	GO111MODULE=off $(GO) fmt ./src/device/sifive
 
 gen-device-stm32:
