@@ -3,15 +3,6 @@
 
 .syntax unified
 
-// This is a convenience function for QEMU semihosting support.
-// At some point, this should be replaced by inline assembly.
-.section .text.SemihostingCall
-.global  SemihostingCall
-.type    SemihostingCall, %function
-SemihostingCall:
-    bkpt 0xab
-    bx   lr
-
 // This is the default handler for interrupts, if triggered but not defined.
 .section .text.Default_Handler
 .global  Default_Handler
