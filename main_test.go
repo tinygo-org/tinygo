@@ -115,14 +115,14 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 	}
 
 	// Build the test binary.
-	config := &BuildConfig{
-		opt:        "z",
-		printIR:    false,
-		dumpSSA:    false,
-		verifyIR:   true,
-		debug:      false,
-		printSizes: "",
-		wasmAbi:    "js",
+	config := &compileopts.Options{
+		Opt:        "z",
+		PrintIR:    false,
+		DumpSSA:    false,
+		VerifyIR:   true,
+		Debug:      false,
+		PrintSizes: "",
+		WasmAbi:    "js",
 	}
 	binary := filepath.Join(tmpdir, "test")
 	err = Build("./"+path, binary, target, config)

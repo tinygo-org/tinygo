@@ -48,40 +48,22 @@ func (e *multiError) Error() string {
 	return e.Errs[0].Error()
 }
 
-type BuildConfig struct {
-	opt           string
-	gc            string
-	panicStrategy string
-	scheduler     string
-	printIR       bool
-	dumpSSA       bool
-	verifyIR      bool
-	debug         bool
-	printSizes    string
-	cFlags        []string
-	ldFlags       []string
-	tags          string
-	wasmAbi       string
-	heapSize      int64
-	testConfig    compileopts.TestConfig
-}
-
 // Helper function for Compiler object.
-func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *BuildConfig, action func(string) error) error {
-	if config.gc == "" && spec.GC != "" {
-		config.gc = spec.GC
+func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, options *compileopts.Options, action func(string) error) error {
+	if options.GC == "" && spec.GC != "" {
+		options.GC = spec.GC
 	}
 
 	root := goenv.Get("TINYGOROOT")
 
 	// Merge and adjust CFlags.
-	cflags := append([]string{}, config.cFlags...)
+	cflags := append([]string{}, options.CFlags...)
 	for _, flag := range spec.CFlags {
 		cflags = append(cflags, strings.Replace(flag, "{root}", root, -1))
 	}
 
 	// Merge and adjust LDFlags.
-	ldflags := append([]string{}, config.ldFlags...)
+	ldflags := append([]string{}, options.LDFlags...)
 	for _, flag := range spec.LDFlags {
 		ldflags = append(ldflags, strings.Replace(flag, "{root}", root, -1))
 	}
@@ -101,12 +83,12 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *Buil
 	for i := 1; i <= minor; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
-	if extraTags := strings.Fields(config.tags); len(extraTags) != 0 {
+	if extraTags := strings.Fields(options.Tags); len(extraTags) != 0 {
 		tags = append(tags, extraTags...)
 	}
 	scheduler := spec.Scheduler
-	if config.scheduler != "" {
-		scheduler = config.scheduler
+	if options.Scheduler != "" {
+		scheduler = options.Scheduler
 	}
 	compilerConfig := &compileopts.Config{
 		Triple:        spec.Triple,
@@ -114,20 +96,20 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *Buil
 		Features:      spec.Features,
 		GOOS:          spec.GOOS,
 		GOARCH:        spec.GOARCH,
-		GC:            config.gc,
-		PanicStrategy: config.panicStrategy,
+		GC:            options.GC,
+		PanicStrategy: options.PanicStrategy,
 		Scheduler:     scheduler,
 		CFlags:        cflags,
 		LDFlags:       ldflags,
 		ClangHeaders:  getClangHeaderPath(root),
-		Debug:         config.debug,
-		DumpSSA:       config.dumpSSA,
-		VerifyIR:      config.verifyIR,
+		Debug:         options.Debug,
+		DumpSSA:       options.DumpSSA,
+		VerifyIR:      options.VerifyIR,
 		TINYGOROOT:    root,
 		GOROOT:        goroot,
 		GOPATH:        goenv.Get("GOPATH"),
 		BuildTags:     tags,
-		TestConfig:    config.testConfig,
+		TestConfig:    options.TestConfig,
 	}
 	c, err := compiler.NewCompiler(pkgName, compilerConfig)
 	if err != nil {
@@ -142,7 +124,7 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *Buil
 		}
 		return &multiError{errs}
 	}
-	if config.printIR {
+	if options.PrintIR {
 		fmt.Println("; Generated LLVM IR:")
 		fmt.Println(c.IR())
 	}
@@ -150,7 +132,7 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *Buil
 		return errors.New("verification error after IR construction")
 	}
 
-	err = interp.Run(c.Module(), config.dumpSSA)
+	err = interp.Run(c.Module(), options.DumpSSA)
 	if err != nil {
 		return err
 	}
@@ -167,7 +149,7 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *Buil
 	// keep functions interoperable, pass int64 types as pointers to
 	// stack-allocated values.
 	// Use -wasm-abi=generic to disable this behaviour.
-	if config.wasmAbi == "js" && strings.HasPrefix(spec.Triple, "wasm") {
+	if options.WasmAbi == "js" && strings.HasPrefix(spec.Triple, "wasm") {
 		err := c.ExternalInt64AsPtr()
 		if err != nil {
 			return err
@@ -176,7 +158,7 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *Buil
 
 	// Optimization levels here are roughly the same as Clang, but probably not
 	// exactly.
-	switch config.opt {
+	switch options.Opt {
 	case "none:", "0":
 		err = c.Optimize(0, 0, 0) // -O0
 	case "1":
@@ -188,7 +170,7 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *Buil
 	case "z":
 		err = c.Optimize(2, 2, 5) // -Oz, default
 	default:
-		err = errors.New("unknown optimization level: -opt=" + config.opt)
+		err = errors.New("unknown optimization level: -opt=" + options.Opt)
 	}
 	if err != nil {
 		return err
@@ -255,7 +237,7 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *Buil
 		if spec.GOARCH == "wasm" {
 			// Round heap size to next multiple of 65536 (the WebAssembly page
 			// size).
-			heapSize := (config.heapSize + (65536 - 1)) &^ (65536 - 1)
+			heapSize := (options.HeapSize + (65536 - 1)) &^ (65536 - 1)
 			ldflags = append(ldflags, "--initial-memory="+strconv.FormatInt(heapSize, 10))
 		}
 
@@ -297,12 +279,12 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *Buil
 			return &commandError{"failed to link", executable, err}
 		}
 
-		if config.printSizes == "short" || config.printSizes == "full" {
+		if options.PrintSizes == "short" || options.PrintSizes == "full" {
 			sizes, err := Sizes(executable)
 			if err != nil {
 				return err
 			}
-			if config.printSizes == "short" {
+			if options.PrintSizes == "short" {
 				fmt.Printf("   code    data     bss |   flash     ram\n")
 				fmt.Printf("%7d %7d %7d | %7d %7d\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
 			} else {
@@ -335,13 +317,13 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *Buil
 	}
 }
 
-func Build(pkgName, outpath, target string, config *BuildConfig) error {
+func Build(pkgName, outpath, target string, options *compileopts.Options) error {
 	spec, err := compileopts.LoadTarget(target)
 	if err != nil {
 		return err
 	}
 
-	return Compile(pkgName, outpath, spec, config, func(tmppath string) error {
+	return Compile(pkgName, outpath, spec, options, func(tmppath string) error {
 		if err := os.Rename(tmppath, outpath); err != nil {
 			// Moving failed. Do a file copy.
 			inf, err := os.Open(tmppath)
@@ -369,15 +351,15 @@ func Build(pkgName, outpath, target string, config *BuildConfig) error {
 	})
 }
 
-func Test(pkgName, target string, config *BuildConfig) error {
+func Test(pkgName, target string, options *compileopts.Options) error {
 	spec, err := compileopts.LoadTarget(target)
 	if err != nil {
 		return err
 	}
 
 	spec.BuildTags = append(spec.BuildTags, "test")
-	config.testConfig.CompileTestBinary = true
-	return Compile(pkgName, ".elf", spec, config, func(tmppath string) error {
+	options.TestConfig.CompileTestBinary = true
+	return Compile(pkgName, ".elf", spec, options, func(tmppath string) error {
 		cmd := exec.Command(tmppath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -396,7 +378,7 @@ func Test(pkgName, target string, config *BuildConfig) error {
 	})
 }
 
-func Flash(pkgName, target, port string, config *BuildConfig) error {
+func Flash(pkgName, target, port string, options *compileopts.Options) error {
 	spec, err := compileopts.LoadTarget(target)
 	if err != nil {
 		return err
@@ -432,7 +414,7 @@ func Flash(pkgName, target, port string, config *BuildConfig) error {
 		return errors.New("unknown flash method: " + spec.FlashMethod)
 	}
 
-	return Compile(pkgName, fileExt, spec, config, func(tmppath string) error {
+	return Compile(pkgName, fileExt, spec, options, func(tmppath string) error {
 		// do we need port reset to put MCU into bootloader mode?
 		if spec.PortReset == "true" {
 			err := touchSerialPortAt1200bps(port)
@@ -503,7 +485,7 @@ func Flash(pkgName, target, port string, config *BuildConfig) error {
 //
 // Note: this command is expected to execute just before exiting, as it
 // modifies global state.
-func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig) error {
+func FlashGDB(pkgName, target, port string, ocdOutput bool, options *compileopts.Options) error {
 	spec, err := compileopts.LoadTarget(target)
 	if err != nil {
 		return err
@@ -513,7 +495,7 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig)
 		return errors.New("gdb not configured in the target specification")
 	}
 
-	return Compile(pkgName, "", spec, config, func(tmppath string) error {
+	return Compile(pkgName, "", spec, options, func(tmppath string) error {
 		// Find a good way to run GDB.
 		gdbInterface := spec.FlashMethod
 		switch gdbInterface {
@@ -594,13 +576,13 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig)
 }
 
 // Compile and run the given program, directly or in an emulator.
-func Run(pkgName, target string, config *BuildConfig) error {
+func Run(pkgName, target string, options *compileopts.Options) error {
 	spec, err := compileopts.LoadTarget(target)
 	if err != nil {
 		return err
 	}
 
-	return Compile(pkgName, ".elf", spec, config, func(tmppath string) error {
+	return Compile(pkgName, ".elf", spec, options, func(tmppath string) error {
 		if len(spec.Emulator) == 0 {
 			// Run directly.
 			cmd := exec.Command(tmppath)
@@ -777,26 +759,26 @@ func main() {
 	command := os.Args[1]
 
 	flag.CommandLine.Parse(os.Args[2:])
-	config := &BuildConfig{
-		opt:           *opt,
-		gc:            *gc,
-		panicStrategy: *panicStrategy,
-		scheduler:     *scheduler,
-		printIR:       *printIR,
-		dumpSSA:       *dumpSSA,
-		verifyIR:      *verifyIR,
-		debug:         !*nodebug,
-		printSizes:    *printSize,
-		tags:          *tags,
-		wasmAbi:       *wasmAbi,
+	options := &compileopts.Options{
+		Opt:           *opt,
+		GC:            *gc,
+		PanicStrategy: *panicStrategy,
+		Scheduler:     *scheduler,
+		PrintIR:       *printIR,
+		DumpSSA:       *dumpSSA,
+		VerifyIR:      *verifyIR,
+		Debug:         !*nodebug,
+		PrintSizes:    *printSize,
+		Tags:          *tags,
+		WasmAbi:       *wasmAbi,
 	}
 
 	if *cFlags != "" {
-		config.cFlags = strings.Split(*cFlags, " ")
+		options.CFlags = strings.Split(*cFlags, " ")
 	}
 
 	if *ldFlags != "" {
-		config.ldFlags = strings.Split(*ldFlags, " ")
+		options.LDFlags = strings.Split(*ldFlags, " ")
 	}
 
 	if *panicStrategy != "print" && *panicStrategy != "trap" {
@@ -806,7 +788,7 @@ func main() {
 	}
 
 	var err error
-	if config.heapSize, err = parseSize(*heapSize); err != nil {
+	if options.HeapSize, err = parseSize(*heapSize); err != nil {
 		fmt.Fprintln(os.Stderr, "Could not read heap size:", *heapSize)
 		usage()
 		os.Exit(1)
@@ -833,7 +815,7 @@ func main() {
 		if target == "" && filepath.Ext(*outpath) == ".wasm" {
 			target = "wasm"
 		}
-		err := Build(pkgName, *outpath, target, config)
+		err := Build(pkgName, *outpath, target, options)
 		handleCompilerError(err)
 	case "build-builtins":
 		// Note: this command is only meant to be used while making a release!
@@ -856,15 +838,15 @@ func main() {
 			os.Exit(1)
 		}
 		if command == "flash" {
-			err := Flash(flag.Arg(0), *target, *port, config)
+			err := Flash(flag.Arg(0), *target, *port, options)
 			handleCompilerError(err)
 		} else {
-			if !config.debug {
+			if !options.Debug {
 				fmt.Fprintln(os.Stderr, "Debug disabled while running gdb?")
 				usage()
 				os.Exit(1)
 			}
-			err := FlashGDB(flag.Arg(0), *target, *port, *ocdOutput, config)
+			err := FlashGDB(flag.Arg(0), *target, *port, *ocdOutput, options)
 			handleCompilerError(err)
 		}
 	case "run":
@@ -873,7 +855,7 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Run(flag.Arg(0), *target, config)
+		err := Run(flag.Arg(0), *target, options)
 		handleCompilerError(err)
 	case "test":
 		pkgName := "."
@@ -884,7 +866,7 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Test(pkgName, *target, config)
+		err := Test(pkgName, *target, options)
 		handleCompilerError(err)
 	case "clean":
 		// remove cache directory
