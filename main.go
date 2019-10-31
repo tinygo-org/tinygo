@@ -63,7 +63,7 @@ type BuildConfig struct {
 	tags          string
 	wasmAbi       string
 	heapSize      int64
-	testConfig    compiler.TestConfig
+	testConfig    compileopts.TestConfig
 }
 
 // Helper function for Compiler object.
@@ -108,7 +108,7 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *Buil
 	if config.scheduler != "" {
 		scheduler = config.scheduler
 	}
-	compilerConfig := compiler.Config{
+	compilerConfig := &compileopts.Config{
 		Triple:        spec.Triple,
 		CPU:           spec.CPU,
 		Features:      spec.Features,
