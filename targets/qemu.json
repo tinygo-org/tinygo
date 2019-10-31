@@ -10,7 +10,7 @@
 		"-T", "targets/lm3s6965.ld"
 	],
 	"extra-files": [
-		"targets/cortex-m.s"
+		"targets/qemu.s"
 	],
 	"emulator": ["qemu-system-arm", "-machine", "lm3s6965evb", "-semihosting", "-nographic", "-kernel"]
 }
