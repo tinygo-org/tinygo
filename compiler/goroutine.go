@@ -13,7 +13,7 @@ import "tinygo.org/x/go-llvm"
 //
 // Because a go statement doesn't return anything, return undef.
 func (c *Compiler) emitStartGoroutine(funcPtr llvm.Value, params []llvm.Value) llvm.Value {
-	switch c.selectScheduler() {
+	switch c.Scheduler() {
 	case "tasks":
 		paramBundle := c.emitPointerPack(params)
 		paramBundle = c.builder.CreatePtrToInt(paramBundle, c.uintptrType, "")

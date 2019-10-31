@@ -50,29 +50,13 @@ func (e *multiError) Error() string {
 
 // Helper function for Compiler object.
 func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, options *compileopts.Options, action func(string) error) error {
-	if options.GC == "" && spec.GC != "" {
-		options.GC = spec.GC
-	}
 
 	root := goenv.Get("TINYGOROOT")
-
-	// Merge and adjust CFlags.
-	cflags := append([]string{}, options.CFlags...)
-	for _, flag := range spec.CFlags {
-		cflags = append(cflags, strings.Replace(flag, "{root}", root, -1))
-	}
-
-	// Merge and adjust LDFlags.
-	ldflags := append([]string{}, options.LDFlags...)
-	for _, flag := range spec.LDFlags {
-		ldflags = append(ldflags, strings.Replace(flag, "{root}", root, -1))
-	}
 
 	goroot := goenv.Get("GOROOT")
 	if goroot == "" {
 		return errors.New("cannot locate $GOROOT, please set it manually")
 	}
-	tags := spec.BuildTags
 	major, minor, err := getGorootVersion(goroot)
 	if err != nil {
 		return fmt.Errorf("could not read version from GOROOT (%v): %v", goroot, err)
@@ -80,36 +64,12 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, options *com
 	if major != 1 || (minor != 11 && minor != 12 && minor != 13) {
 		return fmt.Errorf("requires go version 1.11, 1.12, or 1.13, got go%d.%d", major, minor)
 	}
-	for i := 1; i <= minor; i++ {
-		tags = append(tags, fmt.Sprintf("go1.%d", i))
-	}
-	if extraTags := strings.Fields(options.Tags); len(extraTags) != 0 {
-		tags = append(tags, extraTags...)
-	}
-	scheduler := spec.Scheduler
-	if options.Scheduler != "" {
-		scheduler = options.Scheduler
-	}
 	compilerConfig := &compileopts.Config{
-		Triple:        spec.Triple,
-		CPU:           spec.CPU,
-		Features:      spec.Features,
-		GOOS:          spec.GOOS,
-		GOARCH:        spec.GOARCH,
-		GC:            options.GC,
-		PanicStrategy: options.PanicStrategy,
-		Scheduler:     scheduler,
-		CFlags:        cflags,
-		LDFlags:       ldflags,
-		ClangHeaders:  getClangHeaderPath(root),
-		Debug:         options.Debug,
-		DumpSSA:       options.DumpSSA,
-		VerifyIR:      options.VerifyIR,
-		TINYGOROOT:    root,
-		GOROOT:        goroot,
-		GOPATH:        goenv.Get("GOPATH"),
-		BuildTags:     tags,
-		TestConfig:    options.TestConfig,
+		Options:        options,
+		Target:         spec,
+		GoMinorVersion: minor,
+		ClangHeaders:   getClangHeaderPath(root),
+		TestConfig:     options.TestConfig,
 	}
 	c, err := compiler.NewCompiler(pkgName, compilerConfig)
 	if err != nil {
@@ -227,6 +187,12 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, options *com
 			}
 		}
 
+		// Merge and adjust LDFlags.
+		ldflags := append([]string{}, options.LDFlags...)
+		for _, flag := range spec.LDFlags {
+			ldflags = append(ldflags, strings.Replace(flag, "{root}", root, -1))
+		}
+
 		// Prepare link command.
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
@@ -249,7 +215,7 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, options *com
 			if names, ok := commands[spec.Compiler]; ok {
 				cmdNames = names
 			}
-			err := execCommand(cmdNames, append(cflags, "-c", "-o", outpath, abspath)...)
+			err := execCommand(cmdNames, append(compilerConfig.CFlags(), "-c", "-o", outpath, abspath)...)
 			if err != nil {
 				return &commandError{"failed to build", path, err}
 			}
@@ -265,7 +231,7 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, options *com
 				if names, ok := commands[spec.Compiler]; ok {
 					cmdNames = names
 				}
-				err := execCommand(cmdNames, append(cflags, "-c", "-o", outpath, path)...)
+				err := execCommand(cmdNames, append(compilerConfig.CFlags(), "-c", "-o", outpath, path)...)
 				if err != nil {
 					return &commandError{"failed to build", path, err}
 				}

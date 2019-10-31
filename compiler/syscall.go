@@ -16,8 +16,8 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 	num := c.getValue(frame, call.Args[0])
 	var syscallResult llvm.Value
 	switch {
-	case c.GOARCH == "amd64":
-		if c.GOOS == "darwin" {
+	case c.GOARCH() == "amd64":
+		if c.GOOS() == "darwin" {
 			// Darwin adds this magic number to system call numbers:
 			//
 			// > Syscall classes for 64-bit system call entry.
@@ -58,7 +58,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 		fnType := llvm.FunctionType(c.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "syscall", constraints, true, false, llvm.InlineAsmDialectIntel)
 		syscallResult = c.builder.CreateCall(target, args, "")
-	case c.GOARCH == "386" && c.GOOS == "linux":
+	case c.GOARCH() == "386" && c.GOOS() == "linux":
 		// Sources:
 		//   syscall(2) man page
 		//   https://stackoverflow.com/a/2538212
@@ -84,7 +84,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 		fnType := llvm.FunctionType(c.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "int 0x80", constraints, true, false, llvm.InlineAsmDialectIntel)
 		syscallResult = c.builder.CreateCall(target, args, "")
-	case c.GOARCH == "arm" && c.GOOS == "linux":
+	case c.GOARCH() == "arm" && c.GOOS() == "linux":
 		// Implement the EABI system call convention for Linux.
 		// Source: syscall(2) man page.
 		args := []llvm.Value{}
@@ -116,7 +116,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 		fnType := llvm.FunctionType(c.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0)
 		syscallResult = c.builder.CreateCall(target, args, "")
-	case c.GOARCH == "arm64" && c.GOOS == "linux":
+	case c.GOARCH() == "arm64" && c.GOOS() == "linux":
 		// Source: syscall(2) man page.
 		args := []llvm.Value{}
 		argTypes := []llvm.Type{}
@@ -149,9 +149,9 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0)
 		syscallResult = c.builder.CreateCall(target, args, "")
 	default:
-		return llvm.Value{}, c.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+c.GOOS+"/"+c.GOARCH)
+		return llvm.Value{}, c.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+c.GOOS()+"/"+c.GOARCH())
 	}
-	switch c.GOOS {
+	switch c.GOOS() {
 	case "linux":
 		// Return values: r0, r1 uintptr, err Errno
 		// Pseudocode:
@@ -187,6 +187,6 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 		retval = c.builder.CreateInsertValue(retval, errResult, 2, "")
 		return retval, nil
 	default:
-		return llvm.Value{}, c.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+c.GOOS+"/"+c.GOARCH)
+		return llvm.Value{}, c.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+c.GOOS()+"/"+c.GOARCH())
 	}
 }
