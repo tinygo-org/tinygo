@@ -20,9 +20,9 @@ func init() {
 	// Add the path to a Homebrew-installed LLVM 8 for ease of use (no need to
 	// manually set $PATH).
 	if runtime.GOOS == "darwin" {
-		commands["clang"] = append(commands["clang"], "/usr/local/opt/llvm/bin/clang-8")
-		commands["ld.lld"] = append(commands["ld.lld"], "/usr/local/opt/llvm/bin/ld.lld")
-		commands["wasm-ld"] = append(commands["wasm-ld"], "/usr/local/opt/llvm/bin/wasm-ld")
+		commands["clang"] = append(commands["clang"], "/usr/local/opt/llvm@8/bin/clang-8")
+		commands["ld.lld"] = append(commands["ld.lld"], "/usr/local/opt/llvm@8/bin/ld.lld")
+		commands["wasm-ld"] = append(commands["wasm-ld"], "/usr/local/opt/llvm@8/bin/wasm-ld")
 	}
 	// Add the path for when LLVM was installed with the installer from
 	// llvm.org, which by default doesn't add LLVM to the $PATH environment
