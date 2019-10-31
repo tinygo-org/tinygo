@@ -6,6 +6,21 @@ import (
 
 type sideEffectSeverity int
 
+func (severity sideEffectSeverity) String() string {
+	switch severity {
+	case sideEffectInProgress:
+		return "in progress"
+	case sideEffectNone:
+		return "none"
+	case sideEffectLimited:
+		return "limited"
+	case sideEffectAll:
+		return "all"
+	default:
+		return "unknown"
+	}
+}
+
 const (
 	sideEffectInProgress sideEffectSeverity = iota // computing side effects is in progress (for recursive functions)
 	sideEffectNone                                 // no side effects at all (pure)
