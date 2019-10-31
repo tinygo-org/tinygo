@@ -19,12 +19,12 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 	}
 	builder.AddCoroutinePassesToExtensionPoints()
 
-	if c.PanicStrategy == "trap" {
+	if c.PanicStrategy() == "trap" {
 		c.replacePanicsWithTrap() // -panic=trap
 	}
 
 	// run a check of all of our code
-	if c.VerifyIR {
+	if c.VerifyIR() {
 		err := c.checkModule()
 		if err != nil {
 			return err
@@ -96,7 +96,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 			return err
 		}
 	}
-	if c.VerifyIR {
+	if c.VerifyIR() {
 		if err := c.checkModule(); err != nil {
 			return err
 		}

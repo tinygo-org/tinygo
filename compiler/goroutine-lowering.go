@@ -126,7 +126,7 @@ type asyncFunc struct {
 // coroutine or the tasks implementation of goroutines, and whether goroutines
 // are necessary at all.
 func (c *Compiler) LowerGoroutines() error {
-	switch c.selectScheduler() {
+	switch c.Scheduler() {
 	case "coroutines":
 		return c.lowerCoroutines()
 	case "tasks":
@@ -312,7 +312,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 
 	// Check whether a scheduler is needed.
 	makeGoroutine := c.mod.NamedFunction("runtime.makeGoroutine")
-	if strings.HasPrefix(c.Triple, "avr") {
+	if strings.HasPrefix(c.Triple(), "avr") {
 		needsScheduler = false
 		getCoroutine := c.mod.NamedFunction("runtime.getCoroutine")
 		for _, inst := range getUses(getCoroutine) {

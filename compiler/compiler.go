@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/ir"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
@@ -103,35 +104,26 @@ type Phi struct {
 }
 
 func NewCompiler(pkgName string, config *compileopts.Config) (*Compiler, error) {
-	if config.Triple == "" {
-		config.Triple = llvm.DefaultTargetTriple()
-	}
-	if len(config.BuildTags) == 0 {
-		config.BuildTags = []string{config.GOOS, config.GOARCH}
-	}
 	c := &Compiler{
 		Config:  config,
 		difiles: make(map[string]llvm.Metadata),
 		ditypes: make(map[types.Type]llvm.Metadata),
 	}
 
-	target, err := llvm.GetTargetFromTriple(config.Triple)
+	target, err := llvm.GetTargetFromTriple(config.Triple())
 	if err != nil {
 		return nil, err
 	}
-	features := ""
-	if len(config.Features) > 0 {
-		features = strings.Join(config.Features, `,`)
-	}
-	c.machine = target.CreateTargetMachine(config.Triple, config.CPU, features, llvm.CodeGenLevelDefault, llvm.RelocStatic, llvm.CodeModelDefault)
+	features := strings.Join(config.Features(), ",")
+	c.machine = target.CreateTargetMachine(config.Triple(), config.CPU(), features, llvm.CodeGenLevelDefault, llvm.RelocStatic, llvm.CodeModelDefault)
 	c.targetData = c.machine.CreateTargetData()
 
 	c.ctx = llvm.NewContext()
 	c.mod = c.ctx.NewModule(pkgName)
-	c.mod.SetTarget(config.Triple)
+	c.mod.SetTarget(config.Triple())
 	c.mod.SetDataLayout(c.targetData.String())
 	c.builder = c.ctx.NewBuilder()
-	if c.Debug {
+	if c.Debug() {
 		c.dibuilder = llvm.NewDIBuilder(c.mod)
 	}
 
@@ -164,35 +156,16 @@ func (c *Compiler) Module() llvm.Module {
 	return c.mod
 }
 
-// selectGC picks an appropriate GC strategy if none was provided.
-func (c *Compiler) selectGC() string {
-	if c.GC != "" {
-		return c.GC
-	}
-	return "conservative"
-}
-
-// selectScheduler picks an appropriate scheduler for the target if none was
-// given.
-func (c *Compiler) selectScheduler() string {
-	if c.Scheduler != "" {
-		// A scheduler was specified in the target description.
-		return c.Scheduler
-	}
-	// Fall back to coroutines, which are supported everywhere.
-	return "coroutines"
-}
-
 // getFunctionsUsedInTransforms gets a list of all special functions that should be preserved during transforms and optimization.
 func (c *Compiler) getFunctionsUsedInTransforms() []string {
 	fnused := functionsUsedInTransforms
-	switch c.selectScheduler() {
+	switch c.Scheduler() {
 	case "coroutines":
 		fnused = append(append([]string{}, fnused...), coroFunctionsUsedInTransforms...)
 	case "tasks":
 		fnused = append(append([]string{}, fnused...), taskFunctionsUsedInTransforms...)
 	default:
-		panic(fmt.Errorf("invalid scheduler %q", c.selectScheduler()))
+		panic(fmt.Errorf("invalid scheduler %q", c.Scheduler()))
 	}
 	return fnused
 }
@@ -202,38 +175,37 @@ func (c *Compiler) getFunctionsUsedInTransforms() []string {
 func (c *Compiler) Compile(mainPath string) []error {
 	// Prefix the GOPATH with the system GOROOT, as GOROOT is already set to
 	// the TinyGo root.
-	overlayGopath := c.GOPATH
+	overlayGopath := goenv.Get("GOPATH")
 	if overlayGopath == "" {
-		overlayGopath = c.GOROOT
+		overlayGopath = goenv.Get("GOROOT")
 	} else {
-		overlayGopath = c.GOROOT + string(filepath.ListSeparator) + overlayGopath
+		overlayGopath = goenv.Get("GOROOT") + string(filepath.ListSeparator) + overlayGopath
 	}
 
 	wd, err := os.Getwd()
 	if err != nil {
 		return []error{err}
 	}
-	buildTags := append([]string{"tinygo", "gc." + c.selectGC(), "scheduler." + c.selectScheduler()}, c.BuildTags...)
 	lprogram := &loader.Program{
 		Build: &build.Context{
-			GOARCH:      c.GOARCH,
-			GOOS:        c.GOOS,
-			GOROOT:      c.GOROOT,
-			GOPATH:      c.GOPATH,
+			GOARCH:      c.GOARCH(),
+			GOOS:        c.GOOS(),
+			GOROOT:      goenv.Get("GOROOT"),
+			GOPATH:      goenv.Get("GOPATH"),
 			CgoEnabled:  true,
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
-			BuildTags:   buildTags,
+			BuildTags:   c.BuildTags(),
 		},
 		OverlayBuild: &build.Context{
-			GOARCH:      c.GOARCH,
-			GOOS:        c.GOOS,
-			GOROOT:      c.TINYGOROOT,
+			GOARCH:      c.GOARCH(),
+			GOOS:        c.GOOS(),
+			GOROOT:      goenv.Get("TINYGOROOT"),
 			GOPATH:      overlayGopath,
 			CgoEnabled:  true,
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
-			BuildTags:   buildTags,
+			BuildTags:   c.BuildTags(),
 		},
 		OverlayPath: func(path string) string {
 			// Return the (overlay) import path when it should be overlaid, and
@@ -250,7 +222,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
 					return path
 				} else if path == "syscall" {
-					for _, tag := range c.BuildTags {
+					for _, tag := range c.BuildTags() {
 						if tag == "baremetal" || tag == "darwin" {
 							return path
 						}
@@ -267,8 +239,8 @@ func (c *Compiler) Compile(mainPath string) []error {
 			},
 		},
 		Dir:          wd,
-		TINYGOROOT:   c.TINYGOROOT,
-		CFlags:       c.CFlags,
+		TINYGOROOT:   goenv.Get("TINYGOROOT"),
+		CFlags:       c.CFlags(),
 		ClangHeaders: c.ClangHeaders,
 	}
 
@@ -300,7 +272,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 	c.ir.SimpleDCE()
 
 	// Initialize debug information.
-	if c.Debug {
+	if c.Debug() {
 		c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
 			Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
 			File:      mainPath,
@@ -344,7 +316,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 	initFn := c.ir.GetFunction(c.ir.Program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function))
 	initFn.LLVMFn.SetLinkage(llvm.InternalLinkage)
 	initFn.LLVMFn.SetUnnamedAddr(true)
-	if c.Debug {
+	if c.Debug() {
 		difunc := c.attachDebugInfo(initFn)
 		pos := c.ir.Program.Fset.Position(initFn.Pos())
 		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
@@ -408,7 +380,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 	}
 
 	// see: https://reviews.llvm.org/D18355
-	if c.Debug {
+	if c.Debug() {
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
 			c.ctx.MDNode([]llvm.Metadata{
 				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
@@ -856,7 +828,7 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix,
 }
 
 func (c *Compiler) parseFunc(frame *Frame) {
-	if c.DumpSSA {
+	if c.DumpSSA() {
 		fmt.Printf("\nfunc %s:\n", frame.fn.Function)
 	}
 	if !frame.fn.LLVMFn.IsDeclaration() {
@@ -867,7 +839,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 		frame.fn.LLVMFn.SetLinkage(llvm.InternalLinkage)
 		frame.fn.LLVMFn.SetUnnamedAddr(true)
 	}
-	if frame.fn.IsInterrupt() && strings.HasPrefix(c.Triple, "avr") {
+	if frame.fn.IsInterrupt() && strings.HasPrefix(c.Triple(), "avr") {
 		frame.fn.LLVMFn.SetFunctionCallConv(85) // CallingConv::AVR_SIGNAL
 	}
 
@@ -884,7 +856,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 	}
 
 	// Add debug info, if needed.
-	if c.Debug {
+	if c.Debug() {
 		if frame.fn.Synthetic == "package initializer" {
 			// Package initializers have no debug info. Create some fake debug
 			// info to at least have *something*.
@@ -918,7 +890,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 		frame.locals[param] = c.collapseFormalParam(llvmType, fields)
 
 		// Add debug information to this parameter (if available)
-		if c.Debug && frame.fn.Syntax() != nil {
+		if c.Debug() && frame.fn.Syntax() != nil {
 			pos := c.ir.Program.Fset.Position(frame.fn.Syntax().Pos())
 			diType := c.getDIType(param.Type())
 			dbgParam := c.dibuilder.CreateParameterVariable(frame.difunc, llvm.DIParameterVariable{
@@ -980,7 +952,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 
 	// Fill blocks with instructions.
 	for _, block := range frame.fn.DomPreorder() {
-		if c.DumpSSA {
+		if c.DumpSSA() {
 			fmt.Printf("%d: %s:\n", block.Index, block.Comment)
 		}
 		c.builder.SetInsertPointAtEnd(frame.blockEntries[block])
@@ -989,7 +961,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 			if _, ok := instr.(*ssa.DebugRef); ok {
 				continue
 			}
-			if c.DumpSSA {
+			if c.DumpSSA() {
 				if val, ok := instr.(ssa.Value); ok && val.Name() != "" {
 					fmt.Printf("\t%s = %s\n", val.Name(), val.String())
 				} else {
@@ -1015,7 +987,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 }
 
 func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
-	if c.Debug {
+	if c.Debug() {
 		pos := c.ir.Program.Fset.Position(instr.Pos())
 		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), frame.difunc, llvm.Metadata{})
 	}
@@ -1076,7 +1048,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			//   * The function pointer (for tasks).
 			funcPtr, context := c.decodeFuncValue(c.getValue(frame, instr.Call.Value), instr.Call.Value.Type().(*types.Signature))
 			params = append(params, context) // context parameter
-			switch c.selectScheduler() {
+			switch c.Scheduler() {
 			case "coroutines":
 				// There are no additional parameters needed for the goroutine start operation.
 			case "tasks":

@@ -14,10 +14,10 @@ import (
 // needsStackObjects returns true if the compiler should insert stack objects
 // that can be traced by the garbage collector.
 func (c *Compiler) needsStackObjects() bool {
-	if c.selectGC() != "conservative" {
+	if c.GC() != "conservative" {
 		return false
 	}
-	for _, tag := range c.BuildTags {
+	for _, tag := range c.BuildTags() {
 		if tag == "baremetal" {
 			return false
 		}

@@ -483,7 +483,7 @@ func (c *Compiler) createInterfaceInvokeWrapper(state interfaceInvokeWrapper) {
 	wrapper.SetUnnamedAddr(true)
 
 	// add debug info if needed
-	if c.Debug {
+	if c.Debug() {
 		pos := c.ir.Program.Fset.Position(fn.Pos())
 		difunc := c.attachDebugInfoRaw(fn, wrapper, "$invoke", pos.Filename, pos.Line)
 		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
