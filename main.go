@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
@@ -66,7 +67,7 @@ type BuildConfig struct {
 }
 
 // Helper function for Compiler object.
-func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, action func(string) error) error {
+func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, config *BuildConfig, action func(string) error) error {
 	if config.gc == "" && spec.GC != "" {
 		config.gc = spec.GC
 	}
@@ -335,7 +336,7 @@ func Compile(pkgName, outpath string, spec *TargetSpec, config *BuildConfig, act
 }
 
 func Build(pkgName, outpath, target string, config *BuildConfig) error {
-	spec, err := LoadTarget(target)
+	spec, err := compileopts.LoadTarget(target)
 	if err != nil {
 		return err
 	}
@@ -369,7 +370,7 @@ func Build(pkgName, outpath, target string, config *BuildConfig) error {
 }
 
 func Test(pkgName, target string, config *BuildConfig) error {
-	spec, err := LoadTarget(target)
+	spec, err := compileopts.LoadTarget(target)
 	if err != nil {
 		return err
 	}
@@ -396,7 +397,7 @@ func Test(pkgName, target string, config *BuildConfig) error {
 }
 
 func Flash(pkgName, target, port string, config *BuildConfig) error {
-	spec, err := LoadTarget(target)
+	spec, err := compileopts.LoadTarget(target)
 	if err != nil {
 		return err
 	}
@@ -503,7 +504,7 @@ func Flash(pkgName, target, port string, config *BuildConfig) error {
 // Note: this command is expected to execute just before exiting, as it
 // modifies global state.
 func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig) error {
-	spec, err := LoadTarget(target)
+	spec, err := compileopts.LoadTarget(target)
 	if err != nil {
 		return err
 	}
@@ -594,7 +595,7 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, config *BuildConfig)
 
 // Compile and run the given program, directly or in an emulator.
 func Run(pkgName, target string, config *BuildConfig) error {
-	spec, err := LoadTarget(target)
+	spec, err := compileopts.LoadTarget(target)
 	if err != nil {
 		return err
 	}

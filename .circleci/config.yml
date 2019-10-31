@@ -65,7 +65,7 @@ commands:
             - go-cache-v2-{{ checksum "go.mod" }}
       - llvm-source-linux
       - run: go install .
-      - run: go test -v ./cgo ./interp ./transform .
+      - run: go test -v ./cgo ./compileopts ./interp ./transform .
       - run: make gen-device -j4
       - run: make smoketest RISCV=0
       - save_cache:
