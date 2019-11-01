@@ -13,18 +13,18 @@ import (
 // distributions or may not even exist in $PATH, in which case absolute paths
 // may be used.
 var commands = map[string][]string{
-	"clang":   {"clang-8"},
-	"ld.lld":  {"ld.lld-8", "ld.lld"},
-	"wasm-ld": {"wasm-ld-8", "wasm-ld"},
+	"clang":   {"clang-9"},
+	"ld.lld":  {"ld.lld-9", "ld.lld"},
+	"wasm-ld": {"wasm-ld-9", "wasm-ld"},
 }
 
 func init() {
-	// Add the path to a Homebrew-installed LLVM 8 for ease of use (no need to
+	// Add the path to a Homebrew-installed LLVM 9 for ease of use (no need to
 	// manually set $PATH).
 	if runtime.GOOS == "darwin" {
-		commands["clang"] = append(commands["clang"], "/usr/local/opt/llvm@8/bin/clang-8")
-		commands["ld.lld"] = append(commands["ld.lld"], "/usr/local/opt/llvm@8/bin/ld.lld")
-		commands["wasm-ld"] = append(commands["wasm-ld"], "/usr/local/opt/llvm@8/bin/wasm-ld")
+		commands["clang"] = append(commands["clang"], "/usr/local/opt/llvm@9/bin/clang-9")
+		commands["ld.lld"] = append(commands["ld.lld"], "/usr/local/opt/llvm@9/bin/ld.lld")
+		commands["wasm-ld"] = append(commands["wasm-ld"], "/usr/local/opt/llvm@9/bin/wasm-ld")
 	}
 	// Add the path for when LLVM was installed with the installer from
 	// llvm.org, which by default doesn't add LLVM to the $PATH environment
