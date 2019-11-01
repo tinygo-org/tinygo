@@ -96,9 +96,9 @@ func getClangHeaderPath(TINYGOROOT string) string {
 				return ""
 			}
 			// Example executable:
-			//     /usr/lib/llvm-8/bin/clang
+			//     /usr/lib/llvm-9/bin/clang
 			// Example include path:
-			//     /usr/lib/llvm-8/lib/clang/8.0.1/include/
+			//     /usr/lib/llvm-9/lib/clang/9.0.1/include/
 			llvmRoot := filepath.Dir(filepath.Dir(binpath))
 			clangVersionRoot := filepath.Join(llvmRoot, "lib", "clang")
 			dirs, err := ioutil.ReadDir(clangVersionRoot)

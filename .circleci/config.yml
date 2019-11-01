@@ -44,12 +44,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-8-v5
+            - llvm-source-9-v0
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-8-v5
+          key: llvm-source-9-v0
           paths:
             - llvm-project
   test-linux:
@@ -57,7 +57,7 @@ commands:
       - checkout
       - submodules
       - apt-dependencies:
-          llvm: "-8"
+          llvm: "-9"
       - install-node
       - restore_cache:
           keys:
@@ -101,7 +101,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-8-linux-v7-assert
+            - llvm-build-9-linux-v0-assert
       - run:
           name: "Build LLVM"
           command: |
@@ -119,15 +119,15 @@ commands:
               make ASSERT=1 llvm-build
             fi
       - save_cache:
-          key: llvm-build-8-linux-v7-assert
+          key: llvm-build-9-linux-v0-assert
           paths:
             llvm-build
       - run:
           name: "Create LLVM symlinks"
           command: |
-            ln -s $PWD/llvm-build/bin/clang-8 /go/bin/clang-8
-            ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-8
-            ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-8
+            ln -s $PWD/llvm-build/bin/clang-9 /go/bin/clang-9
+            ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-9
+            ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-9
       - run: make ASSERT=1
       - run:
           name: "Test TinyGo"
@@ -166,7 +166,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-8-linux-v7
+            - llvm-build-9-linux-v0
       - run:
           name: "Build LLVM"
           command: |
@@ -184,15 +184,15 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-8-linux-v7
+          key: llvm-build-9-linux-v0
           paths:
             llvm-build
       - run:
           name: "Create LLVM symlinks"
           command: |
-            ln -s $PWD/llvm-build/bin/clang-8 /go/bin/clang-8
-            ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-8
-            ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-8
+            ln -s $PWD/llvm-build/bin/clang-9 /go/bin/clang-9
+            ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-9
+            ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-9
       - run:
           name: "Test TinyGo"
           command: make test
@@ -239,17 +239,17 @@ commands:
             - go-cache-macos-v2-{{ checksum "go.mod" }}
       - restore_cache:
           keys:
-            - llvm-source-8-macos-v5
+            - llvm-source-9-macos-v0
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-8-macos-v5
+          key: llvm-source-9-macos-v0
           paths:
             - llvm-project
       - restore_cache:
           keys:
-            - llvm-build-8-macos-v6
+            - llvm-build-9-macos-v0
       - run:
           name: "Build LLVM"
           command: |
@@ -261,13 +261,13 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-8-macos-v6
+          key: llvm-build-9-macos-v0
           paths:
             llvm-build
       - run:
           name: "Create LLVM symlinks"
           command: |
-            ln -s $PWD/llvm-build/bin/clang-8 /usr/local/bin/clang-8
+            ln -s $PWD/llvm-build/bin/clang-9 /usr/local/bin/clang-9
       - run:
           name: "Test TinyGo"
           command: make test
@@ -300,17 +300,17 @@ commands:
 
 
 jobs:
-  test-llvm8-go111:
+  test-llvm9-go111:
     docker:
       - image: circleci/golang:1.11-stretch
     steps:
       - test-linux
-  test-llvm8-go112:
+  test-llvm9-go112:
     docker:
       - image: circleci/golang:1.12-stretch
     steps:
       - test-linux
-  test-llvm8-go113:
+  test-llvm9-go113:
     docker:
       - image: circleci/golang:1.13-stretch
     steps:
@@ -337,9 +337,9 @@ jobs:
 workflows:
   test-all:
     jobs:
-      - test-llvm8-go111
-      - test-llvm8-go112
-      - test-llvm8-go113
+      - test-llvm9-go111
+      - test-llvm9-go112
+      - test-llvm9-go113
       - build-linux
       - build-macos
       - assert-test-linux
