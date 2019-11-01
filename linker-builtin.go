@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"sync"
 	"unsafe"
 
 	"github.com/tinygo-org/tinygo/goenv"
@@ -21,10 +22,15 @@ bool tinygo_link_wasm(int argc, char **argv);
 */
 import "C"
 
+// I don't think that LLD is thread-safe.
+var linkerLock sync.Mutex
+
 // Link invokes a linker with the given name and flags.
 //
 // This version uses the built-in linker when trying to use lld.
 func Link(linker string, flags ...string) error {
+	linkerLock.Lock()
+	defer linkerLock.Unlock()
 	switch linker {
 	case "ld.lld":
 		flags = append([]string{"tinygo:" + linker}, flags...)

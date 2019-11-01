@@ -10,6 +10,8 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+var globalCtx = llvm.GlobalContext()
+
 func (c *Compiler) checkType(t llvm.Type, checked map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) error {
 	// prevent infinite recursion for self-referential types
 	if _, ok := checked[t]; ok {
