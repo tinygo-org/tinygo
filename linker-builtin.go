@@ -5,11 +5,11 @@ package main
 // This file provides a Link() function that uses the bundled lld if possible.
 
 import (
-	"errors"
+	//"errors"
 	"os"
 	"os/exec"
 	"sync"
-	"unsafe"
+	//"unsafe"
 
 	"github.com/tinygo-org/tinygo/goenv"
 )
@@ -29,7 +29,7 @@ var linkerLock sync.Mutex
 //
 // This version uses the built-in linker when trying to use lld.
 func Link(linker string, flags ...string) error {
-	linkerLock.Lock()
+	/*linkerLock.Lock()
 	defer linkerLock.Unlock()
 	switch linker {
 	case "ld.lld":
@@ -63,15 +63,15 @@ func Link(linker string, flags ...string) error {
 			return errors.New("failed to link using built-in wasm-ld")
 		}
 		return nil
-	default:
-		// Fall back to external command.
-		if cmdNames, ok := commands[linker]; ok {
-			return execCommand(cmdNames, flags...)
-		}
-		cmd := exec.Command(linker, flags...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Dir = goenv.Get("TINYGOROOT")
-		return cmd.Run()
+	default:*/
+	// Fall back to external command.
+	if cmdNames, ok := commands[linker]; ok {
+		return execCommand(cmdNames, flags...)
 	}
+	cmd := exec.Command(linker, flags...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Dir = goenv.Get("TINYGOROOT")
+	return cmd.Run()
+	//}
 }
