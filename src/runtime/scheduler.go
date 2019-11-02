@@ -32,10 +32,9 @@ type taskState struct {
 // TODO: runqueueFront can be removed by making the run queue a circular linked
 // list. The runqueueBack will simply refer to the front in the 'next' pointer.
 var (
-	runqueueFront      *task
-	runqueueBack       *task
-	sleepQueue         *task
-	sleepQueueBaseTime timeUnit
+	runqueueFront *task
+	runqueueBack  *task
+	nextTasks     *task
 )
 
 // variable set to true after main returns, to indicate that the scheduler should exit
@@ -190,46 +189,9 @@ func runqueuePopFront() *task {
 	return t
 }
 
-// Add this task to the sleep queue, assuming its state is set to sleeping.
-func addSleepTask(t *task, duration int64) {
-	if schedulerDebug {
-		println("  set sleep:", t, uint(duration/tickMicros))
-		if t.state().next != nil {
-			panic("runtime: addSleepTask: expected next task to be nil")
-		}
-	}
-	t.state().data = uint(duration / tickMicros) // TODO: longer durations
-	now := ticks()
-	if sleepQueue == nil {
-		scheduleLog("  -> sleep new queue")
-
-		// set new base time
-		sleepQueueBaseTime = now
-	}
-
-	// Add to sleep queue.
-	q := &sleepQueue
-	for ; *q != nil; q = &((*q).state()).next {
-		if t.state().data < (*q).state().data {
-			// this will finish earlier than the next - insert here
-			break
-		} else {
-			// this will finish later - adjust delay
-			t.state().data -= (*q).state().data
-		}
-	}
-	if *q != nil {
-		// cut delay time between this sleep task and the next
-		(*q).state().data -= t.state().data
-	}
-	t.state().next = *q
-	*q = t
-}
-
 // Run the scheduler until all tasks have finished.
 func scheduler() {
 	// Main scheduler loop.
-	var now timeUnit
 	for {
 		if schedulerDone {
 			scheduleLog("  done")
@@ -238,57 +200,42 @@ func scheduler() {
 
 		scheduleLog("")
 		scheduleLog("  schedule")
-		if sleepQueue != nil {
-			now = ticks()
+
+		// run active tasks
+		for nextTasks != nil {
+			t := nextTasks
+			nextTasks, t.state().next = t.state().next, nil
+			scheduleLogTask("  run:", t)
+			t.resume()
 		}
 
-		// Add tasks that are done sleeping to the end of the runqueue so they
-		// will be executed soon.
-		if sleepQueue != nil && now-sleepQueueBaseTime >= timeUnit(sleepQueue.state().data) {
-			t := sleepQueue
-			scheduleLogTask("  awake:", t)
-			state := t.state()
-			sleepQueueBaseTime += timeUnit(state.data)
-			sleepQueue = state.next
-			state.next = nil
+		// check for events
+		evs := poll()
+		for evs != nil {
+			t := evs
+			evs = t.state().next
+			t.state().next = nil
+			scheduleLogTask("  resumed by event:", t)
 			runqueuePushBack(t)
 		}
 
-		t := runqueuePopFront()
-		if t == nil {
-			if sleepQueue == nil {
-				// No more tasks to execute.
-				// It would be nice if we could detect deadlocks here, because
-				// there might still be functions waiting on each other in a
-				// deadlock.
-				// Due to interrupts, we may actually not be done - so we need to sleep.
-				scheduleLog("  no tasks left!")
-				sleepTicks(0)
-				if asyncScheduler {
-					break
-				}
-				continue
-			}
-			timeLeft := timeUnit(sleepQueue.state().data) - (now - sleepQueueBaseTime)
-			if schedulerDebug {
-				println("  sleeping...", sleepQueue, uint(timeLeft))
-				for t := sleepQueue; t != nil; t = t.state().next {
-					println("    task sleeping:", t, timeUnit(t.state().data))
-				}
-			}
-			sleepTicks(timeLeft)
-			if asyncScheduler {
-				// The sleepTicks function above only sets a timeout at which
-				// point the scheduler will be called again. It does not really
-				// sleep.
-				break
-			}
-			continue
+		// copy runqueue to nextTasks
+		nextTasks = runqueueFront
+		runqueueFront, runqueueBack = nil, nil
+
+		if schedulerDone {
+			// main returned, immediately exit
+			scheduleLog("  done")
+			return
 		}
 
-		// Run the given task.
-		scheduleLogTask("  run:", t)
-		t.resume()
+		if nextTasks == nil {
+			// wait for something to do
+			wait()
+			if asyncScheduler {
+				return
+			}
+		}
 	}
 }
 
