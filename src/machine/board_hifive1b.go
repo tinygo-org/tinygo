@@ -14,8 +14,8 @@ const (
 	D8  = NoPin // PWM?
 	D9  = P01
 	D10 = P02   // SPI1_CS0
-	D11 = P03   // SPI1_DQ0
-	D12 = P04   // SPI1_DQ1
+	D11 = P03   // SPI1_DQ0 (MOSI)
+	D12 = P04   // SPI1_DQ1 (MISO)
 	D13 = P05   // SPI1_SCK
 	D14 = NoPin // not connected
 	D15 = P09   // does not seem to work?

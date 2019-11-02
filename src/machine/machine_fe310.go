@@ -12,7 +12,9 @@ type PinMode uint8
 
 const (
 	PinInput PinMode = iota
+	PinInputPullup
 	PinOutput
+	PinOutputInvert
 	PinPWM
 	PinSPI
 	PinI2C = PinSPI
@@ -20,10 +22,17 @@ const (
 
 // Configure this pin with the given configuration.
 func (p Pin) Configure(config PinConfig) {
-	sifive.GPIO0.INPUT_EN.SetBits(1 << uint8(p))
 	switch config.Mode {
+	case PinInput:
+		sifive.GPIO0.INPUT_EN.SetBits(1 << uint8(p))
+	case PinInputPullup:
+		sifive.GPIO0.INPUT_EN.SetBits(1 << uint8(p))
+		sifive.GPIO0.PULLUP.SetBits(1 << uint8(p))
 	case PinOutput:
 		sifive.GPIO0.OUTPUT_EN.SetBits(1 << uint8(p))
+	case PinOutputInvert:
+		sifive.GPIO0.OUTPUT_EN.SetBits(1 << uint8(p))
+		sifive.GPIO0.OUT_XOR.SetBits(1 << uint8(p))
 	case PinPWM:
 		sifive.GPIO0.IOF_EN.SetBits(1 << uint8(p))
 		sifive.GPIO0.IOF_SEL.SetBits(1 << uint8(p))
@@ -45,7 +54,6 @@ func (p Pin) Set(high bool) {
 // Get returns the current value of a GPIO pin.
 func (p Pin) Get() bool {
 	val := sifive.GPIO0.VALUE.Get() & (1 << uint8(p))
-	println(sifive.GPIO0.VALUE.Get())
 	return (val > 0)
 }
 
@@ -92,10 +100,13 @@ type SPIConfig struct {
 func (spi SPI) Configure(config SPIConfig) error {
 	// Use default pins if not set.
 	if config.SCK == 0 && config.MOSI == 0 && config.MISO == 0 {
-		config.SCK = SPI0_SCK_PIN
-		config.MOSI = SPI0_MOSI_PIN
-		config.MISO = SPI0_MISO_PIN
+		config.SCK = SPI1_SCK_PIN
+		config.MOSI = SPI1_MOSI_PIN
+		config.MISO = SPI1_MISO_PIN
 	}
+
+	// disable SPI Flash DMA mapping
+	spi.Bus.FCTRL.Set(0)
 
 	// enable pins for SPI
 	config.SCK.Configure(PinConfig{Mode: PinSPI})
@@ -135,12 +146,18 @@ func (spi SPI) Configure(config SPIConfig) error {
 	// Set single line operation, by clearing all bits
 	spi.Bus.FMT.ClearBits(sifive.QSPI_FMT_PROTOCOL_Msk)
 
+	// Set direction
+	spi.Bus.FMT.ClearBits(sifive.QSPI_FMT_DIRECTION_Msk)
+
 	// set bit transfer order
 	if config.LSBFirst {
 		spi.Bus.FMT.SetBits(sifive.QSPI_FMT_ENDIAN)
 	} else {
 		spi.Bus.FMT.ClearBits(sifive.QSPI_FMT_ENDIAN)
 	}
+
+	// disable auto-CS
+	spi.Bus.CSMODE.SetBits(3)
 
 	return nil
 }
@@ -155,9 +172,16 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	spi.Bus.TXDATA.Set(uint32(w))
 
 	// wait until receive has data
-	for spi.Bus.RXDATA.HasBits(sifive.QSPI_RXDATA_EMPTY) {
+	var val uint32
+	for {
+		val = spi.Bus.RXDATA.Get()
+		if val&sifive.QSPI_RXDATA_EMPTY > 0 {
+			continue
+		} else {
+			// we've got data now
+			break
+		}
 	}
 
-	// return data
-	return byte(spi.Bus.RXDATA.Get() & sifive.QSPI_RXDATA_DATA_Msk), nil
+	return byte(val), nil
 }
