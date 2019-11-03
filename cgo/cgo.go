@@ -343,18 +343,18 @@ func (p *cgoPackage) addFuncPtrDecls() {
 	if len(p.functions) == 0 {
 		return
 	}
-	gen := &ast.GenDecl{
-		TokPos: token.NoPos,
-		Tok:    token.VAR,
-		Lparen: token.NoPos,
-		Rparen: token.NoPos,
-	}
 	names := make([]string, 0, len(p.functions))
 	for name := range p.functions {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		gen := &ast.GenDecl{
+			TokPos: token.NoPos,
+			Tok:    token.VAR,
+			Lparen: token.NoPos,
+			Rparen: token.NoPos,
+		}
 		fn := p.functions[name]
 		obj := &ast.Object{
 			Kind: ast.Typ,
@@ -379,27 +379,19 @@ func (p *cgoPackage) addFuncPtrDecls() {
 		}
 		obj.Decl = valueSpec
 		gen.Specs = append(gen.Specs, valueSpec)
+		p.generated.Decls = append(p.generated.Decls, gen)
 	}
-	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
 // addConstDecls declares external C constants in the Go source.
 // It adds code like the following to the AST:
 //
-//     const (
-//         C.CONST_INT = 5
-//         C.CONST_FLOAT = 5.8
-//         // ...
-//     )
+//     const C.CONST_INT = 5
+//     const C.CONST_FLOAT = 5.8
+//     // ...
 func (p *cgoPackage) addConstDecls() {
 	if len(p.constants) == 0 {
 		return
-	}
-	gen := &ast.GenDecl{
-		TokPos: token.NoPos,
-		Tok:    token.CONST,
-		Lparen: token.NoPos,
-		Rparen: token.NoPos,
 	}
 	names := make([]string, 0, len(p.constants))
 	for name := range p.constants {
@@ -407,6 +399,12 @@ func (p *cgoPackage) addConstDecls() {
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		gen := &ast.GenDecl{
+			TokPos: token.NoPos,
+			Tok:    token.CONST,
+			Lparen: token.NoPos,
+			Rparen: token.NoPos,
+		}
 		constVal := p.constants[name]
 		obj := &ast.Object{
 			Kind: ast.Con,
@@ -422,27 +420,19 @@ func (p *cgoPackage) addConstDecls() {
 		}
 		obj.Decl = valueSpec
 		gen.Specs = append(gen.Specs, valueSpec)
+		p.generated.Decls = append(p.generated.Decls, gen)
 	}
-	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
 // addVarDecls declares external C globals in the Go source.
 // It adds code like the following to the AST:
 //
-//     var (
-//         C.globalInt  int
-//         C.globalBool bool
-//         // ...
-//     )
+//     var C.globalInt  int
+//     var C.globalBool bool
+//     // ...
 func (p *cgoPackage) addVarDecls() {
 	if len(p.globals) == 0 {
 		return
-	}
-	gen := &ast.GenDecl{
-		TokPos: token.NoPos,
-		Tok:    token.VAR,
-		Lparen: token.NoPos,
-		Rparen: token.NoPos,
 	}
 	names := make([]string, 0, len(p.globals))
 	for name := range p.globals {
@@ -450,6 +440,12 @@ func (p *cgoPackage) addVarDecls() {
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		gen := &ast.GenDecl{
+			TokPos: token.NoPos,
+			Tok:    token.VAR,
+			Lparen: token.NoPos,
+			Rparen: token.NoPos,
+		}
 		global := p.globals[name]
 		obj := &ast.Object{
 			Kind: ast.Var,
@@ -465,31 +461,29 @@ func (p *cgoPackage) addVarDecls() {
 		}
 		obj.Decl = valueSpec
 		gen.Specs = append(gen.Specs, valueSpec)
+		p.generated.Decls = append(p.generated.Decls, gen)
 	}
-	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
 // addTypeAliases aliases some built-in Go types with their equivalent C types.
 // It adds code like the following to the AST:
 //
-//     type (
-//         C.int8_t  = int8
-//         C.int16_t = int16
-//         // ...
-//     )
+//     type C.int8_t  = int8
+//     type C.int16_t = int16
+//     // ...
 func (p *cgoPackage) addTypeAliases() {
 	aliasKeys := make([]string, 0, len(cgoAliases))
 	for key := range cgoAliases {
 		aliasKeys = append(aliasKeys, key)
 	}
 	sort.Strings(aliasKeys)
-	gen := &ast.GenDecl{
-		TokPos: token.NoPos,
-		Tok:    token.TYPE,
-		Lparen: token.NoPos,
-		Rparen: token.NoPos,
-	}
 	for _, typeName := range aliasKeys {
+		gen := &ast.GenDecl{
+			TokPos: token.NoPos,
+			Tok:    token.TYPE,
+			Lparen: token.NoPos,
+			Rparen: token.NoPos,
+		}
 		goTypeName := cgoAliases[typeName]
 		obj := &ast.Object{
 			Kind: ast.Typ,
@@ -509,17 +503,13 @@ func (p *cgoPackage) addTypeAliases() {
 		}
 		obj.Decl = typeSpec
 		gen.Specs = append(gen.Specs, typeSpec)
+		p.generated.Decls = append(p.generated.Decls, gen)
 	}
-	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
 func (p *cgoPackage) addTypedefs() {
 	if len(p.typedefs) == 0 {
 		return
-	}
-	gen := &ast.GenDecl{
-		TokPos: token.NoPos,
-		Tok:    token.TYPE,
 	}
 	names := make([]string, 0, len(p.typedefs))
 	for name := range p.typedefs {
@@ -527,6 +517,10 @@ func (p *cgoPackage) addTypedefs() {
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		gen := &ast.GenDecl{
+			TokPos: token.NoPos,
+			Tok:    token.TYPE,
+		}
 		typedef := p.typedefs[name]
 		typeName := "C." + name
 		isAlias := true
@@ -555,8 +549,8 @@ func (p *cgoPackage) addTypedefs() {
 		}
 		obj.Decl = typeSpec
 		gen.Specs = append(gen.Specs, typeSpec)
+		p.generated.Decls = append(p.generated.Decls, gen)
 	}
-	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
 // addElaboratedTypes adds C elaborated types as aliases. These are the "struct
@@ -568,16 +562,16 @@ func (p *cgoPackage) addElaboratedTypes() {
 	if len(p.elaboratedTypes) == 0 {
 		return
 	}
-	gen := &ast.GenDecl{
-		TokPos: token.NoPos,
-		Tok:    token.TYPE,
-	}
 	names := make([]string, 0, len(p.elaboratedTypes))
 	for name := range p.elaboratedTypes {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		gen := &ast.GenDecl{
+			TokPos: token.NoPos,
+			Tok:    token.TYPE,
+		}
 		typ := p.elaboratedTypes[name]
 		typeName := "C." + name
 		obj := &ast.Object{
@@ -599,8 +593,8 @@ func (p *cgoPackage) addElaboratedTypes() {
 			p.createBitfieldGetter(bitfield, typeName)
 			p.createBitfieldSetter(bitfield, typeName)
 		}
+		p.generated.Decls = append(p.generated.Decls, gen)
 	}
-	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
 // createBitfieldGetter creates a bitfield getter function like the following:
@@ -905,16 +899,16 @@ func (p *cgoPackage) addEnumTypes() {
 	if len(p.enums) == 0 {
 		return
 	}
-	gen := &ast.GenDecl{
-		TokPos: token.NoPos,
-		Tok:    token.TYPE,
-	}
 	names := make([]string, 0, len(p.enums))
 	for name := range p.enums {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		gen := &ast.GenDecl{
+			TokPos: token.NoPos,
+			Tok:    token.TYPE,
+		}
 		typ := p.enums[name]
 		typeName := "C.enum_" + name
 		obj := &ast.Object{
@@ -931,8 +925,8 @@ func (p *cgoPackage) addEnumTypes() {
 		}
 		obj.Decl = typeSpec
 		gen.Specs = append(gen.Specs, typeSpec)
+		p.generated.Decls = append(p.generated.Decls, gen)
 	}
-	p.generated.Decls = append(p.generated.Decls, gen)
 }
 
 // findMissingCGoNames traverses the AST and finds all C.something names. Only
