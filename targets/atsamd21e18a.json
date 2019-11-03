@@ -6,9 +6,7 @@
 		"--target=armv6m-none-eabi",
 		"-Qunused-arguments"
 	],
-	"ldflags": [
-		"-T", "targets/atsamd21.ld"
-	],
+	"linkerscript": "targets/atsamd21.ld",
 	"extra-files": [
 		"src/device/sam/atsamd21e18a.s"
 	]

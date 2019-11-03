@@ -9,9 +9,7 @@
 		"-DNRF52832_XXAA",
 		"-I{root}/lib/CMSIS/CMSIS/Include"
 	],
-	"ldflags": [
-		"-T", "targets/nrf52.ld"
-	],
+	"linkerscript": "targets/nrf52.ld",
 	"extra-files": [
 		"lib/nrfx/mdk/system_nrf52.c",
 		"src/device/nrf/nrf52.s"
