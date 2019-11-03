@@ -15,7 +15,7 @@ import (
 func TestCGo(t *testing.T) {
 	var cflags = []string{"--target=armv6m-none-eabi"}
 
-	for _, name := range []string{"basic"} {
+	for _, name := range []string{"basic", "types"} {
 		name := name // avoid a race condition
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
