@@ -122,6 +122,9 @@ func (c *Config) LDFlags() []string {
 		heapSize := (c.Options.HeapSize + (65536 - 1)) &^ (65536 - 1)
 		ldflags = append(ldflags, "--initial-memory="+strconv.FormatInt(heapSize, 10))
 	}
+	if c.Target.LinkerScript != "" {
+		ldflags = append(ldflags, "-T", c.Target.LinkerScript)
+	}
 	return ldflags
 }
 

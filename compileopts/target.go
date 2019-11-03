@@ -36,6 +36,7 @@ type TargetSpec struct {
 	RTLib            string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
 	CFlags           []string `json:"cflags"`
 	LDFlags          []string `json:"ldflags"`
+	LinkerScript     string   `json:"linkerscript"`
 	ExtraFiles       []string `json:"extra-files"`
 	Emulator         []string `json:"emulator"`
 	FlashCommand     string   `json:"flash-command"`
@@ -85,6 +86,9 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	spec.CFlags = append(spec.CFlags, spec2.CFlags...)
 	spec.LDFlags = append(spec.LDFlags, spec2.LDFlags...)
+	if spec2.LinkerScript != "" {
+		spec.LinkerScript = spec2.LinkerScript
+	}
 	spec.ExtraFiles = append(spec.ExtraFiles, spec2.ExtraFiles...)
 	if len(spec2.Emulator) != 0 {
 		spec.Emulator = spec2.Emulator

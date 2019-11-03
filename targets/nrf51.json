@@ -8,9 +8,7 @@
 		"-DNRF51",
 		"-I{root}/lib/CMSIS/CMSIS/Include"
 	],
-	"ldflags": [
-		"-T", "targets/nrf51.ld"
-	],
+	"linkerscript": "targets/nrf51.ld",
 	"extra-files": [
 		"lib/nrfx/mdk/system_nrf51.c",
 		"src/device/nrf/nrf51.s"
