@@ -187,24 +187,12 @@ func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, options *com
 			}
 		}
 
-		// Merge and adjust LDFlags.
-		ldflags := append([]string{}, options.LDFlags...)
-		for _, flag := range spec.LDFlags {
-			ldflags = append(ldflags, strings.Replace(flag, "{root}", root, -1))
-		}
-
 		// Prepare link command.
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
-		ldflags = append(ldflags, "-o", executable, objfile, "-L", root)
+		ldflags := append(compilerConfig.LDFlags(), "-o", executable, objfile)
 		if spec.RTLib == "compiler-rt" {
 			ldflags = append(ldflags, librt)
-		}
-		if spec.GOARCH == "wasm" {
-			// Round heap size to next multiple of 65536 (the WebAssembly page
-			// size).
-			heapSize := (options.HeapSize + (65536 - 1)) &^ (65536 - 1)
-			ldflags = append(ldflags, "--initial-memory="+strconv.FormatInt(heapSize, 10))
 		}
 
 		// Compile extra files.

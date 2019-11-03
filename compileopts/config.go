@@ -4,6 +4,7 @@ package compileopts
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/goenv"
@@ -102,6 +103,26 @@ func (c *Config) CFlags() []string {
 		cflags = append(cflags, strings.Replace(flag, "{root}", goenv.Get("TINYGOROOT"), -1))
 	}
 	return cflags
+}
+
+// LDFlags returns the flags to pass to the linker. A few more flags are needed
+// (like the one for the compiler runtime), but this represents the majority of
+// the flags.
+func (c *Config) LDFlags() []string {
+	root := goenv.Get("TINYGOROOT")
+	// Merge and adjust LDFlags.
+	ldflags := append([]string{}, c.Options.LDFlags...)
+	for _, flag := range c.Target.LDFlags {
+		ldflags = append(ldflags, strings.Replace(flag, "{root}", root, -1))
+	}
+	ldflags = append(ldflags, "-L", root)
+	if c.Target.GOARCH == "wasm" {
+		// Round heap size to next multiple of 65536 (the WebAssembly page
+		// size).
+		heapSize := (c.Options.HeapSize + (65536 - 1)) &^ (65536 - 1)
+		ldflags = append(ldflags, "--initial-memory="+strconv.FormatInt(heapSize, 10))
+	}
+	return ldflags
 }
 
 // DumpSSA returns whether to dump Go SSA while compiling (-dumpssa flag). Only
