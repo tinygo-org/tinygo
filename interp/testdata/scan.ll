@@ -47,6 +47,12 @@ define i64 @readDirtyGlobal() {
 
 declare i64* @getDirtyPointer()
 
+define void @storeToPointer() {
+  %ptr = call i64* @getDirtyPointer()
+  store i64 3, i64* %ptr
+  ret void
+}
+
 @functionPointer = global i64()* null
 define i64 @callFunctionPointer() {
   %fp = load i64()*, i64()** @functionPointer

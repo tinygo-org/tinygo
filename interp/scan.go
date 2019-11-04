@@ -193,10 +193,13 @@ func (e *Eval) hasLocalSideEffects(dirtyLocals map[llvm.Value]struct{}, inst llv
 				// Already handled in (*Eval).hasSideEffects.
 				continue
 			}
-			// But a store might also store to an alloca, in which case all uses
-			// of the alloca (possibly indirect through a GEP, bitcast, etc.)
-			// must be marked dirty.
-			panic("todo: store")
+			// This store might affect all kinds of values. While it is
+			// certainly possible to traverse through all of them, the easiest
+			// option right now is to just assume the worst and say that this
+			// function has side effects.
+			// TODO: traverse through all stores and mark all relevant allocas /
+			// globals dirty.
+			return true
 		default:
 			// All instructions that take 0 or more operands (1 or more if it
 			// was a use) and produce a result.
