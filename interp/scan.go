@@ -57,6 +57,9 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 	case "llvm.dbg.value":
 		return &sideEffectResult{severity: sideEffectNone}
 	}
+	if fn.IsDeclaration() {
+		return &sideEffectResult{severity: sideEffectLimited}
+	}
 	if e.sideEffectFuncs == nil {
 		e.sideEffectFuncs = make(map[llvm.Value]*sideEffectResult)
 	}
