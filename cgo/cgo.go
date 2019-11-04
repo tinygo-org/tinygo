@@ -42,7 +42,7 @@ type cgoPackage struct {
 // constantInfo stores some information about a CGo constant found by libclang
 // and declared in the Go AST.
 type constantInfo struct {
-	expr *ast.BasicLit
+	expr ast.Expr
 	pos  token.Pos
 }
 

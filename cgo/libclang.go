@@ -245,9 +245,12 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 			p.addError(pos, fmt.Sprintf("internal error: expected macro value to start with %#v, got %#v", name, source))
 			break
 		}
-		value := strings.TrimSpace(source[len(name):])
+		value := source[len(name):]
 		// Try to convert this #define into a Go constant expression.
-		expr := parseConst(pos, value)
+		expr, err := parseConst(pos+token.Pos(len(name)), p.fset, value)
+		if err != nil {
+			p.errors = append(p.errors, err)
+		}
 		if expr != nil {
 			// Parsing was successful.
 			p.constants[name] = constantInfo{expr, pos}

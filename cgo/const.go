@@ -4,56 +4,191 @@ package cgo
 // parse common #define statements to Go constant expressions.
 
 import (
+	"fmt"
 	"go/ast"
+	"go/scanner"
 	"go/token"
 	"strings"
 )
 
 // parseConst parses the given string as a C constant.
-func parseConst(pos token.Pos, value string) *ast.BasicLit {
-	for len(value) != 0 && value[0] == '(' && value[len(value)-1] == ')' {
-		value = strings.TrimSpace(value[1 : len(value)-1])
-	}
-	if len(value) == 0 {
-		// Pretend it doesn't exist at all.
-		return nil
-	}
-	// For information about integer literals:
-	// https://en.cppreference.com/w/cpp/language/integer_literal
-	if value[0] == '"' {
-		// string constant
-		return &ast.BasicLit{ValuePos: pos, Kind: token.STRING, Value: value}
-	}
-	if value[0] == '\'' {
-		// char constant
-		return &ast.BasicLit{ValuePos: pos, Kind: token.CHAR, Value: value}
-	}
-	// assume it's a number (int or float)
-	value = strings.Replace(value, "'", "", -1) // remove ' chars
-	value = strings.TrimRight(value, "lu")      // remove llu suffixes etc.
-	// find the first non-number
-	nonnum := byte(0)
-	for i := 0; i < len(value); i++ {
-		if value[i] < '0' || value[i] > '9' {
-			nonnum = value[i]
-			break
+func parseConst(pos token.Pos, fset *token.FileSet, value string) (ast.Expr, *scanner.Error) {
+	t := newTokenizer(pos, fset, value)
+	expr, err := parseConstExpr(t)
+	if t.token != token.EOF {
+		return nil, &scanner.Error{
+			Pos: t.fset.Position(t.pos),
+			Msg: "unexpected token " + t.token.String(),
 		}
 	}
-	// determine number type based on the first non-number
-	switch nonnum {
-	case 0:
-		// no non-number found, must be an integer
-		return &ast.BasicLit{ValuePos: pos, Kind: token.INT, Value: value}
-	case 'x', 'X':
-		// hex integer constant
-		// TODO: may also be a floating point number per C++17.
-		return &ast.BasicLit{ValuePos: pos, Kind: token.INT, Value: value}
-	case '.', 'e':
-		// float constant
-		value = strings.TrimRight(value, "fFlL")
-		return &ast.BasicLit{ValuePos: pos, Kind: token.FLOAT, Value: value}
+	return expr, err
+}
+
+// parseConstExpr parses a stream of C tokens to a Go expression.
+func parseConstExpr(t *tokenizer) (ast.Expr, *scanner.Error) {
+	switch t.token {
+	case token.LPAREN:
+		lparen := t.pos
+		t.Next()
+		x, err := parseConstExpr(t)
+		if err != nil {
+			return nil, err
+		}
+		if t.token != token.RPAREN {
+			return nil, unexpectedToken(t, token.RPAREN)
+		}
+		expr := &ast.ParenExpr{
+			Lparen: lparen,
+			X:      x,
+			Rparen: t.pos,
+		}
+		t.Next()
+		return expr, nil
+	case token.INT, token.FLOAT, token.STRING, token.CHAR:
+		expr := &ast.BasicLit{
+			ValuePos: t.pos,
+			Kind:     t.token,
+			Value:    t.value,
+		}
+		t.Next()
+		return expr, nil
+	case token.EOF:
+		return nil, &scanner.Error{
+			Pos: t.fset.Position(t.pos),
+			Msg: "empty constant",
+		}
 	default:
-		// unknown type, ignore
+		return nil, &scanner.Error{
+			Pos: t.fset.Position(t.pos),
+			Msg: fmt.Sprintf("unexpected token %s", t.token),
+		}
 	}
-	return nil
+}
+
+// unexpectedToken returns an error of the form "unexpected token FOO, expected
+// BAR".
+func unexpectedToken(t *tokenizer, expected token.Token) *scanner.Error {
+	return &scanner.Error{
+		Pos: t.fset.Position(t.pos),
+		Msg: fmt.Sprintf("unexpected token %s, expected %s", t.token, expected),
+	}
+}
+
+// tokenizer reads C source code and converts it to Go tokens.
+type tokenizer struct {
+	pos   token.Pos
+	fset  *token.FileSet
+	token token.Token
+	value string
+	buf   string
+}
+
+// newTokenizer initializes a new tokenizer, positioned at the first token in
+// the string.
+func newTokenizer(start token.Pos, fset *token.FileSet, buf string) *tokenizer {
+	t := &tokenizer{
+		pos:   start,
+		fset:  fset,
+		buf:   buf,
+		token: token.ILLEGAL,
+	}
+	t.Next() // Parse the first token.
+	return t
+}
+
+// Next consumes the next token in the stream. There is no return value, read
+// the next token from the pos, token and value properties.
+func (t *tokenizer) Next() {
+	t.pos += token.Pos(len(t.value))
+	for {
+		if len(t.buf) == 0 {
+			t.token = token.EOF
+			return
+		}
+		c := t.buf[0]
+		switch {
+		case c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v':
+			// Skip whitespace.
+			// Based on this source, not sure whether it represents C whitespace:
+			// https://en.cppreference.com/w/cpp/string/byte/isspace
+			t.pos++
+			t.buf = t.buf[1:]
+		case c == '(' || c == ')':
+			// Single-character tokens.
+			switch c {
+			case '(':
+				t.token = token.LPAREN
+			case ')':
+				t.token = token.RPAREN
+			}
+			t.value = t.buf[:1]
+			t.buf = t.buf[1:]
+			return
+		case c >= '0' && c <= '9':
+			// Numeric constant (int, float, etc.).
+			// Find the last non-numeric character.
+			tokenLen := len(t.buf)
+			hasDot := false
+			for i, c := range t.buf {
+				if c == '.' {
+					hasDot = true
+				}
+				if (c >= '0' && c <= '9') || c == '.' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+					tokenLen = i + 1
+				}
+			}
+			t.value = t.buf[:tokenLen]
+			t.buf = t.buf[tokenLen:]
+			if hasDot {
+				// Integer constants are more complicated than this but this is
+				// a close approximation.
+				// https://en.cppreference.com/w/cpp/language/integer_literal
+				t.token = token.FLOAT
+				t.value = strings.TrimRight(t.value, "f")
+			} else {
+				t.token = token.INT
+				t.value = strings.TrimRight(t.value, "uUlL")
+			}
+			return
+		case c == '"':
+			// String constant. Find the first '"' character that is not
+			// preceded by a backslash.
+			escape := false
+			tokenLen := len(t.buf)
+			for i, c := range t.buf {
+				if i != 0 && c == '"' && !escape {
+					tokenLen = i + 1
+					break
+				}
+				if !escape {
+					escape = c == '\\'
+				}
+			}
+			t.token = token.STRING
+			t.value = t.buf[:tokenLen]
+			t.buf = t.buf[tokenLen:]
+			return
+		case c == '\'':
+			// Char (rune) constant. Find the first '\'' character that is not
+			// preceded by a backslash.
+			escape := false
+			tokenLen := len(t.buf)
+			for i, c := range t.buf {
+				if i != 0 && c == '\'' && !escape {
+					tokenLen = i + 1
+					break
+				}
+				if !escape {
+					escape = c == '\\'
+				}
+			}
+			t.token = token.CHAR
+			t.value = t.buf[:tokenLen]
+			t.buf = t.buf[tokenLen:]
+			return
+		default:
+			t.token = token.ILLEGAL
+			return
+		}
+	}
 }
