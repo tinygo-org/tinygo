@@ -21,6 +21,7 @@ var scanTestTable = []struct {
 	{"readCleanGlobal", sideEffectNone, []string{"cleanGlobalInt"}},
 	{"readDirtyGlobal", sideEffectLimited, []string{"dirtyGlobalInt"}},
 	{"callFunctionPointer", sideEffectAll, []string{"functionPointer"}},
+	{"getDirtyPointer", sideEffectLimited, nil},
 }
 
 func TestScan(t *testing.T) {
