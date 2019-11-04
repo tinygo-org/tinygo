@@ -246,51 +246,11 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 			break
 		}
 		value := strings.TrimSpace(source[len(name):])
-		for len(value) != 0 && value[0] == '(' && value[len(value)-1] == ')' {
-			value = strings.TrimSpace(value[1 : len(value)-1])
-		}
-		if len(value) == 0 {
-			// Pretend it doesn't exist at all.
-			return C.CXChildVisit_Continue
-		}
-		// For information about integer literals:
-		// https://en.cppreference.com/w/cpp/language/integer_literal
-		if value[0] == '"' {
-			// string constant
-			p.constants[name] = constantInfo{&ast.BasicLit{pos, token.STRING, value}, pos}
-			return C.CXChildVisit_Continue
-		}
-		if value[0] == '\'' {
-			// char constant
-			p.constants[name] = constantInfo{&ast.BasicLit{pos, token.CHAR, value}, pos}
-			return C.CXChildVisit_Continue
-		}
-		// assume it's a number (int or float)
-		value = strings.Replace(value, "'", "", -1) // remove ' chars
-		value = strings.TrimRight(value, "lu")      // remove llu suffixes etc.
-		// find the first non-number
-		nonnum := byte(0)
-		for i := 0; i < len(value); i++ {
-			if value[i] < '0' || value[i] > '9' {
-				nonnum = value[i]
-				break
-			}
-		}
-		// determine number type based on the first non-number
-		switch nonnum {
-		case 0:
-			// no non-number found, must be an integer
-			p.constants[name] = constantInfo{&ast.BasicLit{pos, token.INT, value}, pos}
-		case 'x', 'X':
-			// hex integer constant
-			// TODO: may also be a floating point number per C++17.
-			p.constants[name] = constantInfo{&ast.BasicLit{pos, token.INT, value}, pos}
-		case '.', 'e':
-			// float constant
-			value = strings.TrimRight(value, "fFlL")
-			p.constants[name] = constantInfo{&ast.BasicLit{pos, token.FLOAT, value}, pos}
-		default:
-			// unknown type, ignore
+		// Try to convert this #define into a Go constant expression.
+		expr := parseConst(pos, value)
+		if expr != nil {
+			// Parsing was successful.
+			p.constants[name] = constantInfo{expr, pos}
 		}
 	}
 	return C.CXChildVisit_Continue
