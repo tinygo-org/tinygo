@@ -39,67 +39,59 @@ func TestCompiler(t *testing.T) {
 
 	sort.Strings(matches)
 
-	// Create a temporary directory for test output files.
-	tmpdir, err := ioutil.TempDir("", "tinygo-test")
-	if err != nil {
-		t.Fatal("could not create temporary directory:", err)
-	}
-	defer os.RemoveAll(tmpdir)
-
 	if runtime.GOOS != "windows" {
-		t.Log("running tests on host...")
-		for _, path := range matches {
-			t.Run(path, func(t *testing.T) {
-				runTest(path, tmpdir, "", t)
-			})
-		}
+		t.Run("Host", func(t *testing.T) {
+			runPlatTests("", matches, t)
+		})
 	}
 
 	if testing.Short() {
 		return
 	}
 
-	t.Log("running tests for emulated cortex-m3...")
-	for _, path := range matches {
-		t.Run(path, func(t *testing.T) {
-			runTest(path, tmpdir, "qemu", t)
-		})
-	}
+	t.Run("EmulatedCortexM3", func(t *testing.T) {
+		runPlatTests("qemu", matches, t)
+	})
 
 	if runtime.GOOS == "linux" {
-		t.Log("running tests for linux/arm...")
-		for _, path := range matches {
-			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
-				continue // TODO: improve CGo
-			}
-			t.Run(path, func(t *testing.T) {
-				runTest(path, tmpdir, "arm--linux-gnueabihf", t)
-			})
-		}
-
-		t.Log("running tests for linux/arm64...")
-		for _, path := range matches {
-			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
-				continue // TODO: improve CGo
-			}
-			t.Run(path, func(t *testing.T) {
-				runTest(path, tmpdir, "aarch64--linux-gnu", t)
-			})
-		}
-
-		t.Log("running tests for WebAssembly...")
-		for _, path := range matches {
-			if path == filepath.Join("testdata", "gc.go") {
-				continue // known to fail
-			}
-			t.Run(path, func(t *testing.T) {
-				runTest(path, tmpdir, "wasm", t)
-			})
-		}
+		t.Run("ARMLinux", func(t *testing.T) {
+			runPlatTests("arm--linux-gnueabihf", matches, t)
+		})
+		t.Run("ARM64Linux", func(t *testing.T) {
+			runPlatTests("aarch64--linux-gnu", matches, t)
+		})
+		t.Run("WebAssembly", func(t *testing.T) {
+			runPlatTests("wasm", matches, t)
+		})
 	}
 }
 
-func runTest(path, tmpdir string, target string, t *testing.T) {
+func runPlatTests(target string, matches []string, t *testing.T) {
+	for _, path := range matches {
+		switch {
+		case target == "wasm":
+			// testdata/gc.go is known not to work on WebAssembly
+			if path == filepath.Join("testdata", "gc.go") {
+				continue
+			}
+		case target == "":
+			// run all tests on host
+		case target == "qemu":
+			// all tests are supported
+		default:
+			// cross-compilation of cgo is not yet supported
+			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
+				continue
+			}
+		}
+
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			runTest(path, target, t)
+		})
+	}
+}
+
+func runTest(path, target string, t *testing.T) {
 	// Get the expected output for this test.
 	txtpath := path[:len(path)-3] + ".txt"
 	if path[len(path)-1] == os.PathSeparator {
@@ -113,6 +105,18 @@ func runTest(path, tmpdir string, target string, t *testing.T) {
 	if err != nil {
 		t.Fatal("could not read expected output file:", err)
 	}
+
+	// Create a temporary directory for test output files.
+	tmpdir, err := ioutil.TempDir("", "tinygo-test")
+	if err != nil {
+		t.Fatal("could not create temporary directory:", err)
+	}
+	defer func() {
+		rerr := os.RemoveAll(tmpdir)
+		if rerr != nil {
+			t.Errorf("failed to remove temporary directory %q: %s", tmpdir, rerr.Error())
+		}
+	}()
 
 	// Build the test binary.
 	config := &compileopts.Options{
