@@ -822,6 +822,33 @@ func main() {
 		}
 		err := Test(pkgName, *target, options)
 		handleCompilerError(err)
+	case "info":
+		target := *target
+		if flag.NArg() == 1 {
+			target = flag.Arg(0)
+		} else if flag.NArg() > 1 {
+			fmt.Fprintln(os.Stderr, "only one target name is accepted")
+			usage()
+			os.Exit(1)
+		}
+		spec, err := compileopts.LoadTarget(target)
+		config := &compileopts.Config{
+			Options:        options,
+			Target:         spec,
+			GoMinorVersion: 0, // this avoids creating the list of Go1.x build tags.
+			ClangHeaders:   getClangHeaderPath(goenv.Get("TINYGOROOT")),
+			TestConfig:     options.TestConfig,
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Printf("LLVM triple:       %s\n", config.Triple())
+		fmt.Printf("GOOS:              %s\n", config.GOOS())
+		fmt.Printf("GOARCH:            %s\n", config.GOARCH())
+		fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
+		fmt.Printf("garbage collector: %s\n", config.GC())
+		fmt.Printf("scheduler:         %s\n", config.Scheduler())
 	case "clean":
 		// remove cache directory
 		err := os.RemoveAll(goenv.Get("GOCACHE"))
