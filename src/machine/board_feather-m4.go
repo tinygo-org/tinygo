@@ -83,5 +83,7 @@ var (
 		DOpad:       spiTXPad3SCK1,
 		DIpad:       sercomRXPad2,
 		MISOPinMode: PinSERCOM,
+		MOSIPinMode: PinSERCOM,
+		SCKPinMode:  PinSERCOM,
 	}
 )
