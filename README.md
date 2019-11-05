@@ -47,6 +47,7 @@ The following 20 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
 * [Adafruit Feather M0](https://www.adafruit.com/product/2772)
+* [Adafruit Feather M4](https://www.adafruit.com/product/3857)
 * [Adafruit ItsyBitsy M0](https://www.adafruit.com/product/3727)
 * [Adafruit ItsyBitsy M4](https://www.adafruit.com/product/3800)
 * [Adafruit Trinket M0](https://www.adafruit.com/product/3500)
