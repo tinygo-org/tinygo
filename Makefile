@@ -221,6 +221,8 @@ smoketest:
 	@$(MD5SUM) test.gba
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m4        examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=feather-m4          examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nucleo-f103rb       examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pinetime-devkit0    examples/blinky1

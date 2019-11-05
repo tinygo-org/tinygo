@@ -1,0 +1,13 @@
+{
+	"inherits": ["cortex-m"],
+	"llvm-target": "armv7em-none-eabi",
+	"build-tags": ["atsamd51j19", "atsamd51", "sam"],
+	"cflags": [
+		"--target=armv7em-none-eabi",
+		"-Qunused-arguments"
+	],
+	"linkerscript": "targets/atsamd51.ld",
+	"extra-files": [
+		"src/device/sam/atsamd51j19a.s"
+	]
+}
