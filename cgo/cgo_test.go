@@ -2,10 +2,12 @@ package cgo
 
 import (
 	"bytes"
+	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
@@ -34,6 +36,23 @@ func TestCGo(t *testing.T) {
 				t.Errorf("error during CGo processing: %v", err)
 			}
 
+			// Check the AST for type errors.
+			hasTypeError := false
+			config := types.Config{
+				Error: func(err error) {
+					t.Error("typecheck error:", err)
+					hasTypeError = true
+				},
+				Importer: simpleImporter{},
+				Sizes:    types.SizesFor("gccgo", "arm"),
+			}
+			_, err = config.Check("", fset, []*ast.File{f, cgoAST}, nil)
+			if err != nil && !hasTypeError {
+				// Only report errors when no type errors are found (an
+				// unexpected condition).
+				t.Error(err)
+			}
+
 			// Store the (formatted) output in a buffer. Format it, so it
 			// becomes easier to read (and will hopefully change less with CGo
 			// changes).
@@ -58,5 +77,21 @@ func TestCGo(t *testing.T) {
 				t.Errorf("output did not match:\n%s", string(actual))
 			}
 		})
+	}
+}
+
+// simpleImporter implements the types.Importer interface, but only allows
+// importing the unsafe package.
+type simpleImporter struct {
+}
+
+// Import implements the Importer interface. For testing usage only: it only
+// supports importing the unsafe package.
+func (i simpleImporter) Import(path string) (*types.Package, error) {
+	switch path {
+	case "unsafe":
+		return types.Unsafe, nil
+	default:
+		return nil, fmt.Errorf("importer not implemented for package %s", path)
 	}
 }
