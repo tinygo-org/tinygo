@@ -185,11 +185,38 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 			Name:    files[0].Name.Name,
 		},
 		Decls: []ast.Decl{
+			// import "unsafe"
 			&ast.GenDecl{
 				TokPos: p.generatedPos,
 				Tok:    token.IMPORT,
 				Specs: []ast.Spec{
 					unsafeImport,
+				},
+			},
+			// var _ unsafe.Pointer
+			// This avoids type errors when the unsafe package is never used.
+			&ast.GenDecl{
+				Tok: token.VAR,
+				Specs: []ast.Spec{
+					&ast.ValueSpec{
+						Names: []*ast.Ident{
+							&ast.Ident{
+								Name: "_",
+								Obj: &ast.Object{
+									Kind: ast.Var,
+									Name: "_",
+								},
+							},
+						},
+						Type: &ast.SelectorExpr{
+							X: &ast.Ident{
+								Name: "unsafe",
+							},
+							Sel: &ast.Ident{
+								Name: "Pointer",
+							},
+						},
+					},
 				},
 			},
 		},

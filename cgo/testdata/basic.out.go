@@ -2,6 +2,8 @@ package main
 
 import "unsafe"
 
+var _ unsafe.Pointer
+
 type C.int16_t = int16
 type C.int32_t = int32
 type C.int64_t = int64
