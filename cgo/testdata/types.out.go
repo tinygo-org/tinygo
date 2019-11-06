@@ -2,6 +2,8 @@ package main
 
 import "unsafe"
 
+var _ unsafe.Pointer
+
 const C.option2A = 20
 const C.optionA = 0
 const C.optionB = 1
