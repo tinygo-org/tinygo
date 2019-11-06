@@ -76,16 +76,16 @@ var (
 
 	// Arrays.
 	_ C.myIntArray
-	_ C.myIntArrayPtr
 )
 
 // Test bitfield accesses.
 func foo() {
 	var x C.bitfield_t
 	x.start = 3
-	x.a = 4
-	x.b = 1
-	x.c = 2
+	x.set_bitfield_a(4)
+	x.set_bitfield_b(1)
+	x.set_bitfield_c(2)
 	x.d = 10
 	x.e = 5
+	var _ C.uchar = x.bitfield_a()
 }
