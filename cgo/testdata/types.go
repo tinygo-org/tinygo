@@ -26,6 +26,9 @@ typedef enum option {
 	optionF,
 	optionG,
 } option_t;
+enum unused {
+	unused1 = 5,
+};
 
 // Anonymous enum.
 typedef enum {

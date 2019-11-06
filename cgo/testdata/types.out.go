@@ -10,6 +10,7 @@ const C.optionD = -4
 const C.optionE = 10
 const C.optionF = 11
 const C.optionG = 12
+const C.unused1 = 5
 
 type C.int16_t = int16
 type C.int32_t = int32
@@ -73,3 +74,4 @@ type C.struct_point3d struct {
 	z C.int
 }
 type C.enum_option C.int
+type C.enum_unused C.uint
