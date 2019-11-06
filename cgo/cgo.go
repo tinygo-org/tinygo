@@ -992,3 +992,29 @@ func (p *cgoPackage) walker(cursor *astutil.Cursor) bool {
 	}
 	return true
 }
+
+// renameFieldKeywords renames all reserved words in Go to some other field name
+// with a "_" prefix. For example, it renames `type` to `_type`.
+//
+// See: https://golang.org/cmd/cgo/#hdr-Go_references_to_C
+func renameFieldKeywords(fieldList *ast.FieldList) {
+	renameFieldName(fieldList, "type")
+}
+
+// renameFieldName renames a given field name to a name with a "_" prepended. It
+// makes sure to do the same thing for any field sharing the same name.
+func renameFieldName(fieldList *ast.FieldList, name string) {
+	var ident *ast.Ident
+	for _, f := range fieldList.List {
+		for _, n := range f.Names {
+			if n.Name == name {
+				ident = n
+			}
+		}
+	}
+	if ident == nil {
+		return
+	}
+	renameFieldName(fieldList, "_"+name)
+	ident.Name = "_" + ident.Name
+}

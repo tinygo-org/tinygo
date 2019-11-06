@@ -605,6 +605,7 @@ func (p *cgoPackage) makeASTRecordType(cursor C.GoCXCursor, pos token.Pos) (*ast
 	}{fieldList, p, &inBitfield, &bitfieldNum, &bitfieldList})
 	defer storedRefs.Remove(ref)
 	C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(ref))
+	renameFieldKeywords(fieldList)
 	switch C.tinygo_clang_getCursorKind(cursor) {
 	case C.CXCursor_StructDecl:
 		return &ast.StructType{
