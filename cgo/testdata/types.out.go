@@ -72,4 +72,10 @@ type C.struct_point3d struct {
 	y C.int
 	z C.int
 }
+type C.struct_type1 struct {
+	_type   C.int
+	__type  C.int
+	___type C.int
+}
+type C.struct_type2 struct{ _type C.int }
 type C.enum_option C.int

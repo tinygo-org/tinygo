@@ -15,6 +15,18 @@ typedef struct point3d {
 	int z;
 } point3d_t;
 
+// Structs with reserved field names.
+struct type1 {
+	// All these fields should be renamed.
+	int type;
+	int _type;
+	int __type;
+};
+struct type2 {
+	// This field should not be renamed.
+	int _type;
+};
+
 // Enums. These define constant numbers. All these constants must be given the
 // correct number.
 typedef enum option {
@@ -65,6 +77,10 @@ var (
 	_ C.point2d_t
 	_ C.point3d_t
 	_ C.struct_point3d
+
+	// Structs with reserved field names.
+	_ C.struct_type1
+	_ C.struct_type2
 
 	// Enums (anonymous and named).
 	_ C.option_t
