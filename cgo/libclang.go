@@ -255,6 +255,11 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 			// Parsing was successful.
 			p.constants[name] = constantInfo{expr, pos}
 		}
+	case C.CXCursor_EnumDecl:
+		// Visit all enums, because the fields may be used even when the enum
+		// type itself is not.
+		typ := C.tinygo_clang_getCursorType(c)
+		p.makeASTType(typ, pos)
 	}
 	return C.CXChildVisit_Continue
 }
