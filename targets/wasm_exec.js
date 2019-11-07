@@ -313,6 +313,26 @@
 					//"syscall/js.valueInstanceOf": (sp) => {
 					//	mem().setUint8(sp + 24, loadValue(sp + 8) instanceof loadValue(sp + 16));
 					//},
+
+					// copyBytesToJS(dst ref, src []byte) (int, bool)
+					// Originally copied from upstream Go project, then modified:
+					//   https://github.com/golang/go/blob/3f995c3f3b43033013013e6c7ccc93a9b1411ca9/misc/wasm/wasm_exec.js#L404-L416
+					// param4 and param5 (below) are likely "length" variables of some sort
+					"syscall/js.copyBytesToJS": (ret_addr, dest_addr, source_addr, param4, param5) => {
+						let num_bytes_copied_addr = ret_addr;
+						let returned_status_addr = ret_addr + 4; // address of returned "ok" status variable
+
+						const dst = loadValue(dest_addr);
+						const src = loadSlice(source_addr);
+						if (!(dst instanceof Uint8Array)) {
+							mem().setUint8(returned_status_addr, 0); // Return "not ok" status
+							return;
+						}
+						const toCopy = src.subarray(0, dst.length);
+						dst.set(toCopy);
+						setInt64(num_bytes_copied_addr, toCopy.length);
+						mem().setUint8(returned_status_addr, 1); // Return "ok" status
+					},
 				}
 			};
 		}
