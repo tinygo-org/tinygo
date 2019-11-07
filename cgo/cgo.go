@@ -12,6 +12,7 @@ package cgo
 // source file parsing.
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"sort"
@@ -69,9 +70,11 @@ type typedefInfo struct {
 // elaboratedTypeInfo contains some information about an elaborated type
 // (struct, union) found in the C AST.
 type elaboratedTypeInfo struct {
-	typeExpr  *ast.StructType
-	pos       token.Pos
-	bitfields []bitfieldInfo
+	typeExpr   *ast.StructType
+	pos        token.Pos
+	bitfields  []bitfieldInfo
+	unionSize  int64 // union size in bytes, nonzero when union getters/setters should be created
+	unionAlign int64 // union alignment in bytes
 }
 
 // bitfieldInfo contains information about a single bitfield in a struct. It
@@ -608,13 +611,31 @@ func (p *cgoPackage) addElaboratedTypes() {
 			Kind: ast.Typ,
 			Name: typeName,
 		}
+		typeExpr := typ.typeExpr
+		if typ.unionSize != 0 {
+			// Create getters/setters.
+			for _, field := range typ.typeExpr.Fields.List {
+				if len(field.Names) != 1 {
+					p.addError(typ.pos, fmt.Sprintf("union must have field with a single name, it has %d names", len(field.Names)))
+					continue
+				}
+				p.createUnionAccessor(field, typeName)
+			}
+			// Convert to a single-field struct type.
+			typeExpr = p.makeUnionField(typ)
+			if typeExpr == nil {
+				// There was an error, that was already added to the list of
+				// errors.
+				continue
+			}
+		}
 		typeSpec := &ast.TypeSpec{
 			Name: &ast.Ident{
 				NamePos: typ.pos,
 				Name:    typeName,
 				Obj:     obj,
 			},
-			Type: typ.typeExpr,
+			Type: typeExpr,
 		}
 		obj.Decl = typeSpec
 		gen.Specs = append(gen.Specs, typeSpec)
@@ -625,6 +646,183 @@ func (p *cgoPackage) addElaboratedTypes() {
 		}
 		p.generated.Decls = append(p.generated.Decls, gen)
 	}
+}
+
+// makeUnionField creates a new struct from an existing *elaboratedTypeInfo,
+// that has just a single field that must be accessed through special accessors.
+// It returns nil when there is an error. In case of an error, that error has
+// already been added to the list of errors using p.addError.
+func (p *cgoPackage) makeUnionField(typ *elaboratedTypeInfo) *ast.StructType {
+	unionFieldTypeName, ok := map[int64]string{
+		1: "uint8",
+		2: "uint16",
+		4: "uint32",
+		8: "uint64",
+	}[typ.unionAlign]
+	if !ok {
+		p.addError(typ.typeExpr.Struct, fmt.Sprintf("expected union alignment to be one of 1, 2, 4, or 8, but got %d", typ.unionAlign))
+		return nil
+	}
+	var unionFieldType ast.Expr = &ast.Ident{
+		NamePos: token.NoPos,
+		Name:    unionFieldTypeName,
+	}
+	if typ.unionSize != typ.unionAlign {
+		// A plain struct{uintX} isn't enough, we have to make a
+		// struct{[N]uintX} to make the union big enough.
+		if typ.unionSize/typ.unionAlign*typ.unionAlign != typ.unionSize {
+			p.addError(typ.typeExpr.Struct, fmt.Sprintf("union alignment (%d) must be a multiple of union alignment (%d)", typ.unionSize, typ.unionAlign))
+			return nil
+		}
+		unionFieldType = &ast.ArrayType{
+			Len: &ast.BasicLit{
+				Kind:  token.INT,
+				Value: strconv.FormatInt(typ.unionSize/typ.unionAlign, 10),
+			},
+			Elt: unionFieldType,
+		}
+	}
+	return &ast.StructType{
+		Struct: typ.typeExpr.Struct,
+		Fields: &ast.FieldList{
+			Opening: typ.typeExpr.Fields.Opening,
+			List: []*ast.Field{&ast.Field{
+				Names: []*ast.Ident{
+					&ast.Ident{
+						NamePos: typ.typeExpr.Fields.Opening,
+						Name:    "$union",
+					},
+				},
+				Type: unionFieldType,
+			}},
+			Closing: typ.typeExpr.Fields.Closing,
+		},
+	}
+}
+
+// createUnionAccessor creates a function that returns a typed pointer to a
+// union field for each field in a union. For example:
+//
+//     func (union *C.union_1) unionfield_d() *float64 {
+//         return (*float64)(unsafe.Pointer(&union.$union))
+//     }
+//
+// Where C.union_1 is defined as:
+//
+//     type C.union_1 struct{
+//         $union uint64
+//     }
+//
+// The returned pointer can be used to get or set the field, or get the pointer
+// to a subfield.
+func (p *cgoPackage) createUnionAccessor(field *ast.Field, typeName string) {
+	if len(field.Names) != 1 {
+		panic("number of names in union field must be exactly 1")
+	}
+	fieldName := field.Names[0]
+	pos := fieldName.NamePos
+
+	// The method receiver.
+	receiver := &ast.SelectorExpr{
+		X: &ast.Ident{
+			NamePos: pos,
+			Name:    "union",
+			Obj:     nil,
+		},
+		Sel: &ast.Ident{
+			NamePos: pos,
+			Name:    "$union",
+		},
+	}
+
+	// Get the address of the $union field.
+	receiverPtr := &ast.UnaryExpr{
+		Op: token.AND,
+		X:  receiver,
+	}
+
+	// Cast to unsafe.Pointer.
+	sourcePointer := &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "unsafe"},
+			Sel: &ast.Ident{Name: "Pointer"},
+		},
+		Args: []ast.Expr{receiverPtr},
+	}
+
+	// Cast to the target pointer type.
+	targetPointer := &ast.CallExpr{
+		Lparen: pos,
+		Fun: &ast.ParenExpr{
+			Lparen: pos,
+			X: &ast.StarExpr{
+				X: field.Type,
+			},
+			Rparen: pos,
+		},
+		Args:   []ast.Expr{sourcePointer},
+		Rparen: pos,
+	}
+
+	// Create the accessor function.
+	accessor := &ast.FuncDecl{
+		Recv: &ast.FieldList{
+			Opening: pos,
+			List: []*ast.Field{
+				&ast.Field{
+					Names: []*ast.Ident{
+						&ast.Ident{
+							NamePos: pos,
+							Name:    "union",
+						},
+					},
+					Type: &ast.StarExpr{
+						Star: pos,
+						X: &ast.Ident{
+							NamePos: pos,
+							Name:    typeName,
+							Obj:     nil,
+						},
+					},
+				},
+			},
+			Closing: pos,
+		},
+		Name: &ast.Ident{
+			NamePos: pos,
+			Name:    "unionfield_" + fieldName.Name,
+		},
+		Type: &ast.FuncType{
+			Func: pos,
+			Params: &ast.FieldList{
+				Opening: pos,
+				Closing: pos,
+			},
+			Results: &ast.FieldList{
+				List: []*ast.Field{
+					&ast.Field{
+						Type: &ast.StarExpr{
+							Star: pos,
+							X:    field.Type,
+						},
+					},
+				},
+			},
+		},
+		Body: &ast.BlockStmt{
+			Lbrace: pos,
+			List: []ast.Stmt{
+				&ast.ReturnStmt{
+					Return: pos,
+					Results: []ast.Expr{
+						targetPointer,
+					},
+				},
+			},
+			Rbrace: pos,
+		},
+	}
+	p.generated.Decls = append(p.generated.Decls, accessor)
 }
 
 // createBitfieldGetter creates a bitfield getter function like the following:

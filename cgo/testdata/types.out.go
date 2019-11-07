@@ -34,7 +34,7 @@ type C.uint uint32
 type C.ulong uint32
 type C.ulonglong uint64
 type C.ushort uint16
-type C.bitfield_t = C.struct_1
+type C.bitfield_t = C.struct_2
 type C.myIntArray = [10]C.int
 type C.myint = C.int
 type C.option2_t = C.uint
@@ -49,21 +49,25 @@ type C.types_t = struct {
 	d   float64
 	ptr *C.int
 }
+type C.union1_t = struct{ i C.int }
+type C.union2d_t = C.union_union2d
+type C.union3_t = C.union_1
+type C.unionarrary_t = struct{ arr [10]C.uchar }
 
-func (s *C.struct_1) bitfield_a() C.uchar          { return s.__bitfield_1 & 0x1f }
-func (s *C.struct_1) set_bitfield_a(value C.uchar) { s.__bitfield_1 = s.__bitfield_1&^0x1f | value&0x1f<<0 }
-func (s *C.struct_1) bitfield_b() C.uchar {
+func (s *C.struct_2) bitfield_a() C.uchar          { return s.__bitfield_1 & 0x1f }
+func (s *C.struct_2) set_bitfield_a(value C.uchar) { s.__bitfield_1 = s.__bitfield_1&^0x1f | value&0x1f<<0 }
+func (s *C.struct_2) bitfield_b() C.uchar {
 	return s.__bitfield_1 >> 5 & 0x1
 }
-func (s *C.struct_1) set_bitfield_b(value C.uchar) { s.__bitfield_1 = s.__bitfield_1&^0x20 | value&0x1<<5 }
-func (s *C.struct_1) bitfield_c() C.uchar {
+func (s *C.struct_2) set_bitfield_b(value C.uchar) { s.__bitfield_1 = s.__bitfield_1&^0x20 | value&0x1<<5 }
+func (s *C.struct_2) bitfield_c() C.uchar {
 	return s.__bitfield_1 >> 6
 }
-func (s *C.struct_1) set_bitfield_c(value C.uchar,
+func (s *C.struct_2) set_bitfield_c(value C.uchar,
 
 ) { s.__bitfield_1 = s.__bitfield_1&0x3f | value<<6 }
 
-type C.struct_1 struct {
+type C.struct_2 struct {
 	start        C.uchar
 	__bitfield_1 C.uchar
 
@@ -81,5 +85,16 @@ type C.struct_type1 struct {
 	___type C.int
 }
 type C.struct_type2 struct{ _type C.int }
+
+func (union *C.union_1) unionfield_i() *C.int   { return (*C.int)(unsafe.Pointer(&union.$union)) }
+func (union *C.union_1) unionfield_d() *float64 { return (*float64)(unsafe.Pointer(&union.$union)) }
+func (union *C.union_1) unionfield_s() *C.short { return (*C.short)(unsafe.Pointer(&union.$union)) }
+
+type C.union_1 struct{ $union uint64 }
+
+func (union *C.union_union2d) unionfield_i() *C.int      { return (*C.int)(unsafe.Pointer(&union.$union)) }
+func (union *C.union_union2d) unionfield_d() *[2]float64 { return (*[2]float64)(unsafe.Pointer(&union.$union)) }
+
+type C.union_union2d struct{ $union [2]uint64 }
 type C.enum_option C.int
 type C.enum_unused C.uint

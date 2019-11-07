@@ -27,6 +27,25 @@ struct type2 {
 	int _type;
 };
 
+// Unions.
+typedef union {
+	// Union should be treated as a struct.
+	int i;
+} union1_t;
+typedef union {
+	// Union must contain a single field and have special getters/setters.
+	int    i;
+	double d;
+	short  s;
+} union3_t;
+typedef union union2d {
+	int i;
+	double d[2];
+} union2d_t;
+typedef union {
+	unsigned char arr[10];
+} unionarrary_t;
+
 // Enums. These define constant numbers. All these constants must be given the
 // correct number.
 typedef enum option {
@@ -85,6 +104,12 @@ var (
 	_ C.struct_type1
 	_ C.struct_type2
 
+	// Unions.
+	_ C.union1_t
+	_ C.union3_t
+	_ C.union2d_t
+	_ C.unionarrary_t
+
 	// Enums (anonymous and named).
 	_ C.option_t
 	_ C.enum_option
@@ -98,7 +123,7 @@ var (
 )
 
 // Test bitfield accesses.
-func foo() {
+func accessBitfields() {
 	var x C.bitfield_t
 	x.start = 3
 	x.set_bitfield_a(4)
@@ -107,4 +132,14 @@ func foo() {
 	x.d = 10
 	x.e = 5
 	var _ C.uchar = x.bitfield_a()
+}
+
+// Test union accesses.
+func accessUnion() {
+	var union1 C.union1_t
+	union1.i = 5
+
+	var union2d C.union2d_t
+	var _ *C.int = union2d.unionfield_i()
+	var _ *[2]float64 = union2d.unionfield_d()
 }

@@ -57,12 +57,14 @@ func main() {
 	println("array:", C.globalArray[0], C.globalArray[1], C.globalArray[2])
 	println("union:", C.int(unsafe.Sizeof(C.globalUnion)) == C.globalUnionSize)
 	C.unionSetShort(22)
-	println("union s:", C.globalUnion.s)
+	println("union s:", *C.globalUnion.unionfield_s())
 	C.unionSetFloat(3.14)
-	println("union f:", C.globalUnion.f)
+	println("union f:", *C.globalUnion.unionfield_f())
 	C.unionSetData(5, 8, 1)
-	println("union global data:", C.globalUnion.data[0], C.globalUnion.data[1], C.globalUnion.data[2])
-	println("union field:", printUnion(C.globalUnion).f)
+	data := C.globalUnion.unionfield_data()
+	println("union global data:", data[0], data[1], data[2])
+	returnedUnion := printUnion(C.globalUnion)
+	println("union field:", *returnedUnion.unionfield_f())
 	var _ C.union_joined = C.globalUnion
 	printBitfield(&C.globalBitfield)
 	C.globalBitfield.set_bitfield_a(7)
@@ -105,11 +107,12 @@ func main() {
 }
 
 func printUnion(union C.joined_t) C.joined_t {
-	println("union local data: ", union.data[0], union.data[1], union.data[2])
-	union.s = -33
-	println("union s:", union.data[0] == -33)
-	union.f = 6.28
-	println("union f:", union.f)
+	data := union.unionfield_data()
+	println("union local data: ", data[0], data[1], data[2])
+	*union.unionfield_s() = -33
+	println("union s:", data[0] == -33)
+	*union.unionfield_f() = 6.28
+	println("union f:", *union.unionfield_f())
 	return union
 }
 
