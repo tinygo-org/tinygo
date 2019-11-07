@@ -667,7 +667,13 @@ func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientD
 	bitfieldNum := passed.bitfieldNum
 	bitfieldList := passed.bitfieldList
 	pos := p.getCursorPosition(c)
-	if cursorKind := C.tinygo_clang_getCursorKind(c); cursorKind != C.CXCursor_FieldDecl {
+	switch cursorKind := C.tinygo_clang_getCursorKind(c); cursorKind {
+	case C.CXCursor_FieldDecl:
+		// Expected. This is a regular field.
+	case C.CXCursor_StructDecl, C.CXCursor_UnionDecl:
+		// Ignore. The next field will be the struct/union itself.
+		return C.CXChildVisit_Continue
+	default:
 		cursorKindSpelling := getString(C.clang_getCursorKindSpelling(cursorKind))
 		p.addError(pos, fmt.Sprintf("expected FieldDecl in struct or union, not %s", cursorKindSpelling))
 		return C.CXChildVisit_Continue

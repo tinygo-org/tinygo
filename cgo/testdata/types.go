@@ -44,7 +44,23 @@ typedef union union2d {
 } union2d_t;
 typedef union {
 	unsigned char arr[10];
-} unionarrary_t;
+} unionarray_t;
+
+// Nested structs and unions.
+typedef struct {
+	point2d_t begin;
+	point2d_t end;
+	int       tag;
+	union {
+		point2d_t area;
+		point3d_t solid;
+	} coord;
+} struct_nested_t;
+typedef union {
+	point3d_t    point;
+	unionarray_t array;
+	union3_t     thing;
+} union_nested_t;
 
 // Enums. These define constant numbers. All these constants must be given the
 // correct number.
@@ -108,7 +124,11 @@ var (
 	_ C.union1_t
 	_ C.union3_t
 	_ C.union2d_t
-	_ C.unionarrary_t
+	_ C.unionarray_t
+
+	// Nested structs and unions.
+	_ C.struct_nested_t
+	_ C.union_nested_t
 
 	// Enums (anonymous and named).
 	_ C.option_t

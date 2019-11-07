@@ -80,6 +80,11 @@ func main() {
 	var _ C.point2d_t = C.point2d_t{x: 3, y: 5}
 	var _ C.point3d_t = C.point3d_t{x: 3, y: 5, z: 7}
 
+	// nested structs/unions
+	var _ C.tagged_union_t
+	var _ C.nested_struct_t
+	var _ C.nested_union_t
+
 	// recursive types, test using a linked list
 	list := &C.list_t{n: 3, next: &C.struct_list_t{n: 6, next: &C.list_t{n: 7, next: nil}}}
 	for list != nil {
