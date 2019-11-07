@@ -43,6 +43,31 @@ typedef struct {
 	int z;
 } point3d_t;
 
+typedef struct {
+	int tag;
+	union {
+		int a;
+		int b;
+	} u;
+} tagged_union_t;
+
+typedef struct {
+	int x;
+	struct {
+		char red;
+		char green;
+		char blue;
+	} color;
+} nested_struct_t;
+
+typedef union {
+	int x;
+	struct {
+		char a;
+		char b;
+	};
+} nested_union_t;
+
 // linked list
 typedef struct list_t {
 	int           n;
