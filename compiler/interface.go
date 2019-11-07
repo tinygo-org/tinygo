@@ -210,10 +210,6 @@ func getTypeCodeName(t types.Type) string {
 		return "slice:" + getTypeCodeName(t.Elem())
 	case *types.Struct:
 		elems := make([]string, t.NumFields())
-		if t.NumFields() > 2 && t.Field(0).Name() == "C union" {
-			// TODO: report this as a normal error instead of panicking.
-			panic("cgo unions are not allowed in interfaces")
-		}
 		for i := 0; i < t.NumFields(); i++ {
 			embedded := ""
 			if t.Field(i).Embedded() {
