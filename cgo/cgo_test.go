@@ -2,6 +2,7 @@ package cgo
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -13,6 +14,9 @@ import (
 	"strings"
 	"testing"
 )
+
+// Pass -update to go test to update the output of the test files.
+var flagUpdate = flag.Bool("update", false, "Update images based on test output.")
 
 func TestCGo(t *testing.T) {
 	var cflags = []string{"--target=armv6m-none-eabi"}
@@ -74,6 +78,14 @@ func TestCGo(t *testing.T) {
 			// Check whether the output is as expected.
 			if expected != actual {
 				// It is not. Test failed.
+				if *flagUpdate {
+					// Update the file with the expected data.
+					err := ioutil.WriteFile(outfile, []byte(actual), 0666)
+					if err != nil {
+						t.Error("could not write updated output file:", err)
+					}
+					return
+				}
 				t.Errorf("output did not match:\n%s", string(actual))
 			}
 		})
