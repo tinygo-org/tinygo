@@ -47,7 +47,7 @@ func reflectValueEqual(x, y reflect.Value) bool {
 		return x.Bool() == y.Bool()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return x.Int() == y.Int()
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return x.Uint() == y.Uint()
 	case reflect.Float32, reflect.Float64:
 		return x.Float() == y.Float()
