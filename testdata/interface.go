@@ -50,6 +50,7 @@ func main() {
 		{true, uint16(1), uint16(1)},
 		{true, uint32(1), uint32(1)},
 		{true, uint64(1), uint64(1)},
+		{true, uintptr(1), uintptr(1)},
 		{true, float32(1.1), float32(1.1)},
 		{true, float64(1.1), float64(1.1)},
 		{true, complex(100, 8), complex(100, 8)},
