@@ -39,6 +39,18 @@ const (
 )
 
 const (
+	ESP32_CS = PA15
+
+	ESP32_TX  = PA04
+	ESP32_RX  = PA07
+	ESP32_RTS = PB23
+
+	ESP32_GPIO0 = PB01
+	ESP32_BUSY  = PB04
+	ESP32_RESET = PB05
+)
+
+const (
 	LED = D13
 )
 
