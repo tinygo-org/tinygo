@@ -18,4 +18,5 @@ func main() {
 
 	// package strings
 	fmt.Println("strings.IndexByte:", strings.IndexByte("asdf", 'd'))
+	fmt.Println("strings.Replace:", strings.Replace("An example string", " ", "-", -1))
 }

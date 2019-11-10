@@ -216,16 +216,3 @@ func indexByteString(s string, c byte) int {
 	}
 	return -1
 }
-
-// countString copies the implementation from
-// https://github.com/golang/go/blob/67f181bfd84dfd5942fe9a29d8a20c9ce5eb2fea/src/internal/bytealg/count_generic.go#L1
-//go:linkname countString internal/bytealg.CountString
-func countString(s string, c byte) int {
-	n := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == c {
-			n++
-		}
-	}
-	return n
-}
