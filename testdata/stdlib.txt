@@ -3,3 +3,4 @@ stdout: 1
 stderr: 2
 pseudorandom number: 1298498081
 strings.IndexByte: 2
+strings.Replace: An-example-string
