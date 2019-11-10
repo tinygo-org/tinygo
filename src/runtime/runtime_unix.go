@@ -22,7 +22,7 @@ func abort()
 func exit(code int)
 
 //go:export clock_gettime
-func clock_gettime(clk_id uint, ts *timespec)
+func clock_gettime(clk_id int32, ts *timespec)
 
 const heapSize = 1 * 1024 * 1024 // 1MB to start
 
@@ -37,8 +37,8 @@ const tickMicros = 1
 
 // TODO: Linux/amd64-specific
 type timespec struct {
-	tv_sec  int64
-	tv_nsec int64
+	tv_sec  timeT
+	tv_nsec timeT
 }
 
 const CLOCK_MONOTONIC_RAW = 4
