@@ -1,4 +1,4 @@
-package main
+package builder
 
 import (
 	"debug/elf"
@@ -10,31 +10,31 @@ import (
 	"github.com/marcinbor85/gohex"
 )
 
-// ObjcopyError is an error returned by functions that act like objcopy.
-type ObjcopyError struct {
+// objcopyError is an error returned by functions that act like objcopy.
+type objcopyError struct {
 	Op  string
 	Err error
 }
 
-func (e ObjcopyError) Error() string {
+func (e objcopyError) Error() string {
 	if e.Err == nil {
 		return e.Op
 	}
 	return e.Op + ": " + e.Err.Error()
 }
 
-type ProgSlice []*elf.Prog
+type progSlice []*elf.Prog
 
-func (s ProgSlice) Len() int           { return len(s) }
-func (s ProgSlice) Less(i, j int) bool { return s[i].Paddr < s[j].Paddr }
-func (s ProgSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s progSlice) Len() int           { return len(s) }
+func (s progSlice) Less(i, j int) bool { return s[i].Paddr < s[j].Paddr }
+func (s progSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-// ExtractROM extracts a firmware image and the first load address from the
+// extractROM extracts a firmware image and the first load address from the
 // given ELF file. It tries to emulate the behavior of objcopy.
-func ExtractROM(path string) (uint64, []byte, error) {
+func extractROM(path string) (uint64, []byte, error) {
 	f, err := elf.Open(path)
 	if err != nil {
-		return 0, nil, ObjcopyError{"failed to open ELF file to extract text segment", err}
+		return 0, nil, objcopyError{"failed to open ELF file to extract text segment", err}
 	}
 	defer f.Close()
 
@@ -56,7 +56,7 @@ func ExtractROM(path string) (uint64, []byte, error) {
 		}
 	}
 
-	progs := make(ProgSlice, 0, 2)
+	progs := make(progSlice, 0, 2)
 	for _, prog := range f.Progs {
 		if prog.Type != elf.PT_LOAD || prog.Filesz == 0 {
 			continue
@@ -64,18 +64,18 @@ func ExtractROM(path string) (uint64, []byte, error) {
 		progs = append(progs, prog)
 	}
 	if len(progs) == 0 {
-		return 0, nil, ObjcopyError{"file does not contain ROM segments: " + path, nil}
+		return 0, nil, objcopyError{"file does not contain ROM segments: " + path, nil}
 	}
 	sort.Sort(progs)
 
 	var rom []byte
 	for _, prog := range progs {
 		if prog.Paddr != progs[0].Paddr+uint64(len(rom)) {
-			return 0, nil, ObjcopyError{"ROM segments are non-contiguous: " + path, nil}
+			return 0, nil, objcopyError{"ROM segments are non-contiguous: " + path, nil}
 		}
 		data, err := ioutil.ReadAll(prog.Open())
 		if err != nil {
-			return 0, nil, ObjcopyError{"failed to extract segment from ELF file: " + path, err}
+			return 0, nil, objcopyError{"failed to extract segment from ELF file: " + path, err}
 		}
 		rom = append(rom, data...)
 	}
@@ -91,9 +91,9 @@ func ExtractROM(path string) (uint64, []byte, error) {
 	}
 }
 
-// Objcopy converts an ELF file to a different (simpler) output file format:
+// objcopy converts an ELF file to a different (simpler) output file format:
 // .bin or .hex. It extracts only the .text section.
-func Objcopy(infile, outfile string) error {
+func objcopy(infile, outfile string) error {
 	f, err := os.OpenFile(outfile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
@@ -101,7 +101,7 @@ func Objcopy(infile, outfile string) error {
 	defer f.Close()
 
 	// Read the .text segment.
-	addr, data, err := ExtractROM(infile)
+	addr, data, err := extractROM(infile)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func Objcopy(infile, outfile string) error {
 		mem := gohex.NewMemory()
 		err := mem.AddBinary(uint32(addr), data)
 		if err != nil {
-			return ObjcopyError{"failed to create .hex file", err}
+			return objcopyError{"failed to create .hex file", err}
 		}
 		mem.DumpIntelHex(f, 16) // TODO: handle error
 		return nil

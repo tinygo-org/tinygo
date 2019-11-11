@@ -1,4 +1,4 @@
-package main
+package builder
 
 import (
 	"errors"
@@ -197,7 +197,7 @@ func loadBuiltins(target string) (path string, err error) {
 	}
 
 	var cachepath string
-	err = compileBuiltins(target, func(path string) error {
+	err = CompileBuiltins(target, func(path string) error {
 		path, err := cacheStore(path, outfile, commands["clang"][0], srcs)
 		cachepath = path
 		return err
@@ -205,11 +205,11 @@ func loadBuiltins(target string) (path string, err error) {
 	return cachepath, err
 }
 
-// compileBuiltins compiles builtins from compiler-rt into a static library.
+// CompileBuiltins compiles builtins from compiler-rt into a static library.
 // When it succeeds, it will call the callback with the resulting path. The path
 // will be removed after callback returns. If callback returns an error, this is
 // passed through to the return value of this function.
-func compileBuiltins(target string, callback func(path string) error) error {
+func CompileBuiltins(target string, callback func(path string) error) error {
 	builtinsDir := builtinsDir()
 
 	builtins := builtinFiles(target)

@@ -1,6 +1,6 @@
 // +build byollvm
 
-package main
+package builder
 
 // This file provides a Link() function that uses the bundled lld if possible.
 
@@ -21,10 +21,10 @@ bool tinygo_link_wasm(int argc, char **argv);
 */
 import "C"
 
-// Link invokes a linker with the given name and flags.
+// link invokes a linker with the given name and flags.
 //
 // This version uses the built-in linker when trying to use lld.
-func Link(linker string, flags ...string) error {
+func link(linker string, flags ...string) error {
 	switch linker {
 	case "ld.lld":
 		flags = append([]string{"tinygo:" + linker}, flags...)

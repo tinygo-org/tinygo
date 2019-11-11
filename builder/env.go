@@ -1,4 +1,4 @@
-package main
+package builder
 
 import (
 	"errors"
@@ -15,7 +15,7 @@ import (
 // getGorootVersion returns the major and minor version for a given GOROOT path.
 // If the goroot cannot be determined, (0, 0) is returned.
 func getGorootVersion(goroot string) (major, minor int, err error) {
-	s, err := getGorootVersionString(goroot)
+	s, err := GorootVersionString(goroot)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -42,10 +42,10 @@ func getGorootVersion(goroot string) (major, minor int, err error) {
 	return
 }
 
-// getGorootVersionString returns the version string as reported by the Go
+// GorootVersionString returns the version string as reported by the Go
 // toolchain for the given GOROOT path. It is usually of the form `go1.x.y` but
 // can have some variations (for beta releases, for example).
-func getGorootVersionString(goroot string) (string, error) {
+func GorootVersionString(goroot string) (string, error) {
 	if data, err := ioutil.ReadFile(filepath.Join(
 		goroot, "src", "runtime", "internal", "sys", "zversion.go")); err == nil {
 

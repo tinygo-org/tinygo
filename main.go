@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"go/types"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -17,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
-	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
@@ -38,246 +37,50 @@ func (e *commandError) Error() string {
 	return e.Msg + " " + e.File + ": " + e.Err.Error()
 }
 
-// multiError is a list of multiple errors (actually: diagnostics) returned
-// during LLVM IR generation.
-type multiError struct {
-	Errs []error
+// moveFile renames the file from src to dst. If renaming doesn't work (for
+// example, the rename crosses a filesystem boundary), the file is copied and
+// the old file is removed.
+func moveFile(src, dst string) error {
+	err := os.Rename(src, dst)
+	if err == nil {
+		// Success!
+		return nil
+	}
+	// Failed to move, probably a different filesystem.
+	// Do a copy + remove.
+	inf, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer inf.Close()
+	outpath := dst + ".tmp"
+	outf, err := os.Create(outpath)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(outf, inf)
+	if err != nil {
+		os.Remove(outpath)
+		return err
+	}
+
+	err = outf.Close()
+	if err != nil {
+		return err
+	}
+
+	return os.Rename(dst+".tmp", dst)
 }
 
-func (e *multiError) Error() string {
-	return e.Errs[0].Error()
-}
-
-// Helper function for Compiler object.
-func Compile(pkgName, outpath string, spec *compileopts.TargetSpec, options *compileopts.Options, action func(string) error) error {
-
-	root := goenv.Get("TINYGOROOT")
-
-	goroot := goenv.Get("GOROOT")
-	if goroot == "" {
-		return errors.New("cannot locate $GOROOT, please set it manually")
-	}
-	major, minor, err := getGorootVersion(goroot)
-	if err != nil {
-		return fmt.Errorf("could not read version from GOROOT (%v): %v", goroot, err)
-	}
-	if major != 1 || (minor != 11 && minor != 12 && minor != 13) {
-		return fmt.Errorf("requires go version 1.11, 1.12, or 1.13, got go%d.%d", major, minor)
-	}
-	compilerConfig := &compileopts.Config{
-		Options:        options,
-		Target:         spec,
-		GoMinorVersion: minor,
-		ClangHeaders:   getClangHeaderPath(root),
-		TestConfig:     options.TestConfig,
-	}
-	c, err := compiler.NewCompiler(pkgName, compilerConfig)
+// Build compiles and links the given package and writes it to outpath.
+func Build(pkgName, outpath string, options *compileopts.Options) error {
+	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
 	}
 
-	// Compile Go code to IR.
-	errs := c.Compile(pkgName)
-	if len(errs) != 0 {
-		if len(errs) == 1 {
-			return errs[0]
-		}
-		return &multiError{errs}
-	}
-	if options.PrintIR {
-		fmt.Println("; Generated LLVM IR:")
-		fmt.Println(c.IR())
-	}
-	if err := c.Verify(); err != nil {
-		return errors.New("verification error after IR construction")
-	}
-
-	err = interp.Run(c.Module(), options.DumpSSA)
-	if err != nil {
-		return err
-	}
-	if err := c.Verify(); err != nil {
-		return errors.New("verification error after interpreting runtime.initAll")
-	}
-
-	if spec.GOOS != "darwin" {
-		c.ApplyFunctionSections() // -ffunction-sections
-	}
-
-	// Browsers cannot handle external functions that have type i64 because it
-	// cannot be represented exactly in JavaScript (JS only has doubles). To
-	// keep functions interoperable, pass int64 types as pointers to
-	// stack-allocated values.
-	// Use -wasm-abi=generic to disable this behaviour.
-	if options.WasmAbi == "js" && strings.HasPrefix(spec.Triple, "wasm") {
-		err := c.ExternalInt64AsPtr()
-		if err != nil {
-			return err
-		}
-	}
-
-	// Optimization levels here are roughly the same as Clang, but probably not
-	// exactly.
-	switch options.Opt {
-	case "none:", "0":
-		err = c.Optimize(0, 0, 0) // -O0
-	case "1":
-		err = c.Optimize(1, 0, 0) // -O1
-	case "2":
-		err = c.Optimize(2, 0, 225) // -O2
-	case "s":
-		err = c.Optimize(2, 1, 225) // -Os
-	case "z":
-		err = c.Optimize(2, 2, 5) // -Oz, default
-	default:
-		err = errors.New("unknown optimization level: -opt=" + options.Opt)
-	}
-	if err != nil {
-		return err
-	}
-	if err := c.Verify(); err != nil {
-		return errors.New("verification failure after LLVM optimization passes")
-	}
-
-	// On the AVR, pointers can point either to flash or to RAM, but we don't
-	// know. As a temporary fix, load all global variables in RAM.
-	// In the future, there should be a compiler pass that determines which
-	// pointers are flash and which are in RAM so that pointers can have a
-	// correct address space parameter (address space 1 is for flash).
-	if strings.HasPrefix(spec.Triple, "avr") {
-		c.NonConstGlobals()
-		if err := c.Verify(); err != nil {
-			return errors.New("verification error after making all globals non-constant on AVR")
-		}
-	}
-
-	// Generate output.
-	outext := filepath.Ext(outpath)
-	switch outext {
-	case ".o":
-		return c.EmitObject(outpath)
-	case ".bc":
-		return c.EmitBitcode(outpath)
-	case ".ll":
-		return c.EmitText(outpath)
-	default:
-		// Act as a compiler driver.
-
-		// Create a temporary directory for intermediary files.
-		dir, err := ioutil.TempDir("", "tinygo")
-		if err != nil {
-			return err
-		}
-		defer os.RemoveAll(dir)
-
-		// Write the object file.
-		objfile := filepath.Join(dir, "main.o")
-		err = c.EmitObject(objfile)
-		if err != nil {
-			return err
-		}
-
-		// Load builtins library from the cache, possibly compiling it on the
-		// fly.
-		var librt string
-		if spec.RTLib == "compiler-rt" {
-			librt, err = loadBuiltins(spec.Triple)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Prepare link command.
-		executable := filepath.Join(dir, "main")
-		tmppath := executable // final file
-		ldflags := append(compilerConfig.LDFlags(), "-o", executable, objfile)
-		if spec.RTLib == "compiler-rt" {
-			ldflags = append(ldflags, librt)
-		}
-
-		// Compile extra files.
-		for i, path := range spec.ExtraFiles {
-			abspath := filepath.Join(root, path)
-			outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
-			cmdNames := []string{spec.Compiler}
-			if names, ok := commands[spec.Compiler]; ok {
-				cmdNames = names
-			}
-			err := execCommand(cmdNames, append(compilerConfig.CFlags(), "-c", "-o", outpath, abspath)...)
-			if err != nil {
-				return &commandError{"failed to build", path, err}
-			}
-			ldflags = append(ldflags, outpath)
-		}
-
-		// Compile C files in packages.
-		for i, pkg := range c.Packages() {
-			for _, file := range pkg.CFiles {
-				path := filepath.Join(pkg.Package.Dir, file)
-				outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"-"+file+".o")
-				cmdNames := []string{spec.Compiler}
-				if names, ok := commands[spec.Compiler]; ok {
-					cmdNames = names
-				}
-				err := execCommand(cmdNames, append(compilerConfig.CFlags(), "-c", "-o", outpath, path)...)
-				if err != nil {
-					return &commandError{"failed to build", path, err}
-				}
-				ldflags = append(ldflags, outpath)
-			}
-		}
-
-		// Link the object files together.
-		err = Link(spec.Linker, ldflags...)
-		if err != nil {
-			return &commandError{"failed to link", executable, err}
-		}
-
-		if options.PrintSizes == "short" || options.PrintSizes == "full" {
-			sizes, err := Sizes(executable)
-			if err != nil {
-				return err
-			}
-			if options.PrintSizes == "short" {
-				fmt.Printf("   code    data     bss |   flash     ram\n")
-				fmt.Printf("%7d %7d %7d | %7d %7d\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
-			} else {
-				fmt.Printf("   code  rodata    data     bss |   flash     ram | package\n")
-				for _, name := range sizes.SortedPackageNames() {
-					pkgSize := sizes.Packages[name]
-					fmt.Printf("%7d %7d %7d %7d | %7d %7d | %s\n", pkgSize.Code, pkgSize.ROData, pkgSize.Data, pkgSize.BSS, pkgSize.Flash(), pkgSize.RAM(), name)
-				}
-				fmt.Printf("%7d %7d %7d %7d | %7d %7d | (sum)\n", sizes.Sum.Code, sizes.Sum.ROData, sizes.Sum.Data, sizes.Sum.BSS, sizes.Sum.Flash(), sizes.Sum.RAM())
-				fmt.Printf("%7d       - %7d %7d | %7d %7d | (all)\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
-			}
-		}
-
-		// Get an Intel .hex file or .bin file from the .elf file.
-		if outext == ".hex" || outext == ".bin" || outext == ".gba" {
-			tmppath = filepath.Join(dir, "main"+outext)
-			err := Objcopy(executable, tmppath)
-			if err != nil {
-				return err
-			}
-		} else if outext == ".uf2" {
-			// Get UF2 from the .elf file.
-			tmppath = filepath.Join(dir, "main"+outext)
-			err := ConvertELFFileToUF2File(executable, tmppath)
-			if err != nil {
-				return err
-			}
-		}
-		return action(tmppath)
-	}
-}
-
-func Build(pkgName, outpath, target string, options *compileopts.Options) error {
-	spec, err := compileopts.LoadTarget(target)
-	if err != nil {
-		return err
-	}
-
-	return Compile(pkgName, outpath, spec, options, func(tmppath string) error {
+	return builder.Build(pkgName, outpath, config, func(tmppath string) error {
 		if err := os.Rename(tmppath, outpath); err != nil {
 			// Moving failed. Do a file copy.
 			inf, err := os.Open(tmppath)
@@ -305,15 +108,21 @@ func Build(pkgName, outpath, target string, options *compileopts.Options) error 
 	})
 }
 
-func Test(pkgName, target string, options *compileopts.Options) error {
-	spec, err := compileopts.LoadTarget(target)
+// Test runs the tests in the given package.
+func Test(pkgName string, options *compileopts.Options) error {
+	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
 	}
 
-	spec.BuildTags = append(spec.BuildTags, "test")
+	// Add test build tag. This is incorrect: `go test` only looks at the
+	// _test.go file suffix but does not add the test build tag in the process.
+	// However, it's a simple fix right now.
+	// For details: https://github.com/golang/go/issues/21360
+	config.Target.BuildTags = append(config.Target.BuildTags, "test")
+
 	options.TestConfig.CompileTestBinary = true
-	return Compile(pkgName, ".elf", spec, options, func(tmppath string) error {
+	return builder.Build(pkgName, ".elf", config, func(tmppath string) error {
 		cmd := exec.Command(tmppath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -332,8 +141,9 @@ func Test(pkgName, target string, options *compileopts.Options) error {
 	})
 }
 
-func Flash(pkgName, target, port string, options *compileopts.Options) error {
-	spec, err := compileopts.LoadTarget(target)
+// Flash builds and flashes the built binary to the given serial port.
+func Flash(pkgName, port string, options *compileopts.Options) error {
+	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
 	}
@@ -341,36 +151,36 @@ func Flash(pkgName, target, port string, options *compileopts.Options) error {
 	// determine the type of file to compile
 	var fileExt string
 
-	switch spec.FlashMethod {
+	switch config.Target.FlashMethod {
 	case "command", "":
 		switch {
-		case strings.Contains(spec.FlashCommand, "{hex}"):
+		case strings.Contains(config.Target.FlashCommand, "{hex}"):
 			fileExt = ".hex"
-		case strings.Contains(spec.FlashCommand, "{elf}"):
+		case strings.Contains(config.Target.FlashCommand, "{elf}"):
 			fileExt = ".elf"
-		case strings.Contains(spec.FlashCommand, "{bin}"):
+		case strings.Contains(config.Target.FlashCommand, "{bin}"):
 			fileExt = ".bin"
-		case strings.Contains(spec.FlashCommand, "{uf2}"):
+		case strings.Contains(config.Target.FlashCommand, "{uf2}"):
 			fileExt = ".uf2"
 		default:
 			return errors.New("invalid target file - did you forget the {hex} token in the 'flash-command' section?")
 		}
 	case "msd":
-		if spec.FlashFilename == "" {
+		if config.Target.FlashFilename == "" {
 			return errors.New("invalid target file: flash-method was set to \"msd\" but no msd-firmware-name was set")
 		}
-		fileExt = filepath.Ext(spec.FlashFilename)
+		fileExt = filepath.Ext(config.Target.FlashFilename)
 	case "openocd":
 		fileExt = ".hex"
 	case "native":
 		return errors.New("unknown flash method \"native\" - did you miss a -target flag?")
 	default:
-		return errors.New("unknown flash method: " + spec.FlashMethod)
+		return errors.New("unknown flash method: " + config.Target.FlashMethod)
 	}
 
-	return Compile(pkgName, fileExt, spec, options, func(tmppath string) error {
+	return builder.Build(pkgName, fileExt, config, func(tmppath string) error {
 		// do we need port reset to put MCU into bootloader mode?
-		if spec.PortReset == "true" {
+		if config.Target.PortReset == "true" {
 			err := touchSerialPortAt1200bps(port)
 			if err != nil {
 				return &commandError{"failed to reset port", tmppath, err}
@@ -380,10 +190,10 @@ func Flash(pkgName, target, port string, options *compileopts.Options) error {
 		}
 
 		// this flashing method copies the binary data to a Mass Storage Device (msd)
-		switch spec.FlashMethod {
+		switch config.Target.FlashMethod {
 		case "", "command":
 			// Create the command.
-			flashCmd := spec.FlashCommand
+			flashCmd := config.Target.FlashCommand
 			fileToken := "{" + fileExt[1:] + "}"
 			flashCmd = strings.Replace(flashCmd, fileToken, tmppath, -1)
 			flashCmd = strings.Replace(flashCmd, "{port}", port, -1)
@@ -401,13 +211,13 @@ func Flash(pkgName, target, port string, options *compileopts.Options) error {
 		case "msd":
 			switch fileExt {
 			case ".uf2":
-				err := flashUF2UsingMSD(spec.FlashVolume, tmppath)
+				err := flashUF2UsingMSD(config.Target.FlashVolume, tmppath)
 				if err != nil {
 					return &commandError{"failed to flash", tmppath, err}
 				}
 				return nil
 			case ".hex":
-				err := flashHexUsingMSD(spec.FlashVolume, tmppath)
+				err := flashHexUsingMSD(config.Target.FlashVolume, tmppath)
 				if err != nil {
 					return &commandError{"failed to flash", tmppath, err}
 				}
@@ -416,7 +226,7 @@ func Flash(pkgName, target, port string, options *compileopts.Options) error {
 				return errors.New("mass storage device flashing currently only supports uf2 and hex")
 			}
 		case "openocd":
-			args, err := spec.OpenOCDConfiguration()
+			args, err := config.Target.OpenOCDConfiguration()
 			if err != nil {
 				return err
 			}
@@ -430,34 +240,36 @@ func Flash(pkgName, target, port string, options *compileopts.Options) error {
 			}
 			return nil
 		default:
-			return fmt.Errorf("unknown flash method: %s", spec.FlashMethod)
+			return fmt.Errorf("unknown flash method: %s", config.Target.FlashMethod)
 		}
 	})
 }
 
-// Flash a program on a microcontroller and drop into a GDB shell.
+// FlashGDB compiles and flashes a program to a microcontroller (just like
+// Flash) but instead of resetting the target, it will drop into a GDB shell.
+// You can then set breakpoints, run the GDB `continue` command to start, hit
+// Ctrl+C to break the running program, etc.
 //
 // Note: this command is expected to execute just before exiting, as it
 // modifies global state.
-func FlashGDB(pkgName, target, port string, ocdOutput bool, options *compileopts.Options) error {
-	spec, err := compileopts.LoadTarget(target)
+func FlashGDB(pkgName, port string, ocdOutput bool, options *compileopts.Options) error {
+	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
 	}
-
-	if spec.GDB == "" {
+	if config.Target.GDB == "" {
 		return errors.New("gdb not configured in the target specification")
 	}
 
-	return Compile(pkgName, "", spec, options, func(tmppath string) error {
+	return builder.Build(pkgName, "", config, func(tmppath string) error {
 		// Find a good way to run GDB.
-		gdbInterface := spec.FlashMethod
+		gdbInterface := config.Target.FlashMethod
 		switch gdbInterface {
 		case "msd", "command", "":
 			if gdbInterface == "" {
 				gdbInterface = "command"
 			}
-			if spec.OpenOCDInterface != "" && spec.OpenOCDTarget != "" {
+			if config.Target.OpenOCDInterface != "" && config.Target.OpenOCDTarget != "" {
 				gdbInterface = "openocd"
 			}
 		}
@@ -471,7 +283,7 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, options *compileopts
 			gdbCommands = append(gdbCommands, "target remote :3333", "monitor halt", "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
-			args, err := spec.OpenOCDConfiguration()
+			args, err := config.Target.OpenOCDConfiguration()
 			if err != nil {
 				return err
 			}
@@ -517,7 +329,7 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, options *compileopts
 		for _, cmd := range gdbCommands {
 			params = append(params, "-ex", cmd)
 		}
-		cmd := exec.Command(spec.GDB, params...)
+		cmd := exec.Command(config.Target.GDB, params...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -529,15 +341,18 @@ func FlashGDB(pkgName, target, port string, ocdOutput bool, options *compileopts
 	})
 }
 
-// Compile and run the given program, directly or in an emulator.
-func Run(pkgName, target string, options *compileopts.Options) error {
-	spec, err := compileopts.LoadTarget(target)
+// Run compiles and runs the given program. Depending on the target provided in
+// the options, it will run the program directly on the host or will run it in
+// an emulator. For example, -target=wasm will cause the binary to be run inside
+// of a WebAssembly VM.
+func Run(pkgName string, options *compileopts.Options) error {
+	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
 	}
 
-	return Compile(pkgName, ".elf", spec, options, func(tmppath string) error {
-		if len(spec.Emulator) == 0 {
+	return builder.Build(pkgName, ".elf", config, func(tmppath string) error {
+		if len(config.Target.Emulator) == 0 {
 			// Run directly.
 			cmd := exec.Command(tmppath)
 			cmd.Stdout = os.Stdout
@@ -553,8 +368,8 @@ func Run(pkgName, target string, options *compileopts.Options) error {
 			return nil
 		} else {
 			// Run in an emulator.
-			args := append(spec.Emulator[1:], tmppath)
-			cmd := exec.Command(spec.Emulator[0], args...)
+			args := append(config.Target.Emulator[1:], tmppath)
+			cmd := exec.Command(config.Target.Emulator[0], args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			err := cmd.Run()
@@ -674,7 +489,7 @@ func handleCompilerError(err error) {
 			for _, err := range err.Errs {
 				fmt.Fprintln(os.Stderr, err)
 			}
-		case *multiError:
+		case *builder.MultiError:
 			for _, err := range err.Errs {
 				fmt.Fprintln(os.Stderr, err)
 			}
@@ -714,6 +529,7 @@ func main() {
 
 	flag.CommandLine.Parse(os.Args[2:])
 	options := &compileopts.Options{
+		Target:        *target,
 		Opt:           *opt,
 		GC:            *gc,
 		PanicStrategy: *panicStrategy,
@@ -765,11 +581,10 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		target := *target
-		if target == "" && filepath.Ext(*outpath) == ".wasm" {
-			target = "wasm"
+		if options.Target == "" && filepath.Ext(*outpath) == ".wasm" {
+			options.Target = "wasm"
 		}
-		err := Build(pkgName, *outpath, target, options)
+		err := Build(pkgName, *outpath, options)
 		handleCompilerError(err)
 	case "build-builtins":
 		// Note: this command is only meant to be used while making a release!
@@ -781,7 +596,7 @@ func main() {
 		if *target == "" {
 			fmt.Fprintln(os.Stderr, "No target (-target).")
 		}
-		err := compileBuiltins(*target, func(path string) error {
+		err := builder.CompileBuiltins(*target, func(path string) error {
 			return moveFile(path, *outpath)
 		})
 		handleCompilerError(err)
@@ -792,7 +607,7 @@ func main() {
 			os.Exit(1)
 		}
 		if command == "flash" {
-			err := Flash(flag.Arg(0), *target, *port, options)
+			err := Flash(flag.Arg(0), *port, options)
 			handleCompilerError(err)
 		} else {
 			if !options.Debug {
@@ -800,7 +615,7 @@ func main() {
 				usage()
 				os.Exit(1)
 			}
-			err := FlashGDB(flag.Arg(0), *target, *port, *ocdOutput, options)
+			err := FlashGDB(flag.Arg(0), *port, *ocdOutput, options)
 			handleCompilerError(err)
 		}
 	case "run":
@@ -809,7 +624,7 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Run(flag.Arg(0), *target, options)
+		err := Run(flag.Arg(0), options)
 		handleCompilerError(err)
 	case "test":
 		pkgName := "."
@@ -820,25 +635,23 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Test(pkgName, *target, options)
+		err := Test(pkgName, options)
 		handleCompilerError(err)
 	case "info":
-		target := *target
 		if flag.NArg() == 1 {
-			target = flag.Arg(0)
+			options.Target = flag.Arg(0)
 		} else if flag.NArg() > 1 {
 			fmt.Fprintln(os.Stderr, "only one target name is accepted")
 			usage()
 			os.Exit(1)
 		}
-		spec, err := compileopts.LoadTarget(target)
-		config := &compileopts.Config{
-			Options:        options,
-			Target:         spec,
-			GoMinorVersion: 0, // this avoids creating the list of Go1.x build tags.
-			ClangHeaders:   getClangHeaderPath(goenv.Get("TINYGOROOT")),
-			TestConfig:     options.TestConfig,
+		config, err := builder.NewConfig(options)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			usage()
+			os.Exit(1)
 		}
+		config.GoMinorVersion = 0 // this avoids creating the list of Go1.x build tags.
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -860,7 +673,7 @@ func main() {
 		usage()
 	case "version":
 		goversion := "<unknown>"
-		if s, err := getGorootVersionString(goenv.Get("GOROOT")); err == nil {
+		if s, err := builder.GorootVersionString(goenv.Get("GOROOT")); err == nil {
 			goversion = s
 		}
 		fmt.Printf("tinygo version %s %s/%s (using go version %s)\n", version, runtime.GOOS, runtime.GOARCH, goversion)

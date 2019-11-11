@@ -1,4 +1,4 @@
-package main
+package builder
 
 import (
 	"debug/elf"
@@ -6,18 +6,18 @@ import (
 	"strings"
 )
 
-// Statistics about code size in a program.
-type ProgramSize struct {
-	Packages map[string]*PackageSize
-	Sum      *PackageSize
+// programSize contains size statistics per package of a compiled program.
+type programSize struct {
+	Packages map[string]*packageSize
+	Sum      *packageSize
 	Code     uint64
 	Data     uint64
 	BSS      uint64
 }
 
-// Return the list of package names (ProgramSize.Packages) sorted
-// alphabetically.
-func (ps *ProgramSize) SortedPackageNames() []string {
+// sortedPackageNames returns the list of package names (ProgramSize.Packages)
+// sorted alphabetically.
+func (ps *programSize) sortedPackageNames() []string {
 	names := make([]string, 0, len(ps.Packages))
 	for name := range ps.Packages {
 		names = append(names, name)
@@ -26,8 +26,9 @@ func (ps *ProgramSize) SortedPackageNames() []string {
 	return names
 }
 
-// The size of a package, calculated from the linked object file.
-type PackageSize struct {
+// packageSize contains the size of a package, calculated from the linked object
+// file.
+type packageSize struct {
 	Code   uint64
 	ROData uint64
 	Data   uint64
@@ -35,12 +36,12 @@ type PackageSize struct {
 }
 
 // Flash usage in regular microcontrollers.
-func (ps *PackageSize) Flash() uint64 {
+func (ps *packageSize) Flash() uint64 {
 	return ps.Code + ps.ROData + ps.Data
 }
 
 // Static RAM usage in regular microcontrollers.
-func (ps *PackageSize) RAM() uint64 {
+func (ps *packageSize) RAM() uint64 {
 	return ps.Data + ps.BSS
 }
 
@@ -64,8 +65,9 @@ func (l symbolList) Swap(i, j int) {
 	l[i], l[j] = l[j], l[i]
 }
 
-// Calculate program/data size breakdown of each package for a given ELF file.
-func Sizes(path string) (*ProgramSize, error) {
+// loadProgramSize calculate a program/data size breakdown of each package for a
+// given ELF file.
+func loadProgramSize(path string) (*programSize, error) {
 	file, err := elf.Open(path)
 	if err != nil {
 		return nil, err
@@ -115,7 +117,7 @@ func Sizes(path string) (*ProgramSize, error) {
 	}
 	sort.Sort(symbolList(symbols))
 
-	sizes := map[string]*PackageSize{}
+	sizes := map[string]*packageSize{}
 	var lastSymbolValue uint64
 	for _, symbol := range symbols {
 		symType := elf.ST_TYPE(symbol.Info)
@@ -129,7 +131,7 @@ func Sizes(path string) (*ProgramSize, error) {
 		}
 		pkgSize := sizes[pkgName]
 		if pkgSize == nil {
-			pkgSize = &PackageSize{}
+			pkgSize = &packageSize{}
 			sizes[pkgName] = pkgSize
 		}
 		if lastSymbolValue != symbol.Value || lastSymbolValue == 0 {
@@ -148,7 +150,7 @@ func Sizes(path string) (*ProgramSize, error) {
 		lastSymbolValue = symbol.Value
 	}
 
-	sum := &PackageSize{}
+	sum := &packageSize{}
 	for _, pkg := range sizes {
 		sum.Code += pkg.Code
 		sum.ROData += pkg.ROData
@@ -156,5 +158,5 @@ func Sizes(path string) (*ProgramSize, error) {
 		sum.BSS += pkg.BSS
 	}
 
-	return &ProgramSize{Packages: sizes, Code: sumCode, Data: sumData, BSS: sumBSS, Sum: sum}, nil
+	return &programSize{Packages: sizes, Code: sumCode, Data: sumData, BSS: sumBSS, Sum: sum}, nil
 }

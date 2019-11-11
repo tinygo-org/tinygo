@@ -1,4 +1,4 @@
-package main
+package builder
 
 import (
 	"errors"
@@ -8,8 +8,10 @@ import (
 	"strings"
 )
 
-// Commands used by the compilation process might have different file names
-// across operating systems and distributions.
+// Commands lists command alternatives for various operating systems. These
+// commands may have a slightly different name across operating systems and
+// distributions or may not even exist in $PATH, in which case absolute paths
+// may be used.
 var commands = map[string][]string{
 	"clang":   {"clang-8"},
 	"ld.lld":  {"ld.lld-8", "ld.lld"},

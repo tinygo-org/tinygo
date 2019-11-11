@@ -128,6 +128,12 @@ func (c *Config) LDFlags() []string {
 	return ldflags
 }
 
+// ExtraFiles returns the list of extra files to be built and linked with the
+// executable. This can include extra C and assembly files.
+func (c *Config) ExtraFiles() []string {
+	return c.Target.ExtraFiles
+}
+
 // DumpSSA returns whether to dump Go SSA while compiling (-dumpssa flag). Only
 // enable this for debugging.
 func (c *Config) DumpSSA() bool {
