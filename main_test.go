@@ -120,6 +120,7 @@ func runTest(path, target string, t *testing.T) {
 
 	// Build the test binary.
 	config := &compileopts.Options{
+		Target:     target,
 		Opt:        "z",
 		PrintIR:    false,
 		DumpSSA:    false,
@@ -129,7 +130,7 @@ func runTest(path, target string, t *testing.T) {
 		WasmAbi:    "js",
 	}
 	binary := filepath.Join(tmpdir, "test")
-	err = Build("./"+path, binary, target, config)
+	err = Build("./"+path, binary, config)
 	if err != nil {
 		if errLoader, ok := err.(loader.Errors); ok {
 			for _, err := range errLoader.Errs {

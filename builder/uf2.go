@@ -1,10 +1,11 @@
-// Converts firmware files from BIN to UF2 format before flashing.
+package builder
+
+// This file converts firmware files from BIN to UF2 format before flashing.
 //
 // For more information about the UF2 firmware file format, please see:
 // https://github.com/Microsoft/uf2
 //
 //
-package main
 
 import (
 	"bytes"
@@ -12,24 +13,24 @@ import (
 	"io/ioutil"
 )
 
-// ConvertELFFileToUF2File converts an ELF file to a UF2 file.
-func ConvertELFFileToUF2File(infile, outfile string) error {
+// convertELFFileToUF2File converts an ELF file to a UF2 file.
+func convertELFFileToUF2File(infile, outfile string) error {
 	// Read the .text segment.
-	targetAddress, data, err := ExtractROM(infile)
+	targetAddress, data, err := extractROM(infile)
 	if err != nil {
 		return err
 	}
 
-	output, _ := ConvertBinToUF2(data, uint32(targetAddress))
+	output, _ := convertBinToUF2(data, uint32(targetAddress))
 	return ioutil.WriteFile(outfile, output, 0644)
 }
 
-// ConvertBinToUF2 converts the binary bytes in input to UF2 formatted data.
-func ConvertBinToUF2(input []byte, targetAddr uint32) ([]byte, int) {
+// convertBinToUF2 converts the binary bytes in input to UF2 formatted data.
+func convertBinToUF2(input []byte, targetAddr uint32) ([]byte, int) {
 	blocks := split(input, 256)
 	output := make([]byte, 0)
 
-	bl := NewUF2Block(targetAddr)
+	bl := newUF2Block(targetAddr)
 	bl.SetNumBlocks(len(blocks))
 
 	for i := 0; i < len(blocks); i++ {
@@ -49,8 +50,8 @@ const (
 	uf2MagicEnd    = 0x0AB16F30 // Ditto
 )
 
-// UF2Block is the structure used for each UF2 code block sent to device.
-type UF2Block struct {
+// uf2Block is the structure used for each UF2 code block sent to device.
+type uf2Block struct {
 	magicStart0 uint32
 	magicStart1 uint32
 	flags       uint32
@@ -63,9 +64,9 @@ type UF2Block struct {
 	magicEnd    uint32
 }
 
-// NewUF2Block returns a new UF2Block struct that has been correctly populated
-func NewUF2Block(targetAddr uint32) *UF2Block {
-	return &UF2Block{magicStart0: uf2MagicStart0,
+// newUF2Block returns a new uf2Block struct that has been correctly populated
+func newUF2Block(targetAddr uint32) *uf2Block {
+	return &uf2Block{magicStart0: uf2MagicStart0,
 		magicStart1: uf2MagicStart1,
 		magicEnd:    uf2MagicEnd,
 		targetAddr:  targetAddr,
@@ -76,8 +77,8 @@ func NewUF2Block(targetAddr uint32) *UF2Block {
 	}
 }
 
-// Bytes converts the UF2Block to a slice of bytes that can be written to file.
-func (b *UF2Block) Bytes() []byte {
+// Bytes converts the uf2Block to a slice of bytes that can be written to file.
+func (b *uf2Block) Bytes() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, 512))
 	binary.Write(buf, binary.LittleEndian, b.magicStart0)
 	binary.Write(buf, binary.LittleEndian, b.magicStart1)
@@ -94,23 +95,23 @@ func (b *UF2Block) Bytes() []byte {
 }
 
 // IncrementAddress moves the target address pointer forward by count bytes.
-func (b *UF2Block) IncrementAddress(count uint32) {
+func (b *uf2Block) IncrementAddress(count uint32) {
 	b.targetAddr += b.payloadSize
 }
 
 // SetData sets the data to be used for the current block.
-func (b *UF2Block) SetData(d []byte) {
+func (b *uf2Block) SetData(d []byte) {
 	b.data = make([]byte, 476)
 	copy(b.data[:], d)
 }
 
 // SetBlockNo sets the current block number to be used.
-func (b *UF2Block) SetBlockNo(bn int) {
+func (b *uf2Block) SetBlockNo(bn int) {
 	b.blockNo = uint32(bn)
 }
 
 // SetNumBlocks sets the total number of blocks for this UF2 file.
-func (b *UF2Block) SetNumBlocks(total int) {
+func (b *uf2Block) SetNumBlocks(total int) {
 	b.numBlocks = uint32(total)
 }
 

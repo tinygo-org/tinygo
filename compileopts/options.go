@@ -3,6 +3,7 @@ package compileopts
 // Options contains extra options to give to the compiler. These options are
 // usually passed from the command line.
 type Options struct {
+	Target        string
 	Opt           string
 	GC            string
 	PanicStrategy string
