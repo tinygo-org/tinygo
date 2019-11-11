@@ -35,10 +35,12 @@ type timeUnit int64
 
 const tickMicros = 1
 
-// TODO: Linux/amd64-specific
+// Note: tv_sec and tv_nsec vary in size by platform. They are 32-bit on 32-bit
+// systems and 64-bit on 64-bit systems (at least on macOS/Linux), so we can
+// simply use the 'int' type which does the same.
 type timespec struct {
-	tv_sec  timeT
-	tv_nsec timeT
+	tv_sec  int // time_t: follows the platform bitness
+	tv_nsec int // long: on Linux and macOS, follows the platform bitness
 }
 
 const CLOCK_MONOTONIC_RAW = 4
