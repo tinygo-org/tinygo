@@ -1,15 +1,11 @@
 package builder
 
 import (
-	"errors"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/blakesmith/ar"
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
@@ -246,50 +242,15 @@ func CompileBuiltins(target string, callback func(path string) error) error {
 		}
 	}
 
-	// Put all builtins in an archive to link as a static library.
-	// Note: this does not create a symbol index, but ld.lld doesn't seem to
-	// care.
+	// Put all the object files in a single archive. This archive file will be
+	// used to statically link compiler-rt.
 	arpath := filepath.Join(dir, "librt.a")
-	arfile, err := os.Create(arpath)
+	err = makeArchive(arpath, objs)
 	if err != nil {
 		return err
-	}
-	defer arfile.Close()
-	arwriter := ar.NewWriter(arfile)
-	err = arwriter.WriteGlobalHeader()
-	if err != nil {
-		return &os.PathError{"write ar header", arpath, err}
-	}
-	for _, objpath := range objs {
-		name := filepath.Base(objpath)
-		objfile, err := os.Open(objpath)
-		if err != nil {
-			return err
-		}
-		defer objfile.Close()
-		st, err := objfile.Stat()
-		if err != nil {
-			return err
-		}
-		arwriter.WriteHeader(&ar.Header{
-			Name:    name,
-			ModTime: time.Unix(0, 0),
-			Uid:     0,
-			Gid:     0,
-			Mode:    0644,
-			Size:    st.Size(),
-		})
-		n, err := io.Copy(arwriter, objfile)
-		if err != nil {
-			return err
-		}
-		if n != st.Size() {
-			return errors.New("file modified during ar creation: " + arpath)
-		}
 	}
 
 	// Give the caller the resulting file. The callback must copy the file,
 	// because after it returns the temporary directory will be removed.
-	arfile.Close()
 	return callback(arpath)
 }
