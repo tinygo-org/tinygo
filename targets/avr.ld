@@ -17,7 +17,7 @@ SECTIONS
         *(.rodata.*)
     }
 
-    .stack :
+    .stack (NOLOAD) :
     {
         . += _stack_size;
         _stack_top = .;

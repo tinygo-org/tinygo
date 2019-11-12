@@ -13,7 +13,7 @@ SECTIONS
     /* Put the stack at the bottom of RAM, so that the application will
      * crash on stack overflow instead of silently corrupting memory.
      * See: http://blog.japaric.io/stack-overflow-protection/ */
-    .stack :
+    .stack (NOLOAD) :
     {
         . = ALIGN(4);
         . += _stack_size;
