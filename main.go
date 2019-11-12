@@ -151,7 +151,8 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	// determine the type of file to compile
 	var fileExt string
 
-	switch config.Target.FlashMethod {
+	flashMethod, _ := config.Programmer()
+	switch flashMethod {
 	case "command", "":
 		switch {
 		case strings.Contains(config.Target.FlashCommand, "{hex}"):
@@ -175,7 +176,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	case "native":
 		return errors.New("unknown flash method \"native\" - did you miss a -target flag?")
 	default:
-		return errors.New("unknown flash method: " + config.Target.FlashMethod)
+		return errors.New("unknown flash method: " + flashMethod)
 	}
 
 	return builder.Build(pkgName, fileExt, config, func(tmppath string) error {
@@ -190,7 +191,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		}
 
 		// this flashing method copies the binary data to a Mass Storage Device (msd)
-		switch config.Target.FlashMethod {
+		switch flashMethod {
 		case "", "command":
 			// Create the command.
 			flashCmd := config.Target.FlashCommand
@@ -226,7 +227,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 				return errors.New("mass storage device flashing currently only supports uf2 and hex")
 			}
 		case "openocd":
-			args, err := config.Target.OpenOCDConfiguration()
+			args, err := config.OpenOCDConfiguration()
 			if err != nil {
 				return err
 			}
@@ -240,7 +241,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			}
 			return nil
 		default:
-			return fmt.Errorf("unknown flash method: %s", config.Target.FlashMethod)
+			return fmt.Errorf("unknown flash method: %s", flashMethod)
 		}
 	})
 }
@@ -263,13 +264,13 @@ func FlashGDB(pkgName, port string, ocdOutput bool, options *compileopts.Options
 
 	return builder.Build(pkgName, "", config, func(tmppath string) error {
 		// Find a good way to run GDB.
-		gdbInterface := config.Target.FlashMethod
+		gdbInterface, openocdInterface := config.Programmer()
 		switch gdbInterface {
 		case "msd", "command", "":
 			if gdbInterface == "" {
 				gdbInterface = "command"
 			}
-			if config.Target.OpenOCDInterface != "" && config.Target.OpenOCDTarget != "" {
+			if openocdInterface != "" && config.Target.OpenOCDTarget != "" {
 				gdbInterface = "openocd"
 			}
 		}
@@ -283,7 +284,7 @@ func FlashGDB(pkgName, port string, ocdOutput bool, options *compileopts.Options
 			gdbCommands = append(gdbCommands, "target remote :3333", "monitor halt", "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
-			args, err := config.Target.OpenOCDConfiguration()
+			args, err := config.OpenOCDConfiguration()
 			if err != nil {
 				return err
 			}
@@ -515,6 +516,7 @@ func main() {
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "/dev/ttyACM0", "flash port")
+	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
 	wasmAbi := flag.String("wasm-abi", "js", "WebAssembly ABI conventions: js (no i64 params) or generic")
@@ -541,6 +543,7 @@ func main() {
 		PrintSizes:    *printSize,
 		Tags:          *tags,
 		WasmAbi:       *wasmAbi,
+		Programmer:    *programmer,
 	}
 
 	if *cFlags != "" {

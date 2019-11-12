@@ -5,11 +5,9 @@ package compileopts
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 
@@ -276,31 +274,4 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		}
 	}
 	return &spec, nil
-}
-
-// OpenOCDConfiguration returns a list of command line arguments to OpenOCD.
-// This list of command-line arguments is based on the various OpenOCD-related
-// flags in the target specification.
-func (spec *TargetSpec) OpenOCDConfiguration() (args []string, err error) {
-	if spec.OpenOCDInterface == "" {
-		return nil, errors.New("OpenOCD programmer not set")
-	}
-	if !regexp.MustCompile("^[\\p{L}0-9_-]+$").MatchString(spec.OpenOCDInterface) {
-		return nil, fmt.Errorf("OpenOCD programmer has an invalid name: %#v", spec.OpenOCDInterface)
-	}
-	if spec.OpenOCDTarget == "" {
-		return nil, errors.New("OpenOCD chip not set")
-	}
-	if !regexp.MustCompile("^[\\p{L}0-9_-]+$").MatchString(spec.OpenOCDTarget) {
-		return nil, fmt.Errorf("OpenOCD target has an invalid name: %#v", spec.OpenOCDTarget)
-	}
-	if spec.OpenOCDTransport != "" && spec.OpenOCDTransport != "swd" {
-		return nil, fmt.Errorf("unknown OpenOCD transport: %#v", spec.OpenOCDTransport)
-	}
-	args = []string{"-f", "interface/" + spec.OpenOCDInterface + ".cfg"}
-	if spec.OpenOCDTransport != "" {
-		args = append(args, "-c", "transport select "+spec.OpenOCDTransport)
-	}
-	args = append(args, "-f", "target/"+spec.OpenOCDTarget+".cfg")
-	return args, nil
 }

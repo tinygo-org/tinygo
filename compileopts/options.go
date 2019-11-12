@@ -19,4 +19,5 @@ type Options struct {
 	WasmAbi       string
 	HeapSize      int64
 	TestConfig    TestConfig
+	Programmer    string
 }

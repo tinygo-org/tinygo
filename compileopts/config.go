@@ -3,7 +3,9 @@
 package compileopts
 
 import (
+	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -150,6 +152,52 @@ func (c *Config) VerifyIR() bool {
 // and similar.
 func (c *Config) Debug() bool {
 	return c.Options.Debug
+}
+
+// Programmer returns the flash method and OpenOCD interface name given a
+// particular configuration. It may either be all configured in the target JSON
+// file or be modified using the -programmmer command-line option.
+func (c *Config) Programmer() (method, openocdInterface string) {
+	switch c.Options.Programmer {
+	case "":
+		// No configuration supplied.
+		return c.Target.FlashMethod, c.Target.OpenOCDInterface
+	case "openocd", "msd", "command":
+		// The -programmer flag only specifies the flash method.
+		return c.Options.Programmer, c.Target.OpenOCDInterface
+	default:
+		// The -programmer flag specifies something else, assume it specifies
+		// the OpenOCD interface name.
+		return "openocd", c.Options.Programmer
+	}
+}
+
+// OpenOCDConfiguration returns a list of command line arguments to OpenOCD.
+// This list of command-line arguments is based on the various OpenOCD-related
+// flags in the target specification.
+func (c *Config) OpenOCDConfiguration() (args []string, err error) {
+	_, openocdInterface := c.Programmer()
+	if openocdInterface == "" {
+		return nil, errors.New("OpenOCD programmer not set")
+	}
+	if !regexp.MustCompile("^[\\p{L}0-9_-]+$").MatchString(openocdInterface) {
+		return nil, fmt.Errorf("OpenOCD programmer has an invalid name: %#v", openocdInterface)
+	}
+	if c.Target.OpenOCDTarget == "" {
+		return nil, errors.New("OpenOCD chip not set")
+	}
+	if !regexp.MustCompile("^[\\p{L}0-9_-]+$").MatchString(c.Target.OpenOCDTarget) {
+		return nil, fmt.Errorf("OpenOCD target has an invalid name: %#v", c.Target.OpenOCDTarget)
+	}
+	if c.Target.OpenOCDTransport != "" && c.Target.OpenOCDTransport != "swd" {
+		return nil, fmt.Errorf("unknown OpenOCD transport: %#v", c.Target.OpenOCDTransport)
+	}
+	args = []string{"-f", "interface/" + openocdInterface + ".cfg"}
+	if c.Target.OpenOCDTransport != "" {
+		args = append(args, "-c", "transport select "+c.Target.OpenOCDTransport)
+	}
+	args = append(args, "-f", "target/"+c.Target.OpenOCDTarget+".cfg")
+	return args, nil
 }
 
 type TestConfig struct {
