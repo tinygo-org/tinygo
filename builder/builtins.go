@@ -166,6 +166,12 @@ func builtinFiles(target string) []string {
 
 // builtinsDir returns the directory where the sources for compiler-rt are kept.
 func builtinsDir() string {
+	// Path from within the development directory.
+	path := filepath.Join(goenv.Get("TINYGOROOT"), "llvm-project", "compiler-rt", "lib", "builtins")
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+	// Path from within an installation directory (bundled in the release tarball).
 	return filepath.Join(goenv.Get("TINYGOROOT"), "lib", "compiler-rt", "lib", "builtins")
 }
 
