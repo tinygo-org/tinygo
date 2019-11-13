@@ -6,6 +6,7 @@ package compiler
 import (
 	"go/types"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -122,7 +123,7 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 			// Store this value in an alloca and put a pointer to this alloca
 			// in the send state.
 			sendValue := c.getValue(frame, state.Send)
-			alloca := c.createEntryBlockAlloca(sendValue.Type(), "select.send.value")
+			alloca := llvmutil.CreateEntryBlockAlloca(c.builder, sendValue.Type(), "select.send.value")
 			c.builder.CreateStore(sendValue, alloca)
 			ptr := c.builder.CreateBitCast(alloca, c.i8ptrType, "")
 			selectState = c.builder.CreateInsertValue(selectState, ptr, 1, "")

@@ -108,6 +108,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -534,7 +535,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 					var retvalAlloca llvm.Value
 					if callee.Type().ElementType().ReturnType().TypeKind() != llvm.VoidTypeKind {
 						// allocate return value buffer
-						retvalAlloca = c.createInstructionAlloca(callee.Type().ElementType().ReturnType(), inst, "coro.retvalAlloca")
+						retvalAlloca = llvmutil.CreateInstructionAlloca(c.builder, c.mod, callee.Type().ElementType().ReturnType(), inst, "coro.retvalAlloca")
 
 						// call before function
 						c.builder.SetInsertPointBefore(inst)
@@ -770,7 +771,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			size = c.builder.CreateZExt(size, c.uintptrType, "task.size.uintptr")
 		}
 		data := c.createRuntimeCall("alloc", []llvm.Value{size}, "task.data")
-		if c.needsStackObjects() {
+		if c.NeedsStackObjects() {
 			c.trackPointer(data)
 		}
 

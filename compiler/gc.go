@@ -11,21 +11,6 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-// needsStackObjects returns true if the compiler should insert stack objects
-// that can be traced by the garbage collector.
-func (c *Compiler) needsStackObjects() bool {
-	if c.GC() != "conservative" {
-		return false
-	}
-	for _, tag := range c.BuildTags() {
-		if tag == "baremetal" {
-			return false
-		}
-	}
-
-	return true
-}
-
 // trackExpr inserts pointer tracking intrinsics for the GC if the expression is
 // one of the expressions that need this.
 func (c *Compiler) trackExpr(frame *Frame, expr ssa.Value, value llvm.Value) {

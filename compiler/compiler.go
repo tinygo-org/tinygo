@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/ir"
 	"github.com/tinygo-org/tinygo/loader"
@@ -978,7 +979,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			frame.locals[instr] = llvm.Undef(c.getLLVMType(instr.Type()))
 		} else {
 			frame.locals[instr] = value
-			if len(*instr.Referrers()) != 0 && c.needsStackObjects() {
+			if len(*instr.Referrers()) != 0 && c.NeedsStackObjects() {
 				c.trackExpr(frame, instr, value)
 			}
 		}
@@ -1386,7 +1387,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			buf = c.builder.CreateBitCast(buf, llvm.PointerType(typ, 0), "")
 			return buf, nil
 		} else {
-			buf := c.createEntryBlockAlloca(typ, expr.Comment)
+			buf := llvmutil.CreateEntryBlockAlloca(c.builder, typ, expr.Comment)
 			if c.targetData.TypeAllocSize(typ) != 0 {
 				c.builder.CreateStore(llvm.ConstNull(typ), buf) // zero-initialize var
 			}
