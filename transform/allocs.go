@@ -69,8 +69,13 @@ func OptimizeAllocs(mod llvm.Module) {
 		sizeInWords := (size + uint64(alignment) - 1) / uint64(alignment)
 		allocaType := llvm.ArrayType(mod.Context().IntType(alignment*8), int(sizeInWords))
 		alloca := builder.CreateAlloca(allocaType, "stackalloc.alloca")
+
+		// Zero the allocation inside the block where the value was originally allocated.
 		zero := llvm.ConstNull(alloca.Type().ElementType())
+		builder.SetInsertPointBefore(bitcast)
 		builder.CreateStore(zero, alloca)
+
+		// Replace heap alloc bitcast with stack alloc bitcast.
 		stackalloc := builder.CreateBitCast(alloca, bitcast.Type(), "stackalloc")
 		bitcast.ReplaceAllUsesWith(stackalloc)
 		if heapalloc != bitcast {

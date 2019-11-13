@@ -70,8 +70,9 @@ func fuzzyEqualIR(s1, s2 string) bool {
 func filterIrrelevantIRLines(lines []string) []string {
 	var out []string
 	for _, line := range lines {
-		line = strings.TrimSpace(line) // drop '\r' on Windows
-		if line == "" || line[0] == ';' {
+		line = strings.Split(line, ";")[0]    // strip out comments/info
+		line = strings.TrimRight(line, "\r ") // drop '\r' on Windows and remove trailing spaces from comments
+		if line == "" {
 			continue
 		}
 		if strings.HasPrefix(line, "source_filename = ") {
