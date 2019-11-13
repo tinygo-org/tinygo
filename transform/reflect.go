@@ -1,4 +1,4 @@
-package compiler
+package transform
 
 // This file has some compiler support for run-time reflection using the reflect
 // package. In particular, it encodes type information in type codes in such a
@@ -125,27 +125,27 @@ type typeCodeAssignmentState struct {
 // assignTypeCodes is used to assign a type code to each type in the program
 // that is ever stored in an interface. It tries to use the smallest possible
 // numbers to make the code that works with interfaces as small as possible.
-func (c *Compiler) assignTypeCodes(typeSlice typeInfoSlice) {
+func assignTypeCodes(mod llvm.Module, typeSlice typeInfoSlice) {
 	// if reflect were not used, we could skip generating the sidetable
 	// this does not help in practice, and is difficult to do correctly
 
 	// Assign typecodes the way the reflect package expects.
 	state := typeCodeAssignmentState{
 		fallbackIndex:                    1,
-		uintptrLen:                       c.uintptrType.IntTypeWidth(),
+		uintptrLen:                       llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8,
 		namedBasicTypes:                  make(map[string]int),
 		namedNonBasicTypes:               make(map[string]int),
 		arrayTypes:                       make(map[string]int),
 		structTypes:                      make(map[string]int),
 		structNames:                      make(map[string]int),
-		needsNamedNonBasicTypesSidetable: len(getUses(c.mod.NamedGlobal("reflect.namedNonBasicTypesSidetable"))) != 0,
-		needsStructTypesSidetable:        len(getUses(c.mod.NamedGlobal("reflect.structTypesSidetable"))) != 0,
-		needsStructNamesSidetable:        len(getUses(c.mod.NamedGlobal("reflect.structNamesSidetable"))) != 0,
-		needsArrayTypesSidetable:         len(getUses(c.mod.NamedGlobal("reflect.arrayTypesSidetable"))) != 0,
+		needsNamedNonBasicTypesSidetable: len(getUses(mod.NamedGlobal("reflect.namedNonBasicTypesSidetable"))) != 0,
+		needsStructTypesSidetable:        len(getUses(mod.NamedGlobal("reflect.structTypesSidetable"))) != 0,
+		needsStructNamesSidetable:        len(getUses(mod.NamedGlobal("reflect.structNamesSidetable"))) != 0,
+		needsArrayTypesSidetable:         len(getUses(mod.NamedGlobal("reflect.arrayTypesSidetable"))) != 0,
 	}
 	for _, t := range typeSlice {
 		num := state.getTypeCodeNum(t.typecode)
-		if num.BitLen() > c.uintptrType.IntTypeWidth() || !num.IsUint64() {
+		if num.BitLen() > state.uintptrLen || !num.IsUint64() {
 			// TODO: support this in some way, using a side table for example.
 			// That's less efficient but better than not working at all.
 			// Particularly important on systems with 16-bit pointers (e.g.
@@ -157,22 +157,22 @@ func (c *Compiler) assignTypeCodes(typeSlice typeInfoSlice) {
 
 	// Only create this sidetable when it is necessary.
 	if state.needsNamedNonBasicTypesSidetable {
-		global := c.replaceGlobalIntWithArray("reflect.namedNonBasicTypesSidetable", state.namedNonBasicTypesSidetable)
+		global := replaceGlobalIntWithArray(mod, "reflect.namedNonBasicTypesSidetable", state.namedNonBasicTypesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 	}
 	if state.needsArrayTypesSidetable {
-		global := c.replaceGlobalIntWithArray("reflect.arrayTypesSidetable", state.arrayTypesSidetable)
+		global := replaceGlobalIntWithArray(mod, "reflect.arrayTypesSidetable", state.arrayTypesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 	}
 	if state.needsStructTypesSidetable {
-		global := c.replaceGlobalIntWithArray("reflect.structTypesSidetable", state.structTypesSidetable)
+		global := replaceGlobalIntWithArray(mod, "reflect.structTypesSidetable", state.structTypesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 	}
 	if state.needsStructNamesSidetable {
-		global := c.replaceGlobalIntWithArray("reflect.structNamesSidetable", state.structNamesSidetable)
+		global := replaceGlobalIntWithArray(mod, "reflect.structNamesSidetable", state.structNamesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 	}
