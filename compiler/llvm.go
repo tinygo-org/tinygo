@@ -3,6 +3,7 @@ package compiler
 import (
 	"reflect"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -24,22 +25,6 @@ func getUses(value llvm.Value) []llvm.Value {
 	return uses
 }
 
-// createEntryBlockAlloca creates a new alloca in the entry block, even though
-// the IR builder is located elsewhere. It assumes that the insert point is
-// at the end of the current block.
-func (c *Compiler) createEntryBlockAlloca(t llvm.Type, name string) llvm.Value {
-	currentBlock := c.builder.GetInsertBlock()
-	entryBlock := currentBlock.Parent().EntryBasicBlock()
-	if entryBlock.FirstInstruction().IsNil() {
-		c.builder.SetInsertPointAtEnd(entryBlock)
-	} else {
-		c.builder.SetInsertPointBefore(entryBlock.FirstInstruction())
-	}
-	alloca := c.builder.CreateAlloca(t, name)
-	c.builder.SetInsertPointAtEnd(currentBlock)
-	return alloca
-}
-
 // createTemporaryAlloca creates a new alloca in the entry block and adds
 // lifetime start infromation in the IR signalling that the alloca won't be used
 // before this point.
@@ -47,56 +32,26 @@ func (c *Compiler) createEntryBlockAlloca(t llvm.Type, name string) llvm.Value {
 // This is useful for creating temporary allocas for intrinsics. Don't forget to
 // end the lifetime using emitLifetimeEnd after you're done with it.
 func (c *Compiler) createTemporaryAlloca(t llvm.Type, name string) (alloca, bitcast, size llvm.Value) {
-	alloca = c.createEntryBlockAlloca(t, name)
-	bitcast = c.builder.CreateBitCast(alloca, c.i8ptrType, name+".bitcast")
-	size = llvm.ConstInt(c.ctx.Int64Type(), c.targetData.TypeAllocSize(t), false)
-	c.builder.CreateCall(c.getLifetimeStartFunc(), []llvm.Value{size, bitcast}, "")
-	return
-}
-
-// createInstructionAlloca creates an alloca in the entry block, and places lifetime control intrinsics around the instruction
-func (c *Compiler) createInstructionAlloca(t llvm.Type, inst llvm.Value, name string) llvm.Value {
-	alloca := c.createEntryBlockAlloca(t, name)
-	c.builder.SetInsertPointBefore(inst)
-	bitcast := c.builder.CreateBitCast(alloca, c.i8ptrType, name+".bitcast")
-	size := llvm.ConstInt(c.ctx.Int64Type(), c.targetData.TypeAllocSize(t), false)
-	c.builder.CreateCall(c.getLifetimeStartFunc(), []llvm.Value{size, bitcast}, "")
-	if next := llvm.NextInstruction(inst); !next.IsNil() {
-		c.builder.SetInsertPointBefore(next)
-	} else {
-		c.builder.SetInsertPointAtEnd(inst.InstructionParent())
-	}
-	c.builder.CreateCall(c.getLifetimeEndFunc(), []llvm.Value{size, bitcast}, "")
-	return alloca
+	return llvmutil.CreateTemporaryAlloca(c.builder, c.mod, t, name)
 }
 
 // emitLifetimeEnd signals the end of an (alloca) lifetime by calling the
 // llvm.lifetime.end intrinsic. It is commonly used together with
 // createTemporaryAlloca.
 func (c *Compiler) emitLifetimeEnd(ptr, size llvm.Value) {
-	c.builder.CreateCall(c.getLifetimeEndFunc(), []llvm.Value{size, ptr}, "")
+	llvmutil.EmitLifetimeEnd(c.builder, c.mod, ptr, size)
 }
 
-// getLifetimeStartFunc returns the llvm.lifetime.start intrinsic and creates it
-// first if it doesn't exist yet.
-func (c *Compiler) getLifetimeStartFunc() llvm.Value {
-	fn := c.mod.NamedFunction("llvm.lifetime.start.p0i8")
-	if fn.IsNil() {
-		fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.ctx.Int64Type(), c.i8ptrType}, false)
-		fn = llvm.AddFunction(c.mod, "llvm.lifetime.start.p0i8", fnType)
-	}
-	return fn
+// emitPointerPack packs the list of values into a single pointer value using
+// bitcasts, or else allocates a value on the heap if it cannot be packed in the
+// pointer value directly. It returns the pointer with the packed data.
+func (c *Compiler) emitPointerPack(values []llvm.Value) llvm.Value {
+	return llvmutil.EmitPointerPack(c.builder, c.mod, c.Config, values)
 }
 
-// getLifetimeEndFunc returns the llvm.lifetime.end intrinsic and creates it
-// first if it doesn't exist yet.
-func (c *Compiler) getLifetimeEndFunc() llvm.Value {
-	fn := c.mod.NamedFunction("llvm.lifetime.end.p0i8")
-	if fn.IsNil() {
-		fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.ctx.Int64Type(), c.i8ptrType}, false)
-		fn = llvm.AddFunction(c.mod, "llvm.lifetime.end.p0i8", fnType)
-	}
-	return fn
+// emitPointerUnpack extracts a list of values packed using emitPointerPack.
+func (c *Compiler) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []llvm.Value {
+	return llvmutil.EmitPointerUnpack(c.builder, c.mod, ptr, valueTypes)
 }
 
 // splitBasicBlock splits a LLVM basic block into two parts. All instructions

@@ -77,6 +77,21 @@ func (c *Config) GC() string {
 	return "conservative"
 }
 
+// NeedsStackObjects returns true if the compiler should insert stack objects
+// that can be traced by the garbage collector.
+func (c *Config) NeedsStackObjects() bool {
+	if c.GC() != "conservative" {
+		return false
+	}
+	for _, tag := range c.BuildTags() {
+		if tag == "baremetal" {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Scheduler returns the scheduler implementation. Valid values are "coroutines"
 // and "tasks".
 func (c *Config) Scheduler() string {

@@ -130,7 +130,7 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) {
 	// Put this struct in an alloca.
 	alloca := c.builder.CreateAlloca(deferFrameType, "defer.alloca")
 	c.builder.CreateStore(deferFrame, alloca)
-	if c.needsStackObjects() {
+	if c.NeedsStackObjects() {
 		c.trackPointer(alloca)
 	}
 
