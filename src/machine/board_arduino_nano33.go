@@ -48,18 +48,6 @@ const (
 	LED = D13
 )
 
-// NINA-W102 Pins
-
-const (
-	NINA_MOSI   Pin = PA12
-	NINA_MISO   Pin = PA13
-	NINA_CS     Pin = PA14
-	NINA_SCK    Pin = PA15
-	NINA_GPIO0  Pin = PA27
-	NINA_RESETN Pin = PA08
-	NINA_ACK    Pin = PA28
-)
-
 // UART0 aka USBCDC pins
 const (
 	USBCDC_DM_PIN Pin = PA24
@@ -129,6 +117,28 @@ var (
 		Bus:    sam.SERCOM0_SPI,
 		SERCOM: 0,
 	}
+)
+
+// NINA-W102 Pins
+const (
+	NINA_MOSI   Pin = PA12
+	NINA_MISO   Pin = PA13
+	NINA_CS     Pin = PA14
+	NINA_SCK    Pin = PA15
+	NINA_GPIO0  Pin = PA27
+	NINA_RESETN Pin = PA08
+	NINA_ACK    Pin = PA28
+	NINA_TX     Pin = PA22
+	NINA_RX     Pin = PA23
+)
+
+// SPI1 is connected to the NINA-W102 chip on the Arduino Nano 33.
+var (
+	SPI1 = SPI{
+		Bus:    sam.SERCOM2_SPI,
+		SERCOM: 2,
+	}
+	NINA_SPI = SPI1
 )
 
 // I2S pins
