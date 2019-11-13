@@ -54,6 +54,20 @@ define i32* @testEscapingReturn() {
   ret i32* %2
 }
 
+; Do a non-escaping allocation in a loop.
+define void @testNonEscapingLoop() {
+entry:
+  br label %loop
+loop:
+  %0 = call i8* @runtime.alloc(i32 4)
+  %1 = bitcast i8* %0 to i32*
+  %2 = call i32* @noescapeIntPtr(i32* %1)
+  %3 = icmp eq i32* null, %2
+  br i1 %3, label %loop, label %end
+end:
+  ret void
+}
+
 declare i32* @escapeIntPtr(i32*)
 
 declare i32* @noescapeIntPtr(i32* nocapture)
