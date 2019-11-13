@@ -1,8 +1,6 @@
 package compiler
 
 import (
-	"reflect"
-
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
@@ -130,43 +128,14 @@ func (c *Compiler) splitBasicBlock(afterInst llvm.Value, insertAfter llvm.BasicB
 // contents, and returns the global.
 // Note that it is left with the default linkage etc., you should set
 // linkage/constant/etc properties yourself.
-func (c *Compiler) makeGlobalArray(bufItf interface{}, name string, elementType llvm.Type) llvm.Value {
-	buf := reflect.ValueOf(bufItf)
-	globalType := llvm.ArrayType(elementType, buf.Len())
+func (c *Compiler) makeGlobalArray(buf []byte, name string, elementType llvm.Type) llvm.Value {
+	globalType := llvm.ArrayType(elementType, len(buf))
 	global := llvm.AddGlobal(c.mod, globalType, name)
 	value := llvm.Undef(globalType)
-	for i := 0; i < buf.Len(); i++ {
-		ch := buf.Index(i).Uint()
+	for i := 0; i < len(buf); i++ {
+		ch := uint64(buf[i])
 		value = llvm.ConstInsertValue(value, llvm.ConstInt(elementType, ch, false), []uint32{uint32(i)})
 	}
 	global.SetInitializer(value)
-	return global
-}
-
-// getGlobalBytes returns the slice contained in the array of the provided
-// global. It can recover the bytes originally created using makeGlobalArray, if
-// makeGlobalArray was given a byte slice.
-func getGlobalBytes(global llvm.Value) []byte {
-	value := global.Initializer()
-	buf := make([]byte, value.Type().ArrayLength())
-	for i := range buf {
-		buf[i] = byte(llvm.ConstExtractValue(value, []uint32{uint32(i)}).ZExtValue())
-	}
-	return buf
-}
-
-// replaceGlobalByteWithArray replaces a global integer type in the module with
-// an integer array, using a GEP to make the types match. It is a convenience
-// function used for creating reflection sidetables, for example.
-func (c *Compiler) replaceGlobalIntWithArray(name string, buf interface{}) llvm.Value {
-	oldGlobal := c.mod.NamedGlobal(name)
-	global := c.makeGlobalArray(buf, name+".tmp", oldGlobal.Type().ElementType())
-	gep := llvm.ConstGEP(global, []llvm.Value{
-		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-	})
-	oldGlobal.ReplaceAllUsesWith(gep)
-	oldGlobal.EraseFromParentAsGlobal()
-	global.SetName(name)
 	return global
 }

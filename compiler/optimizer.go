@@ -55,7 +55,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		transform.OptimizeMaps(c.mod)
 		transform.OptimizeStringToBytes(c.mod)
 		transform.OptimizeAllocs(c.mod)
-		c.LowerInterfaces()
+		transform.LowerInterfaces(c.mod)
 		c.LowerFuncValues()
 
 		// After interfaces are lowered, there are many more opportunities for
@@ -89,7 +89,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		}
 	} else {
 		// Must be run at any optimization level.
-		c.LowerInterfaces()
+		transform.LowerInterfaces(c.mod)
 		c.LowerFuncValues()
 		err := c.LowerGoroutines()
 		if err != nil {

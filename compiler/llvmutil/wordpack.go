@@ -45,10 +45,18 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, config *compileopts.
 		// Packed data is bigger than a pointer, so allocate it on the heap.
 		sizeValue := llvm.ConstInt(uintptrType, size, false)
 		alloc := mod.NamedFunction("runtime.alloc")
-		packedHeapAlloc = builder.CreateCall(alloc, []llvm.Value{sizeValue}, "")
+		packedHeapAlloc = builder.CreateCall(alloc, []llvm.Value{
+			sizeValue,
+			llvm.Undef(i8ptrType),            // unused context parameter
+			llvm.ConstPointerNull(i8ptrType), // coroutine handle
+		}, "")
 		if config.NeedsStackObjects() {
 			trackPointer := mod.NamedFunction("runtime.trackPointer")
-			builder.CreateCall(trackPointer, []llvm.Value{packedHeapAlloc}, "")
+			builder.CreateCall(trackPointer, []llvm.Value{
+				packedHeapAlloc,
+				llvm.Undef(i8ptrType),            // unused context parameter
+				llvm.ConstPointerNull(i8ptrType), // coroutine handle
+			}, "")
 		}
 		packedAlloc = builder.CreateBitCast(packedHeapAlloc, llvm.PointerType(packedType, 0), "")
 	}

@@ -1,4 +1,4 @@
-package compiler
+package transform
 
 // This file provides function to lower interface intrinsics to their final LLVM
 // form, optimizing them in the process.
@@ -38,6 +38,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -133,22 +134,28 @@ func (itf *interfaceInfo) id() string {
 // pass has been implemented as an object type because of its complexity, but
 // should be seen as a regular function call (see LowerInterfaces).
 type lowerInterfacesPass struct {
-	*Compiler
-	types      map[string]*typeInfo
-	signatures map[string]*signatureInfo
-	interfaces map[string]*interfaceInfo
+	mod         llvm.Module
+	builder     llvm.Builder
+	ctx         llvm.Context
+	uintptrType llvm.Type
+	types       map[string]*typeInfo
+	signatures  map[string]*signatureInfo
+	interfaces  map[string]*interfaceInfo
 }
 
-// Lower all interface functions. They are emitted by the compiler as
-// higher-level intrinsics that need some lowering before LLVM can work on them.
-// This is done so that a few cleanup passes can run before assigning the final
-// type codes.
-func (c *Compiler) LowerInterfaces() {
+// LowerInterfaces lowers all intermediate interface calls and globals that are
+// emitted by the compiler as higher-level intrinsics. They need some lowering
+// before LLVM can work on them. This is done so that a few cleanup passes can
+// run before assigning the final type codes.
+func LowerInterfaces(mod llvm.Module) {
 	p := &lowerInterfacesPass{
-		Compiler:   c,
-		types:      make(map[string]*typeInfo),
-		signatures: make(map[string]*signatureInfo),
-		interfaces: make(map[string]*interfaceInfo),
+		mod:         mod,
+		builder:     mod.Context().NewBuilder(),
+		ctx:         mod.Context(),
+		uintptrType: mod.Context().IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8),
+		types:       make(map[string]*typeInfo),
+		signatures:  make(map[string]*signatureInfo),
+		interfaces:  make(map[string]*interfaceInfo),
 	}
 	p.run()
 }
@@ -156,8 +163,8 @@ func (c *Compiler) LowerInterfaces() {
 // run runs the pass itself.
 func (p *lowerInterfacesPass) run() {
 	// Collect all type codes.
-	typecodeIDPtr := llvm.PointerType(p.getLLVMRuntimeType("typecodeID"), 0)
-	typeInInterfacePtr := llvm.PointerType(p.getLLVMRuntimeType("typeInInterface"), 0)
+	typecodeIDPtr := llvm.PointerType(p.mod.GetTypeByName("runtime.typecodeID"), 0)
+	typeInInterfacePtr := llvm.PointerType(p.mod.GetTypeByName("runtime.typeInInterface"), 0)
 	var typesInInterfaces []llvm.Value
 	for global := p.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
 		switch global.Type() {
@@ -368,7 +375,7 @@ func (p *lowerInterfacesPass) run() {
 	}
 
 	// Assign a type code for each type.
-	p.assignTypeCodes(typeSlice)
+	assignTypeCodes(p.mod, typeSlice)
 
 	// Replace each use of a runtime.typeInInterface with the constant type
 	// code.
@@ -519,7 +526,7 @@ func (p *lowerInterfacesPass) replaceInvokeWithCall(use llvm.Value, typ *typeInf
 				}
 			}
 			p.builder.SetInsertPointBefore(call)
-			receiverParams := p.emitPointerUnpack(operands[0], receiverParamTypes)
+			receiverParams := llvmutil.EmitPointerUnpack(p.builder, p.mod, operands[0], receiverParamTypes)
 			result := p.builder.CreateCall(function, append(receiverParams, operands[1:]...), "")
 			if result.Type().TypeKind() != llvm.VoidTypeKind {
 				call.ReplaceAllUsesWith(result)
