@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -100,12 +101,24 @@ func getClangHeaderPath(TINYGOROOT string) string {
 			//     /usr/lib/llvm-8/lib/clang/8.0.1/include/
 			llvmRoot := filepath.Dir(filepath.Dir(binpath))
 			clangVersionRoot := filepath.Join(llvmRoot, "lib", "clang")
-			dirnames, err := ioutil.ReadDir(clangVersionRoot)
-			if err != nil || len(dirnames) != 1 {
+			dirs, err := ioutil.ReadDir(clangVersionRoot)
+			if err != nil {
 				// Unexpected.
-				return ""
+				continue
 			}
-			return filepath.Join(clangVersionRoot, dirnames[0].Name(), "include")
+			dirnames := make([]string, len(dirs))
+			for i, d := range dirs {
+				dirnames[i] = d.Name()
+			}
+			sort.Strings(dirnames)
+			// Check for the highest version first.
+			for i := len(dirnames) - 1; i >= 0; i-- {
+				path := filepath.Join(clangVersionRoot, dirnames[i], "include")
+				_, err := os.Stat(filepath.Join(path, "stdint.h"))
+				if err == nil {
+					return path
+				}
+			}
 		}
 	}
 
