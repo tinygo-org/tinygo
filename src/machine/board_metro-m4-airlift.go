@@ -39,15 +39,14 @@ const (
 )
 
 const (
-	ESP32_CS = PA15
+	NINA_CS     = PA15
+	NINA_ACK    = PB04
+	NINA_GPIO0  = PB01
+	NINA_RESETN = PB05
 
 	ESP32_TX  = PA04
 	ESP32_RX  = PA07
 	ESP32_RTS = PB23
-
-	ESP32_GPIO0 = PB01
-	ESP32_BUSY  = PB04
-	ESP32_RESET = PB05
 )
 
 const (
@@ -60,11 +59,28 @@ const (
 	USBCDC_DP_PIN = PA25
 )
 
-// UART1 pins
 const (
 	UART_TX_PIN = D1
 	UART_RX_PIN = D0
 )
+
+// Note: UART1 is on SERCOM3, defined in machine_atsamd51.go
+
+// UART2 on the Metro M4 IOT connects to the onboard ESP32-WROOM chip.
+var (
+	UART2 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    sam.SERCOM0_USART_INT,
+		Mode:   PinSERCOM,
+		// SERCOM: 0,
+	}
+)
+
+//go:export SERCOM0_IRQHandler
+func handleUART2() {
+	UART2.Receive(byte((UART2.Bus.DATA.Get() & 0xFF)))
+	UART2.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INT_INTFLAG_RXC)
+}
 
 // I2C pins
 const (
@@ -87,7 +103,7 @@ const (
 	SPI0_MISO_PIN = PA14 // MISO: SERCOM1/PAD[2]
 )
 
-// SPI on the Feather M4.
+// SPI on the Metro M4.
 var (
 	SPI0 = SPI{Bus: sam.SERCOM1_SPIM,
 		SCK:         SPI0_SCK_PIN,
