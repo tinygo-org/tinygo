@@ -62,12 +62,16 @@ func (p Pin) Get() bool {
 // UART on the NRF.
 type UART struct {
 	Buffer *RingBuffer
+	Bus    *nrf.UART_Type
 }
 
 // UART
 var (
 	// UART0 is the hardware serial port on the NRF.
-	UART0 = UART{Buffer: NewRingBuffer()}
+	UART0 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    nrf.UART0,
+	}
 )
 
 // Configure the UART.
@@ -82,10 +86,10 @@ func (uart UART) Configure(config UARTConfig) {
 	// Set TX and RX pins from board.
 	uart.setPins(UART_TX_PIN, UART_RX_PIN)
 
-	nrf.UART0.ENABLE.Set(nrf.UART_ENABLE_ENABLE_Enabled)
-	nrf.UART0.TASKS_STARTTX.Set(1)
-	nrf.UART0.TASKS_STARTRX.Set(1)
-	nrf.UART0.INTENSET.Set(nrf.UART_INTENSET_RXDRDY_Msk)
+	uart.Bus.ENABLE.Set(nrf.UART_ENABLE_ENABLE_Enabled)
+	uart.Bus.TASKS_STARTTX.Set(1)
+	uart.Bus.TASKS_STARTRX.Set(1)
+	uart.Bus.INTENSET.Set(nrf.UART_INTENSET_RXDRDY_Msk)
 
 	// Enable RX IRQ.
 	arm.SetPriority(nrf.IRQ_UART0, 0xc0) // low priority
@@ -104,22 +108,22 @@ func (uart UART) SetBaudRate(br uint32) {
 	// https://devzone.nordicsemi.com/f/nordic-q-a/391/uart-baudrate-register-values/2046#2046
 	rate := uint32((uint64(br/400)*uint64(400*0xffffffff/16000000) + 0x800) & 0xffffff000)
 
-	nrf.UART0.BAUDRATE.Set(rate)
+	uart.Bus.BAUDRATE.Set(rate)
 }
 
 // WriteByte writes a byte of data to the UART.
 func (uart UART) WriteByte(c byte) error {
-	nrf.UART0.EVENTS_TXDRDY.Set(0)
-	nrf.UART0.TXD.Set(uint32(c))
-	for nrf.UART0.EVENTS_TXDRDY.Get() == 0 {
+	uart.Bus.EVENTS_TXDRDY.Set(0)
+	uart.Bus.TXD.Set(uint32(c))
+	for uart.Bus.EVENTS_TXDRDY.Get() == 0 {
 	}
 	return nil
 }
 
 func (uart UART) handleInterrupt() {
-	if nrf.UART0.EVENTS_RXDRDY.Get() != 0 {
-		uart.Receive(byte(nrf.UART0.RXD.Get()))
-		nrf.UART0.EVENTS_RXDRDY.Set(0x0)
+	if uart.Bus.EVENTS_RXDRDY.Get() != 0 {
+		uart.Receive(byte(uart.Bus.RXD.Get()))
+		uart.Bus.EVENTS_RXDRDY.Set(0x0)
 	}
 }
 
