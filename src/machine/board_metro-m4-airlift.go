@@ -39,17 +39,6 @@ const (
 )
 
 const (
-	NINA_CS     = PA15
-	NINA_ACK    = PB04
-	NINA_GPIO0  = PB01
-	NINA_RESETN = PB05
-
-	ESP32_TX  = PA04
-	ESP32_RX  = PA07
-	ESP32_RTS = PB23
-)
-
-const (
 	LED = D13
 )
 
@@ -66,13 +55,23 @@ const (
 
 // Note: UART1 is on SERCOM3, defined in machine_atsamd51.go
 
-// UART2 on the Metro M4 IOT connects to the onboard ESP32-WROOM chip.
+const (
+	NINA_CS     = PA15
+	NINA_ACK    = PB04
+	NINA_GPIO0  = PB01
+	NINA_RESETN = PB05
+
+	NINA_TX  = PA04
+	NINA_RX  = PA07
+	NINA_RTS = PB23
+)
+
+// UART2 on the Metro M4 Airlift Lite connects to the onboard ESP32-WROOM chip.
 var (
 	UART2 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM0_USART_INT,
-		Mode:   PinSERCOM,
-		// SERCOM: 0,
+		Mode:   PinSERCOMAlt,
 	}
 )
 
@@ -84,33 +83,55 @@ func handleUART2() {
 
 // I2C pins
 const (
-	SDA_PIN = PB02 // SDA: SERCOM2/PAD[0]
-	SCL_PIN = PB03 // SCL: SERCOM2/PAD[1]
+	SDA_PIN = PB02 // SDA: SERCOM5/PAD[0]
+	SCL_PIN = PB03 // SCL: SERCOM5/PAD[1]
 )
 
-// I2C on the Feather M4.
+// I2C on the Metro M4.
 var (
-	I2C0 = I2C{Bus: sam.SERCOM2_I2CM,
+	I2C0 = I2C{Bus: sam.SERCOM5_I2CM,
 		SDA:     SDA_PIN,
 		SCL:     SCL_PIN,
-		PinMode: PinSERCOM}
+		PinMode: PinSERCOMAlt}
 )
 
 // SPI pins
 const (
-	SPI0_SCK_PIN  = PA13 // SCK: SERCOM1/PAD[1]
-	SPI0_MOSI_PIN = PA12 // MOSI: SERCOM1/PAD[3]
-	SPI0_MISO_PIN = PA14 // MISO: SERCOM1/PAD[2]
+	SPI0_SCK_PIN  = PA13 // SCK:  SERCOM2/PAD[1]
+	SPI0_MOSI_PIN = PA12 // MOSI: SERCOM2/PAD[0]
+	SPI0_MISO_PIN = PA14 // MISO: SERCOM2/PAD[2]
 )
 
 // SPI on the Metro M4.
 var (
-	SPI0 = SPI{Bus: sam.SERCOM1_SPIM,
+	SPI0 = SPI{
+		Bus:         sam.SERCOM2_SPIM,
 		SCK:         SPI0_SCK_PIN,
 		MOSI:        SPI0_MOSI_PIN,
 		MISO:        SPI0_MISO_PIN,
-		DOpad:       spiTXPad3SCK1,
+		DOpad:       spiTXPad0SCK1,
 		DIpad:       sercomRXPad2,
+		MISOPinMode: PinSERCOM,
+		MOSIPinMode: PinSERCOM,
+		SCKPinMode:  PinSERCOM,
+	}
+)
+
+const (
+	SPI1_SCK_PIN  = D12 // MISO: SERCOM1/PAD[1]
+	SPI1_MOSI_PIN = D11 // MOSI: SERCOM1/PAD[3]
+	SPI1_MISO_PIN = D13 // SCK:  SERCOM1/PAD[0]
+)
+
+// SPI1 on the Metro M4 on pins 11,12,13
+var (
+	SPI1 = SPI{
+		Bus:         sam.SERCOM1_SPIM,
+		SCK:         SPI1_SCK_PIN,
+		MOSI:        SPI1_MOSI_PIN,
+		MISO:        SPI1_MISO_PIN,
+		DOpad:       spiTXPad3SCK1,
+		DIpad:       sercomRXPad0,
 		MISOPinMode: PinSERCOM,
 		MOSIPinMode: PinSERCOM,
 		SCKPinMode:  PinSERCOM,
