@@ -509,6 +509,8 @@ func (uart UART) Configure(config UARTConfig) {
 	// determine pads
 	var txpad, rxpad int
 	switch config.TX {
+	case PA04:
+		txpad = sercomTXPad0
 	case PA10:
 		txpad = sercomTXPad2
 	case PA18:
@@ -520,6 +522,8 @@ func (uart UART) Configure(config UARTConfig) {
 	}
 
 	switch config.RX {
+	case PA07:
+		rxpad = sercomRXPad3
 	case PA11:
 		rxpad = sercomRXPad3
 	case PA18:
