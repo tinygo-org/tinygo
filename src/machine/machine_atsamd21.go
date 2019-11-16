@@ -877,29 +877,29 @@ func (i2s I2S) Configure(config I2SConfig) {
 	// now set serializer data size.
 	switch config.DataFormat {
 	case I2SDataFormat8bit:
-		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_DATASIZE_8)
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_DATASIZE_8 << sam.I2S_SERCTRL_DATASIZE_Pos)
 
 	case I2SDataFormat16bit:
-		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_DATASIZE_16)
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_DATASIZE_16 << sam.I2S_SERCTRL_DATASIZE_Pos)
 
 	case I2SDataFormat24bit:
-		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_DATASIZE_24)
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_DATASIZE_24 << sam.I2S_SERCTRL_DATASIZE_Pos)
 
 	case I2SDataFormat32bit:
 	case I2SDataFormatDefault:
-		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_DATASIZE_32)
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_DATASIZE_32 << sam.I2S_SERCTRL_DATASIZE_Pos)
 	}
 
 	// set serializer slot adjustment
 	if config.Standard == I2SStandardLSB {
 		// adjust right
 		i2s.Bus.SERCTRL1.ClearBits(sam.I2S_SERCTRL_SLOTADJ)
+
+		// transfer LSB first
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_BITREV)
 	} else {
 		// adjust left
 		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_SLOTADJ)
-
-		// reverse bit order?
-		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_BITREV)
 	}
 
 	// set serializer mode.
