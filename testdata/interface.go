@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 func main() {
 	thing := &Thing{"foo"}
 	println("thing:", thing.String())
@@ -87,6 +89,14 @@ func main() {
 			println("test", i, "of interfaceEqualTests failed")
 		}
 	}
+
+	// test interface blocking
+	blockDynamic(NonBlocker{})
+	println("non-blocking call on sometimes-blocking interface")
+	blockDynamic(SleepBlocker(time.Millisecond))
+	println("slept 1ms")
+	blockStatic(SleepBlocker(time.Millisecond))
+	println("slept 1ms")
 }
 
 func printItf(val interface{}) {
@@ -132,6 +142,14 @@ func nestedSwitch(verb rune, arg interface{}) bool {
 		}
 	}
 	return false
+}
+
+func blockDynamic(blocker DynamicBlocker) {
+	blocker.Block()
+}
+
+func blockStatic(blocker StaticBlocker) {
+	blocker.Sleep()
 }
 
 type Thing struct {
@@ -210,4 +228,26 @@ type Unmatched interface {
 
 type linkedList struct {
 	addr *linkedList
+}
+
+type DynamicBlocker interface {
+	Block()
+}
+
+type NonBlocker struct{}
+
+func (b NonBlocker) Block() {}
+
+type SleepBlocker time.Duration
+
+func (s SleepBlocker) Block() {
+	time.Sleep(time.Duration(s))
+}
+
+func (s SleepBlocker) Sleep() {
+	s.Block()
+}
+
+type StaticBlocker interface {
+	Sleep()
 }

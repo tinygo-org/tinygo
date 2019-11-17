@@ -336,7 +336,7 @@ func (p *lowerInterfacesPass) run() {
 
 			// Replace the old lookup/inttoptr/call with the new call.
 			p.builder.SetInsertPointBefore(call)
-			retval := p.builder.CreateCall(redirector, params, "")
+			retval := p.builder.CreateCall(redirector, append(params, llvm.ConstNull(llvm.PointerType(p.ctx.Int8Type(), 0))), "")
 			if retval.Type().TypeKind() != llvm.VoidTypeKind {
 				call.ReplaceAllUsesWith(retval)
 			}
@@ -613,9 +613,10 @@ func (p *lowerInterfacesPass) getInterfaceMethodFunc(itf *interfaceInfo, signatu
 	// Construct the function name, which is of the form:
 	//     (main.Stringer).String
 	fnName := "(" + itf.id() + ")." + signature.methodName()
-	fnType := llvm.FunctionType(returnType, params, false)
+	fnType := llvm.FunctionType(returnType, append(params, llvm.PointerType(p.ctx.Int8Type(), 0)), false)
 	fn := llvm.AddFunction(p.mod, fnName, fnType)
-	fn.LastParam().SetName("actualType")
+	llvm.PrevParam(fn.LastParam()).SetName("actualType")
+	fn.LastParam().SetName("parentHandle")
 	itf.methodFuncs[signature] = fn
 	return fn
 }
@@ -644,13 +645,13 @@ func (p *lowerInterfacesPass) createInterfaceMethodFunc(itf *interfaceInfo, sign
 
 	// Create type switch in entry block.
 	p.builder.SetInsertPointAtEnd(entry)
-	actualType := fn.LastParam()
+	actualType := llvm.PrevParam(fn.LastParam())
 	sw := p.builder.CreateSwitch(actualType, defaultBlock, len(itf.types))
 
 	// Collect the params that will be passed to the functions to call.
 	// These params exclude the receiver (which may actually consist of multiple
 	// parts).
-	params := make([]llvm.Value, fn.ParamsCount()-2)
+	params := make([]llvm.Value, fn.ParamsCount()-3)
 	for i := range params {
 		params[i] = fn.Param(i + 1)
 	}
