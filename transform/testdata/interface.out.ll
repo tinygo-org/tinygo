@@ -47,7 +47,7 @@ typeswitch.notUnmatched:
   br i1 %typeassert.ok, label %typeswitch.Doubler, label %typeswitch.notDoubler
 
 typeswitch.Doubler:
-  %doubler.result = call i32 @"(Number).Double$invoke"(i8* %value)
+  %doubler.result = call i32 @"(Number).Double$invoke"(i8* %value, i8* null)
   call void @runtime.printint32(i32 %doubler.result)
   ret void
 
@@ -65,14 +65,14 @@ typeswitch.notByte:
   ret void
 }
 
-define i32 @"(Number).Double"(i32 %receiver) {
+define i32 @"(Number).Double"(i32 %receiver, i8* %parentHandle) {
   %ret = mul i32 %receiver, 2
   ret i32 %ret
 }
 
-define i32 @"(Number).Double$invoke"(i8* %receiverPtr) {
+define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %parentHandle) {
   %receiver = ptrtoint i8* %receiverPtr to i32
-  %ret = call i32 @"(Number).Double"(i32 %receiver)
+  %ret = call i32 @"(Number).Double"(i32 %receiver, i8* null)
   ret i32 %ret
 }
 

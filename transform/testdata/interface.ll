@@ -13,7 +13,7 @@ target triple = "armv7m-none-eabi"
 @"Unmatched$interface" = private constant [1 x i8*] [i8* @"func NeverImplementedMethod()"]
 @"func Double() int" = external constant i8
 @"Doubler$interface" = private constant [1 x i8*] [i8* @"func Double() int"]
-@"Number$methodset" = private constant [1 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { i8* @"func Double() int", i32 ptrtoint (i32 (i8*)* @"(Number).Double$invoke" to i32) }]
+@"Number$methodset" = private constant [1 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { i8* @"func Double() int", i32 ptrtoint (i32 (i8*, i8*)* @"(Number).Double$invoke" to i32) }]
 @"reflect/types.type:named:Number" = private constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i32 0 }
 @"typeInInterface:reflect/types.type:named:Number" = private constant %runtime.typeInInterface { %runtime.typecodeID* @"reflect/types.type:named:Number", %runtime.interfaceMethodInfo* getelementptr inbounds ([1 x %runtime.interfaceMethodInfo], [1 x %runtime.interfaceMethodInfo]* @"Number$methodset", i32 0, i32 0) }
 
@@ -49,8 +49,8 @@ typeswitch.notUnmatched:
 
 typeswitch.Doubler:
   %doubler.func = call i32 @runtime.interfaceMethod(i32 %typecode, i8** getelementptr inbounds ([1 x i8*], [1 x i8*]* @"Doubler$interface", i32 0, i32 0), i8* nonnull @"func Double() int")
-  %doubler.func.cast = inttoptr i32 %doubler.func to i32 (i8*)*
-  %doubler.result = call i32 %doubler.func.cast(i8* %value)
+  %doubler.func.cast = inttoptr i32 %doubler.func to i32 (i8*, i8*)*
+  %doubler.result = call i32 %doubler.func.cast(i8* %value, i8* null)
   call void @runtime.printint32(i32 %doubler.result)
   ret void
 
@@ -68,13 +68,13 @@ typeswitch.notByte:
   ret void
 }
 
-define i32 @"(Number).Double"(i32 %receiver) {
+define i32 @"(Number).Double"(i32 %receiver, i8* %parentHandle) {
   %ret = mul i32 %receiver, 2
   ret i32 %ret
 }
 
-define i32 @"(Number).Double$invoke"(i8* %receiverPtr) {
+define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %parentHandle) {
   %receiver = ptrtoint i8* %receiverPtr to i32
-  %ret = call i32 @"(Number).Double"(i32 %receiver)
+  %ret = call i32 @"(Number).Double"(i32 %receiver, i8* null)
   ret i32 %ret
 }
