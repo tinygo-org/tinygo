@@ -122,6 +122,7 @@ func (c *Compiler) makeGCStackSlots() bool {
 			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.Type().ElementType()))
 			stackChainStart.SetGlobalConstant(true)
 		}
+		return false
 	}
 
 	trackPointer := c.mod.NamedFunction("runtime.trackPointer")
@@ -180,7 +181,13 @@ func (c *Compiler) makeGCStackSlots() bool {
 	// Collect some variables used below in the loop.
 	stackChainStart := c.mod.NamedGlobal("runtime.stackChainStart")
 	if stackChainStart.IsNil() {
-		panic("stack chain start not found!")
+		// This may be reached in a weird scenario where we call runtime.alloc but the garbage collector is unreachable.
+		// This can be accomplished by allocating 0 bytes.
+		// There is no point in tracking anything.
+		for _, use := range getUses(trackPointer) {
+			use.EraseFromParentAsInstruction()
+		}
+		return false
 	}
 	stackChainStartType := stackChainStart.Type().ElementType()
 	stackChainStart.SetInitializer(llvm.ConstNull(stackChainStartType))
