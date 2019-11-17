@@ -36,7 +36,7 @@ func (v *LocalValue) Type() llvm.Type {
 }
 
 func (v *LocalValue) IsConstant() bool {
-	if _, ok := v.Eval.dirtyGlobals[v.Underlying]; ok {
+	if _, ok := v.Eval.dirtyGlobals[unwrap(v.Underlying)]; ok {
 		return false
 	}
 	return v.Underlying.IsConstant()
@@ -73,6 +73,11 @@ func (v *LocalValue) Store(value llvm.Value) {
 		} else {
 			v.Underlying.SetInitializer(value)
 		}
+		return
+	}
+	if !value.IsConstant() {
+		v.MarkDirty()
+		v.Eval.builder.CreateStore(value, v.Underlying)
 		return
 	}
 	switch v.Underlying.Opcode() {
@@ -150,13 +155,14 @@ func (v *LocalValue) getConstGEPIndices() []uint32 {
 // MarkDirty marks this global as dirty, meaning that every load from and store
 // to this global (from now on) must be performed at runtime.
 func (v *LocalValue) MarkDirty() {
-	if v.Underlying.IsAGlobalVariable().IsNil() {
+	underlying := unwrap(v.Underlying)
+	if underlying.IsAGlobalVariable().IsNil() {
 		panic("trying to mark a non-global as dirty")
 	}
 	if !v.IsConstant() {
 		return // already dirty
 	}
-	v.Eval.dirtyGlobals[v.Underlying] = struct{}{}
+	v.Eval.dirtyGlobals[underlying] = struct{}{}
 }
 
 // MapValue implements a Go map which is created at compile time and stored as a

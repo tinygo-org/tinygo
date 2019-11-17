@@ -76,3 +76,22 @@ func isPointerNil(v llvm.Value) (result bool, ok bool) {
 	}
 	return false, false // not valid
 }
+
+// unwrap returns the underlying value, with GEPs removed. This can be useful to
+// get the underlying global of a GEP pointer.
+func unwrap(value llvm.Value) llvm.Value {
+	for {
+		if !value.IsAConstantExpr().IsNil() {
+			switch value.Opcode() {
+			case llvm.GetElementPtr:
+				value = value.Operand(0)
+				continue
+			}
+		} else if !value.IsAGetElementPtrInst().IsNil() {
+			value = value.Operand(0)
+			continue
+		}
+		break
+	}
+	return value
+}
