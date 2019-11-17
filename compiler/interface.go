@@ -461,7 +461,9 @@ func (c *Compiler) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 	paramTypes := append([]llvm.Type{c.i8ptrType}, fnType.ParamTypes()[len(expandedReceiverType):]...)
 	wrapFnType := llvm.FunctionType(fnType.ReturnType(), paramTypes, false)
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
-	wrapper.LastParam().SetName("parentHandle")
+	if f.LLVMFn.LastParam().Name() == "parentHandle" {
+		wrapper.LastParam().SetName("parentHandle")
+	}
 	c.interfaceInvokeWrappers = append(c.interfaceInvokeWrappers, interfaceInvokeWrapper{
 		fn:           f,
 		wrapper:      wrapper,
