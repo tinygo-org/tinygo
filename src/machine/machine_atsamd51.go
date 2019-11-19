@@ -591,11 +591,20 @@ func (uart UART) Configure(config UARTConfig) {
 	// setup interrupt on receive
 	uart.Bus.INTENSET.Set(sam.SERCOM_USART_INT_INTENSET_RXC)
 
-	// Enable RX IRQ. Currently assumes SERCOM3.
-	arm.EnableIRQ(sam.IRQ_SERCOM3_0)
-	arm.EnableIRQ(sam.IRQ_SERCOM3_1)
-	arm.EnableIRQ(sam.IRQ_SERCOM3_2)
-	arm.EnableIRQ(sam.IRQ_SERCOM3_OTHER)
+	// Enable RX IRQ.
+	switch uart.Bus {
+	case sam.SERCOM0_USART_INT:
+		arm.EnableIRQ(sam.IRQ_SERCOM0_0)
+		arm.EnableIRQ(sam.IRQ_SERCOM0_1)
+		arm.EnableIRQ(sam.IRQ_SERCOM0_2)
+		arm.EnableIRQ(sam.IRQ_SERCOM0_OTHER)
+	default:
+		// Currently assumes SERCOM3
+		arm.EnableIRQ(sam.IRQ_SERCOM3_0)
+		arm.EnableIRQ(sam.IRQ_SERCOM3_1)
+		arm.EnableIRQ(sam.IRQ_SERCOM3_2)
+		arm.EnableIRQ(sam.IRQ_SERCOM3_OTHER)
+	}
 }
 
 // SetBaudRate sets the communication speed for the UART.
@@ -645,6 +654,31 @@ func handleUART1() {
 	// should reset IRQ
 	UART1.Receive(byte((UART1.Bus.DATA.Get() & 0xFF)))
 	UART1.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INT_INTFLAG_RXC)
+}
+
+//go:export SERCOM0_0_IRQHandler
+func handleSERCOM0_0() {
+	handleUART2()
+}
+
+//go:export SERCOM0_1_IRQHandler
+func handleSERCOM0_1() {
+	handleUART2()
+}
+
+//go:export SERCOM0_2_IRQHandler
+func handleSERCOM0_2() {
+	handleUART2()
+}
+
+//go:export SERCOM0_OTHER_IRQHandler
+func handleSERCOM0_OTHER() {
+	handleUART2()
+}
+
+func handleUART2() {
+	UART2.Receive(byte((UART2.Bus.DATA.Get() & 0xFF)))
+	UART2.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INT_INTFLAG_RXC)
 }
 
 // I2C on the SAMD51.
