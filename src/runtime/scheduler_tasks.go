@@ -12,8 +12,7 @@ const stackSize = 1024
 const stackCanary = uintptr(uint64(0x670c1333b83bf575) & uint64(^uintptr(0)))
 
 var (
-	schedulerState = task{canary: stackCanary}
-	currentTask    *task // currently running goroutine, or nil
+	currentTask *task // currently running goroutine, or nil
 )
 
 // This type points to the bottom of the goroutine stack and contains some state
@@ -22,10 +21,10 @@ var (
 type task struct {
 	// The order of fields in this structs must be kept in sync with assembly!
 	calleeSavedRegs
-	sp uintptr
 	pc uintptr
+	sp uintptr
 	taskState
-	canary uintptr // used to detect stack overflows
+	canaryPtr *uintptr // used to detect stack overflows
 }
 
 // getCoroutine returns the currently executing goroutine. It is used as an
@@ -47,26 +46,24 @@ func (t *task) state() *taskState {
 // to the scheduler.
 func (t *task) resume() {
 	currentTask = t
-	swapTask(&schedulerState, t)
+	switchToTask(t)
 	currentTask = nil
 }
 
-// swapTask saves the current state to oldTask (which must contain the current
-// task state) and switches to newTask. Note that this function usually does
-// return, when another task (perhaps newTask) switches back to the current
-// task.
-//
-// As an additional protection, before switching tasks, it checks whether this
-// goroutine has overflowed the stack.
-func swapTask(oldTask, newTask *task) {
-	if oldTask.canary != stackCanary {
-		runtimePanic("goroutine stack overflow")
-	}
-	swapTaskLower(oldTask, newTask)
-}
+// switchToScheduler saves the current state on the stack, saves the current
+// stack pointer in the task, and switches to the scheduler. It must only be
+// called when actually running on this task.
+// When it returns, the scheduler has switched back to this task (for example,
+// after a blocking operation completed).
+//export tinygo_switchToScheduler
+func switchToScheduler(t *task)
 
-//go:linkname swapTaskLower tinygo_swapTask
-func swapTaskLower(oldTask, newTask *task)
+// switchToTask switches from the scheduler to the task. It must only be called
+// from the scheduler.
+// When this function returns, the task just yielded control back to the
+// scheduler.
+//export tinygo_switchToTask
+func switchToTask(t *task)
 
 // startTask is a small wrapper function that sets up the first (and only)
 // argument to the new goroutine and makes sure it is exited when the goroutine
@@ -79,11 +76,20 @@ var startTask [0]uint8
 // adds it to the runqueue.
 func startGoroutine(fn, args uintptr) {
 	stack := alloc(stackSize)
-	t := (*task)(stack)
-	t.sp = uintptr(stack) + stackSize
+	t := (*task)(unsafe.Pointer(uintptr(stack) + stackSize - unsafe.Sizeof(task{})))
+
+	// Set up the stack canary, a random number that should be checked when
+	// switching from the task back to the scheduler. The stack canary pointer
+	// points to the first word of the stack. If it has changed between now and
+	// the next stack switch, there was a stack overflow.
+	t.canaryPtr = (*uintptr)(unsafe.Pointer(stack))
+	*t.canaryPtr = stackCanary
+
+	// Store the initial sp/pc for the startTask function (implemented in
+	// assembly).
+	t.sp = uintptr(stack) + stackSize - unsafe.Sizeof(task{})
 	t.pc = uintptr(unsafe.Pointer(&startTask))
 	t.prepareStartTask(fn, args)
-	t.canary = stackCanary
 	scheduleLogTask("  start goroutine:", t)
 	runqueuePushBack(t)
 }
@@ -92,17 +98,15 @@ func startGoroutine(fn, args uintptr) {
 // any wakeups must be configured before calling yield
 //export runtime.yield
 func yield() {
-	swapTask(currentTask, &schedulerState)
+	// Check whether the canary (the lowest address of the stack) is still
+	// valid. If it is not, a stack overflow has occured.
+	if *currentTask.canaryPtr != stackCanary {
+		runtimePanic("goroutine stack overflow")
+	}
+	switchToScheduler(currentTask)
 }
 
 // getSystemStackPointer returns the current stack pointer of the system stack.
 // This is not necessarily the same as the current stack pointer.
-func getSystemStackPointer() uintptr {
-	if currentTask == nil {
-		// Currently on the system stack.
-		return getCurrentStackPointer()
-	} else {
-		// Currently in a goroutine.
-		return schedulerState.sp
-	}
-}
+//export tinygo_getSystemStackPointer
+func getSystemStackPointer() uintptr

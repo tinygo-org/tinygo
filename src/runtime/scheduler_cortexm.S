@@ -19,76 +19,96 @@ tinygo_startTask:
     // After return, exit this goroutine. This is a tail call.
     bl    runtime.yield
 
+.section .text.tinygo_getSystemStackPointer
+.global  tinygo_getSystemStackPointer
+.type    tinygo_getSystemStackPointer, %function
+tinygo_getSystemStackPointer:
+    // The system stack pointer is always stored in the MSP register.
+    mrs r0, MSP
+    bx lr
+
+
+// switchToScheduler and switchToTask are also in the same section, to make sure
+// relative branches work.
 .section .text.tinygo_swapTask
+
+.global  tinygo_switchToScheduler
+.type    tinygo_switchToScheduler, %function
+tinygo_switchToScheduler:
+    // r0 = oldTask *task
+
+    // Currently on the task stack (SP=PSP). We need to store the position on
+    // the stack where the in-use registers will be stored.
+    mov r1, sp
+    subs r1, #36
+    str r1, [r0, #36]
+
+    b tinygo_swapTask
+
+.global  tinygo_switchToTask
+.type    tinygo_switchToTask, %function
+tinygo_switchToTask:
+    // r0 = newTask *task
+
+    // Currently on the scheduler stack (SP=MSP). We'll have to update the PSP,
+    // and then we can invoke swapTask.
+    ldr r0, [r0, #36]
+    msr PSP, r0
+
+    // Continue executing in the swapTask function, which swaps the stack
+    // pointer.
+
 .global  tinygo_swapTask
 .type    tinygo_swapTask, %function
 tinygo_swapTask:
-    // r0 = oldTask *task
-    // r1 = newTask *task
-
-    // This function stores the current register state to a task struct and
-    // loads the state of another task to replace the current state. Apart from
-    // saving and restoring all relevant callee-saved registers, it also ends
-    // with branching to the last program counter (saved as the lr register, to
-    // follow the ARM calling convention).
+    // This function stores the current register state to the stack, switches to
+    // the other stack (MSP/PSP), and loads the register state from the other
+    // stack. Apart from saving and restoring all relevant callee-saved
+    // registers, it also ends with branching to the last program counter (saved
+    // as the lr register, to follow the ARM calling convention).
 
     // On pre-Thumb2 CPUs (Cortex-M0 in particular), registers r8-r15 cannot be
     // used directly. Only very few operations work on them, such as mov. That's
     // why the higher register values are first stored in the temporary register
     // r3 when loading/storing them.
+    // It is possible to reduce the swapTask by two instructions (~2 cycles) on
+    // Cortex-M0 by reordering the layout of the pushed registers from {r4-r11,
+    // lr} to {r8-r11, r4-r8, lr}. However, that also requires a change on the
+    // Go side (depending on thumb1/thumb2!) and so is not really worth the
+    // complexity.
 
     // Store state to old task. It saves the lr instead of the pc, because that
     // will be the pc after returning back to the old task (in a different
     // invocation of swapTask).
-    str r4, [r0, #0]
-    str r5, [r0, #4]
-    str r6, [r0, #8]
-    str r7, [r0, #12]
     #if defined(__thumb2__)
-    str r8, [r0, #16]
-    str r9, [r0, #20]
-    str r10, [r0, #24]
-    str r11, [r0, #28]
-    str sp, [r0, #32]
-    str lr, [r0, #36]
+    push {r4-r11, lr}
     #else
-    mov r3, r8
-    str r3, [r0, #16]
-    mov r3, r9
-    str r3, [r0, #20]
-    mov r3, r10
-    str r3, [r0, #24]
+    mov r0, r8
+    mov r1, r9
+    mov r2, r10
     mov r3, r11
-    str r3, [r0, #28]
-    mov r3, sp
-    str r3, [r0, #32]
-    mov r3, lr
-    str r3, [r0, #36]
+    push {r0-r3, lr}
+    push {r4-r7}
     #endif
+
+    // Switch the stack. This could either switch from PSP to MSP, or from MSP
+    // to PSP. By using an XOR (eor), it will just switch to the other stack.
+    mrs  r0, CONTROL // load CONTROL register
+    movs r3, #2
+    eors r0, r0, r3  // flip the SPSEL (active stack pointer) bit
+    msr  CONTROL, r0 // store CONTROL register
+    isb              // required to flush the pipeline
 
     // Load state from new task and branch to the previous position in the
     // program.
-    ldr r4, [r1, #0]
-    ldr r5, [r1, #4]
-    ldr r6, [r1, #8]
-    ldr r7, [r1, #12]
     #if defined(__thumb2__)
-    ldr r8, [r1, #16]
-    ldr r9, [r1, #20]
-    ldr r10, [r1, #24]
-    ldr r11, [r1, #28]
-    ldr sp, [r1, #32]
+    pop {r4-r11, pc}
     #else
-    ldr r3, [r1, #16]
-    mov r8, r3
-    ldr r3, [r1, #20]
-    mov r9, r3
-    ldr r3, [r1, #24]
-    mov r10, r3
-    ldr r3, [r1, #28]
+    pop {r4-r7}
+    pop {r0-r3}
+    mov r8, r0
+    mov r9, r1
+    mov r10, r2
     mov r11, r3
-    ldr r3, [r1, #32]
-    mov sp, r3
+    pop {pc}
     #endif
-    ldr r3, [r1, #36]
-    bx r3
