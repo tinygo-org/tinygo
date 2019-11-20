@@ -473,6 +473,13 @@ var (
 		Buffer: NewRingBuffer(),
 		Mode:   PinSERCOMAlt,
 	}
+
+	// The second hardware serial port on the SAMD51. Uses the SERCOM0 interface.
+	UART2 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    sam.SERCOM0_USART_INT,
+		Mode:   PinSERCOMAlt,
+	}
 )
 
 const (
@@ -522,6 +529,8 @@ func (uart UART) Configure(config UARTConfig) {
 	}
 
 	switch config.RX {
+	case PA06:
+		rxpad = sercomRXPad2
 	case PA07:
 		rxpad = sercomRXPad3
 	case PA11:
@@ -677,6 +686,7 @@ func handleSERCOM0_OTHER() {
 }
 
 func handleUART2() {
+	// should reset IRQ
 	UART2.Receive(byte((UART2.Bus.DATA.Get() & 0xFF)))
 	UART2.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INT_INTFLAG_RXC)
 }
