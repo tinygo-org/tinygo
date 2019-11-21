@@ -7,10 +7,11 @@ type Once struct {
 
 func (o *Once) Do(f func()) {
 	o.m.Lock()
-	defer o.m.Unlock()
 	if o.done {
+		o.m.Unlock()
 		return
 	}
 	o.done = true
 	f()
+	o.m.Unlock()
 }

@@ -3,22 +3,28 @@ package sync
 // These mutexes assume there is only one thread of operation: no goroutines,
 // interrupts or anything else.
 
+type Locker interface {
+	Lock()
+	Unlock()
+}
+
 type Mutex struct {
-	locked bool
+	ch chan struct{}
 }
 
 func (m *Mutex) Lock() {
-	if m.locked {
-		panic("todo: block on locked mutex")
+	if m.ch == nil {
+		m.ch = make(chan struct{}, 1)
 	}
-	m.locked = true
+	m.ch <- struct{}{}
 }
 
 func (m *Mutex) Unlock() {
-	if !m.locked {
+	select {
+	case <-m.ch:
+	default:
 		panic("sync: unlock of unlocked Mutex")
 	}
-	m.locked = false
 }
 
 type RWMutex struct {

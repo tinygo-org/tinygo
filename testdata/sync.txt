@@ -1,0 +1,11 @@
+testing uncontended mutex
+testing mutex wait
+testing waitgroup
+testing empty waitgroup
+testing once
+number of times run: 1
+testing cond
+testing pool
+zero pool value: 0
+nil pool value is nil: true
+done
