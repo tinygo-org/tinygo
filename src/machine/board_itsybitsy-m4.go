@@ -51,10 +51,20 @@ const (
 	UART_RX_PIN = D0
 )
 
+// UART1 var is on SERCOM3, defined in atsamd51.go
+
+// UART2 pins
+const (
+	UART2_TX_PIN = A4
+	UART2_RX_PIN = D2
+)
+
+// UART2 var is on SERCOM0, defined in atsamd51.go
+
 // I2C pins
 const (
-	SDA_PIN = PA12 // SDA: SERCOM3/PAD[0]
-	SCL_PIN = PA13 // SCL: SERCOM3/PAD[1]
+	SDA_PIN = PA12 // SDA: SERCOM2/PAD[0]
+	SCL_PIN = PA13 // SCL: SERCOM2/PAD[1]
 )
 
 // I2C on the ItsyBitsy M4.

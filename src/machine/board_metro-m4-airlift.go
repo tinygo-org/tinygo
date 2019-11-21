@@ -66,20 +66,8 @@ const (
 	NINA_RTS = PB23
 )
 
-// UART2 on the Metro M4 Airlift Lite connects to the onboard ESP32-WROOM chip.
-var (
-	UART2 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM0_USART_INT,
-		Mode:   PinSERCOMAlt,
-	}
-)
-
-//go:export SERCOM0_IRQHandler
-func handleUART2() {
-	UART2.Receive(byte((UART2.Bus.DATA.Get() & 0xFF)))
-	UART2.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INT_INTFLAG_RXC)
-}
+// UART2 is on SERCOM0,  defined in machine_atsamd51.go, and connects to the
+// onboard ESP32-WROOM chip.
 
 // I2C pins
 const (
@@ -100,6 +88,10 @@ const (
 	SPI0_SCK_PIN  = PA13 // SCK:  SERCOM2/PAD[1]
 	SPI0_MOSI_PIN = PA12 // MOSI: SERCOM2/PAD[0]
 	SPI0_MISO_PIN = PA14 // MISO: SERCOM2/PAD[2]
+
+	NINA_MOSI = SPI0_MOSI_PIN
+	NINA_MISO = SPI0_MISO_PIN
+	NINA_SCK  = SPI0_SCK_PIN
 )
 
 // SPI on the Metro M4.
@@ -115,6 +107,7 @@ var (
 		MOSIPinMode: PinSERCOM,
 		SCKPinMode:  PinSERCOM,
 	}
+	NINA_SPI = SPI0
 )
 
 const (
