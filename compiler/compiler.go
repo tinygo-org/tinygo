@@ -34,29 +34,43 @@ func init() {
 // The TinyGo import path.
 const tinygoPath = "github.com/tinygo-org/tinygo"
 
-type Compiler struct {
+// compilerContext contains function-independent data that should still be
+// available while compiling every function. It is not strictly read-only, but
+// must not contain function-dependent data such as an IR builder.
+type compilerContext struct {
 	*compileopts.Config
-	mod                     llvm.Module
-	ctx                     llvm.Context
+	mod              llvm.Module
+	ctx              llvm.Context
+	dibuilder        *llvm.DIBuilder
+	cu               llvm.Metadata
+	difiles          map[string]llvm.Metadata
+	ditypes          map[types.Type]llvm.Metadata
+	machine          llvm.TargetMachine
+	targetData       llvm.TargetData
+	intType          llvm.Type
+	i8ptrType        llvm.Type // for convenience
+	funcPtrAddrSpace int
+	uintptrType      llvm.Type
+	ir               *ir.Program
+	diagnostics      []error
+}
+
+type Compiler struct {
+	compilerContext
 	builder                 llvm.Builder
-	dibuilder               *llvm.DIBuilder
-	cu                      llvm.Metadata
-	difiles                 map[string]llvm.Metadata
-	ditypes                 map[types.Type]llvm.Metadata
-	machine                 llvm.TargetMachine
-	targetData              llvm.TargetData
-	intType                 llvm.Type
-	i8ptrType               llvm.Type // for convenience
-	funcPtrAddrSpace        int
-	uintptrType             llvm.Type
 	initFuncs               []llvm.Value
 	interfaceInvokeWrappers []interfaceInvokeWrapper
-	ir                      *ir.Program
-	diagnostics             []error
 	astComments             map[string]*ast.CommentGroup
 }
 
 type Frame struct {
+	builder
+}
+
+// builder contains all information relevant to build a single function.
+type builder struct {
+	*compilerContext
+	llvm.Builder
 	fn                *ir.Function
 	locals            map[ssa.Value]llvm.Value            // local variables
 	blockEntries      map[*ssa.BasicBlock]llvm.BasicBlock // a *ssa.BasicBlock may be split up
@@ -81,9 +95,11 @@ type Phi struct {
 
 func NewCompiler(pkgName string, config *compileopts.Config) (*Compiler, error) {
 	c := &Compiler{
-		Config:  config,
-		difiles: make(map[string]llvm.Metadata),
-		ditypes: make(map[types.Type]llvm.Metadata),
+		compilerContext: compilerContext{
+			Config:  config,
+			difiles: make(map[string]llvm.Metadata),
+			ditypes: make(map[types.Type]llvm.Metadata),
+		},
 	}
 
 	target, err := llvm.GetTargetFromTriple(config.Triple())
@@ -252,6 +268,20 @@ func (c *Compiler) Compile(mainPath string) []error {
 
 	c.loadASTComments(lprogram)
 
+	// Declare runtime types.
+	// TODO: lazily create runtime types in getLLVMRuntimeType when they are
+	// needed. Eventually this will be required anyway, when packages are
+	// compiled independently (and the runtime types are not available).
+	for _, member := range c.ir.Program.ImportedPackage("runtime").Members {
+		if member, ok := member.(*ssa.Type); ok {
+			if typ, ok := member.Type().(*types.Named); ok {
+				if _, ok := typ.Underlying().(*types.Struct); ok {
+					c.getLLVMType(typ)
+				}
+			}
+		}
+	}
+
 	// Declare all functions.
 	for _, f := range c.ir.Functions {
 		frames = append(frames, c.parseFuncDecl(f))
@@ -367,23 +397,23 @@ func (c *Compiler) Compile(mainPath string) []error {
 	return c.diagnostics
 }
 
-// getRuntimeType obtains a named type from the runtime package and returns it
-// as a Go type.
-func (c *Compiler) getRuntimeType(name string) types.Type {
-	return c.ir.Program.ImportedPackage("runtime").Type(name).Type()
-}
-
 // getLLVMRuntimeType obtains a named type from the runtime package and returns
 // it as a LLVM type, creating it if necessary. It is a shorthand for
 // getLLVMType(getRuntimeType(name)).
-func (c *Compiler) getLLVMRuntimeType(name string) llvm.Type {
-	return c.getLLVMType(c.getRuntimeType(name))
+func (c *compilerContext) getLLVMRuntimeType(name string) llvm.Type {
+	fullName := "runtime." + name
+	typ := c.mod.GetTypeByName(fullName)
+	if typ.IsNil() {
+		println(c.mod.String())
+		panic("could not find runtime type: " + fullName)
+	}
+	return typ
 }
 
 // getLLVMType creates and returns a LLVM type for a Go type. In the case of
 // named struct types (or Go types implemented as named LLVM structs such as
 // strings) it also creates it first if necessary.
-func (c *Compiler) getLLVMType(goType types.Type) llvm.Type {
+func (c *compilerContext) getLLVMType(goType types.Type) llvm.Type {
 	switch typ := goType.(type) {
 	case *types.Array:
 		elemType := c.getLLVMType(typ.Elem())
@@ -705,11 +735,15 @@ func (c *Compiler) getLocalVariable(frame *Frame, variable *types.Var) llvm.Meta
 
 func (c *Compiler) parseFuncDecl(f *ir.Function) *Frame {
 	frame := &Frame{
-		fn:           f,
-		locals:       make(map[ssa.Value]llvm.Value),
-		dilocals:     make(map[*types.Var]llvm.Metadata),
-		blockEntries: make(map[*ssa.BasicBlock]llvm.BasicBlock),
-		blockExits:   make(map[*ssa.BasicBlock]llvm.BasicBlock),
+		builder: builder{
+			compilerContext: &c.compilerContext,
+			Builder:         c.builder, // TODO: use a separate builder per function
+			fn:              f,
+			locals:          make(map[ssa.Value]llvm.Value),
+			dilocals:        make(map[*types.Var]llvm.Metadata),
+			blockEntries:    make(map[*ssa.BasicBlock]llvm.BasicBlock),
+			blockExits:      make(map[*ssa.BasicBlock]llvm.BasicBlock),
+		},
 	}
 
 	var retType llvm.Type
@@ -728,7 +762,7 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) *Frame {
 	var paramTypes []llvm.Type
 	for _, param := range f.Params {
 		paramType := c.getLLVMType(param.Type())
-		paramTypeFragments := c.expandFormalParamType(paramType)
+		paramTypeFragments := expandFormalParamType(paramType)
 		paramTypes = append(paramTypes, paramTypeFragments...)
 	}
 
@@ -871,7 +905,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 	for _, param := range frame.fn.Params {
 		llvmType := c.getLLVMType(param.Type())
 		fields := make([]llvm.Value, 0, 1)
-		for range c.expandFormalParamType(llvmType) {
+		for range expandFormalParamType(llvmType) {
 			fields = append(fields, frame.fn.LLVMFn.Param(llvmParamIndex))
 			llvmParamIndex++
 		}
@@ -1368,7 +1402,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 func (c *Compiler) getValue(frame *Frame, expr ssa.Value) llvm.Value {
 	switch expr := expr.(type) {
 	case *ssa.Const:
-		return c.parseConst(frame.fn.LinkName(), expr)
+		return frame.createConst(frame.fn.LinkName(), expr)
 	case *ssa.Function:
 		fn := c.ir.GetFunction(expr)
 		if fn.IsExported() {
@@ -2211,10 +2245,11 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 	}
 }
 
-func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
+// createConst creates a LLVM constant value from a Go constant.
+func (b *builder) createConst(prefix string, expr *ssa.Const) llvm.Value {
 	switch typ := expr.Type().Underlying().(type) {
 	case *types.Basic:
-		llvmType := c.getLLVMType(typ)
+		llvmType := b.getLLVMType(typ)
 		if typ.Info()&types.IsBoolean != 0 {
 			b := constant.BoolVal(expr.Value)
 			n := uint64(0)
@@ -2224,23 +2259,23 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 			return llvm.ConstInt(llvmType, n, false)
 		} else if typ.Info()&types.IsString != 0 {
 			str := constant.StringVal(expr.Value)
-			strLen := llvm.ConstInt(c.uintptrType, uint64(len(str)), false)
+			strLen := llvm.ConstInt(b.uintptrType, uint64(len(str)), false)
 			objname := prefix + "$string"
-			global := llvm.AddGlobal(c.mod, llvm.ArrayType(c.ctx.Int8Type(), len(str)), objname)
-			global.SetInitializer(c.ctx.ConstString(str, false))
+			global := llvm.AddGlobal(b.mod, llvm.ArrayType(b.ctx.Int8Type(), len(str)), objname)
+			global.SetInitializer(b.ctx.ConstString(str, false))
 			global.SetLinkage(llvm.InternalLinkage)
 			global.SetGlobalConstant(true)
 			global.SetUnnamedAddr(true)
-			zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-			strPtr := c.builder.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
-			strObj := llvm.ConstNamedStruct(c.getLLVMRuntimeType("_string"), []llvm.Value{strPtr, strLen})
+			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+			strPtr := b.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
+			strObj := llvm.ConstNamedStruct(b.getLLVMRuntimeType("_string"), []llvm.Value{strPtr, strLen})
 			return strObj
 		} else if typ.Kind() == types.UnsafePointer {
 			if !expr.IsNil() {
 				value, _ := constant.Uint64Val(expr.Value)
-				return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, value, false), c.i8ptrType)
+				return llvm.ConstIntToPtr(llvm.ConstInt(b.uintptrType, value, false), b.i8ptrType)
 			}
-			return llvm.ConstNull(c.i8ptrType)
+			return llvm.ConstNull(b.i8ptrType)
 		} else if typ.Info()&types.IsUnsigned != 0 {
 			n, _ := constant.Uint64Val(expr.Value)
 			return llvm.ConstInt(llvmType, n, false)
@@ -2251,18 +2286,18 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 			n, _ := constant.Float64Val(expr.Value)
 			return llvm.ConstFloat(llvmType, n)
 		} else if typ.Kind() == types.Complex64 {
-			r := c.parseConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]))
-			i := c.parseConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]))
-			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false))
-			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+			r := b.createConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]))
+			i := b.createConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]))
+			cplx := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.FloatType(), b.ctx.FloatType()}, false))
+			cplx = b.CreateInsertValue(cplx, r, 0, "")
+			cplx = b.CreateInsertValue(cplx, i, 1, "")
 			return cplx
 		} else if typ.Kind() == types.Complex128 {
-			r := c.parseConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
-			i := c.parseConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float64]))
-			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false))
-			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+			r := b.createConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
+			i := b.createConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float64]))
+			cplx := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.DoubleType(), b.ctx.DoubleType()}, false))
+			cplx = b.CreateInsertValue(cplx, r, 0, "")
+			cplx = b.CreateInsertValue(cplx, i, 1, "")
 			return cplx
 		} else {
 			panic("unknown constant of basic type: " + expr.String())
@@ -2271,35 +2306,35 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 		if expr.Value != nil {
 			panic("expected nil chan constant")
 		}
-		return llvm.ConstNull(c.getLLVMType(expr.Type()))
+		return llvm.ConstNull(b.getLLVMType(expr.Type()))
 	case *types.Signature:
 		if expr.Value != nil {
 			panic("expected nil signature constant")
 		}
-		return llvm.ConstNull(c.getLLVMType(expr.Type()))
+		return llvm.ConstNull(b.getLLVMType(expr.Type()))
 	case *types.Interface:
 		if expr.Value != nil {
 			panic("expected nil interface constant")
 		}
 		// Create a generic nil interface with no dynamic type (typecode=0).
 		fields := []llvm.Value{
-			llvm.ConstInt(c.uintptrType, 0, false),
-			llvm.ConstPointerNull(c.i8ptrType),
+			llvm.ConstInt(b.uintptrType, 0, false),
+			llvm.ConstPointerNull(b.i8ptrType),
 		}
-		return llvm.ConstNamedStruct(c.getLLVMRuntimeType("_interface"), fields)
+		return llvm.ConstNamedStruct(b.getLLVMRuntimeType("_interface"), fields)
 	case *types.Pointer:
 		if expr.Value != nil {
 			panic("expected nil pointer constant")
 		}
-		return llvm.ConstPointerNull(c.getLLVMType(typ))
+		return llvm.ConstPointerNull(b.getLLVMType(typ))
 	case *types.Slice:
 		if expr.Value != nil {
 			panic("expected nil slice constant")
 		}
-		elemType := c.getLLVMType(typ.Elem())
+		elemType := b.getLLVMType(typ.Elem())
 		llvmPtr := llvm.ConstPointerNull(llvm.PointerType(elemType, 0))
-		llvmLen := llvm.ConstInt(c.uintptrType, 0, false)
-		slice := c.ctx.ConstStruct([]llvm.Value{
+		llvmLen := llvm.ConstInt(b.uintptrType, 0, false)
+		slice := b.ctx.ConstStruct([]llvm.Value{
 			llvmPtr, // backing array
 			llvmLen, // len
 			llvmLen, // cap
@@ -2310,7 +2345,7 @@ func (c *Compiler) parseConst(prefix string, expr *ssa.Const) llvm.Value {
 			// I believe this is not allowed by the Go spec.
 			panic("non-nil map constant")
 		}
-		llvmType := c.getLLVMType(typ)
+		llvmType := b.getLLVMType(typ)
 		return llvm.ConstNull(llvmType)
 	default:
 		panic("unknown constant: " + expr.String())

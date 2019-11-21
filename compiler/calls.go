@@ -43,10 +43,10 @@ func (c *Compiler) createCall(fn llvm.Value, args []llvm.Value, name string) llv
 
 // Expand an argument type to a list that can be used in a function call
 // parameter list.
-func (c *Compiler) expandFormalParamType(t llvm.Type) []llvm.Type {
+func expandFormalParamType(t llvm.Type) []llvm.Type {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
-		fields := c.flattenAggregateType(t)
+		fields := flattenAggregateType(t)
 		if len(fields) <= MaxFieldsPerParam {
 			return fields
 		} else {
@@ -82,7 +82,7 @@ func (c *Compiler) expandFormalParamOffsets(t llvm.Type) []uint64 {
 func (c *Compiler) expandFormalParam(v llvm.Value) []llvm.Value {
 	switch v.Type().TypeKind() {
 	case llvm.StructTypeKind:
-		fieldTypes := c.flattenAggregateType(v.Type())
+		fieldTypes := flattenAggregateType(v.Type())
 		if len(fieldTypes) <= MaxFieldsPerParam {
 			fields := c.flattenAggregate(v)
 			if len(fields) != len(fieldTypes) {
@@ -101,12 +101,12 @@ func (c *Compiler) expandFormalParam(v llvm.Value) []llvm.Value {
 
 // Try to flatten a struct type to a list of types. Returns a 1-element slice
 // with the passed in type if this is not possible.
-func (c *Compiler) flattenAggregateType(t llvm.Type) []llvm.Type {
+func flattenAggregateType(t llvm.Type) []llvm.Type {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		fields := make([]llvm.Type, 0, t.StructElementTypesCount())
 		for _, subfield := range t.StructElementTypes() {
-			subfields := c.flattenAggregateType(subfield)
+			subfields := flattenAggregateType(subfield)
 			fields = append(fields, subfields...)
 		}
 		return fields
@@ -166,7 +166,7 @@ func (c *Compiler) collapseFormalParam(t llvm.Type, fields []llvm.Value) llvm.Va
 func (c *Compiler) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value) (llvm.Value, []llvm.Value) {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
-		if len(c.flattenAggregateType(t)) <= MaxFieldsPerParam {
+		if len(flattenAggregateType(t)) <= MaxFieldsPerParam {
 			value := llvm.ConstNull(t)
 			for i, subtyp := range t.StructElementTypes() {
 				structField, remaining := c.collapseFormalParamInternal(subtyp, fields)
