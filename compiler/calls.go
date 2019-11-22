@@ -31,6 +31,18 @@ func (c *Compiler) createRuntimeCall(fnName string, args []llvm.Value, name stri
 	return c.createCall(fn.LLVMFn, args, name)
 }
 
+// createCall creates a new call to runtime.<fnName> with the given arguments.
+func (b *builder) createRuntimeCall(fnName string, args []llvm.Value, name string) llvm.Value {
+	fullName := "runtime." + fnName
+	fn := b.mod.NamedFunction(fullName)
+	if fn.IsNil() {
+		panic("trying to call non-existent function: " + fullName)
+	}
+	args = append(args, llvm.Undef(b.i8ptrType))            // unused context parameter
+	args = append(args, llvm.ConstPointerNull(b.i8ptrType)) // coroutine handle
+	return b.createCall(fn, args, name)
+}
+
 // Create a call to the given function with the arguments possibly expanded.
 func (c *Compiler) createCall(fn llvm.Value, args []llvm.Value, name string) llvm.Value {
 	expanded := make([]llvm.Value, 0, len(args))
@@ -39,6 +51,17 @@ func (c *Compiler) createCall(fn llvm.Value, args []llvm.Value, name string) llv
 		expanded = append(expanded, fragments...)
 	}
 	return c.builder.CreateCall(fn, expanded, name)
+}
+
+// createCall creates a call to the given function with the arguments possibly
+// expanded.
+func (b *builder) createCall(fn llvm.Value, args []llvm.Value, name string) llvm.Value {
+	expanded := make([]llvm.Value, 0, len(args))
+	for _, arg := range args {
+		fragments := b.expandFormalParam(arg)
+		expanded = append(expanded, fragments...)
+	}
+	return b.CreateCall(fn, expanded, name)
 }
 
 // Expand an argument type to a list that can be used in a function call
@@ -99,6 +122,30 @@ func (c *Compiler) expandFormalParam(v llvm.Value) []llvm.Value {
 	}
 }
 
+// expandFormalParam splits a formal param value into pieces, so it can be
+// passed directly as part of a function call. For example, it splits up small
+// structs into individual fields. It is the equivalent of expandFormalParamType
+// for parameter values.
+func (b *builder) expandFormalParam(v llvm.Value) []llvm.Value {
+	switch v.Type().TypeKind() {
+	case llvm.StructTypeKind:
+		fieldTypes := flattenAggregateType(v.Type())
+		if len(fieldTypes) <= MaxFieldsPerParam {
+			fields := b.flattenAggregate(v)
+			if len(fields) != len(fieldTypes) {
+				panic("type and value param lowering don't match")
+			}
+			return fields
+		} else {
+			// failed to lower
+			return []llvm.Value{v}
+		}
+	default:
+		// TODO: split small arrays
+		return []llvm.Value{v}
+	}
+}
+
 // Try to flatten a struct type to a list of types. Returns a 1-element slice
 // with the passed in type if this is not possible.
 func flattenAggregateType(t llvm.Type) []llvm.Type {
@@ -145,6 +192,23 @@ func (c *Compiler) flattenAggregate(v llvm.Value) []llvm.Value {
 		for i := range v.Type().StructElementTypes() {
 			subfield := c.builder.CreateExtractValue(v, i, "")
 			subfields := c.flattenAggregate(subfield)
+			fields = append(fields, subfields...)
+		}
+		return fields
+	default:
+		return []llvm.Value{v}
+	}
+}
+
+// flattenAggregate breaks down a struct into its elementary values for argument
+// passing. It is the value equivalent of flattenAggregateType
+func (b *builder) flattenAggregate(v llvm.Value) []llvm.Value {
+	switch v.Type().TypeKind() {
+	case llvm.StructTypeKind:
+		fields := make([]llvm.Value, 0, v.Type().StructElementTypesCount())
+		for i := range v.Type().StructElementTypes() {
+			subfield := b.CreateExtractValue(v, i, "")
+			subfields := b.flattenAggregate(subfield)
 			fields = append(fields, subfields...)
 		}
 		return fields
