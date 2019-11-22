@@ -325,9 +325,32 @@ func (p *cgoPackage) getClangLocationPosition(location C.CXSourceLocation, tu C.
 	return positionFile.Pos(int(offset))
 }
 
-// addError is a utility function to add an error to the list of errors.
+// addError is a utility function to add an error to the list of errors. It will
+// convert the token position to a line/column position first, and call
+// addErrorAt.
 func (p *cgoPackage) addError(pos token.Pos, msg string) {
+	p.addErrorAt(p.fset.PositionFor(pos, true), msg)
+}
+
+// addErrorAfter is like addError, but adds the text `after` to the source
+// location.
+func (p *cgoPackage) addErrorAfter(pos token.Pos, after, msg string) {
 	position := p.fset.PositionFor(pos, true)
+	lines := strings.Split(after, "\n")
+	if len(lines) != 1 {
+		// Adjust lines.
+		// For why we can't just do pos+token.Pos(len(after)), see:
+		// https://github.com/golang/go/issues/35803
+		position.Line += len(lines) - 1
+		position.Column = len(lines[len(lines)-1]) + 1
+	} else {
+		position.Column += len(after)
+	}
+	p.addErrorAt(position, msg)
+}
+
+// addErrorAt is a utility function to add an error to the list of errors.
+func (p *cgoPackage) addErrorAt(position token.Position, msg string) {
 	if filepath.IsAbs(position.Filename) {
 		// Relative paths for readability, like other Go parser errors.
 		relpath, err := filepath.Rel(p.dir, position.Filename)

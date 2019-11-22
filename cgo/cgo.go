@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/shlex"
 	"golang.org/x/tools/go/ast/astutil"
 )
 
@@ -235,6 +236,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	}
 
 	// Find `import "C"` statements in the file.
+	var statements []*ast.GenDecl
 	for _, f := range files {
 		for i := 0; i < len(f.Decls); i++ {
 			decl := f.Decls[i]
@@ -258,14 +260,9 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 			if path != "C" {
 				continue
 			}
-			cgoComment := genDecl.Doc.Text()
 
-			pos := genDecl.Pos()
-			if genDecl.Doc != nil {
-				pos = genDecl.Doc.Pos()
-			}
-			position := fset.PositionFor(pos, true)
-			p.parseFragment(cgoComment+cgoTypes, cflags, position.Filename, position.Line)
+			// Found a CGo statement.
+			statements = append(statements, genDecl)
 
 			// Remove this import declaration.
 			f.Decls = append(f.Decls[:i], f.Decls[i+1:]...)
@@ -274,6 +271,93 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 
 		// Print the AST, for debugging.
 		//ast.Print(fset, f)
+	}
+
+	// Find all #cgo lines.
+	for _, genDecl := range statements {
+		if genDecl.Doc == nil {
+			continue
+		}
+		for _, comment := range genDecl.Doc.List {
+			for {
+				// Extract the #cgo line, and replace it with spaces.
+				// Replacing with spaces makes sure that error locations are
+				// still correct, while not interfering with parsing in any way.
+				lineStart := strings.Index(comment.Text, "#cgo ")
+				if lineStart < 0 {
+					break
+				}
+				lineLen := strings.IndexByte(comment.Text[lineStart:], '\n')
+				if lineLen < 0 {
+					lineLen = len(comment.Text) - lineStart
+				}
+				lineEnd := lineStart + lineLen
+				line := comment.Text[lineStart:lineEnd]
+				spaces := make([]byte, len(line))
+				for i := range spaces {
+					spaces[i] = ' '
+				}
+				lenBefore := len(comment.Text)
+				comment.Text = comment.Text[:lineStart] + string(spaces) + comment.Text[lineEnd:]
+				if len(comment.Text) != lenBefore {
+					println(lenBefore, len(comment.Text))
+					panic("length of preamble changed!")
+				}
+
+				// Get the text before the colon in the #cgo directive.
+				colon := strings.IndexByte(line, ':')
+				if colon < 0 {
+					p.addErrorAfter(comment.Slash, comment.Text[:lineStart], "missing colon in #cgo line")
+					continue
+				}
+
+				// Extract the fields before the colon. These fields are a list
+				// of build tags and the C environment variable.
+				fields := strings.Fields(line[4:colon])
+				if len(fields) == 0 {
+					p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon-1], "invalid #cgo line")
+					continue
+				}
+
+				if len(fields) > 1 {
+					p.addErrorAfter(comment.Slash, comment.Text[:lineStart+5], "not implemented: build constraints in #cgo line")
+					continue
+				}
+
+				name := fields[len(fields)-1]
+				value := line[colon+1:]
+				switch name {
+				case "CFLAGS":
+					flags, err := shlex.Split(value)
+					if err != nil {
+						// TODO: find the exact location where the error happened.
+						p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon+1], "failed to parse flags in #cgo line: "+err.Error())
+						continue
+					}
+					if err := checkCompilerFlags(name, flags); err != nil {
+						p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon+1], err.Error())
+						continue
+					}
+					cflags = append(cflags, flags...)
+				default:
+					startPos := strings.LastIndex(line[4:colon], name) + 4
+					p.addErrorAfter(comment.Slash, comment.Text[:lineStart+startPos], "invalid #cgo line: "+name)
+					continue
+				}
+			}
+		}
+	}
+
+	// Process all CGo imports.
+	for _, genDecl := range statements {
+		cgoComment := genDecl.Doc.Text()
+
+		pos := genDecl.Pos()
+		if genDecl.Doc != nil {
+			pos = genDecl.Doc.Pos()
+		}
+		position := fset.PositionFor(pos, true)
+		p.parseFragment(cgoComment+cgoTypes, cflags, position.Filename, position.Line)
 	}
 
 	// Declare functions found by libclang.
