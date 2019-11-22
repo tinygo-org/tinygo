@@ -52,6 +52,11 @@ func (c *Compiler) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []l
 	return llvmutil.EmitPointerUnpack(c.builder, c.mod, ptr, valueTypes)
 }
 
+// emitPointerUnpack extracts a list of values packed using emitPointerPack.
+func (b *builder) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []llvm.Value {
+	return llvmutil.EmitPointerUnpack(b.Builder, b.mod, ptr, valueTypes)
+}
+
 // makeGlobalArray creates a new LLVM global with the given name and integers as
 // contents, and returns the global.
 // Note that it is left with the default linkage etc., you should set
