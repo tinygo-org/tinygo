@@ -11,6 +11,7 @@ import (
 	"go/types"
 	"io/ioutil"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -21,7 +22,7 @@ var flagUpdate = flag.Bool("update", false, "Update images based on test output.
 func TestCGo(t *testing.T) {
 	var cflags = []string{"--target=armv6m-none-eabi"}
 
-	for _, name := range []string{"basic", "types"} {
+	for _, name := range []string{"basic", "errors", "types"} {
 		name := name // avoid a race condition
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -35,23 +36,19 @@ func TestCGo(t *testing.T) {
 			}
 
 			// Process the AST with CGo.
-			cgoAST, errs := Process([]*ast.File{f}, "testdata", fset, cflags)
-			for _, err := range errs {
-				t.Errorf("error during CGo processing: %v", err)
-			}
+			cgoAST, cgoErrors := Process([]*ast.File{f}, "testdata", fset, cflags)
 
 			// Check the AST for type errors.
-			hasTypeError := false
+			var typecheckErrors []error
 			config := types.Config{
 				Error: func(err error) {
-					t.Error("typecheck error:", err)
-					hasTypeError = true
+					typecheckErrors = append(typecheckErrors, err)
 				},
 				Importer: simpleImporter{},
 				Sizes:    types.SizesFor("gccgo", "arm"),
 			}
 			_, err = config.Check("", fset, []*ast.File{f, cgoAST}, nil)
-			if err != nil && !hasTypeError {
+			if err != nil && len(typecheckErrors) == 0 {
 				// Only report errors when no type errors are found (an
 				// unexpected condition).
 				t.Error(err)
@@ -61,6 +58,20 @@ func TestCGo(t *testing.T) {
 			// becomes easier to read (and will hopefully change less with CGo
 			// changes).
 			buf := &bytes.Buffer{}
+			if len(cgoErrors) != 0 {
+				buf.WriteString("// CGo errors:\n")
+				for _, err := range cgoErrors {
+					buf.WriteString(formatDiagnostic(err))
+				}
+				buf.WriteString("\n")
+			}
+			if len(typecheckErrors) != 0 {
+				buf.WriteString("// Type checking errors after CGo processing:\n")
+				for _, err := range typecheckErrors {
+					buf.WriteString(formatDiagnostic(err))
+				}
+				buf.WriteString("\n")
+			}
 			err = format.Node(buf, fset, cgoAST)
 			if err != nil {
 				t.Errorf("could not write out CGo AST: %v", err)
@@ -106,4 +117,15 @@ func (i simpleImporter) Import(path string) (*types.Package, error) {
 	default:
 		return nil, fmt.Errorf("importer not implemented for package %s", path)
 	}
+}
+
+// formatDiagnostics formats the error message to be an indented comment. It
+// also fixes Windows path name issues (backward slashes).
+func formatDiagnostic(err error) string {
+	msg := err.Error()
+	if runtime.GOOS == "windows" {
+		// Fix Windows path slashes.
+		msg = strings.Replace(msg, "testdata\\", "testdata/", -1)
+	}
+	return "//     " + msg + "\n"
 }

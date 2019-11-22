@@ -132,7 +132,6 @@ func (p *cgoPackage) parseFragment(fragment string, cflags []string, posFilename
 				addDiagnostic(C.clang_getDiagnosticInSet(diagnostics, C.uint(j)))
 			}
 		}
-		return
 	}
 
 	ref := storedRefs.Put(p)
