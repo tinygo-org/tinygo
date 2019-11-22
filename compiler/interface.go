@@ -271,7 +271,7 @@ func (c *Compiler) getTypeMethodSet(typ types.Type) llvm.Value {
 // getInterfaceMethodSet returns a global variable with the method set of the
 // given named interface type. This method set is used by the interface lowering
 // pass.
-func (c *Compiler) getInterfaceMethodSet(typ *types.Named) llvm.Value {
+func (c *compilerContext) getInterfaceMethodSet(typ *types.Named) llvm.Value {
 	global := c.mod.NamedGlobal(typ.String() + "$interface")
 	zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 	if !global.IsNil() {
@@ -297,7 +297,7 @@ func (c *Compiler) getInterfaceMethodSet(typ *types.Named) llvm.Value {
 // getMethodSignature returns a global variable which is a reference to an
 // external *i8 indicating the indicating the signature of this method. It is
 // used during the interface lowering pass.
-func (c *Compiler) getMethodSignature(method *types.Func) llvm.Value {
+func (c *compilerContext) getMethodSignature(method *types.Func) llvm.Value {
 	signature := ir.MethodSignature(method)
 	signatureGlobal := c.mod.NamedGlobal("func " + signature)
 	if signatureGlobal.IsNil() {
@@ -307,18 +307,18 @@ func (c *Compiler) getMethodSignature(method *types.Func) llvm.Value {
 	return signatureGlobal
 }
 
-// parseTypeAssert will emit the code for a typeassert, used in if statements
+// createTypeAssert will emit the code for a typeassert, used in if statements
 // and in type switches (Go SSA does not have type switches, only if/else
 // chains). Note that even though the Go SSA does not contain type switches,
 // LLVM will recognize the pattern and make it a real switch in many cases.
 //
 // Type asserts on concrete types are trivial: just compare type numbers. Type
 // asserts on interfaces are more difficult, see the comments in the function.
-func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) llvm.Value {
-	itf := frame.getValue(expr.X)
-	assertedType := c.getLLVMType(expr.AssertedType)
+func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
+	itf := b.getValue(expr.X)
+	assertedType := b.getLLVMType(expr.AssertedType)
 
-	actualTypeNum := c.builder.CreateExtractValue(itf, 0, "interface.type")
+	actualTypeNum := b.CreateExtractValue(itf, 0, "interface.type")
 	commaOk := llvm.Value{}
 	if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
 		// Type assert on interface type.
@@ -329,15 +329,15 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) llvm.Valu
 		// the main Go compiler, where the runtime checks whether the type
 		// implements each method of the interface. See:
 		// https://research.swtch.com/interfaces
-		methodSet := c.getInterfaceMethodSet(expr.AssertedType.(*types.Named))
-		commaOk = c.createRuntimeCall("interfaceImplements", []llvm.Value{actualTypeNum, methodSet}, "")
+		methodSet := b.getInterfaceMethodSet(expr.AssertedType.(*types.Named))
+		commaOk = b.createRuntimeCall("interfaceImplements", []llvm.Value{actualTypeNum, methodSet}, "")
 
 	} else {
 		// Type assert on concrete type.
 		// Call runtime.typeAssert, which will be lowered to a simple icmp or
 		// const false in the interface lowering pass.
-		assertedTypeCodeGlobal := c.getTypeCode(expr.AssertedType)
-		commaOk = c.createRuntimeCall("typeAssert", []llvm.Value{actualTypeNum, assertedTypeCodeGlobal}, "typecode")
+		assertedTypeCodeGlobal := b.getTypeCode(expr.AssertedType)
+		commaOk = b.createRuntimeCall("typeAssert", []llvm.Value{actualTypeNum, assertedTypeCodeGlobal}, "typecode")
 	}
 
 	// Add 2 new basic blocks (that should get optimized away): one for the
@@ -351,15 +351,15 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) llvm.Valu
 	// typeassert should return a zero value, not an incorrectly casted
 	// value.
 
-	prevBlock := c.builder.GetInsertBlock()
-	okBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "typeassert.ok")
-	nextBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "typeassert.next")
-	frame.blockExits[frame.currentBlock] = nextBlock // adjust outgoing block for phi nodes
-	c.builder.CreateCondBr(commaOk, okBlock, nextBlock)
+	prevBlock := b.GetInsertBlock()
+	okBlock := b.ctx.AddBasicBlock(b.fn.LLVMFn, "typeassert.ok")
+	nextBlock := b.ctx.AddBasicBlock(b.fn.LLVMFn, "typeassert.next")
+	b.blockExits[b.currentBlock] = nextBlock // adjust outgoing block for phi nodes
+	b.CreateCondBr(commaOk, okBlock, nextBlock)
 
 	// Retrieve the value from the interface if the type assert was
 	// successful.
-	c.builder.SetInsertPointAtEnd(okBlock)
+	b.SetInsertPointAtEnd(okBlock)
 	var valueOk llvm.Value
 	if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
 		// Type assert on interface type. Easy: just return the same
@@ -368,25 +368,25 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) llvm.Valu
 	} else {
 		// Type assert on concrete type. Extract the underlying type from
 		// the interface (but only after checking it matches).
-		valuePtr := c.builder.CreateExtractValue(itf, 1, "typeassert.value.ptr")
-		valueOk = c.emitPointerUnpack(valuePtr, []llvm.Type{assertedType})[0]
+		valuePtr := b.CreateExtractValue(itf, 1, "typeassert.value.ptr")
+		valueOk = b.emitPointerUnpack(valuePtr, []llvm.Type{assertedType})[0]
 	}
-	c.builder.CreateBr(nextBlock)
+	b.CreateBr(nextBlock)
 
 	// Continue after the if statement.
-	c.builder.SetInsertPointAtEnd(nextBlock)
-	phi := c.builder.CreatePHI(assertedType, "typeassert.value")
+	b.SetInsertPointAtEnd(nextBlock)
+	phi := b.CreatePHI(assertedType, "typeassert.value")
 	phi.AddIncoming([]llvm.Value{llvm.ConstNull(assertedType), valueOk}, []llvm.BasicBlock{prevBlock, okBlock})
 
 	if expr.CommaOk {
-		tuple := c.ctx.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(c.ctx.Int1Type())}, false) // create empty tuple
-		tuple = c.builder.CreateInsertValue(tuple, phi, 0, "")                                                  // insert value
-		tuple = c.builder.CreateInsertValue(tuple, commaOk, 1, "")                                              // insert 'comma ok' boolean
+		tuple := b.ctx.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(b.ctx.Int1Type())}, false) // create empty tuple
+		tuple = b.CreateInsertValue(tuple, phi, 0, "")                                                          // insert value
+		tuple = b.CreateInsertValue(tuple, commaOk, 1, "")                                                      // insert 'comma ok' boolean
 		return tuple
 	} else {
 		// This is kind of dirty as the branch above becomes mostly useless,
 		// but hopefully this gets optimized away.
-		c.createRuntimeCall("interfaceTypeAssert", []llvm.Value{commaOk}, "")
+		b.createRuntimeCall("interfaceTypeAssert", []llvm.Value{commaOk}, "")
 		return phi
 	}
 }

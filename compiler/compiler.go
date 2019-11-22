@@ -1897,7 +1897,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, c.makeError(expr.Pos(), "unknown slice type: "+typ.String())
 		}
 	case *ssa.TypeAssert:
-		return c.parseTypeAssert(frame, expr), nil
+		return frame.createTypeAssert(expr), nil
 	case *ssa.UnOp:
 		return c.parseUnOp(frame, expr)
 	default:
