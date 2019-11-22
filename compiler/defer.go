@@ -91,12 +91,12 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) {
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields, followed by the call parameters).
-		itf := c.getValue(frame, instr.Call.Value) // interface
+		itf := frame.getValue(instr.Call.Value) // interface
 		receiverValue := c.builder.CreateExtractValue(itf, 1, "invoke.func.receiver")
 		values = []llvm.Value{callback, next, receiverValue}
 		valueTypes = append(valueTypes, c.i8ptrType)
 		for _, arg := range instr.Call.Args {
-			val := c.getValue(frame, arg)
+			val := frame.getValue(arg)
 			values = append(values, val)
 			valueTypes = append(valueTypes, val.Type())
 		}
@@ -115,7 +115,7 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) {
 		// runtime._defer fields).
 		values = []llvm.Value{callback, next}
 		for _, param := range instr.Call.Args {
-			llvmParam := c.getValue(frame, param)
+			llvmParam := frame.getValue(param)
 			values = append(values, llvmParam)
 			valueTypes = append(valueTypes, llvmParam.Type())
 		}
@@ -127,7 +127,7 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) {
 		// pointer.
 		// TODO: ignore this closure entirely and put pointers to the free
 		// variables directly in the defer struct, avoiding a memory allocation.
-		closure := c.getValue(frame, instr.Call.Value)
+		closure := frame.getValue(instr.Call.Value)
 		context := c.builder.CreateExtractValue(closure, 0, "")
 
 		// Get the callback number.
@@ -143,7 +143,7 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) {
 		// context pointer).
 		values = []llvm.Value{callback, next}
 		for _, param := range instr.Call.Args {
-			llvmParam := c.getValue(frame, param)
+			llvmParam := frame.getValue(param)
 			values = append(values, llvmParam)
 			valueTypes = append(valueTypes, llvmParam.Type())
 		}

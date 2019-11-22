@@ -56,7 +56,7 @@ func (c *Compiler) loadASTComments(lprogram *loader.Program) {
 
 // getGlobal returns a LLVM IR global value for a Go SSA global. It is added to
 // the LLVM IR if it has not been added already.
-func (c *Compiler) getGlobal(g *ssa.Global) llvm.Value {
+func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 	info := c.getGlobalInfo(g)
 	llvmGlobal := c.mod.NamedGlobal(info.linkName)
 	if llvmGlobal.IsNil() {
@@ -104,7 +104,7 @@ func (c *Compiler) getGlobal(g *ssa.Global) llvm.Value {
 }
 
 // getGlobalInfo returns some information about a specific global.
-func (c *Compiler) getGlobalInfo(g *ssa.Global) globalInfo {
+func (c *compilerContext) getGlobalInfo(g *ssa.Global) globalInfo {
 	info := globalInfo{}
 	if strings.HasPrefix(g.Name(), "C.") {
 		// Created by CGo: such a name cannot be created by regular C code.

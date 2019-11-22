@@ -14,7 +14,7 @@ import (
 func (c *Compiler) emitMakeChan(frame *Frame, expr *ssa.MakeChan) llvm.Value {
 	elementSize := c.targetData.TypeAllocSize(c.getLLVMType(expr.Type().(*types.Chan).Elem()))
 	elementSizeValue := llvm.ConstInt(c.uintptrType, elementSize, false)
-	bufSize := c.getValue(frame, expr.Size)
+	bufSize := frame.getValue(expr.Size)
 	c.emitChanBoundsCheck(frame, elementSize, bufSize, expr.Size.Type().Underlying().(*types.Basic), expr.Pos())
 	if bufSize.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
 		bufSize = c.builder.CreateZExt(bufSize, c.uintptrType, "")
@@ -27,8 +27,8 @@ func (c *Compiler) emitMakeChan(frame *Frame, expr *ssa.MakeChan) llvm.Value {
 // emitChanSend emits a pseudo chan send operation. It is lowered to the actual
 // channel send operation during goroutine lowering.
 func (c *Compiler) emitChanSend(frame *Frame, instr *ssa.Send) {
-	ch := c.getValue(frame, instr.Chan)
-	chanValue := c.getValue(frame, instr.X)
+	ch := frame.getValue(instr.Chan)
+	chanValue := frame.getValue(instr.X)
 
 	// store value-to-send
 	valueType := c.getLLVMType(instr.X.Type())
@@ -48,7 +48,7 @@ func (c *Compiler) emitChanSend(frame *Frame, instr *ssa.Send) {
 // actual channel receive operation during goroutine lowering.
 func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) llvm.Value {
 	valueType := c.getLLVMType(unop.X.Type().(*types.Chan).Elem())
-	ch := c.getValue(frame, unop.X)
+	ch := frame.getValue(unop.X)
 
 	// Allocate memory to receive into.
 	valueAlloca, valueAllocaCast, valueAllocaSize := c.createTemporaryAlloca(valueType, "chan.value")
@@ -70,7 +70,7 @@ func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) llvm.Value {
 
 // emitChanClose closes the given channel.
 func (c *Compiler) emitChanClose(frame *Frame, param ssa.Value) {
-	ch := c.getValue(frame, param)
+	ch := frame.getValue(param)
 	c.createRuntimeCall("chanClose", []llvm.Value{ch}, "")
 }
 
@@ -111,7 +111,7 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 	var selectStates []llvm.Value
 	chanSelectStateType := c.getLLVMRuntimeType("chanSelectState")
 	for _, state := range expr.States {
-		ch := c.getValue(frame, state.Chan)
+		ch := frame.getValue(state.Chan)
 		selectState := llvm.ConstNull(chanSelectStateType)
 		selectState = c.builder.CreateInsertValue(selectState, ch, 0, "")
 		switch state.Dir {
@@ -128,7 +128,7 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 		case types.SendOnly:
 			// Store this value in an alloca and put a pointer to this alloca
 			// in the send state.
-			sendValue := c.getValue(frame, state.Send)
+			sendValue := frame.getValue(state.Send)
 			alloca := llvmutil.CreateEntryBlockAlloca(c.builder, sendValue.Type(), "select.send.value")
 			c.builder.CreateStore(sendValue, alloca)
 			ptr := c.builder.CreateBitCast(alloca, c.i8ptrType, "")
@@ -219,7 +219,7 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 func (c *Compiler) getChanSelectResult(frame *Frame, expr *ssa.Extract) llvm.Value {
 	if expr.Index == 0 {
 		// index
-		value := c.getValue(frame, expr.Tuple)
+		value := frame.getValue(expr.Tuple)
 		index := c.builder.CreateExtractValue(value, expr.Index, "")
 		if index.Type().IntTypeWidth() < c.intType.IntTypeWidth() {
 			index = c.builder.CreateSExt(index, c.intType, "")
@@ -227,7 +227,7 @@ func (c *Compiler) getChanSelectResult(frame *Frame, expr *ssa.Extract) llvm.Val
 		return index
 	} else if expr.Index == 1 {
 		// comma-ok
-		value := c.getValue(frame, expr.Tuple)
+		value := frame.getValue(expr.Tuple)
 		return c.builder.CreateExtractValue(value, expr.Index, "")
 	} else {
 		// Select statements are (index, ok, ...) where ... is a number of

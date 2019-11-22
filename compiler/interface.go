@@ -44,7 +44,7 @@ func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, pos token.
 // getTypeCode returns a reference to a type code.
 // It returns a pointer to an external global which should be replaced with the
 // real type in the interface lowering pass.
-func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
+func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 	globalName := "reflect/types.type:" + getTypeCodeName(typ)
 	global := c.mod.NamedGlobal(globalName)
 	if global.IsNil() {
@@ -91,7 +91,7 @@ func (c *Compiler) getTypeCode(typ types.Type) llvm.Value {
 // makeStructTypeFields creates a new global that stores all type information
 // related to this struct type, and returns the resulting global. This global is
 // actually an array of all the fields in the structs.
-func (c *Compiler) makeStructTypeFields(typ *types.Struct) llvm.Value {
+func (c *compilerContext) makeStructTypeFields(typ *types.Struct) llvm.Value {
 	// The global is an array of runtime.structField structs.
 	runtimeStructField := c.getLLVMRuntimeType("structField")
 	structGlobalType := llvm.ArrayType(runtimeStructField, typ.NumFields())
@@ -315,7 +315,7 @@ func (c *Compiler) getMethodSignature(method *types.Func) llvm.Value {
 // Type asserts on concrete types are trivial: just compare type numbers. Type
 // asserts on interfaces are more difficult, see the comments in the function.
 func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) llvm.Value {
-	itf := c.getValue(frame, expr.X)
+	itf := frame.getValue(expr.X)
 	assertedType := c.getLLVMType(expr.AssertedType)
 
 	actualTypeNum := c.builder.CreateExtractValue(itf, 0, "interface.type")
@@ -395,7 +395,7 @@ func (c *Compiler) parseTypeAssert(frame *Frame, expr *ssa.TypeAssert) llvm.Valu
 // interface call. It can be used in a call or defer instruction.
 func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, []llvm.Value) {
 	// Call an interface method with dynamic dispatch.
-	itf := c.getValue(frame, instr.Value) // interface
+	itf := frame.getValue(instr.Value) // interface
 
 	llvmFnType := c.getRawFuncType(instr.Method.Type().(*types.Signature))
 
@@ -411,7 +411,7 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 
 	args := []llvm.Value{receiverValue}
 	for _, arg := range instr.Args {
-		args = append(args, c.getValue(frame, arg))
+		args = append(args, frame.getValue(arg))
 	}
 	// Add the context parameter. An interface call never takes a context but we
 	// have to supply the parameter anyway.

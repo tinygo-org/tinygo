@@ -14,6 +14,18 @@ import (
 // createFuncValue creates a function value from a raw function pointer with no
 // context.
 func (c *Compiler) createFuncValue(funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
+	return c.compilerContext.createFuncValue(c.builder, funcPtr, context, sig)
+}
+
+// createFuncValue creates a function value from a raw function pointer with no
+// context.
+func (b *builder) createFuncValue(funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
+	return b.compilerContext.createFuncValue(b.Builder, funcPtr, context, sig)
+}
+
+// createFuncValue creates a function value from a raw function pointer with no
+// context.
+func (c *compilerContext) createFuncValue(builder llvm.Builder, funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
 	var funcValueScalar llvm.Value
 	switch c.FuncImplementation() {
 	case compileopts.FuncValueDoubleword:
@@ -40,8 +52,8 @@ func (c *Compiler) createFuncValue(funcPtr, context llvm.Value, sig *types.Signa
 	}
 	funcValueType := c.getFuncType(sig)
 	funcValue := llvm.Undef(funcValueType)
-	funcValue = c.builder.CreateInsertValue(funcValue, context, 0, "")
-	funcValue = c.builder.CreateInsertValue(funcValue, funcValueScalar, 1, "")
+	funcValue = builder.CreateInsertValue(funcValue, context, 0, "")
+	funcValue = builder.CreateInsertValue(funcValue, funcValueScalar, 1, "")
 	return funcValue
 }
 
@@ -151,7 +163,7 @@ func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.V
 	boundVars := make([]llvm.Value, len(expr.Bindings))
 	for i, binding := range expr.Bindings {
 		// The context stores the bound variables.
-		llvmBoundVar := c.getValue(frame, binding)
+		llvmBoundVar := frame.getValue(binding)
 		boundVars[i] = llvmBoundVar
 	}
 

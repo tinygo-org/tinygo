@@ -77,7 +77,7 @@ func (c *Compiler) emitAsmFull(frame *Frame, instr *ssa.CallCommon) (llvm.Value,
 			}
 			key := constant.StringVal(r.Key.(*ssa.Const).Value)
 			//println("value:", r.Value.(*ssa.MakeInterface).X.String())
-			registers[key] = c.getValue(frame, r.Value.(*ssa.MakeInterface).X)
+			registers[key] = frame.getValue(r.Value.(*ssa.MakeInterface).X)
 		case *ssa.Call:
 			if r.Common() == instr {
 				break
@@ -150,7 +150,7 @@ func (c *Compiler) emitSVCall(frame *Frame, args []ssa.Value) (llvm.Value, error
 		} else {
 			constraints += ",{r" + strconv.Itoa(i) + "}"
 		}
-		llvmValue := c.getValue(frame, arg)
+		llvmValue := frame.getValue(arg)
 		llvmArgs = append(llvmArgs, llvmValue)
 		argTypes = append(argTypes, llvmValue.Type())
 	}
@@ -190,19 +190,19 @@ func (c *Compiler) emitCSROperation(frame *Frame, call *ssa.CallCommon) (llvm.Va
 		fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.uintptrType}, false)
 		asm := fmt.Sprintf("csrw %d, $0", csr)
 		target := llvm.InlineAsm(fnType, asm, "r", true, false, 0)
-		return c.builder.CreateCall(target, []llvm.Value{c.getValue(frame, call.Args[1])}, ""), nil
+		return c.builder.CreateCall(target, []llvm.Value{frame.getValue(call.Args[1])}, ""), nil
 	case "SetBits":
 		// Note: it may be possible to optimize this to csrrsi in many cases.
 		fnType := llvm.FunctionType(c.uintptrType, []llvm.Type{c.uintptrType}, false)
 		asm := fmt.Sprintf("csrrs $0, %d, $1", csr)
 		target := llvm.InlineAsm(fnType, asm, "=r,r", true, false, 0)
-		return c.builder.CreateCall(target, []llvm.Value{c.getValue(frame, call.Args[1])}, ""), nil
+		return c.builder.CreateCall(target, []llvm.Value{frame.getValue(call.Args[1])}, ""), nil
 	case "ClearBits":
 		// Note: it may be possible to optimize this to csrrci in many cases.
 		fnType := llvm.FunctionType(c.uintptrType, []llvm.Type{c.uintptrType}, false)
 		asm := fmt.Sprintf("csrrc $0, %d, $1", csr)
 		target := llvm.InlineAsm(fnType, asm, "=r,r", true, false, 0)
-		return c.builder.CreateCall(target, []llvm.Value{c.getValue(frame, call.Args[1])}, ""), nil
+		return c.builder.CreateCall(target, []llvm.Value{frame.getValue(call.Args[1])}, ""), nil
 	default:
 		return llvm.Value{}, c.makeError(call.Pos(), "unknown CSR operation: "+name)
 	}

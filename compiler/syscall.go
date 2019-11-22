@@ -13,7 +13,7 @@ import (
 // emitSyscall emits an inline system call instruction, depending on the target
 // OS/arch.
 func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, error) {
-	num := c.getValue(frame, call.Args[0])
+	num := frame.getValue(call.Args[0])
 	var syscallResult llvm.Value
 	switch {
 	case c.GOARCH() == "amd64":
@@ -50,7 +50,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 				"{r12}",
 				"{r13}",
 			}[i]
-			llvmValue := c.getValue(frame, arg)
+			llvmValue := frame.getValue(arg)
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
@@ -77,7 +77,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 				"{edi}",
 				"{ebp}",
 			}[i]
-			llvmValue := c.getValue(frame, arg)
+			llvmValue := frame.getValue(arg)
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
@@ -102,7 +102,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 				"{r5}",
 				"{r6}",
 			}[i]
-			llvmValue := c.getValue(frame, arg)
+			llvmValue := frame.getValue(arg)
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
@@ -132,7 +132,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 				"{x4}",
 				"{x5}",
 			}[i]
-			llvmValue := c.getValue(frame, arg)
+			llvmValue := frame.getValue(arg)
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
