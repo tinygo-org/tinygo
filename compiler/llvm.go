@@ -33,11 +33,28 @@ func (c *Compiler) createTemporaryAlloca(t llvm.Type, name string) (alloca, bitc
 	return llvmutil.CreateTemporaryAlloca(c.builder, c.mod, t, name)
 }
 
+// createTemporaryAlloca creates a new alloca in the entry block and adds
+// lifetime start infromation in the IR signalling that the alloca won't be used
+// before this point.
+//
+// This is useful for creating temporary allocas for intrinsics. Don't forget to
+// end the lifetime using emitLifetimeEnd after you're done with it.
+func (b *builder) createTemporaryAlloca(t llvm.Type, name string) (alloca, bitcast, size llvm.Value) {
+	return llvmutil.CreateTemporaryAlloca(b.Builder, b.mod, t, name)
+}
+
 // emitLifetimeEnd signals the end of an (alloca) lifetime by calling the
 // llvm.lifetime.end intrinsic. It is commonly used together with
 // createTemporaryAlloca.
 func (c *Compiler) emitLifetimeEnd(ptr, size llvm.Value) {
 	llvmutil.EmitLifetimeEnd(c.builder, c.mod, ptr, size)
+}
+
+// emitLifetimeEnd signals the end of an (alloca) lifetime by calling the
+// llvm.lifetime.end intrinsic. It is commonly used together with
+// createTemporaryAlloca.
+func (b *builder) emitLifetimeEnd(ptr, size llvm.Value) {
+	llvmutil.EmitLifetimeEnd(b.Builder, b.mod, ptr, size)
 }
 
 // emitPointerPack packs the list of values into a single pointer value using

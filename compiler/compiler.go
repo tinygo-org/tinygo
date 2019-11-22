@@ -1131,7 +1131,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 	case *ssa.RunDefers:
 		c.emitRunDefers(frame)
 	case *ssa.Send:
-		c.emitChanSend(frame, instr)
+		frame.createChanSend(instr)
 	case *ssa.Store:
 		llvmAddr := frame.getValue(instr.Addr)
 		llvmVal := frame.getValue(instr.Val)
@@ -1188,7 +1188,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 		}
 		return llvmCap, nil
 	case "close":
-		c.emitChanClose(frame, args[0])
+		frame.createChanClose(args[0])
 		return llvm.Value{}, nil
 	case "complex":
 		r := frame.getValue(args[0])
@@ -1510,7 +1510,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return c.parseConvert(expr.X.Type(), expr.Type(), x, expr.Pos())
 	case *ssa.Extract:
 		if _, ok := expr.Tuple.(*ssa.Select); ok {
-			return c.getChanSelectResult(frame, expr), nil
+			return frame.getChanSelectResult(expr), nil
 		}
 		value := frame.getValue(expr.Tuple)
 		return c.builder.CreateExtractValue(value, expr.Index, ""), nil
@@ -1626,7 +1626,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			panic("unknown lookup type: " + expr.String())
 		}
 	case *ssa.MakeChan:
-		return c.emitMakeChan(frame, expr), nil
+		return frame.createMakeChan(expr), nil
 	case *ssa.MakeClosure:
 		return c.parseMakeClosure(frame, expr)
 	case *ssa.MakeInterface:
@@ -1726,7 +1726,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		c.builder.CreateStore(llvm.ConstNull(iteratorType), it)
 		return it, nil
 	case *ssa.Select:
-		return c.emitSelect(frame, expr), nil
+		return frame.createSelect(expr), nil
 	case *ssa.Slice:
 		value := frame.getValue(expr.X)
 
@@ -2566,7 +2566,7 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 	case token.XOR: // ^x, toggle all bits in integer
 		return c.builder.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil
 	case token.ARROW: // <-x, receive from channel
-		return c.emitChanRecv(frame, unop), nil
+		return frame.createChanRecv(unop), nil
 	default:
 		return llvm.Value{}, c.makeError(unop.Pos(), "todo: unknown unop")
 	}
