@@ -347,7 +347,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 		c.mod.NamedFunction("runtime.alloc").AddAttributeAtIndex(0, getAttr(attrName))
 	}
 
-	// See emitNilCheck in asserts.go.
+	// See createNilCheck in asserts.go.
 	c.mod.NamedFunction("runtime.isnil").AddAttributeAtIndex(1, nocapture)
 
 	// On *nix systems, the "abort" functuion in libc is used to handle fatal panics.
@@ -1135,7 +1135,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 	case *ssa.Store:
 		llvmAddr := frame.getValue(instr.Addr)
 		llvmVal := frame.getValue(instr.Val)
-		c.emitNilCheck(frame, llvmAddr, "store")
+		frame.createNilCheck(llvmAddr, "store")
 		if c.targetData.TypeAllocSize(llvmVal.Type()) == 0 {
 			// nothing to store
 			return
@@ -1392,7 +1392,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 		// This is a func value, which cannot be called directly. We have to
 		// extract the function pointer and context first from the func value.
 		funcPtr, context := c.decodeFuncValue(value, instr.Value.Type().Underlying().(*types.Signature))
-		c.emitNilCheck(frame, funcPtr, "fpcall")
+		frame.createNilCheck(funcPtr, "fpcall")
 		return c.parseFunctionCall(frame, instr.Args, funcPtr, context, false), nil
 	}
 }
@@ -1524,7 +1524,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// > For an operand x of type T, the address operation &x generates a
 		// > pointer of type *T to x. [...] If the evaluation of x would cause a
 		// > run-time panic, then the evaluation of &x does too.
-		c.emitNilCheck(frame, val, "gep")
+		frame.createNilCheck(val, "gep")
 		// Do a GEP on the pointer to get the field address.
 		indices := []llvm.Value{
 			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
@@ -1542,7 +1542,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// Check bounds.
 		arrayLen := expr.X.Type().(*types.Array).Len()
 		arrayLenLLVM := llvm.ConstInt(c.uintptrType, uint64(arrayLen), false)
-		c.emitLookupBoundsCheck(frame, arrayLenLLVM, index, expr.Index.Type())
+		frame.createLookupBoundsCheck(arrayLenLLVM, index, expr.Index.Type())
 
 		// Can't load directly from array (as index is non-constant), so have to
 		// do it using an alloca+gep+load.
@@ -1572,7 +1572,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				// > generates a pointer of type *T to x. [...] If the
 				// > evaluation of x would cause a run-time panic, then the
 				// > evaluation of &x does too.
-				c.emitNilCheck(frame, bufptr, "gep")
+				frame.createNilCheck(bufptr, "gep")
 			default:
 				return llvm.Value{}, c.makeError(expr.Pos(), "todo: indexaddr: "+typ.String())
 			}
@@ -1584,7 +1584,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		}
 
 		// Bounds check.
-		c.emitLookupBoundsCheck(frame, buflen, index, expr.Index.Type())
+		frame.createLookupBoundsCheck(buflen, index, expr.Index.Type())
 
 		switch expr.X.Type().Underlying().(type) {
 		case *types.Pointer:
@@ -1610,7 +1610,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 			// Bounds check.
 			length := c.builder.CreateExtractValue(value, 1, "len")
-			c.emitLookupBoundsCheck(frame, length, index, expr.Index.Type())
+			frame.createLookupBoundsCheck(length, index, expr.Index.Type())
 
 			// Lookup byte
 			buf := c.builder.CreateExtractValue(value, 0, "")
@@ -1654,7 +1654,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// Bounds checking.
 		lenType := expr.Len.Type().(*types.Basic)
 		capType := expr.Cap.Type().(*types.Basic)
-		c.emitSliceBoundsCheck(frame, maxSize, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
+		frame.createSliceBoundsCheck(maxSize, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
 
 		// Allocate the backing array.
 		sliceCapCast, err := c.parseConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
@@ -1792,7 +1792,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				low,
 			}
 
-			c.emitSliceBoundsCheck(frame, llvmLen, low, high, max, lowType, highType, maxType)
+			frame.createSliceBoundsCheck(llvmLen, low, high, max, lowType, highType, maxType)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
@@ -1832,7 +1832,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				max = oldCap
 			}
 
-			c.emitSliceBoundsCheck(frame, oldCap, low, high, max, lowType, highType, maxType)
+			frame.createSliceBoundsCheck(oldCap, low, high, max, lowType, highType, maxType)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
@@ -1875,7 +1875,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				high = oldLen
 			}
 
-			c.emitSliceBoundsCheck(frame, oldLen, low, high, high, lowType, highType, maxType)
+			frame.createSliceBoundsCheck(oldLen, low, high, high, lowType, highType, maxType)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
@@ -2559,7 +2559,7 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 			}
 			return c.builder.CreateBitCast(fn, c.i8ptrType, ""), nil
 		} else {
-			c.emitNilCheck(frame, x, "deref")
+			frame.createNilCheck(x, "deref")
 			load := c.builder.CreateLoad(x, "")
 			return load, nil
 		}
