@@ -1460,7 +1460,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	case *ssa.BinOp:
 		x := c.getValue(frame, expr.X)
 		y := c.getValue(frame, expr.Y)
-		return c.parseBinOp(expr.Op, expr.X.Type(), x, y, expr.Pos())
+		return frame.createBinOp(expr.Op, expr.X.Type(), x, y, expr.Pos())
 	case *ssa.Call:
 		// Passing the current task here to the subroutine. It is only used when
 		// the subroutine is blocking.
@@ -1905,7 +1905,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	}
 }
 
-func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, pos token.Pos) (llvm.Value, error) {
+// createBinOp creates a LLVM binary operation (add, sub, mul, etc) for a Go
+// binary operation. This is almost a direct mapping, but there are some subtle
+// differences such as the requirement in LLVM IR that both sides must have the
+// same type, even for bitshifts. Also, signedness in Go is encoded in the type
+// and is encoded in the operation in LLVM IR: this is important for some
+// operations such as divide.
+func (b *builder) createBinOp(op token.Token, typ types.Type, x, y llvm.Value, pos token.Pos) (llvm.Value, error) {
 	switch typ := typ.Underlying().(type) {
 	case *types.Basic:
 		if typ.Info()&types.IsInteger != 0 {
@@ -1913,87 +1919,87 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			signed := typ.Info()&types.IsUnsigned == 0
 			switch op {
 			case token.ADD: // +
-				return c.builder.CreateAdd(x, y, ""), nil
+				return b.CreateAdd(x, y, ""), nil
 			case token.SUB: // -
-				return c.builder.CreateSub(x, y, ""), nil
+				return b.CreateSub(x, y, ""), nil
 			case token.MUL: // *
-				return c.builder.CreateMul(x, y, ""), nil
+				return b.CreateMul(x, y, ""), nil
 			case token.QUO: // /
 				if signed {
-					return c.builder.CreateSDiv(x, y, ""), nil
+					return b.CreateSDiv(x, y, ""), nil
 				} else {
-					return c.builder.CreateUDiv(x, y, ""), nil
+					return b.CreateUDiv(x, y, ""), nil
 				}
 			case token.REM: // %
 				if signed {
-					return c.builder.CreateSRem(x, y, ""), nil
+					return b.CreateSRem(x, y, ""), nil
 				} else {
-					return c.builder.CreateURem(x, y, ""), nil
+					return b.CreateURem(x, y, ""), nil
 				}
 			case token.AND: // &
-				return c.builder.CreateAnd(x, y, ""), nil
+				return b.CreateAnd(x, y, ""), nil
 			case token.OR: // |
-				return c.builder.CreateOr(x, y, ""), nil
+				return b.CreateOr(x, y, ""), nil
 			case token.XOR: // ^
-				return c.builder.CreateXor(x, y, ""), nil
+				return b.CreateXor(x, y, ""), nil
 			case token.SHL, token.SHR:
-				sizeX := c.targetData.TypeAllocSize(x.Type())
-				sizeY := c.targetData.TypeAllocSize(y.Type())
+				sizeX := b.targetData.TypeAllocSize(x.Type())
+				sizeY := b.targetData.TypeAllocSize(y.Type())
 				if sizeX > sizeY {
 					// x and y must have equal sizes, make Y bigger in this case.
 					// y is unsigned, this has been checked by the Go type checker.
-					y = c.builder.CreateZExt(y, x.Type(), "")
+					y = b.CreateZExt(y, x.Type(), "")
 				} else if sizeX < sizeY {
 					// What about shifting more than the integer width?
 					// I'm not entirely sure what the Go spec is on that, but as
 					// Intel CPUs have undefined behavior when shifting more
 					// than the integer width I'm assuming it is also undefined
 					// in Go.
-					y = c.builder.CreateTrunc(y, x.Type(), "")
+					y = b.CreateTrunc(y, x.Type(), "")
 				}
 				switch op {
 				case token.SHL: // <<
-					return c.builder.CreateShl(x, y, ""), nil
+					return b.CreateShl(x, y, ""), nil
 				case token.SHR: // >>
 					if signed {
-						return c.builder.CreateAShr(x, y, ""), nil
+						return b.CreateAShr(x, y, ""), nil
 					} else {
-						return c.builder.CreateLShr(x, y, ""), nil
+						return b.CreateLShr(x, y, ""), nil
 					}
 				default:
 					panic("unreachable")
 				}
 			case token.EQL: // ==
-				return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+				return b.CreateICmp(llvm.IntEQ, x, y, ""), nil
 			case token.NEQ: // !=
-				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+				return b.CreateICmp(llvm.IntNE, x, y, ""), nil
 			case token.AND_NOT: // &^
 				// Go specific. Calculate "and not" with x & (~y)
-				inv := c.builder.CreateNot(y, "") // ~y
-				return c.builder.CreateAnd(x, inv, ""), nil
+				inv := b.CreateNot(y, "") // ~y
+				return b.CreateAnd(x, inv, ""), nil
 			case token.LSS: // <
 				if signed {
-					return c.builder.CreateICmp(llvm.IntSLT, x, y, ""), nil
+					return b.CreateICmp(llvm.IntSLT, x, y, ""), nil
 				} else {
-					return c.builder.CreateICmp(llvm.IntULT, x, y, ""), nil
+					return b.CreateICmp(llvm.IntULT, x, y, ""), nil
 				}
 			case token.LEQ: // <=
 				if signed {
-					return c.builder.CreateICmp(llvm.IntSLE, x, y, ""), nil
+					return b.CreateICmp(llvm.IntSLE, x, y, ""), nil
 				} else {
-					return c.builder.CreateICmp(llvm.IntULE, x, y, ""), nil
+					return b.CreateICmp(llvm.IntULE, x, y, ""), nil
 				}
 			case token.GTR: // >
 				if signed {
-					return c.builder.CreateICmp(llvm.IntSGT, x, y, ""), nil
+					return b.CreateICmp(llvm.IntSGT, x, y, ""), nil
 				} else {
-					return c.builder.CreateICmp(llvm.IntUGT, x, y, ""), nil
+					return b.CreateICmp(llvm.IntUGT, x, y, ""), nil
 				}
 			case token.GEQ: // >=
 				if signed {
-					return c.builder.CreateICmp(llvm.IntSGE, x, y, ""), nil
+					return b.CreateICmp(llvm.IntSGE, x, y, ""), nil
 				} else {
-					return c.builder.CreateICmp(llvm.IntUGE, x, y, ""), nil
+					return b.CreateICmp(llvm.IntUGE, x, y, ""), nil
 				}
 			default:
 				panic("binop on integer: " + op.String())
@@ -2002,58 +2008,58 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			// Operations on floats
 			switch op {
 			case token.ADD: // +
-				return c.builder.CreateFAdd(x, y, ""), nil
+				return b.CreateFAdd(x, y, ""), nil
 			case token.SUB: // -
-				return c.builder.CreateFSub(x, y, ""), nil
+				return b.CreateFSub(x, y, ""), nil
 			case token.MUL: // *
-				return c.builder.CreateFMul(x, y, ""), nil
+				return b.CreateFMul(x, y, ""), nil
 			case token.QUO: // /
-				return c.builder.CreateFDiv(x, y, ""), nil
+				return b.CreateFDiv(x, y, ""), nil
 			case token.EQL: // ==
-				return c.builder.CreateFCmp(llvm.FloatUEQ, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatUEQ, x, y, ""), nil
 			case token.NEQ: // !=
-				return c.builder.CreateFCmp(llvm.FloatUNE, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatUNE, x, y, ""), nil
 			case token.LSS: // <
-				return c.builder.CreateFCmp(llvm.FloatULT, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatULT, x, y, ""), nil
 			case token.LEQ: // <=
-				return c.builder.CreateFCmp(llvm.FloatULE, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatULE, x, y, ""), nil
 			case token.GTR: // >
-				return c.builder.CreateFCmp(llvm.FloatUGT, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatUGT, x, y, ""), nil
 			case token.GEQ: // >=
-				return c.builder.CreateFCmp(llvm.FloatUGE, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatUGE, x, y, ""), nil
 			default:
 				panic("binop on float: " + op.String())
 			}
 		} else if typ.Info()&types.IsComplex != 0 {
-			r1 := c.builder.CreateExtractValue(x, 0, "r1")
-			r2 := c.builder.CreateExtractValue(y, 0, "r2")
-			i1 := c.builder.CreateExtractValue(x, 1, "i1")
-			i2 := c.builder.CreateExtractValue(y, 1, "i2")
+			r1 := b.CreateExtractValue(x, 0, "r1")
+			r2 := b.CreateExtractValue(y, 0, "r2")
+			i1 := b.CreateExtractValue(x, 1, "i1")
+			i2 := b.CreateExtractValue(y, 1, "i2")
 			switch op {
 			case token.EQL: // ==
-				req := c.builder.CreateFCmp(llvm.FloatOEQ, r1, r2, "")
-				ieq := c.builder.CreateFCmp(llvm.FloatOEQ, i1, i2, "")
-				return c.builder.CreateAnd(req, ieq, ""), nil
+				req := b.CreateFCmp(llvm.FloatOEQ, r1, r2, "")
+				ieq := b.CreateFCmp(llvm.FloatOEQ, i1, i2, "")
+				return b.CreateAnd(req, ieq, ""), nil
 			case token.NEQ: // !=
-				req := c.builder.CreateFCmp(llvm.FloatOEQ, r1, r2, "")
-				ieq := c.builder.CreateFCmp(llvm.FloatOEQ, i1, i2, "")
-				neq := c.builder.CreateAnd(req, ieq, "")
-				return c.builder.CreateNot(neq, ""), nil
+				req := b.CreateFCmp(llvm.FloatOEQ, r1, r2, "")
+				ieq := b.CreateFCmp(llvm.FloatOEQ, i1, i2, "")
+				neq := b.CreateAnd(req, ieq, "")
+				return b.CreateNot(neq, ""), nil
 			case token.ADD, token.SUB:
 				var r, i llvm.Value
 				switch op {
 				case token.ADD:
-					r = c.builder.CreateFAdd(r1, r2, "")
-					i = c.builder.CreateFAdd(i1, i2, "")
+					r = b.CreateFAdd(r1, r2, "")
+					i = b.CreateFAdd(i1, i2, "")
 				case token.SUB:
-					r = c.builder.CreateFSub(r1, r2, "")
-					i = c.builder.CreateFSub(i1, i2, "")
+					r = b.CreateFSub(r1, r2, "")
+					i = b.CreateFSub(i1, i2, "")
 				default:
 					panic("unreachable")
 				}
-				cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{r.Type(), i.Type()}, false))
-				cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-				cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+				cplx := llvm.Undef(b.ctx.StructType([]llvm.Type{r.Type(), i.Type()}, false))
+				cplx = b.CreateInsertValue(cplx, r, 0, "")
+				cplx = b.CreateInsertValue(cplx, i, 1, "")
 				return cplx, nil
 			case token.MUL:
 				// Complex multiplication follows the current implementation in
@@ -2068,11 +2074,11 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 				// http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1548.pdf#page=549
 				// See https://github.com/golang/go/issues/29846 for a related
 				// discussion.
-				r := c.builder.CreateFSub(c.builder.CreateFMul(r1, r2, ""), c.builder.CreateFMul(i1, i2, ""), "")
-				i := c.builder.CreateFAdd(c.builder.CreateFMul(r1, i2, ""), c.builder.CreateFMul(i1, r2, ""), "")
-				cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{r.Type(), i.Type()}, false))
-				cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-				cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+				r := b.CreateFSub(b.CreateFMul(r1, r2, ""), b.CreateFMul(i1, i2, ""), "")
+				i := b.CreateFAdd(b.CreateFMul(r1, i2, ""), b.CreateFMul(i1, r2, ""), "")
+				cplx := llvm.Undef(b.ctx.StructType([]llvm.Type{r.Type(), i.Type()}, false))
+				cplx = b.CreateInsertValue(cplx, r, 0, "")
+				cplx = b.CreateInsertValue(cplx, i, 1, "")
 				return cplx, nil
 			case token.QUO:
 				// Complex division.
@@ -2080,9 +2086,9 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 				// inline.
 				switch r1.Type().TypeKind() {
 				case llvm.FloatTypeKind:
-					return c.createRuntimeCall("complex64div", []llvm.Value{x, y}, ""), nil
+					return b.createRuntimeCall("complex64div", []llvm.Value{x, y}, ""), nil
 				case llvm.DoubleTypeKind:
-					return c.createRuntimeCall("complex128div", []llvm.Value{x, y}, ""), nil
+					return b.createRuntimeCall("complex128div", []llvm.Value{x, y}, ""), nil
 				default:
 					panic("unexpected complex type")
 				}
@@ -2093,9 +2099,9 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			// Operations on booleans
 			switch op {
 			case token.EQL: // ==
-				return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+				return b.CreateICmp(llvm.IntEQ, x, y, ""), nil
 			case token.NEQ: // !=
-				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+				return b.CreateICmp(llvm.IntNE, x, y, ""), nil
 			default:
 				panic("binop on bool: " + op.String())
 			}
@@ -2103,9 +2109,9 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			// Operations on pointers
 			switch op {
 			case token.EQL: // ==
-				return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+				return b.CreateICmp(llvm.IntEQ, x, y, ""), nil
 			case token.NEQ: // !=
-				return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+				return b.CreateICmp(llvm.IntNE, x, y, ""), nil
 			default:
 				panic("binop on pointer: " + op.String())
 			}
@@ -2113,27 +2119,27 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			// Operations on strings
 			switch op {
 			case token.ADD: // +
-				return c.createRuntimeCall("stringConcat", []llvm.Value{x, y}, ""), nil
+				return b.createRuntimeCall("stringConcat", []llvm.Value{x, y}, ""), nil
 			case token.EQL: // ==
-				return c.createRuntimeCall("stringEqual", []llvm.Value{x, y}, ""), nil
+				return b.createRuntimeCall("stringEqual", []llvm.Value{x, y}, ""), nil
 			case token.NEQ: // !=
-				result := c.createRuntimeCall("stringEqual", []llvm.Value{x, y}, "")
-				return c.builder.CreateNot(result, ""), nil
+				result := b.createRuntimeCall("stringEqual", []llvm.Value{x, y}, "")
+				return b.CreateNot(result, ""), nil
 			case token.LSS: // <
-				return c.createRuntimeCall("stringLess", []llvm.Value{x, y}, ""), nil
+				return b.createRuntimeCall("stringLess", []llvm.Value{x, y}, ""), nil
 			case token.LEQ: // <=
-				result := c.createRuntimeCall("stringLess", []llvm.Value{y, x}, "")
-				return c.builder.CreateNot(result, ""), nil
+				result := b.createRuntimeCall("stringLess", []llvm.Value{y, x}, "")
+				return b.CreateNot(result, ""), nil
 			case token.GTR: // >
-				result := c.createRuntimeCall("stringLess", []llvm.Value{x, y}, "")
-				return c.builder.CreateNot(result, ""), nil
+				result := b.createRuntimeCall("stringLess", []llvm.Value{x, y}, "")
+				return b.CreateNot(result, ""), nil
 			case token.GEQ: // >=
-				return c.createRuntimeCall("stringLess", []llvm.Value{y, x}, ""), nil
+				return b.createRuntimeCall("stringLess", []llvm.Value{y, x}, ""), nil
 			default:
 				panic("binop on string: " + op.String())
 			}
 		} else {
-			return llvm.Value{}, c.makeError(pos, "todo: unknown basic type in binop: "+typ.String())
+			return llvm.Value{}, b.makeError(pos, "todo: unknown basic type in binop: "+typ.String())
 		}
 	case *types.Signature:
 		// Get raw scalars from the function value and compare those.
@@ -2141,26 +2147,26 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 		// have some way of getting a scalar value identifying the function.
 		// This is safe: function pointers are generally not comparable
 		// against each other, only against nil. So one of these has to be nil.
-		x = c.extractFuncScalar(x)
-		y = c.extractFuncScalar(y)
+		x = b.extractFuncScalar(x)
+		y = b.extractFuncScalar(y)
 		switch op {
 		case token.EQL: // ==
-			return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+			return b.CreateICmp(llvm.IntEQ, x, y, ""), nil
 		case token.NEQ: // !=
-			return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+			return b.CreateICmp(llvm.IntNE, x, y, ""), nil
 		default:
-			return llvm.Value{}, c.makeError(pos, "binop on signature: "+op.String())
+			return llvm.Value{}, b.makeError(pos, "binop on signature: "+op.String())
 		}
 	case *types.Interface:
 		switch op {
 		case token.EQL, token.NEQ: // ==, !=
-			result := c.createRuntimeCall("interfaceEqual", []llvm.Value{x, y}, "")
+			result := b.createRuntimeCall("interfaceEqual", []llvm.Value{x, y}, "")
 			if op == token.NEQ {
-				result = c.builder.CreateNot(result, "")
+				result = b.CreateNot(result, "")
 			}
 			return result, nil
 		default:
-			return llvm.Value{}, c.makeError(pos, "binop on interface: "+op.String())
+			return llvm.Value{}, b.makeError(pos, "binop on interface: "+op.String())
 		}
 	case *types.Chan, *types.Map, *types.Pointer:
 		// Maps are in general not comparable, but can be compared against nil
@@ -2170,78 +2176,78 @@ func (c *Compiler) parseBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 		// are created with the same call to make or if both are nil.
 		switch op {
 		case token.EQL: // ==
-			return c.builder.CreateICmp(llvm.IntEQ, x, y, ""), nil
+			return b.CreateICmp(llvm.IntEQ, x, y, ""), nil
 		case token.NEQ: // !=
-			return c.builder.CreateICmp(llvm.IntNE, x, y, ""), nil
+			return b.CreateICmp(llvm.IntNE, x, y, ""), nil
 		default:
-			return llvm.Value{}, c.makeError(pos, "todo: binop on pointer: "+op.String())
+			return llvm.Value{}, b.makeError(pos, "todo: binop on pointer: "+op.String())
 		}
 	case *types.Slice:
 		// Slices are in general not comparable, but can be compared against
 		// nil. Assume at least one of them is nil to make the code easier.
-		xPtr := c.builder.CreateExtractValue(x, 0, "")
-		yPtr := c.builder.CreateExtractValue(y, 0, "")
+		xPtr := b.CreateExtractValue(x, 0, "")
+		yPtr := b.CreateExtractValue(y, 0, "")
 		switch op {
 		case token.EQL: // ==
-			return c.builder.CreateICmp(llvm.IntEQ, xPtr, yPtr, ""), nil
+			return b.CreateICmp(llvm.IntEQ, xPtr, yPtr, ""), nil
 		case token.NEQ: // !=
-			return c.builder.CreateICmp(llvm.IntNE, xPtr, yPtr, ""), nil
+			return b.CreateICmp(llvm.IntNE, xPtr, yPtr, ""), nil
 		default:
-			return llvm.Value{}, c.makeError(pos, "todo: binop on slice: "+op.String())
+			return llvm.Value{}, b.makeError(pos, "todo: binop on slice: "+op.String())
 		}
 	case *types.Array:
 		// Compare each array element and combine the result. From the spec:
 		//     Array values are comparable if values of the array element type
 		//     are comparable. Two array values are equal if their corresponding
 		//     elements are equal.
-		result := llvm.ConstInt(c.ctx.Int1Type(), 1, true)
+		result := llvm.ConstInt(b.ctx.Int1Type(), 1, true)
 		for i := 0; i < int(typ.Len()); i++ {
-			xField := c.builder.CreateExtractValue(x, i, "")
-			yField := c.builder.CreateExtractValue(y, i, "")
-			fieldEqual, err := c.parseBinOp(token.EQL, typ.Elem(), xField, yField, pos)
+			xField := b.CreateExtractValue(x, i, "")
+			yField := b.CreateExtractValue(y, i, "")
+			fieldEqual, err := b.createBinOp(token.EQL, typ.Elem(), xField, yField, pos)
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			result = c.builder.CreateAnd(result, fieldEqual, "")
+			result = b.CreateAnd(result, fieldEqual, "")
 		}
 		switch op {
 		case token.EQL: // ==
 			return result, nil
 		case token.NEQ: // !=
-			return c.builder.CreateNot(result, ""), nil
+			return b.CreateNot(result, ""), nil
 		default:
-			return llvm.Value{}, c.makeError(pos, "unknown: binop on struct: "+op.String())
+			return llvm.Value{}, b.makeError(pos, "unknown: binop on struct: "+op.String())
 		}
 	case *types.Struct:
 		// Compare each struct field and combine the result. From the spec:
 		//     Struct values are comparable if all their fields are comparable.
 		//     Two struct values are equal if their corresponding non-blank
 		//     fields are equal.
-		result := llvm.ConstInt(c.ctx.Int1Type(), 1, true)
+		result := llvm.ConstInt(b.ctx.Int1Type(), 1, true)
 		for i := 0; i < typ.NumFields(); i++ {
 			if typ.Field(i).Name() == "_" {
 				// skip blank fields
 				continue
 			}
 			fieldType := typ.Field(i).Type()
-			xField := c.builder.CreateExtractValue(x, i, "")
-			yField := c.builder.CreateExtractValue(y, i, "")
-			fieldEqual, err := c.parseBinOp(token.EQL, fieldType, xField, yField, pos)
+			xField := b.CreateExtractValue(x, i, "")
+			yField := b.CreateExtractValue(y, i, "")
+			fieldEqual, err := b.createBinOp(token.EQL, fieldType, xField, yField, pos)
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			result = c.builder.CreateAnd(result, fieldEqual, "")
+			result = b.CreateAnd(result, fieldEqual, "")
 		}
 		switch op {
 		case token.EQL: // ==
 			return result, nil
 		case token.NEQ: // !=
-			return c.builder.CreateNot(result, ""), nil
+			return b.CreateNot(result, ""), nil
 		default:
-			return llvm.Value{}, c.makeError(pos, "unknown: binop on struct: "+op.String())
+			return llvm.Value{}, b.makeError(pos, "unknown: binop on struct: "+op.String())
 		}
 	default:
-		return llvm.Value{}, c.makeError(pos, "todo: binop type: "+typ.String())
+		return llvm.Value{}, b.makeError(pos, "todo: binop type: "+typ.String())
 	}
 }
 

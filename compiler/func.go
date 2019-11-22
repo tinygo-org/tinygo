@@ -51,6 +51,12 @@ func (c *Compiler) extractFuncScalar(funcValue llvm.Value) llvm.Value {
 	return c.builder.CreateExtractValue(funcValue, 1, "")
 }
 
+// extractFuncScalar returns some scalar that can be used in comparisons. It is
+// a cheap operation.
+func (b *builder) extractFuncScalar(funcValue llvm.Value) llvm.Value {
+	return b.CreateExtractValue(funcValue, 1, "")
+}
+
 // extractFuncContext extracts the context pointer from this function value. It
 // is a cheap operation.
 func (c *Compiler) extractFuncContext(funcValue llvm.Value) llvm.Value {
