@@ -11,79 +11,79 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-func (c *Compiler) emitMakeChan(frame *Frame, expr *ssa.MakeChan) llvm.Value {
-	elementSize := c.targetData.TypeAllocSize(c.getLLVMType(expr.Type().(*types.Chan).Elem()))
-	elementSizeValue := llvm.ConstInt(c.uintptrType, elementSize, false)
-	bufSize := frame.getValue(expr.Size)
-	frame.createChanBoundsCheck(elementSize, bufSize, expr.Size.Type().Underlying().(*types.Basic), expr.Pos())
-	if bufSize.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
-		bufSize = c.builder.CreateZExt(bufSize, c.uintptrType, "")
-	} else if bufSize.Type().IntTypeWidth() > c.uintptrType.IntTypeWidth() {
-		bufSize = c.builder.CreateTrunc(bufSize, c.uintptrType, "")
+func (b *builder) createMakeChan(expr *ssa.MakeChan) llvm.Value {
+	elementSize := b.targetData.TypeAllocSize(b.getLLVMType(expr.Type().(*types.Chan).Elem()))
+	elementSizeValue := llvm.ConstInt(b.uintptrType, elementSize, false)
+	bufSize := b.getValue(expr.Size)
+	b.createChanBoundsCheck(elementSize, bufSize, expr.Size.Type().Underlying().(*types.Basic), expr.Pos())
+	if bufSize.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
+		bufSize = b.CreateZExt(bufSize, b.uintptrType, "")
+	} else if bufSize.Type().IntTypeWidth() > b.uintptrType.IntTypeWidth() {
+		bufSize = b.CreateTrunc(bufSize, b.uintptrType, "")
 	}
-	return c.createRuntimeCall("chanMake", []llvm.Value{elementSizeValue, bufSize}, "")
+	return b.createRuntimeCall("chanMake", []llvm.Value{elementSizeValue, bufSize}, "")
 }
 
-// emitChanSend emits a pseudo chan send operation. It is lowered to the actual
-// channel send operation during goroutine lowering.
-func (c *Compiler) emitChanSend(frame *Frame, instr *ssa.Send) {
-	ch := frame.getValue(instr.Chan)
-	chanValue := frame.getValue(instr.X)
+// createChanSend emits a pseudo chan send operation. It is lowered to the
+// actual channel send operation during goroutine lowering.
+func (b *builder) createChanSend(instr *ssa.Send) {
+	ch := b.getValue(instr.Chan)
+	chanValue := b.getValue(instr.X)
 
 	// store value-to-send
-	valueType := c.getLLVMType(instr.X.Type())
-	valueAlloca, valueAllocaCast, valueAllocaSize := c.createTemporaryAlloca(valueType, "chan.value")
-	c.builder.CreateStore(chanValue, valueAlloca)
+	valueType := b.getLLVMType(instr.X.Type())
+	valueAlloca, valueAllocaCast, valueAllocaSize := b.createTemporaryAlloca(valueType, "chan.value")
+	b.CreateStore(chanValue, valueAlloca)
 
 	// Do the send.
-	c.createRuntimeCall("chanSend", []llvm.Value{ch, valueAllocaCast}, "")
+	b.createRuntimeCall("chanSend", []llvm.Value{ch, valueAllocaCast}, "")
 
 	// End the lifetime of the alloca.
 	// This also works around a bug in CoroSplit, at least in LLVM 8:
 	// https://bugs.llvm.org/show_bug.cgi?id=41742
-	c.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
+	b.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
 }
 
-// emitChanRecv emits a pseudo chan receive operation. It is lowered to the
+// createChanRecv emits a pseudo chan receive operation. It is lowered to the
 // actual channel receive operation during goroutine lowering.
-func (c *Compiler) emitChanRecv(frame *Frame, unop *ssa.UnOp) llvm.Value {
-	valueType := c.getLLVMType(unop.X.Type().(*types.Chan).Elem())
-	ch := frame.getValue(unop.X)
+func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
+	valueType := b.getLLVMType(unop.X.Type().(*types.Chan).Elem())
+	ch := b.getValue(unop.X)
 
 	// Allocate memory to receive into.
-	valueAlloca, valueAllocaCast, valueAllocaSize := c.createTemporaryAlloca(valueType, "chan.value")
+	valueAlloca, valueAllocaCast, valueAllocaSize := b.createTemporaryAlloca(valueType, "chan.value")
 
 	// Do the receive.
-	commaOk := c.createRuntimeCall("chanRecv", []llvm.Value{ch, valueAllocaCast}, "")
-	received := c.builder.CreateLoad(valueAlloca, "chan.received")
-	c.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
+	commaOk := b.createRuntimeCall("chanRecv", []llvm.Value{ch, valueAllocaCast}, "")
+	received := b.CreateLoad(valueAlloca, "chan.received")
+	b.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
 
 	if unop.CommaOk {
-		tuple := llvm.Undef(c.ctx.StructType([]llvm.Type{valueType, c.ctx.Int1Type()}, false))
-		tuple = c.builder.CreateInsertValue(tuple, received, 0, "")
-		tuple = c.builder.CreateInsertValue(tuple, commaOk, 1, "")
+		tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{valueType, b.ctx.Int1Type()}, false))
+		tuple = b.CreateInsertValue(tuple, received, 0, "")
+		tuple = b.CreateInsertValue(tuple, commaOk, 1, "")
 		return tuple
 	} else {
 		return received
 	}
 }
 
-// emitChanClose closes the given channel.
-func (c *Compiler) emitChanClose(frame *Frame, param ssa.Value) {
-	ch := frame.getValue(param)
-	c.createRuntimeCall("chanClose", []llvm.Value{ch}, "")
+// createChanClose closes the given channel.
+func (b *builder) createChanClose(param ssa.Value) {
+	ch := b.getValue(param)
+	b.createRuntimeCall("chanClose", []llvm.Value{ch}, "")
 }
 
-// emitSelect emits all IR necessary for a select statements. That's a
+// createSelect emits all IR necessary for a select statements. That's a
 // non-trivial amount of code because select is very complex to implement.
-func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
+func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 	if len(expr.States) == 0 {
 		// Shortcuts for some simple selects.
-		llvmType := c.getLLVMType(expr.Type())
+		llvmType := b.getLLVMType(expr.Type())
 		if expr.Blocking {
 			// Blocks forever:
 			//     select {}
-			c.createRuntimeCall("deadlock", nil, "")
+			b.createRuntimeCall("deadlock", nil, "")
 			return llvm.Undef(llvmType)
 		} else {
 			// No-op:
@@ -91,7 +91,7 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 			//     default:
 			//     }
 			retval := llvm.Undef(llvmType)
-			retval = c.builder.CreateInsertValue(retval, llvm.ConstInt(c.intType, 0xffffffffffffffff, true), 0, "")
+			retval = b.CreateInsertValue(retval, llvm.ConstInt(b.intType, 0xffffffffffffffff, true), 0, "")
 			return retval // {-1, false}
 		}
 	}
@@ -109,30 +109,30 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 	recvbufAlign := 0
 	hasReceives := false
 	var selectStates []llvm.Value
-	chanSelectStateType := c.getLLVMRuntimeType("chanSelectState")
+	chanSelectStateType := b.getLLVMRuntimeType("chanSelectState")
 	for _, state := range expr.States {
-		ch := frame.getValue(state.Chan)
+		ch := b.getValue(state.Chan)
 		selectState := llvm.ConstNull(chanSelectStateType)
-		selectState = c.builder.CreateInsertValue(selectState, ch, 0, "")
+		selectState = b.CreateInsertValue(selectState, ch, 0, "")
 		switch state.Dir {
 		case types.RecvOnly:
 			// Make sure the receive buffer is big enough and has the correct alignment.
-			llvmType := c.getLLVMType(state.Chan.Type().(*types.Chan).Elem())
-			if size := c.targetData.TypeAllocSize(llvmType); size > recvbufSize {
+			llvmType := b.getLLVMType(state.Chan.Type().(*types.Chan).Elem())
+			if size := b.targetData.TypeAllocSize(llvmType); size > recvbufSize {
 				recvbufSize = size
 			}
-			if align := c.targetData.ABITypeAlignment(llvmType); align > recvbufAlign {
+			if align := b.targetData.ABITypeAlignment(llvmType); align > recvbufAlign {
 				recvbufAlign = align
 			}
 			hasReceives = true
 		case types.SendOnly:
 			// Store this value in an alloca and put a pointer to this alloca
 			// in the send state.
-			sendValue := frame.getValue(state.Send)
-			alloca := llvmutil.CreateEntryBlockAlloca(c.builder, sendValue.Type(), "select.send.value")
-			c.builder.CreateStore(sendValue, alloca)
-			ptr := c.builder.CreateBitCast(alloca, c.i8ptrType, "")
-			selectState = c.builder.CreateInsertValue(selectState, ptr, 1, "")
+			sendValue := b.getValue(state.Send)
+			alloca := llvmutil.CreateEntryBlockAlloca(b.Builder, sendValue.Type(), "select.send.value")
+			b.CreateStore(sendValue, alloca)
+			ptr := b.CreateBitCast(alloca, b.i8ptrType, "")
+			selectState = b.CreateInsertValue(selectState, ptr, 1, "")
 		default:
 			panic("unreachable")
 		}
@@ -140,74 +140,74 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 	}
 
 	// Create a receive buffer, where the received value will be stored.
-	recvbuf := llvm.Undef(c.i8ptrType)
+	recvbuf := llvm.Undef(b.i8ptrType)
 	if hasReceives {
-		allocaType := llvm.ArrayType(c.ctx.Int8Type(), int(recvbufSize))
-		recvbufAlloca, _, _ := c.createTemporaryAlloca(allocaType, "select.recvbuf.alloca")
+		allocaType := llvm.ArrayType(b.ctx.Int8Type(), int(recvbufSize))
+		recvbufAlloca, _, _ := b.createTemporaryAlloca(allocaType, "select.recvbuf.alloca")
 		recvbufAlloca.SetAlignment(recvbufAlign)
-		recvbuf = c.builder.CreateGEP(recvbufAlloca, []llvm.Value{
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+		recvbuf = b.CreateGEP(recvbufAlloca, []llvm.Value{
+			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 		}, "select.recvbuf")
 	}
 
 	// Create the states slice (allocated on the stack).
 	statesAllocaType := llvm.ArrayType(chanSelectStateType, len(selectStates))
-	statesAlloca, statesI8, statesSize := c.createTemporaryAlloca(statesAllocaType, "select.states.alloca")
+	statesAlloca, statesI8, statesSize := b.createTemporaryAlloca(statesAllocaType, "select.states.alloca")
 	for i, state := range selectStates {
 		// Set each slice element to the appropriate channel.
-		gep := c.builder.CreateGEP(statesAlloca, []llvm.Value{
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false),
+		gep := b.CreateGEP(statesAlloca, []llvm.Value{
+			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
 		}, "")
-		c.builder.CreateStore(state, gep)
+		b.CreateStore(state, gep)
 	}
-	statesPtr := c.builder.CreateGEP(statesAlloca, []llvm.Value{
-		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+	statesPtr := b.CreateGEP(statesAlloca, []llvm.Value{
+		llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+		llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 	}, "select.states")
-	statesLen := llvm.ConstInt(c.uintptrType, uint64(len(selectStates)), false)
+	statesLen := llvm.ConstInt(b.uintptrType, uint64(len(selectStates)), false)
 
 	// Do the select in the runtime.
 	var results llvm.Value
 	if expr.Blocking {
 		// Stack-allocate operation structures.
 		// If these were simply created as a slice, they would heap-allocate.
-		chBlockAllocaType := llvm.ArrayType(c.getLLVMRuntimeType("channelBlockedList"), len(selectStates))
-		chBlockAlloca, chBlockAllocaPtr, chBlockSize := c.createTemporaryAlloca(chBlockAllocaType, "select.block.alloca")
-		chBlockLen := llvm.ConstInt(c.uintptrType, uint64(len(selectStates)), false)
-		chBlockPtr := c.builder.CreateGEP(chBlockAlloca, []llvm.Value{
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+		chBlockAllocaType := llvm.ArrayType(b.getLLVMRuntimeType("channelBlockedList"), len(selectStates))
+		chBlockAlloca, chBlockAllocaPtr, chBlockSize := b.createTemporaryAlloca(chBlockAllocaType, "select.block.alloca")
+		chBlockLen := llvm.ConstInt(b.uintptrType, uint64(len(selectStates)), false)
+		chBlockPtr := b.CreateGEP(chBlockAlloca, []llvm.Value{
+			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 		}, "select.block")
 
-		results = c.createRuntimeCall("chanSelect", []llvm.Value{
+		results = b.createRuntimeCall("chanSelect", []llvm.Value{
 			recvbuf,
 			statesPtr, statesLen, statesLen, // []chanSelectState
 			chBlockPtr, chBlockLen, chBlockLen, // []channelBlockList
 		}, "select.result")
 
 		// Terminate the lifetime of the operation structures.
-		c.emitLifetimeEnd(chBlockAllocaPtr, chBlockSize)
+		b.emitLifetimeEnd(chBlockAllocaPtr, chBlockSize)
 	} else {
-		results = c.createRuntimeCall("tryChanSelect", []llvm.Value{
+		results = b.createRuntimeCall("tryChanSelect", []llvm.Value{
 			recvbuf,
 			statesPtr, statesLen, statesLen, // []chanSelectState
 		}, "select.result")
 	}
 
 	// Terminate the lifetime of the states alloca.
-	c.emitLifetimeEnd(statesI8, statesSize)
+	b.emitLifetimeEnd(statesI8, statesSize)
 
 	// The result value does not include all the possible received values,
 	// because we can't load them in advance. Instead, the *ssa.Extract
 	// instruction will treat a *ssa.Select specially and load it there inline.
 	// Store the receive alloca in a sidetable until we hit this extract
 	// instruction.
-	if frame.selectRecvBuf == nil {
-		frame.selectRecvBuf = make(map[*ssa.Select]llvm.Value)
+	if b.selectRecvBuf == nil {
+		b.selectRecvBuf = make(map[*ssa.Select]llvm.Value)
 	}
-	frame.selectRecvBuf[expr] = recvbuf
+	b.selectRecvBuf[expr] = recvbuf
 
 	return results
 }
@@ -216,28 +216,28 @@ func (c *Compiler) emitSelect(frame *Frame, expr *ssa.Select) llvm.Value {
 // when extracting a value from a select statement (*ssa.Select). Because
 // *ssa.Select cannot load all values in advance, it does this later in the
 // *ssa.Extract expression.
-func (c *Compiler) getChanSelectResult(frame *Frame, expr *ssa.Extract) llvm.Value {
+func (b *builder) getChanSelectResult(expr *ssa.Extract) llvm.Value {
 	if expr.Index == 0 {
 		// index
-		value := frame.getValue(expr.Tuple)
-		index := c.builder.CreateExtractValue(value, expr.Index, "")
-		if index.Type().IntTypeWidth() < c.intType.IntTypeWidth() {
-			index = c.builder.CreateSExt(index, c.intType, "")
+		value := b.getValue(expr.Tuple)
+		index := b.CreateExtractValue(value, expr.Index, "")
+		if index.Type().IntTypeWidth() < b.intType.IntTypeWidth() {
+			index = b.CreateSExt(index, b.intType, "")
 		}
 		return index
 	} else if expr.Index == 1 {
 		// comma-ok
-		value := frame.getValue(expr.Tuple)
-		return c.builder.CreateExtractValue(value, expr.Index, "")
+		value := b.getValue(expr.Tuple)
+		return b.CreateExtractValue(value, expr.Index, "")
 	} else {
 		// Select statements are (index, ok, ...) where ... is a number of
 		// received values, depending on how many receive statements there
 		// are. They are all combined into one alloca (because only one
 		// receive can proceed at a time) so we'll get that alloca, bitcast
 		// it to the correct type, and dereference it.
-		recvbuf := frame.selectRecvBuf[expr.Tuple.(*ssa.Select)]
-		typ := llvm.PointerType(c.getLLVMType(expr.Type()), 0)
-		ptr := c.builder.CreateBitCast(recvbuf, typ, "")
-		return c.builder.CreateLoad(ptr, "")
+		recvbuf := b.selectRecvBuf[expr.Tuple.(*ssa.Select)]
+		typ := llvm.PointerType(b.getLLVMType(expr.Type()), 0)
+		ptr := b.CreateBitCast(recvbuf, typ, "")
+		return b.CreateLoad(ptr, "")
 	}
 }
