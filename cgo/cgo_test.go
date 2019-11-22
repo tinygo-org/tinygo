@@ -22,7 +22,7 @@ var flagUpdate = flag.Bool("update", false, "Update images based on test output.
 func TestCGo(t *testing.T) {
 	var cflags = []string{"--target=armv6m-none-eabi"}
 
-	for _, name := range []string{"basic", "errors", "types"} {
+	for _, name := range []string{"basic", "errors", "types", "flags"} {
 		name := name // avoid a race condition
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
