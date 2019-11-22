@@ -1899,7 +1899,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 	case *ssa.TypeAssert:
 		return frame.createTypeAssert(expr), nil
 	case *ssa.UnOp:
-		return c.parseUnOp(frame, expr)
+		return frame.createUnOp(expr)
 	default:
 		return llvm.Value{}, c.makeError(expr.Pos(), "todo: unknown expression: "+expr.String())
 	}
@@ -2523,26 +2523,30 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 	}
 }
 
-func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
-	x := frame.getValue(unop.X)
+// createUnOp creates LLVM IR for a given Go unary operation.
+// Most unary operators are pretty simple, such as the not and minus operator
+// which can all be directly lowered to IR. However, there is also the channel
+// receive operator which is handled in the runtime directly.
+func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
+	x := b.getValue(unop.X)
 	switch unop.Op {
 	case token.NOT: // !x
-		return c.builder.CreateNot(x, ""), nil
+		return b.CreateNot(x, ""), nil
 	case token.SUB: // -x
 		if typ, ok := unop.X.Type().Underlying().(*types.Basic); ok {
 			if typ.Info()&types.IsInteger != 0 {
-				return c.builder.CreateSub(llvm.ConstInt(x.Type(), 0, false), x, ""), nil
+				return b.CreateSub(llvm.ConstInt(x.Type(), 0, false), x, ""), nil
 			} else if typ.Info()&types.IsFloat != 0 {
-				return c.builder.CreateFSub(llvm.ConstFloat(x.Type(), 0.0), x, ""), nil
+				return b.CreateFSub(llvm.ConstFloat(x.Type(), 0.0), x, ""), nil
 			} else {
-				return llvm.Value{}, c.makeError(unop.Pos(), "todo: unknown basic type for negate: "+typ.String())
+				return llvm.Value{}, b.makeError(unop.Pos(), "todo: unknown basic type for negate: "+typ.String())
 			}
 		} else {
-			return llvm.Value{}, c.makeError(unop.Pos(), "todo: unknown type for negate: "+unop.X.Type().Underlying().String())
+			return llvm.Value{}, b.makeError(unop.Pos(), "todo: unknown type for negate: "+unop.X.Type().Underlying().String())
 		}
 	case token.MUL: // *x, dereference pointer
 		unop.X.Type().Underlying().(*types.Pointer).Elem()
-		if c.targetData.TypeAllocSize(x.Type().ElementType()) == 0 {
+		if b.targetData.TypeAllocSize(x.Type().ElementType()) == 0 {
 			// zero-length data
 			return llvm.ConstNull(x.Type().ElementType()), nil
 		} else if strings.HasSuffix(unop.X.String(), "$funcaddr") {
@@ -2551,24 +2555,24 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 			//     var C.add unsafe.Pointer
 			// Instead of a load from the global, create a bitcast of the
 			// function pointer itself.
-			globalName := c.getGlobalInfo(unop.X.(*ssa.Global)).linkName
+			globalName := b.getGlobalInfo(unop.X.(*ssa.Global)).linkName
 			name := globalName[:len(globalName)-len("$funcaddr")]
-			fn := c.mod.NamedFunction(name)
+			fn := b.mod.NamedFunction(name)
 			if fn.IsNil() {
-				return llvm.Value{}, c.makeError(unop.Pos(), "cgo function not found: "+name)
+				return llvm.Value{}, b.makeError(unop.Pos(), "cgo function not found: "+name)
 			}
-			return c.builder.CreateBitCast(fn, c.i8ptrType, ""), nil
+			return b.CreateBitCast(fn, b.i8ptrType, ""), nil
 		} else {
-			frame.createNilCheck(x, "deref")
-			load := c.builder.CreateLoad(x, "")
+			b.createNilCheck(x, "deref")
+			load := b.CreateLoad(x, "")
 			return load, nil
 		}
 	case token.XOR: // ^x, toggle all bits in integer
-		return c.builder.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil
+		return b.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil
 	case token.ARROW: // <-x, receive from channel
-		return frame.createChanRecv(unop), nil
+		return b.createChanRecv(unop), nil
 	default:
-		return llvm.Value{}, c.makeError(unop.Pos(), "todo: unknown unop")
+		return llvm.Value{}, b.makeError(unop.Pos(), "todo: unknown unop")
 	}
 }
 
