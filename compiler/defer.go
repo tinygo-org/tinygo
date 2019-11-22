@@ -14,6 +14,7 @@ package compiler
 //     frames.
 
 import (
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/ir"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -32,6 +33,40 @@ func (c *Compiler) deferInitFunc(frame *Frame) {
 	deferType := llvm.PointerType(c.getLLVMRuntimeType("_defer"), 0)
 	frame.deferPtr = c.builder.CreateAlloca(deferType, "deferPtr")
 	c.builder.CreateStore(llvm.ConstPointerNull(deferType), frame.deferPtr)
+}
+
+// isInLoop checks if there is a path from a basic block to itself.
+func isInLoop(start *ssa.BasicBlock) bool {
+	// Use a breadth-first search to scan backwards through the block graph.
+	queue := []*ssa.BasicBlock{start}
+	checked := map[*ssa.BasicBlock]struct{}{}
+
+	for len(queue) > 0 {
+		// pop a block off of the queue
+		block := queue[len(queue)-1]
+		queue = queue[:len(queue)-1]
+
+		// Search through predecessors.
+		// Searching backwards means that this is pretty fast when the block is close to the start of the function.
+		// Defers are often placed near the start of the function.
+		for _, pred := range block.Preds {
+			if pred == start {
+				// cycle found
+				return true
+			}
+
+			if _, ok := checked[pred]; ok {
+				// block already checked
+				continue
+			}
+
+			// add to queue and checked map
+			queue = append(queue, pred)
+			checked[pred] = struct{}{}
+		}
+	}
+
+	return false
 }
 
 // emitDefer emits a single defer instruction, to be run when this function
@@ -127,12 +162,22 @@ func (c *Compiler) emitDefer(frame *Frame, instr *ssa.Defer) {
 		deferFrame = c.builder.CreateInsertValue(deferFrame, value, i, "")
 	}
 
-	// Put this struct in an alloca.
-	alloca := c.builder.CreateAlloca(deferFrameType, "defer.alloca")
-	c.builder.CreateStore(deferFrame, alloca)
+	// Put this struct in an allocation.
+	var alloca llvm.Value
+	if !isInLoop(instr.Block()) {
+		// This can safely use a stack allocation.
+		alloca = llvmutil.CreateEntryBlockAlloca(c.builder, deferFrameType, "defer.alloca")
+	} else {
+		// This may be hit a variable number of times, so use a heap allocation.
+		size := c.targetData.TypeAllocSize(deferFrameType)
+		sizeValue := llvm.ConstInt(c.uintptrType, size, false)
+		allocCall := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "defer.alloc.call")
+		alloca = c.builder.CreateBitCast(allocCall, llvm.PointerType(deferFrameType, 0), "defer.alloc")
+	}
 	if c.NeedsStackObjects() {
 		c.trackPointer(alloca)
 	}
+	c.builder.CreateStore(deferFrame, alloca)
 
 	// Push it on top of the linked list by replacing deferPtr.
 	allocaCast := c.builder.CreateBitCast(alloca, next.Type(), "defer.alloca.cast")

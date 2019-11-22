@@ -4,6 +4,10 @@ Thing.Print: foo arg: bar
 ...run as defer 3
 ...run closure deferred: 4
 ...run as defer 1
+loop 3
+loop 2
+loop 1
+loop 0
 bound method: foo
 thing inside closure: foo
 inside fp closure: foo 3
