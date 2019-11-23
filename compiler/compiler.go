@@ -1066,7 +1066,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 				// A goroutine call on a func value, but the callee is trivial to find. For
 				// example: immediately applied functions.
 				funcValue := frame.getValue(value)
-				context = c.extractFuncContext(funcValue)
+				context = frame.extractFuncContext(funcValue)
 			default:
 				panic("StaticCallee returned an unexpected value")
 			}
@@ -1078,7 +1078,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			// goroutine:
 			//   * The function context, for closures.
 			//   * The function pointer (for tasks).
-			funcPtr, context := c.decodeFuncValue(frame.getValue(instr.Call.Value), instr.Call.Value.Type().(*types.Signature))
+			funcPtr, context := frame.decodeFuncValue(frame.getValue(instr.Call.Value), instr.Call.Value.Type().(*types.Signature))
 			params = append(params, context) // context parameter
 			switch c.Scheduler() {
 			case "none", "coroutines":
@@ -1315,10 +1315,78 @@ func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos
 	}
 }
 
-func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, context llvm.Value, exported bool) llvm.Value {
+// createFunctionCall lowers a Go SSA call instruction (to a simple function,
+// closure, function pointer, builtin, method, etc.) to LLVM IR, usually a call
+// instruction.
+//
+// This is also where compiler intrinsics are implemented.
+func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) {
+	if instr.IsInvoke() {
+		fnCast, args := b.getInvokeCall(instr)
+		return b.createCall(fnCast, args, ""), nil
+	}
+
+	// Try to call the function directly for trivially static calls.
+	var callee, context llvm.Value
+	exported := false
+	if fn := instr.StaticCallee(); fn != nil {
+		// Direct function call, either to a named or anonymous (directly
+		// applied) function call. If it is anonymous, it may be a closure.
+		name := fn.RelString(nil)
+		switch {
+		case name == "device/arm.ReadRegister" || name == "device/riscv.ReadRegister":
+			return b.createReadRegister(name, instr.Args)
+		case name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
+			return b.createInlineAsm(instr.Args)
+		case name == "device/arm.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
+			return b.createInlineAsmFull(instr)
+		case strings.HasPrefix(name, "device/arm.SVCall"):
+			return b.emitSVCall(instr.Args)
+		case strings.HasPrefix(name, "(device/riscv.CSR)."):
+			return b.emitCSROperation(instr)
+		case strings.HasPrefix(name, "syscall.Syscall"):
+			return b.createSyscall(instr)
+		case strings.HasPrefix(name, "runtime/volatile.Load"):
+			return b.createVolatileLoad(instr)
+		case strings.HasPrefix(name, "runtime/volatile.Store"):
+			return b.createVolatileStore(instr)
+		case name == "runtime/interrupt.New":
+			return b.createInterruptGlobal(instr)
+		}
+
+		targetFunc := b.ir.GetFunction(fn)
+		if targetFunc.LLVMFn.IsNil() {
+			return llvm.Value{}, b.makeError(instr.Pos(), "undefined function: "+targetFunc.LinkName())
+		}
+		switch value := instr.Value.(type) {
+		case *ssa.Function:
+			// Regular function call. No context is necessary.
+			context = llvm.Undef(b.i8ptrType)
+		case *ssa.MakeClosure:
+			// A call on a func value, but the callee is trivial to find. For
+			// example: immediately applied functions.
+			funcValue := b.getValue(value)
+			context = b.extractFuncContext(funcValue)
+		default:
+			panic("StaticCallee returned an unexpected value")
+		}
+		callee = targetFunc.LLVMFn
+		exported = targetFunc.IsExported()
+	} else if call, ok := instr.Value.(*ssa.Builtin); ok {
+		// Builtin function (append, close, delete, etc.).)
+		return b.createBuiltin(instr.Args, call.Name(), instr.Pos())
+	} else {
+		// Function pointer.
+		value := b.getValue(instr.Value)
+		// This is a func value, which cannot be called directly. We have to
+		// extract the function pointer and context first from the func value.
+		callee, context = b.decodeFuncValue(value, instr.Value.Type().Underlying().(*types.Signature))
+		b.createNilCheck(callee, "fpcall")
+	}
+
 	var params []llvm.Value
-	for _, param := range args {
-		params = append(params, frame.getValue(param))
+	for _, param := range instr.Args {
+		params = append(params, b.getValue(param))
 	}
 
 	if !exported {
@@ -1327,74 +1395,10 @@ func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, con
 		params = append(params, context)
 
 		// Parent coroutine handle.
-		params = append(params, llvm.Undef(c.i8ptrType))
+		params = append(params, llvm.Undef(b.i8ptrType))
 	}
 
-	return c.createCall(llvmFn, params, "")
-}
-
-func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, error) {
-	if instr.IsInvoke() {
-		fnCast, args := frame.getInvokeCall(instr)
-		return c.createCall(fnCast, args, ""), nil
-	}
-
-	// Try to call the function directly for trivially static calls.
-	if fn := instr.StaticCallee(); fn != nil {
-		name := fn.RelString(nil)
-		switch {
-		case name == "device/arm.ReadRegister" || name == "device/riscv.ReadRegister":
-			return c.emitReadRegister(name, instr.Args)
-		case name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
-			return c.emitAsm(instr.Args)
-		case name == "device/arm.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
-			return c.emitAsmFull(frame, instr)
-		case strings.HasPrefix(name, "device/arm.SVCall"):
-			return c.emitSVCall(frame, instr.Args)
-		case strings.HasPrefix(name, "(device/riscv.CSR)."):
-			return c.emitCSROperation(frame, instr)
-		case strings.HasPrefix(name, "syscall.Syscall"):
-			return c.emitSyscall(frame, instr)
-		case strings.HasPrefix(name, "runtime/volatile.Load"):
-			return c.emitVolatileLoad(frame, instr)
-		case strings.HasPrefix(name, "runtime/volatile.Store"):
-			return c.emitVolatileStore(frame, instr)
-		case name == "runtime/interrupt.New":
-			return c.emitInterruptGlobal(frame, instr)
-		}
-
-		targetFunc := c.ir.GetFunction(fn)
-		if targetFunc.LLVMFn.IsNil() {
-			return llvm.Value{}, c.makeError(instr.Pos(), "undefined function: "+targetFunc.LinkName())
-		}
-		var context llvm.Value
-		switch value := instr.Value.(type) {
-		case *ssa.Function:
-			// Regular function call. No context is necessary.
-			context = llvm.Undef(c.i8ptrType)
-		case *ssa.MakeClosure:
-			// A call on a func value, but the callee is trivial to find. For
-			// example: immediately applied functions.
-			funcValue := frame.getValue(value)
-			context = c.extractFuncContext(funcValue)
-		default:
-			panic("StaticCallee returned an unexpected value")
-		}
-		return c.parseFunctionCall(frame, instr.Args, targetFunc.LLVMFn, context, targetFunc.IsExported()), nil
-	}
-
-	// Builtin or function pointer.
-	switch call := instr.Value.(type) {
-	case *ssa.Builtin:
-		return frame.createBuiltin(instr.Args, call.Name(), instr.Pos())
-	default: // function pointer
-		value := frame.getValue(instr.Value)
-		// This is a func value, which cannot be called directly. We have to
-		// extract the function pointer and context first from the func value.
-		funcPtr, context := c.decodeFuncValue(value, instr.Value.Type().Underlying().(*types.Signature))
-		frame.createNilCheck(funcPtr, "fpcall")
-		return c.parseFunctionCall(frame, instr.Args, funcPtr, context, false), nil
-	}
+	return b.createCall(callee, params, ""), nil
 }
 
 // getValue returns the LLVM value of a constant, function value, global, or
@@ -1462,9 +1466,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		y := frame.getValue(expr.Y)
 		return frame.createBinOp(expr.Op, expr.X.Type(), x, y, expr.Pos())
 	case *ssa.Call:
-		// Passing the current task here to the subroutine. It is only used when
-		// the subroutine is blocking.
-		return c.parseCall(frame, expr.Common())
+		return frame.createFunctionCall(expr.Common())
 	case *ssa.ChangeInterface:
 		// Do not change between interface types: always use the underlying
 		// (concrete) type in the type number of the interface. Every method

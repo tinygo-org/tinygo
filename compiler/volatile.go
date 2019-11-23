@@ -8,19 +8,23 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-func (c *Compiler) emitVolatileLoad(frame *Frame, instr *ssa.CallCommon) (llvm.Value, error) {
-	addr := frame.getValue(instr.Args[0])
-	frame.createNilCheck(addr, "deref")
-	val := c.builder.CreateLoad(addr, "")
+// createVolatileLoad is the implementation of the intrinsic function
+// runtime/volatile.LoadT().
+func (b *builder) createVolatileLoad(instr *ssa.CallCommon) (llvm.Value, error) {
+	addr := b.getValue(instr.Args[0])
+	b.createNilCheck(addr, "deref")
+	val := b.CreateLoad(addr, "")
 	val.SetVolatile(true)
 	return val, nil
 }
 
-func (c *Compiler) emitVolatileStore(frame *Frame, instr *ssa.CallCommon) (llvm.Value, error) {
-	addr := frame.getValue(instr.Args[0])
-	val := frame.getValue(instr.Args[1])
-	frame.createNilCheck(addr, "deref")
-	store := c.builder.CreateStore(val, addr)
+// createVolatileStore is the implementation of the intrinsic function
+// runtime/volatile.StoreT().
+func (b *builder) createVolatileStore(instr *ssa.CallCommon) (llvm.Value, error) {
+	addr := b.getValue(instr.Args[0])
+	val := b.getValue(instr.Args[1])
+	b.createNilCheck(addr, "deref")
+	store := b.CreateStore(val, addr)
 	store.SetVolatile(true)
 	return llvm.Value{}, nil
 }
