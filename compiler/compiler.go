@@ -1107,7 +1107,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 		key := frame.getValue(instr.Key)
 		value := frame.getValue(instr.Value)
 		mapType := instr.Map.Type().Underlying().(*types.Map)
-		c.emitMapUpdate(mapType.Key(), m, key, value, instr.Pos())
+		frame.createMapUpdate(mapType.Key(), m, key, value, instr.Pos())
 	case *ssa.Panic:
 		value := frame.getValue(instr.X)
 		c.createRuntimeCall("_panic", []llvm.Value{value}, "")
@@ -1219,7 +1219,7 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 	case "delete":
 		m := frame.getValue(args[0])
 		key := frame.getValue(args[1])
-		return llvm.Value{}, c.emitMapDelete(args[1].Type(), m, key, pos)
+		return llvm.Value{}, frame.createMapDelete(args[1].Type(), m, key, pos)
 	case "imag":
 		cplx := frame.getValue(args[0])
 		return c.builder.CreateExtractValue(cplx, 1, "imag"), nil
@@ -1619,7 +1619,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			if expr.CommaOk {
 				valueType = valueType.(*types.Tuple).At(0).Type()
 			}
-			return c.emitMapLookup(xType.Key(), valueType, value, index, expr.CommaOk, expr.Pos())
+			return frame.createMapLookup(xType.Key(), valueType, value, index, expr.CommaOk, expr.Pos())
 		default:
 			panic("unknown lookup type: " + expr.String())
 		}
@@ -1631,7 +1631,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		val := frame.getValue(expr.X)
 		return frame.createMakeInterface(val, expr.X.Type(), expr.Pos()), nil
 	case *ssa.MakeMap:
-		return c.emitMakeMap(frame, expr)
+		return frame.createMakeMap(expr)
 	case *ssa.MakeSlice:
 		sliceLen := frame.getValue(expr.Len)
 		sliceCap := frame.getValue(expr.Cap)
