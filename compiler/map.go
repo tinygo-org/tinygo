@@ -36,7 +36,7 @@ func (c *Compiler) emitMakeMap(frame *Frame, expr *ssa.MakeMap) (llvm.Value, err
 	if expr.Reserve != nil {
 		sizeHint = frame.getValue(expr.Reserve)
 		var err error
-		sizeHint, err = c.parseConvert(expr.Reserve.Type(), types.Typ[types.Uintptr], sizeHint, expr.Pos())
+		sizeHint, err = frame.createConvert(expr.Reserve.Type(), types.Typ[types.Uintptr], sizeHint, expr.Pos())
 		if err != nil {
 			return llvm.Value{}, err
 		}

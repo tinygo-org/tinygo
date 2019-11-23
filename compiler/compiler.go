@@ -1507,7 +1507,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		panic("const is not an expression")
 	case *ssa.Convert:
 		x := frame.getValue(expr.X)
-		return c.parseConvert(expr.X.Type(), expr.Type(), x, expr.Pos())
+		return frame.createConvert(expr.X.Type(), expr.Type(), x, expr.Pos())
 	case *ssa.Extract:
 		if _, ok := expr.Tuple.(*ssa.Select); ok {
 			return frame.getChanSelectResult(expr), nil
@@ -1657,7 +1657,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		frame.createSliceBoundsCheck(maxSize, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
 
 		// Allocate the backing array.
-		sliceCapCast, err := c.parseConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
+		sliceCapCast, err := frame.createConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
 		if err != nil {
 			return llvm.Value{}, err
 		}
@@ -1667,11 +1667,11 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		// Extend or truncate if necessary. This is safe as we've already done
 		// the bounds check.
-		sliceLen, err = c.parseConvert(expr.Len.Type(), types.Typ[types.Uintptr], sliceLen, expr.Pos())
+		sliceLen, err = frame.createConvert(expr.Len.Type(), types.Typ[types.Uintptr], sliceLen, expr.Pos())
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		sliceCap, err = c.parseConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
+		sliceCap, err = frame.createConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
 		if err != nil {
 			return llvm.Value{}, err
 		}
@@ -2358,15 +2358,16 @@ func (b *builder) createConst(prefix string, expr *ssa.Const) llvm.Value {
 	}
 }
 
-func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, pos token.Pos) (llvm.Value, error) {
+// createConvert creates a Go type conversion instruction.
+func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, pos token.Pos) (llvm.Value, error) {
 	llvmTypeFrom := value.Type()
-	llvmTypeTo := c.getLLVMType(typeTo)
+	llvmTypeTo := b.getLLVMType(typeTo)
 
 	// Conversion between unsafe.Pointer and uintptr.
 	isPtrFrom := isPointer(typeFrom.Underlying())
 	isPtrTo := isPointer(typeTo.Underlying())
 	if isPtrFrom && !isPtrTo {
-		return c.builder.CreatePtrToInt(value, llvmTypeTo, ""), nil
+		return b.CreatePtrToInt(value, llvmTypeTo, ""), nil
 	} else if !isPtrFrom && isPtrTo {
 		if !value.IsABinaryOperator().IsNil() && value.InstructionOpcode() == llvm.Add {
 			// This is probably a pattern like the following:
@@ -2381,7 +2382,7 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 			}
 			if !ptr.IsAPtrToIntInst().IsNil() {
 				origptr := ptr.Operand(0)
-				if origptr.Type() == c.i8ptrType {
+				if origptr.Type() == b.i8ptrType {
 					// This pointer can be calculated from the original
 					// ptrtoint instruction with a GEP. The leftover inttoptr
 					// instruction is trivial to optimize away.
@@ -2389,21 +2390,21 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 					// create a GEP that is not in bounds. However, we're
 					// talking about unsafe code here so the programmer has to
 					// be careful anyway.
-					return c.builder.CreateInBoundsGEP(origptr, []llvm.Value{index}, ""), nil
+					return b.CreateInBoundsGEP(origptr, []llvm.Value{index}, ""), nil
 				}
 			}
 		}
-		return c.builder.CreateIntToPtr(value, llvmTypeTo, ""), nil
+		return b.CreateIntToPtr(value, llvmTypeTo, ""), nil
 	}
 
 	// Conversion between pointers and unsafe.Pointer.
 	if isPtrFrom && isPtrTo {
-		return c.builder.CreateBitCast(value, llvmTypeTo, ""), nil
+		return b.CreateBitCast(value, llvmTypeTo, ""), nil
 	}
 
 	switch typeTo := typeTo.Underlying().(type) {
 	case *types.Basic:
-		sizeFrom := c.targetData.TypeAllocSize(llvmTypeFrom)
+		sizeFrom := b.targetData.TypeAllocSize(llvmTypeFrom)
 
 		if typeTo.Info()&types.IsString != 0 {
 			switch typeFrom := typeFrom.Underlying().(type) {
@@ -2413,47 +2414,47 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 				// Cast to an i32 value as expected by
 				// runtime.stringFromUnicode.
 				if sizeFrom > 4 {
-					value = c.builder.CreateTrunc(value, c.ctx.Int32Type(), "")
+					value = b.CreateTrunc(value, b.ctx.Int32Type(), "")
 				} else if sizeFrom < 4 && typeTo.Info()&types.IsUnsigned != 0 {
-					value = c.builder.CreateZExt(value, c.ctx.Int32Type(), "")
+					value = b.CreateZExt(value, b.ctx.Int32Type(), "")
 				} else if sizeFrom < 4 {
-					value = c.builder.CreateSExt(value, c.ctx.Int32Type(), "")
+					value = b.CreateSExt(value, b.ctx.Int32Type(), "")
 				}
-				return c.createRuntimeCall("stringFromUnicode", []llvm.Value{value}, ""), nil
+				return b.createRuntimeCall("stringFromUnicode", []llvm.Value{value}, ""), nil
 			case *types.Slice:
 				switch typeFrom.Elem().(*types.Basic).Kind() {
 				case types.Byte:
-					return c.createRuntimeCall("stringFromBytes", []llvm.Value{value}, ""), nil
+					return b.createRuntimeCall("stringFromBytes", []llvm.Value{value}, ""), nil
 				case types.Rune:
-					return c.createRuntimeCall("stringFromRunes", []llvm.Value{value}, ""), nil
+					return b.createRuntimeCall("stringFromRunes", []llvm.Value{value}, ""), nil
 				default:
-					return llvm.Value{}, c.makeError(pos, "todo: convert to string: "+typeFrom.String())
+					return llvm.Value{}, b.makeError(pos, "todo: convert to string: "+typeFrom.String())
 				}
 			default:
-				return llvm.Value{}, c.makeError(pos, "todo: convert to string: "+typeFrom.String())
+				return llvm.Value{}, b.makeError(pos, "todo: convert to string: "+typeFrom.String())
 			}
 		}
 
 		typeFrom := typeFrom.Underlying().(*types.Basic)
-		sizeTo := c.targetData.TypeAllocSize(llvmTypeTo)
+		sizeTo := b.targetData.TypeAllocSize(llvmTypeTo)
 
 		if typeFrom.Info()&types.IsInteger != 0 && typeTo.Info()&types.IsInteger != 0 {
 			// Conversion between two integers.
 			if sizeFrom > sizeTo {
-				return c.builder.CreateTrunc(value, llvmTypeTo, ""), nil
+				return b.CreateTrunc(value, llvmTypeTo, ""), nil
 			} else if typeFrom.Info()&types.IsUnsigned != 0 { // if unsigned
-				return c.builder.CreateZExt(value, llvmTypeTo, ""), nil
+				return b.CreateZExt(value, llvmTypeTo, ""), nil
 			} else { // if signed
-				return c.builder.CreateSExt(value, llvmTypeTo, ""), nil
+				return b.CreateSExt(value, llvmTypeTo, ""), nil
 			}
 		}
 
 		if typeFrom.Info()&types.IsFloat != 0 && typeTo.Info()&types.IsFloat != 0 {
 			// Conversion between two floats.
 			if sizeFrom > sizeTo {
-				return c.builder.CreateFPTrunc(value, llvmTypeTo, ""), nil
+				return b.CreateFPTrunc(value, llvmTypeTo, ""), nil
 			} else if sizeFrom < sizeTo {
-				return c.builder.CreateFPExt(value, llvmTypeTo, ""), nil
+				return b.CreateFPExt(value, llvmTypeTo, ""), nil
 			} else {
 				return value, nil
 			}
@@ -2462,46 +2463,46 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 		if typeFrom.Info()&types.IsFloat != 0 && typeTo.Info()&types.IsInteger != 0 {
 			// Conversion from float to int.
 			if typeTo.Info()&types.IsUnsigned != 0 { // if unsigned
-				return c.builder.CreateFPToUI(value, llvmTypeTo, ""), nil
+				return b.CreateFPToUI(value, llvmTypeTo, ""), nil
 			} else { // if signed
-				return c.builder.CreateFPToSI(value, llvmTypeTo, ""), nil
+				return b.CreateFPToSI(value, llvmTypeTo, ""), nil
 			}
 		}
 
 		if typeFrom.Info()&types.IsInteger != 0 && typeTo.Info()&types.IsFloat != 0 {
 			// Conversion from int to float.
 			if typeFrom.Info()&types.IsUnsigned != 0 { // if unsigned
-				return c.builder.CreateUIToFP(value, llvmTypeTo, ""), nil
+				return b.CreateUIToFP(value, llvmTypeTo, ""), nil
 			} else { // if signed
-				return c.builder.CreateSIToFP(value, llvmTypeTo, ""), nil
+				return b.CreateSIToFP(value, llvmTypeTo, ""), nil
 			}
 		}
 
 		if typeFrom.Kind() == types.Complex128 && typeTo.Kind() == types.Complex64 {
 			// Conversion from complex128 to complex64.
-			r := c.builder.CreateExtractValue(value, 0, "real.f64")
-			i := c.builder.CreateExtractValue(value, 1, "imag.f64")
-			r = c.builder.CreateFPTrunc(r, c.ctx.FloatType(), "real.f32")
-			i = c.builder.CreateFPTrunc(i, c.ctx.FloatType(), "imag.f32")
-			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false))
-			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+			r := b.CreateExtractValue(value, 0, "real.f64")
+			i := b.CreateExtractValue(value, 1, "imag.f64")
+			r = b.CreateFPTrunc(r, b.ctx.FloatType(), "real.f32")
+			i = b.CreateFPTrunc(i, b.ctx.FloatType(), "imag.f32")
+			cplx := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.FloatType(), b.ctx.FloatType()}, false))
+			cplx = b.CreateInsertValue(cplx, r, 0, "")
+			cplx = b.CreateInsertValue(cplx, i, 1, "")
 			return cplx, nil
 		}
 
 		if typeFrom.Kind() == types.Complex64 && typeTo.Kind() == types.Complex128 {
 			// Conversion from complex64 to complex128.
-			r := c.builder.CreateExtractValue(value, 0, "real.f32")
-			i := c.builder.CreateExtractValue(value, 1, "imag.f32")
-			r = c.builder.CreateFPExt(r, c.ctx.DoubleType(), "real.f64")
-			i = c.builder.CreateFPExt(i, c.ctx.DoubleType(), "imag.f64")
-			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false))
-			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+			r := b.CreateExtractValue(value, 0, "real.f32")
+			i := b.CreateExtractValue(value, 1, "imag.f32")
+			r = b.CreateFPExt(r, b.ctx.DoubleType(), "real.f64")
+			i = b.CreateFPExt(i, b.ctx.DoubleType(), "imag.f64")
+			cplx := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.DoubleType(), b.ctx.DoubleType()}, false))
+			cplx = b.CreateInsertValue(cplx, r, 0, "")
+			cplx = b.CreateInsertValue(cplx, i, 1, "")
 			return cplx, nil
 		}
 
-		return llvm.Value{}, c.makeError(pos, "todo: convert: basic non-integer type: "+typeFrom.String()+" -> "+typeTo.String())
+		return llvm.Value{}, b.makeError(pos, "todo: convert: basic non-integer type: "+typeFrom.String()+" -> "+typeTo.String())
 
 	case *types.Slice:
 		if basic, ok := typeFrom.(*types.Basic); !ok || basic.Info()&types.IsString == 0 {
@@ -2511,15 +2512,15 @@ func (c *Compiler) parseConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 		elemType := typeTo.Elem().Underlying().(*types.Basic) // must be byte or rune
 		switch elemType.Kind() {
 		case types.Byte:
-			return c.createRuntimeCall("stringToBytes", []llvm.Value{value}, ""), nil
+			return b.createRuntimeCall("stringToBytes", []llvm.Value{value}, ""), nil
 		case types.Rune:
-			return c.createRuntimeCall("stringToRunes", []llvm.Value{value}, ""), nil
+			return b.createRuntimeCall("stringToRunes", []llvm.Value{value}, ""), nil
 		default:
 			panic("unexpected type in string to slice conversion")
 		}
 
 	default:
-		return llvm.Value{}, c.makeError(pos, "todo: convert "+typeTo.String()+" <- "+typeFrom.String())
+		return llvm.Value{}, b.makeError(pos, "todo: convert "+typeTo.String()+" <- "+typeFrom.String())
 	}
 }
 
