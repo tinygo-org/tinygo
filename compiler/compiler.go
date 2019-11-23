@@ -1333,7 +1333,7 @@ func (c *Compiler) parseFunctionCall(frame *Frame, args []ssa.Value, llvmFn, con
 
 func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, error) {
 	if instr.IsInvoke() {
-		fnCast, args := c.getInvokeCall(frame, instr)
+		fnCast, args := frame.getInvokeCall(instr)
 		return c.createCall(fnCast, args, ""), nil
 	}
 
@@ -1629,7 +1629,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		return c.parseMakeClosure(frame, expr)
 	case *ssa.MakeInterface:
 		val := frame.getValue(expr.X)
-		return c.parseMakeInterface(val, expr.X.Type(), expr.Pos()), nil
+		return frame.createMakeInterface(val, expr.X.Type(), expr.Pos()), nil
 	case *ssa.MakeMap:
 		return c.emitMakeMap(frame, expr)
 	case *ssa.MakeSlice:
