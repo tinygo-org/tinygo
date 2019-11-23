@@ -1144,122 +1144,124 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 	}
 }
 
-func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string, pos token.Pos) (llvm.Value, error) {
+// createBuiltin lowers a builtin Go function (append, close, delete, etc.) to
+// LLVM IR. It uses runtime calls for some builtins.
+func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos) (llvm.Value, error) {
 	switch callName {
 	case "append":
-		src := frame.getValue(args[0])
-		elems := frame.getValue(args[1])
-		srcBuf := c.builder.CreateExtractValue(src, 0, "append.srcBuf")
-		srcPtr := c.builder.CreateBitCast(srcBuf, c.i8ptrType, "append.srcPtr")
-		srcLen := c.builder.CreateExtractValue(src, 1, "append.srcLen")
-		srcCap := c.builder.CreateExtractValue(src, 2, "append.srcCap")
-		elemsBuf := c.builder.CreateExtractValue(elems, 0, "append.elemsBuf")
-		elemsPtr := c.builder.CreateBitCast(elemsBuf, c.i8ptrType, "append.srcPtr")
-		elemsLen := c.builder.CreateExtractValue(elems, 1, "append.elemsLen")
+		src := b.getValue(args[0])
+		elems := b.getValue(args[1])
+		srcBuf := b.CreateExtractValue(src, 0, "append.srcBuf")
+		srcPtr := b.CreateBitCast(srcBuf, b.i8ptrType, "append.srcPtr")
+		srcLen := b.CreateExtractValue(src, 1, "append.srcLen")
+		srcCap := b.CreateExtractValue(src, 2, "append.srcCap")
+		elemsBuf := b.CreateExtractValue(elems, 0, "append.elemsBuf")
+		elemsPtr := b.CreateBitCast(elemsBuf, b.i8ptrType, "append.srcPtr")
+		elemsLen := b.CreateExtractValue(elems, 1, "append.elemsLen")
 		elemType := srcBuf.Type().ElementType()
-		elemSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(elemType), false)
-		result := c.createRuntimeCall("sliceAppend", []llvm.Value{srcPtr, elemsPtr, srcLen, srcCap, elemsLen, elemSize}, "append.new")
-		newPtr := c.builder.CreateExtractValue(result, 0, "append.newPtr")
-		newBuf := c.builder.CreateBitCast(newPtr, srcBuf.Type(), "append.newBuf")
-		newLen := c.builder.CreateExtractValue(result, 1, "append.newLen")
-		newCap := c.builder.CreateExtractValue(result, 2, "append.newCap")
+		elemSize := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(elemType), false)
+		result := b.createRuntimeCall("sliceAppend", []llvm.Value{srcPtr, elemsPtr, srcLen, srcCap, elemsLen, elemSize}, "append.new")
+		newPtr := b.CreateExtractValue(result, 0, "append.newPtr")
+		newBuf := b.CreateBitCast(newPtr, srcBuf.Type(), "append.newBuf")
+		newLen := b.CreateExtractValue(result, 1, "append.newLen")
+		newCap := b.CreateExtractValue(result, 2, "append.newCap")
 		newSlice := llvm.Undef(src.Type())
-		newSlice = c.builder.CreateInsertValue(newSlice, newBuf, 0, "")
-		newSlice = c.builder.CreateInsertValue(newSlice, newLen, 1, "")
-		newSlice = c.builder.CreateInsertValue(newSlice, newCap, 2, "")
+		newSlice = b.CreateInsertValue(newSlice, newBuf, 0, "")
+		newSlice = b.CreateInsertValue(newSlice, newLen, 1, "")
+		newSlice = b.CreateInsertValue(newSlice, newCap, 2, "")
 		return newSlice, nil
 	case "cap":
-		value := frame.getValue(args[0])
+		value := b.getValue(args[0])
 		var llvmCap llvm.Value
 		switch args[0].Type().(type) {
 		case *types.Chan:
 			// Channel. Buffered channels haven't been implemented yet so always
 			// return 0.
-			llvmCap = llvm.ConstInt(c.intType, 0, false)
+			llvmCap = llvm.ConstInt(b.intType, 0, false)
 		case *types.Slice:
-			llvmCap = c.builder.CreateExtractValue(value, 2, "cap")
+			llvmCap = b.CreateExtractValue(value, 2, "cap")
 		default:
-			return llvm.Value{}, c.makeError(pos, "todo: cap: unknown type")
+			return llvm.Value{}, b.makeError(pos, "todo: cap: unknown type")
 		}
-		if c.targetData.TypeAllocSize(llvmCap.Type()) < c.targetData.TypeAllocSize(c.intType) {
-			llvmCap = c.builder.CreateZExt(llvmCap, c.intType, "len.int")
+		if b.targetData.TypeAllocSize(llvmCap.Type()) < b.targetData.TypeAllocSize(b.intType) {
+			llvmCap = b.CreateZExt(llvmCap, b.intType, "len.int")
 		}
 		return llvmCap, nil
 	case "close":
-		frame.createChanClose(args[0])
+		b.createChanClose(args[0])
 		return llvm.Value{}, nil
 	case "complex":
-		r := frame.getValue(args[0])
-		i := frame.getValue(args[1])
+		r := b.getValue(args[0])
+		i := b.getValue(args[1])
 		t := args[0].Type().Underlying().(*types.Basic)
 		var cplx llvm.Value
 		switch t.Kind() {
 		case types.Float32:
-			cplx = llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false))
+			cplx = llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.FloatType(), b.ctx.FloatType()}, false))
 		case types.Float64:
-			cplx = llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false))
+			cplx = llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.DoubleType(), b.ctx.DoubleType()}, false))
 		default:
-			return llvm.Value{}, c.makeError(pos, "unsupported type in complex builtin: "+t.String())
+			return llvm.Value{}, b.makeError(pos, "unsupported type in complex builtin: "+t.String())
 		}
-		cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-		cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
+		cplx = b.CreateInsertValue(cplx, r, 0, "")
+		cplx = b.CreateInsertValue(cplx, i, 1, "")
 		return cplx, nil
 	case "copy":
-		dst := frame.getValue(args[0])
-		src := frame.getValue(args[1])
-		dstLen := c.builder.CreateExtractValue(dst, 1, "copy.dstLen")
-		srcLen := c.builder.CreateExtractValue(src, 1, "copy.srcLen")
-		dstBuf := c.builder.CreateExtractValue(dst, 0, "copy.dstArray")
-		srcBuf := c.builder.CreateExtractValue(src, 0, "copy.srcArray")
+		dst := b.getValue(args[0])
+		src := b.getValue(args[1])
+		dstLen := b.CreateExtractValue(dst, 1, "copy.dstLen")
+		srcLen := b.CreateExtractValue(src, 1, "copy.srcLen")
+		dstBuf := b.CreateExtractValue(dst, 0, "copy.dstArray")
+		srcBuf := b.CreateExtractValue(src, 0, "copy.srcArray")
 		elemType := dstBuf.Type().ElementType()
-		dstBuf = c.builder.CreateBitCast(dstBuf, c.i8ptrType, "copy.dstPtr")
-		srcBuf = c.builder.CreateBitCast(srcBuf, c.i8ptrType, "copy.srcPtr")
-		elemSize := llvm.ConstInt(c.uintptrType, c.targetData.TypeAllocSize(elemType), false)
-		return c.createRuntimeCall("sliceCopy", []llvm.Value{dstBuf, srcBuf, dstLen, srcLen, elemSize}, "copy.n"), nil
+		dstBuf = b.CreateBitCast(dstBuf, b.i8ptrType, "copy.dstPtr")
+		srcBuf = b.CreateBitCast(srcBuf, b.i8ptrType, "copy.srcPtr")
+		elemSize := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(elemType), false)
+		return b.createRuntimeCall("sliceCopy", []llvm.Value{dstBuf, srcBuf, dstLen, srcLen, elemSize}, "copy.n"), nil
 	case "delete":
-		m := frame.getValue(args[0])
-		key := frame.getValue(args[1])
-		return llvm.Value{}, frame.createMapDelete(args[1].Type(), m, key, pos)
+		m := b.getValue(args[0])
+		key := b.getValue(args[1])
+		return llvm.Value{}, b.createMapDelete(args[1].Type(), m, key, pos)
 	case "imag":
-		cplx := frame.getValue(args[0])
-		return c.builder.CreateExtractValue(cplx, 1, "imag"), nil
+		cplx := b.getValue(args[0])
+		return b.CreateExtractValue(cplx, 1, "imag"), nil
 	case "len":
-		value := frame.getValue(args[0])
+		value := b.getValue(args[0])
 		var llvmLen llvm.Value
 		switch args[0].Type().Underlying().(type) {
 		case *types.Basic, *types.Slice:
 			// string or slice
-			llvmLen = c.builder.CreateExtractValue(value, 1, "len")
+			llvmLen = b.CreateExtractValue(value, 1, "len")
 		case *types.Chan:
 			// Channel. Buffered channels haven't been implemented yet so always
 			// return 0.
-			llvmLen = llvm.ConstInt(c.intType, 0, false)
+			llvmLen = llvm.ConstInt(b.intType, 0, false)
 		case *types.Map:
-			llvmLen = c.createRuntimeCall("hashmapLen", []llvm.Value{value}, "len")
+			llvmLen = b.createRuntimeCall("hashmapLen", []llvm.Value{value}, "len")
 		default:
-			return llvm.Value{}, c.makeError(pos, "todo: len: unknown type")
+			return llvm.Value{}, b.makeError(pos, "todo: len: unknown type")
 		}
-		if c.targetData.TypeAllocSize(llvmLen.Type()) < c.targetData.TypeAllocSize(c.intType) {
-			llvmLen = c.builder.CreateZExt(llvmLen, c.intType, "len.int")
+		if b.targetData.TypeAllocSize(llvmLen.Type()) < b.targetData.TypeAllocSize(b.intType) {
+			llvmLen = b.CreateZExt(llvmLen, b.intType, "len.int")
 		}
 		return llvmLen, nil
 	case "print", "println":
 		for i, arg := range args {
 			if i >= 1 && callName == "println" {
-				c.createRuntimeCall("printspace", nil, "")
+				b.createRuntimeCall("printspace", nil, "")
 			}
-			value := frame.getValue(arg)
+			value := b.getValue(arg)
 			typ := arg.Type().Underlying()
 			switch typ := typ.(type) {
 			case *types.Basic:
 				switch typ.Kind() {
 				case types.String, types.UntypedString:
-					c.createRuntimeCall("printstring", []llvm.Value{value}, "")
+					b.createRuntimeCall("printstring", []llvm.Value{value}, "")
 				case types.Uintptr:
-					c.createRuntimeCall("printptr", []llvm.Value{value}, "")
+					b.createRuntimeCall("printptr", []llvm.Value{value}, "")
 				case types.UnsafePointer:
-					ptrValue := c.builder.CreatePtrToInt(value, c.uintptrType, "")
-					c.createRuntimeCall("printptr", []llvm.Value{ptrValue}, "")
+					ptrValue := b.CreatePtrToInt(value, b.uintptrType, "")
+					b.createRuntimeCall("printptr", []llvm.Value{ptrValue}, "")
 				default:
 					// runtime.print{int,uint}{8,16,32,64}
 					if typ.Info()&types.IsInteger != 0 {
@@ -1269,47 +1271,47 @@ func (c *Compiler) parseBuiltin(frame *Frame, args []ssa.Value, callName string,
 						} else {
 							name += "int"
 						}
-						name += strconv.FormatUint(c.targetData.TypeAllocSize(value.Type())*8, 10)
-						c.createRuntimeCall(name, []llvm.Value{value}, "")
+						name += strconv.FormatUint(b.targetData.TypeAllocSize(value.Type())*8, 10)
+						b.createRuntimeCall(name, []llvm.Value{value}, "")
 					} else if typ.Kind() == types.Bool {
-						c.createRuntimeCall("printbool", []llvm.Value{value}, "")
+						b.createRuntimeCall("printbool", []llvm.Value{value}, "")
 					} else if typ.Kind() == types.Float32 {
-						c.createRuntimeCall("printfloat32", []llvm.Value{value}, "")
+						b.createRuntimeCall("printfloat32", []llvm.Value{value}, "")
 					} else if typ.Kind() == types.Float64 {
-						c.createRuntimeCall("printfloat64", []llvm.Value{value}, "")
+						b.createRuntimeCall("printfloat64", []llvm.Value{value}, "")
 					} else if typ.Kind() == types.Complex64 {
-						c.createRuntimeCall("printcomplex64", []llvm.Value{value}, "")
+						b.createRuntimeCall("printcomplex64", []llvm.Value{value}, "")
 					} else if typ.Kind() == types.Complex128 {
-						c.createRuntimeCall("printcomplex128", []llvm.Value{value}, "")
+						b.createRuntimeCall("printcomplex128", []llvm.Value{value}, "")
 					} else {
-						return llvm.Value{}, c.makeError(pos, "unknown basic arg type: "+typ.String())
+						return llvm.Value{}, b.makeError(pos, "unknown basic arg type: "+typ.String())
 					}
 				}
 			case *types.Interface:
-				c.createRuntimeCall("printitf", []llvm.Value{value}, "")
+				b.createRuntimeCall("printitf", []llvm.Value{value}, "")
 			case *types.Map:
-				c.createRuntimeCall("printmap", []llvm.Value{value}, "")
+				b.createRuntimeCall("printmap", []llvm.Value{value}, "")
 			case *types.Pointer:
-				ptrValue := c.builder.CreatePtrToInt(value, c.uintptrType, "")
-				c.createRuntimeCall("printptr", []llvm.Value{ptrValue}, "")
+				ptrValue := b.CreatePtrToInt(value, b.uintptrType, "")
+				b.createRuntimeCall("printptr", []llvm.Value{ptrValue}, "")
 			default:
-				return llvm.Value{}, c.makeError(pos, "unknown arg type: "+typ.String())
+				return llvm.Value{}, b.makeError(pos, "unknown arg type: "+typ.String())
 			}
 		}
 		if callName == "println" {
-			c.createRuntimeCall("printnl", nil, "")
+			b.createRuntimeCall("printnl", nil, "")
 		}
 		return llvm.Value{}, nil // print() or println() returns void
 	case "real":
-		cplx := frame.getValue(args[0])
-		return c.builder.CreateExtractValue(cplx, 0, "real"), nil
+		cplx := b.getValue(args[0])
+		return b.CreateExtractValue(cplx, 0, "real"), nil
 	case "recover":
-		return c.createRuntimeCall("_recover", nil, ""), nil
+		return b.createRuntimeCall("_recover", nil, ""), nil
 	case "ssa:wrapnilchk":
 		// TODO: do an actual nil check?
-		return frame.getValue(args[0]), nil
+		return b.getValue(args[0]), nil
 	default:
-		return llvm.Value{}, c.makeError(pos, "todo: builtin: "+callName)
+		return llvm.Value{}, b.makeError(pos, "todo: builtin: "+callName)
 	}
 }
 
@@ -1384,7 +1386,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 	// Builtin or function pointer.
 	switch call := instr.Value.(type) {
 	case *ssa.Builtin:
-		return c.parseBuiltin(frame, instr.Args, call.Name(), instr.Pos())
+		return frame.createBuiltin(instr.Args, call.Name(), instr.Pos())
 	default: // function pointer
 		value := frame.getValue(instr.Value)
 		// This is a func value, which cannot be called directly. We have to
