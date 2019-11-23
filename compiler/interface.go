@@ -422,20 +422,12 @@ func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Valu
 	return fnCast, args
 }
 
-// interfaceInvokeWrapper keeps some state between getInterfaceInvokeWrapper and
-// createInterfaceInvokeWrapper. The former is called during IR construction
-// itself and the latter is called when finishing up the IR.
-type interfaceInvokeWrapper struct {
-	fn           *ir.Function
-	wrapper      llvm.Value
-	receiverType llvm.Type
-}
-
-// Wrap an interface method function pointer. The wrapper takes in a pointer to
-// the underlying value, dereferences it, and calls the real method. This
-// wrapper is only needed when the interface value actually doesn't fit in a
-// pointer and a pointer to the value must be created.
-func (c *Compiler) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
+// getInterfaceInvokeWrapper returns a wrapper for the given method so it can be
+// invoked from an interface. The wrapper takes in a pointer to the underlying
+// value, dereferences or unpacks it if necessary, and calls the real method.
+// If the method to wrap has a pointer receiver, no wrapping is necessary and
+// the function is returned directly.
+func (c *compilerContext) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 	wrapperName := f.LinkName() + "$invoke"
 	wrapper := c.mod.NamedFunction(wrapperName)
 	if !wrapper.IsNil() {
@@ -464,41 +456,37 @@ func (c *Compiler) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 	if f.LLVMFn.LastParam().Name() == "parentHandle" {
 		wrapper.LastParam().SetName("parentHandle")
 	}
-	c.interfaceInvokeWrappers = append(c.interfaceInvokeWrappers, interfaceInvokeWrapper{
-		fn:           f,
-		wrapper:      wrapper,
-		receiverType: receiverType,
-	})
-	return wrapper
-}
 
-// createInterfaceInvokeWrapper finishes the work of getInterfaceInvokeWrapper,
-// see that function for details.
-func (c *Compiler) createInterfaceInvokeWrapper(state interfaceInvokeWrapper) {
-	wrapper := state.wrapper
-	fn := state.fn
-	receiverType := state.receiverType
 	wrapper.SetLinkage(llvm.InternalLinkage)
 	wrapper.SetUnnamedAddr(true)
 
+	// Create a new builder just to create this wrapper.
+	b := builder{
+		compilerContext: c,
+		Builder:         c.ctx.NewBuilder(),
+	}
+	defer b.Builder.Dispose()
+
 	// add debug info if needed
 	if c.Debug() {
-		pos := c.ir.Program.Fset.Position(fn.Pos())
-		difunc := c.attachDebugInfoRaw(fn, wrapper, "$invoke", pos.Filename, pos.Line)
-		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
+		pos := c.ir.Program.Fset.Position(f.Pos())
+		difunc := c.attachDebugInfoRaw(f, wrapper, "$invoke", pos.Filename, pos.Line)
+		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
 
 	// set up IR builder
-	block := c.ctx.AddBasicBlock(wrapper, "entry")
-	c.builder.SetInsertPointAtEnd(block)
+	block := b.ctx.AddBasicBlock(wrapper, "entry")
+	b.SetInsertPointAtEnd(block)
 
-	receiverValue := c.emitPointerUnpack(wrapper.Param(0), []llvm.Type{receiverType})[0]
-	params := append(c.expandFormalParam(receiverValue), wrapper.Params()[1:]...)
-	if fn.LLVMFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
-		c.builder.CreateCall(fn.LLVMFn, params, "")
-		c.builder.CreateRetVoid()
+	receiverValue := b.emitPointerUnpack(wrapper.Param(0), []llvm.Type{receiverType})[0]
+	params := append(b.expandFormalParam(receiverValue), wrapper.Params()[1:]...)
+	if f.LLVMFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
+		b.CreateCall(f.LLVMFn, params, "")
+		b.CreateRetVoid()
 	} else {
-		ret := c.builder.CreateCall(fn.LLVMFn, params, "ret")
-		c.builder.CreateRet(ret)
+		ret := b.CreateCall(f.LLVMFn, params, "ret")
+		b.CreateRet(ret)
 	}
+
+	return wrapper
 }

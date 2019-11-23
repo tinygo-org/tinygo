@@ -58,9 +58,8 @@ type compilerContext struct {
 
 type Compiler struct {
 	compilerContext
-	builder                 llvm.Builder
-	initFuncs               []llvm.Value
-	interfaceInvokeWrappers []interfaceInvokeWrapper
+	builder   llvm.Builder
+	initFuncs []llvm.Value
 }
 
 type Frame struct {
@@ -299,12 +298,6 @@ func (c *Compiler) Compile(mainPath string) []error {
 			continue // external function
 		}
 		c.parseFunc(frame)
-	}
-
-	// Define the already declared functions that wrap methods for use in
-	// interfaces.
-	for _, state := range c.interfaceInvokeWrappers {
-		c.createInterfaceInvokeWrapper(state)
 	}
 
 	// After all packages are imported, add a synthetic initializer function
@@ -801,12 +794,17 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) *Frame {
 	return frame
 }
 
-func (c *Compiler) attachDebugInfo(f *ir.Function) llvm.Metadata {
+// attachDebugInfo adds debug info to a function declaration. It returns the
+// DISubprogram metadata node.
+func (c *compilerContext) attachDebugInfo(f *ir.Function) llvm.Metadata {
 	pos := c.ir.Program.Fset.Position(f.Syntax().Pos())
 	return c.attachDebugInfoRaw(f, f.LLVMFn, "", pos.Filename, pos.Line)
 }
 
-func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix, filename string, line int) llvm.Metadata {
+// attachDebugInfo adds debug info to a function declaration. It returns the
+// DISubprogram metadata node. This method allows some more control over how
+// debug info is added to the function.
+func (c *compilerContext) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix, filename string, line int) llvm.Metadata {
 	// Debug info for this function.
 	diparams := make([]llvm.Metadata, 0, len(f.Params))
 	for _, param := range f.Params {
