@@ -153,24 +153,24 @@ func (c *compilerContext) getRawFuncType(typ *types.Signature) llvm.Type {
 
 // parseMakeClosure makes a function value (with context) from the given
 // closure expression.
-func (c *Compiler) parseMakeClosure(frame *Frame, expr *ssa.MakeClosure) (llvm.Value, error) {
+func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 	if len(expr.Bindings) == 0 {
 		panic("unexpected: MakeClosure without bound variables")
 	}
-	f := c.ir.GetFunction(expr.Fn.(*ssa.Function))
+	f := b.ir.GetFunction(expr.Fn.(*ssa.Function))
 
 	// Collect all bound variables.
 	boundVars := make([]llvm.Value, len(expr.Bindings))
 	for i, binding := range expr.Bindings {
 		// The context stores the bound variables.
-		llvmBoundVar := frame.getValue(binding)
+		llvmBoundVar := b.getValue(binding)
 		boundVars[i] = llvmBoundVar
 	}
 
 	// Store the bound variables in a single object, allocating it on the heap
 	// if necessary.
-	context := c.emitPointerPack(boundVars)
+	context := b.emitPointerPack(boundVars)
 
 	// Create the closure.
-	return c.createFuncValue(f.LLVMFn, context, f.Signature), nil
+	return b.createFuncValue(f.LLVMFn, context, f.Signature), nil
 }

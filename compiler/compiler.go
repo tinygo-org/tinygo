@@ -1026,7 +1026,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 
 	switch instr := instr.(type) {
 	case ssa.Value:
-		if value, err := c.parseExpr(frame, instr); err != nil {
+		if value, err := frame.createExpr(instr); err != nil {
 			// This expression could not be parsed. Add the error to the list
 			// of diagnostics and continue with an undef value.
 			// The resulting IR will be incorrect (but valid). However,
@@ -1432,41 +1432,42 @@ func (b *builder) getValue(expr ssa.Value) llvm.Value {
 	}
 }
 
-// parseExpr translates a Go SSA expression to a LLVM instruction.
-func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
-	if _, ok := frame.locals[expr]; ok {
+// createExpr translates a Go SSA expression to LLVM IR. This can be zero, one,
+// or multiple LLVM IR instructions and/or runtime calls.
+func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
+	if _, ok := b.locals[expr]; ok {
 		// sanity check
-		panic("local has already been parsed: " + expr.String())
+		panic("instruction has already been created: " + expr.String())
 	}
 
 	switch expr := expr.(type) {
 	case *ssa.Alloc:
-		typ := c.getLLVMType(expr.Type().Underlying().(*types.Pointer).Elem())
+		typ := b.getLLVMType(expr.Type().Underlying().(*types.Pointer).Elem())
 		if expr.Heap {
-			size := c.targetData.TypeAllocSize(typ)
+			size := b.targetData.TypeAllocSize(typ)
 			// Calculate ^uintptr(0)
-			maxSize := llvm.ConstNot(llvm.ConstInt(c.uintptrType, 0, false)).ZExtValue()
+			maxSize := llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)).ZExtValue()
 			if size > maxSize {
 				// Size would be truncated if truncated to uintptr.
-				return llvm.Value{}, c.makeError(expr.Pos(), fmt.Sprintf("value is too big (%v bytes)", size))
+				return llvm.Value{}, b.makeError(expr.Pos(), fmt.Sprintf("value is too big (%v bytes)", size))
 			}
-			sizeValue := llvm.ConstInt(c.uintptrType, size, false)
-			buf := c.createRuntimeCall("alloc", []llvm.Value{sizeValue}, expr.Comment)
-			buf = c.builder.CreateBitCast(buf, llvm.PointerType(typ, 0), "")
+			sizeValue := llvm.ConstInt(b.uintptrType, size, false)
+			buf := b.createRuntimeCall("alloc", []llvm.Value{sizeValue}, expr.Comment)
+			buf = b.CreateBitCast(buf, llvm.PointerType(typ, 0), "")
 			return buf, nil
 		} else {
-			buf := llvmutil.CreateEntryBlockAlloca(c.builder, typ, expr.Comment)
-			if c.targetData.TypeAllocSize(typ) != 0 {
-				c.builder.CreateStore(llvm.ConstNull(typ), buf) // zero-initialize var
+			buf := llvmutil.CreateEntryBlockAlloca(b.Builder, typ, expr.Comment)
+			if b.targetData.TypeAllocSize(typ) != 0 {
+				b.CreateStore(llvm.ConstNull(typ), buf) // zero-initialize var
 			}
 			return buf, nil
 		}
 	case *ssa.BinOp:
-		x := frame.getValue(expr.X)
-		y := frame.getValue(expr.Y)
-		return frame.createBinOp(expr.Op, expr.X.Type(), x, y, expr.Pos())
+		x := b.getValue(expr.X)
+		y := b.getValue(expr.Y)
+		return b.createBinOp(expr.Op, expr.X.Type(), x, y, expr.Pos())
 	case *ssa.Call:
-		return frame.createFunctionCall(expr.Common())
+		return b.createFunctionCall(expr.Common())
 	case *ssa.ChangeInterface:
 		// Do not change between interface types: always use the underlying
 		// (concrete) type in the type number of the interface. Every method
@@ -1474,13 +1475,13 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		// This is different from how the official Go compiler works, because of
 		// heap allocation and because it's easier to implement, see:
 		// https://research.swtch.com/interfaces
-		return frame.getValue(expr.X), nil
+		return b.getValue(expr.X), nil
 	case *ssa.ChangeType:
 		// This instruction changes the type, but the underlying value remains
 		// the same. This is often a no-op, but sometimes we have to change the
 		// LLVM type as well.
-		x := frame.getValue(expr.X)
-		llvmType := c.getLLVMType(expr.Type())
+		x := b.getValue(expr.X)
+		llvmType := b.getLLVMType(expr.Type())
 		if x.Type() == llvmType {
 			// Different Go type but same LLVM type (for example, named int).
 			// This is the common case.
@@ -1494,70 +1495,70 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			// values from the previous struct in there.
 			value := llvm.Undef(llvmType)
 			for i := 0; i < llvmType.StructElementTypesCount(); i++ {
-				field := c.builder.CreateExtractValue(x, i, "changetype.field")
-				value = c.builder.CreateInsertValue(value, field, i, "changetype.struct")
+				field := b.CreateExtractValue(x, i, "changetype.field")
+				value = b.CreateInsertValue(value, field, i, "changetype.struct")
 			}
 			return value, nil
 		case llvm.PointerTypeKind:
 			// This can happen with pointers to structs. This case is easy:
 			// simply bitcast the pointer to the destination type.
-			return c.builder.CreateBitCast(x, llvmType, "changetype.pointer"), nil
+			return b.CreateBitCast(x, llvmType, "changetype.pointer"), nil
 		default:
 			return llvm.Value{}, errors.New("todo: unknown ChangeType type: " + expr.X.Type().String())
 		}
 	case *ssa.Const:
 		panic("const is not an expression")
 	case *ssa.Convert:
-		x := frame.getValue(expr.X)
-		return frame.createConvert(expr.X.Type(), expr.Type(), x, expr.Pos())
+		x := b.getValue(expr.X)
+		return b.createConvert(expr.X.Type(), expr.Type(), x, expr.Pos())
 	case *ssa.Extract:
 		if _, ok := expr.Tuple.(*ssa.Select); ok {
-			return frame.getChanSelectResult(expr), nil
+			return b.getChanSelectResult(expr), nil
 		}
-		value := frame.getValue(expr.Tuple)
-		return c.builder.CreateExtractValue(value, expr.Index, ""), nil
+		value := b.getValue(expr.Tuple)
+		return b.CreateExtractValue(value, expr.Index, ""), nil
 	case *ssa.Field:
-		value := frame.getValue(expr.X)
-		result := c.builder.CreateExtractValue(value, expr.Field, "")
+		value := b.getValue(expr.X)
+		result := b.CreateExtractValue(value, expr.Field, "")
 		return result, nil
 	case *ssa.FieldAddr:
-		val := frame.getValue(expr.X)
+		val := b.getValue(expr.X)
 		// Check for nil pointer before calculating the address, from the spec:
 		// > For an operand x of type T, the address operation &x generates a
 		// > pointer of type *T to x. [...] If the evaluation of x would cause a
 		// > run-time panic, then the evaluation of &x does too.
-		frame.createNilCheck(val, "gep")
+		b.createNilCheck(val, "gep")
 		// Do a GEP on the pointer to get the field address.
 		indices := []llvm.Value{
-			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(c.ctx.Int32Type(), uint64(expr.Field), false),
+			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(b.ctx.Int32Type(), uint64(expr.Field), false),
 		}
-		return c.builder.CreateInBoundsGEP(val, indices, ""), nil
+		return b.CreateInBoundsGEP(val, indices, ""), nil
 	case *ssa.Function:
 		panic("function is not an expression")
 	case *ssa.Global:
 		panic("global is not an expression")
 	case *ssa.Index:
-		array := frame.getValue(expr.X)
-		index := frame.getValue(expr.Index)
+		array := b.getValue(expr.X)
+		index := b.getValue(expr.Index)
 
 		// Check bounds.
 		arrayLen := expr.X.Type().(*types.Array).Len()
-		arrayLenLLVM := llvm.ConstInt(c.uintptrType, uint64(arrayLen), false)
-		frame.createLookupBoundsCheck(arrayLenLLVM, index, expr.Index.Type())
+		arrayLenLLVM := llvm.ConstInt(b.uintptrType, uint64(arrayLen), false)
+		b.createLookupBoundsCheck(arrayLenLLVM, index, expr.Index.Type())
 
 		// Can't load directly from array (as index is non-constant), so have to
 		// do it using an alloca+gep+load.
-		alloca, allocaPtr, allocaSize := c.createTemporaryAlloca(array.Type(), "index.alloca")
-		c.builder.CreateStore(array, alloca)
-		zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-		ptr := c.builder.CreateInBoundsGEP(alloca, []llvm.Value{zero, index}, "index.gep")
-		result := c.builder.CreateLoad(ptr, "index.load")
-		c.emitLifetimeEnd(allocaPtr, allocaSize)
+		alloca, allocaPtr, allocaSize := b.createTemporaryAlloca(array.Type(), "index.alloca")
+		b.CreateStore(array, alloca)
+		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+		ptr := b.CreateInBoundsGEP(alloca, []llvm.Value{zero, index}, "index.gep")
+		result := b.CreateLoad(ptr, "index.load")
+		b.emitLifetimeEnd(allocaPtr, allocaSize)
 		return result, nil
 	case *ssa.IndexAddr:
-		val := frame.getValue(expr.X)
-		index := frame.getValue(expr.Index)
+		val := b.getValue(expr.X)
+		index := b.getValue(expr.Index)
 
 		// Get buffer pointer and length
 		var bufptr, buflen llvm.Value
@@ -1567,42 +1568,42 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			switch typ := typ.(type) {
 			case *types.Array:
 				bufptr = val
-				buflen = llvm.ConstInt(c.uintptrType, uint64(typ.Len()), false)
+				buflen = llvm.ConstInt(b.uintptrType, uint64(typ.Len()), false)
 				// Check for nil pointer before calculating the address, from
 				// the spec:
 				// > For an operand x of type T, the address operation &x
 				// > generates a pointer of type *T to x. [...] If the
 				// > evaluation of x would cause a run-time panic, then the
 				// > evaluation of &x does too.
-				frame.createNilCheck(bufptr, "gep")
+				b.createNilCheck(bufptr, "gep")
 			default:
-				return llvm.Value{}, c.makeError(expr.Pos(), "todo: indexaddr: "+typ.String())
+				return llvm.Value{}, b.makeError(expr.Pos(), "todo: indexaddr: "+typ.String())
 			}
 		case *types.Slice:
-			bufptr = c.builder.CreateExtractValue(val, 0, "indexaddr.ptr")
-			buflen = c.builder.CreateExtractValue(val, 1, "indexaddr.len")
+			bufptr = b.CreateExtractValue(val, 0, "indexaddr.ptr")
+			buflen = b.CreateExtractValue(val, 1, "indexaddr.len")
 		default:
-			return llvm.Value{}, c.makeError(expr.Pos(), "todo: indexaddr: "+ptrTyp.String())
+			return llvm.Value{}, b.makeError(expr.Pos(), "todo: indexaddr: "+ptrTyp.String())
 		}
 
 		// Bounds check.
-		frame.createLookupBoundsCheck(buflen, index, expr.Index.Type())
+		b.createLookupBoundsCheck(buflen, index, expr.Index.Type())
 
 		switch expr.X.Type().Underlying().(type) {
 		case *types.Pointer:
 			indices := []llvm.Value{
-				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 				index,
 			}
-			return c.builder.CreateInBoundsGEP(bufptr, indices, ""), nil
+			return b.CreateInBoundsGEP(bufptr, indices, ""), nil
 		case *types.Slice:
-			return c.builder.CreateInBoundsGEP(bufptr, []llvm.Value{index}, ""), nil
+			return b.CreateInBoundsGEP(bufptr, []llvm.Value{index}, ""), nil
 		default:
 			panic("unreachable")
 		}
 	case *ssa.Lookup:
-		value := frame.getValue(expr.X)
-		index := frame.getValue(expr.Index)
+		value := b.getValue(expr.X)
+		index := b.getValue(expr.Index)
 		switch xType := expr.X.Type().Underlying().(type) {
 		case *types.Basic:
 			// Value type must be a string, which is a basic type.
@@ -1611,153 +1612,153 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 			}
 
 			// Bounds check.
-			length := c.builder.CreateExtractValue(value, 1, "len")
-			frame.createLookupBoundsCheck(length, index, expr.Index.Type())
+			length := b.CreateExtractValue(value, 1, "len")
+			b.createLookupBoundsCheck(length, index, expr.Index.Type())
 
 			// Lookup byte
-			buf := c.builder.CreateExtractValue(value, 0, "")
-			bufPtr := c.builder.CreateInBoundsGEP(buf, []llvm.Value{index}, "")
-			return c.builder.CreateLoad(bufPtr, ""), nil
+			buf := b.CreateExtractValue(value, 0, "")
+			bufPtr := b.CreateInBoundsGEP(buf, []llvm.Value{index}, "")
+			return b.CreateLoad(bufPtr, ""), nil
 		case *types.Map:
 			valueType := expr.Type()
 			if expr.CommaOk {
 				valueType = valueType.(*types.Tuple).At(0).Type()
 			}
-			return frame.createMapLookup(xType.Key(), valueType, value, index, expr.CommaOk, expr.Pos())
+			return b.createMapLookup(xType.Key(), valueType, value, index, expr.CommaOk, expr.Pos())
 		default:
 			panic("unknown lookup type: " + expr.String())
 		}
 	case *ssa.MakeChan:
-		return frame.createMakeChan(expr), nil
+		return b.createMakeChan(expr), nil
 	case *ssa.MakeClosure:
-		return c.parseMakeClosure(frame, expr)
+		return b.parseMakeClosure(expr)
 	case *ssa.MakeInterface:
-		val := frame.getValue(expr.X)
-		return frame.createMakeInterface(val, expr.X.Type(), expr.Pos()), nil
+		val := b.getValue(expr.X)
+		return b.createMakeInterface(val, expr.X.Type(), expr.Pos()), nil
 	case *ssa.MakeMap:
-		return frame.createMakeMap(expr)
+		return b.createMakeMap(expr)
 	case *ssa.MakeSlice:
-		sliceLen := frame.getValue(expr.Len)
-		sliceCap := frame.getValue(expr.Cap)
+		sliceLen := b.getValue(expr.Len)
+		sliceCap := b.getValue(expr.Cap)
 		sliceType := expr.Type().Underlying().(*types.Slice)
-		llvmElemType := c.getLLVMType(sliceType.Elem())
-		elemSize := c.targetData.TypeAllocSize(llvmElemType)
-		elemSizeValue := llvm.ConstInt(c.uintptrType, elemSize, false)
+		llvmElemType := b.getLLVMType(sliceType.Elem())
+		elemSize := b.targetData.TypeAllocSize(llvmElemType)
+		elemSizeValue := llvm.ConstInt(b.uintptrType, elemSize, false)
 
 		// Calculate (^uintptr(0)) >> 1, which is the max value that fits in
 		// uintptr if uintptr were signed.
-		maxSize := llvm.ConstLShr(llvm.ConstNot(llvm.ConstInt(c.uintptrType, 0, false)), llvm.ConstInt(c.uintptrType, 1, false))
+		maxSize := llvm.ConstLShr(llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)), llvm.ConstInt(b.uintptrType, 1, false))
 		if elemSize > maxSize.ZExtValue() {
 			// This seems to be checked by the typechecker already, but let's
 			// check it again just to be sure.
-			return llvm.Value{}, c.makeError(expr.Pos(), fmt.Sprintf("slice element type is too big (%v bytes)", elemSize))
+			return llvm.Value{}, b.makeError(expr.Pos(), fmt.Sprintf("slice element type is too big (%v bytes)", elemSize))
 		}
 
 		// Bounds checking.
 		lenType := expr.Len.Type().(*types.Basic)
 		capType := expr.Cap.Type().(*types.Basic)
-		frame.createSliceBoundsCheck(maxSize, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
+		b.createSliceBoundsCheck(maxSize, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
 
 		// Allocate the backing array.
-		sliceCapCast, err := frame.createConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
+		sliceCapCast, err := b.createConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		sliceSize := c.builder.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
-		slicePtr := c.createRuntimeCall("alloc", []llvm.Value{sliceSize}, "makeslice.buf")
-		slicePtr = c.builder.CreateBitCast(slicePtr, llvm.PointerType(llvmElemType, 0), "makeslice.array")
+		sliceSize := b.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
+		slicePtr := b.createRuntimeCall("alloc", []llvm.Value{sliceSize}, "makeslice.buf")
+		slicePtr = b.CreateBitCast(slicePtr, llvm.PointerType(llvmElemType, 0), "makeslice.array")
 
 		// Extend or truncate if necessary. This is safe as we've already done
 		// the bounds check.
-		sliceLen, err = frame.createConvert(expr.Len.Type(), types.Typ[types.Uintptr], sliceLen, expr.Pos())
+		sliceLen, err = b.createConvert(expr.Len.Type(), types.Typ[types.Uintptr], sliceLen, expr.Pos())
 		if err != nil {
 			return llvm.Value{}, err
 		}
-		sliceCap, err = frame.createConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
+		sliceCap, err = b.createConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
 		if err != nil {
 			return llvm.Value{}, err
 		}
 
 		// Create the slice.
-		slice := c.ctx.ConstStruct([]llvm.Value{
+		slice := b.ctx.ConstStruct([]llvm.Value{
 			llvm.Undef(slicePtr.Type()),
-			llvm.Undef(c.uintptrType),
-			llvm.Undef(c.uintptrType),
+			llvm.Undef(b.uintptrType),
+			llvm.Undef(b.uintptrType),
 		}, false)
-		slice = c.builder.CreateInsertValue(slice, slicePtr, 0, "")
-		slice = c.builder.CreateInsertValue(slice, sliceLen, 1, "")
-		slice = c.builder.CreateInsertValue(slice, sliceCap, 2, "")
+		slice = b.CreateInsertValue(slice, slicePtr, 0, "")
+		slice = b.CreateInsertValue(slice, sliceLen, 1, "")
+		slice = b.CreateInsertValue(slice, sliceCap, 2, "")
 		return slice, nil
 	case *ssa.Next:
 		rangeVal := expr.Iter.(*ssa.Range).X
-		llvmRangeVal := frame.getValue(rangeVal)
-		it := frame.getValue(expr.Iter)
+		llvmRangeVal := b.getValue(rangeVal)
+		it := b.getValue(expr.Iter)
 		if expr.IsString {
-			return c.createRuntimeCall("stringNext", []llvm.Value{llvmRangeVal, it}, "range.next"), nil
+			return b.createRuntimeCall("stringNext", []llvm.Value{llvmRangeVal, it}, "range.next"), nil
 		} else { // map
-			llvmKeyType := c.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Key())
-			llvmValueType := c.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Elem())
+			llvmKeyType := b.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Key())
+			llvmValueType := b.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Elem())
 
-			mapKeyAlloca, mapKeyPtr, mapKeySize := c.createTemporaryAlloca(llvmKeyType, "range.key")
-			mapValueAlloca, mapValuePtr, mapValueSize := c.createTemporaryAlloca(llvmValueType, "range.value")
-			ok := c.createRuntimeCall("hashmapNext", []llvm.Value{llvmRangeVal, it, mapKeyPtr, mapValuePtr}, "range.next")
+			mapKeyAlloca, mapKeyPtr, mapKeySize := b.createTemporaryAlloca(llvmKeyType, "range.key")
+			mapValueAlloca, mapValuePtr, mapValueSize := b.createTemporaryAlloca(llvmValueType, "range.value")
+			ok := b.createRuntimeCall("hashmapNext", []llvm.Value{llvmRangeVal, it, mapKeyPtr, mapValuePtr}, "range.next")
 
-			tuple := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.Int1Type(), llvmKeyType, llvmValueType}, false))
-			tuple = c.builder.CreateInsertValue(tuple, ok, 0, "")
-			tuple = c.builder.CreateInsertValue(tuple, c.builder.CreateLoad(mapKeyAlloca, ""), 1, "")
-			tuple = c.builder.CreateInsertValue(tuple, c.builder.CreateLoad(mapValueAlloca, ""), 2, "")
-			c.emitLifetimeEnd(mapKeyPtr, mapKeySize)
-			c.emitLifetimeEnd(mapValuePtr, mapValueSize)
+			tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.Int1Type(), llvmKeyType, llvmValueType}, false))
+			tuple = b.CreateInsertValue(tuple, ok, 0, "")
+			tuple = b.CreateInsertValue(tuple, b.CreateLoad(mapKeyAlloca, ""), 1, "")
+			tuple = b.CreateInsertValue(tuple, b.CreateLoad(mapValueAlloca, ""), 2, "")
+			b.emitLifetimeEnd(mapKeyPtr, mapKeySize)
+			b.emitLifetimeEnd(mapValuePtr, mapValueSize)
 			return tuple, nil
 		}
 	case *ssa.Phi:
-		phi := c.builder.CreatePHI(c.getLLVMType(expr.Type()), "")
-		frame.phis = append(frame.phis, Phi{expr, phi})
+		phi := b.CreatePHI(b.getLLVMType(expr.Type()), "")
+		b.phis = append(b.phis, Phi{expr, phi})
 		return phi, nil
 	case *ssa.Range:
 		var iteratorType llvm.Type
 		switch typ := expr.X.Type().Underlying().(type) {
 		case *types.Basic: // string
-			iteratorType = c.getLLVMRuntimeType("stringIterator")
+			iteratorType = b.getLLVMRuntimeType("stringIterator")
 		case *types.Map:
-			iteratorType = c.getLLVMRuntimeType("hashmapIterator")
+			iteratorType = b.getLLVMRuntimeType("hashmapIterator")
 		default:
 			panic("unknown type in range: " + typ.String())
 		}
-		it, _, _ := c.createTemporaryAlloca(iteratorType, "range.it")
-		c.builder.CreateStore(llvm.ConstNull(iteratorType), it)
+		it, _, _ := b.createTemporaryAlloca(iteratorType, "range.it")
+		b.CreateStore(llvm.ConstNull(iteratorType), it)
 		return it, nil
 	case *ssa.Select:
-		return frame.createSelect(expr), nil
+		return b.createSelect(expr), nil
 	case *ssa.Slice:
-		value := frame.getValue(expr.X)
+		value := b.getValue(expr.X)
 
 		var lowType, highType, maxType *types.Basic
 		var low, high, max llvm.Value
 
 		if expr.Low != nil {
 			lowType = expr.Low.Type().Underlying().(*types.Basic)
-			low = frame.getValue(expr.Low)
-			if low.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
+			low = b.getValue(expr.Low)
+			if low.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
 				if lowType.Info()&types.IsUnsigned != 0 {
-					low = c.builder.CreateZExt(low, c.uintptrType, "")
+					low = b.CreateZExt(low, b.uintptrType, "")
 				} else {
-					low = c.builder.CreateSExt(low, c.uintptrType, "")
+					low = b.CreateSExt(low, b.uintptrType, "")
 				}
 			}
 		} else {
 			lowType = types.Typ[types.Uintptr]
-			low = llvm.ConstInt(c.uintptrType, 0, false)
+			low = llvm.ConstInt(b.uintptrType, 0, false)
 		}
 
 		if expr.High != nil {
 			highType = expr.High.Type().Underlying().(*types.Basic)
-			high = frame.getValue(expr.High)
-			if high.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
+			high = b.getValue(expr.High)
+			if high.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
 				if highType.Info()&types.IsUnsigned != 0 {
-					high = c.builder.CreateZExt(high, c.uintptrType, "")
+					high = b.CreateZExt(high, b.uintptrType, "")
 				} else {
-					high = c.builder.CreateSExt(high, c.uintptrType, "")
+					high = b.CreateSExt(high, b.uintptrType, "")
 				}
 			}
 		} else {
@@ -1766,12 +1767,12 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 
 		if expr.Max != nil {
 			maxType = expr.Max.Type().Underlying().(*types.Basic)
-			max = frame.getValue(expr.Max)
-			if max.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
+			max = b.getValue(expr.Max)
+			if max.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
 				if maxType.Info()&types.IsUnsigned != 0 {
-					max = c.builder.CreateZExt(max, c.uintptrType, "")
+					max = b.CreateZExt(max, b.uintptrType, "")
 				} else {
-					max = c.builder.CreateSExt(max, c.uintptrType, "")
+					max = b.CreateSExt(max, b.uintptrType, "")
 				}
 			}
 		} else {
@@ -1782,7 +1783,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		case *types.Pointer: // pointer to array
 			// slice an array
 			length := typ.Elem().Underlying().(*types.Array).Len()
-			llvmLen := llvm.ConstInt(c.uintptrType, uint64(length), false)
+			llvmLen := llvm.ConstInt(b.uintptrType, uint64(length), false)
 			if high.IsNil() {
 				high = llvmLen
 			}
@@ -1790,43 +1791,43 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				max = llvmLen
 			}
 			indices := []llvm.Value{
-				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 				low,
 			}
 
-			frame.createSliceBoundsCheck(llvmLen, low, high, max, lowType, highType, maxType)
+			b.createSliceBoundsCheck(llvmLen, low, high, max, lowType, highType, maxType)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
-			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-				low = c.builder.CreateTrunc(low, c.uintptrType, "")
+			if b.targetData.TypeAllocSize(low.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+				low = b.CreateTrunc(low, b.uintptrType, "")
 			}
-			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-				high = c.builder.CreateTrunc(high, c.uintptrType, "")
+			if b.targetData.TypeAllocSize(high.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+				high = b.CreateTrunc(high, b.uintptrType, "")
 			}
-			if c.targetData.TypeAllocSize(max.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-				max = c.builder.CreateTrunc(max, c.uintptrType, "")
+			if b.targetData.TypeAllocSize(max.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+				max = b.CreateTrunc(max, b.uintptrType, "")
 			}
 
-			sliceLen := c.builder.CreateSub(high, low, "slice.len")
-			slicePtr := c.builder.CreateInBoundsGEP(value, indices, "slice.ptr")
-			sliceCap := c.builder.CreateSub(max, low, "slice.cap")
+			sliceLen := b.CreateSub(high, low, "slice.len")
+			slicePtr := b.CreateInBoundsGEP(value, indices, "slice.ptr")
+			sliceCap := b.CreateSub(max, low, "slice.cap")
 
-			slice := c.ctx.ConstStruct([]llvm.Value{
+			slice := b.ctx.ConstStruct([]llvm.Value{
 				llvm.Undef(slicePtr.Type()),
-				llvm.Undef(c.uintptrType),
-				llvm.Undef(c.uintptrType),
+				llvm.Undef(b.uintptrType),
+				llvm.Undef(b.uintptrType),
 			}, false)
-			slice = c.builder.CreateInsertValue(slice, slicePtr, 0, "")
-			slice = c.builder.CreateInsertValue(slice, sliceLen, 1, "")
-			slice = c.builder.CreateInsertValue(slice, sliceCap, 2, "")
+			slice = b.CreateInsertValue(slice, slicePtr, 0, "")
+			slice = b.CreateInsertValue(slice, sliceLen, 1, "")
+			slice = b.CreateInsertValue(slice, sliceCap, 2, "")
 			return slice, nil
 
 		case *types.Slice:
 			// slice a slice
-			oldPtr := c.builder.CreateExtractValue(value, 0, "")
-			oldLen := c.builder.CreateExtractValue(value, 1, "")
-			oldCap := c.builder.CreateExtractValue(value, 2, "")
+			oldPtr := b.CreateExtractValue(value, 0, "")
+			oldLen := b.CreateExtractValue(value, 1, "")
+			oldCap := b.CreateExtractValue(value, 2, "")
 			if high.IsNil() {
 				high = oldLen
 			}
@@ -1834,76 +1835,76 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 				max = oldCap
 			}
 
-			frame.createSliceBoundsCheck(oldCap, low, high, max, lowType, highType, maxType)
+			b.createSliceBoundsCheck(oldCap, low, high, max, lowType, highType, maxType)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
-			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-				low = c.builder.CreateTrunc(low, c.uintptrType, "")
+			if b.targetData.TypeAllocSize(low.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+				low = b.CreateTrunc(low, b.uintptrType, "")
 			}
-			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-				high = c.builder.CreateTrunc(high, c.uintptrType, "")
+			if b.targetData.TypeAllocSize(high.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+				high = b.CreateTrunc(high, b.uintptrType, "")
 			}
-			if c.targetData.TypeAllocSize(max.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-				max = c.builder.CreateTrunc(max, c.uintptrType, "")
+			if b.targetData.TypeAllocSize(max.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+				max = b.CreateTrunc(max, b.uintptrType, "")
 			}
 
-			newPtr := c.builder.CreateInBoundsGEP(oldPtr, []llvm.Value{low}, "")
-			newLen := c.builder.CreateSub(high, low, "")
-			newCap := c.builder.CreateSub(max, low, "")
-			slice := c.ctx.ConstStruct([]llvm.Value{
+			newPtr := b.CreateInBoundsGEP(oldPtr, []llvm.Value{low}, "")
+			newLen := b.CreateSub(high, low, "")
+			newCap := b.CreateSub(max, low, "")
+			slice := b.ctx.ConstStruct([]llvm.Value{
 				llvm.Undef(newPtr.Type()),
-				llvm.Undef(c.uintptrType),
-				llvm.Undef(c.uintptrType),
+				llvm.Undef(b.uintptrType),
+				llvm.Undef(b.uintptrType),
 			}, false)
-			slice = c.builder.CreateInsertValue(slice, newPtr, 0, "")
-			slice = c.builder.CreateInsertValue(slice, newLen, 1, "")
-			slice = c.builder.CreateInsertValue(slice, newCap, 2, "")
+			slice = b.CreateInsertValue(slice, newPtr, 0, "")
+			slice = b.CreateInsertValue(slice, newLen, 1, "")
+			slice = b.CreateInsertValue(slice, newCap, 2, "")
 			return slice, nil
 
 		case *types.Basic:
 			if typ.Info()&types.IsString == 0 {
-				return llvm.Value{}, c.makeError(expr.Pos(), "unknown slice type: "+typ.String())
+				return llvm.Value{}, b.makeError(expr.Pos(), "unknown slice type: "+typ.String())
 			}
 			// slice a string
 			if expr.Max != nil {
 				// This might as well be a panic, as the frontend should have
 				// handled this already.
-				return llvm.Value{}, c.makeError(expr.Pos(), "slicing a string with a max parameter is not allowed by the spec")
+				return llvm.Value{}, b.makeError(expr.Pos(), "slicing a string with a max parameter is not allowed by the spec")
 			}
-			oldPtr := c.builder.CreateExtractValue(value, 0, "")
-			oldLen := c.builder.CreateExtractValue(value, 1, "")
+			oldPtr := b.CreateExtractValue(value, 0, "")
+			oldLen := b.CreateExtractValue(value, 1, "")
 			if high.IsNil() {
 				high = oldLen
 			}
 
-			frame.createSliceBoundsCheck(oldLen, low, high, high, lowType, highType, maxType)
+			b.createSliceBoundsCheck(oldLen, low, high, high, lowType, highType, maxType)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
-			if c.targetData.TypeAllocSize(low.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-				low = c.builder.CreateTrunc(low, c.uintptrType, "")
+			if b.targetData.TypeAllocSize(low.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+				low = b.CreateTrunc(low, b.uintptrType, "")
 			}
-			if c.targetData.TypeAllocSize(high.Type()) > c.targetData.TypeAllocSize(c.uintptrType) {
-				high = c.builder.CreateTrunc(high, c.uintptrType, "")
+			if b.targetData.TypeAllocSize(high.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+				high = b.CreateTrunc(high, b.uintptrType, "")
 			}
 
-			newPtr := c.builder.CreateInBoundsGEP(oldPtr, []llvm.Value{low}, "")
-			newLen := c.builder.CreateSub(high, low, "")
-			str := llvm.Undef(c.getLLVMRuntimeType("_string"))
-			str = c.builder.CreateInsertValue(str, newPtr, 0, "")
-			str = c.builder.CreateInsertValue(str, newLen, 1, "")
+			newPtr := b.CreateInBoundsGEP(oldPtr, []llvm.Value{low}, "")
+			newLen := b.CreateSub(high, low, "")
+			str := llvm.Undef(b.getLLVMRuntimeType("_string"))
+			str = b.CreateInsertValue(str, newPtr, 0, "")
+			str = b.CreateInsertValue(str, newLen, 1, "")
 			return str, nil
 
 		default:
-			return llvm.Value{}, c.makeError(expr.Pos(), "unknown slice type: "+typ.String())
+			return llvm.Value{}, b.makeError(expr.Pos(), "unknown slice type: "+typ.String())
 		}
 	case *ssa.TypeAssert:
-		return frame.createTypeAssert(expr), nil
+		return b.createTypeAssert(expr), nil
 	case *ssa.UnOp:
-		return frame.createUnOp(expr)
+		return b.createUnOp(expr)
 	default:
-		return llvm.Value{}, c.makeError(expr.Pos(), "todo: unknown expression: "+expr.String())
+		return llvm.Value{}, b.makeError(expr.Pos(), "todo: unknown expression: "+expr.String())
 	}
 }
 
