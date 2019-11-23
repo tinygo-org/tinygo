@@ -16,28 +16,28 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-// parseMakeInterface emits the LLVM IR for the *ssa.MakeInterface instruction.
+// createMakeInterface emits the LLVM IR for the *ssa.MakeInterface instruction.
 // It tries to put the type in the interface value, but if that's not possible,
 // it will do an allocation of the right size and put that in the interface
 // value field.
 //
-// An interface value is a {typecode, value} tuple, or {i16, i8*} to be exact.
-func (c *Compiler) parseMakeInterface(val llvm.Value, typ types.Type, pos token.Pos) llvm.Value {
-	itfValue := c.emitPointerPack([]llvm.Value{val})
-	itfTypeCodeGlobal := c.getTypeCode(typ)
-	itfMethodSetGlobal := c.getTypeMethodSet(typ)
-	itfConcreteTypeGlobal := c.mod.NamedGlobal("typeInInterface:" + itfTypeCodeGlobal.Name())
+// An interface value is a {typecode, value} tuple named runtime._interface.
+func (b *builder) createMakeInterface(val llvm.Value, typ types.Type, pos token.Pos) llvm.Value {
+	itfValue := b.emitPointerPack([]llvm.Value{val})
+	itfTypeCodeGlobal := b.getTypeCode(typ)
+	itfMethodSetGlobal := b.getTypeMethodSet(typ)
+	itfConcreteTypeGlobal := b.mod.NamedGlobal("typeInInterface:" + itfTypeCodeGlobal.Name())
 	if itfConcreteTypeGlobal.IsNil() {
-		typeInInterface := c.getLLVMRuntimeType("typeInInterface")
-		itfConcreteTypeGlobal = llvm.AddGlobal(c.mod, typeInInterface, "typeInInterface:"+itfTypeCodeGlobal.Name())
+		typeInInterface := b.getLLVMRuntimeType("typeInInterface")
+		itfConcreteTypeGlobal = llvm.AddGlobal(b.mod, typeInInterface, "typeInInterface:"+itfTypeCodeGlobal.Name())
 		itfConcreteTypeGlobal.SetInitializer(llvm.ConstNamedStruct(typeInInterface, []llvm.Value{itfTypeCodeGlobal, itfMethodSetGlobal}))
 		itfConcreteTypeGlobal.SetGlobalConstant(true)
 		itfConcreteTypeGlobal.SetLinkage(llvm.PrivateLinkage)
 	}
-	itfTypeCode := c.builder.CreatePtrToInt(itfConcreteTypeGlobal, c.uintptrType, "")
-	itf := llvm.Undef(c.getLLVMRuntimeType("_interface"))
-	itf = c.builder.CreateInsertValue(itf, itfTypeCode, 0, "")
-	itf = c.builder.CreateInsertValue(itf, itfValue, 1, "")
+	itfTypeCode := b.CreatePtrToInt(itfConcreteTypeGlobal, b.uintptrType, "")
+	itf := llvm.Undef(b.getLLVMRuntimeType("_interface"))
+	itf = b.CreateInsertValue(itf, itfTypeCode, 0, "")
+	itf = b.CreateInsertValue(itf, itfValue, 1, "")
 	return itf
 }
 
@@ -228,7 +228,7 @@ func getTypeCodeName(t types.Type) string {
 
 // getTypeMethodSet returns a reference (GEP) to a global method set. This
 // method set should be unreferenced after the interface lowering pass.
-func (c *Compiler) getTypeMethodSet(typ types.Type) llvm.Value {
+func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 	global := c.mod.NamedGlobal(typ.String() + "$methodset")
 	zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 	if !global.IsNil() {
@@ -393,31 +393,31 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 
 // getInvokeCall creates and returns the function pointer and parameters of an
 // interface call. It can be used in a call or defer instruction.
-func (c *Compiler) getInvokeCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, []llvm.Value) {
+func (b *builder) getInvokeCall(instr *ssa.CallCommon) (llvm.Value, []llvm.Value) {
 	// Call an interface method with dynamic dispatch.
-	itf := frame.getValue(instr.Value) // interface
+	itf := b.getValue(instr.Value) // interface
 
-	llvmFnType := c.getRawFuncType(instr.Method.Type().(*types.Signature))
+	llvmFnType := b.getRawFuncType(instr.Method.Type().(*types.Signature))
 
-	typecode := c.builder.CreateExtractValue(itf, 0, "invoke.typecode")
+	typecode := b.CreateExtractValue(itf, 0, "invoke.typecode")
 	values := []llvm.Value{
 		typecode,
-		c.getInterfaceMethodSet(instr.Value.Type().(*types.Named)),
-		c.getMethodSignature(instr.Method),
+		b.getInterfaceMethodSet(instr.Value.Type().(*types.Named)),
+		b.getMethodSignature(instr.Method),
 	}
-	fn := c.createRuntimeCall("interfaceMethod", values, "invoke.func")
-	fnCast := c.builder.CreateIntToPtr(fn, llvmFnType, "invoke.func.cast")
-	receiverValue := c.builder.CreateExtractValue(itf, 1, "invoke.func.receiver")
+	fn := b.createRuntimeCall("interfaceMethod", values, "invoke.func")
+	fnCast := b.CreateIntToPtr(fn, llvmFnType, "invoke.func.cast")
+	receiverValue := b.CreateExtractValue(itf, 1, "invoke.func.receiver")
 
 	args := []llvm.Value{receiverValue}
 	for _, arg := range instr.Args {
-		args = append(args, frame.getValue(arg))
+		args = append(args, b.getValue(arg))
 	}
 	// Add the context parameter. An interface call never takes a context but we
 	// have to supply the parameter anyway.
-	args = append(args, llvm.Undef(c.i8ptrType))
+	args = append(args, llvm.Undef(b.i8ptrType))
 	// Add the parent goroutine handle.
-	args = append(args, llvm.Undef(c.i8ptrType))
+	args = append(args, llvm.Undef(b.i8ptrType))
 
 	return fnCast, args
 }

@@ -272,7 +272,7 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 			// Parent coroutine handle.
 			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
 
-			fnPtr, _ := c.getInvokeCall(frame, callback)
+			fnPtr, _ := frame.getInvokeCall(callback)
 			c.createCall(fnPtr, forwardParams, "")
 
 		case *ir.Function:
