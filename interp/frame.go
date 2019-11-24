@@ -194,20 +194,28 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			lhs := fr.getLocal(inst.Operand(0)).(*LocalValue).Underlying
 			rhs := fr.getLocal(inst.Operand(1)).(*LocalValue).Underlying
 			predicate := inst.IntPredicate()
-			if predicate == llvm.IntEQ && lhs.Type().TypeKind() == llvm.PointerTypeKind {
-				// Unfortunately, the const propagation in the IR builder
-				// doesn't handle pointer compares of inttoptr values. So we
-				// implement it manually here.
-				lhsNil, ok1 := isPointerNil(lhs)
-				rhsNil, ok2 := isPointerNil(rhs)
+			if predicate == llvm.IntEQ {
+				var lhsZero, rhsZero bool
+				var ok1, ok2 bool
+				if lhs.Type().TypeKind() == llvm.PointerTypeKind {
+					// Unfortunately, the const propagation in the IR builder
+					// doesn't handle pointer compares of inttoptr values. So we
+					// implement it manually here.
+					lhsZero, ok1 = isPointerNil(lhs)
+					rhsZero, ok2 = isPointerNil(rhs)
+				}
+				if lhs.Type().TypeKind() == llvm.IntegerTypeKind {
+					lhsZero, ok1 = isZero(lhs)
+					rhsZero, ok2 = isZero(rhs)
+				}
 				if ok1 && ok2 {
-					if lhsNil && rhsNil {
-						// Both are nil, so this icmp is always evaluated to true.
+					if lhsZero && rhsZero {
+						// Both are zero, so this icmp is always evaluated to true.
 						fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstInt(fr.Mod.Context().Int1Type(), 1, false)}
 						continue
 					}
-					if lhsNil != rhsNil {
-						// Only one of them is nil, so this comparison must return false.
+					if lhsZero != rhsZero {
+						// Only one of them is zero, so this comparison must return false.
 						fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstInt(fr.Mod.Context().Int1Type(), 0, false)}
 						continue
 					}

@@ -60,9 +60,9 @@ func isPointerNil(v llvm.Value) (result bool, ok bool) {
 		case llvm.IntToPtr:
 			// Whether a constant inttoptr is nil is easy to
 			// determine.
-			operand := v.Operand(0)
-			if operand.IsConstant() {
-				return operand.ZExtValue() == 0, true
+			result, ok = isZero(v.Operand(0))
+			if ok {
+				return
 			}
 		case llvm.BitCast, llvm.GetElementPtr:
 			// These const instructions are just a kind of wrappers for the
@@ -73,6 +73,26 @@ func isPointerNil(v llvm.Value) (result bool, ok bool) {
 	if !v.IsAConstantPointerNull().IsNil() {
 		// A constant pointer null is always null, of course.
 		return true, true
+	}
+	if !v.IsAGlobalValue().IsNil() {
+		// A global value is never null.
+		return false, true
+	}
+	return false, false // not valid
+}
+
+// isZero returns whether the value in v is the integer zero, and whether that
+// can be known right now.
+func isZero(v llvm.Value) (result bool, ok bool) {
+	if !v.IsAConstantExpr().IsNil() {
+		switch v.Opcode() {
+		case llvm.PtrToInt:
+			return isPointerNil(v.Operand(0))
+		}
+	}
+	if !v.IsAConstantInt().IsNil() {
+		val := v.ZExtValue()
+		return val == 0, true
 	}
 	return false, false // not valid
 }
