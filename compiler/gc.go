@@ -81,6 +81,15 @@ func (c *Compiler) trackPointer(value llvm.Value) {
 	c.createRuntimeCall("trackPointer", []llvm.Value{value}, "")
 }
 
+// trackPointer creates a call to runtime.trackPointer, bitcasting the poitner
+// first if needed. The input value must be of LLVM pointer type.
+func (b *builder) trackPointer(value llvm.Value) {
+	if value.Type() != b.i8ptrType {
+		value = b.CreateBitCast(value, b.i8ptrType, "")
+	}
+	b.createRuntimeCall("trackPointer", []llvm.Value{value}, "")
+}
+
 // typeHasPointers returns whether this type is a pointer or contains pointers.
 // If the type is an aggregate type, it will check whether there is a pointer
 // inside.
