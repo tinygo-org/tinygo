@@ -958,7 +958,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 	if frame.fn.Recover != nil {
 		// This function has deferred function calls. Set some things up for
 		// them.
-		c.deferInitFunc(frame)
+		frame.deferInitFunc()
 	}
 
 	// Fill blocks with instructions.
@@ -1044,7 +1044,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 	case *ssa.DebugRef:
 		// ignore
 	case *ssa.Defer:
-		c.emitDefer(frame, instr)
+		frame.createDefer(instr)
 	case *ssa.Go:
 		// Get all function parameters to pass to the goroutine.
 		var params []llvm.Value
@@ -1127,7 +1127,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			c.builder.CreateRet(retVal)
 		}
 	case *ssa.RunDefers:
-		c.emitRunDefers(frame)
+		frame.createRunDefers()
 	case *ssa.Send:
 		frame.createChanSend(instr)
 	case *ssa.Store:
