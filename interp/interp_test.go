@@ -13,6 +13,7 @@ func TestInterp(t *testing.T) {
 	for _, name := range []string{
 		"basic",
 		"slice-copy",
+		"consteval",
 	} {
 		name := name // make tc local to this closure
 		t.Run(name, func(t *testing.T) {
