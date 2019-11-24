@@ -7,7 +7,6 @@ package interp
 // methods.
 
 import (
-	"errors"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
@@ -20,6 +19,15 @@ type Eval struct {
 	builder         llvm.Builder
 	dirtyGlobals    map[llvm.Value]struct{}
 	sideEffectFuncs map[llvm.Value]*sideEffectResult // cache of side effect scan results
+}
+
+// evalPackage encapsulates the Eval type for just a single package. The Eval
+// type keeps state across the whole program, the evalPackage type keeps extra
+// state for the currently interpreted package.
+type evalPackage struct {
+	*Eval
+	packagePath string
+	errors      []error
 }
 
 // Run evaluates the function with the given name and then eliminates all
@@ -56,7 +64,7 @@ func Run(mod llvm.Module, debug bool) error {
 			break // ret void
 		}
 		if inst.IsACallInst().IsNil() || inst.CalledValue().IsAFunction().IsNil() {
-			return errors.New("expected all instructions in " + name + " to be direct calls")
+			return errorAt(inst, "interp: expected all instructions in "+name+" to be direct calls")
 		}
 		initCalls = append(initCalls, inst)
 	}
@@ -66,13 +74,17 @@ func Run(mod llvm.Module, debug bool) error {
 	for _, call := range initCalls {
 		initName := call.CalledValue().Name()
 		if !strings.HasSuffix(initName, ".init") {
-			return errors.New("expected all instructions in " + name + " to be *.init() calls")
+			return errorAt(call, "interp: expected all instructions in "+name+" to be *.init() calls")
 		}
 		pkgName := initName[:len(initName)-5]
 		fn := call.CalledValue()
 		call.EraseFromParentAsInstruction()
-		_, err := e.Function(fn, []Value{&LocalValue{e, undefPtr}, &LocalValue{e, undefPtr}}, pkgName)
-		if err == ErrUnreachable {
+		evalPkg := evalPackage{
+			Eval:        e,
+			packagePath: pkgName,
+		}
+		_, err := evalPkg.function(fn, []Value{&LocalValue{e, undefPtr}, &LocalValue{e, undefPtr}}, "")
+		if err == errUnreachable {
 			break
 		}
 		if err != nil {
@@ -83,16 +95,14 @@ func Run(mod llvm.Module, debug bool) error {
 	return nil
 }
 
-func (e *Eval) Function(fn llvm.Value, params []Value, pkgName string) (Value, error) {
-	return e.function(fn, params, pkgName, "")
-}
-
-func (e *Eval) function(fn llvm.Value, params []Value, pkgName, indent string) (Value, error) {
+// function interprets the given function. The params are the function params
+// and the indent is the string indentation to use when dumping all interpreted
+// instructions.
+func (e *evalPackage) function(fn llvm.Value, params []Value, indent string) (Value, error) {
 	fr := frame{
-		Eval:    e,
-		fn:      fn,
-		pkgName: pkgName,
-		locals:  make(map[llvm.Value]Value),
+		evalPackage: e,
+		fn:          fn,
+		locals:      make(map[llvm.Value]Value),
 	}
 	for i, param := range fn.Params() {
 		fr.locals[param] = params[i]

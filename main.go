@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go/scanner"
 	"go/types"
 	"io"
 	"os"
@@ -480,11 +481,21 @@ func handleCompilerError(err error) {
 		switch err := err.(type) {
 		case *interp.Unsupported:
 			// hit an unknown/unsupported instruction
-			fmt.Fprintln(os.Stderr, "unsupported instruction during init evaluation:")
+			fmt.Fprintln(os.Stderr, "#", err.ImportPath)
+			msg := "unsupported instruction during init evaluation:"
+			if err.Pos.String() != "" {
+				msg = err.Pos.String() + " " + msg
+			}
+			fmt.Fprintln(os.Stderr, msg)
 			err.Inst.Dump()
 			fmt.Fprintln(os.Stderr)
-		case types.Error:
+		case types.Error, scanner.Error:
 			fmt.Fprintln(os.Stderr, err)
+		case interp.Error:
+			fmt.Fprintln(os.Stderr, "#", err.ImportPath)
+			for _, err := range err.Errs {
+				fmt.Fprintln(os.Stderr, err)
+			}
 		case loader.Errors:
 			fmt.Fprintln(os.Stderr, "#", err.Pkg.ImportPath)
 			for _, err := range err.Errs {

@@ -4,20 +4,16 @@ package interp
 // functions.
 
 import (
-	"errors"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
 )
 
 type frame struct {
-	*Eval
-	fn      llvm.Value
-	pkgName string
-	locals  map[llvm.Value]Value
+	*evalPackage
+	fn     llvm.Value
+	locals map[llvm.Value]Value
 }
-
-var ErrUnreachable = errors.New("interp: unreachable executed")
 
 // evalBasicBlock evaluates a single basic block, returning the return value (if
 // ending with a ret instruction), a list of outgoing basic blocks (if not
@@ -79,13 +75,13 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateXor(lhs, rhs, "")}
 
 			default:
-				return nil, nil, &Unsupported{inst}
+				return nil, nil, fr.unsupportedInstructionError(inst)
 			}
 
 		// Memory operators
 		case !inst.IsAAllocaInst().IsNil():
 			allocType := inst.Type().ElementType()
-			alloca := llvm.AddGlobal(fr.Mod, allocType, fr.pkgName+"$alloca")
+			alloca := llvm.AddGlobal(fr.Mod, allocType, fr.packagePath+"$alloca")
 			alloca.SetInitializer(llvm.ConstNull(allocType))
 			alloca.SetLinkage(llvm.InternalLinkage)
 			fr.locals[inst] = &LocalValue{
@@ -247,12 +243,12 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				if size != typeSize {
 					// allocate an array
 					if size%typeSize != 0 {
-						return nil, nil, &Unsupported{inst}
+						return nil, nil, fr.unsupportedInstructionError(inst)
 					}
 					elementCount = int(size / typeSize)
 					allocType = llvm.ArrayType(allocType, elementCount)
 				}
-				alloc := llvm.AddGlobal(fr.Mod, allocType, fr.pkgName+"$alloc")
+				alloc := llvm.AddGlobal(fr.Mod, allocType, fr.packagePath+"$alloc")
 				alloc.SetInitializer(llvm.ConstNull(allocType))
 				alloc.SetLinkage(llvm.InternalLinkage)
 				result := &LocalValue{
@@ -270,13 +266,16 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				valueSize := inst.Operand(1).ZExtValue()
 				fr.locals[inst] = &MapValue{
 					Eval:      fr.Eval,
-					PkgName:   fr.pkgName,
+					PkgName:   fr.packagePath,
 					KeySize:   int(keySize),
 					ValueSize: int(valueSize),
 				}
 			case callee.Name() == "runtime.hashmapStringSet":
 				// set a string key in the map
-				m := fr.getLocal(inst.Operand(0)).(*MapValue)
+				m, ok := fr.getLocal(inst.Operand(0)).(*MapValue)
+				if !ok {
+					return nil, nil, fr.errorAt(inst, "could not update map with string key")
+				}
 				// "key" is a Go string value, which in the TinyGo calling convention is split up
 				// into separate pointer and length parameters.
 				keyBuf := fr.getLocal(inst.Operand(1)).(*LocalValue)
@@ -285,7 +284,10 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				m.PutString(keyBuf, keyLen, valPtr)
 			case callee.Name() == "runtime.hashmapBinarySet":
 				// set a binary (int etc.) key in the map
-				m := fr.getLocal(inst.Operand(0)).(*MapValue)
+				m, ok := fr.getLocal(inst.Operand(0)).(*MapValue)
+				if !ok {
+					return nil, nil, fr.errorAt(inst, "could not update map")
+				}
 				keyBuf := fr.getLocal(inst.Operand(1)).(*LocalValue)
 				valPtr := fr.getLocal(inst.Operand(2)).(*LocalValue)
 				m.PutBinary(keyBuf, valPtr)
@@ -304,7 +306,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				}
 				globalType := llvm.ArrayType(fr.Mod.Context().Int8Type(), len(result))
 				globalValue := llvm.ConstArray(fr.Mod.Context().Int8Type(), vals)
-				global := llvm.AddGlobal(fr.Mod, globalType, fr.pkgName+"$stringconcat")
+				global := llvm.AddGlobal(fr.Mod, globalType, fr.packagePath+"$stringconcat")
 				global.SetInitializer(globalValue)
 				global.SetLinkage(llvm.InternalLinkage)
 				global.SetGlobalConstant(true)
@@ -336,20 +338,20 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					srcArray = srcArray.GetElementPtr([]uint32{0, 0}).(*LocalValue)
 				}
 				if fr.Eval.TargetData.TypeAllocSize(dstArray.Type().ElementType()) != elementSize {
-					return nil, nil, errors.New("interp: slice dst element size does not match pointer type")
+					return nil, nil, fr.errorAt(inst, "interp: slice dst element size does not match pointer type")
 				}
 				if fr.Eval.TargetData.TypeAllocSize(srcArray.Type().ElementType()) != elementSize {
-					return nil, nil, errors.New("interp: slice src element size does not match pointer type")
+					return nil, nil, fr.errorAt(inst, "interp: slice src element size does not match pointer type")
 				}
 				if dstArray.Type() != srcArray.Type() {
-					return nil, nil, errors.New("interp: slice element types don't match")
+					return nil, nil, fr.errorAt(inst, "interp: slice element types don't match")
 				}
 				length := dstLen.Value().SExtValue()
 				if srcLength := srcLen.Value().SExtValue(); srcLength < length {
 					length = srcLength
 				}
 				if length < 0 {
-					return nil, nil, errors.New("interp: trying to copy a slice with negative length?")
+					return nil, nil, fr.errorAt(inst, "interp: trying to copy a slice with negative length?")
 				}
 				for i := int64(0); i < length; i++ {
 					// *dst = *src
@@ -370,7 +372,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				}
 				globalType := llvm.ArrayType(fr.Mod.Context().Int8Type(), len(result))
 				globalValue := llvm.ConstArray(fr.Mod.Context().Int8Type(), vals)
-				global := llvm.AddGlobal(fr.Mod, globalType, fr.pkgName+"$bytes")
+				global := llvm.AddGlobal(fr.Mod, globalType, fr.packagePath+"$bytes")
 				global.SetInitializer(globalValue)
 				global.SetLinkage(llvm.InternalLinkage)
 				global.SetGlobalConstant(true)
@@ -489,7 +491,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					//     compile time.
 					//   * Unbounded: cannot call at runtime so we'll try to
 					//     interpret anyway and hope for the best.
-					ret, err = fr.function(callee, params, fr.pkgName, indent+"    ")
+					ret, err = fr.function(callee, params, indent+"    ")
 					if err != nil {
 						return nil, nil, err
 					}
@@ -499,7 +501,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				}
 			default:
 				// function pointers, etc.
-				return nil, nil, &Unsupported{inst}
+				return nil, nil, fr.unsupportedInstructionError(inst)
 			}
 		case !inst.IsAExtractValueInst().IsNil():
 			agg := fr.getLocal(inst.Operand(0)).(*LocalValue) // must be constant
@@ -509,7 +511,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				fr.locals[inst] = fr.getValue(newValue)
 			} else {
 				if len(indices) != 1 {
-					return nil, nil, errors.New("cannot handle extractvalue with not exactly 1 index")
+					return nil, nil, fr.errorAt(inst, "interp: cannot handle extractvalue with not exactly 1 index")
 				}
 				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateExtractValue(agg.Underlying, int(indices[0]), inst.Name())}
 			}
@@ -522,7 +524,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				fr.locals[inst] = &LocalValue{fr.Eval, newValue}
 			} else {
 				if len(indices) != 1 {
-					return nil, nil, errors.New("cannot handle insertvalue with not exactly 1 index")
+					return nil, nil, fr.errorAt(inst, "interp: cannot handle insertvalue with not exactly 1 index")
 				}
 				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateInsertValue(agg.Underlying, val.Value(), int(indices[0]), inst.Name())}
 			}
@@ -540,12 +542,12 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			thenBB := inst.Operand(1)
 			elseBB := inst.Operand(2)
 			if !cond.IsAInstruction().IsNil() {
-				return nil, nil, errors.New("interp: branch on a non-constant")
+				return nil, nil, fr.errorAt(inst, "interp: branch on a non-constant")
 			}
 			if !cond.IsAConstantExpr().IsNil() {
 				// This may happen when the instruction builder could not
 				// const-fold some instructions.
-				return nil, nil, errors.New("interp: branch on a non-const-propagated constant expression")
+				return nil, nil, fr.errorAt(inst, "interp: branch on a non-const-propagated constant expression")
 			}
 			switch cond {
 			case llvm.ConstInt(fr.Mod.Context().Int1Type(), 0, false): // false
@@ -561,10 +563,11 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 		case !inst.IsAUnreachableInst().IsNil():
 			// Unreachable was reached (e.g. after a call to panic()).
 			// Report this as an error, as it is not supposed to happen.
-			return nil, nil, ErrUnreachable
+			// This is a sentinel error value.
+			return nil, nil, errUnreachable
 
 		default:
-			return nil, nil, &Unsupported{inst}
+			return nil, nil, fr.unsupportedInstructionError(inst)
 		}
 	}
 
