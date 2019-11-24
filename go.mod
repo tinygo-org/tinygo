@@ -9,5 +9,5 @@ require (
 	go.bug.st/serial.v1 v0.0.0-20180827123349-5f7892a7bb45
 	golang.org/x/sys v0.0.0-20191010194322-b09406accb47 // indirect
 	golang.org/x/tools v0.0.0-20190227180812-8dcc6e70cdef
-	tinygo.org/x/go-llvm v0.0.0-20191113125529-bad6d01809e8
+	tinygo.org/x/go-llvm v0.0.0-20191124211856-b2db3df3f257
 )
