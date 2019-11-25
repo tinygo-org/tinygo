@@ -146,6 +146,7 @@ tinygo-test:
 
 .PHONY: smoketest
 smoketest:
+	$(TINYGO) version
 	# test all examples
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky1
 	@$(MD5SUM) test.hex
