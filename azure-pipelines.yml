@@ -50,14 +50,16 @@ jobs:
       inputs:
         targetType: inline
         script: |
-          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          unset GOROOT
           make test
     - task: Bash@3
       displayName: Build TinyGo release tarball
       inputs:
         targetType: inline
         script: |
-          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          unset GOROOT
           make release -j4
     - publish: $(System.DefaultWorkingDirectory)/build/release.tar.gz
       displayName: Publish tarball as artifact
@@ -67,5 +69,6 @@ jobs:
       inputs:
         targetType: inline
         script: |
-          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          unset GOROOT
           make smoketest TINYGO=build/tinygo AVR=0 RISCV=0
