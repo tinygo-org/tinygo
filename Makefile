@@ -258,16 +258,16 @@ release: tinygo gen-device
 	@mkdir -p build/release/tinygo/pkg/armv7m-none-eabi
 	@mkdir -p build/release/tinygo/pkg/armv7em-none-eabi
 	@echo copying source files
-	@cp -p  build/tinygo$(EXE)                     build/release/tinygo/bin
+	@cp -p  build/tinygo$(EXE)           build/release/tinygo/bin
 	@cp -p $(abspath $(CLANG_SRC))/lib/Headers/*.h build/release/tinygo/lib/clang/include
-	@cp -rp lib/CMSIS/CMSIS/Include                build/release/tinygo/lib/CMSIS/CMSIS
-	@cp -rp lib/CMSIS/README.md                    build/release/tinygo/lib/CMSIS
-	@cp -rp llvm-project/compiler-rt/lib/builtins  build/release/tinygo/lib/compiler-rt/lib
-	@cp -rp llvm-project/compiler-rt/LICENSE.TXT   build/release/tinygo/lib/compiler-rt
-	@cp -rp llvm-project/compiler-rt/README.txt    build/release/tinygo/lib/compiler-rt
-	@cp -rp lib/nrfx/*                             build/release/tinygo/lib/nrfx
-	@cp -rp src                                    build/release/tinygo/src
-	@cp -rp targets                                build/release/tinygo/targets
+	@cp -rp lib/CMSIS/CMSIS/Include      build/release/tinygo/lib/CMSIS/CMSIS
+	@cp -rp lib/CMSIS/README.md          build/release/tinygo/lib/CMSIS
+	@cp -rp lib/compiler-rt/lib/builtins build/release/tinygo/lib/compiler-rt/lib
+	@cp -rp lib/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt
+	@cp -rp lib/compiler-rt/README.txt   build/release/tinygo/lib/compiler-rt
+	@cp -rp lib/nrfx/*                   build/release/tinygo/lib/nrfx
+	@cp -rp src                          build/release/tinygo/src
+	@cp -rp targets                      build/release/tinygo/targets
 	./build/tinygo build-builtins -target=armv6m-none-eabi  -o build/release/tinygo/pkg/armv6m-none-eabi/compiler-rt.a
 	./build/tinygo build-builtins -target=armv7m-none-eabi  -o build/release/tinygo/pkg/armv7m-none-eabi/compiler-rt.a
 	./build/tinygo build-builtins -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/compiler-rt.a
