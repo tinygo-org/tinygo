@@ -27,7 +27,6 @@ type Eval struct {
 type evalPackage struct {
 	*Eval
 	packagePath string
-	errors      []error
 }
 
 // Run evaluates the function with the given name and then eliminates all

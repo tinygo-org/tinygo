@@ -97,7 +97,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				value = operand.Load()
 			}
 			if value.Type() != inst.Type() {
-				panic("interp: load: type does not match")
+				return nil, nil, fr.errorAt(inst, "interp: load: type does not match")
 			}
 			fr.locals[inst] = fr.getValue(value)
 		case !inst.IsAStoreInst().IsNil():
@@ -121,15 +121,13 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					// Not a constant operation.
 					// This should be detected by the scanner, but isn't at the
 					// moment.
-					panic("todo: non-const gep")
+					return nil, nil, fr.errorAt(inst, "todo: non-const gep")
 				}
 				indices[i] = uint32(operand.Value().ZExtValue())
 			}
 			result := value.GetElementPtr(indices)
 			if result.Type() != inst.Type() {
-				println(" expected:", inst.Type().String())
-				println(" actual:  ", result.Type().String())
-				panic("interp: gep: type does not match")
+				return nil, nil, fr.errorAt(inst, "interp: gep: type does not match")
 			}
 			fr.locals[inst] = result
 
@@ -184,7 +182,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					}
 				}
 				// It is not possible in Go to bitcast a map value to a pointer.
-				panic("unimplemented: bitcast of map")
+				return nil, nil, fr.errorAt(inst, "unimplemented: bitcast of map")
 			}
 			value := fr.getLocal(operand).(*LocalValue)
 			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateBitCast(value.Value(), inst.Type(), "")}
@@ -397,16 +395,16 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				typecode := fr.getLocal(inst.Operand(0)).(*LocalValue).Underlying
 				interfaceMethodSet := fr.getLocal(inst.Operand(1)).(*LocalValue).Underlying
 				if typecode.IsAConstantExpr().IsNil() || typecode.Opcode() != llvm.PtrToInt {
-					panic("interp: expected typecode to be a ptrtoint")
+					return nil, nil, fr.errorAt(inst, "interp: expected typecode to be a ptrtoint")
 				}
 				typecode = typecode.Operand(0)
 				if interfaceMethodSet.IsAConstantExpr().IsNil() || interfaceMethodSet.Opcode() != llvm.GetElementPtr {
-					panic("interp: expected method set in runtime.interfaceImplements to be a constant gep")
+					return nil, nil, fr.errorAt(inst, "interp: expected method set in runtime.interfaceImplements to be a constant gep")
 				}
 				interfaceMethodSet = interfaceMethodSet.Operand(0).Initializer()
 				methodSet := llvm.ConstExtractValue(typecode.Initializer(), []uint32{1})
 				if methodSet.IsAConstantExpr().IsNil() || methodSet.Opcode() != llvm.GetElementPtr {
-					panic("interp: expected method set to be a constant gep")
+					return nil, nil, fr.errorAt(inst, "interp: expected method set to be a constant gep")
 				}
 				methodSet = methodSet.Operand(0).Initializer()
 
@@ -476,7 +474,10 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					params = append(params, local)
 				}
 				var ret Value
-				scanResult := fr.Eval.hasSideEffects(callee)
+				scanResult, err := fr.hasSideEffects(callee)
+				if err != nil {
+					return nil, nil, err
+				}
 				if scanResult.severity == sideEffectLimited || dirtyParams && scanResult.severity != sideEffectAll {
 					// Side effect is bounded. This means the operation invokes
 					// side effects (like calling an external function) but it
@@ -545,7 +546,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			// conditional branch (if/then/else)
 			cond := fr.getLocal(inst.Operand(0)).Value()
 			if cond.Type() != fr.Mod.Context().Int1Type() {
-				panic("expected an i1 in a branch instruction")
+				return nil, nil, fr.errorAt(inst, "expected an i1 in a branch instruction")
 			}
 			thenBB := inst.Operand(1)
 			elseBB := inst.Operand(2)
@@ -563,7 +564,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			case llvm.ConstInt(fr.Mod.Context().Int1Type(), 1, false): // true
 				return nil, []llvm.Value{elseBB}, nil // else
 			default:
-				panic("branch was not true or false")
+				return nil, nil, fr.errorAt(inst, "branch was not true or false")
 			}
 		case !inst.IsABranchInst().IsNil() && inst.OperandsCount() == 1:
 			// unconditional branch (goto)
@@ -589,6 +590,7 @@ func (fr *frame) getLocal(v llvm.Value) Value {
 	} else if value := fr.getValue(v); value != nil {
 		return value
 	} else {
+		// This should not happen under normal circumstances.
 		panic("cannot find value")
 	}
 }

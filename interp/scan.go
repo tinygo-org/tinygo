@@ -38,33 +38,33 @@ type sideEffectResult struct {
 // hasSideEffects scans this function and all descendants, recursively. It
 // returns whether this function has side effects and if it does, which globals
 // it mentions anywhere in this function or any called functions.
-func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
+func (e *evalPackage) hasSideEffects(fn llvm.Value) (*sideEffectResult, error) {
 	switch fn.Name() {
 	case "runtime.alloc":
 		// Cannot be scanned but can be interpreted.
-		return &sideEffectResult{severity: sideEffectNone}
+		return &sideEffectResult{severity: sideEffectNone}, nil
 	case "runtime.nanotime":
 		// Fixed value at compile time.
-		return &sideEffectResult{severity: sideEffectNone}
+		return &sideEffectResult{severity: sideEffectNone}, nil
 	case "runtime._panic":
-		return &sideEffectResult{severity: sideEffectLimited}
+		return &sideEffectResult{severity: sideEffectLimited}, nil
 	case "runtime.interfaceImplements":
-		return &sideEffectResult{severity: sideEffectNone}
+		return &sideEffectResult{severity: sideEffectNone}, nil
 	case "runtime.sliceCopy":
-		return &sideEffectResult{severity: sideEffectNone}
+		return &sideEffectResult{severity: sideEffectNone}, nil
 	case "runtime.trackPointer":
-		return &sideEffectResult{severity: sideEffectNone}
+		return &sideEffectResult{severity: sideEffectNone}, nil
 	case "llvm.dbg.value":
-		return &sideEffectResult{severity: sideEffectNone}
+		return &sideEffectResult{severity: sideEffectNone}, nil
 	}
 	if fn.IsDeclaration() {
-		return &sideEffectResult{severity: sideEffectLimited}
+		return &sideEffectResult{severity: sideEffectLimited}, nil
 	}
 	if e.sideEffectFuncs == nil {
 		e.sideEffectFuncs = make(map[llvm.Value]*sideEffectResult)
 	}
 	if se, ok := e.sideEffectFuncs[fn]; ok {
-		return se
+		return se, nil
 	}
 	result := &sideEffectResult{
 		severity:        sideEffectInProgress,
@@ -75,6 +75,7 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 	for bb := fn.EntryBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
 		for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
 			if inst.IsAInstruction().IsNil() {
+				// Should not happen in valid IR.
 				panic("not an instruction")
 			}
 
@@ -91,7 +92,7 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 			switch inst.InstructionOpcode() {
 			case llvm.IndirectBr, llvm.Invoke:
 				// Not emitted by the compiler.
-				panic("unknown instructions")
+				return nil, e.errorAt(inst, "unknown instructions")
 			case llvm.Call:
 				child := inst.CalledValue()
 				if !child.IsAInlineAsm().IsNil() {
@@ -117,7 +118,10 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 					}
 					continue
 				}
-				childSideEffects := e.hasSideEffects(child)
+				childSideEffects, err := e.hasSideEffects(child)
+				if err != nil {
+					return nil, err
+				}
 				switch childSideEffects.severity {
 				case sideEffectInProgress, sideEffectNone:
 					// no side effects or recursive function - continue scanning
@@ -159,7 +163,7 @@ func (e *Eval) hasSideEffects(fn llvm.Value) *sideEffectResult {
 		// No side effect was reported for this function.
 		result.severity = sideEffectNone
 	}
-	return result
+	return result, nil
 }
 
 // hasLocalSideEffects checks whether the given instruction flows into a branch
@@ -174,6 +178,7 @@ func (e *Eval) hasLocalSideEffects(dirtyLocals map[llvm.Value]struct{}, inst llv
 	for use := inst.FirstUse(); !use.IsNil(); use = use.NextUse() {
 		user := use.User()
 		if user.IsAInstruction().IsNil() {
+			// Should not happen in valid IR.
 			panic("user not an instruction")
 		}
 		switch user.InstructionOpcode() {

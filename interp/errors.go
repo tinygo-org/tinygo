@@ -78,6 +78,9 @@ func errorAt(inst llvm.Value, msg string) scanner.Error {
 // getPosition returns the position information for the given instruction, as
 // far as it is available.
 func getPosition(inst llvm.Value) token.Position {
+	if inst.IsAInstruction().IsNil() {
+		return token.Position{}
+	}
 	loc := inst.InstructionDebugLoc()
 	if loc.IsNil() {
 		return token.Position{}
