@@ -56,7 +56,9 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		transform.OptimizeStringToBytes(c.mod)
 		transform.OptimizeAllocs(c.mod)
 		transform.LowerInterfaces(c.mod)
-		c.LowerFuncValues()
+		if c.funcImplementation() == funcValueSwitch {
+			transform.LowerFuncValues(c.mod)
+		}
 
 		// After interfaces are lowered, there are many more opportunities for
 		// interprocedural optimizations. To get them to work, function
@@ -90,7 +92,9 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 	} else {
 		// Must be run at any optimization level.
 		transform.LowerInterfaces(c.mod)
-		c.LowerFuncValues()
+		if c.funcImplementation() == funcValueSwitch {
+			transform.LowerFuncValues(c.mod)
+		}
 		err := c.LowerGoroutines()
 		if err != nil {
 			return err

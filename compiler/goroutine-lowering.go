@@ -805,7 +805,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 				llvm.ConstNull(c.ctx.TokenType()),
 				llvm.ConstInt(c.ctx.Int1Type(), 0, false),
 			}, "")
-			wakeup := c.splitBasicBlock(inst, llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.wakeup")
+			wakeup := llvmutil.SplitBasicBlock(c.builder, inst, llvm.NextBasicBlock(c.builder.GetInsertBlock()), "task.wakeup")
 			c.builder.SetInsertPointBefore(inst)
 			sw := c.builder.CreateSwitch(continuePoint, frame.suspendBlock, 2)
 			sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), wakeup)
