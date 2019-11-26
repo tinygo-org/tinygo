@@ -1,3 +1,66 @@
+0.10.0
+---
+* **command line**
+  - halt GDB after flashing with `gdb` subcommand
+  - fix a crash when using `-ocd-output`
+  - add `info` subcommand
+  - add `-programmer` flag
+* **builder**
+  - macos: use llvm@8 instead of just llvm in paths
+  - add `linkerscript` key to target JSON files
+  - write a symbol table when writing out the compiler-rt lib
+  - make Clang header detection more robust
+  - switch to LLVM 9
+* **compiler**
+  - fix interface miscompilation with reflect
+  - fix miscompile of static goroutine calls to closures
+  - fix `todo: store` panic
+  - fix incorrect starting value for optimized allocations in a loop
+  - optimize coroutines on non-Cortex-M targets
+  - fix crash for programs which have heap allocations but never hit the GC
+  - add support for async interface calls
+  - fix inserting non-const values in a const global
+  - interp: improve error reporting
+  - interp: implement comparing ptrtoint to 0
+* **cgo**
+  - improve diagnostics
+  - implement the constant parser (for `#define`) as a real parser
+  - rename reserved field names such as `type`
+  - avoid `"unsafe" imported but not used` error
+  - include all enums in the CGo Go AST
+  - add support for nested structs and unions
+  - implement `#cgo CFLAGS`
+* **standard library**
+  - `reflect`: add implementation of array alignment
+  - `runtime`: improve scheduler performance when no goroutines are queued
+  - `runtime`: add blocking select
+  - `runtime`: implement interface equality in non-trivial cases
+  - `runtime`: add AdjustTimeOffset to update current time
+  - `runtime`: only implement CountString for required platforms
+  - `runtime`: use MSP/PSP registers for scheduling on Cortex-M
+* **targets**
+  - `arm`: add system timer registers
+  - `atmega`: add port C GPIO support
+  - `atsamd21`: correct handling of pins >= 32
+  - `atsamd21`: i2s initialization fixes
+  - `atsamd51`: fix clock init code
+  - `atsamd51`: correct initialization for RTC
+  - `atsamd51`: fix pin function selection
+  - `atsamd51`: pin method cleanup
+  - `atsamd51`: allow setting pin mode for each of the SPI pins
+  - `atsamd51`: correct channel init and pin map for ADC based on ItsyBitsy-M4
+  - `feather-m4`: add Adafruit Feather M4 board
+  - `hifive1b`: add support for SPI1
+  - `hifive1b`: fix compiling in simulation
+  - `linux`: fix time on arm32
+  - `metro-m4`: add support for Adafruit Metro M4 Express Airlift board
+  - `metro-m4`: fixes for UART2
+  - `pinetime-devkit0`: add support for the PineTime dev kit
+  - `x9pro`: add support for this smartwatch
+  - `pca10040-s132v6`: add support for SoftDevice
+  - `pca10056-s140v7`: add support for SoftDevice
+  - `arduino-nano33`: added SPI1 connected to NINA-W102 chip on Arduino Nano 33 IOT
+
 0.9.0
 ---
 * **command line**
