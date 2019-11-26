@@ -59,7 +59,11 @@ func TestScan(t *testing.T) {
 			t.Errorf("scan test: could not find tested function %s in the IR", tc.name)
 			continue
 		}
-		result := e.hasSideEffects(fn)
+		evalPkg := &evalPackage{e, "testdata"}
+		result, err := evalPkg.hasSideEffects(fn)
+		if err != nil {
+			t.Errorf("scan test: failed to scan %s for side effects: %v", fn.Name(), err)
+		}
 
 		// Check whether the result is what we expect.
 		if result.severity != tc.severity {
