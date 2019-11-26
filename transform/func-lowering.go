@@ -1,4 +1,4 @@
-package compiler
+package transform
 
 // This file lowers func values into their final form. This is necessary for
 // funcValueSwitch, which needs full program analysis.
@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -43,17 +44,17 @@ func (l funcWithUsesList) Swap(i, j int) {
 	l[i], l[j] = l[j], l[i]
 }
 
-// LowerFuncValue lowers the runtime.funcValueWithSignature type and
+// LowerFuncValues lowers the runtime.funcValueWithSignature type and
 // runtime.getFuncPtr function to their final form.
-func (c *Compiler) LowerFuncValues() {
-	if c.funcImplementation() != funcValueSwitch {
-		return
-	}
+func LowerFuncValues(mod llvm.Module) {
+	ctx := mod.Context()
+	builder := ctx.NewBuilder()
+	uintptrType := ctx.IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8)
 
 	// Find all func values used in the program with their signatures.
-	funcValueWithSignaturePtr := llvm.PointerType(c.getLLVMRuntimeType("funcValueWithSignature"), 0)
+	funcValueWithSignaturePtr := llvm.PointerType(mod.GetTypeByName("runtime.funcValueWithSignature"), 0)
 	signatures := map[string]*funcSignatureInfo{}
-	for global := c.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+	for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
 		if global.Type() != funcValueWithSignaturePtr {
 			continue
 		}
@@ -107,7 +108,7 @@ func (c *Compiler) LowerFuncValues() {
 							if ptrtoint.IsAConstantExpr().IsNil() || ptrtoint.Opcode() != llvm.PtrToInt {
 								panic("expected const ptrtoint")
 							}
-							use.ReplaceAllUsesWith(llvm.ConstInt(c.uintptrType, uint64(fn.id), false))
+							use.ReplaceAllUsesWith(llvm.ConstInt(uintptrType, uint64(fn.id), false))
 						}
 					}
 				}
@@ -139,11 +140,11 @@ func (c *Compiler) LowerFuncValues() {
 				// There is exactly one function with this signature that is
 				// used in a func value. The func value itself can be either nil
 				// or this one function.
-				c.builder.SetInsertPointBefore(getFuncPtrCall)
-				zero := llvm.ConstInt(c.uintptrType, 0, false)
-				isnil := c.builder.CreateICmp(llvm.IntEQ, funcID, zero, "")
+				builder.SetInsertPointBefore(getFuncPtrCall)
+				zero := llvm.ConstInt(uintptrType, 0, false)
+				isnil := builder.CreateICmp(llvm.IntEQ, funcID, zero, "")
 				funcPtrNil := llvm.ConstPointerNull(functions[0].funcPtr.Type())
-				funcPtr := c.builder.CreateSelect(isnil, funcPtrNil, functions[0].funcPtr, "")
+				funcPtr := builder.CreateSelect(isnil, funcPtrNil, functions[0].funcPtr, "")
 				for _, inttoptr := range getUses(getFuncPtrCall) {
 					if inttoptr.IsAIntToPtrInst().IsNil() {
 						panic("expected inttoptr")
@@ -181,15 +182,23 @@ func (c *Compiler) LowerFuncValues() {
 				// to replace.
 				for _, callIntPtr := range getUses(getFuncPtrCall) {
 					if !callIntPtr.IsACallInst().IsNil() && callIntPtr.CalledValue().Name() == "runtime.makeGoroutine" {
+						// Special case for runtime.makeGoroutine.
 						for _, inttoptr := range getUses(callIntPtr) {
 							if inttoptr.IsAIntToPtrInst().IsNil() {
 								panic("expected a inttoptr")
 							}
 							for _, use := range getUses(inttoptr) {
-								c.addFuncLoweringSwitch(funcID, use, func(funcPtr llvm.Value, params []llvm.Value) llvm.Value {
+								addFuncLoweringSwitch(mod, builder, funcID, use, func(funcPtr llvm.Value, params []llvm.Value) llvm.Value {
 									// The function lowering switch code passes in a parent handle value.
-									// Strip the parent handle off here because it is irrelevant to goroutine starts.
-									return c.emitStartGoroutine(funcPtr, params[:len(params)-1])
+									// Set the parent handle to null here because it is irrelevant to goroutine starts.
+									i8ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+									params[len(params)-1] = llvm.ConstPointerNull(i8ptrType)
+									calleeValue := builder.CreatePtrToInt(funcPtr, uintptrType, "")
+									makeGoroutine := mod.NamedFunction("runtime.makeGoroutine")
+									calleeValue = builder.CreateCall(makeGoroutine, []llvm.Value{calleeValue, llvm.Undef(i8ptrType), llvm.ConstNull(i8ptrType)}, "")
+									calleeValue = builder.CreateIntToPtr(calleeValue, funcPtr.Type(), "")
+									builder.CreateCall(calleeValue, params, "")
+									return llvm.Value{} // void so no return value
 								}, functions)
 								use.EraseFromParentAsInstruction()
 							}
@@ -209,15 +218,15 @@ func (c *Compiler) LowerFuncValues() {
 								}
 								switch bitcastUse.CalledValue().Name() {
 								case "runtime.isnil":
-									bitcastUse.ReplaceAllUsesWith(llvm.ConstInt(c.ctx.Int1Type(), 0, false))
+									bitcastUse.ReplaceAllUsesWith(llvm.ConstInt(ctx.Int1Type(), 0, false))
 									bitcastUse.EraseFromParentAsInstruction()
 								default:
 									panic("expected a call to runtime.isnil")
 								}
 							}
 						} else if !ptrUse.IsACallInst().IsNil() && ptrUse.CalledValue() == callIntPtr {
-							c.addFuncLoweringSwitch(funcID, ptrUse, func(funcPtr llvm.Value, params []llvm.Value) llvm.Value {
-								return c.builder.CreateCall(funcPtr, params, "")
+							addFuncLoweringSwitch(mod, builder, funcID, ptrUse, func(funcPtr llvm.Value, params []llvm.Value) llvm.Value {
+								return builder.CreateCall(funcPtr, params, "")
 							}, functions)
 						} else {
 							panic("unexpected getFuncPtrCall")
@@ -236,30 +245,35 @@ func (c *Compiler) LowerFuncValues() {
 // to the newly created direct calls. The funcID is the number to switch on,
 // call is the call instruction to replace, and createCall is the callback that
 // actually creates the new call. By changing createCall to something other than
-// c.builder.CreateCall, instead of calling a function it can start a new
+// builder.CreateCall, instead of calling a function it can start a new
 // goroutine for example.
-func (c *Compiler) addFuncLoweringSwitch(funcID, call llvm.Value, createCall func(funcPtr llvm.Value, params []llvm.Value) llvm.Value, functions funcWithUsesList) {
+func addFuncLoweringSwitch(mod llvm.Module, builder llvm.Builder, funcID, call llvm.Value, createCall func(funcPtr llvm.Value, params []llvm.Value) llvm.Value, functions funcWithUsesList) {
+	ctx := mod.Context()
+	uintptrType := ctx.IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8)
+	i8ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+
 	// The block that cannot be reached with correct funcValues (to help the
 	// optimizer).
-	c.builder.SetInsertPointBefore(call)
-	defaultBlock := c.ctx.AddBasicBlock(call.InstructionParent().Parent(), "func.default")
-	c.builder.SetInsertPointAtEnd(defaultBlock)
-	c.builder.CreateUnreachable()
+	builder.SetInsertPointBefore(call)
+	defaultBlock := ctx.AddBasicBlock(call.InstructionParent().Parent(), "func.default")
+	builder.SetInsertPointAtEnd(defaultBlock)
+	builder.CreateUnreachable()
 
 	// Create the switch.
-	c.builder.SetInsertPointBefore(call)
-	sw := c.builder.CreateSwitch(funcID, defaultBlock, len(functions)+1)
+	builder.SetInsertPointBefore(call)
+	sw := builder.CreateSwitch(funcID, defaultBlock, len(functions)+1)
 
 	// Split right after the switch. We will need to insert a few basic blocks
 	// in this gap.
-	nextBlock := c.splitBasicBlock(sw, llvm.NextBasicBlock(sw.InstructionParent()), "func.next")
+	nextBlock := llvmutil.SplitBasicBlock(builder, sw, llvm.NextBasicBlock(sw.InstructionParent()), "func.next")
 
 	// The 0 case, which is actually a nil check.
-	nilBlock := c.ctx.InsertBasicBlock(nextBlock, "func.nil")
-	c.builder.SetInsertPointAtEnd(nilBlock)
-	c.createRuntimeCall("nilPanic", nil, "")
-	c.builder.CreateUnreachable()
-	sw.AddCase(llvm.ConstInt(c.uintptrType, 0, false), nilBlock)
+	nilBlock := ctx.InsertBasicBlock(nextBlock, "func.nil")
+	builder.SetInsertPointAtEnd(nilBlock)
+	nilPanic := mod.NamedFunction("runtime.nilPanic")
+	builder.CreateCall(nilPanic, []llvm.Value{llvm.Undef(i8ptrType), llvm.ConstNull(i8ptrType)}, "")
+	builder.CreateUnreachable()
+	sw.AddCase(llvm.ConstInt(uintptrType, 0, false), nilBlock)
 
 	// Gather the list of parameters for every call we're going to make.
 	callParams := make([]llvm.Value, call.OperandsCount()-1)
@@ -273,11 +287,11 @@ func (c *Compiler) addFuncLoweringSwitch(funcID, call llvm.Value, createCall fun
 	phiValues := make([]llvm.Value, len(functions))
 	for i, fn := range functions {
 		// Insert a switch case.
-		bb := c.ctx.InsertBasicBlock(nextBlock, "func.call"+strconv.Itoa(fn.id))
-		c.builder.SetInsertPointAtEnd(bb)
+		bb := ctx.InsertBasicBlock(nextBlock, "func.call"+strconv.Itoa(fn.id))
+		builder.SetInsertPointAtEnd(bb)
 		result := createCall(fn.funcPtr, callParams)
-		c.builder.CreateBr(nextBlock)
-		sw.AddCase(llvm.ConstInt(c.uintptrType, uint64(fn.id), false), bb)
+		builder.CreateBr(nextBlock)
+		sw.AddCase(llvm.ConstInt(uintptrType, uint64(fn.id), false), bb)
 		phiBlocks[i] = bb
 		phiValues[i] = result
 	}
@@ -285,8 +299,8 @@ func (c *Compiler) addFuncLoweringSwitch(funcID, call llvm.Value, createCall fun
 	// next block (after the split). This is only necessary when the
 	// call produced a value.
 	if call.Type().TypeKind() != llvm.VoidTypeKind {
-		c.builder.SetInsertPointBefore(nextBlock.FirstInstruction())
-		phi := c.builder.CreatePHI(call.Type(), "")
+		builder.SetInsertPointBefore(nextBlock.FirstInstruction())
+		phi := builder.CreatePHI(call.Type(), "")
 		phi.AddIncoming(phiValues, phiBlocks)
 		call.ReplaceAllUsesWith(phi)
 	}
