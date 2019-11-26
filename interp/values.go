@@ -294,7 +294,10 @@ func (v *MapValue) Type() llvm.Type {
 }
 
 func (v *MapValue) IsConstant() bool {
-	return true // TODO: dirty maps
+	if v.Underlying.IsNil() {
+		return true
+	}
+	return v.Underlying.IsConstant()
 }
 
 // Load panics: maps are of reference type so cannot be dereferenced.
@@ -348,8 +351,10 @@ func (v *MapValue) PutString(keyBuf, keyLen, valPtr *LocalValue) {
 
 // PutBinary does a map assign operation.
 func (v *MapValue) PutBinary(keyPtr, valPtr *LocalValue) {
-	if !v.Underlying.IsNil() {
-		panic("map already created")
+	if !v.Underlying.IsNil() || !keyPtr.IsConstant() || !valPtr.IsConstant() {
+		// Something is not constant. Do the map assign at runtime.
+		v.putBinaryCall(keyPtr, valPtr)
+		return
 	}
 
 	if valPtr.Underlying.Opcode() == llvm.BitCast {
@@ -384,9 +389,25 @@ func (v *MapValue) PutBinary(keyPtr, valPtr *LocalValue) {
 		}
 	}
 
+	if !value.IsConstant() || !key.IsConstant() {
+		panic("interp: expected the key and value to be constant")
+	}
+
 	// TODO: avoid duplicate keys
 	v.Keys = append(v.Keys, &LocalValue{v.Eval, key})
 	v.Values = append(v.Values, &LocalValue{v.Eval, value})
+}
+
+// putBinaryCall is the fallback for PutBinary, when the map assign operation
+// couldn't be done at compile time.
+func (v *MapValue) putBinaryCall(keyPtr, valPtr *LocalValue) {
+	// The map operation couldn't be done at compile time. Do it at runtime
+	// (while initializing).
+	fn := v.Eval.Mod.NamedFunction("runtime.hashmapBinarySet")
+	ctx := v.Eval.Mod.Context()
+	i8ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+	v.Eval.builder.CreateCall(fn, []llvm.Value{v.Value(), keyPtr.Value(), valPtr.Value(), llvm.Undef(i8ptrType), llvm.ConstNull(i8ptrType)}, "")
+	v.Eval.markDirty(v.Underlying)
 }
 
 // Get FNV-1a hash of this string.
