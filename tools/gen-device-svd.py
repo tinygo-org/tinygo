@@ -413,7 +413,6 @@ const (
             continue
         out.write('\n// {description}\ntype {groupName}_Type struct {{\n'.format(**peripheral))
         address = peripheral['baseAddress']
-        padNumber = 0
         for register in peripheral['registers']:
             if address > register['address'] and 'registers' not in register :
                 # In Nordic SVD files, these registers are deprecated or
@@ -435,18 +434,17 @@ const (
             if address < register['address']:
                 bytesNeeded = register['address'] - address
                 if bytesNeeded == 1:
-                    out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType='volatile.Register8'))
+                    out.write('\t_ {regType}\n'.format(regType='volatile.Register8'))
                 elif bytesNeeded == 2:
-                    out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType='volatile.Register16'))
+                    out.write('\t_ {regType}\n'.format(regType='volatile.Register16'))
                 elif bytesNeeded == 3:
-                    out.write('\t_padding{padNumber} [3]{regType}\n'.format(padNumber=padNumber, regType='volatile.Register8'))
+                    out.write('\t_ [3]{regType}\n'.format(regType='volatile.Register8'))
                 else:
                     numSkip = (register['address'] - address) // eSize
                     if numSkip == 1:
-                        out.write('\t_padding{padNumber} {regType}\n'.format(padNumber=padNumber, regType=regType))
+                        out.write('\t_ {regType}\n'.format(regType=regType))
                     else:
-                        out.write('\t_padding{padNumber} [{num}]{regType}\n'.format(padNumber=padNumber, num=numSkip, regType=regType))
-                padNumber += 1
+                        out.write('\t_ [{num}]{regType}\n'.format(num=numSkip, regType=regType))
                 address = register['address']
 
             lastCluster = False
@@ -467,18 +465,17 @@ const (
                     if subaddress != subregister['address']:
                         bytesNeeded = subregister['address'] - subaddress
                         if bytesNeeded == 1:
-                            regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='volatile.Register8')
+                            regType += '\t\t_ {subregType}\n'.format(subregType='volatile.Register8')
                         elif bytesNeeded == 2:
-                            regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='volatile.Register16')
+                            regType += '\t\t_ {subregType}\n'.format(subregType='volatile.Register16')
                         else:
                             numSkip = (subregister['address'] - subaddress)
                             if numSkip < 1:
                                 continue
                             elif numSkip == 1:
-                                regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType='volatile.Register8')
+                                regType += '\t\t_ {subregType}\n'.format(subregType='volatile.Register8')
                             else:
-                                regType += '\t\t_padding{padNumber} [{num}]{subregType}\n'.format(padNumber=padNumber, num=numSkip, subregType='volatile.Register8')
-                        padNumber += 1
+                                regType += '\t\t_ [{num}]{subregType}\n'.format(num=numSkip, subregType='volatile.Register8')
                         subaddress += bytesNeeded
                     if subregister['array'] is not None:
                         subregSize = subregister['array'] * subregister['elementsize']
@@ -490,9 +487,9 @@ const (
                     if subaddress != register['address'] + register['elementsize']:
                         numSkip = ((register['address'] + register['elementsize']) - subaddress) // subregSize
                         if numSkip <= 1:
-                            regType += '\t\t_padding{padNumber} {subregType}\n'.format(padNumber=padNumber, subregType=subregType)
+                            regType += '\t\t_ {subregType}\n'.format(subregType=subregType)
                         else:
-                            regType += '\t\t_padding{padNumber} [{num}]{subregType}\n'.format(padNumber=padNumber, num=numSkip, subregType=subregType)
+                            regType += '\t\t_ [{num}]{subregType}\n'.format(num=numSkip, subregType=subregType)
                 else:
                     lastCluster = True
                 regType += '\t}'
