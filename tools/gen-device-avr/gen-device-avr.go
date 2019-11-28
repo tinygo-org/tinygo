@@ -1,0 +1,464 @@
+package main
+
+import (
+	"bufio"
+	"encoding/xml"
+	"fmt"
+	"html/template"
+	"math/bits"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+)
+
+type AVRToolsDeviceFile struct {
+	XMLName xml.Name `xml:"avr-tools-device-file"`
+	Devices []struct {
+		Name          string `xml:"name,attr"`
+		Architecture  string `xml:"architecture,attr"`
+		Family        string `xml:"family,attr"`
+		AddressSpaces []struct {
+			Name           string `xml:"name,attr"`
+			Size           string `xml:"size,attr"`
+			MemorySegments []struct {
+				Name string `xml:"name,attr"`
+				Size string `xml:"size,attr"`
+			} `xml:"memory-segment"`
+		} `xml:"address-spaces>address-space"`
+		Interrupts []Interrupt `xml:"interrupts>interrupt"`
+	} `xml:"devices>device"`
+	Modules []struct {
+		Name          string `xml:"name,attr"`
+		Caption       string `xml:"caption,attr"`
+		RegisterGroup struct {
+			Name      string `xml:"name,attr"`
+			Caption   string `xml:"caption,attr"`
+			Registers []struct {
+				Name      string `xml:"name,attr"`
+				Caption   string `xml:"caption,attr"`
+				Offset    string `xml:"offset,attr"`
+				Size      int    `xml:"size,attr"`
+				Bitfields []struct {
+					Name    string `xml:"name,attr"`
+					Caption string `xml:"caption,attr"`
+					Mask    string `xml:"mask,attr"`
+				} `xml:"bitfield"`
+			} `xml:"register"`
+		} `xml:"register-group"`
+	} `xml:"modules>module"`
+}
+
+type Device struct {
+	metadata    map[string]interface{}
+	interrupts  []Interrupt
+	peripherals []*Peripheral
+}
+
+type AddressSpace struct {
+	Size     string
+	Segments map[string]int
+}
+
+type Interrupt struct {
+	Index   int    `xml:"index,attr"`
+	Name    string `xml:"name,attr"`
+	Caption string `xml:"caption,attr"`
+}
+
+type Peripheral struct {
+	Name      string
+	Caption   string
+	Registers []*Register
+}
+
+type Register struct {
+	Caption    string
+	Variants   []RegisterVariant
+	Bitfields  []Bitfield
+	peripheral *Peripheral
+}
+
+type RegisterVariant struct {
+	Name    string
+	Address int64
+}
+
+type Bitfield struct {
+	Name    string
+	Caption string
+	Mask    uint
+}
+
+func readATDF(path string) (*Device, error) {
+	// Read Atmel device descriptor files.
+	// See: http://packs.download.atmel.com
+
+	// Open the XML file.
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	decoder := xml.NewDecoder(f)
+	xml := &AVRToolsDeviceFile{}
+	err = decoder.Decode(xml)
+	if err != nil {
+		return nil, err
+	}
+
+	device := xml.Devices[0]
+
+	memorySizes := make(map[string]*AddressSpace, len(device.AddressSpaces))
+	for _, el := range device.AddressSpaces {
+		memorySizes[el.Name] = &AddressSpace{
+			Size:     el.Size,
+			Segments: make(map[string]int),
+		}
+		for _, segmentEl := range el.MemorySegments {
+			size, err := strconv.ParseInt(segmentEl.Size, 0, 32)
+			if err != nil {
+				return nil, err
+			}
+			memorySizes[el.Name].Segments[segmentEl.Name] = int(size)
+		}
+	}
+
+	allRegisters := map[string]*Register{}
+
+	var peripherals []*Peripheral
+	for _, el := range xml.Modules {
+		peripheral := &Peripheral{
+			Name:    el.Name,
+			Caption: el.Caption,
+		}
+		peripherals = append(peripherals, peripheral)
+
+		regElGroup := el.RegisterGroup
+		for _, regEl := range regElGroup.Registers {
+			regOffset, err := strconv.ParseInt(regEl.Offset, 0, 64)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse offset %#v of register %s: %v", regEl.Offset, regEl.Name, err)
+			}
+			reg := &Register{
+				Caption:    regEl.Caption,
+				peripheral: peripheral,
+			}
+			switch regEl.Size {
+			case 1:
+				reg.Variants = []RegisterVariant{
+					{
+						Name:    regEl.Name,
+						Address: regOffset,
+					},
+				}
+			case 2:
+				reg.Variants = []RegisterVariant{
+					{
+						Name:    regEl.Name + "L",
+						Address: regOffset,
+					},
+					{
+						Name:    regEl.Name + "H",
+						Address: regOffset + 1,
+					},
+				}
+			default:
+				// TODO
+				continue
+			}
+
+			for _, bitfieldEl := range regEl.Bitfields {
+				mask := bitfieldEl.Mask
+				if len(mask) == 2 {
+					// Two devices (ATtiny102 and ATtiny104) appear to have an
+					// error in the bitfields, leaving out the '0x' prefix.
+					mask = "0x" + mask
+				}
+				maskInt, err := strconv.ParseUint(mask, 0, 32)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse mask %#v of bitfield %s: %v", mask, bitfieldEl.Name, err)
+				}
+				reg.Bitfields = append(reg.Bitfields, Bitfield{
+					Name:    regEl.Name + "_" + bitfieldEl.Name,
+					Caption: bitfieldEl.Caption,
+					Mask:    uint(maskInt),
+				})
+			}
+
+			if _, ok := allRegisters[regEl.Name]; ok {
+				firstReg := allRegisters[regEl.Name]
+				for i := 0; i < len(firstReg.peripheral.Registers); i++ {
+					if firstReg.peripheral.Registers[i] == firstReg {
+						firstReg.peripheral.Registers = append(firstReg.peripheral.Registers[:i], firstReg.peripheral.Registers[i+1:]...)
+						break
+					}
+				}
+				continue
+			} else {
+				allRegisters[regEl.Name] = reg
+			}
+
+			peripheral.Registers = append(peripheral.Registers, reg)
+		}
+	}
+
+	ramSize := 0 // for devices with no RAM
+	for _, ramSegmentName := range []string{"IRAM", "INTERNAL_SRAM", "SRAM"} {
+		if segment, ok := memorySizes["data"].Segments[ramSegmentName]; ok {
+			ramSize = segment
+		}
+	}
+
+	flashSize, err := strconv.ParseInt(memorySizes["prog"].Size, 0, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Device{
+		metadata: map[string]interface{}{
+			"file":             filepath.Base(path),
+			"descriptorSource": "http://packs.download.atmel.com/",
+			"name":             device.Name,
+			"nameLower":        strings.ToLower(device.Name),
+			"description":      fmt.Sprintf("Device information for the %s.", device.Name),
+			"arch":             device.Architecture,
+			"family":           device.Family,
+			"flashSize":        int(flashSize),
+			"ramSize":          ramSize,
+			"numInterrupts":    len(device.Interrupts),
+		},
+		interrupts:  device.Interrupts,
+		peripherals: peripherals,
+	}, nil
+}
+
+func writeGo(outdir string, device *Device) error {
+	// The Go module for this device.
+	outf, err := os.Create(outdir + "/" + device.metadata["nameLower"].(string) + ".go")
+	if err != nil {
+		return err
+	}
+	defer outf.Close()
+	w := bufio.NewWriter(outf)
+
+	maxInterruptNum := 0
+	for _, intr := range device.interrupts {
+		if intr.Index > maxInterruptNum {
+			maxInterruptNum = intr.Index
+		}
+	}
+
+	t := template.Must(template.New("go").Parse(`// Automatically generated file. DO NOT EDIT.
+// Generated by gen-device-avr.go from {{.metadata.file}}, see {{.metadata.descriptorSource}}
+
+// +build {{.pkgName}},{{.metadata.nameLower}}
+
+// {{.metadata.description}}
+package {{.pkgName}}
+
+import (
+	"runtime/volatile"
+	"unsafe"
+)
+
+// Some information about this device.
+const (
+	DEVICE = "{{.metadata.name}}"
+	ARCH   = "{{.metadata.arch}}"
+	FAMILY = "{{.metadata.family}}"
+)
+
+// Interrupts
+const ({{range .interrupts}}
+	IRQ_{{.Name}} = {{.Index}} // {{.Caption}}{{end}}
+	IRQ_max = {{.interruptMax}} // Highest interrupt number on this device.
+)
+
+// Peripherals.
+var ({{range .peripherals}}
+	// {{.Caption}}
+{{range .Registers}}{{range .Variants}}	{{.Name}} = (*volatile.Register8)(unsafe.Pointer(uintptr(0x{{printf "%x" .Address}})))
+{{end}}{{end}}{{end}})
+`))
+	err = t.Execute(w, map[string]interface{}{
+		"metadata":     device.metadata,
+		"pkgName":      filepath.Base(strings.TrimRight(outdir, "/")),
+		"interrupts":   device.interrupts,
+		"interruptMax": maxInterruptNum,
+		"peripherals":  device.peripherals,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Write bitfields.
+	for _, peripheral := range device.peripherals {
+		// Only write bitfields when there are any.
+		numFields := 0
+		for _, r := range peripheral.Registers {
+			numFields += len(r.Bitfields)
+		}
+		if numFields == 0 {
+			continue
+		}
+
+		fmt.Fprintf(w, "\n// Bitfields for %s: %s\nconst(", peripheral.Name, peripheral.Caption)
+		for _, register := range peripheral.Registers {
+			if len(register.Bitfields) == 0 {
+				continue
+			}
+			for _, variant := range register.Variants {
+				fmt.Fprintf(w, "\n\t// %s", variant.Name)
+				if register.Caption != "" {
+					fmt.Fprintf(w, ": %s", register.Caption)
+				}
+				fmt.Fprintf(w, "\n")
+			}
+			for _, bitfield := range register.Bitfields {
+				if bits.OnesCount(bitfield.Mask) == 1 {
+					fmt.Fprintf(w, "\t%s = 0x%x", bitfield.Name, bitfield.Mask)
+					if len(bitfield.Caption) != 0 {
+						fmt.Fprintf(w, " // %s", bitfield.Caption)
+					}
+					fmt.Fprintf(w, "\n")
+				} else {
+					n := 0
+					for i := uint(0); i < 8; i++ {
+						if (bitfield.Mask>>i)&1 == 0 {
+							continue
+						}
+						fmt.Fprintf(w, "\t%s%d = 0x%x", bitfield.Name, n, 1<<i)
+						if len(bitfield.Caption) != 0 {
+							fmt.Fprintf(w, " // %s", bitfield.Caption)
+						}
+						n++
+						fmt.Fprintf(w, "\n")
+					}
+				}
+			}
+		}
+		fmt.Fprintf(w, ")\n")
+	}
+	return w.Flush()
+}
+
+func writeAsm(outdir string, device *Device) error {
+	// The interrupt vector, which is hard to write directly in Go.
+	out, err := os.Create(outdir + "/" + device.metadata["nameLower"].(string) + ".s")
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	t := template.Must(template.New("asm").Parse(
+		`; Automatically generated file. DO NOT EDIT.
+; Generated by gen-device-avr.go from {{.file}}, see {{.descriptorSource}}
+
+; This is the default handler for interrupts, if triggered but not defined.
+; Sleep inside so that an accidentally triggered interrupt won't drain the
+; battery of a battery-powered device.
+.section .text.__vector_default
+.global  __vector_default
+__vector_default:
+    sleep
+    rjmp __vector_default
+
+; Avoid the need for repeated .weak and .set instructions.
+.macro IRQ handler
+    .weak  \handler
+    .set   \handler, __vector_default
+.endm
+
+; The interrupt vector of this device. Must be placed at address 0 by the linker.
+.section .vectors
+.global  __vectors
+`))
+	err = t.Execute(out, device.metadata)
+	if err != nil {
+		return err
+	}
+	num := 0
+	for _, intr := range device.interrupts {
+		jmp := "jmp"
+		if device.metadata["flashSize"].(int) <= 8*1024 {
+			// When a device has 8kB or less flash, rjmp (2 bytes) must be used
+			// instead of jmp (4 bytes).
+			// https://www.avrfreaks.net/forum/rjmp-versus-jmp
+			jmp = "rjmp"
+		}
+		if intr.Index < num {
+			// Some devices have duplicate interrupts, probably for historical
+			// reasons.
+			continue
+		}
+		for intr.Index > num {
+			fmt.Fprintf(out, "    %s __vector_default\n", jmp)
+			num++
+		}
+		num++
+		fmt.Fprintf(out, "    %s __vector_%s\n", jmp, intr.Name)
+	}
+
+	fmt.Fprint(out, `
+    ; Define default implementations for interrupts, redirecting to
+    ; __vector_default when not implemented.
+`)
+	for _, intr := range device.interrupts {
+		fmt.Fprintf(out, "    IRQ __vector_%s\n", intr.Name)
+	}
+	return nil
+}
+
+func writeLD(outdir string, device *Device) error {
+	// Variables for the linker script.
+	out, err := os.Create(outdir + "/" + device.metadata["nameLower"].(string) + ".ld")
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	t := template.Must(template.New("ld").Parse(`/* Automatically generated file. DO NOT EDIT. */
+/* Generated by gen-device-avr.go from {{.file}}, see {{.descriptorSource}} */
+
+__flash_size = 0x{{printf "%x" .flashSize}};
+__ram_size   = 0x{{printf "%x" .ramSize}};
+__num_isrs   = {{.numInterrupts}};
+`))
+	return t.Execute(out, device.metadata)
+}
+
+func generate(indir, outdir string) error {
+	matches, err := filepath.Glob(indir + "/*.atdf")
+	if err != nil {
+		return err
+	}
+	for _, filepath := range matches {
+		fmt.Println(filepath)
+		device, err := readATDF(filepath)
+		if err != nil {
+			return err
+		}
+		err = writeGo(outdir, device)
+		if err != nil {
+			return err
+		}
+		err = writeAsm(outdir, device)
+		if err != nil {
+			return err
+		}
+		err = writeLD(outdir, device)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func main() {
+	indir := os.Args[1]  // directory with register descriptor files (*.atdf)
+	outdir := os.Args[2] // output directory
+	err := generate(indir, outdir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}

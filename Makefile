@@ -97,9 +97,10 @@ fmt-check:
 gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-sifive gen-device-stm32
 
 gen-device-avr:
-	$(PYTHON) ./tools/gen-device-avr.py lib/avr/packs/atmega src/device/avr/
-	$(PYTHON) ./tools/gen-device-avr.py lib/avr/packs/tiny src/device/avr/
-	GO111MODULE=off $(GO) fmt ./src/device/avr
+	$(GO) build -o ./build/gen-device-avr ./tools/gen-device-avr/
+	./build/gen-device-avr lib/avr/packs/atmega src/device/avr/
+	./build/gen-device-avr lib/avr/packs/tiny src/device/avr/
+	@GO111MODULE=off $(GO) fmt ./src/device/avr
 
 gen-device-nrf:
 	$(PYTHON) ./tools/gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/ --source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk
