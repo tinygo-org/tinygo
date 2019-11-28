@@ -8,8 +8,10 @@ import (
 	"math/bits"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type AVRToolsDeviceFile struct {
@@ -426,31 +428,67 @@ __num_isrs   = {{.numInterrupts}};
 	return t.Execute(out, device.metadata)
 }
 
+func processFile(filepath, outdir string) error {
+	device, err := readATDF(filepath)
+	if err != nil {
+		return err
+	}
+	err = writeGo(outdir, device)
+	if err != nil {
+		return err
+	}
+	err = writeAsm(outdir, device)
+	if err != nil {
+		return err
+	}
+	return writeLD(outdir, device)
+}
+
 func generate(indir, outdir string) error {
+	// Read list of ATDF files to process.
 	matches, err := filepath.Glob(indir + "/*.atdf")
 	if err != nil {
 		return err
 	}
+
+	// Start worker goroutines.
+	var wg sync.WaitGroup
+	workChan := make(chan string)
+	errChan := make(chan error, 1)
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go func() {
+			for filepath := range workChan {
+				err := processFile(filepath, outdir)
+				wg.Done()
+				if err != nil {
+					// Store error to errChan if no error was stored before.
+					select {
+					case errChan <- err:
+					default:
+					}
+				}
+			}
+		}()
+	}
+
+	// Submit all jobs to the goroutines.
+	wg.Add(len(matches))
 	for _, filepath := range matches {
 		fmt.Println(filepath)
-		device, err := readATDF(filepath)
-		if err != nil {
-			return err
-		}
-		err = writeGo(outdir, device)
-		if err != nil {
-			return err
-		}
-		err = writeAsm(outdir, device)
-		if err != nil {
-			return err
-		}
-		err = writeLD(outdir, device)
-		if err != nil {
-			return err
-		}
+		workChan <- filepath
 	}
-	return nil
+	close(workChan)
+
+	// Wait until all workers have finished.
+	wg.Wait()
+
+	// Check for an error.
+	select {
+	case err := <-errChan:
+		return err
+	default:
+		return nil
+	}
 }
 
 func main() {
