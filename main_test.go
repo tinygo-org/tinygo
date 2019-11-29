@@ -50,7 +50,7 @@ func TestCompiler(t *testing.T) {
 	}
 
 	t.Run("EmulatedCortexM3", func(t *testing.T) {
-		runPlatTests("qemu", matches, t)
+		runPlatTests("cortex-m-qemu", matches, t)
 	})
 
 	if runtime.GOOS == "linux" {
@@ -76,7 +76,7 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 			}
 		case target == "":
 			// run all tests on host
-		case target == "qemu":
+		case target == "cortex-m-qemu":
 			// all tests are supported
 		default:
 			// cross-compilation of cgo is not yet supported

@@ -8,7 +8,7 @@
 	],
 	"linkerscript": "targets/lm3s6965.ld",
 	"extra-files": [
-		"targets/qemu.s"
+		"targets/cortex-m-qemu.s"
 	],
 	"emulator": ["qemu-system-arm", "-machine", "lm3s6965evb", "-semihosting", "-nographic", "-kernel"]
 }
