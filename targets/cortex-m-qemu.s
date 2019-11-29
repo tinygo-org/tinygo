@@ -1,5 +1,5 @@
 // Generic Cortex-M interrupt vector.
-// This vector is used by the QEMU target.
+// This vector is used by the Cortex-M QEMU target.
 
 .syntax unified
 

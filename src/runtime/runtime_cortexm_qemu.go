@@ -1,4 +1,4 @@
-// +build qemu
+// +build cortexm,qemu
 
 package runtime
 
