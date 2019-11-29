@@ -22,5 +22,6 @@
 	],
 	"extra-files": [
 		"src/device/riscv/start.S"
-	]
+	],
+	"gdb": "riscv64-unknown-elf-gdb"
 }

@@ -9,7 +9,6 @@ import (
 	"machine"
 	"unsafe"
 
-	"device/riscv"
 	"device/sifive"
 )
 
@@ -104,12 +103,5 @@ const asyncScheduler = false
 func sleepTicks(d timeUnit) {
 	target := ticks() + d
 	for ticks() < target {
-	}
-}
-
-func abort() {
-	// lock up forever
-	for {
-		riscv.Asm("wfi")
 	}
 }
