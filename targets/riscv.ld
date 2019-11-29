@@ -30,8 +30,8 @@ SECTIONS
         /* see https://gnu-mcu-eclipse.github.io/arch/riscv/programmer/#the-gp-global-pointer-register */
         PROVIDE( __global_pointer$ = . + (4K / 2) );
         _sdata = .;        /* used by startup code */
-        *(.data)
-        *(.data*)
+        *(.sdata)
+        *(.data .data.*)
         . = ALIGN(4);
         _edata = .;        /* used by startup code */
     } >RAM AT>FLASH_TEXT
@@ -41,8 +41,8 @@ SECTIONS
     {
         . = ALIGN(4);
         _sbss = .;         /* used by startup code */
-        *(.bss)
-        *(.bss*)
+        *(.sbss)
+        *(.bss .bss.*)
         *(COMMON)
         . = ALIGN(4);
         _ebss = .;         /* used by startup code */
