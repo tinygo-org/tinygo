@@ -67,7 +67,7 @@ commands:
       - run: go install .
       - run: go test -v ./cgo ./compileopts ./interp ./transform .
       - run: make gen-device -j4
-      - run: make smoketest RISCV=0
+      - run: make smoketest
       - save_cache:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
@@ -139,7 +139,7 @@ commands:
             - ~/.cache/tinygo
             - /go/pkg/mod
       - run: make gen-device -j4
-      - run: make smoketest TINYGO=build/tinygo RISCV=0
+      - run: make smoketest TINYGO=build/tinygo
   build-linux:
     steps:
       - checkout
@@ -216,11 +216,6 @@ commands:
             tar -C ~/lib -xf /tmp/tinygo.linux-amd64.tar.gz
             ln -s ~/lib/tinygo/bin/tinygo /go/bin/tinygo
             tinygo version
-      - run:
-          name: "Download SiFive GNU toolchain"
-          command: |
-            curl -O https://static.dev.sifive.com/dev-tools/riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-linux-ubuntu14.tar.gz
-            sudo tar -C /usr/local --strip-components=1 -xf riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-linux-ubuntu14.tar.gz
       - run: make smoketest
   build-macos:
     steps:

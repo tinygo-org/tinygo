@@ -4,9 +4,10 @@
 	"goarch": "arm",
 	"build-tags": ["tinygo.riscv", "baremetal", "linux", "arm"],
 	"gc": "conservative",
-	"compiler": "riscv64-unknown-elf-gcc",
-	"linker": "riscv64-unknown-elf-ld",
+	"compiler": "clang",
+	"linker": "ld.lld",
 	"cflags": [
+		"--target=riscv32--none",
 		"-march=rv32imac",
 		"-mabi=ilp32",
 		"-Os",
