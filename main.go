@@ -268,11 +268,12 @@ func FlashGDB(pkgName, port string, ocdOutput bool, options *compileopts.Options
 		gdbInterface, openocdInterface := config.Programmer()
 		switch gdbInterface {
 		case "msd", "command", "":
-			if gdbInterface == "" {
-				gdbInterface = "command"
-			}
 			if openocdInterface != "" && config.Target.OpenOCDTarget != "" {
 				gdbInterface = "openocd"
+			}
+			if len(config.Target.Emulator) != 0 {
+				// Assume QEMU as an emulator.
+				gdbInterface = "qemu"
 			}
 		}
 
@@ -303,6 +304,26 @@ func FlashGDB(pkgName, port string, ocdOutput bool, options *compileopts.Options
 			// Make sure the daemon doesn't receive Ctrl-C that is intended for
 			// GDB (to break the currently executing program).
 			setCommandAsDaemon(daemon)
+			// Start now, and kill it on exit.
+			daemon.Start()
+			defer func() {
+				daemon.Process.Signal(os.Interrupt)
+				// Maybe we should send a .Kill() after x seconds?
+				daemon.Wait()
+			}()
+		case "qemu":
+			gdbCommands = append(gdbCommands, "target remote :1234")
+
+			// Run in an emulator.
+			args := append(config.Target.Emulator[1:], tmppath, "-s", "-S")
+			daemon := exec.Command(config.Target.Emulator[0], args...)
+			daemon.Stdout = os.Stdout
+			daemon.Stderr = os.Stderr
+
+			// Make sure the daemon doesn't receive Ctrl-C that is intended for
+			// GDB (to break the currently executing program).
+			setCommandAsDaemon(daemon)
+
 			// Start now, and kill it on exit.
 			daemon.Start()
 			defer func() {
