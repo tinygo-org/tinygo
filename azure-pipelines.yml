@@ -71,4 +71,4 @@ jobs:
         script: |
           export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
           unset GOROOT
-          make smoketest TINYGO=build/tinygo AVR=0 RISCV=0
+          make smoketest TINYGO=build/tinygo AVR=0

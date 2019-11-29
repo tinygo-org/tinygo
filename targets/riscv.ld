@@ -47,6 +47,11 @@ SECTIONS
         . = ALIGN(4);
         _ebss = .;         /* used by startup code */
     } >RAM
+
+    /DISCARD/ :
+    {
+        *(.eh_frame)       /* causes 'no memory region specified' error in lld */
+    }
 }
 
 /* For the memory allocator. */
