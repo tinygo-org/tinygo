@@ -6,6 +6,7 @@
 	"gc": "conservative",
 	"compiler": "clang",
 	"linker": "ld.lld",
+	"rtlib": "compiler-rt",
 	"cflags": [
 		"--target=riscv32--none",
 		"-march=rv32imac",
