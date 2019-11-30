@@ -52,6 +52,7 @@ jobs:
         script: |
           export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
           unset GOROOT
+          make gen-device-sifive # needed for testing
           make test
     - task: Bash@3
       displayName: Build TinyGo release tarball

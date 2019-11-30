@@ -246,7 +246,9 @@ commands:
             llvm-build
       - run:
           name: "Test TinyGo"
-          command: make test
+          command: |
+            make gen-device-sifive # needed for testing
+            make test
       - run:
           name: "Build TinyGo release"
           command: |

@@ -55,6 +55,14 @@ func TestCompiler(t *testing.T) {
 		runPlatTests("cortex-m-qemu", matches, t)
 	})
 
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		// Note: running only on Windows and macOS because Linux usually has an
+		// outdated QEMU version that doesn't support RISC-V yet.
+		t.Run("EmulatedHiFive1", func(t *testing.T) {
+			runPlatTests("hifive1-qemu", matches, t)
+		})
+	}
+
 	if runtime.GOOS == "linux" {
 		t.Run("ARMLinux", func(t *testing.T) {
 			runPlatTests("arm--linux-gnueabihf", matches, t)
@@ -83,6 +91,8 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 		case target == "":
 			// run all tests on host
 		case target == "cortex-m-qemu":
+			// all tests are supported
+		case target == "hifive1-qemu":
 			// all tests are supported
 		default:
 			// cross-compilation of cgo is not yet supported
@@ -204,7 +214,11 @@ func runTest(path, target string, t *testing.T) {
 	}
 	close(runComplete)
 
-	if ranTooLong {
+	if ranTooLong && target != "hifive1-qemu" {
+		// Note: the hifive1-qemu exception is here because QEMU does
+		// not yet include the SiFive test finisher used to exit tests.
+		// https://github.com/sifive/riscv-qemu/commit/0eec372a36b7237caf16ec7c7646a202faba5fdb
+		// It's a crude hack, but it makes RISC-V testable.
 		stdout.WriteString("--- test ran too long, terminating...\n")
 	}
 
