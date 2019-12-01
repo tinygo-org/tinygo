@@ -187,6 +187,8 @@ smoketest:
 	@$(MD5SUM) test.wasm
 	$(TINYGO) build             -o test.wasm -tags=pca10056             examples/blinky2
 	@$(MD5SUM) test.wasm
+	$(TINYGO) build             -o test.wasm -tags=circuitplay_express  examples/blinky1
+	@$(MD5SUM) test.wasm
 	# test all targets/boards
 	$(TINYGO) build -size short -o test.hex -target=pca10040-s132v6     examples/blinky1
 	@$(MD5SUM) test.hex
