@@ -125,3 +125,5 @@ The original reasoning was: if [Python](https://micropython.org/) can run on mic
 ## License
 
 This project is licensed under the BSD 3-clause license, just like the [Go project](https://golang.org/LICENSE) itself.
+
+Some code has been copied from the LLVM project and is therefore licensed under [a variant of the Apache 2.0 license](http://releases.llvm.org/9.0.0/LICENSE.TXT). This has been clearly indicated in the header of these files.

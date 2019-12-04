@@ -154,11 +154,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 		for i, path := range config.ExtraFiles() {
 			abspath := filepath.Join(root, path)
 			outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
-			cmdNames := []string{config.Target.Compiler}
-			if names, ok := commands[config.Target.Compiler]; ok {
-				cmdNames = names
-			}
-			err := execCommand(cmdNames, append(config.CFlags(), "-c", "-o", outpath, abspath)...)
+			err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, abspath)...)
 			if err != nil {
 				return &commandError{"failed to build", path, err}
 			}
@@ -170,11 +166,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 			for _, file := range pkg.CFiles {
 				path := filepath.Join(pkg.Package.Dir, file)
 				outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"-"+file+".o")
-				cmdNames := []string{config.Target.Compiler}
-				if names, ok := commands[config.Target.Compiler]; ok {
-					cmdNames = names
-				}
-				err := execCommand(cmdNames, append(config.CFlags(), "-c", "-o", outpath, path)...)
+				err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, path)...)
 				if err != nil {
 					return &commandError{"failed to build", path, err}
 				}
