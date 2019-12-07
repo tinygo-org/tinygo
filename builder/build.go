@@ -33,10 +33,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	// Compile Go code to IR.
 	errs := c.Compile(pkgName)
 	if len(errs) != 0 {
-		if len(errs) == 1 {
-			return errs[0]
-		}
-		return &MultiError{errs}
+		return newMultiError(errs)
 	}
 	if config.Options.PrintIR {
 		fmt.Println("; Generated LLVM IR:")
@@ -72,22 +69,23 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 
 	// Optimization levels here are roughly the same as Clang, but probably not
 	// exactly.
+	errs = nil
 	switch config.Options.Opt {
 	case "none:", "0":
-		err = c.Optimize(0, 0, 0) // -O0
+		errs = c.Optimize(0, 0, 0) // -O0
 	case "1":
-		err = c.Optimize(1, 0, 0) // -O1
+		errs = c.Optimize(1, 0, 0) // -O1
 	case "2":
-		err = c.Optimize(2, 0, 225) // -O2
+		errs = c.Optimize(2, 0, 225) // -O2
 	case "s":
-		err = c.Optimize(2, 1, 225) // -Os
+		errs = c.Optimize(2, 1, 225) // -Os
 	case "z":
-		err = c.Optimize(2, 2, 5) // -Oz, default
+		errs = c.Optimize(2, 2, 5) // -Oz, default
 	default:
-		err = errors.New("unknown optimization level: -opt=" + config.Options.Opt)
+		errs = []error{errors.New("unknown optimization level: -opt=" + config.Options.Opt)}
 	}
-	if err != nil {
-		return err
+	if len(errs) > 0 {
+		return newMultiError(errs)
 	}
 	if err := c.Verify(); err != nil {
 		return errors.New("verification failure after LLVM optimization passes")

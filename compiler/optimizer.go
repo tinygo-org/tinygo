@@ -9,7 +9,7 @@ import (
 
 // Run the LLVM optimizer over the module.
 // The inliner can be disabled (if necessary) by passing 0 to the inlinerThreshold.
-func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) error {
+func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) []error {
 	builder := llvm.NewPassManagerBuilder()
 	defer builder.Dispose()
 	builder.SetOptLevel(optLevel)
@@ -25,9 +25,9 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 
 	// run a check of all of our code
 	if c.VerifyIR() {
-		err := c.checkModule()
-		if err != nil {
-			return err
+		errs := c.checkModule()
+		if errs != nil {
+			return errs
 		}
 	}
 
@@ -87,7 +87,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 
 		err := c.LowerGoroutines()
 		if err != nil {
-			return err
+			return []error{err}
 		}
 	} else {
 		// Must be run at any optimization level.
@@ -97,16 +97,16 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 		}
 		err := c.LowerGoroutines()
 		if err != nil {
-			return err
+			return []error{err}
 		}
 	}
 	if c.VerifyIR() {
-		if err := c.checkModule(); err != nil {
-			return err
+		if errs := c.checkModule(); errs != nil {
+			return errs
 		}
 	}
 	if err := c.Verify(); err != nil {
-		return errors.New("optimizations caused a verification failure")
+		return []error{errors.New("optimizations caused a verification failure")}
 	}
 
 	if sizeLevel >= 2 {
@@ -145,7 +145,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) erro
 	hasGCPass = transform.MakeGCStackSlots(c.mod) || hasGCPass
 	if hasGCPass {
 		if err := c.Verify(); err != nil {
-			return errors.New("GC pass caused a verification failure")
+			return []error{errors.New("GC pass caused a verification failure")}
 		}
 	}
 

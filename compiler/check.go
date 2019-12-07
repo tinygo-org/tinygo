@@ -98,76 +98,75 @@ func (c *Compiler) checkValue(v llvm.Value, types map[llvm.Type]struct{}, specia
 func (c *Compiler) checkInstruction(inst llvm.Value, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) error {
 	// check value properties
 	if err := c.checkValue(inst, types, specials); err != nil {
-		return fmt.Errorf("failed to validate value of instruction %q: %s", inst.Name(), err.Error())
+		return errorAt(inst, err.Error())
 	}
 
 	// check operands
 	for i := 0; i < inst.OperandsCount(); i++ {
 		if err := c.checkValue(inst.Operand(i), types, specials); err != nil {
-			return fmt.Errorf("failed to validate argument %d of instruction %q: %s", i, inst.Name(), err.Error())
+			return errorAt(inst, fmt.Sprintf("failed to validate operand %d of instruction %q: %s", i, inst.Name(), err.Error()))
 		}
 	}
 
 	return nil
 }
 
-func (c *Compiler) checkBasicBlock(bb llvm.BasicBlock, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) error {
+func (c *Compiler) checkBasicBlock(bb llvm.BasicBlock, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) []error {
 	// check basic block value and type
+	var errs []error
 	if err := c.checkValue(bb.AsValue(), types, specials); err != nil {
-		return fmt.Errorf("failed to validate value of basic block %s: %s", bb.AsValue().Name(), err.Error())
+		errs = append(errs, errorAt(bb.Parent(), fmt.Sprintf("failed to validate value of basic block %s: %v", bb.AsValue().Name(), err)))
 	}
 
 	// check instructions
 	for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
 		if err := c.checkInstruction(inst, types, specials); err != nil {
-			return fmt.Errorf("failed to validate basic block %q: %s", bb.AsValue().Name(), err.Error())
+			errs = append(errs, err)
 		}
 	}
 
-	return nil
+	return errs
 }
 
-func (c *Compiler) checkFunction(fn llvm.Value, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) error {
+func (c *Compiler) checkFunction(fn llvm.Value, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) []error {
 	// check function value and type
+	var errs []error
 	if err := c.checkValue(fn, types, specials); err != nil {
-		return fmt.Errorf("failed to validate value of function %s: %s", fn.Name(), err.Error())
+		errs = append(errs, fmt.Errorf("failed to validate value of function %s: %s", fn.Name(), err.Error()))
 	}
 
 	// check basic blocks
 	for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
-		if err := c.checkBasicBlock(bb, types, specials); err != nil {
-			return fmt.Errorf("failed to validate basic block of function %s: %s", fn.Name(), err.Error())
-		}
+		errs = append(errs, c.checkBasicBlock(bb, types, specials)...)
 	}
 
-	return nil
+	return errs
 }
 
-func (c *Compiler) checkModule() error {
+func (c *Compiler) checkModule() []error {
 	// check for any context mismatches
+	var errs []error
 	switch {
 	case c.mod.Context() == c.ctx:
 		// this is correct
 	case c.mod.Context() == llvm.GlobalContext():
 		// somewhere we accidentally used the global context instead of a real context
-		return errors.New("module uses global context")
+		errs = append(errs, errors.New("module uses global context"))
 	default:
 		// we used some other context by accident
-		return fmt.Errorf("module uses context %v instead of the main context %v", c.mod.Context(), c.ctx)
+		errs = append(errs, fmt.Errorf("module uses context %v instead of the main context %v", c.mod.Context(), c.ctx))
 	}
 
 	types := map[llvm.Type]struct{}{}
 	specials := map[llvm.TypeKind]llvm.Type{}
 	for fn := c.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-		if err := c.checkFunction(fn, types, specials); err != nil {
-			return err
-		}
+		errs = append(errs, c.checkFunction(fn, types, specials)...)
 	}
 	for g := c.mod.FirstGlobal(); !g.IsNil(); g = llvm.NextGlobal(g) {
 		if err := c.checkValue(g, types, specials); err != nil {
-			return fmt.Errorf("failed to verify global %s of module: %s", g.Name(), err.Error())
+			errs = append(errs, fmt.Errorf("failed to verify global %s of module: %s", g.Name(), err.Error()))
 		}
 	}
 
-	return nil
+	return errs
 }
