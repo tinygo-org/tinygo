@@ -101,6 +101,24 @@ func (c *Compiler) checkInstruction(inst llvm.Value, types map[llvm.Type]struct{
 		return errorAt(inst, err.Error())
 	}
 
+	// The alloca instruction can be present in every basic block. However,
+	// allocas in basic blocks other than the entry basic block have a number of
+	// problems:
+	//   * They are hard to optimize, leading to potential missed optimizations.
+	//   * They may cause stack overflows in loops that would otherwise be
+	//     innocent.
+	//   * They cause extra code to be generated, because it requires the use of
+	//     a frame pointer.
+	//   * Perhaps most importantly, the coroutine lowering pass of LLVM (as of
+	//     LLVM 9) cannot deal with these allocas:
+	//     https://llvm.org/docs/Coroutines.html
+	// Therefore, alloca instructions should be limited to the entry block.
+	if !inst.IsAAllocaInst().IsNil() {
+		if inst.InstructionParent() != inst.InstructionParent().Parent().EntryBasicBlock() {
+			return errorAt(inst, "internal error: non-static alloca")
+		}
+	}
+
 	// check operands
 	for i := 0; i < inst.OperandsCount(); i++ {
 		if err := c.checkValue(inst.Operand(i), types, specials); err != nil {
