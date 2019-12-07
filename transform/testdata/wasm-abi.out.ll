@@ -14,11 +14,11 @@ define internal i64 @testCall(i8* %ptr, i32 %len, i64 %foo) {
 
 define internal i64 @testCallNonEntry(i8* %ptr, i32 %len) {
 entry:
+  %i64asptr = alloca i64
+  %i64asptr1 = alloca i64
   br label %bb1
 
 bb1:                                              ; preds = %entry
-  %i64asptr = alloca i64
-  %i64asptr1 = alloca i64
   store i64 3, i64* %i64asptr1
   call void @externalCall(i64* %i64asptr, i8* %ptr, i32 %len, i64* %i64asptr1)
   %retval = load i64, i64* %i64asptr

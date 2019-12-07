@@ -22,6 +22,11 @@ func ExternalInt64AsPtr(mod llvm.Module) error {
 	int64Type := ctx.Int64Type()
 	int64PtrType := llvm.PointerType(int64Type, 0)
 
+	// This builder is only used for creating new allocas in the entry block of
+	// a function, avoiding many SetInsertPoint* calls.
+	entryBlockBuilder := ctx.NewBuilder()
+	defer entryBlockBuilder.Dispose()
+
 	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
 		if fn.Linkage() != llvm.ExternalLinkage {
 			// Only change externally visible functions (exports and imports).
@@ -77,11 +82,12 @@ func ExternalInt64AsPtr(mod llvm.Module) error {
 			// be left in place.
 			for use := fn.FirstUse(); !use.IsNil(); use = use.NextUse() {
 				call := use.User()
+				entryBlockBuilder.SetInsertPointBefore(call.InstructionParent().Parent().EntryBasicBlock().FirstInstruction())
 				builder.SetInsertPointBefore(call)
 				callParams := []llvm.Value{}
 				var retvalAlloca llvm.Value
 				if fnType.ReturnType() == int64Type {
-					retvalAlloca = builder.CreateAlloca(int64Type, "i64asptr")
+					retvalAlloca = entryBlockBuilder.CreateAlloca(int64Type, "i64asptr")
 					callParams = append(callParams, retvalAlloca)
 				}
 				for i := 0; i < call.OperandsCount()-1; i++ {
@@ -89,7 +95,7 @@ func ExternalInt64AsPtr(mod llvm.Module) error {
 					if operand.Type() == int64Type {
 						// Pass a stack-allocated pointer instead of the value
 						// itself.
-						alloca := builder.CreateAlloca(int64Type, "i64asptr")
+						alloca := entryBlockBuilder.CreateAlloca(int64Type, "i64asptr")
 						builder.CreateStore(operand, alloca)
 						callParams = append(callParams, alloca)
 					} else {
