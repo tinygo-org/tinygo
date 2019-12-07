@@ -25,8 +25,6 @@ func TestCGo(t *testing.T) {
 	for _, name := range []string{"basic", "errors", "types", "flags"} {
 		name := name // avoid a race condition
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
 			// Read the AST in memory.
 			path := filepath.Join("testdata", name+".go")
 			fset := token.NewFileSet()
