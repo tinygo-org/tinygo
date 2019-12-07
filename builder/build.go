@@ -16,6 +16,7 @@ import (
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
+	"github.com/tinygo-org/tinygo/transform"
 )
 
 // Build performs a single package to executable Go build. It takes in a package
@@ -61,7 +62,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	// stack-allocated values.
 	// Use -wasm-abi=generic to disable this behaviour.
 	if config.Options.WasmAbi == "js" && strings.HasPrefix(config.Triple(), "wasm") {
-		err := c.ExternalInt64AsPtr()
+		err := transform.ExternalInt64AsPtr(c.Module())
 		if err != nil {
 			return err
 		}
