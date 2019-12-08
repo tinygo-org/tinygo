@@ -1,4 +1,4 @@
-// +build sam stm32,!stm32f407 fe310
+// +build !baremetal sam stm32,!stm32f407 fe310
 
 package machine
 
