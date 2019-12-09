@@ -297,7 +297,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 		if frame.fn.Blocks == nil {
 			continue // external function
 		}
-		c.parseFunc(frame)
+		frame.createFunctionDefinition()
 	}
 
 	// After all packages are imported, add a synthetic initializer function
@@ -689,40 +689,40 @@ func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
 // getLocalVariable returns a debug info entry for a local variable, which may
 // either be a parameter or a regular variable. It will create a new metadata
 // entry if there isn't one for the variable yet.
-func (c *Compiler) getLocalVariable(frame *Frame, variable *types.Var) llvm.Metadata {
-	if dilocal, ok := frame.dilocals[variable]; ok {
+func (b *builder) getLocalVariable(variable *types.Var) llvm.Metadata {
+	if dilocal, ok := b.dilocals[variable]; ok {
 		// DILocalVariable was already created, return it directly.
 		return dilocal
 	}
 
-	pos := c.ir.Program.Fset.Position(variable.Pos())
+	pos := b.ir.Program.Fset.Position(variable.Pos())
 
 	// Check whether this is a function parameter.
-	for i, param := range frame.fn.Params {
+	for i, param := range b.fn.Params {
 		if param.Object().(*types.Var) == variable {
 			// Yes it is, create it as a function parameter.
-			dilocal := c.dibuilder.CreateParameterVariable(frame.difunc, llvm.DIParameterVariable{
+			dilocal := b.dibuilder.CreateParameterVariable(b.difunc, llvm.DIParameterVariable{
 				Name:           param.Name(),
-				File:           c.getDIFile(pos.Filename),
+				File:           b.getDIFile(pos.Filename),
 				Line:           pos.Line,
-				Type:           c.getDIType(variable.Type()),
+				Type:           b.getDIType(variable.Type()),
 				AlwaysPreserve: true,
 				ArgNo:          i + 1,
 			})
-			frame.dilocals[variable] = dilocal
+			b.dilocals[variable] = dilocal
 			return dilocal
 		}
 	}
 
 	// No, it's not a parameter. Create a regular (auto) variable.
-	dilocal := c.dibuilder.CreateAutoVariable(frame.difunc, llvm.DIAutoVariable{
+	dilocal := b.dibuilder.CreateAutoVariable(b.difunc, llvm.DIAutoVariable{
 		Name:           variable.Name(),
-		File:           c.getDIFile(pos.Filename),
+		File:           b.getDIFile(pos.Filename),
 		Line:           pos.Line,
-		Type:           c.getDIType(variable.Type()),
+		Type:           b.getDIType(variable.Type()),
 		AlwaysPreserve: true,
 	})
-	frame.dilocals[variable] = dilocal
+	b.dilocals[variable] = dilocal
 	return dilocal
 }
 
@@ -845,86 +845,89 @@ func (c *compilerContext) getDIFile(filename string) llvm.Metadata {
 	return c.difiles[filename]
 }
 
-func (c *Compiler) parseFunc(frame *Frame) {
-	if c.DumpSSA() {
-		fmt.Printf("\nfunc %s:\n", frame.fn.Function)
+// createFunctionDefinition builds the LLVM IR implementation for this function.
+// The function must be declared but not yet defined, otherwise this function
+// will create a diagnostic.
+func (b *builder) createFunctionDefinition() {
+	if b.DumpSSA() {
+		fmt.Printf("\nfunc %s:\n", b.fn.Function)
 	}
-	if !frame.fn.LLVMFn.IsDeclaration() {
-		errValue := frame.fn.LLVMFn.Name() + " redeclared in this program"
-		fnPos := getPosition(frame.fn.LLVMFn)
+	if !b.fn.LLVMFn.IsDeclaration() {
+		errValue := b.fn.Name() + " redeclared in this program"
+		fnPos := getPosition(b.fn.LLVMFn)
 		if fnPos.IsValid() {
 			errValue += "\n\tprevious declaration at " + fnPos.String()
 		}
-		c.addError(frame.fn.Pos(), errValue)
+		b.addError(b.fn.Pos(), errValue)
 		return
 	}
-	if !frame.fn.IsExported() {
-		frame.fn.LLVMFn.SetLinkage(llvm.InternalLinkage)
-		frame.fn.LLVMFn.SetUnnamedAddr(true)
+	if !b.fn.IsExported() {
+		b.fn.LLVMFn.SetLinkage(llvm.InternalLinkage)
+		b.fn.LLVMFn.SetUnnamedAddr(true)
 	}
 
 	// Some functions have a pragma controlling the inlining level.
-	switch frame.fn.Inline() {
+	switch b.fn.Inline() {
 	case ir.InlineHint:
 		// Add LLVM inline hint to functions with //go:inline pragma.
-		inline := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("inlinehint"), 0)
-		frame.fn.LLVMFn.AddFunctionAttr(inline)
+		inline := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("inlinehint"), 0)
+		b.fn.LLVMFn.AddFunctionAttr(inline)
 	case ir.InlineNone:
 		// Add LLVM attribute to always avoid inlining this function.
-		noinline := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
-		frame.fn.LLVMFn.AddFunctionAttr(noinline)
+		noinline := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
+		b.fn.LLVMFn.AddFunctionAttr(noinline)
 	}
 
 	// Add debug info, if needed.
-	if c.Debug() {
-		if frame.fn.Synthetic == "package initializer" {
+	if b.Debug() {
+		if b.fn.Synthetic == "package initializer" {
 			// Package initializers have no debug info. Create some fake debug
 			// info to at least have *something*.
-			frame.difunc = c.attachDebugInfoRaw(frame.fn, frame.fn.LLVMFn, "", "", 0)
-		} else if frame.fn.Syntax() != nil {
+			b.difunc = b.attachDebugInfoRaw(b.fn, b.fn.LLVMFn, "", "", 0)
+		} else if b.fn.Syntax() != nil {
 			// Create debug info file if needed.
-			frame.difunc = c.attachDebugInfo(frame.fn)
+			b.difunc = b.attachDebugInfo(b.fn)
 		}
-		pos := c.ir.Program.Fset.Position(frame.fn.Pos())
-		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), frame.difunc, llvm.Metadata{})
+		pos := b.ir.Program.Fset.Position(b.fn.Pos())
+		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
 	}
 
 	// Pre-create all basic blocks in the function.
-	for _, block := range frame.fn.DomPreorder() {
-		llvmBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, block.Comment)
-		frame.blockEntries[block] = llvmBlock
-		frame.blockExits[block] = llvmBlock
+	for _, block := range b.fn.DomPreorder() {
+		llvmBlock := b.ctx.AddBasicBlock(b.fn.LLVMFn, block.Comment)
+		b.blockEntries[block] = llvmBlock
+		b.blockExits[block] = llvmBlock
 	}
-	entryBlock := frame.blockEntries[frame.fn.Blocks[0]]
-	c.builder.SetInsertPointAtEnd(entryBlock)
+	entryBlock := b.blockEntries[b.fn.Blocks[0]]
+	b.SetInsertPointAtEnd(entryBlock)
 
 	// Load function parameters
 	llvmParamIndex := 0
-	for _, param := range frame.fn.Params {
-		llvmType := c.getLLVMType(param.Type())
+	for _, param := range b.fn.Params {
+		llvmType := b.getLLVMType(param.Type())
 		fields := make([]llvm.Value, 0, 1)
 		for range expandFormalParamType(llvmType) {
-			fields = append(fields, frame.fn.LLVMFn.Param(llvmParamIndex))
+			fields = append(fields, b.fn.LLVMFn.Param(llvmParamIndex))
 			llvmParamIndex++
 		}
-		frame.locals[param] = c.collapseFormalParam(llvmType, fields)
+		b.locals[param] = b.collapseFormalParam(llvmType, fields)
 
 		// Add debug information to this parameter (if available)
-		if c.Debug() && frame.fn.Syntax() != nil {
-			dbgParam := c.getLocalVariable(frame, param.Object().(*types.Var))
-			loc := c.builder.GetCurrentDebugLocation()
+		if b.Debug() && b.fn.Syntax() != nil {
+			dbgParam := b.getLocalVariable(param.Object().(*types.Var))
+			loc := b.GetCurrentDebugLocation()
 			if len(fields) == 1 {
-				expr := c.dibuilder.CreateExpression(nil)
-				c.dibuilder.InsertValueAtEnd(fields[0], dbgParam, expr, loc, entryBlock)
+				expr := b.dibuilder.CreateExpression(nil)
+				b.dibuilder.InsertValueAtEnd(fields[0], dbgParam, expr, loc, entryBlock)
 			} else {
-				fieldOffsets := c.expandFormalParamOffsets(llvmType)
+				fieldOffsets := b.expandFormalParamOffsets(llvmType)
 				for i, field := range fields {
-					expr := c.dibuilder.CreateExpression([]int64{
+					expr := b.dibuilder.CreateExpression([]int64{
 						0x1000,                     // DW_OP_LLVM_fragment
 						int64(fieldOffsets[i]) * 8, // offset in bits
-						int64(c.targetData.TypeAllocSize(field.Type())) * 8, // size in bits
+						int64(b.targetData.TypeAllocSize(field.Type())) * 8, // size in bits
 					})
-					c.dibuilder.InsertValueAtEnd(field, dbgParam, expr, loc, entryBlock)
+					b.dibuilder.InsertValueAtEnd(field, dbgParam, expr, loc, entryBlock)
 				}
 			}
 		}
@@ -933,44 +936,44 @@ func (c *Compiler) parseFunc(frame *Frame) {
 	// Load free variables from the context. This is a closure (or bound
 	// method).
 	var context llvm.Value
-	if !frame.fn.IsExported() {
-		parentHandle := frame.fn.LLVMFn.LastParam()
+	if !b.fn.IsExported() {
+		parentHandle := b.fn.LLVMFn.LastParam()
 		parentHandle.SetName("parentHandle")
 		context = llvm.PrevParam(parentHandle)
 		context.SetName("context")
 	}
-	if len(frame.fn.FreeVars) != 0 {
+	if len(b.fn.FreeVars) != 0 {
 		// Get a list of all variable types in the context.
-		freeVarTypes := make([]llvm.Type, len(frame.fn.FreeVars))
-		for i, freeVar := range frame.fn.FreeVars {
-			freeVarTypes[i] = c.getLLVMType(freeVar.Type())
+		freeVarTypes := make([]llvm.Type, len(b.fn.FreeVars))
+		for i, freeVar := range b.fn.FreeVars {
+			freeVarTypes[i] = b.getLLVMType(freeVar.Type())
 		}
 
 		// Load each free variable from the context pointer.
 		// A free variable is always a pointer when this is a closure, but it
 		// can be another type when it is a wrapper for a bound method (these
 		// wrappers are generated by the ssa package).
-		for i, val := range c.emitPointerUnpack(context, freeVarTypes) {
-			frame.locals[frame.fn.FreeVars[i]] = val
+		for i, val := range b.emitPointerUnpack(context, freeVarTypes) {
+			b.locals[b.fn.FreeVars[i]] = val
 		}
 	}
 
-	if frame.fn.Recover != nil {
+	if b.fn.Recover != nil {
 		// This function has deferred function calls. Set some things up for
 		// them.
-		frame.deferInitFunc()
+		b.deferInitFunc()
 	}
 
 	// Fill blocks with instructions.
-	for _, block := range frame.fn.DomPreorder() {
-		if c.DumpSSA() {
+	for _, block := range b.fn.DomPreorder() {
+		if b.DumpSSA() {
 			fmt.Printf("%d: %s:\n", block.Index, block.Comment)
 		}
-		c.builder.SetInsertPointAtEnd(frame.blockEntries[block])
-		frame.currentBlock = block
+		b.SetInsertPointAtEnd(b.blockEntries[block])
+		b.currentBlock = block
 		for _, instr := range block.Instrs {
 			if instr, ok := instr.(*ssa.DebugRef); ok {
-				if !c.Debug() {
+				if !b.Debug() {
 					continue
 				}
 				object := instr.Object()
@@ -984,35 +987,35 @@ func (c *Compiler) parseFunc(frame *Frame) {
 					// for example.
 					continue
 				}
-				dbgVar := c.getLocalVariable(frame, variable)
-				pos := c.ir.Program.Fset.Position(instr.Pos())
-				c.dibuilder.InsertValueAtEnd(frame.getValue(instr.X), dbgVar, c.dibuilder.CreateExpression(nil), llvm.DebugLoc{
+				dbgVar := b.getLocalVariable(variable)
+				pos := b.ir.Program.Fset.Position(instr.Pos())
+				b.dibuilder.InsertValueAtEnd(b.getValue(instr.X), dbgVar, b.dibuilder.CreateExpression(nil), llvm.DebugLoc{
 					Line:  uint(pos.Line),
 					Col:   uint(pos.Column),
-					Scope: frame.difunc,
-				}, c.builder.GetInsertBlock())
+					Scope: b.difunc,
+				}, b.GetInsertBlock())
 				continue
 			}
-			if c.DumpSSA() {
+			if b.DumpSSA() {
 				if val, ok := instr.(ssa.Value); ok && val.Name() != "" {
 					fmt.Printf("\t%s = %s\n", val.Name(), val.String())
 				} else {
 					fmt.Printf("\t%s\n", instr.String())
 				}
 			}
-			frame.createInstruction(instr)
+			b.createInstruction(instr)
 		}
-		if frame.fn.Name() == "init" && len(block.Instrs) == 0 {
-			c.builder.CreateRetVoid()
+		if b.fn.Name() == "init" && len(block.Instrs) == 0 {
+			b.CreateRetVoid()
 		}
 	}
 
 	// Resolve phi nodes
-	for _, phi := range frame.phis {
+	for _, phi := range b.phis {
 		block := phi.ssa.Block()
 		for i, edge := range phi.ssa.Edges {
-			llvmVal := frame.getValue(edge)
-			llvmBlock := frame.blockExits[block.Preds[i]]
+			llvmVal := b.getValue(edge)
+			llvmBlock := b.blockExits[block.Preds[i]]
 			phi.llvm.AddIncoming([]llvm.Value{llvmVal}, []llvm.BasicBlock{llvmBlock})
 		}
 	}

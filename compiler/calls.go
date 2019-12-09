@@ -82,13 +82,14 @@ func expandFormalParamType(t llvm.Type) []llvm.Type {
 	}
 }
 
-// Expand an argument type to a list of offsets from the start of the object.
-// Used together with expandFormalParam to get the offset of each value from the
-// start of the non-expanded value.
-func (c *Compiler) expandFormalParamOffsets(t llvm.Type) []uint64 {
+// expandFormalParamOffsets returns a list of offsets from the start of an
+// object of type t after it would have been split up by expandFormalParam. This
+// is useful for debug information, where it is necessary to know the offset
+// from the start of the combined object.
+func (b *builder) expandFormalParamOffsets(t llvm.Type) []uint64 {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
-		fields := c.flattenAggregateTypeOffsets(t)
+		fields := b.flattenAggregateTypeOffsets(t)
 		if len(fields) <= MaxFieldsPerParam {
 			return fields
 		} else {
@@ -162,10 +163,13 @@ func flattenAggregateType(t llvm.Type) []llvm.Type {
 	}
 }
 
-// Return the offsets from the start of the object if this object type were
-// flattened like in flattenAggregate. Used together with flattenAggregate to
-// know the start indices of each value in the non-flattened object.
-func (c *Compiler) flattenAggregateTypeOffsets(t llvm.Type) []uint64 {
+// flattenAggregateTypeOffset returns the offsets from the start of an object of
+// type t if this object were flattened like in flattenAggregate. Used together
+// with flattenAggregate to know the start indices of each value in the
+// non-flattened object.
+//
+// Note: this is an implementation detail, use expandFormalParamOffsets instead.
+func (c *compilerContext) flattenAggregateTypeOffsets(t llvm.Type) []uint64 {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		fields := make([]uint64, 0, t.StructElementTypesCount())
@@ -217,25 +221,28 @@ func (b *builder) flattenAggregate(v llvm.Value) []llvm.Value {
 	}
 }
 
-// Collapse a list of fields into its original value.
-func (c *Compiler) collapseFormalParam(t llvm.Type, fields []llvm.Value) llvm.Value {
-	param, remaining := c.collapseFormalParamInternal(t, fields)
+// collapseFormalParam combines an aggregate object back into the original
+// value. This is used to join multiple LLVM parameters into a single Go value
+// in the function entry block.
+func (b *builder) collapseFormalParam(t llvm.Type, fields []llvm.Value) llvm.Value {
+	param, remaining := b.collapseFormalParamInternal(t, fields)
 	if len(remaining) != 0 {
 		panic("failed to expand back all fields")
 	}
 	return param
 }
 
-// Returns (value, remainingFields). Used by collapseFormalParam.
-func (c *Compiler) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value) (llvm.Value, []llvm.Value) {
+// collapseFormalParamInternal is an implementation detail of
+// collapseFormalParam: it works by recursing until there are no fields left.
+func (b *builder) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value) (llvm.Value, []llvm.Value) {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		if len(flattenAggregateType(t)) <= MaxFieldsPerParam {
 			value := llvm.ConstNull(t)
 			for i, subtyp := range t.StructElementTypes() {
-				structField, remaining := c.collapseFormalParamInternal(subtyp, fields)
+				structField, remaining := b.collapseFormalParamInternal(subtyp, fields)
 				fields = remaining
-				value = c.builder.CreateInsertValue(value, structField, i, "")
+				value = b.CreateInsertValue(value, structField, i, "")
 			}
 			return value, fields
 		} else {
