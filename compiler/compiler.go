@@ -1000,7 +1000,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 					fmt.Printf("\t%s\n", instr.String())
 				}
 			}
-			c.parseInstr(frame, instr)
+			frame.createInstruction(instr)
 		}
 		if frame.fn.Name() == "init" && len(block.Instrs) == 0 {
 			c.builder.CreateRetVoid()
@@ -1018,69 +1018,71 @@ func (c *Compiler) parseFunc(frame *Frame) {
 	}
 }
 
-func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
-	if c.Debug() {
-		pos := c.ir.Program.Fset.Position(instr.Pos())
-		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), frame.difunc, llvm.Metadata{})
+// createInstruction builds the LLVM IR equivalent instructions for the
+// particular Go SSA instruction.
+func (b *builder) createInstruction(instr ssa.Instruction) {
+	if b.Debug() {
+		pos := b.ir.Program.Fset.Position(instr.Pos())
+		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
 	}
 
 	switch instr := instr.(type) {
 	case ssa.Value:
-		if value, err := frame.createExpr(instr); err != nil {
+		if value, err := b.createExpr(instr); err != nil {
 			// This expression could not be parsed. Add the error to the list
 			// of diagnostics and continue with an undef value.
 			// The resulting IR will be incorrect (but valid). However,
 			// compilation can proceed which is useful because there may be
 			// more compilation errors which can then all be shown together to
 			// the user.
-			c.diagnostics = append(c.diagnostics, err)
-			frame.locals[instr] = llvm.Undef(c.getLLVMType(instr.Type()))
+			b.diagnostics = append(b.diagnostics, err)
+			b.locals[instr] = llvm.Undef(b.getLLVMType(instr.Type()))
 		} else {
-			frame.locals[instr] = value
-			if len(*instr.Referrers()) != 0 && c.NeedsStackObjects() {
-				c.trackExpr(frame, instr, value)
+			b.locals[instr] = value
+			if len(*instr.Referrers()) != 0 && b.NeedsStackObjects() {
+				b.trackExpr(instr, value)
 			}
 		}
 	case *ssa.DebugRef:
 		// ignore
 	case *ssa.Defer:
-		frame.createDefer(instr)
+		b.createDefer(instr)
 	case *ssa.Go:
 		// Get all function parameters to pass to the goroutine.
 		var params []llvm.Value
 		for _, param := range instr.Call.Args {
-			params = append(params, frame.getValue(param))
+			params = append(params, b.getValue(param))
 		}
 
 		// Start a new goroutine.
 		if callee := instr.Call.StaticCallee(); callee != nil {
 			// Static callee is known. This makes it easier to start a new
 			// goroutine.
-			calleeFn := c.ir.GetFunction(callee)
+			calleeFn := b.ir.GetFunction(callee)
 			var context llvm.Value
 			switch value := instr.Call.Value.(type) {
 			case *ssa.Function:
 				// Goroutine call is regular function call. No context is necessary.
-				context = llvm.Undef(c.i8ptrType)
+				context = llvm.Undef(b.i8ptrType)
 			case *ssa.MakeClosure:
 				// A goroutine call on a func value, but the callee is trivial to find. For
 				// example: immediately applied functions.
-				funcValue := frame.getValue(value)
-				context = frame.extractFuncContext(funcValue)
+				funcValue := b.getValue(value)
+				context = b.extractFuncContext(funcValue)
 			default:
 				panic("StaticCallee returned an unexpected value")
 			}
 			params = append(params, context) // context parameter
-			frame.createGoInstruction(calleeFn.LLVMFn, params)
+			b.createGoInstruction(calleeFn.LLVMFn, params)
 		} else if !instr.Call.IsInvoke() {
 			// This is a function pointer.
 			// At the moment, two extra params are passed to the newly started
 			// goroutine:
 			//   * The function context, for closures.
 			//   * The function pointer (for tasks).
-			funcPtr, context := frame.decodeFuncValue(frame.getValue(instr.Call.Value), instr.Call.Value.Type().(*types.Signature))
+			funcPtr, context := b.decodeFuncValue(b.getValue(instr.Call.Value), instr.Call.Value.Type().(*types.Signature))
 			params = append(params, context) // context parameter
-			switch c.Scheduler() {
+			switch b.Scheduler() {
 			case "none", "coroutines":
 				// There are no additional parameters needed for the goroutine start operation.
 			case "tasks":
@@ -1089,58 +1091,58 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			default:
 				panic("unknown scheduler type")
 			}
-			frame.createGoInstruction(funcPtr, params)
+			b.createGoInstruction(funcPtr, params)
 		} else {
-			c.addError(instr.Pos(), "todo: go on interface call")
+			b.addError(instr.Pos(), "todo: go on interface call")
 		}
 	case *ssa.If:
-		cond := frame.getValue(instr.Cond)
+		cond := b.getValue(instr.Cond)
 		block := instr.Block()
-		blockThen := frame.blockEntries[block.Succs[0]]
-		blockElse := frame.blockEntries[block.Succs[1]]
-		c.builder.CreateCondBr(cond, blockThen, blockElse)
+		blockThen := b.blockEntries[block.Succs[0]]
+		blockElse := b.blockEntries[block.Succs[1]]
+		b.CreateCondBr(cond, blockThen, blockElse)
 	case *ssa.Jump:
-		blockJump := frame.blockEntries[instr.Block().Succs[0]]
-		c.builder.CreateBr(blockJump)
+		blockJump := b.blockEntries[instr.Block().Succs[0]]
+		b.CreateBr(blockJump)
 	case *ssa.MapUpdate:
-		m := frame.getValue(instr.Map)
-		key := frame.getValue(instr.Key)
-		value := frame.getValue(instr.Value)
+		m := b.getValue(instr.Map)
+		key := b.getValue(instr.Key)
+		value := b.getValue(instr.Value)
 		mapType := instr.Map.Type().Underlying().(*types.Map)
-		frame.createMapUpdate(mapType.Key(), m, key, value, instr.Pos())
+		b.createMapUpdate(mapType.Key(), m, key, value, instr.Pos())
 	case *ssa.Panic:
-		value := frame.getValue(instr.X)
-		c.createRuntimeCall("_panic", []llvm.Value{value}, "")
-		c.builder.CreateUnreachable()
+		value := b.getValue(instr.X)
+		b.createRuntimeCall("_panic", []llvm.Value{value}, "")
+		b.CreateUnreachable()
 	case *ssa.Return:
 		if len(instr.Results) == 0 {
-			c.builder.CreateRetVoid()
+			b.CreateRetVoid()
 		} else if len(instr.Results) == 1 {
-			c.builder.CreateRet(frame.getValue(instr.Results[0]))
+			b.CreateRet(b.getValue(instr.Results[0]))
 		} else {
 			// Multiple return values. Put them all in a struct.
-			retVal := llvm.ConstNull(frame.fn.LLVMFn.Type().ElementType().ReturnType())
+			retVal := llvm.ConstNull(b.fn.LLVMFn.Type().ElementType().ReturnType())
 			for i, result := range instr.Results {
-				val := frame.getValue(result)
-				retVal = c.builder.CreateInsertValue(retVal, val, i, "")
+				val := b.getValue(result)
+				retVal = b.CreateInsertValue(retVal, val, i, "")
 			}
-			c.builder.CreateRet(retVal)
+			b.CreateRet(retVal)
 		}
 	case *ssa.RunDefers:
-		frame.createRunDefers()
+		b.createRunDefers()
 	case *ssa.Send:
-		frame.createChanSend(instr)
+		b.createChanSend(instr)
 	case *ssa.Store:
-		llvmAddr := frame.getValue(instr.Addr)
-		llvmVal := frame.getValue(instr.Val)
-		frame.createNilCheck(llvmAddr, "store")
-		if c.targetData.TypeAllocSize(llvmVal.Type()) == 0 {
+		llvmAddr := b.getValue(instr.Addr)
+		llvmVal := b.getValue(instr.Val)
+		b.createNilCheck(llvmAddr, "store")
+		if b.targetData.TypeAllocSize(llvmVal.Type()) == 0 {
 			// nothing to store
 			return
 		}
-		c.builder.CreateStore(llvmVal, llvmAddr)
+		b.CreateStore(llvmVal, llvmAddr)
 	default:
-		c.addError(instr.Pos(), "unknown instruction: "+instr.String())
+		b.addError(instr.Pos(), "unknown instruction: "+instr.String())
 	}
 }
 
