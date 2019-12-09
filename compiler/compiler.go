@@ -1071,7 +1071,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 				panic("StaticCallee returned an unexpected value")
 			}
 			params = append(params, context) // context parameter
-			c.emitStartGoroutine(calleeFn.LLVMFn, params)
+			frame.createGoInstruction(calleeFn.LLVMFn, params)
 		} else if !instr.Call.IsInvoke() {
 			// This is a function pointer.
 			// At the moment, two extra params are passed to the newly started
@@ -1089,7 +1089,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			default:
 				panic("unknown scheduler type")
 			}
-			c.emitStartGoroutine(funcPtr, params)
+			frame.createGoInstruction(funcPtr, params)
 		} else {
 			c.addError(instr.Pos(), "todo: go on interface call")
 		}
