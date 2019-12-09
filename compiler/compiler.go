@@ -62,10 +62,6 @@ type Compiler struct {
 	initFuncs []llvm.Value
 }
 
-type Frame struct {
-	builder
-}
-
 // builder contains all information relevant to build a single function.
 type builder struct {
 	*compilerContext
@@ -263,8 +259,6 @@ func (c *Compiler) Compile(mainPath string) []error {
 		})
 	}
 
-	var frames []*Frame
-
 	c.loadASTComments(lprogram)
 
 	// Declare runtime types.
@@ -283,21 +277,32 @@ func (c *Compiler) Compile(mainPath string) []error {
 
 	// Declare all functions.
 	for _, f := range c.ir.Functions {
-		frames = append(frames, c.parseFuncDecl(f))
+		c.createFunctionDeclaration(f)
 	}
 
 	// Add definitions to declarations.
-	for _, frame := range frames {
-		if frame.fn.Synthetic == "package initializer" {
-			c.initFuncs = append(c.initFuncs, frame.fn.LLVMFn)
+	for _, f := range c.ir.Functions {
+		if f.Synthetic == "package initializer" {
+			c.initFuncs = append(c.initFuncs, f.LLVMFn)
 		}
-		if frame.fn.CName() != "" {
+		if f.CName() != "" {
 			continue
 		}
-		if frame.fn.Blocks == nil {
+		if f.Blocks == nil {
 			continue // external function
 		}
-		frame.createFunctionDefinition()
+
+		// Create the function definition.
+		b := builder{
+			compilerContext: &c.compilerContext,
+			Builder:         c.builder,
+			fn:              f,
+			locals:          make(map[ssa.Value]llvm.Value),
+			dilocals:        make(map[*types.Var]llvm.Metadata),
+			blockEntries:    make(map[*ssa.BasicBlock]llvm.BasicBlock),
+			blockExits:      make(map[*ssa.BasicBlock]llvm.BasicBlock),
+		}
+		b.createFunctionDefinition()
 	}
 
 	// After all packages are imported, add a synthetic initializer function
@@ -726,19 +731,9 @@ func (b *builder) getLocalVariable(variable *types.Var) llvm.Metadata {
 	return dilocal
 }
 
-func (c *Compiler) parseFuncDecl(f *ir.Function) *Frame {
-	frame := &Frame{
-		builder: builder{
-			compilerContext: &c.compilerContext,
-			Builder:         c.builder, // TODO: use a separate builder per function
-			fn:              f,
-			locals:          make(map[ssa.Value]llvm.Value),
-			dilocals:        make(map[*types.Var]llvm.Metadata),
-			blockEntries:    make(map[*ssa.BasicBlock]llvm.BasicBlock),
-			blockExits:      make(map[*ssa.BasicBlock]llvm.BasicBlock),
-		},
-	}
-
+// createFunctionDeclaration creates a LLVM function declaration without body.
+// It can later be filled with frame.createFunctionDefinition().
+func (c *compilerContext) createFunctionDeclaration(f *ir.Function) {
 	var retType llvm.Type
 	if f.Signature.Results() == nil {
 		retType = c.ctx.VoidType()
@@ -769,9 +764,9 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) *Frame {
 	fnType := llvm.FunctionType(retType, paramTypes, false)
 
 	name := f.LinkName()
-	frame.fn.LLVMFn = c.mod.NamedFunction(name)
-	if frame.fn.LLVMFn.IsNil() {
-		frame.fn.LLVMFn = llvm.AddFunction(c.mod, name, fnType)
+	f.LLVMFn = c.mod.NamedFunction(name)
+	if f.LLVMFn.IsNil() {
+		f.LLVMFn = llvm.AddFunction(c.mod, name, fnType)
 	}
 
 	// External/exported functions may not retain pointer values.
@@ -780,18 +775,16 @@ func (c *Compiler) parseFuncDecl(f *ir.Function) *Frame {
 		// Set the wasm-import-module attribute if the function's module is set.
 		if f.Module() != "" {
 			wasmImportModuleAttr := c.ctx.CreateStringAttribute("wasm-import-module", f.Module())
-			frame.fn.LLVMFn.AddFunctionAttr(wasmImportModuleAttr)
+			f.LLVMFn.AddFunctionAttr(wasmImportModuleAttr)
 		}
 		nocaptureKind := llvm.AttributeKindID("nocapture")
 		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
 		for i, typ := range paramTypes {
 			if typ.TypeKind() == llvm.PointerTypeKind {
-				frame.fn.LLVMFn.AddAttributeAtIndex(i+1, nocapture)
+				f.LLVMFn.AddAttributeAtIndex(i+1, nocapture)
 			}
 		}
 	}
-
-	return frame
 }
 
 // attachDebugInfo adds debug info to a function declaration. It returns the
