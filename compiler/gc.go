@@ -12,53 +12,53 @@ import (
 
 // trackExpr inserts pointer tracking intrinsics for the GC if the expression is
 // one of the expressions that need this.
-func (c *Compiler) trackExpr(frame *Frame, expr ssa.Value, value llvm.Value) {
+func (b *builder) trackExpr(expr ssa.Value, value llvm.Value) {
 	// There are uses of this expression, Make sure the pointers
 	// are tracked during GC.
 	switch expr := expr.(type) {
 	case *ssa.Alloc, *ssa.MakeChan, *ssa.MakeMap:
 		// These values are always of pointer type in IR.
-		c.trackPointer(value)
+		b.trackPointer(value)
 	case *ssa.Call, *ssa.Convert, *ssa.MakeClosure, *ssa.MakeInterface, *ssa.MakeSlice, *ssa.Next:
 		if !value.IsNil() {
-			c.trackValue(value)
+			b.trackValue(value)
 		}
 	case *ssa.Select:
-		if alloca, ok := frame.selectRecvBuf[expr]; ok {
+		if alloca, ok := b.selectRecvBuf[expr]; ok {
 			if alloca.IsAUndefValue().IsNil() {
-				c.trackPointer(alloca)
+				b.trackPointer(alloca)
 			}
 		}
 	case *ssa.UnOp:
 		switch expr.Op {
 		case token.MUL:
 			// Pointer dereference.
-			c.trackValue(value)
+			b.trackValue(value)
 		case token.ARROW:
 			// Channel receive operator.
 			// It's not necessary to look at commaOk here, because in that
 			// case it's just an aggregate and trackValue will extract the
 			// pointer in there (if there is one).
-			c.trackValue(value)
+			b.trackValue(value)
 		}
 	}
 }
 
 // trackValue locates pointers in a value (possibly an aggregate) and tracks the
 // individual pointers
-func (c *Compiler) trackValue(value llvm.Value) {
+func (b *builder) trackValue(value llvm.Value) {
 	typ := value.Type()
 	switch typ.TypeKind() {
 	case llvm.PointerTypeKind:
-		c.trackPointer(value)
+		b.trackPointer(value)
 	case llvm.StructTypeKind:
 		if !typeHasPointers(typ) {
 			return
 		}
 		numElements := typ.StructElementTypesCount()
 		for i := 0; i < numElements; i++ {
-			subValue := c.builder.CreateExtractValue(value, i, "")
-			c.trackValue(subValue)
+			subValue := b.CreateExtractValue(value, i, "")
+			b.trackValue(subValue)
 		}
 	case llvm.ArrayTypeKind:
 		if !typeHasPointers(typ) {
@@ -66,8 +66,8 @@ func (c *Compiler) trackValue(value llvm.Value) {
 		}
 		numElements := typ.ArrayLength()
 		for i := 0; i < numElements; i++ {
-			subValue := c.builder.CreateExtractValue(value, i, "")
-			c.trackValue(subValue)
+			subValue := b.CreateExtractValue(value, i, "")
+			b.trackValue(subValue)
 		}
 	}
 }
