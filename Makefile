@@ -14,9 +14,6 @@ export GOROOT = $(shell $(GO) env GOROOT)
 # md5sum binary
 MD5SUM = md5sum
 
-# Python binary
-PYTHON ?= python
-
 # tinygo binary for tests
 TINYGO ?= tinygo
 
@@ -102,20 +99,23 @@ gen-device-avr:
 	./build/gen-device-avr lib/avr/packs/tiny src/device/avr/
 	@GO111MODULE=off $(GO) fmt ./src/device/avr
 
-gen-device-nrf:
-	$(PYTHON) ./tools/gen-device-svd.py lib/nrfx/mdk/ src/device/nrf/ --source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk
+build/gen-device-svd: ./tools/gen-device-svd/*.go
+	$(GO) build -o $@ ./tools/gen-device-svd/
+
+gen-device-nrf: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk lib/nrfx/mdk/ src/device/nrf/
 	GO111MODULE=off $(GO) fmt ./src/device/nrf
 
-gen-device-sam:
-	$(PYTHON) ./tools/gen-device-svd.py lib/cmsis-svd/data/Atmel/ src/device/sam/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel
+gen-device-sam: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel lib/cmsis-svd/data/Atmel/ src/device/sam/
 	GO111MODULE=off $(GO) fmt ./src/device/sam
 
-gen-device-sifive:
-	$(PYTHON) ./tools/gen-device-svd.py lib/cmsis-svd/data/SiFive-Community/ src/device/sifive/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/SiFive-Community
+gen-device-sifive: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/SiFive-Community lib/cmsis-svd/data/SiFive-Community/ src/device/sifive/
 	GO111MODULE=off $(GO) fmt ./src/device/sifive
 
-gen-device-stm32:
-	$(PYTHON) ./tools/gen-device-svd.py lib/cmsis-svd/data/STMicro/ src/device/stm32/ --source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro
+gen-device-stm32: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro lib/cmsis-svd/data/STMicro/ src/device/stm32/
 	GO111MODULE=off $(GO) fmt ./src/device/stm32
 
 

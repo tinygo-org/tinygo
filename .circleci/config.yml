@@ -18,7 +18,6 @@ commands:
             wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
             sudo apt-get update
             sudo apt-get install \
-                python3 \
                 llvm<<parameters.llvm>>-dev \
                 clang<<parameters.llvm>> \
                 libclang<<parameters.llvm>>-dev \
@@ -83,7 +82,6 @@ commands:
           name: "Install apt dependencies"
           command: |
             sudo apt-get install \
-                python3 \
                 gcc-arm-linux-gnueabihf \
                 binutils-arm-none-eabi \
                 libc6-dev-armel-cross \
@@ -148,7 +146,6 @@ commands:
           name: "Install apt dependencies"
           command: |
             sudo apt-get install \
-                python3 \
                 gcc-arm-linux-gnueabihf \
                 binutils-arm-none-eabi \
                 libc6-dev-armel-cross \

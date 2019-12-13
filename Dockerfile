@@ -41,9 +41,8 @@ COPY --from=tinygo-base /tinygo/lib /tinygo/lib
 
 RUN cd /tinygo/ && \
     apt-get update && \
-    apt-get install -y apt-utils python3 make binutils-avr gcc-avr avr-libc && \
+    apt-get install -y apt-utils make binutils-avr gcc-avr avr-libc && \
     make gen-device-avr && \
-    apt-get remove -y python3 && \
     apt-get autoremove -y && \
     apt-get clean
 
@@ -59,11 +58,8 @@ COPY --from=tinygo-base /tinygo/lib /tinygo/lib
 
 RUN cd /tinygo/ && \
     apt-get update && \
-    apt-get install -y apt-utils python3 make clang-9 && \
-    make gen-device-nrf && make gen-device-stm32 && \
-    apt-get remove -y python3 && \
-    apt-get autoremove -y && \
-    apt-get clean
+    apt-get install -y apt-utils make clang-9 && \
+    make gen-device-nrf && make gen-device-stm32
 
 # tinygo-all stage installs the needed dependencies to compile TinyGo programs for all platforms.
 FROM tinygo-wasm AS tinygo-all
@@ -74,10 +70,7 @@ COPY --from=tinygo-base /tinygo/lib /tinygo/lib
 
 RUN cd /tinygo/ && \
     apt-get update && \
-    apt-get install -y apt-utils python3 make clang-9 binutils-avr gcc-avr avr-libc && \
-    make gen-device && \
-    apt-get remove -y python3 && \
-    apt-get autoremove -y && \
-    apt-get clean
+    apt-get install -y apt-utils make clang-9 binutils-avr gcc-avr avr-libc && \
+    make gen-device
 
 CMD ["tinygo"]
