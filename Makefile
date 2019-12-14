@@ -62,6 +62,11 @@ $(LIBCLANG_PATH): $(LIBCLANG_FILES)
 else ifeq ($(shell uname -s),Darwin)
     MD5SUM = md5
     LIBCLANG_PATH = $(abspath $(LLVM_BUILDDIR))/lib/libclang.a
+else ifeq ($(shell uname -s),FreeBSD)
+    MD5SUM = md5
+    LIBCLANG_PATH = $(abspath $(LLVM_BUILDDIR))/lib/libclang.a
+    START_GROUP = -Wl,--start-group
+    END_GROUP = -Wl,--end-group
 else
     LIBCLANG_PATH = $(abspath $(LLVM_BUILDDIR))/lib/libclang.a
     START_GROUP = -Wl,--start-group

@@ -34,6 +34,12 @@ func init() {
 		commands["ld.lld"] = append(commands["ld.lld"], "lld", "C:\\Program Files\\LLVM\\bin\\lld.exe")
 		commands["wasm-ld"] = append(commands["wasm-ld"], "C:\\Program Files\\LLVM\\bin\\wasm-ld.exe")
 	}
+	// Add the path to the llvm90 installed from ports
+	if runtime.GOOS == "freebsd" {
+		commands["clang"] = append(commands["clang"], "/usr/local/llvm90/bin/clang-9")
+		commands["ld.lld"] = append(commands["ld.lld"], "/usr/local/llvm90/bin/ld.lld")
+		commands["wasm-ld"] = append(commands["wasm-ld"], "/usr/local/llvm90/bin/wasm-ld")
+	}
 }
 
 func execCommand(cmdNames []string, args ...string) error {
