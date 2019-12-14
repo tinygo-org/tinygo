@@ -152,7 +152,7 @@ func (c *Compiler) emitSyscall(frame *Frame, call *ssa.CallCommon) (llvm.Value, 
 		return llvm.Value{}, c.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+c.GOOS()+"/"+c.GOARCH())
 	}
 	switch c.GOOS() {
-	case "linux":
+	case "linux", "freebsd":
 		// Return values: r0, r1 uintptr, err Errno
 		// Pseudocode:
 		//     var err uintptr
