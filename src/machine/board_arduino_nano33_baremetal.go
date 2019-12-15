@@ -45,8 +45,8 @@ var (
 // SPI on the Arduino Nano 33.
 var (
 	SPI0 = SPI{
-		Bus:    sam.SERCOM0_SPI,
-		SERCOM: 0,
+		Bus:    sam.SERCOM1_SPI,
+		SERCOM: 1,
 	}
 )
 
