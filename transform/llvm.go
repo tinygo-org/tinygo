@@ -89,3 +89,19 @@ func typeHasPointers(t llvm.Type) bool {
 		return false
 	}
 }
+
+// isFunctionLocal returns true if (and only if) this value is local to a
+// function. That is, it returns true for instructions and parameters, and false
+// for constants and globals.
+func isFunctionLocal(val llvm.Value) bool {
+	if !val.IsAConstant().IsNil() {
+		return false
+	}
+	if !val.IsAInstruction().IsNil() {
+		return true
+	}
+	if !val.IsAGlobalValue().IsNil() {
+		return false
+	}
+	panic("unknown value kind")
+}

@@ -217,7 +217,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 				path = path[len(tinygoPath+"/src/"):]
 			}
 			switch path {
-			case "machine", "os", "reflect", "runtime", "runtime/volatile", "sync", "testing", "internal/reflectlite":
+			case "machine", "os", "reflect", "runtime", "runtime/interrupt", "runtime/volatile", "sync", "testing", "internal/reflectlite":
 				return path
 			default:
 				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
@@ -827,9 +827,6 @@ func (c *Compiler) parseFunc(frame *Frame) {
 	if !frame.fn.IsExported() {
 		frame.fn.LLVMFn.SetLinkage(llvm.InternalLinkage)
 		frame.fn.LLVMFn.SetUnnamedAddr(true)
-	}
-	if frame.fn.IsInterrupt() && strings.HasPrefix(c.Triple(), "avr") {
-		frame.fn.LLVMFn.SetFunctionCallConv(85) // CallingConv::AVR_SIGNAL
 	}
 
 	// Some functions have a pragma controlling the inlining level.

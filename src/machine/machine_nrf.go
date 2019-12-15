@@ -3,9 +3,9 @@
 package machine
 
 import (
-	"device/arm"
 	"device/nrf"
 	"errors"
+	"runtime/interrupt"
 )
 
 var (
@@ -88,8 +88,11 @@ func (uart UART) Configure(config UARTConfig) {
 	nrf.UART0.INTENSET.Set(nrf.UART_INTENSET_RXDRDY_Msk)
 
 	// Enable RX IRQ.
-	arm.SetPriority(nrf.IRQ_UART0, 0xc0) // low priority
-	arm.EnableIRQ(nrf.IRQ_UART0)
+	intr := interrupt.New(nrf.IRQ_UART0, func(intr interrupt.Interrupt) {
+		UART0.handleInterrupt()
+	})
+	intr.SetPriority(0xc0) // low priority
+	intr.Enable()
 }
 
 // SetBaudRate sets the communication speed for the UART.

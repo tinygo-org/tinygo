@@ -57,6 +57,12 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) []er
 		transform.OptimizeStringToBytes(c.mod)
 		transform.OptimizeAllocs(c.mod)
 		transform.LowerInterfaces(c.mod)
+
+		errs := transform.LowerInterruptRegistrations(c.mod)
+		if len(errs) > 0 {
+			return errs
+		}
+
 		if c.funcImplementation() == funcValueSwitch {
 			transform.LowerFuncValues(c.mod)
 		}
@@ -99,6 +105,10 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) []er
 		err := c.LowerGoroutines()
 		if err != nil {
 			return []error{err}
+		}
+		errs := transform.LowerInterruptRegistrations(c.mod)
+		if len(errs) > 0 {
+			return errs
 		}
 	}
 	if c.VerifyIR() {

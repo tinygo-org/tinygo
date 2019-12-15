@@ -11,6 +11,7 @@ import (
 	"device/arm"
 	"device/sam"
 	"errors"
+	"runtime/interrupt"
 	"unsafe"
 )
 
@@ -1368,7 +1369,8 @@ func (usbcdc USBCDC) Configure(config UARTConfig) {
 	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_ENABLE)
 
 	// enable IRQ
-	arm.EnableIRQ(sam.IRQ_USB)
+	intr := interrupt.New(sam.IRQ_USB, handleUSB)
+	intr.Enable()
 }
 
 func handlePadCalibration() {
@@ -1414,8 +1416,7 @@ func handlePadCalibration() {
 	sam.USB_DEVICE.PADCAL.SetBits(calibTrim << sam.USB_DEVICE_PADCAL_TRIM_Pos)
 }
 
-//go:export USB_IRQHandler
-func handleUSB() {
+func handleUSB(intr interrupt.Interrupt) {
 	// reset all interrupt flags
 	flags := sam.USB_DEVICE.INTFLAG.Get()
 	sam.USB_DEVICE.INTFLAG.Set(flags)
