@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/avr"
+	"runtime/interrupt"
 	"runtime/volatile"
 )
 
@@ -232,6 +233,18 @@ func (uart UART) Configure(config UARTConfig) {
 		config.BaudRate = 9600
 	}
 
+	// Register the UART interrupt.
+	interrupt.New(avr.IRQ_USART_RX, func(intr interrupt.Interrupt) {
+		// Read register to clear it.
+		data := avr.UDR0.Get()
+
+		// Ensure no error.
+		if !avr.UCSR0A.HasBits(avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0) {
+			// Put data from UDR register into buffer.
+			UART0.Receive(byte(data))
+		}
+	})
+
 	// Set baud rate based on prescale formula from
 	// https://www.microchip.com/webdoc/AVRLibcReferenceManual/FAQ_1faq_wrong_baud_rate.html
 	// ((F_CPU + UART_BAUD_RATE * 8L) / (UART_BAUD_RATE * 16L) - 1)
@@ -253,16 +266,4 @@ func (uart UART) WriteByte(c byte) error {
 	}
 	avr.UDR0.Set(c) // send char
 	return nil
-}
-
-//go:interrupt USART_RX_vect
-func handleUSART_RX() {
-	// Read register to clear it.
-	data := avr.UDR0.Get()
-
-	// Ensure no error.
-	if !avr.UCSR0A.HasBits(avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0) {
-		// Put data from UDR register into buffer.
-		UART0.Receive(byte(data))
-	}
 }

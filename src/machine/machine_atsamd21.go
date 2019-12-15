@@ -11,6 +11,7 @@ import (
 	"device/arm"
 	"device/sam"
 	"errors"
+	"runtime/interrupt"
 	"unsafe"
 )
 
@@ -292,9 +293,10 @@ func waitADCSync() {
 
 // UART on the SAMD21.
 type UART struct {
-	Buffer *RingBuffer
-	Bus    *sam.SERCOM_USART_Type
-	SERCOM uint8
+	Buffer    *RingBuffer
+	Bus       *sam.SERCOM_USART_Type
+	SERCOM    uint8
+	Interrupt interrupt.Interrupt
 }
 
 var (
@@ -401,10 +403,7 @@ func (uart UART) Configure(config UARTConfig) error {
 	uart.Bus.INTENSET.Set(sam.SERCOM_USART_INTENSET_RXC)
 
 	// Enable RX IRQ.
-	// IRQ lines are in the same order as SERCOM instance numbers on SAMD21
-	// chips, so the IRQ number can be trivially determined from the SERCOM
-	// number.
-	arm.EnableIRQ(sam.IRQ_SERCOM0 + uint32(uart.SERCOM))
+	uart.Interrupt.Enable()
 
 	return nil
 }
@@ -432,11 +431,12 @@ func (uart UART) WriteByte(c byte) error {
 	return nil
 }
 
-// defaultUART1Handler handles the UART1 IRQ.
-func defaultUART1Handler() {
+// handleInterrupt should be called from the appropriate interrupt handler for
+// this UART instance.
+func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	// should reset IRQ
-	UART1.Receive(byte((UART1.Bus.DATA.Get() & 0xFF)))
-	UART1.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INTFLAG_RXC)
+	uart.Receive(byte((uart.Bus.DATA.Get() & 0xFF)))
+	uart.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INTFLAG_RXC)
 }
 
 // I2C on the SAMD21.
@@ -1368,7 +1368,8 @@ func (usbcdc USBCDC) Configure(config UARTConfig) {
 	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_ENABLE)
 
 	// enable IRQ
-	arm.EnableIRQ(sam.IRQ_USB)
+	intr := interrupt.New(sam.IRQ_USB, handleUSB)
+	intr.Enable()
 }
 
 func handlePadCalibration() {
@@ -1414,8 +1415,7 @@ func handlePadCalibration() {
 	sam.USB_DEVICE.PADCAL.SetBits(calibTrim << sam.USB_DEVICE_PADCAL_TRIM_Pos)
 }
 
-//go:export USB_IRQHandler
-func handleUSB() {
+func handleUSB(intr interrupt.Interrupt) {
 	// reset all interrupt flags
 	flags := sam.USB_DEVICE.INTFLAG.Get()
 	sam.USB_DEVICE.INTFLAG.Set(flags)

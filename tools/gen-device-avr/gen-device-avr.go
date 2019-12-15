@@ -260,6 +260,7 @@ func writeGo(outdir string, device *Device) error {
 package {{.pkgName}}
 
 import (
+	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -275,6 +276,12 @@ const (
 const ({{range .interrupts}}
 	IRQ_{{.Name}} = {{.Index}} // {{.Caption}}{{end}}
 	IRQ_max = {{.interruptMax}} // Highest interrupt number on this device.
+)
+
+// Map interrupt numbers to function names.
+// These aren't real calls, they're removed by the compiler.
+var ({{range .interrupts}}
+	_ = interrupt.Register(IRQ_{{.Name}}, "__vector_{{.Name}}"){{end}}
 )
 
 // Peripherals.

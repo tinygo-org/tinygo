@@ -82,6 +82,7 @@ type Device struct {
 
 type interrupt struct {
 	Name            string
+	HandlerName     string
 	peripheralIndex int
 	Value           int // interrupt number
 	Description     string
@@ -171,12 +172,12 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		groupName := cleanName(periphEl.GroupName)
 
 		for _, interrupt := range periphEl.Interrupts {
-			addInterrupt(interrupts, interrupt.Name, interrupt.Index, description)
+			addInterrupt(interrupts, interrupt.Name, interrupt.Name, interrupt.Index, description)
 			// As a convenience, also use the peripheral name as the interrupt
 			// name. Only do that for the nrf for now, as the stm32 .svd files
 			// don't always put interrupts in the correct peripheral...
 			if len(periphEl.Interrupts) == 1 && strings.HasPrefix(device.Name, "nrf") {
-				addInterrupt(interrupts, periphEl.Name, interrupt.Index, description)
+				addInterrupt(interrupts, periphEl.Name, interrupt.Name, interrupt.Index, description)
 			}
 		}
 
@@ -388,7 +389,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 	}, nil
 }
 
-func addInterrupt(interrupts map[string]*interrupt, name string, index int, description string) {
+func addInterrupt(interrupts map[string]*interrupt, name, interruptName string, index int, description string) {
 	if _, ok := interrupts[name]; ok {
 		if interrupts[name].Value != index {
 			// Note: some SVD files like the one for STM32H7x7 contain mistakes.
@@ -409,6 +410,7 @@ func addInterrupt(interrupts map[string]*interrupt, name string, index int, desc
 	} else {
 		interrupts[name] = &interrupt{
 			Name:            name,
+			HandlerName:     interruptName + "_IRQHandler",
 			peripheralIndex: len(interrupts),
 			Value:           index,
 			Description:     description,
@@ -619,6 +621,7 @@ func writeGo(outdir string, device *Device) error {
 package {{.pkgName}}
 
 import (
+	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -628,10 +631,16 @@ const (
 	DEVICE	 = "{{.metadata.name}}"
 )
 
-// Interrupt numbers
+// Interrupt numbers.
 const ({{range .interrupts}}
 	IRQ_{{.Name}} = {{.Value}} // {{.Description}}{{end}}
 	IRQ_max = {{.interruptMax}} // Highest interrupt number on this device.
+)
+
+// Map interrupt numbers to function names.
+// These aren't real calls, they're removed by the compiler.
+var ({{range .interrupts}}
+	_ = interrupt.Register(IRQ_{{.Name}}, "{{.HandlerName}}"){{end}}
 )
 
 // Peripherals.
@@ -879,7 +888,7 @@ Default_Handler:
 			num++
 		}
 		num++
-		fmt.Fprintf(w, "    .long %s_IRQHandler\n", intr.Name)
+		fmt.Fprintf(w, "    .long %s\n", intr.HandlerName)
 	}
 
 	w.WriteString(`

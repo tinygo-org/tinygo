@@ -11,6 +11,7 @@ import (
 	"device/arm"
 	"device/sam"
 	"errors"
+	"runtime/interrupt"
 	"unsafe"
 )
 
@@ -1547,11 +1548,11 @@ func (usbcdc USBCDC) Configure(config UARTConfig) {
 	// enable USB
 	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_ENABLE)
 
-	// enable IRQ
-	arm.EnableIRQ(sam.IRQ_USB_OTHER)
-	arm.EnableIRQ(sam.IRQ_USB_SOF_HSOF)
-	arm.EnableIRQ(sam.IRQ_USB_TRCPT0)
-	arm.EnableIRQ(sam.IRQ_USB_TRCPT1)
+	// enable IRQ at highest priority
+	interrupt.New(sam.IRQ_USB_OTHER, handleUSBIRQ).Enable()
+	interrupt.New(sam.IRQ_USB_SOF_HSOF, handleUSBIRQ).Enable()
+	interrupt.New(sam.IRQ_USB_TRCPT0, handleUSBIRQ).Enable()
+	interrupt.New(sam.IRQ_USB_TRCPT1, handleUSBIRQ).Enable()
 }
 
 func handlePadCalibration() {
@@ -1597,27 +1598,7 @@ func handlePadCalibration() {
 	sam.USB_DEVICE.PADCAL.SetBits(calibTrim << sam.USB_DEVICE_PADCAL_TRIM_Pos)
 }
 
-//go:export USB_OTHER_IRQHandler
-func handleUSBOther() {
-	handleUSBIRQ()
-}
-
-//go:export USB_SOF_HSOF_IRQHandler
-func handleUSBSOFHSOF() {
-	handleUSBIRQ()
-}
-
-//go:export USB_TRCPT0_IRQHandler
-func handleUSBTRCPT0() {
-	handleUSBIRQ()
-}
-
-//go:export USB_TRCPT1_IRQHandler
-func handleUSBTRCPT1() {
-	handleUSBIRQ()
-}
-
-func handleUSBIRQ() {
+func handleUSBIRQ(interrupt.Interrupt) {
 	// reset all interrupt flags
 	flags := sam.USB_DEVICE.INTFLAG.Get()
 	sam.USB_DEVICE.INTFLAG.Set(flags)
