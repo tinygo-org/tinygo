@@ -5,8 +5,8 @@ package machine
 // Peripheral abstraction layer for the stm32.
 
 import (
-	"device/arm"
 	"device/stm32"
+	"runtime/interrupt"
 )
 
 func CPUFrequency() uint32 {
@@ -203,8 +203,11 @@ func (uart UART) Configure(config UARTConfig) {
 	stm32.USART2.CR1.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
 
 	// Enable RX IRQ.
-	arm.SetPriority(stm32.IRQ_USART2, 0xc0)
-	arm.EnableIRQ(stm32.IRQ_USART2)
+	intr := interrupt.New(stm32.IRQ_USART2, func(interrupt.Interrupt) {
+		UART1.Receive(byte((stm32.USART2.DR.Get() & 0xFF)))
+	})
+	intr.SetPriority(0xc0)
+	intr.Enable()
 }
 
 // WriteByte writes a byte of data to the UART.
@@ -214,9 +217,4 @@ func (uart UART) WriteByte(c byte) error {
 	for !stm32.USART2.SR.HasBits(stm32.USART_SR_TXE) {
 	}
 	return nil
-}
-
-//go:export USART2_IRQHandler
-func handleUSART2() {
-	UART1.Receive(byte((stm32.USART2.DR.Get() & 0xFF)))
 }

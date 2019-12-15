@@ -27,14 +27,13 @@ type Program struct {
 // Function or method.
 type Function struct {
 	*ssa.Function
-	LLVMFn    llvm.Value
-	module    string     // go:wasm-module
-	linkName  string     // go:linkname, go:export, go:interrupt
-	exported  bool       // go:export
-	nobounds  bool       // go:nobounds
-	flag      bool       // used by dead code elimination
-	interrupt bool       // go:interrupt
-	inline    InlineType // go:inline
+	LLVMFn   llvm.Value
+	module   string     // go:wasm-module
+	linkName string     // go:linkname, go:export
+	exported bool       // go:export
+	nobounds bool       // go:nobounds
+	flag     bool       // used by dead code elimination
+	inline   InlineType // go:inline
 }
 
 // Interface type that is at some point used in a type assert (to check whether
@@ -243,18 +242,6 @@ func (f *Function) parsePragmas() {
 				f.inline = InlineHint
 			case "//go:noinline":
 				f.inline = InlineNone
-			case "//go:interrupt":
-				if len(parts) != 2 {
-					continue
-				}
-				name := parts[1]
-				if strings.HasSuffix(name, "_vect") {
-					// AVR vector naming
-					name = "__vector_" + name[:len(name)-5]
-				}
-				f.linkName = name
-				f.exported = true
-				f.interrupt = true
 			case "//go:linkname":
 				if len(parts) != 3 || parts[1] != f.Name() {
 					continue
@@ -286,14 +273,6 @@ func (f *Function) IsNoBounds() bool {
 // Return true iff this function is externally visible.
 func (f *Function) IsExported() bool {
 	return f.exported || f.CName() != ""
-}
-
-// Return true for functions annotated with //go:interrupt. The function name is
-// already customized in LinkName() to hook up in the interrupt vector.
-//
-// On some platforms (like AVR), interrupts need a special compiler flag.
-func (f *Function) IsInterrupt() bool {
-	return f.interrupt
 }
 
 // Return the inline directive of this function.

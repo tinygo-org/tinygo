@@ -6,6 +6,7 @@ import (
 	"device/arm"
 	"device/sam"
 	"machine"
+	"runtime/interrupt"
 	"runtime/volatile"
 )
 
@@ -202,8 +203,14 @@ func initRTC() {
 	for sam.RTC_MODE0.SYNCBUSY.HasBits(sam.RTC_MODE0_SYNCBUSY_ENABLE) {
 	}
 
-	arm.SetPriority(sam.IRQ_RTC, 0xc0)
-	arm.EnableIRQ(sam.IRQ_RTC)
+	irq := interrupt.New(sam.IRQ_RTC, func(interrupt.Interrupt) {
+		// disable IRQ for CMP0 compare
+		sam.RTC_MODE0.INTFLAG.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
+
+		timerWakeup.Set(1)
+	})
+	irq.SetPriority(0xc0)
+	irq.Enable()
 }
 
 func waitForSync() {
@@ -269,14 +276,6 @@ func timerSleep(ticks uint32) {
 	for timerWakeup.Get() == 0 {
 		arm.Asm("wfi")
 	}
-}
-
-//go:export RTC_IRQHandler
-func handleRTC() {
-	// disable IRQ for CMP0 compare
-	sam.RTC_MODE0.INTFLAG.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
-
-	timerWakeup.Set(1)
 }
 
 func initUSBClock() {

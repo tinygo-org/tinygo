@@ -6,6 +6,7 @@ import (
 	"device/arm"
 	"device/nrf"
 	"machine"
+	"runtime/interrupt"
 	"runtime/volatile"
 )
 
@@ -43,8 +44,13 @@ func initLFCLK() {
 
 func initRTC() {
 	nrf.RTC1.TASKS_START.Set(1)
-	arm.SetPriority(nrf.IRQ_RTC1, 0xc0) // low priority
-	arm.EnableIRQ(nrf.IRQ_RTC1)
+	intr := interrupt.New(nrf.IRQ_RTC1, func(intr interrupt.Interrupt) {
+		nrf.RTC1.INTENCLR.Set(nrf.RTC_INTENSET_COMPARE0)
+		nrf.RTC1.EVENTS_COMPARE[0].Set(0)
+		rtc_wakeup.Set(1)
+	})
+	intr.SetPriority(0xc0) // low priority
+	intr.Enable()
 }
 
 func putchar(c byte) {
@@ -95,11 +101,4 @@ func rtc_sleep(ticks uint32) {
 	for rtc_wakeup.Get() == 0 {
 		arm.Asm("wfi")
 	}
-}
-
-//go:export RTC1_IRQHandler
-func handleRTC1() {
-	nrf.RTC1.INTENCLR.Set(nrf.RTC_INTENSET_COMPARE0)
-	nrf.RTC1.EVENTS_COMPARE[0].Set(0)
-	rtc_wakeup.Set(1)
 }
