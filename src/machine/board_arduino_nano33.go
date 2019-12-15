@@ -71,7 +71,6 @@ const (
 	SPI0_MISO_PIN Pin = D12 // MISO: SERCOM1/PAD[3]
 )
 
-
 // NINA-W102 Pins
 const (
 	NINA_MOSI   Pin = PA12
