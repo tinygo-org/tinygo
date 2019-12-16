@@ -6,7 +6,9 @@ import (
 	"device/sifive"
 )
 
-const CPU_FREQUENCY = 16000000
+func CPUFrequency() uint32 {
+	return 16000000
+}
 
 type PinMode uint8
 
@@ -108,7 +110,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 	}
 
 	// div = (SPI_CFG(dev)->f_sys / (2 * frequency)) - 1;
-	div := CPU_FREQUENCY/(2*config.Frequency) - 1
+	div := CPUFrequency()/(2*config.Frequency) - 1
 	spi.Bus.DIV.Set(div)
 
 	// set mode
