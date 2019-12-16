@@ -415,7 +415,7 @@ func (uart UART) SetBaudRate(br uint32) {
 	//   BAUD = fref / (sampleRateValue * fbaud)
 	// (multiply by 8, to calculate fractional piece)
 	// uint32_t baudTimes8 = (SystemCoreClock * 8) / (16 * baudrate);
-	baud := (CPU_FREQUENCY * 8) / (sampleRate16X * br)
+	baud := (CPUFrequency() * 8) / (sampleRate16X * br)
 
 	// sercom->USART.BAUD.FRAC.FP   = (baudTimes8 % 8);
 	// sercom->USART.BAUD.FRAC.BAUD = (baudTimes8 / 8);
@@ -531,7 +531,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 func (i2c I2C) SetBaudRate(br uint32) {
 	// Synchronous arithmetic baudrate, via Arduino SAMD implementation:
 	// SystemCoreClock / ( 2 * baudrate) - 5 - (((SystemCoreClock / 1000000) * WIRE_RISE_TIME_NANOSECONDS) / (2 * 1000));
-	baud := CPU_FREQUENCY/(2*br) - 5 - (((CPU_FREQUENCY / 1000000) * riseTimeNanoseconds) / (2 * 1000))
+	baud := CPUFrequency()/(2*br) - 5 - (((CPUFrequency() / 1000000) * riseTimeNanoseconds) / (2 * 1000))
 	i2c.Bus.BAUD.Set(baud)
 }
 
@@ -723,7 +723,7 @@ func (i2s I2S) Configure(config I2SConfig) {
 	sam.PM.APBCMASK.SetBits(sam.PM_APBCMASK_I2S_)
 
 	// setting clock rate for sample.
-	division_factor := CPU_FREQUENCY / (config.AudioFrequency * uint32(config.DataFormat))
+	division_factor := CPUFrequency() / (config.AudioFrequency * uint32(config.DataFormat))
 
 	// Switch Generic Clock Generator 3 to DFLL48M.
 	sam.GCLK.GENDIV.Set((sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_GENDIV_ID_Pos) |
@@ -1043,7 +1043,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 	}
 
 	// Set synch speed for SPI
-	baudRate := (CPU_FREQUENCY / (2 * config.Frequency)) - 1
+	baudRate := (CPUFrequency() / (2 * config.Frequency)) - 1
 	spi.Bus.BAUD.Set(uint8(baudRate))
 
 	// Enable SPI port.

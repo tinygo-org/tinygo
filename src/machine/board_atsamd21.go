@@ -2,7 +2,10 @@
 
 package machine
 
-const CPU_FREQUENCY = 48000000
+// Return the current CPU frequency in hertz.
+func CPUFrequency() uint32 {
+	return 48000000
+}
 
 // Hardware pins
 const (

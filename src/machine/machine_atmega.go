@@ -140,7 +140,7 @@ func (i2c I2C) Configure(config I2CConfig) {
 	// SCL Frequency = CPU Clock Frequency / (16 + (2 * TWBR))
 	// NOTE: TWBR should be 10 or higher for master mode.
 	// It is 72 for a 16mhz board with 100kHz TWI
-	avr.TWBR.Set(uint8(((CPU_FREQUENCY / config.Frequency) - 16) / 2))
+	avr.TWBR.Set(uint8(((CPUFrequency() / config.Frequency) - 16) / 2))
 
 	// Enable twi module.
 	avr.TWCR.Set(avr.TWCR_TWEN)
@@ -235,7 +235,7 @@ func (uart UART) Configure(config UARTConfig) {
 	// Set baud rate based on prescale formula from
 	// https://www.microchip.com/webdoc/AVRLibcReferenceManual/FAQ_1faq_wrong_baud_rate.html
 	// ((F_CPU + UART_BAUD_RATE * 8L) / (UART_BAUD_RATE * 16L) - 1)
-	ps := ((CPU_FREQUENCY+config.BaudRate*8)/(config.BaudRate*16) - 1)
+	ps := ((CPUFrequency()+config.BaudRate*8)/(config.BaudRate*16) - 1)
 	avr.UBRR0H.Set(uint8(ps >> 8))
 	avr.UBRR0L.Set(uint8(ps & 0xff))
 

@@ -9,7 +9,9 @@ import (
 	"device/stm32"
 )
 
-const CPU_FREQUENCY = 168000000
+func CPUFrequency() uint32 {
+	return 168000000
+}
 
 const (
 	// Mode Flag

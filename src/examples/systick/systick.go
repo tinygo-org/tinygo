@@ -9,7 +9,7 @@ func main() {
 	machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	// timer fires 10 times per second
-	arm.SetupSystemTimer(machine.CPU_FREQUENCY / 10)
+	arm.SetupSystemTimer(machine.CPUFrequency() / 10)
 
 	for {
 	}

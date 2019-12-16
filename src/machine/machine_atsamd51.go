@@ -14,7 +14,9 @@ import (
 	"unsafe"
 )
 
-const CPU_FREQUENCY = 120000000
+func CPUFrequency() uint32 {
+	return 120000000
+}
 
 type PinMode uint8
 

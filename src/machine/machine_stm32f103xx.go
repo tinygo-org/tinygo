@@ -10,7 +10,9 @@ import (
 	"errors"
 )
 
-const CPU_FREQUENCY = 72000000
+func CPUFrequency() uint32 {
+	return 72000000
+}
 
 const (
 	PinInput       PinMode = 0 // Input mode
@@ -163,10 +165,10 @@ func (uart UART) SetBaudRate(br uint32) {
 	var divider uint32
 	if uart.Bus == stm32.USART1 {
 		// first divide by PCLK2 prescaler (div 1) and then desired baudrate
-		divider = CPU_FREQUENCY / br
+		divider = CPUFrequency() / br
 	} else {
 		// first divide by PCLK1 prescaler (div 2) and then desired baudrate
-		divider = CPU_FREQUENCY / 2 / br
+		divider = CPUFrequency() / 2 / br
 	}
 	uart.Bus.BRR.Set(divider)
 }
@@ -360,7 +362,7 @@ func (i2c I2C) Configure(config I2CConfig) {
 	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_PE)
 
 	// pclk1 clock speed is main frequency divided by PCLK1 prescaler (div 2)
-	pclk1 := uint32(CPU_FREQUENCY / 2)
+	pclk1 := CPUFrequency() / 2
 
 	// set freqency range to PCLK1 clock speed in MHz
 	// aka setting the value 36 means to use 36 MHz clock
