@@ -144,6 +144,14 @@ func Test(pkgName string, options *compileopts.Options) error {
 
 // Flash builds and flashes the built binary to the given serial port.
 func Flash(pkgName, port string, options *compileopts.Options) error {
+	if port == "" {
+		var err error
+		port, err = getDefaultPort()
+		if err != nil {
+			return err
+		}
+	}
+
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
@@ -255,6 +263,14 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 // Note: this command is expected to execute just before exiting, as it
 // modifies global state.
 func FlashGDB(pkgName, port string, ocdOutput bool, options *compileopts.Options) error {
+	if port == "" {
+		var err error
+		port, err = getDefaultPort()
+		if err != nil {
+			return err
+		}
+	}
+
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
@@ -480,6 +496,30 @@ func parseSize(s string) (int64, error) {
 	return n, err
 }
 
+// getDefaultPort returns the default serial port depending on the operating system.
+// Currently only supports macOS and Linux.
+func getDefaultPort() (port string, err error) {
+	var portPath string
+	switch runtime.GOOS {
+	case "darwin":
+		portPath = "/dev/cu.usb*"
+	case "linux":
+		portPath = "/dev/ttyACM*"
+	default:
+		return "", errors.New("unable to search for a default USB device to be flashed on this OS")
+	}
+
+	d, err := filepath.Glob(portPath)
+	if err != nil {
+		return "", err
+	}
+	if d == nil {
+		return "", errors.New("unable to locate a USB device to be flashed")
+	}
+
+	return d[0], nil
+}
+
 func usage() {
 	fmt.Fprintln(os.Stderr, "TinyGo is a Go compiler for small places.")
 	fmt.Fprintln(os.Stderr, "version:", version)
@@ -547,7 +587,7 @@ func main() {
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
-	port := flag.String("port", "/dev/ttyACM0", "flash port")
+	port := flag.String("port", "", "flash port")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
