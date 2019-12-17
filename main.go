@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -209,7 +210,18 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			flashCmd = strings.Replace(flashCmd, "{port}", port, -1)
 
 			// Execute the command.
-			cmd := exec.Command("/bin/sh", "-c", flashCmd)
+			var cmd *exec.Cmd
+			switch runtime.GOOS {
+			case "windows":
+				command := strings.Split(flashCmd, " ")
+				if len(command) < 2 {
+					return errors.New("invalid flash command")
+				}
+				cmd = exec.Command(command[0], command[1:]...)
+			default:
+				cmd = exec.Command("/bin/sh", "-c", flashCmd)
+			}
+
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Dir = goenv.Get("TINYGOROOT")
@@ -438,9 +450,18 @@ func touchSerialPortAt1200bps(port string) error {
 
 func flashUF2UsingMSD(volume, tmppath string) error {
 	// find standard UF2 info path
-	infoPath := "/media/*/" + volume + "/INFO_UF2.TXT"
-	if runtime.GOOS == "darwin" {
+	var infoPath string
+	switch runtime.GOOS {
+	case "linux":
+		infoPath = "/media/*/" + volume + "/INFO_UF2.TXT"
+	case "darwin":
 		infoPath = "/Volumes/" + volume + "/INFO_UF2.TXT"
+	case "windows":
+		path, err := windowsFindUSBDrive()
+		if err != nil {
+			return err
+		}
+		infoPath = path + "/INFO_UF2.TXT"
 	}
 
 	d, err := filepath.Glob(infoPath)
@@ -456,9 +477,18 @@ func flashUF2UsingMSD(volume, tmppath string) error {
 
 func flashHexUsingMSD(volume, tmppath string) error {
 	// find expected volume path
-	destPath := "/media/*/" + volume
-	if runtime.GOOS == "darwin" {
+	var destPath string
+	switch runtime.GOOS {
+	case "linux":
+		destPath = "/media/*/" + volume
+	case "darwin":
 		destPath = "/Volumes/" + volume
+	case "windows":
+		path, err := windowsFindUSBDrive()
+		if err != nil {
+			return err
+		}
+		destPath = path + "/"
 	}
 
 	d, err := filepath.Glob(destPath)
@@ -470,6 +500,29 @@ func flashHexUsingMSD(volume, tmppath string) error {
 	}
 
 	return moveFile(tmppath, d[0]+"/flash.hex")
+}
+
+func windowsFindUSBDrive() (string, error) {
+	cmd := exec.Command("wmic", "PATH", "Win32_LogicalDisk",
+		"get", "DeviceID,", "VolumeName,",
+		"FileSystem,", "DriveType")
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+
+	for _, line := range strings.Split(out.String(), "\n") {
+		words := strings.Fields(line)
+		if len(words) >= 3 {
+			if words[1] == "2" && words[2] == "FAT" {
+				return words[0], nil
+			}
+		}
+	}
+	return "", errors.New("unable to locate a USB device to be flashed")
 }
 
 // parseSize converts a human-readable size (with k/m/g suffix) into a plain
@@ -505,6 +558,30 @@ func getDefaultPort() (port string, err error) {
 		portPath = "/dev/cu.usb*"
 	case "linux":
 		portPath = "/dev/ttyACM*"
+	case "windows":
+		cmd := exec.Command("wmic", "PATH", "Win32_SerialPort",
+			"get", "DeviceID")
+
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		err := cmd.Run()
+		if err != nil {
+			return "", err
+		}
+
+		if out.String() == "No Instance(s) Available." {
+			return "", errors.New("unable to locate a USB device to be flashed")
+		}
+
+		for _, line := range strings.Split(out.String(), "\n") {
+			words := strings.Fields(line)
+			if len(words) == 1 {
+				if strings.Contains(words[0], "COM") {
+					return words[0], nil
+				}
+			}
+		}
+		return "", errors.New("unable to locate a USB device to be flashed")
 	default:
 		return "", errors.New("unable to search for a default USB device to be flashed on this OS")
 	}
