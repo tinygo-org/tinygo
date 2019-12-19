@@ -278,24 +278,24 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				}
 			case callee.Name() == "runtime.hashmapStringSet":
 				// set a string key in the map
+				keyBuf := fr.getLocal(inst.Operand(1)).(*LocalValue)
+				keyLen := fr.getLocal(inst.Operand(2)).(*LocalValue)
+				valPtr := fr.getLocal(inst.Operand(3)).(*LocalValue)
 				m, ok := fr.getLocal(inst.Operand(0)).(*MapValue)
-				if !ok {
+				if !ok || !keyBuf.IsConstant() || !keyLen.IsConstant() || !valPtr.IsConstant() {
 					return nil, nil, fr.errorAt(inst, "could not update map with string key")
 				}
 				// "key" is a Go string value, which in the TinyGo calling convention is split up
 				// into separate pointer and length parameters.
-				keyBuf := fr.getLocal(inst.Operand(1)).(*LocalValue)
-				keyLen := fr.getLocal(inst.Operand(2)).(*LocalValue)
-				valPtr := fr.getLocal(inst.Operand(3)).(*LocalValue)
 				m.PutString(keyBuf, keyLen, valPtr)
 			case callee.Name() == "runtime.hashmapBinarySet":
 				// set a binary (int etc.) key in the map
-				m, ok := fr.getLocal(inst.Operand(0)).(*MapValue)
-				if !ok {
-					return nil, nil, fr.errorAt(inst, "could not update map")
-				}
 				keyBuf := fr.getLocal(inst.Operand(1)).(*LocalValue)
 				valPtr := fr.getLocal(inst.Operand(2)).(*LocalValue)
+				m, ok := fr.getLocal(inst.Operand(0)).(*MapValue)
+				if !ok || !keyBuf.IsConstant() || !valPtr.IsConstant() {
+					return nil, nil, fr.errorAt(inst, "could not update map")
+				}
 				m.PutBinary(keyBuf, valPtr)
 			case callee.Name() == "runtime.stringConcat":
 				// adding two strings together
