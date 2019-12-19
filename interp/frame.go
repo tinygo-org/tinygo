@@ -433,6 +433,8 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstInt(fr.Mod.Context().Int64Type(), 0, false)}
 			case callee.Name() == "llvm.dbg.value":
 				// do nothing
+			case strings.HasPrefix(callee.Name(), "llvm.lifetime."):
+				// do nothing
 			case callee.Name() == "runtime.trackPointer":
 				// do nothing
 			case strings.HasPrefix(callee.Name(), "runtime.print") || callee.Name() == "runtime._panic":

@@ -367,10 +367,14 @@ func (v *MapValue) PutBinary(keyPtr, valPtr *LocalValue) {
 		}
 	}
 
-	if keyPtr.Underlying.Opcode() == llvm.BitCast {
-		keyPtr = &LocalValue{v.Eval, keyPtr.Underlying.Operand(0)}
-	} else if keyPtr.Underlying.Opcode() == llvm.GetElementPtr {
-		keyPtr = &LocalValue{v.Eval, keyPtr.Underlying.Operand(0)}
+	keyPtr.Underlying.Dump()
+	println()
+	if !keyPtr.Underlying.IsAConstantExpr().IsNil() {
+		if keyPtr.Underlying.Opcode() == llvm.BitCast {
+			keyPtr = &LocalValue{v.Eval, keyPtr.Underlying.Operand(0)}
+		} else if keyPtr.Underlying.Opcode() == llvm.GetElementPtr {
+			keyPtr = &LocalValue{v.Eval, keyPtr.Underlying.Operand(0)}
+		}
 	}
 	key := keyPtr.Load()
 	if v.KeyType.IsNil() {
