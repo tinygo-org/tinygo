@@ -457,7 +457,7 @@ func flashUF2UsingMSD(volume, tmppath string) error {
 	case "darwin":
 		infoPath = "/Volumes/" + volume + "/INFO_UF2.TXT"
 	case "windows":
-		path, err := windowsFindUSBDrive()
+		path, err := windowsFindUSBDrive(volume)
 		if err != nil {
 			return err
 		}
@@ -484,7 +484,7 @@ func flashHexUsingMSD(volume, tmppath string) error {
 	case "darwin":
 		destPath = "/Volumes/" + volume
 	case "windows":
-		path, err := windowsFindUSBDrive()
+		path, err := windowsFindUSBDrive(volume)
 		if err != nil {
 			return err
 		}
@@ -502,10 +502,10 @@ func flashHexUsingMSD(volume, tmppath string) error {
 	return moveFile(tmppath, d[0]+"/flash.hex")
 }
 
-func windowsFindUSBDrive() (string, error) {
-	cmd := exec.Command("wmic", "PATH", "Win32_LogicalDisk",
-		"get", "DeviceID,", "VolumeName,",
-		"FileSystem,", "DriveType")
+func windowsFindUSBDrive(volume string) (string, error) {
+	cmd := exec.Command("wmic",
+		"PATH", "Win32_LogicalDisk", "WHERE", "VolumeName = '"+volume+"'",
+		"get", "DeviceID,VolumeName,FileSystem,DriveType")
 
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -559,8 +559,8 @@ func getDefaultPort() (port string, err error) {
 	case "linux":
 		portPath = "/dev/ttyACM*"
 	case "windows":
-		cmd := exec.Command("wmic", "PATH", "Win32_SerialPort",
-			"get", "DeviceID")
+		cmd := exec.Command("wmic",
+			"PATH", "Win32_SerialPort", "WHERE", "Caption LIKE 'USB Serial%'", "GET", "DeviceID")
 
 		var out bytes.Buffer
 		cmd.Stdout = &out
