@@ -283,7 +283,20 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				valPtr := fr.getLocal(inst.Operand(3)).(*LocalValue)
 				m, ok := fr.getLocal(inst.Operand(0)).(*MapValue)
 				if !ok || !keyBuf.IsConstant() || !keyLen.IsConstant() || !valPtr.IsConstant() {
-					return nil, nil, fr.errorAt(inst, "could not update map with string key")
+					// The mapassign operation could not be done at compile
+					// time. Do it at runtime instead.
+					m := fr.getLocal(inst.Operand(0)).Value()
+					fr.markDirty(m)
+					llvmParams := []llvm.Value{
+						m,                                    // *runtime.hashmap
+						fr.getLocal(inst.Operand(1)).Value(), // key.ptr
+						fr.getLocal(inst.Operand(2)).Value(), // key.len
+						fr.getLocal(inst.Operand(3)).Value(), // value (unsafe.Pointer)
+						fr.getLocal(inst.Operand(4)).Value(), // context
+						fr.getLocal(inst.Operand(5)).Value(), // parentHandle
+					}
+					fr.builder.CreateCall(callee, llvmParams, "")
+					continue
 				}
 				// "key" is a Go string value, which in the TinyGo calling convention is split up
 				// into separate pointer and length parameters.
@@ -294,7 +307,19 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				valPtr := fr.getLocal(inst.Operand(2)).(*LocalValue)
 				m, ok := fr.getLocal(inst.Operand(0)).(*MapValue)
 				if !ok || !keyBuf.IsConstant() || !valPtr.IsConstant() {
-					return nil, nil, fr.errorAt(inst, "could not update map")
+					// The mapassign operation could not be done at compile
+					// time. Do it at runtime instead.
+					m := fr.getLocal(inst.Operand(0)).Value()
+					fr.markDirty(m)
+					llvmParams := []llvm.Value{
+						m,                                    // *runtime.hashmap
+						fr.getLocal(inst.Operand(1)).Value(), // key
+						fr.getLocal(inst.Operand(2)).Value(), // value
+						fr.getLocal(inst.Operand(3)).Value(), // context
+						fr.getLocal(inst.Operand(4)).Value(), // parentHandle
+					}
+					fr.builder.CreateCall(callee, llvmParams, "")
+					continue
 				}
 				m.PutBinary(keyBuf, valPtr)
 			case callee.Name() == "runtime.stringConcat":
