@@ -367,8 +367,6 @@ func (v *MapValue) PutBinary(keyPtr, valPtr *LocalValue) {
 		}
 	}
 
-	keyPtr.Underlying.Dump()
-	println()
 	if !keyPtr.Underlying.IsAConstantExpr().IsNil() {
 		if keyPtr.Underlying.Opcode() == llvm.BitCast {
 			keyPtr = &LocalValue{v.Eval, keyPtr.Underlying.Operand(0)}
