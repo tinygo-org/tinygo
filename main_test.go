@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"sync"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -67,6 +68,8 @@ func TestCompiler(t *testing.T) {
 }
 
 func runPlatTests(target string, matches []string, t *testing.T) {
+	t.Parallel()
+
 	for _, path := range matches {
 		switch {
 		case target == "wasm":
@@ -86,9 +89,23 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 		}
 
 		t.Run(filepath.Base(path), func(t *testing.T) {
+			t.Parallel()
+
 			runTest(path, target, t)
 		})
 	}
+}
+
+// Due to some problems with LLD, we cannot run links in parallel, or in parallel with compiles.
+// Therefore, we put a lock around builds and run everything else in parallel.
+var buildLock sync.Mutex
+
+// runBuild is a thread-safe wrapper around Build.
+func runBuild(src, out string, opts *compileopts.Options) error {
+	buildLock.Lock()
+	defer buildLock.Unlock()
+
+	return Build(src, out, opts)
 }
 
 func runTest(path, target string, t *testing.T) {
@@ -130,7 +147,7 @@ func runTest(path, target string, t *testing.T) {
 		WasmAbi:    "js",
 	}
 	binary := filepath.Join(tmpdir, "test")
-	err = Build("./"+path, binary, config)
+	err = runBuild("./"+path, binary, config)
 	if err != nil {
 		if errLoader, ok := err.(loader.Errors); ok {
 			for _, err := range errLoader.Errs {
