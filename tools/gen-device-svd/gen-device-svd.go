@@ -668,8 +668,7 @@ var (
 			}
 
 			var regType string
-			eSize := register.elementSize
-			switch eSize {
+			switch register.elementSize {
 			case 4:
 				regType = "volatile.Register32"
 			case 2:
@@ -677,27 +676,16 @@ var (
 			case 1:
 				regType = "volatile.Register8"
 			default:
-				eSize = 4
 				regType = "volatile.Register32"
 			}
 
 			// insert padding, if needed
 			if address < register.address {
 				bytesNeeded := register.address - address
-				switch bytesNeeded {
-				case 1:
-					w.WriteString("\t_ volatile.Register8\n")
-				case 2:
-					w.WriteString("\t_ volatile.Register16\n")
-				case 3:
-					w.WriteString("\t_ [3]volatile.Register8\n")
-				default:
-					numSkip := (register.address - address) / uint64(eSize)
-					if numSkip == 1 {
-						fmt.Fprintf(w, "\t_ %s\n", regType)
-					} else {
-						fmt.Fprintf(w, "\t_ [%d]%s\n", numSkip, regType)
-					}
+				if bytesNeeded == 1 {
+					w.WriteString("\t_ byte\n")
+				} else {
+					fmt.Fprintf(w, "\t_ [%d]byte\n", bytesNeeded)
 				}
 				address = register.address
 			}
@@ -707,9 +695,8 @@ var (
 				// This is a cluster, not a register. Create the cluster type.
 				regType = "struct {\n"
 				subaddress := register.address
-				var subregSize uint64
-				var subregType string
 				for _, subregister := range register.registers {
+					var subregType string
 					switch subregister.elementSize {
 					case 4:
 						subregType = "volatile.Register32"
@@ -728,21 +715,13 @@ var (
 					if subaddress != subregister.address {
 						bytesNeeded := subregister.address - subaddress
 						if bytesNeeded == 1 {
-							regType += "\t\t_ volatile.Register8\n"
-						} else if bytesNeeded == 2 {
-							regType += "\t\t_ volatile.Register16\n"
+							regType += "\t\t_ byte\n"
 						} else {
-							numSkip := (subregister.address - subaddress)
-							if numSkip < 1 {
-								continue
-							} else if numSkip == 1 {
-								regType += "\t\t_ volatile.Register8\n"
-							} else {
-								regType += fmt.Sprintf("\t\t_ [%d]volatile.Register8\n", numSkip)
-							}
+							regType += fmt.Sprintf("\t\t_ [%d]byte\n", bytesNeeded)
 						}
 						subaddress += bytesNeeded
 					}
+					var subregSize uint64
 					if subregister.array != -1 {
 						subregSize = uint64(subregister.array * subregister.elementSize)
 					} else {
@@ -753,11 +732,11 @@ var (
 				}
 				if register.array != -1 {
 					if subaddress != register.address+uint64(register.elementSize) {
-						numSkip := ((register.address + uint64(register.elementSize)) - subaddress) / subregSize
-						if numSkip <= 1 {
-							regType += fmt.Sprintf("\t\t_ %s\n", subregType)
+						bytesNeeded := (register.address + uint64(register.elementSize)) - subaddress
+						if bytesNeeded == 1 {
+							regType += "\t_ byte\n"
 						} else {
-							regType += fmt.Sprintf("\t\t_ [%d]%s\n", numSkip, subregType)
+							regType += fmt.Sprintf("\t_ [%d]byte\n", bytesNeeded)
 						}
 					}
 				} else {
