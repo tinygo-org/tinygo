@@ -40,7 +40,7 @@ const (
 )
 
 const (
-	LED      = D13
+	LED       = D13
 	NEOPIXELS = D8
 
 	LIGHTSENSOR = A7
