@@ -20,7 +20,9 @@ import (
 
 // Build performs a single package to executable Go build. It takes in a package
 // name, an output path, and set of compile options and from that it manages the
-// whole compilation process.
+// whole compilation process. It is safe to be called concurrently. However,
+// because of limitations in LLVM you may not call into LLVM functions while
+// Build is running.
 //
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.

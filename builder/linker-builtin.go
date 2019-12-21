@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"sync"
 	"unsafe"
 
 	"github.com/tinygo-org/tinygo/goenv"
@@ -21,12 +22,20 @@ bool tinygo_link_wasm(int argc, char **argv);
 */
 import "C"
 
+// Due to some problems with embedded LLD, we cannot run links in parallel.
+// Therefore, we put a lock around links and run everything else in parallel.
+var lldLock sync.Mutex
+
 // link invokes a linker with the given name and flags.
 //
 // This version uses the built-in linker when trying to use lld.
 func link(linker string, flags ...string) error {
 	switch linker {
 	case "ld.lld":
+		// Do not run multiple instances of lld at the same time.
+		lldLock.Lock()
+		defer lldLock.Unlock()
+
 		flags = append([]string{"tinygo:" + linker}, flags...)
 		var cflag *C.char
 		buf := C.calloc(C.size_t(len(flags)), C.size_t(unsafe.Sizeof(cflag)))
@@ -41,7 +50,12 @@ func link(linker string, flags ...string) error {
 			return errors.New("failed to link using built-in ld.lld")
 		}
 		return nil
+
 	case "wasm-ld":
+		// Do not run multiple instances of lld at the same time.
+		lldLock.Lock()
+		defer lldLock.Unlock()
+
 		flags = append([]string{"tinygo:" + linker}, flags...)
 		var cflag *C.char
 		buf := C.calloc(C.size_t(len(flags)), C.size_t(unsafe.Sizeof(cflag)))
@@ -57,6 +71,7 @@ func link(linker string, flags ...string) error {
 			return errors.New("failed to link using built-in wasm-ld")
 		}
 		return nil
+
 	default:
 		// Fall back to external command.
 		if cmdNames, ok := commands[linker]; ok {

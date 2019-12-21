@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"runtime"
+	"sync"
 	"unsafe"
 
 	"github.com/tinygo-org/tinygo/goenv"
@@ -19,12 +21,23 @@ bool tinygo_clang_driver(int argc, char **argv);
 */
 import "C"
 
+// Due to some problems with embedded Clang on Windows, we cannot run compiles
+// in parallel. Therefore, we put a lock around each Clang invocation.
+var clangLock sync.Mutex
+
 // runCCompiler invokes a C compiler with the given arguments.
 //
 // This version invokes the built-in Clang when trying to run the Clang compiler.
 func runCCompiler(command string, flags ...string) error {
 	switch command {
 	case "clang":
+		if runtime.GOOS == "windows" {
+			// The Windows builds of LLVM used in TinyGo do not currently
+			// support concurrency. Therefore, we'll have to serialize this
+			// Clang invocation.
+			clangLock.Lock()
+			defer clangLock.Unlock()
+		}
 		// Compile this with the internal Clang compiler.
 		headerPath := getClangHeaderPath(goenv.Get("TINYGOROOT"))
 		if headerPath == "" {
