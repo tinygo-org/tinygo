@@ -114,11 +114,7 @@ func runTest(path, target string, t *testing.T) {
 	if path[len(path)-1] == os.PathSeparator {
 		txtpath = path + "out.txt"
 	}
-	f, err := os.Open(txtpath)
-	if err != nil {
-		t.Fatal("could not open expected output file:", err)
-	}
-	expected, err := ioutil.ReadAll(f)
+	expected, err := ioutil.ReadFile(txtpath)
 	if err != nil {
 		t.Fatal("could not read expected output file:", err)
 	}
