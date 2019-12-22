@@ -62,6 +62,7 @@ The following 22 microcontroller boards are currently supported:
 * [Nordic Semiconductor PCA10040](https://www.nordicsemi.com/eng/Products/Bluetooth-low-energy/nRF52-DK)
 * [Nordic Semiconductor PCA10056](https://www.nordicsemi.com/Software-and-Tools/Development-Kits/nRF52840-DK)
 * [Phytec reel board](https://www.phytec.eu/product-eu/internet-of-things/reelboard/)
+* [PineTime DevKit](https://www.pine64.org/pinetime/)
 * [SiFIve HiFive1](https://www.sifive.com/boards/hifive1)
 * [ST Micro "Nucleo F103RB"](https://www.st.com/en/evaluation-tools/nucleo-f103rb.html)
 * [ST Micro STM32F103XX "Bluepill"](http://wiki.stm32duino.com/index.php?title=Blue_Pill)
