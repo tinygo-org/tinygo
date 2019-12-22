@@ -229,6 +229,8 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m4          examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pybadge             examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=metro-m4-airlift    examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nucleo-f103rb       examples/blinky1

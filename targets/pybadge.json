@@ -1,0 +1,8 @@
+{
+    "inherits": ["atsamd51j19a"],
+    "build-tags": ["sam", "atsamd51j19a", "pybadge"],
+    "flash-1200-bps-reset": "true",
+    "flash-method": "msd",
+    "msd-volume-name": "PYBADGEBOOT",
+    "msd-firmware-name": "arcade.uf2"
+}
