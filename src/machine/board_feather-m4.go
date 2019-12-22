@@ -82,14 +82,8 @@ const (
 
 // SPI on the Feather M4.
 var (
-	SPI0 = SPI{Bus: sam.SERCOM1_SPIM,
-		SCK:         SPI0_SCK_PIN,
-		MOSI:        SPI0_MOSI_PIN,
-		MISO:        SPI0_MISO_PIN,
-		DOpad:       spiTXPad3SCK1,
-		DIpad:       sercomRXPad2,
-		MISOPinMode: PinSERCOM,
-		MOSIPinMode: PinSERCOM,
-		SCKPinMode:  PinSERCOM,
+	SPI0 = SPI{
+		Bus:    sam.SERCOM1_SPIM,
+		SERCOM: 1,
 	}
 )

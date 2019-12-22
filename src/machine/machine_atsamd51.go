@@ -112,6 +112,162 @@ const (
 	PB31 Pin = 63
 )
 
+const (
+	pinPadMapSERCOM0Pad0 uint16 = 0x1000
+	pinPadMapSERCOM1Pad0 uint16 = 0x2000
+	pinPadMapSERCOM2Pad0 uint16 = 0x3000
+	pinPadMapSERCOM3Pad0 uint16 = 0x4000
+	pinPadMapSERCOM4Pad0 uint16 = 0x5000
+	pinPadMapSERCOM5Pad0 uint16 = 0x6000
+	pinPadMapSERCOM6Pad0 uint16 = 0x7000
+	pinPadMapSERCOM7Pad0 uint16 = 0x8000
+	pinPadMapSERCOM0Pad2 uint16 = 0x1200
+	pinPadMapSERCOM1Pad2 uint16 = 0x2200
+	pinPadMapSERCOM2Pad2 uint16 = 0x3200
+	pinPadMapSERCOM3Pad2 uint16 = 0x4200
+	pinPadMapSERCOM4Pad2 uint16 = 0x5200
+	pinPadMapSERCOM5Pad2 uint16 = 0x6200
+	pinPadMapSERCOM6Pad2 uint16 = 0x7200
+	pinPadMapSERCOM7Pad2 uint16 = 0x8200
+
+	pinPadMapSERCOM0AltPad0 uint16 = 0x0010
+	pinPadMapSERCOM1AltPad0 uint16 = 0x0020
+	pinPadMapSERCOM2AltPad0 uint16 = 0x0030
+	pinPadMapSERCOM3AltPad0 uint16 = 0x0040
+	pinPadMapSERCOM4AltPad0 uint16 = 0x0050
+	pinPadMapSERCOM5AltPad0 uint16 = 0x0060
+	pinPadMapSERCOM6AltPad0 uint16 = 0x0070
+	pinPadMapSERCOM7AltPad0 uint16 = 0x0080
+	pinPadMapSERCOM0AltPad1 uint16 = 0x0011
+	pinPadMapSERCOM1AltPad1 uint16 = 0x0021
+	pinPadMapSERCOM2AltPad1 uint16 = 0x0031
+	pinPadMapSERCOM3AltPad1 uint16 = 0x0041
+	pinPadMapSERCOM4AltPad1 uint16 = 0x0051
+	pinPadMapSERCOM5AltPad1 uint16 = 0x0061
+	pinPadMapSERCOM6AltPad1 uint16 = 0x0071
+	pinPadMapSERCOM7AltPad1 uint16 = 0x0081
+	pinPadMapSERCOM0AltPad2 uint16 = 0x0012
+	pinPadMapSERCOM1AltPad2 uint16 = 0x0022
+	pinPadMapSERCOM2AltPad2 uint16 = 0x0032
+	pinPadMapSERCOM3AltPad2 uint16 = 0x0042
+	pinPadMapSERCOM4AltPad2 uint16 = 0x0052
+	pinPadMapSERCOM5AltPad2 uint16 = 0x0062
+	pinPadMapSERCOM6AltPad2 uint16 = 0x0072
+	pinPadMapSERCOM7AltPad2 uint16 = 0x0082
+)
+
+// pinPadMapping lists which pins have which SERCOMs attached to them.
+// The encoding is rather dense, with each uint16 encoding two pins and both
+// SERCOM and SERCOM-ALT.
+//
+// Observations:
+//   * There are eight SERCOMs. Those SERCOM numbers can be encoded in 4 bits.
+//   * Even pad numbers are usually on even pins, and odd pad numbers are usually
+//     on odd pins. The exception is SERCOM-ALT, which sometimes swaps pad 0 and 1.
+//     With that, there is still an invariant that the pad number for an odd pin is
+//     the pad number for the corresponding even pin with the low bit toggled.
+//   * Pin pads come in pairs. If PA00 has pad 0, then PA01 has pad 1.
+// With this information, we can encode SERCOM pin/pad numbers much more
+// efficiently. Due to pads coming in pairs, we can ignore half the pins: the
+// information for an odd pin can be calculated easily from the preceding even
+// pin.
+//
+// Each word below is split in two bytes. The 8 high bytes are for SERCOM and
+// the 8 low bits are for SERCOM-ALT. Of each byte, the 4 high bits encode the
+// SERCOM + 1 while the two low bits encodes the pad number (the pad number for
+// the odd pin can be trivially calculated by toggling the low bit of the pad
+// number). It encodes SERCOM + 1 instead of just the SERCOM number, to make it
+// easy to check whether a nibble is set at all.
+//
+// Datasheet: http://ww1.microchip.com/downloads/en/DeviceDoc/60001507E.pdf
+var pinPadMapping = [32]uint16{
+	// page 32
+	PA00 / 2: 0 | pinPadMapSERCOM1AltPad0,
+
+	// page 33
+	PB08 / 2: 0 | pinPadMapSERCOM4AltPad0,
+	PA04 / 2: 0 | pinPadMapSERCOM0AltPad0,
+	PA06 / 2: 0 | pinPadMapSERCOM0AltPad2,
+	//PC04 / 2: pinPadMapSERCOM6Pad0 | 0,
+	//PC06 / 2: pinPadMapSERCOM6Pad2 | 0,
+	PA08 / 2: pinPadMapSERCOM0Pad0 | pinPadMapSERCOM2AltPad1,
+	PA10 / 2: pinPadMapSERCOM0Pad2 | pinPadMapSERCOM2AltPad2,
+	PB10 / 2: 0 | pinPadMapSERCOM4AltPad2,
+	PB12 / 2: pinPadMapSERCOM4Pad0 | 0,
+	PB14 / 2: pinPadMapSERCOM4Pad2 | 0,
+	//PD08 / 2: pinPadMapSERCOM7Pad0 | pinPadMapSERCOM6AltPad1,
+	//PD10 / 2: pinPadMapSERCOM7Pad2 | pinPadMapSERCOM6AltPad2,
+	//PC10 / 2: pinPadMapSERCOM6Pad2 | pinPadMapSERCOM7AltPad2,
+
+	// page 34
+	//PC12 / 2: pinPadMapSERCOM7Pad0 | pinPadMapSERCOM6AltPad1,
+	//PC14 / 2: pinPadMapSERCOM7Pad2 | pinPadMapSERCOM6AltPad2,
+	PA12 / 2: pinPadMapSERCOM2Pad0 | pinPadMapSERCOM4AltPad1,
+	PA14 / 2: pinPadMapSERCOM2Pad2 | pinPadMapSERCOM4AltPad2,
+	PA16 / 2: pinPadMapSERCOM1Pad0 | pinPadMapSERCOM3AltPad1,
+	PA18 / 2: pinPadMapSERCOM1Pad2 | pinPadMapSERCOM3AltPad2,
+	//PC16 / 2: pinPadMapSERCOM6Pad0 | pinPadMapSERCOM0AltPad1,
+	//PC18 / 2: pinPadMapSERCOM6Pad2 | pinPadMapSERCOM0AltPad2,
+	//PC22 / 2: pinPadMapSERCOM1Pad0 | pinPadMapSERCOM3AltPad1,
+	//PD20 / 2: pinPadMapSERCOM1Pad2 | pinPadMapSERCOM3AltPad2,
+	PB16 / 2: pinPadMapSERCOM5Pad0 | 0,
+	PB18 / 2: pinPadMapSERCOM5Pad2 | pinPadMapSERCOM7AltPad2,
+
+	// page 35
+	PB20 / 2: pinPadMapSERCOM3Pad0 | pinPadMapSERCOM7AltPad1,
+	PA20 / 2: pinPadMapSERCOM5Pad2 | pinPadMapSERCOM3AltPad2,
+	PA22 / 2: pinPadMapSERCOM3Pad0 | pinPadMapSERCOM5AltPad1,
+	PA24 / 2: pinPadMapSERCOM3Pad2 | pinPadMapSERCOM5AltPad2,
+	PB22 / 2: pinPadMapSERCOM1Pad2 | pinPadMapSERCOM5AltPad2,
+	PB24 / 2: pinPadMapSERCOM0Pad0 | pinPadMapSERCOM2AltPad1,
+	PB26 / 2: pinPadMapSERCOM2Pad0 | pinPadMapSERCOM4AltPad1,
+	PB28 / 2: pinPadMapSERCOM2Pad2 | pinPadMapSERCOM4AltPad2,
+	//PC24 / 2: pinPadMapSERCOM0Pad2 | pinPadMapSERCOM2AltPad2,
+	//PC26 / 2: pinPadMapSERCOM1Pad1 | 0, // note: PC26 doesn't support SERCOM, but PC27 does
+	//PC28 / 2: pinPadMapSERCOM1Pad1 | 0, // note: PC29 doesn't exist in the datasheet?
+	PA30 / 2: 0 | pinPadMapSERCOM1AltPad2,
+
+	// page 36
+	PB30 / 2: 0 | pinPadMapSERCOM5AltPad1,
+	PB00 / 2: 0 | pinPadMapSERCOM5AltPad2,
+	PB02 / 2: 0 | pinPadMapSERCOM5AltPad0,
+}
+
+// findPinPadMapping looks up the pad number and the pinmode for a given pin and
+// SERCOM number. The result can either be SERCOM, SERCOM-ALT, or "not found"
+// (indicated by returning ok=false). The pad number is returned to calculate
+// the DOPO/DIPO bitfields of the various serial peripherals.
+func findPinPadMapping(sercom uint8, pin Pin) (pinMode PinMode, pad uint32, ok bool) {
+	bytes := pinPadMapping[pin/2]
+	upper := byte(bytes >> 8)
+	lower := byte(bytes & 0xff)
+
+	if upper != 0 {
+		// SERCOM
+		if (upper>>4)-1 == sercom {
+			pinMode = PinSERCOM
+			pad |= uint32(upper % 4)
+			ok = true
+		}
+	}
+	if lower != 0 {
+		// SERCOM-ALT
+		if (lower>>4)-1 == sercom {
+			pinMode = PinSERCOMAlt
+			pad |= uint32(lower % 4)
+			ok = true
+		}
+	}
+
+	if ok {
+		// If the pin is uneven, toggle the lowest bit of the pad number.
+		if pin&1 != 0 {
+			pad ^= 1
+		}
+	}
+	return
+}
+
 // Return the register and mask to enable a given GPIO pin. This can be used to
 // implement bit-banged drivers.
 func (p Pin) PortMaskSet() (*uint32, uint32) {
@@ -497,11 +653,6 @@ const (
 	sercomTXPad0   = 0 // Only for UART
 	sercomTXPad2   = 1 // Only for UART
 	sercomTXPad023 = 2 // Only for UART with TX on PAD0, RTS on PAD2 and CTS on PAD3
-
-	spiTXPad0SCK1 = 0
-	spiTXPad2SCK3 = 1
-	spiTXPad3SCK1 = 2
-	spiTXPad0SCK3 = 3
 )
 
 // Configure the UART.
@@ -934,15 +1085,8 @@ func (i2c I2C) readByte() byte {
 
 // SPI
 type SPI struct {
-	Bus         *sam.SERCOM_SPIM_Type
-	SCK         Pin
-	MOSI        Pin
-	MISO        Pin
-	DOpad       int
-	DIpad       int
-	SCKPinMode  PinMode
-	MOSIPinMode PinMode
-	MISOPinMode PinMode
+	Bus    *sam.SERCOM_SPIM_Type
+	SERCOM uint8
 }
 
 // SPIConfig is used to store config info for SPI.
@@ -956,13 +1100,48 @@ type SPIConfig struct {
 }
 
 // Configure is intended to setup the SPI interface.
-func (spi SPI) Configure(config SPIConfig) {
-	doPad := spi.DOpad
-	diPad := spi.DIpad
+func (spi SPI) Configure(config SPIConfig) error {
+	// Use default pins if not set.
+	if config.SCK == 0 && config.MOSI == 0 && config.MISO == 0 {
+		config.SCK = SPI0_SCK_PIN
+		config.MOSI = SPI0_MOSI_PIN
+		config.MISO = SPI0_MISO_PIN
+	}
 
 	// set default frequency
 	if config.Frequency == 0 {
 		config.Frequency = 4000000
+	}
+
+	// Determine the input pinout (for MISO).
+	var dataInPinout uint32
+	misoPinMode, misoPad, ok := findPinPadMapping(spi.SERCOM, config.MISO)
+	if config.MISO != NoPin {
+		if !ok {
+			return ErrInvalidInputPin
+		}
+		dataInPinout = misoPad // mapped directly
+	}
+
+	// Determine the output pinout (for MOSI/SCK).
+	// See DOPO field in the CTRLA register on page 986 of the datasheet.
+	var dataOutPinout uint32
+	sckPinMode, sckPad, ok := findPinPadMapping(spi.SERCOM, config.SCK)
+	if !ok || sckPad != 1 {
+		// SCK pad must always be 1
+		return ErrInvalidOutputPin
+	}
+	mosiPinMode, mosiPad, ok := findPinPadMapping(spi.SERCOM, config.MOSI)
+	if !ok {
+		return ErrInvalidOutputPin
+	}
+	switch mosiPad {
+	case 0:
+		dataOutPinout = 0x0
+	case 3:
+		dataOutPinout = 0x2
+	default:
+		return ErrInvalidOutputPin
 	}
 
 	// Disable SPI port.
@@ -971,19 +1150,11 @@ func (spi SPI) Configure(config SPIConfig) {
 	}
 
 	// enable pins
-	if spi.SCKPinMode == 0 {
-		spi.SCKPinMode = PinSERCOMAlt
+	config.SCK.Configure(PinConfig{Mode: sckPinMode})
+	config.MOSI.Configure(PinConfig{Mode: mosiPinMode})
+	if config.MISO != NoPin {
+		config.MISO.Configure(PinConfig{Mode: misoPinMode})
 	}
-	if spi.MOSIPinMode == 0 {
-		spi.MOSIPinMode = PinSERCOMAlt
-	}
-	if spi.MISOPinMode == 0 {
-		spi.MISOPinMode = PinSERCOMAlt
-	}
-
-	spi.SCK.Configure(PinConfig{Mode: spi.SCKPinMode})
-	spi.MOSI.Configure(PinConfig{Mode: spi.MOSIPinMode})
-	spi.MISO.Configure(PinConfig{Mode: spi.MISOPinMode})
 
 	// reset SERCOM
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPIM_CTRLA_SWRST)
@@ -992,17 +1163,17 @@ func (spi SPI) Configure(config SPIConfig) {
 	}
 
 	// set bit transfer order
-	dataOrder := 0
+	dataOrder := uint32(0)
 	if config.LSBFirst {
 		dataOrder = 1
 	}
 
 	// Set SPI master
 	// SERCOM_SPIM_CTRLA_MODE_SPI_MASTER = 3
-	spi.Bus.CTRLA.Set(uint32((3 << sam.SERCOM_SPIM_CTRLA_MODE_Pos) |
-		(doPad << sam.SERCOM_SPIM_CTRLA_DOPO_Pos) |
-		(diPad << sam.SERCOM_SPIM_CTRLA_DIPO_Pos) |
-		(dataOrder << sam.SERCOM_SPIM_CTRLA_DORD_Pos)))
+	spi.Bus.CTRLA.Set((3 << sam.SERCOM_SPIM_CTRLA_MODE_Pos) |
+		(dataOutPinout << sam.SERCOM_SPIM_CTRLA_DOPO_Pos) |
+		(dataInPinout << sam.SERCOM_SPIM_CTRLA_DIPO_Pos) |
+		(dataOrder << sam.SERCOM_SPIM_CTRLA_DORD_Pos))
 
 	spi.Bus.CTRLB.SetBits((0 << sam.SERCOM_SPIM_CTRLB_CHSIZE_Pos) | // 8bit char size
 		sam.SERCOM_SPIM_CTRLB_RXEN) // receive enable
@@ -1036,6 +1207,8 @@ func (spi SPI) Configure(config SPIConfig) {
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPIM_CTRLA_ENABLE)
 	for spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPIM_SYNCBUSY_ENABLE) {
 	}
+
+	return nil
 }
 
 // Transfer writes/reads a single byte using the SPI interface.

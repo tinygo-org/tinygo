@@ -84,12 +84,8 @@ const (
 
 // SPI on the ItsyBitsy M4.
 var (
-	SPI0 = SPI{Bus: sam.SERCOM1_SPIM,
-		SCK:         SPI0_SCK_PIN,
-		MOSI:        SPI0_MOSI_PIN,
-		MISO:        SPI0_MISO_PIN,
-		DOpad:       spiTXPad2SCK3,
-		DIpad:       sercomRXPad3,
-		MISOPinMode: PinSERCOM,
+	SPI0 = SPI{
+		Bus:    sam.SERCOM1_SPIM,
+		SERCOM: 1,
 	}
 )

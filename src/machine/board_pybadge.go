@@ -120,15 +120,9 @@ const (
 
 // SPI on the PyBadge.
 var (
-	SPI0 = SPI{Bus: sam.SERCOM1_SPIM,
-		SCK:         SPI0_SCK_PIN,
-		MOSI:        SPI0_MOSI_PIN,
-		MISO:        SPI0_MISO_PIN,
-		DOpad:       spiTXPad3SCK1,
-		DIpad:       sercomRXPad2,
-		MISOPinMode: PinSERCOM,
-		MOSIPinMode: PinSERCOM,
-		SCKPinMode:  PinSERCOM,
+	SPI0 = SPI{
+		Bus:    sam.SERCOM1_SPIM,
+		SERCOM: 1,
 	}
 )
 
@@ -136,15 +130,13 @@ var (
 const (
 	SPI1_SCK_PIN  = PB13 // SCK: SERCOM4/PAD[1]
 	SPI1_MOSI_PIN = PB15 // MOSI: SERCOM4/PAD[3]
+	SPI1_MISO_PIN = NoPin
 )
 
 // TFT SPI on the PyBadge.
 var (
-	SPI1 = SPI{Bus: sam.SERCOM4_SPIM,
-		SCK:         SPI1_SCK_PIN,
-		MOSI:        SPI1_MOSI_PIN,
-		DOpad:       spiTXPad3SCK1,
-		MOSIPinMode: PinSERCOM,
-		SCKPinMode:  PinSERCOM,
+	SPI1 = SPI{
+		Bus:    sam.SERCOM4_SPIM,
+		SERCOM: 4,
 	}
 )
