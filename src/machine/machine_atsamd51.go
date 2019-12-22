@@ -2049,14 +2049,14 @@ func setEPINTENSET(ep uint32, val uint8) {
 	sam.USB_DEVICE.DEVICE_ENDPOINT[ep].EPINTENSET.Set(val)
 }
 
-// ResetProcessor should perform a system reset in preperation
+// ResetProcessor should perform a system reset in preparation
 // to switch to the bootloader to flash new firmware.
 func ResetProcessor() {
 	arm.DisableInterrupts()
 
 	// Perform magic reset into bootloader, as mentioned in
 	// https://github.com/arduino/ArduinoCore-samd/issues/197
-	*(*uint32)(unsafe.Pointer(uintptr(0x20000000 + 0x00030000 - 4))) = RESET_MAGIC_VALUE
+	*(*uint32)(unsafe.Pointer(uintptr(0x20000000 + HSRAM_SIZE - 4))) = RESET_MAGIC_VALUE
 
 	arm.SystemReset()
 }
