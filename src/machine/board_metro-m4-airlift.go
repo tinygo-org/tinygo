@@ -97,15 +97,8 @@ const (
 // SPI on the Metro M4.
 var (
 	SPI0 = SPI{
-		Bus:         sam.SERCOM2_SPIM,
-		SCK:         SPI0_SCK_PIN,
-		MOSI:        SPI0_MOSI_PIN,
-		MISO:        SPI0_MISO_PIN,
-		DOpad:       spiTXPad0SCK1,
-		DIpad:       sercomRXPad2,
-		MISOPinMode: PinSERCOM,
-		MOSIPinMode: PinSERCOM,
-		SCKPinMode:  PinSERCOM,
+		Bus:    sam.SERCOM2_SPIM,
+		SERCOM: 2,
 	}
 	NINA_SPI = SPI0
 )
@@ -119,14 +112,7 @@ const (
 // SPI1 on the Metro M4 on pins 11,12,13
 var (
 	SPI1 = SPI{
-		Bus:         sam.SERCOM1_SPIM,
-		SCK:         SPI1_SCK_PIN,
-		MOSI:        SPI1_MOSI_PIN,
-		MISO:        SPI1_MISO_PIN,
-		DOpad:       spiTXPad3SCK1,
-		DIpad:       sercomRXPad0,
-		MISOPinMode: PinSERCOM,
-		MOSIPinMode: PinSERCOM,
-		SCKPinMode:  PinSERCOM,
+		Bus:    sam.SERCOM1_SPIM,
+		SERCOM: 1,
 	}
 )
