@@ -6,7 +6,7 @@ trigger:
 
 jobs:
 - job: Build
-  timeoutInMinutes: 180
+  timeoutInMinutes: 240 # 4h
   pool:
     vmImage: 'VS2017-Win2016'
   steps:
