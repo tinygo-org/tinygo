@@ -120,12 +120,6 @@ commands:
           key: llvm-build-9-linux-v0-assert
           paths:
             llvm-build
-      - run:
-          name: "Create LLVM symlinks"
-          command: |
-            ln -s $PWD/llvm-build/bin/clang-9 /go/bin/clang-9
-            ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-9
-            ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-9
       - run: make ASSERT=1
       - run:
           name: "Test TinyGo"
@@ -184,12 +178,6 @@ commands:
           key: llvm-build-9-linux-v0
           paths:
             llvm-build
-      - run:
-          name: "Create LLVM symlinks"
-          command: |
-            ln -s $PWD/llvm-build/bin/clang-9 /go/bin/clang-9
-            ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-9
-            ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-9
       - run:
           name: "Test TinyGo"
           command: make test
@@ -256,10 +244,6 @@ commands:
           key: llvm-build-9-macos-v0
           paths:
             llvm-build
-      - run:
-          name: "Create LLVM symlinks"
-          command: |
-            ln -s $PWD/llvm-build/bin/clang-9 /usr/local/bin/clang-9
       - run:
           name: "Test TinyGo"
           command: make test
