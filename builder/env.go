@@ -71,7 +71,7 @@ func GorootVersionString(goroot string) (string, error) {
 // various ways.
 func getClangHeaderPath(TINYGOROOT string) string {
 	// Check whether we're running from the source directory.
-	path := filepath.Join(TINYGOROOT, "llvm", "tools", "clang", "lib", "Headers")
+	path := filepath.Join(TINYGOROOT, "llvm-project", "clang", "lib", "Headers")
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		return path
 	}

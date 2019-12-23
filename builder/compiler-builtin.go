@@ -26,7 +26,11 @@ func runCCompiler(command string, flags ...string) error {
 	switch command {
 	case "clang":
 		// Compile this with the internal Clang compiler.
-		flags = append(flags, "-I"+getClangHeaderPath(goenv.Get("TINYGOROOT")))
+		headerPath := getClangHeaderPath(goenv.Get("TINYGOROOT"))
+		if headerPath == "" {
+			return errors.New("could not locate Clang headers")
+		}
+		flags = append(flags, "-I"+headerPath)
 		flags = append([]string{"tinygo:" + command}, flags...)
 		var cflag *C.char
 		buf := C.calloc(C.size_t(len(flags)), C.size_t(unsafe.Sizeof(cflag)))
