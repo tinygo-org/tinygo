@@ -330,8 +330,8 @@ workflows:
   test-all:
     jobs:
       - test-llvm9-go111
-      - test-llvm9-go112
-      - test-llvm9-go113
-      - build-linux
-      - build-macos
-      - assert-test-linux
+      #- test-llvm9-go112
+      #- test-llvm9-go113
+      #- build-linux
+      #- build-macos
+      #- assert-test-linux

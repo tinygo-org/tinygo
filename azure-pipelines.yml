@@ -10,6 +10,19 @@ jobs:
   pool:
     vmImage: 'VS2017-Win2016'
   steps:
+    - task: Bash@3
+      displayName: Download QEMU
+      inputs:
+        targetType: inline
+        script: |
+          curl -o riscv-qemu.zip https://static.dev.sifive.com/dev-tools/riscv-qemu-4.1.0-2019.08.0-x86_64-w64-mingw32.zip
+          unzip riscv-qemu
+          mv riscv-qemu-4.1.0-2019.08.0-x86_64-w64-mingw32 "/c/Program Files/qemu"
+          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu/bin"
+          ls -l "/c/Program Files/qemu"
+          ls -l "/c/Program Files/qemu/bin"
+          "/c/Program Files/qemu/bin/qemu-system-arm" --version
+          qemu-system-arm --version
     - checkout: self
     - task: CacheBeta@0
       displayName: Cache LLVM source
@@ -41,16 +54,12 @@ jobs:
             make llvm-build
           fi
     - task: Bash@3
-      displayName: Install QEMU
-      inputs:
-        targetType: inline
-        script: choco install qemu
-    - task: Bash@3
       displayName: Test TinyGo
       inputs:
         targetType: inline
         script: |
-          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu/bin"
+          qemu-system-arm --version
           unset GOROOT
           make test
     - task: Bash@3
@@ -58,7 +67,7 @@ jobs:
       inputs:
         targetType: inline
         script: |
-          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu/bin"
           unset GOROOT
           make release -j4
     - publish: $(System.DefaultWorkingDirectory)/build/release.tar.gz
@@ -69,6 +78,6 @@ jobs:
       inputs:
         targetType: inline
         script: |
-          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu/bin"
           unset GOROOT
           make smoketest TINYGO=build/tinygo AVR=0
