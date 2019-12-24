@@ -1054,22 +1054,6 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 // PWM
 const period = 0xFFFF
 
-// InitPWM initializes the PWM interface.
-func InitPWM() {
-	// turn on timer clocks used for PWM
-	sam.MCLK.APBBMASK.SetBits(sam.MCLK_APBBMASK_TCC0_ | sam.MCLK_APBBMASK_TCC1_)
-	sam.MCLK.APBCMASK.SetBits(sam.MCLK_APBCMASK_TCC2_)
-	sam.MCLK.APBDMASK.SetBits(sam.MCLK_APBDMASK_TCC4_)
-
-	//use clock generator 0
-	sam.GCLK.PCHCTRL[25].Set((sam.GCLK_PCHCTRL_GEN_GCLK0 << sam.GCLK_PCHCTRL_GEN_Pos) |
-		sam.GCLK_PCHCTRL_CHEN)
-	sam.GCLK.PCHCTRL[29].Set((sam.GCLK_PCHCTRL_GEN_GCLK0 << sam.GCLK_PCHCTRL_GEN_Pos) |
-		sam.GCLK_PCHCTRL_CHEN)
-	sam.GCLK.PCHCTRL[38].Set((sam.GCLK_PCHCTRL_GEN_GCLK0 << sam.GCLK_PCHCTRL_GEN_Pos) |
-		sam.GCLK_PCHCTRL_CHEN)
-}
-
 // Configure configures a PWM pin for output.
 func (pwm PWM) Configure() {
 	// Set pin as output
@@ -1182,36 +1166,6 @@ func (pwm PWM) getPinCfg() uint8 {
 // setPinCfg sets the value for the correct PINCFG register for this pin.
 func (pwm PWM) setPinCfg(val uint8) {
 	pwm.Pin.setPinCfg(val)
-}
-
-// getTimer returns the timer to be used for PWM on this pin
-func (pwm PWM) getTimer() *sam.TCC_Type {
-	switch pwm.Pin {
-	case PA16:
-		return sam.TCC1
-	case PA17:
-		return sam.TCC1
-	case PA14:
-		return sam.TCC2
-	case PA15:
-		return sam.TCC2
-	case PA18:
-		return sam.TCC1
-	case PA19:
-		return sam.TCC1
-	case PA20:
-		return sam.TCC0
-	case PA21:
-		return sam.TCC0
-	case PA23:
-		return sam.TCC0
-	case PA22:
-		return sam.TCC0
-	case PB31:
-		return sam.TCC4
-	default:
-		return nil // not supported on this pin
-	}
 }
 
 // setChannel sets the value for the correct channel for PWM on this pin
