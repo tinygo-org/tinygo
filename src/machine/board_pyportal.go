@@ -2,7 +2,9 @@
 
 package machine
 
-import "device/sam"
+import (
+	"device/sam"
+)
 
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
@@ -88,19 +90,11 @@ const (
 	USBCDC_DP_PIN = PA25
 )
 
-// UART1 pins
+// TODO: add configuration for UART on SERCOM4 that is connected to TX/RX of ESP32
 const (
-	UART_TX_PIN = D5
-	UART_RX_PIN = D7
+	UART_TX_PIN = NoPin
+	UART_RX_PIN = NoPin
 )
-
-/*
-// UART2 pins
-const (
-	UART2_TX_PIN = A4
-	UART2_RX_PIN = A5
-)
-*/
 
 // I2C pins
 const (
