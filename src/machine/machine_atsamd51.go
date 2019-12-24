@@ -1059,11 +1059,14 @@ func InitPWM() {
 	// turn on timer clocks used for PWM
 	sam.MCLK.APBBMASK.SetBits(sam.MCLK_APBBMASK_TCC0_ | sam.MCLK_APBBMASK_TCC1_)
 	sam.MCLK.APBCMASK.SetBits(sam.MCLK_APBCMASK_TCC2_)
+	sam.MCLK.APBDMASK.SetBits(sam.MCLK_APBDMASK_TCC4_)
 
 	//use clock generator 0
 	sam.GCLK.PCHCTRL[25].Set((sam.GCLK_PCHCTRL_GEN_GCLK0 << sam.GCLK_PCHCTRL_GEN_Pos) |
 		sam.GCLK_PCHCTRL_CHEN)
 	sam.GCLK.PCHCTRL[29].Set((sam.GCLK_PCHCTRL_GEN_GCLK0 << sam.GCLK_PCHCTRL_GEN_Pos) |
+		sam.GCLK_PCHCTRL_CHEN)
+	sam.GCLK.PCHCTRL[38].Set((sam.GCLK_PCHCTRL_GEN_GCLK0 << sam.GCLK_PCHCTRL_GEN_Pos) |
 		sam.GCLK_PCHCTRL_CHEN)
 }
 
@@ -1204,6 +1207,8 @@ func (pwm PWM) getTimer() *sam.TCC_Type {
 		return sam.TCC0
 	case PA22:
 		return sam.TCC0
+	case PB31:
+		return sam.TCC4
 	default:
 		return nil // not supported on this pin
 	}
@@ -1232,6 +1237,8 @@ func (pwm PWM) setChannel(val uint32) {
 		pwm.getTimer().CC[3].Set(val)
 	case PA22:
 		pwm.getTimer().CC[2].Set(val)
+	case PB31:
+		pwm.getTimer().CC[1].Set(val)
 	default:
 		return // not supported on this pin
 	}
@@ -1260,6 +1267,8 @@ func (pwm PWM) setChannelBuffer(val uint32) {
 		pwm.getTimer().CCBUF[3].Set(val)
 	case PA22:
 		pwm.getTimer().CCBUF[2].Set(val)
+	case PB31:
+		pwm.getTimer().CCBUF[1].Set(val)
 	default:
 		return // not supported on this pin
 	}
@@ -1288,6 +1297,8 @@ func (pwm PWM) getMux() PinMode {
 		return PinPWMG
 	case PA22:
 		return PinPWMG
+	case PB31:
+		return PinPWMF
 	default:
 		return 0 // not supported on this pin
 	}
