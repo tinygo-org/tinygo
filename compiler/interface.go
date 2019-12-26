@@ -279,14 +279,14 @@ func (c *Compiler) getInterfaceMethodSet(typ *types.Named) llvm.Value {
 		return llvm.ConstGEP(global, []llvm.Value{zero, zero})
 	}
 
-	// Every method is a *i16 reference indicating the signature of this method.
+	// Every method is a *i8 reference indicating the signature of this method.
 	methods := make([]llvm.Value, typ.Underlying().(*types.Interface).NumMethods())
 	for i := range methods {
 		method := typ.Underlying().(*types.Interface).Method(i)
 		methods[i] = c.getMethodSignature(method)
 	}
 
-	value := llvm.ConstArray(methods[0].Type(), methods)
+	value := llvm.ConstArray(c.i8ptrType, methods)
 	global = llvm.AddGlobal(c.mod, value.Type(), typ.String()+"$interface")
 	global.SetInitializer(value)
 	global.SetGlobalConstant(true)
@@ -295,7 +295,7 @@ func (c *Compiler) getInterfaceMethodSet(typ *types.Named) llvm.Value {
 }
 
 // getMethodSignature returns a global variable which is a reference to an
-// external *i16 indicating the indicating the signature of this method. It is
+// external *i8 indicating the indicating the signature of this method. It is
 // used during the interface lowering pass.
 func (c *Compiler) getMethodSignature(method *types.Func) llvm.Value {
 	signature := ir.MethodSignature(method)
