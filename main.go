@@ -274,15 +274,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 //
 // Note: this command is expected to execute just before exiting, as it
 // modifies global state.
-func FlashGDB(pkgName, port string, ocdOutput bool, options *compileopts.Options) error {
-	if port == "" {
-		var err error
-		port, err = getDefaultPort()
-		if err != nil {
-			return err
-		}
-	}
-
+func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) error {
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
@@ -767,7 +759,7 @@ func main() {
 				usage()
 				os.Exit(1)
 			}
-			err := FlashGDB(flag.Arg(0), *port, *ocdOutput, options)
+			err := FlashGDB(flag.Arg(0), *ocdOutput, options)
 			handleCompilerError(err)
 		}
 	case "run":
