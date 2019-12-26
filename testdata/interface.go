@@ -33,6 +33,10 @@ func main() {
 	// https://github.com/tinygo-org/tinygo/issues/309
 	itf = linkedList{}
 
+	// Test bugfix for assertion on named empty interface:
+	// https://github.com/tinygo-org/tinygo/issues/453
+	_, _ = itf.(Empty)
+
 	var n int
 	var f float32
 	var interfaceEqualTests = []struct {
@@ -251,3 +255,5 @@ func (s SleepBlocker) Sleep() {
 type StaticBlocker interface {
 	Sleep()
 }
+
+type Empty interface{}
