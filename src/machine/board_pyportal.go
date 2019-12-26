@@ -102,12 +102,12 @@ const (
 	SCL_PIN = PB03 // SCL: SERCOM2/PAD[1]
 )
 
-// I2C on the Feather M4.
+// I2C on the PyPortal.
 var (
 	I2C0 = I2C{Bus: sam.SERCOM5_I2CM,
 		SDA:     SDA_PIN,
 		SCL:     SCL_PIN,
-		PinMode: PinSERCOM}
+		PinMode: PinSERCOMAlt}
 )
 
 // SPI pins
