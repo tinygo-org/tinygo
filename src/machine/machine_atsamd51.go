@@ -430,7 +430,12 @@ func (a ADC) Get() uint16 {
 }
 
 func (a ADC) getADCBus() *sam.ADC_Type {
-	return sam.ADC0
+	switch a.Pin {
+	case PB08:
+		return sam.ADC1
+	default:
+		return sam.ADC0
+	}
 }
 
 func (a ADC) getADCChannel() uint8 {
@@ -438,7 +443,7 @@ func (a ADC) getADCChannel() uint8 {
 	case PA02:
 		return 0
 	case PB08:
-		return 2
+		return 0
 	case PB09:
 		return 3
 	case PA04:
@@ -449,16 +454,20 @@ func (a ADC) getADCChannel() uint8 {
 		return 6
 	case PA07:
 		return 7
+	case PB00:
+		return 12
+	case PB01:
+		return 13
 	case PB02:
-		return 10
+		return 14
 	case PB03:
-		return 11
+		return 15
 	case PA09:
 		return 17
 	case PA11:
 		return 19
 	default:
-		return 0
+		panic("Invalid ADC pin")
 	}
 }
 

@@ -63,14 +63,14 @@ const (
 
 // Analog pins
 const (
-	A0 = PA02 // ADC/AIN[0]
-	A1 = D3   // ADC/AIN[2]
-	A2 = PA07 // ADC/AIN[3]
-	A3 = D4   // ADC/AIN[4]
-	A4 = PB00 // ADC/AIN[5]
-	A5 = PB01 // ADC/AIN[10]
-	A6 = PA06 // ADC/AIN[5]
-	A7 = PB08 // ADC/AIN[5]
+	A0 = PA02 // ADC0/AIN[0]
+	A1 = D3   // ADC0/AIN[4]
+	A2 = PA07 // ADC0/AIN[7]
+	A3 = D4   // ADC0/AIN[5]
+	A4 = PB00 // ADC0/AIN[12]
+	A5 = PB01 // ADC0/AIN[13]
+	A6 = PA06 // ADC0/AIN[6]
+	A7 = PB08 // ADC1/AIN[0]
 
 	AUDIO_OUT = A0
 	LIGHT     = A2
