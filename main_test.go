@@ -14,6 +14,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/loader"
@@ -157,7 +158,9 @@ func runTest(path, target string, t *testing.T) {
 	}
 
 	// Run the test.
+	runComplete := make(chan struct{})
 	var cmd *exec.Cmd
+	ranTooLong := false
 	if target == "" {
 		cmd = exec.Command(binary)
 	} else {
@@ -173,12 +176,34 @@ func runTest(path, target string, t *testing.T) {
 	}
 	stdout := &bytes.Buffer{}
 	cmd.Stdout = stdout
-	if target != "" {
-		cmd.Stderr = os.Stderr
+	cmd.Stderr = os.Stderr
+	err = cmd.Start()
+	if err != nil {
+		t.Fatal("failed to start:", err)
 	}
-	err = cmd.Run()
+	go func() {
+		// Terminate the process if it runs too long.
+		timer := time.NewTimer(1 * time.Second)
+		select {
+		case <-runComplete:
+			timer.Stop()
+		case <-timer.C:
+			ranTooLong = true
+			if runtime.GOOS == "windows" {
+				cmd.Process.Signal(os.Kill) // Windows doesn't support SIGINT.
+			} else {
+				cmd.Process.Signal(os.Interrupt)
+			}
+		}
+	}()
+	err = cmd.Wait()
 	if _, ok := err.(*exec.ExitError); ok && target != "" {
 		err = nil // workaround for QEMU
+	}
+	close(runComplete)
+
+	if ranTooLong {
+		stdout.WriteString("--- test ran too long, terminating...\n")
 	}
 
 	// putchar() prints CRLF, convert it to LF.
