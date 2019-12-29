@@ -43,6 +43,7 @@ type TargetSpec struct {
 	FlashMethod      string   `json:"flash-method"`
 	FlashVolume      string   `json:"msd-volume-name"`
 	FlashFilename    string   `json:"msd-firmware-name"`
+	UF2FamilyID      string   `json:"uf2-family-id"`
 	OpenOCDInterface string   `json:"openocd-interface"`
 	OpenOCDTarget    string   `json:"openocd-target"`
 	OpenOCDTransport string   `json:"openocd-transport"`
@@ -108,6 +109,9 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if spec2.FlashFilename != "" {
 		spec.FlashFilename = spec2.FlashFilename
+	}
+	if spec2.UF2FamilyID != "" {
+		spec.UF2FamilyID = spec2.UF2FamilyID
 	}
 	if spec2.OpenOCDInterface != "" {
 		spec.OpenOCDInterface = spec2.OpenOCDInterface
