@@ -207,7 +207,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 		} else if outext == ".uf2" {
 			// Get UF2 from the .elf file.
 			tmppath = filepath.Join(dir, "main"+outext)
-			err := convertELFFileToUF2File(executable, tmppath)
+			err := convertELFFileToUF2File(executable, tmppath, config.Target.UF2FamilyID)
 			if err != nil {
 				return err
 			}

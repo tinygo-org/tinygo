@@ -1,0 +1,9 @@
+{
+    "inherits": ["nrf52840"],
+    "build-tags": ["circuitplay_bluefruit"],
+    "flash-method": "msd",
+    "msd-volume-name": "CPLAYBTBOOT",
+    "msd-firmware-name": "firmware.uf2",
+    "uf2-family-id": "0xADA52840",
+    "linkerscript": "targets/circuitplay-bluefruit.ld"
+}
