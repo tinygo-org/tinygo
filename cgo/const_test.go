@@ -30,6 +30,7 @@ func TestParseConst(t *testing.T) {
 		{`'a'`, `'a'`},
 		{`0b10`, `0b10`},
 		{`0x1234_5678`, `0x1234_5678`},
+		{`5 5`, `error: 1:3: unexpected token INT`}, // test for a bugfix
 	} {
 		fset := token.NewFileSet()
 		startPos := fset.AddFile("", -1, 1000).Pos(0)

@@ -140,8 +140,10 @@ func (t *tokenizer) Next() {
 				if c == '.' {
 					hasDot = true
 				}
-				if (c >= '0' && c <= '9') || c == '.' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+				if c >= '0' && c <= '9' || c == '.' || c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' {
 					tokenLen = i + 1
+				} else {
+					break
 				}
 			}
 			t.value = t.buf[:tokenLen]
