@@ -65,6 +65,12 @@ func (c *Config) BuildTags() []string {
 	return tags
 }
 
+// CgoEnabled returns true if (and only if) CGo is enabled. It is true by
+// default and false if CGO_ENABLED is set to "0".
+func (c *Config) CgoEnabled() bool {
+	return goenv.Get("CGO_ENABLED") == "1"
+}
+
 // GC returns the garbage collection strategy in use on this platform. Valid
 // values are "none", "leaking", and "conservative".
 func (c *Config) GC() string {

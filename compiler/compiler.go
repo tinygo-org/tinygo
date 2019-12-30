@@ -193,7 +193,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 			GOOS:        c.GOOS(),
 			GOROOT:      goenv.Get("GOROOT"),
 			GOPATH:      goenv.Get("GOPATH"),
-			CgoEnabled:  true,
+			CgoEnabled:  c.CgoEnabled(),
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
 			BuildTags:   c.BuildTags(),
@@ -203,7 +203,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 			GOOS:        c.GOOS(),
 			GOROOT:      goenv.Get("TINYGOROOT"),
 			GOPATH:      overlayGopath,
-			CgoEnabled:  true,
+			CgoEnabled:  c.CgoEnabled(),
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
 			BuildTags:   c.BuildTags(),
