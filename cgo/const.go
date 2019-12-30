@@ -52,6 +52,13 @@ func parseConstExpr(t *tokenizer) (ast.Expr, *scanner.Error) {
 		}
 		t.Next()
 		return expr, nil
+	case token.IDENT:
+		expr := &ast.Ident{
+			NamePos: t.pos,
+			Name:    "C." + t.value,
+		}
+		t.Next()
+		return expr, nil
 	case token.EOF:
 		return nil, &scanner.Error{
 			Pos: t.fset.Position(t.pos),
@@ -149,6 +156,21 @@ func (t *tokenizer) Next() {
 				t.token = token.INT
 				t.value = strings.TrimRight(t.value, "uUlL")
 			}
+			return
+		case c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c == '_':
+			// Identifier. Find all remaining tokens that are part of this
+			// identifier.
+			tokenLen := len(t.buf)
+			for i, c := range t.buf {
+				if c >= '0' && c <= '9' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c == '_' {
+					tokenLen = i + 1
+				} else {
+					break
+				}
+			}
+			t.value = t.buf[:tokenLen]
+			t.buf = t.buf[tokenLen:]
+			t.token = token.IDENT
 			return
 		case c == '"':
 			// String constant. Find the first '"' character that is not

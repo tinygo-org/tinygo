@@ -21,8 +21,8 @@ func TestParseConst(t *testing.T) {
 		{`5)`, `error: 1:2: unexpected token )`},
 		{"  \t)", `error: 1:4: unexpected token )`},
 		{`5.8f`, `5.8`},
-		{`foo`, `error: 1:1: unexpected token ILLEGAL`}, // identifiers unimplemented
-		{``, `error: 1:1: empty constant`},              // empty constants not allowed in Go
+		{`foo`, `C.foo`},
+		{``, `error: 1:1: empty constant`}, // empty constants not allowed in Go
 		{`"foo"`, `"foo"`},
 		{`"a\\n"`, `"a\\n"`},
 		{`"a\n"`, `"a\n"`},
