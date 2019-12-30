@@ -1,4 +1,4 @@
-// +build avr nrf sam stm32,!stm32f4disco
+// +build avr nrf sam stm32
 
 package machine
 

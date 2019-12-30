@@ -5,44 +5,30 @@ package machine
 // Peripheral abstraction layer for the stm32.
 
 import (
-	"device/arm"
 	"device/stm32"
+	"unsafe"
 )
 
 const CPU_FREQUENCY = 168000000
 
 const (
-	// Mode Flag
-	PinOutput        PinMode = 0
-	PinInput         PinMode = PinInputFloating
-	PinInputFloating PinMode = 1
-	PinInputPulldown PinMode = 2
-	PinInputPullup   PinMode = 3
-
-	// for UART
-	PinModeUartTX PinMode = 4
-	PinModeUartRX PinMode = 5
-
-	//GPIOx_MODER
-	GPIO_MODE_INPUT          = 0
-	GPIO_MODE_GENERAL_OUTPUT = 1
-	GPIO_MODE_ALTERNABTIVE   = 2
-	GPIO_MODE_ANALOG         = 3
-
-	//GPIOx_OTYPER
-	GPIO_OUTPUT_MODE_PUSH_PULL  = 0
-	GPIO_OUTPUT_MODE_OPEN_DRAIN = 1
-
-	// GPIOx_OSPEEDR
-	GPIO_SPEED_LOW     = 0
-	GPIO_SPEED_MID     = 1
-	GPIO_SPEED_HI      = 2
-	GPIO_SPEED_VERY_HI = 3
-
-	// GPIOx_PUPDR
-	GPIO_FLOATING  = 0
-	GPIO_PULL_UP   = 1
-	GPIO_PULL_DOWN = 2
+	// Alternative peripheral pin functions
+	AF0_SYSTEM                AltFunc = 0
+	AF1_TIM1_2                        = 1
+	AF2_TIM3_4_5                      = 2
+	AF3_TIM8_9_10_11                  = 3
+	AF4_I2C1_2_3                      = 4
+	AF5_SPI1_SPI2                     = 5
+	AF6_SPI3                          = 6
+	AF7_USART1_2_3                    = 7
+	AF8_USART4_5_6                    = 8
+	AF9_CAN1_CAN2_TIM12_13_14         = 9
+	AF10_OTG_FS_OTG_HS                = 10
+	AF11_ETH                          = 11
+	AF12_FSMC_SDIO_OTG_HS_1           = 12
+	AF13_DCMI                         = 13
+	AF14                              = 14
+	AF15_EVENTOUT                     = 15
 )
 
 func (p Pin) getPort() *stm32.GPIO_Type {
@@ -96,90 +82,40 @@ func (p Pin) enableClock() {
 	}
 }
 
-// Configure this pin with the given configuration.
-func (p Pin) Configure(config PinConfig) {
-	// Configure the GPIO pin.
-	p.enableClock()
-	port := p.getPort()
-	pin := uint8(p) % 16
-	pos := pin * 2
-
-	if config.Mode == PinInputFloating {
-		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
-		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_FLOATING) << pos)))
-	} else if config.Mode == PinInputPulldown {
-		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
-		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_PULL_DOWN) << pos)))
-	} else if config.Mode == PinInputPullup {
-		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_INPUT) << pos)))
-		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
-	} else if config.Mode == PinOutput {
-		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_GENERAL_OUTPUT) << pos)))
-		port.OSPEEDR.Set((uint32(port.OSPEEDR.Get())&^(0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
-	} else if config.Mode == PinModeUartTX {
-		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
-		port.OSPEEDR.Set((uint32(port.OSPEEDR.Get())&^(0x3<<pos) | (uint32(GPIO_SPEED_HI) << pos)))
-		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_PULL_UP) << pos)))
-		p.setAltFunc(0x7)
-	} else if config.Mode == PinModeUartRX {
-		port.MODER.Set((uint32(port.MODER.Get())&^(0x3<<pos) | (uint32(GPIO_MODE_ALTERNABTIVE) << pos)))
-		port.PUPDR.Set((uint32(port.PUPDR.Get())&^(0x3<<pos) | (uint32(GPIO_FLOATING) << pos)))
-		p.setAltFunc(0x7)
+// Enable peripheral clock
+func enableAltFuncClock(bus unsafe.Pointer) {
+	if bus == unsafe.Pointer(stm32.USART1) {
+		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_USART1EN)
+	} else if bus == unsafe.Pointer(stm32.USART2) {
+		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_USART2EN)
+	} else if bus == unsafe.Pointer(stm32.I2C1) {
+		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_I2C1EN)
+	} else if bus == unsafe.Pointer(stm32.SPI1) {
+		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_SPI1EN)
 	}
 }
 
-func (p Pin) setAltFunc(af uint32) {
-	port := p.getPort()
-	pin := uint8(p) % 16
-	pos := pin * 4
-	if pin >= 8 {
-		port.AFRH.Set(uint32(port.AFRH.Get())&^(0xF<<pos) | ((af & 0xF) << pos))
-	} else {
-		port.AFRL.Set(uint32(port.AFRL.Get())&^(0xF<<pos) | ((af & 0xF) << pos))
-	}
-}
-
-// Set the pin to high or low.
-// Warning: only use this on an output pin!
-func (p Pin) Set(high bool) {
-	port := p.getPort()
-	pin := p % 16
-	if high {
-		port.BSRR.Set(1 << uint8(pin))
-	} else {
-		port.BSRR.Set(1 << uint8(pin+16))
-	}
-}
-
-// UART
-type UART struct {
-	Buffer *RingBuffer
-}
+//-------- UART hooks
 
 var (
 	// Both UART0 and UART1 refer to USART2.
-	UART0 = UART{Buffer: NewRingBuffer()}
+	UART0 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    stm32.USART2,
+		IRQVal: stm32.IRQ_USART2,
+	}
 	UART1 = &UART0
 )
 
-// Configure the UART.
-func (uart UART) Configure(config UARTConfig) {
-	// Default baud rate to 115200.
-	if config.BaudRate == 0 {
-		config.BaudRate = 115200
-	}
+// UART pin config
+func (uart UART) configurePins(config UARTConfig) {
+	config.TX.Configure(PinConfig{Mode: PinModeUartTX})
+	config.RX.Configure(PinConfig{Mode: PinModeUartRX})
+}
 
-	// pins
-	switch config.TX {
-	default:
-		// use standard TX/RX pins PA2 and PA3
-		UART_TX_PIN.Configure(PinConfig{Mode: PinModeUartTX})
-		UART_RX_PIN.Configure(PinConfig{Mode: PinModeUartRX})
-	}
-
-	// Enable USART2 clock
-	stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_USART2EN)
-
+// UART baudrate calc
+func (uart UART) getBaudRateDivisor(br uint32) uint32 {
+	// TODO: derive this from the CPU/system clocks
 	/*
 	  Set baud rate(115200)
 	  OVER8 = 0, APB2 = 42mhz
@@ -195,26 +131,40 @@ func (uart UART) Configure(config UARTConfig) {
 	  | 115200   | 0x16D  |
 	  +----------+--------+
 	*/
-	stm32.USART2.BRR.Set(0x16c)
-
-	// Enable USART2 port.
-	stm32.USART2.CR1.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
-
-	// Enable RX IRQ.
-	arm.SetPriority(stm32.IRQ_USART2, 0xc0)
-	arm.EnableIRQ(stm32.IRQ_USART2)
-}
-
-// WriteByte writes a byte of data to the UART.
-func (uart UART) WriteByte(c byte) error {
-	stm32.USART2.DR.Set(uint32(c))
-
-	for !stm32.USART2.SR.HasBits(stm32.USART_SR_TXE) {
-	}
-	return nil
+	var APB2_Speed uint32 = 42000000
+	return APB2_Speed / br
 }
 
 //go:export USART2_IRQHandler
 func handleUSART2() {
-	UART1.Receive(byte((stm32.USART2.DR.Get() & 0xFF)))
+	UART1.Receive(byte((UART1.Bus.DR.Get() & 0xFF)))
+}
+
+// Configure the SDA and SCL pins for I2C
+func (i2c I2C) configurePins(config I2CConfig) {
+	// TODO: do the thing
+}
+
+// Set baud rate for SPI
+func (spi SPI) getBaudRate(config SPIConfig) uint32 {
+	// enable clock for SPI
+	var conf uint32
+	return conf
+}
+
+// Configure SPI pins for input output and clock
+func (spi SPI) configurePins(config SPIConfig) {
+	if config.SCK == 0 {
+		config.SCK = SPI0_SCK_PIN
+	}
+	if config.MOSI == 0 {
+		config.MOSI = SPI0_MOSI_PIN
+	}
+	if config.MISO == 0 {
+		config.MISO = SPI0_MISO_PIN
+	}
+
+	config.SCK.Configure(PinConfig{Mode: PinModeSpiClk})
+	config.MOSI.Configure(PinConfig{Mode: PinModeSpiMosi})
+	config.MISO.Configure(PinConfig{Mode: PinModeSpiMiso})
 }

@@ -160,3 +160,13 @@ func (r *Register32) ClearBits(value uint32) {
 func (r *Register32) HasBits(value uint32) bool {
 	return (r.Get() & value) > 0
 }
+
+// SetMasked is a helper to simplify setting multiple bits high and/or low at
+// once. It is the volatile equivalent of:
+//
+//     r.Reg = (r.Reg & ^(mask << pos)) | value << pos
+//
+// go:inline
+func (r *Register32) SetMasked(value uint32, mask uint32, pos uint8) {
+	StoreUint32(&r.Reg, LoadUint32(&r.Reg)&^(mask<<pos)|value<<pos)
+}

@@ -110,3 +110,33 @@ const (
 	UART_TX_PIN = PA2
 	UART_RX_PIN = PA3
 )
+
+// SPI pins
+const (
+	SPI1_SCK_PIN  = PA5
+	SPI1_MISO_PIN = PA6
+	SPI1_MOSI_PIN = PA7
+	SPI0_SCK_PIN  = SPI1_SCK_PIN
+	SPI0_MISO_PIN = SPI1_MISO_PIN
+	SPI0_MOSI_PIN = SPI1_MOSI_PIN
+)
+
+// MEMs accelerometer
+const (
+	MEMS_ACCEL_CS   = PE3
+	MEMS_ACCEL_INT1 = PE0
+	MEMS_ACCEL_INT2 = PE1
+)
+
+// MEMs microphone
+const (
+	MEMS_MICROPHONE_CLK  = PB10
+	MEMS_MICROPHONE_DATA = PC3
+)
+
+// I2S audio I/O driver CS43L22
+// I2C address 0x94
+const (
+	AUDIO_DRIVER_SCL = PB6
+	AUDIO_DRIVER_SDA = PB9
+)
