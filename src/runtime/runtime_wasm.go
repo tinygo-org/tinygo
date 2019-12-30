@@ -76,3 +76,17 @@ func memset(ptr unsafe.Pointer, c byte, size uintptr) unsafe.Pointer {
 	}
 	return ptr
 }
+
+// Implement memmove for LLVM and compiler-rt.
+//go:export memmove
+func libc_memmove(dst, src unsafe.Pointer, size uintptr) unsafe.Pointer {
+	memmove(dst, src, size)
+	return dst
+}
+
+// Implement memcpy for LLVM and compiler-rt.
+//go:export memcpy
+func libc_memcpy(dst, src unsafe.Pointer, size uintptr) unsafe.Pointer {
+	memcpy(dst, src, size)
+	return dst
+}
