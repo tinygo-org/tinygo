@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/build"
 	"go/parser"
+	"go/scanner"
 	"go/token"
 	"go/types"
 	"os"
@@ -46,7 +47,7 @@ type Package struct {
 
 // Import loads the given package relative to srcDir (for the vendor directory).
 // It only loads the current package without recursion.
-func (p *Program) Import(path, srcDir string) (*Package, error) {
+func (p *Program) Import(path, srcDir string, pos token.Position) (*Package, error) {
 	if p.Packages == nil {
 		p.Packages = make(map[string]*Package)
 	}
@@ -59,7 +60,10 @@ func (p *Program) Import(path, srcDir string) (*Package, error) {
 	}
 	buildPkg, err := ctx.Import(path, srcDir, build.ImportComment)
 	if err != nil {
-		return nil, err
+		return nil, scanner.Error{
+			Pos: pos,
+			Msg: err.Error(), // TODO: define a new error type that will wrap the inner error
+		}
 	}
 	if existingPkg, ok := p.Packages[buildPkg.ImportPath]; ok {
 		// Already imported, or at least started the import.
@@ -467,7 +471,14 @@ func (p *Package) importRecursively(includeTests bool) error {
 		if _, ok := p.Imports[to]; ok {
 			continue
 		}
-		importedPkg, err := p.Program.Import(to, p.Package.Dir)
+		// Find error location.
+		var pos token.Position
+		if len(p.Package.ImportPos[to]) > 0 {
+			pos = p.Package.ImportPos[to][0]
+		} else {
+			pos = token.Position{Filename: p.Package.ImportPath}
+		}
+		importedPkg, err := p.Program.Import(to, p.Package.Dir, pos)
 		if err != nil {
 			if err, ok := err.(*ImportCycleError); ok {
 				err.Packages = append([]string{p.ImportPath}, err.Packages...)

@@ -251,13 +251,17 @@ func (c *Compiler) Compile(mainPath string) []error {
 			return []error{err}
 		}
 	} else {
-		_, err = lprogram.Import(mainPath, wd)
+		_, err = lprogram.Import(mainPath, wd, token.Position{
+			Filename: "build command-line-arguments",
+		})
 		if err != nil {
 			return []error{err}
 		}
 	}
 
-	_, err = lprogram.Import("runtime", "")
+	_, err = lprogram.Import("runtime", "", token.Position{
+		Filename: "build default import",
+	})
 	if err != nil {
 		return []error{err}
 	}
