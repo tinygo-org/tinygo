@@ -125,7 +125,10 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				}
 				indices[i] = uint32(operand.Value().ZExtValue())
 			}
-			result := value.GetElementPtr(indices)
+			result, err := value.GetElementPtr(indices)
+			if err != nil {
+				return nil, nil, fr.errorAt(inst, err.Error())
+			}
 			if result.Type() != inst.Type() {
 				return nil, nil, fr.errorAt(inst, "interp: gep: type does not match")
 			}
@@ -264,7 +267,11 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				if elementCount == 1 {
 					fr.locals[resultInst] = result
 				} else {
-					fr.locals[resultInst] = result.GetElementPtr([]uint32{0, 0})
+					result, err := result.GetElementPtr([]uint32{0, 0})
+					if err != nil {
+						return nil, nil, errorAt(inst, err.Error())
+					}
+					fr.locals[resultInst] = result
 				}
 			case callee.Name() == "runtime.hashmapMake":
 				// create a map
@@ -365,8 +372,16 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					// a bitcast of the original array instead of the GEP,
 					// which breaks our assumptions.
 					// Re-add this GEP, in the hope that it it is then of the correct type...
-					dstArray = dstArray.GetElementPtr([]uint32{0, 0}).(*LocalValue)
-					srcArray = srcArray.GetElementPtr([]uint32{0, 0}).(*LocalValue)
+					dstArrayValue, err := dstArray.GetElementPtr([]uint32{0, 0})
+					if err != nil {
+						return nil, nil, errorAt(inst, err.Error())
+					}
+					dstArray = dstArrayValue.(*LocalValue)
+					srcArrayValue, err := srcArray.GetElementPtr([]uint32{0, 0})
+					if err != nil {
+						return nil, nil, errorAt(inst, err.Error())
+					}
+					srcArray = srcArrayValue.(*LocalValue)
 				}
 				if fr.Eval.TargetData.TypeAllocSize(dstArray.Type().ElementType()) != elementSize {
 					return nil, nil, fr.errorAt(inst, "interp: slice dst element size does not match pointer type")
@@ -385,12 +400,21 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					return nil, nil, fr.errorAt(inst, "interp: trying to copy a slice with negative length?")
 				}
 				for i := int64(0); i < length; i++ {
+					var err error
 					// *dst = *src
 					dstArray.Store(srcArray.Load())
 					// dst++
-					dstArray = dstArray.GetElementPtr([]uint32{1}).(*LocalValue)
+					dstArrayValue, err := dstArray.GetElementPtr([]uint32{1})
+					if err != nil {
+						return nil, nil, errorAt(inst, err.Error())
+					}
+					dstArray = dstArrayValue.(*LocalValue)
 					// src++
-					srcArray = srcArray.GetElementPtr([]uint32{1}).(*LocalValue)
+					srcArrayValue, err := srcArray.GetElementPtr([]uint32{1})
+					if err != nil {
+						return nil, nil, errorAt(inst, err.Error())
+					}
+					srcArray = srcArrayValue.(*LocalValue)
 				}
 			case callee.Name() == "runtime.stringToBytes":
 				// convert a string to a []byte
