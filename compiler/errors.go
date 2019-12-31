@@ -31,20 +31,31 @@ func errorAt(inst llvm.Value, msg string) scanner.Error {
 	}
 }
 
-// getPosition returns the position information for the given instruction, as
-// far as it is available.
-func getPosition(inst llvm.Value) token.Position {
-	if inst.IsAInstruction().IsNil() {
+// getPosition returns the position information for the given value, as far as
+// it is available.
+func getPosition(val llvm.Value) token.Position {
+	if !val.IsAInstruction().IsNil() {
+		loc := val.InstructionDebugLoc()
+		if loc.IsNil() {
+			return token.Position{}
+		}
+		file := loc.LocationScope().ScopeFile()
+		return token.Position{
+			Filename: filepath.Join(file.FileDirectory(), file.FileFilename()),
+			Line:     int(loc.LocationLine()),
+			Column:   int(loc.LocationColumn()),
+		}
+	} else if !val.IsAFunction().IsNil() {
+		loc := val.Subprogram()
+		if loc.IsNil() {
+			return token.Position{}
+		}
+		file := loc.ScopeFile()
+		return token.Position{
+			Filename: filepath.Join(file.FileDirectory(), file.FileFilename()),
+			Line:     int(loc.SubprogramLine()),
+		}
+	} else {
 		return token.Position{}
-	}
-	loc := inst.InstructionDebugLoc()
-	if loc.IsNil() {
-		return token.Position{}
-	}
-	file := loc.LocationScope().ScopeFile()
-	return token.Position{
-		Filename: filepath.Join(file.FileDirectory(), file.FileFilename()),
-		Line:     int(loc.LocationLine()),
-		Column:   int(loc.LocationColumn()),
 	}
 }
