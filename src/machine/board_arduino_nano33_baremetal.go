@@ -8,12 +8,12 @@ import "device/sam"
 var (
 	UART1 = UART{
 		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM5_USART,
-		SERCOM: 5,
+		Bus:    sam.SERCOM3_USART,
+		SERCOM: 3,
 	}
 )
 
-//go:export SERCOM5_IRQHandler
+//go:export SERCOM3_IRQHandler
 func handleUART1() {
 	defaultUART1Handler()
 }
@@ -22,12 +22,12 @@ func handleUART1() {
 var (
 	UART2 = UART{
 		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM3_USART,
-		SERCOM: 3,
+		Bus:    sam.SERCOM5_USART,
+		SERCOM: 5,
 	}
 )
 
-//go:export SERCOM3_IRQHandler
+//go:export SERCOM5_IRQHandler
 func handleUART2() {
 	// should reset IRQ
 	UART2.Receive(byte((UART2.Bus.DATA.Get() & 0xFF)))
