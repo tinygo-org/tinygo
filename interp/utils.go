@@ -24,7 +24,11 @@ func getStringBytes(strPtr Value, strLen llvm.Value) []byte {
 	}
 	buf := make([]byte, strLen.ZExtValue())
 	for i := range buf {
-		c := strPtr.GetElementPtr([]uint32{uint32(i)}).Load()
+		gep, err := strPtr.GetElementPtr([]uint32{uint32(i)})
+		if err != nil {
+			panic(err) // TODO
+		}
+		c := gep.Load()
 		buf[i] = byte(c.ZExtValue())
 	}
 	return buf
