@@ -806,7 +806,12 @@ func (c *Compiler) parseFunc(frame *Frame) {
 		fmt.Printf("\nfunc %s:\n", frame.fn.Function)
 	}
 	if !frame.fn.LLVMFn.IsDeclaration() {
-		c.addError(frame.fn.Pos(), "function is already defined:"+frame.fn.LLVMFn.Name())
+		errValue := frame.fn.LLVMFn.Name() + " redeclared in this program"
+		fnPos := getPosition(frame.fn.LLVMFn)
+		if fnPos.IsValid() {
+			errValue += "\n\tprevious declaration at " + fnPos.String()
+		}
+		c.addError(frame.fn.Pos(), errValue)
 		return
 	}
 	if !frame.fn.IsExported() {
