@@ -45,6 +45,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) []er
 		// Run some preparatory passes for the Go optimizer.
 		goPasses := llvm.NewPassManager()
 		defer goPasses.Dispose()
+		goPasses.AddGlobalDCEPass()
 		goPasses.AddGlobalOptimizerPass()
 		goPasses.AddConstantPropagationPass()
 		goPasses.AddAggressiveDCEPass()
