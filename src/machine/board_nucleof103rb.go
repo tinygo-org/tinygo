@@ -2,7 +2,10 @@
 
 package machine
 
-import "device/stm32"
+import (
+	"device/stm32"
+	"runtime/interrupt"
+)
 
 const (
 	PA0  = portA + 0
@@ -100,14 +103,12 @@ var (
 	UART0 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    stm32.USART2,
-		IRQVal: stm32.IRQ_USART2,
 	}
 	UART2 = &UART0
 )
 
-//go:export USART2_IRQHandler
-func handleUART2() {
-	UART2.Receive(byte((UART2.Bus.DR.Get() & 0xFF)))
+func init() {
+	UART0.interrupt = interrupt.New(stm32.IRQ_USART2, UART0.handleInterrupt)
 }
 
 // SPI pins

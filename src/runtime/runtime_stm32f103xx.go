@@ -6,6 +6,7 @@ import (
 	"device/arm"
 	"device/stm32"
 	"machine"
+	"runtime/interrupt"
 	"runtime/volatile"
 )
 
@@ -101,8 +102,9 @@ func initRTC() {
 func initTIM() {
 	stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_TIM3EN)
 
-	arm.SetPriority(stm32.IRQ_TIM3, 0xc3)
-	arm.EnableIRQ(stm32.IRQ_TIM3)
+	intr := interrupt.New(stm32.IRQ_TIM3, handleTIM3)
+	intr.SetPriority(0xc3)
+	intr.Enable()
 }
 
 const asyncScheduler = false
@@ -186,8 +188,7 @@ func timerSleep(ticks uint32) {
 	}
 }
 
-//go:export TIM3_IRQHandler
-func handleTIM3() {
+func handleTIM3(interrupt.Interrupt) {
 	if stm32.TIM3.SR.HasBits(stm32.TIM_SR_UIF) {
 		// Disable the timer.
 		stm32.TIM3.CR1.ClearBits(stm32.TIM_CR1_CEN)

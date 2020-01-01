@@ -23,3 +23,8 @@ func New(id int, handler func(Interrupt)) Interrupt
 // function: it is only for telling the compiler about the mapping between an
 // interrupt number and the interrupt handler name.
 func Register(id int, handlerName string) int
+
+type handle struct {
+	handler func(Interrupt)
+	Interrupt
+}

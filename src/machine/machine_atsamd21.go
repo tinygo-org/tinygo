@@ -293,9 +293,10 @@ func waitADCSync() {
 
 // UART on the SAMD21.
 type UART struct {
-	Buffer *RingBuffer
-	Bus    *sam.SERCOM_USART_Type
-	SERCOM uint8
+	Buffer    *RingBuffer
+	Bus       *sam.SERCOM_USART_Type
+	SERCOM    uint8
+	interrupt interrupt.Interrupt
 }
 
 var (
@@ -402,10 +403,7 @@ func (uart UART) Configure(config UARTConfig) error {
 	uart.Bus.INTENSET.Set(sam.SERCOM_USART_INTENSET_RXC)
 
 	// Enable RX IRQ.
-	// IRQ lines are in the same order as SERCOM instance numbers on SAMD21
-	// chips, so the IRQ number can be trivially determined from the SERCOM
-	// number.
-	arm.EnableIRQ(sam.IRQ_SERCOM0 + uint32(uart.SERCOM))
+	uart.interrupt.Enable()
 
 	return nil
 }
@@ -433,11 +431,12 @@ func (uart UART) WriteByte(c byte) error {
 	return nil
 }
 
-// defaultUART1Handler handles the UART1 IRQ.
-func defaultUART1Handler() {
+// handleInterrupt should be called from the appropriate interrupt handler for
+// this UART instance.
+func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	// should reset IRQ
-	UART1.Receive(byte((UART1.Bus.DATA.Get() & 0xFF)))
-	UART1.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INTFLAG_RXC)
+	uart.Receive(byte((uart.Bus.DATA.Get() & 0xFF)))
+	uart.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INTFLAG_RXC)
 }
 
 // I2C on the SAMD21.

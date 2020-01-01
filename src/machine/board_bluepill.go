@@ -2,7 +2,10 @@
 
 package machine
 
-import "device/stm32"
+import (
+	"device/stm32"
+	"runtime/interrupt"
+)
 
 // https://wiki.stm32duino.com/index.php?title=File:Bluepillpinout.gif
 const (
@@ -61,14 +64,12 @@ var (
 	UART0 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    stm32.USART1,
-		IRQVal: stm32.IRQ_USART1,
 	}
 	UART1 = &UART0
 )
 
-//go:export USART1_IRQHandler
-func handleUART1() {
-	UART1.Receive(byte((UART1.Bus.DR.Get() & 0xFF)))
+func init() {
+	UART0.interrupt = interrupt.New(stm32.IRQ_USART1, UART0.handleInterrupt)
 }
 
 // SPI pins

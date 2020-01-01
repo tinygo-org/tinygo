@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/sam"
+	"runtime/interrupt"
 )
 
 // used to reset into bootloader
@@ -62,9 +63,8 @@ var (
 	}
 )
 
-//go:export SERCOM1_IRQHandler
-func handleUART1() {
-	defaultUART1Handler()
+func init() {
+	UART1.interrupt = interrupt.New(sam.IRQ_SERCOM1, UART1.handleInterrupt)
 }
 
 // I2C pins

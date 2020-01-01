@@ -2,7 +2,10 @@
 
 package machine
 
-import "device/sam"
+import (
+	"device/sam"
+	"runtime/interrupt"
+)
 
 // UART1 on the Circuit Playground Express.
 var (
@@ -13,9 +16,8 @@ var (
 	}
 )
 
-//go:export SERCOM1_IRQHandler
-func handleUART1() {
-	defaultUART1Handler()
+func init() {
+	UART1.interrupt = interrupt.New(sam.IRQ_SERCOM4, UART1.handleInterrupt)
 }
 
 // I2C on the Circuit Playground Express.

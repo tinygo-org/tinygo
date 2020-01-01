@@ -5,9 +5,9 @@ package machine
 // Peripheral abstraction layer for the stm32.
 
 import (
-	"device/arm"
 	"device/stm32"
 	"errors"
+	"runtime/interrupt"
 )
 
 func CPUFrequency() uint32 {
@@ -111,9 +111,9 @@ func (p Pin) Get() bool {
 
 // UART
 type UART struct {
-	Buffer *RingBuffer
-	Bus    *stm32.USART_Type
-	IRQVal uint32
+	Buffer    *RingBuffer
+	Bus       *stm32.USART_Type
+	interrupt interrupt.Interrupt
 }
 
 // Configure the UART.
@@ -155,8 +155,8 @@ func (uart UART) Configure(config UARTConfig) {
 	uart.Bus.CR1.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
 
 	// Enable RX IRQ
-	arm.SetPriority(uart.IRQVal, 0xc0)
-	arm.EnableIRQ(uart.IRQVal)
+	uart.interrupt.SetPriority(0xc0)
+	uart.interrupt.Enable()
 }
 
 // SetBaudRate sets the communication speed for the UART.
@@ -180,6 +180,12 @@ func (uart UART) WriteByte(c byte) error {
 	for !uart.Bus.SR.HasBits(stm32.USART_SR_TXE) {
 	}
 	return nil
+}
+
+// handleInterrupt should be called from the appropriate interrupt handler for
+// this UART instance.
+func (uart *UART) handleInterrupt(interrupt.Interrupt) {
+	uart.Receive(byte((uart.Bus.DR.Get() & 0xFF)))
 }
 
 // SPI on the STM32.

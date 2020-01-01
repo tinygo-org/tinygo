@@ -1309,6 +1309,8 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 			return c.emitVolatileLoad(frame, instr)
 		case strings.HasPrefix(name, "runtime/volatile.Store"):
 			return c.emitVolatileStore(frame, instr)
+		case name == "runtime/interrupt.New":
+			return c.emitInterruptGlobal(frame, instr)
 		}
 
 		targetFunc := c.ir.GetFunction(fn)

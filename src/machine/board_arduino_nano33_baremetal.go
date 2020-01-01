@@ -2,7 +2,10 @@
 
 package machine
 
-import "device/sam"
+import (
+	"device/sam"
+	"runtime/interrupt"
+)
 
 // UART1 on the Arduino Nano 33 connects to the onboard NINA-W102 WiFi chip.
 var (
@@ -13,11 +16,6 @@ var (
 	}
 )
 
-//go:export SERCOM3_IRQHandler
-func handleUART1() {
-	defaultUART1Handler()
-}
-
 // UART2 on the Arduino Nano 33 connects to the normal TX/RX pins.
 var (
 	UART2 = UART{
@@ -27,11 +25,10 @@ var (
 	}
 )
 
-//go:export SERCOM5_IRQHandler
-func handleUART2() {
-	// should reset IRQ
-	UART2.Receive(byte((UART2.Bus.DATA.Get() & 0xFF)))
-	UART2.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INTFLAG_RXC)
+func init() {
+	// Work around circular definitions.
+	UART1.interrupt = interrupt.New(sam.IRQ_SERCOM3, UART1.handleInterrupt)
+	UART2.interrupt = interrupt.New(sam.IRQ_SERCOM5, UART2.handleInterrupt)
 }
 
 // I2C on the Arduino Nano 33.
