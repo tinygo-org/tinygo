@@ -21,12 +21,18 @@ const (
 	D7  = PB17 // NINA_RESETN
 	D8  = PB14 // NINA_CS
 	D9  = PB04 // TFT_RD
-	D10 = PB05 // TFT_RS
+	D10 = PB05 // TFT_DC
 	D11 = PB06 // TFT_CS
 	D12 = PB07 // TFT_TE
 	D13 = PB23 // built-in LED
 	D24 = PA00 // TFT_RESET
-	D25 = PB31 // TFT_WR
+	D25 = PB31 // TFT_BACKLIGHT
+	D26 = PB09 // TFT_WR
+	D27 = PB02 // SDA
+	D28 = PB03 // SCL
+	D29 = PA12 // MOSI
+	D30 = PA13 // SCK
+	D31 = PA14 // MISO
 	D32 = PB30 // SD_CS
 	D33 = PA01 // SD_CARD_DETECT
 	D34 = PA16 // LCD_DATA0
@@ -37,6 +43,12 @@ const (
 	D39 = PA21 // LCD_DATA5
 	D40 = PA22 // LCD_DATA6
 	D41 = PA23 // LCD_DATA7
+	D42 = PB10 // QSPI
+	D43 = PB11 // QSPI
+	D44 = PA08 // QSPI
+	D45 = PA09 // QSPI
+	D46 = PA10 // QSPI
+	D47 = PA11 // QSPI
 	D50 = PA02 // speaker amplifier shutdown
 	D51 = PA15 // NINA_RTS
 
@@ -49,13 +61,15 @@ const (
 	NINA_RX  = D0
 	NINA_RTS = D51
 
-	TFT_WR        = PB09
+	LCD_DATA0 = D34
+
 	TFT_RD        = D9
-	TFT_RS        = D10
+	TFT_DC        = D10
 	TFT_CS        = D11
 	TFT_TE        = D12
 	TFT_RESET     = D24
 	TFT_BACKLIGHT = D25
+	TFT_WR        = D26
 
 	NEOPIXEL = D2
 	SPK_SD   = D50
