@@ -24,6 +24,7 @@ package runtime
 // element of the receiving coroutine and setting the 'comma-ok' value to false.
 
 import (
+	"internal/task"
 	"unsafe"
 )
 
@@ -46,7 +47,7 @@ type channelBlockedList struct {
 	// If this channel operation is not part of a select, then the pointer field of the state holds the data buffer.
 	// If this channel operation is part of a select, then the pointer field of the state holds the recieve buffer.
 	// If this channel operation is a receive, then the data field should be set to zero when resuming due to channel closure.
-	t *task
+	t *task.Task
 
 	// s is a pointer to the channel select state corresponding to this operation.
 	// This will be nil if and only if this channel operation is not part of a select statement.
@@ -141,24 +142,24 @@ func (ch *channel) resumeRX(ok bool) unsafe.Pointer {
 	b, ch.blocked = ch.blocked, ch.blocked.next
 
 	// get destination pointer
-	dst := b.t.state().ptr
+	dst := b.t.Ptr
 
 	if !ok {
 		// the result value is zero
 		memzero(dst, ch.elementSize)
-		b.t.state().data = 0
+		b.t.Data = 0
 	}
 
 	if b.s != nil {
 		// tell the select op which case resumed
-		b.t.state().ptr = unsafe.Pointer(b.s)
+		b.t.Ptr = unsafe.Pointer(b.s)
 
 		// detach associated operations
 		b.detach()
 	}
 
 	// push task onto runqueue
-	runqueuePushBack(b.t)
+	runqueue.Push(b.t)
 
 	return dst
 }
@@ -171,21 +172,21 @@ func (ch *channel) resumeTX() unsafe.Pointer {
 	b, ch.blocked = ch.blocked, ch.blocked.next
 
 	// get source pointer
-	src := b.t.state().ptr
+	src := b.t.Ptr
 
 	if b.s != nil {
 		// use state's source pointer
 		src = b.s.value
 
 		// tell the select op which case resumed
-		b.t.state().ptr = unsafe.Pointer(b.s)
+		b.t.Ptr = unsafe.Pointer(b.s)
 
 		// detach associated operations
 		b.detach()
 	}
 
 	// push task onto runqueue
-	runqueuePushBack(b.t)
+	runqueue.Push(b.t)
 
 	return src
 }
@@ -424,17 +425,16 @@ func chanSend(ch *channel, value unsafe.Pointer) {
 	}
 
 	// wait for reciever
-	sender := getCoroutine()
+	sender := task.Current()
 	ch.state = chanStateSend
-	senderState := sender.state()
-	senderState.ptr = value
+	sender.Ptr = value
 	ch.blocked = &channelBlockedList{
 		next: ch.blocked,
 		t:    sender,
 	}
 	chanDebug(ch)
-	yield()
-	senderState.ptr = nil
+	task.Pause()
+	sender.Ptr = nil
 }
 
 // chanRecv receives a single value over a channel.
@@ -454,18 +454,17 @@ func chanRecv(ch *channel, value unsafe.Pointer) bool {
 	}
 
 	// wait for a value
-	receiver := getCoroutine()
+	receiver := task.Current()
 	ch.state = chanStateRecv
-	receiverState := receiver.state()
-	receiverState.ptr, receiverState.data = value, 1
+	receiver.Ptr, receiver.Data = value, 1
 	ch.blocked = &channelBlockedList{
 		next: ch.blocked,
 		t:    receiver,
 	}
 	chanDebug(ch)
-	yield()
-	ok := receiverState.data == 1
-	receiverState.ptr, receiverState.data = nil, 0
+	task.Pause()
+	ok := receiver.Data == 1
+	receiver.Ptr, receiver.Data = nil, 0
 	return ok
 }
 
@@ -515,7 +514,7 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelB
 	for i, v := range states {
 		ops[i] = channelBlockedList{
 			next:         v.ch.blocked,
-			t:            getCoroutine(),
+			t:            task.Current(),
 			s:            &states[i],
 			allSelectOps: ops,
 		}
@@ -547,14 +546,15 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelB
 	}
 
 	// expose rx buffer
-	getCoroutine().state().ptr = recvbuf
-	getCoroutine().state().data = 1
+	t := task.Current()
+	t.Ptr = recvbuf
+	t.Data = 1
 
 	// wait for one case to fire
-	yield()
+	task.Pause()
 
 	// figure out which one fired and return the ok value
-	return (uintptr(getCoroutine().state().ptr) - uintptr(unsafe.Pointer(&states[0]))) / unsafe.Sizeof(chanSelectState{}), getCoroutine().state().data != 0
+	return (uintptr(t.Ptr) - uintptr(unsafe.Pointer(&states[0]))) / unsafe.Sizeof(chanSelectState{}), t.Data != 0
 }
 
 // tryChanSelect is like chanSelect, but it does a non-blocking select operation.

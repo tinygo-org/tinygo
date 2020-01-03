@@ -47,7 +47,7 @@ func main() {
 		time.Sleep(2 * time.Millisecond)
 		x = 1
 	}()
-	time.Sleep(time.Second/2)
+	time.Sleep(time.Second / 2)
 	println("closure go call result:", x)
 
 	time.Sleep(2 * time.Millisecond)

@@ -13,24 +13,17 @@ import "tinygo.org/x/go-llvm"
 //
 // Because a go statement doesn't return anything, return undef.
 func (c *Compiler) emitStartGoroutine(funcPtr llvm.Value, params []llvm.Value) llvm.Value {
+	paramBundle := c.emitPointerPack(params)
+	var callee llvm.Value
 	switch c.Scheduler() {
-	case "tasks":
-		paramBundle := c.emitPointerPack(params)
-		paramBundle = c.builder.CreatePtrToInt(paramBundle, c.uintptrType, "")
-
-		calleeValue := c.createGoroutineStartWrapper(funcPtr)
-		c.createRuntimeCall("startGoroutine", []llvm.Value{calleeValue, paramBundle}, "")
+	case "none", "tasks":
+		callee = c.createGoroutineStartWrapper(funcPtr)
 	case "coroutines":
-		// We roundtrip through runtime.makeGoroutine as a signal (to find these
-		// calls) and to break any optimizations LLVM will try to do: they are
-		// invalid if we called this as a regular function to be updated later.
-		calleeValue := c.builder.CreatePtrToInt(funcPtr, c.uintptrType, "")
-		calleeValue = c.createRuntimeCall("makeGoroutine", []llvm.Value{calleeValue}, "")
-		calleeValue = c.builder.CreateIntToPtr(calleeValue, funcPtr.Type(), "")
-		c.createCall(calleeValue, append(params, llvm.ConstPointerNull(c.i8ptrType)), "")
+		callee = c.builder.CreatePtrToInt(funcPtr, c.uintptrType, "")
 	default:
 		panic("unreachable")
 	}
+	c.createCall(c.mod.NamedFunction("internal/task.start"), []llvm.Value{callee, paramBundle, llvm.Undef(c.i8ptrType), llvm.ConstPointerNull(c.i8ptrType)}, "")
 	return llvm.Undef(funcPtr.Type().ElementType().ReturnType())
 }
 

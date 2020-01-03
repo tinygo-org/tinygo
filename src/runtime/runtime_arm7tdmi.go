@@ -40,7 +40,10 @@ func main() {
 	initAll()
 
 	// Compiler-generated call to main.main().
-	callMain()
+	go callMain()
+
+	// Run the scheduler.
+	scheduler()
 }
 
 func preinit() {

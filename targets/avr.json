@@ -5,6 +5,7 @@
 	"compiler": "avr-gcc",
 	"gc": "conservative",
 	"linker": "avr-gcc",
+	"scheduler": "none",
 	"ldflags": [
 		"-T", "targets/avr.ld",
 		"-Wl,--gc-sections"

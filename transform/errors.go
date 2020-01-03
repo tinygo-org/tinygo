@@ -46,3 +46,12 @@ func getPosition(val llvm.Value) token.Position {
 		return token.Position{}
 	}
 }
+
+// ErrMissingIntrinsic is an error indicating that a required intrinsic was not found in the module.
+type ErrMissingIntrinsic struct {
+	Name string
+}
+
+func (err ErrMissingIntrinsic) Error() string {
+	return "missing intrinsic: " + err.Name
+}

@@ -8,6 +8,7 @@ type timeUnit int64
 func main() {
 	preinit()
 	initAll()
-	callMain()
+	go callMain()
+	scheduler()
 	abort()
 }
