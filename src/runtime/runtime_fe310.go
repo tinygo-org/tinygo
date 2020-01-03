@@ -52,7 +52,8 @@ func main() {
 	preinit()
 	initPeripherals()
 	initAll()
-	callMain()
+	go callMain()
+	scheduler()
 	abort()
 }
 

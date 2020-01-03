@@ -31,6 +31,9 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) []er
 		}
 	}
 
+	// Replace callMain placeholder with actual main function.
+	c.mod.NamedFunction("runtime.callMain").ReplaceAllUsesWith(c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main"))
+
 	// Run function passes for each function.
 	funcPasses := llvm.NewFunctionPassManagerForModule(c.mod)
 	defer funcPasses.Dispose()
@@ -92,25 +95,41 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) []er
 			}
 		}
 
-		err := c.LowerGoroutines()
-		if err != nil {
-			return []error{err}
-		}
 	} else {
 		// Must be run at any optimization level.
 		transform.LowerInterfaces(c.mod)
 		if c.funcImplementation() == funcValueSwitch {
 			transform.LowerFuncValues(c.mod)
 		}
-		err := c.LowerGoroutines()
-		if err != nil {
-			return []error{err}
-		}
 		errs := transform.LowerInterrupts(c.mod)
 		if len(errs) > 0 {
 			return errs
 		}
 	}
+
+	// Lower async implementations.
+	switch c.Scheduler() {
+	case "coroutines":
+		// Lower async as coroutines.
+		err := transform.LowerCoroutines(c.mod, c.NeedsStackObjects())
+		if err != nil {
+			return []error{err}
+		}
+	case "tasks":
+		// No transformations necessary.
+	case "none":
+		// Check for any goroutine starts.
+		if start := c.mod.NamedFunction("internal/task.start"); !start.IsNil() && len(getUses(start)) > 0 {
+			errs := []error{}
+			for _, call := range getUses(start) {
+				errs = append(errs, errorAt(call, "attempted to start a goroutine without a scheduler"))
+			}
+			return errs
+		}
+	default:
+		return []error{errors.New("invalid scheduler")}
+	}
+
 	if c.VerifyIR() {
 		if errs := c.checkModule(); errs != nil {
 			return errs

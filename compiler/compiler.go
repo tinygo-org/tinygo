@@ -40,24 +40,22 @@ const tinygoPath = "github.com/tinygo-org/tinygo"
 var functionsUsedInTransforms = []string{
 	"runtime.alloc",
 	"runtime.free",
-	"runtime.scheduler",
 	"runtime.nilPanic",
 }
 
-var taskFunctionsUsedInTransforms = []string{
-	"runtime.startGoroutine",
-}
+var taskFunctionsUsedInTransforms = []string{}
 
 var coroFunctionsUsedInTransforms = []string{
-	"runtime.avrSleep",
-	"runtime.getFakeCoroutine",
-	"runtime.setTaskStatePtr",
-	"runtime.getTaskStatePtr",
-	"runtime.activateTask",
-	"runtime.noret",
-	"runtime.getParentHandle",
-	"runtime.getCoroutine",
-	"runtime.llvmCoroRefHolder",
+	"internal/task.start",
+	"internal/task.Pause",
+	"internal/task.fake",
+	"internal/task.Current",
+	"internal/task.createTask",
+	"(*internal/task.Task).setState",
+	"(*internal/task.Task).returnTo",
+	"(*internal/task.Task).returnCurrent",
+	"(*internal/task.Task).setReturnPtr",
+	"(*internal/task.Task).getReturnPtr",
 }
 
 type Compiler struct {
@@ -162,6 +160,7 @@ func (c *Compiler) Module() llvm.Module {
 func (c *Compiler) getFunctionsUsedInTransforms() []string {
 	fnused := functionsUsedInTransforms
 	switch c.Scheduler() {
+	case "none":
 	case "coroutines":
 		fnused = append(append([]string{}, fnused...), coroFunctionsUsedInTransforms...)
 	case "tasks":
@@ -218,7 +217,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 				path = path[len(tinygoPath+"/src/"):]
 			}
 			switch path {
-			case "machine", "os", "reflect", "runtime", "runtime/interrupt", "runtime/volatile", "sync", "testing", "internal/reflectlite":
+			case "machine", "os", "reflect", "runtime", "runtime/interrupt", "runtime/volatile", "sync", "testing", "internal/reflectlite", "internal/task":
 				return path
 			default:
 				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
@@ -1095,7 +1094,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			funcPtr, context := c.decodeFuncValue(c.getValue(frame, instr.Call.Value), instr.Call.Value.Type().(*types.Signature))
 			params = append(params, context) // context parameter
 			switch c.Scheduler() {
-			case "coroutines":
+			case "none", "coroutines":
 				// There are no additional parameters needed for the goroutine start operation.
 			case "tasks":
 				// Add the function pointer as a parameter to start the goroutine.

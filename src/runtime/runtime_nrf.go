@@ -22,7 +22,8 @@ func main() {
 	systemInit()
 	preinit()
 	initAll()
-	callMain()
+	go callMain()
+	scheduler()
 	abort()
 }
 

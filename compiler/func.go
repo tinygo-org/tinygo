@@ -35,7 +35,7 @@ func (c *Compiler) funcImplementation() funcValueImplementation {
 	// Always pick the switch implementation, as it allows the use of blocking
 	// inside a function that is used as a func value.
 	switch c.Scheduler() {
-	case "coroutines":
+	case "none", "coroutines":
 		return funcValueSwitch
 	case "tasks":
 		return funcValueDoubleword

@@ -15,7 +15,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 
 declare i32 @runtime.getFuncPtr(i8*, i32, %runtime.typecodeID*, i8*, i8*)
 
-declare i32 @runtime.makeGoroutine(i32, i8*, i8*)
+declare void @"internal/task.start"(i32, i8*, i8*, i8*)
 
 declare void @runtime.nilPanic(i8*, i8*)
 
@@ -102,15 +102,11 @@ func.nil:
   unreachable
 
 func.call1:
-  %2 = call i32 @runtime.makeGoroutine(i32 ptrtoint (void (i32, i8*, i8*)* @"main$1" to i32), i8* undef, i8* null)
-  %3 = inttoptr i32 %2 to void (i32, i8*, i8*)*
-  call void %3(i32 8, i8* %0, i8* null)
+  call void @"internal/task.start"(i32 ptrtoint (void (i32, i8*, i8*)* @"main$1" to i32), i8* null, i8* undef, i8* null)
   br label %func.next
 
 func.call2:
-  %4 = call i32 @runtime.makeGoroutine(i32 ptrtoint (void (i32, i8*, i8*)* @"main$2" to i32), i8* undef, i8* null)
-  %5 = inttoptr i32 %4 to void (i32, i8*, i8*)*
-  call void %5(i32 8, i8* %0, i8* null)
+  call void @"internal/task.start"(i32 ptrtoint (void (i32, i8*, i8*)* @"main$2" to i32), i8* null, i8* undef, i8* null)
   br label %func.next
 
 func.next:

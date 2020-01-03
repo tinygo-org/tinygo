@@ -17,7 +17,7 @@ tinygo_startTask:
     blx   r4
 
     // After return, exit this goroutine. This is a tail call.
-    bl    runtime.yield
+    bl    	tinygo_pause
 
 .section .text.tinygo_getSystemStackPointer
 .global  tinygo_getSystemStackPointer
@@ -35,24 +35,23 @@ tinygo_getSystemStackPointer:
 .global  tinygo_switchToScheduler
 .type    tinygo_switchToScheduler, %function
 tinygo_switchToScheduler:
-    // r0 = oldTask *task
+    // r0 = sp *uintptr
 
     // Currently on the task stack (SP=PSP). We need to store the position on
     // the stack where the in-use registers will be stored.
     mov r1, sp
     subs r1, #36
-    str r1, [r0, #36]
+    str r1, [r0]
 
     b tinygo_swapTask
 
 .global  tinygo_switchToTask
 .type    tinygo_switchToTask, %function
 tinygo_switchToTask:
-    // r0 = newTask *task
+    // r0 = sp uintptr
 
     // Currently on the scheduler stack (SP=MSP). We'll have to update the PSP,
     // and then we can invoke swapTask.
-    ldr r0, [r0, #36]
     msr PSP, r0
 
     // Continue executing in the swapTask function, which swaps the stack

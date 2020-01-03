@@ -21,7 +21,8 @@ var timestamp timeUnit
 func main() {
 	preinit()
 	initAll()
-	callMain()
+	go callMain()
+	scheduler()
 	arm.SemihostingCall(arm.SemihostingReportException, arm.SemihostingApplicationExit)
 	abort()
 }

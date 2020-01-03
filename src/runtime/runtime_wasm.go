@@ -21,7 +21,8 @@ func fd_write(id uint32, iovs *wasiIOVec, iovs_len uint, nwritten *uint) (errno 
 //export _start
 func _start() {
 	initAll()
-	callMain()
+	go callMain()
+	scheduler()
 }
 
 // Using global variables to avoid heap allocation.
@@ -50,7 +51,9 @@ func setEventHandler(fn func()) {
 
 //go:export resume
 func resume() {
-	handleEvent()
+	go func() {
+		handleEvent()
+	}()
 }
 
 //go:export go_scheduler

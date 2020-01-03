@@ -52,7 +52,10 @@ func main() int {
 	initAll()
 
 	// Compiler-generated call to main.main().
-	callMain()
+	go callMain()
+
+	// Run scheduler.
+	scheduler()
 
 	// For libc compatibility.
 	return 0
