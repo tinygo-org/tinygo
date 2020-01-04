@@ -771,14 +771,6 @@ func (c *Compiler) attachDebugInfo(f *ir.Function) llvm.Metadata {
 }
 
 func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix, filename string, line int) llvm.Metadata {
-	if _, ok := c.difiles[filename]; !ok {
-		dir, file := filepath.Split(filename)
-		if dir != "" {
-			dir = dir[:len(dir)-1]
-		}
-		c.difiles[filename] = c.dibuilder.CreateFile(file, dir)
-	}
-
 	// Debug info for this function.
 	diparams := make([]llvm.Metadata, 0, len(f.Params))
 	for _, param := range f.Params {
@@ -792,7 +784,7 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix,
 	difunc := c.dibuilder.CreateFunction(c.difiles[filename], llvm.DIFunction{
 		Name:         f.RelString(nil) + suffix,
 		LinkageName:  f.LinkName() + suffix,
-		File:         c.difiles[filename],
+		File:         c.getDIFile(filename),
 		Line:         line,
 		Type:         diFuncType,
 		LocalToUnit:  true,
@@ -803,6 +795,20 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix,
 	})
 	llvmFn.SetSubprogram(difunc)
 	return difunc
+}
+
+// getDIFile returns a DIFile metadata node for the given filename. It tries to
+// use one that was already created, otherwise it falls back to creating a new
+// one.
+func (c *Compiler) getDIFile(filename string) llvm.Metadata {
+	if _, ok := c.difiles[filename]; !ok {
+		dir, file := filepath.Split(filename)
+		if dir != "" {
+			dir = dir[:len(dir)-1]
+		}
+		c.difiles[filename] = c.dibuilder.CreateFile(file, dir)
+	}
+	return c.difiles[filename]
 }
 
 func (c *Compiler) parseFunc(frame *Frame) {
