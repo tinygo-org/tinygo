@@ -321,7 +321,7 @@ func InitADC() {
 
 	sam.ADC0.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
 	// adcs[i]->CTRLB.bit.RESSEL = ADC_CTRLB_RESSEL_10BIT_Val;
-	sam.ADC0.CTRLB.SetBits(sam.ADC_CTRLB_RESSEL_10BIT << sam.ADC_CTRLB_RESSEL_Pos)
+	sam.ADC0.CTRLB.SetBits(sam.ADC_CTRLB_RESSEL_12BIT << sam.ADC_CTRLB_RESSEL_Pos)
 
 	// wait for sync
 	for sam.ADC0.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_CTRLB) {
@@ -351,7 +351,7 @@ func InitADC() {
 
 	// same for ADC1, as for ADC0
 	sam.ADC1.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
-	sam.ADC1.CTRLB.SetBits(sam.ADC_CTRLB_RESSEL_10BIT << sam.ADC_CTRLB_RESSEL_Pos)
+	sam.ADC1.CTRLB.SetBits(sam.ADC_CTRLB_RESSEL_12BIT << sam.ADC_CTRLB_RESSEL_Pos)
 	for sam.ADC1.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_CTRLB) {
 	}
 	sam.ADC1.SAMPCTRL.Set(5)
@@ -389,6 +389,9 @@ func (a ADC) Get() uint16 {
 	}
 
 	// Selection for the positive ADC input channel
+	bus.INPUTCTRL.ClearBits(sam.ADC_INPUTCTRL_MUXPOS_Msk)
+	for bus.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_ENABLE) {
+	}
 	bus.INPUTCTRL.SetBits((uint16(ch) & sam.ADC_INPUTCTRL_MUXPOS_Msk) << sam.ADC_INPUTCTRL_MUXPOS_Pos)
 	for bus.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_ENABLE) {
 	}
@@ -404,7 +407,7 @@ func (a ADC) Get() uint16 {
 	}
 
 	// Clear the Data Ready flag
-	bus.INTFLAG.SetBits(sam.ADC_INTFLAG_RESRDY)
+	bus.INTFLAG.ClearBits(sam.ADC_INTFLAG_RESRDY)
 	for bus.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_ENABLE) {
 	}
 
