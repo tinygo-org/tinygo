@@ -430,12 +430,7 @@ func (a ADC) Get() uint16 {
 }
 
 func (a ADC) getADCBus() *sam.ADC_Type {
-	switch a.Pin {
-	case PB08:
-		return sam.ADC1
-	default:
-		return sam.ADC0
-	}
+	return sam.ADC0
 }
 
 func (a ADC) getADCChannel() uint8 {
@@ -443,7 +438,7 @@ func (a ADC) getADCChannel() uint8 {
 	case PA02:
 		return 0
 	case PB08:
-		return 0
+		return 2
 	case PB09:
 		return 3
 	case PA04:
