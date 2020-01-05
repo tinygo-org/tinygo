@@ -627,6 +627,7 @@ type UART struct {
 	Buffer *RingBuffer
 	Bus    *sam.SERCOM_USART_INT_Type
 	SERCOM uint8
+	IRQVal uint32 // RXC interrupt
 }
 
 var (
@@ -638,6 +639,7 @@ var (
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM3_USART_INT,
 		SERCOM: 3,
+		IRQVal: sam.IRQ_SERCOM3_2, // RXC interrupt
 	}
 
 	// The second hardware serial port on the SAMD51. Uses the SERCOM0 interface.
@@ -645,6 +647,7 @@ var (
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM0_USART_INT,
 		SERCOM: 0,
+		IRQVal: sam.IRQ_SERCOM0_2, // RXC interrupt
 	}
 )
 
@@ -696,7 +699,7 @@ func (uart UART) Configure(config UARTConfig) error {
 	config.TX.Configure(PinConfig{Mode: txPinMode})
 	config.RX.Configure(PinConfig{Mode: rxPinMode})
 
-	// reset SERCOM0
+	// reset SERCOM
 	uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_INT_CTRLA_SWRST)
 	for uart.Bus.CTRLA.HasBits(sam.SERCOM_USART_INT_CTRLA_SWRST) ||
 		uart.Bus.SYNCBUSY.HasBits(sam.SERCOM_USART_INT_SYNCBUSY_SWRST) {
@@ -746,19 +749,12 @@ func (uart UART) Configure(config UARTConfig) error {
 	uart.Bus.INTENSET.Set(sam.SERCOM_USART_INT_INTENSET_RXC)
 
 	// Enable RX IRQ.
-	switch uart.SERCOM {
-	case 0:
-		arm.EnableIRQ(sam.IRQ_SERCOM0_0)
-		arm.EnableIRQ(sam.IRQ_SERCOM0_1)
-		arm.EnableIRQ(sam.IRQ_SERCOM0_2)
-		arm.EnableIRQ(sam.IRQ_SERCOM0_OTHER)
-	default:
-		// Currently assumes SERCOM3
-		arm.EnableIRQ(sam.IRQ_SERCOM3_0)
-		arm.EnableIRQ(sam.IRQ_SERCOM3_1)
-		arm.EnableIRQ(sam.IRQ_SERCOM3_2)
-		arm.EnableIRQ(sam.IRQ_SERCOM3_OTHER)
-	}
+	// This is a small note at the bottom of the NVIC section of the datasheet:
+	// > The integer number specified in the source refers to the respective bit
+	// > position in the INTFLAG register of respective peripheral.
+	// Therefore, if we only need to listen to the RXC interrupt source (in bit
+	// position 2), we only need interrupt source 2 for this SERCOM device.
+	arm.EnableIRQ(uart.IRQVal)
 
 	return nil
 }
@@ -786,53 +782,15 @@ func (uart UART) WriteByte(c byte) error {
 	return nil
 }
 
-//go:export SERCOM3_0_IRQHandler
-func handleSERCOM3_0() {
-	handleUART1()
-}
-
-//go:export SERCOM3_1_IRQHandler
-func handleSERCOM3_1() {
-	handleUART1()
-}
-
 //go:export SERCOM3_2_IRQHandler
 func handleSERCOM3_2() {
-	handleUART1()
-}
-
-//go:export SERCOM3_OTHER_IRQHandler
-func handleSERCOM3_OTHER() {
-	handleUART1()
-}
-
-func handleUART1() {
 	// should reset IRQ
 	UART1.Receive(byte((UART1.Bus.DATA.Get() & 0xFF)))
 	UART1.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INT_INTFLAG_RXC)
 }
 
-//go:export SERCOM0_0_IRQHandler
-func handleSERCOM0_0() {
-	handleUART2()
-}
-
-//go:export SERCOM0_1_IRQHandler
-func handleSERCOM0_1() {
-	handleUART2()
-}
-
 //go:export SERCOM0_2_IRQHandler
 func handleSERCOM0_2() {
-	handleUART2()
-}
-
-//go:export SERCOM0_OTHER_IRQHandler
-func handleSERCOM0_OTHER() {
-	handleUART2()
-}
-
-func handleUART2() {
 	// should reset IRQ
 	UART2.Receive(byte((UART2.Bus.DATA.Get() & 0xFF)))
 	UART2.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INT_INTFLAG_RXC)
