@@ -61,9 +61,9 @@ jobs:
           export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
           unset GOROOT
           make release -j4
-    - publish: $(System.DefaultWorkingDirectory)/build/release.tar.gz
-      displayName: Publish tarball as artifact
-      artifact: tinygo.windows-amd64.tar.gz
+    - publish: $(System.DefaultWorkingDirectory)/build/release/tinygo
+      displayName: Publish zip as artifact
+      artifact: tinygo
     - task: Bash@3
       displayName: Smoke tests
       inputs:
