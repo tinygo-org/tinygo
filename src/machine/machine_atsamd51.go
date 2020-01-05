@@ -1007,7 +1007,7 @@ func (i2c I2C) WriteByte(data byte) error {
 	timeout := i2cTimeout
 	for !i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_MB) {
 		// check for bus error
-		if sam.SERCOM3_I2CM.STATUS.HasBits(sam.SERCOM_I2CM_STATUS_BUSERR) {
+		if i2c.Bus.STATUS.HasBits(sam.SERCOM_I2CM_STATUS_BUSERR) {
 			return errors.New("I2C bus error")
 		}
 		timeout--
