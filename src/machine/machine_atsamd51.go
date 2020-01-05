@@ -627,7 +627,7 @@ func (a ADC) getADCChannel() uint8 {
 type UART struct {
 	Buffer *RingBuffer
 	Bus    *sam.SERCOM_USART_INT_Type
-	Mode   PinMode
+	SERCOM uint8
 }
 
 var (
@@ -635,82 +635,67 @@ var (
 	UART0 = USBCDC{Buffer: NewRingBuffer()}
 
 	// The first hardware serial port on the SAMD51. Uses the SERCOM3 interface.
-	UART1 = UART{Bus: sam.SERCOM3_USART_INT,
+	UART1 = UART{
 		Buffer: NewRingBuffer(),
-		Mode:   PinSERCOMAlt,
+		Bus:    sam.SERCOM3_USART_INT,
+		SERCOM: 3,
 	}
 
 	// The second hardware serial port on the SAMD51. Uses the SERCOM0 interface.
 	UART2 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM0_USART_INT,
-		Mode:   PinSERCOMAlt,
+		SERCOM: 0,
 	}
 )
 
 const (
-	sampleRate16X  = 16
-	lsbFirst       = 1
-	sercomRXPad0   = 0
-	sercomRXPad1   = 1
-	sercomRXPad2   = 2
-	sercomRXPad3   = 3
-	sercomTXPad0   = 0 // Only for UART
-	sercomTXPad2   = 1 // Only for UART
-	sercomTXPad023 = 2 // Only for UART with TX on PAD0, RTS on PAD2 and CTS on PAD3
+	sampleRate16X = 16
+	lsbFirst      = 1
 )
 
 // Configure the UART.
-func (uart UART) Configure(config UARTConfig) {
+func (uart UART) Configure(config UARTConfig) error {
 	// Default baud rate to 115200.
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
 
 	// determine pins
-	if config.TX == 0 {
+	if config.TX == 0 && config.RX == 0 {
 		// use default pins
 		config.TX = UART_TX_PIN
 		config.RX = UART_RX_PIN
 	}
 
-	// determine pads
-	var txpad, rxpad int
-	switch config.TX {
-	case PA04:
-		txpad = sercomTXPad0
-	case PA10:
-		txpad = sercomTXPad2
-	case PA18:
-		txpad = sercomTXPad2
-	case PA16:
-		txpad = sercomTXPad0
+	// Determine transmit pinout.
+	txPinMode, txPad, ok := findPinPadMapping(uart.SERCOM, config.TX)
+	if !ok {
+		return ErrInvalidOutputPin
+	}
+	var txPinOut uint32
+	// See CTRLA.RXPO bits of the SERCOM USART peripheral (page 945-946) for how
+	// pads are mapped to pinout values.
+	switch txPad {
+	case 0:
+		txPinOut = 0
 	default:
-		panic("Invalid TX pin for UART")
+		// TODO: flow control (RTS/CTS)
+		return ErrInvalidOutputPin
 	}
 
-	switch config.RX {
-	case PA06:
-		rxpad = sercomRXPad2
-	case PA07:
-		rxpad = sercomRXPad3
-	case PA11:
-		rxpad = sercomRXPad3
-	case PA18:
-		rxpad = sercomRXPad2
-	case PA16:
-		rxpad = sercomRXPad0
-	case PA19:
-		rxpad = sercomRXPad3
-	case PA17:
-		rxpad = sercomRXPad1
-	default:
-		panic("Invalid RX pin for UART")
+	// Determine receive pinout.
+	rxPinMode, rxPad, ok := findPinPadMapping(uart.SERCOM, config.RX)
+	if !ok {
+		return ErrInvalidInputPin
 	}
+	// As you can see in the CTRLA.RXPO bits of the SERCOM USART peripheral
+	// (page 945), input pins are mapped directly.
+	rxPinOut := rxPad
 
 	// configure pins
-	config.TX.Configure(PinConfig{Mode: uart.Mode})
-	config.RX.Configure(PinConfig{Mode: uart.Mode})
+	config.TX.Configure(PinConfig{Mode: txPinMode})
+	config.RX.Configure(PinConfig{Mode: rxPinMode})
 
 	// reset SERCOM0
 	uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_INT_CTRLA_SWRST)
@@ -745,8 +730,8 @@ func (uart UART) Configure(config UARTConfig) {
 	// set UART pads. This is not same as pins...
 	//  SERCOM_USART_CTRLA_TXPO(txPad) |
 	//   SERCOM_USART_CTRLA_RXPO(rxPad);
-	uart.Bus.CTRLA.SetBits(uint32((txpad << sam.SERCOM_USART_INT_CTRLA_TXPO_Pos) |
-		(rxpad << sam.SERCOM_USART_INT_CTRLA_RXPO_Pos)))
+	uart.Bus.CTRLA.SetBits((txPinOut << sam.SERCOM_USART_INT_CTRLA_TXPO_Pos) |
+		(rxPinOut << sam.SERCOM_USART_INT_CTRLA_RXPO_Pos))
 
 	// Enable Transceiver and Receiver
 	//sercom->USART.CTRLB.reg |= SERCOM_USART_CTRLB_TXEN | SERCOM_USART_CTRLB_RXEN ;
@@ -762,8 +747,8 @@ func (uart UART) Configure(config UARTConfig) {
 	uart.Bus.INTENSET.Set(sam.SERCOM_USART_INT_INTENSET_RXC)
 
 	// Enable RX IRQ.
-	switch uart.Bus {
-	case sam.SERCOM0_USART_INT:
+	switch uart.SERCOM {
+	case 0:
 		arm.EnableIRQ(sam.IRQ_SERCOM0_0)
 		arm.EnableIRQ(sam.IRQ_SERCOM0_1)
 		arm.EnableIRQ(sam.IRQ_SERCOM0_2)
@@ -775,6 +760,8 @@ func (uart UART) Configure(config UARTConfig) {
 		arm.EnableIRQ(sam.IRQ_SERCOM3_2)
 		arm.EnableIRQ(sam.IRQ_SERCOM3_OTHER)
 	}
+
+	return nil
 }
 
 // SetBaudRate sets the communication speed for the UART.
