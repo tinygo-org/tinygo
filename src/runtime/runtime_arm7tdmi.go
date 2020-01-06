@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	_ "runtime/interrupt" // make sure the interrupt handler is defined
 	"unsafe"
 )
 

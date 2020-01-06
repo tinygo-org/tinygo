@@ -17,9 +17,7 @@ _start:
     .byte   0x00,0x00              // Checksum (80000BEh)
 
 start_vector:
-    mov     r0, #0x4000000                 // REG_BASE
-    str     r0, [r0, #0x208]
-
+    // Configure stacks
     mov     r0, #0x12                      // Switch to IRQ Mode
     msr     cpsr, r0
     ldr     sp, =_stack_top_irq            // Set IRQ stack
@@ -27,7 +25,21 @@ start_vector:
     msr     cpsr, r0
     ldr     sp, =_stack_top                // Set user stack
 
+    // Configure interrupt handler
+    mov     r0, #0x4000000                 // REG_BASE
+    ldr     r1, =handleInterruptARM
+    str     r1, [r0, #-4]                  // actually storing to 0x03007FFC due to mirroring
+
+    // Enable interrupts
+    mov     r1, #1
+    str     r1, [r0, #0x208]               // 0x04000208 Interrupt Master Enable
+
     // Jump to user code (switching to Thumb mode)
     ldr     r3, =main
     bx      r3
 
+// Small interrupt handler that immediately jumps to a function defined in the
+// program (in Thumb) for further processing.
+handleInterruptARM:
+    ldr     r0, =handleInterrupt
+    bx      r0
