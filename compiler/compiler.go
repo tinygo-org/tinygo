@@ -1309,7 +1309,7 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 			return c.emitVolatileLoad(frame, instr)
 		case strings.HasPrefix(name, "runtime/volatile.Store"):
 			return c.emitVolatileStore(frame, instr)
-		case name == "runtime/interrupt.New":
+		case name == "runtime/interrupt.New" && len(fn.Blocks) == 0:
 			return c.emitInterruptGlobal(frame, instr)
 		}
 

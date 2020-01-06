@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"unsafe"
+	_ "runtime/interrupt" // make sure the interrupt handler is defined
 )
 
 type timeUnit int64
