@@ -1,10 +1,13 @@
 OUTPUT_ARCH(arm)
 ENTRY(_start)
 
+/* Note: iwram is reduced by 96 bytes because the last part of that RAM
+ * (starting at 0x03007FA0) is used for interrupt handling.
+ */
 MEMORY {
-    ewram   : ORIGIN = 0x02000000, LENGTH = 256K /* on-board work RAM (2 wait states) */
-    iwram   : ORIGIN = 0x03000000, LENGTH = 32K  /* in-chip work RAM (faster) */
-    rom     : ORIGIN = 0x08000000, LENGTH = 32M  /* flash ROM */
+    ewram   : ORIGIN = 0x02000000, LENGTH = 256K   /* on-board work RAM (2 wait states) */
+    iwram   : ORIGIN = 0x03000000, LENGTH = 32K-96 /* in-chip work RAM (faster) */
+    rom     : ORIGIN = 0x08000000, LENGTH = 32M    /* flash ROM */
 }
 
 __stack_size_irq = 1K;
