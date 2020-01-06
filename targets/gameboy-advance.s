@@ -22,10 +22,10 @@ start_vector:
 
     mov     r0, #0x12                      // Switch to IRQ Mode
     msr     cpsr, r0
-    ldr     sp, =__sp_irq                  // Set IRQ stack
+    ldr     sp, =_stack_top_irq            // Set IRQ stack
     mov     r0, #0x1f                      // Switch to System Mode
     msr     cpsr, r0
-    ldr     sp, =__sp_usr                  // Set user stack
+    ldr     sp, =_stack_top                // Set user stack
 
     // Jump to user code (switching to Thumb mode)
     ldr     r3, =main
