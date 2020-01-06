@@ -23,7 +23,7 @@ func (c *Compiler) emitReadRegister(name string, args []ssa.Value) (llvm.Value, 
 	regname := constant.StringVal(args[0].(*ssa.Const).Value)
 	var asm string
 	switch name {
-	case "device/arm.ReadRegister":
+	case "device/arm.ReadRegister", "device/arm64.ReadRegister":
 		asm = "mov $0, " + regname
 	case "device/riscv.ReadRegister":
 		asm = "mv $0, " + regname

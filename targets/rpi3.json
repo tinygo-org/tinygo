@@ -1,0 +1,13 @@
+{
+	"inherits": ["arm64"],
+	"build-tags": ["rpi3", "rpi", "baremetal"],
+	"cflags": [
+		"-mcpu=cortex-a53",
+		"-march=armv8-a"
+	],
+	"linkerscript": "targets/rpi3.ld",
+	"extra-files": [
+		"src/device/arm64/start.S",
+		"src/device/arm64/interrupts.S"
+	]
+}
