@@ -162,3 +162,48 @@ func (c *Compiler) emitSVCall(frame *Frame, args []ssa.Value) (llvm.Value, error
 	target := llvm.InlineAsm(fnType, asm, constraints, true, false, 0)
 	return c.builder.CreateCall(target, llvmArgs, ""), nil
 }
+
+// This is a compiler builtin which emits CSR instructions. It can be one of:
+//
+//     func (csr CSR) Get() uintptr
+//     func (csr CSR) Set(uintptr)
+//     func (csr CSR) SetBits(uintptr) uintptr
+//     func (csr CSR) ClearBits(uintptr) uintptr
+//
+// The csr parameter (method receiver) must be a constant. Other parameter can
+// be any value.
+func (c *Compiler) emitCSROperation(frame *Frame, call *ssa.CallCommon) (llvm.Value, error) {
+	csrConst, ok := call.Args[0].(*ssa.Const)
+	if !ok {
+		return llvm.Value{}, c.makeError(call.Pos(), "CSR must be constant")
+	}
+	csr := csrConst.Uint64()
+	switch name := call.StaticCallee().Name(); name {
+	case "Get":
+		// Note that this instruction may have side effects, and thus must be
+		// marked as such.
+		fnType := llvm.FunctionType(c.uintptrType, nil, false)
+		asm := fmt.Sprintf("csrr $0, %d", csr)
+		target := llvm.InlineAsm(fnType, asm, "=r", true, false, 0)
+		return c.builder.CreateCall(target, nil, ""), nil
+	case "Set":
+		fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.uintptrType}, false)
+		asm := fmt.Sprintf("csrw %d, $0", csr)
+		target := llvm.InlineAsm(fnType, asm, "r", true, false, 0)
+		return c.builder.CreateCall(target, []llvm.Value{c.getValue(frame, call.Args[1])}, ""), nil
+	case "SetBits":
+		// Note: it may be possible to optimize this to csrrsi in many cases.
+		fnType := llvm.FunctionType(c.uintptrType, []llvm.Type{c.uintptrType}, false)
+		asm := fmt.Sprintf("csrrs $0, %d, $1", csr)
+		target := llvm.InlineAsm(fnType, asm, "=r,r", true, false, 0)
+		return c.builder.CreateCall(target, []llvm.Value{c.getValue(frame, call.Args[1])}, ""), nil
+	case "ClearBits":
+		// Note: it may be possible to optimize this to csrrci in many cases.
+		fnType := llvm.FunctionType(c.uintptrType, []llvm.Type{c.uintptrType}, false)
+		asm := fmt.Sprintf("csrrc $0, %d, $1", csr)
+		target := llvm.InlineAsm(fnType, asm, "=r,r", true, false, 0)
+		return c.builder.CreateCall(target, []llvm.Value{c.getValue(frame, call.Args[1])}, ""), nil
+	default:
+		return llvm.Value{}, c.makeError(call.Pos(), "unknown CSR operation: "+name)
+	}
+}

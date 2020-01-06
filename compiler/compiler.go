@@ -1306,6 +1306,8 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 			return c.emitAsmFull(frame, instr)
 		case strings.HasPrefix(name, "device/arm.SVCall"):
 			return c.emitSVCall(frame, instr.Args)
+		case strings.HasPrefix(name, "(device/riscv.CSR)."):
+			return c.emitCSROperation(frame, instr)
 		case strings.HasPrefix(name, "syscall.Syscall"):
 			return c.emitSyscall(frame, instr)
 		case strings.HasPrefix(name, "runtime/volatile.Load"):
