@@ -449,16 +449,20 @@ func (a ADC) getADCChannel() uint8 {
 		return 6
 	case PA07:
 		return 7
+	case PB00:
+		return 12
+	case PB01:
+		return 13
 	case PB02:
-		return 10
+		return 14
 	case PB03:
-		return 11
+		return 15
 	case PA09:
 		return 17
 	case PA11:
 		return 19
 	default:
-		return 0
+		panic("Invalid ADC pin")
 	}
 }
 
@@ -1054,19 +1058,6 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 // PWM
 const period = 0xFFFF
 
-// InitPWM initializes the PWM interface.
-func InitPWM() {
-	// turn on timer clocks used for PWM
-	sam.MCLK.APBBMASK.SetBits(sam.MCLK_APBBMASK_TCC0_ | sam.MCLK_APBBMASK_TCC1_)
-	sam.MCLK.APBCMASK.SetBits(sam.MCLK_APBCMASK_TCC2_)
-
-	//use clock generator 0
-	sam.GCLK.PCHCTRL[25].Set((sam.GCLK_PCHCTRL_GEN_GCLK0 << sam.GCLK_PCHCTRL_GEN_Pos) |
-		sam.GCLK_PCHCTRL_CHEN)
-	sam.GCLK.PCHCTRL[29].Set((sam.GCLK_PCHCTRL_GEN_GCLK0 << sam.GCLK_PCHCTRL_GEN_Pos) |
-		sam.GCLK_PCHCTRL_CHEN)
-}
-
 // Configure configures a PWM pin for output.
 func (pwm PWM) Configure() {
 	// Set pin as output
@@ -1181,34 +1172,6 @@ func (pwm PWM) setPinCfg(val uint8) {
 	pwm.Pin.setPinCfg(val)
 }
 
-// getTimer returns the timer to be used for PWM on this pin
-func (pwm PWM) getTimer() *sam.TCC_Type {
-	switch pwm.Pin {
-	case PA16:
-		return sam.TCC1
-	case PA17:
-		return sam.TCC1
-	case PA14:
-		return sam.TCC2
-	case PA15:
-		return sam.TCC2
-	case PA18:
-		return sam.TCC1
-	case PA19:
-		return sam.TCC1
-	case PA20:
-		return sam.TCC0
-	case PA21:
-		return sam.TCC0
-	case PA23:
-		return sam.TCC0
-	case PA22:
-		return sam.TCC0
-	default:
-		return nil // not supported on this pin
-	}
-}
-
 // setChannel sets the value for the correct channel for PWM on this pin
 func (pwm PWM) setChannel(val uint32) {
 	switch pwm.Pin {
@@ -1232,6 +1195,8 @@ func (pwm PWM) setChannel(val uint32) {
 		pwm.getTimer().CC[3].Set(val)
 	case PA22:
 		pwm.getTimer().CC[2].Set(val)
+	case PB31:
+		pwm.getTimer().CC[1].Set(val)
 	default:
 		return // not supported on this pin
 	}
@@ -1260,6 +1225,8 @@ func (pwm PWM) setChannelBuffer(val uint32) {
 		pwm.getTimer().CCBUF[3].Set(val)
 	case PA22:
 		pwm.getTimer().CCBUF[2].Set(val)
+	case PB31:
+		pwm.getTimer().CCBUF[1].Set(val)
 	default:
 		return // not supported on this pin
 	}
@@ -1288,6 +1255,8 @@ func (pwm PWM) getMux() PinMode {
 		return PinPWMG
 	case PA22:
 		return PinPWMG
+	case PB31:
+		return PinPWMF
 	default:
 		return 0 // not supported on this pin
 	}
@@ -2049,14 +2018,14 @@ func setEPINTENSET(ep uint32, val uint8) {
 	sam.USB_DEVICE.DEVICE_ENDPOINT[ep].EPINTENSET.Set(val)
 }
 
-// ResetProcessor should perform a system reset in preperation
+// ResetProcessor should perform a system reset in preparation
 // to switch to the bootloader to flash new firmware.
 func ResetProcessor() {
 	arm.DisableInterrupts()
 
 	// Perform magic reset into bootloader, as mentioned in
 	// https://github.com/arduino/ArduinoCore-samd/issues/197
-	*(*uint32)(unsafe.Pointer(uintptr(0x20000000 + 0x00030000 - 4))) = RESET_MAGIC_VALUE
+	*(*uint32)(unsafe.Pointer(uintptr(0x20000000 + HSRAM_SIZE - 4))) = RESET_MAGIC_VALUE
 
 	arm.SystemReset()
 }

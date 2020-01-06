@@ -1,4 +1,4 @@
-// +build sam,atsamd51,atsamd51j19
+// +build sam,atsamd51,atsamd51j20
 
 // Peripheral abstraction layer for the atsamd51.
 //
@@ -9,7 +9,7 @@ package machine
 
 import "device/sam"
 
-const HSRAM_SIZE = 0x00030000
+const HSRAM_SIZE = 0x00040000
 
 // InitPWM initializes the PWM interface.
 func InitPWM() {
