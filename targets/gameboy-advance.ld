@@ -7,10 +7,8 @@ MEMORY {
     rom     : ORIGIN = 0x08000000, LENGTH = 32M  /* flash ROM */
 }
 
-__iwram_top = ORIGIN(iwram) + LENGTH(iwram);;
-_stack_size = 3K;
-__sp_irq    = _stack_top;
-__sp_usr    = _stack_top - 1K;
+__stack_size_irq = 1K;
+__stack_size_usr = 2K;
 
 SECTIONS
 {
@@ -35,8 +33,10 @@ SECTIONS
     .stack (NOLOAD) :
     {
         . = ALIGN(4);
-        . += _stack_size;
+        _stack_top_irq = .;
+        . += __stack_size_irq;
         _stack_top = .;
+        . += __stack_size_usr;
     } >iwram
 
     /* Start address (in flash) of .data, used by startup code. */
