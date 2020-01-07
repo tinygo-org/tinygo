@@ -16,8 +16,8 @@ func (p Pin) getPortPin() (*nrf.GPIO_Type, uint32) {
 }
 
 func (uart UART) setPins(tx, rx Pin) {
-	nrf.UART0.PSELTXD.Set(uint32(tx))
-	nrf.UART0.PSELRXD.Set(uint32(rx))
+	uart.Bus.PSELTXD.Set(uint32(tx))
+	uart.Bus.PSELRXD.Set(uint32(rx))
 }
 
 //go:export UART0_IRQHandler
