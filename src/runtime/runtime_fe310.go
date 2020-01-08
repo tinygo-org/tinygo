@@ -14,8 +14,6 @@ import (
 
 type timeUnit int64
 
-const tickMicros = 32768 // RTC runs at 32.768kHz
-
 //go:extern _sbss
 var _sbss unsafe.Pointer
 
@@ -82,3 +80,26 @@ func putchar(c byte) {
 }
 
 const asyncScheduler = false
+
+func ticks() timeUnit {
+	// Combining the low bits and the high bits yields a time span of over 270
+	// years without counter rollover.
+	highBits := sifive.CLINT.MTIMEH.Get()
+	for {
+		lowBits := sifive.CLINT.MTIME.Get()
+		newHighBits := sifive.CLINT.MTIMEH.Get()
+		if newHighBits == highBits {
+			// High bits stayed the same.
+			return timeUnit(lowBits) | (timeUnit(highBits) << 32)
+		}
+		// Retry, because there was a rollover in the low bits (happening every
+		// 1.5 days).
+		highBits = newHighBits
+	}
+}
+
+func sleepTicks(d timeUnit) {
+	target := ticks() + d
+	for ticks() < target {
+	}
+}
