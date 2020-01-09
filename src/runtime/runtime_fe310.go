@@ -9,7 +9,9 @@ import (
 	"machine"
 	"unsafe"
 
+	"device/riscv"
 	"device/sifive"
+	"runtime/volatile"
 )
 
 type timeUnit int64
@@ -31,10 +33,45 @@ var _edata unsafe.Pointer
 
 //go:export main
 func main() {
+	// Zero the PLIC enable bits on startup: they are not zeroed at reset.
+	sifive.PLIC.ENABLE[0].Set(0)
+	sifive.PLIC.ENABLE[1].Set(0)
+
+	// Set the interrupt address.
+	// Note that this address must be aligned specially, otherwise the MODE bits
+	// of MTVEC won't be zero.
+	riscv.MTVEC.Set(uintptr(unsafe.Pointer(&handleInterruptASM)))
+
+	// Enable global interrupts now that they've been set up.
+	riscv.MSTATUS.SetBits(1 << 3) // MIE
+
 	preinit()
 	initAll()
 	callMain()
 	abort()
+}
+
+//go:extern handleInterruptASM
+var handleInterruptASM [0]uintptr
+
+//export handleInterrupt
+func handleInterrupt() {
+	cause := riscv.MCAUSE.Get()
+	code := uint(cause &^ (1 << 31))
+	if cause&(1<<31) != 0 {
+		// Topmost bit is set, which means that it is an interrupt.
+		switch code {
+		case 7: // Machine timer interrupt
+			// Signal timeout.
+			timerWakeup.Set(1)
+			// Disable the timer, to avoid triggering the interrupt right after
+			// this interrupt returns.
+			riscv.MIE.ClearBits(1 << 7) // MTIE bit
+		}
+	} else {
+		// TODO: handle exceptions in a similar was as HardFault is handled on
+		// Cortex-M (by printing an error message with instruction address).
+	}
 }
 
 func init() {
@@ -81,6 +118,8 @@ func putchar(c byte) {
 
 const asyncScheduler = false
 
+var timerWakeup volatile.Register8
+
 func ticks() timeUnit {
 	// Combining the low bits and the high bits yields a time span of over 270
 	// years without counter rollover.
@@ -99,7 +138,16 @@ func ticks() timeUnit {
 }
 
 func sleepTicks(d timeUnit) {
-	target := ticks() + d
-	for ticks() < target {
+	target := uint64(ticks() + d)
+	sifive.CLINT.MTIMECMPH.Set(uint32(target >> 32))
+	sifive.CLINT.MTIMECMP.Set(uint32(target))
+	riscv.MIE.SetBits(1 << 7) // MTIE
+	for {
+		if timerWakeup.Get() != 0 {
+			timerWakeup.Set(0)
+			// Disable timer.
+			break
+		}
+		riscv.Asm("wfi")
 	}
 }
