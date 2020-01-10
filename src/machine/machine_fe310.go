@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/sifive"
+	"runtime/interrupt"
 )
 
 func CPUFrequency() uint32 {
@@ -65,6 +66,23 @@ func (uart UART) Configure(config UARTConfig) {
 	// 115200 baud rate is 138.
 	sifive.UART0.DIV.Set(138)
 	sifive.UART0.TXCTRL.Set(sifive.UART_TXCTRL_ENABLE)
+	sifive.UART0.RXCTRL.Set(sifive.UART_RXCTRL_ENABLE)
+	sifive.UART0.IE.Set(sifive.UART_IE_RXWM) // enable the receive interrupt (only)
+	intr := interrupt.New(sifive.IRQ_UART0, UART0.handleInterrupt)
+	intr.SetPriority(5)
+	intr.Enable()
+}
+
+func (uart *UART) handleInterrupt(interrupt.Interrupt) {
+	rxdata := uart.Bus.RXDATA.Get()
+	c := byte(rxdata)
+	if uint32(c) != rxdata {
+		// The rxdata has other bits set than just the low 8 bits. This probably
+		// means that the 'empty' flag is set, which indicates there is no data
+		// to be read and the byte is garbage. Ignore this byte.
+		return
+	}
+	uart.Receive(c)
 }
 
 func (uart UART) WriteByte(c byte) {
