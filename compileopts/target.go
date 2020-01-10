@@ -47,6 +47,7 @@ type TargetSpec struct {
 	OpenOCDInterface string   `json:"openocd-interface"`
 	OpenOCDTarget    string   `json:"openocd-target"`
 	OpenOCDTransport string   `json:"openocd-transport"`
+	JLinkDevice      string   `json:"jlink-device"`
 }
 
 // copyProperties copies all properties that are set in spec2 into itself.
@@ -121,6 +122,9 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if spec2.OpenOCDTransport != "" {
 		spec.OpenOCDTransport = spec2.OpenOCDTransport
+	}
+	if spec2.JLinkDevice != "" {
+		spec.JLinkDevice = spec2.JLinkDevice
 	}
 }
 

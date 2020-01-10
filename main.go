@@ -288,12 +288,13 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		gdbInterface, openocdInterface := config.Programmer()
 		switch gdbInterface {
 		case "msd", "command", "":
-			if openocdInterface != "" && config.Target.OpenOCDTarget != "" {
-				gdbInterface = "openocd"
-			}
 			if len(config.Target.Emulator) != 0 {
 				// Assume QEMU as an emulator.
 				gdbInterface = "qemu"
+			} else if openocdInterface != "" && config.Target.OpenOCDTarget != "" {
+				gdbInterface = "openocd"
+			} else if config.Target.JLinkDevice != "" {
+				gdbInterface = "jlink"
 			}
 		}
 
@@ -316,6 +317,31 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				w := &ColorWriter{
 					Out:    os.Stderr,
 					Prefix: "openocd: ",
+					Color:  TermColorYellow,
+				}
+				daemon.Stdout = w
+				daemon.Stderr = w
+			}
+			// Make sure the daemon doesn't receive Ctrl-C that is intended for
+			// GDB (to break the currently executing program).
+			setCommandAsDaemon(daemon)
+			// Start now, and kill it on exit.
+			daemon.Start()
+			defer func() {
+				daemon.Process.Signal(os.Interrupt)
+				// Maybe we should send a .Kill() after x seconds?
+				daemon.Wait()
+			}()
+		case "jlink":
+			gdbCommands = append(gdbCommands, "target remote :2331", "load", "monitor reset halt")
+
+			// We need a separate debugging daemon for on-chip debugging.
+			daemon := exec.Command("JLinkGDBServer", "-device", config.Target.JLinkDevice)
+			if ocdOutput {
+				// Make it clear which output is from the daemon.
+				w := &ColorWriter{
+					Out:    os.Stderr,
+					Prefix: "jlink: ",
 					Color:  TermColorYellow,
 				}
 				daemon.Stdout = w
