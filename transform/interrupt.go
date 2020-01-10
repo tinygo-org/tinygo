@@ -2,6 +2,8 @@ package transform
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
@@ -60,6 +62,9 @@ func LowerInterrupts(mod llvm.Module) []error {
 		call.EraseFromParentAsInstruction()
 	}
 
+	hasSoftwareVectoring := hasUses(mod.NamedFunction("runtime.callInterruptHandler"))
+	softwareVector := make(map[int64]llvm.Value)
+
 	ctx := mod.Context()
 	nullptr := llvm.ConstNull(llvm.PointerType(ctx.Int8Type(), 0))
 	builder := ctx.NewBuilder()
@@ -90,9 +95,25 @@ func LowerInterrupts(mod llvm.Module) []error {
 		num := llvm.ConstExtractValue(initializer, []uint32{1, 0})
 		name := handlerNames[num.SExtValue()]
 
+		isSoftwareVectored := false
 		if name == "" {
-			errs = append(errs, errorAt(global, fmt.Sprintf("cannot find interrupt name for number %d", num.SExtValue())))
-			continue
+			// No function name was defined for this interrupt number, which
+			// probably means one of two things:
+			//   * runtime/interrupt.Register wasn't called to give the interrupt
+			//     number a function name (such as on Cortex-M).
+			//   * We're using software vectoring instead of hardware vectoring,
+			//     which means the name of the handler doesn't matter (it will
+			//     probably be inlined anyway).
+			if hasSoftwareVectoring {
+				isSoftwareVectored = true
+				if name == "" {
+					// Name doesn't matter, so pick something unique.
+					name = "runtime/interrupt.interruptHandler" + strconv.FormatInt(num.SExtValue(), 10)
+				}
+			} else {
+				errs = append(errs, errorAt(global, fmt.Sprintf("cannot find interrupt name for number %d", num.SExtValue())))
+				continue
+			}
 		}
 
 		// Extract the func value.
@@ -162,6 +183,10 @@ func LowerInterrupts(mod llvm.Module) []error {
 		// that is inserted in the interrupt vector.
 		fn.SetUnnamedAddr(true)
 		fn.SetSection(".text." + name)
+		if isSoftwareVectored {
+			fn.SetLinkage(llvm.InternalLinkage)
+			softwareVector[num.SExtValue()] = fn
+		}
 		entryBlock := ctx.AddBasicBlock(fn, "entry")
 		builder.SetInsertPointAtEnd(entryBlock)
 
@@ -198,6 +223,56 @@ func LowerInterrupts(mod llvm.Module) []error {
 		// It would probably be eliminated anyway by a globaldce pass but it's
 		// better to do it now to be sure.
 		global.EraseFromParentAsGlobal()
+	}
+
+	// Create a dispatcher function that calls the appropriate interrupt handler
+	// for each interrupt ID. This is used in the case of software vectoring.
+	// The function looks like this:
+	//     func callInterruptHandler(id int) {
+	//         switch id {
+	//         case IRQ_UART:
+	//             interrupt.interruptHandler3()
+	//         case IRQ_FOO:
+	//             interrupt.interruptHandler7()
+	//         default:
+	//             // do nothing
+	//     }
+	if hasSoftwareVectoring {
+		// Create a sorted list of interrupt vector IDs.
+		ids := make([]int64, 0, len(softwareVector))
+		for id := range softwareVector {
+			ids = append(ids, id)
+		}
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+
+		// Start creating the function body with the big switch.
+		dispatcher := mod.NamedFunction("runtime.callInterruptHandler")
+		entryBlock := ctx.AddBasicBlock(dispatcher, "entry")
+		defaultBlock := ctx.AddBasicBlock(dispatcher, "default")
+		builder.SetInsertPointAtEnd(entryBlock)
+		interruptID := dispatcher.Param(0)
+		sw := builder.CreateSwitch(interruptID, defaultBlock, len(ids))
+
+		// Create a switch case for each interrupt ID that calls the appropriate
+		// handler.
+		for _, id := range ids {
+			block := ctx.AddBasicBlock(dispatcher, "interrupt"+strconv.FormatInt(id, 10))
+			builder.SetInsertPointAtEnd(block)
+			builder.CreateCall(softwareVector[id], nil, "")
+			builder.CreateRetVoid()
+			sw.AddCase(llvm.ConstInt(interruptID.Type(), uint64(id), true), block)
+		}
+
+		// Create a default case that just returns.
+		// Perhaps it is better to call some default interrupt handler here that
+		// logs an error?
+		builder.SetInsertPointAtEnd(defaultBlock)
+		builder.CreateRetVoid()
+
+		// Make sure the dispatcher is optimized.
+		// Without this, it will probably not get inlined.
+		dispatcher.SetLinkage(llvm.InternalLinkage)
+		dispatcher.SetUnnamedAddr(true)
 	}
 
 	// Remove now-useless runtime/interrupt.use calls. These are used for some

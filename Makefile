@@ -116,7 +116,7 @@ gen-device-sam: build/gen-device-svd
 	GO111MODULE=off $(GO) fmt ./src/device/sam
 
 gen-device-sifive: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/SiFive-Community lib/cmsis-svd/data/SiFive-Community/ src/device/sifive/
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/SiFive-Community -interrupts=software lib/cmsis-svd/data/SiFive-Community/ src/device/sifive/
 	GO111MODULE=off $(GO) fmt ./src/device/sifive
 
 gen-device-stm32: build/gen-device-svd

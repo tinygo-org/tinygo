@@ -21,6 +21,15 @@ func getUses(value llvm.Value) []llvm.Value {
 	return uses
 }
 
+// hasUses returns whether the given value has any uses. It is equivalent to
+// getUses(value) != nil but faster.
+func hasUses(value llvm.Value) bool {
+	if value.IsNil() {
+		return false
+	}
+	return !value.FirstUse().IsNil()
+}
+
 // makeGlobalArray creates a new LLVM global with the given name and integers as
 // contents, and returns the global.
 // Note that it is left with the default linkage etc., you should set
