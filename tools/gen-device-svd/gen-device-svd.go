@@ -595,7 +595,7 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 }
 
 // The Go module for this device.
-func writeGo(outdir string, device *Device) error {
+func writeGo(outdir string, device *Device, interruptSystem string) error {
 	outf, err := os.Create(filepath.Join(outdir, device.metadata["nameLower"]+".go"))
 	if err != nil {
 		return err
@@ -621,7 +621,7 @@ func writeGo(outdir string, device *Device) error {
 package {{.pkgName}}
 
 import (
-	"runtime/interrupt"
+{{if eq .interruptSystem "hardware"}}"runtime/interrupt"{{end}}
 	"runtime/volatile"
 	"unsafe"
 )
@@ -637,11 +637,13 @@ const ({{range .interrupts}}
 	IRQ_max = {{.interruptMax}} // Highest interrupt number on this device.
 )
 
+{{if eq .interruptSystem "hardware"}}
 // Map interrupt numbers to function names.
 // These aren't real calls, they're removed by the compiler.
 var ({{range .interrupts}}
 	_ = interrupt.Register(IRQ_{{.Name}}, "{{.HandlerName}}"){{end}}
 )
+{{end}}
 
 // Peripherals.
 var (
@@ -649,11 +651,12 @@ var (
 {{end}})
 `))
 	err = t.Execute(w, map[string]interface{}{
-		"metadata":     device.metadata,
-		"interrupts":   device.interrupts,
-		"peripherals":  device.peripherals,
-		"pkgName":      filepath.Base(strings.TrimRight(outdir, "/")),
-		"interruptMax": maxInterruptValue,
+		"metadata":        device.metadata,
+		"interrupts":      device.interrupts,
+		"peripherals":     device.peripherals,
+		"pkgName":         filepath.Base(strings.TrimRight(outdir, "/")),
+		"interruptMax":    maxInterruptValue,
+		"interruptSystem": interruptSystem,
 	})
 	if err != nil {
 		return err
@@ -910,7 +913,7 @@ Default_Handler:
 	return w.Flush()
 }
 
-func generate(indir, outdir, sourceURL string) error {
+func generate(indir, outdir, sourceURL, interruptSystem string) error {
 	if _, err := os.Stat(indir); os.IsNotExist(err) {
 		fmt.Fprintln(os.Stderr, "cannot find input directory:", indir)
 		os.Exit(1)
@@ -929,13 +932,20 @@ func generate(indir, outdir, sourceURL string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read: %w", err)
 		}
-		err = writeGo(outdir, device)
+		err = writeGo(outdir, device, interruptSystem)
 		if err != nil {
 			return fmt.Errorf("failed to write Go file: %w", err)
 		}
-		err = writeAsm(outdir, device)
-		if err != nil {
-			return fmt.Errorf("failed to write assembly file: %w", err)
+		switch interruptSystem {
+		case "software":
+			// Nothing to do.
+		case "hardware":
+			err = writeAsm(outdir, device)
+			if err != nil {
+				return fmt.Errorf("failed to write assembly file: %w", err)
+			}
+		default:
+			return fmt.Errorf("unknown interrupt system: %s", interruptSystem)
 		}
 	}
 	return nil
@@ -943,6 +953,7 @@ func generate(indir, outdir, sourceURL string) error {
 
 func main() {
 	sourceURL := flag.String("source", "<unknown>", "source SVD file")
+	interruptSystem := flag.String("interrupts", "hardware", "interrupt system in use (software, hardware)")
 	flag.Parse()
 	if flag.NArg() != 2 {
 		fmt.Fprintln(os.Stderr, "provide exactly two arguments: input directory (with .svd files) and output directory for generated files")
@@ -951,7 +962,7 @@ func main() {
 	}
 	indir := flag.Arg(0)
 	outdir := flag.Arg(1)
-	err := generate(indir, outdir, *sourceURL)
+	err := generate(indir, outdir, *sourceURL, *interruptSystem)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
