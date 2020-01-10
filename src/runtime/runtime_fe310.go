@@ -69,8 +69,10 @@ func handleInterrupt() {
 			riscv.MIE.ClearBits(1 << 7) // MTIE bit
 		}
 	} else {
-		// TODO: handle exceptions in a similar was as HardFault is handled on
-		// Cortex-M (by printing an error message with instruction address).
+		// Topmost bit is clear, so it is an exception of some sort.
+		// We could implement support for unsupported instructions here (such as
+		// misaligned loads). However, for now we'll just print a fatal error.
+		handleException(code)
 	}
 }
 
@@ -150,4 +152,18 @@ func sleepTicks(d timeUnit) {
 		}
 		riscv.Asm("wfi")
 	}
+}
+
+// handleException is called from the interrupt handler for any exception.
+// Exceptions can be things like illegal instructions, invalid memory
+// read/write, and similar issues.
+func handleException(code uint) {
+	// For a list of exception codes, see:
+	// https://content.riscv.org/wp-content/uploads/2019/08/riscv-privileged-20190608-1.pdf#page=49
+	print("fatal error: exception with mcause=")
+	print(code)
+	print(" pc=")
+	print(riscv.MEPC.Get())
+	println()
+	abort()
 }
