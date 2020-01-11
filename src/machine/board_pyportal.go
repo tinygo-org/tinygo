@@ -137,15 +137,9 @@ const (
 
 // SPI on the PyPortal.
 var (
-	SPI0 = SPI{Bus: sam.SERCOM2_SPIM,
-		SCK:         SPI0_SCK_PIN,
-		MOSI:        SPI0_MOSI_PIN,
-		MISO:        SPI0_MISO_PIN,
-		DOpad:       spiTXPad0SCK1,
-		DIpad:       sercomRXPad2,
-		MISOPinMode: PinSERCOM,
-		MOSIPinMode: PinSERCOM,
-		SCKPinMode:  PinSERCOM,
+	SPI0 = SPI{
+		Bus:    sam.SERCOM2_SPIM,
+		SERCOM: 2,
 	}
 	NINA_SPI = SPI0
 )
