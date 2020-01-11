@@ -93,6 +93,8 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 			// run all tests on host
 		case target == "cortex-m-qemu":
 			// all tests are supported
+		case target == "hifive1-qemu":
+			// all tests are supported
 		default:
 			// cross-compilation of cgo is not yet supported
 			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
