@@ -14,3 +14,6 @@
 	path = lib/compiler-rt
 	url = https://github.com/llvm-mirror/compiler-rt.git
 	branch = release_80
+[submodule "lib/wasi-libc"]
+	path = lib/wasi-libc
+	url = https://github.com/CraneStation/wasi-libc
