@@ -1,13 +1,34 @@
 .syntax unified
 
-.section .text.HardFault_Handler
-.global  HardFault_Handler
-.type    HardFault_Handler, %function
-HardFault_Handler:
+// Note: some of the below interrupt handlers are unused on smaller cores (such
+// as Cortex-M0) but are defined here anyway for consistency.
+
+// Define fault handlers in a consistent way.
+.macro FaultIRQ handler id
+    .section .text.\handler
+    .global  \handler
+    .weak    \handler
+    .type    \handler, %function
+    .weak    \handler
+    \handler:
+        movs r0, \id
+        b    Fault_Handler
+.endm
+
+FaultIRQ NMI_Handler              2
+FaultIRQ HardFault_Handler        3
+FaultIRQ MemoryManagement_Handler 4
+FaultIRQ BusFault_Handler         5
+FaultIRQ UsageFault_Handler       6
+
+.section .text.Fault_Handler
+.global  Fault_Handler
+.type    Fault_Handler, %function
+Fault_Handler:
     // Put the old stack pointer in the first argument, for easy debugging. This
     // is especially useful on Cortex-M0, which supports far fewer debug
     // facilities.
-    mov r0, sp
+    mov r1, sp
 
     // Load the default stack pointer from address 0 so that we can call normal
     // functions again that expect a working stack. However, it will corrupt the
@@ -18,7 +39,7 @@ HardFault_Handler:
     mov sp, r3
 
     // Continue handling this error in Go.
-    bl handleHardFault
+    bl handleFault
 
 // This is a convenience function for semihosting support.
 // At some point, this should be replaced by inline assembly.

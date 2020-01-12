@@ -101,6 +101,12 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 				continue
 			}
 		}
+		if target != "cortex-m-qemu" && target != "hifive1-qemu" {
+			if path == filepath.Join("testdata", "faulthandler")+string(filepath.Separator) {
+				// only run the faulthandler test on bare metal
+				continue
+			}
+		}
 
 		t.Run(filepath.Base(path), func(t *testing.T) {
 			t.Parallel()

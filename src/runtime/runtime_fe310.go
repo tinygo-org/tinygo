@@ -158,6 +158,13 @@ func sleepTicks(d timeUnit) {
 // Exceptions can be things like illegal instructions, invalid memory
 // read/write, and similar issues.
 func handleException(code uint) {
+	if faultHandler != nil {
+		faultHandler(FaultInfo{
+			PC:   riscv.MEPC.Get(),
+			SP:   0,
+			Code: int(code),
+		})
+	}
 	// For a list of exception codes, see:
 	// https://content.riscv.org/wp-content/uploads/2019/08/riscv-privileged-20190608-1.pdf#page=49
 	print("fatal error: exception with mcause=")
