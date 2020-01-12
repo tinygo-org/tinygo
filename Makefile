@@ -7,6 +7,11 @@ LLVM_BUILDDIR ?= llvm-build
 CLANG_SRC ?= llvm-project/clang
 LLD_SRC ?= llvm-project/lld
 
+# Default tool selection.
+CLANG ?= clang-9
+LLVM_AR ?= llvm-ar-9
+LLVM_NM ?= llvm-nm-9
+
 # Go binary and GOROOT to select
 GO ?= go
 export GOROOT = $(shell $(GO) env GOROOT)
@@ -139,12 +144,19 @@ $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
 	cd $(LLVM_BUILDDIR); ninja
 
 
+# Build wasi-libc sysroot
+.PHONY: wasi-libc
+wasi-libc: lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a
+lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
+	cd lib/wasi-libc && make -j4 WASM_CC=$(CLANG) WASM_AR=$(LLVM_AR) WASM_NM=$(LLVM_NM)
+
+
 # Build the Go compiler.
 tinygo:
 	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  make llvm-source"; echo "  make $(LLVM_BUILDDIR)"; exit 1; fi
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) build -o build/tinygo$(EXE) -tags byollvm .
 
-test:
+test: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test -v -tags byollvm ./cgo ./compileopts ./interp ./transform .
 
 tinygo-test:
@@ -261,12 +273,13 @@ endif
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/export
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/main
 
-release: tinygo gen-device
+release: tinygo gen-device wasi-libc
 	@mkdir -p build/release/tinygo/bin
 	@mkdir -p build/release/tinygo/lib/clang/include
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
 	@mkdir -p build/release/tinygo/lib/compiler-rt/lib
 	@mkdir -p build/release/tinygo/lib/nrfx
+	@mkdir -p build/release/tinygo/lib/wasi-libc
 	@mkdir -p build/release/tinygo/pkg/armv6m-none-eabi
 	@mkdir -p build/release/tinygo/pkg/armv7m-none-eabi
 	@mkdir -p build/release/tinygo/pkg/armv7em-none-eabi
@@ -279,6 +292,7 @@ release: tinygo gen-device
 	@cp -rp lib/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt
 	@cp -rp lib/compiler-rt/README.txt   build/release/tinygo/lib/compiler-rt
 	@cp -rp lib/nrfx/*                   build/release/tinygo/lib/nrfx
+	@cp -rp lib/wasi-libc/sysroot        build/release/tinygo/lib/wasi-libc/sysroot
 	@cp -rp src                          build/release/tinygo/src
 	@cp -rp targets                      build/release/tinygo/targets
 	./build/tinygo build-builtins -target=armv6m-none-eabi  -o build/release/tinygo/pkg/armv6m-none-eabi/compiler-rt.a
