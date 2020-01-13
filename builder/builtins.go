@@ -158,7 +158,7 @@ var aeabiBuiltins = []string{
 
 func builtinFiles(target string) []string {
 	builtins := append([]string{}, genericBuiltins...) // copy genericBuiltins
-	if strings.HasPrefix(target, "arm") {
+	if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
 		builtins = append(builtins, aeabiBuiltins...)
 	}
 	return builtins
