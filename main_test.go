@@ -72,6 +72,8 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 	t.Parallel()
 
 	for _, path := range matches {
+		path := path // redefine to avoid race condition
+
 		switch {
 		case target == "wasm":
 			// testdata/gc.go is known not to work on WebAssembly
