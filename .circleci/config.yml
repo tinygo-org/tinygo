@@ -23,9 +23,7 @@ commands:
                 libclang<<parameters.llvm>>-dev \
                 lld<<parameters.llvm>> \
                 gcc-arm-linux-gnueabihf \
-                libc6-dev-armel-cross \
                 gcc-aarch64-linux-gnu \
-                libc6-dev-arm64-cross \
                 qemu-system-arm \
                 qemu-user \
                 gcc-avr \
