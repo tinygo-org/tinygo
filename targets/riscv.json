@@ -3,6 +3,7 @@
 	"goos": "linux",
 	"goarch": "arm",
 	"build-tags": ["tinygo.riscv", "baremetal", "linux", "arm"],
+	"compiler": "clang",
 	"gc": "conservative",
 	"compiler": "clang",
 	"linker": "ld.lld",
@@ -13,7 +14,8 @@
 		"-mabi=ilp32",
 		"-Os",
 		"-Werror",
-		"-nostdinc",
+		"-nostdlibinc",
+		"-Wno-macro-redefined",
 		"-fno-exceptions", "-fno-unwind-tables",
 		"-ffunction-sections", "-fdata-sections"
 	],
