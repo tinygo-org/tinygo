@@ -80,15 +80,8 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 			if path == filepath.Join("testdata", "gc.go") {
 				continue
 			}
-		case target == "":
-			// run all tests on host
-		case target == "cortex-m-qemu":
-			// all tests are supported
 		default:
-			// cross-compilation of cgo is not yet supported
-			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
-				continue
-			}
+			// all tests are supported
 		}
 
 		t.Run(filepath.Base(path), func(t *testing.T) {

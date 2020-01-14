@@ -229,6 +229,14 @@ func LoadTarget(target string) (*TargetSpec, error) {
 		if len(tripleSplit) < 3 {
 			return nil, errors.New("expected a full LLVM target or a custom target in -target flag")
 		}
+		if tripleSplit[0] == "arm" {
+			// LLVM and Clang have a different idea of what "arm" means, so
+			// upgrade to a slightly more modern ARM. In fact, when you pass
+			// --target=arm--linux-gnueabihf to Clang, it will convert that
+			// internally to armv7-unknown-linux-gnueabihf. Changing the
+			// architecture to armv7 will keep things consistent.
+			tripleSplit[0] = "armv7"
+		}
 		goos := tripleSplit[2]
 		if strings.HasPrefix(goos, "darwin") {
 			goos = "darwin"
@@ -237,11 +245,12 @@ func LoadTarget(target string) (*TargetSpec, error) {
 			"i386":    "386",
 			"x86_64":  "amd64",
 			"aarch64": "arm64",
+			"armv7":   "arm",
 		}[tripleSplit[0]]
 		if goarch == "" {
 			goarch = tripleSplit[0]
 		}
-		return defaultTarget(goos, goarch, target)
+		return defaultTarget(goos, goarch, strings.Join(tripleSplit, "-"))
 	}
 }
 
@@ -255,6 +264,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		BuildTags:   []string{goos, goarch},
 		Compiler:    "clang",
 		Linker:      "cc",
+		CFlags:      []string{"--target=" + triple},
 		GDB:         "gdb",
 		PortReset:   "false",
 		FlashMethod: "native",
@@ -267,11 +277,13 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	if goarch != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.
 		if goarch == "arm" && goos == "linux" {
+			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/arm-linux-gnueabihf")
 			spec.Linker = "arm-linux-gnueabihf-gcc"
 			spec.GDB = "arm-linux-gnueabihf-gdb"
 			spec.Emulator = []string{"qemu-arm", "-L", "/usr/arm-linux-gnueabihf"}
 		}
 		if goarch == "arm64" && goos == "linux" {
+			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/aarch64-linux-gnu")
 			spec.Linker = "aarch64-linux-gnu-gcc"
 			spec.GDB = "aarch64-linux-gnu-gdb"
 			spec.Emulator = []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"}
