@@ -4,6 +4,7 @@ package main
 int fortytwo(void);
 #include "main.h"
 int mul(int, int);
+#include <string.h>
 */
 import "C"
 
@@ -109,6 +110,12 @@ func main() {
 	var _ C.option3_t = C.option3A
 	println("option 2A:", C.option2A)
 	println("option 3A:", C.option3A)
+
+	// libc: test whether C functions work at all.
+	buf1 := []byte("foobar\x00")
+	buf2 := make([]byte, len(buf1))
+	C.strcpy((*C.char)(unsafe.Pointer(&buf2[0])), (*C.char)(unsafe.Pointer(&buf1[0])))
+	println("copied string:", string(buf2[:C.strlen((*C.char)(unsafe.Pointer(&buf2[0])))]))
 }
 
 func printUnion(union C.joined_t) C.joined_t {

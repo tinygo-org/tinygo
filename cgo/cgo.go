@@ -170,6 +170,11 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 		enums:           map[string]enumInfo{},
 	}
 
+	// Disable _FORTIFY_SOURCE as it causes problems on macOS.
+	// Note that it is only disabled for memcpy (etc) calls made from Go, which
+	// have better alternatives anyway.
+	cflags = append(cflags, "-D_FORTIFY_SOURCE=0")
+
 	// Add a new location for the following file.
 	generatedTokenPos := p.fset.AddFile(dir+"/!cgo.go", -1, 0)
 	generatedTokenPos.SetLines([]int{0})

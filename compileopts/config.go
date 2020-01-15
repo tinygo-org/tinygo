@@ -5,6 +5,7 @@ package compileopts
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -162,6 +163,11 @@ func (c *Config) CFlags() []string {
 	cflags := append([]string{}, c.Options.CFlags...)
 	for _, flag := range c.Target.CFlags {
 		cflags = append(cflags, strings.Replace(flag, "{root}", goenv.Get("TINYGOROOT"), -1))
+	}
+	if c.Target.Libc == "picolibc" {
+		root := goenv.Get("TINYGOROOT")
+		cflags = append(cflags, "--sysroot="+filepath.Join(root, "lib", "picolibc", "newlib", "libc"))
+		cflags = append(cflags, "-I"+filepath.Join(root, "lib/picolibc-include"))
 	}
 	return cflags
 }
