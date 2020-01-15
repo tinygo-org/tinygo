@@ -129,21 +129,18 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 			return err
 		}
 
-		// Load builtins library from the cache, possibly compiling it on the
-		// fly.
-		var librt string
-		if config.Target.RTLib == "compiler-rt" {
-			librt, err = loadBuiltins(config.Triple())
-			if err != nil {
-				return err
-			}
-		}
-
 		// Prepare link command.
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
 		ldflags := append(config.LDFlags(), "-o", executable, objfile)
+
+		// Load builtins library from the cache, possibly compiling it on the
+		// fly.
 		if config.Target.RTLib == "compiler-rt" {
+			librt, err := CompilerRT.Load(config.Triple())
+			if err != nil {
+				return err
+			}
 			ldflags = append(ldflags, librt)
 		}
 
