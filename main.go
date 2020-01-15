@@ -50,6 +50,17 @@ func moveFile(src, dst string) error {
 	}
 	// Failed to move, probably a different filesystem.
 	// Do a copy + remove.
+	err = copyFile(src, dst)
+	if err != nil {
+		return err
+	}
+	return os.Remove(src)
+}
+
+// copyFile copies the given file from src to dst. It copies first to a .tmp
+// file which is then moved over a possibly already existing file at the
+// destination.
+func copyFile(src, dst string) error {
 	inf, err := os.Open(src)
 	if err != nil {
 		return err
@@ -785,10 +796,9 @@ func main() {
 		if *target == "" {
 			fmt.Fprintln(os.Stderr, "No target (-target).")
 		}
-		err := builder.CompileBuiltins(*target, func(path string) error {
-			return moveFile(path, *outpath)
-		})
+		path, err := builder.CompilerRT.Load(*target)
 		handleCompilerError(err)
+		copyFile(path, *outpath)
 	case "flash", "gdb":
 		if *outpath != "" {
 			fmt.Fprintln(os.Stderr, "Output cannot be specified with the flash command.")
