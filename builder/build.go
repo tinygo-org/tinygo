@@ -145,6 +145,15 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 			ldflags = append(ldflags, librt)
 		}
 
+		// Add libc.
+		if config.Target.Libc == "picolibc" {
+			libc, err := Picolibc.Load(config.Triple())
+			if err != nil {
+				return err
+			}
+			ldflags = append(ldflags, libc)
+		}
+
 		// Compile extra files.
 		root := goenv.Get("TINYGOROOT")
 		for i, path := range config.ExtraFiles() {

@@ -76,17 +76,3 @@ func abort() {
 	for {
 	}
 }
-
-// Implement memset for LLVM and compiler-rt.
-//go:export memset
-func libc_memset(ptr unsafe.Pointer, c byte, size uintptr) {
-	for i := uintptr(0); i < size; i++ {
-		*(*byte)(unsafe.Pointer(uintptr(ptr) + i)) = c
-	}
-}
-
-// Implement memmove for LLVM and compiler-rt.
-//go:export memmove
-func libc_memmove(dst, src unsafe.Pointer, size uintptr) {
-	memmove(dst, src, size)
-}

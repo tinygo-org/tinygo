@@ -786,7 +786,7 @@ func main() {
 		}
 		err := Build(pkgName, *outpath, options)
 		handleCompilerError(err)
-	case "build-builtins":
+	case "build-library":
 		// Note: this command is only meant to be used while making a release!
 		if *outpath == "" {
 			fmt.Fprintln(os.Stderr, "No output filename supplied (-o).")
@@ -796,7 +796,22 @@ func main() {
 		if *target == "" {
 			fmt.Fprintln(os.Stderr, "No target (-target).")
 		}
-		path, err := builder.CompilerRT.Load(*target)
+		if flag.NArg() != 1 {
+			fmt.Fprintf(os.Stderr, "Build-library only accepts exactly one library name as argument, %d given\n", flag.NArg())
+			usage()
+			os.Exit(1)
+		}
+		var lib *builder.Library
+		switch name := flag.Arg(0); name {
+		case "compiler-rt":
+			lib = &builder.CompilerRT
+		case "picolibc":
+			lib = &builder.Picolibc
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown library: %s\n", name)
+			os.Exit(1)
+		}
+		path, err := lib.Load(*target)
 		handleCompilerError(err)
 		copyFile(path, *outpath)
 	case "flash", "gdb":

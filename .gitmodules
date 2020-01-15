@@ -17,3 +17,6 @@
 [submodule "lib/wasi-libc"]
 	path = lib/wasi-libc
 	url = https://github.com/CraneStation/wasi-libc
+[submodule "lib/picolibc"]
+	path = lib/picolibc
+	url = https://github.com/keith-packard/picolibc.git

@@ -32,6 +32,7 @@ type TargetSpec struct {
 	Compiler         string   `json:"compiler"`
 	Linker           string   `json:"linker"`
 	RTLib            string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
+	Libc             string   `json:"libc"`
 	CFlags           []string `json:"cflags"`
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
@@ -83,6 +84,9 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if spec2.RTLib != "" {
 		spec.RTLib = spec2.RTLib
+	}
+	if spec2.Libc != "" {
+		spec.Libc = spec2.Libc
 	}
 	spec.CFlags = append(spec.CFlags, spec2.CFlags...)
 	spec.LDFlags = append(spec.LDFlags, spec2.LDFlags...)
