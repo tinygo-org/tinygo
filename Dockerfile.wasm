@@ -1,0 +1,27 @@
+# TinyGo base stage installs Go 1.14, LLVM 10 and the TinyGo compiler itself.
+FROM golang:1.14 AS tinygo-base
+
+RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
+    echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-10 main" >> /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y llvm-10-dev libclang-10-dev git libllvm10 lld-10
+
+RUN apt-get install -y apt-utils make clang-10
+
+COPY . /tinygo
+
+# remove submodules directories and re-init them to fix any hard-coded paths
+# after copying the tinygo directory in the previous step.
+RUN cd /tinygo/ && \
+    rm -rf ./lib/* && \
+    git submodule sync && \
+    git submodule update --init --recursive --force
+
+COPY ./lib/picolibc-include/* /tinygo/lib/picolibc-include/
+
+RUN cd /tinygo/ && make wasi-libc
+
+RUN cd /tinygo/ && \
+    go install /tinygo/
+
+CMD ["tinygo"]
