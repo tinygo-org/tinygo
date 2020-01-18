@@ -885,11 +885,6 @@ Default_Handler:
 	w.WriteString(`
     // Define default implementations for interrupts, redirecting to
     // Default_Handler when not implemented.
-    IRQ NMI_Handler
-    IRQ HardFault_Handler
-    IRQ MemoryManagement_Handler
-    IRQ BusFault_Handler
-    IRQ UsageFault_Handler
     IRQ SVC_Handler
     IRQ DebugMon_Handler
     IRQ PendSV_Handler

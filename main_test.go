@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"flag"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -21,6 +22,8 @@ import (
 )
 
 const TESTDATA = "testdata"
+
+var flagTarget = flag.String("target", "", "target to test (default: all supported targets)")
 
 func TestCompiler(t *testing.T) {
 	matches, err := filepath.Glob(filepath.Join(TESTDATA, "*.go"))
@@ -40,6 +43,14 @@ func TestCompiler(t *testing.T) {
 	}
 
 	sort.Strings(matches)
+
+	if *flagTarget != "" {
+		// As a convenience, support a -target flag to run tests for just one
+		// target. For example:
+		//     go test -v -target=cortex-m-qemu
+		runPlatTests(*flagTarget, matches, t)
+		return
+	}
 
 	if runtime.GOOS != "windows" {
 		t.Run("Host", func(t *testing.T) {
@@ -84,9 +95,17 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 			// run all tests on host
 		case target == "cortex-m-qemu":
 			// all tests are supported
+		case target == "hifive1-qemu":
+			// all tests are supported
 		default:
 			// cross-compilation of cgo is not yet supported
 			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
+				continue
+			}
+		}
+		if target != "cortex-m-qemu" && target != "hifive1-qemu" {
+			if path == filepath.Join("testdata", "faulthandler")+string(filepath.Separator) {
+				// only run the faulthandler test on bare metal
 				continue
 			}
 		}

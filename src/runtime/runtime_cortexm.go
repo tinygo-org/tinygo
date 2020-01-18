@@ -97,23 +97,34 @@ type interruptStack struct {
 // For details, see:
 // https://community.arm.com/developer/ip-products/system/f/embedded-forum/3257/debugging-a-cortex-m0-hard-fault
 // https://blog.feabhas.com/2013/02/developing-a-generic-hard-fault-handler-for-arm-cortex-m3cortex-m4/
-//go:export handleHardFault
-func handleHardFault(sp *interruptStack) {
+//go:export handleFault
+func handleFault(code int, sp *interruptStack) {
+	// Only print the PC if it points into memory.
+	// It may not point into memory during a stack overflow, so check that first
+	// before accessing the stack.
+	var pc uintptr
+	if uintptr(unsafe.Pointer(&sp.PC)) >= 0x20000000 {
+		pc = sp.PC
+	}
+	if faultHandler != nil {
+		faultHandler(FaultInfo{
+			PC:   sp.PC,
+			SP:   uintptr(unsafe.Pointer(sp)),
+			Code: code,
+		})
+	}
 	print("fatal error: ")
 	if uintptr(unsafe.Pointer(sp)) < 0x20000000 {
 		print("stack overflow")
 	} else {
-		// TODO: try to find the cause of the hard fault. Especially on
-		// Cortex-M3 and higher it is possible to find more detailed information
-		// in special status registers.
-		print("HardFault")
+		// TODO: try to find the cause of the fault. Especially on Cortex-M3 and
+		// higher it is possible to find more detailed information in special
+		// status registers.
+		print("fault with exception=", code)
 	}
-	print(" with sp=", sp)
-	if uintptr(unsafe.Pointer(&sp.PC)) >= 0x20000000 {
-		// Only print the PC if it points into memory.
-		// It may not point into memory during a stack overflow, so check that
-		// first before accessing the stack.
-		print(" pc=", sp.PC)
+	print(" sp=", sp)
+	if pc != 0 {
+		print(" pc=", pc)
 	}
 	println()
 	abort()
