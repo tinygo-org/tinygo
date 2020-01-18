@@ -799,10 +799,8 @@ func handleSERCOM0_2() {
 
 // I2C on the SAMD51.
 type I2C struct {
-	Bus     *sam.SERCOM_I2CM_Type
-	SCL     Pin
-	SDA     Pin
-	PinMode PinMode
+	Bus    *sam.SERCOM_I2CM_Type
+	SERCOM uint8
 }
 
 // I2CConfig is used to store config info for I2C.
@@ -835,10 +833,31 @@ const (
 const i2cTimeout = 1000
 
 // Configure is intended to setup the I2C interface.
-func (i2c I2C) Configure(config I2CConfig) {
+func (i2c I2C) Configure(config I2CConfig) error {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
+	}
+
+	// Use default I2C pins if not set.
+	if config.SDA == 0 && config.SCL == 0 {
+		config.SDA = SDA_PIN
+		config.SCL = SCL_PIN
+	}
+
+	sclPinMode, sclPad, ok := findPinPadMapping(i2c.SERCOM, config.SCL)
+	if !ok || sclPad != 1 {
+		// SCL must be on pad 1, according to section 36.4 of the datasheet.
+		// Note: this is not an exhaustive test for I2C support on the pin: not
+		// all pins support I2C.
+		return ErrInvalidClockPin
+	}
+	sdaPinMode, sdaPad, ok := findPinPadMapping(i2c.SERCOM, config.SDA)
+	if !ok || sdaPad != 0 {
+		// SDA must be on pad 0, according to section 36.4 of the datasheet.
+		// Note: this is not an exhaustive test for I2C support on the pin: not
+		// all pins support I2C.
+		return ErrInvalidDataPin
 	}
 
 	// reset SERCOM
@@ -866,8 +885,10 @@ func (i2c I2C) Configure(config I2CConfig) {
 	}
 
 	// enable pins
-	i2c.SDA.Configure(PinConfig{Mode: i2c.PinMode})
-	i2c.SCL.Configure(PinConfig{Mode: i2c.PinMode})
+	config.SDA.Configure(PinConfig{Mode: sdaPinMode})
+	config.SCL.Configure(PinConfig{Mode: sclPinMode})
+
+	return nil
 }
 
 // SetBaudRate sets the communication speed for the I2C.

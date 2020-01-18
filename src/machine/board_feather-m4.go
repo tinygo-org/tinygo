@@ -67,10 +67,10 @@ const (
 
 // I2C on the Feather M4.
 var (
-	I2C0 = I2C{Bus: sam.SERCOM2_I2CM,
-		SDA:     SDA_PIN,
-		SCL:     SCL_PIN,
-		PinMode: PinSERCOM}
+	I2C0 = I2C{
+		Bus:    sam.SERCOM2_I2CM,
+		SERCOM: 2,
+	}
 )
 
 // SPI pins
