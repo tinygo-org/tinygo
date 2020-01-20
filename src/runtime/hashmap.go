@@ -6,6 +6,7 @@ package runtime
 //     https://golang.org/src/runtime/map.go
 
 import (
+	"reflect"
 	"unsafe"
 )
 
@@ -317,4 +318,75 @@ func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer) bool {
 func hashmapStringDelete(m *hashmap, key string) {
 	hash := hashmapStringHash(key)
 	hashmapDelete(m, unsafe.Pointer(&key), hash, hashmapStringEqual)
+}
+
+// Hashmap with interface keys (for everything else).
+
+func hashmapInterfaceHash(itf interface{}) uint32 {
+	x := reflect.ValueOf(itf)
+	if x.Type() == 0 {
+		return 0 // nil interface
+	}
+
+	value := (*_interface)(unsafe.Pointer(&itf)).value
+	ptr := value
+	if x.Type().Size() <= unsafe.Sizeof(uintptr(0)) {
+		// Value fits in pointer, so it's directly stored in the pointer.
+		ptr = unsafe.Pointer(&value)
+	}
+
+	switch x.Type().Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return hashmapHash(ptr, x.Type().Size())
+	case reflect.Bool, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return hashmapHash(ptr, x.Type().Size())
+	case reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128:
+		// It should be possible to just has the contents. However, NaN != NaN
+		// so if you're using lots of NaNs as map keys (you shouldn't) then hash
+		// time may become exponential. To fix that, it would be better to
+		// return a random number instead:
+		// https://research.swtch.com/randhash
+		return hashmapHash(ptr, x.Type().Size())
+	case reflect.String:
+		return hashmapStringHash(x.String())
+	case reflect.Chan, reflect.Ptr, reflect.UnsafePointer:
+		// It might seem better to just return the pointer, but that won't
+		// result in an evenly distributed hashmap. Instead, hash the pointer
+		// like most other types.
+		return hashmapHash(ptr, x.Type().Size())
+	case reflect.Array:
+		var hash uint32
+		for i := 0; i < x.Len(); i++ {
+			hash |= hashmapInterfaceHash(x.Index(i).Interface())
+		}
+		return hash
+	case reflect.Struct:
+		var hash uint32
+		for i := 0; i < x.NumField(); i++ {
+			hash |= hashmapInterfaceHash(x.Field(i).Interface())
+		}
+		return hash
+	default:
+		runtimePanic("comparing un-comparable type")
+		return 0 // unreachable
+	}
+}
+
+func hashmapInterfaceEqual(x, y unsafe.Pointer, n uintptr) bool {
+	return *(*interface{})(x) == *(*interface{})(y)
+}
+
+func hashmapInterfaceSet(m *hashmap, key interface{}, value unsafe.Pointer) {
+	hash := hashmapInterfaceHash(key)
+	hashmapSet(m, unsafe.Pointer(&key), value, hash, hashmapInterfaceEqual)
+}
+
+func hashmapInterfaceGet(m *hashmap, key interface{}, value unsafe.Pointer) bool {
+	hash := hashmapInterfaceHash(key)
+	return hashmapGet(m, unsafe.Pointer(&key), value, hash, hashmapInterfaceEqual)
+}
+
+func hashmapInterfaceDelete(m *hashmap, key interface{}) {
+	hash := hashmapInterfaceHash(key)
+	hashmapDelete(m, unsafe.Pointer(&key), hash, hashmapInterfaceEqual)
 }
