@@ -111,6 +111,14 @@ const (
 	UART_RX_PIN = PA3
 )
 
+// I2C pins
+const (
+	I2C1_SCL = PB6
+	I2C1_SDA = PB9
+	I2C0_SCL = I2C1_SCL
+	I2C0_SDA = I2C1_SDA
+)
+
 // SPI pins
 const (
 	SPI1_SCK_PIN  = PA5
@@ -137,6 +145,6 @@ const (
 // I2S audio I/O driver CS43L22
 // I2C address 0x94
 const (
-	AUDIO_DRIVER_SCL = PB6
-	AUDIO_DRIVER_SDA = PB9
+	AUDIO_DRIVER_SCL = I2C1_SCL
+	AUDIO_DRIVER_SDA = I2C1_SDA
 )

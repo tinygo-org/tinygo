@@ -78,10 +78,22 @@ func (spi SPI) Configure(config SPIConfig) {
 	// set to SPI master
 	conf |= stm32.SPI_CR1_MSTR
 
+	// disable MCU acting as SPI slave
+	conf |= stm32.SPI_CR1_SSM | stm32.SPI_CR1_SSI
+
 	// now set the configuration
 	spi.Bus.CR1.Set(conf)
 
 	// init pins
+	if config.SCK == 0 {
+		config.SCK = SPI0_SCK_PIN
+	}
+	if config.MOSI == 0 {
+		config.MOSI = SPI0_MOSI_PIN
+	}
+	if config.MISO == 0 {
+		config.MISO = SPI0_MISO_PIN
+	}
 	spi.configurePins(config)
 
 	// enable SPI interface

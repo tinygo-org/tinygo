@@ -24,7 +24,13 @@ func (uart UART) Configure(config UARTConfig) {
 		config.BaudRate = 115200
 	}
 
-	// Set the GPIO pins appropriately
+	// Set the GPIO pins to defaults if they're not set
+	if config.TX == 0 {
+		config.TX = UART_TX_PIN
+	}
+	if config.RX == 0 {
+		config.RX = UART_RX_PIN
+	}
 	uart.configurePins(config)
 
 	// Enable USART clock

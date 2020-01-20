@@ -181,16 +181,6 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 
 // Configure SPI pins for input output and clock
 func (spi SPI) configurePins(config SPIConfig) {
-	if config.SCK == 0 {
-		config.SCK = SPI0_SCK_PIN
-	}
-	if config.MOSI == 0 {
-		config.MOSI = SPI0_MOSI_PIN
-	}
-	if config.MISO == 0 {
-		config.MISO = SPI0_MISO_PIN
-	}
-
 	config.SCK.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
 	config.MOSI.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
 	config.MISO.Configure(PinConfig{Mode: PinInputModeFloating})

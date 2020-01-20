@@ -3,7 +3,7 @@
 package machine
 
 // GPIO for the stm32 families except the stm32f1xx which uses a simpler but
-//  less flexible mechanism. Extend the +build directive above with other
+//  less flexible mechanism. Extend the +build directive above to exclude other
 //  models in the stm32f1xx series as necessary
 
 const (
@@ -19,8 +19,8 @@ const (
 	PinModeUartRX PinMode = 5
 
 	// for I2C
-	PinModeI2CSclk PinMode = 6
-	PinModeI2CSda  PinMode = 7
+	PinModeI2CScl PinMode = 6
+	PinModeI2CSda PinMode = 7
 
 	// for SPI
 	PinModeSpiClk  PinMode = 8
@@ -63,6 +63,8 @@ func (p Pin) configure(config PinConfig) {
 	pos := pin * 2
 
 	switch config.Mode {
+
+	// GPIO
 	case PinInputFloating:
 		port.MODER.SetMasked(GPIO_MODE_INPUT, 0x3, pos)
 		port.PUPDR.SetMasked(GPIO_FLOATING, 0x3, pos)
@@ -75,6 +77,8 @@ func (p Pin) configure(config PinConfig) {
 	case PinOutput:
 		port.MODER.SetMasked(GPIO_MODE_GENERAL_OUTPUT, 0x3, pos)
 		port.OSPEEDR.SetMasked(GPIO_SPEED_HI, 0x3, pos)
+
+	// UART
 	case PinModeUartTX:
 		port.MODER.SetMasked(GPIO_MODE_ALTERNATIVE, 0x3, pos)
 		port.OSPEEDR.SetMasked(GPIO_SPEED_HI, 0x3, pos)
@@ -86,6 +90,42 @@ func (p Pin) configure(config PinConfig) {
 		port.PUPDR.SetMasked(GPIO_FLOATING, 0x3, pos)
 		// TODO: determine right alt-func for the peripheral in use
 		p.SetAltFunc(AF7_USART1_2_3)
+
+	// I2C
+	case PinModeI2CScl:
+		port.MODER.SetMasked(GPIO_MODE_ALTERNATIVE, 0x3, pos)
+		port.OTYPER.SetMasked(GPIO_OUTPUT_MODE_OPEN_DRAIN, 0x1, pos)
+		port.OSPEEDR.SetMasked(GPIO_SPEED_LOW, 0x3, pos)
+		port.PUPDR.SetMasked(GPIO_FLOATING, 0x3, pos)
+		// TODO: determine right alt-func for the peripheral in use
+		p.SetAltFunc(AF4_I2C1_2_3)
+	case PinModeI2CSda:
+		port.MODER.SetMasked(GPIO_MODE_ALTERNATIVE, 0x3, pos)
+		port.OTYPER.SetMasked(GPIO_OUTPUT_MODE_OPEN_DRAIN, 0x1, pos)
+		port.OSPEEDR.SetMasked(GPIO_SPEED_LOW, 0x3, pos)
+		port.PUPDR.SetMasked(GPIO_FLOATING, 0x3, pos)
+		// TODO: determine right alt-func for the peripheral in use
+		p.SetAltFunc(AF4_I2C1_2_3)
+
+	// SPI
+	case PinModeSpiClk:
+		port.MODER.SetMasked(GPIO_MODE_ALTERNATIVE, 0x3, pos)
+		port.OSPEEDR.SetMasked(GPIO_SPEED_LOW, 0x3, pos)
+		port.PUPDR.SetMasked(GPIO_FLOATING, 0x3, pos)
+		// TODO: determine right alt-func for the peripheral in use
+		p.SetAltFunc(AF5_SPI1_SPI2)
+	case PinModeSpiMosi:
+		port.MODER.SetMasked(GPIO_MODE_ALTERNATIVE, 0x3, pos)
+		port.OSPEEDR.SetMasked(GPIO_SPEED_LOW, 0x3, pos)
+		port.PUPDR.SetMasked(GPIO_FLOATING, 0x3, pos)
+		// TODO: determine right alt-func for the peripheral in use
+		p.SetAltFunc(AF5_SPI1_SPI2)
+	case PinModeSpiMiso:
+		port.MODER.SetMasked(GPIO_MODE_ALTERNATIVE, 0x3, pos)
+		port.OSPEEDR.SetMasked(GPIO_SPEED_LOW, 0x3, pos)
+		port.PUPDR.SetMasked(GPIO_FLOATING, 0x3, pos)
+		// TODO: determine right alt-func for the peripheral in use
+		p.SetAltFunc(AF5_SPI1_SPI2)
 	}
 }
 
