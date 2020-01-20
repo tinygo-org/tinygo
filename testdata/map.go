@@ -24,6 +24,11 @@ var testMapArrayKey = map[ArrayKey]int{
 }
 var testmapIntInt = map[int]int{1: 1, 2: 4, 3: 9}
 
+type namedFloat struct {
+	s string
+	f float32
+}
+
 func main() {
 	m := map[string]int{"answer": 42, "foo": 3}
 	readMap(m, "answer")
@@ -47,6 +52,44 @@ func main() {
 	println(testMapArrayKey[arrKey])
 	testMapArrayKey[arrKey] = 5555
 	println(testMapArrayKey[arrKey])
+
+	// test maps with interface keys
+	itfMap := map[interface{}]int{
+		3.14:         3,
+		8:            8,
+		uint8(8):     80,
+		"eight":      800,
+		[2]int{5, 2}: 52,
+		true:         1,
+	}
+	println("itfMap[3]:", itfMap[3]) // doesn't exist
+	println("itfMap[3.14]:", itfMap[3.14])
+	println("itfMap[8]:", itfMap[8])
+	println("itfMap[uint8(8)]:", itfMap[uint8(8)])
+	println(`itfMap["eight"]:`, itfMap["eight"])
+	println(`itfMap[[2]int{5, 2}]:`, itfMap[[2]int{5, 2}])
+	println("itfMap[true]:", itfMap[true])
+	delete(itfMap, 8)
+	println("itfMap[8]:", itfMap[8])
+
+	// test map with float keys
+	floatMap := map[float32]int{
+		42: 84,
+	}
+	println("floatMap[42]:", floatMap[42])
+	println("floatMap[43]:", floatMap[43])
+	delete(floatMap, 42)
+	println("floatMap[42]:", floatMap[42])
+
+	// test maps with struct keys
+	structMap := map[namedFloat]int{
+		namedFloat{"tau", 6.28}: 5,
+	}
+	println(`structMap[{"tau", 6.28}]:`, structMap[namedFloat{"tau", 6.28}])
+	println(`structMap[{"Tau", 6.28}]:`, structMap[namedFloat{"Tau", 6.28}])
+	println(`structMap[{"tau", 3.14}]:`, structMap[namedFloat{"tau", 3.14}])
+	delete(structMap, namedFloat{"tau", 6.28})
+	println(`structMap[{"tau", 6.28}]:`, structMap[namedFloat{"tau", 6.28}])
 
 	// test preallocated map
 	squares := make(map[int]int, 200)
@@ -79,7 +122,7 @@ func testBigMap(squares map[int]int, n int) {
 		if len(squares) != i {
 			println("unexpected length:", len(squares), "at i =", i)
 		}
-		squares[i] = i*i
+		squares[i] = i * i
 		for j := 0; j <= i; j++ {
 			if v, ok := squares[j]; !ok || v != j*j {
 				if !ok {

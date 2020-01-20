@@ -54,5 +54,20 @@ true false 0
 42
 4321
 5555
+itfMap[3]: 0
+itfMap[3.14]: 3
+itfMap[8]: 8
+itfMap[uint8(8)]: 80
+itfMap["eight"]: 800
+itfMap[[2]int{5, 2}]: 52
+itfMap[true]: 1
+itfMap[8]: 0
+floatMap[42]: 84
+floatMap[43]: 0
+floatMap[42]: 0
+structMap[{"tau", 6.28}]: 5
+structMap[{"Tau", 6.28}]: 0
+structMap[{"tau", 3.14}]: 0
+structMap[{"tau", 6.28}]: 0
 tested preallocated map
 tested growing of a map
