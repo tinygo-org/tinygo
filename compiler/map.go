@@ -6,8 +6,32 @@ import (
 	"go/token"
 	"go/types"
 
+	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
+
+// emitMakeMap creates a new map object (runtime.hashmap) by allocating and
+// initializing an appropriately sized object.
+func (c *Compiler) emitMakeMap(frame *Frame, expr *ssa.MakeMap) (llvm.Value, error) {
+	mapType := expr.Type().Underlying().(*types.Map)
+	llvmKeyType := c.getLLVMType(mapType.Key().Underlying())
+	llvmValueType := c.getLLVMType(mapType.Elem().Underlying())
+	keySize := c.targetData.TypeAllocSize(llvmKeyType)
+	valueSize := c.targetData.TypeAllocSize(llvmValueType)
+	llvmKeySize := llvm.ConstInt(c.ctx.Int8Type(), keySize, false)
+	llvmValueSize := llvm.ConstInt(c.ctx.Int8Type(), valueSize, false)
+	sizeHint := llvm.ConstInt(c.uintptrType, 8, false)
+	if expr.Reserve != nil {
+		sizeHint = c.getValue(frame, expr.Reserve)
+		var err error
+		sizeHint, err = c.parseConvert(expr.Reserve.Type(), types.Typ[types.Uintptr], sizeHint, expr.Pos())
+		if err != nil {
+			return llvm.Value{}, err
+		}
+	}
+	hashmap := c.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize, sizeHint}, "")
+	return hashmap, nil
+}
 
 func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Value, commaOk bool, pos token.Pos) (llvm.Value, error) {
 	llvmValueType := c.getLLVMType(valueType)

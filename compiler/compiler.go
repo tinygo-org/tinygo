@@ -1585,24 +1585,7 @@ func (c *Compiler) parseExpr(frame *Frame, expr ssa.Value) (llvm.Value, error) {
 		val := c.getValue(frame, expr.X)
 		return c.parseMakeInterface(val, expr.X.Type(), expr.Pos()), nil
 	case *ssa.MakeMap:
-		mapType := expr.Type().Underlying().(*types.Map)
-		llvmKeyType := c.getLLVMType(mapType.Key().Underlying())
-		llvmValueType := c.getLLVMType(mapType.Elem().Underlying())
-		keySize := c.targetData.TypeAllocSize(llvmKeyType)
-		valueSize := c.targetData.TypeAllocSize(llvmValueType)
-		llvmKeySize := llvm.ConstInt(c.ctx.Int8Type(), keySize, false)
-		llvmValueSize := llvm.ConstInt(c.ctx.Int8Type(), valueSize, false)
-		sizeHint := llvm.ConstInt(c.uintptrType, 8, false)
-		if expr.Reserve != nil {
-			sizeHint = c.getValue(frame, expr.Reserve)
-			var err error
-			sizeHint, err = c.parseConvert(expr.Reserve.Type(), types.Typ[types.Uintptr], sizeHint, expr.Pos())
-			if err != nil {
-				return llvm.Value{}, err
-			}
-		}
-		hashmap := c.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize, sizeHint}, "")
-		return hashmap, nil
+		return c.emitMakeMap(frame, expr)
 	case *ssa.MakeSlice:
 		sliceLen := c.getValue(frame, expr.Len)
 		sliceCap := c.getValue(frame, expr.Cap)
