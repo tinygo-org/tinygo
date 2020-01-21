@@ -145,14 +145,6 @@ func Test(pkgName string, options *compileopts.Options) error {
 
 // Flash builds and flashes the built binary to the given serial port.
 func Flash(pkgName, port string, options *compileopts.Options) error {
-	if port == "" {
-		var err error
-		port, err = getDefaultPort()
-		if err != nil {
-			return err
-		}
-	}
-
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
@@ -192,6 +184,14 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	return builder.Build(pkgName, fileExt, config, func(tmppath string) error {
 		// do we need port reset to put MCU into bootloader mode?
 		if config.Target.PortReset == "true" {
+			if port == "" {
+				var err error
+				port, err = getDefaultPort()
+				if err != nil {
+					return err
+				}
+			}
+
 			err := touchSerialPortAt1200bps(port)
 			if err != nil {
 				return &commandError{"failed to reset port", tmppath, err}
@@ -207,6 +207,15 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			flashCmd := config.Target.FlashCommand
 			fileToken := "{" + fileExt[1:] + "}"
 			flashCmd = strings.Replace(flashCmd, fileToken, tmppath, -1)
+
+			if port == "" && strings.Contains(flashCmd, "{port}") {
+				var err error
+				port, err = getDefaultPort()
+				if err != nil {
+					return err
+				}
+			}
+
 			flashCmd = strings.Replace(flashCmd, "{port}", port, -1)
 
 			// Execute the command.
@@ -568,7 +577,6 @@ func parseSize(s string) (int64, error) {
 }
 
 // getDefaultPort returns the default serial port depending on the operating system.
-// Currently only supports macOS and Linux.
 func getDefaultPort() (port string, err error) {
 	var portPath string
 	switch runtime.GOOS {
