@@ -590,7 +590,7 @@ func getDefaultPort() (port string, err error) {
 		}
 
 		if out.String() == "No Instance(s) Available." {
-			return "", errors.New("unable to locate a USB device to be flashed")
+			return "", errors.New("no serial ports available")
 		}
 
 		for _, line := range strings.Split(out.String(), "\n") {
@@ -601,7 +601,7 @@ func getDefaultPort() (port string, err error) {
 				}
 			}
 		}
-		return "", errors.New("unable to locate a USB device to be flashed")
+		return "", errors.New("unable to locate a serial port")
 	default:
 		return "", errors.New("unable to search for a default USB device to be flashed on this OS")
 	}
@@ -611,7 +611,7 @@ func getDefaultPort() (port string, err error) {
 		return "", err
 	}
 	if d == nil {
-		return "", errors.New("unable to locate a USB device to be flashed")
+		return "", errors.New("unable to locate a serial port")
 	}
 
 	return d[0], nil
