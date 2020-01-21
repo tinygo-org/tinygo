@@ -1,19 +1,9 @@
 {
-	"inherits": ["avr"],
-	"llvm-target": "avr-atmel-none",
-	"cpu": "atmega328p",
-	"build-tags": ["arduino", "atmega328p", "atmega", "avr5"],
-	"cflags": [
-		"-mmcu=atmega328p"
-	],
+	"inherits": ["atmega328p"],
+	"build-tags": ["arduino"],
 	"ldflags": [
 		"-Wl,--defsym=_bootloader_size=512",
 		"-Wl,--defsym=_stack_size=512"
-	],
-	"linkerscript": "src/device/avr/atmega328p.ld",
-	"extra-files": [
-		"targets/avr.S",
-		"src/device/avr/atmega328p.s"
 	],
 	"flash-command": "avrdude -c arduino -p atmega328p -P {port} -U flash:w:{hex}:i"
 }
