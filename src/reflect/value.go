@@ -539,6 +539,14 @@ func maskAndShift(value, offset, size uintptr) uintptr {
 	return (uintptr(value) >> (offset * 8)) & mask
 }
 
+func (v Value) NumMethod() int {
+	return v.typecode.NumMethod()
+}
+
+func (v Value) OverflowFloat(x float64) bool {
+	panic("unimplemented: (reflect.Value).OverflowFloat()")
+}
+
 func (v Value) MapKeys() []Value {
 	panic("unimplemented: (reflect.Value).MapKeys()")
 }
@@ -660,6 +668,18 @@ func (v Value) SetString(x string) {
 	default:
 		panic(&ValueError{"SetString"})
 	}
+}
+
+func (v Value) SetBytes(x []byte) {
+	panic("unimplemented: (reflect.Value).SetBytes()")
+}
+
+func (v Value) SetCap(n int) {
+	panic("unimplemented: (reflect.Value).SetCap()")
+}
+
+func (v Value) SetLen(n int) {
+	panic("unimplemented: (reflect.Value).SetLen()")
 }
 
 func (v Value) checkAddressable() {
