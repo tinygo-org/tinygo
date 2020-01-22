@@ -51,14 +51,23 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 	// Allocate the memory for the resulting type. Do not zero this memory: it
 	// will be zeroed by the hashmap get implementation if the key is not
 	// present in the map.
-	mapValueAlloca, mapValuePtr, mapValueSize := c.createTemporaryAlloca(llvmValueType, "hashmap.value")
+	mapValueAlloca, mapValuePtr, mapValueAllocaSize := c.createTemporaryAlloca(llvmValueType, "hashmap.value")
+
+	// We need the map size (with type uintptr) to pass to the hashmap*Get
+	// functions. This is necessary because those *Get functions are valid on
+	// nil maps, and they'll need to zero the value pointer by that number of
+	// bytes.
+	mapValueSize := mapValueAllocaSize
+	if mapValueSize.Type().IntTypeWidth() > c.uintptrType.IntTypeWidth() {
+		mapValueSize = llvm.ConstTrunc(mapValueSize, c.uintptrType)
+	}
 
 	// Do the lookup. How it is done depends on the key type.
 	var commaOkValue llvm.Value
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
-		params := []llvm.Value{m, key, mapValuePtr}
+		params := []llvm.Value{m, key, mapValuePtr, mapValueSize}
 		commaOkValue = c.createRuntimeCall("hashmapStringGet", params, "")
 	} else if hashmapIsBinaryKey(keyType) {
 		// key can be compared with runtime.memequal
@@ -67,7 +76,7 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 		mapKeyAlloca, mapKeyPtr, mapKeySize := c.createTemporaryAlloca(key.Type(), "hashmap.key")
 		c.builder.CreateStore(key, mapKeyAlloca)
 		// Fetch the value from the hashmap.
-		params := []llvm.Value{m, mapKeyPtr, mapValuePtr}
+		params := []llvm.Value{m, mapKeyPtr, mapValuePtr, mapValueSize}
 		commaOkValue = c.createRuntimeCall("hashmapBinaryGet", params, "")
 		c.emitLifetimeEnd(mapKeyPtr, mapKeySize)
 	} else {
@@ -77,14 +86,14 @@ func (c *Compiler) emitMapLookup(keyType, valueType types.Type, m, key llvm.Valu
 			// Not already an interface, so convert it to an interface now.
 			itfKey = c.parseMakeInterface(key, keyType, pos)
 		}
-		params := []llvm.Value{m, itfKey, mapValuePtr}
+		params := []llvm.Value{m, itfKey, mapValuePtr, mapValueSize}
 		commaOkValue = c.createRuntimeCall("hashmapInterfaceGet", params, "")
 	}
 
 	// Load the resulting value from the hashmap. The value is set to the zero
 	// value if the key doesn't exist in the hashmap.
 	mapValue := c.builder.CreateLoad(mapValueAlloca, "")
-	c.emitLifetimeEnd(mapValuePtr, mapValueSize)
+	c.emitLifetimeEnd(mapValuePtr, mapValueAllocaSize)
 
 	if commaOk {
 		tuple := llvm.Undef(c.ctx.StructType([]llvm.Type{llvmValueType, c.ctx.Int1Type()}, false))

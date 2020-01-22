@@ -44,6 +44,8 @@ func main() {
 	var nilmap map[string]int
 	println(m == nil, m != nil, len(m))
 	println(nilmap == nil, nilmap != nil, len(nilmap))
+	delete(nilmap, "foo")
+	println("nilmap:", nilmap["bar"])
 	println(testmapIntInt[2])
 	testmapIntInt[2] = 42
 	println(testmapIntInt[2])
