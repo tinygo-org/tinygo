@@ -265,6 +265,13 @@ func main() {
 		println("type assertion failed (but should succeed)")
 	}
 
+	if reflect.TypeOf(new(myint)) != reflect.PtrTo(reflect.TypeOf(myint(0))) {
+		println("PtrTo failed for type myint")
+	}
+	if reflect.TypeOf(new(myslice)) != reflect.PtrTo(reflect.TypeOf(make(myslice, 0))) {
+		println("PtrTo failed for type myslice")
+	}
+
 	println("\nstruct tags")
 	TestStructTag()
 }

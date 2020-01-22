@@ -133,6 +133,14 @@ func TypeOf(i interface{}) Type {
 	return ValueOf(i).typecode
 }
 
+func PtrTo(t Type) Type {
+	ptrType := t<<5 | 5 // 0b0101 == 5
+	if ptrType>>5 != t {
+		panic("reflect: PtrTo type does not fit")
+	}
+	return ptrType
+}
+
 func (t Type) String() string {
 	return "T"
 }
