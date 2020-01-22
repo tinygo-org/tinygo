@@ -166,7 +166,14 @@ func hashmapInsertIntoNewBucket(m *hashmap, key, value unsafe.Pointer, tophash u
 
 // Get the value of a specified key, or zero the value if not found.
 //go:nobounds
-func hashmapGet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint32, keyEqual func(x, y unsafe.Pointer, n uintptr) bool) bool {
+func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash uint32, keyEqual func(x, y unsafe.Pointer, n uintptr) bool) bool {
+	if m == nil {
+		// Getting a value out of a nil map is valid. From the spec:
+		// > if the map is nil or does not contain such an entry, a[x] is the
+		// > zero value for the element type of M
+		memzero(value, uintptr(valueSize))
+		return false
+	}
 	numBuckets := uintptr(1) << m.bucketBits
 	bucketNumber := (uintptr(hash) & (numBuckets - 1))
 	bucketSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*8
@@ -207,6 +214,12 @@ func hashmapGet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 // map.
 //go:nobounds
 func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32, keyEqual func(x, y unsafe.Pointer, n uintptr) bool) {
+	if m == nil {
+		// The delete builtin is defined even when the map is nil. From the spec:
+		// > If the map m is nil or the element m[k] does not exist, delete is a
+		// > no-op.
+		return
+	}
 	numBuckets := uintptr(1) << m.bucketBits
 	bucketNumber := (uintptr(hash) & (numBuckets - 1))
 	bucketSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*8
@@ -284,9 +297,9 @@ func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
 	hashmapSet(m, key, value, hash, memequal)
 }
 
-func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer) bool {
+func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) bool {
 	hash := hashmapHash(key, uintptr(m.keySize))
-	return hashmapGet(m, key, value, hash, memequal)
+	return hashmapGet(m, key, value, valueSize, hash, memequal)
 }
 
 func hashmapBinaryDelete(m *hashmap, key unsafe.Pointer) {
@@ -310,9 +323,9 @@ func hashmapStringSet(m *hashmap, key string, value unsafe.Pointer) {
 	hashmapSet(m, unsafe.Pointer(&key), value, hash, hashmapStringEqual)
 }
 
-func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer) bool {
+func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer, valueSize uintptr) bool {
 	hash := hashmapStringHash(key)
-	return hashmapGet(m, unsafe.Pointer(&key), value, hash, hashmapStringEqual)
+	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash, hashmapStringEqual)
 }
 
 func hashmapStringDelete(m *hashmap, key string) {
@@ -381,9 +394,9 @@ func hashmapInterfaceSet(m *hashmap, key interface{}, value unsafe.Pointer) {
 	hashmapSet(m, unsafe.Pointer(&key), value, hash, hashmapInterfaceEqual)
 }
 
-func hashmapInterfaceGet(m *hashmap, key interface{}, value unsafe.Pointer) bool {
+func hashmapInterfaceGet(m *hashmap, key interface{}, value unsafe.Pointer, valueSize uintptr) bool {
 	hash := hashmapInterfaceHash(key)
-	return hashmapGet(m, unsafe.Pointer(&key), value, hash, hashmapInterfaceEqual)
+	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash, hashmapInterfaceEqual)
 }
 
 func hashmapInterfaceDelete(m *hashmap, key interface{}) {
