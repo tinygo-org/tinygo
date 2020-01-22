@@ -16,6 +16,7 @@ import (
 )
 
 var validName = regexp.MustCompile("^[a-zA-Z0-9_]+$")
+var enumBitSpecifier = regexp.MustCompile("^#[x01]+$")
 
 type SVDFile struct {
 	XMLName     xml.Name `xml:"device"`
@@ -41,6 +42,7 @@ type SVDRegister struct {
 	Name          string      `xml:"name"`
 	Description   string      `xml:"description"`
 	Dim           *string     `xml:"dim"`
+	DimIndex      *string     `xml:"dimIndex"`
 	DimIncrement  string      `xml:"dimIncrement"`
 	Size          *string     `xml:"size"`
 	Fields        []*SVDField `xml:"fields>field"`
@@ -484,13 +486,24 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 		}
 		for _, enumEl := range fieldEl.EnumeratedValues {
 			enumName := enumEl.Name
+			if strings.EqualFold(enumName, "reserved") || !validName.MatchString(enumName) {
+				continue
+			}
 			if !unicode.IsUpper(rune(enumName[0])) && !unicode.IsDigit(rune(enumName[0])) {
 				enumName = strings.ToUpper(enumName)
 			}
 			enumDescription := strings.Replace(enumEl.Description, "\n", " ", -1)
 			enumValue, err := strconv.ParseUint(enumEl.Value, 0, 32)
 			if err != nil {
-				panic(err)
+				if enumBitSpecifier.MatchString(enumEl.Value) {
+					// NXP SVDs use the form #xx1x, #x0xx, etc for values
+					enumValue, err = strconv.ParseUint(strings.Replace(enumEl.Value[1:], "x", "0", -1), 2, 32)
+					if err != nil {
+						panic(err)
+					}
+				} else {
+					panic(err)
+				}
 			}
 			fields = append(fields, Bitfield{
 				name:        fmt.Sprintf("%s_%s%s_%s_%s", groupName, bitfieldPrefix, regName, fieldName, enumName),
@@ -545,6 +558,59 @@ func (r *Register) dim() int {
 	return int(dim)
 }
 
+func (r *Register) dimIndex() []string {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("register", r.name())
+			panic(err)
+		}
+	}()
+
+	dim := r.dim()
+	if r.element.DimIndex == nil {
+		if dim <= 0 {
+			return nil
+		}
+
+		idx := make([]string, dim)
+		for i := range idx {
+			idx[i] = strconv.FormatInt(int64(i), 10)
+		}
+		return idx
+	}
+
+	t := strings.Split(*r.element.DimIndex, "-")
+	if len(t) == 2 {
+		x, err := strconv.ParseInt(t[0], 0, 32)
+		if err != nil {
+			panic(err)
+		}
+		y, err := strconv.ParseInt(t[1], 0, 32)
+		if err != nil {
+			panic(err)
+		}
+
+		if x < 0 || y < x || y-x != int64(dim-1) {
+			panic("invalid dimIndex")
+		}
+
+		idx := make([]string, dim)
+		for i := x; i <= y; i++ {
+			idx[i-x] = strconv.FormatInt(i, 10)
+		}
+		return idx
+	} else if len(t) > 2 {
+		panic("invalid dimIndex")
+	}
+
+	s := strings.Split(*r.element.DimIndex, ",")
+	if len(s) != dim {
+		panic("invalid dimIndex")
+	}
+
+	return s
+}
+
 func (r *Register) size() int {
 	if r.element.Size != nil {
 		size, err := strconv.ParseInt(*r.element.Size, 0, 32)
@@ -568,10 +634,10 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 			// a "spaced array" of registers, special processing required
 			// we need to generate a separate register for each "element"
 			var results []*PeripheralField
-			for i := uint64(0); i < uint64(reg.dim()); i++ {
-				regAddress := reg.address() + (i * dimIncrement)
+			for i, j := range reg.dimIndex() {
+				regAddress := reg.address() + (uint64(i) * dimIncrement)
 				results = append(results, &PeripheralField{
-					name:        strings.ToUpper(strings.Replace(reg.name(), "%s", strconv.FormatUint(i, 10), -1)),
+					name:        strings.ToUpper(strings.Replace(reg.name(), "%s", j, -1)),
 					address:     regAddress,
 					description: reg.description(),
 					array:       -1,
@@ -589,11 +655,12 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 		regName = strings.ToUpper(regName)
 	}
 
+	bitfields := parseBitfields(groupName, regName, regEl.Fields, bitfieldPrefix)
 	return []*PeripheralField{&PeripheralField{
 		name:        regName,
 		address:     reg.address(),
 		description: reg.description(),
-		bitfields:   parseBitfields(groupName, regName, regEl.Fields, bitfieldPrefix),
+		bitfields:   bitfields,
 		array:       reg.dim(),
 		elementSize: reg.size(),
 	}}
@@ -770,7 +837,7 @@ var (
 			if register.array != -1 {
 				regType = fmt.Sprintf("[%d]%s", register.array, regType)
 			}
-			fmt.Fprintf(w, "\t%s %s\n", register.name, regType)
+			fmt.Fprintf(w, "\t%s %s // 0x%X\n", register.name, regType, register.address-peripheral.BaseAddress)
 
 			// next address
 			if lastCluster {

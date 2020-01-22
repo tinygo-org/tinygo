@@ -51,7 +51,7 @@ else
     LLVM_OPTION += '-DLLVM_ENABLE_ASSERTIONS=OFF'
 endif
 
-.PHONY: all tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-avr
+.PHONY: all tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-nxp gen-device-avr
 
 LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines coverage debuginfodwarf executionengine frontendopenmp instrumentation interpreter ipo irreader linker lto mc mcjit objcarcopts option profiledata scalaropts support target
 
@@ -118,7 +118,7 @@ fmt-check:
 	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
 
 
-gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-sifive gen-device-stm32 gen-device-kendryte
+gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-sifive gen-device-stm32 gen-device-kendryte gen-device-nxp
 
 gen-device-avr:
 	$(GO) build -o ./build/gen-device-avr ./tools/gen-device-avr/
@@ -132,6 +132,10 @@ build/gen-device-svd: ./tools/gen-device-svd/*.go
 gen-device-nrf: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk lib/nrfx/mdk/ src/device/nrf/
 	GO111MODULE=off $(GO) fmt ./src/device/nrf
+
+gen-device-nxp: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/NXP lib/cmsis-svd/data/NXP/ src/device/nxp/
+	GO111MODULE=off $(GO) fmt ./src/device/nxp
 
 gen-device-sam: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel lib/cmsis-svd/data/Atmel/ src/device/sam/
