@@ -51,7 +51,7 @@ reflect type: complex64
   complex: (+1.200000e+000+3.000000e-001i)
 reflect type: complex128
   complex: (+1.300000e+000+4.000000e-001i)
-reflect type: int
+reflect type: int methods=1
   int: 32
 reflect type: string
   string: foo 3
@@ -77,7 +77,7 @@ reflect type: ptr
 reflect type: ptr
   pointer: true interface
   nil: false
-  reflect type: interface settable=true
+  reflect type: interface settable=true methods=1
     interface
     nil: true
 reflect type: ptr
@@ -230,28 +230,24 @@ reflect type: map comparable=false
   nil: false
 reflect type: struct
   struct: 0
-reflect type: struct
+reflect type: struct methods=1
   struct: 1
   field: 0 error
-  tag: 
   embedded: true
-  reflect type: interface
+  reflect type: interface methods=1
     interface
     nil: true
 reflect type: struct
   struct: 3
   field: 0 a
-  tag: 
   embedded: false
   reflect type: uint8
     uint: 42
   field: 1 b
-  tag: 
   embedded: false
   reflect type: int16
     int: 321
   field: 2 c
-  tag: 
   embedded: false
   reflect type: int8
     int: 123
@@ -263,27 +259,22 @@ reflect type: struct comparable=false
   reflect type: int
     int: 5
   field: 1 some
-  tag: 
   embedded: false
   reflect type: struct
     struct: 2
     field: 0 X
-    tag: 
     embedded: false
     reflect type: int16
       int: -5
     field: 1 Y
-    tag: 
     embedded: false
     reflect type: int16
       int: 3
   field: 2 zero
-  tag: 
   embedded: false
   reflect type: struct
     struct: 0
   field: 3 buf
-  tag: 
   embedded: false
   reflect type: slice comparable=false
     slice: uint8 2 2
@@ -296,7 +287,6 @@ reflect type: struct comparable=false
     reflect type: uint8
       uint: 111
   field: 4 Buf
-  tag: 
   embedded: false
   reflect type: slice comparable=false
     slice: uint8 1 1
@@ -317,10 +307,31 @@ reflect type: ptr
       pointer: false struct
       nil: true
     field: 1 foo
-    tag: 
     embedded: false
     reflect type: int
       int: 42
+reflect type: struct
+  struct: 4
+  field: 0 a
+  embedded: false
+  reflect type: interface
+    interface
+    nil: true
+  field: 1 b
+  embedded: false
+  reflect type: interface methods=2
+    interface
+    nil: true
+  field: 2 c
+  embedded: false
+  reflect type: interface methods=3
+    interface
+    nil: true
+  field: 3 d
+  embedded: false
+  reflect type: ptr
+    pointer: false interface
+    nil: true
 
 sizes:
 int8 1 8

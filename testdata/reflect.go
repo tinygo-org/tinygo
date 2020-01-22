@@ -26,7 +26,17 @@ type (
 		next *linkedList `description:"chain"`
 		foo  int
 	}
+	myitf interface {
+		Foo()
+		bar()
+		baz()
+	}
 )
+
+// To test Type.NumMethod.
+func (n myint) foo() {}
+func (n myint) bar() {}
+func (n myint) Baz() {}
 
 func main() {
 	println("matching types")
@@ -111,6 +121,16 @@ func main() {
 		&linkedList{
 			foo: 42,
 		},
+		// interfaces
+		struct {
+			a interface{}
+			b interface {
+				Foo()
+				bar()
+			}
+			c myitf
+			d *myitf
+		}{},
 	} {
 		showValue(reflect.ValueOf(v), "")
 	}
@@ -284,6 +304,9 @@ func showValue(rv reflect.Value, indent string) {
 	if !rt.Comparable() {
 		print(" comparable=false")
 	}
+	if rt.NumMethod() != 0 {
+		print(" methods=", rt.NumMethod())
+	}
 	println()
 	switch rt.Kind() {
 	case reflect.Bool:
@@ -339,7 +362,9 @@ func showValue(rv reflect.Value, indent string) {
 		for i := 0; i < rv.NumField(); i++ {
 			field := rt.Field(i)
 			println(indent+"  field:", i, field.Name)
-			println(indent+"  tag:", field.Tag)
+			if field.Tag != "" {
+				println(indent+"  tag:", field.Tag)
+			}
 			println(indent+"  embedded:", field.Anonymous)
 			showValue(rv.Field(i), indent+"  ")
 		}

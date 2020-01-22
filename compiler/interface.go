@@ -72,13 +72,33 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			structGlobal := c.makeStructTypeFields(typ)
 			references = llvm.ConstBitCast(structGlobal, global.Type())
 		}
-		if !references.IsNil() {
+		methodSet := types.NewMethodSet(typ)
+		numMethods := 0
+		_, isInterface := typ.Underlying().(*types.Interface)
+		for i := 0; i < methodSet.Len(); i++ {
+			// NumMethod (unintentionally) includes unexported methods for
+			// interface types but excludes unexported methods for other types.
+			// This makes sure we're bug-compatible with the Go reflect package.
+			// For a discussion, see:
+			// https://github.com/golang/go/issues/22075 (original bug)
+			// https://github.com/golang/go/issues/42123 (revert of bugfix)
+			if methodSet.At(i).Obj().Exported() || isInterface {
+				numMethods++
+			}
+		}
+		if !references.IsNil() || numMethods != 0 || isInterface {
 			// Set the 'references' field of the runtime.typecodeID struct.
 			globalValue := llvm.ConstNull(global.Type().ElementType())
-			globalValue = llvm.ConstInsertValue(globalValue, references, []uint32{0})
+			if !references.IsNil() {
+				globalValue = llvm.ConstInsertValue(globalValue, references, []uint32{0})
+			}
 			if length != 0 {
 				lengthValue := llvm.ConstInt(c.uintptrType, uint64(length), false)
 				globalValue = llvm.ConstInsertValue(globalValue, lengthValue, []uint32{1})
+			}
+			if numMethods != 0 {
+				numMethodsValue := llvm.ConstInt(c.uintptrType, uint64(numMethods), false)
+				globalValue = llvm.ConstInsertValue(globalValue, numMethodsValue, []uint32{2})
 			}
 			global.SetInitializer(globalValue)
 			global.SetLinkage(llvm.PrivateLinkage)
@@ -187,7 +207,7 @@ func getTypeCodeName(t types.Type) string {
 	case *types.Interface:
 		methods := make([]string, t.NumMethods())
 		for i := 0; i < t.NumMethods(); i++ {
-			methods[i] = getTypeCodeName(t.Method(i).Type())
+			methods[i] = t.Method(i).Name() + ":" + getTypeCodeName(t.Method(i).Type())
 		}
 		return "interface:" + "{" + strings.Join(methods, ",") + "}"
 	case *types.Map:

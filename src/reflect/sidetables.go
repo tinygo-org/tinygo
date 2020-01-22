@@ -4,11 +4,21 @@ import (
 	"unsafe"
 )
 
+// This stores the number of methods (for Type.NumMethod()) for each named basic
+// type. It is indexed by the named type number.
+//go:extern reflect.namedBasicNumMethodSidetable
+var namedBasicNumMethodSidetable byte
+
 // This stores a varint for each named type. Named types are identified by their
 // name instead of by their type. The named types stored in this struct are
-// non-basic types: pointer, struct, and channel.
+// non-basic types: pointer, struct, channel, and interface.
 //go:extern reflect.namedNonBasicTypesSidetable
 var namedNonBasicTypesSidetable uintptr
+
+// This stores the number of methods (for Type.NumMethods()) for each named
+// non-basic type. It is indexed by the named type number.
+//go:extern reflect.namedNonBasicNumMethodSidetable
+var namedNonBasicNumMethodSidetable byte
 
 //go:extern reflect.structTypesSidetable
 var structTypesSidetable byte
@@ -18,6 +28,9 @@ var structNamesSidetable byte
 
 //go:extern reflect.arrayTypesSidetable
 var arrayTypesSidetable byte
+
+//go:extern reflect.interfaceTypesSidetable
+var interfaceTypesSidetable byte
 
 // readStringSidetable reads a string from the given table (like
 // structNamesSidetable) and returns this string. No heap allocation is

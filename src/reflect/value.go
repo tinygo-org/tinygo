@@ -532,6 +532,10 @@ func maskAndShift(value, offset, size uintptr) uintptr {
 	return (uintptr(value) >> (offset * 8)) & mask
 }
 
+func (v Value) NumMethod() int {
+	return v.Type().NumMethod()
+}
+
 func (v Value) MapKeys() []Value {
 	panic("unimplemented: (reflect.Value).MapKeys()")
 }

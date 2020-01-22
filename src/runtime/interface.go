@@ -107,6 +107,9 @@ type typecodeID struct {
 
 	// The array length, for array types.
 	length uintptr
+
+	// Number of methods on this type. Usually 0 for non-named types.
+	numMethods uintptr
 }
 
 // structField is used by the compiler to pass information to the interface

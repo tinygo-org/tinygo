@@ -1,7 +1,7 @@
 target datalayout = "e-m:e-p:32:32-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "armv7m-none-eabi"
 
-%runtime.typecodeID = type { %runtime.typecodeID*, i32 }
+%runtime.typecodeID = type { %runtime.typecodeID*, i32, i32 }
 
 @"reflect/types.type:basic:uint8" = external constant %runtime.typecodeID
 @"reflect/types.type:basic:int" = external constant %runtime.typecodeID
@@ -9,7 +9,7 @@ target triple = "armv7m-none-eabi"
 @"Unmatched$interface" = private constant [1 x i8*] [i8* @"func NeverImplementedMethod()"]
 @"func Double() int" = external constant i8
 @"Doubler$interface" = private constant [1 x i8*] [i8* @"func Double() int"]
-@"reflect/types.type:named:Number" = private constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i32 0 }
+@"reflect/types.type:named:Number" = private constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i32 0, i32 1 }
 
 declare i1 @runtime.interfaceImplements(i32, i8**)
 
