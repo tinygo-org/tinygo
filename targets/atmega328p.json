@@ -10,5 +10,6 @@
 	"extra-files": [
 		"targets/avr.S",
 		"src/device/avr/atmega328p.s"
-	]
+	],
+	"emulator": ["simavr", "-m", "atmega328p", "-f", "16000000"]
 }
