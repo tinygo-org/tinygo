@@ -380,11 +380,11 @@ type cdcLineInfo struct {
 var (
 	// TODO: allow setting these
 	usb_STRING_LANGUAGE     = [2]uint16{(3 << 8) | (2 + 2), 0x0409} // English
-	usb_STRING_PRODUCT      = "Arduino Zero"
+	usb_STRING_PRODUCT      = "Adafruit Feather M0 Express"
 	usb_STRING_MANUFACTURER = "Arduino"
 
-	usb_VID uint16 = 0x2341
-	usb_PID uint16 = 0x004d
+	usb_VID uint16 = 0x239A
+	usb_PID uint16 = 0x801B
 )
 
 const (
