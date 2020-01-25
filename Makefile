@@ -267,6 +267,8 @@ ifneq ($(AVR), 0)
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=digispark           examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=digispark -gc=leaking examples/blinky1
+	@$(MD5SUM) test.hex
 endif
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
 	@$(MD5SUM) test.hex
