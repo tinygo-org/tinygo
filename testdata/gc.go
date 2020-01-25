@@ -23,6 +23,13 @@ var scalarSlices [4][]byte
 var randSeeds [4]uint32
 
 func testNonPointerHeap() {
+	maxSliceSize := uint32(1024)
+	if ^uintptr(0) <= 0xffff {
+		// 16-bit and lower devices, such as AVR.
+		// Heap size is a real issue there, while it is still useful to run
+		// these tests. Therefore, lower the max slice size.
+		maxSliceSize = 64
+	}
 	// Allocate roughly 0.5MB of memory.
 	for i := 0; i < 1000; i++ {
 		// Pick a random index that the optimizer can't predict.
@@ -38,9 +45,9 @@ func testNonPointerHeap() {
 		}
 
 		// Allocate a randomly-sized slice, randomly sliced to be smaller.
-		sliceLen := randuint32() % 1024
+		sliceLen := randuint32() % maxSliceSize
 		slice := make([]byte, sliceLen)
-		cutLen := randuint32() % 1024
+		cutLen := randuint32() % maxSliceSize
 		if cutLen < sliceLen {
 			slice = slice[cutLen:]
 		}
