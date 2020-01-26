@@ -7,19 +7,19 @@ import (
 )
 
 //go:extern _heap_start
-var heapStartSymbol unsafe.Pointer
+var heapStartSymbol [0]byte
 
 //go:extern _heap_end
-var heapEndSymbol unsafe.Pointer
+var heapEndSymbol [0]byte
 
 //go:extern _globals_start
-var globalsStartSymbol unsafe.Pointer
+var globalsStartSymbol [0]byte
 
 //go:extern _globals_end
-var globalsEndSymbol unsafe.Pointer
+var globalsEndSymbol [0]byte
 
 //go:extern _stack_top
-var stackTopSymbol unsafe.Pointer
+var stackTopSymbol [0]byte
 
 var (
 	heapStart    = uintptr(unsafe.Pointer(&heapStartSymbol))

@@ -12,7 +12,7 @@ const GOARCH = "wasm"
 const TargetBits = 32
 
 //go:extern __heap_base
-var heapStartSymbol unsafe.Pointer
+var heapStartSymbol [0]byte
 
 //go:export llvm.wasm.memory.size.i32
 func wasm_memory_size(index int32) int32
