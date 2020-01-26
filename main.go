@@ -299,7 +299,11 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		case "msd", "command", "":
 			if len(config.Target.Emulator) != 0 {
 				// Assume QEMU as an emulator.
-				gdbInterface = "qemu"
+				if config.Target.Emulator[0] == "mgba" {
+					gdbInterface = "mgba"
+				} else {
+					gdbInterface = "qemu"
+				}
 			} else if openocdInterface != "" && config.Target.OpenOCDTarget != "" {
 				gdbInterface = "openocd"
 			} else if config.Target.JLinkDevice != "" {
@@ -390,6 +394,26 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			if err != nil {
 				return &commandError{"failed to run", daemon.Path, err}
 			}
+			defer func() {
+				daemon.Process.Signal(os.Interrupt)
+				// Maybe we should send a .Kill() after x seconds?
+				daemon.Wait()
+			}()
+		case "mgba":
+			gdbCommands = append(gdbCommands, "target remote :2345")
+
+			// Run in an emulator.
+			args := append(config.Target.Emulator[1:], tmppath, "-g")
+			daemon := exec.Command(config.Target.Emulator[0], args...)
+			daemon.Stdout = os.Stdout
+			daemon.Stderr = os.Stderr
+
+			// Make sure the daemon doesn't receive Ctrl-C that is intended for
+			// GDB (to break the currently executing program).
+			setCommandAsDaemon(daemon)
+
+			// Start now, and kill it on exit.
+			daemon.Start()
 			defer func() {
 				daemon.Process.Signal(os.Interrupt)
 				// Maybe we should send a .Kill() after x seconds?
