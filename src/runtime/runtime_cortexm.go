@@ -8,19 +8,19 @@ import (
 )
 
 //go:extern _sbss
-var _sbss unsafe.Pointer
+var _sbss [0]byte
 
 //go:extern _ebss
-var _ebss unsafe.Pointer
+var _ebss [0]byte
 
 //go:extern _sdata
-var _sdata unsafe.Pointer
+var _sdata [0]byte
 
 //go:extern _sidata
-var _sidata unsafe.Pointer
+var _sidata [0]byte
 
 //go:extern _edata
-var _edata unsafe.Pointer
+var _edata [0]byte
 
 func preinit() {
 	// Initialize .bss: zero-initialized global variables.
