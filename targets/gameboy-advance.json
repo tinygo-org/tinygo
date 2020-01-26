@@ -26,5 +26,6 @@
 	"extra-files": [
 		"targets/gameboy-advance.s"
 	],
-	"emulator": ["mgba-qt"]
+	"gdb": "gdb-multiarch",
+	"emulator": ["mgba", "-3"]
 }
