@@ -12,7 +12,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/loader"
@@ -67,28 +69,29 @@ func TestCompiler(t *testing.T) {
 }
 
 func runPlatTests(target string, matches []string, t *testing.T) {
+	t.Parallel()
+
 	for _, path := range matches {
-		switch {
-		case target == "wasm":
-			// testdata/gc.go is known not to work on WebAssembly
-			if path == filepath.Join("testdata", "gc.go") {
-				continue
-			}
-		case target == "":
-			// run all tests on host
-		case target == "cortex-m-qemu":
-			// all tests are supported
-		default:
-			// cross-compilation of cgo is not yet supported
-			if path == filepath.Join("testdata", "cgo")+string(filepath.Separator) {
-				continue
-			}
-		}
+		path := path // redefine to avoid race condition
 
 		t.Run(filepath.Base(path), func(t *testing.T) {
+			t.Parallel()
+
 			runTest(path, target, t)
 		})
 	}
+}
+
+// Due to some problems with LLD, we cannot run links in parallel, or in parallel with compiles.
+// Therefore, we put a lock around builds and run everything else in parallel.
+var buildLock sync.Mutex
+
+// runBuild is a thread-safe wrapper around Build.
+func runBuild(src, out string, opts *compileopts.Options) error {
+	buildLock.Lock()
+	defer buildLock.Unlock()
+
+	return Build(src, out, opts)
 }
 
 func runTest(path, target string, t *testing.T) {
@@ -97,11 +100,7 @@ func runTest(path, target string, t *testing.T) {
 	if path[len(path)-1] == os.PathSeparator {
 		txtpath = path + "out.txt"
 	}
-	f, err := os.Open(txtpath)
-	if err != nil {
-		t.Fatal("could not open expected output file:", err)
-	}
-	expected, err := ioutil.ReadAll(f)
+	expected, err := ioutil.ReadFile(txtpath)
 	if err != nil {
 		t.Fatal("could not read expected output file:", err)
 	}
@@ -130,7 +129,7 @@ func runTest(path, target string, t *testing.T) {
 		WasmAbi:    "js",
 	}
 	binary := filepath.Join(tmpdir, "test")
-	err = Build("./"+path, binary, config)
+	err = runBuild("./"+path, binary, config)
 	if err != nil {
 		if errLoader, ok := err.(loader.Errors); ok {
 			for _, err := range errLoader.Errs {
@@ -144,7 +143,9 @@ func runTest(path, target string, t *testing.T) {
 	}
 
 	// Run the test.
+	runComplete := make(chan struct{})
 	var cmd *exec.Cmd
+	ranTooLong := false
 	if target == "" {
 		cmd = exec.Command(binary)
 	} else {
@@ -160,12 +161,34 @@ func runTest(path, target string, t *testing.T) {
 	}
 	stdout := &bytes.Buffer{}
 	cmd.Stdout = stdout
-	if target != "" {
-		cmd.Stderr = os.Stderr
+	cmd.Stderr = os.Stderr
+	err = cmd.Start()
+	if err != nil {
+		t.Fatal("failed to start:", err)
 	}
-	err = cmd.Run()
+	go func() {
+		// Terminate the process if it runs too long.
+		timer := time.NewTimer(1 * time.Second)
+		select {
+		case <-runComplete:
+			timer.Stop()
+		case <-timer.C:
+			ranTooLong = true
+			if runtime.GOOS == "windows" {
+				cmd.Process.Signal(os.Kill) // Windows doesn't support SIGINT.
+			} else {
+				cmd.Process.Signal(os.Interrupt)
+			}
+		}
+	}()
+	err = cmd.Wait()
 	if _, ok := err.(*exec.ExitError); ok && target != "" {
 		err = nil // workaround for QEMU
+	}
+	close(runComplete)
+
+	if ranTooLong {
+		stdout.WriteString("--- test ran too long, terminating...\n")
 	}
 
 	// putchar() prints CRLF, convert it to LF.

@@ -2,7 +2,10 @@
 
 package machine
 
-const CPU_FREQUENCY = 16000000
+// Return the current CPU frequency in hertz.
+func CPUFrequency() uint32 {
+	return 16000000
+}
 
 // LED on the Arduino
 const LED Pin = 13

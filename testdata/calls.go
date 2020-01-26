@@ -41,6 +41,9 @@ func main() {
 	// deferred functions
 	testDefer()
 
+	// defers in loop
+	testDeferLoop()
+
 	// Take a bound method and use it as a function pointer.
 	// This function pointer needs a context pointer.
 	testBound(thing.String)
@@ -83,6 +86,12 @@ func testDefer() {
 	defer t.Print("bar")
 
 	println("deferring...")
+}
+
+func testDeferLoop() {
+	for j := 0; j < 4; j++ {
+		defer deferred("loop", j)
+	}
 }
 
 func deferred(msg string, i int) {

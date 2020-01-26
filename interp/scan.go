@@ -1,6 +1,8 @@
 package interp
 
 import (
+	"strings"
+
 	"tinygo.org/x/go-llvm"
 )
 
@@ -39,22 +41,25 @@ type sideEffectResult struct {
 // returns whether this function has side effects and if it does, which globals
 // it mentions anywhere in this function or any called functions.
 func (e *evalPackage) hasSideEffects(fn llvm.Value) (*sideEffectResult, error) {
-	switch fn.Name() {
-	case "runtime.alloc":
+	name := fn.Name()
+	switch {
+	case name == "runtime.alloc":
 		// Cannot be scanned but can be interpreted.
 		return &sideEffectResult{severity: sideEffectNone}, nil
-	case "runtime.nanotime":
+	case name == "runtime.nanotime":
 		// Fixed value at compile time.
 		return &sideEffectResult{severity: sideEffectNone}, nil
-	case "runtime._panic":
+	case name == "runtime._panic":
 		return &sideEffectResult{severity: sideEffectLimited}, nil
-	case "runtime.interfaceImplements":
+	case name == "runtime.interfaceImplements":
 		return &sideEffectResult{severity: sideEffectNone}, nil
-	case "runtime.sliceCopy":
+	case name == "runtime.sliceCopy":
 		return &sideEffectResult{severity: sideEffectNone}, nil
-	case "runtime.trackPointer":
+	case name == "runtime.trackPointer":
 		return &sideEffectResult{severity: sideEffectNone}, nil
-	case "llvm.dbg.value":
+	case name == "llvm.dbg.value":
+		return &sideEffectResult{severity: sideEffectNone}, nil
+	case strings.HasPrefix(name, "llvm.lifetime."):
 		return &sideEffectResult{severity: sideEffectNone}, nil
 	}
 	if fn.IsDeclaration() {

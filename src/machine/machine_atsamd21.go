@@ -11,10 +11,9 @@ import (
 	"device/arm"
 	"device/sam"
 	"errors"
+	"runtime/interrupt"
 	"unsafe"
 )
-
-const CPU_FREQUENCY = 48000000
 
 type PinMode uint8
 
@@ -33,74 +32,6 @@ const (
 	PinPWM           PinMode = PinTimer
 	PinPWMAlt        PinMode = PinTimerAlt
 	PinInputPulldown PinMode = 12
-)
-
-// Hardware pins
-const (
-	PA00 Pin = 0
-	PA01 Pin = 1
-	PA02 Pin = 2
-	PA03 Pin = 3
-	PA04 Pin = 4
-	PA05 Pin = 5
-	PA06 Pin = 6
-	PA07 Pin = 7
-	PA08 Pin = 8
-	PA09 Pin = 9
-	PA10 Pin = 10
-	PA11 Pin = 11
-	PA12 Pin = 12
-	PA13 Pin = 13
-	PA14 Pin = 14
-	PA15 Pin = 15
-	PA16 Pin = 16
-	PA17 Pin = 17
-	PA18 Pin = 18
-	PA19 Pin = 19
-	PA20 Pin = 20
-	PA21 Pin = 21
-	PA22 Pin = 22
-	PA23 Pin = 23
-	PA24 Pin = 24
-	PA25 Pin = 25
-	PA26 Pin = 26
-	PA27 Pin = 27
-	PA28 Pin = 28
-	PA29 Pin = 29
-	PA30 Pin = 30
-	PA31 Pin = 31
-	PB00 Pin = 32
-	PB01 Pin = 33
-	PB02 Pin = 34
-	PB03 Pin = 35
-	PB04 Pin = 36
-	PB05 Pin = 37
-	PB06 Pin = 38
-	PB07 Pin = 39
-	PB08 Pin = 40
-	PB09 Pin = 41
-	PB10 Pin = 42
-	PB11 Pin = 43
-	PB12 Pin = 44
-	PB13 Pin = 45
-	PB14 Pin = 46
-	PB15 Pin = 47
-	PB16 Pin = 48
-	PB17 Pin = 49
-	PB18 Pin = 50
-	PB19 Pin = 51
-	PB20 Pin = 52
-	PB21 Pin = 53
-	PB22 Pin = 54
-	PB23 Pin = 55
-	PB24 Pin = 56
-	PB25 Pin = 57
-	PB26 Pin = 58
-	PB27 Pin = 59
-	PB28 Pin = 60
-	PB29 Pin = 61
-	PB30 Pin = 62
-	PB31 Pin = 63
 )
 
 const (
@@ -362,9 +293,10 @@ func waitADCSync() {
 
 // UART on the SAMD21.
 type UART struct {
-	Buffer *RingBuffer
-	Bus    *sam.SERCOM_USART_Type
-	SERCOM uint8
+	Buffer    *RingBuffer
+	Bus       *sam.SERCOM_USART_Type
+	SERCOM    uint8
+	Interrupt interrupt.Interrupt
 }
 
 var (
@@ -471,10 +403,7 @@ func (uart UART) Configure(config UARTConfig) error {
 	uart.Bus.INTENSET.Set(sam.SERCOM_USART_INTENSET_RXC)
 
 	// Enable RX IRQ.
-	// IRQ lines are in the same order as SERCOM instance numbers on SAMD21
-	// chips, so the IRQ number can be trivially determined from the SERCOM
-	// number.
-	arm.EnableIRQ(sam.IRQ_SERCOM0 + uint32(uart.SERCOM))
+	uart.Interrupt.Enable()
 
 	return nil
 }
@@ -485,7 +414,7 @@ func (uart UART) SetBaudRate(br uint32) {
 	//   BAUD = fref / (sampleRateValue * fbaud)
 	// (multiply by 8, to calculate fractional piece)
 	// uint32_t baudTimes8 = (SystemCoreClock * 8) / (16 * baudrate);
-	baud := (CPU_FREQUENCY * 8) / (sampleRate16X * br)
+	baud := (CPUFrequency() * 8) / (sampleRate16X * br)
 
 	// sercom->USART.BAUD.FRAC.FP   = (baudTimes8 % 8);
 	// sercom->USART.BAUD.FRAC.BAUD = (baudTimes8 / 8);
@@ -502,11 +431,12 @@ func (uart UART) WriteByte(c byte) error {
 	return nil
 }
 
-// defaultUART1Handler handles the UART1 IRQ.
-func defaultUART1Handler() {
+// handleInterrupt should be called from the appropriate interrupt handler for
+// this UART instance.
+func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	// should reset IRQ
-	UART1.Receive(byte((UART1.Bus.DATA.Get() & 0xFF)))
-	UART1.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INTFLAG_RXC)
+	uart.Receive(byte((uart.Bus.DATA.Get() & 0xFF)))
+	uart.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INTFLAG_RXC)
 }
 
 // I2C on the SAMD21.
@@ -601,7 +531,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 func (i2c I2C) SetBaudRate(br uint32) {
 	// Synchronous arithmetic baudrate, via Arduino SAMD implementation:
 	// SystemCoreClock / ( 2 * baudrate) - 5 - (((SystemCoreClock / 1000000) * WIRE_RISE_TIME_NANOSECONDS) / (2 * 1000));
-	baud := CPU_FREQUENCY/(2*br) - 5 - (((CPU_FREQUENCY / 1000000) * riseTimeNanoseconds) / (2 * 1000))
+	baud := CPUFrequency()/(2*br) - 5 - (((CPUFrequency() / 1000000) * riseTimeNanoseconds) / (2 * 1000))
 	i2c.Bus.BAUD.Set(baud)
 }
 
@@ -793,7 +723,7 @@ func (i2s I2S) Configure(config I2SConfig) {
 	sam.PM.APBCMASK.SetBits(sam.PM_APBCMASK_I2S_)
 
 	// setting clock rate for sample.
-	division_factor := CPU_FREQUENCY / (config.AudioFrequency * uint32(config.DataFormat))
+	division_factor := CPUFrequency() / (config.AudioFrequency * uint32(config.DataFormat))
 
 	// Switch Generic Clock Generator 3 to DFLL48M.
 	sam.GCLK.GENDIV.Set((sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_GENDIV_ID_Pos) |
@@ -1113,7 +1043,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 	}
 
 	// Set synch speed for SPI
-	baudRate := (CPU_FREQUENCY / (2 * config.Frequency)) - 1
+	baudRate := (CPUFrequency() / (2 * config.Frequency)) - 1
 	spi.Bus.BAUD.Set(uint8(baudRate))
 
 	// Enable SPI port.
@@ -1438,7 +1368,8 @@ func (usbcdc USBCDC) Configure(config UARTConfig) {
 	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_ENABLE)
 
 	// enable IRQ
-	arm.EnableIRQ(sam.IRQ_USB)
+	intr := interrupt.New(sam.IRQ_USB, handleUSB)
+	intr.Enable()
 }
 
 func handlePadCalibration() {
@@ -1484,8 +1415,7 @@ func handlePadCalibration() {
 	sam.USB_DEVICE.PADCAL.SetBits(calibTrim << sam.USB_DEVICE_PADCAL_TRIM_Pos)
 }
 
-//go:export USB_IRQHandler
-func handleUSB() {
+func handleUSB(intr interrupt.Interrupt) {
 	// reset all interrupt flags
 	flags := sam.USB_DEVICE.INTFLAG.Get()
 	sam.USB_DEVICE.INTFLAG.Set(flags)

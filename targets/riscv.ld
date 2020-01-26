@@ -2,7 +2,10 @@ SECTIONS
 {
     .text :
     {
+        . = ALIGN(4);
         KEEP(*(.init))
+        . = ALIGN(4);
+        *(.text.handleInterruptASM)
         *(.text)
         *(.text.*)
         *(.rodata)

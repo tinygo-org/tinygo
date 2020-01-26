@@ -104,7 +104,6 @@ package compiler
 // scheduler, which runs in the background scheduling all coroutines.
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -283,7 +282,7 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 			if use.IsConstant() && use.Opcode() == llvm.PtrToInt {
 				for _, call := range getUses(use) {
 					if call.IsACallInst().IsNil() || call.CalledValue().Name() != "runtime.makeGoroutine" {
-						return false, errors.New("async function " + f.Name() + " incorrectly used in ptrtoint, expected runtime.makeGoroutine")
+						return false, errorAt(call, "async function incorrectly used in ptrtoint, expected runtime.makeGoroutine")
 					}
 				}
 				// This is a go statement. Do not mark the parent as async, as
@@ -303,12 +302,19 @@ func (c *Compiler) markAsyncFunctions() (needsScheduler bool, err error) {
 				// Not a call instruction. Maybe a store to a global? In any
 				// case, this requires support for async calls across function
 				// pointers which is not yet supported.
-				return false, errors.New("async function " + f.Name() + " used as function pointer")
+				at := use
+				if use.IsAInstruction().IsNil() {
+					// The use might not be an instruction (for example, in the
+					// case of a const bitcast). Fall back to reporting the
+					// location of the function instead.
+					at = f
+				}
+				return false, errorAt(at, "async function "+f.Name()+" used as function pointer")
 			}
 			parent := use.InstructionParent().Parent()
 			for i := 0; i < use.OperandsCount()-1; i++ {
 				if use.Operand(i) == f {
-					return false, errors.New("async function " + f.Name() + " used as function pointer in " + parent.Name())
+					return false, errorAt(use, "async function "+f.Name()+" used as function pointer")
 				}
 			}
 			worklist = append(worklist, parent)
@@ -906,12 +912,12 @@ func (c *Compiler) lowerMakeGoroutineCalls(sched bool) error {
 		origFunc := ptrtointIn.Operand(0)
 		uses := getUses(goroutine)
 		if len(uses) != 1 || uses[0].IsAIntToPtrInst().IsNil() {
-			return errors.New("expected exactly 1 inttoptr use of runtime.makeGoroutine")
+			return errorAt(makeGoroutine, "expected exactly 1 inttoptr use of runtime.makeGoroutine")
 		}
 		inttoptrOut := uses[0]
 		uses = getUses(inttoptrOut)
 		if len(uses) != 1 || uses[0].IsACallInst().IsNil() {
-			return errors.New("expected exactly 1 call use of runtime.makeGoroutine bitcast")
+			return errorAt(inttoptrOut, "expected exactly 1 call use of runtime.makeGoroutine bitcast")
 		}
 		realCall := uses[0]
 

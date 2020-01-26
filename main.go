@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -183,6 +184,14 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	return builder.Build(pkgName, fileExt, config, func(tmppath string) error {
 		// do we need port reset to put MCU into bootloader mode?
 		if config.Target.PortReset == "true" {
+			if port == "" {
+				var err error
+				port, err = getDefaultPort()
+				if err != nil {
+					return err
+				}
+			}
+
 			err := touchSerialPortAt1200bps(port)
 			if err != nil {
 				return &commandError{"failed to reset port", tmppath, err}
@@ -198,10 +207,30 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			flashCmd := config.Target.FlashCommand
 			fileToken := "{" + fileExt[1:] + "}"
 			flashCmd = strings.Replace(flashCmd, fileToken, tmppath, -1)
+
+			if port == "" && strings.Contains(flashCmd, "{port}") {
+				var err error
+				port, err = getDefaultPort()
+				if err != nil {
+					return err
+				}
+			}
+
 			flashCmd = strings.Replace(flashCmd, "{port}", port, -1)
 
 			// Execute the command.
-			cmd := exec.Command("/bin/sh", "-c", flashCmd)
+			var cmd *exec.Cmd
+			switch runtime.GOOS {
+			case "windows":
+				command := strings.Split(flashCmd, " ")
+				if len(command) < 2 {
+					return errors.New("invalid flash command")
+				}
+				cmd = exec.Command(command[0], command[1:]...)
+			default:
+				cmd = exec.Command("/bin/sh", "-c", flashCmd)
+			}
+
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Dir = goenv.Get("TINYGOROOT")
@@ -254,7 +283,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 //
 // Note: this command is expected to execute just before exiting, as it
 // modifies global state.
-func FlashGDB(pkgName, port string, ocdOutput bool, options *compileopts.Options) error {
+func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) error {
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
@@ -268,12 +297,13 @@ func FlashGDB(pkgName, port string, ocdOutput bool, options *compileopts.Options
 		gdbInterface, openocdInterface := config.Programmer()
 		switch gdbInterface {
 		case "msd", "command", "":
-			if openocdInterface != "" && config.Target.OpenOCDTarget != "" {
-				gdbInterface = "openocd"
-			}
 			if len(config.Target.Emulator) != 0 {
 				// Assume QEMU as an emulator.
 				gdbInterface = "qemu"
+			} else if openocdInterface != "" && config.Target.OpenOCDTarget != "" {
+				gdbInterface = "openocd"
+			} else if config.Target.JLinkDevice != "" {
+				gdbInterface = "jlink"
 			}
 		}
 
@@ -296,6 +326,31 @@ func FlashGDB(pkgName, port string, ocdOutput bool, options *compileopts.Options
 				w := &ColorWriter{
 					Out:    os.Stderr,
 					Prefix: "openocd: ",
+					Color:  TermColorYellow,
+				}
+				daemon.Stdout = w
+				daemon.Stderr = w
+			}
+			// Make sure the daemon doesn't receive Ctrl-C that is intended for
+			// GDB (to break the currently executing program).
+			setCommandAsDaemon(daemon)
+			// Start now, and kill it on exit.
+			daemon.Start()
+			defer func() {
+				daemon.Process.Signal(os.Interrupt)
+				// Maybe we should send a .Kill() after x seconds?
+				daemon.Wait()
+			}()
+		case "jlink":
+			gdbCommands = append(gdbCommands, "target remote :2331", "load", "monitor reset halt")
+
+			// We need a separate debugging daemon for on-chip debugging.
+			daemon := exec.Command("JLinkGDBServer", "-device", config.Target.JLinkDevice)
+			if ocdOutput {
+				// Make it clear which output is from the daemon.
+				w := &ColorWriter{
+					Out:    os.Stderr,
+					Prefix: "jlink: ",
 					Color:  TermColorYellow,
 				}
 				daemon.Stdout = w
@@ -422,9 +477,18 @@ func touchSerialPortAt1200bps(port string) error {
 
 func flashUF2UsingMSD(volume, tmppath string) error {
 	// find standard UF2 info path
-	infoPath := "/media/*/" + volume + "/INFO_UF2.TXT"
-	if runtime.GOOS == "darwin" {
+	var infoPath string
+	switch runtime.GOOS {
+	case "linux", "freebsd":
+		infoPath = "/media/*/" + volume + "/INFO_UF2.TXT"
+	case "darwin":
 		infoPath = "/Volumes/" + volume + "/INFO_UF2.TXT"
+	case "windows":
+		path, err := windowsFindUSBDrive(volume)
+		if err != nil {
+			return err
+		}
+		infoPath = path + "/INFO_UF2.TXT"
 	}
 
 	d, err := filepath.Glob(infoPath)
@@ -440,9 +504,18 @@ func flashUF2UsingMSD(volume, tmppath string) error {
 
 func flashHexUsingMSD(volume, tmppath string) error {
 	// find expected volume path
-	destPath := "/media/*/" + volume
-	if runtime.GOOS == "darwin" {
+	var destPath string
+	switch runtime.GOOS {
+	case "linux", "freebsd":
+		destPath = "/media/*/" + volume
+	case "darwin":
 		destPath = "/Volumes/" + volume
+	case "windows":
+		path, err := windowsFindUSBDrive(volume)
+		if err != nil {
+			return err
+		}
+		destPath = path + "/"
 	}
 
 	d, err := filepath.Glob(destPath)
@@ -454,6 +527,29 @@ func flashHexUsingMSD(volume, tmppath string) error {
 	}
 
 	return moveFile(tmppath, d[0]+"/flash.hex")
+}
+
+func windowsFindUSBDrive(volume string) (string, error) {
+	cmd := exec.Command("wmic",
+		"PATH", "Win32_LogicalDisk", "WHERE", "VolumeName = '"+volume+"'",
+		"get", "DeviceID,VolumeName,FileSystem,DriveType")
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+
+	for _, line := range strings.Split(out.String(), "\n") {
+		words := strings.Fields(line)
+		if len(words) >= 3 {
+			if words[1] == "2" && words[2] == "FAT" {
+				return words[0], nil
+			}
+		}
+	}
+	return "", errors.New("unable to locate a USB device to be flashed")
 }
 
 // parseSize converts a human-readable size (with k/m/g suffix) into a plain
@@ -478,6 +574,55 @@ func parseSize(s string) (int64, error) {
 	n, err := strconv.ParseInt(s, 0, 64)
 	n *= multiply
 	return n, err
+}
+
+// getDefaultPort returns the default serial port depending on the operating system.
+func getDefaultPort() (port string, err error) {
+	var portPath string
+	switch runtime.GOOS {
+	case "darwin":
+		portPath = "/dev/cu.usb*"
+	case "linux":
+		portPath = "/dev/ttyACM*"
+	case "freebsd":
+		portPath = "/dev/cuaU*"
+	case "windows":
+		cmd := exec.Command("wmic",
+			"PATH", "Win32_SerialPort", "WHERE", "Caption LIKE 'USB Serial%'", "GET", "DeviceID")
+
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		err := cmd.Run()
+		if err != nil {
+			return "", err
+		}
+
+		if out.String() == "No Instance(s) Available." {
+			return "", errors.New("unable to locate a USB device to be flashed")
+		}
+
+		for _, line := range strings.Split(out.String(), "\n") {
+			words := strings.Fields(line)
+			if len(words) == 1 {
+				if strings.Contains(words[0], "COM") {
+					return words[0], nil
+				}
+			}
+		}
+		return "", errors.New("unable to locate a USB device to be flashed")
+	default:
+		return "", errors.New("unable to search for a default USB device to be flashed on this OS")
+	}
+
+	d, err := filepath.Glob(portPath)
+	if err != nil {
+		return "", err
+	}
+	if d == nil {
+		return "", errors.New("unable to locate a USB device to be flashed")
+	}
+
+	return d[0], nil
 }
 
 func usage() {
@@ -547,7 +692,7 @@ func main() {
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
-	port := flag.String("port", "/dev/ttyACM0", "flash port")
+	port := flag.String("port", "", "flash port")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
@@ -650,7 +795,7 @@ func main() {
 				usage()
 				os.Exit(1)
 			}
-			err := FlashGDB(flag.Arg(0), *port, *ocdOutput, options)
+			err := FlashGDB(flag.Arg(0), *ocdOutput, options)
 			handleCompilerError(err)
 		}
 	case "run":

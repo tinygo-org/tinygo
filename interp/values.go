@@ -3,6 +3,7 @@ package interp
 // This file provides a litte bit of abstraction around LLVM values.
 
 import (
+	"errors"
 	"strconv"
 
 	"tinygo.org/x/go-llvm"
@@ -11,13 +12,13 @@ import (
 // A Value is a LLVM value with some extra methods attached for easier
 // interpretation.
 type Value interface {
-	Value() llvm.Value            // returns a LLVM value
-	Type() llvm.Type              // equal to Value().Type()
-	IsConstant() bool             // returns true if this value is a constant value
-	Load() llvm.Value             // dereference a pointer
-	Store(llvm.Value)             // store to a pointer
-	GetElementPtr([]uint32) Value // returns an interior pointer
-	String() string               // string representation, for debugging
+	Value() llvm.Value                     // returns a LLVM value
+	Type() llvm.Type                       // equal to Value().Type()
+	IsConstant() bool                      // returns true if this value is a constant value
+	Load() llvm.Value                      // dereference a pointer
+	Store(llvm.Value)                      // store to a pointer
+	GetElementPtr([]uint32) (Value, error) // returns an interior pointer
+	String() string                        // string representation, for debugging
 }
 
 // A type that simply wraps a LLVM constant value.
@@ -97,21 +98,21 @@ func (v *LocalValue) Store(value llvm.Value) {
 }
 
 // GetElementPtr returns a GEP when the underlying value is of pointer type.
-func (v *LocalValue) GetElementPtr(indices []uint32) Value {
+func (v *LocalValue) GetElementPtr(indices []uint32) (Value, error) {
 	if !v.Underlying.IsAGlobalVariable().IsNil() {
 		int32Type := v.Underlying.Type().Context().Int32Type()
 		gep := llvm.ConstGEP(v.Underlying, getLLVMIndices(int32Type, indices))
-		return &LocalValue{v.Eval, gep}
+		return &LocalValue{v.Eval, gep}, nil
 	}
 	if !v.Underlying.IsAConstantExpr().IsNil() {
 		switch v.Underlying.Opcode() {
 		case llvm.GetElementPtr, llvm.IntToPtr, llvm.BitCast:
 			int32Type := v.Underlying.Type().Context().Int32Type()
 			llvmIndices := getLLVMIndices(int32Type, indices)
-			return &LocalValue{v.Eval, llvm.ConstGEP(v.Underlying, llvmIndices)}
+			return &LocalValue{v.Eval, llvm.ConstGEP(v.Underlying, llvmIndices)}, nil
 		}
 	}
-	panic("interp: unknown GEP")
+	return nil, errors.New("interp: unknown GEP")
 }
 
 // stripPointerCasts removes all const bitcasts from pointer values, if there
@@ -309,8 +310,8 @@ func (v *MapValue) Store(value llvm.Value) {
 
 // GetElementPtr panics: maps are of reference type so their (interior)
 // addresses cannot be calculated.
-func (v *MapValue) GetElementPtr(indices []uint32) Value {
-	panic("interp: GEP on a map")
+func (v *MapValue) GetElementPtr(indices []uint32) (Value, error) {
+	return nil, errors.New("interp: GEP on a map")
 }
 
 // PutString does a map assign operation, assuming that the map is of type
@@ -367,10 +368,12 @@ func (v *MapValue) PutBinary(keyPtr, valPtr *LocalValue) {
 		}
 	}
 
-	if keyPtr.Underlying.Opcode() == llvm.BitCast {
-		keyPtr = &LocalValue{v.Eval, keyPtr.Underlying.Operand(0)}
-	} else if keyPtr.Underlying.Opcode() == llvm.GetElementPtr {
-		keyPtr = &LocalValue{v.Eval, keyPtr.Underlying.Operand(0)}
+	if !keyPtr.Underlying.IsAConstantExpr().IsNil() {
+		if keyPtr.Underlying.Opcode() == llvm.BitCast {
+			keyPtr = &LocalValue{v.Eval, keyPtr.Underlying.Operand(0)}
+		} else if keyPtr.Underlying.Opcode() == llvm.GetElementPtr {
+			keyPtr = &LocalValue{v.Eval, keyPtr.Underlying.Operand(0)}
+		}
 	}
 	key := keyPtr.Load()
 	if v.KeyType.IsNil() {

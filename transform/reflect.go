@@ -160,21 +160,25 @@ func assignTypeCodes(mod llvm.Module, typeSlice typeInfoSlice) {
 		global := replaceGlobalIntWithArray(mod, "reflect.namedNonBasicTypesSidetable", state.namedNonBasicTypesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
+		global.SetGlobalConstant(true)
 	}
 	if state.needsArrayTypesSidetable {
 		global := replaceGlobalIntWithArray(mod, "reflect.arrayTypesSidetable", state.arrayTypesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
+		global.SetGlobalConstant(true)
 	}
 	if state.needsStructTypesSidetable {
 		global := replaceGlobalIntWithArray(mod, "reflect.structTypesSidetable", state.structTypesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
+		global.SetGlobalConstant(true)
 	}
 	if state.needsStructNamesSidetable {
 		global := replaceGlobalIntWithArray(mod, "reflect.structNamesSidetable", state.structNamesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
+		global.SetGlobalConstant(true)
 	}
 }
 

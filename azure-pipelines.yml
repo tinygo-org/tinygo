@@ -6,7 +6,7 @@ trigger:
 
 jobs:
 - job: Build
-  timeoutInMinutes: 180
+  timeoutInMinutes: 240 # 4h
   pool:
     vmImage: 'VS2017-Win2016'
   steps:
@@ -45,6 +45,16 @@ jobs:
       inputs:
         targetType: inline
         script: choco install qemu
+    - task: CacheBeta@0
+      displayName: Cache wasi-libc sysroot
+      inputs:
+        key: wasi-libc-sysroot-v0
+        path: lib/wasi-libc/sysroot
+    - task: Bash@3
+      displayName: Build wasi-libc
+      inputs:
+        targetType: inline
+        script: PATH=/usr/bin:$PATH make wasi-libc CLANG=$PWD/llvm-build/bin/clang LLVM_AR=$PWD/llvm-build/bin/llvm-ar LLVM_NM=$PWD/llvm-build/bin/llvm-nm
     - task: Bash@3
       displayName: Test TinyGo
       inputs:
@@ -61,9 +71,9 @@ jobs:
           export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
           unset GOROOT
           make release -j4
-    - publish: $(System.DefaultWorkingDirectory)/build/release.tar.gz
-      displayName: Publish tarball as artifact
-      artifact: tinygo.windows-amd64.tar.gz
+    - publish: $(System.DefaultWorkingDirectory)/build/release/tinygo
+      displayName: Publish zip as artifact
+      artifact: tinygo
     - task: Bash@3
       displayName: Smoke tests
       inputs:

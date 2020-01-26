@@ -193,7 +193,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 			GOOS:        c.GOOS(),
 			GOROOT:      goenv.Get("GOROOT"),
 			GOPATH:      goenv.Get("GOPATH"),
-			CgoEnabled:  true,
+			CgoEnabled:  c.CgoEnabled(),
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
 			BuildTags:   c.BuildTags(),
@@ -203,7 +203,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 			GOOS:        c.GOOS(),
 			GOROOT:      goenv.Get("TINYGOROOT"),
 			GOPATH:      overlayGopath,
-			CgoEnabled:  true,
+			CgoEnabled:  c.CgoEnabled(),
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
 			BuildTags:   c.BuildTags(),
@@ -217,7 +217,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 				path = path[len(tinygoPath+"/src/"):]
 			}
 			switch path {
-			case "machine", "os", "reflect", "runtime", "runtime/volatile", "sync", "testing", "internal/reflectlite":
+			case "machine", "os", "reflect", "runtime", "runtime/interrupt", "runtime/volatile", "sync", "testing", "internal/reflectlite":
 				return path
 			default:
 				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
@@ -251,13 +251,17 @@ func (c *Compiler) Compile(mainPath string) []error {
 			return []error{err}
 		}
 	} else {
-		_, err = lprogram.Import(mainPath, wd)
+		_, err = lprogram.Import(mainPath, wd, token.Position{
+			Filename: "build command-line-arguments",
+		})
 		if err != nil {
 			return []error{err}
 		}
 	}
 
-	_, err = lprogram.Import("runtime", "")
+	_, err = lprogram.Import("runtime", "", token.Position{
+		Filename: "build default import",
+	})
 	if err != nil {
 		return []error{err}
 	}
@@ -767,14 +771,6 @@ func (c *Compiler) attachDebugInfo(f *ir.Function) llvm.Metadata {
 }
 
 func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix, filename string, line int) llvm.Metadata {
-	if _, ok := c.difiles[filename]; !ok {
-		dir, file := filepath.Split(filename)
-		if dir != "" {
-			dir = dir[:len(dir)-1]
-		}
-		c.difiles[filename] = c.dibuilder.CreateFile(file, dir)
-	}
-
 	// Debug info for this function.
 	diparams := make([]llvm.Metadata, 0, len(f.Params))
 	for _, param := range f.Params {
@@ -788,7 +784,7 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix,
 	difunc := c.dibuilder.CreateFunction(c.difiles[filename], llvm.DIFunction{
 		Name:         f.RelString(nil) + suffix,
 		LinkageName:  f.LinkName() + suffix,
-		File:         c.difiles[filename],
+		File:         c.getDIFile(filename),
 		Line:         line,
 		Type:         diFuncType,
 		LocalToUnit:  true,
@@ -801,20 +797,36 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix,
 	return difunc
 }
 
+// getDIFile returns a DIFile metadata node for the given filename. It tries to
+// use one that was already created, otherwise it falls back to creating a new
+// one.
+func (c *Compiler) getDIFile(filename string) llvm.Metadata {
+	if _, ok := c.difiles[filename]; !ok {
+		dir, file := filepath.Split(filename)
+		if dir != "" {
+			dir = dir[:len(dir)-1]
+		}
+		c.difiles[filename] = c.dibuilder.CreateFile(file, dir)
+	}
+	return c.difiles[filename]
+}
+
 func (c *Compiler) parseFunc(frame *Frame) {
 	if c.DumpSSA() {
 		fmt.Printf("\nfunc %s:\n", frame.fn.Function)
 	}
 	if !frame.fn.LLVMFn.IsDeclaration() {
-		c.addError(frame.fn.Pos(), "function is already defined:"+frame.fn.LLVMFn.Name())
+		errValue := frame.fn.LLVMFn.Name() + " redeclared in this program"
+		fnPos := getPosition(frame.fn.LLVMFn)
+		if fnPos.IsValid() {
+			errValue += "\n\tprevious declaration at " + fnPos.String()
+		}
+		c.addError(frame.fn.Pos(), errValue)
 		return
 	}
 	if !frame.fn.IsExported() {
 		frame.fn.LLVMFn.SetLinkage(llvm.InternalLinkage)
 		frame.fn.LLVMFn.SetUnnamedAddr(true)
-	}
-	if frame.fn.IsInterrupt() && strings.HasPrefix(c.Triple(), "avr") {
-		frame.fn.LLVMFn.SetFunctionCallConv(85) // CallingConv::AVR_SIGNAL
 	}
 
 	// Some functions have a pragma controlling the inlining level.
@@ -1291,12 +1303,16 @@ func (c *Compiler) parseCall(frame *Frame, instr *ssa.CallCommon) (llvm.Value, e
 			return c.emitAsmFull(frame, instr)
 		case strings.HasPrefix(name, "device/arm.SVCall"):
 			return c.emitSVCall(frame, instr.Args)
+		case strings.HasPrefix(name, "(device/riscv.CSR)."):
+			return c.emitCSROperation(frame, instr)
 		case strings.HasPrefix(name, "syscall.Syscall"):
 			return c.emitSyscall(frame, instr)
 		case strings.HasPrefix(name, "runtime/volatile.Load"):
 			return c.emitVolatileLoad(frame, instr)
 		case strings.HasPrefix(name, "runtime/volatile.Store"):
 			return c.emitVolatileStore(frame, instr)
+		case name == "runtime/interrupt.New":
+			return c.emitInterruptGlobal(frame, instr)
 		}
 
 		targetFunc := c.ir.GetFunction(fn)

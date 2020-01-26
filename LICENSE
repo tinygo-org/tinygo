@@ -3,6 +3,9 @@ Copyright (c) 2018-2019 TinyGo Authors. All rights reserved.
 TinyGo includes portions of the Go standard library.
 Copyright (c) 2009-2019 The Go Authors. All rights reserved.
 
+TinyGo includes portions of LLVM, which is under the Apache License v2.0 with
+LLVM Exceptions. See https://llvm.org/LICENSE.txt for license information.
+
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
 met:

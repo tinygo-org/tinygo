@@ -1,12 +1,10 @@
-// +build sam,atsamd21,arduino_nano33
+// +build arduino_nano33
 
 // This contains the pin mappings for the Arduino Nano33 IoT board.
 //
 // For more information, see: https://store.arduino.cc/nano-33-iot
 //
 package machine
-
-import "device/sam"
 
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0x07738135
@@ -54,41 +52,11 @@ const (
 	USBCDC_DP_PIN Pin = PA25
 )
 
-// UART1 on the Arduino Nano 33 connects to the onboard NINA-W102 WiFi chip.
-var (
-	UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM5_USART,
-		SERCOM: 5,
-	}
-)
-
 // UART1 pins
 const (
 	UART_TX_PIN Pin = PA22
 	UART_RX_PIN Pin = PA23
 )
-
-//go:export SERCOM5_IRQHandler
-func handleUART1() {
-	defaultUART1Handler()
-}
-
-// UART2 on the Arduino Nano 33 connects to the normal TX/RX pins.
-var (
-	UART2 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM3_USART,
-		SERCOM: 3,
-	}
-)
-
-//go:export SERCOM3_IRQHandler
-func handleUART2() {
-	// should reset IRQ
-	UART2.Receive(byte((UART2.Bus.DATA.Get() & 0xFF)))
-	UART2.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INTFLAG_RXC)
-}
 
 // I2C pins
 const (
@@ -96,27 +64,11 @@ const (
 	SCL_PIN Pin = A5 // SCL: SERCOM4/PAD[1]
 )
 
-// I2C on the Arduino Nano 33.
-var (
-	I2C0 = I2C{
-		Bus:    sam.SERCOM4_I2CM,
-		SERCOM: 4,
-	}
-)
-
 // SPI pins
 const (
-	SPI0_SCK_PIN  Pin = A2 // SCK: SERCOM0/PAD[3]
-	SPI0_MOSI_PIN Pin = A3 // MOSI: SERCOM0/PAD[2]
-	SPI0_MISO_PIN Pin = A6 // MISO: SERCOM0/PAD[1]
-)
-
-// SPI on the Arduino Nano 33.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM0_SPI,
-		SERCOM: 0,
-	}
+	SPI0_SCK_PIN  Pin = D13 // SCK: SERCOM1/PAD[1]
+	SPI0_MOSI_PIN Pin = D11 // MOSI: SERCOM1/PAD[0]
+	SPI0_MISO_PIN Pin = D12 // MISO: SERCOM1/PAD[3]
 )
 
 // NINA-W102 Pins
@@ -132,23 +84,9 @@ const (
 	NINA_RX     Pin = PA23
 )
 
-// SPI1 is connected to the NINA-W102 chip on the Arduino Nano 33.
-var (
-	SPI1 = SPI{
-		Bus:    sam.SERCOM2_SPI,
-		SERCOM: 2,
-	}
-	NINA_SPI = SPI1
-)
-
 // I2S pins
 const (
 	I2S_SCK_PIN Pin = PA10
 	I2S_SD_PIN  Pin = PA08
 	I2S_WS_PIN      = NoPin // TODO: figure out what this is on Arduino Nano 33.
-)
-
-// I2S on the Arduino Nano 33.
-var (
-	I2S0 = I2S{Bus: sam.I2S}
 )

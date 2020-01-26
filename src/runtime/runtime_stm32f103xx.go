@@ -6,6 +6,7 @@ import (
 	"device/arm"
 	"device/stm32"
 	"machine"
+	"runtime/interrupt"
 	"runtime/volatile"
 )
 
@@ -101,8 +102,9 @@ func initRTC() {
 func initTIM() {
 	stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_TIM3EN)
 
-	arm.SetPriority(stm32.IRQ_TIM3, 0xc3)
-	arm.EnableIRQ(stm32.IRQ_TIM3)
+	intr := interrupt.New(stm32.IRQ_TIM3, handleTIM3)
+	intr.SetPriority(0xc3)
+	intr.Enable()
 }
 
 const asyncScheduler = false
@@ -163,7 +165,7 @@ func timerSleep(ticks uint32) {
 	// The current scaling only supports a range of 200 usec to 6553 msec.
 
 	// prescale counter down from 72mhz to 10khz aka 0.1 ms frequency.
-	stm32.TIM3.PSC.Set(machine.CPU_FREQUENCY/10000 - 1) // 7199
+	stm32.TIM3.PSC.Set(machine.CPUFrequency()/10000 - 1) // 7199
 
 	// Set duty aka duration.
 	// STM32 dividers use n-1, i.e. n counts from 0 to n-1.
@@ -186,8 +188,7 @@ func timerSleep(ticks uint32) {
 	}
 }
 
-//go:export TIM3_IRQHandler
-func handleTIM3() {
+func handleTIM3(interrupt.Interrupt) {
 	if stm32.TIM3.SR.HasBits(stm32.TIM_SR_UIF) {
 		// Disable the timer.
 		stm32.TIM3.CR1.ClearBits(stm32.TIM_CR1_CEN)

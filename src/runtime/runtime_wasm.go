@@ -2,10 +2,6 @@
 
 package runtime
 
-import (
-	"unsafe"
-)
-
 type timeUnit float64 // time in milliseconds, just like Date.now() in JavaScript
 
 const tickMicros = 1000000
@@ -67,12 +63,4 @@ func ticks() timeUnit
 // Abort executes the wasm 'unreachable' instruction.
 func abort() {
 	trap()
-}
-
-//go:export memset
-func memset(ptr unsafe.Pointer, c byte, size uintptr) unsafe.Pointer {
-	for i := uintptr(0); i < size; i++ {
-		*(*byte)(unsafe.Pointer(uintptr(ptr) + i)) = c
-	}
-	return ptr
 }

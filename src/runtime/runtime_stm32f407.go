@@ -6,6 +6,7 @@ import (
 	"device/arm"
 	"device/stm32"
 	"machine"
+	"runtime/interrupt"
 	"runtime/volatile"
 )
 
@@ -121,8 +122,9 @@ var timerWakeup volatile.Register8
 func initTIM3() {
 	stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_TIM3EN)
 
-	arm.SetPriority(stm32.IRQ_TIM3, 0xc3)
-	arm.EnableIRQ(stm32.IRQ_TIM3)
+	intr := interrupt.New(stm32.IRQ_TIM3, handleTIM3)
+	intr.SetPriority(0xc3)
+	intr.Enable()
 }
 
 // Enable the TIM7 clock.(tick count)
@@ -139,8 +141,9 @@ func initTIM7() {
 	// Enable the timer.
 	stm32.TIM7.CR1.SetBits(stm32.TIM_CR1_CEN)
 
-	arm.SetPriority(stm32.IRQ_TIM7, 0xc1)
-	arm.EnableIRQ(stm32.IRQ_TIM7)
+	intr := interrupt.New(stm32.IRQ_TIM7, handleTIM7)
+	intr.SetPriority(0xc1)
+	intr.Enable()
 }
 
 const asyncScheduler = false
@@ -183,8 +186,7 @@ func timerSleep(ticks uint32) {
 	}
 }
 
-//go:export TIM3_IRQHandler
-func handleTIM3() {
+func handleTIM3(interrupt.Interrupt) {
 	if stm32.TIM3.SR.HasBits(stm32.TIM_SR_UIF) {
 		// Disable the timer.
 		stm32.TIM3.CR1.ClearBits(stm32.TIM_CR1_CEN)
@@ -197,8 +199,7 @@ func handleTIM3() {
 	}
 }
 
-//go:export TIM7_IRQHandler
-func handleTIM7() {
+func handleTIM7(interrupt.Interrupt) {
 	if stm32.TIM7.SR.HasBits(stm32.TIM_SR_UIF) {
 		// clear the update flag
 		stm32.TIM7.SR.ClearBits(stm32.TIM_SR_UIF)

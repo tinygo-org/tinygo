@@ -60,14 +60,44 @@ func (c *Compiler) getGlobal(g *ssa.Global) llvm.Value {
 	info := c.getGlobalInfo(g)
 	llvmGlobal := c.mod.NamedGlobal(info.linkName)
 	if llvmGlobal.IsNil() {
-		llvmType := c.getLLVMType(g.Type().(*types.Pointer).Elem())
+		typ := g.Type().(*types.Pointer).Elem()
+		llvmType := c.getLLVMType(typ)
 		llvmGlobal = llvm.AddGlobal(c.mod, llvmType, info.linkName)
 		if !info.extern {
 			llvmGlobal.SetInitializer(llvm.ConstNull(llvmType))
 			llvmGlobal.SetLinkage(llvm.InternalLinkage)
 		}
-		if info.align > c.targetData.ABITypeAlignment(llvmType) {
-			llvmGlobal.SetAlignment(info.align)
+
+		// Set alignment from the //go:align comment.
+		var alignInBits uint32
+		if info.align < 0 || info.align&(info.align-1) != 0 {
+			// Check for power-of-two (or 0).
+			// See: https://stackoverflow.com/a/108360
+			c.addError(g.Pos(), "global variable alignment must be a positive power of two")
+		} else {
+			// Set the alignment only when it is a power of two.
+			alignInBits = uint32(info.align) ^ uint32(info.align-1)
+			if info.align > c.targetData.ABITypeAlignment(llvmType) {
+				llvmGlobal.SetAlignment(info.align)
+			}
+		}
+
+		if c.Debug() && !info.extern {
+			// Add debug info.
+			// TODO: this should be done for every global in the program, not just
+			// the ones that are referenced from some code.
+			pos := c.ir.Program.Fset.Position(g.Pos())
+			diglobal := c.dibuilder.CreateGlobalVariableExpression(c.difiles[pos.Filename], llvm.DIGlobalVariableExpression{
+				Name:        g.RelString(nil),
+				LinkageName: info.linkName,
+				File:        c.getDIFile(pos.Filename),
+				Line:        pos.Line,
+				Type:        c.getDIType(typ),
+				LocalToUnit: false,
+				Expr:        c.dibuilder.CreateExpression(nil),
+				AlignInBits: alignInBits,
+			})
+			llvmGlobal.AddMetadata(0, diglobal)
 		}
 	}
 	return llvmGlobal

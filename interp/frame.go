@@ -125,7 +125,10 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				}
 				indices[i] = uint32(operand.Value().ZExtValue())
 			}
-			result := value.GetElementPtr(indices)
+			result, err := value.GetElementPtr(indices)
+			if err != nil {
+				return nil, nil, fr.errorAt(inst, err.Error())
+			}
 			if result.Type() != inst.Type() {
 				return nil, nil, fr.errorAt(inst, "interp: gep: type does not match")
 			}
@@ -264,7 +267,11 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				if elementCount == 1 {
 					fr.locals[resultInst] = result
 				} else {
-					fr.locals[resultInst] = result.GetElementPtr([]uint32{0, 0})
+					result, err := result.GetElementPtr([]uint32{0, 0})
+					if err != nil {
+						return nil, nil, errorAt(inst, err.Error())
+					}
+					fr.locals[resultInst] = result
 				}
 			case callee.Name() == "runtime.hashmapMake":
 				// create a map
@@ -278,24 +285,49 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				}
 			case callee.Name() == "runtime.hashmapStringSet":
 				// set a string key in the map
-				m, ok := fr.getLocal(inst.Operand(0)).(*MapValue)
-				if !ok {
-					return nil, nil, fr.errorAt(inst, "could not update map with string key")
-				}
-				// "key" is a Go string value, which in the TinyGo calling convention is split up
-				// into separate pointer and length parameters.
 				keyBuf := fr.getLocal(inst.Operand(1)).(*LocalValue)
 				keyLen := fr.getLocal(inst.Operand(2)).(*LocalValue)
 				valPtr := fr.getLocal(inst.Operand(3)).(*LocalValue)
+				m, ok := fr.getLocal(inst.Operand(0)).(*MapValue)
+				if !ok || !keyBuf.IsConstant() || !keyLen.IsConstant() || !valPtr.IsConstant() {
+					// The mapassign operation could not be done at compile
+					// time. Do it at runtime instead.
+					m := fr.getLocal(inst.Operand(0)).Value()
+					fr.markDirty(m)
+					llvmParams := []llvm.Value{
+						m,                                    // *runtime.hashmap
+						fr.getLocal(inst.Operand(1)).Value(), // key.ptr
+						fr.getLocal(inst.Operand(2)).Value(), // key.len
+						fr.getLocal(inst.Operand(3)).Value(), // value (unsafe.Pointer)
+						fr.getLocal(inst.Operand(4)).Value(), // context
+						fr.getLocal(inst.Operand(5)).Value(), // parentHandle
+					}
+					fr.builder.CreateCall(callee, llvmParams, "")
+					continue
+				}
+				// "key" is a Go string value, which in the TinyGo calling convention is split up
+				// into separate pointer and length parameters.
 				m.PutString(keyBuf, keyLen, valPtr)
 			case callee.Name() == "runtime.hashmapBinarySet":
 				// set a binary (int etc.) key in the map
-				m, ok := fr.getLocal(inst.Operand(0)).(*MapValue)
-				if !ok {
-					return nil, nil, fr.errorAt(inst, "could not update map")
-				}
 				keyBuf := fr.getLocal(inst.Operand(1)).(*LocalValue)
 				valPtr := fr.getLocal(inst.Operand(2)).(*LocalValue)
+				m, ok := fr.getLocal(inst.Operand(0)).(*MapValue)
+				if !ok || !keyBuf.IsConstant() || !valPtr.IsConstant() {
+					// The mapassign operation could not be done at compile
+					// time. Do it at runtime instead.
+					m := fr.getLocal(inst.Operand(0)).Value()
+					fr.markDirty(m)
+					llvmParams := []llvm.Value{
+						m,                                    // *runtime.hashmap
+						fr.getLocal(inst.Operand(1)).Value(), // key
+						fr.getLocal(inst.Operand(2)).Value(), // value
+						fr.getLocal(inst.Operand(3)).Value(), // context
+						fr.getLocal(inst.Operand(4)).Value(), // parentHandle
+					}
+					fr.builder.CreateCall(callee, llvmParams, "")
+					continue
+				}
 				m.PutBinary(keyBuf, valPtr)
 			case callee.Name() == "runtime.stringConcat":
 				// adding two strings together
@@ -340,8 +372,16 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					// a bitcast of the original array instead of the GEP,
 					// which breaks our assumptions.
 					// Re-add this GEP, in the hope that it it is then of the correct type...
-					dstArray = dstArray.GetElementPtr([]uint32{0, 0}).(*LocalValue)
-					srcArray = srcArray.GetElementPtr([]uint32{0, 0}).(*LocalValue)
+					dstArrayValue, err := dstArray.GetElementPtr([]uint32{0, 0})
+					if err != nil {
+						return nil, nil, errorAt(inst, err.Error())
+					}
+					dstArray = dstArrayValue.(*LocalValue)
+					srcArrayValue, err := srcArray.GetElementPtr([]uint32{0, 0})
+					if err != nil {
+						return nil, nil, errorAt(inst, err.Error())
+					}
+					srcArray = srcArrayValue.(*LocalValue)
 				}
 				if fr.Eval.TargetData.TypeAllocSize(dstArray.Type().ElementType()) != elementSize {
 					return nil, nil, fr.errorAt(inst, "interp: slice dst element size does not match pointer type")
@@ -360,12 +400,21 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					return nil, nil, fr.errorAt(inst, "interp: trying to copy a slice with negative length?")
 				}
 				for i := int64(0); i < length; i++ {
+					var err error
 					// *dst = *src
 					dstArray.Store(srcArray.Load())
 					// dst++
-					dstArray = dstArray.GetElementPtr([]uint32{1}).(*LocalValue)
+					dstArrayValue, err := dstArray.GetElementPtr([]uint32{1})
+					if err != nil {
+						return nil, nil, errorAt(inst, err.Error())
+					}
+					dstArray = dstArrayValue.(*LocalValue)
 					// src++
-					srcArray = srcArray.GetElementPtr([]uint32{1}).(*LocalValue)
+					srcArrayValue, err := srcArray.GetElementPtr([]uint32{1})
+					if err != nil {
+						return nil, nil, errorAt(inst, err.Error())
+					}
+					srcArray = srcArrayValue.(*LocalValue)
 				}
 			case callee.Name() == "runtime.stringToBytes":
 				// convert a string to a []byte
@@ -432,6 +481,8 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			case callee.Name() == "runtime.nanotime":
 				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstInt(fr.Mod.Context().Int64Type(), 0, false)}
 			case callee.Name() == "llvm.dbg.value":
+				// do nothing
+			case strings.HasPrefix(callee.Name(), "llvm.lifetime."):
 				// do nothing
 			case callee.Name() == "runtime.trackPointer":
 				// do nothing

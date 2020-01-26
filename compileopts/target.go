@@ -43,9 +43,11 @@ type TargetSpec struct {
 	FlashMethod      string   `json:"flash-method"`
 	FlashVolume      string   `json:"msd-volume-name"`
 	FlashFilename    string   `json:"msd-firmware-name"`
+	UF2FamilyID      string   `json:"uf2-family-id"`
 	OpenOCDInterface string   `json:"openocd-interface"`
 	OpenOCDTarget    string   `json:"openocd-target"`
 	OpenOCDTransport string   `json:"openocd-transport"`
+	JLinkDevice      string   `json:"jlink-device"`
 }
 
 // copyProperties copies all properties that are set in spec2 into itself.
@@ -109,6 +111,9 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	if spec2.FlashFilename != "" {
 		spec.FlashFilename = spec2.FlashFilename
 	}
+	if spec2.UF2FamilyID != "" {
+		spec.UF2FamilyID = spec2.UF2FamilyID
+	}
 	if spec2.OpenOCDInterface != "" {
 		spec.OpenOCDInterface = spec2.OpenOCDInterface
 	}
@@ -117,6 +122,9 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if spec2.OpenOCDTransport != "" {
 		spec.OpenOCDTransport = spec2.OpenOCDTransport
+	}
+	if spec2.JLinkDevice != "" {
+		spec.JLinkDevice = spec2.JLinkDevice
 	}
 }
 
@@ -221,6 +229,14 @@ func LoadTarget(target string) (*TargetSpec, error) {
 		if len(tripleSplit) < 3 {
 			return nil, errors.New("expected a full LLVM target or a custom target in -target flag")
 		}
+		if tripleSplit[0] == "arm" {
+			// LLVM and Clang have a different idea of what "arm" means, so
+			// upgrade to a slightly more modern ARM. In fact, when you pass
+			// --target=arm--linux-gnueabihf to Clang, it will convert that
+			// internally to armv7-unknown-linux-gnueabihf. Changing the
+			// architecture to armv7 will keep things consistent.
+			tripleSplit[0] = "armv7"
+		}
 		goos := tripleSplit[2]
 		if strings.HasPrefix(goos, "darwin") {
 			goos = "darwin"
@@ -229,11 +245,12 @@ func LoadTarget(target string) (*TargetSpec, error) {
 			"i386":    "386",
 			"x86_64":  "amd64",
 			"aarch64": "arm64",
+			"armv7":   "arm",
 		}[tripleSplit[0]]
 		if goarch == "" {
 			goarch = tripleSplit[0]
 		}
-		return defaultTarget(goos, goarch, target)
+		return defaultTarget(goos, goarch, strings.Join(tripleSplit, "-"))
 	}
 }
 
@@ -247,6 +264,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		BuildTags:   []string{goos, goarch},
 		Compiler:    "clang",
 		Linker:      "cc",
+		CFlags:      []string{"--target=" + triple},
 		GDB:         "gdb",
 		PortReset:   "false",
 		FlashMethod: "native",
@@ -259,11 +277,13 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	if goarch != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.
 		if goarch == "arm" && goos == "linux" {
+			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/arm-linux-gnueabihf")
 			spec.Linker = "arm-linux-gnueabihf-gcc"
 			spec.GDB = "arm-linux-gnueabihf-gdb"
 			spec.Emulator = []string{"qemu-arm", "-L", "/usr/arm-linux-gnueabihf"}
 		}
 		if goarch == "arm64" && goos == "linux" {
+			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/aarch64-linux-gnu")
 			spec.Linker = "aarch64-linux-gnu-gcc"
 			spec.GDB = "aarch64-linux-gnu-gdb"
 			spec.Emulator = []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"}

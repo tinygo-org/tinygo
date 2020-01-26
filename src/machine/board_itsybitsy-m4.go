@@ -69,10 +69,10 @@ const (
 
 // I2C on the ItsyBitsy M4.
 var (
-	I2C0 = I2C{Bus: sam.SERCOM2_I2CM,
-		SDA:     SDA_PIN,
-		SCL:     SCL_PIN,
-		PinMode: PinSERCOM}
+	I2C0 = I2C{
+		Bus:    sam.SERCOM2_I2CM,
+		SERCOM: 2,
+	}
 )
 
 // SPI pins
@@ -84,12 +84,8 @@ const (
 
 // SPI on the ItsyBitsy M4.
 var (
-	SPI0 = SPI{Bus: sam.SERCOM1_SPIM,
-		SCK:         SPI0_SCK_PIN,
-		MOSI:        SPI0_MOSI_PIN,
-		MISO:        SPI0_MISO_PIN,
-		DOpad:       spiTXPad2SCK3,
-		DIpad:       sercomRXPad3,
-		MISOPinMode: PinSERCOM,
+	SPI0 = SPI{
+		Bus:    sam.SERCOM1_SPIM,
+		SERCOM: 1,
 	}
 )

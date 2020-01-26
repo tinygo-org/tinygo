@@ -18,15 +18,12 @@ commands:
             wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
             sudo apt-get update
             sudo apt-get install \
-                python3 \
                 llvm<<parameters.llvm>>-dev \
                 clang<<parameters.llvm>> \
                 libclang<<parameters.llvm>>-dev \
                 lld<<parameters.llvm>> \
                 gcc-arm-linux-gnueabihf \
-                libc6-dev-armel-cross \
                 gcc-aarch64-linux-gnu \
-                libc6-dev-arm64-cross \
                 qemu-system-arm \
                 qemu-user \
                 gcc-avr \
@@ -52,6 +49,18 @@ commands:
           key: llvm-source-9-v0
           paths:
             - llvm-project
+  build-wasi-libc:
+    steps:
+      - restore_cache:
+          keys:
+            - wasi-libc-sysroot-v0
+      - run:
+          name: "Build wasi-libc"
+          command: make wasi-libc CLANG=$PWD/llvm-build/bin/clang LLVM_AR=$PWD/llvm-build/bin/llvm-ar LLVM_NM=$PWD/llvm-build/bin/llvm-nm
+      - save_cache:
+          key: wasi-libc-sysroot-v0
+          paths:
+            - lib/wasi-libc/sysroot
   test-linux:
     steps:
       - checkout
@@ -65,6 +74,14 @@ commands:
             - go-cache-v2-{{ checksum "go.mod" }}
       - llvm-source-linux
       - run: go install .
+      - restore_cache:
+          keys:
+            - wasi-libc-sysroot-systemclang-v0
+      - run: make wasi-libc
+      - save_cache:
+          key: wasi-libc-sysroot-systemclang-v0
+          paths:
+            - lib/wasi-libc/sysroot
       - run: go test -v ./cgo ./compileopts ./interp ./transform .
       - run: make gen-device -j4
       - run: make smoketest
@@ -83,7 +100,6 @@ commands:
           name: "Install apt dependencies"
           command: |
             sudo apt-get install \
-                python3 \
                 gcc-arm-linux-gnueabihf \
                 binutils-arm-none-eabi \
                 libc6-dev-armel-cross \
@@ -122,13 +138,8 @@ commands:
           key: llvm-build-9-linux-v0-assert
           paths:
             llvm-build
-      - run:
-          name: "Create LLVM symlinks"
-          command: |
-            ln -s $PWD/llvm-build/bin/clang-9 /go/bin/clang-9
-            ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-9
-            ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-9
       - run: make ASSERT=1
+      - build-wasi-libc
       - run:
           name: "Test TinyGo"
           command: make ASSERT=1 test
@@ -148,7 +159,6 @@ commands:
           name: "Install apt dependencies"
           command: |
             sudo apt-get install \
-                python3 \
                 gcc-arm-linux-gnueabihf \
                 binutils-arm-none-eabi \
                 libc6-dev-armel-cross \
@@ -187,12 +197,7 @@ commands:
           key: llvm-build-9-linux-v0
           paths:
             llvm-build
-      - run:
-          name: "Create LLVM symlinks"
-          command: |
-            ln -s $PWD/llvm-build/bin/clang-9 /go/bin/clang-9
-            ln -s $PWD/llvm-build/bin/ld.lld  /go/bin/ld.lld-9
-            ln -s $PWD/llvm-build/bin/wasm-ld /go/bin/wasm-ld-9
+      - build-wasi-libc
       - run:
           name: "Test TinyGo"
           command: make test
@@ -259,10 +264,16 @@ commands:
           key: llvm-build-9-macos-v0
           paths:
             llvm-build
+      - restore_cache:
+          keys:
+            - wasi-libc-sysroot-macos-v0
       - run:
-          name: "Create LLVM symlinks"
-          command: |
-            ln -s $PWD/llvm-build/bin/clang-9 /usr/local/bin/clang-9
+          name: "Build wasi-libc"
+          command: make wasi-libc CLANG=$PWD/llvm-build/bin/clang LLVM_AR=$PWD/llvm-build/bin/llvm-ar LLVM_NM=$PWD/llvm-build/bin/llvm-nm
+      - save_cache:
+          key: wasi-libc-sysroot-macos-v0
+          paths:
+            - lib/wasi-libc/sysroot
       - run:
           name: "Test TinyGo"
           command: make test

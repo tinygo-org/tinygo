@@ -6,6 +6,8 @@ import (
 	"device/arm"
 	"device/sam"
 	"machine"
+	"runtime/interrupt"
+	"runtime/volatile"
 )
 
 type timeUnit int64
@@ -201,8 +203,14 @@ func initRTC() {
 	for sam.RTC_MODE0.SYNCBUSY.HasBits(sam.RTC_MODE0_SYNCBUSY_ENABLE) {
 	}
 
-	arm.SetPriority(sam.IRQ_RTC, 0xc0)
-	arm.EnableIRQ(sam.IRQ_RTC)
+	irq := interrupt.New(sam.IRQ_RTC, func(interrupt.Interrupt) {
+		// disable IRQ for CMP0 compare
+		sam.RTC_MODE0.INTFLAG.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
+
+		timerWakeup.Set(1)
+	})
+	irq.SetPriority(0xc0)
+	irq.Enable()
 }
 
 func waitForSync() {
@@ -218,10 +226,7 @@ var (
 	timerLastCounter uint64
 )
 
-//go:volatile
-type isrFlag bool
-
-var timerWakeup isrFlag
+var timerWakeup volatile.Register8
 
 const asyncScheduler = false
 
@@ -248,7 +253,7 @@ func ticks() timeUnit {
 
 // ticks are in microseconds
 func timerSleep(ticks uint32) {
-	timerWakeup = false
+	timerWakeup.Set(0)
 	if ticks < 260 {
 		// due to delay waiting for the register value to sync, the minimum sleep value
 		// for the SAMD51 is 260us.
@@ -268,17 +273,9 @@ func timerSleep(ticks uint32) {
 	// enable IRQ for CMP0 compare
 	sam.RTC_MODE0.INTENSET.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
 
-	for !timerWakeup {
+	for timerWakeup.Get() == 0 {
 		arm.Asm("wfi")
 	}
-}
-
-//go:export RTC_IRQHandler
-func handleRTC() {
-	// disable IRQ for CMP0 compare
-	sam.RTC_MODE0.INTFLAG.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
-
-	timerWakeup = true
 }
 
 func initUSBClock() {

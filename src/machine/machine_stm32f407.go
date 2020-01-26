@@ -6,10 +6,22 @@ package machine
 
 import (
 	"device/stm32"
+	"runtime/interrupt"
 	"unsafe"
 )
 
-const CPU_FREQUENCY = 168000000
+func CPUFrequency() uint32 {
+	return 168000000
+}
+
+// Peripheral clock frequencies as set in runtime_stm32f407.go
+func APB1_Frequency() uint32 {
+	return CPUFrequency() / 4
+}
+
+func APB2_Frequency() uint32 {
+	return CPUFrequency() / 2
+}
 
 const (
 	// Alternative peripheral pin functions
@@ -45,12 +57,6 @@ const (
 	SPI_PCLK_64
 	SPI_PCLK_128
 	SPI_PCLK_256
-)
-
-// Peripheral clock frequencies as set in runtime_stm32f407.go
-const (
-	APB1_PCLK1_FREQ = 42000000
-	APB2_PCLK2_FREQ = 84000000
 )
 
 func (p Pin) getPort() *stm32.GPIO_Type {
@@ -121,10 +127,10 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 
 var (
 	// Both UART0 and UART1 refer to USART2.
+	// Interrupt handler will get added during Configure()
 	UART0 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    stm32.USART2,
-		IRQVal: stm32.IRQ_USART2,
 	}
 	UART1 = &UART0
 )
@@ -133,6 +139,16 @@ var (
 func (uart UART) configurePins(config UARTConfig) {
 	config.TX.Configure(PinConfig{Mode: PinModeUartTX})
 	config.RX.Configure(PinConfig{Mode: PinModeUartRX})
+
+	// Set up the interrupt routine here while we're here.
+	// TODO: move this to machine_stm32_uart.go
+	// Until a better way is found to do this, following is hardcoded to UART0
+	//if uart.Bus == stm32.USART1 {
+	//	uart.Interrupt = interrupt.New(stm32.IRQ_USART1, uart.handleInterrupt)
+	//} else if uart.Bus == stm32.USART2 {
+	//  uart.Interrupt = interrupt.New(stm32.IRQ_USART2, uart.handleInterrupt)
+	//}
+	uart.Interrupt = interrupt.New(stm32.IRQ_USART2, UART0.handleInterrupt)
 }
 
 // UART baudrate calc
@@ -142,18 +158,13 @@ func (uart UART) getBaudRateDivisor(br uint32) uint32 {
 	var clock uint32
 	switch unsafe.Pointer(uart.Bus) {
 	case unsafe.Pointer(stm32.USART1):
-		clock = APB2_PCLK2_FREQ
+		clock = APB2_Frequency()
 	case unsafe.Pointer(stm32.USART2):
 		fallthrough
 	case unsafe.Pointer(stm32.USART3):
-		clock = APB1_PCLK1_FREQ
+		clock = APB1_Frequency()
 	}
 	return clock / br
-}
-
-//go:export USART2_IRQHandler
-func handleUSART2() {
-	UART1.Receive(byte((UART1.Bus.DR.Get() & 0xFF)))
 }
 
 // Configure the SDA and SCL pins for I2C

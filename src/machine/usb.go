@@ -3,7 +3,6 @@
 package machine
 
 import (
-	"bytes"
 	"errors"
 	"runtime/volatile"
 )
@@ -348,18 +347,18 @@ const cdcSize = iadDescriptorSize +
 
 // Bytes returns CDCDescriptor data.
 func (d CDCDescriptor) Bytes() []byte {
-	buf := bytes.NewBuffer(make([]byte, 0))
-	buf.Write(d.iad.Bytes())
-	buf.Write(d.cif.Bytes())
-	buf.Write(d.header.Bytes())
-	buf.Write(d.controlManagement.Bytes())
-	buf.Write(d.functionalDescriptor.Bytes())
-	buf.Write(d.callManagement.Bytes())
-	buf.Write(d.cifin.Bytes())
-	buf.Write(d.dif.Bytes())
-	buf.Write(d.out.Bytes())
-	buf.Write(d.in.Bytes())
-	return buf.Bytes()
+	var buf []byte
+	buf = append(buf, d.iad.Bytes()...)
+	buf = append(buf, d.cif.Bytes()...)
+	buf = append(buf, d.header.Bytes()...)
+	buf = append(buf, d.controlManagement.Bytes()...)
+	buf = append(buf, d.functionalDescriptor.Bytes()...)
+	buf = append(buf, d.callManagement.Bytes()...)
+	buf = append(buf, d.cifin.Bytes()...)
+	buf = append(buf, d.dif.Bytes()...)
+	buf = append(buf, d.out.Bytes()...)
+	buf = append(buf, d.in.Bytes()...)
+	return buf
 }
 
 // MSCDescriptor is not used yet.

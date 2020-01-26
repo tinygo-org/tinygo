@@ -1,8 +1,6 @@
-// +build sam,atsamd21,circuitplay_express
+// +build circuitplay_express
 
 package machine
-
-import "device/sam"
 
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
@@ -68,20 +66,6 @@ const (
 	UART_RX_PIN = PB09 // PORTB
 )
 
-// UART1 on the Circuit Playground Express.
-var (
-	UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM4_USART,
-		SERCOM: 4,
-	}
-)
-
-//go:export SERCOM1_IRQHandler
-func handleUART1() {
-	defaultUART1Handler()
-}
-
 // I2C pins
 const (
 	SDA_PIN = PB02 // I2C0 external
@@ -91,20 +75,6 @@ const (
 	SCL1_PIN = PA01 // I2C1 internal
 )
 
-// I2C on the Circuit Playground Express.
-var (
-	// external device
-	I2C0 = I2C{
-		Bus:    sam.SERCOM5_I2CM,
-		SERCOM: 5,
-	}
-	// internal device
-	I2C1 = I2C{
-		Bus:    sam.SERCOM1_I2CM,
-		SERCOM: 1,
-	}
-)
-
 // SPI pins (internal flash)
 const (
 	SPI0_SCK_PIN  = PA21 // SCK: SERCOM3/PAD[3]
@@ -112,22 +82,9 @@ const (
 	SPI0_MISO_PIN = PA16 // MISO: SERCOM3/PAD[0]
 )
 
-// SPI on the Circuit Playground Express.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM3_SPI,
-		SERCOM: 3,
-	}
-)
-
 // I2S pins
 const (
 	I2S_SCK_PIN = PA10
 	I2S_SD_PIN  = PA08
 	I2S_WS_PIN  = NoPin // no WS, instead uses SCK to sync
-)
-
-// I2S on the Circuit Playground Express.
-var (
-	I2S0 = I2S{Bus: sam.I2S}
 )

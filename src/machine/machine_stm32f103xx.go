@@ -9,7 +9,9 @@ import (
 	"unsafe"
 )
 
-const CPU_FREQUENCY = 72000000
+func CPUFrequency() uint32 {
+	return 72000000
+}
 
 const (
 	PinInput       PinMode = 0 // Input mode
@@ -124,10 +126,10 @@ func (uart UART) getBaudRateDivisor(br uint32) uint32 {
 	var divider uint32
 	if uart.Bus == stm32.USART1 {
 		// first divide by PCLK2 prescaler (div 1) and then desired baudrate
-		divider = CPU_FREQUENCY / br
+		divider = CPUFrequency() / br
 	} else {
 		// first divide by PCLK1 prescaler (div 2) and then desired baudrate
-		divider = CPU_FREQUENCY / 2 / br
+		divider = CPUFrequency() / 2 / br
 	}
 	return divider
 }

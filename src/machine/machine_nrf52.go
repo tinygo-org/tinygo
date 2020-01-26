@@ -7,7 +7,9 @@ import (
 	"unsafe"
 )
 
-const CPU_FREQUENCY = 64000000
+func CPUFrequency() uint32 {
+	return 64000000
+}
 
 // Get peripheral and pin number for this GPIO pin.
 func (p Pin) getPortPin() (*nrf.GPIO_Type, uint32) {
@@ -17,11 +19,6 @@ func (p Pin) getPortPin() (*nrf.GPIO_Type, uint32) {
 func (uart UART) setPins(tx, rx Pin) {
 	nrf.UART0.PSELTXD.Set(uint32(tx))
 	nrf.UART0.PSELRXD.Set(uint32(rx))
-}
-
-//go:export UARTE0_UART0_IRQHandler
-func handleUART0() {
-	UART0.handleInterrupt()
 }
 
 func (i2c I2C) setPins(scl, sda Pin) {

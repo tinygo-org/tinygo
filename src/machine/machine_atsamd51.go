@@ -11,10 +11,13 @@ import (
 	"device/arm"
 	"device/sam"
 	"errors"
+	"runtime/interrupt"
 	"unsafe"
 )
 
-const CPU_FREQUENCY = 120000000
+func CPUFrequency() uint32 {
+	return 120000000
+}
 
 type PinMode uint8
 
@@ -109,6 +112,162 @@ const (
 	PB30 Pin = 62
 	PB31 Pin = 63
 )
+
+const (
+	pinPadMapSERCOM0Pad0 uint16 = 0x1000
+	pinPadMapSERCOM1Pad0 uint16 = 0x2000
+	pinPadMapSERCOM2Pad0 uint16 = 0x3000
+	pinPadMapSERCOM3Pad0 uint16 = 0x4000
+	pinPadMapSERCOM4Pad0 uint16 = 0x5000
+	pinPadMapSERCOM5Pad0 uint16 = 0x6000
+	pinPadMapSERCOM6Pad0 uint16 = 0x7000
+	pinPadMapSERCOM7Pad0 uint16 = 0x8000
+	pinPadMapSERCOM0Pad2 uint16 = 0x1200
+	pinPadMapSERCOM1Pad2 uint16 = 0x2200
+	pinPadMapSERCOM2Pad2 uint16 = 0x3200
+	pinPadMapSERCOM3Pad2 uint16 = 0x4200
+	pinPadMapSERCOM4Pad2 uint16 = 0x5200
+	pinPadMapSERCOM5Pad2 uint16 = 0x6200
+	pinPadMapSERCOM6Pad2 uint16 = 0x7200
+	pinPadMapSERCOM7Pad2 uint16 = 0x8200
+
+	pinPadMapSERCOM0AltPad0 uint16 = 0x0010
+	pinPadMapSERCOM1AltPad0 uint16 = 0x0020
+	pinPadMapSERCOM2AltPad0 uint16 = 0x0030
+	pinPadMapSERCOM3AltPad0 uint16 = 0x0040
+	pinPadMapSERCOM4AltPad0 uint16 = 0x0050
+	pinPadMapSERCOM5AltPad0 uint16 = 0x0060
+	pinPadMapSERCOM6AltPad0 uint16 = 0x0070
+	pinPadMapSERCOM7AltPad0 uint16 = 0x0080
+	pinPadMapSERCOM0AltPad1 uint16 = 0x0011
+	pinPadMapSERCOM1AltPad1 uint16 = 0x0021
+	pinPadMapSERCOM2AltPad1 uint16 = 0x0031
+	pinPadMapSERCOM3AltPad1 uint16 = 0x0041
+	pinPadMapSERCOM4AltPad1 uint16 = 0x0051
+	pinPadMapSERCOM5AltPad1 uint16 = 0x0061
+	pinPadMapSERCOM6AltPad1 uint16 = 0x0071
+	pinPadMapSERCOM7AltPad1 uint16 = 0x0081
+	pinPadMapSERCOM0AltPad2 uint16 = 0x0012
+	pinPadMapSERCOM1AltPad2 uint16 = 0x0022
+	pinPadMapSERCOM2AltPad2 uint16 = 0x0032
+	pinPadMapSERCOM3AltPad2 uint16 = 0x0042
+	pinPadMapSERCOM4AltPad2 uint16 = 0x0052
+	pinPadMapSERCOM5AltPad2 uint16 = 0x0062
+	pinPadMapSERCOM6AltPad2 uint16 = 0x0072
+	pinPadMapSERCOM7AltPad2 uint16 = 0x0082
+)
+
+// pinPadMapping lists which pins have which SERCOMs attached to them.
+// The encoding is rather dense, with each uint16 encoding two pins and both
+// SERCOM and SERCOM-ALT.
+//
+// Observations:
+//   * There are eight SERCOMs. Those SERCOM numbers can be encoded in 4 bits.
+//   * Even pad numbers are usually on even pins, and odd pad numbers are usually
+//     on odd pins. The exception is SERCOM-ALT, which sometimes swaps pad 0 and 1.
+//     With that, there is still an invariant that the pad number for an odd pin is
+//     the pad number for the corresponding even pin with the low bit toggled.
+//   * Pin pads come in pairs. If PA00 has pad 0, then PA01 has pad 1.
+// With this information, we can encode SERCOM pin/pad numbers much more
+// efficiently. Due to pads coming in pairs, we can ignore half the pins: the
+// information for an odd pin can be calculated easily from the preceding even
+// pin.
+//
+// Each word below is split in two bytes. The 8 high bytes are for SERCOM and
+// the 8 low bits are for SERCOM-ALT. Of each byte, the 4 high bits encode the
+// SERCOM + 1 while the two low bits encodes the pad number (the pad number for
+// the odd pin can be trivially calculated by toggling the low bit of the pad
+// number). It encodes SERCOM + 1 instead of just the SERCOM number, to make it
+// easy to check whether a nibble is set at all.
+//
+// Datasheet: http://ww1.microchip.com/downloads/en/DeviceDoc/60001507E.pdf
+var pinPadMapping = [32]uint16{
+	// page 32
+	PA00 / 2: 0 | pinPadMapSERCOM1AltPad0,
+
+	// page 33
+	PB08 / 2: 0 | pinPadMapSERCOM4AltPad0,
+	PA04 / 2: 0 | pinPadMapSERCOM0AltPad0,
+	PA06 / 2: 0 | pinPadMapSERCOM0AltPad2,
+	//PC04 / 2: pinPadMapSERCOM6Pad0 | 0,
+	//PC06 / 2: pinPadMapSERCOM6Pad2 | 0,
+	PA08 / 2: pinPadMapSERCOM0Pad0 | pinPadMapSERCOM2AltPad1,
+	PA10 / 2: pinPadMapSERCOM0Pad2 | pinPadMapSERCOM2AltPad2,
+	PB10 / 2: 0 | pinPadMapSERCOM4AltPad2,
+	PB12 / 2: pinPadMapSERCOM4Pad0 | 0,
+	PB14 / 2: pinPadMapSERCOM4Pad2 | 0,
+	//PD08 / 2: pinPadMapSERCOM7Pad0 | pinPadMapSERCOM6AltPad1,
+	//PD10 / 2: pinPadMapSERCOM7Pad2 | pinPadMapSERCOM6AltPad2,
+	//PC10 / 2: pinPadMapSERCOM6Pad2 | pinPadMapSERCOM7AltPad2,
+
+	// page 34
+	//PC12 / 2: pinPadMapSERCOM7Pad0 | pinPadMapSERCOM6AltPad1,
+	//PC14 / 2: pinPadMapSERCOM7Pad2 | pinPadMapSERCOM6AltPad2,
+	PA12 / 2: pinPadMapSERCOM2Pad0 | pinPadMapSERCOM4AltPad1,
+	PA14 / 2: pinPadMapSERCOM2Pad2 | pinPadMapSERCOM4AltPad2,
+	PA16 / 2: pinPadMapSERCOM1Pad0 | pinPadMapSERCOM3AltPad1,
+	PA18 / 2: pinPadMapSERCOM1Pad2 | pinPadMapSERCOM3AltPad2,
+	//PC16 / 2: pinPadMapSERCOM6Pad0 | pinPadMapSERCOM0AltPad1,
+	//PC18 / 2: pinPadMapSERCOM6Pad2 | pinPadMapSERCOM0AltPad2,
+	//PC22 / 2: pinPadMapSERCOM1Pad0 | pinPadMapSERCOM3AltPad1,
+	//PD20 / 2: pinPadMapSERCOM1Pad2 | pinPadMapSERCOM3AltPad2,
+	PB16 / 2: pinPadMapSERCOM5Pad0 | 0,
+	PB18 / 2: pinPadMapSERCOM5Pad2 | pinPadMapSERCOM7AltPad2,
+
+	// page 35
+	PB20 / 2: pinPadMapSERCOM3Pad0 | pinPadMapSERCOM7AltPad1,
+	PA20 / 2: pinPadMapSERCOM5Pad2 | pinPadMapSERCOM3AltPad2,
+	PA22 / 2: pinPadMapSERCOM3Pad0 | pinPadMapSERCOM5AltPad1,
+	PA24 / 2: pinPadMapSERCOM3Pad2 | pinPadMapSERCOM5AltPad2,
+	PB22 / 2: pinPadMapSERCOM1Pad2 | pinPadMapSERCOM5AltPad2,
+	PB24 / 2: pinPadMapSERCOM0Pad0 | pinPadMapSERCOM2AltPad1,
+	PB26 / 2: pinPadMapSERCOM2Pad0 | pinPadMapSERCOM4AltPad1,
+	PB28 / 2: pinPadMapSERCOM2Pad2 | pinPadMapSERCOM4AltPad2,
+	//PC24 / 2: pinPadMapSERCOM0Pad2 | pinPadMapSERCOM2AltPad2,
+	//PC26 / 2: pinPadMapSERCOM1Pad1 | 0, // note: PC26 doesn't support SERCOM, but PC27 does
+	//PC28 / 2: pinPadMapSERCOM1Pad1 | 0, // note: PC29 doesn't exist in the datasheet?
+	PA30 / 2: 0 | pinPadMapSERCOM1AltPad2,
+
+	// page 36
+	PB30 / 2: 0 | pinPadMapSERCOM5AltPad1,
+	PB00 / 2: 0 | pinPadMapSERCOM5AltPad2,
+	PB02 / 2: 0 | pinPadMapSERCOM5AltPad0,
+}
+
+// findPinPadMapping looks up the pad number and the pinmode for a given pin and
+// SERCOM number. The result can either be SERCOM, SERCOM-ALT, or "not found"
+// (indicated by returning ok=false). The pad number is returned to calculate
+// the DOPO/DIPO bitfields of the various serial peripherals.
+func findPinPadMapping(sercom uint8, pin Pin) (pinMode PinMode, pad uint32, ok bool) {
+	bytes := pinPadMapping[pin/2]
+	upper := byte(bytes >> 8)
+	lower := byte(bytes & 0xff)
+
+	if upper != 0 {
+		// SERCOM
+		if (upper>>4)-1 == sercom {
+			pinMode = PinSERCOM
+			pad |= uint32(upper % 4)
+			ok = true
+		}
+	}
+	if lower != 0 {
+		// SERCOM-ALT
+		if (lower>>4)-1 == sercom {
+			pinMode = PinSERCOMAlt
+			pad |= uint32(lower % 4)
+			ok = true
+		}
+	}
+
+	if ok {
+		// If the pin is uneven, toggle the lowest bit of the pad number.
+		if pin&1 != 0 {
+			pad ^= 1
+		}
+	}
+	return
+}
 
 // Return the register and mask to enable a given GPIO pin. This can be used to
 // implement bit-banged drivers.
@@ -319,7 +478,7 @@ func InitADC() {
 
 	sam.ADC0.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
 	// adcs[i]->CTRLB.bit.RESSEL = ADC_CTRLB_RESSEL_10BIT_Val;
-	sam.ADC0.CTRLB.SetBits(sam.ADC_CTRLB_RESSEL_10BIT << sam.ADC_CTRLB_RESSEL_Pos)
+	sam.ADC0.CTRLB.SetBits(sam.ADC_CTRLB_RESSEL_12BIT << sam.ADC_CTRLB_RESSEL_Pos)
 
 	// wait for sync
 	for sam.ADC0.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_CTRLB) {
@@ -349,7 +508,7 @@ func InitADC() {
 
 	// same for ADC1, as for ADC0
 	sam.ADC1.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
-	sam.ADC1.CTRLB.SetBits(sam.ADC_CTRLB_RESSEL_10BIT << sam.ADC_CTRLB_RESSEL_Pos)
+	sam.ADC1.CTRLB.SetBits(sam.ADC_CTRLB_RESSEL_12BIT << sam.ADC_CTRLB_RESSEL_Pos)
 	for sam.ADC1.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_CTRLB) {
 	}
 	sam.ADC1.SAMPCTRL.Set(5)
@@ -387,6 +546,9 @@ func (a ADC) Get() uint16 {
 	}
 
 	// Selection for the positive ADC input channel
+	bus.INPUTCTRL.ClearBits(sam.ADC_INPUTCTRL_MUXPOS_Msk)
+	for bus.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_ENABLE) {
+	}
 	bus.INPUTCTRL.SetBits((uint16(ch) & sam.ADC_INPUTCTRL_MUXPOS_Msk) << sam.ADC_INPUTCTRL_MUXPOS_Pos)
 	for bus.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_ENABLE) {
 	}
@@ -402,7 +564,7 @@ func (a ADC) Get() uint16 {
 	}
 
 	// Clear the Data Ready flag
-	bus.INTFLAG.SetBits(sam.ADC_INTFLAG_RESRDY)
+	bus.INTFLAG.ClearBits(sam.ADC_INTFLAG_RESRDY)
 	for bus.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_ENABLE) {
 	}
 
@@ -444,16 +606,20 @@ func (a ADC) getADCChannel() uint8 {
 		return 6
 	case PA07:
 		return 7
+	case PB00:
+		return 12
+	case PB01:
+		return 13
 	case PB02:
-		return 10
+		return 14
 	case PB03:
-		return 11
+		return 15
 	case PA09:
 		return 17
 	case PA11:
 		return 19
 	default:
-		return 0
+		panic("Invalid ADC pin")
 	}
 }
 
@@ -461,7 +627,8 @@ func (a ADC) getADCChannel() uint8 {
 type UART struct {
 	Buffer *RingBuffer
 	Bus    *sam.SERCOM_USART_INT_Type
-	Mode   PinMode
+	SERCOM uint8
+	IRQVal uint32 // RXC interrupt
 }
 
 var (
@@ -469,89 +636,71 @@ var (
 	UART0 = USBCDC{Buffer: NewRingBuffer()}
 
 	// The first hardware serial port on the SAMD51. Uses the SERCOM3 interface.
-	UART1 = UART{Bus: sam.SERCOM3_USART_INT,
+	UART1 = UART{
 		Buffer: NewRingBuffer(),
-		Mode:   PinSERCOMAlt,
+		Bus:    sam.SERCOM3_USART_INT,
+		SERCOM: 3,
+		IRQVal: sam.IRQ_SERCOM3_2, // RXC interrupt
 	}
 
 	// The second hardware serial port on the SAMD51. Uses the SERCOM0 interface.
 	UART2 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM0_USART_INT,
-		Mode:   PinSERCOMAlt,
+		SERCOM: 0,
+		IRQVal: sam.IRQ_SERCOM0_2, // RXC interrupt
 	}
 )
 
 const (
-	sampleRate16X  = 16
-	lsbFirst       = 1
-	sercomRXPad0   = 0
-	sercomRXPad1   = 1
-	sercomRXPad2   = 2
-	sercomRXPad3   = 3
-	sercomTXPad0   = 0 // Only for UART
-	sercomTXPad2   = 1 // Only for UART
-	sercomTXPad023 = 2 // Only for UART with TX on PAD0, RTS on PAD2 and CTS on PAD3
-
-	spiTXPad0SCK1 = 0
-	spiTXPad2SCK3 = 1
-	spiTXPad3SCK1 = 2
-	spiTXPad0SCK3 = 3
+	sampleRate16X = 16
+	lsbFirst      = 1
 )
 
 // Configure the UART.
-func (uart UART) Configure(config UARTConfig) {
+func (uart UART) Configure(config UARTConfig) error {
 	// Default baud rate to 115200.
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
 
 	// determine pins
-	if config.TX == 0 {
+	if config.TX == 0 && config.RX == 0 {
 		// use default pins
 		config.TX = UART_TX_PIN
 		config.RX = UART_RX_PIN
 	}
 
-	// determine pads
-	var txpad, rxpad int
-	switch config.TX {
-	case PA04:
-		txpad = sercomTXPad0
-	case PA10:
-		txpad = sercomTXPad2
-	case PA18:
-		txpad = sercomTXPad2
-	case PA16:
-		txpad = sercomTXPad0
+	// Determine transmit pinout.
+	txPinMode, txPad, ok := findPinPadMapping(uart.SERCOM, config.TX)
+	if !ok {
+		return ErrInvalidOutputPin
+	}
+	var txPinOut uint32
+	// See CTRLA.RXPO bits of the SERCOM USART peripheral (page 945-946) for how
+	// pads are mapped to pinout values.
+	switch txPad {
+	case 0:
+		txPinOut = 0
 	default:
-		panic("Invalid TX pin for UART")
+		// TODO: flow control (RTS/CTS)
+		return ErrInvalidOutputPin
 	}
 
-	switch config.RX {
-	case PA06:
-		rxpad = sercomRXPad2
-	case PA07:
-		rxpad = sercomRXPad3
-	case PA11:
-		rxpad = sercomRXPad3
-	case PA18:
-		rxpad = sercomRXPad2
-	case PA16:
-		rxpad = sercomRXPad0
-	case PA19:
-		rxpad = sercomRXPad3
-	case PA17:
-		rxpad = sercomRXPad1
-	default:
-		panic("Invalid RX pin for UART")
+	// Determine receive pinout.
+	rxPinMode, rxPad, ok := findPinPadMapping(uart.SERCOM, config.RX)
+	if !ok {
+		return ErrInvalidInputPin
 	}
+	// As you can see in the CTRLA.RXPO bits of the SERCOM USART peripheral
+	// (page 945), input pins are mapped directly.
+	rxPinOut := rxPad
 
 	// configure pins
-	config.TX.Configure(PinConfig{Mode: uart.Mode})
-	config.RX.Configure(PinConfig{Mode: uart.Mode})
+	config.TX.Configure(PinConfig{Mode: txPinMode})
+	config.RX.Configure(PinConfig{Mode: rxPinMode})
 
-	// reset SERCOM0
+	// reset SERCOM
 	uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_INT_CTRLA_SWRST)
 	for uart.Bus.CTRLA.HasBits(sam.SERCOM_USART_INT_CTRLA_SWRST) ||
 		uart.Bus.SYNCBUSY.HasBits(sam.SERCOM_USART_INT_SYNCBUSY_SWRST) {
@@ -584,8 +733,8 @@ func (uart UART) Configure(config UARTConfig) {
 	// set UART pads. This is not same as pins...
 	//  SERCOM_USART_CTRLA_TXPO(txPad) |
 	//   SERCOM_USART_CTRLA_RXPO(rxPad);
-	uart.Bus.CTRLA.SetBits(uint32((txpad << sam.SERCOM_USART_INT_CTRLA_TXPO_Pos) |
-		(rxpad << sam.SERCOM_USART_INT_CTRLA_RXPO_Pos)))
+	uart.Bus.CTRLA.SetBits((txPinOut << sam.SERCOM_USART_INT_CTRLA_TXPO_Pos) |
+		(rxPinOut << sam.SERCOM_USART_INT_CTRLA_RXPO_Pos))
 
 	// Enable Transceiver and Receiver
 	//sercom->USART.CTRLB.reg |= SERCOM_USART_CTRLB_TXEN | SERCOM_USART_CTRLB_RXEN ;
@@ -601,19 +750,14 @@ func (uart UART) Configure(config UARTConfig) {
 	uart.Bus.INTENSET.Set(sam.SERCOM_USART_INT_INTENSET_RXC)
 
 	// Enable RX IRQ.
-	switch uart.Bus {
-	case sam.SERCOM0_USART_INT:
-		arm.EnableIRQ(sam.IRQ_SERCOM0_0)
-		arm.EnableIRQ(sam.IRQ_SERCOM0_1)
-		arm.EnableIRQ(sam.IRQ_SERCOM0_2)
-		arm.EnableIRQ(sam.IRQ_SERCOM0_OTHER)
-	default:
-		// Currently assumes SERCOM3
-		arm.EnableIRQ(sam.IRQ_SERCOM3_0)
-		arm.EnableIRQ(sam.IRQ_SERCOM3_1)
-		arm.EnableIRQ(sam.IRQ_SERCOM3_2)
-		arm.EnableIRQ(sam.IRQ_SERCOM3_OTHER)
-	}
+	// This is a small note at the bottom of the NVIC section of the datasheet:
+	// > The integer number specified in the source refers to the respective bit
+	// > position in the INTFLAG register of respective peripheral.
+	// Therefore, if we only need to listen to the RXC interrupt source (in bit
+	// position 2), we only need interrupt source 2 for this SERCOM device.
+	arm.EnableIRQ(uart.IRQVal)
+
+	return nil
 }
 
 // SetBaudRate sets the communication speed for the UART.
@@ -639,53 +783,15 @@ func (uart UART) WriteByte(c byte) error {
 	return nil
 }
 
-//go:export SERCOM3_0_IRQHandler
-func handleSERCOM3_0() {
-	handleUART1()
-}
-
-//go:export SERCOM3_1_IRQHandler
-func handleSERCOM3_1() {
-	handleUART1()
-}
-
 //go:export SERCOM3_2_IRQHandler
 func handleSERCOM3_2() {
-	handleUART1()
-}
-
-//go:export SERCOM3_OTHER_IRQHandler
-func handleSERCOM3_OTHER() {
-	handleUART1()
-}
-
-func handleUART1() {
 	// should reset IRQ
 	UART1.Receive(byte((UART1.Bus.DATA.Get() & 0xFF)))
 	UART1.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INT_INTFLAG_RXC)
 }
 
-//go:export SERCOM0_0_IRQHandler
-func handleSERCOM0_0() {
-	handleUART2()
-}
-
-//go:export SERCOM0_1_IRQHandler
-func handleSERCOM0_1() {
-	handleUART2()
-}
-
 //go:export SERCOM0_2_IRQHandler
 func handleSERCOM0_2() {
-	handleUART2()
-}
-
-//go:export SERCOM0_OTHER_IRQHandler
-func handleSERCOM0_OTHER() {
-	handleUART2()
-}
-
-func handleUART2() {
 	// should reset IRQ
 	UART2.Receive(byte((UART2.Bus.DATA.Get() & 0xFF)))
 	UART2.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INT_INTFLAG_RXC)
@@ -693,10 +799,8 @@ func handleUART2() {
 
 // I2C on the SAMD51.
 type I2C struct {
-	Bus     *sam.SERCOM_I2CM_Type
-	SCL     Pin
-	SDA     Pin
-	PinMode PinMode
+	Bus    *sam.SERCOM_I2CM_Type
+	SERCOM uint8
 }
 
 // I2CConfig is used to store config info for I2C.
@@ -729,10 +833,31 @@ const (
 const i2cTimeout = 1000
 
 // Configure is intended to setup the I2C interface.
-func (i2c I2C) Configure(config I2CConfig) {
+func (i2c I2C) Configure(config I2CConfig) error {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
+	}
+
+	// Use default I2C pins if not set.
+	if config.SDA == 0 && config.SCL == 0 {
+		config.SDA = SDA_PIN
+		config.SCL = SCL_PIN
+	}
+
+	sclPinMode, sclPad, ok := findPinPadMapping(i2c.SERCOM, config.SCL)
+	if !ok || sclPad != 1 {
+		// SCL must be on pad 1, according to section 36.4 of the datasheet.
+		// Note: this is not an exhaustive test for I2C support on the pin: not
+		// all pins support I2C.
+		return ErrInvalidClockPin
+	}
+	sdaPinMode, sdaPad, ok := findPinPadMapping(i2c.SERCOM, config.SDA)
+	if !ok || sdaPad != 0 {
+		// SDA must be on pad 0, according to section 36.4 of the datasheet.
+		// Note: this is not an exhaustive test for I2C support on the pin: not
+		// all pins support I2C.
+		return ErrInvalidDataPin
 	}
 
 	// reset SERCOM
@@ -760,8 +885,10 @@ func (i2c I2C) Configure(config I2CConfig) {
 	}
 
 	// enable pins
-	i2c.SDA.Configure(PinConfig{Mode: i2c.PinMode})
-	i2c.SCL.Configure(PinConfig{Mode: i2c.PinMode})
+	config.SDA.Configure(PinConfig{Mode: sdaPinMode})
+	config.SCL.Configure(PinConfig{Mode: sclPinMode})
+
+	return nil
 }
 
 // SetBaudRate sets the communication speed for the I2C.
@@ -860,7 +987,7 @@ func (i2c I2C) WriteByte(data byte) error {
 	timeout := i2cTimeout
 	for !i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_MB) {
 		// check for bus error
-		if sam.SERCOM3_I2CM.STATUS.HasBits(sam.SERCOM_I2CM_STATUS_BUSERR) {
+		if i2c.Bus.STATUS.HasBits(sam.SERCOM_I2CM_STATUS_BUSERR) {
 			return errors.New("I2C bus error")
 		}
 		timeout--
@@ -929,15 +1056,8 @@ func (i2c I2C) readByte() byte {
 
 // SPI
 type SPI struct {
-	Bus         *sam.SERCOM_SPIM_Type
-	SCK         Pin
-	MOSI        Pin
-	MISO        Pin
-	DOpad       int
-	DIpad       int
-	SCKPinMode  PinMode
-	MOSIPinMode PinMode
-	MISOPinMode PinMode
+	Bus    *sam.SERCOM_SPIM_Type
+	SERCOM uint8
 }
 
 // SPIConfig is used to store config info for SPI.
@@ -951,13 +1071,48 @@ type SPIConfig struct {
 }
 
 // Configure is intended to setup the SPI interface.
-func (spi SPI) Configure(config SPIConfig) {
-	doPad := spi.DOpad
-	diPad := spi.DIpad
+func (spi SPI) Configure(config SPIConfig) error {
+	// Use default pins if not set.
+	if config.SCK == 0 && config.MOSI == 0 && config.MISO == 0 {
+		config.SCK = SPI0_SCK_PIN
+		config.MOSI = SPI0_MOSI_PIN
+		config.MISO = SPI0_MISO_PIN
+	}
 
 	// set default frequency
 	if config.Frequency == 0 {
 		config.Frequency = 4000000
+	}
+
+	// Determine the input pinout (for MISO).
+	var dataInPinout uint32
+	misoPinMode, misoPad, ok := findPinPadMapping(spi.SERCOM, config.MISO)
+	if config.MISO != NoPin {
+		if !ok {
+			return ErrInvalidInputPin
+		}
+		dataInPinout = misoPad // mapped directly
+	}
+
+	// Determine the output pinout (for MOSI/SCK).
+	// See DOPO field in the CTRLA register on page 986 of the datasheet.
+	var dataOutPinout uint32
+	sckPinMode, sckPad, ok := findPinPadMapping(spi.SERCOM, config.SCK)
+	if !ok || sckPad != 1 {
+		// SCK pad must always be 1
+		return ErrInvalidOutputPin
+	}
+	mosiPinMode, mosiPad, ok := findPinPadMapping(spi.SERCOM, config.MOSI)
+	if !ok {
+		return ErrInvalidOutputPin
+	}
+	switch mosiPad {
+	case 0:
+		dataOutPinout = 0x0
+	case 3:
+		dataOutPinout = 0x2
+	default:
+		return ErrInvalidOutputPin
 	}
 
 	// Disable SPI port.
@@ -966,19 +1121,11 @@ func (spi SPI) Configure(config SPIConfig) {
 	}
 
 	// enable pins
-	if spi.SCKPinMode == 0 {
-		spi.SCKPinMode = PinSERCOMAlt
+	config.SCK.Configure(PinConfig{Mode: sckPinMode})
+	config.MOSI.Configure(PinConfig{Mode: mosiPinMode})
+	if config.MISO != NoPin {
+		config.MISO.Configure(PinConfig{Mode: misoPinMode})
 	}
-	if spi.MOSIPinMode == 0 {
-		spi.MOSIPinMode = PinSERCOMAlt
-	}
-	if spi.MISOPinMode == 0 {
-		spi.MISOPinMode = PinSERCOMAlt
-	}
-
-	spi.SCK.Configure(PinConfig{Mode: spi.SCKPinMode})
-	spi.MOSI.Configure(PinConfig{Mode: spi.MOSIPinMode})
-	spi.MISO.Configure(PinConfig{Mode: spi.MISOPinMode})
 
 	// reset SERCOM
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPIM_CTRLA_SWRST)
@@ -987,17 +1134,17 @@ func (spi SPI) Configure(config SPIConfig) {
 	}
 
 	// set bit transfer order
-	dataOrder := 0
+	dataOrder := uint32(0)
 	if config.LSBFirst {
 		dataOrder = 1
 	}
 
 	// Set SPI master
 	// SERCOM_SPIM_CTRLA_MODE_SPI_MASTER = 3
-	spi.Bus.CTRLA.Set(uint32((3 << sam.SERCOM_SPIM_CTRLA_MODE_Pos) |
-		(doPad << sam.SERCOM_SPIM_CTRLA_DOPO_Pos) |
-		(diPad << sam.SERCOM_SPIM_CTRLA_DIPO_Pos) |
-		(dataOrder << sam.SERCOM_SPIM_CTRLA_DORD_Pos)))
+	spi.Bus.CTRLA.Set((3 << sam.SERCOM_SPIM_CTRLA_MODE_Pos) |
+		(dataOutPinout << sam.SERCOM_SPIM_CTRLA_DOPO_Pos) |
+		(dataInPinout << sam.SERCOM_SPIM_CTRLA_DIPO_Pos) |
+		(dataOrder << sam.SERCOM_SPIM_CTRLA_DORD_Pos))
 
 	spi.Bus.CTRLB.SetBits((0 << sam.SERCOM_SPIM_CTRLB_CHSIZE_Pos) | // 8bit char size
 		sam.SERCOM_SPIM_CTRLB_RXEN) // receive enable
@@ -1031,6 +1178,8 @@ func (spi SPI) Configure(config SPIConfig) {
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPIM_CTRLA_ENABLE)
 	for spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPIM_SYNCBUSY_ENABLE) {
 	}
+
+	return nil
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
@@ -1048,19 +1197,6 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 
 // PWM
 const period = 0xFFFF
-
-// InitPWM initializes the PWM interface.
-func InitPWM() {
-	// turn on timer clocks used for PWM
-	sam.MCLK.APBBMASK.SetBits(sam.MCLK_APBBMASK_TCC0_ | sam.MCLK_APBBMASK_TCC1_)
-	sam.MCLK.APBCMASK.SetBits(sam.MCLK_APBCMASK_TCC2_)
-
-	//use clock generator 0
-	sam.GCLK.PCHCTRL[25].Set((sam.GCLK_PCHCTRL_GEN_GCLK0 << sam.GCLK_PCHCTRL_GEN_Pos) |
-		sam.GCLK_PCHCTRL_CHEN)
-	sam.GCLK.PCHCTRL[29].Set((sam.GCLK_PCHCTRL_GEN_GCLK0 << sam.GCLK_PCHCTRL_GEN_Pos) |
-		sam.GCLK_PCHCTRL_CHEN)
-}
 
 // Configure configures a PWM pin for output.
 func (pwm PWM) Configure() {
@@ -1176,34 +1312,6 @@ func (pwm PWM) setPinCfg(val uint8) {
 	pwm.Pin.setPinCfg(val)
 }
 
-// getTimer returns the timer to be used for PWM on this pin
-func (pwm PWM) getTimer() *sam.TCC_Type {
-	switch pwm.Pin {
-	case PA16:
-		return sam.TCC1
-	case PA17:
-		return sam.TCC1
-	case PA14:
-		return sam.TCC2
-	case PA15:
-		return sam.TCC2
-	case PA18:
-		return sam.TCC1
-	case PA19:
-		return sam.TCC1
-	case PA20:
-		return sam.TCC0
-	case PA21:
-		return sam.TCC0
-	case PA23:
-		return sam.TCC0
-	case PA22:
-		return sam.TCC0
-	default:
-		return nil // not supported on this pin
-	}
-}
-
 // setChannel sets the value for the correct channel for PWM on this pin
 func (pwm PWM) setChannel(val uint32) {
 	switch pwm.Pin {
@@ -1227,6 +1335,8 @@ func (pwm PWM) setChannel(val uint32) {
 		pwm.getTimer().CC[3].Set(val)
 	case PA22:
 		pwm.getTimer().CC[2].Set(val)
+	case PB31:
+		pwm.getTimer().CC[1].Set(val)
 	default:
 		return // not supported on this pin
 	}
@@ -1255,6 +1365,8 @@ func (pwm PWM) setChannelBuffer(val uint32) {
 		pwm.getTimer().CCBUF[3].Set(val)
 	case PA22:
 		pwm.getTimer().CCBUF[2].Set(val)
+	case PB31:
+		pwm.getTimer().CCBUF[1].Set(val)
 	default:
 		return // not supported on this pin
 	}
@@ -1283,6 +1395,8 @@ func (pwm PWM) getMux() PinMode {
 		return PinPWMG
 	case PA22:
 		return PinPWMG
+	case PB31:
+		return PinPWMF
 	default:
 		return 0 // not supported on this pin
 	}
@@ -1400,11 +1514,11 @@ func (usbcdc USBCDC) Configure(config UARTConfig) {
 	// enable USB
 	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_ENABLE)
 
-	// enable IRQ
-	arm.EnableIRQ(sam.IRQ_USB_OTHER)
-	arm.EnableIRQ(sam.IRQ_USB_SOF_HSOF)
-	arm.EnableIRQ(sam.IRQ_USB_TRCPT0)
-	arm.EnableIRQ(sam.IRQ_USB_TRCPT1)
+	// enable IRQ at highest priority
+	interrupt.New(sam.IRQ_USB_OTHER, handleUSBIRQ).Enable()
+	interrupt.New(sam.IRQ_USB_SOF_HSOF, handleUSBIRQ).Enable()
+	interrupt.New(sam.IRQ_USB_TRCPT0, handleUSBIRQ).Enable()
+	interrupt.New(sam.IRQ_USB_TRCPT1, handleUSBIRQ).Enable()
 }
 
 func handlePadCalibration() {
@@ -1450,27 +1564,7 @@ func handlePadCalibration() {
 	sam.USB_DEVICE.PADCAL.SetBits(calibTrim << sam.USB_DEVICE_PADCAL_TRIM_Pos)
 }
 
-//go:export USB_OTHER_IRQHandler
-func handleUSBOther() {
-	handleUSBIRQ()
-}
-
-//go:export USB_SOF_HSOF_IRQHandler
-func handleUSBSOFHSOF() {
-	handleUSBIRQ()
-}
-
-//go:export USB_TRCPT0_IRQHandler
-func handleUSBTRCPT0() {
-	handleUSBIRQ()
-}
-
-//go:export USB_TRCPT1_IRQHandler
-func handleUSBTRCPT1() {
-	handleUSBIRQ()
-}
-
-func handleUSBIRQ() {
+func handleUSBIRQ(interrupt.Interrupt) {
 	// reset all interrupt flags
 	flags := sam.USB_DEVICE.INTFLAG.Get()
 	sam.USB_DEVICE.INTFLAG.Set(flags)
@@ -2044,14 +2138,14 @@ func setEPINTENSET(ep uint32, val uint8) {
 	sam.USB_DEVICE.DEVICE_ENDPOINT[ep].EPINTENSET.Set(val)
 }
 
-// ResetProcessor should perform a system reset in preperation
+// ResetProcessor should perform a system reset in preparation
 // to switch to the bootloader to flash new firmware.
 func ResetProcessor() {
 	arm.DisableInterrupts()
 
 	// Perform magic reset into bootloader, as mentioned in
 	// https://github.com/arduino/ArduinoCore-samd/issues/197
-	*(*uint32)(unsafe.Pointer(uintptr(0x20000000 + 0x00030000 - 4))) = RESET_MAGIC_VALUE
+	*(*uint32)(unsafe.Pointer(uintptr(0x20000000 + HSRAM_SIZE - 4))) = RESET_MAGIC_VALUE
 
 	arm.SystemReset()
 }

@@ -158,7 +158,7 @@ var aeabiBuiltins = []string{
 
 func builtinFiles(target string) []string {
 	builtins := append([]string{}, genericBuiltins...) // copy genericBuiltins
-	if strings.HasPrefix(target, "arm") {
+	if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
 		builtins = append(builtins, aeabiBuiltins...)
 	}
 	return builtins
@@ -236,7 +236,11 @@ func CompileBuiltins(target string, callback func(path string) error) error {
 		// Note: -fdebug-prefix-map is necessary to make the output archive
 		// reproducible. Otherwise the temporary directory is stored in the
 		// archive itself, which varies each run.
-		err := execCommand(commands["clang"], "-c", "-Oz", "-g", "-Werror", "-Wall", "-std=c11", "-fshort-enums", "-nostdlibinc", "-ffunction-sections", "-fdata-sections", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir, "-o", objpath, srcpath)
+		args := []string{"-c", "-Oz", "-g", "-Werror", "-Wall", "-std=c11", "-fshort-enums", "-nostdlibinc", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target=" + target, "-fdebug-prefix-map=" + dir + "=" + remapDir}
+		if strings.HasPrefix(target, "riscv32-") {
+			args = append(args, "-march=rv32imac", "-mabi=ilp32", "-fforce-enable-int128")
+		}
+		err := runCCompiler("clang", append(args, "-o", objpath, srcpath)...)
 		if err != nil {
 			return &commandError{"failed to build", srcpath, err}
 		}

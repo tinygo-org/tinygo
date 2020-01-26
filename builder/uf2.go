@@ -11,26 +11,33 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io/ioutil"
+	"strconv"
 )
 
 // convertELFFileToUF2File converts an ELF file to a UF2 file.
-func convertELFFileToUF2File(infile, outfile string) error {
+func convertELFFileToUF2File(infile, outfile string, uf2FamilyID string) error {
 	// Read the .text segment.
 	targetAddress, data, err := extractROM(infile)
 	if err != nil {
 		return err
 	}
 
-	output, _ := convertBinToUF2(data, uint32(targetAddress))
+	output, _, err := convertBinToUF2(data, uint32(targetAddress), uf2FamilyID)
+	if err != nil {
+		return err
+	}
 	return ioutil.WriteFile(outfile, output, 0644)
 }
 
 // convertBinToUF2 converts the binary bytes in input to UF2 formatted data.
-func convertBinToUF2(input []byte, targetAddr uint32) ([]byte, int) {
+func convertBinToUF2(input []byte, targetAddr uint32, uf2FamilyID string) ([]byte, int, error) {
 	blocks := split(input, 256)
 	output := make([]byte, 0)
 
-	bl := newUF2Block(targetAddr)
+	bl, err := newUF2Block(targetAddr, uf2FamilyID)
+	if err != nil {
+		return nil, 0, err
+	}
 	bl.SetNumBlocks(len(blocks))
 
 	for i := 0; i < len(blocks); i++ {
@@ -41,7 +48,7 @@ func convertBinToUF2(input []byte, targetAddr uint32) ([]byte, int) {
 		bl.IncrementAddress(bl.payloadSize)
 	}
 
-	return output, len(blocks)
+	return output, len(blocks), nil
 }
 
 const (
@@ -65,17 +72,31 @@ type uf2Block struct {
 }
 
 // newUF2Block returns a new uf2Block struct that has been correctly populated
-func newUF2Block(targetAddr uint32) *uf2Block {
+func newUF2Block(targetAddr uint32, uf2FamilyID string) (*uf2Block, error) {
+	var flags uint32
+	var familyID uint32
+	if uf2FamilyID != "" {
+		flags |= flagFamilyIDPresent
+		v, err := strconv.ParseUint(uf2FamilyID, 0, 32)
+		if err != nil {
+			return nil, err
+		}
+		familyID = uint32(v)
+	}
 	return &uf2Block{magicStart0: uf2MagicStart0,
 		magicStart1: uf2MagicStart1,
 		magicEnd:    uf2MagicEnd,
 		targetAddr:  targetAddr,
-		flags:       0x0,
-		familyID:    0x0,
+		flags:       flags,
+		familyID:    familyID,
 		payloadSize: 256,
 		data:        make([]byte, 476),
-	}
+	}, nil
 }
+
+const (
+	flagFamilyIDPresent = 0x00002000
+)
 
 // Bytes converts the uf2Block to a slice of bytes that can be written to file.
 func (b *uf2Block) Bytes() []byte {

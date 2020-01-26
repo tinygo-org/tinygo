@@ -1,3 +1,29 @@
+0.11.0
+---
+* **command line**
+  - add support for QEMU in `gdb` subcommand
+  - use builtin Clang when building statically, dropping the clang-9 dependency
+  - search for default serial port on both macOS and Linux
+  - windows: support `tinygo flash` directly by using win32 wmi
+* **compiler**
+  - add location information to the IR checker
+  - make reflection sidetables constant globals
+  - improve error locations in goroutine lowering
+  - interp: improve support for maps with string keys
+  - interp: add runtime fallback for mapassign operations
+* **standard library**
+  - `machine`: add support for `SPI.Tx()` on play.tinygo.org
+  - `machine`: rename `CPU_FREQUENCY` to `CPUFrequency()`
+* **targets**
+  - `adafruit-pybadge`: add Adafruit Pybadge
+  - `arduino-nano33`: allow simulation on play.tinygo.org
+  - `arduino-nano33`: fix default SPI pin numbers to be D13/D11/D12
+  - `circuitplay-express`: allow simulation on play.tinygo.org
+  - `hifive1-qemu`: add target for testing RISC-V bare metal in QEMU
+  - `riscv`: fix heap corruption due to changes in LLVM 9
+  - `riscv`: add support for compiler-rt
+  - `qemu`: rename to `cortex-m-qemu`
+
 0.10.0
 ---
 * **command line**
