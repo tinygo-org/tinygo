@@ -17,8 +17,10 @@ type SPI struct {
 // Since the first interface is named SPI1, both SPI0 and SPI1 refer to SPI1.
 // TODO: implement SPI2 and SPI3.
 var (
-	SPI1 = SPI{Bus: stm32.SPI1}
-	SPI0 = SPI1
+	SPI0 = SPI{
+		Bus: stm32.SPI1,
+	}
+	SPI1 = &SPI0
 )
 
 // SPI phase and polarity configs CPOL and CPHA

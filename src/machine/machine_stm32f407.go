@@ -140,13 +140,13 @@ func (uart UART) getBaudRateDivisor(br uint32) uint32 {
 	// TODO: derive this from the CPU/system clocks
 	//  appropriate for the USART in use
 	var clock uint32
-	switch uart.Bus {
+	switch unsafe.Pointer(uart.Bus) {
 	case unsafe.Pointer(stm32.USART1):
-		clock = APB1_PCLK1_FREQ
+		clock = APB2_PCLK2_FREQ
 	case unsafe.Pointer(stm32.USART2):
 		fallthrough
 	case unsafe.Pointer(stm32.USART3):
-		clock = APB2_PCLK2_FREQ
+		clock = APB1_PCLK1_FREQ
 	}
 	return clock / br
 }
