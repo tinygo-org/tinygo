@@ -1,16 +1,29 @@
 package sync
 
+import (
+	"internal/task"
+	_ "unsafe"
+)
+
 // These mutexes assume there is only one thread of operation: no goroutines,
 // interrupts or anything else.
 
 type Mutex struct {
-	locked bool
+	locked  bool
+	blocked task.Stack
 }
+
+//go:linkname scheduleTask runtime.runqueuePushBack
+func scheduleTask(*task.Task)
 
 func (m *Mutex) Lock() {
 	if m.locked {
-		panic("todo: block on locked mutex")
+		// Push self onto stack of blocked tasks, and wait to be resumed.
+		m.blocked.Push(task.Current())
+		task.Pause()
+		return
 	}
+
 	m.locked = true
 }
 
@@ -18,7 +31,13 @@ func (m *Mutex) Unlock() {
 	if !m.locked {
 		panic("sync: unlock of unlocked Mutex")
 	}
-	m.locked = false
+
+	// Wake up a blocked task, if applicable.
+	if t := m.blocked.Pop(); t != nil {
+		scheduleTask(t)
+	} else {
+		m.locked = false
+	}
 }
 
 type RWMutex struct {
