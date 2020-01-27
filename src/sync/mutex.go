@@ -69,3 +69,8 @@ func (rw *RWMutex) RUnlock() {
 		rw.m.Unlock()
 	}
 }
+
+type Locker interface {
+	Lock()
+	Unlock()
+}
