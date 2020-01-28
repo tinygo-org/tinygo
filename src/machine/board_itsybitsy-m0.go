@@ -123,3 +123,14 @@ const (
 var (
 	I2S0 = I2S{Bus: sam.I2S}
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "ItsyBitsy M0 Express"
+	usb_STRING_MANUFACTURER = "Adafruit"
+)
+
+var (
+	usb_VID uint16 = 0x239A
+	usb_PID uint16 = 0x800F
+)

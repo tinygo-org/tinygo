@@ -93,3 +93,14 @@ const (
 	I2S_SD_PIN  = PA08
 	I2S_WS_PIN  = NoPin // TODO: figure out what this is on Trinket M0.
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "Trinket M0"
+	usb_STRING_MANUFACTURER = "Adafruit"
+)
+
+var (
+	usb_VID uint16 = 0x239A
+	usb_PID uint16 = 0x801E
+)
