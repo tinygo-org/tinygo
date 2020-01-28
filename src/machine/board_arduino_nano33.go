@@ -90,3 +90,14 @@ const (
 	I2S_SD_PIN  Pin = PA08
 	I2S_WS_PIN      = NoPin // TODO: figure out what this is on Arduino Nano 33.
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "Arduino NANO 33 IoT"
+	usb_STRING_MANUFACTURER = "Arduino"
+)
+
+var (
+	usb_VID uint16 = 0x2341
+	usb_PID uint16 = 0x8057
+)

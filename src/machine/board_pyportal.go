@@ -143,3 +143,14 @@ var (
 	}
 	NINA_SPI = SPI0
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "Adafruit PyPortal M4"
+	usb_STRING_MANUFACTURER = "Adafruit LLC"
+)
+
+var (
+	usb_VID uint16 = 0x239A
+	usb_PID uint16 = 0x8035
+)

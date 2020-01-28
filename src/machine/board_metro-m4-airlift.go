@@ -116,3 +116,14 @@ var (
 		SERCOM: 1,
 	}
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "Adafruit Metro M4 Airlift Lite"
+	usb_STRING_MANUFACTURER = "Adafruit LLC"
+)
+
+var (
+	usb_VID uint16 = 0x239A
+	usb_PID uint16 = 0x8037
+)

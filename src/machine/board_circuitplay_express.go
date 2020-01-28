@@ -88,3 +88,14 @@ const (
 	I2S_SD_PIN  = PA08
 	I2S_WS_PIN  = NoPin // no WS, instead uses SCK to sync
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "Circuit Playground Express"
+	usb_STRING_MANUFACTURER = "Adafruit"
+)
+
+var (
+	usb_VID uint16 = 0x239A
+	usb_PID uint16 = 0x8018
+)
