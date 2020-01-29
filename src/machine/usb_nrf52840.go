@@ -1,10 +1,12 @@
 // +build nrf52840
+
 package machine
 
 import (
-	"device/arm"
 	"device/nrf"
 	"errors"
+	"runtime/interrupt"
+	"unicode/utf16"
 	"unsafe"
 )
 
@@ -46,6 +48,8 @@ func (usbcdc USBCDC) RTS() bool {
 }
 
 var (
+	usbdInterrupt = interrupt.New(nrf.IRQ_USBD, handleUSBIRQ)
+
 	usbEndpointDescriptors [8]usbDeviceDescriptor
 
 	udd_ep_in_cache_buffer  [7][128]uint8
@@ -80,16 +84,15 @@ func (usbcdc USBCDC) Configure(config UARTConfig) {
 	)
 
 	// enable IRQ
-	arm.SetPriority(nrf.IRQ_USBD, 0xc0)
-	arm.EnableIRQ(nrf.IRQ_USBD)
+	usbdInterrupt.SetPriority(0xe0)
+	usbdInterrupt.Enable()
 
 	// enable USB
 	nrf.USBD.ENABLE.Set(1)
 	nrf.USBD.USBPULLUP.Set(0)
 }
 
-//go:export USBD_IRQHandler
-func handleUSBIRQ() {
+func handleUSBIRQ(interrupt.Interrupt) {
 	// USBD ready event
 	if nrf.USBD.EVENTS_USBEVENT.Get() == 1 &&
 		(nrf.USBD.EVENTCAUSE.Get()&nrf.USBD_EVENTCAUSE_READY) > 0 {
@@ -181,11 +184,11 @@ func handleUSBIRQ() {
 func parseUSBSetupRegisters() usbSetup {
 	return usbSetup{
 		bmRequestType: uint8(nrf.USBD.BMREQUESTTYPE.Get()),
-		bRequest: uint8(nrf.USBD.BREQUEST.Get()),
-		wValueL: uint8(nrf.USBD.WVALUEL.Get()),
-		wValueH: uint8(nrf.USBD.WVALUEH.Get()),
-		wIndex: uint16((nrf.USBD.WINDEXH.Get() << 8) | nrf.USBD.WINDEXL.Get()),
-		wLength: uint16(((nrf.USBD.WLENGTHH.Get() & 0xff) << 8) | (nrf.USBD.WLENGTHL.Get() & 0xff)),
+		bRequest:      uint8(nrf.USBD.BREQUEST.Get()),
+		wValueL:       uint8(nrf.USBD.WVALUEL.Get()),
+		wValueH:       uint8(nrf.USBD.WVALUEH.Get()),
+		wIndex:        uint16((nrf.USBD.WINDEXH.Get() << 8) | nrf.USBD.WINDEXL.Get()),
+		wLength:       uint16(((nrf.USBD.WLENGTHH.Get() & 0xff) << 8) | (nrf.USBD.WLENGTHL.Get() & 0xff)),
 	}
 }
 
@@ -427,11 +430,11 @@ func sendDescriptor(setup usbSetup) {
 			sendUSBPacket(0, b)
 
 		case usb_IPRODUCT:
-			b := strToUTF16Descriptor(usb_STRING_PRODUCT)
+			b := strToUTF16LEDescriptor(usb_STRING_PRODUCT)
 			sendUSBPacket(0, b[:setup.wLength])
 
 		case usb_IMANUFACTURER:
-			b := strToUTF16Descriptor(usb_STRING_MANUFACTURER)
+			b := strToUTF16LEDescriptor(usb_STRING_MANUFACTURER)
 			sendUSBPacket(0, b[:setup.wLength])
 
 		case usb_ISERIAL:
@@ -527,15 +530,16 @@ func enableEPIn(ep uint32) {
 	nrf.USBD.EPINEN.Set(epinen)
 }
 
-func strToUTF16Descriptor(in string) []byte {
-	size := (len(in)<<1) + 2
+func strToUTF16LEDescriptor(in string) []byte {
+	runes := []rune(in)
+	encoded := utf16.Encode(runes)
+	size := (len(encoded) << 1) + 2
 	out := make([]byte, size)
 	out[0] = byte(size)
 	out[1] = 0x03
-	// TODO: do a "real" conversion that supports more than just ascii chars
-	for i, char := range in {
-		out[i<<1 + 2] = 0
-		out[i<<1 + 3] = byte(char)
+	for i, value := range encoded {
+		out[(i<<1)+2] = byte(value & 0xff)
+		out[(i<<1)+3] = byte(value >> 8)
 	}
 	return out
 }
