@@ -1,3 +1,67 @@
+0.12.0
+---
+* **command line**
+  - add initial FreeBSD support
+  - remove getting a serial port in gdb subcommand
+  - add support for debugging through JLinkGDBServer
+  - fix CGo when cross compiling
+  - remove default port check for Digispark as micronucleus communicates directly using HID
+  - differentiate between various serial/USB error messages
+* **builder**
+  - improve detection of Clang headers
+* **compiler**
+  - fix assertion on empty interface
+  - don't crash when encountering `types.Invalid`
+  - revise defer to use heap allocations when running a variable number of times
+  - improve error messages for failed imports
+  - improve "function redeclared" error
+  - add globaldce pass to start of optimization pipeline
+  - add support for debugging globals
+  - implement RISC-V CSR operations as intrinsics
+  - add support for CGO_ENABLED environment variable
+  - do not emit debug info for extern globals (bugfix)
+  - add support for interrupts
+  - implement maps for arbitrary keys
+  - interp: error location for "unknown GEP" error
+  - wasm-abi: create temporary allocas in the entry block
+* **cgo**
+  - add support for symbols in `#define`
+  - fix a bug in number tokenization
+* **standard library**
+  - `machine`: avoid bytes package in USB logic
+  - `runtime`: fix external address declarations
+  - `runtime`: provide implementation for `internal/bytealg.IndexByte`
+* **targets**
+  - `atsamd51`: fix volatile usage
+  - `atsamd51`: fix ADC, updating to 12-bits precision
+  - `atsamd51`: refactor SPI pin configuration to only look at pin numbers
+  - `atsamd51`: switch UART to use new pin configuration
+  - `atsamd51`: fix obvious bug in I2C code
+  - `atsamd51`: use only the necessary UART interrupts
+  - `atsamd51`: refactor I2C pin handling to auto-detect pin mode
+  - `avr`: use a garbage collector
+  - `fe310`: use CLINT peripheral for timekeeping
+  - `fe310`: add support for PLIC interrupts
+  - `fe310`: implement UART receive interrupts
+  - `riscv`: support sleeping in QEMU
+  - `riscv`: add bare-bones interrupt support
+  - `riscv`: print exception PC and code
+  - `wasm`: implement memcpy and memset
+  - `wasm`: include wasi-libc
+  - `wasm`: use wasi ABI for basic startup/stdout
+* **boards**
+  - `arduino`: make avrdude command line compatible with Windows
+  - `arduino-nano`: add this board
+  - `arduino-nano33`: fix UART1 and UART2
+  - `circuitplay-bluefruit`: add this board
+  - `digispark`: add clock speed and pin mappings
+  - `gameboy-advance`: include compiler-rt in build
+  - `gameboy-advance`: implement interrupt handler
+  - `hifive1b`: add support for gdb subcommand
+  - `pyportal`: add this board
+  - `pyportal`: remove manual SPI pin mapping as now handled by default
+
+
 0.11.0
 ---
 * **command line**
