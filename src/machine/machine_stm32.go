@@ -2,8 +2,6 @@
 
 package machine
 
-import "unsafe"
-
 // Peripheral abstraction layer for the stm32.
 
 type PinMode uint8
@@ -26,54 +24,13 @@ type AltFunc uint8
 //  definition files
 // Also, the stm32f1xx series handles things differently from the stm32f0/2/3/4
 
-// EnableClock configures the STM32 to send clock signals to the given GPIO port
-func (p Pin) EnableClock() {
-	p.enableClock()
-}
-
-// Implement these in the more specialized family files, extended to include the ports
-//  available for that device
-/*
-// getPort is a helper to map to the I/O ports. Extend to the
-//  supported ports on your part.
-func (p Pin) getPort() *stm32.GPIO_Type {
-  switch p / 16 {
-  case 0:
-    return stm32.GPIOA
-  case 1:
-    return stm32.GPIOB
-  case 2:
-    ...
-  default:
-  	panic("machine: unknown port")
-  }
-}
-
-// enableClock enables the clock for this desired GPIO port.
-// Use the appropriate APB1ENR/APB2ENR for the part
-func (p Pin) enableClock() {
-  switch p / 16 {
-  case 0:
-    stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_IOPAEN)
-  case 1:
-    stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_IOPBEN)
-  case 2:
-    ...
-  default:
-    panic("machine: unknown port")
-  }
-}
-
-// configure sets the port I/O direction, speed, pull-up/down config etc
-func (p Pin) configure(config PinConfig) {
-	// perform GPIO configuration specific to this family
-}
-*/
 // ---------- General pin operations ----------
 
 // Configure this pin with the given I/O settings.
+// Remember to call enableClock() in the chip-specific implementations!
+// Also call enableAltFuncClock() if using alternative output functions when
+//  configuring peripherals, e.g. UART, SPI etc.
 func (p Pin) Configure(config PinConfig) {
-	p.EnableClock()
 	p.configure(config)
 }
 
@@ -95,9 +52,4 @@ func (p Pin) Get() bool {
 	pin := uint8(p) % 16
 	val := port.IDR.Get() & (1 << pin)
 	return (val > 0)
-}
-
-// EnableAltFuncClock sends clock signals to the alternative function peripheral
-func EnableAltFuncClock(bus unsafe.Pointer) {
-	enableAltFuncClock(bus)
 }

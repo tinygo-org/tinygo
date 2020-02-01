@@ -1,6 +1,7 @@
 package main
 
-// Use goroutines to spin off led timing for each of the user LEDs on the stm32f4 discovery board
+// Use goroutines to spin off led timing for each of the user LEDs on boards that have them
+// The program also outputs some text periodically to remind you what you flashed to the board!
 
 import (
 	"machine"

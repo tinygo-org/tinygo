@@ -39,11 +39,11 @@ func (p Pin) configure(config PinConfig) {
 	// Configure the GPIO pin.
 	port := p.getPort()
 	pin := uint8(p) % 16
-	pos := uint8(p) % 8 * 4
+	pos := (pin % 8) * 4
 	if pin < 8 {
-		port.CRL.SetMasked(uint32(config.Mode), 0xf, pos)
+		port.CRL.ReplaceBits(uint32(config.Mode), 0xf, pos)
 	} else {
-		port.CRH.SetMasked(uint32(config.Mode), 0xf, pos)
+		port.CRH.ReplaceBits(uint32(config.Mode), 0xf, pos)
 	}
 }
 
@@ -117,6 +117,12 @@ func (uart UART) Configure(config UARTConfig) {
 		config.BaudRate = 115200
 	}
 
+	// Set the GPIO pins to defaults if they're not set
+	if config.TX == 0 && config.RX == 0 {
+		config.TX = UART_TX_PIN
+		config.RX = UART_RX_PIN
+	}
+
 	// pins
 	switch config.TX {
 	case UART_ALT_TX_PIN:
@@ -127,20 +133,14 @@ func (uart UART) Configure(config UARTConfig) {
 		} else if uart.Bus == stm32.USART2 {
 			stm32.AFIO.MAPR.SetBits(stm32.AFIO_MAPR_USART2_REMAP)
 		}
-		UART_ALT_TX_PIN.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
-		UART_ALT_RX_PIN.Configure(PinConfig{Mode: PinInputModeFloating})
 	default:
 		// use standard TX/RX pins PA9 and PA10
-		UART_TX_PIN.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
-		UART_RX_PIN.Configure(PinConfig{Mode: PinInputModeFloating})
 	}
+	config.TX.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
+	config.RX.Configure(PinConfig{Mode: PinInputModeFloating})
 
 	// Enable USART clock
-	if uart.Bus == stm32.USART1 {
-		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_USART1EN)
-	} else if uart.Bus == stm32.USART2 {
-		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_USART2EN)
-	}
+	enableAltFuncClock(unsafe.Pointer(uart.Bus))
 
 	// Set baud rate
 	uart.SetBaudRate(config.BaudRate)

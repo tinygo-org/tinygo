@@ -15,11 +15,11 @@ func CPUFrequency() uint32 {
 }
 
 // Peripheral clock frequencies as set in runtime_stm32f407.go
-func APB1_Frequency() uint32 {
+func apb1_Frequency() uint32 {
 	return CPUFrequency() / 4
 }
 
-func APB2_Frequency() uint32 {
+func apb2_Frequency() uint32 {
 	return CPUFrequency() / 2
 }
 
@@ -130,19 +130,17 @@ func (uart UART) Configure(config UARTConfig) {
 	}
 
 	// Set the GPIO pins to defaults if they're not set
-	if config.TX == 0 {
+	if config.TX == 0 && config.RX == 0 {
 		config.TX = UART_TX_PIN
-	}
-	if config.RX == 0 {
 		config.RX = UART_RX_PIN
 	}
 
-	// use standard TX/RX pins PA2 and PA3
-	config.TX.Configure(PinConfig{Mode: PinModeUartTX})
-	config.RX.Configure(PinConfig{Mode: PinModeUartRX})
+	// Enable USART clock
+	enableAltFuncClock(unsafe.Pointer(uart.Bus))
 
-	// Enable USART2 clock
-	EnableAltFuncClock(unsafe.Pointer(uart.Bus))
+	// use standard TX/RX pins PA2 and PA3
+	config.TX.Configure(PinConfig{Mode: PinModeUARTTX})
+	config.RX.Configure(PinConfig{Mode: PinModeUARTRX})
 
 	/*
 	  Set baud rate(115200)
