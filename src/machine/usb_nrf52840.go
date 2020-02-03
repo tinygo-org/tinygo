@@ -3,12 +3,12 @@
 package machine
 
 import (
-	"device/nrf"
 	"device/arm"
+	"device/nrf"
 	"runtime/interrupt"
+	"runtime/volatile"
 	"unicode/utf16"
 	"unsafe"
-	"runtime/volatile"
 )
 
 // USBCDC is the USB CDC aka serial over USB interface on the nRF52840
@@ -68,7 +68,7 @@ var (
 	usbLineInfo      = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
 	epinen           uint32
 	epouten          uint32
-	cdcInBusy				 volatile.Register8
+	cdcInBusy        volatile.Register8
 )
 
 // Configure the USB CDC interface. The config is here for compatibility with the UART interface.
@@ -95,7 +95,8 @@ func (usbcdc *USBCDC) Configure(config UARTConfig) {
 func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 	// USBD ready event
 	if nrf.USBD.EVENTS_USBEVENT.Get() == 1 {
-		if (nrf.USBD.EVENTCAUSE.Get()&nrf.USBD_EVENTCAUSE_READY) > 0 {
+		nrf.USBD.EVENTS_USBEVENT.Set(0)
+		if (nrf.USBD.EVENTCAUSE.Get() & nrf.USBD_EVENTCAUSE_READY) > 0 {
 
 			// Configure control endpoint
 			initEndpoint(0, usb_ENDPOINT_TYPE_CONTROL)
@@ -106,7 +107,6 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 
 			usbConfiguration = 0
 		}
-		nrf.USBD.EVENTS_USBEVENT.Set(0)
 		nrf.USBD.EVENTCAUSE.Set(0)
 	}
 
@@ -118,6 +118,7 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 
 	if nrf.USBD.EVENTS_EP0DATADONE.Get() == 1 {
 		// done sending packet - either need to send another or enter status stage
+		nrf.USBD.EVENTS_EP0DATADONE.Set(0)
 		if sendOnEP0DATADONE.ptr != nil {
 			// previous data was too big for one packet, so send a second
 			sendViaEPIn(
@@ -132,7 +133,6 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 			// no more data, so set status stage
 			nrf.USBD.TASKS_EP0STATUS.Set(1)
 		}
-		nrf.USBD.EVENTS_EP0DATADONE.Set(0)
 		return
 	}
 
@@ -162,7 +162,9 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 
 	// Now the actual transfer handlers, ignore endpoint number 0 (setup)
 	if nrf.USBD.EVENTS_EPDATA.Get() > 0 {
+		nrf.USBD.EVENTS_EPDATA.Set(0)
 		epDataStatus := nrf.USBD.EPDATASTATUS.Get()
+		nrf.USBD.EPDATASTATUS.Set(0)
 		var i uint32
 		for i = 1; i < uint32(len(endPoints)); i++ {
 			// Check if endpoint has a pending interrupt
@@ -171,14 +173,21 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 			if inDataDone || outDataDone {
 				switch i {
 				case usb_CDC_ENDPOINT_OUT:
-					handleEndpoint(i)
+					nrf.USBD.EPOUT[i].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[i]))))
+					nrf.USBD.EPOUT[i].MAXCNT.Set(64)
+					nrf.USBD.TASKS_STARTEPOUT[i].Set(1)
 				case usb_CDC_ENDPOINT_IN, usb_CDC_ENDPOINT_ACM:
 					cdcInBusy.Set(0)
 				}
 			}
 		}
-		nrf.USBD.EVENTS_EPDATA.Set(0)
-		nrf.USBD.EPDATASTATUS.Set(0)
+	}
+
+	for i := 0; i < len(endPoints); i++ {
+		if nrf.USBD.EVENTS_ENDEPOUT[i].Get() > 0 {
+			nrf.USBD.EVENTS_ENDEPOUT[i].Set(0)
+			handleEndpoint(uint32(i))
+		}
 	}
 }
 
@@ -199,24 +208,26 @@ func initEndpoint(ep, config uint32) {
 		enableEPIn(ep)
 
 	case usb_ENDPOINT_TYPE_BULK | usbEndpointOut:
-		// set data buffer address
-		nrf.USBD.EPOUT[ep].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
-		nrf.USBD.EPOUT[ep].MAXCNT.Set(64)
 		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_EPDATA)
+		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0 << ep)
 		nrf.USBD.SIZE.EPOUT[ep].Set(0)
 		enableEPOut(ep)
-		// nrf.USBD.TASKS_STARTEPOUT[ep].Set(1)
 
 	case usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointOut:
+		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0 << ep)
+		nrf.USBD.SIZE.EPOUT[ep].Set(0)
 		enableEPOut(ep)
-		// TODO: not really anything, seems like...
 
 	case usb_ENDPOINT_TYPE_BULK | usbEndpointIn:
+		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_EPDATA)
 		enableEPIn(ep)
 
 	case usb_ENDPOINT_TYPE_CONTROL:
 		enableEPIn(0)
 		enableEPOut(0)
+		nrf.USBD.EPOUT[0].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[0]))))
+		nrf.USBD.EPOUT[0].MAXCNT.Set(64)
+		nrf.USBD.TASKS_STARTEPOUT[0].Set(1)
 		nrf.USBD.TASKS_EP0STATUS.Set(1)
 	}
 }
@@ -272,12 +283,12 @@ func handleStandardSetup(setup usbSetup) bool {
 
 	case usb_SET_CONFIGURATION:
 		if setup.bmRequestType&usb_REQUEST_RECIPIENT == usb_REQUEST_DEVICE {
+			nrf.USBD.TASKS_EP0STATUS.Set(1)
 			for i := 1; i < len(endPoints); i++ {
 				initEndpoint(uint32(i), endPoints[i])
 			}
 
 			usbConfiguration = setup.wValueL
-			nrf.USBD.TASKS_EP0STATUS.Set(1)
 			return true
 		} else {
 			return false
@@ -319,10 +330,12 @@ func cdcSetup(setup usbSetup) bool {
 	if setup.bmRequestType == usb_REQUEST_HOSTTODEVICE_CLASS_INTERFACE {
 		if setup.bRequest == usb_CDC_SET_LINE_CODING {
 			b := receiveUSBControlPacket()
-			usbLineInfo.dwDTERate = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
-			usbLineInfo.bCharFormat = b[4]
-			usbLineInfo.bParityType = b[5]
-			usbLineInfo.bDataBits = b[6]
+			if len(b) >= 7 {
+				usbLineInfo.dwDTERate = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
+				usbLineInfo.bCharFormat = b[4]
+				usbLineInfo.bParityType = b[5]
+				usbLineInfo.bDataBits = b[6]
+			}
 		}
 
 		if setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
@@ -367,17 +380,12 @@ func sendUSBPacket(ep uint32, data []byte) {
 }
 
 func receiveUSBControlPacket() []byte {
-	// address
-	nrf.USBD.EPOUT[0].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[0][0]))))
-	nrf.USBD.EPOUT[0].MAXCNT.Set(64)
-
 	// set byte count to zero
 	nrf.USBD.SIZE.EPOUT[0].Set(0)
-	nrf.USBD.SHORTS.Set(nrf.USBD_SHORTS_ENDEPOUT0_EP0RCVOUT)
-	nrf.USBD.TASKS_STARTEPOUT[0].Set(1)
+	nrf.USBD.TASKS_EP0RCVOUT.Set(1)
 
 	// Wait until OUT transfer is ready.
-	timeout := 300000
+	timeout := 3000
 	for nrf.USBD.EVENTS_EP0DATADONE.Get() == 0 {
 		timeout--
 		if timeout == 0 {
@@ -387,10 +395,8 @@ func receiveUSBControlPacket() []byte {
 
 	// get data
 	bytesread := int(nrf.USBD.SIZE.EPOUT[0].Get())
-
 	data := make([]byte, bytesread)
 	copy(data, udd_ep_out_cache_buffer[0][:])
-
 	return data
 }
 
@@ -495,16 +501,14 @@ func sendConfiguration(setup usbSetup) {
 func handleEndpoint(ep uint32) {
 	// get data
 	count := int(nrf.USBD.SIZE.EPOUT[ep].Get())
+
 	// move to ring buffer
 	for i := 0; i < count; i++ {
-		USB.Receive(byte((udd_ep_out_cache_buffer[ep][i] & 0xFF)))
+		USB.Receive(byte(udd_ep_out_cache_buffer[ep][i]))
 	}
 
 	// set ready for next data
 	nrf.USBD.SIZE.EPOUT[ep].Set(0)
-	nrf.USBD.EPOUT[ep].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep][0]))))
-	nrf.USBD.EPOUT[ep].MAXCNT.Set(64)
-	nrf.USBD.TASKS_STARTEPOUT[ep].Set(1)
 }
 
 func sendViaEPIn(ep uint32, ptr *byte, count int) {
