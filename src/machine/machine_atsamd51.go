@@ -1195,6 +1195,16 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return byte(spi.Bus.DATA.Get()), nil
 }
 
+// The QSPI peripheral on ATSAMD51 is only available on the following pins
+const (
+	QSPI_SCK   = PB10
+	QSPI_CS    = PB11
+	QSPI_DATA0 = PA08
+	QSPI_DATA1 = PA09
+	QSPI_DATA2 = PA10
+	QSPI_DATA3 = PA11
+)
+
 // PWM
 const period = 0xFFFF
 
