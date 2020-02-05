@@ -376,6 +376,23 @@ type cdcLineInfo struct {
 	lineState   uint8
 }
 
+// strToUTF16LEDescriptor converts a utf8 string into a string descriptor
+// note: the following code only converts ascii characters to UTF16LE. In order
+// to do a "proper" conversion, we would need to pull in the 'unicode/utf16'
+// package, which at the time this was written added 512 bytes to the compiled
+// binary.
+func strToUTF16LEDescriptor(in string) []byte {
+	size := (len(in) << 1) + 2
+	out := make([]byte, size)
+	out[0] = byte(size)
+	out[1] = 0x03
+	for i, rune := range in {
+		out[(i<<1)+2] = byte(rune)
+		out[(i<<1)+3] = 0
+	}
+	return out
+}
+
 var (
 	// TODO: allow setting these
 	usb_STRING_LANGUAGE     = [2]uint16{(3 << 8) | (2 + 2), 0x0409} // English

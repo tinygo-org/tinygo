@@ -7,7 +7,6 @@ import (
 	"device/nrf"
 	"runtime/interrupt"
 	"runtime/volatile"
-	"unicode/utf16"
 	"unsafe"
 )
 
@@ -21,17 +20,13 @@ type USBCDC struct {
 func (usbcdc USBCDC) WriteByte(c byte) error {
 	// Supposedly to handle problem with Windows USB serial ports?
 	if usbLineInfo.lineState > 0 {
-		cdcInBusy.Set(1)
+		enterCriticalSection()
 		udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN][0] = c
 		sendViaEPIn(
 			usb_CDC_ENDPOINT_IN,
 			&udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN][0],
 			1,
 		)
-
-		for cdcInBusy.Get() == 1 {
-			arm.Asm("wfi")
-		}
 	}
 
 	return nil
@@ -46,7 +41,8 @@ func (usbcdc USBCDC) RTS() bool {
 }
 
 var (
-	USB                    = USBCDC{Buffer: NewRingBuffer()}
+	USB = USBCDC{Buffer: NewRingBuffer()}
+
 	usbEndpointDescriptors [8]usbDeviceDescriptor
 
 	udd_ep_in_cache_buffer  [7][128]uint8
@@ -68,8 +64,25 @@ var (
 	usbLineInfo      = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
 	epinen           uint32
 	epouten          uint32
-	cdcInBusy        volatile.Register8
+	easyDMABusy      volatile.Register8
 )
+
+// enterCriticalSection is used to protect access to easyDMA - only one thing
+// can be done with it at a time
+func enterCriticalSection() {
+	waitForEasyDMA()
+	easyDMABusy.SetBits(1)
+}
+
+func waitForEasyDMA() {
+	for easyDMABusy.HasBits(1) {
+		arm.Asm("wfi")
+	}
+}
+
+func exitCriticalSection() {
+	easyDMABusy.ClearBits(1)
+}
 
 // Configure the USB CDC interface. The config is here for compatibility with the UART interface.
 func (usbcdc *USBCDC) Configure(config UARTConfig) {
@@ -83,7 +96,7 @@ func (usbcdc *USBCDC) Configure(config UARTConfig) {
 
 	// enable interrupt for end of reset and start of frame
 	nrf.USBD.INTENSET.Set(
-		nrf.USBD_INTENSET_SOF |
+		nrf.USBD_INTENSET_EPDATA |
 			nrf.USBD_INTENSET_EP0DATADONE |
 			nrf.USBD_INTENSET_USBEVENT |
 			nrf.USBD_INTENSET_EP0SETUP,
@@ -108,12 +121,6 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 			usbConfiguration = 0
 		}
 		nrf.USBD.EVENTCAUSE.Set(0)
-	}
-
-	// Start of frame
-	if nrf.USBD.EVENTS_SOF.Get() == 1 {
-		nrf.USBD.EVENTS_SOF.Set(0)
-		// if you want to blink LED showing traffic, this would be the place...
 	}
 
 	if nrf.USBD.EVENTS_EP0DATADONE.Get() == 1 {
@@ -164,29 +171,40 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 	if nrf.USBD.EVENTS_EPDATA.Get() > 0 {
 		nrf.USBD.EVENTS_EPDATA.Set(0)
 		epDataStatus := nrf.USBD.EPDATASTATUS.Get()
-		nrf.USBD.EPDATASTATUS.Set(0)
+		nrf.USBD.EPDATASTATUS.Set(epDataStatus)
 		var i uint32
 		for i = 1; i < uint32(len(endPoints)); i++ {
 			// Check if endpoint has a pending interrupt
-			inDataDone := epDataStatus&(1<<i) > 0
-			outDataDone := epDataStatus&(0x10000<<i) > 0
+			inDataDone := epDataStatus&(nrf.USBD_EPDATASTATUS_EPIN1<<(i-1)) > 0
+			outDataDone := epDataStatus&(nrf.USBD_EPDATASTATUS_EPOUT1<<(i-1)) > 0
 			if inDataDone || outDataDone {
 				switch i {
 				case usb_CDC_ENDPOINT_OUT:
-					nrf.USBD.EPOUT[i].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[i]))))
-					nrf.USBD.EPOUT[i].MAXCNT.Set(64)
-					nrf.USBD.TASKS_STARTEPOUT[i].Set(1)
-				case usb_CDC_ENDPOINT_IN, usb_CDC_ENDPOINT_ACM:
-					cdcInBusy.Set(0)
+					// setup buffer to receive from host
+					if outDataDone {
+						enterCriticalSection()
+						nrf.USBD.EPOUT[i].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[i]))))
+						count := nrf.USBD.SIZE.EPOUT[i].Get()
+						nrf.USBD.EPOUT[i].MAXCNT.Set(count)
+						nrf.USBD.TASKS_STARTEPOUT[i].Set(1)
+					}
+				case usb_CDC_ENDPOINT_IN: //, usb_CDC_ENDPOINT_ACM:
+					if inDataDone {
+						exitCriticalSection()
+					}
 				}
 			}
 		}
 	}
 
+	// ENDEPOUT[n] events
 	for i := 0; i < len(endPoints); i++ {
 		if nrf.USBD.EVENTS_ENDEPOUT[i].Get() > 0 {
 			nrf.USBD.EVENTS_ENDEPOUT[i].Set(0)
-			handleEndpoint(uint32(i))
+			if i == usb_CDC_ENDPOINT_OUT {
+				handleEndpoint(uint32(i))
+			}
+			exitCriticalSection()
 		}
 	}
 }
@@ -208,7 +226,6 @@ func initEndpoint(ep, config uint32) {
 		enableEPIn(ep)
 
 	case usb_ENDPOINT_TYPE_BULK | usbEndpointOut:
-		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_EPDATA)
 		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0 << ep)
 		nrf.USBD.SIZE.EPOUT[ep].Set(0)
 		enableEPOut(ep)
@@ -219,7 +236,6 @@ func initEndpoint(ep, config uint32) {
 		enableEPOut(ep)
 
 	case usb_ENDPOINT_TYPE_BULK | usbEndpointIn:
-		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_EPDATA)
 		enableEPIn(ep)
 
 	case usb_ENDPOINT_TYPE_CONTROL:
@@ -238,7 +254,6 @@ func handleStandardSetup(setup usbSetup) bool {
 		buf := []byte{0, 0}
 
 		if setup.bmRequestType != 0 { // endpoint
-			// TODO: actually check if the endpoint in question is currently halted
 			if isEndpointHalt {
 				buf[0] = 1
 			}
@@ -354,9 +369,6 @@ func cdcSetup(setup usbSetup) bool {
 		}
 
 		if setup.bRequest == usb_CDC_SEND_BREAK {
-			// TODO: something with this value?
-			// breakValue = ((uint16_t)setup.wValueH << 8) | setup.wValueL;
-			// return false;
 			nrf.USBD.TASKS_EP0STATUS.Set(1)
 		}
 		return true
@@ -431,11 +443,19 @@ func sendDescriptor(setup usbSetup) {
 
 		case usb_IPRODUCT:
 			b := strToUTF16LEDescriptor(usb_STRING_PRODUCT)
-			sendUSBPacket(0, b[:setup.wLength])
+			if setup.wLength == 2 {
+				sendUSBPacket(0, b[:2])
+			} else {
+				sendUSBPacket(0, b)
+			}
 
 		case usb_IMANUFACTURER:
 			b := strToUTF16LEDescriptor(usb_STRING_MANUFACTURER)
-			sendUSBPacket(0, b[:setup.wLength])
+			if setup.wLength == 2 {
+				sendUSBPacket(0, b[:2])
+			} else {
+				sendUSBPacket(0, b)
+			}
 
 		case usb_ISERIAL:
 			// TODO: allow returning a product serial number
@@ -500,7 +520,7 @@ func sendConfiguration(setup usbSetup) {
 
 func handleEndpoint(ep uint32) {
 	// get data
-	count := int(nrf.USBD.SIZE.EPOUT[ep].Get())
+	count := int(nrf.USBD.EPOUT[ep].AMOUNT.Get())
 
 	// move to ring buffer
 	for i := 0; i < count; i++ {
@@ -516,7 +536,6 @@ func sendViaEPIn(ep uint32, ptr *byte, count int) {
 		uint32(uintptr(unsafe.Pointer(ptr))),
 	)
 	nrf.USBD.EPIN[ep].MAXCNT.Set(uint32(count))
-	nrf.USBD.EVENTS_ENDEPIN[ep].Set(0)
 	nrf.USBD.TASKS_STARTEPIN[ep].Set(1)
 }
 
@@ -528,18 +547,4 @@ func enableEPOut(ep uint32) {
 func enableEPIn(ep uint32) {
 	epinen = epinen | (nrf.USBD_EPINEN_IN0 << ep)
 	nrf.USBD.EPINEN.Set(epinen)
-}
-
-func strToUTF16LEDescriptor(in string) []byte {
-	runes := []rune(in)
-	encoded := utf16.Encode(runes)
-	size := (len(encoded) << 1) + 2
-	out := make([]byte, size)
-	out[0] = byte(size)
-	out[1] = 0x03
-	for i, value := range encoded {
-		out[(i<<1)+2] = byte(value & 0xff)
-		out[(i<<1)+3] = byte(value >> 8)
-	}
-	return out
 }
