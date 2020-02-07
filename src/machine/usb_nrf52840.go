@@ -88,7 +88,7 @@ func exitCriticalSection() {
 func (usbcdc *USBCDC) Configure(config UARTConfig) {
 	// enable IRQ
 	usbcdc.interrupt = interrupt.New(nrf.IRQ_USBD, USB.handleInterrupt)
-	usbcdc.interrupt.SetPriority(0xDF)
+	usbcdc.interrupt.SetPriority(0xD0)
 	usbcdc.interrupt.Enable()
 
 	// enable USB
@@ -202,7 +202,7 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 		if nrf.USBD.EVENTS_ENDEPOUT[i].Get() > 0 {
 			nrf.USBD.EVENTS_ENDEPOUT[i].Set(0)
 			if i == usb_CDC_ENDPOINT_OUT {
-				handleEndpoint(uint32(i))
+				usbcdc.handleEndpoint(uint32(i))
 			}
 			exitCriticalSection()
 		}
@@ -518,13 +518,13 @@ func sendConfiguration(setup usbSetup) {
 	}
 }
 
-func handleEndpoint(ep uint32) {
+func (usbcdc USBCDC) handleEndpoint(ep uint32) {
 	// get data
 	count := int(nrf.USBD.EPOUT[ep].AMOUNT.Get())
 
 	// move to ring buffer
 	for i := 0; i < count; i++ {
-		USB.Receive(byte(udd_ep_out_cache_buffer[ep][i]))
+		usbcdc.Receive(byte(udd_ep_out_cache_buffer[ep][i]))
 	}
 
 	// set ready for next data
