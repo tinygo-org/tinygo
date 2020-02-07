@@ -7,6 +7,10 @@ import (
 	"unsafe"
 )
 
+var (
+	UART0 = NRF_UART0
+)
+
 func CPUFrequency() uint32 {
 	return 64000000
 }
