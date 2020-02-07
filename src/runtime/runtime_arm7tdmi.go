@@ -30,20 +30,16 @@ var _sidata [0]byte
 //go:extern _edata
 var _edata [0]byte
 
+func postinit() {}
+
 // Entry point for Go. Initialize all packages and call main.main().
 //go:export main
 func main() {
 	// Initialize .data and .bss sections.
 	preinit()
 
-	// Run initializers of all packages.
-	initAll()
-
-	// Compiler-generated call to main.main().
-	go callMain()
-
-	// Run the scheduler.
-	scheduler()
+	// Run program.
+	run()
 }
 
 func preinit() {

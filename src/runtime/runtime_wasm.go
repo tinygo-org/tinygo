@@ -18,11 +18,11 @@ type wasiIOVec struct {
 //export fd_write
 func fd_write(id uint32, iovs *wasiIOVec, iovs_len uint, nwritten *uint) (errno uint)
 
+func postinit() {}
+
 //export _start
 func _start() {
-	initAll()
-	go callMain()
-	scheduler()
+	run()
 }
 
 // Using global variables to avoid heap allocation.
