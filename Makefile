@@ -242,6 +242,8 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/i2s
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=clue_alpha          examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.gba -target=gameboy-advance     examples/gba-display
 	@$(MD5SUM) test.gba
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m4        examples/blinky1

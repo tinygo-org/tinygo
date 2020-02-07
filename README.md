@@ -43,10 +43,11 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 27 microcontroller boards are currently supported:
+The following 28 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
+* [Adafruit CLUE Alpha](https://www.adafruit.com/product/4500)
 * [Adafruit Feather M0](https://www.adafruit.com/product/2772)
 * [Adafruit Feather M4](https://www.adafruit.com/product/3857)
 * [Adafruit ItsyBitsy M0](https://www.adafruit.com/product/3727)
