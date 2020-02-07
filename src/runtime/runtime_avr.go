@@ -39,9 +39,7 @@ var _ebss [0]byte
 //go:export main
 func main() {
 	preinit()
-	initAll()
-	postinit()
-	callMain()
+	run()
 	abort()
 }
 

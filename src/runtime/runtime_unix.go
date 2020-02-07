@@ -45,17 +45,12 @@ type timespec struct {
 
 const CLOCK_MONOTONIC_RAW = 4
 
+func postinit() {}
+
 // Entry point for Go. Initialize all packages and call main.main().
 //go:export main
 func main() int {
-	// Run initializers of all packages.
-	initAll()
-
-	// Compiler-generated call to main.main().
-	go callMain()
-
-	// Run scheduler.
-	scheduler()
+	run()
 
 	// For libc compatibility.
 	return 0

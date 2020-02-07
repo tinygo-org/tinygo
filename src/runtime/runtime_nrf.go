@@ -17,13 +17,13 @@ const tickMicros = 1024 * 32
 //go:linkname systemInit SystemInit
 func systemInit()
 
+func postinit() {}
+
 //go:export Reset_Handler
 func main() {
 	systemInit()
 	preinit()
-	initAll()
-	go callMain()
-	scheduler()
+	run()
 	abort()
 }
 
