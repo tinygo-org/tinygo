@@ -45,3 +45,7 @@ func KeepAlive(x interface{}) {
 func SetFinalizer(obj interface{}, finalizer interface{}) {
 	// Unimplemented.
 }
+
+func initHeap() {
+	// Nothing to initialize.
+}

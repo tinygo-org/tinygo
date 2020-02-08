@@ -180,7 +180,7 @@ func (b gcBlock) unmark() {
 // No memory may be allocated before this is called. That means the runtime and
 // any packages the runtime depends upon may not allocate memory during package
 // initialization.
-func init() {
+func initHeap() {
 	totalSize := heapEnd - heapStart
 
 	// Allocate some memory to keep 2 bits of information about every block.
