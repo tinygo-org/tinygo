@@ -28,12 +28,6 @@ const (
 	UART_RX_PIN Pin = 8
 )
 
-// UART0 is the NRF UART and UART1 is the nRF52840's USB device
-var (
-	UART0 = NRF_UART0
-	UART1 = USB
-)
-
 // ADC pins
 const (
 	ADC0 Pin = 3

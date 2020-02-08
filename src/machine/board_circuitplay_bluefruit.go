@@ -56,10 +56,9 @@ const (
 	UART_RX_PIN = P0_30 // PORTB
 )
 
-// UART0 is the USB device and UART1 is the NRF UART
+// UART0 is the USB device
 var (
 	UART0 = USB
-	UART1 = NRF_UART0
 )
 
 // I2C pins
