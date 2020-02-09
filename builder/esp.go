@@ -22,15 +22,15 @@ type espImageSegment struct {
 	data []byte
 }
 
-// makeESP32Firmare converts an input ELF file to an image file for the ESP32
-// chip. This is a special purpose image format just for the ESP32 chip, and is
-// parsed by the on-chip mask ROM bootloader.
+// makeESPFirmare converts an input ELF file to an image file for an ESP32 or
+// ESP8266 chip. This is a special purpose image format just for the ESP chip
+// family, and is parsed by the on-chip mask ROM bootloader.
 //
 // The following documentation has been used:
 // https://github.com/espressif/esptool/wiki/Firmware-Image-Format
 // https://github.com/espressif/esp-idf/blob/8fbb63c2a701c22ccf4ce249f43aded73e134a34/components/bootloader_support/include/esp_image_format.h#L58
 // https://github.com/espressif/esptool/blob/master/esptool.py
-func makeESP32FirmareImage(infile, outfile string) error {
+func makeESPFirmareImage(infile, outfile, format string) error {
 	inf, err := elf.Open(infile)
 	if err != nil {
 		return err
@@ -79,26 +79,49 @@ func makeESP32FirmareImage(infile, outfile string) error {
 	outf := &bytes.Buffer{}
 
 	// Image header.
-	// Details: https://github.com/espressif/esp-idf/blob/8fbb63c2/components/bootloader_support/include/esp_image_format.h#L58
-	binary.Write(outf, binary.LittleEndian, struct {
-		magic          uint8
-		segment_count  uint8
-		spi_mode       uint8
-		spi_speed_size uint8
-		entry_addr     uint32
-		wp_pin         uint8
-		spi_pin_drv    [3]uint8
-		reserved       [11]uint8
-		hash_appended  bool
-	}{
-		magic:          0xE9,
-		segment_count:  byte(len(segments)),
-		spi_mode:       0, // irrelevant, replaced by esptool when flashing
-		spi_speed_size: 0, // spi_speed, spi_size: replaced by esptool when flashing
-		entry_addr:     uint32(inf.Entry),
-		wp_pin:         0xEE, // disable WP pin
-		hash_appended:  true, // add a SHA256 hash
-	})
+	switch format {
+	case "esp32":
+		// Header format:
+		// https://github.com/espressif/esp-idf/blob/8fbb63c2/components/bootloader_support/include/esp_image_format.h#L58
+		binary.Write(outf, binary.LittleEndian, struct {
+			magic          uint8
+			segment_count  uint8
+			spi_mode       uint8
+			spi_speed_size uint8
+			entry_addr     uint32
+			wp_pin         uint8
+			spi_pin_drv    [3]uint8
+			reserved       [11]uint8
+			hash_appended  bool
+		}{
+			magic:          0xE9,
+			segment_count:  byte(len(segments)),
+			spi_mode:       0, // irrelevant, replaced by esptool when flashing
+			spi_speed_size: 0, // spi_speed, spi_size: replaced by esptool when flashing
+			entry_addr:     uint32(inf.Entry),
+			wp_pin:         0xEE, // disable WP pin
+			hash_appended:  true, // add a SHA256 hash
+		})
+	case "esp8266":
+		// Header format:
+		// https://github.com/espressif/esptool/wiki/Firmware-Image-Format
+		// Basically a truncated version of the ESP32 header.
+		binary.Write(outf, binary.LittleEndian, struct {
+			magic          uint8
+			segment_count  uint8
+			spi_mode       uint8
+			spi_speed_size uint8
+			entry_addr     uint32
+		}{
+			magic:          0xE9,
+			segment_count:  byte(len(segments)),
+			spi_mode:       0,    // irrelevant, replaced by esptool when flashing
+			spi_speed_size: 0x20, // spi_speed, spi_size: replaced by esptool when flashing
+			entry_addr:     uint32(inf.Entry),
+		})
+	default:
+		return fmt.Errorf("builder: unknown binary format %#v, expected esp32 or esp8266", format)
+	}
 
 	// Write all segments to the image.
 	// https://github.com/espressif/esptool/wiki/Firmware-Image-Format#segment
@@ -119,9 +142,11 @@ func makeESP32FirmareImage(infile, outfile string) error {
 	outf.Write(make([]byte, 15-outf.Len()%16))
 	outf.WriteByte(checksum)
 
-	// SHA256 hash (to protect against image corruption, not for security).
-	hash := sha256.Sum256(outf.Bytes())
-	outf.Write(hash[:])
+	if format == "esp32" {
+		// SHA256 hash (to protect against image corruption, not for security).
+		hash := sha256.Sum256(outf.Bytes())
+		outf.Write(hash[:])
+	}
 
 	// Write the image to the output file.
 	return ioutil.WriteFile(outfile, outf.Bytes(), 0666)
