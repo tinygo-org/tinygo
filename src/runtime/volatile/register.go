@@ -57,6 +57,16 @@ func (r *Register8) HasBits(value uint8) bool {
 	return (r.Get() & value) > 0
 }
 
+// ReplaceBits is a helper to simplify setting multiple bits high and/or low at
+// once. It is the volatile equivalent of:
+//
+//     r.Reg = (r.Reg & ^(mask << pos)) | value << pos
+//
+// go:inline
+func (r *Register8) ReplaceBits(value uint8, mask uint8, pos uint8) {
+	StoreUint8(&r.Reg, LoadUint8(&r.Reg)&^(mask<<pos)|value<<pos)
+}
+
 type Register16 struct {
 	Reg uint16
 }
@@ -109,6 +119,16 @@ func (r *Register16) HasBits(value uint16) bool {
 	return (r.Get() & value) > 0
 }
 
+// ReplaceBits is a helper to simplify setting multiple bits high and/or low at
+// once. It is the volatile equivalent of:
+//
+//     r.Reg = (r.Reg & ^(mask << pos)) | value << pos
+//
+// go:inline
+func (r *Register16) ReplaceBits(value uint16, mask uint16, pos uint8) {
+	StoreUint16(&r.Reg, LoadUint16(&r.Reg)&^(mask<<pos)|value<<pos)
+}
+
 type Register32 struct {
 	Reg uint32
 }
@@ -159,4 +179,14 @@ func (r *Register32) ClearBits(value uint32) {
 //go:inline
 func (r *Register32) HasBits(value uint32) bool {
 	return (r.Get() & value) > 0
+}
+
+// ReplaceBits is a helper to simplify setting multiple bits high and/or low at
+// once. It is the volatile equivalent of:
+//
+//     r.Reg = (r.Reg & ^(mask << pos)) | value << pos
+//
+// go:inline
+func (r *Register32) ReplaceBits(value uint32, mask uint32, pos uint8) {
+	StoreUint32(&r.Reg, LoadUint32(&r.Reg)&^(mask<<pos)|value<<pos)
 }
