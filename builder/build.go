@@ -292,10 +292,11 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			if err != nil {
 				return err
 			}
-		case "esp32":
-			// Special format for the ESP32 chip (parsed by the ROM bootloader).
+		case "esp32", "esp8266":
+			// Special format for the ESP family of chips (parsed by the ROM
+			// bootloader).
 			tmppath = filepath.Join(dir, "main"+outext)
-			err := makeESP32FirmareImage(executable, tmppath)
+			err := makeESPFirmareImage(executable, tmppath, outputBinaryFormat)
 			if err != nil {
 				return err
 			}
