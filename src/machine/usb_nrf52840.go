@@ -59,12 +59,13 @@ var (
 		(usb_ENDPOINT_TYPE_BULK | usbEndpointOut),
 		(usb_ENDPOINT_TYPE_BULK | usbEndpointIn)}
 
-	usbConfiguration uint8
-	usbSetInterface  uint8
-	usbLineInfo      = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
-	epinen           uint32
-	epouten          uint32
-	easyDMABusy      volatile.Register8
+	usbConfiguration         uint8
+	usbSetInterface          uint8
+	usbLineInfo              = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
+	epinen                   uint32
+	epouten                  uint32
+	easyDMABusy              volatile.Register8
+	epout0data_setlinecoding bool
 )
 
 // enterCriticalSection is used to protect access to easyDMA - only one thing
@@ -126,6 +127,12 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 	if nrf.USBD.EVENTS_EP0DATADONE.Get() == 1 {
 		// done sending packet - either need to send another or enter status stage
 		nrf.USBD.EVENTS_EP0DATADONE.Set(0)
+		if epout0data_setlinecoding {
+			nrf.USBD.EPOUT[0].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[0]))))
+			nrf.USBD.EPOUT[0].MAXCNT.Set(64)
+			nrf.USBD.TASKS_STARTEPOUT[0].Set(1)
+			return
+		}
 		if sendOnEP0DATADONE.ptr != nil {
 			// previous data was too big for one packet, so send a second
 			sendViaEPIn(
@@ -201,12 +208,28 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 	for i := 0; i < len(endPoints); i++ {
 		if nrf.USBD.EVENTS_ENDEPOUT[i].Get() > 0 {
 			nrf.USBD.EVENTS_ENDEPOUT[i].Set(0)
+			if i == 0 && epout0data_setlinecoding {
+				epout0data_setlinecoding = false
+				count := int(nrf.USBD.SIZE.EPOUT[0].Get())
+				if count >= 7 {
+					parseUSBLineInfo(udd_ep_out_cache_buffer[0][:count])
+					checkShouldReset()
+				}
+				nrf.USBD.TASKS_EP0STATUS.Set(1)
+			}
 			if i == usb_CDC_ENDPOINT_OUT {
 				usbcdc.handleEndpoint(uint32(i))
 			}
 			exitCriticalSection()
 		}
 	}
+}
+
+func parseUSBLineInfo(b []byte) {
+	usbLineInfo.dwDTERate = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
+	usbLineInfo.bCharFormat = b[4]
+	usbLineInfo.bParityType = b[5]
+	usbLineInfo.bDataBits = b[6]
 }
 
 func parseUSBSetupRegisters() usbSetup {
@@ -241,9 +264,7 @@ func initEndpoint(ep, config uint32) {
 	case usb_ENDPOINT_TYPE_CONTROL:
 		enableEPIn(0)
 		enableEPOut(0)
-		nrf.USBD.EPOUT[0].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[0]))))
-		nrf.USBD.EPOUT[0].MAXCNT.Set(64)
-		nrf.USBD.TASKS_STARTEPOUT[0].Set(1)
+		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0)
 		nrf.USBD.TASKS_EP0STATUS.Set(1)
 	}
 }
@@ -344,27 +365,14 @@ func cdcSetup(setup usbSetup) bool {
 
 	if setup.bmRequestType == usb_REQUEST_HOSTTODEVICE_CLASS_INTERFACE {
 		if setup.bRequest == usb_CDC_SET_LINE_CODING {
-			b := receiveUSBControlPacket()
-			if len(b) >= 7 {
-				usbLineInfo.dwDTERate = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
-				usbLineInfo.bCharFormat = b[4]
-				usbLineInfo.bParityType = b[5]
-				usbLineInfo.bDataBits = b[6]
-			}
+			epout0data_setlinecoding = true
+			nrf.USBD.TASKS_EP0RCVOUT.Set(1)
+			return true
 		}
 
 		if setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
 			usbLineInfo.lineState = setup.wValueL
-		}
-
-		if setup.bRequest == usb_CDC_SET_LINE_CODING || setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
-			// auto-reset into the bootloader
-			if usbLineInfo.dwDTERate == 1200 && usbLineInfo.lineState&usb_CDC_LINESTATE_DTR == 0 {
-				// TODO: do we want to do this on the nRF52840?
-				// ResetProcessor()
-			} else {
-				// TODO: cancel any reset
-			}
+			checkShouldReset()
 			nrf.USBD.TASKS_EP0STATUS.Set(1)
 		}
 
@@ -374,6 +382,12 @@ func cdcSetup(setup usbSetup) bool {
 		return true
 	}
 	return false
+}
+
+func checkShouldReset() {
+	if usbLineInfo.dwDTERate == 1200 && usbLineInfo.lineState&usb_CDC_LINESTATE_DTR == 0 {
+		// TODO: reset here
+	}
 }
 
 func sendUSBPacket(ep uint32, data []byte) {
@@ -389,27 +403,6 @@ func sendUSBPacket(ep uint32, data []byte) {
 		&udd_ep_in_cache_buffer[ep][0],
 		count,
 	)
-}
-
-func receiveUSBControlPacket() []byte {
-	// set byte count to zero
-	nrf.USBD.SIZE.EPOUT[0].Set(0)
-	nrf.USBD.TASKS_EP0RCVOUT.Set(1)
-
-	// Wait until OUT transfer is ready.
-	timeout := 3000
-	for nrf.USBD.EVENTS_EP0DATADONE.Get() == 0 {
-		timeout--
-		if timeout == 0 {
-			return []byte{}
-		}
-	}
-
-	// get data
-	bytesread := int(nrf.USBD.SIZE.EPOUT[0].Get())
-	data := make([]byte, bytesread)
-	copy(data, udd_ep_out_cache_buffer[0][:])
-	return data
 }
 
 // sendDescriptor creates and sends the various USB descriptor types that
