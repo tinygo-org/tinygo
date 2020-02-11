@@ -25,8 +25,8 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not read version from GOROOT (%v): %v", goroot, err)
 	}
-	if major != 1 || (minor != 11 && minor != 12 && minor != 13) {
-		return nil, fmt.Errorf("requires go version 1.11, 1.12, or 1.13, got go%d.%d", major, minor)
+	if major != 1 || minor < 11 || minor > 14 {
+		return nil, fmt.Errorf("requires go version 1.11, 1.12, 1.13, or 1.14, got go%d.%d", major, minor)
 	}
 	clangHeaderPath := getClangHeaderPath(goenv.Get("TINYGOROOT"))
 	return &compileopts.Config{
