@@ -12,7 +12,7 @@ jobs:
   steps:
     - task: GoTool@0
       inputs:
-        version: '1.13.8'  
+        version: '1.14.1'
     - checkout: self
     - task: CacheBeta@0
       displayName: Cache LLVM source

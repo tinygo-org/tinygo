@@ -229,14 +229,14 @@ commands:
       - run:
           name: "Install dependencies"
           command: |
-            curl https://dl.google.com/go/go1.13.darwin-amd64.tar.gz -o go1.13.darwin-amd64.tar.gz
-            sudo tar -C /usr/local -xzf go1.13.darwin-amd64.tar.gz
+            curl https://dl.google.com/go/go1.14.darwin-amd64.tar.gz -o go1.14.darwin-amd64.tar.gz
+            sudo tar -C /usr/local -xzf go1.14.darwin-amd64.tar.gz
             ln -s /usr/local/go/bin/go /usr/local/bin/go
             HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
       - restore_cache:
           keys:
-            - go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
-            - go-cache-macos-v2-{{ checksum "go.mod" }}
+            - go-cache-macos-v3-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-macos-v3-{{ checksum "go.mod" }}
       - restore_cache:
           keys:
             - llvm-source-9-macos-v0
@@ -298,7 +298,7 @@ commands:
             sudo tar -C /usr/local --strip-components=1 -xf riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-apple-darwin.tar.gz
       - run: make smoketest AVR=0
       - save_cache:
-          key: go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
+          key: go-cache-macos-v3-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
             - ~/.cache/tinygo
@@ -319,6 +319,11 @@ jobs:
   test-llvm9-go113:
     docker:
       - image: circleci/golang:1.13-buster
+    steps:
+      - test-linux
+  test-llvm9-go114:
+    docker:
+      - image: circleci/golang:1.14-buster
     steps:
       - test-linux
   assert-test-linux:
@@ -346,6 +351,7 @@ workflows:
       - test-llvm9-go111
       - test-llvm9-go112
       - test-llvm9-go113
+      - test-llvm9-go114
       - build-linux
       - build-macos
       - assert-test-linux
