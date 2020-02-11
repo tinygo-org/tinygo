@@ -232,8 +232,8 @@ commands:
       - run:
           name: "Install dependencies"
           command: |
-            curl https://dl.google.com/go/go1.13.darwin-amd64.tar.gz -o go1.13.darwin-amd64.tar.gz
-            sudo tar -C /usr/local -xzf go1.13.darwin-amd64.tar.gz
+            curl https://dl.google.com/go/go1.14.darwin-amd64.tar.gz -o go1.14.darwin-amd64.tar.gz
+            sudo tar -C /usr/local -xzf go1.14.darwin-amd64.tar.gz
             ln -s /usr/local/go/bin/go /usr/local/bin/go
             HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
       - restore_cache:
@@ -327,14 +327,20 @@ jobs:
     steps:
       - test-linux:
           llvm: "10"
+  test-llvm10-go114:
+    docker:
+      - image: circleci/golang:1.14-buster
+    steps:
+      - test-linux:
+          llvm: "10"
   assert-test-linux:
     docker:
-      - image: circleci/golang:1.13-stretch
+      - image: circleci/golang:1.14-stretch
     steps:
       - assert-test-linux
   build-linux:
     docker:
-      - image: circleci/golang:1.13-stretch
+      - image: circleci/golang:1.14-stretch
     steps:
       - build-linux
   build-macos:
@@ -352,6 +358,7 @@ workflows:
       - test-llvm9-go111
       - test-llvm10-go112
       - test-llvm10-go113
+      - test-llvm10-go114
       - build-linux
       - build-macos
       - assert-test-linux
