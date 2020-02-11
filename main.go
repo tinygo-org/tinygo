@@ -24,7 +24,7 @@ import (
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
 
-	serial "go.bug.st/serial.v1"
+	"go.bug.st/serial"
 )
 
 // commandError is an error type to wrap os/exec.Command errors. This provides
