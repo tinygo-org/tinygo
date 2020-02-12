@@ -14,15 +14,6 @@ func CPUFrequency() uint32 {
 	return 168000000
 }
 
-// Peripheral clock frequencies as set in runtime_stm32f407.go
-func apb1_Frequency() uint32 {
-	return CPUFrequency() / 4
-}
-
-func apb2_Frequency() uint32 {
-	return CPUFrequency() / 2
-}
-
 const (
 	// Alternative peripheral pin functions
 	AF0_SYSTEM                AltFunc = 0
@@ -96,13 +87,14 @@ func (p Pin) enableClock() {
 
 // Enable peripheral clock
 func enableAltFuncClock(bus unsafe.Pointer) {
-	if bus == unsafe.Pointer(stm32.USART1) {
+	switch bus {
+	case unsafe.Pointer(stm32.USART1):
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_USART1EN)
-	} else if bus == unsafe.Pointer(stm32.USART2) {
+	case unsafe.Pointer(stm32.USART2):
 		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_USART2EN)
-	} else if bus == unsafe.Pointer(stm32.I2C1) {
+	case unsafe.Pointer(stm32.I2C1):
 		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_I2C1EN)
-	} else if bus == unsafe.Pointer(stm32.SPI1) {
+	case unsafe.Pointer(stm32.SPI1):
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_SPI1EN)
 	}
 }

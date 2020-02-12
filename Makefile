@@ -254,8 +254,6 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32f4disco        examples/blinky2
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=stm32f4disco        examples/blinky4
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-bluefruit examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/i2s
