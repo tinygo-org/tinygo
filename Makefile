@@ -9,8 +9,24 @@ LLD_SRC ?= llvm-project/lld
 
 # Default tool selection.
 CLANG ?= clang-9
-LLVM_AR ?= llvm-ar-9
-LLVM_NM ?= llvm-nm-9
+
+# Try to autodetect llvm-ar and llvm-nm
+ifneq (, $(shell command -v llvm-ar-9 2> /dev/null))
+    LLVM_AR ?= llvm-ar-9
+else ifneq (, $(shell command -v llvm-ar 2> /dev/null))
+    LLVM_AR ?= llvm-ar
+endif
+ifneq (, $(shell command -v llvm-nm-9 2> /dev/null))
+    LLVM_NM ?= llvm-nm-9
+else ifneq (, $(shell command -v llvm-nm 2> /dev/null))
+    LLVM_NM ?= llvm-nm
+endif
+ifndef LLVM_AR
+    $(warning llvm-ar not found)
+endif
+ifndef LLVM_NM
+    $(warning llvm-nm not found)
+endif
 
 # Go binary and GOROOT to select
 GO ?= go
@@ -23,7 +39,7 @@ MD5SUM = md5sum
 TINYGO ?= tinygo
 
 # Use CCACHE for LLVM if possible
-ifneq (, $(shell which ccache))
+ifneq (, $(shell command -v ccache 2> /dev/null))
     LLVM_OPTION += '-DLLVM_CCACHE_BUILD=ON'
 endif
 
