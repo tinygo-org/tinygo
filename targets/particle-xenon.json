@@ -1,0 +1,6 @@
+{
+	"inherits": ["nrf52840_mdk"],
+	"build-tags": ["particle_xenon"],
+	"flash-method": "openocd",
+	"openocd-interface": "cmsis-dap"
+}
