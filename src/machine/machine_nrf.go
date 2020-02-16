@@ -79,8 +79,14 @@ func (uart UART) Configure(config UARTConfig) {
 
 	uart.SetBaudRate(config.BaudRate)
 
-	// Set TX and RX pins from board.
-	uart.setPins(UART_TX_PIN, UART_RX_PIN)
+	// Set TX and RX pins
+	if config.TX == 0 && config.RX == 0 {
+		// Use default pins
+		uart.setPins(UART_TX_PIN, UART_RX_PIN)
+	} else {
+		uart.setPins(config.TX, config.RX)
+	}
+	
 
 	nrf.UART0.ENABLE.Set(nrf.UART_ENABLE_ENABLE_Enabled)
 	nrf.UART0.TASKS_STARTTX.Set(1)
