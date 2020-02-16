@@ -1,6 +1,6 @@
 {
 	"inherits": ["particle-3rd-gen"],
-	"build-tags": ["particle_xenon"],
+	"build-tags": ["particle_argon"],
 	"flash-method": "openocd",
 	"openocd-interface": "cmsis-dap"
 }
