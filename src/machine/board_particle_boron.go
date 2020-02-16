@@ -1,10 +1,10 @@
-// +build particle_xenon
+// +build particle_boron
 
 package machine
 
 const HasLowFrequencyCrystal = true
 
-// More info: https://docs.particle.io/datasheets/discontinued/xenon-datasheet/
+// More info: https://docs.particle.io/datasheets/cellular/boron-datasheet/
 // Board diagram: https://docs.particle.io/assets/images/xenon/xenon-block-diagram.png
 
 // LEDs
@@ -25,6 +25,11 @@ const (
 const (
 	SDA_PIN = 26
 	SCL_PIN = 27
+
+	// Internal I2C with MAX17043 and BQ24195 chips on it
+	SDA1_PIN = 24
+	SCL1_PIN = 41
+	INT1_PIN = 5
 )
 
 // SPI pins
@@ -44,12 +49,24 @@ const (
 	SPI1_HOLD_PIN = 23
 )
 
+// u-blox coprocessor
+const (
+	UBLOX_TXD_PIN       = 37
+	UBLOX_RXD_PIN       = 36
+	UBLOX_CTS_PIN       = 38
+	UBLOX_RTS_PIN       = 39
+	UBLOX_RESET_PIN     = 16
+	UBLOX_POWER_ON_PIN  = 24
+	UBLOX_BUFF_EN_PIN   = 25
+	UBLOX_VINT_PIN      = 2
+)
+
 // Other periferals
 const (
 	MODE_BUTTON_PIN   = 11
 	CHARGE_STATUS_PIN = 41
 	LIPO_VOLTAGE_PIN  = 5
-	PCB_ANTENNA_PIN   = 24
+	PCB_ANTENNA_PIN   = 2
 	EXTERNAL_UFL_PIN  = 25
 	NFC1_PIN          = 9
 	NFC2_PIN          = 10

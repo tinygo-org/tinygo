@@ -1,0 +1,6 @@
+{
+	"inherits": ["nrf52840"],
+	"build-tags": ["particle_3rd_gen"],
+	"flash-method": "openocd",
+	"openocd-interface": "cmsis-dap"
+}
