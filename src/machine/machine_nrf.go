@@ -86,7 +86,6 @@ func (uart UART) Configure(config UARTConfig) {
 	} else {
 		uart.setPins(config.TX, config.RX)
 	}
-	
 
 	nrf.UART0.ENABLE.Set(nrf.UART_ENABLE_ENABLE_Enabled)
 	nrf.UART0.TASKS_STARTTX.Set(1)

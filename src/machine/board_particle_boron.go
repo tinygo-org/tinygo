@@ -51,14 +51,14 @@ const (
 
 // u-blox coprocessor
 const (
-	UBLOX_TXD_PIN       = 37
-	UBLOX_RXD_PIN       = 36
-	UBLOX_CTS_PIN       = 38
-	UBLOX_RTS_PIN       = 39
-	UBLOX_RESET_PIN     = 16
-	UBLOX_POWER_ON_PIN  = 24
-	UBLOX_BUFF_EN_PIN   = 25
-	UBLOX_VINT_PIN      = 2
+	UBLOX_TXD_PIN      = 37
+	UBLOX_RXD_PIN      = 36
+	UBLOX_CTS_PIN      = 38
+	UBLOX_RTS_PIN      = 39
+	UBLOX_RESET_PIN    = 16
+	UBLOX_POWER_ON_PIN = 24
+	UBLOX_BUFF_EN_PIN  = 25
+	UBLOX_VINT_PIN     = 2
 )
 
 // Other periferals
