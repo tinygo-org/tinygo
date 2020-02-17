@@ -18,6 +18,11 @@ const (
 	UART_RX_PIN Pin = 19
 )
 
+// UART0 is the USB device
+var (
+	UART0 = USB
+)
+
 // I2C pins (unused)
 const (
 	SDA_PIN = NoPin

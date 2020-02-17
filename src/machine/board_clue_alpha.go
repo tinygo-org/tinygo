@@ -103,6 +103,11 @@ const (
 	UART_TX_PIN = D1
 )
 
+// UART0 is the USB device
+var (
+	UART0 = USB
+)
+
 // I2C pins
 const (
 	SDA_PIN = D20 // I2C0 external

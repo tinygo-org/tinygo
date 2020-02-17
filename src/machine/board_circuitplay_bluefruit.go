@@ -56,6 +56,11 @@ const (
 	UART_RX_PIN = P0_30 // PORTB
 )
 
+// UART0 is the USB device
+var (
+	UART0 = USB
+)
+
 // I2C pins
 const (
 	SDA_PIN = P0_05 // I2C0 external
