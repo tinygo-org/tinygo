@@ -5,7 +5,7 @@ package machine
 const HasLowFrequencyCrystal = true
 
 // More info: https://docs.particle.io/datasheets/wi-fi/argon-datasheet/
-// Board diagram: https://docs.particle.io/assets/images/xenon/xenon-block-diagram.png
+// Board diagram: https://docs.particle.io/assets/images/argon/argon-block-diagram.png
 
 // LEDs
 const (
