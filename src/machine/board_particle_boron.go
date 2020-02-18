@@ -15,8 +15,34 @@ const (
 	LED_BLUE  Pin = 15
 )
 
-// UART pins
+// GPIOs
 const (
+	A0  Pin = 3
+	A1  Pin = 4
+	A2  Pin = 28
+	A3  Pin = 29
+	A4  Pin = 30
+	A5  Pin = 31
+	D0  Pin = 26 // Also SDA
+	D1  Pin = 27 // Also SCL
+	D2  Pin = 33
+	D3  Pin = 34
+	D4  Pin = 40
+	D5  Pin = 42
+	D6  Pin = 43
+	D7  Pin = 44 // Also LED
+	D8  Pin = 35
+	D9  Pin = 6  // Also TX
+	D10 Pin = 8  // Also RX
+	D11 Pin = 46 // Also MISO
+	D12 Pin = 45 // Also MOSI
+	D13 Pin = 47 // Also SCK
+)
+
+// UART
+const (
+	Serial          = USB
+	UART0           = NRF_UART0
 	UART_TX_PIN Pin = 6
 	UART_RX_PIN Pin = 8
 )
@@ -26,7 +52,7 @@ const (
 	SDA_PIN Pin = 26
 	SCL_PIN Pin = 27
 
-	// Internal I2C with MAX17043 and BQ24195 chips on it
+	// Internal I2C with MAX17043 (Fuel gauge) and BQ24195 (Power management) chips on it
 	SDA1_PIN Pin = 24
 	SCL1_PIN Pin = 41
 	INT1_PIN Pin = 5
@@ -55,19 +81,16 @@ const (
 	UBLOX_RXD_PIN      Pin = 36
 	UBLOX_CTS_PIN      Pin = 38
 	UBLOX_RTS_PIN      Pin = 39
-	UBLOX_RESET_PIN    Pin = 16
-	UBLOX_POWER_ON_PIN Pin = 24
+	UBLOX_RESET_PIN    Pin = 12
+	UBLOX_POWER_ON_PIN Pin = 16
 	UBLOX_BUFF_EN_PIN  Pin = 25
 	UBLOX_VINT_PIN     Pin = 2
 )
 
 // Other periferals
 const (
-	MODE_BUTTON_PIN   Pin = 11
-	CHARGE_STATUS_PIN Pin = 41
-	LIPO_VOLTAGE_PIN  Pin = 5
-	PCB_ANTENNA_PIN   Pin = 2
-	EXTERNAL_UFL_PIN  Pin = 25
-	NFC1_PIN          Pin = 9
-	NFC2_PIN          Pin = 10
+	MODE_BUTTON_PIN Pin = 11
+	ANTENNA_SEL_PIN Pin = 7 // Low: chip antenna, High: External uFL
+	NFC1_PIN        Pin = 9
+	NFC2_PIN        Pin = 10
 )
