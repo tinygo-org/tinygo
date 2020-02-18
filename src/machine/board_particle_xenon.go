@@ -15,8 +15,34 @@ const (
 	LED_BLUE  Pin = 15
 )
 
-// UART pins
+// GPIOs
 const (
+	A0  Pin = 3
+	A1  Pin = 4
+	A2  Pin = 28
+	A3  Pin = 29
+	A4  Pin = 30
+	A5  Pin = 31
+	D0  Pin = 26 // Also SDA
+	D1  Pin = 27 // Also SCL
+	D2  Pin = 33
+	D3  Pin = 34
+	D4  Pin = 40
+	D5  Pin = 42
+	D6  Pin = 43
+	D7  Pin = 44 // Also LED
+	D8  Pin = 35
+	D9  Pin = 6  // Also TX
+	D10 Pin = 8  // Also RX
+	D11 Pin = 46 // Also MISO
+	D12 Pin = 45 // Also MOSI
+	D13 Pin = 47 // Also SCK
+)
+
+// UART
+const (
+	Serial          = USB
+	UART0           = NRF_UART0
 	UART_TX_PIN Pin = 6
 	UART_RX_PIN Pin = 8
 )
