@@ -40,9 +40,12 @@ const (
 )
 
 // UART
+var (
+	Serial = USB
+	UART0  = NRF_UART0
+)
+
 const (
-	Serial          = USB
-	UART0           = NRF_UART0
 	UART_TX_PIN Pin = 6
 	UART_RX_PIN Pin = 8
 )
