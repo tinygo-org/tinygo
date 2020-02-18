@@ -44,3 +44,9 @@ func (rb *RingBuffer) Get() (byte, bool) {
 	}
 	return 0, false
 }
+
+// Clear resets the head and tail pointer to zero.
+func (rb *RingBuffer) Clear() {
+	rb.head.Set(0)
+	rb.tail.Set(0)
+}

@@ -12,6 +12,11 @@ func (irq Interrupt) Enable() {
 	arm.EnableIRQ(uint32(irq.num))
 }
 
+// Disable disables this interrupt.
+func (irq Interrupt) Disable() {
+	arm.DisableIRQ(uint32(irq.num))
+}
+
 // SetPriority sets the interrupt priority for this interrupt. A lower number
 // means a higher priority. Additionally, most hardware doesn't implement all
 // priority bits (only the uppoer bits).

@@ -22,19 +22,19 @@ SECTIONS
         _vector_table = .;
         KEEP(*(.isr_vector))
 
-        /* this works as long as reset handler doesn't overflow past 0x400 */
-        *(.resetHandler)
-
         /* flash configuration MUST be at 0x400 */
         . = 0x400;
-		KEEP(*(.flashconfig))
+        _flash_config = .;
+		KEEP(*(.flash_config))
 
         /* everything else */
+        *(.resetHandler)
         *(.text)
         *(.text*)
         *(.rodata)
         *(.rodata*)
         . = ALIGN(4);
+
     } >FLASH_TEXT = 0xFF
 
     /* Put the stack at the bottom of RAM, so that the application will

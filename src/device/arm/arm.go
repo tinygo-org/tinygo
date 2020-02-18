@@ -174,6 +174,11 @@ func EnableIRQ(irq uint32) {
 	NVIC.ISER[irq>>5].Set(1 << (irq & 0x1F))
 }
 
+// Disable the given interrupt number.
+func DisableIRQ(irq uint32) {
+	NVIC.ICER[irq>>5].Set(1 << (irq & 0x1F))
+}
+
 // Set the priority of the given interrupt number.
 // Note that the priority is given as a 0-255 number, where some of the lower
 // bits are not implemented by the hardware. For example, to set a low interrupt
