@@ -9,7 +9,7 @@
 	url = https://github.com/avr-rust/avr-mcu.git
 [submodule "lib/cmsis-svd"]
 	path = lib/cmsis-svd
-	url = https://github.com/tinygo-org/cmsis-svd
+	url = https://github.com/posborne/cmsis-svd
 [submodule "lib/compiler-rt"]
 	path = lib/compiler-rt
 	url = https://github.com/llvm-mirror/compiler-rt.git
