@@ -78,19 +78,19 @@ const (
 	SPI1_HOLD_PIN Pin = 23
 )
 
-// u-blox coprocessor
+// u-blox SARA coprocessor
 const (
-	UBLOX_TXD_PIN      Pin = 37
-	UBLOX_RXD_PIN      Pin = 36
-	UBLOX_CTS_PIN      Pin = 38
-	UBLOX_RTS_PIN      Pin = 39
-	UBLOX_RESET_PIN    Pin = 12
-	UBLOX_POWER_ON_PIN Pin = 16
-	UBLOX_BUFF_EN_PIN  Pin = 25
-	UBLOX_VINT_PIN     Pin = 2
+	SARA_TXD_PIN      Pin = 37
+	SARA_RXD_PIN      Pin = 36
+	SARA_CTS_PIN      Pin = 38
+	SARA_RTS_PIN      Pin = 39
+	SARA_RESET_PIN    Pin = 12
+	SARA_POWER_ON_PIN Pin = 16
+	SARA_BUFF_EN_PIN  Pin = 25
+	SARA_VINT_PIN     Pin = 2
 )
 
-// Other periferals
+// Other peripherals
 const (
 	MODE_BUTTON_PIN Pin = 11
 	ANTENNA_SEL_PIN Pin = 7 // Low: chip antenna, High: External uFL

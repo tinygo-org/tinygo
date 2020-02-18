@@ -73,7 +73,7 @@ const (
 	SPI1_HOLD_PIN Pin = 23
 )
 
-// Other periferals
+// Other peripherals
 const (
 	MODE_BUTTON_PIN   Pin = 11
 	CHARGE_STATUS_PIN Pin = 41
