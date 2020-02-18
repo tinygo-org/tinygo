@@ -10,14 +10,14 @@ const bitbandBase = 0x42000000
 const ptrBytes = unsafe.Sizeof(uintptr(0))
 
 //go:inline
-func bitbandAddress(reg uintptr, bit uintptr) uintptr {
-	if bit > ptrBytes*8 {
+func bitbandAddress(reg uintptr, bit uint8) uintptr {
+	if uintptr(bit) > ptrBytes*8 {
 		panic("invalid bit position")
 	}
 	if reg < registerBase || reg >= registerEnd {
 		panic("register is out of range")
 	}
-	return (reg-registerBase)*ptrBytes*8 + bit*ptrBytes + bitbandBase
+	return (reg-registerBase)*ptrBytes*8 + uintptr(bit)*ptrBytes + bitbandBase
 }
 
 // Special types that causes loads/stores to be volatile (necessary for
@@ -40,17 +40,12 @@ func (r *BitRegister) Get() bool {
 //     *r.Reg = 1
 //
 //go:inline
-func (r *BitRegister) Set() {
-	StoreUint32(&r.Reg, 1)
-}
-
-// Clear clears the mapped register bit. It is the volatile equivalent of:
-//
-//     *r.Reg = 0
-//
-//go:inline
-func (r *BitRegister) Clear() {
-	StoreUint32(&r.Reg, 0)
+func (r *BitRegister) Set(v bool) {
+	var i uint32
+	if v {
+		i = 1
+	}
+	StoreUint32(&r.Reg, i)
 }
 
 // Bit maps bit N of register R to the corresponding bitband address. Bit panics
@@ -58,7 +53,7 @@ func (r *BitRegister) Clear() {
 // the number of bits in a register minus one).
 //
 // go:inline
-func (r *Register8) Bit(bit uintptr) *BitRegister {
+func (r *Register8) Bit(bit uint8) *BitRegister {
 	ptr := bitbandAddress(uintptr(unsafe.Pointer(&r.Reg)), bit)
 	return (*BitRegister)(unsafe.Pointer(ptr))
 }
@@ -68,7 +63,7 @@ func (r *Register8) Bit(bit uintptr) *BitRegister {
 // the number of bits in a register minus one).
 //
 // go:inline
-func (r *Register16) Bit(bit uintptr) *BitRegister {
+func (r *Register16) Bit(bit uint8) *BitRegister {
 	ptr := bitbandAddress(uintptr(unsafe.Pointer(&r.Reg)), bit)
 	return (*BitRegister)(unsafe.Pointer(ptr))
 }
@@ -78,7 +73,7 @@ func (r *Register16) Bit(bit uintptr) *BitRegister {
 // the number of bits in a register minus one).
 //
 // go:inline
-func (r *Register32) Bit(bit uintptr) *BitRegister {
+func (r *Register32) Bit(bit uint8) *BitRegister {
 	ptr := bitbandAddress(uintptr(unsafe.Pointer(&r.Reg)), bit)
 	return (*BitRegister)(unsafe.Pointer(ptr))
 }
