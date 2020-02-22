@@ -6,11 +6,6 @@ package machine
 
 type PinMode uint8
 
-// AltFunc represents the alternate function peripherals that can be mapped to
-// the GPIO ports. Since these differ by what is supported on the stm32 family
-// they are defined in the more specific files
-type AltFunc uint8
-
 // Peripheral operations sequence:
 //  1. Enable the clock to the alternate function.
 //  2. Enable clock to corresponding GPIO
@@ -25,14 +20,6 @@ type AltFunc uint8
 // Also, the stm32f1xx series handles things differently from the stm32f0/2/3/4
 
 // ---------- General pin operations ----------
-
-// Configure this pin with the given I/O settings.
-// Remember to call enableClock() in the chip-specific implementations!
-// Also call enableAltFuncClock() if using alternative output functions when
-//  configuring peripherals, e.g. UART, SPI etc.
-func (p Pin) Configure(config PinConfig) {
-	p.configure(config)
-}
 
 // Set the pin to high or low.
 // Warning: only use this on an output pin!

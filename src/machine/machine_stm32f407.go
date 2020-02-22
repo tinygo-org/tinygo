@@ -14,26 +14,6 @@ func CPUFrequency() uint32 {
 	return 168000000
 }
 
-const (
-	// Alternative peripheral pin functions
-	AF0_SYSTEM                AltFunc = 0
-	AF1_TIM1_2                        = 1
-	AF2_TIM3_4_5                      = 2
-	AF3_TIM8_9_10_11                  = 3
-	AF4_I2C1_2_3                      = 4
-	AF5_SPI1_SPI2                     = 5
-	AF6_SPI3                          = 6
-	AF7_USART1_2_3                    = 7
-	AF8_USART4_5_6                    = 8
-	AF9_CAN1_CAN2_TIM12_13_14         = 9
-	AF10_OTG_FS_OTG_HS                = 10
-	AF11_ETH                          = 11
-	AF12_FSMC_SDIO_OTG_HS_1           = 12
-	AF13_DCMI                         = 13
-	AF14                              = 14
-	AF15_EVENTOUT                     = 15
-)
-
 func (p Pin) getPort() *stm32.GPIO_Type {
 	switch p / 16 {
 	case 0:
@@ -101,15 +81,16 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 
 // UART
 type UART struct {
-	Buffer *RingBuffer
-	Bus    *stm32.USART_Type
+	Buffer          *RingBuffer
+	Bus             *stm32.USART_Type
+	AltFuncSelector stm32.AltFunc
 }
 
 var (
-	// Both UART0 and UART1 refer to USART2.
 	UART0 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    stm32.USART2,
+		Buffer:          NewRingBuffer(),
+		Bus:             stm32.USART2,
+		AltFuncSelector: stm32.AF7_USART1_2_3,
 	}
 	UART1 = &UART0
 )
@@ -131,8 +112,8 @@ func (uart UART) Configure(config UARTConfig) {
 	enableAltFuncClock(unsafe.Pointer(uart.Bus))
 
 	// use standard TX/RX pins PA2 and PA3
-	config.TX.Configure(PinConfig{Mode: PinModeUARTTX})
-	config.RX.Configure(PinConfig{Mode: PinModeUARTRX})
+	config.TX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTTX}, uart.AltFuncSelector)
+	config.RX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTRX}, uart.AltFuncSelector)
 
 	/*
 	  Set baud rate(115200)
@@ -154,7 +135,7 @@ func (uart UART) Configure(config UARTConfig) {
 	// Enable USART2 port.
 	uart.Bus.CR1.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
 
-	// Enable RX IRQ.
+	// Enable RX IRQ. TODO: pick the right IRQ_xxx for the bus and the uart
 	intr := interrupt.New(stm32.IRQ_USART2, func(interrupt.Interrupt) {
 		UART1.Receive(byte((UART1.Bus.DR.Get() & 0xFF)))
 	})

@@ -35,7 +35,7 @@ const (
 
 // Configure this pin with the given I/O settings.
 // stm32f1xx uses different technique for setting the GPIO pins than the stm32f407
-func (p Pin) configure(config PinConfig) {
+func (p Pin) Configure(config PinConfig) {
 	// Configure the GPIO pin.
 	port := p.getPort()
 	pin := uint8(p) % 16
