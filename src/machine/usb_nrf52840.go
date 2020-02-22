@@ -384,12 +384,6 @@ func cdcSetup(setup usbSetup) bool {
 	return false
 }
 
-func checkShouldReset() {
-	if usbLineInfo.dwDTERate == 1200 && usbLineInfo.lineState&usb_CDC_LINESTATE_DTR == 0 {
-		// TODO: reset here
-	}
-}
-
 func sendUSBPacket(ep uint32, data []byte) {
 	count := len(data)
 	copy(udd_ep_in_cache_buffer[ep][:], data)
