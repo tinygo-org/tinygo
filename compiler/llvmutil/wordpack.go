@@ -12,6 +12,7 @@ import (
 // EmitPointerPack packs the list of values into a single pointer value using
 // bitcasts, or else allocates a value on the heap if it cannot be packed in the
 // pointer value directly. It returns the pointer with the packed data.
+// If the values are all constants, they are be stored in a constant global and deduplicated.
 func EmitPointerPack(builder llvm.Builder, mod llvm.Module, config *compileopts.Config, values []llvm.Value) llvm.Value {
 	ctx := mod.Context()
 	targetData := llvm.NewTargetData(mod.DataLayout())
@@ -42,6 +43,27 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, config *compileopts.
 		// it in an alloca first for bitcasting (store+bitcast+load).
 		packedAlloc, _, _ = CreateTemporaryAlloca(builder, mod, packedType, "")
 	} else {
+		// Check if the values are all constants.
+		constant := true
+		for _, v := range values {
+			if !v.IsConstant() {
+				constant = false
+				break
+			}
+		}
+
+		if constant {
+			// The data is known at compile time, so store it in a constant global.
+			// The global address is marked as unnamed, which allows LLVM to merge duplicates.
+			funcName := builder.GetInsertBlock().Parent().Name()
+			global := llvm.AddGlobal(mod, packedType, funcName+"$pack")
+			global.SetInitializer(ctx.ConstStruct(values, false))
+			global.SetGlobalConstant(true)
+			global.SetUnnamedAddr(true)
+			global.SetLinkage(llvm.PrivateLinkage)
+			return llvm.ConstBitCast(global, i8ptrType)
+		}
+
 		// Packed data is bigger than a pointer, so allocate it on the heap.
 		sizeValue := llvm.ConstInt(uintptrType, size, false)
 		alloc := mod.NamedFunction("runtime.alloc")
