@@ -332,7 +332,6 @@
 				true,
 				false,
 				global,
-				this._inst.exports.memory,
 				this,
 			];
 			this._refs = new Map();
