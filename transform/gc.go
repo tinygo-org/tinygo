@@ -271,7 +271,7 @@ func AddGlobalsBitmap(mod llvm.Module) bool {
 	var trackedGlobals []llvm.Value
 	var trackedGlobalTypes []llvm.Type
 	for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
-		if global.IsDeclaration() {
+		if global.IsDeclaration() || global.IsGlobalConstant() {
 			continue
 		}
 		typ := global.Type().ElementType()
