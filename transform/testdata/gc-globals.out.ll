@@ -4,7 +4,9 @@ target triple = "wasm32-unknown-unknown-wasm"
 %runtime._string = type { i8*, i32 }
 %runtime._interface = type { i32, i8* }
 
-@globalInt = constant i32 5
+@globalInt = global i32 5
+@constString = constant %runtime._string zeroinitializer
+@constInterface = constant %runtime._interface zeroinitializer
 @runtime.trackedGlobalsLength = global i32 4
 @runtime.trackedGlobalsBitmap = external global [0 x i8]
 @runtime.trackedGlobalsStart = global i32 ptrtoint ({ %runtime._string, %runtime._interface }* @tinygo.trackedGlobals to i32)
@@ -15,6 +17,8 @@ define void @main() {
   %1 = load i32, i32* @globalInt
   %2 = load %runtime._string, %runtime._string* getelementptr inbounds ({ %runtime._string, %runtime._interface }, { %runtime._string, %runtime._interface }* @tinygo.trackedGlobals, i32 0, i32 0)
   %3 = load %runtime._interface, %runtime._interface* getelementptr inbounds ({ %runtime._string, %runtime._interface }, { %runtime._string, %runtime._interface }* @tinygo.trackedGlobals, i32 0, i32 1)
+  %4 = load %runtime._string, %runtime._string* @constString
+  %5 = load %runtime._interface, %runtime._interface* @constInterface
   ret void
 }
 
