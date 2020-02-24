@@ -7,17 +7,16 @@ import "unsafe"
 const registerBase = 0x40000000
 const registerEnd = 0x40100000
 const bitbandBase = 0x42000000
-const ptrBytes = unsafe.Sizeof(uintptr(0))
 
 //go:inline
 func bitbandAddress(reg uintptr, bit uint8) uintptr {
-	if uintptr(bit) > ptrBytes*8 {
+	if uintptr(bit) > 32 {
 		panic("invalid bit position")
 	}
 	if reg < registerBase || reg >= registerEnd {
 		panic("register is out of range")
 	}
-	return (reg-registerBase)*ptrBytes*8 + uintptr(bit)*ptrBytes + bitbandBase
+	return (reg-registerBase)*32 + uintptr(bit)*4 + bitbandBase
 }
 
 // Special types that causes loads/stores to be volatile (necessary for
