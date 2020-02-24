@@ -6,6 +6,7 @@ package compiler
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"tinygo.org/x/go-llvm"
 )
@@ -169,4 +170,162 @@ func (c *Compiler) checkModule() []error {
 	}
 
 	return errs
+}
+
+func (c *Compiler) CheckInvalidYield() {
+	cg := c.createCallGraph([]string{"runtime.yield"}, []string{"runtime.sleepTicks", "runtime.putchar"})
+
+	if n := cg.nodes["runtime.sleepTicks"]; len(n.reaches) > 0 {
+		fmt.Fprintf(os.Stderr, "unsafe call to runtime.yield from runtime.sleepTicks: yield may call sleepTicks, which could lead to a stack overflow\n")
+		n.printReaches()
+	}
+
+	if n := cg.nodes["runtime.putchar"]; len(n.reaches) > 0 {
+		fmt.Fprintf(os.Stderr, "unsafe call to runtime.yield from runtime.putchar: putchar must work in contexts where calling the scheduler is not safe\n")
+		n.printReaches()
+	}
+}
+
+type callGraph struct {
+	compiler *Compiler
+	ofConcern []string
+	topLevel []string
+	nodes map[string]*callGraphNode
+}
+
+type callGraphNode struct {
+	name string
+	graph *callGraph
+	callers []*callGraphNode
+	calls []*callGraphNode
+	reaches map[string]*callGraphNode
+}
+
+func (c *Compiler) createCallGraph(ofConcern, topLevel []string) *callGraph {
+	cg := &callGraph{
+		compiler: c,
+		ofConcern: ofConcern,
+		topLevel: topLevel,
+		nodes: map[string]*callGraphNode{},
+	}
+
+	for _, fn := range topLevel {
+		cg.add(c.mod.NamedFunction(fn))
+	}
+
+	return cg
+}
+
+func (cg *callGraph) isOfConcern(name string) bool {
+	for _, n := range cg.ofConcern {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (cg *callGraph) isTopLevel(name string) bool {
+	for _, n := range cg.topLevel {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (cg *callGraph) add(fn llvm.Value) *callGraphNode {
+	if n, ok := cg.nodes[fn.Name()]; ok {
+		return n
+	}
+
+	n := &callGraphNode{
+		name: fn.Name(),
+		graph: cg,
+		reaches: map[string]*callGraphNode{},
+	}
+	cg.nodes[n.name] = n
+
+	if n.isOfConcern() {
+		return n
+	}
+
+	if fn.BasicBlocksCount() == 0 {
+		return n
+	}
+
+	for _, bb := range fn.BasicBlocks() {
+		for i := bb.FirstInstruction(); !i.IsNil(); i = llvm.NextInstruction(i) {
+			if i.IsACallInst().IsNil() {
+				continue
+			}
+
+			v := i.CalledValue()
+			if v.IsAFunction().IsNil() {
+				continue
+			}
+
+			callee := cg.add(v)
+			callee.callers = append(callee.callers, n)
+			n.markReaches(callee)
+		}
+	}
+
+	return n
+}
+
+func (n *callGraphNode) isOfConcern() bool {
+	return n.graph.isOfConcern(n.name)
+}
+
+func (n *callGraphNode) isTopLevel() bool {
+	return n.graph.isTopLevel(n.name)
+}
+
+func (n *callGraphNode) markReaches(caller *callGraphNode) {
+	if _, ok := n.reaches[caller.name]; ok {
+		// Already marked
+		return
+	}
+
+	if len(caller.reaches) == 0 && !caller.isOfConcern() {
+		// Caller doesn't actually reach a function of concern
+		return
+	}
+
+	if caller.isTopLevel() {
+		// Don't mark callers of the top-level functions. For example,
+		// sleepTicks eventually calls putchar through a compiler-inserted nil
+		// dereference check, but also calls yield separately. The first path
+		// (through putchar) should be ignored because the user will see a
+		// separate warning for that.
+		return
+	}
+
+	n.reaches[caller.name] = caller
+
+	if n.isTopLevel() {
+		// See comment for `caller.isTopLevel()`
+		return
+	}
+
+	if n.callers == nil {
+		return
+	}
+	for _, c := range n.callers {
+		c.markReaches(n)
+	}
+}
+
+func (n *callGraphNode) printReaches() {
+	if n.isOfConcern() {
+		fmt.Fprintf(os.Stderr, "\t%s\n", n.name)
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "\t%s calls\n", n.name)
+	for _, fn := range n.reaches {
+		fn.printReaches()
+		return
+	}
 }
