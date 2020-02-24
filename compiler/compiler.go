@@ -365,6 +365,12 @@ func (c *Compiler) Compile(mainPath string) []error {
 	// See emitNilCheck in asserts.go.
 	c.mod.NamedFunction("runtime.isnil").AddAttributeAtIndex(1, nocapture)
 
+	// On *nix systems, the "abort" functuion in libc is used to handle fatal panics.
+	// Mark it as noreturn so LLVM can optimize away code.
+	if abort := c.mod.NamedFunction("abort"); !abort.IsNil() && abort.IsDeclaration() {
+		abort.AddFunctionAttr(getAttr("noreturn"))
+	}
+
 	// This function is necessary for tracking pointers on the stack in a
 	// portable way (see gc.go). Indicate to the optimizer that the only thing
 	// we'll do is read the pointer.
