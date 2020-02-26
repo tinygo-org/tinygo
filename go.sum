@@ -51,3 +51,5 @@ tinygo.org/x/go-llvm v0.0.0-20191215173731-ad71f3d24aae h1:s8J5EyxCkHxXB08UI3gk9
 tinygo.org/x/go-llvm v0.0.0-20191215173731-ad71f3d24aae/go.mod h1:fv1F0BSNpxMfCL0zF3M4OPFbgYHnhtB6ST0HvUtu/LE=
 tinygo.org/x/go-llvm v0.0.0-20200104190746-1ff21df33566 h1:a4y30bTf7U0zDA75v2PTL+XQ2OzJetj19gK8XwQpUNY=
 tinygo.org/x/go-llvm v0.0.0-20200104190746-1ff21df33566/go.mod h1:fv1F0BSNpxMfCL0zF3M4OPFbgYHnhtB6ST0HvUtu/LE=
+tinygo.org/x/go-llvm v0.0.0-20200226165415-53522ab6713d h1:mtgZh/e8a3wxneQFuLXoQYO//1mvlki02yZ1JCwMKp4=
+tinygo.org/x/go-llvm v0.0.0-20200226165415-53522ab6713d/go.mod h1:fv1F0BSNpxMfCL0zF3M4OPFbgYHnhtB6ST0HvUtu/LE=
