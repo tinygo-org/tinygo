@@ -72,6 +72,8 @@ func hello(n int) {
 }
 
 func testDefer() {
+	defer exportedDefer()
+
 	i := 1
 	defer deferred("...run as defer", i)
 	i++
@@ -96,6 +98,11 @@ func testDeferLoop() {
 
 func deferred(msg string, i int) {
 	println(msg, i)
+}
+
+//go:export __exportedDefer
+func exportedDefer() {
+	println("...exported defer")
 }
 
 func testBound(f func() string) {

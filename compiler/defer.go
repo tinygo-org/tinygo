@@ -295,12 +295,16 @@ func (c *Compiler) emitRunDefers(frame *Frame) {
 				forwardParams = append(forwardParams, forwardParam)
 			}
 
-			// Add the context parameter. We know it is ignored by the receiving
-			// function, but we have to pass one anyway.
-			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
+			// Plain TinyGo functions add some extra parameters to implement async functionality and function recievers.
+			// These parameters should not be supplied when calling into an external C/ASM function.
+			if !callback.IsExported() {
+				// Add the context parameter. We know it is ignored by the receiving
+				// function, but we have to pass one anyway.
+				forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
 
-			// Parent coroutine handle.
-			forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
+				// Parent coroutine handle.
+				forwardParams = append(forwardParams, llvm.Undef(c.i8ptrType))
+			}
 
 			// Call real function.
 			c.createCall(callback.LLVMFn, forwardParams, "")
