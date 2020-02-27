@@ -1,25 +1,25 @@
 package arm
 
 const (
-	SCB_CFSR_IACCVIOL        = 0x1
-	SCB_CFSR_DACCVIOL        = 0x2
-	SCB_CFSR_MUNSTKERR       = 0x8
-	SCB_CFSR_MSTKERR         = 0x10
-	SCB_CFSR_MLSPERR         = 0x20
-	SCB_CFSR_MMARVALID       = 0x80
-	SCB_CFSR_IBUSERR         = 0x100
-	SCB_CFSR_PRECISERR       = 0x200
-	SCB_CFSR_IMPRECISERR     = 0x400
-	SCB_CFSR_UNSTKERR        = 0x800
-	SCB_CFSR_STKERR          = 0x1000
-	SCB_CFSR_LSPERR          = 0x2000
-	SCB_CFSR_BFARVALID       = 0x8000
-	SCB_CFSR_UNDEFINSTR      = 0x10000
-	SCB_CFSR_INVSTATE        = 0x20000
-	SCB_CFSR_INVPC           = 0x40000
-	SCB_CFSR_NOCP            = 0x80000
-	SCB_CFSR_UNALIGNED       = 0x1000000
-	SCB_CFSR_DIVBYZERO       = 0x2000000
+	SCB_CFSR_IACCVIOL    = 0x1
+	SCB_CFSR_DACCVIOL    = 0x2
+	SCB_CFSR_MUNSTKERR   = 0x8
+	SCB_CFSR_MSTKERR     = 0x10
+	SCB_CFSR_MLSPERR     = 0x20
+	SCB_CFSR_MMARVALID   = 0x80
+	SCB_CFSR_IBUSERR     = 0x100
+	SCB_CFSR_PRECISERR   = 0x200
+	SCB_CFSR_IMPRECISERR = 0x400
+	SCB_CFSR_UNSTKERR    = 0x800
+	SCB_CFSR_STKERR      = 0x1000
+	SCB_CFSR_LSPERR      = 0x2000
+	SCB_CFSR_BFARVALID   = 0x8000
+	SCB_CFSR_UNDEFINSTR  = 0x10000
+	SCB_CFSR_INVSTATE    = 0x20000
+	SCB_CFSR_INVPC       = 0x40000
+	SCB_CFSR_NOCP        = 0x80000
+	SCB_CFSR_UNALIGNED   = 0x1000000
+	SCB_CFSR_DIVBYZERO   = 0x2000000
 
 	SCB_CFSR_KnownFault = SCB_CFSR_IACCVIOL | SCB_CFSR_DACCVIOL | SCB_CFSR_MUNSTKERR | SCB_CFSR_MSTKERR | SCB_CFSR_MLSPERR | SCB_CFSR_IBUSERR | SCB_CFSR_PRECISERR | SCB_CFSR_IMPRECISERR | SCB_CFSR_UNSTKERR | SCB_CFSR_STKERR | SCB_CFSR_LSPERR | SCB_CFSR_UNDEFINSTR | SCB_CFSR_INVSTATE | SCB_CFSR_INVPC | SCB_CFSR_NOCP | SCB_CFSR_UNALIGNED | SCB_CFSR_DIVBYZERO
 )
@@ -36,8 +36,8 @@ type MemFaultStatus uint32
 type BusFaultStatus uint32
 type UsageFaultStatus uint32
 
-func (fs FaultStatus) Mem() MemFaultStatus { return MemFaultStatus(fs) }
-func (fs FaultStatus) Bus() BusFaultStatus { return BusFaultStatus(fs) }
+func (fs FaultStatus) Mem() MemFaultStatus     { return MemFaultStatus(fs) }
+func (fs FaultStatus) Bus() BusFaultStatus     { return BusFaultStatus(fs) }
 func (fs FaultStatus) Usage() UsageFaultStatus { return UsageFaultStatus(fs) }
 
 // Unknown returns true if the cause of the fault is not known
@@ -179,7 +179,6 @@ func (fs UsageFaultStatus) UnalignedMemoryAccess() bool { return fs&SCB_CFSR_UNA
 // Enable trapping of divide by zero by setting the DIV_0_TRP bit in the CCR to
 // 1."
 func (fs UsageFaultStatus) DivideByZero() bool { return fs&SCB_CFSR_DIVBYZERO != 0 }
-
 
 // Address returns the MemManage Fault Address Register if the fault status
 // indicates the address is valid.
