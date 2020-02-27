@@ -1,4 +1,4 @@
-// +build stm32,stm32f103xx
+// +build stm32,stm32f103xx qemu,lm3s6965
 
 package arm
 

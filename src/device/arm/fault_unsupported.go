@@ -1,4 +1,4 @@
-// +build sam,atsamd21 nrf,nrf51
+// +build !stm32f103xx,!atsamd51,!nrf52,!nrf52840,!stm32f407,!mk66f18
 
 package arm
 
