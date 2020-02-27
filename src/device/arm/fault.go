@@ -235,3 +235,6 @@ func (fs UsageFaultStatus) UnalignedMemoryAccess() bool { return fs&SCB_CFSR_UNA
 // Enable trapping of divide by zero by setting the DIV_0_TRP bit in the CCR to
 // 1."
 func (fs UsageFaultStatus) DivideByZero() bool { return fs&SCB_CFSR_DIVBYZERO != 0 }
+
+func (fs MemFaultStatus) ValidAddress() bool { return fs&SCB_CFSR_MMARVALID != 0 }
+func (fs BusFaultStatus) ValidAddress() bool { return fs&SCB_CFSR_BFARVALID != 0 }
