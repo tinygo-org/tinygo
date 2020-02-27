@@ -27,14 +27,70 @@ const (
 // Descriptions are sourced from the K66 SVD and
 // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0552a/Cihcfefj.html
 
-// GetFaultStatus reads the System Control Block Configurable Fault Status
-// Register and returns it as a FaultStatus.
-func GetFaultStatus() FaultStatus { return FaultStatus(SCB.CFSR.Get()) }
-
 type FaultStatus uint32
 type MemFaultStatus uint32
 type BusFaultStatus uint32
 type UsageFaultStatus uint32
+
+func (fs FaultStatus) Describe() {
+	if fs.Mem().InstructionAccessViolation() {
+		print("instruction access violation")
+	}
+	if fs.Mem().DataAccessViolation() {
+		print("data access violation")
+	}
+	if fs.Mem().WhileUnstackingException() {
+		print(" while unstacking exception")
+	}
+	if fs.Mem().WileStackingException() {
+		print(" while stacking exception")
+	}
+	if fs.Mem().DuringFPLazyStatePres() {
+		print(" during floating-point lazy state preservation")
+	}
+
+	if fs.Bus().InstructionBusError() {
+		print("instruction bus error")
+	}
+	if fs.Bus().PreciseDataBusError() {
+		print("data bus error (precise)")
+	}
+	if fs.Bus().ImpreciseDataBusError() {
+		print("data bus error (imprecise)")
+	}
+	if fs.Bus().WhileUnstackingException() {
+		print(" while unstacking exception")
+	}
+	if fs.Bus().WhileStackingException() {
+		print(" while stacking exception")
+	}
+	if fs.Bus().DuringFPLazyStatePres() {
+		print(" during floating-point lazy state preservation")
+	}
+
+	if fs.Usage().UndefinedInstruction() {
+		print("undefined instruction")
+	}
+	if fs.Usage().IllegalUseOfEPSR() {
+		print("illegal use of the EPSR")
+	}
+	if fs.Usage().IllegalExceptionReturn() {
+		print("illegal load of EXC_RETURN to the PC")
+	}
+	if fs.Usage().AttemptedToAccessCoprocessor() {
+		print("coprocessor access violation")
+	}
+	if fs.Usage().UnalignedMemoryAccess() {
+		print("unaligned memory access")
+	}
+	if fs.Usage().DivideByZero() {
+		print("divide by zero")
+	}
+
+	if fs.Unknown() {
+		print("unknown hard fault")
+	}
+}
 
 func (fs FaultStatus) Mem() MemFaultStatus     { return MemFaultStatus(fs) }
 func (fs FaultStatus) Bus() BusFaultStatus     { return BusFaultStatus(fs) }
@@ -179,37 +235,3 @@ func (fs UsageFaultStatus) UnalignedMemoryAccess() bool { return fs&SCB_CFSR_UNA
 // Enable trapping of divide by zero by setting the DIV_0_TRP bit in the CCR to
 // 1."
 func (fs UsageFaultStatus) DivideByZero() bool { return fs&SCB_CFSR_DIVBYZERO != 0 }
-
-// Address returns the MemManage Fault Address Register if the fault status
-// indicates the address is valid.
-//
-// "If a MemManage fault occurs and is escalated to a HardFault because of
-// priority, the HardFault handler must set this bit to 0. This prevents
-// problems on return to a stacked active MemManage fault handler whose MMAR
-// value has been overwritten."
-func (fs MemFaultStatus) Address() (uintptr, bool) {
-	if fs&SCB_CFSR_MMARVALID == 0 {
-		return 0, false
-	} else {
-		return uintptr(SCB.MMAR.Get()), true
-	}
-}
-
-// Address returns the BusFault Address Register if the fault status
-// indicates the address is valid.
-//
-// "The processor sets this bit to 1 after a BusFault where the address is
-// known. Other faults can set this bit to 0, such as a MemManage fault
-// occurring later.
-//
-// If a BusFault occurs and is escalated to a hard fault because of priority,
-// the hard fault handler must set this bit to 0. This prevents problems if
-// returning to a stacked active BusFault handler whose BFAR value has been
-// overwritten.""
-func (fs BusFaultStatus) Address() (uintptr, bool) {
-	if fs&SCB_CFSR_BFARVALID == 0 {
-		return 0, false
-	} else {
-		return uintptr(SCB.BFAR.Get()), true
-	}
-}
