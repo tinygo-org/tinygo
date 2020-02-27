@@ -11,6 +11,7 @@ import (
 	"go/types"
 	"io/ioutil"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -18,6 +19,21 @@ import (
 
 // Pass -update to go test to update the output of the test files.
 var flagUpdate = flag.Bool("update", false, "Update images based on test output.")
+
+// normalizeResult normalizes Go source code that comes out of tests across
+// platforms and Go versions.
+func normalizeResult(result string) string {
+	actual := strings.Replace(result, "\r\n", "\n", -1)
+
+	// Make sure all functions are wrapped, even those that would otherwise be
+	// single-line functions. This is necessary because Go 1.14 changed the way
+	// such functions are wrapped and it's important to have consistent test
+	// results.
+	re := regexp.MustCompile(`func \((.+)\)( .*?) +{ (.+) }`)
+	actual = re.ReplaceAllString(actual, "func ($1)$2 {\n\t$3\n}")
+
+	return actual
+}
 
 func TestCGo(t *testing.T) {
 	var cflags = []string{"--target=armv6m-none-eabi"}
@@ -74,7 +90,7 @@ func TestCGo(t *testing.T) {
 			if err != nil {
 				t.Errorf("could not write out CGo AST: %v", err)
 			}
-			actual := strings.Replace(string(buf.Bytes()), "\r\n", "\n", -1)
+			actual := normalizeResult(string(buf.Bytes()))
 
 			// Read the file with the expected output, to compare against.
 			outfile := filepath.Join("testdata", name+".out.go")
