@@ -53,12 +53,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-v0
+            - wasi-libc-sysroot-v1
       - run:
           name: "Build wasi-libc"
-          command: make wasi-libc CLANG=$PWD/llvm-build/bin/clang LLVM_AR=$PWD/llvm-build/bin/llvm-ar LLVM_NM=$PWD/llvm-build/bin/llvm-nm
+          command: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-v0
+          key: wasi-libc-sysroot-v1
           paths:
             - lib/wasi-libc/sysroot
   test-linux:
@@ -266,12 +266,12 @@ commands:
             llvm-build
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-macos-v0
+            - wasi-libc-sysroot-macos-v1
       - run:
           name: "Build wasi-libc"
-          command: make wasi-libc CLANG=$PWD/llvm-build/bin/clang LLVM_AR=$PWD/llvm-build/bin/llvm-ar LLVM_NM=$PWD/llvm-build/bin/llvm-nm
+          command: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-macos-v0
+          key: wasi-libc-sysroot-macos-v1
           paths:
             - lib/wasi-libc/sysroot
       - run:

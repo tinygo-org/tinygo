@@ -48,13 +48,13 @@ jobs:
     - task: CacheBeta@0
       displayName: Cache wasi-libc sysroot
       inputs:
-        key: wasi-libc-sysroot-v0
+        key: wasi-libc-sysroot-v1
         path: lib/wasi-libc/sysroot
     - task: Bash@3
       displayName: Build wasi-libc
       inputs:
         targetType: inline
-        script: PATH=/usr/bin:$PATH make wasi-libc CLANG=$PWD/llvm-build/bin/clang LLVM_AR=$PWD/llvm-build/bin/llvm-ar LLVM_NM=$PWD/llvm-build/bin/llvm-nm
+        script: PATH=/usr/bin:$PATH make wasi-libc
     - task: Bash@3
       displayName: Test TinyGo
       inputs:
