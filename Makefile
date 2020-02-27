@@ -7,25 +7,25 @@ LLVM_BUILDDIR ?= llvm-build
 CLANG_SRC ?= llvm-project/clang
 LLD_SRC ?= llvm-project/lld
 
-# Default tool selection.
-CLANG ?= clang-9
-
-# Try to autodetect llvm-ar and llvm-nm
-ifneq (, $(shell command -v llvm-ar-9 2> /dev/null))
+# Try to autodetect LLVM build tools.
+ifneq (, $(shell command -v llvm-build/bin/clang 2> /dev/null))
+    CLANG ?= $(abspath llvm-build/bin/clang)
+else
+    CLANG ?= clang-9
+endif
+ifneq (, $(shell command -v llvm-build/bin/llvm-ar 2> /dev/null))
+    LLVM_AR ?= $(abspath llvm-build/bin/llvm-ar)
+else ifneq (, $(shell command -v llvm-ar-9 2> /dev/null))
     LLVM_AR ?= llvm-ar-9
-else ifneq (, $(shell command -v llvm-ar 2> /dev/null))
+else
     LLVM_AR ?= llvm-ar
 endif
-ifneq (, $(shell command -v llvm-nm-9 2> /dev/null))
+ifneq (, $(shell command -v llvm-build/bin/llvm-nm 2> /dev/null))
+    LLVM_NM ?= $(abspath llvm-build/bin/llvm-nm)
+else ifneq (, $(shell command -v llvm-nm-9 2> /dev/null))
     LLVM_NM ?= llvm-nm-9
-else ifneq (, $(shell command -v llvm-nm 2> /dev/null))
+else
     LLVM_NM ?= llvm-nm
-endif
-ifndef LLVM_AR
-    $(warning llvm-ar not found)
-endif
-ifndef LLVM_NM
-    $(warning llvm-nm not found)
 endif
 
 # Go binary and GOROOT to select
