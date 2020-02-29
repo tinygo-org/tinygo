@@ -3,12 +3,14 @@ package loader
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/build"
 	"go/parser"
 	"go/scanner"
 	"go/token"
 	"go/types"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,6 +18,7 @@ import (
 	"text/template"
 
 	"github.com/tinygo-org/tinygo/cgo"
+	"github.com/tinygo-org/tinygo/compileopts"
 )
 
 // Program holds all packages and some metadata about the program as a whole.
@@ -189,7 +192,7 @@ func (p *Program) sort() {
 // The returned error may be an Errors error, which contains a list of errors.
 //
 // Idempotent.
-func (p *Program) Parse(compileTestBinary bool) error {
+func (p *Program) Parse(compileTestBinary bool, target *compileopts.TargetSpec) error {
 	includeTests := compileTestBinary
 
 	// Load all imports
@@ -203,6 +206,26 @@ func (p *Program) Parse(compileTestBinary bool) error {
 			}
 			return err
 		}
+	}
+
+	if pkg, ok := p.Packages["machine"]; ok {
+		tmp, err := ioutil.TempFile("", "*.go")
+		if err != nil {
+			return err
+		}
+		path, err := filepath.Rel(pkg.Package.Dir, tmp.Name())
+		if err != nil {
+			return err
+		}
+		pkg.GoFiles = append(pkg.GoFiles, path)
+		fmt.Fprintf(tmp, "package machine\n")
+		fmt.Fprintf(tmp, "const CPUArchitecture = `%s`\n", strings.SplitN(target.Triple, "-", 2)[0])
+		if target.CPU != "" {
+			fmt.Fprintf(tmp, "const CPU = `%s`\n", target.CPU)
+		}
+		tmp.Close()
+	} else {
+		fmt.Println("not using machine package")
 	}
 
 	// Parse all packages.

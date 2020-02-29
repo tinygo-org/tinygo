@@ -266,7 +266,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 		return []error{err}
 	}
 
-	err = lprogram.Parse(c.TestConfig.CompileTestBinary)
+	err = lprogram.Parse(c.TestConfig.CompileTestBinary, c.Target)
 	if err != nil {
 		return []error{err}
 	}
