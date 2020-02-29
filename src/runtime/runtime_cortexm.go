@@ -4,11 +4,12 @@ package runtime
 
 import (
 	"device/arm"
+	"machine"
 	"unsafe"
 )
 
-const showFaultAddresses = true
-const verboseFaultMessage = true
+const showFaultAddresses = false
+const verboseFaultMessage = false
 
 //go:extern _sbss
 var _sbss [0]byte
@@ -104,21 +105,7 @@ type interruptStack struct {
 func handleHardFault(sp *interruptStack) {
 	print("fatal error: ")
 
-	if arm.Core == arm.CortexM0 {
-		if uintptr(unsafe.Pointer(sp)) < 0x20000000 {
-			print("stack overflow")
-		} else {
-			print("HardFault")
-		}
-
-		print(" with sp=", sp)
-		if uintptr(unsafe.Pointer(&sp.PC)) >= 0x20000000 {
-			// Only print the PC if it points into memory.
-			// It may not point into memory during a stack overflow, so check that
-			// first before accessing the stack.
-			print(" pc=", sp.PC)
-		}
-	} else if arm.Core == arm.CortexM3 || arm.Core == arm.CortexM4 {
+	if machine.CPUArchitecture == "armv7m" || machine.CPUArchitecture == "armv7em" || machine.CPUArchitecture == "armv8m" {
 		fault := arm.GetFaultStatus()
 		validSP := !fault.Bus().ImpreciseDataBusError()
 
@@ -150,6 +137,21 @@ func handleHardFault(sp *interruptStack) {
 				// accessing the stack.
 				print(" pc=", sp.PC)
 			}
+		}
+
+	} else {
+		if uintptr(unsafe.Pointer(sp)) < 0x20000000 {
+			print("stack overflow")
+		} else {
+			print("HardFault")
+		}
+
+		print(" with sp=", sp)
+		if uintptr(unsafe.Pointer(&sp.PC)) >= 0x20000000 {
+			// Only print the PC if it points into memory.
+			// It may not point into memory during a stack overflow, so check that
+			// first before accessing the stack.
+			print(" pc=", sp.PC)
 		}
 	}
 
