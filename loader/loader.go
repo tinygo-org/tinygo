@@ -213,17 +213,22 @@ func (p *Program) Parse(compileTestBinary bool, target *compileopts.TargetSpec) 
 		if err != nil {
 			return err
 		}
+		defer tmp.Close()
+
 		path, err := filepath.Rel(pkg.Package.Dir, tmp.Name())
 		if err != nil {
 			return err
 		}
+
 		pkg.GoFiles = append(pkg.GoFiles, path)
+
+		arch := strings.SplitN(target.Triple, "-", 2)[0]
+
 		fmt.Fprintf(tmp, "package machine\n")
-		fmt.Fprintf(tmp, "const CPUArchitecture = `%s`\n", strings.SplitN(target.Triple, "-", 2)[0])
+		fmt.Fprintf(tmp, "const CPUArchitecture = `%s`\n", arch)
 		if target.CPU != "" {
 			fmt.Fprintf(tmp, "const CPU = `%s`\n", target.CPU)
 		}
-		tmp.Close()
 	} else {
 		fmt.Println("not using machine package")
 	}
