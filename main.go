@@ -313,6 +313,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 
 		// Run the GDB server, if necessary.
 		var gdbCommands []string
+		var daemon *exec.Cmd
 		switch gdbInterface {
 		case "native":
 			// Run GDB directly.
@@ -324,7 +325,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			if err != nil {
 				return err
 			}
-			daemon := exec.Command("openocd", args...)
+			daemon = exec.Command("openocd", args...)
 			if ocdOutput {
 				// Make it clear which output is from the daemon.
 				w := &ColorWriter{
@@ -335,24 +336,11 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				daemon.Stdout = w
 				daemon.Stderr = w
 			}
-			// Make sure the daemon doesn't receive Ctrl-C that is intended for
-			// GDB (to break the currently executing program).
-			setCommandAsDaemon(daemon)
-			// Start now, and kill it on exit.
-			err = daemon.Start()
-			if err != nil {
-				return &commandError{"failed to run", daemon.Path, err}
-			}
-			defer func() {
-				daemon.Process.Signal(os.Interrupt)
-				// Maybe we should send a .Kill() after x seconds?
-				daemon.Wait()
-			}()
 		case "jlink":
 			gdbCommands = append(gdbCommands, "target remote :2331", "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
-			daemon := exec.Command("JLinkGDBServer", "-device", config.Target.JLinkDevice)
+			daemon = exec.Command("JLinkGDBServer", "-device", config.Target.JLinkDevice)
 			if ocdOutput {
 				// Make it clear which output is from the daemon.
 				w := &ColorWriter{
@@ -363,28 +351,29 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				daemon.Stdout = w
 				daemon.Stderr = w
 			}
-			// Make sure the daemon doesn't receive Ctrl-C that is intended for
-			// GDB (to break the currently executing program).
-			setCommandAsDaemon(daemon)
-			// Start now, and kill it on exit.
-			err = daemon.Start()
-			if err != nil {
-				return &commandError{"failed to run", daemon.Path, err}
-			}
-			defer func() {
-				daemon.Process.Signal(os.Interrupt)
-				// Maybe we should send a .Kill() after x seconds?
-				daemon.Wait()
-			}()
 		case "qemu":
 			gdbCommands = append(gdbCommands, "target remote :1234")
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], tmppath, "-s", "-S")
-			daemon := exec.Command(config.Target.Emulator[0], args...)
+			daemon = exec.Command(config.Target.Emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
+		case "mgba":
+			gdbCommands = append(gdbCommands, "target remote :2345")
 
+			// Run in an emulator.
+			args := append(config.Target.Emulator[1:], tmppath, "-g")
+			daemon = exec.Command(config.Target.Emulator[0], args...)
+			daemon.Stdout = os.Stdout
+			daemon.Stderr = os.Stderr
+		case "msd":
+			return errors.New("gdb is not supported for drag-and-drop programmable devices")
+		default:
+			return fmt.Errorf("gdb is not supported with interface %#v", gdbInterface)
+		}
+
+		if daemon != nil {
 			// Make sure the daemon doesn't receive Ctrl-C that is intended for
 			// GDB (to break the currently executing program).
 			setCommandAsDaemon(daemon)
@@ -399,30 +388,6 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				// Maybe we should send a .Kill() after x seconds?
 				daemon.Wait()
 			}()
-		case "mgba":
-			gdbCommands = append(gdbCommands, "target remote :2345")
-
-			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], tmppath, "-g")
-			daemon := exec.Command(config.Target.Emulator[0], args...)
-			daemon.Stdout = os.Stdout
-			daemon.Stderr = os.Stderr
-
-			// Make sure the daemon doesn't receive Ctrl-C that is intended for
-			// GDB (to break the currently executing program).
-			setCommandAsDaemon(daemon)
-
-			// Start now, and kill it on exit.
-			daemon.Start()
-			defer func() {
-				daemon.Process.Signal(os.Interrupt)
-				// Maybe we should send a .Kill() after x seconds?
-				daemon.Wait()
-			}()
-		case "msd":
-			return errors.New("gdb is not supported for drag-and-drop programmable devices")
-		default:
-			return fmt.Errorf("gdb is not supported with interface %#v", gdbInterface)
 		}
 
 		// Ignore Ctrl-C, it must be passed on to GDB.
