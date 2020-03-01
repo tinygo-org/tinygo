@@ -587,6 +587,9 @@ func (a ADC) Get() uint16 {
 }
 
 func (a ADC) getADCBus() *sam.ADC_Type {
+	if a.Pin >= PB04 && a.Pin <= PB07 {
+		return sam.ADC1
+	}
 	return sam.ADC0
 }
 
@@ -618,6 +621,15 @@ func (a ADC) getADCChannel() uint8 {
 		return 17
 	case PA11:
 		return 19
+
+	case PB04:
+		return 6
+	case PB05:
+		return 7
+	case PB06:
+		return 8
+	case PB07:
+		return 9
 	default:
 		panic("Invalid ADC pin")
 	}
