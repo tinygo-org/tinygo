@@ -66,6 +66,15 @@ const (
 	BUTTON_START_MASK  = 32
 	BUTTON_A_MASK      = 64
 	BUTTON_B_MASK      = 128
+
+	BUTTON_LEFT   = 0
+	BUTTON_UP     = 1
+	BUTTON_DOWN   = 2
+	BUTTON_RIGHT  = 3
+	BUTTON_SELECT = 4
+	BUTTON_START  = 5
+	BUTTON_A      = 6
+	BUTTON_B      = 7
 )
 
 // UART0 aka USBCDC pins
