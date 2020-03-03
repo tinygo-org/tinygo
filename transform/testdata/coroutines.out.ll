@@ -32,7 +32,7 @@ declare void @callMain(i8*, i8*)
 
 declare void @enqueueTimer(%"internal/task.Task"*, i64, i8*, i8*)
 
-define void @sleep(i64, i8*, i8* %parentHandle) {
+define void @sleep(i64 %0, i8* %1, i8* %parentHandle) {
 entry:
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
   %task.current1 = bitcast i8* %parentHandle to %"internal/task.Task"*
@@ -40,7 +40,7 @@ entry:
   ret void
 }
 
-define i32 @delayedValue(i32, i64, i8*, i8* %parentHandle) {
+define i32 @delayedValue(i32 %0, i64 %1, i8* %2, i8* %parentHandle) {
 entry:
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
   %ret.ptr = call i8* @"(*internal/task.Task).getReturnPtr"(%"internal/task.Task"* %task.current, i8* undef, i8* undef)
@@ -50,20 +50,20 @@ entry:
   ret i32 undef
 }
 
-define void @deadlock(i8*, i8* %parentHandle) {
+define void @deadlock(i8* %0, i8* %parentHandle) {
 entry:
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
   ret void
 }
 
-define i32 @tail(i32, i64, i8*, i8* %parentHandle) {
+define i32 @tail(i32 %0, i64 %1, i8* %2, i8* %parentHandle) {
 entry:
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
   %3 = call i32 @delayedValue(i32 %0, i64 %1, i8* undef, i8* %parentHandle)
   ret i32 undef
 }
 
-define void @ditchTail(i32, i64, i8*, i8* %parentHandle) {
+define void @ditchTail(i32 %0, i64 %1, i8* %2, i8* %parentHandle) {
 entry:
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
   %ret.ditch = call i8* @runtime.alloc(i32 4, i8* undef, i8* undef)
@@ -72,14 +72,14 @@ entry:
   ret void
 }
 
-define void @voidTail(i32, i64, i8*, i8* %parentHandle) {
+define void @voidTail(i32 %0, i64 %1, i8* %2, i8* %parentHandle) {
 entry:
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
   call void @ditchTail(i32 %0, i64 %1, i8* undef, i8* %parentHandle)
   ret void
 }
 
-define i32 @alternateTail(i32, i32, i64, i8*, i8* %parentHandle) {
+define i32 @alternateTail(i32 %0, i32 %1, i64 %2, i8* %3, i8* %parentHandle) {
 entry:
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
   %ret.ptr = call i8* @"(*internal/task.Task).getReturnPtr"(%"internal/task.Task"* %task.current, i8* undef, i8* undef)
@@ -91,7 +91,7 @@ entry:
   ret i32 undef
 }
 
-define i1 @coroutine(i32, i64, i8*, i8* %parentHandle) {
+define i1 @coroutine(i32 %0, i64 %1, i8* %2, i8* %parentHandle) {
 entry:
   %call.return = alloca i32
   %coro.id = call token @llvm.coro.id(i32 0, i8* null, i8* null, i8* null)
@@ -133,18 +133,18 @@ cleanup:                                          ; preds = %entry, %wakeup
   br label %suspend
 }
 
-define void @doNothing(i8*, i8*) {
+define void @doNothing(i8* %0, i8* %1) {
 entry:
   ret void
 }
 
-define void @sleepGoroutine(i8*, i8* %parentHandle) {
+define void @sleepGoroutine(i8* %0, i8* %parentHandle) {
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
   call void @sleep(i64 1000000, i8* undef, i8* %parentHandle)
   ret void
 }
 
-define void @progMain(i8*, i8* %parentHandle) {
+define void @progMain(i8* %0, i8* %parentHandle) {
 entry:
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
   call void @doNothing(i8* undef, i8* undef)
@@ -185,13 +185,13 @@ declare i8* @llvm.coro.free(token, i8* nocapture readonly) #0
 ; Function Attrs: nounwind
 declare token @llvm.coro.save(i8*) #2
 
-; Function Attrs: argmemonly nounwind
+; Function Attrs: argmemonly nounwind willreturn
 declare void @llvm.lifetime.start.p0i8(i64 immarg, i8* nocapture) #3
 
-; Function Attrs: argmemonly nounwind
+; Function Attrs: argmemonly nounwind willreturn
 declare void @llvm.lifetime.end.p0i8(i64 immarg, i8* nocapture) #3
 
 attributes #0 = { argmemonly nounwind readonly }
 attributes #1 = { nounwind readnone }
 attributes #2 = { nounwind }
-attributes #3 = { argmemonly nounwind }
+attributes #3 = { argmemonly nounwind willreturn }

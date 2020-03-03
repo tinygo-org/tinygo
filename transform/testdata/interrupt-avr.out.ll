@@ -19,7 +19,7 @@ declare i32 @"runtime/interrupt.Register"(i32, i8*, i16, i8*, i8*) addrspace(1)
 
 declare void @"runtime/interrupt.use"(%"runtime/interrupt.Interrupt") addrspace(1)
 
-define void @"(machine.UART).Configure"(%machine.RingBuffer*, i32, i8, i8, i8* %context, i8* %parentHandle) unnamed_addr addrspace(1) {
+define void @"(machine.UART).Configure"(%machine.RingBuffer* %0, i32 %1, i8 %2, i8 %3, i8* %context, i8* %parentHandle) unnamed_addr addrspace(1) {
   ret void
 }
 

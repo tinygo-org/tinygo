@@ -52,8 +52,7 @@ bool tinygo_clang_driver(int argc, char **argv) {
 			std::unique_ptr<clang::CompilerInstance> Clang(new clang::CompilerInstance());
 			bool success = clang::CompilerInvocation::CreateFromArgs(
 					Clang->getInvocation(),
-					const_cast<const char **>(CCArgs.data()),
-					const_cast<const char **>(CCArgs.data()) + CCArgs.size(),
+					CCArgs,
 					Diags);
 			if (!success) {
 				return false;
@@ -74,7 +73,8 @@ bool tinygo_clang_driver(int argc, char **argv) {
 		} else if (strcmp(*CCArgs.data(), "-cc1as") == 0) {
 			// This is the assembler frontend. Parse the arguments.
 			AssemblerInvocation Asm;
-			if (!AssemblerInvocation::CreateFromArgs(Asm, llvm::ArrayRef<const char*>(CCArgs).slice(1), Diags))
+			ArrayRef<const char *> Argv = llvm::ArrayRef<const char*>(CCArgs);
+			if (!AssemblerInvocation::CreateFromArgs(Asm, Argv.slice(1), Diags))
 				return false;
 
 			// Execute the invocation, unless there were parsing errors.

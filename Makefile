@@ -12,19 +12,19 @@ LLD_SRC ?= $(LLVM_PROJECTDIR)/lld
 ifneq (, $(shell command -v llvm-build/bin/clang 2> /dev/null))
     CLANG ?= $(abspath llvm-build/bin/clang)
 else
-    CLANG ?= clang-9
+    CLANG ?= clang-10
 endif
 ifneq (, $(shell command -v llvm-build/bin/llvm-ar 2> /dev/null))
     LLVM_AR ?= $(abspath llvm-build/bin/llvm-ar)
-else ifneq (, $(shell command -v llvm-ar-9 2> /dev/null))
-    LLVM_AR ?= llvm-ar-9
+else ifneq (, $(shell command -v llvm-ar-10 2> /dev/null))
+    LLVM_AR ?= llvm-ar-10
 else
     LLVM_AR ?= llvm-ar
 endif
 ifneq (, $(shell command -v llvm-build/bin/llvm-nm 2> /dev/null))
     LLVM_NM ?= $(abspath llvm-build/bin/llvm-nm)
-else ifneq (, $(shell command -v llvm-nm-9 2> /dev/null))
-    LLVM_NM ?= llvm-nm-9
+else ifneq (, $(shell command -v llvm-nm-10 2> /dev/null))
+    LLVM_NM ?= llvm-nm-10
 else
     LLVM_NM ?= llvm-nm
 endif
@@ -53,7 +53,7 @@ endif
 
 .PHONY: all tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-avr
 
-LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines coverage debuginfodwarf executionengine instrumentation interpreter ipo irreader linker lto mc mcjit objcarcopts option profiledata scalaropts support target
+LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines coverage debuginfodwarf executionengine frontendopenmp instrumentation interpreter ipo irreader linker lto mc mcjit objcarcopts option profiledata scalaropts support target
 
 ifeq ($(OS),Windows_NT)
     EXE = .exe
@@ -103,8 +103,8 @@ LLD_LIBS = $(START_GROUP) -llldCOFF -llldCommon -llldCore -llldDriver -llldELF -
 # For static linking.
 ifneq ("$(wildcard $(LLVM_BUILDDIR)/bin/llvm-config*)","")
     CGO_CPPFLAGS=$(shell $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(LLVM_BUILDDIR))/tools/clang/include -I$(abspath $(CLANG_SRC))/include -I$(abspath $(LLD_SRC))/include
-    CGO_CXXFLAGS=-std=c++11
-    CGO_LDFLAGS+=$(LIBCLANG_PATH) -std=c++11 -L$(abspath $(LLVM_BUILDDIR)/lib) $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
+    CGO_CXXFLAGS=-std=c++14
+    CGO_LDFLAGS+=$(LIBCLANG_PATH) -std=c++14 -L$(abspath $(LLVM_BUILDDIR)/lib) $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
 endif
 
 
@@ -148,7 +148,7 @@ gen-device-stm32: build/gen-device-svd
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/README.md:
-	git clone -b release/9.x https://github.com/llvm/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b release/10.x https://github.com/llvm/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/README.md
 
 # Configure LLVM.

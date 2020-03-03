@@ -41,24 +41,24 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-9-v0
+            - llvm-source-10-v0
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-9-v0
+          key: llvm-source-10-v0
           paths:
             - llvm-project
   build-wasi-libc:
     steps:
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-v1
+            - wasi-libc-sysroot-v2
       - run:
           name: "Build wasi-libc"
           command: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-v1
+          key: wasi-libc-sysroot-v2
           paths:
             - lib/wasi-libc/sysroot
   test-linux:
@@ -66,7 +66,7 @@ commands:
       - checkout
       - submodules
       - apt-dependencies:
-          llvm: "-9"
+          llvm: "-10"
       - install-node
       - restore_cache:
           keys:
@@ -76,10 +76,10 @@ commands:
       - run: go install .
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-systemclang-v0
+            - wasi-libc-sysroot-systemclang-v1
       - run: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-systemclang-v0
+          key: wasi-libc-sysroot-systemclang-v1
           paths:
             - lib/wasi-libc/sysroot
       - run: go test -v ./cgo ./compileopts ./interp ./transform .
@@ -117,7 +117,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-9-linux-v0-assert
+            - llvm-build-10-linux-v0-assert
       - run:
           name: "Build LLVM"
           command: |
@@ -135,7 +135,7 @@ commands:
               make ASSERT=1 llvm-build
             fi
       - save_cache:
-          key: llvm-build-9-linux-v0-assert
+          key: llvm-build-10-linux-v0-assert
           paths:
             llvm-build
       - run: make ASSERT=1
@@ -176,7 +176,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-9-linux-v0
+            - llvm-build-10-linux-v0
       - run:
           name: "Build LLVM"
           command: |
@@ -194,7 +194,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-9-linux-v0
+          key: llvm-build-10-linux-v0
           paths:
             llvm-build
       - build-wasi-libc
@@ -239,17 +239,17 @@ commands:
             - go-cache-macos-v2-{{ checksum "go.mod" }}
       - restore_cache:
           keys:
-            - llvm-source-9-macos-v0
+            - llvm-source-10-macos-v0
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-9-macos-v0
+          key: llvm-source-10-macos-v0
           paths:
             - llvm-project
       - restore_cache:
           keys:
-            - llvm-build-9-macos-v0
+            - llvm-build-10-macos-v0
       - run:
           name: "Build LLVM"
           command: |
@@ -261,7 +261,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-9-macos-v0
+          key: llvm-build-10-macos-v0
           paths:
             llvm-build
       - restore_cache:
@@ -306,17 +306,17 @@ commands:
 
 
 jobs:
-  test-llvm9-go111:
+  test-llvm10-go111:
     docker:
       - image: circleci/golang:1.11-buster
     steps:
       - test-linux
-  test-llvm9-go112:
+  test-llvm10-go112:
     docker:
       - image: circleci/golang:1.12-buster
     steps:
       - test-linux
-  test-llvm9-go113:
+  test-llvm10-go113:
     docker:
       - image: circleci/golang:1.13-buster
     steps:
@@ -343,9 +343,9 @@ jobs:
 workflows:
   test-all:
     jobs:
-      - test-llvm9-go111
-      - test-llvm9-go112
-      - test-llvm9-go113
+      - test-llvm10-go111
+      - test-llvm10-go112
+      - test-llvm10-go113
       - build-linux
       - build-macos
       - assert-test-linux
