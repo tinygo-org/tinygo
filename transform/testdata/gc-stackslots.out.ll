@@ -94,7 +94,7 @@ entry:
   store i8 1, i8* %entry.y
   br label %loop
 
-loop:
+loop:                                             ; preds = %loop, %entry
   %prev.y = phi i8* [ %entry.y, %entry ], [ %prev.x, %loop ]
   %prev.x = phi i8* [ %entry.x, %entry ], [ %next.x, %loop ]
   %5 = getelementptr { %runtime.stackChainObject*, i32, i8*, i8*, i8*, i8*, i8* }, { %runtime.stackChainObject*, i32, i8*, i8*, i8*, i8*, i8* }* %gc.stackobject, i32 0, i32 5
@@ -108,7 +108,7 @@ loop:
   %loop.done = icmp ult i8 40, %next.x.val
   br i1 %loop.done, label %end, label %loop
 
-end:
+end:                                              ; preds = %loop
   store %runtime.stackChainObject* %0, %runtime.stackChainObject** @runtime.stackChainStart
   ret i8* %next.x
 }

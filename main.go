@@ -23,6 +23,7 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
+	"tinygo.org/x/go-llvm"
 
 	"go.bug.st/serial"
 )
@@ -902,7 +903,7 @@ func main() {
 		if s, err := builder.GorootVersionString(goenv.Get("GOROOT")); err == nil {
 			goversion = s
 		}
-		fmt.Printf("tinygo version %s %s/%s (using go version %s)\n", version, runtime.GOOS, runtime.GOARCH, goversion)
+		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
 	case "env":
 		if flag.NArg() == 0 {
 			// Show all environment variables.

@@ -1,10 +1,10 @@
-# TinyGo base stage installs Go 1.13, LLVM 9 and the TinyGo compiler itself.
+# TinyGo base stage installs Go 1.13, LLVM 10 and the TinyGo compiler itself.
 FROM golang:1.13 AS tinygo-base
 
 RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
-    echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-9 main" >> /etc/apt/sources.list && \
+    echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-10 main" >> /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y llvm-9-dev libclang-9-dev git
+    apt-get install -y llvm-10-dev libclang-10-dev git
 
 COPY . /tinygo
 
@@ -28,9 +28,9 @@ COPY --from=tinygo-base /tinygo/src /tinygo/src
 COPY --from=tinygo-base /tinygo/targets /tinygo/targets
 
 RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
-    echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-9 main" >> /etc/apt/sources.list && \
+    echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-10 main" >> /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y libllvm9 lld-9
+    apt-get install -y libllvm10 lld-10
 
 # tinygo-avr stage installs the needed dependencies to compile TinyGo programs for AVR microcontrollers.
 FROM tinygo-base AS tinygo-avr
@@ -61,7 +61,7 @@ COPY --from=tinygo-base /tinygo/lib /tinygo/lib
 
 RUN cd /tinygo/ && \
     apt-get update && \
-    apt-get install -y apt-utils make clang-9 && \
+    apt-get install -y apt-utils make clang-10 && \
     make gen-device-nrf && make gen-device-stm32
 
 # tinygo-all stage installs the needed dependencies to compile TinyGo programs for all platforms.
@@ -73,7 +73,7 @@ COPY --from=tinygo-base /tinygo/lib /tinygo/lib
 
 RUN cd /tinygo/ && \
     apt-get update && \
-    apt-get install -y apt-utils make clang-9 binutils-avr gcc-avr avr-libc && \
+    apt-get install -y apt-utils make clang-10 binutils-avr gcc-avr avr-libc && \
     make gen-device
 
 CMD ["tinygo"]

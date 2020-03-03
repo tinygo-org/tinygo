@@ -9,5 +9,5 @@ require (
 	go.bug.st/serial v1.0.0
 	golang.org/x/tools v0.0.0-20200216192241-b320d3a0f5a2
 	google.golang.org/appengine v1.4.0 // indirect
-	tinygo.org/x/go-llvm v0.0.0-20200226165415-53522ab6713d
+	tinygo.org/x/go-llvm v0.0.0-20200401165421-8d120882fc7a
 )

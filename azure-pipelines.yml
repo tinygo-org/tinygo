@@ -12,12 +12,12 @@ jobs:
   steps:
     - task: GoTool@0
       inputs:
-        version: '1.13.8'  
+        version: '1.13.8'
     - checkout: self
     - task: CacheBeta@0
       displayName: Cache LLVM source
       inputs:
-        key: llvm-source-9-windows-v0
+        key: llvm-source-10-windows-v0
         path: llvm-project
     - task: Bash@3
       displayName: Download LLVM source
@@ -27,7 +27,7 @@ jobs:
     - task: CacheBeta@0
       displayName: Cache LLVM build
       inputs:
-        key: llvm-build-9-windows-v0
+        key: llvm-build-10-windows-v0
         path: llvm-build
     - task: Bash@3
       displayName: Build LLVM
@@ -37,10 +37,6 @@ jobs:
           if [ ! -f llvm-build/lib/liblldELF.a ]
           then
             choco install ninja
-            # LLVM 9 cannot be built with MinGW 8.
-            # For details: https://reviews.llvm.org/D70266
-            choco uninstall mingw
-            choco install mingw --version=7.3.0
             make llvm-build
           fi
     - task: Bash@3
@@ -51,7 +47,7 @@ jobs:
     - task: CacheBeta@0
       displayName: Cache wasi-libc sysroot
       inputs:
-        key: wasi-libc-sysroot-v1
+        key: wasi-libc-sysroot-v2
         path: lib/wasi-libc/sysroot
     - task: Bash@3
       displayName: Build wasi-libc

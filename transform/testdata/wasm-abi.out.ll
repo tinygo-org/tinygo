@@ -37,7 +37,7 @@ define internal void @callExportedFunction(i64 %foo) {
 
 declare void @externalCall(i64*, i8*, i32, i64*)
 
-define void @exportedFunction(i64*) {
+define void @exportedFunction(i64* %0) {
 entry:
   %i64 = load i64, i64* %0
   call void @"exportedFunction$i64wrap"(i64 %i64)

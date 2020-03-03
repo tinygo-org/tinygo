@@ -16,14 +16,14 @@ declare void @"device/arm.EnableIRQ"(i32, i8* nocapture readnone, i8* nocapture 
 
 declare void @"device/arm.SetPriority"(i32, i32, i8* nocapture readnone, i8* nocapture readnone)
 
-define void @runtime.initAll(i8* nocapture readnone, i8* nocapture readnone) unnamed_addr {
+define void @runtime.initAll(i8* nocapture readnone %0, i8* nocapture readnone %1) unnamed_addr {
 entry:
   call void @"device/arm.SetPriority"(i32 2, i32 192, i8* undef, i8* undef)
   call void @"device/arm.EnableIRQ"(i32 2, i8* undef, i8* undef)
   ret void
 }
 
-define internal void @"(*machine.UART).handleInterrupt$bound"(i32, i8* nocapture %context, i8* nocapture readnone %parentHandle) {
+define internal void @"(*machine.UART).handleInterrupt$bound"(i32 %0, i8* nocapture %context, i8* nocapture readnone %parentHandle) {
 entry:
   %unpack.ptr = bitcast i8* %context to %machine.UART*
   call void @"(*machine.UART).handleInterrupt"(%machine.UART* %unpack.ptr, i32 %0, i8* undef, i8* undef)

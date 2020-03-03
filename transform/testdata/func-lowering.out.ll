@@ -29,7 +29,7 @@ declare void @func1Uint8(i8, i8*, i8*)
 
 declare void @func2Uint8(i8, i8*, i8*)
 
-define void @runFunc1(i8*, i32, i8, i8* %context, i8* %parentHandle) {
+define void @runFunc1(i8* %0, i32 %1, i8 %2, i8* %context, i8* %parentHandle) {
 entry:
   %3 = icmp eq i32 %1, 0
   %4 = select i1 %3, void (i8, i8*, i8*)* null, void (i8, i8*, i8*)* @funcInt8
@@ -45,7 +45,7 @@ fpcall.next:                                      ; preds = %entry
   ret void
 }
 
-define void @runFunc2(i8*, i32, i8, i8* %context, i8* %parentHandle) {
+define void @runFunc2(i8* %0, i32 %1, i8 %2, i8* %context, i8* %parentHandle) {
 entry:
   br i1 false, label %fpcall.nil, label %fpcall.next
 
@@ -79,7 +79,7 @@ func.default:                                     ; preds = %fpcall.next
   unreachable
 }
 
-define void @sleepFuncValue(i8*, i32, i8* nocapture readnone %context, i8* nocapture readnone %parentHandle) {
+define void @sleepFuncValue(i8* %0, i32 %1, i8* nocapture readnone %context, i8* nocapture readnone %parentHandle) {
 entry:
   switch i32 %1, label %func.default [
     i32 0, label %func.nil

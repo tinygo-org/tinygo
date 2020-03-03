@@ -6,25 +6,28 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"tinygo.org/x/go-llvm"
 )
 
 // Commands lists command alternatives for various operating systems. These
 // commands may have a slightly different name across operating systems and
 // distributions or may not even exist in $PATH, in which case absolute paths
 // may be used.
-var commands = map[string][]string{
-	"clang":   {"clang-9"},
-	"ld.lld":  {"ld.lld-9", "ld.lld"},
-	"wasm-ld": {"wasm-ld-9", "wasm-ld"},
-}
+var commands = map[string][]string{}
 
 func init() {
-	// Add the path to a Homebrew-installed LLVM 9 for ease of use (no need to
+	llvmMajor := strings.Split(llvm.Version, ".")[0]
+	commands["clang"] = []string{"clang-" + llvmMajor}
+	commands["ld.lld"] = []string{"ld.lld-" + llvmMajor, "ld.lld"}
+	commands["wasm-ld"] = []string{"wasm-ld-" + llvmMajor, "wasm-ld"}
+	// Add the path to a Homebrew-installed LLVM for ease of use (no need to
 	// manually set $PATH).
 	if runtime.GOOS == "darwin" {
-		commands["clang"] = append(commands["clang"], "/usr/local/opt/llvm@9/bin/clang-9")
-		commands["ld.lld"] = append(commands["ld.lld"], "/usr/local/opt/llvm@9/bin/ld.lld")
-		commands["wasm-ld"] = append(commands["wasm-ld"], "/usr/local/opt/llvm@9/bin/wasm-ld")
+		prefix := "/usr/local/opt/llvm@" + llvmMajor + "/bin/"
+		commands["clang"] = append(commands["clang"], prefix+"clang-"+llvmMajor)
+		commands["ld.lld"] = append(commands["ld.lld"], prefix+"ld.lld")
+		commands["wasm-ld"] = append(commands["wasm-ld"], prefix+"wasm-ld")
 	}
 	// Add the path for when LLVM was installed with the installer from
 	// llvm.org, which by default doesn't add LLVM to the $PATH environment
@@ -34,11 +37,12 @@ func init() {
 		commands["ld.lld"] = append(commands["ld.lld"], "lld", "C:\\Program Files\\LLVM\\bin\\lld.exe")
 		commands["wasm-ld"] = append(commands["wasm-ld"], "C:\\Program Files\\LLVM\\bin\\wasm-ld.exe")
 	}
-	// Add the path to the llvm90 installed from ports
+	// Add the path to LLVM installed from ports.
 	if runtime.GOOS == "freebsd" {
-		commands["clang"] = append(commands["clang"], "/usr/local/llvm90/bin/clang-9")
-		commands["ld.lld"] = append(commands["ld.lld"], "/usr/local/llvm90/bin/ld.lld")
-		commands["wasm-ld"] = append(commands["wasm-ld"], "/usr/local/llvm90/bin/wasm-ld")
+		prefix := "/usr/local/llvm" + llvmMajor + "/bin/"
+		commands["clang"] = append(commands["clang"], prefix+"clang-"+llvmMajor)
+		commands["ld.lld"] = append(commands["ld.lld"], prefix+"ld.lld")
+		commands["wasm-ld"] = append(commands["wasm-ld"], prefix+"wasm-ld")
 	}
 }
 

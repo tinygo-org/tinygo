@@ -423,7 +423,7 @@ func (p *Package) parseFiles(includeTests bool) ([]*ast.File, error) {
 	if len(p.CgoFiles) != 0 {
 		cflags := append(p.CFlags, "-I"+p.Package.Dir)
 		if p.ClangHeaders != "" {
-			cflags = append(cflags, "-I"+p.ClangHeaders)
+			cflags = append(cflags, "-Xclang", "-internal-isystem", "-Xclang", p.ClangHeaders)
 		}
 		generated, errs := cgo.Process(files, p.Program.Dir, p.fset, cflags)
 		if errs != nil {
