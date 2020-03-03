@@ -675,38 +675,49 @@ func usage() {
 	flag.PrintDefaults()
 }
 
+// printCompilerError prints compiler errors using the provided logger function
+// (similar to fmt.Println).
+//
+// There is one exception: interp errors may print to stderr unconditionally due
+// to limitations in the LLVM bindings.
+func printCompilerError(logln func(...interface{}), err error) {
+	switch err := err.(type) {
+	case *interp.Unsupported:
+		// hit an unknown/unsupported instruction
+		logln("#", err.ImportPath)
+		msg := "unsupported instruction during init evaluation:"
+		if err.Pos.String() != "" {
+			msg = err.Pos.String() + " " + msg
+		}
+		logln(msg)
+		err.Inst.Dump()
+		logln()
+	case types.Error, scanner.Error:
+		logln(err)
+	case interp.Error:
+		logln("#", err.ImportPath)
+		for _, err := range err.Errs {
+			logln(err)
+		}
+	case loader.Errors:
+		logln("#", err.Pkg.ImportPath)
+		for _, err := range err.Errs {
+			logln(err)
+		}
+	case *builder.MultiError:
+		for _, err := range err.Errs {
+			logln(err)
+		}
+	default:
+		logln("error:", err)
+	}
+}
+
 func handleCompilerError(err error) {
 	if err != nil {
-		switch err := err.(type) {
-		case *interp.Unsupported:
-			// hit an unknown/unsupported instruction
-			fmt.Fprintln(os.Stderr, "#", err.ImportPath)
-			msg := "unsupported instruction during init evaluation:"
-			if err.Pos.String() != "" {
-				msg = err.Pos.String() + " " + msg
-			}
-			fmt.Fprintln(os.Stderr, msg)
-			err.Inst.Dump()
-			fmt.Fprintln(os.Stderr)
-		case types.Error, scanner.Error:
-			fmt.Fprintln(os.Stderr, err)
-		case interp.Error:
-			fmt.Fprintln(os.Stderr, "#", err.ImportPath)
-			for _, err := range err.Errs {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		case loader.Errors:
-			fmt.Fprintln(os.Stderr, "#", err.Pkg.ImportPath)
-			for _, err := range err.Errs {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		case *builder.MultiError:
-			for _, err := range err.Errs {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		default:
-			fmt.Fprintln(os.Stderr, "error:", err)
-		}
+		printCompilerError(func(args ...interface{}) {
+			fmt.Fprintln(os.Stderr, args...)
+		}, err)
 		os.Exit(1)
 	}
 }
