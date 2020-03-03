@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/tinygo-org/tinygo/compileopts"
-	"github.com/tinygo-org/tinygo/loader"
 )
 
 const TESTDATA = "testdata"
@@ -131,13 +130,7 @@ func runTest(path, target string, t *testing.T) {
 	binary := filepath.Join(tmpdir, "test")
 	err = runBuild("./"+path, binary, config)
 	if err != nil {
-		if errLoader, ok := err.(loader.Errors); ok {
-			for _, err := range errLoader.Errs {
-				t.Log("failed to build:", err)
-			}
-		} else {
-			t.Log("failed to build:", err)
-		}
+		printCompilerError(t.Log, err)
 		t.Fail()
 		return
 	}
