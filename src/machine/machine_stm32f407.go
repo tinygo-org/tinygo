@@ -2,7 +2,7 @@
 
 package machine
 
-// Peripheral abstraction layer for the stm32.
+// Peripheral abstraction layer for the stm32f4(07)
 
 import (
 	"device/stm32"
