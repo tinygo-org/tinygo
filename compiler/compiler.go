@@ -137,63 +137,24 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
 	dummyFunc.EraseFromParentAsFunction()
 
-	// Prefix the GOPATH with the system GOROOT, as GOROOT is already set to
-	// the TinyGo root.
-	overlayGopath := goenv.Get("GOPATH")
-	if overlayGopath == "" {
-		overlayGopath = goenv.Get("GOROOT")
-	} else {
-		overlayGopath = goenv.Get("GOROOT") + string(filepath.ListSeparator) + overlayGopath
-	}
-
 	wd, err := os.Getwd()
 	if err != nil {
 		return c.mod, nil, nil, []error{err}
+	}
+	goroot, err := loader.GetCachedGoroot(c.Config)
+	if err != nil {
+		return c.mod, nil, []error{err}
 	}
 	lprogram := &loader.Program{
 		Build: &build.Context{
 			GOARCH:      c.GOARCH(),
 			GOOS:        c.GOOS(),
-			GOROOT:      goenv.Get("GOROOT"),
+			GOROOT:      goroot,
 			GOPATH:      goenv.Get("GOPATH"),
 			CgoEnabled:  c.CgoEnabled(),
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
 			BuildTags:   c.BuildTags(),
-		},
-		OverlayBuild: &build.Context{
-			GOARCH:      c.GOARCH(),
-			GOOS:        c.GOOS(),
-			GOROOT:      goenv.Get("TINYGOROOT"),
-			GOPATH:      overlayGopath,
-			CgoEnabled:  c.CgoEnabled(),
-			UseAllFiles: false,
-			Compiler:    "gc", // must be one of the recognized compilers
-			BuildTags:   c.BuildTags(),
-		},
-		OverlayPath: func(path string) string {
-			// Return the (overlay) import path when it should be overlaid, and
-			// "" if it should not.
-			if strings.HasPrefix(path, tinygoPath+"/src/") {
-				// Avoid issues with packages that are imported twice, one from
-				// GOPATH and one from TINYGOPATH.
-				path = path[len(tinygoPath+"/src/"):]
-			}
-			switch path {
-			case "machine", "os", "reflect", "runtime", "runtime/interrupt", "runtime/volatile", "sync", "testing", "internal/reflectlite", "internal/bytealg", "internal/task":
-				return path
-			default:
-				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
-					return path
-				} else if path == "syscall" {
-					for _, tag := range c.BuildTags() {
-						if tag == "baremetal" || tag == "darwin" {
-							return path
-						}
-					}
-				}
-			}
-			return ""
 		},
 		TypeChecker: types.Config{
 			Sizes: &stdSizes{

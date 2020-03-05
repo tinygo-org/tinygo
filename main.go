@@ -630,6 +630,36 @@ func getDefaultPort() (port string, err error) {
 	return d[0], nil
 }
 
+// runGoList runs the `go list` command but using the configuration used for
+// TinyGo.
+func runGoList(config *compileopts.Config, flagJSON, flagDeps bool, pkgs []string) error {
+	goroot, err := loader.GetCachedGoroot(config)
+	if err != nil {
+		return err
+	}
+	args := []string{"list"}
+	if flagJSON {
+		args = append(args, "-json")
+	}
+	if flagDeps {
+		args = append(args, "-deps")
+	}
+	if len(config.BuildTags()) != 0 {
+		args = append(args, "-tags", strings.Join(config.BuildTags(), " "))
+	}
+	args = append(args, pkgs...)
+	cgoEnabled := "0"
+	if config.CgoEnabled() {
+		cgoEnabled = "1"
+	}
+	cmd := exec.Command("go", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(), "GOROOT="+goroot, "GOOS="+config.GOOS(), "GOARCH="+config.GOARCH(), "CGO_ENABLED="+cgoEnabled)
+	cmd.Run()
+	return nil
+}
+
 func usage() {
 	fmt.Fprintln(os.Stderr, "TinyGo is a Go compiler for small places.")
 	fmt.Fprintln(os.Stderr, "version:", goenv.Version)
@@ -641,10 +671,25 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  flash: compile and flash to the device")
 	fmt.Fprintln(os.Stderr, "  gdb:   run/flash and immediately enter GDB")
 	fmt.Fprintln(os.Stderr, "  env:   list environment variables used during build")
+	fmt.Fprintln(os.Stderr, "  list:  run go list using the TinyGo root")
 	fmt.Fprintln(os.Stderr, "  clean: empty cache directory ("+goenv.Get("GOCACHE")+")")
 	fmt.Fprintln(os.Stderr, "  help:  print this help text")
 	fmt.Fprintln(os.Stderr, "\nflags:")
 	flag.PrintDefaults()
+}
+
+// try to make the path relative to the current working directory. If any error
+// occurs, this error is ignored and the absolute path is returned instead.
+func tryToMakePathRelative(dir string) string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return dir
+	}
+	relpath, err := filepath.Rel(wd, dir)
+	if err != nil {
+		return dir
+	}
+	return relpath
 }
 
 // printCompilerError prints compiler errors using the provided logger function
@@ -654,8 +699,24 @@ func usage() {
 // to limitations in the LLVM bindings.
 func printCompilerError(logln func(...interface{}), err error) {
 	switch err := err.(type) {
-	case types.Error, scanner.Error:
+	case types.Error:
+		printCompilerError(logln, scanner.Error{
+			Pos: err.Fset.Position(err.Pos),
+			Msg: err.Msg,
+		})
+	case scanner.Error:
+		if !strings.HasPrefix(err.Pos.Filename, filepath.Join(goenv.Get("GOROOT"), "src")) && !strings.HasPrefix(err.Pos.Filename, filepath.Join(goenv.Get("TINYGOROOT"), "src")) {
+			// This file is not from the standard library (either the GOROOT or
+			// the TINYGOROOT). Make the path relative, for easier reading.
+			// Ignore any errors in the process (falling back to the absolute
+			// path).
+			err.Pos.Filename = tryToMakePathRelative(err.Pos.Filename)
+		}
 		logln(err)
+	case scanner.ErrorList:
+		for _, scannerErr := range err {
+			printCompilerError(logln, *scannerErr)
+		}
 	case *interp.Error:
 		logln("#", err.ImportPath)
 		logln(err.Error())
@@ -674,11 +735,11 @@ func printCompilerError(logln func(...interface{}), err error) {
 	case loader.Errors:
 		logln("#", err.Pkg.ImportPath)
 		for _, err := range err.Errs {
-			logln(err)
+			printCompilerError(logln, err)
 		}
 	case *builder.MultiError:
 		for _, err := range err.Errs {
-			logln(err)
+			printCompilerError(logln, err)
 		}
 	default:
 		logln("error:", err)
@@ -695,6 +756,13 @@ func handleCompilerError(err error) {
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
+		usage()
+		os.Exit(1)
+	}
+	command := os.Args[1]
+
 	outpath := flag.String("o", "", "output filename")
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, extalloc, conservative)")
@@ -715,12 +783,11 @@ func main() {
 	wasmAbi := flag.String("wasm-abi", "js", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	heapSize := flag.String("heap-size", "1M", "default heap size in bytes (only supported by WebAssembly)")
 
-	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
-		usage()
-		os.Exit(1)
+	var flagJSON, flagDeps *bool
+	if command == "list" {
+		flagJSON = flag.Bool("json", false, "print data in JSON format")
+		flagDeps = flag.Bool("deps", false, "")
 	}
-	command := os.Args[1]
 
 	// Early command processing, before commands are interpreted by the Go flag
 	// library.
@@ -886,6 +953,18 @@ func main() {
 		fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
 		fmt.Printf("garbage collector: %s\n", config.GC())
 		fmt.Printf("scheduler:         %s\n", config.Scheduler())
+	case "list":
+		config, err := builder.NewConfig(options)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			usage()
+			os.Exit(1)
+		}
+		err = runGoList(config, *flagJSON, *flagDeps, flag.Args())
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "failed to run `go list`:", err)
+			os.Exit(1)
+		}
 	case "clean":
 		// remove cache directory
 		err := os.RemoveAll(goenv.Get("GOCACHE"))
