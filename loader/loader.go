@@ -22,8 +22,6 @@ import (
 type Program struct {
 	mainPkg      string
 	Build        *build.Context
-	OverlayBuild *build.Context
-	OverlayPath  func(path string) string
 	Packages     map[string]*Package
 	sorted       []*Package
 	fset         *token.FileSet
@@ -54,10 +52,6 @@ func (p *Program) Import(path, srcDir string, pos token.Position) (*Package, err
 
 	// Load this package.
 	ctx := p.Build
-	if newPath := p.OverlayPath(path); newPath != "" {
-		ctx = p.OverlayBuild
-		path = newPath
-	}
 	buildPkg, err := ctx.Import(path, srcDir, build.ImportComment)
 	if err != nil {
 		return nil, scanner.Error{
