@@ -16,14 +16,13 @@ import (
 	"text/template"
 
 	"github.com/tinygo-org/tinygo/cgo"
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
 	mainPkg      string
 	Build        *build.Context
-	OverlayBuild *build.Context
-	OverlayPath  func(path string) string
 	Packages     map[string]*Package
 	sorted       []*Package
 	fset         *token.FileSet
@@ -55,10 +54,6 @@ func (p *Program) Import(path, srcDir string, pos token.Position) (*Package, err
 
 	// Load this package.
 	ctx := p.Build
-	if newPath := p.OverlayPath(path); newPath != "" {
-		ctx = p.OverlayBuild
-		path = newPath
-	}
 	buildPkg, err := ctx.Import(path, srcDir, build.ImportComment)
 	if err != nil {
 		return nil, scanner.Error{
@@ -320,14 +315,30 @@ func (p *Program) parseFile(path string, mode parser.Mode) (*ast.File, error) {
 		return nil, err
 	}
 	defer rd.Close()
-	relpath := path
-	if filepath.IsAbs(path) {
-		rp, err := filepath.Rel(p.Dir, path)
-		if err == nil {
-			relpath = rp
+	diagnosticPath := path
+	if strings.HasPrefix(path, p.Build.GOROOT+string(filepath.Separator)) {
+		// If this file is part of the synthetic GOROOT, try to infer the
+		// original path.
+		relpath := path[len(filepath.Join(p.Build.GOROOT, "src"))+1:]
+		realgorootPath := filepath.Join(goenv.Get("GOROOT"), "src", relpath)
+		if _, err := os.Stat(realgorootPath); err == nil {
+			diagnosticPath = realgorootPath
+		}
+		maybeInTinyGoRoot := false
+		for prefix := range pathsToOverride(needsSyscallPackage(p.Build.BuildTags)) {
+			if !strings.HasPrefix(relpath, prefix) {
+				continue
+			}
+			maybeInTinyGoRoot = true
+		}
+		if maybeInTinyGoRoot {
+			tinygoPath := filepath.Join(p.TINYGOROOT, "src", relpath)
+			if _, err := os.Stat(tinygoPath); err == nil {
+				diagnosticPath = tinygoPath
+			}
 		}
 	}
-	return parser.ParseFile(p.fset, relpath, rd, mode)
+	return parser.ParseFile(p.fset, diagnosticPath, rd, mode)
 }
 
 // Parse parses and typechecks this package.
