@@ -9,6 +9,7 @@ import "unsafe"
 var _ unsafe.Pointer
 
 const C.BAR = 3
+const C.FOO_H = 1
 
 type C.int16_t = int16
 type C.int32_t = int32

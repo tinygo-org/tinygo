@@ -14,7 +14,9 @@ package cgo
 import (
 	"fmt"
 	"go/ast"
+	"go/scanner"
 	"go/token"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -172,6 +174,18 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	generatedTokenPos := p.fset.AddFile(dir+"/!cgo.go", -1, 0)
 	generatedTokenPos.SetLines([]int{0})
 	p.generatedPos = generatedTokenPos.Pos(0)
+
+	// Find the absolute path for this package.
+	packagePath, err := filepath.Abs(fset.File(files[0].Pos()).Name())
+	if err != nil {
+		return nil, []error{
+			scanner.Error{
+				Pos: fset.Position(files[0].Pos()),
+				Msg: "cgo: cannot find absolute path: " + err.Error(), // TODO: wrap this error
+			},
+		}
+	}
+	packagePath = filepath.Dir(packagePath)
 
 	// Construct a new in-memory AST for CGo declarations of this package.
 	unsafeImport := &ast.ImportSpec{
@@ -338,6 +352,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 						p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon+1], err.Error())
 						continue
 					}
+					makePathsAbsolute(flags, packagePath)
 					cflags = append(cflags, flags...)
 				default:
 					startPos := strings.LastIndex(line[4:colon], name) + 4
@@ -393,6 +408,30 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	//ast.Print(fset, p.generated)
 
 	return p.generated, p.errors
+}
+
+// makePathsAbsolute converts some common path compiler flags (-I, -L) from
+// relative flags into absolute flags, if they are relative. This is necessary
+// because the C compiler is usually not invoked from the package path.
+func makePathsAbsolute(args []string, packagePath string) {
+	nextIsPath := false
+	for i, arg := range args {
+		if nextIsPath {
+			if !filepath.IsAbs(arg) {
+				args[i] = filepath.Join(packagePath, arg)
+			}
+		}
+		if arg == "-I" || arg == "-L" {
+			nextIsPath = true
+			continue
+		}
+		if strings.HasPrefix(arg, "-I") || strings.HasPrefix(arg, "-L") {
+			path := arg[2:]
+			if !filepath.IsAbs(path) {
+				args[i] = arg[:2] + filepath.Join(packagePath, path)
+			}
+		}
+	}
 }
 
 // addFuncDecls adds the C function declarations found by libclang in the
