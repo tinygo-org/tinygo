@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -765,8 +766,10 @@ func main() {
 	heapSize := flag.String("heap-size", "1M", "default heap size in bytes (only supported by WebAssembly)")
 
 	var flagJSON, flagDeps *bool
-	if command == "list" {
+	if command == "list" || command == "env" {
 		flagJSON = flag.Bool("json", false, "print data in JSON format")
+	}
+	if command == "list" {
 		flagDeps = flag.Bool("deps", false, "")
 	}
 
@@ -960,15 +963,31 @@ func main() {
 		}
 		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
 	case "env":
-		if flag.NArg() == 0 {
-			// Show all environment variables.
-			for _, key := range goenv.Keys {
-				fmt.Printf("%s=%#v\n", key, goenv.Get(key))
+		if *flagJSON {
+			keys := goenv.Keys
+			if flag.NArg() != 0 {
+				// Show only one (or a few) environment variables.
+				keys = flag.Args()
 			}
+			// Show environment variables in JSON format.
+			env := make(map[string]string)
+			for _, key := range keys {
+				env[key] = goenv.Get(key)
+			}
+			encoder := json.NewEncoder(os.Stdout)
+			encoder.SetIndent("", "\t")
+			encoder.Encode(env)
 		} else {
-			// Show only one (or a few) environment variables.
-			for i := 0; i < flag.NArg(); i++ {
-				fmt.Println(goenv.Get(flag.Arg(i)))
+			if flag.NArg() == 0 {
+				// Show all environment variables.
+				for _, key := range goenv.Keys {
+					fmt.Printf("%s=%#v\n", key, goenv.Get(key))
+				}
+			} else {
+				// Show only one (or a few) environment variables.
+				for i := 0; i < flag.NArg(); i++ {
+					fmt.Println(goenv.Get(flag.Arg(i)))
+				}
 			}
 		}
 	default:
