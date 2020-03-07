@@ -8,6 +8,7 @@ import (
 	"device/stm32"
 	"errors"
 	"runtime/interrupt"
+	"unsafe"
 )
 
 func CPUFrequency() uint32 {
@@ -31,6 +32,20 @@ const (
 	PinOutputModeAltPushPull  PinMode = 8  // Output mode alt. purpose push/pull
 	PinOutputModeAltOpenDrain PinMode = 12 // Output mode alt. purpose open drain
 )
+
+// Configure this pin with the given I/O settings.
+// stm32f1xx uses different technique for setting the GPIO pins than the stm32f407
+func (p Pin) Configure(config PinConfig) {
+	// Configure the GPIO pin.
+	port := p.getPort()
+	pin := uint8(p) % 16
+	pos := (pin % 8) * 4
+	if pin < 8 {
+		port.CRL.ReplaceBits(uint32(config.Mode), 0xf, pos)
+	} else {
+		port.CRH.ReplaceBits(uint32(config.Mode), 0xf, pos)
+	}
+}
 
 func (p Pin) getPort() *stm32.GPIO_Type {
 	switch p / 16 {
@@ -75,38 +90,17 @@ func (p Pin) enableClock() {
 	}
 }
 
-// Configure this pin with the given configuration.
-func (p Pin) Configure(config PinConfig) {
-	// Configure the GPIO pin.
-	p.enableClock()
-	port := p.getPort()
-	pin := uint8(p) % 16
-	pos := uint8(p) % 8 * 4
-	if pin < 8 {
-		port.CRL.Set((uint32(port.CRL.Get()) &^ (0xf << pos)) | (uint32(config.Mode) << pos))
-	} else {
-		port.CRH.Set((uint32(port.CRH.Get()) &^ (0xf << pos)) | (uint32(config.Mode) << pos))
+// Enable peripheral clock. Expand to include all the desired peripherals
+func enableAltFuncClock(bus unsafe.Pointer) {
+	if bus == unsafe.Pointer(stm32.USART1) {
+		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_USART1EN)
+	} else if bus == unsafe.Pointer(stm32.USART2) {
+		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_USART2EN)
+	} else if bus == unsafe.Pointer(stm32.I2C1) {
+		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_I2C1EN)
+	} else if bus == unsafe.Pointer(stm32.SPI1) {
+		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_SPI1EN)
 	}
-}
-
-// Set the pin to high or low.
-// Warning: only use this on an output pin!
-func (p Pin) Set(high bool) {
-	port := p.getPort()
-	pin := uint8(p) % 16
-	if high {
-		port.BSRR.Set(1 << pin)
-	} else {
-		port.BSRR.Set(1 << (pin + 16))
-	}
-}
-
-// Get returns the current value of a GPIO pin.
-func (p Pin) Get() bool {
-	port := p.getPort()
-	pin := uint8(p) % 16
-	val := port.IDR.Get() & (1 << pin)
-	return (val > 0)
 }
 
 // UART
@@ -123,6 +117,12 @@ func (uart UART) Configure(config UARTConfig) {
 		config.BaudRate = 115200
 	}
 
+	// Set the GPIO pins to defaults if they're not set
+	if config.TX == 0 && config.RX == 0 {
+		config.TX = UART_TX_PIN
+		config.RX = UART_RX_PIN
+	}
+
 	// pins
 	switch config.TX {
 	case UART_ALT_TX_PIN:
@@ -133,20 +133,14 @@ func (uart UART) Configure(config UARTConfig) {
 		} else if uart.Bus == stm32.USART2 {
 			stm32.AFIO.MAPR.SetBits(stm32.AFIO_MAPR_USART2_REMAP)
 		}
-		UART_ALT_TX_PIN.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
-		UART_ALT_RX_PIN.Configure(PinConfig{Mode: PinInputModeFloating})
 	default:
 		// use standard TX/RX pins PA9 and PA10
-		UART_TX_PIN.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
-		UART_RX_PIN.Configure(PinConfig{Mode: PinInputModeFloating})
 	}
+	config.TX.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
+	config.RX.Configure(PinConfig{Mode: PinInputModeFloating})
 
 	// Enable USART clock
-	if uart.Bus == stm32.USART1 {
-		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_USART1EN)
-	} else if uart.Bus == stm32.USART2 {
-		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_USART2EN)
-	}
+	enableAltFuncClock(unsafe.Pointer(uart.Bus))
 
 	// Set baud rate
 	uart.SetBaudRate(config.BaudRate)
