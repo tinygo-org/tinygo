@@ -9,5 +9,8 @@
 	"ldflags": [
 		"-T", "targets/avr.ld",
 		"-Wl,--gc-sections"
+	],
+	"extra-files": [
+		"src/runtime/scheduler_avr.S"
 	]
 }
