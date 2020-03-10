@@ -7,6 +7,7 @@
 		"-mmcu=attiny85"
 	],
 	"ldflags": [
+		"-mmcu=avr25",
 		"-Wl,--defsym=_bootloader_size=2180",
 		"-Wl,--defsym=_stack_size=128"
 	],
