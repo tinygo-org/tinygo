@@ -234,7 +234,7 @@ func (uart UART) Configure(config UARTConfig) {
 	}
 
 	// Register the UART interrupt.
-	interrupt.New(avr.IRQ_USART_RX, func(intr interrupt.Interrupt) {
+	interrupt.New(irq_USART0_RX, func(intr interrupt.Interrupt) {
 		// Read register to clear it.
 		data := avr.UDR0.Get()
 
