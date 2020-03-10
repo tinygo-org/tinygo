@@ -4,6 +4,8 @@ package compiler
 // required by the Go programming language.
 
 import (
+	"fmt"
+	"go/token"
 	"go/types"
 
 	"tinygo.org/x/go-llvm"
@@ -119,6 +121,77 @@ func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high, max l
 	c.builder.CreateUnreachable()
 
 	// Ok: this is a valid pointer.
+	c.builder.SetInsertPointAtEnd(nextBlock)
+}
+
+// emitChanBoundsCheck emits a bounds check before creating a new channel to
+// check that the value is not too big for runtime.chanMake.
+func (c *Compiler) emitChanBoundsCheck(frame *Frame, elementSize uint64, bufSize llvm.Value, bufSizeType *types.Basic, pos token.Pos) {
+	if frame.fn.IsNoBounds() {
+		// The //go:nobounds pragma was added to the function to avoid bounds
+		// checking.
+		return
+	}
+
+	// Check whether the bufSize parameter must be cast to a wider integer for
+	// comparison.
+	if bufSize.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
+		if bufSizeType.Info()&types.IsUnsigned != 0 {
+			// Unsigned, so zero-extend to uint type.
+			bufSizeType = types.Typ[types.Uint]
+			bufSize = c.builder.CreateZExt(bufSize, c.intType, "")
+		} else {
+			// Signed, so sign-extend to int type.
+			bufSizeType = types.Typ[types.Int]
+			bufSize = c.builder.CreateSExt(bufSize, c.intType, "")
+		}
+	}
+
+	// Calculate (^uintptr(0)) >> 1, which is the max value that fits in an
+	// uintptr if uintptrs were signed.
+	maxBufSize := llvm.ConstLShr(llvm.ConstNot(llvm.ConstInt(c.uintptrType, 0, false)), llvm.ConstInt(c.uintptrType, 1, false))
+	if elementSize > maxBufSize.ZExtValue() {
+		c.addError(pos, fmt.Sprintf("channel element type is too big (%v bytes)", elementSize))
+		return
+	}
+	// Avoid divide-by-zero.
+	if elementSize == 0 {
+		elementSize = 1
+	}
+	// Make the maxBufSize actually the maximum allowed value (in number of
+	// elements in the channel buffer).
+	maxBufSize = llvm.ConstUDiv(maxBufSize, llvm.ConstInt(c.uintptrType, elementSize, false))
+
+	// Make sure maxBufSize has the same type as bufSize.
+	if maxBufSize.Type() != bufSize.Type() {
+		maxBufSize = llvm.ConstZExt(maxBufSize, bufSize.Type())
+	}
+
+	bufSizeTooBig := c.builder.CreateICmp(llvm.IntUGE, bufSize, maxBufSize, "")
+	// Check whether we can resolve this check at compile time.
+	if !bufSizeTooBig.IsAConstantInt().IsNil() {
+		val := bufSizeTooBig.ZExtValue()
+		if val == 0 {
+			// Everything is constant so the check does not have to be emitted
+			// in IR. This avoids emitting some redundant IR in the vast
+			// majority of cases.
+			return
+		}
+	}
+
+	faultBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "chan.outofbounds")
+	nextBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "chan.next")
+	frame.blockExits[frame.currentBlock] = nextBlock // adjust outgoing block for phi nodes
+
+	// Now branch to the out-of-bounds or the regular block.
+	c.builder.CreateCondBr(bufSizeTooBig, faultBlock, nextBlock)
+
+	// Fail: this channel is created with an invalid size parameter.
+	c.builder.SetInsertPointAtEnd(faultBlock)
+	c.createRuntimeCall("chanMakePanic", nil, "")
+	c.builder.CreateUnreachable()
+
+	// Ok: this channel value is not too big.
 	c.builder.SetInsertPointAtEnd(nextBlock)
 }
 

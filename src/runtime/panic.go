@@ -50,6 +50,11 @@ func slicePanic() {
 	runtimePanic("slice out of range")
 }
 
+// Panic when trying to create a new channel that is too big.
+func chanMakePanic() {
+	runtimePanic("new channel is too big")
+}
+
 func blockingPanic() {
 	runtimePanic("trying to do blocking operation in exported function")
 }
