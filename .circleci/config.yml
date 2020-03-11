@@ -14,7 +14,7 @@ commands:
       - run:
           name: "Install apt dependencies"
           command: |
-            echo 'deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch<<parameters.llvm>> main' | sudo tee /etc/apt/sources.list.d/llvm.list
+            echo 'deb https://apt.llvm.org/buster/ llvm-toolchain-buster<<parameters.llvm>> main' | sudo tee /etc/apt/sources.list.d/llvm.list
             wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
             sudo apt-get update
             sudo apt-get install \
@@ -308,17 +308,17 @@ commands:
 jobs:
   test-llvm9-go111:
     docker:
-      - image: circleci/golang:1.11-stretch
+      - image: circleci/golang:1.11-buster
     steps:
       - test-linux
   test-llvm9-go112:
     docker:
-      - image: circleci/golang:1.12-stretch
+      - image: circleci/golang:1.12-buster
     steps:
       - test-linux
   test-llvm9-go113:
     docker:
-      - image: circleci/golang:1.13-stretch
+      - image: circleci/golang:1.13-buster
     steps:
       - test-linux
   assert-test-linux:
