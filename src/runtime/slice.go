@@ -42,12 +42,12 @@ func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintp
 }
 
 // Builtin copy(dst, src) function: copy bytes from dst to src.
-func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen uintptr, elemSize uintptr) uintptr {
+func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen uintptr, elemSize uintptr) int {
 	// n = min(srcLen, dstLen)
 	n := srcLen
 	if n > dstLen {
 		n = dstLen
 	}
 	memmove(dst, src, n*elemSize)
-	return n
+	return int(n)
 }
