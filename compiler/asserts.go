@@ -34,21 +34,9 @@ func (c *Compiler) emitLookupBoundsCheck(frame *Frame, arrayLen, index llvm.Valu
 		arrayLen = c.builder.CreateZExt(arrayLen, index.Type(), "")
 	}
 
-	faultBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "lookup.outofbounds")
-	nextBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "lookup.next")
-	frame.blockExits[frame.currentBlock] = nextBlock // adjust outgoing block for phi nodes
-
 	// Now do the bounds check: index >= arrayLen
 	outOfBounds := c.builder.CreateICmp(llvm.IntUGE, index, arrayLen, "")
-	c.builder.CreateCondBr(outOfBounds, faultBlock, nextBlock)
-
-	// Fail: this is a nil pointer, exit with a panic.
-	c.builder.SetInsertPointAtEnd(faultBlock)
-	c.createRuntimeCall("lookupPanic", nil, "")
-	c.builder.CreateUnreachable()
-
-	// Ok: this is a valid pointer.
-	c.builder.SetInsertPointAtEnd(nextBlock)
+	c.createRuntimeAssert(frame, outOfBounds, "lookup", "lookupPanic")
 }
 
 // emitSliceBoundsCheck emits a bounds check before a slicing operation to make
@@ -103,25 +91,13 @@ func (c *Compiler) emitSliceBoundsCheck(frame *Frame, capacity, low, high, max l
 		}
 	}
 
-	faultBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "slice.outofbounds")
-	nextBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "slice.next")
-	frame.blockExits[frame.currentBlock] = nextBlock // adjust outgoing block for phi nodes
-
 	// Now do the bounds check: low > high || high > capacity
 	outOfBounds1 := c.builder.CreateICmp(llvm.IntUGT, low, high, "slice.lowhigh")
 	outOfBounds2 := c.builder.CreateICmp(llvm.IntUGT, high, max, "slice.highmax")
 	outOfBounds3 := c.builder.CreateICmp(llvm.IntUGT, max, capacity, "slice.maxcap")
 	outOfBounds := c.builder.CreateOr(outOfBounds1, outOfBounds2, "slice.lowmax")
 	outOfBounds = c.builder.CreateOr(outOfBounds, outOfBounds3, "slice.lowcap")
-	c.builder.CreateCondBr(outOfBounds, faultBlock, nextBlock)
-
-	// Fail: this is a nil pointer, exit with a panic.
-	c.builder.SetInsertPointAtEnd(faultBlock)
-	c.createRuntimeCall("slicePanic", nil, "")
-	c.builder.CreateUnreachable()
-
-	// Ok: this is a valid pointer.
-	c.builder.SetInsertPointAtEnd(nextBlock)
+	c.createRuntimeAssert(frame, outOfBounds, "slice", "slicePanic")
 }
 
 // emitChanBoundsCheck emits a bounds check before creating a new channel to
@@ -167,32 +143,9 @@ func (c *Compiler) emitChanBoundsCheck(frame *Frame, elementSize uint64, bufSize
 		maxBufSize = llvm.ConstZExt(maxBufSize, bufSize.Type())
 	}
 
+	// Do the check for a too large (or negative) buffer size.
 	bufSizeTooBig := c.builder.CreateICmp(llvm.IntUGE, bufSize, maxBufSize, "")
-	// Check whether we can resolve this check at compile time.
-	if !bufSizeTooBig.IsAConstantInt().IsNil() {
-		val := bufSizeTooBig.ZExtValue()
-		if val == 0 {
-			// Everything is constant so the check does not have to be emitted
-			// in IR. This avoids emitting some redundant IR in the vast
-			// majority of cases.
-			return
-		}
-	}
-
-	faultBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "chan.outofbounds")
-	nextBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, "chan.next")
-	frame.blockExits[frame.currentBlock] = nextBlock // adjust outgoing block for phi nodes
-
-	// Now branch to the out-of-bounds or the regular block.
-	c.builder.CreateCondBr(bufSizeTooBig, faultBlock, nextBlock)
-
-	// Fail: this channel is created with an invalid size parameter.
-	c.builder.SetInsertPointAtEnd(faultBlock)
-	c.createRuntimeCall("chanMakePanic", nil, "")
-	c.builder.CreateUnreachable()
-
-	// Ok: this channel value is not too big.
-	c.builder.SetInsertPointAtEnd(nextBlock)
+	c.createRuntimeAssert(frame, bufSizeTooBig, "chan", "chanMakePanic")
 }
 
 // emitNilCheck checks whether the given pointer is nil, and panics if it is. It
@@ -203,11 +156,6 @@ func (c *Compiler) emitNilCheck(frame *Frame, ptr llvm.Value, blockPrefix string
 	if !ptr.IsAGlobalValue().IsNil() {
 		return
 	}
-
-	// Check whether this is a nil pointer.
-	faultBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, blockPrefix+".nil")
-	nextBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, blockPrefix+".next")
-	frame.blockExits[frame.currentBlock] = nextBlock // adjust outgoing block for phi nodes
 
 	// Compare against nil.
 	var isnil llvm.Value
@@ -227,13 +175,36 @@ func (c *Compiler) emitNilCheck(frame *Frame, ptr llvm.Value, blockPrefix string
 		nilptr := llvm.ConstPointerNull(ptr.Type())
 		isnil = c.builder.CreateICmp(llvm.IntEQ, ptr, nilptr, "")
 	}
-	c.builder.CreateCondBr(isnil, faultBlock, nextBlock)
 
-	// Fail: this is a nil pointer, exit with a panic.
+	// Emit the nil check in IR.
+	c.createRuntimeAssert(frame, isnil, blockPrefix, "nilPanic")
+}
+
+// createRuntimeAssert is a common function to create a new branch on an assert
+// bool, calling an assert func if the assert value is true (1).
+func (c *Compiler) createRuntimeAssert(frame *Frame, assert llvm.Value, blockPrefix, assertFunc string) {
+	// Check whether we can resolve this check at compile time.
+	if !assert.IsAConstantInt().IsNil() {
+		val := assert.ZExtValue()
+		if val == 0 {
+			// Everything is constant so the check does not have to be emitted
+			// in IR. This avoids emitting some redundant IR.
+			return
+		}
+	}
+
+	faultBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, blockPrefix+".throw")
+	nextBlock := c.ctx.AddBasicBlock(frame.fn.LLVMFn, blockPrefix+".next")
+	frame.blockExits[frame.currentBlock] = nextBlock // adjust outgoing block for phi nodes
+
+	// Now branch to the out-of-bounds or the regular block.
+	c.builder.CreateCondBr(assert, faultBlock, nextBlock)
+
+	// Fail: the assert triggered so panic.
 	c.builder.SetInsertPointAtEnd(faultBlock)
-	c.createRuntimeCall("nilPanic", nil, "")
+	c.createRuntimeCall(assertFunc, nil, "")
 	c.builder.CreateUnreachable()
 
-	// Ok: this is a valid pointer.
+	// Ok: assert didn't trigger so continue normally.
 	c.builder.SetInsertPointAtEnd(nextBlock)
 }
