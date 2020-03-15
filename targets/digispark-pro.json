@@ -1,0 +1,21 @@
+{
+	"inherits": ["avr"],
+	"llvm-target": "avr-atmel-none",
+	"cpu": "attiny167",
+	"build-tags": ["digispark_pro", "attiny167", "attiny"],
+	"cflags": [
+		"-mmcu=attiny167"
+	],
+	"ldflags": [
+		"-mmcu=avr35",
+		"-Wl,--defsym=_bootloader_size=1540",
+		"-Wl,--defsym=_stack_size=128"
+	],
+	"linkerscript": "src/device/avr/attiny167.ld",
+	"extra-files": [
+		"targets/avr.S",
+		"src/device/avr/attiny167.s"
+	],
+	"flash-command": "micronucleus --run {hex}",
+	"emulator": ["simavr", "-m", "attiny167", "-f", "16000000"]
+}
