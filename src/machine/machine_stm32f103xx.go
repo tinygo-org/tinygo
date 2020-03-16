@@ -104,25 +104,17 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 	}
 }
 
-// UART
+//---------- UART related types and code
+
+// UART representation
 type UART struct {
 	Buffer    *RingBuffer
 	Bus       *stm32.USART_Type
 	Interrupt interrupt.Interrupt
 }
 
-// Configure the UART.
-func (uart UART) Configure(config UARTConfig) {
-	// Default baud rate to 115200.
-	if config.BaudRate == 0 {
-		config.BaudRate = 115200
-	}
-
-	// Set the GPIO pins to defaults if they're not set
-	if config.TX == 0 && config.RX == 0 {
-		config.TX = UART_TX_PIN
-		config.RX = UART_RX_PIN
-	}
+// Configure the TX and RX pins
+func (uart UART) configurePins(config UARTConfig) {
 
 	// pins
 	switch config.TX {
@@ -139,23 +131,11 @@ func (uart UART) Configure(config UARTConfig) {
 	}
 	config.TX.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
 	config.RX.Configure(PinConfig{Mode: PinInputModeFloating})
-
-	// Enable USART clock
-	enableAltFuncClock(unsafe.Pointer(uart.Bus))
-
-	// Set baud rate
-	uart.SetBaudRate(config.BaudRate)
-
-	// Enable USART port
-	uart.Bus.CR1.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
-
-	// Enable RX IRQ
-	uart.Interrupt.SetPriority(0xc0)
-	uart.Interrupt.Enable()
 }
 
-// SetBaudRate sets the communication speed for the UART.
-func (uart UART) SetBaudRate(br uint32) {
+// Determine the divisor for USARTs to get the given baudrate
+func (uart UART) getBaudRateDivisor(br uint32) uint32 {
+
 	// Note: PCLK2 (from APB2) used for USART1 and PCLK1 for USART2, 3, 4, 5
 	var divider uint32
 	if uart.Bus == stm32.USART1 {
@@ -165,22 +145,7 @@ func (uart UART) SetBaudRate(br uint32) {
 		// first divide by PCLK1 prescaler (div 2) and then desired baudrate
 		divider = CPUFrequency() / 2 / br
 	}
-	uart.Bus.BRR.Set(divider)
-}
-
-// WriteByte writes a byte of data to the UART.
-func (uart UART) WriteByte(c byte) error {
-	uart.Bus.DR.Set(uint32(c))
-
-	for !uart.Bus.SR.HasBits(stm32.USART_SR_TXE) {
-	}
-	return nil
-}
-
-// handleInterrupt should be called from the appropriate interrupt handler for
-// this UART instance.
-func (uart *UART) handleInterrupt(interrupt.Interrupt) {
-	uart.Receive(byte((uart.Bus.DR.Get() & 0xFF)))
+	return divider
 }
 
 // SPI on the STM32.
