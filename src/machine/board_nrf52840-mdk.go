@@ -35,3 +35,14 @@ const (
 	SPI0_MOSI_PIN = NoPin
 	SPI0_MISO_PIN = NoPin
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "Makerdiary nRF52840 MDK USB Dongle"
+	usb_STRING_MANUFACTURER = "Makerdiary"
+)
+
+var (
+	usb_VID uint16 = 0x1915
+	usb_PID uint16 = 0xCAFE
+)

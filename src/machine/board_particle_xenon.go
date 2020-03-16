@@ -83,3 +83,14 @@ const (
 	NFC1_PIN          Pin = 9
 	NFC2_PIN          Pin = 10
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "Particle Xenon"
+	usb_STRING_MANUFACTURER = "Particle"
+)
+
+var (
+	usb_VID uint16 = 0x239A
+	usb_PID uint16 = 0x8029
+)
