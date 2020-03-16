@@ -59,3 +59,14 @@ func PowerSupplyActive(active bool) {
 		POWER_SUPPLY_PIN.Low()
 	}
 }
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "PHYTEC reelboard"
+	usb_STRING_MANUFACTURER = "PHYTEC"
+)
+
+var (
+	usb_VID uint16 = 0x2FE3
+	usb_PID uint16 = 0x100
+)
