@@ -82,7 +82,7 @@ func (p Pin) ConfigureAltFunc(config PinConfig, altFunc stm32.AltFunc) {
 		port.PUPDR.ReplaceBits(stm32.GPIOPUPDRFloating, 0x3, pos)
 		p.SetAltFunc(altFunc)
 
-	// I2C)
+	// I2C
 	case PinModeI2CSCL:
 		port.MODER.ReplaceBits(stm32.GPIOModeOutputAltFunc, 0x3, pos)
 		port.OTYPER.ReplaceBits(stm32.GPIOOutputTypeOpenDrain, 0x1, pos)

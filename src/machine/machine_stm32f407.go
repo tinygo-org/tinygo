@@ -79,75 +79,32 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 	}
 }
 
-// UART
+//---------- UART related types and code
+
+// UART representation
 type UART struct {
 	Buffer          *RingBuffer
 	Bus             *stm32.USART_Type
+	Interrupt       interrupt.Interrupt
 	AltFuncSelector stm32.AltFunc
 }
 
-var (
-	UART0 = UART{
-		Buffer:          NewRingBuffer(),
-		Bus:             stm32.USART2,
-		AltFuncSelector: stm32.AF7_USART1_2_3,
-	}
-	UART1 = &UART0
-)
-
 // Configure the UART.
-func (uart UART) Configure(config UARTConfig) {
-	// Default baud rate to 115200.
-	if config.BaudRate == 0 {
-		config.BaudRate = 115200
-	}
-
-	// Set the GPIO pins to defaults if they're not set
-	if config.TX == 0 && config.RX == 0 {
-		config.TX = UART_TX_PIN
-		config.RX = UART_RX_PIN
-	}
-
-	// Enable USART clock
-	enableAltFuncClock(unsafe.Pointer(uart.Bus))
-
-	// use standard TX/RX pins PA2 and PA3
+func (uart UART) configurePins(config UARTConfig) {
+	// enable the alternate functions on the TX and RX pins
 	config.TX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTTX}, uart.AltFuncSelector)
 	config.RX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTRX}, uart.AltFuncSelector)
-
-	/*
-	  Set baud rate(115200)
-	  OVER8 = 0, APB1 = 42mhz
-	  +----------+--------+
-	  | baudrate | BRR    |
-	  +----------+--------+
-	  | 1200     | 0x88B8 |
-	  | 2400     | 0x445C |
-	  | 9600     | 0x1117 |
-	  | 19200    | 0x88C  |
-	  | 38400    | 0x446  |
-	  | 57600    | 0x2D9  |
-	  | 115200   | 0x16D  |
-	  +----------+--------+
-	*/
-	uart.Bus.BRR.Set(0x16c)
-
-	// Enable USART2 port.
-	uart.Bus.CR1.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
-
-	// Enable RX IRQ. TODO: pick the right IRQ_xxx for the bus and the uart
-	intr := interrupt.New(stm32.IRQ_USART2, func(interrupt.Interrupt) {
-		UART1.Receive(byte((UART1.Bus.DR.Get() & 0xFF)))
-	})
-	intr.SetPriority(0xc0)
-	intr.Enable()
 }
 
-// WriteByte writes a byte of data to the UART.
-func (uart UART) WriteByte(c byte) error {
-	uart.Bus.DR.Set(uint32(c))
-
-	for !uart.Bus.SR.HasBits(stm32.USART_SR_TXE) {
+// UART baudrate calc based on the bus and clockspeed
+// NOTE: keep this in sync with the runtime/runtime_stm32f407.go clock init code
+func (uart UART) getBaudRateDivisor(baudRate uint32) uint32 {
+	var clock uint32
+	switch uart.Bus {
+	case stm32.USART1, stm32.USART6:
+		clock = CPUFrequency() / 2 // APB2 Frequency
+	case stm32.USART2, stm32.USART3, stm32.UART4, stm32.UART5:
+		clock = CPUFrequency() / 4 // APB1 Frequency
 	}
-	return nil
+	return clock / baudRate
 }

@@ -2,6 +2,11 @@
 
 package machine
 
+import (
+	"device/stm32"
+	"runtime/interrupt"
+)
+
 const (
 	PA0  = portA + 0
 	PA1  = portA + 1
@@ -110,3 +115,17 @@ const (
 	UART_TX_PIN = PA2
 	UART_RX_PIN = PA3
 )
+
+var (
+	UART0 = UART{
+		Buffer:          NewRingBuffer(),
+		Bus:             stm32.USART2,
+		AltFuncSelector: stm32.AF7_USART1_2_3,
+	}
+	UART1 = &UART0
+)
+
+// set up RX IRQ handler. Follow similar pattern for other UARTx instances
+func init() {
+	UART0.Interrupt = interrupt.New(stm32.IRQ_USART2, UART0.handleInterrupt)
+}
