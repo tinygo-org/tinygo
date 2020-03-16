@@ -1451,7 +1451,7 @@ func (usbcdc USBCDC) WriteByte(c byte) error {
 		setEPSTATUSSET(usb_CDC_ENDPOINT_IN, sam.USB_DEVICE_ENDPOINT_EPSTATUSSET_BK1RDY)
 
 		// wait for transfer to complete
-		timeout := 3000
+		timeout := 7500
 		for (getEPINTFLAG(usb_CDC_ENDPOINT_IN) & sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT1) == 0 {
 			timeout--
 			if timeout == 0 {
@@ -1794,7 +1794,7 @@ func handleStandardSetup(setup usbSetup) bool {
 		setEPSTATUSSET(0, sam.USB_DEVICE_ENDPOINT_EPSTATUSSET_BK1RDY)
 
 		// wait for transfer to complete
-		timeout := 3000
+		timeout := 7500
 		for (getEPINTFLAG(0) & sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT1) == 0 {
 			timeout--
 			if timeout == 0 {
@@ -1931,7 +1931,7 @@ func receiveUSBControlPacket() []byte {
 	setEPSTATUSCLR(0, sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_BK0RDY)
 
 	// Wait until OUT transfer is ready.
-	timeout := 300000
+	timeout := 750000
 	for (getEPSTATUS(0) & sam.USB_DEVICE_ENDPOINT_EPSTATUS_BK0RDY) == 0 {
 		timeout--
 		if timeout == 0 {
@@ -1940,7 +1940,7 @@ func receiveUSBControlPacket() []byte {
 	}
 
 	// Wait until OUT transfer is completed.
-	timeout = 300000
+	timeout = 750000
 	for (getEPINTFLAG(0) & sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT1) == 0 {
 		timeout--
 		if timeout == 0 {
