@@ -3,6 +3,7 @@
 	"goarch": "arm",
 	"build-tags": ["tinygo.riscv", "baremetal", "linux", "arm"],
 	"gc": "conservative",
+	"scheduler": "tasks",
 	"compiler": "clang",
 	"linker": "ld.lld",
 	"rtlib": "compiler-rt",
