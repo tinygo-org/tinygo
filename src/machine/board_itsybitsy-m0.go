@@ -126,7 +126,7 @@ var (
 
 // USB CDC identifiers
 const (
-	usb_STRING_PRODUCT      = "ItsyBitsy M0 Express"
+	usb_STRING_PRODUCT      = "Adafruit ItsyBitsy M0 Express"
 	usb_STRING_MANUFACTURER = "Adafruit"
 )
 
