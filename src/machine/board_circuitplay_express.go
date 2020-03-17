@@ -91,7 +91,7 @@ const (
 
 // USB CDC identifiers
 const (
-	usb_STRING_PRODUCT      = "Circuit Playground Express"
+	usb_STRING_PRODUCT      = "Adafruit Circuit Playground Express"
 	usb_STRING_MANUFACTURER = "Adafruit"
 )
 
