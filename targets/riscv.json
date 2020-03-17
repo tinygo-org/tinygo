@@ -4,6 +4,7 @@
 	"goarch": "arm",
 	"build-tags": ["tinygo.riscv", "baremetal", "linux", "arm"],
 	"gc": "conservative",
+	"scheduler": "tasks",
 	"compiler": "clang",
 	"linker": "ld.lld",
 	"rtlib": "compiler-rt",
@@ -22,7 +23,8 @@
 		"--gc-sections"
 	],
 	"extra-files": [
-		"src/device/riscv/start.S"
+		"src/device/riscv/start.S",
+		"src/runtime/scheduler_tinygoriscv.S"
 	],
 	"gdb": "riscv64-unknown-elf-gdb"
 }
