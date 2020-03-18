@@ -98,7 +98,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	// pointers are flash and which are in RAM so that pointers can have a
 	// correct address space parameter (address space 1 is for flash).
 	if strings.HasPrefix(config.Triple(), "avr") {
-		c.NonConstGlobals()
+		transform.NonConstGlobals(c.Module())
 		if err := c.Verify(); err != nil {
 			return errors.New("verification error after making all globals non-constant on AVR")
 		}

@@ -12,3 +12,10 @@ func TestApplyFunctionSections(t *testing.T) {
 		ApplyFunctionSections(mod)
 	})
 }
+
+func TestNonConstGlobals(t *testing.T) {
+	t.Parallel()
+	testTransform(t, "testdata/globals-non-const", func(mod llvm.Module) {
+		NonConstGlobals(mod)
+	})
+}
