@@ -10,6 +10,9 @@ jobs:
   pool:
     vmImage: 'VS2017-Win2016'
   steps:
+    - task: GoTool@0
+      inputs:
+        version: '1.13.8'  
     - checkout: self
     - task: CacheBeta@0
       displayName: Cache LLVM source
