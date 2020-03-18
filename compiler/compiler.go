@@ -34,30 +34,6 @@ func init() {
 // The TinyGo import path.
 const tinygoPath = "github.com/tinygo-org/tinygo"
 
-// functionsUsedInTransform is a list of function symbols that may be used
-// during TinyGo optimization passes so they have to be marked as external
-// linkage until all TinyGo passes have finished.
-var functionsUsedInTransforms = []string{
-	"runtime.alloc",
-	"runtime.free",
-	"runtime.nilPanic",
-}
-
-var taskFunctionsUsedInTransforms = []string{}
-
-var coroFunctionsUsedInTransforms = []string{
-	"internal/task.start",
-	"internal/task.Pause",
-	"internal/task.fake",
-	"internal/task.Current",
-	"internal/task.createTask",
-	"(*internal/task.Task).setState",
-	"(*internal/task.Task).returnTo",
-	"(*internal/task.Task).returnCurrent",
-	"(*internal/task.Task).setReturnPtr",
-	"(*internal/task.Task).getReturnPtr",
-}
-
 type Compiler struct {
 	*compileopts.Config
 	mod                     llvm.Module
@@ -154,21 +130,6 @@ func (c *Compiler) Packages() []*loader.Package {
 // Return the LLVM module. Only valid after a successful compile.
 func (c *Compiler) Module() llvm.Module {
 	return c.mod
-}
-
-// getFunctionsUsedInTransforms gets a list of all special functions that should be preserved during transforms and optimization.
-func (c *Compiler) getFunctionsUsedInTransforms() []string {
-	fnused := functionsUsedInTransforms
-	switch c.Scheduler() {
-	case "none":
-	case "coroutines":
-		fnused = append(append([]string{}, fnused...), coroFunctionsUsedInTransforms...)
-	case "tasks":
-		fnused = append(append([]string{}, fnused...), taskFunctionsUsedInTransforms...)
-	default:
-		panic(fmt.Errorf("invalid scheduler %q", c.Scheduler()))
-	}
-	return fnused
 }
 
 // Compile the given package path or .go file path. Return an error when this
@@ -338,14 +299,8 @@ func (c *Compiler) Compile(mainPath string) []error {
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
 	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
 
-	// Make sure these functions are kept in tact during TinyGo transformation passes.
-	for _, name := range c.getFunctionsUsedInTransforms() {
-		fn := c.mod.NamedFunction(name)
-		if fn.IsNil() {
-			panic(fmt.Errorf("missing core function %q", name))
-		}
-		fn.SetLinkage(llvm.ExternalLinkage)
-	}
+	// Replace callMain placeholder with actual main function.
+	c.mod.NamedFunction("runtime.callMain").ReplaceAllUsesWith(realMain)
 
 	// Load some attributes
 	getAttr := func(attrName string) llvm.Attribute {

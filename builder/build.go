@@ -72,16 +72,16 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	// exactly.
 	errs = nil
 	switch config.Options.Opt {
-	case "none:", "0":
-		errs = c.Optimize(0, 0, 0) // -O0
+	case "none", "0":
+		errs = transform.Optimize(c.Module(), config, 0, 0, 0) // -O0
 	case "1":
-		errs = c.Optimize(1, 0, 0) // -O1
+		errs = transform.Optimize(c.Module(), config, 1, 0, 0) // -O1
 	case "2":
-		errs = c.Optimize(2, 0, 225) // -O2
+		errs = transform.Optimize(c.Module(), config, 2, 0, 225) // -O2
 	case "s":
-		errs = c.Optimize(2, 1, 225) // -Os
+		errs = transform.Optimize(c.Module(), config, 2, 1, 225) // -Os
 	case "z":
-		errs = c.Optimize(2, 2, 5) // -Oz, default
+		errs = transform.Optimize(c.Module(), config, 2, 2, 5) // -Oz, default
 	default:
 		errs = []error{errors.New("unknown optimization level: -opt=" + config.Options.Opt)}
 	}
