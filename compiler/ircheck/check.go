@@ -1,7 +1,8 @@
-package compiler
-
-// This file implements a set of sanity checks for the IR that is generated.
-// It can catch some mistakes that LLVM's verifier cannot.
+// Package ircheck implements a checker for LLVM IR, that goes a bit further
+// than the regular LLVM IR verifier. Note that it checks different things, so
+// this is not a replacement for the LLVM verifier but does catch things that
+// the LLVM verifier doesn't catch.
+package ircheck
 
 import (
 	"errors"
@@ -10,7 +11,11 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-func (c *Compiler) checkType(t llvm.Type, checked map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) error {
+type checker struct {
+	ctx llvm.Context
+}
+
+func (c *checker) checkType(t llvm.Type, checked map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) error {
 	// prevent infinite recursion for self-referential types
 	if _, ok := checked[t]; ok {
 		return nil
@@ -81,7 +86,7 @@ func (c *Compiler) checkType(t llvm.Type, checked map[llvm.Type]struct{}, specia
 	return nil
 }
 
-func (c *Compiler) checkValue(v llvm.Value, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) error {
+func (c *checker) checkValue(v llvm.Value, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) error {
 	// check type
 	if err := c.checkType(v.Type(), types, specials); err != nil {
 		return fmt.Errorf("failed to verify type of value: %s", err.Error())
@@ -95,7 +100,7 @@ func (c *Compiler) checkValue(v llvm.Value, types map[llvm.Type]struct{}, specia
 	return nil
 }
 
-func (c *Compiler) checkInstruction(inst llvm.Value, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) error {
+func (c *checker) checkInstruction(inst llvm.Value, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) error {
 	// check value properties
 	if err := c.checkValue(inst, types, specials); err != nil {
 		return errorAt(inst, err.Error())
@@ -129,7 +134,7 @@ func (c *Compiler) checkInstruction(inst llvm.Value, types map[llvm.Type]struct{
 	return nil
 }
 
-func (c *Compiler) checkBasicBlock(bb llvm.BasicBlock, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) []error {
+func (c *checker) checkBasicBlock(bb llvm.BasicBlock, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) []error {
 	// check basic block value and type
 	var errs []error
 	if err := c.checkValue(bb.AsValue(), types, specials); err != nil {
@@ -146,7 +151,7 @@ func (c *Compiler) checkBasicBlock(bb llvm.BasicBlock, types map[llvm.Type]struc
 	return errs
 }
 
-func (c *Compiler) checkFunction(fn llvm.Value, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) []error {
+func (c *checker) checkFunction(fn llvm.Value, types map[llvm.Type]struct{}, specials map[llvm.TypeKind]llvm.Type) []error {
 	// check function value and type
 	var errs []error
 	if err := c.checkValue(fn, types, specials); err != nil {
@@ -161,26 +166,25 @@ func (c *Compiler) checkFunction(fn llvm.Value, types map[llvm.Type]struct{}, sp
 	return errs
 }
 
-func (c *Compiler) checkModule() []error {
+// Module checks the given module and returns a slice of error, if there are
+// any.
+func Module(mod llvm.Module) []error {
 	// check for any context mismatches
 	var errs []error
-	switch {
-	case c.mod.Context() == c.ctx:
-		// this is correct
-	case c.mod.Context() == llvm.GlobalContext():
+	c := checker{
+		ctx: mod.Context(),
+	}
+	if c.ctx == llvm.GlobalContext() {
 		// somewhere we accidentally used the global context instead of a real context
 		errs = append(errs, errors.New("module uses global context"))
-	default:
-		// we used some other context by accident
-		errs = append(errs, fmt.Errorf("module uses context %v instead of the main context %v", c.mod.Context(), c.ctx))
 	}
 
 	types := map[llvm.Type]struct{}{}
 	specials := map[llvm.TypeKind]llvm.Type{}
-	for fn := c.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
 		errs = append(errs, c.checkFunction(fn, types, specials)...)
 	}
-	for g := c.mod.FirstGlobal(); !g.IsNil(); g = llvm.NextGlobal(g) {
+	for g := mod.FirstGlobal(); !g.IsNil(); g = llvm.NextGlobal(g) {
 		if err := c.checkValue(g, types, specials); err != nil {
 			errs = append(errs, fmt.Errorf("failed to verify global %s of module: %s", g.Name(), err.Error()))
 		}

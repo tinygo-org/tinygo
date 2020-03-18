@@ -3,6 +3,7 @@ package compiler
 import (
 	"errors"
 
+	"github.com/tinygo-org/tinygo/compiler/ircheck"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
@@ -25,7 +26,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) []er
 
 	// run a check of all of our code
 	if c.VerifyIR() {
-		errs := c.checkModule()
+		errs := ircheck.Module(c.mod)
 		if errs != nil {
 			return errs
 		}
@@ -131,7 +132,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) []er
 	}
 
 	if c.VerifyIR() {
-		if errs := c.checkModule(); errs != nil {
+		if errs := ircheck.Module(c.mod); errs != nil {
 			return errs
 		}
 	}
