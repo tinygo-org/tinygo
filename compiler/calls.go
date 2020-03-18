@@ -1,8 +1,6 @@
 package compiler
 
 import (
-	"fmt"
-	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -12,24 +10,6 @@ import (
 // The maximum number of arguments that can be expanded from a single struct. If
 // a struct contains more fields, it is passed as a struct without expanding.
 const MaxFieldsPerParam = 3
-
-// Shortcut: create a call to runtime.<fnName> with the given arguments.
-func (c *Compiler) createRuntimeCall(fnName string, args []llvm.Value, name string) llvm.Value {
-	runtimePkg := c.ir.Program.ImportedPackage("runtime")
-	member := runtimePkg.Members[fnName]
-	if member == nil {
-		panic("trying to call runtime." + fnName)
-	}
-	fn := c.ir.GetFunction(member.(*ssa.Function))
-	if fn.LLVMFn.IsNil() {
-		panic(fmt.Errorf("function %s does not appear in LLVM IR", fnName))
-	}
-	if !fn.IsExported() {
-		args = append(args, llvm.Undef(c.i8ptrType))            // unused context parameter
-		args = append(args, llvm.ConstPointerNull(c.i8ptrType)) // coroutine handle
-	}
-	return c.createCall(fn.LLVMFn, args, name)
-}
 
 // createCall creates a new call to runtime.<fnName> with the given arguments.
 func (b *builder) createRuntimeCall(fnName string, args []llvm.Value, name string) llvm.Value {
@@ -41,16 +21,6 @@ func (b *builder) createRuntimeCall(fnName string, args []llvm.Value, name strin
 	args = append(args, llvm.Undef(b.i8ptrType))            // unused context parameter
 	args = append(args, llvm.ConstPointerNull(b.i8ptrType)) // coroutine handle
 	return b.createCall(fn, args, name)
-}
-
-// Create a call to the given function with the arguments possibly expanded.
-func (c *Compiler) createCall(fn llvm.Value, args []llvm.Value, name string) llvm.Value {
-	expanded := make([]llvm.Value, 0, len(args))
-	for _, arg := range args {
-		fragments := c.expandFormalParam(arg)
-		expanded = append(expanded, fragments...)
-	}
-	return c.builder.CreateCall(fn, expanded, name)
 }
 
 // createCall creates a call to the given function with the arguments possibly
@@ -99,27 +69,6 @@ func (b *builder) expandFormalParamOffsets(t llvm.Type) []uint64 {
 	default:
 		// TODO: split small arrays
 		return []uint64{0}
-	}
-}
-
-// Equivalent of expandFormalParamType for parameter values.
-func (c *Compiler) expandFormalParam(v llvm.Value) []llvm.Value {
-	switch v.Type().TypeKind() {
-	case llvm.StructTypeKind:
-		fieldTypes := flattenAggregateType(v.Type())
-		if len(fieldTypes) <= MaxFieldsPerParam {
-			fields := c.flattenAggregate(v)
-			if len(fields) != len(fieldTypes) {
-				panic("type and value param lowering don't match")
-			}
-			return fields
-		} else {
-			// failed to lower
-			return []llvm.Value{v}
-		}
-	default:
-		// TODO: split small arrays
-		return []llvm.Value{v}
 	}
 }
 
@@ -184,23 +133,6 @@ func (c *compilerContext) flattenAggregateTypeOffsets(t llvm.Type) []uint64 {
 		return fields
 	default:
 		return []uint64{0}
-	}
-}
-
-// Break down a struct into its elementary types for argument passing. The value
-// equivalent of flattenAggregateType
-func (c *Compiler) flattenAggregate(v llvm.Value) []llvm.Value {
-	switch v.Type().TypeKind() {
-	case llvm.StructTypeKind:
-		fields := make([]llvm.Value, 0, v.Type().StructElementTypesCount())
-		for i := range v.Type().StructElementTypes() {
-			subfield := c.builder.CreateExtractValue(v, i, "")
-			subfields := c.flattenAggregate(subfield)
-			fields = append(fields, subfields...)
-		}
-		return fields
-	default:
-		return []llvm.Value{v}
 	}
 }
 

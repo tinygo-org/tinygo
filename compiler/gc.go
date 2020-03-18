@@ -74,15 +74,6 @@ func (b *builder) trackValue(value llvm.Value) {
 
 // trackPointer creates a call to runtime.trackPointer, bitcasting the poitner
 // first if needed. The input value must be of LLVM pointer type.
-func (c *Compiler) trackPointer(value llvm.Value) {
-	if value.Type() != c.i8ptrType {
-		value = c.builder.CreateBitCast(value, c.i8ptrType, "")
-	}
-	c.createRuntimeCall("trackPointer", []llvm.Value{value}, "")
-}
-
-// trackPointer creates a call to runtime.trackPointer, bitcasting the poitner
-// first if needed. The input value must be of LLVM pointer type.
 func (b *builder) trackPointer(value llvm.Value) {
 	if value.Type() != b.i8ptrType {
 		value = b.CreateBitCast(value, b.i8ptrType, "")
