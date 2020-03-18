@@ -6,53 +6,20 @@ package compiler
 import (
 	"go/types"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
-
-type funcValueImplementation int
-
-const (
-	funcValueNone funcValueImplementation = iota
-
-	// A func value is implemented as a pair of pointers:
-	//     {context, function pointer}
-	// where the context may be a pointer to a heap-allocated struct containing
-	// the free variables, or it may be undef if the function being pointed to
-	// doesn't need a context. The function pointer is a regular function
-	// pointer.
-	funcValueDoubleword
-
-	// As funcValueDoubleword, but with the function pointer replaced by a
-	// unique ID per function signature. Function values are called by using a
-	// switch statement and choosing which function to call.
-	funcValueSwitch
-)
-
-// funcImplementation picks an appropriate func value implementation for the
-// target.
-func (c *Compiler) funcImplementation() funcValueImplementation {
-	// Always pick the switch implementation, as it allows the use of blocking
-	// inside a function that is used as a func value.
-	switch c.Scheduler() {
-	case "none", "coroutines":
-		return funcValueSwitch
-	case "tasks":
-		return funcValueDoubleword
-	default:
-		panic("unknown scheduler type")
-	}
-}
 
 // createFuncValue creates a function value from a raw function pointer with no
 // context.
 func (c *Compiler) createFuncValue(funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
 	var funcValueScalar llvm.Value
-	switch c.funcImplementation() {
-	case funcValueDoubleword:
+	switch c.FuncImplementation() {
+	case compileopts.FuncValueDoubleword:
 		// Closure is: {context, function pointer}
 		funcValueScalar = funcPtr
-	case funcValueSwitch:
+	case compileopts.FuncValueSwitch:
 		sigGlobal := c.getTypeCode(sig)
 		funcValueWithSignatureGlobalName := funcPtr.Name() + "$withSignature"
 		funcValueWithSignatureGlobal := c.mod.NamedGlobal(funcValueWithSignatureGlobalName)
@@ -94,10 +61,10 @@ func (c *Compiler) extractFuncContext(funcValue llvm.Value) llvm.Value {
 // value. This may be an expensive operation.
 func (c *Compiler) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcPtr, context llvm.Value) {
 	context = c.builder.CreateExtractValue(funcValue, 0, "")
-	switch c.funcImplementation() {
-	case funcValueDoubleword:
+	switch c.FuncImplementation() {
+	case compileopts.FuncValueDoubleword:
 		funcPtr = c.builder.CreateExtractValue(funcValue, 1, "")
-	case funcValueSwitch:
+	case compileopts.FuncValueSwitch:
 		llvmSig := c.getRawFuncType(sig)
 		sigGlobal := c.getTypeCode(sig)
 		funcPtr = c.createRuntimeCall("getFuncPtr", []llvm.Value{funcValue, sigGlobal}, "")
@@ -110,11 +77,11 @@ func (c *Compiler) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (
 
 // getFuncType returns the type of a func value given a signature.
 func (c *Compiler) getFuncType(typ *types.Signature) llvm.Type {
-	switch c.funcImplementation() {
-	case funcValueDoubleword:
+	switch c.FuncImplementation() {
+	case compileopts.FuncValueDoubleword:
 		rawPtr := c.getRawFuncType(typ)
 		return c.ctx.StructType([]llvm.Type{c.i8ptrType, rawPtr}, false)
-	case funcValueSwitch:
+	case compileopts.FuncValueSwitch:
 		return c.getLLVMRuntimeType("funcValue")
 	default:
 		panic("unimplemented func value variant")

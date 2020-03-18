@@ -3,6 +3,7 @@ package compiler
 import (
 	"errors"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler/ircheck"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
@@ -67,7 +68,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) []er
 			return errs
 		}
 
-		if c.funcImplementation() == funcValueSwitch {
+		if c.FuncImplementation() == compileopts.FuncValueSwitch {
 			transform.LowerFuncValues(c.mod)
 		}
 
@@ -99,7 +100,7 @@ func (c *Compiler) Optimize(optLevel, sizeLevel int, inlinerThreshold uint) []er
 	} else {
 		// Must be run at any optimization level.
 		transform.LowerInterfaces(c.mod)
-		if c.funcImplementation() == funcValueSwitch {
+		if c.FuncImplementation() == compileopts.FuncValueSwitch {
 			transform.LowerFuncValues(c.mod)
 		}
 		errs := transform.LowerInterrupts(c.mod)
