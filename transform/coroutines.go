@@ -5,8 +5,9 @@ package transform
 
 import (
 	"errors"
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"strconv"
+
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
