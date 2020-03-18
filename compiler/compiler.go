@@ -2585,19 +2585,6 @@ func (c *Compiler) Verify() error {
 	return llvm.VerifyModule(c.mod, llvm.PrintMessageAction)
 }
 
-func (c *Compiler) ApplyFunctionSections() {
-	// Put every function in a separate section. This makes it possible for the
-	// linker to remove dead code (-ffunction-sections).
-	llvmFn := c.mod.FirstFunction()
-	for !llvmFn.IsNil() {
-		if !llvmFn.IsDeclaration() {
-			name := llvmFn.Name()
-			llvmFn.SetSection(".text." + name)
-		}
-		llvmFn = llvm.NextFunction(llvmFn)
-	}
-}
-
 // Turn all global constants into global variables. This works around a
 // limitation on Harvard architectures (e.g. AVR), where constant and
 // non-constant pointers point to a different address space.

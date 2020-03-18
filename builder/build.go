@@ -53,7 +53,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	}
 
 	if config.GOOS() != "darwin" {
-		c.ApplyFunctionSections() // -ffunction-sections
+		transform.ApplyFunctionSections(c.Module()) // -ffunction-sections
 	}
 
 	// Browsers cannot handle external functions that have type i64 because it
