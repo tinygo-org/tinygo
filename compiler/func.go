@@ -13,12 +13,6 @@ import (
 
 // createFuncValue creates a function value from a raw function pointer with no
 // context.
-func (c *Compiler) createFuncValue(funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
-	return c.compilerContext.createFuncValue(c.builder, funcPtr, context, sig)
-}
-
-// createFuncValue creates a function value from a raw function pointer with no
-// context.
 func (b *builder) createFuncValue(funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
 	return b.compilerContext.createFuncValue(b.Builder, funcPtr, context, sig)
 }
@@ -55,12 +49,6 @@ func (c *compilerContext) createFuncValue(builder llvm.Builder, funcPtr, context
 	funcValue = builder.CreateInsertValue(funcValue, context, 0, "")
 	funcValue = builder.CreateInsertValue(funcValue, funcValueScalar, 1, "")
 	return funcValue
-}
-
-// extractFuncScalar returns some scalar that can be used in comparisons. It is
-// a cheap operation.
-func (c *Compiler) extractFuncScalar(funcValue llvm.Value) llvm.Value {
-	return c.builder.CreateExtractValue(funcValue, 1, "")
 }
 
 // extractFuncScalar returns some scalar that can be used in comparisons. It is
