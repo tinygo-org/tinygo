@@ -17,6 +17,7 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/transform"
+	"tinygo.org/x/go-llvm"
 )
 
 // Build performs a single package to executable Go build. It takes in a package
@@ -26,34 +27,34 @@ import (
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
 func Build(pkgName, outpath string, config *compileopts.Config, action func(string) error) error {
-	c, err := compiler.NewCompiler(pkgName, config)
+	// Compile Go code to IR.
+	machine, err := compiler.NewTargetMachine(config)
 	if err != nil {
 		return err
 	}
-
-	// Compile Go code to IR.
-	errs := c.Compile(pkgName)
-	if len(errs) != 0 {
+	mod, extraFiles, errs := compiler.Compile(pkgName, machine, config)
+	if errs != nil {
 		return newMultiError(errs)
 	}
+
 	if config.Options.PrintIR {
 		fmt.Println("; Generated LLVM IR:")
-		fmt.Println(c.IR())
+		fmt.Println(mod.String())
 	}
-	if err := c.Verify(); err != nil {
+	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 		return errors.New("verification error after IR construction")
 	}
 
-	err = interp.Run(c.Module(), config.DumpSSA())
+	err = interp.Run(mod, config.DumpSSA())
 	if err != nil {
 		return err
 	}
-	if err := c.Verify(); err != nil {
+	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 		return errors.New("verification error after interpreting runtime.initAll")
 	}
 
 	if config.GOOS() != "darwin" {
-		transform.ApplyFunctionSections(c.Module()) // -ffunction-sections
+		transform.ApplyFunctionSections(mod) // -ffunction-sections
 	}
 
 	// Browsers cannot handle external functions that have type i64 because it
@@ -62,7 +63,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	// stack-allocated values.
 	// Use -wasm-abi=generic to disable this behaviour.
 	if config.Options.WasmAbi == "js" && strings.HasPrefix(config.Triple(), "wasm") {
-		err := transform.ExternalInt64AsPtr(c.Module())
+		err := transform.ExternalInt64AsPtr(mod)
 		if err != nil {
 			return err
 		}
@@ -73,22 +74,22 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	errs = nil
 	switch config.Options.Opt {
 	case "none", "0":
-		errs = transform.Optimize(c.Module(), config, 0, 0, 0) // -O0
+		errs = transform.Optimize(mod, config, 0, 0, 0) // -O0
 	case "1":
-		errs = transform.Optimize(c.Module(), config, 1, 0, 0) // -O1
+		errs = transform.Optimize(mod, config, 1, 0, 0) // -O1
 	case "2":
-		errs = transform.Optimize(c.Module(), config, 2, 0, 225) // -O2
+		errs = transform.Optimize(mod, config, 2, 0, 225) // -O2
 	case "s":
-		errs = transform.Optimize(c.Module(), config, 2, 1, 225) // -Os
+		errs = transform.Optimize(mod, config, 2, 1, 225) // -Os
 	case "z":
-		errs = transform.Optimize(c.Module(), config, 2, 2, 5) // -Oz, default
+		errs = transform.Optimize(mod, config, 2, 2, 5) // -Oz, default
 	default:
 		errs = []error{errors.New("unknown optimization level: -opt=" + config.Options.Opt)}
 	}
 	if len(errs) > 0 {
 		return newMultiError(errs)
 	}
-	if err := c.Verify(); err != nil {
+	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 		return errors.New("verification failure after LLVM optimization passes")
 	}
 
@@ -98,8 +99,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	// pointers are flash and which are in RAM so that pointers can have a
 	// correct address space parameter (address space 1 is for flash).
 	if strings.HasPrefix(config.Triple(), "avr") {
-		transform.NonConstGlobals(c.Module())
-		if err := c.Verify(); err != nil {
+		transform.NonConstGlobals(mod)
+		if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 			return errors.New("verification error after making all globals non-constant on AVR")
 		}
 	}
@@ -108,11 +109,17 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	outext := filepath.Ext(outpath)
 	switch outext {
 	case ".o":
-		return c.EmitObject(outpath)
+		llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
+		if err != nil {
+			return err
+		}
+		return ioutil.WriteFile(outpath, llvmBuf.Bytes(), 0666)
 	case ".bc":
-		return c.EmitBitcode(outpath)
+		data := llvm.WriteBitcodeToMemoryBuffer(mod).Bytes()
+		return ioutil.WriteFile(outpath, data, 0666)
 	case ".ll":
-		return c.EmitText(outpath)
+		data := []byte(mod.String())
+		return ioutil.WriteFile(outpath, data, 0666)
 	default:
 		// Act as a compiler driver.
 
@@ -125,7 +132,11 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 
 		// Write the object file.
 		objfile := filepath.Join(dir, "main.o")
-		err = c.EmitObject(objfile)
+		llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
+		if err != nil {
+			return err
+		}
+		err = ioutil.WriteFile(objfile, llvmBuf.Bytes(), 0666)
 		if err != nil {
 			return err
 		}
@@ -167,16 +178,13 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 		}
 
 		// Compile C files in packages.
-		for i, pkg := range c.Packages() {
-			for _, file := range pkg.CFiles {
-				path := filepath.Join(pkg.Package.Dir, file)
-				outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"-"+file+".o")
-				err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, path)...)
-				if err != nil {
-					return &commandError{"failed to build", path, err}
-				}
-				ldflags = append(ldflags, outpath)
+		for i, file := range extraFiles {
+			outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"-"+filepath.Base(file)+".o")
+			err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, file)...)
+			if err != nil {
+				return &commandError{"failed to build", file, err}
 			}
+			ldflags = append(ldflags, outpath)
 		}
 
 		// Link the object files together.

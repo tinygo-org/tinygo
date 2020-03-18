@@ -56,12 +56,6 @@ type compilerContext struct {
 	astComments      map[string]*ast.CommentGroup
 }
 
-type Compiler struct {
-	compilerContext
-	builder   llvm.Builder
-	initFuncs []llvm.Value
-}
-
 // builder contains all information relevant to build a single function.
 type builder struct {
 	*compilerContext
@@ -88,28 +82,40 @@ type Phi struct {
 	llvm llvm.Value
 }
 
-func NewCompiler(pkgName string, config *compileopts.Config) (*Compiler, error) {
-	c := &Compiler{
-		compilerContext: compilerContext{
-			Config:  config,
-			difiles: make(map[string]llvm.Metadata),
-			ditypes: make(map[types.Type]llvm.Metadata),
-		},
-	}
-
+// NewTargetMachine returns a new llvm.TargetMachine based on the passed-in
+// configuration. It is used by the compiler and is needed for machine code
+// emission.
+func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 	target, err := llvm.GetTargetFromTriple(config.Triple())
 	if err != nil {
-		return nil, err
+		return llvm.TargetMachine{}, err
 	}
 	features := strings.Join(config.Features(), ",")
-	c.machine = target.CreateTargetMachine(config.Triple(), config.CPU(), features, llvm.CodeGenLevelDefault, llvm.RelocStatic, llvm.CodeModelDefault)
-	c.targetData = c.machine.CreateTargetData()
+	machine := target.CreateTargetMachine(config.Triple(), config.CPU(), features, llvm.CodeGenLevelDefault, llvm.RelocStatic, llvm.CodeModelDefault)
+	return machine, nil
+}
+
+// Compile the given package path or .go file path. Return an error when this
+// fails (in any stage). If successful it returns the LLVM module and a list of
+// extra C files to be compiled. If not, one or more errors will be returned.
+//
+// The fact that it returns a list of filenames to compile is a layering
+// violation. Eventually, this Compile function should only compile a single
+// package and not the whole program, and loading of the program (including CGo
+// processing) should be moved outside the compiler package.
+func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) (llvm.Module, []string, []error) {
+	c := &compilerContext{
+		Config:     config,
+		difiles:    make(map[string]llvm.Metadata),
+		ditypes:    make(map[types.Type]llvm.Metadata),
+		machine:    machine,
+		targetData: machine.CreateTargetData(),
+	}
 
 	c.ctx = llvm.NewContext()
 	c.mod = c.ctx.NewModule(pkgName)
 	c.mod.SetTarget(config.Triple())
 	c.mod.SetDataLayout(c.targetData.String())
-	c.builder = c.ctx.NewBuilder()
 	if c.Debug() {
 		c.dibuilder = llvm.NewDIBuilder(c.mod)
 	}
@@ -131,21 +137,6 @@ func NewCompiler(pkgName string, config *compileopts.Config) (*Compiler, error) 
 	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
 	dummyFunc.EraseFromParentAsFunction()
 
-	return c, nil
-}
-
-func (c *Compiler) Packages() []*loader.Package {
-	return c.ir.LoaderProgram.Sorted()
-}
-
-// Return the LLVM module. Only valid after a successful compile.
-func (c *Compiler) Module() llvm.Module {
-	return c.mod
-}
-
-// Compile the given package path or .go file path. Return an error when this
-// fails (in any stage).
-func (c *Compiler) Compile(mainPath string) []error {
 	// Prefix the GOPATH with the system GOROOT, as GOROOT is already set to
 	// the TinyGo root.
 	overlayGopath := goenv.Get("GOPATH")
@@ -157,7 +148,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 
 	wd, err := os.Getwd()
 	if err != nil {
-		return []error{err}
+		return c.mod, nil, []error{err}
 	}
 	lprogram := &loader.Program{
 		Build: &build.Context{
@@ -217,17 +208,17 @@ func (c *Compiler) Compile(mainPath string) []error {
 		ClangHeaders: c.ClangHeaders,
 	}
 
-	if strings.HasSuffix(mainPath, ".go") {
-		_, err = lprogram.ImportFile(mainPath)
+	if strings.HasSuffix(pkgName, ".go") {
+		_, err = lprogram.ImportFile(pkgName)
 		if err != nil {
-			return []error{err}
+			return c.mod, nil, []error{err}
 		}
 	} else {
-		_, err = lprogram.Import(mainPath, wd, token.Position{
+		_, err = lprogram.Import(pkgName, wd, token.Position{
 			Filename: "build command-line-arguments",
 		})
 		if err != nil {
-			return []error{err}
+			return c.mod, nil, []error{err}
 		}
 	}
 
@@ -235,15 +226,15 @@ func (c *Compiler) Compile(mainPath string) []error {
 		Filename: "build default import",
 	})
 	if err != nil {
-		return []error{err}
+		return c.mod, nil, []error{err}
 	}
 
 	err = lprogram.Parse(c.TestConfig.CompileTestBinary)
 	if err != nil {
-		return []error{err}
+		return c.mod, nil, []error{err}
 	}
 
-	c.ir = ir.NewProgram(lprogram, mainPath)
+	c.ir = ir.NewProgram(lprogram, pkgName)
 
 	// Run a simple dead code elimination pass.
 	c.ir.SimpleDCE()
@@ -252,7 +243,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 	if c.Debug() {
 		c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
 			Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
-			File:      mainPath,
+			File:      pkgName,
 			Dir:       "",
 			Producer:  "TinyGo",
 			Optimized: true,
@@ -281,9 +272,12 @@ func (c *Compiler) Compile(mainPath string) []error {
 	}
 
 	// Add definitions to declarations.
+	var initFuncs []llvm.Value
+	irbuilder := c.ctx.NewBuilder()
+	defer irbuilder.Dispose()
 	for _, f := range c.ir.Functions {
 		if f.Synthetic == "package initializer" {
-			c.initFuncs = append(c.initFuncs, f.LLVMFn)
+			initFuncs = append(initFuncs, f.LLVMFn)
 		}
 		if f.CName() != "" {
 			continue
@@ -294,8 +288,8 @@ func (c *Compiler) Compile(mainPath string) []error {
 
 		// Create the function definition.
 		b := builder{
-			compilerContext: &c.compilerContext,
-			Builder:         c.builder,
+			compilerContext: c,
+			Builder:         irbuilder,
 			fn:              f,
 			locals:          make(map[ssa.Value]llvm.Value),
 			dilocals:        make(map[*types.Var]llvm.Metadata),
@@ -313,14 +307,14 @@ func (c *Compiler) Compile(mainPath string) []error {
 	if c.Debug() {
 		difunc := c.attachDebugInfo(initFn)
 		pos := c.ir.Program.Fset.Position(initFn.Pos())
-		c.builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
+		irbuilder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
 	block := c.ctx.AddBasicBlock(initFn.LLVMFn, "entry")
-	c.builder.SetInsertPointAtEnd(block)
-	for _, fn := range c.initFuncs {
-		c.builder.CreateCall(fn, []llvm.Value{llvm.Undef(c.i8ptrType), llvm.Undef(c.i8ptrType)}, "")
+	irbuilder.SetInsertPointAtEnd(block)
+	for _, fn := range initFuncs {
+		irbuilder.CreateCall(fn, []llvm.Value{llvm.Undef(c.i8ptrType), llvm.Undef(c.i8ptrType)}, "")
 	}
-	c.builder.CreateRetVoid()
+	irbuilder.CreateRetVoid()
 
 	// Conserve for goroutine lowering. Without marking these as external, they
 	// would be optimized away.
@@ -392,7 +386,15 @@ func (c *Compiler) Compile(mainPath string) []error {
 		c.dibuilder.Finalize()
 	}
 
-	return c.diagnostics
+	// Gather the list of (C) file paths that should be included in the build.
+	var extraFiles []string
+	for _, pkg := range c.ir.LoaderProgram.Sorted() {
+		for _, file := range pkg.CFiles {
+			extraFiles = append(extraFiles, filepath.Join(pkg.Package.Dir, file))
+		}
+	}
+
+	return c.mod, extraFiles, c.diagnostics
 }
 
 // getLLVMRuntimeType obtains a named type from the runtime package and returns
@@ -2576,48 +2578,4 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 	default:
 		return llvm.Value{}, b.makeError(unop.Pos(), "todo: unknown unop")
 	}
-}
-
-// IR returns the whole IR as a human-readable string.
-func (c *Compiler) IR() string {
-	return c.mod.String()
-}
-
-func (c *Compiler) Verify() error {
-	return llvm.VerifyModule(c.mod, llvm.PrintMessageAction)
-}
-
-// Emit object file (.o).
-func (c *Compiler) EmitObject(path string) error {
-	llvmBuf, err := c.machine.EmitToMemoryBuffer(c.mod, llvm.ObjectFile)
-	if err != nil {
-		return err
-	}
-	return c.writeFile(llvmBuf.Bytes(), path)
-}
-
-// Emit LLVM bitcode file (.bc).
-func (c *Compiler) EmitBitcode(path string) error {
-	data := llvm.WriteBitcodeToMemoryBuffer(c.mod).Bytes()
-	return c.writeFile(data, path)
-}
-
-// Emit LLVM IR source file (.ll).
-func (c *Compiler) EmitText(path string) error {
-	data := []byte(c.mod.String())
-	return c.writeFile(data, path)
-}
-
-// Write the data to the file specified by path.
-func (c *Compiler) writeFile(data []byte, path string) error {
-	// Write output to file
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-	if err != nil {
-		return err
-	}
-	_, err = f.Write(data)
-	if err != nil {
-		return err
-	}
-	return f.Close()
 }

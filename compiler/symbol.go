@@ -26,7 +26,7 @@ type globalInfo struct {
 
 // loadASTComments loads comments on globals from the AST, for use later in the
 // program. In particular, they are required for //go:extern pragmas on globals.
-func (c *Compiler) loadASTComments(lprogram *loader.Program) {
+func (c *compilerContext) loadASTComments(lprogram *loader.Program) {
 	c.astComments = map[string]*ast.CommentGroup{}
 	for _, pkgInfo := range lprogram.Sorted() {
 		for _, file := range pkgInfo.Files {
