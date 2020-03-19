@@ -10,6 +10,9 @@ jobs:
   pool:
     vmImage: 'VS2017-Win2016'
   steps:
+    - task: GoTool@0
+      inputs:
+        version: '1.13.8'  
     - checkout: self
     - task: CacheBeta@0
       displayName: Cache LLVM source
@@ -60,7 +63,7 @@ jobs:
       inputs:
         targetType: inline
         script: |
-          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
           unset GOROOT
           make test
     - task: Bash@3
@@ -68,7 +71,7 @@ jobs:
       inputs:
         targetType: inline
         script: |
-          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
           unset GOROOT
           make release -j4
     - publish: $(System.DefaultWorkingDirectory)/build/release/tinygo
@@ -79,6 +82,6 @@ jobs:
       inputs:
         targetType: inline
         script: |
-          export PATH="/c/Go1.13/bin:$PATH:./llvm-build/bin:/c/Program Files/qemu"
+          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
           unset GOROOT
           make smoketest TINYGO=build/tinygo AVR=0
