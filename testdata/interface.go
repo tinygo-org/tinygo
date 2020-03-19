@@ -137,6 +137,12 @@ func printItf(val interface{}) {
 	}
 }
 
+var (
+	// Test for type assert support in the interp package.
+	globalThing interface{} = Foo(3)
+	_                       = globalThing.(Foo)
+)
+
 func nestedSwitch(verb rune, arg interface{}) bool {
 	switch verb {
 	case 'v', 's':

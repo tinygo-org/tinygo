@@ -440,6 +440,21 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{1}) // len
 				ret = llvm.ConstInsertValue(ret, retLen, []uint32{2}) // cap
 				fr.locals[inst] = &LocalValue{fr.Eval, ret}
+			case callee.Name() == "runtime.typeAssert":
+				actualTypeInt := fr.getLocal(inst.Operand(0)).(*LocalValue).Underlying
+				assertedType := fr.getLocal(inst.Operand(1)).(*LocalValue).Underlying
+				if actualTypeInt.IsAConstantExpr().IsNil() || actualTypeInt.Opcode() != llvm.PtrToInt {
+					return nil, nil, fr.errorAt(inst, "interp: expected typecode in runtime.typeAssert to be a ptrtoint")
+				}
+				actualType := actualTypeInt.Operand(0)
+				if actualType.IsAConstant().IsNil() || assertedType.IsAConstant().IsNil() {
+					return nil, nil, fr.errorAt(inst, "interp: unimplemented: type assert with non-constant interface value")
+				}
+				assertOk := uint64(0)
+				if llvm.ConstExtractValue(actualType.Initializer(), []uint32{0}) == assertedType {
+					assertOk = 1
+				}
+				fr.locals[inst] = &LocalValue{fr.Eval, llvm.ConstInt(fr.Mod.Context().Int1Type(), assertOk, false)}
 			case callee.Name() == "runtime.interfaceImplements":
 				typecode := fr.getLocal(inst.Operand(0)).(*LocalValue).Underlying
 				interfaceMethodSet := fr.getLocal(inst.Operand(1)).(*LocalValue).Underlying
