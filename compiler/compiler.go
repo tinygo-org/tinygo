@@ -750,10 +750,12 @@ func (c *compilerContext) createFunctionDeclaration(f *ir.Function) {
 	}
 
 	var paramTypes []llvm.Type
+	var paramTypeVariants []paramFlags
 	for _, param := range f.Params {
 		paramType := c.getLLVMType(param.Type())
-		paramTypeFragments := expandFormalParamType(paramType)
+		paramTypeFragments, paramTypeFragmentVariants := expandFormalParamType(paramType, param.Type())
 		paramTypes = append(paramTypes, paramTypeFragments...)
+		paramTypeVariants = append(paramTypeVariants, paramTypeFragmentVariants...)
 	}
 
 	// Add an extra parameter as the function context. This context is used in
@@ -761,6 +763,7 @@ func (c *compilerContext) createFunctionDeclaration(f *ir.Function) {
 	if !f.IsExported() {
 		paramTypes = append(paramTypes, c.i8ptrType) // context
 		paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
+		paramTypeVariants = append(paramTypeVariants, 0, 0)
 	}
 
 	fnType := llvm.FunctionType(retType, paramTypes, false)
@@ -769,6 +772,23 @@ func (c *compilerContext) createFunctionDeclaration(f *ir.Function) {
 	f.LLVMFn = c.mod.NamedFunction(name)
 	if f.LLVMFn.IsNil() {
 		f.LLVMFn = llvm.AddFunction(c.mod, name, fnType)
+	}
+
+	dereferenceableOrNullKind := llvm.AttributeKindID("dereferenceable_or_null")
+	for i, typ := range paramTypes {
+		if paramTypeVariants[i]&paramIsDeferenceableOrNull == 0 {
+			continue
+		}
+		if typ.TypeKind() == llvm.PointerTypeKind {
+			el := typ.ElementType()
+			size := c.targetData.TypeAllocSize(el)
+			if size == 0 {
+				// dereferenceable_or_null(0) appears to be illegal in LLVM.
+				continue
+			}
+			dereferenceableOrNull := c.ctx.CreateEnumAttribute(dereferenceableOrNullKind, size)
+			f.LLVMFn.AddAttributeAtIndex(i+1, dereferenceableOrNull)
+		}
 	}
 
 	// External/exported functions may not retain pointer values.
@@ -901,7 +921,8 @@ func (b *builder) createFunctionDefinition() {
 	for _, param := range b.fn.Params {
 		llvmType := b.getLLVMType(param.Type())
 		fields := make([]llvm.Value, 0, 1)
-		for range expandFormalParamType(llvmType) {
+		fieldFragments, _ := expandFormalParamType(llvmType, nil)
+		for range fieldFragments {
 			fields = append(fields, b.fn.LLVMFn.Param(llvmParamIndex))
 			llvmParamIndex++
 		}

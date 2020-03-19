@@ -1,6 +1,8 @@
 package compiler
 
 import (
+	"go/types"
+
 	"tinygo.org/x/go-llvm"
 )
 
@@ -10,6 +12,16 @@ import (
 // The maximum number of arguments that can be expanded from a single struct. If
 // a struct contains more fields, it is passed as a struct without expanding.
 const MaxFieldsPerParam = 3
+
+// paramFlags identifies parameter attributes for flags. Most importantly, it
+// determines which parameters are dereferenceable_or_null and which aren't.
+type paramFlags uint8
+
+const (
+	// Parameter may have the deferenceable_or_null attribute. This attribute
+	// cannot be applied to unsafe.Pointer and to the data pointer of slices.
+	paramIsDeferenceableOrNull = 1 << iota
+)
 
 // createCall creates a new call to runtime.<fnName> with the given arguments.
 func (b *builder) createRuntimeCall(fnName string, args []llvm.Value, name string) llvm.Value {
@@ -36,19 +48,19 @@ func (b *builder) createCall(fn llvm.Value, args []llvm.Value, name string) llvm
 
 // Expand an argument type to a list that can be used in a function call
 // parameter list.
-func expandFormalParamType(t llvm.Type) []llvm.Type {
+func expandFormalParamType(t llvm.Type, goType types.Type) ([]llvm.Type, []paramFlags) {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
-		fields := flattenAggregateType(t)
+		fields, fieldFlags := flattenAggregateType(t, goType)
 		if len(fields) <= MaxFieldsPerParam {
-			return fields
+			return fields, fieldFlags
 		} else {
 			// failed to lower
-			return []llvm.Type{t}
+			return []llvm.Type{t}, []paramFlags{getTypeFlags(goType)}
 		}
 	default:
 		// TODO: split small arrays
-		return []llvm.Type{t}
+		return []llvm.Type{t}, []paramFlags{getTypeFlags(goType)}
 	}
 }
 
@@ -79,7 +91,7 @@ func (b *builder) expandFormalParamOffsets(t llvm.Type) []uint64 {
 func (b *builder) expandFormalParam(v llvm.Value) []llvm.Value {
 	switch v.Type().TypeKind() {
 	case llvm.StructTypeKind:
-		fieldTypes := flattenAggregateType(v.Type())
+		fieldTypes, _ := flattenAggregateType(v.Type(), nil)
 		if len(fieldTypes) <= MaxFieldsPerParam {
 			fields := b.flattenAggregate(v)
 			if len(fields) != len(fieldTypes) {
@@ -98,17 +110,62 @@ func (b *builder) expandFormalParam(v llvm.Value) []llvm.Value {
 
 // Try to flatten a struct type to a list of types. Returns a 1-element slice
 // with the passed in type if this is not possible.
-func flattenAggregateType(t llvm.Type) []llvm.Type {
+func flattenAggregateType(t llvm.Type, goType types.Type) ([]llvm.Type, []paramFlags) {
+	typeFlags := getTypeFlags(goType)
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		fields := make([]llvm.Type, 0, t.StructElementTypesCount())
-		for _, subfield := range t.StructElementTypes() {
-			subfields := flattenAggregateType(subfield)
+		fieldFlags := make([]paramFlags, 0, cap(fields))
+		for i, subfield := range t.StructElementTypes() {
+			subfields, subfieldFlags := flattenAggregateType(subfield, extractSubfield(goType, i))
+			for i := range subfieldFlags {
+				subfieldFlags[i] |= typeFlags
+			}
 			fields = append(fields, subfields...)
+			fieldFlags = append(fieldFlags, subfieldFlags...)
 		}
-		return fields
+		return fields, fieldFlags
 	default:
-		return []llvm.Type{t}
+		return []llvm.Type{t}, []paramFlags{typeFlags}
+	}
+}
+
+// getTypeFlags returns the type flags for a given type. It will not recurse
+// into sub-types (such as in structs).
+func getTypeFlags(t types.Type) paramFlags {
+	if t == nil {
+		return 0
+	}
+	switch t.Underlying().(type) {
+	case *types.Pointer:
+		// Pointers in Go must either point to an object or be nil.
+		return paramIsDeferenceableOrNull
+	case *types.Chan, *types.Map:
+		// Channels and maps are implemented as pointers pointing to some
+		// object, and follow the same rules as *types.Pointer.
+		return paramIsDeferenceableOrNull
+	default:
+		return 0
+	}
+}
+
+// extractSubfield extracts a field from a struct, or returns null if this is
+// not a struct and thus no subfield can be obtained.
+func extractSubfield(t types.Type, field int) types.Type {
+	if t == nil {
+		return nil
+	}
+	switch t := t.Underlying().(type) {
+	case *types.Struct:
+		return t.Field(field).Type()
+	case *types.Interface, *types.Slice, *types.Basic, *types.Signature:
+		// These Go types are (sometimes) implemented as LLVM structs but can't
+		// really be split further up in Go (with the possible exception of
+		// complex numbers).
+		return nil
+	default:
+		// This should be unreachable.
+		panic("cannot split subfield: " + t.String())
 	}
 }
 
@@ -169,7 +226,8 @@ func (b *builder) collapseFormalParam(t llvm.Type, fields []llvm.Value) llvm.Val
 func (b *builder) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value) (llvm.Value, []llvm.Value) {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
-		if len(flattenAggregateType(t)) <= MaxFieldsPerParam {
+		flattened, _ := flattenAggregateType(t, nil)
+		if len(flattened) <= MaxFieldsPerParam {
 			value := llvm.ConstNull(t)
 			for i, subtyp := range t.StructElementTypes() {
 				structField, remaining := b.collapseFormalParamInternal(subtyp, fields)

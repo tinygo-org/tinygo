@@ -437,7 +437,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 
 	// Get the expanded receiver type.
 	receiverType := c.getLLVMType(f.Params[0].Type())
-	expandedReceiverType := expandFormalParamType(receiverType)
+	expandedReceiverType, _ := expandFormalParamType(receiverType, nil)
 
 	// Does this method even need any wrapping?
 	if len(expandedReceiverType) == 1 && receiverType.TypeKind() == llvm.PointerTypeKind {
