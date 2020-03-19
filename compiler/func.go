@@ -125,11 +125,13 @@ func (c *compilerContext) getRawFuncType(typ *types.Signature) llvm.Type {
 			// The receiver is not an interface, but a i8* type.
 			recv = c.i8ptrType
 		}
-		paramTypes = append(paramTypes, expandFormalParamType(recv)...)
+		recvFragments, _ := expandFormalParamType(recv, nil)
+		paramTypes = append(paramTypes, recvFragments...)
 	}
 	for i := 0; i < typ.Params().Len(); i++ {
 		subType := c.getLLVMType(typ.Params().At(i).Type())
-		paramTypes = append(paramTypes, expandFormalParamType(subType)...)
+		paramTypeFragments, _ := expandFormalParamType(subType, nil)
+		paramTypes = append(paramTypes, paramTypeFragments...)
 	}
 	// All functions take these parameters at the end.
 	paramTypes = append(paramTypes, c.i8ptrType) // context
