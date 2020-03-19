@@ -1146,7 +1146,9 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 	case *ssa.Store:
 		llvmAddr := c.getValue(frame, instr.Addr)
 		llvmVal := c.getValue(frame, instr.Val)
-		c.emitNilCheck(frame, llvmAddr, "store")
+		if _, ok := instr.Addr.(*ssa.IndexAddr); !ok {
+			c.emitNilCheck(frame, llvmAddr, "store")
+		}
 		if c.targetData.TypeAllocSize(llvmVal.Type()) == 0 {
 			// nothing to store
 			return
@@ -2563,7 +2565,9 @@ func (c *Compiler) parseUnOp(frame *Frame, unop *ssa.UnOp) (llvm.Value, error) {
 			}
 			return c.builder.CreateBitCast(fn, c.i8ptrType, ""), nil
 		} else {
-			c.emitNilCheck(frame, x, "deref")
+			if _, ok := unop.X.(*ssa.IndexAddr); !ok {
+				c.emitNilCheck(frame, x, "deref")
+			}
 			load := c.builder.CreateLoad(x, "")
 			return load, nil
 		}
