@@ -6,7 +6,8 @@
 		"--target=armv6m-none-eabi",
 		"-Qunused-arguments",
 		"-DNRF51",
-		"-I{root}/lib/CMSIS/CMSIS/Include"
+		"-I{root}/lib/CMSIS/CMSIS/Include",
+		"-I{root}/lib/nrfx/mdk"
 	],
 	"linkerscript": "targets/nrf51.ld",
 	"extra-files": [
