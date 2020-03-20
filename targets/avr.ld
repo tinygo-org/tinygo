@@ -1,8 +1,8 @@
 
 MEMORY
 {
-    FLASH_TEXT (rw) : ORIGIN = 0,           LENGTH = __flash_size - _bootloader_size
-    RAM (xrw)       : ORIGIN = __ram_start, LENGTH = __ram_size
+    FLASH_TEXT (rw) : ORIGIN = 0,                      LENGTH = __flash_size - _bootloader_size
+    RAM (xrw)       : ORIGIN = 0x800000 + __ram_start, LENGTH = __ram_size
 }
 
 SECTIONS
