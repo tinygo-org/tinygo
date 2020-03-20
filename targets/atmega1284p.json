@@ -15,5 +15,6 @@
     "extra-files": [
         "targets/avr.S",
         "src/device/avr/atmega1284p.s"
-    ]
+    ],
+    "emulator": ["simavr", "-m", "atmega1284p", "-f", "20000000"]
 }
