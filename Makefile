@@ -287,6 +287,8 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10056-s140v7     examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=reelboard-s140v7    examples/blinky1
+	@$(MD5SUM) test.hex
 ifneq ($(AVR), 0)
 	$(TINYGO) build -size short -o test.hex -target=atmega1284p         examples/serial
 	@$(MD5SUM) test.hex

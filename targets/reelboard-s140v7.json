@@ -1,0 +1,3 @@
+{
+	"inherits": ["reelboard", "nrf52840-s140v7"]
+}
