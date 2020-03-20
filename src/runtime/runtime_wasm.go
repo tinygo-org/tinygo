@@ -79,3 +79,9 @@ func ticks() timeUnit
 func abort() {
 	trap()
 }
+
+// WebAssembly supports only a single thread (at present)
+//go:export NumCPU()
+func NumCPU() int {
+	return 1
+}
