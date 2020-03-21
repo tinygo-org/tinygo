@@ -19,8 +19,6 @@ declare void @"internal/task.start"(i32, i8*, i8*, i8*)
 
 declare void @runtime.nilPanic(i8*, i8*)
 
-declare i1 @runtime.isnil(i8*, i8*, i8*)
-
 declare void @"main$1"(i32, i8*, i8*)
 
 declare void @"main$2"(i32, i8*, i8*)
@@ -38,9 +36,8 @@ define void @runFunc1(i8*, i32, i8, i8* %context, i8* %parentHandle) {
 entry:
   %3 = icmp eq i32 %1, 0
   %4 = select i1 %3, void (i8, i8*, i8*)* null, void (i8, i8*, i8*)* @funcInt8
-  %5 = bitcast void (i8, i8*, i8*)* %4 to i8*
-  %6 = call i1 @runtime.isnil(i8* %5, i8* undef, i8* null)
-  br i1 %6, label %fpcall.nil, label %fpcall.next
+  %5 = icmp eq void (i8, i8*, i8*)* %4, null
+  br i1 %5, label %fpcall.nil, label %fpcall.next
 
 fpcall.nil:
   call void @runtime.nilPanic(i8* undef, i8* null)

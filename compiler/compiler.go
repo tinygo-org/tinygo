@@ -339,9 +339,6 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 		c.mod.NamedFunction("runtime.alloc").AddAttributeAtIndex(0, getAttr(attrName))
 	}
 
-	// See createNilCheck in asserts.go.
-	c.mod.NamedFunction("runtime.isnil").AddAttributeAtIndex(1, nocapture)
-
 	// On *nix systems, the "abort" functuion in libc is used to handle fatal panics.
 	// Mark it as noreturn so LLVM can optimize away code.
 	if abort := c.mod.NamedFunction("abort"); !abort.IsNil() && abort.IsDeclaration() {

@@ -98,24 +98,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		OptimizeAllocs(mod)
 		OptimizeStringToBytes(mod)
 
-		// Lower runtime.isnil calls to regular nil comparisons.
-		isnil := mod.NamedFunction("runtime.isnil")
-		if !isnil.IsNil() {
-			builder := mod.Context().NewBuilder()
-			defer builder.Dispose()
-			for _, use := range getUses(isnil) {
-				builder.SetInsertPointBefore(use)
-				ptr := use.Operand(0)
-				if !ptr.IsABitCastInst().IsNil() {
-					ptr = ptr.Operand(0)
-				}
-				nilptr := llvm.ConstPointerNull(ptr.Type())
-				icmp := builder.CreateICmp(llvm.IntEQ, ptr, nilptr, "")
-				use.ReplaceAllUsesWith(icmp)
-				use.EraseFromParentAsInstruction()
-			}
-		}
-
 	} else {
 		// Must be run at any optimization level.
 		err := LowerInterfaces(mod)

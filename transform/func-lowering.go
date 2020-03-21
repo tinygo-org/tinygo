@@ -197,19 +197,8 @@ func LowerFuncValues(mod llvm.Module) {
 						panic("expected inttoptr")
 					}
 					for _, ptrUse := range getUses(callIntPtr) {
-						if !ptrUse.IsABitCastInst().IsNil() {
-							for _, bitcastUse := range getUses(ptrUse) {
-								if bitcastUse.IsACallInst().IsNil() || bitcastUse.CalledValue().IsAFunction().IsNil() {
-									panic("expected a call instruction")
-								}
-								switch bitcastUse.CalledValue().Name() {
-								case "runtime.isnil":
-									bitcastUse.ReplaceAllUsesWith(llvm.ConstInt(ctx.Int1Type(), 0, false))
-									bitcastUse.EraseFromParentAsInstruction()
-								default:
-									panic("expected a call to runtime.isnil")
-								}
-							}
+						if !ptrUse.IsAICmpInst().IsNil() {
+							ptrUse.ReplaceAllUsesWith(llvm.ConstInt(ctx.Int1Type(), 0, false))
 						} else if !ptrUse.IsACallInst().IsNil() && ptrUse.CalledValue() == callIntPtr {
 							addFuncLoweringSwitch(mod, builder, funcID, ptrUse, func(funcPtr llvm.Value, params []llvm.Value) llvm.Value {
 								return builder.CreateCall(funcPtr, params, "")
