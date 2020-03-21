@@ -176,23 +176,11 @@ func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix str
 	}
 
 	// Compare against nil.
-	var isnil llvm.Value
-	if ptr.Type().PointerAddressSpace() == 0 {
-		// Do the nil check using the isnil builtin, which marks the parameter
-		// as nocapture.
-		// The reason it has to go through a builtin, is that a regular icmp
-		// instruction may capture the pointer in LLVM semantics, see
-		// https://reviews.llvm.org/D60047 for details. Pointer capturing
-		// unfortunately breaks escape analysis, so we use this trick to let the
-		// functionattr pass know that this pointer doesn't really escape.
-		ptr = b.CreateBitCast(ptr, b.i8ptrType, "")
-		isnil = b.createRuntimeCall("isnil", []llvm.Value{ptr}, "")
-	} else {
-		// Do the nil check using a regular icmp. This can happen with function
-		// pointers on AVR, which don't benefit from escape analysis anyway.
-		nilptr := llvm.ConstPointerNull(ptr.Type())
-		isnil = b.CreateICmp(llvm.IntEQ, ptr, nilptr, "")
-	}
+	// We previously used a hack to make sure this wouldn't break escape
+	// analysis, but this is not necessary anymore since
+	// https://reviews.llvm.org/D60047 has been merged.
+	nilptr := llvm.ConstPointerNull(ptr.Type())
+	isnil := b.CreateICmp(llvm.IntEQ, ptr, nilptr, "")
 
 	// Emit the nil check in IR.
 	b.createRuntimeAssert(isnil, blockPrefix, "nilPanic")
