@@ -108,3 +108,62 @@ func (uart UART) getBaudRateDivisor(baudRate uint32) uint32 {
 	}
 	return clock / baudRate
 }
+
+//---------- SPI related types and code
+
+// SPI on the STM32Fxxx using MODER / alternate function pins
+type SPI struct {
+	Bus             *stm32.SPI_Type
+	AltFuncSelector stm32.AltFunc
+}
+
+// Set baud rate for SPI
+func (spi SPI) getBaudRate(config SPIConfig) uint32 {
+	var conf uint32
+
+	localFrequency := config.Frequency
+	if spi.Bus != stm32.SPI1 {
+		// Assume it's SPI2 or SPI3 on APB1 at 1/2 the clock frequency of APB2, so
+		//  we want to pretend to request 2x the baudrate asked for
+		localFrequency = localFrequency * 2
+	}
+
+	// set frequency dependent on PCLK prescaler. Since these are rather weird
+	// speeds due to the CPU freqency, pick a range up to that frquency for
+	// clients to use more human-understandable numbers, e.g. nearest 100KHz
+
+	// These are based on APB2 clock frquency (84MHz on the discovery board)
+	// TODO: also include the MCU/APB clock setting in the equation
+	switch true {
+	case localFrequency < 328125:
+		conf = stm32.SPI_PCLK_256
+	case localFrequency < 656250:
+		conf = stm32.SPI_PCLK_128
+	case localFrequency < 1312500:
+		conf = stm32.SPI_PCLK_64
+	case localFrequency < 2625000:
+		conf = stm32.SPI_PCLK_32
+	case localFrequency < 5250000:
+		conf = stm32.SPI_PCLK_16
+	case localFrequency < 10500000:
+		conf = stm32.SPI_PCLK_8
+		// NOTE: many SPI components won't operate reliably (or at all) above 10MHz
+		// Check the datasheet of the part
+	case localFrequency < 21000000:
+		conf = stm32.SPI_PCLK_4
+	case localFrequency < 42000000:
+		conf = stm32.SPI_PCLK_2
+	default:
+		// None of the specific baudrates were selected; choose the lowest speed
+		conf = stm32.SPI_PCLK_256
+	}
+
+	return conf << stm32.SPI_CR1_BR_Pos
+}
+
+// Configure SPI pins for input output and clock
+func (spi SPI) configurePins(config SPIConfig) {
+	config.SCK.ConfigureAltFunc(PinConfig{Mode: PinModeSPICLK}, spi.AltFuncSelector)
+	config.MOSI.ConfigureAltFunc(PinConfig{Mode: PinModeSPIMOSI}, spi.AltFuncSelector)
+	config.MISO.ConfigureAltFunc(PinConfig{Mode: PinModeSPIMISO}, spi.AltFuncSelector)
+}

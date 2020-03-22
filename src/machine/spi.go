@@ -1,8 +1,16 @@
-// +build !baremetal sam stm32,!stm32f407 fe310
+// +build !baremetal sam stm32 fe310
 
 package machine
 
 import "errors"
+
+// SPI phase and polarity configs CPOL and CPHA
+const (
+	Mode0 = 0
+	Mode1 = 1
+	Mode2 = 2
+	Mode3 = 3
+)
 
 var (
 	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")

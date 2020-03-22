@@ -129,3 +129,30 @@ var (
 func init() {
 	UART0.Interrupt = interrupt.New(stm32.IRQ_USART2, UART0.handleInterrupt)
 }
+
+// SPI pins
+const (
+	SPI1_SCK_PIN  = PA5
+	SPI1_MISO_PIN = PA6
+	SPI1_MOSI_PIN = PA7
+	SPI0_SCK_PIN  = SPI1_SCK_PIN
+	SPI0_MISO_PIN = SPI1_MISO_PIN
+	SPI0_MOSI_PIN = SPI1_MOSI_PIN
+)
+
+// MEMs accelerometer
+const (
+	MEMS_ACCEL_CS   = PE3
+	MEMS_ACCEL_INT1 = PE0
+	MEMS_ACCEL_INT2 = PE1
+)
+
+// Since the first interface is named SPI1, both SPI0 and SPI1 refer to SPI1.
+// TODO: implement SPI2 and SPI3.
+var (
+	SPI0 = SPI{
+		Bus:             stm32.SPI1,
+		AltFuncSelector: stm32.AF5_SPI1_SPI2,
+	}
+	SPI1 = &SPI0
+)

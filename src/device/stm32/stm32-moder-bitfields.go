@@ -43,3 +43,15 @@ const (
 	GPIOPUPDRPullUp   = 1
 	GPIOPUPDRPullDown = 2
 )
+
+// SPI prescaler values fPCLK / X
+const (
+	SPI_PCLK_2   = 0
+	SPI_PCLK_4   = 1
+	SPI_PCLK_8   = 2
+	SPI_PCLK_16  = 3
+	SPI_PCLK_32  = 4
+	SPI_PCLK_64  = 5
+	SPI_PCLK_128 = 6
+	SPI_PCLK_256 = 7
+)

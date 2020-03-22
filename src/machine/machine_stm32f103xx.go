@@ -148,7 +148,8 @@ func (uart UART) getBaudRateDivisor(br uint32) uint32 {
 	return divider
 }
 
-// SPI on the STM32.
+//---------- SPI related types and code
+
 type SPI struct {
 	Bus *stm32.SPI_Type
 }
@@ -161,26 +162,8 @@ var (
 	SPI0 = SPI1
 )
 
-// SPIConfig is used to store config info for SPI.
-type SPIConfig struct {
-	Frequency uint32
-	SCK       Pin
-	MOSI      Pin
-	MISO      Pin
-	LSBFirst  bool
-	Mode      uint8
-}
-
-// Configure is intended to setup the STM32 SPI1 interface.
-// Features still TODO:
-// - support SPI2 and SPI3
-// - allow setting data size to 16 bits?
-// - allow setting direction in HW for additional optimization?
-// - hardware SS pin?
-func (spi SPI) Configure(config SPIConfig) {
-	// enable clock for SPI
-	stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_SPI1EN)
-
+// Set baud rate for SPI
+func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 	var conf uint32
 
 	// set frequency dependent on PCLK2 prescaler (div 1)
@@ -203,82 +186,18 @@ func (spi SPI) Configure(config SPIConfig) {
 	default:
 		conf |= stm32.SPI_BaudRatePrescaler_256
 	}
-
-	// set bit transfer order
-	if config.LSBFirst {
-		conf |= stm32.SPI_FirstBit_LSB
-	}
-
-	// set mode
-	switch config.Mode {
-	case 0:
-		conf &^= (1 << stm32.SPI_CR1_CPOL_Pos)
-		conf &^= (1 << stm32.SPI_CR1_CPHA_Pos)
-	case 1:
-		conf &^= (1 << stm32.SPI_CR1_CPOL_Pos)
-		conf |= (1 << stm32.SPI_CR1_CPHA_Pos)
-	case 2:
-		conf |= (1 << stm32.SPI_CR1_CPOL_Pos)
-		conf &^= (1 << stm32.SPI_CR1_CPHA_Pos)
-	case 3:
-		conf |= (1 << stm32.SPI_CR1_CPOL_Pos)
-		conf |= (1 << stm32.SPI_CR1_CPHA_Pos)
-	default: // to mode 0
-		conf &^= (1 << stm32.SPI_CR1_CPOL_Pos)
-		conf &^= (1 << stm32.SPI_CR1_CPHA_Pos)
-	}
-
-	// set to SPI master
-	conf |= stm32.SPI_Mode_Master
-
-	// now set the configuration
-	spi.Bus.CR1.Set(conf)
-
-	// init pins
-	spi.setPins(config.SCK, config.MOSI, config.MISO)
-
-	// enable SPI interface
-	spi.Bus.CR1.SetBits(stm32.SPI_CR1_SPE)
+	return conf
 }
 
-// Transfer writes/reads a single byte using the SPI interface.
-func (spi SPI) Transfer(w byte) (byte, error) {
-	// Write data to be transmitted to the SPI data register
-	spi.Bus.DR.Set(uint32(w))
-
-	// Wait until transmit complete
-	for !spi.Bus.SR.HasBits(stm32.SPI_SR_TXE) {
-	}
-
-	// Wait until receive complete
-	for !spi.Bus.SR.HasBits(stm32.SPI_SR_RXNE) {
-	}
-
-	// Wait until SPI is not busy
-	for spi.Bus.SR.HasBits(stm32.SPI_SR_BSY) {
-	}
-
-	// Return received data from SPI data register
-	return byte(spi.Bus.DR.Get()), nil
+// Configure SPI pins for input output and clock
+func (spi SPI) configurePins(config SPIConfig) {
+	config.SCK.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
+	config.MOSI.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
+	config.MISO.Configure(PinConfig{Mode: PinInputModeFloating})
 }
 
-func (spi SPI) setPins(sck, mosi, miso Pin) {
-	if sck == 0 {
-		sck = SPI0_SCK_PIN
-	}
-	if mosi == 0 {
-		mosi = SPI0_MOSI_PIN
-	}
-	if miso == 0 {
-		miso = SPI0_MISO_PIN
-	}
+//---------- I2C related types and code
 
-	sck.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
-	mosi.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
-	miso.Configure(PinConfig{Mode: PinInputModeFloating})
-}
-
-// I2C on the STM32F103xx.
 type I2C struct {
 	Bus *stm32.I2C_Type
 }
