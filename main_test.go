@@ -54,6 +54,14 @@ func TestCompiler(t *testing.T) {
 		runPlatTests("cortex-m-qemu", matches, t)
 	})
 
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		// Note: running only on Windows and macOS because Linux (as of 2020)
+		// usually has an outdated QEMU version that doesn't support RISC-V yet.
+		t.Run("EmulatedRISCV", func(t *testing.T) {
+			runPlatTests("riscv-qemu", matches, t)
+		})
+	}
+
 	if runtime.GOOS == "linux" {
 		t.Run("ARMLinux", func(t *testing.T) {
 			runPlatTests("arm--linux-gnueabihf", matches, t)
