@@ -123,7 +123,7 @@ func runTest(path, target string, t *testing.T) {
 		PrintIR:    false,
 		DumpSSA:    false,
 		VerifyIR:   true,
-		Debug:      false,
+		Debug:      true,
 		PrintSizes: "",
 		WasmAbi:    "js",
 	}
