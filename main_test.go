@@ -161,7 +161,7 @@ func runTest(path, target string, t *testing.T) {
 	}
 	go func() {
 		// Terminate the process if it runs too long.
-		timer := time.NewTimer(1 * time.Second)
+		timer := time.NewTimer(10 * time.Second)
 		select {
 		case <-runComplete:
 			timer.Stop()
