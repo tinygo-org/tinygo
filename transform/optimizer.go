@@ -75,7 +75,10 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		OptimizeMaps(mod)
 		OptimizeStringToBytes(mod)
 		OptimizeAllocs(mod)
-		LowerInterfaces(mod)
+		err := LowerInterfaces(mod)
+		if err != nil {
+			return []error{err}
+		}
 
 		errs := LowerInterrupts(mod)
 		if len(errs) > 0 {
@@ -115,7 +118,10 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 
 	} else {
 		// Must be run at any optimization level.
-		LowerInterfaces(mod)
+		err := LowerInterfaces(mod)
+		if err != nil {
+			return []error{err}
+		}
 		if config.FuncImplementation() == compileopts.FuncValueSwitch {
 			LowerFuncValues(mod)
 		}
