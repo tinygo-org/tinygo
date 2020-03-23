@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/sifive"
+	"errors"
 	"runtime/interrupt"
 )
 
@@ -180,4 +181,122 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 
 	// return data
 	return byte(spi.Bus.RXDATA.Get() & sifive.QSPI_RXDATA_DATA_Msk), nil
+}
+
+// SPI on the FE310 G002.
+type I2C struct {
+	Bus *sifive.I2C_Type
+}
+
+// I2CConfig is used to store config info for I2C.
+type I2CConfig struct {
+	Frequency uint32
+	SCL       Pin
+	SDA       Pin
+}
+
+func (i2c I2C) Configure(config I2CConfig) error {
+
+	var clockFrequency uint32 = 32000000
+
+	if config.Frequency == 0 {
+		config.Frequency = TWI_FREQ_100KHZ
+	}
+
+	if config.SDA == 0 && config.SCL == 0 {
+		config.SDA = I2C0_SDA_PIN
+		config.SCL = I2C0_SCL_PIN
+	}
+
+	var prescaler = clockFrequency/(5*config.Frequency) - 1
+
+	// Disable controller before setting the prescale registers
+	i2c.Bus.CTR.ClearBits(sifive.I2C_CTR_EN_Msk)
+
+	// Set prescaler registers
+	i2c.Bus.PRER_LO.Set(uint32(prescaler & 0xff))
+	i2c.Bus.PRER_HI.Set(uint32((prescaler >> 8) & 0xff))
+
+	// Enable controller
+	i2c.Bus.CTR.SetBits(sifive.I2C_CTR_EN_Msk)
+
+	config.SDA.Configure(PinConfig{Mode: PinI2C})
+	config.SCL.Configure(PinConfig{Mode: PinI2C})
+
+	return nil
+}
+
+func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+	var err error
+	if len(w) != 0 {
+		// send start/address for write
+		i2c.sendAddress(addr, true)
+
+		// wait until transmission complete
+		// TODO: add timeout
+		for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP_Msk) {
+		}
+
+		// ACK received (0: ACK, 1: NACK)
+		if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK_Msk) {
+			return errors.New("I2C write error: expected ACK not NACK")
+		}
+
+		// write data
+		for _, b := range w {
+			err = i2c.WriteByte(b)
+			print("write ok\n")
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+	if len(r) != 0 {
+		// send start/address for read
+		i2c.sendAddress(addr, false)
+
+	}
+
+	return nil
+}
+
+// WriteByte writes a single byte to the I2C bus.
+func (i2c I2C) WriteByte(data byte) error {
+	// Send data byte
+	i2c.Bus.TXR_RXR.Set(uint32(data))
+
+	i2c.Bus.CR_SR.Set(sifive.I2C_CR_STO | sifive.I2C_CR_WR)
+
+	// wait until transmission complete
+	// TODO: add timeout
+	for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP_Msk) {
+	}
+
+	// ACK received (0: ACK, 1: NACK)
+	if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK_Msk) {
+		return errors.New("I2C write error: expected ACK not NACK")
+	}
+
+	return nil
+}
+
+// sendAddress sends the address and start signal
+func (i2c I2C) sendAddress(address uint16, write bool) error {
+	data := (address << 1)
+	if !write {
+		data |= 1 // set read flag in transmit register
+	}
+
+	// write address to transmit register
+	i2c.Bus.TXR_RXR.Set(uint32(data))
+
+	// generate start condition
+	if write {
+		i2c.Bus.CR_SR.Set((sifive.I2C_CR_STA | sifive.I2C_CR_WR))
+	} else {
+		i2c.Bus.CR_SR.Set((sifive.I2C_CR_STA | sifive.I2C_CR_RD))
+	}
+
+	return nil
 }
