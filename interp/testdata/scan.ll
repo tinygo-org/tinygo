@@ -1,6 +1,11 @@
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64--linux"
 
+%runtime.typecodeID = type { %runtime.typecodeID*, i64 }
+
+declare i1 @runtime.typeAssert(i64, %runtime.typecodeID*, i8*, i8*)
+declare i1 @runtime.interfaceImplements(i64, i8**)
+
 define i64 @returnsConst() {
   ret i64 0
 }
@@ -58,4 +63,16 @@ define i64 @callFunctionPointer() {
   %fp = load i64()*, i64()** @functionPointer
   %result = call i64 %fp()
   ret i64 %result
+}
+
+define i1 @callTypeAssert() {
+  ; Note: parameters are not realistic.
+  %ok = call i1 @runtime.typeAssert(i64 0, %runtime.typecodeID* null, i8* undef, i8* null)
+  ret i1 %ok
+}
+
+define i1 @callInterfaceImplements() {
+  ; Note: parameters are not realistic.
+  %ok = call i1 @runtime.interfaceImplements(i64 0, i8** null)
+  ret i1 %ok
 }

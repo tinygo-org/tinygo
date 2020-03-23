@@ -23,6 +23,8 @@ var scanTestTable = []struct {
 	{"callFunctionPointer", sideEffectAll, []string{"functionPointer"}},
 	{"getDirtyPointer", sideEffectLimited, nil},
 	{"storeToPointer", sideEffectLimited, nil},
+	{"callTypeAssert", sideEffectNone, nil},
+	{"callInterfaceImplements", sideEffectNone, nil},
 }
 
 func TestScan(t *testing.T) {
