@@ -147,7 +147,7 @@ type lowerInterfacesPass struct {
 // emitted by the compiler as higher-level intrinsics. They need some lowering
 // before LLVM can work on them. This is done so that a few cleanup passes can
 // run before assigning the final type codes.
-func LowerInterfaces(mod llvm.Module) {
+func LowerInterfaces(mod llvm.Module) error {
 	p := &lowerInterfacesPass{
 		mod:         mod,
 		builder:     mod.Context().NewBuilder(),
@@ -157,11 +157,11 @@ func LowerInterfaces(mod llvm.Module) {
 		signatures:  make(map[string]*signatureInfo),
 		interfaces:  make(map[string]*interfaceInfo),
 	}
-	p.run()
+	return p.run()
 }
 
 // run runs the pass itself.
-func (p *lowerInterfacesPass) run() {
+func (p *lowerInterfacesPass) run() error {
 	// Collect all type codes.
 	typecodeIDPtr := llvm.PointerType(p.mod.GetTypeByName("runtime.typecodeID"), 0)
 	typeInInterfacePtr := llvm.PointerType(p.mod.GetTypeByName("runtime.typeInInterface"), 0)
@@ -303,19 +303,22 @@ func (p *lowerInterfacesPass) run() {
 		} else if len(itf.types) == 1 {
 			// There is only one implementation of the given type.
 			// Call that function directly.
-			p.replaceInvokeWithCall(use, itf.types[0], signature)
+			err := p.replaceInvokeWithCall(use, itf.types[0], signature)
+			if err != nil {
+				return err
+			}
 		} else {
 			// There are multiple types implementing this interface, thus there
 			// are multiple possible functions to call. Delegate calling the
 			// right function to a special wrapper function.
 			inttoptrs := getUses(use)
 			if len(inttoptrs) != 1 || inttoptrs[0].IsAIntToPtrInst().IsNil() {
-				panic("expected exactly one inttoptr use of runtime.interfaceMethod")
+				return errorAt(use, "internal error: expected exactly one inttoptr use of runtime.interfaceMethod")
 			}
 			inttoptr := inttoptrs[0]
 			calls := getUses(inttoptr)
 			if len(calls) != 1 || calls[0].IsACallInst().IsNil() {
-				panic("expected exactly one call use of runtime.interfaceMethod")
+				return errorAt(use, "internal error: expected exactly one call use of runtime.interfaceMethod")
 			}
 			call := calls[0]
 
@@ -368,11 +371,6 @@ func (p *lowerInterfacesPass) run() {
 		typeSlice = append(typeSlice, t)
 	}
 	sort.Sort(sort.Reverse(typeSlice))
-
-	// A type code must fit in 16 bits.
-	if len(typeSlice) >= 1<<16 {
-		panic("typecode does not fit in a uint16: too many types in this program")
-	}
 
 	// Assign a type code for each type.
 	assignTypeCodes(p.mod, typeSlice)
@@ -433,6 +431,7 @@ func (p *lowerInterfacesPass) run() {
 			typ.methodSet = llvm.Value{}
 		}
 	}
+	return nil
 }
 
 // addTypeMethods reads the method set of the given type info struct. It
@@ -493,10 +492,10 @@ func (p *lowerInterfacesPass) getSignature(name string) *signatureInfo {
 // replaceInvokeWithCall replaces a runtime.interfaceMethod + inttoptr with a
 // concrete method. This can be done when only one type implements the
 // interface.
-func (p *lowerInterfacesPass) replaceInvokeWithCall(use llvm.Value, typ *typeInfo, signature *signatureInfo) {
+func (p *lowerInterfacesPass) replaceInvokeWithCall(use llvm.Value, typ *typeInfo, signature *signatureInfo) error {
 	inttoptrs := getUses(use)
 	if len(inttoptrs) != 1 || inttoptrs[0].IsAIntToPtrInst().IsNil() {
-		panic("expected exactly one inttoptr use of runtime.interfaceMethod")
+		return errorAt(use, "internal error: expected exactly one inttoptr use of runtime.interfaceMethod")
 	}
 	inttoptr := inttoptrs[0]
 	function := typ.getMethod(signature).function
@@ -511,7 +510,7 @@ func (p *lowerInterfacesPass) replaceInvokeWithCall(use llvm.Value, typ *typeInf
 		// function.
 		for _, call := range getUses(inttoptr) {
 			if call.IsACallInst().IsNil() || call.CalledValue() != inttoptr {
-				panic("expected the inttoptr to be called as a method, this is not a method call")
+				return errorAt(call, "internal error: expected the inttoptr to be called as a method, this is not a method call")
 			}
 			operands := make([]llvm.Value, call.OperandsCount()-1)
 			for i := range operands {
@@ -522,7 +521,7 @@ func (p *lowerInterfacesPass) replaceInvokeWithCall(use llvm.Value, typ *typeInf
 			methodParamTypes := paramTypes[len(paramTypes)-(len(operands)-1):]
 			for i, methodParamType := range methodParamTypes {
 				if methodParamType != operands[i+1].Type() {
-					panic("expected method call param type and function param type to be the same")
+					return errorAt(call, "internal error: expected method call param type and function param type to be the same")
 				}
 			}
 			p.builder.SetInsertPointBefore(call)
@@ -536,6 +535,7 @@ func (p *lowerInterfacesPass) replaceInvokeWithCall(use llvm.Value, typ *typeInf
 	}
 	inttoptr.EraseFromParentAsInstruction()
 	use.EraseFromParentAsInstruction()
+	return nil
 }
 
 // getInterfaceImplementsFunc returns a function that checks whether a given
