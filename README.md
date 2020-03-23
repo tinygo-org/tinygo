@@ -63,6 +63,7 @@ The following 28 microcontroller boards are currently supported:
 * [Digispark](http://digistump.com/products/1)
 * [Game Boy Advance](https://en.wikipedia.org/wiki/Game_Boy_Advance)
 * [Makerdiary nRF52840-MDK](https://wiki.makerdiary.com/nrf52840-mdk/)
+* [MicroPython Pyboard D series SF2](https://store.micropython.org/product/PYBD-SF2-W4F2)
 * [Nordic Semiconductor PCA10031](https://www.nordicsemi.com/eng/Products/nRF51-Dongle)
 * [Nordic Semiconductor PCA10040](https://www.nordicsemi.com/eng/Products/Bluetooth-low-energy/nRF52-DK)
 * [Nordic Semiconductor PCA10056](https://www.nordicsemi.com/Software-and-Tools/Development-Kits/nRF52840-DK)

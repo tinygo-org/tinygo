@@ -1,0 +1,12 @@
+{
+    "inherits": ["cortex-m"],
+    "llvm-target": "armv7em-none-eabi",
+    "build-tags": ["stm32f7x2", "stm32"],
+    "cflags": [
+        "--target=armv7em-none-eabi",
+        "-Qunused-arguments"
+    ],
+    "extra-files": [
+        "src/device/stm32/stm32f7x2.s"
+    ]
+}

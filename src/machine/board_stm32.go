@@ -1,4 +1,4 @@
-// +build bluepill nucleof103rb stm32f4disco
+// +build stm32 bluepill nucleof103rb stm32f4disco
 
 package machine
 
