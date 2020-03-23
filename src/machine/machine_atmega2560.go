@@ -121,27 +121,27 @@ func (p Pin) getPortMask() (*volatile.Register8, uint8) {
 func (p Pin) getRegisterPortMask() (*volatile.Register8, *volatile.Register8, uint8) {
 	switch {
 	case p >= PA0 && p <= PA7:
-		return avr.DDRA, avr.PORTA, 1 << uint8(p-PA0)
+		return avr.DDRA, avr.PORTA, 1 << uint8(p-portA)
 	case p >= PB0 && p <= PB7:
-		return avr.DDRB, avr.PORTB, 1 << uint8(p-PB0)
+		return avr.DDRB, avr.PORTB, 1 << uint8(p-portB)
 	case p >= PC0 && p <= PC7:
-		return avr.DDRC, avr.PORTC, 1 << uint8(p-PC0)
+		return avr.DDRC, avr.PORTC, 1 << uint8(p-portC)
 	case p >= PD0 && p <= PD7:
-		return avr.DDRD, avr.PORTD, 1 << uint8(p-PD0)
+		return avr.DDRD, avr.PORTD, 1 << uint8(p-portD)
 	case p >= PE0 && p <= PE6:
-		return avr.DDRE, avr.PORTE, 1 << uint8(p-PE0)
+		return avr.DDRE, avr.PORTE, 1 << uint8(p-portE)
 	case p >= PF0 && p <= PF7:
-		return avr.DDRF, avr.PORTF, 1 << uint8(p-PF0)
+		return avr.DDRF, avr.PORTF, 1 << uint8(p-portF)
 	case p >= PG0 && p <= PG5:
-		return avr.DDRG, avr.PORTG, 1 << uint8(p-PG0)
+		return avr.DDRG, avr.PORTG, 1 << uint8(p-portG)
 	case p >= PH0 && p <= PH6:
-		return avr.DDRH, avr.PORTH, 1 << uint8(p-PH0)
+		return avr.DDRH, avr.PORTH, 1 << uint8(p-portH)
 	case p >= PJ0 && p <= PJ1:
-		return avr.DDRJ, avr.PORTJ, 1 << uint8(p-PJ0)
+		return avr.DDRJ, avr.PORTJ, 1 << uint8(p-portJ)
 	case p >= PK0 && p <= PK7:
-		return avr.DDRK, avr.PORTK, 1 << uint8(p-PK0)
+		return avr.DDRK, avr.PORTK, 1 << uint8(p-portK)
 	case p >= PL0 && p <= PL7:
-		return avr.DDRL, avr.PORTL, 1 << uint8(p-PL0)
+		return avr.DDRL, avr.PORTL, 1 << uint8(p-portL)
 	default:
 		return avr.DDRB, avr.PORTA, 255
 	}
