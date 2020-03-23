@@ -8,7 +8,8 @@ func CPUFrequency() uint32 {
 }
 
 const (
-	LED Pin = PB7
+	AREF Pin = NoPin
+	LED  Pin = PB7
 
 	A0  Pin = PF0
 	A1  Pin = PF1
