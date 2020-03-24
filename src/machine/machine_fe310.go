@@ -183,7 +183,7 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return byte(spi.Bus.RXDATA.Get() & sifive.QSPI_RXDATA_DATA_Msk), nil
 }
 
-// SPI on the FE310 G002.
+// I2C on the FE310 G002.
 type I2C struct {
 	Bus *sifive.I2C_Type
 }
