@@ -210,15 +210,15 @@ func (i2c I2C) Configure(config I2CConfig) error {
 
 	var prescaler = clockFrequency/(5*config.Frequency) - 1
 
-	// Disable controller before setting the prescale registers
-	i2c.Bus.CTR.ClearBits(sifive.I2C_CTR_EN_Msk)
+	// disable controller before setting the prescale registers
+	i2c.Bus.CTR.ClearBits(sifive.I2C_CTR_EN)
 
-	// Set prescaler registers
+	// set prescaler registers
 	i2c.Bus.PRER_LO.Set(uint32(prescaler & 0xff))
 	i2c.Bus.PRER_HI.Set(uint32((prescaler >> 8) & 0xff))
 
-	// Enable controller
-	i2c.Bus.CTR.SetBits(sifive.I2C_CTR_EN_Msk)
+	// enable controller
+	i2c.Bus.CTR.SetBits(sifive.I2C_CTR_EN)
 
 	config.SDA.Configure(PinConfig{Mode: PinI2C})
 	config.SCL.Configure(PinConfig{Mode: PinI2C})
@@ -234,18 +234,17 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 		// wait until transmission complete
 		// TODO: add timeout
-		for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP_Msk) {
+		for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP) {
 		}
 
 		// ACK received (0: ACK, 1: NACK)
-		if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK_Msk) {
+		if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK) {
 			return errors.New("I2C write error: expected ACK not NACK")
 		}
 
 		// write data
 		for _, b := range w {
 			err = i2c.WriteByte(b)
-			print("write ok\n")
 			if err != nil {
 				return err
 			}
@@ -256,8 +255,32 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		// send start/address for read
 		i2c.sendAddress(addr, false)
 
+		// wait until transmission complete
+		// TODO: add timeout
+		for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP) {
+		}
+
+		// ACK received (0: ACK, 1: NACK)
+		if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK) {
+			return errors.New("I2C write error: expected ACK not NACK")
+		}
+
+		// read first byte
+		r[0] = i2c.readByte()
+		for i := 1; i < len(r); i++ {
+			// send an ACK
+			i2c.Bus.CR_SR.Set(^uint32(sifive.I2C_CR_ACK))
+
+			// read data and send the ACK
+			r[i] = i2c.readByte()
+		}
+
+		// send NACK to end transmission
+		i2c.Bus.CR_SR.Set(sifive.I2C_CR_ACK)
 	}
 
+	// generate stop condition
+	i2c.Bus.CR_SR.Set(sifive.I2C_CR_STO)
 	return nil
 }
 
@@ -266,11 +289,11 @@ func (i2c I2C) WriteByte(data byte) error {
 	// Send data byte
 	i2c.Bus.TXR_RXR.Set(uint32(data))
 
-	i2c.Bus.CR_SR.Set(sifive.I2C_CR_STO | sifive.I2C_CR_WR)
+	i2c.Bus.CR_SR.Set(sifive.I2C_CR_WR)
 
 	// wait until transmission complete
-	// TODO: add timeout
-	for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP_Msk) {
+	// TODO: add timeout ?
+	for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP) {
 	}
 
 	// ACK received (0: ACK, 1: NACK)
@@ -279,6 +302,15 @@ func (i2c I2C) WriteByte(data byte) error {
 	}
 
 	return nil
+}
+
+func (i2c I2C) readByte() byte {
+	i2c.Bus.CR_SR.Set(sifive.I2C_CR_RD)
+
+	//TODO: add timeout ?
+	for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP) {
+	}
+	return byte(i2c.Bus.TXR_RXR.Get())
 }
 
 // sendAddress sends the address and start signal
@@ -292,11 +324,7 @@ func (i2c I2C) sendAddress(address uint16, write bool) error {
 	i2c.Bus.TXR_RXR.Set(uint32(data))
 
 	// generate start condition
-	if write {
-		i2c.Bus.CR_SR.Set((sifive.I2C_CR_STA | sifive.I2C_CR_WR))
-	} else {
-		i2c.Bus.CR_SR.Set((sifive.I2C_CR_STA | sifive.I2C_CR_RD))
-	}
+	i2c.Bus.CR_SR.Set((sifive.I2C_CR_STA | sifive.I2C_CR_WR))
 
 	return nil
 }
