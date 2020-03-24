@@ -317,33 +317,30 @@ func (p *lowerInterfacesPass) run() error {
 			}
 			inttoptr := inttoptrs[0]
 			calls := getUses(inttoptr)
-			if len(calls) != 1 || calls[0].IsACallInst().IsNil() {
-				return errorAt(use, "internal error: expected exactly one call use of runtime.interfaceMethod")
-			}
-			call := calls[0]
+			for _, call := range calls {
+				// Set up parameters for the call. First copy the regular params...
+				params := make([]llvm.Value, call.OperandsCount())
+				paramTypes := make([]llvm.Type, len(params))
+				for i := 0; i < len(params)-1; i++ {
+					params[i] = call.Operand(i)
+					paramTypes[i] = params[i].Type()
+				}
+				// then add the typecode to the end of the list.
+				params[len(params)-1] = typecode
+				paramTypes[len(params)-1] = p.uintptrType
 
-			// Set up parameters for the call. First copy the regular params...
-			params := make([]llvm.Value, call.OperandsCount())
-			paramTypes := make([]llvm.Type, len(params))
-			for i := 0; i < len(params)-1; i++ {
-				params[i] = call.Operand(i)
-				paramTypes[i] = params[i].Type()
-			}
-			// then add the typecode to the end of the list.
-			params[len(params)-1] = typecode
-			paramTypes[len(params)-1] = p.uintptrType
+				// Create a function that redirects the call to the destination
+				// call, after selecting the right concrete type.
+				redirector := p.getInterfaceMethodFunc(itf, signature, call.Type(), paramTypes)
 
-			// Create a function that redirects the call to the destination
-			// call, after selecting the right concrete type.
-			redirector := p.getInterfaceMethodFunc(itf, signature, call.Type(), paramTypes)
-
-			// Replace the old lookup/inttoptr/call with the new call.
-			p.builder.SetInsertPointBefore(call)
-			retval := p.builder.CreateCall(redirector, append(params, llvm.ConstNull(llvm.PointerType(p.ctx.Int8Type(), 0))), "")
-			if retval.Type().TypeKind() != llvm.VoidTypeKind {
-				call.ReplaceAllUsesWith(retval)
+				// Replace the old lookup/inttoptr/call with the new call.
+				p.builder.SetInsertPointBefore(call)
+				retval := p.builder.CreateCall(redirector, append(params, llvm.ConstNull(llvm.PointerType(p.ctx.Int8Type(), 0))), "")
+				if retval.Type().TypeKind() != llvm.VoidTypeKind {
+					call.ReplaceAllUsesWith(retval)
+				}
+				call.EraseFromParentAsInstruction()
 			}
-			call.EraseFromParentAsInstruction()
 			inttoptr.EraseFromParentAsInstruction()
 			use.EraseFromParentAsInstruction()
 		}
