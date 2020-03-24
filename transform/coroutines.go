@@ -60,10 +60,11 @@ func LowerCoroutines(mod llvm.Module, needStackSlots bool) error {
 	defer target.Dispose()
 
 	pass := &coroutineLoweringPass{
-		mod:     mod,
-		ctx:     ctx,
-		builder: builder,
-		target:  target,
+		mod:            mod,
+		ctx:            ctx,
+		builder:        builder,
+		target:         target,
+		needStackSlots: needStackSlots,
 	}
 
 	err := pass.load()
@@ -149,6 +150,9 @@ type coroutineLoweringPass struct {
 
 	// llvm.coro intrinsics
 	coroId, coroSize, coroBegin, coroSuspend, coroEnd, coroFree, coroSave llvm.Value
+
+	trackPointer   llvm.Value
+	needStackSlots bool
 }
 
 // findAsyncFuncs finds all asynchronous functions.
@@ -265,6 +269,13 @@ func (c *coroutineLoweringPass) load() error {
 		return ErrMissingIntrinsic{"internal/task.createTask"}
 	}
 
+	if c.needStackSlots {
+		c.trackPointer = c.mod.NamedFunction("runtime.trackPointer")
+		if c.trackPointer.IsNil() {
+			return ErrMissingIntrinsic{"runtime.trackPointer"}
+		}
+	}
+
 	// Find async functions.
 	c.findAsyncFuncs()
 
@@ -295,6 +306,15 @@ func (c *coroutineLoweringPass) load() error {
 	c.coroSave = llvm.AddFunction(c.mod, "llvm.coro.save", coroSaveType)
 
 	return nil
+}
+
+func (c *coroutineLoweringPass) track(ptr llvm.Value) {
+	if c.needStackSlots {
+		if ptr.Type() != c.i8ptr {
+			ptr = c.builder.CreateBitCast(ptr, c.i8ptr, "track.bitcast")
+		}
+		c.builder.CreateCall(c.trackPointer, []llvm.Value{ptr, llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, "")
+	}
 }
 
 // lowerStartSync lowers a goroutine start of a synchronous function to a synchronous call.
@@ -662,6 +682,7 @@ func (c *coroutineLoweringPass) lowerFuncCoro(fn *asyncFunc) {
 	coroAlloc := c.builder.CreateCall(c.alloc, []llvm.Value{coroSize, llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, "coro.alloc")
 	// %coro.state = call noalias i8* @llvm.coro.begin(token %coro.id, i8* %coro.alloc)
 	coroState := c.builder.CreateCall(c.coroBegin, []llvm.Value{coroId, coroAlloc}, "coro.state")
+	c.track(coroState)
 	// Store state into task.
 	task := c.builder.CreateCall(c.current, []llvm.Value{llvm.Undef(c.i8ptr), fn.rawTask}, "task")
 	parentState := c.builder.CreateCall(c.setState, []llvm.Value{task, coroState, llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, "task.state.parent")
@@ -795,6 +816,9 @@ func (c *coroutineLoweringPass) lowerFuncCoro(fn *asyncFunc) {
 		if call.CalledValue() == c.pause {
 			call.EraseFromParentAsInstruction()
 		}
+
+		c.builder.SetInsertPointBefore(wakeup.FirstInstruction())
+		c.track(coroState)
 	}
 }
 
