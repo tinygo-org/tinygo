@@ -96,7 +96,7 @@ func (c *Config) CgoEnabled() bool {
 }
 
 // GC returns the garbage collection strategy in use on this platform. Valid
-// values are "none", "leaking", and "conservative".
+// values are "none", "leaking", "extalloc", and "conservative".
 func (c *Config) GC() string {
 	if c.Options.GC != "" {
 		return c.Options.GC
@@ -104,22 +104,29 @@ func (c *Config) GC() string {
 	if c.Target.GC != "" {
 		return c.Target.GC
 	}
-	return "conservative"
+	for _, tag := range c.Target.BuildTags {
+		if tag == "baremetal" || tag == "wasm" {
+			return "conservative"
+		}
+	}
+	return "extalloc"
 }
 
 // NeedsStackObjects returns true if the compiler should insert stack objects
 // that can be traced by the garbage collector.
 func (c *Config) NeedsStackObjects() bool {
-	if c.GC() != "conservative" {
+	switch c.GC() {
+	case "conservative", "extalloc":
+		for _, tag := range c.BuildTags() {
+			if tag == "baremetal" {
+				return false
+			}
+		}
+
+		return true
+	default:
 		return false
 	}
-	for _, tag := range c.BuildTags() {
-		if tag == "baremetal" {
-			return false
-		}
-	}
-
-	return true
 }
 
 // Scheduler returns the scheduler implementation. Valid values are "coroutines"

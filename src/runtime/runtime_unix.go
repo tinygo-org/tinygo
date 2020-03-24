@@ -24,10 +24,6 @@ func exit(code int)
 //go:export clock_gettime
 func clock_gettime(clk_id int32, ts *timespec)
 
-const heapSize = 1 * 1024 * 1024 // 1MB to start
-
-var heapStart, heapEnd uintptr
-
 type timeUnit int64
 
 const tickMicros = 1
@@ -47,8 +43,7 @@ func postinit() {}
 // Entry point for Go. Initialize all packages and call main.main().
 //go:export main
 func main() int {
-	heapStart = uintptr(malloc(heapSize))
-	heapEnd = heapStart + heapSize
+	preinit()
 
 	run()
 
@@ -83,3 +78,10 @@ func ticks() timeUnit {
 func syscall_Exit(code int) {
 	exit(code)
 }
+
+func extalloc(size uintptr) unsafe.Pointer {
+	return malloc(size)
+}
+
+//go:export free
+func extfree(ptr unsafe.Pointer)

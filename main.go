@@ -701,7 +701,7 @@ func handleCompilerError(err error) {
 func main() {
 	outpath := flag.String("o", "", "output filename")
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
-	gc := flag.String("gc", "", "garbage collector to use (none, leaking, conservative)")
+	gc := flag.String("gc", "", "garbage collector to use (none, leaking, extalloc, conservative)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
 	scheduler := flag.String("scheduler", "", "which scheduler to use (coroutines, tasks)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
