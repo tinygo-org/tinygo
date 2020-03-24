@@ -37,7 +37,7 @@ func (v *LocalValue) Type() llvm.Type {
 }
 
 func (v *LocalValue) IsConstant() bool {
-	if _, ok := v.Eval.dirtyGlobals[unwrap(v.Underlying)]; ok {
+	if v.Eval.isDirty(v.Underlying) {
 		return false
 	}
 	return v.Underlying.IsConstant()
@@ -45,6 +45,11 @@ func (v *LocalValue) IsConstant() bool {
 
 // Load loads a constant value if this is a constant pointer.
 func (v *LocalValue) Load() (llvm.Value, error) {
+	if v.Eval.isDirty(v.Underlying) {
+		// This may indicate a bug elsewhere.
+		v.MarkDirty()
+		return v.Eval.builder.CreateLoad(v.Underlying, ""), nil
+	}
 	if !v.Underlying.IsAGlobalVariable().IsNil() {
 		return v.Underlying.Initializer(), nil
 	}
@@ -188,14 +193,7 @@ func (v *LocalValue) getConstGEPIndices() []uint32 {
 // MarkDirty marks this global as dirty, meaning that every load from and store
 // to this global (from now on) must be performed at runtime.
 func (v *LocalValue) MarkDirty() {
-	underlying := unwrap(v.Underlying)
-	if underlying.IsAGlobalVariable().IsNil() {
-		panic("trying to mark a non-global as dirty")
-	}
-	if !v.IsConstant() {
-		return // already dirty
-	}
-	v.Eval.dirtyGlobals[underlying] = struct{}{}
+	v.Eval.markDirty(v.Underlying)
 }
 
 // MapValue implements a Go map which is created at compile time and stored as a

@@ -106,21 +106,22 @@ func isZero(v llvm.Value) (result bool, ok bool) {
 	return false, false // not valid
 }
 
-// unwrap returns the underlying value, with GEPs removed. This can be useful to
-// get the underlying global of a GEP pointer.
+// unwrap returns the underlying global value, with GEPs and bitcasts removed.
+// This can be useful to get the underlying global of a GEP pointer.
 func unwrap(value llvm.Value) llvm.Value {
-	for {
-		if !value.IsAConstantExpr().IsNil() {
-			switch value.Opcode() {
-			case llvm.GetElementPtr:
-				value = value.Operand(0)
-				continue
-			}
-		} else if !value.IsAGetElementPtrInst().IsNil() {
-			value = value.Operand(0)
-			continue
-		}
-		break
+	var opcode llvm.Opcode
+	if !value.IsAConstantExpr().IsNil() {
+		opcode = value.Opcode()
+	} else if !value.IsAInstruction().IsNil() {
+		opcode = value.InstructionOpcode()
+	} else {
+		return value
 	}
-	return value
+	switch opcode {
+	case llvm.BitCast, llvm.GetElementPtr, llvm.PtrToInt:
+		// Make sure dirty globals are caught through pointer casts.
+		return unwrap(value.Operand(0))
+	default:
+		return value
+	}
 }

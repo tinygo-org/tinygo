@@ -136,26 +136,27 @@ func (e *Eval) getValue(v llvm.Value) Value {
 // markDirty marks the passed-in LLVM value dirty, recursively. For example,
 // when it encounters a constant GEP on a global, it marks the global dirty.
 func (e *Eval) markDirty(v llvm.Value) {
-	if !v.IsAGlobalVariable().IsNil() {
-		if v.IsGlobalConstant() {
-			return
-		}
-		if _, ok := e.dirtyGlobals[v]; !ok {
-			e.dirtyGlobals[v] = struct{}{}
-			e.sideEffectFuncs = nil // re-calculate all side effects
-		}
-	} else if v.IsConstant() {
-		if v.OperandsCount() >= 2 && !v.Operand(0).IsAGlobalVariable().IsNil() {
-			// looks like a constant getelementptr of a global.
-			// TODO: find a way to make sure it really is: v.Opcode() returns 0.
-			e.markDirty(v.Operand(0))
-			return
-		}
-		return // nothing to mark
-	} else if !v.IsAGetElementPtrInst().IsNil() {
-		panic("interp: todo: GEP")
-	} else {
-		// Not constant and not a global or GEP so doesn't have to be marked
-		// non-constant.
+	if v.Type().TypeKind() != llvm.PointerTypeKind {
+		return
 	}
+	v = unwrap(v)
+	if v.IsAGlobalVariable().IsNil() {
+		if !v.IsAUndefValue().IsNil() || !v.IsAConstantPointerNull().IsNil() {
+			// Nothing to mark here: these definitely don't point to globals.
+			return
+		}
+		panic("interp: trying to mark a non-global as dirty")
+	}
+	e.dirtyGlobals[v] = struct{}{}
+}
+
+// isDirty returns whether the value is tracked as part of the set of dirty
+// globals or not. If it's not dirty, it means loads/stores can be done at
+// compile time.
+func (e *Eval) isDirty(v llvm.Value) bool {
+	v = unwrap(v)
+	if _, ok := e.dirtyGlobals[v]; ok {
+		return true
+	}
+	return false
 }
