@@ -97,11 +97,11 @@ const (
 
 // USB CDC identifiers
 const (
-	usb_STRING_PRODUCT      = "Particle Argon"
+	usb_STRING_PRODUCT      = "Argon"
 	usb_STRING_MANUFACTURER = "Particle"
 )
 
 var (
-	usb_VID uint16 = 0x239A
-	usb_PID uint16 = 0x8029
+	usb_VID uint16 = 0x2B04
+	usb_PID uint16 = 0xD00C
 )
