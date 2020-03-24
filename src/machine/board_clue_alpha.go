@@ -120,3 +120,14 @@ const (
 	SPI0_MOSI_PIN = D15 // MOSI
 	SPI0_MISO_PIN = D14 // MISO
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "Adafruit CLUE"
+	usb_STRING_MANUFACTURER = "Adafruit"
+)
+
+var (
+	usb_VID uint16 = 0x239A
+	usb_PID uint16 = 0x8072
+)

@@ -30,17 +30,16 @@ var _sidata [0]byte
 //go:extern _edata
 var _edata [0]byte
 
+func postinit() {}
+
 // Entry point for Go. Initialize all packages and call main.main().
 //go:export main
 func main() {
 	// Initialize .data and .bss sections.
 	preinit()
 
-	// Run initializers of all packages.
-	initAll()
-
-	// Compiler-generated call to main.main().
-	callMain()
+	// Run program.
+	run()
 }
 
 func preinit() {
@@ -76,18 +75,4 @@ func abort() {
 	// TODO
 	for {
 	}
-}
-
-// Implement memset for LLVM and compiler-rt.
-//go:export memset
-func libc_memset(ptr unsafe.Pointer, c byte, size uintptr) {
-	for i := uintptr(0); i < size; i++ {
-		*(*byte)(unsafe.Pointer(uintptr(ptr) + i)) = c
-	}
-}
-
-// Implement memmove for LLVM and compiler-rt.
-//go:export memmove
-func libc_memmove(dst, src unsafe.Pointer, size uintptr) {
-	memmove(dst, src, size)
 }

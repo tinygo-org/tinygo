@@ -1801,7 +1801,7 @@ func sendDescriptor(setup usbSetup) {
 			sendUSBPacket(0, dd.Bytes()[:8])
 		} else {
 			// complete descriptor requested so send entire packet
-			dd := NewDeviceDescriptor(0x00, 0x00, 0x00, 64, usb_VID, usb_PID, 0x100, usb_IMANUFACTURER, usb_IPRODUCT, usb_ISERIAL, 1)
+			dd := NewDeviceDescriptor(0x02, 0x00, 0x00, 64, usb_VID, usb_PID, 0x100, usb_IMANUFACTURER, usb_IPRODUCT, usb_ISERIAL, 1)
 			sendUSBPacket(0, dd.Bytes())
 		}
 		return
@@ -1810,11 +1810,12 @@ func sendDescriptor(setup usbSetup) {
 		switch setup.wValueL {
 		case 0:
 			b := make([]byte, 4)
-			b[0] = byte(usb_STRING_LANGUAGE[0] >> 8)
-			b[1] = byte(usb_STRING_LANGUAGE[0] & 0xff)
-			b[2] = byte(usb_STRING_LANGUAGE[1] >> 8)
-			b[3] = byte(usb_STRING_LANGUAGE[1] & 0xff)
+			b[0] = 0x04
+			b[1] = 0x03
+			b[2] = 0x09
+			b[3] = 0x04
 			sendUSBPacket(0, b)
+			return
 
 		case usb_IPRODUCT:
 			prod := []byte(usb_STRING_PRODUCT)
@@ -1823,11 +1824,12 @@ func sendDescriptor(setup usbSetup) {
 			b[1] = 0x03
 
 			for i, val := range prod {
-				b[i*2] = 0
-				b[i*2+1] = val
+				b[i*2+2] = val
+				b[i*2+3] = 0
 			}
 
 			sendUSBPacket(0, b)
+			return
 
 		case usb_IMANUFACTURER:
 			prod := []byte(usb_STRING_MANUFACTURER)
@@ -1836,11 +1838,12 @@ func sendDescriptor(setup usbSetup) {
 			b[1] = 0x03
 
 			for i, val := range prod {
-				b[i*2] = 0
-				b[i*2+1] = val
+				b[i*2+2] = val
+				b[i*2+3] = 0
 			}
 
 			sendUSBPacket(0, b)
+			return
 
 		case usb_ISERIAL:
 			// TODO: allow returning a product serial number

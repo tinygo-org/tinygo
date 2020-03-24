@@ -5,6 +5,7 @@ package compileopts
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,6 +21,29 @@ type Config struct {
 	ClangHeaders   string // Clang built-in header include path
 	TestConfig     TestConfig
 }
+
+// FuncValueImplementation is an enum for the particular implementations of Go
+// func values.
+type FuncValueImplementation int
+
+// These constants describe the various possible implementations of Go func
+// values.
+const (
+	FuncValueNone FuncValueImplementation = iota
+
+	// A func value is implemented as a pair of pointers:
+	//     {context, function pointer}
+	// where the context may be a pointer to a heap-allocated struct containing
+	// the free variables, or it may be undef if the function being pointed to
+	// doesn't need a context. The function pointer is a regular function
+	// pointer.
+	FuncValueDoubleword
+
+	// As funcValueDoubleword, but with the function pointer replaced by a
+	// unique ID per function signature. Function values are called by using a
+	// switch statement and choosing which function to call.
+	FuncValueSwitch
+)
 
 // Triple returns the LLVM target triple, like armv6m-none-eabi.
 func (c *Config) Triple() string {
@@ -111,6 +135,21 @@ func (c *Config) Scheduler() string {
 	return "coroutines"
 }
 
+// FuncImplementation picks an appropriate func value implementation for the
+// target.
+func (c *Config) FuncImplementation() FuncValueImplementation {
+	// Always pick the switch implementation, as it allows the use of blocking
+	// inside a function that is used as a func value.
+	switch c.Scheduler() {
+	case "none", "coroutines":
+		return FuncValueSwitch
+	case "tasks":
+		return FuncValueDoubleword
+	default:
+		panic("unknown scheduler type")
+	}
+}
+
 // PanicStrategy returns the panic strategy selected for this target. Valid
 // values are "print" (print the panic value, then exit) or "trap" (issue a trap
 // instruction).
@@ -124,6 +163,11 @@ func (c *Config) CFlags() []string {
 	cflags := append([]string{}, c.Options.CFlags...)
 	for _, flag := range c.Target.CFlags {
 		cflags = append(cflags, strings.Replace(flag, "{root}", goenv.Get("TINYGOROOT"), -1))
+	}
+	if c.Target.Libc == "picolibc" {
+		root := goenv.Get("TINYGOROOT")
+		cflags = append(cflags, "--sysroot="+filepath.Join(root, "lib", "picolibc", "newlib", "libc"))
+		cflags = append(cflags, "-I"+filepath.Join(root, "lib/picolibc-include"))
 	}
 	return cflags
 }

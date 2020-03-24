@@ -15,6 +15,12 @@ func (c *Compiler) emitMakeChan(frame *Frame, expr *ssa.MakeChan) llvm.Value {
 	elementSize := c.targetData.TypeAllocSize(c.getLLVMType(expr.Type().(*types.Chan).Elem()))
 	elementSizeValue := llvm.ConstInt(c.uintptrType, elementSize, false)
 	bufSize := c.getValue(frame, expr.Size)
+	c.emitChanBoundsCheck(frame, elementSize, bufSize, expr.Size.Type().Underlying().(*types.Basic), expr.Pos())
+	if bufSize.Type().IntTypeWidth() < c.uintptrType.IntTypeWidth() {
+		bufSize = c.builder.CreateZExt(bufSize, c.uintptrType, "")
+	} else if bufSize.Type().IntTypeWidth() > c.uintptrType.IntTypeWidth() {
+		bufSize = c.builder.CreateTrunc(bufSize, c.uintptrType, "")
+	}
 	return c.createRuntimeCall("chanMake", []llvm.Value{elementSizeValue, bufSize}, "")
 }
 

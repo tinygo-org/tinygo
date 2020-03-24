@@ -40,29 +40,6 @@ func preinit() {
 	}
 }
 
-// calleeSavedRegs is the list of registers that must be saved and restored when
-// switching between tasks. Also see scheduler_cortexm.S that relies on the
-// exact layout of this struct.
-type calleeSavedRegs struct {
-	r4  uintptr
-	r5  uintptr
-	r6  uintptr
-	r7  uintptr
-	r8  uintptr
-	r9  uintptr
-	r10 uintptr
-	r11 uintptr
-}
-
-// prepareStartTask stores fn and args in some callee-saved registers that can
-// then be used by the startTask function (implemented in assembly) to set up
-// the initial stack pointer and initial argument with the pointer to the object
-// with the goroutine start arguments.
-func (r *calleeSavedRegs) prepareStartTask(fn, args uintptr) {
-	r.r4 = fn
-	r.r5 = args
-}
-
 func abort() {
 	// disable all interrupts
 	arm.DisableInterrupts()
@@ -117,24 +94,4 @@ func handleHardFault(sp *interruptStack) {
 	}
 	println()
 	abort()
-}
-
-// Implement memset for LLVM and compiler-rt.
-//go:export memset
-func libc_memset(ptr unsafe.Pointer, c byte, size uintptr) {
-	for i := uintptr(0); i < size; i++ {
-		*(*byte)(unsafe.Pointer(uintptr(ptr) + i)) = c
-	}
-}
-
-// Implement memmove for LLVM and compiler-rt.
-//go:export memmove
-func libc_memmove(dst, src unsafe.Pointer, size uintptr) {
-	memmove(dst, src, size)
-}
-
-// Implement memcpy for LLVM and compiler-rt.
-//go:export memcpy
-func libc_memcpy(dst, src unsafe.Pointer, size uintptr) {
-	memcpy(dst, src, size)
 }

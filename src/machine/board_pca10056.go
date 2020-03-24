@@ -50,3 +50,14 @@ const (
 	SPI0_MOSI_PIN Pin = 45 // P1.13
 	SPI0_MISO_PIN Pin = 46 // P1.14
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "Nordic nRF52840DK (PCA10056)"
+	usb_STRING_MANUFACTURER = "Nordic Semiconductor"
+)
+
+var (
+	usb_VID uint16 = 0x239A
+	usb_PID uint16 = 0x8029
+)

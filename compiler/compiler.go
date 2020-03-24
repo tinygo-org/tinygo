@@ -34,32 +34,6 @@ func init() {
 // The TinyGo import path.
 const tinygoPath = "github.com/tinygo-org/tinygo"
 
-// functionsUsedInTransform is a list of function symbols that may be used
-// during TinyGo optimization passes so they have to be marked as external
-// linkage until all TinyGo passes have finished.
-var functionsUsedInTransforms = []string{
-	"runtime.alloc",
-	"runtime.free",
-	"runtime.scheduler",
-	"runtime.nilPanic",
-}
-
-var taskFunctionsUsedInTransforms = []string{
-	"runtime.startGoroutine",
-}
-
-var coroFunctionsUsedInTransforms = []string{
-	"runtime.avrSleep",
-	"runtime.getFakeCoroutine",
-	"runtime.setTaskStatePtr",
-	"runtime.getTaskStatePtr",
-	"runtime.activateTask",
-	"runtime.noret",
-	"runtime.getParentHandle",
-	"runtime.getCoroutine",
-	"runtime.llvmCoroRefHolder",
-}
-
 type Compiler struct {
 	*compileopts.Config
 	mod                     llvm.Module
@@ -92,6 +66,7 @@ type Frame struct {
 	taskHandle        llvm.Value
 	deferPtr          llvm.Value
 	difunc            llvm.Metadata
+	dilocals          map[*types.Var]llvm.Metadata
 	allDeferFuncs     []interface{}
 	deferFuncs        map[*ir.Function]int
 	deferInvokeFuncs  map[string]int
@@ -157,20 +132,6 @@ func (c *Compiler) Module() llvm.Module {
 	return c.mod
 }
 
-// getFunctionsUsedInTransforms gets a list of all special functions that should be preserved during transforms and optimization.
-func (c *Compiler) getFunctionsUsedInTransforms() []string {
-	fnused := functionsUsedInTransforms
-	switch c.Scheduler() {
-	case "coroutines":
-		fnused = append(append([]string{}, fnused...), coroFunctionsUsedInTransforms...)
-	case "tasks":
-		fnused = append(append([]string{}, fnused...), taskFunctionsUsedInTransforms...)
-	default:
-		panic(fmt.Errorf("invalid scheduler %q", c.Scheduler()))
-	}
-	return fnused
-}
-
 // Compile the given package path or .go file path. Return an error when this
 // fails (in any stage).
 func (c *Compiler) Compile(mainPath string) []error {
@@ -217,7 +178,7 @@ func (c *Compiler) Compile(mainPath string) []error {
 				path = path[len(tinygoPath+"/src/"):]
 			}
 			switch path {
-			case "machine", "os", "reflect", "runtime", "runtime/interrupt", "runtime/volatile", "sync", "testing", "internal/reflectlite":
+			case "machine", "os", "reflect", "runtime", "runtime/interrupt", "runtime/volatile", "sync", "testing", "internal/reflectlite", "internal/task":
 				return path
 			default:
 				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
@@ -338,14 +299,8 @@ func (c *Compiler) Compile(mainPath string) []error {
 	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
 	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
 
-	// Make sure these functions are kept in tact during TinyGo transformation passes.
-	for _, name := range c.getFunctionsUsedInTransforms() {
-		fn := c.mod.NamedFunction(name)
-		if fn.IsNil() {
-			panic(fmt.Errorf("missing core function %q", name))
-		}
-		fn.SetLinkage(llvm.ExternalLinkage)
-	}
+	// Replace callMain placeholder with actual main function.
+	c.mod.NamedFunction("runtime.callMain").ReplaceAllUsesWith(realMain)
 
 	// Load some attributes
 	getAttr := func(attrName string) llvm.Attribute {
@@ -708,10 +663,51 @@ func (c *Compiler) createDIType(typ types.Type) llvm.Metadata {
 	}
 }
 
+// getLocalVariable returns a debug info entry for a local variable, which may
+// either be a parameter or a regular variable. It will create a new metadata
+// entry if there isn't one for the variable yet.
+func (c *Compiler) getLocalVariable(frame *Frame, variable *types.Var) llvm.Metadata {
+	if dilocal, ok := frame.dilocals[variable]; ok {
+		// DILocalVariable was already created, return it directly.
+		return dilocal
+	}
+
+	pos := c.ir.Program.Fset.Position(variable.Pos())
+
+	// Check whether this is a function parameter.
+	for i, param := range frame.fn.Params {
+		if param.Object().(*types.Var) == variable {
+			// Yes it is, create it as a function parameter.
+			dilocal := c.dibuilder.CreateParameterVariable(frame.difunc, llvm.DIParameterVariable{
+				Name:           param.Name(),
+				File:           c.getDIFile(pos.Filename),
+				Line:           pos.Line,
+				Type:           c.getDIType(variable.Type()),
+				AlwaysPreserve: true,
+				ArgNo:          i + 1,
+			})
+			frame.dilocals[variable] = dilocal
+			return dilocal
+		}
+	}
+
+	// No, it's not a parameter. Create a regular (auto) variable.
+	dilocal := c.dibuilder.CreateAutoVariable(frame.difunc, llvm.DIAutoVariable{
+		Name:           variable.Name(),
+		File:           c.getDIFile(pos.Filename),
+		Line:           pos.Line,
+		Type:           c.getDIType(variable.Type()),
+		AlwaysPreserve: true,
+	})
+	frame.dilocals[variable] = dilocal
+	return dilocal
+}
+
 func (c *Compiler) parseFuncDecl(f *ir.Function) *Frame {
 	frame := &Frame{
 		fn:           f,
 		locals:       make(map[ssa.Value]llvm.Value),
+		dilocals:     make(map[*types.Var]llvm.Metadata),
 		blockEntries: make(map[*ssa.BasicBlock]llvm.BasicBlock),
 		blockExits:   make(map[*ssa.BasicBlock]llvm.BasicBlock),
 	}
@@ -783,11 +779,11 @@ func (c *Compiler) attachDebugInfoRaw(f *ir.Function, llvmFn llvm.Value, suffix,
 		diparams = append(diparams, c.getDIType(param.Type()))
 	}
 	diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
-		File:       c.difiles[filename],
+		File:       c.getDIFile(filename),
 		Parameters: diparams,
 		Flags:      0, // ?
 	})
-	difunc := c.dibuilder.CreateFunction(c.difiles[filename], llvm.DIFunction{
+	difunc := c.dibuilder.CreateFunction(c.getDIFile(filename), llvm.DIFunction{
 		Name:         f.RelString(nil) + suffix,
 		LinkageName:  f.LinkName() + suffix,
 		File:         c.getDIFile(filename),
@@ -872,7 +868,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 
 	// Load function parameters
 	llvmParamIndex := 0
-	for i, param := range frame.fn.Params {
+	for _, param := range frame.fn.Params {
 		llvmType := c.getLLVMType(param.Type())
 		fields := make([]llvm.Value, 0, 1)
 		for range c.expandFormalParamType(llvmType) {
@@ -883,16 +879,7 @@ func (c *Compiler) parseFunc(frame *Frame) {
 
 		// Add debug information to this parameter (if available)
 		if c.Debug() && frame.fn.Syntax() != nil {
-			pos := c.ir.Program.Fset.Position(frame.fn.Syntax().Pos())
-			diType := c.getDIType(param.Type())
-			dbgParam := c.dibuilder.CreateParameterVariable(frame.difunc, llvm.DIParameterVariable{
-				Name:           param.Name(),
-				File:           c.difiles[pos.Filename],
-				Line:           pos.Line,
-				Type:           diType,
-				AlwaysPreserve: true,
-				ArgNo:          i + 1,
-			})
+			dbgParam := c.getLocalVariable(frame, param.Object().(*types.Var))
 			loc := c.builder.GetCurrentDebugLocation()
 			if len(fields) == 1 {
 				expr := c.dibuilder.CreateExpression(nil)
@@ -950,7 +937,28 @@ func (c *Compiler) parseFunc(frame *Frame) {
 		c.builder.SetInsertPointAtEnd(frame.blockEntries[block])
 		frame.currentBlock = block
 		for _, instr := range block.Instrs {
-			if _, ok := instr.(*ssa.DebugRef); ok {
+			if instr, ok := instr.(*ssa.DebugRef); ok {
+				if !c.Debug() {
+					continue
+				}
+				object := instr.Object()
+				variable, ok := object.(*types.Var)
+				if !ok {
+					// Not a local variable.
+					continue
+				}
+				if instr.IsAddr {
+					// TODO, this may happen for *ssa.Alloc and *ssa.FieldAddr
+					// for example.
+					continue
+				}
+				dbgVar := c.getLocalVariable(frame, variable)
+				pos := c.ir.Program.Fset.Position(instr.Pos())
+				c.dibuilder.InsertValueAtEnd(c.getValue(frame, instr.X), dbgVar, c.dibuilder.CreateExpression(nil), llvm.DebugLoc{
+					Line:  uint(pos.Line),
+					Col:   uint(pos.Column),
+					Scope: frame.difunc,
+				}, c.builder.GetInsertBlock())
 				continue
 			}
 			if c.DumpSSA() {
@@ -1041,7 +1049,7 @@ func (c *Compiler) parseInstr(frame *Frame, instr ssa.Instruction) {
 			funcPtr, context := c.decodeFuncValue(c.getValue(frame, instr.Call.Value), instr.Call.Value.Type().(*types.Signature))
 			params = append(params, context) // context parameter
 			switch c.Scheduler() {
-			case "coroutines":
+			case "none", "coroutines":
 				// There are no additional parameters needed for the goroutine start operation.
 			case "tasks":
 				// Add the function pointer as a parameter to start the goroutine.
@@ -2530,30 +2538,6 @@ func (c *Compiler) IR() string {
 
 func (c *Compiler) Verify() error {
 	return llvm.VerifyModule(c.mod, llvm.PrintMessageAction)
-}
-
-func (c *Compiler) ApplyFunctionSections() {
-	// Put every function in a separate section. This makes it possible for the
-	// linker to remove dead code (-ffunction-sections).
-	llvmFn := c.mod.FirstFunction()
-	for !llvmFn.IsNil() {
-		if !llvmFn.IsDeclaration() {
-			name := llvmFn.Name()
-			llvmFn.SetSection(".text." + name)
-		}
-		llvmFn = llvm.NextFunction(llvmFn)
-	}
-}
-
-// Turn all global constants into global variables. This works around a
-// limitation on Harvard architectures (e.g. AVR), where constant and
-// non-constant pointers point to a different address space.
-func (c *Compiler) NonConstGlobals() {
-	global := c.mod.FirstGlobal()
-	for !global.IsNil() {
-		global.SetGlobalConstant(false)
-		global = llvm.NextGlobal(global)
-	}
 }
 
 // Emit object file (.o).

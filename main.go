@@ -50,6 +50,17 @@ func moveFile(src, dst string) error {
 	}
 	// Failed to move, probably a different filesystem.
 	// Do a copy + remove.
+	err = copyFile(src, dst)
+	if err != nil {
+		return err
+	}
+	return os.Remove(src)
+}
+
+// copyFile copies the given file from src to dst. It copies first to a .tmp
+// file which is then moved over a possibly already existing file at the
+// destination.
+func copyFile(src, dst string) error {
 	inf, err := os.Open(src)
 	if err != nil {
 		return err
@@ -313,6 +324,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 
 		// Run the GDB server, if necessary.
 		var gdbCommands []string
+		var daemon *exec.Cmd
 		switch gdbInterface {
 		case "native":
 			// Run GDB directly.
@@ -324,7 +336,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			if err != nil {
 				return err
 			}
-			daemon := exec.Command("openocd", args...)
+			daemon = exec.Command("openocd", args...)
 			if ocdOutput {
 				// Make it clear which output is from the daemon.
 				w := &ColorWriter{
@@ -335,24 +347,11 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				daemon.Stdout = w
 				daemon.Stderr = w
 			}
-			// Make sure the daemon doesn't receive Ctrl-C that is intended for
-			// GDB (to break the currently executing program).
-			setCommandAsDaemon(daemon)
-			// Start now, and kill it on exit.
-			err = daemon.Start()
-			if err != nil {
-				return &commandError{"failed to run", daemon.Path, err}
-			}
-			defer func() {
-				daemon.Process.Signal(os.Interrupt)
-				// Maybe we should send a .Kill() after x seconds?
-				daemon.Wait()
-			}()
 		case "jlink":
 			gdbCommands = append(gdbCommands, "target remote :2331", "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
-			daemon := exec.Command("JLinkGDBServer", "-device", config.Target.JLinkDevice)
+			daemon = exec.Command("JLinkGDBServer", "-device", config.Target.JLinkDevice)
 			if ocdOutput {
 				// Make it clear which output is from the daemon.
 				w := &ColorWriter{
@@ -363,28 +362,29 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				daemon.Stdout = w
 				daemon.Stderr = w
 			}
-			// Make sure the daemon doesn't receive Ctrl-C that is intended for
-			// GDB (to break the currently executing program).
-			setCommandAsDaemon(daemon)
-			// Start now, and kill it on exit.
-			err = daemon.Start()
-			if err != nil {
-				return &commandError{"failed to run", daemon.Path, err}
-			}
-			defer func() {
-				daemon.Process.Signal(os.Interrupt)
-				// Maybe we should send a .Kill() after x seconds?
-				daemon.Wait()
-			}()
 		case "qemu":
 			gdbCommands = append(gdbCommands, "target remote :1234")
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], tmppath, "-s", "-S")
-			daemon := exec.Command(config.Target.Emulator[0], args...)
+			daemon = exec.Command(config.Target.Emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
+		case "mgba":
+			gdbCommands = append(gdbCommands, "target remote :2345")
 
+			// Run in an emulator.
+			args := append(config.Target.Emulator[1:], tmppath, "-g")
+			daemon = exec.Command(config.Target.Emulator[0], args...)
+			daemon.Stdout = os.Stdout
+			daemon.Stderr = os.Stderr
+		case "msd":
+			return errors.New("gdb is not supported for drag-and-drop programmable devices")
+		default:
+			return fmt.Errorf("gdb is not supported with interface %#v", gdbInterface)
+		}
+
+		if daemon != nil {
 			// Make sure the daemon doesn't receive Ctrl-C that is intended for
 			// GDB (to break the currently executing program).
 			setCommandAsDaemon(daemon)
@@ -399,30 +399,6 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				// Maybe we should send a .Kill() after x seconds?
 				daemon.Wait()
 			}()
-		case "mgba":
-			gdbCommands = append(gdbCommands, "target remote :2345")
-
-			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], tmppath, "-g")
-			daemon := exec.Command(config.Target.Emulator[0], args...)
-			daemon.Stdout = os.Stdout
-			daemon.Stderr = os.Stderr
-
-			// Make sure the daemon doesn't receive Ctrl-C that is intended for
-			// GDB (to break the currently executing program).
-			setCommandAsDaemon(daemon)
-
-			// Start now, and kill it on exit.
-			daemon.Start()
-			defer func() {
-				daemon.Process.Signal(os.Interrupt)
-				// Maybe we should send a .Kill() after x seconds?
-				daemon.Wait()
-			}()
-		case "msd":
-			return errors.New("gdb is not supported for drag-and-drop programmable devices")
-		default:
-			return fmt.Errorf("gdb is not supported with interface %#v", gdbInterface)
 		}
 
 		// Ignore Ctrl-C, it must be passed on to GDB.
@@ -675,38 +651,49 @@ func usage() {
 	flag.PrintDefaults()
 }
 
+// printCompilerError prints compiler errors using the provided logger function
+// (similar to fmt.Println).
+//
+// There is one exception: interp errors may print to stderr unconditionally due
+// to limitations in the LLVM bindings.
+func printCompilerError(logln func(...interface{}), err error) {
+	switch err := err.(type) {
+	case *interp.Unsupported:
+		// hit an unknown/unsupported instruction
+		logln("#", err.ImportPath)
+		msg := "unsupported instruction during init evaluation:"
+		if err.Pos.String() != "" {
+			msg = err.Pos.String() + " " + msg
+		}
+		logln(msg)
+		err.Inst.Dump()
+		logln()
+	case types.Error, scanner.Error:
+		logln(err)
+	case interp.Error:
+		logln("#", err.ImportPath)
+		for _, err := range err.Errs {
+			logln(err)
+		}
+	case loader.Errors:
+		logln("#", err.Pkg.ImportPath)
+		for _, err := range err.Errs {
+			logln(err)
+		}
+	case *builder.MultiError:
+		for _, err := range err.Errs {
+			logln(err)
+		}
+	default:
+		logln("error:", err)
+	}
+}
+
 func handleCompilerError(err error) {
 	if err != nil {
-		switch err := err.(type) {
-		case *interp.Unsupported:
-			// hit an unknown/unsupported instruction
-			fmt.Fprintln(os.Stderr, "#", err.ImportPath)
-			msg := "unsupported instruction during init evaluation:"
-			if err.Pos.String() != "" {
-				msg = err.Pos.String() + " " + msg
-			}
-			fmt.Fprintln(os.Stderr, msg)
-			err.Inst.Dump()
-			fmt.Fprintln(os.Stderr)
-		case types.Error, scanner.Error:
-			fmt.Fprintln(os.Stderr, err)
-		case interp.Error:
-			fmt.Fprintln(os.Stderr, "#", err.ImportPath)
-			for _, err := range err.Errs {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		case loader.Errors:
-			fmt.Fprintln(os.Stderr, "#", err.Pkg.ImportPath)
-			for _, err := range err.Errs {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		case *builder.MultiError:
-			for _, err := range err.Errs {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		default:
-			fmt.Fprintln(os.Stderr, "error:", err)
-		}
+		printCompilerError(func(args ...interface{}) {
+			fmt.Fprintln(os.Stderr, args...)
+		}, err)
 		os.Exit(1)
 	}
 }
@@ -799,7 +786,7 @@ func main() {
 		}
 		err := Build(pkgName, *outpath, options)
 		handleCompilerError(err)
-	case "build-builtins":
+	case "build-library":
 		// Note: this command is only meant to be used while making a release!
 		if *outpath == "" {
 			fmt.Fprintln(os.Stderr, "No output filename supplied (-o).")
@@ -809,10 +796,24 @@ func main() {
 		if *target == "" {
 			fmt.Fprintln(os.Stderr, "No target (-target).")
 		}
-		err := builder.CompileBuiltins(*target, func(path string) error {
-			return moveFile(path, *outpath)
-		})
+		if flag.NArg() != 1 {
+			fmt.Fprintf(os.Stderr, "Build-library only accepts exactly one library name as argument, %d given\n", flag.NArg())
+			usage()
+			os.Exit(1)
+		}
+		var lib *builder.Library
+		switch name := flag.Arg(0); name {
+		case "compiler-rt":
+			lib = &builder.CompilerRT
+		case "picolibc":
+			lib = &builder.Picolibc
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown library: %s\n", name)
+			os.Exit(1)
+		}
+		path, err := lib.Load(*target)
 		handleCompilerError(err)
+		copyFile(path, *outpath)
 	case "flash", "gdb":
 		if *outpath != "" {
 			fmt.Fprintln(os.Stderr, "Output cannot be specified with the flash command.")

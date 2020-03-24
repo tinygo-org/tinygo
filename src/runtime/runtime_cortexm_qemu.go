@@ -17,11 +17,12 @@ const tickMicros = 1
 
 var timestamp timeUnit
 
+func postinit() {}
+
 //go:export Reset_Handler
 func main() {
 	preinit()
-	initAll()
-	callMain()
+	run()
 	arm.SemihostingCall(arm.SemihostingReportException, arm.SemihostingApplicationExit)
 	abort()
 }

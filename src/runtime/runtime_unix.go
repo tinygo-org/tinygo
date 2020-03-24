@@ -26,10 +26,7 @@ func clock_gettime(clk_id int32, ts *timespec)
 
 const heapSize = 1 * 1024 * 1024 // 1MB to start
 
-var (
-	heapStart = uintptr(malloc(heapSize))
-	heapEnd   = heapStart + heapSize
-)
+var heapStart, heapEnd uintptr
 
 type timeUnit int64
 
@@ -45,14 +42,15 @@ type timespec struct {
 
 const CLOCK_MONOTONIC_RAW = 4
 
+func postinit() {}
+
 // Entry point for Go. Initialize all packages and call main.main().
 //go:export main
 func main() int {
-	// Run initializers of all packages.
-	initAll()
+	heapStart = uintptr(malloc(heapSize))
+	heapEnd = heapStart + heapSize
 
-	// Compiler-generated call to main.main().
-	callMain()
+	run()
 
 	// For libc compatibility.
 	return 0

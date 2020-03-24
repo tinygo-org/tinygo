@@ -18,10 +18,15 @@ type wasiIOVec struct {
 //export fd_write
 func fd_write(id uint32, iovs *wasiIOVec, iovs_len uint, nwritten *uint) (errno uint)
 
+func postinit() {}
+
 //export _start
 func _start() {
-	initAll()
-	callMain()
+	// These need to be initialized early so that the heap can be initialized.
+	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
+	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
+
+	run()
 }
 
 // Using global variables to avoid heap allocation.
@@ -50,7 +55,9 @@ func setEventHandler(fn func()) {
 
 //go:export resume
 func resume() {
-	handleEvent()
+	go func() {
+		handleEvent()
+	}()
 }
 
 //go:export go_scheduler

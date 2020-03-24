@@ -94,3 +94,14 @@ const (
 	NFC1_PIN          Pin = 9
 	NFC2_PIN          Pin = 10
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "Argon"
+	usb_STRING_MANUFACTURER = "Particle"
+)
+
+var (
+	usb_VID uint16 = 0x2B04
+	usb_PID uint16 = 0xD00C
+)

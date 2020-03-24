@@ -15,6 +15,7 @@ func TestInterp(t *testing.T) {
 		"slice-copy",
 		"consteval",
 		"map",
+		"interface",
 	} {
 		name := name // make tc local to this closure
 		t.Run(name, func(t *testing.T) {

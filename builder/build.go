@@ -53,7 +53,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	}
 
 	if config.GOOS() != "darwin" {
-		c.ApplyFunctionSections() // -ffunction-sections
+		transform.ApplyFunctionSections(c.Module()) // -ffunction-sections
 	}
 
 	// Browsers cannot handle external functions that have type i64 because it
@@ -72,16 +72,16 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	// exactly.
 	errs = nil
 	switch config.Options.Opt {
-	case "none:", "0":
-		errs = c.Optimize(0, 0, 0) // -O0
+	case "none", "0":
+		errs = transform.Optimize(c.Module(), config, 0, 0, 0) // -O0
 	case "1":
-		errs = c.Optimize(1, 0, 0) // -O1
+		errs = transform.Optimize(c.Module(), config, 1, 0, 0) // -O1
 	case "2":
-		errs = c.Optimize(2, 0, 225) // -O2
+		errs = transform.Optimize(c.Module(), config, 2, 0, 225) // -O2
 	case "s":
-		errs = c.Optimize(2, 1, 225) // -Os
+		errs = transform.Optimize(c.Module(), config, 2, 1, 225) // -Os
 	case "z":
-		errs = c.Optimize(2, 2, 5) // -Oz, default
+		errs = transform.Optimize(c.Module(), config, 2, 2, 5) // -Oz, default
 	default:
 		errs = []error{errors.New("unknown optimization level: -opt=" + config.Options.Opt)}
 	}
@@ -98,7 +98,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	// pointers are flash and which are in RAM so that pointers can have a
 	// correct address space parameter (address space 1 is for flash).
 	if strings.HasPrefix(config.Triple(), "avr") {
-		c.NonConstGlobals()
+		transform.NonConstGlobals(c.Module())
 		if err := c.Verify(); err != nil {
 			return errors.New("verification error after making all globals non-constant on AVR")
 		}
@@ -130,22 +130,28 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 			return err
 		}
 
-		// Load builtins library from the cache, possibly compiling it on the
-		// fly.
-		var librt string
-		if config.Target.RTLib == "compiler-rt" {
-			librt, err = loadBuiltins(config.Triple())
-			if err != nil {
-				return err
-			}
-		}
-
 		// Prepare link command.
 		executable := filepath.Join(dir, "main")
 		tmppath := executable // final file
 		ldflags := append(config.LDFlags(), "-o", executable, objfile)
+
+		// Load builtins library from the cache, possibly compiling it on the
+		// fly.
 		if config.Target.RTLib == "compiler-rt" {
+			librt, err := CompilerRT.Load(config.Triple())
+			if err != nil {
+				return err
+			}
 			ldflags = append(ldflags, librt)
+		}
+
+		// Add libc.
+		if config.Target.Libc == "picolibc" {
+			libc, err := Picolibc.Load(config.Triple())
+			if err != nil {
+				return err
+			}
+			ldflags = append(ldflags, libc)
 		}
 
 		// Compile extra files.

@@ -51,6 +51,8 @@ func (e *evalPackage) hasSideEffects(fn llvm.Value) (*sideEffectResult, error) {
 		return &sideEffectResult{severity: sideEffectNone}, nil
 	case name == "runtime._panic":
 		return &sideEffectResult{severity: sideEffectLimited}, nil
+	case name == "runtime.typeAssert":
+		return &sideEffectResult{severity: sideEffectNone}, nil
 	case name == "runtime.interfaceImplements":
 		return &sideEffectResult{severity: sideEffectNone}, nil
 	case name == "runtime.sliceCopy":
@@ -118,6 +120,12 @@ func (e *evalPackage) hasSideEffects(fn llvm.Value) (*sideEffectResult, error) {
 				if child.IsDeclaration() {
 					// External function call. Assume only limited side effects
 					// (no affected globals, etc.).
+					switch child.Name() {
+					case "runtime.typeAssert":
+						continue // implemented in interp
+					case "runtime.interfaceImplements":
+						continue // implemented in interp
+					}
 					if e.hasLocalSideEffects(dirtyLocals, inst) {
 						result.updateSeverity(sideEffectLimited)
 					}

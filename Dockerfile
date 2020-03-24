@@ -12,6 +12,7 @@ COPY . /tinygo
 # after copying the tinygo directory in the previous step.
 RUN cd /tinygo/ && \
     rm -rf ./lib/* && \
+    git submodule sync && \
     git submodule update --init --recursive --force
 
 RUN cd /tinygo/ && \

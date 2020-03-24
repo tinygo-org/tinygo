@@ -10,17 +10,8 @@ const Compiler = "tinygo"
 // package.
 func initAll()
 
-// A function call to this function is replaced with one of the following,
-// depending on whether the scheduler is necessary:
-//
-// Without scheduler:
-//
-//     main.main()
-//
-// With scheduler:
-//
-//     main.main()
-//     scheduler()
+// callMain is a placeholder for the program main function.
+// All references to this are replaced with references to the program main function by the compiler.
 func callMain()
 
 func GOMAXPROCS(n int) int {

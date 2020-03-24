@@ -12,11 +12,12 @@ import (
 
 type timeUnit int64
 
+func postinit() {}
+
 //go:export Reset_Handler
 func main() {
 	preinit()
-	initAll()
-	callMain()
+	run()
 	abort()
 }
 

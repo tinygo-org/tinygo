@@ -31,6 +31,8 @@ var _sidata [0]byte
 //go:extern _edata
 var _edata [0]byte
 
+func postinit() {}
+
 //go:export main
 func main() {
 	// Zero the PLIC enable bits on startup: they are not zeroed at reset.
@@ -51,8 +53,7 @@ func main() {
 
 	preinit()
 	initPeripherals()
-	initAll()
-	callMain()
+	run()
 	abort()
 }
 

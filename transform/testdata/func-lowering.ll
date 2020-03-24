@@ -15,7 +15,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 
 declare i32 @runtime.getFuncPtr(i8*, i32, %runtime.typecodeID*, i8*, i8*)
 
-declare i32 @runtime.makeGoroutine(i32, i8*, i8*)
+declare void @"internal/task.start"(i32, i8*, i8*, i8*)
 
 declare void @runtime.nilPanic(i8*, i8*)
 
@@ -71,13 +71,10 @@ fpcall.next:
   ret void
 }
 
-; Special case for runtime.makeGoroutine.
+; Special case for internal/task.start.
 define void @sleepFuncValue(i8*, i32, i8* nocapture readnone %context, i8* nocapture readnone %parentHandle) {
 entry:
   %2 = call i32 @runtime.getFuncPtr(i8* %0, i32 %1, %runtime.typecodeID* @"reflect/types.type:func:{basic:int}{}", i8* undef, i8* null)
-  %3 = call i32 @runtime.makeGoroutine(i32 %2, i8* undef, i8* null)
-  %4 = inttoptr i32 %3 to void (i32, i8*, i8*)*
-  call void %4(i32 8, i8* %0, i8* null)
+  call void @"internal/task.start"(i32 %2, i8* null, i8* undef, i8* null)
   ret void
 }
-
