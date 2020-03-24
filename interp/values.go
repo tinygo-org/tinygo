@@ -52,7 +52,8 @@ func (v *LocalValue) Load() (llvm.Value, error) {
 	case llvm.GetElementPtr:
 		indices := v.getConstGEPIndices()
 		if indices[0] != 0 {
-			return llvm.Value{}, errors.New("invalid GEP")
+			v.MarkDirty()
+			return v.Eval.builder.CreateLoad(v.Underlying, ""), nil
 		}
 		global := v.Eval.getValue(v.Underlying.Operand(0))
 		agg, err := global.Load()
@@ -61,9 +62,35 @@ func (v *LocalValue) Load() (llvm.Value, error) {
 		}
 		return llvm.ConstExtractValue(agg, indices[1:]), nil
 	case llvm.BitCast:
-		return llvm.Value{}, errors.New("interp: load from a bitcast")
+		// Assuming a pointer bitcast, such as i64* to double*.
+		// By loading the pre-bitcast value and then bitcasting the loaded value
+		// we work around the problem.
+		sourceType := v.Underlying.Operand(0).Type().ElementType()
+		destType := v.Underlying.Type().ElementType()
+		if v.Eval.TargetData.TypeAllocSize(sourceType) != v.Eval.TargetData.TypeAllocSize(destType) {
+			v.MarkDirty()
+			return v.Eval.builder.CreateLoad(v.Underlying, ""), nil
+		}
+		if !isScalar(sourceType) || !isScalar(destType) {
+			// Actually bitcasts are a bit more flexible than this: any
+			// non-aggregate first-class type can be casted.
+			v.MarkDirty()
+			return v.Eval.builder.CreateLoad(v.Underlying, ""), nil
+		}
+		valueBeforeCast := LocalValue{v.Eval, v.Underlying.Operand(0)}
+		llvmValueBeforeCast, err := valueBeforeCast.Load()
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		if !llvmValueBeforeCast.IsConstant() {
+			// Unlikely but check for it anyway.
+			v.MarkDirty()
+			return v.Eval.builder.CreateLoad(v.Underlying, ""), nil
+		}
+		return llvm.ConstBitCast(llvmValueBeforeCast, destType), nil
 	default:
-		return llvm.Value{}, errors.New("interp: load from a constant")
+		v.MarkDirty()
+		return v.Eval.builder.CreateLoad(v.Underlying, ""), nil
 	}
 }
 
