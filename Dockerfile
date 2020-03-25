@@ -15,6 +15,8 @@ RUN cd /tinygo/ && \
     git submodule sync && \
     git submodule update --init --recursive --force
 
+COPY ./lib/picolibc-include/* /tinygo/lib/picolibc-include/
+
 RUN cd /tinygo/ && \
     go install /tinygo/
 
