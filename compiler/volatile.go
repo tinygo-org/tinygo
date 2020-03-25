@@ -12,7 +12,7 @@ import (
 // runtime/volatile.LoadT().
 func (b *builder) createVolatileLoad(instr *ssa.CallCommon) (llvm.Value, error) {
 	addr := b.getValue(instr.Args[0])
-	b.createNilCheck(addr, "deref")
+	b.createNilCheck(instr.Args[0], addr, "deref")
 	val := b.CreateLoad(addr, "")
 	val.SetVolatile(true)
 	return val, nil
@@ -23,7 +23,7 @@ func (b *builder) createVolatileLoad(instr *ssa.CallCommon) (llvm.Value, error) 
 func (b *builder) createVolatileStore(instr *ssa.CallCommon) (llvm.Value, error) {
 	addr := b.getValue(instr.Args[0])
 	val := b.getValue(instr.Args[1])
-	b.createNilCheck(addr, "deref")
+	b.createNilCheck(instr.Args[0], addr, "deref")
 	store := b.CreateStore(val, addr)
 	store.SetVolatile(true)
 	return llvm.Value{}, nil

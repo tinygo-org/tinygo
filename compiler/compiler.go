@@ -1154,7 +1154,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 	case *ssa.Store:
 		llvmAddr := b.getValue(instr.Addr)
 		llvmVal := b.getValue(instr.Val)
-		b.createNilCheck(llvmAddr, "store")
+		b.createNilCheck(instr.Addr, llvmAddr, "store")
 		if b.targetData.TypeAllocSize(llvmVal.Type()) == 0 {
 			// nothing to store
 			return
@@ -1402,7 +1402,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		// This is a func value, which cannot be called directly. We have to
 		// extract the function pointer and context first from the func value.
 		callee, context = b.decodeFuncValue(value, instr.Value.Type().Underlying().(*types.Signature))
-		b.createNilCheck(callee, "fpcall")
+		b.createNilCheck(instr.Value, callee, "fpcall")
 	}
 
 	var params []llvm.Value
@@ -1548,7 +1548,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		// > For an operand x of type T, the address operation &x generates a
 		// > pointer of type *T to x. [...] If the evaluation of x would cause a
 		// > run-time panic, then the evaluation of &x does too.
-		b.createNilCheck(val, "gep")
+		b.createNilCheck(expr.X, val, "gep")
 		// Do a GEP on the pointer to get the field address.
 		indices := []llvm.Value{
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
@@ -1596,7 +1596,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				// > generates a pointer of type *T to x. [...] If the
 				// > evaluation of x would cause a run-time panic, then the
 				// > evaluation of &x does too.
-				b.createNilCheck(bufptr, "gep")
+				b.createNilCheck(expr.X, bufptr, "gep")
 			default:
 				return llvm.Value{}, b.makeError(expr.Pos(), "todo: indexaddr: "+typ.String())
 			}
@@ -2588,7 +2588,7 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			}
 			return b.CreateBitCast(fn, b.i8ptrType, ""), nil
 		} else {
-			b.createNilCheck(x, "deref")
+			b.createNilCheck(unop.X, x, "deref")
 			load := b.CreateLoad(x, "")
 			return load, nil
 		}
