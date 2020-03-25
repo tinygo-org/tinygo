@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"go/types"
 
+	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -151,9 +152,17 @@ func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, 
 // createNilCheck checks whether the given pointer is nil, and panics if it is.
 // It has no effect in well-behaved programs, but makes sure no uncaught nil
 // pointer dereferences exist in valid Go code.
-func (b *builder) createNilCheck(ptr llvm.Value, blockPrefix string) {
+func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix string) {
 	// Check whether we need to emit this check at all.
 	if !ptr.IsAGlobalValue().IsNil() {
+		return
+	}
+
+	switch inst.(type) {
+	case *ssa.IndexAddr:
+		// This pointer is the result of an index operation into a slice or
+		// array. Such slices/arrays are already bounds checked so the pointer
+		// must be a valid (non-nil) pointer. No nil checking is necessary.
 		return
 	}
 
