@@ -158,12 +158,21 @@ func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix str
 		return
 	}
 
-	switch inst.(type) {
+	switch inst := inst.(type) {
 	case *ssa.IndexAddr:
 		// This pointer is the result of an index operation into a slice or
 		// array. Such slices/arrays are already bounds checked so the pointer
 		// must be a valid (non-nil) pointer. No nil checking is necessary.
 		return
+	case *ssa.Convert:
+		// This is a pointer that comes from a conversion from unsafe.Pointer.
+		// Don't do nil checking because this is unsafe code and the code should
+		// know what it is doing.
+		// Note: all *ssa.Convert instructions that result in a pointer must
+		// come from unsafe.Pointer. Testing here for unsafe.Pointer to be sure.
+		if inst.X.Type() == types.Typ[types.UnsafePointer] {
+			return
+		}
 	}
 
 	// Compare against nil.
