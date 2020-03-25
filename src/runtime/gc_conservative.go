@@ -213,10 +213,83 @@ func initHeap() {
 // collection cycle if needed. If no space is free, it panics.
 //go:noinline
 func alloc(size uintptr) unsafe.Pointer {
-	if size == 0 {
-		return unsafe.Pointer(&zeroSizedAlloc)
+	var ptr unsafe.Pointer
+	switch {
+	case size == 0:
+		// Use a fixed location for all zero-sized allocations.
+		ptr = unsafe.Pointer(&zeroSizedAlloc)
+	case size < bytesPerBlock:
+		// Bundle small allocations together.
+		ptr = smallAlloc(size)
+	default:
+		// Allocate multiple memory blocks.
+		ptr = bigAlloc(size)
 	}
 
+	// Zero the allocation.
+	memzero(ptr, size)
+
+	return ptr
+}
+
+// alignMask computes a bit mask which contains all bits which must be zero in the maximum alignment of a pointer of the given size.
+func alignMask(size uintptr) uintptr {
+	switch {
+	case size <= unsafe.Sizeof(uint8(0)):
+		return unsafe.Alignof(uint8(0)) - 1
+	case size <= unsafe.Sizeof(uint16(0)):
+		return unsafe.Alignof(uint16(0)) - 1
+	case size <= unsafe.Sizeof(uint32(0)):
+		return unsafe.Alignof(uint32(0)) - 1
+	default:
+		return unsafe.Alignof(uint64(0)) - 1
+	}
+}
+
+// smallBlock is a pointer to a memory block that can be divided up for small (sub-block-size) allocations.
+var smallBlock *[bytesPerBlock]byte
+
+// smallBlockAvailable is the amount of remaining available space in smallBlock.
+var smallBlockAvailable uintptr
+
+// smallAlloc handles allocations that are smaller than a memory block.
+// Several allocations are bundled together into a single memory block.
+// These allocations are collectively treated as a single object by the garbage collector.
+func smallAlloc(size uintptr) unsafe.Pointer {
+	// Compute alignment mask.
+	align := alignMask(size)
+
+	if size > smallBlockAvailable&^align {
+		// There is not enough space in smallBlock for this allocation.
+		// Acquire a new block.
+		block := bigAlloc(bytesPerBlock)
+
+		if smallBlockAvailable > bytesPerBlock-size {
+			// After this allocation, there will be less leftover space in this block than in the old block.
+			// Do not attempt to re-use the new block.
+			return block
+		}
+
+		// The new block will have more extra space than the old one.
+		// Discard the old block, and replace it with a new one.
+		smallBlock = (*[bytesPerBlock]byte)(block)
+		smallBlockAvailable = bytesPerBlock
+	}
+
+	// Prepend any necessary padding to the allocation.
+	smallBlockAvailable &^= align
+
+	// Extract a pointer to the base of the allocation.
+	ptr := unsafe.Pointer(&smallBlock[bytesPerBlock-smallBlockAvailable])
+
+	// Subtract used space.
+	smallBlockAvailable -= size
+
+	return ptr
+}
+
+// bigAlloc allocates a series of consecutive memory blocks, running the garbage collector if necessary.
+func bigAlloc(size uintptr) unsafe.Pointer {
 	neededBlocks := (size + (bytesPerBlock - 1)) / bytesPerBlock
 
 	// Continue looping until a run of free blocks has been found that fits the
@@ -274,7 +347,6 @@ func alloc(size uintptr) unsafe.Pointer {
 
 			// Return a pointer to this allocation.
 			pointer := thisAlloc.pointer()
-			memzero(pointer, size)
 			return pointer
 		}
 	}
@@ -289,6 +361,10 @@ func GC() {
 	if gcDebug {
 		println("running collection cycle...")
 	}
+
+	// Ditch the small allocations bundle block to avoid keeping it alive if the bundled allocations are dead.
+	smallBlock = nil
+	smallBlockAvailable = 0
 
 	// Mark phase: mark all reachable objects, recursively.
 	markGlobals()
