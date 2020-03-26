@@ -41,11 +41,9 @@ func memcpy(dst, src unsafe.Pointer, size uintptr)
 func memmove(dst, src unsafe.Pointer, size uintptr)
 
 // Set the given number of bytes to zero.
-func memzero(ptr unsafe.Pointer, size uintptr) {
-	for i := uintptr(0); i < size; i++ {
-		*(*byte)(unsafe.Pointer(uintptr(ptr) + i)) = 0
-	}
-}
+// Calls to this function are converted to LLVM intrinsic calls such as
+// llvm.memset.p0i8.i32(ptr, 0, size, false).
+func memzero(ptr unsafe.Pointer, size uintptr)
 
 // Compare two same-size buffers for equality.
 func memequal(x, y unsafe.Pointer, n uintptr) bool {
