@@ -318,6 +318,13 @@
 						Reflect.set(v, p, x);
 					},
 
+					// func valueDelete(v ref, p string)
+					"syscall/js.valueDelete": (v_addr, p_ptr, p_len) => {
+						const v = loadValue(v_addr);
+						const p = loadString(p_ptr, p_len);
+						Reflect.deleteProperty(v, p);
+					},
+
 					// func valueIndex(v ref, i int) ref
 					"syscall/js.valueIndex": (ret_addr, v_addr, i) => {
 						storeValue(ret_addr, Reflect.get(loadValue(v_addr), i));
