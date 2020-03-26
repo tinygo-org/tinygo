@@ -393,6 +393,23 @@
 					//	mem().setUint8(sp + 24, loadValue(sp + 8) instanceof loadValue(sp + 16));
 					//},
 
+					// func copyBytesToGo(dst []byte, src ref) (int, bool)
+					"syscall/js.copyBytesToGo": (ret_addr, dest_addr, dest_len, dest_cap, source_addr) => {
+						let num_bytes_copied_addr = ret_addr;
+						let returned_status_addr = ret_addr + 4; // Address of returned boolean status variable
+
+						const dst = loadSlice(dest_addr, dest_len);
+						const src = loadValue(source_addr);
+						if (!(src instanceof Uint8Array)) {
+							mem().setUint8(returned_status_addr, 0); // Return "not ok" status
+							return;
+						}
+						const toCopy = src.subarray(0, dst.length);
+						dst.set(toCopy);
+						setInt64(num_bytes_copied_addr, toCopy.length);
+						mem().setUint8(returned_status_addr, 1); // Return "ok" status
+					},
+
 					// copyBytesToJS(dst ref, src []byte) (int, bool)
 					// Originally copied from upstream Go project, then modified:
 					//   https://github.com/golang/go/blob/3f995c3f3b43033013013e6c7ccc93a9b1411ca9/misc/wasm/wasm_exec.js#L404-L416
