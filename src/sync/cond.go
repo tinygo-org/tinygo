@@ -54,6 +54,8 @@ func (c *Cond) Wait() {
 
 	// Temporarily unlock L.
 	c.L.Unlock()
+
+	// Re-acquire the lock before returning.
 	defer c.L.Lock()
 
 	// If we were signaled while unlocking, immediately complete.
@@ -62,16 +64,14 @@ func (c *Cond) Wait() {
 	}
 
 	// Remove the earlySignal frame.
-	if c.unlocking == &early {
-		c.unlocking = early.next
-	} else {
-		// Something else happened after the unlock - the earlySignal is somewhere in the middle.
-		// This would be faster but less space-efficient if it were a doubly linked list.
-		prev := c.unlocking
-		for prev.next != &early {
-			prev = prev.next
-		}
+	prev := c.unlocking
+	for prev != nil && prev.next != &early {
+		prev = prev.next
+	}
+	if prev != nil {
 		prev.next = early.next
+	} else {
+		c.unlocking = early.next
 	}
 
 	// Wait for a signal.
