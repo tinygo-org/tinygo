@@ -330,7 +330,6 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 		return c.ctx.CreateEnumAttribute(attrKind, 0)
 	}
 	nocapture := getAttr("nocapture")
-	writeonly := getAttr("writeonly")
 	readonly := getAttr("readonly")
 
 	// Tell the optimizer that runtime.alloc is an allocator, meaning that it
@@ -355,16 +354,6 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	if !trackPointer.IsNil() {
 		trackPointer.AddAttributeAtIndex(1, nocapture)
 		trackPointer.AddAttributeAtIndex(1, readonly)
-	}
-
-	// Memory copy operations do not capture pointers, even though some weird
-	// pointer arithmetic is happening in the Go implementation.
-	for _, fnName := range []string{"runtime.memcpy", "runtime.memmove"} {
-		fn := c.mod.NamedFunction(fnName)
-		fn.AddAttributeAtIndex(1, nocapture)
-		fn.AddAttributeAtIndex(1, writeonly)
-		fn.AddAttributeAtIndex(2, nocapture)
-		fn.AddAttributeAtIndex(2, readonly)
 	}
 
 	// see: https://reviews.llvm.org/D18355
@@ -1334,6 +1323,8 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		// applied) function call. If it is anonymous, it may be a closure.
 		name := fn.RelString(nil)
 		switch {
+		case name == "runtime.memcpy" || name == "runtime.memmove" || name == "reflect.memcpy":
+			return b.createMemoryCopyCall(fn, instr.Args)
 		case name == "device/arm.ReadRegister" || name == "device/riscv.ReadRegister":
 			return b.createReadRegister(name, instr.Args)
 		case name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
