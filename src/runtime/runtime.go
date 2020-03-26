@@ -30,26 +30,15 @@ func os_runtime_args() []string {
 }
 
 // Copy size bytes from src to dst. The memory areas must not overlap.
-func memcpy(dst, src unsafe.Pointer, size uintptr) {
-	for i := uintptr(0); i < size; i++ {
-		*(*uint8)(unsafe.Pointer(uintptr(dst) + i)) = *(*uint8)(unsafe.Pointer(uintptr(src) + i))
-	}
-}
+// Calls to this function are converted to LLVM intrinsic calls such as
+// llvm.memcpy.p0i8.p0i8.i32(dst, src, size, false).
+func memcpy(dst, src unsafe.Pointer, size uintptr)
 
 // Copy size bytes from src to dst. The memory areas may overlap and will do the
 // correct thing.
-func memmove(dst, src unsafe.Pointer, size uintptr) {
-	if uintptr(dst) < uintptr(src) {
-		// Copy forwards.
-		memcpy(dst, src, size)
-		return
-	}
-	// Copy backwards.
-	for i := size; i != 0; {
-		i--
-		*(*uint8)(unsafe.Pointer(uintptr(dst) + i)) = *(*uint8)(unsafe.Pointer(uintptr(src) + i))
-	}
-}
+// Calls to this function are converted to LLVM intrinsic calls such as
+// llvm.memmove.p0i8.p0i8.i32(dst, src, size, false).
+func memmove(dst, src unsafe.Pointer, size uintptr)
 
 // Set the given number of bytes to zero.
 func memzero(ptr unsafe.Pointer, size uintptr) {

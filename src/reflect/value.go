@@ -678,5 +678,6 @@ func (e *ValueError) Error() string {
 	return "reflect: call of reflect.Value." + e.Method + " on invalid type"
 }
 
-//go:linkname memcpy runtime.memcpy
+// Calls to this function are converted to LLVM intrinsic calls such as
+// llvm.memcpy.p0i8.p0i8.i32().
 func memcpy(dst, src unsafe.Pointer, size uintptr)
