@@ -1476,7 +1476,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 	case *ssa.BinOp:
 		x := b.getValue(expr.X)
 		y := b.getValue(expr.Y)
-		return b.createBinOp(expr.Op, expr.X.Type(), x, y, expr.Pos())
+		return b.createBinOp(expr.Op, expr.X.Type(), expr.Y.Type(), x, y, expr.Pos())
 	case *ssa.Call:
 		return b.createFunctionCall(expr.Common())
 	case *ssa.ChangeInterface:
@@ -1925,7 +1925,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 // same type, even for bitshifts. Also, signedness in Go is encoded in the type
 // and is encoded in the operation in LLVM IR: this is important for some
 // operations such as divide.
-func (b *builder) createBinOp(op token.Token, typ types.Type, x, y llvm.Value, pos token.Pos) (llvm.Value, error) {
+func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Value, pos token.Pos) (llvm.Value, error) {
 	switch typ := typ.Underlying().(type) {
 	case *types.Basic:
 		if typ.Info()&types.IsInteger != 0 {
@@ -1957,32 +1957,49 @@ func (b *builder) createBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			case token.XOR: // ^
 				return b.CreateXor(x, y, ""), nil
 			case token.SHL, token.SHR:
+				if ytyp.Underlying().(*types.Basic).Info()&types.IsUnsigned == 0 {
+					// Ensure that y is not negative.
+					b.createNegativeShiftCheck(y)
+				}
+
 				sizeX := b.targetData.TypeAllocSize(x.Type())
 				sizeY := b.targetData.TypeAllocSize(y.Type())
-				if sizeX > sizeY {
-					// x and y must have equal sizes, make Y bigger in this case.
-					// y is unsigned, this has been checked by the Go type checker.
+
+				// Check if the shift is bigger than the bit-width of the shifted value.
+				// This is UB in LLVM, so it needs to be handled seperately.
+				// The Go spec indirectly defines the result as 0.
+				// Negative shifts are handled earlier, so we can treat y as unsigned.
+				overshifted := b.CreateICmp(llvm.IntUGE, y, llvm.ConstInt(y.Type(), 8*sizeX, false), "shift.overflow")
+
+				// Adjust the size of y to match x.
+				switch {
+				case sizeX > sizeY:
 					y = b.CreateZExt(y, x.Type(), "")
-				} else if sizeX < sizeY {
-					// What about shifting more than the integer width?
-					// I'm not entirely sure what the Go spec is on that, but as
-					// Intel CPUs have undefined behavior when shifting more
-					// than the integer width I'm assuming it is also undefined
-					// in Go.
+				case sizeX < sizeY:
+					// If it gets truncated, overshifted will be true and it will not matter.
 					y = b.CreateTrunc(y, x.Type(), "")
 				}
+
+				// Create a shift operation.
+				var val llvm.Value
 				switch op {
 				case token.SHL: // <<
-					return b.CreateShl(x, y, ""), nil
+					val = b.CreateShl(x, y, "")
 				case token.SHR: // >>
 					if signed {
+						// Arithmetic right shifts work differently, since shifting a negative number right yields -1.
+						// Cap the shift input rather than selecting the output.
+						y = b.CreateSelect(overshifted, llvm.ConstInt(y.Type(), 8*sizeX-1, false), y, "shift.offset")
 						return b.CreateAShr(x, y, ""), nil
 					} else {
-						return b.CreateLShr(x, y, ""), nil
+						val = b.CreateLShr(x, y, "")
 					}
 				default:
 					panic("unreachable")
 				}
+
+				// Select between the shift result and zero depending on whether there was an overshift.
+				return b.CreateSelect(overshifted, llvm.ConstInt(val.Type(), 0, false), val, "shift.result"), nil
 			case token.EQL: // ==
 				return b.CreateICmp(llvm.IntEQ, x, y, ""), nil
 			case token.NEQ: // !=
@@ -2218,7 +2235,7 @@ func (b *builder) createBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 		for i := 0; i < int(typ.Len()); i++ {
 			xField := b.CreateExtractValue(x, i, "")
 			yField := b.CreateExtractValue(y, i, "")
-			fieldEqual, err := b.createBinOp(token.EQL, typ.Elem(), xField, yField, pos)
+			fieldEqual, err := b.createBinOp(token.EQL, typ.Elem(), typ.Elem(), xField, yField, pos)
 			if err != nil {
 				return llvm.Value{}, err
 			}
@@ -2246,7 +2263,7 @@ func (b *builder) createBinOp(op token.Token, typ types.Type, x, y llvm.Value, p
 			fieldType := typ.Field(i).Type()
 			xField := b.CreateExtractValue(x, i, "")
 			yField := b.CreateExtractValue(y, i, "")
-			fieldEqual, err := b.createBinOp(token.EQL, fieldType, xField, yField, pos)
+			fieldEqual, err := b.createBinOp(token.EQL, fieldType, fieldType, xField, yField, pos)
 			if err != nil {
 				return llvm.Value{}, err
 			}

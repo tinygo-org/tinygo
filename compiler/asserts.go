@@ -186,6 +186,19 @@ func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix str
 	b.createRuntimeAssert(isnil, blockPrefix, "nilPanic")
 }
 
+// createNegativeShiftCheck creates an assertion that panics if the given shift value is negative.
+// This function assumes that the shift value is signed.
+func (b *builder) createNegativeShiftCheck(shift llvm.Value) {
+	if b.fn.IsNoBounds() {
+		// Function disabled bounds checking - skip shift check.
+		return
+	}
+
+	// isNegative = shift < 0
+	isNegative := b.CreateICmp(llvm.IntSLT, shift, llvm.ConstInt(shift.Type(), 0, false), "")
+	b.createRuntimeAssert(isNegative, "shift", "negativeShiftPanic")
+}
+
 // createRuntimeAssert is a common function to create a new branch on an assert
 // bool, calling an assert func if the assert value is true (1).
 func (b *builder) createRuntimeAssert(assert llvm.Value, blockPrefix, assertFunc string) {

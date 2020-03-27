@@ -47,6 +47,11 @@ func chanMakePanic() {
 	runtimePanic("new channel is too big")
 }
 
+// Panic when a shift value is negative.
+func negativeShiftPanic() {
+	runtimePanic("negative shift")
+}
+
 func blockingPanic() {
 	runtimePanic("trying to do blocking operation in exported function")
 }

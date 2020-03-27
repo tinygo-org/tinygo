@@ -61,6 +61,15 @@ func main() {
 	println(c128 != 3+2i)
 	println(c128 != 4+2i)
 	println(c128 != 3+3i)
+
+	println("shifts")
+	println(shlSimple == 4)
+	println(shlOverflow == 0)
+	println(shrSimple == 1)
+	println(shrOverflow == 0)
+	println(ashrNeg == -1)
+	println(ashrOverflow == 0)
+	println(ashrNegOverflow == -1)
 }
 
 var x = true
@@ -87,3 +96,23 @@ type Struct2 struct {
 	_ float64
 	i int
 }
+
+func shl(x uint, y int) uint {
+	return x << y
+}
+
+func shr(x uint, y int) uint {
+	return x >> y
+}
+
+func ashr(x int, y int) int {
+	return x >> y
+}
+
+var shlSimple = shl(2, 1)
+var shlOverflow = shl(2, 1000)
+var shrSimple = shr(2, 1)
+var shrOverflow = shr(2, 1000000)
+var ashrNeg = ashr(-1, 1)
+var ashrOverflow = ashr(1, 1000000)
+var ashrNegOverflow = ashr(-1, 1000000)
