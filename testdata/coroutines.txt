@@ -14,3 +14,9 @@ async interface method call
 slept inside func pointer 8
 slept inside closure, with value: 20 8
 closure go call result: 1
+pre-acquired mutex
+releasing mutex
+acquired mutex from goroutine
+released mutex from goroutine
+re-acquired mutex
+done
