@@ -384,6 +384,7 @@ func cdcSetup(setup usbSetup) bool {
 	return false
 }
 
+//go:noinline
 func sendUSBPacket(ep uint32, data []byte) {
 	count := len(data)
 	copy(udd_ep_in_cache_buffer[ep][:], data)
