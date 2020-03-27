@@ -1,6 +1,9 @@
 package main
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 func main() {
 	println("main 1")
@@ -51,6 +54,29 @@ func main() {
 	println("closure go call result:", x)
 
 	time.Sleep(2 * time.Millisecond)
+
+	var m sync.Mutex
+	m.Lock()
+	println("pre-acquired mutex")
+	go acquire(&m)
+	time.Sleep(2 * time.Millisecond)
+	println("releasing mutex")
+	m.Unlock()
+	time.Sleep(2 * time.Millisecond)
+	m.Lock()
+	println("re-acquired mutex")
+	m.Unlock()
+	println("done")
+
+	time.Sleep(2 * time.Millisecond)
+}
+
+func acquire(m *sync.Mutex) {
+	m.Lock()
+	println("acquired mutex from goroutine")
+	time.Sleep(2 * time.Millisecond)
+	m.Unlock()
+	println("released mutex from goroutine")
 }
 
 func sub() {
