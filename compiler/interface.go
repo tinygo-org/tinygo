@@ -247,15 +247,23 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 	for i := 0; i < ms.Len(); i++ {
 		method := ms.At(i)
 		signatureGlobal := c.getMethodSignature(method.Obj().(*types.Func))
-		f := c.ir.GetFunction(c.ir.Program.MethodValue(method))
-		if f.LLVMFn.IsNil() {
+		fn := c.ir.Program.MethodValue(method)
+		llvmFn := c.getFunction(fn)
+		if llvmFn.IsNil() {
 			// compiler error, so panic
-			panic("cannot find function: " + f.LinkName())
+			panic("cannot find function: " + c.getFunctionInfo(fn).linkName)
 		}
-		fn := c.getInterfaceInvokeWrapper(f)
+		if isAnonymous(typ) && llvmFn.IsDeclaration() {
+			// Inline types may also have methods when they embed interface
+			// types with methods. Example: struct{ error }
+			irbuilder := c.ctx.NewBuilder()
+			defer irbuilder.Dispose()
+			c.createFunction(irbuilder, fn, llvmFn)
+		}
+		wrapper := c.getInterfaceInvokeWrapper(fn, llvmFn)
 		methodInfo := llvm.ConstNamedStruct(interfaceMethodInfoType, []llvm.Value{
 			signatureGlobal,
-			llvm.ConstPtrToInt(fn, c.uintptrType),
+			llvm.ConstPtrToInt(wrapper, c.uintptrType),
 		})
 		methods[i] = methodInfo
 	}
@@ -357,8 +365,8 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 	// value.
 
 	prevBlock := b.GetInsertBlock()
-	okBlock := b.ctx.AddBasicBlock(b.fn.LLVMFn, "typeassert.ok")
-	nextBlock := b.ctx.AddBasicBlock(b.fn.LLVMFn, "typeassert.next")
+	okBlock := b.ctx.AddBasicBlock(b.llvmFn, "typeassert.ok")
+	nextBlock := b.ctx.AddBasicBlock(b.llvmFn, "typeassert.next")
 	b.blockExits[b.currentBlock] = nextBlock // adjust outgoing block for phi nodes
 	b.CreateCondBr(commaOk, okBlock, nextBlock)
 
@@ -436,8 +444,8 @@ func (b *builder) getInvokeCall(instr *ssa.CallCommon) (llvm.Value, []llvm.Value
 // value, dereferences or unpacks it if necessary, and calls the real method.
 // If the method to wrap has a pointer receiver, no wrapping is necessary and
 // the function is returned directly.
-func (c *compilerContext) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
-	wrapperName := f.LinkName() + "$invoke"
+func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llvm.Value) llvm.Value {
+	wrapperName := llvmFn.Name() + "$invoke"
 	wrapper := c.mod.NamedFunction(wrapperName)
 	if !wrapper.IsNil() {
 		// Wrapper already created. Return it directly.
@@ -445,7 +453,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 	}
 
 	// Get the expanded receiver type.
-	receiverType := c.getLLVMType(f.Params[0].Type())
+	receiverType := c.getLLVMType(fn.Params[0].Type())
 	var expandedReceiverType []llvm.Type
 	for _, info := range expandFormalParamType(receiverType, "", nil) {
 		expandedReceiverType = append(expandedReceiverType, info.llvmType)
@@ -457,15 +465,15 @@ func (c *compilerContext) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 		// Casting a function signature to a different signature and calling it
 		// with a receiver pointer bitcasted to *i8 (as done in calls on an
 		// interface) is hopefully a safe (defined) operation.
-		return f.LLVMFn
+		return llvmFn
 	}
 
 	// create wrapper function
-	fnType := f.LLVMFn.Type().ElementType()
+	fnType := llvmFn.Type().ElementType()
 	paramTypes := append([]llvm.Type{c.i8ptrType}, fnType.ParamTypes()[len(expandedReceiverType):]...)
 	wrapFnType := llvm.FunctionType(fnType.ReturnType(), paramTypes, false)
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
-	if f.LLVMFn.LastParam().Name() == "parentHandle" {
+	if llvmFn.LastParam().Name() == "parentHandle" {
 		wrapper.LastParam().SetName("parentHandle")
 	}
 
@@ -481,8 +489,8 @@ func (c *compilerContext) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 
 	// add debug info if needed
 	if c.Debug() {
-		pos := c.ir.Program.Fset.Position(f.Pos())
-		difunc := c.attachDebugInfoRaw(f, wrapper, "$invoke", pos.Filename, pos.Line)
+		pos := c.ir.Program.Fset.Position(fn.Pos())
+		difunc := c.attachDebugInfoRaw(fn, wrapper, "$invoke", pos.Filename, pos.Line)
 		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
 
@@ -492,13 +500,25 @@ func (c *compilerContext) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 
 	receiverValue := b.emitPointerUnpack(wrapper.Param(0), []llvm.Type{receiverType})[0]
 	params := append(b.expandFormalParam(receiverValue), wrapper.Params()[1:]...)
-	if f.LLVMFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
-		b.CreateCall(f.LLVMFn, params, "")
+	if llvmFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
+		b.CreateCall(llvmFn, params, "")
 		b.CreateRetVoid()
 	} else {
-		ret := b.CreateCall(f.LLVMFn, params, "ret")
+		ret := b.CreateCall(llvmFn, params, "ret")
 		b.CreateRet(ret)
 	}
 
 	return wrapper
+}
+
+// isAnonymous returns true if (and only if) this is an anonymous type: one that
+// is created inline. It can have methods if it embeds a type with methods.
+func isAnonymous(typ types.Type) bool {
+	if t, ok := typ.(*types.Pointer); ok {
+		typ = t.Elem()
+	}
+	if _, ok := typ.(*types.Named); !ok {
+		return true
+	}
+	return false
 }

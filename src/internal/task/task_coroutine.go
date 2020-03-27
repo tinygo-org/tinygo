@@ -85,14 +85,9 @@ type taskHolder interface {
 	getReturnPtr() unsafe.Pointer
 }
 
-// If there are no direct references to the task methods, they will not be discovered by the compiler, and this will trigger a compiler error.
-// Instantiating this interface forces discovery of these methods.
-var _ = taskHolder((*Task)(nil))
-
 func fake() {
 	// Hack to ensure intrinsics are discovered.
 	Current()
-	go func() {}()
 	Pause()
 }
 
