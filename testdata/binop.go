@@ -97,15 +97,15 @@ type Struct2 struct {
 	i int
 }
 
-func shl(x uint, y int) uint {
+func shl(x uint, y uint) uint {
 	return x << y
 }
 
-func shr(x uint, y int) uint {
+func shr(x uint, y uint) uint {
 	return x >> y
 }
 
-func ashr(x int, y int) int {
+func ashr(x int, y uint) int {
 	return x >> y
 }
 
