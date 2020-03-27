@@ -7,6 +7,7 @@ import (
 	"go/token"
 
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -28,7 +29,8 @@ func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value, p
 	default:
 		panic("unreachable")
 	}
-	b.createCall(b.mod.NamedFunction("internal/task.start"), []llvm.Value{callee, paramBundle, llvm.Undef(b.i8ptrType), llvm.ConstPointerNull(b.i8ptrType)}, "")
+	start := b.getFunction(b.ir.Program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
+	b.createCall(start, []llvm.Value{callee, paramBundle, llvm.Undef(b.i8ptrType), llvm.ConstPointerNull(b.i8ptrType)}, "")
 	return llvm.Undef(funcPtr.Type().ElementType().ReturnType())
 }
 

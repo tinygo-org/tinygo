@@ -5,6 +5,7 @@ package compiler
 
 import (
 	"go/types"
+	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"golang.org/x/tools/go/ssa"
@@ -149,7 +150,16 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 	if len(expr.Bindings) == 0 {
 		panic("unexpected: MakeClosure without bound variables")
 	}
-	f := b.ir.GetFunction(expr.Fn.(*ssa.Function))
+	f := expr.Fn.(*ssa.Function)
+	llvmFn := b.getFunction(f)
+
+	if strings.HasSuffix(f.Name(), "$bound") && llvmFn.IsDeclaration() {
+		// Hack: the ssa package does not expose bound methods so make sure
+		// they're built here when necessary.
+		irbuilder := b.ctx.NewBuilder()
+		defer irbuilder.Dispose()
+		b.createFunction(irbuilder, f, llvmFn)
+	}
 
 	// Collect all bound variables.
 	boundVars := make([]llvm.Value, len(expr.Bindings))
@@ -164,5 +174,5 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 	context := b.emitPointerPack(boundVars)
 
 	// Create the closure.
-	return b.createFuncValue(f.LLVMFn, context, f.Signature), nil
+	return b.createFuncValue(llvmFn, context, f.Signature), nil
 }
