@@ -20,12 +20,8 @@ import (
 
 const schedulerDebug = false
 
-// Queues used by the scheduler.
-var (
-	runqueue           task.Queue
-	sleepQueue         *task.Task
-	sleepQueueBaseTime timeUnit
-)
+// runqueue is a queue of tasks that are ready to run.
+var runqueue task.Queue
 
 // Simple logging, for debugging.
 func scheduleLog(msg string) {
@@ -74,95 +70,51 @@ func runqueuePushBack(t *task.Task) {
 	runqueue.Push(t)
 }
 
-// Add this task to the sleep queue, assuming its state is set to sleeping.
-func addSleepTask(t *task.Task, duration int64) {
-	if schedulerDebug {
-		println("  set sleep:", t, uint(duration/tickMicros))
-		if t.Next != nil {
-			panic("runtime: addSleepTask: expected next task to be nil")
-		}
-	}
-	t.Data = uint(duration / tickMicros) // TODO: longer durations
-	now := ticks()
-	if sleepQueue == nil {
-		scheduleLog("  -> sleep new queue")
+var schedulerDone bool
 
-		// set new base time
-		sleepQueueBaseTime = now
-	}
-
-	// Add to sleep queue.
-	q := &sleepQueue
-	for ; *q != nil; q = &(*q).Next {
-		if t.Data < (*q).Data {
-			// this will finish earlier than the next - insert here
-			break
-		} else {
-			// this will finish later - adjust delay
-			t.Data -= (*q).Data
-		}
-	}
-	if *q != nil {
-		// cut delay time between this sleep task and the next
-		(*q).Data -= t.Data
-	}
-	t.Next = *q
-	*q = t
-}
+const pollInterval = 256
 
 // Run the scheduler until all tasks have finished.
 func scheduler() {
-	// Main scheduler loop.
-	var now timeUnit
-	for {
-		scheduleLog("")
-		scheduleLog("  schedule")
-		if sleepQueue != nil {
-			now = ticks()
-		}
-
-		// Add tasks that are done sleeping to the end of the runqueue so they
-		// will be executed soon.
-		if sleepQueue != nil && now-sleepQueueBaseTime >= timeUnit(sleepQueue.Data) {
-			t := sleepQueue
-			scheduleLogTask("  awake:", t)
-			sleepQueueBaseTime += timeUnit(t.Data)
-			sleepQueue = t.Next
-			t.Next = nil
-			runqueue.Push(t)
-		}
-
+	var n uint
+	for !schedulerDone {
+		// Get the next available task.
 		t := runqueue.Pop()
 		if t == nil {
-			if sleepQueue == nil {
-				// No more tasks to execute.
-				// It would be nice if we could detect deadlocks here, because
-				// there might still be functions waiting on each other in a
-				// deadlock.
-				scheduleLog("  no tasks left!")
+			scheduleLog("  runqueue empty")
+
+			// Check for any available tasks.
+			if poll() {
+				// A task was found and pushed onto the runqueue.
+				continue
+			}
+
+			// Sleep until another task is available.
+			wait()
+			if asyncScheduler {
+				// This platform (WebAssembly) requires us to return control to the host while waiting.
+				// The host will eventually re-invoke the scheduler when there is work available.
 				return
 			}
-			timeLeft := timeUnit(sleepQueue.Data) - (now - sleepQueueBaseTime)
-			if schedulerDebug {
-				println("  sleeping...", sleepQueue, uint(timeLeft))
-				for t := sleepQueue; t != nil; t = t.Next {
-					println("    task sleeping:", t, timeUnit(t.Data))
-				}
-			}
-			sleepTicks(timeLeft)
-			if asyncScheduler {
-				// The sleepTicks function above only sets a timeout at which
-				// point the scheduler will be called again. It does not really
-				// sleep.
-				break
-			}
+
+			// Try again.
 			continue
 		}
 
-		// Run the given task.
-		scheduleLogTask("  run:", t)
+		// Run task.
+		scheduleLogTask("resuming:", t)
 		t.Resume()
+
+		// Periodically poll for additional events.
+		if !asyncScheduler && n > pollInterval {
+			poll()
+			n = 0
+		} else {
+			n++
+		}
 	}
+
+	scheduleLog("  program complete!")
 }
 
 func Gosched() {
