@@ -237,7 +237,10 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	c.ir = ir.NewProgram(lprogram, pkgName)
 
 	// Run a simple dead code elimination pass.
-	c.ir.SimpleDCE()
+	err = c.ir.SimpleDCE()
+	if err != nil {
+		return c.mod, nil, []error{err}
+	}
 
 	// Initialize debug information.
 	if c.Debug() {
