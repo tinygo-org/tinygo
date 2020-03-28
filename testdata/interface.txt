@@ -18,6 +18,7 @@ is Tuple: 0 8 16 24
 SmallPair.Print: 3 5
 Stringer.String(): foo
 Stringer.(*Thing).String(): foo
+s has String() method: foo
 nested switch: true
 non-blocking call on sometimes-blocking interface
 slept 1ms

@@ -271,8 +271,13 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 // getInterfaceMethodSet returns a global variable with the method set of the
 // given named interface type. This method set is used by the interface lowering
 // pass.
-func (c *compilerContext) getInterfaceMethodSet(typ *types.Named) llvm.Value {
-	global := c.mod.NamedGlobal(typ.String() + "$interface")
+func (c *compilerContext) getInterfaceMethodSet(typ types.Type) llvm.Value {
+	name := typ.String()
+	if _, ok := typ.(*types.Named); !ok {
+		// Anonymous interface.
+		name = "reflect/types.interface:" + name
+	}
+	global := c.mod.NamedGlobal(name + "$interface")
 	zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 	if !global.IsNil() {
 		// method set already exist, return it
@@ -287,7 +292,7 @@ func (c *compilerContext) getInterfaceMethodSet(typ *types.Named) llvm.Value {
 	}
 
 	value := llvm.ConstArray(c.i8ptrType, methods)
-	global = llvm.AddGlobal(c.mod, value.Type(), typ.String()+"$interface")
+	global = llvm.AddGlobal(c.mod, value.Type(), name+"$interface")
 	global.SetInitializer(value)
 	global.SetGlobalConstant(true)
 	global.SetLinkage(llvm.PrivateLinkage)
@@ -329,7 +334,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 		// the main Go compiler, where the runtime checks whether the type
 		// implements each method of the interface. See:
 		// https://research.swtch.com/interfaces
-		methodSet := b.getInterfaceMethodSet(expr.AssertedType.(*types.Named))
+		methodSet := b.getInterfaceMethodSet(expr.AssertedType)
 		commaOk = b.createRuntimeCall("interfaceImplements", []llvm.Value{actualTypeNum, methodSet}, "")
 
 	} else {
@@ -402,7 +407,7 @@ func (b *builder) getInvokeCall(instr *ssa.CallCommon) (llvm.Value, []llvm.Value
 	typecode := b.CreateExtractValue(itf, 0, "invoke.typecode")
 	values := []llvm.Value{
 		typecode,
-		b.getInterfaceMethodSet(instr.Value.Type().(*types.Named)),
+		b.getInterfaceMethodSet(instr.Value.Type()),
 		b.getMethodSignature(instr.Method),
 	}
 	fn := b.createRuntimeCall("interfaceMethod", values, "invoke.func")
