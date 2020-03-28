@@ -4,6 +4,8 @@ package compiler
 // goroutine-lowering.go for more details.
 
 import (
+	"go/token"
+
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
@@ -15,12 +17,12 @@ import (
 // pointer passed in as a parameter too in addition to the context.
 //
 // Because a go statement doesn't return anything, return undef.
-func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value) llvm.Value {
+func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value, prefix string, pos token.Pos) llvm.Value {
 	paramBundle := b.emitPointerPack(params)
 	var callee llvm.Value
 	switch b.Scheduler() {
 	case "none", "tasks":
-		callee = b.createGoroutineStartWrapper(funcPtr)
+		callee = b.createGoroutineStartWrapper(funcPtr, prefix, pos)
 	case "coroutines":
 		callee = b.CreatePtrToInt(funcPtr, b.uintptrType, "")
 	default:
@@ -48,10 +50,11 @@ func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value) l
 // allows a single (pointer) argument to the newly started goroutine. Also, it
 // ignores the return value because newly started goroutines do not have a
 // return value.
-func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value) llvm.Value {
+func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix string, pos token.Pos) llvm.Value {
 	var wrapper llvm.Value
 
 	builder := c.ctx.NewBuilder()
+	defer builder.Dispose()
 
 	if !fn.IsAFunction().IsNil() {
 		// See whether this wrapper has already been created. If so, return it.
@@ -68,6 +71,28 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value) llvm.Value 
 		wrapper.SetUnnamedAddr(true)
 		entry := c.ctx.AddBasicBlock(wrapper, "entry")
 		builder.SetInsertPointAtEnd(entry)
+
+		if c.Debug() {
+			pos := c.ir.Program.Fset.Position(pos)
+			diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+				File:       c.getDIFile(pos.Filename),
+				Parameters: nil, // do not show parameters in debugger
+				Flags:      0,   // ?
+			})
+			difunc := c.dibuilder.CreateFunction(c.getDIFile(pos.Filename), llvm.DIFunction{
+				Name:         "<goroutine wrapper>",
+				File:         c.getDIFile(pos.Filename),
+				Line:         pos.Line,
+				Type:         diFuncType,
+				LocalToUnit:  true,
+				IsDefinition: true,
+				ScopeLine:    0,
+				Flags:        llvm.FlagPrototyped,
+				Optimized:    true,
+			})
+			wrapper.SetSubprogram(difunc)
+			builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
+		}
 
 		// Create the list of params for the call.
 		paramTypes := fn.Type().ElementType().ParamTypes()
@@ -97,11 +122,33 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value) llvm.Value 
 
 		// Create the wrapper.
 		wrapperType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.i8ptrType}, false)
-		wrapper = llvm.AddFunction(c.mod, ".gowrapper", wrapperType)
+		wrapper = llvm.AddFunction(c.mod, prefix+".gowrapper", wrapperType)
 		wrapper.SetLinkage(llvm.InternalLinkage)
 		wrapper.SetUnnamedAddr(true)
 		entry := c.ctx.AddBasicBlock(wrapper, "entry")
 		builder.SetInsertPointAtEnd(entry)
+
+		if c.Debug() {
+			pos := c.ir.Program.Fset.Position(pos)
+			diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+				File:       c.getDIFile(pos.Filename),
+				Parameters: nil, // do not show parameters in debugger
+				Flags:      0,   // ?
+			})
+			difunc := c.dibuilder.CreateFunction(c.getDIFile(pos.Filename), llvm.DIFunction{
+				Name:         "<goroutine wrapper>",
+				File:         c.getDIFile(pos.Filename),
+				Line:         pos.Line,
+				Type:         diFuncType,
+				LocalToUnit:  true,
+				IsDefinition: true,
+				ScopeLine:    0,
+				Flags:        llvm.FlagPrototyped,
+				Optimized:    true,
+			})
+			wrapper.SetSubprogram(difunc)
+			builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
+		}
 
 		// Get the list of parameters, with the extra parameters at the end.
 		paramTypes := fn.Type().ElementType().ParamTypes()

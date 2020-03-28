@@ -1094,7 +1094,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 				panic("StaticCallee returned an unexpected value")
 			}
 			params = append(params, context) // context parameter
-			b.createGoInstruction(calleeFn.LLVMFn, params)
+			b.createGoInstruction(calleeFn.LLVMFn, params, "", callee.Pos())
 		} else if !instr.Call.IsInvoke() {
 			// This is a function pointer.
 			// At the moment, two extra params are passed to the newly started
@@ -1112,7 +1112,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 			default:
 				panic("unknown scheduler type")
 			}
-			b.createGoInstruction(funcPtr, params)
+			b.createGoInstruction(funcPtr, params, b.fn.RelString(nil), instr.Pos())
 		} else {
 			b.addError(instr.Pos(), "todo: go on interface call")
 		}
