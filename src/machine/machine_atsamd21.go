@@ -1477,6 +1477,8 @@ func handleUSB(intr interrupt.Interrupt) {
 			// clear stall request
 			setEPINTENCLR(0, sam.USB_DEVICE_EPINTENCLR_STALL1)
 		}
+	} else {
+		sendZlp(0)
 	}
 
 	// Now the actual transfer handlers, ignore endpoint number 0 (setup)
@@ -1796,53 +1798,29 @@ func sendDescriptor(setup usbSetup) {
 		sendConfiguration(setup)
 		return
 	case usb_DEVICE_DESCRIPTOR_TYPE:
-		if setup.wLength == 8 {
-			// composite descriptor requested, so only send 8 bytes
-			dd := NewDeviceDescriptor(0xEF, 0x02, 0x01, 64, usb_VID, usb_PID, 0x100, usb_IMANUFACTURER, usb_IPRODUCT, usb_ISERIAL, 1)
-			sendUSBPacket(0, dd.Bytes()[:8])
-		} else {
-			// complete descriptor requested so send entire packet
-			dd := NewDeviceDescriptor(0x02, 0x00, 0x00, 64, usb_VID, usb_PID, 0x100, usb_IMANUFACTURER, usb_IPRODUCT, usb_ISERIAL, 1)
-			sendUSBPacket(0, dd.Bytes())
+		// composite descriptor
+		dd := NewDeviceDescriptor(0xef, 0x02, 0x01, 64, usb_VID, usb_PID, 0x100, usb_IMANUFACTURER, usb_IPRODUCT, usb_ISERIAL, 1)
+		l := deviceDescriptorSize
+		if setup.wLength < deviceDescriptorSize {
+			l = int(setup.wLength)
 		}
+		sendUSBPacket(0, dd.Bytes()[:l])
 		return
 
 	case usb_STRING_DESCRIPTOR_TYPE:
 		switch setup.wValueL {
 		case 0:
-			b := make([]byte, 4)
-			b[0] = 0x04
-			b[1] = 0x03
-			b[2] = 0x09
-			b[3] = 0x04
+			b := []byte{0x04, 0x03, 0x09, 0x04}
 			sendUSBPacket(0, b)
 			return
 
 		case usb_IPRODUCT:
-			prod := []byte(usb_STRING_PRODUCT)
-			b := make([]byte, len(prod)*2+2)
-			b[0] = byte(len(prod)*2 + 2)
-			b[1] = 0x03
-
-			for i, val := range prod {
-				b[i*2+2] = val
-				b[i*2+3] = 0
-			}
-
+			b := strToUTF16LEDescriptor(usb_STRING_PRODUCT)
 			sendUSBPacket(0, b)
 			return
 
 		case usb_IMANUFACTURER:
-			prod := []byte(usb_STRING_MANUFACTURER)
-			b := make([]byte, len(prod)*2+2)
-			b[0] = byte(len(prod)*2 + 2)
-			b[1] = 0x03
-
-			for i, val := range prod {
-				b[i*2+2] = val
-				b[i*2+3] = 0
-			}
-
+			b := strToUTF16LEDescriptor(usb_STRING_MANUFACTURER)
 			sendUSBPacket(0, b)
 			return
 
