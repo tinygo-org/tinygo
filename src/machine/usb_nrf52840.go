@@ -408,15 +408,13 @@ func sendDescriptor(setup usbSetup) {
 		sendConfiguration(setup)
 		return
 	case usb_DEVICE_DESCRIPTOR_TYPE:
-		if setup.wLength == 8 {
-			// composite descriptor requested, so only send 8 bytes
-			dd := NewDeviceDescriptor(0xEF, 0x02, 0x01, 64, usb_VID, usb_PID, 0x100, usb_IMANUFACTURER, usb_IPRODUCT, usb_ISERIAL, 1)
-			sendUSBPacket(0, dd.Bytes()[:8])
-		} else {
-			// complete descriptor requested so send entire packet
-			dd := NewDeviceDescriptor(0x02, 0x00, 0x00, 64, usb_VID, usb_PID, 0x100, usb_IMANUFACTURER, usb_IPRODUCT, usb_ISERIAL, 1)
-			sendUSBPacket(0, dd.Bytes())
+		// composite descriptor
+		dd := NewDeviceDescriptor(0xef, 0x02, 0x01, 64, usb_VID, usb_PID, 0x100, usb_IMANUFACTURER, usb_IPRODUCT, usb_ISERIAL, 1)
+		l := deviceDescriptorSize
+		if setup.wLength < deviceDescriptorSize {
+			l = int(setup.wLength)
 		}
+		sendUSBPacket(0, dd.Bytes()[:l])
 		return
 
 	case usb_STRING_DESCRIPTOR_TYPE:
