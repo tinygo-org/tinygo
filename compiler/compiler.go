@@ -884,7 +884,8 @@ func (b *builder) createFunctionDefinition() {
 		if b.fn.Synthetic == "package initializer" {
 			// Package initializers have no debug info. Create some fake debug
 			// info to at least have *something*.
-			b.difunc = b.attachDebugInfoRaw(b.fn, b.fn.LLVMFn, "", "", 0)
+			filename := b.fn.Package().Pkg.Path() + "/<init>"
+			b.difunc = b.attachDebugInfoRaw(b.fn, b.fn.LLVMFn, "", filename, 0)
 		} else if b.fn.Syntax() != nil {
 			// Create debug info file if needed.
 			b.difunc = b.attachDebugInfo(b.fn)

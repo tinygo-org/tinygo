@@ -4,6 +4,7 @@ package interp
 // functions.
 
 import (
+	"errors"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
@@ -21,7 +22,7 @@ type frame struct {
 // Most of it works at compile time. Some calls get translated into calls to be
 // executed at runtime: calls to functions with side effects, external calls,
 // and operations on the result of such instructions.
-func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (retval Value, outgoing []llvm.Value, err error) {
+func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (retval Value, outgoing []llvm.Value, err *Error) {
 	for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
 		if fr.Debug {
 			print(indent)
@@ -97,7 +98,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				value = operand.Load()
 			}
 			if value.Type() != inst.Type() {
-				return nil, nil, fr.errorAt(inst, "interp: load: type does not match")
+				return nil, nil, fr.errorAt(inst, errors.New("interp: load: type does not match"))
 			}
 			fr.locals[inst] = fr.getValue(value)
 		case !inst.IsAStoreInst().IsNil():
@@ -121,16 +122,16 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					// Not a constant operation.
 					// This should be detected by the scanner, but isn't at the
 					// moment.
-					return nil, nil, fr.errorAt(inst, "todo: non-const gep")
+					return nil, nil, fr.errorAt(inst, errors.New("todo: non-const gep"))
 				}
 				indices[i] = uint32(operand.Value().ZExtValue())
 			}
 			result, err := value.GetElementPtr(indices)
 			if err != nil {
-				return nil, nil, fr.errorAt(inst, err.Error())
+				return nil, nil, fr.errorAt(inst, err)
 			}
 			if result.Type() != inst.Type() {
-				return nil, nil, fr.errorAt(inst, "interp: gep: type does not match")
+				return nil, nil, fr.errorAt(inst, errors.New("interp: gep: type does not match"))
 			}
 			fr.locals[inst] = result
 
@@ -185,7 +186,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					}
 				}
 				// It is not possible in Go to bitcast a map value to a pointer.
-				return nil, nil, fr.errorAt(inst, "unimplemented: bitcast of map")
+				return nil, nil, fr.errorAt(inst, errors.New("unimplemented: bitcast of map"))
 			}
 			value := fr.getLocal(operand).(*LocalValue)
 			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateBitCast(value.Value(), inst.Type(), "")}
@@ -269,7 +270,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				} else {
 					result, err := result.GetElementPtr([]uint32{0, 0})
 					if err != nil {
-						return nil, nil, errorAt(inst, err.Error())
+						return nil, nil, fr.errorAt(inst, err)
 					}
 					fr.locals[resultInst] = result
 				}
@@ -374,30 +375,30 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					// Re-add this GEP, in the hope that it it is then of the correct type...
 					dstArrayValue, err := dstArray.GetElementPtr([]uint32{0, 0})
 					if err != nil {
-						return nil, nil, errorAt(inst, err.Error())
+						return nil, nil, fr.errorAt(inst, err)
 					}
 					dstArray = dstArrayValue.(*LocalValue)
 					srcArrayValue, err := srcArray.GetElementPtr([]uint32{0, 0})
 					if err != nil {
-						return nil, nil, errorAt(inst, err.Error())
+						return nil, nil, fr.errorAt(inst, err)
 					}
 					srcArray = srcArrayValue.(*LocalValue)
 				}
 				if fr.Eval.TargetData.TypeAllocSize(dstArray.Type().ElementType()) != elementSize {
-					return nil, nil, fr.errorAt(inst, "interp: slice dst element size does not match pointer type")
+					return nil, nil, fr.errorAt(inst, errors.New("interp: slice dst element size does not match pointer type"))
 				}
 				if fr.Eval.TargetData.TypeAllocSize(srcArray.Type().ElementType()) != elementSize {
-					return nil, nil, fr.errorAt(inst, "interp: slice src element size does not match pointer type")
+					return nil, nil, fr.errorAt(inst, errors.New("interp: slice src element size does not match pointer type"))
 				}
 				if dstArray.Type() != srcArray.Type() {
-					return nil, nil, fr.errorAt(inst, "interp: slice element types don't match")
+					return nil, nil, fr.errorAt(inst, errors.New("interp: slice element types don't match"))
 				}
 				length := dstLen.Value().SExtValue()
 				if srcLength := srcLen.Value().SExtValue(); srcLength < length {
 					length = srcLength
 				}
 				if length < 0 {
-					return nil, nil, fr.errorAt(inst, "interp: trying to copy a slice with negative length?")
+					return nil, nil, fr.errorAt(inst, errors.New("interp: trying to copy a slice with negative length?"))
 				}
 				for i := int64(0); i < length; i++ {
 					var err error
@@ -406,13 +407,13 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					// dst++
 					dstArrayValue, err := dstArray.GetElementPtr([]uint32{1})
 					if err != nil {
-						return nil, nil, errorAt(inst, err.Error())
+						return nil, nil, fr.errorAt(inst, err)
 					}
 					dstArray = dstArrayValue.(*LocalValue)
 					// src++
 					srcArrayValue, err := srcArray.GetElementPtr([]uint32{1})
 					if err != nil {
-						return nil, nil, errorAt(inst, err.Error())
+						return nil, nil, fr.errorAt(inst, err)
 					}
 					srcArray = srcArrayValue.(*LocalValue)
 				}
@@ -444,11 +445,11 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				actualTypeInt := fr.getLocal(inst.Operand(0)).(*LocalValue).Underlying
 				assertedType := fr.getLocal(inst.Operand(1)).(*LocalValue).Underlying
 				if actualTypeInt.IsAConstantExpr().IsNil() || actualTypeInt.Opcode() != llvm.PtrToInt {
-					return nil, nil, fr.errorAt(inst, "interp: expected typecode in runtime.typeAssert to be a ptrtoint")
+					return nil, nil, fr.errorAt(inst, errors.New("interp: expected typecode in runtime.typeAssert to be a ptrtoint"))
 				}
 				actualType := actualTypeInt.Operand(0)
 				if actualType.IsAConstant().IsNil() || assertedType.IsAConstant().IsNil() {
-					return nil, nil, fr.errorAt(inst, "interp: unimplemented: type assert with non-constant interface value")
+					return nil, nil, fr.errorAt(inst, errors.New("interp: unimplemented: type assert with non-constant interface value"))
 				}
 				assertOk := uint64(0)
 				if llvm.ConstExtractValue(actualType.Initializer(), []uint32{0}) == assertedType {
@@ -459,16 +460,16 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				typecode := fr.getLocal(inst.Operand(0)).(*LocalValue).Underlying
 				interfaceMethodSet := fr.getLocal(inst.Operand(1)).(*LocalValue).Underlying
 				if typecode.IsAConstantExpr().IsNil() || typecode.Opcode() != llvm.PtrToInt {
-					return nil, nil, fr.errorAt(inst, "interp: expected typecode to be a ptrtoint")
+					return nil, nil, fr.errorAt(inst, errors.New("interp: expected typecode to be a ptrtoint"))
 				}
 				typecode = typecode.Operand(0)
 				if interfaceMethodSet.IsAConstantExpr().IsNil() || interfaceMethodSet.Opcode() != llvm.GetElementPtr {
-					return nil, nil, fr.errorAt(inst, "interp: expected method set in runtime.interfaceImplements to be a constant gep")
+					return nil, nil, fr.errorAt(inst, errors.New("interp: expected method set in runtime.interfaceImplements to be a constant gep"))
 				}
 				interfaceMethodSet = interfaceMethodSet.Operand(0).Initializer()
 				methodSet := llvm.ConstExtractValue(typecode.Initializer(), []uint32{1})
 				if methodSet.IsAConstantExpr().IsNil() || methodSet.Opcode() != llvm.GetElementPtr {
-					return nil, nil, fr.errorAt(inst, "interp: expected method set to be a constant gep")
+					return nil, nil, fr.errorAt(inst, errors.New("interp: expected method set to be a constant gep"))
 				}
 				methodSet = methodSet.Operand(0).Initializer()
 
@@ -568,6 +569,11 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					//     interpret anyway and hope for the best.
 					ret, err = fr.function(callee, params, indent+"    ")
 					if err != nil {
+						// Record this function call in the backtrace.
+						err.Traceback = append(err.Traceback, ErrorLine{
+							Pos:  getPosition(inst),
+							Inst: inst,
+						})
 						return nil, nil, err
 					}
 				}
@@ -586,7 +592,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				fr.locals[inst] = fr.getValue(newValue)
 			} else {
 				if len(indices) != 1 {
-					return nil, nil, fr.errorAt(inst, "interp: cannot handle extractvalue with not exactly 1 index")
+					return nil, nil, fr.errorAt(inst, errors.New("interp: cannot handle extractvalue with not exactly 1 index"))
 				}
 				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateExtractValue(agg.Underlying, int(indices[0]), inst.Name())}
 			}
@@ -599,7 +605,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				fr.locals[inst] = &LocalValue{fr.Eval, newValue}
 			} else {
 				if len(indices) != 1 {
-					return nil, nil, fr.errorAt(inst, "interp: cannot handle insertvalue with not exactly 1 index")
+					return nil, nil, fr.errorAt(inst, errors.New("interp: cannot handle insertvalue with not exactly 1 index"))
 				}
 				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateInsertValue(agg.Underlying, val.Value(), int(indices[0]), inst.Name())}
 			}
@@ -624,17 +630,17 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			// conditional branch (if/then/else)
 			cond := fr.getLocal(inst.Operand(0)).Value()
 			if cond.Type() != fr.Mod.Context().Int1Type() {
-				return nil, nil, fr.errorAt(inst, "expected an i1 in a branch instruction")
+				return nil, nil, fr.errorAt(inst, errors.New("expected an i1 in a branch instruction"))
 			}
 			thenBB := inst.Operand(1)
 			elseBB := inst.Operand(2)
 			if !cond.IsAInstruction().IsNil() {
-				return nil, nil, fr.errorAt(inst, "interp: branch on a non-constant")
+				return nil, nil, fr.errorAt(inst, errors.New("interp: branch on a non-constant"))
 			}
 			if !cond.IsAConstantExpr().IsNil() {
 				// This may happen when the instruction builder could not
 				// const-fold some instructions.
-				return nil, nil, fr.errorAt(inst, "interp: branch on a non-const-propagated constant expression")
+				return nil, nil, fr.errorAt(inst, errors.New("interp: branch on a non-const-propagated constant expression"))
 			}
 			switch cond {
 			case llvm.ConstInt(fr.Mod.Context().Int1Type(), 0, false): // false
@@ -642,7 +648,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			case llvm.ConstInt(fr.Mod.Context().Int1Type(), 1, false): // true
 				return nil, []llvm.Value{elseBB}, nil // else
 			default:
-				return nil, nil, fr.errorAt(inst, "branch was not true or false")
+				return nil, nil, fr.errorAt(inst, errors.New("branch was not true or false"))
 			}
 		case !inst.IsABranchInst().IsNil() && inst.OperandsCount() == 1:
 			// unconditional branch (goto)

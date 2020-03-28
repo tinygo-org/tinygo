@@ -658,22 +658,22 @@ func usage() {
 // to limitations in the LLVM bindings.
 func printCompilerError(logln func(...interface{}), err error) {
 	switch err := err.(type) {
-	case *interp.Unsupported:
-		// hit an unknown/unsupported instruction
-		logln("#", err.ImportPath)
-		msg := "unsupported instruction during init evaluation:"
-		if err.Pos.String() != "" {
-			msg = err.Pos.String() + " " + msg
-		}
-		logln(msg)
-		err.Inst.Dump()
-		logln()
 	case types.Error, scanner.Error:
 		logln(err)
-	case interp.Error:
+	case *interp.Error:
 		logln("#", err.ImportPath)
-		for _, err := range err.Errs {
-			logln(err)
+		logln(err.Error())
+		if !err.Inst.IsNil() {
+			err.Inst.Dump()
+			logln()
+		}
+		if len(err.Traceback) > 0 {
+			logln("\ntraceback:")
+			for _, line := range err.Traceback {
+				logln(line.Pos.String() + ":")
+				line.Inst.Dump()
+				logln()
+			}
 		}
 	case loader.Errors:
 		logln("#", err.Pkg.ImportPath)
