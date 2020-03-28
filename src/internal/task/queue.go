@@ -37,6 +37,11 @@ func (q *Queue) Pop() *Task {
 	return t
 }
 
+// Empty checks if there are any tasks in the queue.
+func (q *Queue) Empty() bool {
+	return q.head == nil
+}
+
 // Append pops the contents of another queue and pushes them onto the end of this queue.
 func (q *Queue) Append(other *Queue) {
 	if q.head == nil {
@@ -46,6 +51,11 @@ func (q *Queue) Append(other *Queue) {
 	}
 	q.tail = other.tail
 	other.head, other.tail = nil, nil
+}
+
+// AppendTo pops the contents of this queue and pushes them onto another queue.
+func (q *Queue) AppendTo(other *Queue) {
+	other.Append(q)
 }
 
 // Stack is a LIFO container of tasks.
