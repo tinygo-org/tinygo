@@ -26,6 +26,9 @@ func main() {
 	println("Stringer.String():", s.String())
 	var itf interface{} = s
 	println("Stringer.(*Thing).String():", itf.(Stringer).String())
+	if s, ok := s.(interface{ String() string }); ok {
+		println("s has String() method:", s.String())
+	}
 
 	println("nested switch:", nestedSwitch('v', 3))
 
