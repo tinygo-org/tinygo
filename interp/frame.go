@@ -603,6 +603,18 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				}
 				fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateInsertValue(agg.Underlying, val.Value(), int(indices[0]), inst.Name())}
 			}
+		case !inst.IsASelectInst().IsNil():
+			// var result T
+			// if cond {
+			//   result = x
+			// } else {
+			//   result = y
+			// }
+			// return result
+			cond := fr.getLocal(inst.Operand(0)).(*LocalValue).Underlying
+			x := fr.getLocal(inst.Operand(1)).(*LocalValue).Underlying
+			y := fr.getLocal(inst.Operand(2)).(*LocalValue).Underlying
+			fr.locals[inst] = &LocalValue{fr.Eval, fr.builder.CreateSelect(cond, x, y, "")}
 
 		case !inst.IsAReturnInst().IsNil() && inst.OperandsCount() == 0:
 			return nil, nil, nil // ret void
