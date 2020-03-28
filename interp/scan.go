@@ -1,6 +1,7 @@
 package interp
 
 import (
+	"errors"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
@@ -40,7 +41,7 @@ type sideEffectResult struct {
 // hasSideEffects scans this function and all descendants, recursively. It
 // returns whether this function has side effects and if it does, which globals
 // it mentions anywhere in this function or any called functions.
-func (e *evalPackage) hasSideEffects(fn llvm.Value) (*sideEffectResult, error) {
+func (e *evalPackage) hasSideEffects(fn llvm.Value) (*sideEffectResult, *Error) {
 	name := fn.Name()
 	switch {
 	case name == "runtime.alloc":
@@ -99,7 +100,7 @@ func (e *evalPackage) hasSideEffects(fn llvm.Value) (*sideEffectResult, error) {
 			switch inst.InstructionOpcode() {
 			case llvm.IndirectBr, llvm.Invoke:
 				// Not emitted by the compiler.
-				return nil, e.errorAt(inst, "unknown instructions")
+				return nil, e.errorAt(inst, errors.New("unknown instructions"))
 			case llvm.Call:
 				child := inst.CalledValue()
 				if !child.IsAInlineAsm().IsNil() {

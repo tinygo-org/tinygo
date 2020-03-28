@@ -97,7 +97,7 @@ func Run(mod llvm.Module, debug bool) error {
 // function interprets the given function. The params are the function params
 // and the indent is the string indentation to use when dumping all interpreted
 // instructions.
-func (e *evalPackage) function(fn llvm.Value, params []Value, indent string) (Value, error) {
+func (e *evalPackage) function(fn llvm.Value, params []Value, indent string) (Value, *Error) {
 	fr := frame{
 		evalPackage: e,
 		fn:          fn,

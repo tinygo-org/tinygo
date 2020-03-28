@@ -13,55 +13,44 @@ import (
 
 // errUnreachable is returned when an unreachable instruction is executed. This
 // error should not be visible outside of the interp package.
-var errUnreachable = errors.New("interp: unreachable executed")
-
-// Unsupported is the specific error that is returned when an unsupported
-// instruction is hit while trying to interpret all initializers.
-type Unsupported struct {
-	ImportPath string
-	Inst       llvm.Value
-	Pos        token.Position
-}
-
-func (e Unsupported) Error() string {
-	// TODO: how to return the actual instruction string?
-	// It looks like LLVM provides no function for that...
-	return scanner.Error{
-		Pos: e.Pos,
-		Msg: "interp: unsupported instruction",
-	}.Error()
-}
+var errUnreachable = &Error{Err: errors.New("interp: unreachable executed")}
 
 // unsupportedInstructionError returns a new "unsupported instruction" error for
 // the given instruction. It includes source location information, when
 // available.
-func (e *evalPackage) unsupportedInstructionError(inst llvm.Value) *Unsupported {
-	return &Unsupported{
-		ImportPath: e.packagePath,
-		Inst:       inst,
-		Pos:        getPosition(inst),
-	}
+func (e *evalPackage) unsupportedInstructionError(inst llvm.Value) *Error {
+	return e.errorAt(inst, errors.New("interp: unsupported instruction"))
+}
+
+// ErrorLine is one line in a traceback. The position may be missing.
+type ErrorLine struct {
+	Pos  token.Position
+	Inst llvm.Value
 }
 
 // Error encapsulates compile-time interpretation errors with an associated
 // import path. The errors may not have a precise location attached.
 type Error struct {
 	ImportPath string
-	Errs       []scanner.Error
+	Inst       llvm.Value
+	Pos        token.Position
+	Err        error
+	Traceback  []ErrorLine
 }
 
 // Error returns the string of the first error in the list of errors.
-func (e Error) Error() string {
-	return e.Errs[0].Error()
+func (e *Error) Error() string {
+	return e.Pos.String() + ": " + e.Err.Error()
 }
 
 // errorAt returns an error value for the currently interpreted package at the
 // location of the instruction. The location information may not be complete as
 // it depends on debug information in the IR.
-func (e *evalPackage) errorAt(inst llvm.Value, msg string) Error {
-	return Error{
+func (e *evalPackage) errorAt(inst llvm.Value, err error) *Error {
+	return &Error{
 		ImportPath: e.packagePath,
-		Errs:       []scanner.Error{errorAt(inst, msg)},
+		Pos:        getPosition(inst),
+		Err:        err,
 	}
 }
 
