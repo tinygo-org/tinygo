@@ -1478,7 +1478,7 @@ func handleUSB(intr interrupt.Interrupt) {
 			setEPINTENCLR(0, sam.USB_DEVICE_EPINTENCLR_STALL1)
 		}
 	} else {
-		sendZlp(0)
+		sendZlp()
 	}
 
 	// Now the actual transfer handlers, ignore endpoint number 0 (setup)
@@ -1601,7 +1601,7 @@ func handleStandardSetup(setup usbSetup) bool {
 		} else if setup.wValueL == 0 { // ENDPOINTHALT
 			isEndpointHalt = false
 		}
-		sendZlp(0)
+		sendZlp()
 		return true
 
 	case usb_SET_FEATURE:
@@ -1610,7 +1610,7 @@ func handleStandardSetup(setup usbSetup) bool {
 		} else if setup.wValueL == 0 { // ENDPOINTHALT
 			isEndpointHalt = true
 		}
-		sendZlp(0)
+		sendZlp()
 		return true
 
 	case usb_SET_ADDRESS:
@@ -1665,7 +1665,7 @@ func handleStandardSetup(setup usbSetup) bool {
 			// Enable interrupt for CDC data messages from host
 			setEPINTENSET(usb_CDC_ENDPOINT_OUT, sam.USB_DEVICE_EPINTENSET_TRCPT0)
 
-			sendZlp(0)
+			sendZlp()
 			return true
 		} else {
 			return false
@@ -1679,7 +1679,7 @@ func handleStandardSetup(setup usbSetup) bool {
 	case usb_SET_INTERFACE:
 		usbSetInterface = setup.wValueL
 
-		sendZlp(0)
+		sendZlp()
 		return true
 
 	default:
@@ -1724,14 +1724,14 @@ func cdcSetup(setup usbSetup) bool {
 			} else {
 				// TODO: cancel any reset
 			}
-			sendZlp(0)
+			sendZlp()
 		}
 
 		if setup.bRequest == usb_CDC_SEND_BREAK {
 			// TODO: something with this value?
 			// breakValue = ((uint16_t)setup.wValueH << 8) | setup.wValueL;
 			// return false;
-			sendZlp(0)
+			sendZlp()
 		}
 		return true
 	}
@@ -1790,104 +1790,6 @@ func receiveUSBControlPacket() []byte {
 	return data
 }
 
-// sendDescriptor creates and sends the various USB descriptor types that
-// can be requested by the host.
-func sendDescriptor(setup usbSetup) {
-	switch setup.wValueH {
-	case usb_CONFIGURATION_DESCRIPTOR_TYPE:
-		sendConfiguration(setup)
-		return
-	case usb_DEVICE_DESCRIPTOR_TYPE:
-		// composite descriptor
-		dd := NewDeviceDescriptor(0xef, 0x02, 0x01, 64, usb_VID, usb_PID, 0x100, usb_IMANUFACTURER, usb_IPRODUCT, usb_ISERIAL, 1)
-		l := deviceDescriptorSize
-		if setup.wLength < deviceDescriptorSize {
-			l = int(setup.wLength)
-		}
-		sendUSBPacket(0, dd.Bytes()[:l])
-		return
-
-	case usb_STRING_DESCRIPTOR_TYPE:
-		switch setup.wValueL {
-		case 0:
-			b := []byte{0x04, 0x03, 0x09, 0x04}
-			sendUSBPacket(0, b)
-			return
-
-		case usb_IPRODUCT:
-			b := strToUTF16LEDescriptor(usb_STRING_PRODUCT)
-			sendUSBPacket(0, b)
-			return
-
-		case usb_IMANUFACTURER:
-			b := strToUTF16LEDescriptor(usb_STRING_MANUFACTURER)
-			sendUSBPacket(0, b)
-			return
-
-		case usb_ISERIAL:
-			// TODO: allow returning a product serial number
-			sendZlp(0)
-		}
-
-		// send final zero length packet and return
-		sendZlp(0)
-		return
-	}
-
-	// do not know how to handle this message, so return zero
-	sendZlp(0)
-	return
-}
-
-// sendConfiguration creates and sends the configuration packet to the host.
-func sendConfiguration(setup usbSetup) {
-	if setup.wLength == 9 {
-		sz := uint16(configDescriptorSize + cdcSize)
-		config := NewConfigDescriptor(sz, 2)
-		sendUSBPacket(0, config.Bytes())
-	} else {
-		iad := NewIADDescriptor(0, 2, usb_CDC_COMMUNICATION_INTERFACE_CLASS, usb_CDC_ABSTRACT_CONTROL_MODEL, 0)
-
-		cif := NewInterfaceDescriptor(usb_CDC_ACM_INTERFACE, 1, usb_CDC_COMMUNICATION_INTERFACE_CLASS, usb_CDC_ABSTRACT_CONTROL_MODEL, 0)
-
-		header := NewCDCCSInterfaceDescriptor(usb_CDC_HEADER, usb_CDC_V1_10&0xFF, (usb_CDC_V1_10>>8)&0x0FF)
-
-		controlManagement := NewACMFunctionalDescriptor(usb_CDC_ABSTRACT_CONTROL_MANAGEMENT, 6)
-
-		functionalDescriptor := NewCDCCSInterfaceDescriptor(usb_CDC_UNION, usb_CDC_ACM_INTERFACE, usb_CDC_DATA_INTERFACE)
-
-		callManagement := NewCMFunctionalDescriptor(usb_CDC_CALL_MANAGEMENT, 1, 1)
-
-		cifin := NewEndpointDescriptor((usb_CDC_ENDPOINT_ACM | usbEndpointIn), usb_ENDPOINT_TYPE_INTERRUPT, 0x10, 0x10)
-
-		dif := NewInterfaceDescriptor(usb_CDC_DATA_INTERFACE, 2, usb_CDC_DATA_INTERFACE_CLASS, 0, 0)
-
-		out := NewEndpointDescriptor((usb_CDC_ENDPOINT_OUT | usbEndpointOut), usb_ENDPOINT_TYPE_BULK, usbEndpointPacketSize, 0)
-
-		in := NewEndpointDescriptor((usb_CDC_ENDPOINT_IN | usbEndpointIn), usb_ENDPOINT_TYPE_BULK, usbEndpointPacketSize, 0)
-
-		cdc := NewCDCDescriptor(iad,
-			cif,
-			header,
-			controlManagement,
-			functionalDescriptor,
-			callManagement,
-			cifin,
-			dif,
-			out,
-			in)
-
-		sz := uint16(configDescriptorSize + cdcSize)
-		config := NewConfigDescriptor(sz, 2)
-
-		buf := make([]byte, 0, sz)
-		buf = append(buf, config.Bytes()...)
-		buf = append(buf, cdc.Bytes()...)
-
-		sendUSBPacket(0, buf)
-	}
-}
-
 func handleEndpoint(ep uint32) {
 	// get data
 	count := int((usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.Get() >>
@@ -1908,8 +1810,8 @@ func handleEndpoint(ep uint32) {
 	setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
 }
 
-func sendZlp(ep uint32) {
-	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+func sendZlp() {
+	usbEndpointDescriptors[0].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 }
 
 func epPacketSize(size uint16) uint32 {
