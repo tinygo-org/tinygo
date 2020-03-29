@@ -98,15 +98,9 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 	return machine, nil
 }
 
-// Compile the given package path or .go file path. Return an error when this
-// fails (in any stage). If successful it returns the LLVM module and a list of
-// extra C files to be compiled. If not, one or more errors will be returned.
-//
-// The fact that it returns a list of filenames to compile is a layering
-// violation. Eventually, this Compile function should only compile a single
-// package and not the whole program, and loading of the program (including CGo
-// processing) should be moved outside the compiler package.
-func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) (llvm.Module, []string, []error) {
+// newCompilerContext builds a new *compilerContext based on the provided
+// configuration, ready to compile Go SSA to LLVM IR.
+func newCompilerContext(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) *compilerContext {
 	c := &compilerContext{
 		Config:     config,
 		difiles:    make(map[string]llvm.Metadata),
@@ -139,6 +133,20 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	dummyFunc := llvm.AddFunction(c.mod, "tinygo.dummy", dummyFuncType)
 	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
 	dummyFunc.EraseFromParentAsFunction()
+
+	return c
+}
+
+// Compile the given package path or .go file path. Return an error when this
+// fails (in any stage). If successful it returns the LLVM module and a list of
+// extra C files to be compiled. If not, one or more errors will be returned.
+//
+// The fact that it returns a list of filenames to compile is a layering
+// violation. Eventually, this Compile function should only compile a single
+// package and not the whole program, and loading of the program (including CGo
+// processing) should be moved outside the compiler package.
+func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) (llvm.Module, []string, []error) {
+	c := newCompilerContext(pkgName, machine, config)
 
 	// Prefix the GOPATH with the system GOROOT, as GOROOT is already set to
 	// the TinyGo root.
