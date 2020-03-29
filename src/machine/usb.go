@@ -381,16 +381,14 @@ type cdcLineInfo struct {
 // to do a "proper" conversion, we would need to pull in the 'unicode/utf16'
 // package, which at the time this was written added 512 bytes to the compiled
 // binary.
-func strToUTF16LEDescriptor(in string) []byte {
-	size := (len(in) << 1) + 2
-	out := make([]byte, size)
-	out[0] = byte(size)
-	out[1] = 0x03
+func strToUTF16LEDescriptor(in string, out []byte) {
+	out[0] = byte(len(out))
+	out[1] = usb_STRING_DESCRIPTOR_TYPE
 	for i, rune := range in {
 		out[(i<<1)+2] = byte(rune)
 		out[(i<<1)+3] = 0
 	}
-	return out
+	return
 }
 
 var (
@@ -614,4 +612,98 @@ func (usbcdc USBCDC) Buffered() int {
 // Usually called by the IRQ handler for a machine.
 func (usbcdc USBCDC) Receive(data byte) {
 	usbcdc.Buffer.Put(data)
+}
+
+// sendDescriptor creates and sends the various USB descriptor types that
+// can be requested by the host.
+func sendDescriptor(setup usbSetup) {
+	switch setup.wValueH {
+	case usb_CONFIGURATION_DESCRIPTOR_TYPE:
+		sendConfiguration(setup)
+		return
+	case usb_DEVICE_DESCRIPTOR_TYPE:
+		// composite descriptor
+		dd := NewDeviceDescriptor(0xef, 0x02, 0x01, 64, usb_VID, usb_PID, 0x100, usb_IMANUFACTURER, usb_IPRODUCT, usb_ISERIAL, 1)
+		l := deviceDescriptorSize
+		if setup.wLength < deviceDescriptorSize {
+			l = int(setup.wLength)
+		}
+		sendUSBPacket(0, dd.Bytes()[:l])
+		return
+
+	case usb_STRING_DESCRIPTOR_TYPE:
+		switch setup.wValueL {
+		case 0:
+			b := []byte{0x04, 0x03, 0x09, 0x04}
+			sendUSBPacket(0, b)
+
+		case usb_IPRODUCT:
+			b := make([]byte, (len(usb_STRING_PRODUCT)<<1)+2)
+			strToUTF16LEDescriptor(usb_STRING_PRODUCT, b)
+			sendUSBPacket(0, b)
+
+		case usb_IMANUFACTURER:
+			b := make([]byte, (len(usb_STRING_MANUFACTURER)<<1)+2)
+			strToUTF16LEDescriptor(usb_STRING_MANUFACTURER, b)
+			sendUSBPacket(0, b)
+
+		case usb_ISERIAL:
+			// TODO: allow returning a product serial number
+			sendZlp()
+		}
+		return
+	}
+
+	// do not know how to handle this message, so return zero
+	sendZlp()
+	return
+}
+
+// sendConfiguration creates and sends the configuration packet to the host.
+func sendConfiguration(setup usbSetup) {
+	if setup.wLength == 9 {
+		sz := uint16(configDescriptorSize + cdcSize)
+		config := NewConfigDescriptor(sz, 2)
+		sendUSBPacket(0, config.Bytes())
+	} else {
+		iad := NewIADDescriptor(0, 2, usb_CDC_COMMUNICATION_INTERFACE_CLASS, usb_CDC_ABSTRACT_CONTROL_MODEL, 0)
+
+		cif := NewInterfaceDescriptor(usb_CDC_ACM_INTERFACE, 1, usb_CDC_COMMUNICATION_INTERFACE_CLASS, usb_CDC_ABSTRACT_CONTROL_MODEL, 0)
+
+		header := NewCDCCSInterfaceDescriptor(usb_CDC_HEADER, usb_CDC_V1_10&0xFF, (usb_CDC_V1_10>>8)&0x0FF)
+
+		controlManagement := NewACMFunctionalDescriptor(usb_CDC_ABSTRACT_CONTROL_MANAGEMENT, 6)
+
+		functionalDescriptor := NewCDCCSInterfaceDescriptor(usb_CDC_UNION, usb_CDC_ACM_INTERFACE, usb_CDC_DATA_INTERFACE)
+
+		callManagement := NewCMFunctionalDescriptor(usb_CDC_CALL_MANAGEMENT, 1, 1)
+
+		cifin := NewEndpointDescriptor((usb_CDC_ENDPOINT_ACM | usbEndpointIn), usb_ENDPOINT_TYPE_INTERRUPT, 0x10, 0x10)
+
+		dif := NewInterfaceDescriptor(usb_CDC_DATA_INTERFACE, 2, usb_CDC_DATA_INTERFACE_CLASS, 0, 0)
+
+		out := NewEndpointDescriptor((usb_CDC_ENDPOINT_OUT | usbEndpointOut), usb_ENDPOINT_TYPE_BULK, usbEndpointPacketSize, 0)
+
+		in := NewEndpointDescriptor((usb_CDC_ENDPOINT_IN | usbEndpointIn), usb_ENDPOINT_TYPE_BULK, usbEndpointPacketSize, 0)
+
+		cdc := NewCDCDescriptor(iad,
+			cif,
+			header,
+			controlManagement,
+			functionalDescriptor,
+			callManagement,
+			cifin,
+			dif,
+			out,
+			in)
+
+		sz := uint16(configDescriptorSize + cdcSize)
+		config := NewConfigDescriptor(sz, 2)
+
+		buf := make([]byte, 0, sz)
+		buf = append(buf, config.Bytes()...)
+		buf = append(buf, cdc.Bytes()...)
+
+		sendUSBPacket(0, buf)
+	}
 }
