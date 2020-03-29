@@ -180,7 +180,7 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 				path = path[len(tinygoPath+"/src/"):]
 			}
 			switch path {
-			case "machine", "os", "reflect", "runtime", "runtime/interrupt", "runtime/volatile", "sync", "testing", "internal/reflectlite", "internal/task":
+			case "machine", "os", "reflect", "runtime", "runtime/interrupt", "runtime/volatile", "runtime/sync", "sync", "testing", "internal/reflectlite", "internal/task":
 				return path
 			default:
 				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {

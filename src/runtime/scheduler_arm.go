@@ -10,6 +10,10 @@ import (
 
 var intq task.InterruptQueue
 
+func pushInterrupt(t *task.Task) {
+	intq.Push(t)
+}
+
 func poll() bool {
 	var found bool
 

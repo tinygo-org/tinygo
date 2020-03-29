@@ -15,6 +15,8 @@
 // and https://blog.regehr.org/archives/28.
 package volatile
 
+import "unsafe"
+
 // LoadUint8 loads the volatile value *addr.
 func LoadUint8(addr *uint8) (val uint8)
 
@@ -24,6 +26,9 @@ func LoadUint16(addr *uint16) (val uint16)
 // LoadUint32 loads the volatile value *addr.
 func LoadUint32(addr *uint32) (val uint32)
 
+// LoadPointer loads the volatile value *addr.
+func LoadPointer(addr *unsafe.Pointer) (val unsafe.Pointer)
+
 // StoreUint8 stores val to the volatile value *addr.
 func StoreUint8(addr *uint8, val uint8)
 
@@ -32,3 +37,6 @@ func StoreUint16(addr *uint16, val uint16)
 
 // StoreUint32 stores val to the volatile value *addr.
 func StoreUint32(addr *uint32, val uint32)
+
+// StorePointer stores val to the volatile value *addr.
+func StorePointer(addr *unsafe.Pointer, val unsafe.Pointer)
