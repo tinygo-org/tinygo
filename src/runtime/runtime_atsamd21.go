@@ -3,11 +3,10 @@
 package runtime
 
 import (
-	"device/arm"
 	"device/sam"
+	"internal/task"
 	"machine"
 	"runtime/interrupt"
-	"runtime/volatile"
 	"unsafe"
 )
 
@@ -217,10 +216,7 @@ func initRTC() {
 	waitForSync()
 
 	intr := interrupt.New(sam.IRQ_RTC, func(intr interrupt.Interrupt) {
-		// disable IRQ for CMP0 compare
-		sam.RTC_MODE0.INTFLAG.Set(sam.RTC_MODE0_INTENSET_CMP0)
-
-		timerWakeup.Set(1)
+		rtc.handleInterrupt()
 	})
 	intr.SetPriority(0xc0)
 	intr.Enable()
@@ -239,19 +235,58 @@ var (
 	timerLastCounter uint64
 )
 
-var timerWakeup volatile.Register8
+type rtcTimer struct{}
+
+func (t rtcTimer) setTimer(wakeup timeUnit) {
+	now := ticks()
+	if now >= wakeup {
+		wakeup = now
+	}
+
+	delay := wakeup - now
+
+	if delay < 214 {
+		// due to around 183us delay waiting for the register value to sync, the minimum sleep value
+		// for the SAMD21 is 214us.
+		// For related info, see:
+		// https://community.atmel.com/comment/2507091#comment-2507091
+		delay = 214
+	}
+
+	// request read of count
+	sam.RTC_MODE0.READREQ.Set(sam.RTC_MODE0_READREQ_RREQ)
+	waitForSync()
+
+	// set compare value
+	cnt := sam.RTC_MODE0.COUNT.Get()
+	sam.RTC_MODE0.COMP0.Set(uint32(cnt) + (uint32(delay) * 10 / 305)) // each counter tick == 30.5us
+	waitForSync()
+
+	// enable IRQ for CMP0 compare
+	sam.RTC_MODE0.INTENSET.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
+}
+
+func (t rtcTimer) disableTimer() {
+	// disable IRQ for CMP0 compare
+	sam.RTC_MODE0.INTFLAG.Set(sam.RTC_MODE0_INTENSET_CMP0)
+}
+
+var rtc = timerController{
+	t: rtcTimer{},
+}
+
+// Add this task to the sleep queue, assuming its state is set to sleeping.
+func addSleepTask(t *task.Task, duration int64) {
+	rtc.enqueue(t, ticks()+timeUnit(duration/tickMicros))
+}
+
+// devicePoll polls for device-specific events.
+// For atsamd21, the only device-specific events are RTC timers.
+func devicePoll() bool {
+	return rtc.poll()
+}
 
 const asyncScheduler = false
-
-// sleepTicks should sleep for d number of microseconds.
-func sleepTicks(d timeUnit) {
-	for d != 0 {
-		ticks() // update timestamp
-		ticks := uint32(d)
-		timerSleep(ticks)
-		d -= timeUnit(ticks)
-	}
-}
 
 // ticks returns number of microseconds since start.
 func ticks() timeUnit {
@@ -264,34 +299,6 @@ func ticks() timeUnit {
 	timerLastCounter = rtcCounter
 	timestamp += timeUnit(offset) // TODO: not precise
 	return timestamp
-}
-
-// ticks are in microseconds
-func timerSleep(ticks uint32) {
-	timerWakeup.Set(0)
-	if ticks < 214 {
-		// due to around 183us delay waiting for the register value to sync, the minimum sleep value
-		// for the SAMD21 is 214us.
-		// For related info, see:
-		// https://community.atmel.com/comment/2507091#comment-2507091
-		ticks = 214
-	}
-
-	// request read of count
-	sam.RTC_MODE0.READREQ.Set(sam.RTC_MODE0_READREQ_RREQ)
-	waitForSync()
-
-	// set compare value
-	cnt := sam.RTC_MODE0.COUNT.Get()
-	sam.RTC_MODE0.COMP0.Set(uint32(cnt) + (ticks * 10 / 305)) // each counter tick == 30.5us
-	waitForSync()
-
-	// enable IRQ for CMP0 compare
-	sam.RTC_MODE0.INTENSET.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
-
-	for timerWakeup.Get() == 0 {
-		arm.Asm("wfi")
-	}
 }
 
 func initUSBClock() {

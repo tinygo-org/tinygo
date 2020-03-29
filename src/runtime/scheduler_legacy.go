@@ -1,3 +1,5 @@
+// +build wasm !atsamd21
+
 package runtime
 
 import "internal/task"

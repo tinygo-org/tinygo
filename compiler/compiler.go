@@ -252,6 +252,13 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 
 	c.loadASTComments(lprogram)
 
+	// Forcibly preload special types.
+	runtimePkg := c.ir.Program.ImportedPackage("runtime")
+	c.getLLVMType(runtimePkg.Type("_interface").Type())
+	c.getLLVMType(runtimePkg.Type("_string").Type())
+	c.getLLVMType(runtimePkg.Type("hashmap").Type())
+	c.getLLVMType(runtimePkg.Type("channel").Type())
+
 	// Declare runtime types.
 	// TODO: lazily create runtime types in getLLVMRuntimeType when they are
 	// needed. Eventually this will be required anyway, when packages are
