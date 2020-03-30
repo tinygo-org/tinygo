@@ -1,8 +1,7 @@
 package syscall
 
 // This file defines errno and constants to match the darwin libsystem ABI.
-// Values have been determined experimentally by compiling some C code on macOS
-// with Clang and looking at the resulting LLVM IR.
+// Values have been copied from src/syscall/zerrors_darwin_amd64.go.
 
 // This function returns the error location in the darwin ABI.
 // Discovered by compiling the following code using Clang:
@@ -24,28 +23,34 @@ func getErrno() Errno {
 }
 
 const (
-	ENOENT      Errno = 2
-	EINTR       Errno = 4
-	EMFILE      Errno = 24
-	EAGAIN      Errno = 35
-	ETIMEDOUT   Errno = 60
-	ENOSYS      Errno = 78
+	ENOENT      Errno = 0x2
+	EEXIST      Errno = 0x11
+	EINTR       Errno = 0x4
+	EMFILE      Errno = 0x18
+	EAGAIN      Errno = 0x23
+	ETIMEDOUT   Errno = 0x3c
+	ENOSYS      Errno = 0x4e
 	EWOULDBLOCK Errno = EAGAIN
 )
 
 type Signal int
 
 const (
-	SIGCHLD Signal = 20
-	SIGINT  Signal = 2
-	SIGKILL Signal = 9
-	SIGTRAP Signal = 5
-	SIGQUIT Signal = 3
-	SIGTERM Signal = 15
+	SIGCHLD Signal = 0x14
+	SIGINT  Signal = 0x2
+	SIGKILL Signal = 0x9
+	SIGTRAP Signal = 0x5
+	SIGQUIT Signal = 0x3
+	SIGTERM Signal = 0xf
 )
 
 const (
-	O_RDONLY = 0
-	O_WRONLY = 1
-	O_RDWR   = 2
+	O_RDONLY = 0x0
+	O_WRONLY = 0x1
+	O_RDWR   = 0x2
+	O_APPEND = 0x8
+	O_SYNC   = 0x80
+	O_CREAT  = 0x200
+	O_TRUNC  = 0x400
+	O_EXCL   = 0x800
 )
