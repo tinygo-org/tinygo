@@ -28,3 +28,13 @@ var (
 	globalsEnd   = uintptr(unsafe.Pointer(&globalsEndSymbol))
 	stackTop     = uintptr(unsafe.Pointer(&stackTopSymbol))
 )
+
+//export malloc
+func libc_malloc(size uintptr) unsafe.Pointer {
+	return alloc(size)
+}
+
+//export free
+func libc_free(ptr unsafe.Pointer) {
+	free(ptr)
+}
