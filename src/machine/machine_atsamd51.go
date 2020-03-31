@@ -1648,8 +1648,6 @@ func handleUSBIRQ(interrupt.Interrupt) {
 			// clear stall request
 			setEPINTENCLR(0, sam.USB_DEVICE_ENDPOINT_EPINTENCLR_STALL1)
 		}
-	} else {
-		sendZlp()
 	}
 
 	// Now the actual transfer handlers, ignore endpoint number 0 (setup)
@@ -1920,6 +1918,7 @@ func sendUSBPacket(ep uint32, data []byte) {
 	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
 
 	// set byte count, which is total number of bytes to be sent
+	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.SetBits(uint32((len(data) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask) << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos))
 }
 
