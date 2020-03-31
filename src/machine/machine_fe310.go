@@ -183,7 +183,7 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return byte(spi.Bus.RXDATA.Get() & sifive.QSPI_RXDATA_DATA_Msk), nil
 }
 
-// I2C on the FE310 G002.
+// I2C on the FE310-G002.
 type I2C struct {
 	Bus *sifive.I2C_Type
 }
@@ -195,6 +195,7 @@ type I2CConfig struct {
 	SDA       Pin
 }
 
+// Configure is intended to setup the I2C interface.
 func (i2c I2C) Configure(config I2CConfig) error {
 
 	var clockFrequency uint32 = 32000000
@@ -226,16 +227,14 @@ func (i2c I2C) Configure(config I2CConfig) error {
 	return nil
 }
 
+// Tx does a single I2C transaction at the specified address.
+// It clocks out the given address, writes the bytes in w, reads back len(r)
+// bytes and stores them in r, and generates a stop condition on the bus.
 func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	var err error
 	if len(w) != 0 {
 		// send start/address for write
 		i2c.sendAddress(addr, true)
-
-		// wait until transmission complete
-		// TODO: add timeout
-		for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP) {
-		}
 
 		// ACK received (0: ACK, 1: NACK)
 		if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK) {
@@ -244,21 +243,15 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 		// write data
 		for _, b := range w {
-			err = i2c.WriteByte(b)
+			err = i2c.writeByte(b)
 			if err != nil {
 				return err
 			}
 		}
-
 	}
 	if len(r) != 0 {
 		// send start/address for read
 		i2c.sendAddress(addr, false)
-
-		// wait until transmission complete
-		// TODO: add timeout
-		for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP) {
-		}
 
 		// ACK received (0: ACK, 1: NACK)
 		if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK) {
@@ -284,15 +277,14 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	return nil
 }
 
-// WriteByte writes a single byte to the I2C bus.
-func (i2c I2C) WriteByte(data byte) error {
+// Writes a single byte to the I2C bus.
+func (i2c I2C) writeByte(data byte) error {
 	// Send data byte
 	i2c.Bus.TXR_RXR.Set(uint32(data))
 
 	i2c.Bus.CR_SR.Set(sifive.I2C_CR_WR)
 
 	// wait until transmission complete
-	// TODO: add timeout ?
 	for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP) {
 	}
 
@@ -304,16 +296,18 @@ func (i2c I2C) WriteByte(data byte) error {
 	return nil
 }
 
+// Reads a single byte from the I2C bus.
 func (i2c I2C) readByte() byte {
 	i2c.Bus.CR_SR.Set(sifive.I2C_CR_RD)
 
-	//TODO: add timeout ?
+	// wait until transmission complete
 	for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP) {
 	}
+
 	return byte(i2c.Bus.TXR_RXR.Get())
 }
 
-// sendAddress sends the address and start signal
+// Sends the address and start signal.
 func (i2c I2C) sendAddress(address uint16, write bool) error {
 	data := (address << 1)
 	if !write {
@@ -325,6 +319,10 @@ func (i2c I2C) sendAddress(address uint16, write bool) error {
 
 	// generate start condition
 	i2c.Bus.CR_SR.Set((sifive.I2C_CR_STA | sifive.I2C_CR_WR))
+
+	// wait until transmission complete
+	for i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_TIP) {
+	}
 
 	return nil
 }
