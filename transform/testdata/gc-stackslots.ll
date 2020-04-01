@@ -50,3 +50,37 @@ define i8* @noAllocatingFunction() {
   call void @runtime.trackPointer(i8* %ptr)
   ret i8* %ptr
 }
+
+define i8* @fibNext(i8* %x, i8* %y) {
+  %x.val = load i8, i8* %x
+  %y.val = load i8, i8* %y
+  %out.val = add i8 %x.val, %y.val
+  %out.alloc = call i8* @runtime.alloc(i32 1)
+  call void @runtime.trackPointer(i8* %out.alloc)
+  store i8 %out.val, i8* %out.alloc
+  ret i8* %out.alloc
+}
+
+define i8* @allocLoop() {
+entry:
+  %entry.x = call i8* @runtime.alloc(i32 1)
+  call void @runtime.trackPointer(i8* %entry.x)
+  %entry.y = call i8* @runtime.alloc(i32 1)
+  call void @runtime.trackPointer(i8* %entry.y)
+  store i8 1, i8* %entry.y
+  br label %loop
+
+loop:
+  %prev.y = phi i8* [ %entry.y, %entry ], [ %prev.x, %loop ]
+  %prev.x = phi i8* [ %entry.x, %entry ], [ %next.x, %loop ]
+  call void @runtime.trackPointer(i8* %prev.x)
+  call void @runtime.trackPointer(i8* %prev.y)
+  %next.x = call i8* @fibNext(i8* %prev.x, i8* %prev.y)
+  call void @runtime.trackPointer(i8* %next.x)
+  %next.x.val = load i8, i8* %next.x
+  %loop.done = icmp ult i8 40, %next.x.val
+  br i1 %loop.done, label %end, label %loop
+
+end:
+  ret i8* %next.x
+}
