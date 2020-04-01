@@ -92,6 +92,13 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	root := goenv.Get("TINYGOROOT")
 	var libcDependencies []*compileJob
 	switch config.Target.Libc {
+	case "musl":
+		job, err := Musl.load(config, dir)
+		if err != nil {
+			return err
+		}
+		libcDependencies = append(libcDependencies, dummyCompileJob(filepath.Join(filepath.Dir(job.result), "crt1.o")))
+		libcDependencies = append(libcDependencies, job)
 	case "picolibc":
 		libcJob, err := Picolibc.load(config, dir)
 		if err != nil {
@@ -578,12 +585,15 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			// while we're at it. Relocations can only be compressed when debug
 			// information is stripped.
 			ldflags = append(ldflags, "--strip-debug", "--compress-relocations")
+		} else if config.Target.Linker == "ld.lld" {
+			// ld.lld is also used on Linux.
+			ldflags = append(ldflags, "--strip-debug")
 		} else {
 			switch config.GOOS() {
 			case "linux":
 				// Either real linux or an embedded system (like AVR) that
 				// pretends to be Linux. It's a ELF linker wrapped by GCC in any
-				// case.
+				// case (not ld.lld - that case is handled above).
 				ldflags = append(ldflags, "-Wl,--strip-debug")
 			case "darwin":
 				// MacOS (darwin) doesn't have a linker flag to strip debug

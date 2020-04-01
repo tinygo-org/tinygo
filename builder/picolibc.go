@@ -11,14 +11,14 @@ import (
 // based on newlib.
 var Picolibc = Library{
 	name: "picolibc",
-	makeHeaders: func(includeDir string) error {
+	makeHeaders: func(target, includeDir string) error {
 		f, err := os.Create(filepath.Join(includeDir, "picolibc.h"))
 		if err != nil {
 			return err
 		}
 		return f.Close()
 	},
-	cflags: func(headerPath string) []string {
+	cflags: func(target, headerPath string) []string {
 		picolibcDir := filepath.Join(goenv.Get("TINYGOROOT"), "lib/picolibc/newlib/libc")
 		return []string{
 			"-Werror",
@@ -34,7 +34,7 @@ var Picolibc = Library{
 		}
 	},
 	sourceDir: "lib/picolibc/newlib/libc",
-	sources: func(target string) []string {
+	librarySources: func(target string) []string {
 		return picolibcSources
 	},
 }

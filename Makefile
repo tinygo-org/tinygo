@@ -465,6 +465,7 @@ endif
 	@$(MD5SUM) test.nro
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -opt=0     ./testdata/stdlib.go
 	@$(MD5SUM) test.hex
+	GOOS=linux GOARCH=arm $(TINYGO) build -size short -o test.elf       ./testdata/cgo
 ifneq ($(OS),Windows_NT)
 	$(TINYGO) build -o test.elf -gc=leaking -scheduler=none examples/serial
 endif
@@ -478,6 +479,9 @@ build/release: tinygo gen-device wasi-libc
 	@mkdir -p build/release/tinygo/lib/clang/include
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
 	@mkdir -p build/release/tinygo/lib/compiler-rt/lib
+	@mkdir -p build/release/tinygo/lib/musl/arch
+	@mkdir -p build/release/tinygo/lib/musl/crt
+	@mkdir -p build/release/tinygo/lib/musl/src
 	@mkdir -p build/release/tinygo/lib/nrfx
 	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libc
 	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libm
@@ -493,6 +497,27 @@ build/release: tinygo gen-device wasi-libc
 	@cp -rp lib/compiler-rt/lib/builtins build/release/tinygo/lib/compiler-rt/lib
 	@cp -rp lib/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt
 	@cp -rp lib/compiler-rt/README.txt   build/release/tinygo/lib/compiler-rt
+	@cp -rp lib/musl/arch/aarch64        build/release/tinygo/lib/musl/arch
+	@cp -rp lib/musl/arch/arm            build/release/tinygo/lib/musl/arch
+	@cp -rp lib/musl/arch/generic        build/release/tinygo/lib/musl/arch
+	@cp -rp lib/musl/arch/i386           build/release/tinygo/lib/musl/arch
+	@cp -rp lib/musl/arch/x86_64         build/release/tinygo/lib/musl/arch
+	@cp -rp lib/musl/crt/crt1.c          build/release/tinygo/lib/musl/crt
+	@cp -rp lib/musl/COPYRIGHT           build/release/tinygo/lib/musl
+	@cp -rp lib/musl/include             build/release/tinygo/lib/musl
+	@cp -rp lib/musl/src/env             build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/errno           build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/exit            build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/include         build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/internal        build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/malloc          build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/mman            build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/signal          build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/stdio           build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/string          build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/thread          build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/time            build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/unistd          build/release/tinygo/lib/musl/src
 	@cp -rp lib/nrfx/*                   build/release/tinygo/lib/nrfx
 	@cp -rp lib/picolibc/newlib/libc/ctype       build/release/tinygo/lib/picolibc/newlib/libc
 	@cp -rp lib/picolibc/newlib/libc/include     build/release/tinygo/lib/picolibc/newlib/libc

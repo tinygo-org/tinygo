@@ -17,31 +17,19 @@ type Library struct {
 	name string
 
 	// makeHeaders creates a header include dir for the library
-	makeHeaders func(includeDir string) error
+	makeHeaders func(target, includeDir string) error
 
 	// cflags returns the C flags specific to this library
-	cflags func(headerPath string) []string
+	cflags func(target, headerPath string) []string
 
 	// The source directory, relative to TINYGOROOT.
 	sourceDir string
 
 	// The source files, relative to sourceDir.
-	sources func(target string) []string
-}
+	librarySources func(target string) []string
 
-// fullPath returns the full path to the source directory.
-func (l *Library) fullPath() string {
-	return filepath.Join(goenv.Get("TINYGOROOT"), l.sourceDir)
-}
-
-// sourcePaths returns a slice with the full paths to the source files.
-func (l *Library) sourcePaths(target string) []string {
-	sources := l.sources(target)
-	paths := make([]string, len(sources))
-	for i, name := range sources {
-		paths[i] = filepath.Join(l.fullPath(), name)
-	}
-	return paths
+	// The source code for the crt1.o file, relative to sourceDir.
+	crt1Source string
 }
 
 // Load the library archive, possibly generating and caching it if needed.
@@ -90,6 +78,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 
 	// Make headers if needed.
 	headerPath := filepath.Join(outdir, "include")
+	target := config.Triple()
 	if l.makeHeaders != nil {
 		if _, err = os.Stat(headerPath); err != nil {
 			temporaryHeaderPath, err := ioutil.TempDir(outdir, "include.tmp*")
@@ -97,7 +86,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 				return nil, err
 			}
 			defer os.RemoveAll(temporaryHeaderPath)
-			err = l.makeHeaders(temporaryHeaderPath)
+			err = l.makeHeaders(target, temporaryHeaderPath)
 			if err != nil {
 				return nil, err
 			}
@@ -119,11 +108,16 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	// Note: -fdebug-prefix-map is necessary to make the output archive
 	// reproducible. Otherwise the temporary directory is stored in the archive
 	// itself, which varies each run.
-	target := config.Triple()
-	args := append(l.cflags(headerPath), "-c", "-Oz", "-g", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir)
+	args := append(l.cflags(target, headerPath), "-c", "-Oz", "-g", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir)
 	cpu := config.CPU()
 	if cpu != "" {
-		args = append(args, "-mcpu="+cpu)
+		// X86 has deprecated the -mcpu flag, so we need to use -march instead.
+		// However, ARM has not done this.
+		if strings.HasPrefix(target, "i386") || strings.HasPrefix(target, "x86_64") {
+			args = append(args, "-march="+cpu)
+		} else {
+			args = append(args, "-mcpu="+cpu)
+		}
 	}
 	if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
 		args = append(args, "-fshort-enums", "-fomit-frame-pointer", "-mfloat-abi=soft")
@@ -162,9 +156,15 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 
 	// Create jobs to compile all sources. These jobs are depended upon by the
 	// archive job above, so must be run first.
-	for _, srcpath := range l.sourcePaths(target) {
-		srcpath := srcpath // avoid concurrency issues by redefining inside the loop
-		objpath := filepath.Join(dir, filepath.Base(srcpath)+".o")
+	for _, path := range l.librarySources(target) {
+		// Strip leading "../" parts off the path.
+		cleanpath := path
+		for strings.HasPrefix(cleanpath, "../") {
+			cleanpath = cleanpath[3:]
+		}
+		srcpath := filepath.Join(goenv.Get("TINYGOROOT"), l.sourceDir, path)
+		objpath := filepath.Join(dir, cleanpath+".o")
+		os.MkdirAll(filepath.Dir(objpath), 0o777)
 		objs = append(objs, objpath)
 		job.dependencies = append(job.dependencies, &compileJob{
 			description: "compile " + srcpath,
@@ -177,6 +177,32 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 					return &commandError{"failed to build", srcpath, err}
 				}
 				return nil
+			},
+		})
+	}
+
+	// Create crt1.o job, if needed.
+	// Add this as a (fake) dependency to the ar file so it gets compiled.
+	// (It could be done in parallel with creating the ar file, but it probably
+	// won't make much of a difference in speed).
+	if l.crt1Source != "" {
+		srcpath := filepath.Join(goenv.Get("TINYGOROOT"), l.sourceDir, l.crt1Source)
+		job.dependencies = append(job.dependencies, &compileJob{
+			description: "compile " + srcpath,
+			run: func(*compileJob) error {
+				var compileArgs []string
+				compileArgs = append(compileArgs, args...)
+				tmpfile, err := ioutil.TempFile(outdir, "crt1.o.tmp*")
+				if err != nil {
+					return err
+				}
+				tmpfile.Close()
+				compileArgs = append(compileArgs, "-o", tmpfile.Name(), srcpath)
+				err = runCCompiler(compileArgs...)
+				if err != nil {
+					return &commandError{"failed to build", srcpath, err}
+				}
+				return os.Rename(tmpfile.Name(), filepath.Join(outdir, "crt1.o"))
 			},
 		})
 	}
