@@ -5,11 +5,13 @@ target triple = "armv7m-none-eabi"
 %"internal/task.state" = type { i8* }
 
 declare void @"internal/task.start"(i32, i8*, i8*, i8*)
+
 declare void @"internal/task.Pause"(i8*, i8*)
 
 declare void @runtime.scheduler(i8*, i8*)
 
 declare i8* @runtime.alloc(i32, i8*, i8*)
+
 declare void @runtime.free(i8*, i8*, i8*)
 
 declare %"internal/task.Task"* @"internal/task.Current"(i8*, i8*)
@@ -17,9 +19,11 @@ declare %"internal/task.Task"* @"internal/task.Current"(i8*, i8*)
 declare i8* @"(*internal/task.Task).setState"(%"internal/task.Task"*, i8*, i8*, i8*)
 
 declare void @"(*internal/task.Task).setReturnPtr"(%"internal/task.Task"*, i8*, i8*, i8*)
+
 declare i8* @"(*internal/task.Task).getReturnPtr"(%"internal/task.Task"*, i8*, i8*)
 
 declare void @"(*internal/task.Task).returnTo"(%"internal/task.Task"*, i8*, i8*, i8*)
+
 declare void @"(*internal/task.Task).returnCurrent"(%"internal/task.Task"*, i8*, i8*)
 
 declare %"internal/task.Task"* @"internal/task.createTask"(i8*, i8*)
@@ -27,6 +31,7 @@ declare %"internal/task.Task"* @"internal/task.createTask"(i8*, i8*)
 declare void @callMain(i8*, i8*)
 
 declare void @enqueueTimer(%"internal/task.Task"*, i64, i8*, i8*)
+
 define void @sleep(i64, i8*, i8* %parentHandle) {
 entry:
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
@@ -159,15 +164,31 @@ entry:
   ret void
 }
 
+; Function Attrs: argmemonly nounwind readonly
 declare token @llvm.coro.id(i32, i8* readnone, i8* nocapture readonly, i8*) #0
+
+; Function Attrs: nounwind readnone
 declare i32 @llvm.coro.size.i32() #1
+
+; Function Attrs: nounwind
 declare i8* @llvm.coro.begin(token, i8* writeonly) #2
+
+; Function Attrs: nounwind
 declare i8 @llvm.coro.suspend(token, i1) #2
+
+; Function Attrs: nounwind
 declare i1 @llvm.coro.end(i8*, i1) #2
+
+; Function Attrs: argmemonly nounwind readonly
 declare i8* @llvm.coro.free(token, i8* nocapture readonly) #0
+
+; Function Attrs: nounwind
 declare token @llvm.coro.save(i8*) #2
 
+; Function Attrs: argmemonly nounwind
 declare void @llvm.lifetime.start.p0i8(i64 immarg, i8* nocapture) #3
+
+; Function Attrs: argmemonly nounwind
 declare void @llvm.lifetime.end.p0i8(i64 immarg, i8* nocapture) #3
 
 attributes #0 = { argmemonly nounwind readonly }

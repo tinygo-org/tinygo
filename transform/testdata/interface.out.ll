@@ -36,32 +36,32 @@ define void @printInterface(i32 %typecode, i8* %value) {
   %typeassert.ok1 = call i1 @"Unmatched$typeassert"(i32 %typecode)
   br i1 %typeassert.ok1, label %typeswitch.Unmatched, label %typeswitch.notUnmatched
 
-typeswitch.Unmatched:
+typeswitch.Unmatched:                             ; preds = %0
   %unmatched = ptrtoint i8* %value to i32
   call void @runtime.printptr(i32 %unmatched)
   call void @runtime.printnl()
   ret void
 
-typeswitch.notUnmatched:
+typeswitch.notUnmatched:                          ; preds = %0
   %typeassert.ok = call i1 @"Doubler$typeassert"(i32 %typecode)
   br i1 %typeassert.ok, label %typeswitch.Doubler, label %typeswitch.notDoubler
 
-typeswitch.Doubler:
+typeswitch.Doubler:                               ; preds = %typeswitch.notUnmatched
   %doubler.result = call i32 @"(Number).Double$invoke"(i8* %value, i8* null)
   call void @runtime.printint32(i32 %doubler.result)
   ret void
 
-typeswitch.notDoubler:
+typeswitch.notDoubler:                            ; preds = %typeswitch.notUnmatched
   %typeassert.ok2 = icmp eq i32 16, %typecode
   br i1 %typeassert.ok2, label %typeswitch.byte, label %typeswitch.notByte
 
-typeswitch.byte:
+typeswitch.byte:                                  ; preds = %typeswitch.notDoubler
   %byte = ptrtoint i8* %value to i8
   call void @runtime.printuint8(i8 %byte)
   call void @runtime.printnl()
   ret void
 
-typeswitch.notByte:
+typeswitch.notByte:                               ; preds = %typeswitch.notDoubler
   ret void
 }
 
@@ -82,10 +82,10 @@ entry:
     i32 68, label %then
   ]
 
-then:
+then:                                             ; preds = %entry
   ret i1 true
 
-else:
+else:                                             ; preds = %entry
   ret i1 false
 }
 
@@ -94,9 +94,9 @@ entry:
   switch i32 %actualType, label %else [
   ]
 
-then:
+then:                                             ; No predecessors!
   ret i1 true
 
-else:
+else:                                             ; preds = %entry
   ret i1 false
 }

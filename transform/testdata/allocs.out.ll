@@ -54,13 +54,15 @@ define void @testNonEscapingLoop() {
 entry:
   %stackalloc.alloca = alloca [1 x i32]
   br label %loop
-loop:
+
+loop:                                             ; preds = %loop, %entry
   store [1 x i32] zeroinitializer, [1 x i32]* %stackalloc.alloca
   %stackalloc = bitcast [1 x i32]* %stackalloc.alloca to i32*
   %0 = call i32* @noescapeIntPtr(i32* %stackalloc)
   %1 = icmp eq i32* null, %0
   br i1 %1, label %loop, label %end
-end:
+
+end:                                              ; preds = %loop
   ret void
 }
 
