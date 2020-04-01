@@ -41,6 +41,12 @@ func (b *builder) trackExpr(expr ssa.Value, value llvm.Value) {
 			// pointer in there (if there is one).
 			b.trackValue(value)
 		}
+	case *ssa.BinOp:
+		switch expr.Op {
+		case token.ADD:
+			// String concatenation.
+			b.trackValue(value)
+		}
 	}
 }
 
