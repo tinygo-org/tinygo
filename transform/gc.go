@@ -150,11 +150,14 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 				continue
 			}
 			switch ptr.InstructionOpcode() {
-			case llvm.PHI, llvm.GetElementPtr:
+			case llvm.GetElementPtr:
 				// These values do not create new values: the values already
 				// existed locally in this function so must have been tracked
 				// already.
 				continue
+			case llvm.PHI:
+				// While the value may have already been tracked, it may be overwritten in a loop.
+				// Therefore, a second copy must be created to ensure that it is tracked over the entirety of its lifetime.
 			case llvm.ExtractValue, llvm.BitCast:
 				// These instructions do not create new values, but their
 				// original value may not be tracked. So keep tracking them for
@@ -228,11 +231,22 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 
 		// Do a store to the stack object after each new pointer that is created.
 		for i, ptr := range pointers {
-			builder.SetInsertPointBefore(llvm.NextInstruction(ptr))
+			// Insert the store after the pointer value is created.
+			insertionPoint := llvm.NextInstruction(ptr)
+			for !insertionPoint.IsAPHINode().IsNil() {
+				// PHI nodes are required to be at the start of the block.
+				// Insert after the last PHI node.
+				insertionPoint = llvm.NextInstruction(insertionPoint)
+			}
+			builder.SetInsertPointBefore(insertionPoint)
+
+			// Extract a pointer to the appropriate section of the stack object.
 			gep := builder.CreateGEP(stackObject, []llvm.Value{
 				llvm.ConstInt(ctx.Int32Type(), 0, false),
 				llvm.ConstInt(ctx.Int32Type(), uint64(2+len(allocas)+i), false),
 			}, "")
+
+			// Store the pointer into the stack slot.
 			builder.CreateStore(ptr, gep)
 		}
 
