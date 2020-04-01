@@ -51,3 +51,9 @@ const (
 	SPI1_MOSI_PIN = D11
 	SPI1_MISO_PIN = D12
 )
+
+// I2C pins
+const (
+	I2C0_SDA_PIN = D18
+	I2C0_SCL_PIN = D19
+)
