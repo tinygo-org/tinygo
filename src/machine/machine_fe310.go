@@ -195,11 +195,11 @@ type I2CConfig struct {
 	SDA       Pin
 }
 
+var i2cAckExpectedError error = errors.New("I2C write error: expected ACK not NACK")
+
 // Configure is intended to setup the I2C interface.
 func (i2c I2C) Configure(config I2CConfig) error {
-
-	var clockFrequency uint32 = 32000000
-
+	var i2cClockFrequency uint32 = 32000000
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
 	}
@@ -209,7 +209,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 		config.SCL = I2C0_SCL_PIN
 	}
 
-	var prescaler = clockFrequency/(5*config.Frequency) - 1
+	var prescaler = i2cClockFrequency/(5*config.Frequency) - 1
 
 	// disable controller before setting the prescale registers
 	i2c.Bus.CTR.ClearBits(sifive.I2C_CTR_EN)
@@ -238,7 +238,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 		// ACK received (0: ACK, 1: NACK)
 		if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK) {
-			return errors.New("I2C write error: expected ACK not NACK")
+			return i2cAckExpectedError
 		}
 
 		// write data
@@ -255,7 +255,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 		// ACK received (0: ACK, 1: NACK)
 		if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK) {
-			return errors.New("I2C write error: expected ACK not NACK")
+			return i2cAckExpectedError
 		}
 
 		// read first byte
@@ -289,8 +289,8 @@ func (i2c I2C) writeByte(data byte) error {
 	}
 
 	// ACK received (0: ACK, 1: NACK)
-	if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK_Msk) {
-		return errors.New("I2C write error: expected ACK not NACK")
+	if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK) {
+		return i2cAckExpectedError
 	}
 
 	return nil
