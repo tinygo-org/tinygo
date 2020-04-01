@@ -17,8 +17,11 @@ func usleep(usec uint) int
 func malloc(size uintptr) unsafe.Pointer
 
 // void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+// Note: off_t is defined as int64 because:
+//   - musl (used on Linux) always defines it as int64
+//   - darwin is practically always 64-bit anyway
 //export mmap
-func mmap(addr unsafe.Pointer, length uintptr, prot, flags, fd int, offset int) unsafe.Pointer
+func mmap(addr unsafe.Pointer, length uintptr, prot, flags, fd int, offset int64) unsafe.Pointer
 
 //export abort
 func abort()
@@ -27,16 +30,39 @@ func abort()
 func exit(code int)
 
 //export clock_gettime
-func clock_gettime(clk_id int32, ts *timespec)
+func libc_clock_gettime(clk_id int32, ts *timespec)
+
+//export __clock_gettime64
+func libc_clock_gettime64(clk_id int32, ts *timespec)
+
+// Portable (64-bit) variant of clock_gettime.
+func clock_gettime(clk_id int32, ts *timespec) {
+	if TargetBits == 32 {
+		// This is a 32-bit architecture (386, arm, etc).
+		// We would like to use the 64-bit version of this function so that
+		// binaries will continue to run after Y2038.
+		// For more information:
+		//   - https://musl.libc.org/time64.html
+		//   - https://sourceware.org/glibc/wiki/Y2038ProofnessDesign
+		libc_clock_gettime64(clk_id, ts)
+	} else {
+		// This is a 64-bit architecture (amd64, arm64, etc).
+		// Use the regular variant, because it already fixes the Y2038 problem
+		// by using 64-bit integer types.
+		libc_clock_gettime(clk_id, ts)
+	}
+}
 
 type timeUnit int64
 
-// Note: tv_sec and tv_nsec vary in size by platform. They are 32-bit on 32-bit
-// systems and 64-bit on 64-bit systems (at least on macOS/Linux), so we can
-// simply use the 'int' type which does the same.
+// Note: tv_sec and tv_nsec normally vary in size by platform. However, we're
+// using the time64 variant (see clock_gettime above), so the formats are the
+// same between 32-bit and 64-bit architectures.
+// There is one issue though: on big-endian systems, tv_nsec would be incorrect.
+// But we don't support big-endian systems yet (as of 2021) so this is fine.
 type timespec struct {
-	tv_sec  int // time_t: follows the platform bitness
-	tv_nsec int // long: on Linux and macOS, follows the platform bitness
+	tv_sec  int64 // time_t with time64 support (always 64-bit)
+	tv_nsec int64 // unsigned 64-bit integer on all time64 platforms
 }
 
 var stackTop uintptr

@@ -198,6 +198,16 @@ func (c *Config) RP2040BootPatch() bool {
 	return false
 }
 
+// MuslArchitecture returns the architecture name as used in musl libc. It is
+// usually the same as the first part of the LLVM triple, but not always.
+func MuslArchitecture(triple string) string {
+	arch := strings.Split(triple, "-")[0]
+	if strings.HasPrefix(arch, "arm") || strings.HasPrefix(arch, "thumb") {
+		arch = "arm"
+	}
+	return arch
+}
+
 // LibcPath returns the path to the libc directory. The libc path will be either
 // a precompiled libc shipped with a TinyGo build, or a libc path in the cache
 // directory (which might not yet be built).
@@ -237,6 +247,15 @@ func (c *Config) CFlags() []string {
 			"--sysroot="+path,
 			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "include"),
 			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "tinystdio"),
+		)
+	case "musl":
+		root := goenv.Get("TINYGOROOT")
+		path, _ := c.LibcPath("musl")
+		arch := MuslArchitecture(c.Triple())
+		cflags = append(cflags,
+			"--sysroot="+path,
+			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "musl", "arch", arch),
+			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "musl", "include"),
 		)
 	case "wasi-libc":
 		root := goenv.Get("TINYGOROOT")

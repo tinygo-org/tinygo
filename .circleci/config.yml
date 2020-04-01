@@ -17,18 +17,15 @@ commands:
             echo 'deb https://apt.llvm.org/buster/ llvm-toolchain-buster-<<parameters.llvm>> main' | sudo tee /etc/apt/sources.list.d/llvm.list
             wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
             sudo apt-get update
-            sudo apt-get install \
+            sudo apt-get install --no-install-recommends \
                 llvm-<<parameters.llvm>>-dev \
                 clang-<<parameters.llvm>> \
                 libclang-<<parameters.llvm>>-dev \
                 lld-<<parameters.llvm>> \
-                gcc-arm-linux-gnueabihf \
-                gcc-aarch64-linux-gnu \
                 qemu-system-arm \
                 qemu-user \
                 gcc-avr \
                 avr-libc
-            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-8-dev
   install-node:
     steps:
       - run:
@@ -139,17 +136,12 @@ commands:
           name: "Install apt dependencies"
           command: |
             sudo apt-get update
-            sudo apt-get install \
+            sudo apt-get install --no-install-recommends \
                 libgnutls30 libssl1.0.2 \
-                gcc-arm-linux-gnueabihf \
-                libc6-dev-armel-cross \
-                gcc-aarch64-linux-gnu \
-                libc6-dev-arm64-cross \
                 qemu-system-arm \
                 qemu-user \
                 gcc-avr \
                 avr-libc
-            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-6-dev
       - install-node
       - install-wasmtime
       - install-xtensa-toolchain:
@@ -209,17 +201,12 @@ commands:
           name: "Install apt dependencies"
           command: |
             sudo apt-get update
-            sudo apt-get install \
+            sudo apt-get install --no-install-recommends \
                 libgnutls30 libssl1.0.2 \
-                gcc-arm-linux-gnueabihf \
-                libc6-dev-armel-cross \
-                gcc-aarch64-linux-gnu \
-                libc6-dev-arm64-cross \
                 qemu-system-arm \
                 qemu-user \
                 gcc-avr \
                 avr-libc
-            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-6-dev
       - install-node
       - install-wasmtime
       - install-xtensa-toolchain:

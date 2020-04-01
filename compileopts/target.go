@@ -234,6 +234,11 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	if goos == "darwin" {
 		spec.CFlags = append(spec.CFlags, "-isysroot", "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk")
 		spec.LDFlags = append(spec.LDFlags, "-Wl,-dead_strip")
+	} else if goos == "linux" {
+		spec.Linker = "ld.lld"
+		spec.RTLib = "compiler-rt"
+		spec.Libc = "musl"
+		spec.LDFlags = append(spec.LDFlags, "--gc-sections")
 	} else {
 		spec.LDFlags = append(spec.LDFlags, "-no-pie", "-Wl,--gc-sections") // WARNING: clang < 5.0 requires -nopie
 	}
@@ -245,18 +250,10 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		// Some educated guesses as to how to invoke helper programs.
 		spec.GDB = []string{"gdb-multiarch"}
 		if goarch == "arm" && goos == "linux" {
-			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/arm-linux-gnueabihf")
-			spec.Linker = "arm-linux-gnueabihf-gcc"
-			spec.Emulator = []string{"qemu-arm", "-L", "/usr/arm-linux-gnueabihf"}
+			spec.Emulator = []string{"qemu-arm"}
 		}
 		if goarch == "arm64" && goos == "linux" {
-			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/aarch64-linux-gnu")
-			spec.Linker = "aarch64-linux-gnu-gcc"
-			spec.Emulator = []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"}
-		}
-		if goarch == "386" && runtime.GOARCH == "amd64" {
-			spec.CFlags = append(spec.CFlags, "-m32")
-			spec.LDFlags = append(spec.LDFlags, "-m32")
+			spec.Emulator = []string{"qemu-aarch64"}
 		}
 	}
 	return &spec, nil
