@@ -1025,6 +1025,18 @@ func (b *builder) createFunctionDefinition() {
 			phi.llvm.AddIncoming([]llvm.Value{llvmVal}, []llvm.BasicBlock{llvmBlock})
 		}
 	}
+
+	if b.NeedsStackObjects() {
+		// Track phi nodes.
+		for _, phi := range b.phis {
+			insertPoint := llvm.NextInstruction(phi.llvm)
+			for !insertPoint.IsAPHINode().IsNil() {
+				insertPoint = llvm.NextInstruction(insertPoint)
+			}
+			b.SetInsertPointBefore(insertPoint)
+			b.trackValue(phi.llvm)
+		}
+	}
 }
 
 // createInstruction builds the LLVM IR equivalent instructions for the
