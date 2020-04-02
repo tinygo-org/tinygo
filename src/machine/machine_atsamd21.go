@@ -2209,3 +2209,65 @@ func ResetProcessor() {
 
 	arm.SystemReset()
 }
+
+// DAC on the SAMD21.
+type DAC struct {
+}
+
+var (
+	DAC0 = DAC{}
+)
+
+type DACConfig struct {
+	// TBD
+}
+
+func (dac DAC) Configure(config DACConfig) {
+	// output pin must already be configured
+
+	// Turn on clock for DAC
+	sam.PM.APBCMASK.SetBits(sam.PM_APBCMASK_DAC_)
+
+	// Use Generic Clock Generator 0 as source for DAC.
+	sam.GCLK.CLKCTRL.Set((sam.GCLK_CLKCTRL_ID_DAC << sam.GCLK_CLKCTRL_ID_Pos) |
+		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
+		sam.GCLK_CLKCTRL_CLKEN)
+	waitForSync()
+
+	// reset DAC
+	sam.DAC.CTRLA.Set(sam.DAC_CTRLA_SWRST)
+	syncDAC()
+
+	// wait for reset complete
+	for sam.DAC.CTRLA.HasBits(sam.DAC_CTRLA_SWRST) {
+	}
+
+	// enable
+	sam.DAC.CTRLB.Set(sam.DAC_CTRLB_EOEN | sam.DAC_CTRLB_REFSEL_AVCC)
+	sam.DAC.CTRLA.Set(sam.DAC_CTRLA_ENABLE)
+}
+
+func (dac DAC) WriteData(value uint16) error {
+	syncDAC()
+	sam.DAC.DATA.Set(value & 0x3FF)
+	syncDAC()
+	sam.DAC.CTRLA.SetBits(sam.DAC_CTRLA_ENABLE)
+	syncDAC()
+	return nil
+}
+
+func (dac DAC) Write(p []uint16) (n int, err error) {
+	for _, val := range p {
+		dac.WriteData(val)
+	}
+	return len(p), nil
+}
+
+func (dac DAC) Close() error {
+	return nil
+}
+
+func syncDAC() {
+	for sam.DAC.STATUS.HasBits(sam.DAC_STATUS_SYNCBUSY) {
+	}
+}
