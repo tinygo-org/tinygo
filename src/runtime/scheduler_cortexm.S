@@ -111,3 +111,26 @@ tinygo_swapTask:
     mov r11, r3
     pop {pc}
     #endif
+
+.global  tinygo_scanCurrentStack
+.type    tinygo_scanCurrentStack, %function
+tinygo_scanCurrentStack:
+    // Save callee-saved registers onto the stack.
+    #if defined(__thumb2__)
+    push {r4-r11, lr}
+    #else
+    mov r0, r8
+    mov r1, r9
+    mov r2, r10
+    mov r3, r11
+    push {r0-r3, lr}
+    push {r4-r7}
+    #endif
+
+    // Scan the stack.
+    mov r0, sp
+    bl tinygo_scanstack
+
+    // Restore stack state and return.
+    add sp, #32
+    pop {pc}
