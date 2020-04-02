@@ -95,3 +95,9 @@ func fake() {
 	go func() {}()
 	Pause()
 }
+
+// OnSystemStack returns whether the caller is running on the system stack.
+func OnSystemStack() bool {
+	// This scheduler does not do any stack switching.
+	return true
+}

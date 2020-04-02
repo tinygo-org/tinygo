@@ -27,3 +27,9 @@ type state struct{}
 func (t *Task) Resume() {
 	runtimePanic("scheduler is disabled")
 }
+
+// OnSystemStack returns whether the caller is running on the system stack.
+func OnSystemStack() bool {
+	// This scheduler does not do any stack switching.
+	return true
+}

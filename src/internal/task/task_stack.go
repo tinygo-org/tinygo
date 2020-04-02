@@ -72,3 +72,9 @@ func start(fn uintptr, args unsafe.Pointer) {
 	t.state.initialize(fn, args)
 	runqueuePushBack(t)
 }
+
+// OnSystemStack returns whether the caller is running on the system stack.
+func OnSystemStack() bool {
+	// If there is not an active goroutine, then this must be running on the system stack.
+	return Current() == nil
+}
