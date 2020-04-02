@@ -726,6 +726,18 @@ func main() {
 	}
 	command := os.Args[1]
 
+	// Early command processing, before commands are interpreted by the Go flag
+	// library.
+	switch command {
+	case "clang", "ld.lld", "wasm-ld":
+		err := builder.RunTool(command, os.Args[2:]...)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	flag.CommandLine.Parse(os.Args[2:])
 	options := &compileopts.Options{
 		Target:        *target,

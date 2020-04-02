@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -16,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
 )
 
@@ -217,4 +219,25 @@ func runTest(path, target string, t *testing.T) {
 		}
 		t.Fail()
 	}
+}
+
+// This TestMain is necessary because TinyGo may also be invoked to run certain
+// LLVM tools in a separate process. Not capturing these invocations would lead
+// to recursive tests.
+func TestMain(m *testing.M) {
+	if len(os.Args) >= 2 {
+		switch os.Args[1] {
+		case "clang", "ld.lld", "wasm-ld":
+			// Invoke a specific tool.
+			err := builder.RunTool(os.Args[1], os.Args[2:]...)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			os.Exit(0)
+		}
+	}
+
+	// Run normal tests.
+	os.Exit(m.Run())
 }
