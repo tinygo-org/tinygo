@@ -14,14 +14,14 @@ commands:
       - run:
           name: "Install apt dependencies"
           command: |
-            echo 'deb https://apt.llvm.org/buster/ llvm-toolchain-buster<<parameters.llvm>> main' | sudo tee /etc/apt/sources.list.d/llvm.list
+            echo 'deb https://apt.llvm.org/buster/ llvm-toolchain-buster-<<parameters.llvm>> main' | sudo tee /etc/apt/sources.list.d/llvm.list
             wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
             sudo apt-get update
             sudo apt-get install \
-                llvm<<parameters.llvm>>-dev \
-                clang<<parameters.llvm>> \
-                libclang<<parameters.llvm>>-dev \
-                lld<<parameters.llvm>> \
+                llvm-<<parameters.llvm>>-dev \
+                clang-<<parameters.llvm>> \
+                libclang-<<parameters.llvm>>-dev \
+                lld-<<parameters.llvm>> \
                 gcc-arm-linux-gnueabihf \
                 gcc-aarch64-linux-gnu \
                 qemu-system-arm \
@@ -62,18 +62,21 @@ commands:
           paths:
             - lib/wasi-libc/sysroot
   test-linux:
+    parameters:
+      llvm:
+        type: string
     steps:
       - checkout
       - submodules
       - apt-dependencies:
-          llvm: "-10"
+          llvm: "<<parameters.llvm>>"
       - install-node
       - restore_cache:
           keys:
             - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
             - go-cache-v2-{{ checksum "go.mod" }}
       - llvm-source-linux
-      - run: go install .
+      - run: go install -tags=llvm<<parameters.llvm>> .
       - restore_cache:
           keys:
             - wasi-libc-sysroot-systemclang-v1
@@ -82,7 +85,7 @@ commands:
           key: wasi-libc-sysroot-systemclang-v1
           paths:
             - lib/wasi-libc/sysroot
-      - run: go test -v ./cgo ./compileopts ./interp ./transform .
+      - run: go test -v -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./interp ./transform .
       - run: make gen-device -j4
       - run: make smoketest
       - save_cache:
@@ -306,21 +309,24 @@ commands:
 
 
 jobs:
-  test-llvm10-go111:
+  test-llvm9-go111:
     docker:
       - image: circleci/golang:1.11-buster
     steps:
-      - test-linux
+      - test-linux:
+          llvm: "9"
   test-llvm10-go112:
     docker:
       - image: circleci/golang:1.12-buster
     steps:
-      - test-linux
+      - test-linux:
+          llvm: "10"
   test-llvm10-go113:
     docker:
       - image: circleci/golang:1.13-buster
     steps:
-      - test-linux
+      - test-linux:
+          llvm: "10"
   assert-test-linux:
     docker:
       - image: circleci/golang:1.13-stretch
@@ -343,7 +349,7 @@ jobs:
 workflows:
   test-all:
     jobs:
-      - test-llvm10-go111
+      - test-llvm9-go111
       - test-llvm10-go112
       - test-llvm10-go113
       - build-linux
