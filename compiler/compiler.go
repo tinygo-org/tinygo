@@ -2207,7 +2207,19 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 	case *types.Interface:
 		switch op {
 		case token.EQL, token.NEQ: // ==, !=
-			result := b.createRuntimeCall("interfaceEqual", []llvm.Value{x, y}, "")
+			nilInterface := llvm.ConstNull(x.Type())
+			var result llvm.Value
+			if x == nilInterface || y == nilInterface {
+				// An interface value is compared against nil.
+				// This is a very common case and is easy to optimize: simply
+				// compare the typecodes (of which one is nil).
+				typecodeX := b.CreateExtractValue(x, 0, "")
+				typecodeY := b.CreateExtractValue(y, 0, "")
+				result = b.CreateICmp(llvm.IntEQ, typecodeX, typecodeY, "")
+			} else {
+				// Fall back to a full interface comparison.
+				result = b.createRuntimeCall("interfaceEqual", []llvm.Value{x, y}, "")
+			}
 			if op == token.NEQ {
 				result = b.CreateNot(result, "")
 			}
