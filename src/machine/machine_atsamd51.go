@@ -637,10 +637,10 @@ func (a ADC) getADCChannel() uint8 {
 
 // UART on the SAMD51.
 type UART struct {
-	Buffer *RingBuffer
-	Bus    *sam.SERCOM_USART_INT_Type
-	SERCOM uint8
-	IRQVal uint32 // RXC interrupt
+	Buffer    *RingBuffer
+	Bus       *sam.SERCOM_USART_INT_Type
+	SERCOM    uint8
+	Interrupt interrupt.Interrupt // RXC interrupt
 }
 
 var (
@@ -652,7 +652,6 @@ var (
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM3_USART_INT,
 		SERCOM: 3,
-		IRQVal: sam.IRQ_SERCOM3_2, // RXC interrupt
 	}
 
 	// The second hardware serial port on the SAMD51. Uses the SERCOM0 interface.
@@ -660,9 +659,14 @@ var (
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM0_USART_INT,
 		SERCOM: 0,
-		IRQVal: sam.IRQ_SERCOM0_2, // RXC interrupt
 	}
 )
+
+func init() {
+	// Register RXC interrupts.
+	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM3_2, UART1.handleInterrupt)
+	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM0_2, UART2.handleInterrupt)
+}
 
 const (
 	sampleRate16X = 16
@@ -767,7 +771,7 @@ func (uart UART) Configure(config UARTConfig) error {
 	// > position in the INTFLAG register of respective peripheral.
 	// Therefore, if we only need to listen to the RXC interrupt source (in bit
 	// position 2), we only need interrupt source 2 for this SERCOM device.
-	arm.EnableIRQ(uart.IRQVal)
+	uart.Interrupt.Enable()
 
 	return nil
 }
@@ -795,18 +799,10 @@ func (uart UART) WriteByte(c byte) error {
 	return nil
 }
 
-//go:export SERCOM3_2_IRQHandler
-func handleSERCOM3_2() {
+func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	// should reset IRQ
-	UART1.Receive(byte((UART1.Bus.DATA.Get() & 0xFF)))
-	UART1.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INT_INTFLAG_RXC)
-}
-
-//go:export SERCOM0_2_IRQHandler
-func handleSERCOM0_2() {
-	// should reset IRQ
-	UART2.Receive(byte((UART2.Bus.DATA.Get() & 0xFF)))
-	UART2.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INT_INTFLAG_RXC)
+	uart.Receive(byte((uart.Bus.DATA.Get() & 0xFF)))
+	uart.Bus.INTFLAG.SetBits(sam.SERCOM_USART_INT_INTFLAG_RXC)
 }
 
 // I2C on the SAMD51.
