@@ -6,7 +6,6 @@ package machine
 
 import (
 	"device/stm32"
-	"errors"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -343,7 +342,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY) {
 				timeout--
 				if timeout == 0 {
-					return errors.New("I2C timeout on read clear address")
+					return errI2CWriteTimeout
 				}
 			}
 
@@ -354,7 +353,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_RxNE) {
 				timeout--
 				if timeout == 0 {
-					return errors.New("I2C timeout on read 1 byte")
+					return errI2CReadTimeout
 				}
 			}
 
@@ -382,7 +381,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY) {
 				timeout--
 				if timeout == 0 {
-					return errors.New("I2C timeout on read clear address")
+					return errI2CWriteTimeout
 				}
 			}
 
@@ -394,7 +393,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_BTF) {
 				timeout--
 				if timeout == 0 {
-					return errors.New("I2C timeout on read 2 bytes")
+					return errI2CReadTimeout
 				}
 			}
 
@@ -428,7 +427,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY) {
 				timeout--
 				if timeout == 0 {
-					return errors.New("I2C timeout on read clear address")
+					return errI2CWriteTimeout
 				}
 			}
 
@@ -440,8 +439,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_BTF) {
 				timeout--
 				if timeout == 0 {
-					println("I2C timeout on read 3 bytes")
-					return errors.New("I2C timeout on read 3 bytes")
+					return errI2CReadTimeout
 				}
 			}
 
@@ -455,7 +453,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_BTF) {
 				timeout--
 				if timeout == 0 {
-					return errors.New("I2C timeout on read 3 bytes")
+					return errI2CReadTimeout
 				}
 			}
 
@@ -483,7 +481,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY) {
 				timeout--
 				if timeout == 0 {
-					return errors.New("I2C timeout on read clear address")
+					return errI2CWriteTimeout
 				}
 			}
 
@@ -496,8 +494,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 				for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_BTF) {
 					timeout--
 					if timeout == 0 {
-						println("I2C timeout on read 3 bytes")
-						return errors.New("I2C timeout on read 3 bytes")
+						return errI2CReadTimeout
 					}
 				}
 
@@ -510,7 +507,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_BTF) {
 				timeout--
 				if timeout == 0 {
-					return errors.New("I2C timeout on read more than 3 bytes")
+					return errI2CReadTimeout
 				}
 			}
 
@@ -530,7 +527,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_RxNE) {
 				timeout--
 				if timeout == 0 {
-					return errors.New("I2C timeout on read last byte of more than 3")
+					return errI2CReadTimeout
 				}
 			}
 
@@ -554,7 +551,7 @@ func (i2c I2C) signalStart() error {
 	for i2c.Bus.SR2.HasBits(stm32.I2C_SR2_BUSY) {
 		timeout--
 		if timeout == 0 {
-			return errors.New("I2C busy on start")
+			return errI2CSignalStartTimeout
 		}
 	}
 
@@ -569,7 +566,7 @@ func (i2c I2C) signalStart() error {
 	for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_SB) {
 		timeout--
 		if timeout == 0 {
-			return errors.New("I2C timeout on start")
+			return errI2CSignalStartTimeout
 		}
 	}
 
@@ -592,8 +589,7 @@ func (i2c I2C) waitForStop() error {
 	for i2c.Bus.SR1.HasBits(stm32.I2C_SR1_STOPF) {
 		timeout--
 		if timeout == 0 {
-			println("I2C timeout on wait for stop signal")
-			return errors.New("I2C timeout on wait for stop signal")
+			return errI2CSignalStopTimeout
 		}
 	}
 
@@ -617,7 +613,7 @@ func (i2c I2C) sendAddress(address uint8, write bool) error {
 		for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_ADDR) {
 			timeout--
 			if timeout == 0 {
-				return errors.New("I2C timeout on send write address")
+				return errI2CWriteTimeout
 			}
 		}
 
@@ -625,7 +621,7 @@ func (i2c I2C) sendAddress(address uint8, write bool) error {
 		for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY | stm32.I2C_SR2_TRA) {
 			timeout--
 			if timeout == 0 {
-				return errors.New("I2C timeout on send write address")
+				return errI2CWriteTimeout
 			}
 		}
 	} else {
@@ -633,7 +629,7 @@ func (i2c I2C) sendAddress(address uint8, write bool) error {
 		for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_ADDR) {
 			timeout--
 			if timeout == 0 {
-				return errors.New("I2C timeout on send read address")
+				return errI2CWriteTimeout
 			}
 		}
 	}
@@ -653,7 +649,7 @@ func (i2c I2C) WriteByte(data byte) error {
 	for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_TxE) {
 		timeout--
 		if timeout == 0 {
-			return errors.New("I2C timeout on write")
+			return errI2CWriteTimeout
 		}
 	}
 
