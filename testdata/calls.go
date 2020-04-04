@@ -100,7 +100,7 @@ func deferred(msg string, i int) {
 	println(msg, i)
 }
 
-//go:export __exportedDefer
+//export __exportedDefer
 func exportedDefer() {
 	println("...exported defer")
 }

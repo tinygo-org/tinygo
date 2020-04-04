@@ -17,7 +17,7 @@ func main() {
 
 var led_state bool
 
-//go:export SysTick_Handler
+//export SysTick_Handler
 func timer_isr() {
 	if led_state {
 		machine.LED.Low()

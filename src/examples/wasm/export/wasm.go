@@ -8,12 +8,12 @@ import (
 func main() {
 }
 
-//go:export add
+//export add
 func add(a, b int) int {
 	return a + b
 }
 
-//go:export update
+//export update
 func update() {
 	document := js.Global().Get("document")
 	aStr := document.Call("getElementById", "a").Get("value").String()

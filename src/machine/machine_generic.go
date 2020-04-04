@@ -31,13 +31,13 @@ func (p Pin) Get() bool {
 	return gpioGet(p)
 }
 
-//go:export __tinygo_gpio_configure
+//export __tinygo_gpio_configure
 func gpioConfigure(pin Pin, config PinConfig)
 
-//go:export __tinygo_gpio_set
+//export __tinygo_gpio_set
 func gpioSet(pin Pin, value bool)
 
-//go:export __tinygo_gpio_get
+//export __tinygo_gpio_get
 func gpioGet(pin Pin) bool
 
 type SPI struct {
@@ -61,10 +61,10 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return spiTransfer(spi.Bus, w), nil
 }
 
-//go:export __tinygo_spi_configure
+//export __tinygo_spi_configure
 func spiConfigure(bus uint8, sck Pin, mosi Pin, miso Pin)
 
-//go:export __tinygo_spi_transfer
+//export __tinygo_spi_transfer
 func spiTransfer(bus uint8, w uint8) uint8
 
 // InitADC enables support for ADC peripherals.
@@ -81,7 +81,7 @@ func (adc ADC) Get() uint16 {
 	return adcRead(adc.Pin)
 }
 
-//go:export __tinygo_adc_read
+//export __tinygo_adc_read
 func adcRead(pin Pin) uint16
 
 // InitPWM enables support for PWM peripherals.
@@ -98,7 +98,7 @@ func (pwm PWM) Set(value uint16) {
 	pwmSet(pwm.Pin, value)
 }
 
-//go:export __tinygo_pwm_set
+//export __tinygo_pwm_set
 func pwmSet(pin Pin, value uint16)
 
 // I2C is a generic implementation of the Inter-IC communication protocol.
@@ -125,10 +125,10 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	return nil
 }
 
-//go:export __tinygo_i2c_configure
+//export __tinygo_i2c_configure
 func i2cConfigure(bus uint8, scl Pin, sda Pin)
 
-//go:export __tinygo_i2c_transfer
+//export __tinygo_i2c_transfer
 func i2cTransfer(bus uint8, w *byte, wlen int, r *byte, rlen int) int
 
 type UART struct {
@@ -174,11 +174,11 @@ func (uart UART) WriteByte(b byte) error {
 	return nil
 }
 
-//go:export __tinygo_uart_configure
+//export __tinygo_uart_configure
 func uartConfigure(bus uint8, tx Pin, rx Pin)
 
-//go:export __tinygo_uart_read
+//export __tinygo_uart_read
 func uartRead(bus uint8, buf *byte, bufLen int) int
 
-//go:export __tinygo_uart_write
+//export __tinygo_uart_write
 func uartWrite(bus uint8, buf *byte, bufLen int) int

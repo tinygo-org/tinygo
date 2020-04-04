@@ -53,5 +53,5 @@ func splitSlice(p []byte) (buf *byte, len uintptr) {
 }
 
 // ssize_t write(int fd, const void *buf, size_t count)
-//go:export write
+//export write
 func libc_write(fd int32, buf *byte, count uint) int

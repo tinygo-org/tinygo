@@ -19,7 +19,7 @@ var timestamp timeUnit
 
 func postinit() {}
 
-//go:export main
+//export main
 func main() {
 	preinit()
 	run()

@@ -18,7 +18,7 @@ type timeUnit int64
 
 func postinit() {}
 
-//go:export main
+//export main
 func main() {
 	// Zero the PLIC enable bits on startup: they are not zeroed at reset.
 	sifive.PLIC.ENABLE[0].Set(0)

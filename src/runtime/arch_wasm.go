@@ -14,7 +14,7 @@ const TargetBits = 32
 //go:extern __heap_base
 var heapStartSymbol [0]byte
 
-//go:export llvm.wasm.memory.size.i32
+//export llvm.wasm.memory.size.i32
 func wasm_memory_size(index int32) int32
 
 var (

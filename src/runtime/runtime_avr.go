@@ -36,7 +36,7 @@ var _sbss [0]byte
 //go:extern _ebss
 var _ebss [0]byte
 
-//go:export main
+//export main
 func main() {
 	preinit()
 	run()

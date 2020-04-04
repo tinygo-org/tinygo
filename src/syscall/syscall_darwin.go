@@ -12,7 +12,7 @@ package syscall
 //         return errno;
 //     }
 //
-//go:export __error
+//export __error
 func libc___error() *int32
 
 // getErrno returns the current C errno. It may not have been caused by the last
