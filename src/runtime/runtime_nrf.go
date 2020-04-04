@@ -19,7 +19,7 @@ func systemInit()
 
 func postinit() {}
 
-//go:export Reset_Handler
+//export Reset_Handler
 func main() {
 	systemInit()
 	preinit()

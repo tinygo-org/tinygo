@@ -10,12 +10,12 @@ import (
 // This matches *i8 in LLVM.
 type rawState uint8
 
-//go:export llvm.coro.resume
+//export llvm.coro.resume
 func (s *rawState) resume()
 
 type state struct{ *rawState }
 
-//go:export llvm.coro.noop
+//export llvm.coro.noop
 func noopState() *rawState
 
 // Resume the task until it pauses or completes.

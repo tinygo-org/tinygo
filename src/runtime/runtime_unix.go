@@ -6,22 +6,22 @@ import (
 	"unsafe"
 )
 
-//go:export putchar
+//export putchar
 func _putchar(c int) int
 
-//go:export usleep
+//export usleep
 func usleep(usec uint) int
 
-//go:export malloc
+//export malloc
 func malloc(size uintptr) unsafe.Pointer
 
-//go:export abort
+//export abort
 func abort()
 
-//go:export exit
+//export exit
 func exit(code int)
 
-//go:export clock_gettime
+//export clock_gettime
 func clock_gettime(clk_id int32, ts *timespec)
 
 type timeUnit int64
@@ -41,7 +41,7 @@ const CLOCK_MONOTONIC_RAW = 4
 func postinit() {}
 
 // Entry point for Go. Initialize all packages and call main.main().
-//go:export main
+//export main
 func main() int {
 	preinit()
 
@@ -83,5 +83,5 @@ func extalloc(size uintptr) unsafe.Pointer {
 	return malloc(size)
 }
 
-//go:export free
+//export free
 func extfree(ptr unsafe.Pointer)

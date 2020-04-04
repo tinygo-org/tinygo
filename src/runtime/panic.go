@@ -2,7 +2,7 @@ package runtime
 
 // trap is a compiler hint that this function cannot be executed. It is
 // translated into either a trap instruction or a call to abort().
-//go:export llvm.trap
+//export llvm.trap
 func trap()
 
 // Builtin function panic(msg), used as a compiler intrinsic.

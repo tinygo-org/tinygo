@@ -53,14 +53,14 @@ func setEventHandler(fn func()) {
 	handleEvent = fn
 }
 
-//go:export resume
+//export resume
 func resume() {
 	go func() {
 		handleEvent()
 	}()
 }
 
-//go:export go_scheduler
+//export go_scheduler
 func go_scheduler() {
 	scheduler()
 }
@@ -69,10 +69,10 @@ const asyncScheduler = true
 
 // This function is called by the scheduler.
 // Schedule a call to runtime.scheduler, do not actually sleep.
-//go:export runtime.sleepTicks
+//export runtime.sleepTicks
 func sleepTicks(d timeUnit)
 
-//go:export runtime.ticks
+//export runtime.ticks
 func ticks() timeUnit
 
 // Abort executes the wasm 'unreachable' instruction.

@@ -63,7 +63,7 @@ func math_Ceil(x float64) float64 {
 	return math_ceil(x)
 }
 
-//go:export llvm.ceil.f64
+//export llvm.ceil.f64
 func llvm_ceil(x float64) float64
 
 //go:linkname math_ceil math.ceil
@@ -119,7 +119,7 @@ func math_Floor(x float64) float64 {
 	return math_floor(x)
 }
 
-//go:export llvm.floor.f64
+//export llvm.floor.f64
 func llvm_floor(x float64) float64
 
 //go:linkname math_floor math.floor
@@ -175,7 +175,7 @@ func math_Max(x, y float64) float64 {
 	return math_max(x, y)
 }
 
-//go:export llvm.maximum.f64
+//export llvm.maximum.f64
 func llvm_maximum(x, y float64) float64
 
 //go:linkname math_max math.max
@@ -189,7 +189,7 @@ func math_Min(x, y float64) float64 {
 	return math_min(x, y)
 }
 
-//go:export llvm.minimum.f64
+//export llvm.minimum.f64
 func llvm_minimum(x, y float64) float64
 
 //go:linkname math_min math.min
@@ -239,7 +239,7 @@ func math_Sqrt(x float64) float64 {
 	return math_sqrt(x)
 }
 
-//go:export llvm.sqrt.f64
+//export llvm.sqrt.f64
 func llvm_sqrt(x float64) float64
 
 //go:linkname math_sqrt math.sqrt
@@ -265,7 +265,7 @@ func math_Trunc(x float64) float64 {
 	return math_trunc(x)
 }
 
-//go:export llvm.trunc.f64
+//export llvm.trunc.f64
 func llvm_trunc(x float64) float64
 
 //go:linkname math_trunc math.trunc

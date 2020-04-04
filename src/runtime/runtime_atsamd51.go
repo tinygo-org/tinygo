@@ -14,7 +14,7 @@ type timeUnit int64
 
 func postinit() {}
 
-//go:export Reset_Handler
+//export Reset_Handler
 func main() {
 	preinit()
 	run()
