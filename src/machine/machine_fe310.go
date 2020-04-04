@@ -4,7 +4,6 @@ package machine
 
 import (
 	"device/sifive"
-	"errors"
 	"runtime/interrupt"
 )
 
@@ -195,8 +194,6 @@ type I2CConfig struct {
 	SDA       Pin
 }
 
-var i2cAckExpectedError error = errors.New("I2C write error: expected ACK not NACK")
-
 // Configure is intended to setup the I2C interface.
 func (i2c I2C) Configure(config I2CConfig) error {
 	var i2cClockFrequency uint32 = 32000000
@@ -238,7 +235,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 		// ACK received (0: ACK, 1: NACK)
 		if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK) {
-			return i2cAckExpectedError
+			return errI2CAckExpected
 		}
 
 		// write data
@@ -255,7 +252,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 		// ACK received (0: ACK, 1: NACK)
 		if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK) {
-			return i2cAckExpectedError
+			return errI2CAckExpected
 		}
 
 		// read first byte
@@ -290,7 +287,7 @@ func (i2c I2C) writeByte(data byte) error {
 
 	// ACK received (0: ACK, 1: NACK)
 	if i2c.Bus.CR_SR.HasBits(sifive.I2C_SR_RX_ACK) {
-		return i2cAckExpectedError
+		return errI2CAckExpected
 	}
 
 	return nil

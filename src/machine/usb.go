@@ -9,6 +9,11 @@ import (
 
 const deviceDescriptorSize = 18
 
+var (
+	errUSBCDCBufferEmpty      = errors.New("USB-CDC buffer empty")
+	errUSBCDCWriteByteTimeout = errors.New("USB-CDC write byte timeout")
+)
+
 // DeviceDescriptor implements the USB standard device descriptor.
 //
 // Table 9-8. Standard Device Descriptor
@@ -598,7 +603,7 @@ func (usbcdc USBCDC) ReadByte() (byte, error) {
 	// check if RX buffer is empty
 	buf, ok := usbcdc.Buffer.Get()
 	if !ok {
-		return 0, errors.New("Buffer empty")
+		return 0, errUSBCDCBufferEmpty
 	}
 	return buf, nil
 }

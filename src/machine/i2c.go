@@ -2,10 +2,25 @@
 
 package machine
 
+import (
+	"errors"
+)
+
 // TWI_FREQ is the I2C bus speed. Normally either 100 kHz, or 400 kHz for high-speed bus.
 const (
 	TWI_FREQ_100KHZ = 100000
 	TWI_FREQ_400KHZ = 400000
+)
+
+var (
+	errI2CWriteTimeout       = errors.New("I2C timeout during write")
+	errI2CReadTimeout        = errors.New("I2C timeout during read")
+	errI2CBusReadyTimeout    = errors.New("I2C timeout on bus ready")
+	errI2CSignalStartTimeout = errors.New("I2C timeout on signal start")
+	errI2CSignalReadTimeout  = errors.New("I2C timeout on signal read")
+	errI2CSignalStopTimeout  = errors.New("I2C timeout on signal stop")
+	errI2CAckExpected        = errors.New("I2C error: expected ACK not NACK")
+	errI2CBusError           = errors.New("I2C bus error")
 )
 
 // WriteRegister transmits first the register and then the data to the

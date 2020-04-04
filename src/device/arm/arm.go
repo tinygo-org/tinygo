@@ -35,6 +35,8 @@ import (
 	"unsafe"
 )
 
+var errCycleCountTooLarge = errors.New("requested cycle count is too large, overflows 24 bit counter")
+
 // Run the given assembly code. The code will be marked as having side effects,
 // as it doesn't produce output and thus would normally be eliminated by the
 // optimizer.
@@ -232,7 +234,7 @@ func SetupSystemTimer(cyclecount uint32) error {
 	}
 	if cyclecount&SYST_RVR_RELOAD_Msk != cyclecount {
 		// The cycle refresh register is only 24 bits wide.  The user-specified value will overflow.
-		return errors.New("requested cycle count is too large, overflows 24 bit counter")
+		return errCycleCountTooLarge
 	}
 
 	// set refresh count

@@ -10,7 +10,6 @@ package machine
 import (
 	"device/arm"
 	"device/sam"
-	"errors"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -549,13 +548,13 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		for !i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_MB) {
 			timeout--
 			if timeout == 0 {
-				return errors.New("I2C timeout on ready to write data")
+				return errI2CWriteTimeout
 			}
 		}
 
 		// ACK received (0: ACK, 1: NACK)
 		if i2c.Bus.STATUS.HasBits(sam.SERCOM_I2CM_STATUS_RXNACK) {
-			return errors.New("I2C write error: expected ACK not NACK")
+			return errI2CAckExpected
 		}
 
 		// write data
@@ -581,13 +580,13 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 			// In that case, send a stop condition and return error.
 			if i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_MB) {
 				i2c.Bus.CTRLB.SetBits(wireCmdStop << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop condition
-				return errors.New("I2C read error: expected ACK not NACK")
+				return errI2CAckExpected
 			}
 		}
 
 		// ACK received (0: ACK, 1: NACK)
 		if i2c.Bus.STATUS.HasBits(sam.SERCOM_I2CM_STATUS_RXNACK) {
-			return errors.New("I2C read error: expected ACK not NACK")
+			return errI2CAckExpected
 		}
 
 		// read first byte
@@ -624,16 +623,16 @@ func (i2c I2C) WriteByte(data byte) error {
 	for !i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_MB) {
 		// check for bus error
 		if sam.SERCOM3_I2CM.STATUS.HasBits(sam.SERCOM_I2CM_STATUS_BUSERR) {
-			return errors.New("I2C bus error")
+			return errI2CBusError
 		}
 		timeout--
 		if timeout == 0 {
-			return errors.New("I2C timeout on write data")
+			return errI2CWriteTimeout
 		}
 	}
 
 	if i2c.Bus.STATUS.HasBits(sam.SERCOM_I2CM_STATUS_RXNACK) {
-		return errors.New("I2C write error: expected ACK not NACK")
+		return errI2CAckExpected
 	}
 
 	return nil
@@ -652,7 +651,7 @@ func (i2c I2C) sendAddress(address uint16, write bool) error {
 		!i2c.Bus.STATUS.HasBits(wireOwnerState<<sam.SERCOM_I2CM_STATUS_BUSSTATE_Pos) {
 		timeout--
 		if timeout == 0 {
-			return errors.New("I2C timeout on bus ready")
+			return errI2CBusReadyTimeout
 		}
 	}
 	i2c.Bus.ADDR.Set(uint32(data))
@@ -666,7 +665,7 @@ func (i2c I2C) signalStop() error {
 	for i2c.Bus.SYNCBUSY.HasBits(sam.SERCOM_I2CM_SYNCBUSY_SYSOP) {
 		timeout--
 		if timeout == 0 {
-			return errors.New("I2C timeout on signal stop")
+			return errI2CSignalStopTimeout
 		}
 	}
 	return nil
@@ -678,7 +677,7 @@ func (i2c I2C) signalRead() error {
 	for i2c.Bus.SYNCBUSY.HasBits(sam.SERCOM_I2CM_SYNCBUSY_SYSOP) {
 		timeout--
 		if timeout == 0 {
-			return errors.New("I2C timeout on signal read")
+			return errI2CSignalReadTimeout
 		}
 	}
 	return nil
@@ -1286,7 +1285,7 @@ func (usbcdc USBCDC) WriteByte(c byte) error {
 		for (getEPINTFLAG(usb_CDC_ENDPOINT_IN) & sam.USB_DEVICE_EPINTFLAG_TRCPT1) == 0 {
 			timeout--
 			if timeout == 0 {
-				return errors.New("USBCDC write byte timeout")
+				return errUSBCDCWriteByteTimeout
 			}
 		}
 	}

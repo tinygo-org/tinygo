@@ -4,6 +4,8 @@ package machine
 
 import "errors"
 
+var errUARTBufferEmpty = errors.New("UART buffer empty")
+
 type UARTConfig struct {
 	BaudRate uint32
 	TX       Pin
@@ -60,7 +62,7 @@ func (uart UART) ReadByte() (byte, error) {
 	// check if RX buffer is empty
 	buf, ok := uart.Buffer.Get()
 	if !ok {
-		return 0, errors.New("Buffer empty")
+		return 0, errUARTBufferEmpty
 	}
 	return buf, nil
 }
