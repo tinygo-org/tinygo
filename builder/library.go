@@ -69,7 +69,7 @@ func (l *Library) Load(target string) (path string, err error) {
 	// Precalculate the flags to the compiler invocation.
 	args := append(l.cflags(), "-c", "-Oz", "-g", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir)
 	if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
-		args = append(args, "-fshort-enums")
+		args = append(args, "-fshort-enums", "-fomit-frame-pointer")
 	}
 	if strings.HasPrefix(target, "riscv32-") {
 		args = append(args, "-march=rv32imac", "-mabi=ilp32", "-fforce-enable-int128")

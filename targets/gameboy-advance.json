@@ -15,6 +15,7 @@
 		"-Oz",
 		"-Werror",
 		"-fshort-enums",
+		"-fomit-frame-pointer",
 		"-Qunused-arguments",
 		"-fno-exceptions", "-fno-unwind-tables",
 		"-ffunction-sections", "-fdata-sections"
