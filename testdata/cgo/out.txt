@@ -55,4 +55,5 @@ option F: 11
 option G: 12
 option 2A: 20
 option 3A: 21
+enum width matches: true
 copied string: foobar

@@ -158,7 +158,7 @@ var aeabiBuiltins = []string{
 // For more information, see: https://compiler-rt.llvm.org/
 var CompilerRT = Library{
 	name:      "compiler-rt",
-	cflags:    func() []string { return []string{"-Werror", "-Wall", "-std=c11", "-fshort-enums", "-nostdlibinc"} },
+	cflags:    func() []string { return []string{"-Werror", "-Wall", "-std=c11", "-nostdlibinc"} },
 	sourceDir: "lib/compiler-rt/lib/builtins",
 	sources: func(target string) []string {
 		builtins := append([]string{}, genericBuiltins...) // copy genericBuiltins

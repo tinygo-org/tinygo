@@ -134,6 +134,8 @@ extern int globalUnionSize;
 extern option_t globalOption;
 extern bitfield_t globalBitfield;
 
+extern int smallEnumWidth;
+
 // test duplicate definitions
 int add(int a, int b);
 extern int global;

@@ -111,6 +111,9 @@ func main() {
 	println("option 2A:", C.option2A)
 	println("option 3A:", C.option3A)
 
+	// Check that enums are considered the same width in C and CGo.
+	println("enum width matches:", unsafe.Sizeof(C.option2_t(0)) == uintptr(C.smallEnumWidth))
+
 	// libc: test whether C functions work at all.
 	buf1 := []byte("foobar\x00")
 	buf2 := make([]byte, len(buf1))
