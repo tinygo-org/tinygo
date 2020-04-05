@@ -13,6 +13,7 @@
 		"-mthumb",
 		"-Werror",
 		"-fshort-enums",
+		"-fomit-frame-pointer",
 		"-fno-exceptions", "-fno-unwind-tables",
 		"-ffunction-sections", "-fdata-sections"
 	],
