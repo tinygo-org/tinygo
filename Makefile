@@ -214,6 +214,8 @@ smoketest:
 	# test simulated boards on play.tinygo.org
 	$(TINYGO) build             -o test.wasm -tags=arduino              examples/blinky1
 	@$(MD5SUM) test.wasm
+	$(TINYGO) build             -o test.wasm -tags=hifive1-qemu         examples/serial
+	@$(MD5SUM) test.wasm
 	$(TINYGO) build             -o test.wasm -tags=hifive1b             examples/blinky1
 	@$(MD5SUM) test.wasm
 	$(TINYGO) build             -o test.wasm -tags=reelboard            examples/blinky1
