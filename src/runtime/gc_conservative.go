@@ -45,6 +45,7 @@ const (
 	bytesPerBlock      = wordsPerBlock * unsafe.Sizeof(heapStart)
 	stateBits          = 2 // how many bits a block state takes (see blockState type)
 	blocksPerStateByte = 8 / stateBits
+	markStackSize      = 4 * unsafe.Sizeof((*int)(nil)) // number of to-be-marked blocks to queue before forcing a rescan
 )
 
 var (
@@ -324,6 +325,112 @@ func markRoots(start, end uintptr) {
 	}
 }
 
+// mark a gcBlock and all of its children.
+// The specified block must have previously been unmarked, and must be a head.
+func mark(root gcBlock) {
+	var stack [markStackSize]gcBlock
+	stack[0] = root
+	root.setState(blockStateMark)
+	stackTop := 1
+	stackOverflow := false
+	rescanBlock := endBlock
+	for {
+		var block gcBlock
+		switch {
+		case stackTop > 0:
+			// Pop a block off of the stack.
+			stackTop--
+			block = stack[stackTop]
+			if gcDebug {
+				println("stack popped, remaining stack:", stackTop)
+			}
+		case rescanBlock < endBlock:
+			// Select the next marked block to rescan.
+			if rescanBlock.state() != blockStateMark {
+				// This block is not the head of a marked block, so skip it.
+				rescanBlock++
+				continue
+			}
+			block = rescanBlock
+			rescanBlock++
+			if gcDebug {
+				println("rescanning block")
+			}
+		case stackOverflow:
+			// Start a new rescan.
+			if gcDebug {
+				println("start rescan")
+			}
+			rescanBlock = 0
+			stackOverflow = false
+			continue
+		default:
+			// Done.
+			if gcDebug {
+				println("mark done")
+			}
+			return
+		}
+		if gcDebug {
+			println("scan block:", block)
+		}
+
+		// Scan all pointers inside the block.
+		start, end := block.address(), block.findNext().address()
+		for addr := start; addr != end; addr += unsafe.Alignof(addr) {
+			// Load the word.
+			word := *(*uintptr)(unsafe.Pointer(addr))
+
+			if !looksLikePointer(word) {
+				// Not a heap pointer.
+				continue
+			}
+
+			// Find the corresponding memory block.
+			block := blockFromAddr(word)
+
+			if block.state() == blockStateFree {
+				// The to-be-marked object doesn't actually exist.
+				// This is probbably a false positive.
+				if gcDebug {
+					println("found reference to free memory:", word, "at:", addr)
+				}
+				continue
+			}
+
+			// Move to the block's head.
+			block = block.findHead()
+
+			if block.state() == blockStateMark {
+				// The block has already been marked by something else.
+				continue
+			}
+
+			if stackTop == len(stack) {
+				// The stack is full.
+				// It is necessary to rescan all marked blocks once we are done.
+				// There is also no point in trying to scan any more pointers in this block, since they will all end up back here.
+				stackOverflow = true
+				if gcDebug {
+					println("gc stack overflowed")
+				}
+				break
+			}
+
+			// Mark block.
+			if gcDebug {
+				println("marking block:", block)
+			}
+			block.setState(blockStateMark)
+
+			// Push the pointer onto the stack to be scanned later.
+			stack[stackTop] = block
+			stackTop++
+		}
+	}
+}
+
+// mark a GC root at the address addr.
 func markRoot(addr, root uintptr) {
 	if looksLikePointer(root) {
 		block := blockFromAddr(root)
@@ -338,10 +445,7 @@ func markRoot(addr, root uintptr) {
 			if gcDebug {
 				println("found unmarked pointer", root, "at address", addr)
 			}
-			head.setState(blockStateMark)
-			next := block.findNext()
-			// TODO: avoid recursion as much as possible
-			markRoots(head.address(), next.address())
+			mark(head)
 		}
 	}
 }
