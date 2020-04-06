@@ -415,7 +415,6 @@
 				this,
 			];
 			this._refs = new Map();
-			this._callbackShutdown = false;
 			this.exited = false;
 
 			const mem = new DataView(this._inst.exports.memory.buffer)
@@ -472,12 +471,6 @@
 
 		const go = new Go();
 		WebAssembly.instantiate(fs.readFileSync(process.argv[2]), go.importObject).then((result) => {
-			process.on("exit", (code) => { // Node.js exits if no callback is pending
-				if (code === 0 && !go.exited) {
-					// deadlock, make Go print error and stack traces
-					go._callbackShutdown = true;
-				}
-			});
 			return go.run(result.instance);
 		}).catch((err) => {
 			throw err;
