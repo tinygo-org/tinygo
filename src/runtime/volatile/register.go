@@ -186,7 +186,7 @@ func (r *Register32) HasBits(value uint32) bool {
 //
 //     r.Reg = (r.Reg & ^(mask << pos)) | value << pos
 //
-// go:inline
+//go:noinline
 func (r *Register32) ReplaceBits(value uint32, mask uint32, pos uint8) {
-	StoreUint32(&r.Reg, LoadUint32(&r.Reg)&^(mask<<pos)|value<<pos)
+	StoreUint32(&r.Reg, (LoadUint32(&r.Reg)&(^(mask<<pos)))|value<<pos)
 }

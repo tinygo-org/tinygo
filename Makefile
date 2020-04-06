@@ -348,8 +348,7 @@ build/release: tinygo gen-device wasi-libc
 	./build/tinygo build-library -target=armv6m-none-eabi  -o build/release/tinygo/pkg/armv6m-none-eabi/picolibc.a picolibc
 	./build/tinygo build-library -target=armv7m-none-eabi  -o build/release/tinygo/pkg/armv7m-none-eabi/picolibc.a picolibc
 	./build/tinygo build-library -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/picolibc.a picolibc
-
-release: build/release
+	./build/tinygo build-library -target=aarch64-elf -o build/release/tinygo/pkg/aarch64-elf/picolibc.a picolibc
 	tar -czf build/release.tar.gz -C build/release tinygo
 
 deb: build/release

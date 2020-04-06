@@ -1,0 +1,34 @@
+{
+	"inherits": ["arm64"],
+	"build-tags": ["rpi3_qemu", "baremetal", "arm64"],
+	"goos": "linux",
+	"compiler": "clang",
+	"linker": "ld.lld",
+	"rtlib": "compiler-rt",
+	"libc": "picolibc",
+	"llvm-target": "aarch64-none-elf",
+	"ldflags": [
+	],
+	"scheduler": "none",
+	"gc": "leaking",
+	"cflags": [
+		"-mcpu=cortex-a53",
+		"--target=aarch64-elf",
+		"-mstack-alignment=16",
+		"-mstackrealign",
+		"-mno-unaligned-access",
+		"-Oz",
+		"-Werror",
+		"-fshort-enums",
+		"-fomit-frame-pointer",
+		"-fno-exceptions",
+		"-fno-unwind-tables",
+		"-ffunction-sections",
+		"-fdata-sections"
+
+	],
+	"linkerscript": "targets/rpi3_qemu.ld",
+	"extra-files": [
+		"src/device/arm/rpi3_baremetal_boot.S"
+	]
+}
