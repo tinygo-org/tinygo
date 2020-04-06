@@ -202,26 +202,31 @@
 						return;
 				}
 
-				let ref = this._refs.get(v);
-				if (ref === undefined) {
-					ref = this._values.length;
-					this._values.push(v);
-					this._refs.set(v, ref);
+				let id = this._ids.get(v);
+				if (id === undefined) {
+					id = this._idPool.pop();
+					if (id === undefined) {
+						id = this._values.length;
+					}
+					this._values[id] = v;
+					this._goRefCounts[id] = 0;
+					this._ids.set(v, id);
 				}
-				let typeFlag = 0;
+				this._goRefCounts[id]++;
+				let typeFlag = 1;
 				switch (typeof v) {
 					case "string":
-						typeFlag = 1;
-						break;
-					case "symbol":
 						typeFlag = 2;
 						break;
-					case "function":
+					case "symbol":
 						typeFlag = 3;
+						break;
+					case "function":
+						typeFlag = 4;
 						break;
 				}
 				mem().setUint32(addr + 4, nanHead | typeFlag, true);
-				mem().setUint32(addr, ref, true);
+				mem().setUint32(addr, id, true);
 			}
 
 			const loadSlice = (array, len, cap) => {
@@ -282,6 +287,13 @@
 					"runtime.sleepTicks": (timeout) => {
 						// Do not sleep, only reactivate scheduler after the given timeout.
 						setTimeout(this._inst.exports.go_scheduler, timeout);
+					},
+
+					// func finalizeRef(v ref)
+					"syscall/js.finalizeRef": (sp) => {
+						// Note: TinyGo does not support finalizers so this should never be
+						// called.
+						console.error('syscall/js.finalizeRef not implemented');
 					},
 
 					// func stringVal(value string) ref
@@ -405,7 +417,7 @@
 
 		async run(instance) {
 			this._inst = instance;
-			this._values = [ // TODO: garbage collection
+			this._values = [ // JS values that Go currently has references to, indexed by reference id
 				NaN,
 				0,
 				null,
@@ -414,8 +426,10 @@
 				global,
 				this,
 			];
-			this._refs = new Map();
-			this.exited = false;
+			this._goRefCounts = []; // number of references that Go has to a JS value, indexed by reference id
+			this._ids = new Map();  // mapping from JS values to reference ids
+			this._idPool = [];      // unused ids that have been garbage collected
+			this.exited = false;    // whether the Go program has exited
 
 			const mem = new DataView(this._inst.exports.memory.buffer)
 
