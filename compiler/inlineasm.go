@@ -13,27 +13,6 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-// This is a compiler builtin, which reads the given register by name:
-//
-//     func ReadRegister(name string) uintptr
-//
-// The register name must be a constant, for example "sp".
-func (b *builder) createReadRegister(name string, args []ssa.Value) (llvm.Value, error) {
-	fnType := llvm.FunctionType(b.uintptrType, []llvm.Type{}, false)
-	regname := constant.StringVal(args[0].(*ssa.Const).Value)
-	var asm string
-	switch name {
-	case "device/arm.ReadRegister":
-		asm = "mov $0, " + regname
-	case "device/riscv.ReadRegister":
-		asm = "mv $0, " + regname
-	default:
-		panic("unknown architecture")
-	}
-	target := llvm.InlineAsm(fnType, asm, "=r", false, false, 0)
-	return b.CreateCall(target, nil, ""), nil
-}
-
 // This is a compiler builtin, which emits a piece of inline assembly with no
 // operands or return values. It is useful for trivial instructions, like wfi in
 // ARM or sleep in AVR.
@@ -52,7 +31,7 @@ func (b *builder) createInlineAsm(args []ssa.Value) (llvm.Value, error) {
 // This is a compiler builtin, which allows assembly to be called in a flexible
 // way.
 //
-//     func AsmFull(asm string, regs map[string]interface{})
+//     func AsmFull(asm string, regs map[string]interface{}) uintptr
 //
 // The asm parameter must be a constant string. The regs parameter must be
 // provided immediately. For example:
@@ -66,24 +45,24 @@ func (b *builder) createInlineAsm(args []ssa.Value) (llvm.Value, error) {
 func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error) {
 	asmString := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
 	registers := map[string]llvm.Value{}
-	registerMap := instr.Args[1].(*ssa.MakeMap)
-	for _, r := range *registerMap.Referrers() {
-		switch r := r.(type) {
-		case *ssa.DebugRef:
-			// ignore
-		case *ssa.MapUpdate:
-			if r.Block() != registerMap.Block() {
-				return llvm.Value{}, b.makeError(instr.Pos(), "register value map must be created in the same basic block")
+	if registerMap, ok := instr.Args[1].(*ssa.MakeMap); ok {
+		for _, r := range *registerMap.Referrers() {
+			switch r := r.(type) {
+			case *ssa.DebugRef:
+				// ignore
+			case *ssa.MapUpdate:
+				if r.Block() != registerMap.Block() {
+					return llvm.Value{}, b.makeError(instr.Pos(), "register value map must be created in the same basic block")
+				}
+				key := constant.StringVal(r.Key.(*ssa.Const).Value)
+				registers[key] = b.getValue(r.Value.(*ssa.MakeInterface).X)
+			case *ssa.Call:
+				if r.Common() == instr {
+					break
+				}
+			default:
+				return llvm.Value{}, b.makeError(instr.Pos(), "don't know how to handle argument to inline assembly: "+r.String())
 			}
-			key := constant.StringVal(r.Key.(*ssa.Const).Value)
-			//println("value:", r.Value.(*ssa.MakeInterface).X.String())
-			registers[key] = b.getValue(r.Value.(*ssa.MakeInterface).X)
-		case *ssa.Call:
-			if r.Common() == instr {
-				break
-			}
-		default:
-			return llvm.Value{}, b.makeError(instr.Pos(), "don't know how to handle argument to inline assembly: "+r.String())
 		}
 	}
 	// TODO: handle dollar signs in asm string
@@ -92,6 +71,15 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 	argTypes := []llvm.Type{}
 	args := []llvm.Value{}
 	constraints := []string{}
+	hasOutput := false
+	asmString = regexp.MustCompile("\\{\\}").ReplaceAllStringFunc(asmString, func(s string) string {
+		hasOutput = true
+		return "$0"
+	})
+	if hasOutput {
+		constraints = append(constraints, "=&r")
+		registerNumbers[""] = 0
+	}
 	asmString = regexp.MustCompile("\\{[a-zA-Z]+\\}").ReplaceAllStringFunc(asmString, func(s string) string {
 		// TODO: skip strings like {r4} etc. that look like ARM push/pop
 		// instructions.
@@ -121,9 +109,21 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 	if err != nil {
 		return llvm.Value{}, err
 	}
-	fnType := llvm.FunctionType(b.ctx.VoidType(), argTypes, false)
+	var outputType llvm.Type
+	if hasOutput {
+		outputType = b.uintptrType
+	} else {
+		outputType = b.ctx.VoidType()
+	}
+	fnType := llvm.FunctionType(outputType, argTypes, false)
 	target := llvm.InlineAsm(fnType, asmString, strings.Join(constraints, ","), true, false, 0)
-	return b.CreateCall(target, args, ""), nil
+	result := b.CreateCall(target, args, "")
+	if hasOutput {
+		return result, nil
+	} else {
+		// Make sure we return something valid.
+		return llvm.ConstInt(b.uintptrType, 0, false), nil
+	}
 }
 
 // This is a compiler builtin which emits an inline SVCall instruction. It can

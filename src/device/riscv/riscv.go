@@ -5,6 +5,17 @@ package riscv
 // optimizer.
 func Asm(asm string)
 
-// ReadRegister returns the contents of the specified register. The register
-// must be a processor register, reachable with the "mov" instruction.
-func ReadRegister(name string) uintptr
+// Run the given inline assembly. The code will be marked as having side
+// effects, as it would otherwise be optimized away. The inline assembly string
+// recognizes template values in the form {name}, like so:
+//
+//     arm.AsmFull(
+//         "st {value}, {result}",
+//         map[string]interface{}{
+//             "value":  1
+//             "result": &dest,
+//         })
+//
+// You can use {} in the asm string (which expands to a register) to set the
+// return value.
+func AsmFull(asm string, regs map[string]interface{}) uintptr

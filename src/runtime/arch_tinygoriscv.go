@@ -15,5 +15,5 @@ func align(ptr uintptr) uintptr {
 }
 
 func getCurrentStackPointer() uintptr {
-	return riscv.ReadRegister("sp")
+	return riscv.AsmFull("mv {}, sp", nil)
 }

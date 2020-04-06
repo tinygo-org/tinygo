@@ -17,5 +17,5 @@ func align(ptr uintptr) uintptr {
 }
 
 func getCurrentStackPointer() uintptr {
-	return arm.ReadRegister("sp")
+	return arm.AsmFull("mov {}, sp", nil)
 }
