@@ -396,22 +396,26 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 	}
 }
 
-// getInvokeCall creates and returns the function pointer and parameters of an
-// interface call. It can be used in a call or defer instruction.
-func (b *builder) getInvokeCall(instr *ssa.CallCommon) (llvm.Value, []llvm.Value) {
-	// Call an interface method with dynamic dispatch.
-	itf := b.getValue(instr.Value) // interface
-
+// getInvokePtr creates an interface function pointer lookup for the specified invoke instruction, using a specified typecode.
+func (b *builder) getInvokePtr(instr *ssa.CallCommon, typecode llvm.Value) llvm.Value {
 	llvmFnType := b.getRawFuncType(instr.Method.Type().(*types.Signature))
-
-	typecode := b.CreateExtractValue(itf, 0, "invoke.typecode")
 	values := []llvm.Value{
 		typecode,
 		b.getInterfaceMethodSet(instr.Value.Type()),
 		b.getMethodSignature(instr.Method),
 	}
 	fn := b.createRuntimeCall("interfaceMethod", values, "invoke.func")
-	fnCast := b.CreateIntToPtr(fn, llvmFnType, "invoke.func.cast")
+	return b.CreateIntToPtr(fn, llvmFnType, "invoke.func.cast")
+}
+
+// getInvokeCall creates and returns the function pointer and parameters of an
+// interface call.
+func (b *builder) getInvokeCall(instr *ssa.CallCommon) (llvm.Value, []llvm.Value) {
+	// Call an interface method with dynamic dispatch.
+	itf := b.getValue(instr.Value) // interface
+
+	typecode := b.CreateExtractValue(itf, 0, "invoke.typecode")
+	fnCast := b.getInvokePtr(instr, typecode)
 	receiverValue := b.CreateExtractValue(itf, 1, "invoke.func.receiver")
 
 	args := []llvm.Value{receiverValue}

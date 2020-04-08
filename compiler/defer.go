@@ -92,9 +92,10 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields, followed by the call parameters).
 		itf := b.getValue(instr.Call.Value) // interface
+		typecode := b.CreateExtractValue(itf, 0, "invoke.func.typecode")
 		receiverValue := b.CreateExtractValue(itf, 1, "invoke.func.receiver")
-		values = []llvm.Value{callback, next, receiverValue}
-		valueTypes = append(valueTypes, b.i8ptrType)
+		values = []llvm.Value{callback, next, typecode, receiverValue}
+		valueTypes = append(valueTypes, b.uintptrType, b.i8ptrType)
 		for _, arg := range instr.Call.Args {
 			val := b.getValue(arg)
 			values = append(values, val)
@@ -248,7 +249,7 @@ func (b *builder) createRunDefers() {
 			}
 
 			// Get the real defer struct type and cast to it.
-			valueTypes := []llvm.Type{b.uintptrType, llvm.PointerType(b.getLLVMRuntimeType("_defer"), 0), b.i8ptrType}
+			valueTypes := []llvm.Type{b.uintptrType, llvm.PointerType(b.getLLVMRuntimeType("_defer"), 0), b.uintptrType, b.i8ptrType}
 			for _, arg := range callback.Args {
 				valueTypes = append(valueTypes, b.getLLVMType(arg.Type()))
 			}
@@ -264,6 +265,9 @@ func (b *builder) createRunDefers() {
 				forwardParams = append(forwardParams, forwardParam)
 			}
 
+			// Isolate the typecode.
+			typecode, forwardParams := forwardParams[0], forwardParams[1:]
+
 			// Add the context parameter. An interface call cannot also be a
 			// closure but we have to supply the parameter anyway for platforms
 			// with a strict calling convention.
@@ -272,7 +276,7 @@ func (b *builder) createRunDefers() {
 			// Parent coroutine handle.
 			forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
 
-			fnPtr, _ := b.getInvokeCall(callback)
+			fnPtr := b.getInvokePtr(callback, typecode)
 			b.createCall(fnPtr, forwardParams, "")
 
 		case *ir.Function:

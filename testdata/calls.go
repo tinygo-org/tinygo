@@ -61,6 +61,9 @@ func main() {
 	thingFunctionalArgs1.Print("functional args 1")
 	thingFunctionalArgs2 := NewThing(WithName("named thing"))
 	thingFunctionalArgs2.Print("functional args 2")
+
+	// regression testing
+	regression1033()
 }
 
 func runFunc(f func(int), arg int) {
@@ -107,4 +110,37 @@ func exportedDefer() {
 
 func testBound(f func() string) {
 	println("bound method:", f())
+}
+
+// regression1033 is a regression test for https://github.com/tinygo-org/tinygo/issues/1033.
+// In previous versions of the compiler, a deferred call to an interface would create an instruction that did not dominate its uses.
+func regression1033() {
+	foo(&Bar{})
+}
+
+type Bar struct {
+	empty bool
+}
+
+func (b *Bar) Close() error {
+	return nil
+}
+
+type Closer interface {
+	Close() error
+}
+
+func foo(bar *Bar) error {
+	var a int
+	if !bar.empty {
+		a = 10
+		if a != 5 {
+			return nil
+		}
+	}
+
+	var c Closer = bar
+	defer c.Close()
+
+	return nil
 }
