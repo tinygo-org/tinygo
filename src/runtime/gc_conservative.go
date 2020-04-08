@@ -294,6 +294,7 @@ func GC() {
 	// Mark phase: mark all reachable objects, recursively.
 	markGlobals()
 	markStack()
+	finishMark()
 
 	// Sweep phase: free all non-marked objects and unmark marked objects for
 	// the next collection cycle.
@@ -325,54 +326,22 @@ func markRoots(start, end uintptr) {
 	}
 }
 
-// mark a gcBlock and all of its children.
-// The specified block must have previously been unmarked, and must be a head.
-func mark(root gcBlock) {
+// stackOverflow is a flag which is set when the GC scans too deep while marking.
+// After it is set, all marked allocations must be re-scanned.
+var stackOverflow bool
+
+// startMark starts the marking process on a root and all of its children.
+func startMark(root gcBlock) {
 	var stack [markStackSize]gcBlock
 	stack[0] = root
 	root.setState(blockStateMark)
-	stackTop := 1
-	stackOverflow := false
-	rescanBlock := endBlock
-	for {
-		var block gcBlock
-		switch {
-		case stackTop > 0:
-			// Pop a block off of the stack.
-			stackTop--
-			block = stack[stackTop]
-			if gcDebug {
-				println("stack popped, remaining stack:", stackTop)
-			}
-		case rescanBlock < endBlock:
-			// Select the next marked block to rescan.
-			if rescanBlock.state() != blockStateMark {
-				// This block is not the head of a marked block, so skip it.
-				rescanBlock++
-				continue
-			}
-			block = rescanBlock
-			rescanBlock++
-			if gcDebug {
-				println("rescanning block")
-			}
-		case stackOverflow:
-			// Start a new rescan.
-			if gcDebug {
-				println("start rescan")
-			}
-			rescanBlock = 0
-			stackOverflow = false
-			continue
-		default:
-			// Done.
-			if gcDebug {
-				println("mark done")
-			}
-			return
-		}
+	stackLen := 1
+	for stackLen > 0 {
+		// Pop a block off of the stack.
+		stackLen--
+		block := stack[stackLen]
 		if gcDebug {
-			println("scan block:", block)
+			println("stack popped, remaining stack:", stackLen)
 		}
 
 		// Scan all pointers inside the block.
@@ -387,11 +356,11 @@ func mark(root gcBlock) {
 			}
 
 			// Find the corresponding memory block.
-			block := blockFromAddr(word)
+			referencedBlock := blockFromAddr(word)
 
-			if block.state() == blockStateFree {
+			if referencedBlock.state() == blockStateFree {
 				// The to-be-marked object doesn't actually exist.
-				// This is probbably a false positive.
+				// This is probably a false positive.
 				if gcDebug {
 					println("found reference to free memory:", word, "at:", addr)
 				}
@@ -399,33 +368,49 @@ func mark(root gcBlock) {
 			}
 
 			// Move to the block's head.
-			block = block.findHead()
+			referencedBlock = referencedBlock.findHead()
 
-			if block.state() == blockStateMark {
+			if referencedBlock.state() == blockStateMark {
 				// The block has already been marked by something else.
 				continue
 			}
 
-			if stackTop == len(stack) {
+			// Mark block.
+			if gcDebug {
+				println("marking block:", referencedBlock)
+			}
+			referencedBlock.setState(blockStateMark)
+
+			if stackLen == len(stack) {
 				// The stack is full.
 				// It is necessary to rescan all marked blocks once we are done.
-				// There is also no point in trying to scan any more pointers in this block, since they will all end up back here.
 				stackOverflow = true
 				if gcDebug {
 					println("gc stack overflowed")
 				}
-				break
+				continue
 			}
-
-			// Mark block.
-			if gcDebug {
-				println("marking block:", block)
-			}
-			block.setState(blockStateMark)
 
 			// Push the pointer onto the stack to be scanned later.
-			stack[stackTop] = block
-			stackTop++
+			stack[stackLen] = referencedBlock
+			stackLen++
+		}
+	}
+}
+
+// finishMark finishes the marking process by processing all stack overflows.
+func finishMark() {
+	for stackOverflow {
+		// Re-mark all blocks.
+		stackOverflow = false
+		for block := gcBlock(0); block < endBlock; block++ {
+			if block.state() != blockStateMark {
+				// Block is not marked, so we do not need to rescan it.
+				continue
+			}
+
+			// Re-mark the block.
+			startMark(block)
 		}
 	}
 }
@@ -445,7 +430,7 @@ func markRoot(addr, root uintptr) {
 			if gcDebug {
 				println("found unmarked pointer", root, "at address", addr)
 			}
-			mark(head)
+			startMark(head)
 		}
 	}
 }
