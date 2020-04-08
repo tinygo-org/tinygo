@@ -49,7 +49,6 @@ const (
 
 var (
 	poolStart uintptr // the first heap pointer
-	nextAlloc gcBlock // the next block that should be tried by the allocator
 	endBlock  gcBlock // the block just past the end of the available space
 )
 
@@ -207,6 +206,105 @@ func initHeap() {
 
 	// Set all block states to 'free'.
 	memzero(unsafe.Pointer(heapStart), metadataSize)
+
+	// Initialize the freeList with a single node encompassing the entire heap.
+	freeList = endBlock
+	freeListInsert(0, numBlocks)
+}
+
+var freeList gcBlock
+
+type freeListNode struct {
+	prev, next *freeListNode
+	size       uintptr
+}
+
+// freeListHead returns a pointer to the first entry in the free list.
+// If the free list is empty, this returns nil.
+func freeListHead() *freeListNode {
+	if freeList == endBlock {
+		return nil
+	}
+
+	return (*freeListNode)(unsafe.Pointer(freeList.pointer()))
+}
+
+// freeListFind searches the free list for the smallest gap that is at least the specified size (in blocks).
+func freeListFind(size uintptr) gcBlock {
+	for node := freeListHead(); node != nil; node = node.next {
+		if node.size >= size {
+			return blockFromAddr(uintptr(unsafe.Pointer(node)))
+		}
+	}
+
+	// The entire free list was scanned, and no blocks were sufficiently large.
+	return endBlock
+}
+
+// freeListInsert adds a free region starting at block, with the specified size (in blocks).
+func freeListInsert(block gcBlock, size uintptr) {
+	// Search for an insertion point.
+	var prev *freeListNode
+	next := freeListHead()
+	for ; next != nil && next.size < size; next = next.next {
+		prev = next
+	}
+
+	// Build the new free list entry.
+	node := (*freeListNode)(block.pointer())
+	*node = freeListNode{
+		prev: prev,
+		next: next,
+		size: size,
+	}
+
+	if prev != nil {
+		// Update previous entry to reference this.
+		prev.next = node
+	} else {
+		// Update list head.
+		freeList = block
+	}
+
+	if next != nil {
+		// Update next entry to reference this.
+		next.prev = node
+	}
+}
+
+// freeListRemove removes the gap starting at the specified block from the free list.
+// It returns the size of the gap that was removed.
+func freeListRemove(block gcBlock) uintptr {
+	node := (*freeListNode)(block.pointer())
+	prev, next := node.prev, node.next
+
+	if prev != nil {
+		// Update previous node.
+		prev.next = next
+	} else {
+		// Update list head.
+		if next == nil {
+			// List is now empty.
+			freeList = endBlock
+		} else {
+			// The former next node becomes the head.
+			freeList = blockFromAddr(uintptr(unsafe.Pointer(next)))
+		}
+	}
+
+	if next != nil {
+		// Update next node.
+		next.prev = prev
+	}
+
+	return node.size
+}
+
+func freeListDump() {
+	println("free list:")
+	for node := freeListHead(); node != nil; node = node.next {
+		println("", node, "size:", node.size)
+	}
 }
 
 // alloc tries to find some free space on the heap, possibly doing a garbage
@@ -219,65 +317,50 @@ func alloc(size uintptr) unsafe.Pointer {
 
 	neededBlocks := (size + (bytesPerBlock - 1)) / bytesPerBlock
 
-	// Continue looping until a run of free blocks has been found that fits the
-	// requested size.
-	index := nextAlloc
-	numFreeBlocks := uintptr(0)
-	heapScanCount := uint8(0)
-	for {
-		if index == nextAlloc {
-			if heapScanCount == 0 {
-				heapScanCount = 1
-			} else if heapScanCount == 1 {
-				// The entire heap has been searched for free memory, but none
-				// could be found. Run a garbage collection cycle to reclaim
-				// free memory and try again.
-				heapScanCount = 2
-				GC()
-			} else {
-				// Even after garbage collection, no free memory could be found.
-				runtimePanic("out of memory")
-			}
-		}
-
-		// Wrap around the end of the heap.
-		if index == endBlock {
-			index = 0
-			// Reset numFreeBlocks as allocations cannot wrap.
-			numFreeBlocks = 0
-		}
-
-		// Is the block we're looking at free?
-		if index.state() != blockStateFree {
-			// This block is in use. Try again from this point.
-			numFreeBlocks = 0
-			index++
-			continue
-		}
-		numFreeBlocks++
-		index++
-
-		// Are we finished?
-		if numFreeBlocks == neededBlocks {
-			// Found a big enough range of free blocks!
-			nextAlloc = index
-			thisAlloc := index - gcBlock(neededBlocks)
+	// Find an unused gap in the heap to fill with the allocation.
+	var ranGC bool
+findMem:
+	block := freeListFind(neededBlocks)
+	if block == endBlock {
+		// There are no available gaps big enough for the allocation.
+		if ranGC {
+			// Even after garbage collection, no free memory could be found.
 			if gcDebug {
-				println("found memory:", thisAlloc.pointer(), int(size))
+				freeListDump()
+				dumpHeap()
 			}
-
-			// Set the following blocks as being allocated.
-			thisAlloc.setState(blockStateHead)
-			for i := thisAlloc + 1; i != nextAlloc; i++ {
-				i.setState(blockStateTail)
-			}
-
-			// Return a pointer to this allocation.
-			pointer := thisAlloc.pointer()
-			memzero(pointer, size)
-			return pointer
+			runtimePanic("out of memory")
 		}
+
+		// Run the garbage collector and try again.
+		GC()
+		ranGC = true
+		goto findMem
 	}
+
+	// Update the free list.
+	gapSize := freeListRemove(block)
+	if gcDebug {
+		println("using gap", block, "of size", gapSize)
+	}
+	if gapSize > neededBlocks {
+		// Create a new free list entry with the leftover space.
+		if gcDebug {
+			println("creating shrunk gap", block+gcBlock(neededBlocks), "of size", gapSize-neededBlocks)
+		}
+		freeListInsert(block+gcBlock(neededBlocks), gapSize-neededBlocks)
+	}
+
+	// Update block metadata.
+	block.setState(blockStateHead)
+	for offset := uintptr(1); offset < neededBlocks; offset++ {
+		(block + gcBlock(offset)).setState(blockStateTail)
+	}
+
+	// Return a pointer to this allocation.
+	pointer := block.pointer()
+	memzero(pointer, neededBlocks*bytesPerBlock)
+	return pointer
 }
 
 func free(ptr unsafe.Pointer) {
@@ -348,15 +431,31 @@ func markRoot(addr, root uintptr) {
 
 // Sweep goes through all memory and frees unmarked memory.
 func sweep() {
-	freeCurrentObject := false
+	// Clear free list. It will be rebuilt while sweeping.
+	freeList = endBlock
+
+	// Sweep and rebuild free list.
+	var freeStart gcBlock
+	freeStarted := false
 	for block := gcBlock(0); block < endBlock; block++ {
-		switch block.state() {
+		state := block.state()
+		switch state {
+		case blockStateFree:
+			if !freeStarted {
+				// Start a new free block.
+				freeStart = block
+				freeStarted = true
+			}
 		case blockStateHead:
 			// Unmarked head. Free it, including all tail blocks following it.
 			block.markFree()
-			freeCurrentObject = true
+			if !freeStarted {
+				// Start a new free block with this head.
+				freeStart = block
+				freeStarted = true
+			}
 		case blockStateTail:
-			if freeCurrentObject {
+			if freeStarted {
 				// This is a tail object following an unmarked head.
 				// Free it now.
 				block.markFree()
@@ -366,8 +465,18 @@ func sweep() {
 			// but the mark bit must be removed so the next GC cycle will
 			// collect this object if it is unreferenced then.
 			block.unmark()
-			freeCurrentObject = false
+
+			if freeStarted {
+				// Add the previous gap to the free list.
+				freeListInsert(freeStart, uintptr(block-freeStart))
+				freeStarted = false
+			}
 		}
+	}
+
+	if freeStarted {
+		// Add the last gap to the free list.
+		freeListInsert(freeStart, uintptr(endBlock-freeStart))
 	}
 }
 
