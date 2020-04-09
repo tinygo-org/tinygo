@@ -4,10 +4,9 @@ target triple = "wasm32-unknown-unknown-wasm"
 %runtime.typecodeID = type { %runtime.typecodeID*, i32 }
 %runtime.funcValueWithSignature = type { i32, %runtime.typecodeID* }
 
-@"reflect/types.type:func:{basic:int8}{}" = external constant %runtime.typecodeID
 @"reflect/types.type:func:{basic:uint8}{}" = external constant %runtime.typecodeID
 @"reflect/types.type:func:{basic:int}{}" = external constant %runtime.typecodeID
-@"funcInt8$withSignature" = constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i8, i8*, i8*)* @funcInt8 to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:int8}{}" }
+@"reflect/types.type:func:{}{basic:uint32}" = external constant %runtime.typecodeID
 @"func1Uint8$withSignature" = constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i8, i8*, i8*)* @func1Uint8 to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:uint8}{}" }
 @"func2Uint8$withSignature" = constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i8, i8*, i8*)* @func2Uint8 to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:uint8}{}" }
 @"main$withSignature" = constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i32, i8*, i8*)* @"main$1" to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:int}{}" }
@@ -23,26 +22,32 @@ declare void @"main$1"(i32, i8*, i8*)
 
 declare void @"main$2"(i32, i8*, i8*)
 
-declare void @funcInt8(i8, i8*, i8*)
-
 declare void @func1Uint8(i8, i8*, i8*)
 
 declare void @func2Uint8(i8, i8*, i8*)
 
-define void @runFunc1(i8* %0, i32 %1, i8 %2, i8* %context, i8* %parentHandle) {
+define i32 @runFuncNone(i8* %0, i32 %1, i8* %context, i8* %parentHandle) {
 entry:
-  %3 = icmp eq i32 %1, 0
-  %4 = select i1 %3, void (i8, i8*, i8*)* null, void (i8, i8*, i8*)* @funcInt8
-  %5 = icmp eq void (i8, i8*, i8*)* %4, null
-  br i1 %5, label %fpcall.nil, label %fpcall.next
+  br i1 false, label %fpcall.nil, label %fpcall.next
 
 fpcall.nil:                                       ; preds = %entry
   call void @runtime.nilPanic(i8* undef, i8* null)
   unreachable
 
 fpcall.next:                                      ; preds = %entry
-  call void %4(i8 %2, i8* %0, i8* undef)
-  ret void
+  switch i32 %1, label %func.default [
+    i32 0, label %func.nil
+  ]
+
+func.nil:                                         ; preds = %fpcall.next
+  call void @runtime.nilPanic(i8* undef, i8* null)
+  unreachable
+
+func.next:                                        ; No predecessors!
+  ret i32 undef
+
+func.default:                                     ; preds = %fpcall.next
+  unreachable
 }
 
 define void @runFunc2(i8* %0, i32 %1, i8 %2, i8* %context, i8* %parentHandle) {
