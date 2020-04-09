@@ -4,10 +4,9 @@ target triple = "wasm32-unknown-unknown-wasm"
 %runtime.typecodeID = type { %runtime.typecodeID*, i32 }
 %runtime.funcValueWithSignature = type { i32, %runtime.typecodeID* }
 
-@"reflect/types.type:func:{basic:int8}{}" = external constant %runtime.typecodeID
 @"reflect/types.type:func:{basic:uint8}{}" = external constant %runtime.typecodeID
 @"reflect/types.type:func:{basic:int}{}" = external constant %runtime.typecodeID
-@"funcInt8$withSignature" = constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i8, i8*, i8*)* @funcInt8 to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:int8}{}" }
+@"reflect/types.type:func:{}{basic:uint32}" = external constant %runtime.typecodeID
 @"func1Uint8$withSignature" = constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i8, i8*, i8*)* @func1Uint8 to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:uint8}{}" }
 @"func2Uint8$withSignature" = constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i8, i8*, i8*)* @func2Uint8 to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:uint8}{}" }
 @"main$withSignature" = constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i32, i8*, i8*)* @"main$1" to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:int}{}" }
@@ -23,29 +22,26 @@ declare void @"main$1"(i32, i8*, i8*)
 
 declare void @"main$2"(i32, i8*, i8*)
 
-declare void @funcInt8(i8, i8*, i8*)
-
 declare void @func1Uint8(i8, i8*, i8*)
 
 declare void @func2Uint8(i8, i8*, i8*)
 
-; Call a function of which only one function with this signature is used as a
-; function value. This means that lowering it to IR is trivial: simply check
-; whether the func value is nil, and if not, call that one function directly.
-define void @runFunc1(i8*, i32, i8, i8* %context, i8* %parentHandle) {
+; There are no functions with this signature used in a func value.
+; This means that this should unconditionally nil panic.
+define i32 @runFuncNone(i8*, i32, i8* %context, i8* %parentHandle) {
 entry:
-  %3 = call i32 @runtime.getFuncPtr(i8* %0, i32 %1, %runtime.typecodeID* @"reflect/types.type:func:{basic:int8}{}", i8* undef, i8* null)
-  %4 = inttoptr i32 %3 to void (i8, i8*, i8*)*
-  %5 = icmp eq void (i8, i8*, i8*)* %4, null
-  br i1 %5, label %fpcall.nil, label %fpcall.next
+  %2 = call i32 @runtime.getFuncPtr(i8* %0, i32 %1, %runtime.typecodeID* @"reflect/types.type:func:{}{basic:uint32}", i8* undef, i8* null)
+  %3 = inttoptr i32 %2 to i32 (i8*, i8*)*
+  %4 = icmp eq i32 (i8*, i8*)* %3, null
+  br i1 %4, label %fpcall.nil, label %fpcall.next
 
 fpcall.nil:
   call void @runtime.nilPanic(i8* undef, i8* null)
   unreachable
 
 fpcall.next:
-  call void %4(i8 %2, i8* %0, i8* undef)
-  ret void
+  %5 = call i32 %3(i8* %0, i8* undef)
+  ret i32 %5
 }
 
 ; There are two functions with this signature used in a func value. That means
