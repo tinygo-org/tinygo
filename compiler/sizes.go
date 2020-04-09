@@ -10,13 +10,13 @@ import (
 // The original license can be found here:
 //     https://golang.org/LICENSE
 
-type StdSizes struct {
+type stdSizes struct {
 	IntSize  int64
 	PtrSize  int64
 	MaxAlign int64
 }
 
-func (s *StdSizes) Alignof(T types.Type) int64 {
+func (s *stdSizes) Alignof(T types.Type) int64 {
 	// For arrays and structs, alignment is defined in terms
 	// of alignment of the elements and fields, respectively.
 	switch t := T.Underlying().(type) {
@@ -61,7 +61,7 @@ func (s *StdSizes) Alignof(T types.Type) int64 {
 	return a
 }
 
-func (s *StdSizes) Offsetsof(fields []*types.Var) []int64 {
+func (s *stdSizes) Offsetsof(fields []*types.Var) []int64 {
 	offsets := make([]int64, len(fields))
 	var o int64
 	for i, f := range fields {
@@ -89,7 +89,7 @@ var basicSizes = [...]byte{
 	types.Complex128: 16,
 }
 
-func (s *StdSizes) Sizeof(T types.Type) int64 {
+func (s *stdSizes) Sizeof(T types.Type) int64 {
 	switch t := T.Underlying().(type) {
 	case *types.Basic:
 		k := t.Kind()
