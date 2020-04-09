@@ -11,7 +11,7 @@ import (
 
 // The maximum number of arguments that can be expanded from a single struct. If
 // a struct contains more fields, it is passed as a struct without expanding.
-const MaxFieldsPerParam = 3
+const maxFieldsPerParam = 3
 
 // paramFlags identifies parameter attributes for flags. Most importantly, it
 // determines which parameters are dereferenceable_or_null and which aren't.
@@ -52,7 +52,7 @@ func expandFormalParamType(t llvm.Type, goType types.Type) ([]llvm.Type, []param
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		fields, fieldFlags := flattenAggregateType(t, goType)
-		if len(fields) <= MaxFieldsPerParam {
+		if len(fields) <= maxFieldsPerParam {
 			return fields, fieldFlags
 		} else {
 			// failed to lower
@@ -72,7 +72,7 @@ func (b *builder) expandFormalParamOffsets(t llvm.Type) []uint64 {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		fields := b.flattenAggregateTypeOffsets(t)
-		if len(fields) <= MaxFieldsPerParam {
+		if len(fields) <= maxFieldsPerParam {
 			return fields
 		} else {
 			// failed to lower
@@ -92,7 +92,7 @@ func (b *builder) expandFormalParam(v llvm.Value) []llvm.Value {
 	switch v.Type().TypeKind() {
 	case llvm.StructTypeKind:
 		fieldTypes, _ := flattenAggregateType(v.Type(), nil)
-		if len(fieldTypes) <= MaxFieldsPerParam {
+		if len(fieldTypes) <= maxFieldsPerParam {
 			fields := b.flattenAggregate(v)
 			if len(fields) != len(fieldTypes) {
 				panic("type and value param lowering don't match")
@@ -227,7 +227,7 @@ func (b *builder) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value) 
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		flattened, _ := flattenAggregateType(t, nil)
-		if len(flattened) <= MaxFieldsPerParam {
+		if len(flattened) <= maxFieldsPerParam {
 			value := llvm.ConstNull(t)
 			for i, subtyp := range t.StructElementTypes() {
 				structField, remaining := b.collapseFormalParamInternal(subtyp, fields)

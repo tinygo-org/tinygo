@@ -65,7 +65,7 @@ type builder struct {
 	blockEntries      map[*ssa.BasicBlock]llvm.BasicBlock // a *ssa.BasicBlock may be split up
 	blockExits        map[*ssa.BasicBlock]llvm.BasicBlock // these are the exit blocks
 	currentBlock      *ssa.BasicBlock
-	phis              []Phi
+	phis              []phiNode
 	taskHandle        llvm.Value
 	deferPtr          llvm.Value
 	difunc            llvm.Metadata
@@ -77,7 +77,7 @@ type builder struct {
 	selectRecvBuf     map[*ssa.Select]llvm.Value
 }
 
-type Phi struct {
+type phiNode struct {
 	ssa  *ssa.Phi
 	llvm llvm.Value
 }
@@ -196,7 +196,7 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 			return ""
 		},
 		TypeChecker: types.Config{
-			Sizes: &StdSizes{
+			Sizes: &stdSizes{
 				IntSize:  int64(c.targetData.TypeAllocSize(c.intType)),
 				PtrSize:  int64(c.targetData.PointerSize()),
 				MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
@@ -1740,7 +1740,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 	case *ssa.Phi:
 		phi := b.CreatePHI(b.getLLVMType(expr.Type()), "")
-		b.phis = append(b.phis, Phi{expr, phi})
+		b.phis = append(b.phis, phiNode{expr, phi})
 		return phi, nil
 	case *ssa.Range:
 		var iteratorType llvm.Type
