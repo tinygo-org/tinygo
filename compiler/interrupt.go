@@ -39,7 +39,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 
 	// Create a new global of type runtime/interrupt.handle. Globals of this
 	// type are lowered in the interrupt lowering pass.
-	globalType := b.ir.Program.ImportedPackage("runtime/interrupt").Type("handle").Type()
+	globalType := b.program.ImportedPackage("runtime/interrupt").Type("handle").Type()
 	globalLLVMType := b.getLLVMType(globalType)
 	globalName := "runtime/interrupt.$interrupt" + strconv.FormatInt(id.Int64(), 10)
 	if global := b.mod.NamedGlobal(globalName); !global.IsNil() {
@@ -56,7 +56,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 
 	// Add debug info to the interrupt global.
 	if b.Debug() {
-		pos := b.ir.Program.Fset.Position(instr.Pos())
+		pos := b.program.Fset.Position(instr.Pos())
 		diglobal := b.dibuilder.CreateGlobalVariableExpression(b.getDIFile(pos.Filename), llvm.DIGlobalVariableExpression{
 			Name:        "interrupt" + strconv.FormatInt(id.Int64(), 10),
 			LinkageName: globalName,

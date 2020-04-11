@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tinygo-org/tinygo/ir"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -236,7 +235,7 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 		return llvm.ConstGEP(global, []llvm.Value{zero, zero})
 	}
 
-	ms := c.ir.Program.MethodSets.MethodSet(typ)
+	ms := c.program.MethodSets.MethodSet(typ)
 	if ms.Len() == 0 {
 		// no methods, so can leave that one out
 		return llvm.ConstPointerNull(llvm.PointerType(c.getLLVMRuntimeType("interfaceMethodInfo"), 0))
@@ -247,7 +246,7 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 	for i := 0; i < ms.Len(); i++ {
 		method := ms.At(i)
 		signatureGlobal := c.getMethodSignature(method.Obj().(*types.Func))
-		fn := c.ir.Program.MethodValue(method)
+		fn := c.program.MethodValue(method)
 		llvmFn := c.getFunction(fn)
 		if llvmFn.IsNil() {
 			// compiler error, so panic
@@ -311,7 +310,7 @@ func (c *compilerContext) getInterfaceMethodSet(typ types.Type) llvm.Value {
 // external *i8 indicating the indicating the signature of this method. It is
 // used during the interface lowering pass.
 func (c *compilerContext) getMethodSignature(method *types.Func) llvm.Value {
-	signature := ir.MethodSignature(method)
+	signature := methodSignature(method)
 	signatureGlobal := c.mod.NamedGlobal("func " + signature)
 	if signatureGlobal.IsNil() {
 		signatureGlobal = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), "func "+signature)
@@ -489,7 +488,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llv
 
 	// add debug info if needed
 	if c.Debug() {
-		pos := c.ir.Program.Fset.Position(fn.Pos())
+		pos := c.program.Fset.Position(fn.Pos())
 		difunc := c.attachDebugInfoRaw(fn, wrapper, "$invoke", pos.Filename, pos.Line)
 		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
@@ -521,4 +520,51 @@ func isAnonymous(typ types.Type) bool {
 		return true
 	}
 	return false
+}
+
+// methodSignature creates a readable version of a method signature (including
+// the function name, excluding the receiver name). This string is used
+// internally to match interfaces and to call the correct method on an
+// interface. Examples:
+//
+//     String() string
+//     Read([]byte) (int, error)
+func methodSignature(method *types.Func) string {
+	return method.Name() + signature(method.Type().(*types.Signature))
+}
+
+// Make a readable version of a function (pointer) signature.
+// Examples:
+//
+//     () string
+//     (string, int) (int, error)
+func signature(sig *types.Signature) string {
+	s := ""
+	if sig.Params().Len() == 0 {
+		s += "()"
+	} else {
+		s += "("
+		for i := 0; i < sig.Params().Len(); i++ {
+			if i > 0 {
+				s += ", "
+			}
+			s += sig.Params().At(i).Type().String()
+		}
+		s += ")"
+	}
+	if sig.Results().Len() == 0 {
+		// keep as-is
+	} else if sig.Results().Len() == 1 {
+		s += " " + sig.Results().At(0).Type().String()
+	} else {
+		s += " ("
+		for i := 0; i < sig.Results().Len(); i++ {
+			if i > 0 {
+				s += ", "
+			}
+			s += sig.Results().At(i).Type().String()
+		}
+		s += ")"
+	}
+	return s
 }
