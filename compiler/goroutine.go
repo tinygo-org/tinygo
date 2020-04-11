@@ -29,7 +29,7 @@ func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value, p
 	default:
 		panic("unreachable")
 	}
-	start := b.getFunction(b.ir.Program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
+	start := b.getFunction(b.program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
 	b.createCall(start, []llvm.Value{callee, paramBundle, llvm.Undef(b.i8ptrType), llvm.ConstPointerNull(b.i8ptrType)}, "")
 	return llvm.Undef(funcPtr.Type().ElementType().ReturnType())
 }
@@ -75,7 +75,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		builder.SetInsertPointAtEnd(entry)
 
 		if c.Debug() {
-			pos := c.ir.Program.Fset.Position(pos)
+			pos := c.program.Fset.Position(pos)
 			diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
 				File:       c.getDIFile(pos.Filename),
 				Parameters: nil, // do not show parameters in debugger
@@ -131,7 +131,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		builder.SetInsertPointAtEnd(entry)
 
 		if c.Debug() {
-			pos := c.ir.Program.Fset.Position(pos)
+			pos := c.program.Fset.Position(pos)
 			diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
 				File:       c.getDIFile(pos.Filename),
 				Parameters: nil, // do not show parameters in debugger

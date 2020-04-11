@@ -277,7 +277,7 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 			// Add debug info.
 			// TODO: this should be done for every global in the program, not just
 			// the ones that are referenced from some code.
-			pos := c.ir.Program.Fset.Position(g.Pos())
+			pos := c.program.Fset.Position(g.Pos())
 			diglobal := c.dibuilder.CreateGlobalVariableExpression(c.difiles[pos.Filename], llvm.DIGlobalVariableExpression{
 				Name:        g.RelString(nil),
 				LinkageName: info.linkName,

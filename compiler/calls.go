@@ -35,7 +35,7 @@ const (
 
 // createCall creates a new call to runtime.<fnName> with the given arguments.
 func (b *builder) createRuntimeCall(fnName string, args []llvm.Value, name string) llvm.Value {
-	fn := b.ir.Program.ImportedPackage("runtime").Members[fnName].(*ssa.Function)
+	fn := b.program.ImportedPackage("runtime").Members[fnName].(*ssa.Function)
 	llvmFn := b.getFunction(fn)
 	if llvmFn.IsNil() {
 		panic("trying to call non-existent function: " + fn.RelString(nil))

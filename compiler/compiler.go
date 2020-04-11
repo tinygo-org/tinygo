@@ -18,7 +18,6 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/goenv"
-	"github.com/tinygo-org/tinygo/ir"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -52,7 +51,7 @@ type compilerContext struct {
 	i8ptrType        llvm.Type // for convenience
 	funcPtrAddrSpace int
 	uintptrType      llvm.Type
-	ir               *ir.Program
+	program          *ssa.Program
 	diagnostics      []error
 	astComments      map[string]*ast.CommentGroup
 }
@@ -245,7 +244,8 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 		return c.mod, nil, []error{err}
 	}
 
-	c.ir = ir.NewProgram(lprogram, pkgName)
+	c.program = lprogram.LoadSSA()
+	c.program.Build()
 
 	// Initialize debug information.
 	if c.Debug() {
@@ -264,7 +264,7 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	// TODO: lazily create runtime types in getLLVMRuntimeType when they are
 	// needed. Eventually this will be required anyway, when packages are
 	// compiled independently (and the runtime types are not available).
-	for _, member := range c.ir.Program.ImportedPackage("runtime").Members {
+	for _, member := range c.program.ImportedPackage("runtime").Members {
 		if member, ok := member.(*ssa.Type); ok {
 			if typ, ok := member.Type().(*types.Named); ok {
 				if _, ok := typ.Underlying().(*types.Struct); ok {
@@ -276,11 +276,13 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 
 	// Predeclare the runtime.alloc function, which is used by the wordpack
 	// functionality.
-	c.getFunction(c.ir.Program.ImportedPackage("runtime").Members["alloc"].(*ssa.Function))
+	c.getFunction(c.program.ImportedPackage("runtime").Members["alloc"].(*ssa.Function))
+
+	sortedPackages := sortPackages(c.program, pkgName)
 
 	// Find package initializers.
 	var initFuncs []llvm.Value
-	for _, pkg := range c.ir.Packages() {
+	for _, pkg := range sortedPackages {
 		for _, member := range pkg.Members {
 			switch member := member.(type) {
 			case *ssa.Function:
@@ -294,19 +296,19 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	// Add definitions to declarations.
 	irbuilder := c.ctx.NewBuilder()
 	defer irbuilder.Dispose()
-	for _, pkg := range c.ir.Packages() {
+	for _, pkg := range sortedPackages {
 		c.createPackage(pkg, irbuilder)
 	}
 
 	// After all packages are imported, add a synthetic initializer function
 	// that calls the initializer of each package.
-	initFn := c.ir.Program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function)
+	initFn := c.program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function)
 	llvmInitFn := c.getFunction(initFn)
 	llvmInitFn.SetLinkage(llvm.InternalLinkage)
 	llvmInitFn.SetUnnamedAddr(true)
 	if c.Debug() {
 		difunc := c.attachDebugInfo(initFn)
-		pos := c.ir.Program.Fset.Position(initFn.Pos())
+		pos := c.program.Fset.Position(initFn.Pos())
 		irbuilder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
 	block := c.ctx.AddBasicBlock(llvmInitFn, "entry")
@@ -318,7 +320,7 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 
 	// Conserve for goroutine lowering. Without marking these as external, they
 	// would be optimized away.
-	realMain := c.mod.NamedFunction(c.ir.MainPkg().Pkg.Path() + ".main")
+	realMain := c.mod.NamedFunction(pkgName + ".main")
 	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
 
 	// Replace callMain placeholder with actual main function.
@@ -374,13 +376,80 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 
 	// Gather the list of (C) file paths that should be included in the build.
 	var extraFiles []string
-	for _, pkg := range c.ir.LoaderProgram.Sorted() {
+	for _, pkg := range lprogram.Sorted() {
 		for _, file := range pkg.CFiles {
 			extraFiles = append(extraFiles, filepath.Join(pkg.Package.Dir, file))
 		}
 	}
 
 	return c.mod, extraFiles, c.diagnostics
+}
+
+// sortPackages returns a list of all packages, sorted by import order.
+func sortPackages(program *ssa.Program, mainPath string) []*ssa.Package {
+	// Find the main package, which is a bit difficult when running a .go file
+	// directly.
+	mainPkg := program.ImportedPackage(mainPath)
+	if mainPkg == nil {
+		for _, pkgInfo := range program.AllPackages() {
+			if pkgInfo.Pkg.Name() == "main" {
+				if mainPkg != nil {
+					panic("more than one main package found")
+				}
+				mainPkg = pkgInfo
+			}
+		}
+	}
+	if mainPkg == nil {
+		panic("could not find main package")
+	}
+
+	packageList := []*ssa.Package{}
+	packageSet := map[string]struct{}{}
+	worklist := []string{"runtime", mainPath}
+	for len(worklist) != 0 {
+		pkgPath := worklist[0]
+		var pkg *ssa.Package
+		if pkgPath == mainPath {
+			pkg = mainPkg // necessary for compiling individual .go files
+		} else {
+			pkg = program.ImportedPackage(pkgPath)
+		}
+		if pkg == nil {
+			// Non-SSA package (e.g. cgo).
+			packageSet[pkgPath] = struct{}{}
+			worklist = worklist[1:]
+			continue
+		}
+		if _, ok := packageSet[pkgPath]; ok {
+			// Package already in the final package list.
+			worklist = worklist[1:]
+			continue
+		}
+
+		unsatisfiedImports := make([]string, 0)
+		imports := pkg.Pkg.Imports()
+		for _, pkg := range imports {
+			if _, ok := packageSet[pkg.Path()]; ok {
+				continue
+			}
+			unsatisfiedImports = append(unsatisfiedImports, pkg.Path())
+		}
+		if len(unsatisfiedImports) == 0 {
+			// All dependencies of this package are satisfied, so add this
+			// package to the list.
+			packageList = append(packageList, pkg)
+			packageSet[pkgPath] = struct{}{}
+			worklist = worklist[1:]
+		} else {
+			// Prepend all dependencies to the worklist and reconsider this
+			// package (by not removing it from the worklist). At that point, it
+			// must be possible to add it to packageList.
+			worklist = append(unsatisfiedImports, worklist...)
+		}
+	}
+
+	return packageList
 }
 
 // getLLVMRuntimeType obtains a named type from the runtime package and returns
@@ -576,11 +645,11 @@ func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
 			Encoding:   encoding,
 		})
 	case *types.Chan:
-		return c.getDIType(types.NewPointer(c.ir.Program.ImportedPackage("runtime").Members["channel"].(*ssa.Type).Type()))
+		return c.getDIType(types.NewPointer(c.program.ImportedPackage("runtime").Members["channel"].(*ssa.Type).Type()))
 	case *types.Interface:
-		return c.getDIType(c.ir.Program.ImportedPackage("runtime").Members["_interface"].(*ssa.Type).Type())
+		return c.getDIType(c.program.ImportedPackage("runtime").Members["_interface"].(*ssa.Type).Type())
 	case *types.Map:
-		return c.getDIType(types.NewPointer(c.ir.Program.ImportedPackage("runtime").Members["hashmap"].(*ssa.Type).Type()))
+		return c.getDIType(types.NewPointer(c.program.ImportedPackage("runtime").Members["hashmap"].(*ssa.Type).Type()))
 	case *types.Named:
 		return c.dibuilder.CreateTypedef(llvm.DITypedef{
 			Type: c.getDIType(typ.Underlying()),
@@ -688,7 +757,7 @@ func (b *builder) getLocalVariable(variable *types.Var) llvm.Metadata {
 		return dilocal
 	}
 
-	pos := b.ir.Program.Fset.Position(variable.Pos())
+	pos := b.program.Fset.Position(variable.Pos())
 
 	// Check whether this is a function parameter.
 	for i, param := range b.fn.Params {
@@ -722,7 +791,7 @@ func (b *builder) getLocalVariable(variable *types.Var) llvm.Metadata {
 // attachDebugInfo adds debug info to a function declaration. It returns the
 // DISubprogram metadata node.
 func (c *compilerContext) attachDebugInfo(f *ssa.Function) llvm.Metadata {
-	pos := c.ir.Program.Fset.Position(f.Syntax().Pos())
+	pos := c.program.Fset.Position(f.Syntax().Pos())
 	return c.attachDebugInfoRaw(f, c.getFunction(f), "", pos.Filename, pos.Line)
 }
 
@@ -876,7 +945,7 @@ func (c *compilerContext) createFunction(irbuilder llvm.Builder, fn *ssa.Functio
 			// Create debug info file if needed.
 			b.difunc = b.attachDebugInfo(b.fn)
 		}
-		pos := b.ir.Program.Fset.Position(b.fn.Pos())
+		pos := b.program.Fset.Position(b.fn.Pos())
 		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
 	}
 
@@ -978,7 +1047,7 @@ func (c *compilerContext) createFunction(irbuilder llvm.Builder, fn *ssa.Functio
 					continue
 				}
 				dbgVar := b.getLocalVariable(variable)
-				pos := b.ir.Program.Fset.Position(instr.Pos())
+				pos := b.program.Fset.Position(instr.Pos())
 				b.dibuilder.InsertValueAtEnd(b.getValue(instr.X), dbgVar, b.dibuilder.CreateExpression(nil), llvm.DebugLoc{
 					Line:  uint(pos.Line),
 					Col:   uint(pos.Column),
@@ -1032,7 +1101,7 @@ func (c *compilerContext) createFunction(irbuilder llvm.Builder, fn *ssa.Functio
 // particular Go SSA instruction.
 func (b *builder) createInstruction(instr ssa.Instruction) {
 	if b.Debug() {
-		pos := b.ir.Program.Fset.Position(instr.Pos())
+		pos := b.program.Fset.Position(instr.Pos())
 		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
 	}
 
