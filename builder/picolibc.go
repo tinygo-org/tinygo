@@ -10,9 +10,10 @@ import (
 // based on newlib.
 var Picolibc = Library{
 	name: "picolibc",
+	//lib/picolibc/newlib/libc/include/
 	cflags: func() []string {
 		picolibcDir := filepath.Join(goenv.Get("TINYGOROOT"), "lib/picolibc/newlib/libc")
-		return []string{"-Werror", "-Wall", "-std=gnu11", "-D_COMPILING_NEWLIB", "--sysroot=" + picolibcDir, "-I" + picolibcDir + "/tinystdio", "-I" + goenv.Get("TINYGOROOT") + "/lib/picolibc-include"}
+		return []string{"-Werror", "-Wall", "-std=gnu11", "-D_COMPILING_NEWLIB", "-I"+picolibcDir+"/include","--sysroot=" + picolibcDir, "-I" + picolibcDir + "/tinystdio", "-I" + goenv.Get("TINYGOROOT") + "/lib/picolibc-include"}
 	},
 	sourceDir: "lib/picolibc/newlib/libc",
 	sources: func(target string) []string {

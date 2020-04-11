@@ -1,0 +1,12 @@
+{
+	"inherits": ["arm64"],
+	"build-tags": ["rpi3", "rpi", "baremetal"],
+	"scheduler": "none",
+	"gc": "leaking",
+	"ldflags": [
+		"-T", "targets/rpi3.ld"
+	],
+	"extra-files": [
+		"src/device/arm/arm-cortex-a53.S"
+	]
+}

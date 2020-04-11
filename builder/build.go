@@ -170,7 +170,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 		for i, path := range config.ExtraFiles() {
 			abspath := filepath.Join(root, path)
 			outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
-			err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, abspath)...)
+			err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "--target="+config.Target.Triple,"-o", outpath, abspath)...)
 			if err != nil {
 				return &commandError{"failed to build", path, err}
 			}
