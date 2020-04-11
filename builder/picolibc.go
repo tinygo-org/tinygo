@@ -13,7 +13,10 @@ var Picolibc = Library{
 	//lib/picolibc/newlib/libc/include/
 	cflags: func() []string {
 		picolibcDir := filepath.Join(goenv.Get("TINYGOROOT"), "lib/picolibc/newlib/libc")
-		return []string{"-Werror", "-Wall", "-std=gnu11", "-D_COMPILING_NEWLIB", "-I"+picolibcDir+"/include","--sysroot=" + picolibcDir, "-I" + picolibcDir + "/tinystdio", "-I" + goenv.Get("TINYGOROOT") + "/lib/picolibc-include"}
+		//note: different targets seems to imply different behavior from llvm so it's necessary
+		//note: to add this additional "-I"+picolibcDir+"/include" when compiling for arm64.
+		//note: it ends being ignored by other targets, so no harm, no foul.
+		return []string{"-Werror", "-Wall", "-std=gnu11", "-D_COMPILING_NEWLIB","-I"+picolibcDir+"/include", "--sysroot=" + picolibcDir, "-I" + picolibcDir + "/tinystdio", "-I" + goenv.Get("TINYGOROOT") + "/lib/picolibc-include"}
 	},
 	sourceDir: "lib/picolibc/newlib/libc",
 	sources: func(target string) []string {
