@@ -81,6 +81,8 @@ func runCompilerTest(t *testing.T, name string) {
 		t.Fatal(err)
 	}
 	c := newCompilerContext("main", machine, &config)
+	c.runtimePkg = types.NewPackage("runtime", "runtime")
+	c.taskPkg = types.NewPackage("internal/task", "task")
 	irbuilder := c.ctx.NewBuilder()
 	defer irbuilder.Dispose()
 

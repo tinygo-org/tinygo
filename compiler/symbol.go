@@ -51,26 +51,37 @@ type functionInfo struct {
 // it if needed. It can later be filled with compilerContext.createFunction().
 func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 	info := c.getFunctionInfo(fn)
+	return c.getFunctionRaw(fn.Signature, info)
+}
+
+func (c *compilerContext) getFunctionRaw(sig *types.Signature, info functionInfo) llvm.Value {
 	llvmFn := c.mod.NamedFunction(info.linkName)
 	if !llvmFn.IsNil() {
 		return llvmFn
 	}
 
 	var retType llvm.Type
-	if fn.Signature.Results() == nil {
+	if sig.Results() == nil {
 		retType = c.ctx.VoidType()
-	} else if fn.Signature.Results().Len() == 1 {
-		retType = c.getLLVMType(fn.Signature.Results().At(0).Type())
+	} else if sig.Results().Len() == 1 {
+		retType = c.getLLVMType(sig.Results().At(0).Type())
 	} else {
-		results := make([]llvm.Type, 0, fn.Signature.Results().Len())
-		for i := 0; i < fn.Signature.Results().Len(); i++ {
-			results = append(results, c.getLLVMType(fn.Signature.Results().At(i).Type()))
+		results := make([]llvm.Type, 0, sig.Results().Len())
+		for i := 0; i < sig.Results().Len(); i++ {
+			results = append(results, c.getLLVMType(sig.Results().At(i).Type()))
 		}
 		retType = c.ctx.StructType(results, false)
 	}
 
 	var paramInfos []paramInfo
-	for _, param := range fn.Params {
+	params := []*types.Var{}
+	if sig.Recv() != nil {
+		params = append(params, sig.Recv())
+	}
+	for i := 0; i < sig.Params().Len(); i++ {
+		params = append(params, sig.Params().At(i))
+	}
+	for _, param := range params {
 		paramType := c.getLLVMType(param.Type())
 		paramFragmentInfos := expandFormalParamType(paramType, param.Name(), param.Type())
 		paramInfos = append(paramInfos, paramFragmentInfos...)

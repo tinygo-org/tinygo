@@ -1,5 +1,7 @@
 package compiler
 
+//go:generate go run ./mkruntimetypes.go
+
 import (
 	"debug/dwarf"
 	"errors"
@@ -49,11 +51,14 @@ type compilerContext struct {
 	targetData       llvm.TargetData
 	intType          llvm.Type
 	i8ptrType        llvm.Type // for convenience
+	runtimeTypes     map[string]types.Type
 	funcPtrAddrSpace int
 	uintptrType      llvm.Type
 	program          *ssa.Program
 	diagnostics      []error
 	astComments      map[string]*ast.CommentGroup
+	runtimePkg       *types.Package // package runtime
+	taskPkg          *types.Package // package internal/task
 }
 
 // builder contains all information relevant to build a single function.
@@ -101,11 +106,12 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 // configuration, ready to compile Go SSA to LLVM IR.
 func newCompilerContext(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) *compilerContext {
 	c := &compilerContext{
-		Config:     config,
-		difiles:    make(map[string]llvm.Metadata),
-		ditypes:    make(map[types.Type]llvm.Metadata),
-		machine:    machine,
-		targetData: machine.CreateTargetData(),
+		Config:       config,
+		difiles:      make(map[string]llvm.Metadata),
+		ditypes:      make(map[types.Type]llvm.Metadata),
+		machine:      machine,
+		targetData:   machine.CreateTargetData(),
+		runtimeTypes: make(map[string]types.Type),
 	}
 
 	c.ctx = llvm.NewContext()
@@ -246,6 +252,8 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 
 	c.program = lprogram.LoadSSA()
 	c.program.Build()
+	c.runtimePkg = c.program.ImportedPackage("runtime").Pkg
+	c.taskPkg = c.program.ImportedPackage("internal/task").Pkg
 
 	// Initialize debug information.
 	if c.Debug() {
@@ -259,20 +267,6 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	}
 
 	c.loadASTComments(lprogram)
-
-	// Declare runtime types.
-	// TODO: lazily create runtime types in getLLVMRuntimeType when they are
-	// needed. Eventually this will be required anyway, when packages are
-	// compiled independently (and the runtime types are not available).
-	for _, member := range c.program.ImportedPackage("runtime").Members {
-		if member, ok := member.(*ssa.Type); ok {
-			if typ, ok := member.Type().(*types.Named); ok {
-				if _, ok := typ.Underlying().(*types.Struct); ok {
-					c.getLLVMType(typ)
-				}
-			}
-		}
-	}
 
 	// Predeclare the runtime.alloc function, which is used by the wordpack
 	// functionality.
@@ -453,16 +447,14 @@ func sortPackages(program *ssa.Program, mainPath string) []*ssa.Package {
 }
 
 // getLLVMRuntimeType obtains a named type from the runtime package and returns
-// it as a LLVM type, creating it if necessary. It is a shorthand for
-// getLLVMType(getRuntimeType(name)).
+// it as a LLVM type, creating it if necessary.
 func (c *compilerContext) getLLVMRuntimeType(name string) llvm.Type {
 	fullName := "runtime." + name
-	typ := c.mod.GetTypeByName(fullName)
-	if typ.IsNil() {
-		println(c.mod.String())
-		panic("could not find runtime type: " + fullName)
+	llvmType := c.mod.GetTypeByName(fullName)
+	if llvmType.IsNil() {
+		llvmType = c.getLLVMType(c.getRuntimeType(name))
 	}
-	return typ
+	return llvmType
 }
 
 // getLLVMType creates and returns a LLVM type for a Go type. In the case of
@@ -522,6 +514,10 @@ func (c *compilerContext) getLLVMType(goType types.Type) llvm.Type {
 				llvmType = c.ctx.StructCreateNamed(llvmName)
 				underlying := c.getLLVMType(st)
 				llvmType.StructSetBody(underlying.StructElementTypes(), false)
+			} else if typ.String() == "internal/task.Task" && llvmType.StructElementTypesCount() == 0 {
+				// Note: this struct is an opaque struct. Give it a body.
+				underlying := c.getLLVMType(st)
+				llvmType.StructSetBody(underlying.StructElementTypes(), false)
 			}
 			return llvmType
 		}
@@ -542,6 +538,23 @@ func (c *compilerContext) getLLVMType(goType types.Type) llvm.Type {
 	case *types.Struct:
 		members := make([]llvm.Type, typ.NumFields())
 		for i := 0; i < typ.NumFields(); i++ {
+			if ptr, ok := typ.Field(i).Type().(*types.Pointer); ok {
+				if named, ok := ptr.Elem().(*types.Named); ok && named.String() == "internal/task.Task" {
+					// Special workaround for internal/task.Task. It is
+					// referenced from the runtime.channel type, which
+					// references runtime.channelBlockedList, which references
+					// internal/task.Task. To avoid having to define
+					// internal/task.Task as a compiler-internal type, make the
+					// type opaque.
+					ptrTo := c.mod.GetTypeByName(named.String())
+					if ptrTo.IsNil() {
+						ptrTo = c.ctx.StructCreateNamed(named.String())
+					}
+					members[i] = llvm.PointerType(ptrTo, 0)
+					continue
+				}
+			}
+
 			members[i] = c.getLLVMType(typ.Field(i).Type())
 		}
 		return c.ctx.StructType(members, false)
@@ -645,11 +658,11 @@ func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
 			Encoding:   encoding,
 		})
 	case *types.Chan:
-		return c.getDIType(types.NewPointer(c.program.ImportedPackage("runtime").Members["channel"].(*ssa.Type).Type()))
+		return c.getDIType(types.NewPointer(c.getRuntimeType("channel")))
 	case *types.Interface:
-		return c.getDIType(c.program.ImportedPackage("runtime").Members["_interface"].(*ssa.Type).Type())
+		return c.getDIType(c.getRuntimeType("_interface"))
 	case *types.Map:
-		return c.getDIType(types.NewPointer(c.program.ImportedPackage("runtime").Members["hashmap"].(*ssa.Type).Type()))
+		return c.getDIType(types.NewPointer(c.getRuntimeType("hashmap")))
 	case *types.Named:
 		return c.dibuilder.CreateTypedef(llvm.DITypedef{
 			Type: c.getDIType(typ.Underlying()),

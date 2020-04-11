@@ -4,7 +4,6 @@ import (
 	"go/types"
 	"strconv"
 
-	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -35,11 +34,9 @@ const (
 
 // createCall creates a new call to runtime.<fnName> with the given arguments.
 func (b *builder) createRuntimeCall(fnName string, args []llvm.Value, name string) llvm.Value {
-	fn := b.program.ImportedPackage("runtime").Members[fnName].(*ssa.Function)
-	llvmFn := b.getFunction(fn)
-	if llvmFn.IsNil() {
-		panic("trying to call non-existent function: " + fn.RelString(nil))
-	}
+	llvmFn := b.getFunctionRaw(b.getRuntimeFuncType(fnName), functionInfo{
+		linkName: "runtime." + fnName,
+	})
 	args = append(args, llvm.Undef(b.i8ptrType))            // unused context parameter
 	args = append(args, llvm.ConstPointerNull(b.i8ptrType)) // coroutine handle
 	return b.createCall(llvmFn, args, name)
