@@ -85,10 +85,12 @@ func (b *channelBlockedList) detach() {
 	}
 	for i, v := range b.allSelectOps {
 		// cancel all other channel operations that are part of this select statement
-		if &b.allSelectOps[i] == b {
+		switch {
+		case &b.allSelectOps[i] == b:
+			// This entry is the one that was already detatched.
 			continue
-		}
-		if v.s.ch == nil {
+		case v.t == nil:
+			// This entry is not used (nil channel).
 			continue
 		}
 		v.s.ch.blocked = v.s.ch.blocked.remove(&b.allSelectOps[i])
@@ -512,6 +514,13 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelB
 
 	// construct blocked operations
 	for i, v := range states {
+		if v.ch == nil {
+			// A nil channel receive will never complete.
+			// A nil channel send would have panicked during tryChanSelect.
+			ops[i] = channelBlockedList{}
+			continue
+		}
+
 		ops[i] = channelBlockedList{
 			next:         v.ch.blocked,
 			t:            task.Current(),
