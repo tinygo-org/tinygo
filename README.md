@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 28 microcontroller boards are currently supported:
+The following 32 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
@@ -56,6 +56,7 @@ The following 28 microcontroller boards are currently supported:
 * [Adafruit PyBadge](https://www.adafruit.com/product/4200)
 * [Adafruit PyPortal](https://www.adafruit.com/product/4116)
 * [Adafruit Trinket M0](https://www.adafruit.com/product/3500)
+* [Arduino Mega 2560](https://store.arduino.cc/arduino-mega-2560-rev3)
 * [Arduino Nano](https://store.arduino.cc/arduino-nano)
 * [Arduino Nano33 IoT](https://store.arduino.cc/nano-33-iot)
 * [Arduino Uno](https://store.arduino.cc/arduino-uno-rev3)
