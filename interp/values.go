@@ -178,6 +178,8 @@ type MapValue struct {
 	ValueSize  int
 	KeyType    llvm.Type
 	ValueType  llvm.Type
+	MapType    llvm.Type // *%runtime.hashmap
+	keyVariant string
 }
 
 func (v *MapValue) newBucket() llvm.Value {
@@ -221,27 +223,32 @@ func (v *MapValue) Value() llvm.Value {
 		var keyBuf []byte
 		llvmKey := key.Value()
 		llvmValue := v.Values[i].Value()
-		if key.Type().TypeKind() == llvm.StructTypeKind && key.Type().StructName() == "runtime._string" {
+		switch v.keyVariant {
+		case "string":
 			keyPtr := llvm.ConstExtractValue(llvmKey, []uint32{0})
 			keyLen := llvm.ConstExtractValue(llvmKey, []uint32{1})
 			keyPtrVal := v.Eval.getValue(keyPtr)
 			keyBuf = getStringBytes(keyPtrVal, keyLen)
-		} else if key.Type().TypeKind() == llvm.IntegerTypeKind {
-			keyBuf = make([]byte, v.Eval.TargetData.TypeAllocSize(key.Type()))
-			n := key.Value().ZExtValue()
-			for i := range keyBuf {
-				keyBuf[i] = byte(n)
-				n >>= 8
+		case "binary":
+			if key.Type().TypeKind() == llvm.IntegerTypeKind {
+				keyBuf = make([]byte, v.Eval.TargetData.TypeAllocSize(key.Type()))
+				n := key.Value().ZExtValue()
+				for i := range keyBuf {
+					keyBuf[i] = byte(n)
+					n >>= 8
+				}
+			} else if key.Type().TypeKind() == llvm.ArrayTypeKind &&
+				key.Type().ElementType().TypeKind() == llvm.IntegerTypeKind &&
+				key.Type().ElementType().IntTypeWidth() == 8 {
+				keyBuf = make([]byte, v.Eval.TargetData.TypeAllocSize(key.Type()))
+				for i := range keyBuf {
+					keyBuf[i] = byte(llvm.ConstExtractValue(llvmKey, []uint32{uint32(i)}).ZExtValue())
+				}
+			} else {
+				panic("interp: map key type not implemented: " + key.Type().String())
 			}
-		} else if key.Type().TypeKind() == llvm.ArrayTypeKind &&
-			key.Type().ElementType().TypeKind() == llvm.IntegerTypeKind &&
-			key.Type().ElementType().IntTypeWidth() == 8 {
-			keyBuf = make([]byte, v.Eval.TargetData.TypeAllocSize(key.Type()))
-			for i := range keyBuf {
-				keyBuf[i] = byte(llvm.ConstExtractValue(llvmKey, []uint32{uint32(i)}).ZExtValue())
-			}
-		} else {
-			panic("interp: map key type not implemented: " + key.Type().String())
+		default:
+			panic("interp: map key variant: " + v.keyVariant)
 		}
 		hash := v.hash(keyBuf)
 
@@ -291,7 +298,7 @@ func (v *MapValue) Value() llvm.Value {
 
 // Type returns type runtime.hashmap, which is the actual hashmap type.
 func (v *MapValue) Type() llvm.Type {
-	return v.Eval.Mod.GetTypeByName("runtime.hashmap")
+	return v.MapType
 }
 
 func (v *MapValue) IsConstant() bool {
@@ -314,12 +321,30 @@ func (v *MapValue) GetElementPtr(indices []uint32) (Value, error) {
 	return nil, errors.New("interp: GEP on a map")
 }
 
+// setKeyVariant sets the key variant as a result of storing to the hashmap
+// (string, binary, or interface). The way that TinyGo is structured, the key
+// variant is not known until there is a store to the hashmap.
+// The key variant has to be known when lowering the hashmap to its final form,
+// to correctly calculate the hash of a key (for example, a string key must
+// calculate the hash over the string contents).
+func (v *MapValue) setKeyVariant(keyVariant string) {
+	if v.keyVariant == "" {
+		v.keyVariant = keyVariant
+		return
+	}
+	if v.keyVariant != keyVariant {
+		// Valid IR will not cause this panic to occur.
+		panic("MapValue store with inconsistent key type")
+	}
+}
+
 // PutString does a map assign operation, assuming that the map is of type
 // map[string]T.
 func (v *MapValue) PutString(keyBuf, keyLen, valPtr *LocalValue) {
 	if !v.Underlying.IsNil() {
 		panic("map already created")
 	}
+	v.setKeyVariant("string")
 
 	if valPtr.Underlying.Opcode() == llvm.BitCast {
 		valPtr = &LocalValue{v.Eval, valPtr.Underlying.Operand(0)}
@@ -336,9 +361,13 @@ func (v *MapValue) PutString(keyBuf, keyLen, valPtr *LocalValue) {
 		}
 	}
 
-	keyType := v.Eval.Mod.GetTypeByName("runtime._string")
-	v.KeyType = keyType
-	key := llvm.ConstNull(keyType)
+	if v.KeyType.IsNil() {
+		v.KeyType = v.Eval.Mod.Context().StructType([]llvm.Type{
+			keyBuf.Type(),
+			keyLen.Type(),
+		}, false)
+	}
+	key := llvm.ConstNull(v.KeyType)
 	key = llvm.ConstInsertValue(key, keyBuf.Value(), []uint32{0})
 	key = llvm.ConstInsertValue(key, keyLen.Value(), []uint32{1})
 
@@ -352,6 +381,7 @@ func (v *MapValue) PutBinary(keyPtr, valPtr *LocalValue) {
 	if !v.Underlying.IsNil() {
 		panic("map already created")
 	}
+	v.setKeyVariant("binary")
 
 	if valPtr.Underlying.Opcode() == llvm.BitCast {
 		valPtr = &LocalValue{v.Eval, valPtr.Underlying.Operand(0)}

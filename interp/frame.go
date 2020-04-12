@@ -283,6 +283,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					PkgName:   fr.packagePath,
 					KeySize:   int(keySize),
 					ValueSize: int(valueSize),
+					MapType:   inst.Type().ElementType(),
 				}
 			case callee.Name() == "runtime.hashmapStringSet":
 				// set a string key in the map
@@ -350,7 +351,7 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				global.SetLinkage(llvm.InternalLinkage)
 				global.SetGlobalConstant(true)
 				global.SetUnnamedAddr(true)
-				stringType := fr.Mod.GetTypeByName("runtime._string")
+				stringType := inst.Type()
 				retPtr := llvm.ConstGEP(global, getLLVMIndices(fr.Mod.Context().Int32Type(), []uint32{0, 0}))
 				retLen := llvm.ConstInt(stringType.StructElementTypes()[1], uint64(len(result)), false)
 				ret := llvm.ConstNull(stringType)
