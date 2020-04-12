@@ -17,7 +17,7 @@ var SysTimer *SysTimerRegisterMap = (*SysTimerRegisterMap)(unsafe.Pointer(Memory
 var InterruptController *IRQRegisterMap = (*IRQRegisterMap)(unsafe.Pointer(MemoryMappedIO + 0xB200))
 
 //decls
-var MiniUART UART
+var MiniUART *UART
 
 // for the interrupt numbers for use with interrupt controller
 const AuxInterrupt = 1 << 29
@@ -277,24 +277,23 @@ func (p Pin) Set(_ bool) {}
 const RxBufMax = 0xfff
 
 type UART struct {
-	rxhead   *volatile.Register32
-	rxtail   *volatile.Register32
+	rxhead   int
+	rxtail   int
 	rxbuffer []uint8
 }
 
-func NewUART() UART {
-	return UART{
-		rxhead:   &volatile.Register32{},
-		rxtail:   &volatile.Register32{},
+func NewUART() *UART {
+	return &UART{
+		rxhead:   0,
+		rxtail:   0,
 		rxbuffer: make([]uint8, RxBufMax+1),
 	}
 }
 
 //
 // For now, zero value is a non-interrupt UART at 8bits, bidirectional.
-// If you set EnableRXInterrupt, you'll need to actually "turn on" the
-// interrupts when you are ready:
-// InterruptController.EnableIRQs1.SetBits(1<<AuxInterrupt)
+// If you set EnableRXInterrupt, you'll need to actually turn on the
+// interrupts when you are ready.
 type UARTConfig struct {
 	RXInterrupt bool
 	Data7Bits         bool
@@ -321,7 +320,7 @@ func GPIOSetup(pinNumber uint8, mode GPIOMode) bool {
 // properties of the UART.  It is not a fully featured 16550 UART,
 // rather it is the "mini" UART.   The zero value of conf
 // gives you 8 bits, no interrupts, and both tx and rx enabled.
-func (uart UART) Configure(conf UARTConfig) error {
+func (uart *UART) Configure(conf UARTConfig) error {
 	var r uint32
 
 	Aux.Enables.SetBits(PeripheralMiniUART) //enable AUX Mini uart
@@ -409,7 +408,7 @@ func (uart UART) WriteByte(c byte) error {
 //
 // Write a CR (and secretly an LF) to serial.
 //
-func (uart UART) WriteCR() error {
+func (uart *UART) WriteCR() error {
 	if err:=uart.WriteByte(10); err!=nil {
 		return err
 	}
@@ -421,7 +420,7 @@ func (uart UART) WriteCR() error {
 //
 // Reading a byte from serial. Blocking.
 //
-func (uart UART) ReadByte() uint8 {
+func (uart *UART) ReadByte() uint8 {
 	for {
 		if Aux.MiniUARTLineStatus.HasBits(ReceiveFIFOReady) {
 			break
@@ -435,14 +434,14 @@ func (uart UART) ReadByte() uint8 {
 //
 // Put a whole string out to serial. Blocking.
 //
-func (uart UART) WriteString(s string) error {
+func (uart *UART) WriteString(s string) error {
 	for i := 0; i < len(s); i++ {
 		uart.WriteByte(s[i])
 	}
 	return nil
 }
 
-func (uart UART) Hex32string(d uint32) {
+func (uart *UART) Hex32string(d uint32) {
 	var rb uint32
 	var rc uint32
 
@@ -463,7 +462,7 @@ func (uart UART) Hex32string(d uint32) {
 	uart.WriteByte(0x20)
 }
 
-func (uart UART) Hex64string(d uint64) {
+func (uart *UART) Hex64string(d uint64) {
 	var rb uint64
 	var rc uint64
 
@@ -484,129 +483,111 @@ func (uart UART) Hex64string(d uint64) {
 	uart.WriteByte(0x20)
 }
 
-// DumpRxBuffer is for debugging. Returns the size of the buffer dumped.
-func (uart UART) DumpRxBuffer() uint32 {
+// DumpRxBuffer pushes the entire RX buffer out to serial and leaves the
+// buffer empty.
+//go:noinline
+func (uart *UART) DumpRxBuffer() uint32 {
 	moved := uint32(0)
 	for !uart.EmptyRx() {
-		index := uart.rxtail.Get()
+		index := uart.rxtail
 		uart.WriteByte(uart.rxbuffer[index])
 		tail := index + 1
 		tail &= RxBufMax
-		uart.rxtail.Set(tail)
+		uart.rxtail=tail
 		moved++
 	}
 	return moved
 }
 
 // LoadRx puts a byte in the RxBuffer as if it came in from
-// the other side.  This is probably only interesting for callers
-// if they are doing testing.
-func (uart UART) LoadRx(b uint8) {
+// the other side.  Probably should be called from an exception
+// hadler.
+//go:noinline
+func (uart *UART) LoadRx(b uint8) {
 	//receiver holds a valid byte
-	index := uart.rxhead.Get()
+	index := uart.rxhead
 	uart.rxbuffer[index] = b
 	head := index + 1
 	head &= RxBufMax
-	uart.rxhead.Set(head)
+	uart.rxhead=head
 }
 
 // EmptyRx is true if the receiver ring buffer is empty.
-func (uart UART) EmptyRx() bool {
-	return uart.rxtail.Get() == uart.rxhead.Get()
+//go:noinline
+func (uart *UART) EmptyRx() bool {
+	return uart.rxtail == uart.rxhead
 }
 
 // Returns the next element from the read queue.  Note that
 // this busy waits on EmptyRx() so you should be sure
 // there is data there before you call this or it will block
 // and only an interrupt can save that...
-func (uart UART) NextRx() uint8 {
+//go:noinline
+func (uart *UART) NextRx() uint8 {
 	for {
 		if !uart.EmptyRx() {
 			break
 		}
 	}
-	result := uart.rxbuffer[uart.rxtail.Get()]
-	tail := uart.rxtail.Get() + 1
+	result := uart.rxbuffer[uart.rxtail]
+	tail := uart.rxtail + 1
 	tail &= RxBufMax
-	uart.rxtail.Set(tail)
+	uart.rxtail=tail
 	return result
 }
 
-// pullRXData is only called if you have enabled RX interrupts *and* you have
-// inserted functions address into the proper interrupt vector.
-func (uart UART) pullRXData() {
-	//an interrupt has occurred, find out why
-	for { //resolve all interrupts to uart
-		//weird, clear means we DO have interrupt
-		if Aux.MiniUARTInterruptIdentify.HasBits(1) {
-			break //no more interrupts
-		}
-		//this ignores the possibility that HasBits(6) because docs (!)
-		//say that bits 2 and 1 cannot both be set, so we just check bit 2
-		if Aux.MiniUARTInterruptIdentify.HasBits(4) {
-			//receiver holds a valid byte
-			rc := Aux.MiniUARTData.Get() //read byte from rx fifo
-			uart.LoadRx(uint8(rc))
-		}
-	}
-}
 //////////////////////////////////////////////////////////////////
 // ARM64 Exception Handlers
 //////////////////////////////////////////////////////////////////
-type interruptHandler func(uint64,uint64, uint64)
+type exceptionHandler func(uint64,uint64, uint64)
 
-//go:export excptrs
-var excptrs [16]interruptHandler
+//list of exceptions
+var excptrs [16]exceptionHandler
 
-func handleIRQ(t uint64, esr uint64, addr uint64) {
-	MiniUART.WriteString("woot! ")
-	MiniUART.WriteString(", ESR 0x")
-	MiniUART.Hex64string(esr)
-	MiniUART.WriteString(", ADDR 0x")
-	MiniUART.Hex64string(addr)
-	MiniUART.WriteCR()
-
-	for { //resolve all interrupts to uart
-		//weird, clear means we DO have interrupt
-		if Aux.MiniUARTInterruptIdentify.HasBits(1) {
-			break //no more interrupts
-		}
-		//this ignores the possibility that HasBits(6) because docs (!)
-		//say that bits 2 and 1 cannot both be set, so we just check bit 2
-		if Aux.MiniUARTInterruptIdentify.HasBits(4) {
-			MiniUART.pullRXData()
-		}
-	}
-}
 
 
 // MaskDAIF sets the value of the four D-A-I-F interupt masking on the ARM
 func MaskDAIF() {
 	arm.Asm("msr    daifset, #0xf")
-
 }
+
 // UnmaskDAIF sets the value of the four D-A-I-F interupt masking on the ARM
 func UnmaskDAIF() {
 	arm.Asm("msr    daifclr, #0xf")
 }
 
-// see rpi3.ld
-const exceptionBase = 0x2000
-
-//go:extern single_exception_code_ptr
-var singleExceptionCodePtr uint64
+//go:extern vectors
+var vectors uint64
 
 // InitInterrupts is called by postinit (before main) to make sure all the interrupt
 // machinery is in the right startup state.
 func InitInterrupts() {
-	arm.Asm("adr	x0, #0x76000")		// load VBAR_EL1 with exc vector
+	for i:=0; i<len(excptrs); i++ {
+		excptrs[i]=unexpectedException
+	}
+	arm.Asm("adr	x0, vectors")		// load VBAR_EL1 with exc vector
 	arm.Asm("msr	vbar_el1, x0")
 	MaskDAIF()
 	InterruptController.DisableIRQs1.SetBits(AuxInterrupt)
 }
 
+func SetExceptionHandlerEl1hInterrupts(h exceptionHandler) {
+	excptrs[5]=h
+}
+
+func SetExceptionHandlerEl1hSynchronous(h exceptionHandler) {
+	excptrs[4]=h
+}
+
 // when an interrupt falls in the woods and nobody is around to hear it
-func showInvalidEntryMessage(t uint64, esr uint64, addr uint64 ) {
+//go:export raw_exception_handler
+func rawExceptionHandler(t uint64, esr uint64, addr uint64 ) {
+	excptrs[t](t, esr, addr)
+}
+
+//go:noinline
+func unexpectedException(t uint64, esr uint64, addr uint64) {
+	MiniUART.WriteString("Unexpected Exception: ")
 	MiniUART.WriteString(entryErrorMessages[t])
 	MiniUART.WriteString(", ESR 0x")
 	MiniUART.Hex64string(esr)
@@ -614,6 +595,8 @@ func showInvalidEntryMessage(t uint64, esr uint64, addr uint64 ) {
 	MiniUART.Hex64string(addr)
 	MiniUART.WriteCR()
 }
+
+
 
 var entryErrorMessages = []string {
 	"SYNC_INVALID_EL1t",

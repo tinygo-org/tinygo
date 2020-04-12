@@ -1,11 +1,13 @@
-.section ".text.boot","",@progbits
+.section ".exc_vector","ax",@progbits
+.align 7
+
+.extern raw_exception_handler
 
 /*
  * Interrupt vectors that are jumped to by the hardware when we get
  * an exception. There are 4 states and 4 types of exceptions so
  * we have 0x10 entries, and each entry cannot exceed 0x80
  */
-
 #define S_FRAME_SIZE			256 		// size of all saved registers
 
 #define SYNC_EL1t		0
@@ -33,15 +35,8 @@
 	mov	x0, #\type
 	mrs	x1, esr_el1
 	mrs	x2, elr_el1
-
-    mov x3,#\type
-    lsl x3,x3,#3 //multiply by 8
-    ldr x4,excptrs
-    add x4,x4,x3
-    ldr x5,[x4]
-
-    br x5
-	b	err_hang
+    bl raw_exception_handler
+    kernel_exit
 	.endm
 
 	.macro	ventry	label
@@ -90,8 +85,9 @@
 	eret
 	.endm
 
-.align 7
-//vectors:
+.align 11
+.globl vectors
+vectors:
 	ventry	sync_el1t			// Synchronous EL1t
 	ventry	irq_el1t			// IRQ EL1t
 	ventry	fiq_el1t			// FIQ EL1t
@@ -178,16 +174,7 @@ fiq_el0_32:
 error_el0_32:
 	interrupt_entry  ERROR_EL0_32
 
-.globl err_hang
-err_hang: b err_hang
-
-.globl excptrs
-excptrs:
-.space 0x8*16
-
-
-
-.section ".text"
+.section ".text.boot"
 .globl _start
 _start:
     mov x0, #0x760
@@ -199,7 +186,7 @@ _start:
 	b	proc_hang
 
 .align 3
-proc_hang: 
+proc_hang:
 	b 	proc_hang
 
 master:
@@ -266,3 +253,6 @@ get_el:
 	lsr x0, x0, #2
 	ret
 
+
+.globl err_hang
+err_hang: b err_hang

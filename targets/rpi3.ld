@@ -10,9 +10,11 @@ SECTIONS
 {
     . = 0x80000;
     .text : {
+                KEEP(*(.text.boot))
                 KEEP(*(.text))
-                *(.text.*)
-                *(.gnu.linkonce.t*) }
+                KEEP(*(.text.*))
+                *(.gnu.linkonce.t*)
+    }
 
     .rodata : {
         *(.rodata .rodata.* .gnu.linkonce.r*)
@@ -32,11 +34,10 @@ SECTIONS
         _ebss = .;
     }
 
-    . = 0x96000; /* interrupt vectors must be 2k aligned */
+    . = 0x96000;
    .exc  : {
-                KEEP(*(.text.boot))
+        KEEP(*(.exc_vector))
      }
-
    /DISCARD/ : { *(.comment) *(.gnu*) *(.note*) *(.eh_frame*)  }
 }
 
