@@ -134,6 +134,8 @@ func main() {
 	select {
 	case make(chan int) <- 3:
 		println("unreachable")
+	case <-(chan int)(nil):
+		println("unreachable")
 	case n := <-ch:
 		println("select n from chan:", n)
 	case n := <-make(chan int):
