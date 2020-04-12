@@ -3,6 +3,7 @@
 	"build-tags": ["rpi3", "rpi", "baremetal"],
 	"scheduler": "none",
 	"gc": "leaking",
+	"cflags": ["--target=aarch64-elf"],
 	"ldflags": [
 		"-T", "targets/rpi3.ld"
 	],
