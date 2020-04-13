@@ -24,7 +24,7 @@ func getUses(value llvm.Value) []llvm.Value {
 }
 
 // createTemporaryAlloca creates a new alloca in the entry block and adds
-// lifetime start infromation in the IR signalling that the alloca won't be used
+// lifetime start information in the IR signalling that the alloca won't be used
 // before this point.
 //
 // This is useful for creating temporary allocas for intrinsics. Don't forget to
