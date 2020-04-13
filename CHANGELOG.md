@@ -1,3 +1,88 @@
+0.13.0
+---
+* **command line**
+  - use `gdb-multiarch` for debugging Cortex-M chips
+  - support `tinygo run` with simavr
+  - support LLVM 10
+  - support Go 1.14
+  - retry 3 times when attempting to do a 1200-baud reset
+* **compiler**
+  - mark the `abort` function as noreturn
+  - fix deferred calls to exported functions
+  - add debug info for local variables
+  - check for channel size limit
+  - refactor coroutine lowering
+  - add `dereferenceable_or_null` attribute to pointer parameters
+  - do not perform nil checking when indexing slices and on `unsafe.Pointer`
+  - remove `runtime.isnil` hack
+  - use LLVM builtins for runtime `memcpy`/`memmove`/`memzero` functions
+  - implement spec-compliant shifts on negative/overflow
+  - support anonymous type asserts
+  - track pointer result of string concatenation for GC
+  - track PHI nodes for GC
+  - add debug info to goroutine start wrappers
+  - optimize comparing interface values against nil
+  - fix miscompilation when deferring an interface call
+  - builder: include picolibc for most baremetal targets
+  - builder: run tools (clang, lld) as separate processes
+  - builder: use `-fshort-enums` consistently
+  - interp: add support for constant type asserts
+  - interp: better support for interface operations
+  - interp: include backtrace with error
+  - transform: do not track const globals for GC
+  - transform: replace panics with source locations
+  - transform: fix error in interface lowering pass
+  - transform: make coroutine lowering deterministic
+  - transform: fix miscompilation in func lowering
+* **cgo**
+  - make `-I` and `-L` paths absolute
+* **standard library**
+  - `machine`: set the USB VID and PID to the manufacturer values
+  - `machine`: correct USB CDC composite descriptors
+  - `machine`: move `errors.New` calls to globals
+  - `runtime`: support operations on nil maps
+  - `runtime`: fix copy builtin return value on AVR
+  - `runtime`: refactor goroutines
+  - `runtime`: support `-scheduler=none` on most platforms
+  - `runtime`: run package initialization in the main goroutine
+  - `runtime`: export `malloc` / `free` for use from C
+  - `runtime`: add garbage collector that uses an external allocator
+  - `runtime`: scan callee-saved registers while marking the stack
+  - `runtime`: remove recursion from conservative GC
+  - `runtime`: fix blocking select on nil channel
+  - `runtime/volatile`: include `ReplaceBits` method
+  - `sync`: implement trivial `sync.Map`
+* **targets**
+  - `arm`: use `-fomit-frame-pointer`
+  - `atmega1284`: support this chip for testing purposes
+  - `atsamd51`: make QSPI available on all boards
+  - `atsamd51`: add support for ADC1
+  - `atsamd51`: use new interrupt registration in UART code
+  - `attiny`: clean up pin definitions
+  - `avr`: use the correct RAM start address
+  - `avr`: pass the correct `-mmcu` flag to the linker
+  - `avr`: add support for tasks scheduler (disabled by default)
+  - `avr`: fix linker problem with overlapping program/data areas
+  - `nrf`: fix typo in pin configuration options
+  - `nrf`: add lib/nrfx/mdk to include dirs
+  - `nrf52840`: implement USB-CDC
+  - `riscv`: implement VirtIO target and add RISC-V integration test
+  - `riscv`: add I2C support for the HiFive1 rev B board
+  - `stm32`: refactor GPIO pin handling
+  - `stm32`: refactor UART code
+  - `stm32f4`: add SPI
+  - `wasm`: support Go 1.14 (breaking previous versions)
+  - `wasm`: support `syscall/js.CopyBytesToJS`
+  - `wasm`: sync polyfills from Go 1.14.
+* **boards**
+  - `arduino-mega2560`: add the Arduino Mega 2560
+  - `clue-alpha`: add the Adafruit CLUE Alpha
+  - `gameboy-advance`: enable debugging with GDB
+  - `particle-argon`: add the Particle Argon board
+  - `particle-boron`: add the Particle Boron board
+  - `particle-xenon`: add the Particle Xenon board
+  - `reelboard`: add `reelboard-s140v7` SoftDevice target
+
 0.12.0
 ---
 * **command line**
