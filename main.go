@@ -473,16 +473,22 @@ func Run(pkgName string, options *compileopts.Options) error {
 	})
 }
 
-func touchSerialPortAt1200bps(port string) error {
-	// Open port
-	p, err := serial.Open(port, &serial.Mode{BaudRate: 1200})
-	if err != nil {
-		return fmt.Errorf("opening port: %s", err)
-	}
-	defer p.Close()
+func touchSerialPortAt1200bps(port string) (err error) {
+	retryCount := 3
+	for i := 0; i < retryCount; i++ {
+		// Open port
+		p, e := serial.Open(port, &serial.Mode{BaudRate: 1200})
+		if e != nil {
+			time.Sleep(1 * time.Second)
+			err = e
+			continue
+		}
+		defer p.Close()
 
-	p.SetDTR(false)
-	return nil
+		p.SetDTR(false)
+		return nil
+	}
+	return fmt.Errorf("opening port: %s", err)
 }
 
 func flashUF2UsingMSD(volume, tmppath string) error {
