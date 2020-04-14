@@ -2,16 +2,21 @@
 	"build-tags": ["avr", "baremetal", "linux", "arm"],
 	"goos": "linux",
 	"goarch": "arm",
-	"compiler": "avr-gcc",
+	"compiler": "clang",
 	"gc": "conservative",
-	"linker": "avr-gcc",
+	"linker": "llvm-build.master/bin/ld.lld",
 	"scheduler": "none",
+	"rtlib": "compiler-rt",
+	"libc": "picolibc",
 	"cflags": [
-		"-gdwarf-4"
+		"--target=avr-atmel-none",
+		"-g",
+		"-Werror",
+		"-Qunused-arguments"
 	],
 	"ldflags": [
 		"-T", "targets/avr.ld",
-		"-Wl,--gc-sections"
+		"--gc-sections"
 	],
 	"extra-files": [
 		"src/runtime/scheduler_avr.S"

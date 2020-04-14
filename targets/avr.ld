@@ -5,17 +5,22 @@ MEMORY
     RAM (xrw)       : ORIGIN = 0x800000 + __ram_start, LENGTH = __ram_size
 }
 
+ENTRY(main)
+
 SECTIONS
 {
-    .text :
+    .text : ALIGN(2)
     {
         KEEP(*(.vectors))
         KEEP(*(.text.__vector_RESET))
         KEEP(*(.text.main)) /* main must follow the reset handler */
+        *(.text)
         *(.text.*)
         *(.rodata)
         *(.rodata.*)
-    }
+        *(.progmem.data)
+        . = ALIGN(16); /* required because of lld (not sure why) */
+    } > FLASH_TEXT
 
     .stack (NOLOAD) :
     {
@@ -29,7 +34,7 @@ SECTIONS
     {
         _sdata = .;        /* used by startup code */
         *(.data)
-        *(.data*)
+        *(.data.*)
         _edata = .;        /* used by startup code */
     } >RAM AT>FLASH_TEXT
 
@@ -37,7 +42,7 @@ SECTIONS
     {
         _sbss = .;         /* used by startup code */
         *(.bss)
-        *(.bss*)
+        *(.bss.*)
         *(COMMON)
         _ebss = .;         /* used by startup code */
     } >RAM

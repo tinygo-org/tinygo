@@ -407,7 +407,7 @@ __vector_default:
 .endm
 
 ; The interrupt vector of this device. Must be placed at address 0 by the linker.
-.section .vectors
+.section .vectors, "a", %progbits
 .global  __vectors
 `))
 	err = t.Execute(out, device.metadata)

@@ -16,8 +16,10 @@ var genericBuiltins = []string{
 	"addvsi3.c",
 	"addvti3.c",
 	"apple_versioning.c",
+	"ashlsi3.c",
 	"ashldi3.c",
 	"ashlti3.c",
+	"ashrsi3.c",
 	"ashrdi3.c",
 	"ashrti3.c",
 	"bswapdi2.c",
@@ -72,7 +74,9 @@ var genericBuiltins = []string{
 	"floatunsisf.c",
 	"floatuntidf.c",
 	"floatuntisf.c",
-	//"int_util.c",
+	"fp_mode.c",
+	"int_util.c",
+	"lshrsi3.c",
 	"lshrdi3.c",
 	"lshrti3.c",
 	"moddi3.c",
@@ -86,6 +90,7 @@ var genericBuiltins = []string{
 	"muloti4.c",
 	"mulsc3.c",
 	"mulsf3.c",
+	"mulsi3.c",
 	"multi3.c",
 	"multf3.c",
 	"mulvdi3.c",
@@ -108,6 +113,7 @@ var genericBuiltins = []string{
 	"powidf2.c",
 	"powisf2.c",
 	"powitf2.c",
+	"powixf2.c",
 	"subdf3.c",
 	"subsf3.c",
 	"subvdi3.c",
@@ -159,7 +165,7 @@ var aeabiBuiltins = []string{
 var CompilerRT = Library{
 	name:      "compiler-rt",
 	cflags:    func() []string { return []string{"-Werror", "-Wall", "-std=c11", "-nostdlibinc"} },
-	sourceDir: "lib/compiler-rt/lib/builtins",
+	sourceDir: "llvm-project.master/compiler-rt/lib/builtins",
 	sources: func(target string) []string {
 		builtins := append([]string{}, genericBuiltins...) // copy genericBuiltins
 		if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
