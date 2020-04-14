@@ -6,11 +6,15 @@
 	"gc": "conservative",
 	"linker": "avr-gcc",
 	"scheduler": "none",
+	"cflags": [
+		"-gdwarf-4"
+	],
 	"ldflags": [
 		"-T", "targets/avr.ld",
 		"-Wl,--gc-sections"
 	],
 	"extra-files": [
 		"src/runtime/scheduler_avr.S"
-	]
+	],
+	"gdb": "avr-gdb"
 }
