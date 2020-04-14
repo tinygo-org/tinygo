@@ -61,7 +61,7 @@ func extractROM(path string) (uint64, []byte, error) {
 
 	progs := make(progSlice, 0, 2)
 	for _, prog := range f.Progs {
-		if prog.Type != elf.PT_LOAD || prog.Filesz == 0 {
+		if prog.Type != elf.PT_LOAD || prog.Filesz == 0 || prog.Off == 0 {
 			continue
 		}
 		progs = append(progs, prog)
@@ -73,6 +73,12 @@ func extractROM(path string) (uint64, []byte, error) {
 
 	var rom []byte
 	for _, prog := range progs {
+		romEnd := progs[0].Paddr + uint64(len(rom))
+		if prog.Paddr > romEnd && prog.Paddr < romEnd+16 {
+			// Sometimes, the linker seems to insert a bit of padding between
+			// segments. Simply zero-fill these parts.
+			rom = append(rom, make([]byte, prog.Paddr-romEnd)...)
+		}
 		if prog.Paddr != progs[0].Paddr+uint64(len(rom)) {
 			diff := prog.Paddr - (progs[0].Paddr + uint64(len(rom)))
 			if diff > maxPadBytes {

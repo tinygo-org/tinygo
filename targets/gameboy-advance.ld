@@ -19,6 +19,7 @@ SECTIONS
     {
         KEEP (*(.init))
         *(.text)
+        *(.text.*)
         . = ALIGN(4);
     } >rom
 
@@ -26,7 +27,7 @@ SECTIONS
     {
         . = ALIGN(4);
         *(.rodata)
-        *(.rodata*)
+        *(.rodata.*)
         . = ALIGN(4);
     } >rom
 
@@ -51,7 +52,7 @@ SECTIONS
         . = ALIGN(4);
         _sdata = .;        /* used by startup code */
         *(.data)
-        *(.data*)
+        *(.data.*)
         *(.iwram .iwram.*)
         . = ALIGN(4);
         _edata = .;        /* used by startup code */
@@ -63,7 +64,7 @@ SECTIONS
         . = ALIGN(4);
         _sbss = .;         /* used by startup code */
         *(.bss)
-        *(.bss*)
+        *(.bss.*)
         *(COMMON)
         . = ALIGN(4);
         _ebss = .;         /* used by startup code */

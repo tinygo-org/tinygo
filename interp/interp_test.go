@@ -3,6 +3,7 @@ package interp
 import (
 	"io/ioutil"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -66,6 +67,8 @@ func runTest(t *testing.T, pathPrefix string) {
 	}
 }
 
+var alignRegexp = regexp.MustCompile(", align [0-9]+$")
+
 // fuzzyEqualIR returns true if the two LLVM IR strings passed in are roughly
 // equal. That means, only relevant lines are compared (excluding comments
 // etc.).
@@ -75,8 +78,18 @@ func fuzzyEqualIR(s1, s2 string) bool {
 	if len(lines1) != len(lines2) {
 		return false
 	}
-	for i, line := range lines1 {
-		if line != lines2[i] {
+	for i, line1 := range lines1 {
+		line2 := lines2[i]
+		match1 := alignRegexp.MatchString(line1)
+		match2 := alignRegexp.MatchString(line2)
+		if match1 != match2 {
+			// Only one of the lines has the align keyword. Remove it.
+			// This is a change to make the test work in both LLVM 10 and LLVM
+			// 11 (LLVM 11 appears to automatically add alignment everywhere).
+			line1 = alignRegexp.ReplaceAllString(line1, "")
+			line2 = alignRegexp.ReplaceAllString(line2, "")
+		}
+		if line1 != line2 {
 			return false
 		}
 	}
