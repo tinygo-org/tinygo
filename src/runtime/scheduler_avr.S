@@ -188,6 +188,7 @@ tinygo_switchToScheduler:
     // Return into the scheduler, as if tinygo_switchToTask was a regular call.
     ret
 
+.section .text.tinygo_scanCurrentStack
 .global tinygo_scanCurrentStack
 .type tinygo_scanCurrentStack, %function
 tinygo_scanCurrentStack:

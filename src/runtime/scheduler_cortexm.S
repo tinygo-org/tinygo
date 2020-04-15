@@ -112,6 +112,7 @@ tinygo_swapTask:
     pop {pc}
     #endif
 
+.section .text.tinygo_scanCurrentStack
 .global  tinygo_scanCurrentStack
 .type    tinygo_scanCurrentStack, %function
 tinygo_scanCurrentStack:
