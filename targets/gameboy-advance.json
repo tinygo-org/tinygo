@@ -25,7 +25,8 @@
 	],
 	"linkerscript": "targets/gameboy-advance.ld",
 	"extra-files": [
-		"targets/gameboy-advance.s"
+		"targets/gameboy-advance.s",
+		"src/runtime/scheduler_gba.S"
 	],
 	"gdb": "gdb-multiarch",
 	"emulator": ["mgba", "-3"]
