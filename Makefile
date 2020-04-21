@@ -36,7 +36,7 @@ else
     LLVM_OPTION += '-DLLVM_ENABLE_ASSERTIONS=OFF'
 endif
 
-.PHONY: all tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-nxp gen-device-avr gen-device-rp
+.PHONY: all tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt
 
 LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines coverage debuginfodwarf executionengine frontendopenmp instrumentation interpreter ipo irreader linker lto mc mcjit objcarcopts option profiledata scalaropts support target
 
@@ -107,6 +107,7 @@ fmt-check:
 	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
 
 
+.PHONY: gen-device gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp gen-device-rp gen-device-stm32
 gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp gen-device-rp
 ifneq ($(STM32), 0)
 gen-device: gen-device-stm32
