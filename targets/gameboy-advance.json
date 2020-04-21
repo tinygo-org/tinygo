@@ -1,5 +1,5 @@
 {
-	"llvm-target": "thumb4-none-eabi",
+	"llvm-target": "arm4-none-eabi",
 	"cpu": "arm7tdmi",
 	"build-tags": ["gameboyadvance", "arm7tdmi", "baremetal", "linux", "arm"],
 	"goos": "linux",
@@ -10,7 +10,7 @@
 	"libc": "picolibc",
 	"cflags": [
 		"-g",
-		"--target=thumb4-none-eabi",
+		"--target=arm4-none-eabi",
 		"-mcpu=arm7tdmi",
 		"-Oz",
 		"-Werror",
