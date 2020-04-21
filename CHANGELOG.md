@@ -1,3 +1,12 @@
+0.13.1
+---
+* **standard library**
+  - `runtime`: do not put scheduler and GC code in the same section
+  - `runtime`: copy stack scan assembly for GBA
+* **boards**
+  - `gameboy-advance`: always use ARM mode instead of Thumb mode
+
+
 0.13.0
 ---
 * **command line**
