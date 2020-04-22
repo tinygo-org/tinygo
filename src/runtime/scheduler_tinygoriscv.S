@@ -22,6 +22,9 @@ tinygo_scanCurrentStack:
    mv a0, sp
    call tinygo_scanstack
 
+   // Restore return address.
+   lw ra, 60(sp)
+
    // Restore stack state.
    addi sp, sp, 64
 
