@@ -24,6 +24,9 @@ MD5SUM = md5sum
 # tinygo binary for tests
 TINYGO ?= $(word 1,$(call detect,tinygo)$(call detect,build/tinygo))
 
+# Targets for which to build the library
+LIBRARY_TARGETS = armv6m-none-eabi armv7m-none-eabi armv7em-none-eabi
+
 # Use CCACHE for LLVM if possible
 ifneq (, $(shell command -v ccache 2> /dev/null))
     LLVM_OPTION += '-DLLVM_CCACHE_BUILD=ON'
@@ -460,7 +463,16 @@ endif
 wasmtest:
 	$(GO) test ./tests/wasm
 
-build/release: tinygo gen-device wasi-libc
+build/compiler-rt.%.a: build/tinygo$(EXE)
+	./build/tinygo$(EXE) build-library -target=$* -o $@ compiler-rt
+
+build/picolibc.%.a: build/tinygo$(EXE)
+	./build/tinygo$(EXE) build-library -target=$* -o $@ picolibc
+
+.PHONY: library
+library: $(patsubst %, build/compiler-rt.%.a, $(LIBRARY_TARGETS)) $(patsubst %, build/picolibc.%.a, $(LIBRARY_TARGETS))
+
+build/release: tinygo gen-device library wasi-libc
 	@mkdir -p build/release/tinygo/bin
 	@mkdir -p build/release/tinygo/lib/clang/include
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
@@ -468,9 +480,9 @@ build/release: tinygo gen-device wasi-libc
 	@mkdir -p build/release/tinygo/lib/nrfx
 	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libc
 	@mkdir -p build/release/tinygo/lib/wasi-libc
-	@mkdir -p build/release/tinygo/pkg/armv6m-none-eabi
-	@mkdir -p build/release/tinygo/pkg/armv7m-none-eabi
-	@mkdir -p build/release/tinygo/pkg/armv7em-none-eabi
+	@for target in $(LIBRARY_TARGETS); do \
+	mkdir -p build/release/tinygo/pkg/$${target}; \
+	done
 	@echo copying source files
 	@cp -p  build/tinygo$(EXE)           build/release/tinygo/bin
 	@cp -p $(abspath $(CLANG_SRC))/lib/Headers/*.h build/release/tinygo/lib/clang/include
@@ -489,12 +501,10 @@ build/release: tinygo gen-device wasi-libc
 	@cp -rp lib/wasi-libc/sysroot        build/release/tinygo/lib/wasi-libc/sysroot
 	@cp -rp src                          build/release/tinygo/src
 	@cp -rp targets                      build/release/tinygo/targets
-	./build/tinygo build-library -target=armv6m-none-eabi  -o build/release/tinygo/pkg/armv6m-none-eabi/compiler-rt.a compiler-rt
-	./build/tinygo build-library -target=armv7m-none-eabi  -o build/release/tinygo/pkg/armv7m-none-eabi/compiler-rt.a compiler-rt
-	./build/tinygo build-library -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/compiler-rt.a compiler-rt
-	./build/tinygo build-library -target=armv6m-none-eabi  -o build/release/tinygo/pkg/armv6m-none-eabi/picolibc.a picolibc
-	./build/tinygo build-library -target=armv7m-none-eabi  -o build/release/tinygo/pkg/armv7m-none-eabi/picolibc.a picolibc
-	./build/tinygo build-library -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/picolibc.a picolibc
+	@for target in $(LIBRARY_TARGETS); do \
+	cp -p build/compiler-rt.$${target}.a build/release/tinygo/pkg/$${target}/compiler-rt.a; \
+	cp -p build/picolibc.$${target}.a build/release/tinygo/pkg/$${target}/picolibc.a; \
+	done
 
 release: build/release
 	tar -czf build/release.tar.gz -C build/release tinygo
