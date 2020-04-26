@@ -45,11 +45,11 @@ type Options struct {
 	Programmer    string
 }
 
-// Verify performs a validation on the given options, raising an error is options are not valid
+// Verify performs a validation on the given options, raising an error is options are not valid.
 // In particular:
-// ErrGCInvalidOption will be returned if gc is not valid
-// ErrSchedulerInvalidOption will be returned if scheduler is not valid
-// ErrPrintSizeInvalidOption will be rereturnedised if size is not valid
+// ErrGCInvalidOption will be returned if gc is not valid.
+// ErrSchedulerInvalidOption will be returned if scheduler is not valid.
+// ErrPrintSizeInvalidOption will be rereturnedised if size is not valid.
 func (o *Options) Verify() error {
 	if o.GC != "" {
 		valid := isInArray(validGCOptions, o.GC)
