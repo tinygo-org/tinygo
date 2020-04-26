@@ -7,15 +7,18 @@ import (
 
 var (
 	validGCOptions        = []string{"none", "leaking", "extalloc", "conservative"}
-	validSchedulerOptions = []string{"tasks", "coroutines"}
+	validSchedulerOptions = []string{"none", "tasks", "coroutines"}
 	validPrintSizeOptions = []string{"none", "short", "full"}
-	// ErrGCInvalidOption is an error raised if gc option is not valid
+)
+
+var (
+	// ErrGCInvalidOption is an error returned if gc option is not valid.
 	ErrGCInvalidOption = fmt.Errorf(`invalid gc option: valid values are %s`,
 		strings.Join(validGCOptions, ", "))
-	// ErrSchedulerInvalidOption is an error raised if scheduler option is not valid
+	// ErrSchedulerInvalidOption is an error returned if scheduler option is not valid.
 	ErrSchedulerInvalidOption = fmt.Errorf(`invalid scheduler option: valid values are %s`,
 		strings.Join(validSchedulerOptions, ", "))
-	//ErrPrintSizeInvalidOption is an error raised if size option is not valid
+	// ErrPrintSizeInvalidOption is an error returned if size option is not valid.
 	ErrPrintSizeInvalidOption = fmt.Errorf(`invalid size option: valid values are %s`,
 		strings.Join(validPrintSizeOptions, ", "))
 )
