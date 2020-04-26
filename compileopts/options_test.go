@@ -6,7 +6,7 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 )
 
-func TestOptions_Verify(t *testing.T) {
+func TestVerifyOptions(t *testing.T) {
 	testCases := []struct {
 		name          string
 		opts          compileopts.Options
