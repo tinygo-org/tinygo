@@ -48,12 +48,6 @@ func TestOptions_Verify(t *testing.T) {
 			},
 		},
 		{
-			name: "it returns no error if gc option is empty",
-			opts: compileopts.Options{
-				GC: "",
-			},
-		},
-		{
 			name: "it returns an error if scheduler option is not valid",
 			opts: compileopts.Options{
 				Scheduler: "incorrect",
@@ -70,12 +64,6 @@ func TestOptions_Verify(t *testing.T) {
 			name: "it returns no error if scheduler option is 'coroutines'",
 			opts: compileopts.Options{
 				Scheduler: "coroutines",
-			},
-		},
-		{
-			name: "it returns no error if scheduler option is empty",
-			opts: compileopts.Options{
-				Scheduler: "",
 			},
 		},
 		{
@@ -101,12 +89,6 @@ func TestOptions_Verify(t *testing.T) {
 			name: "it returns no error if printSize option is 'full'",
 			opts: compileopts.Options{
 				PrintSizes: "full",
-			},
-		},
-		{
-			name: "it returns no error if printSize option is empty",
-			opts: compileopts.Options{
-				PrintSizes: "",
 			},
 		},
 	}
