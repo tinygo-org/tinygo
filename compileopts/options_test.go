@@ -13,80 +13,80 @@ func TestOptions_Verify(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name: "it returns no error if Options is empty",
+			name: "OptionsEmpty",
 			opts: compileopts.Options{},
 		},
 		{
-			name: "it returns an error if gc option is not valid",
+			name: "InvalidGCOption",
 			opts: compileopts.Options{
 				GC: "incorrect",
 			},
 			expectedError: compileopts.ErrGCInvalidOption,
 		},
 		{
-			name: "it returns no error if gc option is 'none'",
+			name: "GCOptionNone",
 			opts: compileopts.Options{
 				GC: "none",
 			},
 		},
 		{
-			name: "it returns no error if gc option is 'leaking'",
+			name: "GCOptionLeaking",
 			opts: compileopts.Options{
 				GC: "leaking",
 			},
 		},
 		{
-			name: "it returns no error if gc option is 'extalloc'",
+			name: "GCOptionExtalloc",
 			opts: compileopts.Options{
 				GC: "extalloc",
 			},
 		},
 		{
-			name: "it returns no error if gc option is 'conservative'",
+			name: "GCOptionConservative",
 			opts: compileopts.Options{
 				GC: "conservative",
 			},
 		},
 		{
-			name: "it returns an error if scheduler option is not valid",
+			name: "InvalidSchedulerOption",
 			opts: compileopts.Options{
 				Scheduler: "incorrect",
 			},
 			expectedError: compileopts.ErrSchedulerInvalidOption,
 		},
 		{
-			name: "it returns no error if scheduler option is 'tasks'",
+			name: "SchedulerOptionTasks",
 			opts: compileopts.Options{
 				Scheduler: "tasks",
 			},
 		},
 		{
-			name: "it returns no error if scheduler option is 'coroutines'",
+			name: "SchedulerOptionCoroutines",
 			opts: compileopts.Options{
 				Scheduler: "coroutines",
 			},
 		},
 		{
-			name: "it returns an error if printSize option is not valid",
+			name: "InvalidPrintSizeOption",
 			opts: compileopts.Options{
 				PrintSizes: "invalid",
 			},
 			expectedError: compileopts.ErrPrintSizeInvalidOption,
 		},
 		{
-			name: "it returns no error if printSize option is 'none'",
+			name: "PrintSizeOptionNone",
 			opts: compileopts.Options{
 				PrintSizes: "none",
 			},
 		},
 		{
-			name: "it returns no error if printSize option is 'short'",
+			name: "PrintSizeOptionShort",
 			opts: compileopts.Options{
 				PrintSizes: "short",
 			},
 		},
 		{
-			name: "it returns no error if printSize option is 'full'",
+			name: "PrintSizeOptionFull",
 			opts: compileopts.Options{
 				PrintSizes: "full",
 			},
