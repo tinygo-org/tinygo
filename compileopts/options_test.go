@@ -1,7 +1,6 @@
 package compileopts_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -115,7 +114,7 @@ func TestOptions_Verify(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Verify()
-			if !errors.Is(err, tc.expectedError) {
+			if tc.expectedError != err {
 				t.Errorf("expecting %v, got %v", tc.expectedError, err)
 			}
 		})
