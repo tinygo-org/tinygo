@@ -97,7 +97,7 @@ func TestOptions_Verify(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Verify()
 			if tc.expectedError != err {
-				t.Errorf("expecting %v, got %v", tc.expectedError, err)
+				t.Errorf("expected %v, got %v", tc.expectedError, err)
 			}
 		})
 	}
