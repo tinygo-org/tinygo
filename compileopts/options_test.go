@@ -64,7 +64,7 @@ func TestOptions_Verify(t *testing.T) {
 		{
 			name: "it returns no error if scheduler option is 'tasks'",
 			opts: compileopts.Options{
-				Scheduler: "task",
+				Scheduler: "tasks",
 			},
 		},
 		{

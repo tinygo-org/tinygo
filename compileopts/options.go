@@ -7,7 +7,7 @@ import (
 
 var (
 	validGCOptions        = []string{"none", "leaking", "extalloc", "conservative"}
-	validSchedulerOptions = []string{"task", "coroutines"}
+	validSchedulerOptions = []string{"tasks", "coroutines"}
 	validPrintSizeOptions = []string{"none", "short", "full"}
 	// ErrGCInvalidOption is an error raised if gc option is not valid
 	ErrGCInvalidOption = fmt.Errorf(`invalid gc option: valid values are %s`,
