@@ -762,13 +762,6 @@ func main() {
 		Programmer:    *programmer,
 	}
 
-	err := options.Verify()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		usage()
-		os.Exit(1)
-	}
-
 	if *cFlags != "" {
 		options.CFlags = strings.Split(*cFlags, " ")
 	}
@@ -777,6 +770,7 @@ func main() {
 		options.LDFlags = strings.Split(*ldFlags, " ")
 	}
 
+	var err error
 	if options.HeapSize, err = parseSize(*heapSize); err != nil {
 		fmt.Fprintln(os.Stderr, "Could not read heap size:", *heapSize)
 		usage()
@@ -784,6 +778,13 @@ func main() {
 	}
 
 	os.Setenv("CC", "clang -target="+*target)
+
+	err = options.Verify()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		usage()
+		os.Exit(1)
+	}
 
 	switch command {
 	case "build":
