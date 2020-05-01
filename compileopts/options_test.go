@@ -55,6 +55,12 @@ func TestVerifyOptions(t *testing.T) {
 			expectedError: compileopts.ErrSchedulerInvalidOption,
 		},
 		{
+			name: "SchedulerOptionNone",
+			opts: compileopts.Options{
+				Scheduler: "none",
+			},
+		},
+		{
 			name: "SchedulerOptionTasks",
 			opts: compileopts.Options{
 				Scheduler: "tasks",
