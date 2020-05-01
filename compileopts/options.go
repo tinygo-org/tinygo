@@ -6,9 +6,10 @@ import (
 )
 
 var (
-	validGCOptions        = []string{"none", "leaking", "extalloc", "conservative"}
-	validSchedulerOptions = []string{"none", "tasks", "coroutines"}
-	validPrintSizeOptions = []string{"none", "short", "full"}
+	validGCOptions            = []string{"none", "leaking", "extalloc", "conservative"}
+	validSchedulerOptions     = []string{"none", "tasks", "coroutines"}
+	validPrintSizeOptions     = []string{"none", "short", "full"}
+	validPanicStrategyOptions = []string{"print", "trap"}
 )
 
 var (
@@ -21,6 +22,9 @@ var (
 	// ErrPrintSizeInvalidOption is an error returned if size option is not valid.
 	ErrPrintSizeInvalidOption = fmt.Errorf(`invalid size option: valid values are %s`,
 		strings.Join(validPrintSizeOptions, ", "))
+	// ErrPanicStrategyInvalidOption is an error returned if panic strategy option is not valid.
+	ErrPanicStrategyInvalidOption = fmt.Errorf(`invalid panic option: valid values are %s`,
+		strings.Join(validPanicStrategyOptions, ", "))
 )
 
 // Options contains extra options to give to the compiler. These options are
@@ -50,6 +54,7 @@ type Options struct {
 // ErrGCInvalidOption will be returned if gc option is not valid.
 // ErrSchedulerInvalidOption will be returned if scheduler option is not valid.
 // ErrPrintSizeInvalidOption will be rereturned if size option is not valid.
+// ErrPanicStrategyInvalidOption will be returned if panic strategy option is not valid
 func (o *Options) Verify() error {
 	if o.GC != "" {
 		valid := isInArray(validGCOptions, o.GC)
@@ -69,6 +74,13 @@ func (o *Options) Verify() error {
 		valid := isInArray(validPrintSizeOptions, o.PrintSizes)
 		if !valid {
 			return ErrPrintSizeInvalidOption
+		}
+	}
+
+	if o.PanicStrategy != "" {
+		valid := isInArray(validPanicStrategyOptions, o.PanicStrategy)
+		if !valid {
+			return ErrPanicStrategyInvalidOption
 		}
 	}
 

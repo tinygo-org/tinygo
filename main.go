@@ -777,12 +777,6 @@ func main() {
 		options.LDFlags = strings.Split(*ldFlags, " ")
 	}
 
-	if *panicStrategy != "print" && *panicStrategy != "trap" {
-		fmt.Fprintln(os.Stderr, "Panic strategy must be either print or trap.")
-		usage()
-		os.Exit(1)
-	}
-
 	if options.HeapSize, err = parseSize(*heapSize); err != nil {
 		fmt.Fprintln(os.Stderr, "Could not read heap size:", *heapSize)
 		usage()
@@ -809,6 +803,7 @@ func main() {
 		if options.Target == "" && filepath.Ext(*outpath) == ".wasm" {
 			options.Target = "wasm"
 		}
+
 		err := Build(pkgName, *outpath, options)
 		handleCompilerError(err)
 	case "build-library":

@@ -97,6 +97,25 @@ func TestVerifyOptions(t *testing.T) {
 				PrintSizes: "full",
 			},
 		},
+		{
+			name: "InvalidPanicOption",
+			opts: compileopts.Options{
+				PanicStrategy: "invalid",
+			},
+			expectedError: compileopts.ErrPanicStrategyInvalidOption,
+		},
+		{
+			name: "PanicOptionPrint",
+			opts: compileopts.Options{
+				PanicStrategy: "print",
+			},
+		},
+		{
+			name: "PanicOptionTrap",
+			opts: compileopts.Options{
+				PanicStrategy: "trap",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
