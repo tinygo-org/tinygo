@@ -225,6 +225,10 @@ func addFuncLoweringSwitch(mod llvm.Module, builder llvm.Builder, funcID, call l
 	// in this gap.
 	nextBlock := llvmutil.SplitBasicBlock(builder, sw, llvm.NextBasicBlock(sw.InstructionParent()), "func.next")
 
+	// Temporarily set the insert point to set the correct debug insert location
+	// for the builder. It got destroyed by the SplitBasicBlock call.
+	builder.SetInsertPointBefore(call)
+
 	// The 0 case, which is actually a nil check.
 	nilBlock := ctx.InsertBasicBlock(nextBlock, "func.nil")
 	builder.SetInsertPointAtEnd(nilBlock)
