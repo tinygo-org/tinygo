@@ -3,6 +3,7 @@ package loader
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/build"
 	"go/parser"
@@ -12,18 +13,21 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 
 	"github.com/tinygo-org/tinygo/cgo"
 	"github.com/tinygo-org/tinygo/goenv"
+	"golang.org/x/tools/go/packages"
 )
 
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
-	mainPkg      string
 	Build        *build.Context
+	Tests        bool
 	Packages     map[string]*Package
+	MainPkg      *Package
 	sorted       []*Package
 	fset         *token.FileSet
 	TypeChecker  types.Config
@@ -37,85 +41,163 @@ type Program struct {
 // Package holds a loaded package, its imports, and its parsed files.
 type Package struct {
 	*Program
-	*build.Package
-	Imports   map[string]*Package
-	Importing bool
-	Files     []*ast.File
-	Pkg       *types.Package
+	*packages.Package
+	Files []*ast.File
+	Pkg   *types.Package
 	types.Info
 }
 
-// Import loads the given package relative to srcDir (for the vendor directory).
-// It only loads the current package without recursion.
-func (p *Program) Import(path, srcDir string, pos token.Position) (*Package, error) {
+// Load loads the given package with all dependencies (including the runtime
+// package). Call .Parse() afterwards to parse all Go files (including CGo
+// processing, if necessary).
+func (p *Program) Load(importPath string) error {
 	if p.Packages == nil {
 		p.Packages = make(map[string]*Package)
 	}
 
-	// Load this package.
-	ctx := p.Build
-	buildPkg, err := ctx.Import(path, srcDir, build.ImportComment)
+	err := p.loadPackage(importPath)
 	if err != nil {
-		return nil, scanner.Error{
-			Pos: pos,
-			Msg: err.Error(), // TODO: define a new error type that will wrap the inner error
-		}
+		return err
 	}
-	if existingPkg, ok := p.Packages[buildPkg.ImportPath]; ok {
-		// Already imported, or at least started the import.
-		return existingPkg, nil
+	p.MainPkg = p.sorted[len(p.sorted)-1]
+	if _, ok := p.Packages["runtime"]; !ok {
+		// The runtime package wasn't loaded. Although `go list -deps` seems to
+		// return the full dependency list, there is no way to get those
+		// packages from the go/packages package. Therefore load the runtime
+		// manually and add it to the list of to-be-compiled packages
+		// (duplicates are already filtered).
+		return p.loadPackage("runtime")
 	}
-	p.sorted = nil // invalidate the sorted order of packages
-	pkg := p.newPackage(buildPkg)
-	p.Packages[buildPkg.ImportPath] = pkg
-
-	if p.mainPkg == "" {
-		p.mainPkg = buildPkg.ImportPath
-	}
-
-	return pkg, nil
+	return nil
 }
 
-// ImportFile loads and parses the import statements in the given path and
-// creates a pseudo-package out of it.
-func (p *Program) ImportFile(path string) (*Package, error) {
-	if p.Packages == nil {
-		p.Packages = make(map[string]*Package)
+func (p *Program) loadPackage(importPath string) error {
+	cgoEnabled := "0"
+	if p.Build.CgoEnabled {
+		cgoEnabled = "1"
 	}
-	if _, ok := p.Packages[path]; ok {
-		// unlikely
-		return nil, errors.New("loader: cannot import file that is already imported as package: " + path)
-	}
-
-	file, err := p.parseFile(path, parser.ImportsOnly)
+	pkgs, err := packages.Load(&packages.Config{
+		Mode:       packages.NeedName | packages.NeedFiles | packages.NeedImports | packages.NeedDeps,
+		Env:        append(os.Environ(), "GOROOT="+p.Build.GOROOT, "GOOS="+p.Build.GOOS, "GOARCH="+p.Build.GOARCH, "CGO_ENABLED="+cgoEnabled),
+		BuildFlags: []string{"-tags", strings.Join(p.Build.BuildTags, " ")},
+		Tests:      p.Tests,
+	}, importPath)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	buildPkg := &build.Package{
-		Dir:        filepath.Dir(path),
-		ImportPath: path,
-		GoFiles:    []string{filepath.Base(path)},
+	var pkg *packages.Package
+	if p.Tests {
+		// We need the second package. Quoting from the docs:
+		// > For example, when using the go command, loading "fmt" with Tests=true
+		// > returns four packages, with IDs "fmt" (the standard package),
+		// > "fmt [fmt.test]" (the package as compiled for the test),
+		// > "fmt_test" (the test functions from source files in package fmt_test),
+		// > and "fmt.test" (the test binary).
+		pkg = pkgs[1]
+	} else {
+		if len(pkgs) != 1 {
+			return fmt.Errorf("expected exactly one package while importing %s, got %d", importPath, len(pkgs))
+		}
+		pkg = pkgs[0]
 	}
-	for _, importSpec := range file.Imports {
-		buildPkg.Imports = append(buildPkg.Imports, importSpec.Path.Value[1:len(importSpec.Path.Value)-1])
-	}
-	p.sorted = nil // invalidate the sorted order of packages
-	pkg := p.newPackage(buildPkg)
-	p.Packages[buildPkg.ImportPath] = pkg
+	var importError *Errors
+	var addPackages func(pkg *packages.Package)
+	addPackages = func(pkg *packages.Package) {
+		if _, ok := p.Packages[pkg.PkgPath]; ok {
+			return
+		}
+		pkg2 := p.newPackage(pkg)
+		p.Packages[pkg.PkgPath] = pkg2
+		if len(pkg.Errors) != 0 {
+			if importError != nil {
+				// There was another error reported already. Do not report
+				// errors from multiple packages at once.
+				return
+			}
+			importError = &Errors{
+				Pkg: pkg2,
+			}
+			for _, err := range pkg.Errors {
+				pos := token.Position{}
+				fields := strings.Split(err.Pos, ":")
+				if len(fields) >= 2 {
+					// There is some file/line/column information.
+					if n, err := strconv.Atoi(fields[len(fields)-2]); err == nil {
+						// Format: filename.go:line:colum
+						pos.Filename = strings.Join(fields[:len(fields)-2], ":")
+						pos.Line = n
+						pos.Column, _ = strconv.Atoi(fields[len(fields)-1])
+					} else {
+						// Format: filename.go:line
+						pos.Filename = strings.Join(fields[:len(fields)-1], ":")
+						pos.Line, _ = strconv.Atoi(fields[len(fields)-1])
+					}
+					pos.Filename = p.getOriginalPath(pos.Filename)
+				}
+				importError.Errs = append(importError.Errs, scanner.Error{
+					Pos: pos,
+					Msg: err.Msg,
+				})
+			}
+			return
+		}
 
-	if p.mainPkg == "" {
-		p.mainPkg = buildPkg.ImportPath
-	}
+		// Get the list of imports (sorted alphabetically).
+		names := make([]string, 0, len(pkg.Imports))
+		for name := range pkg.Imports {
+			names = append(names, name)
+		}
+		sort.Strings(names)
 
-	return pkg, nil
+		// Add all the imports.
+		for _, name := range names {
+			addPackages(pkg.Imports[name])
+		}
+
+		p.sorted = append(p.sorted, pkg2)
+	}
+	addPackages(pkg)
+	if importError != nil {
+		return *importError
+	}
+	return nil
+}
+
+// getOriginalPath looks whether this path is in the generated GOROOT and if so,
+// replaces the path with the original path (in GOROOT or TINYGOROOT). Otherwise
+// the input path is returned.
+func (p *Program) getOriginalPath(path string) string {
+	originalPath := path
+	if strings.HasPrefix(path, p.Build.GOROOT+string(filepath.Separator)) {
+		// If this file is part of the synthetic GOROOT, try to infer the
+		// original path.
+		relpath := path[len(filepath.Join(p.Build.GOROOT, "src"))+1:]
+		realgorootPath := filepath.Join(goenv.Get("GOROOT"), "src", relpath)
+		if _, err := os.Stat(realgorootPath); err == nil {
+			originalPath = realgorootPath
+		}
+		maybeInTinyGoRoot := false
+		for prefix := range pathsToOverride(needsSyscallPackage(p.Build.BuildTags)) {
+			if !strings.HasPrefix(relpath, prefix) {
+				continue
+			}
+			maybeInTinyGoRoot = true
+		}
+		if maybeInTinyGoRoot {
+			tinygoPath := filepath.Join(p.TINYGOROOT, "src", relpath)
+			if _, err := os.Stat(tinygoPath); err == nil {
+				originalPath = tinygoPath
+			}
+		}
+	}
+	return originalPath
 }
 
 // newPackage instantiates a new *Package object with initialized members.
-func (p *Program) newPackage(pkg *build.Package) *Package {
+func (p *Program) newPackage(pkg *packages.Package) *Package {
 	return &Package{
 		Program: p,
 		Package: pkg,
-		Imports: make(map[string]*Package, len(pkg.Imports)),
 		Info: types.Info{
 			Types:      make(map[ast.Expr]types.TypeAndValue),
 			Defs:       make(map[*ast.Ident]types.Object),
@@ -130,87 +212,25 @@ func (p *Program) newPackage(pkg *build.Package) *Package {
 // Sorted returns a list of all packages, sorted in a way that no packages come
 // before the packages they depend upon.
 func (p *Program) Sorted() []*Package {
-	if p.sorted == nil {
-		p.sort()
-	}
 	return p.sorted
 }
 
-func (p *Program) sort() {
-	p.sorted = nil
-	packageList := make([]*Package, 0, len(p.Packages))
-	packageSet := make(map[string]struct{}, len(p.Packages))
-	worklist := make([]string, 0, len(p.Packages))
-	for path := range p.Packages {
-		worklist = append(worklist, path)
-	}
-	sort.Strings(worklist)
-	for len(worklist) != 0 {
-		pkgPath := worklist[0]
-		pkg := p.Packages[pkgPath]
-
-		if _, ok := packageSet[pkgPath]; ok {
-			// Package already in the final package list.
-			worklist = worklist[1:]
-			continue
-		}
-
-		unsatisfiedImports := make([]string, 0)
-		for _, pkg := range pkg.Imports {
-			if _, ok := packageSet[pkg.ImportPath]; ok {
-				continue
-			}
-			unsatisfiedImports = append(unsatisfiedImports, pkg.ImportPath)
-		}
-		sort.Strings(unsatisfiedImports)
-		if len(unsatisfiedImports) == 0 {
-			// All dependencies of this package are satisfied, so add this
-			// package to the list.
-			packageList = append(packageList, pkg)
-			packageSet[pkgPath] = struct{}{}
-			worklist = worklist[1:]
-		} else {
-			// Prepend all dependencies to the worklist and reconsider this
-			// package (by not removing it from the worklist). At that point, it
-			// must be possible to add it to packageList.
-			worklist = append(unsatisfiedImports, worklist...)
-		}
-	}
-
-	p.sorted = packageList
-}
-
-// Parse recursively imports all packages, parses them, and typechecks them.
+// Parse parses all packages and typechecks them.
 //
 // The returned error may be an Errors error, which contains a list of errors.
 //
 // Idempotent.
-func (p *Program) Parse(compileTestBinary bool) error {
-	includeTests := compileTestBinary
-
-	// Load all imports
-	for _, pkg := range p.Sorted() {
-		err := pkg.importRecursively(includeTests)
-		if err != nil {
-			if err, ok := err.(*ImportCycleError); ok {
-				if pkg.ImportPath != err.Packages[0] {
-					err.Packages = append([]string{pkg.ImportPath}, err.Packages...)
-				}
-			}
-			return err
-		}
-	}
-
+func (p *Program) Parse() error {
 	// Parse all packages.
 	for _, pkg := range p.Sorted() {
-		err := pkg.Parse(includeTests)
+		err := pkg.Parse()
 		if err != nil {
 			return err
 		}
 	}
 
-	if compileTestBinary {
-		err := p.SwapTestMain()
+	if p.Tests {
+		err := p.swapTestMain()
 		if err != nil {
 			return err
 		}
@@ -227,7 +247,7 @@ func (p *Program) Parse(compileTestBinary bool) error {
 	return nil
 }
 
-func (p *Program) SwapTestMain() error {
+func (p *Program) swapTestMain() error {
 	var tests []string
 
 	isTestFunc := func(f *ast.FuncDecl) bool {
@@ -237,8 +257,7 @@ func (p *Program) SwapTestMain() error {
 		}
 		return false
 	}
-	mainPkg := p.Packages[p.mainPkg]
-	for _, f := range mainPkg.Files {
+	for _, f := range p.MainPkg.Files {
 		for i, d := range f.Decls {
 			switch v := d.(type) {
 			case *ast.FuncDecl:
@@ -289,7 +308,7 @@ func main () {
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(p.mainPkg, "$testmain.go")
+	path := filepath.Join(p.MainPkg.Dir, "$testmain.go")
 
 	if p.fset == nil {
 		p.fset = token.NewFileSet()
@@ -299,7 +318,7 @@ func main () {
 	if err != nil {
 		return err
 	}
-	mainPkg.Files = append(mainPkg.Files, newMain)
+	p.MainPkg.Files = append(p.MainPkg.Files, newMain)
 
 	return nil
 }
@@ -315,50 +334,27 @@ func (p *Program) parseFile(path string, mode parser.Mode) (*ast.File, error) {
 		return nil, err
 	}
 	defer rd.Close()
-	diagnosticPath := path
-	if strings.HasPrefix(path, p.Build.GOROOT+string(filepath.Separator)) {
-		// If this file is part of the synthetic GOROOT, try to infer the
-		// original path.
-		relpath := path[len(filepath.Join(p.Build.GOROOT, "src"))+1:]
-		realgorootPath := filepath.Join(goenv.Get("GOROOT"), "src", relpath)
-		if _, err := os.Stat(realgorootPath); err == nil {
-			diagnosticPath = realgorootPath
-		}
-		maybeInTinyGoRoot := false
-		for prefix := range pathsToOverride(needsSyscallPackage(p.Build.BuildTags)) {
-			if !strings.HasPrefix(relpath, prefix) {
-				continue
-			}
-			maybeInTinyGoRoot = true
-		}
-		if maybeInTinyGoRoot {
-			tinygoPath := filepath.Join(p.TINYGOROOT, "src", relpath)
-			if _, err := os.Stat(tinygoPath); err == nil {
-				diagnosticPath = tinygoPath
-			}
-		}
-	}
-	return parser.ParseFile(p.fset, diagnosticPath, rd, mode)
+	return parser.ParseFile(p.fset, p.getOriginalPath(path), rd, mode)
 }
 
 // Parse parses and typechecks this package.
 //
 // Idempotent.
-func (p *Package) Parse(includeTests bool) error {
+func (p *Package) Parse() error {
 	if len(p.Files) != 0 {
 		return nil
 	}
 
 	// Load the AST.
 	// TODO: do this in parallel.
-	if p.ImportPath == "unsafe" {
+	if p.PkgPath == "unsafe" {
 		// Special case for the unsafe package. Don't even bother loading
 		// the files.
 		p.Pkg = types.Unsafe
 		return nil
 	}
 
-	files, err := p.parseFiles(includeTests)
+	files, err := p.parseFiles()
 	if err != nil {
 		return err
 	}
@@ -385,7 +381,7 @@ func (p *Package) Check() error {
 	// Do typechecking of the package.
 	checker.Importer = p
 
-	typesPkg, err := checker.Check(p.ImportPath, p.fset, p.Files, &p.Info)
+	typesPkg, err := checker.Check(p.PkgPath, p.fset, p.Files, &p.Info)
 	if err != nil {
 		if err, ok := err.(Errors); ok {
 			return err
@@ -397,22 +393,14 @@ func (p *Package) Check() error {
 }
 
 // parseFiles parses the loaded list of files and returns this list.
-func (p *Package) parseFiles(includeTests bool) ([]*ast.File, error) {
+func (p *Package) parseFiles() ([]*ast.File, error) {
 	// TODO: do this concurrently.
 	var files []*ast.File
 	var fileErrs []error
 
-	var gofiles []string
-	if includeTests {
-		gofiles = make([]string, 0, len(p.GoFiles)+len(p.TestGoFiles))
-		gofiles = append(gofiles, p.GoFiles...)
-		gofiles = append(gofiles, p.TestGoFiles...)
-	} else {
-		gofiles = p.GoFiles
-	}
-
-	for _, file := range gofiles {
-		f, err := p.parseFile(filepath.Join(p.Package.Dir, file), parser.ParseComments)
+	var cgoFiles []*ast.File
+	for _, file := range p.GoFiles {
+		f, err := p.parseFile(file, parser.ParseComments)
 		if err != nil {
 			fileErrs = append(fileErrs, err)
 			continue
@@ -420,20 +408,16 @@ func (p *Package) parseFiles(includeTests bool) ([]*ast.File, error) {
 		if err != nil {
 			fileErrs = append(fileErrs, err)
 			continue
+		}
+		for _, importSpec := range f.Imports {
+			if importSpec.Path.Value == `"C"` {
+				cgoFiles = append(cgoFiles, f)
+			}
 		}
 		files = append(files, f)
 	}
-	for _, file := range p.CgoFiles {
-		path := filepath.Join(p.Package.Dir, file)
-		f, err := p.parseFile(path, parser.ParseComments)
-		if err != nil {
-			fileErrs = append(fileErrs, err)
-			continue
-		}
-		files = append(files, f)
-	}
-	if len(p.CgoFiles) != 0 {
-		cflags := append(p.CFlags, "-I"+p.Package.Dir)
+	if len(cgoFiles) != 0 {
+		cflags := append(p.CFlags, "-I"+filepath.Dir(p.GoFiles[0]))
 		if p.ClangHeaders != "" {
 			cflags = append(cflags, "-Xclang", "-internal-isystem", "-Xclang", p.ClangHeaders)
 		}
@@ -458,58 +442,8 @@ func (p *Package) Import(to string) (*types.Package, error) {
 		return types.Unsafe, nil
 	}
 	if _, ok := p.Imports[to]; ok {
-		return p.Imports[to].Pkg, nil
+		return p.Packages[p.Imports[to].PkgPath].Pkg, nil
 	} else {
 		return nil, errors.New("package not imported: " + to)
 	}
-}
-
-// importRecursively calls Program.Import() on all imported packages, and calls
-// importRecursively() on the imported packages as well.
-//
-// Idempotent.
-func (p *Package) importRecursively(includeTests bool) error {
-	p.Importing = true
-
-	imports := p.Package.Imports
-	if includeTests {
-		imports = append(imports, p.Package.TestImports...)
-	}
-
-	for _, to := range imports {
-		if to == "C" {
-			// Do CGo processing in a later stage.
-			continue
-		}
-		if _, ok := p.Imports[to]; ok {
-			continue
-		}
-		// Find error location.
-		var pos token.Position
-		if len(p.Package.ImportPos[to]) > 0 {
-			pos = p.Package.ImportPos[to][0]
-		} else {
-			pos = token.Position{Filename: p.Package.ImportPath}
-		}
-		importedPkg, err := p.Program.Import(to, p.Package.Dir, pos)
-		if err != nil {
-			if err, ok := err.(*ImportCycleError); ok {
-				err.Packages = append([]string{p.ImportPath}, err.Packages...)
-			}
-			return err
-		}
-		if importedPkg.Importing {
-			return &ImportCycleError{[]string{p.ImportPath, importedPkg.ImportPath}, p.ImportPos[to]}
-		}
-		err = importedPkg.importRecursively(false)
-		if err != nil {
-			if err, ok := err.(*ImportCycleError); ok {
-				err.Packages = append([]string{p.ImportPath}, err.Packages...)
-			}
-			return err
-		}
-		p.Imports[to] = importedPkg
-	}
-	p.Importing = false
-	return nil
 }
