@@ -124,6 +124,7 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 
 // Test runs the tests in the given package.
 func Test(pkgName string, options *compileopts.Options) error {
+	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
@@ -135,7 +136,6 @@ func Test(pkgName string, options *compileopts.Options) error {
 	// For details: https://github.com/golang/go/issues/21360
 	config.Target.BuildTags = append(config.Target.BuildTags, "test")
 
-	options.TestConfig.CompileTestBinary = true
 	return builder.Build(pkgName, ".elf", config, func(tmppath string) error {
 		cmd := exec.Command(tmppath)
 		cmd.Stdout = os.Stdout
