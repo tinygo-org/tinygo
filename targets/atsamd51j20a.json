@@ -6,7 +6,7 @@
 		"--target=armv7em-none-eabi",
 		"-Qunused-arguments"
 	],
-	"linkerscript": "targets/atsamd51.ld",
+	"linkerscript": "targets/atsamd51j20a.ld",
 	"extra-files": [
 		"src/device/sam/atsamd51j20a.s"
 	]
