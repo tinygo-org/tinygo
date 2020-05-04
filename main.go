@@ -897,7 +897,7 @@ func main() {
 		usage()
 	case "version":
 		goversion := "<unknown>"
-		if s, err := builder.GorootVersionString(goenv.Get("GOROOT")); err == nil {
+		if s, err := goenv.GorootVersionString(goenv.Get("GOROOT")); err == nil {
 			goversion = s
 		}
 		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
