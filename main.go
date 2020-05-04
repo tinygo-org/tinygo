@@ -714,7 +714,7 @@ func printCompilerError(logln func(...interface{}), err error) {
 			}
 		}
 	case loader.Errors:
-		logln("#", err.Pkg.ImportPath)
+		logln("#", err.Pkg.PkgPath)
 		for _, err := range err.Errs {
 			logln(err)
 		}

@@ -10,8 +10,10 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -58,8 +60,12 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 		return "", err
 	}
 
+	// Remove the temporary directory if it wasn't moved to the right place
+	// (for example, when there was an error).
+	defer os.RemoveAll(tmpgoroot)
+
 	for _, name := range []string{"bin", "lib", "pkg"} {
-		err = os.Symlink(filepath.Join(goroot, name), filepath.Join(tmpgoroot, name))
+		err = symlink(filepath.Join(goroot, name), filepath.Join(tmpgoroot, name))
 		if err != nil {
 			return "", err
 		}
@@ -72,8 +78,8 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	if err != nil {
 		if os.IsExist(err) {
 			// Another invocation of TinyGo also seems to have created a GOROOT.
-			// Use that one instead and delete ours.
-			os.RemoveAll(tmpgoroot)
+			// Use that one instead. Our new GOROOT will be automatically
+			// deleted by the defer above.
 			return cachedgoroot, nil
 		}
 		return "", err
@@ -91,7 +97,7 @@ func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides 
 			// root, so simply make a symlink.
 			newname := filepath.Join(tmpgoroot, "src", importPath)
 			oldname := filepath.Join(tinygoroot, "src", importPath)
-			return os.Symlink(oldname, newname)
+			return symlink(oldname, newname)
 		}
 
 		// Merge subdirectories. Start by making the directory to merge.
@@ -117,7 +123,7 @@ func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides 
 				// A file, so symlink this.
 				newname := filepath.Join(tmpgoroot, "src", importPath, e.Name())
 				oldname := filepath.Join(tinygoroot, "src", importPath, e.Name())
-				err := os.Symlink(oldname, newname)
+				err := symlink(oldname, newname)
 				if err != nil {
 					return err
 				}
@@ -143,7 +149,7 @@ func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides 
 			}
 			newname := filepath.Join(tmpgoroot, "src", importPath, e.Name())
 			oldname := filepath.Join(goroot, "src", importPath, e.Name())
-			err := os.Symlink(oldname, newname)
+			err := symlink(oldname, newname)
 			if err != nil {
 				return err
 			}
@@ -173,4 +179,47 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		paths["syscall/"] = true // include syscall/js
 	}
 	return paths
+}
+
+// symlink creates a symlink or something similar. On Unix-like systems, it
+// always creates a symlink. On Windows, it tries to create a symlink and if
+// that fails, creates a hardlink or directory junction instead.
+//
+// Note that while Windows 10 does support symlinks and allows them to be
+// created using os.Symlink, it requires developer mode to be enabled.
+// Therefore provide a fallback for when symlinking is not possible.
+// Unfortunately this fallback only works when TinyGo is installed on the same
+// filesystem as the TinyGo cache and the Go installation (which is usually the
+// C drive).
+func symlink(oldname, newname string) error {
+	symlinkErr := os.Symlink(oldname, newname)
+	if runtime.GOOS == "windows" && symlinkErr != nil {
+		// Fallback for when developer mode is disabled.
+		// Note that we return the symlink error even if something else fails
+		// later on. This is because symlinks are the easiest to support
+		// (they're also used on Linux and MacOS) and enabling them is easy:
+		// just enable developer mode.
+		st, err := os.Stat(oldname)
+		if err != nil {
+			return symlinkErr
+		}
+		if st.IsDir() {
+			// Make a directory junction. There may be a way to do this
+			// programmatically, but it involves a lot of magic. Use the mklink
+			// command built into cmd instead (mklink is a builtin, not an
+			// external command).
+			err := exec.Command("cmd", "/k", "mklink", "/J", newname, oldname).Run()
+			if err != nil {
+				return symlinkErr
+			}
+		} else {
+			// Make a hard link.
+			err := os.Link(oldname, newname)
+			if err != nil {
+				return symlinkErr
+			}
+		}
+		return nil // success
+	}
+	return symlinkErr
 }

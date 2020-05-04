@@ -156,6 +156,7 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 			Compiler:    "gc", // must be one of the recognized compilers
 			BuildTags:   c.BuildTags(),
 		},
+		Tests: c.TestConfig.CompileTestBinary,
 		TypeChecker: types.Config{
 			Sizes: &stdSizes{
 				IntSize:  int64(c.targetData.TypeAllocSize(c.intType)),
@@ -169,33 +170,17 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 		ClangHeaders: c.ClangHeaders,
 	}
 
-	if strings.HasSuffix(pkgName, ".go") {
-		_, err = lprogram.ImportFile(pkgName)
-		if err != nil {
-			return c.mod, nil, []error{err}
-		}
-	} else {
-		_, err = lprogram.Import(pkgName, wd, token.Position{
-			Filename: "build command-line-arguments",
-		})
-		if err != nil {
-			return c.mod, nil, []error{err}
-		}
-	}
-
-	_, err = lprogram.Import("runtime", "", token.Position{
-		Filename: "build default import",
-	})
+	err = lprogram.Load(pkgName)
 	if err != nil {
 		return c.mod, nil, []error{err}
 	}
 
-	err = lprogram.Parse(c.TestConfig.CompileTestBinary)
+	err = lprogram.Parse()
 	if err != nil {
 		return c.mod, nil, []error{err}
 	}
 
-	c.ir = ir.NewProgram(lprogram, pkgName)
+	c.ir = ir.NewProgram(lprogram)
 
 	// Run a simple dead code elimination pass.
 	err = c.ir.SimpleDCE()
@@ -339,8 +324,11 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	// Gather the list of (C) file paths that should be included in the build.
 	var extraFiles []string
 	for _, pkg := range c.ir.LoaderProgram.Sorted() {
-		for _, file := range pkg.CFiles {
-			extraFiles = append(extraFiles, filepath.Join(pkg.Package.Dir, file))
+		for _, file := range pkg.OtherFiles {
+			switch strings.ToLower(filepath.Ext(file)) {
+			case ".c":
+				extraFiles = append(extraFiles, file)
+			}
 		}
 	}
 

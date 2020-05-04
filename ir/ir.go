@@ -63,23 +63,13 @@ const (
 )
 
 // Create and initialize a new *Program from a *ssa.Program.
-func NewProgram(lprogram *loader.Program, mainPath string) *Program {
+func NewProgram(lprogram *loader.Program) *Program {
 	program := lprogram.LoadSSA()
 	program.Build()
 
 	// Find the main package, which is a bit difficult when running a .go file
 	// directly.
-	mainPkg := program.ImportedPackage(mainPath)
-	if mainPkg == nil {
-		for _, pkgInfo := range program.AllPackages() {
-			if pkgInfo.Pkg.Name() == "main" {
-				if mainPkg != nil {
-					panic("more than one main package found")
-				}
-				mainPkg = pkgInfo
-			}
-		}
-	}
+	mainPkg := program.ImportedPackage(lprogram.MainPkg.PkgPath)
 	if mainPkg == nil {
 		panic("could not find main package")
 	}
@@ -87,21 +77,10 @@ func NewProgram(lprogram *loader.Program, mainPath string) *Program {
 	// Make a list of packages in import order.
 	packageList := []*ssa.Package{}
 	packageSet := map[string]struct{}{}
-	worklist := []string{"runtime", mainPath}
+	worklist := []string{"runtime", lprogram.MainPkg.PkgPath}
 	for len(worklist) != 0 {
 		pkgPath := worklist[0]
-		var pkg *ssa.Package
-		if pkgPath == mainPath {
-			pkg = mainPkg // necessary for compiling individual .go files
-		} else {
-			pkg = program.ImportedPackage(pkgPath)
-		}
-		if pkg == nil {
-			// Non-SSA package (e.g. cgo).
-			packageSet[pkgPath] = struct{}{}
-			worklist = worklist[1:]
-			continue
-		}
+		pkg := program.ImportedPackage(pkgPath)
 		if _, ok := packageSet[pkgPath]; ok {
 			// Package already in the final package list.
 			worklist = worklist[1:]
