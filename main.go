@@ -479,6 +479,13 @@ func touchSerialPortAt1200bps(port string) (err error) {
 		// Open port
 		p, e := serial.Open(port, &serial.Mode{BaudRate: 1200})
 		if e != nil {
+			if runtime.GOOS == `windows` {
+				se, ok := e.(*serial.PortError)
+				if ok && se.Code() == serial.InvalidSerialPort {
+					// InvalidSerialPort error occurs when transitioning to boot
+					return nil
+				}
+			}
 			time.Sleep(1 * time.Second)
 			err = e
 			continue
