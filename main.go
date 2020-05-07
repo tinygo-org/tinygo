@@ -603,29 +603,18 @@ func getDefaultPort() (port string, err error) {
 	case "freebsd":
 		portPath = "/dev/cuaU*"
 	case "windows":
-		cmd := exec.Command("wmic",
-			"PATH", "Win32_SerialPort", "WHERE", "Caption LIKE 'USB Serial%'", "GET", "DeviceID")
-
-		var out bytes.Buffer
-		cmd.Stdout = &out
-		err := cmd.Run()
+		ports, err := serial.GetPortsList()
 		if err != nil {
 			return "", err
 		}
 
-		if out.String() == "No Instance(s) Available." {
+		if len(ports) == 0 {
 			return "", errors.New("no serial ports available")
+		} else if len(ports) > 1 {
+			return "", errors.New("multiple serial ports available - use -port flag")
 		}
 
-		for _, line := range strings.Split(out.String(), "\n") {
-			words := strings.Fields(line)
-			if len(words) == 1 {
-				if strings.Contains(words[0], "COM") {
-					return words[0], nil
-				}
-			}
-		}
-		return "", errors.New("unable to locate a serial port")
+		return ports[0], nil
 	default:
 		return "", errors.New("unable to search for a default USB device to be flashed on this OS")
 	}
