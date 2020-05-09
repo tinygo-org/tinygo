@@ -1,4 +1,4 @@
-// +build darwin
+// +build darwin nintendoswitch
 
 package syscall
 
