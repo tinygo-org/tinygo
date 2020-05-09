@@ -93,6 +93,7 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 	features := strings.Join(config.Features(), ",")
 
 	var codeModel llvm.CodeModel
+	var relocationModel llvm.RelocMode
 
 	switch config.CodeModel() {
 	case "default":
@@ -109,7 +110,16 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 		codeModel = llvm.CodeModelLarge
 	}
 
-	machine := target.CreateTargetMachine(config.Triple(), config.CPU(), features, llvm.CodeGenLevelDefault, llvm.RelocStatic, codeModel)
+	switch config.RelocationModel() {
+	case "static":
+		relocationModel = llvm.RelocStatic
+	case "pic":
+		relocationModel = llvm.RelocPIC
+	case "dynamicnopic":
+		relocationModel = llvm.RelocDynamicNoPic
+	}
+
+	machine := target.CreateTargetMachine(config.Triple(), config.CPU(), features, llvm.CodeGenLevelDefault, relocationModel, codeModel)
 	return machine, nil
 }
 

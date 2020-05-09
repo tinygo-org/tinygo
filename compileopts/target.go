@@ -50,6 +50,7 @@ type TargetSpec struct {
 	OpenOCDTransport string   `json:"openocd-transport"`
 	JLinkDevice      string   `json:"jlink-device"`
 	CodeModel        string   `json:"code-model"`
+	RelocationModel  string   `json:"relocation-model"`
 }
 
 // copyProperties copies all properties that are set in spec2 into itself.
@@ -133,6 +134,10 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if spec2.CodeModel != "" {
 		spec.CodeModel = spec2.CodeModel
+	}
+
+	if spec2.RelocationModel != "" {
+		spec.RelocationModel = spec2.RelocationModel
 	}
 }
 

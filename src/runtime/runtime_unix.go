@@ -1,4 +1,5 @@
 // +build darwin linux,!baremetal freebsd,!baremetal
+// +build !nintendoswitch
 
 package runtime
 
