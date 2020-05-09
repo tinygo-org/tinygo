@@ -281,6 +281,16 @@ func (c *Config) CodeModel() string {
 	return "default"
 }
 
+// RelocationModel returns the relocation model in use on this platform. Valid
+// values are "static", "pic", "dynamicnopic".
+func (c *Config) RelocationModel() string {
+	if c.Target.RelocationModel != "" {
+		return c.Target.RelocationModel
+	}
+
+	return "static"
+}
+
 type TestConfig struct {
 	CompileTestBinary bool
 	// TODO: Filter the test functions to run, include verbose flag, etc
