@@ -8,9 +8,9 @@ import (
 // This example assumes that an RGB LED is connected to pins 3, 5 and 6 on an Arduino.
 // Change the values below to use different pins.
 const (
-	redPin   = 3
-	greenPin = 5
-	bluePin  = 6
+	redPin   = machine.D3
+	greenPin = machine.D5
+	bluePin  = machine.D6
 )
 
 // cycleColor is just a placeholder until math/rand or some equivalent is working.
