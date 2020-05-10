@@ -182,7 +182,7 @@ tinygo-test:
 .PHONY: smoketest
 smoketest:
 	$(TINYGO) version
-	# test all examples
+	# test all examples (except pwm)
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/adc
@@ -202,8 +202,6 @@ smoketest:
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/mcp3008
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=microbit            examples/microbit-blink
-	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/pwm
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/serial
 	@$(MD5SUM) test.hex
@@ -295,6 +293,8 @@ ifneq ($(AVR), 0)
 	$(TINYGO) build -size short -o test.hex -target=atmega1284p         examples/serial
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino             examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=arduino             examples/pwm
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino -scheduler=tasks  examples/blinky1
 	@$(MD5SUM) test.hex
