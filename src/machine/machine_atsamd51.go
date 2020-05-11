@@ -1216,7 +1216,7 @@ const (
 const period = 0xFFFF
 
 // Configure configures a PWM pin for output.
-func (pwm PWM) Configure() {
+func (pwm PWM) Configure() error {
 	// Set pin as output
 	sam.PORT.GROUP[0].DIRSET.Set(1 << uint8(pwm.Pin))
 	// Set pin to low
@@ -1240,6 +1240,9 @@ func (pwm PWM) Configure() {
 
 	// figure out which TCCX timer for this pin
 	timer := pwm.getTimer()
+	if timer == nil {
+		return ErrInvalidOutputPin
+	}
 
 	// disable timer
 	timer.CTRLA.ClearBits(sam.TCC_CTRLA_ENABLE)
@@ -1264,7 +1267,7 @@ func (pwm PWM) Configure() {
 
 	// Set the initial value
 	// TCCx->CC[tcChannel].reg = (uint32_t) value;
-	pwm.setChannel(0)
+	pwm.setChannel(timer, 0)
 
 	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_CC0) ||
 		timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_CC1) {
@@ -1282,12 +1285,19 @@ func (pwm PWM) Configure() {
 	// Wait for synchronization
 	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_ENABLE) {
 	}
+
+	return nil
 }
 
 // Set turns on the duty cycle for a PWM pin using the provided value.
 func (pwm PWM) Set(value uint16) {
 	// figure out which TCCX timer for this pin
 	timer := pwm.getTimer()
+	if timer == nil {
+		// The Configure call above cannot have succeeded, so simply ignore this
+		// error.
+		return
+	}
 
 	// Wait for synchronization
 	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_CTRLB) {
@@ -1297,7 +1307,7 @@ func (pwm PWM) Set(value uint16) {
 	}
 
 	// TCCx->CCBUF[tcChannel].reg = (uint32_t) value;
-	pwm.setChannelBuffer(uint32(value))
+	pwm.setChannelBuffer(timer, uint32(value))
 
 	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_CC0) ||
 		timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_CC1) {
@@ -1329,61 +1339,61 @@ func (pwm PWM) setPinCfg(val uint8) {
 	pwm.Pin.setPinCfg(val)
 }
 
-// setChannel sets the value for the correct channel for PWM on this pin
-func (pwm PWM) setChannel(val uint32) {
+// setChannel sets the value for the correct channel for PWM on this pin.
+func (pwm PWM) setChannel(timer *sam.TCC_Type, val uint32) {
 	switch pwm.Pin {
 	case PA16:
-		pwm.getTimer().CC[0].Set(val)
+		timer.CC[0].Set(val)
 	case PA17:
-		pwm.getTimer().CC[1].Set(val)
+		timer.CC[1].Set(val)
 	case PA14:
-		pwm.getTimer().CC[0].Set(val)
+		timer.CC[0].Set(val)
 	case PA15:
-		pwm.getTimer().CC[1].Set(val)
+		timer.CC[1].Set(val)
 	case PA18:
-		pwm.getTimer().CC[2].Set(val)
+		timer.CC[2].Set(val)
 	case PA19:
-		pwm.getTimer().CC[3].Set(val)
+		timer.CC[3].Set(val)
 	case PA20:
-		pwm.getTimer().CC[0].Set(val)
+		timer.CC[0].Set(val)
 	case PA21:
-		pwm.getTimer().CC[1].Set(val)
+		timer.CC[1].Set(val)
 	case PA23:
-		pwm.getTimer().CC[3].Set(val)
+		timer.CC[3].Set(val)
 	case PA22:
-		pwm.getTimer().CC[2].Set(val)
+		timer.CC[2].Set(val)
 	case PB31:
-		pwm.getTimer().CC[1].Set(val)
+		timer.CC[1].Set(val)
 	default:
 		return // not supported on this pin
 	}
 }
 
 // setChannelBuffer sets the value for the correct channel buffer for PWM on this pin
-func (pwm PWM) setChannelBuffer(val uint32) {
+func (pwm PWM) setChannelBuffer(timer *sam.TCC_Type, val uint32) {
 	switch pwm.Pin {
 	case PA16:
-		pwm.getTimer().CCBUF[0].Set(val)
+		timer.CCBUF[0].Set(val)
 	case PA17:
-		pwm.getTimer().CCBUF[1].Set(val)
+		timer.CCBUF[1].Set(val)
 	case PA14:
-		pwm.getTimer().CCBUF[0].Set(val)
+		timer.CCBUF[0].Set(val)
 	case PA15:
-		pwm.getTimer().CCBUF[1].Set(val)
+		timer.CCBUF[1].Set(val)
 	case PA18:
-		pwm.getTimer().CCBUF[2].Set(val)
+		timer.CCBUF[2].Set(val)
 	case PA19:
-		pwm.getTimer().CCBUF[3].Set(val)
+		timer.CCBUF[3].Set(val)
 	case PA20:
-		pwm.getTimer().CCBUF[0].Set(val)
+		timer.CCBUF[0].Set(val)
 	case PA21:
-		pwm.getTimer().CCBUF[1].Set(val)
+		timer.CCBUF[1].Set(val)
 	case PA23:
-		pwm.getTimer().CCBUF[3].Set(val)
+		timer.CCBUF[3].Set(val)
 	case PA22:
-		pwm.getTimer().CCBUF[2].Set(val)
+		timer.CCBUF[2].Set(val)
 	case PB31:
-		pwm.getTimer().CCBUF[1].Set(val)
+		timer.CCBUF[1].Set(val)
 	default:
 		return // not supported on this pin
 	}
