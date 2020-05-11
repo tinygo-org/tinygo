@@ -15,6 +15,7 @@ func TestParseConst(t *testing.T) {
 		Go string
 	}{
 		{`5`, `5`},
+		{`-5`, `-5`},
 		{`(5)`, `(5)`},
 		{`(((5)))`, `(5)`},
 		{`)`, `error: 1:1: unexpected token )`},

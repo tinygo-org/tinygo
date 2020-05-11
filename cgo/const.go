@@ -131,7 +131,7 @@ func (t *tokenizer) Next() {
 			t.value = t.buf[:1]
 			t.buf = t.buf[1:]
 			return
-		case c >= '0' && c <= '9':
+		case (c >= '0' && c <= '9') || c == '-':
 			// Numeric constant (int, float, etc.).
 			// Find the last non-numeric character.
 			tokenLen := len(t.buf)
@@ -140,7 +140,7 @@ func (t *tokenizer) Next() {
 				if c == '.' {
 					hasDot = true
 				}
-				if c >= '0' && c <= '9' || c == '.' || c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' {
+				if c >= '0' && c <= '9' || c == '-' || c == '.' || c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' {
 					tokenLen = i + 1
 				} else {
 					break
