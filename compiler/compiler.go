@@ -1201,9 +1201,7 @@ func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos
 		var llvmCap llvm.Value
 		switch args[0].Type().(type) {
 		case *types.Chan:
-			// Channel. Buffered channels haven't been implemented yet so always
-			// return 0.
-			llvmCap = llvm.ConstInt(b.intType, 0, false)
+			llvmCap = b.createRuntimeCall("chanCap", []llvm.Value{value}, "cap")
 		case *types.Slice:
 			llvmCap = b.CreateExtractValue(value, 2, "cap")
 		default:
@@ -1259,9 +1257,7 @@ func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos
 			// string or slice
 			llvmLen = b.CreateExtractValue(value, 1, "len")
 		case *types.Chan:
-			// Channel. Buffered channels haven't been implemented yet so always
-			// return 0.
-			llvmLen = llvm.ConstInt(b.intType, 0, false)
+			llvmLen = b.createRuntimeCall("chanLen", []llvm.Value{value}, "len")
 		case *types.Map:
 			llvmLen = b.createRuntimeCall("hashmapLen", []llvm.Value{value}, "len")
 		default:

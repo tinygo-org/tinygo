@@ -136,6 +136,38 @@ func chanMake(elementSize uintptr, bufSize uintptr) *channel {
 	}
 }
 
+// Return the number of entries in this chan, called from the len builtin.
+// A nil chan is defined as having length 0.
+//go:inline
+func chanLen(c *channel) int {
+	if c == nil {
+		return 0
+	}
+	return int(c.bufUsed)
+}
+
+// wrapper for use in reflect
+func chanLenUnsafePointer(p unsafe.Pointer) int {
+	c := (*channel)(p)
+	return chanLen(c)
+}
+
+// Return the capacity of this chan, called from the cap builtin.
+// A nil chan is defined as having capacity 0.
+//go:inline
+func chanCap(c *channel) int {
+	if c == nil {
+		return 0
+	}
+	return int(c.bufSize)
+}
+
+// wrapper for use in reflect
+func chanCapUnsafePointer(p unsafe.Pointer) int {
+	c := (*channel)(p)
+	return chanCap(c)
+}
+
 // resumeRX resumes the next receiver and returns the destination pointer.
 // If the ok value is true, then the caller is expected to store a value into this pointer.
 func (ch *channel) resumeRX(ok bool) unsafe.Pointer {
