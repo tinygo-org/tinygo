@@ -304,29 +304,48 @@ func (v Value) Slice(i, j int) Value {
 	panic("unimplemented: (reflect.Value).Slice()")
 }
 
+//go:linkname maplen runtime.hashmapLenUnsafePointer
+func maplen(p unsafe.Pointer) int
+
+//go:linkname chanlen runtime.chanLenUnsafePointer
+func chanlen(p unsafe.Pointer) int
+
 // Len returns the length of this value for slices, strings, arrays, channels,
-// and maps. For oter types, it panics.
+// and maps. For other types, it panics.
 func (v Value) Len() int {
 	t := v.Type()
 	switch t.Kind() {
+	case Array:
+		return v.Type().Len()
+	case Chan:
+		return chanlen(v.value)
+	case Map:
+		return maplen(v.value)
 	case Slice:
 		return int((*SliceHeader)(v.value).Len)
 	case String:
 		return int((*StringHeader)(v.value).Len)
-	case Array:
-		return v.Type().Len()
-	default: // Chan, Map
-		panic("unimplemented: (reflect.Value).Len()")
+	default:
+		panic(&ValueError{"Len"})
 	}
 }
 
+//go:linkname chancap runtime.chanCapUnsafePointer
+func chancap(p unsafe.Pointer) int
+
+// Cap returns the capacity of this value for arrays, channels and slices.
+// For other types, it panics.
 func (v Value) Cap() int {
 	t := v.Type()
 	switch t.Kind() {
+	case Array:
+		return v.Type().Len()
+	case Chan:
+		return chancap(v.value)
 	case Slice:
 		return int((*SliceHeader)(v.value).Cap)
-	default: // Array, Chan
-		panic("unimplemented: (reflect.Value).Cap()")
+	default:
+		panic(&ValueError{"Cap"})
 	}
 }
 
