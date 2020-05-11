@@ -9,7 +9,11 @@ import (
 var wg sync.WaitGroup
 
 func main() {
-	ch := make(chan int)
+	ch := make(chan int, 2)
+	ch <- 1
+	println("len, cap of channel:", len(ch), cap(ch), ch == nil)
+
+	ch = make(chan int)
 	println("len, cap of channel:", len(ch), cap(ch), ch == nil)
 
 	wg.Add(1)
