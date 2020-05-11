@@ -1090,9 +1090,12 @@ func InitPWM() {
 }
 
 // Configure configures a PWM pin for output.
-func (pwm PWM) Configure() {
+func (pwm PWM) Configure() error {
 	// figure out which TCCX timer for this pin
 	timer := pwm.getTimer()
+	if timer == nil {
+		return ErrInvalidOutputPin
+	}
 
 	// disable timer
 	timer.CTRLA.ClearBits(sam.TCC_CTRLA_ENABLE)
@@ -1139,12 +1142,19 @@ func (pwm PWM) Configure() {
 		val := pwm.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
 		pwm.setPMux(val | uint8(pwmConfig<<sam.PORT_PMUX0_PMUXE_Pos))
 	}
+
+	return nil
 }
 
 // Set turns on the duty cycle for a PWM pin using the provided value.
 func (pwm PWM) Set(value uint16) {
 	// figure out which TCCX timer for this pin
 	timer := pwm.getTimer()
+	if timer == nil {
+		// The Configure call above cannot have succeeded, so simply ignore this
+		// error.
+		return
+	}
 
 	// disable output
 	timer.CTRLA.ClearBits(sam.TCC_CTRLA_ENABLE)
@@ -1154,7 +1164,7 @@ func (pwm PWM) Set(value uint16) {
 	}
 
 	// Set PWM signal to output duty cycle
-	pwm.setChannel(uint32(value))
+	pwm.setChannel(timer, uint32(value))
 
 	// Wait for synchronization on all channels
 	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_CC0 |
@@ -1223,32 +1233,32 @@ func (pwm PWM) getTimer() *sam.TCC_Type {
 }
 
 // setChannel sets the value for the correct channel for PWM on this pin
-func (pwm PWM) setChannel(val uint32) {
+func (pwm PWM) setChannel(timer *sam.TCC_Type, val uint32) {
 	switch pwm.Pin {
 	case 6:
-		pwm.getTimer().CC0.Set(val)
+		timer.CC0.Set(val)
 	case 7:
-		pwm.getTimer().CC1.Set(val)
+		timer.CC1.Set(val)
 	case 8:
-		pwm.getTimer().CC0.Set(val)
+		timer.CC0.Set(val)
 	case 9:
-		pwm.getTimer().CC1.Set(val)
+		timer.CC1.Set(val)
 	case 14:
-		pwm.getTimer().CC0.Set(val)
+		timer.CC0.Set(val)
 	case 15:
-		pwm.getTimer().CC1.Set(val)
+		timer.CC1.Set(val)
 	case 16:
-		pwm.getTimer().CC2.Set(val)
+		timer.CC2.Set(val)
 	case 17:
-		pwm.getTimer().CC3.Set(val)
+		timer.CC3.Set(val)
 	case 18:
-		pwm.getTimer().CC2.Set(val)
+		timer.CC2.Set(val)
 	case 19:
-		pwm.getTimer().CC3.Set(val)
+		timer.CC3.Set(val)
 	case 20:
-		pwm.getTimer().CC2.Set(val)
+		timer.CC2.Set(val)
 	case 21:
-		pwm.getTimer().CC3.Set(val)
+		timer.CC3.Set(val)
 	default:
 		return // not supported on this pin
 	}

@@ -104,8 +104,8 @@ func InitADC() {
 }
 
 // Configure configures an ADC pin to be able to read analog data.
-func (a ADC) Configure() {
-	return // no pin specific setup on nrf52840 machine.
+func (a ADC) Configure() error {
+	return nil // no pin specific setup on nrf52840 machine.
 }
 
 // Get returns the current value of a ADC pin in the range 0..0xffff.

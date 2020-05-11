@@ -28,13 +28,16 @@ func main() {
 	machine.InitPWM()
 
 	red := machine.PWM{redPin}
-	red.Configure()
+	err := red.Configure()
+	checkError(err, "failed to configure red pin")
 
 	green := machine.PWM{greenPin}
-	green.Configure()
+	err = green.Configure()
+	checkError(err, "failed to configure green pin")
 
 	blue := machine.PWM{bluePin}
-	blue.Configure()
+	err = blue.Configure()
+	checkError(err, "failed to configure blue pin")
 
 	var rc uint8
 	var gc uint8 = 20
@@ -50,5 +53,12 @@ func main() {
 		blue.Set(uint16(bc) << 8)
 
 		time.Sleep(time.Millisecond * 500)
+	}
+}
+
+func checkError(err error, msg string) {
+	if err != nil {
+		print(msg, ": ", err.Error())
+		println()
 	}
 }
