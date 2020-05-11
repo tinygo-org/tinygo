@@ -38,8 +38,8 @@ var (
 
 	uint8SliceSrc = []uint8{3, 100}
 	uint8SliceDst []uint8
-	intSliceSrc = []int16{5, 123, 1024}
-	intSliceDst []int16
+	intSliceSrc   = []int16{5, 123, 1024}
+	intSliceDst   []int16
 )
 
 func init() {
