@@ -44,6 +44,26 @@ const (
 	PinInputPulldown PinMode = 18
 )
 
+type PinChange uint8
+
+// Pin change interrupt constants for SetInterrupt.
+const (
+	PinRising  PinChange = sam.EIC_CONFIG_SENSE0_RISE
+	PinFalling PinChange = sam.EIC_CONFIG_SENSE0_FALL
+	PinToggle  PinChange = sam.EIC_CONFIG_SENSE0_BOTH
+)
+
+// Callbacks to be called for pins configured with SetInterrupt. Unfortunately,
+// we also need to keep track of which interrupt channel is used by which pin,
+// as the only alternative would be iterating through all pins.
+//
+// We're using the magic constant 16 here because the SAM D21 has 16 interrupt
+// channels configurable for pins.
+var (
+	interruptPins [16]Pin // warning: the value is invalid when pinCallbacks[i] is not set!
+	pinCallbacks  [16]func(Pin)
+)
+
 // Hardware pins
 const (
 	PA00 Pin = 0
@@ -266,6 +286,146 @@ func findPinPadMapping(sercom uint8, pin Pin) (pinMode PinMode, pad uint32, ok b
 		}
 	}
 	return
+}
+
+// SetInterrupt sets an interrupt to be executed when a particular pin changes
+// state.
+//
+// This call will replace a previously set callback on this pin. You can pass a
+// nil func to unset the pin change interrupt. If you do so, the change
+// parameter is ignored and can be set to any value (such as 0).
+func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
+	// Most pins follow a common pattern where the EXTINT value is the pin
+	// number modulo 16. However, there are a few exceptions, as you can see
+	// below.
+	extint := uint8(0)
+
+	switch p {
+	case PA08:
+		// Connected to NMI. This is not currently supported.
+		return ErrInvalidInputPin
+	case PB26:
+		extint = 12
+	case PB27:
+		extint = 13
+	case PB28:
+		extint = 14
+	case PB29:
+		extint = 15
+	default:
+		// All other pins follow a normal pattern.
+		extint = uint8(p) % 16
+	}
+
+	if callback == nil {
+		// Disable this pin interrupt (if it was enabled).
+		sam.EIC.INTENCLR.Set(1 << extint)
+		if pinCallbacks[extint] != nil {
+			pinCallbacks[extint] = nil
+		}
+		return nil
+	}
+
+	if pinCallbacks[extint] != nil {
+		// The pin was already configured.
+		// To properly re-configure a pin, unset it first and set a new
+		// configuration.
+		return ErrNoPinChangeChannel
+	}
+	pinCallbacks[extint] = callback
+	interruptPins[extint] = p
+
+	if (sam.EIC.CTRLA.Get() & 0x02) == 0 {
+		// EIC peripheral has not yet been initialized. Initialize it now.
+
+		// The EIC needs two clocks: CLK_EIC_APB and GCLK_EIC. CLK_EIC_APB is
+		// enabled by default, so doesn't have to be re-enabled. The other is
+		// required for detecting edges and must be enabled manually.
+		sam.GCLK.PCHCTRL[4].Set((sam.GCLK_PCHCTRL_GEN_GCLK0 << sam.GCLK_PCHCTRL_GEN_Pos) | sam.GCLK_PCHCTRL_CHEN)
+
+		// should not be necessary (CLKCTRL is not synchronized)
+		for sam.GCLK.SYNCBUSY.HasBits(sam.GCLK_SYNCBUSY_GENCTRL_GCLK0 << sam.GCLK_SYNCBUSY_GENCTRL_Pos) {
+		}
+	}
+
+	// CONFIG register is enable-protected, so disable EIC.
+	sam.EIC.CTRLA.Set(0)
+
+	// Configure this pin. Set the 4 bits of the EIC.CONFIGx register to the
+	// sense value (filter bit set to 0, sense bits set to the change value).
+	addr := &sam.EIC.CONFIG[0]
+	if extint >= 8 {
+		addr = &sam.EIC.CONFIG[1]
+	}
+	pos := (extint % 8) * 4 // bit position in register
+	addr.Set((addr.Get() &^ (0xf << pos)) | uint32(change)<<pos)
+
+	// Enable external interrupt for this pin.
+	sam.EIC.INTENSET.Set(1 << extint)
+
+	sam.EIC.CTRLA.Set(sam.EIC_CTRLA_ENABLE)
+	for sam.EIC.SYNCBUSY.HasBits(sam.EIC_SYNCBUSY_ENABLE) {
+	}
+
+	// Set the PMUXEN flag, while keeping the INEN and PULLEN flags (if they
+	// were set before). This avoids clearing the pin pull mode while
+	// configuring the pin interrupt.
+	p.setPinCfg(sam.PORT_GROUP_PINCFG_PMUXEN | (p.getPinCfg() & (sam.PORT_GROUP_PINCFG_INEN | sam.PORT_GROUP_PINCFG_PULLEN)))
+	if p&1 > 0 {
+		// odd pin, so save the even pins
+		val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXE_Msk
+		p.setPMux(val | (0 << sam.PORT_GROUP_PMUX_PMUXO_Pos))
+	} else {
+		// even pin, so save the odd pins
+		val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXO_Msk
+		p.setPMux(val | (0 << sam.PORT_GROUP_PMUX_PMUXE_Pos))
+	}
+
+	handleEICInterrupt := func(interrupt.Interrupt) {
+		flags := sam.EIC.INTFLAG.Get()
+		sam.EIC.INTFLAG.Set(flags)      // clear interrupt
+		for i := uint(0); i < 16; i++ { // there are 16 channels
+			if flags&(1<<i) != 0 {
+				pinCallbacks[i](interruptPins[i])
+			}
+		}
+	}
+	switch extint {
+	case 0:
+		interrupt.New(sam.IRQ_EIC_EXTINT_0, handleEICInterrupt).Enable()
+	case 1:
+		interrupt.New(sam.IRQ_EIC_EXTINT_1, handleEICInterrupt).Enable()
+	case 2:
+		interrupt.New(sam.IRQ_EIC_EXTINT_2, handleEICInterrupt).Enable()
+	case 3:
+		interrupt.New(sam.IRQ_EIC_EXTINT_3, handleEICInterrupt).Enable()
+	case 4:
+		interrupt.New(sam.IRQ_EIC_EXTINT_4, handleEICInterrupt).Enable()
+	case 5:
+		interrupt.New(sam.IRQ_EIC_EXTINT_5, handleEICInterrupt).Enable()
+	case 6:
+		interrupt.New(sam.IRQ_EIC_EXTINT_6, handleEICInterrupt).Enable()
+	case 7:
+		interrupt.New(sam.IRQ_EIC_EXTINT_7, handleEICInterrupt).Enable()
+	case 8:
+		interrupt.New(sam.IRQ_EIC_EXTINT_8, handleEICInterrupt).Enable()
+	case 9:
+		interrupt.New(sam.IRQ_EIC_EXTINT_9, handleEICInterrupt).Enable()
+	case 10:
+		interrupt.New(sam.IRQ_EIC_EXTINT_10, handleEICInterrupt).Enable()
+	case 11:
+		interrupt.New(sam.IRQ_EIC_EXTINT_11, handleEICInterrupt).Enable()
+	case 12:
+		interrupt.New(sam.IRQ_EIC_EXTINT_12, handleEICInterrupt).Enable()
+	case 13:
+		interrupt.New(sam.IRQ_EIC_EXTINT_13, handleEICInterrupt).Enable()
+	case 14:
+		interrupt.New(sam.IRQ_EIC_EXTINT_14, handleEICInterrupt).Enable()
+	case 15:
+		interrupt.New(sam.IRQ_EIC_EXTINT_15, handleEICInterrupt).Enable()
+	}
+
+	return nil
 }
 
 // Return the register and mask to enable a given GPIO pin. This can be used to
