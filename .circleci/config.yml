@@ -205,12 +205,20 @@ commands:
           name: "Test TinyGo"
           command: make test
       - run:
+          name: "Install fpm"
+          command: |
+            sudo apt-get install ruby ruby-dev
+            sudo gem install --no-document fpm
+      - run:
           name: "Build TinyGo release"
           command: |
-            make release -j3
+            make release deb -j3
             cp -p build/release.tar.gz /tmp/tinygo.linux-amd64.tar.gz
+            cp -p build/release.deb    /tmp/tinygo_amd64.deb
       - store_artifacts:
           path: /tmp/tinygo.linux-amd64.tar.gz
+      - store_artifacts:
+          path: /tmp/tinygo_amd64.deb
       - save_cache:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:

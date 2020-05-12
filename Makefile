@@ -310,7 +310,7 @@ endif
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/export
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/main
 
-release: tinygo gen-device wasi-libc
+build/release: tinygo gen-device wasi-libc
 	@mkdir -p build/release/tinygo/bin
 	@mkdir -p build/release/tinygo/lib/clang/include
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
@@ -345,4 +345,13 @@ release: tinygo gen-device wasi-libc
 	./build/tinygo build-library -target=armv6m-none-eabi  -o build/release/tinygo/pkg/armv6m-none-eabi/picolibc.a picolibc
 	./build/tinygo build-library -target=armv7m-none-eabi  -o build/release/tinygo/pkg/armv7m-none-eabi/picolibc.a picolibc
 	./build/tinygo build-library -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/picolibc.a picolibc
+
+release: build/release
 	tar -czf build/release.tar.gz -C build/release tinygo
+
+deb: build/release
+	@mkdir -p build/release-deb/usr/local/bin
+	@mkdir -p build/release-deb/usr/local/lib
+	cp -ar build/release/tinygo build/release-deb/usr/local/lib/tinygo
+	ln -sf ../lib/tinygo/bin/tinygo build/release-deb/usr/local/bin/tinygo
+	fpm -f -s dir -t deb -n tinygo -v $(shell grep "version = " version.go | awk '{print $$NF}') -m '@tinygo-org' --description='TinyGo is a Go compiler for small places.' --license='BSD 3-Clause' --url=https://tinygo.org/ --deb-changelog CHANGELOG.md -p build/release.deb -C ./build/release-deb
