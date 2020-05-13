@@ -661,6 +661,18 @@ func (v Value) checkAddressable() {
 	}
 }
 
+func (v Value) OverflowInt(x int64) bool {
+	panic("unimplemented: reflect.OverflowInt()")
+}
+
+func (v Value) OverflowUint(x uint64) bool {
+	panic("unimplemented: reflect.OverflowUint()")
+}
+
+func (v Value) Convert(t Type) Value {
+	panic("unimplemented: (reflect.Value).Convert()")
+}
+
 func MakeSlice(typ Type, len, cap int) Value {
 	panic("unimplemented: reflect.MakeSlice()")
 }
@@ -700,3 +712,33 @@ func (e *ValueError) Error() string {
 // Calls to this function are converted to LLVM intrinsic calls such as
 // llvm.memcpy.p0i8.p0i8.i32().
 func memcpy(dst, src unsafe.Pointer, size uintptr)
+
+// Copy copies the contents of src into dst until either
+// dst has been filled or src has been exhausted.
+func Copy(dst, src Value) int {
+	panic("unimplemented: reflect.Copy()")
+}
+
+// Append appends the values x to a slice s and returns the resulting slice.
+// As in Go, each x's value must be assignable to the slice's element type.
+func Append(s Value, x ...Value) Value {
+	panic("unimplemented: reflect.Append()")
+}
+
+func (v Value) SetMapIndex(key, elem Value) {
+	panic("unimplemented: (reflect.Value).SetMapIndex()")
+}
+
+// FieldByIndex returns the nested field corresponding to index.
+func (v Value) FieldByIndex(index []int) Value {
+	panic("unimplemented: (reflect.Value).FieldByIndex()")
+}
+
+func (v Value) FieldByName(name string) Value {
+	panic("unimplemented: (reflect.Value).FieldByName()")
+}
+
+// MakeMap creates a new map with the specified type.
+func MakeMap(typ Type) Value {
+	panic("unimplemented: reflect.MakeMap()")
+}
