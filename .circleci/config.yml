@@ -294,11 +294,6 @@ commands:
             tar -C /usr/local/opt -xf /tmp/tinygo.darwin-amd64.tar.gz
             ln -s /usr/local/opt/tinygo/bin/tinygo /usr/local/bin/tinygo
             tinygo version
-      - run:
-          name: "Download SiFive GNU toolchain"
-          command: |
-            curl -O https://static.dev.sifive.com/dev-tools/riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-apple-darwin.tar.gz
-            sudo tar -C /usr/local --strip-components=1 -xf riscv64-unknown-elf-gcc-8.2.0-2019.05.3-x86_64-apple-darwin.tar.gz
       - run: make smoketest AVR=0
       - save_cache:
           key: go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
