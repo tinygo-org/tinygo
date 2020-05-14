@@ -12,6 +12,7 @@ type PinMode uint8
 
 const (
 	PinInput PinMode = iota
+	PinInputPullup
 	PinOutput
 )
 
@@ -34,9 +35,33 @@ func (p Pin) Configure(config PinConfig) {
 	if config.Mode == PinOutput {
 		// set output bit
 		ddr.SetBits(mask)
+
+		// Note: if the pin was PinInputPullup before, it'll now be high.
+		// Otherwise it will be low.
 	} else {
 		// configure input: clear output bit
 		ddr.ClearBits(mask)
+
+		if config.Mode == PinInput {
+			// No pullup (floating).
+			// The transition may be one of the following:
+			//   output high -> input pullup -> input (safe: output high and input pullup are similar)
+			//   output low  -> input        -> input (safe: no extra transition)
+			port.ClearBits(mask)
+		} else {
+			// Pullup.
+			// The transition may be one of the following:
+			//   output high -> input pullup -> input pullup (safe: no extra transition)
+			//   output low  -> input        -> input pullup (possibly problematic)
+			// For the last transition (output low -> input -> input pullup),
+			// the transition may be problematic in some cases because there is
+			// an intermediate floating state (which may cause irratic
+			// interrupts, for example). If this is a problem, the application
+			// should set the pin high before configuring it as PinInputPullup.
+			// We can't do that here because setting it to high as an
+			// intermediate state may have other problems.
+			port.SetBits(mask)
+		}
 	}
 }
 
