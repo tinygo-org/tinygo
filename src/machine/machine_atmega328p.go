@@ -9,51 +9,15 @@ import (
 
 const irq_USART0_RX = avr.IRQ_USART_RX
 
-// Configure sets the pin to input or output.
-func (p Pin) Configure(config PinConfig) {
-	if config.Mode == PinOutput { // set output bit
-		switch p / 8 {
-		case 0: // port B
-			avr.DDRB.SetBits(1 << uint8(p))
-		case 1: // port C
-			avr.DDRC.SetBits(1 << uint8(p-8))
-		case 2: // port D
-			avr.DDRD.SetBits(1 << uint8(p-16))
-		}
-	} else { // configure input: clear output bit
-		switch p / 8 {
-		case 0: // port B
-			avr.DDRB.ClearBits(1 << uint8(p))
-		case 1: // port C
-			avr.DDRC.ClearBits(1 << uint8(p-8))
-		case 2: // port D
-			avr.DDRD.ClearBits(1 << uint8(p-16))
-		}
-	}
-}
-
-// Get returns the current value of a GPIO pin.
-func (p Pin) Get() bool {
-	var val uint8
-	switch p / 8 {
-	case 0: // port B
-		val = avr.PINB.Get() & (1 << uint8(p))
-	case 1: // port C
-		val = avr.PINC.Get() & (1 << uint8(p-8))
-	case 2: // port D
-		val = avr.PIND.Get() & (1 << uint8(p-16))
-	}
-	return val != 0
-}
-
+// getPortMask returns the PORTx register and mask for the pin.
 func (p Pin) getPortMask() (*volatile.Register8, uint8) {
-	switch p / 8 {
-	case 0: // port B
-		return avr.PORTB, 1 << uint8(p)
-	case 1:
-		return avr.PORTC, 1 << uint8(p-8)
-	default:
-		return avr.PORTD, 1 << uint8(p-16)
+	switch {
+	case p >= PB0 && p <= PB7: // port B
+		return avr.PORTB, 1 << uint8(p-portB)
+	case p >= PC0 && p <= PC7: // port C
+		return avr.PORTC, 1 << uint8(p-portC)
+	default: // port D
+		return avr.PORTD, 1 << uint8(p-portD)
 	}
 }
 
