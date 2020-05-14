@@ -96,53 +96,32 @@ const (
 	PL7 = portE + 7
 )
 
-// Configure sets the pin to input or output.
-func (p Pin) Configure(config PinConfig) {
-	register, _, mask := p.getRegisterPortMask()
-	if config.Mode == PinOutput { // set output bit
-		register.SetBits(mask)
-	} else { // configure input: clear output bit
-		register.ClearBits(mask)
-	}
-}
-
-// Get returns the current value of a GPIO pin.
-func (p Pin) Get() bool {
-	_, port, mask := p.getRegisterPortMask()
-	return (port.Get() & mask) > 0
-}
-
+// getPortMask returns the PORTx register and mask for the pin.
 func (p Pin) getPortMask() (*volatile.Register8, uint8) {
-	_, port, mask := p.getRegisterPortMask()
-	return port, mask
-}
-
-// getRegisterPortMask returns the register, port, and mask for the pin
-func (p Pin) getRegisterPortMask() (*volatile.Register8, *volatile.Register8, uint8) {
 	switch {
 	case p >= PA0 && p <= PA7:
-		return avr.DDRA, avr.PORTA, 1 << uint8(p-portA)
+		return avr.PORTA, 1 << uint8(p-portA)
 	case p >= PB0 && p <= PB7:
-		return avr.DDRB, avr.PORTB, 1 << uint8(p-portB)
+		return avr.PORTB, 1 << uint8(p-portB)
 	case p >= PC0 && p <= PC7:
-		return avr.DDRC, avr.PORTC, 1 << uint8(p-portC)
+		return avr.PORTC, 1 << uint8(p-portC)
 	case p >= PD0 && p <= PD7:
-		return avr.DDRD, avr.PORTD, 1 << uint8(p-portD)
+		return avr.PORTD, 1 << uint8(p-portD)
 	case p >= PE0 && p <= PE6:
-		return avr.DDRE, avr.PORTE, 1 << uint8(p-portE)
+		return avr.PORTE, 1 << uint8(p-portE)
 	case p >= PF0 && p <= PF7:
-		return avr.DDRF, avr.PORTF, 1 << uint8(p-portF)
+		return avr.PORTF, 1 << uint8(p-portF)
 	case p >= PG0 && p <= PG5:
-		return avr.DDRG, avr.PORTG, 1 << uint8(p-portG)
+		return avr.PORTG, 1 << uint8(p-portG)
 	case p >= PH0 && p <= PH6:
-		return avr.DDRH, avr.PORTH, 1 << uint8(p-portH)
+		return avr.PORTH, 1 << uint8(p-portH)
 	case p >= PJ0 && p <= PJ1:
-		return avr.DDRJ, avr.PORTJ, 1 << uint8(p-portJ)
+		return avr.PORTJ, 1 << uint8(p-portJ)
 	case p >= PK0 && p <= PK7:
-		return avr.DDRK, avr.PORTK, 1 << uint8(p-portK)
+		return avr.PORTK, 1 << uint8(p-portK)
 	case p >= PL0 && p <= PL7:
-		return avr.DDRL, avr.PORTL, 1 << uint8(p-portL)
+		return avr.PORTL, 1 << uint8(p-portL)
 	default:
-		return avr.DDRB, avr.PORTA, 255
+		return avr.PORTA, 255
 	}
 }
