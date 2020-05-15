@@ -94,3 +94,14 @@ func extalloc(size uintptr) unsafe.Pointer {
 
 //export free
 func extfree(ptr unsafe.Pointer)
+
+// TinyGo does not yet support any form of parallelism on an OS, so these can be
+// left empty.
+
+//go:linkname procPin sync/atomic.runtime_procPin
+func procPin() {
+}
+
+//go:linkname procUnpin sync/atomic.runtime_procUnpin
+func procUnpin() {
+}
