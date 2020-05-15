@@ -19,3 +19,19 @@ func Asm(asm string)
 // You can use {} in the asm string (which expands to a register) to set the
 // return value.
 func AsmFull(asm string, regs map[string]interface{}) uintptr
+
+// DisableInterrupts disables all interrupts, and returns the old interrupt
+// state.
+func DisableInterrupts() uintptr {
+	// Note: this can be optimized with a CSRRW instruction, which atomically
+	// swaps the value and returns the old value.
+	mask := MIE.Get()
+	MIE.Set(0)
+	return mask
+}
+
+// EnableInterrupts enables all interrupts again. The value passed in must be
+// the mask returned by DisableInterrupts.
+func EnableInterrupts(mask uintptr) {
+	MIE.Set(mask)
+}

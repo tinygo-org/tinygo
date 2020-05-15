@@ -1323,6 +1323,14 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.createVolatileLoad(instr)
 		case strings.HasPrefix(name, "runtime/volatile.Store"):
 			return b.createVolatileStore(instr)
+		case strings.HasPrefix(name, "sync/atomic."):
+			val, ok := b.createAtomicOp(instr)
+			if ok {
+				// This call could be lowered as an atomic operation.
+				return val, nil
+			}
+			// This call couldn't be lowered as an atomic operation, it's
+			// probably something else. Continue as usual.
 		case name == "runtime/interrupt.New":
 			return b.createInterruptGlobal(instr)
 		}

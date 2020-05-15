@@ -91,3 +91,14 @@ func ticks() timeUnit
 func abort() {
 	trap()
 }
+
+// TinyGo does not yet support any form of parallelism on WebAssembly, so these
+// can be left empty.
+
+//go:linkname procPin sync/atomic.runtime_procPin
+func procPin() {
+}
+
+//go:linkname procUnpin sync/atomic.runtime_procUnpin
+func procUnpin() {
+}
