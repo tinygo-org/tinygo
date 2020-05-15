@@ -156,7 +156,7 @@ func Test(pkgName string, options *compileopts.Options) error {
 }
 
 // Flash builds and flashes the built binary to the given serial port.
-func Flash(pkgName, port string, options *compileopts.Options) error {
+func Flash(pkgName, port string, pause int64, options *compileopts.Options) error {
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
@@ -209,7 +209,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 				return &commandError{"failed to reset port", tmppath, err}
 			}
 			// give the target MCU a chance to restart into bootloader
-			time.Sleep(3 * time.Second)
+			time.Sleep(time.Duration(pause) * time.Second)
 		}
 
 		// this flashing method copies the binary data to a Mass Storage Device (msd)
@@ -709,6 +709,7 @@ func main() {
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "", "flash port")
+	pause := flag.Int64("pause", 3, "pause in seconds after 1200 baud port reset")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
@@ -829,7 +830,7 @@ func main() {
 			os.Exit(1)
 		}
 		if command == "flash" {
-			err := Flash(flag.Arg(0), *port, options)
+			err := Flash(flag.Arg(0), *port, *pause, options)
 			handleCompilerError(err)
 		} else {
 			if !options.Debug {
