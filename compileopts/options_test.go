@@ -1,12 +1,19 @@
 package compileopts_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 )
 
 func TestVerifyOptions(t *testing.T) {
+
+	expectedGCError := errors.New(`invalid gc option 'incorrect': valid values are none, leaking, extalloc, conservative`)
+	expectedSchedulerError := errors.New(`invalid scheduler option 'incorrect': valid values are none, tasks, coroutines`)
+	expectedPrintSizeError := errors.New(`invalid size option 'incorrect': valid values are none, short, full`)
+	expectedPanicStrategyError := errors.New(`invalid panic option 'incorrect': valid values are print, trap`)
+
 	testCases := []struct {
 		name          string
 		opts          compileopts.Options
@@ -21,7 +28,7 @@ func TestVerifyOptions(t *testing.T) {
 			opts: compileopts.Options{
 				GC: "incorrect",
 			},
-			expectedError: compileopts.ErrGCInvalidOption,
+			expectedError: expectedGCError,
 		},
 		{
 			name: "GCOptionNone",
@@ -52,7 +59,7 @@ func TestVerifyOptions(t *testing.T) {
 			opts: compileopts.Options{
 				Scheduler: "incorrect",
 			},
-			expectedError: compileopts.ErrSchedulerInvalidOption,
+			expectedError: expectedSchedulerError,
 		},
 		{
 			name: "SchedulerOptionNone",
@@ -75,9 +82,9 @@ func TestVerifyOptions(t *testing.T) {
 		{
 			name: "InvalidPrintSizeOption",
 			opts: compileopts.Options{
-				PrintSizes: "invalid",
+				PrintSizes: "incorrect",
 			},
-			expectedError: compileopts.ErrPrintSizeInvalidOption,
+			expectedError: expectedPrintSizeError,
 		},
 		{
 			name: "PrintSizeOptionNone",
@@ -102,7 +109,7 @@ func TestVerifyOptions(t *testing.T) {
 			opts: compileopts.Options{
 				PanicStrategy: "invalid",
 			},
-			expectedError: compileopts.ErrPanicStrategyInvalidOption,
+			expectedError: expectedPanicStrategyError,
 		},
 		{
 			name: "PanicOptionPrint",
@@ -122,7 +129,9 @@ func TestVerifyOptions(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Verify()
 			if tc.expectedError != err {
-				t.Errorf("expected %v, got %v", tc.expectedError, err)
+				if tc.expectedError.Error() != err.Error() {
+					t.Errorf("expected %v, got %v", tc.expectedError, err)
+				}
 			}
 		})
 	}

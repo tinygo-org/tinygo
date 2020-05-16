@@ -12,21 +12,6 @@ var (
 	validPanicStrategyOptions = []string{"print", "trap"}
 )
 
-var (
-	// ErrGCInvalidOption is an error returned if gc option is not valid.
-	ErrGCInvalidOption = fmt.Errorf(`invalid gc option: valid values are %s`,
-		strings.Join(validGCOptions, ", "))
-	// ErrSchedulerInvalidOption is an error returned if scheduler option is not valid.
-	ErrSchedulerInvalidOption = fmt.Errorf(`invalid scheduler option: valid values are %s`,
-		strings.Join(validSchedulerOptions, ", "))
-	// ErrPrintSizeInvalidOption is an error returned if size option is not valid.
-	ErrPrintSizeInvalidOption = fmt.Errorf(`invalid size option: valid values are %s`,
-		strings.Join(validPrintSizeOptions, ", "))
-	// ErrPanicStrategyInvalidOption is an error returned if panic strategy option is not valid.
-	ErrPanicStrategyInvalidOption = fmt.Errorf(`invalid panic option: valid values are %s`,
-		strings.Join(validPanicStrategyOptions, ", "))
-)
-
 // Options contains extra options to give to the compiler. These options are
 // usually passed from the command line.
 type Options struct {
@@ -49,38 +34,41 @@ type Options struct {
 	Programmer    string
 }
 
-// Verify performs a validation on the given options, raising an error is options are not valid.
-// In particular:
-// ErrGCInvalidOption will be returned if gc option is not valid.
-// ErrSchedulerInvalidOption will be returned if scheduler option is not valid.
-// ErrPrintSizeInvalidOption will be rereturned if size option is not valid.
-// ErrPanicStrategyInvalidOption will be returned if panic strategy option is not valid
+// Verify performs a validation on the given options, raising an error if options are not valid.
 func (o *Options) Verify() error {
 	if o.GC != "" {
 		valid := isInArray(validGCOptions, o.GC)
 		if !valid {
-			return ErrGCInvalidOption
+			return fmt.Errorf(`invalid gc option '%s': valid values are %s`,
+				o.GC,
+				strings.Join(validGCOptions, ", "))
 		}
 	}
 
 	if o.Scheduler != "" {
 		valid := isInArray(validSchedulerOptions, o.Scheduler)
 		if !valid {
-			return ErrSchedulerInvalidOption
+			return fmt.Errorf(`invalid scheduler option '%s': valid values are %s`,
+				o.Scheduler,
+				strings.Join(validSchedulerOptions, ", "))
 		}
 	}
 
 	if o.PrintSizes != "" {
 		valid := isInArray(validPrintSizeOptions, o.PrintSizes)
 		if !valid {
-			return ErrPrintSizeInvalidOption
+			return fmt.Errorf(`invalid size option '%s': valid values are %s`,
+				o.PrintSizes,
+				strings.Join(validPrintSizeOptions, ", "))
 		}
 	}
 
 	if o.PanicStrategy != "" {
 		valid := isInArray(validPanicStrategyOptions, o.PanicStrategy)
 		if !valid {
-			return ErrPanicStrategyInvalidOption
+			return fmt.Errorf(`invalid panic option '%s': valid values are %s`,
+				o.PanicStrategy,
+				strings.Join(validPanicStrategyOptions, ", "))
 		}
 	}
 
