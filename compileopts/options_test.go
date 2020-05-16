@@ -107,7 +107,7 @@ func TestVerifyOptions(t *testing.T) {
 		{
 			name: "InvalidPanicOption",
 			opts: compileopts.Options{
-				PanicStrategy: "invalid",
+				PanicStrategy: "incorrect",
 			},
 			expectedError: expectedPanicStrategyError,
 		},
