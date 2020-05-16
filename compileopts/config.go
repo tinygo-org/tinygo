@@ -129,8 +129,8 @@ func (c *Config) NeedsStackObjects() bool {
 	}
 }
 
-// Scheduler returns the scheduler implementation. Valid values are "coroutines"
-// and "tasks".
+// Scheduler returns the scheduler implementation. Valid values are "none",
+//"coroutines" and "tasks".
 func (c *Config) Scheduler() string {
 	if c.Options.Scheduler != "" {
 		return c.Options.Scheduler

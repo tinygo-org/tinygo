@@ -699,7 +699,7 @@ func main() {
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, extalloc, conservative)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
-	scheduler := flag.String("scheduler", "", "which scheduler to use (coroutines, tasks)")
+	scheduler := flag.String("scheduler", "", "which scheduler to use (none, coroutines, tasks)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
@@ -759,12 +759,6 @@ func main() {
 		options.LDFlags = strings.Split(*ldFlags, " ")
 	}
 
-	if *panicStrategy != "print" && *panicStrategy != "trap" {
-		fmt.Fprintln(os.Stderr, "Panic strategy must be either print or trap.")
-		usage()
-		os.Exit(1)
-	}
-
 	var err error
 	if options.HeapSize, err = parseSize(*heapSize); err != nil {
 		fmt.Fprintln(os.Stderr, "Could not read heap size:", *heapSize)
@@ -773,6 +767,13 @@ func main() {
 	}
 
 	os.Setenv("CC", "clang -target="+*target)
+
+	err = options.Verify()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		usage()
+		os.Exit(1)
+	}
 
 	switch command {
 	case "build":
@@ -792,6 +793,7 @@ func main() {
 		if options.Target == "" && filepath.Ext(*outpath) == ".wasm" {
 			options.Target = "wasm"
 		}
+
 		err := Build(pkgName, *outpath, options)
 		handleCompilerError(err)
 	case "build-library":
