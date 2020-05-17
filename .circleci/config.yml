@@ -335,6 +335,7 @@ jobs:
     docker:
       - image: circleci/golang:1.14-buster
     steps:
+      - setup_remote_docker
       - test-linux:
           llvm: "10"
   assert-test-linux:
