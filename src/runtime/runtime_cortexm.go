@@ -4,8 +4,12 @@ package runtime
 
 import (
 	"device/arm"
+	"machine"
 	"unsafe"
 )
+
+const showFaultAddresses = false
+const verboseFaultMessage = false
 
 //go:extern _sbss
 var _sbss [0]byte
@@ -77,21 +81,57 @@ type interruptStack struct {
 //export handleHardFault
 func handleHardFault(sp *interruptStack) {
 	print("fatal error: ")
-	if uintptr(unsafe.Pointer(sp)) < 0x20000000 {
-		print("stack overflow")
+
+	if machine.CPUArchitecture == "armv7m" || machine.CPUArchitecture == "armv7em" || machine.CPUArchitecture == "armv8m" {
+		fault := arm.GetFaultStatus()
+		validSP := !fault.Bus().ImpreciseDataBusError()
+
+		if validSP && uintptr(unsafe.Pointer(sp)) < 0x20000000 {
+			print("stack overflow with")
+		} else if verboseFaultMessage {
+			fault.Describe()
+			if validSP || fault.Mem().ValidAddress() || fault.Bus().ValidAddress() {
+				print(" with")
+			}
+		} else {
+			print("hard fault with cfsr=", uintptr(fault))
+		}
+
+		if showFaultAddresses && fault.Mem().ValidAddress() {
+			print(" mmar=", uintptr(arm.SCB.MMAR.Get()))
+		}
+		if showFaultAddresses && fault.Bus().ValidAddress() {
+			print(" bfar=", uintptr(arm.SCB.BFAR.Get()))
+		}
+		if validSP {
+			// Only print the SP if it is valid. During certain faults it may
+			// not be.
+			print(" sp=", sp)
+
+			if uintptr(unsafe.Pointer(&sp.PC)) >= 0x20000000 {
+				// Only print the PC if it points into memory. It may not point into
+				// memory during a stack overflow, so check that first before
+				// accessing the stack.
+				print(" pc=", sp.PC)
+			}
+		}
+
 	} else {
-		// TODO: try to find the cause of the hard fault. Especially on
-		// Cortex-M3 and higher it is possible to find more detailed information
-		// in special status registers.
-		print("HardFault")
+		if uintptr(unsafe.Pointer(sp)) < 0x20000000 {
+			print("stack overflow")
+		} else {
+			print("HardFault")
+		}
+
+		print(" with sp=", sp)
+		if uintptr(unsafe.Pointer(&sp.PC)) >= 0x20000000 {
+			// Only print the PC if it points into memory.
+			// It may not point into memory during a stack overflow, so check that
+			// first before accessing the stack.
+			print(" pc=", sp.PC)
+		}
 	}
-	print(" with sp=", sp)
-	if uintptr(unsafe.Pointer(&sp.PC)) >= 0x20000000 {
-		// Only print the PC if it points into memory.
-		// It may not point into memory during a stack overflow, so check that
-		// first before accessing the stack.
-		print(" pc=", sp.PC)
-	}
+
 	println()
 	abort()
 }

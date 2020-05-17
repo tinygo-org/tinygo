@@ -229,7 +229,7 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 		return c.mod, nil, []error{err}
 	}
 
-	err = lprogram.Parse(c.TestConfig.CompileTestBinary)
+	err = lprogram.Parse(c.TestConfig.CompileTestBinary, c.Target)
 	if err != nil {
 		return c.mod, nil, []error{err}
 	}

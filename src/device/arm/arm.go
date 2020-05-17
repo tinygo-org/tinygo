@@ -89,15 +89,23 @@ const (
 //
 // SCB_Type provides the definitions for the System Control Block Registers.
 type SCB_Type struct {
-	CPUID volatile.Register32    // CPUID Base Register
-	ICSR  volatile.Register32    // Interrupt Control and State Register
-	VTOR  volatile.Register32    // Vector Table Offset Register
-	AIRCR volatile.Register32    // Application Interrupt and Reset Control Register
-	SCR   volatile.Register32    // System Control Register
-	CCR   volatile.Register32    // Configuration Control Register
-	_     volatile.Register32    // RESERVED1;
-	SHP   [2]volatile.Register32 // System Handlers Priority Registers. [0] is RESERVED
-	SHCSR volatile.Register32    // System Handler Control and State Register
+	CPUID volatile.Register32    // 00 CPUID Base Register
+	ICSR  volatile.Register32    // 04 Interrupt Control and State Register
+	VTOR  volatile.Register32    // 08 Vector Table Offset Register
+	AIRCR volatile.Register32    // 0C Application Interrupt and Reset Control Register
+	SCR   volatile.Register32    // 10 System Control Register
+	CCR   volatile.Register32    // 14 Configuration Control Register
+	_     volatile.Register32    // 18 RESERVED on Cortex-M0
+	SHP   [2]volatile.Register32 // 1C, 20 System Handlers Priority Registers. [0] is RESERVED
+	SHCSR volatile.Register32    // 24 System Handler Control and State Register (M3 only)
+	CFSR  volatile.Register32    // 28 Configurable Fault Status Register (M3 only)
+	MMSR  volatile.Register32    // 28 MemManage Fault Status Register (M3 only)
+	BFSR  volatile.Register32    // 29 BusFault Status Register (M3 only)
+	UFSR  volatile.Register32    // 2A UsageFault Status Register (M3 only)
+	HFSR  volatile.Register32    // 2C HardFault Status Register (M3 only)
+	MMAR  volatile.Register32    // 34 MemManage Fault Address Register (M3 only)
+	BFAR  volatile.Register32    // 38 BusFault Address Register (M3 only)
+	AFSR  volatile.Register32    // 3C Auxiliary Fault Status Register (M3 only)
 }
 
 var SCB = (*SCB_Type)(unsafe.Pointer(uintptr(SCB_BASE)))
