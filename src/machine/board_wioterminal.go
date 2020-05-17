@@ -29,12 +29,25 @@ const (
 
 // Analog pins
 const (
-	A0 = PA02 // ADC/AIN[0]
-	A1 = PA05 // ADC/AIN[2]
-	A2 = PB08 // ADC/AIN[3]
-	A3 = PB09 // ADC/AIN[4]
-	A4 = PA04 // ADC/AIN[5]
-	A5 = PA06 // ADC/AIN[10]
+	A0 = PB08 // ADC/AIN[0]
+	A1 = PB09 // ADC/AIN[2]
+	A2 = PA07 // ADC/AIN[3]
+	A3 = PB04 // ADC/AIN[4]
+	A4 = PB05 // ADC/AIN[5]
+	A5 = PB06 // ADC/AIN[10]
+	A6 = PB04 // ADC/AIN[10]
+	A7 = PB07 // ADC/AIN[10]
+	A8 = PA06 // ADC/AIN[10]
+
+	ADC0 = A0
+	ADC1 = A1
+	ADC2 = A2
+	ADC3 = A3
+	ADC4 = A4
+	ADC5 = A5
+	ADC6 = A6
+	ADC7 = A7
+	ADC8 = A8
 )
 
 const (
