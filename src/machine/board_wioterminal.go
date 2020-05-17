@@ -111,11 +111,11 @@ var (
 
 // USB CDC identifiers
 const (
-	usb_STRING_PRODUCT      = "Adafruit Feather M4"
-	usb_STRING_MANUFACTURER = "Adafruit"
+	usb_STRING_PRODUCT      = "Seeed Wio Terminal"
+	usb_STRING_MANUFACTURER = "Seeed"
 )
 
 var (
-	usb_VID uint16 = 0x239A
-	usb_PID uint16 = 0x8022
+	usb_VID uint16 = 0x2886
+	usb_PID uint16 = 0x802D
 )
