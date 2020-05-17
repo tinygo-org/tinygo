@@ -1,4 +1,4 @@
-// +build sam,atsamd51,feather_m4
+// +build sam,atsamd51,wioterminal
 
 package machine
 
@@ -38,7 +38,7 @@ const (
 )
 
 const (
-	LED = D13
+	LED = PA15
 )
 
 // UART0 aka USBCDC pins

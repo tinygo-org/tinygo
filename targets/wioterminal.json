@@ -1,8 +1,8 @@
 {
-    "inherits": ["atsamd51j19a"],
-    "build-tags": ["sam", "atsamd51j19a", "feather_m4"],
+    "inherits": ["atsamd51p19a"],
+    "build-tags": ["sam", "atsamd51p19a", "wioterminal"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "msd-volume-name": "FEATHERBOOT",
+    "msd-volume-name": "Arduino",
     "msd-firmware-name": "firmware.uf2"
 }
