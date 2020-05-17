@@ -37,6 +37,14 @@ commands:
             sudo tar -C /usr/local -xf node-v10.15.1-linux-x64.tar.xz
             sudo ln -s /usr/local/node-v10.15.1-linux-x64/bin/node /usr/bin/node
             rm node-v10.15.1-linux-x64.tar.xz
+  install-chrome:
+    steps:
+      - run:
+          name: "Install Chrome"
+          command: |
+            wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+            sudo apt install ./google-chrome-stable_current_amd64.deb
+            rm ./google-chrome-stable_current_amd64.deb
   llvm-source-linux:
     steps:
       - restore_cache:
@@ -71,6 +79,7 @@ commands:
       - apt-dependencies:
           llvm: "<<parameters.llvm>>"
       - install-node
+      - install-chrome
       - restore_cache:
           keys:
             - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
@@ -88,7 +97,7 @@ commands:
       - run: go test -v -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./interp ./transform .
       - run: make gen-device -j4
       - run: make smoketest
-      - run: make wasmtest-docker-headless
+      - run: make wasmtest
       - save_cache:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
@@ -335,7 +344,6 @@ jobs:
     docker:
       - image: circleci/golang:1.14-buster
     steps:
-      - setup_remote_docker
       - test-linux:
           llvm: "10"
   assert-test-linux:
