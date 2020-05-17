@@ -1,3 +1,5 @@
+// +build go1.12
+
 package wasm
 
 import (
@@ -17,17 +19,25 @@ func TestEvent(t *testing.T) {
 	ctx, cancel := chromectx(5 * time.Second)
 	defer cancel()
 
+	var log1, log2 string
 	err = chromedp.Run(ctx,
 		chromedp.Navigate("http://localhost:8826/run?file=event_pgm.wasm"),
+		chromedp.WaitVisible("#log"),
+		chromedp.Sleep(time.Second),
+		chromedp.InnerHTML("#log", &log1),
 		waitLog(`1
 4`),
 		chromedp.Click("#testbtn"),
+		chromedp.Sleep(time.Second),
+		chromedp.InnerHTML("#log", &log2),
 		waitLog(`1
 4
 2
 3
 true`),
 	)
+	t.Logf("log1: %s", log1)
+	t.Logf("log2: %s", log2)
 	if err != nil {
 		t.Fatal(err)
 	}
