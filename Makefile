@@ -310,6 +310,11 @@ endif
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/export
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/main
 
+wasmtest:
+	$(GO) test ./tests/wasm
+wasmtest-docker-headless:
+	$(GO) test ./tests/wasm -docker-headless
+
 build/release: tinygo gen-device wasi-libc
 	@mkdir -p build/release/tinygo/bin
 	@mkdir -p build/release/tinygo/lib/clang/include
