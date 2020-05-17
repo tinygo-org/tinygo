@@ -73,6 +73,9 @@ const (
 	WIO_5S_RIGHT = SWITCH_Z
 	WIO_5S_DOWN  = SWITCH_B
 	WIO_5S_PRESS = SWITCH_U
+
+	OUTPUT_CTR_5V  = PC14
+	OUTPUT_CTR_3V3 = PC15
 )
 
 // UART0 aka USBCDC pins
@@ -95,15 +98,15 @@ const (
 
 // I2C pins
 const (
-	SDA_PIN = D22 // SDA: SERCOM2/PAD[0]
-	SCL_PIN = D21 // SCL: SERCOM2/PAD[1]
+	SDA_PIN = D21 // SDA: SERCOM4/PAD[0]
+	SCL_PIN = D22 // SCL: SERCOM4/PAD[1]
 )
 
 // I2C on the Feather M4.
 var (
 	I2C0 = I2C{
-		Bus:    sam.SERCOM2_I2CM,
-		SERCOM: 2,
+		Bus:    sam.SERCOM4_I2CM,
+		SERCOM: 4,
 	}
 )
 
