@@ -37,10 +37,6 @@ func (p Pin) Low() {
 	p.Set(false)
 }
 
-type PWM struct {
-	Pin Pin
-}
-
 type ADC struct {
 	Pin Pin
 }

@@ -341,8 +341,6 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m4          examples/pwm
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=pyportal            examples/pwm
-	@$(MD5SUM) test.hex
 ifneq ($(STM32), 0)
 	$(TINYGO) build -size short -o test.hex -target=bluepill            examples/blinky1
 	@$(MD5SUM) test.hex

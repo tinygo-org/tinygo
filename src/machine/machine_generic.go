@@ -84,24 +84,6 @@ func (adc ADC) Get() uint16 {
 //export __tinygo_adc_read
 func adcRead(pin Pin) uint16
 
-// InitPWM enables support for PWM peripherals.
-func InitPWM() {
-	// Nothing to do here.
-}
-
-// Configure configures a PWM pin for output.
-func (pwm PWM) Configure() error {
-	return nil
-}
-
-// Set turns on the duty cycle for a PWM pin using the provided value.
-func (pwm PWM) Set(value uint16) {
-	pwmSet(pwm.Pin, value)
-}
-
-//export __tinygo_pwm_set
-func pwmSet(pin Pin, value uint16)
-
 // I2C is a generic implementation of the Inter-IC communication protocol.
 type I2C struct {
 	Bus uint8

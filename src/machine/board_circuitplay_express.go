@@ -25,8 +25,8 @@ const (
 
 // Analog Pins
 const (
-	A0  = PA02 // PWM available, also ADC/AIN[0]
-	A1  = PA05 // ADC/AIN[5]
+	A0  = PA02 // ADC/AIN[0]
+	A1  = PA05 // PWM available, also ADC/AIN[5]
 	A2  = PA06 // PWM available, also ADC/AIN[6]
 	A3  = PA07 // PWM available, also ADC/AIN[7]
 	A4  = PB03 // PORTB
