@@ -632,7 +632,7 @@ func getDefaultPort() (port string, err error) {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "TinyGo is a Go compiler for small places.")
-	fmt.Fprintln(os.Stderr, "version:", version)
+	fmt.Fprintln(os.Stderr, "version:", goenv.Version)
 	fmt.Fprintf(os.Stderr, "usage: %s command [-printir] [-target=<target>] -o <output> <input>\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "\ncommands:")
 	fmt.Fprintln(os.Stderr, "  build: compile packages and dependencies")
@@ -900,7 +900,7 @@ func main() {
 		if s, err := goenv.GorootVersionString(goenv.Get("GOROOT")); err == nil {
 			goversion = s
 		}
-		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
+		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", goenv.Version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
 	case "env":
 		if flag.NArg() == 0 {
 			// Show all environment variables.
