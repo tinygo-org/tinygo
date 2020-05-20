@@ -35,7 +35,7 @@ const (
 	A3 = PB04 // ADC/AIN[4]
 	A4 = PB05 // ADC/AIN[5]
 	A5 = PB06 // ADC/AIN[10]
-	A6 = PB04 // ADC/AIN[10]
+	A6 = PA04 // ADC/AIN[10]
 	A7 = PB07 // ADC/AIN[10]
 	A8 = PA06 // ADC/AIN[10]
 
@@ -74,6 +74,8 @@ const (
 	WIO_5S_DOWN  = SWITCH_B
 	WIO_5S_PRESS = SWITCH_U
 
+	BUZZER_CTR = PD11
+
 	OUTPUT_CTR_5V  = PC14
 	OUTPUT_CTR_3V3 = PC15
 
@@ -90,6 +92,8 @@ const (
 	LCD_YU = PC11
 	LCD_XR = PC12
 	LCD_YD = PC13
+
+	WIO_LIGHT = PD01
 )
 
 // UART0 aka USBCDC pins
