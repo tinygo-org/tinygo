@@ -31,6 +31,7 @@ type Program struct {
 	Dir          string // current working directory (for error reporting)
 	TINYGOROOT   string // root of the TinyGo installation or root of the source code
 	CFlags       []string
+	LDFlags      []string
 	ClangHeaders string
 }
 
@@ -425,11 +426,12 @@ func (p *Package) parseFiles(includeTests bool) ([]*ast.File, error) {
 		if p.ClangHeaders != "" {
 			cflags = append(cflags, "-Xclang", "-internal-isystem", "-Xclang", p.ClangHeaders)
 		}
-		generated, errs := cgo.Process(files, p.Program.Dir, p.fset, cflags)
+		generated, ldflags, errs := cgo.Process(files, p.Program.Dir, p.fset, cflags)
 		if errs != nil {
 			fileErrs = append(fileErrs, errs...)
 		}
 		files = append(files, generated)
+		p.LDFlags = append(p.LDFlags, ldflags...)
 	}
 	if len(fileErrs) != 0 {
 		return nil, Errors{p, fileErrs}

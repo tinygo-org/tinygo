@@ -20,10 +20,10 @@ import (
 type common struct {
 	output io.Writer
 
-	failed     bool   // Test or benchmark has failed.
-	skipped    bool   // Test of benchmark has been skipped.
-	finished   bool   // Test function has completed.
-	name       string // Name of test or benchmark.
+	failed   bool   // Test or benchmark has failed.
+	skipped  bool   // Test of benchmark has been skipped.
+	finished bool   // Test function has completed.
+	name     string // Name of test or benchmark.
 }
 
 // TB is the interface common to T and B.
