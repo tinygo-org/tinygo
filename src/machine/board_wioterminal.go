@@ -76,6 +76,20 @@ const (
 
 	OUTPUT_CTR_5V  = PC14
 	OUTPUT_CTR_3V3 = PC15
+
+	LCD_MISO = PB18
+	LCD_MOSI = PB19
+	LCD_SCK  = PB20
+	LCD_CS   = PB21
+
+	LCD_BACKLIGHT_CTR = PC05
+	LCD_DC            = PC06
+	LCD_RESET         = PC07
+
+	LCD_XL = PC10
+	LCD_YU = PC11
+	LCD_XR = PC12
+	LCD_YD = PC13
 )
 
 // UART0 aka USBCDC pins
@@ -112,16 +126,21 @@ var (
 
 // SPI pins
 const (
-	SPI0_SCK_PIN  = D25 // SCK: SERCOM1/PAD[1]
-	SPI0_MOSI_PIN = D24 // MOSI: SERCOM1/PAD[3]
-	SPI0_MISO_PIN = D23 // MISO: SERCOM1/PAD[2]
+	SPI0_SCK_PIN  = PB03 // SCK: SERCOM5/PAD[1]
+	SPI0_MOSI_PIN = PB02 // MOSI: SERCOM5/PAD[0]
+	SPI0_MISO_PIN = PB00 // MISO: SERCOM5/PAD[2]
 )
 
 // SPI on the Feather M4.
 var (
 	SPI0 = SPI{
-		Bus:    sam.SERCOM1_SPIM,
-		SERCOM: 1,
+		Bus:    sam.SERCOM5_SPIM,
+		SERCOM: 5,
+	}
+
+	SPI3 = SPI{
+		Bus:    sam.SERCOM7_SPIM,
+		SERCOM: 7,
 	}
 )
 
