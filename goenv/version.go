@@ -10,6 +10,10 @@ import (
 	"strings"
 )
 
+// Version of TinyGo.
+// Update this value before release of new version of software.
+const Version = "0.14.0-dev"
+
 // GetGorootVersion returns the major and minor version for a given GOROOT path.
 // If the goroot cannot be determined, (0, 0) is returned.
 func GetGorootVersion(goroot string) (major, minor int, err error) {
