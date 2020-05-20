@@ -103,7 +103,7 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 // violation. Eventually, this Compile function should only compile a single
 // package and not the whole program, and loading of the program (including CGo
 // processing) should be moved outside the compiler package.
-func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) (llvm.Module, []string, []error) {
+func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) (mod llvm.Module, extrafiles []string, extraldflags []string, errors []error) {
 	c := &compilerContext{
 		Config:     config,
 		difiles:    make(map[string]llvm.Metadata),
@@ -148,7 +148,7 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 
 	wd, err := os.Getwd()
 	if err != nil {
-		return c.mod, nil, []error{err}
+		return c.mod, nil, nil, []error{err}
 	}
 	lprogram := &loader.Program{
 		Build: &build.Context{
@@ -211,14 +211,14 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	if strings.HasSuffix(pkgName, ".go") {
 		_, err = lprogram.ImportFile(pkgName)
 		if err != nil {
-			return c.mod, nil, []error{err}
+			return c.mod, nil, nil, []error{err}
 		}
 	} else {
 		_, err = lprogram.Import(pkgName, wd, token.Position{
 			Filename: "build command-line-arguments",
 		})
 		if err != nil {
-			return c.mod, nil, []error{err}
+			return c.mod, nil, nil, []error{err}
 		}
 	}
 
@@ -226,12 +226,12 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 		Filename: "build default import",
 	})
 	if err != nil {
-		return c.mod, nil, []error{err}
+		return c.mod, nil, nil, []error{err}
 	}
 
 	err = lprogram.Parse(c.TestConfig.CompileTestBinary)
 	if err != nil {
-		return c.mod, nil, []error{err}
+		return c.mod, nil, nil, []error{err}
 	}
 
 	c.ir = ir.NewProgram(lprogram, pkgName)
@@ -239,7 +239,7 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	// Run a simple dead code elimination pass.
 	err = c.ir.SimpleDCE()
 	if err != nil {
-		return c.mod, nil, []error{err}
+		return c.mod, nil, nil, []error{err}
 	}
 
 	// Initialize debug information.
@@ -383,7 +383,7 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 		}
 	}
 
-	return c.mod, extraFiles, c.diagnostics
+	return c.mod, extraFiles, lprogram.LDFlags, c.diagnostics
 }
 
 // getLLVMRuntimeType obtains a named type from the runtime package and returns
