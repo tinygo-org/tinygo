@@ -90,7 +90,8 @@ func InitPWM() {
 }
 
 // Configure configures a PWM pin for output.
-func (pwm PWM) Configure() {
+func (pwm PWM) Configure() error {
+	return nil
 }
 
 // Set turns on the duty cycle for a PWM pin using the provided value.

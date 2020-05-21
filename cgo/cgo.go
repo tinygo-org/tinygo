@@ -41,6 +41,7 @@ type cgoPackage struct {
 	elaboratedTypes map[string]*elaboratedTypeInfo
 	enums           map[string]enumInfo
 	anonStructNum   int
+	ldflags         []string
 }
 
 // constantInfo stores some information about a CGo constant found by libclang
@@ -156,7 +157,7 @@ typedef unsigned long long  _Cgo_ulonglong;
 // newly created *ast.File that should be added to the list of to-be-parsed
 // files. If there is one or more error, it returns these in the []error slice
 // but still modifies the AST.
-func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string) (*ast.File, []error) {
+func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string) (*ast.File, []string, []error) {
 	p := &cgoPackage{
 		dir:             dir,
 		fset:            fset,
@@ -183,7 +184,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Find the absolute path for this package.
 	packagePath, err := filepath.Abs(fset.File(files[0].Pos()).Name())
 	if err != nil {
-		return nil, []error{
+		return nil, nil, []error{
 			scanner.Error{
 				Pos: fset.Position(files[0].Pos()),
 				Msg: "cgo: cannot find absolute path: " + err.Error(), // TODO: wrap this error
@@ -359,6 +360,19 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 					}
 					makePathsAbsolute(flags, packagePath)
 					cflags = append(cflags, flags...)
+				case "LDFLAGS":
+					flags, err := shlex.Split(value)
+					if err != nil {
+						// TODO: find the exact location where the error happened.
+						p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon+1], "failed to parse flags in #cgo line: "+err.Error())
+						continue
+					}
+					if err := checkLinkerFlags(name, flags); err != nil {
+						p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon+1], err.Error())
+						continue
+					}
+					makePathsAbsolute(flags, packagePath)
+					p.ldflags = append(p.ldflags, flags...)
 				default:
 					startPos := strings.LastIndex(line[4:colon], name) + 4
 					p.addErrorAfter(comment.Slash, comment.Text[:lineStart+startPos], "invalid #cgo line: "+name)
@@ -412,7 +426,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
-	return p.generated, p.errors
+	return p.generated, p.ldflags, p.errors
 }
 
 // makePathsAbsolute converts some common path compiler flags (-I, -L) from

@@ -58,6 +58,7 @@ func resume() {
 	go func() {
 		handleEvent()
 	}()
+	scheduler()
 }
 
 //export go_scheduler

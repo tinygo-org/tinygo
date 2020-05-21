@@ -21,6 +21,13 @@ package main
 #if defined(NOTDEFINED)
 #warning flag must not be defined
 #endif
+
+// Check Compiler flags
+#cgo LDFLAGS: -lc
+
+// This flag is not valid ldflags
+#cgo LDFLAGS: -does-not-exists
+
 */
 import "C"
 
