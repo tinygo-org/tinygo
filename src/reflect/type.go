@@ -479,6 +479,9 @@ type StructField struct {
 // A StructTag is the tag string in a struct field.
 type StructTag string
 
+// TODO: it would be feasible to do the key/value splitting at compile time,
+// avoiding the code size cost of doing it at runtime
+
 // Get returns the value associated with key in the tag string.
 func (tag StructTag) Get(key string) string {
 	v, _ := tag.Lookup(key)
