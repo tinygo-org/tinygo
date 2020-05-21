@@ -14,8 +14,6 @@ type timeUnit uint32
 
 var currentTime timeUnit
 
-const tickMicros = 1024 * 16384
-
 // Watchdog timer periods. These can be off by a large margin (hence the jump
 // between 64ms and 125ms which is not an exact double), so don't rely on this
 // for accurate time keeping.
@@ -70,6 +68,16 @@ func putchar(c byte) {
 }
 
 const asyncScheduler = false
+
+const tickNanos = 1024 * 16384 // roughly 16ms in nanoseconds
+
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	return int64(ticks) * tickNanos
+}
+
+func nanosecondsToTicks(ns int64) timeUnit {
+	return timeUnit(ns / tickNanos)
+}
 
 // Sleep this number of ticks of 16ms.
 //

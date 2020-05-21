@@ -12,8 +12,6 @@ import (
 
 type timeUnit int64
 
-const tickMicros = 1024 * 32
-
 //go:linkname systemInit SystemInit
 func systemInit()
 
@@ -64,7 +62,7 @@ func sleepTicks(d timeUnit) {
 	for d != 0 {
 		ticks()                       // update timestamp
 		ticks := uint32(d) & 0x7fffff // 23 bits (to be on the safe side)
-		rtc_sleep(ticks)              // TODO: not accurate (must be d / 30.5175...)
+		rtc_sleep(ticks)
 		d -= timeUnit(ticks)
 	}
 }
@@ -73,6 +71,22 @@ var (
 	timestamp      timeUnit // nanoseconds since boottime
 	rtcLastCounter uint32   // 24 bits ticks
 )
+
+// ticksToNanoseconds converts RTC ticks (at 32768Hz) to nanoseconds.
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	// The following calculation is actually the following, but with both sides
+	// reduced to reduce the risk of overflow:
+	//     ticks * 1e9 / 32768
+	return int64(ticks) * 1953125 / 64
+}
+
+// nanosecondsToTicks converts nanoseconds to RTC ticks (running at 32768Hz).
+func nanosecondsToTicks(ns int64) timeUnit {
+	// The following calculation is actually the following, but with both sides
+	// reduced to reduce the risk of overflow:
+	//     ns * 32768 / 1e9
+	return timeUnit(ns * 64 / 1953125)
+}
 
 // Monotonically increasing numer of ticks since start.
 //
@@ -83,7 +97,7 @@ func ticks() timeUnit {
 	rtcCounter := uint32(nrf.RTC1.COUNTER.Get())
 	offset := (rtcCounter - rtcLastCounter) & 0xffffff // change since last measurement
 	rtcLastCounter = rtcCounter
-	timestamp += timeUnit(offset) // TODO: not precise
+	timestamp += timeUnit(offset)
 	return timestamp
 }
 

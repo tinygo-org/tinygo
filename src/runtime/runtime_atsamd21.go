@@ -231,9 +231,6 @@ func waitForSync() {
 	}
 }
 
-// treat all ticks params coming from runtime as being in microseconds
-const tickMicros = 1000
-
 var (
 	timestamp        timeUnit // ticks since boottime
 	timerLastCounter uint64
@@ -242,6 +239,22 @@ var (
 var timerWakeup volatile.Register8
 
 const asyncScheduler = false
+
+// ticksToNanoseconds converts RTC ticks (at 32768Hz) to nanoseconds.
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	// The following calculation is actually the following, but with both sides
+	// reduced to reduce the risk of overflow:
+	//     ticks * 1e9 / 32768
+	return int64(ticks) * 1953125 / 64
+}
+
+// nanosecondsToTicks converts nanoseconds to RTC ticks (running at 32768Hz).
+func nanosecondsToTicks(ns int64) timeUnit {
+	// The following calculation is actually the following, but with both sides
+	// reduced to reduce the risk of overflow:
+	//     ns * 32768 / 1e9
+	return timeUnit(ns * 64 / 1953125)
+}
 
 // sleepTicks should sleep for d number of microseconds.
 func sleepTicks(d timeUnit) {
@@ -259,22 +272,22 @@ func ticks() timeUnit {
 	sam.RTC_MODE0.READREQ.Set(sam.RTC_MODE0_READREQ_RREQ)
 	waitForSync()
 
-	rtcCounter := (uint64(sam.RTC_MODE0.COUNT.Get()) * 305) / 10 // each counter tick == 30.5us
-	offset := (rtcCounter - timerLastCounter)                    // change since last measurement
+	rtcCounter := uint64(sam.RTC_MODE0.COUNT.Get()) // each counter tick == 30.5us
+	offset := (rtcCounter - timerLastCounter)       // change since last measurement
 	timerLastCounter = rtcCounter
-	timestamp += timeUnit(offset) // TODO: not precise
+	timestamp += timeUnit(offset)
 	return timestamp
 }
 
 // ticks are in microseconds
 func timerSleep(ticks uint32) {
 	timerWakeup.Set(0)
-	if ticks < 214 {
-		// due to around 183us delay waiting for the register value to sync, the minimum sleep value
-		// for the SAMD21 is 214us.
+	if ticks < 7 {
+		// Due to around 6 clock ticks delay waiting for the register value to
+		// sync, the minimum sleep value for the SAMD21 is 214us.
 		// For related info, see:
 		// https://community.atmel.com/comment/2507091#comment-2507091
-		ticks = 214
+		ticks = 7
 	}
 
 	// request read of count
@@ -283,7 +296,7 @@ func timerSleep(ticks uint32) {
 
 	// set compare value
 	cnt := sam.RTC_MODE0.COUNT.Get()
-	sam.RTC_MODE0.COMP0.Set(uint32(cnt) + (ticks * 10 / 305)) // each counter tick == 30.5us
+	sam.RTC_MODE0.COMP0.Set(uint32(cnt) + ticks)
 	waitForSync()
 
 	// enable IRQ for CMP0 compare
