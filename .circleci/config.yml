@@ -1,6 +1,4 @@
 version: 2.1
-orbs:
-  webhook: eddiewebb/webhook@0.0.4
 
 commands:
   submodules:
@@ -221,8 +219,6 @@ commands:
           path: /tmp/tinygo.linux-amd64.tar.gz
       - store_artifacts:
           path: /tmp/tinygo_amd64.deb
-      - webhook/notify:
-          endpoint: "${WEBHOOK_ENDPOINT}"
       - save_cache:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
