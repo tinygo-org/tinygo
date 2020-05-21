@@ -527,13 +527,11 @@ func (tag StructTag) Lookup(key string) (value string, ok bool) {
 		tag = tag[i+1:]
 
 		if key == name {
-			// TODO strconv causes import cycle
-			//value, err := strconv.Unquote(qvalue)
-			//if err != nil {
-			//	break
-			//}
-			//return value, true
-			return qvalue, true
+			value, err := Unquote(qvalue)
+			if err != nil {
+				break
+			}
+			return value, true
 		}
 	}
 	return "", false
