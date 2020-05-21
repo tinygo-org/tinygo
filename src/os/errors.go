@@ -8,6 +8,13 @@ var (
 	ErrInvalid    = errors.New("invalid argument")
 	ErrPermission = errors.New("permission denied")
 	ErrClosed     = errors.New("file already closed")
+
+	// Portable analogs of some common system call errors.
+	// Note that these are exported for use in the Filesystem interface.
+	ErrUnsupported    = errors.New("operation not supported")
+	ErrNotImplemented = errors.New("operation not implemented")
+	ErrNotExist       = errors.New("file not found")
+	ErrExist          = errors.New("file exists")
 )
 
 func IsPermission(err error) bool {

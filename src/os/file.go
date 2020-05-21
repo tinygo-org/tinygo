@@ -6,17 +6,7 @@
 package os
 
 import (
-	"errors"
 	"syscall"
-)
-
-// Portable analogs of some common system call errors.
-// Note that these are exported for use in the Filesystem interface.
-var (
-	ErrUnsupported    = errors.New("operation not supported")
-	ErrNotImplemented = errors.New("operation not implemented")
-	ErrNotExist       = errors.New("file not found")
-	ErrExist          = errors.New("file exists")
 )
 
 // Mkdir creates a directory. If the operation fails, it will return an error of
