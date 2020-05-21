@@ -26,8 +26,6 @@ func clock_gettime(clk_id int32, ts *timespec)
 
 type timeUnit int64
 
-const tickMicros = 1
-
 // Note: tv_sec and tv_nsec vary in size by platform. They are 32-bit on 32-bit
 // systems and 64-bit on 64-bit systems (at least on macOS/Linux), so we can
 // simply use the 'int' type which does the same.
@@ -57,7 +55,18 @@ func putchar(c byte) {
 
 const asyncScheduler = false
 
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	// The OS API works in nanoseconds so no conversion necessary.
+	return int64(ticks)
+}
+
+func nanosecondsToTicks(ns int64) timeUnit {
+	// The OS API works in nanoseconds so no conversion necessary.
+	return timeUnit(ns)
+}
+
 func sleepTicks(d timeUnit) {
+	// timeUnit is in nanoseconds, so need to convert to microseconds here.
 	usleep(uint(d) / 1000)
 }
 

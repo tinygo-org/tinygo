@@ -53,8 +53,6 @@ func initCLK() {
 	}
 }
 
-const tickMicros = 1000
-
 var (
 	timestamp        timeUnit // microseconds since boottime
 	timerLastCounter uint64
@@ -108,6 +106,14 @@ func initTIM() {
 }
 
 const asyncScheduler = false
+
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	return int64(ticks) * 1000
+}
+
+func nanosecondsToTicks(ns int64) timeUnit {
+	return timeUnit(ns / 1000)
+}
 
 // sleepTicks should sleep for specific number of microseconds.
 func sleepTicks(d timeUnit) {

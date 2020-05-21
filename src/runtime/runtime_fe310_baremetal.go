@@ -6,7 +6,21 @@ import (
 	"device/riscv"
 )
 
-const tickMicros = 32768 // RTC clock runs at 32.768kHz
+// ticksToNanoseconds converts RTC ticks (at 32768Hz) to nanoseconds.
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	// The following calculation is actually the following, but with both sides
+	// reduced to reduce the risk of overflow:
+	//     ticks * 1e9 / 32768
+	return int64(ticks) * 1953125 / 64
+}
+
+// nanosecondsToTicks converts nanoseconds to RTC ticks (running at 32768Hz).
+func nanosecondsToTicks(ns int64) timeUnit {
+	// The following calculation is actually the following, but with both sides
+	// reduced to reduce the risk of overflow:
+	//     ns * 32768 / 1e9
+	return timeUnit(ns * 64 / 1953125)
+}
 
 func abort() {
 	// lock up forever

@@ -6,8 +6,6 @@ import "unsafe"
 
 type timeUnit float64 // time in milliseconds, just like Date.now() in JavaScript
 
-const tickMicros = 1000000
-
 // Implements __wasi_ciovec_t and __wasi_iovec_t.
 type wasiIOVec struct {
 	buf    unsafe.Pointer
@@ -67,6 +65,19 @@ func go_scheduler() {
 }
 
 const asyncScheduler = true
+
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	// The JavaScript API works in float64 milliseconds, so convert to
+	// nanoseconds first before converting to a timeUnit (which is a float64),
+	// to avoid precision loss.
+	return int64(ticks * 1e6)
+}
+
+func nanosecondsToTicks(ns int64) timeUnit {
+	// The JavaScript API works in float64 milliseconds, so convert to timeUnit
+	// (which is a float64) first before dividing, to avoid precision loss.
+	return timeUnit(ns) / 1e6
+}
 
 // This function is called by the scheduler.
 // Schedule a call to runtime.scheduler, do not actually sleep.

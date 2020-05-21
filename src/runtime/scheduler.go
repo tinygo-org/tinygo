@@ -75,14 +75,14 @@ func runqueuePushBack(t *task.Task) {
 }
 
 // Add this task to the sleep queue, assuming its state is set to sleeping.
-func addSleepTask(t *task.Task, duration int64) {
+func addSleepTask(t *task.Task, duration timeUnit) {
 	if schedulerDebug {
-		println("  set sleep:", t, uint(duration/tickMicros))
+		println("  set sleep:", t, duration)
 		if t.Next != nil {
 			panic("runtime: addSleepTask: expected next task to be nil")
 		}
 	}
-	t.Data = uint(duration / tickMicros) // TODO: longer durations
+	t.Data = uint(duration) // TODO: longer durations
 	now := ticks()
 	if sleepQueue == nil {
 		scheduleLog("  -> sleep new queue")
