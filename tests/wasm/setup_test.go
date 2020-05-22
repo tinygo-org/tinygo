@@ -25,21 +25,20 @@ var wasmTmpDir string // set in TestMain to a temp directory for build output
 func TestMain(m *testing.M) {
 	flag.Parse()
 
-	var err error
-	wasmTmpDir, err = ioutil.TempDir("", "wasm_test")
-	if err != nil {
-		log.Fatalf("unable to create temp dir: %v", err)
-	}
+	os.Exit(func() int {
 
-	startServer(wasmTmpDir)
+		var err error
+		wasmTmpDir, err = ioutil.TempDir("", "wasm_test")
+		if err != nil {
+			log.Fatalf("unable to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(wasmTmpDir) // cleanup even on panic and before os.Exit
 
-	var ret int
-	func() {
-		defer os.RemoveAll(wasmTmpDir) // cleanup even on panic
-		ret = m.Run()
-	}()
+		startServer(wasmTmpDir)
 
-	os.Exit(ret)
+		return m.Run()
+	}())
+
 }
 
 func run(cmdline string) error {

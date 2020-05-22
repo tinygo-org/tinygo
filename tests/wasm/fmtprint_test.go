@@ -1,3 +1,5 @@
+// +build go1.14
+
 package wasm
 
 import (
