@@ -312,8 +312,6 @@ endif
 
 wasmtest:
 	$(GO) test ./tests/wasm
-wasmtest-docker-headless:
-	$(GO) test ./tests/wasm -docker-headless
 
 build/release: tinygo gen-device wasi-libc
 	@mkdir -p build/release/tinygo/bin

@@ -1,5 +1,3 @@
-// +build tinygo
-
 package main
 
 import "syscall/js"

@@ -11,7 +11,9 @@ import (
 
 func TestEvent(t *testing.T) {
 
-	err := run("tinygo build -o event_pgm.wasm -target wasm event_pgm.go")
+	t.Parallel()
+
+	err := run("tinygo build -o " + wasmTmpDir + "/event.wasm -target wasm testdata/event.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +23,7 @@ func TestEvent(t *testing.T) {
 
 	var log1, log2 string
 	err = chromedp.Run(ctx,
-		chromedp.Navigate("http://localhost:8826/run?file=event_pgm.wasm"),
+		chromedp.Navigate("http://localhost:8826/run?file=event.wasm"),
 		chromedp.WaitVisible("#log"),
 		chromedp.Sleep(time.Second),
 		chromedp.InnerHTML("#log", &log1),

@@ -1,4 +1,0 @@
-*.wasm
-server
-server.pid
-wasm_exec.js

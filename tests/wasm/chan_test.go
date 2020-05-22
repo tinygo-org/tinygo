@@ -9,7 +9,9 @@ import (
 
 func TestChan(t *testing.T) {
 
-	err := run("tinygo build -o chan_pgm.wasm -target wasm chan_pgm.go")
+	t.Parallel()
+
+	err := run("tinygo build -o " + wasmTmpDir + "/chan.wasm -target wasm testdata/chan.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -18,7 +20,7 @@ func TestChan(t *testing.T) {
 	defer cancel()
 
 	err = chromedp.Run(ctx,
-		chromedp.Navigate("http://localhost:8826/run?file=chan_pgm.wasm"),
+		chromedp.Navigate("http://localhost:8826/run?file=chan.wasm"),
 		waitLog(`1
 2
 4
