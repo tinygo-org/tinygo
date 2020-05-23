@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -145,12 +146,23 @@ if (wasmSupported) {
 
 }
 
+// waitLog blocks until the log output equals the text provided (ignoring whitespace before and after)
 func waitLog(logText string) chromedp.QueryAction {
-	return waitInnerTextTrimEq("#log", logText)
+	return waitInnerTextTrimEq("#log", strings.TrimSpace(logText))
 }
 
-// waitInnerTextTrimEq will wait for the innerText of the specified element to match a specific string after whitespace trimming.
-func waitInnerTextTrimEq(sel, innerText string) chromedp.QueryAction {
+// waitLogRe blocks until the log output matches this regular expression
+func waitLogRe(restr string) chromedp.QueryAction {
+	return waitInnerTextMatch("#log", regexp.MustCompile(restr))
+}
+
+// waitInnerTextTrimEq will wait for the innerText of the specified element to match a specific text pattern (ignoring whitespace before and after)
+func waitInnerTextTrimEq(sel string, innerText string) chromedp.QueryAction {
+	return waitInnerTextMatch(sel, regexp.MustCompile(`^\s*`+regexp.QuoteMeta(innerText)+`\s*$`))
+}
+
+// waitInnerTextMatch will wait for the innerText of the specified element to match a specific regexp pattern
+func waitInnerTextMatch(sel string, re *regexp.Regexp) chromedp.QueryAction {
 
 	return chromedp.Query(sel, func(s *chromedp.Selector) {
 
@@ -173,7 +185,7 @@ func waitInnerTextTrimEq(sel, innerText string) chromedp.QueryAction {
 			if err != nil {
 				return nodes, err
 			}
-			if strings.TrimSpace(ret) != innerText {
+			if !re.MatchString(ret) {
 				// log.Printf("found text: %s", ret)
 				return nodes, errors.New("unexpected value: " + ret)
 			}
