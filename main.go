@@ -491,6 +491,8 @@ func touchSerialPortAt1200bps(port string) (err error) {
 	return fmt.Errorf("opening port: %s", err)
 }
 
+const maxMSDRetries = 10
+
 func flashUF2UsingMSD(volume, tmppath string) error {
 	// find standard UF2 info path
 	var infoPath string
@@ -507,9 +509,17 @@ func flashUF2UsingMSD(volume, tmppath string) error {
 		infoPath = path + "/INFO_UF2.TXT"
 	}
 
-	d, err := filepath.Glob(infoPath)
-	if err != nil {
-		return err
+	var d []string
+	var err error
+	for i := 0; i < maxMSDRetries; i++ {
+		d, err = filepath.Glob(infoPath)
+		if err != nil {
+			return err
+		}
+		if d != nil {
+			break
+		}
+		time.Sleep(1 * time.Second)
 	}
 	if d == nil {
 		return errors.New("unable to locate UF2 device: " + volume)
@@ -534,9 +544,17 @@ func flashHexUsingMSD(volume, tmppath string) error {
 		destPath = path + "/"
 	}
 
-	d, err := filepath.Glob(destPath)
-	if err != nil {
-		return err
+	var d []string
+	var err error
+	for i := 0; i < maxMSDRetries; i++ {
+		d, err = filepath.Glob(destPath)
+		if err != nil {
+			return err
+		}
+		if d != nil {
+			break
+		}
+		time.Sleep(1 * time.Second)
 	}
 	if d == nil {
 		return errors.New("unable to locate device: " + volume)
