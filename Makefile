@@ -229,6 +229,8 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=microbit            examples/echo
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=microbit-s110v8     examples/echo
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nrf52840-mdk        examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10031            examples/blinky1

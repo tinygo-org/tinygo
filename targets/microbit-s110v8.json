@@ -1,0 +1,3 @@
+{
+	"inherits": ["microbit", "nrf51-s110v8"]
+}
