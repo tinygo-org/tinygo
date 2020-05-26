@@ -1104,7 +1104,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 			// goroutine:
 			//   * The function context, for closures.
 			//   * The function pointer (for tasks).
-			funcPtr, context := b.decodeFuncValue(b.getValue(instr.Call.Value), instr.Call.Value.Type().(*types.Signature))
+			funcPtr, context := b.decodeFuncValue(b.getValue(instr.Call.Value), instr.Call.Value.Type().Underlying().(*types.Signature))
 			params = append(params, context) // context parameter
 			switch b.Scheduler() {
 			case "none", "coroutines":
@@ -1567,7 +1567,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		index := b.getValue(expr.Index)
 
 		// Check bounds.
-		arrayLen := expr.X.Type().(*types.Array).Len()
+		arrayLen := expr.X.Type().Underlying().(*types.Array).Len()
 		arrayLenLLVM := llvm.ConstInt(b.uintptrType, uint64(arrayLen), false)
 		b.createLookupBoundsCheck(arrayLenLLVM, index, expr.Index.Type())
 
@@ -1679,8 +1679,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 
 		// Bounds checking.
-		lenType := expr.Len.Type().(*types.Basic)
-		capType := expr.Cap.Type().(*types.Basic)
+		lenType := expr.Len.Type().Underlying().(*types.Basic)
+		capType := expr.Cap.Type().Underlying().(*types.Basic)
 		b.createSliceBoundsCheck(maxSize, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
 
 		// Allocate the backing array.

@@ -68,6 +68,8 @@ func main() {
 	m.Unlock()
 	println("done")
 
+	startSimpleFunc(emptyFunc)
+
 	time.Sleep(2 * time.Millisecond)
 }
 
@@ -100,6 +102,11 @@ func sleepFuncValue(fn func(int)) {
 	go fn(8)
 }
 
+func startSimpleFunc(fn simpleFunc) {
+	// Test that named function types don't crash the compiler.
+	go fn()
+}
+
 func nowait() {
 	println("non-blocking goroutine")
 }
@@ -114,4 +121,9 @@ type myPrinter struct {
 func (i *myPrinter) Print() {
 	time.Sleep(time.Millisecond)
 	println("async interface method call")
+}
+
+type simpleFunc func()
+
+func emptyFunc() {
 }
