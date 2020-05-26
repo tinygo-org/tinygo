@@ -31,6 +31,7 @@ func main() {
 	assert(len(make([]int, makeUint32(2), makeUint32(3))) == 2)
 	assert(len(make([]int, makeUint64(2), makeUint64(3))) == 2)
 	assert(len(make([]int, makeUintptr(2), makeUintptr(3))) == 2)
+	assert(len(make([]int, makeMyUint8(2), makeMyUint8(3))) == 2)
 
 	// indexing into a slice with uncommon index types
 	assert(foo[int(2)] == 4)
@@ -131,6 +132,9 @@ func main() {
 	var named MySlice
 	assert(len(unnamed[:]) == 32)
 	assert(len(named[:]) == 32)
+	for _, c := range named {
+		assert(c == 0)
+	}
 }
 
 func printslice(name string, s []int) {
@@ -169,3 +173,4 @@ func makeUint16(x uint16) uint16    { return x }
 func makeUint32(x uint32) uint32    { return x }
 func makeUint64(x uint64) uint64    { return x }
 func makeUintptr(x uintptr) uintptr { return x }
+func makeMyUint8(x myUint8) myUint8 { return x }

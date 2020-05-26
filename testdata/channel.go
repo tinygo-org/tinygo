@@ -8,6 +8,8 @@ import (
 
 var wg sync.WaitGroup
 
+type intchan chan int
+
 func main() {
 	ch := make(chan int, 2)
 	ch <- 1
@@ -39,6 +41,15 @@ func main() {
 	_ = make(chan int, uint16(2))
 	_ = make(chan int, uint32(2))
 	_ = make(chan int, uint64(2))
+
+	// Test that named channels don't crash the compiler.
+	named := make(intchan, 1)
+	named <- 3
+	<-named
+	select {
+	case <-named:
+	default:
+	}
 
 	// Test bigger values
 	ch2 := make(chan complex128)

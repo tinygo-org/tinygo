@@ -12,7 +12,7 @@ import (
 )
 
 func (b *builder) createMakeChan(expr *ssa.MakeChan) llvm.Value {
-	elementSize := b.targetData.TypeAllocSize(b.getLLVMType(expr.Type().(*types.Chan).Elem()))
+	elementSize := b.targetData.TypeAllocSize(b.getLLVMType(expr.Type().Underlying().(*types.Chan).Elem()))
 	elementSizeValue := llvm.ConstInt(b.uintptrType, elementSize, false)
 	bufSize := b.getValue(expr.Size)
 	b.createChanBoundsCheck(elementSize, bufSize, expr.Size.Type().Underlying().(*types.Basic), expr.Pos())
@@ -47,7 +47,7 @@ func (b *builder) createChanSend(instr *ssa.Send) {
 // createChanRecv emits a pseudo chan receive operation. It is lowered to the
 // actual channel receive operation during goroutine lowering.
 func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
-	valueType := b.getLLVMType(unop.X.Type().(*types.Chan).Elem())
+	valueType := b.getLLVMType(unop.X.Type().Underlying().(*types.Chan).Elem())
 	ch := b.getValue(unop.X)
 
 	// Allocate memory to receive into.
@@ -117,7 +117,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 		switch state.Dir {
 		case types.RecvOnly:
 			// Make sure the receive buffer is big enough and has the correct alignment.
-			llvmType := b.getLLVMType(state.Chan.Type().(*types.Chan).Elem())
+			llvmType := b.getLLVMType(state.Chan.Type().Underlying().(*types.Chan).Elem())
 			if size := b.targetData.TypeAllocSize(llvmType); size > recvbufSize {
 				recvbufSize = size
 			}
