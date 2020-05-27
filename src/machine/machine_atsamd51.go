@@ -264,7 +264,7 @@ const (
 // easy to check whether a nibble is set at all.
 //
 // Datasheet: http://ww1.microchip.com/downloads/en/DeviceDoc/60001507E.pdf
-var pinPadMapping = [32]uint16{
+var pinPadMapping = [64]uint16{
 	// page 32
 	PA00 / 2: 0 | pinPadMapSERCOM1AltPad0,
 
@@ -272,28 +272,28 @@ var pinPadMapping = [32]uint16{
 	PB08 / 2: 0 | pinPadMapSERCOM4AltPad0,
 	PA04 / 2: 0 | pinPadMapSERCOM0AltPad0,
 	PA06 / 2: 0 | pinPadMapSERCOM0AltPad2,
-	//PC04 / 2: pinPadMapSERCOM6Pad0 | 0,
-	//PC06 / 2: pinPadMapSERCOM6Pad2 | 0,
+	PC04 / 2: pinPadMapSERCOM6Pad0 | 0,
+	PC06 / 2: pinPadMapSERCOM6Pad2 | 0,
 	PA08 / 2: pinPadMapSERCOM0Pad0 | pinPadMapSERCOM2AltPad1,
 	PA10 / 2: pinPadMapSERCOM0Pad2 | pinPadMapSERCOM2AltPad2,
 	PB10 / 2: 0 | pinPadMapSERCOM4AltPad2,
 	PB12 / 2: pinPadMapSERCOM4Pad0 | 0,
 	PB14 / 2: pinPadMapSERCOM4Pad2 | 0,
-	//PD08 / 2: pinPadMapSERCOM7Pad0 | pinPadMapSERCOM6AltPad1,
-	//PD10 / 2: pinPadMapSERCOM7Pad2 | pinPadMapSERCOM6AltPad2,
-	//PC10 / 2: pinPadMapSERCOM6Pad2 | pinPadMapSERCOM7AltPad2,
+	PD08 / 2: pinPadMapSERCOM7Pad0 | pinPadMapSERCOM6AltPad1,
+	PD10 / 2: pinPadMapSERCOM7Pad2 | pinPadMapSERCOM6AltPad2,
+	PC10 / 2: pinPadMapSERCOM6Pad2 | pinPadMapSERCOM7AltPad2,
 
 	// page 34
-	//PC12 / 2: pinPadMapSERCOM7Pad0 | pinPadMapSERCOM6AltPad1,
-	//PC14 / 2: pinPadMapSERCOM7Pad2 | pinPadMapSERCOM6AltPad2,
+	PC12 / 2: pinPadMapSERCOM7Pad0 | pinPadMapSERCOM6AltPad1,
+	PC14 / 2: pinPadMapSERCOM7Pad2 | pinPadMapSERCOM6AltPad2,
 	PA12 / 2: pinPadMapSERCOM2Pad0 | pinPadMapSERCOM4AltPad1,
 	PA14 / 2: pinPadMapSERCOM2Pad2 | pinPadMapSERCOM4AltPad2,
 	PA16 / 2: pinPadMapSERCOM1Pad0 | pinPadMapSERCOM3AltPad1,
 	PA18 / 2: pinPadMapSERCOM1Pad2 | pinPadMapSERCOM3AltPad2,
-	//PC16 / 2: pinPadMapSERCOM6Pad0 | pinPadMapSERCOM0AltPad1,
-	//PC18 / 2: pinPadMapSERCOM6Pad2 | pinPadMapSERCOM0AltPad2,
-	//PC22 / 2: pinPadMapSERCOM1Pad0 | pinPadMapSERCOM3AltPad1,
-	//PD20 / 2: pinPadMapSERCOM1Pad2 | pinPadMapSERCOM3AltPad2,
+	PC16 / 2: pinPadMapSERCOM6Pad0 | pinPadMapSERCOM0AltPad1,
+	PC18 / 2: pinPadMapSERCOM6Pad2 | pinPadMapSERCOM0AltPad2,
+	PC22 / 2: pinPadMapSERCOM1Pad0 | pinPadMapSERCOM3AltPad1,
+	PD20 / 2: pinPadMapSERCOM1Pad2 | pinPadMapSERCOM3AltPad2,
 	PB16 / 2: pinPadMapSERCOM5Pad0 | 0,
 	PB18 / 2: pinPadMapSERCOM5Pad2 | pinPadMapSERCOM7AltPad2,
 
@@ -306,7 +306,7 @@ var pinPadMapping = [32]uint16{
 	PB24 / 2: pinPadMapSERCOM0Pad0 | pinPadMapSERCOM2AltPad1,
 	PB26 / 2: pinPadMapSERCOM2Pad0 | pinPadMapSERCOM4AltPad1,
 	PB28 / 2: pinPadMapSERCOM2Pad2 | pinPadMapSERCOM4AltPad2,
-	//PC24 / 2: pinPadMapSERCOM0Pad2 | pinPadMapSERCOM2AltPad2,
+	PC24 / 2: pinPadMapSERCOM0Pad2 | pinPadMapSERCOM2AltPad2,
 	//PC26 / 2: pinPadMapSERCOM1Pad1 | 0, // note: PC26 doesn't support SERCOM, but PC27 does
 	//PC28 / 2: pinPadMapSERCOM1Pad1 | 0, // note: PC29 doesn't exist in the datasheet?
 	PA30 / 2: 0 | pinPadMapSERCOM1AltPad2,
