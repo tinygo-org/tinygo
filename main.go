@@ -509,23 +509,12 @@ func flashUF2UsingMSD(volume, tmppath string) error {
 		infoPath = path + "/INFO_UF2.TXT"
 	}
 
-	var d []string
-	var err error
-	for i := 0; i < maxMSDRetries; i++ {
-		d, err = filepath.Glob(infoPath)
-		if err != nil {
-			return err
-		}
-		if d != nil {
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
-	if d == nil {
-		return errors.New("unable to locate UF2 device: " + volume)
+	d, err := locateDevice(volume, infoPath)
+	if err != nil {
+		return err
 	}
 
-	return moveFile(tmppath, filepath.Dir(d[0])+"/flash.uf2")
+	return moveFile(tmppath, filepath.Dir(d)+"/flash.uf2")
 }
 
 func flashHexUsingMSD(volume, tmppath string) error {
@@ -544,23 +533,31 @@ func flashHexUsingMSD(volume, tmppath string) error {
 		destPath = path + "/"
 	}
 
+	d, err := locateDevice(volume, destPath)
+	if err != nil {
+		return err
+	}
+
+	return moveFile(tmppath, d+"/flash.hex")
+}
+
+func locateDevice(volume, path string) (string, error) {
 	var d []string
 	var err error
 	for i := 0; i < maxMSDRetries; i++ {
-		d, err = filepath.Glob(destPath)
+		d, err = filepath.Glob(path)
 		if err != nil {
-			return err
+			return "", err
 		}
 		if d != nil {
 			break
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(500 * time.Millisecond)
 	}
 	if d == nil {
-		return errors.New("unable to locate device: " + volume)
+		return "", errors.New("unable to locate device: " + volume)
 	}
-
-	return moveFile(tmppath, d[0]+"/flash.hex")
+	return d[0], nil
 }
 
 func windowsFindUSBDrive(volume string) (string, error) {
