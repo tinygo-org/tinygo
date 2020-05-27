@@ -25,6 +25,8 @@ declare void @runtime.printptr(i32)
 
 declare void @runtime.printnl()
 
+declare void @runtime.nilPanic(i8*, i8*)
+
 define void @printInterfaces() {
   call void @printInterface(i32 4, i8* inttoptr (i32 5 to i8*))
   call void @printInterface(i32 16, i8* inttoptr (i8 120 to i8*))
@@ -83,6 +85,7 @@ entry:
   ]
 
 default:                                          ; preds = %entry
+  call void @runtime.nilPanic(i8* undef, i8* undef)
   unreachable
 
 "reflect/types.type:named:Number":                ; preds = %entry
