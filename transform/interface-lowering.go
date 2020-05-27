@@ -616,10 +616,19 @@ func (p *lowerInterfacesPass) createInterfaceMethodFunc(itf *interfaceInfo, sign
 	// Create entry block.
 	entry := p.ctx.AddBasicBlock(fn, "entry")
 
-	// Create default block and make it unreachable (which it is, because all
-	// possible types are checked).
+	// Create default block and call runtime.nilPanic.
+	// The only other possible value remaining is nil for nil interfaces. We
+	// could panic with a different message here such as "nil interface" but
+	// that would increase code size and "nil panic" is close enough. Most
+	// importantly, it avoids undefined behavior when accidentally calling a
+	// method on a nil interface.
 	defaultBlock := p.ctx.AddBasicBlock(fn, "default")
 	p.builder.SetInsertPointAtEnd(defaultBlock)
+	nilPanic := p.mod.NamedFunction("runtime.nilPanic")
+	p.builder.CreateCall(nilPanic, []llvm.Value{
+		llvm.Undef(llvm.PointerType(p.ctx.Int8Type(), 0)),
+		llvm.Undef(llvm.PointerType(p.ctx.Int8Type(), 0)),
+	}, "")
 	p.builder.CreateUnreachable()
 
 	// Create type switch in entry block.

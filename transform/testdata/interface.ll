@@ -24,6 +24,7 @@ declare void @runtime.printuint8(i8)
 declare void @runtime.printint32(i32)
 declare void @runtime.printptr(i32)
 declare void @runtime.printnl()
+declare void @runtime.nilPanic(i8*, i8*)
 
 define void @printInterfaces() {
   call void @printInterface(i32 ptrtoint (%runtime.typeInInterface* @"typeInInterface:reflect/types.type:basic:int" to i32), i8* inttoptr (i32 5 to i8*))
