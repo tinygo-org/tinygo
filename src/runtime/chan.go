@@ -446,7 +446,7 @@ type chanSelectState struct {
 // chanSend sends a single value over the channel.
 // This operation will block unless a value is immediately available.
 // May panic if the channel is closed.
-func chanSend(ch *channel, value unsafe.Pointer) {
+func chanSend(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList) {
 	if ch.trySend(value) {
 		// value immediately sent
 		chanDebug(ch)
@@ -462,10 +462,11 @@ func chanSend(ch *channel, value unsafe.Pointer) {
 	sender := task.Current()
 	ch.state = chanStateSend
 	sender.Ptr = value
-	ch.blocked = &channelBlockedList{
+	*blockedlist = channelBlockedList{
 		next: ch.blocked,
 		t:    sender,
 	}
+	ch.blocked = blockedlist
 	chanDebug(ch)
 	task.Pause()
 	sender.Ptr = nil
@@ -475,7 +476,7 @@ func chanSend(ch *channel, value unsafe.Pointer) {
 // It blocks if there is no available value to recieve.
 // The recieved value is copied into the value pointer.
 // Returns the comma-ok value.
-func chanRecv(ch *channel, value unsafe.Pointer) bool {
+func chanRecv(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList) bool {
 	if rx, ok := ch.tryRecv(value); rx {
 		// value immediately available
 		chanDebug(ch)
@@ -491,10 +492,11 @@ func chanRecv(ch *channel, value unsafe.Pointer) bool {
 	receiver := task.Current()
 	ch.state = chanStateRecv
 	receiver.Ptr, receiver.Data = value, 1
-	ch.blocked = &channelBlockedList{
+	*blockedlist = channelBlockedList{
 		next: ch.blocked,
 		t:    receiver,
 	}
+	ch.blocked = blockedlist
 	chanDebug(ch)
 	task.Pause()
 	ok := receiver.Data == 1
