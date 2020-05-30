@@ -335,7 +335,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	pinCallbacks[extint] = callback
 	interruptPins[extint] = p
 
-	if (sam.EIC.CTRLA.Get() & sam.EIC_CTRLA_ENABLE) == 0 {
+	if !sam.EIC.CTRLA.HasBits(sam.EIC_CTRLA_ENABLE) {
 		// EIC peripheral has not yet been initialized. Initialize it now.
 
 		// The EIC needs two clocks: CLK_EIC_APB and GCLK_EIC. CLK_EIC_APB is
