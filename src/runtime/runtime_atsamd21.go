@@ -216,14 +216,14 @@ func initRTC() {
 	sam.RTC_MODE0.CTRL.SetBits(sam.RTC_MODE0_CTRL_ENABLE)
 	waitForSync()
 
-	intr := interrupt.New(sam.IRQ_RTC, func(intr interrupt.Interrupt) {
+	rtcInterrupt := interrupt.New(sam.IRQ_RTC, func(intr interrupt.Interrupt) {
 		// disable IRQ for CMP0 compare
 		sam.RTC_MODE0.INTFLAG.Set(sam.RTC_MODE0_INTENSET_CMP0)
 
 		timerWakeup.Set(1)
 	})
-	intr.SetPriority(0xc0)
-	intr.Enable()
+	rtcInterrupt.SetPriority(0xc0)
+	rtcInterrupt.Enable()
 }
 
 func waitForSync() {
@@ -261,7 +261,10 @@ func sleepTicks(d timeUnit) {
 	for d != 0 {
 		ticks() // update timestamp
 		ticks := uint32(d)
-		timerSleep(ticks)
+		if !timerSleep(ticks) {
+			// Bail out early to handle a non-time interrupt.
+			return
+		}
 		d -= timeUnit(ticks)
 	}
 }
@@ -280,7 +283,9 @@ func ticks() timeUnit {
 }
 
 // ticks are in microseconds
-func timerSleep(ticks uint32) {
+// Returns true if the timer completed.
+// Returns false if another interrupt occured which requires an early return to scheduler.
+func timerSleep(ticks uint32) bool {
 	timerWakeup.Set(0)
 	if ticks < 7 {
 		// Due to around 6 clock ticks delay waiting for the register value to
@@ -302,8 +307,20 @@ func timerSleep(ticks uint32) {
 	// enable IRQ for CMP0 compare
 	sam.RTC_MODE0.INTENSET.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
 
-	for timerWakeup.Get() == 0 {
-		arm.Asm("wfi")
+wait:
+	arm.Asm("wfe")
+	if timerWakeup.Get() != 0 {
+		return true
+	}
+	if hasScheduler {
+		// The interurpt may have awoken a goroutine, so bail out early.
+		// Disable IRQ for CMP0 compare.
+		sam.RTC_MODE0.INTENCLR.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
+		return false
+	} else {
+		// This is running without a scheduler.
+		// The application expects this to sleep the whole time.
+		goto wait
 	}
 }
 

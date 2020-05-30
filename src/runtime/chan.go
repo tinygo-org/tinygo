@@ -25,6 +25,7 @@ package runtime
 
 import (
 	"internal/task"
+	"runtime/interrupt"
 	"unsafe"
 )
 
@@ -308,13 +309,17 @@ func (ch *channel) trySend(value unsafe.Pointer) bool {
 		return false
 	}
 
+	i := interrupt.Disable()
+
 	switch ch.state {
 	case chanStateEmpty, chanStateBuf:
 		// try to dump the value directly into the buffer
 		if ch.push(value) {
 			ch.state = chanStateBuf
+			interrupt.Restore(i)
 			return true
 		}
+		interrupt.Restore(i)
 		return false
 	case chanStateRecv:
 		// unblock reciever
@@ -328,16 +333,21 @@ func (ch *channel) trySend(value unsafe.Pointer) bool {
 			ch.state = chanStateEmpty
 		}
 
+		interrupt.Restore(i)
 		return true
 	case chanStateSend:
 		// something else is already waiting to send
+		interrupt.Restore(i)
 		return false
 	case chanStateClosed:
+		interrupt.Restore(i)
 		runtimePanic("send on closed channel")
 	default:
+		interrupt.Restore(i)
 		runtimePanic("invalid channel state")
 	}
 
+	interrupt.Restore(i)
 	return false
 }
 
@@ -350,6 +360,8 @@ func (ch *channel) tryRecv(value unsafe.Pointer) (bool, bool) {
 		// this is non-blocking, so just say no
 		return false, false
 	}
+
+	i := interrupt.Disable()
 
 	switch ch.state {
 	case chanStateBuf, chanStateSend:
@@ -373,6 +385,7 @@ func (ch *channel) tryRecv(value unsafe.Pointer) (bool, bool) {
 				ch.state = chanStateEmpty
 			}
 
+			interrupt.Restore(i)
 			return true, true
 		} else if ch.blocked != nil {
 			// unblock next sender if applicable
@@ -386,19 +399,24 @@ func (ch *channel) tryRecv(value unsafe.Pointer) (bool, bool) {
 				ch.state = chanStateEmpty
 			}
 
+			interrupt.Restore(i)
 			return true, true
 		}
+		interrupt.Restore(i)
 		return false, false
 	case chanStateRecv, chanStateEmpty:
 		// something else is already waiting to recieve
+		interrupt.Restore(i)
 		return false, false
 	case chanStateClosed:
 		if ch.pop(value) {
+			interrupt.Restore(i)
 			return true, true
 		}
 
 		// channel closed - nothing to recieve
 		memzero(value, ch.elementSize)
+		interrupt.Restore(i)
 		return true, false
 	default:
 		runtimePanic("invalid channel state")
@@ -447,14 +465,18 @@ type chanSelectState struct {
 // This operation will block unless a value is immediately available.
 // May panic if the channel is closed.
 func chanSend(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList) {
+	i := interrupt.Disable()
+
 	if ch.trySend(value) {
 		// value immediately sent
 		chanDebug(ch)
+		interrupt.Restore(i)
 		return
 	}
 
 	if ch == nil {
 		// A nil channel blocks forever. Do not schedule this goroutine again.
+		interrupt.Restore(i)
 		deadlock()
 	}
 
@@ -468,6 +490,7 @@ func chanSend(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList
 	}
 	ch.blocked = blockedlist
 	chanDebug(ch)
+	interrupt.Restore(i)
 	task.Pause()
 	sender.Ptr = nil
 }
@@ -477,14 +500,18 @@ func chanSend(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList
 // The recieved value is copied into the value pointer.
 // Returns the comma-ok value.
 func chanRecv(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList) bool {
+	i := interrupt.Disable()
+
 	if rx, ok := ch.tryRecv(value); rx {
 		// value immediately available
 		chanDebug(ch)
+		interrupt.Restore(i)
 		return ok
 	}
 
 	if ch == nil {
 		// A nil channel blocks forever. Do not schedule this goroutine again.
+		interrupt.Restore(i)
 		deadlock()
 	}
 
@@ -498,6 +525,7 @@ func chanRecv(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList
 	}
 	ch.blocked = blockedlist
 	chanDebug(ch)
+	interrupt.Restore(i)
 	task.Pause()
 	ok := receiver.Data == 1
 	receiver.Ptr, receiver.Data = nil, 0
@@ -511,15 +539,18 @@ func chanClose(ch *channel) {
 		// Not allowed by the language spec.
 		runtimePanic("close of nil channel")
 	}
+	i := interrupt.Disable()
 	switch ch.state {
 	case chanStateClosed:
 		// Not allowed by the language spec.
+		interrupt.Restore(i)
 		runtimePanic("close of closed channel")
 	case chanStateSend:
 		// This panic should ideally on the sending side, not in this goroutine.
 		// But when a goroutine tries to send while the channel is being closed,
 		// that is clearly invalid: the send should have been completed already
 		// before the close.
+		interrupt.Restore(i)
 		runtimePanic("close channel during send")
 	case chanStateRecv:
 		// unblock all receivers with the zero value
@@ -531,6 +562,7 @@ func chanClose(ch *channel) {
 		// Easy case. No available sender or receiver.
 	}
 	ch.state = chanStateClosed
+	interrupt.Restore(i)
 	chanDebug(ch)
 }
 
@@ -541,8 +573,11 @@ func chanClose(ch *channel) {
 // TODO: do this in a round-robin fashion (as specified in the Go spec) instead
 // of picking the first one that can proceed.
 func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelBlockedList) (uintptr, bool) {
+	istate := interrupt.Disable()
+
 	if selected, ok := tryChanSelect(recvbuf, states); selected != ^uintptr(0) {
 		// one channel was immediately ready
+		interrupt.Restore(istate)
 		return selected, ok
 	}
 
@@ -570,6 +605,7 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelB
 			case chanStateRecv:
 				// already in correct state
 			default:
+				interrupt.Restore(istate)
 				runtimePanic("invalid channel state")
 			}
 		} else {
@@ -582,6 +618,7 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelB
 			case chanStateBuf:
 				// already in correct state
 			default:
+				interrupt.Restore(istate)
 				runtimePanic("invalid channel state")
 			}
 		}
@@ -594,6 +631,7 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelB
 	t.Data = 1
 
 	// wait for one case to fire
+	interrupt.Restore(istate)
 	task.Pause()
 
 	// figure out which one fired and return the ok value
@@ -602,22 +640,27 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelB
 
 // tryChanSelect is like chanSelect, but it does a non-blocking select operation.
 func tryChanSelect(recvbuf unsafe.Pointer, states []chanSelectState) (uintptr, bool) {
+	istate := interrupt.Disable()
+
 	// See whether we can receive from one of the channels.
 	for i, state := range states {
 		if state.value == nil {
 			// A receive operation.
 			if rx, ok := state.ch.tryRecv(recvbuf); rx {
 				chanDebug(state.ch)
+				interrupt.Restore(istate)
 				return uintptr(i), ok
 			}
 		} else {
 			// A send operation: state.value is not nil.
 			if state.ch.trySend(state.value) {
 				chanDebug(state.ch)
+				interrupt.Restore(istate)
 				return uintptr(i), true
 			}
 		}
 	}
 
+	interrupt.Restore(istate)
 	return ^uintptr(0), false
 }

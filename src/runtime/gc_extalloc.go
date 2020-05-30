@@ -2,7 +2,11 @@
 
 package runtime
 
-import "unsafe"
+import (
+	"internal/task"
+	"runtime/interrupt"
+	"unsafe"
+)
 
 // This garbage collector implementation allows TinyGo to use an external memory allocator.
 // It appends a header to the end of every allocation which the garbage collector uses for tracking purposes.
@@ -417,9 +421,9 @@ func (t *memTreap) destroy() {
 // This is used to detect if the collector is invoking itself or trying to allocate memory.
 var gcrunning bool
 
-// activeMem is a treap used to store marked allocations which have already been scanned.
+// activeMem is a queue used to store marked allocations which have already been scanned.
 // This is only used when the garbage collector is running.
-var activeMem memTreap
+var activeMem memScanQueue
 
 func GC() {
 	if gcDebug {
@@ -449,9 +453,26 @@ func GC() {
 	// These can be quickly compared against to eliminate most false positives.
 	firstPtr, lastPtr = allocations.minAddr(), allocations.maxAddr()
 
-	// Start by scanning all of the global variables and the stack.
-	markGlobals()
+	// Start by scanning the stack.
 	markStack()
+
+	// Scan all globals.
+	markGlobals()
+
+	// Channel operations in interrupts may move task pointers around while we are marking.
+	// Therefore we need to scan the runqueue seperately.
+	var markedTaskQueue task.Queue
+runqueueScan:
+	for !runqueue.Empty() {
+		// Pop the next task off of the runqueue.
+		t := runqueue.Pop()
+
+		// Mark the task if it has not already been marked.
+		markRoot(uintptr(unsafe.Pointer(&runqueue)), uintptr(unsafe.Pointer(t)))
+
+		// Push the task onto our temporary queue.
+		markedTaskQueue.Push(t)
+	}
 
 	// Scan all referenced allocations, building a new treap with marked allocations.
 	// The marking process deletes the allocations from the old allocations treap, so they are only queued once.
@@ -462,9 +483,18 @@ func GC() {
 		// Scan and mark all nodes that this references.
 		n.scan()
 
-		// Insert this node into the new treap.
-		activeMem.insert(n)
+		// Insert this node into the active memory queue.
+		activeMem.push(n)
 	}
+
+	i := interrupt.Disable()
+	if !runqueue.Empty() {
+		// Something new came in while finishing the mark.
+		interrupt.Restore(i)
+		goto runqueueScan
+	}
+	runqueue = markedTaskQueue
+	interrupt.Restore(i)
 
 	// The allocations treap now only contains unreferenced nodes. Destroy them all.
 	allocations.destroy()
@@ -472,9 +502,10 @@ func GC() {
 		runtimePanic("failed to fully destroy allocations")
 	}
 
-	// Replace the allocations treap with the new treap.
-	allocations = activeMem
-	activeMem = memTreap{}
+	// Treapify the active memory queue.
+	for !activeMem.empty() {
+		allocations.insert(activeMem.pop())
+	}
 
 	if gcDebug {
 		println("GC finished")

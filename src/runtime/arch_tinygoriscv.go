@@ -90,3 +90,11 @@ func procPin() {
 func procUnpin() {
 	riscv.EnableInterrupts(procPinnedMask)
 }
+
+func waitForEvents() {
+	mask := riscv.DisableInterrupts()
+	if !runqueue.Empty() {
+		riscv.Asm("wfi")
+	}
+	riscv.EnableInterrupts(mask)
+}
