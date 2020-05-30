@@ -20,6 +20,8 @@ import (
 
 const schedulerDebug = false
 
+var schedulerDone bool
+
 // Queues used by the scheduler.
 var (
 	runqueue           task.Queue
@@ -114,7 +116,7 @@ func addSleepTask(t *task.Task, duration timeUnit) {
 func scheduler() {
 	// Main scheduler loop.
 	var now timeUnit
-	for {
+	for !schedulerDone {
 		scheduleLog("")
 		scheduleLog("  schedule")
 		if sleepQueue != nil {
@@ -135,12 +137,11 @@ func scheduler() {
 		t := runqueue.Pop()
 		if t == nil {
 			if sleepQueue == nil {
-				// No more tasks to execute.
-				// It would be nice if we could detect deadlocks here, because
-				// there might still be functions waiting on each other in a
-				// deadlock.
-				scheduleLog("  no tasks left!")
-				return
+				if asyncScheduler {
+					return
+				}
+				waitForEvents()
+				continue
 			}
 			timeLeft := timeUnit(sleepQueue.Data) - (now - sleepQueueBaseTime)
 			if schedulerDebug {

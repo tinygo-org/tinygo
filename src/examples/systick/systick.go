@@ -5,6 +5,8 @@ import (
 	"machine"
 )
 
+var timerCh = make(chan struct{}, 1)
+
 func main() {
 	machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
@@ -12,17 +14,18 @@ func main() {
 	arm.SetupSystemTimer(machine.CPUFrequency() / 10)
 
 	for {
+		machine.LED.Low()
+		<-timerCh
+		machine.LED.High()
+		<-timerCh
 	}
 }
 
-var led_state bool
-
 //export SysTick_Handler
 func timer_isr() {
-	if led_state {
-		machine.LED.Low()
-	} else {
-		machine.LED.High()
+	select {
+	case timerCh <- struct{}{}:
+	default:
+		// The consumer is running behind.
 	}
-	led_state = !led_state
 }

@@ -21,3 +21,5 @@ func run() {
 	postinit()
 	callMain()
 }
+
+const hasScheduler = false

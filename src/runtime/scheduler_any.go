@@ -19,6 +19,9 @@ func run() {
 		initAll()
 		postinit()
 		callMain()
+		schedulerDone = true
 	}()
 	scheduler()
 }
+
+const hasScheduler = true
