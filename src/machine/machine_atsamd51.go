@@ -335,7 +335,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	pinCallbacks[extint] = callback
 	interruptPins[extint] = p
 
-	if (sam.EIC.CTRLA.Get() & 0x02) == 0 {
+	if !sam.EIC.CTRLA.HasBits(sam.EIC_CTRLA_ENABLE) {
 		// EIC peripheral has not yet been initialized. Initialize it now.
 
 		// The EIC needs two clocks: CLK_EIC_APB and GCLK_EIC. CLK_EIC_APB is
@@ -349,7 +349,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	}
 
 	// CONFIG register is enable-protected, so disable EIC.
-	sam.EIC.CTRLA.Set(0)
+	sam.EIC.CTRLA.ClearBits(sam.EIC_CTRLA_ENABLE)
 
 	// Configure this pin. Set the 4 bits of the EIC.CONFIGx register to the
 	// sense value (filter bit set to 0, sense bits set to the change value).
