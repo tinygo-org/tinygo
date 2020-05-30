@@ -35,12 +35,17 @@ func (b *builder) createChanSend(instr *ssa.Send) {
 	valueAlloca, valueAllocaCast, valueAllocaSize := b.createTemporaryAlloca(valueType, "chan.value")
 	b.CreateStore(chanValue, valueAlloca)
 
-	// Do the send.
-	b.createRuntimeCall("chanSend", []llvm.Value{ch, valueAllocaCast}, "")
+	// Allocate blockedlist buffer.
+	channelBlockedList := b.mod.GetTypeByName("runtime.channelBlockedList")
+	channelBlockedListAlloca, channelBlockedListAllocaCast, channelBlockedListAllocaSize := b.createTemporaryAlloca(channelBlockedList, "chan.blockedList")
 
-	// End the lifetime of the alloca.
+	// Do the send.
+	b.createRuntimeCall("chanSend", []llvm.Value{ch, valueAllocaCast, channelBlockedListAlloca}, "")
+
+	// End the lifetime of the allocas.
 	// This also works around a bug in CoroSplit, at least in LLVM 8:
 	// https://bugs.llvm.org/show_bug.cgi?id=41742
+	b.emitLifetimeEnd(channelBlockedListAllocaCast, channelBlockedListAllocaSize)
 	b.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
 }
 
@@ -53,9 +58,14 @@ func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
 	// Allocate memory to receive into.
 	valueAlloca, valueAllocaCast, valueAllocaSize := b.createTemporaryAlloca(valueType, "chan.value")
 
+	// Allocate blockedlist buffer.
+	channelBlockedList := b.mod.GetTypeByName("runtime.channelBlockedList")
+	channelBlockedListAlloca, channelBlockedListAllocaCast, channelBlockedListAllocaSize := b.createTemporaryAlloca(channelBlockedList, "chan.blockedList")
+
 	// Do the receive.
-	commaOk := b.createRuntimeCall("chanRecv", []llvm.Value{ch, valueAllocaCast}, "")
+	commaOk := b.createRuntimeCall("chanRecv", []llvm.Value{ch, valueAllocaCast, channelBlockedListAlloca}, "")
 	received := b.CreateLoad(valueAlloca, "chan.received")
+	b.emitLifetimeEnd(channelBlockedListAllocaCast, channelBlockedListAllocaSize)
 	b.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
 
 	if unop.CommaOk {
