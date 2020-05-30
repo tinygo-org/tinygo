@@ -27,10 +27,7 @@ COPY --from=tinygo-base /go/bin/tinygo /go/bin/tinygo
 COPY --from=tinygo-base /tinygo/src /tinygo/src
 COPY --from=tinygo-base /tinygo/targets /tinygo/targets
 
-RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
-    echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-10 main" >> /etc/apt/sources.list && \
-    apt-get update && \
-    apt-get install -y libllvm10 lld-10
+RUN apt-get install -y libllvm10 lld-10
 
 # tinygo-avr stage installs the needed dependencies to compile TinyGo programs for AVR microcontrollers.
 FROM tinygo-base AS tinygo-avr
