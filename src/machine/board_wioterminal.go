@@ -174,7 +174,7 @@ const (
 	WIO_5S_DOWN  = PD08
 	WIO_5S_PRESS = PD10
 
-	// IRQ0
+	// IRQ0 : RTL8720D
 	IRQ0 = PC20
 
 	// BUZZER_CTR
@@ -315,7 +315,7 @@ const (
 
 	// RTL8720D Interfaces
 	RTL8720D_CHIP_PU = PA18
-	RTL8720D_GPIO0   = PA19
+	RTL8720D_GPIO0   = PA19 // SYNC
 
 	// SWD
 	SWDCLK = PA30
@@ -358,6 +358,7 @@ var (
 		SERCOM: 2,
 	}
 
+	// RTL8720D
 	UART2 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM1_USART_INT,
@@ -423,6 +424,7 @@ var (
 		SERCOM: 5,
 	}
 
+	// RTL8720D
 	SPI1 = SPI{
 		Bus:    sam.SERCOM0_SPIM,
 		SERCOM: 0,
