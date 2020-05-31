@@ -123,8 +123,7 @@ func objcopy(infile, outfile string) error {
 		if err != nil {
 			return objcopyError{"failed to create .hex file", err}
 		}
-		mem.DumpIntelHex(f, 16) // TODO: handle error
-		return nil
+		return mem.DumpIntelHex(f, 16)
 	default:
 		panic("unreachable")
 	}
