@@ -1,0 +1,19 @@
+{
+	"inherits": ["riscv"],
+	"features": ["+a", "+c", "+m", "+f", "+d"],
+	"build-tags": ["k210", "kendryte"],
+	"llvm-target": "riscv64--none",
+	"cflags": [
+		"--target=riscv64--none",
+		"-march=rv64gc",
+		"-mabi=lp64d",
+		"-Os",
+		"-Werror",
+		"-fno-exceptions", "-fno-unwind-tables",
+		"-ffunction-sections", "-fdata-sections"
+	],
+	"ldflags": [
+		"-melf64lriscv",
+		"--gc-sections"
+	]
+}
