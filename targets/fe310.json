@@ -1,5 +1,19 @@
 {
 	"inherits": ["riscv32"],
 	"features": ["+a", "+c", "+m"],
-	"build-tags": ["fe310", "sifive"]
+	"build-tags": ["fe310", "sifive"],
+	"llvm-target": "riscv32--none",
+	"cflags": [
+		"--target=riscv32--none",
+		"-march=rv32imac",
+		"-mabi=ilp32",
+		"-Os",
+		"-Werror",
+		"-fno-exceptions", "-fno-unwind-tables",
+		"-ffunction-sections", "-fdata-sections"
+	],
+	"ldflags": [
+		"-melf32lriscv",
+		"--gc-sections"
+	]
 }
