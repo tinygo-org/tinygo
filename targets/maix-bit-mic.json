@@ -1,6 +1,0 @@
-{
-	"inherits": ["k210"],
-	"build-tags": ["maix-bit-mic"],
-	"linkerscript": "targets/maix-bit-mic.ld",
-	"flash-command": "kflash -p /dev/ttyUSB0 {hex}"
-}
