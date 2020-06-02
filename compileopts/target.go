@@ -276,6 +276,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		GDB:         "gdb",
 		PortReset:   "false",
 		FlashMethod: "native",
+		CodeModel:   "default",
 	}
 	if goos == "darwin" {
 		spec.LDFlags = append(spec.LDFlags, "-Wl,-dead_strip")
