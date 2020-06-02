@@ -91,7 +91,25 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 		return llvm.TargetMachine{}, err
 	}
 	features := strings.Join(config.Features(), ",")
-	machine := target.CreateTargetMachine(config.Triple(), config.CPU(), features, llvm.CodeGenLevelDefault, llvm.RelocStatic, llvm.CodeModelDefault)
+
+	var codeModel llvm.CodeModel
+
+	switch config.CodeModel() {
+	case "default":
+		codeModel = llvm.CodeModelDefault
+	case "tiny":
+		codeModel = llvm.CodeModelTiny
+	case "small":
+		codeModel = llvm.CodeModelSmall
+	case "kernel":
+		codeModel = llvm.CodeModelKernel
+	case "medium":
+		codeModel = llvm.CodeModelMedium
+	case "large":
+		codeModel = llvm.CodeModelLarge
+	}
+
+	machine := target.CreateTargetMachine(config.Triple(), config.CPU(), features, llvm.CodeGenLevelDefault, llvm.RelocStatic, codeModel)
 	return machine, nil
 }
 

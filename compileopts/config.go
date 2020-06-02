@@ -272,6 +272,15 @@ func (c *Config) OpenOCDConfiguration() (args []string, err error) {
 	return args, nil
 }
 
+// CodeModel returns the code model used on this platform.
+func (c *Config) CodeModel() string {
+	if c.Target.CodeModel != "" {
+		return c.Target.CodeModel
+	}
+
+	return "default"
+}
+
 type TestConfig struct {
 	CompileTestBinary bool
 	// TODO: Filter the test functions to run, include verbose flag, etc
