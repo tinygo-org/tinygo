@@ -376,6 +376,22 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 		extint = 14
 	case PB29:
 		extint = 15
+	case PC07:
+		extint = 9
+	case PD08:
+		extint = 3
+	case PD09:
+		extint = 4
+	case PD10:
+		extint = 5
+	case PD11:
+		extint = 6
+	case PD12:
+		extint = 7
+	case PD20:
+		extint = 10
+	case PD21:
+		extint = 11
 	default:
 		// All other pins follow a normal pattern.
 		extint = uint8(p) % 16
