@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/sam"
+	"runtime/interrupt"
 )
 
 // used to reset into bootloader
@@ -104,11 +105,23 @@ const (
 	USBCDC_DP_PIN = PA25
 )
 
-// TODO: add configuration for UART on SERCOM4 that is connected to TX/RX of ESP32
+// UART1 aka NINA_TX/NINA_RX
 const (
-	UART_TX_PIN = NoPin
-	UART_RX_PIN = NoPin
+	UART_TX_PIN = D1
+	UART_RX_PIN = D0
 )
+
+var (
+	UART1 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    sam.SERCOM4_USART_INT,
+		SERCOM: 4,
+	}
+)
+
+func init() {
+	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM4_2, UART1.handleInterrupt)
+}
 
 // I2C pins
 const (

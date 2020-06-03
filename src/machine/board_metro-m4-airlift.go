@@ -2,7 +2,10 @@
 
 package machine
 
-import "device/sam"
+import (
+	"device/sam"
+	"runtime/interrupt"
+)
 
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
@@ -53,7 +56,29 @@ const (
 	UART_RX_PIN = D0
 )
 
-// Note: UART1 is on SERCOM3, defined in machine_atsamd51.go
+const (
+	UART2_TX_PIN = PA04
+	UART2_RX_PIN = PA07
+)
+
+var (
+	UART1 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    sam.SERCOM3_USART_INT,
+		SERCOM: 3,
+	}
+
+	UART2 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    sam.SERCOM0_USART_INT,
+		SERCOM: 0,
+	}
+)
+
+func init() {
+	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM3_2, UART1.handleInterrupt)
+	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM0_2, UART2.handleInterrupt)
+}
 
 const (
 	NINA_CS     = PA15
@@ -65,9 +90,6 @@ const (
 	NINA_RX  = PA07
 	NINA_RTS = PB23
 )
-
-// UART2 is on SERCOM0,  defined in machine_atsamd51.go, and connects to the
-// onboard ESP32-WROOM chip.
 
 // I2C pins
 const (
