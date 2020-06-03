@@ -2,7 +2,10 @@
 
 package machine
 
-import "device/sam"
+import (
+	"device/sam"
+	"runtime/interrupt"
+)
 
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
@@ -347,6 +350,25 @@ const (
 	UART2_TX_PIN = PIN_SERIAL2_TX
 	UART2_RX_PIN = PIN_SERIAL2_RX
 )
+
+var (
+	UART1 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    sam.SERCOM2_USART_INT,
+		SERCOM: 2,
+	}
+
+	UART2 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    sam.SERCOM1_USART_INT,
+		SERCOM: 1,
+	}
+)
+
+func init() {
+	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM2_2, UART1.handleInterrupt)
+	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM1_2, UART2.handleInterrupt)
+}
 
 // I2C pins
 const (
