@@ -1,11 +1,6 @@
-// +build sam,atsamd51,itsybitsy_m4
+// +build itsybitsy_m4
 
 package machine
-
-import (
-	"device/sam"
-	"runtime/interrupt"
-)
 
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
@@ -59,37 +54,10 @@ const (
 	UART2_RX_PIN = D2
 )
 
-var (
-	UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM3_USART_INT,
-		SERCOM: 3,
-	}
-
-	UART2 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM0_USART_INT,
-		SERCOM: 0,
-	}
-)
-
-func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM3_2, UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM0_2, UART2.handleInterrupt)
-}
-
 // I2C pins
 const (
 	SDA_PIN = PA12 // SDA: SERCOM2/PAD[0]
 	SCL_PIN = PA13 // SCL: SERCOM2/PAD[1]
-)
-
-// I2C on the ItsyBitsy M4.
-var (
-	I2C0 = I2C{
-		Bus:    sam.SERCOM2_I2CM,
-		SERCOM: 2,
-	}
 )
 
 // SPI pins
@@ -97,14 +65,6 @@ const (
 	SPI0_SCK_PIN  = PA01 // SCK: SERCOM1/PAD[1]
 	SPI0_MOSI_PIN = PA00 // MOSI: SERCOM1/PAD[0]
 	SPI0_MISO_PIN = PB23 // MISO: SERCOM1/PAD[3]
-)
-
-// SPI on the ItsyBitsy M4.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM1_SPIM,
-		SERCOM: 1,
-	}
 )
 
 // USB CDC identifiers
