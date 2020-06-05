@@ -1,5 +1,5 @@
 {
-	"inherits": ["riscv"],
+	"inherits": ["riscv32"],
 	"features": ["+a", "+c", "+m"],
 	"build-tags": ["virt", "qemu"],
 	"linkerscript": "targets/riscv-qemu.ld",
