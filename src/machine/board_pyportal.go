@@ -1,10 +1,6 @@
-// +build sam,atsamd51,pyportal
+// +build pyportal
 
 package machine
-
-import (
-	"device/sam"
-)
 
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
@@ -104,24 +100,16 @@ const (
 	USBCDC_DP_PIN = PA25
 )
 
-// TODO: add configuration for UART on SERCOM4 that is connected to TX/RX of ESP32
+// UART1 aka NINA_TX/NINA_RX
 const (
-	UART_TX_PIN = NoPin
-	UART_RX_PIN = NoPin
+	UART_TX_PIN = D1
+	UART_RX_PIN = D0
 )
 
 // I2C pins
 const (
 	SDA_PIN = PB02 // SDA: SERCOM2/PAD[0]
 	SCL_PIN = PB03 // SCL: SERCOM2/PAD[1]
-)
-
-// I2C on the PyPortal.
-var (
-	I2C0 = I2C{
-		Bus:    sam.SERCOM5_I2CM,
-		SERCOM: 5,
-	}
 )
 
 // SPI pins
@@ -133,15 +121,6 @@ const (
 	NINA_MOSI = SPI0_MOSI_PIN
 	NINA_MISO = SPI0_MISO_PIN
 	NINA_SCK  = SPI0_SCK_PIN
-)
-
-// SPI on the PyPortal.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM2_SPIM,
-		SERCOM: 2,
-	}
-	NINA_SPI = SPI0
 )
 
 // USB CDC identifiers

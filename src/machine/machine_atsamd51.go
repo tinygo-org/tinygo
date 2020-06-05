@@ -903,27 +903,7 @@ type UART struct {
 var (
 	// UART0 is actually a USB CDC interface.
 	UART0 = USBCDC{Buffer: NewRingBuffer()}
-
-	// The first hardware serial port on the SAMD51. Uses the SERCOM3 interface.
-	UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM3_USART_INT,
-		SERCOM: 3,
-	}
-
-	// The second hardware serial port on the SAMD51. Uses the SERCOM0 interface.
-	UART2 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM0_USART_INT,
-		SERCOM: 0,
-	}
 )
-
-func init() {
-	// Register RXC interrupts.
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM3_2, UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM0_2, UART2.handleInterrupt)
-}
 
 const (
 	sampleRate16X = 16
