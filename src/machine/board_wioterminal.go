@@ -1,11 +1,6 @@
-// +build sam,atsamd51,wioterminal
+// +build wioterminal
 
 package machine
-
-import (
-	"device/sam"
-	"runtime/interrupt"
-)
 
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
@@ -351,26 +346,6 @@ const (
 	UART2_RX_PIN = PIN_SERIAL2_RX
 )
 
-var (
-	UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM2_USART_INT,
-		SERCOM: 2,
-	}
-
-	// RTL8720D
-	UART2 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM1_USART_INT,
-		SERCOM: 1,
-	}
-)
-
-func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM2_2, UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM1_2, UART2.handleInterrupt)
-}
-
 // I2C pins
 const (
 	SDA0_PIN = PIN_WIRE_SDA // SDA: SERCOM3/PAD[0]
@@ -381,19 +356,6 @@ const (
 
 	SDA_PIN = SDA0_PIN
 	SCL_PIN = SCL0_PIN
-)
-
-// I2C on the Wio Terminal
-var (
-	I2C0 = I2C{
-		Bus:    sam.SERCOM4_I2CM,
-		SERCOM: 4,
-	}
-
-	I2C1 = I2C{
-		Bus:    sam.SERCOM4_I2CM,
-		SERCOM: 4,
-	}
 )
 
 // SPI pins
@@ -416,32 +378,6 @@ const (
 	SPI3_SCK_PIN  = SCK3  // SCK:  SERCOM7/PAD[1]
 	SPI3_MOSI_PIN = MOSI3 // MOSI: SERCOM7/PAD[3]
 	SPI3_MISO_PIN = MISO3 // MISO: SERCOM7/PAD[2]
-)
-
-// SPI on the Wio Terminal
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM5_SPIM,
-		SERCOM: 5,
-	}
-
-	// RTL8720D
-	SPI1 = SPI{
-		Bus:    sam.SERCOM0_SPIM,
-		SERCOM: 0,
-	}
-
-	// SD
-	SPI2 = SPI{
-		Bus:    sam.SERCOM6_SPIM,
-		SERCOM: 6,
-	}
-
-	// LCD
-	SPI3 = SPI{
-		Bus:    sam.SERCOM7_SPIM,
-		SERCOM: 7,
-	}
 )
 
 // USB CDC identifiers
