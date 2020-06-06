@@ -24,6 +24,9 @@ func LoadUint16(addr *uint16) (val uint16)
 // LoadUint32 loads the volatile value *addr.
 func LoadUint32(addr *uint32) (val uint32)
 
+// LoadUint64 loads the volatile value *addr.
+func LoadUint64(addr *uint64) (val uint64)
+
 // StoreUint8 stores val to the volatile value *addr.
 func StoreUint8(addr *uint8, val uint8)
 
@@ -32,3 +35,6 @@ func StoreUint16(addr *uint16, val uint16)
 
 // StoreUint32 stores val to the volatile value *addr.
 func StoreUint32(addr *uint32, val uint32)
+
+// StoreUint64 stores val to the volatile value *addr.
+func StoreUint64(addr *uint64, val uint64)

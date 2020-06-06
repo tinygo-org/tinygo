@@ -681,6 +681,8 @@ var (
 
 			var regType string
 			switch register.elementSize {
+			case 8:
+				regType = "volatile.Register64"
 			case 4:
 				regType = "volatile.Register32"
 			case 2:
@@ -710,6 +712,8 @@ var (
 				for _, subregister := range register.registers {
 					var subregType string
 					switch subregister.elementSize {
+					case 8:
+						subregType = "volatile.Register64"
 					case 4:
 						subregType = "volatile.Register32"
 					case 2:
