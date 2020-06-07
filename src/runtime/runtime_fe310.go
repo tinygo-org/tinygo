@@ -24,6 +24,9 @@ func main() {
 	sifive.PLIC.ENABLE[0].Set(0)
 	sifive.PLIC.ENABLE[1].Set(0)
 
+	// Zero the threshold value to allow all priorities of interrupts.
+	sifive.PLIC.THRESHOLD.Set(0)
+
 	// Set the interrupt address.
 	// Note that this address must be aligned specially, otherwise the MODE bits
 	// of MTVEC won't be zero.
