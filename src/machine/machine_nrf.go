@@ -443,13 +443,13 @@ func (spi SPI) Tx(w, r []byte) error {
 			spi.Bus.TXD.Set(uint32(b))
 			for spi.Bus.EVENTS_READY.Get() == 0 {
 			}
-			_ = spi.Bus.RXD.Get()
 			spi.Bus.EVENTS_READY.Set(0)
+			_ = spi.Bus.RXD.Get()
 		}
 		for spi.Bus.EVENTS_READY.Get() == 0 {
 		}
-		_ = spi.Bus.RXD.Get()
 		spi.Bus.EVENTS_READY.Set(0)
+		_ = spi.Bus.RXD.Get()
 
 	default:
 		// write/read
