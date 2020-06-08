@@ -342,6 +342,11 @@ func readSVD(path, sourceURL string) (*Device, error) {
 				firstAddress := clusterRegisters[0].address
 				dimIncrement = int(lastAddress - firstAddress)
 			}
+
+			if !unicode.IsUpper(rune(clusterName[0])) && !unicode.IsDigit(rune(clusterName[0])) {
+				clusterName = strings.ToUpper(clusterName)
+			}
+
 			p.registers = append(p.registers, &PeripheralField{
 				name:        clusterName,
 				address:     baseAddress + clusterOffset,
