@@ -246,9 +246,9 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 		}
 		value := source[len(name):]
 		// Try to convert this #define into a Go constant expression.
-		expr, err := parseConst(pos+token.Pos(len(name)), p.fset, value)
-		if err != nil {
-			p.errors = append(p.errors, err)
+		expr, scannerError := parseConst(pos+token.Pos(len(name)), p.fset, value)
+		if scannerError != nil {
+			p.errors = append(p.errors, *scannerError)
 		}
 		if expr != nil {
 			// Parsing was successful.
