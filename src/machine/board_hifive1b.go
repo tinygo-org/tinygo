@@ -37,8 +37,8 @@ const (
 
 const (
 	// TODO: figure out the pin numbers for these.
-	UART_TX_PIN = NoPin
-	UART_RX_PIN = NoPin
+	UART_TX_PIN = D1
+	UART_RX_PIN = D0
 )
 
 // SPI pins
