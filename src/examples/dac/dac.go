@@ -1,5 +1,7 @@
-// Example using the DAC
+// Simplistic example using the DAC on the Circuit Playground Express.
 //
+// To actually use the DAC for producing complex waveforms or samples requires a DMA
+// timer-based playback mechanism which is beyond the scope of this example.
 package main
 
 import (
