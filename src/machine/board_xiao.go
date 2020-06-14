@@ -12,34 +12,49 @@ const RESET_MAGIC_VALUE = 0xf01669ef
 
 // GPIO Pins
 const (
-	D0  = PA11 // UART0 RX
-	D1  = PA10 // UART0 TX
-	D2  = PA14
-	D3  = PA09 // PWM available
-	D4  = PA08 // PWM available
-	D5  = PA15 // PWM available
-	D6  = PA20 // PWM available
-	D7  = PA21 // PWM available
-	D8  = PA06 // PWM available
-	D9  = PA07 // PWM available
-	D10 = PA18 // can be used for PWM or UART1 TX
-	D11 = PA16 // can be used for PWM or UART1 RX
-	D12 = PA19 // PWM available
-	D13 = PA17 // PWM available
+	D0  = PA02 // can be used for PWM or DAC
+	D1  = PA04 // PWM available
+	D2  = PA10 // PWM available
+	D3  = PA11 // PWM available
+	D4  = PA08 // can be used for PWM or I2C SDA
+	D5  = PA09 // can be used for PWM or I2C SCL
+	D6  = PB08 // can be used for PWM or UART1 TX
+	D7  = PB09 // can be used for PWM or UART1 RX
+	D8  = PA07 // can be used for PWM or SPI SCK
+	D9  = PA05 // can be used for PWM or SPI MISO
+	D10 = PA06 // can be used for PWM or SPI MOSI
 )
 
 // Analog pins
 const (
-	A0 = PA02 // ADC/AIN[0]
-	A1 = PB08 // ADC/AIN[2]
-	A2 = PB09 // ADC/AIN[3]
-	A3 = PA04 // ADC/AIN[4]
-	A4 = PA05 // ADC/AIN[5]
-	A5 = PB02 // ADC/AIN[10]
+	A0  = PA02 // ADC/AIN[0]
+	A1  = PA04 // ADC/AIN[4]
+	A2  = PA10 // ADC/AIN[18]
+	A3  = PA11 // ADC/AIN[19]
+	A4  = PA08 // ADC/AIN[16]
+	A5  = PA09 // ADC/AIN[17]
+	A6  = PB08 // ADC/AIN[2]
+	A7  = PB09 // ADC/AIN[3]
+	A8  = PA07 // ADC/AIN[7]
+	A9  = PA05 // ADC/AIN[6]
+	A10 = PA06 // ADC/AIN[5]
 )
 
 const (
-	LED = D13
+	LED         = PA17
+	PIN_LED_13  = PA17
+	PIN_LED     = PA17
+	LED_BUILTIN = PA17
+
+	PIN_LED_RXL = PA18
+	PIN_LED_TXL = PA19
+	PIN_LED2    = PIN_LED_RXL
+	PIN_LED3    = PIN_LED_TXL
+)
+
+const (
+	SWDIO = PA31
+	SWCLK = PA30
 )
 
 // UART0 aka USBCDC pins
@@ -50,65 +65,49 @@ const (
 
 // UART1 pins
 const (
-	UART_TX_PIN = D10
-	UART_RX_PIN = D11
+	UART_TX_PIN = D6
+	UART_RX_PIN = D7
 )
 
-// UART1 on the ItsyBitsy M0.
+// UART1 on the Xiao
 var (
 	UART1 = UART{
 		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM1_USART,
-		SERCOM: 1,
+		Bus:    sam.SERCOM4_USART,
+		SERCOM: 4,
 	}
 )
 
 func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1, UART1.handleInterrupt)
+	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM4, UART1.handleInterrupt)
 }
 
 // I2C pins
 const (
-	SDA_PIN = PA22 // SDA: SERCOM3/PAD[0]
-	SCL_PIN = PA23 // SCL: SERCOM3/PAD[1]
+	SDA_PIN = PA08 // SDA: SERCOM2/PAD[0]
+	SCL_PIN = PA09 // SCL: SERCOM2/PAD[1]
 )
 
-// I2C on the ItsyBitsy M0.
+// I2C on the Xiao
 var (
 	I2C0 = I2C{
-		Bus:    sam.SERCOM3_I2CM,
-		SERCOM: 3,
+		Bus:    sam.SERCOM2_I2CM,
+		SERCOM: 2,
 	}
 )
 
 // SPI pins
 const (
-	SPI0_SCK_PIN  = PB11 // SCK: SERCOM4/PAD[3]
-	SPI0_MOSI_PIN = PB10 // MOSI: SERCOM4/PAD[2]
-	SPI0_MISO_PIN = PA12 // MISO: SERCOM4/PAD[0]
+	SPI0_SCK_PIN  = PA07 // SCK: SERCOM0/PAD[3]
+	SPI0_MOSI_PIN = PA05 // MOSI: SERCOM0/PAD[2]
+	SPI0_MISO_PIN = PA06 // MISO: SERCOM0/PAD[1]
 )
 
-// SPI on the ItsyBitsy M0.
+// SPI on the Xiao
 var (
 	SPI0 = SPI{
-		Bus:    sam.SERCOM4_SPI,
-		SERCOM: 4,
-	}
-)
-
-// "Internal" SPI pins; SPI flash is attached to these on ItsyBitsy M0
-const (
-	SPI1_CS_PIN   = PA27
-	SPI1_SCK_PIN  = PB23
-	SPI1_MOSI_PIN = PB22
-	SPI1_MISO_PIN = PB03
-)
-
-// "Internal" SPI on Sercom 5
-var (
-	SPI1 = SPI{
-		Bus:    sam.SERCOM5_SPI,
-		SERCOM: 5,
+		Bus:    sam.SERCOM0_SPI,
+		SERCOM: 0,
 	}
 )
 
@@ -116,18 +115,18 @@ var (
 const (
 	I2S_SCK_PIN = PA10
 	I2S_SD_PIN  = PA08
-	I2S_WS_PIN  = NoPin // TODO: figure out what this is on ItsyBitsy M0.
+	I2S_WS_PIN  = NoPin // TODO: figure out what this is on Xiao
 )
 
-// I2S on the ItsyBitsy M0.
+// I2S on the Xiao
 var (
 	I2S0 = I2S{Bus: sam.I2S}
 )
 
 // USB CDC identifiers
 const (
-	usb_STRING_PRODUCT      = "Adafruit ItsyBitsy M0 Express"
-	usb_STRING_MANUFACTURER = "Adafruit"
+	usb_STRING_PRODUCT      = "Seeed Xiao"
+	usb_STRING_MANUFACTURER = "Seeed"
 )
 
 var (
