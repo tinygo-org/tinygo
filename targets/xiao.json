@@ -1,0 +1,8 @@
+{
+    "inherits": ["atsamd21g18a"],
+    "build-tags": ["sam", "atsamd21g18a", "itsybitsy_m0"],
+    "flash-1200-bps-reset": "true",
+    "flash-method": "msd",
+    "msd-volume-name": "ITSYBOOT",
+    "msd-firmware-name": "firmware.uf2"
+}
