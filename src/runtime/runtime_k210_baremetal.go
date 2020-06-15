@@ -7,7 +7,7 @@ import (
 	"device/riscv"
 )
 
-var clockFrequency uint32 = kendryte.SYSCTL.CLK_FREQ.Get()
+var clockFrequency int64 = int64(kendryte.SYSCTL.CLK_FREQ.Get())
 
 // ticksToNanoseconds converts RTC ticks to nanoseconds.
 func ticksToNanoseconds(ticks timeUnit) int64 {

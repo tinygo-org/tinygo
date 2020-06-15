@@ -6,10 +6,11 @@
 package runtime
 
 import (
-	"unsafe"
-
+	"device/kendryte"
 	"device/riscv"
+	"machine"
 	"runtime/volatile"
+	"unsafe"
 )
 
 type timeUnit int64
@@ -18,24 +19,41 @@ func postinit() {}
 
 //export main
 func main() {
-	// todo
 
-	// Set the interrupt address.
-	// Note that this address must be aligned specially, otherwise the MODE bits
-	// of MTVEC won't be zero.
-	riscv.MTVEC.Set(uintptr(unsafe.Pointer(&handleInterruptASM)))
+	// Only use one core for the moment
+	if riscv.MHARTID.Get() == 0 {
+		// Zero the PLIC enable bits at startup.
+		for i := 0; i < ((kendryte.IRQ_max + 32) / 32); i++ {
+			kendryte.PLIC.TARGET_ENABLES[0].ENABLE[i].Set(0) // core 0
+		}
 
-	// Reset the MIE register and enable external interrupts.
-	// It must be reset here because it not zeroed at startup.
-	riscv.MIE.Set(1 << 11) // bit 11 is for machine external interrupts
+		// Zero the PLIC threshold bits to allow all interrupts.
+		kendryte.PLIC.TARGETS[0].THRESHOLD.Set(0)
 
-	// Enable global interrupts now that they've been set up.
-	riscv.MSTATUS.SetBits(1 << 3) // MIE
+		// Reset all interrupt source priorities to zero.
+		for i := 0; i < kendryte.IRQ_max; i++ {
+			kendryte.PLIC.PRIORITY[i].Set(0)
+		}
 
-	preinit()
-	initPeripherals()
-	run()
-	abort()
+		// Set the interrupt address.
+		// Note that this address must be aligned specially, otherwise the MODE bits
+		// of MTVEC won't be zero.
+		riscv.MTVEC.Set(uintptr(unsafe.Pointer(&handleInterruptASM)))
+
+		// Reset the MIE register and enable external interrupts.
+		// It must be reset here because it not zeroed at startup.
+		riscv.MIE.Set(1 << 11) // bit 11 is for machine external interrupts
+
+		// Enable global interrupts now that they've been set up.
+		riscv.MSTATUS.SetBits(1 << 3) // MIE
+
+		preinit()
+		initPeripherals()
+		run()
+		abort()
+	} else {
+		abort()
+	}
 }
 
 //go:extern handleInterruptASM
@@ -56,11 +74,11 @@ func handleInterrupt() {
 			riscv.MIE.ClearBits(1 << 7) // MTIE bit
 		case 11: // Machine external interrupt
 			// Claim this interrupt.
-			//id := sifive.PLIC.CLAIM.Get()
+			id := kendryte.PLIC.TARGETS[0].CLAIM.Get()
 			// Call the interrupt handler, if any is registered for this ID.
 			callInterruptHandler(int(0))
 			// Complete this interrupt.
-			//sifive.PLIC.CLAIM.Set(id)
+			kendryte.PLIC.TARGETS[0].CLAIM.Set(id)
 		}
 	} else {
 		// Topmost bit is clear, so it is an exception of some sort.
@@ -72,11 +90,14 @@ func handleInterrupt() {
 
 // initPeripherals configures periperhals the way the runtime expects them.
 func initPeripherals() {
-	// todo
+
+	//machine.FPIOA0.Init()
+
+	machine.UART0.Configure(machine.UARTConfig{})
 }
 
 func putchar(c byte) {
-	//machine.UART0.WriteByte(c)
+	machine.UART0.WriteByte(c)
 }
 
 const asyncScheduler = false
@@ -84,11 +105,29 @@ const asyncScheduler = false
 var timerWakeup volatile.Register8
 
 func ticks() timeUnit {
-	// todo
+	highBits := uint32(kendryte.CLINT.MTIME.Get() >> 32)
+	for {
+		lowBits := uint32(kendryte.CLINT.MTIME.Get() & 0xffffffff)
+		newHighBits := uint32(kendryte.CLINT.MTIME.Get() >> 32)
+		if newHighBits == highBits {
+			return timeUnit(lowBits) | (timeUnit(highBits) << 32)
+		}
+		highBits = newHighBits
+	}
 }
 
 func sleepTicks(d timeUnit) {
-	// todo
+	target := uint64(ticks() + d)
+	kendryte.CLINT.MTIMECMP[0].Set(target)
+	riscv.MIE.SetBits(1 << 7) // MTIE
+	for {
+		if timerWakeup.Get() != 0 {
+			timerWakeup.Set(0)
+			// Disable timer.
+			break
+		}
+		riscv.Asm("wfi")
+	}
 }
 
 // handleException is called from the interrupt handler for any exception.
