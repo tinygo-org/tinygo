@@ -2,5 +2,5 @@
 	"inherits": ["k210"],
 	"build-tags": ["maixbit"],
 	"linkerscript": "targets/maixbit.ld",
-	"flash-command": "kflash -p /dev/ttyUSB0 {hex}"
+	"flash-command": "kflash -p {port} {hex}"
 }
