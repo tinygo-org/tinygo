@@ -59,3 +59,9 @@ const (
 	LED_GREEN = D4
 	LED_BLUE  = D6
 )
+
+// Default pins for UARTHS
+const (
+	UART_TX_PIN = P05
+	UART_RX_PIN = P04
+)
