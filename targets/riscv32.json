@@ -12,6 +12,6 @@
 	],
 	"extra-files": [
 		"src/runtime/scheduler_tinygoriscv.S",
-		"src/device/riscv/start.S"
+		"src/device/riscv/handleinterrupt32.S"
 	]
 }
