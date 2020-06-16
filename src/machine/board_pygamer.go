@@ -16,7 +16,7 @@ const (
 	D4  = PA14 // PWM available
 	D5  = PA16 // PWM available
 	D6  = PA18 // PWM available
-	D7  = PB14 // built-in SD card slot
+	D7  = PB14 // CS for microSD card slot
 	D8  = PA15 // built-in neopixel
 	D9  = PA19 // PWM available
 	D10 = PA20 // can be used for PWM or UART1 TX
@@ -43,8 +43,8 @@ const (
 	LED       = D13
 	NEOPIXELS = D8
 	
-	SDCS = D7 // SD card slot
-
+	SD_CS = D7 
+	
 	LIGHTSENSOR = A7
 
 	BUTTON_LATCH = PB00

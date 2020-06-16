@@ -14,3 +14,7 @@ src/device/stm32/*.s
 vendor
 llvm-build
 llvm-project
+src/device/.DS_Store
+src/.DS_Store
+compiler/.DS_Store
+.DS_Store
