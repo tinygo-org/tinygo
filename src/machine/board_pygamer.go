@@ -42,9 +42,9 @@ const (
 const (
 	LED       = D13
 	NEOPIXELS = D8
-	
-	SD_CS = D7 
-	
+
+	SD_CS = D7
+
 	LIGHTSENSOR = A7
 
 	BUTTON_LATCH = PB00
