@@ -3,6 +3,6 @@
     "build-tags": ["sam", "atsamd21g18a", "xiao"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "msd-volume-name": "ITSYBOOT",
+    "msd-volume-name": "Arduino",
     "msd-firmware-name": "firmware.uf2"
 }

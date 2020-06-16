@@ -125,11 +125,11 @@ var (
 
 // USB CDC identifiers
 const (
-	usb_STRING_PRODUCT      = "Seeed Xiao"
+	usb_STRING_PRODUCT      = "Seeed XIAO M0"
 	usb_STRING_MANUFACTURER = "Seeed"
 )
 
 var (
-	usb_VID uint16 = 0x239A
-	usb_PID uint16 = 0x800F
+	usb_VID uint16 = 0x2886
+	usb_PID uint16 = 0x802F
 )
