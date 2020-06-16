@@ -20,15 +20,11 @@ func postinit() {}
 //export main
 func main() {
 
-	// Only use one core for the moment
-	if riscv.MHARTID.Get() == 0 {
-		// Zero the PLIC enable bits at startup.
-		for i := 0; i < ((kendryte.IRQ_max + 32) / 32); i++ {
-			kendryte.PLIC.TARGET_ENABLES[0].ENABLE[i].Set(0) // core 0
-		}
+	// Both harts should disable all interrupts on startup.
+	initPLIC()
 
-		// Zero the PLIC threshold bits to allow all interrupts.
-		kendryte.PLIC.TARGETS[0].THRESHOLD.Set(0)
+	// Only use one hart for the moment.
+	if riscv.MHARTID.Get() == 0 {
 
 		// Reset all interrupt source priorities to zero.
 		for i := 0; i < kendryte.IRQ_max; i++ {
@@ -56,14 +52,26 @@ func main() {
 	}
 }
 
+func initPLIC() {
+	hartId := riscv.MHARTID.Get()
+
+	// Zero the PLIC enable bits at startup.
+	for i := 0; i < ((kendryte.IRQ_max + 32) / 32); i++ {
+		kendryte.PLIC.TARGET_ENABLES[hartId].ENABLE[i].Set(0)
+	}
+
+	// Zero the PLIC threshold bits to allow all interrupts.
+	kendryte.PLIC.TARGETS[hartId].THRESHOLD.Set(0)
+}
+
 //go:extern handleInterruptASM
 var handleInterruptASM [0]uintptr
 
 //export handleInterrupt
 func handleInterrupt() {
 	cause := riscv.MCAUSE.Get()
-	code := uint(cause &^ (1 << 31))
-	if cause&(1<<31) != 0 {
+	code := uint64(cause &^ (1 << 63))
+	if cause&(1<<63) != 0 {
 		// Topmost bit is set, which means that it is an interrupt.
 		switch code {
 		case 7: // Machine timer interrupt
@@ -73,12 +81,14 @@ func handleInterrupt() {
 			// this interrupt returns.
 			riscv.MIE.ClearBits(1 << 7) // MTIE bit
 		case 11: // Machine external interrupt
+			hartId := riscv.MHARTID.Get()
+
 			// Claim this interrupt.
-			id := kendryte.PLIC.TARGETS[0].CLAIM.Get()
+			id := kendryte.PLIC.TARGETS[hartId].CLAIM.Get()
 			// Call the interrupt handler, if any is registered for this ID.
-			callInterruptHandler(int(0))
+			callInterruptHandler(int(id))
 			// Complete this interrupt.
-			kendryte.PLIC.TARGETS[0].CLAIM.Set(id)
+			kendryte.PLIC.TARGETS[hartId].CLAIM.Set(id)
 		}
 	} else {
 		// Topmost bit is clear, so it is an exception of some sort.
@@ -133,7 +143,7 @@ func sleepTicks(d timeUnit) {
 // handleException is called from the interrupt handler for any exception.
 // Exceptions can be things like illegal instructions, invalid memory
 // read/write, and similar issues.
-func handleException(code uint) {
+func handleException(code uint64) {
 	// For a list of exception codes, see:
 	// https://content.riscv.org/wp-content/uploads/2019/08/riscv-privileged-20190608-1.pdf#page=49
 	print("fatal error: exception with mcause=")

@@ -16,9 +16,5 @@
 	"ldflags": [
 		"--gc-sections"
 	],
-	"extra-files": [
-		"src/device/riscv/start.S",
-		"src/runtime/scheduler_tinygoriscv.S"
-	],
 	"gdb": "riscv64-unknown-elf-gdb"
 }

@@ -9,5 +9,9 @@
 	],
 	"ldflags": [
 		"-melf64lriscv"
+	],
+	"extra-files": [
+		"src/runtime/scheduler_tinygoriscv64.S",
+		"src/device/riscv/start64.S"
 	]
 }

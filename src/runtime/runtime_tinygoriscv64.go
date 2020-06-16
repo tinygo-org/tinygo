@@ -1,4 +1,4 @@
-// +build tinygo.riscv32
+// +build tinygo.riscv64
 
 package runtime
 
@@ -23,16 +23,16 @@ func preinit() {
 	// Initialize .bss: zero-initialized global variables.
 	ptr := unsafe.Pointer(&_sbss)
 	for ptr != unsafe.Pointer(&_ebss) {
-		*(*uint32)(ptr) = 0
-		ptr = unsafe.Pointer(uintptr(ptr) + 4)
+		*(*uint64)(ptr) = 0
+		ptr = unsafe.Pointer(uintptr(ptr) + 8)
 	}
 
 	// Initialize .data: global variables initialized from flash.
 	src := unsafe.Pointer(&_sidata)
 	dst := unsafe.Pointer(&_sdata)
 	for dst != unsafe.Pointer(&_edata) {
-		*(*uint32)(dst) = *(*uint32)(src)
-		dst = unsafe.Pointer(uintptr(dst) + 4)
-		src = unsafe.Pointer(uintptr(src) + 4)
+		*(*uint64)(dst) = *(*uint64)(src)
+		dst = unsafe.Pointer(uintptr(dst) + 8)
+		src = unsafe.Pointer(uintptr(src) + 8)
 	}
 }
