@@ -388,6 +388,16 @@ func (a ADC) getADCChannel() uint8 {
 	switch a.Pin {
 	case PA02:
 		return 0
+	case PA03:
+		return 1
+	case PB04:
+		return 12
+	case PB05:
+		return 13
+	case PB06:
+		return 14
+	case PB07:
+		return 15
 	case PB08:
 		return 2
 	case PB09:
@@ -400,14 +410,22 @@ func (a ADC) getADCChannel() uint8 {
 		return 6
 	case PA07:
 		return 7
+	case PA08:
+		return 16
+	case PA09:
+		return 17
+	case PA10:
+		return 18
+	case PA11:
+		return 19
+	case PB00:
+		return 8
+	case PB01:
+		return 9
 	case PB02:
 		return 10
 	case PB03:
 		return 11
-	case PA09:
-		return 17
-	case PA11:
-		return 19
 	default:
 		return 0
 	}
