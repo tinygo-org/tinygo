@@ -1,17 +1,17 @@
-// +build tinygo.riscv32
+// +build tinygo.riscv64
 
 package runtime
 
 import "device/riscv"
 
-const GOARCH = "arm" // riscv pretends to be arm
+const GOARCH = "arm64" // riscv pretends to be arm
 
 // The bitness of the CPU (e.g. 8, 32, 64).
-const TargetBits = 32
+const TargetBits = 64
 
 // Align on word boundary.
 func align(ptr uintptr) uintptr {
-	return (ptr + 3) &^ 3
+	return (ptr + 7) &^ 7
 }
 
 func getCurrentStackPointer() uintptr {
@@ -89,12 +89,4 @@ func procPin() {
 //go:linkname procUnpin sync/atomic.runtime_procUnpin
 func procUnpin() {
 	riscv.EnableInterrupts(procPinnedMask)
-}
-
-func waitForEvents() {
-	mask := riscv.DisableInterrupts()
-	if !runqueue.Empty() {
-		riscv.Asm("wfi")
-	}
-	riscv.EnableInterrupts(mask)
 }

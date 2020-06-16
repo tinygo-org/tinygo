@@ -60,22 +60,21 @@ var (
 )
 
 func (uart UART) Configure(config UARTConfig) {
-
 	div := CPUFrequency()/115200 - 1
 
 	uart.Bus.DIV.Set(div)
 	uart.Bus.TXCTRL.Set(kendryte.UARTHS_TXCTRL_TXEN)
 	uart.Bus.RXCTRL.Set(kendryte.UARTHS_RXCTRL_RXEN)
-	//uart.Bus.IP.Set(kendryte.UARTHS_IP_TXWM | kendryte.UARTHS_IP_RXWM)
-	//uart.Bus.IE.Set(kendryte.UARTHS_IE_RXWM)
 
-	/*intr := interrupt.New(kendryte.IRQ_UARTHS, UART0.handleInterrupt)
+	// Enable interrupts on receive.
+	uart.Bus.IE.Set(kendryte.UARTHS_IE_RXWM)
+
+	intr := interrupt.New(kendryte.IRQ_UARTHS, UART0.handleInterrupt)
 	intr.SetPriority(5)
-	intr.Enable()*/
-
+	intr.Enable()
 }
 
-func (uart UART) handleInterrupt(interrupt.Interrupt) {
+func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	rxdata := uart.Bus.RXDATA.Get()
 	c := byte(rxdata)
 	if uint32(c) != rxdata {

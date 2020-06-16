@@ -1,6 +1,7 @@
 {
 	"inherits": ["riscv"],
 	"llvm-target": "riscv32--none",
+	"build-tags": ["tinygo.riscv32"],
 	"cflags": [
 		"--target=riscv32--none",
 		"-march=rv32imac",
@@ -8,5 +9,9 @@
 	],
 	"ldflags": [
 		"-melf32lriscv"
+	],
+	"extra-files": [
+		"src/runtime/scheduler_tinygoriscv.S",
+		"src/device/riscv/start.S"
 	]
 }
