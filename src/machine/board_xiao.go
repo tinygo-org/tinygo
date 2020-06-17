@@ -48,11 +48,6 @@ const (
 	LED3    = LED_TXL
 )
 
-const (
-	SWDIO = PA31
-	SWCLK = PA30
-)
-
 // UART0 aka USBCDC pins
 const (
 	USBCDC_DM_PIN = PA24
