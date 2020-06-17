@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 33 microcontroller boards are currently supported:
+The following 34 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
@@ -73,6 +73,7 @@ The following 33 microcontroller boards are currently supported:
 * [Phytec reel board](https://www.phytec.eu/product-eu/internet-of-things/reelboard/)
 * [PineTime DevKit](https://www.pine64.org/pinetime/)
 * [Seeed Wio Terminal](https://www.seeedstudio.com/Wio-Terminal-p-4509.html)
+* [Seeed Seeeduino XIAO](https://www.seeedstudio.com/Seeeduino-XIAO-Arduino-Microcontroller-SAMD21-Cortex-M0+-p-4426.html)
 * [SiFIve HiFive1](https://www.sifive.com/boards/hifive1)
 * [ST Micro "Nucleo F103RB"](https://www.st.com/en/evaluation-tools/nucleo-f103rb.html)
 * [ST Micro STM32F103XX "Bluepill"](http://wiki.stm32duino.com/index.php?title=Blue_Pill)
