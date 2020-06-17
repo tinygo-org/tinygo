@@ -41,15 +41,11 @@ const (
 )
 
 const (
-	LED         = PA17
-	PIN_LED_13  = PA17
-	PIN_LED     = PA17
-	LED_BUILTIN = PA17
-
-	PIN_LED_RXL = PA18
-	PIN_LED_TXL = PA19
-	PIN_LED2    = PIN_LED_RXL
-	PIN_LED3    = PIN_LED_TXL
+	LED     = PA17
+	LED_RXL = PA18
+	LED_TXL = PA19
+	LED2    = LED_RXL
+	LED3    = LED_TXL
 )
 
 const (
