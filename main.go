@@ -901,7 +901,7 @@ func main() {
 			os.Exit(1)
 		}
 		var lib *builder.Library
-		switch name := filepath.ToSlash(flag.Arg(0)); name {
+		switch name := flag.Arg(0); name {
 		case "compiler-rt":
 			lib = &builder.CompilerRT
 		case "picolibc":
@@ -954,8 +954,7 @@ func main() {
 		handleCompilerError(err)
 	case "info":
 		if flag.NArg() == 1 {
-			pkgName := filepath.ToSlash(flag.Arg(0))
-			options.Target = pkgName
+			options.Target = flag.Arg(0)
 		} else if flag.NArg() > 1 {
 			fmt.Fprintln(os.Stderr, "only one target name is accepted")
 			usage()
