@@ -97,7 +97,7 @@ const (
 	SCL_PIN = PA13 // SCL: SERCOM2/PAD[1]
 )
 
-// I2C on the ItsyBitsy M4.
+// I2C on the PyGamer.
 var (
 	I2C0 = I2C{
 		Bus:    sam.SERCOM2_I2CM,
