@@ -1,0 +1,8 @@
+{
+    "inherits": ["atsamd51j19a"],
+    "build-tags": ["sam", "atsamd51j19a", "pygamer"],
+    "flash-1200-bps-reset": "true",
+    "flash-method": "msd",
+    "msd-volume-name": "PYGAMERBOOT",
+    "msd-firmware-name": "arcade.uf2"
+}
