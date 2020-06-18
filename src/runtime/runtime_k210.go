@@ -24,32 +24,31 @@ func main() {
 	initPLIC()
 
 	// Only use one hart for the moment.
-	if riscv.MHARTID.Get() == 0 {
-
-		// Reset all interrupt source priorities to zero.
-		for i := 0; i < kendryte.IRQ_max; i++ {
-			kendryte.PLIC.PRIORITY[i].Set(0)
-		}
-
-		// Set the interrupt address.
-		// Note that this address must be aligned specially, otherwise the MODE bits
-		// of MTVEC won't be zero.
-		riscv.MTVEC.Set(uintptr(unsafe.Pointer(&handleInterruptASM)))
-
-		// Reset the MIE register and enable external interrupts.
-		// It must be reset here because it not zeroed at startup.
-		riscv.MIE.Set(1 << 11) // bit 11 is for machine external interrupts
-
-		// Enable global interrupts now that they've been set up.
-		riscv.MSTATUS.SetBits(1 << 3) // MIE
-
-		preinit()
-		initPeripherals()
-		run()
-		abort()
-	} else {
+	if riscv.MHARTID.Get() != 0 {
 		abort()
 	}
+
+	// Reset all interrupt source priorities to zero.
+	for i := 0; i < kendryte.IRQ_max; i++ {
+		kendryte.PLIC.PRIORITY[i].Set(0)
+	}
+
+	// Set the interrupt address.
+	// Note that this address must be aligned specially, otherwise the MODE bits
+	// of MTVEC won't be zero.
+	riscv.MTVEC.Set(uintptr(unsafe.Pointer(&handleInterruptASM)))
+
+	// Reset the MIE register and enable external interrupts.
+	// It must be reset here because it not zeroed at startup.
+	riscv.MIE.Set(1 << 11) // bit 11 is for machine external interrupts
+
+	// Enable global interrupts now that they've been set up.
+	riscv.MSTATUS.SetBits(1 << 3) // MIE
+
+	preinit()
+	initPeripherals()
+	run()
+	abort()
 }
 
 func initPLIC() {
