@@ -1,3 +1,7 @@
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package reflect
 
 import (
@@ -530,7 +534,7 @@ func (tag StructTag) Lookup(key string) (value string, ok bool) {
 		tag = tag[i+1:]
 
 		if key == name {
-			value, err := Unquote(qvalue)
+			value, err := unquote(qvalue)
 			if err != nil {
 				break
 			}

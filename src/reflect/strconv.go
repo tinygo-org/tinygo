@@ -8,8 +8,8 @@ import (
 	"unicode/utf8"
 )
 
-// ErrSyntax indicates that a value does not have the right syntax for the target type.
-var ErrSyntax = badSyntax{}
+// errSyntax indicates that a value does not have the right syntax for the target type.
+var errSyntax = badSyntax{}
 
 type badSyntax struct{}
 
@@ -30,7 +30,7 @@ func unhex(b byte) (v rune, ok bool) {
 	return
 }
 
-// UnquoteChar decodes the first character or byte in the escaped string
+// unquoteChar decodes the first character or byte in the escaped string
 // or character literal represented by the string s.
 // It returns four values:
 //
@@ -44,15 +44,15 @@ func unhex(b byte) (v rune, ok bool) {
 // If set to a single quote, it permits the sequence \' and disallows unescaped '.
 // If set to a double quote, it permits \" and disallows unescaped ".
 // If set to zero, it does not permit either escape and allows both quote characters to appear unescaped.
-func UnquoteChar(s string, quote byte) (value rune, multibyte bool, tail string, err error) {
+func unquoteChar(s string, quote byte) (value rune, multibyte bool, tail string, err error) {
 	// easy cases
 	if len(s) == 0 {
-		err = ErrSyntax
+		err = errSyntax
 		return
 	}
 	switch c := s[0]; {
 	case c == quote && (quote == '\'' || quote == '"'):
-		err = ErrSyntax
+		err = errSyntax
 		return
 	case c >= utf8.RuneSelf:
 		r, size := utf8.DecodeRuneInString(s)
@@ -63,7 +63,7 @@ func UnquoteChar(s string, quote byte) (value rune, multibyte bool, tail string,
 
 	// hard case: c is backslash
 	if len(s) <= 1 {
-		err = ErrSyntax
+		err = errSyntax
 		return
 	}
 	c := s[1]
@@ -96,13 +96,13 @@ func UnquoteChar(s string, quote byte) (value rune, multibyte bool, tail string,
 		}
 		var v rune
 		if len(s) < n {
-			err = ErrSyntax
+			err = errSyntax
 			return
 		}
 		for j := 0; j < n; j++ {
 			x, ok := unhex(s[j])
 			if !ok {
-				err = ErrSyntax
+				err = errSyntax
 				return
 			}
 			v = v<<4 | x
@@ -114,7 +114,7 @@ func UnquoteChar(s string, quote byte) (value rune, multibyte bool, tail string,
 			break
 		}
 		if v > utf8.MaxRune {
-			err = ErrSyntax
+			err = errSyntax
 			return
 		}
 		value = v
@@ -122,20 +122,20 @@ func UnquoteChar(s string, quote byte) (value rune, multibyte bool, tail string,
 	case '0', '1', '2', '3', '4', '5', '6', '7':
 		v := rune(c) - '0'
 		if len(s) < 2 {
-			err = ErrSyntax
+			err = errSyntax
 			return
 		}
 		for j := 0; j < 2; j++ { // one digit already; two more
 			x := rune(s[j]) - '0'
 			if x < 0 || x > 7 {
-				err = ErrSyntax
+				err = errSyntax
 				return
 			}
 			v = (v << 3) | x
 		}
 		s = s[2:]
 		if v > 255 {
-			err = ErrSyntax
+			err = errSyntax
 			return
 		}
 		value = v
@@ -143,37 +143,37 @@ func UnquoteChar(s string, quote byte) (value rune, multibyte bool, tail string,
 		value = '\\'
 	case '\'', '"':
 		if c != quote {
-			err = ErrSyntax
+			err = errSyntax
 			return
 		}
 		value = rune(c)
 	default:
-		err = ErrSyntax
+		err = errSyntax
 		return
 	}
 	tail = s
 	return
 }
 
-// Unquote interprets s as a single-quoted, double-quoted,
+// unquote interprets s as a single-quoted, double-quoted,
 // or backquoted Go string literal, returning the string value
 // that s quotes.  (If s is single-quoted, it would be a Go
-// character literal; Unquote returns the corresponding
+// character literal; unquote returns the corresponding
 // one-character string.)
-func Unquote(s string) (string, error) {
+func unquote(s string) (string, error) {
 	n := len(s)
 	if n < 2 {
-		return "", ErrSyntax
+		return "", errSyntax
 	}
 	quote := s[0]
 	if quote != s[n-1] {
-		return "", ErrSyntax
+		return "", errSyntax
 	}
 	s = s[1 : n-1]
 
 	if quote == '`' {
 		if contains(s, '`') {
-			return "", ErrSyntax
+			return "", errSyntax
 		}
 		if contains(s, '\r') {
 			// -1 because we know there is at least one \r to remove.
@@ -188,10 +188,10 @@ func Unquote(s string) (string, error) {
 		return s, nil
 	}
 	if quote != '"' && quote != '\'' {
-		return "", ErrSyntax
+		return "", errSyntax
 	}
 	if contains(s, '\n') {
-		return "", ErrSyntax
+		return "", errSyntax
 	}
 
 	// Is it trivial? Avoid allocation.
@@ -212,7 +212,7 @@ func Unquote(s string) (string, error) {
 	var runeTmp [utf8.UTFMax]byte
 	buf := make([]byte, 0, 3*len(s)/2) // Try to avoid more allocations.
 	for len(s) > 0 {
-		c, multibyte, ss, err := UnquoteChar(s, quote)
+		c, multibyte, ss, err := unquoteChar(s, quote)
 		if err != nil {
 			return "", err
 		}
@@ -225,7 +225,7 @@ func Unquote(s string) (string, error) {
 		}
 		if quote == '\'' && len(s) != 0 {
 			// single-quoted must be single character
-			return "", ErrSyntax
+			return "", errSyntax
 		}
 	}
 	return string(buf), nil
@@ -233,12 +233,12 @@ func Unquote(s string) (string, error) {
 
 // contains reports whether the string contains the byte c.
 func contains(s string, c byte) bool {
-	return IndexByteString(s, c) != -1
+	return indexByteString(s, c) != -1
 }
 
 // Index finds the index of the first instance of the specified byte in the string.
 // If the byte is not found, this returns -1.
-func IndexByteString(s string, c byte) int {
+func indexByteString(s string, c byte) int {
 	for i := 0; i < len(s); i++ {
 		if s[i] == c {
 			return i
