@@ -8,10 +8,10 @@ import (
 )
 
 type spiDriver struct {
-	bus machine.SPI
+	bus *machine.SPI
 }
 
-func NewSpi(bus machine.SPI, dc, cs, rst machine.Pin) *Device {
+func NewSpi(bus *machine.SPI, dc, cs, rst machine.Pin) *Device {
 	return &Device{
 		dc:  dc,
 		cs:  cs,
@@ -98,19 +98,14 @@ func (pd *spiDriver) write16n(data uint16, n int) {
 	}
 }
 
+// for pyportal_boing
+var data8 = make([]uint8, (136+8)*(100+8)*2)
+
 func (pd *spiDriver) write16sl(data []uint16) {
-	pd.bus.Bus.CTRLB.ClearBits(sam.SERCOM_SPIM_CTRLB_RXEN)
-
-	for i, c := 0, len(data); i < c; i++ {
-		for !pd.bus.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_DRE) {
-		}
-		pd.bus.Bus.DATA.Set(uint32(uint8(data[i] >> 8)))
-		for !pd.bus.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_DRE) {
-		}
-		pd.bus.Bus.DATA.Set(uint32(uint8(data[i])))
+	for i, b := range data {
+		data8[i*2+0] = uint8(b >> 8)
+		data8[i*2+1] = uint8(b)
 	}
 
-	pd.bus.Bus.CTRLB.SetBits(sam.SERCOM_SPIM_CTRLB_RXEN)
-	for pd.bus.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPIM_SYNCBUSY_CTRLB) {
-	}
+	pd.bus.Tx(data8[:len(data)*2], nil)
 }

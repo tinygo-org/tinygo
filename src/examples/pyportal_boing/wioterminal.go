@@ -10,9 +10,9 @@ import (
 
 var (
 	display = ili9341.NewSpi(
-		machine.SPI3,
+		&machine.SPI3,
 		machine.LCD_DC,
-		machine.LCD_SS_PIN,
+		machine.NoPin, // machine.LCD_SS_PIN,
 		machine.LCD_RESET,
 	)
 
@@ -26,4 +26,8 @@ func init() {
 		MISO:      machine.LCD_MISO_PIN,
 		Frequency: 40000000,
 	})
+	machine.SPI3.SetupDMA()
+
+	machine.LCD_SS_PIN.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	machine.LCD_SS_PIN.Low()
 }

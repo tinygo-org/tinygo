@@ -190,6 +190,7 @@ func main() {
 			bgy++
 		}
 
+		machine.SPI3.DmaWait()
 		display.DrawRGBBitmap(minx, miny, frameBuffer[:width*height], width, height)
 
 		// Show approximate frame rate
@@ -220,6 +221,7 @@ func DrawBackground() {
 				frameBuffer[k] = GRIDCOLOR
 			}
 		}
+		machine.SPI3.DmaWait()
 		display.DrawRGBBitmap(0, j, frameBuffer[0:w], w, 1)
 	}
 }
