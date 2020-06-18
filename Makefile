@@ -192,7 +192,7 @@ smoketest:
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky2
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/button
-	@$(MD5SUM) test.hex
+	@$(MD5SUM) test.
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/button2
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/echo
@@ -294,6 +294,8 @@ smoketest:
 	$(TINYGO) build -size short -o test.hex -target=reelboard-s140v7    examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=wioterminal         examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pygamer             examples/blinky1
 	@$(MD5SUM) test.hex
 ifneq ($(AVR), 0)
 	$(TINYGO) build -size short -o test.hex -target=atmega1284p         examples/serial
