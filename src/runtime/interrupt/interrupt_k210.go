@@ -2,13 +2,16 @@
 
 package interrupt
 
-import "device/kendryte"
+import (
+	"device/kendryte"
+	"device/riscv"
+)
 
 // Enable enables this interrupt. Right after calling this function, the
 // interrupt may be invoked if it was already pending.
 func (irq Interrupt) Enable() {
-	// TODO: Use current hartid
-	kendryte.PLIC.TARGET_ENABLES[0].ENABLE[irq.num/32].SetBits(1 << (uint(irq.num) % 32))
+	hartId := riscv.MHARTID.Get()
+	kendryte.PLIC.TARGET_ENABLES[hartId].ENABLE[irq.num/32].SetBits(1 << (uint(irq.num) % 32))
 }
 
 // SetPriority sets the interrupt priority for this interrupt. A higher priority

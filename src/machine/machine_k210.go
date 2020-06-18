@@ -44,10 +44,10 @@ var (
 
 func (fpioa FPIOA) Init() {
 	// Enable APB0 clock.
-	kendryte.SYSCTL.CLK_EN_CENT.Set(kendryte.SYSCTL_CLK_EN_CENT_APB0_CLK_EN)
+	kendryte.SYSCTL.CLK_EN_CENT.SetBits(kendryte.SYSCTL_CLK_EN_CENT_APB0_CLK_EN)
 
 	// Enable FPIOA peripheral.
-	kendryte.SYSCTL.CLK_EN_PERI.Set(kendryte.SYSCTL_CLK_EN_PERI_FPIOA_CLK_EN)
+	kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_FPIOA_CLK_EN)
 }
 
 type UART struct {
