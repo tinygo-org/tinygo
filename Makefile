@@ -182,7 +182,7 @@ tinygo-test:
 .PHONY: smoketest
 smoketest:
 	$(TINYGO) version
-	# test all examples
+	# test all examples (except pwm)
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/adc
@@ -192,7 +192,7 @@ smoketest:
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky2
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/button
-	@$(MD5SUM) test.hex
+	@$(MD5SUM) test.
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/button2
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/echo
@@ -203,7 +203,7 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=microbit            examples/microbit-blink
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/pwm
+	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/pininterrupt
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/serial
 	@$(MD5SUM) test.hex
@@ -230,6 +230,8 @@ smoketest:
 	$(TINYGO) build -size short -o test.hex -target=pca10040-s132v6     examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=microbit            examples/echo
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=microbit-s110v8     examples/echo
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nrf52840-mdk        examples/blinky1
 	@$(MD5SUM) test.hex
@@ -300,6 +302,8 @@ ifneq ($(AVR), 0)
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino             examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=arduino             examples/pwm
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino -scheduler=tasks  examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-nano        examples/blinky1
@@ -314,7 +318,10 @@ endif
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/export
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/main
 
-release: tinygo gen-device wasi-libc
+wasmtest:
+	$(GO) test ./tests/wasm
+
+build/release: tinygo gen-device wasi-libc
 	@mkdir -p build/release/tinygo/bin
 	@mkdir -p build/release/tinygo/lib/clang/include
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
@@ -349,4 +356,13 @@ release: tinygo gen-device wasi-libc
 	./build/tinygo build-library -target=armv6m-none-eabi  -o build/release/tinygo/pkg/armv6m-none-eabi/picolibc.a picolibc
 	./build/tinygo build-library -target=armv7m-none-eabi  -o build/release/tinygo/pkg/armv7m-none-eabi/picolibc.a picolibc
 	./build/tinygo build-library -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/picolibc.a picolibc
+
+release: build/release
 	tar -czf build/release.tar.gz -C build/release tinygo
+
+deb: build/release
+	@mkdir -p build/release-deb/usr/local/bin
+	@mkdir -p build/release-deb/usr/local/lib
+	cp -ar build/release/tinygo build/release-deb/usr/local/lib/tinygo
+	ln -sf ../lib/tinygo/bin/tinygo build/release-deb/usr/local/bin/tinygo
+	fpm -f -s dir -t deb -n tinygo -v $(shell grep "const Version = " goenv/version.go | awk '{print $$NF}') -m '@tinygo-org' --description='TinyGo is a Go compiler for small places.' --license='BSD 3-Clause' --url=https://tinygo.org/ --deb-changelog CHANGELOG.md -p build/release.deb -C ./build/release-deb
