@@ -192,7 +192,7 @@ smoketest:
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky2
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/button
-	@$(MD5SUM) test.
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/button2
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/echo
