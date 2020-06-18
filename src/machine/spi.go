@@ -34,7 +34,7 @@ var (
 //
 // 		spi.Tx(nil, rx)
 //
-func (spi SPI) Tx(w, r []byte) error {
+func (spi *SPI) Tx(w, r []byte) error {
 	var err error
 
 	switch {
@@ -48,10 +48,19 @@ func (spi SPI) Tx(w, r []byte) error {
 		}
 	case r == nil:
 		// write only
-		for _, b := range w {
-			_, err = spi.Transfer(b)
-			if err != nil {
-				return err
+		if spi.DmaEnabled {
+			spi.TransferDma8(w)
+
+			// If you want to wait until you're finished, you can uncomment
+			//return spi.DmaWait()
+
+			return nil
+		} else {
+			for _, b := range w {
+				_, err = spi.Transfer(b)
+				if err != nil {
+					return err
+				}
 			}
 		}
 

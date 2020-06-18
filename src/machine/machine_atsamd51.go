@@ -1303,6 +1303,10 @@ func (i2c I2C) readByte() byte {
 type SPI struct {
 	Bus    *sam.SERCOM_SPIM_Type
 	SERCOM uint8
+
+	DmaChannel uint32
+	DmaEnabled bool
+	DmaWaitEnd bool
 }
 
 // SPIConfig is used to store config info for SPI.
@@ -1438,6 +1442,97 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 
 	// return data
 	return byte(spi.Bus.DATA.Get()), nil
+}
+
+const dmaDescriptors = 2
+
+//go:align 16
+var dmaDescriptorSection [dmaDescriptors]dmaDescriptor
+
+//go:align 16
+var dmaDescriptorWritebackSection [dmaDescriptors]dmaDescriptor
+
+type dmaDescriptor struct {
+	btctrl   uint16
+	btcnt    uint16
+	srcaddr  unsafe.Pointer
+	dstaddr  unsafe.Pointer
+	descaddr unsafe.Pointer
+}
+
+// SetupDMA setup DMA for SPI tx.
+func (spi *SPI) SetupDMA() error {
+	spi.DmaChannel = 0
+	spi.DmaEnabled = true
+	spi.DmaWaitEnd = false
+	triggerSource := uint32(0x13) // TODO: calc from spi.SERCOM
+
+	// Init DMAC.
+	// First configure the clocks, then configure the DMA descriptors. Those
+	// descriptors must live in SRAM and must be aligned on a 16-byte boundary.
+	// http://www.lucadavidian.com/2018/03/08/wifi-controlled-neo-pixels-strips/
+	// https://svn.larosterna.com/oss/trunk/arduino/zerotimer/zerodma.cpp
+	sam.MCLK.AHBMASK.SetBits(sam.MCLK_AHBMASK_DMAC_)
+	sam.DMAC.BASEADDR.Set(uint32(uintptr(unsafe.Pointer(&dmaDescriptorSection))))
+	sam.DMAC.WRBADDR.Set(uint32(uintptr(unsafe.Pointer(&dmaDescriptorWritebackSection))))
+
+	// Enable peripheral with all priorities.
+	sam.DMAC.CTRL.SetBits(sam.DMAC_CTRL_DMAENABLE | sam.DMAC_CTRL_LVLEN0 | sam.DMAC_CTRL_LVLEN1 | sam.DMAC_CTRL_LVLEN2 | sam.DMAC_CTRL_LVLEN3)
+
+	// Configure channel descriptor.
+	dmaDescriptorSection[spi.DmaChannel] = dmaDescriptor{
+		btctrl: (1 << 0) | // VALID: Descriptor Valid
+			(0 << 3) | // BLOCKACT=NOACT: Block Action
+			(1 << 10) | // SRCINC: Source Address Increment Enable
+			(0 << 11) | // DSTINC: Destination Address Increment Enable
+			(1 << 12) | // STEPSEL=SRC: Step Selection
+			(0 << 13), // STEPSIZE=X1: Address Increment Step Size
+		dstaddr: unsafe.Pointer(&spi.Bus.DATA.Reg),
+	}
+
+	// Reset channel.
+	sam.DMAC.CHANNEL[spi.DmaChannel].CHCTRLA.ClearBits(sam.DMAC_CHANNEL_CHCTRLA_ENABLE)
+	sam.DMAC.CHANNEL[spi.DmaChannel].CHCTRLA.SetBits(sam.DMAC_CHANNEL_CHCTRLA_SWRST)
+
+	// Configure channel.
+	sam.DMAC.CHANNEL[spi.DmaChannel].CHPRILVL.Set(0)
+	sam.DMAC.CHANNEL[spi.DmaChannel].CHCTRLA.Set((sam.DMAC_CHANNEL_CHCTRLA_TRIGACT_BURST << sam.DMAC_CHANNEL_CHCTRLA_TRIGACT_Pos) | (triggerSource << sam.DMAC_CHANNEL_CHCTRLA_TRIGSRC_Pos) | (sam.DMAC_CHANNEL_CHCTRLA_BURSTLEN_SINGLE << sam.DMAC_CHANNEL_CHCTRLA_BURSTLEN_Pos))
+	//sam.DMAC.CHANNEL[spi.DmaChannel].CHCTRLA.Set((sam.DMAC_CHANNEL_CHCTRLA_TRIGACT_BLOCK << sam.DMAC_CHANNEL_CHCTRLA_TRIGACT_Pos) | (triggerSource << sam.DMAC_CHANNEL_CHCTRLA_TRIGSRC_Pos) | (sam.DMAC_CHANNEL_CHCTRLA_BURSTLEN_SINGLE << sam.DMAC_CHANNEL_CHCTRLA_BURSTLEN_Pos))
+	return nil
+}
+
+func (spi *SPI) TransferDma8(buf []byte) {
+	//sam.DMAC.CHANNEL[spi.Channel].CHCTRLA.ClearBits(sam.DMAC_CHANNEL_CHCTRLA_ENABLE)
+	descriptor := &dmaDescriptorSection[spi.DmaChannel]
+	descriptor.srcaddr = unsafe.Pointer(uintptr(unsafe.Pointer(&buf[0])) + uintptr(len(buf)))
+	descriptor.btcnt = uint16(len(buf)) // beat count
+
+	// Start the transfer.
+	spi.DmaWaitEnd = true
+	sam.DMAC.CHANNEL[spi.DmaChannel].CHCTRLA.SetBits(sam.DMAC_CHANNEL_CHCTRLA_ENABLE)
+}
+
+func (spi *SPI) TransferDma16(buf []uint16) {
+	//sam.DMAC.CHANNEL[spi.Channel].CHCTRLA.ClearBits(sam.DMAC_CHANNEL_CHCTRLA_ENABLE)
+	descriptor := &dmaDescriptorSection[spi.DmaChannel]
+	descriptor.srcaddr = unsafe.Pointer(uintptr(unsafe.Pointer(&buf[0])) + uintptr(len(buf)*2))
+	descriptor.btcnt = uint16(len(buf) * 2) // beat count
+
+	// Start the transfer.
+	spi.DmaWaitEnd = true
+	sam.DMAC.CHANNEL[spi.DmaChannel].CHCTRLA.SetBits(sam.DMAC_CHANNEL_CHCTRLA_ENABLE)
+}
+
+func (spi *SPI) DmaWait() error {
+	if !spi.DmaWaitEnd {
+		return nil
+	}
+
+	for !sam.DMAC.CHANNEL[spi.DmaChannel].CHINTFLAG.HasBits(sam.DMAC_CHANNEL_CHINTFLAG_TCMPL) {
+	}
+	sam.DMAC.CHANNEL[spi.DmaChannel].CHINTFLAG.SetBits(sam.DMAC_CHANNEL_CHINTFLAG_TCMPL)
+	spi.DmaWaitEnd = false
+	return nil
 }
 
 // The QSPI peripheral on ATSAMD51 is only available on the following pins
