@@ -100,7 +100,7 @@ func handleInterrupt() {
 // initPeripherals configures periperhals the way the runtime expects them.
 func initPeripherals() {
 
-	//machine.FPIOA0.Init()
+	machine.FPIOA0.Init()
 
 	machine.UART0.Configure(machine.UARTConfig{})
 }
