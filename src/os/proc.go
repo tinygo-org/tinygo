@@ -9,6 +9,15 @@ import (
 	"syscall"
 )
 
+// Args hold the command-line arguments, starting with the program name.
+var Args []string
+
+func init() {
+	Args = runtime_args()
+}
+
+func runtime_args() []string // in package runtime
+
 // Exit causes the current program to exit with the given status code.
 // Conventionally, code zero indicates success, non-zero an error.
 // The program terminates immediately; deferred functions are not run.

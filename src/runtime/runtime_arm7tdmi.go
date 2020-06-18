@@ -9,8 +9,6 @@ import (
 
 type timeUnit int64
 
-const tickMicros = 1
-
 func putchar(c byte) {
 	// dummy, TODO
 }
@@ -58,6 +56,14 @@ func preinit() {
 		dst = unsafe.Pointer(uintptr(dst) + 4)
 		src = unsafe.Pointer(uintptr(src) + 4)
 	}
+}
+
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	return int64(ticks)
+}
+
+func nanosecondsToTicks(ns int64) timeUnit {
+	return timeUnit(ns)
 }
 
 func ticks() timeUnit {

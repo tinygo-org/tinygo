@@ -136,6 +136,38 @@ func chanMake(elementSize uintptr, bufSize uintptr) *channel {
 	}
 }
 
+// Return the number of entries in this chan, called from the len builtin.
+// A nil chan is defined as having length 0.
+//go:inline
+func chanLen(c *channel) int {
+	if c == nil {
+		return 0
+	}
+	return int(c.bufUsed)
+}
+
+// wrapper for use in reflect
+func chanLenUnsafePointer(p unsafe.Pointer) int {
+	c := (*channel)(p)
+	return chanLen(c)
+}
+
+// Return the capacity of this chan, called from the cap builtin.
+// A nil chan is defined as having capacity 0.
+//go:inline
+func chanCap(c *channel) int {
+	if c == nil {
+		return 0
+	}
+	return int(c.bufSize)
+}
+
+// wrapper for use in reflect
+func chanCapUnsafePointer(p unsafe.Pointer) int {
+	c := (*channel)(p)
+	return chanCap(c)
+}
+
 // resumeRX resumes the next receiver and returns the destination pointer.
 // If the ok value is true, then the caller is expected to store a value into this pointer.
 func (ch *channel) resumeRX(ok bool) unsafe.Pointer {
@@ -414,7 +446,7 @@ type chanSelectState struct {
 // chanSend sends a single value over the channel.
 // This operation will block unless a value is immediately available.
 // May panic if the channel is closed.
-func chanSend(ch *channel, value unsafe.Pointer) {
+func chanSend(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList) {
 	if ch.trySend(value) {
 		// value immediately sent
 		chanDebug(ch)
@@ -430,10 +462,11 @@ func chanSend(ch *channel, value unsafe.Pointer) {
 	sender := task.Current()
 	ch.state = chanStateSend
 	sender.Ptr = value
-	ch.blocked = &channelBlockedList{
+	*blockedlist = channelBlockedList{
 		next: ch.blocked,
 		t:    sender,
 	}
+	ch.blocked = blockedlist
 	chanDebug(ch)
 	task.Pause()
 	sender.Ptr = nil
@@ -443,7 +476,7 @@ func chanSend(ch *channel, value unsafe.Pointer) {
 // It blocks if there is no available value to recieve.
 // The recieved value is copied into the value pointer.
 // Returns the comma-ok value.
-func chanRecv(ch *channel, value unsafe.Pointer) bool {
+func chanRecv(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList) bool {
 	if rx, ok := ch.tryRecv(value); rx {
 		// value immediately available
 		chanDebug(ch)
@@ -459,10 +492,11 @@ func chanRecv(ch *channel, value unsafe.Pointer) bool {
 	receiver := task.Current()
 	ch.state = chanStateRecv
 	receiver.Ptr, receiver.Data = value, 1
-	ch.blocked = &channelBlockedList{
+	*blockedlist = channelBlockedList{
 		next: ch.blocked,
 		t:    receiver,
 	}
+	ch.blocked = blockedlist
 	chanDebug(ch)
 	task.Pause()
 	ok := receiver.Data == 1

@@ -68,8 +68,8 @@ func (s *Stack) Pop() *Task {
 	t := s.top
 	if t != nil {
 		s.top = t.Next
+		t.Next = nil
 	}
-	t.Next = nil
 	return t
 }
 

@@ -25,6 +25,8 @@ declare void @runtime.printptr(i32)
 
 declare void @runtime.printnl()
 
+declare void @runtime.nilPanic(i8*, i8*)
+
 define void @printInterfaces() {
   call void @printInterface(i32 4, i8* inttoptr (i32 5 to i8*))
   call void @printInterface(i32 16, i8* inttoptr (i8 120 to i8*))
@@ -47,8 +49,8 @@ typeswitch.notUnmatched:                          ; preds = %0
   br i1 %typeassert.ok, label %typeswitch.Doubler, label %typeswitch.notDoubler
 
 typeswitch.Doubler:                               ; preds = %typeswitch.notUnmatched
-  %doubler.result = call i32 @"(Number).Double$invoke"(i8* %value, i8* null)
-  call void @runtime.printint32(i32 %doubler.result)
+  %1 = call i32 @"(Doubler).Double"(i8* %value, i8* null, i32 %typecode, i8* null)
+  call void @runtime.printint32(i32 %1)
   ret void
 
 typeswitch.notDoubler:                            ; preds = %typeswitch.notUnmatched
@@ -74,6 +76,21 @@ define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %parentHandle) {
   %receiver = ptrtoint i8* %receiverPtr to i32
   %ret = call i32 @"(Number).Double"(i32 %receiver, i8* null)
   ret i32 %ret
+}
+
+define internal i32 @"(Doubler).Double"(i8* %0, i8* %1, i32 %actualType, i8* %parentHandle) unnamed_addr {
+entry:
+  switch i32 %actualType, label %default [
+    i32 68, label %"reflect/types.type:named:Number"
+  ]
+
+default:                                          ; preds = %entry
+  call void @runtime.nilPanic(i8* undef, i8* undef)
+  unreachable
+
+"reflect/types.type:named:Number":                ; preds = %entry
+  %2 = call i32 @"(Number).Double$invoke"(i8* %0, i8* %1)
+  ret i32 %2
 }
 
 define internal i1 @"Doubler$typeassert"(i32 %actualType) unnamed_addr {

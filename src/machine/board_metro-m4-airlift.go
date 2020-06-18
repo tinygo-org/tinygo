@@ -1,8 +1,6 @@
-// +build sam,atsamd51,metro_m4_airlift
+// +build metro_m4_airlift
 
 package machine
-
-import "device/sam"
 
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
@@ -53,7 +51,10 @@ const (
 	UART_RX_PIN = D0
 )
 
-// Note: UART1 is on SERCOM3, defined in machine_atsamd51.go
+const (
+	UART2_TX_PIN = PA04
+	UART2_RX_PIN = PA07
+)
 
 const (
 	NINA_CS     = PA15
@@ -66,21 +67,10 @@ const (
 	NINA_RTS = PB23
 )
 
-// UART2 is on SERCOM0,  defined in machine_atsamd51.go, and connects to the
-// onboard ESP32-WROOM chip.
-
 // I2C pins
 const (
 	SDA_PIN = PB02 // SDA: SERCOM5/PAD[0]
 	SCL_PIN = PB03 // SCL: SERCOM5/PAD[1]
-)
-
-// I2C on the Metro M4.
-var (
-	I2C0 = I2C{
-		Bus:    sam.SERCOM5_I2CM,
-		SERCOM: 5,
-	}
 )
 
 // SPI pins
@@ -94,27 +84,10 @@ const (
 	NINA_SCK  = SPI0_SCK_PIN
 )
 
-// SPI on the Metro M4.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM2_SPIM,
-		SERCOM: 2,
-	}
-	NINA_SPI = SPI0
-)
-
 const (
 	SPI1_SCK_PIN  = D12 // MISO: SERCOM1/PAD[1]
 	SPI1_MOSI_PIN = D11 // MOSI: SERCOM1/PAD[3]
 	SPI1_MISO_PIN = D13 // SCK:  SERCOM1/PAD[0]
-)
-
-// SPI1 on the Metro M4 on pins 11,12,13
-var (
-	SPI1 = SPI{
-		Bus:    sam.SERCOM1_SPIM,
-		SERCOM: 1,
-	}
 )
 
 // USB CDC identifiers

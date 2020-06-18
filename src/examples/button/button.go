@@ -5,16 +5,14 @@ import (
 	"time"
 )
 
-// This example assumes that the button is connected to pin 8. Change the value
-// below to use a different pin.
 const (
 	led    = machine.LED
-	button = machine.Pin(8)
+	button = machine.BUTTON
 )
 
 func main() {
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	button.Configure(machine.PinConfig{Mode: machine.PinInput})
+	button.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 
 	for {
 		if button.Get() {

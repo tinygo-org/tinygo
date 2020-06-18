@@ -602,3 +602,11 @@ func alloc(size uintptr) unsafe.Pointer {
 func free(ptr unsafe.Pointer) {
 	// Currently unimplemented due to bugs in coroutine lowering.
 }
+
+func KeepAlive(x interface{}) {
+	// Unimplemented. Only required with SetFinalizer().
+}
+
+func SetFinalizer(obj interface{}, finalizer interface{}) {
+	// Unimplemented.
+}

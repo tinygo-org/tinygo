@@ -1,8 +1,6 @@
-// +build sam,atsamd51,feather_m4
+// +build feather_m4
 
 package machine
-
-import "device/sam"
 
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
@@ -47,13 +45,11 @@ const (
 	USBCDC_DP_PIN = PA25
 )
 
-// UART1 pins
 const (
 	UART_TX_PIN = D1
 	UART_RX_PIN = D0
 )
 
-// UART2 pins
 const (
 	UART2_TX_PIN = A4
 	UART2_RX_PIN = A5
@@ -65,27 +61,11 @@ const (
 	SCL_PIN = D21 // SCL: SERCOM2/PAD[1]
 )
 
-// I2C on the Feather M4.
-var (
-	I2C0 = I2C{
-		Bus:    sam.SERCOM2_I2CM,
-		SERCOM: 2,
-	}
-)
-
 // SPI pins
 const (
 	SPI0_SCK_PIN  = D25 // SCK: SERCOM1/PAD[1]
 	SPI0_MOSI_PIN = D24 // MOSI: SERCOM1/PAD[3]
 	SPI0_MISO_PIN = D23 // MISO: SERCOM1/PAD[2]
-)
-
-// SPI on the Feather M4.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM1_SPIM,
-		SERCOM: 1,
-	}
 )
 
 // USB CDC identifiers

@@ -129,8 +129,8 @@ func (c *Config) NeedsStackObjects() bool {
 	}
 }
 
-// Scheduler returns the scheduler implementation. Valid values are "coroutines"
-// and "tasks".
+// Scheduler returns the scheduler implementation. Valid values are "none",
+//"coroutines" and "tasks".
 func (c *Config) Scheduler() string {
 	if c.Options.Scheduler != "" {
 		return c.Options.Scheduler
@@ -173,7 +173,7 @@ func (c *Config) CFlags() []string {
 	}
 	if c.Target.Libc == "picolibc" {
 		root := goenv.Get("TINYGOROOT")
-		cflags = append(cflags, "--sysroot="+filepath.Join(root, "lib", "picolibc", "newlib", "libc"))
+		cflags = append(cflags, "-nostdlibinc", "-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "picolibc", "newlib", "libc", "include"))
 		cflags = append(cflags, "-I"+filepath.Join(root, "lib/picolibc-include"))
 	}
 	return cflags
@@ -270,6 +270,15 @@ func (c *Config) OpenOCDConfiguration() (args []string, err error) {
 	}
 	args = append(args, "-f", "target/"+c.Target.OpenOCDTarget+".cfg")
 	return args, nil
+}
+
+// CodeModel returns the code model used on this platform.
+func (c *Config) CodeModel() string {
+	if c.Target.CodeModel != "" {
+		return c.Target.CodeModel
+	}
+
+	return "default"
 }
 
 type TestConfig struct {

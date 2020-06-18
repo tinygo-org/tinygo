@@ -1,7 +1,7 @@
 package runtime
 
 // This is a hashmap implementation for the map[T]T type.
-// It is very rougly based on the implementation of the Go hashmap:
+// It is very roughly based on the implementation of the Go hashmap:
 //
 //     https://golang.org/src/runtime/map.go
 
@@ -80,11 +80,18 @@ func hashmapMake(keySize, valueSize uint8, sizeHint uintptr) *hashmap {
 
 // Return the number of entries in this hashmap, called from the len builtin.
 // A nil hashmap is defined as having length 0.
+//go:inline
 func hashmapLen(m *hashmap) int {
 	if m == nil {
 		return 0
 	}
 	return int(m.count)
+}
+
+// wrapper for use in reflect
+func hashmapLenUnsafePointer(p unsafe.Pointer) int {
+	m := (*hashmap)(p)
+	return hashmapLen(m)
 }
 
 // Set a specified key to a given value. Grow the map if necessary.

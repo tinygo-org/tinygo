@@ -342,6 +342,11 @@ func readSVD(path, sourceURL string) (*Device, error) {
 				firstAddress := clusterRegisters[0].address
 				dimIncrement = int(lastAddress - firstAddress)
 			}
+
+			if !unicode.IsUpper(rune(clusterName[0])) && !unicode.IsDigit(rune(clusterName[0])) {
+				clusterName = strings.ToUpper(clusterName)
+			}
+
 			p.registers = append(p.registers, &PeripheralField{
 				name:        clusterName,
 				address:     baseAddress + clusterOffset,
@@ -681,6 +686,8 @@ var (
 
 			var regType string
 			switch register.elementSize {
+			case 8:
+				regType = "volatile.Register64"
 			case 4:
 				regType = "volatile.Register32"
 			case 2:
@@ -710,6 +717,8 @@ var (
 				for _, subregister := range register.registers {
 					var subregType string
 					switch subregister.elementSize {
+					case 8:
+						subregType = "volatile.Register64"
 					case 4:
 						subregType = "volatile.Register32"
 					case 2:

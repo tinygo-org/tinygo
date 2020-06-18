@@ -9,9 +9,9 @@ import (
 
 func main() {
 	// package os, fmt
-	fmt.Println("stdin: ", os.Stdin.Fd())
-	fmt.Println("stdout:", os.Stdout.Fd())
-	fmt.Println("stderr:", os.Stderr.Fd())
+	fmt.Println("stdin: ", os.Stdin.Name())
+	fmt.Println("stdout:", os.Stdout.Name())
+	fmt.Println("stderr:", os.Stderr.Name())
 
 	// package math/rand
 	fmt.Println("pseudorandom number:", rand.Int31())

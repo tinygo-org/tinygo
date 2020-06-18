@@ -13,8 +13,6 @@ import (
 
 type timeUnit int64
 
-const tickMicros = 1
-
 var timestamp timeUnit
 
 func postinit() {}
@@ -28,6 +26,14 @@ func main() {
 }
 
 const asyncScheduler = false
+
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	return int64(ticks)
+}
+
+func nanosecondsToTicks(ns int64) timeUnit {
+	return timeUnit(ns)
+}
 
 func sleepTicks(d timeUnit) {
 	// TODO: actually sleep here for the given time.

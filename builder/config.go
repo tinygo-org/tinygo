@@ -21,7 +21,7 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 	if goroot == "" {
 		return nil, errors.New("cannot locate $GOROOT, please set it manually")
 	}
-	major, minor, err := getGorootVersion(goroot)
+	major, minor, err := goenv.GetGorootVersion(goroot)
 	if err != nil {
 		return nil, fmt.Errorf("could not read version from GOROOT (%v): %v", goroot, err)
 	}

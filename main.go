@@ -124,6 +124,7 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 
 // Test runs the tests in the given package.
 func Test(pkgName string, options *compileopts.Options) error {
+	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
@@ -135,7 +136,6 @@ func Test(pkgName string, options *compileopts.Options) error {
 	// For details: https://github.com/golang/go/issues/21360
 	config.Target.BuildTags = append(config.Target.BuildTags, "test")
 
-	options.TestConfig.CompileTestBinary = true
 	return builder.Build(pkgName, ".elf", config, func(tmppath string) error {
 		cmd := exec.Command(tmppath)
 		cmd.Stdout = os.Stdout
@@ -479,6 +479,13 @@ func touchSerialPortAt1200bps(port string) (err error) {
 		// Open port
 		p, e := serial.Open(port, &serial.Mode{BaudRate: 1200})
 		if e != nil {
+			if runtime.GOOS == `windows` {
+				se, ok := e.(*serial.PortError)
+				if ok && se.Code() == serial.InvalidSerialPort {
+					// InvalidSerialPort error occurs when transitioning to boot
+					return nil
+				}
+			}
 			time.Sleep(1 * time.Second)
 			err = e
 			continue
@@ -490,6 +497,8 @@ func touchSerialPortAt1200bps(port string) (err error) {
 	}
 	return fmt.Errorf("opening port: %s", err)
 }
+
+const maxMSDRetries = 10
 
 func flashUF2UsingMSD(volume, tmppath string) error {
 	// find standard UF2 info path
@@ -507,15 +516,12 @@ func flashUF2UsingMSD(volume, tmppath string) error {
 		infoPath = path + "/INFO_UF2.TXT"
 	}
 
-	d, err := filepath.Glob(infoPath)
+	d, err := locateDevice(volume, infoPath)
 	if err != nil {
 		return err
 	}
-	if d == nil {
-		return errors.New("unable to locate UF2 device: " + volume)
-	}
 
-	return moveFile(tmppath, filepath.Dir(d[0])+"/flash.uf2")
+	return moveFile(tmppath, filepath.Dir(d)+"/flash.uf2")
 }
 
 func flashHexUsingMSD(volume, tmppath string) error {
@@ -534,15 +540,31 @@ func flashHexUsingMSD(volume, tmppath string) error {
 		destPath = path + "/"
 	}
 
-	d, err := filepath.Glob(destPath)
+	d, err := locateDevice(volume, destPath)
 	if err != nil {
 		return err
 	}
-	if d == nil {
-		return errors.New("unable to locate device: " + volume)
-	}
 
-	return moveFile(tmppath, d[0]+"/flash.hex")
+	return moveFile(tmppath, d+"/flash.hex")
+}
+
+func locateDevice(volume, path string) (string, error) {
+	var d []string
+	var err error
+	for i := 0; i < maxMSDRetries; i++ {
+		d, err = filepath.Glob(path)
+		if err != nil {
+			return "", err
+		}
+		if d != nil {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if d == nil {
+		return "", errors.New("unable to locate device: " + volume)
+	}
+	return d[0], nil
 }
 
 func windowsFindUSBDrive(volume string) (string, error) {
@@ -603,29 +625,18 @@ func getDefaultPort() (port string, err error) {
 	case "freebsd":
 		portPath = "/dev/cuaU*"
 	case "windows":
-		cmd := exec.Command("wmic",
-			"PATH", "Win32_SerialPort", "WHERE", "Caption LIKE 'USB Serial%'", "GET", "DeviceID")
-
-		var out bytes.Buffer
-		cmd.Stdout = &out
-		err := cmd.Run()
+		ports, err := serial.GetPortsList()
 		if err != nil {
 			return "", err
 		}
 
-		if out.String() == "No Instance(s) Available." {
+		if len(ports) == 0 {
 			return "", errors.New("no serial ports available")
+		} else if len(ports) > 1 {
+			return "", errors.New("multiple serial ports available - use -port flag")
 		}
 
-		for _, line := range strings.Split(out.String(), "\n") {
-			words := strings.Fields(line)
-			if len(words) == 1 {
-				if strings.Contains(words[0], "COM") {
-					return words[0], nil
-				}
-			}
-		}
-		return "", errors.New("unable to locate a serial port")
+		return ports[0], nil
 	default:
 		return "", errors.New("unable to search for a default USB device to be flashed on this OS")
 	}
@@ -641,9 +652,39 @@ func getDefaultPort() (port string, err error) {
 	return d[0], nil
 }
 
+// runGoList runs the `go list` command but using the configuration used for
+// TinyGo.
+func runGoList(config *compileopts.Config, flagJSON, flagDeps bool, pkgs []string) error {
+	goroot, err := loader.GetCachedGoroot(config)
+	if err != nil {
+		return err
+	}
+	args := []string{"list"}
+	if flagJSON {
+		args = append(args, "-json")
+	}
+	if flagDeps {
+		args = append(args, "-deps")
+	}
+	if len(config.BuildTags()) != 0 {
+		args = append(args, "-tags", strings.Join(config.BuildTags(), " "))
+	}
+	args = append(args, pkgs...)
+	cgoEnabled := "0"
+	if config.CgoEnabled() {
+		cgoEnabled = "1"
+	}
+	cmd := exec.Command("go", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(), "GOROOT="+goroot, "GOOS="+config.GOOS(), "GOARCH="+config.GOARCH(), "CGO_ENABLED="+cgoEnabled)
+	cmd.Run()
+	return nil
+}
+
 func usage() {
 	fmt.Fprintln(os.Stderr, "TinyGo is a Go compiler for small places.")
-	fmt.Fprintln(os.Stderr, "version:", version)
+	fmt.Fprintln(os.Stderr, "version:", goenv.Version)
 	fmt.Fprintf(os.Stderr, "usage: %s command [-printir] [-target=<target>] -o <output> <input>\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "\ncommands:")
 	fmt.Fprintln(os.Stderr, "  build: compile packages and dependencies")
@@ -652,10 +693,25 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  flash: compile and flash to the device")
 	fmt.Fprintln(os.Stderr, "  gdb:   run/flash and immediately enter GDB")
 	fmt.Fprintln(os.Stderr, "  env:   list environment variables used during build")
+	fmt.Fprintln(os.Stderr, "  list:  run go list using the TinyGo root")
 	fmt.Fprintln(os.Stderr, "  clean: empty cache directory ("+goenv.Get("GOCACHE")+")")
 	fmt.Fprintln(os.Stderr, "  help:  print this help text")
 	fmt.Fprintln(os.Stderr, "\nflags:")
 	flag.PrintDefaults()
+}
+
+// try to make the path relative to the current working directory. If any error
+// occurs, this error is ignored and the absolute path is returned instead.
+func tryToMakePathRelative(dir string) string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return dir
+	}
+	relpath, err := filepath.Rel(wd, dir)
+	if err != nil {
+		return dir
+	}
+	return relpath
 }
 
 // printCompilerError prints compiler errors using the provided logger function
@@ -665,8 +721,24 @@ func usage() {
 // to limitations in the LLVM bindings.
 func printCompilerError(logln func(...interface{}), err error) {
 	switch err := err.(type) {
-	case types.Error, scanner.Error:
+	case types.Error:
+		printCompilerError(logln, scanner.Error{
+			Pos: err.Fset.Position(err.Pos),
+			Msg: err.Msg,
+		})
+	case scanner.Error:
+		if !strings.HasPrefix(err.Pos.Filename, filepath.Join(goenv.Get("GOROOT"), "src")) && !strings.HasPrefix(err.Pos.Filename, filepath.Join(goenv.Get("TINYGOROOT"), "src")) {
+			// This file is not from the standard library (either the GOROOT or
+			// the TINYGOROOT). Make the path relative, for easier reading.
+			// Ignore any errors in the process (falling back to the absolute
+			// path).
+			err.Pos.Filename = tryToMakePathRelative(err.Pos.Filename)
+		}
 		logln(err)
+	case scanner.ErrorList:
+		for _, scannerErr := range err {
+			printCompilerError(logln, *scannerErr)
+		}
 	case *interp.Error:
 		logln("#", err.ImportPath)
 		logln(err.Error())
@@ -683,13 +755,13 @@ func printCompilerError(logln func(...interface{}), err error) {
 			}
 		}
 	case loader.Errors:
-		logln("#", err.Pkg.ImportPath)
+		logln("#", err.Pkg.PkgPath)
 		for _, err := range err.Errs {
-			logln(err)
+			printCompilerError(logln, err)
 		}
 	case *builder.MultiError:
 		for _, err := range err.Errs {
-			logln(err)
+			printCompilerError(logln, err)
 		}
 	default:
 		logln("error:", err)
@@ -706,11 +778,18 @@ func handleCompilerError(err error) {
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
+		usage()
+		os.Exit(1)
+	}
+	command := os.Args[1]
+
 	outpath := flag.String("o", "", "output filename")
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, extalloc, conservative)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
-	scheduler := flag.String("scheduler", "", "which scheduler to use (coroutines, tasks)")
+	scheduler := flag.String("scheduler", "", "which scheduler to use (none, coroutines, tasks)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
@@ -726,12 +805,11 @@ func main() {
 	wasmAbi := flag.String("wasm-abi", "js", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	heapSize := flag.String("heap-size", "1M", "default heap size in bytes (only supported by WebAssembly)")
 
-	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
-		usage()
-		os.Exit(1)
+	var flagJSON, flagDeps *bool
+	if command == "list" {
+		flagJSON = flag.Bool("json", false, "print data in JSON format")
+		flagDeps = flag.Bool("deps", false, "")
 	}
-	command := os.Args[1]
 
 	// Early command processing, before commands are interpreted by the Go flag
 	// library.
@@ -770,12 +848,6 @@ func main() {
 		options.LDFlags = strings.Split(*ldFlags, " ")
 	}
 
-	if *panicStrategy != "print" && *panicStrategy != "trap" {
-		fmt.Fprintln(os.Stderr, "Panic strategy must be either print or trap.")
-		usage()
-		os.Exit(1)
-	}
-
 	var err error
 	if options.HeapSize, err = parseSize(*heapSize); err != nil {
 		fmt.Fprintln(os.Stderr, "Could not read heap size:", *heapSize)
@@ -784,6 +856,13 @@ func main() {
 	}
 
 	os.Setenv("CC", "clang -target="+*target)
+
+	err = options.Verify()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		usage()
+		os.Exit(1)
+	}
 
 	switch command {
 	case "build":
@@ -803,6 +882,7 @@ func main() {
 		if options.Target == "" && filepath.Ext(*outpath) == ".wasm" {
 			options.Target = "wasm"
 		}
+
 		err := Build(pkgName, *outpath, options)
 		handleCompilerError(err)
 	case "build-library":
@@ -895,6 +975,18 @@ func main() {
 		fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
 		fmt.Printf("garbage collector: %s\n", config.GC())
 		fmt.Printf("scheduler:         %s\n", config.Scheduler())
+	case "list":
+		config, err := builder.NewConfig(options)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			usage()
+			os.Exit(1)
+		}
+		err = runGoList(config, *flagJSON, *flagDeps, flag.Args())
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "failed to run `go list`:", err)
+			os.Exit(1)
+		}
 	case "clean":
 		// remove cache directory
 		err := os.RemoveAll(goenv.Get("GOCACHE"))
@@ -906,10 +998,10 @@ func main() {
 		usage()
 	case "version":
 		goversion := "<unknown>"
-		if s, err := builder.GorootVersionString(goenv.Get("GOROOT")); err == nil {
+		if s, err := goenv.GorootVersionString(goenv.Get("GOROOT")); err == nil {
 			goversion = s
 		}
-		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
+		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", goenv.Version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
 	case "env":
 		if flag.NArg() == 0 {
 			// Show all environment variables.

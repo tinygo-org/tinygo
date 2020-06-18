@@ -109,14 +109,20 @@ func initCLK() {
 
 }
 
-const tickMicros = 1000
-
 var (
 	// tick in milliseconds
 	tickCount timeUnit
 )
 
 var timerWakeup volatile.Register8
+
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	return int64(ticks) * 1000
+}
+
+func nanosecondsToTicks(ns int64) timeUnit {
+	return timeUnit(ns / 1000)
+}
 
 // Enable the TIM3 clock.(sleep count)
 func initTIM3() {

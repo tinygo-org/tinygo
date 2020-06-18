@@ -32,7 +32,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 	if err != nil {
 		return err
 	}
-	mod, extraFiles, errs := compiler.Compile(pkgName, machine, config)
+	mod, extraFiles, extraLDFlags, errs := compiler.Compile(pkgName, machine, config)
 	if errs != nil {
 		return newMultiError(errs)
 	}
@@ -185,6 +185,10 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 				return &commandError{"failed to build", file, err}
 			}
 			ldflags = append(ldflags, outpath)
+		}
+
+		if len(extraLDFlags) > 0 {
+			ldflags = append(ldflags, extraLDFlags...)
 		}
 
 		// Link the object files together.

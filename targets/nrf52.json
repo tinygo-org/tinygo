@@ -1,10 +1,7 @@
 {
-	"inherits": ["cortex-m"],
-	"llvm-target": "armv7em-none-eabi",
+	"inherits": ["cortex-m4"],
 	"build-tags": ["nrf52", "nrf"],
 	"cflags": [
-		"--target=armv7em-none-eabi",
-		"-mfloat-abi=soft",
 		"-Qunused-arguments",
 		"-DNRF52832_XXAA",
 		"-I{root}/lib/CMSIS/CMSIS/Include",

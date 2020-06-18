@@ -73,7 +73,7 @@ func TestCompiler(t *testing.T) {
 		t.Run("ARM64Linux", func(t *testing.T) {
 			runPlatTests("aarch64--linux-gnu", matches, t)
 		})
-		goVersion, err := builder.GorootVersionString(goenv.Get("GOROOT"))
+		goVersion, err := goenv.GorootVersionString(goenv.Get("GOROOT"))
 		if err != nil {
 			t.Error("could not get Go version:", err)
 			return

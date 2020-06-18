@@ -91,7 +91,25 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 		return llvm.TargetMachine{}, err
 	}
 	features := strings.Join(config.Features(), ",")
-	machine := target.CreateTargetMachine(config.Triple(), config.CPU(), features, llvm.CodeGenLevelDefault, llvm.RelocStatic, llvm.CodeModelDefault)
+
+	var codeModel llvm.CodeModel
+
+	switch config.CodeModel() {
+	case "default":
+		codeModel = llvm.CodeModelDefault
+	case "tiny":
+		codeModel = llvm.CodeModelTiny
+	case "small":
+		codeModel = llvm.CodeModelSmall
+	case "kernel":
+		codeModel = llvm.CodeModelKernel
+	case "medium":
+		codeModel = llvm.CodeModelMedium
+	case "large":
+		codeModel = llvm.CodeModelLarge
+	}
+
+	machine := target.CreateTargetMachine(config.Triple(), config.CPU(), features, llvm.CodeGenLevelDefault, llvm.RelocStatic, codeModel)
 	return machine, nil
 }
 
@@ -103,7 +121,7 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 // violation. Eventually, this Compile function should only compile a single
 // package and not the whole program, and loading of the program (including CGo
 // processing) should be moved outside the compiler package.
-func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) (llvm.Module, []string, []error) {
+func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) (mod llvm.Module, extrafiles []string, extraldflags []string, errors []error) {
 	c := &compilerContext{
 		Config:     config,
 		difiles:    make(map[string]llvm.Metadata),
@@ -137,64 +155,26 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
 	dummyFunc.EraseFromParentAsFunction()
 
-	// Prefix the GOPATH with the system GOROOT, as GOROOT is already set to
-	// the TinyGo root.
-	overlayGopath := goenv.Get("GOPATH")
-	if overlayGopath == "" {
-		overlayGopath = goenv.Get("GOROOT")
-	} else {
-		overlayGopath = goenv.Get("GOROOT") + string(filepath.ListSeparator) + overlayGopath
-	}
-
 	wd, err := os.Getwd()
 	if err != nil {
-		return c.mod, nil, []error{err}
+		return c.mod, nil, nil, []error{err}
+	}
+	goroot, err := loader.GetCachedGoroot(c.Config)
+	if err != nil {
+		return c.mod, nil, nil, []error{err}
 	}
 	lprogram := &loader.Program{
 		Build: &build.Context{
 			GOARCH:      c.GOARCH(),
 			GOOS:        c.GOOS(),
-			GOROOT:      goenv.Get("GOROOT"),
+			GOROOT:      goroot,
 			GOPATH:      goenv.Get("GOPATH"),
 			CgoEnabled:  c.CgoEnabled(),
 			UseAllFiles: false,
 			Compiler:    "gc", // must be one of the recognized compilers
 			BuildTags:   c.BuildTags(),
 		},
-		OverlayBuild: &build.Context{
-			GOARCH:      c.GOARCH(),
-			GOOS:        c.GOOS(),
-			GOROOT:      goenv.Get("TINYGOROOT"),
-			GOPATH:      overlayGopath,
-			CgoEnabled:  c.CgoEnabled(),
-			UseAllFiles: false,
-			Compiler:    "gc", // must be one of the recognized compilers
-			BuildTags:   c.BuildTags(),
-		},
-		OverlayPath: func(path string) string {
-			// Return the (overlay) import path when it should be overlaid, and
-			// "" if it should not.
-			if strings.HasPrefix(path, tinygoPath+"/src/") {
-				// Avoid issues with packages that are imported twice, one from
-				// GOPATH and one from TINYGOPATH.
-				path = path[len(tinygoPath+"/src/"):]
-			}
-			switch path {
-			case "machine", "os", "reflect", "runtime", "runtime/interrupt", "runtime/volatile", "sync", "testing", "internal/reflectlite", "internal/task":
-				return path
-			default:
-				if strings.HasPrefix(path, "device/") || strings.HasPrefix(path, "examples/") {
-					return path
-				} else if path == "syscall" {
-					for _, tag := range c.BuildTags() {
-						if tag == "baremetal" || tag == "darwin" {
-							return path
-						}
-					}
-				}
-			}
-			return ""
-		},
+		Tests: c.TestConfig.CompileTestBinary,
 		TypeChecker: types.Config{
 			Sizes: &stdSizes{
 				IntSize:  int64(c.targetData.TypeAllocSize(c.intType)),
@@ -208,38 +188,22 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 		ClangHeaders: c.ClangHeaders,
 	}
 
-	if strings.HasSuffix(pkgName, ".go") {
-		_, err = lprogram.ImportFile(pkgName)
-		if err != nil {
-			return c.mod, nil, []error{err}
-		}
-	} else {
-		_, err = lprogram.Import(pkgName, wd, token.Position{
-			Filename: "build command-line-arguments",
-		})
-		if err != nil {
-			return c.mod, nil, []error{err}
-		}
-	}
-
-	_, err = lprogram.Import("runtime", "", token.Position{
-		Filename: "build default import",
-	})
+	err = lprogram.Load(pkgName)
 	if err != nil {
-		return c.mod, nil, []error{err}
+		return c.mod, nil, nil, []error{err}
 	}
 
-	err = lprogram.Parse(c.TestConfig.CompileTestBinary)
+	err = lprogram.Parse()
 	if err != nil {
-		return c.mod, nil, []error{err}
+		return c.mod, nil, nil, []error{err}
 	}
 
-	c.ir = ir.NewProgram(lprogram, pkgName)
+	c.ir = ir.NewProgram(lprogram)
 
 	// Run a simple dead code elimination pass.
 	err = c.ir.SimpleDCE()
 	if err != nil {
-		return c.mod, nil, []error{err}
+		return c.mod, nil, nil, []error{err}
 	}
 
 	// Initialize debug information.
@@ -378,12 +342,15 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	// Gather the list of (C) file paths that should be included in the build.
 	var extraFiles []string
 	for _, pkg := range c.ir.LoaderProgram.Sorted() {
-		for _, file := range pkg.CFiles {
-			extraFiles = append(extraFiles, filepath.Join(pkg.Package.Dir, file))
+		for _, file := range pkg.OtherFiles {
+			switch strings.ToLower(filepath.Ext(file)) {
+			case ".c":
+				extraFiles = append(extraFiles, file)
+			}
 		}
 	}
 
-	return c.mod, extraFiles, c.diagnostics
+	return c.mod, extraFiles, lprogram.LDFlags, c.diagnostics
 }
 
 // getLLVMRuntimeType obtains a named type from the runtime package and returns
@@ -1104,7 +1071,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 			// goroutine:
 			//   * The function context, for closures.
 			//   * The function pointer (for tasks).
-			funcPtr, context := b.decodeFuncValue(b.getValue(instr.Call.Value), instr.Call.Value.Type().(*types.Signature))
+			funcPtr, context := b.decodeFuncValue(b.getValue(instr.Call.Value), instr.Call.Value.Type().Underlying().(*types.Signature))
 			params = append(params, context) // context parameter
 			switch b.Scheduler() {
 			case "none", "coroutines":
@@ -1201,9 +1168,7 @@ func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos
 		var llvmCap llvm.Value
 		switch args[0].Type().(type) {
 		case *types.Chan:
-			// Channel. Buffered channels haven't been implemented yet so always
-			// return 0.
-			llvmCap = llvm.ConstInt(b.intType, 0, false)
+			llvmCap = b.createRuntimeCall("chanCap", []llvm.Value{value}, "cap")
 		case *types.Slice:
 			llvmCap = b.CreateExtractValue(value, 2, "cap")
 		default:
@@ -1259,9 +1224,7 @@ func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos
 			// string or slice
 			llvmLen = b.CreateExtractValue(value, 1, "len")
 		case *types.Chan:
-			// Channel. Buffered channels haven't been implemented yet so always
-			// return 0.
-			llvmLen = llvm.ConstInt(b.intType, 0, false)
+			llvmLen = b.createRuntimeCall("chanLen", []llvm.Value{value}, "len")
 		case *types.Map:
 			llvmLen = b.createRuntimeCall("hashmapLen", []llvm.Value{value}, "len")
 		default:
@@ -1364,11 +1327,9 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.createMemoryCopyCall(fn, instr.Args)
 		case name == "runtime.memzero":
 			return b.createMemoryZeroCall(instr.Args)
-		case name == "device/arm.ReadRegister" || name == "device/riscv.ReadRegister":
-			return b.createReadRegister(name, instr.Args)
-		case name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
+		case name == "device.Asm" || name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
 			return b.createInlineAsm(instr.Args)
-		case name == "device/arm.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
+		case name == "device.AsmFull" || name == "device/arm.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
 			return b.createInlineAsmFull(instr)
 		case strings.HasPrefix(name, "device/arm.SVCall"):
 			return b.emitSVCall(instr.Args)
@@ -1380,6 +1341,14 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.createVolatileLoad(instr)
 		case strings.HasPrefix(name, "runtime/volatile.Store"):
 			return b.createVolatileStore(instr)
+		case strings.HasPrefix(name, "sync/atomic."):
+			val, ok := b.createAtomicOp(instr)
+			if ok {
+				// This call could be lowered as an atomic operation.
+				return val, nil
+			}
+			// This call couldn't be lowered as an atomic operation, it's
+			// probably something else. Continue as usual.
 		case name == "runtime/interrupt.New":
 			return b.createInterruptGlobal(instr)
 		}
@@ -1573,7 +1542,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		index := b.getValue(expr.Index)
 
 		// Check bounds.
-		arrayLen := expr.X.Type().(*types.Array).Len()
+		arrayLen := expr.X.Type().Underlying().(*types.Array).Len()
 		arrayLenLLVM := llvm.ConstInt(b.uintptrType, uint64(arrayLen), false)
 		b.createLookupBoundsCheck(arrayLenLLVM, index, expr.Index.Type())
 
@@ -1685,8 +1654,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 
 		// Bounds checking.
-		lenType := expr.Len.Type().(*types.Basic)
-		capType := expr.Cap.Type().(*types.Basic)
+		lenType := expr.Len.Type().Underlying().(*types.Basic)
+		capType := expr.Cap.Type().Underlying().(*types.Basic)
 		b.createSliceBoundsCheck(maxSize, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
 
 		// Allocate the backing array.

@@ -24,9 +24,12 @@ func GOROOT() string {
 	return "/usr/local/go"
 }
 
+// TODO: fill with real args.
+var args = []string{"/proc/self/exe"}
+
 //go:linkname os_runtime_args os.runtime_args
 func os_runtime_args() []string {
-	return nil
+	return args
 }
 
 // Copy size bytes from src to dst. The memory areas must not overlap.
@@ -58,7 +61,7 @@ func memequal(x, y unsafe.Pointer, n uintptr) bool {
 }
 
 func nanotime() int64 {
-	return int64(ticks()) * tickMicros
+	return ticksToNanoseconds(ticks())
 }
 
 // timeOffset is how long the monotonic clock started after the Unix epoch. It

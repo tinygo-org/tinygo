@@ -12,7 +12,7 @@ import (
 )
 
 func (b *builder) createMakeChan(expr *ssa.MakeChan) llvm.Value {
-	elementSize := b.targetData.TypeAllocSize(b.getLLVMType(expr.Type().(*types.Chan).Elem()))
+	elementSize := b.targetData.TypeAllocSize(b.getLLVMType(expr.Type().Underlying().(*types.Chan).Elem()))
 	elementSizeValue := llvm.ConstInt(b.uintptrType, elementSize, false)
 	bufSize := b.getValue(expr.Size)
 	b.createChanBoundsCheck(elementSize, bufSize, expr.Size.Type().Underlying().(*types.Basic), expr.Pos())
@@ -35,27 +35,37 @@ func (b *builder) createChanSend(instr *ssa.Send) {
 	valueAlloca, valueAllocaCast, valueAllocaSize := b.createTemporaryAlloca(valueType, "chan.value")
 	b.CreateStore(chanValue, valueAlloca)
 
-	// Do the send.
-	b.createRuntimeCall("chanSend", []llvm.Value{ch, valueAllocaCast}, "")
+	// Allocate blockedlist buffer.
+	channelBlockedList := b.mod.GetTypeByName("runtime.channelBlockedList")
+	channelBlockedListAlloca, channelBlockedListAllocaCast, channelBlockedListAllocaSize := b.createTemporaryAlloca(channelBlockedList, "chan.blockedList")
 
-	// End the lifetime of the alloca.
+	// Do the send.
+	b.createRuntimeCall("chanSend", []llvm.Value{ch, valueAllocaCast, channelBlockedListAlloca}, "")
+
+	// End the lifetime of the allocas.
 	// This also works around a bug in CoroSplit, at least in LLVM 8:
 	// https://bugs.llvm.org/show_bug.cgi?id=41742
+	b.emitLifetimeEnd(channelBlockedListAllocaCast, channelBlockedListAllocaSize)
 	b.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
 }
 
 // createChanRecv emits a pseudo chan receive operation. It is lowered to the
 // actual channel receive operation during goroutine lowering.
 func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
-	valueType := b.getLLVMType(unop.X.Type().(*types.Chan).Elem())
+	valueType := b.getLLVMType(unop.X.Type().Underlying().(*types.Chan).Elem())
 	ch := b.getValue(unop.X)
 
 	// Allocate memory to receive into.
 	valueAlloca, valueAllocaCast, valueAllocaSize := b.createTemporaryAlloca(valueType, "chan.value")
 
+	// Allocate blockedlist buffer.
+	channelBlockedList := b.mod.GetTypeByName("runtime.channelBlockedList")
+	channelBlockedListAlloca, channelBlockedListAllocaCast, channelBlockedListAllocaSize := b.createTemporaryAlloca(channelBlockedList, "chan.blockedList")
+
 	// Do the receive.
-	commaOk := b.createRuntimeCall("chanRecv", []llvm.Value{ch, valueAllocaCast}, "")
+	commaOk := b.createRuntimeCall("chanRecv", []llvm.Value{ch, valueAllocaCast, channelBlockedListAlloca}, "")
 	received := b.CreateLoad(valueAlloca, "chan.received")
+	b.emitLifetimeEnd(channelBlockedListAllocaCast, channelBlockedListAllocaSize)
 	b.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
 
 	if unop.CommaOk {
@@ -117,7 +127,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 		switch state.Dir {
 		case types.RecvOnly:
 			// Make sure the receive buffer is big enough and has the correct alignment.
-			llvmType := b.getLLVMType(state.Chan.Type().(*types.Chan).Elem())
+			llvmType := b.getLLVMType(state.Chan.Type().Underlying().(*types.Chan).Elem())
 			if size := b.targetData.TypeAllocSize(llvmType); size > recvbufSize {
 				recvbufSize = size
 			}

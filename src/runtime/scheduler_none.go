@@ -4,7 +4,7 @@ package runtime
 
 //go:linkname sleep time.Sleep
 func sleep(duration int64) {
-	sleepTicks(timeUnit(duration / tickMicros))
+	sleepTicks(nanosecondsToTicks(duration))
 }
 
 // getSystemStackPointer returns the current stack pointer of the system stack.

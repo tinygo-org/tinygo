@@ -1,5 +1,5 @@
 {
-	"inherits": ["riscv"],
+	"inherits": ["riscv32"],
 	"features": ["+a", "+c", "+m"],
 	"build-tags": ["fe310", "sifive"]
 }

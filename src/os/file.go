@@ -10,49 +10,119 @@ import (
 )
 
 // Portable analogs of some common system call errors.
+// Note that these are exported for use in the Filesystem interface.
 var (
-	errUnsupported = errors.New("operation not supported")
-	notImplemented = errors.New("os: not implemented")
+	ErrUnsupported    = errors.New("operation not supported")
+	ErrNotImplemented = errors.New("operation not implemented")
+	ErrNotExist       = errors.New("file not found")
+	ErrExist          = errors.New("file exists")
 )
 
-// Stdin, Stdout, and Stderr are open Files pointing to the standard input,
-// standard output, and standard error file descriptors.
-var (
-	Stdin  = &File{0, "/dev/stdin"}
-	Stdout = &File{1, "/dev/stdout"}
-	Stderr = &File{2, "/dev/stderr"}
-)
+// Mkdir creates a directory. If the operation fails, it will return an error of
+// type *PathError.
+func Mkdir(path string, perm FileMode) error {
+	fs, suffix := findMount(path)
+	if fs == nil {
+		return &PathError{"mkdir", path, ErrNotExist}
+	}
+	err := fs.Mkdir(suffix, perm)
+	if err != nil {
+		return &PathError{"mkdir", path, err}
+	}
+	return nil
+}
+
+// Remove removes a file or (empty) directory. If the operation fails, it will
+// return an error of type *PathError.
+func Remove(path string) error {
+	fs, suffix := findMount(path)
+	if fs == nil {
+		return &PathError{"remove", path, ErrNotExist}
+	}
+	err := fs.Remove(suffix)
+	if err != nil {
+		return &PathError{"remove", path, err}
+	}
+	return nil
+}
 
 // File represents an open file descriptor.
 type File struct {
-	fd   uintptr
-	name string
+	handle FileHandle
+	name   string
+}
+
+// Name returns the name of the file with which it was opened.
+func (f *File) Name() string {
+	return f.name
+}
+
+// OpenFile opens the named file. If the operation fails, the returned error
+// will be of type *PathError.
+func OpenFile(name string, flag int, perm FileMode) (*File, error) {
+	fs, suffix := findMount(name)
+	if fs == nil {
+		return nil, &PathError{"open", name, ErrNotExist}
+	}
+	handle, err := fs.OpenFile(suffix, flag, perm)
+	if err != nil {
+		return nil, &PathError{"open", name, err}
+	}
+	return &File{name: name, handle: handle}, nil
+}
+
+// Open opens the file named for reading.
+func Open(name string) (*File, error) {
+	return OpenFile(name, O_RDONLY, 0)
+}
+
+// Create creates the named file, overwriting it if it already exists.
+func Create(name string) (*File, error) {
+	return OpenFile(name, O_RDWR|O_CREATE|O_TRUNC, 0666)
+}
+
+// Read reads up to len(b) bytes from the File. It returns the number of bytes
+// read and any error encountered. At end of file, Read returns 0, io.EOF.
+func (f *File) Read(b []byte) (n int, err error) {
+	n, err = f.handle.Read(b)
+	if err != nil {
+		err = &PathError{"read", f.name, err}
+	}
+	return
+}
+
+// Write writes len(b) bytes to the File. It returns the number of bytes written
+// and an error, if any. Write returns a non-nil error when n != len(b).
+func (f *File) Write(b []byte) (n int, err error) {
+	n, err = f.handle.Write(b)
+	if err != nil {
+		err = &PathError{"write", f.name, err}
+	}
+	return
+}
+
+// Close closes the File, rendering it unusable for I/O.
+func (f *File) Close() (err error) {
+	err = f.handle.Close()
+	if err != nil {
+		err = &PathError{"close", f.name, err}
+	}
+	return
 }
 
 // Readdir is a stub, not yet implemented
 func (f *File) Readdir(n int) ([]FileInfo, error) {
-	return nil, notImplemented
+	return nil, &PathError{"readdir", f.name, ErrNotImplemented}
 }
 
 // Readdirnames is a stub, not yet implemented
 func (f *File) Readdirnames(n int) (names []string, err error) {
-	return nil, notImplemented
+	return nil, &PathError{"readdirnames", f.name, ErrNotImplemented}
 }
 
 // Stat is a stub, not yet implemented
 func (f *File) Stat() (FileInfo, error) {
-	return nil, notImplemented
-}
-
-// NewFile returns a new File with the given file descriptor and name.
-func NewFile(fd uintptr, name string) *File {
-	return &File{fd, name}
-}
-
-// Fd returns the integer Unix file descriptor referencing the open file. The
-// file descriptor is valid only until f.Close is called.
-func (f *File) Fd() uintptr {
-	return f.fd
+	return nil, &PathError{"stat", f.name, ErrNotImplemented}
 }
 
 const (
@@ -72,32 +142,8 @@ type PathError struct {
 	Err  error
 }
 
-func (e *PathError) Error() string { return e.Op + " " + e.Path + ": " + e.Err.Error() }
-
-// Open is a super simple stub function (for now), only capable of opening stdin, stdout, and stderr
-func Open(name string) (*File, error) {
-	fd := uintptr(999)
-	switch name {
-	case "/dev/stdin":
-		fd = 0
-	case "/dev/stdout":
-		fd = 1
-	case "/dev/stderr":
-		fd = 2
-	default:
-		return nil, &PathError{"open", name, notImplemented}
-	}
-	return &File{fd, name}, nil
-}
-
-// OpenFile is a stub, passing through to the stub Open() call
-func OpenFile(name string, flag int, perm FileMode) (*File, error) {
-	return Open(name)
-}
-
-// Create is a stub, passing through to the stub Open() call
-func Create(name string) (*File, error) {
-	return Open(name)
+func (e *PathError) Error() string {
+	return e.Op + " " + e.Path + ": " + e.Err.Error()
 }
 
 type FileMode uint32
@@ -155,12 +201,12 @@ type FileInfo interface {
 
 // Stat is a stub, not yet implemented
 func Stat(name string) (FileInfo, error) {
-	return nil, notImplemented
+	return nil, &PathError{"stat", name, ErrNotImplemented}
 }
 
 // Lstat is a stub, not yet implemented
 func Lstat(name string) (FileInfo, error) {
-	return nil, notImplemented
+	return nil, &PathError{"lstat", name, ErrNotImplemented}
 }
 
 // Getwd is a stub (for now), always returning an empty string
@@ -176,11 +222,6 @@ func Readlink(name string) (string, error) {
 // TempDir is a stub (for now), always returning the string "/tmp"
 func TempDir() string {
 	return "/tmp"
-}
-
-// Mkdir is a stub, not yet implemented
-func Mkdir(name string, perm FileMode) error {
-	return notImplemented
 }
 
 // IsExist is a stub (for now), always returning false

@@ -1,3 +1,4 @@
+len, cap of channel: 1 2 false
 len, cap of channel: 0 0 false
 recv from open channel: 1 true
 received num: 2

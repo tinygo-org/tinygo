@@ -1,6 +1,7 @@
 // CGo errors:
 //     testdata/flags.go:5:7: invalid #cgo line: NOFLAGS
 //     testdata/flags.go:8:13: invalid flag: -fdoes-not-exist
+//     testdata/flags.go:29:14: invalid flag: -does-not-exists
 
 package main
 

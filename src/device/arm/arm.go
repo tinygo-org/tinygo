@@ -52,11 +52,10 @@ func Asm(asm string)
 //             "value":  1
 //             "result": &dest,
 //         })
-func AsmFull(asm string, regs map[string]interface{})
-
-// ReadRegister returns the contents of the specified register. The register
-// must be a processor register, reachable with the "mov" instruction.
-func ReadRegister(name string) uintptr
+//
+// You can use {} in the asm string (which expands to a register) to set the
+// return value.
+func AsmFull(asm string, regs map[string]interface{}) uintptr
 
 // Run the following system call (SVCall) with 0 arguments.
 func SVCall0(num uintptr) uintptr
@@ -192,22 +191,21 @@ func SetPriority(irq uint32, priority uint32) {
 	NVIC.IPR[regnum].Set((uint32(NVIC.IPR[regnum].Get()) &^ mask) | priority)
 }
 
-// DisableInterrupts disables all interrupts, and returns the old state.
-//
-// TODO: it doesn't actually return the old state, meaning that it cannot be
-// nested.
+// DisableInterrupts disables all interrupts, and returns the old interrupt
+// state.
 func DisableInterrupts() uintptr {
-	Asm("cpsid if")
-	return 0
+	return AsmFull(`
+		mrs {}, PRIMASK
+		cpsid if
+	`, nil)
 }
 
 // EnableInterrupts enables all interrupts again. The value passed in must be
 // the mask returned by DisableInterrupts.
-//
-// TODO: it doesn't actually use the old state, meaning that it cannot be
-// nested.
 func EnableInterrupts(mask uintptr) {
-	Asm("cpsie if")
+	AsmFull("msr PRIMASK, {mask}", map[string]interface{}{
+		"mask": mask,
+	})
 }
 
 // SystemReset performs a hard system reset.

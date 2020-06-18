@@ -47,23 +47,8 @@ func printint16(n int16) {
 	printint32(int32(n))
 }
 
-//go:nobounds
 func printuint32(n uint32) {
-	digits := [10]byte{} // enough to hold (2^32)-1
-	// Fill in all 10 digits.
-	firstdigit := 9 // digit index that isn't zero (by default, the last to handle '0' correctly)
-	for i := 9; i >= 0; i-- {
-		digit := byte(n%10 + '0')
-		digits[i] = digit
-		if digit != '0' {
-			firstdigit = i
-		}
-		n /= 10
-	}
-	// Print digits without the leading zeroes.
-	for i := firstdigit; i < 10; i++ {
-		putchar(digits[i])
-	}
+	printuint64(uint64(n))
 }
 
 func printint32(n int32) {
@@ -76,12 +61,23 @@ func printint32(n int32) {
 	printuint32(uint32(n))
 }
 
+//go:nobounds
 func printuint64(n uint64) {
-	prevdigits := n / 10
-	if prevdigits != 0 {
-		printuint64(prevdigits)
+	digits := [20]byte{} // enough to hold (2^64)-1
+	// Fill in all 10 digits.
+	firstdigit := 19 // digit index that isn't zero (by default, the last to handle '0' correctly)
+	for i := 19; i >= 0; i-- {
+		digit := byte(n%10 + '0')
+		digits[i] = digit
+		if digit != '0' {
+			firstdigit = i
+		}
+		n /= 10
 	}
-	putchar(byte((n % 10) + '0'))
+	// Print digits without the leading zeroes.
+	for i := firstdigit; i < 20; i++ {
+		putchar(digits[i])
+	}
 }
 
 func printint64(n int64) {

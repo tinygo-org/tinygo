@@ -44,6 +44,26 @@ const (
 	PinInputPulldown PinMode = 18
 )
 
+type PinChange uint8
+
+// Pin change interrupt constants for SetInterrupt.
+const (
+	PinRising  PinChange = sam.EIC_CONFIG_SENSE0_RISE
+	PinFalling PinChange = sam.EIC_CONFIG_SENSE0_FALL
+	PinToggle  PinChange = sam.EIC_CONFIG_SENSE0_BOTH
+)
+
+// Callbacks to be called for pins configured with SetInterrupt. Unfortunately,
+// we also need to keep track of which interrupt channel is used by which pin,
+// as the only alternative would be iterating through all pins.
+//
+// We're using the magic constant 16 here because the SAM D21 has 16 interrupt
+// channels configurable for pins.
+var (
+	interruptPins [16]Pin // warning: the value is invalid when pinCallbacks[i] is not set!
+	pinCallbacks  [16]func(Pin)
+)
+
 // Hardware pins
 const (
 	PA00 Pin = 0
@@ -110,6 +130,70 @@ const (
 	PB29 Pin = 61
 	PB30 Pin = 62
 	PB31 Pin = 63
+	PC00 Pin = 64
+	PC01 Pin = 65
+	PC02 Pin = 66
+	PC03 Pin = 67
+	PC04 Pin = 68
+	PC05 Pin = 69
+	PC06 Pin = 70
+	PC07 Pin = 71
+	PC08 Pin = 72
+	PC09 Pin = 73
+	PC10 Pin = 74
+	PC11 Pin = 75
+	PC12 Pin = 76
+	PC13 Pin = 77
+	PC14 Pin = 78
+	PC15 Pin = 79
+	PC16 Pin = 80
+	PC17 Pin = 81
+	PC18 Pin = 82
+	PC19 Pin = 83
+	PC20 Pin = 84
+	PC21 Pin = 85
+	PC22 Pin = 86
+	PC23 Pin = 87
+	PC24 Pin = 88
+	PC25 Pin = 89
+	PC26 Pin = 90
+	PC27 Pin = 91
+	PC28 Pin = 92
+	PC29 Pin = 93
+	PC30 Pin = 94
+	PC31 Pin = 95
+	PD00 Pin = 96
+	PD01 Pin = 97
+	PD02 Pin = 98
+	PD03 Pin = 99
+	PD04 Pin = 100
+	PD05 Pin = 101
+	PD06 Pin = 102
+	PD07 Pin = 103
+	PD08 Pin = 104
+	PD09 Pin = 105
+	PD10 Pin = 106
+	PD11 Pin = 107
+	PD12 Pin = 108
+	PD13 Pin = 109
+	PD14 Pin = 110
+	PD15 Pin = 111
+	PD16 Pin = 112
+	PD17 Pin = 113
+	PD18 Pin = 114
+	PD19 Pin = 115
+	PD20 Pin = 116
+	PD21 Pin = 117
+	PD22 Pin = 118
+	PD23 Pin = 119
+	PD24 Pin = 120
+	PD25 Pin = 121
+	PD26 Pin = 122
+	PD27 Pin = 123
+	PD28 Pin = 124
+	PD29 Pin = 125
+	PD30 Pin = 126
+	PD31 Pin = 127
 )
 
 const (
@@ -180,7 +264,7 @@ const (
 // easy to check whether a nibble is set at all.
 //
 // Datasheet: http://ww1.microchip.com/downloads/en/DeviceDoc/60001507E.pdf
-var pinPadMapping = [32]uint16{
+var pinPadMapping = [64]uint16{
 	// page 32
 	PA00 / 2: 0 | pinPadMapSERCOM1AltPad0,
 
@@ -188,28 +272,28 @@ var pinPadMapping = [32]uint16{
 	PB08 / 2: 0 | pinPadMapSERCOM4AltPad0,
 	PA04 / 2: 0 | pinPadMapSERCOM0AltPad0,
 	PA06 / 2: 0 | pinPadMapSERCOM0AltPad2,
-	//PC04 / 2: pinPadMapSERCOM6Pad0 | 0,
-	//PC06 / 2: pinPadMapSERCOM6Pad2 | 0,
+	PC04 / 2: pinPadMapSERCOM6Pad0 | 0,
+	PC06 / 2: pinPadMapSERCOM6Pad2 | 0,
 	PA08 / 2: pinPadMapSERCOM0Pad0 | pinPadMapSERCOM2AltPad1,
 	PA10 / 2: pinPadMapSERCOM0Pad2 | pinPadMapSERCOM2AltPad2,
 	PB10 / 2: 0 | pinPadMapSERCOM4AltPad2,
 	PB12 / 2: pinPadMapSERCOM4Pad0 | 0,
 	PB14 / 2: pinPadMapSERCOM4Pad2 | 0,
-	//PD08 / 2: pinPadMapSERCOM7Pad0 | pinPadMapSERCOM6AltPad1,
-	//PD10 / 2: pinPadMapSERCOM7Pad2 | pinPadMapSERCOM6AltPad2,
-	//PC10 / 2: pinPadMapSERCOM6Pad2 | pinPadMapSERCOM7AltPad2,
+	PD08 / 2: pinPadMapSERCOM7Pad0 | pinPadMapSERCOM6AltPad1,
+	PD10 / 2: pinPadMapSERCOM7Pad2 | pinPadMapSERCOM6AltPad2,
+	PC10 / 2: pinPadMapSERCOM6Pad2 | pinPadMapSERCOM7AltPad2,
 
 	// page 34
-	//PC12 / 2: pinPadMapSERCOM7Pad0 | pinPadMapSERCOM6AltPad1,
-	//PC14 / 2: pinPadMapSERCOM7Pad2 | pinPadMapSERCOM6AltPad2,
+	PC12 / 2: pinPadMapSERCOM7Pad0 | pinPadMapSERCOM6AltPad1,
+	PC14 / 2: pinPadMapSERCOM7Pad2 | pinPadMapSERCOM6AltPad2,
 	PA12 / 2: pinPadMapSERCOM2Pad0 | pinPadMapSERCOM4AltPad1,
 	PA14 / 2: pinPadMapSERCOM2Pad2 | pinPadMapSERCOM4AltPad2,
 	PA16 / 2: pinPadMapSERCOM1Pad0 | pinPadMapSERCOM3AltPad1,
 	PA18 / 2: pinPadMapSERCOM1Pad2 | pinPadMapSERCOM3AltPad2,
-	//PC16 / 2: pinPadMapSERCOM6Pad0 | pinPadMapSERCOM0AltPad1,
-	//PC18 / 2: pinPadMapSERCOM6Pad2 | pinPadMapSERCOM0AltPad2,
-	//PC22 / 2: pinPadMapSERCOM1Pad0 | pinPadMapSERCOM3AltPad1,
-	//PD20 / 2: pinPadMapSERCOM1Pad2 | pinPadMapSERCOM3AltPad2,
+	PC16 / 2: pinPadMapSERCOM6Pad0 | pinPadMapSERCOM0AltPad1,
+	PC18 / 2: pinPadMapSERCOM6Pad2 | pinPadMapSERCOM0AltPad2,
+	PC22 / 2: pinPadMapSERCOM1Pad0 | pinPadMapSERCOM3AltPad1,
+	PD20 / 2: pinPadMapSERCOM1Pad2 | pinPadMapSERCOM3AltPad2,
 	PB16 / 2: pinPadMapSERCOM5Pad0 | 0,
 	PB18 / 2: pinPadMapSERCOM5Pad2 | pinPadMapSERCOM7AltPad2,
 
@@ -222,7 +306,7 @@ var pinPadMapping = [32]uint16{
 	PB24 / 2: pinPadMapSERCOM0Pad0 | pinPadMapSERCOM2AltPad1,
 	PB26 / 2: pinPadMapSERCOM2Pad0 | pinPadMapSERCOM4AltPad1,
 	PB28 / 2: pinPadMapSERCOM2Pad2 | pinPadMapSERCOM4AltPad2,
-	//PC24 / 2: pinPadMapSERCOM0Pad2 | pinPadMapSERCOM2AltPad2,
+	PC24 / 2: pinPadMapSERCOM0Pad2 | pinPadMapSERCOM2AltPad2,
 	//PC26 / 2: pinPadMapSERCOM1Pad1 | 0, // note: PC26 doesn't support SERCOM, but PC27 does
 	//PC28 / 2: pinPadMapSERCOM1Pad1 | 0, // note: PC29 doesn't exist in the datasheet?
 	PA30 / 2: 0 | pinPadMapSERCOM1AltPad2,
@@ -266,6 +350,162 @@ func findPinPadMapping(sercom uint8, pin Pin) (pinMode PinMode, pad uint32, ok b
 		}
 	}
 	return
+}
+
+// SetInterrupt sets an interrupt to be executed when a particular pin changes
+// state.
+//
+// This call will replace a previously set callback on this pin. You can pass a
+// nil func to unset the pin change interrupt. If you do so, the change
+// parameter is ignored and can be set to any value (such as 0).
+func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
+	// Most pins follow a common pattern where the EXTINT value is the pin
+	// number modulo 16. However, there are a few exceptions, as you can see
+	// below.
+	extint := uint8(0)
+
+	switch p {
+	case PA08:
+		// Connected to NMI. This is not currently supported.
+		return ErrInvalidInputPin
+	case PB26:
+		extint = 12
+	case PB27:
+		extint = 13
+	case PB28:
+		extint = 14
+	case PB29:
+		extint = 15
+	case PC07:
+		extint = 9
+	case PD08:
+		extint = 3
+	case PD09:
+		extint = 4
+	case PD10:
+		extint = 5
+	case PD11:
+		extint = 6
+	case PD12:
+		extint = 7
+	case PD20:
+		extint = 10
+	case PD21:
+		extint = 11
+	default:
+		// All other pins follow a normal pattern.
+		extint = uint8(p) % 16
+	}
+
+	if callback == nil {
+		// Disable this pin interrupt (if it was enabled).
+		sam.EIC.INTENCLR.Set(1 << extint)
+		if pinCallbacks[extint] != nil {
+			pinCallbacks[extint] = nil
+		}
+		return nil
+	}
+
+	if pinCallbacks[extint] != nil {
+		// The pin was already configured.
+		// To properly re-configure a pin, unset it first and set a new
+		// configuration.
+		return ErrNoPinChangeChannel
+	}
+	pinCallbacks[extint] = callback
+	interruptPins[extint] = p
+
+	if !sam.EIC.CTRLA.HasBits(sam.EIC_CTRLA_ENABLE) {
+		// EIC peripheral has not yet been initialized. Initialize it now.
+
+		// The EIC needs two clocks: CLK_EIC_APB and GCLK_EIC. CLK_EIC_APB is
+		// enabled by default, so doesn't have to be re-enabled. The other is
+		// required for detecting edges and must be enabled manually.
+		sam.GCLK.PCHCTRL[4].Set((sam.GCLK_PCHCTRL_GEN_GCLK0 << sam.GCLK_PCHCTRL_GEN_Pos) | sam.GCLK_PCHCTRL_CHEN)
+
+		// should not be necessary (CLKCTRL is not synchronized)
+		for sam.GCLK.SYNCBUSY.HasBits(sam.GCLK_SYNCBUSY_GENCTRL_GCLK0 << sam.GCLK_SYNCBUSY_GENCTRL_Pos) {
+		}
+	}
+
+	// CONFIG register is enable-protected, so disable EIC.
+	sam.EIC.CTRLA.ClearBits(sam.EIC_CTRLA_ENABLE)
+
+	// Configure this pin. Set the 4 bits of the EIC.CONFIGx register to the
+	// sense value (filter bit set to 0, sense bits set to the change value).
+	addr := &sam.EIC.CONFIG[0]
+	if extint >= 8 {
+		addr = &sam.EIC.CONFIG[1]
+	}
+	pos := (extint % 8) * 4 // bit position in register
+	addr.Set((addr.Get() &^ (0xf << pos)) | uint32(change)<<pos)
+
+	// Enable external interrupt for this pin.
+	sam.EIC.INTENSET.Set(1 << extint)
+
+	sam.EIC.CTRLA.Set(sam.EIC_CTRLA_ENABLE)
+	for sam.EIC.SYNCBUSY.HasBits(sam.EIC_SYNCBUSY_ENABLE) {
+	}
+
+	// Set the PMUXEN flag, while keeping the INEN and PULLEN flags (if they
+	// were set before). This avoids clearing the pin pull mode while
+	// configuring the pin interrupt.
+	p.setPinCfg(sam.PORT_GROUP_PINCFG_PMUXEN | (p.getPinCfg() & (sam.PORT_GROUP_PINCFG_INEN | sam.PORT_GROUP_PINCFG_PULLEN)))
+	if p&1 > 0 {
+		// odd pin, so save the even pins
+		val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXE_Msk
+		p.setPMux(val | (0 << sam.PORT_GROUP_PMUX_PMUXO_Pos))
+	} else {
+		// even pin, so save the odd pins
+		val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXO_Msk
+		p.setPMux(val | (0 << sam.PORT_GROUP_PMUX_PMUXE_Pos))
+	}
+
+	handleEICInterrupt := func(interrupt.Interrupt) {
+		flags := sam.EIC.INTFLAG.Get()
+		sam.EIC.INTFLAG.Set(flags)      // clear interrupt
+		for i := uint(0); i < 16; i++ { // there are 16 channels
+			if flags&(1<<i) != 0 {
+				pinCallbacks[i](interruptPins[i])
+			}
+		}
+	}
+	switch extint {
+	case 0:
+		interrupt.New(sam.IRQ_EIC_EXTINT_0, handleEICInterrupt).Enable()
+	case 1:
+		interrupt.New(sam.IRQ_EIC_EXTINT_1, handleEICInterrupt).Enable()
+	case 2:
+		interrupt.New(sam.IRQ_EIC_EXTINT_2, handleEICInterrupt).Enable()
+	case 3:
+		interrupt.New(sam.IRQ_EIC_EXTINT_3, handleEICInterrupt).Enable()
+	case 4:
+		interrupt.New(sam.IRQ_EIC_EXTINT_4, handleEICInterrupt).Enable()
+	case 5:
+		interrupt.New(sam.IRQ_EIC_EXTINT_5, handleEICInterrupt).Enable()
+	case 6:
+		interrupt.New(sam.IRQ_EIC_EXTINT_6, handleEICInterrupt).Enable()
+	case 7:
+		interrupt.New(sam.IRQ_EIC_EXTINT_7, handleEICInterrupt).Enable()
+	case 8:
+		interrupt.New(sam.IRQ_EIC_EXTINT_8, handleEICInterrupt).Enable()
+	case 9:
+		interrupt.New(sam.IRQ_EIC_EXTINT_9, handleEICInterrupt).Enable()
+	case 10:
+		interrupt.New(sam.IRQ_EIC_EXTINT_10, handleEICInterrupt).Enable()
+	case 11:
+		interrupt.New(sam.IRQ_EIC_EXTINT_11, handleEICInterrupt).Enable()
+	case 12:
+		interrupt.New(sam.IRQ_EIC_EXTINT_12, handleEICInterrupt).Enable()
+	case 13:
+		interrupt.New(sam.IRQ_EIC_EXTINT_13, handleEICInterrupt).Enable()
+	case 14:
+		interrupt.New(sam.IRQ_EIC_EXTINT_14, handleEICInterrupt).Enable()
+	case 15:
+		interrupt.New(sam.IRQ_EIC_EXTINT_15, handleEICInterrupt).Enable()
+	}
+
+	return nil
 }
 
 // Return the register and mask to enable a given GPIO pin. This can be used to
@@ -586,7 +826,7 @@ func (a ADC) Get() uint16 {
 }
 
 func (a ADC) getADCBus() *sam.ADC_Type {
-	if a.Pin >= PB04 && a.Pin <= PB07 {
+	if (a.Pin >= PB04 && a.Pin <= PB07) || (a.Pin >= PC00) {
 		return sam.ADC1
 	}
 	return sam.ADC0
@@ -629,6 +869,24 @@ func (a ADC) getADCChannel() uint8 {
 		return 8
 	case PB07:
 		return 9
+
+	case PC00:
+		return 10
+	case PC01:
+		return 11
+	case PC02:
+		return 4
+	case PC03:
+		return 5
+	case PC30:
+		return 12
+	case PC31:
+		return 13
+
+	case PD00:
+		return 14
+	case PD01:
+		return 15
 	default:
 		panic("Invalid ADC pin")
 	}
@@ -645,27 +903,7 @@ type UART struct {
 var (
 	// UART0 is actually a USB CDC interface.
 	UART0 = USBCDC{Buffer: NewRingBuffer()}
-
-	// The first hardware serial port on the SAMD51. Uses the SERCOM3 interface.
-	UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM3_USART_INT,
-		SERCOM: 3,
-	}
-
-	// The second hardware serial port on the SAMD51. Uses the SERCOM0 interface.
-	UART2 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM0_USART_INT,
-		SERCOM: 0,
-	}
 )
-
-func init() {
-	// Register RXC interrupts.
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM3_2, UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM0_2, UART2.handleInterrupt)
-}
 
 const (
 	sampleRate16X = 16
@@ -1216,7 +1454,7 @@ const (
 const period = 0xFFFF
 
 // Configure configures a PWM pin for output.
-func (pwm PWM) Configure() {
+func (pwm PWM) Configure() error {
 	// Set pin as output
 	sam.PORT.GROUP[0].DIRSET.Set(1 << uint8(pwm.Pin))
 	// Set pin to low
@@ -1240,6 +1478,9 @@ func (pwm PWM) Configure() {
 
 	// figure out which TCCX timer for this pin
 	timer := pwm.getTimer()
+	if timer == nil {
+		return ErrInvalidOutputPin
+	}
 
 	// disable timer
 	timer.CTRLA.ClearBits(sam.TCC_CTRLA_ENABLE)
@@ -1264,7 +1505,7 @@ func (pwm PWM) Configure() {
 
 	// Set the initial value
 	// TCCx->CC[tcChannel].reg = (uint32_t) value;
-	pwm.setChannel(0)
+	pwm.setChannel(timer, 0)
 
 	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_CC0) ||
 		timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_CC1) {
@@ -1282,12 +1523,19 @@ func (pwm PWM) Configure() {
 	// Wait for synchronization
 	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_ENABLE) {
 	}
+
+	return nil
 }
 
 // Set turns on the duty cycle for a PWM pin using the provided value.
 func (pwm PWM) Set(value uint16) {
 	// figure out which TCCX timer for this pin
 	timer := pwm.getTimer()
+	if timer == nil {
+		// The Configure call above cannot have succeeded, so simply ignore this
+		// error.
+		return
+	}
 
 	// Wait for synchronization
 	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_CTRLB) {
@@ -1297,7 +1545,7 @@ func (pwm PWM) Set(value uint16) {
 	}
 
 	// TCCx->CCBUF[tcChannel].reg = (uint32_t) value;
-	pwm.setChannelBuffer(uint32(value))
+	pwm.setChannelBuffer(timer, uint32(value))
 
 	for timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_CC0) ||
 		timer.SYNCBUSY.HasBits(sam.TCC_SYNCBUSY_CC1) {
@@ -1329,61 +1577,61 @@ func (pwm PWM) setPinCfg(val uint8) {
 	pwm.Pin.setPinCfg(val)
 }
 
-// setChannel sets the value for the correct channel for PWM on this pin
-func (pwm PWM) setChannel(val uint32) {
+// setChannel sets the value for the correct channel for PWM on this pin.
+func (pwm PWM) setChannel(timer *sam.TCC_Type, val uint32) {
 	switch pwm.Pin {
 	case PA16:
-		pwm.getTimer().CC[0].Set(val)
+		timer.CC[0].Set(val)
 	case PA17:
-		pwm.getTimer().CC[1].Set(val)
+		timer.CC[1].Set(val)
 	case PA14:
-		pwm.getTimer().CC[0].Set(val)
+		timer.CC[0].Set(val)
 	case PA15:
-		pwm.getTimer().CC[1].Set(val)
+		timer.CC[1].Set(val)
 	case PA18:
-		pwm.getTimer().CC[2].Set(val)
+		timer.CC[2].Set(val)
 	case PA19:
-		pwm.getTimer().CC[3].Set(val)
+		timer.CC[3].Set(val)
 	case PA20:
-		pwm.getTimer().CC[0].Set(val)
+		timer.CC[0].Set(val)
 	case PA21:
-		pwm.getTimer().CC[1].Set(val)
+		timer.CC[1].Set(val)
 	case PA23:
-		pwm.getTimer().CC[3].Set(val)
+		timer.CC[3].Set(val)
 	case PA22:
-		pwm.getTimer().CC[2].Set(val)
+		timer.CC[2].Set(val)
 	case PB31:
-		pwm.getTimer().CC[1].Set(val)
+		timer.CC[1].Set(val)
 	default:
 		return // not supported on this pin
 	}
 }
 
 // setChannelBuffer sets the value for the correct channel buffer for PWM on this pin
-func (pwm PWM) setChannelBuffer(val uint32) {
+func (pwm PWM) setChannelBuffer(timer *sam.TCC_Type, val uint32) {
 	switch pwm.Pin {
 	case PA16:
-		pwm.getTimer().CCBUF[0].Set(val)
+		timer.CCBUF[0].Set(val)
 	case PA17:
-		pwm.getTimer().CCBUF[1].Set(val)
+		timer.CCBUF[1].Set(val)
 	case PA14:
-		pwm.getTimer().CCBUF[0].Set(val)
+		timer.CCBUF[0].Set(val)
 	case PA15:
-		pwm.getTimer().CCBUF[1].Set(val)
+		timer.CCBUF[1].Set(val)
 	case PA18:
-		pwm.getTimer().CCBUF[2].Set(val)
+		timer.CCBUF[2].Set(val)
 	case PA19:
-		pwm.getTimer().CCBUF[3].Set(val)
+		timer.CCBUF[3].Set(val)
 	case PA20:
-		pwm.getTimer().CCBUF[0].Set(val)
+		timer.CCBUF[0].Set(val)
 	case PA21:
-		pwm.getTimer().CCBUF[1].Set(val)
+		timer.CCBUF[1].Set(val)
 	case PA23:
-		pwm.getTimer().CCBUF[3].Set(val)
+		timer.CCBUF[3].Set(val)
 	case PA22:
-		pwm.getTimer().CCBUF[2].Set(val)
+		timer.CCBUF[2].Set(val)
 	case PB31:
-		pwm.getTimer().CCBUF[1].Set(val)
+		timer.CCBUF[1].Set(val)
 	default:
 		return // not supported on this pin
 	}

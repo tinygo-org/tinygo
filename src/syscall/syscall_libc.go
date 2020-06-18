@@ -31,6 +31,14 @@ func Open(path string, mode int, perm uint32) (fd int, err error) {
 	return 0, ENOSYS // TODO
 }
 
+func Mkdir(path string, mode uint32) (err error) {
+	return ENOSYS // TODO
+}
+
+func Unlink(path string) (err error) {
+	return ENOSYS // TODO
+}
+
 func Kill(pid int, sig Signal) (err error) {
 	return ENOSYS // TODO
 }
