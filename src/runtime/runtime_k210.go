@@ -99,8 +99,11 @@ func handleInterrupt() {
 
 // initPeripherals configures periperhals the way the runtime expects them.
 func initPeripherals() {
+	// Enable APB0 clock.
+	kendryte.SYSCTL.CLK_EN_CENT.SetBits(kendryte.SYSCTL_CLK_EN_CENT_APB0_CLK_EN)
 
-	machine.FPIOA0.Init()
+	// Enable FPIOA peripheral.
+	kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_FPIOA_CLK_EN)
 
 	machine.UART0.Configure(machine.UARTConfig{})
 }
