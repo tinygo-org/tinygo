@@ -110,6 +110,18 @@ func (b gcBlock) address() uintptr {
 	return poolStart + uintptr(b)*bytesPerBlock
 }
 
+// setAlloc sets states of a series of gc blocks to list it as allocated.
+func (b gcBlock) setAlloc(len uintptr) {
+	if len == 0 {
+		return
+	}
+
+	b.setState(blockStateHead)
+	for i := uintptr(1); i < len; i++ {
+		(b + gcBlock(i)).setState(blockStateTail)
+	}
+}
+
 // findHead returns the head (first block) of an object, assuming the block
 // points to an allocated object. It returns the same block if this block
 // already points to the head.
@@ -177,10 +189,155 @@ func (b gcBlock) unmark() {
 	}
 }
 
+// gcFreeSpan stores information about a span of free blocks.
+// It is stored in the first free block of the span.
+type gcFreeSpan struct {
+	// next is a pointer to the next free span of equal size.
+	next *gcFreeSpan
+}
+
+// gcBlock returns the first block in the free span.
+func (span *gcFreeSpan) gcBlock() gcBlock {
+	return blockFromAddr(uintptr(unsafe.Pointer(span)))
+}
+
+// gcFreeRootSpan stores information about available free block spans.
+type gcFreeRootSpan struct {
+	gcFreeSpan
+
+	// len is the length of the free span (measured in blocks).
+	len uintptr
+
+	// nextSize is a pointer to the root span of the next smallest span size.
+	nextSize *gcFreeRootSpan
+}
+
+// gcFreeSpans is a tree which is used to track spans of free blocks in the heap.
+// This tree is asymmetric, and can also be viewed as a linked list of linked lists.
+// The outer list tracks available node sizes, and is sorted in ascending size order.
+// The inner lists are of individual free spans of a given size, sorted in no particular order.
+// This ensures that the worst case lookup time for the smallest span fitting an allocation is proportional to the size of the allocation.
+// However, the minimum heap size for n different sized spans is ½n² + (3/2)n - 2.
+// Therefore the worst case lookup complexity with respect to heap size is O(√(8n+17)) ≈ O(√n).
+var gcFreeSpans *gcFreeRootSpan
+
+// insertFreeSpan inserts a new span of free blocks into the span tree.
+func insertFreeSpan(block gcBlock, len uintptr) {
+	if len == 0 {
+		return
+	}
+
+	// Search for the appropriate root insertion point.
+	rins := &gcFreeSpans
+	for *rins != nil && (*rins).len < len {
+		rins = &(*rins).nextSize
+	}
+
+	if root := *rins; root != nil && root.len == len {
+		// There is already a root for this size.
+		// Add a span to this root.
+		span := (*gcFreeSpan)(block.pointer())
+		*span = gcFreeSpan{
+			next: root.next,
+		}
+		root.next = span
+		return
+	}
+
+	// Create a new root for this size.
+	root := (*gcFreeRootSpan)(block.pointer())
+	*root = gcFreeRootSpan{
+		len:      len,
+		nextSize: *rins,
+	}
+	*rins = root
+}
+
+// rebuildSpanTree rebuilds the free span tree.
+// This is used after the GC sweep.
+func rebuildSpanTree() {
+	// Clear the existing span tree.
+	gcFreeSpans = nil
+
+	// Search for all free blocks.
+	for block := gcBlock(0); block < endBlock; block++ {
+		if block.state() != blockStateFree {
+			// This block is in use.
+			continue
+		}
+
+		// This is the first block in a free span.
+		spanStart := block
+
+		// Find the end of the free span.
+		for block < endBlock && block.state() == blockStateFree {
+			block++
+		}
+
+		// Add the span to the tree.
+		insertFreeSpan(spanStart, uintptr(block-spanStart))
+	}
+}
+
+// allocBlocks allocates a series of gc blocks.
+// It attempts to use the smallest possible free span.
+func allocBlocks(len uintptr) (gcBlock, bool) {
+	// Search for a root with a span length of at least len.
+	rins := &gcFreeSpans
+	for *rins != nil && (*rins).len < len {
+		rins = &(*rins).nextSize
+	}
+	if *rins == nil {
+		// There are no sufficiently-large free spans.
+		return 0, false
+	}
+
+	// Get a free span.
+	root := *rins
+	var span *gcFreeSpan
+	if span = root.next; span != nil {
+		// Pop a leaf span off of the tree.
+		root.next = span.next
+	} else {
+		// There is only one free span of this size.
+		// Extract the root.
+		*rins = root.nextSize
+		span = &root.gcFreeSpan
+	}
+
+	if root.len > len {
+		// The span is longer than requested.
+		// Insert the remainder of the span.
+		insertFreeSpan(span.gcBlock()+gcBlock(len), root.len-len)
+	}
+
+	return span.gcBlock(), true
+}
+
+// dumpFreeSpanTree prints the available free spans.
+// This can be used in order to debug heap fragmentation.
+func dumpFreeSpanTree() {
+	if gcFreeSpans == nil {
+		println("no free spans")
+		return
+	}
+
+	println("free spans:")
+	for root := gcFreeSpans; root != nil; root = root.nextSize {
+		var n uint
+		for s := &root.gcFreeSpan; s != nil; s = s.next {
+			n++
+		}
+		print("  ", n, "x ", uint(root.len*bytesPerBlock), " bytes: ", root)
+		for s := root.next; s != nil; s = s.next {
+			print(", ", s)
+		}
+		println()
+	}
+}
+
 // Initialize the memory allocator.
-// No memory may be allocated before this is called. That means the runtime and
-// any packages the runtime depends upon may not allocate memory during package
-// initialization.
+// No memory may be allocated before this is called.
 func initHeap() {
 	totalSize := heapEnd - heapStart
 
@@ -208,6 +365,9 @@ func initHeap() {
 
 	// Set all block states to 'free'.
 	memzero(unsafe.Pointer(heapStart), metadataSize)
+
+	// Insert an initial free span.
+	insertFreeSpan(0, numBlocks)
 }
 
 // alloc tries to find some free space on the heap, possibly doing a garbage
@@ -219,66 +379,40 @@ func alloc(size uintptr) unsafe.Pointer {
 	}
 
 	neededBlocks := (size + (bytesPerBlock - 1)) / bytesPerBlock
-
-	// Continue looping until a run of free blocks has been found that fits the
-	// requested size.
-	index := nextAlloc
-	numFreeBlocks := uintptr(0)
-	heapScanCount := uint8(0)
-	for {
-		if index == nextAlloc {
-			if heapScanCount == 0 {
-				heapScanCount = 1
-			} else if heapScanCount == 1 {
-				// The entire heap has been searched for free memory, but none
-				// could be found. Run a garbage collection cycle to reclaim
-				// free memory and try again.
-				heapScanCount = 2
-				GC()
-			} else {
-				// Even after garbage collection, no free memory could be found.
-				runtimePanic("out of memory")
-			}
-		}
-
-		// Wrap around the end of the heap.
-		if index == endBlock {
-			index = 0
-			// Reset numFreeBlocks as allocations cannot wrap.
-			numFreeBlocks = 0
-		}
-
-		// Is the block we're looking at free?
-		if index.state() != blockStateFree {
-			// This block is in use. Try again from this point.
-			numFreeBlocks = 0
-			index++
-			continue
-		}
-		numFreeBlocks++
-		index++
-
-		// Are we finished?
-		if numFreeBlocks == neededBlocks {
-			// Found a big enough range of free blocks!
-			nextAlloc = index
-			thisAlloc := index - gcBlock(neededBlocks)
-			if gcDebug {
-				println("found memory:", thisAlloc.pointer(), int(size))
-			}
-
-			// Set the following blocks as being allocated.
-			thisAlloc.setState(blockStateHead)
-			for i := thisAlloc + 1; i != nextAlloc; i++ {
-				i.setState(blockStateTail)
-			}
-
-			// Return a pointer to this allocation.
-			pointer := thisAlloc.pointer()
-			memzero(pointer, size)
-			return pointer
-		}
+	if neededBlocks > uintptr(endBlock) {
+		runtimePanic("oversized allocation")
 	}
+
+	var gcRun bool
+tryAlloc:
+	// Find a span of free blocks.
+	block, ok := allocBlocks(neededBlocks)
+	if !ok {
+		// There is no sufficiently large span of free blocks available.
+
+		if !gcRun {
+			// Run the garbage collector and try again.
+			GC()
+			gcRun = true
+			goto tryAlloc
+		}
+
+		// There is not enough space for the allocation.
+		runtimePanic("out of memory")
+	}
+
+	if gcDebug {
+		println("found memory:", block.pointer(), int(size))
+	}
+
+	// Set the states of the blocks as allocated.
+	block.setAlloc(neededBlocks)
+
+	// Clear the allocation.
+	pointer := block.pointer()
+	memzero(pointer, size)
+
+	return pointer
 }
 
 func free(ptr unsafe.Pointer) {
@@ -300,9 +434,13 @@ func GC() {
 	// the next collection cycle.
 	sweep()
 
+	// Build a tree of free memory spans.
+	rebuildSpanTree()
+
 	// Show how much has been sweeped, for debugging.
 	if gcDebug {
 		dumpHeap()
+		dumpFreeSpanTree()
 	}
 }
 
