@@ -196,7 +196,7 @@ func SetPriority(irq uint32, priority uint32) {
 func DisableInterrupts() uintptr {
 	return AsmFull(`
 		mrs {}, PRIMASK
-		cpsid if
+		cpsid i
 	`, nil)
 }
 
