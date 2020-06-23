@@ -14,8 +14,10 @@ package compiler
 //     frames.
 
 import (
+	"fmt"
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/ir"
+	"go/types"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -28,6 +30,7 @@ func (b *builder) deferInitFunc() {
 	b.deferFuncs = make(map[*ir.Function]int)
 	b.deferInvokeFuncs = make(map[string]int)
 	b.deferClosureFuncs = make(map[*ir.Function]int)
+	b.deferExprFuncs = make(map[interface{}]deferExpr)
 
 	// Create defer list pointer.
 	deferType := llvm.PointerType(b.getLLVMRuntimeType("_defer"), 0)
@@ -151,9 +154,79 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		values = append(values, context)
 		valueTypes = append(valueTypes, context.Type())
 
+	} else if  builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
+		b.addError(instr.Pos(), fmt.Sprintf("%+v", builtin))
+		b.addError(instr.Pos(), "todo: Is builtin")
+	/*} else if  extract, ok := instr.Call.Value.(*ssa.Extract); ok {
+		value := b.getValue(extract.Tuple)
+		funcValue := b.CreateExtractValue(value, extract.Index, "")
+		context := b.CreateExtractValue(funcValue, 0, "")
+
+		callback := llvm.ConstInt(b.uintptrType, uint64(len(b.allDeferFuncs)), false)
+		b.allDeferFuncs = append(b.allDeferFuncs, extract)
+
+		// Collect all values to be put in the struct (starting with
+		// runtime._defer fields, followed by all parameters including the
+		// context pointer).
+
+		values = []llvm.Value{callback, next}
+		for _, param := range instr.Call.Args {
+			llvmParam := b.getValue(param)
+			values = append(values, llvmParam)
+			valueTypes = append(valueTypes, llvmParam.Type())
+		}
+
+		values = append(values, context)
+		valueTypes = append(valueTypes, context.Type())*/
+	} else if  unop, ok := instr.Call.Value.(*ssa.UnOp); ok {
+		b.addError(instr.Pos(), fmt.Sprintf("%+v", unop))
+		b.addError(instr.Pos(), "todo: Is UnOp")
+	/*} else if call, ok := instr.Call.Value.(*ssa.Call); ok {
+		funcValue := b.getValue(call.Call.Value)*/
+
 	} else {
-		b.addError(instr.Pos(), "todo: defer on uncommon function call type")
-		return
+		var funcValue llvm.Value
+		var sig *types.Signature
+
+		if  extract, ok := instr.Call.Value.(*ssa.Extract); ok {
+			value := b.getValue(extract.Tuple)
+			funcValue = b.CreateExtractValue(value, extract.Index, "")
+			sig = extract.Tuple.(*ssa.Call).Call.Value.(*ssa.Function).Signature.Results().At(extract.Index).Type().(*types.Signature)
+		} else if call, ok := instr.Call.Value.(*ssa.Call); ok {
+			funcValue = b.getValue(call)
+			sig = call.Call.Value.Type().Underlying().(*types.Signature).Results().At(0).Type().(*types.Signature)
+		}
+
+		if funcValue.IsNil() == false && sig != nil {
+			funcSig, context := b.decodeFuncValue(funcValue, sig)
+
+			if _, ok := b.deferExprFuncs[instr.Call.Value]; !ok {
+				b.deferExprFuncs[instr.Call.Value] = deferExpr{
+					funcValueSig: funcSig,
+					signature: sig,
+					callback: len(b.allDeferFuncs),
+				}
+				b.allDeferFuncs = append(b.allDeferFuncs, instr.Call.Value)
+			}
+
+			callback := llvm.ConstInt(b.uintptrType, uint64(b.deferExprFuncs[instr.Call.Value].callback), false)
+
+			// Collect all values to be put in the struct (starting with
+			// runtime._defer fields, followed by all parameters including the
+			// context pointer).
+			values = []llvm.Value{callback, next}
+			for _, param := range instr.Call.Args {
+				llvmParam := b.getValue(param)
+				values = append(values, llvmParam)
+				valueTypes = append(valueTypes, llvmParam.Type())
+			}
+
+			values = append(values, context)
+			valueTypes = append(valueTypes, context.Type())
+		} else {
+			b.addError(instr.Pos(), "todo: defer on uncommon function call type")
+			return
+		}
 	}
 
 	// Make a struct out of the collected values to put in the defer frame.
@@ -339,6 +412,36 @@ func (b *builder) createRunDefers() {
 
 			// Call deferred function.
 			b.createCall(fn.LLVMFn, forwardParams, "")
+		case *ssa.Extract, *ssa.Call:
+			expr := b.deferExprFuncs[callback]
+
+			// Get the real defer struct type and cast to it.
+			valueTypes := []llvm.Type{b.uintptrType, llvm.PointerType(b.getLLVMRuntimeType("_defer"), 0)}
+
+			//Get signature from call results
+			params := expr.signature.Params()
+			for i := 0; i < params.Len(); i++ {
+				valueTypes = append(valueTypes, b.getLLVMType(params.At(i).Type()))
+			}
+
+			valueTypes = append(valueTypes, b.i8ptrType) // closure
+			deferFrameType := b.ctx.StructType(valueTypes, false)
+			deferFramePtr := b.CreateBitCast(deferData, llvm.PointerType(deferFrameType, 0), "deferFrame")
+
+			// Extract the params from the struct.
+			var forwardParams []llvm.Value
+			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+			for i := 2; i < len(valueTypes); i++ {
+				gep := b.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)}, "")
+				forwardParam := b.CreateLoad(gep, "param")
+				forwardParams = append(forwardParams, forwardParam)
+			}
+
+			// Parent coroutine handle.
+			forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
+
+			// Call deferred function.
+			b.createCall(expr.funcValueSig, forwardParams, "")
 
 		default:
 			panic("unknown deferred function type")

@@ -74,7 +74,14 @@ type builder struct {
 	deferFuncs        map[*ir.Function]int
 	deferInvokeFuncs  map[string]int
 	deferClosureFuncs map[*ir.Function]int
+	deferExprFuncs    map[interface{}]deferExpr
 	selectRecvBuf     map[*ssa.Select]llvm.Value
+}
+
+type deferExpr struct {
+	funcValueSig llvm.Value
+	signature *types.Signature
+	callback int
 }
 
 type phiNode struct {
