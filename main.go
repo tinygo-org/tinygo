@@ -873,7 +873,7 @@ func main() {
 		}
 		pkgName := "."
 		if flag.NArg() == 1 {
-			pkgName = flag.Arg(0)
+			pkgName = filepath.ToSlash(flag.Arg(0))
 		} else if flag.NArg() > 1 {
 			fmt.Fprintln(os.Stderr, "build only accepts a single positional argument: package name, but multiple were specified")
 			usage()
@@ -919,8 +919,9 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
+		pkgName := filepath.ToSlash(flag.Arg(0))
 		if command == "flash" {
-			err := Flash(flag.Arg(0), *port, options)
+			err := Flash(pkgName, *port, options)
 			handleCompilerError(err)
 		} else {
 			if !options.Debug {
@@ -928,7 +929,7 @@ func main() {
 				usage()
 				os.Exit(1)
 			}
-			err := FlashGDB(flag.Arg(0), *ocdOutput, options)
+			err := FlashGDB(pkgName, *ocdOutput, options)
 			handleCompilerError(err)
 		}
 	case "run":
@@ -937,12 +938,13 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Run(flag.Arg(0), options)
+		pkgName := filepath.ToSlash(flag.Arg(0))
+		err := Run(pkgName, options)
 		handleCompilerError(err)
 	case "test":
 		pkgName := "."
 		if flag.NArg() == 1 {
-			pkgName = flag.Arg(0)
+			pkgName = filepath.ToSlash(flag.Arg(0))
 		} else if flag.NArg() > 1 {
 			fmt.Fprintln(os.Stderr, "test only accepts a single positional argument: package name, but multiple were specified")
 			usage()
