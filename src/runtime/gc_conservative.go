@@ -297,32 +297,36 @@ func GC() {
 	markStack()
 	markGlobals()
 
-	// Channel operations in interrupts may move task pointers around while we are marking.
-	// Therefore we need to scan the runqueue seperately.
-	var markedTaskQueue task.Queue
-runqueueScan:
-	for !runqueue.Empty() {
-		// Pop the next task off of the runqueue.
-		t := runqueue.Pop()
+	if baremetal && hasScheduler {
+		// Channel operations in interrupts may move task pointers around while we are marking.
+		// Therefore we need to scan the runqueue seperately.
+		var markedTaskQueue task.Queue
+	runqueueScan:
+		for !runqueue.Empty() {
+			// Pop the next task off of the runqueue.
+			t := runqueue.Pop()
 
-		// Mark the task if it has not already been marked.
-		markRoot(uintptr(unsafe.Pointer(&runqueue)), uintptr(unsafe.Pointer(t)))
+			// Mark the task if it has not already been marked.
+			markRoot(uintptr(unsafe.Pointer(&runqueue)), uintptr(unsafe.Pointer(t)))
 
-		// Push the task onto our temporary queue.
-		markedTaskQueue.Push(t)
-	}
+			// Push the task onto our temporary queue.
+			markedTaskQueue.Push(t)
+		}
 
-	finishMark()
+		finishMark()
 
-	// Restore the runqueue.
-	i := interrupt.Disable()
-	if !runqueue.Empty() {
-		// Something new came in while finishing the mark.
+		// Restore the runqueue.
+		i := interrupt.Disable()
+		if !runqueue.Empty() {
+			// Something new came in while finishing the mark.
+			interrupt.Restore(i)
+			goto runqueueScan
+		}
+		runqueue = markedTaskQueue
 		interrupt.Restore(i)
-		goto runqueueScan
+	} else {
+		finishMark()
 	}
-	runqueue = markedTaskQueue
-	interrupt.Restore(i)
 
 	// Sweep phase: free all non-marked objects and unmark marked objects for
 	// the next collection cycle.

@@ -38,3 +38,5 @@ func libc_malloc(size uintptr) unsafe.Pointer {
 func libc_free(ptr unsafe.Pointer) {
 	free(ptr)
 }
+
+const baremetal = true
