@@ -2249,25 +2249,10 @@ func (dac DAC) Configure(config DACConfig) {
 
 // WriteData writes a single value to the DAC.
 func (dac DAC) WriteData(value uint16) error {
-	syncDAC()
 	sam.DAC.DATA.Set(value & 0x3FF)
 	syncDAC()
 	sam.DAC.CTRLA.SetBits(sam.DAC_CTRLA_ENABLE)
 	syncDAC()
-	return nil
-}
-
-// Write is intended to satisfy the Writer interface.
-// This current implementation is probably not very useful.
-func (dac DAC) Write(p []uint16) (n int, err error) {
-	for _, val := range p {
-		dac.WriteData(val)
-	}
-	return len(p), nil
-}
-
-// Close the DAC.
-func (dac DAC) Close() error {
 	return nil
 }
 
