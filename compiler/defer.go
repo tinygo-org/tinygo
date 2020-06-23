@@ -157,33 +157,9 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 	} else if  builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
 		b.addError(instr.Pos(), fmt.Sprintf("%+v", builtin))
 		b.addError(instr.Pos(), "todo: Is builtin")
-	/*} else if  extract, ok := instr.Call.Value.(*ssa.Extract); ok {
-		value := b.getValue(extract.Tuple)
-		funcValue := b.CreateExtractValue(value, extract.Index, "")
-		context := b.CreateExtractValue(funcValue, 0, "")
-
-		callback := llvm.ConstInt(b.uintptrType, uint64(len(b.allDeferFuncs)), false)
-		b.allDeferFuncs = append(b.allDeferFuncs, extract)
-
-		// Collect all values to be put in the struct (starting with
-		// runtime._defer fields, followed by all parameters including the
-		// context pointer).
-
-		values = []llvm.Value{callback, next}
-		for _, param := range instr.Call.Args {
-			llvmParam := b.getValue(param)
-			values = append(values, llvmParam)
-			valueTypes = append(valueTypes, llvmParam.Type())
-		}
-
-		values = append(values, context)
-		valueTypes = append(valueTypes, context.Type())*/
 	} else if  unop, ok := instr.Call.Value.(*ssa.UnOp); ok {
 		b.addError(instr.Pos(), fmt.Sprintf("%+v", unop))
 		b.addError(instr.Pos(), "todo: Is UnOp")
-	/*} else if call, ok := instr.Call.Value.(*ssa.Call); ok {
-		funcValue := b.getValue(call.Call.Value)*/
-
 	} else {
 		var funcValue llvm.Value
 		var sig *types.Signature
