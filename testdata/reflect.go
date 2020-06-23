@@ -264,6 +264,9 @@ func main() {
 	default:
 		println("type assertion failed (but should succeed)")
 	}
+
+	println("\nstruct tags")
+	TestStructTag()
 }
 
 func emptyFunc() {
@@ -352,3 +355,14 @@ func assertSize(ok bool, typ string) {
 }
 
 type unreferencedType int
+
+func TestStructTag() {
+	type S struct {
+		F string `species:"gopher" color:"blue"`
+	}
+
+	s := S{}
+	st := reflect.TypeOf(s)
+	field := st.Field(0)
+	println(field.Tag.Get("color"), field.Tag.Get("species"))
+}

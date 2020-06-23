@@ -1,3 +1,7 @@
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package reflect
 
 import (
@@ -227,7 +231,7 @@ func (t Type) Field(i int) StructField {
 			// There is a tag.
 			var tagNum uintptr
 			tagNum, p = readVarint(p)
-			field.Tag = readStringSidetable(unsafe.Pointer(&structNamesSidetable), tagNum)
+			field.Tag = StructTag(readStringSidetable(unsafe.Pointer(&structNamesSidetable), tagNum))
 		} else {
 			// There is no tag.
 			field.Tag = ""
@@ -445,6 +449,22 @@ func (t Type) Comparable() bool {
 	}
 }
 
+func (t Type) ConvertibleTo(u Type) bool {
+	panic("unimplemented: (reflect.Type).ConvertibleTo()")
+}
+
+func (t Type) NumMethod() int {
+	panic("unimplemented: (reflect.Type).NumMethod()")
+}
+
+func (t Type) Name() string {
+	panic("unimplemented: (reflect.Type).Name()")
+}
+
+func (t Type) Key() Type {
+	panic("unimplemented: (reflect.Type).Key()")
+}
+
 // A StructField describes a single field in a struct.
 type StructField struct {
 	// Name indicates the field name.
@@ -455,9 +475,73 @@ type StructField struct {
 	PkgPath string
 
 	Type      Type
-	Tag       string
+	Tag       StructTag // field tag string
 	Anonymous bool
 	Offset    uintptr
+}
+
+// A StructTag is the tag string in a struct field.
+type StructTag string
+
+// TODO: it would be feasible to do the key/value splitting at compile time,
+// avoiding the code size cost of doing it at runtime
+
+// Get returns the value associated with key in the tag string.
+func (tag StructTag) Get(key string) string {
+	v, _ := tag.Lookup(key)
+	return v
+}
+
+// Lookup returns the value associated with key in the tag string.
+func (tag StructTag) Lookup(key string) (value string, ok bool) {
+	for tag != "" {
+		// Skip leading space.
+		i := 0
+		for i < len(tag) && tag[i] == ' ' {
+			i++
+		}
+		tag = tag[i:]
+		if tag == "" {
+			break
+		}
+
+		// Scan to colon. A space, a quote or a control character is a syntax error.
+		// Strictly speaking, control chars include the range [0x7f, 0x9f], not just
+		// [0x00, 0x1f], but in practice, we ignore the multi-byte control characters
+		// as it is simpler to inspect the tag's bytes than the tag's runes.
+		i = 0
+		for i < len(tag) && tag[i] > ' ' && tag[i] != ':' && tag[i] != '"' && tag[i] != 0x7f {
+			i++
+		}
+		if i == 0 || i+1 >= len(tag) || tag[i] != ':' || tag[i+1] != '"' {
+			break
+		}
+		name := string(tag[:i])
+		tag = tag[i+1:]
+
+		// Scan quoted string to find value.
+		i = 1
+		for i < len(tag) && tag[i] != '"' {
+			if tag[i] == '\\' {
+				i++
+			}
+			i++
+		}
+		if i >= len(tag) {
+			break
+		}
+		qvalue := string(tag[:i+1])
+		tag = tag[i+1:]
+
+		if key == name {
+			value, err := unquote(qvalue)
+			if err != nil {
+				break
+			}
+			return value, true
+		}
+	}
+	return "", false
 }
 
 // TypeError is the error that is used in a panic when invoking a method on a
