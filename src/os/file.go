@@ -6,16 +6,7 @@
 package os
 
 import (
-	"errors"
-)
-
-// Portable analogs of some common system call errors.
-// Note that these are exported for use in the Filesystem interface.
-var (
-	ErrUnsupported    = errors.New("operation not supported")
-	ErrNotImplemented = errors.New("operation not implemented")
-	ErrNotExist       = errors.New("file not found")
-	ErrExist          = errors.New("file exists")
+	"syscall"
 )
 
 // Mkdir creates a directory. If the operation fails, it will return an error of
@@ -91,6 +82,10 @@ func (f *File) Read(b []byte) (n int, err error) {
 	return
 }
 
+func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
+	return 0, ErrNotImplemented
+}
+
 // Write writes len(b) bytes to the File. It returns the number of bytes written
 // and an error, if any. Write returns a non-nil error when n != len(b).
 func (f *File) Write(b []byte) (n int, err error) {
@@ -123,6 +118,20 @@ func (f *File) Readdirnames(n int) (names []string, err error) {
 // Stat is a stub, not yet implemented
 func (f *File) Stat() (FileInfo, error) {
 	return nil, &PathError{"stat", f.name, ErrNotImplemented}
+}
+
+// Sync is a stub, not yet implemented
+func (f *File) Sync() error {
+	return ErrNotImplemented
+}
+
+func (f *File) SyscallConn() (syscall.RawConn, error) {
+	return nil, ErrNotImplemented
+}
+
+// Fd returns the file handle referencing the open file.
+func (f *File) Fd() uintptr {
+	panic("unimplemented: os.file.Fd()")
 }
 
 const (
@@ -194,7 +203,7 @@ type FileInfo interface {
 	Name() string   // base name of the file
 	Size() int64    // length in bytes for regular files; system-dependent for others
 	Mode() FileMode // file mode bits
-	// ModTime() time.Time // modification time
+	// TODO ModTime() time.Time // modification time
 	IsDir() bool      // abbreviation for Mode().IsDir()
 	Sys() interface{} // underlying data source (can return nil)
 }

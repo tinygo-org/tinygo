@@ -336,3 +336,6 @@ float64 8 64
 complex64 8 64
 complex128 16 128
 type assertion succeeded for unreferenced type
+
+struct tags
+blue gopher

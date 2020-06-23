@@ -42,3 +42,18 @@ func (m *Map) Store(key, value interface{}) {
 	}
 	m.m[key] = value
 }
+
+func (m *Map) Range(f func(key, value interface{}) bool) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if m.m == nil {
+		return
+	}
+
+	for k, v := range m.m {
+		if !f(k, v) {
+			break
+		}
+	}
+}

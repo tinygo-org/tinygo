@@ -4,7 +4,7 @@ FROM golang:1.14 AS tinygo-base
 RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
     echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-10 main" >> /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y llvm-10-dev libclang-10-dev git
+    apt-get install -y llvm-10-dev libclang-10-dev lld-10 git
 
 COPY . /tinygo
 
