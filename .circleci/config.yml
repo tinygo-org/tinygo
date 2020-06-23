@@ -93,6 +93,7 @@ commands:
           key: wasi-libc-sysroot-systemclang-v1
           paths:
             - lib/wasi-libc/sysroot
+      - run: tinygo clean
       - run: go test -v -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./interp ./transform .
       - run: make gen-device -j4
       - run: make smoketest
