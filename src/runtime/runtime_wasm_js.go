@@ -1,4 +1,4 @@
-// +build wasm,!wasi
+// +build wasm,!cosmwasm,!wasi
 
 package runtime
 
