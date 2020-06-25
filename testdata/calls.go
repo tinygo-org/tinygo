@@ -74,7 +74,6 @@ func main() {
 	regression1033()
 
 	//Test deferred builtins
-	//this one should cause a panic
 	testDeferBuiltin()
 }
 
@@ -124,26 +123,6 @@ func testMultiFuncVar() {
 
 func testDeferBuiltin() {
 	i := make(chan int)
-
-	go func() {
-		j := 0
-		for {
-			j++
-			i <- j
-		}
-	}()
-
-	go func() {
-		for {
-			select {
-				case n := <-i:
-					println(n)
-			}
-		}
-	}()
-
-	time.Sleep(1000)
-
 	defer close(i)
 }
 
