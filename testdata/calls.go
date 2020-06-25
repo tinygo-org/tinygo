@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 type Thing struct {
 	name string
 }
@@ -70,6 +72,10 @@ func main() {
 
 	// regression testing
 	regression1033()
+
+	//Test deferred builtins
+	//this one should cause a panic
+	testDeferBuiltin()
 }
 
 func runFunc(f func(int), arg int) {
@@ -116,6 +122,31 @@ func testMultiFuncVar() {
 	defer f(1)
 }
 
+func testDeferBuiltin() {
+	i := make(chan int)
+
+	go func() {
+		j := 0
+		for {
+			j++
+			i <- j
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+				case n := <-i:
+					println(n)
+			}
+		}
+	}()
+
+	time.Sleep(1000)
+
+	defer close(i)
+}
+
 func deferred(msg string, i int) {
 	println(msg, i)
 }
@@ -130,11 +161,11 @@ func deferFunc() (int, func(int)) {
 }
 
 func multiFuncDefer() func(int) {
-	//i := 0
+	i := 0
 
-	/*if i > 0 {
+	if i > 0 {
 		return func(i int){println("Should not have gotten here. i = ", i)}
-	}*/
+	}
 
 	return func(i int){println("Called the correct function. i = ", i)}
 }
