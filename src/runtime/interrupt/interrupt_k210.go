@@ -20,3 +20,8 @@ func (irq Interrupt) Enable() {
 func (irq Interrupt) SetPriority(priority uint8) {
 	kendryte.PLIC.PRIORITY[irq.num].Set(uint32(priority))
 }
+
+// GetNumber returns the interrupt number for this interrupt.
+func (irq Interrupt) GetNumber() int {
+	return irq.num
+}
