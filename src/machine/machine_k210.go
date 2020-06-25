@@ -12,6 +12,8 @@ func CPUFrequency() uint32 {
 }
 
 type PinMode uint8
+type fpioaPullMode uint8
+type PinChange uint8
 
 const (
 	PinInput PinMode = iota
@@ -20,12 +22,18 @@ const (
 	PinOutput
 )
 
-type fpioaPullMode uint8
-
 const (
 	fpioaPullNone fpioaPullMode = iota
 	fpioaPullDown
 	fpioaPullUp
+)
+
+const (
+	PinRising PinChange = iota + 1
+	PinFalling
+	PinToggle
+	PinHigh
+	PinLow = 8
 )
 
 func (p Pin) fpioaSetIOPull(pull fpioaPullMode) {
@@ -120,6 +128,174 @@ func (p Pin) Get() bool {
 		val = kendryte.GPIOHS.INPUT_VAL.Get() & (1 << gpioPin)
 	}
 	return (val > 0)
+}
+
+// Callbacks to be called for GPIOHS pins configured with SetInterrupt.
+var pinCallbacks [32]func(Pin)
+
+// SetInterrupt sets an interrupt to be executed when a particular pin changes
+// state.
+//
+// You can pass a nil func to unset the pin change interrupt. If you do so,
+// the change parameter is ignored and can be set to any value (such as 0).
+// If the pin is already configured with a callback, you must first unset
+// this pins interrupt before you can set a new callback.
+func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
+
+	// Check if the pin is a GPIOHS pin.
+	if p < P16 && p > P47 {
+		return ErrInvalidDataPin
+	}
+
+	gpioPin := uint8(p) - 16
+
+	// Clear all interrupts.
+	kendryte.GPIOHS.RISE_IE.ClearBits(1 << gpioPin)
+	kendryte.GPIOHS.FALL_IE.ClearBits(1 << gpioPin)
+	kendryte.GPIOHS.HIGH_IE.ClearBits(1 << gpioPin)
+	kendryte.GPIOHS.LOW_IE.ClearBits(1 << gpioPin)
+
+	// Clear all the pending bits for this pin.
+	kendryte.GPIOHS.RISE_IP.SetBits(1 << gpioPin)
+	kendryte.GPIOHS.FALL_IP.SetBits(1 << gpioPin)
+	kendryte.GPIOHS.HIGH_IP.SetBits(1 << gpioPin)
+	kendryte.GPIOHS.LOW_IP.SetBits(1 << gpioPin)
+
+	if callback == nil {
+		if pinCallbacks[gpioPin] != nil {
+			pinCallbacks[gpioPin] = nil
+		}
+		return nil
+	}
+
+	if pinCallbacks[gpioPin] != nil {
+		// The pin was already configured.
+		// To properly re-configure a pin, unset it first and set a new
+		// configuration.
+		return ErrNoPinChangeChannel
+	}
+
+	pinCallbacks[gpioPin] = callback
+
+	// Enable interrupts.
+	if change&PinRising != 0 {
+		kendryte.GPIOHS.RISE_IE.SetBits(1 << gpioPin)
+	}
+	if change&PinFalling != 0 {
+		kendryte.GPIOHS.FALL_IE.SetBits(1 << gpioPin)
+	}
+	if change&PinHigh != 0 {
+		kendryte.GPIOHS.HIGH_IE.SetBits(1 << gpioPin)
+	}
+	if change&PinLow != 0 {
+		kendryte.GPIOHS.LOW_IE.SetBits(1 << gpioPin)
+	}
+
+	handleInterrupt := func(inter interrupt.Interrupt) {
+
+		pin := uint8(inter.GetNumber() - kendryte.IRQ_GPIOHS0)
+
+		if kendryte.GPIOHS.RISE_IE.HasBits(1 << pin) {
+			kendryte.GPIOHS.RISE_IE.ClearBits(1 << pin)
+			kendryte.GPIOHS.RISE_IP.SetBits(1 << pin)
+			kendryte.GPIOHS.RISE_IE.SetBits(1 << pin)
+		}
+
+		if kendryte.GPIOHS.FALL_IE.HasBits(1 << pin) {
+			kendryte.GPIOHS.FALL_IE.ClearBits(1 << pin)
+			kendryte.GPIOHS.FALL_IP.SetBits(1 << pin)
+			kendryte.GPIOHS.FALL_IE.SetBits(1 << pin)
+		}
+
+		if kendryte.GPIOHS.HIGH_IE.HasBits(1 << pin) {
+			kendryte.GPIOHS.HIGH_IE.ClearBits(1 << pin)
+			kendryte.GPIOHS.HIGH_IP.SetBits(1 << pin)
+			kendryte.GPIOHS.HIGH_IE.SetBits(1 << pin)
+		}
+
+		if kendryte.GPIOHS.LOW_IE.HasBits(1 << pin) {
+			kendryte.GPIOHS.LOW_IE.ClearBits(1 << pin)
+			kendryte.GPIOHS.LOW_IP.SetBits(1 << pin)
+			kendryte.GPIOHS.LOW_IE.SetBits(1 << pin)
+		}
+
+		pinCallbacks[pin](Pin(pin))
+	}
+
+	var ir interrupt.Interrupt
+
+	switch p {
+	case P16:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS0, handleInterrupt)
+	case P17:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS1, handleInterrupt)
+	case P18:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS2, handleInterrupt)
+	case P19:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS3, handleInterrupt)
+	case P20:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS4, handleInterrupt)
+	case P21:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS5, handleInterrupt)
+	case P22:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS6, handleInterrupt)
+	case P23:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS7, handleInterrupt)
+	case P24:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS8, handleInterrupt)
+	case P25:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS9, handleInterrupt)
+	case P26:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS10, handleInterrupt)
+	case P27:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS11, handleInterrupt)
+	case P28:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS12, handleInterrupt)
+	case P29:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS13, handleInterrupt)
+	case P30:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS14, handleInterrupt)
+	case P31:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS15, handleInterrupt)
+	case P32:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS16, handleInterrupt)
+	case P33:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS17, handleInterrupt)
+	case P34:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS18, handleInterrupt)
+	case P35:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS19, handleInterrupt)
+	case P36:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS20, handleInterrupt)
+	case P37:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS21, handleInterrupt)
+	case P38:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS22, handleInterrupt)
+	case P39:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS23, handleInterrupt)
+	case P40:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS24, handleInterrupt)
+	case P41:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS25, handleInterrupt)
+	case P42:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS26, handleInterrupt)
+	case P43:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS27, handleInterrupt)
+	case P44:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS28, handleInterrupt)
+	case P45:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS29, handleInterrupt)
+	case P46:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS30, handleInterrupt)
+	case P47:
+		ir = interrupt.New(kendryte.IRQ_GPIOHS31, handleInterrupt)
+	}
+
+	ir.SetPriority(5)
+	ir.Enable()
+
+	return nil
+
 }
 
 type UART struct {
