@@ -1,4 +1,5 @@
 // +build gc.conservative
+// +build !avr
 
 package runtime
 
