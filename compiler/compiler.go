@@ -76,11 +76,17 @@ type builder struct {
 	deferClosureFuncs map[*ir.Function]int
 	deferExprFuncs    map[interface{}]deferExpr
 	selectRecvBuf     map[*ssa.Select]llvm.Value
+	deferBuiltinFuncs map[interface{}]deferBuiltin
 }
 
 type deferExpr struct {
 	funcValueSig llvm.Value
 	signature *types.Signature
+	callback int
+}
+
+type deferBuiltin struct {
+	funcName string
 	callback int
 }
 

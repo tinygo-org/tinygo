@@ -31,6 +31,7 @@ func (b *builder) deferInitFunc() {
 	b.deferInvokeFuncs = make(map[string]int)
 	b.deferClosureFuncs = make(map[*ir.Function]int)
 	b.deferExprFuncs = make(map[interface{}]deferExpr)
+	b.deferBuiltinFuncs = make(map[interface{}]deferBuiltin)
 
 	// Create defer list pointer.
 	deferType := llvm.PointerType(b.getLLVMRuntimeType("_defer"), 0)
@@ -155,22 +156,53 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		valueTypes = append(valueTypes, context.Type())
 
 	} else if  builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
-		b.addError(instr.Pos(), fmt.Sprintf("%+v", builtin))
-		b.addError(instr.Pos(), "todo: Is builtin")
-	} else if  unop, ok := instr.Call.Value.(*ssa.UnOp); ok {
-		b.addError(instr.Pos(), fmt.Sprintf("%+v", unop))
-		b.addError(instr.Pos(), "todo: Is UnOp")
+		var funcName string
+		switch builtin.Name() {
+		case "close":
+			funcName = "chanClose"
+		default:
+			b.addError(instr.Pos(), fmt.Sprint("TODO: Implement defer for ", builtin.Name()))
+			return
+		}
+
+		if _, ok := b.deferBuiltinFuncs[instr.Call.Value]; !ok {
+			b.deferBuiltinFuncs[instr.Call.Value] = deferBuiltin {
+				funcName,
+				len(b.allDeferFuncs),
+			}
+			b.allDeferFuncs = append(b.allDeferFuncs, instr.Call.Value)
+		}
+		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferBuiltinFuncs[instr.Call.Value].callback), false)
+
+		// Collect all values to be put in the struct (starting with
+		// runtime._defer fields).
+		values = []llvm.Value{callback, next}
+		for _, param := range instr.Call.Args {
+			llvmParam := b.getValue(param)
+			values = append(values, llvmParam)
+			valueTypes = append(valueTypes, llvmParam.Type())
+		}
+
 	} else {
 		var funcValue llvm.Value
 		var sig *types.Signature
 
-		if  extract, ok := instr.Call.Value.(*ssa.Extract); ok {
-			value := b.getValue(extract.Tuple)
-			funcValue = b.CreateExtractValue(value, extract.Index, "")
-			sig = extract.Tuple.(*ssa.Call).Call.Value.(*ssa.Function).Signature.Results().At(extract.Index).Type().(*types.Signature)
-		} else if call, ok := instr.Call.Value.(*ssa.Call); ok {
-			funcValue = b.getValue(call)
-			sig = call.Call.Value.Type().Underlying().(*types.Signature).Results().At(0).Type().(*types.Signature)
+		switch expr := instr.Call.Value.(type) {
+		case *ssa.Extract:
+			value := b.getValue(expr.Tuple)
+			funcValue = b.CreateExtractValue(value, expr.Index, "")
+			sig = expr.Tuple.(*ssa.Call).Call.Value.(*ssa.Function).Signature.Results().At(expr.Index).Type().Underlying().(*types.Signature)
+		case *ssa.Call:
+			funcValue = b.getValue(expr)
+			sig = expr.Call.Value.Type().Underlying().(*types.Signature).Results().At(0).Type().Underlying().(*types.Signature)
+		case *ssa.UnOp:
+			funcValue = b.getValue(expr)
+			switch ty := expr.X.Type().(type) {
+			case *types.Pointer:
+				sig = ty.Elem().Underlying().(*types.Signature)
+			default:
+				sig = ty.Underlying().(*types.Signature).Results().At(0).Type().Underlying().(*types.Signature)
+			}
 		}
 
 		if funcValue.IsNil() == false && sig != nil {
@@ -388,7 +420,7 @@ func (b *builder) createRunDefers() {
 
 			// Call deferred function.
 			b.createCall(fn.LLVMFn, forwardParams, "")
-		case *ssa.Extract, *ssa.Call:
+		case *ssa.Extract, *ssa.Call, *ssa.UnOp:
 			expr := b.deferExprFuncs[callback]
 
 			// Get the real defer struct type and cast to it.
@@ -418,7 +450,41 @@ func (b *builder) createRunDefers() {
 
 			// Call deferred function.
 			b.createCall(expr.funcValueSig, forwardParams, "")
+		case *ssa.Builtin:
+			db := b.deferBuiltinFuncs[callback]
+			fullName := "runtime." + db.funcName
+			fn := b.mod.NamedFunction(fullName)
 
+			//Get parameter types
+			valueTypes := []llvm.Type{b.uintptrType, llvm.PointerType(b.getLLVMRuntimeType("_defer"), 0)}
+
+			//Get signature from call results
+			params := callback.Type().Underlying().(*types.Signature).Params()
+			for i := 0; i < params.Len(); i++ {
+				valueTypes = append(valueTypes, b.getLLVMType(params.At(i).Type()))
+			}
+
+			deferFrameType := b.ctx.StructType(valueTypes, false)
+			deferFramePtr := b.CreateBitCast(deferData, llvm.PointerType(deferFrameType, 0), "deferFrame")
+
+			// Extract the params from the struct.
+			forwardParams := []llvm.Value{}
+			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+			for i := 0; i < params.Len(); i++ {
+				gep := b.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i+2), false)}, "gep")
+				forwardParam := b.CreateLoad(gep, "param")
+				forwardParams = append(forwardParams, forwardParam)
+			}
+
+			// Add the context parameter. We know it is ignored by the receiving
+			// function, but we have to pass one anyway.
+			forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
+
+			// Parent coroutine handle.
+			forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
+
+			// Call real function.
+			b.createCall(fn, forwardParams, "")
 		default:
 			panic("unknown deferred function type")
 		}
