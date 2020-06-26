@@ -209,6 +209,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 			//funcSig, context := b.decodeFuncValue(funcValue, sig)
 			if _, ok := b.deferExprFuncs[instr.Call.Value]; !ok {
 				b.deferExprFuncs[instr.Call.Value] = deferExpr{
+					funcValueType: funcValue.Type(),
 					signature: sig,
 					callback: len(b.allDeferFuncs),
 				}
@@ -432,22 +433,22 @@ func (b *builder) createRunDefers() {
 				valueTypes = append(valueTypes, b.getLLVMType(params.At(i).Type()))
 			}
 
-			valueTypes = append(valueTypes, b.mod.GetTypeByName("runtime.funcValue"))
+			valueTypes = append(valueTypes, expr.funcValueType)
 			deferFrameType := b.ctx.StructType(valueTypes, false)
 			deferFramePtr := b.CreateBitCast(deferData, llvm.PointerType(deferFrameType, 0), "deferFrame")
 
 			// Extract the params from the struct.
 			var forwardParams []llvm.Value
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-			i := 2
-			for ; i < len(valueTypes)-1; i++ {
+			funcPtrIndex := len(valueTypes)-1
+			for i := 2; i < funcPtrIndex; i++ {
 				gep := b.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)}, "")
 				forwardParam := b.CreateLoad(gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
 
 			//Last one is funcValue
-			gep := b.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)}, "")
+			gep := b.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(funcPtrIndex), false)}, "")
 			fun := b.CreateLoad(gep, "param.func")
 
 			//Get funcValueWithSignature and context

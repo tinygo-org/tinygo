@@ -80,8 +80,9 @@ type builder struct {
 }
 
 type deferExpr struct {
-	signature *types.Signature
-	callback int
+	signature     *types.Signature
+	callback      int
+	funcValueType llvm.Type
 }
 
 type deferBuiltin struct {
