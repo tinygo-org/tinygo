@@ -80,7 +80,6 @@ type builder struct {
 }
 
 type deferExpr struct {
-	funcValueSig llvm.Value
 	signature *types.Signature
 	callback int
 }

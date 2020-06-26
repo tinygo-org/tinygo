@@ -206,11 +206,9 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		}
 
 		if funcValue.IsNil() == false && sig != nil {
-			funcSig, context := b.decodeFuncValue(funcValue, sig)
-
+			//funcSig, context := b.decodeFuncValue(funcValue, sig)
 			if _, ok := b.deferExprFuncs[instr.Call.Value]; !ok {
 				b.deferExprFuncs[instr.Call.Value] = deferExpr{
-					funcValueSig: funcSig,
 					signature: sig,
 					callback: len(b.allDeferFuncs),
 				}
@@ -229,8 +227,10 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 				valueTypes = append(valueTypes, llvmParam.Type())
 			}
 
-			values = append(values, context)
-			valueTypes = append(valueTypes, context.Type())
+			//Pass funcValue through defer frame
+			values = append(values, funcValue)
+			valueTypes = append(valueTypes, funcValue.Type())
+
 		} else {
 			b.addError(instr.Pos(), "todo: defer on uncommon function call type")
 			return
@@ -432,24 +432,35 @@ func (b *builder) createRunDefers() {
 				valueTypes = append(valueTypes, b.getLLVMType(params.At(i).Type()))
 			}
 
-			valueTypes = append(valueTypes, b.i8ptrType) // closure
+			valueTypes = append(valueTypes, b.mod.GetTypeByName("runtime.funcValue"))
 			deferFrameType := b.ctx.StructType(valueTypes, false)
 			deferFramePtr := b.CreateBitCast(deferData, llvm.PointerType(deferFrameType, 0), "deferFrame")
 
 			// Extract the params from the struct.
 			var forwardParams []llvm.Value
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-			for i := 2; i < len(valueTypes); i++ {
+			i := 2
+			for ; i < len(valueTypes)-1; i++ {
 				gep := b.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)}, "")
 				forwardParam := b.CreateLoad(gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
 
+			//Last one is funcValue
+			gep := b.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)}, "")
+			fun := b.CreateLoad(gep, "param.func")
+
+			//Get funcValueWithSignature and context
+			funcPtr, context := b.decodeFuncValue(fun, expr.signature)
+
+			//Pass context
+			forwardParams = append(forwardParams, context)
+
 			// Parent coroutine handle.
 			forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
 
 			// Call deferred function.
-			b.createCall(expr.funcValueSig, forwardParams, "")
+			b.createCall(funcPtr, forwardParams, "")
 		case *ssa.Builtin:
 			db := b.deferBuiltinFuncs[callback]
 			fullName := "runtime." + db.funcName
