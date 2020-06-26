@@ -571,7 +571,7 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 			for i := uint64(0); i < uint64(reg.dim()); i++ {
 				regAddress := reg.address() + (i * dimIncrement)
 				results = append(results, &PeripheralField{
-					name:        strings.Replace(reg.name(), "%s", strconv.FormatUint(i, 10), -1),
+					name:        strings.ToUpper(strings.Replace(reg.name(), "%s", strconv.FormatUint(i, 10), -1)),
 					address:     regAddress,
 					description: reg.description(),
 					array:       -1,
