@@ -235,3 +235,33 @@ func putchar(c byte) {
 
 // ???
 const asyncScheduler = false
+
+func abort() {
+	println("!!! ABORT !!!")
+
+	m := arm.DisableInterrupts()
+	arm.Asm("mov r12, #1")
+	arm.Asm("msr basepri, r12")                                           // only execute interrupts of priority 0
+	nxp.SystemControl.SHPR3.ClearBits(nxp.SystemControl_SHPR3_PRI_15_Msk) // set systick to priority 0
+	arm.EnableInterrupts(m)
+
+	machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
+
+	var v bool
+	for {
+		machine.LED.Set(v)
+		v = !v
+
+		t := millisSinceBoot()
+		for millisSinceBoot()-t < 60 {
+			arm.Asm("wfi")
+		}
+
+		// keep polling some communication while in fault
+		// mode, so we don't completely die.
+		// machine.PollUSB(&machine.USB0)
+		machine.PollUART(&machine.UART0)
+		machine.PollUART(&machine.UART1)
+		machine.PollUART(&machine.UART2)
+	}
+}
