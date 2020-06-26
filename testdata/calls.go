@@ -1,7 +1,5 @@
 package main
 
-import "time"
-
 type Thing struct {
 	name string
 }
@@ -102,6 +100,8 @@ func testDefer() {
 	defer t.Print("bar")
 
 	println("deferring...")
+	d := dumb{}
+	defer d.Value(0)
 }
 
 func testDeferLoop() {
@@ -124,6 +124,14 @@ func testMultiFuncVar() {
 func testDeferBuiltin() {
 	i := make(chan int)
 	defer close(i)
+}
+
+type dumb struct {
+
+}
+
+func (*dumb) Value(key interface{}) interface{} {
+	return nil
 }
 
 func deferred(msg string, i int) {
