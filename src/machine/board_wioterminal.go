@@ -132,9 +132,6 @@ const (
 	PIN_DAC0 = PA02
 	PIN_DAC1 = PA05
 
-	DAC0 = PIN_DAC0
-	DAC1 = PIN_DAC1
-
 	// FPO Analog RPIs
 	//FPC_A7  = FPC_D7
 	//FPC_A8  = FPC_D8
