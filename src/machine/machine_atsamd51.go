@@ -2297,3 +2297,60 @@ func ResetProcessor() {
 
 	arm.SystemReset()
 }
+
+// DAC on the SAMD51.
+type DAC struct {
+}
+
+var (
+	DAC0 = DAC{}
+)
+
+// DACConfig placeholder for future expansion.
+type DACConfig struct {
+}
+
+// Configure the DAC.
+// output pin must already be configured.
+func (dac DAC) Configure(config DACConfig) {
+	// Turn on clock for DAC
+	sam.MCLK.APBDMASK.SetBits(sam.MCLK_APBDMASK_DAC_)
+
+	// Use Generic Clock Generator 4 as source for DAC.
+	sam.GCLK.PCHCTRL[42].Set((sam.GCLK_PCHCTRL_GEN_GCLK4 << sam.GCLK_PCHCTRL_GEN_Pos) | sam.GCLK_PCHCTRL_CHEN)
+	for sam.GCLK.SYNCBUSY.HasBits(sam.GCLK_SYNCBUSY_GENCTRL_GCLK4 << sam.GCLK_SYNCBUSY_GENCTRL_Pos) {
+	}
+
+	// reset DAC
+	sam.DAC.CTRLA.Set(sam.DAC_CTRLA_SWRST)
+
+	// wait for reset complete
+	for sam.DAC.CTRLA.HasBits(sam.DAC_CTRLA_SWRST) {
+	}
+	for sam.DAC.SYNCBUSY.HasBits(sam.DAC_SYNCBUSY_SWRST) {
+	}
+
+	// enable
+	sam.DAC.CTRLB.Set(sam.DAC_CTRLB_REFSEL_VREFPU)
+	sam.DAC.DACCTRL[0].SetBits((sam.DAC_DACCTRL_CCTRL_CC12M << sam.DAC_DACCTRL_CCTRL_Pos) | sam.DAC_DACCTRL_ENABLE)
+	sam.DAC.CTRLA.Set(sam.DAC_CTRLA_ENABLE)
+
+	for sam.DAC.SYNCBUSY.HasBits(sam.DAC_SYNCBUSY_ENABLE) {
+	}
+	for !sam.DAC.STATUS.HasBits(sam.DAC_STATUS_READY0) {
+	}
+}
+
+// WriteData writes a single value to the DAC.
+func (dac DAC) WriteData(value uint16) error {
+	sam.DAC.DATA[0].Set(value & 0xFFF)
+	syncDAC()
+	return nil
+}
+
+func syncDAC() {
+	for !sam.DAC.STATUS.HasBits(sam.DAC_STATUS_EOC0) {
+	}
+	for sam.DAC.SYNCBUSY.HasBits(sam.DAC_SYNCBUSY_DATA0) {
+	}
+}
