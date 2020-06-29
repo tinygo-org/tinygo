@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/kendryte"
+	"errors"
 	"runtime/interrupt"
 )
 
@@ -15,6 +16,7 @@ type PinMode uint8
 type fpioaPullMode uint8
 type PinChange uint8
 
+// Pin modes.
 const (
 	PinInput PinMode = iota
 	PinInputPullUp
@@ -22,18 +24,34 @@ const (
 	PinOutput
 )
 
+// FPIOA internal pull resistors.
 const (
 	fpioaPullNone fpioaPullMode = iota
 	fpioaPullDown
 	fpioaPullUp
 )
 
+// GPIOHS pin interrupt events.
 const (
 	PinRising PinChange = iota + 1
 	PinFalling
 	PinToggle
 	PinHigh
 	PinLow = 8
+)
+
+// FPIOA functions.
+const (
+	fpioaFuncSpi0Sclk = 17
+	fpioaFuncSpi0D0   = 4
+	fpioaFuncSpi0D1   = 5
+	fpioaFuncSpi1Sclk = 83
+	fpioaFuncSpi1D0   = 70
+	fpioaFuncSpi1D1   = 71
+)
+
+var (
+	ErrUnsupportedSPIController = errors.New("SPI controller not supported. Use SPI0 or SPI1.")
 )
 
 func (p Pin) fpioaSetIOPull(pull fpioaPullMode) {
@@ -339,4 +357,121 @@ func (uart UART) WriteByte(c byte) {
 	}
 
 	uart.Bus.TXDATA.Set(uint32(c))
+}
+
+type SPI struct {
+	Bus *kendryte.SPI_Type
+}
+
+// SPIConfig is used to store config info for SPI.
+type SPIConfig struct {
+	Frequency uint32
+	SCK       Pin
+	MOSI      Pin
+	MISO      Pin
+	LSBFirst  bool
+	Mode      uint8
+}
+
+// Configure is intended to setup the SPI interface.
+// Only SPI controller 0 and 1 can be used because SPI2 is a special
+// slave-mode controller and SPI3 is used for flashing.
+func (spi SPI) Configure(config SPIConfig) error {
+	// Use default pins if not set.
+	if config.SCK == 0 && config.MOSI == 0 && config.MISO == 0 {
+		config.SCK = SPI0_SCK_PIN
+		config.MOSI = SPI0_MOSI_PIN
+		config.MISO = SPI0_MISO_PIN
+	}
+
+	// Enable pins for SPI.
+	sckBits := uint32(kendryte.FPIOA_IO_OE_EN | kendryte.FPIOA_IO_DS_Msk)
+	dataBits := uint32(kendryte.FPIOA_IO_OE_EN | kendryte.FPIOA_IO_OE_INV | kendryte.FPIOA_IO_IE_EN |
+		kendryte.FPIOA_IO_IE_INV | kendryte.FPIOA_IO_ST | kendryte.FPIOA_IO_DS_Msk)
+
+	// Enable APB2 clock.
+	kendryte.SYSCTL.CLK_EN_CENT.SetBits(kendryte.SYSCTL_CLK_EN_CENT_APB2_CLK_EN)
+
+	var fpioaFuncSclk uint32
+	var fpioaFuncD0 uint32
+	var fpioaFuncD1 uint32
+
+	switch spi.Bus {
+	case kendryte.SPI0:
+		// Initialize FPIOA values.
+		fpioaFuncSclk = fpioaFuncSpi0Sclk
+		fpioaFuncD0 = fpioaFuncSpi0D0
+		fpioaFuncD1 = fpioaFuncSpi0D1
+
+		// Initialize SPI clock.
+		kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_SPI0_CLK_EN)
+		kendryte.SYSCTL.CLK_TH1.ClearBits(kendryte.SYSCTL_CLK_TH1_SPI0_CLK_Msk)
+	case kendryte.SPI1:
+		// Initialize FPIOA values.
+		fpioaFuncSclk = fpioaFuncSpi1Sclk
+		fpioaFuncD0 = fpioaFuncSpi1D0
+		fpioaFuncD1 = fpioaFuncSpi1D1
+
+		// Initialize SPI clock.
+		kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_SPI1_CLK_EN)
+		kendryte.SYSCTL.CLK_TH1.ClearBits(kendryte.SYSCTL_CLK_TH1_SPI1_CLK_Msk)
+	default:
+		return ErrUnsupportedSPIController
+	}
+
+	// Set FPIOA functins for selected pins.
+	kendryte.FPIOA.IO[uint8(config.SCK)].Set(uint32(sckBits | fpioaFuncSclk))
+	kendryte.FPIOA.IO[uint8(config.MOSI)].Set(uint32(dataBits | fpioaFuncD0))
+	kendryte.FPIOA.IO[uint8(config.MISO)].Set(uint32(dataBits | fpioaFuncD1))
+
+	// Set default frequency.
+	if config.Frequency == 0 {
+		config.Frequency = 500000
+	}
+
+	baudr := CPUFrequency() / config.Frequency
+	print(baudr)
+	spi.Bus.BAUDR.Set(baudr)
+
+	// Configure SPI mode 0, standard frame format, 8-bit data, little-endian.
+	spi.Bus.IMR.Set(0)
+	spi.Bus.DMACR.Set(0)
+	spi.Bus.DMATDLR.Set(0x10)
+	spi.Bus.DMARDLR.Set(0)
+	spi.Bus.SER.Set(0)
+	spi.Bus.SSIENR.Set(0)
+	spi.Bus.CTRLR0.Set((7 << 16))
+	spi.Bus.SPI_CTRLR0.Set(0)
+	spi.Bus.ENDIAN.Set(0)
+
+	return nil
+}
+
+// Transfer writes/reads a single byte using the SPI interface.
+func (spi SPI) Transfer(w byte) (byte, error) {
+	spi.Bus.SSIENR.Set(0)
+
+	// Set transfer-receive mode.
+	spi.Bus.CTRLR0.ClearBits(0x3 << 8)
+
+	// Enable/disable SPI.
+	spi.Bus.SSIENR.Set(1)
+	defer spi.Bus.SSIENR.Set(0)
+
+	// Enable/disable device.
+	spi.Bus.SER.Set(0x1)
+	defer spi.Bus.SER.Set(0)
+
+	spi.Bus.DR0.Set(uint32(w))
+
+	// Wait for transfer.
+	for spi.Bus.SR.Get()&0x05 != 0x04 {
+	}
+
+	// Wait for data.
+	for spi.Bus.RXFLR.Get() == 0 {
+	}
+
+	return byte(spi.Bus.DR0.Get()), nil
+
 }
