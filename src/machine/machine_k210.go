@@ -40,21 +40,12 @@ const (
 	PinLow = 8
 )
 
-// FPIOA functions.
-const (
-	fpioaFuncSpi0Sclk = 17
-	fpioaFuncSpi0D0   = 4
-	fpioaFuncSpi0D1   = 5
-	fpioaFuncSpi1Sclk = 83
-	fpioaFuncSpi1D0   = 70
-	fpioaFuncSpi1D1   = 71
-)
-
 var (
-	ErrUnsupportedSPIController = errors.New("SPI controller not supported. Use SPI0 or SPI1.")
+	errUnsupportedSPIController = errors.New("SPI controller not supported. Use SPI0 or SPI1.")
+	errI2CTxAbort               = errors.New("I2C transmition has been aborted.")
 )
 
-func (p Pin) fpioaSetIOPull(pull fpioaPullMode) {
+func (p Pin) setFPIOAIOPull(pull fpioaPullMode) {
 	switch pull {
 	case fpioaPullNone:
 		kendryte.FPIOA.IO[uint8(p)].ClearBits(kendryte.FPIOA_IO_PU & kendryte.FPIOA_IO_PD)
@@ -67,42 +58,55 @@ func (p Pin) fpioaSetIOPull(pull fpioaPullMode) {
 	}
 }
 
+// SetFPIOAFunction is used to configure the pin for one of the FPIOA functions.
+// Each pin on the Kendryte K210 can be configured with any of the available FPIOA functions.
+func (p Pin) SetFPIOAFunction(f FPIOAFunction) {
+	kendryte.FPIOA.IO[uint8(p)].Set(fpioaFuncDefaults[uint8(f)])
+}
+
+// FPIOAFunction returns the current FPIOA function of the pin.
+func (p Pin) FPIOAFunction() FPIOAFunction {
+	return FPIOAFunction((kendryte.FPIOA.IO[uint8(p)].Get() & kendryte.FPIOA_IO_CH_SEL_Msk))
+}
+
 // Configure this pin with the given configuration.
+// The pin must already be set as GPIO or GPIOHS pin.
 func (p Pin) Configure(config PinConfig) {
 	var input bool
 
-	kendryte.FPIOA.IO[uint8(p)].SetBits(kendryte.FPIOA_IO_OE_EN | kendryte.FPIOA_IO_IE_EN | kendryte.FPIOA_IO_ST | kendryte.FPIOA_IO_DS_Msk)
-	switch config.Mode {
-	case PinInput:
-		p.fpioaSetIOPull(fpioaPullNone)
-		input = true
-
-	case PinInputPullUp:
-		p.fpioaSetIOPull(fpioaPullUp)
-		input = true
-
-	case PinInputPullDown:
-		p.fpioaSetIOPull(fpioaPullDown)
-		input = true
-
-	case PinOutput:
-		p.fpioaSetIOPull(fpioaPullNone)
-		input = false
-
+	// Check if the current pin's FPIOA function is either GPIO or GPIOHS.
+	f := p.FPIOAFunction()
+	if f < FUNC_GPIOHS0 || f > FUNC_GPIO7 {
+		return // The pin is not configured as GPIO or GPIOHS.
 	}
 
-	if p >= P08 && p <= P15 {
-		// Converts the IO pin number in the effective GPIO number (assuming default FPIOA function).
-		gpioPin := uint8(p) - 8
+	switch config.Mode {
+	case PinInput:
+		p.setFPIOAIOPull(fpioaPullNone)
+		input = true
+	case PinInputPullUp:
+		p.setFPIOAIOPull(fpioaPullUp)
+		input = true
+	case PinInputPullDown:
+		p.setFPIOAIOPull(fpioaPullDown)
+		input = true
+	case PinOutput:
+		p.setFPIOAIOPull(fpioaPullNone)
+		input = false
+	}
+
+	if f >= FUNC_GPIO0 && f <= FUNC_GPIO7 {
+		// Converts the IO pin number in the effective GPIO number (based on the FPIOA function).
+		gpioPin := uint8(f - FUNC_GPIO0)
 
 		if input {
 			kendryte.GPIO.DIRECTION.ClearBits(1 << gpioPin)
 		} else {
 			kendryte.GPIO.DIRECTION.SetBits(1 << gpioPin)
 		}
-	} else if p >= P16 && p <= P47 {
-		// Converts the IO pin number in the effective GPIOHS number (assuming default FPIOA function).
-		gpioPin := uint8(p) - 16
+	} else if f >= FUNC_GPIOHS0 && f <= FUNC_GPIOHS31 {
+		// Converts the IO pin number in the effective GPIOHS number (based on the FPIOA function).
+		gpioPin := uint8(f - FUNC_GPIOHS0)
 
 		if input {
 			kendryte.GPIOHS.INPUT_EN.SetBits(1 << gpioPin)
@@ -116,16 +120,23 @@ func (p Pin) Configure(config PinConfig) {
 
 // Set the pin to high or low.
 func (p Pin) Set(high bool) {
-	if p >= P08 && p <= P15 {
-		gpioPin := uint8(p) - 8
+
+	// Check if the current pin's FPIOA function is either GPIO or GPIOHS.
+	f := p.FPIOAFunction()
+	if f < FUNC_GPIOHS0 || f > FUNC_GPIO7 {
+		return // The pin is not configured as GPIO or GPIOHS.
+	}
+
+	if f >= FUNC_GPIO0 && f <= FUNC_GPIO7 {
+		gpioPin := uint8(f - FUNC_GPIO0)
 
 		if high {
 			kendryte.GPIO.DATA_OUTPUT.SetBits(1 << gpioPin)
 		} else {
 			kendryte.GPIO.DATA_OUTPUT.ClearBits(1 << gpioPin)
 		}
-	} else if p >= P16 && p <= P47 {
-		gpioPin := uint8(p) - 16
+	} else if f >= FUNC_GPIOHS0 && f <= FUNC_GPIOHS31 {
+		gpioPin := uint8(f - FUNC_GPIOHS0)
 
 		if high {
 			kendryte.GPIOHS.OUTPUT_VAL.SetBits(1 << gpioPin)
@@ -137,12 +148,19 @@ func (p Pin) Set(high bool) {
 
 // Get returns the current value of a GPIO pin.
 func (p Pin) Get() bool {
+
+	// Check if the current pin's FPIOA function is either GPIO or GPIOHS.
+	f := p.FPIOAFunction()
+	if f < FUNC_GPIOHS0 || f > FUNC_GPIO7 {
+		return false // The pin is not configured as GPIO or GPIOHS.
+	}
+
 	var val uint32
-	if p >= P08 && p <= P15 {
-		gpioPin := uint8(p) - 8
+	if f >= FUNC_GPIO0 && f <= FUNC_GPIO7 {
+		gpioPin := uint8(f - FUNC_GPIO0)
 		val = kendryte.GPIO.DATA_INPUT.Get() & (1 << gpioPin)
-	} else if p >= P16 && p <= P47 {
-		gpioPin := uint8(p) - 16
+	} else if f >= FUNC_GPIOHS0 && f <= FUNC_GPIOHS31 {
+		gpioPin := uint8(f - FUNC_GPIOHS0)
 		val = kendryte.GPIOHS.INPUT_VAL.Get() & (1 << gpioPin)
 	}
 	return (val > 0)
@@ -161,11 +179,12 @@ var pinCallbacks [32]func(Pin)
 func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 
 	// Check if the pin is a GPIOHS pin.
-	if p < P16 && p > P47 {
+	f := p.FPIOAFunction()
+	if f >= FUNC_GPIOHS0 && f <= FUNC_GPIOHS31 {
 		return ErrInvalidDataPin
 	}
 
-	gpioPin := uint8(p) - 16
+	gpioPin := uint8(f - FUNC_GPIOHS0)
 
 	// Clear all interrupts.
 	kendryte.GPIOHS.RISE_IE.ClearBits(1 << gpioPin)
@@ -242,70 +261,70 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 
 	var ir interrupt.Interrupt
 
-	switch p {
-	case P16:
+	switch f {
+	case FUNC_GPIOHS0:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS0, handleInterrupt)
-	case P17:
+	case FUNC_GPIOHS1:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS1, handleInterrupt)
-	case P18:
+	case FUNC_GPIOHS2:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS2, handleInterrupt)
-	case P19:
+	case FUNC_GPIOHS3:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS3, handleInterrupt)
-	case P20:
+	case FUNC_GPIOHS4:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS4, handleInterrupt)
-	case P21:
+	case FUNC_GPIOHS5:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS5, handleInterrupt)
-	case P22:
+	case FUNC_GPIOHS6:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS6, handleInterrupt)
-	case P23:
+	case FUNC_GPIOHS7:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS7, handleInterrupt)
-	case P24:
+	case FUNC_GPIOHS8:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS8, handleInterrupt)
-	case P25:
+	case FUNC_GPIOHS9:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS9, handleInterrupt)
-	case P26:
+	case FUNC_GPIOHS10:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS10, handleInterrupt)
-	case P27:
+	case FUNC_GPIOHS11:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS11, handleInterrupt)
-	case P28:
+	case FUNC_GPIOHS12:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS12, handleInterrupt)
-	case P29:
+	case FUNC_GPIOHS13:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS13, handleInterrupt)
-	case P30:
+	case FUNC_GPIOHS14:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS14, handleInterrupt)
-	case P31:
+	case FUNC_GPIOHS15:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS15, handleInterrupt)
-	case P32:
+	case FUNC_GPIOHS16:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS16, handleInterrupt)
-	case P33:
+	case FUNC_GPIOHS17:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS17, handleInterrupt)
-	case P34:
+	case FUNC_GPIOHS18:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS18, handleInterrupt)
-	case P35:
+	case FUNC_GPIOHS19:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS19, handleInterrupt)
-	case P36:
+	case FUNC_GPIOHS20:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS20, handleInterrupt)
-	case P37:
+	case FUNC_GPIOHS21:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS21, handleInterrupt)
-	case P38:
+	case FUNC_GPIOHS22:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS22, handleInterrupt)
-	case P39:
+	case FUNC_GPIOHS23:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS23, handleInterrupt)
-	case P40:
+	case FUNC_GPIOHS24:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS24, handleInterrupt)
-	case P41:
+	case FUNC_GPIOHS25:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS25, handleInterrupt)
-	case P42:
+	case FUNC_GPIOHS26:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS26, handleInterrupt)
-	case P43:
+	case FUNC_GPIOHS27:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS27, handleInterrupt)
-	case P44:
+	case FUNC_GPIOHS28:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS28, handleInterrupt)
-	case P45:
+	case FUNC_GPIOHS29:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS29, handleInterrupt)
-	case P46:
+	case FUNC_GPIOHS30:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS30, handleInterrupt)
-	case P47:
+	case FUNC_GPIOHS31:
 		ir = interrupt.New(kendryte.IRQ_GPIOHS31, handleInterrupt)
 	}
 
@@ -326,7 +345,22 @@ var (
 )
 
 func (uart UART) Configure(config UARTConfig) {
-	div := CPUFrequency()/115200 - 1
+
+	// Use default baudrate  if not set.
+	if config.BaudRate == 0 {
+		config.BaudRate = 115200
+	}
+
+	// Use default pins if not set.
+	if config.TX == 0 && config.RX == 0 {
+		config.TX = UART_TX_PIN
+		config.RX = UART_RX_PIN
+	}
+
+	config.TX.SetFPIOAFunction(FUNC_UARTHS_TX)
+	config.RX.SetFPIOAFunction(FUNC_UARTHS_RX)
+
+	div := CPUFrequency()/config.BaudRate - 1
 
 	uart.Bus.DIV.Set(div)
 	uart.Bus.TXCTRL.Set(kendryte.UARTHS_TXCTRL_TXEN)
@@ -384,45 +418,31 @@ func (spi SPI) Configure(config SPIConfig) error {
 		config.MISO = SPI0_MISO_PIN
 	}
 
-	// Enable pins for SPI.
-	sckBits := uint32(kendryte.FPIOA_IO_OE_EN | kendryte.FPIOA_IO_DS_Msk)
-	dataBits := uint32(kendryte.FPIOA_IO_OE_EN | kendryte.FPIOA_IO_OE_INV | kendryte.FPIOA_IO_IE_EN |
-		kendryte.FPIOA_IO_IE_INV | kendryte.FPIOA_IO_ST | kendryte.FPIOA_IO_DS_Msk)
-
 	// Enable APB2 clock.
 	kendryte.SYSCTL.CLK_EN_CENT.SetBits(kendryte.SYSCTL_CLK_EN_CENT_APB2_CLK_EN)
 
-	var fpioaFuncSclk uint32
-	var fpioaFuncD0 uint32
-	var fpioaFuncD1 uint32
-
 	switch spi.Bus {
 	case kendryte.SPI0:
-		// Initialize FPIOA values.
-		fpioaFuncSclk = fpioaFuncSpi0Sclk
-		fpioaFuncD0 = fpioaFuncSpi0D0
-		fpioaFuncD1 = fpioaFuncSpi0D1
-
 		// Initialize SPI clock.
 		kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_SPI0_CLK_EN)
 		kendryte.SYSCTL.CLK_TH1.ClearBits(kendryte.SYSCTL_CLK_TH1_SPI0_CLK_Msk)
-	case kendryte.SPI1:
-		// Initialize FPIOA values.
-		fpioaFuncSclk = fpioaFuncSpi1Sclk
-		fpioaFuncD0 = fpioaFuncSpi1D0
-		fpioaFuncD1 = fpioaFuncSpi1D1
 
+		// Initialize pins.
+		config.SCK.SetFPIOAFunction(FUNC_SPI0_SCLK)
+		config.MOSI.SetFPIOAFunction(FUNC_SPI0_D0)
+		config.MISO.SetFPIOAFunction(FUNC_SPI0_D1)
+	case kendryte.SPI1:
 		// Initialize SPI clock.
 		kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_SPI1_CLK_EN)
 		kendryte.SYSCTL.CLK_TH1.ClearBits(kendryte.SYSCTL_CLK_TH1_SPI1_CLK_Msk)
-	default:
-		return ErrUnsupportedSPIController
-	}
 
-	// Set FPIOA functins for selected pins.
-	kendryte.FPIOA.IO[uint8(config.SCK)].Set(uint32(sckBits | fpioaFuncSclk))
-	kendryte.FPIOA.IO[uint8(config.MOSI)].Set(uint32(dataBits | fpioaFuncD0))
-	kendryte.FPIOA.IO[uint8(config.MISO)].Set(uint32(dataBits | fpioaFuncD1))
+		// Initialize pins.
+		config.SCK.SetFPIOAFunction(FUNC_SPI1_SCLK)
+		config.MOSI.SetFPIOAFunction(FUNC_SPI1_D0)
+		config.MISO.SetFPIOAFunction(FUNC_SPI1_D1)
+	default:
+		return errUnsupportedSPIController
+	}
 
 	// Set default frequency.
 	if config.Frequency == 0 {
@@ -430,7 +450,6 @@ func (spi SPI) Configure(config SPIConfig) error {
 	}
 
 	baudr := CPUFrequency() / config.Frequency
-	print(baudr)
 	spi.Bus.BAUDR.Set(baudr)
 
 	// Configure SPI mode 0, standard frame format, 8-bit data, little-endian.
@@ -473,5 +492,148 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	}
 
 	return byte(spi.Bus.DR0.Get()), nil
+}
 
+// I2C on the K210.
+type I2C struct {
+	Bus *kendryte.I2C_Type
+}
+
+// I2CConfig is used to store config info for I2C.
+type I2CConfig struct {
+	Frequency uint32
+	SCL       Pin
+	SDA       Pin
+}
+
+// Configure is intended to setup the I2C interface.
+func (i2c I2C) Configure(config I2CConfig) error {
+
+	if config.Frequency == 0 {
+		config.Frequency = TWI_FREQ_100KHZ
+	}
+
+	if config.SDA == 0 && config.SCL == 0 {
+		config.SDA = I2C0_SDA_PIN
+		config.SCL = I2C0_SCL_PIN
+	}
+
+	// Enable APB0 clock.
+	kendryte.SYSCTL.CLK_EN_CENT.SetBits(kendryte.SYSCTL_CLK_EN_CENT_APB0_CLK_EN)
+
+	switch i2c.Bus {
+	case kendryte.I2C0:
+		// Initialize I2C0 clock.
+		kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_I2C0_CLK_EN)
+		kendryte.SYSCTL.CLK_TH5.ReplaceBits(0x03, kendryte.SYSCTL_CLK_TH5_I2C0_CLK_Msk, kendryte.SYSCTL_CLK_TH5_I2C0_CLK_Pos)
+
+		// Initialize pins.
+		config.SDA.SetFPIOAFunction(FUNC_I2C0_SDA)
+		config.SCL.SetFPIOAFunction(FUNC_I2C0_SCLK)
+	case kendryte.I2C1:
+		// Initialize I2C1 clock.
+		kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_I2C1_CLK_EN)
+		kendryte.SYSCTL.CLK_TH5.ReplaceBits(0x03, kendryte.SYSCTL_CLK_TH5_I2C1_CLK_Msk, kendryte.SYSCTL_CLK_TH5_I2C1_CLK_Pos)
+
+		// Initialize pins.
+		config.SDA.SetFPIOAFunction(FUNC_I2C1_SDA)
+		config.SCL.SetFPIOAFunction(FUNC_I2C1_SCLK)
+	case kendryte.I2C2:
+		// Initialize I2C2 clock.
+		kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_I2C2_CLK_EN)
+		kendryte.SYSCTL.CLK_TH5.ReplaceBits(0x03, kendryte.SYSCTL_CLK_TH5_I2C2_CLK_Msk, kendryte.SYSCTL_CLK_TH5_I2C2_CLK_Pos)
+
+		// Initialize pins.
+		config.SDA.SetFPIOAFunction(FUNC_I2C2_SDA)
+		config.SCL.SetFPIOAFunction(FUNC_I2C2_SCLK)
+	}
+
+	div := CPUFrequency() / config.Frequency / 16
+
+	// Disable controller before setting the prescale register.
+	i2c.Bus.ENABLE.Set(0)
+
+	i2c.Bus.CON.Set(0x63)
+
+	// Set prescaler registers.
+	i2c.Bus.SS_SCL_HCNT.Set(uint32(div))
+	i2c.Bus.SS_SCL_LCNT.Set(uint32(div))
+
+	i2c.Bus.INTR_MASK.Set(0)
+	i2c.Bus.DMA_CR.Set(0x03)
+	i2c.Bus.DMA_RDLR.Set(0)
+	i2c.Bus.DMA_TDLR.Set(0x4)
+
+	return nil
+}
+
+// Tx does a single I2C transaction at the specified address.
+// It clocks out the given address, writes the bytes in w, reads back len(r)
+// bytes and stores them in r, and generates a stop condition on the bus.
+func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+	// Set slave address.
+	i2c.Bus.TAR.Set(uint32(addr))
+	// Enable controller.
+	i2c.Bus.ENABLE.Set(1)
+
+	if len(w) != 0 {
+		i2c.Bus.CLR_TX_ABRT.Set(i2c.Bus.CLR_TX_ABRT.Get())
+		dataLen := uint32(len(w))
+		di := 0
+
+		for dataLen != 0 {
+			fifoLen := 8 - i2c.Bus.TXFLR.Get()
+			if dataLen < fifoLen {
+				fifoLen = dataLen
+			}
+
+			for i := uint32(0); i < fifoLen; i++ {
+				i2c.Bus.DATA_CMD.Set(uint32(w[di]))
+				di += 1
+			}
+			if i2c.Bus.TX_ABRT_SOURCE.Get() != 0 {
+				return errI2CTxAbort
+			}
+			dataLen -= fifoLen
+		}
+
+		// Wait for transmition to complete.
+		for i2c.Bus.STATUS.HasBits(kendryte.I2C_STATUS_ACTIVITY) || !i2c.Bus.STATUS.HasBits(kendryte.I2C_STATUS_TFE) {
+		}
+
+		if i2c.Bus.TX_ABRT_SOURCE.Get() != 0 {
+			return errI2CTxAbort
+		}
+	}
+	if len(r) != 0 {
+		dataLen := uint32(len(r))
+		cmdLen := uint32(len(r))
+		di := 0
+
+		for dataLen != 0 || cmdLen != 0 {
+			fifoLen := 8 - i2c.Bus.RXFLR.Get()
+			if dataLen < fifoLen {
+				fifoLen = dataLen
+			}
+			for i := uint32(0); i < fifoLen; i++ {
+				r[di] = byte(i2c.Bus.DATA_CMD.Get())
+				di += 1
+			}
+			dataLen -= fifoLen
+
+			fifoLen = 8 - i2c.Bus.TXFLR.Get()
+			if cmdLen < fifoLen {
+				fifoLen = cmdLen
+			}
+			for i := uint32(0); i < fifoLen; i++ {
+				i2c.Bus.DATA_CMD.Set(0x100)
+			}
+			if i2c.Bus.TX_ABRT_SOURCE.Get() != 0 {
+				return errI2CTxAbort
+			}
+			cmdLen -= fifoLen
+		}
+	}
+
+	return nil
 }
