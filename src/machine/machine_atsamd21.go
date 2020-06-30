@@ -2251,8 +2251,6 @@ func (dac DAC) Configure(config DACConfig) {
 func (dac DAC) WriteData(value uint16) error {
 	sam.DAC.DATA.Set(value & 0x3FF)
 	syncDAC()
-	sam.DAC.CTRLA.SetBits(sam.DAC_CTRLA_ENABLE)
-	syncDAC()
 	return nil
 }
 
