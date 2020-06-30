@@ -17,11 +17,11 @@ type PinConfig struct {
 // Pin is a single pin on a chip, which may be connected to other hardware
 // devices. It can either be used directly as GPIO pin or it can be used in
 // other peripherals like ADC, I2C, etc.
-type Pin int8
+type Pin uint8
 
 // NoPin explicitly indicates "not a pin". Use this pin if you want to leave one
 // of the pins in a peripheral unconfigured (if supported by the hardware).
-const NoPin = Pin(-1)
+const NoPin = Pin(0xff)
 
 // High sets this GPIO pin to high, assuming it has been configured as an output
 // pin. It is hardware dependent (and often undefined) what happens if you set a
