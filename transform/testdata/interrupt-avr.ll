@@ -1,5 +1,5 @@
 target datalayout = "e-P1-p:16:8-i8:8-i16:8-i32:8-i64:8-f32:8-f64:8-n8-a:8"
-target triple = "avr-atmel-none"
+target triple = "avr-unknown-unknown"
 
 %"runtime/interrupt.handle" = type { %runtime.funcValue, %"runtime/interrupt.Interrupt" } %runtime.funcValue = type { i8*, i16 }
 %runtime.typecodeID = type { %runtime.typecodeID*, i16 }

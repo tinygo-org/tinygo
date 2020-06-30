@@ -1,6 +1,5 @@
 {
     "inherits": ["avr"],
-    "llvm-target": "avr-atmel-none",
     "cpu": "atmega1284p",
     "build-tags": ["atmega1284p", "atmega"],
     "cflags": [

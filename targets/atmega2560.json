@@ -1,6 +1,5 @@
 {
     "inherits": ["avr"],
-    "llvm-target": "avr-atmel-none",
     "cpu": "atmega2560",
     "build-tags": ["atmega2560", "atmega"],
     "cflags": [
