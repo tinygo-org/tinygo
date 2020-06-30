@@ -74,6 +74,9 @@ func (l *Library) Load(target string) (path string, err error) {
 	if strings.HasPrefix(target, "riscv32-") {
 		args = append(args, "-march=rv32imac", "-mabi=ilp32", "-fforce-enable-int128")
 	}
+	if strings.HasPrefix(target, "riscv64-") {
+		args = append(args, "-march=rv64gc", "-mabi=lp64")
+	}
 
 	// Compile all sources.
 	var objs []string
