@@ -324,6 +324,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/export
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/main
+	$(TINYGO) build -size short -o test.hex -target=maixbit             examples/blinky1
+	@$(MD5SUM) test.hex
 
 wasmtest:
 	$(GO) test ./tests/wasm
