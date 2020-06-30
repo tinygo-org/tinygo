@@ -1,4 +1,5 @@
 {
+	"llvm-target": "avr-unknown-unknown",
 	"build-tags": ["avr", "baremetal", "linux", "arm"],
 	"goos": "linux",
 	"goarch": "arm",
