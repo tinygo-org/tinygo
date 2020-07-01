@@ -80,6 +80,9 @@ func (p Pin) Configure(config PinConfig) {
 		return // The pin is not configured as GPIO or GPIOHS.
 	}
 
+	// Configure pin.
+	kendryte.FPIOA.IO[uint8(p)].SetBits(kendryte.FPIOA_IO_OE_EN | kendryte.FPIOA_IO_IE_EN | kendryte.FPIOA_IO_ST | kendryte.FPIOA_IO_DS_Msk)
+
 	switch config.Mode {
 	case PinInput:
 		p.setFPIOAIOPull(fpioaPullNone)
