@@ -183,7 +183,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 
 	// Check if the pin is a GPIOHS pin.
 	f := p.FPIOAFunction()
-	if f >= FUNC_GPIOHS0 && f <= FUNC_GPIOHS31 {
+	if f < FUNC_GPIOHS0 || f > FUNC_GPIOHS31 {
 		return ErrInvalidDataPin
 	}
 
