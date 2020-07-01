@@ -611,7 +611,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 		di := 0
 
 		for dataLen != 0 || cmdLen != 0 {
-			fifoLen := 8 - i2c.Bus.RXFLR.Get()
+			fifoLen := i2c.Bus.RXFLR.Get()
 			if dataLen < fifoLen {
 				fifoLen = dataLen
 			}
