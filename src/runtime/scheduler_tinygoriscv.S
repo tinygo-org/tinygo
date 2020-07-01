@@ -1,32 +1,42 @@
+#ifdef RV64
+#define REGSIZE 8
+#define SREG sd
+#define LREG ld
+#else
+#define REGSIZE 4
+#define SREG sw
+#define LREG lw
+#endif
+
 .section .text.tinygo_scanCurrentStack
 .global  tinygo_scanCurrentStack
 .type    tinygo_scanCurrentStack, %function
 tinygo_scanCurrentStack:
    // Push callee-saved registers onto the stack.
-   addi sp, sp, -64
-   sw ra,  60(sp)
-   sw s11, 56(sp)
-   sw s10, 52(sp)
-   sw s9,  48(sp)
-   sw s8,  44(sp)
-   sw s7,  40(sp)
-   sw s6,  36(sp)
-   sw s5,  32(sp)
-   sw s4,  28(sp)
-   sw s3,  24(sp)
-   sw s2,  20(sp)
-   sw s1,  16(sp)
-   sw s0,  12(sp)
+   addi sp, sp, -13*REGSIZE
+   SREG ra,  0*REGSIZE(sp)
+   SREG s11, 1*REGSIZE(sp)
+   SREG s10, 2*REGSIZE(sp)
+   SREG s9,  3*REGSIZE(sp)
+   SREG s8,  4*REGSIZE(sp)
+   SREG s7,  5*REGSIZE(sp)
+   SREG s6,  6*REGSIZE(sp)
+   SREG s5,  7*REGSIZE(sp)
+   SREG s4,  8*REGSIZE(sp)
+   SREG s3,  9*REGSIZE(sp)
+   SREG s2,  10*REGSIZE(sp)
+   SREG s1,  11*REGSIZE(sp)
+   SREG s0,  12*REGSIZE(sp)
 
    // Scan the stack.
    mv a0, sp
    call tinygo_scanstack
 
    // Restore return address.
-   lw ra, 60(sp)
+   LREG ra, 0(sp)
 
    // Restore stack state.
-   addi sp, sp, 64
+   addi sp, sp, 13*REGSIZE
 
    // Return to the caller.
    ret

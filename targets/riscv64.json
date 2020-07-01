@@ -5,13 +5,10 @@
 	"cflags": [
 		"--target=riscv64--none",
 		"-march=rv64gc",
-		"-mabi=lp64"
+		"-mabi=lp64",
+		"-D=RV64"
 	],
 	"ldflags": [
 		"-melf64lriscv"
-	],
-	"extra-files": [
-		"src/runtime/scheduler_tinygoriscv64.S",
-		"src/device/riscv/handleinterrupt64.S"
 	]
 }

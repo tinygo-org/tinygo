@@ -17,7 +17,9 @@
 		"--gc-sections"
 	],
 	"extra-files": [
-		"src/device/riscv/start.S"
+		"src/device/riscv/start.S",
+		"src/runtime/scheduler_tinygoriscv.S",
+		"src/device/riscv/handleinterrupt.S"
 	],
 	"gdb": "riscv64-unknown-elf-gdb"
 }

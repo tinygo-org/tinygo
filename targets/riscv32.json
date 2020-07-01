@@ -9,9 +9,5 @@
 	],
 	"ldflags": [
 		"-melf32lriscv"
-	],
-	"extra-files": [
-		"src/runtime/scheduler_tinygoriscv.S",
-		"src/device/riscv/handleinterrupt32.S"
 	]
 }
