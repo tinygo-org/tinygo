@@ -1,4 +1,4 @@
-#ifdef F_EXTENSION
+#ifdef __riscv_flen
 #define NREG 48
 #define LFREG flw
 #define SFREG fsw
@@ -6,7 +6,7 @@
 #define NREG 16
 #endif
 
-#ifdef RV64
+#if __riscv_xlen==64
 #define REGSIZE 8
 #define SREG sd
 #define LREG ld
@@ -41,7 +41,7 @@ handleInterruptASM:
     SREG    t4, 13*REGSIZE(sp)
     SREG    t5, 14*REGSIZE(sp)
     SREG    t6, 15*REGSIZE(sp)
-#ifdef F_EXTENSION
+#ifdef __riscv_flen
     SFREG   f0, (0  + 16)*REGSIZE(sp)
     SFREG   f1, (1  + 16)*REGSIZE(sp)
     SFREG   f2, (2  + 16)*REGSIZE(sp)
@@ -76,7 +76,7 @@ handleInterruptASM:
     SFREG   f31,(31 + 16)*REGSIZE(sp)
 #endif
     call    handleInterrupt
-#ifdef F_EXTENSION
+#ifdef __riscv_flen
     LFREG   f0, (31 + 16)*REGSIZE(sp)
     LFREG   f1, (30 + 16)*REGSIZE(sp)
     LFREG   f2, (29 + 16)*REGSIZE(sp)

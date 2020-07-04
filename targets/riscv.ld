@@ -18,7 +18,7 @@ SECTIONS
      * See: http://blog.japaric.io/stack-overflow-protection/ */
     .stack (NOLOAD) :
     {
-        . = ALIGN(8);
+        . = ALIGN(16);
         . += _stack_size;
         _stack_top = .;
     } >RAM
@@ -29,25 +29,25 @@ SECTIONS
     /* Globals with initial value */
     .data :
     {
-        . = ALIGN(8);
+        . = ALIGN(4);
         /* see https://gnu-mcu-eclipse.github.io/arch/riscv/programmer/#the-gp-global-pointer-register */
         PROVIDE( __global_pointer$ = . + (4K / 2) );
         _sdata = .;        /* used by startup code */
         *(.sdata)
         *(.data .data.*)
-        . = ALIGN(8);
+        . = ALIGN(4);
         _edata = .;        /* used by startup code */
     } >RAM AT>FLASH_TEXT
 
     /* Zero-initialized globals  */
     .bss :
     {
-        . = ALIGN(8);
+        . = ALIGN(4);
         _sbss = .;         /* used by startup code */
         *(.sbss)
         *(.bss .bss.*)
         *(COMMON)
-        . = ALIGN(8);
+        . = ALIGN(4);
         _ebss = .;         /* used by startup code */
     } >RAM
 
