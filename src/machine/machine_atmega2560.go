@@ -55,7 +55,8 @@ const (
 	PD7 = portD + 7
 	PE0 = portE + 0
 	PE1 = portE + 1
-	PE3 = portE + 2
+	PE3 = portE + 3
+	PE4 = portE + 4
 	PE5 = portE + 5
 	PE6 = portE + 6
 	PF0 = portF + 0
