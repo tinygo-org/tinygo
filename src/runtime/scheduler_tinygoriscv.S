@@ -1,4 +1,4 @@
-#ifdef RV64
+#if __riscv_xlen==64
 #define REGSIZE 8
 #define SREG sd
 #define LREG ld

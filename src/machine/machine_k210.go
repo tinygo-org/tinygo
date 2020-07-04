@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/kendryte"
+	"device/riscv"
 	"errors"
 	"runtime/interrupt"
 )
@@ -33,11 +34,9 @@ const (
 
 // GPIOHS pin interrupt events.
 const (
-	PinRising PinChange = iota + 1
+	PinRising PinChange = 1 << iota
 	PinFalling
-	PinToggle
-	PinHigh
-	PinLow = 8
+	PinToggle = PinRising | PinFalling
 )
 
 var (
@@ -224,12 +223,6 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	if change&PinFalling != 0 {
 		kendryte.GPIOHS.FALL_IE.SetBits(1 << gpioPin)
 	}
-	if change&PinHigh != 0 {
-		kendryte.GPIOHS.HIGH_IE.SetBits(1 << gpioPin)
-	}
-	if change&PinLow != 0 {
-		kendryte.GPIOHS.LOW_IE.SetBits(1 << gpioPin)
-	}
 
 	handleInterrupt := func(inter interrupt.Interrupt) {
 
@@ -237,26 +230,26 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 
 		if kendryte.GPIOHS.RISE_IE.HasBits(1 << pin) {
 			kendryte.GPIOHS.RISE_IE.ClearBits(1 << pin)
-			kendryte.GPIOHS.RISE_IP.SetBits(1 << pin)
+			// Acknowledge interrupt atomically.
+			riscv.AsmFull(
+				"amoor.w {}, {mask}, {reg}",
+				map[string]interface{}{
+					"mask": uint32(1 << pin),
+					"reg":  &kendryte.GPIOHS.RISE_IP.Reg,
+				})
 			kendryte.GPIOHS.RISE_IE.SetBits(1 << pin)
 		}
 
 		if kendryte.GPIOHS.FALL_IE.HasBits(1 << pin) {
 			kendryte.GPIOHS.FALL_IE.ClearBits(1 << pin)
-			kendryte.GPIOHS.FALL_IP.SetBits(1 << pin)
+			// Acknowledge interrupt atomically.
+			riscv.AsmFull(
+				"amoor.w {}, {mask}, {reg}",
+				map[string]interface{}{
+					"mask": uint32(1 << pin),
+					"reg":  &kendryte.GPIOHS.FALL_IP.Reg,
+				})
 			kendryte.GPIOHS.FALL_IE.SetBits(1 << pin)
-		}
-
-		if kendryte.GPIOHS.HIGH_IE.HasBits(1 << pin) {
-			kendryte.GPIOHS.HIGH_IE.ClearBits(1 << pin)
-			kendryte.GPIOHS.HIGH_IP.SetBits(1 << pin)
-			kendryte.GPIOHS.HIGH_IE.SetBits(1 << pin)
-		}
-
-		if kendryte.GPIOHS.LOW_IE.HasBits(1 << pin) {
-			kendryte.GPIOHS.LOW_IE.ClearBits(1 << pin)
-			kendryte.GPIOHS.LOW_IP.SetBits(1 << pin)
-			kendryte.GPIOHS.LOW_IE.SetBits(1 << pin)
 		}
 
 		pinCallbacks[pin](Pin(pin))
