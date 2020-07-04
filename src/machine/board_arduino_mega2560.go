@@ -49,7 +49,7 @@ const (
 	// Digital pins
 	D0  Pin = PE0
 	D1  Pin = PE1
-	D2  Pin = PE6
+	D2  Pin = PE4
 	D3  Pin = PE5
 	D4  Pin = PG5
 	D5  Pin = PE3
