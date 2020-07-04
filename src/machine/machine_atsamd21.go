@@ -2209,3 +2209,53 @@ func ResetProcessor() {
 
 	arm.SystemReset()
 }
+
+// DAC on the SAMD21.
+type DAC struct {
+}
+
+var (
+	DAC0 = DAC{}
+)
+
+// DACConfig placeholder for future expansion.
+type DACConfig struct {
+}
+
+// Configure the DAC.
+// output pin must already be configured.
+func (dac DAC) Configure(config DACConfig) {
+	// Turn on clock for DAC
+	sam.PM.APBCMASK.SetBits(sam.PM_APBCMASK_DAC_)
+
+	// Use Generic Clock Generator 0 as source for DAC.
+	sam.GCLK.CLKCTRL.Set((sam.GCLK_CLKCTRL_ID_DAC << sam.GCLK_CLKCTRL_ID_Pos) |
+		(sam.GCLK_CLKCTRL_GEN_GCLK0 << sam.GCLK_CLKCTRL_GEN_Pos) |
+		sam.GCLK_CLKCTRL_CLKEN)
+	waitForSync()
+
+	// reset DAC
+	sam.DAC.CTRLA.Set(sam.DAC_CTRLA_SWRST)
+	syncDAC()
+
+	// wait for reset complete
+	for sam.DAC.CTRLA.HasBits(sam.DAC_CTRLA_SWRST) {
+	}
+
+	// enable
+	sam.DAC.CTRLB.Set(sam.DAC_CTRLB_EOEN | sam.DAC_CTRLB_REFSEL_AVCC)
+	sam.DAC.CTRLA.Set(sam.DAC_CTRLA_ENABLE)
+}
+
+// Set writes a single 16-bit value to the DAC.
+// Since the ATSAMD21 only has a 10-bit DAC, the passed-in value will be scaled down.
+func (dac DAC) Set(value uint16) error {
+	sam.DAC.DATA.Set(value >> 6)
+	syncDAC()
+	return nil
+}
+
+func syncDAC() {
+	for sam.DAC.STATUS.HasBits(sam.DAC_STATUS_SYNCBUSY) {
+	}
+}
