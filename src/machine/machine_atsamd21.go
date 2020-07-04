@@ -2247,9 +2247,10 @@ func (dac DAC) Configure(config DACConfig) {
 	sam.DAC.CTRLA.Set(sam.DAC_CTRLA_ENABLE)
 }
 
-// WriteData writes a single value to the DAC.
-func (dac DAC) WriteData(value uint16) error {
-	sam.DAC.DATA.Set(value & 0x3FF)
+// Set writes a single 16-bit value to the DAC.
+// Since the ATSAMD21 only has a 10-bit DAC, the passed-in value will be scaled down.
+func (dac DAC) Set(value uint16) error {
+	sam.DAC.DATA.Set(value >> 6)
 	syncDAC()
 	return nil
 }

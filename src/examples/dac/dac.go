@@ -19,7 +19,7 @@ func main() {
 
 	machine.DAC0.Configure(machine.DACConfig{})
 
-	data := []uint16{4096, 2058, 1024, 512, 256, 128}
+	data := []uint16{32768, 8192, 2048, 512, 0}
 
 	for {
 		for _, val := range data {
@@ -31,10 +31,10 @@ func main() {
 
 func play(val uint16) {
 	for i := 0; i < 100; i++ {
-		machine.DAC0.WriteData(val)
+		machine.DAC0.Set(val)
 		time.Sleep(2 * time.Millisecond)
 
-		machine.DAC0.WriteData(0)
+		machine.DAC0.Set(0)
 		time.Sleep(2 * time.Millisecond)
 	}
 }
