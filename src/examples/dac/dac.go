@@ -10,10 +10,6 @@ import (
 )
 
 func main() {
-	enable := machine.PA30
-	enable.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	enable.Set(true)
-
 	speaker := machine.A0
 	speaker.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
