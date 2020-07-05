@@ -2341,9 +2341,10 @@ func (dac DAC) Configure(config DACConfig) {
 	}
 }
 
-// WriteData writes a single value to the DAC.
-func (dac DAC) WriteData(value uint16) error {
-	sam.DAC.DATA[0].Set(value & 0xFFF)
+// Set writes a single 16-bit value to the DAC.
+// Since the ATSAMD51 only has a 12-bit DAC, the passed-in value will be scaled down.
+func (dac DAC) Set(value uint16) error {
+	sam.DAC.DATA[0].Set(value >> 4)
 	syncDAC()
 	return nil
 }
