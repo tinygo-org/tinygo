@@ -15,7 +15,7 @@ func main() {
 
 	machine.DAC0.Configure(machine.DACConfig{})
 
-	data := []uint16{32768, 8192, 2048, 512, 0}
+	data := []uint16{0xFFFF, 0x8000, 0x4000, 0x2000, 0x1000, 0x0000}
 
 	for {
 		for _, val := range data {
