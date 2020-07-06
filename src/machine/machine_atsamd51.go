@@ -2331,7 +2331,7 @@ func (dac DAC) Configure(config DACConfig) {
 	}
 
 	// enable
-	sam.DAC.CTRLB.Set(sam.DAC_CTRLB_REFSEL_VREFPU)
+	sam.DAC.CTRLB.Set(sam.DAC_CTRLB_REFSEL_VREFPU << sam.DAC_CTRLB_REFSEL_Pos)
 	sam.DAC.DACCTRL[0].SetBits((sam.DAC_DACCTRL_CCTRL_CC12M << sam.DAC_DACCTRL_CCTRL_Pos) | sam.DAC_DACCTRL_ENABLE)
 	sam.DAC.CTRLA.Set(sam.DAC_CTRLA_ENABLE)
 
