@@ -154,18 +154,18 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		values = append(values, context)
 		valueTypes = append(valueTypes, context.Type())
 
-	} else if  builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
+	} else if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
 		var funcName string
 		switch builtin.Name() {
 		case "close":
 			funcName = "chanClose"
 		default:
-			b.addError(instr.Pos(), "todo: Implement defer for " + builtin.Name())
+			b.addError(instr.Pos(), "todo: Implement defer for "+builtin.Name())
 			return
 		}
 
 		if _, ok := b.deferBuiltinFuncs[instr.Call.Value]; !ok {
-			b.deferBuiltinFuncs[instr.Call.Value] = deferBuiltin {
+			b.deferBuiltinFuncs[instr.Call.Value] = deferBuiltin{
 				funcName,
 				len(b.allDeferFuncs),
 			}
@@ -184,7 +184,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 
 	} else {
 		funcValue := b.getValue(instr.Call.Value)
-		
+
 		if _, ok := b.deferExprFuncs[instr.Call.Value]; !ok {
 			b.deferExprFuncs[instr.Call.Value] = len(b.allDeferFuncs)
 			b.allDeferFuncs = append(b.allDeferFuncs, &instr.Call)
