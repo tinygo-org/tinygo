@@ -648,7 +648,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 		i2c.Bus.SYNCBUSY.HasBits(sam.SERCOM_I2CM_SYNCBUSY_SWRST) {
 	}
 
-	// Set i2c master mode
+	// Set i2c controller mode
 	//SERCOM_I2CM_CTRLA_MODE( I2C_MASTER_OPERATION )
 	i2c.Bus.CTRLA.Set(sam.SERCOM_I2CM_CTRLA_MODE_I2C_MASTER << sam.SERCOM_I2CM_CTRLA_MODE_Pos) // |
 
@@ -722,7 +722,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 		// wait transmission complete
 		for !i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_SB) {
-			// If the slave NACKS the address, the MB bit will be set.
+			// If the peripheral NACKS the address, the MB bit will be set.
 			// In that case, send a stop condition and return error.
 			if i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_MB) {
 				i2c.Bus.CTRLB.SetBits(wireCmdStop << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop condition
@@ -1074,8 +1074,8 @@ type SPI struct {
 type SPIConfig struct {
 	Frequency uint32
 	SCK       Pin
-	MOSI      Pin
-	MISO      Pin
+	SDO       Pin
+	SDI       Pin
 	LSBFirst  bool
 	Mode      uint8
 }
@@ -1083,10 +1083,10 @@ type SPIConfig struct {
 // Configure is intended to setup the SPI interface.
 func (spi SPI) Configure(config SPIConfig) error {
 	// Use default pins if not set.
-	if config.SCK == 0 && config.MOSI == 0 && config.MISO == 0 {
+	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
 		config.SCK = SPI0_SCK_PIN
-		config.MOSI = SPI0_MOSI_PIN
-		config.MISO = SPI0_MISO_PIN
+		config.SDO = SPI0_SDO_PIN
+		config.SDI = SPI0_SDI_PIN
 	}
 
 	// set default frequency
@@ -1094,27 +1094,27 @@ func (spi SPI) Configure(config SPIConfig) error {
 		config.Frequency = 4000000
 	}
 
-	// Determine the input pinout (for MISO).
-	misoPinMode, misoPad, ok := findPinPadMapping(spi.SERCOM, config.MISO)
+	// Determine the input pinout (for SDI).
+	SDIPinMode, SDIPad, ok := findPinPadMapping(spi.SERCOM, config.SDI)
 	if !ok {
 		return ErrInvalidInputPin
 	}
-	dataInPinout := misoPad // mapped directly
+	dataInPinout := SDIPad // mapped directly
 
-	// Determine the output pinout (for MOSI/SCK).
+	// Determine the output pinout (for SDO/SCK).
 	// See table 26-7 on page 494 of the datasheet.
 	var dataOutPinout uint32
 	sckPinMode, sckPad, ok := findPinPadMapping(spi.SERCOM, config.SCK)
 	if !ok {
 		return ErrInvalidOutputPin
 	}
-	mosiPinMode, mosiPad, ok := findPinPadMapping(spi.SERCOM, config.MOSI)
+	SDOPinMode, SDOPad, ok := findPinPadMapping(spi.SERCOM, config.SDO)
 	if !ok {
 		return ErrInvalidOutputPin
 	}
 	switch sckPad {
 	case 1:
-		switch mosiPad {
+		switch SDOPad {
 		case 0:
 			dataOutPinout = 0x0
 		case 3:
@@ -1123,7 +1123,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 			return ErrInvalidOutputPin
 		}
 	case 3:
-		switch mosiPad {
+		switch SDOPad {
 		case 2:
 			dataOutPinout = 0x1
 		case 0:
@@ -1142,8 +1142,8 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 	// enable pins
 	config.SCK.Configure(PinConfig{Mode: sckPinMode})
-	config.MOSI.Configure(PinConfig{Mode: mosiPinMode})
-	config.MISO.Configure(PinConfig{Mode: misoPinMode})
+	config.SDO.Configure(PinConfig{Mode: SDOPinMode})
+	config.SDI.Configure(PinConfig{Mode: SDIPinMode})
 
 	// reset SERCOM
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_SWRST)
@@ -1157,7 +1157,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 		dataOrder = 1
 	}
 
-	// Set SPI master
+	// Set SPI mode to controller
 	spi.Bus.CTRLA.Set((sam.SERCOM_SPI_CTRLA_MODE_SPI_MASTER << sam.SERCOM_SPI_CTRLA_MODE_Pos) |
 		(dataOutPinout << sam.SERCOM_SPI_CTRLA_DOPO_Pos) |
 		(dataInPinout << sam.SERCOM_SPI_CTRLA_DIPO_Pos) |

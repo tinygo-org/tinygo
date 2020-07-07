@@ -13,8 +13,8 @@ import (
 type SPIConfig struct {
 	Frequency uint32
 	SCK       Pin
-	MOSI      Pin
-	MISO      Pin
+	SDO       Pin
+	SDI       Pin
 	LSBFirst  bool
 	Mode      uint8
 }
@@ -56,20 +56,20 @@ func (spi SPI) Configure(config SPIConfig) {
 		conf &^= (1 << stm32.SPI_CR1_CPHA_Pos)
 	}
 
-	// set to SPI master
+	// set to SPI controller
 	conf |= stm32.SPI_CR1_MSTR
 
-	// disable MCU acting as SPI slave
+	// disable MCU acting as SPI peripheral
 	conf |= stm32.SPI_CR1_SSM | stm32.SPI_CR1_SSI
 
 	// now set the configuration
 	spi.Bus.CR1.Set(conf)
 
 	// init pins
-	if config.SCK == 0 && config.MOSI == 0 && config.MISO == 0 {
+	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
 		config.SCK = SPI0_SCK_PIN
-		config.MOSI = SPI0_MOSI_PIN
-		config.MISO = SPI0_MISO_PIN
+		config.SDO = SPI0_SDO_PIN
+		config.SDI = SPI0_SDI_PIN
 	}
 	spi.configurePins(config)
 

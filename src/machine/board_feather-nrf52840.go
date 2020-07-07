@@ -88,9 +88,9 @@ const (
 
 // SPI pins
 const (
-	SPI0_SCK_PIN  = D26 // SCK
-	SPI0_MOSI_PIN = D25 // MOSI
-	SPI0_MISO_PIN = D24 // MISO
+	SPI0_SCK_PIN = D26 // SCK
+	SPI0_SDO_PIN = D25 // SDO
+	SPI0_SDI_PIN = D24 // SDI
 )
 
 // USB CDC identifiers

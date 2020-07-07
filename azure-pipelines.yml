@@ -1,7 +1,7 @@
 # Avoid lengthy LLVM rebuilds on each newly pushed branch. Pull requests will
 # be built anyway.
 trigger:
-- master
+- release
 - dev
 
 jobs:

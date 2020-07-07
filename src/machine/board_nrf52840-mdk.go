@@ -31,9 +31,9 @@ const (
 
 // SPI pins (unused)
 const (
-	SPI0_SCK_PIN  = NoPin
-	SPI0_MOSI_PIN = NoPin
-	SPI0_MISO_PIN = NoPin
+	SPI0_SCK_PIN = NoPin
+	SPI0_SDO_PIN = NoPin
+	SPI0_SDI_PIN = NoPin
 )
 
 // USB CDC identifiers

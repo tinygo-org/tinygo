@@ -325,8 +325,8 @@ var (
 type SPIConfig struct {
 	Frequency uint32
 	SCK       Pin
-	MOSI      Pin
-	MISO      Pin
+	SDO       Pin
+	SDI       Pin
 	LSBFirst  bool
 	Mode      uint8
 }
@@ -387,7 +387,7 @@ func (spi SPI) Configure(config SPIConfig) {
 	spi.Bus.CONFIG.Set(conf)
 
 	// set pins
-	spi.setPins(config.SCK, config.MOSI, config.MISO)
+	spi.setPins(config.SCK, config.SDO, config.SDI)
 
 	// Re-enable bus now that it is configured.
 	spi.Bus.ENABLE.Set(nrf.SPI_ENABLE_ENABLE_Enabled)

@@ -164,6 +164,6 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 // Configure SPI pins for input output and clock
 func (spi SPI) configurePins(config SPIConfig) {
 	config.SCK.ConfigureAltFunc(PinConfig{Mode: PinModeSPICLK}, spi.AltFuncSelector)
-	config.MOSI.ConfigureAltFunc(PinConfig{Mode: PinModeSPIMOSI}, spi.AltFuncSelector)
-	config.MISO.ConfigureAltFunc(PinConfig{Mode: PinModeSPIMISO}, spi.AltFuncSelector)
+	config.SDO.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDO}, spi.AltFuncSelector)
+	config.SDI.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDI}, spi.AltFuncSelector)
 }

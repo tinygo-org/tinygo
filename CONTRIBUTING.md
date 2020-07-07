@@ -32,7 +32,7 @@ Microcontrollers have lots of peripherals (I2C, SPI, ADC, etc.) and many don't h
 
 ## How to use our Github repository
 
-The `master` branch of this repo will always have the latest released version of TinyGo. All of the active development work for the next release will take place in the `dev` branch. TinyGo will use semantic versioning and will create a tag/release for each release.
+The `release` branch of this repo will always have the latest released version of TinyGo. All of the active development work for the next release will take place in the `dev` branch. TinyGo will use semantic versioning and will create a tag/release for each release.
 
 Here is how to contribute back some code or documentation:
 

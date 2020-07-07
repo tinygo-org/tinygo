@@ -43,13 +43,13 @@ const (
 
 // SPI pins
 const (
-	SPI0_SCK_PIN  = NoPin
-	SPI0_MOSI_PIN = NoPin
-	SPI0_MISO_PIN = NoPin
+	SPI0_SCK_PIN = NoPin
+	SPI0_SDO_PIN = NoPin
+	SPI0_SDI_PIN = NoPin
 
-	SPI1_SCK_PIN  = D13
-	SPI1_MOSI_PIN = D11
-	SPI1_MISO_PIN = D12
+	SPI1_SCK_PIN = D13
+	SPI1_SDO_PIN = D11
+	SPI1_SDI_PIN = D12
 )
 
 // I2C pins

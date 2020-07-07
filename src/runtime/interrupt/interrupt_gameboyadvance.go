@@ -10,7 +10,7 @@ import (
 var (
 	regInterruptEnable       = (*volatile.Register16)(unsafe.Pointer(uintptr(0x4000200)))
 	regInterruptRequestFlags = (*volatile.Register16)(unsafe.Pointer(uintptr(0x4000202)))
-	regInterruptMasterEnable = (*volatile.Register16)(unsafe.Pointer(uintptr(0x4000208)))
+	regGlobalInterruptEnable = (*volatile.Register16)(unsafe.Pointer(uintptr(0x4000208)))
 )
 
 // Enable enables this interrupt. Right after calling this function, the
@@ -49,9 +49,9 @@ type State uint8
 // as you called Disable (this happens naturally with the pattern above).
 func Disable() (state State) {
 	// Save the previous interrupt state.
-	state = State(regInterruptMasterEnable.Get())
+	state = State(regGlobalInterruptEnable.Get())
 	// Disable all interrupts.
-	regInterruptMasterEnable.Set(0)
+	regGlobalInterruptEnable.Set(0)
 	return
 }
 
@@ -61,5 +61,5 @@ func Disable() (state State) {
 // cricital sections.
 func Restore(state State) {
 	// Restore interrupts to the previous state.
-	regInterruptMasterEnable.Set(uint16(state))
+	regGlobalInterruptEnable.Set(uint16(state))
 }
