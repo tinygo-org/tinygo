@@ -273,11 +273,9 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			fmt.Println("---------------- TINYGO - OPENOCD WRAPPER ----------------")
 			attemptNum := 1
 			args, err := config.OpenOCDConfiguration()
-
 			if err != nil {
 				return err
 			}
-
 			args = append(args, "-c", "program "+tmppath+" reset exit")
 			fmt.Print("\nTINYGO - OPENOCD WRAPPER ", "ATTEMPT ", strconv.Itoa(attemptNum), " - \nRUNNING: openocd ", strings.Join(args, " "), "\n\n")
 			attemptNum++
@@ -325,7 +323,6 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 						line = stderrScanner.Text() + "\n"
 						slurp = slurp + line
 						fmt.Printf("\tTGO-OOCD WRAPPER: %s", line)
-
 					}
 					cmd.Wait()
 					successfulFlash := successfulFlashRegex.MatchString(slurp)
@@ -344,13 +341,11 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 				if unableToResetTargetError {
 					fmt.Println("\nTINYGO - OPENOCD: attempting to resolve openocd error")
 					fmt.Print("TINYGO - OPENOCD: running a second attempt at openocd.\n\n")
-
 					reader := bufio.NewReader(os.Stdin)
 					fmt.Print("TINYGO - OPENOCD: Detected a software reset problem, please hold the reset pin. and hit enter to reflash the \n")
 					fmt.Print("TINYGO - OPENOCD: device to correct the problem.\n")
 					fmt.Print("TINYGO - OPENOCD: Press Enter while holding the reset button.\n")
 					reader.ReadString('\n')
-
 					args, _ := config.OpenOCDConfiguration()
 					prependedArgs := []string{args[0], args[1], "-c", "set CPUTAPID 0", args[2], args[3], "-c", "program " + tmppath + " reset exit"}
 					fmt.Print("\nTINYGO - OPENOCD WRAPPER ", "ATTEMPT ", strconv.Itoa(attemptNum), " - \nRUNNING: openocd ", strings.Join(args, " "), "\n\n")
@@ -362,14 +357,15 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 					for stderrScanner.Scan() {
 						line = stderrScanner.Text() + "\n"
 						fmt.Printf("\tTGO-OOCD WRAPPER: %s", line)
-
 					}
 					cmd.Wait()
 
 					cmd = exec.Command("openocd", prependedArgs...)
+					stderr, _ = cmd.StderrPipe()
 					fmt.Print("\n\nTINYGO - OPENOCD: Let go of the reset button, and then press Enter.\n")
 					reader.ReadString('\n')
 					slurp = ""
+					stderrScanner = bufio.NewScanner(stderr)
 					cmd.Start()
 					for stderrScanner.Scan() {
 						line = stderrScanner.Text() + "\n"
@@ -384,15 +380,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 					} else {
 						fmt.Print("\nTINYGO - OPENOCD: Flashing was successful.\n\n")
 					}
-
 				}
-
-				// handle "** Unable to reset target **" since this is generally caused by the reset pin on the cheaper st-link adapters
-				// the solution is to hold the reset pin on the bluepill, then run the flashing software while the reset pin is held.
-				// then to run open ocd once more, which will then flash the MCU providing a success.
-
-				//return errors.New("TINYGO - OPENOCD ERROR: Could not resolve openocd for a second attempt")
-
 			}
 			return nil
 		default:
