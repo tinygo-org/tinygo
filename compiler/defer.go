@@ -184,29 +184,23 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 
 	} else {
 		funcValue := b.getValue(instr.Call.Value)
-		funcValueType := b.getLLVMRuntimeType("funcValue")
+		
+		if _, ok := b.deferExprFuncs[instr.Call.Value]; !ok {
+			b.deferExprFuncs[instr.Call.Value] = len(b.allDeferFuncs)
+			b.allDeferFuncs = append(b.allDeferFuncs, &instr.Call)
+		}
 
-		if !funcValue.IsNil() && funcValue.Type() == funcValueType {
-			if _, ok := b.deferExprFuncs[instr.Call.Value]; !ok {
-				b.deferExprFuncs[instr.Call.Value] = len(b.allDeferFuncs)
-				b.allDeferFuncs = append(b.allDeferFuncs, &instr.Call)
-			}
+		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferExprFuncs[instr.Call.Value]), false)
 
-			callback := llvm.ConstInt(b.uintptrType, uint64(b.deferExprFuncs[instr.Call.Value]), false)
-
-			// Collect all values to be put in the struct (starting with
-			// runtime._defer fields, followed by all parameters including the
-			// context pointer).
-			values = []llvm.Value{callback, next, funcValue}
-			valueTypes = append(valueTypes, funcValueType)
-			for _, param := range instr.Call.Args {
-				llvmParam := b.getValue(param)
-				values = append(values, llvmParam)
-				valueTypes = append(valueTypes, llvmParam.Type())
-			}
-		} else {
-			b.addError(instr.Pos(), "todo: defer on uncommon function call type")
-			return
+		// Collect all values to be put in the struct (starting with
+		// runtime._defer fields, followed by all parameters including the
+		// context pointer).
+		values = []llvm.Value{callback, next, funcValue}
+		valueTypes = append(valueTypes, funcValue.Type())
+		for _, param := range instr.Call.Args {
+			llvmParam := b.getValue(param)
+			values = append(values, llvmParam)
+			valueTypes = append(valueTypes, llvmParam.Type())
 		}
 	}
 
