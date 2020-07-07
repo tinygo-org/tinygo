@@ -79,12 +79,6 @@ type builder struct {
 	deferBuiltinFuncs map[interface{}]deferBuiltin
 }
 
-type deferExpr struct {
-	signature     *types.Signature
-	callback      int
-	funcValueType llvm.Type
-}
-
 type deferBuiltin struct {
 	funcName string
 	callback int

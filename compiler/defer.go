@@ -301,8 +301,7 @@ func (b *builder) createRunDefers() {
 
 			if !callback.IsInvoke() {
 				//Expect funcValue to be passed through the defer frame.
-				valueTypes = append(valueTypes,
-					b.getLLVMRuntimeType("funcValue"))
+				valueTypes = append(valueTypes, b.getFuncType(callback.Signature()))
 			} else {
 				//Expect typecode
 				valueTypes = append(valueTypes, b.uintptrType, b.i8ptrType)
