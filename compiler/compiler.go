@@ -74,7 +74,7 @@ type builder struct {
 	deferFuncs        map[*ir.Function]int
 	deferInvokeFuncs  map[string]int
 	deferClosureFuncs map[*ir.Function]int
-	deferExprFuncs    map[interface{}]deferExpr
+	deferExprFuncs    map[interface{}]int
 	selectRecvBuf     map[*ssa.Select]llvm.Value
 	deferBuiltinFuncs map[interface{}]deferBuiltin
 }
