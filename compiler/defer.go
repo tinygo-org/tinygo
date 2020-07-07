@@ -291,10 +291,7 @@ func (b *builder) createRunDefers() {
 		b.SetInsertPointAtEnd(block)
 		switch callback := callback.(type) {
 		case *ssa.CallCommon:
-			// Call on an interface value.
-			//if !callback.IsInvoke() {
-			//	panic("expected an invoke call, not a direct call")
-			//}
+			// Call on an value or interface value.
 
 			// Get the real defer struct type and cast to it.
 			valueTypes := []llvm.Type{b.uintptrType, llvm.PointerType(b.getLLVMRuntimeType("_defer"), 0)}
