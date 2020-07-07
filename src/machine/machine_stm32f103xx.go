@@ -191,8 +191,8 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 // Configure SPI pins for input output and clock
 func (spi SPI) configurePins(config SPIConfig) {
 	config.SCK.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
-	config.MOSI.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
-	config.MISO.Configure(PinConfig{Mode: PinInputModeFloating})
+	config.SDO.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
+	config.SDI.Configure(PinConfig{Mode: PinInputModeFloating})
 }
 
 //---------- I2C related types and code

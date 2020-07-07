@@ -33,9 +33,9 @@ const (
 
 // SPI pins
 const (
-	SPI0_SCK_PIN  Pin = 23 // P13 on the board
-	SPI0_MOSI_PIN Pin = 21 // P15 on the board
-	SPI0_MISO_PIN Pin = 22 // P14 on the board
+	SPI0_SCK_PIN Pin = 23 // P13 on the board
+	SPI0_SDO_PIN Pin = 21 // P15 on the board
+	SPI0_SDI_PIN Pin = 22 // P14 on the board
 )
 
 // GPIO/Analog pins

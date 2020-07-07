@@ -47,13 +47,13 @@ type SPI struct {
 type SPIConfig struct {
 	Frequency uint32
 	SCK       Pin
-	MOSI      Pin
-	MISO      Pin
+	SDO       Pin
+	SDI       Pin
 	Mode      uint8
 }
 
 func (spi SPI) Configure(config SPIConfig) {
-	spiConfigure(spi.Bus, config.SCK, config.MOSI, config.MISO)
+	spiConfigure(spi.Bus, config.SCK, config.SDO, config.SDI)
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
@@ -62,7 +62,7 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 }
 
 //export __tinygo_spi_configure
-func spiConfigure(bus uint8, sck Pin, mosi Pin, miso Pin)
+func spiConfigure(bus uint8, sck Pin, SDO Pin, SDI Pin)
 
 //export __tinygo_spi_transfer
 func spiTransfer(bus uint8, w uint8) uint8

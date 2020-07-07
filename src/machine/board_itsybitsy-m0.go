@@ -83,9 +83,9 @@ var (
 
 // SPI pins
 const (
-	SPI0_SCK_PIN  = PB11 // SCK: SERCOM4/PAD[3]
-	SPI0_MOSI_PIN = PB10 // MOSI: SERCOM4/PAD[2]
-	SPI0_MISO_PIN = PA12 // MISO: SERCOM4/PAD[0]
+	SPI0_SCK_PIN = PB11 // SCK: SERCOM4/PAD[3]
+	SPI0_SDO_PIN = PB10 // SDO: SERCOM4/PAD[2]
+	SPI0_SDI_PIN = PA12 // SDI: SERCOM4/PAD[0]
 )
 
 // SPI on the ItsyBitsy M0.
@@ -98,10 +98,10 @@ var (
 
 // "Internal" SPI pins; SPI flash is attached to these on ItsyBitsy M0
 const (
-	SPI1_CS_PIN   = PA27
-	SPI1_SCK_PIN  = PB23
-	SPI1_MOSI_PIN = PB22
-	SPI1_MISO_PIN = PB03
+	SPI1_CS_PIN  = PA27
+	SPI1_SCK_PIN = PB23
+	SPI1_SDO_PIN = PB22
+	SPI1_SDI_PIN = PB03
 )
 
 // "Internal" SPI on Sercom 5

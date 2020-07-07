@@ -27,7 +27,7 @@ func (i2c I2C) Configure(config I2CConfig) {
 
 	// twi bit rate formula from atmega128 manual pg. 204:
 	// SCL Frequency = CPU Clock Frequency / (16 + (2 * TWBR))
-	// NOTE: TWBR should be 10 or higher for master mode.
+	// NOTE: TWBR should be 10 or higher for controller mode.
 	// It is 72 for a 16mhz board with 100kHz TWI
 	avr.TWBR.Set(uint8(((CPUFrequency() / config.Frequency) - 16) / 2))
 

@@ -27,9 +27,9 @@ const (
 
 // SPI pins for the PineTime.
 const (
-	SPI0_SCK_PIN  Pin = 2
-	SPI0_MOSI_PIN Pin = 3
-	SPI0_MISO_PIN Pin = 4
+	SPI0_SCK_PIN Pin = 2
+	SPI0_SDO_PIN Pin = 3
+	SPI0_SDI_PIN Pin = 4
 )
 
 // I2C pins for the PineTime.
@@ -51,7 +51,7 @@ const VIBRATOR_PIN Pin = 16
 // http://files.pine64.org/doc/PineTime/PineTime%20Port%20Assignment%20rev1.0.pdf
 const (
 	LCD_SCK                = SPI0_SCK_PIN
-	LCD_SDI                = SPI0_MOSI_PIN
+	LCD_SDI                = SPI0_SDO_PIN
 	LCD_RS             Pin = 18
 	LCD_CS             Pin = 25
 	LCD_RESET          Pin = 26

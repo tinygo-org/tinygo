@@ -15,8 +15,8 @@ type I2SClockSource uint8
 type I2SDataFormat uint8
 
 const (
-	I2SModeMaster I2SMode = iota
-	I2SModeSlave
+	I2SModeSource I2SMode = iota
+	I2SModeReceiver
 	I2SModePDM
 )
 
@@ -41,14 +41,14 @@ const (
 
 // All fields are optional and may not be required or used on a particular platform.
 type I2SConfig struct {
-	SCK               Pin
-	WS                Pin
-	SD                Pin
-	Mode              I2SMode
-	Standard          I2SStandard
-	ClockSource       I2SClockSource
-	DataFormat        I2SDataFormat
-	AudioFrequency    uint32
-	MasterClockOutput bool
-	Stereo            bool
+	SCK             Pin
+	WS              Pin
+	SD              Pin
+	Mode            I2SMode
+	Standard        I2SStandard
+	ClockSource     I2SClockSource
+	DataFormat      I2SDataFormat
+	AudioFrequency  uint32
+	MainClockOutput bool
+	Stereo          bool
 }

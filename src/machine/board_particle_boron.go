@@ -34,8 +34,8 @@ const (
 	D8  Pin = 35
 	D9  Pin = 6  // Also TX
 	D10 Pin = 8  // Also RX
-	D11 Pin = 46 // Also MISO
-	D12 Pin = 45 // Also MOSI
+	D11 Pin = 46 // Also SDI
+	D12 Pin = 45 // Also SDO
 	D13 Pin = 47 // Also SCK
 )
 
@@ -63,16 +63,16 @@ const (
 
 // SPI pins
 const (
-	SPI0_SCK_PIN  Pin = 47
-	SPI0_MOSI_PIN Pin = 45
-	SPI0_MISO_PIN Pin = 46
+	SPI0_SCK_PIN Pin = 47
+	SPI0_SDO_PIN Pin = 45
+	SPI0_SDI_PIN Pin = 46
 )
 
 // Internal 4MB SPI Flash
 const (
 	SPI1_SCK_PIN  Pin = 19
-	SPI1_MOSI_PIN Pin = 20
-	SPI1_MISO_PIN Pin = 21
+	SPI1_SDO_PIN  Pin = 20
+	SPI1_SDI_PIN  Pin = 21
 	SPI1_CS_PIN   Pin = 17
 	SPI1_WP_PIN   Pin = 22
 	SPI1_HOLD_PIN Pin = 23

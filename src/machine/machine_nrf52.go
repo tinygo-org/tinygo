@@ -31,19 +31,19 @@ func (i2c I2C) setPins(scl, sda Pin) {
 }
 
 // SPI
-func (spi SPI) setPins(sck, mosi, miso Pin) {
+func (spi SPI) setPins(sck, sdo, sdi Pin) {
 	if sck == 0 {
 		sck = SPI0_SCK_PIN
 	}
-	if mosi == 0 {
-		mosi = SPI0_MOSI_PIN
+	if sdo == 0 {
+		sdo = SPI0_SDO_PIN
 	}
-	if miso == 0 {
-		miso = SPI0_MISO_PIN
+	if sdi == 0 {
+		sdi = SPI0_SDI_PIN
 	}
 	spi.Bus.PSEL.SCK.Set(uint32(sck))
-	spi.Bus.PSEL.MOSI.Set(uint32(mosi))
-	spi.Bus.PSEL.MISO.Set(uint32(miso))
+	spi.Bus.PSEL.MOSI.Set(uint32(sdo))
+	spi.Bus.PSEL.MISO.Set(uint32(sdi))
 }
 
 // InitADC initializes the registers needed for ADC.

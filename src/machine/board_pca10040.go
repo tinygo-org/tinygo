@@ -47,7 +47,7 @@ const (
 
 // SPI pins
 const (
-	SPI0_SCK_PIN  Pin = 25
-	SPI0_MOSI_PIN Pin = 23
-	SPI0_MISO_PIN Pin = 24
+	SPI0_SCK_PIN Pin = 25
+	SPI0_SDO_PIN Pin = 23
+	SPI0_SDI_PIN Pin = 24
 )

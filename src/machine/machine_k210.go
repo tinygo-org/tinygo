@@ -397,21 +397,21 @@ type SPI struct {
 type SPIConfig struct {
 	Frequency uint32
 	SCK       Pin
-	MOSI      Pin
-	MISO      Pin
+	SDO       Pin
+	SDI       Pin
 	LSBFirst  bool
 	Mode      uint8
 }
 
 // Configure is intended to setup the SPI interface.
 // Only SPI controller 0 and 1 can be used because SPI2 is a special
-// slave-mode controller and SPI3 is used for flashing.
+// peripheral-mode controller and SPI3 is used for flashing.
 func (spi SPI) Configure(config SPIConfig) error {
 	// Use default pins if not set.
-	if config.SCK == 0 && config.MOSI == 0 && config.MISO == 0 {
+	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
 		config.SCK = SPI0_SCK_PIN
-		config.MOSI = SPI0_MOSI_PIN
-		config.MISO = SPI0_MISO_PIN
+		config.SDO = SPI0_SDO_PIN
+		config.SDI = SPI0_SDI_PIN
 	}
 
 	// Enable APB2 clock.
@@ -425,8 +425,8 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 		// Initialize pins.
 		config.SCK.SetFPIOAFunction(FUNC_SPI0_SCLK)
-		config.MOSI.SetFPIOAFunction(FUNC_SPI0_D0)
-		config.MISO.SetFPIOAFunction(FUNC_SPI0_D1)
+		config.SDO.SetFPIOAFunction(FUNC_SPI0_D0)
+		config.SDI.SetFPIOAFunction(FUNC_SPI0_D1)
 	case kendryte.SPI1:
 		// Initialize SPI clock.
 		kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_SPI1_CLK_EN)
@@ -434,8 +434,8 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 		// Initialize pins.
 		config.SCK.SetFPIOAFunction(FUNC_SPI1_SCLK)
-		config.MOSI.SetFPIOAFunction(FUNC_SPI1_D0)
-		config.MISO.SetFPIOAFunction(FUNC_SPI1_D1)
+		config.SDO.SetFPIOAFunction(FUNC_SPI1_D0)
+		config.SDI.SetFPIOAFunction(FUNC_SPI1_D1)
 	default:
 		return errUnsupportedSPIController
 	}
@@ -567,7 +567,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 // It clocks out the given address, writes the bytes in w, reads back len(r)
 // bytes and stores them in r, and generates a stop condition on the bus.
 func (i2c I2C) Tx(addr uint16, w, r []byte) error {
-	// Set slave address.
+	// Set peripheral address.
 	i2c.Bus.TAR.Set(uint32(addr))
 	// Enable controller.
 	i2c.Bus.ENABLE.Set(1)
