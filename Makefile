@@ -118,7 +118,7 @@ fmt-check:
 	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
 
 
-gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-sifive gen-device-stm32
+gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-sifive gen-device-stm32 gen-device-kendryte
 
 gen-device-avr:
 	$(GO) build -o ./build/gen-device-avr ./tools/gen-device-avr/
@@ -140,6 +140,10 @@ gen-device-sam: build/gen-device-svd
 gen-device-sifive: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/SiFive-Community -interrupts=software lib/cmsis-svd/data/SiFive-Community/ src/device/sifive/
 	GO111MODULE=off $(GO) fmt ./src/device/sifive
+
+gen-device-kendryte: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Kendryte-Community -interrupts=software lib/cmsis-svd/data/Kendryte-Community/ src/device/kendryte/
+	GO111MODULE=off $(GO) fmt ./src/device/kendryte
 
 gen-device-stm32: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro lib/cmsis-svd/data/STMicro/ src/device/stm32/
@@ -322,6 +326,8 @@ ifneq ($(AVR), 0)
 	@$(MD5SUM) test.hex
 endif
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=maixbit             examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/export
 	$(TINYGO) build             -o wasm.wasm -target=wasm               examples/wasm/main

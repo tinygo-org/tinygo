@@ -1,0 +1,6 @@
+{
+	"inherits": ["k210"],
+	"build-tags": ["maixbit"],
+	"linkerscript": "targets/maixbit.ld",
+	"flash-command": "kflash -p {port} {bin}"
+}

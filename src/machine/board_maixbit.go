@@ -1,0 +1,72 @@
+// +build maixbit
+
+package machine
+
+// Pins on the MAix Bit.
+const (
+	D0  = P00 // JTAG_TCLK
+	D1  = P01 // JTAG_TDI
+	D2  = P02 // JTAG_TMS
+	D3  = P03 // JTAG_TDO
+	D4  = P04 // UARTHS_RX
+	D5  = P05 // UARTHS_TX
+	D6  = P06 // RESV0
+	D7  = P07 // RESV0
+	D8  = P08 // GPIO1
+	D9  = P09 // GPIO2
+	D10 = P10 // GPIO3
+	D11 = P11 // GPIO4
+	D12 = P12 // GPIO5
+	D13 = P13 // GPIO6
+	D14 = P14 // GPIO7
+	D15 = P15 // GPIO8
+	D16 = P16 // GPIOHS0
+	D17 = P17 // GPIOHS1
+	D18 = P18 // GPIOHS2
+	D19 = P19 // GPIOHS3
+	D20 = P20 // GPIOHS4
+	D21 = P21 // GPIOHS5
+	D22 = P22 // GPIOHS6
+	D23 = P23 // GPIOHS7
+	D24 = P24 // GPIOHS8
+	D25 = P25 // GPIOHS9
+	D26 = P26 // GPIOHS10 / SPI0_MISO
+	D27 = P27 // GPIOHS11 / SPI0_SCLK
+	D28 = P28 // GPIOHS12 / SPI0_MOSI
+	D29 = P29 // GPIOHS13
+	D30 = P30 // GPIOHS14
+	D31 = P31 // GPIOHS15
+	D32 = P32 // GPIOHS16
+	D33 = P33 // GPIOHS17
+	D34 = P34 // GPIOHS18
+	D35 = P35 // GPIOHS19
+)
+
+const (
+	LED       = LED1
+	LED1      = LED_RED
+	LED2      = LED_GREEN
+	LED3      = LED_BLUE
+	LED_RED   = D13
+	LED_GREEN = D12
+	LED_BLUE  = D14
+)
+
+// Default pins for UARTHS.
+const (
+	UART_TX_PIN = D5
+	UART_RX_PIN = D4
+)
+
+// SPI pins.
+const (
+	SPI0_SCK_PIN  = D27
+	SPI0_MOSI_PIN = D28
+	SPI0_MISO_PIN = D26
+)
+
+// I2C pins.
+const (
+	I2C0_SDA_PIN = D34
+	I2C0_SCL_PIN = D35
+)
