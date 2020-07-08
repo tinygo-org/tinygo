@@ -94,7 +94,7 @@ const (
 	PL4 = portL + 4
 	PL5 = portL + 5
 	PL6 = portL + 6
-	PL7 = portL + 7
+	PL7 = portE + 7
 )
 
 // getPortMask returns the PORTx register and mask for the pin.
