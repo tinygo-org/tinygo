@@ -2,7 +2,7 @@
 
 package runtime
 
-const GOARCH = "arm" // riscv pretends to be arm
+const GOARCH = "riscv"
 
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 32
