@@ -82,8 +82,11 @@ The result should not contain libclang or libLLVM.
 
 Now that we have a working static build, it's time to make a release tarball:
 
-    git submodule update --init
     make release
+
+If you did not clone the repository with the `--recursive` option, you will get errors until you initialize the project submodules:
+
+    git submodule update --init
 
 The release tarball is stored in build/release.tar.gz, and can be extracted with
 the following command (for example in ~/lib):
