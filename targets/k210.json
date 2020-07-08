@@ -1,5 +1,5 @@
 {
 	"inherits": ["riscv64"],
 	"features": ["+a", "+c", "+m", "+f", "+d"],
-	"build-tags": ["k210", "kendryte"]
+	"build-tags": ["k210", "kendryte", "tinygo.riscv.fp"]
 }

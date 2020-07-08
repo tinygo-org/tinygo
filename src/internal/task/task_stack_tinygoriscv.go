@@ -6,26 +6,6 @@ import "unsafe"
 
 const stackSize = 1024
 
-// calleeSavedRegs is the list of registers that must be saved and restored when
-// switching between tasks. Also see scheduler_riscv.S that relies on the
-// exact layout of this struct.
-type calleeSavedRegs struct {
-	s0  uintptr // x8 (fp)
-	s1  uintptr // x9
-	s2  uintptr // x18
-	s3  uintptr // x19
-	s4  uintptr // x20
-	s5  uintptr // x21
-	s6  uintptr // x22
-	s7  uintptr // x23
-	s8  uintptr // x24
-	s9  uintptr // x25
-	s10 uintptr // x26
-	s11 uintptr // x27
-
-	pc uintptr
-}
-
 // registers gets a pointer to the registers stored at the top of the stack.
 func (s *state) registers() *calleeSavedRegs {
 	return (*calleeSavedRegs)(unsafe.Pointer(s.sp))
@@ -49,7 +29,6 @@ func (s *state) archInit(stack []uintptr, fn uintptr, args unsafe.Pointer) {
 	// Store the initial sp for the startTask function (implemented in assembly).
 	s.sp = uintptr(unsafe.Pointer(&stack[uintptr(len(stack))-(unsafe.Sizeof(calleeSavedRegs{})/unsafe.Sizeof(uintptr(0)))]))
 
-	// Initialize the registers.
 	// These will be popped off of the stack on the first resume of the goroutine.
 	r := s.registers()
 

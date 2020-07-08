@@ -1,3 +1,11 @@
+#ifdef __riscv_flen
+#define NREG 25
+#define LFREG flw
+#define SFREG fsw
+#else
+#define NREG 13
+#endif
+
 #if __riscv_xlen==64
 #define REGSIZE 8
 #define SREG sd
@@ -87,20 +95,34 @@ tinygo_switchToTask:
     // a0 = sp uintptr
 
     // Push all the registers.
-    addi sp, sp, -64
-    sw ra,  60(sp)
-    sw s11, 56(sp)
-    sw s10, 52(sp)
-    sw s9,  48(sp)
-    sw s8,  44(sp)
-    sw s7,  40(sp)
-    sw s6,  36(sp)
-    sw s5,  32(sp)
-    sw s4,  28(sp)
-    sw s3,  24(sp)
-    sw s2,  20(sp)
-    sw s1,  16(sp)
-    sw s0,  12(sp)
+    addi sp, sp, -NREG*REGSIZE
+    SREG ra,  0*REGSIZE(sp)
+    SREG s11, 1*REGSIZE(sp)
+    SREG s10, 2*REGSIZE(sp)
+    SREG s9,  3*REGSIZE(sp)
+    SREG s8,  4*REGSIZE(sp)
+    SREG s7,  5*REGSIZE(sp)
+    SREG s6,  6*REGSIZE(sp)
+    SREG s5,  7*REGSIZE(sp)
+    SREG s4,  8*REGSIZE(sp)
+    SREG s3,  9*REGSIZE(sp)
+    SREG s2,  10*REGSIZE(sp)
+    SREG s1,  11*REGSIZE(sp)
+    SREG s0,  12*REGSIZE(sp)
+#ifdef __riscv_flen
+    SFREG   fs11, 13*REGSIZE(sp)
+    SFREG   fs10, 14*REGSIZE(sp)
+    SFREG   fs9,  15*REGSIZE(sp)
+    SFREG   fs8,  16*REGSIZE(sp)
+    SFREG   fs7,  17*REGSIZE(sp)
+    SFREG   fs6,  18*REGSIZE(sp)
+    SFREG   fs5,  19*REGSIZE(sp)
+    SFREG   fs4,  20*REGSIZE(sp)
+    SFREG   fs3,  21*REGSIZE(sp)
+    SFREG   fs2,  22*REGSIZE(sp)
+    SFREG   fs1,  23*REGSIZE(sp)
+    SFREG   fs0,  24*REGSIZE(sp)
+#endif
 
     // Store the old stack pointer in tp (thread pointer, otherwise unused in
     // TinyGo).
@@ -110,20 +132,37 @@ tinygo_switchToTask:
     mv sp,  a0
 
     // Pop all saved registers from this new stack.
-    lw ra,  48(sp)
-    lw s11, 44(sp)
-    lw s10, 40(sp)
-    lw s9,  36(sp)
-    lw s8,  32(sp)
-    lw s7,  28(sp)
-    lw s6,  24(sp)
-    lw s5,  20(sp)
-    lw s4,  16(sp)
-    lw s3,  12(sp)
-    lw s2,   8(sp)
-    lw s1,   4(sp)
-    lw s0,    (sp)
-    addi sp, sp, 48
+    LREG ra,  (NREG - 1)*REGSIZE(sp)
+
+    LREG s11, ((NREG - 1) - 1)*REGSIZE(sp)
+    LREG s10, ((NREG - 1) - 2)*REGSIZE(sp)
+    LREG s9,  ((NREG - 1) - 3)*REGSIZE(sp)
+    LREG s8,  ((NREG - 1) - 4)*REGSIZE(sp)
+    LREG s7,  ((NREG - 1) - 5)*REGSIZE(sp)
+    LREG s6,  ((NREG - 1) - 6)*REGSIZE(sp)
+    LREG s5,  ((NREG - 1) - 7)*REGSIZE(sp)
+    LREG s4,  ((NREG - 1) - 8)*REGSIZE(sp)
+    LREG s3,  ((NREG - 1) - 9)*REGSIZE(sp)
+    LREG s2,  ((NREG - 1) - 10)*REGSIZE(sp)
+    LREG s1,  ((NREG - 1) - 11)*REGSIZE(sp)
+    LREG s0,  ((NREG - 1) - 12)*REGSIZE(sp)
+
+#ifdef __riscv_flen
+    LFREG   fs11, ((NREG - 1) - 13)*REGSIZE(sp)
+    LFREG   fs10, ((NREG - 1) - 14)*REGSIZE(sp)
+    LFREG   fs9,  ((NREG - 1) - 15)*REGSIZE(sp)
+    LFREG   fs8,  ((NREG - 1) - 16)*REGSIZE(sp)
+    LFREG   fs7,  ((NREG - 1) - 17)*REGSIZE(sp)
+    LFREG   fs6,  ((NREG - 1) - 18)*REGSIZE(sp)
+    LFREG   fs5,  ((NREG - 1) - 19)*REGSIZE(sp)
+    LFREG   fs4,  ((NREG - 1) - 20)*REGSIZE(sp)
+    LFREG   fs3,  ((NREG - 1) - 21)*REGSIZE(sp)
+    LFREG   fs2,  ((NREG - 1) - 22)*REGSIZE(sp)
+    LFREG   fs1,  ((NREG - 1) - 23)*REGSIZE(sp)
+    LFREG   fs0,  ((NREG - 1) - 24)*REGSIZE(sp)
+#endif
+
+    addi sp, sp, (NREG - 1)*REGSIZE
 
     // Return into the task.
     ret
@@ -136,23 +175,40 @@ tinygo_switchToScheduler:
 
     // Currently on the task stack. Push all callee-saved registers on this
     // stack.
-    addi sp, sp, -48
-    sw ra,  48(sp)
-    sw s11, 44(sp)
-    sw s10, 40(sp)
-    sw s9,  36(sp)
-    sw s8,  32(sp)
-    sw s7,  28(sp)
-    sw s6,  24(sp)
-    sw s5,  20(sp)
-    sw s4,  16(sp)
-    sw s3,  12(sp)
-    sw s2,   8(sp)
-    sw s1,   4(sp)
-    sw s0,    (sp)
+    addi sp, sp, -(NREG - 1)*REGSIZE
+    SREG ra, (NREG - 1)*REGSIZE(sp)
+    
+    SREG s11, ((NREG - 1) - 1)*REGSIZE(sp)
+    SREG s10, ((NREG - 1) - 2)*REGSIZE(sp)
+    SREG s9,  ((NREG - 1) - 3)*REGSIZE(sp)
+    SREG s8,  ((NREG - 1) - 4)*REGSIZE(sp)
+    SREG s7,  ((NREG - 1) - 5)*REGSIZE(sp)
+    SREG s6,  ((NREG - 1) - 6)*REGSIZE(sp)
+    SREG s5,  ((NREG - 1) - 7)*REGSIZE(sp)
+    SREG s4,  ((NREG - 1) - 8)*REGSIZE(sp)
+    SREG s3,  ((NREG - 1) - 9)*REGSIZE(sp)
+    SREG s2,  ((NREG - 1) - 10)*REGSIZE(sp)
+    SREG s1,  ((NREG - 1) - 11)*REGSIZE(sp)
+    SREG s0,  ((NREG - 1) - 12)*REGSIZE(sp)
+
+
+#ifdef __riscv_flen
+    SFREG fs11, ((NREG - 1) - 13)*REGSIZE(sp)
+    SFREG fs10, ((NREG - 1) - 14)*REGSIZE(sp)
+    SFREG fs9,  ((NREG - 1) - 15)*REGSIZE(sp)
+    SFREG fs8,  ((NREG - 1) - 16)*REGSIZE(sp)
+    SFREG fs7,  ((NREG - 1) - 17)*REGSIZE(sp)
+    SFREG fs6,  ((NREG - 1) - 18)*REGSIZE(sp)
+    SFREG fs5,  ((NREG - 1) - 19)*REGSIZE(sp)
+    SFREG fs4,  ((NREG - 1) - 20)*REGSIZE(sp)
+    SFREG fs3,  ((NREG - 1) - 21)*REGSIZE(sp)
+    SFREG fs2,  ((NREG - 1) - 22)*REGSIZE(sp)
+    SFREG fs1,  ((NREG - 1) - 23)*REGSIZE(sp)
+    SFREG fs0,  ((NREG - 1) - 24)*REGSIZE(sp)
+#endif
 
     // Store the current stack pointer into a0 (&task.sp).
-    sw sp,    (a0)
+    SREG sp,    (a0)
 
     // Switch to the system stack pointer, which was saved in tp.
     // Also, clear the tp to make sure tinygo_getSystemStackPointer will work
@@ -161,20 +217,34 @@ tinygo_switchToScheduler:
     mv tp, zero
 
     // Pop all registers from the system stack.
-    lw ra,  60(sp)
-    lw s11, 56(sp)
-    lw s10, 52(sp)
-    lw s9,  48(sp)
-    lw s8,  44(sp)
-    lw s7,  40(sp)
-    lw s6,  36(sp)
-    lw s5,  32(sp)
-    lw s4,  28(sp)
-    lw s3,  24(sp)
-    lw s2,  20(sp)
-    lw s1,  16(sp)
-    lw s0,  12(sp)
-    addi sp, sp, 64
+    LREG ra,  0*REGSIZE(sp)
+    LREG s11, 1*REGSIZE(sp)
+    LREG s10, 2*REGSIZE(sp)
+    LREG s9,  3*REGSIZE(sp)
+    LREG s8,  4*REGSIZE(sp)
+    LREG s7,  5*REGSIZE(sp)
+    LREG s6,  6*REGSIZE(sp)
+    LREG s5,  7*REGSIZE(sp)
+    LREG s4,  8*REGSIZE(sp)
+    LREG s3,  9*REGSIZE(sp)
+    LREG s2,  10*REGSIZE(sp)
+    LREG s1,  11*REGSIZE(sp)
+    LREG s0,  12*REGSIZE(sp)
+#ifdef __riscv_flen
+    LFREG fs11, 13*REGSIZE(sp)
+    LFREG fs10, 14*REGSIZE(sp)
+    LFREG fs9,  15*REGSIZE(sp)
+    LFREG fs8,  16*REGSIZE(sp)
+    LFREG fs7,  17*REGSIZE(sp)
+    LFREG fs6,  18*REGSIZE(sp)
+    LFREG fs5,  19*REGSIZE(sp)
+    LFREG fs4,  20*REGSIZE(sp)
+    LFREG fs3,  21*REGSIZE(sp)
+    LFREG fs2,  22*REGSIZE(sp)
+    LFREG fs1,  23*REGSIZE(sp)
+    LFREG fs0,  24*REGSIZE(sp)
+#endif
+    addi sp, sp, NREG*REGSIZE
 
     // Return into the scheduler.
     ret
