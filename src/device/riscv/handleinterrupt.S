@@ -1,7 +1,5 @@
 #ifdef __riscv_flen
 #define NREG 48
-#define LFREG flw
-#define SFREG fsw
 #else
 #define NREG 16
 #endif
@@ -10,10 +8,18 @@
 #define REGSIZE 8
 #define SREG sd
 #define LREG ld
+#ifdef __riscv_flen
+#define LFREG fld
+#define SFREG fsd
+#endif
 #else
 #define REGSIZE 4
 #define SREG sw
 #define LREG lw
+#ifdef __riscv_flen
+#define LFREG flw
+#define SFREG fsw
+#endif
 #endif
 
 .section .text.handleInterruptASM
