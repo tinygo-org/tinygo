@@ -9,7 +9,6 @@
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
 	"cflags": [
-		"-g",
 		"--target=arm4-none-eabi",
 		"-mcpu=arm7tdmi",
 		"-Oz",
