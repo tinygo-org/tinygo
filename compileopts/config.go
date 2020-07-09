@@ -176,6 +176,9 @@ func (c *Config) CFlags() []string {
 		cflags = append(cflags, "-nostdlibinc", "-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "picolibc", "newlib", "libc", "include"))
 		cflags = append(cflags, "-I"+filepath.Join(root, "lib/picolibc-include"))
 	}
+	if c.Debug() {
+		cflags = append(cflags, "-g")
+	}
 	return cflags
 }
 
