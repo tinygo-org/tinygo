@@ -4,7 +4,7 @@ package task
 
 import "unsafe"
 
-const stackSize = 1024
+const stackSize = 1800
 
 // registers gets a pointer to the registers stored at the top of the stack.
 func (s *state) registers() *calleeSavedRegs {
@@ -27,7 +27,9 @@ func (s *state) archInit(stack []uintptr, fn uintptr, args unsafe.Pointer) {
 	*s.canaryPtr = stackCanary
 
 	// Store the initial sp for the startTask function (implemented in assembly).
-	s.sp = uintptr(unsafe.Pointer(&stack[uintptr(len(stack))-(unsafe.Sizeof(calleeSavedRegs{})/unsafe.Sizeof(uintptr(0)))]))
+	sp := uintptr(unsafe.Pointer(&stack[uintptr(len(stack))-(unsafe.Sizeof(calleeSavedRegs{})/unsafe.Sizeof(uintptr(0)))]))
+	// Make sure the stack pointer is 16 byte aligned.
+	s.sp = (sp - 15) &^ 15
 
 	// These will be popped off of the stack on the first resume of the goroutine.
 	r := s.registers()
