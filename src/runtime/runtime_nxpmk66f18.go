@@ -35,6 +35,8 @@ import (
 	"device/arm"
 	"device/nxp"
 	"machine"
+	"runtime/volatile"
+	"unsafe"
 )
 
 const (
@@ -56,6 +58,7 @@ func main() {
 	initSystem()
 	arm.Asm("CPSIE i")
 	initInternal()
+	initMemoryProtection()
 
 	run()
 	abort()
@@ -229,6 +232,47 @@ func initInternal() {
 
 func postinit() {}
 
+func initMemoryProtection() {
+	privFull := MemRegionPrivBusConfig{PrivExec: true, PrivWrite: true, UserRead: true, UserWrite: true, UserExec: true}
+	protectStart := heapEnd - 0x400
+	protectEnd := heapEnd
+
+	arm.Asm("dmb")
+
+	// full access before range
+	MemRegionConfig{
+		Start:    0x00000000,
+		End:      protectStart - 1,
+		Core:     privFull,
+		Debugger: privFull,
+		DMA:      privFull,
+	}.Apply(1)
+
+	// no access for protected range
+	MemRegionConfig{
+		Start: protectStart,
+		End:   protectEnd - 1,
+	}.Apply(2)
+
+	// full access after range
+	MemRegionConfig{
+		Start:    protectEnd,
+		End:      0xFFFFFFFF,
+		Core:     privFull,
+		Debugger: privFull,
+		DMA:      privFull,
+	}.Apply(3)
+
+	// no Core access for all memory
+	access := nxp.SYSMPU.RGDAAC0.Get()
+	access &^= nxp.SYSMPU_RGDAAC_M0UM_Msk | nxp.SYSMPU_RGDAAC_M0SM_Msk | nxp.SYSMPU_RGDAAC_M0PE_Msk
+	access |= MemRegionPrivBusConfig{}.Value()
+	nxp.SYSMPU.RGDAAC0.Set(access)
+
+	arm.Asm("dsb")
+	arm.Asm("isb")
+}
+
 func putchar(c byte) {
 	machine.PutcharUART(&machine.UART0, c)
 }
@@ -264,4 +308,91 @@ func abort() {
 		machine.PollUART(&machine.UART1)
 		machine.PollUART(&machine.UART2)
 	}
+}
+
+type MemRegionConfig struct {
+	Start, End                uintptr
+	Core, Debugger, DMA, ENET MemRegionPrivBusConfig
+	USB, SDHC, USBHS          MemRegionBusConfig
+}
+
+func (m MemRegionConfig) Apply(n int) {
+	if m.Start >= m.End {
+		panic("start not less than end")
+	} else if m.Start%32 != 0 {
+		panic("start not 32-byte aligned")
+	} else if (m.End+1)%32 != 0 {
+		panic("end not 32-byte aligned")
+	}
+
+	access :=
+		(m.Core.Value() << nxp.SYSMPU_RGDAAC_M0UM_Pos) |
+			(m.Debugger.Value() << nxp.SYSMPU_RGDAAC_M1UM_Pos) |
+			(m.DMA.Value() << nxp.SYSMPU_RGDAAC_M2UM_Pos) |
+			(m.ENET.Value() << nxp.SYSMPU_RGDAAC_M3UM_Pos) |
+			(m.USB.Value() << nxp.SYSMPU_RGDAAC_M4WE_Pos) |
+			(m.SDHC.Value() << nxp.SYSMPU_RGDAAC_M5WE_Pos) |
+			(m.USBHS.Value() << nxp.SYSMPU_RGDAAC_M6WE_Pos)
+
+	RGD := &(*[12]struct {
+		START, END, ACCESS, CONTROL volatile.Register32
+	})(unsafe.Pointer(&nxp.SYSMPU.RGD0_WORD0))[n]
+
+	RGD.START.Set(uint32(m.Start))
+	RGD.END.Set(uint32(m.End))
+	RGD.ACCESS.Set(access)
+	RGD.CONTROL.Set(nxp.SYSMPU_RGD_WORD3_VLD)
+}
+
+type MemRegionPrivBusConfig struct {
+	ProcIdent bool
+	PrivWrite bool
+	PrivExec  bool
+	UserRead  bool
+	UserWrite bool
+	UserExec  bool
+}
+
+func (m MemRegionPrivBusConfig) Value() uint32 {
+	var v uint32
+	if m.ProcIdent {
+		v |= nxp.SYSMPU_RGDAAC_M0PE
+	}
+
+	if !m.PrivWrite && !m.PrivExec {
+		v |= 3 << nxp.SYSMPU_RGDAAC_M0SM_Pos
+	} else if !m.PrivExec {
+		v |= 2 << nxp.SYSMPU_RGDAAC_M0SM_Pos
+	} else if !m.PrivWrite {
+		v |= 1 << nxp.SYSMPU_RGDAAC_M0SM_Pos
+	}
+
+	if m.UserRead {
+		v |= 1 << 2
+	}
+
+	if m.UserWrite {
+		v |= 1 << 1
+	}
+
+	if m.UserExec {
+		v |= 1 << 0
+	}
+
+	return v
+}
+
+type MemRegionBusConfig struct {
+	Read, Write bool
+}
+
+func (m MemRegionBusConfig) Value() uint32 {
+	var v uint32
+	if m.Write {
+		v |= 1 << 1
+	}
+	if m.Read {
+		v |= 1 << 0
+	}
+	return v
 }
