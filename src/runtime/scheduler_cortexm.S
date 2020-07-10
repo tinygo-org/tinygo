@@ -18,6 +18,7 @@ tinygo_startTask:
 
     // After return, exit this goroutine. This is a tail call.
     bl    	tinygo_pause
+.size tinygo_startTask, .-tinygo_startTask
 
 .section .text.tinygo_getSystemStackPointer
 .global  tinygo_getSystemStackPointer
@@ -44,6 +45,7 @@ tinygo_switchToScheduler:
     str r1, [r0]
 
     b tinygo_swapTask
+.size tinygo_switchToScheduler, .-tinygo_switchToScheduler
 
 .global  tinygo_switchToTask
 .type    tinygo_switchToTask, %function
@@ -56,6 +58,7 @@ tinygo_switchToTask:
 
     // Continue executing in the swapTask function, which swaps the stack
     // pointer.
+.size tinygo_switchToTask, .-tinygo_switchToTask
 
 .global  tinygo_swapTask
 .type    tinygo_swapTask, %function
@@ -111,6 +114,7 @@ tinygo_swapTask:
     mov r11, r3
     pop {pc}
     #endif
+.size tinygo_swapTask, .-tinygo_swapTask
 
 .section .text.tinygo_scanCurrentStack
 .global  tinygo_scanCurrentStack
@@ -135,3 +139,4 @@ tinygo_scanCurrentStack:
     // Restore stack state and return.
     add sp, #32
     pop {pc}
+.size tinygo_scanCurrentStack, .-tinygo_scanCurrentStack

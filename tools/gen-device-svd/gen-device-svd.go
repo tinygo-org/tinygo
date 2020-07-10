@@ -916,6 +916,7 @@ func writeAsm(outdir string, device *Device) error {
 Default_Handler:
     wfe
     b    Default_Handler
+.size Default_Handler, .-Default_Handler
 
 // Avoid the need for repeated .weak and .set instructions.
 .macro IRQ handler

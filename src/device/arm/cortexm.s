@@ -19,6 +19,7 @@ HardFault_Handler:
 
     // Continue handling this error in Go.
     bl handleHardFault
+.size HardFault_Handler, .-HardFault_Handler
 
 // This is a convenience function for semihosting support.
 // At some point, this should be replaced by inline assembly.

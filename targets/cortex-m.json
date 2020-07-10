@@ -18,6 +18,7 @@
 		"-ffunction-sections", "-fdata-sections"
 	],
 	"ldflags": [
+		"--emit-relocs",
 		"--gc-sections"
 	],
 	"extra-files": [

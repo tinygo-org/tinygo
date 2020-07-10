@@ -796,6 +796,7 @@ func main() {
 	tags := flag.String("tags", "", "a space-separated list of extra build tags")
 	target := flag.String("target", "", "LLVM target | .json file with TargetSpec")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
+	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "", "flash port")
@@ -835,6 +836,7 @@ func main() {
 		VerifyIR:      *verifyIR,
 		Debug:         !*nodebug,
 		PrintSizes:    *printSize,
+		PrintStacks:   *printStacks,
 		Tags:          *tags,
 		WasmAbi:       *wasmAbi,
 		Programmer:    *programmer,
