@@ -4,11 +4,13 @@
 package builder
 
 import (
+	"debug/elf"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
+	"github.com/tinygo-org/tinygo/stacksize"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
@@ -216,6 +219,11 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 			}
 		}
 
+		// Print goroutine stack sizes, as far as possible.
+		if config.Options.PrintStacks {
+			printStacks(mod, executable)
+		}
+
 		// Get an Intel .hex file or .bin file from the .elf file.
 		if outext == ".hex" || outext == ".bin" || outext == ".gba" {
 			tmppath = filepath.Join(dir, "main"+outext)
@@ -232,5 +240,91 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 			}
 		}
 		return action(tmppath)
+	}
+}
+
+// printStacks prints the maximum stack depth for functions that are started as
+// goroutines. Stack sizes cannot always be determined statically, in particular
+// recursive functions and functions that call interface methods or function
+// pointers may have an unknown stack depth (depending on what the optimizer
+// manages to optimize away).
+//
+// It might print something like the following:
+//
+//     function                         stack usage (in bytes)
+//     Reset_Handler                    316
+//     .Lexamples/blinky2.led1          92
+//     .Lruntime.run$1                  300
+func printStacks(mod llvm.Module, executable string) {
+	// Determine which functions call a function pointer.
+	var callsIndirectFunction []string
+	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				if inst.IsACallInst().IsNil() {
+					continue
+				}
+				if callee := inst.CalledValue(); callee.IsAFunction().IsNil() && callee.IsAInlineAsm().IsNil() {
+					callsIndirectFunction = append(callsIndirectFunction, fn.Name())
+				}
+			}
+		}
+	}
+
+	// Load the ELF binary.
+	f, err := elf.Open(executable)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "could not load executable for stack size analysis:", err)
+		return
+	}
+	defer f.Close()
+
+	// Determine the frame size of each function (if available) and the callgraph.
+	functions, err := stacksize.CallGraph(f, callsIndirectFunction)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "could not parse executable for stack size analysis:", err)
+		return
+	}
+
+	// Get a list of "go wrappers", small wrapper functions that decode
+	// parameters when starting a new goroutine.
+	var gowrappers []string
+	for name := range functions {
+		if strings.HasSuffix(name, "$gowrapper") {
+			gowrappers = append(gowrappers, name)
+		}
+	}
+	sort.Strings(gowrappers)
+
+	switch f.Machine {
+	case elf.EM_ARM:
+		// Add the reset handler, which runs startup code and is the
+		// interrupt/scheduler stack with -scheduler=tasks.
+		// Note that because interrupts happen on this stack, the stack needed
+		// by just the Reset_Handler is not enough. Stacks needed by interrupt
+		// handlers should also be taken into account.
+		gowrappers = append([]string{"Reset_Handler"}, gowrappers...)
+	}
+
+	// Print the sizes of all stacks.
+	fmt.Printf("%-32s %s\n", "function", "stack usage (in bytes)")
+	for _, name := range gowrappers {
+		for _, fn := range functions[name] {
+			stackSize, stackSizeType, missingStackSize := fn.StackSize()
+			strippedName := name
+			if strings.HasSuffix(name, "$gowrapper") {
+				strippedName = name[:len(name)-len("$gowrapper")]
+			}
+			switch stackSizeType {
+			case stacksize.Bounded:
+				fmt.Printf("%-32s %d\n", strippedName, stackSize)
+			case stacksize.Unknown:
+				fmt.Printf("%-32s unknown, %s does not have stack frame information\n", strippedName, missingStackSize)
+			case stacksize.Recursive:
+				fmt.Printf("%-32s recursive, %s may call itself\n", strippedName, missingStackSize)
+			case stacksize.IndirectCall:
+				fmt.Printf("%-32s unknown, %s calls a function pointer\n", strippedName, missingStackSize)
+			}
+		}
 	}
 }

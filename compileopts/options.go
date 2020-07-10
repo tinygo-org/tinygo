@@ -25,6 +25,7 @@ type Options struct {
 	VerifyIR      bool
 	Debug         bool
 	PrintSizes    string
+	PrintStacks   bool
 	CFlags        []string
 	LDFlags       []string
 	Tags          string
