@@ -79,7 +79,12 @@ func (c *Config) GOARCH() string {
 
 // BuildTags returns the complete list of build tags used during this build.
 func (c *Config) BuildTags() []string {
-	tags := append(c.Target.BuildTags, []string{"tinygo", "gc." + c.GC(), "scheduler." + c.Scheduler()}...)
+	gc := c.GC()
+	tags := append(c.Target.BuildTags, []string{"tinygo", "gc." + gc, "scheduler." + c.Scheduler()}...)
+	switch gc {
+	case "list", "blocks", "extalloc":
+		tags = append(tags, "gc.conservative")
+	}
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
@@ -96,7 +101,7 @@ func (c *Config) CgoEnabled() bool {
 }
 
 // GC returns the garbage collection strategy in use on this platform. Valid
-// values are "none", "leaking", "extalloc", and "conservative".
+// values are "none", "leaking", "list", "extalloc", and "blocks".
 func (c *Config) GC() string {
 	if c.Options.GC != "" {
 		return c.Options.GC
@@ -106,7 +111,7 @@ func (c *Config) GC() string {
 	}
 	for _, tag := range c.Target.BuildTags {
 		if tag == "baremetal" || tag == "wasm" {
-			return "conservative"
+			return "blocks"
 		}
 	}
 	return "extalloc"
@@ -116,7 +121,7 @@ func (c *Config) GC() string {
 // that can be traced by the garbage collector.
 func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
-	case "conservative", "extalloc":
+	case "list", "blocks", "extalloc":
 		for _, tag := range c.BuildTags() {
 			if tag == "wasm" {
 				return true

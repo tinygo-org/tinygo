@@ -3,7 +3,7 @@
 	"goos": "linux",
 	"goarch": "arm",
 	"compiler": "clang",
-	"gc": "conservative",
+	"gc": "blocks",
 	"scheduler": "tasks",
 	"linker": "ld.lld",
 	"rtlib": "compiler-rt",

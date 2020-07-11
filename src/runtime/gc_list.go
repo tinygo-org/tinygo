@@ -1,17 +1,20 @@
-// +build gc.conservative
-// +build avr
+// +build gc.list
 
 package runtime
 
+import (
+	"internal/task"
+	"runtime/interrupt"
+	"unsafe"
+)
+
 // This memory manager is partially inspired by the memory allocator included in avr-libc.
 // Unlike avr-libc malloc, this memory manager stores an allocation list instead of a free list.
-// This gives an overhead of 4 bytes/allocation (up from avr-libc's 2 bytes/allocation).
+// This gives an overhead of 2 pointers/allocation (up from avr-libc's 1 pointer-width/allocation).
 // The allocation list is stored in ascending address order.
 // The set of free spans is implicitly derived from the gaps between allocations.
 // This allocator has an effective allocation complexity of O(n) and worst-case GC complexity of O(n^2).
-// Due to architectural quirks of AVR, as well as tiny heaps, this should almost always be faster than the standard conservative collector.
-
-import "unsafe"
+// Due to architectural quirks, as well as tiny heaps, this should almost always be faster than the standard conservative collector on AVR.
 
 // isInHeap checks if an address is inside the heap.
 func isInHeap(addr uintptr) bool {
@@ -73,25 +76,28 @@ func markAddr(addr uintptr) {
 	}
 }
 
-// markMem scans a memory region for pointers and marks anything that is pointed to.
-func markMem(start, end uintptr) {
-	if start >= end {
-		return
-	}
-	prevByte := *(*byte)(unsafe.Pointer(start))
-	for ; start != end; start++ {
-		b := *(*byte)(unsafe.Pointer(start))
-		addr := (uintptr(b) << 8) | uintptr(prevByte)
-		markAddr(addr)
-		prevByte = b
-	}
-}
-
 // GC runs a garbage collection cycle.
 func GC() {
 	// Mark phase: mark all reachable objects, recursively.
 	markGlobals()
 	markStack()
+	var markedTaskQueue task.Queue
+runqueueScan:
+	if baremetal && hasScheduler {
+		// Channel operations in interrupts may move task pointers around while we are marking.
+		// Therefore we need to scan the runqueue seperately.
+		for !runqueue.Empty() {
+			// Pop the next task off of the runqueue.
+			t := runqueue.Pop()
+
+			// Mark the task if it has not already been marked.
+			markRoot(uintptr(unsafe.Pointer(&runqueue)), uintptr(unsafe.Pointer(t)))
+
+			// Push the task onto our temporary queue.
+			markedTaskQueue.Push(t)
+		}
+	}
+
 	var keep *allocNode
 	for scanList != nil {
 		// Pop a node off of the scan list.
@@ -115,6 +121,18 @@ func GC() {
 		} else {
 			prev.next, node.next = node, keepNode
 		}
+	}
+
+	if baremetal && hasScheduler {
+		// Restore the runqueue.
+		i := interrupt.Disable()
+		if !runqueue.Empty() {
+			// Something new came in while finishing the mark.
+			interrupt.Restore(i)
+			goto runqueueScan
+		}
+		runqueue = markedTaskQueue
+		interrupt.Restore(i)
 	}
 
 	// Sweep phase: replace the heap.
@@ -172,7 +190,7 @@ searchLoop:
 			// That was the last free region.
 			break searchLoop
 		}
-		start = uintptr(unsafe.Pointer(&node.base)) + node.len
+		start = align(uintptr(unsafe.Pointer(&node.base)) + node.len)
 		dst = &node.next
 	}
 

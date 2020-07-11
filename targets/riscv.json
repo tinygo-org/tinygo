@@ -2,7 +2,7 @@
 	"goos": "linux",
 	"goarch": "arm",
 	"build-tags": ["tinygo.riscv", "baremetal", "linux", "arm"],
-	"gc": "conservative",
+	"gc": "blocks",
 	"compiler": "clang",
 	"linker": "ld.lld",
 	"rtlib": "compiler-rt",

@@ -1,5 +1,4 @@
-// +build gc.conservative
-// +build !avr
+// +build gc.blocks
 
 package runtime
 

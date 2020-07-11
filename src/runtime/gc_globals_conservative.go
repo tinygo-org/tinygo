@@ -1,4 +1,4 @@
-// +build gc.conservative gc.extalloc
+// +build gc.conservative
 // +build baremetal
 
 package runtime

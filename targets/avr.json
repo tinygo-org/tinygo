@@ -4,7 +4,7 @@
 	"goos": "linux",
 	"goarch": "arm",
 	"compiler": "avr-gcc",
-	"gc": "conservative",
+	"gc": "list",
 	"linker": "avr-gcc",
 	"scheduler": "none",
 	"default-stack-size": 256,
