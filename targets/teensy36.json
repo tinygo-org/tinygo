@@ -1,6 +1,5 @@
 {
-	"inherits": ["cortex-m"],
-	"llvm-target": "armv7em-none-eabi",
+	"inherits": ["cortex-m4"],
 	"cpu": "cortex-m4",
 	"build-tags": ["teensy36", "teensy", "mk66f18", "nxp"],
 	"cflags": [

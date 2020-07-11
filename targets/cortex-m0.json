@@ -1,0 +1,8 @@
+{
+	"inherits": ["cortex-m"],
+	"build-tags": ["cortexm0"],
+	"llvm-target": "armv6m-none-eabi",
+	"cflags": [
+		"--target=armv6m-none-eabi"
+	]
+}

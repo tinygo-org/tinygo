@@ -1,11 +1,6 @@
 {
-  "inherits": ["cortex-m"],
-  "llvm-target": "armv7m-none-eabi",
+  "inherits": ["cortex-m3"],
   "build-tags": ["nucleof103rb", "stm32f103xx", "stm32"],
-  "cflags": [
-    "--target=armv7m-none-eabi",
-    "-Qunused-arguments"
-  ],
   "linkerscript": "targets/stm32f103rb.ld",
   "extra-files": [
     "src/device/stm32/stm32f103xx.s"
