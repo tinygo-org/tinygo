@@ -18,6 +18,9 @@ var globalsStartSymbol [0]byte
 //go:extern _globals_end
 var globalsEndSymbol [0]byte
 
+//go:extern _stack_size
+var stackSizeSymbol [0]byte
+
 //go:extern _stack_top
 var stackTopSymbol [0]byte
 
@@ -26,6 +29,7 @@ var (
 	heapEnd      = uintptr(unsafe.Pointer(&heapEndSymbol))
 	globalsStart = uintptr(unsafe.Pointer(&globalsStartSymbol))
 	globalsEnd   = uintptr(unsafe.Pointer(&globalsEndSymbol))
+	stackSize    = uintptr(unsafe.Pointer(&stackSizeSymbol))
 	stackTop     = uintptr(unsafe.Pointer(&stackTopSymbol))
 )
 

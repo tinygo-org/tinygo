@@ -1,4 +1,4 @@
-// +build cortexm,!nxp
+// +build cortexm0 cortexm0p
 
 package runtime
 
@@ -17,9 +17,13 @@ import (
 // https://community.arm.com/developer/ip-products/system/f/embedded-forum/3257/debugging-a-cortex-m0-hard-fault
 // https://blog.feabhas.com/2013/02/developing-a-generic-hard-fault-handler-for-arm-cortex-m3cortex-m4/
 //export handleHardFault
-func handleHardFault(sp *interruptStack) {
+func handleHardFault(sp, msp *interruptStack, excReturn uintptr) {
+	if excReturn&(1<<2) == 0 {
+		sp = msp
+	}
+
 	print("fatal error: ")
-	if uintptr(unsafe.Pointer(sp)) < 0x20000000 {
+	if uintptr(unsafe.Pointer(sp)) < stackTop-stackSize {
 		print("stack overflow")
 	} else {
 		// TODO: try to find the cause of the hard fault. Especially on
