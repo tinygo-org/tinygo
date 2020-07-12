@@ -158,7 +158,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 	// After TinyGo-specific transforms have finished, undo exporting these functions.
 	for _, name := range getFunctionsUsedInTransforms(config) {
 		fn := mod.NamedFunction(name)
-		if fn.IsNil() {
+		if fn.IsNil() || fn.IsDeclaration() {
 			continue
 		}
 		fn.SetLinkage(llvm.InternalLinkage)
