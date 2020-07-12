@@ -23,8 +23,8 @@ func TestChan(t *testing.T) {
 		chromedp.Navigate("http://localhost:8826/run?file=chan.wasm"),
 		waitLog(`1
 2
-4
 3
+4
 true`),
 	)
 	if err != nil {
