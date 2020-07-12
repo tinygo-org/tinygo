@@ -122,6 +122,8 @@ func (e *evalPackage) hasSideEffects(fn llvm.Value) (*sideEffectResult, *Error) 
 					// External function call. Assume only limited side effects
 					// (no affected globals, etc.).
 					switch child.Name() {
+					case "runtime.alloc":
+						continue
 					case "runtime.typeAssert":
 						continue // implemented in interp
 					case "runtime.interfaceImplements":
