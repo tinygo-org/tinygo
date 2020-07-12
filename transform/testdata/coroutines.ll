@@ -14,6 +14,7 @@ declare void @runtime.free(i8*, i8*, i8*)
 
 declare %"internal/task.Task"* @"internal/task.Current"(i8*, i8*)
 
+declare void @"(*internal/task.Task).finish"(%"internal/task.Task"*, i8*, i8*)
 declare i8* @"(*internal/task.Task).setState"(%"internal/task.Task"*, i8*, i8*, i8*)
 declare void @"(*internal/task.Task).setReturnPtr"(%"internal/task.Task"*, i8*, i8*, i8*)
 declare i8* @"(*internal/task.Task).getReturnPtr"(%"internal/task.Task"*, i8*, i8*)

@@ -207,6 +207,7 @@ var coroFunctionsUsedInTransforms = []string{
 	"internal/task.fake",
 	"internal/task.Current",
 	"internal/task.createTask",
+	"(*internal/task.Task).finish",
 	"(*internal/task.Task).setState",
 	"(*internal/task.Task).returnTo",
 	"(*internal/task.Task).returnCurrent",

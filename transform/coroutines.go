@@ -155,7 +155,7 @@ type coroutineLoweringPass struct {
 	alloc, free llvm.Value
 
 	// coroutine intrinsics
-	start, pause, current                                   llvm.Value
+	start, finish, pause, current                           llvm.Value
 	setState, setRetPtr, getRetPtr, returnTo, returnCurrent llvm.Value
 	createTask                                              llvm.Value
 
@@ -264,6 +264,10 @@ func (c *coroutineLoweringPass) load() error {
 	c.start = c.mod.NamedFunction("internal/task.start")
 	if c.start.IsNil() {
 		return ErrMissingIntrinsic{"internal/task.start"}
+	}
+	c.finish = c.mod.NamedFunction("(*internal/task.Task).finish")
+	if c.finish.IsNil() {
+		return ErrMissingIntrinsic{"(*internal/task.Task).finish"}
 	}
 	c.current = c.mod.NamedFunction("internal/task.Current")
 	if c.current.IsNil() {
@@ -946,6 +950,9 @@ func (c *coroutineLoweringPass) lowerStart(start llvm.Value) {
 
 	// Generate call to function.
 	c.builder.CreateCall(fn, params, "")
+
+	// Generate call to finish.
+	c.builder.CreateCall(c.finish, []llvm.Value{task, llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, "")
 
 	// Erase start call.
 	start.EraseFromParentAsInstruction()

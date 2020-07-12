@@ -13,33 +13,46 @@ type rawState uint8
 //export llvm.coro.resume
 func (s *rawState) resume()
 
-type state struct{ *rawState }
+type state struct {
+	*rawState
+
+	// retcon is set to true when a call returns and awakens it caller.
+	retcon bool
+}
 
 //export llvm.coro.noop
 func noopState() *rawState
 
 // Resume the task until it pauses or completes.
 func (t *Task) Resume() {
-	t.state.resume()
+	t.state.retcon = true
+	t.finish()
+}
+
+func (t *Task) finish() {
+	for t.state.retcon {
+		t.state.retcon = false
+		t.state.rawState.resume()
+	}
 }
 
 // setState is used by the compiler to set the state of the function at the beginning of a function call.
 // Returns the state of the caller.
 func (t *Task) setState(s *rawState) *rawState {
-	caller := t.state
-	t.state = state{s}
-	return caller.rawState
+	caller := t.state.rawState
+	t.state.rawState = s
+	return caller
 }
 
 // returnTo is used by the compiler to return to the state of the caller.
 func (t *Task) returnTo(parent *rawState) {
-	t.state = state{parent}
+	t.state.rawState = parent
 	t.returnCurrent()
 }
 
 // returnCurrent is used by the compiler to return to the state of the caller in a case where the state is not replaced.
 func (t *Task) returnCurrent() {
-	scheduleTask(t)
+	t.state.retcon = true
 }
 
 //go:linkname scheduleTask runtime.runqueuePushBack
@@ -60,7 +73,7 @@ func (t *Task) getReturnPtr() unsafe.Pointer {
 // createTask returns a new task struct initialized with a no-op state.
 func createTask() *Task {
 	return &Task{
-		state: state{noopState()},
+		state: state{noopState(), false},
 	}
 }
 
@@ -80,6 +93,7 @@ func Pause()
 type taskHolder interface {
 	setState(*rawState) *rawState
 	returnTo(*rawState)
+	finish()
 	returnCurrent()
 	setReturnPtr(unsafe.Pointer)
 	getReturnPtr() unsafe.Pointer

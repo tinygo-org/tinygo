@@ -16,6 +16,8 @@ declare void @runtime.free(i8*, i8*, i8*)
 
 declare %"internal/task.Task"* @"internal/task.Current"(i8*, i8*)
 
+declare void @"(*internal/task.Task).finish"(%"internal/task.Task"*, i8*, i8*)
+
 declare i8* @"(*internal/task.Task).setState"(%"internal/task.Task"*, i8*, i8*, i8*)
 
 declare void @"(*internal/task.Task).setReturnPtr"(%"internal/task.Task"*, i8*, i8*, i8*)
@@ -151,6 +153,7 @@ entry:
   %start.task = call %"internal/task.Task"* @"internal/task.createTask"(i8* undef, i8* undef)
   %start.task.bitcast = bitcast %"internal/task.Task"* %start.task to i8*
   call void @sleepGoroutine(i8* undef, i8* %start.task.bitcast)
+  call void @"(*internal/task.Task).finish"(%"internal/task.Task"* %start.task, i8* undef, i8* undef)
   call void @sleep(i64 2000000, i8* undef, i8* %parentHandle)
   ret void
 }
@@ -160,6 +163,7 @@ entry:
   %start.task = call %"internal/task.Task"* @"internal/task.createTask"(i8* undef, i8* undef)
   %start.task.bitcast = bitcast %"internal/task.Task"* %start.task to i8*
   call void @progMain(i8* undef, i8* %start.task.bitcast)
+  call void @"(*internal/task.Task).finish"(%"internal/task.Task"* %start.task, i8* undef, i8* undef)
   call void @runtime.scheduler(i8* undef, i8* null)
   ret void
 }
