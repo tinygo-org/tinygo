@@ -264,37 +264,37 @@ func (p Pin) setPMux(val uint8) {
 	case 15:
 		sam.PORT.PMUX0_15.Set(val)
 	case 16:
-		sam.PORT.PMUX1_0.Set(sam.PORT.PMUX1_0.Get()&^(0xff<<0) | (uint32(val) << 0))
+		sam.PORT.PMUX1_0.ReplaceBits(uint32(val), 0xff, 0)
 	case 17:
-		sam.PORT.PMUX1_0.Set(sam.PORT.PMUX1_0.Get()&^(0xff<<8) | (uint32(val) << 8))
+		sam.PORT.PMUX1_0.ReplaceBits(uint32(val), 0xff, 8)
 	case 18:
-		sam.PORT.PMUX1_0.Set(sam.PORT.PMUX1_0.Get()&^(0xff<<16) | (uint32(val) << 16))
+		sam.PORT.PMUX1_0.ReplaceBits(uint32(val), 0xff, 16)
 	case 19:
-		sam.PORT.PMUX1_0.Set(sam.PORT.PMUX1_0.Get()&^(0xff<<24) | (uint32(val) << 24))
+		sam.PORT.PMUX1_0.ReplaceBits(uint32(val), 0xff, 24)
 	case 20:
-		sam.PORT.PMUX1_4.Set(sam.PORT.PMUX1_4.Get()&^(0xff<<0) | (uint32(val) << 0))
+		sam.PORT.PMUX1_4.ReplaceBits(uint32(val), 0xff, 0)
 	case 21:
-		sam.PORT.PMUX1_4.Set(sam.PORT.PMUX1_4.Get()&^(0xff<<8) | (uint32(val) << 8))
+		sam.PORT.PMUX1_4.ReplaceBits(uint32(val), 0xff, 8)
 	case 22:
-		sam.PORT.PMUX1_4.Set(sam.PORT.PMUX1_4.Get()&^(0xff<<16) | (uint32(val) << 16))
+		sam.PORT.PMUX1_4.ReplaceBits(uint32(val), 0xff, 16)
 	case 23:
-		sam.PORT.PMUX1_4.Set(sam.PORT.PMUX1_4.Get()&^(0xff<<24) | (uint32(val) << 24))
+		sam.PORT.PMUX1_4.ReplaceBits(uint32(val), 0xff, 24)
 	case 24:
-		sam.PORT.PMUX1_8.Set(sam.PORT.PMUX1_8.Get()&^(0xff<<0) | (uint32(val) << 0))
+		sam.PORT.PMUX1_8.ReplaceBits(uint32(val), 0xff, 0)
 	case 25:
-		sam.PORT.PMUX1_8.Set(sam.PORT.PMUX1_8.Get()&^(0xff<<8) | (uint32(val) << 8))
+		sam.PORT.PMUX1_8.ReplaceBits(uint32(val), 0xff, 8)
 	case 26:
-		sam.PORT.PMUX1_8.Set(sam.PORT.PMUX1_8.Get()&^(0xff<<16) | (uint32(val) << 16))
+		sam.PORT.PMUX1_8.ReplaceBits(uint32(val), 0xff, 16)
 	case 27:
-		sam.PORT.PMUX1_8.Set(sam.PORT.PMUX1_8.Get()&^(0xff<<24) | (uint32(val) << 24))
+		sam.PORT.PMUX1_8.ReplaceBits(uint32(val), 0xff, 24)
 	case 28:
-		sam.PORT.PMUX1_12.Set(sam.PORT.PMUX1_12.Get()&^(0xff<<0) | (uint32(val) << 0))
+		sam.PORT.PMUX1_12.ReplaceBits(uint32(val), 0xff, 0)
 	case 29:
-		sam.PORT.PMUX1_12.Set(sam.PORT.PMUX1_12.Get()&^(0xff<<8) | (uint32(val) << 8))
+		sam.PORT.PMUX1_12.ReplaceBits(uint32(val), 0xff, 8)
 	case 30:
-		sam.PORT.PMUX1_12.Set(sam.PORT.PMUX1_12.Get()&^(0xff<<16) | (uint32(val) << 16))
+		sam.PORT.PMUX1_12.ReplaceBits(uint32(val), 0xff, 16)
 	case 31:
-		sam.PORT.PMUX1_12.Set(sam.PORT.PMUX1_12.Get()&^(0xff<<24) | (uint32(val) << 24))
+		sam.PORT.PMUX1_12.ReplaceBits(uint32(val), 0xff, 24)
 	}
 }
 
@@ -502,68 +502,68 @@ func (p Pin) setPinCfg(val uint8) {
 	case 31:
 		sam.PORT.PINCFG0_31.Set(val)
 	case 32: // PB00
-		sam.PORT.PINCFG1_0.Set(sam.PORT.PINCFG1_0.Get()&^(0xff<<0) | (uint32(val) << 0))
+		sam.PORT.PINCFG1_0.ReplaceBits(uint32(val), 0xff, 0)
 	case 33: // PB01
-		sam.PORT.PINCFG1_0.Set(sam.PORT.PINCFG1_0.Get()&^(0xff<<8) | (uint32(val) << 8))
+		sam.PORT.PINCFG1_0.ReplaceBits(uint32(val), 0xff, 8)
 	case 34: // PB02
-		sam.PORT.PINCFG1_0.Set(sam.PORT.PINCFG1_0.Get()&^(0xff<<16) | (uint32(val) << 16))
+		sam.PORT.PINCFG1_0.ReplaceBits(uint32(val), 0xff, 16)
 	case 35: // PB03
-		sam.PORT.PINCFG1_0.Set(sam.PORT.PINCFG1_0.Get()&^(0xff<<24) | (uint32(val) << 24))
+		sam.PORT.PINCFG1_0.ReplaceBits(uint32(val), 0xff, 24)
 	case 36: // PB04
-		sam.PORT.PINCFG1_4.Set(sam.PORT.PINCFG1_4.Get()&^(0xff<<0) | (uint32(val) << 0))
+		sam.PORT.PINCFG1_4.ReplaceBits(uint32(val), 0xff, 0)
 	case 37: // PB05
-		sam.PORT.PINCFG1_4.Set(sam.PORT.PINCFG1_4.Get()&^(0xff<<8) | (uint32(val) << 8))
+		sam.PORT.PINCFG1_4.ReplaceBits(uint32(val), 0xff, 8)
 	case 38: // PB06
-		sam.PORT.PINCFG1_4.Set(sam.PORT.PINCFG1_4.Get()&^(0xff<<16) | (uint32(val) << 16))
+		sam.PORT.PINCFG1_4.ReplaceBits(uint32(val), 0xff, 16)
 	case 39: // PB07
-		sam.PORT.PINCFG1_4.Set(sam.PORT.PINCFG1_4.Get()&^(0xff<<24) | (uint32(val) << 24))
+		sam.PORT.PINCFG1_4.ReplaceBits(uint32(val), 0xff, 24)
 	case 40: // PB08
-		sam.PORT.PINCFG1_8.Set(sam.PORT.PINCFG1_8.Get()&^(0xff<<0) | (uint32(val) << 0))
+		sam.PORT.PINCFG1_8.ReplaceBits(uint32(val), 0xff, 0)
 	case 41: // PB09
-		sam.PORT.PINCFG1_8.Set(sam.PORT.PINCFG1_8.Get()&^(0xff<<8) | (uint32(val) << 8))
+		sam.PORT.PINCFG1_8.ReplaceBits(uint32(val), 0xff, 8)
 	case 42: // PB10
-		sam.PORT.PINCFG1_8.Set(sam.PORT.PINCFG1_8.Get()&^(0xff<<16) | (uint32(val) << 16))
+		sam.PORT.PINCFG1_8.ReplaceBits(uint32(val), 0xff, 16)
 	case 43: // PB11
-		sam.PORT.PINCFG1_8.Set(sam.PORT.PINCFG1_8.Get()&^(0xff<<24) | (uint32(val) << 24))
+		sam.PORT.PINCFG1_8.ReplaceBits(uint32(val), 0xff, 24)
 	case 44: // PB12
-		sam.PORT.PINCFG1_12.Set(sam.PORT.PINCFG1_12.Get()&^(0xff<<0) | (uint32(val) << 0))
+		sam.PORT.PINCFG1_12.ReplaceBits(uint32(val), 0xff, 0)
 	case 45: // PB13
-		sam.PORT.PINCFG1_12.Set(sam.PORT.PINCFG1_12.Get()&^(0xff<<8) | (uint32(val) << 8))
+		sam.PORT.PINCFG1_12.ReplaceBits(uint32(val), 0xff, 8)
 	case 46: // PB14
-		sam.PORT.PINCFG1_12.Set(sam.PORT.PINCFG1_12.Get()&^(0xff<<16) | (uint32(val) << 16))
+		sam.PORT.PINCFG1_12.ReplaceBits(uint32(val), 0xff, 16)
 	case 47: // PB15
-		sam.PORT.PINCFG1_12.Set(sam.PORT.PINCFG1_12.Get()&^(0xff<<24) | (uint32(val) << 24))
+		sam.PORT.PINCFG1_12.ReplaceBits(uint32(val), 0xff, 24)
 	case 48: // PB16
-		sam.PORT.PINCFG1_16.Set(sam.PORT.PINCFG1_16.Get()&^(0xff<<0) | (uint32(val) << 0))
+		sam.PORT.PINCFG1_16.ReplaceBits(uint32(val), 0xff, 0)
 	case 49: // PB17
-		sam.PORT.PINCFG1_16.Set(sam.PORT.PINCFG1_16.Get()&^(0xff<<8) | (uint32(val) << 8))
+		sam.PORT.PINCFG1_16.ReplaceBits(uint32(val), 0xff, 8)
 	case 50: // PB18
-		sam.PORT.PINCFG1_16.Set(sam.PORT.PINCFG1_16.Get()&^(0xff<<16) | (uint32(val) << 16))
+		sam.PORT.PINCFG1_16.ReplaceBits(uint32(val), 0xff, 16)
 	case 51: // PB19
-		sam.PORT.PINCFG1_16.Set(sam.PORT.PINCFG1_16.Get()&^(0xff<<24) | (uint32(val) << 24))
+		sam.PORT.PINCFG1_16.ReplaceBits(uint32(val), 0xff, 24)
 	case 52: // PB20
-		sam.PORT.PINCFG1_20.Set(sam.PORT.PINCFG1_20.Get()&^(0xff<<0) | (uint32(val) << 0))
+		sam.PORT.PINCFG1_20.ReplaceBits(uint32(val), 0xff, 0)
 	case 53: // PB21
-		sam.PORT.PINCFG1_20.Set(sam.PORT.PINCFG1_20.Get()&^(0xff<<8) | (uint32(val) << 8))
+		sam.PORT.PINCFG1_20.ReplaceBits(uint32(val), 0xff, 8)
 	case 54: // PB22
-		sam.PORT.PINCFG1_20.Set(sam.PORT.PINCFG1_20.Get()&^(0xff<<16) | (uint32(val) << 16))
+		sam.PORT.PINCFG1_20.ReplaceBits(uint32(val), 0xff, 16)
 	case 55: // PB23
-		sam.PORT.PINCFG1_20.Set(sam.PORT.PINCFG1_20.Get()&^(0xff<<24) | (uint32(val) << 24))
+		sam.PORT.PINCFG1_20.ReplaceBits(uint32(val), 0xff, 24)
 	case 56: // PB24
-		sam.PORT.PINCFG1_24.Set(sam.PORT.PINCFG1_24.Get()&^(0xff<<0) | (uint32(val) << 0))
+		sam.PORT.PINCFG1_24.ReplaceBits(uint32(val), 0xff, 0)
 	case 57: // PB25
-		sam.PORT.PINCFG1_24.Set(sam.PORT.PINCFG1_24.Get()&^(0xff<<8) | (uint32(val) << 8))
+		sam.PORT.PINCFG1_24.ReplaceBits(uint32(val), 0xff, 8)
 	case 58: // PB26
-		sam.PORT.PINCFG1_24.Set(sam.PORT.PINCFG1_24.Get()&^(0xff<<16) | (uint32(val) << 16))
+		sam.PORT.PINCFG1_24.ReplaceBits(uint32(val), 0xff, 16)
 	case 59: // PB27
-		sam.PORT.PINCFG1_24.Set(sam.PORT.PINCFG1_24.Get()&^(0xff<<24) | (uint32(val) << 24))
+		sam.PORT.PINCFG1_24.ReplaceBits(uint32(val), 0xff, 24)
 	case 60: // PB28
-		sam.PORT.PINCFG1_28.Set(sam.PORT.PINCFG1_28.Get()&^(0xff<<0) | (uint32(val) << 0))
+		sam.PORT.PINCFG1_28.ReplaceBits(uint32(val), 0xff, 0)
 	case 61: // PB29
-		sam.PORT.PINCFG1_28.Set(sam.PORT.PINCFG1_28.Get()&^(0xff<<8) | (uint32(val) << 8))
+		sam.PORT.PINCFG1_28.ReplaceBits(uint32(val), 0xff, 8)
 	case 62: // PB30
-		sam.PORT.PINCFG1_28.Set(sam.PORT.PINCFG1_28.Get()&^(0xff<<16) | (uint32(val) << 16))
+		sam.PORT.PINCFG1_28.ReplaceBits(uint32(val), 0xff, 16)
 	case 63: // PB31
-		sam.PORT.PINCFG1_28.Set(sam.PORT.PINCFG1_28.Get()&^(0xff<<24) | (uint32(val) << 24))
+		sam.PORT.PINCFG1_28.ReplaceBits(uint32(val), 0xff, 24)
 	}
 }
