@@ -240,7 +240,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 		addr = &sam.EIC.CONFIG1
 	}
 	pos := (extint % 8) * 4 // bit position in register
-	addr.Set((addr.Get() &^ (0xf << pos)) | uint32(change)<<pos)
+	addr.ReplaceBits(uint32(change), 0xf, pos)
 
 	// Enable external interrupt for this pin.
 	sam.EIC.INTENSET.Set(1 << extint)
