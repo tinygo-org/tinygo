@@ -67,6 +67,16 @@ func (r *Register8) ReplaceBits(value uint8, mask uint8, pos uint8) {
 	StoreUint8(&r.Reg, LoadUint8(&r.Reg)&^(mask<<pos)|value<<pos)
 }
 
+// GetBits is a helper to simplify reading multiple bits at a specific offset.
+// It is the volatile equivalent of:
+//
+//     (r.Reg >> pos) & mask
+//
+// go:inline
+func (r *Register8) GetBits(mask uint8, pos uint8) uint8 {
+	return (LoadUint8(&r.Reg) >> pos) & mask
+}
+
 type Register16 struct {
 	Reg uint16
 }
@@ -127,6 +137,16 @@ func (r *Register16) HasBits(value uint16) bool {
 // go:inline
 func (r *Register16) ReplaceBits(value uint16, mask uint16, pos uint8) {
 	StoreUint16(&r.Reg, LoadUint16(&r.Reg)&^(mask<<pos)|value<<pos)
+}
+
+// GetBits is a helper to simplify reading multiple bits at a specific offset.
+// It is the volatile equivalent of:
+//
+//     (r.Reg >> pos) & mask
+//
+// go:inline
+func (r *Register16) GetBits(mask uint16, pos uint8) uint16 {
+	return (LoadUint16(&r.Reg) >> pos) & mask
 }
 
 type Register32 struct {
@@ -191,6 +211,16 @@ func (r *Register32) ReplaceBits(value uint32, mask uint32, pos uint8) {
 	StoreUint32(&r.Reg, LoadUint32(&r.Reg)&^(mask<<pos)|value<<pos)
 }
 
+// GetBits is a helper to simplify reading multiple bits at a specific offset.
+// It is the volatile equivalent of:
+//
+//     (r.Reg >> pos) & mask
+//
+// go:inline
+func (r *Register32) GetBits(mask uint32, pos uint8) uint32 {
+	return (LoadUint32(&r.Reg) >> pos) & mask
+}
+
 type Register64 struct {
 	Reg uint64
 }
@@ -251,4 +281,14 @@ func (r *Register64) HasBits(value uint64) bool {
 // go:inline
 func (r *Register64) ReplaceBits(value uint64, mask uint64, pos uint8) {
 	StoreUint64(&r.Reg, LoadUint64(&r.Reg)&^(mask<<pos)|value<<pos)
+}
+
+// GetBits is a helper to simplify reading multiple bits at a specific offset.
+// It is the volatile equivalent of:
+//
+//     (r.Reg >> pos) & mask
+//
+// go:inline
+func (r *Register64) GetBits(mask uint64, pos uint8) uint64 {
+	return (LoadUint64(&r.Reg) >> pos) & mask
 }
