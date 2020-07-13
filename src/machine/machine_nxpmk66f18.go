@@ -187,17 +187,18 @@ func (p Pin) reg() (*nxp.GPIO_Type, *volatile.Register32, uint8) {
 	var gpio *nxp.GPIO_Type
 	var pcr *nxp.PORT_Type
 
-	if p < 32 {
+	switch p / 32 {
+	case 0:
 		gpio, pcr = nxp.GPIOA, nxp.PORTA
-	} else if p < 64 {
+	case 1:
 		gpio, pcr = nxp.GPIOB, nxp.PORTB
-	} else if p < 96 {
+	case 2:
 		gpio, pcr = nxp.GPIOC, nxp.PORTC
-	} else if p < 128 {
+	case 3:
 		gpio, pcr = nxp.GPIOD, nxp.PORTD
-	} else if p < 160 {
+	case 5:
 		gpio, pcr = nxp.GPIOE, nxp.PORTE
-	} else {
+	default:
 		panic("invalid pin number")
 	}
 
