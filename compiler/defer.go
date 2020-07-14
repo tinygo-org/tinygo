@@ -29,8 +29,8 @@ func (b *builder) deferInitFunc() {
 	b.deferFuncs = make(map[*ir.Function]int)
 	b.deferInvokeFuncs = make(map[string]int)
 	b.deferClosureFuncs = make(map[*ir.Function]int)
-	b.deferExprFuncs = make(map[interface{}]int)
-	b.deferBuiltinFuncs = make(map[interface{}]deferBuiltin)
+	b.deferExprFuncs = make(map[ssa.Value]int)
+	b.deferBuiltinFuncs = make(map[ssa.Value]deferBuiltin)
 
 	// Create defer list pointer.
 	deferType := llvm.PointerType(b.getLLVMRuntimeType("_defer"), 0)
