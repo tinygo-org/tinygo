@@ -151,10 +151,24 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 			}
 			switch ptr.InstructionOpcode() {
 			case llvm.GetElementPtr:
-				// These values do not create new values: the values already
-				// existed locally in this function so must have been tracked
-				// already.
-				continue
+				// Check for all zero offsets.
+				// Sometimes LLVM rewrites bitcasts to zero-index GEPs, and we still need to track the GEP.
+				n := ptr.OperandsCount()
+				var hasOffset bool
+				for i := 1; i < n; i++ {
+					offset := ptr.Operand(i)
+					if offset.IsAConstantInt().IsNil() || offset.ZExtValue() != 0 {
+						hasOffset = true
+						break
+					}
+				}
+
+				if hasOffset {
+					// These values do not create new values: the values already
+					// existed locally in this function so must have been tracked
+					// already.
+					continue
+				}
 			case llvm.PHI:
 				// While the value may have already been tracked, it may be overwritten in a loop.
 				// Therefore, a second copy must be created to ensure that it is tracked over the entirety of its lifetime.
