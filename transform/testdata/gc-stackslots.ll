@@ -84,3 +84,14 @@ loop:
 end:
   ret i8* %next.x
 }
+
+declare [32 x i8]* @arrayAlloc()
+
+define void @testGEPBitcast() {
+  %arr = call [32 x i8]* @arrayAlloc()
+  %arr.bitcast = getelementptr [32 x i8], [32 x i8]* %arr, i32 0, i32 0
+  call void @runtime.trackPointer(i8* %arr.bitcast)
+  %other = call i8* @runtime.alloc(i32 1)
+  call void @runtime.trackPointer(i8* %other)
+  ret void
+}
