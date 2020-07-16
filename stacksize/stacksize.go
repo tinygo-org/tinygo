@@ -181,14 +181,6 @@ func CallGraph(f *elf.File, callsIndirectFunction []string) (map[string][]*CallN
 	switch f.Machine {
 	case elf.EM_ARM:
 		knownFrameSizes := map[string]uint64{
-			// implemented in assembly in TinyGo
-			"tinygo_startTask":             0,     // thunk
-			"tinygo_getSystemStackPointer": 0,     // getter
-			"tinygo_switchToScheduler":     0,     // calls tinygo_swapTask
-			"tinygo_switchToTask":          0,     // calls tinygo_swapTask
-			"tinygo_swapTask":              9 * 4, // 9 registers saved
-			"tinygo_scanCurrentStack":      9 * 4, // 9 registers saved
-
 			// implemented with assembly in compiler-rt
 			"__aeabi_uidivmod": 3 * 4, // 3 registers on thumb1 but 1 register on thumb2
 		}

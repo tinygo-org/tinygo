@@ -207,6 +207,15 @@ func (fi *frameInfo) exec(bytecode []byte) ([]frameInfoLine, error) {
 			switch lowBits {
 			case 0: // DW_CFA_nop
 				// no operation
+			case 0x07: // DW_CFA_undefined
+				// Marks a single register as undefined. This is used to stop
+				// unwinding in tinygo_startTask using:
+				//     .cfi_undefined lr
+				// Ignore this directive.
+				_, err := readULEB128(r)
+				if err != nil {
+					return nil, err
+				}
 			case 0x0c: // DW_CFA_def_cfa
 				register, err := readULEB128(r)
 				if err != nil {
@@ -225,10 +234,10 @@ func (fi *frameInfo) exec(bytecode []byte) ([]frameInfoLine, error) {
 				}
 				fi.cfaOffset = offset
 			default:
-				return nil, fmt.Errorf("could not decode .debug_frame bytecode op 0x%x", op)
+				return nil, fmt.Errorf("could not decode .debug_frame bytecode op 0x%x (for address 0x%x)", op, fi.loc)
 			}
 		default:
-			return nil, fmt.Errorf("could not decode .debug_frame bytecode op 0x%x", op)
+			return nil, fmt.Errorf("could not decode .debug_frame bytecode op 0x%x (for address 0x%x)", op, fi.loc)
 		}
 	}
 }
