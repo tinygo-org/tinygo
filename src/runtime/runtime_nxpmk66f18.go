@@ -54,8 +54,10 @@ const (
 //go:export Reset_Handler
 func main() {
 	initSystem()
+	initSysTick()
 	arm.Asm("CPSIE i")
 	initInternal()
+	initSleepTimer()
 
 	run()
 	abort()
@@ -89,12 +91,10 @@ func initSystem() {
 
 	preinit()
 
-	// copy the vector table to RAM default all interrupts to medium priority level
-	// for (i=0; i < NVIC_NUM_INTERRUPTS + 16; i++) _VectorsRam[i] = _VectorsFlash[i];
+	// default all interrupts to medium priority level
 	for i := uint32(0); i <= nxp.IRQ_max; i++ {
 		arm.SetPriority(i, 128)
 	}
-	// SCB_VTOR = (uint32_t)_VectorsRam;	// use vector table in RAM
 
 	// hardware always starts in FEI mode
 	//  C1[CLKS] bits are written to 00
@@ -160,13 +160,11 @@ func initSystem() {
 		nxp.RTC.SR.Set(0)
 		nxp.RTC.CR.Set(nxp.RTC_CR_SC16P | nxp.RTC_CR_SC4P | nxp.RTC_CR_OSCE)
 	}
-
-	// initialize the SysTick counter
-	initSysTick()
 }
 
 func initInternal() {
 	// from: _init_Teensyduino_internal_
+
 	// arm.EnableIRQ(nxp.IRQ_PORTA)
 	// arm.EnableIRQ(nxp.IRQ_PORTB)
 	// arm.EnableIRQ(nxp.IRQ_PORTC)
@@ -220,11 +218,6 @@ func initInternal() {
 	nxp.TPM1.C0SC.Set(0x28)
 	nxp.TPM1.C1SC.Set(0x28)
 	nxp.TPM1.SC.Set((1 << nxp.FTM_SC_CLKS_Pos) | (0 << nxp.FTM_SC_PS_Pos))
-
-	// configure the sleep timer
-	initSleepTimer()
-
-	// 	analog_init();
 }
 
 func postinit() {}

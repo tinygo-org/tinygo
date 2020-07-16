@@ -1,4 +1,4 @@
-// +build nxp
+// +build nxp,mk66f18
 
 package runtime
 

@@ -2,7 +2,7 @@
 	"inherits": ["cortex-m"],
 	"llvm-target": "armv7em-none-eabi",
 	"cpu": "cortex-m4",
-	"build-tags": ["teensy36", "teensy", "mk66f18", "nxp"],
+	"build-tags": ["teensy36", "teensy", "mk66f18", "kinetis", "nxp"],
 	"cflags": [
 		"--target=armv7em-none-eabi",
 		"-Qunused-arguments",
@@ -12,8 +12,8 @@
 	"linkerscript": "targets/nxpmk66f18.ld",
 	"extra-files": [
 		"src/device/nxp/mk66f18.s",
-		"targets/teensy36.s"
+		"targets/teensy-kinetis.s"
 	],
-	"flash-command": "teensy_loader_cli -mmcu=mk66fx1m0 -v -w {hex}"
+	"flash-command": "teensy_loader_cli -mmcu=TEENSY36 -v -w {hex}"
 }
 

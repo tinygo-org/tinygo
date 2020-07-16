@@ -1,0 +1,17 @@
+{
+	"inherits": ["cortex-m"],
+	"llvm-target": "armv6m-none-eabi",
+	"build-tags": ["teensylc", "teensy", "mkl26z4", "kinetis", "nxp"],
+	"cflags": [
+		"--target=armv6m-none-eabi",
+		"-Qunused-arguments",
+		"-mfloat-abi=soft"
+	],
+	"linkerscript": "targets/nxpmkl26z4.ld",
+	"extra-files": [
+		"src/device/nxp/mkl26z4.s",
+		"targets/teensy-kinetis.s"
+	],
+	"flash-command": "teensy_loader_cli -mmcu=TEENSYLC -v -w {hex}"
+}
+
