@@ -1,12 +1,21 @@
+// Only generate .debug_frame, don't generate .eh_frame.
+.cfi_sections .debug_frame
+
 .section .text.tinygo_startTask
 .global  tinygo_startTask
 .type    tinygo_startTask, %function
 tinygo_startTask:
+    .cfi_startproc
     // Small assembly stub for starting a goroutine. This is already run on the
     // new stack, with the callee-saved registers already loaded.
     // Most importantly, r4 contains the pc of the to-be-started function and r5
     // contains the only argument it is given. Multiple arguments are packed
     // into one by storing them in a new allocation.
+
+    // Indicate to the unwinder that there is nothing to unwind, this is the
+    // root frame. It avoids the following (bogus) error message in GDB:
+    //     Backtrace stopped: previous frame identical to this frame (corrupt stack?)
+    .cfi_undefined lr
 
     // Set the first argument of the goroutine start wrapper, which contains all
     // the arguments.
@@ -18,15 +27,19 @@ tinygo_startTask:
 
     // After return, exit this goroutine. This is a tail call.
     bl    	tinygo_pause
+    .cfi_endproc
 .size tinygo_startTask, .-tinygo_startTask
 
 .section .text.tinygo_getSystemStackPointer
 .global  tinygo_getSystemStackPointer
 .type    tinygo_getSystemStackPointer, %function
 tinygo_getSystemStackPointer:
+    .cfi_startproc
     // The system stack pointer is always stored in the MSP register.
     mrs r0, MSP
     bx lr
+    .cfi_endproc
+.size tinygo_getSystemStackPointer, .-tinygo_getSystemStackPointer
 
 
 // switchToScheduler and switchToTask are also in the same section, to make sure
@@ -36,6 +49,7 @@ tinygo_getSystemStackPointer:
 .global  tinygo_switchToScheduler
 .type    tinygo_switchToScheduler, %function
 tinygo_switchToScheduler:
+    .cfi_startproc
     // r0 = sp *uintptr
 
     // Currently on the task stack (SP=PSP). We need to store the position on
@@ -45,11 +59,13 @@ tinygo_switchToScheduler:
     str r1, [r0]
 
     b tinygo_swapTask
+    .cfi_endproc
 .size tinygo_switchToScheduler, .-tinygo_switchToScheduler
 
 .global  tinygo_switchToTask
 .type    tinygo_switchToTask, %function
 tinygo_switchToTask:
+    .cfi_startproc
     // r0 = sp uintptr
 
     // Currently on the scheduler stack (SP=MSP). We'll have to update the PSP,
@@ -58,11 +74,13 @@ tinygo_switchToTask:
 
     // Continue executing in the swapTask function, which swaps the stack
     // pointer.
+    .cfi_endproc
 .size tinygo_switchToTask, .-tinygo_switchToTask
 
 .global  tinygo_swapTask
 .type    tinygo_swapTask, %function
 tinygo_swapTask:
+    .cfi_startproc
     // This function stores the current register state to the stack, switches to
     // the other stack (MSP/PSP), and loads the register state from the other
     // stack. Apart from saving and restoring all relevant callee-saved
@@ -84,13 +102,16 @@ tinygo_swapTask:
     // invocation of swapTask).
     #if defined(__thumb2__)
     push {r4-r11, lr}
+    .cfi_def_cfa_offset 9*4
     #else
     mov r0, r8
     mov r1, r9
     mov r2, r10
     mov r3, r11
     push {r0-r3, lr}
+    .cfi_def_cfa_offset 5*4
     push {r4-r7}
+    .cfi_def_cfa_offset 9*4
     #endif
 
     // Switch the stack. This could either switch from PSP to MSP, or from MSP
@@ -107,29 +128,36 @@ tinygo_swapTask:
     pop {r4-r11, pc}
     #else
     pop {r4-r7}
+    .cfi_def_cfa_offset 5*9
     pop {r0-r3}
+    .cfi_def_cfa_offset 1*9
     mov r8, r0
     mov r9, r1
     mov r10, r2
     mov r11, r3
     pop {pc}
     #endif
+    .cfi_endproc
 .size tinygo_swapTask, .-tinygo_swapTask
 
 .section .text.tinygo_scanCurrentStack
 .global  tinygo_scanCurrentStack
 .type    tinygo_scanCurrentStack, %function
 tinygo_scanCurrentStack:
+    .cfi_startproc
     // Save callee-saved registers onto the stack.
     #if defined(__thumb2__)
     push {r4-r11, lr}
+    .cfi_def_cfa_offset 9*4
     #else
     mov r0, r8
     mov r1, r9
     mov r2, r10
     mov r3, r11
     push {r0-r3, lr}
+    .cfi_def_cfa_offset 5*4
     push {r4-r7}
+    .cfi_def_cfa_offset 4*4
     #endif
 
     // Scan the stack.
@@ -138,5 +166,7 @@ tinygo_scanCurrentStack:
 
     // Restore stack state and return.
     add sp, #32
+    .cfi_def_cfa_offset 1*4
     pop {pc}
+    .cfi_endproc
 .size tinygo_scanCurrentStack, .-tinygo_scanCurrentStack
