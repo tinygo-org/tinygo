@@ -260,12 +260,14 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 //
 //     function                         stack usage (in bytes)
 //     Reset_Handler                    316
-//     .Lexamples/blinky2.led1          92
-//     .Lruntime.run$1                  300
+//     examples/blinky2.led1            92
+//     runtime.run$1                    300
 func printStacks(mod llvm.Module, executable string) {
-	// Determine which functions call a function pointer.
 	var callsIndirectFunction []string
+	gowrappers := []string{}
+	gowrapperNames := make(map[string]string)
 	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		// Determine which functions call a function pointer.
 		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
 			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
 				if inst.IsACallInst().IsNil() {
@@ -276,7 +278,16 @@ func printStacks(mod llvm.Module, executable string) {
 				}
 			}
 		}
+
+		// Get a list of "go wrappers", small wrapper functions that decode
+		// parameters when starting a new goroutine.
+		attr := fn.GetStringAttributeAtIndex(-1, "tinygo-gowrapper")
+		if !attr.IsNil() {
+			gowrappers = append(gowrappers, fn.Name())
+			gowrapperNames[fn.Name()] = attr.GetStringValue()
+		}
 	}
+	sort.Strings(gowrappers)
 
 	// Load the ELF binary.
 	f, err := elf.Open(executable)
@@ -293,16 +304,6 @@ func printStacks(mod llvm.Module, executable string) {
 		return
 	}
 
-	// Get a list of "go wrappers", small wrapper functions that decode
-	// parameters when starting a new goroutine.
-	var gowrappers []string
-	for name := range functions {
-		if strings.HasSuffix(name, "$gowrapper") {
-			gowrappers = append(gowrappers, name)
-		}
-	}
-	sort.Strings(gowrappers)
-
 	switch f.Machine {
 	case elf.EM_ARM:
 		// Add the reset handler, which runs startup code and is the
@@ -311,6 +312,7 @@ func printStacks(mod llvm.Module, executable string) {
 		// by just the Reset_Handler is not enough. Stacks needed by interrupt
 		// handlers should also be taken into account.
 		gowrappers = append([]string{"Reset_Handler"}, gowrappers...)
+		gowrapperNames["Reset_Handler"] = "Reset_Handler"
 	}
 
 	// Print the sizes of all stacks.
@@ -318,19 +320,19 @@ func printStacks(mod llvm.Module, executable string) {
 	for _, name := range gowrappers {
 		for _, fn := range functions[name] {
 			stackSize, stackSizeType, missingStackSize := fn.StackSize()
-			strippedName := name
-			if strings.HasSuffix(name, "$gowrapper") {
-				strippedName = name[:len(name)-len("$gowrapper")]
+			funcName := gowrapperNames[name]
+			if funcName == "" {
+				funcName = "<unknown>"
 			}
 			switch stackSizeType {
 			case stacksize.Bounded:
-				fmt.Printf("%-32s %d\n", strippedName, stackSize)
+				fmt.Printf("%-32s %d\n", funcName, stackSize)
 			case stacksize.Unknown:
-				fmt.Printf("%-32s unknown, %s does not have stack frame information\n", strippedName, missingStackSize)
+				fmt.Printf("%-32s unknown, %s does not have stack frame information\n", funcName, missingStackSize)
 			case stacksize.Recursive:
-				fmt.Printf("%-32s recursive, %s may call itself\n", strippedName, missingStackSize)
+				fmt.Printf("%-32s recursive, %s may call itself\n", funcName, missingStackSize)
 			case stacksize.IndirectCall:
-				fmt.Printf("%-32s unknown, %s calls a function pointer\n", strippedName, missingStackSize)
+				fmt.Printf("%-32s unknown, %s calls a function pointer\n", funcName, missingStackSize)
 			}
 		}
 	}
