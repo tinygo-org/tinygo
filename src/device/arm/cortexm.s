@@ -1,9 +1,11 @@
 .syntax unified
+.cfi_sections .debug_frame
 
 .section .text.HardFault_Handler
 .global  HardFault_Handler
 .type    HardFault_Handler, %function
 HardFault_Handler:
+    .cfi_startproc
     // Put the old stack pointer in the first argument, for easy debugging. This
     // is especially useful on Cortex-M0, which supports far fewer debug
     // facilities.
@@ -19,6 +21,7 @@ HardFault_Handler:
 
     // Continue handling this error in Go.
     bl handleHardFault
+    .cfi_endproc
 .size HardFault_Handler, .-HardFault_Handler
 
 // This is a convenience function for semihosting support.
@@ -27,5 +30,8 @@ HardFault_Handler:
 .global  SemihostingCall
 .type    SemihostingCall, %function
 SemihostingCall:
+    .cfi_startproc
     bkpt 0xab
     bx   lr
+    .cfi_endproc
+.size SemihostingCall, .-SemihostingCall

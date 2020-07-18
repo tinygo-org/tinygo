@@ -54,7 +54,7 @@ func (t *Task) Resume() {
 }
 
 // initialize the state and prepare to call the specified function with the specified argument bundle.
-func (s *state) initialize(fn uintptr, args unsafe.Pointer) {
+func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	// Create a stack.
 	stack := make([]uintptr, stackSize/unsafe.Sizeof(uintptr(0)))
 
@@ -67,9 +67,9 @@ func runqueuePushBack(*Task)
 
 // start creates and starts a new goroutine with the given function and arguments.
 // The new goroutine is scheduled to run later.
-func start(fn uintptr, args unsafe.Pointer) {
+func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	t := &Task{}
-	t.state.initialize(fn, args)
+	t.state.initialize(fn, args, stackSize)
 	runqueuePushBack(t)
 }
 

@@ -4,8 +4,6 @@ package task
 
 import "unsafe"
 
-const stackSize = 1024
-
 // calleeSavedRegs is the list of registers that must be saved and restored when
 // switching between tasks. Also see scheduler_cortexm.S that relies on the
 // exact layout of this struct.

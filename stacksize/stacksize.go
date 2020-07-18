@@ -14,18 +14,37 @@ import (
 // set to true to print information useful for debugging
 const debugPrint = false
 
-type sizeType uint8
+// SizeType indicates whether a stack or frame size could be determined and if
+// not, why.
+type SizeType uint8
 
 // Results after trying to determine the stack size of a function in the call
 // graph. The goal is to find a maximum (bounded) stack size, but sometimes this
 // is not possible for some reasons such as recursion or indirect calls.
 const (
-	Undefined sizeType = iota // not yet calculated
+	Undefined SizeType = iota // not yet calculated
 	Unknown                   // child has unknown stack size
 	Bounded                   // stack size is fixed at compile time (no recursion etc)
 	Recursive
 	IndirectCall
 )
+
+func (s SizeType) String() string {
+	switch s {
+	case Undefined:
+		return "undefined"
+	case Unknown:
+		return "unknown"
+	case Bounded:
+		return "bounded"
+	case Recursive:
+		return "recursive"
+	case IndirectCall:
+		return "indirect call"
+	default:
+		return "<?>"
+	}
+}
 
 // CallNode is a node in the call graph (that is, a function). Because this is
 // determined after linking, there may be multiple names for a single function
@@ -37,9 +56,9 @@ type CallNode struct {
 	Size             uint64      // symbol size, in bytes
 	Children         []*CallNode // functions this function calls
 	FrameSize        uint64      // frame size, if FrameSizeType is Bounded
-	FrameSizeType    sizeType    // can be Undefined or Bounded
+	FrameSizeType    SizeType    // can be Undefined or Bounded
 	stackSize        uint64
-	stackSizeType    sizeType
+	stackSizeType    SizeType
 	missingFrameInfo *CallNode // the child function that is the cause for not being able to determine the stack size
 }
 
@@ -236,7 +255,7 @@ func findSymbol(symbolList []*CallNode, address uint64) *CallNode {
 // returns the maximum stack size, whether this size can be known at compile
 // time and the call node responsible for failing to determine the maximum stack
 // usage. The stack size is only valid if sizeType is Bounded.
-func (node *CallNode) StackSize() (uint64, sizeType, *CallNode) {
+func (node *CallNode) StackSize() (uint64, SizeType, *CallNode) {
 	if node.stackSizeType == Undefined {
 		node.determineStackSize(make(map[*CallNode]struct{}))
 	}

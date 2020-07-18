@@ -67,7 +67,7 @@ func createTask() *Task {
 // start invokes a function in a new goroutine. Calls to this are inserted by the compiler.
 // The created goroutine starts running immediately.
 // This is implemented inside the compiler.
-func start(fn uintptr, args unsafe.Pointer)
+func start(fn uintptr, args unsafe.Pointer, stackSize uintptr)
 
 // Current returns the current active task.
 // This is implemented inside the compiler.

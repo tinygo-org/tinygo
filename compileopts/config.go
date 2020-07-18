@@ -164,6 +164,16 @@ func (c *Config) PanicStrategy() string {
 	return c.Options.PanicStrategy
 }
 
+// AutomaticStackSize returns whether goroutine stack sizes should be determined
+// automatically at compile time, if possible. If it is false, no attempt is
+// made.
+func (c *Config) AutomaticStackSize() bool {
+	if c.Target.AutoStackSize != nil && c.Scheduler() == "tasks" {
+		return *c.Target.AutoStackSize
+	}
+	return false
+}
+
 // CFlags returns the flags to pass to the C compiler. This is necessary for CGo
 // preprocessing.
 func (c *Config) CFlags() []string {
