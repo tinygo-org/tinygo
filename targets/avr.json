@@ -7,6 +7,7 @@
 	"gc": "conservative",
 	"linker": "avr-gcc",
 	"scheduler": "none",
+	"default-stack-size": 256,
 	"ldflags": [
 		"-T", "targets/avr.ld",
 		"-Wl,--gc-sections"

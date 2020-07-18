@@ -18,3 +18,8 @@ type Task struct {
 	// state is the underlying running state of the task.
 	state state
 }
+
+// getGoroutineStackSize is a compiler intrinsic that returns the stack size for
+// the given function and falls back to the default stack size. It is replaced
+// with a load from a special section just before codegen.
+func getGoroutineStackSize(fn uintptr) uintptr

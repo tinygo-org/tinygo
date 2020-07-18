@@ -33,6 +33,8 @@ type TargetSpec struct {
 	Linker           string   `json:"linker"`
 	RTLib            string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
 	Libc             string   `json:"libc"`
+	AutoStackSize    *bool    `json:"automatic-stack-size"` // Determine stack size automatically at compile time.
+	DefaultStackSize uint64   `json:"default-stack-size"`   // Default stack size if the size couldn't be determined at compile time.
 	CFlags           []string `json:"cflags"`
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
@@ -89,6 +91,12 @@ func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
 	}
 	if spec2.Libc != "" {
 		spec.Libc = spec2.Libc
+	}
+	if spec2.AutoStackSize != nil {
+		spec.AutoStackSize = spec2.AutoStackSize
+	}
+	if spec2.DefaultStackSize != 0 {
+		spec.DefaultStackSize = spec2.DefaultStackSize
 	}
 	spec.CFlags = append(spec.CFlags, spec2.CFlags...)
 	spec.LDFlags = append(spec.LDFlags, spec2.LDFlags...)

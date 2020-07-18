@@ -19,16 +19,30 @@ import (
 // Because a go statement doesn't return anything, return undef.
 func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value, prefix string, pos token.Pos) llvm.Value {
 	paramBundle := b.emitPointerPack(params)
-	var callee llvm.Value
+	var callee, stackSize llvm.Value
 	switch b.Scheduler() {
 	case "none", "tasks":
 		callee = b.createGoroutineStartWrapper(funcPtr, prefix, pos)
+		if b.AutomaticStackSize() {
+			// The stack size is not known until after linking. Call a dummy
+			// function that will be replaced with a load from a special ELF
+			// section that contains the stack size (and is modified after
+			// linking).
+			stackSize = b.createCall(b.mod.NamedFunction("internal/task.getGoroutineStackSize"), []llvm.Value{callee, llvm.Undef(b.i8ptrType), llvm.Undef(b.i8ptrType)}, "stacksize")
+		} else {
+			// The stack size is fixed at compile time. By emitting it here as a
+			// constant, it can be optimized.
+			stackSize = llvm.ConstInt(b.uintptrType, b.Target.DefaultStackSize, false)
+		}
 	case "coroutines":
 		callee = b.CreatePtrToInt(funcPtr, b.uintptrType, "")
+		// There is no goroutine stack size: coroutines are used instead of
+		// stacks.
+		stackSize = llvm.Undef(b.uintptrType)
 	default:
 		panic("unreachable")
 	}
-	b.createCall(b.mod.NamedFunction("internal/task.start"), []llvm.Value{callee, paramBundle, llvm.Undef(b.i8ptrType), llvm.ConstPointerNull(b.i8ptrType)}, "")
+	b.createCall(b.mod.NamedFunction("internal/task.start"), []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.i8ptrType), llvm.ConstPointerNull(b.i8ptrType)}, "")
 	return llvm.Undef(funcPtr.Type().ElementType().ReturnType())
 }
 

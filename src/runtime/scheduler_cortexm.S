@@ -41,11 +41,7 @@ tinygo_getSystemStackPointer:
     .cfi_endproc
 .size tinygo_getSystemStackPointer, .-tinygo_getSystemStackPointer
 
-
-// switchToScheduler and switchToTask are also in the same section, to make sure
-// relative branches work.
-.section .text.tinygo_swapTask
-
+.section .text.tinygo_switchToScheduler
 .global  tinygo_switchToScheduler
 .type    tinygo_switchToScheduler, %function
 tinygo_switchToScheduler:
@@ -62,6 +58,7 @@ tinygo_switchToScheduler:
     .cfi_endproc
 .size tinygo_switchToScheduler, .-tinygo_switchToScheduler
 
+.section .text.tinygo_switchToTask
 .global  tinygo_switchToTask
 .type    tinygo_switchToTask, %function
 tinygo_switchToTask:
@@ -72,11 +69,11 @@ tinygo_switchToTask:
     // and then we can invoke swapTask.
     msr PSP, r0
 
-    // Continue executing in the swapTask function, which swaps the stack
-    // pointer.
+    b.n tinygo_swapTask
     .cfi_endproc
 .size tinygo_switchToTask, .-tinygo_switchToTask
 
+.section .text.tinygo_swapTask
 .global  tinygo_swapTask
 .type    tinygo_swapTask, %function
 tinygo_swapTask:
