@@ -1,3 +1,92 @@
+0.14.0
+---
+* **command-line**
+  - fix `getDefaultPort()` on non-English Windows locales
+  - compileopts: improve error reporting of unsupported flags
+  - fix test subcommand
+  - use auto-retry to locate MSD for UF2 and HEX flashing
+  - fix touchSerialPortAt1200bps on Windows
+  - support package names with backslashes on Windows
+* **compiler**
+  - fix a few crashes due to named types
+  - add support for atomic operations
+  - move the channel blocked list onto the stack
+  - fix -gc=none
+  - fix named string to `[]byte` slice conversion
+  - implement func value and builtin defers
+  - add proper parameter names to runtime.initAll, to fix a panic
+  - builder: fix picolibc include path
+  - builder: use newer version of gohex
+  - builder: try to determine stack size information at compile time
+  - builder: remove -opt=0
+  - interp: fix sync/atomic.Value load/store methods
+  - loader: add Go module support
+  - transform: fix debug information in func lowering pass
+  - transform: do not special-case zero or one implementations of a method call
+  - transform: introduce check for method calls on nil interfaces
+  - transform: gc: track 0-index GEPs to fix miscompilation
+* **cgo**
+  - Add LDFlags support
+* **standard library**
+  - extend stdlib to allow import of more packages
+  - replace master/slave terminology with appropriate alternatives (MOSI->SDO
+    etc)
+  - `internal/bytealg`: reimplement bytealg in pure Go
+  - `internal/task`: fix nil panic in (*internal/task.Stack).Pop
+  - `os`: add Args and stub it with mock data
+  - `os`: implement virtual filesystem support
+  - `reflect`: add Cap and Len support for map and chan
+  - `runtime`: fix return address in scheduler on RISC-V
+  - `runtime`: avoid recursion in printuint64 function
+  - `runtime`: replace ReadRegister with AsmFull inline assembly
+  - `runtime`: fix compilation errors when using gc.extalloc
+  - `runtime`: add cap and len support for chans
+  - `runtime`: refactor time handling (improving accuracy)
+  - `runtime`: make channels work in interrupts
+  - `runtime/interrupt`: add cross-chip disable/restore interrupt support
+  - `sync`: implement `sync.Cond`
+  - `sync`: add WaitGroup
+* **targets**
+  - `arm`: allow nesting in DisableInterrupts and EnableInterrupts
+  - `arm`: make FPU configuraton consistent
+  - `arm`: do not mask fault handlers in critical sections
+  - `atmega2560`: fix pin mapping for pins D2, D5 and the L port
+  - `atsamd`: return an error when an incorrect PWM pin is used
+  - `atsamd`: add support for pin change interrupts
+  - `atsamd`: add DAC support
+  - `atsamd21`: add more ADC pins
+  - `atsamd51`: fix ROM / RAM size on atsamd51j20
+  - `atsamd51`: add more pins
+  - `atsamd51`: add more ADC pins
+  - `atsamd51`: add pin change interrupt settings
+  - `atsamd51`: extend pinPadMapping
+  - `arduino-nano33`: use (U)SB flag to ensure that device can be found when
+     not on default port
+  - `arduino-nano33`: remove (d)ebug flag to reduce console noise when flashing
+  - `avr`: use standard pin numbering
+  - `avr`: unify GPIO pin/port code
+  - `avr`: add support for PinInputPullup
+  - `avr`: work around codegen bug in LLVM 10
+  - `avr`: fix target triple
+  - `fe310`: remove extra println left in by mistake
+  - `feather-nrf52840`: add support for the Feather nRF52840
+  - `maixbit`: add board definition and dummy runtime
+  - `nintendoswitch`: Add experimental Nintendo Switch support without CRT
+  - `nrf`: expose the RAM base address
+  - `nrf`: add support for pin change interrupts
+  - `nrf`: add microbit-s110v8 target
+  - `nrf`: fix bug in SPI.Tx
+  - `nrf`: support debugging the PCA10056
+  - `pygamer`: add Adafruit PyGamer suport
+  - `riscv`: fix interrupt configuration bug
+  - `riscv`: disable linker relaxations during gp init
+  - `stm32f4disco`: add new target with ST-Link v2.1 debugger
+  - `teensy36`: add Teensy 3.6 support
+  - `wasm`: fix event handling
+  - `wasm`: add --no-demangle linker option
+  - `wioterminal`: add support for the Seeed Wio Terminal
+  - `xiao`: add support for the Seeed XIAO
+
 0.13.1
 ---
 * **standard library**
