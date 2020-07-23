@@ -93,7 +93,6 @@ commands:
           key: wasi-libc-sysroot-systemclang-v1
           paths:
             - lib/wasi-libc/sysroot
-      - run: tinygo clean
       - run: go test -v -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./interp ./transform .
       - run: make gen-device -j4
       - run: make smoketest
@@ -102,7 +101,6 @@ commands:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
-            - ~/.cache/tinygo
             - /go/pkg/mod
       - run: make fmt-check
   assert-test-linux:
@@ -160,7 +158,6 @@ commands:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
-            - ~/.cache/tinygo
             - /go/pkg/mod
       - run: make gen-device -j4
       - run: make smoketest TINYGO=build/tinygo
@@ -233,7 +230,6 @@ commands:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
-            - ~/.cache/tinygo
             - /go/pkg/mod
       - run:
           name: "Extract release tarball"
@@ -317,7 +313,6 @@ commands:
           key: go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
-            - ~/.cache/tinygo
             - /go/pkg/mod
   arch-release:
     steps:
