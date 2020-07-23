@@ -95,7 +95,11 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			if !operand.IsConstant() || inst.IsVolatile() || (!operand.Underlying.IsAConstantExpr().IsNil() && operand.Underlying.Opcode() == llvm.BitCast) {
 				value = fr.builder.CreateLoad(operand.Value(), inst.Name())
 			} else {
-				value = operand.Load()
+				var err error
+				value, err = operand.Load()
+				if err != nil {
+					return nil, nil, fr.errorAt(inst, err)
+				}
 			}
 			if value.Type() != inst.Type() {
 				return nil, nil, fr.errorAt(inst, errors.New("interp: load: type does not match"))
@@ -308,7 +312,10 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				}
 				// "key" is a Go string value, which in the TinyGo calling convention is split up
 				// into separate pointer and length parameters.
-				m.PutString(keyBuf, keyLen, valPtr)
+				err := m.PutString(keyBuf, keyLen, valPtr)
+				if err != nil {
+					return nil, nil, fr.errorAt(inst, err)
+				}
 			case callee.Name() == "runtime.hashmapBinarySet":
 				// set a binary (int etc.) key in the map
 				keyBuf := fr.getLocal(inst.Operand(1)).(*LocalValue)
@@ -329,15 +336,24 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					fr.builder.CreateCall(callee, llvmParams, "")
 					continue
 				}
-				m.PutBinary(keyBuf, valPtr)
+				err := m.PutBinary(keyBuf, valPtr)
+				if err != nil {
+					return nil, nil, fr.errorAt(inst, err)
+				}
 			case callee.Name() == "runtime.stringConcat":
 				// adding two strings together
 				buf1Ptr := fr.getLocal(inst.Operand(0))
 				buf1Len := fr.getLocal(inst.Operand(1))
 				buf2Ptr := fr.getLocal(inst.Operand(2))
 				buf2Len := fr.getLocal(inst.Operand(3))
-				buf1 := getStringBytes(buf1Ptr, buf1Len.Value())
-				buf2 := getStringBytes(buf2Ptr, buf2Len.Value())
+				buf1, err := getStringBytes(buf1Ptr, buf1Len.Value())
+				if err != nil {
+					return nil, nil, fr.errorAt(inst, err)
+				}
+				buf2, err := getStringBytes(buf2Ptr, buf2Len.Value())
+				if err != nil {
+					return nil, nil, fr.errorAt(inst, err)
+				}
 				result := []byte(string(buf1) + string(buf2))
 				vals := make([]llvm.Value, len(result))
 				for i := range vals {
@@ -401,9 +417,12 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					return nil, nil, fr.errorAt(inst, errors.New("interp: trying to copy a slice with negative length?"))
 				}
 				for i := int64(0); i < length; i++ {
-					var err error
 					// *dst = *src
-					dstArray.Store(srcArray.Load())
+					val, err := srcArray.Load()
+					if err != nil {
+						return nil, nil, fr.errorAt(inst, err)
+					}
+					dstArray.Store(val)
 					// dst++
 					dstArrayValue, err := dstArray.GetElementPtr([]uint32{1})
 					if err != nil {
@@ -421,7 +440,10 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 				// convert a string to a []byte
 				bufPtr := fr.getLocal(inst.Operand(0))
 				bufLen := fr.getLocal(inst.Operand(1))
-				result := getStringBytes(bufPtr, bufLen.Value())
+				result, err := getStringBytes(bufPtr, bufLen.Value())
+				if err != nil {
+					return nil, nil, fr.errorAt(inst, err)
+				}
 				vals := make([]llvm.Value, len(result))
 				for i := range vals {
 					vals[i] = llvm.ConstInt(fr.Mod.Context().Int8Type(), uint64(result[i]), false)

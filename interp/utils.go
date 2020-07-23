@@ -1,6 +1,8 @@
 package interp
 
 import (
+	"errors"
+
 	"tinygo.org/x/go-llvm"
 )
 
@@ -18,20 +20,23 @@ func getUses(value llvm.Value) []llvm.Value {
 
 // getStringBytes loads the byte slice of a Go string represented as a
 // {ptr, len} pair.
-func getStringBytes(strPtr Value, strLen llvm.Value) []byte {
+func getStringBytes(strPtr Value, strLen llvm.Value) ([]byte, error) {
 	if !strLen.IsConstant() {
-		panic("getStringBytes with a non-constant length")
+		return nil, errors.New("getStringBytes with a non-constant length")
 	}
 	buf := make([]byte, strLen.ZExtValue())
 	for i := range buf {
 		gep, err := strPtr.GetElementPtr([]uint32{uint32(i)})
 		if err != nil {
-			panic(err) // TODO
+			return nil, err
 		}
-		c := gep.Load()
+		c, err := gep.Load()
+		if err != nil {
+			return nil, err
+		}
 		buf[i] = byte(c.ZExtValue())
 	}
-	return buf
+	return buf, nil
 }
 
 // getLLVMIndices converts an []uint32 into an []llvm.Value, for use in
