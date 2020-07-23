@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -25,6 +26,8 @@ import (
 
 const TESTDATA = "testdata"
 
+var testTarget = flag.String("target", "", "override test target")
+
 func TestCompiler(t *testing.T) {
 	matches, err := filepath.Glob(filepath.Join(TESTDATA, "*.go"))
 	if err != nil {
@@ -43,6 +46,14 @@ func TestCompiler(t *testing.T) {
 	}
 
 	sort.Strings(matches)
+
+	if *testTarget != "" {
+		// This makes it possible to run one specific test (instead of all),
+		// which is especially useful to quickly check whether some changes
+		// affect a particular target architecture.
+		runPlatTests(*testTarget, matches, t)
+		return
+	}
 
 	if runtime.GOOS != "windows" {
 		t.Run("Host", func(t *testing.T) {
