@@ -43,7 +43,7 @@ jobs:
       displayName: Install QEMU
       inputs:
         targetType: inline
-        script: choco install qemu
+        script: choco install qemu --version=2020.06.12
     - task: CacheBeta@0
       displayName: Cache wasi-libc sysroot
       inputs:
