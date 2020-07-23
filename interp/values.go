@@ -15,7 +15,7 @@ type Value interface {
 	Value() llvm.Value                     // returns a LLVM value
 	Type() llvm.Type                       // equal to Value().Type()
 	IsConstant() bool                      // returns true if this value is a constant value
-	Load() llvm.Value                      // dereference a pointer
+	Load() (llvm.Value, error)             // dereference a pointer
 	Store(llvm.Value)                      // store to a pointer
 	GetElementPtr([]uint32) (Value, error) // returns an interior pointer
 	String() string                        // string representation, for debugging
@@ -44,23 +44,26 @@ func (v *LocalValue) IsConstant() bool {
 }
 
 // Load loads a constant value if this is a constant pointer.
-func (v *LocalValue) Load() llvm.Value {
+func (v *LocalValue) Load() (llvm.Value, error) {
 	if !v.Underlying.IsAGlobalVariable().IsNil() {
-		return v.Underlying.Initializer()
+		return v.Underlying.Initializer(), nil
 	}
 	switch v.Underlying.Opcode() {
 	case llvm.GetElementPtr:
 		indices := v.getConstGEPIndices()
 		if indices[0] != 0 {
-			panic("invalid GEP")
+			return llvm.Value{}, errors.New("invalid GEP")
 		}
 		global := v.Eval.getValue(v.Underlying.Operand(0))
-		agg := global.Load()
-		return llvm.ConstExtractValue(agg, indices[1:])
+		agg, err := global.Load()
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		return llvm.ConstExtractValue(agg, indices[1:]), nil
 	case llvm.BitCast:
-		panic("interp: load from a bitcast")
+		return llvm.Value{}, errors.New("interp: load from a bitcast")
 	default:
-		panic("interp: load from a constant")
+		return llvm.Value{}, errors.New("interp: load from a constant")
 	}
 }
 
@@ -88,7 +91,10 @@ func (v *LocalValue) Store(value llvm.Value) {
 			panic("invalid GEP")
 		}
 		global := &LocalValue{v.Eval, v.Underlying.Operand(0)}
-		agg := global.Load()
+		agg, err := global.Load()
+		if err != nil {
+			panic(err) // TODO
+		}
 		agg = llvm.ConstInsertValue(agg, value, indices[1:])
 		global.Store(agg)
 		return
@@ -225,7 +231,11 @@ func (v *MapValue) Value() llvm.Value {
 			keyPtr := llvm.ConstExtractValue(llvmKey, []uint32{0})
 			keyLen := llvm.ConstExtractValue(llvmKey, []uint32{1})
 			keyPtrVal := v.Eval.getValue(keyPtr)
-			keyBuf = getStringBytes(keyPtrVal, keyLen)
+			var err error
+			keyBuf, err = getStringBytes(keyPtrVal, keyLen)
+			if err != nil {
+				panic(err) // TODO
+			}
 		} else if key.Type().TypeKind() == llvm.IntegerTypeKind {
 			keyBuf = make([]byte, v.Eval.TargetData.TypeAllocSize(key.Type()))
 			n := key.Value().ZExtValue()
@@ -299,7 +309,7 @@ func (v *MapValue) IsConstant() bool {
 }
 
 // Load panics: maps are of reference type so cannot be dereferenced.
-func (v *MapValue) Load() llvm.Value {
+func (v *MapValue) Load() (llvm.Value, error) {
 	panic("interp: load from a map")
 }
 
@@ -316,23 +326,26 @@ func (v *MapValue) GetElementPtr(indices []uint32) (Value, error) {
 
 // PutString does a map assign operation, assuming that the map is of type
 // map[string]T.
-func (v *MapValue) PutString(keyBuf, keyLen, valPtr *LocalValue) {
+func (v *MapValue) PutString(keyBuf, keyLen, valPtr *LocalValue) error {
 	if !v.Underlying.IsNil() {
-		panic("map already created")
+		return errors.New("map already created")
 	}
 
 	if valPtr.Underlying.Opcode() == llvm.BitCast {
 		valPtr = &LocalValue{v.Eval, valPtr.Underlying.Operand(0)}
 	}
-	value := valPtr.Load()
+	value, err := valPtr.Load()
+	if err != nil {
+		return err
+	}
 	if v.ValueType.IsNil() {
 		v.ValueType = value.Type()
 		if int(v.Eval.TargetData.TypeAllocSize(v.ValueType)) != v.ValueSize {
-			panic("interp: map store value type has the wrong size")
+			return errors.New("interp: map store value type has the wrong size")
 		}
 	} else {
 		if value.Type() != v.ValueType {
-			panic("interp: map store value type is inconsistent")
+			return errors.New("interp: map store value type is inconsistent")
 		}
 	}
 
@@ -345,26 +358,31 @@ func (v *MapValue) PutString(keyBuf, keyLen, valPtr *LocalValue) {
 	// TODO: avoid duplicate keys
 	v.Keys = append(v.Keys, &LocalValue{v.Eval, key})
 	v.Values = append(v.Values, &LocalValue{v.Eval, value})
+
+	return nil
 }
 
 // PutBinary does a map assign operation.
-func (v *MapValue) PutBinary(keyPtr, valPtr *LocalValue) {
+func (v *MapValue) PutBinary(keyPtr, valPtr *LocalValue) error {
 	if !v.Underlying.IsNil() {
-		panic("map already created")
+		return errors.New("map already created")
 	}
 
 	if valPtr.Underlying.Opcode() == llvm.BitCast {
 		valPtr = &LocalValue{v.Eval, valPtr.Underlying.Operand(0)}
 	}
-	value := valPtr.Load()
+	value, err := valPtr.Load()
+	if err != nil {
+		return err
+	}
 	if v.ValueType.IsNil() {
 		v.ValueType = value.Type()
 		if int(v.Eval.TargetData.TypeAllocSize(v.ValueType)) != v.ValueSize {
-			panic("interp: map store value type has the wrong size")
+			return errors.New("interp: map store value type has the wrong size")
 		}
 	} else {
 		if value.Type() != v.ValueType {
-			panic("interp: map store value type is inconsistent")
+			return errors.New("interp: map store value type is inconsistent")
 		}
 	}
 
@@ -375,21 +393,26 @@ func (v *MapValue) PutBinary(keyPtr, valPtr *LocalValue) {
 			keyPtr = &LocalValue{v.Eval, keyPtr.Underlying.Operand(0)}
 		}
 	}
-	key := keyPtr.Load()
+	key, err := keyPtr.Load()
+	if err != nil {
+		return err
+	}
 	if v.KeyType.IsNil() {
 		v.KeyType = key.Type()
 		if int(v.Eval.TargetData.TypeAllocSize(v.KeyType)) != v.KeySize {
-			panic("interp: map store key type has the wrong size")
+			return errors.New("interp: map store key type has the wrong size")
 		}
 	} else {
 		if key.Type() != v.KeyType {
-			panic("interp: map store key type is inconsistent")
+			return errors.New("interp: map store key type is inconsistent")
 		}
 	}
 
 	// TODO: avoid duplicate keys
 	v.Keys = append(v.Keys, &LocalValue{v.Eval, key})
 	v.Values = append(v.Values, &LocalValue{v.Eval, value})
+
+	return nil
 }
 
 // Get FNV-1a hash of this string.
