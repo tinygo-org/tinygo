@@ -62,6 +62,10 @@ func (e *evalPackage) hasSideEffects(fn llvm.Value) (*sideEffectResult, *Error) 
 		return &sideEffectResult{severity: sideEffectNone}, nil
 	case name == "llvm.dbg.value":
 		return &sideEffectResult{severity: sideEffectNone}, nil
+	case name == "(*sync/atomic.Value).Load" || name == "(*sync/atomic.Value).Store":
+		// These functions do some unsafe pointer loading/storing but are
+		// otherwise safe.
+		return &sideEffectResult{severity: sideEffectLimited}, nil
 	case strings.HasPrefix(name, "llvm.lifetime."):
 		return &sideEffectResult{severity: sideEffectNone}, nil
 	}
