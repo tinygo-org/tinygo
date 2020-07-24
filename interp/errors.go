@@ -47,10 +47,12 @@ func (e *Error) Error() string {
 // location of the instruction. The location information may not be complete as
 // it depends on debug information in the IR.
 func (e *evalPackage) errorAt(inst llvm.Value, err error) *Error {
+	pos := getPosition(inst)
 	return &Error{
 		ImportPath: e.packagePath,
-		Pos:        getPosition(inst),
+		Pos:        pos,
 		Err:        err,
+		Traceback:  []ErrorLine{{pos, inst}},
 	}
 }
 
