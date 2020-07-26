@@ -16,7 +16,7 @@ type Value interface {
 	Type() llvm.Type                       // equal to Value().Type()
 	IsConstant() bool                      // returns true if this value is a constant value
 	Load() (llvm.Value, error)             // dereference a pointer
-	Store(llvm.Value)                      // store to a pointer
+	Store(llvm.Value) error                // store to a pointer
 	GetElementPtr([]uint32) (Value, error) // returns an interior pointer
 	String() string                        // string representation, for debugging
 }
@@ -68,8 +68,8 @@ func (v *LocalValue) Load() (llvm.Value, error) {
 }
 
 // Store stores to the underlying value if the value type is a pointer type,
-// otherwise it panics.
-func (v *LocalValue) Store(value llvm.Value) {
+// otherwise it returns an error.
+func (v *LocalValue) Store(value llvm.Value) error {
 	if !v.Underlying.IsAGlobalVariable().IsNil() {
 		if !value.IsConstant() {
 			v.MarkDirty()
@@ -77,29 +77,28 @@ func (v *LocalValue) Store(value llvm.Value) {
 		} else {
 			v.Underlying.SetInitializer(value)
 		}
-		return
+		return nil
 	}
 	if !value.IsConstant() {
 		v.MarkDirty()
 		v.Eval.builder.CreateStore(value, v.Underlying)
-		return
+		return nil
 	}
 	switch v.Underlying.Opcode() {
 	case llvm.GetElementPtr:
 		indices := v.getConstGEPIndices()
 		if indices[0] != 0 {
-			panic("invalid GEP")
+			return errors.New("invalid GEP")
 		}
 		global := &LocalValue{v.Eval, v.Underlying.Operand(0)}
 		agg, err := global.Load()
 		if err != nil {
-			panic(err) // TODO
+			return err
 		}
 		agg = llvm.ConstInsertValue(agg, value, indices[1:])
-		global.Store(agg)
-		return
+		return global.Store(agg)
 	default:
-		panic("interp: store on a constant")
+		return errors.New("interp: store on a constant")
 	}
 }
 
@@ -313,9 +312,11 @@ func (v *MapValue) Load() (llvm.Value, error) {
 	panic("interp: load from a map")
 }
 
-// Store panics: maps are of reference type so cannot be stored to.
-func (v *MapValue) Store(value llvm.Value) {
-	panic("interp: store on a map")
+// Store returns an error: maps are of reference type so cannot be stored to.
+func (v *MapValue) Store(value llvm.Value) error {
+	// This must be a bug, but it might be helpful to indicate the location
+	// anyway.
+	return errors.New("interp: store on a map")
 }
 
 // GetElementPtr panics: maps are of reference type so their (interior)
