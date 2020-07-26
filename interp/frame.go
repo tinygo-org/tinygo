@@ -111,7 +111,10 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 			if inst.IsVolatile() {
 				fr.builder.CreateStore(value.Value(), ptr.Value())
 			} else {
-				ptr.Store(value.Value())
+				err := ptr.Store(value.Value())
+				if err != nil {
+					return nil, nil, fr.errorAt(inst, err)
+				}
 			}
 		case !inst.IsAGetElementPtrInst().IsNil():
 			value := fr.getLocal(inst.Operand(0))
@@ -422,7 +425,10 @@ func (fr *frame) evalBasicBlock(bb, incoming llvm.BasicBlock, indent string) (re
 					if err != nil {
 						return nil, nil, fr.errorAt(inst, err)
 					}
-					dstArray.Store(val)
+					err = dstArray.Store(val)
+					if err != nil {
+						return nil, nil, fr.errorAt(inst, err)
+					}
 					// dst++
 					dstArrayValue, err := dstArray.GetElementPtr([]uint32{1})
 					if err != nil {
