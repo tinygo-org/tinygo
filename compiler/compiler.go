@@ -2536,7 +2536,7 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 		return llvm.Value{}, b.makeError(pos, "todo: convert: basic non-integer type: "+typeFrom.String()+" -> "+typeTo.String())
 
 	case *types.Slice:
-		if basic, ok := typeFrom.(*types.Basic); !ok || basic.Info()&types.IsString == 0 {
+		if basic, ok := typeFrom.Underlying().(*types.Basic); !ok || basic.Info()&types.IsString == 0 {
 			panic("can only convert from a string to a slice")
 		}
 

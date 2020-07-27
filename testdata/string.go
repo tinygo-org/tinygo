@@ -17,8 +17,11 @@ func testRunesToString(r []rune) {
 	println("string from runes:", string(r))
 }
 
+type myString string
+
 func main() {
 	testRangeString()
 	testStringToRunes()
 	testRunesToString([]rune{97, 98, 99, 252, 162, 8364, 66376, 176, 120})
+	var _ = len([]byte(myString("foobar"))) // issue 1246
 }
