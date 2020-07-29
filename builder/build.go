@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -30,11 +31,16 @@ import (
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
 func Build(pkgName, outpath string, config *compileopts.Config, action func(string) error) error {
+	var err error
+	var machine llvm.TargetMachine
+
 	// Compile Go code to IR.
-	machine, err := compiler.NewTargetMachine(config)
+	machine, err = compiler.NewTargetMachine(config)
+
 	if err != nil {
 		return err
 	}
+
 	mod, extraFiles, extraLDFlags, errs := compiler.Compile(pkgName, machine, config)
 	if errs != nil {
 		return newMultiError(errs)
@@ -44,6 +50,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 		fmt.Println("; Generated LLVM IR:")
 		fmt.Println(mod.String())
 	}
+
 	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 		return errors.New("verification error after IR construction")
 	}
@@ -166,6 +173,29 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 			ldflags = append(ldflags, librt)
 		}
 
+		root := goenv.Get("TINYGOROOT")
+		dkp := os.Getenv("DEVKITPRO")
+		// If Nintendo Switch, add libnx
+		if config.Target.Linker == "devKitPro" {
+			// Use devKitPro
+			if dkp == "" {
+				return &commandError{"Nintendo Switch requires devKitPro. Check https://switchbrew.org/wiki/Setting_up_Development_Environment", config.Target.Linker, fmt.Errorf("DEVKITPRO environment not found")}
+			}
+
+			config.Target.Linker = path.Join(dkp, "devkitA64", "bin", "aarch64-none-elf-gcc")
+		}
+
+		if config.Target.Libc == "libnx" {
+			// libnx requires devKitProA64
+			if dkp == "" {
+				return &commandError{"Nintendo Switch requires devKitPro. Check https://switchbrew.org/wiki/Setting_up_Development_Environment", config.Target.Linker, fmt.Errorf("DEVKITPRO environment not found")}
+			}
+
+			libnxpath := path.Join(dkp, "libnx")
+			ldflags = append(ldflags, "-L"+path.Join(libnxpath, "lib"), "-lnx")
+			ldflags = append(ldflags, "-specs="+path.Join(libnxpath, "switch.specs"))
+		}
+
 		// Add libc.
 		if config.Target.Libc == "picolibc" {
 			libc, err := Picolibc.Load(config.Triple())
@@ -176,7 +206,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 		}
 
 		// Compile extra files.
-		root := goenv.Get("TINYGOROOT")
 		for i, path := range config.ExtraFiles() {
 			abspath := filepath.Join(root, path)
 			outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
