@@ -18,3 +18,5 @@ src/device/kendryte/*.s
 vendor
 llvm-build
 llvm-project
+src/pkg
+src/runtime/pkg
