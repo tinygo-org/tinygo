@@ -276,6 +276,8 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 		pos := c.ir.Program.Fset.Position(initFn.Pos())
 		irbuilder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
+	initFn.LLVMFn.Param(0).SetName("context")
+	initFn.LLVMFn.Param(1).SetName("parentHandle")
 	block := c.ctx.AddBasicBlock(initFn.LLVMFn, "entry")
 	irbuilder.SetInsertPointAtEnd(block)
 	for _, fn := range initFuncs {
