@@ -44,6 +44,12 @@ func main() {
 	// defers in loop
 	testDeferLoop()
 
+	//defer func variable call
+	testDeferFuncVar()
+
+	//More complicated func variable call
+	testMultiFuncVar()
+
 	// Take a bound method and use it as a function pointer.
 	// This function pointer needs a context pointer.
 	testBound(thing.String)
@@ -64,6 +70,9 @@ func main() {
 
 	// regression testing
 	regression1033()
+
+	//Test deferred builtins
+	testDeferBuiltin()
 }
 
 func runFunc(f func(int), arg int) {
@@ -91,12 +100,38 @@ func testDefer() {
 	defer t.Print("bar")
 
 	println("deferring...")
+	d := dumb{}
+	defer d.Value(0)
 }
 
 func testDeferLoop() {
 	for j := 0; j < 4; j++ {
 		defer deferred("loop", j)
 	}
+}
+
+func testDeferFuncVar() {
+	dummy, f := deferFunc()
+	dummy++
+	defer f(1)
+}
+
+func testMultiFuncVar() {
+	f := multiFuncDefer()
+	defer f(1)
+}
+
+func testDeferBuiltin() {
+	i := make(chan int)
+	defer close(i)
+}
+
+type dumb struct {
+
+}
+
+func (*dumb) Value(key interface{}) interface{} {
+	return nil
 }
 
 func deferred(msg string, i int) {
@@ -106,6 +141,20 @@ func deferred(msg string, i int) {
 //export __exportedDefer
 func exportedDefer() {
 	println("...exported defer")
+}
+
+func deferFunc() (int, func(int)) {
+	return 0, func(i int){println("...extracted defer func ", i)}
+}
+
+func multiFuncDefer() func(int) {
+	i := 0
+
+	if i > 0 {
+		return func(i int){println("Should not have gotten here. i = ", i)}
+	}
+
+	return func(i int){println("Called the correct function. i = ", i)}
 }
 
 func testBound(f func() string) {

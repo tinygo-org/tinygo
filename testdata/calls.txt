@@ -9,6 +9,8 @@ loop 3
 loop 2
 loop 1
 loop 0
+...extracted defer func  1
+Called the correct function. i =  1
 bound method: foo
 thing inside closure: foo
 inside fp closure: foo 3
