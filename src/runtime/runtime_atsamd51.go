@@ -332,3 +332,7 @@ func initADCClock() {
 	sam.GCLK.PCHCTRL[41].Set((sam.GCLK_PCHCTRL_GEN_GCLK1 << sam.GCLK_PCHCTRL_GEN_Pos) |
 		sam.GCLK_PCHCTRL_CHEN)
 }
+
+func waitForEvents() {
+	arm.Asm("wfe")
+}

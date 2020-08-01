@@ -345,3 +345,7 @@ func initADCClock() {
 		sam.GCLK_CLKCTRL_CLKEN)
 	waitForSync()
 }
+
+func waitForEvents() {
+	arm.Asm("wfe")
+}
