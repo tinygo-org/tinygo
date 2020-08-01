@@ -95,11 +95,11 @@ const (
 
 // USB CDC identifiers
 const (
-	usb_STRING_PRODUCT      = "Adafruit Feather nRF52840 Express"
-	usb_STRING_MANUFACTURER = "Adafruit"
+	usb_STRING_PRODUCT      = "Feather nRF52840 Express"
+	usb_STRING_MANUFACTURER = "Adafruit Industries LLC"
 )
 
 var (
 	usb_VID uint16 = 0x239A
-	usb_PID uint16 = 0x0029
+	usb_PID uint16 = 0x802A
 )
