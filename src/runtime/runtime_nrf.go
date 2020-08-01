@@ -3,7 +3,6 @@
 package runtime
 
 import (
-	"device/arm"
 	"device/nrf"
 	"machine"
 	"runtime/interrupt"
@@ -114,6 +113,6 @@ func rtc_sleep(ticks uint32) {
 	}
 	nrf.RTC1.CC[0].Set((nrf.RTC1.COUNTER.Get() + ticks) & 0x00ffffff)
 	for rtc_wakeup.Get() == 0 {
-		arm.Asm("wfi")
+		waitForEvents()
 	}
 }
