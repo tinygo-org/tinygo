@@ -308,7 +308,7 @@ func timerSleep(ticks uint32) bool {
 	sam.RTC_MODE0.INTENSET.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
 
 wait:
-	arm.Asm("wfe")
+	waitForEvents()
 	if timerWakeup.Get() != 0 {
 		return true
 	}
