@@ -265,3 +265,7 @@ func abort() {
 		machine.PollUART(&machine.UART2)
 	}
 }
+
+func waitForEvents() {
+	arm.Asm("wfe")
+}
