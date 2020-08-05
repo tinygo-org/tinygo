@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 
@@ -37,7 +38,7 @@ type TargetSpec struct {
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
 	ExtraFiles       []string `json:"extra-files"`
-	Emulator         []string `json:"emulator"`
+	Emulator         []string `json:"emulator" copy:"replace"` // inherited Emulator must not be appened
 	FlashCommand     string   `json:"flash-command"`
 	GDB              string   `json:"gdb"`
 	PortReset        string   `json:"flash-1200-bps-reset"`
@@ -53,91 +54,35 @@ type TargetSpec struct {
 	RelocationModel  string   `json:"relocation-model"`
 }
 
-// copyProperties copies all properties that are set in spec2 into itself.
+// copyProperties copies all properties that are set in spec2 into itself using reflection.
 func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
-	// TODO: simplify this using reflection? Inherits and BuildTags are special
-	// cases, but the rest can simply be copied if set.
-	spec.Inherits = append(spec.Inherits, spec2.Inherits...)
-	if spec2.Triple != "" {
-		spec.Triple = spec2.Triple
-	}
-	if spec2.CPU != "" {
-		spec.CPU = spec2.CPU
-	}
-	spec.Features = append(spec.Features, spec2.Features...)
-	if spec2.GOOS != "" {
-		spec.GOOS = spec2.GOOS
-	}
-	if spec2.GOARCH != "" {
-		spec.GOARCH = spec2.GOARCH
-	}
-	spec.BuildTags = append(spec.BuildTags, spec2.BuildTags...)
-	if spec2.GC != "" {
-		spec.GC = spec2.GC
-	}
-	if spec2.Scheduler != "" {
-		spec.Scheduler = spec2.Scheduler
-	}
-	if spec2.Compiler != "" {
-		spec.Compiler = spec2.Compiler
-	}
-	if spec2.Linker != "" {
-		spec.Linker = spec2.Linker
-	}
-	if spec2.RTLib != "" {
-		spec.RTLib = spec2.RTLib
-	}
-	if spec2.Libc != "" {
-		spec.Libc = spec2.Libc
-	}
-	spec.CFlags = append(spec.CFlags, spec2.CFlags...)
-	spec.LDFlags = append(spec.LDFlags, spec2.LDFlags...)
-	if spec2.LinkerScript != "" {
-		spec.LinkerScript = spec2.LinkerScript
-	}
-	spec.ExtraFiles = append(spec.ExtraFiles, spec2.ExtraFiles...)
-	if len(spec2.Emulator) != 0 {
-		spec.Emulator = spec2.Emulator
-	}
-	if spec2.FlashCommand != "" {
-		spec.FlashCommand = spec2.FlashCommand
-	}
-	if spec2.GDB != "" {
-		spec.GDB = spec2.GDB
-	}
-	if spec2.PortReset != "" {
-		spec.PortReset = spec2.PortReset
-	}
-	if spec2.FlashMethod != "" {
-		spec.FlashMethod = spec2.FlashMethod
-	}
-	if spec2.FlashVolume != "" {
-		spec.FlashVolume = spec2.FlashVolume
-	}
-	if spec2.FlashFilename != "" {
-		spec.FlashFilename = spec2.FlashFilename
-	}
-	if spec2.UF2FamilyID != "" {
-		spec.UF2FamilyID = spec2.UF2FamilyID
-	}
-	if spec2.OpenOCDInterface != "" {
-		spec.OpenOCDInterface = spec2.OpenOCDInterface
-	}
-	if spec2.OpenOCDTarget != "" {
-		spec.OpenOCDTarget = spec2.OpenOCDTarget
-	}
-	if spec2.OpenOCDTransport != "" {
-		spec.OpenOCDTransport = spec2.OpenOCDTransport
-	}
-	if spec2.JLinkDevice != "" {
-		spec.JLinkDevice = spec2.JLinkDevice
-	}
-	if spec2.CodeModel != "" {
-		spec.CodeModel = spec2.CodeModel
-	}
-
-	if spec2.RelocationModel != "" {
-		spec.RelocationModel = spec2.RelocationModel
+	specType := reflect.TypeOf(spec).Elem()
+	specValue := reflect.ValueOf(spec).Elem()
+	spec2Value := reflect.ValueOf(spec2).Elem()
+	for i := 0; i < specType.NumField(); i++ {
+		field := specType.Field(i)
+		switch kind := field.Type.Kind(); kind {
+		case reflect.String: // for strings, just copy the field of spec2 to spec (if not empty)
+			if v := spec2Value.Field(i); v.Len() > 0 {
+				specValue.Field(i).Set(v)
+			}
+		case reflect.Slice: // for slices...
+			tag, ok := field.Tag.Lookup("copy")
+			if ok && tag == "replace" {
+				// ... copy the field of spec2 to spec if the field has a "copy" tag
+				// and the tag is "replace" (and is not [])
+				if v := spec2Value.Field(i); v.Len() > 0 {
+					specValue.Field(i).Set(v)
+				}
+			} else if ok && tag != "append" {
+				panic("copy mode must be 'replace' or 'append' (default). I don't know how to '" + tag + "'.")
+			} else {
+				// ... else append the field of spec2 to spec
+				specValue.Field(i).Set(reflect.AppendSlice(specValue.Field(i), spec2Value.Field(i)))
+			}
+		default:
+			panic("field must be a string or a slice. '" + kind.String() + "' is not expected.")
+		}
 	}
 }
 
