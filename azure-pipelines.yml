@@ -14,20 +14,24 @@ jobs:
       inputs:
         version: '1.15'
     - checkout: self
-    - task: CacheBeta@0
+    - task: Cache@2
       displayName: Cache LLVM source
       inputs:
-        key: llvm-source-10-windows-v0
+        key: llvm-source-10-windows-v1
         path: llvm-project
     - task: Bash@3
       displayName: Download LLVM source
       inputs:
         targetType: inline
-        script: make llvm-source
+        script: |
+          make llvm-source
+          # Workaround for bad symlinks:
+          # https://github.com/microsoft/azure-pipelines-tasks/issues/13418
+          rm -f llvm-project/libcxx/test/std/input.output/filesystems/Inputs/static_test_env/bad_symlink
     - task: CacheBeta@0
       displayName: Cache LLVM build
       inputs:
-        key: llvm-build-10-windows-v0
+        key: llvm-build-10-windows-v1
         path: llvm-build
     - task: Bash@3
       displayName: Build LLVM
@@ -80,4 +84,4 @@ jobs:
         script: |
           export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
           unset GOROOT
-          make smoketest TINYGO=build/tinygo AVR=0
+          make smoketest TINYGO=build/tinygo AVR=0 XTENSA=0

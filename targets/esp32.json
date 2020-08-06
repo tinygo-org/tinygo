@@ -1,0 +1,13 @@
+{
+	"inherits": ["xtensa"],
+	"cpu": "esp32",
+	"build-tags": ["esp32", "esp"],
+	"linker": "xtensa-esp32-elf-ld",
+	"cflags": [
+		"-mcpu=esp32"
+	],
+	"linkerscript": "targets/esp32.ld",
+	"extra-files": [
+		"src/device/esp/esp32.S"
+	]
+}

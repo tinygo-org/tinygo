@@ -44,16 +44,28 @@ commands:
           command: |
             wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
             sudo apt install ./google-chrome-stable_current_amd64.deb
+  install-xtensa-toolchain:
+    parameters:
+      variant:
+        type: string
+    steps:
+      - run:
+          name: "Install Xtensa toolchain"
+          command: |
+            curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-<<parameters.variant>>.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-<<parameters.variant>>.tar.gz
+            sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-<<parameters.variant>>.tar.gz
+            sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
+            rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-<<parameters.variant>>.tar.gz
   llvm-source-linux:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-10-v0
+            - llvm-source-10-v1
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-10-v0
+          key: llvm-source-10-v1
           paths:
             - llvm-project
   build-wasi-libc:
@@ -95,7 +107,7 @@ commands:
             - lib/wasi-libc/sysroot
       - run: go test -v -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./interp ./transform .
       - run: make gen-device -j4
-      - run: make smoketest
+      - run: make smoketest XTENSA=0
       - run: make wasmtest
       - save_cache:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
@@ -121,6 +133,8 @@ commands:
                 gcc-avr \
                 avr-libc
       - install-node
+      - install-xtensa-toolchain:
+          variant: "linux-amd64"
       - restore_cache:
           keys:
             - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
@@ -128,7 +142,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-10-linux-v0-assert
+            - llvm-build-10-linux-v1-assert
       - run:
           name: "Build LLVM"
           command: |
@@ -146,7 +160,7 @@ commands:
               make ASSERT=1 llvm-build
             fi
       - save_cache:
-          key: llvm-build-10-linux-v0-assert
+          key: llvm-build-10-linux-v1-assert
           paths:
             llvm-build
       - run: make ASSERT=1
@@ -179,6 +193,8 @@ commands:
                 gcc-avr \
                 avr-libc
       - install-node
+      - install-xtensa-toolchain:
+          variant: "linux-amd64"
       - restore_cache:
           keys:
             - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
@@ -186,7 +202,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-10-linux-v0
+            - llvm-build-10-linux-v1
       - run:
           name: "Build LLVM"
           command: |
@@ -204,7 +220,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-10-linux-v0
+          key: llvm-build-10-linux-v1
           paths:
             llvm-build
       - build-wasi-libc
@@ -250,23 +266,25 @@ commands:
             sudo tar -C /usr/local -xzf go1.14.darwin-amd64.tar.gz
             ln -s /usr/local/go/bin/go /usr/local/bin/go
             HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
+      - install-xtensa-toolchain:
+          variant: "macos"
       - restore_cache:
           keys:
             - go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
             - go-cache-macos-v2-{{ checksum "go.mod" }}
       - restore_cache:
           keys:
-            - llvm-source-10-macos-v0
+            - llvm-source-10-macos-v1
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-10-macos-v0
+          key: llvm-source-10-macos-v1
           paths:
             - llvm-project
       - restore_cache:
           keys:
-            - llvm-build-10-macos-v0
+            - llvm-build-10-macos-v1
       - run:
           name: "Build LLVM"
           command: |
@@ -278,7 +296,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-10-macos-v0
+          key: llvm-build-10-macos-v1
           paths:
             llvm-build
       - restore_cache:

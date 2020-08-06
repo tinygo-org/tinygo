@@ -3,6 +3,7 @@ docs/_build
 src/device/avr/*.go
 src/device/avr/*.ld
 src/device/avr/*.s
+src/device/esp/*.go
 src/device/nrf/*.go
 src/device/nrf/*.s
 src/device/nxp/*.go
