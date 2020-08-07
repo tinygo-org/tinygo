@@ -38,7 +38,7 @@ type TargetSpec struct {
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
 	ExtraFiles       []string `json:"extra-files"`
-	Emulator         []string `json:"emulator" copy:"replace"` // inherited Emulator must not be appened
+	Emulator         []string `json:"emulator" override:"copy"` // inherited Emulator must not be appened
 	FlashCommand     string   `json:"flash-command"`
 	GDB              string   `json:"gdb"`
 	PortReset        string   `json:"flash-1200-bps-reset"`
@@ -54,31 +54,42 @@ type TargetSpec struct {
 	RelocationModel  string   `json:"relocation-model"`
 }
 
-// copyProperties copies all properties that are set in spec2 into itself using reflection.
-func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
+// overrideProperties overrides all properties that are set in child into itself using reflection.
+func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 	specType := reflect.TypeOf(spec).Elem()
 	specValue := reflect.ValueOf(spec).Elem()
-	spec2Value := reflect.ValueOf(spec2).Elem()
+	childValue := reflect.ValueOf(child).Elem()
+
+	copyFieldIfNotEmpty := func(dst reflect.Value, src reflect.Value) {
+		if src.Len() > 0 {
+			dst.Set(src)
+		}
+	}
+
+	appendField := func(dst reflect.Value, src reflect.Value) {
+		dst.Set(reflect.AppendSlice(src, dst))
+	}
+
 	for i := 0; i < specType.NumField(); i++ {
 		field := specType.Field(i)
 		switch kind := field.Type.Kind(); kind {
-		case reflect.String: // for strings, just copy the field of spec2 to spec (if not empty)
-			if v := spec2Value.Field(i); v.Len() > 0 {
-				specValue.Field(i).Set(v)
-			}
-		case reflect.Slice: // for slices...
-			tag, ok := field.Tag.Lookup("copy")
-			if ok && tag == "replace" {
-				// ... copy the field of spec2 to spec if the field has a "copy" tag
-				// and the tag is "replace" (and is not [])
-				if v := spec2Value.Field(i); v.Len() > 0 {
-					specValue.Field(i).Set(v)
+		case reflect.String: // for strings, just copy the field of child to spec if not empty
+			copyFieldIfNotEmpty(specValue.Field(i), childValue.Field(i))
+		case reflect.Slice: // for slices... check if there is a tag for the field
+			if tag, ok := field.Tag.Lookup("override"); ok {
+				switch tag {
+				case "copy":
+					// copy the field of child to spec if not empty
+					copyFieldIfNotEmpty(specValue.Field(i), childValue.Field(i))
+				case "append":
+					// or append the field of child to spec
+					appendField(specValue.Field(i), childValue.Field(i))
+				default:
+					panic("override mode must be 'copy' or 'append' (default). I don't know how to '" + tag + "'.")
 				}
-			} else if ok && tag != "append" {
-				panic("copy mode must be 'replace' or 'append' (default). I don't know how to '" + tag + "'.")
 			} else {
-				// ... else append the field of spec2 to spec
-				specValue.Field(i).Set(reflect.AppendSlice(specValue.Field(i), spec2Value.Field(i)))
+				// if no tag, then append the field of child to spec
+				appendField(specValue.Field(i), childValue.Field(i))
 			}
 		default:
 			panic("field must be a string or a slice. '" + kind.String() + "' is not expected.")
@@ -131,11 +142,11 @@ func (spec *TargetSpec) resolveInherits() error {
 		if err != nil {
 			return err
 		}
-		newSpec.copyProperties(subtarget)
+		newSpec.overrideProperties(subtarget)
 	}
 
 	// When all properties are loaded, make sure they are properly inherited.
-	newSpec.copyProperties(spec)
+	newSpec.overrideProperties(spec)
 	*spec = *newSpec
 
 	return nil
