@@ -38,7 +38,7 @@ type TargetSpec struct {
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
 	ExtraFiles       []string `json:"extra-files"`
-	Emulator         []string `json:"emulator" override:"copy"` // inherited Emulator must not be appened
+	Emulator         []string `json:"emulator" override:"copy"` // inherited Emulator must not be append
 	FlashCommand     string   `json:"flash-command"`
 	GDB              string   `json:"gdb"`
 	PortReset        string   `json:"flash-1200-bps-reset"`
