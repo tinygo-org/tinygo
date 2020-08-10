@@ -1,0 +1,4 @@
+{
+	"inherits": ["bluepill"],
+	"openocd-commands": ["set CPUTAPID 0x2ba01477"]
+}
