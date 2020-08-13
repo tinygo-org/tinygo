@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -228,10 +229,27 @@ func symlink(oldname, newname string) error {
 				return symlinkErr
 			}
 		} else {
-			// Make a hard link.
+			// Try making a hard link.
 			err := os.Link(oldname, newname)
 			if err != nil {
-				return symlinkErr
+				// Making a hardlink failed. Try copying the file as a last
+				// fallback.
+				inf, err := os.Open(oldname)
+				if err != nil {
+					return err
+				}
+				defer inf.Close()
+				outf, err := os.Create(newname)
+				if err != nil {
+					return err
+				}
+				defer outf.Close()
+				_, err = io.Copy(outf, inf)
+				if err != nil {
+					os.Remove(newname)
+					return err
+				}
+				// File was copied.
 			}
 		}
 		return nil // success
