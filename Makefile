@@ -350,7 +350,7 @@ endif
 	@$(MD5SUM) test.elf
 
 wasmtest:
-	$(GO) test ./tests/wasm
+	$(GO) test -buildmode exe ./tests/wasm
 
 build/release: tinygo gen-device wasi-libc
 	@mkdir -p build/release/tinygo/bin
