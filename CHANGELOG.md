@@ -1,3 +1,10 @@
+0.14.1
+---
+* **command-line**
+  - support for Go 1.15
+* **compiler**
+  - loader:  work around Windows symlink limitation
+
 0.14.0
 ---
 * **command-line**
