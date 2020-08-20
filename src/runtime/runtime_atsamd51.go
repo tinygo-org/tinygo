@@ -17,6 +17,7 @@ func postinit() {}
 //export Reset_Handler
 func main() {
 	preinit()
+	initFPU()
 	run()
 	abort()
 }
@@ -331,4 +332,9 @@ func initADCClock() {
 		sam.GCLK_PCHCTRL_CHEN)
 	sam.GCLK.PCHCTRL[41].Set((sam.GCLK_PCHCTRL_GEN_GCLK1 << sam.GCLK_PCHCTRL_GEN_Pos) |
 		sam.GCLK_PCHCTRL_CHEN)
+}
+
+func initFPU() {
+	// Enable FPU
+	arm.SCB.CPACR.SetBits(0x00F00000)
 }

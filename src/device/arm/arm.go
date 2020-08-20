@@ -89,15 +89,36 @@ const (
 //
 // SCB_Type provides the definitions for the System Control Block Registers.
 type SCB_Type struct {
-	CPUID volatile.Register32    // CPUID Base Register
-	ICSR  volatile.Register32    // Interrupt Control and State Register
-	VTOR  volatile.Register32    // Vector Table Offset Register
-	AIRCR volatile.Register32    // Application Interrupt and Reset Control Register
-	SCR   volatile.Register32    // System Control Register
-	CCR   volatile.Register32    // Configuration Control Register
-	_     volatile.Register32    // RESERVED1;
-	SHP   [2]volatile.Register32 // System Handlers Priority Registers. [0] is RESERVED
-	SHCSR volatile.Register32    // System Handler Control and State Register
+	CPUID    volatile.Register32    // CPUID Base Register
+	ICSR     volatile.Register32    // Interrupt Control and State Register
+	VTOR     volatile.Register32    // Vector Table Offset Register
+	AIRCR    volatile.Register32    // Application Interrupt and Reset Control Register
+	SCR      volatile.Register32    // System Control Register
+	CCR      volatile.Register32    // Configuration Control Register
+	_        volatile.Register32    // RESERVED1;
+	SHP      [2]volatile.Register32 // System Handlers Priority Registers. [0] is RESERVED
+	SHCSR    volatile.Register32    // System Handler Control and State Register
+	CFSR     volatile.Register32    // Configurable Fault Status Registers
+	HFSR     volatile.Register32    // HardFault Status register
+	DFSR     volatile.Register32    // Debug Fault Status Register
+	MMFAR    volatile.Register32    // MemManage Address Register[b]
+	BFAR     volatile.Register32    // BusFault Address Register[b]
+	AFSR     volatile.Register32    // Auxiliary Fault Status Register, AFSR
+	ID_PFR0  volatile.Register32    // Processor Feature Register 0
+	ID_PFR1  volatile.Register32    // Processor Feature Register 1
+	ID_DFR0  volatile.Register32    // Debug Features Register 0
+	ID_AFR0  volatile.Register32    // Auxiliary Features Register 0
+	ID_MMFR0 volatile.Register32    // Memory Model Feature Register 0
+	ID_MMFR1 volatile.Register32    // Memory Model Feature Register 1
+	ID_MMFR2 volatile.Register32    // Memory Model Feature Register 2
+	ID_MMFR3 volatile.Register32    // Memory Model Feature Register 3
+	ID_ISAR0 volatile.Register32    // Instruction Set Attributes Register 0
+	ID_ISAR1 volatile.Register32    // Instruction Set Attributes Register 1
+	ID_ISAR2 volatile.Register32    // Instruction Set Attributes Register 2
+	ID_ISAR3 volatile.Register32    // Instruction Set Attributes Register 3
+	ID_ISAR4 volatile.Register32    // Instruction Set Attributes Register 4
+	_        [5]volatile.Register32 // RESERVED
+	CPACR    volatile.Register32    // Coprocessor Access Control Register
 }
 
 var SCB = (*SCB_Type)(unsafe.Pointer(uintptr(SCB_BASE)))
