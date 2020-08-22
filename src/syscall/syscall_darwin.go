@@ -24,6 +24,7 @@ func getErrno() Errno {
 
 const (
 	ENOENT      Errno = 0x2
+	ENOTDIR     Errno = 0x14
 	EEXIST      Errno = 0x11
 	EINTR       Errno = 0x4
 	EMFILE      Errno = 0x18
