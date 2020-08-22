@@ -1,0 +1,13 @@
+{
+  "inherits": ["cortex-m4"],
+  "build-tags": ["feather_stm32f405", "stm32f405", "stm32"],
+  "cflags": [
+    "-Qunused-arguments"
+  ],
+  "linkerscript": "targets/stm32f405.ld",
+  "extra-files": [
+    "src/device/stm32/stm32f405.s"
+  ],
+  "flash-method": "command",
+  "flash-command": "dfu-util -a 0 --dfuse-address 0x08000000 -D {bin}"
+}
