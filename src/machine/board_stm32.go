@@ -1,4 +1,4 @@
-// +build bluepill nucleof103rb stm32f4disco
+// +build bluepill nucleof103rb stm32f4disco feather_stm32f405
 
 package machine
 
@@ -13,4 +13,7 @@ const (
 	portF
 	portG
 	portH
+	portI
+	portJ
+	portK
 )
