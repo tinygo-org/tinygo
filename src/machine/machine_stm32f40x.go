@@ -11,6 +11,7 @@ import (
 	"unsafe"
 )
 
+<<<<<<< HEAD
 const (
 	PA0  = portA + 0
 	PA1  = portA + 1
@@ -101,6 +102,8 @@ const (
 	PH1 = portH + 1
 )
 
+=======
+>>>>>>> add basic support for feather-stm32f405
 func CPUFrequency() uint32 {
 	return 168_000_000
 }

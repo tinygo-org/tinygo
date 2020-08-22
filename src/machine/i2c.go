@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // +build avr nrf sam stm32,!stm32f4disco,!feather_stm32f405 fe310 k210
+=======
+// +build avr nrf sam stm32,!stm32f4disco,!feather-stm32f405 fe310 k210
+>>>>>>> add basic support for feather-stm32f405
 
 package machine
 

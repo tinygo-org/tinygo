@@ -9,5 +9,9 @@
     "src/device/stm32/stm32f405.s"
   ],
   "flash-method": "command",
+<<<<<<< HEAD
   "flash-command": "dfu-util -a 0 --dfuse-address 0x08000000 -D {hex}"
+=======
+  "flash-command": "dfu-util -a 0 --dfuse-address 0x08000000 -D {bin}"
+>>>>>>> add basic support for feather-stm32f405
 }
