@@ -12,7 +12,6 @@
 	],
 	"ldflags": [
 		"--allow-undefined",
-		"--no-threads",
 		"--stack-first",
 		"--export-all",
 		"--no-demangle",
