@@ -10,7 +10,7 @@ const (
 	D1  = P0_24 // UART RX
 	D2  = P1_02
 	D3  = P0_06 // LED1
-	D4  = P0_20 // Button
+	D4  = P0_29 // Button
 	D5  = P0_27
 	D6  = P1_09 // DotStar Clock
 	D7  = P1_08
@@ -83,9 +83,9 @@ const (
 
 // SPI pins
 const (
-	SPI0_SCK_PIN  = D25
-	SPI0_MOSI_PIN = D24
-	SPI0_MISO_PIN = D23
+	SPI0_SCK_PIN = D25
+	SPI0_SDO_PIN = D24
+	SPI0_SDI_PIN = D23
 )
 
 // USB CDC identifiers
@@ -96,5 +96,5 @@ const (
 
 var (
 	usb_VID uint16 = 0x239A
-	usb_PID uint16 = 0x0052
+	usb_PID uint16 = 0x8051
 )
