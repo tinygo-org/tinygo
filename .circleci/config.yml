@@ -60,12 +60,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-v2
+            - wasi-libc-sysroot-v3
       - run:
           name: "Build wasi-libc"
           command: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-v2
+          key: wasi-libc-sysroot-v3
           paths:
             - lib/wasi-libc/sysroot
   test-linux:
@@ -87,10 +87,10 @@ commands:
       - run: go install -tags=llvm<<parameters.llvm>> .
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-systemclang-v1
+            - wasi-libc-sysroot-systemclang-v2
       - run: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-systemclang-v1
+          key: wasi-libc-sysroot-systemclang-v2
           paths:
             - lib/wasi-libc/sysroot
       - run: go test -v -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./interp ./transform .
@@ -283,12 +283,12 @@ commands:
             llvm-build
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-macos-v1
+            - wasi-libc-sysroot-macos-v2
       - run:
           name: "Build wasi-libc"
           command: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-macos-v1
+          key: wasi-libc-sysroot-macos-v2
           paths:
             - lib/wasi-libc/sysroot
       - run:
