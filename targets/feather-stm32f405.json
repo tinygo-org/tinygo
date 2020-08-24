@@ -9,5 +9,5 @@
     "src/device/stm32/stm32f405.s"
   ],
   "flash-method": "command",
-  "flash-command": "dfu-util -a 0 --dfuse-address 0x08000000 -D {bin}"
+  "flash-command": "dfu-util -a 0 --dfuse-address 0x08000000 -D {hex}"
 }
