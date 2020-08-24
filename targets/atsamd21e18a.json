@@ -9,5 +9,7 @@
 	"linkerscript": "targets/atsamd21.ld",
 	"extra-files": [
 		"src/device/sam/atsamd21e18a.s"
-	]
+	],
+	"openocd-transport": "swd",
+	"openocd-target": "at91samdXX"
 }
