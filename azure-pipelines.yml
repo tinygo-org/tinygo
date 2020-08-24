@@ -47,7 +47,7 @@ jobs:
     - task: CacheBeta@0
       displayName: Cache wasi-libc sysroot
       inputs:
-        key: wasi-libc-sysroot-v2
+        key: wasi-libc-sysroot-v3
         path: lib/wasi-libc/sysroot
     - task: Bash@3
       displayName: Build wasi-libc
