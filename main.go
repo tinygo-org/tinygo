@@ -58,33 +58,23 @@ func moveFile(src, dst string) error {
 	return os.Remove(src)
 }
 
-// copyFile copies the given file from src to dst. It copies first to a .tmp
-// file which is then moved over a possibly already existing file at the
-// destination.
+// copyFile copies the given file from src to dst. It can copy over
+// a possibly already existing file at the destination.
 func copyFile(src, dst string) error {
-	inf, err := os.Open(src)
+	source, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer inf.Close()
-	outpath := dst + ".tmp"
-	outf, err := os.Create(outpath)
-	if err != nil {
-		return err
-	}
+	defer source.Close()
 
-	_, err = io.Copy(outf, inf)
-	if err != nil {
-		os.Remove(outpath)
-		return err
-	}
-
-	err = outf.Close()
+	destination, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
+	defer destination.Close()
 
-	return os.Rename(dst+".tmp", dst)
+	_, err = io.Copy(destination, source)
+	return err
 }
 
 // Build compiles and links the given package and writes it to outpath.
