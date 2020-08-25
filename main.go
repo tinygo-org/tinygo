@@ -28,6 +28,12 @@ import (
 	"go.bug.st/serial"
 )
 
+var (
+	// This variable is set at build time using -ldflags parameters.
+	// See: https://stackoverflow.com/a/11355611
+	gitSha1 string
+)
+
 // commandError is an error type to wrap os/exec.Command errors. This provides
 // some more information regarding what went wrong while running a command.
 type commandError struct {
@@ -995,7 +1001,11 @@ func main() {
 		if s, err := goenv.GorootVersionString(goenv.Get("GOROOT")); err == nil {
 			goversion = s
 		}
-		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", goenv.Version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
+		version := goenv.Version
+		if strings.HasSuffix(goenv.Version, "-dev") && gitSha1 != "" {
+			version += "-" + gitSha1
+		}
+		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
 	case "env":
 		if flag.NArg() == 0 {
 			// Show all environment variables.
