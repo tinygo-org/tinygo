@@ -29,6 +29,8 @@ import (
 )
 
 var (
+	// This variable is set at build time using -ldflags parameters.
+	// See: https://stackoverflow.com/a/11355611
 	gitSha1 string
 )
 
