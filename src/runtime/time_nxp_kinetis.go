@@ -27,7 +27,7 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// +build nxp,mk66f18
+// +build nxp,kinetis
 
 package runtime
 
@@ -49,11 +49,11 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns / 1000)
 }
 
-// cyclesPerMilli-1 is used for the systick reset value
-//   the systick current value will be decremented on every clock cycle
-//   an interrupt is generated when the current value reaches 0
-//   a value of freq/1000 generates a tick (irq) every millisecond (1/1000 s)
-var cyclesPerMilli = machine.CPUFrequency() / 1000
+var (
+	cyclesPerSecond = machine.CPUFrequency()
+	cyclesPerMilli  = cyclesPerSecond / 1000
+	cyclesPerMicro  = cyclesPerMilli / 1000
+)
 
 // number of systick irqs (milliseconds) since boot
 var systickCount volatile.Register64
@@ -63,6 +63,10 @@ func millisSinceBoot() uint64 {
 }
 
 func initSysTick() {
+	// The systick current value will be decremented on every clock cycle.
+	// An interrupt is generated when the current value reaches 0.
+	// A value of freq/1000-1 generates a tick (irq) every millisecond (1/1000 s).
+
 	nxp.SysTick.RVR.Set(cyclesPerMilli - 1)
 	nxp.SysTick.CVR.Set(0)
 	nxp.SysTick.CSR.Set(nxp.SysTick_CSR_CLKSOURCE | nxp.SysTick_CSR_TICKINT | nxp.SysTick_CSR_ENABLE)
@@ -95,9 +99,14 @@ func ticks() timeUnit {
 	// if the systick counter was about to reset and ICSR indicates a pending systick irq, increment count
 	if istatus&nxp.SystemControl_ICSR_PENDSTSET != 0 && current > 50 {
 		micros += 1000
+	}
+
+	cycles := cyclesPerMilli - 1 - current // number of cycles since last 1ms tick
+	if machine.Kinetis == "L" && machine.CPUFrequency() == 48000000 {
+		micros += timeUnit(cycles*uint32(87381)) >> 22
+	} else if machine.Kinetis == "L" && machine.CPUFrequency() == 24000000 {
+		micros += timeUnit(cycles*uint32(174763)) >> 22
 	} else {
-		cycles := cyclesPerMilli - 1 - current // number of cycles since last 1ms tick
-		cyclesPerMicro := machine.CPUFrequency() / 1000000
 		micros += timeUnit(cycles / cyclesPerMicro)
 	}
 
@@ -108,7 +117,7 @@ func ticks() timeUnit {
 func sleepTicks(duration timeUnit) {
 	now := ticks()
 	end := duration + now
-	cyclesPerMicro := machine.ClockFrequency() / 1000000
+	clockCyclesPerMicro := machine.ClockFrequency() / 1000000
 
 	if duration <= 0 {
 		return
@@ -117,7 +126,7 @@ func sleepTicks(duration timeUnit) {
 	nxp.LPTMR0.PSR.Set((3 << nxp.LPTMR0_PSR_PCS_Pos) | nxp.LPTMR0_PSR_PBYP) // use 16MHz clock, undivided
 
 	for now < end {
-		count := uint32(end-now) / cyclesPerMicro
+		count := uint32(end-now) / clockCyclesPerMicro
 		if count > 65535 {
 			count = 65535
 		}

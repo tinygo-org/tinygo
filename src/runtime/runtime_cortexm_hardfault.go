@@ -1,4 +1,5 @@
-// +build cortexm,!nxp
+// +build cortexm
+// +build !nxp !mk66f18
 
 package runtime
 

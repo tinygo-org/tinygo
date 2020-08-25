@@ -27,7 +27,7 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// +build nxp,mk66f18
+// +build nxp,mkl26z4
 
 package machine
 
@@ -37,7 +37,7 @@ import (
 	"unsafe"
 )
 
-const Kinetis = "K"
+const Kinetis = "L"
 
 type PinMode uint8
 
@@ -46,12 +46,11 @@ const (
 	PinInputPullUp
 	PinInputPullDown
 	PinOutput
-	PinOutputOpenDrain
 	PinDisable
 )
 
 const (
-	PA00 Pin = iota
+	PA00 Pin = iota + (0 << 5)
 	PA01
 	PA02
 	PA03
@@ -59,11 +58,8 @@ const (
 	PA05
 	PA06
 	PA07
-	PA08
-	PA09
-	PA10
-	PA11
-	PA12
+
+	PA12 Pin = iota + PA00 + 12
 	PA13
 	PA14
 	PA15
@@ -72,35 +68,21 @@ const (
 	PA18
 	PA19
 	PA20
-	PA21
-	PA22
-	PA23
-	PA24
-	PA25
-	PA26
-	PA27
-	PA28
-	PA29
 )
 
 const (
-	PB00 Pin = iota + 32
+	PB00 Pin = iota + (1 << 5)
 	PB01
 	PB02
 	PB03
-	PB04
-	PB05
-	PB06
-	PB07
+
+	PB07 Pin = iota + PB00 + 7
 	PB08
 	PB09
 	PB10
 	PB11
-	_
-	_
-	_
-	_
-	PB16
+
+	PB16 Pin = iota + PB00 + 16
 	PB17
 	PB18
 	PB19
@@ -111,7 +93,7 @@ const (
 )
 
 const (
-	PC00 Pin = iota + 64
+	PC00 Pin = iota + (2 << 5)
 	PC01
 	PC02
 	PC03
@@ -125,16 +107,19 @@ const (
 	PC11
 	PC12
 	PC13
-	PC14
-	PC15
-	PC16
+
+	PC16 Pin = iota + PC00 + 16
 	PC17
 	PC18
-	PC19
+
+	PC20 Pin = iota + PC00 + 20
+	PC21
+	PC22
+	PC23
 )
 
 const (
-	PD00 Pin = iota + 96
+	PD00 Pin = iota + (3 << 5)
 	PD01
 	PD02
 	PD03
@@ -142,34 +127,18 @@ const (
 	PD05
 	PD06
 	PD07
-	PD08
-	PD09
-	PD10
-	PD11
-	PD12
-	PD13
-	PD14
-	PD15
 )
 
 const (
-	PE00 Pin = iota + 128
+	PE00 Pin = iota + (4 << 5)
 	PE01
 	PE02
 	PE03
 	PE04
 	PE05
 	PE06
-	PE07
-	PE08
-	PE09
-	PE10
-	PE11
-	PE12
-	PE13
-	PE14
-	PE15
-	PE16
+
+	PE16 Pin = iota + PC00 + 16
 	PE17
 	PE18
 	PE19
@@ -180,31 +149,38 @@ const (
 	PE24
 	PE25
 	PE26
-	PE27
-	PE28
+
+	PE29 Pin = iota + PC00 + 29
+	PE30
+	PE31
 )
 
 //go:inline
-func (p Pin) reg() (*nxp.GPIO_Type, *volatile.Register32, uint8) {
-	var gpio *nxp.GPIO_Type
+func (p Pin) reg() (*nxp.FGPIO_Type, *volatile.Register32, uint8) {
+	var gpio *nxp.FGPIO_Type
 	var pcr *nxp.PORT_Type
 
 	switch p / 32 {
 	case 0:
-		gpio, pcr = nxp.GPIOA, nxp.PORTA
+		gpio, pcr = nxp.FGPIOA, nxp.PORTA
 	case 1:
-		gpio, pcr = nxp.GPIOB, nxp.PORTB
+		gpio, pcr = nxp.FGPIOB, nxp.PORTB
 	case 2:
-		gpio, pcr = nxp.GPIOC, nxp.PORTC
+		gpio, pcr = nxp.FGPIOC, nxp.PORTC
 	case 3:
-		gpio, pcr = nxp.GPIOD, nxp.PORTD
+		gpio, pcr = nxp.FGPIOD, nxp.PORTD
 	case 5:
-		gpio, pcr = nxp.GPIOE, nxp.PORTE
+		gpio, pcr = nxp.FGPIOE, nxp.PORTE
 	default:
 		panic("invalid pin number")
 	}
 
 	return gpio, &(*[32]volatile.Register32)(unsafe.Pointer(pcr))[p%32], uint8(p % 32)
+}
+
+func (p Pin) Control() *volatile.Register32 {
+	_, pcr, _ := p.reg()
+	return pcr
 }
 
 // Configure this pin with the given configuration.
@@ -215,10 +191,6 @@ func (p Pin) Configure(config PinConfig) {
 	case PinOutput:
 		gpio.PDDR.SetBits(1 << pos)
 		pcr.Set((1 << nxp.PORT_PCR0_MUX_Pos) | nxp.PORT_PCR0_SRE | nxp.PORT_PCR0_DSE)
-
-	case PinOutputOpenDrain:
-		gpio.PDDR.SetBits(1 << pos)
-		pcr.Set((1 << nxp.PORT_PCR0_MUX_Pos) | nxp.PORT_PCR0_SRE | nxp.PORT_PCR0_DSE | nxp.PORT_PCR0_ODE)
 
 	case PinInput:
 		gpio.PDDR.ClearBits(1 << pos)
@@ -253,35 +225,3 @@ func (p Pin) Get() bool {
 	gpio, _, pos := p.reg()
 	return gpio.PDIR.HasBits(1 << pos)
 }
-
-func (p Pin) Control() *volatile.Register32 {
-	_, pcr, _ := p.reg()
-	return pcr
-}
-
-func (p Pin) Fast() FastPin {
-	gpio, _, pos := p.reg()
-	return FastPin{
-		PDOR: gpio.PDOR.Bit(pos),
-		PSOR: gpio.PSOR.Bit(pos),
-		PCOR: gpio.PCOR.Bit(pos),
-		PTOR: gpio.PTOR.Bit(pos),
-		PDIR: gpio.PDIR.Bit(pos),
-		PDDR: gpio.PDDR.Bit(pos),
-	}
-}
-
-type FastPin struct {
-	PDOR *volatile.BitRegister
-	PSOR *volatile.BitRegister
-	PCOR *volatile.BitRegister
-	PTOR *volatile.BitRegister
-	PDIR *volatile.BitRegister
-	PDDR *volatile.BitRegister
-}
-
-func (p FastPin) Set()         { p.PSOR.Set(true) }
-func (p FastPin) Clear()       { p.PCOR.Set(true) }
-func (p FastPin) Toggle()      { p.PTOR.Set(true) }
-func (p FastPin) Write(v bool) { p.PDOR.Set(v) }
-func (p FastPin) Read() bool   { return p.PDIR.Get() }

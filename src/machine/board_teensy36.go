@@ -2,11 +2,17 @@
 
 package machine
 
+const (
+	fCPU = 180000000 // core - 180MHz
+	fCLK = 16000000  // oscillator - 16MHz
+	fBUS = 60000000  // bus - 60MHz
+)
+
 // CPUFrequency returns the frequency of the ARM core clock (180MHz)
-func CPUFrequency() uint32 { return 180000000 }
+func CPUFrequency() uint32 { return fCPU }
 
 // ClockFrequency returns the frequency of the external oscillator (16MHz)
-func ClockFrequency() uint32 { return 16000000 }
+func ClockFrequency() uint32 { return fCLK }
 
 // LED on the Teensy
 const LED = PC05
@@ -80,22 +86,26 @@ const (
 )
 
 var (
-	TeensyUART1 = &UART0
-	TeensyUART2 = &UART1
-	TeensyUART3 = &UART2
-	TeensyUART4 = &UART3
-	TeensyUART5 = &UART4
-)
+	UART0RX0 = PinMux{D00, 3}
+	UART0RX1 = PinMux{D21, 3}
+	UART0RX2 = PinMux{D27, 3}
+	UART0TX0 = PinMux{D01, 3}
+	UART0TX1 = PinMux{D05, 3}
+	UART0TX2 = PinMux{D26, 3}
 
-const (
-	defaultUART0RX = D00
-	defaultUART0TX = D01
-	defaultUART1RX = D09
-	defaultUART1TX = D10
-	defaultUART2RX = D07
-	defaultUART2TX = D08
-	defaultUART3RX = D31
-	defaultUART3TX = D32
-	defaultUART4RX = D34
-	defaultUART4TX = D33
+	UART1RX0 = PinMux{D09, 3}
+	UART1RX1 = PinMux{D59, 3}
+	UART1TX0 = PinMux{D10, 3}
+	UART1TX1 = PinMux{D58, 3}
+
+	UART2RX0 = PinMux{D07, 3}
+	UART2TX0 = PinMux{D08, 3}
+
+	UART3RX0 = PinMux{D31, 3}
+	UART3RX1 = PinMux{D63, 3}
+	UART3TX0 = PinMux{D32, 3}
+	UART3TX1 = PinMux{D62, 3}
+
+	UART4RX0 = PinMux{D34, 3}
+	UART4TX0 = PinMux{D33, 3}
 )
