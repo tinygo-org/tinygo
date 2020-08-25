@@ -1001,11 +1001,11 @@ func main() {
 		if s, err := goenv.GorootVersionString(goenv.Get("GOROOT")); err == nil {
 			goversion = s
 		}
-		if !strings.HasSuffix(goenv.Version, "-dev") {
-			fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", goenv.Version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
-		} else {
-			fmt.Printf("tinygo version %s-%s %s/%s (using go version %s and LLVM version %s)\n", goenv.Version, gitSha1, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
+		version := goenv.Version
+		if strings.HasSuffix(goenv.Version, "-dev") && gitSha1 != "" {
+			version += "-" + gitSha1
 		}
+		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
 	case "env":
 		if flag.NArg() == 0 {
 			// Show all environment variables.
