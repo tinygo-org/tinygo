@@ -12,5 +12,6 @@
 		"lib/nrfx/mdk/system_nrf52.c",
 		"src/device/nrf/nrf52.s"
 	],
+	"openocd-transport": "swd",
 	"openocd-target": "nrf51"
 }
