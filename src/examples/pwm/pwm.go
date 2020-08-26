@@ -8,7 +8,7 @@ import (
 // This example assumes that an RGB LED is connected to pins 3, 5 and 6 on an Arduino.
 // Change the values below to use different pins.
 const (
-	redPin   = machine.D3
+	redPin   = machine.D4
 	greenPin = machine.D5
 	bluePin  = machine.D6
 )
