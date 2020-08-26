@@ -10,13 +10,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
-	"strconv"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -50,7 +48,8 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	fmt.Fprintln(hash, tinygoroot)
 	gorootsHash := hash.Sum(nil)
 	gorootsHashHex := hex.EncodeToString(gorootsHash[:])
-	cachedgoroot := filepath.Join(goenv.Get("GOCACHE"), "goroot-"+version+"-"+gorootsHashHex)
+	cachedgorootName := "goroot-" + version + "-" + gorootsHashHex
+	cachedgoroot := filepath.Join(goenv.Get("GOCACHE"), cachedgorootName)
 	if needsSyscallPackage(config.BuildTags()) {
 		cachedgoroot += "-syscall"
 	}
@@ -58,8 +57,11 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	if _, err := os.Stat(cachedgoroot); err == nil {
 		return cachedgoroot, nil
 	}
-	tmpgoroot := cachedgoroot + ".tmp" + strconv.Itoa(rand.Int())
-	err = os.MkdirAll(tmpgoroot, 0777)
+	err = os.MkdirAll(goenv.Get("GOCACHE"), 0777)
+	if err != nil {
+		return "", err
+	}
+	tmpgoroot, err := ioutil.TempDir(goenv.Get("GOCACHE"), cachedgorootName+".tmp")
 	if err != nil {
 		return "", err
 	}
