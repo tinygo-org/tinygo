@@ -15,10 +15,13 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sync"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
+
+var gorootCreateMutex sync.Mutex
 
 // GetCachedGoroot creates a new GOROOT by merging both the standard GOROOT and
 // the GOROOT from TinyGo using lots of symbolic links.
@@ -54,6 +57,15 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 		cachedgoroot += "-syscall"
 	}
 
+	// Do not try to create the cached GOROOT in parallel, that's only a waste
+	// of I/O bandwidth and thus speed. Instead, use a mutex to make sure only
+	// one goroutine does it at a time.
+	// This is not a way to ensure atomicity (a different TinyGo invocation
+	// could be creating the same directory), but instead a way to avoid
+	// creating it many times in parallel when running tests in parallel.
+	gorootCreateMutex.Lock()
+	defer gorootCreateMutex.Unlock()
+
 	if _, err := os.Stat(cachedgoroot); err == nil {
 		return cachedgoroot, nil
 	}
@@ -87,6 +99,15 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 			// Use that one instead. Our new GOROOT will be automatically
 			// deleted by the defer above.
 			return cachedgoroot, nil
+		}
+		if runtime.GOOS == "windows" && os.IsPermission(err) {
+			// On Windows, a rename with a destination directory that already
+			// exists does not result in an IsExist error, but rather in an
+			// access denied error. To be sure, check for this case by checking
+			// whether the target directory exists.
+			if _, err := os.Stat(cachedgoroot); err == nil {
+				return cachedgoroot, nil
+			}
 		}
 		return "", err
 	}
