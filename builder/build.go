@@ -279,6 +279,13 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 			if err != nil {
 				return err
 			}
+		case "esp32":
+			// Special format for the ESP32 chip (parsed by the ROM bootloader).
+			tmppath = filepath.Join(dir, "main"+outext)
+			err := makeESP32FirmareImage(executable, tmppath)
+			if err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 		}
