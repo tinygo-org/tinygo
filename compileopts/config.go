@@ -239,6 +239,31 @@ func (c *Config) Debug() bool {
 	return c.Options.Debug
 }
 
+// BinaryFormat returns an appropriate binary format, based on the file
+// extension and the configured binary format in the target JSON file.
+func (c *Config) BinaryFormat(ext string) string {
+	switch ext {
+	case ".bin", ".gba":
+		// The simplest format possible: dump everything in a raw binary file.
+		if c.Target.BinaryFormat != "" {
+			return c.Target.BinaryFormat
+		}
+		return "bin"
+	case ".hex":
+		// Similar to bin, but includes the start address and is thus usually a
+		// better format.
+		return "hex"
+	case ".uf2":
+		// Special purpose firmware format, mainly used on Adafruit boards.
+		// More information:
+		// https://github.com/Microsoft/uf2
+		return "uf2"
+	default:
+		// Use the ELF format for unrecognized file formats.
+		return "elf"
+	}
+}
+
 // Programmer returns the flash method and OpenOCD interface name given a
 // particular configuration. It may either be all configured in the target JSON
 // file or be modified using the -programmmer command-line option.

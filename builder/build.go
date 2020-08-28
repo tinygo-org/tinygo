@@ -260,19 +260,27 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 		}
 
 		// Get an Intel .hex file or .bin file from the .elf file.
-		if outext == ".hex" || outext == ".bin" || outext == ".gba" {
+		outputBinaryFormat := config.BinaryFormat(outext)
+		switch outputBinaryFormat {
+		case "elf":
+			// do nothing, file is already in ELF format
+		case "hex", "bin":
+			// Extract raw binary, either encoding it as a hex file or as a raw
+			// firmware file.
 			tmppath = filepath.Join(dir, "main"+outext)
-			err := objcopy(executable, tmppath)
+			err := objcopy(executable, tmppath, outputBinaryFormat)
 			if err != nil {
 				return err
 			}
-		} else if outext == ".uf2" {
+		case "uf2":
 			// Get UF2 from the .elf file.
 			tmppath = filepath.Join(dir, "main"+outext)
 			err := convertELFFileToUF2File(executable, tmppath, config.Target.UF2FamilyID)
 			if err != nil {
 				return err
 			}
+		default:
+			return fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 		}
 		return action(tmppath)
 	}

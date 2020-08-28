@@ -4,7 +4,6 @@ import (
 	"debug/elf"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"sort"
 
 	"github.com/marcinbor85/gohex"
@@ -93,7 +92,7 @@ func extractROM(path string) (uint64, []byte, error) {
 
 // objcopy converts an ELF file to a different (simpler) output file format:
 // .bin or .hex. It extracts only the .text section.
-func objcopy(infile, outfile string) error {
+func objcopy(infile, outfile, binaryFormat string) error {
 	f, err := os.OpenFile(outfile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
@@ -107,23 +106,20 @@ func objcopy(infile, outfile string) error {
 	}
 
 	// Write to the file, in the correct format.
-	switch filepath.Ext(outfile) {
-	case ".gba":
-		// The address is not stored in a .gba file.
-		_, err := f.Write(data)
-		return err
-	case ".bin":
-		// The address is not stored in a .bin file (therefore you
-		// should use .hex files in most cases).
-		_, err := f.Write(data)
-		return err
-	case ".hex":
+	switch binaryFormat {
+	case "hex":
+		// Intel hex file, includes the firmware start address.
 		mem := gohex.NewMemory()
 		err := mem.AddBinary(uint32(addr), data)
 		if err != nil {
 			return objcopyError{"failed to create .hex file", err}
 		}
 		return mem.DumpIntelHex(f, 16)
+	case "bin":
+		// The start address is not stored in raw firmware files (therefore you
+		// should use .hex files in most cases).
+		_, err := f.Write(data)
+		return err
 	default:
 		panic("unreachable")
 	}
