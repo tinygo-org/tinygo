@@ -1,7 +1,6 @@
-// These are the supported alternate function numberings on the stm32f407
-// +build stm32,stm32f407
+// +build stm32f4
 
-// Alternate function settings on the stm32f4xx series
+// Alternate function settings on the stm32f4 series
 
 package stm32
 
