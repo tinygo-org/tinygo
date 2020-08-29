@@ -15,7 +15,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -129,18 +128,6 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 	}
 }
 
-// Due to some problems with LLD, we cannot run links in parallel, or in parallel with compiles.
-// Therefore, we put a lock around builds and run everything else in parallel.
-var buildLock sync.Mutex
-
-// runBuild is a thread-safe wrapper around Build.
-func runBuild(src, out string, opts *compileopts.Options) error {
-	buildLock.Lock()
-	defer buildLock.Unlock()
-
-	return Build(src, out, opts)
-}
-
 func runTest(path, target string, t *testing.T, environmentVars []string, additionalArgs []string) {
 	// Get the expected output for this test.
 	txtpath := path[:len(path)-3] + ".txt"
@@ -177,7 +164,7 @@ func runTest(path, target string, t *testing.T, environmentVars []string, additi
 	}
 
 	binary := filepath.Join(tmpdir, "test")
-	err = runBuild("./"+path, binary, config)
+	err = Build("./"+path, binary, config)
 	if err != nil {
 		printCompilerError(t.Log, err)
 		t.Fail()
