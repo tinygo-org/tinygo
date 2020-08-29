@@ -22,8 +22,22 @@ type UART struct {
 	AltFuncSelector stm32.AltFunc
 }
 
-func (uart UART) configurePins(config UARTConfig)           {}
-func (uart UART) getBaudRateDivisor(baudRate uint32) uint32 { return 0 }
+func (uart UART) configurePins(config UARTConfig) {
+	// enable the alternate functions on the TX and RX pins
+	config.TX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTTX}, uart.AltFuncSelector)
+	config.RX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTRX}, uart.AltFuncSelector)
+}
+
+func (uart UART) getBaudRateDivisor(baudRate uint32) uint32 {
+	var clock uint32
+	switch uart.Bus {
+	case stm32.USART1, stm32.USART6:
+		clock = CPUFrequency() / 2 // APB2 Frequency
+	case stm32.USART2, stm32.USART3, stm32.UART4, stm32.UART5:
+		clock = CPUFrequency() / 4 // APB1 Frequency
+	}
+	return clock / baudRate
+}
 
 // -- SPI ----------------------------------------------------------------------
 

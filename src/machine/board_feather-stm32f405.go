@@ -2,6 +2,11 @@
 
 package machine
 
+import (
+	"device/stm32"
+	"runtime/interrupt"
+)
+
 const (
 	NUM_DIGITAL_IO_PINS = 39
 	NUM_ANALOG_IO_PINS  = 7
@@ -113,7 +118,30 @@ const (
 	UART_TX_PIN = UART0_TX_PIN //
 )
 
-func initUART() {}
+var (
+	UART1 = UART{
+		Buffer:          NewRingBuffer(),
+		Bus:             stm32.USART3,
+		AltFuncSelector: stm32.AF7_USART1_2_3,
+	}
+	UART2 = UART{
+		Buffer:          NewRingBuffer(),
+		Bus:             stm32.USART6,
+		AltFuncSelector: stm32.AF8_USART4_5_6,
+	}
+	UART3 = UART{
+		Buffer:          NewRingBuffer(),
+		Bus:             stm32.USART1,
+		AltFuncSelector: stm32.AF7_USART1_2_3,
+	}
+	UART0 = UART1
+)
+
+func initUART() {
+	UART1.Interrupt = interrupt.New(stm32.IRQ_USART3, UART1.handleInterrupt)
+	UART2.Interrupt = interrupt.New(stm32.IRQ_USART6, UART2.handleInterrupt)
+	UART3.Interrupt = interrupt.New(stm32.IRQ_USART1, UART3.handleInterrupt)
+}
 
 // -- SPI ----------------------------------------------------------------------
 
