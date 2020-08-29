@@ -13,6 +13,7 @@ var (
 		Bus:    sam.SERCOM5_USART_INT,
 		SERCOM: 5,
 	}
+	UART_DEFAULT = UART1
 
 	UART2 = UART{
 		Buffer: NewRingBuffer(),

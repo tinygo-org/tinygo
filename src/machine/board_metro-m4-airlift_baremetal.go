@@ -8,12 +8,15 @@ import (
 )
 
 var (
+	// UART on the TX/RX pins
 	UART1 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM3_USART_INT,
 		SERCOM: 3,
 	}
+	UART_DEFAULT = UART1
 
+	// UART to ESP chip
 	UART2 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM0_USART_INT,
