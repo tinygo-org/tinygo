@@ -191,7 +191,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 
 	return builder.Build(pkgName, fileExt, config, func(tmppath string) error {
 		// do we need port reset to put MCU into bootloader mode?
-		if config.Target.PortReset == "true" {
+		if config.Target.PortReset == "true" && flashMethod != "openocd" {
 			if port == "" {
 				var err error
 				port, err = getDefaultPort()
