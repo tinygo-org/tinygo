@@ -191,9 +191,13 @@ test: wasi-libc
 tinygo-test:
 	cd tests/tinygotest && tinygo test
 
-.PHONY: smoketest
-smoketest:
+.PHONY: smoketest smoketest-version smoketest-01 smoketest-02 smoketest-03 smoketest-04
+smoketest: smoketest-version smoketest-01 smoketest-02 smoketest-03 smoketest-04
+
+smoketest-version:
 	$(TINYGO) version
+
+smoketest-01:
 	# test all examples (except pwm)
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky1
 	@$(MD5SUM) test.hex
@@ -238,6 +242,8 @@ smoketest:
 	@$(MD5SUM) test.wasm
 	$(TINYGO) build             -o test.wasm -tags=circuitplay_express  examples/blinky1
 	@$(MD5SUM) test.wasm
+
+smoketest-02:
 	# test all targets/boards
 	$(TINYGO) build -size short -o test.hex -target=pca10040-s132v6     examples/blinky1
 	@$(MD5SUM) test.hex
@@ -277,6 +283,7 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/i2s
 	@$(MD5SUM) test.hex
+smoketest-03:
 	$(TINYGO) build -size short -o test.hex -target=clue_alpha          examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.gba -target=gameboy-advance     examples/gba-display
@@ -330,6 +337,8 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pyportal            examples/pwm
 	@$(MD5SUM) test.hex
+
+smoketest-04:
 ifneq ($(AVR), 0)
 	$(TINYGO) build -size short -o test.hex -target=atmega1284p         examples/serial
 	@$(MD5SUM) test.hex
