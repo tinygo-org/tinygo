@@ -447,11 +447,28 @@ func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map
 			return fmt.Errorf("could not find symbol %s in ELF file", name)
 		}
 		if fn.stackSizeType == stacksize.Bounded {
-			// Note: adding 4 for the stack canary. Even though the size may be
+			stackSize := uint32(fn.stackSize)
+
+			// Adding 4 for the stack canary. Even though the size may be
 			// automatically determined, stack overflow checking is still
 			// important as the stack size cannot be determined for all
 			// goroutines.
-			binary.LittleEndian.PutUint32(data[i*4:], uint32(fn.stackSize)+4)
+			stackSize += 4
+
+			// Add stack size used by interrupts.
+			switch elfFile.Machine {
+			case elf.EM_ARM:
+				// On Cortex-M (assumed here), this stack size is 8 words or 32
+				// bytes. This is only to store the registers that the interrupt
+				// may modify, the interrupt will switch to the interrupt stack
+				// (MSP).
+				// Some background:
+				// https://interrupt.memfault.com/blog/cortex-m-rtos-context-switching
+				stackSize += 32
+			}
+
+			// Finally write the stack size to the binary.
+			binary.LittleEndian.PutUint32(data[i*4:], stackSize)
 		}
 	}
 
