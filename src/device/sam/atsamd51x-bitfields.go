@@ -17,7 +17,8 @@ const (
 	PCHCTRL_GCLK_OSCCTRL_FDPLL1_32K = 3
 	PCHCTRL_GCLK_SDHC0_SLOW         = 3
 	PCHCTRL_GCLK_SDHC1_SLOW         = 3
-	// GCLK_SERCOM[0..7]_SLOW = 3
+	PCHCTRL_GCLK_SERCOMX_SLOW       = 3 // GCLK_SERCOM[0..7]_SLOW = 3
+
 	// FDPLL0 = 3 // 32KHz clock for internal lock timer
 	// FDPLL1 = 3 //32KHz clock for internal lock timer
 	// SDHC0 = 3 // Slow

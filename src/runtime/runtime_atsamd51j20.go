@@ -13,7 +13,7 @@ func initSERCOMClocks() {
 		sam.GCLK_PCHCTRL_CHEN)
 
 	// sets the "slow" clock shared by all SERCOM
-	sam.GCLK.PCHCTRL[sam.PCHCTRL_GCLK_SDHC1_SLOW].Set((sam.GCLK_PCHCTRL_GEN_GCLK1 << sam.GCLK_PCHCTRL_GEN_Pos) |
+	sam.GCLK.PCHCTRL[sam.PCHCTRL_GCLK_SERCOMX_SLOW].Set((sam.GCLK_PCHCTRL_GEN_GCLK1 << sam.GCLK_PCHCTRL_GEN_Pos) |
 		sam.GCLK_PCHCTRL_CHEN)
 
 	// Turn on clock to SERCOM1
