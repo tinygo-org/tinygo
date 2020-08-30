@@ -323,40 +323,47 @@ commands:
           name: Create TinyGo user
           command: useradd -m tinygo
       - run:
-          name: Become TinyGo user
-          command: su tinygo
-      - run:
           name: Start SSH Agent
+          user: tinygo
           command: eval $(ssh-agent -s)
       - run:
           name: Add ARCH_RELEASE_SSH_PRIVATE_KEY identity
+          user: tinygo
           command: echo "${ARCH_RELEASE_SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add -
       - run:
           name: Create SSH directory
+          user: tinygo
           command: mkdir -p ~/.ssh && chmod 700 ~/.ssh
       - run:
           name: Add aur.archlinux.org to known hosts
+          user: tinygo
           command: ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
       - run:
           name: Clone tinygo-bin repo
+          user: tinygo
           command: git clone ssh://aur@aur.archlinux.org/tinygo-bin.git ~/tinygo-bin
       - run:
           name: Update package version
+          user: tinygo
           command: sed -i -E "s/(pkgver=)(.*)$/\1${CIRCLE_TAG}/" ~/tinygo-bin/PKGBUILD
       - run:
           name: Update file checksums
+          user: tinygo
           command: cd ~/tinygo-bin && updpkgsums
       - run:
           name: Update .SRCINFO
+          user: tinygo
           command: cd ~/tinygo-bin && makepkg --printsrcinfo > .SRCINFO
       # Commit the update
       - run:
           name: Set git commit config
+          user: tinygo
           command: |
             git config --global user.email "tinygo-bot@tinygo.org" &&
             git config --global user.name "TinyGo Release Bot"
       - run:
           name: Commit and push changes
+          user: tinygo
           command: |
             cd ~/tinygo-bin &&
             git commit -a -m "Update tinygo-bin to v${CIRCLE_TAG}" &&
