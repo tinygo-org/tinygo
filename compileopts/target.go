@@ -63,47 +63,35 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 	specValue := reflect.ValueOf(spec).Elem()
 	childValue := reflect.ValueOf(child).Elem()
 
-	copyFieldIfNotEmpty := func(dst reflect.Value, src reflect.Value) {
-		if src.Len() > 0 {
-			dst.Set(src)
-		}
-	}
-
-	copyUintIfNotZero := func(dst reflect.Value, src reflect.Value) {
-		if src.Uint() != 0 {
-			dst.Set(src)
-		}
-	}
-
-	copyPtrIfNotNil := func(dst reflect.Value, src reflect.Value) {
-		if !src.IsNil() {
-			dst.Set(src)
-		}
-	}
-
-	appendField := func(dst reflect.Value, src reflect.Value) {
-		dst.Set(reflect.AppendSlice(src, dst))
-	}
-
 	for i := 0; i < specType.NumField(); i++ {
 		field := specType.Field(i)
+		src := childValue.Field(i)
+		dst := specValue.Field(i)
 		switch kind := field.Type.Kind(); kind {
 		case reflect.String: // for strings, just copy the field of child to spec if not empty
-			copyFieldIfNotEmpty(specValue.Field(i), childValue.Field(i))
-		case reflect.Uint, reflect.Uint32, reflect.Uint64:
-			copyUintIfNotZero(specValue.Field(i), childValue.Field(i))
-		case reflect.Ptr:
-			copyPtrIfNotNil(specValue.Field(i), childValue.Field(i))
-		case reflect.Slice: // for slices... check if there is a tag for the field
-			switch tag := field.Tag.Get("override"); tag {
-			case "copy":
-				// copy the field of child to spec if not empty
-				copyFieldIfNotEmpty(specValue.Field(i), childValue.Field(i))
-			case "append", "":
-				// or append the field of child to spec
-				appendField(specValue.Field(i), childValue.Field(i))
-			default:
-				panic("override mode must be 'copy' or 'append' (default). I don't know how to '" + tag + "'.")
+			if src.Len() > 0 {
+				dst.Set(src)
+			}
+		case reflect.Uint, reflect.Uint32, reflect.Uint64: // for Uint, copy if not zero
+			if src.Uint() != 0 {
+				dst.Set(src)
+			}
+		case reflect.Ptr: // for pointers, copy if not nil
+			if !src.IsNil() {
+				dst.Set(src)
+			}
+		case reflect.Slice: // for slices...
+			if src.Len() > 0 { // ... if not empty ...
+				switch tag := field.Tag.Get("override"); tag {
+				case "copy":
+					// copy the field of child to spec
+					dst.Set(src)
+				case "append", "":
+					// or append the field of child to spec
+					dst.Set(reflect.AppendSlice(src, dst))
+				default:
+					panic("override mode must be 'copy' or 'append' (default). I don't know how to '" + tag + "'.")
+				}
 			}
 		default:
 			panic("unknown field type : " + kind.String())
