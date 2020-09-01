@@ -95,20 +95,15 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 		case reflect.Ptr:
 			copyPtrIfNotNil(specValue.Field(i), childValue.Field(i))
 		case reflect.Slice: // for slices... check if there is a tag for the field
-			if tag, ok := field.Tag.Lookup("override"); ok {
-				switch tag {
-				case "copy":
-					// copy the field of child to spec if not empty
-					copyFieldIfNotEmpty(specValue.Field(i), childValue.Field(i))
-				case "append":
-					// or append the field of child to spec
-					appendField(specValue.Field(i), childValue.Field(i))
-				default:
-					panic("override mode must be 'copy' or 'append' (default). I don't know how to '" + tag + "'.")
-				}
-			} else {
-				// if no tag, then append the field of child to spec
+			switch tag := field.Tag.Get("override"); tag {
+			case "copy":
+				// copy the field of child to spec if not empty
+				copyFieldIfNotEmpty(specValue.Field(i), childValue.Field(i))
+			case "append", "":
+				// or append the field of child to spec
 				appendField(specValue.Field(i), childValue.Field(i))
+			default:
+				panic("override mode must be 'copy' or 'append' (default). I don't know how to '" + tag + "'.")
 			}
 		default:
 			panic("unknown field type : " + kind.String())
