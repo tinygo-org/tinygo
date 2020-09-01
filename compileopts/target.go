@@ -67,6 +67,7 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 		field := specType.Field(i)
 		src := childValue.Field(i)
 		dst := specValue.Field(i)
+
 		switch kind := field.Type.Kind(); kind {
 		case reflect.String: // for strings, just copy the field of child to spec if not empty
 			if src.Len() > 0 {
