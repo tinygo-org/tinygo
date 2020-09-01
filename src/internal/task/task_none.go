@@ -17,7 +17,7 @@ func Current() *Task {
 }
 
 //go:noinline
-func start(fn uintptr, args unsafe.Pointer) {
+func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	// The compiler will error if this is reachable.
 	runtimePanic("scheduler is disabled")
 }

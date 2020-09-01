@@ -34,6 +34,8 @@ type TargetSpec struct {
 	Linker           string   `json:"linker"`
 	RTLib            string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
 	Libc             string   `json:"libc"`
+	AutoStackSize    *bool    `json:"automatic-stack-size"` // Determine stack size automatically at compile time.
+	DefaultStackSize uint64   `json:"default-stack-size"`   // Default stack size if the size couldn't be determined at compile time.
 	CFlags           []string `json:"cflags"`
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
@@ -46,6 +48,7 @@ type TargetSpec struct {
 	FlashVolume      string   `json:"msd-volume-name"`
 	FlashFilename    string   `json:"msd-firmware-name"`
 	UF2FamilyID      string   `json:"uf2-family-id"`
+	BinaryFormat     string   `json:"binary-format"`
 	OpenOCDInterface string   `json:"openocd-interface"`
 	OpenOCDTarget    string   `json:"openocd-target"`
 	OpenOCDTransport string   `json:"openocd-transport"`
@@ -66,6 +69,18 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 		}
 	}
 
+	copyUintIfNotZero := func(dst reflect.Value, src reflect.Value) {
+		if src.Uint() != 0 {
+			dst.Set(src)
+		}
+	}
+
+	copyPtrIfNotNil := func(dst reflect.Value, src reflect.Value) {
+		if !src.IsNil() {
+			dst.Set(src)
+		}
+	}
+
 	appendField := func(dst reflect.Value, src reflect.Value) {
 		dst.Set(reflect.AppendSlice(src, dst))
 	}
@@ -75,6 +90,10 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 		switch kind := field.Type.Kind(); kind {
 		case reflect.String: // for strings, just copy the field of child to spec if not empty
 			copyFieldIfNotEmpty(specValue.Field(i), childValue.Field(i))
+		case reflect.Uint, reflect.Uint32, reflect.Uint64:
+			copyUintIfNotZero(specValue.Field(i), childValue.Field(i))
+		case reflect.Ptr:
+			copyPtrIfNotNil(specValue.Field(i), childValue.Field(i))
 		case reflect.Slice: // for slices... check if there is a tag for the field
 			if tag, ok := field.Tag.Lookup("override"); ok {
 				switch tag {
@@ -92,7 +111,7 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 				appendField(specValue.Field(i), childValue.Field(i))
 			}
 		default:
-			panic("field must be a string or a slice. '" + kind.String() + "' is not expected.")
+			panic("unknown field type : " + kind.String())
 		}
 	}
 }

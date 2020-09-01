@@ -118,7 +118,7 @@ fmt-check:
 	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
 
 
-gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-sifive gen-device-stm32 gen-device-kendryte gen-device-nxp
+gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-stm32 gen-device-kendryte gen-device-nxp
 
 gen-device-avr:
 	$(GO) build -o ./build/gen-device-avr ./tools/gen-device-avr/
@@ -128,6 +128,10 @@ gen-device-avr:
 
 build/gen-device-svd: ./tools/gen-device-svd/*.go
 	$(GO) build -o $@ ./tools/gen-device-svd/
+
+gen-device-esp: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Espressif-Community -interrupts=software lib/cmsis-svd/data/Espressif-Community/ src/device/esp/
+	GO111MODULE=off $(GO) fmt ./src/device/esp
 
 gen-device-nrf: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk lib/nrfx/mdk/ src/device/nrf/
@@ -156,13 +160,13 @@ gen-device-stm32: build/gen-device-svd
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/README.md:
-	git clone -b release/10.x --depth=1 https://github.com/llvm/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b xtensa_release_10.0.1 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/README.md
 
 # Configure LLVM.
 TINYGO_SOURCE_DIR=$(shell pwd)
 $(LLVM_BUILDDIR)/build.ninja: llvm-source
-	mkdir -p $(LLVM_BUILDDIR); cd $(LLVM_BUILDDIR); cmake -G Ninja $(TINYGO_SOURCE_DIR)/$(LLVM_PROJECTDIR)/llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;RISCV;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR" -DCMAKE_BUILD_TYPE=Release -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_ENABLE_OCAMLDOC=OFF -DLLVM_ENABLE_PROJECTS="clang;lld" -DLLVM_TOOL_CLANG_TOOLS_EXTRA_BUILD=OFF $(LLVM_OPTION)
+	mkdir -p $(LLVM_BUILDDIR); cd $(LLVM_BUILDDIR); cmake -G Ninja $(TINYGO_SOURCE_DIR)/$(LLVM_PROJECTDIR)/llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;RISCV;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR;Xtensa" -DCMAKE_BUILD_TYPE=Release -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_ENABLE_OCAMLDOC=OFF -DLLVM_ENABLE_PROJECTS="clang;lld" -DLLVM_TOOL_CLANG_TOOLS_EXTRA_BUILD=OFF $(LLVM_OPTION)
 
 # Build LLVM.
 $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
@@ -179,10 +183,10 @@ lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 # Build the Go compiler.
 tinygo:
 	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  make llvm-source"; echo "  make $(LLVM_BUILDDIR)"; exit 1; fi
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) build -o build/tinygo$(EXE) -tags byollvm .
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags byollvm -ldflags="-X main.gitSha1=`git rev-parse --short HEAD`" .
 
 test: wasi-libc
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test -v -tags byollvm ./cgo ./compileopts ./interp ./transform .
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test -v -buildmode exe -tags byollvm ./cgo ./compileopts ./interp ./transform .
 
 tinygo-test:
 	cd tests/tinygotest && tinygo test
@@ -315,6 +319,17 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-nrf52840  	examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=itsybitsy-nrf52840  examples/blinky1
+	@$(MD5SUM) test.hex
+	# test pwm
+	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0        examples/pwm
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m4        examples/pwm
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=feather-m4          examples/pwm
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pyportal            examples/pwm
+	@$(MD5SUM) test.hex
 ifneq ($(AVR), 0)
 	$(TINYGO) build -size short -o test.hex -target=atmega1284p         examples/serial
 	@$(MD5SUM) test.hex
@@ -330,6 +345,9 @@ ifneq ($(AVR), 0)
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=digispark -gc=leaking examples/blinky1
 	@$(MD5SUM) test.hex
+endif
+ifneq ($(XTENSA), 0)
+	$(TINYGO) build -size short -o test.bin -target=esp32-wroom-32      examples/blinky1
 endif
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
 	@$(MD5SUM) test.hex

@@ -19,23 +19,25 @@ var validName = regexp.MustCompile("^[a-zA-Z0-9_]+$")
 var enumBitSpecifier = regexp.MustCompile("^#[x01]+$")
 
 type SVDFile struct {
-	XMLName     xml.Name `xml:"device"`
-	Name        string   `xml:"name"`
-	Description string   `xml:"description"`
-	LicenseText string   `xml:"licenseText"`
-	Peripherals []struct {
-		Name        string `xml:"name"`
-		Description string `xml:"description"`
-		BaseAddress string `xml:"baseAddress"`
-		GroupName   string `xml:"groupName"`
-		DerivedFrom string `xml:"derivedFrom,attr"`
-		Interrupts  []struct {
-			Name  string `xml:"name"`
-			Index int    `xml:"value"`
-		} `xml:"interrupt"`
-		Registers []*SVDRegister `xml:"registers>register"`
-		Clusters  []*SVDCluster  `xml:"registers>cluster"`
-	} `xml:"peripherals>peripheral"`
+	XMLName     xml.Name        `xml:"device"`
+	Name        string          `xml:"name"`
+	Description string          `xml:"description"`
+	LicenseText string          `xml:"licenseText"`
+	Peripherals []SVDPeripheral `xml:"peripherals>peripheral"`
+}
+
+type SVDPeripheral struct {
+	Name        string `xml:"name"`
+	Description string `xml:"description"`
+	BaseAddress string `xml:"baseAddress"`
+	GroupName   string `xml:"groupName"`
+	DerivedFrom string `xml:"derivedFrom,attr"`
+	Interrupts  []struct {
+		Name  string `xml:"name"`
+		Index int    `xml:"value"`
+	} `xml:"interrupt"`
+	Registers []*SVDRegister `xml:"registers>register"`
+	Clusters  []*SVDCluster  `xml:"registers>cluster"`
 }
 
 type SVDRegister struct {
@@ -139,6 +141,11 @@ func cleanName(text string) string {
 		}
 		text = string(result)
 	}
+	if len(text) != 0 && (text[0] >= '0' && text[0] <= '9') {
+		// Identifiers may not start with a number.
+		// Add an underscore instead.
+		text = "_" + text
+	}
 	return text
 }
 
@@ -163,7 +170,12 @@ func readSVD(path, sourceURL string) (*Device, error) {
 	interrupts := make(map[string]*interrupt)
 	var peripheralsList []*peripheral
 
-	for _, periphEl := range device.Peripherals {
+	// Some SVD files have peripheral elements derived from a peripheral that
+	// comes later in the file. To make sure this works, sort the peripherals if
+	// needed.
+	orderedPeripherals := orderPeripherals(device.Peripherals)
+
+	for _, periphEl := range orderedPeripherals {
 		description := formatText(periphEl.Description)
 		baseAddress, err := strconv.ParseUint(periphEl.BaseAddress, 0, 32)
 		if err != nil {
@@ -172,6 +184,9 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		// Some group names (for example the STM32H7A3x) have an invalid
 		// group name. Replace invalid characters with "_".
 		groupName := cleanName(periphEl.GroupName)
+		if groupName == "" {
+			groupName = cleanName(periphEl.Name)
+		}
 
 		for _, interrupt := range periphEl.Interrupts {
 			addInterrupt(interrupts, interrupt.Name, interrupt.Name, interrupt.Index, description)
@@ -394,6 +409,34 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		interrupts:  interruptList,
 		peripherals: peripheralsList,
 	}, nil
+}
+
+// orderPeripherals sorts the peripherals so that derived peripherals come after
+// base peripherals. This is necessary for some SVD files.
+func orderPeripherals(input []SVDPeripheral) []*SVDPeripheral {
+	var sortedPeripherals []*SVDPeripheral
+	var missingBasePeripherals []*SVDPeripheral
+	knownBasePeripherals := map[string]struct{}{}
+	for i := range input {
+		p := &input[i]
+		groupName := p.GroupName
+		if groupName == "" {
+			groupName = p.Name
+		}
+		knownBasePeripherals[groupName] = struct{}{}
+		if p.DerivedFrom != "" {
+			if _, ok := knownBasePeripherals[p.DerivedFrom]; !ok {
+				missingBasePeripherals = append(missingBasePeripherals, p)
+				continue
+			}
+		}
+		sortedPeripherals = append(sortedPeripherals, p)
+	}
+
+	// Let's hope all base peripherals are now included.
+	sortedPeripherals = append(sortedPeripherals, missingBasePeripherals...)
+
+	return sortedPeripherals
 }
 
 func addInterrupt(interrupts map[string]*interrupt, name, interruptName string, index int, description string) {
@@ -654,6 +697,7 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 	if !unicode.IsUpper(rune(regName[0])) && !unicode.IsDigit(rune(regName[0])) {
 		regName = strings.ToUpper(regName)
 	}
+	regName = cleanName(regName)
 
 	bitfields := parseBitfields(groupName, regName, regEl.Fields, bitfieldPrefix)
 	return []*PeripheralField{&PeripheralField{

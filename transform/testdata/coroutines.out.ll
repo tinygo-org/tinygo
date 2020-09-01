@@ -4,7 +4,7 @@ target triple = "armv7m-none-eabi"
 %"internal/task.Task" = type { %"internal/task.Task", i8*, i32, %"internal/task.state" }
 %"internal/task.state" = type { i8* }
 
-declare void @"internal/task.start"(i32, i8*, i8*, i8*)
+declare void @"internal/task.start"(i32, i8*, i32, i8*, i8*)
 
 declare void @"internal/task.Pause"(i8*, i8*)
 

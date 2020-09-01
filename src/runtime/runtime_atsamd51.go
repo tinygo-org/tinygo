@@ -292,7 +292,7 @@ func timerSleep(ticks uint32) bool {
 	sam.RTC_MODE0.INTENSET.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
 
 wait:
-	arm.Asm("wfe")
+	waitForEvents()
 	if timerWakeup.Get() != 0 {
 		return true
 	}
@@ -317,7 +317,7 @@ func initUSBClock() {
 
 	// Put Generic Clock Generator 1 as source for USB
 	//GCLK->PCHCTRL[USB_GCLK_ID].reg = GCLK_PCHCTRL_GEN_GCLK1_Val | (1 << GCLK_PCHCTRL_CHEN_Pos);
-	sam.GCLK.PCHCTRL[10].Set((sam.GCLK_PCHCTRL_GEN_GCLK1 << sam.GCLK_PCHCTRL_GEN_Pos) |
+	sam.GCLK.PCHCTRL[sam.PCHCTRL_GCLK_USB].Set((sam.GCLK_PCHCTRL_GEN_GCLK1 << sam.GCLK_PCHCTRL_GEN_Pos) |
 		sam.GCLK_PCHCTRL_CHEN)
 }
 
@@ -327,8 +327,12 @@ func initADCClock() {
 	sam.MCLK.APBDMASK.SetBits(sam.MCLK_APBDMASK_ADC1_)
 
 	// Put Generic Clock Generator 1 as source for ADC0 and ADC1.
-	sam.GCLK.PCHCTRL[40].Set((sam.GCLK_PCHCTRL_GEN_GCLK1 << sam.GCLK_PCHCTRL_GEN_Pos) |
+	sam.GCLK.PCHCTRL[sam.PCHCTRL_GCLK_ADC0].Set((sam.GCLK_PCHCTRL_GEN_GCLK1 << sam.GCLK_PCHCTRL_GEN_Pos) |
 		sam.GCLK_PCHCTRL_CHEN)
-	sam.GCLK.PCHCTRL[41].Set((sam.GCLK_PCHCTRL_GEN_GCLK1 << sam.GCLK_PCHCTRL_GEN_Pos) |
+	sam.GCLK.PCHCTRL[sam.PCHCTRL_GCLK_ADC1].Set((sam.GCLK_PCHCTRL_GEN_GCLK1 << sam.GCLK_PCHCTRL_GEN_Pos) |
 		sam.GCLK_PCHCTRL_CHEN)
+}
+
+func waitForEvents() {
+	arm.Asm("wfe")
 }

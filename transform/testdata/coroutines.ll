@@ -4,7 +4,7 @@ target triple = "armv7m-none-eabi"
 %"internal/task.state" = type { i8* }
 %"internal/task.Task" = type { %"internal/task.Task", i8*, i32, %"internal/task.state" }
 
-declare void @"internal/task.start"(i32, i8*, i8*, i8*)
+declare void @"internal/task.start"(i32, i8*, i32, i8*, i8*)
 declare void @"internal/task.Pause"(i8*, i8*)
 
 declare void @runtime.scheduler(i8*, i8*)
@@ -102,9 +102,9 @@ define void @sleepGoroutine(i8*, i8* %parentHandle) {
 define void @progMain(i8*, i8* %parentHandle) {
 entry:
   ; Call a sync func in a goroutine.
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*, i8*)* @doNothing to i32), i8* undef, i8* undef, i8* null)
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*, i8*)* @doNothing to i32), i8* undef, i32 undef, i8* undef, i8* null)
   ; Call an async func in a goroutine.
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*, i8*)* @sleepGoroutine to i32), i8* undef, i8* undef, i8* null)
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*, i8*)* @sleepGoroutine to i32), i8* undef, i32 undef, i8* undef, i8* null)
   ; Sleep a bit.
   call void @sleep(i64 2000000, i8* undef, i8* null)
   ; Done.
@@ -114,7 +114,7 @@ entry:
 ; Entrypoint of runtime.
 define void @main() {
 entry:
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*, i8*)* @progMain to i32), i8* undef, i8* undef, i8* null)
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*, i8*)* @progMain to i32), i8* undef, i32 undef, i8* undef, i8* null)
   call void @runtime.scheduler(i8* undef, i8* null)
   ret void
 }

@@ -50,3 +50,7 @@ var stdoutWrite = (*volatile.Register8)(unsafe.Pointer(uintptr(0x4000c000)))
 func putchar(c byte) {
 	stdoutWrite.Set(uint8(c))
 }
+
+func waitForEvents() {
+	arm.Asm("wfe")
+}

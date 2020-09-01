@@ -8,6 +8,8 @@
 	"linker": "ld.lld",
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
+	"automatic-stack-size": true,
+	"default-stack-size": 1024,
 	"cflags": [
 		"-Oz",
 		"-mthumb",

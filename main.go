@@ -28,6 +28,12 @@ import (
 	"go.bug.st/serial"
 )
 
+var (
+	// This variable is set at build time using -ldflags parameters.
+	// See: https://stackoverflow.com/a/11355611
+	gitSha1 string
+)
+
 // commandError is an error type to wrap os/exec.Command errors. This provides
 // some more information regarding what went wrong while running a command.
 type commandError struct {
@@ -58,33 +64,23 @@ func moveFile(src, dst string) error {
 	return os.Remove(src)
 }
 
-// copyFile copies the given file from src to dst. It copies first to a .tmp
-// file which is then moved over a possibly already existing file at the
-// destination.
+// copyFile copies the given file from src to dst. It can copy over
+// a possibly already existing file at the destination.
 func copyFile(src, dst string) error {
-	inf, err := os.Open(src)
+	source, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer inf.Close()
-	outpath := dst + ".tmp"
-	outf, err := os.Create(outpath)
-	if err != nil {
-		return err
-	}
+	defer source.Close()
 
-	_, err = io.Copy(outf, inf)
-	if err != nil {
-		os.Remove(outpath)
-		return err
-	}
-
-	err = outf.Close()
+	destination, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
+	defer destination.Close()
 
-	return os.Rename(dst+".tmp", dst)
+	_, err = io.Copy(destination, source)
+	return err
 }
 
 // Build compiles and links the given package and writes it to outpath.
@@ -195,7 +191,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 
 	return builder.Build(pkgName, fileExt, config, func(tmppath string) error {
 		// do we need port reset to put MCU into bootloader mode?
-		if config.Target.PortReset == "true" {
+		if config.Target.PortReset == "true" && flashMethod != "openocd" {
 			if port == "" {
 				var err error
 				port, err = getDefaultPort()
@@ -273,7 +269,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			if err != nil {
 				return err
 			}
-			args = append(args, "-c", "program "+tmppath+" reset exit")
+			args = append(args, "-c", "program "+filepath.ToSlash(tmppath)+" reset exit")
 			cmd := exec.Command("openocd", args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
@@ -1005,7 +1001,11 @@ func main() {
 		if s, err := goenv.GorootVersionString(goenv.Get("GOROOT")); err == nil {
 			goversion = s
 		}
-		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", goenv.Version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
+		version := goenv.Version
+		if strings.HasSuffix(goenv.Version, "-dev") && gitSha1 != "" {
+			version += "-" + gitSha1
+		}
+		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
 	case "env":
 		if flag.NArg() == 0 {
 			// Show all environment variables.

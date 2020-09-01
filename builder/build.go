@@ -5,6 +5,7 @@ package builder
 
 import (
 	"debug/elf"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -115,6 +116,13 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 		}
 	}
 
+	// Make sure stack sizes are loaded from a separate section so they can be
+	// modified after linking.
+	var stackSizeLoads []string
+	if config.AutomaticStackSize() {
+		stackSizeLoads = transform.CreateStackSizeLoads(mod, config)
+	}
+
 	// Generate output.
 	outext := filepath.Ext(outpath)
 	switch outext {
@@ -207,6 +215,26 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 			return &commandError{"failed to link", executable, err}
 		}
 
+		var calculatedStacks []string
+		var stackSizes map[string]functionStackSize
+		if config.Options.PrintStacks || config.AutomaticStackSize() {
+			// Try to determine stack sizes at compile time.
+			// Don't do this by default as it usually doesn't work on
+			// unsupported architectures.
+			calculatedStacks, stackSizes, err = determineStackSizes(mod, executable)
+			if err != nil {
+				return err
+			}
+		}
+		if config.AutomaticStackSize() {
+			// Modify the .tinygo_stacksizes section that contains a stack size
+			// for each goroutine.
+			err = modifyStackSizes(executable, stackSizeLoads, stackSizes)
+			if err != nil {
+				return fmt.Errorf("could not modify stack sizes: %w", err)
+			}
+		}
+
 		if config.Options.PrintSizes == "short" || config.Options.PrintSizes == "full" {
 			sizes, err := loadProgramSize(executable)
 			if err != nil {
@@ -228,26 +256,244 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 
 		// Print goroutine stack sizes, as far as possible.
 		if config.Options.PrintStacks {
-			printStacks(mod, executable)
+			printStacks(calculatedStacks, stackSizes)
 		}
 
 		// Get an Intel .hex file or .bin file from the .elf file.
-		if outext == ".hex" || outext == ".bin" || outext == ".gba" {
+		outputBinaryFormat := config.BinaryFormat(outext)
+		switch outputBinaryFormat {
+		case "elf":
+			// do nothing, file is already in ELF format
+		case "hex", "bin":
+			// Extract raw binary, either encoding it as a hex file or as a raw
+			// firmware file.
 			tmppath = filepath.Join(dir, "main"+outext)
-			err := objcopy(executable, tmppath)
+			err := objcopy(executable, tmppath, outputBinaryFormat)
 			if err != nil {
 				return err
 			}
-		} else if outext == ".uf2" {
+		case "uf2":
 			// Get UF2 from the .elf file.
 			tmppath = filepath.Join(dir, "main"+outext)
 			err := convertELFFileToUF2File(executable, tmppath, config.Target.UF2FamilyID)
 			if err != nil {
 				return err
 			}
+		case "esp32":
+			// Special format for the ESP32 chip (parsed by the ROM bootloader).
+			tmppath = filepath.Join(dir, "main"+outext)
+			err := makeESP32FirmareImage(executable, tmppath)
+			if err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 		}
 		return action(tmppath)
 	}
+}
+
+// functionStackSizes keeps stack size information about a single function
+// (usually a goroutine).
+type functionStackSize struct {
+	humanName        string
+	stackSize        uint64
+	stackSizeType    stacksize.SizeType
+	missingStackSize *stacksize.CallNode
+}
+
+// determineStackSizes tries to determine the stack sizes of all started
+// goroutines and of the reset vector. The LLVM module is necessary to find
+// functions that call a function pointer.
+func determineStackSizes(mod llvm.Module, executable string) ([]string, map[string]functionStackSize, error) {
+	var callsIndirectFunction []string
+	gowrappers := []string{}
+	gowrapperNames := make(map[string]string)
+	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		// Determine which functions call a function pointer.
+		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				if inst.IsACallInst().IsNil() {
+					continue
+				}
+				if callee := inst.CalledValue(); callee.IsAFunction().IsNil() && callee.IsAInlineAsm().IsNil() {
+					callsIndirectFunction = append(callsIndirectFunction, fn.Name())
+				}
+			}
+		}
+
+		// Get a list of "go wrappers", small wrapper functions that decode
+		// parameters when starting a new goroutine.
+		attr := fn.GetStringAttributeAtIndex(-1, "tinygo-gowrapper")
+		if !attr.IsNil() {
+			gowrappers = append(gowrappers, fn.Name())
+			gowrapperNames[fn.Name()] = attr.GetStringValue()
+		}
+	}
+	sort.Strings(gowrappers)
+
+	// Load the ELF binary.
+	f, err := elf.Open(executable)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not load executable for stack size analysis: %w", err)
+	}
+	defer f.Close()
+
+	// Determine the frame size of each function (if available) and the callgraph.
+	functions, err := stacksize.CallGraph(f, callsIndirectFunction)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not parse executable for stack size analysis: %w", err)
+	}
+
+	// Goroutines need to be started and finished and take up some stack space
+	// that way. This can be measured by measuing the stack size of
+	// tinygo_startTask.
+	if numFuncs := len(functions["tinygo_startTask"]); numFuncs != 1 {
+		return nil, nil, fmt.Errorf("expected exactly one definition of tinygo_startTask, got %d", numFuncs)
+	}
+	baseStackSize, baseStackSizeType, baseStackSizeFailedAt := functions["tinygo_startTask"][0].StackSize()
+
+	sizes := make(map[string]functionStackSize)
+
+	// Add the reset handler function, for convenience. The reset handler runs
+	// startup code and the scheduler. The listed stack size is not the full
+	// stack size: interrupts are not counted.
+	var resetFunction string
+	switch f.Machine {
+	case elf.EM_ARM:
+		// Note: all interrupts happen on this stack so the real size is bigger.
+		resetFunction = "Reset_Handler"
+	}
+	if resetFunction != "" {
+		funcs := functions[resetFunction]
+		if len(funcs) != 1 {
+			return nil, nil, fmt.Errorf("expected exactly one definition of %s in the callgraph, found %d", resetFunction, len(funcs))
+		}
+		stackSize, stackSizeType, missingStackSize := funcs[0].StackSize()
+		sizes[resetFunction] = functionStackSize{
+			stackSize:        stackSize,
+			stackSizeType:    stackSizeType,
+			missingStackSize: missingStackSize,
+			humanName:        resetFunction,
+		}
+	}
+
+	// Add all goroutine wrapper functions.
+	for _, name := range gowrappers {
+		funcs := functions[name]
+		if len(funcs) != 1 {
+			return nil, nil, fmt.Errorf("expected exactly one definition of %s in the callgraph, found %d", name, len(funcs))
+		}
+		humanName := gowrapperNames[name]
+		if humanName == "" {
+			humanName = name // fallback
+		}
+		stackSize, stackSizeType, missingStackSize := funcs[0].StackSize()
+		if baseStackSizeType != stacksize.Bounded {
+			// It was not possible to determine the stack size at compile time
+			// because tinygo_startTask does not have a fixed stack size. This
+			// can happen when using -opt=1.
+			stackSizeType = baseStackSizeType
+			missingStackSize = baseStackSizeFailedAt
+		} else if stackSize < baseStackSize {
+			// This goroutine has a very small stack, but still needs to fit all
+			// registers to start and suspend the goroutine. Otherwise a stack
+			// overflow will occur even before the goroutine is started.
+			stackSize = baseStackSize
+		}
+		sizes[name] = functionStackSize{
+			stackSize:        stackSize,
+			stackSizeType:    stackSizeType,
+			missingStackSize: missingStackSize,
+			humanName:        humanName,
+		}
+	}
+
+	if resetFunction != "" {
+		return append([]string{resetFunction}, gowrappers...), sizes, nil
+	}
+	return gowrappers, sizes, nil
+}
+
+// modifyStackSizes modifies the .tinygo_stacksizes section with the updated
+// stack size information. Before this modification, all stack sizes in the
+// section assume the default stack size (which is relatively big).
+func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map[string]functionStackSize) error {
+	fp, err := os.OpenFile(executable, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer fp.Close()
+
+	elfFile, err := elf.NewFile(fp)
+	if err != nil {
+		return err
+	}
+
+	section := elfFile.Section(".tinygo_stacksizes")
+	if section == nil {
+		return errors.New("could not find .tinygo_stacksizes section")
+	}
+
+	if section.Size != section.FileSize {
+		// Sanity check.
+		return fmt.Errorf("expected .tinygo_stacksizes to have identical size and file size, got %d and %d", section.Size, section.FileSize)
+	}
+
+	// Read all goroutine stack sizes.
+	data := make([]byte, section.Size)
+	_, err = fp.ReadAt(data, int64(section.Offset))
+	if err != nil {
+		return err
+	}
+
+	if len(stackSizeLoads)*4 != len(data) {
+		// Note: while AVR should use 2 byte stack sizes, even 64-bit platforms
+		// should probably stick to 4 byte stack sizes as a larger than 4GB
+		// stack doesn't make much sense.
+		return errors.New("expected 4 byte stack sizes")
+	}
+
+	// Modify goroutine stack sizes with a compile-time known worst case stack
+	// size.
+	for i, name := range stackSizeLoads {
+		fn, ok := stackSizes[name]
+		if !ok {
+			return fmt.Errorf("could not find symbol %s in ELF file", name)
+		}
+		if fn.stackSizeType == stacksize.Bounded {
+			stackSize := uint32(fn.stackSize)
+
+			// Adding 4 for the stack canary. Even though the size may be
+			// automatically determined, stack overflow checking is still
+			// important as the stack size cannot be determined for all
+			// goroutines.
+			stackSize += 4
+
+			// Add stack size used by interrupts.
+			switch elfFile.Machine {
+			case elf.EM_ARM:
+				// On Cortex-M (assumed here), this stack size is 8 words or 32
+				// bytes. This is only to store the registers that the interrupt
+				// may modify, the interrupt will switch to the interrupt stack
+				// (MSP).
+				// Some background:
+				// https://interrupt.memfault.com/blog/cortex-m-rtos-context-switching
+				stackSize += 32
+			}
+
+			// Finally write the stack size to the binary.
+			binary.LittleEndian.PutUint32(data[i*4:], stackSize)
+		}
+	}
+
+	// Write back the modified stack sizes.
+	_, err = fp.WriteAt(data, int64(section.Offset))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // printStacks prints the maximum stack depth for functions that are started as
@@ -260,78 +506,22 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 //
 //     function                         stack usage (in bytes)
 //     Reset_Handler                    316
-//     .Lexamples/blinky2.led1          92
-//     .Lruntime.run$1                  300
-func printStacks(mod llvm.Module, executable string) {
-	// Determine which functions call a function pointer.
-	var callsIndirectFunction []string
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
-			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
-				if inst.IsACallInst().IsNil() {
-					continue
-				}
-				if callee := inst.CalledValue(); callee.IsAFunction().IsNil() && callee.IsAInlineAsm().IsNil() {
-					callsIndirectFunction = append(callsIndirectFunction, fn.Name())
-				}
-			}
-		}
-	}
-
-	// Load the ELF binary.
-	f, err := elf.Open(executable)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "could not load executable for stack size analysis:", err)
-		return
-	}
-	defer f.Close()
-
-	// Determine the frame size of each function (if available) and the callgraph.
-	functions, err := stacksize.CallGraph(f, callsIndirectFunction)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "could not parse executable for stack size analysis:", err)
-		return
-	}
-
-	// Get a list of "go wrappers", small wrapper functions that decode
-	// parameters when starting a new goroutine.
-	var gowrappers []string
-	for name := range functions {
-		if strings.HasSuffix(name, "$gowrapper") {
-			gowrappers = append(gowrappers, name)
-		}
-	}
-	sort.Strings(gowrappers)
-
-	switch f.Machine {
-	case elf.EM_ARM:
-		// Add the reset handler, which runs startup code and is the
-		// interrupt/scheduler stack with -scheduler=tasks.
-		// Note that because interrupts happen on this stack, the stack needed
-		// by just the Reset_Handler is not enough. Stacks needed by interrupt
-		// handlers should also be taken into account.
-		gowrappers = append([]string{"Reset_Handler"}, gowrappers...)
-	}
-
+//     examples/blinky2.led1            92
+//     runtime.run$1                    300
+func printStacks(calculatedStacks []string, stackSizes map[string]functionStackSize) {
 	// Print the sizes of all stacks.
 	fmt.Printf("%-32s %s\n", "function", "stack usage (in bytes)")
-	for _, name := range gowrappers {
-		for _, fn := range functions[name] {
-			stackSize, stackSizeType, missingStackSize := fn.StackSize()
-			strippedName := name
-			if strings.HasSuffix(name, "$gowrapper") {
-				strippedName = name[:len(name)-len("$gowrapper")]
-			}
-			switch stackSizeType {
-			case stacksize.Bounded:
-				fmt.Printf("%-32s %d\n", strippedName, stackSize)
-			case stacksize.Unknown:
-				fmt.Printf("%-32s unknown, %s does not have stack frame information\n", strippedName, missingStackSize)
-			case stacksize.Recursive:
-				fmt.Printf("%-32s recursive, %s may call itself\n", strippedName, missingStackSize)
-			case stacksize.IndirectCall:
-				fmt.Printf("%-32s unknown, %s calls a function pointer\n", strippedName, missingStackSize)
-			}
+	for _, name := range calculatedStacks {
+		fn := stackSizes[name]
+		switch fn.stackSizeType {
+		case stacksize.Bounded:
+			fmt.Printf("%-32s %d\n", fn.humanName, fn.stackSize)
+		case stacksize.Unknown:
+			fmt.Printf("%-32s unknown, %s does not have stack frame information\n", fn.humanName, fn.missingStackSize)
+		case stacksize.Recursive:
+			fmt.Printf("%-32s recursive, %s may call itself\n", fn.humanName, fn.missingStackSize)
+		case stacksize.IndirectCall:
+			fmt.Printf("%-32s unknown, %s calls a function pointer\n", fn.humanName, fn.missingStackSize)
 		}
 	}
 }
