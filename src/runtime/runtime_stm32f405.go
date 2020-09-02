@@ -16,6 +16,15 @@ func init() {
 }
 
 const (
+	// +----------------------+
+	// |    Clock Settings    |
+	// +-------------+--------+
+	// | HSE         | 12mhz  |
+	// | SYSCLK      | 168mhz |
+	// | HCLK        | 168mhz |
+	// | APB1(PCLK1) | 42mhz  |
+	// | APB2(PCLK2) | 84mhz  |
+	// +-------------+--------+
 	HCLK_FREQ_HZ  = 168000000
 	PCLK1_FREQ_HZ = HCLK_FREQ_HZ / 4
 	PCLK2_FREQ_HZ = HCLK_FREQ_HZ / 2
@@ -65,16 +74,6 @@ const (
 	FLASH_OPTIONS = stm32.FLASH_ACR_ICEN | stm32.FLASH_ACR_DCEN | stm32.FLASH_ACR_PRFTEN
 )
 
-/*
-   clock settings
-   +-------------+--------+
-   | HSE         | 12mhz  |
-   | SYSCLK      | 168mhz |
-   | HCLK        | 168mhz |
-   | APB1(PCLK1) | 42mhz  |
-   | APB2(PCLK2) | 84mhz  |
-   +-------------+--------+
-*/
 func initOSC() {
 	// enable voltage regulator
 	stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_PWREN)
