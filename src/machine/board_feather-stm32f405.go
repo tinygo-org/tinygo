@@ -2,11 +2,6 @@
 
 package machine
 
-import (
-	"device/stm32"
-	"runtime/interrupt"
-)
-
 const (
 	NUM_DIGITAL_IO_PINS = 39
 	NUM_ANALOG_IO_PINS  = 7
@@ -94,34 +89,6 @@ const (
 	UART3_TX_PIN = D15
 )
 
-var (
-	// TBD: why do UART0 and UART1 have different types (struct vs reference)?
-	UART0 = UART{
-		Buffer:          NewRingBuffer(),
-		Bus:             stm32.USART3,
-		AltFuncSelector: stm32.AF7_USART1_2_3,
-	}
-	UART1 = &UART0
-
-//  UART2 = &UART{
-//    Buffer:          NewRingBuffer(),
-//    Bus:             stm32.USART6,
-//    AltFuncSelector: stm32.AF8_USART4_5_6,
-//  }
-//  UART3 = &UART{
-//    Buffer:          NewRingBuffer(),
-//    Bus:             stm32.USART1,
-//    AltFuncSelector: stm32.AF7_USART1_2_3,
-//  }
-)
-
-// set up RX IRQ handler. Follow similar pattern for other UARTx instances
-func init() {
-	UART0.Interrupt = interrupt.New(stm32.IRQ_USART3, UART0.handleInterrupt)
-	//UART2.Interrupt = interrupt.New(stm32.IRQ_USART6, UART2.handleInterrupt)
-	//UART3.Interrupt = interrupt.New(stm32.IRQ_USART1, UART3.handleInterrupt)
-}
-
 // SPI pins
 const (
 	NUM_SPI_INTERFACES = 3
@@ -144,24 +111,4 @@ const (
 	SPI3_SCK_PIN = D17
 	SPI3_SDI_PIN = D18
 	SPI3_SDO_PIN = D19
-)
-
-// Since the first interface is named SPI1, both SPI0 and SPI1 refer to SPI1.
-// TODO: implement SPI2 and SPI3.
-var (
-	// TBD: why do SPI0 and SPI1 have different types (struct vs reference)?
-	SPI0 = SPI{
-		Bus:             stm32.SPI2,
-		AltFuncSelector: stm32.AF5_SPI1_SPI2,
-	}
-	SPI1 = &SPI0
-
-//  SPI2 = &SPI{
-//    Bus:             stm32.SPI3,
-//    AltFuncSelector: stm32.AF6_SPI3,
-//  }
-//  SPI3 = &SPI{
-//    Bus:             stm32.SPI1,
-//    AltFuncSelector: stm32.AF5_SPI1_SPI2,
-//  }
 )
