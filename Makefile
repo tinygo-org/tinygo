@@ -190,8 +190,14 @@ tinygo:
 test: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test -v -buildmode exe -tags byollvm ./cgo ./compileopts ./interp ./transform .
 
+# Test known-working standard library packages.
+# TODO: do this in one command, parallelize, and only show failing tests (no
+# implied -v flag).
+.PHONY: tinygo-test
 tinygo-test:
-	cd tests/tinygotest && tinygo test
+	$(TINYGO) test container/list
+	$(TINYGO) test container/ring
+	$(TINYGO) test text/scanner
 
 .PHONY: smoketest
 smoketest:

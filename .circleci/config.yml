@@ -108,6 +108,7 @@ commands:
       - run: go test -v -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./interp ./transform .
       - run: make gen-device -j4
       - run: make smoketest XTENSA=0
+      - run: make tinygo-test
       - run: make wasmtest
       - save_cache:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
