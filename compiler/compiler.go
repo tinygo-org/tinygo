@@ -5,18 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
-	"go/build"
 	"go/constant"
 	"go/token"
 	"go/types"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
-	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/ir"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
@@ -172,40 +169,12 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
 	dummyFunc.EraseFromParentAsFunction()
 
-	wd, err := os.Getwd()
-	if err != nil {
-		return c.mod, nil, nil, []error{err}
-	}
-	goroot, err := loader.GetCachedGoroot(c.Config)
-	if err != nil {
-		return c.mod, nil, nil, []error{err}
-	}
-	lprogram := &loader.Program{
-		Build: &build.Context{
-			GOARCH:      c.GOARCH(),
-			GOOS:        c.GOOS(),
-			GOROOT:      goroot,
-			GOPATH:      goenv.Get("GOPATH"),
-			CgoEnabled:  c.CgoEnabled(),
-			UseAllFiles: false,
-			Compiler:    "gc", // must be one of the recognized compilers
-			BuildTags:   c.BuildTags(),
-		},
-		Tests: c.TestConfig.CompileTestBinary,
-		TypeChecker: types.Config{
-			Sizes: &stdSizes{
-				IntSize:  int64(c.targetData.TypeAllocSize(c.intType)),
-				PtrSize:  int64(c.targetData.PointerSize()),
-				MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
-			},
-		},
-		Dir:          wd,
-		TINYGOROOT:   goenv.Get("TINYGOROOT"),
-		CFlags:       c.CFlags(),
-		ClangHeaders: c.ClangHeaders,
-	}
-
-	err = lprogram.Load(pkgName)
+	lprogram, err := loader.Load(c.Config, []string{pkgName}, c.ClangHeaders, types.Config{
+		Sizes: &stdSizes{
+			IntSize:  int64(c.targetData.TypeAllocSize(c.intType)),
+			PtrSize:  int64(c.targetData.PointerSize()),
+			MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
+		}})
 	if err != nil {
 		return c.mod, nil, nil, []error{err}
 	}
@@ -361,11 +330,8 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	// Gather the list of (C) file paths that should be included in the build.
 	var extraFiles []string
 	for _, pkg := range c.ir.LoaderProgram.Sorted() {
-		for _, file := range pkg.OtherFiles {
-			switch strings.ToLower(filepath.Ext(file)) {
-			case ".c":
-				extraFiles = append(extraFiles, file)
-			}
+		for _, filename := range pkg.CFiles {
+			extraFiles = append(extraFiles, filepath.Join(pkg.Dir, filename))
 		}
 	}
 

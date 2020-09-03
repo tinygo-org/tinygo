@@ -67,7 +67,7 @@ func NewProgram(lprogram *loader.Program) *Program {
 	program := lprogram.LoadSSA()
 	program.Build()
 
-	mainPkg := program.ImportedPackage(lprogram.MainPkg.PkgPath)
+	mainPkg := program.ImportedPackage(lprogram.MainPkg().ImportPath)
 	if mainPkg == nil {
 		panic("could not find main package")
 	}
@@ -79,7 +79,7 @@ func NewProgram(lprogram *loader.Program) *Program {
 	}
 
 	for _, pkg := range lprogram.Sorted() {
-		p.AddPackage(program.ImportedPackage(pkg.PkgPath))
+		p.AddPackage(program.ImportedPackage(pkg.ImportPath))
 	}
 
 	return p

@@ -126,12 +126,6 @@ func Test(pkgName string, options *compileopts.Options) error {
 		return err
 	}
 
-	// Add test build tag. This is incorrect: `go test` only looks at the
-	// _test.go file suffix but does not add the test build tag in the process.
-	// However, it's a simple fix right now.
-	// For details: https://github.com/golang/go/issues/21360
-	config.Target.BuildTags = append(config.Target.BuildTags, "test")
-
 	return builder.Build(pkgName, ".elf", config, func(tmppath string) error {
 		cmd := exec.Command(tmppath)
 		cmd.Stdout = os.Stdout
@@ -648,36 +642,6 @@ func getDefaultPort() (port string, err error) {
 	return d[0], nil
 }
 
-// runGoList runs the `go list` command but using the configuration used for
-// TinyGo.
-func runGoList(config *compileopts.Config, flagJSON, flagDeps bool, pkgs []string) error {
-	goroot, err := loader.GetCachedGoroot(config)
-	if err != nil {
-		return err
-	}
-	args := []string{"list"}
-	if flagJSON {
-		args = append(args, "-json")
-	}
-	if flagDeps {
-		args = append(args, "-deps")
-	}
-	if len(config.BuildTags()) != 0 {
-		args = append(args, "-tags", strings.Join(config.BuildTags(), " "))
-	}
-	args = append(args, pkgs...)
-	cgoEnabled := "0"
-	if config.CgoEnabled() {
-		cgoEnabled = "1"
-	}
-	cmd := exec.Command("go", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = append(os.Environ(), "GOROOT="+goroot, "GOOS="+config.GOOS(), "GOARCH="+config.GOARCH(), "CGO_ENABLED="+cgoEnabled)
-	cmd.Run()
-	return nil
-}
-
 func usage() {
 	fmt.Fprintln(os.Stderr, "TinyGo is a Go compiler for small places.")
 	fmt.Fprintln(os.Stderr, "version:", goenv.Version)
@@ -751,9 +715,15 @@ func printCompilerError(logln func(...interface{}), err error) {
 			}
 		}
 	case loader.Errors:
-		logln("#", err.Pkg.PkgPath)
+		logln("#", err.Pkg.ImportPath)
 		for _, err := range err.Errs {
 			printCompilerError(logln, err)
+		}
+	case loader.Error:
+		logln(err.Err.Error())
+		logln("package", err.ImportStack[0])
+		for _, pkgPath := range err.ImportStack[1:] {
+			logln("\timports", pkgPath)
 		}
 	case *builder.MultiError:
 		for _, err := range err.Errs {
@@ -982,8 +952,28 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err = runGoList(config, *flagJSON, *flagDeps, flag.Args())
+		var extraArgs []string
+		if *flagJSON {
+			extraArgs = append(extraArgs, "-json")
+		}
+		if *flagDeps {
+			extraArgs = append(extraArgs, "-deps")
+		}
+		cmd, err := loader.List(config, extraArgs, flag.Args())
 		if err != nil {
+			fmt.Fprintln(os.Stderr, "failed to run `go list`:", err)
+			os.Exit(1)
+		}
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+					os.Exit(status.ExitStatus())
+				}
+				os.Exit(1)
+			}
 			fmt.Fprintln(os.Stderr, "failed to run `go list`:", err)
 			os.Exit(1)
 		}

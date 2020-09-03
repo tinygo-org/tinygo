@@ -154,18 +154,16 @@ func (c *common) Skipped() bool {
 	return c.skipped
 }
 
-// TestToCall is a reference to a test that should be called during a test suite run.
-type TestToCall struct {
-	// Name of the test to call.
+// InternalTest is a reference to a test that should be called during a test suite run.
+type InternalTest struct {
 	Name string
-	// Function reference to the test.
-	Func func(*T)
+	F    func(*T)
 }
 
 // M is a test suite.
 type M struct {
 	// tests is a list of the test names to execute
-	Tests []TestToCall
+	Tests []InternalTest
 }
 
 // Run the test suite.
@@ -180,7 +178,7 @@ func (m *M) Run() int {
 		}
 
 		fmt.Printf("=== RUN   %s\n", test.Name)
-		test.Func(t)
+		test.F(t)
 
 		if t.failed {
 			fmt.Printf("--- FAIL: %s\n", test.Name)
@@ -203,4 +201,17 @@ func (m *M) Run() int {
 
 func TestMain(m *M) {
 	os.Exit(m.Run())
+}
+
+func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenchmark, examples []InternalExample) *M {
+	return &M{
+		Tests: tests,
+	}
+}
+
+type InternalExample struct {
+	Name      string
+	F         func()
+	Output    string
+	Unordered bool
 }
