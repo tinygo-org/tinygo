@@ -1,4 +1,4 @@
-// +build cortexm,!nxp
+// +build cortexm,!nxp,!qemu
 
 package runtime
 

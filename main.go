@@ -127,22 +127,50 @@ func Test(pkgName string, options *compileopts.Options) error {
 	}
 
 	return builder.Build(pkgName, ".elf", config, func(result builder.BuildResult) error {
-		cmd := exec.Command(result.Binary)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Dir = result.MainDir
-		err := cmd.Run()
-		if err != nil {
-			// Propagate the exit code
-			if err, ok := err.(*exec.ExitError); ok {
-				if status, ok := err.Sys().(syscall.WaitStatus); ok {
-					os.Exit(status.ExitStatus())
+		if len(config.Target.Emulator) == 0 {
+			// Run directly.
+			cmd := exec.Command(result.Binary)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Dir = result.MainDir
+			err := cmd.Run()
+			if err != nil {
+				// Propagate the exit code
+				if err, ok := err.(*exec.ExitError); ok {
+					if status, ok := err.Sys().(syscall.WaitStatus); ok {
+						os.Exit(status.ExitStatus())
+					}
+					os.Exit(1)
 				}
-				os.Exit(1)
+				return &commandError{"failed to run compiled binary", result.Binary, err}
 			}
-			return &commandError{"failed to run compiled binary", result.Binary, err}
+			return nil
+		} else {
+			// Run in an emulator.
+			args := append(config.Target.Emulator[1:], result.Binary)
+			cmd := exec.Command(config.Target.Emulator[0], args...)
+			buf := &bytes.Buffer{}
+			w := io.MultiWriter(os.Stdout, buf)
+			cmd.Stdout = w
+			cmd.Stderr = os.Stderr
+			err := cmd.Run()
+			if err != nil {
+				if err, ok := err.(*exec.ExitError); !ok || !err.Exited() {
+					// Workaround for QEMU which always exits with an error.
+					return &commandError{"failed to run emulator with", result.Binary, err}
+				}
+			}
+			testOutput := string(buf.Bytes())
+			if testOutput == "PASS\n" || strings.HasSuffix(testOutput, "\nPASS\n") {
+				// Test passed.
+				return nil
+			} else {
+				// Test failed, either by ending with the word "FAIL" or with a
+				// panic of some sort.
+				os.Exit(1)
+				return nil // unreachable
+			}
 		}
-		return nil
 	})
 }
 

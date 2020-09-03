@@ -21,6 +21,8 @@ func postinit() {}
 func main() {
 	preinit()
 	run()
+
+	// Signal successful exit.
 	arm.SemihostingCall(arm.SemihostingReportException, arm.SemihostingApplicationExit)
 	abort()
 }
@@ -53,4 +55,14 @@ func putchar(c byte) {
 
 func waitForEvents() {
 	arm.Asm("wfe")
+}
+
+func abort() {
+	// Signal an abnormal exit.
+	arm.SemihostingCall(arm.SemihostingReportException, arm.SemihostingRunTimeErrorUnknown)
+
+	// Lock up forever (should be unreachable).
+	for {
+		arm.Asm("wfi")
+	}
 }

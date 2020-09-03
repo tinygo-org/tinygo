@@ -289,6 +289,17 @@
 						setTimeout(this._inst.exports.go_scheduler, timeout);
 					},
 
+					// func Exit(code int)
+					"syscall.Exit": (code) => {
+						if (global.process) {
+							// Node.js
+							process.exit(code);
+						} else {
+							// Can't exit in a browser.
+							throw 'trying to exit with code ' + code;
+						}
+					},
+
 					// func finalizeRef(v ref)
 					"syscall/js.finalizeRef": (sp) => {
 						// Note: TinyGo does not support finalizers so this should never be
