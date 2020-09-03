@@ -121,6 +121,7 @@ fmt-check:
 gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-stm32 gen-device-kendryte gen-device-nxp
 
 gen-device-avr:
+	@if [ ! -e lib/avr/README.md ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
 	$(GO) build -o ./build/gen-device-avr ./tools/gen-device-avr/
 	./build/gen-device-avr lib/avr/packs/atmega src/device/avr/
 	./build/gen-device-avr lib/avr/packs/tiny src/device/avr/
@@ -177,6 +178,7 @@ $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
 .PHONY: wasi-libc
 wasi-libc: lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a
 lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
+	@if [ ! -e lib/wasi-libc/Makefile ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
 	cd lib/wasi-libc && make -j4 WASM_CC=$(CLANG) WASM_AR=$(LLVM_AR) WASM_NM=$(LLVM_NM)
 
 
