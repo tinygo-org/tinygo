@@ -15,3 +15,8 @@ type B struct {
 	common
 	N int
 }
+
+type InternalBenchmark struct {
+	Name string
+	F    func(b *B)
+}

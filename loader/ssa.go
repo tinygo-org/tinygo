@@ -10,8 +10,8 @@ import (
 func (p *Program) LoadSSA() *ssa.Program {
 	prog := ssa.NewProgram(p.fset, ssa.SanityCheckFunctions|ssa.BareInits|ssa.GlobalDebug)
 
-	for _, pkg := range p.Sorted() {
-		prog.CreatePackage(pkg.Pkg, pkg.Files, &pkg.Info, true)
+	for _, pkg := range p.sorted {
+		prog.CreatePackage(pkg.Pkg, pkg.Files, &pkg.info, true)
 	}
 
 	return prog
