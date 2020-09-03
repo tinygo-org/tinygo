@@ -193,7 +193,7 @@ tinygo-test:
 
 .PHONY: smoketest smoketest-version smoketest-j4 smoketest-01 smoketest-02 smoketest-03 smoketest-04
 smoketest: smoketest-version
-	$(MAKE) -j4 smoketest-j4 --output-sync
+	$(MAKE) -j4 smoketest-j4
 
 smoketest-version:
 	$(TINYGO) version
