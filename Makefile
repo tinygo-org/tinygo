@@ -191,11 +191,14 @@ test: wasi-libc
 tinygo-test:
 	cd tests/tinygotest && tinygo test
 
-.PHONY: smoketest smoketest-version smoketest-01 smoketest-02 smoketest-03 smoketest-04
-smoketest: smoketest-version smoketest-01 smoketest-02 smoketest-03 smoketest-04
+.PHONY: smoketest smoketest-version smoketest-j4 smoketest-01 smoketest-02 smoketest-03 smoketest-04
+smoketest: smoketest-version
+	$(MAKE) -j4 smoketest-j4 --output-sync
 
 smoketest-version:
 	$(TINYGO) version
+
+smoketest-j4: smoketest-01 smoketest-02 smoketest-03 smoketest-04
 
 smoketest-01:
 	# test all examples (except pwm)
