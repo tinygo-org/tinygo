@@ -24,22 +24,35 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// BuildResult is the output of a build. This includes the binary itself and
+// some other metadata that is obtained while building the binary.
+type BuildResult struct {
+	// A path to the output binary. It will be removed after Build returns, so
+	// if it should be kept it must be copied or moved away.
+	Binary string
+
+	// The directory of the main package. This is useful for testing as the test
+	// binary must be run in the directory of the tested package.
+	MainDir string
+}
+
 // Build performs a single package to executable Go build. It takes in a package
 // name, an output path, and set of compile options and from that it manages the
 // whole compilation process.
 //
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
-func Build(pkgName, outpath string, config *compileopts.Config, action func(string) error) error {
+func Build(pkgName, outpath string, config *compileopts.Config, action func(BuildResult) error) error {
 	// Compile Go code to IR.
 	machine, err := compiler.NewTargetMachine(config)
 	if err != nil {
 		return err
 	}
-	mod, extraFiles, extraLDFlags, errs := compiler.Compile(pkgName, machine, config)
+	buildOutput, errs := compiler.Compile(pkgName, machine, config)
 	if errs != nil {
 		return newMultiError(errs)
 	}
+	mod := buildOutput.Mod
 
 	if config.Options.PrintIR {
 		fmt.Println("; Generated LLVM IR:")
@@ -196,7 +209,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 		}
 
 		// Compile C files in packages.
-		for i, file := range extraFiles {
+		for i, file := range buildOutput.ExtraFiles {
 			outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"-"+filepath.Base(file)+".o")
 			err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, file)...)
 			if err != nil {
@@ -205,8 +218,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 			ldflags = append(ldflags, outpath)
 		}
 
-		if len(extraLDFlags) > 0 {
-			ldflags = append(ldflags, extraLDFlags...)
+		if len(buildOutput.ExtraLDFlags) > 0 {
+			ldflags = append(ldflags, buildOutput.ExtraLDFlags...)
 		}
 
 		// Link the object files together.
@@ -289,7 +302,10 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(stri
 		default:
 			return fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 		}
-		return action(tmppath)
+		return action(BuildResult{
+			Binary:  tmppath,
+			MainDir: buildOutput.MainDir,
+		})
 	}
 }
 
