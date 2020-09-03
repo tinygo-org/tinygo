@@ -90,10 +90,10 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 		return err
 	}
 
-	return builder.Build(pkgName, outpath, config, func(tmppath string) error {
-		if err := os.Rename(tmppath, outpath); err != nil {
+	return builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
+		if err := os.Rename(result.Binary, outpath); err != nil {
 			// Moving failed. Do a file copy.
-			inf, err := os.Open(tmppath)
+			inf, err := os.Open(result.Binary)
 			if err != nil {
 				return err
 			}
@@ -126,10 +126,11 @@ func Test(pkgName string, options *compileopts.Options) error {
 		return err
 	}
 
-	return builder.Build(pkgName, ".elf", config, func(tmppath string) error {
-		cmd := exec.Command(tmppath)
+	return builder.Build(pkgName, ".elf", config, func(result builder.BuildResult) error {
+		cmd := exec.Command(result.Binary)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+		cmd.Dir = result.MainDir
 		err := cmd.Run()
 		if err != nil {
 			// Propagate the exit code
@@ -139,7 +140,7 @@ func Test(pkgName string, options *compileopts.Options) error {
 				}
 				os.Exit(1)
 			}
-			return &commandError{"failed to run compiled binary", tmppath, err}
+			return &commandError{"failed to run compiled binary", result.Binary, err}
 		}
 		return nil
 	})
@@ -183,7 +184,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		return errors.New("unknown flash method: " + flashMethod)
 	}
 
-	return builder.Build(pkgName, fileExt, config, func(tmppath string) error {
+	return builder.Build(pkgName, fileExt, config, func(result builder.BuildResult) error {
 		// do we need port reset to put MCU into bootloader mode?
 		if config.Target.PortReset == "true" && flashMethod != "openocd" {
 			if port == "" {
@@ -196,7 +197,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 
 			err := touchSerialPortAt1200bps(port)
 			if err != nil {
-				return &commandError{"failed to reset port", tmppath, err}
+				return &commandError{"failed to reset port", result.Binary, err}
 			}
 			// give the target MCU a chance to restart into bootloader
 			time.Sleep(3 * time.Second)
@@ -208,7 +209,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			// Create the command.
 			flashCmd := config.Target.FlashCommand
 			fileToken := "{" + fileExt[1:] + "}"
-			flashCmd = strings.Replace(flashCmd, fileToken, tmppath, -1)
+			flashCmd = strings.Replace(flashCmd, fileToken, result.Binary, -1)
 
 			if port == "" && strings.Contains(flashCmd, "{port}") {
 				var err error
@@ -238,21 +239,21 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			cmd.Dir = goenv.Get("TINYGOROOT")
 			err := cmd.Run()
 			if err != nil {
-				return &commandError{"failed to flash", tmppath, err}
+				return &commandError{"failed to flash", result.Binary, err}
 			}
 			return nil
 		case "msd":
 			switch fileExt {
 			case ".uf2":
-				err := flashUF2UsingMSD(config.Target.FlashVolume, tmppath)
+				err := flashUF2UsingMSD(config.Target.FlashVolume, result.Binary)
 				if err != nil {
-					return &commandError{"failed to flash", tmppath, err}
+					return &commandError{"failed to flash", result.Binary, err}
 				}
 				return nil
 			case ".hex":
-				err := flashHexUsingMSD(config.Target.FlashVolume, tmppath)
+				err := flashHexUsingMSD(config.Target.FlashVolume, result.Binary)
 				if err != nil {
-					return &commandError{"failed to flash", tmppath, err}
+					return &commandError{"failed to flash", result.Binary, err}
 				}
 				return nil
 			default:
@@ -263,13 +264,13 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			if err != nil {
 				return err
 			}
-			args = append(args, "-c", "program "+filepath.ToSlash(tmppath)+" reset exit")
+			args = append(args, "-c", "program "+filepath.ToSlash(result.Binary)+" reset exit")
 			cmd := exec.Command("openocd", args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			err = cmd.Run()
 			if err != nil {
-				return &commandError{"failed to flash", tmppath, err}
+				return &commandError{"failed to flash", result.Binary, err}
 			}
 			return nil
 		default:
@@ -294,7 +295,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		return errors.New("gdb not configured in the target specification")
 	}
 
-	return builder.Build(pkgName, "", config, func(tmppath string) error {
+	return builder.Build(pkgName, "", config, func(result builder.BuildResult) error {
 		// Find a good way to run GDB.
 		gdbInterface, openocdInterface := config.Programmer()
 		switch gdbInterface {
@@ -357,7 +358,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			gdbCommands = append(gdbCommands, "target remote :1234")
 
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], tmppath, "-s", "-S")
+			args := append(config.Target.Emulator[1:], result.Binary, "-s", "-S")
 			daemon = exec.Command(config.Target.Emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
@@ -365,7 +366,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			gdbCommands = append(gdbCommands, "target remote :2345")
 
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], tmppath, "-g")
+			args := append(config.Target.Emulator[1:], result.Binary, "-g")
 			daemon = exec.Command(config.Target.Emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
@@ -403,7 +404,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		// Construct and execute a gdb command.
 		// By default: gdb -ex run <binary>
 		// Exit GDB with Ctrl-D.
-		params := []string{tmppath}
+		params := []string{result.Binary}
 		for _, cmd := range gdbCommands {
 			params = append(params, "-ex", cmd)
 		}
@@ -413,7 +414,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		cmd.Stderr = os.Stderr
 		err := cmd.Run()
 		if err != nil {
-			return &commandError{"failed to run gdb with", tmppath, err}
+			return &commandError{"failed to run gdb with", result.Binary, err}
 		}
 		return nil
 	})
@@ -429,10 +430,10 @@ func Run(pkgName string, options *compileopts.Options) error {
 		return err
 	}
 
-	return builder.Build(pkgName, ".elf", config, func(tmppath string) error {
+	return builder.Build(pkgName, ".elf", config, func(result builder.BuildResult) error {
 		if len(config.Target.Emulator) == 0 {
 			// Run directly.
-			cmd := exec.Command(tmppath)
+			cmd := exec.Command(result.Binary)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			err := cmd.Run()
@@ -441,12 +442,12 @@ func Run(pkgName string, options *compileopts.Options) error {
 					// Workaround for QEMU which always exits with an error.
 					return nil
 				}
-				return &commandError{"failed to run compiled binary", tmppath, err}
+				return &commandError{"failed to run compiled binary", result.Binary, err}
 			}
 			return nil
 		} else {
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], tmppath)
+			args := append(config.Target.Emulator[1:], result.Binary)
 			cmd := exec.Command(config.Target.Emulator[0], args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
@@ -456,7 +457,7 @@ func Run(pkgName string, options *compileopts.Options) error {
 					// Workaround for QEMU which always exits with an error.
 					return nil
 				}
-				return &commandError{"failed to run emulator with", tmppath, err}
+				return &commandError{"failed to run emulator with", result.Binary, err}
 			}
 			return nil
 		}

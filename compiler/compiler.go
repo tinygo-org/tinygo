@@ -127,6 +127,28 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 	return machine, nil
 }
 
+// CompilerOutput is returned from the Compile() call. It contains the compile
+// output and information necessary to continue to compile and link the program.
+type CompilerOutput struct {
+	// The LLVM module that contains the compiled but not optimized LLVM module
+	// for all the Go code in the program.
+	Mod llvm.Module
+
+	// ExtraFiles is a list of C source files included in packages that should
+	// be built and linked together with the main executable to form one
+	// program. They can be used from CGo, for example.
+	ExtraFiles []string
+
+	// ExtraLDFlags are linker flags obtained during CGo processing. These flags
+	// must be passed to the linker which links the entire executable.
+	ExtraLDFlags []string
+
+	// MainDir is the absolute directory path to the directory of the main
+	// package. This is useful for testing: tests must be run in the package
+	// directory that is being tested.
+	MainDir string
+}
+
 // Compile the given package path or .go file path. Return an error when this
 // fails (in any stage). If successful it returns the LLVM module and a list of
 // extra C files to be compiled. If not, one or more errors will be returned.
@@ -135,7 +157,7 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 // violation. Eventually, this Compile function should only compile a single
 // package and not the whole program, and loading of the program (including CGo
 // processing) should be moved outside the compiler package.
-func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) (mod llvm.Module, extrafiles []string, extraldflags []string, errors []error) {
+func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) (output CompilerOutput, errors []error) {
 	c := &compilerContext{
 		Config:     config,
 		difiles:    make(map[string]llvm.Metadata),
@@ -151,6 +173,7 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	if c.Debug() {
 		c.dibuilder = llvm.NewDIBuilder(c.mod)
 	}
+	output.Mod = c.mod
 
 	c.uintptrType = c.ctx.IntType(c.targetData.PointerSize() * 8)
 	if c.targetData.PointerSize() <= 4 {
@@ -176,20 +199,22 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 			MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
 		}})
 	if err != nil {
-		return c.mod, nil, nil, []error{err}
+		return output, []error{err}
 	}
 
 	err = lprogram.Parse()
 	if err != nil {
-		return c.mod, nil, nil, []error{err}
+		return output, []error{err}
 	}
+	output.ExtraLDFlags = lprogram.LDFlags
+	output.MainDir = lprogram.MainPkg().Dir
 
 	c.ir = ir.NewProgram(lprogram)
 
 	// Run a simple dead code elimination pass.
 	err = c.ir.SimpleDCE()
 	if err != nil {
-		return c.mod, nil, nil, []error{err}
+		return output, []error{err}
 	}
 
 	// Initialize debug information.
@@ -328,14 +353,13 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	}
 
 	// Gather the list of (C) file paths that should be included in the build.
-	var extraFiles []string
 	for _, pkg := range c.ir.LoaderProgram.Sorted() {
 		for _, filename := range pkg.CFiles {
-			extraFiles = append(extraFiles, filepath.Join(pkg.Dir, filename))
+			output.ExtraFiles = append(output.ExtraFiles, filepath.Join(pkg.Dir, filename))
 		}
 	}
 
-	return c.mod, extraFiles, lprogram.LDFlags, c.diagnostics
+	return output, c.diagnostics
 }
 
 // getLLVMRuntimeType obtains a named type from the runtime package and returns
