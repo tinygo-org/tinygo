@@ -195,6 +195,8 @@ func (m *M) Run() int {
 	if failures > 0 {
 		fmt.Printf("exit status %d\n", failures)
 		fmt.Println("FAIL")
+	} else {
+		fmt.Println("PASS")
 	}
 	return failures
 }
