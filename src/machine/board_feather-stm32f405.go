@@ -2,11 +2,6 @@
 
 package machine
 
-import (
-	"device/stm32"
-	"runtime/interrupt"
-)
-
 const (
 	NUM_DIGITAL_IO_PINS = 39
 	NUM_ANALOG_IO_PINS  = 7
@@ -79,9 +74,7 @@ func init() {
 const (
 	NUM_BOARD_LED      = 1
 	NUM_BOARD_NEOPIXEL = 1
-)
 
-const (
 	LED_RED      = D13
 	LED_NEOPIXEL = D8
 	LED_BUILTIN  = LED_RED
@@ -103,9 +96,7 @@ const (
 	// |   UART0   |  USART3  | APB1(42 MHz) |   D0/D1    |   7   | UART1 |
 	// #===========#==========#==============#============#=======#=======#
 	NUM_UART_INTERFACES = 3
-)
 
-const (
 	UART1_RX_PIN = D0 // UART1 = hardware: USART3
 	UART1_TX_PIN = D1 //
 
@@ -122,30 +113,7 @@ const (
 	UART_TX_PIN = UART0_TX_PIN //
 )
 
-var (
-	UART1 = UART{
-		Buffer:          NewRingBuffer(),
-		Bus:             stm32.USART3,
-		AltFuncSelector: stm32.AF7_USART1_2_3,
-	}
-	UART2 = UART{
-		Buffer:          NewRingBuffer(),
-		Bus:             stm32.USART6,
-		AltFuncSelector: stm32.AF8_USART4_5_6,
-	}
-	UART3 = UART{
-		Buffer:          NewRingBuffer(),
-		Bus:             stm32.USART1,
-		AltFuncSelector: stm32.AF7_USART1_2_3,
-	}
-	UART0 = UART1
-)
-
-func initUART() {
-	UART1.Interrupt = interrupt.New(stm32.IRQ_USART3, UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(stm32.IRQ_USART6, UART2.handleInterrupt)
-	UART3.Interrupt = interrupt.New(stm32.IRQ_USART1, UART3.handleInterrupt)
-}
+func initUART() {}
 
 // -- SPI ----------------------------------------------------------------------
 
@@ -160,9 +128,7 @@ const (
 	// |   SPI0    |   SPI2   | APB1(42 MHz) |    D23/D24/D25   |   5   | SPI1  |
 	// #===========#==========#==============#==================#=======#=======#
 	NUM_SPI_INTERFACES = 3
-)
 
-const (
 	SPI1_SCK_PIN = D23 //
 	SPI1_SDI_PIN = D24 // SPI1 = hardware: SPI2
 	SPI1_SDO_PIN = D25 //
@@ -184,22 +150,6 @@ const (
 	SPI_SDO_PIN = SPI0_SDO_PIN //
 )
 
-var (
-	SPI1 = SPI{
-		Bus:             stm32.SPI2,
-		AltFuncSelector: stm32.AF5_SPI1_SPI2,
-	}
-	SPI2 = SPI{
-		Bus:             stm32.SPI3,
-		AltFuncSelector: stm32.AF6_SPI3,
-	}
-	SPI3 = SPI{
-		Bus:             stm32.SPI1,
-		AltFuncSelector: stm32.AF5_SPI1_SPI2,
-	}
-	SPI0 = SPI1
-)
-
 func initSPI() {}
 
 // -- I2C ----------------------------------------------------------------------
@@ -215,9 +165,7 @@ const (
 	// |   I2C0    |   I2C1   |              |   D14/D15    |       | I2C1  |
 	// #===========#==========#==============#==============#=======#=======#
 	NUM_I2C_INTERFACES = 3
-)
 
-const (
 	I2C1_SDA_PIN = D14 // I2C1 = hardware: I2C1
 	I2C1_SCL_PIN = D15 //
 
