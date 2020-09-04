@@ -178,6 +178,22 @@ const (
 	SPI_SDO_PIN = SPI0_SDO_PIN //
 )
 
+var (
+	SPI1 = SPI{
+		Bus:             stm32.SPI2,
+		AltFuncSelector: stm32.AF5_SPI1_SPI2,
+	}
+	SPI2 = SPI{
+		Bus:             stm32.SPI3,
+		AltFuncSelector: stm32.AF6_SPI3,
+	}
+	SPI3 = SPI{
+		Bus:             stm32.SPI1,
+		AltFuncSelector: stm32.AF5_SPI1_SPI2,
+	}
+	SPI0 = SPI1
+)
+
 func initSPI() {}
 
 // -- I2C ----------------------------------------------------------------------
