@@ -55,3 +55,6 @@ type I2C struct {
 	Bus             *stm32.I2C_Type
 	AltFuncSelector stm32.AltFunc
 }
+
+func (i2c I2C) configurePins(config I2CConfig)      {}
+func (i2c I2C) getBaudRate(config I2CConfig) uint32 { return 0 }
