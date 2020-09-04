@@ -2,12 +2,17 @@
 
 package machine
 
+import (
+	"device/stm32"
+	"runtime/interrupt"
+)
+
 const (
 	NUM_DIGITAL_IO_PINS = 39
 	NUM_ANALOG_IO_PINS  = 7
 )
 
-// Pinout
+// Digital pins
 const (
 	// Arduino pin = MCU port pin // primary functions (alternate functions)
 	D0  = PB11 // USART3 RX, PWM TIM2_CH4 (I2C2 SDA)
@@ -62,53 +67,171 @@ const (
 	A6 = D22 // VBAT
 )
 
-// Pretty lights
+func init() {
+	initLED()
+	initUART()
+	initSPI()
+	initI2C()
+}
+
+// -- LEDs ---------------------------------------------------------------------
+
 const (
-	LED          = LED_BUILTIN
-	LED_BUILTIN  = LED_RED
+	NUM_BOARD_LED      = 1
+	NUM_BOARD_NEOPIXEL = 1
+)
+
+const (
 	LED_RED      = D13
 	LED_NEOPIXEL = D8
+	LED_BUILTIN  = LED_RED
+	LED          = LED_BUILTIN
 )
 
-// UART pins
+func initLED() {}
+
+// -- UART ---------------------------------------------------------------------
+
 const (
+	// #===========#==========#==============#============#=======#=======#
+	// | Interface | Hardware |  Bus(Freq)   | RX/TX Pins | AltFn | Alias |
+	// #===========#==========#==============#============#=======#=======#
+	// |   UART1   |  USART3  | APB1(42 MHz) |   D0/D1    |   7   |   ~   |
+	// |   UART2   |  USART6  | APB2(84 MHz) |   D5/D6    |   8   |   ~   |
+	// |   UART3   |  USART1  | APB2(84 MHz) |  D14/D15   |   7   |   ~   |
+	// | --------- | -------- | ------------ | ---------- | ----- | ----- |
+	// |   UART0   |  USART3  | APB1(42 MHz) |   D0/D1    |   7   | UART1 |
+	// #===========#==========#==============#============#=======#=======#
 	NUM_UART_INTERFACES = 3
-
-	UART_RX_PIN = UART1_RX_PIN
-	UART_TX_PIN = UART1_TX_PIN
-
-	UART0_RX_PIN = D0
-	UART0_TX_PIN = D1
-	UART1_RX_PIN = UART0_RX_PIN
-	UART1_TX_PIN = UART0_TX_PIN
-
-	UART2_RX_PIN = D5
-	UART2_TX_PIN = D6
-
-	UART3_RX_PIN = D14
-	UART3_TX_PIN = D15
 )
 
-// SPI pins
 const (
-	NUM_SPI_INTERFACES = 3
+	UART1_RX_PIN = D0 // UART1 = hardware: USART3
+	UART1_TX_PIN = D1 //
 
-	SPI_SCK_PIN = SPI1_SCK_PIN
-	SPI_SDI_PIN = SPI1_SDI_PIN
-	SPI_SDO_PIN = SPI1_SDO_PIN
+	UART2_RX_PIN = D5 // UART2 = hardware: USART6
+	UART2_TX_PIN = D6 //
 
-	SPI0_SCK_PIN = D23
-	SPI0_SDI_PIN = D24
-	SPI0_SDO_PIN = D25
-	SPI1_SCK_PIN = SPI0_SCK_PIN
-	SPI1_SDI_PIN = SPI0_SDI_PIN
-	SPI1_SDO_PIN = SPI0_SDO_PIN
+	UART3_RX_PIN = D14 // UART3 = hardware: USART1
+	UART3_TX_PIN = D15 //
 
-	SPI2_SCK_PIN = D2
-	SPI2_SDI_PIN = D3
-	SPI2_SDO_PIN = D4
+	UART0_RX_PIN = UART1_RX_PIN // UART0 = alias: UART1
+	UART0_TX_PIN = UART1_TX_PIN //
 
-	SPI3_SCK_PIN = D17
-	SPI3_SDI_PIN = D18
-	SPI3_SDO_PIN = D19
+	UART_RX_PIN = UART0_RX_PIN // default/primary UART pins
+	UART_TX_PIN = UART0_TX_PIN //
 )
+
+var (
+	UART1 = UART{
+		Buffer:          NewRingBuffer(),
+		Bus:             stm32.USART3,
+		AltFuncSelector: stm32.AF7_USART1_2_3,
+	}
+	UART2 = UART{
+		Buffer:          NewRingBuffer(),
+		Bus:             stm32.USART6,
+		AltFuncSelector: stm32.AF8_USART4_5_6,
+	}
+	UART3 = UART{
+		Buffer:          NewRingBuffer(),
+		Bus:             stm32.USART1,
+		AltFuncSelector: stm32.AF7_USART1_2_3,
+	}
+	UART0 = UART1
+)
+
+func initUART() {
+	UART1.Interrupt = interrupt.New(stm32.IRQ_USART3, UART1.handleInterrupt)
+	UART2.Interrupt = interrupt.New(stm32.IRQ_USART6, UART2.handleInterrupt)
+	UART3.Interrupt = interrupt.New(stm32.IRQ_USART1, UART3.handleInterrupt)
+}
+
+// -- SPI ----------------------------------------------------------------------
+
+const (
+	// #===========#==========#==============#==================#=======#=======#
+	// | Interface | Hardware |  Bus(Freq)   | SCK/SDI/SDO Pins | AltFn | Alias |
+	// #===========#==========#==============#==================#=======#=======#
+	// |   SPI1    |   SPI2   | APB1(42 MHz) |    D23/D24/D25   |   5   |   ~   |
+	// |   SPI2    |   SPI3   | APB1(42 MHz) |     D2/D3/D4     |   6   |   ~   |
+	// |   SPI3    |   SPI1   | APB2(84 MHz) |    D17/D18/D19   |   5   |   ~   |
+	// | --------- | -------- | ------------ | ---------------- | ----- | ----- |
+	// |   SPI0    |   SPI2   | APB1(42 MHz) |    D23/D24/D25   |   5   | SPI1  |
+	// #===========#==========#==============#==================#=======#=======#
+	NUM_SPI_INTERFACES = 3
+)
+
+const (
+	SPI1_SCK_PIN = D23 //
+	SPI1_SDI_PIN = D24 // SPI1 = hardware: SPI2
+	SPI1_SDO_PIN = D25 //
+
+	SPI2_SCK_PIN = D2 //
+	SPI2_SDI_PIN = D3 // SPI2 = hardware: SPI3
+	SPI2_SDO_PIN = D4 //
+
+	SPI3_SCK_PIN = D17 //
+	SPI3_SDI_PIN = D18 // SPI3 = hardware: SPI1
+	SPI3_SDO_PIN = D19 //
+
+	SPI0_SCK_PIN = SPI1_SCK_PIN //
+	SPI0_SDI_PIN = SPI1_SDI_PIN // SPI0 = alias: SPI1
+	SPI0_SDO_PIN = SPI1_SDO_PIN //
+
+	SPI_SCK_PIN = SPI0_SCK_PIN //
+	SPI_SDI_PIN = SPI0_SDI_PIN // default/primary SPI pins
+	SPI_SDO_PIN = SPI0_SDO_PIN //
+)
+
+var (
+	SPI1 = SPI{
+		Bus:             stm32.SPI2,
+		AltFuncSelector: stm32.AF5_SPI1_SPI2,
+	}
+	SPI2 = SPI{
+		Bus:             stm32.SPI3,
+		AltFuncSelector: stm32.AF6_SPI3,
+	}
+	SPI3 = SPI{
+		Bus:             stm32.SPI1,
+		AltFuncSelector: stm32.AF5_SPI1_SPI2,
+	}
+	SPI0 = SPI1
+)
+
+func initSPI() {}
+
+// -- I2C ----------------------------------------------------------------------
+
+const (
+	// #===========#==========#==============#==============#=======#=======#
+	// | Interface | Hardware |  Bus(Freq)   | SDA/SCL Pins | AltFn | Alias |
+	// #===========#==========#==============#==============#=======#=======#
+	// |   I2C1    |   I2C1   |              |   D14/D15    |       |   ~   |
+	// |   I2C2    |   I2C2   |              |    D0/D1     |       |   ~   |
+	// |   I2C3    |   I2C1   |              |    D9/D10    |       |   ~   |
+	// | --------- | -------- | ------------ | ------------ | ----- | ----- |
+	// |   I2C0    |   I2C1   |              |   D14/D15    |       | I2C1  |
+	// #===========#==========#==============#==============#=======#=======#
+	NUM_I2C_INTERFACES = 3
+)
+
+const (
+	I2C1_SDA_PIN = D14 // I2C1 = hardware: I2C1
+	I2C1_SCL_PIN = D15 //
+
+	I2C2_SDA_PIN = D0 // I2C2 = hardware: I2C2
+	I2C2_SCL_PIN = D1 //
+
+	I2C3_SDA_PIN = D9  // I2C3 = hardware: I2C1
+	I2C3_SCL_PIN = D10 //   (interface duplicated on second pair of pins)
+
+	I2C0_SDA_PIN = I2C1_SDA_PIN // I2C0 = alias: I2C1
+	I2C0_SCL_PIN = I2C1_SCL_PIN //
+
+	I2C_SDA_PIN = I2C0_SDA_PIN // default/primary I2C pins
+	I2C_SCL_PIN = I2C0_SCL_PIN //
+)
+
+func initI2C() {}
