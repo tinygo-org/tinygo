@@ -2,9 +2,18 @@
 
 package machine
 
-import "device/esp"
+import (
+	"device/esp"
+	"runtime/volatile"
+)
 
 const peripheralClock = 80000000 // 80MHz
+
+// CPUFrequency returns the current CPU frequency of the chip.
+// Currently it is a fixed frequency but it may allow changing in the future.
+func CPUFrequency() uint32 {
+	return 160e6 // 160MHz
+}
 
 type PinMode uint8
 
@@ -36,17 +45,45 @@ func (p Pin) Configure(config PinConfig) {
 // Warning: only use this on an output pin!
 func (p Pin) Set(value bool) {
 	if value {
-		if p < 32 {
-			esp.GPIO.OUT_W1TS.Set(1 << p)
-		} else {
-			esp.GPIO.OUT1_W1TS.Set(1 << (p - 32))
-		}
+		reg, mask := p.portMaskSet()
+		reg.Set(mask)
 	} else {
-		if p < 32 {
-			esp.GPIO.OUT_W1TC.Set(1 << p)
-		} else {
-			esp.GPIO.OUT1_W1TC.Set(1 << (p - 32))
-		}
+		reg, mask := p.portMaskClear()
+		reg.Set(mask)
+	}
+}
+
+// Return the register and mask to enable a given GPIO pin. This can be used to
+// implement bit-banged drivers.
+//
+// Warning: only use this on an output pin!
+func (p Pin) PortMaskSet() (*uint32, uint32) {
+	reg, mask := p.portMaskSet()
+	return &reg.Reg, mask
+}
+
+// Return the register and mask to disable a given GPIO pin. This can be used to
+// implement bit-banged drivers.
+//
+// Warning: only use this on an output pin!
+func (p Pin) PortMaskClear() (*uint32, uint32) {
+	reg, mask := p.portMaskClear()
+	return &reg.Reg, mask
+}
+
+func (p Pin) portMaskSet() (*volatile.Register32, uint32) {
+	if p < 32 {
+		return &esp.GPIO.OUT_W1TS, 1 << p
+	} else {
+		return &esp.GPIO.OUT1_W1TS, 1 << (p - 32)
+	}
+}
+
+func (p Pin) portMaskClear() (*volatile.Register32, uint32) {
+	if p < 32 {
+		return &esp.GPIO.OUT_W1TC, 1 << p
+	} else {
+		return &esp.GPIO.OUT1_W1TC, 1 << (p - 32)
 	}
 }
 
