@@ -202,8 +202,11 @@ tinygo-test:
 	$(TINYGO) test text/scanner
 	$(TINYGO) test unicode/utf8
 
-.PHONY: smoketest
+.PHONY: smoketest smoketest-commands
 smoketest:
+	@go run ./src/cmd/run-smoketest make smoketest-commands
+
+smoketest-commands:
 	$(TINYGO) version
 	# test all examples (except pwm)
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky1

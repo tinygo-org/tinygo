@@ -9,7 +9,9 @@ require (
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf
 	github.com/marcinbor85/gohex v0.0.0-20200531091804-343a4b548892
 	github.com/mattn/go-colorable v0.1.8
+	github.com/sago35/ochan v0.0.0-20200313013834-e0f46da4579f // indirect
 	go.bug.st/serial v1.1.2
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20210113181707-4bcb84eeeb78
 	golang.org/x/tools v0.0.0-20200216192241-b320d3a0f5a2
 	tinygo.org/x/go-llvm v0.0.0-20210325115028-e7b85195e81c
