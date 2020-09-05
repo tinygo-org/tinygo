@@ -186,11 +186,11 @@ const (
 	// #===========#==========#==============#==============#=======#=======#
 	// | Interface | Hardware |  Bus(Freq)   | SDA/SCL Pins | AltFn | Alias |
 	// #===========#==========#==============#==============#=======#=======#
-	// |   I2C1    |   I2C1   |              |   D14/D15    |       |   ~   |
-	// |   I2C2    |   I2C2   |              |    D0/D1     |       |   ~   |
-	// |   I2C3    |   I2C1   |              |    D9/D10    |       |   ~   |
+	// |   I2C1    |   I2C1   | APB1(42 MHz) |   D14/D15    |   4   |   ~   |
+	// |   I2C2    |   I2C2   | APB1(42 MHz) |    D0/D1     |   4   |   ~   |
+	// |   I2C3    |   I2C1   | APB1(42 MHz) |    D9/D10    |   4   |   ~   |
 	// | --------- | -------- | ------------ | ------------ | ----- | ----- |
-	// |   I2C0    |   I2C1   |              |   D14/D15    |       | I2C1  |
+	// |   I2C0    |   I2C1   | APB1(42 MHz) |   D14/D15    |   4   | I2C1  |
 	// #===========#==========#==============#==============#=======#=======#
 	NUM_I2C_INTERFACES = 3
 
@@ -208,6 +208,22 @@ const (
 
 	I2C_SDA_PIN = I2C0_SDA_PIN // default/primary I2C pins
 	I2C_SCL_PIN = I2C0_SCL_PIN //
+)
+
+var (
+	I2C1 = I2C{
+		Bus:             stm32.I2C1,
+		AltFuncSelector: stm32.AF4_I2C1_2_3,
+	}
+	I2C2 = I2C{
+		Bus:             stm32.I2C2,
+		AltFuncSelector: stm32.AF4_I2C1_2_3,
+	}
+	I2C3 = I2C{
+		Bus:             stm32.I2C1,
+		AltFuncSelector: stm32.AF4_I2C1_2_3,
+	}
+	I2C0 = I2C1
 )
 
 func initI2C() {}
