@@ -940,12 +940,18 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+		cachedGOROOT, err := loader.GetCachedGoroot(config)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		fmt.Printf("LLVM triple:       %s\n", config.Triple())
 		fmt.Printf("GOOS:              %s\n", config.GOOS())
 		fmt.Printf("GOARCH:            %s\n", config.GOARCH())
 		fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
 		fmt.Printf("garbage collector: %s\n", config.GC())
 		fmt.Printf("scheduler:         %s\n", config.Scheduler())
+		fmt.Printf("cached GOROOT:     %s\n", cachedGOROOT)
 	case "list":
 		config, err := builder.NewConfig(options)
 		if err != nil {
