@@ -27,11 +27,9 @@ COPY --from=tinygo-base /go/bin/tinygo /go/bin/tinygo
 COPY --from=tinygo-base /tinygo/src /tinygo/src
 COPY --from=tinygo-base /tinygo/targets /tinygo/targets
 
-RUN apt-get install -y libllvm10 lld-10
-
 RUN cd /tinygo/ && \
     apt-get update && \
-    apt-get install -y make clang-10 && \
+    apt-get install -y make clang-10 libllvm10 lld-10 && \
     make wasi-libc
 
 # tinygo-avr stage installs the needed dependencies to compile TinyGo programs for AVR microcontrollers.
