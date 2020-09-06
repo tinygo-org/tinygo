@@ -5,5 +5,6 @@
 		"-Wl,--defsym=_bootloader_size=512",
 		"-Wl,--defsym=_stack_size=512"
 	],
-	"flash-command": "avrdude -c arduino -p atmega328p -P {port} -U flash:w:{hex}:i"
+	"flash-command": "avrdude -c arduino -p atmega328p -P {port} -U flash:w:{hex}:i",
+	"emulator": ["simavr", "-m", "atmega328p", "-f", "16000000"]
 }
