@@ -8,6 +8,7 @@ import (
 	"go/scanner"
 	"go/types"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -921,6 +922,35 @@ func main() {
 		}
 		err := Test(pkgName, options)
 		handleCompilerError(err)
+	case "targets":
+		dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
+		entries, err := ioutil.ReadDir(dir)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "could not list targets:", err)
+			os.Exit(1)
+			return
+		}
+		for _, entry := range entries {
+			if !entry.Mode().IsRegular() || !strings.HasSuffix(entry.Name(), ".json") {
+				// Only inspect JSON files.
+				continue
+			}
+			path := filepath.Join(dir, entry.Name())
+			spec, err := compileopts.LoadTarget(path)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "could not list target:", err)
+				os.Exit(1)
+				return
+			}
+			if spec.FlashMethod == "" && spec.FlashCommand == "" && spec.Emulator == nil {
+				// This doesn't look like a regular target file, but rather like
+				// a parent target (such as targets/cortex-m.json).
+				continue
+			}
+			name := entry.Name()
+			name = name[:len(name)-5]
+			fmt.Println(name)
+		}
 	case "info":
 		if flag.NArg() == 1 {
 			options.Target = flag.Arg(0)
