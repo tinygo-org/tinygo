@@ -1,0 +1,9 @@
+{
+    "inherits": ["atsamd21g18a"],
+    "build-tags": ["sam", "atsamd21g18a", "arduino_zero"],
+
+    "flash-method":"openocd",
+    "openocd-transport": "swd",
+    "openocd-target": "at91samdXX",
+    "openocd-interface":"cmsis-dap"
+}
