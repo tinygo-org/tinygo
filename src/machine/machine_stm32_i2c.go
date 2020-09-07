@@ -9,10 +9,128 @@ import (
 	"unsafe"
 )
 
+const (
+	flagOVR     = 0x00010800
+	flagAF      = 0x00010400
+	flagARLO    = 0x00010200
+	flagBERR    = 0x00010100
+	flagTXE     = 0x00010080
+	flagRXNE    = 0x00010040
+	flagSTOPF   = 0x00010010
+	flagADD10   = 0x00010008
+	flagBTF     = 0x00010004
+	flagADDR    = 0x00010002
+	flagSB      = 0x00010001
+	flagDUALF   = 0x00100080
+	flagGENCALL = 0x00100010
+	flagTRA     = 0x00100004
+	flagBUSY    = 0x00100002
+	flagMSL     = 0x00100001
+)
+
+func (i2c I2C) hasFlag(flag uint32) bool {
+	const mask = 0x0000FFFF
+	if uint8(flag>>16) == 1 {
+		return i2c.Bus.SR1.HasBits(flag & mask)
+	} else {
+		return i2c.Bus.SR2.HasBits(flag & mask)
+	}
+}
+
+func (i2c I2C) clearFlag(flag uint32) {
+	const mask = 0x0000FFFF
+	i2c.Bus.SR1.Set(^(flag & mask))
+}
+
+// clearFlagADDR reads both status registers to clear any pending ADDR flags.
+func (i2c I2C) clearFlagADDR() {
+	i2c.Bus.SR1.Get()
+	i2c.Bus.SR2.Get()
+}
+
+func (i2c I2C) waitForFlag(flag uint32, set bool) bool {
+	const tryMax = 10000
+	hasFlag := false
+	for i := 0; !hasFlag && i < tryMax; i++ {
+		hasFlag = i2c.hasFlag(flag) == set
+	}
+	return hasFlag
+}
+
+func (i2c I2C) waitForFlagOrError(flag uint32, set bool) bool {
+	const tryMax = 10000
+	hasFlag := false
+	for i := 0; !hasFlag && i < tryMax; i++ {
+		if hasFlag = i2c.hasFlag(flag) == set; !hasFlag {
+			// check for ACK failure
+			if i2c.hasFlag(flagAF) {
+				// generate stop condition
+				i2c.Bus.CR1.SetBits(stm32.I2C_CR1_STOP)
+				// clear pending flags
+				i2c.clearFlag(flagAF)
+				return false
+			} else if i2c.hasFlag(flagSTOPF) {
+				// clear stop flag
+				i2c.clearFlag(flagSTOPF)
+				return false
+			}
+		}
+	}
+	return hasFlag
+}
+
+type transferOption uint32
+
+const (
+	frameFirst        = 0x00000001
+	frameFirstAndNext = 0x00000002
+	frameNext         = 0x00000004
+	frameFirstAndLast = 0x00000008
+	frameLastNoStop   = 0x00000010
+	frameLast         = 0x00000020
+	frameNoOption     = 0xFFFF0000
+)
+
+// addressable represents a type that can provide fully-formatted I2C slave
+// addresses for both read operations and write operations.
+type addressable interface {
+	toRead() uint32
+	toWrite() uint32
+	bitSize() uint8
+}
+
+// address7Bit and address10Bit stores the unshifted original I2C slave address
+// in an unsigned integral data type and implements the addressable interface
+// to reformat addresses as required for read/write operations.
+//   TODO:
+//    add 10-bit address support
+type (
+	address7Bit uint8
+	//address10Bit uint16
+)
+
+func (sa address7Bit) toRead() uint32 {
+	return uint32(((uint8(sa) << 1) | uint8(stm32.I2C_OAR1_ADD0)) & 0xFF)
+}
+func (sa address7Bit) toWrite() uint32 {
+	return uint32(((uint8(sa) << 1) & ^(uint8(stm32.I2C_OAR1_ADD0))) & 0xFF)
+}
+func (sa address7Bit) bitSize() uint8 { return 7 } // 7-bit addresses
+
+//func (sa address10Bit) toRead() uint32  {}
+//func (sa address10Bit) toWrite() uint32 {}
+//func (sa address10Bit) bitSize() uint8  { return 10 } // 10-bit addresses
+
+func readAddress7Bit(addr uint8) uint32  { return address7Bit(addr).toRead() }
+func writeAddress7Bit(addr uint8) uint32 { return address7Bit(addr).toWrite() }
+
+//func readAddress10Bit(addr uint16) uint32  { return address10Bit(addr).toRead() }
+//func writeAddress10Bit(addr uint16) uint32 { return address10Bit(addr).toWrite() }
+
 // I2C fast mode (Fm) duty cycle
 const (
-	Duty2    = 0
-	Duty16_9 = 1
+	DutyCycle2    = 0
+	DutyCycle16x9 = 1
 )
 
 // I2CConfig is used to store config info for I2C.
@@ -37,6 +155,10 @@ func (i2c I2C) Configure(config I2CConfig) {
 	// disable I2C interface before any configuration changes
 	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_PE)
 
+	// reset I2C bus
+	i2c.Bus.CR1.SetBits(stm32.I2C_CR1_SWRST)
+	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_SWRST)
+
 	// enable clock for I2C
 	enableAltFuncClock(unsafe.Pointer(i2c.Bus))
 
@@ -55,380 +177,304 @@ func (i2c I2C) Configure(config I2CConfig) {
 	// configure I2C input clock
 	i2c.Bus.CR2.SetBits(i2c.getFreqRange(config))
 
+	// configure rise time
+	i2c.Bus.TRISE.Set(i2c.getRiseTime(config))
+
 	// configure clock control
 	i2c.Bus.CCR.Set(i2c.getSpeed(config))
 
-	// configure rise time
-	i2c.Bus.TRISE.Set(i2c.getRiseTime(config))
+	// disable GeneralCall and NoStretch modes
+	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_ENGC | stm32.I2C_CR1_NOSTRETCH)
 
 	// enable I2C interface
 	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_PE)
 }
 
-// Tx does a single I2C transaction at the specified address.
-// It clocks out the given address, writes the bytes in w, reads back len(r)
-// bytes and stores them in r, and generates a stop condition on the bus.
 func (i2c I2C) Tx(addr uint16, w, r []byte) error {
-	var err error
-	if len(w) != 0 {
-		// start transmission for writing
-		err = i2c.signalStart()
-		if err != nil {
-			return err
-		}
-
-		// send address
-		err = i2c.sendAddress(uint8(addr), true)
-		if err != nil {
-			return err
-		}
-
-		for _, b := range w {
-			err = i2c.WriteByte(b)
-			if err != nil {
-				return err
-			}
-		}
-
-		// sending stop here for write
-		err = i2c.signalStop()
-		if err != nil {
-			return err
-		}
+	a := address7Bit(addr)
+	if err := i2c.masterTransmit(a, w); nil != err {
+		return err
 	}
-	if len(r) != 0 {
-		// re-start transmission for reading
-		err = i2c.signalStart()
-		if err != nil {
-			return err
-		}
-
-		// 1 byte
-		switch len(r) {
-		case 1:
-			// send address
-			err = i2c.sendAddress(uint8(addr), false)
-			if err != nil {
-				return err
-			}
-
-			// Disable ACK of received data
-			i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_ACK)
-
-			// clear timeout here
-			timeout := i2cTimeout
-			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY) {
-				timeout--
-				if timeout == 0 {
-					return errI2CWriteTimeout
-				}
-			}
-
-			// Generate stop condition
-			i2c.Bus.CR1.SetBits(stm32.I2C_CR1_STOP)
-
-			timeout = i2cTimeout
-			for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_RxNE) {
-				timeout--
-				if timeout == 0 {
-					return errI2CReadTimeout
-				}
-			}
-
-			// Read and return data byte from I2C data register
-			r[0] = byte(i2c.Bus.DR.Get())
-
-			// wait for stop
-			return i2c.waitForStop()
-
-		case 2:
-			// enable pos
-			i2c.Bus.CR1.SetBits(stm32.I2C_CR1_POS)
-
-			// Enable ACK of received data
-			i2c.Bus.CR1.SetBits(stm32.I2C_CR1_ACK)
-
-			// send address
-			err = i2c.sendAddress(uint8(addr), false)
-			if err != nil {
-				return err
-			}
-
-			// clear address here
-			timeout := i2cTimeout
-			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY) {
-				timeout--
-				if timeout == 0 {
-					return errI2CWriteTimeout
-				}
-			}
-
-			// Disable ACK of received data
-			i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_ACK)
-
-			// wait for btf. we need a longer timeout here than normal.
-			timeout = 1000
-			for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_BTF) {
-				timeout--
-				if timeout == 0 {
-					return errI2CReadTimeout
-				}
-			}
-
-			// Generate stop condition
-			i2c.Bus.CR1.SetBits(stm32.I2C_CR1_STOP)
-
-			// read the 2 bytes by reading twice.
-			r[0] = byte(i2c.Bus.DR.Get())
-			r[1] = byte(i2c.Bus.DR.Get())
-
-			// wait for stop
-			err = i2c.waitForStop()
-
-			//disable pos
-			i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_POS)
-
-			return err
-
-		case 3:
-			// Enable ACK of received data
-			i2c.Bus.CR1.SetBits(stm32.I2C_CR1_ACK)
-
-			// send address
-			err = i2c.sendAddress(uint8(addr), false)
-			if err != nil {
-				return err
-			}
-
-			// clear address here
-			timeout := i2cTimeout
-			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY) {
-				timeout--
-				if timeout == 0 {
-					return errI2CWriteTimeout
-				}
-			}
-
-			// Enable ACK of received data
-			i2c.Bus.CR1.SetBits(stm32.I2C_CR1_ACK)
-
-			// wait for btf. we need a longer timeout here than normal.
-			timeout = 1000
-			for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_BTF) {
-				timeout--
-				if timeout == 0 {
-					return errI2CReadTimeout
-				}
-			}
-
-			// Disable ACK of received data
-			i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_ACK)
-
-			// read the first byte
-			r[0] = byte(i2c.Bus.DR.Get())
-
-			timeout = 1000
-			for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_BTF) {
-				timeout--
-				if timeout == 0 {
-					return errI2CReadTimeout
-				}
-			}
-
-			// Generate stop condition
-			i2c.Bus.CR1.SetBits(stm32.I2C_CR1_STOP)
-
-			// read the last 2 bytes by reading twice.
-			r[1] = byte(i2c.Bus.DR.Get())
-			r[2] = byte(i2c.Bus.DR.Get())
-
-			// wait for stop
-			return i2c.waitForStop()
-
-		default:
-			// more than 3 bytes of data to read
-
-			// send address
-			err = i2c.sendAddress(uint8(addr), false)
-			if err != nil {
-				return err
-			}
-
-			// clear address here
-			timeout := i2cTimeout
-			for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY) {
-				timeout--
-				if timeout == 0 {
-					return errI2CWriteTimeout
-				}
-			}
-
-			for i := 0; i < len(r)-3; i++ {
-				// Enable ACK of received data
-				i2c.Bus.CR1.SetBits(stm32.I2C_CR1_ACK)
-
-				// wait for btf. we need a longer timeout here than normal.
-				timeout = 1000
-				for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_BTF) {
-					timeout--
-					if timeout == 0 {
-						return errI2CReadTimeout
-					}
-				}
-
-				// read the next byte
-				r[i] = byte(i2c.Bus.DR.Get())
-			}
-
-			// wait for btf. we need a longer timeout here than normal.
-			timeout = 1000
-			for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_BTF) {
-				timeout--
-				if timeout == 0 {
-					return errI2CReadTimeout
-				}
-			}
-
-			// Disable ACK of received data
-			i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_ACK)
-
-			// get third from last byte
-			r[len(r)-3] = byte(i2c.Bus.DR.Get())
-
-			// Generate stop condition
-			i2c.Bus.CR1.SetBits(stm32.I2C_CR1_STOP)
-
-			// get second from last byte
-			r[len(r)-2] = byte(i2c.Bus.DR.Get())
-
-			timeout = i2cTimeout
-			for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_RxNE) {
-				timeout--
-				if timeout == 0 {
-					return errI2CReadTimeout
-				}
-			}
-
-			// get last byte
-			r[len(r)-1] = byte(i2c.Bus.DR.Get())
-
-			// wait for stop
-			return i2c.waitForStop()
-		}
+	if err := i2c.masterReceive(a, r); nil != err {
+		return err
 	}
-
 	return nil
 }
 
-const i2cTimeout = 500
+func (i2c I2C) masterTransmit(addr addressable, w []byte) error {
 
-// signalStart sends a start signal.
-func (i2c I2C) signalStart() error {
-	// Wait until I2C is not busy
-	timeout := i2cTimeout
-	for i2c.Bus.SR2.HasBits(stm32.I2C_SR2_BUSY) {
-		timeout--
-		if timeout == 0 {
-			return errI2CSignalStartTimeout
-		}
+	if !i2c.waitForFlag(flagBUSY, false) {
+		return errI2CBusReadyTimeout
 	}
 
-	// clear stop
-	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_STOP)
-
-	// Generate start condition
-	i2c.Bus.CR1.SetBits(stm32.I2C_CR1_START)
-
-	// Wait for I2C EV5 aka SB flag.
-	timeout = i2cTimeout
-	for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_SB) {
-		timeout--
-		if timeout == 0 {
-			return errI2CSignalStartTimeout
-		}
+	// ensure peripheral is enabled
+	if !i2c.Bus.CR1.HasBits(stm32.I2C_CR1_PE) {
+		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_PE)
 	}
 
-	return nil
-}
+	// disable POS
+	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_POS)
 
-// signalStop sends a stop signal and waits for it to succeed.
-func (i2c I2C) signalStop() error {
-	// Generate stop condition
-	i2c.Bus.CR1.SetBits(stm32.I2C_CR1_STOP)
+	pos := 0
+	rem := len(w)
 
-	// wait for stop
-	return i2c.waitForStop()
-}
-
-// waitForStop waits after a stop signal.
-func (i2c I2C) waitForStop() error {
-	// Wait until I2C is stopped
-	timeout := i2cTimeout
-	for i2c.Bus.SR1.HasBits(stm32.I2C_SR1_STOPF) {
-		timeout--
-		if timeout == 0 {
-			return errI2CSignalStopTimeout
-		}
+	// send slave address
+	if err := i2c.masterRequestWrite(addr, frameNoOption); nil != err {
+		return err
 	}
 
-	return nil
-}
+	// clear ADDR flag
+	i2c.clearFlagADDR()
 
-// Send address of device we want to talk to
-func (i2c I2C) sendAddress(address uint8, write bool) error {
-	data := (address << 1)
-	if !write {
-		data |= 1 // set read flag
-	}
-
-	i2c.Bus.DR.Set(uint32(data))
-
-	// Wait for I2C EV6 event.
-	// Destination device acknowledges address
-	timeout := i2cTimeout
-	if write {
-		// EV6 which is ADDR flag.
-		for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_ADDR) {
-			timeout--
-			if timeout == 0 {
-				return errI2CWriteTimeout
-			}
+	for rem > 0 {
+		// wait for TXE flag set
+		if !i2c.waitForFlagOrError(flagTXE, true) {
+			return errI2CAckExpected
 		}
 
-		timeout = i2cTimeout
-		for !i2c.Bus.SR2.HasBits(stm32.I2C_SR2_MSL | stm32.I2C_SR2_BUSY | stm32.I2C_SR2_TRA) {
-			timeout--
-			if timeout == 0 {
-				return errI2CWriteTimeout
-			}
+		// write data to DR
+		i2c.Bus.DR.Set(uint32(w[pos]))
+		// update counters
+		pos++
+		rem--
+
+		if i2c.hasFlag(flagBTF) && rem != 0 {
+			// write data to DR
+			i2c.Bus.DR.Set(uint32(w[pos]))
+			// update counters
+			pos++
+			rem--
 		}
-	} else {
-		// I2C_EVENT_MASTER_RECEIVER_MODE_SELECTED which is ADDR flag.
-		for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_ADDR) {
-			timeout--
-			if timeout == 0 {
-				return errI2CWriteTimeout
-			}
-		}
-	}
 
-	return nil
-}
-
-// WriteByte writes a single byte to the I2C bus.
-func (i2c I2C) WriteByte(data byte) error {
-	// Send data byte
-	i2c.Bus.DR.Set(uint32(data))
-
-	// Wait for I2C EV8_2 when data has been physically shifted out and
-	// output on the bus.
-	// I2C_EVENT_MASTER_BYTE_TRANSMITTED is TXE flag.
-	timeout := i2cTimeout
-	for !i2c.Bus.SR1.HasBits(stm32.I2C_SR1_TxE) {
-		timeout--
-		if timeout == 0 {
+		// wait for transfer finished flag BTF set
+		if !i2c.waitForFlagOrError(flagBTF, true) {
 			return errI2CWriteTimeout
 		}
+	}
+
+	// generate stop condition
+	i2c.Bus.CR1.SetBits(stm32.I2C_CR1_STOP)
+
+	return nil
+}
+
+func (i2c I2C) masterRequestWrite(addr addressable, option transferOption) error {
+
+	if frameFirstAndLast == option || frameFirst == option || frameNoOption == option {
+		// generate start condition
+		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_START)
+	} else if false /* (hi2c->PreviousState == I2C_STATE_MASTER_BUSY_RX) */ {
+		// generate restart condition
+		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_START)
+	}
+
+	// ensure start bit is set
+	if !i2c.waitForFlag(flagSB, true) {
+		return errI2CSignalStartTimeout
+	}
+
+	// send slave address
+	switch addr.bitSize() {
+	case 7: // 7-bit slave address
+		i2c.Bus.DR.Set(addr.toWrite())
+
+	case 10: // 10-bit slave address
+		// TODO
+	}
+
+	// wait for address ACK from slave
+	if !i2c.waitForFlagOrError(flagADDR, true) {
+		return errI2CSignalStartTimeout
+	}
+
+	return nil
+}
+
+func (i2c I2C) masterReceive(addr addressable, r []byte) error {
+
+	if !i2c.waitForFlag(flagBUSY, false) {
+		return errI2CBusReadyTimeout
+	}
+
+	// ensure peripheral is enabled
+	if !i2c.Bus.CR1.HasBits(stm32.I2C_CR1_PE) {
+		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_PE)
+	}
+
+	// disable POS
+	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_POS)
+
+	pos := 0
+	rem := len(r)
+
+	// send slave address
+	if err := i2c.masterRequestRead(addr, frameNoOption); nil != err {
+		return err
+	}
+
+	switch rem {
+	case 0:
+		// clear ADDR flag
+		i2c.clearFlagADDR()
+		// generate stop condition
+		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_STOP)
+
+	case 1:
+		// disable ACK
+		i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_ACK)
+		// clear ADDR flag
+		i2c.clearFlagADDR()
+		// generate stop condition
+		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_STOP)
+
+	case 2:
+		// disable ACK
+		i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_ACK)
+		// enable POS
+		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_POS)
+		// clear ADDR flag
+		i2c.clearFlagADDR()
+
+	default:
+		// enable ACK
+		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_ACK)
+		// clear ADDR flag
+		i2c.clearFlagADDR()
+	}
+
+	for rem > 0 {
+		switch rem {
+		case 1:
+			// wait until RXNE flag is set
+			if !i2c.waitForFlagOrError(flagRXNE, true) {
+				return errI2CReadTimeout
+			}
+
+			// read data from DR
+			r[pos] = byte(i2c.Bus.DR.Get())
+
+			// update counters
+			pos++
+			rem--
+
+		case 2:
+			// wait until transfer finished flag BTF is set
+			if !i2c.waitForFlag(flagBTF, true) {
+				return errI2CReadTimeout
+			}
+
+			// generate stop condition
+			i2c.Bus.CR1.SetBits(stm32.I2C_CR1_STOP)
+
+			// read data from DR
+			r[pos] = byte(i2c.Bus.DR.Get())
+
+			// update counters
+			pos++
+			rem--
+
+			// read data from DR
+			r[pos] = byte(i2c.Bus.DR.Get())
+
+			// update counters
+			pos++
+			rem--
+
+		case 3:
+			// wait until transfer finished flag BTF is set
+			if !i2c.waitForFlag(flagBTF, true) {
+				return errI2CReadTimeout
+			}
+
+			// disable ACK
+			i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_ACK)
+
+			// read data from DR
+			r[pos] = byte(i2c.Bus.DR.Get())
+
+			// update counters
+			pos++
+			rem--
+
+			// wait until transfer finished flag BTF is set
+			if !i2c.waitForFlag(flagBTF, true) {
+				return errI2CReadTimeout
+			}
+
+			// generate stop condition
+			i2c.Bus.CR1.SetBits(stm32.I2C_CR1_STOP)
+
+			// read data from DR
+			r[pos] = byte(i2c.Bus.DR.Get())
+
+			// update counters
+			pos++
+			rem--
+
+			// read data from DR
+			r[pos] = byte(i2c.Bus.DR.Get())
+
+			// update counters
+			pos++
+			rem--
+
+		default:
+			// wait until RXNE flag is set
+			if !i2c.waitForFlagOrError(flagRXNE, true) {
+				return errI2CReadTimeout
+			}
+
+			// read data from DR
+			r[pos] = byte(i2c.Bus.DR.Get())
+
+			// update counters
+			pos++
+			rem--
+
+			if i2c.hasFlag(flagBTF) {
+				// read data from DR
+				r[pos] = byte(i2c.Bus.DR.Get())
+
+				// update counters
+				pos++
+				rem--
+			}
+		}
+	}
+
+	return nil
+}
+
+func (i2c I2C) masterRequestRead(addr addressable, option transferOption) error {
+
+	// enable ACK
+	i2c.Bus.CR1.SetBits(stm32.I2C_CR1_ACK)
+
+	if frameFirstAndLast == option || frameFirst == option || frameNoOption == option {
+		// generate start condition
+		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_START)
+	} else if false /* (hi2c->PreviousState == I2C_STATE_MASTER_BUSY_TX) */ {
+		// generate restart condition
+		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_START)
+	}
+
+	// ensure start bit is set
+	if !i2c.waitForFlag(flagSB, true) {
+		return errI2CSignalStartTimeout
+	}
+
+	// send slave address
+	switch addr.bitSize() {
+	case 7: // 7-bit slave address
+		i2c.Bus.DR.Set(addr.toRead())
+
+	case 10: // 10-bit slave address
+		// TODO
+	}
+
+	// wait for address ACK from slave
+	if !i2c.waitForFlagOrError(flagADDR, true) {
+		return errI2CSignalStartTimeout
 	}
 
 	return nil
