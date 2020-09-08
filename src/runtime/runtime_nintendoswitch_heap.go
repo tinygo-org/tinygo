@@ -7,8 +7,8 @@ package runtime
 const heapSize = 0x2000000 * 16 // Default by libnx
 
 var (
-	heapStart = uintptr(0)
-	heapEnd   = uintptr(0)
+	heapStart                  = uintptr(0)
+	heapEnd                    = uintptr(0)
 	failedToAllocateHeapString = []byte("failed to allocate heap")
 )
 
