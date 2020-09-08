@@ -40,21 +40,18 @@ func ticks() timeUnit {
 	return timeUnit(ticksToNanoseconds(timeUnit(getArmSystemTick())))
 }
 
-var stdoutBuffer = make([]byte, 0, 120)
+var stdoutBuffer = make([]byte, 120, 120)
+var position = 0
 
 func putchar(c byte) {
-	if c == '\n' || len(stdoutBuffer)+1 >= 120 {
-		NxOutputString(string(stdoutBuffer))
-		stdoutBuffer = stdoutBuffer[:0]
+	if c == '\n' || position >= 119 {
+		nxOutputString(&stdoutBuffer[0], uint64(position))
+		position = 0
 		return
 	}
 
-	stdoutBuffer = append(stdoutBuffer, c)
-}
-
-func usleep(usec uint) int {
-	sleepThread(uint64(usec) * 1000)
-	return 0
+	stdoutBuffer[position] = c
+	position++
 }
 
 func abort() {
