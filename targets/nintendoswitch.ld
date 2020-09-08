@@ -1,61 +1,69 @@
-OUTPUT_FORMAT(elf64-littleaarch64)
-OUTPUT_ARCH(aarch64)
-ENTRY(_start)
-
-PHDRS
-{
-  text    PT_LOAD     FLAGS(5);
-  rodata  PT_LOAD     FLAGS(4);
-  data    PT_LOAD     FLAGS(6);
-  bss     PT_LOAD     FLAGS(6);
-  dynamic PT_DYNAMIC;
-}
-
 SECTIONS
 {
   . = 0;
 
-  .text : ALIGN(0x1000) {
+  /* Code and file header */
+
+  .text : {
     HIDDEN(__text_start = .);
     KEEP(*(.text.jmp))
 
     . = 0x80;
 
     *(.text .text.*)
+
+    . = ALIGN(0x1000);
+    HIDDEN(__text_end = .);
+    HIDDEN(__text_size = . - __text_start);
   }
 
   /* Read-only sections */
 
-  . = ALIGN(0x1000);
+  .rodata : {
+    HIDDEN(__rodata_start = .);
 
-  .rodata : { *(.rodata .rodata.*) } :rodata
-  .mod0 : {
+    *(.rodata .rodata.*)
+
+    *(.got)
+
     KEEP(crt0.nso.o(.data.mod0))
     KEEP(crt0.nro.o(.data.mod0))
     KEEP(crt0.lib.nro.o(.data.mod0))
+    KEEP(*(.data.mod0))
+
+    HIDDEN(__dynamic_start = .);
+    *(.dynamic)
+
+    . = ALIGN(0x1000);
+    HIDDEN(__rodata_end = .);
+    HIDDEN(__rodata_size = . - __rodata_start);
   }
 
   /* Read-write sections */
-   . = ALIGN(0x1000);
 
   .data : {
-    *(.data .data.*)
-  } :data
+    HIDDEN(__data_start = .);
 
-  .dynamic : {
-    HIDDEN(__dynamic_start = .);
-    *(.dynamic)
+    *(.data .data.*)
+
+    HIDDEN(__data_end = .);
+    HIDDEN(__data_size = . - __data_start);
   }
 
   /* BSS section */
 
-  . = ALIGN(0x1000);
-
   .bss : {
     HIDDEN(__bss_start = .);
+
     *(.bss .bss.*)
     *(COMMON)
-    . = ALIGN(8);
+
     HIDDEN(__bss_end = .);
-  } :bss
+    HIDDEN(__bss_size = . - __bss_start);
+  }
+
+  /DISCARD/ :
+  {
+    *(.eh_frame) /* This is probably unnecessary and bloats the binary. */
+  }
 }
