@@ -1,8 +1,34 @@
+// For more information on the .nro file format, see:
+// https://switchbrew.org/wiki/NRO
+
 .section .text.jmp, "x"
 .global _start
 _start:
     b start
     .word _mod_header - _start
+    .word 0
+    .word 0
+
+    .ascii "NRO0"              // magic
+    .word 0                    // version (always 0)
+    .word __bss_start - _start // total NRO file size
+    .word 0                    // flags (unused)
+
+    // segment headers
+    .word __text_start
+    .word __text_size
+    .word __rodata_start
+    .word __rodata_size
+    .word __data_start
+    .word __data_size
+    .word __bss_size
+    .word 0
+
+    // ModuleId (not supported)
+    . = 0x50; // skip 32 bytes
+
+    .word 0 // DSO Module Offset (unused)
+    .word 0 // reserved (unused)
 
 .section .data.mod0
     .word 0, 8

@@ -243,7 +243,7 @@ func (c *Config) Debug() bool {
 // extension and the configured binary format in the target JSON file.
 func (c *Config) BinaryFormat(ext string) string {
 	switch ext {
-	case ".bin", ".gba":
+	case ".bin", ".gba", ".nro":
 		// The simplest format possible: dump everything in a raw binary file.
 		if c.Target.BinaryFormat != "" {
 			return c.Target.BinaryFormat
