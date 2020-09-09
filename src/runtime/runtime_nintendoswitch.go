@@ -40,11 +40,11 @@ func ticks() timeUnit {
 	return timeUnit(ticksToNanoseconds(timeUnit(getArmSystemTick())))
 }
 
-var stdoutBuffer = make([]byte, 120, 120)
+var stdoutBuffer = make([]byte, 120)
 var position = 0
 
 func putchar(c byte) {
-	if c == '\n' || position >= 119 {
+	if c == '\n' || position > len(stdoutBuffer) {
 		nxOutputString(&stdoutBuffer[0], uint64(position))
 		position = 0
 		return
