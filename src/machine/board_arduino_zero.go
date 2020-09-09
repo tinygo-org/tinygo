@@ -29,9 +29,10 @@ const (
 
 // LEDs on the Arduino Zero
 const (
-	LED  Pin = D13
-	LED1 Pin = PA27 // TX LED
-	LED2 Pin = PB03 // RX LED
+	LED      = LED1
+	LED1 Pin = D13
+	LED2 Pin = PA27 // TX LED
+	LED3 Pin = PB03 // RX LED
 )
 
 // ADC pins
