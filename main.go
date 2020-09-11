@@ -767,6 +767,7 @@ func main() {
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
+	output := flag.String("output", "", "default output destination for putchar (none, default, custom, usbcdc, uart)")
 	port := flag.String("port", "", "flash port")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
@@ -808,6 +809,7 @@ func main() {
 		Tags:          *tags,
 		WasmAbi:       *wasmAbi,
 		Programmer:    *programmer,
+		Output:        *output,
 	}
 
 	if *cFlags != "" {
@@ -981,6 +983,7 @@ func main() {
 		fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
 		fmt.Printf("garbage collector: %s\n", config.GC())
 		fmt.Printf("scheduler:         %s\n", config.Scheduler())
+		fmt.Printf("output:            %s\n", config.Output())
 		fmt.Printf("cached GOROOT:     %s\n", cachedGOROOT)
 	case "list":
 		config, err := builder.NewConfig(options)
