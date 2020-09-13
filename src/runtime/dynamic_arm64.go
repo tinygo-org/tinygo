@@ -59,8 +59,15 @@ func dynamicLoader(base uintptr, dyn *dyn64) {
 	for relasz > 0 && rela != nil {
 		switch rela.Info {
 		case rAARCH64_RELATIVE:
+			if debugLoader {
+				println("relocating ", uintptr(rela.Addend), " to ", base+uintptr(rela.Addend))
+			}
 			ptr := (*uint64)(unsafe.Pointer(base + uintptr(rela.Off)))
 			*ptr = uint64(base + uintptr(rela.Addend))
+		default:
+			if debugLoader {
+				println("unknown section to load:", rela.Info)
+			}
 		}
 
 		rptr := uintptr(unsafe.Pointer(rela))

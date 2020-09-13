@@ -14,11 +14,11 @@ _start:
     .word 0                    // flags (unused)
 
     // segment headers
-    .word 0 // __text_start
+    .word __text_start - _start
     .word __text_size
-    .word 0 //__rodata_start
+    .word __rodata_start - _start
     .word __rodata_size
-    .word 0 //__data_start
+    .word __data_start - _start
     .word __data_size
     .word __bss_size
     .word 0
@@ -41,18 +41,36 @@ _mod_header:
     .word 0, 0 // eh_frame_hdr start/end
     .word 0 // runtime-generated module object offset
 
-.section .text, "x"
+.section .text.start, "x"
 .global start
 start:
-    // Get ASLR Base
-    adrp x6, _start
+    // save lr
+    mov  x7, x30
+
+    // get aslr base
+    bl   +4
+    sub  x6, x30, #0x88
 
     // context ptr and main thread handle
-    mov  x5, x0
-    mov  x4, x1
+    mov  x25, x0
+    mov  x26, x1
 
     // Save ASLR Base to use later
     mov x0, x6
+
+    adrp x4, _saved_return_address
+    str  x7, [x4, #:lo12:_saved_return_address]
+
+    adrp x4, _context
+    str x25, [x4, #:lo12:_context]
+
+    adrp x4, _main_thread
+    str x26, [x4, #:lo12:_main_thread]
+
+    // store stack pointer
+    mov  x26, sp
+    adrp x4, _stack_top
+    str  x26, [x4, #:lo12:_stack_top]
 
     // clear .bss
     adrp x5, __bss_start
@@ -76,3 +94,33 @@ run:
 
     // call entrypoint
     b    main
+
+.global __nx_exit
+.type   __nx_exit, %function
+__nx_exit:
+    // Exit code in x0
+
+    // restore stack pointer
+    mov sp, x1
+
+    // jump back to loader
+    br   x2
+
+.section .data.horizon
+.align 8
+.global _saved_return_address // Saved return address.
+                              // This might be different than null when coming from launcher
+_saved_return_address:
+    .dword 0
+.global _context // Homebrew Launcher Context
+                 // This might be different than null when not coming from launcher
+_context:
+    .dword 0
+
+.global _main_thread
+_main_thread:
+    .dword 0
+
+.global _stack_top
+_stack_top:
+    .dword 0

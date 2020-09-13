@@ -17,6 +17,7 @@ SECTIONS
     KEEP(*(.text.jmp))
 
     . = 0x80;
+    KEEP(*(.text.start))
 
     *(.text .text.*)
     *(.plt .plt.*)
