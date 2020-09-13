@@ -44,37 +44,6 @@ type SPIConfig struct {
 	CSMode    uint8
 }
 
-//	const (
-//		modeSlave  = 0
-//		modeMaster = stm32.SPI_CR1_MSTR | stm32.SPI_CR1_SSI
-//
-//		direction2Lines   = 0
-//		direction2LinesRx = stm32.SPI_CR1_RXONLY
-//		direction1Line    = stm32.SPI_CR1_BIDIMODE
-//
-//		dataSize8Bit  = 0
-//		dataSize16Bit = stm32.SPI_CR1_DFF
-//
-//		clkPolarityLow  = 0
-//		clkPolarityHigh = stm32.SPI_CR1_CPOL
-//
-//		clkPhase1Edge = 0
-//		clkPhase2Edge = stm32.SPI_CR1_CPHA
-//
-//		slaveSelectSoft       = stm32.SPI_CR1_SSM
-//		slaveSelectHardInput  = 0
-//		slaveSelectHardOutput = stm32.SPI_CR2_SSOE << 16
-//
-//		firstBitMSB = 0
-//		firstBitLSB = stm32.SPI_CR1_LSBFIRST
-//
-//		tiModeDisable = 0
-//		tiModeEnable  = stm32.SPI_CR2_FRF
-//
-//		crcDisable = 0
-//		crcEnable  = stm32.SPI_CR1_CRCEN
-//	)
-
 // Configure is intended to setup the STM32 SPI1 interface.
 func (spi SPI) Configure(config SPIConfig) {
 
@@ -234,11 +203,10 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	for spi.Bus.SR.HasBits(stm32.SPI_SR_BSY) {
 	}
 
-	// clear the overrun flag.
-	// note: this assumes 2-lines directionality (the default and only supported
-	//       direction at the moment).
-	//       otherwise, it is not appropriate to clear this flag.
-	_ = spi.Bus.SR.Get()
+	// clear the overrun flag (only in full-duplex mode)
+	if !spi.Bus.CR1.HasBits(stm32.SPI_CR1_RXONLY | stm32.SPI_CR1_BIDIMODE | stm32.SPI_CR1_BIDIOE) {
+		spi.Bus.SR.Get()
+	}
 
 	// disable the SPI interface
 	spi.Bus.CR1.ClearBits(stm32.SPI_CR1_SPE)
