@@ -8,35 +8,67 @@ type timeUnit int64
 
 const asyncScheduler = false
 
+const (
+	// Handles
+	infoTypeTotalMemorySize = 6          // Total amount of memory available for process.
+	infoTypeUsedMemorySize  = 7          // Amount of memory currently used by process.
+	currentProcessHandle    = 0xFFFF8001 // Pseudo handle for the current process.
+
+	// Types of config Entry
+	envEntryTypeEndOfList        = 0 // Entry list terminator.
+	envEntryTypeMainThreadHandle = 1 // Provides the handle to the main thread.
+	envEntryTypeOverrideHeap     = 3 // Provides heap override information.
+
+	// Default heap size allocated by libnx
+	defaultHeapSize = 0x2000000 * 16
+
+	debugInit = false
+)
+
+//go:extern _saved_return_address
+var savedReturnAddress uintptr
+
+//export __stack_top
 var stackTop uintptr
+
+//go:extern _context
+var context uintptr
+
+//go:extern _main_thread
+var mainThread uintptr
+
+var (
+	heapStart = uintptr(0)
+	heapEnd   = uintptr(0)
+	usedRam   = uint64(0)
+	totalRam  = uint64(0)
+	totalHeap = uint64(0)
+)
 
 func postinit() {}
 
+func preinit() {
+	// Unsafe to use heap here
+	setupEnv()
+	setupHeap()
+}
+
 // Entry point for Go. Initialize all packages and call main.main().
 //export main
-func main() int {
+func main() {
 	preinit()
-
-	// Obtain the initial stack pointer right before calling the run() function.
-	// The run function has been moved to a separate (non-inlined) function so
-	// that the correct stack pointer is read.
-	stackTop = getCurrentStackPointer()
-	runMain()
+	run()
 
 	// Call exit to correctly finish the program
 	// Without this, the application crashes at start, not sure why
-	return exit(0)
-}
-
-// Must be a separate function to get the correct stack pointer.
-//go:noinline
-func runMain() {
-	run()
+	for {
+		exit(0)
+	}
 }
 
 // sleepTicks sleeps for the specified system ticks
 func sleepTicks(d timeUnit) {
-	sleepThread(uint64(ticksToNanoseconds(d)))
+	svcSleepThread(uint64(ticksToNanoseconds(d)))
 }
 
 // armTicksToNs converts cpu ticks to nanoseconds
@@ -60,7 +92,7 @@ var position = 0
 
 func putchar(c byte) {
 	if c == '\n' || position >= len(stdoutBuffer) {
-		nxOutputString(&stdoutBuffer[0], uint64(position))
+		svcOutputDebugString(&stdoutBuffer[0], uint64(position))
 		position = 0
 		return
 	}
@@ -85,11 +117,159 @@ func write(fd int32, buf *byte, count int) int {
 	return count
 }
 
-//export sleepThread
-func sleepThread(nanos uint64)
+// exit checks if a savedReturnAddress were provided by the launcher
+// if so, calls the nxExit which restores the stack and returns to launcher
+// otherwise just calls systemcall exit
+func exit(code int) {
+	if savedReturnAddress == 0 {
+		svcExitProcess(code)
+		return
+	}
 
-//export exit
-func exit(code int) int
+	nxExit(code, stackTop, savedReturnAddress)
+}
+
+type configEntry struct {
+	Key   uint32
+	Flags uint32
+	Value [2]uint64
+}
+
+func setupEnv() {
+	if debugInit {
+		println("Saved Return Address:", savedReturnAddress)
+		println("Context:", context)
+		println("Main Thread Handle:", mainThread)
+	}
+
+	// See https://switchbrew.org/w/index.php?title=Homebrew_ABI
+	// Here we parse only the required configs for initializing
+	if context != 0 {
+		ptr := context
+		entry := (*configEntry)(unsafe.Pointer(ptr))
+		for entry.Key != envEntryTypeEndOfList {
+			switch entry.Key {
+			case envEntryTypeOverrideHeap:
+				if debugInit {
+					println("Got heap override")
+				}
+				heapStart = uintptr(entry.Value[0])
+				heapEnd = heapStart + uintptr(entry.Value[1])
+			case envEntryTypeMainThreadHandle:
+				mainThread = uintptr(entry.Value[0])
+			default:
+				if entry.Flags&1 > 0 {
+					// Mandatory but not parsed
+					runtimePanic("mandatory config entry not parsed")
+				}
+			}
+			ptr += unsafe.Sizeof(configEntry{})
+			entry = (*configEntry)(unsafe.Pointer(ptr))
+		}
+	}
+	// Fetch used / total RAM for allocating HEAP
+	svcGetInfo(&totalRam, infoTypeTotalMemorySize, currentProcessHandle, 0)
+	svcGetInfo(&usedRam, infoTypeUsedMemorySize, currentProcessHandle, 0)
+}
+
+func setupHeap() {
+	if heapStart != 0 {
+		if debugInit {
+			print("Heap already overrided by hblauncher")
+		}
+		// Already overrided
+		return
+	}
+
+	if debugInit {
+		print("No heap override. Using normal initialization")
+	}
+
+	size := uint32(defaultHeapSize)
+
+	if totalRam > usedRam+0x200000 {
+		// Get maximum possible heap
+		size = uint32(totalRam-usedRam-0x200000) & ^uint32(0x1FFFFF)
+	}
+
+	if size < defaultHeapSize {
+		size = defaultHeapSize
+	}
+
+	if debugInit {
+		println("Trying to allocate", size, "bytes of heap")
+	}
+
+	svcSetHeapSize(&heapStart, uint64(size))
+
+	if heapStart == 0 {
+		runtimePanic("failed to allocate heap")
+	}
+
+	totalHeap = uint64(size)
+
+	heapEnd = heapStart + uintptr(size)
+
+	if debugInit {
+		println("Heap Start", heapStart)
+		println("Heap End  ", heapEnd)
+		println("Total Heap", totalHeap)
+	}
+}
+
+// getHeapBase returns the start address of the heap
+// this is externally linked by gonx
+func getHeapBase() uintptr {
+	return heapStart
+}
+
+// getHeapEnd returns the end address of the heap
+// this is externally linked by gonx
+func getHeapEnd() uintptr {
+	return heapEnd
+}
+
+// getContextPtr returns the hblauncher context
+// this is externally linked by gonx
+func getContextPtr() uintptr {
+	return context
+}
+
+// getMainThreadHandle returns the main thread handler if any
+// this is externally linked by gonx
+func getMainThreadHandle() uintptr {
+	return mainThread
+}
 
 //export armGetSystemTick
 func getArmSystemTick() int64
+
+// nxExit exits the program to homebrew launcher
+//export __nx_exit
+func nxExit(code int, stackTop uintptr, exitFunction uintptr)
+
+// Horizon System Calls
+// svcSetHeapSize Set the process heap to a given size. It can both extend and shrink the heap.
+// svc 0x01
+//export svcSetHeapSize
+func svcSetHeapSize(addr *uintptr, length uint64) uint64
+
+// svcExitProcess Exits the current process.
+// svc 0x07
+//export svcExitProcess
+func svcExitProcess(code int)
+
+// svcSleepThread Sleeps the current thread for the specified amount of time.
+// svc 0x0B
+//export svcSleepThread
+func svcSleepThread(nanos uint64)
+
+// svcOutputDebugString Outputs debug text, if used during debugging.
+// svc 0x27
+//export svcOutputDebugString
+func svcOutputDebugString(str *uint8, size uint64) uint64
+
+// svcGetInfo Retrieves information about the system, or a certain kernel object.
+// svc 0x29
+//export svcGetInfo
+func svcGetInfo(output *uint64, id0 uint32, handle uint32, id1 uint64) uint64

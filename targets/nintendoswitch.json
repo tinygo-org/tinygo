@@ -9,9 +9,10 @@
   "libc": "picolibc",
   "gc": "conservative",
   "relocation-model": "pic",
+  "cpu": "cortex-a57",
   "cflags": [
-    "-target", "aarch64-none-linux-gnu",
-    "-mtune=cortex-a57",
+    "-target", "aarch64-unknown-none",
+    "-mcpu=cortex-a57",
     "-fPIE",
     "-Werror",
     "-Qunused-arguments",
