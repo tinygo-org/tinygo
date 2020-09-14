@@ -6,8 +6,7 @@
 _start:
     b start
     .word _mod_header - _start
-    .word 0
-    .word 0
+    .ascii "HOMEBREW"
 
     .ascii "NRO0"              // magic
     .word 0                    // version (always 0)
@@ -15,11 +14,11 @@ _start:
     .word 0                    // flags (unused)
 
     // segment headers
-    .word __text_start
+    .word 0 // __text_start
     .word __text_size
-    .word __rodata_start
+    .word 0 //__rodata_start
     .word __rodata_size
-    .word __data_start
+    .word 0 //__data_start
     .word __data_size
     .word __bss_size
     .word 0
@@ -45,17 +44,16 @@ _mod_header:
 .section .text, "x"
 .global start
 start:
-
-    // save lr
-    mov  x7, x30
-
-    // get aslr base
-    bl   +4
-    sub  x6, x30, #0x88
+    // Get ASLR Base
+    adrp x6, _start
 
     // context ptr and main thread handle
     mov  x5, x0
     mov  x4, x1
+
+    // Save lr, context pointer, main thread handler
+    adrp x0, _aslr_base
+    str  x6, [x0, #:lo12:_aslr_base]
 
     // clear .bss
     adrp x5, __bss_start
@@ -71,7 +69,27 @@ bssloop:
     b bssloop
 
 run:
+    // process .dynamic section
+    adrp x0, _aslr_base
+    ldr  x0, [x0, #:lo12:_aslr_base]
+    adrp x1, _DYNAMIC
+    add  x1, x1, #:lo12:_DYNAMIC
+    bl   __dynamic_loader
+
+    // set LR to svcExitProcess if it's null
+    adrp x3, exit
+    add x3, x3, #:lo12:exit
+    cmp x30, xzr
+    csel x30, x3, x30, eq
+
     // call entrypoint
-    adrp x30, exit
-    add  x30, x30, #:lo12:exit
+    mov x3, sp
+    sub sp, sp, 0x10
+    stp x29, x30, [sp]
     b    main
+
+.section .data.horizon
+.align 8
+.global _aslr_base // Placeholder for ASLR Base Address
+_aslr_base:
+    .dword 0

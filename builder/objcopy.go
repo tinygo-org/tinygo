@@ -9,6 +9,10 @@ import (
 	"github.com/marcinbor85/gohex"
 )
 
+// maxPadBytes is the maximum allowed bytes to be padded in a rom extraction
+// this value is currently defined by Nintendo Switch Page Alignment (4096 bytes)
+const maxPadBytes = 4095
+
 // objcopyError is an error returned by functions that act like objcopy.
 type objcopyError struct {
 	Op  string
@@ -70,7 +74,12 @@ func extractROM(path string) (uint64, []byte, error) {
 	var rom []byte
 	for _, prog := range progs {
 		if prog.Paddr != progs[0].Paddr+uint64(len(rom)) {
-			return 0, nil, objcopyError{"ROM segments are non-contiguous: " + path, nil}
+			diff := prog.Paddr - (progs[0].Paddr + uint64(len(rom)))
+			if diff > maxPadBytes {
+				return 0, nil, objcopyError{"ROM segments are non-contiguous: " + path, nil}
+			}
+			// Pad the difference
+			rom = append(rom, make([]byte, diff)...)
 		}
 		data, err := ioutil.ReadAll(prog.Open())
 		if err != nil {
