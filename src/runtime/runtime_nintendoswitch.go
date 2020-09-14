@@ -2,6 +2,8 @@
 
 package runtime
 
+import "unsafe"
+
 type timeUnit int64
 
 const asyncScheduler = false
@@ -58,6 +60,16 @@ func abort() {
 	for {
 		exit(1)
 	}
+}
+
+//export write
+func write(fd int32, buf *byte, count int) int {
+	// TODO: Proper handling write
+	for i := 0; i < count; i++ {
+		putchar(*buf)
+		buf = (*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(buf)) + 1))
+	}
+	return count
 }
 
 //export sleepThread

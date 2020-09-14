@@ -20,6 +20,10 @@
     "-fno-exceptions", "-fno-unwind-tables",
     "-ffunction-sections", "-fdata-sections"
   ],
+  "ldflags": [
+    "-pie",
+    "-z", "notext"
+  ],
   "linkerscript": "targets/nintendoswitch.ld",
   "extra-files": [
     "targets/nintendoswitch.s",
