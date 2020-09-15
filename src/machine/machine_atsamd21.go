@@ -444,11 +444,6 @@ type UART struct {
 	Interrupt interrupt.Interrupt
 }
 
-var (
-	// UART0 is actually a USB CDC interface.
-	UART0 = USBCDC{Buffer: NewRingBuffer()}
-)
-
 const (
 	sampleRate16X = 16
 	lsbFirst      = 1

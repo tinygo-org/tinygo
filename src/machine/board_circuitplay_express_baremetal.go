@@ -14,6 +14,7 @@ var (
 		Bus:    sam.SERCOM4_USART,
 		SERCOM: 4,
 	}
+	UART_DEFAULT = UART1
 )
 
 func init() {

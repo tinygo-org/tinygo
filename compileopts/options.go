@@ -10,6 +10,7 @@ var (
 	validSchedulerOptions     = []string{"none", "tasks", "coroutines"}
 	validPrintSizeOptions     = []string{"none", "short", "full"}
 	validPanicStrategyOptions = []string{"print", "trap"}
+	validOutputOptions        = []string{"none", "default", "custom", "usbcdc", "uart"}
 )
 
 // Options contains extra options to give to the compiler. These options are
@@ -33,6 +34,7 @@ type Options struct {
 	HeapSize      int64
 	TestConfig    TestConfig
 	Programmer    string
+	Output        string
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.
@@ -70,6 +72,15 @@ func (o *Options) Verify() error {
 			return fmt.Errorf(`invalid panic option '%s': valid values are %s`,
 				o.PanicStrategy,
 				strings.Join(validPanicStrategyOptions, ", "))
+		}
+	}
+
+	if o.Output != "" {
+		valid := isInArray(validOutputOptions, o.Output)
+		if !valid {
+			return fmt.Errorf(`invalid output option '%s': valid values are %s`,
+				o.Output,
+				strings.Join(validOutputOptions, ", "))
 		}
 	}
 

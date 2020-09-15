@@ -269,11 +269,19 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0        examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0 -tags no_default_usb examples/serial
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m0          examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=feather-m0 -tags no_default_usb examples/serial
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=trinket-m0          examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=trinket-m0 -tags no_default_usb examples/serial
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=circuitplay-express -tags no_default_usb examples/serial
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32f4disco        examples/blinky1
 	@$(MD5SUM) test.hex
@@ -293,11 +301,17 @@ smoketest:
 	@$(MD5SUM) test.gba
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m4        examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m4 -tags no_default_usb examples/serial
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m4          examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=feather-m4 -tags no_default_usb examples/serial
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pybadge             examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=metro-m4-airlift    examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=metro-m4-airlift -tags no_default_usb examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pyportal            examples/blinky1
 	@$(MD5SUM) test.hex
@@ -322,6 +336,8 @@ smoketest:
 	$(TINYGO) build -size short -o test.hex -target=pygamer             examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=xiao                examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=xiao -tags no_default_usb examples/serial
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/dac
 	@$(MD5SUM) test.hex

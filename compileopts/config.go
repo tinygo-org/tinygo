@@ -79,7 +79,12 @@ func (c *Config) GOARCH() string {
 
 // BuildTags returns the complete list of build tags used during this build.
 func (c *Config) BuildTags() []string {
-	tags := append(c.Target.BuildTags, []string{"tinygo", "gc." + c.GC(), "scheduler." + c.Scheduler()}...)
+	tags := append(c.Target.BuildTags, []string{
+		"tinygo",
+		"gc." + c.GC(),
+		"output." + c.Output(),
+		"scheduler." + c.Scheduler(),
+	}...)
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
@@ -155,6 +160,18 @@ func (c *Config) FuncImplementation() FuncValueImplementation {
 	default:
 		panic("unknown scheduler type")
 	}
+}
+
+// Output returns the selected output destination for putchar
+func (c *Config) Output() string {
+	if c.Options.Output != "" {
+		return c.Options.Output
+	}
+	if c.Target.Output != "" {
+		return c.Target.Output
+	}
+	// Fall back to 'default', which at the moment doesn't really mean anything
+	return "default"
 }
 
 // PanicStrategy returns the panic strategy selected for this target. Valid
