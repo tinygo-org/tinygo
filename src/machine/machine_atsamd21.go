@@ -1188,7 +1188,10 @@ func (spi SPI) Configure(config SPIConfig) error {
 	}
 
 	// Set synch speed for SPI
-	baudRate := (CPUFrequency() / (2 * config.Frequency)) - 1
+	baudRate := CPUFrequency() / (2 * config.Frequency)
+	if baudRate > 0 {
+		baudRate--
+	}
 	spi.Bus.BAUD.Set(uint8(baudRate))
 
 	// Enable SPI port.
