@@ -51,9 +51,8 @@ start:
     mov  x5, x0
     mov  x4, x1
 
-    // Save lr, context pointer, main thread handler
-    adrp x0, _aslr_base
-    str  x6, [x0, #:lo12:_aslr_base]
+    // Save ASLR Base to use later
+    mov x0, x6
 
     // clear .bss
     adrp x5, __bss_start
@@ -70,26 +69,10 @@ bssloop:
 
 run:
     // process .dynamic section
-    adrp x0, _aslr_base
-    ldr  x0, [x0, #:lo12:_aslr_base]
+    // ASLR base on x0
     adrp x1, _DYNAMIC
     add  x1, x1, #:lo12:_DYNAMIC
     bl   __dynamic_loader
 
-    // set LR to svcExitProcess if it's null
-    adrp x3, exit
-    add x3, x3, #:lo12:exit
-    cmp x30, xzr
-    csel x30, x3, x30, eq
-
     // call entrypoint
-    mov x3, sp
-    sub sp, sp, 0x10
-    stp x29, x30, [sp]
     b    main
-
-.section .data.horizon
-.align 8
-.global _aslr_base // Placeholder for ASLR Base Address
-_aslr_base:
-    .dword 0
