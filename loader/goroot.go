@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -164,6 +165,17 @@ func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides 
 			return err
 		}
 		for _, e := range gorootEntries {
+			if isMergeTargetEntry(importPath, e.Name()) {
+				// In this case, we have files both from TinyGo and Go.
+				// As of now, this is only for WASI to have *_wasi.go files as replacements for *_js.go files
+				newname := filepath.Join(tmpgoroot, "src", importPath, e.Name())
+				oldname := filepath.Join(goroot, "src", importPath, e.Name())
+				err := symlink(oldname, newname)
+				if err != nil {
+					return err
+				}
+				continue
+			}
 			if !e.IsDir() {
 				// Don't merge in files from Go. Otherwise we'd end up with a
 				// weird syscall package with files from both roots.
@@ -185,11 +197,16 @@ func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides 
 	return nil
 }
 
+func isMergeTargetEntry(importPath string, name string) bool {
+	// TODO: add crypto/rand
+	return importPath == "time" && !strings.HasSuffix(name, "_js.go")
+}
+
 // needsSyscallPackage returns whether the syscall package should be overriden
 // with the TinyGo version. This is the case on some targets.
 func needsSyscallPackage(buildTags []string) bool {
 	for _, tag := range buildTags {
-		if tag == "baremetal" || tag == "darwin" || tag == "nintendoswitch" {
+		if tag == "baremetal" || tag == "darwin" || tag == "nintendoswitch" || tag == "wasi" {
 			return true
 		}
 	}
@@ -212,7 +229,8 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"reflect/":              false,
 		"runtime/":              false,
 		"sync/":                 true,
-		"testing/":              true,
+		"time/":                 true,
+		"testing/":              false,
 	}
 	if needsSyscallPackage {
 		paths["syscall/"] = true // include syscall/js

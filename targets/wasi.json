@@ -1,0 +1,22 @@
+{
+	"llvm-target":   "wasm32--wasi",
+	"build-tags":    ["js", "wasm", "wasi"],
+	"goos":          "js",
+	"goarch":        "wasm",
+	"compiler":      "clang",
+	"linker":        "wasm-ld",
+	"cflags": [
+		"--target=wasm32--wasi",
+		"--sysroot={root}/lib/wasi-libc/sysroot",
+		"-Oz"
+	],
+	"ldflags": [
+		"--allow-undefined",
+		"--no-threads",
+		"--stack-first",
+		"--export-dynamic",
+		"--no-demangle",
+		"{root}/lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a"
+	],
+	"emulator":      ["node", "targets/wasm_exec.js"]
+}
