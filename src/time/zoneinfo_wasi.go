@@ -4,6 +4,8 @@
 
 package time
 
+// TODO: https://github.com/WebAssembly/WASI/issues/25
+
 var zoneSources []string // TODO:
 
 func initLocal() {

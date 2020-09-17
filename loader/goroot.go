@@ -230,7 +230,7 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"runtime/":              false,
 		"sync/":                 true,
 		"time/":                 true,
-		"testing/":              false,
+		"testing/":              true,
 	}
 	if needsSyscallPackage {
 		paths["syscall/"] = true // include syscall/js
