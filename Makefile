@@ -198,6 +198,7 @@ tinygo-test:
 	$(TINYGO) test container/list
 	$(TINYGO) test container/ring
 	$(TINYGO) test text/scanner
+	$(TINYGO) test unicode/utf8
 
 .PHONY: smoketest
 smoketest:

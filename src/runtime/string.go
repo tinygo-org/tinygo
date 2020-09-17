@@ -186,21 +186,47 @@ func decodeUTF8(s string, index uintptr) (rune, uintptr) {
 	case x&0x80 == 0x00: // 0xxxxxxx
 		return rune(x), 1
 	case x&0xe0 == 0xc0: // 110xxxxx
-		if remaining < 2 {
+		if remaining < 2 || !isContinuation(s[index+1]) {
 			return 0xfffd, 1
 		}
-		return (rune(x&0x1f) << 6) | (rune(s[index+1]) & 0x3f), 2
+		r := (rune(x&0x1f) << 6) | (rune(s[index+1]) & 0x3f)
+		if r >= 1<<7 {
+			// Check whether the rune really needed to be encoded as a two-byte
+			// sequence. UTF-8 requires every rune to be encoded in the smallest
+			// sequence possible.
+			return r, 2
+		}
 	case x&0xf0 == 0xe0: // 1110xxxx
-		if remaining < 3 {
+		if remaining < 3 || !isContinuation(s[index+1]) || !isContinuation(s[index+2]) {
 			return 0xfffd, 1
 		}
-		return (rune(x&0x0f) << 12) | ((rune(s[index+1]) & 0x3f) << 6) | (rune(s[index+2]) & 0x3f), 3
+		r := (rune(x&0x0f) << 12) | ((rune(s[index+1]) & 0x3f) << 6) | (rune(s[index+2]) & 0x3f)
+		if r >= 1<<11 && !(r >= 0xD800 && r <= 0xDFFF) {
+			// Check whether the rune really needed to be encoded as a
+			// three-byte sequence and check that this is not a Unicode
+			// surrogate pair (which are not allowed by UTF-8).
+			return r, 3
+		}
 	case x&0xf8 == 0xf0: // 11110xxx
-		if remaining < 4 {
+		if remaining < 4 || !isContinuation(s[index+1]) || !isContinuation(s[index+2]) || !isContinuation(s[index+3]) {
 			return 0xfffd, 1
 		}
-		return (rune(x&0x07) << 18) | ((rune(s[index+1]) & 0x3f) << 12) | ((rune(s[index+2]) & 0x3f) << 6) | (rune(s[index+3]) & 0x3f), 4
-	default:
-		return 0xfffd, 1
+		r := (rune(x&0x07) << 18) | ((rune(s[index+1]) & 0x3f) << 12) | ((rune(s[index+2]) & 0x3f) << 6) | (rune(s[index+3]) & 0x3f)
+		if r >= 1<<16 && r <= '\U0010FFFF' {
+			// Check whether this rune really needed to be encoded as a four
+			// byte sequence and check that the resulting rune is in the valid
+			// range (up to at most U+10FFFF).
+			return r, 4
+		}
 	}
+
+	// Failed to decode. Return the Unicode replacement character and a length of 1.
+	return 0xfffd, 1
+}
+
+// isContinuation returns true if (and only if) this is a UTF-8 continuation
+// byte.
+func isContinuation(b byte) bool {
+	// Continuation bytes have their topmost bits set to 0b10.
+	return b&0xc0 == 0x80
 }
