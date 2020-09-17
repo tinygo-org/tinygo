@@ -197,6 +197,7 @@ test: wasi-libc
 tinygo-test:
 	$(TINYGO) test container/list
 	$(TINYGO) test container/ring
+	$(TINYGO) test math
 	$(TINYGO) test text/scanner
 
 .PHONY: smoketest
