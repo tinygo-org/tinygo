@@ -51,8 +51,7 @@ type PackageJSON struct {
 	CFiles   []string
 
 	// Dependency information
-	Imports   []string
-	ImportMap map[string]string
+	Imports []string
 
 	// Error information
 	Error *struct {
@@ -168,6 +167,41 @@ func Load(config *compileopts.Config, inputPkgs []string, clangHeaders string, t
 				}
 			}
 			return nil, err
+		}
+		if config.TestConfig.CompileTestBinary {
+			// When creating a test binary, `go list` will list two or three
+			// packages used for testing the package. The first is the original
+			// package as if it were built normally, the second is the same
+			// package but with the *_test.go files included. A possible third
+			// may be included for _test packages (such as math_test), used to
+			// test the external API with no access to internal functions.
+			// All packages that are necessary for testing (including the to be
+			// tested package with *_test.go files, but excluding the original
+			// unmodified package) have a suffix added to the import path, for
+			// example the math package has import path "math [math.test]" and
+			// test dependencies such as fmt will have an import path of the
+			// form "fmt [math.test]".
+			// The code below removes this suffix, and if this results in a
+			// duplicate (which happens with the to-be-tested package without
+			// *.test.go files) the previous package is removed from the list of
+			// packages included in this build.
+			// This is necessary because the change in import paths results in
+			// breakage to //go:linkname. Additionally, the duplicated package
+			// slows down the build and so is best removed.
+			if pkg.ForTest != "" && strings.HasSuffix(pkg.ImportPath, " ["+pkg.ForTest+".test]") {
+				newImportPath := pkg.ImportPath[:len(pkg.ImportPath)-len(" ["+pkg.ForTest+".test]")]
+				if _, ok := p.Packages[newImportPath]; ok {
+					// Delete the previous package (that this package overrides).
+					delete(p.Packages, newImportPath)
+					for i, pkg := range p.sorted {
+						if pkg.ImportPath == newImportPath {
+							p.sorted = append(p.sorted[:i], p.sorted[i+1:]...) // remove element from slice
+							break
+						}
+					}
+				}
+				pkg.ImportPath = newImportPath
+			}
 		}
 		p.sorted = append(p.sorted, pkg)
 		p.Packages[pkg.ImportPath] = pkg
@@ -366,11 +400,6 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 func (p *Package) Import(to string) (*types.Package, error) {
 	if to == "unsafe" {
 		return types.Unsafe, nil
-	}
-	if replace, ok := p.ImportMap[to]; ok {
-		// This import path should be replaced by another import path, according
-		// to `go list`.
-		to = replace
 	}
 	if imported, ok := p.program.Packages[to]; ok {
 		return imported.Pkg, nil
