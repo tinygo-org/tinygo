@@ -781,7 +781,6 @@ func main() {
 	}
 	command := os.Args[1]
 
-	outpath := flag.String("o", "", "output filename")
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, extalloc, conservative)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
@@ -803,9 +802,13 @@ func main() {
 	heapSize := flag.String("heap-size", "1M", "default heap size in bytes (only supported by WebAssembly)")
 
 	var flagJSON, flagDeps *bool
-	if command == "list" {
+	if command == "help" || command == "list" {
 		flagJSON = flag.Bool("json", false, "print data in JSON format")
 		flagDeps = flag.Bool("deps", false, "")
+	}
+	var outpath string
+	if command == "help" || command == "build" || command == "build-library" {
+		flag.StringVar(&outpath, "o", "", "output filename")
 	}
 
 	// Early command processing, before commands are interpreted by the Go flag
@@ -864,7 +867,7 @@ func main() {
 
 	switch command {
 	case "build":
-		if *outpath == "" {
+		if outpath == "" {
 			fmt.Fprintln(os.Stderr, "No output filename supplied (-o).")
 			usage()
 			os.Exit(1)
@@ -877,15 +880,15 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		if options.Target == "" && filepath.Ext(*outpath) == ".wasm" {
+		if options.Target == "" && filepath.Ext(outpath) == ".wasm" {
 			options.Target = "wasm"
 		}
 
-		err := Build(pkgName, *outpath, options)
+		err := Build(pkgName, outpath, options)
 		handleCompilerError(err)
 	case "build-library":
 		// Note: this command is only meant to be used while making a release!
-		if *outpath == "" {
+		if outpath == "" {
 			fmt.Fprintln(os.Stderr, "No output filename supplied (-o).")
 			usage()
 			os.Exit(1)
@@ -910,13 +913,8 @@ func main() {
 		}
 		path, err := lib.Load(*target)
 		handleCompilerError(err)
-		copyFile(path, *outpath)
+		copyFile(path, outpath)
 	case "flash", "gdb":
-		if *outpath != "" {
-			fmt.Fprintln(os.Stderr, "Output cannot be specified with the flash command.")
-			usage()
-			os.Exit(1)
-		}
 		pkgName := filepath.ToSlash(flag.Arg(0))
 		if command == "flash" {
 			err := Flash(pkgName, *port, options)
