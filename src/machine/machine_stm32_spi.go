@@ -9,28 +9,6 @@ import (
 	"unsafe"
 )
 
-// SPI directionality
-const (
-	DirFullDuplex   = 0
-	DirSimplexRx    = 1
-	DirHalfDuplexRx = 2
-	DirHalfDuplexTx = 3
-)
-
-// SPI data frame format/size
-const (
-	DataWidth8Bit  = 0
-	DataWidth16Bit = 1
-)
-
-// SPI chip/slave select mode. Use any GPIO pin in software mode, otherwise use
-// one of the pins with NSS alternate function in hardware mode.
-const (
-	CSSoft    = 0
-	CSHardIn  = 1
-	CSHardOut = 2
-)
-
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {
 	Frequency uint32
@@ -39,9 +17,6 @@ type SPIConfig struct {
 	SDI       Pin
 	LSBFirst  bool
 	Mode      uint8
-	Direction uint8
-	DataSize  uint8
-	CSMode    uint8
 }
 
 // Configure is intended to setup the STM32 SPI1 interface.
@@ -87,65 +62,17 @@ func (spi SPI) Configure(config SPIConfig) {
 	// set bit transfer order
 	if config.LSBFirst {
 		conf |= stm32.SPI_CR1_LSBFIRST
-	} else {
-		conf &^= stm32.SPI_CR1_LSBFIRST
 	}
 
 	// set polarity and phase on the SPI interface
 	switch config.Mode {
-	case Mode0:
-		conf &^= stm32.SPI_CR1_CPOL
-		conf &^= stm32.SPI_CR1_CPHA
 	case Mode1:
-		conf &^= stm32.SPI_CR1_CPOL
 		conf |= stm32.SPI_CR1_CPHA
 	case Mode2:
 		conf |= stm32.SPI_CR1_CPOL
-		conf &^= stm32.SPI_CR1_CPHA
 	case Mode3:
 		conf |= stm32.SPI_CR1_CPOL
 		conf |= stm32.SPI_CR1_CPHA
-	default: // to mode 0
-		conf &^= stm32.SPI_CR1_CPOL
-		conf &^= stm32.SPI_CR1_CPHA
-	}
-
-	// configure the direction of SPI data
-	switch config.Direction {
-	case DirFullDuplex:
-		conf &^= (stm32.SPI_CR1_RXONLY | stm32.SPI_CR1_BIDIMODE | stm32.SPI_CR1_BIDIOE)
-	case DirSimplexRx:
-		conf &^= (stm32.SPI_CR1_BIDIMODE | stm32.SPI_CR1_BIDIOE)
-		conf |= stm32.SPI_CR1_RXONLY
-	case DirHalfDuplexRx:
-		conf &^= (stm32.SPI_CR1_RXONLY | stm32.SPI_CR1_BIDIOE)
-		conf |= stm32.SPI_CR1_BIDIMODE
-	case DirHalfDuplexTx:
-		conf &^= stm32.SPI_CR1_RXONLY
-		conf |= (stm32.SPI_CR1_BIDIMODE | stm32.SPI_CR1_BIDIOE)
-	}
-
-	// set data frame format/size
-	switch config.DataSize {
-	case DataWidth8Bit:
-		conf &^= stm32.SPI_CR1_DFF
-	case DataWidth16Bit:
-		conf |= stm32.SPI_CR1_DFF
-	}
-
-	// configure chip select mode: hardware vs software
-	var nss uint32
-	switch config.CSMode {
-	case CSSoft:
-		conf &^= (stm32.SPI_CR2_SSOE << 16)
-		nss |= stm32.SPI_CR1_SSM
-		conf |= nss
-	case CSHardIn:
-		conf &^= stm32.SPI_CR1_SSM | (stm32.SPI_CR2_SSOE << 16)
-	case CSHardOut:
-		conf &^= stm32.SPI_CR1_SSM
-		nss |= (stm32.SPI_CR2_SSOE << 16)
-		conf |= nss
 	}
 
 	// configure as SPI master
@@ -156,7 +83,6 @@ func (spi SPI) Configure(config SPIConfig) {
 
 	// now set the configuration
 	spi.Bus.CR1.Set(conf)
-	spi.Bus.CR2.SetBits(nss >> 16)
 }
 
 // Transfer writes/reads a single byte using the SPI interface.

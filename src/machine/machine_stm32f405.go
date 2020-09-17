@@ -62,9 +62,11 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 		clock = CPUFrequency() / 4
 	}
 
-	// limit requested frequency to bus frequency
+	// limit requested frequency to bus frequency and min frequency (DIV256)
 	freq := config.Frequency
-	if freq > clock {
+	if min := clock / 256; freq < min {
+		freq = min
+	} else if freq > clock {
 		freq = clock
 	}
 
