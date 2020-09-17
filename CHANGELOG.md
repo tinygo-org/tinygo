@@ -1,3 +1,76 @@
+0.15.0
+---
+
+* **command-line**
+  - add cached GOROOT to info subcommand
+  - embed git-hash in tinygo-dev executable
+  - implement tinygo targets to list usable targets
+  - use simpler file copy instead of file renaming to avoid issues on nrf52840 UF2 bootloaders
+  - use ToSlash() to specify program path
+  - support flashing esp32/esp8266 directly from tinygo
+  - when flashing call PortReset only on other than openocd
+* **compiler**
+  - `compileopts`: add support for custom binary formats
+  - `compiler`: improve display of goroutine wrappers
+  - `interp`: don't panic in the Store method
+  - `interp`: replace some panics with error messages
+  - `interp`: show error line in first line of the traceback
+  - `loader`: be more robust when creating the cached GOROOT
+  - `loader`: rewrite/refactor much of the code to use go list directly
+  - `loader`: use ioutil.TempDir to create a temporary directory
+  - `stacksize`: deal with DW_CFA_advance_loc1
+* **standard library**
+  - `runtime`: use waitForEvents when appropriate
+* **wasm**
+  - `wasm`: Remove --no-threads from wasm-ld calls.
+  - `wasm`: update wasi-libc dependency
+* **targets**
+  - `arduino-mega2560`: fix flashing on Windows
+  - `arm`: automatically determine stack sizes
+  - `arm64`: make dynamic loader structs and constants private
+  - `avr`: configure emulator in board files
+  - `cortexm`: fix stack size calculation with interrupts
+  - `flash`: add openocd settings to atsamd21 / atsamd51
+  - `flash`: add openocd settings to nrf5
+  - `microbit`: reelboard: flash using OpenOCD when needed
+  - `nintendoswitch`: Add dynamic loader for runtime loading PIE sections
+  - `nintendoswitch`: fix import cycle on dynamic_arm64.go
+  - `nintendoswitch`: Fix invalid memory read / write in print calls
+  - `nintendoswitch`: simplified assembly code
+  - `nintendoswitch`: support outputting .nro files directly
+* **boards**
+  - `arduino-zero`: Adding support for the Arduino Zero (#1365)
+  - `atsamd2x`: fix BAUD value
+  - `atsamd5x`: fix BAUD value
+  - `bluepill`: Enable stm32's USART2 for the board and map it to UART1 tinygo's device
+  - `device/atsamd51x`: add all remaining bitfield values for PCHCTRLm Mapping
+  - `esp32`: add libgcc ROM functions to linker script
+  - `esp32`: add SPI support
+  - `esp32`: add support for basic GPIO
+  - `esp32`: add support for the Espressif ESP32 chip
+  - `esp32`: configure the I/O matrix for GPIO pins
+  - `esp32`: export machine.PortMask* for bitbanging implementations
+  - `esp8266`: add support for this chip
+  - `machine/atsamd51x,runtime/atsamd51x`: fixes needed for full support for all PWM pins. Also adds some useful constants to clarify peripheral clock usage
+  - `machine/itsybitsy-nrf52840`: add support for Adafruit Itsybitsy nrf52840 (#1243)
+  - `machine/stm32f4`: refactor common code and add new build tag stm32f4 (#1332)
+  - `nrf`: add SoftDevice support for the Circuit Playground Bluefruit
+  - `nrf`: call sd_app_evt_wait when the SoftDevice is enabled
+  - `nrf52840`: add build tags for SoftDevice support
+  - `nrf52840`: use higher priority for USB-CDC code
+  - `runtime/atsamd51x`: use PCHCTRL_GCLK_SERCOMX_SLOW for setting clocks on all SERCOM ports
+  - `stm32f405`: add basic UART handler
+  - `stm32f405`: add STM32F405 machine/runtime, and new board/target feather-stm32f405
+* **build**
+  - `all`: run test binaries in the correct directory
+  - `build`: Fix arch release job
+  - `ci`: run `tinygo test` for known-working packages
+  - `ci`: set git-fetch-depth to 1
+  - `docker`: fix the problem with the wasm build (#1357)
+  - `Makefile`: check whether submodules have been downloaded in some common cases
+* **docs**
+  - add ESP32, ESP8266, and Adafruit Feather STM32F405 to list of supported boards
+
 0.14.1
 ---
 * **command-line**
