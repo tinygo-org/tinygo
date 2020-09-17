@@ -89,7 +89,10 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 			return "", err
 		}
 	}
-	err = mergeDirectory(goroot, tinygoroot, tmpgoroot, "", pathsToOverride(needsSyscallPackage(config.BuildTags())))
+	err = mergeDirectory(goroot, tinygoroot, tmpgoroot, "", pathsToOverride(
+		needsSyscallPackage(config.BuildTags()),
+		needsTimePackage(config.BuildTags()),
+	))
 	if err != nil {
 		return "", err
 	}
@@ -213,9 +216,20 @@ func needsSyscallPackage(buildTags []string) bool {
 	return false
 }
 
+// needsTimePackage returns whether the time package should be merged
+// with the TinyGo version. This is the case on some targets.
+func needsTimePackage(buildTags []string) bool {
+	for _, tag := range buildTags {
+		if tag == "wasi" {
+			return true
+		}
+	}
+	return false
+}
+
 // The boolean indicates whether to merge the subdirs. True means merge, false
 // means use the TinyGo version.
-func pathsToOverride(needsSyscallPackage bool) map[string]bool {
+func pathsToOverride(needsSyscallPackage, needsTimePackage bool) map[string]bool {
 	paths := map[string]bool{
 		"/":                     true,
 		"device/":               false,
@@ -229,11 +243,14 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"reflect/":              false,
 		"runtime/":              false,
 		"sync/":                 true,
-		"time/":                 true,
 		"testing/":              true,
 	}
 	if needsSyscallPackage {
 		paths["syscall/"] = true // include syscall/js
+	}
+
+	if needsTimePackage {
+		paths["time/"] = true
 	}
 	return paths
 }
