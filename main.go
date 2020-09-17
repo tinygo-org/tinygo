@@ -74,7 +74,12 @@ func copyFile(src, dst string) error {
 	}
 	defer source.Close()
 
-	destination, err := os.Create(dst)
+	st, err := source.Stat()
+	if err != nil {
+		return err
+	}
+
+	destination, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, st.Mode())
 	if err != nil {
 		return err
 	}
@@ -120,14 +125,27 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 }
 
 // Test runs the tests in the given package.
-func Test(pkgName string, options *compileopts.Options) error {
+func Test(pkgName string, options *compileopts.Options, testCompileOnly bool, outpath string) error {
 	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
 	}
 
-	return builder.Build(pkgName, ".elf", config, func(result builder.BuildResult) error {
+	return builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
+		if testCompileOnly || outpath != "" {
+			// Write test binary to the specified file name.
+			if outpath == "" {
+				// No -o path was given, so create one now.
+				// This matches the behavior of go test.
+				outpath = filepath.Base(result.MainDir) + ".test"
+			}
+			copyFile(result.Binary, outpath)
+		}
+		if testCompileOnly {
+			// Do not run the test.
+			return nil
+		}
 		if len(config.Target.Emulator) == 0 {
 			// Run directly.
 			cmd := exec.Command(result.Binary)
@@ -807,8 +825,12 @@ func main() {
 		flagDeps = flag.Bool("deps", false, "")
 	}
 	var outpath string
-	if command == "help" || command == "build" || command == "build-library" {
+	if command == "help" || command == "build" || command == "build-library" || command == "test" {
 		flag.StringVar(&outpath, "o", "", "output filename")
+	}
+	var testCompileOnlyFlag *bool
+	if command == "help" || command == "test" {
+		testCompileOnlyFlag = flag.Bool("c", false, "compile the test binary but do not run it")
 	}
 
 	// Early command processing, before commands are interpreted by the Go flag
@@ -946,7 +968,7 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Test(pkgName, options)
+		err := Test(pkgName, options, *testCompileOnlyFlag, outpath)
 		handleCompilerError(err)
 	case "targets":
 		dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
