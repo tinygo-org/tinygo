@@ -2044,17 +2044,17 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 			case token.QUO: // /
 				return b.CreateFDiv(x, y, ""), nil
 			case token.EQL: // ==
-				return b.CreateFCmp(llvm.FloatUEQ, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatOEQ, x, y, ""), nil
 			case token.NEQ: // !=
 				return b.CreateFCmp(llvm.FloatUNE, x, y, ""), nil
 			case token.LSS: // <
-				return b.CreateFCmp(llvm.FloatULT, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatOLT, x, y, ""), nil
 			case token.LEQ: // <=
-				return b.CreateFCmp(llvm.FloatULE, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatOLE, x, y, ""), nil
 			case token.GTR: // >
-				return b.CreateFCmp(llvm.FloatUGT, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatOGT, x, y, ""), nil
 			case token.GEQ: // >=
-				return b.CreateFCmp(llvm.FloatUGE, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatOGE, x, y, ""), nil
 			default:
 				panic("binop on float: " + op.String())
 			}
@@ -2578,7 +2578,7 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			if typ.Info()&types.IsInteger != 0 {
 				return b.CreateSub(llvm.ConstInt(x.Type(), 0, false), x, ""), nil
 			} else if typ.Info()&types.IsFloat != 0 {
-				return b.CreateFSub(llvm.ConstFloat(x.Type(), 0.0), x, ""), nil
+				return b.CreateFNeg(x, ""), nil
 			} else {
 				return llvm.Value{}, b.makeError(unop.Pos(), "todo: unknown basic type for negate: "+typ.String())
 			}
