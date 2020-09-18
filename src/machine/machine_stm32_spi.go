@@ -81,8 +81,12 @@ func (spi SPI) Configure(config SPIConfig) {
 	// enable the SPI interface
 	conf |= stm32.SPI_CR1_SPE
 
+	// use software CS (GPIO) by default
+	conf |= stm32.SPI_CR1_SSM
+
 	// now set the configuration
 	spi.Bus.CR1.Set(conf)
+	spi.Bus.CR2.SetBits((conf & stm32.SPI_CR1_SSM_Msk) >> 16)
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
