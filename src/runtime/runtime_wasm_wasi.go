@@ -4,8 +4,6 @@ package runtime
 
 import (
 	"unsafe"
-
-	"github.com/tinygo-org/tinygo/src/syscall/wasi"
 )
 
 type timeUnit int64
@@ -32,11 +30,11 @@ const (
 )
 
 var (
-	sleepTicksSubscription = wasi.Subscription_t{
+	sleepTicksSubscription = __wasi_subscription_t{
 		UserData: 0,
-		U: wasi.Subscription_u_t{
-			Tag: wasi.Eventtype_t_clock,
-			U: wasi.Subscription_clock_t{
+		U: __wasi_subscription_u_t{
+			Tag: __wasi_eventtype_t_clock,
+			U: __wasi_subscription_clock_t{
 				UserData:  0,
 				ID:        0,
 				Timeout:   0,
@@ -45,17 +43,75 @@ var (
 			},
 		},
 	}
-	sleepTicksResult  = wasi.Event_t{}
+	sleepTicksResult  = __wasi_event_t{}
 	sleepTicksNEvents uint32
 )
 
 func sleepTicks(d timeUnit) {
 	sleepTicksSubscription.U.U.Timeout = int64(d)
-	wasi.Poll_oneoff(&sleepTicksSubscription, &sleepTicksResult, 1, &sleepTicksNEvents)
+	poll_oneoff(&sleepTicksSubscription, &sleepTicksResult, 1, &sleepTicksNEvents)
 }
 
 func ticks() timeUnit {
 	var nano int64
-	wasi.Clock_time_get(0, timePrecisionNanoseconds, &nano)
+	clock_time_get(0, timePrecisionNanoseconds, &nano)
 	return timeUnit(nano)
 }
+
+// Implementations of wasi_unstable APIs
+
+//go:wasm-module wasi_unstable
+//export clock_time_get
+func clock_time_get(clockid uint32, precision uint64, time *int64) (errno uint16)
+
+//go:wasm-module wasi_unstable
+//export poll_oneoff
+func poll_oneoff(in *__wasi_subscription_t, out *__wasi_event_t, nsubscriptions uint32, nevents *uint32) (errno uint16)
+
+type __wasi_eventtype_t = uint8
+
+const (
+	__wasi_eventtype_t_clock __wasi_eventtype_t = 0
+	// TODO: __wasi_eventtype_t_fd_read  __wasi_eventtype_t = 1
+	// TODO: __wasi_eventtype_t_fd_write __wasi_eventtype_t = 2
+)
+
+type (
+	// https://github.com/wasmerio/wasmer/blob/1.0.0-alpha3/lib/wasi/src/syscalls/types.rs#L584-L588
+	__wasi_subscription_t struct {
+		UserData uint64
+		U        __wasi_subscription_u_t
+	}
+
+	__wasi_subscription_u_t struct {
+		Tag __wasi_eventtype_t
+
+		// TODO: support fd_read/fd_write event
+		U __wasi_subscription_clock_t
+	}
+
+	// https://github.com/wasmerio/wasmer/blob/1.0.0-alpha3/lib/wasi/src/syscalls/types.rs#L711-L718
+	__wasi_subscription_clock_t struct {
+		UserData  uint64
+		ID        uint32
+		Timeout   int64
+		Precision int64
+		Flags     uint16
+	}
+)
+
+type (
+	// https://github.com/wasmerio/wasmer/blob/1.0.0-alpha3/lib/wasi/src/syscalls/types.rs#L191-L198
+	__wasi_event_t struct {
+		userData  uint64
+		errno     uint16
+		eventType __wasi_eventtype_t
+
+		// only used for fd_read or fd_write events
+		// TODO: support fd_read/fd_write event
+		_ struct {
+			nBytes uint64
+			flags  uint16
+		}
+	}
+)
