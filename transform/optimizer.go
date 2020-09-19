@@ -232,10 +232,10 @@ func getFunctionsUsedInTransforms(config *compileopts.Config) []string {
 
 func shouldHideGlobalVariables(buildTags []string) bool {
 	for _, t := range buildTags {
-		// According to WASI spec, none of exports in WASI executable(Command) should no be accessed.
+		// According to WASI spec, global variables in WASI executable(Command) should not be exported.
 		// Reference: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
 		//
-		// v0.19.0 of wasmetime, which is often refered to as the reference implementation of WASI,
+		// v0.19.0 of wasmtime, which is often referred to as the reference implementation of WASI,
 		// does not accept any exports except functions and the only limited variables like "table" or "memory".
 		// See: https://github.com/bytecodealliance/wasmtime/blob/60681d7019b38a5648b5615001ffa55442a64b83/crates/wasmtime/src/linker.rs#L401-L460
 		if t == "wasi" {

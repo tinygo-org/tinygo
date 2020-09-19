@@ -19,15 +19,13 @@ func MakeGCStackSlots(mod llvm.Module, shouldHiveGlobals bool) bool {
 		}
 		stackChainStart := mod.NamedGlobal("runtime.stackChainStart")
 		if !stackChainStart.IsNil() {
-			stackChainStart.SetVisibility(llvm.HiddenVisibility)
+			if shouldHiveGlobals {
+				stackChainStart.SetVisibility(llvm.HiddenVisibility)
+			}
 			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.Type().ElementType()))
 			stackChainStart.SetGlobalConstant(true)
 		}
 		return false
-	}
-
-	if shouldHiveGlobals {
-		alloc.SetVisibility(llvm.HiddenVisibility)
 	}
 
 	trackPointer := mod.NamedFunction("runtime.trackPointer")
