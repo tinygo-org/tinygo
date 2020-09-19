@@ -19,5 +19,3 @@ src/device/kendryte/*.s
 vendor
 llvm-build
 llvm-project
-
-.vscode

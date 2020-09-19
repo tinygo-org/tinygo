@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/avr"
+	"errors"
 	"runtime/volatile"
 )
 
@@ -89,45 +90,54 @@ func (pwm PWM) Set(value uint16) {
 	}
 }
 
-const (
-	Mode0 uint8 = iota
-	Mode1
-	Mode2
-	Mode3
+var (
+	InvalidClockSpeed = errors.New("In periphal mode only a clock speed of FCK4 or lower is allowed")
 )
 
-type SPIClock uint8
+type SPIClockSpeed uint8
 
 const (
-	SPI_CLOCK_FCK2   SPIClock = 0
-	SPI_CLOCK_FCK4            = 1
-	SPI_CLOCK_FCK8            = 2
-	SPI_CLOCK_FCK16           = 3
-	SPI_CLOCK_FCK32           = 4
-	SPI_CLOCK_FCK64           = 5
-	SPI_CLOCK_FCK128          = 7
+	SPI_CLOCK_FOSC4         SPIClockSpeed = 0
+	SPI_CLOCK_FOSC16        SPIClockSpeed = 1
+	SPI_CLOCK_FOSC64_double SPIClockSpeed = 2
+	SPI_CLOCK_FOSC128       SPIClockSpeed = 3
+	SPI_CLOCK_FOSC2         SPIClockSpeed = 4
+	SPI_CLOCK_FOSC8         SPIClockSpeed = 5
+	SPI_CLOCK_FOSC32        SPIClockSpeed = 6
+	SPI_CLOCK_FOSC64        SPIClockSpeed = 7
 
-	SPI_CLOCK_MASK   = 0x03
-	SPI_2XCLOCK_MASK = 0x01
+	SPI_CLOCK_MASK   uint8 = 0x03
+	SPI_2XCLOCK_MASK uint8 = 0x01
+
+	SPI_CPOL_HIGHIDLE bool = true
 )
 
 type SPIConfig struct {
-	IsSlave  bool
-	LSB      bool
-	MaxSpeed SPIClock
-	Mode     uint8
-	SDI      Pin
-	SDO      Pin
-	SCK      Pin
+	IsPeriphal bool
+	LSB        bool
+	MaxSpeed   SPIClockSpeed
+	Mode       uint8
+	SDI        Pin
+	SDO        Pin
+	SCK        Pin
+	CPOL       bool
 }
 
+// SPI is for the Serial Peripheral Interface
+// Data is taken from http://ww1.microchip.com/downloads/en/DeviceDoc/ATmega48A-PA-88A-PA-168A-PA-328-P-DS-DS40002061A.pdf page 169 and following
 type SPI struct {
 }
 
 var SPI0 = SPI{}
 
-func (spi SPI) Configure(config SPIConfig) {
-	setMode(config.Mode)
+// Configure uses the given config to setup the SPI interface
+func (spi SPI) Configure(config SPIConfig) error {
+	// When the SPI is configured as Periphal, the SPI is only ensured to work at fosc/4 or lower. Info is taken from the Datasheet
+	if config.IsPeriphal && config.MaxSpeed > SPI_CLOCK_FOSC4 {
+		return InvalidClockSpeed
+	}
+
+	spi.setMode(config.Mode)
 
 	if config.LSB {
 		spi.LSB()
@@ -135,63 +145,81 @@ func (spi SPI) Configure(config SPIConfig) {
 		spi.MSB()
 	}
 
-	// Invert the SPI2X bit
-	config.MaxSpeed ^= 0x1
+	if config.CPOL {
+		//When this bit is written to one, SCK is high when idle
+		avr.SPCR.SetBits(avr.SPCR_CPOL)
+	} else {
+		//When this bit is written to zero, SCK is low when idle
+		avr.SPCR.ClearBits(avr.SPCR_CPOL)
+	}
+
+	// Set the SPI2X: Double SPI Speed bit in Bit 0 of SPSR
 	avr.SPSR.SetBits(uint8(config.MaxSpeed) & SPI_2XCLOCK_MASK)
 
-	if config.IsSlave {
-		spi.Slave(config)
+	if config.IsPeriphal {
+		spi.Periphal(config)
 	} else {
-		spi.Master(config)
+		spi.Controller(config)
 	}
+
+	return nil
 }
 
-func (s SPI) LSB() {
+// LSB sets LSB mode
+func (SPI) LSB() {
 	avr.SPCR.SetBits(avr.SPCR_DORD)
 }
 
-func (s SPI) MSB() {
+// MSB sets MSB mode
+func (SPI) MSB() {
 	avr.SPCR.ClearBits(avr.SPCR_DORD)
 }
 
-func (spi SPI) Master(config SPIConfig) {
+// Controller setup the SPI interface as controller
+func (SPI) Controller(config SPIConfig) {
 	avr.DDRB.SetBits(uint8(config.SDO) | uint8(config.SCK))        // set sdo, sck as output, all other input
 	avr.DDRB.ClearBits(1 << 4)                                     // sck is high when idle
-	avr.SPCR.SetBits(avr.SPCR_MSTR | avr.SPCR_SPR0 | avr.SPCR_SPE) // set master, set clock rate fck/16, enable spi
+	avr.SPCR.SetBits(avr.SPCR_MSTR | avr.SPCR_SPR0 | avr.SPCR_SPE) // set controller, set clock rate fck/16, enable spi
 }
 
-func (spi SPI) Slave(s SPIConfig) {
-	avr.DDRB.SetBits(1 << uint8(s.SDI))            // set sdi output, all other input
-	avr.SPCR.ClearBits(avr.SPCR_MSTR)              // set slave
+// Periphal setup the SPI interface as periphal
+func (SPI) Periphal(config SPIConfig) {
+	avr.DDRB.SetBits(uint8(config.SDI))            // set sdi output, all other input
+	avr.SPCR.ClearBits(avr.SPCR_MSTR)              // set periphal
 	avr.SPCR.SetBits(avr.SPCR_SPR0 | avr.SPCR_SPE) // set clock rate fck/16, enable spi
 }
 
-func (SPI) Transfer(b byte) byte {
+// Transfer writes the byte into the register and returns it's content
+func (spi SPI) Transfer(b byte) byte {
 	avr.SPDR.Set(uint8(b))
 
-	waitForRegisterShift()
+	spi.waitForRegisterShift()
 
 	return byte(avr.SPDR.Reg)
 }
 
-func (s SPI) Receive() byte {
-	waitForRegisterShift()
+// Receive reads a byte from the register
+func (spi SPI) Receive() byte {
+	spi.waitForRegisterShift()
 
 	return byte(avr.SPDR.Reg)
 }
 
-func (s SPI) Send(b byte) {
+// Send writes a byte to the SPDR register
+func (spi SPI) Send(b byte) {
 	avr.SPDR.Set(uint8(b))
 
-	waitForRegisterShift()
+	spi.waitForRegisterShift()
 }
 
-func waitForRegisterShift() {
+// waitForRegisterShift waits until the register has shifted
+func (SPI) waitForRegisterShift() {
 	for !avr.SPSR.HasBits(avr.SPSR_SPIF) {
 	}
 }
 
-func setMode(mode uint8) {
+// setMode sets the DataMode
+func (SPI) setMode(mode uint8) {
 	switch mode {
 	case 0:
 		avr.SPCR.ClearBits(avr.SPCR_CPOL)
@@ -206,6 +234,7 @@ func setMode(mode uint8) {
 		avr.SPCR.SetBits(avr.SPCR_CPOL)
 		avr.SPCR.SetBits(avr.SPCR_CPHA)
 	default:
+		// default is mode 0
 		avr.SPCR.ClearBits(avr.SPCR_CPOL)
 		avr.SPCR.ClearBits(avr.SPCR_CPHA)
 	}
