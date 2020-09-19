@@ -48,7 +48,9 @@ commands:
     steps:
       - run:
           name: "Install wasmtime"
-          command: curl https://wasmtime.dev/install.sh -sSf | bash
+          command: |
+            curl https://wasmtime.dev/install.sh -sSf | bash
+            sudo ln -s ~/.wasmtime/bin/wasmtime /usr/local/bin/wasmtime
   install-xtensa-toolchain:
     parameters:
       variant:
@@ -99,7 +101,7 @@ commands:
       - install-wasmtime
       - restore_cache:
           keys:
-            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}-
             - go-cache-v2-{{ checksum "go.mod" }}
       - llvm-source-linux
       - run: go install -tags=llvm<<parameters.llvm>> .
@@ -140,11 +142,12 @@ commands:
                 gcc-avr \
                 avr-libc
       - install-node
+      - install-wasmtime
       - install-xtensa-toolchain:
           variant: "linux-amd64"
       - restore_cache:
           keys:
-            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}-
             - go-cache-v2-{{ checksum "go.mod" }}
       - llvm-source-linux
       - restore_cache:
@@ -200,11 +203,12 @@ commands:
                 gcc-avr \
                 avr-libc
       - install-node
+      - install-wasmtime
       - install-xtensa-toolchain:
           variant: "linux-amd64"
       - restore_cache:
           keys:
-            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}-
             - go-cache-v2-{{ checksum "go.mod" }}
       - llvm-source-linux
       - restore_cache:
@@ -277,7 +281,7 @@ commands:
           variant: "macos"
       - restore_cache:
           keys:
-            - go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}-
             - go-cache-macos-v2-{{ checksum "go.mod" }}
       - restore_cache:
           keys:
