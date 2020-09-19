@@ -9,13 +9,13 @@ import (
 func TestAddGlobalsBitmap(t *testing.T) {
 	t.Parallel()
 	testTransform(t, "testdata/gc-globals", func(mod llvm.Module) {
-		AddGlobalsBitmap(mod)
+		AddGlobalsBitmap(mod, false)
 	})
 }
 
 func TestMakeGCStackSlots(t *testing.T) {
 	t.Parallel()
 	testTransform(t, "testdata/gc-stackslots", func(mod llvm.Module) {
-		MakeGCStackSlots(mod)
+		MakeGCStackSlots(mod, false)
 	})
 }
