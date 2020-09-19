@@ -2,26 +2,20 @@
 
 package runtime
 
-import "unsafe"
+import (
+	"unsafe"
 
-// Implements __wasi_ciovec_t and __wasi_iovec_t.
-type wasiIOVec struct {
-	buf    unsafe.Pointer
-	bufLen uint
-}
-
-//go:wasm-module wasi_unstable
-//export fd_write
-func fd_write(id uint32, iovs *wasiIOVec, iovs_len uint, nwritten *uint) (errno uint)
+	"github.com/tinygo-org/tinygo/src/syscall/wasi"
+)
 
 func postinit() {}
 
 // Using global variables to avoid heap allocation.
 var (
 	putcharBuf   = byte(0)
-	putcharIOVec = wasiIOVec{
-		buf:    unsafe.Pointer(&putcharBuf),
-		bufLen: 1,
+	putcharIOVec = wasi.IOVec{
+		Buf:    unsafe.Pointer(&putcharBuf),
+		BufLen: 1,
 	}
 )
 
@@ -30,7 +24,7 @@ func putchar(c byte) {
 	const stdout = 1
 	var nwritten uint
 	putcharBuf = c
-	fd_write(stdout, &putcharIOVec, 1, &nwritten)
+	wasi.Fd_write(stdout, &putcharIOVec, 1, &nwritten)
 }
 
 // Abort executes the wasm 'unreachable' instruction.

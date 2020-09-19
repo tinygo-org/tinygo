@@ -2,20 +2,21 @@
 
 package runtime
 
-import "unsafe"
+import (
+	"unsafe"
 
-type timeUnit float64
+	"github.com/tinygo-org/tinygo/src/syscall/wasi"
+)
+
+type timeUnit int64
 
 //export _start
 func _start() {
 	// These need to be initialized early so that the heap can be initialized.
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
-
 	run()
 }
-
-const asyncScheduler = true
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	return int64(ticks)
@@ -25,17 +26,36 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns)
 }
 
-// This function is called by the scheduler.
-// Schedule a call to runtime.scheduler, do not actually sleep.
-//export runtime.sleepTicks
-func sleepTicks(d timeUnit)
+const (
+	asyncScheduler           = false
+	timePrecisionNanoseconds = 1000 // TODO: how can we determine the appropriate `precision`?
+)
 
-//go:wasm-module wasi_unstable
-//export clock_time_get
-func clock_time_get(id uint32, precision uint64, timePtr *uint64) (errno uint)
+var (
+	sleepTicksSubscription = wasi.Subscription_t{
+		UserData: 0,
+		U: wasi.Subscription_u_t{
+			Tag: wasi.Eventtype_t_clock,
+			U: wasi.Subscription_clock_t{
+				UserData:  0,
+				ID:        0,
+				Timeout:   0,
+				Precision: timePrecisionNanoseconds,
+				Flags:     0,
+			},
+		},
+	}
+	sleepTicksResult  = wasi.Event_t{}
+	sleepTicksNEvents uint32
+)
+
+func sleepTicks(d timeUnit) {
+	sleepTicksSubscription.U.U.Timeout = int64(d)
+	wasi.Poll_oneoff(&sleepTicksSubscription, &sleepTicksResult, 1, &sleepTicksNEvents)
+}
 
 func ticks() timeUnit {
-	var time uint64
-	clock_time_get(0, 100, &time)
-	return timeUnit(time)
+	var nano int64
+	wasi.Clock_time_get(0, timePrecisionNanoseconds, &nano)
+	return timeUnit(nano)
 }
