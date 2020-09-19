@@ -11,9 +11,6 @@ import (
 func MakeGCStackSlots(mod llvm.Module, shouldHiveGlobals bool) bool {
 	// Check whether there are allocations at all.
 	alloc := mod.NamedFunction("runtime.alloc")
-	if shouldHiveGlobals {
-		alloc.SetVisibility(llvm.HiddenVisibility)
-	}
 	if alloc.IsNil() {
 		// Nothing to. Make sure all remaining bits and pieces for stack
 		// chains are neutralized.
@@ -22,10 +19,15 @@ func MakeGCStackSlots(mod llvm.Module, shouldHiveGlobals bool) bool {
 		}
 		stackChainStart := mod.NamedGlobal("runtime.stackChainStart")
 		if !stackChainStart.IsNil() {
+			stackChainStart.SetVisibility(llvm.HiddenVisibility)
 			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.Type().ElementType()))
 			stackChainStart.SetGlobalConstant(true)
 		}
 		return false
+	}
+
+	if shouldHiveGlobals {
+		alloc.SetVisibility(llvm.HiddenVisibility)
 	}
 
 	trackPointer := mod.NamedFunction("runtime.trackPointer")
@@ -88,9 +90,6 @@ func MakeGCStackSlots(mod llvm.Module, shouldHiveGlobals bool) bool {
 
 	// Collect some variables used below in the loop.
 	stackChainStart := mod.NamedGlobal("runtime.stackChainStart")
-	if shouldHiveGlobals {
-		stackChainStart.SetVisibility(llvm.HiddenVisibility)
-	}
 	if stackChainStart.IsNil() {
 		// This may be reached in a weird scenario where we call runtime.alloc but the garbage collector is unreachable.
 		// This can be accomplished by allocating 0 bytes.
@@ -99,6 +98,9 @@ func MakeGCStackSlots(mod llvm.Module, shouldHiveGlobals bool) bool {
 			use.EraseFromParentAsInstruction()
 		}
 		return false
+	}
+	if shouldHiveGlobals {
+		stackChainStart.SetVisibility(llvm.HiddenVisibility)
 	}
 	stackChainStartType := stackChainStart.Type().ElementType()
 	stackChainStart.SetInitializer(llvm.ConstNull(stackChainStartType))

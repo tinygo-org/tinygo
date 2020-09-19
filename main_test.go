@@ -97,6 +97,10 @@ func TestCompiler(t *testing.T) {
 			t.Run("WebAssembly", func(t *testing.T) {
 				runPlatTests("wasm", matches, t)
 			})
+
+			t.Run("WASI", func(t *testing.T) {
+				runPlatTests("wasi", matches, t)
+			})
 		}
 	}
 }
@@ -109,7 +113,6 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 
 		t.Run(filepath.Base(path), func(t *testing.T) {
 			t.Parallel()
-
 			runTest(path, target, t)
 		})
 	}
@@ -161,6 +164,11 @@ func runTest(path, target string, t *testing.T) {
 		PrintSizes: "",
 		WasmAbi:    "js",
 	}
+
+	if target == "wasi" {
+		config.WasmAbi = "generic"
+	}
+
 	binary := filepath.Join(tmpdir, "test")
 	err = runBuild("./"+path, binary, config)
 	if err != nil {

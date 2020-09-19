@@ -44,6 +44,11 @@ commands:
           command: |
             wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
             sudo apt install ./google-chrome-stable_current_amd64.deb
+  install-wasmtime:
+    steps:
+      - run:
+          name: "Install wasmtime"
+          command: curl https://wasmtime.dev/install.sh -sSf | bash
   install-xtensa-toolchain:
     parameters:
       variant:
@@ -91,6 +96,7 @@ commands:
           llvm: "<<parameters.llvm>>"
       - install-node
       - install-chrome
+      - install-wasmtime
       - restore_cache:
           keys:
             - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
