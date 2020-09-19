@@ -130,6 +130,7 @@ type SPIConfig struct {
 type SPI struct {
 }
 
+// SPI0 is the default SPI interface
 var SPI0 = SPI{}
 
 // Configure uses the given config to setup the SPI interface
