@@ -31,15 +31,15 @@ const (
 
 var (
 	sleepTicksSubscription = __wasi_subscription_t{
-		UserData: 0,
-		U: __wasi_subscription_u_t{
-			Tag: __wasi_eventtype_t_clock,
-			U: __wasi_subscription_clock_t{
-				UserData:  0,
-				ID:        0,
-				Timeout:   0,
-				Precision: timePrecisionNanoseconds,
-				Flags:     0,
+		userData: 0,
+		u: __wasi_subscription_u_t{
+			tag: __wasi_eventtype_t_clock,
+			u: __wasi_subscription_clock_t{
+				userData:  0,
+				id:        0,
+				timeout:   0,
+				precision: timePrecisionNanoseconds,
+				flags:     0,
 			},
 		},
 	}
@@ -48,7 +48,7 @@ var (
 )
 
 func sleepTicks(d timeUnit) {
-	sleepTicksSubscription.U.U.Timeout = int64(d)
+	sleepTicksSubscription.u.u.timeout = int64(d)
 	poll_oneoff(&sleepTicksSubscription, &sleepTicksResult, 1, &sleepTicksNEvents)
 }
 
@@ -79,24 +79,24 @@ const (
 type (
 	// https://github.com/wasmerio/wasmer/blob/1.0.0-alpha3/lib/wasi/src/syscalls/types.rs#L584-L588
 	__wasi_subscription_t struct {
-		UserData uint64
-		U        __wasi_subscription_u_t
+		userData uint64
+		u        __wasi_subscription_u_t
 	}
 
 	__wasi_subscription_u_t struct {
-		Tag __wasi_eventtype_t
+		tag __wasi_eventtype_t
 
 		// TODO: support fd_read/fd_write event
-		U __wasi_subscription_clock_t
+		u __wasi_subscription_clock_t
 	}
 
 	// https://github.com/wasmerio/wasmer/blob/1.0.0-alpha3/lib/wasi/src/syscalls/types.rs#L711-L718
 	__wasi_subscription_clock_t struct {
-		UserData  uint64
-		ID        uint32
-		Timeout   int64
-		Precision int64
-		Flags     uint16
+		userData  uint64
+		id        uint32
+		timeout   int64
+		precision int64
+		flags     uint16
 	}
 )
 
