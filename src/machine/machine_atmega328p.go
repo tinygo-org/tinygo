@@ -187,7 +187,6 @@ func (SPI) MSB() {
 
 // Controller setup the SPI interface as controller
 func (SPI) Controller(config SPIConfig) {
-
 	avr.DDRB.SetBits(uint8(config.SDO) | uint8(config.SCK)) // set sdo, sck as output, all other input
 	avr.DDRB.ClearBits(1 << 4)                              // sck is high when idle
 	// set controller, set clock rate, enable spi
