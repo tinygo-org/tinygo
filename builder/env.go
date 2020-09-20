@@ -40,13 +40,19 @@ func getClangHeaderPath(TINYGOROOT string) string {
 			// Example executable:
 			//     /usr/lib/llvm-9/bin/clang
 			// Example include path:
-			//     /usr/lib/llvm-9/lib/clang/9.0.1/include/
+			//     /usr/lib/llvm-9/lib64/clang/9.0.1/include/
 			llvmRoot := filepath.Dir(filepath.Dir(binpath))
-			clangVersionRoot := filepath.Join(llvmRoot, "lib", "clang")
+			clangVersionRoot := filepath.Join(llvmRoot, "lib64", "clang")
 			dirs, err := ioutil.ReadDir(clangVersionRoot)
 			if err != nil {
-				// Unexpected.
-				continue
+				// Example include path:
+				//     /usr/lib/llvm-9/lib/clang/9.0.1/include/
+				clangVersionRoot = filepath.Join(llvmRoot, "lib", "clang")
+				dirs, err = ioutil.ReadDir(clangVersionRoot)
+				if err != nil {
+					// Unexpected.
+					continue
+				}
 			}
 			dirnames := make([]string, len(dirs))
 			for i, d := range dirs {
