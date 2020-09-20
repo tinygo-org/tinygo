@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 
@@ -39,7 +40,7 @@ type TargetSpec struct {
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
 	ExtraFiles       []string `json:"extra-files"`
-	Emulator         []string `json:"emulator"`
+	Emulator         []string `json:"emulator" override:"copy"` // inherited Emulator must not be append
 	FlashCommand     string   `json:"flash-command"`
 	GDB              string   `json:"gdb"`
 	PortReset        string   `json:"flash-1200-bps-reset"`
@@ -56,100 +57,46 @@ type TargetSpec struct {
 	RelocationModel  string   `json:"relocation-model"`
 }
 
-// copyProperties copies all properties that are set in spec2 into itself.
-func (spec *TargetSpec) copyProperties(spec2 *TargetSpec) {
-	// TODO: simplify this using reflection? Inherits and BuildTags are special
-	// cases, but the rest can simply be copied if set.
-	spec.Inherits = append(spec.Inherits, spec2.Inherits...)
-	if spec2.Triple != "" {
-		spec.Triple = spec2.Triple
-	}
-	if spec2.CPU != "" {
-		spec.CPU = spec2.CPU
-	}
-	spec.Features = append(spec.Features, spec2.Features...)
-	if spec2.GOOS != "" {
-		spec.GOOS = spec2.GOOS
-	}
-	if spec2.GOARCH != "" {
-		spec.GOARCH = spec2.GOARCH
-	}
-	spec.BuildTags = append(spec.BuildTags, spec2.BuildTags...)
-	if spec2.GC != "" {
-		spec.GC = spec2.GC
-	}
-	if spec2.Scheduler != "" {
-		spec.Scheduler = spec2.Scheduler
-	}
-	if spec2.Compiler != "" {
-		spec.Compiler = spec2.Compiler
-	}
-	if spec2.Linker != "" {
-		spec.Linker = spec2.Linker
-	}
-	if spec2.RTLib != "" {
-		spec.RTLib = spec2.RTLib
-	}
-	if spec2.Libc != "" {
-		spec.Libc = spec2.Libc
-	}
-	if spec2.AutoStackSize != nil {
-		spec.AutoStackSize = spec2.AutoStackSize
-	}
-	if spec2.DefaultStackSize != 0 {
-		spec.DefaultStackSize = spec2.DefaultStackSize
-	}
-	spec.CFlags = append(spec.CFlags, spec2.CFlags...)
-	spec.LDFlags = append(spec.LDFlags, spec2.LDFlags...)
-	if spec2.LinkerScript != "" {
-		spec.LinkerScript = spec2.LinkerScript
-	}
-	spec.ExtraFiles = append(spec.ExtraFiles, spec2.ExtraFiles...)
-	if len(spec2.Emulator) != 0 {
-		spec.Emulator = spec2.Emulator
-	}
-	if spec2.FlashCommand != "" {
-		spec.FlashCommand = spec2.FlashCommand
-	}
-	if spec2.GDB != "" {
-		spec.GDB = spec2.GDB
-	}
-	if spec2.PortReset != "" {
-		spec.PortReset = spec2.PortReset
-	}
-	if spec2.FlashMethod != "" {
-		spec.FlashMethod = spec2.FlashMethod
-	}
-	if spec2.FlashVolume != "" {
-		spec.FlashVolume = spec2.FlashVolume
-	}
-	if spec2.FlashFilename != "" {
-		spec.FlashFilename = spec2.FlashFilename
-	}
-	if spec2.UF2FamilyID != "" {
-		spec.UF2FamilyID = spec2.UF2FamilyID
-	}
-	if spec2.BinaryFormat != "" {
-		spec.BinaryFormat = spec2.BinaryFormat
-	}
-	if spec2.OpenOCDInterface != "" {
-		spec.OpenOCDInterface = spec2.OpenOCDInterface
-	}
-	if spec2.OpenOCDTarget != "" {
-		spec.OpenOCDTarget = spec2.OpenOCDTarget
-	}
-	if spec2.OpenOCDTransport != "" {
-		spec.OpenOCDTransport = spec2.OpenOCDTransport
-	}
-	if spec2.JLinkDevice != "" {
-		spec.JLinkDevice = spec2.JLinkDevice
-	}
-	if spec2.CodeModel != "" {
-		spec.CodeModel = spec2.CodeModel
-	}
+// overrideProperties overrides all properties that are set in child into itself using reflection.
+func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
+	specType := reflect.TypeOf(spec).Elem()
+	specValue := reflect.ValueOf(spec).Elem()
+	childValue := reflect.ValueOf(child).Elem()
 
-	if spec2.RelocationModel != "" {
-		spec.RelocationModel = spec2.RelocationModel
+	for i := 0; i < specType.NumField(); i++ {
+		field := specType.Field(i)
+		src := childValue.Field(i)
+		dst := specValue.Field(i)
+
+		switch kind := field.Type.Kind(); kind {
+		case reflect.String: // for strings, just copy the field of child to spec if not empty
+			if src.Len() > 0 {
+				dst.Set(src)
+			}
+		case reflect.Uint, reflect.Uint32, reflect.Uint64: // for Uint, copy if not zero
+			if src.Uint() != 0 {
+				dst.Set(src)
+			}
+		case reflect.Ptr: // for pointers, copy if not nil
+			if !src.IsNil() {
+				dst.Set(src)
+			}
+		case reflect.Slice: // for slices...
+			if src.Len() > 0 { // ... if not empty ...
+				switch tag := field.Tag.Get("override"); tag {
+				case "copy":
+					// copy the field of child to spec
+					dst.Set(src)
+				case "append", "":
+					// or append the field of child to spec
+					dst.Set(reflect.AppendSlice(src, dst))
+				default:
+					panic("override mode must be 'copy' or 'append' (default). I don't know how to '" + tag + "'.")
+				}
+			}
+		default:
+			panic("unknown field type : " + kind.String())
+		}
 	}
 }
 
@@ -198,11 +145,11 @@ func (spec *TargetSpec) resolveInherits() error {
 		if err != nil {
 			return err
 		}
-		newSpec.copyProperties(subtarget)
+		newSpec.overrideProperties(subtarget)
 	}
 
 	// When all properties are loaded, make sure they are properly inherited.
-	newSpec.copyProperties(spec)
+	newSpec.overrideProperties(spec)
 	*spec = *newSpec
 
 	return nil
