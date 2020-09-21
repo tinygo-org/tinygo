@@ -135,9 +135,9 @@ func (spi SPI) Configure(config SPIConfig) error {
 	spi.setMode(config.Mode)
 
 	if config.LSBfirst {
-		spi.lsb()
+		spi.lsbFirst()
 	} else {
-		spi.msb()
+		spi.msbFirst()
 	}
 
 	// Set the SPI2X: Double SPI Speed bit in Bit 0 of SPSR
@@ -152,12 +152,12 @@ func (spi SPI) Configure(config SPIConfig) error {
 }
 
 // LSB sets LSB mode
-func (SPI) lsb() {
+func (SPI) lsbFirst() {
 	avr.SPCR.SetBits(avr.SPCR_DORD)
 }
 
 // MSB sets MSB mode
-func (SPI) msb() {
+func (SPI) msbFirst() {
 	avr.SPCR.ClearBits(avr.SPCR_DORD)
 }
 
