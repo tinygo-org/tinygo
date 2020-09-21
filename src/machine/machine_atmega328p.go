@@ -4,7 +4,6 @@ package machine
 
 import (
 	"device/avr"
-	"errors"
 	"runtime/volatile"
 )
 
@@ -90,10 +89,6 @@ func (pwm PWM) Set(value uint16) {
 	}
 }
 
-var (
-	InvalidClockSpeed = errors.New("In periphal mode only a clock speed of FCK4 or lower is allowed")
-)
-
 type SPIClockSpeed uint8
 
 const (
@@ -112,9 +107,7 @@ const (
 
 // SPIConfig
 type SPIConfig struct {
-	// IsPeriphal set to true, when you are operating not in controller mode
-	IsPeriphal bool
-	LSB        bool
+	LSBfirst   bool
 	ClockSpeed SPIClockSpeed
 	Mode       uint8
 	SDI        Pin
@@ -132,11 +125,6 @@ var SPI0 = SPI{}
 
 // Configure uses the given config to setup the SPI interface
 func (spi SPI) Configure(config SPIConfig) error {
-	// When the SPI is configured as Periphal, the SPI is only ensured to work at fosc/4 or lower. Info is taken from the Datasheet
-	if config.IsPeriphal && config.ClockSpeed > SPI_CLOCK_FOSC4 {
-		return InvalidClockSpeed
-	}
-
 	// Use default pins if not set.
 	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
 		config.SCK = PB5
@@ -146,7 +134,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 	spi.setMode(config.Mode)
 
-	if config.LSB {
+	if config.LSBfirst {
 		spi.lsb()
 	} else {
 		spi.msb()
