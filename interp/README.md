@@ -51,13 +51,13 @@ But why is it necessary at all? The answer is that globals with initializers are
 much easier to optimize by LLVM than initialization code. Also, there are a few
 other benefits:
 
-* Dead globals are trivial to optimize away.
-* Constant globals are easier to detect. Remember that Go does not have global
+  * Dead globals are trivial to optimize away.
+  * Constant globals are easier to detect. Remember that Go does not have global
     constants in the same sense as that C has them. Constants are useful because
     they can be propagated and provide some opportunities for other
     optimizations (like dead code elimination when branching on the contents of
     a global).
-* Constants are much more efficent on microcontrollers, as they can be
+  * Constants are much more efficent on microcontrollers, as they can be
     allocated in flash instead of RAM.
 
 For more details, see [this section of the
