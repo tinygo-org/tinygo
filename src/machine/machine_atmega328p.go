@@ -108,8 +108,6 @@ const (
 
 	SPI_CLOCK_MASK   uint8 = 0x03
 	SPI_2XCLOCK_MASK uint8 = 4
-
-	SPI_CPOL_HIGHIDLE bool = true
 )
 
 // SPIConfig
@@ -122,7 +120,6 @@ type SPIConfig struct {
 	SDI        Pin
 	SDO        Pin
 	SCK        Pin
-	CPOL       bool
 }
 
 // SPI is for the Serial Peripheral Interface
@@ -150,84 +147,41 @@ func (spi SPI) Configure(config SPIConfig) error {
 	spi.setMode(config.Mode)
 
 	if config.LSB {
-		spi.LSB()
+		spi.lsb()
 	} else {
-		spi.MSB()
-	}
-
-	if config.CPOL {
-		//When this bit is written to one, SCK is high when idle
-		avr.SPCR.SetBits(avr.SPCR_CPOL)
-	} else {
-		//When this bit is written to zero, SCK is low when idle
-		avr.SPCR.ClearBits(avr.SPCR_CPOL)
+		spi.msb()
 	}
 
 	// Set the SPI2X: Double SPI Speed bit in Bit 0 of SPSR
 	avr.SPSR.SetBits(((uint8(config.ClockSpeed) & SPI_2XCLOCK_MASK) >> 2))
 
-	if config.IsPeriphal {
-		spi.Periphal(config)
-	} else {
-		spi.Controller(config)
-	}
+	avr.DDRB.SetBits(uint8(config.SDO) | uint8(config.SCK)) // set sdo, sck as output, all other input
+	avr.DDRB.ClearBits(1 << 4)                              // sck is high when idle
+	// set controller, set clock rate, enable spi
+	avr.SPCR.SetBits(avr.SPCR_MSTR | (uint8(config.ClockSpeed) & avr.SPCR_SPR0) | (uint8(config.ClockSpeed) & avr.SPCR_SPR1) | avr.SPCR_SPE)
 
 	return nil
 }
 
 // LSB sets LSB mode
-func (SPI) LSB() {
+func (SPI) lsb() {
 	avr.SPCR.SetBits(avr.SPCR_DORD)
 }
 
 // MSB sets MSB mode
-func (SPI) MSB() {
+func (SPI) msb() {
 	avr.SPCR.ClearBits(avr.SPCR_DORD)
 }
 
-// Controller setup the SPI interface as controller
-func (SPI) Controller(config SPIConfig) {
-	avr.DDRB.SetBits(uint8(config.SDO) | uint8(config.SCK)) // set sdo, sck as output, all other input
-	avr.DDRB.ClearBits(1 << 4)                              // sck is high when idle
-	// set controller, set clock rate, enable spi
-	avr.SPCR.SetBits(avr.SPCR_MSTR | (uint8(config.ClockSpeed) & avr.SPCR_SPR0) | (uint8(config.ClockSpeed) & avr.SPCR_SPR1) | avr.SPCR_SPE)
-}
-
-// Periphal setup the SPI interface as periphal
-func (SPI) Periphal(config SPIConfig) {
-	avr.DDRB.SetBits(uint8(config.SDI)) // set sdi output, all other input
-	avr.SPCR.ClearBits(avr.SPCR_MSTR)   // set periphal
-	// set clock rate fck/16, enable spi
-	avr.SPCR.SetBits((uint8(config.ClockSpeed) & avr.SPCR_SPR0) | (uint8(config.ClockSpeed) & avr.SPCR_SPR1) | avr.SPCR_SPE)
-}
-
-// Transfer writes the byte into the register and returns it's content
+// Transfer writes the byte into the register and returns the read content
 func (spi SPI) Transfer(b byte) (byte, error) {
 	avr.SPDR.Set(uint8(b))
 
-	spi.waitForRegisterShift()
-
-	return byte(avr.SPDR.Reg), nil
-}
-
-// Receive reads a byte from the register
-func (spi SPI) Receive() byte {
-	spi.waitForRegisterShift()
-
-	return byte(avr.SPDR.Reg)
-}
-
-// Send writes a byte to the SPDR register
-func (spi SPI) Send(b byte) {
-	avr.SPDR.Set(uint8(b))
-
-	spi.waitForRegisterShift()
-}
-
-// waitForRegisterShift waits until the register has shifted
-func (SPI) waitForRegisterShift() {
+	// waits until the register has shifted
 	for !avr.SPSR.HasBits(avr.SPSR_SPIF) {
 	}
+
+	return byte(avr.SPDR.Reg), nil
 }
 
 // setMode sets the DataMode
