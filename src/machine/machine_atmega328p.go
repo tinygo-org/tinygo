@@ -134,7 +134,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 	// set default frequency
 	if config.Frequency == 0 {
-		config.Frequency = 4000000
+		config.Frequency = 6000000
 	}
 
 	var clockDivider uint8
