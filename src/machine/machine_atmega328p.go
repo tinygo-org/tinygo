@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/avr"
+	"errors"
 	"runtime/volatile"
 )
 
@@ -89,30 +90,29 @@ func (pwm PWM) Set(value uint16) {
 	}
 }
 
-type SPIClockSpeed uint8
-
 const (
-	SPI_CLOCK_FOSC4         SPIClockSpeed = 0
-	SPI_CLOCK_FOSC16        SPIClockSpeed = 1
-	SPI_CLOCK_FOSC64        SPIClockSpeed = 2
-	SPI_CLOCK_FOSC128       SPIClockSpeed = 3
-	SPI_CLOCK_FOSC2         SPIClockSpeed = 4
-	SPI_CLOCK_FOSC8         SPIClockSpeed = 5
-	SPI_CLOCK_FOSC32        SPIClockSpeed = 6
-	SPI_CLOCK_FOSC64_Double SPIClockSpeed = 7
-
-	SPI_CLOCK_MASK   uint8 = 0x03
-	SPI_2XCLOCK_MASK uint8 = 4
+	SPI_CLOCK_FOSC4         uint8 = 0
+	SPI_CLOCK_FOSC16        uint8 = 1
+	SPI_CLOCK_FOSC64        uint8 = 2
+	SPI_CLOCK_FOSC128       uint8 = 3
+	SPI_CLOCK_FOSC2         uint8 = 4
+	SPI_CLOCK_FOSC8         uint8 = 5
+	SPI_CLOCK_FOSC32        uint8 = 6
+	SPI_CLOCK_FOSC64_Double uint8 = 7
+	SPI_CLOCK_MASK          uint8 = 0x03
+	SPI_2XCLOCK_MASK        uint8 = 4
 )
 
 // SPIConfig
 type SPIConfig struct {
-	LSBfirst   bool
-	ClockSpeed SPIClockSpeed
-	Mode       uint8
-	SDI        Pin
-	SDO        Pin
-	SCK        Pin
+	LSBfirst bool
+	// Frequency defaults to 4000000Hertz if not set
+	Frequency uint32
+	// Mode can be 0, 1, 2, 3, 4, 5
+	Mode uint8
+	SDI  Pin
+	SDO  Pin
+	SCK  Pin
 }
 
 // SPI is for the Serial Peripheral Interface
@@ -132,6 +132,29 @@ func (spi SPI) Configure(config SPIConfig) error {
 		config.SDI = PB4
 	}
 
+	// set default frequency
+	if config.Frequency == 0 {
+		config.Frequency = 4000000
+	}
+
+	var clockDivider uint8
+	switch {
+	case config.Frequency >= 93750 && config.Frequency < 187500:
+		clockDivider = SPI_CLOCK_FOSC128
+	case config.Frequency >= 187500 && config.Frequency < 375000:
+		clockDivider = SPI_CLOCK_FOSC64
+	case config.Frequency >= 375000 && config.Frequency < 750000:
+		clockDivider = SPI_CLOCK_FOSC32
+	case config.Frequency >= 750000 && config.Frequency < 1500000:
+		clockDivider = SPI_CLOCK_FOSC16
+	case config.Frequency >= 1500000 && config.Frequency < 3000000:
+		clockDivider = SPI_CLOCK_FOSC8
+	case config.Frequency >= 3000000 && config.Frequency <= 6000000:
+		clockDivider = SPI_CLOCK_FOSC4
+	default:
+		return errors.New("invalid clock speed for spi")
+	}
+
 	spi.setMode(config.Mode)
 
 	if config.LSBfirst {
@@ -141,12 +164,12 @@ func (spi SPI) Configure(config SPIConfig) error {
 	}
 
 	// Set the SPI2X: Double SPI Speed bit in Bit 0 of SPSR
-	avr.SPSR.SetBits(((uint8(config.ClockSpeed) & SPI_2XCLOCK_MASK) >> 2))
+	avr.SPSR.SetBits((clockDivider & SPI_2XCLOCK_MASK) >> 2)
 
 	avr.DDRB.SetBits(uint8(config.SDO) | uint8(config.SCK)) // set sdo, sck as output, all other input
 	avr.DDRB.ClearBits(1 << 4)                              // sck is high when idle
 	// set controller, set clock rate, enable spi
-	avr.SPCR.SetBits(avr.SPCR_MSTR | (uint8(config.ClockSpeed) & avr.SPCR_SPR0) | (uint8(config.ClockSpeed) & avr.SPCR_SPR1) | avr.SPCR_SPE)
+	avr.SPCR.SetBits(avr.SPCR_MSTR | (clockDivider & avr.SPCR_SPR0) | (clockDivider & avr.SPCR_SPR1) | avr.SPCR_SPE)
 
 	return nil
 }
