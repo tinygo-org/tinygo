@@ -470,6 +470,7 @@ func addInterrupt(interrupts map[string]*interrupt, name, interruptName string, 
 
 func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPrefix string) []Bitfield {
 	var fields []Bitfield
+	enumSeen := map[string]bool{}
 	for _, fieldEl := range fieldEls {
 		// Some bitfields (like the STM32H7x7) contain invalid bitfield
 		// names like "CNT[31]". Replace invalid characters with "_" when
@@ -548,11 +549,21 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 					panic(err)
 				}
 			}
+			enumName = fmt.Sprintf("%s_%s%s_%s_%s", groupName, bitfieldPrefix, regName, fieldName, enumName)
+			_, seen := enumSeen[enumName]
+			enumSeen[enumName] = seen
 			fields = append(fields, Bitfield{
-				name:        fmt.Sprintf("%s_%s%s_%s_%s", groupName, bitfieldPrefix, regName, fieldName, enumName),
+				name:        enumName,
 				description: enumDescription,
 				value:       uint32(enumValue),
 			})
+		}
+	}
+	// check if any of the field names appeared more than once. if so, append
+	// its value onto its name to ensure each name is unique.
+	for i, field := range fields {
+		if dup, seen := enumSeen[field.name]; dup && seen {
+			fields[i].name = fmt.Sprintf("%s_%d", field.name, field.value)
 		}
 	}
 	return fields
