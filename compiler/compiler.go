@@ -31,6 +31,21 @@ func init() {
 // The TinyGo import path.
 const tinygoPath = "github.com/tinygo-org/tinygo"
 
+// runtimeTypeNames lists all types used in getLLVMRuntimeType. They should be
+// declared before the rest of the module is compiled, to make
+// getLLVMRuntimeType work correctly.
+//
+// Type names are grouped together by shared functionality.
+var runtimeTypeNames = []string{
+	"channel", "chanSelectState", "channelBlockedList",
+	"_defer",
+	"funcValue", "funcValueWithSignature",
+	"hashmap", "hashmapIterator",
+	"_interface", "typeInInterface", "typecodeID", "interfaceMethodInfo",
+	"_string", "stringIterator",
+	"structField",
+}
+
 // compilerContext contains function-independent data that should still be
 // available while compiling every function. It is not strictly read-only, but
 // must not contain function-dependent data such as an IR builder.
@@ -51,6 +66,7 @@ type compilerContext struct {
 	ir               *ir.Program
 	diagnostics      []error
 	astComments      map[string]*ast.CommentGroup
+	runtimeTypes     map[string]llvm.Type
 }
 
 // builder contains all information relevant to build a single function.
@@ -234,14 +250,10 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	// TODO: lazily create runtime types in getLLVMRuntimeType when they are
 	// needed. Eventually this will be required anyway, when packages are
 	// compiled independently (and the runtime types are not available).
-	for _, member := range c.ir.Program.ImportedPackage("runtime").Members {
-		if member, ok := member.(*ssa.Type); ok {
-			if typ, ok := member.Type().(*types.Named); ok {
-				if _, ok := typ.Underlying().(*types.Struct); ok {
-					c.getLLVMType(typ)
-				}
-			}
-		}
+	c.runtimeTypes = make(map[string]llvm.Type)
+	for _, name := range runtimeTypeNames {
+		member := c.ir.Program.ImportedPackage("runtime").Members[name].(*ssa.Type)
+		c.runtimeTypes[name] = c.getLLVMType(member.Type())
 	}
 
 	// Declare all functions.
@@ -363,16 +375,15 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 }
 
 // getLLVMRuntimeType obtains a named type from the runtime package and returns
-// it as a LLVM type, creating it if necessary. It is a shorthand for
+// it as a LLVM type. Getting a type this way should be faster than with
 // getLLVMType(getRuntimeType(name)).
 func (c *compilerContext) getLLVMRuntimeType(name string) llvm.Type {
-	fullName := "runtime." + name
-	typ := c.mod.GetTypeByName(fullName)
-	if typ.IsNil() {
-		println(c.mod.String())
-		panic("could not find runtime type: " + fullName)
+	if typ, ok := c.runtimeTypes[name]; ok {
+		return typ
 	}
-	return typ
+	// Note: if a type is not found (when a new runtime type is added for
+	// example), it may need to be added to runtimeTypeNames at the top.
+	panic("could not find runtime type: runtime." + name)
 }
 
 // getLLVMType creates and returns a LLVM type for a Go type. In the case of
