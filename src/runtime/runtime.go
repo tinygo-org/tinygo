@@ -64,6 +64,13 @@ func nanotime() int64 {
 	return ticksToNanoseconds(ticks())
 }
 
+// Go 1.11 compatibility.
+// See: https://github.com/golang/go/commit/ff51353c3887b9d83130d958fb503ff1f2291fde
+//go:linkname timeRuntimeNano time.runtimeNano
+func timeRuntimeNano() int64 {
+	return nanotime()
+}
+
 // timeOffset is how long the monotonic clock started after the Unix epoch. It
 // should be a positive integer under normal operation or zero when it has not
 // been set.

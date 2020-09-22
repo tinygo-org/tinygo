@@ -438,6 +438,19 @@ func (c *compilerContext) getLLVMType(goType types.Type) llvm.Type {
 			// LLVM. This is because it is otherwise impossible to create
 			// self-referencing types such as linked lists.
 			llvmName := typ.Obj().Pkg().Path() + "." + typ.Obj().Name()
+			if llvmName == "runtime.timer" {
+				// This is a hack. The types time.runtimeTimer and runtime.timer
+				// are structurally identical, but because they are not exposed
+				// they can't be the same named Go type. However, functions such
+				// as time.startTimer expect their definitions to be provided by
+				// the runtime (with a *time.runtimeTimer parameter). LLVM
+				// doesn't allow such a mismatched parameter, unfortunately (at
+				// least not until opaque pointer types are supported).
+				// I dislike this hack, but the alternative would involve much
+				// more invasive changes to the compiler.
+				// Hopefully this is the only type that needs such a treatment.
+				llvmName = "time.runtimeTimer"
+			}
 			llvmType := c.mod.GetTypeByName(llvmName)
 			if llvmType.IsNil() {
 				llvmType = c.ctx.StructCreateNamed(llvmName)

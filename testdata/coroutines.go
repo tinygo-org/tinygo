@@ -71,6 +71,42 @@ func main() {
 	startSimpleFunc(emptyFunc)
 
 	time.Sleep(2 * time.Millisecond)
+
+	// Test ticker.
+	ticker := time.NewTicker(time.Millisecond * 10)
+	println("waiting on ticker")
+	go func() {
+		time.Sleep(time.Millisecond * 5)
+		println(" - after 5ms")
+		time.Sleep(time.Millisecond * 10)
+		println(" - after 15ms")
+		time.Sleep(time.Millisecond * 10)
+		println(" - after 25ms")
+	}()
+	<-ticker.C
+	println("waited on ticker at 10ms")
+	<-ticker.C
+	println("waited on ticker at 20ms")
+	ticker.Stop()
+	time.Sleep(time.Millisecond * 20)
+	select {
+	case <-ticker.C:
+		println("fail: ticker should have stopped!")
+	default:
+		println("ticker was stopped (didn't send anything after 50ms)")
+	}
+
+	timer := time.NewTimer(time.Millisecond * 10)
+	println("waiting on timer")
+	go func() {
+		time.Sleep(time.Millisecond * 5)
+		println(" - after 5ms")
+		time.Sleep(time.Millisecond * 10)
+		println(" - after 15ms")
+	}()
+	<-timer.C
+	println("waited on timer at 10ms")
+	time.Sleep(time.Millisecond * 10)
 }
 
 func acquire(m *sync.Mutex) {

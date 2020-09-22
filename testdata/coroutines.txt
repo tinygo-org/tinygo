@@ -20,3 +20,14 @@ acquired mutex from goroutine
 released mutex from goroutine
 re-acquired mutex
 done
+waiting on ticker
+ - after 5ms
+waited on ticker at 10ms
+ - after 15ms
+waited on ticker at 20ms
+ - after 25ms
+ticker was stopped (didn't send anything after 50ms)
+waiting on timer
+ - after 5ms
+waited on timer at 10ms
+ - after 15ms
