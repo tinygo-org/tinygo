@@ -3,7 +3,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 
 %runtime.stackChainObject = type { %runtime.stackChainObject*, i32 }
 
-@runtime.stackChainStart = global %runtime.stackChainObject* null
+@runtime.stackChainStart = internal global %runtime.stackChainObject* null
 @someGlobal = global i8 3
 
 declare void @runtime.trackPointer(i8* nocapture readonly)

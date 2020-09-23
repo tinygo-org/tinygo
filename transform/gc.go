@@ -8,7 +8,7 @@ import (
 
 // MakeGCStackSlots converts all calls to runtime.trackPointer to explicit
 // stores to stack slots that are scannable by the GC.
-func MakeGCStackSlots(mod llvm.Module, shouldHiveGlobals bool) bool {
+func MakeGCStackSlots(mod llvm.Module) bool {
 	// Check whether there are allocations at all.
 	alloc := mod.NamedFunction("runtime.alloc")
 	if alloc.IsNil() {
@@ -19,9 +19,7 @@ func MakeGCStackSlots(mod llvm.Module, shouldHiveGlobals bool) bool {
 		}
 		stackChainStart := mod.NamedGlobal("runtime.stackChainStart")
 		if !stackChainStart.IsNil() {
-			if shouldHiveGlobals {
-				stackChainStart.SetVisibility(llvm.HiddenVisibility)
-			}
+			stackChainStart.SetLinkage(llvm.InternalLinkage)
 			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.Type().ElementType()))
 			stackChainStart.SetGlobalConstant(true)
 		}
@@ -97,9 +95,7 @@ func MakeGCStackSlots(mod llvm.Module, shouldHiveGlobals bool) bool {
 		}
 		return false
 	}
-	if shouldHiveGlobals {
-		stackChainStart.SetVisibility(llvm.HiddenVisibility)
-	}
+	stackChainStart.SetLinkage(llvm.InternalLinkage)
 	stackChainStartType := stackChainStart.Type().ElementType()
 	stackChainStart.SetInitializer(llvm.ConstNull(stackChainStartType))
 
@@ -291,7 +287,7 @@ func MakeGCStackSlots(mod llvm.Module, shouldHiveGlobals bool) bool {
 // bitmap (bit vector) to locate all the pointers in this large global. This
 // bitmap allows the GC to know in advance where exactly all the pointers live
 // in the large globals bundle, to avoid false positives.
-func AddGlobalsBitmap(mod llvm.Module, shouldHiveGlobals bool) bool {
+func AddGlobalsBitmap(mod llvm.Module) bool {
 	if mod.NamedGlobal("runtime.trackedGlobalsStart").IsNil() {
 		return false // nothing to do: no GC in use
 	}
@@ -339,18 +335,14 @@ func AddGlobalsBitmap(mod llvm.Module, shouldHiveGlobals bool) bool {
 	// Update trackedGlobalsStart, which points to the globals bundle.
 	trackedGlobalsStart := llvm.ConstPtrToInt(globalsBundle, uintptrType)
 	mod.NamedGlobal("runtime.trackedGlobalsStart").SetInitializer(trackedGlobalsStart)
-	if shouldHiveGlobals {
-		mod.NamedGlobal("runtime.trackedGlobalsStart").SetVisibility(llvm.HiddenVisibility)
-	}
+	mod.NamedGlobal("runtime.trackedGlobalsStart").SetLinkage(llvm.InternalLinkage)
 
 	// Update trackedGlobalsLength, which contains the length (in words) of the
 	// globals bundle.
 	alignment := targetData.PrefTypeAlignment(llvm.PointerType(ctx.Int8Type(), 0))
 	trackedGlobalsLength := llvm.ConstInt(uintptrType, targetData.TypeAllocSize(globalsBundleType)/uint64(alignment), false)
+	mod.NamedGlobal("runtime.trackedGlobalsLength").SetLinkage(llvm.InternalLinkage)
 	mod.NamedGlobal("runtime.trackedGlobalsLength").SetInitializer(trackedGlobalsLength)
-	if shouldHiveGlobals {
-		mod.NamedGlobal("runtime.trackedGlobalsLength").SetVisibility(llvm.HiddenVisibility)
-	}
 
 	// Create a bitmap (a new global) that stores for each word in the globals
 	// bundle whether it contains a pointer. This allows globals to be scanned
@@ -369,9 +361,7 @@ func AddGlobalsBitmap(mod llvm.Module, shouldHiveGlobals bool) bool {
 	bitmapOld.ReplaceAllUsesWith(llvm.ConstBitCast(bitmapNew, bitmapOld.Type()))
 	bitmapNew.SetInitializer(bitmapArray)
 	bitmapNew.SetName("runtime.trackedGlobalsBitmap")
-	if shouldHiveGlobals {
-		bitmapNew.SetVisibility(llvm.HiddenVisibility)
-	}
+	bitmapNew.SetLinkage(llvm.InternalLinkage)
 
 	return true // the IR was changed
 }
