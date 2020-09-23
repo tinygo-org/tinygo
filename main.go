@@ -351,13 +351,17 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				// Assume QEMU as an emulator.
 				if config.Target.Emulator[0] == "mgba" {
 					gdbInterface = "mgba"
-				} else {
+				} else if strings.HasPrefix(config.Target.Emulator[0], "qemu-system-") {
 					gdbInterface = "qemu"
+				} else {
+					gdbInterface = "qemu-user"
 				}
 			} else if openocdInterface != "" && config.Target.OpenOCDTarget != "" {
 				gdbInterface = "openocd"
 			} else if config.Target.JLinkDevice != "" {
 				gdbInterface = "jlink"
+			} else {
+				gdbInterface = "native"
 			}
 		}
 
@@ -406,6 +410,14 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary, "-s", "-S")
+			daemon = exec.Command(config.Target.Emulator[0], args...)
+			daemon.Stdout = os.Stdout
+			daemon.Stderr = os.Stderr
+		case "qemu-user":
+			gdbCommands = append(gdbCommands, "target remote :1234")
+
+			// Run in an emulator.
+			args := append(config.Target.Emulator[1:], "-g", "1234", result.Binary)
 			daemon = exec.Command(config.Target.Emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
