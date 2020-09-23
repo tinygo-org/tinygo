@@ -28,6 +28,7 @@ commands:
                 qemu-user \
                 gcc-avr \
                 avr-libc
+            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-8-dev
   install-node:
     steps:
       - run:
@@ -133,7 +134,6 @@ commands:
           command: |
             sudo apt-get install \
                 gcc-arm-linux-gnueabihf \
-                binutils-arm-none-eabi \
                 libc6-dev-armel-cross \
                 gcc-aarch64-linux-gnu \
                 libc6-dev-arm64-cross \
@@ -141,6 +141,7 @@ commands:
                 qemu-user \
                 gcc-avr \
                 avr-libc
+            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-6-dev
       - install-node
       - install-wasmtime
       - install-xtensa-toolchain:
@@ -194,7 +195,6 @@ commands:
           command: |
             sudo apt-get install \
                 gcc-arm-linux-gnueabihf \
-                binutils-arm-none-eabi \
                 libc6-dev-armel-cross \
                 gcc-aarch64-linux-gnu \
                 libc6-dev-arm64-cross \
@@ -202,6 +202,7 @@ commands:
                 qemu-user \
                 gcc-avr \
                 avr-libc
+            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-6-dev
       - install-node
       - install-wasmtime
       - install-xtensa-toolchain:
