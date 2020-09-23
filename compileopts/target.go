@@ -231,16 +231,15 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	// No target spec available. Use the default one, useful on most systems
 	// with a regular OS.
 	spec := TargetSpec{
-		Triple:      triple,
-		GOOS:        goos,
-		GOARCH:      goarch,
-		BuildTags:   []string{goos, goarch},
-		Compiler:    "clang",
-		Linker:      "cc",
-		CFlags:      []string{"--target=" + triple},
-		GDB:         "gdb",
-		PortReset:   "false",
-		FlashMethod: "native",
+		Triple:    triple,
+		GOOS:      goos,
+		GOARCH:    goarch,
+		BuildTags: []string{goos, goarch},
+		Compiler:  "clang",
+		Linker:    "cc",
+		CFlags:    []string{"--target=" + triple},
+		GDB:       "gdb",
+		PortReset: "false",
 	}
 	if goos == "darwin" {
 		spec.LDFlags = append(spec.LDFlags, "-Wl,-dead_strip")
@@ -249,16 +248,15 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	}
 	if goarch != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.
+		spec.GDB = "gdb-multiarch"
 		if goarch == "arm" && goos == "linux" {
 			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/arm-linux-gnueabihf")
 			spec.Linker = "arm-linux-gnueabihf-gcc"
-			spec.GDB = "arm-linux-gnueabihf-gdb"
 			spec.Emulator = []string{"qemu-arm", "-L", "/usr/arm-linux-gnueabihf"}
 		}
 		if goarch == "arm64" && goos == "linux" {
 			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/aarch64-linux-gnu")
 			spec.Linker = "aarch64-linux-gnu-gcc"
-			spec.GDB = "aarch64-linux-gnu-gdb"
 			spec.Emulator = []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"}
 		}
 		if goarch == "386" && runtime.GOARCH == "amd64" {
