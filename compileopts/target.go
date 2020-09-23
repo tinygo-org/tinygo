@@ -215,6 +215,7 @@ func LoadTarget(target string) (*TargetSpec, error) {
 		}
 		goarch := map[string]string{ // map from LLVM arch to Go arch
 			"i386":    "386",
+			"i686":    "386",
 			"x86_64":  "amd64",
 			"aarch64": "arm64",
 			"armv7":   "arm",
@@ -260,9 +261,9 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			spec.GDB = "aarch64-linux-gnu-gdb"
 			spec.Emulator = []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"}
 		}
-		if goarch == "386" {
-			spec.CFlags = []string{"-m32"}
-			spec.LDFlags = []string{"-m32"}
+		if goarch == "386" && runtime.GOARCH == "amd64" {
+			spec.CFlags = append(spec.CFlags, "-m32")
+			spec.LDFlags = append(spec.LDFlags, "-m32")
 		}
 	}
 	return &spec, nil

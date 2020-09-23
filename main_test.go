@@ -78,6 +78,9 @@ func TestCompiler(t *testing.T) {
 	}
 
 	if runtime.GOOS == "linux" {
+		t.Run("X86Linux", func(t *testing.T) {
+			runPlatTests("i386--linux-gnu", matches, t)
+		})
 		t.Run("ARMLinux", func(t *testing.T) {
 			runPlatTests("arm--linux-gnueabihf", matches, t)
 		})
@@ -181,10 +184,11 @@ func runTest(path, target string, t *testing.T) {
 			t.Fatal("failed to load target spec:", err)
 		}
 		if len(spec.Emulator) == 0 {
-			t.Fatal("no emulator available for target:", target)
+			cmd = exec.Command(binary)
+		} else {
+			args := append(spec.Emulator[1:], binary)
+			cmd = exec.Command(spec.Emulator[0], args...)
 		}
-		args := append(spec.Emulator[1:], binary)
-		cmd = exec.Command(spec.Emulator[0], args...)
 	}
 	stdout := &bytes.Buffer{}
 	cmd.Stdout = stdout
