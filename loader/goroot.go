@@ -15,7 +15,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -89,10 +88,7 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 			return "", err
 		}
 	}
-	err = mergeDirectory(goroot, tinygoroot, tmpgoroot, "", pathsToOverride(
-		needsSyscallPackage(config.BuildTags()),
-		needsTimePackage(config.BuildTags()),
-	))
+	err = mergeDirectory(goroot, tinygoroot, tmpgoroot, "", pathsToOverride(needsSyscallPackage(config.BuildTags())))
 	if err != nil {
 		return "", err
 	}
@@ -168,17 +164,6 @@ func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides 
 			return err
 		}
 		for _, e := range gorootEntries {
-			if isMergeTargetEntry(importPath, e.Name()) {
-				// In this case, we have files both from TinyGo and Go.
-				// As of now, this is only for WASI to have *_wasi.go files as replacements for *_js.go files
-				newname := filepath.Join(tmpgoroot, "src", importPath, e.Name())
-				oldname := filepath.Join(goroot, "src", importPath, e.Name())
-				err := symlink(oldname, newname)
-				if err != nil {
-					return err
-				}
-				continue
-			}
 			if !e.IsDir() {
 				// Don't merge in files from Go. Otherwise we'd end up with a
 				// weird syscall package with files from both roots.
@@ -200,11 +185,6 @@ func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides 
 	return nil
 }
 
-func isMergeTargetEntry(importPath string, name string) bool {
-	// TODO: add crypto/rand
-	return importPath == "time" && !strings.HasSuffix(name, "_js.go")
-}
-
 // needsSyscallPackage returns whether the syscall package should be overriden
 // with the TinyGo version. This is the case on some targets.
 func needsSyscallPackage(buildTags []string) bool {
@@ -216,20 +196,9 @@ func needsSyscallPackage(buildTags []string) bool {
 	return false
 }
 
-// needsTimePackage returns whether the time package should be merged
-// with the TinyGo version. This is the case on some targets.
-func needsTimePackage(buildTags []string) bool {
-	for _, tag := range buildTags {
-		if tag == "wasi" {
-			return true
-		}
-	}
-	return false
-}
-
 // The boolean indicates whether to merge the subdirs. True means merge, false
 // means use the TinyGo version.
-func pathsToOverride(needsSyscallPackage, needsTimePackage bool) map[string]bool {
+func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 	paths := map[string]bool{
 		"/":                     true,
 		"device/":               false,
@@ -247,10 +216,6 @@ func pathsToOverride(needsSyscallPackage, needsTimePackage bool) map[string]bool
 	}
 	if needsSyscallPackage {
 		paths["syscall/"] = true // include syscall/js
-	}
-
-	if needsTimePackage {
-		paths["time/"] = true
 	}
 	return paths
 }

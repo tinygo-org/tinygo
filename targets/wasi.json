@@ -1,8 +1,8 @@
 {
 	"llvm-target":   "wasm32--wasi",
-	"build-tags":    ["js", "wasm", "wasi"],
-	"goos":          "js",
-	"goarch":        "wasm",
+	"build-tags":    ["wasm", "wasi"],
+	"goos":          "linux",
+	"goarch":        "arm",
 	"compiler":      "clang",
 	"linker":        "wasm-ld",
 	"cflags": [
