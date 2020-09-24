@@ -6,12 +6,7 @@ import (
 	"device/nrf"
 	"errors"
 	"runtime/interrupt"
-
-	_ "unsafe" // for go:linkname
 )
-
-//go:linkname gosched runtime.Gosched
-func gosched()
 
 var (
 	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")
@@ -274,7 +269,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) (err error) {
 		i2c.Bus.TASKS_STARTTX.Set(1) // start transmission for writing
 		for _, b := range w {
 			if err = i2c.writeByte(b); err != nil {
-				return
+				goto cleanUp
 			}
 		}
 	}
@@ -289,10 +284,16 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) (err error) {
 			}
 			i2c.Bus.TASKS_RESUME.Set(1) // re-start transmission for reading
 			if r[i], err = i2c.readByte(); err != nil {
-				return
+				// goto/break are practically equivalent here,
+				// but goto makes this more easily understandable for maintenance.
+				goto cleanUp
 			}
 		}
 	}
+
+cleanUp:
+	i2c.signalStop()
+	i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND_Disabled)
 	return
 }
 
@@ -314,7 +315,6 @@ func (i2c I2C) writeByte(data byte) error {
 			i2c.Bus.EVENTS_ERROR.Set(0)
 			return errI2CBusError
 		}
-		gosched()
 	}
 	i2c.Bus.EVENTS_TXDSENT.Set(0)
 	return nil
@@ -327,7 +327,6 @@ func (i2c I2C) readByte() (byte, error) {
 			i2c.Bus.EVENTS_ERROR.Set(0)
 			return 0, errI2CBusError
 		}
-		gosched()
 	}
 	i2c.Bus.EVENTS_RXDREADY.Set(0)
 	return byte(i2c.Bus.RXD.Get()), nil
