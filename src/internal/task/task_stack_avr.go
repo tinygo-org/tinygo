@@ -4,9 +4,12 @@ package task
 
 import "unsafe"
 
+//go:extern tinygo_systemStack
+var systemStack uintptr
+
 // calleeSavedRegs is the list of registers that must be saved and restored when
-// switching between tasks. Also see scheduler_avr.S that relies on the
-// exact layout of this struct.
+// switching between tasks. Also see task_stack_avr.S that relies on the exact
+// layout of this struct.
 //
 // https://gcc.gnu.org/wiki/avr-gcc#Call-Saved_Registers
 type calleeSavedRegs struct {
@@ -23,34 +26,15 @@ type calleeSavedRegs struct {
 	pc uintptr
 }
 
-// registers gets a pointer to the registers stored at the top of the stack.
-func (s *state) registers() *calleeSavedRegs {
-	return (*calleeSavedRegs)(unsafe.Pointer(s.sp + 1))
-}
-
-// startTask is a small wrapper function that sets up the first (and only)
-// argument to the new goroutine and makes sure it is exited when the goroutine
-// finishes.
-//go:extern tinygo_startTask
-var startTask [0]uint8
-
 // archInit runs architecture-specific setup for the goroutine startup.
 // Note: adding //go:noinline to work around an AVR backend bug.
 //go:noinline
-func (s *state) archInit(stack []uintptr, fn uintptr, args unsafe.Pointer) {
-	// Set up the stack canary, a random number that should be checked when
-	// switching from the task back to the scheduler. The stack canary pointer
-	// points to the first word of the stack. If it has changed between now and
-	// the next stack switch, there was a stack overflow.
-	s.canaryPtr = &stack[0]
-	*s.canaryPtr = stackCanary
-
+func (s *state) archInit(r *calleeSavedRegs, fn uintptr, args unsafe.Pointer) {
 	// Store the initial sp for the startTask function (implemented in assembly).
-	s.sp = uintptr(unsafe.Pointer(&stack[uintptr(len(stack))-(unsafe.Sizeof(calleeSavedRegs{})/unsafe.Sizeof(uintptr(0)))])) - 1
+	s.sp = uintptr(unsafe.Pointer(r)) - 1
 
 	// Initialize the registers.
 	// These will be popped off of the stack on the first resume of the goroutine.
-	r := s.registers()
 
 	// Start the function at tinygo_startTask.
 	startTask := uintptr(unsafe.Pointer(&startTask))
@@ -67,20 +51,17 @@ func (s *state) archInit(stack []uintptr, fn uintptr, args unsafe.Pointer) {
 }
 
 func (s *state) resume() {
-	switchToTask(s.sp)
+	swapTask(s.sp, &systemStack)
 }
-
-//export tinygo_switchToTask
-func switchToTask(uintptr)
-
-//export tinygo_switchToScheduler
-func switchToScheduler(*uintptr)
 
 func (s *state) pause() {
-	switchToScheduler(&s.sp)
+	newStack := systemStack
+	systemStack = 0
+	swapTask(newStack, &s.sp)
 }
 
-//export tinygo_pause
-func pause() {
-	Pause()
+// SystemStack returns the system stack pointer when called from a task stack.
+// When called from the system stack, it returns 0.
+func SystemStack() uintptr {
+	return systemStack
 }

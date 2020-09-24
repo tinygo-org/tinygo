@@ -2,10 +2,13 @@
 
 package task
 
-import "unsafe"
+import (
+	"device/arm"
+	"unsafe"
+)
 
 // calleeSavedRegs is the list of registers that must be saved and restored when
-// switching between tasks. Also see scheduler_cortexm.S that relies on the
+// switching between tasks. Also see task_stack_cortexm.S that relies on the
 // exact layout of this struct.
 type calleeSavedRegs struct {
 	r4  uintptr
@@ -20,34 +23,15 @@ type calleeSavedRegs struct {
 	pc uintptr
 }
 
-// registers gets a pointer to the registers stored at the top of the stack.
-func (s *state) registers() *calleeSavedRegs {
-	return (*calleeSavedRegs)(unsafe.Pointer(s.sp))
-}
-
-// startTask is a small wrapper function that sets up the first (and only)
-// argument to the new goroutine and makes sure it is exited when the goroutine
-// finishes.
-//go:extern tinygo_startTask
-var startTask [0]uint8
-
 // archInit runs architecture-specific setup for the goroutine startup.
-func (s *state) archInit(stack []uintptr, fn uintptr, args unsafe.Pointer) {
-	// Set up the stack canary, a random number that should be checked when
-	// switching from the task back to the scheduler. The stack canary pointer
-	// points to the first word of the stack. If it has changed between now and
-	// the next stack switch, there was a stack overflow.
-	s.canaryPtr = &stack[0]
-	*s.canaryPtr = stackCanary
-
+func (s *state) archInit(r *calleeSavedRegs, fn uintptr, args unsafe.Pointer) {
 	// Store the initial sp for the startTask function (implemented in assembly).
-	s.sp = uintptr(unsafe.Pointer(&stack[uintptr(len(stack))-(unsafe.Sizeof(calleeSavedRegs{})/unsafe.Sizeof(uintptr(0)))]))
+	s.sp = uintptr(unsafe.Pointer(r))
 
 	// Initialize the registers.
 	// These will be popped off of the stack on the first resume of the goroutine.
-	r := s.registers()
 
-	// Start the function at tinygo_startTask (defined in src/runtime/scheduler_cortexm.S).
+	// Start the function at tinygo_startTask (defined in src/internal/task/task_stack_cortexm.S).
 	// This assembly code calls a function (passed in r4) with a single argument (passed in r5).
 	// After the function returns, it calls Pause().
 	r.pc = uintptr(unsafe.Pointer(&startTask))
@@ -75,7 +59,8 @@ func (s *state) pause() {
 	switchToScheduler(&s.sp)
 }
 
-//export tinygo_pause
-func pause() {
-	Pause()
+// SystemStack returns the system stack pointer. On Cortex-M, it is always
+// available.
+func SystemStack() uintptr {
+	return arm.AsmFull("mrs {}, MSP", nil)
 }

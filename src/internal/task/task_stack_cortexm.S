@@ -30,17 +30,6 @@ tinygo_startTask:
     .cfi_endproc
 .size tinygo_startTask, .-tinygo_startTask
 
-.section .text.tinygo_getSystemStackPointer
-.global  tinygo_getSystemStackPointer
-.type    tinygo_getSystemStackPointer, %function
-tinygo_getSystemStackPointer:
-    .cfi_startproc
-    // The system stack pointer is always stored in the MSP register.
-    mrs r0, MSP
-    bx lr
-    .cfi_endproc
-.size tinygo_getSystemStackPointer, .-tinygo_getSystemStackPointer
-
 .section .text.tinygo_switchToScheduler
 .global  tinygo_switchToScheduler
 .type    tinygo_switchToScheduler, %function
