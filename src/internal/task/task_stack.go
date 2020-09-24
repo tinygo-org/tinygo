@@ -45,6 +45,11 @@ func Pause() {
 	currentTask.state.pause()
 }
 
+//export tinygo_pause
+func pause() {
+	Pause()
+}
+
 // Resume the task until it pauses or completes.
 // This may only be called from the scheduler.
 func (t *Task) Resume() {
@@ -58,9 +63,31 @@ func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	// Create a stack.
 	stack := make([]uintptr, stackSize/unsafe.Sizeof(uintptr(0)))
 
+	// Set up the stack canary, a random number that should be checked when
+	// switching from the task back to the scheduler. The stack canary pointer
+	// points to the first word of the stack. If it has changed between now and
+	// the next stack switch, there was a stack overflow.
+	s.canaryPtr = &stack[0]
+	*s.canaryPtr = stackCanary
+
+	// Get a pointer to the top of the stack, where the initial register values
+	// are stored. They will be popped off the stack on the first stack switch
+	// to the goroutine, and will start running tinygo_startTask (this setup
+	// happens in archInit).
+	r := (*calleeSavedRegs)(unsafe.Pointer(&stack[uintptr(len(stack))-(unsafe.Sizeof(calleeSavedRegs{})/unsafe.Sizeof(uintptr(0)))]))
+
 	// Invoke architecture-specific initialization.
-	s.archInit(stack, fn, args)
+	s.archInit(r, fn, args)
 }
+
+//export tinygo_swapTask
+func swapTask(oldStack uintptr, newStack *uintptr)
+
+// startTask is a small wrapper function that sets up the first (and only)
+// argument to the new goroutine and makes sure it is exited when the goroutine
+// finishes.
+//go:extern tinygo_startTask
+var startTask [0]uint8
 
 //go:linkname runqueuePushBack runtime.runqueuePushBack
 func runqueuePushBack(*Task)

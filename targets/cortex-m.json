@@ -25,8 +25,8 @@
 	],
 	"extra-files": [
 		"src/device/arm/cortexm.s",
-		"src/runtime/gc_arm.S",
-		"src/runtime/scheduler_cortexm.S"
+		"src/internal/task/task_stack_cortexm.S",
+		"src/runtime/gc_arm.S"
 	],
 	"gdb": "gdb-multiarch"
 }

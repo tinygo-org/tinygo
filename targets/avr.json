@@ -13,7 +13,7 @@
 		"-Wl,--gc-sections"
 	],
 	"extra-files": [
-		"src/runtime/gc_avr.S",
-		"src/runtime/scheduler_avr.S"
+		"src/internal/task/task_stack_avr.S",
+		"src/runtime/gc_avr.S"
 	]
 }
