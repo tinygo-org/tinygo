@@ -36,18 +36,20 @@ func (e Errno) Is(target error) bool {
 	return false
 }
 
+// Source: https://opensource.apple.com/source/xnu/xnu-7195.81.3/bsd/sys/errno.h.auto.html
 const (
-	EPERM       Errno = 0x1
-	ENOENT      Errno = 0x2
-	EACCES      Errno = 0xd
-	EEXIST      Errno = 0x11
-	EINTR       Errno = 0x4
-	ENOTDIR     Errno = 0x14
-	EINVAL      Errno = 0x16
-	EMFILE      Errno = 0x18
-	EAGAIN      Errno = 0x23
-	ETIMEDOUT   Errno = 0x3c
-	ENOSYS      Errno = 0x4e
+	EPERM       Errno = 1
+	ENOENT      Errno = 2
+	EACCES      Errno = 13
+	EEXIST      Errno = 17
+	EINTR       Errno = 4
+	ENOTDIR     Errno = 20
+	EINVAL      Errno = 22
+	EMFILE      Errno = 24
+	EPIPE       Errno = 32
+	EAGAIN      Errno = 35
+	ETIMEDOUT   Errno = 60
+	ENOSYS      Errno = 78
 	EWOULDBLOCK Errno = EAGAIN
 )
 
@@ -77,6 +79,8 @@ const (
 	O_CREAT  = 0x200
 	O_TRUNC  = 0x400
 	O_EXCL   = 0x800
+
+	O_CLOEXEC = 0x01000000
 )
 
 // Source: https://opensource.apple.com/source/xnu/xnu-7195.81.3/bsd/sys/mman.h.auto.html

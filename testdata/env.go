@@ -13,6 +13,17 @@ func main() {
 	}
 	println("ENV2:", v)
 
+	found := false
+	expected := "ENV1=" + os.Getenv("ENV1")
+	for _, envVar := range os.Environ() {
+		if envVar == expected {
+			found = true
+		}
+	}
+	if !found {
+		println("could not find " + expected + " in os.Environ()")
+	}
+
 	// Check for command line arguments.
 	// Argument 0 is skipped because it is the program name, which varies by
 	// test run.
