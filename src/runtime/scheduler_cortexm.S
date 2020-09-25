@@ -136,34 +136,3 @@ tinygo_swapTask:
     #endif
     .cfi_endproc
 .size tinygo_swapTask, .-tinygo_swapTask
-
-.section .text.tinygo_scanCurrentStack
-.global  tinygo_scanCurrentStack
-.type    tinygo_scanCurrentStack, %function
-tinygo_scanCurrentStack:
-    .cfi_startproc
-    // Save callee-saved registers onto the stack.
-    #if defined(__thumb2__)
-    push {r4-r11, lr}
-    .cfi_def_cfa_offset 9*4
-    #else
-    mov r0, r8
-    mov r1, r9
-    mov r2, r10
-    mov r3, r11
-    push {r0-r3, lr}
-    .cfi_def_cfa_offset 5*4
-    push {r4-r7}
-    .cfi_def_cfa_offset 4*4
-    #endif
-
-    // Scan the stack.
-    mov r0, sp
-    bl tinygo_scanstack
-
-    // Restore stack state and return.
-    add sp, #32
-    .cfi_def_cfa_offset 1*4
-    pop {pc}
-    .cfi_endproc
-.size tinygo_scanCurrentStack, .-tinygo_scanCurrentStack
