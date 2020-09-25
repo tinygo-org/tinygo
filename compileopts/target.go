@@ -239,14 +239,16 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	// No target spec available. Use the default one, useful on most systems
 	// with a regular OS.
 	spec := TargetSpec{
-		Triple:    triple,
-		GOOS:      goos,
-		GOARCH:    goarch,
-		BuildTags: []string{goos, goarch},
-		Linker:    "cc",
-		CFlags:    []string{"--target=" + triple},
-		GDB:       []string{"gdb"},
-		PortReset: "false",
+		Triple:           triple,
+		GOOS:             goos,
+		GOARCH:           goarch,
+		BuildTags:        []string{goos, goarch},
+		Scheduler:        "tasks",
+		Linker:           "cc",
+		DefaultStackSize: 1024 * 64, // 64kB
+		CFlags:           []string{"--target=" + triple},
+		GDB:              []string{"gdb"},
+		PortReset:        "false",
 	}
 	if goos == "darwin" {
 		spec.CFlags = append(spec.CFlags, "-isysroot", "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk")
@@ -256,6 +258,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	}
 	if goarch != "wasm" {
 		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/gc_"+goarch+".S")
+		spec.ExtraFiles = append(spec.ExtraFiles, "src/internal/task/task_stack_"+goarch+".S")
 	}
 	if goarch != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.

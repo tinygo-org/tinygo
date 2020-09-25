@@ -1,21 +1,14 @@
-// +build scheduler.tasks,cortexm
+// +build scheduler.tasks,arm,!cortexm,!avr,!xtensa
 
 package task
 
-// Note that this is almost the same as task_stack_arm.go, but it uses the MSP
-// register to store the system stack pointer instead of a global variable. The
-// big advantage of this is that interrupts always execute with MSP (and not
-// PSP, which is used for goroutines) so that goroutines do not need extra stack
-// space for interrupts.
+import "unsafe"
 
-import (
-	"device/arm"
-	"unsafe"
-)
+var systemStack uintptr
 
 // calleeSavedRegs is the list of registers that must be saved and restored when
-// switching between tasks. Also see task_stack_cortexm.S that relies on the
-// exact layout of this struct.
+// switching between tasks. Also see task_stack_arm.S that relies on the exact
+// layout of this struct.
 type calleeSavedRegs struct {
 	r4  uintptr
 	r5  uintptr
@@ -37,9 +30,9 @@ func (s *state) archInit(r *calleeSavedRegs, fn uintptr, args unsafe.Pointer) {
 	// Initialize the registers.
 	// These will be popped off of the stack on the first resume of the goroutine.
 
-	// Start the function at tinygo_startTask (defined in src/internal/task/task_stack_cortexm.S).
-	// This assembly code calls a function (passed in r4) with a single argument (passed in r5).
-	// After the function returns, it calls Pause().
+	// Start the function at tinygo_startTask (defined in src/internal/task/task_stack_arm.S).
+	// This assembly code calls a function (passed in r4) with a single argument
+	// (passed in r5). After the function returns, it calls Pause().
 	r.pc = uintptr(unsafe.Pointer(&startTask))
 
 	// Pass the function to call in r4.
@@ -52,21 +45,17 @@ func (s *state) archInit(r *calleeSavedRegs, fn uintptr, args unsafe.Pointer) {
 }
 
 func (s *state) resume() {
-	switchToTask(s.sp)
+	swapTask(s.sp, &systemStack)
 }
-
-//export tinygo_switchToTask
-func switchToTask(uintptr)
-
-//export tinygo_switchToScheduler
-func switchToScheduler(*uintptr)
 
 func (s *state) pause() {
-	switchToScheduler(&s.sp)
+	newStack := systemStack
+	systemStack = 0
+	swapTask(newStack, &s.sp)
 }
 
-// SystemStack returns the system stack pointer. On Cortex-M, it is always
-// available.
+// SystemStack returns the system stack pointer when called from a task stack.
+// When called from the system stack, it returns 0.
 func SystemStack() uintptr {
-	return arm.AsmFull("mrs {}, MSP", nil)
+	return systemStack
 }
