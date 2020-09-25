@@ -1,6 +1,7 @@
 {
   "llvm-target": "aarch64",
   "build-tags": ["nintendoswitch", "arm64"],
+  "scheduler": "tasks",
   "goos": "linux",
   "goarch": "arm64",
   "linker": "ld.lld",
@@ -9,6 +10,7 @@
   "gc": "conservative",
   "relocation-model": "pic",
   "cpu": "cortex-a57",
+  "default-stack-size": 2048,
   "cflags": [
     "-target", "aarch64-unknown-none",
     "-mcpu=cortex-a57",
@@ -26,6 +28,7 @@
   "linkerscript": "targets/nintendoswitch.ld",
   "extra-files": [
     "targets/nintendoswitch.s",
+    "src/internal/task/task_stack_arm64.S",
     "src/runtime/gc_arm64.S",
     "src/runtime/runtime_nintendoswitch.s"
   ]
