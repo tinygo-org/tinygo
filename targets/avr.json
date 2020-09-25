@@ -13,6 +13,7 @@
 		"-Wl,--gc-sections"
 	],
 	"extra-files": [
+		"src/runtime/gc_avr.S",
 		"src/runtime/scheduler_avr.S"
 	]
 }
