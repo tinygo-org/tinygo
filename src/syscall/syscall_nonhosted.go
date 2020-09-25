@@ -67,6 +67,13 @@ func Getenv(key string) (value string, found bool) {
 	return "", false
 }
 
+func Environ() []string {
+	env := runtime_envs()
+	envCopy := make([]string, len(env))
+	copy(envCopy, env)
+	return envCopy
+}
+
 func Open(path string, mode int, perm uint32) (fd int, err error) {
 	return 0, ENOSYS
 }

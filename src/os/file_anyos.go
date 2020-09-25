@@ -21,6 +21,8 @@ var (
 	Stderr = &File{unixFileHandle(syscall.Stderr), "/dev/stderr"}
 )
 
+const DevNull = "/dev/null"
+
 // isOS indicates whether we're running on a real operating system with
 // filesystem support.
 const isOS = true

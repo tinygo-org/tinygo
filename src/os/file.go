@@ -52,6 +52,16 @@ func Remove(path string) error {
 	return nil
 }
 
+// Symlink is a stub, it is not implemented.
+func Symlink(oldname, newname string) error {
+	return ErrNotImplemented
+}
+
+// RemoveAll is a stub, it is not implemented.
+func RemoveAll(path string) error {
+	return ErrNotImplemented
+}
+
 // File represents an open file descriptor.
 type File struct {
 	handle FileHandle
@@ -185,6 +195,27 @@ type PathError struct {
 
 func (e *PathError) Error() string {
 	return e.Op + " " + e.Path + ": " + e.Err.Error()
+}
+
+func (e *PathError) Unwrap() error {
+	return e.Err
+}
+
+// LinkError records an error during a link or symlink or rename system call and
+// the paths that caused it.
+type LinkError struct {
+	Op  string
+	Old string
+	New string
+	Err error
+}
+
+func (e *LinkError) Error() string {
+	return e.Op + " " + e.Old + " " + e.New + ": " + e.Err.Error()
+}
+
+func (e *LinkError) Unwrap() error {
+	return e.Err
 }
 
 const (

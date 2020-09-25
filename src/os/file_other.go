@@ -48,3 +48,7 @@ func (f stdioFileHandle) Close() error {
 
 //go:linkname putchar runtime.putchar
 func putchar(c byte)
+
+func Pipe() (r *File, w *File, err error) {
+	return nil, nil, ErrNotImplemented
+}

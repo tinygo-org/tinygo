@@ -81,6 +81,12 @@ func Kill(pid int, sig Signal) (err error) {
 	return ENOSYS // TODO
 }
 
+type SysProcAttr struct{}
+
+func Pipe2(p []int, flags int) (err error) {
+	return ENOSYS // TODO
+}
+
 func Getenv(key string) (value string, found bool) {
 	data := cstring(key)
 	raw := libc_getenv(&data[0])
@@ -115,6 +121,26 @@ func Mprotect(b []byte, prot int) (err error) {
 	return
 }
 
+func Environ() []string {
+	environ := libc_environ
+	var envs []string
+	for *environ != nil {
+		// Convert the C string to a Go string.
+		length := libc_strlen(*environ)
+		var envVar string
+		rawEnvVar := (*struct {
+			ptr    unsafe.Pointer
+			length uintptr
+		})(unsafe.Pointer(&envVar))
+		rawEnvVar.ptr = *environ
+		rawEnvVar.length = length
+		envs = append(envs, envVar)
+		// This is the Go equivalent of "environ++" in C.
+		environ = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(environ)) + unsafe.Sizeof(environ)))
+	}
+	return envs
+}
+
 // cstring converts a Go string to a C string.
 func cstring(s string) []byte {
 	data := make([]byte, len(s)+1)
@@ -127,6 +153,9 @@ func splitSlice(p []byte) (buf *byte, len uintptr) {
 	slice := (*sliceHeader)(unsafe.Pointer(&p))
 	return slice.buf, slice.len
 }
+
+//export strlen
+func libc_strlen(ptr unsafe.Pointer) uintptr
 
 // ssize_t write(int fd, const void *buf, size_t count)
 //export write
@@ -167,3 +196,6 @@ func libc_rmdir(pathname *byte) int32
 // int unlink(const char *pathname);
 //export unlink
 func libc_unlink(pathname *byte) int32
+
+//go:extern environ
+var libc_environ *unsafe.Pointer

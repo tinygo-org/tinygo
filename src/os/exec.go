@@ -16,3 +16,36 @@ func Getpid() int {
 func Getppid() int {
 	return syscall.Getppid()
 }
+
+type ProcAttr struct {
+	Dir   string
+	Env   []string
+	Files []*File
+	Sys   *syscall.SysProcAttr
+}
+
+type ProcessState struct {
+}
+
+func (p *ProcessState) String() string {
+	return "" // TODO
+}
+func (p *ProcessState) Success() bool {
+	return false // TODO
+}
+
+type Process struct {
+	Pid int
+}
+
+func StartProcess(name string, argv []string, attr *ProcAttr) (*Process, error) {
+	return nil, &PathError{"fork/exec", name, ErrNotImplemented}
+}
+
+func (p *Process) Wait() (*ProcessState, error) {
+	return nil, ErrNotImplemented
+}
+
+func (p *Process) Kill() error {
+	return ErrNotImplemented
+}

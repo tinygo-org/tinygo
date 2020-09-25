@@ -200,31 +200,41 @@ test: wasi-libc
 
 TEST_PACKAGES = \
 	compress/bzip2 \
+	compress/flate \
+	compress/zlib \
 	container/heap \
 	container/list \
 	container/ring \
 	crypto/des \
 	crypto/dsa \
+	crypto/elliptic/internal/fiat \
+	crypto/internal/subtle \
 	crypto/md5 \
 	crypto/rc4 \
 	crypto/sha1 \
 	crypto/sha256 \
 	crypto/sha512 \
+	debug/macho \
 	encoding \
 	encoding/ascii85 \
 	encoding/base32 \
+	encoding/csv \
 	encoding/hex \
+	go/scanner \
 	hash \
 	hash/adler32 \
-	hash/fnv \
 	hash/crc64 \
+	hash/fnv \
 	html \
 	index/suffixarray \
 	internal/itoa \
+	internal/profile \
 	math \
 	math/cmplx \
+	net/http/internal/ascii \
 	net/mail \
 	os \
+	path \
 	reflect \
 	testing \
 	testing/iotest \

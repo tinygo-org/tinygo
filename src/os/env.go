@@ -12,3 +12,7 @@ func Getenv(key string) string {
 func LookupEnv(key string) (string, bool) {
 	return syscall.Getenv(key)
 }
+
+func Environ() []string {
+	return syscall.Environ()
+}
