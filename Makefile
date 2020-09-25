@@ -195,8 +195,10 @@ test: wasi-libc
 # implied -v flag).
 .PHONY: tinygo-test
 tinygo-test:
+	$(TINYGO) test container/heap
 	$(TINYGO) test container/list
 	$(TINYGO) test container/ring
+	$(TINYGO) test encoding/ascii85
 	$(TINYGO) test math
 	$(TINYGO) test text/scanner
 	$(TINYGO) test unicode/utf8
