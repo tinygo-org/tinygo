@@ -118,12 +118,12 @@ func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
 	case "conservative", "extalloc":
 		for _, tag := range c.BuildTags() {
-			if tag == "baremetal" {
-				return false
+			if tag == "wasm" {
+				return true
 			}
 		}
 
-		return true
+		return false
 	default:
 		return false
 	}

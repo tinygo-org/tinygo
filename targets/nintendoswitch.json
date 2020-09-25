@@ -27,6 +27,7 @@
   "linkerscript": "targets/nintendoswitch.ld",
   "extra-files": [
     "targets/nintendoswitch.s",
+    "src/runtime/gc_arm64.S",
     "src/runtime/runtime_nintendoswitch.s"
   ]
 }
