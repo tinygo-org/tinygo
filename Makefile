@@ -198,7 +198,9 @@ tinygo-test:
 	$(TINYGO) test container/heap
 	$(TINYGO) test container/list
 	$(TINYGO) test container/ring
+	$(TINYGO) test crypto/des
 	$(TINYGO) test encoding/ascii85
+	$(TINYGO) test encoding/hex
 	$(TINYGO) test math
 	$(TINYGO) test text/scanner
 	$(TINYGO) test unicode/utf8
