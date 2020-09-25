@@ -46,7 +46,7 @@ var stdoutBuffer = make([]byte, 120)
 var position = 0
 
 func putchar(c byte) {
-	if c == '\n' || position > len(stdoutBuffer) {
+	if c == '\n' || position >= len(stdoutBuffer) {
 		nxOutputString(&stdoutBuffer[0], uint64(position))
 		position = 0
 		return
