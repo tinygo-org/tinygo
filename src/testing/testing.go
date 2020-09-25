@@ -42,7 +42,7 @@ type TB interface {
 	SkipNow()
 	Skipf(format string, args ...interface{})
 	Skipped() bool
-	// Helper()
+	Helper()
 }
 
 var _ TB = (*T)(nil)
@@ -152,6 +152,11 @@ func (c *common) skip() {
 // Skipped reports whether the test was skipped.
 func (c *common) Skipped() bool {
 	return c.skipped
+}
+
+// Helper is not implemented, it is only provided for compatibility.
+func (c *common) Helper() {
+	// Unimplemented.
 }
 
 // InternalTest is a reference to a test that should be called during a test suite run.
