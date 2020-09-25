@@ -293,6 +293,11 @@ func GC() {
 		println("running collection cycle...")
 	}
 
+	if gcDebugMetric {
+		gcDebugIncrementNumGC()
+		gcDebugGCPauseStart()
+	}
+
 	// Mark phase: mark all reachable objects, recursively.
 	markStack()
 	markGlobals()
@@ -335,6 +340,10 @@ func GC() {
 	// Show how much has been sweeped, for debugging.
 	if gcDebug {
 		dumpHeap()
+	}
+
+	if gcDebugMetric {
+		gcDebugGCPauseEnd()
 	}
 }
 

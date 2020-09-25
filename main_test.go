@@ -160,6 +160,7 @@ func runTest(path, target string, t *testing.T) {
 		Debug:      true,
 		PrintSizes: "",
 		WasmAbi:    "js",
+		Tags:       "gc.debugmetric",
 	}
 	binary := filepath.Join(tmpdir, "test")
 	err = runBuild("./"+path, binary, config)

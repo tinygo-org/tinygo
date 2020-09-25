@@ -429,6 +429,12 @@ func GC() {
 	if gcDebug {
 		println("running GC")
 	}
+
+	if gcDebugMetric {
+		gcDebugIncrementNumGC()
+		gcDebugGCPauseStart()
+	}
+
 	if allocations.empty() {
 		// Skip collection because the heap is empty.
 		if gcDebug {
@@ -513,6 +519,10 @@ runqueueScan:
 
 	if gcAsserts {
 		gcrunning = false
+	}
+
+	if gcDebugMetric {
+		gcDebugGCPauseEnd()
 	}
 }
 
