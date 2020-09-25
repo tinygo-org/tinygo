@@ -8,17 +8,30 @@ type timeUnit int64
 
 const asyncScheduler = false
 
+var stackTop uintptr
+
 func postinit() {}
 
 // Entry point for Go. Initialize all packages and call main.main().
 //export main
 func main() int {
 	preinit()
-	run()
+
+	// Obtain the initial stack pointer right before calling the run() function.
+	// The run function has been moved to a separate (non-inlined) function so
+	// that the correct stack pointer is read.
+	stackTop = getCurrentStackPointer()
+	runMain()
 
 	// Call exit to correctly finish the program
 	// Without this, the application crashes at start, not sure why
 	return exit(0)
+}
+
+// Must be a separate function to get the correct stack pointer.
+//go:noinline
+func runMain() {
+	run()
 }
 
 // sleepTicks sleeps for the specified system ticks

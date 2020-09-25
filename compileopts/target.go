@@ -246,6 +246,9 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	} else {
 		spec.LDFlags = append(spec.LDFlags, "-no-pie", "-Wl,--gc-sections") // WARNING: clang < 5.0 requires -nopie
 	}
+	if goarch != "wasm" {
+		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/gc_"+goarch+".S")
+	}
 	if goarch != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.
 		spec.GDB = "gdb-multiarch"
