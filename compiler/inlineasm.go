@@ -163,6 +163,44 @@ func (b *builder) emitSVCall(args []ssa.Value) (llvm.Value, error) {
 	return b.CreateCall(target, llvmArgs, ""), nil
 }
 
+// This is a compiler builtin which emits an inline SVCall instruction. It can
+// be one of:
+//
+//     func SVCall0(num uintptr) uintptr
+//     func SVCall1(num uintptr, a1 interface{}) uintptr
+//     func SVCall2(num uintptr, a1, a2 interface{}) uintptr
+//     func SVCall3(num uintptr, a1, a2, a3 interface{}) uintptr
+//     func SVCall4(num uintptr, a1, a2, a3, a4 interface{}) uintptr
+//
+// The num parameter must be a constant. All other parameters may be any scalar
+// value supported by LLVM inline assembly.
+// Same as emitSVCall but for AArch64
+func (b *builder) emitSV64Call(args []ssa.Value) (llvm.Value, error) {
+	num, _ := constant.Uint64Val(args[0].(*ssa.Const).Value)
+	llvmArgs := []llvm.Value{}
+	argTypes := []llvm.Type{}
+	asm := "svc #" + strconv.FormatUint(num, 10)
+	constraints := "={x0}"
+	for i, arg := range args[1:] {
+		arg = arg.(*ssa.MakeInterface).X
+		if i == 0 {
+			constraints += ",0"
+		} else {
+			constraints += ",{x" + strconv.Itoa(i) + "}"
+		}
+		llvmValue := b.getValue(arg)
+		llvmArgs = append(llvmArgs, llvmValue)
+		argTypes = append(argTypes, llvmValue.Type())
+	}
+	// Implement the ARM64 calling convention by marking x1-x7 as
+	// clobbered. x0 is used as an output register so doesn't have to be
+	// marked as clobbered.
+	constraints += ",~{x1},~{x2},~{x3},~{x4},~{x5},~{x6},~{x7}"
+	fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
+	target := llvm.InlineAsm(fnType, asm, constraints, true, false, 0)
+	return b.CreateCall(target, llvmArgs, ""), nil
+}
+
 // This is a compiler builtin which emits CSR instructions. It can be one of:
 //
 //     func (csr CSR) Get() uintptr
