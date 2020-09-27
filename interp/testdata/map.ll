@@ -48,8 +48,7 @@ entry:
 define internal void @main.testNonConstantBinarySet() {
   %hashmap.key = alloca i8
   %hashmap.value = alloca i8
-  ; Create hashmap from global. This breaks the normal hashmapBinarySet
-  ; optimization, to test the fallback.
+  ; Create hashmap from global.
   %map.new = call %runtime.hashmap* @runtime.hashmapMake(i8 1, i8 1, i32 1, i8* undef, i8* null)
   store %runtime.hashmap* %map.new, %runtime.hashmap** @main.binaryMap
   %map = load %runtime.hashmap*, %runtime.hashmap** @main.binaryMap
@@ -64,8 +63,7 @@ define internal void @main.testNonConstantBinarySet() {
 ; operations (with string keys).
 define internal void @main.testNonConstantStringSet() {
   %hashmap.value = alloca i8
-  ; Create hashmap from global. This breaks the normal hashmapStringSet
-  ; optimization, to test the fallback.
+  ; Create hashmap from global.
   %map.new = call %runtime.hashmap* @runtime.hashmapMake(i8 8, i8 1, i32 1, i8* undef, i8* null)
   store %runtime.hashmap* %map.new, %runtime.hashmap** @main.stringMap
   %map = load %runtime.hashmap*, %runtime.hashmap** @main.stringMap

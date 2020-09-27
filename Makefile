@@ -187,9 +187,11 @@ tinygo-test:
 	$(TINYGO) test encoding/ascii85
 	$(TINYGO) test encoding/base32
 	$(TINYGO) test encoding/hex
+	$(TINYGO) test hash/adler32
 	$(TINYGO) test hash/fnv
 	$(TINYGO) test hash/crc64
 	$(TINYGO) test math
+	$(TINYGO) test math/cmplx
 	$(TINYGO) test text/scanner
 	$(TINYGO) test unicode/utf8
 
