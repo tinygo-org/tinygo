@@ -260,10 +260,6 @@ func (i2c I2C) Configure(config I2CConfig) {
 // bytes and stores them in r, and generates a stop condition on the bus.
 func (i2c I2C) Tx(addr uint16, w, r []byte) (err error) {
 	i2c.Bus.ADDRESS.Set(uint32(addr))
-	defer func() {
-		i2c.signalStop()
-		i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND_Disabled)
-	}()
 
 	if len(w) != 0 {
 		i2c.Bus.TASKS_STARTTX.Set(1) // start transmission for writing
