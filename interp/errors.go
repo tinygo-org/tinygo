@@ -11,15 +11,19 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-// errUnreachable is returned when an unreachable instruction is executed. This
-// error should not be visible outside of the interp package.
-var errUnreachable = &Error{Err: errors.New("interp: unreachable executed")}
+var errLiteralToPointer = errors.New("interp: trying to convert literal value to pointer")
 
-// unsupportedInstructionError returns a new "unsupported instruction" error for
-// the given instruction. It includes source location information, when
-// available.
-func (e *evalPackage) unsupportedInstructionError(inst llvm.Value) *Error {
-	return e.errorAt(inst, errors.New("interp: unsupported instruction"))
+// These errors are expected during normal execution and can be recovered from
+// by running the affected function at runtime instead of compile time.
+var (
+	errExpectedPointer        = errors.New("interp: trying to use an integer as a pointer (memory-mapped I/O?)")
+	errUnsupportedInst        = errors.New("interp: unsupported instruction")
+	errUnsupportedRuntimeInst = errors.New("interp: unsupported instruction (to be emitted at runtime)")
+	errMapAlreadyCreated      = errors.New("interp: map already created")
+)
+
+func isRecoverableError(err error) bool {
+	return err == errExpectedPointer || err == errUnsupportedInst || err == errUnsupportedRuntimeInst || err == errMapAlreadyCreated
 }
 
 // ErrorLine is one line in a traceback. The position may be missing.
@@ -46,13 +50,13 @@ func (e *Error) Error() string {
 // errorAt returns an error value for the currently interpreted package at the
 // location of the instruction. The location information may not be complete as
 // it depends on debug information in the IR.
-func (e *evalPackage) errorAt(inst llvm.Value, err error) *Error {
-	pos := getPosition(inst)
+func (r *runner) errorAt(inst instruction, err error) *Error {
+	pos := getPosition(inst.llvmInst)
 	return &Error{
-		ImportPath: e.packagePath,
+		ImportPath: r.pkgName,
 		Pos:        pos,
 		Err:        err,
-		Traceback:  []ErrorLine{{pos, inst}},
+		Traceback:  []ErrorLine{{pos, inst.llvmInst}},
 	}
 }
 

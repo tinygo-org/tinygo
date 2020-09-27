@@ -4,6 +4,10 @@ target triple = "x86_64--linux"
 @main.v1 = internal global i64 0
 @main.nonConst1 = global [4 x i64] zeroinitializer
 @main.nonConst2 = global i64 0
+@main.someArray = global [8 x {i16, i32}] zeroinitializer
+@main.exportedValue = global [1 x i16*] [i16* @main.exposedValue1]
+@main.exposedValue1 = global i16 0
+@main.exposedValue2 = global i16 0
 
 declare void @runtime.printint64(i64) unnamed_addr
 
@@ -47,6 +51,20 @@ entry:
   %value2 = load i64, i64* %gep2
   store i64 %value2, i64* @main.nonConst2
 
+  ; Test that the following GEP works:
+  ;     var someArray
+  ;     modifyExternal(&someArray[3].field1)
+  %gep3 = getelementptr [8 x {i16, i32}], [8 x {i16, i32}]* @main.someArray, i32 0, i32 3, i32 1
+  call void @modifyExternal(i32* %gep3)
+
+  ; Test that marking a value as external also marks all referenced values.
+  call void @modifyExternal(i32* bitcast ([1 x i16*]* @main.exportedValue to i32*))
+  store i16 5, i16* @main.exposedValue1
+
+  ; Test that this even propagates through functions.
+  call void @modifyExternal(i32* bitcast (void ()* @willModifyGlobal to i32*))
+  store i16 7, i16* @main.exposedValue2
+
   ret void
 }
 
@@ -58,3 +76,14 @@ entry:
 }
 
 declare i64 @someValue()
+
+declare void @modifyExternal(i32*)
+
+; This function will modify an external value. By passing this function as a
+; function pointer to an external function, @main.exposedValue2 should be
+; marked as external.
+define void @willModifyGlobal() {
+entry:
+  store i16 8, i16* @main.exposedValue2
+  ret void
+}

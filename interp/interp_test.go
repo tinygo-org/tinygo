@@ -42,7 +42,27 @@ func runTest(t *testing.T, pathPrefix string) {
 	// Perform the transform.
 	err = Run(mod, false)
 	if err != nil {
+		if err, match := err.(*Error); match {
+			println(err.Error())
+			if !err.Inst.IsNil() {
+				err.Inst.Dump()
+				println()
+			}
+			if len(err.Traceback) > 0 {
+				println("\ntraceback:")
+				for _, line := range err.Traceback {
+					println(line.Pos.String() + ":")
+					line.Inst.Dump()
+					println()
+				}
+			}
+		}
 		t.Fatal(err)
+	}
+
+	// To be sure, verify that the module is still valid.
+	if llvm.VerifyModule(mod, llvm.PrintMessageAction) != nil {
+		t.FailNow()
 	}
 
 	// Run some cleanup passes to get easy-to-read outputs.

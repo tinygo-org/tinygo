@@ -123,7 +123,7 @@ type structField struct {
 // than a function call. Also, by keeping the method set around it is easier to
 // implement interfaceImplements in the interp package.
 type typeInInterface struct {
-	typecode  *typecodeID
+	typecode  *typecodeID          // element type, underlying type, or reference to struct fields
 	methodSet *interfaceMethodInfo // nil or a GEP of an array
 }
 
