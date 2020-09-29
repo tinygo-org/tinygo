@@ -19,6 +19,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		}
 		stackChainStart := mod.NamedGlobal("runtime.stackChainStart")
 		if !stackChainStart.IsNil() {
+			stackChainStart.SetLinkage(llvm.InternalLinkage)
 			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.Type().ElementType()))
 			stackChainStart.SetGlobalConstant(true)
 		}
@@ -94,6 +95,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		}
 		return false
 	}
+	stackChainStart.SetLinkage(llvm.InternalLinkage)
 	stackChainStartType := stackChainStart.Type().ElementType()
 	stackChainStart.SetInitializer(llvm.ConstNull(stackChainStartType))
 
@@ -333,11 +335,13 @@ func AddGlobalsBitmap(mod llvm.Module) bool {
 	// Update trackedGlobalsStart, which points to the globals bundle.
 	trackedGlobalsStart := llvm.ConstPtrToInt(globalsBundle, uintptrType)
 	mod.NamedGlobal("runtime.trackedGlobalsStart").SetInitializer(trackedGlobalsStart)
+	mod.NamedGlobal("runtime.trackedGlobalsStart").SetLinkage(llvm.InternalLinkage)
 
 	// Update trackedGlobalsLength, which contains the length (in words) of the
 	// globals bundle.
 	alignment := targetData.PrefTypeAlignment(llvm.PointerType(ctx.Int8Type(), 0))
 	trackedGlobalsLength := llvm.ConstInt(uintptrType, targetData.TypeAllocSize(globalsBundleType)/uint64(alignment), false)
+	mod.NamedGlobal("runtime.trackedGlobalsLength").SetLinkage(llvm.InternalLinkage)
 	mod.NamedGlobal("runtime.trackedGlobalsLength").SetInitializer(trackedGlobalsLength)
 
 	// Create a bitmap (a new global) that stores for each word in the globals
@@ -357,6 +361,7 @@ func AddGlobalsBitmap(mod llvm.Module) bool {
 	bitmapOld.ReplaceAllUsesWith(llvm.ConstBitCast(bitmapNew, bitmapOld.Type()))
 	bitmapNew.SetInitializer(bitmapArray)
 	bitmapNew.SetName("runtime.trackedGlobalsBitmap")
+	bitmapNew.SetLinkage(llvm.InternalLinkage)
 
 	return true // the IR was changed
 }

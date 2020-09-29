@@ -189,7 +189,7 @@ func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides 
 // with the TinyGo version. This is the case on some targets.
 func needsSyscallPackage(buildTags []string) bool {
 	for _, tag := range buildTags {
-		if tag == "baremetal" || tag == "darwin" || tag == "nintendoswitch" {
+		if tag == "baremetal" || tag == "darwin" || tag == "nintendoswitch" || tag == "wasi" {
 			return true
 		}
 	}
