@@ -79,7 +79,10 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// keep functions interoperable, pass int64 types as pointers to
 	// stack-allocated values.
 	// Use -wasm-abi=generic to disable this behaviour.
-	if config.Options.WasmAbi == "js" && strings.HasPrefix(config.Triple(), "wasm") {
+	if config.Options.WasmAbi != "" {
+		config.Target.WasmAbi = config.Options.WasmAbi
+	}
+	if config.Target.WasmAbi == "js" {
 		err := transform.ExternalInt64AsPtr(mod)
 		if err != nil {
 			return err
