@@ -19,5 +19,5 @@
 		"{root}/lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a"
 	],
 	"emulator":      ["wasmtime"],
-	"wasm_abi":      "generic"
+	"wasm-abi":      "generic"
 }
