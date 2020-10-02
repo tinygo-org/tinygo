@@ -102,12 +102,6 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	// 4. Wait until RXNE=1 and read the last received data.
 	// 5. Wait until TXE=1 and then wait until BSY=0 before disabling the SPI.
 
-	// lazy enabling of SPI interface, in case it has been disabled due to error
-	// or intent.
-	if !spi.Bus.CR1.HasBits(stm32.SPI_CR1_SPE) {
-		spi.Bus.CR1.SetBits(stm32.SPI_CR1_SPE)
-	}
-
 	// put output word (8-bit) in data register (DR), which is parallel-loaded
 	// into shift register, and shifted out on MOSI.
 	spi.Bus.DR.Set(uint32(w))
@@ -137,9 +131,6 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	if !spi.Bus.CR1.HasBits(stm32.SPI_CR1_RXONLY | stm32.SPI_CR1_BIDIMODE | stm32.SPI_CR1_BIDIOE) {
 		spi.Bus.SR.Get()
 	}
-
-	// disable the SPI interface
-	spi.Bus.CR1.ClearBits(stm32.SPI_CR1_SPE)
 
 	// Return received data from SPI data register
 	return data, nil
