@@ -6,6 +6,7 @@ package machine
 
 import (
 	"device/stm32"
+	"math/bits"
 	"runtime/interrupt"
 )
 
@@ -46,8 +47,47 @@ type SPI struct {
 	AltFuncSelector stm32.AltFunc
 }
 
-func (spi SPI) configurePins(config SPIConfig)      {}
-func (spi SPI) getBaudRate(config SPIConfig) uint32 { return 0 }
+func (spi SPI) configurePins(config SPIConfig) {
+	config.SCK.ConfigureAltFunc(PinConfig{Mode: PinModeSPICLK}, spi.AltFuncSelector)
+	config.SDO.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDO}, spi.AltFuncSelector)
+	config.SDI.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDI}, spi.AltFuncSelector)
+}
+
+func (spi SPI) getBaudRate(config SPIConfig) uint32 {
+	var clock uint32
+	switch spi.Bus {
+	case stm32.SPI1:
+		clock = CPUFrequency() / 2
+	case stm32.SPI2, stm32.SPI3:
+		clock = CPUFrequency() / 4
+	}
+
+	// limit requested frequency to bus frequency and min frequency (DIV256)
+	freq := config.Frequency
+	if min := clock / 256; freq < min {
+		freq = min
+	} else if freq > clock {
+		freq = clock
+	}
+
+	// calculate the exact clock divisor (freq=clock/div -> div=clock/freq).
+	// truncation is fine, since it produces a less-than-or-equal divisor, and
+	// thus a greater-than-or-equal frequency.
+	// divisors only come in consecutive powers of 2, so we can use log2 (or,
+	// equivalently, bits.Len - 1) to convert to respective enum value.
+	div := bits.Len32(clock/freq) - 1
+
+	// but DIV1 (2^0) is not permitted, as the least divisor is DIV2 (2^1), so
+	// subtract 1 from the log2 value, keeping a lower bound of 0
+	if div < 0 {
+		div = 0
+	} else if div > 0 {
+		div--
+	}
+
+	// finally, shift the enumerated value into position for SPI CR1
+	return uint32(div) << stm32.SPI_CR1_BR_Pos
+}
 
 // -- I2C ----------------------------------------------------------------------
 
