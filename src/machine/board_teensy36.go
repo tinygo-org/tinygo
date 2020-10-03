@@ -8,6 +8,24 @@ func CPUFrequency() uint32 { return 180000000 }
 // ClockFrequency returns the frequency of the external oscillator (16MHz)
 func ClockFrequency() uint32 { return 16000000 }
 
+const (
+	usb_STRING_MANUFACTURER = "Teensy"
+	usb_STRING_PRODUCT      = "Teensy 3.6 USB Serial"
+
+	usb_DEVICE_CLASS    = 0x02
+	usb_DEVICE_SUBCLASS = 0
+	usb_DEVICE_PROTOCOL = 0
+
+	usb_EP0_SIZE    = 64
+	usb_BUFFER_SIZE = usb_EP0_SIZE
+
+	usb_VID        = 0x16C0
+	usb_PID        = 0x0483 // teensy usb serial
+	usb_BCD_DEVICE = 0x0277 // teensy 3.6
+)
+
+var usb_STRING_SERIAL string
+
 // LED on the Teensy
 const LED = PC05
 
@@ -99,3 +117,17 @@ const (
 	defaultUART4RX = D34
 	defaultUART4TX = D33
 )
+
+//go:linkname sleepTicks runtime.sleepTicks
+func sleepTicks(int64)
+
+func InitPlatform() {
+	// for background about this startup delay, please see these conversations
+	// https://forum.pjrc.com/threads/36606-startup-time-(400ms)?p=113980&viewfull=1#post113980
+	// https://forum.pjrc.com/threads/31290-Teensey-3-2-Teensey-Loader-1-24-Issues?p=87273&viewfull=1#post87273
+
+	sleepTicks(25 * 1000) // 50 for TeensyDuino < 142
+	// usb_STRING_SERIAL = readSerialNumber()
+	USB0.Configure()
+	sleepTicks(275 * 1000) // 350 for TeensyDuino < 142
+}

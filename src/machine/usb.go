@@ -1,4 +1,4 @@
-// +build sam nrf52840
+// +build sam nrf52840 nxp,mk66f18
 
 package machine
 
@@ -7,12 +7,19 @@ import (
 	"runtime/volatile"
 )
 
-const deviceDescriptorSize = 18
-
 var (
 	errUSBCDCBufferEmpty      = errors.New("USB-CDC buffer empty")
 	errUSBCDCWriteByteTimeout = errors.New("USB-CDC write byte timeout")
 )
+
+type USBEndpointConfiguration struct {
+	Transmit     bool
+	Receive      bool
+	Handshake    bool
+	DisableSetup bool
+}
+
+const deviceDescriptorSize = 18
 
 // DeviceDescriptor implements the USB standard device descriptor.
 //
@@ -550,6 +557,11 @@ func newUSBSetup(data []byte) usbSetup {
 	u.wIndex = uint16(data[4]) | uint16(data[5]<<8)
 	u.wLength = uint16(data[6]) | uint16(data[7]<<8)
 	return u
+}
+
+//go:inline
+func (u usbSetup) wValue() uint16 {
+	return uint16(u.wValueH)<<8 | uint16(u.wValueL)
 }
 
 // USBCDC is the serial interface that works over the USB port.
