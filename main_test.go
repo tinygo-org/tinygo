@@ -165,11 +165,7 @@ func runTest(path, target string, t *testing.T) {
 		VerifyIR:   true,
 		Debug:      true,
 		PrintSizes: "",
-		WasmAbi:    "js",
-	}
-
-	if target == "wasi" {
-		config.WasmAbi = "generic"
+		WasmAbi:    "",
 	}
 
 	binary := filepath.Join(tmpdir, "test")

@@ -828,7 +828,7 @@ func main() {
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
-	wasmAbi := flag.String("wasm-abi", "js", "WebAssembly ABI conventions: js (no i64 params) or generic")
+	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	heapSize := flag.String("heap-size", "1M", "default heap size in bytes (only supported by WebAssembly)")
 
 	var flagJSON, flagDeps *bool

@@ -18,5 +18,6 @@
 		"--no-demangle",
 		"{root}/lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a"
 	],
-	"emulator":      ["wasmtime"]
+	"emulator":      ["wasmtime"],
+	"wasm-abi":      "generic"
 }
