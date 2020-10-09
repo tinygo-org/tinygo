@@ -86,6 +86,10 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		}
 	}
 
+	if len(config.Options.WasmCustomSections) > 0 {
+		transform.AddWASMCustomSections(mod, config.Options.WasmCustomSections)
+	}
+
 	// Optimization levels here are roughly the same as Clang, but probably not
 	// exactly.
 	errs = nil

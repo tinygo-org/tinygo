@@ -829,6 +829,8 @@ func main() {
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
 	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
+	wasmCustomSections := flag.String("wasm-custom-sections", "",
+		"space separated additional WebAssembly custom sections: Example) \"name1:content name2:content\"")
 	heapSize := flag.String("heap-size", "1M", "default heap size in bytes (only supported by WebAssembly)")
 
 	var flagJSON, flagDeps *bool
@@ -881,6 +883,22 @@ func main() {
 
 	if *ldFlags != "" {
 		options.LDFlags = strings.Split(*ldFlags, " ")
+	}
+
+	if *wasmCustomSections != "" {
+		secs := strings.Split(*wasmCustomSections, " ")
+		options.WasmCustomSections = make([][2]string, len(secs))
+		for i, sec := range strings.Split(*wasmCustomSections, " ") {
+			s := strings.Split(sec, ":")
+			if len(s) != 2 {
+				fmt.Fprintln(os.Stderr, "Given WASM custom sections are malformed. "+
+					"Sections must be space separated, and each section must be in the form of 'name:content': ",
+					*wasmCustomSections)
+				usage()
+				os.Exit(1)
+			}
+			options.WasmCustomSections[i] = [2]string{s[0], s[1]}
+		}
 	}
 
 	var err error
