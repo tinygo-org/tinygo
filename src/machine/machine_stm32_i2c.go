@@ -91,7 +91,7 @@ const (
 	frameNoOption     = 0xFFFF0000
 )
 
-// addressable represents a type that can provide fully-formatted I2C slave
+// addressable represents a type that can provide fully-formatted I2C peripheral
 // addresses for both read operations and write operations.
 type addressable interface {
 	toRead() uint32
@@ -99,7 +99,7 @@ type addressable interface {
 	bitSize() uint8
 }
 
-// address7Bit and address10Bit stores the unshifted original I2C slave address
+// address7Bit and address10Bit stores the unshifted original I2C peripheral address
 // in an unsigned integral data type and implements the addressable interface
 // to reformat addresses as required for read/write operations.
 //   TODO:
@@ -144,7 +144,7 @@ type I2CConfig struct {
 // Configure is intended to setup the STM32 I2C interface.
 func (i2c I2C) Configure(config I2CConfig) {
 
-	// The following is the required sequence in master mode.
+	// The following is the required sequence in controller mode.
 	// 1. Program the peripheral input clock in I2C_CR2 Register in order to
 	//    generate correct timings
 	// 2. Configure the clock control registers
@@ -192,16 +192,16 @@ func (i2c I2C) Configure(config I2CConfig) {
 
 func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	a := address7Bit(addr)
-	if err := i2c.masterTransmit(a, w); nil != err {
+	if err := i2c.controllerTransmit(a, w); nil != err {
 		return err
 	}
-	if err := i2c.masterReceive(a, r); nil != err {
+	if err := i2c.controllerReceive(a, r); nil != err {
 		return err
 	}
 	return nil
 }
 
-func (i2c I2C) masterTransmit(addr addressable, w []byte) error {
+func (i2c I2C) controllerTransmit(addr addressable, w []byte) error {
 
 	if !i2c.waitForFlag(flagBUSY, false) {
 		return errI2CBusReadyTimeout
@@ -218,8 +218,8 @@ func (i2c I2C) masterTransmit(addr addressable, w []byte) error {
 	pos := 0
 	rem := len(w)
 
-	// send slave address
-	if err := i2c.masterRequestWrite(addr, frameNoOption); nil != err {
+	// send peripheral address
+	if err := i2c.controllerRequestWrite(addr, frameNoOption); nil != err {
 		return err
 	}
 
@@ -258,7 +258,7 @@ func (i2c I2C) masterTransmit(addr addressable, w []byte) error {
 	return nil
 }
 
-func (i2c I2C) masterRequestWrite(addr addressable, option transferOption) error {
+func (i2c I2C) controllerRequestWrite(addr addressable, option transferOption) error {
 
 	if frameFirstAndLast == option || frameFirst == option || frameNoOption == option {
 		// generate start condition
@@ -273,16 +273,16 @@ func (i2c I2C) masterRequestWrite(addr addressable, option transferOption) error
 		return errI2CSignalStartTimeout
 	}
 
-	// send slave address
+	// send peripheral address
 	switch addr.bitSize() {
-	case 7: // 7-bit slave address
+	case 7: // 7-bit peripheral address
 		i2c.Bus.DR.Set(addr.toWrite())
 
-	case 10: // 10-bit slave address
+	case 10: // 10-bit peripheral address
 		// TODO
 	}
 
-	// wait for address ACK from slave
+	// wait for address ACK from peripheral
 	if !i2c.waitForFlagOrError(flagADDR, true) {
 		return errI2CSignalStartTimeout
 	}
@@ -290,7 +290,7 @@ func (i2c I2C) masterRequestWrite(addr addressable, option transferOption) error
 	return nil
 }
 
-func (i2c I2C) masterReceive(addr addressable, r []byte) error {
+func (i2c I2C) controllerReceive(addr addressable, r []byte) error {
 
 	if !i2c.waitForFlag(flagBUSY, false) {
 		return errI2CBusReadyTimeout
@@ -307,8 +307,8 @@ func (i2c I2C) masterReceive(addr addressable, r []byte) error {
 	pos := 0
 	rem := len(r)
 
-	// send slave address
-	if err := i2c.masterRequestRead(addr, frameNoOption); nil != err {
+	// send peripheral address
+	if err := i2c.controllerRequestRead(addr, frameNoOption); nil != err {
 		return err
 	}
 
@@ -445,7 +445,7 @@ func (i2c I2C) masterReceive(addr addressable, r []byte) error {
 	return nil
 }
 
-func (i2c I2C) masterRequestRead(addr addressable, option transferOption) error {
+func (i2c I2C) controllerRequestRead(addr addressable, option transferOption) error {
 
 	// enable ACK
 	i2c.Bus.CR1.SetBits(stm32.I2C_CR1_ACK)
@@ -463,16 +463,16 @@ func (i2c I2C) masterRequestRead(addr addressable, option transferOption) error 
 		return errI2CSignalStartTimeout
 	}
 
-	// send slave address
+	// send peripheral address
 	switch addr.bitSize() {
-	case 7: // 7-bit slave address
+	case 7: // 7-bit peripheral address
 		i2c.Bus.DR.Set(addr.toRead())
 
-	case 10: // 10-bit slave address
+	case 10: // 10-bit peripheral address
 		// TODO
 	}
 
-	// wait for address ACK from slave
+	// wait for address ACK from peripheral
 	if !i2c.waitForFlagOrError(flagADDR, true) {
 		return errI2CSignalStartTimeout
 	}
