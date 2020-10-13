@@ -107,6 +107,16 @@ func (p Pin) Configure(config PinConfig) {
 	}
 }
 
+// Get returns the current value of a GPIO pin when the pin is configured as an
+// input.
+func (p Pin) Get() bool {
+	if p < 32 {
+		return esp.GPIO.IN.Get()&(1<<p) != 0
+	} else {
+		return esp.GPIO.IN1.Get()&(1<<(p-32)) != 0
+	}
+}
+
 // Set sets the output value of this pin to high (true) or low (false).
 func (p Pin) Set(value bool) {
 	if value {
