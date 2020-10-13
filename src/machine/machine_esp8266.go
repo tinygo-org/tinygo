@@ -113,7 +113,7 @@ func (p Pin) Get() bool {
 	// See this document for details
 	// https://www.espressif.com/sites/default/files/documentation/esp8266-technical_reference_en.pdf
 
-	return esp.GPIO.IN.Get()&(1<<p) != 0
+	return esp.GPIO.GPIO_IN.Get()&(p) != 0
 }
 
 // Set sets the output value of this pin to high (true) or low (false).
