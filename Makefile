@@ -363,7 +363,7 @@ ifneq ($(AVR), 0)
 	@$(MD5SUM) test.hex
 endif
 ifneq ($(XTENSA), 0)
-	$(TINYGO) build -size short -o test.bin -target=esp32-wroom-32      examples/blinky1
+	$(TINYGO) build -size short -o test.bin -target=esp32-mini32      	examples/blinky1
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=nodemcu             examples/blinky1
 	@$(MD5SUM) test.bin
