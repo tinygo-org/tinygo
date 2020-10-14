@@ -64,7 +64,7 @@ func gosched()
 
 // PutcharUART writes a byte to the UART synchronously, without using interrupts
 // or calling the scheduler
-func PutcharUART(u UART, c byte) {
+func PutcharUART(u *UART, c byte) {
 	// ensure the UART has been configured
 	if !u.SCGC.HasBits(u.SCGCMask) {
 		u.configure(UARTConfig{}, false)
@@ -79,15 +79,13 @@ func PutcharUART(u UART, c byte) {
 
 // PollUART manually checks a UART status and calls the ISR. This should only be
 // called by runtime.abort.
-func PollUART(u UART) {
+func PollUART(u *UART) {
 	if u.SCGC.HasBits(u.SCGCMask) {
 		u.handleStatusInterrupt(u.Interrupt)
 	}
 }
 
-type UART = *UARTData
-
-type UARTData struct {
+type UART struct {
 	*nxp.UART_Type
 	SCGC     *volatile.Register32
 	SCGCMask uint32
@@ -103,11 +101,11 @@ type UARTData struct {
 	Interrupt    interrupt.Interrupt
 }
 
-var UART0 = UARTData{UART_Type: nxp.UART0, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART0, DefaultRX: defaultUART0RX, DefaultTX: defaultUART0TX}
-var UART1 = UARTData{UART_Type: nxp.UART1, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART1, DefaultRX: defaultUART1RX, DefaultTX: defaultUART1TX}
-var UART2 = UARTData{UART_Type: nxp.UART2, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART2, DefaultRX: defaultUART2RX, DefaultTX: defaultUART2TX}
-var UART3 = UARTData{UART_Type: nxp.UART3, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART3, DefaultRX: defaultUART3RX, DefaultTX: defaultUART3TX}
-var UART4 = UARTData{UART_Type: nxp.UART4, SCGC: &nxp.SIM.SCGC1, SCGCMask: nxp.SIM_SCGC1_UART4, DefaultRX: defaultUART4RX, DefaultTX: defaultUART4TX}
+var UART0 = UART{UART_Type: nxp.UART0, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART0, DefaultRX: defaultUART0RX, DefaultTX: defaultUART0TX}
+var UART1 = UART{UART_Type: nxp.UART1, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART1, DefaultRX: defaultUART1RX, DefaultTX: defaultUART1TX}
+var UART2 = UART{UART_Type: nxp.UART2, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART2, DefaultRX: defaultUART2RX, DefaultTX: defaultUART2TX}
+var UART3 = UART{UART_Type: nxp.UART3, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART3, DefaultRX: defaultUART3RX, DefaultTX: defaultUART3TX}
+var UART4 = UART{UART_Type: nxp.UART4, SCGC: &nxp.SIM.SCGC1, SCGCMask: nxp.SIM_SCGC1_UART4, DefaultRX: defaultUART4RX, DefaultTX: defaultUART4TX}
 
 func init() {
 	UART0.Interrupt = interrupt.New(nxp.IRQ_UART0_RX_TX, UART0.handleStatusInterrupt)
@@ -118,11 +116,11 @@ func init() {
 }
 
 // Configure the UART.
-func (u UART) Configure(config UARTConfig) {
+func (u *UART) Configure(config UARTConfig) {
 	u.configure(config, true)
 }
 
-func (u UART) configure(config UARTConfig, canSched bool) {
+func (u *UART) configure(config UARTConfig, canSched bool) {
 	// from: serial_begin
 
 	if !u.Configured {
@@ -183,7 +181,7 @@ func (u UART) configure(config UARTConfig, canSched bool) {
 	}
 }
 
-func (u UART) Disable() {
+func (u *UART) Disable() {
 	// from: serial_end
 
 	// check if the device has been enabled already
@@ -206,13 +204,13 @@ func (u UART) Disable() {
 	u.Buffer.Clear()
 }
 
-func (u UART) Flush() {
+func (u *UART) Flush() {
 	for u.Transmitting.Get() != 0 {
 		gosched()
 	}
 }
 
-func (u UART) handleStatusInterrupt(interrupt.Interrupt) {
+func (u *UART) handleStatusInterrupt(interrupt.Interrupt) {
 	// from: uart0_status_isr
 
 	// receive
@@ -290,7 +288,7 @@ func (u UART) handleStatusInterrupt(interrupt.Interrupt) {
 }
 
 // WriteByte writes a byte of data to the UART.
-func (u UART) WriteByte(c byte) error {
+func (u *UART) WriteByte(c byte) error {
 	if !u.Configured {
 		return ErrNotConfigured
 	}
