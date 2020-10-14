@@ -1,6 +1,7 @@
 {
 	"llvm-target":   "wasm32--wasi",
 	"build-tags":    ["wasm", "wasi"],
+	"output":        "native",
 	"goos":          "linux",
 	"goarch":        "arm",
 	"compiler":      "clang",

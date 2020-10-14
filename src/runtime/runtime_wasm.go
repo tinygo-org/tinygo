@@ -27,7 +27,7 @@ var (
 	}
 )
 
-func putchar(c byte) {
+func nativePutchar(c byte) {
 	// write to stdout
 	const stdout = 1
 	var nwritten uint

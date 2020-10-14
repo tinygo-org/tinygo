@@ -815,6 +815,7 @@ func main() {
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, extalloc, conservative)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
 	scheduler := flag.String("scheduler", "", "which scheduler to use (none, coroutines, tasks)")
+	output := flag.String("output", "", "which output to use for panic and print functions")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
@@ -864,6 +865,7 @@ func main() {
 		GC:            *gc,
 		PanicStrategy: *panicStrategy,
 		Scheduler:     *scheduler,
+		Output:        *output,
 		PrintIR:       *printIR,
 		DumpSSA:       *dumpSSA,
 		VerifyIR:      *verifyIR,

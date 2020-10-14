@@ -2,6 +2,7 @@
 	"inherits": ["cortex-m"],
 	"llvm-target": "armv7m-none-eabi",
 	"build-tags": ["qemu", "lm3s6965"],
+	"output": "native",
 	"cflags": [
 		"--target=armv7m-none-eabi",
 		"-Qunused-arguments"

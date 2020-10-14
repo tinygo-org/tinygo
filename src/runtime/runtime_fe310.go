@@ -6,7 +6,6 @@
 package runtime
 
 import (
-	"machine"
 	"unsafe"
 
 	"device/riscv"
@@ -93,11 +92,7 @@ func initPeripherals() {
 	sifive.RTC.RTCCFG.Set(sifive.RTC_RTCCFG_ENALWAYS)
 
 	// Configure the UART.
-	machine.UART0.Configure(machine.UARTConfig{})
-}
-
-func putchar(c byte) {
-	machine.UART0.WriteByte(c)
+	initOutput()
 }
 
 const asyncScheduler = false

@@ -62,7 +62,7 @@ func runMain() {
 	run()
 }
 
-func putchar(c byte) {
+func nativePutchar(c byte) {
 	_putchar(int(c))
 }
 

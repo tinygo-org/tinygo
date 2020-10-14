@@ -59,24 +59,6 @@ var (
 	ErrNotConfigured  = errors.New("device has not been configured")
 )
 
-//go:linkname gosched runtime.Gosched
-func gosched()
-
-// PutcharUART writes a byte to the UART synchronously, without using interrupts
-// or calling the scheduler
-func PutcharUART(u UART, c byte) {
-	// ensure the UART has been configured
-	if !u.SCGC.HasBits(u.SCGCMask) {
-		u.configure(UARTConfig{}, false)
-	}
-
-	for u.TCFIFO.Get() > 0 {
-		// busy wait
-	}
-	u.D.Set(c)
-	u.C2.Set(uartC2TXActive)
-}
-
 // PollUART manually checks a UART status and calls the ISR. This should only be
 // called by runtime.abort.
 func PollUART(u UART) {
@@ -119,10 +101,6 @@ func init() {
 
 // Configure the UART.
 func (u UART) Configure(config UARTConfig) {
-	u.configure(config, true)
-}
-
-func (u UART) configure(config UARTConfig, canSched bool) {
 	// from: serial_begin
 
 	if !u.Configured {
@@ -150,13 +128,7 @@ func (u UART) configure(config UARTConfig, canSched bool) {
 
 	if u.Configured {
 		// don't change baud rate mid transmit
-		if canSched {
-			u.Flush()
-		} else {
-			for u.Transmitting.Get() != 0 {
-				// busy wait flush
-			}
-		}
+		u.Flush()
 	}
 
 	// set the divisor
@@ -208,7 +180,6 @@ func (u UART) Disable() {
 
 func (u UART) Flush() {
 	for u.Transmitting.Get() != 0 {
-		gosched()
 	}
 }
 
@@ -291,15 +262,11 @@ func (u UART) handleStatusInterrupt(interrupt.Interrupt) {
 
 // WriteByte writes a byte of data to the UART.
 func (u UART) WriteByte(c byte) error {
-	if !u.Configured {
-		return ErrNotConfigured
+	// ensure the UART has been configured
+	for u.TCFIFO.Get() > 0 {
+		// busy wait
 	}
-
-	for !u.TXBuffer.Put(c) {
-		gosched()
-	}
-
-	u.Transmitting.Set(1)
+	u.D.Set(c)
 	u.C2.Set(uartC2TXActive)
 	return nil
 }

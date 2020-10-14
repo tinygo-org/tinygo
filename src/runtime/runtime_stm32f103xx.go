@@ -14,11 +14,7 @@ func init() {
 	initCLK()
 	initRTC()
 	initTIM()
-	machine.UART0.Configure(machine.UARTConfig{})
-}
-
-func putchar(c byte) {
-	machine.UART0.WriteByte(c)
+	initOutput()
 }
 
 // initCLK sets clock to 72MHz using HSE 8MHz crystal w/ PLL X 9 (8MHz x 9 = 72MHz).

@@ -3,6 +3,7 @@
 	"build-tags":    ["js", "wasm"],
 	"goos":          "js",
 	"goarch":        "wasm",
+	"output":        "native",
 	"compiler":      "clang",
 	"linker":        "wasm-ld",
 	"cflags": [

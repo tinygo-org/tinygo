@@ -5,17 +5,12 @@ package runtime
 import (
 	"device"
 	"device/esp"
-	"machine"
 	"unsafe"
 )
 
 type timeUnit int64
 
 var currentTime timeUnit = 0
-
-func putchar(c byte) {
-	machine.UART0.WriteByte(c)
-}
 
 // Write to the internal control bus (using I2C?).
 // Signature found here:
@@ -37,7 +32,7 @@ func main() {
 	rom_i2c_writeReg(103, 4, 2, 145)
 
 	// Initialize UART.
-	machine.UART0.Configure(machine.UARTConfig{})
+	initOutput()
 
 	// Initialize timer. Bits:
 	//  ENABLE:   timer enable

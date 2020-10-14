@@ -4,7 +4,6 @@ package runtime
 
 import (
 	"device/avr"
-	"machine"
 	"unsafe"
 )
 
@@ -37,6 +36,7 @@ var _ebss [0]byte
 //export main
 func main() {
 	preinit()
+	initOutput()
 	run()
 	abort()
 }
@@ -53,18 +53,6 @@ func preinit() {
 func postinit() {
 	// Enable interrupts after initialization.
 	avr.Asm("sei")
-}
-
-func init() {
-	initUART()
-}
-
-func initUART() {
-	machine.UART0.Configure(machine.UARTConfig{})
-}
-
-func putchar(c byte) {
-	machine.UART0.WriteByte(c)
 }
 
 const asyncScheduler = false

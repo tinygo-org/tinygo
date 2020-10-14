@@ -337,6 +337,10 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-nrf52840  examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=teensy36            examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build             -o test.nro -target=nintendoswitch      examples/serial
+	@$(MD5SUM) test.nro
 	# test pwm
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0        examples/pwm
 	@$(MD5SUM) test.hex
@@ -379,8 +383,9 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -opt=1     examples/blinky1
 	@$(MD5SUM) test.hex
-	$(TINYGO) build             -o test.nro -target=nintendoswitch      examples/serial
-	@$(MD5SUM) test.nro
+	$(TINYGO) build             -o test.wasm -target=wasm    -output=none examples/serial
+	$(TINYGO) build -size short -o test.hex -target=pca10040 -output=none examples/serial
+	@$(MD5SUM) test.hex
 
 wasmtest:
 	$(GO) test ./tests/wasm

@@ -5,7 +5,6 @@ package runtime
 import (
 	"device/arm"
 	"device/stm32"
-	"machine"
 	"runtime/interrupt"
 	"runtime/volatile"
 )
@@ -13,12 +12,8 @@ import (
 func init() {
 	initCLK()
 	initTIM3()
-	machine.UART0.Configure(machine.UARTConfig{})
+	initOutput()
 	initTIM7()
-}
-
-func putchar(c byte) {
-	machine.UART0.WriteByte(c)
 }
 
 const (

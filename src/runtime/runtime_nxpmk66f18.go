@@ -56,6 +56,7 @@ func main() {
 	initSystem()
 	arm.Asm("CPSIE i")
 	initInternal()
+	initOutput()
 
 	run()
 	abort()
@@ -228,10 +229,6 @@ func initInternal() {
 }
 
 func postinit() {}
-
-func putchar(c byte) {
-	machine.PutcharUART(&machine.UART0, c)
-}
 
 // ???
 const asyncScheduler = false

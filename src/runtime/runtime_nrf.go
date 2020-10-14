@@ -25,7 +25,7 @@ func main() {
 }
 
 func init() {
-	machine.UART0.Configure(machine.UARTConfig{})
+	initOutput()
 	initLFCLK()
 	initRTC()
 }
@@ -49,10 +49,6 @@ func initRTC() {
 	})
 	intr.SetPriority(0xc0) // low priority
 	intr.Enable()
-}
-
-func putchar(c byte) {
-	machine.UART0.WriteByte(c)
 }
 
 const asyncScheduler = false

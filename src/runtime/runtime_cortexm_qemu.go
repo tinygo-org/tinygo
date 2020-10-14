@@ -49,7 +49,7 @@ func ticks() timeUnit {
 // UART0 output register.
 var stdoutWrite = (*volatile.Register8)(unsafe.Pointer(uintptr(0x4000c000)))
 
-func putchar(c byte) {
+func nativePutchar(c byte) {
 	stdoutWrite.Set(uint8(c))
 }
 

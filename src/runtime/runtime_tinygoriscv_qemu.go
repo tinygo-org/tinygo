@@ -54,7 +54,7 @@ var (
 	testFinisher = (*volatile.Register16)(unsafe.Pointer(uintptr(0x100000)))
 )
 
-func putchar(c byte) {
+func nativePutchar(c byte) {
 	stdoutWrite.Set(uint8(c))
 }
 

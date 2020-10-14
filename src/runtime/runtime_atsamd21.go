@@ -5,7 +5,6 @@ package runtime
 import (
 	"device/arm"
 	"device/sam"
-	"machine"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
@@ -29,12 +28,8 @@ func init() {
 	initUSBClock()
 	initADCClock()
 
-	// connect to USB CDC interface
-	machine.UART0.Configure(machine.UARTConfig{})
-}
-
-func putchar(c byte) {
-	machine.UART0.WriteByte(c)
+	// configure stdout (usually USB-CDC)
+	initOutput()
 }
 
 func initClocks() {

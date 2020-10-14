@@ -9,10 +9,6 @@ import (
 
 type timeUnit int64
 
-func putchar(c byte) {
-	// dummy, TODO
-}
-
 //go:extern _sbss
 var _sbss [0]byte
 

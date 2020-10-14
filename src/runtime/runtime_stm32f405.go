@@ -5,16 +5,15 @@ package runtime
 import (
 	"device/arm"
 	"device/stm32"
-	"machine"
 	"runtime/interrupt"
 	"runtime/volatile"
 )
 
 func init() {
-	initOSC() // configure oscillators
-	initCLK() // configure CPU, AHB, and APB bus clocks
-	initTIM() // configure timers
-	initCOM() // configure serial comm interfaces
+	initOSC()    // configure oscillators
+	initCLK()    // configure CPU, AHB, and APB bus clocks
+	initTIM()    // configure timers
+	initOutput() // configure default output for println etc
 }
 
 const (
@@ -176,12 +175,6 @@ func initTIM() {
 	tim7.Enable()
 }
 
-func initCOM() {
-	if machine.NUM_UART_INTERFACES > 0 {
-		machine.UART0.Configure(machine.UARTConfig{})
-	}
-}
-
 var (
 	// tick in milliseconds
 	tickCount   timeUnit
@@ -241,8 +234,4 @@ func handleTIM7(interrupt.Interrupt) {
 		stm32.TIM7.SR.ClearBits(stm32.TIM_SR_UIF) // clear the update flag
 		tickCount++
 	}
-}
-
-func putchar(c byte) {
-	machine.UART0.WriteByte(c)
 }

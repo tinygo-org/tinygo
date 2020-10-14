@@ -8,6 +8,7 @@ import (
 var (
 	validGCOptions            = []string{"none", "leaking", "extalloc", "conservative"}
 	validSchedulerOptions     = []string{"none", "tasks", "coroutines"}
+	validOutputOptions        = []string{"none", "native", "uart", "custom"}
 	validPrintSizeOptions     = []string{"none", "short", "full"}
 	validPanicStrategyOptions = []string{"print", "trap"}
 )
@@ -20,6 +21,7 @@ type Options struct {
 	GC            string
 	PanicStrategy string
 	Scheduler     string
+	Output        string
 	PrintIR       bool
 	DumpSSA       bool
 	VerifyIR      bool
@@ -52,6 +54,15 @@ func (o *Options) Verify() error {
 			return fmt.Errorf(`invalid scheduler option '%s': valid values are %s`,
 				o.Scheduler,
 				strings.Join(validSchedulerOptions, ", "))
+		}
+	}
+
+	if o.Output != "" {
+		valid := isInArray(validOutputOptions, o.Output)
+		if !valid {
+			return fmt.Errorf(`invalid output option '%s': valid values are %s`,
+				o.Output,
+				strings.Join(validOutputOptions, ", "))
 		}
 	}
 

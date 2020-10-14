@@ -5,17 +5,12 @@ package runtime
 import (
 	"device"
 	"device/esp"
-	"machine"
 	"unsafe"
 )
 
 type timeUnit int64
 
 var currentTime timeUnit
-
-func putchar(c byte) {
-	machine.UART0.WriteByte(c)
-}
 
 func postinit() {}
 
@@ -52,8 +47,7 @@ func main() {
 	// faster.
 	preinit()
 
-	// Initialize UART.
-	machine.UART0.Configure(machine.UARTConfig{})
+	initOutput()
 
 	// Configure timer 0 in timer group 0, for timekeeping.
 	//   EN:       Enable the timer.

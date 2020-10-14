@@ -115,6 +115,12 @@ type UART struct {
 	Buffer *RingBuffer
 }
 
+// UART
+var (
+	// UART0 is the hardware serial port on the AVR.
+	UART0 = UART{Buffer: NewRingBuffer()}
+)
+
 // Configure the UART on the AVR. Defaults to 9600 baud on Arduino.
 func (uart UART) Configure(config UARTConfig) {
 	if config.BaudRate == 0 {

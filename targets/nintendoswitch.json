@@ -3,6 +3,7 @@
   "build-tags": ["nintendoswitch", "arm64"],
   "goos": "linux",
   "goarch": "arm64",
+  "output": "native",
   "compiler": "clang",
   "linker": "ld.lld",
   "rtlib": "compiler-rt",

@@ -79,7 +79,7 @@ func (c *Config) GOARCH() string {
 
 // BuildTags returns the complete list of build tags used during this build.
 func (c *Config) BuildTags() []string {
-	tags := append(c.Target.BuildTags, []string{"tinygo", "gc." + c.GC(), "scheduler." + c.Scheduler()}...)
+	tags := append(c.Target.BuildTags, []string{"tinygo", "gc." + c.GC(), "scheduler." + c.Scheduler(), "output." + c.Output()}...)
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
@@ -140,6 +140,18 @@ func (c *Config) Scheduler() string {
 	}
 	// Fall back to coroutines, which are supported everywhere.
 	return "coroutines"
+}
+
+// Output returns the selected output for logging from the runtime, such as for
+// println and panic.
+func (c *Config) Output() string {
+	if c.Options.Output != "" {
+		return c.Options.Output
+	}
+	if c.Target.Output != "" {
+		return c.Target.Output
+	}
+	return "uart"
 }
 
 // FuncImplementation picks an appropriate func value implementation for the
