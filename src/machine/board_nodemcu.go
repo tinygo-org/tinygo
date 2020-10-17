@@ -19,3 +19,17 @@ const (
 
 // Onboard blue LED (on the AI-Thinker module).
 const LED = D4
+
+// SPI pins
+const (
+	SPI0_SCK_PIN = D5
+	SPI0_SDO_PIN = D7
+	SPI0_SDI_PIN = D6
+	SPI0_CS0_PIN = D8
+)
+
+// I2C pins
+const (
+	SDA_PIN = D2
+	SCL_PIN = D1
+)
