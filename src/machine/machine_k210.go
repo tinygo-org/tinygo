@@ -442,7 +442,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 	// Set default frequency.
 	if config.Frequency == 0 {
-		config.Frequency = 500000
+		config.Frequency = 4000000 // 4MHz
 	}
 
 	baudr := CPUFrequency() / config.Frequency

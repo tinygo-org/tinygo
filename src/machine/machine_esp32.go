@@ -310,7 +310,7 @@ type SPIConfig struct {
 // Configure and make the SPI peripheral ready to use.
 func (spi SPI) Configure(config SPIConfig) error {
 	if config.Frequency == 0 {
-		config.Frequency = 1e6 // default to 1MHz
+		config.Frequency = 4e6 // default to 4MHz
 	}
 
 	// Configure the SPI clock. This assumes a peripheral clock of 80MHz.
