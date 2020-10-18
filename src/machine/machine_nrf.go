@@ -357,23 +357,25 @@ func (spi SPI) Configure(config SPIConfig) {
 	// set frequency
 	var freq uint32
 
-	switch config.Frequency {
-	case 125000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_K125
-	case 250000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_K250
-	case 500000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_K500
-	case 1000000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_M1
-	case 2000000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_M2
-	case 4000000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_M4
-	case 8000000:
+	if config.Frequency == 0 {
+		config.Frequency = 4000000 // 4MHz
+	}
+
+	switch {
+	case config.Frequency >= 8000000:
 		freq = nrf.SPI_FREQUENCY_FREQUENCY_M8
-	default:
+	case config.Frequency >= 4000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M4
+	case config.Frequency >= 2000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M2
+	case config.Frequency >= 1000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M1
+	case config.Frequency >= 500000:
 		freq = nrf.SPI_FREQUENCY_FREQUENCY_K500
+	case config.Frequency >= 250000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K250
+	default: // below 250kHz, default to the lowest speed available
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K125
 	}
 	spi.Bus.FREQUENCY.Set(freq)
 
