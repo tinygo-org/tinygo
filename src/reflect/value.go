@@ -713,10 +713,6 @@ func (e *ValueError) Error() string {
 // llvm.memcpy.p0i8.p0i8.i32().
 func memcpy(dst, src unsafe.Pointer, size uintptr)
 
-// Calls to this function are converted to LLVM intrinsic calls such as
-// llvm.memmove.p0i8.p0i8.i32(dst, src, size, false).
-func memmove(dst, src unsafe.Pointer, size uintptr)
-
 // Copy copies the contents of src into dst until either
 // dst has been filled or src has been exhausted.
 func Copy(dst, src Value) int {
