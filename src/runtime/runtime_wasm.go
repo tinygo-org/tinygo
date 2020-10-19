@@ -18,21 +18,36 @@ func fd_write(id uint32, iovs *__wasi_iovec_t, iovs_len uint, nwritten *uint) (e
 
 func postinit() {}
 
+const (
+	putcharBufferSize = 120
+	stdout            = 1
+)
+
 // Using global variables to avoid heap allocation.
 var (
-	putcharBuf   = byte(0)
-	putcharIOVec = __wasi_iovec_t{
-		buf:    unsafe.Pointer(&putcharBuf),
-		bufLen: 1,
+	putcharBuffer        = [putcharBufferSize]byte{}
+	putcharPosition uint = 0
+	putcharIOVec         = __wasi_iovec_t{
+		buf: unsafe.Pointer(&putcharBuffer[0]),
 	}
+	putcharNWritten uint
 )
 
 func putchar(c byte) {
-	// write to stdout
-	const stdout = 1
-	var nwritten uint
-	putcharBuf = c
-	fd_write(stdout, &putcharIOVec, 1, &nwritten)
+	if putcharPosition >= putcharBufferSize {
+		putcharIOVec.bufLen = putcharPosition
+		fd_write(stdout, &putcharIOVec, 1, &putcharNWritten)
+		putcharPosition = 0
+	}
+
+	putcharBuffer[putcharPosition] = c
+	putcharPosition++
+
+	if c == '\n' {
+		putcharIOVec.bufLen = putcharPosition
+		fd_write(stdout, &putcharIOVec, 1, &putcharNWritten)
+		putcharPosition = 0
+	}
 }
 
 // Abort executes the wasm 'unreachable' instruction.
