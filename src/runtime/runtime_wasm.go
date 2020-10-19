@@ -34,16 +34,10 @@ var (
 )
 
 func putchar(c byte) {
-	if putcharPosition >= putcharBufferSize {
-		putcharIOVec.bufLen = putcharPosition
-		fd_write(stdout, &putcharIOVec, 1, &putcharNWritten)
-		putcharPosition = 0
-	}
-
 	putcharBuffer[putcharPosition] = c
 	putcharPosition++
 
-	if c == '\n' {
+	if c == '\n' || putcharPosition >= putcharBufferSize {
 		putcharIOVec.bufLen = putcharPosition
 		fd_write(stdout, &putcharIOVec, 1, &putcharNWritten)
 		putcharPosition = 0
