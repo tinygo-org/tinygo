@@ -149,8 +149,10 @@ func (spi SPI) Configure(config SPIConfig) error {
 		clockDivider = SPI_CLOCK_FOSC16
 	case config.Frequency >= 1500000 && config.Frequency < 3000000:
 		clockDivider = SPI_CLOCK_FOSC8
-	case config.Frequency >= 3000000 && config.Frequency <= 6000000:
+	case config.Frequency >= 3000000 && config.Frequency < 6000000:
 		clockDivider = SPI_CLOCK_FOSC4
+	case config.Frequency >= 6000000:
+		clockDivider = SPI_CLOCK_FOSC2
 	default:
 		return errors.New("invalid clock speed for spi")
 	}
