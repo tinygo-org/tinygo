@@ -106,7 +106,7 @@ const (
 // SPIConfig
 type SPIConfig struct {
 	LSBfirst bool
-	// Frequency defaults to 4000000Hertz if not set
+	// Frequency defaults to 6000000Hertz if not set
 	Frequency uint32
 	// Mode can be 0, 1, 2, 3, 4, 5
 	Mode uint8
