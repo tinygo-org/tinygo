@@ -89,7 +89,7 @@ func int8s() {
 	sort.Slice(ud, func(i, j int) bool {
 		return ud[i] > ud[j]
 	})
-	println("uint16s")
+	println("uint8s")
 	for _, d := range ud {
 		println(d)
 	}
