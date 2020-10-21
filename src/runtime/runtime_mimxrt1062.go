@@ -5,6 +5,7 @@ package runtime
 import (
 	"device/arm"
 	"device/nxp"
+	"machine"
 	"math/bits"
 	"unsafe"
 )
@@ -114,6 +115,7 @@ func initPeripherals() {
 	initPins()        // configure GPIO
 
 	enablePeripheralClocks() // activate peripheral clock gates
+	initUART()               // configure UART (initialized first for debugging)
 }
 
 func initPins() {
@@ -124,7 +126,13 @@ func initPins() {
 	nxp.IOMUXC_GPR.GPR29.Set(0xFFFFFFFF)
 }
 
-func putchar(c byte) {}
+func initUART() {
+	machine.UART1.Configure(machine.UARTConfig{})
+}
+
+func putchar(c byte) {
+	machine.UART1.WriteByte(c)
+}
 
 func abort() {
 	for {
