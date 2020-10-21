@@ -2,6 +2,11 @@
 
 package machine
 
+import (
+	"device/nxp"
+	"runtime/interrupt"
+)
+
 // Digital pins
 const (
 	//  = Pin  // [Pad]:       Alt Func 0       Alt Func 1       Alt Func 2       Alt Func 3      Alt Func 4            Alt Func 5  Alt Func 6            Alt Func 7             Alt Func 8             Alt Func 9
@@ -83,6 +88,17 @@ const (
 	I2C_SCL_PIN = I2C1_SCL_PIN // D19/A5
 )
 
+func init() {
+	// register any interrupt handlers for this board's peripherals
+	UART1.Interrupt = interrupt.New(nxp.IRQ_LPUART6, UART1.handleInterrupt)
+	UART2.Interrupt = interrupt.New(nxp.IRQ_LPUART4, UART2.handleInterrupt)
+	UART3.Interrupt = interrupt.New(nxp.IRQ_LPUART2, UART3.handleInterrupt)
+	UART4.Interrupt = interrupt.New(nxp.IRQ_LPUART3, UART4.handleInterrupt)
+	UART5.Interrupt = interrupt.New(nxp.IRQ_LPUART8, UART5.handleInterrupt)
+	UART6.Interrupt = interrupt.New(nxp.IRQ_LPUART1, UART6.handleInterrupt)
+	UART7.Interrupt = interrupt.New(nxp.IRQ_LPUART7, UART7.handleInterrupt)
+}
+
 // #=====================================================#
 // |                        UART                         |
 // #===========#===========#=============#===============#
@@ -119,8 +135,88 @@ const (
 	UART7_TX_PIN = D29
 )
 
-// #==================================================================#
-// |                               SPI                                |
+var (
+	UART1 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    nxp.LPUART6,
+		muxRX: muxSelect{ // D0 (PA3 [AD_B0_03])
+			mux: nxp.IOMUXC_LPUART6_RX_SELECT_INPUT_DAISY_GPIO_AD_B0_03_ALT2,
+			sel: &nxp.IOMUXC.LPUART6_RX_SELECT_INPUT,
+		},
+		muxTX: muxSelect{ // D1 (PA2 [AD_B0_02])
+			mux: nxp.IOMUXC_LPUART6_TX_SELECT_INPUT_DAISY_GPIO_AD_B0_02_ALT2,
+			sel: &nxp.IOMUXC.LPUART6_TX_SELECT_INPUT,
+		},
+	}
+	UART2 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    nxp.LPUART4,
+		muxRX: muxSelect{ // D7 (PB17 [B1_01])
+			mux: nxp.IOMUXC_LPUART4_RX_SELECT_INPUT_DAISY_GPIO_B1_01_ALT2,
+			sel: &nxp.IOMUXC.LPUART4_RX_SELECT_INPUT,
+		},
+		muxTX: muxSelect{ // D8 (PB16 [B1_00])
+			mux: nxp.IOMUXC_LPUART4_TX_SELECT_INPUT_DAISY_GPIO_B1_00_ALT2,
+			sel: &nxp.IOMUXC.LPUART4_TX_SELECT_INPUT,
+		},
+	}
+	UART3 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    nxp.LPUART2,
+		muxRX: muxSelect{ // D15 (PA19 [AD_B1_03])
+			mux: nxp.IOMUXC_LPUART2_RX_SELECT_INPUT_DAISY_GPIO_AD_B1_03_ALT2,
+			sel: &nxp.IOMUXC.LPUART2_RX_SELECT_INPUT,
+		},
+		muxTX: muxSelect{ // D14 (PA18 [AD_B1_02])
+			mux: nxp.IOMUXC_LPUART2_TX_SELECT_INPUT_DAISY_GPIO_AD_B1_02_ALT2,
+			sel: &nxp.IOMUXC.LPUART2_TX_SELECT_INPUT,
+		},
+	}
+	UART4 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    nxp.LPUART3,
+		muxRX: muxSelect{ // D16 (PA23 [AD_B1_07])
+			mux: nxp.IOMUXC_LPUART3_RX_SELECT_INPUT_DAISY_GPIO_AD_B1_07_ALT2,
+			sel: &nxp.IOMUXC.LPUART3_RX_SELECT_INPUT,
+		},
+		muxTX: muxSelect{ // D17 (PA22 [AD_B1_06])
+			mux: nxp.IOMUXC_LPUART3_TX_SELECT_INPUT_DAISY_GPIO_AD_B1_06_ALT2,
+			sel: &nxp.IOMUXC.LPUART3_TX_SELECT_INPUT,
+		},
+	}
+	UART5 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    nxp.LPUART8,
+		muxRX: muxSelect{ // D21 (PA27 [AD_B1_11])
+			mux: nxp.IOMUXC_LPUART8_RX_SELECT_INPUT_DAISY_GPIO_AD_B1_11_ALT2,
+			sel: &nxp.IOMUXC.LPUART8_RX_SELECT_INPUT,
+		},
+		muxTX: muxSelect{ // D20 (PA26 [AD_B1_10])
+			mux: nxp.IOMUXC_LPUART8_TX_SELECT_INPUT_DAISY_GPIO_AD_B1_10_ALT2,
+			sel: &nxp.IOMUXC.LPUART8_TX_SELECT_INPUT,
+		},
+	}
+	UART6 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    nxp.LPUART1,
+		// LPUART1 not connected via IOMUXC
+		//   RX: D24 (PA12 [AD_B0_12])
+		//   TX: D25 (PA13 [AD_B0_13])
+	}
+	UART7 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    nxp.LPUART7,
+		muxRX: muxSelect{ // D28 (PC18 [EMC_32])
+			mux: nxp.IOMUXC_LPUART7_RX_SELECT_INPUT_DAISY_GPIO_EMC_32_ALT2,
+			sel: &nxp.IOMUXC.LPUART7_RX_SELECT_INPUT,
+		},
+		muxTX: muxSelect{ // D29 (PD31 [EMC_31])
+			mux: nxp.IOMUXC_LPUART7_TX_SELECT_INPUT_DAISY_GPIO_EMC_31_ALT2,
+			sel: &nxp.IOMUXC.LPUART7_TX_SELECT_INPUT,
+		},
+	}
+)
+
 // #===========#==========#===============#===========================#
 // | Interface | Hardware |  Clock(Freq)  | SDI/SDO/SCK/CS  :   Alt   |
 // #===========#==========#===============#=================-=========#
