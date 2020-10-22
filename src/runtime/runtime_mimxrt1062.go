@@ -5,6 +5,7 @@ package runtime
 import (
 	"device/arm"
 	"device/nxp"
+	"math/bits"
 	"unsafe"
 )
 
@@ -46,20 +47,36 @@ func main() {
 	abort()
 }
 
+func getRamSizeConfig(itcmKB, dtcmKB uint32) uint32 {
+	const minKB, disabled = uint32(4), uint32(0)
+	if itcmKB < minKB {
+		itcmKB = disabled
+	}
+	if dtcmKB < minKB {
+		dtcmKB = disabled
+	}
+	itcmKB = uint32(bits.Len(uint(itcmKB))) << nxp.IOMUXC_GPR_GPR14_CM7_CFGITCMSZ_Pos
+	dtcmKB = uint32(bits.Len(uint(dtcmKB))) << nxp.IOMUXC_GPR_GPR14_CM7_CFGDTCMSZ_Pos
+	return (itcmKB & nxp.IOMUXC_GPR_GPR14_CM7_CFGITCMSZ_Msk) |
+		(dtcmKB & nxp.IOMUXC_GPR_GPR14_CM7_CFGDTCMSZ_Msk)
+}
+
 func initSystem() {
 
-	// configure SRAM capacity
+	// configure SRAM capacity (512K for both ITCM and DTCM)
 	ramc := uintptr(unsafe.Pointer(&_flexram_cfg))
 	nxp.IOMUXC_GPR.GPR17.Set(uint32(ramc))
 	nxp.IOMUXC_GPR.GPR16.Set(0x00200007)
-	nxp.IOMUXC_GPR.GPR14.Set(0x00AA0000)
+	nxp.IOMUXC_GPR.GPR14.Set(getRamSizeConfig(512, 512))
 
-	// use bandgap-based bias currents for best performance (Page 1175) [Teensyduino]
-	nxp.PMU.MISC0_SET.Set(1 << 3)
+	// from Teensyduino
+	nxp.PMU.MISC0_SET.Set(nxp.PMU_MISC0_REFTOP_SELFBIASOFF)
 
 	// install vector table (TODO: initialize interrupt/exception table?)
 	vtor := uintptr(unsafe.Pointer(&_svectors))
 	nxp.SystemControl.VTOR.Set(uint32(vtor))
+
+	const wdogUpdateKey = 0xD928C520
 
 	// disable watchdog powerdown counter
 	nxp.WDOG1.WMCR.ClearBits(nxp.WDOG_WMCR_PDE_Msk)
@@ -73,10 +90,10 @@ func initSystem() {
 		nxp.WDOG2.WCR.ClearBits(nxp.WDOG_WCR_WDE_Msk)
 	}
 	if nxp.RTWDOG.CS.HasBits(nxp.RTWDOG_CS_CMD32EN_Msk) {
-		nxp.RTWDOG.CNT.Set(0xD928C520) // 0xD928C520 is the update key
+		nxp.RTWDOG.CNT.Set(wdogUpdateKey)
 	} else {
-		nxp.RTWDOG.CNT.Set(0xC520)
-		nxp.RTWDOG.CNT.Set(0xD928)
+		nxp.RTWDOG.CNT.Set((wdogUpdateKey >> 0) & 0xFFFF)
+		nxp.RTWDOG.CNT.Set((wdogUpdateKey >> 16) & 0xFFFF)
 	}
 	nxp.RTWDOG.TOVAL.Set(0xFFFF)
 	nxp.RTWDOG.CS.Set((nxp.RTWDOG.CS.Get() & ^uint32(nxp.RTWDOG_CS_EN_Msk)) | nxp.RTWDOG_CS_UPDATE_Msk)
@@ -85,7 +102,9 @@ func initSystem() {
 func initPeripherals() {
 
 	// enable FPU - set CP10, CP11 full access
-	nxp.SystemControl.CPACR.SetBits((3 << (10 * 2)) | (3 << (11 * 2)))
+	nxp.SystemControl.CPACR.SetBits(
+		((nxp.SCB_CPACR_CP10_CP10_3 << nxp.SCB_CPACR_CP10_Pos) & nxp.SCB_CPACR_CP10_Msk) |
+			((nxp.SCB_CPACR_CP11_CP11_3 << nxp.SCB_CPACR_CP11_Pos) & nxp.SCB_CPACR_CP11_Msk))
 
 	enableTimerClocks() // activate GPT/PIT clock gates
 	initSysTick()       // enable SysTick
