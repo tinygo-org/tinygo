@@ -9,7 +9,9 @@ HardFault_Handler:
     // Put the old stack pointer in the first argument, for easy debugging. This
     // is especially useful on Cortex-M0, which supports far fewer debug
     // facilities.
-    mov r0, sp
+    mrs r0, PSP
+    mrs r1, MSP
+    mov r2, lr
 
     // Load the default stack pointer from address 0 so that we can call normal
     // functions again that expect a working stack. However, it will corrupt the

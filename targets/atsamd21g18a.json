@@ -1,6 +1,5 @@
 {
-	"inherits": ["cortex-m"],
-	"llvm-target": "armv6m-none-eabi",
+	"inherits": ["cortex-m0p"],
 	"build-tags": ["atsamd21g18", "atsamd21", "sam"],
 	"cflags": [
 		"--target=armv6m-none-eabi",
