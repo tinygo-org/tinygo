@@ -240,8 +240,6 @@ smoketest:
 	# test simulated boards on play.tinygo.org
 	$(TINYGO) build             -o test.wasm -tags=arduino              examples/blinky1
 	@$(MD5SUM) test.wasm
-	$(TINYGO) build             -o test.wasm -tags=hifive1-qemu         examples/serial
-	@$(MD5SUM) test.wasm
 	$(TINYGO) build             -o test.wasm -tags=hifive1b             examples/blinky1
 	@$(MD5SUM) test.wasm
 	$(TINYGO) build             -o test.wasm -tags=reelboard            examples/blinky1
@@ -293,7 +291,7 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/i2s
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=clue_alpha          examples/blinky1
+	$(TINYGO) build -size short -o test.hex -target=clue-alpha          examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.gba -target=gameboy-advance     examples/gba-display
 	@$(MD5SUM) test.gba
@@ -369,6 +367,8 @@ ifneq ($(XTENSA), 0)
 	@$(MD5SUM) test.bin
 endif
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=hifive1-qemu        examples/serial
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=maixbit             examples/blinky1
 	@$(MD5SUM) test.hex
