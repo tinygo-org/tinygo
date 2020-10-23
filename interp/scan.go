@@ -60,6 +60,10 @@ func (e *evalPackage) hasSideEffects(fn llvm.Value) (*sideEffectResult, *Error) 
 		return &sideEffectResult{severity: sideEffectNone}, nil
 	case name == "runtime.trackPointer":
 		return &sideEffectResult{severity: sideEffectNone}, nil
+	case name == "os.runtime_args":
+		// Special-casing this one because the (only) global it accesses changes
+		// before runtime.initAll is called.
+		return &sideEffectResult{severity: sideEffectLimited}, nil
 	case name == "llvm.dbg.value":
 		return &sideEffectResult{severity: sideEffectNone}, nil
 	case name == "(*sync/atomic.Value).Load" || name == "(*sync/atomic.Value).Store":

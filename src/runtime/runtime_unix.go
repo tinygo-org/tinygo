@@ -10,6 +10,9 @@ import (
 //export putchar
 func _putchar(c int) int
 
+//export strlen
+func strlen(s *byte) uintptr
+
 //export usleep
 func usleep(usec uint) int
 
@@ -43,8 +46,29 @@ func postinit() {}
 
 // Entry point for Go. Initialize all packages and call main.main().
 //export main
-func main() int {
+func main(argc int32, argv **byte) int {
 	preinit()
+
+	// Make args global big enough so that it can store all command line
+	// arguments. Unfortunately this has to be done with some magic as the heap
+	// is not yet initialized.
+	argsSlice := (*struct {
+		ptr unsafe.Pointer
+		len uintptr
+		cap uintptr
+	})(unsafe.Pointer(&args))
+	argsSlice.ptr = malloc(uintptr(argc) * (unsafe.Sizeof(uintptr(0))) * 3)
+	argsSlice.len = uintptr(argc)
+	argsSlice.cap = uintptr(argc)
+
+	// Initialize command line parameters. Again, using some magic, this time to
+	// convert (argc, argv) to a Go slice without doing any memory allocations.
+	argvSlice := (*[1 << 16]*byte)(unsafe.Pointer(argv))[:argc]
+	for i, ptr := range argvSlice {
+		argString := (*_string)(unsafe.Pointer(&args[i]))
+		argString.length = strlen(ptr)
+		argString.ptr = ptr
+	}
 
 	// Obtain the initial stack pointer right before calling the run() function.
 	// The run function has been moved to a separate (non-inlined) function so

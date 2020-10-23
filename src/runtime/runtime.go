@@ -27,6 +27,9 @@ func GOROOT() string {
 // TODO: fill with real args.
 var args = []string{"/proc/self/exe"}
 
+// This function is called from the os package. It is special-cased by the
+// interp package to not run at init time, otherwise it would find the
+// uninitialized args slice.
 //go:linkname os_runtime_args os.runtime_args
 func os_runtime_args() []string {
 	return args

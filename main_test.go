@@ -256,6 +256,81 @@ func runTest(name, target string, t *testing.T) {
 	}
 }
 
+// TestHostEnvironment tests command line arguments. In the future it may also
+// test other things, such as environment variables.
+func TestHostEnvironment(t *testing.T) {
+	// Create a temporary directory for test output files.
+	tmpdir, err := ioutil.TempDir("", "tinygo-test")
+	if err != nil {
+		t.Fatal("could not create temporary directory:", err)
+	}
+	defer func() {
+		rerr := os.RemoveAll(tmpdir)
+		if rerr != nil {
+			t.Errorf("failed to remove temporary directory %q: %s", tmpdir, rerr.Error())
+		}
+	}()
+
+	// Build the test binary.
+	config := &compileopts.Options{
+		Target:     "",
+		Opt:        "z",
+		PrintIR:    false,
+		DumpSSA:    false,
+		VerifyIR:   true,
+		Debug:      true,
+		PrintSizes: "",
+		WasmAbi:    "",
+	}
+	binary := filepath.Join(tmpdir, "test")
+	err = runBuild("./testdata/environment.go", binary, config)
+	if err != nil {
+		printCompilerError(t.Log, err)
+		t.Fail()
+		return
+	}
+
+	// Run the test.
+	cmd := exec.Command(binary, "arg1", "\targ2 \n")
+	stdout := &bytes.Buffer{}
+	cmd.Stdout = stdout
+	cmd.Stderr = stdout
+	err = cmd.Start()
+	if err != nil {
+		t.Fatal("failed to start:", err)
+	}
+	err = cmd.Wait()
+
+	expected := fmt.Sprintf("args: 3\narg: %s\narg: arg1\narg: \targ2 \n", binary)
+
+	// Munge the output a bit to make it easier to work with: putchar() prints
+	// CRLF, convert it to LF.
+	actual := strings.Replace(string(stdout.Bytes()), "\r\n", "\n", -1)
+	actual = actual[:len(actual)-1] // remove trailing '\n' char
+
+	// Check whether the command ran successfully, and print the actual output
+	// if it differs.
+	fail := false
+	if err != nil {
+		t.Log("failed to run:", err)
+		fail = true
+	} else if expected != actual {
+		t.Log("output did not match")
+		fail = true
+	}
+	if fail {
+		r := bufio.NewReader(strings.NewReader(actual))
+		for {
+			line, err := r.ReadString('\n')
+			if err != nil {
+				break
+			}
+			t.Log("stdout:", line[:len(line)-1])
+		}
+		t.Fail()
+	}
+}
+
 // This TestMain is necessary because TinyGo may also be invoked to run certain
 // LLVM tools in a separate process. Not capturing these invocations would lead
 // to recursive tests.
