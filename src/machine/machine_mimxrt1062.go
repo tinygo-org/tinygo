@@ -7,6 +7,7 @@ import (
 	"math/bits"
 	"runtime/interrupt"
 	"runtime/volatile"
+	"sync"
 )
 
 // Peripheral abstraction layer for the MIMXRT1062
@@ -875,5 +876,192 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 
 	default:
 		panic("machine: invalid pin mode")
+	}
+}
+
+type ADCConfig struct {
+	Resolution uint32
+	Samples    uint32
+}
+
+// InitADC is not used by this machine. Use `(ADC).Configure()`.
+func InitADC() {}
+
+// Configure initializes the receiver ADC's Pin and the ADC1/ADC2 instances for
+// immediate usage with default settings.
+func (a ADC) Configure() { a.ConfigureMode(ADCConfig{}) }
+
+// ConfigureMode initializes the receiver ADC's Pin and the ADC1/ADC2 instances
+// for immediate usage with given settings.
+func (a ADC) ConfigureMode(config ADCConfig) {
+
+	const (
+		defaultResolution = uint32(10)
+		defaultSamples    = uint32(4)
+	)
+
+	a.Pin.Configure(PinConfig{Mode: PinInputAnalog})
+
+	resolution, samples := config.Resolution, config.Samples
+	if 0 == resolution {
+		resolution = defaultResolution
+	}
+	if 0 == samples {
+		samples = defaultSamples
+	}
+
+	mode, average := a.mode(resolution, samples)
+
+	nxp.ADC1.CFG.Set(mode | nxp.ADC_CFG_ADHSC) // configure ADC1
+	nxp.ADC2.CFG.Set(mode | nxp.ADC_CFG_ADHSC) // configure ADC2
+
+	// begin calibration
+	nxp.ADC1.GC.Set(average | nxp.ADC_GC_CAL)
+	nxp.ADC2.GC.Set(average | nxp.ADC_GC_CAL)
+
+	adcStatusGlobal.startCalibrating()
+	adcStatusGlobal.waitForCalibration()
+}
+
+func (a ADC) Get() uint16 {
+	if ch1, ch2, ok := a.Pin.getChannel(); ok {
+		adcStatusGlobal.waitForCalibration()
+		if noChannel != ch1 {
+			nxp.ADC1.HC0.Set(uint32(ch1))
+			for !nxp.ADC1.HS.HasBits(nxp.ADC_HS_COCO0) {
+			}
+			return uint16(nxp.ADC1.R0.Get() & 0xFFFF)
+		} else {
+			nxp.ADC2.HC0.Set(uint32(ch2))
+			for !nxp.ADC2.HS.HasBits(nxp.ADC_HS_COCO0) {
+			}
+			return uint16(nxp.ADC2.R0.Get() & 0xFFFF)
+		}
+	}
+	return 0
+}
+
+func (a ADC) mode(resolution, samples uint32) (mode, average uint32) {
+
+	// use asynchronous clock (ADACK) (0 = IPG, 1 = IPG/2, or 3 = ADACK)
+	mode = (nxp.ADC_CFG_ADICLK_ADICLK_3 << nxp.ADC_CFG_ADICLK_Pos) & nxp.ADC_CFG_ADICLK_Msk
+
+	// input clock DIV2 (0 = DIV1, 1 = DIV2, 2 = DIV4, or 3 = DIV8)
+	mode |= (nxp.ADC_CFG_ADIV_ADIV_1 << nxp.ADC_CFG_ADIV_Pos) & nxp.ADC_CFG_ADIV_Msk
+
+	switch resolution {
+	case 8: // 8-bit conversion, sample period (ADC clocks) = 8
+		mode |= (nxp.ADC_CFG_MODE_MODE_0 << nxp.ADC_CFG_MODE_Pos) & nxp.ADC_CFG_MODE_Msk
+		mode |= (nxp.ADC_CFG_ADSTS_ADSTS_3 << nxp.ADC_CFG_ADSTS_Pos) & nxp.ADC_CFG_ADSTS_Msk
+
+	case 12: // 12-bit conversion, sample period (ADC clocks) = 24
+		mode |= (nxp.ADC_CFG_MODE_MODE_2 << nxp.ADC_CFG_MODE_Pos) & nxp.ADC_CFG_MODE_Msk
+		mode |= (nxp.ADC_CFG_ADSTS_ADSTS_3 << nxp.ADC_CFG_ADSTS_Pos) & nxp.ADC_CFG_ADSTS_Msk
+		mode |= nxp.ADC_CFG_ADLSMP
+
+	default: // 10-bit conversion, sample period (ADC clocks) = 20
+		mode |= (nxp.ADC_CFG_MODE_MODE_1 << nxp.ADC_CFG_MODE_Pos) & nxp.ADC_CFG_MODE_Msk
+		mode |= (nxp.ADC_CFG_ADSTS_ADSTS_2 << nxp.ADC_CFG_ADSTS_Pos) & nxp.ADC_CFG_ADSTS_Msk
+		mode |= nxp.ADC_CFG_ADLSMP
+	}
+
+	if samples >= 4 {
+		if samples >= 32 {
+			// 32 samples averaged
+			mode |= (nxp.ADC_CFG_AVGS_AVGS_3 << nxp.ADC_CFG_AVGS_Pos) & nxp.ADC_CFG_AVGS_Msk
+		} else if samples >= 16 {
+			// 16 samples averaged
+			mode |= (nxp.ADC_CFG_AVGS_AVGS_2 << nxp.ADC_CFG_AVGS_Pos) & nxp.ADC_CFG_AVGS_Msk
+		} else if samples >= 8 {
+			// 8 samples averaged
+			mode |= (nxp.ADC_CFG_AVGS_AVGS_1 << nxp.ADC_CFG_AVGS_Pos) & nxp.ADC_CFG_AVGS_Msk
+		} else {
+			// 4 samples averaged
+			mode |= (nxp.ADC_CFG_AVGS_AVGS_0 << nxp.ADC_CFG_AVGS_Pos) & nxp.ADC_CFG_AVGS_Msk
+		}
+		average = nxp.ADC_GC_AVGE
+	}
+
+	return mode, average
+}
+
+const noChannel = uint8(0xFF)
+
+// getChannel returns the input channel for ADC1 & ADC2 of the receiver Pin p.
+func (p Pin) getChannel() (adc1, adc2 uint8, ok bool) {
+	switch p.getPort() {
+	case portA:
+		switch p.getPos() {
+		case 12: // [AD_B0_12]:       ADC1_IN1        ~
+			return 1, noChannel, true
+		case 13: // [AD_B0_13]:       ADC1_IN2        ~
+			return 2, noChannel, true
+		case 14: // [AD_B0_14]:       ADC1_IN3        ~
+			return 3, noChannel, true
+		case 15: // [AD_B0_15]:       ADC1_IN4        ~
+			return 4, noChannel, true
+		case 16: // [AD_B1_00]:       ADC1_IN5     ADC2_IN5
+			return 5, 5, true
+		case 17: // [AD_B1_01]:       ADC1_IN6     ADC2_IN6
+			return 6, 6, true
+		case 18: // [AD_B1_02]:       ADC1_IN7     ADC2_IN7
+			return 7, 7, true
+		case 19: // [AD_B1_03]:       ADC1_IN8     ADC2_IN8
+			return 8, 8, true
+		case 20: // [AD_B1_04]:       ADC1_IN9     ADC2_IN9
+			return 9, 9, true
+		case 21: // [AD_B1_05]:       ADC1_IN10    ADC2_IN10
+			return 10, 10, true
+		case 22: // [AD_B1_06]:       ADC1_IN11    ADC2_IN11
+			return 11, 11, true
+		case 23: // [AD_B1_07]:       ADC1_IN12    ADC2_IN12
+			return 12, 12, true
+		case 24: // [AD_B1_08]:       ADC1_IN13    ADC2_IN13
+			return 13, 13, true
+		case 25: // [AD_B1_09]:       ADC1_IN14    ADC2_IN14
+			return 14, 14, true
+		case 26: // [AD_B1_10]:       ADC1_IN15    ADC2_IN15
+			return 15, 15, true
+		case 27: // [AD_B1_11]:       ADC1_IN0     ADC2_IN0
+			return 16, 16, true
+		case 28: // [AD_B1_12]:          ~         ADC2_IN1
+			return noChannel, 1, true
+		case 29: // [AD_B1_13]:          ~         ADC2_IN2
+			return noChannel, 2, true
+		case 30: // [AD_B1_14]:          ~         ADC2_IN3
+			return noChannel, 3, true
+		case 31: // [AD_B1_15]:          ~         ADC2_IN4
+			return noChannel, 4, true
+		default:
+			return noChannel, noChannel, false
+		}
+	default:
+		return noChannel, noChannel, false
+	}
+}
+
+type adcStatus struct{ volatile.Register32 }
+
+var adcStatusGlobal adcStatus
+
+func (s adcStatus) isCalibrating() bool { return s.Get() != 0 }
+func (s adcStatus) startCalibrating()   { s.Set(1) }
+func (s adcStatus) stopCalibrating()    { s.Set(0) }
+func (s adcStatus) waitForCalibration() {
+	if s.isCalibrating() {
+		work := sync.WaitGroup{}
+		work.Add(2)
+		go func(w *sync.WaitGroup) {
+			for nxp.ADC1.GC.HasBits(nxp.ADC_GC_CAL) {
+			} // wait for calibration
+			w.Done()
+		}(&work)
+		go func(w *sync.WaitGroup) {
+			for nxp.ADC2.GC.HasBits(nxp.ADC_GC_CAL) {
+			} // wait for calibration
+			w.Done()
+		}(&work)
+		work.Wait()
+		s.stopCalibrating()
 	}
 }
