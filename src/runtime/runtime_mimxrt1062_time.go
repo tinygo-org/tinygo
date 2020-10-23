@@ -11,15 +11,14 @@ import (
 
 type timeUnit int64
 
-const (
-	SYST_FREQ      = OSC_FREQ // HW divides 24 MHz XTALOSC down to 100 kHz
-	lastCycle      = SYST_FREQ/1000 - 1
-	microsPerCycle = 1000000 / SYST_FREQ
+const ( // HW divides 24 MHz XTALOSC down to 100 kHz
+	lastCycle      = SYSTICK_FREQ/1000 - 1
+	microsPerCycle = 1000000 / SYSTICK_FREQ
 )
 
 const (
-	PIT_FREQ          = OSC_FREQ // HW divides 24 MHz XTALOSC down to 100 kHz
-	pitMicrosPerCycle = 1000000 / PIT_FREQ
+	PIT_FREQ          = PERCLK_FREQ
+	pitCyclesPerMicro = PIT_FREQ / 1000000
 	pitSleepTimer     = 0 // x4 32-bit PIT timers [0..3]
 )
 
@@ -88,7 +87,7 @@ func sleepTicks(duration timeUnit) {
 		curr := ticks()
 		last := curr + duration
 		for curr < last {
-			cycles := timeUnit((last - curr) * pitMicrosPerCycle)
+			cycles := timeUnit((last - curr) / pitCyclesPerMicro)
 			if cycles > 0xFFFFFFFF {
 				cycles = 0xFFFFFFFF
 			}
