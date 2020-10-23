@@ -108,6 +108,7 @@ func initPeripherals() {
 
 	enableTimerClocks() // activate GPT/PIT clock gates
 	initSysTick()       // enable SysTick
+	initRTC()           // enable real-time clock
 
 	enablePinClocks() // activate IOMUXC(_GPR)/GPIO clock gates
 	initPins()        // configure GPIO

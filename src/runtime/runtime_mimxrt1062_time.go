@@ -7,13 +7,14 @@ import (
 	"device/nxp"
 	"runtime/interrupt"
 	"runtime/volatile"
+	"unsafe"
 )
 
 type timeUnit int64
 
 const ( // HW divides 24 MHz XTALOSC down to 100 kHz
 	lastCycle      = SYSTICK_FREQ/1000 - 1
-	microsPerCycle = 1000000 / SYSTICK_FREQ
+	cyclesPerMicro = CORE_FREQ / 1000000
 )
 
 const (
@@ -24,8 +25,21 @@ const (
 
 var (
 	tickCount  volatile.Register64
+	cycleCount volatile.Register32
 	pitActive  volatile.Register32
 	pitTimeout interrupt.Interrupt
+)
+
+var (
+	// debug exception and monitor control
+	DEMCR      = (*volatile.Register32)(unsafe.Pointer(uintptr(0xe000edfc)))
+	DWT_CTRL   = (*volatile.Register32)(unsafe.Pointer(uintptr(0xe0001000)))
+	DWT_CYCCNT = (*volatile.Register32)(unsafe.Pointer(uintptr(0xe0001004)))
+)
+
+const (
+	DEMCR_TRCENA       = 0x01000000 // enable debugging & monitoring blocks
+	DWT_CTRL_CYCCNTENA = 0x00000001 // cycle count register
 )
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
@@ -49,6 +63,12 @@ func initSysTick() {
 	// set SysTick and PendSV priority to 32
 	nxp.SystemControl.SHPR3.Set((0x20 << nxp.SCB_SHPR3_PRI_15_Pos) |
 		(0x20 << nxp.SCB_SHPR3_PRI_14_Pos))
+
+	// turn on cycle counter
+	DEMCR.SetBits(DEMCR_TRCENA)
+	DWT_CTRL.SetBits(DWT_CTRL_CYCCNTENA)
+	cycleCount.Set(DWT_CYCCNT.Get())
+
 	// enable PIT, disable counters
 	nxp.PIT.MCR.Set(0)
 	for i := range nxp.PIT.TIMER {
@@ -60,26 +80,32 @@ func initSysTick() {
 	pitTimeout.Enable()
 }
 
+func initRTC() {
+	if !nxp.SNVS.LPCR.HasBits(nxp.SNVS_LPCR_SRTC_ENV) {
+		// if SRTC isn't running, start it with default Jan 1, 2019
+		nxp.SNVS.LPSRTCLR.Set(uint32((0x5c2aad80 << 15) & 0xFFFFFFFF))
+		nxp.SNVS.LPSRTCMR.Set(uint32(0x5c2aad80 >> 17))
+		nxp.SNVS.LPCR.SetBits(nxp.SNVS_LPCR_SRTC_ENV)
+	}
+}
+
 //go:export SysTick_Handler
 func tick() {
 	tickCount.Set(tickCount.Get() + 1)
+	cycleCount.Set(DWT_CYCCNT.Get())
 }
 
 func ticks() timeUnit {
 	mask := arm.DisableInterrupts()
-	curr := arm.SYST.SYST_CVR.Get()
 	tick := tickCount.Get()
-	pend := nxp.SystemControl.ICSR.HasBits(nxp.SCB_ICSR_PENDSTSET_Msk)
+	cycs := cycleCount.Get()
+	curr := DWT_CYCCNT.Get()
 	arm.EnableInterrupts(mask)
-	mics := timeUnit(tick * 1000)
-	// if the systick counter was about to reset and ICSR indicates a pending
-	// SysTick IRQ, increment count
-	if pend && (curr > 50) {
-		mics += 1000
-	} else {
-		mics += timeUnit((lastCycle - curr) * microsPerCycle)
+	frac := uint64((curr-cycs)*0xFFFFFFFF/cyclesPerMicro) >> 32
+	if frac > 1000 {
+		frac = 1000
 	}
-	return mics
+	return timeUnit(1000*tick + frac)
 }
 
 func sleepTicks(duration timeUnit) {
