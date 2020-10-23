@@ -9,7 +9,7 @@ import (
 // Core, bus, and peripheral clock frequencies (Hz)
 const (
 	CORE_FREQ      = 600000000 // 600     MHz
-	OSC_FREQ       = 100000    // 100     kHz  (see note below)
+	SYSTICK_FREQ   = 100000    // 100     kHz  (see note below)
 	_                          // -----------
 	AHB_FREQ       = 600000000 // 600     MHz
 	CAN_FREQ       = 40000000  //  40     MHz
@@ -65,7 +65,7 @@ var (
 	}
 )
 
-// Note about OSC_FREQ from Teensyduino (cores/teensy4/startup.c):
+// Note about SYSTICK_FREQ from Teensyduino (cores/teensy4/startup.c):
 //
 // |  ARM SysTick is used for most Ardiuno timing functions, delay(), millis(),
 // |  micros().  SysTick can run from either the ARM core clock, or from an
