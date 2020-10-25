@@ -34,3 +34,12 @@ func Restore(state State) {
 		"state": state,
 	})
 }
+
+// In returns whether the system is currently in an interrupt.
+//
+// Warning: this always returns false on AVR, as there does not appear to be a
+// reliable way to determine whether we're currently running inside an interrupt
+// handler.
+func In() bool {
+	return false
+}
