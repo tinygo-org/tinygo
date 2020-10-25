@@ -50,3 +50,13 @@ func Disable() (state State) {
 func Restore(state State) {
 	arm.EnableInterrupts(uintptr(state))
 }
+
+// In returns whether the system is currently in an interrupt.
+func In() bool {
+	// The VECTACTIVE field gives the instruction vector that is currently
+	// active (in handler mode), or 0 if not in an interrupt.
+	// Documentation:
+	// https://developer.arm.com/documentation/dui0497/a/cortex-m0-peripherals/system-control-block/interrupt-control-and-state-register
+	vectactive := uint8(arm.SCB.ICSR.Get())
+	return vectactive != 0
+}

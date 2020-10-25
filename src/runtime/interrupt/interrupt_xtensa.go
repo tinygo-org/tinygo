@@ -29,3 +29,11 @@ func Restore(state State) {
 		"state": state,
 	})
 }
+
+// In returns whether the system is currently in an interrupt.
+//
+// Warning: interrupts have not been implemented for Xtensa yet so this always
+// returns false.
+func In() bool {
+	return false
+}
