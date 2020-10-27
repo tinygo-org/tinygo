@@ -1,3 +1,57 @@
+0.16.0
+---
+
+* **command-line**
+  - add initial support for LLVM 11
+  - make lib64 clang include path check more robust
+  - `build`: improve support for GOARCH=386 and add tests
+  - `gdb`: add support for qemu-user targets
+  - `test`: support non-host tests
+  - `test`: add support for -c and -o flags
+  - `test`: implement some benchmark stubs
+* **compiler**
+  - `builder`: improve detection of clang on Fedora
+  - `compiler`: fix floating point comparison bugs
+  - `compiler`: implement negate for complex numbers
+  - `loader`: fix linkname in test binaries
+  - `transform`: add missing return pointer restore for regular coroutine tail
+    calls
+* **standard library**
+  - `machine`: switch default frequency to 4MHz
+  - `machine`: clarify caller's responsibility in `SetInterrupt`
+  - `os`: add `LookupEnv()` stub
+  - `reflect`: implement `Swapper`
+  - `runtime`: fix UTF-8 decoding
+  - `runtime`: gc: use raw stack access whenever possible
+  - `runtime`: use dedicated printfloat32
+  - `runtime`: allow ranging over a nil map
+  - `runtime`: avoid device/nxp dependency in HardFault handler
+  - `testing`: implement dummy Helper method
+  - `testing`: add Run method
+* **targets**
+  - `arm64`: add support for SVCall intrinsic
+  - `atsamd51`: avoid panic when configuring SPI with SDI=NoPin
+  - `avr`: properly support the `.rodata` section
+  - `esp8266`: implement `Pin.Get` function
+  - `nintendoswitch`: fix crash when printing long lines (> 120)
+  - `nintendoswitch`: add env parser and removed unused stuff
+  - `nrf`: add I2C error checking
+  - `nrf`: give more flexibility in picking SPI speeds
+  - `nrf`: fix nrf52832 flash size
+  - `stm32f103`: support wakeups from interrupts
+  - `stm32f405`: add SPI support
+  - `stm32f405`: add I2C support
+  - `wasi`: add support for this target
+  - `wasi`: use 'generic' ABI by default
+  - `wasi`: remove --no-threads flag from wasm-ld
+  - `wasm`: add instanceof support for WebAssembly
+  - `wasm`: use fixed length buffer for putchar
+* **boards**
+  - `d1mini`: add this ESP8266 based board
+  - `esp32`: use board definitions instead of chip names
+  - `qtpy`: add board definition for Adafruit QTPy
+  - `teensy40`: add this board
+
 0.15.0
 ---
 
