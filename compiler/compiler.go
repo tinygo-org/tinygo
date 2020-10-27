@@ -2581,6 +2581,16 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 				return b.CreateSub(llvm.ConstInt(x.Type(), 0, false), x, ""), nil
 			} else if typ.Info()&types.IsFloat != 0 {
 				return b.CreateFNeg(x, ""), nil
+			} else if typ.Info()&types.IsComplex != 0 {
+				// Negate both components of the complex number.
+				r := b.CreateExtractValue(x, 0, "r")
+				i := b.CreateExtractValue(x, 1, "i")
+				r = b.CreateFNeg(r, "")
+				i = b.CreateFNeg(i, "")
+				cplx := llvm.Undef(x.Type())
+				cplx = b.CreateInsertValue(cplx, r, 0, "")
+				cplx = b.CreateInsertValue(cplx, i, 1, "")
+				return cplx, nil
 			} else {
 				return llvm.Value{}, b.makeError(unop.Pos(), "todo: unknown basic type for negate: "+typ.String())
 			}
