@@ -200,7 +200,9 @@ tinygo-test:
 	$(TINYGO) test container/ring
 	$(TINYGO) test crypto/des
 	$(TINYGO) test encoding/ascii85
+	$(TINYGO) test encoding/base32
 	$(TINYGO) test encoding/hex
+	$(TINYGO) test hash/fnv
 	$(TINYGO) test math
 	$(TINYGO) test text/scanner
 	$(TINYGO) test unicode/utf8
