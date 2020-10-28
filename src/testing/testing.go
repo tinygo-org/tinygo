@@ -53,6 +53,7 @@ var _ TB = (*B)(nil)
 //
 type T struct {
 	common
+	indent string
 }
 
 // Name returns the name of the running test or benchmark.
@@ -159,6 +160,33 @@ func (c *common) Helper() {
 	// Unimplemented.
 }
 
+// Run runs a subtest of f t called name. It waits until the subtest is finished
+// and returns whether the subtest succeeded.
+func (t *T) Run(name string, f func(t *T)) bool {
+	// Create a subtest.
+	sub := T{
+		indent: t.indent + "    ",
+		common: common{
+			name:   t.name + "/" + name,
+			output: &bytes.Buffer{},
+		},
+	}
+
+	// Run the test.
+	fmt.Printf("=== RUN   %s\n", sub.name)
+	f(&sub)
+
+	// Process the result (pass or fail).
+	if sub.failed {
+		t.failed = true
+		fmt.Printf(sub.indent+"--- FAIL: %s\n", sub.name)
+	} else {
+		fmt.Printf(sub.indent+"--- PASS: %s\n", sub.name)
+	}
+	fmt.Print(sub.output)
+	return !sub.failed
+}
+
 // InternalTest is a reference to a test that should be called during a test suite run.
 type InternalTest struct {
 	Name string
@@ -190,7 +218,7 @@ func (m *M) Run() int {
 		} else {
 			fmt.Printf("--- PASS: %s\n", test.Name)
 		}
-		fmt.Println(t.output)
+		fmt.Print(t.output)
 
 		if t.failed {
 			failures++
