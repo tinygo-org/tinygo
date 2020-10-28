@@ -167,7 +167,7 @@ func initClocks() {
 	nxp.ClockIpLpi2c2.Enable(false) //
 	nxp.ClockIpLpi2c3.Enable(false) //
 	nxp.DivIpLpi2c.Div(0)           // divide LPI2C_CLK_PODF (DIV1)
-	nxp.MuxIpLpi2c.Mux(0)           // LPI2C select PLL3_SW_60M
+	nxp.MuxIpLpi2c.Mux(1)           // LPI2C select OSC
 
 	nxp.ClockIpCan1.Enable(false)  // disable CAN
 	nxp.ClockIpCan2.Enable(false)  //
