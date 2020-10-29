@@ -49,6 +49,9 @@ func main() {
 	println(testmapIntInt[2])
 	testmapIntInt[2] = 42
 	println(testmapIntInt[2])
+	for k := range nilmap {
+		println(k) // unreachable
+	}
 
 	arrKey := ArrayKey([4]byte{4, 3, 2, 1})
 	println(testMapArrayKey[arrKey])
