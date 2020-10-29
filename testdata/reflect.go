@@ -27,6 +27,9 @@ type (
 		next *linkedList `description:"chain"`
 		foo  int
 	}
+	selfref struct {
+		x *selfref
+	}
 )
 
 var (
@@ -326,6 +329,43 @@ func main() {
 
 	println("\nv.Interface() method")
 	testInterfaceMethod()
+
+	// Test reflect.DeepEqual.
+	var selfref1, selfref2 selfref
+	selfref1.x = &selfref1
+	selfref2.x = &selfref2
+	for i, tc := range []struct {
+		v1, v2 interface{}
+		equal  bool
+	}{
+		{int(5), int(5), true},
+		{int(3), int(5), false},
+		{int(5), uint(5), false},
+		{struct {
+			a int
+			b string
+		}{3, "x"}, struct {
+			a int
+			b string
+		}{3, "x"}, true},
+		{struct {
+			a int
+			b string
+		}{3, "x"}, struct {
+			a int
+			b string
+		}{3, "y"}, false},
+		{selfref1, selfref2, true},
+	} {
+		result := reflect.DeepEqual(tc.v1, tc.v2)
+		if result != tc.equal {
+			if tc.equal {
+				println("reflect.DeepEqual() test", i, "not equal while it should be")
+			} else {
+				println("reflect.DeepEqual() test", i, "equal while it should not be")
+			}
+		}
+	}
 }
 
 func emptyFunc() {

@@ -140,10 +140,7 @@ func (v Value) IsNil() bool {
 func (v Value) Pointer() uintptr {
 	switch v.Kind() {
 	case Chan, Map, Ptr, UnsafePointer:
-		if v.isIndirect() {
-			return *(*uintptr)(v.value)
-		}
-		return uintptr(v.value)
+		return uintptr(v.pointer())
 	case Slice:
 		slice := (*sliceHeader)(v.value)
 		return uintptr(slice.data)
@@ -152,6 +149,15 @@ func (v Value) Pointer() uintptr {
 	default: // not implemented: Func
 		panic(&ValueError{"Pointer"})
 	}
+}
+
+// pointer returns the underlying pointer represented by v.
+// v.Kind() must be Ptr, Map, Chan, or UnsafePointer
+func (v Value) pointer() unsafe.Pointer {
+	if v.isIndirect() {
+		return *(*unsafe.Pointer)(v.value)
+	}
+	return v.value
 }
 
 func (v Value) IsValid() bool {
