@@ -210,11 +210,13 @@ TEST_PACKAGES = \
 	index/suffixarray \
 	math \
 	math/cmplx \
+	net/mail \
+	reflect \
 	testing \
 	testing/iotest \
 	text/scanner \
-	text/scanner \
 	unicode \
+	unicode/utf16 \
 	unicode/utf8 \
 
 # Test known-working standard library packages.
