@@ -261,6 +261,13 @@ func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32, keyEqual func(x,
 // Iterate over a hashmap.
 //go:nobounds
 func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) bool {
+	if m == nil {
+		// Iterating over a nil slice appears to be allowed by the Go spec:
+		// https://groups.google.com/g/golang-nuts/c/gVgVLQU1FFE?pli=1
+		// https://play.golang.org/p/S8jxAMytKDB
+		return false
+	}
+
 	numBuckets := uintptr(1) << m.bucketBits
 	for {
 		if it.bucketIndex >= 8 {
