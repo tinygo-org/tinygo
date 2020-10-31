@@ -9,25 +9,10 @@ CLANG_SRC ?= $(LLVM_PROJECTDIR)/clang
 LLD_SRC ?= $(LLVM_PROJECTDIR)/lld
 
 # Try to autodetect LLVM build tools.
-ifneq (, $(shell command -v llvm-build/bin/clang 2> /dev/null))
-    CLANG ?= $(abspath llvm-build/bin/clang)
-else
-    CLANG ?= clang-10
-endif
-ifneq (, $(shell command -v llvm-build/bin/llvm-ar 2> /dev/null))
-    LLVM_AR ?= $(abspath llvm-build/bin/llvm-ar)
-else ifneq (, $(shell command -v llvm-ar-10 2> /dev/null))
-    LLVM_AR ?= llvm-ar-10
-else
-    LLVM_AR ?= llvm-ar
-endif
-ifneq (, $(shell command -v llvm-build/bin/llvm-nm 2> /dev/null))
-    LLVM_NM ?= $(abspath llvm-build/bin/llvm-nm)
-else ifneq (, $(shell command -v llvm-nm-10 2> /dev/null))
-    LLVM_NM ?= llvm-nm-10
-else
-    LLVM_NM ?= llvm-nm
-endif
+detect = $(shell command -v $(1) 2> /dev/null && echo $(1))
+CLANG ?= $(word 1,$(abspath $(call detect,llvm-build/bin/clang))$(call detect,clang-11)$(call detect,clang-10)$(call detect,clang))
+LLVM_AR ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-ar))$(call detect,llvm-ar-11)$(call detect,llvm-ar-10)$(call detect,llvm-ar))
+LLVM_NM ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-nm))$(call detect,llvm-ar-11)$(call detect,llvm-ar-10)$(call detect,llvm-ar))
 
 # Go binary and GOROOT to select
 GO ?= go
@@ -37,7 +22,7 @@ export GOROOT = $(shell $(GO) env GOROOT)
 MD5SUM = md5sum
 
 # tinygo binary for tests
-TINYGO ?= tinygo
+TINYGO ?= $(word 1,$(call detect,tinygo)$(call detect,build/tinygo))
 
 # Use CCACHE for LLVM if possible
 ifneq (, $(shell command -v ccache 2> /dev/null))
