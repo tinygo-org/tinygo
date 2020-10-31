@@ -117,18 +117,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		return errors.New("verification failure after LLVM optimization passes")
 	}
 
-	// On the AVR, pointers can point either to flash or to RAM, but we don't
-	// know. As a temporary fix, load all global variables in RAM.
-	// In the future, there should be a compiler pass that determines which
-	// pointers are flash and which are in RAM so that pointers can have a
-	// correct address space parameter (address space 1 is for flash).
-	if strings.HasPrefix(config.Triple(), "avr") {
-		transform.NonConstGlobals(mod)
-		if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
-			return errors.New("verification error after making all globals non-constant on AVR")
-		}
-	}
-
 	// LLVM 11 by default tries to emit tail calls (even with the target feature
 	// disabled) unless it is explicitly disabled with a function attribute.
 	// This is a problem, as it tries to emit them and prints an error when it
