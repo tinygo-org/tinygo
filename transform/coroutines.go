@@ -735,10 +735,10 @@ func (c *coroutineLoweringPass) lowerFuncCoro(fn *asyncFunc) {
 	task := c.builder.CreateCall(c.current, []llvm.Value{llvm.Undef(c.i8ptr), fn.rawTask}, "task")
 	parentState := c.builder.CreateCall(c.setState, []llvm.Value{task, coroState, llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, "task.state.parent")
 	// Get return pointer if needed.
-	var retPtr llvm.Value
-	if fn.hasValueStoreReturn() {
-		retPtr = c.builder.CreateCall(c.getRetPtr, []llvm.Value{task, llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, "task.retPtr")
-		retPtr = c.builder.CreateBitCast(retPtr, llvm.PointerType(fn.fn.Type().ElementType().ReturnType(), 0), "task.retPtr.bitcast")
+	var retPtrRaw, retPtr llvm.Value
+	if returnType.TypeKind() != llvm.VoidTypeKind {
+		retPtrRaw = c.builder.CreateCall(c.getRetPtr, []llvm.Value{task, llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, "task.retPtr")
+		retPtr = c.builder.CreateBitCast(retPtrRaw, llvm.PointerType(fn.fn.Type().ElementType().ReturnType(), 0), "task.retPtr.bitcast")
 	}
 
 	// Build suspend block.
@@ -802,8 +802,13 @@ func (c *coroutineLoweringPass) lowerFuncCoro(fn *asyncFunc) {
 
 			// Resume caller.
 			c.builder.CreateCall(c.returnTo, []llvm.Value{task, parentState, llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, "")
-		case returnVoidTail, returnTail, returnDeadTail:
+		case returnVoidTail, returnDeadTail:
 			// Nothing to do.
+		case returnTail:
+			c.builder.SetInsertPointBefore(call)
+
+			// Restore the return pointer so that the caller can store into it.
+			c.builder.CreateCall(c.setRetPtr, []llvm.Value{task, retPtrRaw, llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, "")
 		case returnAlternateTail:
 			c.builder.SetInsertPointBefore(call)
 
