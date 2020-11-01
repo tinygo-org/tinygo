@@ -4,16 +4,12 @@
   "cpu": "cortex-m7",
   "build-tags": ["teensy40", "teensy", "mimxrt1062", "nxp"],
   "automatic-stack-size": false,
-  "default-stack-size": 131072,
+  "default-stack-size": 4096,
   "cflags": [
     "--target=armv7em-none-eabi",
     "-Qunused-arguments",
-    "-mfloat-abi=hard",
+    "-mfloat-abi=soft",
     "-mfpu=fpv5-d16"
-  ],
-  "ldflags": [
-    "--emit-relocs",
-    "--gc-sections"
   ],
   "linkerscript": "targets/mimxrt1062-teensy40.ld",
   "extra-files": [

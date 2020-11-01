@@ -15,28 +15,6 @@ func CPUFrequency() uint32 {
 
 type PinMode uint8
 
-// muxSelect is yet another level of indirection required to connect pins in an
-// alternate function state to a desired peripheral (since more than one pin can
-// provide a given alternate function).
-//
-// Once a pin is configured with a given alternate function mode, the IOMUXC
-// device must then be configured to select which alternate function pin to
-// route to the desired peripheral.
-//
-// The reference manual refers to this functionality as a "Daisy Chain". The
-// associated docs are found in the i.MX RT1060 Processor Reference Manual:
-//   "Chapter 11.3.3 Daisy chain - multi pads driving same module input pin"
-type muxSelect struct {
-	mux uint8                // AF mux selection (NOT a Pin type)
-	sel *volatile.Register32 // AF selection register
-}
-
-// connect configures the IOMUXC controller to route a given pin with alternate
-// function to a desired peripheral (see godoc comments on type muxSelect).
-func (s muxSelect) connect() {
-	s.sel.Set(uint32(s.mux))
-}
-
 const (
 	// GPIO
 	PinInput PinMode = iota
@@ -45,92 +23,24 @@ const (
 	PinOutput
 	PinOutputOpenDrain
 	PinDisable
+
+	// ADC
+	PinInputAnalog
+
+	// UART
+	PinModeUARTTX
+	PinModeUARTRX
+
+	// SPI
+	PinModeSPISDI
+	PinModeSPISDO
+	PinModeSPICLK
+	PinModeSPICS
+
+	// I2C
+	PinModeI2CSDA
+	PinModeI2CSCL
 )
-
-// Configure sets the GPIO pad and pin properties, and selects the appropriate
-// alternate function, for a given Pin and PinConfig.
-func (p Pin) Configure(config PinConfig) {
-	var (
-		// padSRE = uint32(0x01 << 0)
-		padDSE = func(n uint32) uint32 { return (n & 0x07) << 3 }
-		// padSPD = func(n uint32) uint32 { return (n & 0x03) << 6 }
-		padODE = uint32(0x01 << 11)
-		padPKE = uint32(0x01 << 12)
-		padPUE = uint32(0x01 << 13)
-		padPUP = func(n uint32) uint32 { return (n & 0x03) << 14 }
-		padHYS = uint32(0x01 << 16)
-	)
-
-	_, gpio := p.getGPIO() // use fast GPIO for all pins
-	pad, mux := p.getPad()
-
-	// first configure the pad characteristics
-	switch config.Mode {
-	case PinInput:
-		gpio.GDIR.ClearBits(p.getMask())
-		pad.Set(padDSE(7))
-
-	case PinInputPullUp:
-		gpio.GDIR.ClearBits(p.getMask())
-		pad.Set(padDSE(7) | padPKE | padPUE | padPUP(3) | padHYS)
-
-	case PinInputPullDown:
-		gpio.GDIR.ClearBits(p.getMask())
-		pad.Set(padDSE(7) | padPKE | padPUE | padHYS)
-
-	case PinOutput:
-		gpio.GDIR.SetBits(p.getMask())
-		pad.Set(padDSE(7))
-
-	case PinOutputOpenDrain:
-		gpio.GDIR.SetBits(p.getMask())
-		pad.Set(padDSE(7) | padODE)
-
-	case PinDisable:
-		gpio.GDIR.ClearBits(p.getMask())
-		pad.Set(padDSE(7) | padHYS)
-	}
-
-	// then configure the alternate function mux
-	mux.Set(p.getMuxMode(config))
-}
-
-// getMuxMode acts as a callback from the `(Pin).Configure(PinMode)` routine to
-// determine the alternate function setting for a given Pin and PinConfig.
-// This value is used in the IOMUXC device's SW_MUX_CTL_PAD_GPIO_* registers.
-func (p Pin) getMuxMode(config PinConfig) uint32 {
-	const forcePath = true // TODO: should be input parameter?
-	switch config.Mode {
-
-	// GPIO
-	case PinInput, PinInputPullUp, PinInputPullDown,
-		PinOutput, PinOutputOpenDrain, PinDisable:
-		mode := uint32(0x5) // GPIO is always alternate function 5
-		if forcePath {
-			mode |= 0x10 // SION bit
-		}
-		return mode
-
-	default:
-		panic("machine: invalid pin mode")
-	}
-}
-
-// Set changes the value of the GPIO pin. The pin must be configured as output.
-func (p Pin) Set(value bool) {
-	_, gpio := p.getGPIO() // use fast GPIO for all pins
-	if value {
-		gpio.DR_SET.Set(p.getMask())
-	} else {
-		gpio.DR_CLEAR.Set(p.getMask())
-	}
-}
-
-// Get returns the current value of a GPIO pin.
-func (p Pin) Get() bool {
-	_, gpio := p.getGPIO() // use fast GPIO for all pins
-	return gpio.PSR.HasBits(p.getMask())
-}
 
 // From the i.MXRT1062 Processor Reference Manual (Chapter 12 - GPIO):
 //
@@ -149,16 +59,12 @@ func (p Pin) Get() bool {
 // We cannot declare 32 pins for all available ports (GPIO1-9) anyway, since Pin
 // is only uint8, and 9*32=288 > 256, so something has to be sacrificed.
 
-const numPorts, pinsPerPort = 4, 32
-
 const (
-	portA Pin = iota * pinsPerPort // GPIO1(6)
-	portB                          // GPIO2(7)
-	portC                          // GPIO3(8)
-	portD                          // GPIO4(9)
+	portA Pin = iota * 32 // GPIO1(6)
+	portB                 // GPIO2(7)
+	portC                 // GPIO3(8)
+	portD                 // GPIO4(9)
 )
-
-const numPins = numPorts * pinsPerPort
 
 const (
 	//                   [Pad]:      Alt Func 0       Alt Func 1       Alt Func 2           Alt Func 3            Alt Func 4            Alt Func 5   Alt Func 6            Alt Func 7            Alt Func 8             Alt Func 9
@@ -296,9 +202,104 @@ const (
 	PD31 = portD + 31 // [EMC_31]:   SEMC_DATA09      FLEXPWM3_PWMA01  LPUART7_TX           LPSPI1_PCS1           CSI_DATA22            GPIO4_IO31   ENET2_TDATA01          ~                     ~                      ~
 )
 
-func (p Pin) getPos() uint8   { return uint8(p % pinsPerPort) }
+func (p Pin) getPos() uint8   { return uint8(p % 32) }
 func (p Pin) getMask() uint32 { return uint32(1) << p.getPos() }
-func (p Pin) getPort() Pin    { return Pin(p/pinsPerPort) * pinsPerPort }
+func (p Pin) getPort() Pin    { return Pin(p/32) * 32 }
+
+// Configure sets the GPIO pad and pin properties, and selects the appropriate
+// alternate function, for a given Pin and PinConfig.
+func (p Pin) Configure(config PinConfig) {
+	var (
+		sre = uint32(0x01 << 0)
+		dse = func(n uint32) uint32 { return (n & 0x07) << 3 }
+		spd = func(n uint32) uint32 { return (n & 0x03) << 6 }
+		ode = uint32(0x01 << 11)
+		pke = uint32(0x01 << 12)
+		pue = uint32(0x01 << 13)
+		pup = func(n uint32) uint32 { return (n & 0x03) << 14 }
+		hys = uint32(0x01 << 16)
+	)
+
+	_, gpio := p.getGPIO() // use fast GPIO for all pins
+	pad, mux := p.getPad()
+
+	// first configure the pad characteristics
+	switch config.Mode {
+	case PinInput:
+		gpio.GDIR.ClearBits(p.getMask())
+		pad.Set(dse(7))
+
+	case PinInputPullUp:
+		gpio.GDIR.ClearBits(p.getMask())
+		pad.Set(dse(7) | pke | pue | pup(3) | hys)
+
+	case PinInputPullDown:
+		gpio.GDIR.ClearBits(p.getMask())
+		pad.Set(dse(7) | pke | pue | hys)
+
+	case PinOutput:
+		gpio.GDIR.SetBits(p.getMask())
+		pad.Set(dse(7))
+
+	case PinOutputOpenDrain:
+		gpio.GDIR.SetBits(p.getMask())
+		pad.Set(dse(7) | ode)
+
+	case PinDisable:
+		gpio.GDIR.ClearBits(p.getMask())
+		pad.Set(dse(7) | hys)
+
+	case PinInputAnalog:
+		gpio.GDIR.ClearBits(p.getMask())
+		pad.Set(dse(7))
+
+	case PinModeUARTTX:
+		pad.Set(sre | dse(3) | spd(3))
+
+	case PinModeUARTRX:
+		pad.Set(dse(7) | pke | pue | pup(3) | hys)
+
+	case PinModeSPISDI:
+		pad.Set(dse(7) | spd(2))
+
+	case PinModeSPISDO:
+		pad.Set(dse(7) | spd(2))
+
+	case PinModeSPICLK:
+		pad.Set(dse(7) | spd(2))
+
+	case PinModeSPICS:
+		pad.Set(dse(7))
+
+	case PinModeI2CSDA, PinModeI2CSCL:
+		pad.Set(ode | sre | dse(4) | spd(1) | pke | pue | pup(3))
+	}
+
+	// then configure the alternate function mux
+	mux.Set(p.getMuxMode(config))
+}
+
+// Get returns the current value of a GPIO pin.
+func (p Pin) Get() bool {
+	_, gpio := p.getGPIO() // use fast GPIO for all pins
+	return gpio.PSR.HasBits(p.getMask())
+}
+
+// Set changes the value of the GPIO pin. The pin must be configured as output.
+func (p Pin) Set(value bool) {
+	_, gpio := p.getGPIO() // use fast GPIO for all pins
+	if value {
+		gpio.DR_SET.Set(p.getMask())
+	} else {
+		gpio.DR_CLEAR.Set(p.getMask())
+	}
+}
+
+// Toggle switches an output pin from low to high or from high to low.
+func (p Pin) Toggle() {
+	_, gpio := p.getGPIO() // use fast GPIO for all pins
+	gpio.DR_TOGGLE.Set(p.getMask())
+}
 
 // getGPIO returns both the normal (IPG_CLK_ROOT) and high-speed (AHB_CLK_ROOT)
 // GPIO peripherals to which a given Pin is connected.
@@ -588,4 +589,169 @@ func (p Pin) getPad() (pad *volatile.Register32, mux *volatile.Register32) {
 		}
 	}
 	panic("machine: invalid pin")
+}
+
+// muxSelect is yet another level of indirection required to connect pins in an
+// alternate function state to a desired peripheral (since more than one pin can
+// provide a given alternate function).
+//
+// Once a pin is configured with a given alternate function mode, the IOMUXC
+// device must then be configured to select which alternate function pin to
+// route to the desired peripheral.
+//
+// The reference manual refers to this functionality as a "Daisy Chain". The
+// associated docs are found in the i.MX RT1060 Processor Reference Manual:
+//   "Chapter 11.3.3 Daisy chain - multi pads driving same module input pin"
+type muxSelect struct {
+	mux uint8                // AF mux selection (NOT a Pin type)
+	sel *volatile.Register32 // AF selection register
+}
+
+// connect configures the IOMUXC controller to route a given pin with alternate
+// function to a desired peripheral (see godoc comments on type muxSelect).
+func (s muxSelect) connect() {
+	s.sel.Set(uint32(s.mux))
+}
+
+// getMuxMode acts as a callback from the `(Pin).Configure(PinMode)` routine to
+// determine the alternate function setting for a given Pin and PinConfig.
+// This value is used in the IOMUXC device's SW_MUX_CTL_PAD_GPIO_* registers.
+func (p Pin) getMuxMode(config PinConfig) uint32 {
+	const forcePath = true // TODO: should be input parameter?
+	switch config.Mode {
+
+	// GPIO
+	case PinInput, PinInputPullUp, PinInputPullDown,
+		PinOutput, PinOutputOpenDrain, PinDisable:
+		mode := uint32(0x5) // GPIO is always alternate function 5
+		if forcePath {
+			mode |= 0x10 // SION bit
+		}
+		return mode
+
+	// ADC
+	case PinInputAnalog:
+		mode := uint32(0x5) // use alternate function 5 (GPIO)
+		if forcePath {
+			mode |= 0x10 // SION bit
+		}
+		return mode
+
+	// UART RX/TX
+	case PinModeUARTRX, PinModeUARTTX:
+		mode := uint32(0x2) // UART is always alternate function 2 on Teensy 4.0
+		// TODO: Teensy 4.1 has a UART (LPUART5) with alternate function 1
+		return mode
+
+	// SPI SDI
+	case PinModeSPISDI:
+		var mode uint32
+		switch p {
+		case PC15: // LPSPI1 SDI on PC15 alternate function 4
+			mode = uint32(0x4)
+		case PA2: // LPSPI3 SDI on PA2 alternate function 7
+			mode = uint32(0x7)
+		case PB1: // LPSPI4 SDI on PB1 alternate function 3
+			mode = uint32(0x3)
+		default:
+			panic("machine: invalid SPI SDI pin")
+		}
+		if forcePath {
+			mode |= 0x10 // SION bit
+		}
+		return mode
+
+	// SPI SDO
+	case PinModeSPISDO:
+		var mode uint32
+		switch p {
+		case PC14: // LPSPI1 SDO on PC14 alternate function 4
+			mode = uint32(0x4)
+		case PA30: // LPSPI3 SDO on PA30 alternate function 2
+			mode = uint32(0x2)
+		case PB2: // LPSPI4 SDO on PB2 alternate function 3
+			mode = uint32(0x3)
+		default:
+			panic("machine: invalid SPI SDO pin")
+		}
+		if forcePath {
+			mode |= 0x10 // SION bit
+		}
+		return mode
+
+	// SPI SCK
+	case PinModeSPICLK:
+		var mode uint32
+		switch p {
+		case PC12: // LPSPI1 SCK on PC12 alternate function 4
+			mode = uint32(0x4)
+		case PA31: // LPSPI3 SCK on PA31 alternate function 2
+			mode = uint32(0x2)
+		case PB3: // LPSPI4 SCK on PB3 alternate function 3
+			mode = uint32(0x3)
+		default:
+			panic("machine: invalid SPI CLK pin")
+		}
+		if forcePath {
+			mode |= 0x10 // SION bit
+		}
+		return mode
+
+	// SPI CS
+	case PinModeSPICS:
+		var mode uint32
+		switch p {
+		case PC13: // LPSPI1 CS on PC13 alternate function 4
+			mode = uint32(0x4)
+		case PA3: // LPSPI3 CS on PA3 alternate function 7
+			mode = uint32(0x7)
+		case PB0: // LPSPI4 CS on PB0 alternate function 3
+			mode = uint32(0x3)
+		default: // use alternate function 5 (GPIO) if non-CS pin selected
+			mode = uint32(0x5)
+		}
+		if forcePath {
+			mode |= 0x10 // SION bit
+		}
+		return mode
+
+	// I2C SDA
+	case PinModeI2CSDA:
+		var mode uint32
+		switch p {
+		case PA13: // LPI2C4 SDA on PA13 alternate function 0
+			mode = uint32(0)
+		case PA17: // LPI2C1 SDA on PA17 alternate function 3
+			mode = uint32(3)
+		case PA22: // LPI2C3 SDA on PA22 alternate function 1
+			mode = uint32(1)
+		default:
+			panic("machine: invalid I2C SDA pin")
+		}
+		if forcePath {
+			mode |= 0x10 // SION bit
+		}
+		return mode
+
+	// I2C SCL
+	case PinModeI2CSCL:
+		var mode uint32
+		switch p {
+		case PA12: // LPI2C4 SCL on PA12 alternate function 0
+			mode = uint32(0)
+		case PA16: // LPI2C1 SCL on PA16 alternate function 3
+			mode = uint32(3)
+		case PA23: // LPI2C3 SCL on PA23 alternate function 1
+			mode = uint32(1)
+		default:
+			panic("machine: invalid I2C SCL pin")
+		}
+		if forcePath {
+			mode |= 0x10 // SION bit
+		}
+		return mode
+
+	default:
+		panic("machine: invalid pin mode")
+	}
 }
