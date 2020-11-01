@@ -11,75 +11,42 @@ import (
 	"unsafe"
 )
 
+// Clock represents an individual peripheral clock that may be enabled/disabled
+// at runtime. Clocks also have a method `Mux` for selecting the clock source
+// and a method `Div` for selecting the hardware divisor. Note that many
+// peripherals have an independent prescalar configuration applied to the output
+// of this divisor.
 type (
 	Clock     uint32
-	Gate      uint8
 	ClockMode uint8
-
-	// PLL configuration for ARM
-	ClockConfigArmPll struct {
-		LoopDivider uint32 // PLL loop divider. Valid range for divider value: 54-108. Fout=Fin*LoopDivider/2.
-		Src         uint8  // Pll clock source, reference _clock_pll_clk_src
-	}
-
-	// PLL configuration for System
-	ClockConfigSysPll struct {
-		LoopDivider uint8  // PLL loop divider. Intended to be 1 (528M): 0 - Fout=Fref*20, 1 - Fout=Fref*22
-		Numerator   uint32 // 30 bit Numerator of fractional loop divider.
-		Denominator uint32 // 30 bit Denominator of fractional loop divider
-		Src         uint8  // Pll clock source, reference _clock_pll_clk_src
-		SsStop      uint16 // Stop value to get frequency change.
-		SsEnable    uint8  // Enable spread spectrum modulation
-		SsStep      uint16 // Step value to get frequency change step.
-	}
-
-	// PLL configuration for USB
-	ClockConfigUsbPll struct {
-		Instance    uint8 // USB PLL number (1 or 2)
-		LoopDivider uint8 // PLL loop divider: 0 - Fout=Fref*20, 1 - Fout=Fref*22
-		Src         uint8 // Pll clock source, reference _clock_pll_clk_src
-	}
-
-	// PLL configuration for AUDIO
-	ClockConfigAudioPll struct {
-		LoopDivider uint8  // PLL loop divider. Valid range for DIV_SELECT divider value: 27~54.
-		PostDivider uint8  // Divider after the PLL, should only be 1, 2, 4, 8, 16.
-		Numerator   uint32 // 30 bit Numerator of fractional loop divider.
-		Denominator uint32 // 30 bit Denominator of fractional loop divider
-		Src         uint8  // Pll clock source, reference _clock_pll_clk_src
-	}
-
-	// PLL configuration for VIDEO
-	ClockConfigVideoPll struct {
-		LoopDivider uint8  // PLL loop divider. Valid range for DIV_SELECT divider value: 27~54.
-		PostDivider uint8  // Divider after the PLL, should only be 1, 2, 4, 8, 16.
-		Numerator   uint32 // 30 bit Numerator of fractional loop divider.
-		Denominator uint32 // 30 bit Denominator of fractional loop divider
-		Src         uint8  // Pll clock source, reference _clock_pll_clk_src
-	}
-
-	// PLL configuration for ENET
-	ClockConfigEnetPll struct {
-		EnableClkOutput    bool  // Power on and enable PLL clock output for ENET0.
-		EnableClkOutput25M bool  // Power on and enable PLL clock output for ENET2.
-		LoopDivider        uint8 // Controls the frequency of the ENET0 reference clock: b00=25MHz, b01=50MHz, b10=100MHz (not 50% duty cycle), b11=125MHz
-		Src                uint8 // Pll clock source, reference _clock_pll_clk_src
-		EnableClkOutput1   bool  // Power on and enable PLL clock output for ENET1.
-		LoopDivider1       uint8 // Controls the frequency of the ENET1 reference clock: b00 25MHz, b01 50MHz, b10 100MHz (not 50% duty cycle), b11 125MHz
-	}
 )
+
+// Enable activates or deactivates the clock gate of receiver Clock c.
+func (c Clock) Enable(enable bool) {
+	if enable {
+		c.setGate(clockNeededRunWait)
+	} else {
+		c.setGate(clockNotNeeded)
+	}
+}
+
+// Mux selects a clock source for the mux of the receiver Clock c.
+func (c Clock) Mux(mux uint32) { c.setCcm(mux) }
+
+// Div configures the prescalar divisor of the receiver Clock c.
+func (c Clock) Div(div uint32) { c.setCcm(div) }
 
 const (
-	ModeClkRun  ClockMode = 0 // Remain in run mode
-	ModeClkWait ClockMode = 1 // Transfer to wait mode
-	ModeClkStop ClockMode = 2 // Transfer to stop mode
+	ClockModeRun  ClockMode = 0 // Remain in run mode
+	ClockModeWait ClockMode = 1 // Transfer to wait mode
+	ClockModeStop ClockMode = 2 // Transfer to stop mode
 )
 
-const (
-	GateClkNotNeeded     Gate = 0 // Clock is off during all modes
-	GateClkNeededRun     Gate = 1 // Clock is on in run mode, but off in WAIT and STOP modes
-	GateClkNeededRunWait Gate = 3 // Clock is on during all modes, except STOP mode
-)
+// Set configures the run mode of the MCU.
+func (m ClockMode) Set() {
+	CCM.CLPCR.Set((CCM.CLPCR.Get() & ^uint32(CCM_CLPCR_LPM_Msk)) |
+		((uint32(m) << CCM_CLPCR_LPM_Pos) & CCM_CLPCR_LPM_Msk))
+}
 
 // Named oscillators
 const (
@@ -259,6 +226,7 @@ const (
 	ClockPfd3 Clock = 3 // PLL PFD3
 )
 
+// Named clock muxes of integrated peripherals
 const (
 	MuxIpPll3Sw     Clock = (offCCSR & 0xFF) | (CCM_CCSR_PLL3_SW_CLK_SEL_Pos << 8) | (((CCM_CCSR_PLL3_SW_CLK_SEL_Msk >> CCM_CCSR_PLL3_SW_CLK_SEL_Pos) & 0x1FFF) << 13) | (noBusyWait << 26)                          // pll3_sw_clk mux name
 	MuxIpPeriph     Clock = (offCBCDR & 0xFF) | (CCM_CBCDR_PERIPH_CLK_SEL_Pos << 8) | (((CCM_CBCDR_PERIPH_CLK_SEL_Msk >> CCM_CBCDR_PERIPH_CLK_SEL_Pos) & 0x1FFF) << 13) | (CCM_CDHIPR_PERIPH_CLK_SEL_BUSY_Pos << 26) // periph mux name
@@ -286,6 +254,7 @@ const (
 	MuxIpCsi        Clock = (offCSCDR3 & 0xFF) | (CCM_CSCDR3_CSI_CLK_SEL_Pos << 8) | (((CCM_CSCDR3_CSI_CLK_SEL_Msk >> CCM_CSCDR3_CSI_CLK_SEL_Pos) & 0x1FFF) << 13) | (noBusyWait << 26)                              // csi mux name
 )
 
+// Named hardware clock divisors of integrated peripherals
 const (
 	DivIpArm        Clock = (offCACRR & 0xFF) | (CCM_CACRR_ARM_PODF_Pos << 8) | (((CCM_CACRR_ARM_PODF_Msk >> CCM_CACRR_ARM_PODF_Pos) & 0x1FFF) << 13) | (CCM_CDHIPR_ARM_PODF_BUSY_Pos << 26)           // core div name
 	DivIpPeriphClk2 Clock = (offCBCDR & 0xFF) | (CCM_CBCDR_PERIPH_CLK2_PODF_Pos << 8) | (((CCM_CBCDR_PERIPH_CLK2_PODF_Msk >> CCM_CBCDR_PERIPH_CLK2_PODF_Pos) & 0x1FFF) << 13) | (noBusyWait << 26)     // periph clock2 div name
@@ -345,7 +314,7 @@ const (
 	noBusyWait = 0x20
 )
 
-// analog pll definition
+// analog PLL definition
 const (
 	pllBypassPos       = 16
 	pllBypassClkSrcMsk = 0xC000
@@ -358,29 +327,14 @@ const (
 	pllSrcClkPN = 1 // Pll clock source CLK1_P and CLK1_N
 )
 
-// Set configures the run mode of the MCU.
-func (m ClockMode) Set() {
-	CCM.CLPCR.Set((CCM.CLPCR.Get() & ^uint32(CCM_CLPCR_LPM_Msk)) |
-		((uint32(m) << CCM_CLPCR_LPM_Pos) & CCM_CLPCR_LPM_Msk))
-}
+const (
+	clockNotNeeded     uint32 = 0 // Clock is off during all modes
+	clockNeededRun     uint32 = 1 // Clock is on in run mode, but off in WAIT and STOP modes
+	clockNeededRunWait uint32 = 3 // Clock is on during all modes, except STOP mode
+)
 
-// Enable activates or deactivates the clock gate of receiver Clock clk.
-func (clk Clock) Enable(enable bool) {
-	if enable {
-		clk.control(GateClkNeededRunWait)
-	} else {
-		clk.control(GateClkNotNeeded)
-	}
-}
-
-// Mux selects a clock source for the mux of the receiver Clock clk.
-func (clk Clock) Mux(mux uint32) { clk.ccm(mux) }
-
-// Div configures the prescalar divisor of the receiver Clock clk.
-func (clk Clock) Div(div uint32) { clk.ccm(div) }
-
-// getCCGR returns the CCM clock gating register for the receiver clk.
-func (clk Clock) getCCGR() *volatile.Register32 {
+// getGate returns the CCM clock gating register for the receiver clk.
+func (clk Clock) getGate() *volatile.Register32 {
 	switch clk >> 8 {
 	case 0:
 		return &CCM.CCGR0
@@ -403,14 +357,14 @@ func (clk Clock) getCCGR() *volatile.Register32 {
 	}
 }
 
-// control enables or disables the receiver clk using its gating register.
-func (clk Clock) control(value Gate) {
-	reg := clk.getCCGR()
+// setGate enables or disables the receiver clk using its gating register.
+func (clk Clock) setGate(value uint32) {
+	reg := clk.getGate()
 	shift := clk & 0x1F
-	reg.Set((reg.Get() & ^(3 << shift)) | (uint32(value) << shift))
+	reg.Set((reg.Get() & ^(3 << shift)) | (value << shift))
 }
 
-func (clk Clock) ccm(value uint32) {
+func (clk Clock) setCcm(value uint32) {
 	const ccmBase = 0x400fc000
 	reg := (*volatile.Register32)(unsafe.Pointer(uintptr(ccmBase + (uint32(clk) & 0xFF))))
 	msk := ((uint32(clk) >> 13) & 0x1FFF) << ((uint32(clk) >> 8) & 0x1F)
@@ -421,260 +375,6 @@ func (clk Clock) ccm(value uint32) {
 		for CCM.CDHIPR.HasBits(1 << bsy) {
 		}
 	}
-}
-
-// GetFreq returns the calculated frequency of the receiver clock clk.
-func (clk Clock) GetFreq() uint32 {
-	switch clk {
-	case ClockCpu, ClockAhb:
-		return getAhbFreq()
-	case ClockSemc:
-		return getSemcFreq()
-	case ClockIpg:
-		return getIpgFreq()
-	case ClockPer:
-		return getPerClkFreq()
-	case ClockOsc:
-		return getOscFreq()
-	case ClockRtc:
-		return getRtcFreq()
-	case ClockArmPll:
-		return ClockPllArm.getPllFreq()
-	case ClockUsb1Pll:
-		return ClockPllUsb1.getPllFreq()
-	case ClockUsb1PllPfd0:
-		return ClockPfd0.getUsb1PfdFreq()
-	case ClockUsb1PllPfd1:
-		return ClockPfd1.getUsb1PfdFreq()
-	case ClockUsb1PllPfd2:
-		return ClockPfd2.getUsb1PfdFreq()
-	case ClockUsb1PllPfd3:
-		return ClockPfd3.getUsb1PfdFreq()
-	case ClockUsb2Pll:
-		return ClockPllUsb2.getPllFreq()
-	case ClockSysPll:
-		return ClockPllSys.getPllFreq()
-	case ClockSysPllPfd0:
-		return ClockPfd0.getSysPfdFreq()
-	case ClockSysPllPfd1:
-		return ClockPfd1.getSysPfdFreq()
-	case ClockSysPllPfd2:
-		return ClockPfd2.getSysPfdFreq()
-	case ClockSysPllPfd3:
-		return ClockPfd3.getSysPfdFreq()
-	case ClockEnetPll0:
-		return ClockPllEnet.getPllFreq()
-	case ClockEnetPll1:
-		return ClockPllEnet2.getPllFreq()
-	case ClockEnetPll2:
-		return ClockPllEnet25M.getPllFreq()
-	case ClockAudioPll:
-		return ClockPllAudio.getPllFreq()
-	case ClockVideoPll:
-		return ClockPllVideo.getPllFreq()
-	default:
-		panic("nxp: invalid clock")
-	}
-}
-
-// getOscFreq returns the XTAL OSC clock frequency
-func getOscFreq() uint32 {
-	return 24000000 // 24 MHz
-}
-
-// getRtcFreq returns the RTC clock frequency
-func getRtcFreq() uint32 {
-	return 32768 // 32.768 kHz
-}
-
-func ccmCbcmrPeriphClk2Sel(n uint32) uint32 {
-	return (n << CCM_CBCMR_PERIPH_CLK2_SEL_Pos) & CCM_CBCMR_PERIPH_CLK2_SEL_Msk
-}
-
-func ccmCbcmrPrePeriphClkSel(n uint32) uint32 {
-	return (n << CCM_CBCMR_PRE_PERIPH_CLK_SEL_Pos) & CCM_CBCMR_PRE_PERIPH_CLK_SEL_Msk
-}
-
-// getPeriphClkFreq returns the PERIPH clock frequency
-func getPeriphClkFreq() uint32 {
-	freq := uint32(0)
-	if CCM.CBCDR.HasBits(CCM_CBCDR_PERIPH_CLK_SEL_Msk) {
-		// Periph_clk2_clk -> Periph_clk
-		switch CCM.CBCMR.Get() & CCM_CBCMR_PERIPH_CLK2_SEL_Msk {
-		case ccmCbcmrPeriphClk2Sel(0):
-			// Pll3_sw_clk -> Periph_clk2_clk -> Periph_clk
-			freq = ClockPllUsb1.getPllFreq()
-		case ccmCbcmrPeriphClk2Sel(1):
-			// Osc_clk -> Periph_clk2_clk -> Periph_clk
-			freq = getOscFreq()
-		case ccmCbcmrPeriphClk2Sel(2):
-			freq = ClockPllSys.getPllFreq()
-		case ccmCbcmrPeriphClk2Sel(3):
-			freq = 0
-		}
-		freq /= ((CCM.CBCDR.Get() & CCM_CBCDR_PERIPH_CLK2_PODF_Msk) >> CCM_CBCDR_PERIPH_CLK2_PODF_Pos) + 1
-	} else {
-		// Pre_Periph_clk -> Periph_clk
-		switch CCM.CBCMR.Get() & CCM_CBCMR_PRE_PERIPH_CLK_SEL_Msk {
-		case ccmCbcmrPrePeriphClkSel(0):
-			// PLL2 -> Pre_Periph_clk -> Periph_clk
-			freq = ClockPllSys.getPllFreq()
-		case ccmCbcmrPrePeriphClkSel(1):
-			// PLL2 PFD2 -> Pre_Periph_clk -> Periph_clk
-			freq = ClockPfd2.getSysPfdFreq()
-		case ccmCbcmrPrePeriphClkSel(2):
-			// PLL2 PFD0 -> Pre_Periph_clk -> Periph_clk
-			freq = ClockPfd0.getSysPfdFreq()
-		case ccmCbcmrPrePeriphClkSel(3):
-			// PLL1 divided(/2) -> Pre_Periph_clk -> Periph_clk
-			freq = ClockPllArm.getPllFreq() / (((CCM.CACRR.Get() & CCM_CACRR_ARM_PODF_Msk) >> CCM_CACRR_ARM_PODF_Pos) + 1)
-		}
-	}
-	return freq
-}
-
-// getAhbFreq returns the AHB clock frequency
-func getAhbFreq() uint32 {
-	return getPeriphClkFreq() / (((CCM.CBCDR.Get() & CCM_CBCDR_AHB_PODF_Msk) >> CCM_CBCDR_AHB_PODF_Pos) + 1)
-}
-
-// getSemcFreq returns the SEMC clock frequency
-func getSemcFreq() uint32 {
-
-	freq := uint32(0)
-
-	if CCM.CBCDR.HasBits(CCM_CBCDR_SEMC_CLK_SEL_Msk) {
-		// SEMC alternative clock -> SEMC Clock
-
-		if CCM.CBCDR.HasBits(CCM_CBCDR_SEMC_ALT_CLK_SEL_Msk) {
-			// PLL3 PFD1 -> SEMC alternative clock -> SEMC Clock
-			freq = ClockPfd1.getUsb1PfdFreq()
-		} else {
-			// PLL2 PFD2 -> SEMC alternative clock -> SEMC Clock
-			freq = ClockPfd2.getSysPfdFreq()
-		}
-	} else {
-		// Periph_clk -> SEMC Clock
-		freq = getPeriphClkFreq()
-	}
-
-	freq /= ((CCM.CBCDR.Get() & CCM_CBCDR_SEMC_PODF_Msk) >> CCM_CBCDR_SEMC_PODF_Pos) + 1
-
-	return freq
-}
-
-// getIpgFreq returns the IPG clock frequency
-func getIpgFreq() uint32 {
-	return getAhbFreq() / (((CCM.CBCDR.Get() & CCM_CBCDR_IPG_PODF_Msk) >> CCM_CBCDR_IPG_PODF_Pos) + 1)
-}
-
-// getPerClkFreq returns the PER clock frequency
-func getPerClkFreq() uint32 {
-	freq := uint32(0)
-	if CCM.CSCMR1.HasBits(CCM_CSCMR1_PERCLK_CLK_SEL_Msk) {
-		// Osc_clk -> PER Cloc
-		freq = getOscFreq()
-	} else {
-		// Periph_clk -> AHB Clock -> IPG Clock -> PER Clock
-		freq = getIpgFreq()
-	}
-	return freq/((CCM.CSCMR1.Get()&CCM_CSCMR1_PERCLK_PODF_Msk)>>
-		CCM_CSCMR1_PERCLK_PODF_Pos) + 1
-}
-
-// getPllFreq returns the clock frequency of the receiver (PLL) clock clk
-func (clk Clock) getPllFreq() uint32 {
-	enetRefClkFreq := []uint32{
-		25000000,  // 25 MHz
-		50000000,  // 50 MHz
-		100000000, // 100 MHz
-		125000000, // 125 MHz
-	}
-	// check if PLL is enabled
-	if !clk.isPllEnabled() {
-		return 0
-	}
-	// get pll reference clock
-	freq := clk.getBypassFreq()
-	// check if pll is bypassed
-	if clk.isPllBypassed() {
-		return freq
-	}
-	switch clk {
-	case ClockPllArm:
-		freq *= (CCM_ANALOG.PLL_ARM.Get() & CCM_ANALOG_PLL_ARM_DIV_SELECT_Msk) >> CCM_ANALOG_PLL_ARM_DIV_SELECT_Pos
-		freq >>= 1
-	case ClockPllSys:
-		// PLL output frequency = Fref * (DIV_SELECT + NUM/DENOM).
-		fFreq := float64(freq) * float64(CCM_ANALOG.PLL_SYS_NUM.Get())
-		fFreq /= float64(CCM_ANALOG.PLL_SYS_DENOM.Get())
-		if CCM_ANALOG.PLL_SYS.HasBits(CCM_ANALOG_PLL_SYS_DIV_SELECT_Msk) {
-			freq *= 22
-		} else {
-			freq *= 20
-		}
-		freq += uint32(fFreq)
-	case ClockPllUsb1:
-		if CCM_ANALOG.PLL_USB1.HasBits(CCM_ANALOG_PLL_USB1_DIV_SELECT_Msk) {
-			freq *= 22
-		} else {
-			freq *= 20
-		}
-	case ClockPllEnet:
-		divSelect := (CCM_ANALOG.PLL_ENET.Get() & CCM_ANALOG_PLL_ENET_DIV_SELECT_Msk) >> CCM_ANALOG_PLL_ENET_DIV_SELECT_Pos
-		freq = enetRefClkFreq[divSelect]
-	case ClockPllEnet2:
-		divSelect := (CCM_ANALOG.PLL_ENET.Get() & CCM_ANALOG_PLL_ENET_ENET2_DIV_SELECT_Msk) >> CCM_ANALOG_PLL_ENET_ENET2_DIV_SELECT_Pos
-		freq = enetRefClkFreq[divSelect]
-	case ClockPllEnet25M:
-		// ref_enetpll1 if fixed at 25MHz.
-		freq = 25000000
-	case ClockPllUsb2:
-		if CCM_ANALOG.PLL_USB2.HasBits(CCM_ANALOG_PLL_USB2_DIV_SELECT_Msk) {
-			freq *= 22
-		} else {
-			freq *= 20
-		}
-	default:
-		freq = 0
-	}
-	return freq
-}
-
-// getSysPfdFreq returns current system PLL PFD output frequency
-func (clk Clock) getSysPfdFreq() uint32 {
-	freq := ClockPllSys.getPllFreq()
-	switch clk {
-	case ClockPfd0:
-		freq /= (CCM_ANALOG.PFD_528.Get() & CCM_ANALOG_PFD_528_PFD0_FRAC_Msk) >> CCM_ANALOG_PFD_528_PFD0_FRAC_Pos
-	case ClockPfd1:
-		freq /= (CCM_ANALOG.PFD_528.Get() & CCM_ANALOG_PFD_528_PFD1_FRAC_Msk) >> CCM_ANALOG_PFD_528_PFD1_FRAC_Pos
-	case ClockPfd2:
-		freq /= (CCM_ANALOG.PFD_528.Get() & CCM_ANALOG_PFD_528_PFD2_FRAC_Msk) >> CCM_ANALOG_PFD_528_PFD2_FRAC_Pos
-	case ClockPfd3:
-		freq /= (CCM_ANALOG.PFD_528.Get() & CCM_ANALOG_PFD_528_PFD3_FRAC_Msk) >> CCM_ANALOG_PFD_528_PFD3_FRAC_Pos
-	default:
-		freq = 0
-	}
-	return freq * 18
-}
-
-// getUsb1PfdFreq returns current USB1 PLL PFD output frequency
-func (clk Clock) getUsb1PfdFreq() uint32 {
-	freq := ClockPllUsb1.getPllFreq()
-	switch clk {
-	case ClockPfd0:
-		freq /= (CCM_ANALOG.PFD_480.Get() & CCM_ANALOG_PFD_480_PFD0_FRAC_Msk) >> CCM_ANALOG_PFD_480_PFD0_FRAC_Pos
-	case ClockPfd1:
-		freq /= (CCM_ANALOG.PFD_480.Get() & CCM_ANALOG_PFD_480_PFD1_FRAC_Msk) >> CCM_ANALOG_PFD_480_PFD1_FRAC_Pos
-	case ClockPfd2:
-		freq /= (CCM_ANALOG.PFD_480.Get() & CCM_ANALOG_PFD_480_PFD2_FRAC_Msk) >> CCM_ANALOG_PFD_480_PFD2_FRAC_Pos
-	case ClockPfd3:
-		freq /= (CCM_ANALOG.PFD_480.Get() & CCM_ANALOG_PFD_480_PFD3_FRAC_Msk) >> CCM_ANALOG_PFD_480_PFD3_FRAC_Pos
-	default:
-		freq = 0
-	}
-	return freq * 18
 }
 
 func setSysPfd(value ...uint32) {
@@ -701,40 +401,10 @@ func setUsb1Pfd(value ...uint32) {
 	}
 }
 
-func (clk Clock) isPllEnabled() bool {
-	const ccmAnalogBase = 0x400d8000
-	addr := ccmAnalogBase + ((uint32(clk) >> 16) & 0xFFF)
-	pos := uint32(1 << (uint32(clk) & 0x1F))
-	return ((*volatile.Register32)(unsafe.Pointer(uintptr(addr)))).HasBits(pos)
-}
-
-func (clk Clock) isPllBypassed() bool {
-	const ccmAnalogBase = 0x400d8000
-	addr := ccmAnalogBase + ((uint32(clk) >> 16) & 0xFFF)
-	pos := uint32(1 << pllBypassPos)
-	return ((*volatile.Register32)(unsafe.Pointer(uintptr(addr)))).HasBits(pos)
-}
-
-func (clk Clock) getBypassFreq() uint32 {
-	const ccmAnalogBase = 0x400d8000
-	addr := ccmAnalogBase + ((uint32(clk) >> 16) & 0xFFF)
-	src := (((*volatile.Register32)(unsafe.Pointer(uintptr(addr)))).Get() &
-		pllBypassClkSrcMsk) >> pllBypassClkSrcPos
-	if src == uint32(pllSrc24M) {
-		return getOscFreq()
-	}
-	return 0
-}
-
-func (clk Clock) bypass(bypass bool) {
-	const ccmAnalogBase = 0x400d8000
-	if bypass {
-		addr := ccmAnalogBase + ((uint32(clk) >> 16) & 0xFFF) + 4
-		((*volatile.Register32)(unsafe.Pointer(uintptr(addr)))).Set(1 << pllBypassPos)
-	} else {
-		addr := ccmAnalogBase + ((uint32(clk) >> 16) & 0xFFF) + 8
-		((*volatile.Register32)(unsafe.Pointer(uintptr(addr)))).Set(1 << pllBypassPos)
-	}
+// PLL configuration for ARM
+type ClockConfigArmPll struct {
+	LoopDivider uint32 // PLL loop divider. Valid range for divider value: 54-108. Fout=Fin*LoopDivider/2.
+	Src         uint8  // Pll clock source, reference _clock_pll_clk_src
 }
 
 func (cfg ClockConfigArmPll) Configure() {
@@ -755,6 +425,17 @@ func (cfg ClockConfigArmPll) Configure() {
 
 	// disable bypass
 	CCM_ANALOG.PLL_ARM.ClearBits(CCM_ANALOG_PLL_ARM_BYPASS_Msk)
+}
+
+// PLL configuration for System
+type ClockConfigSysPll struct {
+	LoopDivider uint8  // PLL loop divider. Intended to be 1 (528M): 0 - Fout=Fref*20, 1 - Fout=Fref*22
+	Numerator   uint32 // 30 bit Numerator of fractional loop divider.
+	Denominator uint32 // 30 bit Denominator of fractional loop divider
+	Src         uint8  // Pll clock source, reference _clock_pll_clk_src
+	SsStop      uint16 // Stop value to get frequency change.
+	SsEnable    uint8  // Enable spread spectrum modulation
+	SsStep      uint16 // Step value to get frequency change step.
 }
 
 func (cfg ClockConfigSysPll) Configure(pfd ...uint32) {
@@ -788,6 +469,13 @@ func (cfg ClockConfigSysPll) Configure(pfd ...uint32) {
 
 	// update PFDs after update
 	setSysPfd(pfd...)
+}
+
+// PLL configuration for USB
+type ClockConfigUsbPll struct {
+	Instance    uint8 // USB PLL number (1 or 2)
+	LoopDivider uint8 // PLL loop divider: 0 - Fout=Fref*20, 1 - Fout=Fref*22
+	Src         uint8 // Pll clock source, reference _clock_pll_clk_src
 }
 
 func (cfg ClockConfigUsbPll) Configure(pfd ...uint32) {

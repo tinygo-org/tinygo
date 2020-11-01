@@ -2,11 +2,6 @@
 
 package machine
 
-const (
-	NUM_DIGITAL_IO_PINS = 40
-	NUM_ANALOG_IO_PINS  = 14
-)
-
 // Digital pins
 const (
 	//  = Pin  // [Pad]:       Alt Func 0       Alt Func 1       Alt Func 2       Alt Func 3      Alt Func 4            Alt Func 5  Alt Func 6            Alt Func 7             Alt Func 8             Alt Func 9
@@ -55,57 +50,53 @@ const (
 
 // Analog pins
 const (
-	//  = Pin  // Dig | [Pad]      {Ch}
-	A0  = PA18 // D14 | [AD_B1_02] {7}
-	A1  = PA19 // D15 | [AD_B1_03] {8}
-	A2  = PA23 // D16 | [AD_B1_07] {12}
-	A3  = PA22 // D17 | [AD_B1_06] {11}
-	A4  = PA17 // D18 | [AD_B1_01] {6}
-	A5  = PA16 // D19 | [AD_B1_00] {5}
-	A6  = PA26 // D20 | [AD_B1_10] {15}
-	A7  = PA27 // D21 | [AD_B1_11] {0}
-	A8  = PA24 // D22 | [AD_B1_08] {13}
-	A9  = PA25 // D23 | [AD_B1_09] {14}
-	A10 = PA12 // D24 | [AD_B0_12] {1}
-	A11 = PA13 // D25 | [AD_B0_13] {2}
-	A12 = PA30 // D26 | [AD_B1_14] {128+3}
-	A13 = PA31 // D27 | [AD_B1_15] {128+4}
+	//  = Pin  // Dig | [Pad]      {ADC1/ADC2}
+	A0  = PA18 // D14 | [AD_B1_02] {  7 / 7  }
+	A1  = PA19 // D15 | [AD_B1_03] {  8 / 8  }
+	A2  = PA23 // D16 | [AD_B1_07] { 12 / 12 }
+	A3  = PA22 // D17 | [AD_B1_06] { 11 / 11 }
+	A4  = PA17 // D18 | [AD_B1_01] {  6 / 6  }
+	A5  = PA16 // D19 | [AD_B1_00] {  5 / 5  }
+	A6  = PA26 // D20 | [AD_B1_10] { 15 / 15 }
+	A7  = PA27 // D21 | [AD_B1_11] {  0 / 0  }
+	A8  = PA24 // D22 | [AD_B1_08] { 13 / 13 }
+	A9  = PA25 // D23 | [AD_B1_09] { 14 / 14 }
+	A10 = PA12 // D24 | [AD_B0_12] {  1 / -  }
+	A11 = PA13 // D25 | [AD_B0_13] {  2 / -  }
+	A12 = PA30 // D26 | [AD_B1_14] {  - / 3  }
+	A13 = PA31 // D27 | [AD_B1_15] {  - / 4  }
 )
 
-func init() {
-	initLED()
-	initUART()
-	initSPI()
-	initI2C()
-}
-
-// -- LEDs ---------------------------------------------------------------------
-
+// Default peripheral pins
 const (
-	NUM_BOARD_LED = 1
+	LED = D13
 
-	LED_BUILTIN = D13
-	LED         = LED_BUILTIN
+	UART_RX_PIN = UART1_RX_PIN // D0
+	UART_TX_PIN = UART1_TX_PIN // D1
+
+	SPI_SDI_PIN = SPI1_SDI_PIN // D12
+	SPI_SDO_PIN = SPI1_SDO_PIN // D11
+	SPI_SCK_PIN = SPI1_SCK_PIN // D13
+	SPI_CS_PIN  = SPI1_CS_PIN  // D10
+
+	I2C_SDA_PIN = I2C1_SDA_PIN // D18/A4
+	I2C_SCL_PIN = I2C1_SCL_PIN // D19/A5
 )
 
-func initLED() {}
-
-// -- UART ---------------------------------------------------------------------
-
+// #=====================================================#
+// |                        UART                         |
+// #===========#===========#=============#===============#
+// | Interface | Hardware  | Clock(Freq) |  RX/TX  : Alt |
+// #===========#===========#=============#=========-=====#
+// |   UART1   |  LPUART6  | OSC(24 MHz) |  D0/D1  : 2/2 |
+// |   UART2   |  LPUART4  | OSC(24 MHz) |  D7/D8  : 2/2 |
+// |   UART3   |  LPUART2  | OSC(24 MHz) | D15/D14 : 2/2 |
+// |   UART4   |  LPUART3  | OSC(24 MHz) | D16/D17 : 2/2 |
+// |   UART5   |  LPUART8  | OSC(24 MHz) | D21/D20 : 2/2 |
+// |   UART6   |  LPUART1  | OSC(24 MHz) | D25/D24 : 2/2 |
+// |   UART7   |  LPUART7  | OSC(24 MHz) | D28/D29 : 2/2 |
+// #===========#===========#=============#=========-=====#
 const (
-	// #===========#===========#=============#===========#=============#
-	// | Interface | Hardware  | Clock(Freq) | RX/TX Pin | RX/TX AltFn |
-	// #===========#===========#=============#===========#=============#
-	// |   UART1   |  LPUART6  | OSC(24 MHz) |   D0/D1   |     2/2     |
-	// |   UART2   |  LPUART4  | OSC(24 MHz) |   D7/D8   |     2/2     |
-	// |   UART3   |  LPUART2  | OSC(24 MHz) |  D15/D14  |     2/2     |
-	// |   UART4   |  LPUART3  | OSC(24 MHz) |  D16/D17  |     2/2     |
-	// |   UART5   |  LPUART8  | OSC(24 MHz) |  D21/D20  |     2/2     |
-	// |   UART6   |  LPUART1  | OSC(24 MHz) |  D25/D24  |     2/2     |
-	// |   UART7   |  LPUART7  | OSC(24 MHz) |  D28/D29  |     2/2     |
-	// #===========#===========#=============#===========#=============#
-	NUM_UART_INTERFACES = 7
-
 	UART1_RX_PIN = D0
 	UART1_TX_PIN = D1
 
@@ -126,25 +117,18 @@ const (
 
 	UART7_RX_PIN = D28
 	UART7_TX_PIN = D29
-
-	UART_RX_PIN = UART1_RX_PIN
-	UART_TX_PIN = UART1_TX_PIN
 )
 
-func initUART() {}
-
-// -- SPI ----------------------------------------------------------------------
-
+// #==================================================================#
+// |                               SPI                                |
+// #===========#==========#===============#===========================#
+// | Interface | Hardware |  Clock(Freq)  | SDI/SDO/SCK/CS  :   Alt   |
+// #===========#==========#===============#=================-=========#
+// |   SPI1    |  LPSPI4  | PLL2(132 MHz) | D12/D11/D13/D10 : 3/3/3/3 |
+// |   SPI2    |  LPSPI3  | PLL2(132 MHz) |  D1/D26/D27/D0  : 7/2/2/7 |
+// |   SPI3    |  LPSPI1  | PLL2(132 MHz) | D34/D35/D37/D36 : 4/4/4/4 |
+// #===========#==========#===============#=================-=========#
 const (
-	// #===========#==========#===================#===========================#
-	// | Interface | Hardware |    Clock(Freq)    | SDI/SDO/SCK/CS  :   Alt   |
-	// #===========#==========#===================#=================-=========#
-	// |   SPI1    |  LPSPI4  | PLL3PFD1(130 MHz) | D12/D11/D13/D10 : 3/3/3/3 |
-	// |   SPI2    |  LPSPI3  | PLL3PFD1(130 MHz) |  D1/D26/D27/D0  : 7/2/2/7 |
-	// |   SPI3    |  LPSPI1  | PLL3PFD1(130 MHz) | D34/D35/D37/D36 : 4/4/4/4 |
-	// #===========#==========#===================#=================-=========#
-	NUM_SPI_INTERFACES = 3
-
 	SPI1_SDI_PIN = D12
 	SPI1_SDO_PIN = D11
 	SPI1_SCK_PIN = D13
@@ -159,19 +143,24 @@ const (
 	SPI3_SDO_PIN = D35
 	SPI3_SCK_PIN = D37
 	SPI3_CS_PIN  = D36
-
-	SPI_SDI_PIN = SPI1_SDI_PIN
-	SPI_SDO_PIN = SPI1_SDO_PIN
-	SPI_SCK_PIN = SPI1_SCK_PIN
-	SPI_CS_PIN  = SPI1_CS_PIN
 )
 
-func initSPI() {}
-
-// -- I2C ----------------------------------------------------------------------
-
+// #====================================================#
+// |                         I2C                        |
+// #===========#==========#=============#===============#
+// | Interface | Hardware | Clock(Freq) | SDA/SCL : Alt |
+// #===========#==========#=============#=========-=====#
+// |   I2C1    |  LPI2C1  | OSC(24 MHz) | D18/D19 : 3/3 |
+// |   I2C2    |  LPI2C3  | OSC(24 MHz) | D17/D16 : 1/1 |
+// |   I2C3    |  LPI2C4  | OSC(24 MHz) | D25/D24 : 0/0 |
+// #===========#==========#=============#=========-=====#
 const (
-	NUM_I2C_INTERFACES = 3
-)
+	I2C1_SDA_PIN = D18
+	I2C1_SCL_PIN = D19
 
-func initI2C() {}
+	I2C2_SDA_PIN = D17
+	I2C2_SCL_PIN = D16
+
+	I2C3_SDA_PIN = D25
+	I2C3_SCL_PIN = D24
+)

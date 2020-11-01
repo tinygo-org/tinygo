@@ -34,16 +34,6 @@ type (
 	Extension   uint32
 )
 
-// MPU Type Register Definitions
-const (
-	MPU_TYPE_IREGION_Pos  = 16                           // MPU TYPE: IREGION Position
-	MPU_TYPE_IREGION_Msk  = 0xFF << MPU_TYPE_IREGION_Pos // MPU TYPE: IREGION Mask
-	MPU_TYPE_DREGION_Pos  = 8                            // MPU TYPE: DREGION Position
-	MPU_TYPE_DREGION_Msk  = 0xFF << MPU_TYPE_DREGION_Pos // MPU TYPE: DREGION Mask
-	MPU_TYPE_SEPARATE_Pos = 0                            // MPU TYPE: SEPARATE Position
-	MPU_TYPE_SEPARATE_Msk = 1                            // MPU TYPE: SEPARATE Mask
-)
-
 // MPU Control Register Definitions
 const (
 	MPU_CTRL_PRIVDEFENA_Pos = 2                            // MPU CTRL: PRIVDEFENA Position
@@ -52,12 +42,6 @@ const (
 	MPU_CTRL_HFNMIENA_Msk   = 1 << MPU_CTRL_HFNMIENA_Pos   // MPU CTRL: HFNMIENA Mask
 	MPU_CTRL_ENABLE_Pos     = 0                            // MPU CTRL: ENABLE Position
 	MPU_CTRL_ENABLE_Msk     = 1                            // MPU CTRL: ENABLE Mask
-)
-
-// MPU Region Number Register Definitions
-const (
-	MPU_RNR_REGION_Pos = 0    // MPU RNR: REGION Position
-	MPU_RNR_REGION_Msk = 0xFF // MPU RNR: REGION Mask
 )
 
 // MPU Region Base Address Register Definitions
@@ -161,11 +145,11 @@ func (mpu *MPU_Type) Enable(enable bool) {
       dsb 0xF
       isb 0xF
     `, nil)
-		EnableDcache(true)
-		EnableIcache(true)
+		enableDcache(true)
+		enableIcache(true)
 	} else {
-		EnableIcache(false)
-		EnableDcache(false)
+		enableIcache(false)
+		enableDcache(false)
 		arm.AsmFull(`
       dmb 0xF
     `, nil)
@@ -200,7 +184,7 @@ func (mpu *MPU_Type) SetRASR(size RegionSize, access AccessPerms, ext Extension,
 		MPU_RASR_ENABLE_Msk)
 }
 
-func EnableIcache(enable bool) {
+func enableIcache(enable bool) {
 	if enable != SystemControl.CCR.HasBits(SCB_CCR_IC_Msk) {
 		if enable {
 			arm.AsmFull(`
@@ -232,7 +216,7 @@ func EnableIcache(enable bool) {
 	}
 }
 
-func EnableDcache(enable bool) {
+func enableDcache(enable bool) {
 	if enable != SystemControl.CCR.HasBits(SCB_CCR_DC_Msk) {
 		if enable {
 			SystemControl.CSSELR.Set(0)

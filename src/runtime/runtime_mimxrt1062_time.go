@@ -12,14 +12,14 @@ import (
 
 type timeUnit int64
 
-const ( // HW divides 24 MHz XTALOSC down to 100 kHz
+const (
 	lastCycle      = SYSTICK_FREQ/1000 - 1
 	cyclesPerMicro = CORE_FREQ / 1000000
 )
 
 const (
-	PIT_FREQ          = PERCLK_FREQ
-	pitCyclesPerMicro = PIT_FREQ / 1000000
+	pitFreq           = OSC_FREQ // PIT/GPT are muxed to 24 MHz OSC
+	pitCyclesPerMicro = pitFreq / 1000000
 	pitSleepTimer     = 0 // x4 32-bit PIT timers [0..3]
 )
 
@@ -32,14 +32,9 @@ var (
 
 var (
 	// debug exception and monitor control
-	DEMCR      = (*volatile.Register32)(unsafe.Pointer(uintptr(0xe000edfc)))
-	DWT_CTRL   = (*volatile.Register32)(unsafe.Pointer(uintptr(0xe0001000)))
+	DEM_CR     = (*volatile.Register32)(unsafe.Pointer(uintptr(0xe000edfc)))
+	DWT_CR     = (*volatile.Register32)(unsafe.Pointer(uintptr(0xe0001000)))
 	DWT_CYCCNT = (*volatile.Register32)(unsafe.Pointer(uintptr(0xe0001004)))
-)
-
-const (
-	DEMCR_TRCENA       = 0x01000000 // enable debugging & monitoring blocks
-	DWT_CTRL_CYCCNTENA = 0x00000001 // cycle count register
 )
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
@@ -51,22 +46,30 @@ func nanosecondsToTicks(ns int64) timeUnit {
 }
 
 func initSysTick() {
-	// disable if already running
+
+	const (
+		traceEnable      = 0x01000000 // enable debugging & monitoring blocks
+		cycleCountEnable = 0x00000001 // cycle count register
+	)
+
+	// disable SysTick if already running
 	if arm.SYST.SYST_CSR.HasBits(arm.SYST_CSR_ENABLE_Msk) {
 		arm.SYST.SYST_CSR.ClearBits(arm.SYST_CSR_ENABLE_Msk)
 	}
+
 	// zeroize the counter
 	tickCount.Set(0)
 	arm.SYST.SYST_RVR.Set(lastCycle)
 	arm.SYST.SYST_CVR.Set(0)
 	arm.SYST.SYST_CSR.Set(arm.SYST_CSR_TICKINT | arm.SYST_CSR_ENABLE)
+
 	// set SysTick and PendSV priority to 32
 	nxp.SystemControl.SHPR3.Set((0x20 << nxp.SCB_SHPR3_PRI_15_Pos) |
 		(0x20 << nxp.SCB_SHPR3_PRI_14_Pos))
 
 	// turn on cycle counter
-	DEMCR.SetBits(DEMCR_TRCENA)
-	DWT_CTRL.SetBits(DWT_CTRL_CYCCNTENA)
+	DEM_CR.SetBits(traceEnable)
+	DWT_CR.SetBits(cycleCountEnable)
 	cycleCount.Set(DWT_CYCCNT.Get())
 
 	// enable PIT, disable counters
@@ -74,6 +77,7 @@ func initSysTick() {
 	for i := range nxp.PIT.TIMER {
 		nxp.PIT.TIMER[i].TCTRL.Set(0)
 	}
+
 	// register sleep timer interrupt
 	pitTimeout = interrupt.New(nxp.IRQ_PIT, timerWake)
 	pitTimeout.SetPriority(0x21)
@@ -101,7 +105,13 @@ func ticks() timeUnit {
 	cycs := cycleCount.Get()
 	curr := DWT_CYCCNT.Get()
 	arm.EnableInterrupts(mask)
-	frac := uint64((curr-cycs)*0xFFFFFFFF/cyclesPerMicro) >> 32
+	var diff uint32
+	if curr < cycs { // cycle counter overflow/rollover occurred
+		diff = (0xFFFFFFFF - cycs) + curr
+	} else {
+		diff = curr - cycs
+	}
+	frac := uint64(diff*0xFFFFFFFF/cyclesPerMicro) >> 32
 	if frac > 1000 {
 		frac = 1000
 	}
@@ -111,15 +121,14 @@ func ticks() timeUnit {
 func sleepTicks(duration timeUnit) {
 	if duration >= 0 {
 		curr := ticks()
-		last := curr + duration
+		last := curr + duration // 64-bit overflow unlikely
 		for curr < last {
 			cycles := timeUnit((last - curr) / pitCyclesPerMicro)
 			if cycles > 0xFFFFFFFF {
 				cycles = 0xFFFFFFFF
 			}
 			if !timerSleep(uint32(cycles)) {
-				// return early due to interrupt
-				return
+				return // return early due to interrupt
 			}
 			curr = ticks()
 		}
