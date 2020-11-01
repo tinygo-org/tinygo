@@ -9,7 +9,6 @@
     "--target=armv7em-none-eabi",
     "-Qunused-arguments",
     "-mfloat-abi=soft",
-    "-mfpu=fpv5-d16"
   ],
   "linkerscript": "targets/mimxrt1062-teensy40.ld",
   "extra-files": [

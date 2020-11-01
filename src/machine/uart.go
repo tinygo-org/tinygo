@@ -1,4 +1,4 @@
-// +build avr esp nrf sam sifive stm32 k210 nxp,!mimxrt1062
+// +build avr esp nrf sam sifive stm32 k210 nxpmk66f18
 
 package machine
 
