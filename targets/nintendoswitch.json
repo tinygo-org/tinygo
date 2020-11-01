@@ -7,7 +7,7 @@
   "linker": "ld.lld",
   "rtlib": "compiler-rt",
   "libc": "picolibc",
-  "gc": "conservative",
+  "gc": "blocks",
   "relocation-model": "pic",
   "cpu": "cortex-a57",
   "cflags": [

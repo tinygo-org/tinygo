@@ -50,67 +50,56 @@ func stringLess(x, y string) bool {
 }
 
 // Add two strings together.
-func stringConcat(x, y _string) _string {
-	if x.length == 0 {
+func stringConcat(x, y string) string {
+	switch {
+	case len(x) == 0:
 		return y
-	} else if y.length == 0 {
+	case len(y) == 0:
 		return x
-	} else {
-		length := x.length + y.length
-		buf := alloc(length)
-		memcpy(buf, unsafe.Pointer(x.ptr), x.length)
-		memcpy(unsafe.Pointer(uintptr(buf)+x.length), unsafe.Pointer(y.ptr), y.length)
-		return _string{ptr: (*byte)(buf), length: length}
 	}
+
+	// Create a []byte and unsafe it to a string.
+	buf := make([]byte, len(x)+len(y))
+	copy(buf, x)
+	copy(buf[len(x):], y)
+	return *(*string)(unsafe.Pointer(&buf))
 }
 
 // Create a string from a []byte slice.
-func stringFromBytes(x struct {
-	ptr *byte
-	len uintptr
-	cap uintptr
-}) _string {
-	buf := alloc(x.len)
-	memcpy(buf, unsafe.Pointer(x.ptr), x.len)
-	return _string{ptr: (*byte)(buf), length: x.len}
+func stringFromBytes(x []byte) string {
+	buf := make([]byte, len(x))
+	copy(buf, x)
+	return *(*string)(unsafe.Pointer(&buf))
 }
 
 // Convert a string to a []byte slice.
-func stringToBytes(x _string) (slice struct {
-	ptr *byte
-	len uintptr
-	cap uintptr
-}) {
-	buf := alloc(x.length)
-	memcpy(buf, unsafe.Pointer(x.ptr), x.length)
-	slice.ptr = (*byte)(buf)
-	slice.len = x.length
-	slice.cap = x.length
-	return
+func stringToBytes(x string) []byte {
+	buf := make([]byte, len(x))
+	copy(buf, x)
+	return buf
 }
 
 // Convert a []rune slice to a string.
-func stringFromRunes(runeSlice []rune) (s _string) {
+func stringFromRunes(runeSlice []rune) string {
 	// Count the number of characters that will be in the string.
+	var length uintptr
 	for _, r := range runeSlice {
 		_, numBytes := encodeUTF8(r)
-		s.length += numBytes
+		length += numBytes
 	}
 
 	// Allocate memory for the string.
-	s.ptr = (*byte)(alloc(s.length))
+	buf := make([]byte, length)
 
 	// Encode runes to UTF-8 and store the resulting bytes in the string.
 	index := uintptr(0)
 	for _, r := range runeSlice {
 		array, numBytes := encodeUTF8(r)
-		for _, c := range array[:numBytes] {
-			*(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(s.ptr)) + index)) = c
-			index++
-		}
+		copy(buf[index:index+numBytes], array[:numBytes])
+		index += numBytes
 	}
 
-	return
+	return *(*string)(unsafe.Pointer(&buf))
 }
 
 // Convert a string to []rune slice.
@@ -129,12 +118,9 @@ func stringToRunes(s string) []rune {
 }
 
 // Create a string from a Unicode code point.
-func stringFromUnicode(x rune) _string {
+func stringFromUnicode(x rune) string {
 	array, length := encodeUTF8(x)
-	// Array will be heap allocated.
-	// The heap most likely doesn't work with blocks below 4 bytes, so there's
-	// no point in allocating a smaller buffer for the string here.
-	return _string{ptr: (*byte)(unsafe.Pointer(&array)), length: length}
+	return string(array[:length])
 }
 
 // Iterate over a string.

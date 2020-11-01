@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/compiler/gctype"
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/ir"
 	"github.com/tinygo-org/tinygo/loader"
@@ -51,6 +52,7 @@ type compilerContext struct {
 	ir               *ir.Program
 	diagnostics      []error
 	astComments      map[string]*ast.CommentGroup
+	typer            *gctype.Typer
 }
 
 // builder contains all information relevant to build a single function.
@@ -249,6 +251,13 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 		c.createFunctionDeclaration(f)
 	}
 
+	allocTyped := c.mod.NamedFunction("runtime.allocTyped")
+	if !allocTyped.IsNil() {
+		// The runtime has precise types available.
+		// Initialize garbage collector type system.
+		c.typer = gctype.NewTyper(c.ctx, c.mod, c.targetData)
+	}
+
 	// Add definitions to declarations.
 	var initFuncs []llvm.Value
 	irbuilder := c.ctx.NewBuilder()
@@ -314,8 +323,14 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 
 	// Tell the optimizer that runtime.alloc is an allocator, meaning that it
 	// returns values that are never null and never alias to an existing value.
+	// Do the same for the typed allocator.
+	alloc := c.mod.NamedFunction("runtime.alloc")
 	for _, attrName := range []string{"noalias", "nonnull"} {
-		c.mod.NamedFunction("runtime.alloc").AddAttributeAtIndex(0, getAttr(attrName))
+		attr := getAttr(attrName)
+		alloc.AddAttributeAtIndex(0, attr)
+		if !allocTyped.IsNil() {
+			allocTyped.AddAttributeAtIndex(0, attr)
+		}
 	}
 
 	// On *nix systems, the "abort" functuion in libc is used to handle fatal panics.
@@ -1462,7 +1477,18 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				return llvm.Value{}, b.makeError(expr.Pos(), fmt.Sprintf("value is too big (%v bytes)", size))
 			}
 			sizeValue := llvm.ConstInt(b.uintptrType, size, false)
-			buf := b.createRuntimeCall("alloc", []llvm.Value{sizeValue}, expr.Comment)
+			var buf llvm.Value
+			if b.typer != nil {
+				// Allocate a typed value.
+				t, err := b.typer.Create(typ)
+				if err != nil {
+					return llvm.Value{}, b.makeError(expr.Pos(), err.Error())
+				}
+				buf = b.createRuntimeCall("allocTyped", []llvm.Value{sizeValue, t}, expr.Comment)
+			} else {
+				// Allocate an untyped value.
+				buf = b.createRuntimeCall("alloc", []llvm.Value{sizeValue}, expr.Comment)
+			}
 			buf = b.CreateBitCast(buf, llvm.PointerType(typ, 0), "")
 			return buf, nil
 		} else {
@@ -1675,7 +1701,18 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, err
 		}
 		sliceSize := b.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
-		slicePtr := b.createRuntimeCall("alloc", []llvm.Value{sliceSize}, "makeslice.buf")
+		var slicePtr llvm.Value
+		if b.typer != nil {
+			// Allocate a typed value.
+			t, err := b.typer.Create(llvmElemType)
+			if err != nil {
+				return llvm.Value{}, b.makeError(expr.Pos(), err.Error())
+			}
+			slicePtr = b.createRuntimeCall("allocTyped", []llvm.Value{sliceSize, t}, "makeslice.buf")
+		} else {
+			// Allocate an untyped value.
+			slicePtr = b.createRuntimeCall("alloc", []llvm.Value{sliceSize}, "makeslice.buf")
+		}
 		slicePtr = b.CreateBitCast(slicePtr, llvm.PointerType(llvmElemType, 0), "makeslice.array")
 
 		// Extend or truncate if necessary. This is safe as we've already done

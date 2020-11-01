@@ -21,7 +21,10 @@ const maxStackAlloc = 256
 // escape analysis, and within a function looks whether an allocation can escape
 // to the heap.
 func OptimizeAllocs(mod llvm.Module) {
-	allocator := mod.NamedFunction("runtime.alloc")
+	allocator := mod.NamedFunction("runtime.allocTyped")
+	if allocator.IsNil() {
+		allocator = mod.NamedFunction("runtime.alloc")
+	}
 	if allocator.IsNil() {
 		// nothing to optimize
 		return

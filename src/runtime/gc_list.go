@@ -10,7 +10,8 @@ import (
 
 // This memory manager is partially inspired by the memory allocator included in avr-libc.
 // Unlike avr-libc malloc, this memory manager stores an allocation list instead of a free list.
-// This gives an overhead of 2 pointers/allocation (up from avr-libc's 1 pointer-width/allocation).
+// Additionally, this memory manager uses strongly typed memory - making it a precise GC.
+// There is an overhead of 3 pointer-widths/allocation (up from avr-libc's 1 pointer-width/allocation).
 // The allocation list is stored in ascending address order.
 // The set of free spans is implicitly derived from the gaps between allocations.
 // This allocator has an effective allocation complexity of O(n) and worst-case GC complexity of O(n^2).
@@ -21,6 +22,17 @@ func isInHeap(addr uintptr) bool {
 	return addr >= heapStart && addr < heapEnd
 }
 
+// gcType is a chunk of metadata used to semi-precisely scan an allocation.
+// The compiler will produce constant globals which can be used in this form.
+type gcType struct {
+	// size is the element size, measured in increments of pointer alignment.
+	size uintptr
+
+	// data is a bitmap following the size value.
+	// It is organized as a []byte, and set bits indicate places where a pointer may be present.
+	data struct{}
+}
+
 // allocNode is a node in the allocations list.
 // It is prepended to every allocation, resulting in an overhead of 4 bytes per allocation.
 type allocNode struct {
@@ -29,6 +41,10 @@ type allocNode struct {
 
 	// len is the length of the body of this node in bytes.
 	len uintptr
+
+	// typ is the memory type of this node.
+	// If it is nil, there are no pointer slots to scan in the node.
+	typ *gcType
 
 	// base is the start of the body of this node.
 	base struct{}
@@ -46,7 +62,27 @@ func markRoot(addr, root uintptr) {
 }
 
 func markRoots(start, end uintptr) {
-	markMem(start, end)
+	ptrSize, ptrAlign := unsafe.Sizeof(unsafe.Pointer(nil)), unsafe.Alignof(unsafe.Pointer(nil))
+
+	// Align the start and end.
+	start = align(start)
+	end &^= ptrAlign - 1
+
+	// Shift the end down so that we do not read past it.
+	end -= ptrSize - ptrAlign
+
+	// Scan the data as a []unsafe.Pointer, using a temporary gcType value.
+	// In the future, we can do precise scanning of the globals instead.
+	t := struct {
+		t    gcType
+		data [1]byte
+	}{
+		t: gcType{
+			size: 1, // 1 pointer-width
+		},
+		data: [1]byte{1}, // scan the pointer-width data
+	}
+	t.t.scan(start, end)
 }
 
 // markAddr marks the allocation containing the specified address.
@@ -73,6 +109,35 @@ func markAddr(addr uintptr) {
 			scanList, node.next = node, scanList
 			return
 		}
+	}
+}
+
+// scan the memory in [start, end) using the specified element type.
+// If the type is larger than the region, the memory will be scanned as if it is a slice of that type.
+func (t *gcType) scan(start, end uintptr) {
+	if t == nil {
+		// There are no pointers in the type.
+		return
+	}
+
+	ptrAlign := unsafe.Alignof(unsafe.Pointer(nil))
+
+	width := t.size
+
+	for start < end {
+		// Process the bitmap a byte at a time.
+		for i := uintptr(0); i <= width/8; i++ {
+			mask := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&t.data)) + i))
+			for j := uintptr(0); mask != 0; j++ {
+				if mask&1 != 0 {
+					markAddr(*(*uintptr)(unsafe.Pointer(start + 8*i*ptrAlign + j*ptrAlign)))
+				}
+				mask >>= 1
+			}
+		}
+
+		// Shift the start up and try to scan the next repeat.
+		start += width * ptrAlign
 	}
 }
 
@@ -105,9 +170,13 @@ runqueueScan:
 		scanList = node.next
 
 		// Scan the node.
-		baseAddr := uintptr(unsafe.Pointer(&node.base))
-		endAddr := baseAddr + node.len
-		markMem(baseAddr, endAddr)
+		if node.typ != nil {
+			// The code-gen for AVR on LLVM has. . . issues.
+			// Hoisting the nil check here saves ~50 clock cycles per iteration.
+			baseAddr := uintptr(unsafe.Pointer(&node.base))
+			endAddr := baseAddr + node.len
+			node.typ.scan(baseAddr, endAddr)
+		}
 
 		// Insert the node into the output heap.
 		var prev *allocNode
@@ -205,10 +274,19 @@ searchLoop:
 	return mem
 }
 
-// alloc tries to find some free space on the heap, possibly doing a garbage
+// alloc a chunk of untyped memory.
+//go:inline
+func alloc(size uintptr) unsafe.Pointer {
+	ptrSize := unsafe.Sizeof(unsafe.Pointer(nil))
+	size += ptrSize - 1
+	buf := make([]unsafe.Pointer, size/ptrSize)
+	return *(*unsafe.Pointer)(unsafe.Pointer(&buf))
+}
+
+// allocTyped tries to find some free space on the heap, possibly doing a garbage
 // collection cycle if needed. If no space is free, it panics.
 //go:noinline
-func alloc(size uintptr) unsafe.Pointer {
+func allocTyped(size uintptr, typ *uintptr) unsafe.Pointer {
 	var ranGC bool
 tryAlloc:
 	// Search for available memory.
@@ -227,9 +305,13 @@ tryAlloc:
 		goto tryAlloc
 	}
 
-	// Zero the allocation and return it.
+	// Zero the allocation.
 	ptr := unsafe.Pointer(&node.base)
 	memzero(ptr, size)
+
+	// Apply the type to the allocation.
+	node.typ = (*gcType)(unsafe.Pointer(typ))
+
 	return ptr
 }
 

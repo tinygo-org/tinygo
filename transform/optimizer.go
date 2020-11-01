@@ -226,5 +226,9 @@ func getFunctionsUsedInTransforms(config *compileopts.Config) []string {
 	default:
 		panic(fmt.Errorf("invalid scheduler %q", config.Scheduler()))
 	}
+	switch config.GC() {
+	case "list":
+		fnused = append(fnused, "runtime.allocTyped")
+	}
 	return fnused
 }

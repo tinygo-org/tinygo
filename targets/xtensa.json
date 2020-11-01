@@ -3,7 +3,7 @@
 	"goos": "linux",
 	"goarch": "arm",
 	"build-tags": ["xtensa", "baremetal", "linux", "arm"],
-	"gc": "conservative",
+	"gc": "blocks",
 	"scheduler": "none",
 	"compiler": "clang",
 	"cflags": [

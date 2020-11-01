@@ -61,13 +61,13 @@ func (t *Task) Resume() {
 // initialize the state and prepare to call the specified function with the specified argument bundle.
 func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	// Create a stack.
-	stack := make([]uintptr, stackSize/unsafe.Sizeof(uintptr(0)))
+	stack := make([]unsafe.Pointer, stackSize/unsafe.Sizeof(unsafe.Pointer(nil)))
 
 	// Set up the stack canary, a random number that should be checked when
 	// switching from the task back to the scheduler. The stack canary pointer
 	// points to the first word of the stack. If it has changed between now and
 	// the next stack switch, there was a stack overflow.
-	s.canaryPtr = &stack[0]
+	s.canaryPtr = (*uintptr)(unsafe.Pointer(&stack[0]))
 	*s.canaryPtr = stackCanary
 
 	// Get a pointer to the top of the stack, where the initial register values
