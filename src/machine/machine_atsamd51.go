@@ -1331,12 +1331,13 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 	// Determine the input pinout (for SDI).
 	var dataInPinout uint32
-	SDIPinMode, SDIPad, ok := findPinPadMapping(spi.SERCOM, config.SDI)
+	var SDIPinMode PinMode
 	if config.SDI != NoPin {
+		var ok bool
+		SDIPinMode, dataInPinout, ok = findPinPadMapping(spi.SERCOM, config.SDI)
 		if !ok {
 			return ErrInvalidInputPin
 		}
-		dataInPinout = SDIPad // mapped directly
 	}
 
 	// Determine the output pinout (for SDO/SCK).
