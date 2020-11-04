@@ -48,5 +48,5 @@ golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898 h1:/atklqdjdhuosWIl6AIbO
 golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
-tinygo.org/x/go-llvm v0.0.0-20200503224449-70c558526021 h1:d8T98WXGjrTgDmMXgxa6nb9EAYXGXwnzXygnJl6d+ac=
-tinygo.org/x/go-llvm v0.0.0-20200503224449-70c558526021/go.mod h1:fv1F0BSNpxMfCL0zF3M4OPFbgYHnhtB6ST0HvUtu/LE=
+tinygo.org/x/go-llvm v0.0.0-20201104183921-570e7a6841d9 h1:l2kTQOhqEoeDTK3ckUnwReOQwMPUmURMIdjJbeAuDT4=
+tinygo.org/x/go-llvm v0.0.0-20201104183921-570e7a6841d9/go.mod h1:fv1F0BSNpxMfCL0zF3M4OPFbgYHnhtB6ST0HvUtu/LE=
