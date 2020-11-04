@@ -165,7 +165,8 @@ func findPinPadMapping(sercom uint8, pin Pin) (pinMode PinMode, pad uint32, ok b
 }
 
 // SetInterrupt sets an interrupt to be executed when a particular pin changes
-// state.
+// state. The pin should already be configured as an input, including a pull up
+// or down if no external pull is provided.
 //
 // This call will replace a previously set callback on this pin. You can pass a
 // nil func to unset the pin change interrupt. If you do so, the change
