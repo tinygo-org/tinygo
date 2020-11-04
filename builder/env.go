@@ -1,10 +1,9 @@
 package builder
 
 import (
-	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -27,60 +26,35 @@ func getClangHeaderPath(TINYGOROOT string) string {
 		return path
 	}
 
-	// It looks like we are built with a system-installed LLVM. Do a last
-	// attempt: try to use Clang headers relative to the clang binary.
-	llvmMajor := strings.Split(llvm.Version, ".")[0]
-	for _, cmdName := range commands["clang"] {
-		binpath, err := exec.LookPath(cmdName)
-		if err == nil {
-			// This should be the command that will also be used by
-			// execCommand. To avoid inconsistencies, make sure we use the
-			// headers relative to this command.
-			binpath, err = filepath.EvalSymlinks(binpath)
-			if err != nil {
-				// Unexpected.
-				return ""
-			}
-			// Example executable:
-			//     /usr/lib/llvm-9/bin/clang
-			// Example include path:
-			//     /usr/lib/llvm-9/lib64/clang/9.0.1/include/
-			llvmRoot := filepath.Dir(filepath.Dir(binpath))
-			clangVersionRoot := filepath.Join(llvmRoot, "lib64", "clang")
-			dirs64, err64 := ioutil.ReadDir(clangVersionRoot)
-			// Example include path:
-			//     /usr/lib/llvm-9/lib/clang/9.0.1/include/
-			clangVersionRoot = filepath.Join(llvmRoot, "lib", "clang")
-			dirs32, err32 := ioutil.ReadDir(clangVersionRoot)
-			if err64 != nil && err32 != nil {
-				// Unexpected.
-				continue
-			}
-			dirnames := make([]string, len(dirs64)+len(dirs32))
-			dirCount := 0
-			for _, d := range dirs32 {
-				name := d.Name()
-				if name == llvmMajor || strings.HasPrefix(name, llvmMajor+".") {
-					dirnames[dirCount] = filepath.Join(llvmRoot, "lib", "clang", name)
-					dirCount++
-				}
-			}
-			for _, d := range dirs64 {
-				name := d.Name()
-				if name == llvmMajor || strings.HasPrefix(name, llvmMajor+".") {
-					dirnames[dirCount] = filepath.Join(llvmRoot, "lib64", "clang", name)
-					dirCount++
-				}
-			}
-			sort.Strings(dirnames)
-			// Check for the highest version first.
-			for i := dirCount - 1; i >= 0; i-- {
-				path := filepath.Join(dirnames[i], "include")
-				_, err := os.Stat(filepath.Join(path, "stdint.h"))
-				if err == nil {
-					return path
-				}
-			}
+	var patterns []string
+	if runtime.GOOS == "linux" {
+		// It looks like we are built with a system-installed LLVM. Do a last
+		// attempt: try to use Clang headers for the currently used Clang version.
+		// The path used on Linux distributions is normally in this form:
+		//     /usr/lib/clang/10/include
+		llvmMajor := strings.Split(llvm.Version, ".")[0]
+		patterns = append(patterns, "/usr/lib*/clang/"+llvmMajor+"/include")
+	}
+
+	for _, pattern := range patterns {
+		includeDirs, _ := filepath.Glob(pattern)
+		if len(includeDirs) == 0 {
+			// Unexpected. Maybe the headers are not installed or the above path is
+			// incorrect?
+			continue
+		}
+		// Glob does not guarantee the output is sorted (although it currently
+		// is).
+		sort.Strings(includeDirs)
+		// Pick the last in the list.
+		// There should be only one (even with multiple LLVM versions
+		// installed), but if there are multiple the higher one might be a later
+		// version.
+		// Skip the entry if it doesn't exist (for example, it's a broken
+		// symlink).
+		candidate := includeDirs[len(includeDirs)-1]
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
 		}
 	}
 
