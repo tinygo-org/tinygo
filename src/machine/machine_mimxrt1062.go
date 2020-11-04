@@ -4,6 +4,8 @@ package machine
 
 import (
 	"device/nxp"
+	"math/bits"
+	"runtime/interrupt"
 	"runtime/volatile"
 )
 
@@ -17,29 +19,56 @@ type PinMode uint8
 
 const (
 	// GPIO
-	PinInput PinMode = iota
-	PinInputPullUp
-	PinInputPullDown
-	PinOutput
-	PinOutputOpenDrain
-	PinDisable
+	PinInput           PinMode = 0
+	PinInputPullUp     PinMode = 1
+	PinInputPullDown   PinMode = 2
+	PinOutput          PinMode = 3
+	PinOutputOpenDrain PinMode = 4
+	PinDisable         PinMode = 5
 
 	// ADC
-	PinInputAnalog
+	PinInputAnalog PinMode = 6
 
 	// UART
-	PinModeUARTTX
-	PinModeUARTRX
+	PinModeUARTTX PinMode = 7
+	PinModeUARTRX PinMode = 8
 
 	// SPI
-	PinModeSPISDI
-	PinModeSPISDO
-	PinModeSPICLK
-	PinModeSPICS
+	PinModeSPISDI PinMode = 9
+	PinModeSPISDO PinMode = 10
+	PinModeSPICLK PinMode = 11
+	PinModeSPICS  PinMode = 12
 
 	// I2C
-	PinModeI2CSDA
-	PinModeI2CSCL
+	PinModeI2CSDA PinMode = 13
+	PinModeI2CSCL PinMode = 14
+)
+
+type PinChange uint8
+
+const (
+	PinLow     PinChange = 0
+	PinHigh    PinChange = 1
+	PinRising  PinChange = 2
+	PinFalling PinChange = 3
+	PinToggle  PinChange = 4
+)
+
+// pinJumpTable represents a function lookup table for all 128 GPIO pins.
+//
+// There are 4 GPIO ports (A-D) and 32 pins (0-31) on each port. The uint8 value
+// of a Pin is used as table index. The number of pins with a defined (non-nil)
+// function is recorded in the uint8 field numDefined.
+type pinJumpTable struct {
+	lut        [4 * 32]func(Pin)
+	numDefined uint8
+}
+
+// pinISR stores the interrupt callbacks for GPIO pins, and pinInterrupt holds
+// an interrupt service routine that dispatches the interrupt callbacks.
+var (
+	pinISR       pinJumpTable
+	pinInterrupt *interrupt.Interrupt
 )
 
 // From the i.MXRT1062 Processor Reference Manual (Chapter 12 - GPIO):
@@ -299,6 +328,101 @@ func (p Pin) Set(value bool) {
 func (p Pin) Toggle() {
 	_, gpio := p.getGPIO() // use fast GPIO for all pins
 	gpio.DR_TOGGLE.Set(p.getMask())
+}
+
+// dispatchInterrupt invokes the user-provided callback functions for external
+// interrupts generated on the high-speed GPIO pins.
+//
+// Unfortunately, all four high-speed GPIO ports (A-D) are connected to just a
+// single interrupt control line. Therefore, the interrupt status register (ISR)
+// must be checked in all four GPIO ports on every interrupt.
+func (jt *pinJumpTable) dispatchInterrupt(interrupt.Interrupt) {
+	handle := func(gpio *nxp.GPIO_Type, port Pin) {
+		if status := gpio.ISR.Get() & gpio.IMR.Get(); status != 0 {
+			gpio.ISR.Set(status) // clear interrupt
+			for status != 0 {
+				p := Pin(bits.TrailingZeros32(status))
+				i := Pin(port + p)
+				jt.lut[i](i)
+				status &^= 1 << p
+			}
+		}
+	}
+	if jt.numDefined > 0 {
+		handle(nxp.GPIO6, portA)
+		handle(nxp.GPIO7, portB)
+		handle(nxp.GPIO8, portC)
+		handle(nxp.GPIO9, portD)
+	}
+}
+
+// set associates a function with a given Pin in the receiver lookup table. If
+// the function is nil, the given Pin's associated function is removed.
+func (jt *pinJumpTable) set(pin Pin, fn func(Pin)) {
+	if int(pin) < len(jt.lut) {
+		if nil != fn {
+			if nil == jt.lut[pin] {
+				jt.numDefined++
+			}
+			jt.lut[pin] = fn
+		} else {
+			if nil != jt.lut[pin] {
+				jt.numDefined--
+			}
+			jt.lut[pin] = nil
+		}
+	}
+}
+
+// SetInterrupt sets an interrupt to be executed when a particular pin changes
+// state. The pin should already be configured as an input, including a pull up
+// or down if no external pull is provided.
+//
+// This call will replace a previously set callback on this pin. You can pass a
+// nil func to unset the pin change interrupt. If you do so, the change
+// parameter is ignored and can be set to any value (such as 0).
+func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
+	_, gpio := p.getGPIO() // use fast GPIO for all pins
+	mask := p.getMask()
+	if nil != callback {
+		switch change {
+		case PinLow, PinHigh, PinRising, PinFalling:
+			gpio.EDGE_SEL.ClearBits(mask)
+			var reg *volatile.Register32
+			var pos uint8
+			if pos = p.getPos(); pos < 16 {
+				reg = &gpio.ICR1 // ICR1 = pins 0-15
+			} else {
+				reg = &gpio.ICR2 // ICR2 = pins 16-31
+				pos -= 16
+			}
+			reg.ReplaceBits(uint32(change), 0x3, pos*2)
+		case PinToggle:
+			gpio.EDGE_SEL.SetBits(mask)
+		}
+		pinISR.set(p, callback) // associate the callback with the pin
+		gpio.ISR.Set(mask)      // clear any pending interrupt (W1C)
+		gpio.IMR.SetBits(mask)  // enable external interrupt
+	} else {
+		pinISR.set(p, nil)       // remove any associated callback from the pin
+		gpio.ISR.Set(mask)       // clear any pending interrupt (W1C)
+		gpio.IMR.ClearBits(mask) // disable external interrupt
+	}
+	// enable or disable the interrupt based on number of defined callbacks
+	if pinISR.numDefined > 0 {
+		if nil == pinInterrupt {
+			// create the Interrupt if it is not yet defined
+			irq := interrupt.New(nxp.IRQ_GPIO6_7_8_9, pinISR.dispatchInterrupt)
+			pinInterrupt = &irq
+			pinInterrupt.Enable()
+		}
+	} else {
+		if nil != pinInterrupt {
+			// disable the interrupt if it is defined
+			pinInterrupt.Disable()
+		}
+	}
+	return nil
 }
 
 // getGPIO returns both the normal (IPG_CLK_ROOT) and high-speed (AHB_CLK_ROOT)
