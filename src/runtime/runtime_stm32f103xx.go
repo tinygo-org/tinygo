@@ -121,7 +121,7 @@ func sleepTicks(d timeUnit) {
 		ticks()            // update timestamp
 		ticks := uint32(d) // current scaling only supports 100 usec to 6553 msec
 		if !timerSleep(ticks) {
-			return	
+			return
 		}
 		d -= timeUnit(ticks)
 	}
@@ -196,14 +196,14 @@ wait:
 	if timerWakeup.Get() != 0 {
 		return true
 	}
-	
+
 	if hasScheduler {
 		return false
 	} else {
 		// keep looping until the routine exits or is interrupted
 		goto wait
 	}
-	
+
 }
 
 func handleTIM3(interrupt.Interrupt) {
