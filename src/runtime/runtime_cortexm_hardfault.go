@@ -1,4 +1,4 @@
-// +build cortexm,!nxp
+// +build atsamd21 nrf51
 
 package runtime
 
