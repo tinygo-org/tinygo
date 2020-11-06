@@ -76,31 +76,7 @@ const (
 	SCS_BASE  = 0xE000E000
 	SYST_BASE = SCS_BASE + 0x0010
 	NVIC_BASE = SCS_BASE + 0x0100
-	SCB_BASE  = SCS_BASE + 0x0D00
 )
-
-const (
-	SCB_AIRCR_VECTKEY_Pos     = 16
-	SCB_AIRCR_SYSRESETREQ_Pos = 2
-	SCB_AIRCR_SYSRESETREQ_Msk = 1 << SCB_AIRCR_SYSRESETREQ_Pos
-)
-
-// System Control Block (SCB)
-//
-// SCB_Type provides the definitions for the System Control Block Registers.
-type SCB_Type struct {
-	CPUID volatile.Register32    // CPUID Base Register
-	ICSR  volatile.Register32    // Interrupt Control and State Register
-	VTOR  volatile.Register32    // Vector Table Offset Register
-	AIRCR volatile.Register32    // Application Interrupt and Reset Control Register
-	SCR   volatile.Register32    // System Control Register
-	CCR   volatile.Register32    // Configuration Control Register
-	_     volatile.Register32    // RESERVED1;
-	SHP   [2]volatile.Register32 // System Handlers Priority Registers. [0] is RESERVED
-	SHCSR volatile.Register32    // System Handler Control and State Register
-}
-
-var SCB = (*SCB_Type)(unsafe.Pointer(uintptr(SCB_BASE)))
 
 // Nested Vectored Interrupt Controller (NVIC).
 //
@@ -211,17 +187,6 @@ func EnableInterrupts(mask uintptr) {
 	AsmFull("msr PRIMASK, {mask}", map[string]interface{}{
 		"mask": mask,
 	})
-}
-
-// SystemReset performs a hard system reset.
-func SystemReset() {
-	// SCB->AIRCR  = ((0x5FA << SCB_AIRCR_VECTKEY_Pos)      |
-	//              SCB_AIRCR_SYSRESETREQ_Msk);
-	SCB.AIRCR.Set((0x5FA << SCB_AIRCR_VECTKEY_Pos) | SCB_AIRCR_SYSRESETREQ_Msk)
-
-	for {
-		Asm("wfi")
-	}
 }
 
 // Set up the system timer to generate periodic tick events.
