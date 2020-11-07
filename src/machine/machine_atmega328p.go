@@ -4,7 +4,6 @@ package machine
 
 import (
 	"device/avr"
-	"errors"
 	"runtime/volatile"
 )
 
@@ -134,27 +133,25 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 	// set default frequency
 	if config.Frequency == 0 {
-		config.Frequency = 6000000
+		config.Frequency = 4000000
 	}
 
 	var clockDivider uint8
 	switch {
-	case config.Frequency >= 93750 && config.Frequency < 187500:
-		clockDivider = SPI_CLOCK_FOSC128
-	case config.Frequency >= 187500 && config.Frequency < 375000:
-		clockDivider = SPI_CLOCK_FOSC64
-	case config.Frequency >= 375000 && config.Frequency < 750000:
-		clockDivider = SPI_CLOCK_FOSC32
-	case config.Frequency >= 750000 && config.Frequency < 1500000:
-		clockDivider = SPI_CLOCK_FOSC16
-	case config.Frequency >= 1500000 && config.Frequency < 3000000:
-		clockDivider = SPI_CLOCK_FOSC8
-	case config.Frequency >= 3000000 && config.Frequency < 6000000:
-		clockDivider = SPI_CLOCK_FOSC4
 	case config.Frequency >= 6000000:
 		clockDivider = SPI_CLOCK_FOSC2
-	default:
-		return errors.New("invalid clock speed for spi")
+	case config.Frequency >= 3000000:
+		clockDivider = SPI_CLOCK_FOSC4
+	case config.Frequency >= 1500000:
+		clockDivider = SPI_CLOCK_FOSC8
+	case config.Frequency >= 750000:
+		clockDivider = SPI_CLOCK_FOSC16
+	case config.Frequency >= 375000:
+		clockDivider = SPI_CLOCK_FOSC32
+	case config.Frequency >= 187500:
+		clockDivider = SPI_CLOCK_FOSC64
+	case config.Frequency >= 93750:
+		clockDivider = SPI_CLOCK_FOSC128
 	}
 
 	spi.setMode(config.Mode)
