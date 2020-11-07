@@ -120,7 +120,9 @@ func sleepTicks(d timeUnit) {
 	for d != 0 {
 		ticks()            // update timestamp
 		ticks := uint32(d) // current scaling only supports 100 usec to 6553 msec
-		timerSleep(ticks)
+		if !timerSleep(ticks) {
+			return
+		}
 		d -= timeUnit(ticks)
 	}
 }
@@ -141,7 +143,8 @@ func ticks() timeUnit {
 }
 
 // ticks are in microseconds
-func timerSleep(ticks uint32) {
+// returns false if an interrupt occured
+func timerSleep(ticks uint32) bool {
 	timerWakeup.Set(0)
 
 	// STM32 timer update event period is calculated as follows:
@@ -188,10 +191,19 @@ func timerSleep(ticks uint32) {
 	// Enable the timer.
 	stm32.TIM3.CR1.SetBits(stm32.TIM_CR1_CEN)
 
-	// wait till timer wakes up
-	for timerWakeup.Get() == 0 {
-		arm.Asm("wfi")
+wait:
+	arm.Asm("wfi")
+	if timerWakeup.Get() != 0 {
+		return true
 	}
+
+	if hasScheduler {
+		return false
+	} else {
+		// keep looping until the routine exits or is interrupted
+		goto wait
+	}
+
 }
 
 func handleTIM3(interrupt.Interrupt) {
