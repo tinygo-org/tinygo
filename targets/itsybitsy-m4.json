@@ -1,6 +1,6 @@
 {
     "inherits": ["atsamd51g19a"],
-    "build-tags": ["sam", "atsamd51g19a", "itsybitsy_m4"],
+    "build-tags": ["itsybitsy_m4"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "ITSYM4BOOT",

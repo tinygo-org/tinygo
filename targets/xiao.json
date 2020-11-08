@@ -1,6 +1,6 @@
 {
     "inherits": ["atsamd21g18a"],
-    "build-tags": ["sam", "atsamd21g18a", "xiao"],
+    "build-tags": ["xiao"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "Arduino",

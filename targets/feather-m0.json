@@ -1,6 +1,6 @@
 {
     "inherits": ["atsamd21g18a"],
-    "build-tags": ["sam", "atsamd21g18a", "feather_m0"],
+    "build-tags": ["feather_m0"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "FEATHERBOOT",
