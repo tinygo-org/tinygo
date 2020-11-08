@@ -1,6 +1,6 @@
 {
     "inherits": ["atsamd21g18a"],
-    "build-tags": ["sam", "atsamd21g18a", "circuitplay_express"],
+    "build-tags": ["circuitplay_express"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "CPLAYBOOT",

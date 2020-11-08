@@ -1,6 +1,6 @@
 {
     "inherits": ["atsamd21e18a"],
-    "build-tags": ["sam", "atsamd21e18a", "qtpy"],
+    "build-tags": ["qtpy"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "QTPYBOOT",

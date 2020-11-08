@@ -1,6 +1,6 @@
 {
     "inherits": ["atsamd51j19a"],
-    "build-tags": ["sam", "atsamd51j19a", "metro_m4_airlift"],
+    "build-tags": ["metro_m4_airlift"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "METROM4BOOT",

@@ -1,6 +1,6 @@
 {
     "inherits": ["atsamd21e18a"],
-    "build-tags": ["sam", "atsamd21e18a", "trinket_m0"],
+    "build-tags": ["trinket_m0"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "TRINKETBOOT",
