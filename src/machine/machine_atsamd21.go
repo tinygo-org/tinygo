@@ -136,6 +136,10 @@ var pinPadMapping = [32]byte{
 // found" (indicated by returning ok=false). The pad number is returned to
 // calculate the DOPO/DIPO bitfields of the various serial peripherals.
 func findPinPadMapping(sercom uint8, pin Pin) (pinMode PinMode, pad uint32, ok bool) {
+	if len(pinPadMapping) <= int(pin) {
+		return
+	}
+
 	nibbles := pinPadMapping[pin/2]
 	upper := nibbles >> 4
 	lower := nibbles & 0xf
