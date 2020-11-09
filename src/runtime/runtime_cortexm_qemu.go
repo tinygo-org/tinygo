@@ -21,6 +21,8 @@ func postinit() {}
 func main() {
 	preinit()
 	run()
+
+	// Signal successful exit.
 	arm.SemihostingCall(arm.SemihostingReportException, arm.SemihostingApplicationExit)
 	abort()
 }
@@ -49,4 +51,18 @@ var stdoutWrite = (*volatile.Register8)(unsafe.Pointer(uintptr(0x4000c000)))
 
 func putchar(c byte) {
 	stdoutWrite.Set(uint8(c))
+}
+
+func waitForEvents() {
+	arm.Asm("wfe")
+}
+
+func abort() {
+	// Signal an abnormal exit.
+	arm.SemihostingCall(arm.SemihostingReportException, arm.SemihostingRunTimeErrorUnknown)
+
+	// Lock up forever (should be unreachable).
+	for {
+		arm.Asm("wfi")
+	}
 }

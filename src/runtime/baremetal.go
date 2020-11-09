@@ -39,4 +39,9 @@ func libc_free(ptr unsafe.Pointer) {
 	free(ptr)
 }
 
+//go:linkname syscall_Exit syscall.Exit
+func syscall_Exit(code int) {
+	abort()
+}
+
 const baremetal = true

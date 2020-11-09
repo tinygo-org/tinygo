@@ -19,15 +19,16 @@ func ApplyFunctionSections(mod llvm.Module) {
 	}
 }
 
-// NonConstGlobals turns all global constants into global variables. This works
-// around a limitation on Harvard architectures (e.g. AVR), where constant and
-// non-constant pointers point to a different address space. Normal pointer
-// behavior is restored by using the data space only, at the cost of RAM for
-// constant global variables.
-func NonConstGlobals(mod llvm.Module) {
-	global := mod.FirstGlobal()
-	for !global.IsNil() {
-		global.SetGlobalConstant(false)
-		global = llvm.NextGlobal(global)
+// DisableTailCalls adds the "disable-tail-calls"="true" function attribute to
+// all functions. This may be necessary, in particular to avoid an error with
+// WebAssembly in LLVM 11.
+func DisableTailCalls(mod llvm.Module) {
+	attribute := mod.Context().CreateStringAttribute("disable-tail-calls", "true")
+	llvmFn := mod.FirstFunction()
+	for !llvmFn.IsNil() {
+		if !llvmFn.IsDeclaration() {
+			llvmFn.AddFunctionAttr(attribute)
+		}
+		llvmFn = llvm.NextFunction(llvmFn)
 	}
 }

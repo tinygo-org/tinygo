@@ -34,6 +34,8 @@ type TargetSpec struct {
 	Linker           string   `json:"linker"`
 	RTLib            string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
 	Libc             string   `json:"libc"`
+	AutoStackSize    *bool    `json:"automatic-stack-size"` // Determine stack size automatically at compile time.
+	DefaultStackSize uint64   `json:"default-stack-size"`   // Default stack size if the size couldn't be determined at compile time.
 	CFlags           []string `json:"cflags"`
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
@@ -46,6 +48,7 @@ type TargetSpec struct {
 	FlashVolume      string   `json:"msd-volume-name"`
 	FlashFilename    string   `json:"msd-firmware-name"`
 	UF2FamilyID      string   `json:"uf2-family-id"`
+	BinaryFormat     string   `json:"binary-format"`
 	OpenOCDInterface string   `json:"openocd-interface"`
 	OpenOCDTarget    string   `json:"openocd-target"`
 	OpenOCDTransport string   `json:"openocd-transport"`
@@ -53,6 +56,7 @@ type TargetSpec struct {
 	JLinkDevice      string   `json:"jlink-device"`
 	CodeModel        string   `json:"code-model"`
 	RelocationModel  string   `json:"relocation-model"`
+	WasmAbi          string   `json:"wasm-abi"`
 }
 
 // overrideProperties overrides all properties that are set in child into itself using reflection.
@@ -61,39 +65,39 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 	specValue := reflect.ValueOf(spec).Elem()
 	childValue := reflect.ValueOf(child).Elem()
 
-	copyFieldIfNotEmpty := func(dst reflect.Value, src reflect.Value) {
-		if src.Len() > 0 {
-			dst.Set(src)
-		}
-	}
-
-	appendField := func(dst reflect.Value, src reflect.Value) {
-		dst.Set(reflect.AppendSlice(src, dst))
-	}
-
 	for i := 0; i < specType.NumField(); i++ {
 		field := specType.Field(i)
+		src := childValue.Field(i)
+		dst := specValue.Field(i)
+
 		switch kind := field.Type.Kind(); kind {
 		case reflect.String: // for strings, just copy the field of child to spec if not empty
-			copyFieldIfNotEmpty(specValue.Field(i), childValue.Field(i))
-		case reflect.Slice: // for slices... check if there is a tag for the field
-			if tag, ok := field.Tag.Lookup("override"); ok {
-				switch tag {
+			if src.Len() > 0 {
+				dst.Set(src)
+			}
+		case reflect.Uint, reflect.Uint32, reflect.Uint64: // for Uint, copy if not zero
+			if src.Uint() != 0 {
+				dst.Set(src)
+			}
+		case reflect.Ptr: // for pointers, copy if not nil
+			if !src.IsNil() {
+				dst.Set(src)
+			}
+		case reflect.Slice: // for slices...
+			if src.Len() > 0 { // ... if not empty ...
+				switch tag := field.Tag.Get("override"); tag {
 				case "copy":
-					// copy the field of child to spec if not empty
-					copyFieldIfNotEmpty(specValue.Field(i), childValue.Field(i))
-				case "append":
+					// copy the field of child to spec
+					dst.Set(src)
+				case "append", "":
 					// or append the field of child to spec
-					appendField(specValue.Field(i), childValue.Field(i))
+					dst.Set(reflect.AppendSlice(src, dst))
 				default:
 					panic("override mode must be 'copy' or 'append' (default). I don't know how to '" + tag + "'.")
 				}
-			} else {
-				// if no tag, then append the field of child to spec
-				appendField(specValue.Field(i), childValue.Field(i))
 			}
 		default:
-			panic("field must be a string or a slice. '" + kind.String() + "' is not expected.")
+			panic("unknown field type : " + kind.String())
 		}
 	}
 }
@@ -213,6 +217,7 @@ func LoadTarget(target string) (*TargetSpec, error) {
 		}
 		goarch := map[string]string{ // map from LLVM arch to Go arch
 			"i386":    "386",
+			"i686":    "386",
 			"x86_64":  "amd64",
 			"aarch64": "arm64",
 			"armv7":   "arm",
@@ -228,39 +233,40 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	// No target spec available. Use the default one, useful on most systems
 	// with a regular OS.
 	spec := TargetSpec{
-		Triple:      triple,
-		GOOS:        goos,
-		GOARCH:      goarch,
-		BuildTags:   []string{goos, goarch},
-		Compiler:    "clang",
-		Linker:      "cc",
-		CFlags:      []string{"--target=" + triple},
-		GDB:         "gdb",
-		PortReset:   "false",
-		FlashMethod: "native",
+		Triple:    triple,
+		GOOS:      goos,
+		GOARCH:    goarch,
+		BuildTags: []string{goos, goarch},
+		Compiler:  "clang",
+		Linker:    "cc",
+		CFlags:    []string{"--target=" + triple},
+		GDB:       "gdb",
+		PortReset: "false",
 	}
 	if goos == "darwin" {
 		spec.LDFlags = append(spec.LDFlags, "-Wl,-dead_strip")
 	} else {
 		spec.LDFlags = append(spec.LDFlags, "-no-pie", "-Wl,--gc-sections") // WARNING: clang < 5.0 requires -nopie
 	}
+	if goarch != "wasm" {
+		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/gc_"+goarch+".S")
+	}
 	if goarch != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.
+		spec.GDB = "gdb-multiarch"
 		if goarch == "arm" && goos == "linux" {
 			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/arm-linux-gnueabihf")
 			spec.Linker = "arm-linux-gnueabihf-gcc"
-			spec.GDB = "arm-linux-gnueabihf-gdb"
 			spec.Emulator = []string{"qemu-arm", "-L", "/usr/arm-linux-gnueabihf"}
 		}
 		if goarch == "arm64" && goos == "linux" {
 			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/aarch64-linux-gnu")
 			spec.Linker = "aarch64-linux-gnu-gcc"
-			spec.GDB = "aarch64-linux-gnu-gdb"
 			spec.Emulator = []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"}
 		}
-		if goarch == "386" {
-			spec.CFlags = []string{"-m32"}
-			spec.LDFlags = []string{"-m32"}
+		if goarch == "386" && runtime.GOARCH == "amd64" {
+			spec.CFlags = append(spec.CFlags, "-m32")
+			spec.LDFlags = append(spec.LDFlags, "-m32")
 		}
 	}
 	return &spec, nil

@@ -7,5 +7,7 @@
 	"linkerscript": "targets/atsamd51j20a.ld",
 	"extra-files": [
 		"src/device/sam/atsamd51j20a.s"
-	]
+	],
+	"openocd-transport": "swd",
+	"openocd-target": "atsame5x"
 }

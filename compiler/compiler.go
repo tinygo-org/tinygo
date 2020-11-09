@@ -5,18 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
-	"go/build"
 	"go/constant"
 	"go/token"
 	"go/types"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
-	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/ir"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
@@ -130,6 +127,28 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 	return machine, nil
 }
 
+// CompilerOutput is returned from the Compile() call. It contains the compile
+// output and information necessary to continue to compile and link the program.
+type CompilerOutput struct {
+	// The LLVM module that contains the compiled but not optimized LLVM module
+	// for all the Go code in the program.
+	Mod llvm.Module
+
+	// ExtraFiles is a list of C source files included in packages that should
+	// be built and linked together with the main executable to form one
+	// program. They can be used from CGo, for example.
+	ExtraFiles []string
+
+	// ExtraLDFlags are linker flags obtained during CGo processing. These flags
+	// must be passed to the linker which links the entire executable.
+	ExtraLDFlags []string
+
+	// MainDir is the absolute directory path to the directory of the main
+	// package. This is useful for testing: tests must be run in the package
+	// directory that is being tested.
+	MainDir string
+}
+
 // Compile the given package path or .go file path. Return an error when this
 // fails (in any stage). If successful it returns the LLVM module and a list of
 // extra C files to be compiled. If not, one or more errors will be returned.
@@ -138,7 +157,7 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 // violation. Eventually, this Compile function should only compile a single
 // package and not the whole program, and loading of the program (including CGo
 // processing) should be moved outside the compiler package.
-func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) (mod llvm.Module, extrafiles []string, extraldflags []string, errors []error) {
+func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) (output CompilerOutput, errors []error) {
 	c := &compilerContext{
 		Config:     config,
 		difiles:    make(map[string]llvm.Metadata),
@@ -154,6 +173,7 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	if c.Debug() {
 		c.dibuilder = llvm.NewDIBuilder(c.mod)
 	}
+	output.Mod = c.mod
 
 	c.uintptrType = c.ctx.IntType(c.targetData.PointerSize() * 8)
 	if c.targetData.PointerSize() <= 4 {
@@ -172,55 +192,29 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
 	dummyFunc.EraseFromParentAsFunction()
 
-	wd, err := os.Getwd()
+	lprogram, err := loader.Load(c.Config, []string{pkgName}, c.ClangHeaders, types.Config{
+		Sizes: &stdSizes{
+			IntSize:  int64(c.targetData.TypeAllocSize(c.intType)),
+			PtrSize:  int64(c.targetData.PointerSize()),
+			MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
+		}})
 	if err != nil {
-		return c.mod, nil, nil, []error{err}
-	}
-	goroot, err := loader.GetCachedGoroot(c.Config)
-	if err != nil {
-		return c.mod, nil, nil, []error{err}
-	}
-	lprogram := &loader.Program{
-		Build: &build.Context{
-			GOARCH:      c.GOARCH(),
-			GOOS:        c.GOOS(),
-			GOROOT:      goroot,
-			GOPATH:      goenv.Get("GOPATH"),
-			CgoEnabled:  c.CgoEnabled(),
-			UseAllFiles: false,
-			Compiler:    "gc", // must be one of the recognized compilers
-			BuildTags:   c.BuildTags(),
-		},
-		Tests: c.TestConfig.CompileTestBinary,
-		TypeChecker: types.Config{
-			Sizes: &stdSizes{
-				IntSize:  int64(c.targetData.TypeAllocSize(c.intType)),
-				PtrSize:  int64(c.targetData.PointerSize()),
-				MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
-			},
-		},
-		Dir:          wd,
-		TINYGOROOT:   goenv.Get("TINYGOROOT"),
-		CFlags:       c.CFlags(),
-		ClangHeaders: c.ClangHeaders,
-	}
-
-	err = lprogram.Load(pkgName)
-	if err != nil {
-		return c.mod, nil, nil, []error{err}
+		return output, []error{err}
 	}
 
 	err = lprogram.Parse()
 	if err != nil {
-		return c.mod, nil, nil, []error{err}
+		return output, []error{err}
 	}
+	output.ExtraLDFlags = lprogram.LDFlags
+	output.MainDir = lprogram.MainPkg().Dir
 
 	c.ir = ir.NewProgram(lprogram)
 
 	// Run a simple dead code elimination pass.
 	err = c.ir.SimpleDCE()
 	if err != nil {
-		return c.mod, nil, nil, []error{err}
+		return output, []error{err}
 	}
 
 	// Initialize debug information.
@@ -359,17 +353,13 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 	}
 
 	// Gather the list of (C) file paths that should be included in the build.
-	var extraFiles []string
 	for _, pkg := range c.ir.LoaderProgram.Sorted() {
-		for _, file := range pkg.OtherFiles {
-			switch strings.ToLower(filepath.Ext(file)) {
-			case ".c":
-				extraFiles = append(extraFiles, file)
-			}
+		for _, filename := range pkg.CFiles {
+			output.ExtraFiles = append(output.ExtraFiles, filepath.Join(pkg.Dir, filename))
 		}
 	}
 
-	return c.mod, extraFiles, lprogram.LDFlags, c.diagnostics
+	return output, c.diagnostics
 }
 
 // getLLVMRuntimeType obtains a named type from the runtime package and returns
@@ -1346,12 +1336,14 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.createMemoryCopyCall(fn, instr.Args)
 		case name == "runtime.memzero":
 			return b.createMemoryZeroCall(instr.Args)
-		case name == "device.Asm" || name == "device/arm.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
+		case name == "device.Asm" || name == "device/arm.Asm" || name == "device/arm64.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
 			return b.createInlineAsm(instr.Args)
-		case name == "device.AsmFull" || name == "device/arm.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
+		case name == "device.AsmFull" || name == "device/arm.AsmFull" || name == "device/arm64.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
 			return b.createInlineAsmFull(instr)
 		case strings.HasPrefix(name, "device/arm.SVCall"):
 			return b.emitSVCall(instr.Args)
+		case strings.HasPrefix(name, "device/arm64.SVCall"):
+			return b.emitSV64Call(instr.Args)
 		case strings.HasPrefix(name, "(device/riscv.CSR)."):
 			return b.emitCSROperation(instr)
 		case strings.HasPrefix(name, "syscall.Syscall"):
@@ -2054,17 +2046,17 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 			case token.QUO: // /
 				return b.CreateFDiv(x, y, ""), nil
 			case token.EQL: // ==
-				return b.CreateFCmp(llvm.FloatUEQ, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatOEQ, x, y, ""), nil
 			case token.NEQ: // !=
 				return b.CreateFCmp(llvm.FloatUNE, x, y, ""), nil
 			case token.LSS: // <
-				return b.CreateFCmp(llvm.FloatULT, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatOLT, x, y, ""), nil
 			case token.LEQ: // <=
-				return b.CreateFCmp(llvm.FloatULE, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatOLE, x, y, ""), nil
 			case token.GTR: // >
-				return b.CreateFCmp(llvm.FloatUGT, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatOGT, x, y, ""), nil
 			case token.GEQ: // >=
-				return b.CreateFCmp(llvm.FloatUGE, x, y, ""), nil
+				return b.CreateFCmp(llvm.FloatOGE, x, y, ""), nil
 			default:
 				panic("binop on float: " + op.String())
 			}
@@ -2588,7 +2580,17 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			if typ.Info()&types.IsInteger != 0 {
 				return b.CreateSub(llvm.ConstInt(x.Type(), 0, false), x, ""), nil
 			} else if typ.Info()&types.IsFloat != 0 {
-				return b.CreateFSub(llvm.ConstFloat(x.Type(), 0.0), x, ""), nil
+				return b.CreateFNeg(x, ""), nil
+			} else if typ.Info()&types.IsComplex != 0 {
+				// Negate both components of the complex number.
+				r := b.CreateExtractValue(x, 0, "r")
+				i := b.CreateExtractValue(x, 1, "i")
+				r = b.CreateFNeg(r, "")
+				i = b.CreateFNeg(i, "")
+				cplx := llvm.Undef(x.Type())
+				cplx = b.CreateInsertValue(cplx, r, 0, "")
+				cplx = b.CreateInsertValue(cplx, i, 1, "")
+				return cplx, nil
 			} else {
 				return llvm.Value{}, b.makeError(unop.Pos(), "todo: unknown basic type for negate: "+typ.String())
 			}

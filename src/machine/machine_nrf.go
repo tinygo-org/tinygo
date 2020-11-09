@@ -72,7 +72,8 @@ func (p Pin) Get() bool {
 }
 
 // SetInterrupt sets an interrupt to be executed when a particular pin changes
-// state.
+// state. The pin should already be configured as an input, including a pull up
+// or down if no external pull is provided.
 //
 // This call will replace a previously set callback on this pin. You can pass a
 // nil func to unset the pin change interrupt. If you do so, the change
@@ -258,12 +259,15 @@ func (i2c I2C) Configure(config I2CConfig) {
 // Tx does a single I2C transaction at the specified address.
 // It clocks out the given address, writes the bytes in w, reads back len(r)
 // bytes and stores them in r, and generates a stop condition on the bus.
-func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+func (i2c I2C) Tx(addr uint16, w, r []byte) (err error) {
 	i2c.Bus.ADDRESS.Set(uint32(addr))
+
 	if len(w) != 0 {
 		i2c.Bus.TASKS_STARTTX.Set(1) // start transmission for writing
 		for _, b := range w {
-			i2c.writeByte(b)
+			if err = i2c.writeByte(b); err != nil {
+				goto cleanUp
+			}
 		}
 	}
 	if len(r) != 0 {
@@ -276,12 +280,18 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 				i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_STOP)
 			}
 			i2c.Bus.TASKS_RESUME.Set(1) // re-start transmission for reading
-			r[i] = i2c.readByte()
+			if r[i], err = i2c.readByte(); err != nil {
+				// goto/break are practically equivalent here,
+				// but goto makes this more easily understandable for maintenance.
+				goto cleanUp
+			}
 		}
 	}
+
+cleanUp:
 	i2c.signalStop()
 	i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND_Disabled)
-	return nil
+	return
 }
 
 // signalStop sends a stop signal when writing or tells the I2C peripheral that
@@ -295,19 +305,28 @@ func (i2c I2C) signalStop() {
 }
 
 // writeByte writes a single byte to the I2C bus.
-func (i2c I2C) writeByte(data byte) {
+func (i2c I2C) writeByte(data byte) error {
 	i2c.Bus.TXD.Set(uint32(data))
 	for i2c.Bus.EVENTS_TXDSENT.Get() == 0 {
+		if e := i2c.Bus.EVENTS_ERROR.Get(); e != 0 {
+			i2c.Bus.EVENTS_ERROR.Set(0)
+			return errI2CBusError
+		}
 	}
 	i2c.Bus.EVENTS_TXDSENT.Set(0)
+	return nil
 }
 
 // readByte reads a single byte from the I2C bus.
-func (i2c I2C) readByte() byte {
+func (i2c I2C) readByte() (byte, error) {
 	for i2c.Bus.EVENTS_RXDREADY.Get() == 0 {
+		if e := i2c.Bus.EVENTS_ERROR.Get(); e != 0 {
+			i2c.Bus.EVENTS_ERROR.Set(0)
+			return 0, errI2CBusError
+		}
 	}
 	i2c.Bus.EVENTS_RXDREADY.Set(0)
-	return byte(i2c.Bus.RXD.Get())
+	return byte(i2c.Bus.RXD.Get()), nil
 }
 
 // SPI on the NRF.
@@ -339,23 +358,25 @@ func (spi SPI) Configure(config SPIConfig) {
 	// set frequency
 	var freq uint32
 
-	switch config.Frequency {
-	case 125000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_K125
-	case 250000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_K250
-	case 500000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_K500
-	case 1000000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_M1
-	case 2000000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_M2
-	case 4000000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_M4
-	case 8000000:
+	if config.Frequency == 0 {
+		config.Frequency = 4000000 // 4MHz
+	}
+
+	switch {
+	case config.Frequency >= 8000000:
 		freq = nrf.SPI_FREQUENCY_FREQUENCY_M8
-	default:
+	case config.Frequency >= 4000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M4
+	case config.Frequency >= 2000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M2
+	case config.Frequency >= 1000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M1
+	case config.Frequency >= 500000:
 		freq = nrf.SPI_FREQUENCY_FREQUENCY_K500
+	case config.Frequency >= 250000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K250
+	default: // below 250kHz, default to the lowest speed available
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K125
 	}
 	spi.Bus.FREQUENCY.Set(freq)
 

@@ -65,11 +65,15 @@ var (
 		Buffer: NewRingBuffer(),
 		Bus:    stm32.USART1,
 	}
-	UART1 = &UART0
+	UART1 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    stm32.USART2,
+	}
 )
 
 func init() {
 	UART0.Interrupt = interrupt.New(stm32.IRQ_USART1, UART0.handleInterrupt)
+	UART1.Interrupt = interrupt.New(stm32.IRQ_USART2, UART1.handleInterrupt)
 }
 
 // SPI pins

@@ -171,7 +171,7 @@ func LowerFuncValues(mod llvm.Module) {
 						i8ptrType := llvm.PointerType(ctx.Int8Type(), 0)
 						calleeValue := builder.CreatePtrToInt(funcPtr, uintptrType, "")
 						start := mod.NamedFunction("internal/task.start")
-						builder.CreateCall(start, []llvm.Value{calleeValue, callIntPtr.Operand(1), llvm.Undef(i8ptrType), llvm.ConstNull(i8ptrType)}, "")
+						builder.CreateCall(start, []llvm.Value{calleeValue, callIntPtr.Operand(1), llvm.Undef(uintptrType), llvm.Undef(i8ptrType), llvm.ConstNull(i8ptrType)}, "")
 						return llvm.Value{} // void so no return value
 					}, functions)
 					callIntPtr.EraseFromParentAsInstruction()

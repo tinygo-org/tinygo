@@ -207,6 +207,16 @@ func (fi *frameInfo) exec(bytecode []byte) ([]frameInfoLine, error) {
 			switch lowBits {
 			case 0: // DW_CFA_nop
 				// no operation
+			case 0x02: // DW_CFA_advance_loc1
+				// Very similar to DW_CFA_advance_loc but allows for a slightly
+				// larger range.
+				offset, err := r.ReadByte()
+				if err != nil {
+					return nil, err
+				}
+				fi.loc += uint64(offset) * fi.cie.codeAlignmentFactor
+				entries = append(entries, fi.newLine())
+				// TODO: DW_CFA_advance_loc2 etc
 			case 0x07: // DW_CFA_undefined
 				// Marks a single register as undefined. This is used to stop
 				// unwinding in tinygo_startTask using:

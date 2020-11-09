@@ -15,3 +15,20 @@ type B struct {
 	common
 	N int
 }
+
+type InternalBenchmark struct {
+	Name string
+	F    func(b *B)
+}
+
+func (b *B) SetBytes(n int64) {
+	panic("testing: unimplemented: B.SetBytes")
+}
+
+func (b *B) ResetTimer() {
+	panic("testing: unimplemented: B.ResetTimer")
+}
+
+func (b *B) Run(name string, f func(b *B)) bool {
+	panic("testing: unimplemented: B.Run")
+}

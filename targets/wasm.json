@@ -12,11 +12,11 @@
 	],
 	"ldflags": [
 		"--allow-undefined",
-		"--no-threads",
 		"--stack-first",
 		"--export-all",
 		"--no-demangle",
 		"{root}/lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a"
 	],
-	"emulator":      ["node", "targets/wasm_exec.js"]
+	"emulator":      ["node", "targets/wasm_exec.js"],
+	"wasm-abi":      "js"
 }

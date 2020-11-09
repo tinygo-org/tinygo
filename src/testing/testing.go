@@ -42,7 +42,7 @@ type TB interface {
 	SkipNow()
 	Skipf(format string, args ...interface{})
 	Skipped() bool
-	// Helper()
+	Helper()
 }
 
 var _ TB = (*T)(nil)
@@ -53,6 +53,7 @@ var _ TB = (*B)(nil)
 //
 type T struct {
 	common
+	indent string
 }
 
 // Name returns the name of the running test or benchmark.
@@ -154,18 +155,48 @@ func (c *common) Skipped() bool {
 	return c.skipped
 }
 
-// TestToCall is a reference to a test that should be called during a test suite run.
-type TestToCall struct {
-	// Name of the test to call.
+// Helper is not implemented, it is only provided for compatibility.
+func (c *common) Helper() {
+	// Unimplemented.
+}
+
+// Run runs a subtest of f t called name. It waits until the subtest is finished
+// and returns whether the subtest succeeded.
+func (t *T) Run(name string, f func(t *T)) bool {
+	// Create a subtest.
+	sub := T{
+		indent: t.indent + "    ",
+		common: common{
+			name:   t.name + "/" + name,
+			output: &bytes.Buffer{},
+		},
+	}
+
+	// Run the test.
+	fmt.Printf("=== RUN   %s\n", sub.name)
+	f(&sub)
+
+	// Process the result (pass or fail).
+	if sub.failed {
+		t.failed = true
+		fmt.Printf(sub.indent+"--- FAIL: %s\n", sub.name)
+	} else {
+		fmt.Printf(sub.indent+"--- PASS: %s\n", sub.name)
+	}
+	fmt.Print(sub.output)
+	return !sub.failed
+}
+
+// InternalTest is a reference to a test that should be called during a test suite run.
+type InternalTest struct {
 	Name string
-	// Function reference to the test.
-	Func func(*T)
+	F    func(*T)
 }
 
 // M is a test suite.
 type M struct {
 	// tests is a list of the test names to execute
-	Tests []TestToCall
+	Tests []InternalTest
 }
 
 // Run the test suite.
@@ -180,14 +211,14 @@ func (m *M) Run() int {
 		}
 
 		fmt.Printf("=== RUN   %s\n", test.Name)
-		test.Func(t)
+		test.F(t)
 
 		if t.failed {
 			fmt.Printf("--- FAIL: %s\n", test.Name)
 		} else {
 			fmt.Printf("--- PASS: %s\n", test.Name)
 		}
-		fmt.Println(t.output)
+		fmt.Print(t.output)
 
 		if t.failed {
 			failures++
@@ -197,10 +228,25 @@ func (m *M) Run() int {
 	if failures > 0 {
 		fmt.Printf("exit status %d\n", failures)
 		fmt.Println("FAIL")
+	} else {
+		fmt.Println("PASS")
 	}
 	return failures
 }
 
 func TestMain(m *M) {
 	os.Exit(m.Run())
+}
+
+func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenchmark, examples []InternalExample) *M {
+	return &M{
+		Tests: tests,
+	}
+}
+
+type InternalExample struct {
+	Name      string
+	F         func()
+	Output    string
+	Unordered bool
 }

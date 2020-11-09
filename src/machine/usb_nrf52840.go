@@ -87,9 +87,12 @@ func exitCriticalSection() {
 
 // Configure the USB CDC interface. The config is here for compatibility with the UART interface.
 func (usbcdc *USBCDC) Configure(config UARTConfig) {
-	// enable IRQ
+	// Enable IRQ. Make sure this is higher than the SWI2 interrupt handler so
+	// that it is possible to print to the console from a BLE interrupt. You
+	// shouldn't generally do that but it is useful for debugging and panic
+	// logging.
 	usbcdc.interrupt = interrupt.New(nrf.IRQ_USBD, USB.handleInterrupt)
-	usbcdc.interrupt.SetPriority(0xD0)
+	usbcdc.interrupt.SetPriority(0x40) // interrupt priority 2 (lower number means more important)
 	usbcdc.interrupt.Enable()
 
 	// enable USB

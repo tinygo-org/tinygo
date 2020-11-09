@@ -16,6 +16,11 @@ SECTIONS
         . = ALIGN(4);
     } >FLASH_TEXT
 
+    .tinygo_stacksizes :
+    {
+        *(.tinygo_stacksizes)
+    } > FLASH_TEXT
+
     /* Put the stack at the bottom of RAM, so that the application will
      * crash on stack overflow instead of silently corrupting memory.
      * See: http://blog.japaric.io/stack-overflow-protection/ */

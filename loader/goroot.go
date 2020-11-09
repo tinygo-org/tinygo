@@ -8,18 +8,20 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
-	"strconv"
+	"sync"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
+
+var gorootCreateMutex sync.Mutex
 
 // GetCachedGoroot creates a new GOROOT by merging both the standard GOROOT and
 // the GOROOT from TinyGo using lots of symbolic links.
@@ -49,16 +51,29 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	fmt.Fprintln(hash, tinygoroot)
 	gorootsHash := hash.Sum(nil)
 	gorootsHashHex := hex.EncodeToString(gorootsHash[:])
-	cachedgoroot := filepath.Join(goenv.Get("GOCACHE"), "goroot-"+version+"-"+gorootsHashHex)
+	cachedgorootName := "goroot-" + version + "-" + gorootsHashHex
+	cachedgoroot := filepath.Join(goenv.Get("GOCACHE"), cachedgorootName)
 	if needsSyscallPackage(config.BuildTags()) {
 		cachedgoroot += "-syscall"
 	}
 
+	// Do not try to create the cached GOROOT in parallel, that's only a waste
+	// of I/O bandwidth and thus speed. Instead, use a mutex to make sure only
+	// one goroutine does it at a time.
+	// This is not a way to ensure atomicity (a different TinyGo invocation
+	// could be creating the same directory), but instead a way to avoid
+	// creating it many times in parallel when running tests in parallel.
+	gorootCreateMutex.Lock()
+	defer gorootCreateMutex.Unlock()
+
 	if _, err := os.Stat(cachedgoroot); err == nil {
 		return cachedgoroot, nil
 	}
-	tmpgoroot := cachedgoroot + ".tmp" + strconv.Itoa(rand.Int())
-	err = os.MkdirAll(tmpgoroot, 0777)
+	err = os.MkdirAll(goenv.Get("GOCACHE"), 0777)
+	if err != nil {
+		return "", err
+	}
+	tmpgoroot, err := ioutil.TempDir(goenv.Get("GOCACHE"), cachedgorootName+".tmp")
 	if err != nil {
 		return "", err
 	}
@@ -84,6 +99,15 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 			// Use that one instead. Our new GOROOT will be automatically
 			// deleted by the defer above.
 			return cachedgoroot, nil
+		}
+		if runtime.GOOS == "windows" && os.IsPermission(err) {
+			// On Windows, a rename with a destination directory that already
+			// exists does not result in an IsExist error, but rather in an
+			// access denied error. To be sure, check for this case by checking
+			// whether the target directory exists.
+			if _, err := os.Stat(cachedgoroot); err == nil {
+				return cachedgoroot, nil
+			}
 		}
 		return "", err
 	}
@@ -165,7 +189,7 @@ func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides 
 // with the TinyGo version. This is the case on some targets.
 func needsSyscallPackage(buildTags []string) bool {
 	for _, tag := range buildTags {
-		if tag == "baremetal" || tag == "darwin" || tag == "nintendoswitch" {
+		if tag == "baremetal" || tag == "darwin" || tag == "nintendoswitch" || tag == "wasi" {
 			return true
 		}
 	}
@@ -188,7 +212,7 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"reflect/":              false,
 		"runtime/":              false,
 		"sync/":                 true,
-		"testing/":              false,
+		"testing/":              true,
 	}
 	if needsSyscallPackage {
 		paths["syscall/"] = true // include syscall/js
@@ -228,10 +252,27 @@ func symlink(oldname, newname string) error {
 				return symlinkErr
 			}
 		} else {
-			// Make a hard link.
+			// Try making a hard link.
 			err := os.Link(oldname, newname)
 			if err != nil {
-				return symlinkErr
+				// Making a hardlink failed. Try copying the file as a last
+				// fallback.
+				inf, err := os.Open(oldname)
+				if err != nil {
+					return err
+				}
+				defer inf.Close()
+				outf, err := os.Create(newname)
+				if err != nil {
+					return err
+				}
+				defer outf.Close()
+				_, err = io.Copy(outf, inf)
+				if err != nil {
+					os.Remove(newname)
+					return err
+				}
+				// File was copied.
 			}
 		}
 		return nil // success

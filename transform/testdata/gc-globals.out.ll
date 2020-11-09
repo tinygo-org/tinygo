@@ -7,11 +7,11 @@ target triple = "wasm32-unknown-unknown-wasm"
 @globalInt = global i32 5
 @constString = constant %runtime._string zeroinitializer
 @constInterface = constant %runtime._interface zeroinitializer
-@runtime.trackedGlobalsLength = global i32 4
+@runtime.trackedGlobalsLength = internal global i32 4
 @runtime.trackedGlobalsBitmap = external global [0 x i8]
-@runtime.trackedGlobalsStart = global i32 ptrtoint ({ %runtime._string, %runtime._interface }* @tinygo.trackedGlobals to i32)
+@runtime.trackedGlobalsStart = internal global i32 ptrtoint ({ %runtime._string, %runtime._interface }* @tinygo.trackedGlobals to i32)
 @tinygo.trackedGlobals = internal unnamed_addr global { %runtime._string, %runtime._interface } zeroinitializer
-@runtime.trackedGlobalsBitmap.1 = global [1 x i8] c"\09"
+@runtime.trackedGlobalsBitmap.1 = internal global [1 x i8] c"\09"
 
 define void @main() {
   %1 = load i32, i32* @globalInt

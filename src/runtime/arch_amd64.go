@@ -1,5 +1,7 @@
 package runtime
 
+import "device"
+
 const GOARCH = "amd64"
 
 // The bitness of the CPU (e.g. 8, 32, 64).
@@ -12,4 +14,6 @@ func align(ptr uintptr) uintptr {
 	return (ptr + 15) &^ 15
 }
 
-func getCurrentStackPointer() uintptr
+func getCurrentStackPointer() uintptr {
+	return device.AsmFull("movq %rsp, {}", nil)
+}

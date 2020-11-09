@@ -123,7 +123,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 	// set default frequency
 	if config.Frequency == 0 {
-		config.Frequency = 4000000
+		config.Frequency = 4000000 // 4MHz
 	}
 
 	// div = (SPI_CFG(dev)->f_sys / (2 * frequency)) - 1;

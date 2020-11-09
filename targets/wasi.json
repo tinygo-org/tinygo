@@ -1,0 +1,22 @@
+{
+	"llvm-target":   "wasm32--wasi",
+	"build-tags":    ["wasm", "wasi"],
+	"goos":          "linux",
+	"goarch":        "arm",
+	"compiler":      "clang",
+	"linker":        "wasm-ld",
+	"cflags": [
+		"--target=wasm32--wasi",
+		"--sysroot={root}/lib/wasi-libc/sysroot",
+		"-Oz"
+	],
+	"ldflags": [
+		"--allow-undefined",
+		"--stack-first",
+		"--export-dynamic",
+		"--no-demangle",
+		"{root}/lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a"
+	],
+	"emulator":      ["wasmtime"],
+	"wasm-abi":      "generic"
+}

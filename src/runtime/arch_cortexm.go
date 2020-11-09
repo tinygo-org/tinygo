@@ -102,7 +102,3 @@ func procPin() {
 func procUnpin() {
 	arm.EnableInterrupts(procPinnedMask)
 }
-
-func waitForEvents() {
-	arm.Asm("wfe")
-}

@@ -9,25 +9,10 @@ CLANG_SRC ?= $(LLVM_PROJECTDIR)/clang
 LLD_SRC ?= $(LLVM_PROJECTDIR)/lld
 
 # Try to autodetect LLVM build tools.
-ifneq (, $(shell command -v llvm-build/bin/clang 2> /dev/null))
-    CLANG ?= $(abspath llvm-build/bin/clang)
-else
-    CLANG ?= clang-10
-endif
-ifneq (, $(shell command -v llvm-build/bin/llvm-ar 2> /dev/null))
-    LLVM_AR ?= $(abspath llvm-build/bin/llvm-ar)
-else ifneq (, $(shell command -v llvm-ar-10 2> /dev/null))
-    LLVM_AR ?= llvm-ar-10
-else
-    LLVM_AR ?= llvm-ar
-endif
-ifneq (, $(shell command -v llvm-build/bin/llvm-nm 2> /dev/null))
-    LLVM_NM ?= $(abspath llvm-build/bin/llvm-nm)
-else ifneq (, $(shell command -v llvm-nm-10 2> /dev/null))
-    LLVM_NM ?= llvm-nm-10
-else
-    LLVM_NM ?= llvm-nm
-endif
+detect = $(shell command -v $(1) 2> /dev/null && echo $(1))
+CLANG ?= $(word 1,$(abspath $(call detect,llvm-build/bin/clang))$(call detect,clang-11)$(call detect,clang-10)$(call detect,clang))
+LLVM_AR ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-ar))$(call detect,llvm-ar-11)$(call detect,llvm-ar-10)$(call detect,llvm-ar))
+LLVM_NM ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-nm))$(call detect,llvm-nm-11)$(call detect,llvm-nm-10)$(call detect,llvm-nm))
 
 # Go binary and GOROOT to select
 GO ?= go
@@ -37,7 +22,7 @@ export GOROOT = $(shell $(GO) env GOROOT)
 MD5SUM = md5sum
 
 # tinygo binary for tests
-TINYGO ?= tinygo
+TINYGO ?= $(word 1,$(call detect,tinygo)$(call detect,build/tinygo))
 
 # Use CCACHE for LLVM if possible
 ifneq (, $(shell command -v ccache 2> /dev/null))
@@ -118,9 +103,10 @@ fmt-check:
 	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
 
 
-gen-device: gen-device-avr gen-device-nrf gen-device-sam gen-device-sifive gen-device-stm32 gen-device-kendryte gen-device-nxp
+gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-stm32 gen-device-kendryte gen-device-nxp
 
 gen-device-avr:
+	@if [ ! -e lib/avr/README.md ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
 	$(GO) build -o ./build/gen-device-avr ./tools/gen-device-avr/
 	./build/gen-device-avr lib/avr/packs/atmega src/device/avr/
 	./build/gen-device-avr lib/avr/packs/tiny src/device/avr/
@@ -128,6 +114,10 @@ gen-device-avr:
 
 build/gen-device-svd: ./tools/gen-device-svd/*.go
 	$(GO) build -o $@ ./tools/gen-device-svd/
+
+gen-device-esp: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Espressif-Community -interrupts=software lib/cmsis-svd/data/Espressif-Community/ src/device/esp/
+	GO111MODULE=off $(GO) fmt ./src/device/esp
 
 gen-device-nrf: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk lib/nrfx/mdk/ src/device/nrf/
@@ -156,13 +146,13 @@ gen-device-stm32: build/gen-device-svd
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/README.md:
-	git clone -b release/10.x --depth=1 https://github.com/llvm/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b xtensa_release_10.0.1 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/README.md
 
 # Configure LLVM.
 TINYGO_SOURCE_DIR=$(shell pwd)
 $(LLVM_BUILDDIR)/build.ninja: llvm-source
-	mkdir -p $(LLVM_BUILDDIR); cd $(LLVM_BUILDDIR); cmake -G Ninja $(TINYGO_SOURCE_DIR)/$(LLVM_PROJECTDIR)/llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;RISCV;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR" -DCMAKE_BUILD_TYPE=Release -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_ENABLE_OCAMLDOC=OFF -DLLVM_ENABLE_PROJECTS="clang;lld" -DLLVM_TOOL_CLANG_TOOLS_EXTRA_BUILD=OFF $(LLVM_OPTION)
+	mkdir -p $(LLVM_BUILDDIR); cd $(LLVM_BUILDDIR); cmake -G Ninja $(TINYGO_SOURCE_DIR)/$(LLVM_PROJECTDIR)/llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;RISCV;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR;Xtensa" -DCMAKE_BUILD_TYPE=Release -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_ENABLE_OCAMLDOC=OFF -DLLVM_ENABLE_PROJECTS="clang;lld" -DLLVM_TOOL_CLANG_TOOLS_EXTRA_BUILD=OFF $(LLVM_OPTION)
 
 # Build LLVM.
 $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
@@ -173,19 +163,35 @@ $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
 .PHONY: wasi-libc
 wasi-libc: lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a
 lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
+	@if [ ! -e lib/wasi-libc/Makefile ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
 	cd lib/wasi-libc && make -j4 WASM_CC=$(CLANG) WASM_AR=$(LLVM_AR) WASM_NM=$(LLVM_NM)
 
 
 # Build the Go compiler.
 tinygo:
 	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  make llvm-source"; echo "  make $(LLVM_BUILDDIR)"; exit 1; fi
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) build -o build/tinygo$(EXE) -tags byollvm .
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags byollvm -ldflags="-X main.gitSha1=`git rev-parse --short HEAD`" .
 
 test: wasi-libc
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test -v -tags byollvm ./cgo ./compileopts ./interp ./transform .
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test -v -buildmode exe -tags byollvm ./cgo ./compileopts ./interp ./transform .
 
+# Test known-working standard library packages.
+# TODO: do this in one command, parallelize, and only show failing tests (no
+# implied -v flag).
+.PHONY: tinygo-test
 tinygo-test:
-	cd tests/tinygotest && tinygo test
+	$(TINYGO) test container/heap
+	$(TINYGO) test container/list
+	$(TINYGO) test container/ring
+	$(TINYGO) test crypto/des
+	$(TINYGO) test encoding/ascii85
+	$(TINYGO) test encoding/base32
+	$(TINYGO) test encoding/hex
+	$(TINYGO) test hash/fnv
+	$(TINYGO) test hash/crc64
+	$(TINYGO) test math
+	$(TINYGO) test text/scanner
+	$(TINYGO) test unicode/utf8
 
 .PHONY: smoketest
 smoketest:
@@ -221,8 +227,6 @@ smoketest:
 	@$(MD5SUM) test.hex
 	# test simulated boards on play.tinygo.org
 	$(TINYGO) build             -o test.wasm -tags=arduino              examples/blinky1
-	@$(MD5SUM) test.wasm
-	$(TINYGO) build             -o test.wasm -tags=hifive1-qemu         examples/serial
 	@$(MD5SUM) test.wasm
 	$(TINYGO) build             -o test.wasm -tags=hifive1b             examples/blinky1
 	@$(MD5SUM) test.wasm
@@ -267,13 +271,15 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32f4disco        examples/blinky2
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=stm32f4disco-1       examples/blinky1
+	$(TINYGO) build -size short -o test.hex -target=stm32f4disco-1      examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=feather-stm32f405   examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-bluefruit examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/i2s
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=clue_alpha          examples/blinky1
+	$(TINYGO) build -size short -o test.hex -target=clue-alpha          examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.gba -target=gameboy-advance     examples/gba-display
 	@$(MD5SUM) test.gba
@@ -315,6 +321,19 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-nrf52840  	examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=itsybitsy-nrf52840  examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=qtpy  				examples/blinky1
+	@$(MD5SUM) test.hex
+	# test pwm
+	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0        examples/pwm
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m4        examples/pwm
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=feather-m4          examples/pwm
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pyportal            examples/pwm
+	@$(MD5SUM) test.hex
 ifneq ($(AVR), 0)
 	$(TINYGO) build -size short -o test.hex -target=atmega1284p         examples/serial
 	@$(MD5SUM) test.hex
@@ -331,7 +350,15 @@ ifneq ($(AVR), 0)
 	$(TINYGO) build -size short -o test.hex -target=digispark -gc=leaking examples/blinky1
 	@$(MD5SUM) test.hex
 endif
+ifneq ($(XTENSA), 0)
+	$(TINYGO) build -size short -o test.bin -target=esp32-mini32      	examples/blinky1
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=nodemcu             examples/blinky1
+	@$(MD5SUM) test.bin
+endif
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=hifive1-qemu        examples/serial
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=maixbit             examples/blinky1
 	@$(MD5SUM) test.hex
@@ -342,8 +369,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -opt=1     examples/blinky1
 	@$(MD5SUM) test.hex
-	$(TINYGO) build             -o test.elf -target=nintendoswitch      examples/serial
-	@$(MD5SUM) test.elf
+	$(TINYGO) build             -o test.nro -target=nintendoswitch      examples/serial
+	@$(MD5SUM) test.nro
 
 wasmtest:
 	$(GO) test ./tests/wasm

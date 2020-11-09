@@ -353,7 +353,8 @@ func findPinPadMapping(sercom uint8, pin Pin) (pinMode PinMode, pad uint32, ok b
 }
 
 // SetInterrupt sets an interrupt to be executed when a particular pin changes
-// state.
+// state. The pin should already be configured as an input, including a pull up
+// or down if no external pull is provided.
 //
 // This call will replace a previously set callback on this pin. You can pass a
 // nil func to unset the pin change interrupt. If you do so, the change
@@ -1331,12 +1332,13 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 	// Determine the input pinout (for SDI).
 	var dataInPinout uint32
-	SDIPinMode, SDIPad, ok := findPinPadMapping(spi.SERCOM, config.SDI)
+	var SDIPinMode PinMode
 	if config.SDI != NoPin {
+		var ok bool
+		SDIPinMode, dataInPinout, ok = findPinPadMapping(spi.SERCOM, config.SDI)
 		if !ok {
 			return ErrInvalidInputPin
 		}
-		dataInPinout = SDIPad // mapped directly
 	}
 
 	// Determine the output pinout (for SDO/SCK).
@@ -1417,6 +1419,9 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 	// Set synch speed for SPI
 	baudRate := SERCOM_FREQ_REF / (2 * config.Frequency)
+	if baudRate > 0 {
+		baudRate--
+	}
 	spi.Bus.BAUD.Set(uint8(baudRate))
 
 	// Enable SPI port.
@@ -1580,13 +1585,13 @@ func (pwm PWM) setPinCfg(val uint8) {
 // setChannel sets the value for the correct channel for PWM on this pin.
 func (pwm PWM) setChannel(timer *sam.TCC_Type, val uint32) {
 	switch pwm.Pin {
-	case PA16:
-		timer.CC[0].Set(val)
-	case PA17:
-		timer.CC[1].Set(val)
 	case PA14:
 		timer.CC[0].Set(val)
 	case PA15:
+		timer.CC[1].Set(val)
+	case PA16:
+		timer.CC[0].Set(val)
+	case PA17:
 		timer.CC[1].Set(val)
 	case PA18:
 		timer.CC[2].Set(val)
@@ -1596,10 +1601,22 @@ func (pwm PWM) setChannel(timer *sam.TCC_Type, val uint32) {
 		timer.CC[0].Set(val)
 	case PA21:
 		timer.CC[1].Set(val)
-	case PA23:
-		timer.CC[3].Set(val)
 	case PA22:
 		timer.CC[2].Set(val)
+	case PA23:
+		timer.CC[3].Set(val)
+	case PB12:
+		timer.CC[0].Set(val)
+	case PB13:
+		timer.CC[1].Set(val)
+	case PB14:
+		timer.CC[0].Set(val)
+	case PB15:
+		timer.CC[1].Set(val)
+	case PB16:
+		timer.CC[4].Set(val)
+	case PB17:
+		timer.CC[5].Set(val)
 	case PB31:
 		timer.CC[1].Set(val)
 	default:
@@ -1610,13 +1627,13 @@ func (pwm PWM) setChannel(timer *sam.TCC_Type, val uint32) {
 // setChannelBuffer sets the value for the correct channel buffer for PWM on this pin
 func (pwm PWM) setChannelBuffer(timer *sam.TCC_Type, val uint32) {
 	switch pwm.Pin {
-	case PA16:
-		timer.CCBUF[0].Set(val)
-	case PA17:
-		timer.CCBUF[1].Set(val)
 	case PA14:
 		timer.CCBUF[0].Set(val)
 	case PA15:
+		timer.CCBUF[1].Set(val)
+	case PA16:
+		timer.CCBUF[0].Set(val)
+	case PA17:
 		timer.CCBUF[1].Set(val)
 	case PA18:
 		timer.CCBUF[2].Set(val)
@@ -1626,10 +1643,22 @@ func (pwm PWM) setChannelBuffer(timer *sam.TCC_Type, val uint32) {
 		timer.CCBUF[0].Set(val)
 	case PA21:
 		timer.CCBUF[1].Set(val)
-	case PA23:
-		timer.CCBUF[3].Set(val)
 	case PA22:
 		timer.CCBUF[2].Set(val)
+	case PA23:
+		timer.CCBUF[3].Set(val)
+	case PB12:
+		timer.CCBUF[0].Set(val)
+	case PB13:
+		timer.CCBUF[1].Set(val)
+	case PB14:
+		timer.CCBUF[0].Set(val)
+	case PB15:
+		timer.CCBUF[1].Set(val)
+	case PB16:
+		timer.CCBUF[4].Set(val)
+	case PB17:
+		timer.CCBUF[5].Set(val)
 	case PB31:
 		timer.CCBUF[1].Set(val)
 	default:
@@ -1640,13 +1669,13 @@ func (pwm PWM) setChannelBuffer(timer *sam.TCC_Type, val uint32) {
 // getMux returns the pin mode mux to be used for PWM on this pin.
 func (pwm PWM) getMux() PinMode {
 	switch pwm.Pin {
-	case PA16:
-		return PinPWMF
-	case PA17:
-		return PinPWMF
 	case PA14:
 		return PinPWMF
 	case PA15:
+		return PinPWMF
+	case PA16:
+		return PinPWMF
+	case PA17:
 		return PinPWMF
 	case PA18:
 		return PinPWMF
@@ -1656,9 +1685,21 @@ func (pwm PWM) getMux() PinMode {
 		return PinPWMG
 	case PA21:
 		return PinPWMG
+	case PA22:
+		return PinPWMG
 	case PA23:
 		return PinPWMG
-	case PA22:
+	case PB12:
+		return PinPWMF
+	case PB13:
+		return PinPWMF
+	case PB14:
+		return PinPWMF
+	case PB15:
+		return PinPWMF
+	case PB16:
+		return PinPWMG
+	case PB17:
 		return PinPWMG
 	case PB31:
 		return PinPWMF

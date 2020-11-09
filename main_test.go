@@ -78,6 +78,9 @@ func TestCompiler(t *testing.T) {
 	}
 
 	if runtime.GOOS == "linux" {
+		t.Run("X86Linux", func(t *testing.T) {
+			runPlatTests("i386--linux-gnu", matches, t)
+		})
 		t.Run("ARMLinux", func(t *testing.T) {
 			runPlatTests("arm--linux-gnueabihf", matches, t)
 		})
@@ -98,6 +101,10 @@ func TestCompiler(t *testing.T) {
 				runPlatTests("wasm", matches, t)
 			})
 		}
+
+		t.Run("WASI", func(t *testing.T) {
+			runPlatTests("wasi", matches, t)
+		})
 	}
 }
 
@@ -109,7 +116,6 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 
 		t.Run(filepath.Base(path), func(t *testing.T) {
 			t.Parallel()
-
 			runTest(path, target, t)
 		})
 	}
@@ -157,10 +163,11 @@ func runTest(path, target string, t *testing.T) {
 		PrintIR:    false,
 		DumpSSA:    false,
 		VerifyIR:   true,
-		Debug:      false,
+		Debug:      true,
 		PrintSizes: "",
-		WasmAbi:    "js",
+		WasmAbi:    "",
 	}
+
 	binary := filepath.Join(tmpdir, "test")
 	err = runBuild("./"+path, binary, config)
 	if err != nil {
@@ -181,10 +188,11 @@ func runTest(path, target string, t *testing.T) {
 			t.Fatal("failed to load target spec:", err)
 		}
 		if len(spec.Emulator) == 0 {
-			t.Fatal("no emulator available for target:", target)
+			cmd = exec.Command(binary)
+		} else {
+			args := append(spec.Emulator[1:], binary)
+			cmd = exec.Command(spec.Emulator[0], args...)
 		}
-		args := append(spec.Emulator[1:], binary)
-		cmd = exec.Command(spec.Emulator[0], args...)
 	}
 	stdout := &bytes.Buffer{}
 	cmd.Stdout = stdout

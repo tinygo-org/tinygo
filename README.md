@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 39 microcontroller boards/devices are currently supported:
+The following 44 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
@@ -51,8 +51,10 @@ The following 39 microcontroller boards/devices are currently supported:
 * [Adafruit Feather M0](https://www.adafruit.com/product/2772)
 * [Adafruit Feather M4](https://www.adafruit.com/product/3857)
 * [Adafruit Feather nRF52840 Express](https://www.adafruit.com/product/4062)
+* [Adafruit Feather STM32F405 Express](https://www.adafruit.com/product/4382)
 * [Adafruit ItsyBitsy M0](https://www.adafruit.com/product/3727)
 * [Adafruit ItsyBitsy M4](https://www.adafruit.com/product/3800)
+* [Adafruit ItsyBitsy nRF52840](https://www.adafruit.com/product/4481)
 * [Adafruit Metro M4 Express Airlift](https://www.adafruit.com/product/4000)
 * [Adafruit PyBadge](https://www.adafruit.com/product/4200)
 * [Adafruit PyGamer](https://www.adafruit.com/product/4242)
@@ -62,8 +64,11 @@ The following 39 microcontroller boards/devices are currently supported:
 * [Arduino Nano](https://store.arduino.cc/arduino-nano)
 * [Arduino Nano33 IoT](https://store.arduino.cc/nano-33-iot)
 * [Arduino Uno](https://store.arduino.cc/arduino-uno-rev3)
+* [Arduino Zero](https://store.arduino.cc/usa/arduino-zero)
 * [BBC micro:bit](https://microbit.org/)
 * [Digispark](http://digistump.com/products/1)
+* [ESP32](https://www.espressif.com/en/products/socs/esp32)
+* [ESP8266](https://www.espressif.com/en/products/socs/esp8266)
 * [Game Boy Advance](https://en.wikipedia.org/wiki/Game_Boy_Advance)
 * [Makerdiary nRF52840-MDK](https://wiki.makerdiary.com/nrf52840-mdk/)
 * [Nintendo Switch](https://www.nintendo.com/switch/)

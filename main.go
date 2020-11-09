@@ -8,6 +8,7 @@ import (
 	"go/scanner"
 	"go/types"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -26,6 +27,12 @@ import (
 	"tinygo.org/x/go-llvm"
 
 	"go.bug.st/serial"
+)
+
+var (
+	// This variable is set at build time using -ldflags parameters.
+	// See: https://stackoverflow.com/a/11355611
+	gitSha1 string
 )
 
 // commandError is an error type to wrap os/exec.Command errors. This provides
@@ -58,33 +65,28 @@ func moveFile(src, dst string) error {
 	return os.Remove(src)
 }
 
-// copyFile copies the given file from src to dst. It copies first to a .tmp
-// file which is then moved over a possibly already existing file at the
-// destination.
+// copyFile copies the given file from src to dst. It can copy over
+// a possibly already existing file at the destination.
 func copyFile(src, dst string) error {
-	inf, err := os.Open(src)
+	source, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer inf.Close()
-	outpath := dst + ".tmp"
-	outf, err := os.Create(outpath)
+	defer source.Close()
+
+	st, err := source.Stat()
 	if err != nil {
 		return err
 	}
 
-	_, err = io.Copy(outf, inf)
-	if err != nil {
-		os.Remove(outpath)
-		return err
-	}
-
-	err = outf.Close()
+	destination, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, st.Mode())
 	if err != nil {
 		return err
 	}
+	defer destination.Close()
 
-	return os.Rename(dst+".tmp", dst)
+	_, err = io.Copy(destination, source)
+	return err
 }
 
 // Build compiles and links the given package and writes it to outpath.
@@ -94,10 +96,10 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 		return err
 	}
 
-	return builder.Build(pkgName, outpath, config, func(tmppath string) error {
-		if err := os.Rename(tmppath, outpath); err != nil {
+	return builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
+		if err := os.Rename(result.Binary, outpath); err != nil {
 			// Moving failed. Do a file copy.
-			inf, err := os.Open(tmppath)
+			inf, err := os.Open(result.Binary)
 			if err != nil {
 				return err
 			}
@@ -123,35 +125,71 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 }
 
 // Test runs the tests in the given package.
-func Test(pkgName string, options *compileopts.Options) error {
+func Test(pkgName string, options *compileopts.Options, testCompileOnly bool, outpath string) error {
 	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
 	}
 
-	// Add test build tag. This is incorrect: `go test` only looks at the
-	// _test.go file suffix but does not add the test build tag in the process.
-	// However, it's a simple fix right now.
-	// For details: https://github.com/golang/go/issues/21360
-	config.Target.BuildTags = append(config.Target.BuildTags, "test")
-
-	return builder.Build(pkgName, ".elf", config, func(tmppath string) error {
-		cmd := exec.Command(tmppath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		err := cmd.Run()
-		if err != nil {
-			// Propagate the exit code
-			if err, ok := err.(*exec.ExitError); ok {
-				if status, ok := err.Sys().(syscall.WaitStatus); ok {
-					os.Exit(status.ExitStatus())
-				}
-				os.Exit(1)
+	return builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
+		if testCompileOnly || outpath != "" {
+			// Write test binary to the specified file name.
+			if outpath == "" {
+				// No -o path was given, so create one now.
+				// This matches the behavior of go test.
+				outpath = filepath.Base(result.MainDir) + ".test"
 			}
-			return &commandError{"failed to run compiled binary", tmppath, err}
+			copyFile(result.Binary, outpath)
 		}
-		return nil
+		if testCompileOnly {
+			// Do not run the test.
+			return nil
+		}
+		if len(config.Target.Emulator) == 0 {
+			// Run directly.
+			cmd := exec.Command(result.Binary)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Dir = result.MainDir
+			err := cmd.Run()
+			if err != nil {
+				// Propagate the exit code
+				if err, ok := err.(*exec.ExitError); ok {
+					if status, ok := err.Sys().(syscall.WaitStatus); ok {
+						os.Exit(status.ExitStatus())
+					}
+					os.Exit(1)
+				}
+				return &commandError{"failed to run compiled binary", result.Binary, err}
+			}
+			return nil
+		} else {
+			// Run in an emulator.
+			args := append(config.Target.Emulator[1:], result.Binary)
+			cmd := exec.Command(config.Target.Emulator[0], args...)
+			buf := &bytes.Buffer{}
+			w := io.MultiWriter(os.Stdout, buf)
+			cmd.Stdout = w
+			cmd.Stderr = os.Stderr
+			err := cmd.Run()
+			if err != nil {
+				if err, ok := err.(*exec.ExitError); !ok || !err.Exited() {
+					// Workaround for QEMU which always exits with an error.
+					return &commandError{"failed to run emulator with", result.Binary, err}
+				}
+			}
+			testOutput := string(buf.Bytes())
+			if testOutput == "PASS\n" || strings.HasSuffix(testOutput, "\nPASS\n") {
+				// Test passed.
+				return nil
+			} else {
+				// Test failed, either by ending with the word "FAIL" or with a
+				// panic of some sort.
+				os.Exit(1)
+				return nil // unreachable
+			}
+		}
 	})
 }
 
@@ -193,9 +231,9 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		return errors.New("unknown flash method: " + flashMethod)
 	}
 
-	return builder.Build(pkgName, fileExt, config, func(tmppath string) error {
+	return builder.Build(pkgName, fileExt, config, func(result builder.BuildResult) error {
 		// do we need port reset to put MCU into bootloader mode?
-		if config.Target.PortReset == "true" {
+		if config.Target.PortReset == "true" && flashMethod != "openocd" {
 			if port == "" {
 				var err error
 				port, err = getDefaultPort()
@@ -206,7 +244,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 
 			err := touchSerialPortAt1200bps(port)
 			if err != nil {
-				return &commandError{"failed to reset port", tmppath, err}
+				return &commandError{"failed to reset port", result.Binary, err}
 			}
 			// give the target MCU a chance to restart into bootloader
 			time.Sleep(3 * time.Second)
@@ -218,7 +256,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			// Create the command.
 			flashCmd := config.Target.FlashCommand
 			fileToken := "{" + fileExt[1:] + "}"
-			flashCmd = strings.Replace(flashCmd, fileToken, tmppath, -1)
+			flashCmd = strings.Replace(flashCmd, fileToken, result.Binary, -1)
 
 			if port == "" && strings.Contains(flashCmd, "{port}") {
 				var err error
@@ -248,21 +286,21 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			cmd.Dir = goenv.Get("TINYGOROOT")
 			err := cmd.Run()
 			if err != nil {
-				return &commandError{"failed to flash", tmppath, err}
+				return &commandError{"failed to flash", result.Binary, err}
 			}
 			return nil
 		case "msd":
 			switch fileExt {
 			case ".uf2":
-				err := flashUF2UsingMSD(config.Target.FlashVolume, tmppath)
+				err := flashUF2UsingMSD(config.Target.FlashVolume, result.Binary)
 				if err != nil {
-					return &commandError{"failed to flash", tmppath, err}
+					return &commandError{"failed to flash", result.Binary, err}
 				}
 				return nil
 			case ".hex":
-				err := flashHexUsingMSD(config.Target.FlashVolume, tmppath)
+				err := flashHexUsingMSD(config.Target.FlashVolume, result.Binary)
 				if err != nil {
-					return &commandError{"failed to flash", tmppath, err}
+					return &commandError{"failed to flash", result.Binary, err}
 				}
 				return nil
 			default:
@@ -273,13 +311,13 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			if err != nil {
 				return err
 			}
-			args = append(args, "-c", "program "+tmppath+" reset exit")
+			args = append(args, "-c", "program "+filepath.ToSlash(result.Binary)+" reset exit")
 			cmd := exec.Command("openocd", args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			err = cmd.Run()
 			if err != nil {
-				return &commandError{"failed to flash", tmppath, err}
+				return &commandError{"failed to flash", result.Binary, err}
 			}
 			return nil
 		default:
@@ -304,7 +342,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		return errors.New("gdb not configured in the target specification")
 	}
 
-	return builder.Build(pkgName, "", config, func(tmppath string) error {
+	return builder.Build(pkgName, "", config, func(result builder.BuildResult) error {
 		// Find a good way to run GDB.
 		gdbInterface, openocdInterface := config.Programmer()
 		switch gdbInterface {
@@ -313,13 +351,17 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				// Assume QEMU as an emulator.
 				if config.Target.Emulator[0] == "mgba" {
 					gdbInterface = "mgba"
-				} else {
+				} else if strings.HasPrefix(config.Target.Emulator[0], "qemu-system-") {
 					gdbInterface = "qemu"
+				} else {
+					gdbInterface = "qemu-user"
 				}
 			} else if openocdInterface != "" && config.Target.OpenOCDTarget != "" {
 				gdbInterface = "openocd"
 			} else if config.Target.JLinkDevice != "" {
 				gdbInterface = "jlink"
+			} else {
+				gdbInterface = "native"
 			}
 		}
 
@@ -367,7 +409,15 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			gdbCommands = append(gdbCommands, "target remote :1234")
 
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], tmppath, "-s", "-S")
+			args := append(config.Target.Emulator[1:], result.Binary, "-s", "-S")
+			daemon = exec.Command(config.Target.Emulator[0], args...)
+			daemon.Stdout = os.Stdout
+			daemon.Stderr = os.Stderr
+		case "qemu-user":
+			gdbCommands = append(gdbCommands, "target remote :1234")
+
+			// Run in an emulator.
+			args := append(config.Target.Emulator[1:], "-g", "1234", result.Binary)
 			daemon = exec.Command(config.Target.Emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
@@ -375,7 +425,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			gdbCommands = append(gdbCommands, "target remote :2345")
 
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], tmppath, "-g")
+			args := append(config.Target.Emulator[1:], result.Binary, "-g")
 			daemon = exec.Command(config.Target.Emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
@@ -413,7 +463,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		// Construct and execute a gdb command.
 		// By default: gdb -ex run <binary>
 		// Exit GDB with Ctrl-D.
-		params := []string{tmppath}
+		params := []string{result.Binary}
 		for _, cmd := range gdbCommands {
 			params = append(params, "-ex", cmd)
 		}
@@ -423,7 +473,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		cmd.Stderr = os.Stderr
 		err := cmd.Run()
 		if err != nil {
-			return &commandError{"failed to run gdb with", tmppath, err}
+			return &commandError{"failed to run gdb with", result.Binary, err}
 		}
 		return nil
 	})
@@ -439,10 +489,10 @@ func Run(pkgName string, options *compileopts.Options) error {
 		return err
 	}
 
-	return builder.Build(pkgName, ".elf", config, func(tmppath string) error {
+	return builder.Build(pkgName, ".elf", config, func(result builder.BuildResult) error {
 		if len(config.Target.Emulator) == 0 {
 			// Run directly.
-			cmd := exec.Command(tmppath)
+			cmd := exec.Command(result.Binary)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			err := cmd.Run()
@@ -451,12 +501,12 @@ func Run(pkgName string, options *compileopts.Options) error {
 					// Workaround for QEMU which always exits with an error.
 					return nil
 				}
-				return &commandError{"failed to run compiled binary", tmppath, err}
+				return &commandError{"failed to run compiled binary", result.Binary, err}
 			}
 			return nil
 		} else {
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], tmppath)
+			args := append(config.Target.Emulator[1:], result.Binary)
 			cmd := exec.Command(config.Target.Emulator[0], args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
@@ -466,7 +516,7 @@ func Run(pkgName string, options *compileopts.Options) error {
 					// Workaround for QEMU which always exits with an error.
 					return nil
 				}
-				return &commandError{"failed to run emulator with", tmppath, err}
+				return &commandError{"failed to run emulator with", result.Binary, err}
 			}
 			return nil
 		}
@@ -652,36 +702,6 @@ func getDefaultPort() (port string, err error) {
 	return d[0], nil
 }
 
-// runGoList runs the `go list` command but using the configuration used for
-// TinyGo.
-func runGoList(config *compileopts.Config, flagJSON, flagDeps bool, pkgs []string) error {
-	goroot, err := loader.GetCachedGoroot(config)
-	if err != nil {
-		return err
-	}
-	args := []string{"list"}
-	if flagJSON {
-		args = append(args, "-json")
-	}
-	if flagDeps {
-		args = append(args, "-deps")
-	}
-	if len(config.BuildTags()) != 0 {
-		args = append(args, "-tags", strings.Join(config.BuildTags(), " "))
-	}
-	args = append(args, pkgs...)
-	cgoEnabled := "0"
-	if config.CgoEnabled() {
-		cgoEnabled = "1"
-	}
-	cmd := exec.Command("go", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = append(os.Environ(), "GOROOT="+goroot, "GOOS="+config.GOOS(), "GOARCH="+config.GOARCH(), "CGO_ENABLED="+cgoEnabled)
-	cmd.Run()
-	return nil
-}
-
 func usage() {
 	fmt.Fprintln(os.Stderr, "TinyGo is a Go compiler for small places.")
 	fmt.Fprintln(os.Stderr, "version:", goenv.Version)
@@ -755,9 +775,15 @@ func printCompilerError(logln func(...interface{}), err error) {
 			}
 		}
 	case loader.Errors:
-		logln("#", err.Pkg.PkgPath)
+		logln("#", err.Pkg.ImportPath)
 		for _, err := range err.Errs {
 			printCompilerError(logln, err)
+		}
+	case loader.Error:
+		logln(err.Err.Error())
+		logln("package", err.ImportStack[0])
+		for _, pkgPath := range err.ImportStack[1:] {
+			logln("\timports", pkgPath)
 		}
 	case *builder.MultiError:
 		for _, err := range err.Errs {
@@ -785,7 +811,6 @@ func main() {
 	}
 	command := os.Args[1]
 
-	outpath := flag.String("o", "", "output filename")
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, extalloc, conservative)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
@@ -803,13 +828,21 @@ func main() {
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
-	wasmAbi := flag.String("wasm-abi", "js", "WebAssembly ABI conventions: js (no i64 params) or generic")
+	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	heapSize := flag.String("heap-size", "1M", "default heap size in bytes (only supported by WebAssembly)")
 
 	var flagJSON, flagDeps *bool
-	if command == "list" {
+	if command == "help" || command == "list" {
 		flagJSON = flag.Bool("json", false, "print data in JSON format")
 		flagDeps = flag.Bool("deps", false, "")
+	}
+	var outpath string
+	if command == "help" || command == "build" || command == "build-library" || command == "test" {
+		flag.StringVar(&outpath, "o", "", "output filename")
+	}
+	var testCompileOnlyFlag *bool
+	if command == "help" || command == "test" {
+		testCompileOnlyFlag = flag.Bool("c", false, "compile the test binary but do not run it")
 	}
 
 	// Early command processing, before commands are interpreted by the Go flag
@@ -868,7 +901,7 @@ func main() {
 
 	switch command {
 	case "build":
-		if *outpath == "" {
+		if outpath == "" {
 			fmt.Fprintln(os.Stderr, "No output filename supplied (-o).")
 			usage()
 			os.Exit(1)
@@ -881,15 +914,15 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		if options.Target == "" && filepath.Ext(*outpath) == ".wasm" {
+		if options.Target == "" && filepath.Ext(outpath) == ".wasm" {
 			options.Target = "wasm"
 		}
 
-		err := Build(pkgName, *outpath, options)
+		err := Build(pkgName, outpath, options)
 		handleCompilerError(err)
 	case "build-library":
 		// Note: this command is only meant to be used while making a release!
-		if *outpath == "" {
+		if outpath == "" {
 			fmt.Fprintln(os.Stderr, "No output filename supplied (-o).")
 			usage()
 			os.Exit(1)
@@ -914,13 +947,8 @@ func main() {
 		}
 		path, err := lib.Load(*target)
 		handleCompilerError(err)
-		copyFile(path, *outpath)
+		copyFile(path, outpath)
 	case "flash", "gdb":
-		if *outpath != "" {
-			fmt.Fprintln(os.Stderr, "Output cannot be specified with the flash command.")
-			usage()
-			os.Exit(1)
-		}
 		pkgName := filepath.ToSlash(flag.Arg(0))
 		if command == "flash" {
 			err := Flash(pkgName, *port, options)
@@ -952,8 +980,37 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err := Test(pkgName, options)
+		err := Test(pkgName, options, *testCompileOnlyFlag, outpath)
 		handleCompilerError(err)
+	case "targets":
+		dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
+		entries, err := ioutil.ReadDir(dir)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "could not list targets:", err)
+			os.Exit(1)
+			return
+		}
+		for _, entry := range entries {
+			if !entry.Mode().IsRegular() || !strings.HasSuffix(entry.Name(), ".json") {
+				// Only inspect JSON files.
+				continue
+			}
+			path := filepath.Join(dir, entry.Name())
+			spec, err := compileopts.LoadTarget(path)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "could not list target:", err)
+				os.Exit(1)
+				return
+			}
+			if spec.FlashMethod == "" && spec.FlashCommand == "" && spec.Emulator == nil {
+				// This doesn't look like a regular target file, but rather like
+				// a parent target (such as targets/cortex-m.json).
+				continue
+			}
+			name := entry.Name()
+			name = name[:len(name)-5]
+			fmt.Println(name)
+		}
 	case "info":
 		if flag.NArg() == 1 {
 			options.Target = flag.Arg(0)
@@ -973,12 +1030,18 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+		cachedGOROOT, err := loader.GetCachedGoroot(config)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		fmt.Printf("LLVM triple:       %s\n", config.Triple())
 		fmt.Printf("GOOS:              %s\n", config.GOOS())
 		fmt.Printf("GOARCH:            %s\n", config.GOARCH())
 		fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
 		fmt.Printf("garbage collector: %s\n", config.GC())
 		fmt.Printf("scheduler:         %s\n", config.Scheduler())
+		fmt.Printf("cached GOROOT:     %s\n", cachedGOROOT)
 	case "list":
 		config, err := builder.NewConfig(options)
 		if err != nil {
@@ -986,8 +1049,28 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
-		err = runGoList(config, *flagJSON, *flagDeps, flag.Args())
+		var extraArgs []string
+		if *flagJSON {
+			extraArgs = append(extraArgs, "-json")
+		}
+		if *flagDeps {
+			extraArgs = append(extraArgs, "-deps")
+		}
+		cmd, err := loader.List(config, extraArgs, flag.Args())
 		if err != nil {
+			fmt.Fprintln(os.Stderr, "failed to run `go list`:", err)
+			os.Exit(1)
+		}
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+					os.Exit(status.ExitStatus())
+				}
+				os.Exit(1)
+			}
 			fmt.Fprintln(os.Stderr, "failed to run `go list`:", err)
 			os.Exit(1)
 		}
@@ -1005,7 +1088,11 @@ func main() {
 		if s, err := goenv.GorootVersionString(goenv.Get("GOROOT")); err == nil {
 			goversion = s
 		}
-		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", goenv.Version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
+		version := goenv.Version
+		if strings.HasSuffix(goenv.Version, "-dev") && gitSha1 != "" {
+			version += "-" + gitSha1
+		}
+		fmt.Printf("tinygo version %s %s/%s (using go version %s and LLVM version %s)\n", version, runtime.GOOS, runtime.GOARCH, goversion, llvm.Version)
 	case "env":
 		if flag.NArg() == 0 {
 			// Show all environment variables.

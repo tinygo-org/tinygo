@@ -9,9 +9,10 @@
   "libc": "picolibc",
   "gc": "conservative",
   "relocation-model": "pic",
+  "cpu": "cortex-a57",
   "cflags": [
-    "-target", "aarch64-none-linux-gnu",
-    "-mtune=cortex-a57",
+    "-target", "aarch64-unknown-none",
+    "-mcpu=cortex-a57",
     "-fPIE",
     "-Werror",
     "-Qunused-arguments",
@@ -20,9 +21,14 @@
     "-fno-exceptions", "-fno-unwind-tables",
     "-ffunction-sections", "-fdata-sections"
   ],
+  "ldflags": [
+    "-pie",
+    "-z", "notext"
+  ],
   "linkerscript": "targets/nintendoswitch.ld",
   "extra-files": [
     "targets/nintendoswitch.s",
+    "src/runtime/gc_arm64.S",
     "src/runtime/runtime_nintendoswitch.s"
   ]
 }

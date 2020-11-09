@@ -289,6 +289,17 @@
 						setTimeout(this._inst.exports.go_scheduler, timeout);
 					},
 
+					// func Exit(code int)
+					"syscall.Exit": (code) => {
+						if (global.process) {
+							// Node.js
+							process.exit(code);
+						} else {
+							// Can't exit in a browser.
+							throw 'trying to exit with code ' + code;
+						}
+					},
+
 					// func finalizeRef(v ref)
 					"syscall/js.finalizeRef": (sp) => {
 						// Note: TinyGo does not support finalizers so this should never be
@@ -396,9 +407,9 @@
 					},
 
 					// func valueInstanceOf(v ref, t ref) bool
-					//"syscall/js.valueInstanceOf": (sp) => {
-					//	mem().setUint8(sp + 24, loadValue(sp + 8) instanceof loadValue(sp + 16));
-					//},
+					"syscall/js.valueInstanceOf": (v_addr, t_addr) => {
+ 						return loadValue(v_attr) instanceof loadValue(t_addr);
+					},
 
 					// func copyBytesToGo(dst []byte, src ref) (int, bool)
 					"syscall/js.copyBytesToGo": (ret_addr, dest_addr, dest_len, dest_cap, source_addr) => {

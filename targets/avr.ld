@@ -13,8 +13,8 @@ SECTIONS
         KEEP(*(.text.__vector_RESET))
         KEEP(*(.text.main)) /* main must follow the reset handler */
         *(.text.*)
-        *(.rodata)
-        *(.rodata.*)
+        *(.progmem)
+        *(.progmem.*)
     }
 
     .stack (NOLOAD) :
@@ -28,6 +28,8 @@ SECTIONS
     .data :
     {
         _sdata = .;        /* used by startup code */
+        *(.rodata)
+        *(.rodata.*)
         *(.data)
         *(.data*)
         _edata = .;        /* used by startup code */

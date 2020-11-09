@@ -7,4 +7,7 @@ MEMORY
 
 _stack_size = 2K;
 
+/* This value is needed by the Nordic SoftDevice. */
+__app_ram_base = ORIGIN(RAM);
+
 INCLUDE "targets/arm.ld"
