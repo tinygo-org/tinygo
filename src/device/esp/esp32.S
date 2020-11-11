@@ -24,7 +24,7 @@ call_start_cpu0:
     wsr.ps a2
     rsync
 
-    // Set WINDOWBASE to 1 << WINDOWSTART.
+    // Set WINDOWSTART to 1 << WINDOWBASE.
     rsr.windowbase  a2
     ssl  a2
     movi a2, 1
@@ -43,7 +43,7 @@ call_start_cpu0:
     rsync
 
     // Jump to the runtime start function written in Go.
-    j main
+    call4 main
 
 .section .text.tinygo_scanCurrentStack
 .global tinygo_scanCurrentStack
