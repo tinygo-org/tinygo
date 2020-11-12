@@ -157,13 +157,19 @@ func (uart *UART) Configure(config UARTConfig) {
 	uart.configured = true
 }
 
+// Disable disables the UART interface.
+//
+// If any buffered data has not yet been transmitted, Disable waits until
+// transmission completes before disabling the interface. The receiver UART's
+// interrupt is also disabled, and the RX/TX pins are reconfigured for GPIO
+// input (pull-up).
 func (uart *UART) Disable() {
 
 	// first ensure the device is enabled
 	if uart.configured {
 
 		// wait for any buffered data to send
-		uart.Flush()
+		uart.Sync()
 
 		// stop trapping RX interrupts
 		uart.Interrupt.Disable()
@@ -181,13 +187,15 @@ func (uart *UART) Disable() {
 	uart.configured = false
 }
 
-// Flush blocks the calling goroutine until all data in the output buffer has
-// been written out.
-func (uart *UART) Flush() {
+// Sync blocks the calling goroutine until all data in the output buffer has
+// been transmitted.
+func (uart *UART) Sync() error {
 	for uart.isTransmitting() {
 	}
+	return nil
 }
 
+// WriteByte writes a single byte of data to the UART interface.
 func (uart *UART) WriteByte(c byte) error {
 	if nil == uart.txBuffer {
 		uart.txBuffer = NewRingBuffer()
