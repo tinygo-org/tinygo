@@ -426,7 +426,7 @@ jobs:
           llvm: "10"
   test-llvm11-go115:
     docker:
-      - image: circleci/golang:1.15.4-buster
+      - image: circleci/golang:1.15-buster
     steps:
       - test-linux:
           llvm: "11"
