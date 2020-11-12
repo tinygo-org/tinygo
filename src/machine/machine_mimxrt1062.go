@@ -19,39 +19,39 @@ type PinMode uint8
 
 const (
 	// GPIO
-	PinInput           PinMode = 0
-	PinInputPullUp     PinMode = 1
-	PinInputPullDown   PinMode = 2
-	PinOutput          PinMode = 3
-	PinOutputOpenDrain PinMode = 4
-	PinDisable         PinMode = 5
+	PinInput PinMode = iota
+	PinInputPullUp
+	PinInputPullDown
+	PinOutput
+	PinOutputOpenDrain
+	PinDisable
 
 	// ADC
-	PinInputAnalog PinMode = 6
+	PinInputAnalog
 
 	// UART
-	PinModeUARTTX PinMode = 7
-	PinModeUARTRX PinMode = 8
+	PinModeUARTTX
+	PinModeUARTRX
 
 	// SPI
-	PinModeSPISDI PinMode = 9
-	PinModeSPISDO PinMode = 10
-	PinModeSPICLK PinMode = 11
-	PinModeSPICS  PinMode = 12
+	PinModeSPISDI
+	PinModeSPISDO
+	PinModeSPICLK
+	PinModeSPICS
 
 	// I2C
-	PinModeI2CSDA PinMode = 13
-	PinModeI2CSCL PinMode = 14
+	PinModeI2CSDA
+	PinModeI2CSCL
 )
 
 type PinChange uint8
 
 const (
-	PinLow     PinChange = 0
-	PinHigh    PinChange = 1
-	PinRising  PinChange = 2
-	PinFalling PinChange = 3
-	PinToggle  PinChange = 4
+	PinLow PinChange = iota
+	PinHigh
+	PinRising
+	PinFalling
+	PinToggle
 )
 
 // pinJumpTable represents a function lookup table for all 128 GPIO pins.
