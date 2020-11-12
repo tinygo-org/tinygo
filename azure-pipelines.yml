@@ -18,7 +18,7 @@ jobs:
     - task: Cache@2
       displayName: Cache LLVM source
       inputs:
-        key: llvm-source-10-windows-v1
+        key: llvm-source-10-windows-v2
         path: llvm-project
     - task: Bash@3
       displayName: Download LLVM source
@@ -29,60 +29,60 @@ jobs:
           # Workaround for bad symlinks:
           # https://github.com/microsoft/azure-pipelines-tasks/issues/13418
           rm -f llvm-project/libcxx/test/std/input.output/filesystems/Inputs/static_test_env/bad_symlink
-    - task: CacheBeta@0
-      displayName: Cache LLVM build
-      inputs:
-        key: llvm-build-10-windows-v1
-        path: llvm-build
-    - task: Bash@3
-      displayName: Build LLVM
-      inputs:
-        targetType: inline
-        script: |
-          if [ ! -f llvm-build/lib/liblldELF.a ]
-          then
-            choco install ninja
-            make llvm-build
-          fi
-    - task: Bash@3
-      displayName: Install QEMU
-      inputs:
-        targetType: inline
-        script: choco install qemu --version=2020.06.12
-    - task: CacheBeta@0
-      displayName: Cache wasi-libc sysroot
-      inputs:
-        key: wasi-libc-sysroot-v3
-        path: lib/wasi-libc/sysroot
-    - task: Bash@3
-      displayName: Build wasi-libc
-      inputs:
-        targetType: inline
-        script: PATH=/usr/bin:$PATH make wasi-libc
-    - task: Bash@3
-      displayName: Test TinyGo
-      inputs:
-        targetType: inline
-        script: |
-          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
-          unset GOROOT
-          make test
-    - task: Bash@3
-      displayName: Build TinyGo release tarball
-      inputs:
-        targetType: inline
-        script: |
-          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
-          unset GOROOT
-          make build/release -j4
-    - publish: $(System.DefaultWorkingDirectory)/build/release/tinygo
-      displayName: Publish zip as artifact
-      artifact: tinygo
-    - task: Bash@3
-      displayName: Smoke tests
-      inputs:
-        targetType: inline
-        script: |
-          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
-          unset GOROOT
-          make smoketest TINYGO=build/tinygo AVR=0 XTENSA=0
+    #- task: Cache@2
+    #  displayName: Cache LLVM build
+    #  inputs:
+    #    key: llvm-build-10-windows-v2
+    #    path: llvm-build
+    #- task: Bash@3
+    #  displayName: Build LLVM
+    #  inputs:
+    #    targetType: inline
+    #    script: |
+    #      if [ ! -f llvm-build/lib/liblldELF.a ]
+    #      then
+    #        choco install ninja
+    #        make llvm-build
+    #      fi
+    #- task: Bash@3
+    #  displayName: Install QEMU
+    #  inputs:
+    #    targetType: inline
+    #    script: choco install qemu --version=2020.06.12
+    #- task: Cache@2
+    #  displayName: Cache wasi-libc sysroot
+    #  inputs:
+    #    key: wasi-libc-sysroot-v4
+    #    path: lib/wasi-libc/sysroot
+    #- task: Bash@3
+    #  displayName: Build wasi-libc
+    #  inputs:
+    #    targetType: inline
+    #    script: PATH=/usr/bin:$PATH make wasi-libc
+    #- task: Bash@3
+    #  displayName: Test TinyGo
+    #  inputs:
+    #    targetType: inline
+    #    script: |
+    #      export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
+    #      unset GOROOT
+    #      make test
+    #- task: Bash@3
+    #  displayName: Build TinyGo release tarball
+    #  inputs:
+    #    targetType: inline
+    #    script: |
+    #      export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
+    #      unset GOROOT
+    #      make build/release -j4
+    #- publish: $(System.DefaultWorkingDirectory)/build/release/tinygo
+    #  displayName: Publish zip as artifact
+    #  artifact: tinygo
+    #- task: Bash@3
+    #  displayName: Smoke tests
+    #  inputs:
+    #    targetType: inline
+    #    script: |
+    #      export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
+    #      unset GOROOT
+    #      make smoketest TINYGO=build/tinygo AVR=0 XTENSA=0
