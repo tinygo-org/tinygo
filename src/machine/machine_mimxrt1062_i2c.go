@@ -53,23 +53,21 @@ type I2C struct {
 	// instance is declared (e.g., in the board definition). see the godoc
 	// comments on type muxSelect for more details.
 	muxSDA, muxSCL muxSelect
-
-	// these are copied from I2CConfig, during (*I2C).Configure(I2CConfig), and
-	// should be considered read-only for internal reference (i.e., modifying them
-	// will have no desirable effect).
-	sda, scl  Pin
-	frequency uint32
-
-	// auxiliary state data used internally
-	configured bool
 }
 
-type I2CDirection bool
+type i2cDirection bool
 
 const (
-	DirectionWrite I2CDirection = false
-	DirectionRead  I2CDirection = true
+	directionWrite i2cDirection = false
+	directionRead  i2cDirection = true
 )
+
+func (dir i2cDirection) shift(addr uint16) uint32 {
+	if addr <<= 1; dir == directionRead {
+		addr |= 1
+	}
+	return uint32(addr) & 0xFF
+}
 
 // I2C enumerated types
 type (
@@ -156,36 +154,31 @@ const (
 func (i2c *I2C) Configure(config I2CConfig) {
 
 	// init pins
-	i2c.sda, i2c.scl = config.getPins()
+	sda, scl := config.getPins()
 
 	// configure the mux and pad control registers
-	i2c.sda.Configure(PinConfig{Mode: PinModeI2CSDA})
-	i2c.scl.Configure(PinConfig{Mode: PinModeI2CSCL})
+	sda.Configure(PinConfig{Mode: PinModeI2CSDA})
+	scl.Configure(PinConfig{Mode: PinModeI2CSCL})
 
 	// configure the mux input selector
 	i2c.muxSDA.connect()
 	i2c.muxSCL.connect()
 
-	i2c.frequency = config.Frequency
-	if 0 == i2c.frequency {
-		i2c.frequency = TWI_FREQ_DEFAULT
+	freq := config.Frequency
+	if 0 == freq {
+		freq = TWI_FREQ_DEFAULT
 	}
 
 	// reset clock and registers, and enable LPI2C module interface
-	i2c.reset()
-
-	i2c.configured = true
+	i2c.reset(freq)
 }
 
 func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
-	// convert address to addressable
-	a := address7Bit(addr)
-
 	// perform transmit transfer
 	if nil != w {
 		// generate start condition on bus
-		if result := i2c.start(a, DirectionWrite); resultSuccess != result {
+		if result := i2c.start(addr, directionWrite); resultSuccess != result {
 			return errI2CSignalStartTimeout
 		}
 		// ensure TX FIFO is empty
@@ -205,7 +198,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	// perform receive transfer
 	if nil != r {
 		// generate (repeated-)start condition on bus
-		if result := i2c.start(a, DirectionRead); resultSuccess != result {
+		if result := i2c.start(addr, directionRead); resultSuccess != result {
 			return errI2CSignalStartTimeout
 		}
 		// read received data
@@ -230,11 +223,11 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 // devices with 7-bit addresses, which is the vast majority.
 func (i2c I2C) WriteRegister(address uint8, register uint8, data []byte) error {
 	option := transferOption{
-		flags:          transferDefault,      // transfer options bit mask (0 = normal transfer)
-		peripheral:     address7Bit(address), // 7-bit peripheral address
-		direction:      DirectionWrite,       // DirectionRead or DirectionWrite
-		subaddress:     uint16(register),     // peripheral sub-address (transferred MSB first)
-		subaddressSize: 1,                    // byte length of sub-address (maximum = 4 bytes)
+		flags:          transferDefault,  // transfer options bit mask (0 = normal transfer)
+		peripheral:     uint16(address),  // 7-bit peripheral address
+		direction:      directionWrite,   // directionRead or directionWrite
+		subaddress:     uint16(register), // peripheral sub-address (transferred MSB first)
+		subaddressSize: 1,                // byte length of sub-address (maximum = 4 bytes)
 	}
 	if result := i2c.controllerTransferPoll(option, data); resultSuccess != result {
 		return errI2CWriteTimeout
@@ -250,11 +243,11 @@ func (i2c I2C) WriteRegister(address uint8, register uint8, data []byte) error {
 // with 7-bit addresses, which is the vast majority.
 func (i2c I2C) ReadRegister(address uint8, register uint8, data []byte) error {
 	option := transferOption{
-		flags:          transferDefault,      // transfer options bit mask (0 = normal transfer)
-		peripheral:     address7Bit(address), // 7-bit peripheral address
-		direction:      DirectionRead,        // DirectionRead or DirectionWrite
-		subaddress:     uint16(register),     // peripheral sub-address (transferred MSB first)
-		subaddressSize: 1,                    // byte length of sub-address (maximum = 4 bytes)
+		flags:          transferDefault,  // transfer options bit mask (0 = normal transfer)
+		peripheral:     uint16(address),  // 7-bit peripheral address
+		direction:      directionRead,    // directionRead or directionWrite
+		subaddress:     uint16(register), // peripheral sub-address (transferred MSB first)
+		subaddressSize: 1,                // byte length of sub-address (maximum = 4 bytes)
 	}
 	if result := i2c.controllerTransferPoll(option, data); resultSuccess != result {
 		return errI2CWriteTimeout
@@ -262,7 +255,7 @@ func (i2c I2C) ReadRegister(address uint8, register uint8, data []byte) error {
 	return nil
 }
 
-func (i2c *I2C) reset() {
+func (i2c *I2C) reset(freq uint32) {
 	// disable interface
 	i2c.Bus.MCR.ClearBits(nxp.LPI2C_MCR_MEN)
 
@@ -284,7 +277,7 @@ func (i2c *I2C) reset() {
 	i2c.Bus.MFCR.Set(mfcr)
 
 	// configure clock using receiver frequency
-	i2c.setFrequency(i2c.frequency)
+	i2c.setFrequency(freq)
 
 	// clear reset, and enable the interface
 	i2c.Bus.MCR.Set(nxp.LPI2C_MCR_MEN)
@@ -392,22 +385,6 @@ func (i2c *I2C) setFrequency(freq uint32) {
 	}
 }
 
-// cycles computes a cycle count for a given time in nanoseconds.
-func (i2c *I2C) cycles(width, maxCycles, prescalar uint32) uint32 {
-	busCycles := 1000000 / (TWI_FREQ_BUS / prescalar / 1000)
-	cycles := uint32(0)
-	// search for the cycle count just below the desired glitch width
-	for (((cycles + 1) * busCycles) < width) && (cycles+1 < maxCycles) {
-		cycles++
-	}
-	// if we end up with zero cycles, then set the filter to a single cycle unless
-	// the bus clock is greater than 10x the desired glitch width
-	if (cycles == 0) && (busCycles <= (width * 10)) {
-		cycles = 1
-	}
-	return cycles
-}
-
 // checkStatus converts the status register to a resultFlag for return, and
 // clears any errors if present.
 func (i2c *I2C) checkStatus(status statusFlag) resultFlag {
@@ -478,41 +455,6 @@ func (i2c *I2C) isBusBusy() bool {
 	return (0 != (status & statusBusBusy)) && (0 == (status & statusBusy))
 }
 
-// addressable represents a type that can provide fully-formatted I2C peripheral
-// addresses for both read operations and write operations.
-type addressable interface {
-	toRead() uint32
-	toWrite() uint32
-	bitSize() uint8
-	shift(I2CDirection) uint32
-}
-
-// address7Bit and address10Bit stores the unshifted original I2C peripheral
-// address in an unsigned integral data type and implements the addressable
-// interface to reformat addresses as required for read/write operations.
-//   TODO:
-//    add 10-bit address support
-type (
-	address7Bit uint8
-	//address10Bit uint16
-)
-
-func (a address7Bit) toRead() uint32  { return uint32(((uint8(a) << 1) | 0x01) & 0xFF) }
-func (a address7Bit) toWrite() uint32 { return uint32(((uint8(a) << 1) & 0xFE) & 0xFF) }
-func (a address7Bit) bitSize() uint8  { return 7 } // 7-bit addresses
-func (a address7Bit) shift(dir I2CDirection) uint32 {
-	if DirectionWrite == dir {
-		return a.toWrite()
-	}
-	return a.toRead()
-}
-
-//func (a address10Bit) toRead() uint32  {}
-//func (a address10Bit) toWrite() uint32 {}
-//func (a address10Bit) bitSize() uint8  { return 10 } // 10-bit addresses
-//func (a address10Bit) shift(dir I2CDirection) uint32 {
-//}
-
 // start sends a START signal and peripheral address on the I2C bus.
 //
 // This function is used to initiate a new controller mode transfer. First, the
@@ -520,7 +462,7 @@ func (a address7Bit) shift(dir I2CDirection) uint32 {
 // bus. Then a START signal is transmitted, followed by the 7-bit peripheral
 // address. Note that this function does not actually wait until the START and
 // address are successfully sent on the bus before returning.
-func (i2c *I2C) start(address addressable, dir I2CDirection) resultFlag {
+func (i2c *I2C) start(address uint16, dir i2cDirection) resultFlag {
 	// return an error if the bus is already in use by another controller
 	if i2c.isBusBusy() {
 		return resultBusy
@@ -535,7 +477,7 @@ func (i2c *I2C) start(address addressable, dir I2CDirection) resultFlag {
 	}
 
 	// issue start command
-	i2c.Bus.MTDR.Set(uint32(commandStart) | address.shift(dir))
+	i2c.Bus.MTDR.Set(uint32(commandStart) | dir.shift(address))
 	return resultSuccess
 }
 
@@ -633,33 +575,10 @@ func (i2c *I2C) controllerTransmit(txBuffer []byte) resultFlag {
 	return resultSuccess
 }
 
-type commandBuffer struct {
-	buffer []uint16
-	curr   uint
-	size   uint
-}
-
-func newCommandBuffer(size uint) *commandBuffer {
-	return &commandBuffer{
-		buffer: make([]uint16, size),
-		curr:   0,
-		size:   size,
-	}
-}
-
-func (cb *commandBuffer) add(cmd uint16) bool {
-	if cb.curr < cb.size {
-		cb.buffer[cb.curr] = cmd
-		cb.curr++
-		return true
-	}
-	return false
-}
-
 type transferOption struct {
 	flags          transferFlag // transfer options bit mask (0 = normal transfer)
-	peripheral     addressable  // 7-bit peripheral address
-	direction      I2CDirection // DirectionRead or DirectionWrite
+	peripheral     uint16       // 7-bit peripheral address
+	direction      i2cDirection // directionRead or directionWrite
 	subaddress     uint16       // peripheral sub-address (transferred MSB first)
 	subaddressSize uint16       // byte length of sub-address (maximum = 4 bytes)
 }
@@ -674,45 +593,47 @@ func (i2c *I2C) controllerTransferPoll(option transferOption, data []byte) resul
 	// turn off auto-stop
 	i2c.Bus.MCFGR1.ClearBits(nxp.LPI2C_MCFGR1_AUTOSTOP)
 
-	cmd := newCommandBuffer(7)
+	cmd := make([]uint16, 0, 7)
 	size := len(data)
 
 	direction := option.direction
 	if option.subaddressSize > 0 {
-		direction = DirectionWrite
+		direction = directionWrite
 	}
 	// peripheral address
 	if 0 == (option.flags & transferNoStart) {
-		cmd.add(uint16(uint32(commandStart) | option.peripheral.shift(direction)))
+		addr := direction.shift(option.peripheral)
+		cmd = append(cmd, uint16(uint32(commandStart)|addr))
 	}
 	// sub-address (MSB-first)
 	rem := option.subaddressSize
 	for rem > 0 {
 		rem--
-		cmd.add((option.subaddress >> (8 * rem)) & 0xFF)
+		cmd = append(cmd, (option.subaddress>>(8*rem))&0xFF)
 	}
 	// need to send repeated start if switching directions to read
-	if (0 != size) && (DirectionRead == option.direction) {
-		if DirectionWrite == direction {
-			cmd.add(uint16(uint32(commandStart) | option.peripheral.toRead()))
+	if (0 != size) && (directionRead == option.direction) {
+		if directionWrite == direction {
+			addr := directionRead.shift(option.peripheral)
+			cmd = append(cmd, uint16(uint32(commandStart)|addr))
 		}
 	}
 	// send command buffer
 	result := resultSuccess
-	for i := uint(0); i < cmd.curr; i++ {
+	for _, c := range cmd {
 		// wait until there is room in the FIFO
 		if result = i2c.waitForTxReady(); resultSuccess != result {
 			return result
 		}
 		// write byte into LPI2C controller data register
-		i2c.Bus.MTDR.Set(uint32(cmd.buffer[i]))
+		i2c.Bus.MTDR.Set(uint32(c))
 	}
 	// send data
-	if option.direction == DirectionWrite && size > 0 {
+	if option.direction == directionWrite && size > 0 {
 		result = i2c.controllerTransmit(data)
 	}
 	// receive data
-	if option.direction == DirectionRead && size > 0 {
+	if option.direction == directionRead && size > 0 {
 		result = i2c.controllerReceive(data)
 	}
 	if resultSuccess != result {
