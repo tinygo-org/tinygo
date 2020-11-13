@@ -1,5 +1,5 @@
-# TinyGo base stage installs Go 1.14, LLVM 10 and the TinyGo compiler itself.
-FROM golang:1.14 AS tinygo-base
+# TinyGo base stage installs the most recent Go 1.15.x, LLVM 10 and the TinyGo compiler itself.
+FROM golang:1.15 AS tinygo-base
 
 RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
     echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-10 main" >> /etc/apt/sources.list && \
