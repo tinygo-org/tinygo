@@ -123,6 +123,10 @@ type SPI struct {
 var SPI0 = SPI{}
 
 // Configure uses the given config to setup the SPI interface
+// Default SCK is PB5
+// Default SDO is PB3
+// Default SDI is PB4
+// CS Pin 10 will be configured as Output.
 func (spi SPI) Configure(config SPIConfig) error {
 	// Use default pins if not set.
 	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
