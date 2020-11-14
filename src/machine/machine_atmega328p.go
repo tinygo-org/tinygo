@@ -127,7 +127,7 @@ var SPI0 = SPI{}
 // Default SCK is PB5
 // Default SDO is PB3
 // Default SDI is PB4
-// CS Pin 10 will be configured as Output.
+// Default CS is D10
 func (spi SPI) Configure(config SPIConfig) error {
 	// Use default pins if not set.
 	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
