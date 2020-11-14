@@ -38,7 +38,9 @@ Here is how to contribute back some code or documentation:
 
 - Fork repo
 - Create a feature branch off of the `dev` branch
+- Try compiling the sources - see _Source Install_ section under your operating system on the [Getting Started](https://tinygo.org/getting-started/) page on the website
 - Make some useful change
+- Make sure the code still compiles
 - Make sure the tests still pass
 - Submit a pull request against the `dev` branch.
 - Be kind
