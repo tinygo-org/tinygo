@@ -62,15 +62,6 @@ func markRoot(addr, root uintptr) {
 }
 
 func markRoots(start, end uintptr) {
-	ptrSize, ptrAlign := unsafe.Sizeof(unsafe.Pointer(nil)), unsafe.Alignof(unsafe.Pointer(nil))
-
-	// Align the start and end.
-	start = align(start)
-	end &^= ptrAlign - 1
-
-	// Shift the end down so that we do not read past it.
-	end -= ptrSize - ptrAlign
-
 	// Scan the data as a []unsafe.Pointer, using a temporary gcType value.
 	// In the future, we can do precise scanning of the globals instead.
 	t := struct {
@@ -120,7 +111,14 @@ func (t *gcType) scan(start, end uintptr) {
 		return
 	}
 
-	ptrAlign := unsafe.Alignof(unsafe.Pointer(nil))
+	ptrSize, ptrAlign := unsafe.Sizeof(unsafe.Pointer(nil)), unsafe.Alignof(unsafe.Pointer(nil))
+
+	// Align the start and end.
+	start = align(start)
+	end &^= ptrAlign - 1
+
+	// Shift the end down so that we do not read past it.
+	end -= ptrSize - ptrAlign
 
 	width := t.size
 
@@ -274,13 +272,22 @@ searchLoop:
 	return mem
 }
 
+// anyPtrType is a special fake type that is used when the type of an allocation is not known.
+var anyPtrType = struct {
+	t    gcType
+	data [1]byte
+}{
+	t: gcType{
+		size: 1, // 1 pointer-width
+	},
+	data: [1]byte{1}, // scan the pointer-width data
+}
+
 // alloc a chunk of untyped memory.
 //go:inline
 func alloc(size uintptr) unsafe.Pointer {
-	ptrSize := unsafe.Sizeof(unsafe.Pointer(nil))
-	size += ptrSize - 1
-	buf := make([]unsafe.Pointer, size/ptrSize)
-	return *(*unsafe.Pointer)(unsafe.Pointer(&buf))
+	// Use a placeholder type to scan the entire thing.
+	return allocTyped(size, &anyPtrType.t.size)
 }
 
 // allocTyped tries to find some free space on the heap, possibly doing a garbage
