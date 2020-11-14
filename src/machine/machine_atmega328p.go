@@ -112,6 +112,7 @@ type SPIConfig struct {
 	SDI  Pin
 	SDO  Pin
 	SCK  Pin
+	CS   Pin
 }
 
 // SPI is for the Serial Peripheral Interface
@@ -133,6 +134,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 		config.SCK = PB5
 		config.SDO = PB3
 		config.SDI = PB4
+		config.CS = D10
 	}
 
 	// set default frequency
@@ -176,9 +178,8 @@ func (spi SPI) Configure(config SPIConfig) error {
 	config.SDO.Configure(PinConfig{PinOutput})
 	config.SCK.Configure(PinConfig{PinOutput})
 	config.SDI.Configure(PinConfig{PinInputPullup})
-
-	// PIN 10 must be set to output in controller mode, to prevent the controller flag from being removed
-	D10.Configure(PinConfig{PinOutput})
+	// CS must be set to output in controller mode, to prevent the controller from going into periphal mode
+	config.CS.Configure(PinConfig{PinOutput})
 
 	// Set the SPI2X: Double SPI Speed bit in Bit 0 of SPSR
 	avr.SPSR.SetBits(clockDivider & SPI_2XCLOCK_MASK)
