@@ -166,7 +166,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 	config.SCK.Configure(PinConfig{PinOutput})
 	config.SDI.Configure(PinConfig{PinInputPullup})
 
-	// PIN 10 must be set to output in c mode, to prevent the master flag from being removed
+	// PIN 10 must be set to output in controller mode, to prevent the controller flag from being removed
 	D10.Configure(PinConfig{PinOutput})
 
 	// Set the SPI2X: Double SPI Speed bit in Bit 0 of SPSR
