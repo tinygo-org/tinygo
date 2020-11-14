@@ -140,22 +140,29 @@ func (spi SPI) Configure(config SPIConfig) error {
 		config.Frequency = 4000000
 	}
 
+	// when the config frequency is higher than the cpu frequency, the highest possible clockDivider will be SPI_CLOCK_FOSC2
+	if config.Frequency > CPUFrequency() {
+		config.Frequency = CPUFrequency() / 2
+	}
+
+	frequencyDivider := CPUFrequency() / config.Frequency
+
 	var clockDivider uint8
 	switch {
-	case config.Frequency >= 6000000:
-		clockDivider = SPI_CLOCK_FOSC2
-	case config.Frequency >= 3000000:
-		clockDivider = SPI_CLOCK_FOSC4
-	case config.Frequency >= 1500000:
-		clockDivider = SPI_CLOCK_FOSC8
-	case config.Frequency >= 750000:
-		clockDivider = SPI_CLOCK_FOSC16
-	case config.Frequency >= 375000:
-		clockDivider = SPI_CLOCK_FOSC32
-	case config.Frequency >= 187500:
-		clockDivider = SPI_CLOCK_FOSC64
-	default:
+	case frequencyDivider >= 128:
 		clockDivider = SPI_CLOCK_FOSC128
+	case frequencyDivider >= 64:
+		clockDivider = SPI_CLOCK_FOSC64
+	case frequencyDivider >= 32:
+		clockDivider = SPI_CLOCK_FOSC32
+	case frequencyDivider >= 16:
+		clockDivider = SPI_CLOCK_FOSC16
+	case frequencyDivider >= 8:
+		clockDivider = SPI_CLOCK_FOSC8
+	case frequencyDivider >= 4:
+		clockDivider = SPI_CLOCK_FOSC4
+	case frequencyDivider >= 2:
+		clockDivider = SPI_CLOCK_FOSC2
 	}
 
 	spi.setMode(config.Mode)
