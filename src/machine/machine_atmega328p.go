@@ -98,8 +98,8 @@ const (
 	SPI_CLOCK_FOSC8         uint8 = 5
 	SPI_CLOCK_FOSC32        uint8 = 6
 	SPI_CLOCK_FOSC64_Double uint8 = 7
-	SPI_CLOCK_MASK          uint8 = 0x03
-	SPI_2XCLOCK_MASK        uint8 = 4
+	SPI_CLOCK_MASK          uint8 = 3
+	SPI_2XCLOCK_MASK        uint8 = 1
 )
 
 // SPIConfig
@@ -150,7 +150,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 		clockDivider = SPI_CLOCK_FOSC32
 	case config.Frequency >= 187500:
 		clockDivider = SPI_CLOCK_FOSC64
-	case config.Frequency >= 93750:
+	default:
 		clockDivider = SPI_CLOCK_FOSC128
 	}
 
@@ -162,13 +162,18 @@ func (spi SPI) Configure(config SPIConfig) error {
 		spi.msbFirst()
 	}
 
-	// Set the SPI2X: Double SPI Speed bit in Bit 0 of SPSR
-	avr.SPSR.SetBits((clockDivider & SPI_2XCLOCK_MASK) >> 2)
+	config.SDO.Configure(PinConfig{PinOutput})
+	config.SCK.Configure(PinConfig{PinOutput})
+	config.SDI.Configure(PinConfig{PinInputPullup})
 
-	avr.DDRB.SetBits(uint8(config.SDO) | uint8(config.SCK)) // set sdo, sck as output, all other input
-	avr.DDRB.ClearBits(1 << 4)                              // sck is high when idle
-	// set controller, set clock rate, enable spi
-	avr.SPCR.SetBits(avr.SPCR_MSTR | (clockDivider & avr.SPCR_SPR0) | (clockDivider & avr.SPCR_SPR1) | avr.SPCR_SPE)
+	// PIN 10 must be set to output in c mode, to prevent the master flag from being removed
+	D10.Configure(PinConfig{PinOutput})
+
+	// Set the SPI2X: Double SPI Speed bit in Bit 0 of SPSR
+	avr.SPSR.SetBits(clockDivider & SPI_2XCLOCK_MASK)
+
+	// enable SPI, set controller, set clock rate
+	avr.SPCR.SetBits(avr.SPCR_SPE | avr.SPCR_MSTR | clockDivider&SPI_CLOCK_MASK)
 
 	return nil
 }
@@ -187,7 +192,6 @@ func (SPI) msbFirst() {
 func (spi SPI) Transfer(b byte) (byte, error) {
 	avr.SPDR.Set(uint8(b))
 
-	// waits until the register has shifted
 	for !avr.SPSR.HasBits(avr.SPSR_SPIF) {
 	}
 
