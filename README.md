@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 44 microcontroller boards are currently supported:
+The following 45 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
@@ -71,6 +71,7 @@ The following 44 microcontroller boards are currently supported:
 * [ESP8266](https://www.espressif.com/en/products/socs/esp8266)
 * [Game Boy Advance](https://en.wikipedia.org/wiki/Game_Boy_Advance)
 * [Makerdiary nRF52840-MDK](https://wiki.makerdiary.com/nrf52840-mdk/)
+* [nice!nano](https://docs.nicekeyboards.com/#/nice!nano/)
 * [Nintendo Switch](https://www.nintendo.com/switch/)
 * [Nordic Semiconductor PCA10031](https://www.nordicsemi.com/eng/Products/nRF51-Dongle)
 * [Nordic Semiconductor PCA10040](https://www.nordicsemi.com/eng/Products/Bluetooth-low-energy/nRF52-DK)
