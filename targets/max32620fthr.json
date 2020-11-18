@@ -1,0 +1,17 @@
+{
+	"inherits": ["cortex-m4"],
+	"build-tags": ["max32620fthr", "max32620", "maxim"],
+	"cflags": [
+		"-Qunused-arguments",
+		"-I{root}/lib/CMSIS/CMSIS/Include",
+		"-I{root}/lib/arduino-max326xx/arm/system/CMSIS/Device/Maxim/MAX32620/Include"
+	],
+	"linkerscript": "targets/max32620.ld",
+	"extra-files": [
+		"lib/arduino-max326xx/arm/system/CMSIS/Device/Maxim/MAX32620/Source/system_max32620.c",
+		"src/device/maxim/max32620.s"
+	],
+	"flash-method": "msd",
+    "msd-volume-name": "BOOTLOADER",
+    "msd-firmware-name": "firmware.bin"
+}

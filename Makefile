@@ -143,6 +143,9 @@ gen-device-stm32: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro lib/cmsis-svd/data/STMicro/ src/device/stm32/
 	GO111MODULE=off $(GO) fmt ./src/device/stm32
 
+gen-device-max32620: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Maxim lib/cmsis-svd/data/Maxim/ src/device/maxim/
+	GO111MODULE=off $(GO) fmt ./src/device/maxim
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/README.md:
