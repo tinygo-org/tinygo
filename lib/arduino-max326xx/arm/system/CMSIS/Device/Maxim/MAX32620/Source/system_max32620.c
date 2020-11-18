@@ -35,7 +35,6 @@
  ******************************************************************************/
 
 #include <string.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include "max32620.h"
 #include "clkman_regs.h"
