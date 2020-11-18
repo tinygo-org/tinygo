@@ -1,0 +1,137 @@
+
+# Maxim Core and platform
+# ------------------------
+#
+# For more info:
+# https://github.com/arduino/Arduino/wiki/Arduino-IDE-1.5-3rd-party-Hardware-specification
+
+name=Maxim ARM (32-bits) Boards
+version=1.0.0
+
+# MAX326xx compile variables
+# --------------------------
+
+compiler.warning_flags=-w
+compiler.warning_flags.none=-w
+compiler.warning_flags.default=
+compiler.warning_flags.more=-Wall
+compiler.warning_flags.all=-Wall -Wextra
+
+compiler.path={runtime.tools.arm-none-eabi-gcc.path}/bin/
+
+compiler.c.cmd=arm-none-eabi-gcc
+compiler.c.flags=-c -g -Os {compiler.warning_flags} -std=gnu11 -ffunction-sections -fdata-sections -nostdlib --param max-inline-insns-single=500 -Dprintf=iprintf -MMD
+compiler.c.elf.cmd=arm-none-eabi-gcc
+compiler.c.elf.flags=-Os -Wl,--gc-sections
+
+compiler.S.cmd=arm-none-eabi-gcc
+compiler.S.flags=-c -g -x assembler-with-cpp
+
+compiler.cpp.cmd=arm-none-eabi-g++
+compiler.cpp.flags=-c -g -Os {compiler.warning_flags} -std=gnu++11 -ffunction-sections -fdata-sections -nostdlib -fno-threadsafe-statics --param max-inline-insns-single=500 -fno-rtti -fno-exceptions -Dprintf=iprintf -MMD
+
+compiler.ar.cmd=arm-none-eabi-ar
+compiler.ar.flags=rcs
+
+compiler.objcopy.cmd=arm-none-eabi-objcopy
+
+compiler.elf2hex.flags=-O binary
+compiler.elf2hex.cmd=arm-none-eabi-objcopy
+
+compiler.ldflags=
+
+compiler.size.cmd=arm-none-eabi-size
+
+compiler.define=-DARDUINO=
+
+compiler.combine.flags=
+
+# This can be overridden in boards.txt
+build.extra_flags=
+
+# These can be overridden in platform.local.txt
+compiler.c.extra_flags=
+compiler.c.elf.extra_flags=
+compiler.cpp.extra_flags=
+compiler.S.extra_flags=
+compiler.ar.extra_flags=
+compiler.elf2hex.extra_flags=
+
+# USB Flags
+# ---------
+#build.usb_flags=-DUSB_VID={build.vid} -DUSB_PID={build.pid} '-DUSB_MANUFACTURER={build.usb_manufacturer}' '-DUSB_PRODUCT={build.usb_product}'
+
+# Default usb manufacturer will be replaced at compile time using
+# numeric vendor ID if available or by board's specific value.
+#build.usb_manufacturer="Unknown"
+
+
+# MAX326xx compile patterns
+# -------------------------
+## Compile c files
+recipe.c.o.pattern="{compiler.path}{compiler.c.cmd}" {compiler.c.flags} -mcpu={build.mcu} -mthumb -DF_CPU={build.f_cpu} -DARDUINO={runtime.ide.version} -DARDUINO_{build.board} -DARDUINO_ARCH_{build.arch} {compiler.c.extra_flags} {build.extra_flags} {compiler.CMSIS.include.path} {compiler.PeriphDriver.include.path} {compiler.PeriphDriver.build.path} {compiler.MAX_USB.include.path} {compiler.MAX_USB.build.path} {includes} "{source_file}" -o "{object_file}"
+
+## Compile c++ files
+recipe.cpp.o.pattern="{compiler.path}{compiler.cpp.cmd}" {compiler.cpp.flags} -mcpu={build.mcu} -mthumb -DF_CPU={build.f_cpu} -DARDUINO={runtime.ide.version} -DARDUINO_{build.board} -DARDUINO_ARCH_{build.arch} {compiler.cpp.extra_flags} {build.extra_flags} {compiler.CMSIS.include.path} {compiler.PeriphDriver.include.path} {compiler.PeriphDriver.build.path} {compiler.MAX_USB.include.path} {compiler.MAX_USB.build.path} {includes} "{source_file}" -o "{object_file}"
+
+## Compile S files
+recipe.S.o.pattern="{compiler.path}{compiler.S.cmd}" {compiler.S.flags} -mcpu={build.mcu} -mthumb -DF_CPU={build.f_cpu} -DARDUINO={runtime.ide.version} -DARDUINO_{build.board} -DARDUINO_ARCH_{build.arch} {compiler.S.extra_flags} {build.extra_flags} {compiler.CMSIS.include.path} {compiler.PeriphDriver.include.path} {compiler.PeriphDriver.build.path} {compiler.MAX_USB.include.path} {compiler.MAX_USB.build.path} {includes} "{source_file}" -o "{object_file}"
+
+## Create archives
+# archive_file_path is needed for backwards compatibility with IDE 1.6.5 or older, IDE 1.6.6 or newer overrides this value
+archive_file_path={build.path}/{archive_file}
+recipe.ar.pattern="{compiler.path}{compiler.ar.cmd}" {compiler.ar.flags} {compiler.ar.extra_flags} "{archive_file_path}" "{object_file}"
+
+## Combine gc-sections, archives, and objects
+recipe.c.combine.pattern="{compiler.path}{compiler.c.elf.cmd}" -mcpu={build.mcu} -mthumb {compiler.c.elf.flags} "-T{build.system.path}/{build.ldscript}" "-Wl,-Map,{build.path}/{build.project_name}.map" {compiler.c.elf.extra_flags} -o "{build.path}/{build.project_name}.elf" "-L{build.path}" -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry=Reset_Handler -Wl,--unresolved-symbols=report-all -Wl,--warn-common -Wl,--start-group {compiler.combine.flags} {object_files} "{build.systemStartupLib}" "{build.periphLib}" "{build.usbLib}" "{build.path}/{archive_file}" -Wl,--end-group -lm -gcc --specs=nosys.specs
+
+## Create output (.bin file)
+recipe.objcopy.bin.pattern="{compiler.path}{compiler.elf2hex.cmd}" {compiler.elf2hex.flags} {compiler.elf2hex.extra_flags} "{build.path}/{build.project_name}.elf" "{build.path}/{build.project_name}.bin"
+
+## Save hex
+recipe.output.tmp_file={build.project_name}.bin
+recipe.output.save_file={build.project_name}.{build.variant}.bin
+
+## Compute size
+recipe.size.pattern="{compiler.path}{compiler.size.cmd}" -A "{build.path}/{build.project_name}.elf"
+recipe.size.regex=\.text\s+([0-9]+).*
+
+
+# DAPLink Uploader/Programmer Tools
+# ---------------------------------
+
+tools.daplink.path={runtime.tools.daplink.path}
+tools.daplink.cmd=daplink
+tools.daplink.cmd.windows=daplink.bat
+
+# ---------------------- Upload ----------------------
+tools.daplink.upload.params.verbose=-v
+tools.daplink.upload.params.verbose.windows=-v
+tools.daplink.upload.params.quiet=
+tools.daplink.upload.params.quiet.windows=
+tools.daplink.upload.mountPoint=BOOTLOADER
+tools.daplink.upload.pattern="{path}/{cmd}" "{build.path}" "{build.project_name}.bin" {upload.mountPoint} {upload.verbose}
+tools.daplink.upload.pattern.windows="{path}\{cmd}" "{build.path}" "{build.project_name}.bin" {upload.mountPoint} {upload.verbose}
+
+# ---------------------- Program ---------------------
+tools.daplink.program.params.verbose=-v
+tools.daplink.program.params.verbose.windows=-v
+tools.daplink.program.params.quiet=
+tools.daplink.program.params.quiet.windows=
+tools.daplink.program.mountPoint=DAPLINK
+tools.daplink.program.pattern="{path}/{cmd}" "{build.path}" "{build.project_name}.bin" {program.mountPoint} {program.verbose}
+tools.daplink.program.pattern.windows="{path}\{cmd}" "{build.path}" "{build.project_name}.bin" {program.mountPoint} {program.verbose}
+
+# ------------------ Burn Bootloader ------------------
+tools.daplink.bootloader.params.verbose=-v
+tools.daplink.bootloader.params.verbose.windows=-v
+tools.daplink.bootloader.params.quiet=
+tools.daplink.bootloader.params.quiet.windows=
+tools.daplink.bootloader.mountPoint=DAPLINK
+tools.daplink.bootloader.pattern="{path}/{cmd}" "{path}/bootloader" "{build.variant}_bl.bin" {bootloader.mountPoint} {bootloader.verbose}
+tools.daplink.bootloader.pattern.windows="{path}\{cmd}" "{path}\bootloader" "{build.variant}_bl.bin" {bootloader.mountPoint} {bootloader.verbose}
+
+# ----------------------- Erase -----------------------
+tools.daplink.erase.params.verbose=
+tools.daplink.erase.params.quiet=
+tools.daplink.erase.pattern=""

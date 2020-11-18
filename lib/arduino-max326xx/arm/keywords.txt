@@ -1,0 +1,14 @@
+#######################################
+# Instances (KEYWORD1)
+#######################################
+Serial0	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+changeA0_A4	KEYWORD2
+changeA4_A0	KEYWORD2
+changeA1_A5	KEYWORD2
+changeA5_A1	KEYWORD2
+useVDDIOH	KEYWORD2
+useVDDIO	KEYWORD2

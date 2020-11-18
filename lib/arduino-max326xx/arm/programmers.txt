@@ -1,0 +1,3 @@
+maxdap_programmer.name=DAPLink
+maxdap_programmer.program.tool=daplink
+maxdap_programmer.bootloader.tool=daplink

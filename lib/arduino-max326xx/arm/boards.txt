@@ -1,0 +1,109 @@
+######################################################################################
+
+max32620_fthr.name=MAX32620FTHR(Programming Port)
+
+max32620_fthr.upload.tool=maxdap_programmer
+
+max32620_fthr.build.mcu=cortex-m4
+max32620_fthr.build.f_cpu=96000000L
+max32620_fthr.build.target=max32620
+max32620_fthr.build.board=MAX32620FTHR
+max32620_fthr.build.core=arduino
+max32620_fthr.build.variant=max32620_fthr
+max32620_fthr.build.extra_flags=-mthumb -D__SYSTEM_HFX=96000000 -DTARGET=MAX32620 -DTARGET_REV=0x4332 -DMAX32620 -DARDUINO_MAXIM
+
+max32620_fthr.build.ldscript=CMSIS/Device/Maxim/MAX32620/Source/GCC/max32620.ld
+
+max32620_fthr.build.systemStartupLib={build.system.path}/startup/Build_max32620/system_startup_max32620.a
+max32620_fthr.build.periphLib={build.system.path}/MAX32620PeriphDriver/Build/PeriphDriver.a
+max32620_fthr.build.usbLib=
+
+max32620_fthr.compiler.PeriphDriver.include.path="-I{build.system.path}/MAX32620PeriphDriver/Include"
+max32620_fthr.compiler.CMSIS.include.path="-I{build.system.path}/CMSIS/Include" "-I{build.system.path}/CMSIS/Device/Maxim/MAX32620/Include"
+max32620_fthr.compiler.PeriphDriver.build.path="-I{build.system.path}/MAX32620PeriphDriver/Build"
+max32620_fthr.compiler.MAX_USB.include.path=
+max32620_fthr.compiler.MAX_USB.build.path=
+
+# To allow Burn Bootloader feature
+# Bootloader can be restores only when operating with MAXDAP programming adapter
+max32620_fthr.bootloader.tool=maxdap_programmer
+
+######################################################################################
+
+max32620_fthr_bl.name=MAX32620FTHR(Native USB Port)
+
+max32620_fthr_bl.upload.tool=daplink
+# upload.protocol is not required for Daplink tools but, it is required for Upload feature to work
+max32620_fthr_bl.upload.protocol=none
+
+max32620_fthr_bl.build.mcu=cortex-m4
+max32620_fthr_bl.build.f_cpu=96000000L
+max32620_fthr_bl.build.target=max32620
+max32620_fthr_bl.build.board=MAX32620FTHR
+max32620_fthr_bl.build.core=arduino
+max32620_fthr_bl.build.variant=max32620_fthr
+max32620_fthr_bl.build.extra_flags=-mthumb -D__SYSTEM_HFX=96000000 -DTARGET=MAX32620 -DTARGET_REV=0x4332 -DUSBCON -DMAX32620 -DMAX32620FTHR_BOOTLOADER -DARDUINO_MAXIM
+
+max32620_fthr_bl.build.ldscript=CMSIS/Device/Maxim/MAX32620/Source/GCC/max32620_bl.ld
+
+max32620_fthr_bl.build.systemStartupLib={build.system.path}/startup/Build_max32620/system_startup_max32620.a
+max32620_fthr_bl.build.periphLib={build.system.path}/MAX32620PeriphDriver/Build/PeriphDriver.a
+max32620_fthr_bl.build.usbLib={build.system.path}/MAX_USB/Build/max32620_usbLib.a
+
+max32620_fthr_bl.compiler.CMSIS.include.path="-I{build.system.path}/CMSIS/Include" "-I{build.system.path}/CMSIS/Device/Maxim/MAX32620/Include"
+max32620_fthr_bl.compiler.PeriphDriver.include.path="-I{build.system.path}/MAX32620PeriphDriver/Include"
+max32620_fthr_bl.compiler.PeriphDriver.build.path="-I{build.system.path}/MAX32620PeriphDriver/Build"
+max32620_fthr_bl.compiler.MAX_USB.include.path="-I{build.system.path}/MAX_USB/include/core" "-I{build.system.path}/MAX_USB/include/core/arm" "-I{build.system.path}/MAX_USB/include/devclass" "-I{build.system.path}/MAX_USB/include/enumerate"
+max32620_fthr_bl.compiler.MAX_USB.build.path="-I{build.system.path}/MAX_USB/Build"
+
+######################################################################################
+
+max32625_mbed.name=MAX32625MBED
+
+max32625_mbed.upload.tool=maxdap_programmer
+
+max32625_mbed.build.mcu=cortex-m4
+max32625_mbed.build.f_cpu=96000000L
+max32625_mbed.build.target=max32625
+max32625_mbed.build.board=MAX32625MBED
+max32625_mbed.build.core=arduino
+max32625_mbed.build.variant=max32625_mbed
+max32625_mbed.build.extra_flags=-mthumb -D__SYSTEM_HFX=96000000 -DTARGET=MAX32625 -DTARGET_REV=0x4132 -DMAX32625 -DARDUINO_MAXIM
+
+max32625_mbed.build.ldscript=CMSIS/Device/Maxim/MAX32625/Source/GCC/max32625.ld
+
+max32625_mbed.build.systemStartupLib={build.system.path}/startup/Build_max32625/system_startup_max32625.a
+max32625_mbed.build.periphLib={build.system.path}/MAX32625PeriphDriver/Build/PeriphDriver.a
+max32625_mbed.build.usbLib=
+
+max32625_mbed.compiler.PeriphDriver.include.path="-I{build.system.path}/MAX32625PeriphDriver/Include"
+max32625_mbed.compiler.CMSIS.include.path="-I{build.system.path}/CMSIS/Include" "-I{build.system.path}/CMSIS/Device/Maxim/MAX32625/Include"
+max32625_mbed.compiler.PeriphDriver.build.path="-I{build.system.path}/MAX32625PeriphDriver/Build"
+max32625_mbed.compiler.MAX_USB.include.path=
+max32625_mbed.compiler.MAX_USB.build.path=
+
+######################################################################################
+
+max32630_fthr.name=MAX32630FTHR
+
+max32630_fthr.upload.tool=maxdap_programmer
+
+max32630_fthr.build.mcu=cortex-m4
+max32630_fthr.build.f_cpu=96000000L
+max32630_fthr.build.target=max32630
+max32630_fthr.build.board=MAX32630FTHR
+max32630_fthr.build.core=arduino
+max32630_fthr.build.variant=max3263x_fthr
+max32630_fthr.build.extra_flags=-mthumb -D__SYSTEM_HFX=96000000 -DTARGET=MAX32630 -DTARGET_REV=0x4132 -DMAX32630 -DARDUINO_MAXIM
+
+max32630_fthr.build.ldscript=CMSIS/Device/Maxim/MAX3263X/Source/GCC/max3263x.ld
+
+max32630_fthr.build.systemStartupLib={build.system.path}/startup/Build_max3263x/system_startup_max3263x.a
+max32630_fthr.build.periphLib={build.system.path}/MAX3263XPeriphDriver/Build/PeriphDriver.a
+max32630_fthr.build.usbLib=
+
+max32630_fthr.compiler.PeriphDriver.include.path="-I{build.system.path}/MAX3263XPeriphDriver/Include"
+max32630_fthr.compiler.CMSIS.include.path="-I{build.system.path}/CMSIS/Include" "-I{build.system.path}/CMSIS/Device/Maxim/MAX3263X/Include"
+max32630_fthr.compiler.PeriphDriver.build.path="-I{build.system.path}/MAX3263XPeriphDriver/Build"
+max32630_fthr.compiler.MAX_USB.include.path=
+max32630_fthr.compiler.MAX_USB.build.path=
