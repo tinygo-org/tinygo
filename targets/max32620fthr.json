@@ -13,5 +13,5 @@
 	],
 	"flash-method": "msd",
     "msd-volume-name": "BOOTLOADER",
-    "msd-firmware-name": "firmware.bin"
+    "msd-firmware-name": "firmware.hex"
 }
