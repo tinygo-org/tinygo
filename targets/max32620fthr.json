@@ -1,8 +1,10 @@
 {
 	"inherits": ["cortex-m4"],
 	"build-tags": ["max32620fthr", "max32620", "maxim"],
+	"llvm-target": "armv7m-none-eabi",
 	"cflags": [
 		"-Qunused-arguments",
+		"--target=armv7m-none-eabi",
 		"-I{root}/lib/CMSIS/CMSIS/Include",
 		"-I{root}/lib/arduino-max326xx/arm/system/CMSIS/Device/Maxim/MAX32620/Include"
 	],
