@@ -1,0 +1,11 @@
+{
+    "inherits": ["atsamd51j19a"],
+    "build-tags": ["atsamd51j19a", "matrixportal_m4"],
+    "flash-1200-bps-reset": "true",
+    "flash-method": "msd",
+    "msd-volume-name": "MATRIXBOOT",
+    "msd-firmware-name": "firmware.uf2",
+    "openocd-transport": "swd",
+    "openocd-interface": "jlink",
+    "openocd-target": "atsame5x"
+}
