@@ -344,60 +344,6 @@ commands:
           paths:
             - ~/.cache/go-build
             - /go/pkg/mod
-  arch-release:
-    steps:
-      - run:
-          name: Install dependencies
-          command: pacman -Sy --noconfirm openssh git pacman-contrib binutils
-      - run:
-          name: Create TinyGo user
-          command: useradd -m tinygo
-      - run:
-          name: Start SSH Agent
-          user: tinygo
-          command: eval $(ssh-agent -s)
-      - run:
-          name: Add ARCH_RELEASE_SSH_PRIVATE_KEY identity
-          user: tinygo
-          command: echo "${ARCH_RELEASE_SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add -
-      - run:
-          name: Create SSH directory
-          user: tinygo
-          command: mkdir -p ~/.ssh && chmod 700 ~/.ssh
-      - run:
-          name: Add aur.archlinux.org to known hosts
-          user: tinygo
-          command: ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
-      - run:
-          name: Clone tinygo-bin repo
-          user: tinygo
-          command: git clone ssh://aur@aur.archlinux.org/tinygo-bin.git ~/tinygo-bin
-      - run:
-          name: Update package version
-          user: tinygo
-          command: sed -i -E "s/(pkgver=)(.*)$/\1${CIRCLE_TAG}/" ~/tinygo-bin/PKGBUILD
-      - run:
-          name: Update file checksums
-          user: tinygo
-          command: cd ~/tinygo-bin && updpkgsums
-      - run:
-          name: Update .SRCINFO
-          user: tinygo
-          command: cd ~/tinygo-bin && makepkg --printsrcinfo > .SRCINFO
-      # Commit the update
-      - run:
-          name: Set git commit config
-          user: tinygo
-          command: |
-            git config --global user.email "tinygo-bot@tinygo.org" &&
-            git config --global user.name "TinyGo Release Bot"
-      - run:
-          name: Commit and push changes
-          user: tinygo
-          command: |
-            cd ~/tinygo-bin &&
-            git commit -a -m "Update tinygo-bin to v${CIRCLE_TAG}" &&
-            git push origin master
 
 jobs:
   test-llvm9-go111:
@@ -445,12 +391,6 @@ jobs:
       xcode: "10.1.0"
     steps:
       - build-macos
-  arch-release:
-    docker:
-      - image: archlinux:latest
-    steps:
-      - arch-release
-
 
 
 
@@ -465,12 +405,3 @@ workflows:
       - build-linux
       - build-macos
       - assert-test-linux
-  release:
-    jobs:
-      - arch-release:
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              # Runs on every semver release
-              only: /v[0-9]+(\.[0-9]+)*(-.*)*/
