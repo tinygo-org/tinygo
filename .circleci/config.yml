@@ -68,12 +68,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-10-v1
+            - llvm-source-11-v1
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-10-v1
+          key: llvm-source-11-v1
           paths:
             - llvm-project
   build-wasi-libc:
@@ -153,17 +153,14 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-10-linux-v1-assert
+            - llvm-build-11-linux-v1-assert
       - run:
           name: "Build LLVM"
           command: |
             if [ ! -f llvm-build/lib/liblldELF.a ]
             then
               # install dependencies
-              sudo apt-get install cmake clang ninja-build
-              # make build faster
-              export CC=clang
-              export CXX=clang++
+              sudo apt-get install cmake ninja-build
               # hack ninja to use less jobs
               echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
               chmod +x /go/bin/ninja
@@ -171,7 +168,7 @@ commands:
               make ASSERT=1 llvm-build
             fi
       - save_cache:
-          key: llvm-build-10-linux-v1-assert
+          key: llvm-build-11-linux-v1-assert
           paths:
             llvm-build
       - run: make ASSERT=1
@@ -214,17 +211,14 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-10-linux-v1
+            - llvm-build-11-linux-v1-noassert
       - run:
           name: "Build LLVM"
           command: |
             if [ ! -f llvm-build/lib/liblldELF.a ]
             then
               # install dependencies
-              sudo apt-get install cmake clang ninja-build
-              # make build faster
-              export CC=clang
-              export CXX=clang++
+              sudo apt-get install cmake ninja-build
               # hack ninja to use less jobs
               echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
               chmod +x /go/bin/ninja
@@ -232,7 +226,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-10-linux-v1
+          key: llvm-build-11-linux-v1-noassert
           paths:
             llvm-build
       - build-wasi-libc
@@ -286,17 +280,17 @@ commands:
             - go-cache-macos-v2-{{ checksum "go.mod" }}
       - restore_cache:
           keys:
-            - llvm-source-10-macos-v1
+            - llvm-source-11-macos-v1
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-10-macos-v1
+          key: llvm-source-11-macos-v1
           paths:
             - llvm-project
       - restore_cache:
           keys:
-            - llvm-build-10-macos-v1
+            - llvm-build-11-macos-v1
       - run:
           name: "Build LLVM"
           command: |
@@ -308,7 +302,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-10-macos-v1
+          key: llvm-build-11-macos-v1
           paths:
             llvm-build
       - restore_cache:
