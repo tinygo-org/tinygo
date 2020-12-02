@@ -4,4 +4,4 @@ if [ ! -f '/Volumes/BOOTLOADER/DETAILS.TXT' ]; then
     [ -d  /Volumes/BOOTLOADER ] || sudo mkdir /Volumes/BOOTLOADER
     sudo mount -t msdos /dev/disk2 /Volumes/BOOTLOADER
 fi
-# tinygo flash -target=max32620fthr .
+tinygo flash -target=max32620fthr .

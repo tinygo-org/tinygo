@@ -5,7 +5,7 @@
 	"cflags": [
 		"-Qunused-arguments",
 		"--target=armv7m-none-eabi",
-		"-I{root}/lib/CMSIS/CMSIS/Include",
+		"-I{root}/lib/arduino-max326xx/arm/system/CMSIS/Include",
 		"-I{root}/lib/arduino-max326xx/arm/system/CMSIS/Device/Maxim/MAX32620/Include"
 	],
 	"linkerscript": "targets/max32620.ld",
