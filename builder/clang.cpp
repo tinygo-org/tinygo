@@ -11,6 +11,7 @@
 #include <clang/FrontendTool/Utils.h>
 #include <llvm/ADT/IntrusiveRefCntPtr.h>
 #include <llvm/Option/Option.h>
+#include <llvm/Support/Host.h>
 
 using namespace llvm;
 using namespace clang;

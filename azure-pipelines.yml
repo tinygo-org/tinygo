@@ -18,7 +18,7 @@ jobs:
     - task: Cache@2
       displayName: Cache LLVM source
       inputs:
-        key: llvm-source-10-windows-v1
+        key: llvm-source-11-windows-v1
         path: llvm-project
     - task: Bash@3
       displayName: Download LLVM source
@@ -32,7 +32,7 @@ jobs:
     - task: CacheBeta@0
       displayName: Cache LLVM build
       inputs:
-        key: llvm-build-10-windows-v1
+        key: llvm-build-11-windows-v3
         path: llvm-build
     - task: Bash@3
       displayName: Build LLVM
@@ -41,7 +41,11 @@ jobs:
         script: |
           if [ ! -f llvm-build/lib/liblldELF.a ]
           then
+            # install dependencies
             choco install ninja
+            # hack ninja to use fewer jobs
+            echo -e 'C:\\ProgramData\\Chocolatey\\bin\\ninja -j4 %*' > /usr/bin/ninja.bat
+            # build!
             make llvm-build
           fi
     - task: Bash@3

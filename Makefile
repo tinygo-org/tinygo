@@ -48,23 +48,13 @@ ifeq ($(OS),Windows_NT)
     # LLVM compiled using MinGW on Windows appears to have problems with threads.
     # Without this flag, linking results in errors like these:
     #     libLLVMSupport.a(Threading.cpp.obj):Threading.cpp:(.text+0x55): undefined reference to `std::thread::hardware_concurrency()'
-    LLVM_OPTION += -DLLVM_ENABLE_THREADS=OFF
+    LLVM_OPTION += -DLLVM_ENABLE_THREADS=OFF -DLLVM_ENABLE_PIC=OFF
 
+    CGO_CPPFLAGS += -DCINDEX_NO_EXPORTS
     CGO_LDFLAGS += -static -static-libgcc -static-libstdc++
     CGO_LDFLAGS_EXTRA += -lversion
 
-    # Build libclang manually because the CMake-based build system on Windows
-    # doesn't allow building libclang as a static library.
-    LIBCLANG_PATH = $(abspath build/libclang-custom.a)
-    LIBCLANG_FILES = $(abspath $(wildcard $(LLVM_BUILDDIR)/tools/clang/tools/libclang/CMakeFiles/libclang.dir/*.cpp.obj))
-
-    # Add the libclang dependency to the tinygo binary target.
-tinygo: $(LIBCLANG_PATH)
-test: $(LIBCLANG_PATH)
-    # Build libclang.
-$(LIBCLANG_PATH): $(LIBCLANG_FILES)
-	@mkdir -p build
-	ar rcs $(LIBCLANG_PATH) $^
+    LIBCLANG_PATH = $(abspath $(LLVM_BUILDDIR))/lib/liblibclang.a
 
 else ifeq ($(shell uname -s),Darwin)
     MD5SUM = md5
@@ -87,7 +77,7 @@ LLD_LIBS = $(START_GROUP) -llldCOFF -llldCommon -llldCore -llldDriver -llldELF -
 
 # For static linking.
 ifneq ("$(wildcard $(LLVM_BUILDDIR)/bin/llvm-config*)","")
-    CGO_CPPFLAGS=$(shell $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(LLVM_BUILDDIR))/tools/clang/include -I$(abspath $(CLANG_SRC))/include -I$(abspath $(LLD_SRC))/include
+    CGO_CPPFLAGS+=$(shell $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(LLVM_BUILDDIR))/tools/clang/include -I$(abspath $(CLANG_SRC))/include -I$(abspath $(LLD_SRC))/include
     CGO_CXXFLAGS=-std=c++14
     CGO_LDFLAGS+=$(LIBCLANG_PATH) -L$(abspath $(LLVM_BUILDDIR)/lib) $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
 endif
@@ -146,7 +136,7 @@ gen-device-stm32: build/gen-device-svd
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/README.md:
-	git clone -b xtensa_release_10.0.1 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b xtensa_release_11.0.0 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/README.md
 
 # Configure LLVM.
