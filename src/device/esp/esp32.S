@@ -42,6 +42,11 @@ call_start_cpu0:
     wsr.ps a2
     rsync
 
+    // Enable the FPU (coprocessor 0 so the lowest bit).
+    movi a2, 1
+    wsr.cpenable a2
+    rsync
+
     // Jump to the runtime start function written in Go.
     call4 main
 
