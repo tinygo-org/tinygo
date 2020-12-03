@@ -8,6 +8,7 @@
 	"cflags": [
 		"-mcpu=esp32"
 	],
+	"rtlib": "compiler-rt",
 	"linkerscript": "targets/esp32.ld",
 	"extra-files": [
 		"src/device/esp/esp32.S",
