@@ -15,6 +15,7 @@ jobs:
         version: '1.15'
     - checkout: self
       fetchDepth: 1
+      submodules: false
     - task: Cache@2
       displayName: Cache LLVM source
       inputs:
@@ -44,29 +45,34 @@ jobs:
             choco install ninja
             make llvm-build
           fi
-    - task: Bash@3
-      displayName: Install QEMU
-      inputs:
-        targetType: inline
-        script: choco install qemu --version=2020.06.12
-    - task: CacheBeta@0
-      displayName: Cache wasi-libc sysroot
-      inputs:
-        key: wasi-libc-sysroot-v3
-        path: lib/wasi-libc/sysroot
-    - task: Bash@3
-      displayName: Build wasi-libc
-      inputs:
-        targetType: inline
-        script: PATH=/usr/bin:$PATH make wasi-libc
-    - task: Bash@3
-      displayName: Test TinyGo
-      inputs:
-        targetType: inline
-        script: |
-          export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
-          unset GOROOT
-          make test
+    #- task: Bash@3
+    #  displayName: Install QEMU
+    #  inputs:
+    #    targetType: inline
+    #    script: choco install qemu --version=2020.06.12
+    #- task: CacheBeta@0
+    #  displayName: Cache wasi-libc sysroot
+    #  inputs:
+    #    key: wasi-libc-sysroot-v3
+    #    path: lib/wasi-libc/sysroot
+    #- task: Bash@3
+    #  displayName: Build wasi-libc
+    #  inputs:
+    #    targetType: inline
+    #    script: PATH=/usr/bin:$PATH make wasi-libc
+    #- task: Bash@3
+    #  displayName: Test TinyGo
+    #  inputs:
+    #    targetType: inline
+    #    script: |
+    #      export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
+    #      unset GOROOT
+    #      make test
+    - publish: $(System.DefaultWorkingDirectory)/llvm-build/tools/clang/tools/libclang/CMakeFiles/libclang.dir/CXType.cpp.obj
+      displayName: CXType.cpp.obj
+      artifact: tinygo
+    - publish: $(System.DefaultWorkingDirectory)/llvm-build/build.ninja
+      displayName: build.ninja
     - task: Bash@3
       displayName: Build TinyGo release tarball
       inputs:
@@ -74,7 +80,20 @@ jobs:
         script: |
           export PATH="$PATH:./llvm-build/bin:/c/Program Files/qemu"
           unset GOROOT
-          make build/release -j4
+          grep -r clang_Type_getAlignOf llvm-build
+          grep -r __imp_clang_Type_getAlignOf llvm-build
+          echo llvm-build/lib
+          ls -l llvm-build/lib
+          echo llvm-build/tools/clang/tools/libclang
+          ls -l llvm-build/tools/clang/tools/libclang
+          echo llvm-build/tools/clang/tools/libclang/CMakeFiles
+          ls -l llvm-build/tools/clang/tools/libclang/CMakeFiles
+          echo llvm-build/tools/clang/tools/libclang/CMakeFiles/libclang.dir
+          ls -l llvm-build/tools/clang/tools/libclang/CMakeFiles/libclang.dir
+          rm llvm-build/lib/liblibclang.dll.a
+          rm llvm-build/bin/libclang.dll
+          make
+          #make build/release -j4
     - publish: $(System.DefaultWorkingDirectory)/build/release/tinygo
       displayName: Publish zip as artifact
       artifact: tinygo
