@@ -96,7 +96,13 @@ func ticks() timeUnit {
 }
 
 func abort() {
+	avr.Asm("cli")
 	for {
-		sleepWDT(WDT_PERIOD_2S)
+		// Sleeping with interrupts disabled will mean the MCU sleeps forever.
+		// To be extra sure, put it in a loop.
+		// This mechanism is used by simavr to detect a program exit, the
+		// emulator will stop when it detects a sleep instruction with
+		// interrupts disabled.
+		avr.Asm("sleep")
 	}
 }

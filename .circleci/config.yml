@@ -277,7 +277,7 @@ commands:
             curl https://dl.google.com/go/go1.15.5.darwin-amd64.tar.gz -o go1.15.5.darwin-amd64.tar.gz
             sudo tar -C /usr/local -xzf go1.15.5.darwin-amd64.tar.gz
             ln -s /usr/local/go/bin/go /usr/local/bin/go
-            HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu simavr
       - install-xtensa-toolchain:
           variant: "macos"
       - restore_cache:

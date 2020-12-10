@@ -12,8 +12,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -22,11 +24,30 @@ import (
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
+	"tinygo.org/x/go-llvm"
 )
 
 const TESTDATA = "testdata"
 
 var testTarget = flag.String("target", "", "override test target")
+
+// There are a lot of tests that don't yet pass on AVR, often because avr-libc
+// doesn't provide the required functions (for float64 for example).
+var skipOnAVR = map[string]struct{}{
+	"testdata/atomic.go":     {},
+	"testdata/cgo/":          {},
+	"testdata/channel.go":    {},
+	"testdata/coroutines.go": {},
+	"testdata/float.go":      {},
+	"testdata/gc.go":         {},
+	"testdata/interface.go":  {},
+	"testdata/map.go":        {},
+	"testdata/math.go":       {},
+	"testdata/print.go":      {},
+	"testdata/reflect.go":    {},
+	"testdata/stdlib.go":     {},
+	"testdata/structs.go":    {},
+}
 
 func TestCompiler(t *testing.T) {
 	matches, err := filepath.Glob(filepath.Join(TESTDATA, "*.go"))
@@ -77,6 +98,19 @@ func TestCompiler(t *testing.T) {
 		})
 	}
 
+	if runtime.GOOS == "darwin" {
+		// Running AVR tests only on Darwin as it has an easily installed
+		// homebrew simavr package.
+		llvmMajorVersion, _ := strconv.ParseInt(strings.Split(llvm.Version, ".")[0], 10, 32)
+		if llvmMajorVersion >= 11 {
+			// The AVR backend in LLVM 11 has been significantly improved and is
+			// able to correctly compile a lot more tests than before.
+			t.Run("AVR", func(t *testing.T) {
+				runPlatTests("atmega1284p", matches, t)
+			})
+		}
+	}
+
 	if runtime.GOOS == "linux" {
 		t.Run("X86Linux", func(t *testing.T) {
 			runPlatTests("i386--linux-gnu", matches, t)
@@ -113,6 +147,13 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 
 	for _, path := range matches {
 		path := path // redefine to avoid race condition
+
+		if target == "atmega1284p" {
+			if _, ok := skipOnAVR[path]; ok {
+				// Some tests don't work on AVR yet, so skip them.
+				continue
+			}
+		}
 
 		t.Run(filepath.Base(path), func(t *testing.T) {
 			t.Parallel()
@@ -180,6 +221,7 @@ func runTest(path, target string, t *testing.T) {
 	runComplete := make(chan struct{})
 	var cmd *exec.Cmd
 	ranTooLong := false
+	var emulator = ""
 	if target == "" {
 		cmd = exec.Command(binary)
 	} else {
@@ -190,13 +232,19 @@ func runTest(path, target string, t *testing.T) {
 		if len(spec.Emulator) == 0 {
 			cmd = exec.Command(binary)
 		} else {
+			emulator = spec.Emulator[0]
 			args := append(spec.Emulator[1:], binary)
 			cmd = exec.Command(spec.Emulator[0], args...)
 		}
 	}
 	stdout := &bytes.Buffer{}
-	cmd.Stdout = stdout
-	cmd.Stderr = os.Stderr
+	if emulator == "simavr" {
+		cmd.Stdout = nil
+		cmd.Stderr = stdout
+	} else {
+		cmd.Stdout = stdout
+		cmd.Stderr = os.Stderr
+	}
 	err = cmd.Start()
 	if err != nil {
 		t.Fatal("failed to start:", err)
@@ -229,6 +277,13 @@ func runTest(path, target string, t *testing.T) {
 	// putchar() prints CRLF, convert it to LF.
 	actual := bytes.Replace(stdout.Bytes(), []byte{'\r', '\n'}, []byte{'\n'}, -1)
 	expected = bytes.Replace(expected, []byte{'\r', '\n'}, []byte{'\n'}, -1) // for Windows
+
+	if emulator == "simavr" {
+		// Munge the data a bit to remove escape characters and the two dots
+		// simavr likes to put at the end of each line.
+		actual = regexp.MustCompile("\x1b.*?m").ReplaceAll(actual, nil)
+		actual = regexp.MustCompile("\\.\\.\n").ReplaceAll(actual, []byte{'\n'})
+	}
 
 	// Check whether the command ran successfully.
 	fail := false
