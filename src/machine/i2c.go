@@ -1,4 +1,4 @@
-// +build avr nrf sam stm32,!stm32f407,!stm32f7x2,!stm32l0 fe310 k210
+// +build avr nrf sam stm32,!stm32f407,!stm32f7x2,!stm32l5x2,!stm32l0 fe310 k210
 
 package machine
 
