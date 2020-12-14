@@ -1,4 +1,4 @@
-// +build stm32,!stm32f7,!stm32l5x2,!stm32l0
+// +build stm32,stm32l5x2
 
 package machine
 
@@ -7,7 +7,7 @@ package machine
 import (
 	"device/stm32"
 	"runtime/interrupt"
-	"unsafe"
+	//	"unsafe"
 )
 
 // Configure the UART.
@@ -24,7 +24,7 @@ func (uart UART) Configure(config UARTConfig) {
 	}
 
 	// Enable USART clock
-	enableAltFuncClock(unsafe.Pointer(uart.Bus))
+	//enableAltFuncClock(unsafe.Pointer(uart.Bus))
 
 	uart.configurePins(config)
 
@@ -42,7 +42,7 @@ func (uart UART) Configure(config UARTConfig) {
 // handleInterrupt should be called from the appropriate interrupt handler for
 // this UART instance.
 func (uart *UART) handleInterrupt(interrupt.Interrupt) {
-	uart.Receive(byte((uart.Bus.DR.Get() & 0xFF)))
+	uart.Receive(byte((uart.Bus.RDR.Get() & 0xFF)))
 }
 
 // SetBaudRate sets the communication speed for the UART. Defer to chip-specific
@@ -54,9 +54,9 @@ func (uart UART) SetBaudRate(br uint32) {
 
 // WriteByte writes a byte of data to the UART.
 func (uart UART) WriteByte(c byte) error {
-	uart.Bus.DR.Set(uint32(c))
+	uart.Bus.TDR.Set(uint32(c))
 
-	for !uart.Bus.SR.HasBits(stm32.USART_SR_TXE) {
+	for !uart.Bus.ISR.HasBits(stm32.USART_ISR_TXE) {
 	}
 	return nil
 }
