@@ -15,7 +15,7 @@ func main() {
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	sensor := machine.ADC{machine.ADC2}
-	sensor.Configure()
+	sensor.Configure(machine.ADCConfig{})
 
 	for {
 		val := sensor.Get()

@@ -118,7 +118,7 @@ func InitADC() {
 }
 
 // Configure configures a ADCPin to be able to be used to read data.
-func (a ADC) Configure() {
+func (a ADC) Configure(ADCConfig) {
 	return // no pin specific setup on AVR machine.
 }
 

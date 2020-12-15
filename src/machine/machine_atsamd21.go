@@ -307,13 +307,30 @@ func InitADC() {
 
 	// set calibration
 	sam.ADC.CALIB.Set((bias << 8) | linearity)
+}
+
+// Configure configures a ADC pin to be able to be used to read data.
+func (a ADC) Configure(config ADCConfig) {
 
 	// Wait for synchronization
 	waitADCSync()
 
+	var resolution uint32
+	switch config.Resolution {
+	case 8:
+		resolution = sam.ADC_CTRLB_RESSEL_8BIT
+	case 10:
+		resolution = sam.ADC_CTRLB_RESSEL_10BIT
+	case 12:
+		resolution = sam.ADC_CTRLB_RESSEL_12BIT
+	case 16:
+		resolution = sam.ADC_CTRLB_RESSEL_16BIT
+	default:
+		resolution = sam.ADC_CTRLB_RESSEL_12BIT
+	}
 	// Divide Clock by 32 with 12 bits resolution as default
 	sam.ADC.CTRLB.Set((sam.ADC_CTRLB_PRESCALER_DIV32 << sam.ADC_CTRLB_PRESCALER_Pos) |
-		(sam.ADC_CTRLB_RESSEL_12BIT << sam.ADC_CTRLB_RESSEL_Pos))
+		uint16(resolution<<sam.ADC_CTRLB_RESSEL_Pos))
 
 	// Sampling Time Length
 	sam.ADC.SAMPCTRL.Set(5)
@@ -325,18 +342,44 @@ func InitADC() {
 	sam.ADC.INPUTCTRL.Set(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
 
 	// Averaging (see datasheet table in AVGCTRL register description)
-	sam.ADC.AVGCTRL.Set((sam.ADC_AVGCTRL_SAMPLENUM_1 << sam.ADC_AVGCTRL_SAMPLENUM_Pos) |
+	var samples uint32
+	switch config.Resolution {
+	case 1:
+		samples = sam.ADC_AVGCTRL_SAMPLENUM_1
+	case 2:
+		samples = sam.ADC_AVGCTRL_SAMPLENUM_2
+	case 4:
+		samples = sam.ADC_AVGCTRL_SAMPLENUM_4
+	case 8:
+		samples = sam.ADC_AVGCTRL_SAMPLENUM_8
+	case 16:
+		samples = sam.ADC_AVGCTRL_SAMPLENUM_16
+	case 32:
+		samples = sam.ADC_AVGCTRL_SAMPLENUM_32
+	case 64:
+		samples = sam.ADC_AVGCTRL_SAMPLENUM_64
+	case 128:
+		samples = sam.ADC_AVGCTRL_SAMPLENUM_128
+	case 256:
+		samples = sam.ADC_AVGCTRL_SAMPLENUM_256
+	case 512:
+		samples = sam.ADC_AVGCTRL_SAMPLENUM_512
+	case 1024:
+		samples = sam.ADC_AVGCTRL_SAMPLENUM_1024
+	default:
+		samples = sam.ADC_AVGCTRL_SAMPLENUM_1
+	}
+	sam.ADC.AVGCTRL.Set(uint8(samples<<sam.ADC_AVGCTRL_SAMPLENUM_Pos) |
 		(0x0 << sam.ADC_AVGCTRL_ADJRES_Pos))
+
+	// TODO: use config.Reference to set AREF level
 
 	// Analog Reference is AREF pin (3.3v)
 	sam.ADC.INPUTCTRL.SetBits(sam.ADC_INPUTCTRL_GAIN_DIV2 << sam.ADC_INPUTCTRL_GAIN_Pos)
 
 	// 1/2 VDDANA = 0.5 * 3V3 = 1.65V
 	sam.ADC.REFCTRL.SetBits(sam.ADC_REFCTRL_REFSEL_INTVCC1 << sam.ADC_REFCTRL_REFSEL_Pos)
-}
 
-// Configure configures a ADCPin to be able to be used to read data.
-func (a ADC) Configure() {
 	a.Pin.Configure(PinConfig{Mode: PinAnalog})
 	return
 }

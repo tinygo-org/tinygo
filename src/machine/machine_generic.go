@@ -73,7 +73,7 @@ func InitADC() {
 }
 
 // Configure configures an ADC pin to be able to be used to read data.
-func (adc ADC) Configure() {
+func (adc ADC) Configure(ADCConfig) {
 }
 
 // Get reads the current analog value from this ADC peripheral.

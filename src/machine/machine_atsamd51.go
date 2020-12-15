@@ -720,65 +720,83 @@ func InitADC() {
 
 	// calibrate ADC1
 	sam.ADC1.CALIB.Set(uint16((biascomp | biasr2r | biasref) >> 16))
-
-	sam.ADC0.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
-	// adcs[i]->CTRLB.bit.RESSEL = ADC_CTRLB_RESSEL_10BIT_Val;
-	sam.ADC0.CTRLB.SetBits(sam.ADC_CTRLB_RESSEL_12BIT << sam.ADC_CTRLB_RESSEL_Pos)
-
-	// wait for sync
-	for sam.ADC0.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_CTRLB) {
-	}
-
-	// sampling Time Length
-	sam.ADC0.SAMPCTRL.Set(5)
-
-	// wait for sync
-	for sam.ADC0.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_SAMPCTRL) {
-	}
-
-	// No Negative input (Internal Ground)
-	sam.ADC0.INPUTCTRL.Set(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
-
-	// wait for sync
-	for sam.ADC0.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_INPUTCTRL) {
-	}
-
-	// Averaging (see datasheet table in AVGCTRL register description)
-	// 1 sample only (no oversampling nor averaging), adjusting result by 0
-	sam.ADC0.AVGCTRL.Set(sam.ADC_AVGCTRL_SAMPLENUM_1 | (0 << sam.ADC_AVGCTRL_ADJRES_Pos))
-
-	// wait for sync
-	for sam.ADC0.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_AVGCTRL) {
-	}
-
-	// same for ADC1, as for ADC0
-	sam.ADC1.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
-	sam.ADC1.CTRLB.SetBits(sam.ADC_CTRLB_RESSEL_12BIT << sam.ADC_CTRLB_RESSEL_Pos)
-	for sam.ADC1.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_CTRLB) {
-	}
-	sam.ADC1.SAMPCTRL.Set(5)
-	for sam.ADC1.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_SAMPCTRL) {
-	}
-	sam.ADC1.INPUTCTRL.Set(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
-	for sam.ADC1.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_INPUTCTRL) {
-	}
-	sam.ADC1.AVGCTRL.Set(sam.ADC_AVGCTRL_SAMPLENUM_1 | (0 << sam.ADC_AVGCTRL_ADJRES_Pos))
-	for sam.ADC1.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_AVGCTRL) {
-	}
-
-	// wait for sync
-	for sam.ADC0.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_REFCTRL) {
-	}
-	for sam.ADC1.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_REFCTRL) {
-	}
-
-	// default is 3V3 reference voltage
-	sam.ADC0.REFCTRL.SetBits(sam.ADC_REFCTRL_REFSEL_INTVCC1)
-	sam.ADC1.REFCTRL.SetBits(sam.ADC_REFCTRL_REFSEL_INTVCC1)
 }
 
 // Configure configures a ADCPin to be able to be used to read data.
-func (a ADC) Configure() {
+func (a ADC) Configure(config ADCConfig) {
+
+	for _, adc := range []*sam.ADC_Type{sam.ADC0, sam.ADC1} {
+
+		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_CTRLB) {
+		} // wait for sync
+
+		adc.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
+		var resolution uint32
+		switch config.Resolution {
+		case 8:
+			resolution = sam.ADC_CTRLB_RESSEL_8BIT
+		case 10:
+			resolution = sam.ADC_CTRLB_RESSEL_10BIT
+		case 12:
+			resolution = sam.ADC_CTRLB_RESSEL_12BIT
+		case 16:
+			resolution = sam.ADC_CTRLB_RESSEL_16BIT
+		default:
+			resolution = sam.ADC_CTRLB_RESSEL_12BIT
+		}
+		adc.CTRLB.SetBits(uint16(resolution << sam.ADC_CTRLB_RESSEL_Pos))
+		adc.SAMPCTRL.Set(5) // sampling Time Length
+
+		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_SAMPCTRL) {
+		} // wait for sync
+
+		// No Negative input (Internal Ground)
+		adc.INPUTCTRL.Set(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
+		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_INPUTCTRL) {
+		} // wait for sync
+
+		// Averaging (see datasheet table in AVGCTRL register description)
+		var samples uint32
+		switch config.Resolution {
+		case 1:
+			samples = sam.ADC_AVGCTRL_SAMPLENUM_1
+		case 2:
+			samples = sam.ADC_AVGCTRL_SAMPLENUM_2
+		case 4:
+			samples = sam.ADC_AVGCTRL_SAMPLENUM_4
+		case 8:
+			samples = sam.ADC_AVGCTRL_SAMPLENUM_8
+		case 16:
+			samples = sam.ADC_AVGCTRL_SAMPLENUM_16
+		case 32:
+			samples = sam.ADC_AVGCTRL_SAMPLENUM_32
+		case 64:
+			samples = sam.ADC_AVGCTRL_SAMPLENUM_64
+		case 128:
+			samples = sam.ADC_AVGCTRL_SAMPLENUM_128
+		case 256:
+			samples = sam.ADC_AVGCTRL_SAMPLENUM_256
+		case 512:
+			samples = sam.ADC_AVGCTRL_SAMPLENUM_512
+		case 1024:
+			samples = sam.ADC_AVGCTRL_SAMPLENUM_1024
+		default: // 1 sample only (no oversampling nor averaging), adjusting result by 0
+			samples = sam.ADC_AVGCTRL_SAMPLENUM_1
+		}
+		adc.AVGCTRL.Set(uint8(samples<<sam.ADC_AVGCTRL_SAMPLENUM_Pos) |
+			(0 << sam.ADC_AVGCTRL_ADJRES_Pos))
+
+		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_AVGCTRL) {
+		} // wait for sync
+		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_REFCTRL) {
+		} // wait for sync
+
+		// TODO: use config.Reference to set AREF level
+
+		// default is 3V3 reference voltage
+		adc.REFCTRL.SetBits(sam.ADC_REFCTRL_REFSEL_INTVCC1)
+	}
+
 	a.Pin.Configure(PinConfig{Mode: PinAnalog})
 }
 
