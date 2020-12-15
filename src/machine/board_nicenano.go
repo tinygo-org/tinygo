@@ -12,7 +12,7 @@ const (
 	D020 = P0_20
 	D022 = P0_22
 	D024 = P0_24
-	D100 = P0_24
+	D100 = P1_00
 	D011 = P0_11
 	D104 = P1_04
 	D106 = P1_06
@@ -50,8 +50,8 @@ const (
 
 // UART0 pins (logical UART1)
 const (
-	UART_RX_PIN = P0_00
-	UART_TX_PIN = P0_00
+	UART_RX_PIN = P0_06
+	UART_TX_PIN = P0_08
 )
 
 // UART0 is the USB device
@@ -61,15 +61,15 @@ var (
 
 // I2C pins
 const (
-	SDA_PIN = P0_00 // I2C0 external
-	SCL_PIN = P0_00 // I2C0 external
+	SDA_PIN = P0_17 // I2C0 external
+	SCL_PIN = P0_20 // I2C0 external
 )
 
 // SPI pins
 const (
-	SPI0_SCK_PIN = P0_00 // SCK
-	SPI0_SDO_PIN = P0_00 // SDO
-	SPI0_SDI_PIN = P0_00 // SDI
+	SPI0_SCK_PIN = P0_22 // SCK
+	SPI0_SDO_PIN = P0_24 // SDO
+	SPI0_SDI_PIN = P1_00 // SDI
 )
 
 // USB CDC identifiers
