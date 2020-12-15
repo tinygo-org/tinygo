@@ -879,7 +879,7 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 }
 
 // ADCConfig holds optional configuration parameters for ADC initialization.
-// If left unspecified, the defaults are assumed: 10-bit, 4-sample averaging
+// If left unspecified, the defaults are assumed: 10-bit, 4-sample averaging.
 type ADCConfig struct {
 	Resolution uint32 // 8, 10, or 12 (bits)
 	Samples    uint32 // 0, 4, 8, 16, or 32 (0 = hardware averaging disabled)
@@ -891,13 +891,8 @@ var adcMaximum uint32
 // InitADC is not used by this machine. Use `(ADC).Configure()`.
 func InitADC() {}
 
-// Configure initializes the receiver ADC's Pin and the ADC1/ADC2 instances for
-// immediate usage with default settings.
-func (a ADC) Configure() { a.ConfigureMode(ADCConfig{}) }
-
-// ConfigureMode initializes the receiver ADC's Pin and the ADC1/ADC2 instances
-// for immediate usage with given settings.
-func (a ADC) ConfigureMode(config ADCConfig) {
+// Configure initializes the receiver's ADC peripheral and pin for analog input.
+func (a ADC) Configure(config ADCConfig) {
 	// if not specified, use defaults: 10-bit resolution, 4 samples/conversion
 	const (
 		defaultResolution = uint32(10)
