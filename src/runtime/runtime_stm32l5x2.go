@@ -166,9 +166,9 @@ func initTIM15() {
 func initTIM16() {
 	stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_TIM16EN)
 
-	// CK_INT = APB1 x2 = 54mhz
-	stm32.TIM16.PSC.Set(54000000/10000 - 1) // 54mhz to 10khz(0.1ms)
-	stm32.TIM16.ARR.Set(10 - 1)             // interrupt per 1ms
+	// CK_INT = APB1 = 110mhz
+	stm32.TIM16.PSC.Set(110000000/10000 - 1) // 110mhz to 10khz(0.1ms)
+	stm32.TIM16.ARR.Set(10 - 1)              // interrupt per 1ms
 
 	// Enable the hardware interrupt.
 	stm32.TIM16.DIER.SetBits(stm32.TIM_DIER_UIE)
@@ -198,8 +198,8 @@ func ticks() timeUnit {
 func timerSleep(ticks uint32) {
 	timerWakeup.Set(0)
 
-	// CK_INT = APB3 = 110mhz
-	// prescale counter down from 54mhz to 10khz aka 0.1 ms frequency.
+	// CK_INT = APB1 = 110mhz
+	// prescale counter down from 110mhz to 10khz aka 0.1 ms frequency.
 	stm32.TIM15.PSC.Set(110000000/10000 - 1)
 
 	// set duty aka duration

@@ -7,7 +7,7 @@ package machine
 import (
 	"device/stm32"
 	"runtime/interrupt"
-	//	"unsafe"
+	"unsafe"
 )
 
 // Configure the UART.
@@ -24,7 +24,7 @@ func (uart UART) Configure(config UARTConfig) {
 	}
 
 	// Enable USART clock
-	//enableAltFuncClock(unsafe.Pointer(uart.Bus))
+	enableAltFuncClock(unsafe.Pointer(uart.Bus))
 
 	uart.configurePins(config)
 
