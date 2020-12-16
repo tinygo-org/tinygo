@@ -757,7 +757,7 @@ func (a ADC) Configure(config ADCConfig) {
 
 		// Averaging (see datasheet table in AVGCTRL register description)
 		var samples uint32
-		switch config.Resolution {
+		switch config.Samples {
 		case 1:
 			samples = sam.ADC_AVGCTRL_SAMPLENUM_1
 		case 2:
