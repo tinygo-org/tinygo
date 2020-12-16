@@ -1,4 +1,4 @@
-// +build stm32,!stm32f7,!stm32l5x2,!stm32l0
+// +build stm32,!stm32l0
 
 package machine
 
@@ -7,11 +7,26 @@ package machine
 import (
 	"device/stm32"
 	"runtime/interrupt"
+	"runtime/volatile"
 	"unsafe"
 )
 
+// UART representation
+type UART struct {
+	Buffer          *RingBuffer
+	Bus             *stm32.USART_Type
+	Interrupt       interrupt.Interrupt
+	AltFuncSelector stm32.AltFunc
+
+	// Registers specific to the chip
+	rxReg       *volatile.Register32
+	txReg       *volatile.Register32
+	statusReg   *volatile.Register32
+	txEmptyFlag uint32
+}
+
 // Configure the UART.
-func (uart UART) Configure(config UARTConfig) {
+func (uart *UART) Configure(config UARTConfig) {
 	// Default baud rate to 115200.
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
@@ -22,6 +37,11 @@ func (uart UART) Configure(config UARTConfig) {
 		config.TX = UART_TX_PIN
 		config.RX = UART_RX_PIN
 	}
+
+	// STM32 families have different, but compatible, registers for
+	// basic UART functions.  For each family populate the registers
+	// into `uart`.
+	uart.setRegisters()
 
 	// Enable USART clock
 	enableAltFuncClock(unsafe.Pointer(uart.Bus))
@@ -42,21 +62,21 @@ func (uart UART) Configure(config UARTConfig) {
 // handleInterrupt should be called from the appropriate interrupt handler for
 // this UART instance.
 func (uart *UART) handleInterrupt(interrupt.Interrupt) {
-	uart.Receive(byte((uart.Bus.DR.Get() & 0xFF)))
+	uart.Receive(byte((uart.rxReg.Get() & 0xFF)))
 }
 
 // SetBaudRate sets the communication speed for the UART. Defer to chip-specific
 // routines for calculation
-func (uart UART) SetBaudRate(br uint32) {
+func (uart *UART) SetBaudRate(br uint32) {
 	divider := uart.getBaudRateDivisor(br)
 	uart.Bus.BRR.Set(divider)
 }
 
 // WriteByte writes a byte of data to the UART.
-func (uart UART) WriteByte(c byte) error {
-	uart.Bus.DR.Set(uint32(c))
+func (uart *UART) WriteByte(c byte) error {
+	uart.txReg.Set(uint32(c))
 
-	for !uart.Bus.SR.HasBits(stm32.USART_SR_TXE) {
+	for !uart.statusReg.HasBits(uart.txEmptyFlag) {
 	}
 	return nil
 }

@@ -7,7 +7,6 @@ package machine
 import (
 	"device/stm32"
 	"math/bits"
-	"runtime/interrupt"
 )
 
 func CPUFrequency() uint32 {
@@ -36,20 +35,13 @@ const (
 
 // -- UART ---------------------------------------------------------------------
 
-type UART struct {
-	Buffer          *RingBuffer
-	Bus             *stm32.USART_Type
-	Interrupt       interrupt.Interrupt
-	AltFuncSelector uint8
-}
-
-func (uart UART) configurePins(config UARTConfig) {
+func (uart *UART) configurePins(config UARTConfig) {
 	// enable the alternate functions on the TX and RX pins
 	config.TX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTTX}, uart.AltFuncSelector)
 	config.RX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTRX}, uart.AltFuncSelector)
 }
 
-func (uart UART) getBaudRateDivisor(baudRate uint32) uint32 {
+func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
 	var clock uint32
 	switch uart.Bus {
 	case stm32.USART1, stm32.USART6:
@@ -58,6 +50,14 @@ func (uart UART) getBaudRateDivisor(baudRate uint32) uint32 {
 		clock = CPUFrequency() / 4 // APB1 Frequency
 	}
 	return clock / baudRate
+}
+
+// Register names vary by ST processor, these are for STM F405
+func (uart *UART) setRegisters() {
+	uart.rxReg = &uart.Bus.DR
+	uart.txReg = &uart.Bus.DR
+	uart.statusReg = &uart.Bus.SR
+	uart.txEmptyFlag = stm32.USART_SR_TXE
 }
 
 // -- SPI ----------------------------------------------------------------------
