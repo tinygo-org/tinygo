@@ -6,7 +6,6 @@ package machine
 
 import (
 	"device/stm32"
-	"runtime/interrupt"
 	"unsafe"
 )
 
@@ -103,17 +102,10 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 	}
 }
 
-//---------- UART related types and code
-
-// UART representation
-type UART struct {
-	Buffer    *RingBuffer
-	Bus       *stm32.USART_Type
-	Interrupt interrupt.Interrupt
-}
+//---------- UART related code
 
 // Configure the TX and RX pins
-func (uart UART) configurePins(config UARTConfig) {
+func (uart *UART) configurePins(config UARTConfig) {
 
 	// pins
 	switch config.TX {
@@ -133,7 +125,7 @@ func (uart UART) configurePins(config UARTConfig) {
 }
 
 // Determine the divisor for USARTs to get the given baudrate
-func (uart UART) getBaudRateDivisor(br uint32) uint32 {
+func (uart *UART) getBaudRateDivisor(br uint32) uint32 {
 
 	// Note: PCLK2 (from APB2) used for USART1 and PCLK1 for USART2, 3, 4, 5
 	var divider uint32
@@ -145,6 +137,14 @@ func (uart UART) getBaudRateDivisor(br uint32) uint32 {
 		divider = CPUFrequency() / 2 / br
 	}
 	return divider
+}
+
+// Register names vary by ST processor, these are for STM F103xx
+func (uart *UART) setRegisters() {
+	uart.rxReg = &uart.Bus.DR
+	uart.txReg = &uart.Bus.DR
+	uart.statusReg = &uart.Bus.SR
+	uart.txEmptyFlag = stm32.USART_SR_TXE
 }
 
 //---------- SPI related types and code
