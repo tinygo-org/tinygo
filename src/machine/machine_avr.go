@@ -16,6 +16,18 @@ const (
 	PinOutput
 )
 
+// ConfigureAsOutput is a convenience function that configures a pin for default output mode.
+func (p Pin) ConfigureAsOutput() error {
+	p.Configure(PinConfig{Mode: PinOutput})
+	return nil
+}
+
+// ConfigureAsInput is a convenience function that configures a pin for default input mode.
+func (p Pin) ConfigureAsInput() error {
+	p.Configure(PinConfig{Mode: PinInputPullup})
+	return nil
+}
+
 // In all the AVRs I've looked at, the PIN/DDR/PORT registers followed a regular
 // pattern: PINx, DDRx, PORTx in this order without registers in between.
 // Therefore, if you know any of them, you can calculate the other two.

@@ -32,6 +32,18 @@ const (
 	PinOutputModeAltOpenDrain PinMode = 12 // Output mode alt. purpose open drain
 )
 
+// ConfigureAsOutput is a convenience function that configures a pin for default output mode.
+func (p Pin) ConfigureAsOutput() error {
+	p.Configure(PinConfig{Mode: PinOutput})
+	return nil
+}
+
+// ConfigureAsInput is a convenience function that configures a pin for default input mode.
+func (p Pin) ConfigureAsInput() error {
+	p.Configure(PinConfig{Mode: PinInput})
+	return nil
+}
+
 // Configure this pin with the given I/O settings.
 // stm32f1xx uses different technique for setting the GPIO pins than the stm32f407
 func (p Pin) Configure(config PinConfig) {

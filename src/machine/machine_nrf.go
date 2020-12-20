@@ -21,6 +21,18 @@ const (
 	PinOutput        PinMode = (nrf.GPIO_PIN_CNF_DIR_Output << nrf.GPIO_PIN_CNF_DIR_Pos) | (nrf.GPIO_PIN_CNF_INPUT_Disconnect << nrf.GPIO_PIN_CNF_INPUT_Pos)
 )
 
+// ConfigureAsOutput is a convenience function that configures a pin for default output mode.
+func (p Pin) ConfigureAsOutput() error {
+	p.Configure(PinConfig{Mode: PinOutput})
+	return nil
+}
+
+// ConfigureAsInput is a convenience function that configures a pin for default input mode.
+func (p Pin) ConfigureAsInput() error {
+	p.Configure(PinConfig{Mode: PinInputPullup})
+	return nil
+}
+
 type PinChange uint8
 
 // Pin change interrupt constants for SetInterrupt.

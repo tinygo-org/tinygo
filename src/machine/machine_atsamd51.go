@@ -44,6 +44,18 @@ const (
 	PinInputPulldown PinMode = 18
 )
 
+// ConfigureAsOutput is a convenience function that configures a pin for default output mode.
+func (p Pin) ConfigureAsOutput() error {
+	p.Configure(PinConfig{Mode: PinOutput})
+	return nil
+}
+
+// ConfigureAsInput is a convenience function that configures a pin for default input mode.
+func (p Pin) ConfigureAsInput() error {
+	p.Configure(PinConfig{Mode: PinInputPullup})
+	return nil
+}
+
 type PinChange uint8
 
 // Pin change interrupt constants for SetInterrupt.

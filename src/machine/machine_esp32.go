@@ -30,6 +30,18 @@ const (
 	PinInputPulldown
 )
 
+// ConfigureAsOutput is a convenience function that configures a pin for default output mode.
+func (p Pin) ConfigureAsOutput() error {
+	p.Configure(PinConfig{Mode: PinOutput})
+	return nil
+}
+
+// ConfigureAsInput is a convenience function that configures a pin for default input mode.
+func (p Pin) ConfigureAsInput() error {
+	p.Configure(PinConfig{Mode: PinInputPullup})
+	return nil
+}
+
 // Configure this pin with the given configuration.
 func (p Pin) Configure(config PinConfig) {
 	// Output function 256 is a special value reserved for use as a regular GPIO

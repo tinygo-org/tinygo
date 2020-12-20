@@ -17,7 +17,7 @@ func main() {
 
 func led1() {
 	led := machine.LED1
-	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	led.ConfigureAsOutput()
 	for {
 		println("+")
 		led.Low()
@@ -31,7 +31,7 @@ func led1() {
 
 func led2() {
 	led := machine.LED2
-	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	led.ConfigureAsOutput()
 	for {
 		println("  +")
 		led.Low()

@@ -18,6 +18,18 @@ const (
 	PinInput
 )
 
+// ConfigureAsOutput is a convenience function that configures a pin for default output mode.
+func (p Pin) ConfigureAsOutput() error {
+	p.Configure(PinConfig{Mode: PinOutput})
+	return nil
+}
+
+// ConfigureAsInput is a convenience function that configures a pin for default input mode.
+func (p Pin) ConfigureAsInput() error {
+	p.Configure(PinConfig{Mode: PinInput})
+	return nil
+}
+
 // Pins that are fixed by the chip.
 const (
 	UART_TX_PIN Pin = 1

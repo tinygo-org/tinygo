@@ -11,8 +11,8 @@ const (
 )
 
 func main() {
-	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	button.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+	led.ConfigureAsOutput()
+	button.ConfigureAsInput()
 
 	for {
 		if button.Get() {
