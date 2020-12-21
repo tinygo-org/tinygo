@@ -38,6 +38,19 @@ func runCCompiler(command string, flags ...string) error {
 
 // link invokes a linker with the given name and flags.
 func link(linker string, flags ...string) error {
+	if hasBuiltinTools && linker == "clang" {
+		// Compile this with the internal Clang compiler.
+		headerPath := getClangHeaderPath(goenv.Get("TINYGOROOT"))
+		if headerPath == "" {
+			return errors.New("could not locate Clang headers")
+		}
+		flags = append(flags, "-I"+headerPath)
+		cmd := exec.Command(os.Args[0], append([]string{"clang"}, flags...)...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+
 	if hasBuiltinTools && (linker == "ld.lld" || linker == "wasm-ld") {
 		// Run command with internal linker.
 		cmd := exec.Command(os.Args[0], append([]string{linker}, flags...)...)
