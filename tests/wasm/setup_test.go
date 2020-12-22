@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 )
 
@@ -166,7 +167,7 @@ func waitInnerTextMatch(sel string, re *regexp.Regexp) chromedp.QueryAction {
 
 	return chromedp.Query(sel, func(s *chromedp.Selector) {
 
-		chromedp.WaitFunc(func(ctx context.Context, cur *cdp.Frame, ids ...cdp.NodeID) ([]*cdp.Node, error) {
+		chromedp.WaitFunc(func(ctx context.Context, cur *cdp.Frame, execCtx runtime.ExecutionContextID, ids ...cdp.NodeID) ([]*cdp.Node, error) {
 
 			nodes := make([]*cdp.Node, len(ids))
 			cur.RLock()
