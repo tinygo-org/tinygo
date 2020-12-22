@@ -11,6 +11,9 @@ func TestChan(t *testing.T) {
 
 	t.Parallel()
 
+	wasmTmpDir, server, cleanup := startServer(t)
+	defer cleanup()
+
 	err := run("tinygo build -o " + wasmTmpDir + "/chan.wasm -target wasm testdata/chan.go")
 	if err != nil {
 		t.Fatal(err)
@@ -20,7 +23,7 @@ func TestChan(t *testing.T) {
 	defer cancel()
 
 	err = chromedp.Run(ctx,
-		chromedp.Navigate("http://localhost:8826/run?file=chan.wasm"),
+		chromedp.Navigate(server.URL+"/run?file=chan.wasm"),
 		waitLog(`1
 2
 4

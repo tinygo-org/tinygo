@@ -13,6 +13,9 @@ func TestFmtprint(t *testing.T) {
 
 	t.Parallel()
 
+	wasmTmpDir, server, cleanup := startServer(t)
+	defer cleanup()
+
 	err := run("tinygo build -o " + wasmTmpDir + "/fmtprint.wasm -target wasm testdata/fmtprint.go")
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +26,7 @@ func TestFmtprint(t *testing.T) {
 
 	var log1 string
 	err = chromedp.Run(ctx,
-		chromedp.Navigate("http://localhost:8826/run?file=fmtprint.wasm"),
+		chromedp.Navigate(server.URL+"/run?file=fmtprint.wasm"),
 		chromedp.Sleep(time.Second),
 		chromedp.InnerHTML("#log", &log1),
 		waitLog(`test from fmtprint 1

@@ -13,6 +13,9 @@ func TestLog(t *testing.T) {
 
 	t.Parallel()
 
+	wasmTmpDir, server, cleanup := startServer(t)
+	defer cleanup()
+
 	err := run("tinygo build -o " + wasmTmpDir + "/log.wasm -target wasm testdata/log.go")
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +26,7 @@ func TestLog(t *testing.T) {
 
 	var log1 string
 	err = chromedp.Run(ctx,
-		chromedp.Navigate("http://localhost:8826/run?file=log.wasm"),
+		chromedp.Navigate(server.URL+"/run?file=log.wasm"),
 		chromedp.Sleep(time.Second),
 		chromedp.InnerHTML("#log", &log1),
 		waitLogRe(`^..../../.. ..:..:.. log 1
