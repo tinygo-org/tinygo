@@ -13,6 +13,9 @@ func TestEvent(t *testing.T) {
 
 	t.Parallel()
 
+	wasmTmpDir, server, cleanup := startServer(t)
+	defer cleanup()
+
 	err := run("tinygo build -o " + wasmTmpDir + "/event.wasm -target wasm testdata/event.go")
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +26,7 @@ func TestEvent(t *testing.T) {
 
 	var log1, log2 string
 	err = chromedp.Run(ctx,
-		chromedp.Navigate("http://localhost:8826/run?file=event.wasm"),
+		chromedp.Navigate(server.URL+"/run?file=event.wasm"),
 		chromedp.WaitVisible("#log"),
 		chromedp.Sleep(time.Second),
 		chromedp.InnerHTML("#log", &log1),

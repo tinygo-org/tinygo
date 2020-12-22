@@ -20,6 +20,9 @@ func TestFmt(t *testing.T) {
 
 	t.Parallel()
 
+	wasmTmpDir, server, cleanup := startServer(t)
+	defer cleanup()
+
 	err := run("tinygo build -o " + wasmTmpDir + "/fmt.wasm -target wasm testdata/fmt.go")
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +33,7 @@ func TestFmt(t *testing.T) {
 
 	var log1 string
 	err = chromedp.Run(ctx,
-		chromedp.Navigate("http://localhost:8826/run?file=fmt.wasm"),
+		chromedp.Navigate(server.URL+"/run?file=fmt.wasm"),
 		chromedp.Sleep(time.Second),
 		chromedp.InnerHTML("#log", &log1),
 		waitLog(`did not panic`),
