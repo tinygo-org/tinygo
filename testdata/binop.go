@@ -70,6 +70,11 @@ func main() {
 	println(ashrNeg == -1)
 	println(ashrOverflow == 0)
 	println(ashrNegOverflow == -1)
+
+	// fix for a bug in constant numbers
+	println("constant number")
+	x := uint32(5)
+	println(uint32(x) / (20e0 / 1))
 }
 
 var x = true

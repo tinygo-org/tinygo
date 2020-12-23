@@ -2320,15 +2320,15 @@ func (b *builder) createConst(prefix string, expr *ssa.Const) llvm.Value {
 			return strObj
 		} else if typ.Kind() == types.UnsafePointer {
 			if !expr.IsNil() {
-				value, _ := constant.Uint64Val(expr.Value)
+				value, _ := constant.Uint64Val(constant.ToInt(expr.Value))
 				return llvm.ConstIntToPtr(llvm.ConstInt(b.uintptrType, value, false), b.i8ptrType)
 			}
 			return llvm.ConstNull(b.i8ptrType)
 		} else if typ.Info()&types.IsUnsigned != 0 {
-			n, _ := constant.Uint64Val(expr.Value)
+			n, _ := constant.Uint64Val(constant.ToInt(expr.Value))
 			return llvm.ConstInt(llvmType, n, false)
 		} else if typ.Info()&types.IsInteger != 0 { // signed
-			n, _ := constant.Int64Val(expr.Value)
+			n, _ := constant.Int64Val(constant.ToInt(expr.Value))
 			return llvm.ConstInt(llvmType, uint64(n), true)
 		} else if typ.Info()&types.IsFloat != 0 {
 			n, _ := constant.Float64Val(expr.Value)
