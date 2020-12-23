@@ -62,3 +62,5 @@ true
 true
 true
 true
+constant number
+0
