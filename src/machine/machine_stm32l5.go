@@ -219,7 +219,6 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 		stm32.RCC.APB1ENR1.SetBits(stm32.RCC_APB1ENR1_TIM3EN)
 	case unsafe.Pointer(stm32.TIM2): // TIM2 clock enable
 		stm32.RCC.APB1ENR1.SetBits(stm32.RCC_APB1ENR1_TIM2EN)
-
 	case unsafe.Pointer(stm32.UCPD1): // UCPD1 clock enable
 		stm32.RCC.APB1ENR2.SetBits(stm32.RCC_APB1ENR2_UCPD1EN)
 	case unsafe.Pointer(stm32.FDCAN1): // FDCAN1 clock enable
@@ -232,7 +231,6 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 		stm32.RCC.APB1ENR2.SetBits(stm32.RCC_APB1ENR2_I2C4EN)
 	case unsafe.Pointer(stm32.LPUART1): // LPUART1 clock enable
 		stm32.RCC.APB1ENR2.SetBits(stm32.RCC_APB1ENR2_LPUART1EN)
-
 	case unsafe.Pointer(stm32.TIM17): // TIM17 clock enable
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_TIM17EN)
 	case unsafe.Pointer(stm32.TIM16): // TIM16 clock enable
