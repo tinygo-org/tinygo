@@ -16,7 +16,7 @@ type UART struct {
 	Buffer          *RingBuffer
 	Bus             *stm32.USART_Type
 	Interrupt       interrupt.Interrupt
-	AltFuncSelector stm32.AltFunc
+	AltFuncSelector uint8
 
 	// Registers specific to the chip
 	rxReg       *volatile.Register32

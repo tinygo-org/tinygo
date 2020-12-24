@@ -1,7 +1,7 @@
 {
-	"inherits": ["cortex-m"],
+    "inherits": ["cortex-m"],
     "llvm-target": "armv7m-none-eabi",
-	"cflags": [
+    "cflags": [
         "--target=armv7m-none-eabi",
         "-mfloat-abi=soft",
         "-Qunused-arguments"
