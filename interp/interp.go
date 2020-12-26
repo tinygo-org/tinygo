@@ -21,6 +21,8 @@ type runner struct {
 	targetData    llvm.TargetData
 	builder       llvm.Builder
 	pointerSize   uint32                   // cached pointer size from the TargetData
+	i8ptrType     llvm.Type                // often used type so created in advance
+	maxAlign      int                      // maximum alignment of an object, alignment of runtime.alloc() result
 	debug         bool                     // log debug messages
 	pkgName       string                   // package name of the currently executing package
 	functionCache map[llvm.Value]*function // cache of compiled functions
@@ -43,6 +45,8 @@ func Run(mod llvm.Module, debug bool) error {
 		start:         time.Now(),
 	}
 	r.pointerSize = uint32(r.targetData.PointerSize())
+	r.i8ptrType = llvm.PointerType(mod.Context().Int8Type(), 0)
+	r.maxAlign = r.targetData.PrefTypeAlignment(r.i8ptrType) // assume pointers are maximally aligned (this is not always the case)
 
 	initAll := mod.NamedFunction("runtime.initAll")
 	bb := initAll.EntryBasicBlock()

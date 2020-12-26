@@ -522,6 +522,7 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Valu
 			globalType := initializer.Type()
 			llvmValue = llvm.AddGlobal(mem.r.mod, globalType, obj.globalName)
 			llvmValue.SetInitializer(initializer)
+			llvmValue.SetAlignment(mem.r.maxAlign)
 			obj.llvmGlobal = llvmValue
 			mem.put(v.index(), obj)
 		} else {
@@ -795,7 +796,6 @@ func (v *mapValue) toLLVMValue(hashmapType llvm.Type, mem *memoryView) llvm.Valu
 
 	// Convert these buckets into LLVM global variables.
 	ctx := v.r.mod.Context()
-	i8ptrType := llvm.PointerType(ctx.Int8Type(), 0)
 	var nextBucket llvm.Value
 	for i := len(buckets) - 1; i >= 0; i-- {
 		bucket = buckets[i]
@@ -804,9 +804,9 @@ func (v *mapValue) toLLVMValue(hashmapType llvm.Type, mem *memoryView) llvm.Valu
 	}
 	firstBucket := nextBucket
 	if firstBucket.IsNil() {
-		firstBucket = llvm.ConstNull(i8ptrType)
+		firstBucket = llvm.ConstNull(mem.r.i8ptrType)
 	} else {
-		firstBucket = llvm.ConstBitCast(firstBucket, i8ptrType)
+		firstBucket = llvm.ConstBitCast(firstBucket, mem.r.i8ptrType)
 	}
 
 	// Create the hashmap itself, pointing to these buckets.
