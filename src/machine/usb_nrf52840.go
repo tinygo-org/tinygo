@@ -12,8 +12,9 @@ import (
 
 // USBCDC is the USB CDC aka serial over USB interface on the nRF52840
 type USBCDC struct {
-	Buffer    *RingBuffer
-	interrupt interrupt.Interrupt
+	Buffer       *RingBuffer
+	interrupt    interrupt.Interrupt
+	initcomplete bool
 }
 
 // WriteByte writes a byte of data to the USB CDC interface.
@@ -87,6 +88,10 @@ func exitCriticalSection() {
 
 // Configure the USB CDC interface. The config is here for compatibility with the UART interface.
 func (usbcdc *USBCDC) Configure(config UARTConfig) {
+	if usbcdc.initcomplete {
+		return
+	}
+
 	// Enable IRQ. Make sure this is higher than the SWI2 interrupt handler so
 	// that it is possible to print to the console from a BLE interrupt. You
 	// shouldn't generally do that but it is useful for debugging and panic
@@ -107,6 +112,8 @@ func (usbcdc *USBCDC) Configure(config UARTConfig) {
 	)
 
 	nrf.USBD.USBPULLUP.Set(0)
+
+	usbcdc.initcomplete = true
 }
 
 func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
