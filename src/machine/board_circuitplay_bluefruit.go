@@ -58,7 +58,7 @@ const (
 
 // UART0 is the USB device
 var (
-	UART0 = USB
+	UART0 = &USB
 )
 
 // I2C pins
