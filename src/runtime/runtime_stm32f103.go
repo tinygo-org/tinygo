@@ -1,4 +1,4 @@
-// +build stm32,stm32f103xx
+// +build stm32,stm32f103
 
 package runtime
 
@@ -23,10 +23,10 @@ func putchar(c byte) {
 
 // initCLK sets clock to 72MHz using HSE 8MHz crystal w/ PLL X 9 (8MHz x 9 = 72MHz).
 func initCLK() {
-	stm32.FLASH.ACR.SetBits(stm32.FLASH_ACR_LATENCY_2)    // Two wait states, per datasheet
-	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE1_DIV_2)    // prescale PCLK1 = HCLK/2
-	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE2_DIV_NONE) // prescale PCLK2 = HCLK/1
-	stm32.RCC.CR.SetBits(stm32.RCC_CR_HSEON)              // enable HSE clock
+	stm32.FLASH.ACR.SetBits(stm32.FLASH_ACR_LATENCY_WS2)                          // Two wait states, per datasheet
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE1_Div2 << stm32.RCC_CFGR_PPRE1_Pos) // prescale PCLK1 = HCLK/2
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE2_Div1 << stm32.RCC_CFGR_PPRE2_Pos) // prescale PCLK2 = HCLK/1
+	stm32.RCC.CR.SetBits(stm32.RCC_CR_HSEON)                                      // enable HSE clock
 
 	// wait for the HSEREADY flag
 	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_HSERDY) {
@@ -38,9 +38,9 @@ func initCLK() {
 	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_HSIRDY) {
 	}
 
-	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PLLSRC)   // set PLL source to HSE
-	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PLLMUL_9) // multiply by 9
-	stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)        // enable the PLL
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PLLSRC)                                   // set PLL source to HSE
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PLLMUL_Mul9 << stm32.RCC_CFGR_PLLMUL_Pos) // multiply by 9
+	stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)                                        // enable the PLL
 
 	// wait for the PLLRDY flag
 	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_PLLRDY) {
@@ -49,7 +49,7 @@ func initCLK() {
 	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_SW_PLL) // set clock source to pll
 
 	// wait for PLL to be CLK
-	for !stm32.RCC.CFGR.HasBits(stm32.RCC_CFGR_SWS_PLL) {
+	for !stm32.RCC.CFGR.HasBits(stm32.RCC_CFGR_SWS_PLL << stm32.RCC_CFGR_SWS_Pos) {
 	}
 }
 
@@ -75,7 +75,7 @@ func initRTC() {
 	}
 
 	// Select LSE
-	stm32.RCC.BDCR.SetBits(stm32.RCC_RTCCLKSource_LSE)
+	stm32.RCC.BDCR.SetBits(stm32.RCC_BDCR_RTCSEL_LSE << stm32.RCC_BDCR_RTCSEL_Pos)
 
 	// set prescaler to "max" per datasheet
 	stm32.RTC.PRLH.Set(stm32.RTC_PRLH_PRLH_Msk)

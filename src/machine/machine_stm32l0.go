@@ -164,7 +164,7 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_USART2EN)
 	case unsafe.Pointer(stm32.SPI2): // SPI2 clock enable
 		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_SPI2EN)
-	case unsafe.Pointer(stm32.LPUSART1): // LPUSART1 clock enable
+	case unsafe.Pointer(stm32.LPUART1): // LPUART1 clock enable
 		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_LPUART1EN)
 	case unsafe.Pointer(stm32.WWDG): // Window watchdog clock enable
 		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_WWDGEN)
@@ -176,7 +176,7 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_TIM3EN)
 	case unsafe.Pointer(stm32.TIM2): // TIM2 clock enable
 		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_TIM2EN)
-	case unsafe.Pointer(stm32.SYSCFG_COMP): // System configuration controller clock enable
+	case unsafe.Pointer(stm32.SYSCFG): // System configuration controller clock enable
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_SYSCFGEN)
 	case unsafe.Pointer(stm32.SPI1): // SPI1 clock enable
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_SPI1EN)
@@ -194,7 +194,7 @@ type UART struct {
 	Buffer          *RingBuffer
 	Bus             *stm32.USART_Type
 	Interrupt       interrupt.Interrupt
-	AltFuncSelector stm32.AltFunc
+	AltFuncSelector uint8
 }
 
 // Configure the UART.
@@ -208,7 +208,7 @@ func (uart UART) configurePins(config UARTConfig) {
 func (uart UART) getBaudRateDivisor(baudRate uint32) uint32 {
 	var clock, rate uint32
 	switch uart.Bus {
-	case stm32.LPUSART1:
+	case stm32.LPUART1:
 		clock = CPUFrequency() / 2 // APB1 Frequency
 		rate = uint32((256 * clock) / baudRate)
 	case stm32.USART1:
@@ -227,7 +227,7 @@ func (uart UART) getBaudRateDivisor(baudRate uint32) uint32 {
 // SPI on the STM32Fxxx using MODER / alternate function pins
 type SPI struct {
 	Bus             *stm32.SPI_Type
-	AltFuncSelector stm32.AltFunc
+	AltFuncSelector uint8
 }
 
 // Set baud rate for SPI
@@ -255,26 +255,26 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 	// TODO: also include the MCU/APB clock setting in the equation
 	switch {
 	case localFrequency < 328125:
-		conf = stm32.SPI_PCLK_256
+		conf = stm32.SPI_CR1_BR_Div256
 	case localFrequency < 656250:
-		conf = stm32.SPI_PCLK_128
+		conf = stm32.SPI_CR1_BR_Div128
 	case localFrequency < 1312500:
-		conf = stm32.SPI_PCLK_64
+		conf = stm32.SPI_CR1_BR_Div64
 	case localFrequency < 2625000:
-		conf = stm32.SPI_PCLK_32
+		conf = stm32.SPI_CR1_BR_Div32
 	case localFrequency < 5250000:
-		conf = stm32.SPI_PCLK_16
+		conf = stm32.SPI_CR1_BR_Div16
 	case localFrequency < 10500000:
-		conf = stm32.SPI_PCLK_8
+		conf = stm32.SPI_CR1_BR_Div8
 		// NOTE: many SPI components won't operate reliably (or at all) above 10MHz
 		// Check the datasheet of the part
 	case localFrequency < 21000000:
-		conf = stm32.SPI_PCLK_4
+		conf = stm32.SPI_CR1_BR_Div4
 	case localFrequency < 42000000:
-		conf = stm32.SPI_PCLK_2
+		conf = stm32.SPI_CR1_BR_Div2
 	default:
 		// None of the specific baudrates were selected; choose the lowest speed
-		conf = stm32.SPI_PCLK_256
+		conf = stm32.SPI_CR1_BR_Div256
 	}
 
 	return conf << stm32.SPI_CR1_BR_Pos

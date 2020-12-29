@@ -20,7 +20,7 @@ type UART struct {
 	Buffer          *RingBuffer
 	Bus             *stm32.USART_Type
 	Interrupt       interrupt.Interrupt
-	AltFuncSelector stm32.AltFunc
+	AltFuncSelector uint8
 }
 
 // Configure the UART.

@@ -77,11 +77,11 @@ func initCLK() {
 		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_PWREN)
 		stm32.PWR.CR.SetBits(0x4000) // PWR_CR_VOS
 		// HCLK = SYSCLK / 1
-		stm32.RCC.CFGR.SetBits(0x0 << stm32.RCC_CFGR_HPRE_Pos)
+		stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_HPRE_Div1 << stm32.RCC_CFGR_HPRE_Pos)
 		// PCLK2 = HCLK / 2
-		stm32.RCC.CFGR.SetBits(0x4 << stm32.RCC_CFGR_PPRE2_Pos)
+		stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE2_Div2 << stm32.RCC_CFGR_PPRE2_Pos)
 		// PCLK1 = HCLK / 4
-		stm32.RCC.CFGR.SetBits(0x5 << stm32.RCC_CFGR_PPRE1_Pos)
+		stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE1_Div4 << stm32.RCC_CFGR_PPRE1_Pos)
 		// Configure the main PLL
 		// PLL Options - See RM0090 Reference Manual pg. 95
 		stm32.RCC.PLLCFGR.Set(PLL_M | (PLL_N << 6) | (((PLL_P >> 1) - 1) << 16) |
@@ -94,9 +94,9 @@ func initCLK() {
 		// Configure Flash prefetch, Instruction cache, Data cache and wait state
 		stm32.FLASH.ACR.Set(stm32.FLASH_ACR_ICEN | stm32.FLASH_ACR_DCEN | (5 << stm32.FLASH_ACR_LATENCY_Pos))
 		// Select the main PLL as system clock source
-		stm32.RCC.CFGR.ClearBits(stm32.RCC_CFGR_SW0 | stm32.RCC_CFGR_SW1)
-		stm32.RCC.CFGR.SetBits(0x2 << stm32.RCC_CFGR_SW0_Pos)
-		for (stm32.RCC.CFGR.Get() & (0x3 << stm32.RCC_CFGR_SWS0_Pos)) != (0x2 << stm32.RCC_CFGR_SWS0_Pos) {
+		stm32.RCC.CFGR.ClearBits(stm32.RCC_CFGR_SW_Msk)
+		stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_SW_PLL << stm32.RCC_CFGR_SW_Pos)
+		for (stm32.RCC.CFGR.Get() & stm32.RCC_CFGR_SWS_Msk) != (stm32.RCC_CFGR_SWS_PLL << stm32.RCC_CFGR_SWS_Pos) {
 		}
 
 	} else {

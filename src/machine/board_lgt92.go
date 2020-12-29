@@ -55,7 +55,7 @@ var (
 	// Console UART (LPUSART1)
 	UART0 = UART{
 		Buffer:          NewRingBuffer(),
-		Bus:             stm32.LPUSART1,
+		Bus:             stm32.LPUART1,
 		AltFuncSelector: 6,
 	}
 

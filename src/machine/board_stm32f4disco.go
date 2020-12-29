@@ -30,7 +30,7 @@ var (
 	UART0 = UART{
 		Buffer:          NewRingBuffer(),
 		Bus:             stm32.USART2,
-		AltFuncSelector: stm32.AF7_USART1_2_3,
+		AltFuncSelector: AF7_USART1_2_3,
 	}
 	UART1 = &UART0
 )
@@ -62,7 +62,7 @@ const (
 var (
 	SPI0 = SPI{
 		Bus:             stm32.SPI1,
-		AltFuncSelector: stm32.AF5_SPI1_SPI2,
+		AltFuncSelector: AF5_SPI1_SPI2,
 	}
 	SPI1 = &SPI0
 )

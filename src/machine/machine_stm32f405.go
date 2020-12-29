@@ -14,13 +14,33 @@ func CPUFrequency() uint32 {
 	return 168000000
 }
 
+// Alternative peripheral pin functions
+const (
+	AF0_SYSTEM                = 0
+	AF1_TIM1_2                = 1
+	AF2_TIM3_4_5              = 2
+	AF3_TIM8_9_10_11          = 3
+	AF4_I2C1_2_3              = 4
+	AF5_SPI1_SPI2             = 5
+	AF6_SPI3                  = 6
+	AF7_USART1_2_3            = 7
+	AF8_USART4_5_6            = 8
+	AF9_CAN1_CAN2_TIM12_13_14 = 9
+	AF10_OTG_FS_OTG_HS        = 10
+	AF11_ETH                  = 11
+	AF12_FSMC_SDIO_OTG_HS_1   = 12
+	AF13_DCMI                 = 13
+	AF14                      = 14
+	AF15_EVENTOUT             = 15
+)
+
 // -- UART ---------------------------------------------------------------------
 
 type UART struct {
 	Buffer          *RingBuffer
 	Bus             *stm32.USART_Type
 	Interrupt       interrupt.Interrupt
-	AltFuncSelector stm32.AltFunc
+	AltFuncSelector uint8
 }
 
 func (uart UART) configurePins(config UARTConfig) {
@@ -44,7 +64,7 @@ func (uart UART) getBaudRateDivisor(baudRate uint32) uint32 {
 
 type SPI struct {
 	Bus             *stm32.SPI_Type
-	AltFuncSelector stm32.AltFunc
+	AltFuncSelector uint8
 }
 
 func (spi SPI) configurePins(config SPIConfig) {
@@ -93,7 +113,7 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 
 type I2C struct {
 	Bus             *stm32.I2C_Type
-	AltFuncSelector stm32.AltFunc
+	AltFuncSelector uint8
 }
 
 func (i2c I2C) configurePins(config I2CConfig) {
