@@ -93,9 +93,9 @@ func initOsc() {
 	stm32.RCC.PLLCFGR.Set(0x20000000 |
 		(1 << stm32.RCC_PLLCFGR_PLLSRC_Pos) | // 1 = HSE
 		PLL_M |
-		(PLL_N << stm32.RCC_PLLCFGR_PLLN0_Pos) |
-		(((PLL_P >> 1) - 1) << stm32.RCC_PLLCFGR_PLLP0_Pos) |
-		(PLL_Q << stm32.RCC_PLLCFGR_PLLQ0_Pos))
+		(PLL_N << stm32.RCC_PLLCFGR_PLLN_Pos) |
+		(((PLL_P >> 1) - 1) << stm32.RCC_PLLCFGR_PLLP_Pos) |
+		(PLL_Q << stm32.RCC_PLLCFGR_PLLQ_Pos))
 
 	// Enable the PLL, wait until ready
 	stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)

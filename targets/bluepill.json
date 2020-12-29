@@ -1,14 +1,14 @@
 {
 	"inherits": ["cortex-m"],
 	"llvm-target": "armv7m-none-eabi",
-	"build-tags": ["bluepill", "stm32f103xx", "stm32"],
+	"build-tags": ["bluepill", "stm32f103", "stm32"],
 	"cflags": [
 		"--target=armv7m-none-eabi",
 		"-Qunused-arguments"
 	],
 	"linkerscript": "targets/stm32.ld",
 	"extra-files": [
-		"src/device/stm32/stm32f103xx.s"
+		"src/device/stm32/stm32f103.s"
 	],
 	"flash-method": "openocd",
 	"openocd-interface": "stlink-v2",

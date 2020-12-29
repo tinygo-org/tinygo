@@ -122,17 +122,17 @@ var (
 	UART1 = UART{
 		Buffer:          NewRingBuffer(),
 		Bus:             stm32.USART3,
-		AltFuncSelector: stm32.AF7_USART1_2_3,
+		AltFuncSelector: AF7_USART1_2_3,
 	}
 	UART2 = UART{
 		Buffer:          NewRingBuffer(),
 		Bus:             stm32.USART6,
-		AltFuncSelector: stm32.AF8_USART4_5_6,
+		AltFuncSelector: AF8_USART4_5_6,
 	}
 	UART3 = UART{
 		Buffer:          NewRingBuffer(),
 		Bus:             stm32.USART1,
-		AltFuncSelector: stm32.AF7_USART1_2_3,
+		AltFuncSelector: AF7_USART1_2_3,
 	}
 	UART0 = UART1
 )
@@ -181,15 +181,15 @@ const (
 var (
 	SPI1 = SPI{
 		Bus:             stm32.SPI2,
-		AltFuncSelector: stm32.AF5_SPI1_SPI2,
+		AltFuncSelector: AF5_SPI1_SPI2,
 	}
 	SPI2 = SPI{
 		Bus:             stm32.SPI3,
-		AltFuncSelector: stm32.AF6_SPI3,
+		AltFuncSelector: AF6_SPI3,
 	}
 	SPI3 = SPI{
 		Bus:             stm32.SPI1,
-		AltFuncSelector: stm32.AF5_SPI1_SPI2,
+		AltFuncSelector: AF5_SPI1_SPI2,
 	}
 	SPI0 = SPI1
 )
@@ -229,15 +229,15 @@ const (
 var (
 	I2C1 = I2C{
 		Bus:             stm32.I2C1,
-		AltFuncSelector: stm32.AF4_I2C1_2_3,
+		AltFuncSelector: AF4_I2C1_2_3,
 	}
 	I2C2 = I2C{
 		Bus:             stm32.I2C2,
-		AltFuncSelector: stm32.AF4_I2C1_2_3,
+		AltFuncSelector: AF4_I2C1_2_3,
 	}
 	I2C3 = I2C{
 		Bus:             stm32.I2C1,
-		AltFuncSelector: stm32.AF4_I2C1_2_3,
+		AltFuncSelector: AF4_I2C1_2_3,
 	}
 	I2C0 = I2C1
 )

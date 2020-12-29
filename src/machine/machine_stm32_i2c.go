@@ -1,4 +1,4 @@
-// +build stm32,!stm32f103xx,!stm32f407,!stm32f7x2,!stm32l0
+// +build stm32,!stm32f103,!stm32f407,!stm32f7x2,!stm32l0
 
 package machine
 
@@ -110,10 +110,10 @@ type (
 )
 
 func (sa address7Bit) toRead() uint32 {
-	return uint32(((uint8(sa) << 1) | uint8(stm32.I2C_OAR1_ADD0)) & 0xFF)
+	return uint32(((uint8(sa) << 1) | 1) & 0xFF)
 }
 func (sa address7Bit) toWrite() uint32 {
-	return uint32(((uint8(sa) << 1) & ^(uint8(stm32.I2C_OAR1_ADD0))) & 0xFF)
+	return uint32((uint8(sa) << 1) & 0xFF)
 }
 func (sa address7Bit) bitSize() uint8 { return 7 } // 7-bit addresses
 

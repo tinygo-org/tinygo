@@ -1,4 +1,4 @@
-// +build stm32,stm32f103xx
+// +build stm32,stm32f103
 
 package machine
 
@@ -169,21 +169,21 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 	switch config.Frequency {
 	case 125000:
 		// Note: impossible to achieve lower frequency with current PCLK2!
-		conf |= stm32.SPI_BaudRatePrescaler_256
+		conf |= stm32.SPI_CR1_BR_Div256
 	case 250000:
-		conf |= stm32.SPI_BaudRatePrescaler_256
+		conf |= stm32.SPI_CR1_BR_Div256
 	case 500000:
-		conf |= stm32.SPI_BaudRatePrescaler_128
+		conf |= stm32.SPI_CR1_BR_Div128
 	case 1000000:
-		conf |= stm32.SPI_BaudRatePrescaler_64
+		conf |= stm32.SPI_CR1_BR_Div64
 	case 2000000:
-		conf |= stm32.SPI_BaudRatePrescaler_32
+		conf |= stm32.SPI_CR1_BR_Div32
 	case 4000000:
-		conf |= stm32.SPI_BaudRatePrescaler_16
+		conf |= stm32.SPI_CR1_BR_Div16
 	case 8000000:
-		conf |= stm32.SPI_BaudRatePrescaler_8
+		conf |= stm32.SPI_CR1_BR_Div8
 	default:
-		conf |= stm32.SPI_BaudRatePrescaler_256
+		conf |= stm32.SPI_CR1_BR_Div256
 	}
 	return conf
 }
@@ -542,7 +542,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	return nil
 }
 
-const i2cTimeout = 500
+const i2cTimeout = 1000
 
 // signalStart sends a start signal.
 func (i2c I2C) signalStart() error {

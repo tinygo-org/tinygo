@@ -13,6 +13,26 @@ func CPUFrequency() uint32 {
 	return 168000000
 }
 
+// Alternative peripheral pin functions
+const (
+	AF0_SYSTEM                = 0
+	AF1_TIM1_2                = 1
+	AF2_TIM3_4_5              = 2
+	AF3_TIM8_9_10_11          = 3
+	AF4_I2C1_2_3              = 4
+	AF5_SPI1_SPI2             = 5
+	AF6_SPI3                  = 6
+	AF7_USART1_2_3            = 7
+	AF8_USART4_5_6            = 8
+	AF9_CAN1_CAN2_TIM12_13_14 = 9
+	AF10_OTG_FS_OTG_HS        = 10
+	AF11_ETH                  = 11
+	AF12_FSMC_SDIO_OTG_HS_1   = 12
+	AF13_DCMI                 = 13
+	AF14                      = 14
+	AF15_EVENTOUT             = 15
+)
+
 //---------- UART related types and code
 
 // UART representation
@@ -20,7 +40,7 @@ type UART struct {
 	Buffer          *RingBuffer
 	Bus             *stm32.USART_Type
 	Interrupt       interrupt.Interrupt
-	AltFuncSelector stm32.AltFunc
+	AltFuncSelector uint8
 }
 
 // Configure the UART.
@@ -48,7 +68,7 @@ func (uart UART) getBaudRateDivisor(baudRate uint32) uint32 {
 // SPI on the STM32Fxxx using MODER / alternate function pins
 type SPI struct {
 	Bus             *stm32.SPI_Type
-	AltFuncSelector stm32.AltFunc
+	AltFuncSelector uint8
 }
 
 // Set baud rate for SPI
@@ -70,26 +90,26 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 	// TODO: also include the MCU/APB clock setting in the equation
 	switch true {
 	case localFrequency < 328125:
-		conf = stm32.SPI_PCLK_256
+		conf = stm32.SPI_CR1_BR_Div256
 	case localFrequency < 656250:
-		conf = stm32.SPI_PCLK_128
+		conf = stm32.SPI_CR1_BR_Div128
 	case localFrequency < 1312500:
-		conf = stm32.SPI_PCLK_64
+		conf = stm32.SPI_CR1_BR_Div64
 	case localFrequency < 2625000:
-		conf = stm32.SPI_PCLK_32
+		conf = stm32.SPI_CR1_BR_Div32
 	case localFrequency < 5250000:
-		conf = stm32.SPI_PCLK_16
+		conf = stm32.SPI_CR1_BR_Div16
 	case localFrequency < 10500000:
-		conf = stm32.SPI_PCLK_8
+		conf = stm32.SPI_CR1_BR_Div8
 		// NOTE: many SPI components won't operate reliably (or at all) above 10MHz
 		// Check the datasheet of the part
 	case localFrequency < 21000000:
-		conf = stm32.SPI_PCLK_4
+		conf = stm32.SPI_CR1_BR_Div4
 	case localFrequency < 42000000:
-		conf = stm32.SPI_PCLK_2
+		conf = stm32.SPI_CR1_BR_Div2
 	default:
 		// None of the specific baudrates were selected; choose the lowest speed
-		conf = stm32.SPI_PCLK_256
+		conf = stm32.SPI_CR1_BR_Div256
 	}
 
 	return conf << stm32.SPI_CR1_BR_Pos
