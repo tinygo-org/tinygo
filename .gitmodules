@@ -20,3 +20,6 @@
 [submodule "lib/picolibc"]
 	path = lib/picolibc
 	url = https://github.com/keith-packard/picolibc.git
+[submodule "lib/stm32-rs"]
+	path = lib/stm32-rs
+	url = https://github.com/stm32-rs/stm32-rs.git

@@ -130,7 +130,12 @@ gen-device-kendryte: build/gen-device-svd
 	GO111MODULE=off $(GO) fmt ./src/device/kendryte
 
 gen-device-stm32: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/STMicro lib/cmsis-svd/data/STMicro/ src/device/stm32/
+	make -C ./lib/stm32-rs/ svd/.extracted
+	make -C ./lib/stm32-rs/ patch
+	mkdir -p ./lib/stm32-rs/patched
+	$(foreach file, $(wildcard ./lib/stm32-rs/svd/*.svd.patched), \
+		cp $(file) $(patsubst ./lib/stm32-rs/svd/%.svd.patched,./lib/stm32-rs/patched/%.svd,$(file)) &&) true
+	./build/gen-device-svd -source=https://github.com/stm32-rs/stm32-rs lib/stm32-rs/patched/ src/device/stm32/
 	GO111MODULE=off $(GO) fmt ./src/device/stm32
 
 

@@ -61,10 +61,14 @@ type SVDField struct {
 	BitWidth         *uint32 `xml:"bitWidth"`
 	BitRange         *string `xml:"bitRange"`
 	EnumeratedValues []struct {
-		Name        string `xml:"name"`
-		Description string `xml:"description"`
-		Value       string `xml:"value"`
-	} `xml:"enumeratedValues>enumeratedValue"`
+		Name   string `xml:"name"`
+		Usage  string `xml:"usage"`
+		Values []struct {
+			Name        string `xml:"name"`
+			Description string `xml:"description"`
+			Value       string `xml:"value"`
+		} `xml:"enumeratedValue"`
+	} `xml:"enumeratedValues"`
 }
 
 type SVDCluster struct {
@@ -528,35 +532,51 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 				value:       1 << lsb,
 			})
 		}
-		for _, enumEl := range fieldEl.EnumeratedValues {
-			enumName := enumEl.Name
-			if strings.EqualFold(enumName, "reserved") || !validName.MatchString(enumName) {
-				continue
-			}
-			if !unicode.IsUpper(rune(enumName[0])) && !unicode.IsDigit(rune(enumName[0])) {
-				enumName = strings.ToUpper(enumName)
-			}
-			enumDescription := strings.Replace(enumEl.Description, "\n", " ", -1)
-			enumValue, err := strconv.ParseUint(enumEl.Value, 0, 32)
-			if err != nil {
-				if enumBitSpecifier.MatchString(enumEl.Value) {
-					// NXP SVDs use the form #xx1x, #x0xx, etc for values
-					enumValue, err = strconv.ParseUint(strings.Replace(enumEl.Value[1:], "x", "0", -1), 2, 32)
-					if err != nil {
-						panic(err)
-					}
-				} else {
-					panic(err)
+
+		hasUsageSuffix := len(fieldEl.EnumeratedValues) > 1
+		for _, enumsEl := range fieldEl.EnumeratedValues {
+			usageSuffix := ""
+			if hasUsageSuffix {
+				switch enumsEl.Usage {
+				case "read":
+					usageSuffix = "_R"
+				case "write":
+					usageSuffix = "_W"
+				case "read-write":
+					usageSuffix = "_RW"
 				}
 			}
-			enumName = fmt.Sprintf("%s_%s%s_%s_%s", groupName, bitfieldPrefix, regName, fieldName, enumName)
-			_, seen := enumSeen[enumName]
-			enumSeen[enumName] = seen
-			fields = append(fields, Bitfield{
-				name:        enumName,
-				description: enumDescription,
-				value:       uint32(enumValue),
-			})
+
+			for _, enumEl := range enumsEl.Values {
+				enumName := enumEl.Name
+				if strings.EqualFold(enumName, "reserved") || !validName.MatchString(enumName) {
+					continue
+				}
+				if !unicode.IsUpper(rune(enumName[0])) && !unicode.IsDigit(rune(enumName[0])) {
+					enumName = strings.ToUpper(enumName)
+				}
+				enumDescription := strings.Replace(enumEl.Description, "\n", " ", -1)
+				enumValue, err := strconv.ParseUint(enumEl.Value, 0, 32)
+				if err != nil {
+					if enumBitSpecifier.MatchString(enumEl.Value) {
+						// NXP SVDs use the form #xx1x, #x0xx, etc for values
+						enumValue, err = strconv.ParseUint(strings.Replace(enumEl.Value[1:], "x", "0", -1), 2, 32)
+						if err != nil {
+							panic(err)
+						}
+					} else {
+						panic(err)
+					}
+				}
+				enumName = fmt.Sprintf("%s_%s%s_%s_%s%s", groupName, bitfieldPrefix, regName, fieldName, enumName, usageSuffix)
+				_, seen := enumSeen[enumName]
+				enumSeen[enumName] = seen
+				fields = append(fields, Bitfield{
+					name:        enumName,
+					description: enumDescription,
+					value:       uint32(enumValue),
+				})
+			}
 		}
 	}
 	// check if any of the field names appeared more than once. if so, append
