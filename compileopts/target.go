@@ -52,6 +52,7 @@ type TargetSpec struct {
 	OpenOCDInterface string   `json:"openocd-interface"`
 	OpenOCDTarget    string   `json:"openocd-target"`
 	OpenOCDTransport string   `json:"openocd-transport"`
+	OpenOCDCommands  []string `json:"openocd-commands"`
 	JLinkDevice      string   `json:"jlink-device"`
 	CodeModel        string   `json:"code-model"`
 	RelocationModel  string   `json:"relocation-model"`

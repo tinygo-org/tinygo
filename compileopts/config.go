@@ -303,6 +303,9 @@ func (c *Config) OpenOCDConfiguration() (args []string, err error) {
 		return nil, fmt.Errorf("unknown OpenOCD transport: %#v", c.Target.OpenOCDTransport)
 	}
 	args = []string{"-f", "interface/" + openocdInterface + ".cfg"}
+	for _, cmd := range c.Target.OpenOCDCommands {
+		args = append(args, "-c", cmd)
+	}
 	if c.Target.OpenOCDTransport != "" {
 		args = append(args, "-c", "transport select "+c.Target.OpenOCDTransport)
 	}
