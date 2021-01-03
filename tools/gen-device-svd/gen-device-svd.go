@@ -350,7 +350,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 			sort.SliceStable(clusterRegisters, func(i, j int) bool {
 				return clusterRegisters[i].address < clusterRegisters[j].address
 			})
-			if dimIncrement == -1 {
+			if dimIncrement == -1 && len(clusterRegisters) > 0 {
 				lastReg := clusterRegisters[len(clusterRegisters)-1]
 				lastAddress := lastReg.address
 				if lastReg.array != -1 {
@@ -537,7 +537,14 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 				enumName = strings.ToUpper(enumName)
 			}
 			enumDescription := strings.Replace(enumEl.Description, "\n", " ", -1)
-			enumValue, err := strconv.ParseUint(enumEl.Value, 0, 32)
+			var enumValue uint64
+			var err error
+			if strings.HasPrefix(enumEl.Value, "0b") {
+				val := strings.TrimPrefix(enumEl.Value, "0b")
+				enumValue, err = strconv.ParseUint(val, 2, 32)
+			} else {
+				enumValue, err = strconv.ParseUint(enumEl.Value, 0, 32)
+			}
 			if err != nil {
 				if enumBitSpecifier.MatchString(enumEl.Value) {
 					// NXP SVDs use the form #xx1x, #x0xx, etc for values
