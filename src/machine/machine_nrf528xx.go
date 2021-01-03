@@ -1,4 +1,4 @@
-// +build nrf52 nrf52840
+// +build nrf52 nrf52840 nrf52833
 
 package machine
 

@@ -1,0 +1,8 @@
+{
+	"inherits": ["nrf52833"],
+	"build-tags": ["microbit_v2"],
+	"flash-method": "msd",
+	"openocd-interface": "cmsis-dap",
+	"msd-volume-name": "MICROBIT",
+	"msd-firmware-name": "firmware.hex"
+}

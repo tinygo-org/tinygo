@@ -209,6 +209,8 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=microbit            examples/microbit-blink
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=microbit-v2         examples/microbit-blink
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/pininterrupt
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/serial
