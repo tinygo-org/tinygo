@@ -1,0 +1,17 @@
+{
+	"inherits": ["cortex-m4"],
+	"build-tags": ["nrf52833", "nrf"],
+	"cflags": [
+		"-Qunused-arguments",
+		"-DNRF52833_XXAA",
+		"-I{root}/lib/CMSIS/CMSIS/Include",
+		"-I{root}/lib/nrfx/mdk"
+	],
+	"linkerscript": "targets/nrf52833.ld",
+	"extra-files": [
+		"lib/nrfx/mdk/system_nrf52833.c",
+		"src/device/nrf/nrf52833.s"
+	],
+	"openocd-transport": "swd",
+	"openocd-target": "nrf52"
+}
