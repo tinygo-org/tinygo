@@ -56,9 +56,6 @@ func initCLK() {
 	// Use PLL As System clock
 	stm32.RCC.CFGR.SetBits(0b11)
 
-	// sysclt_clockout will clock out systemclck to PA8 to control
-	// the clock with logic analtzer
-	//sysclt_clockout()
 }
 
 var (
@@ -162,23 +159,10 @@ func ticks() timeUnit {
 
 	//Second fraction in milliseconds
 	ssec := uint64((1000 * (prediv - rSubSec)) / (prediv + 1))
-	/*
-		if subsec > prediv {
-			tsec--
-		}
-	*/
 
 	timerCounter := uint64(tsec * 1000) // Timestamp in millis
 	timerCounter += ssec                // Add sub-seconds
 	timerCounter *= 1000                // Convert to micros
-
-	//println("RTC:")
-	//println(" rTime:", rTime)
-	//println(" rDate:", rDate)
-	//println(" tsec:", tsec)
-	//println(" subsec:", rSubSec)
-	//println(" prediv:", prediv)
-	//println(ssec, "/", prediv)
 
 	// change since last measurement
 	offset := (timerCounter - timerLastCounter)
@@ -190,32 +174,6 @@ func ticks() timeUnit {
 // ticks are in microseconds
 func timerSleep(ticks uint32) {
 	timerWakeup.Set(0)
-
-	// STM32 timer update event period is calculated as follows:
-	//
-	// 			Update_event = TIM_CLK/((PSC + 1)*(ARR + 1)*(RCR + 1))
-	//
-	// Where:
-	//
-	//			TIM_CLK = timer clock input
-	// 			PSC = 16-bit prescaler register
-	// 			ARR = 16/32-bit Autoreload register
-	// 			RCR = 16-bit repetition counter
-	//
-	// Example:
-	//
-	//			TIM_CLK = 72 MHz
-	// 			Prescaler = 1
-	// 			Auto reload = 65535
-	// 			No repetition counter RCR = 0
-	// 			Update_event = 72*(10^6)/((1 + 1)*(65535 + 1)*(1))
-	// 			Update_event = 549.3 Hz
-	//
-	// Set the timer prescaler/autoreload timing registers.
-
-	// TODO: support smaller or larger scales (autoscaling) based
-	// on the length of sleep time requested.
-	// The current scaling only supports a range of 200 usec to 6553 msec.
 
 	// prescale counter down from 32mhz to 10khz aka 0.1 ms frequency.
 	clk := machine.CPUFrequency() / 2
@@ -250,32 +208,7 @@ func handleTIM3(interrupt.Interrupt) {
 		// clear the update flag
 		stm32.TIM3.SR.ClearBits(stm32.TIM_SR_UIF)
 
-		//machine.LED_BLUE.High()
-
 		// timer was triggered
 		timerWakeup.Set(1)
 	}
 }
-
-/*
-func toggleLed() {
-	if machine.LED_BLUE.Get() {
-		machine.LED_BLUE.Low()
-	} else {
-		machine.LED_BLUE.High()
-	}
-}
-*/
-
-// Helper function to connect SYSCLK to a PA8
-// (To ensure clock configuration is OK)
-/*
-func sysclt_clockout() {
-	// Configure SysClk with Prescaler 16 as Clockout
-	stm32.RCC.CFGR.ReplaceBits(0b01000001, 0xff, 24)
-
-	// Set alternate function PA8 AF0 (MCO)
-	stm32.GPIOA.MODER.ReplaceBits(stm32.GPIOModeOutputAltFunc, 0x3, 8*2)
-	stm32.GPIOA.AFRH.ReplaceBits(0b0000, 0xf, 0)
-}
-*/

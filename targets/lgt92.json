@@ -1,22 +1,11 @@
 {
 	"inherits": [
-		"cortex-m"
+		"stm32l0x2"
 	],
-	"llvm-target": "armv6m-none-eabi",
 	"build-tags": [
-		"lgt92",
-		"stm32l0",
-		"stm32l0x2",
-		"stm32"
-	],
-	"cflags": [
-		"--target=armv6m-none-eabi",
-		"-Qunused-arguments"
+		"lgt92"
 	],
 	"linkerscript": "targets/stm32l072czt6.ld",
-	"extra-files": [
-		"src/device/stm32/stm32l0x2.s"
-	],
 	"flash-method": "openocd",
 	"openocd-interface": "stlink-v2",
 	"openocd-target": "stm32f0x"
