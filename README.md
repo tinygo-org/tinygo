@@ -74,7 +74,7 @@ The following 32 microcontroller boards are currently supported:
 * [PineTime DevKit](https://www.pine64.org/pinetime/)
 * [SiFIve HiFive1](https://www.sifive.com/boards/hifive1)
 * [ST Micro "Nucleo F103RB"](https://www.st.com/en/evaluation-tools/nucleo-f103rb.html)
-* [ST Micro STM32F103XX "Bluepill"](http://wiki.stm32duino.com/index.php?title=Blue_Pill)
+* [ST Micro STM32F103XX "Bluepill"](https://stm32duinoforum.com/forum/wiki_subdomain/index_title_Blue_Pill.html)
 * [ST Micro STM32F407 "Discovery"](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
 * [X9 Pro smartwatch](https://github.com/curtpw/nRF5x-device-reverse-engineering/tree/master/X9-nrf52832-activity-tracker/)
 
