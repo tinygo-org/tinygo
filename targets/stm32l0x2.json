@@ -4,7 +4,6 @@
     ],
     "llvm-target": "armv6m-none-eabi",
     "build-tags": [
-        "lgt92",
         "stm32l0",
         "stm32l0x2",
         "stm32"
