@@ -190,6 +190,8 @@ func (fi *frameInfo) exec(bytecode []byte) ([]frameInfoLine, error) {
 			}
 			return nil, err
 		}
+		// For details on the various opcodes, see:
+		// http://dwarfstd.org/doc/DWARF5.pdf (page 239)
 		highBits := op >> 6 // high order 2 bits
 		lowBits := op & 0x1f
 		switch highBits {
@@ -217,6 +219,17 @@ func (fi *frameInfo) exec(bytecode []byte) ([]frameInfoLine, error) {
 				fi.loc += uint64(offset) * fi.cie.codeAlignmentFactor
 				entries = append(entries, fi.newLine())
 				// TODO: DW_CFA_advance_loc2 etc
+			case 0x05: // DW_CFA_offset_extended
+				// Semantics are the same as DW_CFA_offset, but the encoding is
+				// different. Ignore it just like DW_CFA_offset.
+				_, err := readULEB128(r) // ULEB128 register
+				if err != nil {
+					return nil, err
+				}
+				_, err = readULEB128(r) // ULEB128 offset
+				if err != nil {
+					return nil, err
+				}
 			case 0x07: // DW_CFA_undefined
 				// Marks a single register as undefined. This is used to stop
 				// unwinding in tinygo_startTask using:
