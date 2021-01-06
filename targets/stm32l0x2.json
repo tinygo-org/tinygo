@@ -12,11 +12,7 @@
         "--target=armv6m-none-eabi",
         "-Qunused-arguments"
     ],
-    "linkerscript": "targets/stm32l072czt6.ld",
     "extra-files": [
         "src/device/stm32/stm32l0x2.s"
-    ],
-    "flash-method": "openocd",
-    "openocd-interface": "stlink-v2",
-    "openocd-target": "stm32f0x"
+    ]
 }
