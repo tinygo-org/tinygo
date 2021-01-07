@@ -10,6 +10,23 @@ import (
 	"runtime/volatile"
 )
 
+const (
+        // Sets PCLK1
+        RCC_CFGR_PPRE1_DIV_NONE = 0x00000000
+        RCC_CFGR_PPRE1_DIV_2    = 0x00000400
+        RCC_CFGR_PPRE1_DIV_4    = 0x00000500
+        RCC_CFGR_PPRE1_DIV_8    = 0x00000600
+        RCC_CFGR_PPRE1_DIV_16   = 0x00000700
+
+        // Sets PCLK2
+        RCC_CFGR_PPRE2_DIV_NONE = 0x00000000
+        RCC_CFGR_PPRE2_DIV_2    = 0x00002000
+        RCC_CFGR_PPRE2_DIV_4    = 0x00002800
+        RCC_CFGR_PPRE2_DIV_8    = 0x00003000
+        RCC_CFGR_PPRE2_DIV_16   = 0x00003800
+
+)
+
 func init() {
 	initCLK()
 	initRTC()
@@ -31,8 +48,8 @@ func initCLK() {
 	stm32.Flash.ACR.SetBits(stm32.Flash_ACR_LATENCY | stm32.Flash_ACR_PRFTEN | stm32.Flash_ACR_PRE_READ)
 
 	// Set presaclers so half system clock (PCLKx = HCLK/2)
-	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE1_DIV_2)
-	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE2_DIV_2)
+	stm32.RCC.CFGR.SetBits(RCC_CFGR_PPRE1_DIV_2)
+	stm32.RCC.CFGR.SetBits(RCC_CFGR_PPRE2_DIV_2)
 
 	// Enable the HSI16 oscillator, since the L0 series boots to the MSI one.
 	stm32.RCC.CR.SetBits(stm32.RCC_CR_HSI16ON)
