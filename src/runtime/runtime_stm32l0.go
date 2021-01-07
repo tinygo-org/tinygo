@@ -70,7 +70,7 @@ func initCLK() {
 	}
 
 	// Use PLL As System clock
-	stm32.RCC.CFGR.SetBits(0b11)
+	stm32.RCC.CFGR.SetBits(0x3)
 
 }
 
@@ -97,8 +97,8 @@ func initRTC() {
 	}
 
 	// Select Clock Source LSE
-	stm32.RCC.CSR.SetBits(0b01 << stm32.RCC_CSR_RTCSEL_Pos)
-	stm32.RCC.CSR.ClearBits(0b10 << stm32.RCC_CSR_RTCSEL_Pos)
+	stm32.RCC.CSR.SetBits(0x01 << stm32.RCC_CSR_RTCSEL_Pos)
+	stm32.RCC.CSR.ClearBits(0x02 << stm32.RCC_CSR_RTCSEL_Pos)
 
 	// Enable clock
 	stm32.RCC.CSR.SetBits(stm32.RCC_CSR_RTCEN)
