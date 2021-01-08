@@ -1,0 +1,12 @@
+{
+	"inherits": [
+		"stm32l0x2"
+	],
+	"build-tags": [
+		"lgt92"
+	],
+	"linkerscript": "targets/stm32l072czt6.ld",
+	"flash-method": "openocd",
+	"openocd-interface": "stlink-v2",
+	"openocd-target": "stm32f0x"
+}
