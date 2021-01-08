@@ -19,9 +19,9 @@ package runtime
 // "head" and is followed by "tail" blocks. The reason for this distinction is
 // that this way, the start and end of every object can be found easily.
 //
-// Metadata is stored in a special area at the beginning of the heap, in the
-// area heapStart..poolStart. The actual blocks are stored in
-// poolStart..heapEnd.
+// Metadata is stored in a special area at the end of the heap, in the area
+// metadataStart..heapEnd. The actual blocks are stored in
+// heapStart..metadataStart.
 //
 // More information:
 // https://github.com/micropython/micropython/wiki/Memory-Manager
@@ -51,9 +51,9 @@ const (
 )
 
 var (
-	poolStart uintptr // the first heap pointer
-	nextAlloc gcBlock // the next block that should be tried by the allocator
-	endBlock  gcBlock // the block just past the end of the available space
+	metadataStart unsafe.Pointer // pointer to the start of the heap
+	nextAlloc     gcBlock        // the next block that should be tried by the allocator
+	endBlock      gcBlock        // the block just past the end of the available space
 )
 
 // zeroSizedAlloc is just a sentinel that gets returned when allocating 0 bytes.
@@ -96,10 +96,10 @@ type gcBlock uintptr
 // blockFromAddr returns a block given an address somewhere in the heap (which
 // might not be heap-aligned).
 func blockFromAddr(addr uintptr) gcBlock {
-	if gcAsserts && (addr < poolStart || addr >= heapEnd) {
+	if gcAsserts && (addr < heapStart || addr >= uintptr(metadataStart)) {
 		runtimePanic("gc: trying to get block from invalid address")
 	}
-	return gcBlock((addr - poolStart) / bytesPerBlock)
+	return gcBlock((addr - heapStart) / bytesPerBlock)
 }
 
 // Return a pointer to the start of the allocated object.
@@ -109,7 +109,7 @@ func (b gcBlock) pointer() unsafe.Pointer {
 
 // Return the address of the start of the allocated object.
 func (b gcBlock) address() uintptr {
-	return poolStart + uintptr(b)*bytesPerBlock
+	return heapStart + uintptr(b)*bytesPerBlock
 }
 
 // findHead returns the head (first block) of an object, assuming the block
@@ -141,7 +141,7 @@ func (b gcBlock) findNext() gcBlock {
 
 // State returns the current block state.
 func (b gcBlock) state() blockState {
-	stateBytePtr := (*uint8)(unsafe.Pointer(heapStart + uintptr(b/blocksPerStateByte)))
+	stateBytePtr := (*uint8)(unsafe.Pointer(uintptr(metadataStart) + uintptr(b/blocksPerStateByte)))
 	return blockState(*stateBytePtr>>((b%blocksPerStateByte)*2)) % 4
 }
 
@@ -149,7 +149,7 @@ func (b gcBlock) state() blockState {
 // bits than the current state. Allowed transitions: from free to any state and
 // from head to mark.
 func (b gcBlock) setState(newState blockState) {
-	stateBytePtr := (*uint8)(unsafe.Pointer(heapStart + uintptr(b/blocksPerStateByte)))
+	stateBytePtr := (*uint8)(unsafe.Pointer(uintptr(metadataStart) + uintptr(b/blocksPerStateByte)))
 	*stateBytePtr |= uint8(newState << ((b % blocksPerStateByte) * 2))
 	if gcAsserts && b.state() != newState {
 		runtimePanic("gc: setState() was not successful")
@@ -158,7 +158,7 @@ func (b gcBlock) setState(newState blockState) {
 
 // markFree sets the block state to free, no matter what state it was in before.
 func (b gcBlock) markFree() {
-	stateBytePtr := (*uint8)(unsafe.Pointer(heapStart + uintptr(b/blocksPerStateByte)))
+	stateBytePtr := (*uint8)(unsafe.Pointer(uintptr(metadataStart) + uintptr(b/blocksPerStateByte)))
 	*stateBytePtr &^= uint8(blockStateMask << ((b % blocksPerStateByte) * 2))
 	if gcAsserts && b.state() != blockStateFree {
 		runtimePanic("gc: markFree() was not successful")
@@ -172,7 +172,7 @@ func (b gcBlock) unmark() {
 		runtimePanic("gc: unmark() on a block that is not marked")
 	}
 	clearMask := blockStateMask ^ blockStateHead // the bits to clear from the state
-	stateBytePtr := (*uint8)(unsafe.Pointer(heapStart + uintptr(b/blocksPerStateByte)))
+	stateBytePtr := (*uint8)(unsafe.Pointer(uintptr(metadataStart) + uintptr(b/blocksPerStateByte)))
 	*stateBytePtr &^= uint8(clearMask << ((b % blocksPerStateByte) * 2))
 	if gcAsserts && b.state() != blockStateHead {
 		runtimePanic("gc: unmark() was not successful")
@@ -188,18 +188,17 @@ func initHeap() {
 
 	// Allocate some memory to keep 2 bits of information about every block.
 	metadataSize := totalSize / (blocksPerStateByte * bytesPerBlock)
+	metadataStart = unsafe.Pointer(heapEnd - metadataSize)
 
-	// Align the pool.
-	poolStart = (heapStart + metadataSize + (bytesPerBlock - 1)) &^ (bytesPerBlock - 1)
-	poolEnd := heapEnd &^ (bytesPerBlock - 1)
-	numBlocks := (poolEnd - poolStart) / bytesPerBlock
+	// Use the rest of the available memory as heap.
+	numBlocks := (uintptr(metadataStart) - heapStart) / bytesPerBlock
 	endBlock = gcBlock(numBlocks)
 	if gcDebug {
 		println("heapStart:        ", heapStart)
 		println("heapEnd:          ", heapEnd)
 		println("total size:       ", totalSize)
 		println("metadata size:    ", metadataSize)
-		println("poolStart:        ", poolStart)
+		println("metadataStart:    ", metadataStart)
 		println("# of blocks:      ", numBlocks)
 		println("# of block states:", metadataSize*blocksPerStateByte)
 	}
@@ -209,7 +208,7 @@ func initHeap() {
 	}
 
 	// Set all block states to 'free'.
-	memzero(unsafe.Pointer(heapStart), metadataSize)
+	memzero(metadataStart, metadataSize)
 }
 
 // alloc tries to find some free space on the heap, possibly doing a garbage
@@ -496,7 +495,7 @@ func sweep() {
 // simply returns whether it lies anywhere in the heap. Go allows interior
 // pointers so we can't check alignment or anything like that.
 func looksLikePointer(ptr uintptr) bool {
-	return ptr >= poolStart && ptr < heapEnd
+	return ptr >= heapStart && ptr < uintptr(metadataStart)
 }
 
 // dumpHeap can be used for debugging purposes. It dumps the state of each heap
