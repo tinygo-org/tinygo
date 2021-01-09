@@ -14,7 +14,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -650,30 +649,6 @@ func windowsFindUSBDrive(volume string) (string, error) {
 	return "", errors.New("unable to locate a USB device to be flashed")
 }
 
-// parseSize converts a human-readable size (with k/m/g suffix) into a plain
-// number.
-func parseSize(s string) (int64, error) {
-	s = strings.ToLower(strings.TrimSpace(s))
-	if len(s) == 0 {
-		return 0, errors.New("no size provided")
-	}
-	multiply := int64(1)
-	switch s[len(s)-1] {
-	case 'k':
-		multiply = 1 << 10
-	case 'm':
-		multiply = 1 << 20
-	case 'g':
-		multiply = 1 << 30
-	}
-	if multiply != 1 {
-		s = s[:len(s)-1]
-	}
-	n, err := strconv.ParseInt(s, 0, 64)
-	n *= multiply
-	return n, err
-}
-
 // getDefaultPort returns the default serial port depending on the operating system.
 func getDefaultPort() (port string, err error) {
 	var portPath string
@@ -839,7 +814,6 @@ func main() {
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
 	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
-	heapSize := flag.String("heap-size", "1M", "default heap size in bytes (only supported by WebAssembly)")
 
 	var flagJSON, flagDeps *bool
 	if command == "help" || command == "list" {
@@ -893,16 +867,9 @@ func main() {
 		options.LDFlags = strings.Split(*ldFlags, " ")
 	}
 
-	var err error
-	if options.HeapSize, err = parseSize(*heapSize); err != nil {
-		fmt.Fprintln(os.Stderr, "Could not read heap size:", *heapSize)
-		usage()
-		os.Exit(1)
-	}
-
 	os.Setenv("CC", "clang -target="+*target)
 
-	err = options.Verify()
+	err := options.Verify()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		usage()

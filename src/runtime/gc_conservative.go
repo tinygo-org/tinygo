@@ -184,6 +184,50 @@ func (b gcBlock) unmark() {
 // any packages the runtime depends upon may not allocate memory during package
 // initialization.
 func initHeap() {
+	calculateHeapAddresses()
+
+	// Set all block states to 'free'.
+	metadataSize := heapEnd - uintptr(metadataStart)
+	memzero(unsafe.Pointer(metadataStart), metadataSize)
+}
+
+// setHeapEnd is called to expand the heap. The heap can only grow, not shrink.
+// Also, the heap should grow substantially each time otherwise growing the heap
+// will be expensive.
+func setHeapEnd(newHeapEnd uintptr) {
+	if gcAsserts && newHeapEnd <= heapEnd {
+		panic("gc: setHeapEnd didn't grow the heap")
+	}
+
+	// Save some old variables we need later.
+	oldMetadataStart := metadataStart
+	oldMetadataSize := heapEnd - uintptr(metadataStart)
+
+	// Increase the heap. After setting the new heapEnd, calculateHeapAddresses
+	// will update metadataStart and the memcpy will copy the metadata to the
+	// new location.
+	// The new metadata will be bigger than the old metadata, but a simple
+	// memcpy is fine as it only copies the old metadata and the new memory will
+	// have been zero initialized.
+	heapEnd = newHeapEnd
+	calculateHeapAddresses()
+	memcpy(metadataStart, oldMetadataStart, oldMetadataSize)
+
+	// Note: the memcpy above assumes the heap grows enough so that the new
+	// metadata does not overlap the old metadata. If that isn't true, memmove
+	// should be used to avoid corruption.
+	// This assert checks whether that's true.
+	if gcAsserts && uintptr(metadataStart) < uintptr(oldMetadataStart)+oldMetadataSize {
+		panic("gc: heap did not grow enough at once")
+	}
+}
+
+// calculateHeapAddresses initializes variables such as metadataStart and
+// numBlock based on heapStart and heapEnd.
+//
+// This function can be called again when the heap size increases. The caller is
+// responsible for copying the metadata to the new location.
+func calculateHeapAddresses() {
 	totalSize := heapEnd - heapStart
 
 	// Allocate some memory to keep 2 bits of information about every block.
@@ -206,9 +250,6 @@ func initHeap() {
 		// sanity check
 		runtimePanic("gc: metadata array is too small")
 	}
-
-	// Set all block states to 'free'.
-	memzero(metadataStart, metadataSize)
 }
 
 // alloc tries to find some free space on the heap, possibly doing a garbage
@@ -238,7 +279,16 @@ func alloc(size uintptr) unsafe.Pointer {
 				GC()
 			} else {
 				// Even after garbage collection, no free memory could be found.
-				runtimePanic("out of memory")
+				// Try to increase heap size.
+				if growHeap() {
+					// Success, the heap was increased in size. Try again with a
+					// larger heap.
+				} else {
+					// Unfortunately the heap could not be increased. This
+					// happens on baremetal systems for example (where all
+					// available RAM has already been dedicated to the heap).
+					runtimePanic("out of memory")
+				}
 			}
 		}
 
