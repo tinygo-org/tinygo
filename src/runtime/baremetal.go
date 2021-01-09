@@ -29,6 +29,13 @@ var (
 	stackTop     = uintptr(unsafe.Pointer(&stackTopSymbol))
 )
 
+// growHeap tries to grow the heap size. It returns true if it succeeds, false
+// otherwise.
+func growHeap() bool {
+	// On baremetal, there is no way the heap can be grown.
+	return false
+}
+
 //export malloc
 func libc_malloc(size uintptr) unsafe.Pointer {
 	return alloc(size)

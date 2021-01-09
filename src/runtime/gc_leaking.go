@@ -20,7 +20,12 @@ func alloc(size uintptr) unsafe.Pointer {
 	size = align(size)
 	addr := heapptr
 	heapptr += size
-	if heapptr >= heapEnd {
+	for heapptr >= heapEnd {
+		// Try to increase the heap and check again.
+		if growHeap() {
+			continue
+		}
+		// Failed to make the heap bigger, so we must really be out of memory.
 		runtimePanic("out of memory")
 	}
 	for i := uintptr(0); i < uintptr(size); i += 4 {
@@ -48,4 +53,11 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 
 func initHeap() {
 	// Nothing to initialize.
+}
+
+// setHeapEnd sets a new (larger) heapEnd pointer.
+func setHeapEnd(newHeapEnd uintptr) {
+	// This "heap" is so simple that simply assigning a new value is good
+	// enough.
+	heapEnd = newHeapEnd
 }

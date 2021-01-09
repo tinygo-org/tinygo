@@ -30,7 +30,6 @@ type Options struct {
 	LDFlags       []string
 	Tags          string
 	WasmAbi       string
-	HeapSize      int64
 	TestConfig    TestConfig
 	Programmer    string
 }

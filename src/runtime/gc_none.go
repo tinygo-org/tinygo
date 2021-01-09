@@ -31,3 +31,7 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 func initHeap() {
 	// Nothing to initialize.
 }
+
+func setHeapEnd(newHeapEnd uintptr) {
+	// Nothing to do here, this function is never actually called.
+}

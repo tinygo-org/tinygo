@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/goenv"
@@ -203,12 +202,6 @@ func (c *Config) LDFlags() []string {
 		ldflags = append(ldflags, strings.Replace(flag, "{root}", root, -1))
 	}
 	ldflags = append(ldflags, "-L", root)
-	if c.Target.GOARCH == "wasm" {
-		// Round heap size to next multiple of 65536 (the WebAssembly page
-		// size).
-		heapSize := (c.Options.HeapSize + (65536 - 1)) &^ (65536 - 1)
-		ldflags = append(ldflags, "--initial-memory="+strconv.FormatInt(heapSize, 10))
-	}
 	if c.Target.LinkerScript != "" {
 		ldflags = append(ldflags, "-T", c.Target.LinkerScript)
 	}

@@ -13,3 +13,12 @@ func preinit() {
 	heapStart = uintptr(malloc(heapSize))
 	heapEnd = heapStart + heapSize
 }
+
+// growHeap tries to grow the heap size. It returns true if it succeeds, false
+// otherwise.
+func growHeap() bool {
+	// At the moment, this is not possible. However it shouldn't be too
+	// difficult (at least on Linux) to allocate a large amount of virtual
+	// memory at startup that is then slowly used.
+	return false
+}

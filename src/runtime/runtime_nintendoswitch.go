@@ -217,6 +217,13 @@ func setupHeap() {
 	}
 }
 
+// growHeap tries to grow the heap size. It returns true if it succeeds, false
+// otherwise.
+func growHeap() bool {
+	// Growing the heap is unimplemented.
+	return false
+}
+
 // getHeapBase returns the start address of the heap
 // this is externally linked by gonx
 func getHeapBase() uintptr {
