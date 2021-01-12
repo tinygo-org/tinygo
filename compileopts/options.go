@@ -23,6 +23,7 @@ type Options struct {
 	PrintIR       bool
 	DumpSSA       bool
 	VerifyIR      bool
+	Verbose       bool
 	Debug         bool
 	PrintSizes    string
 	PrintStacks   bool
