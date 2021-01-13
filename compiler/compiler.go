@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"go/types"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -53,6 +54,45 @@ type compilerContext struct {
 	astComments      map[string]*ast.CommentGroup
 }
 
+// newCompilerContext returns a new compiler context ready for use, most
+// importantly with a newly created LLVM context and module.
+func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *compileopts.Config) *compilerContext {
+	c := &compilerContext{
+		Config:     config,
+		difiles:    make(map[string]llvm.Metadata),
+		ditypes:    make(map[types.Type]llvm.Metadata),
+		machine:    machine,
+		targetData: machine.CreateTargetData(),
+	}
+
+	c.ctx = llvm.NewContext()
+	c.mod = c.ctx.NewModule(moduleName)
+	c.mod.SetTarget(config.Triple())
+	c.mod.SetDataLayout(c.targetData.String())
+	if c.Debug() {
+		c.dibuilder = llvm.NewDIBuilder(c.mod)
+	}
+
+	c.uintptrType = c.ctx.IntType(c.targetData.PointerSize() * 8)
+	if c.targetData.PointerSize() <= 4 {
+		// 8, 16, 32 bits targets
+		c.intType = c.ctx.Int32Type()
+	} else if c.targetData.PointerSize() == 8 {
+		// 64 bits target
+		c.intType = c.ctx.Int64Type()
+	} else {
+		panic("unknown pointer size")
+	}
+	c.i8ptrType = llvm.PointerType(c.ctx.Int8Type(), 0)
+
+	dummyFuncType := llvm.FunctionType(c.ctx.VoidType(), nil, false)
+	dummyFunc := llvm.AddFunction(c.mod, "tinygo.dummy", dummyFuncType)
+	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
+	dummyFunc.EraseFromParentAsFunction()
+
+	return c
+}
+
 // builder contains all information relevant to build a single function.
 type builder struct {
 	*compilerContext
@@ -74,6 +114,18 @@ type builder struct {
 	deferExprFuncs    map[ssa.Value]int
 	selectRecvBuf     map[*ssa.Select]llvm.Value
 	deferBuiltinFuncs map[ssa.Value]deferBuiltin
+}
+
+func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ir.Function) *builder {
+	return &builder{
+		compilerContext: c,
+		Builder:         irbuilder,
+		fn:              f,
+		locals:          make(map[ssa.Value]llvm.Value),
+		dilocals:        make(map[*types.Var]llvm.Metadata),
+		blockEntries:    make(map[*ssa.BasicBlock]llvm.BasicBlock),
+		blockExits:      make(map[*ssa.BasicBlock]llvm.BasicBlock),
+	}
 }
 
 type deferBuiltin struct {
@@ -127,94 +179,47 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 	return machine, nil
 }
 
-// CompilerOutput is returned from the Compile() call. It contains the compile
-// output and information necessary to continue to compile and link the program.
-type CompilerOutput struct {
-	// The LLVM module that contains the compiled but not optimized LLVM module
-	// for all the Go code in the program.
-	Mod llvm.Module
+// Sizes returns a types.Sizes appropriate for the given target machine. It
+// includes the correct int size and aligment as is necessary for the Go
+// typechecker.
+func Sizes(machine llvm.TargetMachine) types.Sizes {
+	targetData := machine.CreateTargetData()
+	defer targetData.Dispose()
 
-	// ExtraFiles is a list of C source files included in packages that should
-	// be built and linked together with the main executable to form one
-	// program. They can be used from CGo, for example.
-	ExtraFiles []string
-
-	// ExtraLDFlags are linker flags obtained during CGo processing. These flags
-	// must be passed to the linker which links the entire executable.
-	ExtraLDFlags []string
-
-	// MainDir is the absolute directory path to the directory of the main
-	// package. This is useful for testing: tests must be run in the package
-	// directory that is being tested.
-	MainDir string
-}
-
-// Compile the given package path or .go file path. Return an error when this
-// fails (in any stage). If successful it returns the LLVM module and a list of
-// extra C files to be compiled. If not, one or more errors will be returned.
-//
-// The fact that it returns a list of filenames to compile is a layering
-// violation. Eventually, this Compile function should only compile a single
-// package and not the whole program, and loading of the program (including CGo
-// processing) should be moved outside the compiler package.
-func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Config) (output CompilerOutput, errors []error) {
-	c := &compilerContext{
-		Config:     config,
-		difiles:    make(map[string]llvm.Metadata),
-		ditypes:    make(map[types.Type]llvm.Metadata),
-		machine:    machine,
-		targetData: machine.CreateTargetData(),
+	intPtrType := targetData.IntPtrType()
+	if intPtrType.IntTypeWidth()/8 <= 32 {
 	}
 
-	c.ctx = llvm.NewContext()
-	c.mod = c.ctx.NewModule(pkgName)
-	c.mod.SetTarget(config.Triple())
-	c.mod.SetDataLayout(c.targetData.String())
-	if c.Debug() {
-		c.dibuilder = llvm.NewDIBuilder(c.mod)
-	}
-	output.Mod = c.mod
-
-	c.uintptrType = c.ctx.IntType(c.targetData.PointerSize() * 8)
-	if c.targetData.PointerSize() <= 4 {
+	var intWidth int
+	if targetData.PointerSize() <= 4 {
 		// 8, 16, 32 bits targets
-		c.intType = c.ctx.Int32Type()
-	} else if c.targetData.PointerSize() == 8 {
+		intWidth = 32
+	} else if targetData.PointerSize() == 8 {
 		// 64 bits target
-		c.intType = c.ctx.Int64Type()
+		intWidth = 64
 	} else {
 		panic("unknown pointer size")
 	}
-	c.i8ptrType = llvm.PointerType(c.ctx.Int8Type(), 0)
 
-	dummyFuncType := llvm.FunctionType(c.ctx.VoidType(), nil, false)
-	dummyFunc := llvm.AddFunction(c.mod, "tinygo.dummy", dummyFuncType)
-	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
-	dummyFunc.EraseFromParentAsFunction()
-
-	lprogram, err := loader.Load(c.Config, []string{pkgName}, c.ClangHeaders, types.Config{
-		Sizes: &stdSizes{
-			IntSize:  int64(c.targetData.TypeAllocSize(c.intType)),
-			PtrSize:  int64(c.targetData.PointerSize()),
-			MaxAlign: int64(c.targetData.PrefTypeAlignment(c.i8ptrType)),
-		}})
-	if err != nil {
-		return output, []error{err}
+	return &stdSizes{
+		IntSize:  int64(intWidth / 8),
+		PtrSize:  int64(targetData.PointerSize()),
+		MaxAlign: int64(targetData.PrefTypeAlignment(intPtrType)),
 	}
+}
 
-	err = lprogram.Parse()
-	if err != nil {
-		return output, []error{err}
-	}
-	output.ExtraLDFlags = lprogram.LDFlags
-	output.MainDir = lprogram.MainPkg().Dir
+// CompileProgram compiles the given package path or .go file path. Return an
+// error when this fails (in any stage). If successful it returns the LLVM
+// module. If not, one or more errors will be returned.
+func CompileProgram(pkgName string, lprogram *loader.Program, machine llvm.TargetMachine, config *compileopts.Config) (llvm.Module, []error) {
+	c := newCompilerContext(pkgName, machine, config)
 
 	c.ir = ir.NewProgram(lprogram)
 
 	// Run a simple dead code elimination pass.
-	err = c.ir.SimpleDCE()
+	err := c.ir.SimpleDCE()
 	if err != nil {
-		return output, []error{err}
+		return llvm.Module{}, []error{err}
 	}
 
 	// Initialize debug information.
@@ -265,15 +270,7 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 		}
 
 		// Create the function definition.
-		b := builder{
-			compilerContext: c,
-			Builder:         irbuilder,
-			fn:              f,
-			locals:          make(map[ssa.Value]llvm.Value),
-			dilocals:        make(map[*types.Var]llvm.Metadata),
-			blockEntries:    make(map[*ssa.BasicBlock]llvm.BasicBlock),
-			blockExits:      make(map[*ssa.BasicBlock]llvm.BasicBlock),
-		}
+		b := newBuilder(c, irbuilder, f)
 		b.createFunctionDefinition()
 	}
 
@@ -352,14 +349,64 @@ func Compile(pkgName string, machine llvm.TargetMachine, config *compileopts.Con
 		c.dibuilder.Finalize()
 	}
 
-	// Gather the list of (C) file paths that should be included in the build.
-	for _, pkg := range c.ir.LoaderProgram.Sorted() {
-		for _, filename := range pkg.CFiles {
-			output.ExtraFiles = append(output.ExtraFiles, filepath.Join(pkg.Dir, filename))
+	return c.mod, c.diagnostics
+}
+
+// CompilePackage compiles a single package to a LLVM module.
+func CompilePackage(moduleName string, pkg *loader.Package, machine llvm.TargetMachine, config *compileopts.Config) (llvm.Module, []error) {
+	c := newCompilerContext(moduleName, machine, config)
+
+	// Build SSA from AST.
+	ssaPkg := pkg.LoadSSA()
+	ssaPkg.Build()
+
+	// Sort by position, so that the order of the functions in the IR matches
+	// the order of functions in the source file. This is useful for testing,
+	// for example.
+	var members []string
+	for name := range ssaPkg.Members {
+		members = append(members, name)
+	}
+	sort.Slice(members, func(i, j int) bool {
+		iPos := ssaPkg.Members[members[i]].Pos()
+		jPos := ssaPkg.Members[members[j]].Pos()
+		if i == j {
+			// Cannot sort by pos, so do it by name.
+			return members[i] < members[j]
+		}
+		return iPos < jPos
+	})
+
+	// Create *ir.Functions objects.
+	var functions []*ir.Function
+	for _, name := range members {
+		member := ssaPkg.Members[name]
+		switch member := member.(type) {
+		case *ssa.Function:
+			functions = append(functions, &ir.Function{
+				Function: member,
+			})
 		}
 	}
 
-	return output, c.diagnostics
+	// Declare all functions.
+	for _, fn := range functions {
+		c.createFunctionDeclaration(fn)
+	}
+
+	// Add definitions to declarations.
+	irbuilder := c.ctx.NewBuilder()
+	defer irbuilder.Dispose()
+	for _, f := range functions {
+		if f.Blocks == nil {
+			continue // external function
+		}
+		// Create the function definition.
+		b := newBuilder(c, irbuilder, f)
+		b.createFunctionDefinition()
+	}
+
+	return c.mod, nil
 }
 
 // getLLVMRuntimeType obtains a named type from the runtime package and returns

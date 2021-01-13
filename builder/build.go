@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"go/types"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
+	"github.com/tinygo-org/tinygo/loader"
 	"github.com/tinygo-org/tinygo/stacksize"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
@@ -43,16 +45,31 @@ type BuildResult struct {
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
 func Build(pkgName, outpath string, config *compileopts.Config, action func(BuildResult) error) error {
-	// Compile Go code to IR.
+	// Load the target machine, which is the LLVM object that contains all
+	// details of a target (alignment restrictions, pointer size, default
+	// address spaces, etc).
 	machine, err := compiler.NewTargetMachine(config)
 	if err != nil {
 		return err
 	}
-	buildOutput, errs := compiler.Compile(pkgName, machine, config)
+
+	// Load entire program AST into memory.
+	lprogram, err := loader.Load(config, []string{pkgName}, config.ClangHeaders, types.Config{
+		Sizes: compiler.Sizes(machine),
+	})
+	if err != nil {
+		return err
+	}
+	err = lprogram.Parse()
+	if err != nil {
+		return err
+	}
+
+	// Compile AST to IR.
+	mod, errs := compiler.CompileProgram(pkgName, lprogram, machine, config)
 	if errs != nil {
 		return newMultiError(errs)
 	}
-	mod := buildOutput.Mod
 
 	if config.Options.PrintIR {
 		fmt.Println("; Generated LLVM IR:")
@@ -208,17 +225,21 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		}
 
 		// Compile C files in packages.
-		for i, file := range buildOutput.ExtraFiles {
-			outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"-"+filepath.Base(file)+".o")
-			err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, file)...)
-			if err != nil {
-				return &commandError{"failed to build", file, err}
+		// Gather the list of (C) file paths that should be included in the build.
+		for i, pkg := range lprogram.Sorted() {
+			for j, filename := range pkg.CFiles {
+				file := filepath.Join(pkg.Dir, filename)
+				outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"."+strconv.Itoa(j)+"-"+filepath.Base(file)+".o")
+				err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, file)...)
+				if err != nil {
+					return &commandError{"failed to build", file, err}
+				}
+				ldflags = append(ldflags, outpath)
 			}
-			ldflags = append(ldflags, outpath)
 		}
 
-		if len(buildOutput.ExtraLDFlags) > 0 {
-			ldflags = append(ldflags, buildOutput.ExtraLDFlags...)
+		if len(lprogram.LDFlags) > 0 {
+			ldflags = append(ldflags, lprogram.LDFlags...)
 		}
 
 		// Link the object files together.
@@ -304,7 +325,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		}
 		return action(BuildResult{
 			Binary:  tmppath,
-			MainDir: buildOutput.MainDir,
+			MainDir: lprogram.MainPkg().Dir,
 		})
 	}
 }
