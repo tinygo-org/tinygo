@@ -43,6 +43,7 @@ type Program struct {
 type PackageJSON struct {
 	Dir        string
 	ImportPath string
+	Name       string
 	ForTest    string
 
 	// Source files
@@ -335,7 +336,16 @@ func (p *Package) Check() error {
 	// Do typechecking of the package.
 	checker.Importer = p
 
-	typesPkg, err := checker.Check(p.ImportPath, p.program.fset, p.Files, &p.info)
+	packageName := p.ImportPath
+	if p.Name == "main" {
+		// The main package normally has a different import path, such as
+		// "command-line-arguments" or "./testdata/cgo". Therefore, use the name
+		// "main" in such a case: this package isn't imported from anywhere.
+		// This is safe as it isn't possible to import a package with the name
+		// "main".
+		packageName = "main"
+	}
+	typesPkg, err := checker.Check(packageName, p.program.fset, p.Files, &p.info)
 	if err != nil {
 		if err, ok := err.(Errors); ok {
 			return err
