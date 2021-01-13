@@ -92,8 +92,8 @@ func copyFile(src, dst string) error {
 
 // executeCommand is a simple wrapper to exec.Cmd
 func executeCommand(name string, arg ...string) *exec.Cmd {
-	if options.Verbose {
-		fmt.Printf("[verbose] execute command: %s %s\n ", name, strings.Join(arg, " "))
+	if options.PrintCommands {
+		fmt.Printf("%s %s\n ", name, strings.Join(arg, " "))
 	}
 	return exec.Command(name, arg...)
 }
@@ -841,7 +841,7 @@ func main() {
 	target := flag.String("target", "", "LLVM target | .json file with TargetSpec")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
-	verbose := flag.Bool("verbose", false, "verbose mode (eg:show executed commands)")
+	printCommands := flag.Bool("x", false, "Print commands")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "", "flash port")
@@ -890,7 +890,7 @@ func main() {
 		Debug:         !*nodebug,
 		PrintSizes:    *printSize,
 		PrintStacks:   *printStacks,
-		Verbose:       *verbose,
+		PrintCommands: *printCommands,
 		Tags:          *tags,
 		WasmAbi:       *wasmAbi,
 		Programmer:    *programmer,
