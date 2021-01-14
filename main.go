@@ -33,7 +33,6 @@ var (
 	// This variable is set at build time using -ldflags parameters.
 	// See: https://stackoverflow.com/a/11355611
 	gitSha1 string
-	options *compileopts.Options
 )
 
 // commandError is an error type to wrap os/exec.Command errors. This provides
@@ -91,7 +90,7 @@ func copyFile(src, dst string) error {
 }
 
 // executeCommand is a simple wrapper to exec.Cmd
-func executeCommand(name string, arg ...string) *exec.Cmd {
+func executeCommand(options *compileopts.Options, name string, arg ...string) *exec.Cmd {
 	if options.PrintCommands {
 		fmt.Printf("%s %s\n ", name, strings.Join(arg, " "))
 	}
@@ -157,7 +156,7 @@ func Test(pkgName string, options *compileopts.Options, testCompileOnly bool, ou
 		}
 		if len(config.Target.Emulator) == 0 {
 			// Run directly.
-			cmd := executeCommand(result.Binary)
+			cmd := executeCommand(config.Options, result.Binary)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Dir = result.MainDir
@@ -176,7 +175,7 @@ func Test(pkgName string, options *compileopts.Options, testCompileOnly bool, ou
 		} else {
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary)
-			cmd := executeCommand(config.Target.Emulator[0], args...)
+			cmd := executeCommand(config.Options, config.Target.Emulator[0], args...)
 			buf := &bytes.Buffer{}
 			w := io.MultiWriter(os.Stdout, buf)
 			cmd.Stdout = w
@@ -285,9 +284,9 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 				if len(command) < 2 {
 					return errors.New("invalid flash command")
 				}
-				cmd = executeCommand(command[0], command[1:]...)
+				cmd = executeCommand(config.Options, command[0], command[1:]...)
 			default:
-				cmd = executeCommand("/bin/sh", "-c", flashCmd)
+				cmd = executeCommand(config.Options, "/bin/sh", "-c", flashCmd)
 			}
 
 			cmd.Stdout = os.Stdout
@@ -301,13 +300,13 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		case "msd":
 			switch fileExt {
 			case ".uf2":
-				err := flashUF2UsingMSD(config.Target.FlashVolume, result.Binary)
+				err := flashUF2UsingMSD(config.Target.FlashVolume, result.Binary, config.Options)
 				if err != nil {
 					return &commandError{"failed to flash", result.Binary, err}
 				}
 				return nil
 			case ".hex":
-				err := flashHexUsingMSD(config.Target.FlashVolume, result.Binary)
+				err := flashHexUsingMSD(config.Target.FlashVolume, result.Binary, config.Options)
 				if err != nil {
 					return &commandError{"failed to flash", result.Binary, err}
 				}
@@ -321,7 +320,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 				return err
 			}
 			args = append(args, "-c", "program "+filepath.ToSlash(result.Binary)+" reset exit")
-			cmd := executeCommand("openocd", args...)
+			cmd := executeCommand(config.Options, "openocd", args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			err = cmd.Run()
@@ -390,7 +389,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			if err != nil {
 				return err
 			}
-			daemon = executeCommand("openocd", args...)
+			daemon = executeCommand(config.Options, "openocd", args...)
 			if ocdOutput {
 				// Make it clear which output is from the daemon.
 				w := &ColorWriter{
@@ -405,7 +404,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			gdbCommands = append(gdbCommands, "target remote :2331", "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
-			daemon = executeCommand("JLinkGDBServer", "-device", config.Target.JLinkDevice)
+			daemon = executeCommand(config.Options, "JLinkGDBServer", "-device", config.Target.JLinkDevice)
 			if ocdOutput {
 				// Make it clear which output is from the daemon.
 				w := &ColorWriter{
@@ -421,7 +420,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary, "-s", "-S")
-			daemon = executeCommand(config.Target.Emulator[0], args...)
+			daemon = executeCommand(config.Options, config.Target.Emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "qemu-user":
@@ -429,7 +428,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], "-g", "1234", result.Binary)
-			daemon = executeCommand(config.Target.Emulator[0], args...)
+			daemon = executeCommand(config.Options, config.Target.Emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "mgba":
@@ -437,7 +436,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary, "-g")
-			daemon = executeCommand(config.Target.Emulator[0], args...)
+			daemon = executeCommand(config.Options, config.Target.Emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "simavr":
@@ -445,7 +444,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], "-g", result.Binary)
-			daemon = executeCommand(config.Target.Emulator[0], args...)
+			daemon = executeCommand(config.Options, config.Target.Emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "msd":
@@ -486,7 +485,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		for _, cmd := range gdbCommands {
 			params = append(params, "-ex", cmd)
 		}
-		cmd := executeCommand(config.Target.GDB, params...)
+		cmd := executeCommand(config.Options, config.Target.GDB, params...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -511,7 +510,7 @@ func Run(pkgName string, options *compileopts.Options) error {
 	return builder.Build(pkgName, ".elf", config, func(result builder.BuildResult) error {
 		if len(config.Target.Emulator) == 0 {
 			// Run directly.
-			cmd := executeCommand(result.Binary)
+			cmd := executeCommand(config.Options, result.Binary)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			err := cmd.Run()
@@ -526,7 +525,7 @@ func Run(pkgName string, options *compileopts.Options) error {
 		} else {
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary)
-			cmd := executeCommand(config.Target.Emulator[0], args...)
+			cmd := executeCommand(config.Options, config.Target.Emulator[0], args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			err := cmd.Run()
@@ -569,7 +568,7 @@ func touchSerialPortAt1200bps(port string) (err error) {
 
 const maxMSDRetries = 10
 
-func flashUF2UsingMSD(volume, tmppath string) error {
+func flashUF2UsingMSD(volume, tmppath string, options *compileopts.Options) error {
 	// find standard UF2 info path
 	var infoPath string
 	switch runtime.GOOS {
@@ -578,7 +577,7 @@ func flashUF2UsingMSD(volume, tmppath string) error {
 	case "darwin":
 		infoPath = "/Volumes/" + volume + "/INFO_UF2.TXT"
 	case "windows":
-		path, err := windowsFindUSBDrive(volume)
+		path, err := windowsFindUSBDrive(volume, options)
 		if err != nil {
 			return err
 		}
@@ -593,7 +592,7 @@ func flashUF2UsingMSD(volume, tmppath string) error {
 	return moveFile(tmppath, filepath.Dir(d)+"/flash.uf2")
 }
 
-func flashHexUsingMSD(volume, tmppath string) error {
+func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) error {
 	// find expected volume path
 	var destPath string
 	switch runtime.GOOS {
@@ -602,7 +601,7 @@ func flashHexUsingMSD(volume, tmppath string) error {
 	case "darwin":
 		destPath = "/Volumes/" + volume
 	case "windows":
-		path, err := windowsFindUSBDrive(volume)
+		path, err := windowsFindUSBDrive(volume, options)
 		if err != nil {
 			return err
 		}
@@ -636,8 +635,8 @@ func locateDevice(volume, path string) (string, error) {
 	return d[0], nil
 }
 
-func windowsFindUSBDrive(volume string) (string, error) {
-	cmd := executeCommand("wmic",
+func windowsFindUSBDrive(volume string, options *compileopts.Options) (string, error) {
+	cmd := executeCommand(options, "wmic",
 		"PATH", "Win32_LogicalDisk", "WHERE", "VolumeName = '"+volume+"'",
 		"get", "DeviceID,VolumeName,FileSystem,DriveType")
 
@@ -878,7 +877,7 @@ func main() {
 	}
 
 	flag.CommandLine.Parse(os.Args[2:])
-	options = &compileopts.Options{
+	options := &compileopts.Options{
 		Target:        *target,
 		Opt:           *opt,
 		GC:            *gc,
