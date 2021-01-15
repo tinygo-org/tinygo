@@ -8,6 +8,7 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
+	"math/bits"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -2552,10 +2553,70 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 
 		if typeFrom.Info()&types.IsFloat != 0 && typeTo.Info()&types.IsInteger != 0 {
 			// Conversion from float to int.
+			// Passing an out-of-bounds float to LLVM would cause UB, so that UB is trapped by select instructions.
+			// The Go specification says that this should be implementation-defined behavior.
+			// This implements saturating behavior, except that NaN is mapped to the minimum value.
+			var significandBits int
+			switch typeFrom.Kind() {
+			case types.Float32:
+				significandBits = 23
+			case types.Float64:
+				significandBits = 52
+			}
 			if typeTo.Info()&types.IsUnsigned != 0 { // if unsigned
-				return b.CreateFPToUI(value, llvmTypeTo, ""), nil
+				// Select the maximum value for this unsigned integer type.
+				max := ^(^uint64(0) << uint(llvmTypeTo.IntTypeWidth()))
+				maxFloat := float64(max)
+				if bits.Len64(max) > significandBits {
+					// Round the max down to fit within the significand.
+					maxFloat = float64(max & ^uint64(0) << uint(bits.Len64(max)-significandBits))
+				}
+
+				// Check if the value is in-bounds (0 <= value <= max).
+				positive := b.CreateFCmp(llvm.FloatOLE, llvm.ConstNull(llvmTypeFrom), value, "positive")
+				withinMax := b.CreateFCmp(llvm.FloatOLE, value, llvm.ConstFloat(llvmTypeFrom, maxFloat), "withinmax")
+				inBounds := b.CreateAnd(positive, withinMax, "inbounds")
+
+				// Assuming that the value is out-of-bounds, select a saturated value.
+				saturated := b.CreateSelect(positive,
+					llvm.ConstInt(llvmTypeTo, max, false), // value > max
+					llvm.ConstNull(llvmTypeTo),            // value < 0 (or NaN)
+					"saturated",
+				)
+
+				// Do a normal conversion.
+				normal := b.CreateFPToUI(value, llvmTypeTo, "normal")
+
+				return b.CreateSelect(inBounds, normal, saturated, ""), nil
 			} else { // if signed
-				return b.CreateFPToSI(value, llvmTypeTo, ""), nil
+				// Select the minimum value for this signed integer type.
+				min := uint64(1) << uint(llvmTypeTo.IntTypeWidth()-1)
+				minFloat := -float64(min)
+
+				// Select the maximum value for this signed integer type.
+				max := ^(^uint64(0) << uint(llvmTypeTo.IntTypeWidth()-1))
+				maxFloat := float64(max)
+				if bits.Len64(max) > significandBits {
+					// Round the max down to fit within the significand.
+					maxFloat = float64(max & ^uint64(0) << uint(bits.Len64(max)-significandBits))
+				}
+
+				// Check if the value is in-bounds (min <= value <= max).
+				aboveMin := b.CreateFCmp(llvm.FloatOLE, llvm.ConstFloat(llvmTypeFrom, minFloat), value, "abovemin")
+				belowMax := b.CreateFCmp(llvm.FloatOLE, value, llvm.ConstFloat(llvmTypeFrom, maxFloat), "belowmax")
+				inBounds := b.CreateAnd(aboveMin, belowMax, "inbounds")
+
+				// Assuming that the value is out-of-bounds, select a saturated value.
+				saturated := b.CreateSelect(aboveMin,
+					llvm.ConstInt(llvmTypeTo, max, false), // value > max
+					llvm.ConstInt(llvmTypeTo, min, false), // value < min (or NaN)
+					"saturated",
+				)
+
+				// Do a normal conversion.
+				normal := b.CreateFPToSI(value, llvmTypeTo, "normal")
+
+				return b.CreateSelect(inBounds, normal, saturated, ""), nil
 			}
 		}
 
