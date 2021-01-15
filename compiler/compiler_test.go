@@ -37,6 +37,7 @@ func TestCompiler(t *testing.T) {
 		"basic.go",
 		"pointer.go",
 		"slice.go",
+		"copy.go",
 	}
 
 	for _, testCase := range tests {

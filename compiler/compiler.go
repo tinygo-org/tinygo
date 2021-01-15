@@ -1264,7 +1264,26 @@ func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos
 		dstBuf = b.CreateBitCast(dstBuf, b.i8ptrType, "copy.dstPtr")
 		srcBuf = b.CreateBitCast(srcBuf, b.i8ptrType, "copy.srcPtr")
 		elemSize := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(elemType), false)
-		return b.createRuntimeCall("sliceCopy", []llvm.Value{dstBuf, srcBuf, dstLen, srcLen, elemSize}, "copy.n"), nil
+		len := b.CreateSelect(
+			b.CreateICmp(llvm.IntULT, dstLen, srcLen, "copy.len.cmp"),
+			dstLen, srcLen,
+			"copy.len",
+		)
+		lenBytes := b.CreateMul(len, elemSize, "copy.len.bytes")
+
+		fnName := "llvm.memmove.p0i8.p0i8.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
+		llvmFn := b.mod.NamedFunction(fnName)
+		if llvmFn.IsNil() {
+			fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.i8ptrType, b.i8ptrType, b.uintptrType, b.ctx.Int1Type()}, false)
+			llvmFn = llvm.AddFunction(b.mod, fnName, fnType)
+		}
+
+		call := b.CreateCall(llvmFn, []llvm.Value{dstBuf, srcBuf, lenBytes, llvm.ConstInt(b.ctx.Int1Type(), 0, false)}, "")
+		align := b.targetData.ABITypeAlignment(elemType)
+		call.SetInstrParamAlignment(1, align)
+		call.SetInstrParamAlignment(2, align)
+
+		return b.CreateZExt(len, b.intType, "copy.n"), nil
 	case "delete":
 		m := b.getValue(args[0])
 		key := b.getValue(args[1])
