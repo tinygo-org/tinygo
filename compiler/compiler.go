@@ -1852,6 +1852,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				low,
 			}
 
+			b.createNilCheck(expr.X, value, "slice")
 			b.createSliceBoundsCheck(llvmLen, low, high, max, lowType, highType, maxType)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
