@@ -74,24 +74,16 @@ func cacheStore(tmppath, name, configKey string, sourceFiles []string) (string, 
 		return "", err
 	}
 	cachepath := filepath.Join(dir, name)
-	err = moveFile(tmppath, cachepath)
+	err = copyFile(tmppath, cachepath)
 	if err != nil {
 		return "", err
 	}
 	return cachepath, nil
 }
 
-// moveFile renames the file from src to dst. If renaming doesn't work (for
-// example, the rename crosses a filesystem boundary), the file is copied and
-// the old file is removed.
-func moveFile(src, dst string) error {
-	err := os.Rename(src, dst)
-	if err == nil {
-		// Success!
-		return nil
-	}
-	// Failed to move, probably a different filesystem.
-	// Do a copy + remove.
+// copyFile copies the given file from src to dst. It can copy over
+// a possibly already existing file at the destination.
+func copyFile(src, dst string) error {
 	inf, err := os.Open(src)
 	if err != nil {
 		return err

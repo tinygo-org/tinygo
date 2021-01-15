@@ -65,10 +65,286 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		return err
 	}
 
+	// The slice of jobs that orchestrates most of the build.
+	// This is somewhat like an in-memory Makefile with each job being a
+	// Makefile target.
+	var jobs []*compileJob
+
+	// Add job to compile and optimize all Go files at once.
+	// TODO: parallelize this.
+	var mod llvm.Module
+	var stackSizeLoads []string
+	programJob := &compileJob{
+		description: "compile Go files",
+		run: func() (err error) {
+			mod, err = compileWholeProgram(pkgName, config, lprogram, machine)
+			if err != nil {
+				return
+			}
+			// Make sure stack sizes are loaded from a separate section so they can be
+			// modified after linking.
+			if config.AutomaticStackSize() {
+				stackSizeLoads = transform.CreateStackSizeLoads(mod, config)
+			}
+			return
+		},
+	}
+	jobs = append(jobs, programJob)
+
+	// Check whether we only need to create an object file.
+	// If so, we don't need to link anything and will be finished quickly.
+	outext := filepath.Ext(outpath)
+	if outext == ".o" || outext == ".bc" || outext == ".ll" {
+		// Run jobs to produce the LLVM module.
+		err := runJobs(jobs)
+		if err != nil {
+			return err
+		}
+		// Generate output.
+		switch outext {
+		case ".o":
+			llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
+			if err != nil {
+				return err
+			}
+			return ioutil.WriteFile(outpath, llvmBuf.Bytes(), 0666)
+		case ".bc":
+			data := llvm.WriteBitcodeToMemoryBuffer(mod).Bytes()
+			return ioutil.WriteFile(outpath, data, 0666)
+		case ".ll":
+			data := []byte(mod.String())
+			return ioutil.WriteFile(outpath, data, 0666)
+		default:
+			panic("unreachable")
+		}
+	}
+
+	// Act as a compiler driver, as we need to produce a complete executable.
+	// First add all jobs necessary to build this object file, then afterwards
+	// run all jobs in parallel as far as possible.
+
+	// Create a temporary directory for intermediary files.
+	dir, err := ioutil.TempDir("", "tinygo")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+
+	// Add job to write the output object file.
+	objfile := filepath.Join(dir, "main.o")
+	outputObjectFileJob := &compileJob{
+		description:  "generate output file",
+		dependencies: []*compileJob{programJob},
+		run: func() error {
+			llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
+			if err != nil {
+				return err
+			}
+			return ioutil.WriteFile(objfile, llvmBuf.Bytes(), 0666)
+		},
+	}
+	jobs = append(jobs, outputObjectFileJob)
+
+	// Prepare link command.
+	linkerDependencies := []*compileJob{outputObjectFileJob}
+	executable := filepath.Join(dir, "main")
+	tmppath := executable // final file
+	ldflags := append(config.LDFlags(), "-o", executable, objfile)
+
+	// Add compiler-rt dependency if needed. Usually this is a simple load from
+	// a cache.
+	if config.Target.RTLib == "compiler-rt" {
+		path, job, err := CompilerRT.load(config.Triple(), dir)
+		if err != nil {
+			return err
+		}
+		if job != nil {
+			// The library was not loaded from cache so needs to be compiled
+			// (and then stored in the cache).
+			jobs = append(jobs, job.dependencies...)
+			jobs = append(jobs, job)
+			linkerDependencies = append(linkerDependencies, job)
+		}
+		ldflags = append(ldflags, path)
+	}
+
+	// Add libc dependency if needed.
+	if config.Target.Libc == "picolibc" {
+		path, job, err := Picolibc.load(config.Triple(), dir)
+		if err != nil {
+			return err
+		}
+		if job != nil {
+			// The library needs to be compiled (cache miss).
+			jobs = append(jobs, job.dependencies...)
+			jobs = append(jobs, job)
+			linkerDependencies = append(linkerDependencies, job)
+		}
+		ldflags = append(ldflags, path)
+	}
+
+	// Add jobs to compile extra files. These files are in C or assembly and
+	// contain things like the interrupt vector table and low level operations
+	// such as stack switching.
+	root := goenv.Get("TINYGOROOT")
+	for i, path := range config.ExtraFiles() {
+		abspath := filepath.Join(root, path)
+		outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
+		job := &compileJob{
+			description: "compile extra file " + path,
+			run: func() error {
+				err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, abspath)...)
+				if err != nil {
+					return &commandError{"failed to build", path, err}
+				}
+				return nil
+			},
+		}
+		jobs = append(jobs, job)
+		linkerDependencies = append(linkerDependencies, job)
+		ldflags = append(ldflags, outpath)
+	}
+
+	// Add jobs to compile C files in all packages. This is part of CGo.
+	// TODO: do this as part of building the package to be able to link the
+	// bitcode files together.
+	for i, pkg := range lprogram.Sorted() {
+		for j, filename := range pkg.CFiles {
+			file := filepath.Join(pkg.Dir, filename)
+			outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"."+strconv.Itoa(j)+"-"+filepath.Base(file)+".o")
+			job := &compileJob{
+				description: "compile CGo file " + file,
+				run: func() error {
+					err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, file)...)
+					if err != nil {
+						return &commandError{"failed to build", file, err}
+					}
+					return nil
+				},
+			}
+			jobs = append(jobs, job)
+			linkerDependencies = append(linkerDependencies, job)
+			ldflags = append(ldflags, outpath)
+		}
+	}
+
+	// Linker flags from CGo lines:
+	//     #cgo LDFLAGS: foo
+	if len(lprogram.LDFlags) > 0 {
+		ldflags = append(ldflags, lprogram.LDFlags...)
+	}
+
+	// Create a linker job, which links all object files together and does some
+	// extra stuff that can only be done after linking.
+	jobs = append(jobs, &compileJob{
+		description:  "link",
+		dependencies: linkerDependencies,
+		run: func() error {
+			err = link(config.Target.Linker, ldflags...)
+			if err != nil {
+				return &commandError{"failed to link", executable, err}
+			}
+
+			var calculatedStacks []string
+			var stackSizes map[string]functionStackSize
+			if config.Options.PrintStacks || config.AutomaticStackSize() {
+				// Try to determine stack sizes at compile time.
+				// Don't do this by default as it usually doesn't work on
+				// unsupported architectures.
+				calculatedStacks, stackSizes, err = determineStackSizes(mod, executable)
+				if err != nil {
+					return err
+				}
+			}
+			if config.AutomaticStackSize() {
+				// Modify the .tinygo_stacksizes section that contains a stack size
+				// for each goroutine.
+				err = modifyStackSizes(executable, stackSizeLoads, stackSizes)
+				if err != nil {
+					return fmt.Errorf("could not modify stack sizes: %w", err)
+				}
+			}
+
+			if config.Options.PrintSizes == "short" || config.Options.PrintSizes == "full" {
+				sizes, err := loadProgramSize(executable)
+				if err != nil {
+					return err
+				}
+				if config.Options.PrintSizes == "short" {
+					fmt.Printf("   code    data     bss |   flash     ram\n")
+					fmt.Printf("%7d %7d %7d | %7d %7d\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
+				} else {
+					fmt.Printf("   code  rodata    data     bss |   flash     ram | package\n")
+					for _, name := range sizes.sortedPackageNames() {
+						pkgSize := sizes.Packages[name]
+						fmt.Printf("%7d %7d %7d %7d | %7d %7d | %s\n", pkgSize.Code, pkgSize.ROData, pkgSize.Data, pkgSize.BSS, pkgSize.Flash(), pkgSize.RAM(), name)
+					}
+					fmt.Printf("%7d %7d %7d %7d | %7d %7d | (sum)\n", sizes.Sum.Code, sizes.Sum.ROData, sizes.Sum.Data, sizes.Sum.BSS, sizes.Sum.Flash(), sizes.Sum.RAM())
+					fmt.Printf("%7d       - %7d %7d | %7d %7d | (all)\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
+				}
+			}
+
+			// Print goroutine stack sizes, as far as possible.
+			if config.Options.PrintStacks {
+				printStacks(calculatedStacks, stackSizes)
+			}
+
+			return nil
+		},
+	})
+
+	// Run all jobs to compile and link the program.
+	// Do this now (instead of after elf-to-hex and similar conversions) as it
+	// is simpler and cannot be parallelized.
+	err = runJobs(jobs)
+	if err != nil {
+		return err
+	}
+
+	// Get an Intel .hex file or .bin file from the .elf file.
+	outputBinaryFormat := config.BinaryFormat(outext)
+	switch outputBinaryFormat {
+	case "elf":
+		// do nothing, file is already in ELF format
+	case "hex", "bin":
+		// Extract raw binary, either encoding it as a hex file or as a raw
+		// firmware file.
+		tmppath = filepath.Join(dir, "main"+outext)
+		err := objcopy(executable, tmppath, outputBinaryFormat)
+		if err != nil {
+			return err
+		}
+	case "uf2":
+		// Get UF2 from the .elf file.
+		tmppath = filepath.Join(dir, "main"+outext)
+		err := convertELFFileToUF2File(executable, tmppath, config.Target.UF2FamilyID)
+		if err != nil {
+			return err
+		}
+	case "esp32", "esp8266":
+		// Special format for the ESP family of chips (parsed by the ROM
+		// bootloader).
+		tmppath = filepath.Join(dir, "main"+outext)
+		err := makeESPFirmareImage(executable, tmppath, outputBinaryFormat)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
+	}
+	return action(BuildResult{
+		Binary:  tmppath,
+		MainDir: lprogram.MainPkg().Dir,
+	})
+}
+
+// compileWholeProgram compiles the entire *loader.Program to a LLVM module and
+// applies most necessary optimizations and transformations.
+func compileWholeProgram(pkgName string, config *compileopts.Config, lprogram *loader.Program, machine llvm.TargetMachine) (llvm.Module, error) {
 	// Compile AST to IR.
 	mod, errs := compiler.CompileProgram(pkgName, lprogram, machine, config)
 	if errs != nil {
-		return newMultiError(errs)
+		return mod, newMultiError(errs)
 	}
 
 	if config.Options.PrintIR {
@@ -76,15 +352,15 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		fmt.Println(mod.String())
 	}
 	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
-		return errors.New("verification error after IR construction")
+		return mod, errors.New("verification error after IR construction")
 	}
 
-	err = interp.Run(mod, config.DumpSSA())
+	err := interp.Run(mod, config.DumpSSA())
 	if err != nil {
-		return err
+		return mod, err
 	}
 	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
-		return errors.New("verification error after interpreting runtime.initAll")
+		return mod, errors.New("verification error after interpreting runtime.initAll")
 	}
 
 	if config.GOOS() != "darwin" {
@@ -99,7 +375,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	if config.WasmAbi() == "js" {
 		err := transform.ExternalInt64AsPtr(mod)
 		if err != nil {
-			return err
+			return mod, err
 		}
 	}
 
@@ -128,10 +404,10 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		errs = []error{errors.New("unknown optimization level: -opt=" + config.Options.Opt)}
 	}
 	if len(errs) > 0 {
-		return newMultiError(errs)
+		return mod, newMultiError(errs)
 	}
 	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
-		return errors.New("verification failure after LLVM optimization passes")
+		return mod, errors.New("verification failure after LLVM optimization passes")
 	}
 
 	// LLVM 11 by default tries to emit tail calls (even with the target feature
@@ -145,189 +421,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		transform.DisableTailCalls(mod)
 	}
 
-	// Make sure stack sizes are loaded from a separate section so they can be
-	// modified after linking.
-	var stackSizeLoads []string
-	if config.AutomaticStackSize() {
-		stackSizeLoads = transform.CreateStackSizeLoads(mod, config)
-	}
-
-	// Generate output.
-	outext := filepath.Ext(outpath)
-	switch outext {
-	case ".o":
-		llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
-		if err != nil {
-			return err
-		}
-		return ioutil.WriteFile(outpath, llvmBuf.Bytes(), 0666)
-	case ".bc":
-		data := llvm.WriteBitcodeToMemoryBuffer(mod).Bytes()
-		return ioutil.WriteFile(outpath, data, 0666)
-	case ".ll":
-		data := []byte(mod.String())
-		return ioutil.WriteFile(outpath, data, 0666)
-	default:
-		// Act as a compiler driver.
-
-		// Create a temporary directory for intermediary files.
-		dir, err := ioutil.TempDir("", "tinygo")
-		if err != nil {
-			return err
-		}
-		defer os.RemoveAll(dir)
-
-		// Write the object file.
-		objfile := filepath.Join(dir, "main.o")
-		llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
-		if err != nil {
-			return err
-		}
-		err = ioutil.WriteFile(objfile, llvmBuf.Bytes(), 0666)
-		if err != nil {
-			return err
-		}
-
-		// Prepare link command.
-		executable := filepath.Join(dir, "main")
-		tmppath := executable // final file
-		ldflags := append(config.LDFlags(), "-o", executable, objfile)
-
-		// Load builtins library from the cache, possibly compiling it on the
-		// fly.
-		if config.Target.RTLib == "compiler-rt" {
-			librt, err := CompilerRT.Load(config.Triple())
-			if err != nil {
-				return err
-			}
-			ldflags = append(ldflags, librt)
-		}
-
-		// Add libc.
-		if config.Target.Libc == "picolibc" {
-			libc, err := Picolibc.Load(config.Triple())
-			if err != nil {
-				return err
-			}
-			ldflags = append(ldflags, libc)
-		}
-
-		// Compile extra files.
-		root := goenv.Get("TINYGOROOT")
-		for i, path := range config.ExtraFiles() {
-			abspath := filepath.Join(root, path)
-			outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
-			err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, abspath)...)
-			if err != nil {
-				return &commandError{"failed to build", path, err}
-			}
-			ldflags = append(ldflags, outpath)
-		}
-
-		// Compile C files in packages.
-		// Gather the list of (C) file paths that should be included in the build.
-		for i, pkg := range lprogram.Sorted() {
-			for j, filename := range pkg.CFiles {
-				file := filepath.Join(pkg.Dir, filename)
-				outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"."+strconv.Itoa(j)+"-"+filepath.Base(file)+".o")
-				err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, file)...)
-				if err != nil {
-					return &commandError{"failed to build", file, err}
-				}
-				ldflags = append(ldflags, outpath)
-			}
-		}
-
-		if len(lprogram.LDFlags) > 0 {
-			ldflags = append(ldflags, lprogram.LDFlags...)
-		}
-
-		// Link the object files together.
-		err = link(config.Target.Linker, ldflags...)
-		if err != nil {
-			return &commandError{"failed to link", executable, err}
-		}
-
-		var calculatedStacks []string
-		var stackSizes map[string]functionStackSize
-		if config.Options.PrintStacks || config.AutomaticStackSize() {
-			// Try to determine stack sizes at compile time.
-			// Don't do this by default as it usually doesn't work on
-			// unsupported architectures.
-			calculatedStacks, stackSizes, err = determineStackSizes(mod, executable)
-			if err != nil {
-				return err
-			}
-		}
-		if config.AutomaticStackSize() {
-			// Modify the .tinygo_stacksizes section that contains a stack size
-			// for each goroutine.
-			err = modifyStackSizes(executable, stackSizeLoads, stackSizes)
-			if err != nil {
-				return fmt.Errorf("could not modify stack sizes: %w", err)
-			}
-		}
-
-		if config.Options.PrintSizes == "short" || config.Options.PrintSizes == "full" {
-			sizes, err := loadProgramSize(executable)
-			if err != nil {
-				return err
-			}
-			if config.Options.PrintSizes == "short" {
-				fmt.Printf("   code    data     bss |   flash     ram\n")
-				fmt.Printf("%7d %7d %7d | %7d %7d\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
-			} else {
-				fmt.Printf("   code  rodata    data     bss |   flash     ram | package\n")
-				for _, name := range sizes.sortedPackageNames() {
-					pkgSize := sizes.Packages[name]
-					fmt.Printf("%7d %7d %7d %7d | %7d %7d | %s\n", pkgSize.Code, pkgSize.ROData, pkgSize.Data, pkgSize.BSS, pkgSize.Flash(), pkgSize.RAM(), name)
-				}
-				fmt.Printf("%7d %7d %7d %7d | %7d %7d | (sum)\n", sizes.Sum.Code, sizes.Sum.ROData, sizes.Sum.Data, sizes.Sum.BSS, sizes.Sum.Flash(), sizes.Sum.RAM())
-				fmt.Printf("%7d       - %7d %7d | %7d %7d | (all)\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
-			}
-		}
-
-		// Print goroutine stack sizes, as far as possible.
-		if config.Options.PrintStacks {
-			printStacks(calculatedStacks, stackSizes)
-		}
-
-		// Get an Intel .hex file or .bin file from the .elf file.
-		outputBinaryFormat := config.BinaryFormat(outext)
-		switch outputBinaryFormat {
-		case "elf":
-			// do nothing, file is already in ELF format
-		case "hex", "bin":
-			// Extract raw binary, either encoding it as a hex file or as a raw
-			// firmware file.
-			tmppath = filepath.Join(dir, "main"+outext)
-			err := objcopy(executable, tmppath, outputBinaryFormat)
-			if err != nil {
-				return err
-			}
-		case "uf2":
-			// Get UF2 from the .elf file.
-			tmppath = filepath.Join(dir, "main"+outext)
-			err := convertELFFileToUF2File(executable, tmppath, config.Target.UF2FamilyID)
-			if err != nil {
-				return err
-			}
-		case "esp32", "esp8266":
-			// Special format for the ESP family of chips (parsed by the ROM
-			// bootloader).
-			tmppath = filepath.Join(dir, "main"+outext)
-			err := makeESPFirmareImage(executable, tmppath, outputBinaryFormat)
-			if err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
-		}
-		return action(BuildResult{
-			Binary:  tmppath,
-			MainDir: lprogram.MainPkg().Dir,
-		})
-	}
+	return mod, nil
 }
 
 // functionStackSizes keeps stack size information about a single function

@@ -932,9 +932,17 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Unknown library: %s\n", name)
 			os.Exit(1)
 		}
-		path, err := lib.Load(*target)
+		tmpdir, err := ioutil.TempDir("", "tinygo*")
+		if err != nil {
+			handleCompilerError(err)
+		}
+		defer os.RemoveAll(tmpdir)
+		path, err := lib.Load(*target, tmpdir)
 		handleCompilerError(err)
-		copyFile(path, outpath)
+		err = copyFile(path, outpath)
+		if err != nil {
+			handleCompilerError(err)
+		}
 	case "flash", "gdb":
 		pkgName := filepath.ToSlash(flag.Arg(0))
 		if command == "flash" {
