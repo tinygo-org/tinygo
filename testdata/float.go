@@ -29,12 +29,21 @@ func main() {
 	var f2 float32 = 5.7
 	var f3 float32 = -2.3
 	var f4 float32 = -11.8
+	println(int32(f1), int32(f2), int32(f3), int32(f4))
+
+	// float -> int saturating behavior
 	var f5 float32 = -1
 	var f6 float32 = 256
 	var f7 float32 = -129
-	var f8 float32 = 0
-	f8 /= 0
-	println(int32(f1), int32(f2), int32(f3), int32(f4), uint8(f5), uint8(f6), int8(f7), int8(f6), uint8(f8), int8(f8))
+	f8 := float32(^uint32(0))
+	f9 := float32(int32(-2147483648))
+	f10 := float32(int32(2147483647))
+	var inf float32 = 1
+	inf /= 0
+	var nan float32 = 0
+	nan /= 0
+	println(uint8(f5), uint8(f6), int8(f7), int8(f6), uint32(f8), int32(f9), int32(f10),
+		uint8(inf), uint8(-inf), int8(inf), int8(-inf), uint8(nan), int64(nan))
 
 	// int -> float
 	var i1 int32 = 53

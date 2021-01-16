@@ -2569,7 +2569,7 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 				maxFloat := float64(max)
 				if bits.Len64(max) > significandBits {
 					// Round the max down to fit within the significand.
-					maxFloat = float64(max & ^uint64(0) << uint(bits.Len64(max)-significandBits))
+					maxFloat = float64(max & (^uint64(0) << uint(bits.Len64(max)-significandBits)))
 				}
 
 				// Check if the value is in-bounds (0 <= value <= max).
@@ -2598,7 +2598,7 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 				maxFloat := float64(max)
 				if bits.Len64(max) > significandBits {
 					// Round the max down to fit within the significand.
-					maxFloat = float64(max & ^uint64(0) << uint(bits.Len64(max)-significandBits))
+					maxFloat = float64(max & (^uint64(0) << uint(bits.Len64(max)-significandBits)))
 				}
 
 				// Check if the value is in-bounds (min <= value <= max).
@@ -2609,8 +2609,15 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 				// Assuming that the value is out-of-bounds, select a saturated value.
 				saturated := b.CreateSelect(aboveMin,
 					llvm.ConstInt(llvmTypeTo, max, false), // value > max
-					llvm.ConstInt(llvmTypeTo, min, false), // value < min (or NaN)
+					llvm.ConstInt(llvmTypeTo, min, false), // value < min
 					"saturated",
+				)
+
+				// Map NaN to 0.
+				saturated = b.CreateSelect(b.CreateFCmp(llvm.FloatUNO, value, value, "isnan"),
+					llvm.ConstNull(llvmTypeTo),
+					saturated,
+					"remapped",
 				)
 
 				// Do a normal conversion.
