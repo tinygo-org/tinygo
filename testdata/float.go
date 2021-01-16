@@ -29,12 +29,7 @@ func main() {
 	var f2 float32 = 5.7
 	var f3 float32 = -2.3
 	var f4 float32 = -11.8
-	var f5 float32 = -1
-	var f6 float32 = 256
-	var f7 float32 = -129
-	var f8 float32 = 0
-	f8 /= 0
-	println(int32(f1), int32(f2), int32(f3), int32(f4), uint8(f5), uint8(f6), int8(f7), int8(f6), uint8(f8), int8(f8))
+	println(int32(f1), int32(f2), int32(f3), int32(f4))
 
 	// int -> float
 	var i1 int32 = 53
