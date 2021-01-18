@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tinygo-org/tinygo/ir"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -236,7 +235,7 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 		return llvm.ConstGEP(global, []llvm.Value{zero, zero})
 	}
 
-	ms := c.ir.Program.MethodSets.MethodSet(typ)
+	ms := c.program.MethodSets.MethodSet(typ)
 	if ms.Len() == 0 {
 		// no methods, so can leave that one out
 		return llvm.ConstPointerNull(llvm.PointerType(c.getLLVMRuntimeType("interfaceMethodInfo"), 0))
@@ -247,15 +246,16 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 	for i := 0; i < ms.Len(); i++ {
 		method := ms.At(i)
 		signatureGlobal := c.getMethodSignature(method.Obj().(*types.Func))
-		f := c.ir.GetFunction(c.ir.Program.MethodValue(method))
-		if f.LLVMFn.IsNil() {
+		fn := c.program.MethodValue(method)
+		llvmFn := c.getFunction(fn)
+		if llvmFn.IsNil() {
 			// compiler error, so panic
-			panic("cannot find function: " + f.LinkName())
+			panic("cannot find function: " + c.getFunctionInfo(fn).linkName)
 		}
-		fn := c.getInterfaceInvokeWrapper(f)
+		wrapper := c.getInterfaceInvokeWrapper(fn, llvmFn)
 		methodInfo := llvm.ConstNamedStruct(interfaceMethodInfoType, []llvm.Value{
 			signatureGlobal,
-			llvm.ConstPtrToInt(fn, c.uintptrType),
+			llvm.ConstPtrToInt(wrapper, c.uintptrType),
 		})
 		methods[i] = methodInfo
 	}
@@ -303,7 +303,7 @@ func (c *compilerContext) getInterfaceMethodSet(typ types.Type) llvm.Value {
 // external *i8 indicating the indicating the signature of this method. It is
 // used during the interface lowering pass.
 func (c *compilerContext) getMethodSignature(method *types.Func) llvm.Value {
-	signature := ir.MethodSignature(method)
+	signature := methodSignature(method)
 	signatureGlobal := c.mod.NamedGlobal("func " + signature)
 	if signatureGlobal.IsNil() {
 		signatureGlobal = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), "func "+signature)
@@ -357,8 +357,8 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 	// value.
 
 	prevBlock := b.GetInsertBlock()
-	okBlock := b.ctx.AddBasicBlock(b.fn.LLVMFn, "typeassert.ok")
-	nextBlock := b.ctx.AddBasicBlock(b.fn.LLVMFn, "typeassert.next")
+	okBlock := b.ctx.AddBasicBlock(b.llvmFn, "typeassert.ok")
+	nextBlock := b.ctx.AddBasicBlock(b.llvmFn, "typeassert.next")
 	b.blockExits[b.currentBlock] = nextBlock // adjust outgoing block for phi nodes
 	b.CreateCondBr(commaOk, okBlock, nextBlock)
 
@@ -436,8 +436,8 @@ func (b *builder) getInvokeCall(instr *ssa.CallCommon) (llvm.Value, []llvm.Value
 // value, dereferences or unpacks it if necessary, and calls the real method.
 // If the method to wrap has a pointer receiver, no wrapping is necessary and
 // the function is returned directly.
-func (c *compilerContext) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
-	wrapperName := f.LinkName() + "$invoke"
+func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llvm.Value) llvm.Value {
+	wrapperName := llvmFn.Name() + "$invoke"
 	wrapper := c.mod.NamedFunction(wrapperName)
 	if !wrapper.IsNil() {
 		// Wrapper already created. Return it directly.
@@ -445,7 +445,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 	}
 
 	// Get the expanded receiver type.
-	receiverType := c.getLLVMType(f.Params[0].Type())
+	receiverType := c.getLLVMType(fn.Params[0].Type())
 	var expandedReceiverType []llvm.Type
 	for _, info := range expandFormalParamType(receiverType, "", nil) {
 		expandedReceiverType = append(expandedReceiverType, info.llvmType)
@@ -457,11 +457,11 @@ func (c *compilerContext) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 		// Casting a function signature to a different signature and calling it
 		// with a receiver pointer bitcasted to *i8 (as done in calls on an
 		// interface) is hopefully a safe (defined) operation.
-		return f.LLVMFn
+		return llvmFn
 	}
 
 	// create wrapper function
-	fnType := f.LLVMFn.Type().ElementType()
+	fnType := llvmFn.Type().ElementType()
 	paramTypes := append([]llvm.Type{c.i8ptrType}, fnType.ParamTypes()[len(expandedReceiverType):]...)
 	wrapFnType := llvm.FunctionType(fnType.ReturnType(), paramTypes, false)
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
@@ -479,8 +479,8 @@ func (c *compilerContext) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 
 	// add debug info if needed
 	if c.Debug() {
-		pos := c.ir.Program.Fset.Position(f.Pos())
-		difunc := c.attachDebugInfoRaw(f, wrapper, "$invoke", pos.Filename, pos.Line)
+		pos := c.program.Fset.Position(fn.Pos())
+		difunc := c.attachDebugInfoRaw(fn, wrapper, "$invoke", pos.Filename, pos.Line)
 		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
 
@@ -490,13 +490,60 @@ func (c *compilerContext) getInterfaceInvokeWrapper(f *ir.Function) llvm.Value {
 
 	receiverValue := b.emitPointerUnpack(wrapper.Param(0), []llvm.Type{receiverType})[0]
 	params := append(b.expandFormalParam(receiverValue), wrapper.Params()[1:]...)
-	if f.LLVMFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
-		b.CreateCall(f.LLVMFn, params, "")
+	if llvmFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
+		b.CreateCall(llvmFn, params, "")
 		b.CreateRetVoid()
 	} else {
-		ret := b.CreateCall(f.LLVMFn, params, "ret")
+		ret := b.CreateCall(llvmFn, params, "ret")
 		b.CreateRet(ret)
 	}
 
 	return wrapper
+}
+
+// methodSignature creates a readable version of a method signature (including
+// the function name, excluding the receiver name). This string is used
+// internally to match interfaces and to call the correct method on an
+// interface. Examples:
+//
+//     String() string
+//     Read([]byte) (int, error)
+func methodSignature(method *types.Func) string {
+	return method.Name() + signature(method.Type().(*types.Signature))
+}
+
+// Make a readable version of a function (pointer) signature.
+// Examples:
+//
+//     () string
+//     (string, int) (int, error)
+func signature(sig *types.Signature) string {
+	s := ""
+	if sig.Params().Len() == 0 {
+		s += "()"
+	} else {
+		s += "("
+		for i := 0; i < sig.Params().Len(); i++ {
+			if i > 0 {
+				s += ", "
+			}
+			s += sig.Params().At(i).Type().String()
+		}
+		s += ")"
+	}
+	if sig.Results().Len() == 0 {
+		// keep as-is
+	} else if sig.Results().Len() == 1 {
+		s += " " + sig.Results().At(0).Type().String()
+	} else {
+		s += " ("
+		for i := 0; i < sig.Results().Len(); i++ {
+			if i > 0 {
+				s += ", "
+			}
+			s += sig.Results().At(i).Type().String()
+		}
+		s += ")"
+	}
+	return s
 }

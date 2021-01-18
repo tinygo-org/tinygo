@@ -16,7 +16,7 @@ import (
 // slice. This is required by the Go language spec: an index out of bounds must
 // cause a panic.
 func (b *builder) createLookupBoundsCheck(arrayLen, index llvm.Value, indexType types.Type) {
-	if b.fn.IsNoBounds() {
+	if b.info.nobounds {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
 		return
@@ -48,7 +48,7 @@ func (b *builder) createLookupBoundsCheck(arrayLen, index llvm.Value, indexType 
 // biggest possible slice capacity, 'low' means len and 'high' means cap. The
 // logic is the same in both cases.
 func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lowType, highType, maxType *types.Basic) {
-	if b.fn.IsNoBounds() {
+	if b.info.nobounds {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
 		return
@@ -104,7 +104,7 @@ func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lo
 // createChanBoundsCheck creates a bounds check before creating a new channel to
 // check that the value is not too big for runtime.chanMake.
 func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, bufSizeType *types.Basic, pos token.Pos) {
-	if b.fn.IsNoBounds() {
+	if b.info.nobounds {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
 		return
@@ -189,7 +189,7 @@ func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix str
 // createNegativeShiftCheck creates an assertion that panics if the given shift value is negative.
 // This function assumes that the shift value is signed.
 func (b *builder) createNegativeShiftCheck(shift llvm.Value) {
-	if b.fn.IsNoBounds() {
+	if b.info.nobounds {
 		// Function disabled bounds checking - skip shift check.
 		return
 	}
@@ -212,8 +212,8 @@ func (b *builder) createRuntimeAssert(assert llvm.Value, blockPrefix, assertFunc
 		}
 	}
 
-	faultBlock := b.ctx.AddBasicBlock(b.fn.LLVMFn, blockPrefix+".throw")
-	nextBlock := b.ctx.AddBasicBlock(b.fn.LLVMFn, blockPrefix+".next")
+	faultBlock := b.ctx.AddBasicBlock(b.llvmFn, blockPrefix+".throw")
+	nextBlock := b.ctx.AddBasicBlock(b.llvmFn, blockPrefix+".next")
 	b.blockExits[b.currentBlock] = nextBlock // adjust outgoing block for phi nodes
 
 	// Now branch to the out-of-bounds or the regular block.

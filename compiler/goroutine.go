@@ -7,6 +7,7 @@ import (
 	"go/token"
 
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -28,7 +29,8 @@ func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value, p
 			// function that will be replaced with a load from a special ELF
 			// section that contains the stack size (and is modified after
 			// linking).
-			stackSize = b.createCall(b.mod.NamedFunction("internal/task.getGoroutineStackSize"), []llvm.Value{callee, llvm.Undef(b.i8ptrType), llvm.Undef(b.i8ptrType)}, "stacksize")
+			stackSizeFn := b.getFunction(b.program.ImportedPackage("internal/task").Members["getGoroutineStackSize"].(*ssa.Function))
+			stackSize = b.createCall(stackSizeFn, []llvm.Value{callee, llvm.Undef(b.i8ptrType), llvm.Undef(b.i8ptrType)}, "stacksize")
 		} else {
 			// The stack size is fixed at compile time. By emitting it here as a
 			// constant, it can be optimized.
@@ -42,7 +44,8 @@ func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value, p
 	default:
 		panic("unreachable")
 	}
-	b.createCall(b.mod.NamedFunction("internal/task.start"), []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.i8ptrType), llvm.ConstPointerNull(b.i8ptrType)}, "")
+	start := b.getFunction(b.program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
+	b.createCall(start, []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.i8ptrType), llvm.ConstPointerNull(b.i8ptrType)}, "")
 	return llvm.Undef(funcPtr.Type().ElementType().ReturnType())
 }
 
@@ -88,7 +91,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		builder.SetInsertPointAtEnd(entry)
 
 		if c.Debug() {
-			pos := c.ir.Program.Fset.Position(pos)
+			pos := c.program.Fset.Position(pos)
 			diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
 				File:       c.getDIFile(pos.Filename),
 				Parameters: nil, // do not show parameters in debugger
@@ -145,7 +148,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		builder.SetInsertPointAtEnd(entry)
 
 		if c.Debug() {
-			pos := c.ir.Program.Fset.Position(pos)
+			pos := c.program.Fset.Position(pos)
 			diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
 				File:       c.getDIFile(pos.Filename),
 				Parameters: nil, // do not show parameters in debugger

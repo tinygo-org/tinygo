@@ -14,9 +14,9 @@ package compiler
 //     frames.
 
 import (
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
-	"github.com/tinygo-org/tinygo/ir"
 	"go/types"
+
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -26,9 +26,9 @@ import (
 // calls.
 func (b *builder) deferInitFunc() {
 	// Some setup.
-	b.deferFuncs = make(map[*ir.Function]int)
+	b.deferFuncs = make(map[*ssa.Function]int)
 	b.deferInvokeFuncs = make(map[string]int)
-	b.deferClosureFuncs = make(map[*ir.Function]int)
+	b.deferClosureFuncs = make(map[*ssa.Function]int)
 	b.deferExprFuncs = make(map[ssa.Value]int)
 	b.deferBuiltinFuncs = make(map[ssa.Value]deferBuiltin)
 
@@ -107,13 +107,11 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 
 	} else if callee, ok := instr.Call.Value.(*ssa.Function); ok {
 		// Regular function call.
-		fn := b.ir.GetFunction(callee)
-
-		if _, ok := b.deferFuncs[fn]; !ok {
-			b.deferFuncs[fn] = len(b.allDeferFuncs)
-			b.allDeferFuncs = append(b.allDeferFuncs, fn)
+		if _, ok := b.deferFuncs[callee]; !ok {
+			b.deferFuncs[callee] = len(b.allDeferFuncs)
+			b.allDeferFuncs = append(b.allDeferFuncs, callee)
 		}
-		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferFuncs[fn]), false)
+		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferFuncs[callee]), false)
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields).
@@ -135,7 +133,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		context := b.CreateExtractValue(closure, 0, "")
 
 		// Get the callback number.
-		fn := b.ir.GetFunction(makeClosure.Fn.(*ssa.Function))
+		fn := makeClosure.Fn.(*ssa.Function)
 		if _, ok := b.deferClosureFuncs[fn]; !ok {
 			b.deferClosureFuncs[fn] = len(b.allDeferFuncs)
 			b.allDeferFuncs = append(b.allDeferFuncs, makeClosure)
@@ -250,10 +248,10 @@ func (b *builder) createRunDefers() {
 	//     }
 
 	// Create loop.
-	loophead := b.ctx.AddBasicBlock(b.fn.LLVMFn, "rundefers.loophead")
-	loop := b.ctx.AddBasicBlock(b.fn.LLVMFn, "rundefers.loop")
-	unreachable := b.ctx.AddBasicBlock(b.fn.LLVMFn, "rundefers.default")
-	end := b.ctx.AddBasicBlock(b.fn.LLVMFn, "rundefers.end")
+	loophead := b.ctx.AddBasicBlock(b.llvmFn, "rundefers.loophead")
+	loop := b.ctx.AddBasicBlock(b.llvmFn, "rundefers.loop")
+	unreachable := b.ctx.AddBasicBlock(b.llvmFn, "rundefers.default")
+	end := b.ctx.AddBasicBlock(b.llvmFn, "rundefers.end")
 	b.CreateBr(loophead)
 
 	// Create loop head:
@@ -285,7 +283,7 @@ func (b *builder) createRunDefers() {
 		// Create switch case, for example:
 		//     case 0:
 		//         // run first deferred call
-		block := b.ctx.AddBasicBlock(b.fn.LLVMFn, "rundefers.callback")
+		block := b.ctx.AddBasicBlock(b.llvmFn, "rundefers.callback")
 		sw.AddCase(llvm.ConstInt(b.uintptrType, uint64(i), false), block)
 		b.SetInsertPointAtEnd(block)
 		switch callback := callback.(type) {
@@ -349,7 +347,7 @@ func (b *builder) createRunDefers() {
 
 			b.createCall(fnPtr, forwardParams, "")
 
-		case *ir.Function:
+		case *ssa.Function:
 			// Direct call.
 
 			// Get the real defer struct type and cast to it.
@@ -371,7 +369,7 @@ func (b *builder) createRunDefers() {
 
 			// Plain TinyGo functions add some extra parameters to implement async functionality and function recievers.
 			// These parameters should not be supplied when calling into an external C/ASM function.
-			if !callback.IsExported() {
+			if !b.getFunctionInfo(callback).exported {
 				// Add the context parameter. We know it is ignored by the receiving
 				// function, but we have to pass one anyway.
 				forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
@@ -381,11 +379,11 @@ func (b *builder) createRunDefers() {
 			}
 
 			// Call real function.
-			b.createCall(callback.LLVMFn, forwardParams, "")
+			b.createCall(b.getFunction(callback), forwardParams, "")
 
 		case *ssa.MakeClosure:
 			// Get the real defer struct type and cast to it.
-			fn := b.ir.GetFunction(callback.Fn.(*ssa.Function))
+			fn := callback.Fn.(*ssa.Function)
 			valueTypes := []llvm.Type{b.uintptrType, llvm.PointerType(b.getLLVMRuntimeType("_defer"), 0)}
 			params := fn.Signature.Params()
 			for i := 0; i < params.Len(); i++ {
@@ -408,7 +406,7 @@ func (b *builder) createRunDefers() {
 			forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
 
 			// Call deferred function.
-			b.createCall(fn.LLVMFn, forwardParams, "")
+			b.createCall(b.getFunction(fn), forwardParams, "")
 		case *ssa.Builtin:
 			db := b.deferBuiltinFuncs[callback]
 
