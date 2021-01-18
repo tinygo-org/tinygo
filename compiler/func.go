@@ -149,7 +149,7 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 	if len(expr.Bindings) == 0 {
 		panic("unexpected: MakeClosure without bound variables")
 	}
-	f := b.ir.GetFunction(expr.Fn.(*ssa.Function))
+	f := expr.Fn.(*ssa.Function)
 
 	// Collect all bound variables.
 	boundVars := make([]llvm.Value, len(expr.Bindings))
@@ -164,5 +164,5 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 	context := b.emitPointerPack(boundVars)
 
 	// Create the closure.
-	return b.createFuncValue(f.LLVMFn, context, f.Signature), nil
+	return b.createFuncValue(b.getFunction(f), context, f.Signature), nil
 }
