@@ -1,10 +1,10 @@
-# TinyGo base stage installs the most recent Go 1.15.x, LLVM 10 and the TinyGo compiler itself.
+# TinyGo base stage installs the most recent Go 1.15.x, LLVM 11 and the TinyGo compiler itself.
 FROM golang:1.15 AS tinygo-base
 
 RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
-    echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-10 main" >> /etc/apt/sources.list && \
+    echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-11 main" >> /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y llvm-10-dev libclang-10-dev lld-10 git
+    apt-get install -y llvm-11-dev libclang-11-dev lld-11 git
 
 COPY . /tinygo
 
@@ -29,7 +29,7 @@ COPY --from=tinygo-base /tinygo/targets /tinygo/targets
 
 RUN cd /tinygo/ && \
     apt-get update && \
-    apt-get install -y make clang-10 libllvm10 lld-10 && \
+    apt-get install -y make clang-11 libllvm11 lld-11 && \
     make wasi-libc
 
 # tinygo-avr stage installs the needed dependencies to compile TinyGo programs for AVR microcontrollers.
@@ -61,7 +61,7 @@ COPY --from=tinygo-base /tinygo/lib /tinygo/lib
 
 RUN cd /tinygo/ && \
     apt-get update && \
-    apt-get install -y apt-utils make clang-10 && \
+    apt-get install -y apt-utils make clang-11 && \
     make gen-device-nrf && make gen-device-stm32
 
 # tinygo-all stage installs the needed dependencies to compile TinyGo programs for all platforms.
@@ -73,7 +73,7 @@ COPY --from=tinygo-base /tinygo/lib /tinygo/lib
 
 RUN cd /tinygo/ && \
     apt-get update && \
-    apt-get install -y apt-utils make clang-10 binutils-avr gcc-avr avr-libc && \
+    apt-get install -y apt-utils make clang-11 binutils-avr gcc-avr avr-libc && \
     make gen-device
 
 CMD ["tinygo"]
