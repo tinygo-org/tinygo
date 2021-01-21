@@ -72,7 +72,8 @@ func main() {
 	regression1033()
 
 	//Test deferred builtins
-	testDeferBuiltin()
+	testDeferBuiltinClose()
+	testDeferBuiltinDelete()
 }
 
 func runFunc(f func(int), arg int) {
@@ -121,13 +122,30 @@ func testMultiFuncVar() {
 	defer f(1)
 }
 
-func testDeferBuiltin() {
+func testDeferBuiltinClose() {
 	i := make(chan int)
-	defer close(i)
+	func() {
+		defer close(i)
+	}()
+	if n, ok := <-i; n != 0 || ok {
+		println("expected to read 0 from closed channel")
+	}
+}
+
+func testDeferBuiltinDelete() {
+	m := map[int]int{3: 30, 5: 50}
+	func() {
+		defer delete(m, 3)
+		if m[3] != 30 {
+			println("expected m[3] to be 30")
+		}
+	}()
+	if m[3] != 0 {
+		println("expected m[3] to be 0")
+	}
 }
 
 type dumb struct {
-
 }
 
 func (*dumb) Value(key interface{}) interface{} {
@@ -144,17 +162,17 @@ func exportedDefer() {
 }
 
 func deferFunc() (int, func(int)) {
-	return 0, func(i int){println("...extracted defer func ", i)}
+	return 0, func(i int) { println("...extracted defer func ", i) }
 }
 
 func multiFuncDefer() func(int) {
 	i := 0
 
 	if i > 0 {
-		return func(i int){println("Should not have gotten here. i = ", i)}
+		return func(i int) { println("Should not have gotten here. i = ", i) }
 	}
 
-	return func(i int){println("Called the correct function. i = ", i)}
+	return func(i int) { println("Called the correct function. i = ", i) }
 }
 
 func testBound(f func() string) {
