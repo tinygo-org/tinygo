@@ -130,7 +130,9 @@ func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ir.Function) *bui
 }
 
 type deferBuiltin struct {
-	funcName string
+	callName string
+	pos      token.Pos
+	argTypes []types.Type
 	callback int
 }
 
@@ -1196,11 +1198,11 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 
 // createBuiltin lowers a builtin Go function (append, close, delete, etc.) to
 // LLVM IR. It uses runtime calls for some builtins.
-func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos) (llvm.Value, error) {
+func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, callName string, pos token.Pos) (llvm.Value, error) {
 	switch callName {
 	case "append":
-		src := b.getValue(args[0])
-		elems := b.getValue(args[1])
+		src := argValues[0]
+		elems := argValues[1]
 		srcBuf := b.CreateExtractValue(src, 0, "append.srcBuf")
 		srcPtr := b.CreateBitCast(srcBuf, b.i8ptrType, "append.srcPtr")
 		srcLen := b.CreateExtractValue(src, 1, "append.srcLen")
@@ -1221,9 +1223,9 @@ func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos
 		newSlice = b.CreateInsertValue(newSlice, newCap, 2, "")
 		return newSlice, nil
 	case "cap":
-		value := b.getValue(args[0])
+		value := argValues[0]
 		var llvmCap llvm.Value
-		switch args[0].Type().(type) {
+		switch argTypes[0].(type) {
 		case *types.Chan:
 			llvmCap = b.createRuntimeCall("chanCap", []llvm.Value{value}, "cap")
 		case *types.Slice:
@@ -1236,12 +1238,12 @@ func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos
 		}
 		return llvmCap, nil
 	case "close":
-		b.createChanClose(args[0])
+		b.createChanClose(argValues[0])
 		return llvm.Value{}, nil
 	case "complex":
-		r := b.getValue(args[0])
-		i := b.getValue(args[1])
-		t := args[0].Type().Underlying().(*types.Basic)
+		r := argValues[0]
+		i := argValues[1]
+		t := argTypes[0].Underlying().(*types.Basic)
 		var cplx llvm.Value
 		switch t.Kind() {
 		case types.Float32:
@@ -1255,8 +1257,8 @@ func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos
 		cplx = b.CreateInsertValue(cplx, i, 1, "")
 		return cplx, nil
 	case "copy":
-		dst := b.getValue(args[0])
-		src := b.getValue(args[1])
+		dst := argValues[0]
+		src := argValues[1]
 		dstLen := b.CreateExtractValue(dst, 1, "copy.dstLen")
 		srcLen := b.CreateExtractValue(src, 1, "copy.srcLen")
 		dstBuf := b.CreateExtractValue(dst, 0, "copy.dstArray")
@@ -1267,16 +1269,16 @@ func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos
 		elemSize := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(elemType), false)
 		return b.createRuntimeCall("sliceCopy", []llvm.Value{dstBuf, srcBuf, dstLen, srcLen, elemSize}, "copy.n"), nil
 	case "delete":
-		m := b.getValue(args[0])
-		key := b.getValue(args[1])
-		return llvm.Value{}, b.createMapDelete(args[1].Type(), m, key, pos)
+		m := argValues[0]
+		key := argValues[1]
+		return llvm.Value{}, b.createMapDelete(argTypes[1], m, key, pos)
 	case "imag":
-		cplx := b.getValue(args[0])
+		cplx := argValues[0]
 		return b.CreateExtractValue(cplx, 1, "imag"), nil
 	case "len":
-		value := b.getValue(args[0])
+		value := argValues[0]
 		var llvmLen llvm.Value
-		switch args[0].Type().Underlying().(type) {
+		switch argTypes[0].Underlying().(type) {
 		case *types.Basic, *types.Slice:
 			// string or slice
 			llvmLen = b.CreateExtractValue(value, 1, "len")
@@ -1292,12 +1294,11 @@ func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos
 		}
 		return llvmLen, nil
 	case "print", "println":
-		for i, arg := range args {
+		for i, value := range argValues {
 			if i >= 1 && callName == "println" {
 				b.createRuntimeCall("printspace", nil, "")
 			}
-			value := b.getValue(arg)
-			typ := arg.Type().Underlying()
+			typ := argTypes[i].Underlying()
 			switch typ := typ.(type) {
 			case *types.Basic:
 				switch typ.Kind() {
@@ -1349,13 +1350,13 @@ func (b *builder) createBuiltin(args []ssa.Value, callName string, pos token.Pos
 		}
 		return llvm.Value{}, nil // print() or println() returns void
 	case "real":
-		cplx := b.getValue(args[0])
+		cplx := argValues[0]
 		return b.CreateExtractValue(cplx, 0, "real"), nil
 	case "recover":
 		return b.createRuntimeCall("_recover", nil, ""), nil
 	case "ssa:wrapnilchk":
 		// TODO: do an actual nil check?
-		return b.getValue(args[0]), nil
+		return argValues[0], nil
 	default:
 		return llvm.Value{}, b.makeError(pos, "todo: builtin: "+callName)
 	}
@@ -1432,7 +1433,13 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		exported = targetFunc.IsExported()
 	} else if call, ok := instr.Value.(*ssa.Builtin); ok {
 		// Builtin function (append, close, delete, etc.).)
-		return b.createBuiltin(instr.Args, call.Name(), instr.Pos())
+		var argTypes []types.Type
+		var argValues []llvm.Value
+		for _, arg := range instr.Args {
+			argTypes = append(argTypes, arg.Type())
+			argValues = append(argValues, b.getValue(arg))
+		}
+		return b.createBuiltin(argTypes, argValues, call.Name(), instr.Pos())
 	} else {
 		// Function pointer.
 		value := b.getValue(instr.Value)

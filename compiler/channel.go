@@ -79,8 +79,7 @@ func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
 }
 
 // createChanClose closes the given channel.
-func (b *builder) createChanClose(param ssa.Value) {
-	ch := b.getValue(param)
+func (b *builder) createChanClose(ch llvm.Value) {
 	b.createRuntimeCall("chanClose", []llvm.Value{ch}, "")
 }
 

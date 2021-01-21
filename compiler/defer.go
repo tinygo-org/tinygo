@@ -155,19 +155,19 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		valueTypes = append(valueTypes, context.Type())
 
 	} else if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
-		var funcName string
-		switch builtin.Name() {
-		case "close":
-			funcName = "chanClose"
-		default:
-			b.addError(instr.Pos(), "todo: Implement defer for "+builtin.Name())
-			return
+		var argTypes []types.Type
+		var argValues []llvm.Value
+		for _, arg := range instr.Call.Args {
+			argTypes = append(argTypes, arg.Type())
+			argValues = append(argValues, b.getValue(arg))
 		}
 
 		if _, ok := b.deferBuiltinFuncs[instr.Call.Value]; !ok {
 			b.deferBuiltinFuncs[instr.Call.Value] = deferBuiltin{
-				funcName,
-				len(b.allDeferFuncs),
+				callName: builtin.Name(),
+				pos:      builtin.Pos(),
+				argTypes: argTypes,
+				callback: len(b.allDeferFuncs),
 			}
 			b.allDeferFuncs = append(b.allDeferFuncs, instr.Call.Value)
 		}
@@ -176,10 +176,9 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields).
 		values = []llvm.Value{callback, next}
-		for _, param := range instr.Call.Args {
-			llvmParam := b.getValue(param)
-			values = append(values, llvmParam)
-			valueTypes = append(valueTypes, llvmParam.Type())
+		for _, param := range argValues {
+			values = append(values, param)
+			valueTypes = append(valueTypes, param.Type())
 		}
 
 	} else {
@@ -426,15 +425,18 @@ func (b *builder) createRunDefers() {
 			deferFramePtr := b.CreateBitCast(deferData, llvm.PointerType(deferFrameType, 0), "deferFrame")
 
 			// Extract the params from the struct.
-			var forwardParams []llvm.Value
+			var argValues []llvm.Value
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 			for i := 0; i < params.Len(); i++ {
 				gep := b.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i+2), false)}, "gep")
 				forwardParam := b.CreateLoad(gep, "param")
-				forwardParams = append(forwardParams, forwardParam)
+				argValues = append(argValues, forwardParam)
 			}
 
-			b.createRuntimeCall(db.funcName, forwardParams, "")
+			_, err := b.createBuiltin(db.argTypes, argValues, db.callName, db.pos)
+			if err != nil {
+				b.diagnostics = append(b.diagnostics, err)
+			}
 		default:
 			panic("unknown deferred function type")
 		}
