@@ -52,7 +52,8 @@ type PackageJSON struct {
 	CFiles   []string
 
 	// Dependency information
-	Imports []string
+	Imports   []string
+	ImportMap map[string]string
 
 	// Error information
 	Error *struct {
@@ -410,6 +411,9 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 func (p *Package) Import(to string) (*types.Package, error) {
 	if to == "unsafe" {
 		return types.Unsafe, nil
+	}
+	if newTo, ok := p.ImportMap[to]; ok && !strings.HasSuffix(newTo, ".test]") {
+		to = newTo
 	}
 	if imported, ok := p.program.Packages[to]; ok {
 		return imported.Pkg, nil
