@@ -277,7 +277,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				copy(dstBuf.buf[dst.offset():dst.offset()+nBytes], srcBuf.buf[src.offset():])
 				dstObj.buffer = dstBuf
 				mem.put(dst.index(), dstObj)
-			case callFn.name == "(reflect.Type).Elem":
+			case callFn.name == "(reflect.rawType).elem":
 				if r.debug {
 					fmt.Fprintln(os.Stderr, indent+"call (reflect.rawType).elem:", operands[1:])
 				}

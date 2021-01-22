@@ -16,7 +16,7 @@ const (
 )
 
 type Value struct {
-	typecode Type
+	typecode rawType
 	value    unsafe.Pointer
 	flags    valueFlags
 }
@@ -36,10 +36,10 @@ func Indirect(v Value) Value {
 }
 
 //go:linkname composeInterface runtime.composeInterface
-func composeInterface(Type, unsafe.Pointer) interface{}
+func composeInterface(rawType, unsafe.Pointer) interface{}
 
 //go:linkname decomposeInterface runtime.decomposeInterface
-func decomposeInterface(i interface{}) (Type, unsafe.Pointer)
+func decomposeInterface(i interface{}) (rawType, unsafe.Pointer)
 
 func ValueOf(i interface{}) Value {
 	typecode, value := decomposeInterface(i)
@@ -51,11 +51,11 @@ func ValueOf(i interface{}) Value {
 }
 
 func (v Value) Interface() interface{} {
-	if v.isIndirect() && v.Type().Size() <= unsafe.Sizeof(uintptr(0)) {
+	if v.isIndirect() && v.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
 		// Value was indirect but must be put back directly in the interface
 		// value.
 		var value uintptr
-		for j := v.Type().Size(); j != 0; j-- {
+		for j := v.typecode.Size(); j != 0; j-- {
 			value = (value << 8) | uintptr(*(*uint8)(unsafe.Pointer(uintptr(v.value) + j - 1)))
 		}
 		v.value = unsafe.Pointer(value)
@@ -67,8 +67,16 @@ func (v Value) Type() Type {
 	return v.typecode
 }
 
+// Internal function only, do not use.
+//
+// RawType returns the raw, underlying type code. It is used in the runtime
+// package and needs to be exported for the runtime package to access it.
+func (v Value) RawType() rawType {
+	return v.typecode
+}
+
 func (v Value) Kind() Kind {
-	return v.Type().Kind()
+	return v.typecode.Kind()
 }
 
 // IsNil returns whether the value is the nil value. It panics if the value Kind
@@ -313,10 +321,9 @@ func chanlen(p unsafe.Pointer) int
 // Len returns the length of this value for slices, strings, arrays, channels,
 // and maps. For other types, it panics.
 func (v Value) Len() int {
-	t := v.Type()
-	switch t.Kind() {
+	switch v.typecode.Kind() {
 	case Array:
-		return v.Type().Len()
+		return v.typecode.Len()
 	case Chan:
 		return chanlen(v.value)
 	case Map:
@@ -336,10 +343,9 @@ func chancap(p unsafe.Pointer) int
 // Cap returns the capacity of this value for arrays, channels and slices.
 // For other types, it panics.
 func (v Value) Cap() int {
-	t := v.Type()
-	switch t.Kind() {
+	switch v.typecode.Kind() {
 	case Array:
-		return v.Type().Len()
+		return v.typecode.Len()
 	case Chan:
 		return chancap(v.value)
 	case Slice:
@@ -352,7 +358,7 @@ func (v Value) Cap() int {
 // NumField returns the number of fields of this struct. It panics for other
 // value types.
 func (v Value) NumField() int {
-	return v.Type().NumField()
+	return v.typecode.NumField()
 }
 
 func (v Value) Elem() Value {
@@ -366,7 +372,7 @@ func (v Value) Elem() Value {
 			return Value{}
 		}
 		return Value{
-			typecode: v.Type().Elem(),
+			typecode: v.typecode.elem(),
 			value:    ptr,
 			flags:    v.flags | valueFlagIndirect,
 		}
@@ -377,7 +383,7 @@ func (v Value) Elem() Value {
 
 // Field returns the value of the i'th field of this struct.
 func (v Value) Field(i int) Value {
-	structField := v.Type().Field(i)
+	structField := v.typecode.rawField(i)
 	flags := v.flags
 	if structField.PkgPath != "" {
 		// The fact that PkgPath is present means that this field is not
@@ -385,14 +391,15 @@ func (v Value) Field(i int) Value {
 		flags &^= valueFlagExported
 	}
 
-	size := v.Type().Size()
-	fieldSize := structField.Type.Size()
+	size := v.typecode.Size()
+	fieldType := structField.Type
+	fieldSize := fieldType.Size()
 	if v.isIndirect() || fieldSize > unsafe.Sizeof(uintptr(0)) {
 		// v.value was already a pointer to the value and it should stay that
 		// way.
 		return Value{
 			flags:    flags,
-			typecode: structField.Type,
+			typecode: fieldType,
 			value:    unsafe.Pointer(uintptr(v.value) + structField.Offset),
 		}
 	}
@@ -407,7 +414,7 @@ func (v Value) Field(i int) Value {
 		// situation explicitly.
 		return Value{
 			flags:    flags,
-			typecode: structField.Type,
+			typecode: fieldType,
 			value:    unsafe.Pointer(uintptr(0)),
 		}
 	}
@@ -420,7 +427,7 @@ func (v Value) Field(i int) Value {
 		value := unsafe.Pointer(loadValue(ptr, fieldSize))
 		return Value{
 			flags:    0,
-			typecode: structField.Type,
+			typecode: fieldType,
 			value:    value,
 		}
 	}
@@ -430,7 +437,7 @@ func (v Value) Field(i int) Value {
 	value := maskAndShift(uintptr(v.value), structField.Offset, fieldSize)
 	return Value{
 		flags:    flags,
-		typecode: structField.Type,
+		typecode: fieldType,
 		value:    unsafe.Pointer(value),
 	}
 }
@@ -444,10 +451,10 @@ func (v Value) Index(i int) Value {
 			panic("reflect: slice index out of range")
 		}
 		elem := Value{
-			typecode: v.Type().Elem(),
+			typecode: v.typecode.elem(),
 			flags:    v.flags | valueFlagIndirect,
 		}
-		addr := uintptr(slice.Data) + elem.Type().Size()*uintptr(i) // pointer to new value
+		addr := uintptr(slice.Data) + elem.typecode.Size()*uintptr(i) // pointer to new value
 		elem.value = unsafe.Pointer(addr)
 		return elem
 	case String:
@@ -464,13 +471,13 @@ func (v Value) Index(i int) Value {
 		}
 	case Array:
 		// Extract an element from the array.
-		elemType := v.Type().Elem()
+		elemType := v.typecode.elem()
 		elemSize := elemType.Size()
-		size := v.Type().Size()
+		size := v.typecode.Size()
 		if size == 0 {
 			// The element size is 0 and/or the length of the array is 0.
 			return Value{
-				typecode: v.Type().Elem(),
+				typecode: v.typecode.elem(),
 				flags:    v.flags,
 			}
 		}
@@ -481,7 +488,7 @@ func (v Value) Index(i int) Value {
 			// elemSize.
 			addr := uintptr(v.value) + elemSize*uintptr(i) // pointer to new value
 			return Value{
-				typecode: v.Type().Elem(),
+				typecode: v.typecode.elem(),
 				flags:    v.flags,
 				value:    unsafe.Pointer(addr),
 			}
@@ -492,7 +499,7 @@ func (v Value) Index(i int) Value {
 			// Load the value from the pointer.
 			addr := uintptr(v.value) + elemSize*uintptr(i) // pointer to new value
 			return Value{
-				typecode: v.Type().Elem(),
+				typecode: v.typecode.elem(),
 				flags:    v.flags,
 				value:    unsafe.Pointer(loadValue(unsafe.Pointer(addr), elemSize)),
 			}
@@ -503,7 +510,7 @@ func (v Value) Index(i int) Value {
 		offset := elemSize * uintptr(i)
 		value := maskAndShift(uintptr(v.value), offset, elemSize)
 		return Value{
-			typecode: v.Type().Elem(),
+			typecode: v.typecode.elem(),
 			flags:    v.flags,
 			value:    unsafe.Pointer(value),
 		}
@@ -561,10 +568,10 @@ func (it *MapIter) Next() bool {
 
 func (v Value) Set(x Value) {
 	v.checkAddressable()
-	if !v.Type().AssignableTo(x.Type()) {
+	if !v.typecode.AssignableTo(x.typecode) {
 		panic("reflect: cannot set")
 	}
-	size := v.Type().Size()
+	size := v.typecode.Size()
 	xptr := x.value
 	if size <= unsafe.Sizeof(uintptr(0)) && !x.isIndirect() {
 		value := x.value

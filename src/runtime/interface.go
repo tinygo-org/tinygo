@@ -31,18 +31,21 @@ func interfaceEqual(x, y interface{}) bool {
 }
 
 func reflectValueEqual(x, y reflect.Value) bool {
-	if x.Type() == 0 || y.Type() == 0 {
+	// Note: doing a x.Type() == y.Type() comparison would not work here as that
+	// would introduce an infinite recursion: comparing two reflect.Type values
+	// is done with this reflectValueEqual runtime call.
+	if x.RawType() == 0 || y.RawType() == 0 {
 		// One of them is nil.
-		return x.Type() == y.Type()
+		return x.RawType() == y.RawType()
 	}
 
-	if x.Type() != y.Type() {
+	if x.RawType() != y.RawType() {
 		// The type is not the same, which means the interfaces are definitely
 		// not the same.
 		return false
 	}
 
-	switch x.Type().Kind() {
+	switch x.RawType().Kind() {
 	case reflect.Bool:
 		return x.Bool() == y.Bool()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:

@@ -21,7 +21,7 @@ func Swapper(slice interface{}) func(i, j int) {
 		return func(i, j int) {}
 	}
 
-	typ := v.Type().Elem()
+	typ := v.typecode.Elem()
 	size := typ.Size()
 
 	header := (*SliceHeader)(v.value)
