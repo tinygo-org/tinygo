@@ -122,30 +122,218 @@ func (k Kind) String() string {
 }
 
 // basicType returns a new Type for this kind if Kind is a basic type.
-func (k Kind) basicType() Type {
-	return Type(k << 1)
+func (k Kind) basicType() rawType {
+	return rawType(k << 1)
+}
+
+// The following Type type has been copied almost entirely from
+// https://github.com/golang/go/blob/go1.15/src/reflect/type.go#L27-L212.
+// Some methods have been commented out as they haven't yet been implemented.
+
+// Type is the representation of a Go type.
+//
+// Not all methods apply to all kinds of types. Restrictions,
+// if any, are noted in the documentation for each method.
+// Use the Kind method to find out the kind of type before
+// calling kind-specific methods. Calling a method
+// inappropriate to the kind of type causes a run-time panic.
+//
+// Type values are comparable, such as with the == operator,
+// so they can be used as map keys.
+// Two Type values are equal if they represent identical types.
+type Type interface {
+	// Methods applicable to all types.
+
+	// Align returns the alignment in bytes of a value of
+	// this type when allocated in memory.
+	Align() int
+
+	// FieldAlign returns the alignment in bytes of a value of
+	// this type when used as a field in a struct.
+	FieldAlign() int
+
+	// Method returns the i'th method in the type's method set.
+	// It panics if i is not in the range [0, NumMethod()).
+	//
+	// For a non-interface type T or *T, the returned Method's Type and Func
+	// fields describe a function whose first argument is the receiver.
+	//
+	// For an interface type, the returned Method's Type field gives the
+	// method signature, without a receiver, and the Func field is nil.
+	//
+	// Only exported methods are accessible and they are sorted in
+	// lexicographic order.
+	//Method(int) Method
+
+	// MethodByName returns the method with that name in the type's
+	// method set and a boolean indicating if the method was found.
+	//
+	// For a non-interface type T or *T, the returned Method's Type and Func
+	// fields describe a function whose first argument is the receiver.
+	//
+	// For an interface type, the returned Method's Type field gives the
+	// method signature, without a receiver, and the Func field is nil.
+	//MethodByName(string) (Method, bool)
+
+	// NumMethod returns the number of exported methods in the type's method set.
+	NumMethod() int
+
+	// Name returns the type's name within its package for a defined type.
+	// For other (non-defined) types it returns the empty string.
+	Name() string
+
+	// PkgPath returns a defined type's package path, that is, the import path
+	// that uniquely identifies the package, such as "encoding/base64".
+	// If the type was predeclared (string, error) or not defined (*T, struct{},
+	// []int, or A where A is an alias for a non-defined type), the package path
+	// will be the empty string.
+	//PkgPath() string
+
+	// Size returns the number of bytes needed to store
+	// a value of the given type; it is analogous to unsafe.Sizeof.
+	Size() uintptr
+
+	// String returns a string representation of the type.
+	// The string representation may use shortened package names
+	// (e.g., base64 instead of "encoding/base64") and is not
+	// guaranteed to be unique among types. To test for type identity,
+	// compare the Types directly.
+	String() string
+
+	// Kind returns the specific kind of this type.
+	Kind() Kind
+
+	// Implements reports whether the type implements the interface type u.
+	Implements(u Type) bool
+
+	// AssignableTo reports whether a value of the type is assignable to type u.
+	AssignableTo(u Type) bool
+
+	// ConvertibleTo reports whether a value of the type is convertible to type u.
+	ConvertibleTo(u Type) bool
+
+	// Comparable reports whether values of this type are comparable.
+	Comparable() bool
+
+	// Methods applicable only to some types, depending on Kind.
+	// The methods allowed for each kind are:
+	//
+	//	Int*, Uint*, Float*, Complex*: Bits
+	//	Array: Elem, Len
+	//	Chan: ChanDir, Elem
+	//	Func: In, NumIn, Out, NumOut, IsVariadic.
+	//	Map: Key, Elem
+	//	Ptr: Elem
+	//	Slice: Elem
+	//	Struct: Field, FieldByIndex, FieldByName, FieldByNameFunc, NumField
+
+	// Bits returns the size of the type in bits.
+	// It panics if the type's Kind is not one of the
+	// sized or unsized Int, Uint, Float, or Complex kinds.
+	Bits() int
+
+	// ChanDir returns a channel type's direction.
+	// It panics if the type's Kind is not Chan.
+	//ChanDir() ChanDir
+
+	// IsVariadic reports whether a function type's final input parameter
+	// is a "..." parameter. If so, t.In(t.NumIn() - 1) returns the parameter's
+	// implicit actual type []T.
+	//
+	// For concreteness, if t represents func(x int, y ... float64), then
+	//
+	//	t.NumIn() == 2
+	//	t.In(0) is the reflect.Type for "int"
+	//	t.In(1) is the reflect.Type for "[]float64"
+	//	t.IsVariadic() == true
+	//
+	// IsVariadic panics if the type's Kind is not Func.
+	//IsVariadic() bool
+
+	// Elem returns a type's element type.
+	// It panics if the type's Kind is not Array, Chan, Map, Ptr, or Slice.
+	Elem() Type
+
+	// Field returns a struct type's i'th field.
+	// It panics if the type's Kind is not Struct.
+	// It panics if i is not in the range [0, NumField()).
+	Field(i int) StructField
+
+	// FieldByIndex returns the nested field corresponding
+	// to the index sequence. It is equivalent to calling Field
+	// successively for each index i.
+	// It panics if the type's Kind is not Struct.
+	//FieldByIndex(index []int) StructField
+
+	// FieldByName returns the struct field with the given name
+	// and a boolean indicating if the field was found.
+	//FieldByName(name string) (StructField, bool)
+
+	// FieldByNameFunc returns the struct field with a name
+	// that satisfies the match function and a boolean indicating if
+	// the field was found.
+	//
+	// FieldByNameFunc considers the fields in the struct itself
+	// and then the fields in any embedded structs, in breadth first order,
+	// stopping at the shallowest nesting depth containing one or more
+	// fields satisfying the match function. If multiple fields at that depth
+	// satisfy the match function, they cancel each other
+	// and FieldByNameFunc returns no match.
+	// This behavior mirrors Go's handling of name lookup in
+	// structs containing embedded fields.
+	//FieldByNameFunc(match func(string) bool) (StructField, bool)
+
+	// In returns the type of a function type's i'th input parameter.
+	// It panics if the type's Kind is not Func.
+	// It panics if i is not in the range [0, NumIn()).
+	//In(i int) Type
+
+	// Key returns a map type's key type.
+	// It panics if the type's Kind is not Map.
+	Key() Type
+
+	// Len returns an array type's length.
+	// It panics if the type's Kind is not Array.
+	Len() int
+
+	// NumField returns a struct type's field count.
+	// It panics if the type's Kind is not Struct.
+	NumField() int
+
+	// NumIn returns a function type's input parameter count.
+	// It panics if the type's Kind is not Func.
+	//NumIn() int
+
+	// NumOut returns a function type's output parameter count.
+	// It panics if the type's Kind is not Func.
+	//NumOut() int
+
+	// Out returns the type of a function type's i'th output parameter.
+	// It panics if the type's Kind is not Func.
+	// It panics if i is not in the range [0, NumOut()).
+	//Out(i int) Type
 }
 
 // The typecode as used in an interface{}.
-type Type uintptr
+type rawType uintptr
 
 func TypeOf(i interface{}) Type {
 	return ValueOf(i).typecode
 }
 
 func PtrTo(t Type) Type {
-	ptrType := t<<5 | 5 // 0b0101 == 5
+	ptrType := t.(rawType)<<5 | 5 // 0b0101 == 5
 	if ptrType>>5 != t {
 		panic("reflect: PtrTo type does not fit")
 	}
 	return ptrType
 }
 
-func (t Type) String() string {
+func (t rawType) String() string {
 	return "T"
 }
 
-func (t Type) Kind() Kind {
+func (t rawType) Kind() Kind {
 	if t%2 == 0 {
 		// basic type
 		return Kind((t >> 1) % 32)
@@ -156,14 +344,18 @@ func (t Type) Kind() Kind {
 
 // Elem returns the element type for channel, slice and array types, the
 // pointed-to value for pointer types, and the key type for map types.
-func (t Type) Elem() Type {
+func (t rawType) Elem() Type {
+	return t.elem()
+}
+
+func (t rawType) elem() rawType {
 	switch t.Kind() {
 	case Chan, Ptr, Slice:
 		return t.stripPrefix()
 	case Array:
 		index := t.stripPrefix()
 		elem, _ := readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&arrayTypesSidetable)) + uintptr(index)))
-		return Type(elem)
+		return rawType(elem)
 	default: // not implemented: Map
 		panic("unimplemented: (reflect.Type).Elem()")
 	}
@@ -175,14 +367,14 @@ func (t Type) Elem() Type {
 // simply shifted off.
 //
 // The behavior is only defined for non-basic types.
-func (t Type) stripPrefix() Type {
+func (t rawType) stripPrefix() rawType {
 	// Look at the 'n' bit in the type code (see the top of this file) to see
 	// whether this is a named type.
 	if (t>>4)%2 != 0 {
 		// This is a named type. The data is stored in a sidetable.
 		namedTypeNum := t >> 5
 		n := *(*uintptr)(unsafe.Pointer(uintptr(unsafe.Pointer(&namedNonBasicTypesSidetable)) + uintptr(namedTypeNum)*unsafe.Sizeof(uintptr(0))))
-		return Type(n)
+		return rawType(n)
 	}
 	// Not a named type, so the value is stored directly in the type code.
 	return t >> 5
@@ -190,7 +382,23 @@ func (t Type) stripPrefix() Type {
 
 // Field returns the type of the i'th field of this struct type. It panics if t
 // is not a struct type.
-func (t Type) Field(i int) StructField {
+func (t rawType) Field(i int) StructField {
+	field := t.rawField(i)
+	return StructField{
+		Name:      field.Name,
+		PkgPath:   field.PkgPath,
+		Type:      field.Type, // note: converts rawType to Type
+		Tag:       field.Tag,
+		Anonymous: field.Anonymous,
+		Offset:    field.Offset,
+	}
+}
+
+// rawField returns nearly the same value as Field but without converting the
+// Type member to an interface.
+//
+// For internal use only.
+func (t rawType) rawField(i int) rawStructField {
 	if t.Kind() != Struct {
 		panic(&TypeError{"Field"})
 	}
@@ -206,7 +414,7 @@ func (t Type) Field(i int) StructField {
 	// efficient, but it is easy to implement.
 	// Adding a jump table at the start to jump to the field directly would
 	// make this much faster, but that would also impact code size.
-	field := StructField{}
+	field := rawStructField{}
 	offset := uintptr(0)
 	for fieldNum := 0; fieldNum <= i; fieldNum++ {
 		// Read some flags of this field, like whether the field is an
@@ -215,15 +423,16 @@ func (t Type) Field(i int) StructField {
 		p = unsafe.Pointer(uintptr(p) + 1)
 
 		// Read the type of this struct field.
-		var fieldType uintptr
-		fieldType, p = readVarint(p)
-		field.Type = Type(fieldType)
+		var fieldTypeVal uintptr
+		fieldTypeVal, p = readVarint(p)
+		fieldType := rawType(fieldTypeVal)
+		field.Type = fieldType
 
 		// Move Offset forward to align it to this field's alignment.
 		// Assume alignment is a power of two.
-		offset = align(offset, uintptr(field.Type.Align()))
+		offset = align(offset, uintptr(fieldType.Align()))
 		field.Offset = offset
-		offset += field.Type.Size() // starting (unaligned) offset for next field
+		offset += fieldType.Size() // starting (unaligned) offset for next field
 
 		// Read the field name.
 		var nameNum uintptr
@@ -264,7 +473,7 @@ func (t Type) Field(i int) StructField {
 // Bits returns the number of bits that this type uses. It is only valid for
 // arithmetic types (integers, floats, and complex numbers). For other types, it
 // will panic.
-func (t Type) Bits() int {
+func (t rawType) Bits() int {
 	kind := t.Kind()
 	if kind >= Int && kind <= Complex128 {
 		return int(t.Size()) * 8
@@ -274,7 +483,7 @@ func (t Type) Bits() int {
 
 // Len returns the number of elements in this array. It panics of the type kind
 // is not Array.
-func (t Type) Len() int {
+func (t rawType) Len() int {
 	if t.Kind() != Array {
 		panic(TypeError{"Len"})
 	}
@@ -290,7 +499,7 @@ func (t Type) Len() int {
 
 // NumField returns the number of fields of a struct type. It panics for other
 // type kinds.
-func (t Type) NumField() int {
+func (t rawType) NumField() int {
 	if t.Kind() != Struct {
 		panic(&TypeError{"NumField"})
 	}
@@ -301,7 +510,7 @@ func (t Type) NumField() int {
 
 // Size returns the size in bytes of a given type. It is similar to
 // unsafe.Sizeof.
-func (t Type) Size() uintptr {
+func (t rawType) Size() uintptr {
 	switch t.Kind() {
 	case Bool, Int8, Uint8:
 		return 1
@@ -332,13 +541,13 @@ func (t Type) Size() uintptr {
 	case Interface:
 		return unsafe.Sizeof(interface{}(nil))
 	case Array:
-		return t.Elem().Size() * uintptr(t.Len())
+		return t.elem().Size() * uintptr(t.Len())
 	case Struct:
 		numField := t.NumField()
 		if numField == 0 {
 			return 0
 		}
-		lastField := t.Field(numField - 1)
+		lastField := t.rawField(numField - 1)
 		return lastField.Offset + lastField.Type.Size()
 	default:
 		panic("unimplemented: size of type")
@@ -347,7 +556,7 @@ func (t Type) Size() uintptr {
 
 // Align returns the alignment of this type. It is similar to calling
 // unsafe.Alignof.
-func (t Type) Align() int {
+func (t rawType) Align() int {
 	switch t.Kind() {
 	case Bool, Int8, Uint8:
 		return int(unsafe.Alignof(int8(0)))
@@ -381,14 +590,14 @@ func (t Type) Align() int {
 		numField := t.NumField()
 		alignment := 1
 		for i := 0; i < numField; i++ {
-			fieldAlignment := t.Field(i).Type.Align()
+			fieldAlignment := t.rawField(i).Type.Align()
 			if fieldAlignment > alignment {
 				alignment = fieldAlignment
 			}
 		}
 		return alignment
 	case Array:
-		return t.Elem().Align()
+		return t.elem().Align()
 	default:
 		panic("unimplemented: alignment of type")
 	}
@@ -396,14 +605,14 @@ func (t Type) Align() int {
 
 // FieldAlign returns the alignment if this type is used in a struct field. It
 // is currently an alias for Align() but this might change in the future.
-func (t Type) FieldAlign() int {
+func (t rawType) FieldAlign() int {
 	return t.Align()
 }
 
 // AssignableTo returns whether a value of type u can be assigned to a variable
 // of type t.
-func (t Type) AssignableTo(u Type) bool {
-	if t == u {
+func (t rawType) AssignableTo(u Type) bool {
+	if t == u.(rawType) {
 		return true
 	}
 	if t.Kind() == Interface {
@@ -412,7 +621,7 @@ func (t Type) AssignableTo(u Type) bool {
 	return false
 }
 
-func (t Type) Implements(u Type) bool {
+func (t rawType) Implements(u Type) bool {
 	if t.Kind() != Interface {
 		panic("reflect: non-interface type passed to Type.Implements")
 	}
@@ -420,7 +629,7 @@ func (t Type) Implements(u Type) bool {
 }
 
 // Comparable returns whether values of this type can be compared to each other.
-func (t Type) Comparable() bool {
+func (t rawType) Comparable() bool {
 	switch t.Kind() {
 	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
 		return true
@@ -439,7 +648,7 @@ func (t Type) Comparable() bool {
 	case Slice:
 		return false
 	case Array:
-		return t.Elem().Comparable()
+		return t.elem().Comparable()
 	case Func:
 		return false
 	case Map:
@@ -447,7 +656,7 @@ func (t Type) Comparable() bool {
 	case Struct:
 		numField := t.NumField()
 		for i := 0; i < numField; i++ {
-			if !t.Field(i).Type.Comparable() {
+			if !t.rawField(i).Type.Comparable() {
 				return false
 			}
 		}
@@ -457,19 +666,19 @@ func (t Type) Comparable() bool {
 	}
 }
 
-func (t Type) ConvertibleTo(u Type) bool {
+func (t rawType) ConvertibleTo(u Type) bool {
 	panic("unimplemented: (reflect.Type).ConvertibleTo()")
 }
 
-func (t Type) NumMethod() int {
+func (t rawType) NumMethod() int {
 	panic("unimplemented: (reflect.Type).NumMethod()")
 }
 
-func (t Type) Name() string {
+func (t rawType) Name() string {
 	panic("unimplemented: (reflect.Type).Name()")
 }
 
-func (t Type) Key() Type {
+func (t rawType) Key() Type {
 	panic("unimplemented: (reflect.Type).Key()")
 }
 
@@ -484,6 +693,18 @@ type StructField struct {
 
 	Type      Type
 	Tag       StructTag // field tag string
+	Anonymous bool
+	Offset    uintptr
+}
+
+// rawStructField is the same as StructField but with the Type member replaced
+// with rawType. For internal use only. Avoiding this conversion to the Type
+// interface improves code size in many cases.
+type rawStructField struct {
+	Name      string
+	PkgPath   string
+	Type      rawType
+	Tag       StructTag
 	Anonymous bool
 	Offset    uintptr
 }
