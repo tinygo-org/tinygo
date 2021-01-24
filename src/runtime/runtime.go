@@ -10,8 +10,7 @@ const Compiler = "tinygo"
 // package.
 func initAll()
 
-// callMain is a placeholder for the program main function.
-// All references to this are replaced with references to the program main function by the compiler.
+//go:linkname callMain main.main
 func callMain()
 
 func GOMAXPROCS(n int) int {

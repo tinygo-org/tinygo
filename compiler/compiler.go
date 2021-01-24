@@ -297,14 +297,6 @@ func CompileProgram(pkgName string, lprogram *loader.Program, machine llvm.Targe
 	}
 	irbuilder.CreateRetVoid()
 
-	// Conserve for goroutine lowering. Without marking these as external, they
-	// would be optimized away.
-	realMain := c.mod.NamedFunction(lprogram.MainPkg().Pkg.Path() + ".main")
-	realMain.SetLinkage(llvm.ExternalLinkage) // keep alive until goroutine lowering
-
-	// Replace callMain placeholder with actual main function.
-	c.mod.NamedFunction("runtime.callMain").ReplaceAllUsesWith(realMain)
-
 	// Load some attributes
 	getAttr := func(attrName string) llvm.Attribute {
 		attrKind := llvm.AttributeKindID(attrName)
