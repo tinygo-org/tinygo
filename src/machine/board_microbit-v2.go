@@ -90,16 +90,16 @@ const (
 
 // LED matrix pins
 const (
-	LED_COL_1 Pin = P4
-	LED_COL_2 Pin = P7
-	LED_COL_3 Pin = P3
-	LED_COL_4 Pin = P6
-	LED_COL_5 Pin = P10
-	LED_ROW_1 Pin = P21
-	LED_ROW_2 Pin = P22
-	LED_ROW_3 Pin = P23
-	LED_ROW_4 Pin = P24
-	LED_ROW_5 Pin = P25
+	LED_COL_1 Pin = P0_28
+	LED_COL_2 Pin = P0_11
+	LED_COL_3 Pin = P0_31
+	LED_COL_4 Pin = P1_05
+	LED_COL_5 Pin = P0_30
+	LED_ROW_1 Pin = P0_21
+	LED_ROW_2 Pin = P0_22
+	LED_ROW_3 Pin = P0_15
+	LED_ROW_4 Pin = P0_24
+	LED_ROW_5 Pin = P0_19
 )
 
 // USB CDC identifiers
