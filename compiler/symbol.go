@@ -108,6 +108,28 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 		}
 	}
 
+	// Set a number of function or parameter attributes, depending on the
+	// function. These functions are runtime functions that are known to have
+	// certain attributes that might not be inferred by the compiler.
+	switch info.linkName {
+	case "abort":
+		// On *nix systems, the "abort" functuion in libc is used to handle fatal panics.
+		// Mark it as noreturn so LLVM can optimize away code.
+		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("noreturn"), 0))
+	case "runtime.alloc":
+		// Tell the optimizer that runtime.alloc is an allocator, meaning that it
+		// returns values that are never null and never alias to an existing value.
+		for _, attrName := range []string{"noalias", "nonnull"} {
+			llvmFn.AddAttributeAtIndex(0, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(attrName), 0))
+		}
+	case "runtime.trackPointer":
+		// This function is necessary for tracking pointers on the stack in a
+		// portable way (see gc_stack_portable.go). Indicate to the optimizer
+		// that the only thing we'll do is read the pointer.
+		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
+	}
+
 	// External/exported functions may not retain pointer values.
 	// https://golang.org/cmd/cgo/#hdr-Passing_pointers
 	if info.exported {
