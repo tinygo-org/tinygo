@@ -297,35 +297,6 @@ func CompileProgram(pkgName string, lprogram *loader.Program, machine llvm.Targe
 	}
 	irbuilder.CreateRetVoid()
 
-	// Load some attributes
-	getAttr := func(attrName string) llvm.Attribute {
-		attrKind := llvm.AttributeKindID(attrName)
-		return c.ctx.CreateEnumAttribute(attrKind, 0)
-	}
-	nocapture := getAttr("nocapture")
-	readonly := getAttr("readonly")
-
-	// Tell the optimizer that runtime.alloc is an allocator, meaning that it
-	// returns values that are never null and never alias to an existing value.
-	for _, attrName := range []string{"noalias", "nonnull"} {
-		c.mod.NamedFunction("runtime.alloc").AddAttributeAtIndex(0, getAttr(attrName))
-	}
-
-	// On *nix systems, the "abort" functuion in libc is used to handle fatal panics.
-	// Mark it as noreturn so LLVM can optimize away code.
-	if abort := c.mod.NamedFunction("abort"); !abort.IsNil() && abort.IsDeclaration() {
-		abort.AddFunctionAttr(getAttr("noreturn"))
-	}
-
-	// This function is necessary for tracking pointers on the stack in a
-	// portable way (see gc.go). Indicate to the optimizer that the only thing
-	// we'll do is read the pointer.
-	trackPointer := c.mod.NamedFunction("runtime.trackPointer")
-	if !trackPointer.IsNil() {
-		trackPointer.AddAttributeAtIndex(1, nocapture)
-		trackPointer.AddAttributeAtIndex(1, readonly)
-	}
-
 	// see: https://reviews.llvm.org/D18355
 	if c.Debug() {
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
