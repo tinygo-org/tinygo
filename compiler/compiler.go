@@ -52,6 +52,7 @@ type compilerContext struct {
 	program          *ssa.Program
 	diagnostics      []error
 	astComments      map[string]*ast.CommentGroup
+	runtimePkg       *types.Package
 }
 
 // newCompilerContext returns a new compiler context ready for use, most
@@ -222,6 +223,7 @@ func CompileProgram(pkgName string, lprogram *loader.Program, machine llvm.Targe
 
 	c.program = lprogram.LoadSSA()
 	c.program.Build()
+	c.runtimePkg = c.program.ImportedPackage("runtime").Pkg
 
 	// Run a simple dead code elimination pass.
 	functions, err := c.simpleDCE(lprogram)
@@ -241,20 +243,6 @@ func CompileProgram(pkgName string, lprogram *loader.Program, machine llvm.Targe
 	}
 
 	c.loadASTComments(lprogram)
-
-	// Declare runtime types.
-	// TODO: lazily create runtime types in getLLVMRuntimeType when they are
-	// needed. Eventually this will be required anyway, when packages are
-	// compiled independently (and the runtime types are not available).
-	for _, member := range c.program.ImportedPackage("runtime").Members {
-		if member, ok := member.(*ssa.Type); ok {
-			if typ, ok := member.Type().(*types.Named); ok {
-				if _, ok := typ.Underlying().(*types.Struct); ok {
-					c.getLLVMType(typ)
-				}
-			}
-		}
-	}
 
 	// Predeclare the runtime.alloc function, which is used by the wordpack
 	// functionality.
@@ -367,13 +355,8 @@ func CompilePackage(moduleName string, pkg *loader.Package, machine llvm.TargetM
 // it as a LLVM type, creating it if necessary. It is a shorthand for
 // getLLVMType(getRuntimeType(name)).
 func (c *compilerContext) getLLVMRuntimeType(name string) llvm.Type {
-	fullName := "runtime." + name
-	typ := c.mod.GetTypeByName(fullName)
-	if typ.IsNil() {
-		println(c.mod.String())
-		panic("could not find runtime type: " + fullName)
-	}
-	return typ
+	typ := c.runtimePkg.Scope().Lookup(name).(*types.TypeName).Type()
+	return c.getLLVMType(typ)
 }
 
 // getLLVMType creates and returns a LLVM type for a Go type. In the case of
