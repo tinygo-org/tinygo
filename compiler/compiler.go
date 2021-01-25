@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
@@ -32,11 +31,37 @@ func init() {
 // The TinyGo import path.
 const tinygoPath = "github.com/tinygo-org/tinygo"
 
+// Config is the configuration for the compiler. Most settings should be copied
+// directly from compileopts.Config, it recreated here to decouple the compiler
+// package a bit and because it makes caching easier.
+//
+// This struct can be used for caching: if one of the flags here changes the
+// code must be recompiled.
+type Config struct {
+	// Target and output information.
+	Triple          string
+	CPU             string
+	Features        []string
+	GOOS            string
+	GOARCH          string
+	CodeModel       string
+	RelocationModel string
+
+	// Various compiler options that determine how code is generated.
+	Scheduler          string
+	FuncImplementation string
+	AutomaticStackSize bool
+	DefaultStackSize   uint64
+	NeedsStackObjects  bool
+	Debug              bool // Whether to emit debug information in the LLVM module.
+}
+
 // compilerContext contains function-independent data that should still be
 // available while compiling every function. It is not strictly read-only, but
 // must not contain function-dependent data such as an IR builder.
 type compilerContext struct {
-	*compileopts.Config
+	*Config
+	DumpSSA          bool
 	mod              llvm.Module
 	ctx              llvm.Context
 	dibuilder        *llvm.DIBuilder
@@ -57,9 +82,10 @@ type compilerContext struct {
 
 // newCompilerContext returns a new compiler context ready for use, most
 // importantly with a newly created LLVM context and module.
-func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *compileopts.Config) *compilerContext {
+func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *Config, dumpSSA bool) *compilerContext {
 	c := &compilerContext{
 		Config:     config,
+		DumpSSA:    dumpSSA,
 		difiles:    make(map[string]llvm.Metadata),
 		ditypes:    make(map[types.Type]llvm.Metadata),
 		machine:    machine,
@@ -68,9 +94,9 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *c
 
 	c.ctx = llvm.NewContext()
 	c.mod = c.ctx.NewModule(moduleName)
-	c.mod.SetTarget(config.Triple())
+	c.mod.SetTarget(config.Triple)
 	c.mod.SetDataLayout(c.targetData.String())
-	if c.Debug() {
+	if c.Debug {
 		c.dibuilder = llvm.NewDIBuilder(c.mod)
 	}
 
@@ -148,17 +174,17 @@ type phiNode struct {
 // NewTargetMachine returns a new llvm.TargetMachine based on the passed-in
 // configuration. It is used by the compiler and is needed for machine code
 // emission.
-func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
-	target, err := llvm.GetTargetFromTriple(config.Triple())
+func NewTargetMachine(config *Config) (llvm.TargetMachine, error) {
+	target, err := llvm.GetTargetFromTriple(config.Triple)
 	if err != nil {
 		return llvm.TargetMachine{}, err
 	}
-	features := strings.Join(config.Features(), ",")
+	features := strings.Join(config.Features, ",")
 
 	var codeModel llvm.CodeModel
 	var relocationModel llvm.RelocMode
 
-	switch config.CodeModel() {
+	switch config.CodeModel {
 	case "default":
 		codeModel = llvm.CodeModelDefault
 	case "tiny":
@@ -173,7 +199,7 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 		codeModel = llvm.CodeModelLarge
 	}
 
-	switch config.RelocationModel() {
+	switch config.RelocationModel {
 	case "static":
 		relocationModel = llvm.RelocStatic
 	case "pic":
@@ -182,7 +208,7 @@ func NewTargetMachine(config *compileopts.Config) (llvm.TargetMachine, error) {
 		relocationModel = llvm.RelocDynamicNoPic
 	}
 
-	machine := target.CreateTargetMachine(config.Triple(), config.CPU(), features, llvm.CodeGenLevelDefault, relocationModel, codeModel)
+	machine := target.CreateTargetMachine(config.Triple, config.CPU, features, llvm.CodeGenLevelDefault, relocationModel, codeModel)
 	return machine, nil
 }
 
@@ -218,8 +244,8 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 // CompileProgram compiles the given package path or .go file path. Return an
 // error when this fails (in any stage). If successful it returns the LLVM
 // module. If not, one or more errors will be returned.
-func CompileProgram(pkgName string, lprogram *loader.Program, machine llvm.TargetMachine, config *compileopts.Config) (llvm.Module, []error) {
-	c := newCompilerContext(pkgName, machine, config)
+func CompileProgram(lprogram *loader.Program, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
+	c := newCompilerContext("", machine, config, dumpSSA)
 
 	c.program = lprogram.LoadSSA()
 	c.program.Build()
@@ -232,10 +258,10 @@ func CompileProgram(pkgName string, lprogram *loader.Program, machine llvm.Targe
 	}
 
 	// Initialize debug information.
-	if c.Debug() {
+	if c.Debug {
 		c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
 			Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
-			File:      pkgName,
+			File:      "<unknown>",
 			Dir:       "",
 			Producer:  "TinyGo",
 			Optimized: true,
@@ -271,7 +297,7 @@ func CompileProgram(pkgName string, lprogram *loader.Program, machine llvm.Targe
 	llvmInitFn := c.getFunction(initFn)
 	llvmInitFn.SetLinkage(llvm.InternalLinkage)
 	llvmInitFn.SetUnnamedAddr(true)
-	if c.Debug() {
+	if c.Debug {
 		difunc := c.attachDebugInfo(initFn)
 		pos := c.program.Fset.Position(initFn.Pos())
 		irbuilder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
@@ -286,7 +312,7 @@ func CompileProgram(pkgName string, lprogram *loader.Program, machine llvm.Targe
 	irbuilder.CreateRetVoid()
 
 	// see: https://reviews.llvm.org/D18355
-	if c.Debug() {
+	if c.Debug {
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
 			c.ctx.MDNode([]llvm.Metadata{
 				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
@@ -308,8 +334,8 @@ func CompileProgram(pkgName string, lprogram *loader.Program, machine llvm.Targe
 }
 
 // CompilePackage compiles a single package to a LLVM module.
-func CompilePackage(moduleName string, pkg *loader.Package, machine llvm.TargetMachine, config *compileopts.Config) (llvm.Module, []error) {
-	c := newCompilerContext(moduleName, machine, config)
+func CompilePackage(moduleName string, pkg *loader.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
+	c := newCompilerContext(moduleName, machine, config, dumpSSA)
 
 	// Build SSA from AST.
 	ssaPkg := pkg.LoadSSA()
@@ -737,7 +763,7 @@ func (c *compilerContext) getDIFile(filename string) llvm.Metadata {
 // function must not yet be defined, otherwise this function will create a
 // diagnostic.
 func (b *builder) createFunction() {
-	if b.DumpSSA() {
+	if b.DumpSSA {
 		fmt.Printf("\nfunc %s:\n", b.fn)
 	}
 	if !b.llvmFn.IsDeclaration() {
@@ -767,7 +793,7 @@ func (b *builder) createFunction() {
 	}
 
 	// Add debug info, if needed.
-	if b.Debug() {
+	if b.Debug {
 		if b.fn.Synthetic == "package initializer" {
 			// Package initializers have no debug info. Create some fake debug
 			// info to at least have *something*.
@@ -804,7 +830,7 @@ func (b *builder) createFunction() {
 		b.locals[param] = b.collapseFormalParam(llvmType, fields)
 
 		// Add debug information to this parameter (if available)
-		if b.Debug() && b.fn.Syntax() != nil {
+		if b.Debug && b.fn.Syntax() != nil {
 			dbgParam := b.getLocalVariable(param.Object().(*types.Var))
 			loc := b.GetCurrentDebugLocation()
 			if len(fields) == 1 {
@@ -857,14 +883,14 @@ func (b *builder) createFunction() {
 
 	// Fill blocks with instructions.
 	for _, block := range b.fn.DomPreorder() {
-		if b.DumpSSA() {
+		if b.DumpSSA {
 			fmt.Printf("%d: %s:\n", block.Index, block.Comment)
 		}
 		b.SetInsertPointAtEnd(b.blockEntries[block])
 		b.currentBlock = block
 		for _, instr := range block.Instrs {
 			if instr, ok := instr.(*ssa.DebugRef); ok {
-				if !b.Debug() {
+				if !b.Debug {
 					continue
 				}
 				object := instr.Object()
@@ -887,7 +913,7 @@ func (b *builder) createFunction() {
 				}, b.GetInsertBlock())
 				continue
 			}
-			if b.DumpSSA() {
+			if b.DumpSSA {
 				if val, ok := instr.(ssa.Value); ok && val.Name() != "" {
 					fmt.Printf("\t%s = %s\n", val.Name(), val.String())
 				} else {
@@ -911,7 +937,7 @@ func (b *builder) createFunction() {
 		}
 	}
 
-	if b.NeedsStackObjects() {
+	if b.NeedsStackObjects {
 		// Track phi nodes.
 		for _, phi := range b.phis {
 			insertPoint := llvm.NextInstruction(phi.llvm)
@@ -927,7 +953,7 @@ func (b *builder) createFunction() {
 // createInstruction builds the LLVM IR equivalent instructions for the
 // particular Go SSA instruction.
 func (b *builder) createInstruction(instr ssa.Instruction) {
-	if b.Debug() {
+	if b.Debug {
 		pos := b.program.Fset.Position(instr.Pos())
 		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
 	}
@@ -945,7 +971,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 			b.locals[instr] = llvm.Undef(b.getLLVMType(instr.Type()))
 		} else {
 			b.locals[instr] = value
-			if len(*instr.Referrers()) != 0 && b.NeedsStackObjects() {
+			if len(*instr.Referrers()) != 0 && b.NeedsStackObjects {
 				b.trackExpr(instr, value)
 			}
 		}
@@ -987,7 +1013,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 			//   * The function pointer (for tasks).
 			funcPtr, context := b.decodeFuncValue(b.getValue(instr.Call.Value), instr.Call.Value.Type().Underlying().(*types.Signature))
 			params = append(params, context) // context parameter
-			switch b.Scheduler() {
+			switch b.Scheduler {
 			case "none", "coroutines":
 				// There are no additional parameters needed for the goroutine start operation.
 			case "tasks":

@@ -28,7 +28,17 @@ func TestCompiler(t *testing.T) {
 		Options: &compileopts.Options{},
 		Target:  target,
 	}
-	machine, err := NewTargetMachine(config)
+	compilerConfig := &Config{
+		Triple:             config.Triple(),
+		GOOS:               config.GOOS(),
+		GOARCH:             config.GOARCH(),
+		CodeModel:          config.CodeModel(),
+		RelocationModel:    config.RelocationModel(),
+		Scheduler:          config.Scheduler(),
+		FuncImplementation: config.FuncImplementation(),
+		AutomaticStackSize: config.AutomaticStackSize(),
+	}
+	machine, err := NewTargetMachine(compilerConfig)
 	if err != nil {
 		t.Fatal("failed to create target machine:", err)
 	}
@@ -56,7 +66,7 @@ func TestCompiler(t *testing.T) {
 
 			// Compile AST to IR.
 			pkg := lprogram.MainPkg()
-			mod, errs := CompilePackage(testCase, pkg, machine, config)
+			mod, errs := CompilePackage(testCase, pkg, machine, compilerConfig, false)
 			if errs != nil {
 				for _, err := range errs {
 					t.Log("error:", err)

@@ -45,10 +45,27 @@ type BuildResult struct {
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
 func Build(pkgName, outpath string, config *compileopts.Config, action func(BuildResult) error) error {
+	compilerConfig := &compiler.Config{
+		Triple:          config.Triple(),
+		CPU:             config.CPU(),
+		Features:        config.Features(),
+		GOOS:            config.GOOS(),
+		GOARCH:          config.GOARCH(),
+		CodeModel:       config.CodeModel(),
+		RelocationModel: config.RelocationModel(),
+
+		Scheduler:          config.Scheduler(),
+		FuncImplementation: config.FuncImplementation(),
+		AutomaticStackSize: config.AutomaticStackSize(),
+		DefaultStackSize:   config.Target.DefaultStackSize,
+		NeedsStackObjects:  config.NeedsStackObjects(),
+		Debug:              config.Debug(),
+	}
+
 	// Load the target machine, which is the LLVM object that contains all
 	// details of a target (alignment restrictions, pointer size, default
 	// address spaces, etc).
-	machine, err := compiler.NewTargetMachine(config)
+	machine, err := compiler.NewTargetMachine(compilerConfig)
 	if err != nil {
 		return err
 	}
@@ -77,7 +94,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	programJob := &compileJob{
 		description: "compile Go files",
 		run: func() (err error) {
-			mod, err = compileWholeProgram(pkgName, config, lprogram, machine)
+			mod, err = compileWholeProgram(pkgName, config, compilerConfig, lprogram, machine)
 			if err != nil {
 				return
 			}
@@ -340,9 +357,9 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 
 // compileWholeProgram compiles the entire *loader.Program to a LLVM module and
 // applies most necessary optimizations and transformations.
-func compileWholeProgram(pkgName string, config *compileopts.Config, lprogram *loader.Program, machine llvm.TargetMachine) (llvm.Module, error) {
+func compileWholeProgram(pkgName string, config *compileopts.Config, compilerConfig *compiler.Config, lprogram *loader.Program, machine llvm.TargetMachine) (llvm.Module, error) {
 	// Compile AST to IR.
-	mod, errs := compiler.CompileProgram(pkgName, lprogram, machine, config)
+	mod, errs := compiler.CompileProgram(lprogram, machine, compilerConfig, config.DumpSSA())
 	if errs != nil {
 		return mod, newMultiError(errs)
 	}

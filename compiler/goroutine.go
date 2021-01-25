@@ -21,10 +21,10 @@ import (
 func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value, prefix string, pos token.Pos) llvm.Value {
 	paramBundle := b.emitPointerPack(params)
 	var callee, stackSize llvm.Value
-	switch b.Scheduler() {
+	switch b.Scheduler {
 	case "none", "tasks":
 		callee = b.createGoroutineStartWrapper(funcPtr, prefix, pos)
-		if b.AutomaticStackSize() {
+		if b.AutomaticStackSize {
 			// The stack size is not known until after linking. Call a dummy
 			// function that will be replaced with a load from a special ELF
 			// section that contains the stack size (and is modified after
@@ -34,7 +34,7 @@ func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value, p
 		} else {
 			// The stack size is fixed at compile time. By emitting it here as a
 			// constant, it can be optimized.
-			stackSize = llvm.ConstInt(b.uintptrType, b.Target.DefaultStackSize, false)
+			stackSize = llvm.ConstInt(b.uintptrType, b.DefaultStackSize, false)
 		}
 	case "coroutines":
 		callee = b.CreatePtrToInt(funcPtr, b.uintptrType, "")
@@ -90,7 +90,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		entry := c.ctx.AddBasicBlock(wrapper, "entry")
 		builder.SetInsertPointAtEnd(entry)
 
-		if c.Debug() {
+		if c.Debug {
 			pos := c.program.Fset.Position(pos)
 			diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
 				File:       c.getDIFile(pos.Filename),
@@ -147,7 +147,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		entry := c.ctx.AddBasicBlock(wrapper, "entry")
 		builder.SetInsertPointAtEnd(entry)
 
-		if c.Debug() {
+		if c.Debug {
 			pos := c.program.Fset.Position(pos)
 			diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
 				File:       c.getDIFile(pos.Filename),

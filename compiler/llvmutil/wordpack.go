@@ -5,7 +5,6 @@ package llvmutil
 // itself if possible and legal.
 
 import (
-	"github.com/tinygo-org/tinygo/compileopts"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -13,7 +12,7 @@ import (
 // bitcasts, or else allocates a value on the heap if it cannot be packed in the
 // pointer value directly. It returns the pointer with the packed data.
 // If the values are all constants, they are be stored in a constant global and deduplicated.
-func EmitPointerPack(builder llvm.Builder, mod llvm.Module, config *compileopts.Config, values []llvm.Value) llvm.Value {
+func EmitPointerPack(builder llvm.Builder, mod llvm.Module, needsStackObjects bool, values []llvm.Value) llvm.Value {
 	ctx := mod.Context()
 	targetData := llvm.NewTargetData(mod.DataLayout())
 	i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
@@ -101,7 +100,7 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, config *compileopts.
 			llvm.Undef(i8ptrType),            // unused context parameter
 			llvm.ConstPointerNull(i8ptrType), // coroutine handle
 		}, "")
-		if config.NeedsStackObjects() {
+		if needsStackObjects {
 			trackPointer := mod.NamedFunction("runtime.trackPointer")
 			builder.CreateCall(trackPointer, []llvm.Value{
 				packedHeapAlloc,

@@ -295,7 +295,7 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 			}
 		}
 
-		if c.Debug() && !info.extern {
+		if c.Debug && !info.extern {
 			// Add debug info.
 			// TODO: this should be done for every global in the program, not just
 			// the ones that are referenced from some code.

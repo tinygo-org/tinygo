@@ -55,7 +55,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	global.SetInitializer(initializer)
 
 	// Add debug info to the interrupt global.
-	if b.Debug() {
+	if b.Debug {
 		pos := b.program.Fset.Position(instr.Pos())
 		diglobal := b.dibuilder.CreateGlobalVariableExpression(b.getDIFile(pos.Filename), llvm.DIGlobalVariableExpression{
 			Name:        "interrupt" + strconv.FormatInt(id.Int64(), 10),
@@ -79,7 +79,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	// PLIC where each interrupt must be enabled using the interrupt number, and
 	// thus keeps the Interrupt object alive.
 	// This call is removed during interrupt lowering.
-	if strings.HasPrefix(b.Triple(), "avr") {
+	if strings.HasPrefix(b.Triple, "avr") {
 		useFn := b.mod.NamedFunction("runtime/interrupt.use")
 		if useFn.IsNil() {
 			useFnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{interrupt.Type()}, false)
