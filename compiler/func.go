@@ -6,7 +6,6 @@ package compiler
 import (
 	"go/types"
 
-	"github.com/tinygo-org/tinygo/compileopts"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -21,11 +20,11 @@ func (b *builder) createFuncValue(funcPtr, context llvm.Value, sig *types.Signat
 // context.
 func (c *compilerContext) createFuncValue(builder llvm.Builder, funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
 	var funcValueScalar llvm.Value
-	switch c.FuncImplementation() {
-	case compileopts.FuncValueDoubleword:
+	switch c.FuncImplementation {
+	case "doubleword":
 		// Closure is: {context, function pointer}
 		funcValueScalar = funcPtr
-	case compileopts.FuncValueSwitch:
+	case "switch":
 		sigGlobal := c.getTypeCode(sig)
 		funcValueWithSignatureGlobalName := funcPtr.Name() + "$withSignature"
 		funcValueWithSignatureGlobal := c.mod.NamedGlobal(funcValueWithSignatureGlobalName)
@@ -67,10 +66,10 @@ func (b *builder) extractFuncContext(funcValue llvm.Value) llvm.Value {
 // value. This may be an expensive operation.
 func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcPtr, context llvm.Value) {
 	context = b.CreateExtractValue(funcValue, 0, "")
-	switch b.FuncImplementation() {
-	case compileopts.FuncValueDoubleword:
+	switch b.FuncImplementation {
+	case "doubleword":
 		funcPtr = b.CreateExtractValue(funcValue, 1, "")
-	case compileopts.FuncValueSwitch:
+	case "switch":
 		llvmSig := b.getRawFuncType(sig)
 		sigGlobal := b.getTypeCode(sig)
 		funcPtr = b.createRuntimeCall("getFuncPtr", []llvm.Value{funcValue, sigGlobal}, "")
@@ -83,11 +82,11 @@ func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (f
 
 // getFuncType returns the type of a func value given a signature.
 func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
-	switch c.FuncImplementation() {
-	case compileopts.FuncValueDoubleword:
+	switch c.FuncImplementation {
+	case "doubleword":
 		rawPtr := c.getRawFuncType(typ)
 		return c.ctx.StructType([]llvm.Type{c.i8ptrType, rawPtr}, false)
-	case compileopts.FuncValueSwitch:
+	case "switch":
 		return c.getLLVMRuntimeType("funcValue")
 	default:
 		panic("unimplemented func value variant")

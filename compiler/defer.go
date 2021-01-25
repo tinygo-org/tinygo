@@ -220,7 +220,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		allocCall := b.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "defer.alloc.call")
 		alloca = b.CreateBitCast(allocCall, llvm.PointerType(deferFrameType, 0), "defer.alloc")
 	}
-	if b.NeedsStackObjects() {
+	if b.NeedsStackObjects {
 		b.trackPointer(alloca)
 	}
 	b.CreateStore(deferFrame, alloca)

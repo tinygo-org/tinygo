@@ -21,29 +21,6 @@ type Config struct {
 	TestConfig     TestConfig
 }
 
-// FuncValueImplementation is an enum for the particular implementations of Go
-// func values.
-type FuncValueImplementation int
-
-// These constants describe the various possible implementations of Go func
-// values.
-const (
-	FuncValueNone FuncValueImplementation = iota
-
-	// A func value is implemented as a pair of pointers:
-	//     {context, function pointer}
-	// where the context may be a pointer to a heap-allocated struct containing
-	// the free variables, or it may be undef if the function being pointed to
-	// doesn't need a context. The function pointer is a regular function
-	// pointer.
-	FuncValueDoubleword
-
-	// As funcValueDoubleword, but with the function pointer replaced by a
-	// unique ID per function signature. Function values are called by using a
-	// switch statement and choosing which function to call.
-	FuncValueSwitch
-)
-
 // Triple returns the LLVM target triple, like armv6m-none-eabi.
 func (c *Config) Triple() string {
 	return c.Target.Triple
@@ -143,14 +120,24 @@ func (c *Config) Scheduler() string {
 
 // FuncImplementation picks an appropriate func value implementation for the
 // target.
-func (c *Config) FuncImplementation() FuncValueImplementation {
-	// Always pick the switch implementation, as it allows the use of blocking
-	// inside a function that is used as a func value.
+func (c *Config) FuncImplementation() string {
 	switch c.Scheduler() {
-	case "none", "coroutines":
-		return FuncValueSwitch
 	case "tasks":
-		return FuncValueDoubleword
+		// A func value is implemented as a pair of pointers:
+		//     {context, function pointer}
+		// where the context may be a pointer to a heap-allocated struct
+		// containing the free variables, or it may be undef if the function
+		// being pointed to doesn't need a context. The function pointer is a
+		// regular function pointer.
+		return "doubleword"
+	case "none", "coroutines":
+		// As "doubleword", but with the function pointer replaced by a unique
+		// ID per function signature. Function values are called by using a
+		// switch statement and choosing which function to call.
+		// Pick the switch implementation with the coroutines scheduler, as it
+		// allows the use of blocking inside a function that is used as a func
+		// value.
+		return "switch"
 	default:
 		panic("unknown scheduler type")
 	}
