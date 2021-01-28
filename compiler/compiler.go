@@ -283,8 +283,19 @@ func CompileProgram(lprogram *loader.Program, machine llvm.TargetMachine, config
 			initFuncs = append(initFuncs, c.getFunction(f))
 		}
 		if f.Blocks == nil {
+      fmt.Printf("External Function: %v \n\n%#v\n\n%#v\n\n", f, f, f.targets);
 			continue // external function
 		}
+
+    // TODO torch2424: Trying to fix bug #1559, to allow for non-conflicting wasm import names
+    // Actually, it's a bit more complicated
+    // The name really needs to be write on non-wasm systems but apparently the symbol should not be renamed on wasm
+    // The IR is currently generated here:
+    // https://github.com/tinygo-org/tinygo/blob/release/compiler/compiler.go#L703
+    // But things will change with this PR:
+    // https://github.com/tinygo-org/tinygo/pull/1584
+    // fmt.Printf("Yooooo \n\n%+v\n\n", config.Options);
+    // fmt.Printf("WasmAbi \n\n%s\n\n", config.Options.WasmAbi);
 
 		// Create the function definition.
 		b := newBuilder(c, irbuilder, f)
