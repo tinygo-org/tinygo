@@ -66,8 +66,8 @@ const (
 	SDA_PIN = P0_05 // I2C0 external
 	SCL_PIN = P0_04 // I2C0 external
 
-	SDA1_PIN = P0_00 // I2C1 internal
-	SCL1_PIN = P0_01 // I2C1 internal
+	SDA1_PIN = P1_10 // I2C1 internal
+	SCL1_PIN = P1_12 // I2C1 internal
 )
 
 // SPI pins (internal flash)
