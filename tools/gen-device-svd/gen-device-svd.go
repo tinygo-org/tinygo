@@ -180,7 +180,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 	orderedPeripherals := orderPeripherals(device.Peripherals)
 
 	for _, periphEl := range orderedPeripherals {
-		description := formatText(periphEl.Description)
+		description := strings.Replace(formatText(periphEl.Description), "\n", " ", -1)
 		baseAddress, err := strconv.ParseUint(periphEl.BaseAddress, 0, 32)
 		if err != nil {
 			return nil, fmt.Errorf("invalid base address: %w", err)
