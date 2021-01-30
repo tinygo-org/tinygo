@@ -28,6 +28,13 @@ func (v Value) isIndirect() bool {
 	return v.flags&valueFlagIndirect != 0
 }
 
+// isExported returns whether the value represented by this Value could be
+// accessed without violating type system constraints. For example, it is not
+// set for unexported struct fields.
+func (v Value) isExported() bool {
+	return v.flags&valueFlagExported != 0
+}
+
 func Indirect(v Value) Value {
 	if v.Kind() != Ptr {
 		return v
@@ -51,6 +58,15 @@ func ValueOf(i interface{}) Value {
 }
 
 func (v Value) Interface() interface{} {
+	if !v.isExported() {
+		panic("(reflect.Value).Interface: unexported")
+	}
+	return valueInterfaceUnsafe(v)
+}
+
+// valueInterfaceUnsafe is used by the runtime to hash map keys. It should not
+// be subject to the isExported check.
+func valueInterfaceUnsafe(v Value) interface{} {
 	if v.isIndirect() && v.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
 		// Value was indirect but must be put back directly in the interface
 		// value.
