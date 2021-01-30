@@ -349,6 +349,13 @@ func hashmapStringDelete(m *hashmap, key string) {
 
 // Hashmap with interface keys (for everything else).
 
+// This is a method that is intentionally unexported in the reflect package. It
+// is identical to the Interface() method call, except it doesn't check whether
+// a field is exported and thus allows circumventing the type system.
+// The hash function needs it as it also needs to hash unexported struct fields.
+//go:linkname valueInterfaceUnsafe reflect.valueInterfaceUnsafe
+func valueInterfaceUnsafe(v reflect.Value) interface{}
+
 func hashmapInterfaceHash(itf interface{}) uint32 {
 	x := reflect.ValueOf(itf)
 	if x.RawType() == 0 {
@@ -384,13 +391,13 @@ func hashmapInterfaceHash(itf interface{}) uint32 {
 	case reflect.Array:
 		var hash uint32
 		for i := 0; i < x.Len(); i++ {
-			hash |= hashmapInterfaceHash(x.Index(i).Interface())
+			hash |= hashmapInterfaceHash(valueInterfaceUnsafe(x.Index(i)))
 		}
 		return hash
 	case reflect.Struct:
 		var hash uint32
 		for i := 0; i < x.NumField(); i++ {
-			hash |= hashmapInterfaceHash(x.Field(i).Interface())
+			hash |= hashmapInterfaceHash(valueInterfaceUnsafe(x.Field(i)))
 		}
 		return hash
 	default:
