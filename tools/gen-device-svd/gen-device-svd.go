@@ -83,45 +83,54 @@ type SVDCluster struct {
 }
 
 type Device struct {
-	metadata    map[string]string
-	interrupts  []*interrupt
-	peripherals []*peripheral
+	Metadata    *Metadata
+	Interrupts  []*Interrupt
+	Peripherals []*Peripheral
 }
 
-type interrupt struct {
+type Metadata struct {
+	File             string
+	DescriptorSource string
+	Name             string
+	NameLower        string
+	Description      string
+	LicenseBlock     string
+}
+
+type Interrupt struct {
 	Name            string
 	HandlerName     string
-	peripheralIndex int
+	PeripheralIndex int
 	Value           int // interrupt number
 	Description     string
 }
 
-type peripheral struct {
+type Peripheral struct {
 	Name        string
 	GroupName   string
 	BaseAddress uint64
 	Description string
 	ClusterName string
-	registers   []*PeripheralField
-	subtypes    []*peripheral
+	Registers   []*PeripheralField
+	Subtypes    []*Peripheral
 }
 
 // A PeripheralField is a single field in a peripheral type. It may be a full
 // peripheral or a cluster within a peripheral.
 type PeripheralField struct {
-	name        string
-	address     uint64
-	description string
-	registers   []*PeripheralField // contains fields if this is a cluster
-	array       int
-	elementSize int
-	bitfields   []Bitfield
+	Name        string
+	Address     uint64
+	Description string
+	Registers   []*PeripheralField // contains fields if this is a cluster
+	Array       int
+	ElementSize int
+	Bitfields   []Bitfield
 }
 
 type Bitfield struct {
-	name        string
-	description string
-	value       uint32
+	Name        string
+	Description string
+	Value       uint32
 }
 
 func formatText(text string) string {
@@ -129,6 +138,14 @@ func formatText(text string) string {
 	text = strings.Replace(text, "\\n ", "\n", -1)
 	text = strings.TrimSpace(text)
 	return text
+}
+
+func isMultiline(s string) bool {
+	return strings.Index(s, "\n") >= 0
+}
+
+func splitLine(s string) []string {
+	return strings.Split(s, "\n")
 }
 
 // Replace characters that are not allowed in a symbol name with a '_'. This is
@@ -168,11 +185,11 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		return nil, err
 	}
 
-	peripheralDict := map[string]*peripheral{}
-	groups := map[string]*peripheral{}
+	peripheralDict := map[string]*Peripheral{}
+	groups := map[string]*Peripheral{}
 
-	interrupts := make(map[string]*interrupt)
-	var peripheralsList []*peripheral
+	interrupts := make(map[string]*Interrupt)
+	var peripheralsList []*Peripheral
 
 	// Some SVD files have peripheral elements derived from a peripheral that
 	// comes later in the file. To make sure this works, sort the peripherals if
@@ -203,13 +220,13 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		}
 
 		if _, ok := groups[groupName]; ok || periphEl.DerivedFrom != "" {
-			var derivedFrom *peripheral
+			var derivedFrom *Peripheral
 			if periphEl.DerivedFrom != "" {
 				derivedFrom = peripheralDict[periphEl.DerivedFrom]
 			} else {
 				derivedFrom = groups[groupName]
 			}
-			p := &peripheral{
+			p := &Peripheral{
 				Name:        periphEl.Name,
 				GroupName:   derivedFrom.GroupName,
 				Description: description,
@@ -220,8 +237,8 @@ func readSVD(path, sourceURL string) (*Device, error) {
 			}
 			peripheralsList = append(peripheralsList, p)
 			peripheralDict[p.Name] = p
-			for _, subtype := range derivedFrom.subtypes {
-				peripheralsList = append(peripheralsList, &peripheral{
+			for _, subtype := range derivedFrom.Subtypes {
+				peripheralsList = append(peripheralsList, &Peripheral{
 					Name:        periphEl.Name + "_" + subtype.ClusterName,
 					GroupName:   subtype.GroupName,
 					Description: subtype.Description,
@@ -231,12 +248,12 @@ func readSVD(path, sourceURL string) (*Device, error) {
 			continue
 		}
 
-		p := &peripheral{
+		p := &Peripheral{
 			Name:        periphEl.Name,
 			GroupName:   groupName,
 			Description: description,
 			BaseAddress: baseAddress,
-			registers:   []*PeripheralField{},
+			Registers:   []*PeripheralField{},
 		}
 		if p.GroupName == "" {
 			p.GroupName = periphEl.Name
@@ -253,7 +270,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 			if regName == "" {
 				regName = periphEl.Name // fall back to peripheral name
 			}
-			p.registers = append(p.registers, parseRegister(regName, register, baseAddress, "")...)
+			p.Registers = append(p.Registers, parseRegister(regName, register, baseAddress, "")...)
 		}
 		for _, cluster := range periphEl.Clusters {
 			clusterName := strings.Replace(cluster.Name, "[%s]", "", -1)
@@ -299,12 +316,12 @@ func readSVD(path, sourceURL string) (*Device, error) {
 								subcpRegisters = append(subcpRegisters, parseRegister(groupName, regEl, baseAddress+subclusterOffset, subclusterPrefix)...)
 							}
 							cpRegisters = append(cpRegisters, &PeripheralField{
-								name:        subclusterName,
-								address:     baseAddress + subclusterOffset,
-								description: subClusterEl.Description,
-								registers:   subcpRegisters,
-								array:       subdim,
-								elementSize: int(subdimIncrement),
+								Name:        subclusterName,
+								Address:     baseAddress + subclusterOffset,
+								Description: subClusterEl.Description,
+								Registers:   subcpRegisters,
+								Array:       subdim,
+								ElementSize: int(subdimIncrement),
 							})
 						} else {
 							for _, regEl := range subClusterEl.Registers {
@@ -314,19 +331,19 @@ func readSVD(path, sourceURL string) (*Device, error) {
 					}
 
 					sort.SliceStable(cpRegisters, func(i, j int) bool {
-						return cpRegisters[i].address < cpRegisters[j].address
+						return cpRegisters[i].Address < cpRegisters[j].Address
 					})
-					clusterPeripheral := &peripheral{
+					clusterPeripheral := &Peripheral{
 						Name:        periphEl.Name + "_" + clusterName,
 						GroupName:   groupName + "_" + clusterName,
 						Description: description + " - " + clusterName,
 						ClusterName: clusterName,
 						BaseAddress: baseAddress,
-						registers:   cpRegisters,
+						Registers:   cpRegisters,
 					}
 					peripheralsList = append(peripheralsList, clusterPeripheral)
 					peripheralDict[clusterPeripheral.Name] = clusterPeripheral
-					p.subtypes = append(p.subtypes, clusterPeripheral)
+					p.Subtypes = append(p.Subtypes, clusterPeripheral)
 					continue
 				}
 				dim = -1
@@ -352,15 +369,15 @@ func readSVD(path, sourceURL string) (*Device, error) {
 				clusterRegisters = append(clusterRegisters, parseRegister(regName, regEl, baseAddress+clusterOffset, clusterPrefix)...)
 			}
 			sort.SliceStable(clusterRegisters, func(i, j int) bool {
-				return clusterRegisters[i].address < clusterRegisters[j].address
+				return clusterRegisters[i].Address < clusterRegisters[j].Address
 			})
 			if dimIncrement == -1 && len(clusterRegisters) > 0 {
 				lastReg := clusterRegisters[len(clusterRegisters)-1]
-				lastAddress := lastReg.address
-				if lastReg.array != -1 {
-					lastAddress = lastReg.address + uint64(lastReg.array*lastReg.elementSize)
+				lastAddress := lastReg.Address
+				if lastReg.Array != -1 {
+					lastAddress = lastReg.Address + uint64(lastReg.Array*lastReg.ElementSize)
 				}
-				firstAddress := clusterRegisters[0].address
+				firstAddress := clusterRegisters[0].Address
 				dimIncrement = int(lastAddress - firstAddress)
 			}
 
@@ -368,22 +385,22 @@ func readSVD(path, sourceURL string) (*Device, error) {
 				clusterName = strings.ToUpper(clusterName)
 			}
 
-			p.registers = append(p.registers, &PeripheralField{
-				name:        clusterName,
-				address:     baseAddress + clusterOffset,
-				description: cluster.Description,
-				registers:   clusterRegisters,
-				array:       dim,
-				elementSize: dimIncrement,
+			p.Registers = append(p.Registers, &PeripheralField{
+				Name:        clusterName,
+				Address:     baseAddress + clusterOffset,
+				Description: cluster.Description,
+				Registers:   clusterRegisters,
+				Array:       dim,
+				ElementSize: dimIncrement,
 			})
 		}
-		sort.SliceStable(p.registers, func(i, j int) bool {
-			return p.registers[i].address < p.registers[j].address
+		sort.SliceStable(p.Registers, func(i, j int) bool {
+			return p.Registers[i].Address < p.Registers[j].Address
 		})
 	}
 
 	// Make a sorted list of interrupts.
-	interruptList := make([]*interrupt, 0, len(interrupts))
+	interruptList := make([]*Interrupt, 0, len(interrupts))
 	for _, intr := range interrupts {
 		interruptList = append(interruptList, intr)
 	}
@@ -391,7 +408,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		if interruptList[i].Value != interruptList[j].Value {
 			return interruptList[i].Value < interruptList[j].Value
 		}
-		return interruptList[i].peripheralIndex < interruptList[j].peripheralIndex
+		return interruptList[i].PeripheralIndex < interruptList[j].PeripheralIndex
 	})
 
 	// Properly format the license block, with comments.
@@ -402,16 +419,16 @@ func readSVD(path, sourceURL string) (*Device, error) {
 	}
 
 	return &Device{
-		metadata: map[string]string{
-			"file":             filepath.Base(path),
-			"descriptorSource": sourceURL,
-			"name":             device.Name,
-			"nameLower":        strings.ToLower(device.Name),
-			"description":      strings.TrimSpace(device.Description),
-			"licenseBlock":     licenseBlock,
+		Metadata: &Metadata{
+			File:             filepath.Base(path),
+			DescriptorSource: sourceURL,
+			Name:             device.Name,
+			NameLower:        strings.ToLower(device.Name),
+			Description:      strings.TrimSpace(device.Description),
+			LicenseBlock:     licenseBlock,
 		},
-		interrupts:  interruptList,
-		peripherals: peripheralsList,
+		Interrupts:  interruptList,
+		Peripherals: peripheralsList,
 	}, nil
 }
 
@@ -443,7 +460,7 @@ func orderPeripherals(input []SVDPeripheral) []*SVDPeripheral {
 	return sortedPeripherals
 }
 
-func addInterrupt(interrupts map[string]*interrupt, name, interruptName string, index int, description string) {
+func addInterrupt(interrupts map[string]*Interrupt, name, interruptName string, index int, description string) {
 	if _, ok := interrupts[name]; ok {
 		if interrupts[name].Value != index {
 			// Note: some SVD files like the one for STM32H7x7 contain mistakes.
@@ -462,10 +479,10 @@ func addInterrupt(interrupts map[string]*interrupt, name, interruptName string, 
 			interrupts[name].Description += " // " + description
 		}
 	} else {
-		interrupts[name] = &interrupt{
+		interrupts[name] = &Interrupt{
 			Name:            name,
 			HandlerName:     interruptName + "_IRQHandler",
-			peripheralIndex: len(interrupts),
+			PeripheralIndex: len(interrupts),
 			Value:           index,
 			Description:     description,
 		}
@@ -542,20 +559,20 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 		}
 
 		fields = append(fields, Bitfield{
-			name:        fmt.Sprintf("%s_%s%s_%s_Pos", groupName, bitfieldPrefix, regName, fieldName),
-			description: fmt.Sprintf("Position of %s field.", fieldName),
-			value:       lsb,
+			Name:        fmt.Sprintf("%s_%s%s_%s_Pos", groupName, bitfieldPrefix, regName, fieldName),
+			Description: fmt.Sprintf("Position of %s field.", fieldName),
+			Value:       lsb,
 		})
 		fields = append(fields, Bitfield{
-			name:        fmt.Sprintf("%s_%s%s_%s_Msk", groupName, bitfieldPrefix, regName, fieldName),
-			description: fmt.Sprintf("Bit mask of %s field.", fieldName),
-			value:       (0xffffffff >> (31 - (msb - lsb))) << lsb,
+			Name:        fmt.Sprintf("%s_%s%s_%s_Msk", groupName, bitfieldPrefix, regName, fieldName),
+			Description: fmt.Sprintf("Bit mask of %s field.", fieldName),
+			Value:       (0xffffffff >> (31 - (msb - lsb))) << lsb,
 		})
 		if lsb == msb { // single bit
 			fields = append(fields, Bitfield{
-				name:        fmt.Sprintf("%s_%s%s_%s", groupName, bitfieldPrefix, regName, fieldName),
-				description: fmt.Sprintf("Bit %s.", fieldName),
-				value:       1 << lsb,
+				Name:        fmt.Sprintf("%s_%s%s_%s", groupName, bitfieldPrefix, regName, fieldName),
+				Description: fmt.Sprintf("Bit %s.", fieldName),
+				Value:       1 << lsb,
 			})
 		}
 		for _, enumEl := range enumeratedValues.EnumeratedValue {
@@ -566,7 +583,7 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			if !unicode.IsUpper(rune(enumName[0])) && !unicode.IsDigit(rune(enumName[0])) {
 				enumName = strings.ToUpper(enumName)
 			}
-			enumDescription := strings.Replace(enumEl.Description, "\n", " ", -1)
+			enumDescription := formatText(enumEl.Description)
 			var enumValue uint64
 			var err error
 			if strings.HasPrefix(enumEl.Value, "0b") {
@@ -606,7 +623,7 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 					// existing enum bitfield value.
 					enumSeen[enumName] = -1
 					for i, field := range fields {
-						if field.name == enumName {
+						if field.Name == enumName {
 							fields = append(fields[:i], fields[i+1:]...)
 							break
 						}
@@ -617,9 +634,9 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			enumSeen[enumName] = int64(enumValue)
 
 			fields = append(fields, Bitfield{
-				name:        enumName,
-				description: enumDescription,
-				value:       uint32(enumValue),
+				Name:        enumName,
+				Description: enumDescription,
+				Value:       uint32(enumValue),
 			})
 		}
 	}
@@ -643,7 +660,7 @@ func (r *Register) name() string {
 }
 
 func (r *Register) description() string {
-	return strings.Replace(r.element.Description, "\n", " ", -1)
+	return formatText(r.element.Description)
 }
 
 func (r *Register) address() uint64 {
@@ -748,16 +765,16 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 			for i, j := range reg.dimIndex() {
 				regAddress := reg.address() + (uint64(i) * dimIncrement)
 				results = append(results, &PeripheralField{
-					name:        strings.ToUpper(strings.Replace(reg.name(), "%s", j, -1)),
-					address:     regAddress,
-					description: reg.description(),
-					array:       -1,
-					elementSize: reg.size(),
+					Name:        strings.ToUpper(strings.Replace(reg.name(), "%s", j, -1)),
+					Address:     regAddress,
+					Description: reg.description(),
+					Array:       -1,
+					ElementSize: reg.size(),
 				})
 			}
 			// set first result bitfield
 			shortName := strings.ToUpper(strings.Replace(strings.Replace(reg.name(), "_%s", "", -1), "%s", "", -1))
-			results[0].bitfields = parseBitfields(groupName, shortName, regEl.Fields, bitfieldPrefix)
+			results[0].Bitfields = parseBitfields(groupName, shortName, regEl.Fields, bitfieldPrefix)
 			return results
 		}
 	}
@@ -769,18 +786,18 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 
 	bitfields := parseBitfields(groupName, regName, regEl.Fields, bitfieldPrefix)
 	return []*PeripheralField{&PeripheralField{
-		name:        regName,
-		address:     reg.address(),
-		description: reg.description(),
-		bitfields:   bitfields,
-		array:       reg.dim(),
-		elementSize: reg.size(),
+		Name:        regName,
+		Address:     reg.address(),
+		Description: reg.description(),
+		Bitfields:   bitfields,
+		Array:       reg.dim(),
+		ElementSize: reg.size(),
 	}}
 }
 
 // The Go module for this device.
 func writeGo(outdir string, device *Device, interruptSystem string) error {
-	outf, err := os.Create(filepath.Join(outdir, device.metadata["nameLower"]+".go"))
+	outf, err := os.Create(filepath.Join(outdir, device.Metadata.NameLower+".go"))
 	if err != nil {
 		return err
 	}
@@ -788,20 +805,24 @@ func writeGo(outdir string, device *Device, interruptSystem string) error {
 	w := bufio.NewWriter(outf)
 
 	maxInterruptValue := 0
-	for _, intr := range device.interrupts {
+	for _, intr := range device.Interrupts {
 		if intr.Value > maxInterruptValue {
 			maxInterruptValue = intr.Value
 		}
 	}
 
-	t := template.Must(template.New("go").Parse(`// Automatically generated file. DO NOT EDIT.
-// Generated by gen-device-svd.go from {{.metadata.file}}, see {{.metadata.descriptorSource}}
+	t := template.Must(template.New("go").Funcs(template.FuncMap{
+		"bytesNeeded": func(i, j uint64) uint64 { return j - i },
+		"isMultiline": isMultiline,
+		"splitLine":   splitLine,
+	}).Parse(`// Automatically generated file. DO NOT EDIT.
+// Generated by gen-device-svd.go from {{.device.Metadata.File}}, see {{.device.Metadata.DescriptorSource}}
 
-// +build {{.pkgName}},{{.metadata.nameLower}}
+// +build {{.pkgName}},{{.device.Metadata.NameLower}}
 
-// {{.metadata.description}}
+// {{.device.Metadata.Description}}
 //
-{{.metadata.licenseBlock}}
+{{.device.Metadata.LicenseBlock}}
 package {{.pkgName}}
 
 import (
@@ -812,32 +833,50 @@ import (
 
 // Some information about this device.
 const (
-	DEVICE	 = "{{.metadata.name}}"
+	DEVICE	 = "{{.device.Metadata.Name}}"
 )
 
 // Interrupt numbers.
-const ({{range .interrupts}}
-	IRQ_{{.Name}} = {{.Value}} // {{.Description}}{{end}}
-	IRQ_max = {{.interruptMax}} // Highest interrupt number on this device.
+const (
+{{- range .device.Interrupts}}
+	{{- if .Description}}
+		{{- range .Description|splitLine}}
+	// {{.}}
+		{{- end}}
+	{{- end}}
+	IRQ_{{.Name}} = {{.Value}}
+	{{- "\n"}}
+{{- end}}
+	// Highest interrupt number on this device.
+	IRQ_max = {{.interruptMax}} 
 )
 
-{{if eq .interruptSystem "hardware"}}
+{{- if eq .interruptSystem "hardware"}}
 // Map interrupt numbers to function names.
 // These aren't real calls, they're removed by the compiler.
-var ({{range .interrupts}}
-	_ = interrupt.Register(IRQ_{{.Name}}, "{{.HandlerName}}"){{end}}
+var (
+{{- range .device.Interrupts}}
+	_ = interrupt.Register(IRQ_{{.Name}}, "{{.HandlerName}}")
+{{- end}}
 )
-{{end}}
+{{- end}}
 
 // Peripherals.
 var (
-{{range .peripherals}}	{{.Name}} = (*{{.GroupName}}_Type)(unsafe.Pointer(uintptr(0x{{printf "%x" .BaseAddress}}))) // {{.Description}}
-{{end}})
+{{- range .device.Peripherals}}
+	{{- if .Description}}
+		{{- range .Description|splitLine}}
+	// {{.}}
+		{{- end}}
+	{{- end}}
+	{{.Name}} = (*{{.GroupName}}_Type)(unsafe.Pointer(uintptr(0x{{printf "%x" .BaseAddress}})))
+	{{- "\n"}}
+{{- end}}
+)
+
 `))
 	err = t.Execute(w, map[string]interface{}{
-		"metadata":        device.metadata,
-		"interrupts":      device.interrupts,
-		"peripherals":     device.peripherals,
+		"device":          device,
 		"pkgName":         filepath.Base(strings.TrimRight(outdir, "/")),
 		"interruptMax":    maxInterruptValue,
 		"interruptSystem": interruptSystem,
@@ -847,16 +886,23 @@ var (
 	}
 
 	// Define peripheral struct types.
-	for _, peripheral := range device.peripherals {
-		if peripheral.registers == nil {
+	for _, peripheral := range device.Peripherals {
+		if peripheral.Registers == nil {
 			// This peripheral was derived from another peripheral. No new type
 			// needs to be defined for it.
 			continue
 		}
-		fmt.Fprintf(w, "\n// %s\ntype %s_Type struct {\n", peripheral.Description, peripheral.GroupName)
+		fmt.Fprintln(w)
+		if peripheral.Description != "" {
+			for _, l := range splitLine(peripheral.Description) {
+				fmt.Fprintf(w, "// %s\n", l)
+			}
+		}
+		fmt.Fprintf(w, "type %s_Type struct {\n", peripheral.GroupName)
+
 		address := peripheral.BaseAddress
-		for _, register := range peripheral.registers {
-			if register.registers == nil && address > register.address {
+		for _, register := range peripheral.Registers {
+			if register.Registers == nil && address > register.Address {
 				// In Nordic SVD files, these registers are deprecated or
 				// duplicates, so can be ignored.
 				//fmt.Fprintf(os.Stderr, "skip: %s.%s 0x%x - 0x%x %d\n", peripheral.Name, register.name, address, register.address, register.elementSize)
@@ -864,7 +910,7 @@ var (
 			}
 
 			var regType string
-			switch register.elementSize {
+			switch register.ElementSize {
 			case 8:
 				regType = "volatile.Register64"
 			case 4:
@@ -878,24 +924,24 @@ var (
 			}
 
 			// insert padding, if needed
-			if address < register.address {
-				bytesNeeded := register.address - address
+			if address < register.Address {
+				bytesNeeded := register.Address - address
 				if bytesNeeded == 1 {
 					w.WriteString("\t_ byte\n")
 				} else {
 					fmt.Fprintf(w, "\t_ [%d]byte\n", bytesNeeded)
 				}
-				address = register.address
+				address = register.Address
 			}
 
 			lastCluster := false
-			if register.registers != nil {
+			if register.Registers != nil {
 				// This is a cluster, not a register. Create the cluster type.
 				regType = "struct {\n"
-				subaddress := register.address
-				for _, subregister := range register.registers {
+				subaddress := register.Address
+				for _, subregister := range register.Registers {
 					var subregType string
-					switch subregister.elementSize {
+					switch subregister.ElementSize {
 					case 8:
 						subregType = "volatile.Register64"
 					case 4:
@@ -909,11 +955,11 @@ var (
 						panic("unknown element size")
 					}
 
-					if subregister.array != -1 {
-						subregType = fmt.Sprintf("[%d]%s", subregister.array, subregType)
+					if subregister.Array != -1 {
+						subregType = fmt.Sprintf("[%d]%s", subregister.Array, subregType)
 					}
-					if subaddress != subregister.address {
-						bytesNeeded := subregister.address - subaddress
+					if subaddress != subregister.Address {
+						bytesNeeded := subregister.Address - subaddress
 						if bytesNeeded == 1 {
 							regType += "\t\t_ byte\n"
 						} else {
@@ -922,17 +968,17 @@ var (
 						subaddress += bytesNeeded
 					}
 					var subregSize uint64
-					if subregister.array != -1 {
-						subregSize = uint64(subregister.array * subregister.elementSize)
+					if subregister.Array != -1 {
+						subregSize = uint64(subregister.Array * subregister.ElementSize)
 					} else {
-						subregSize = uint64(subregister.elementSize)
+						subregSize = uint64(subregister.ElementSize)
 					}
 					subaddress += subregSize
-					regType += fmt.Sprintf("\t\t%s %s\n", subregister.name, subregType)
+					regType += fmt.Sprintf("\t\t%s %s\n", subregister.Name, subregType)
 				}
-				if register.array != -1 {
-					if subaddress != register.address+uint64(register.elementSize) {
-						bytesNeeded := (register.address + uint64(register.elementSize)) - subaddress
+				if register.Array != -1 {
+					if subaddress != register.Address+uint64(register.ElementSize) {
+						bytesNeeded := (register.Address + uint64(register.ElementSize)) - subaddress
 						if bytesNeeded == 1 {
 							regType += "\t_ byte\n"
 						} else {
@@ -946,40 +992,49 @@ var (
 				address = subaddress
 			}
 
-			if register.array != -1 {
-				regType = fmt.Sprintf("[%d]%s", register.array, regType)
+			if register.Array != -1 {
+				regType = fmt.Sprintf("[%d]%s", register.Array, regType)
 			}
-			fmt.Fprintf(w, "\t%s %s // 0x%X\n", register.name, regType, register.address-peripheral.BaseAddress)
+			fmt.Fprintf(w, "\t%s %s // 0x%X\n", register.Name, regType, register.Address-peripheral.BaseAddress)
 
 			// next address
 			if lastCluster {
 				lastCluster = false
-			} else if register.array != -1 {
-				address = register.address + uint64(register.elementSize*register.array)
+			} else if register.Array != -1 {
+				address = register.Address + uint64(register.ElementSize*register.Array)
 			} else {
-				address = register.address + uint64(register.elementSize)
+				address = register.Address + uint64(register.ElementSize)
 			}
 		}
 		w.WriteString("}\n")
 	}
 
 	// Define bitfields.
-	for _, peripheral := range device.peripherals {
-		if peripheral.registers == nil {
+	for _, peripheral := range device.Peripherals {
+		if peripheral.Registers == nil {
 			// This peripheral was derived from another peripheral. Bitfields are
 			// already defined.
 			continue
 		}
-		fmt.Fprintf(w, "\n// Bitfields for %s: %s\nconst(", peripheral.Name, peripheral.Description)
-		for _, register := range peripheral.registers {
-			if len(register.bitfields) != 0 {
-				writeGoRegisterBitfields(w, register, register.name)
+		fmt.Fprintf(w, "\n// Bitfields for %s", peripheral.Name)
+		if isMultiline(peripheral.Description) {
+			for _, l := range splitLine(peripheral.Description) {
+				fmt.Fprintf(w, "\n// %s", l)
 			}
-			if register.registers == nil {
+		} else if peripheral.Description != "" {
+			fmt.Fprintf(w, ": %s", peripheral.Description)
+		}
+
+		fmt.Fprint(w, "\nconst(")
+		for _, register := range peripheral.Registers {
+			if len(register.Bitfields) != 0 {
+				writeGoRegisterBitfields(w, register, register.Name)
+			}
+			if register.Registers == nil {
 				continue
 			}
-			for _, subregister := range register.registers {
-				writeGoRegisterBitfields(w, subregister, register.name+"."+subregister.name)
+			for _, subregister := range register.Registers {
+				writeGoRegisterBitfields(w, subregister, register.Name+"."+subregister.Name)
 			}
 		}
 		w.WriteString(")\n")
@@ -990,22 +1045,29 @@ var (
 
 func writeGoRegisterBitfields(w *bufio.Writer, register *PeripheralField, name string) {
 	w.WriteString("\n\t// " + name)
-	if register.description != "" {
-		w.WriteString(": " + register.description)
+	if register.Description != "" {
+		if isMultiline(register.Description) {
+			for _, l := range splitLine(register.Description) {
+				w.WriteString("\n\t// " + l)
+			}
+		} else {
+			w.WriteString(": " + register.Description)
+		}
 	}
 	w.WriteByte('\n')
-	for _, bitfield := range register.bitfields {
-		fmt.Fprintf(w, "\t%s = 0x%x", bitfield.name, bitfield.value)
-		if bitfield.description != "" {
-			w.WriteString(" // " + bitfield.description)
+	for _, bitfield := range register.Bitfields {
+		if bitfield.Description != "" {
+			for _, l := range splitLine(bitfield.Description) {
+				w.WriteString("\t// " + l + "\n")
+			}
 		}
-		w.WriteByte('\n')
+		fmt.Fprintf(w, "\t%s = 0x%x\n", bitfield.Name, bitfield.Value)
 	}
 }
 
 // The interrupt vector, which is hard to write directly in Go.
 func writeAsm(outdir string, device *Device) error {
-	outf, err := os.Create(filepath.Join(outdir, device.metadata["nameLower"]+".s"))
+	outf, err := os.Create(filepath.Join(outdir, device.Metadata.NameLower+".s"))
 	if err != nil {
 		return err
 	}
@@ -1013,11 +1075,11 @@ func writeAsm(outdir string, device *Device) error {
 	w := bufio.NewWriter(outf)
 
 	t := template.Must(template.New("go").Parse(`// Automatically generated file. DO NOT EDIT.
-// Generated by gen-device-svd.go from {{.file}}, see {{.descriptorSource}}
+// Generated by gen-device-svd.go from {{.File}}, see {{.DescriptorSource}}
 
-// {{.description}}
+// {{.Description}}
 //
-{{.licenseBlock}}
+{{.LicenseBlock}}
 
 .syntax unified
 
@@ -1063,12 +1125,12 @@ Default_Handler:
 
     // Extra interrupts for peripherals defined by the hardware vendor.
 `))
-	err = t.Execute(w, device.metadata)
+	err = t.Execute(w, device.Metadata)
 	if err != nil {
 		return err
 	}
 	num := 0
-	for _, intr := range device.interrupts {
+	for _, intr := range device.Interrupts {
 		if intr.Value == num-1 {
 			continue
 		}
@@ -1096,7 +1158,7 @@ Default_Handler:
     IRQ PendSV_Handler
     IRQ SysTick_Handler
 `)
-	for _, intr := range device.interrupts {
+	for _, intr := range device.Interrupts {
 		fmt.Fprintf(w, "    IRQ %s_IRQHandler\n", intr.Name)
 	}
 	return w.Flush()
