@@ -42,6 +42,7 @@ type cgoPackage struct {
 	enums           map[string]enumInfo
 	anonStructNum   int
 	ldflags         []string
+	visitedFiles    map[string][]byte
 }
 
 // constantInfo stores some information about a CGo constant found by libclang
@@ -156,9 +157,10 @@ typedef unsigned long long  _Cgo_ulonglong;
 // Process extracts `import "C"` statements from the AST, parses the comment
 // with libclang, and modifies the AST to use this information. It returns a
 // newly created *ast.File that should be added to the list of to-be-parsed
-// files. If there is one or more error, it returns these in the []error slice
-// but still modifies the AST.
-func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string) (*ast.File, []string, []error) {
+// files, the LDFLAGS for this package, and a map of file hashes of the accessed
+// C header files. If there is one or more error, it returns these in the
+// []error slice but still modifies the AST.
+func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string) (*ast.File, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
 		dir:             dir,
 		fset:            fset,
@@ -170,6 +172,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 		typedefs:        map[string]*typedefInfo{},
 		elaboratedTypes: map[string]*elaboratedTypeInfo{},
 		enums:           map[string]enumInfo{},
+		visitedFiles:    map[string][]byte{},
 	}
 
 	// Disable _FORTIFY_SOURCE as it causes problems on macOS.
@@ -185,7 +188,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Find the absolute path for this package.
 	packagePath, err := filepath.Abs(fset.File(files[0].Pos()).Name())
 	if err != nil {
-		return nil, nil, []error{
+		return nil, nil, nil, []error{
 			scanner.Error{
 				Pos: fset.Position(files[0].Pos()),
 				Msg: "cgo: cannot find absolute path: " + err.Error(), // TODO: wrap this error
@@ -427,7 +430,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
-	return p.generated, p.ldflags, p.errors
+	return p.generated, p.ldflags, p.visitedFiles, p.errors
 }
 
 // makePathsAbsolute converts some common path compiler flags (-I, -L) from

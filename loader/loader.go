@@ -2,6 +2,7 @@ package loader
 
 import (
 	"bytes"
+	"crypto/sha512"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"go/token"
 	"go/types"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -66,10 +68,12 @@ type PackageJSON struct {
 type Package struct {
 	PackageJSON
 
-	program *Program
-	Files   []*ast.File
-	Pkg     *types.Package
-	info    types.Info
+	program    *Program
+	Files      []*ast.File
+	FileHashes map[string][]byte
+	CFlags     []string // CFlags used during CGo preprocessing (only set if CGo is used)
+	Pkg        *types.Package
+	info       types.Info
 }
 
 // Load loads the given package with all dependencies (including the runtime
@@ -118,7 +122,8 @@ func Load(config *compileopts.Config, inputPkgs []string, clangHeaders string, t
 	decoder := json.NewDecoder(buf)
 	for {
 		pkg := &Package{
-			program: p,
+			program:    p,
+			FileHashes: make(map[string][]byte),
 			info: types.Info{
 				Types:      make(map[ast.Expr]types.TypeAndValue),
 				Defs:       make(map[*ast.Ident]types.Object),
@@ -277,17 +282,15 @@ func (p *Program) Parse() error {
 }
 
 // parseFile is a wrapper around parser.ParseFile.
-func (p *Program) parseFile(path string, mode parser.Mode) (*ast.File, error) {
-	if p.fset == nil {
-		p.fset = token.NewFileSet()
-	}
-
-	rd, err := os.Open(path)
+func (p *Package) parseFile(path string, mode parser.Mode) (*ast.File, error) {
+	originalPath := p.program.getOriginalPath(path)
+	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	defer rd.Close()
-	return parser.ParseFile(p.fset, p.getOriginalPath(path), rd, mode)
+	sum := sha512.Sum512_224(data)
+	p.FileHashes[originalPath] = sum[:]
+	return parser.ParseFile(p.program.fset, originalPath, data, mode)
 }
 
 // Parse parses and typechecks this package.
@@ -363,7 +366,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		if !filepath.IsAbs(file) {
 			file = filepath.Join(p.Dir, file)
 		}
-		f, err := p.program.parseFile(file, parser.ParseComments)
+		f, err := p.parseFile(file, parser.ParseComments)
 		if err != nil {
 			fileErrs = append(fileErrs, err)
 			return
@@ -385,7 +388,11 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		if p.program.clangHeaders != "" {
 			cflags = append(cflags, "-Xclang", "-internal-isystem", "-Xclang", p.program.clangHeaders)
 		}
-		generated, ldflags, errs := cgo.Process(files, p.program.workingDir, p.program.fset, cflags)
+		p.CFlags = cflags
+		generated, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.program.fset, cflags)
+		for path, hash := range accessedFiles {
+			p.FileHashes[path] = hash
+		}
 		if errs != nil {
 			fileErrs = append(fileErrs, errs...)
 		}

@@ -46,7 +46,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 		return llvm.Value{}, b.makeError(instr.Pos(), "interrupt redeclared in this program")
 	}
 	global := llvm.AddGlobal(b.mod, globalLLVMType, globalName)
-	global.SetLinkage(llvm.PrivateLinkage)
+	global.SetVisibility(llvm.HiddenVisibility)
 	global.SetGlobalConstant(true)
 	global.SetUnnamedAddr(true)
 	initializer := llvm.ConstNull(globalLLVMType)
