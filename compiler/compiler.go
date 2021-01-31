@@ -84,12 +84,13 @@ type compilerContext struct {
 // importantly with a newly created LLVM context and module.
 func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *Config, dumpSSA bool) *compilerContext {
 	c := &compilerContext{
-		Config:     config,
-		DumpSSA:    dumpSSA,
-		difiles:    make(map[string]llvm.Metadata),
-		ditypes:    make(map[types.Type]llvm.Metadata),
-		machine:    machine,
-		targetData: machine.CreateTargetData(),
+		Config:      config,
+		DumpSSA:     dumpSSA,
+		difiles:     make(map[string]llvm.Metadata),
+		ditypes:     make(map[types.Type]llvm.Metadata),
+		machine:     machine,
+		targetData:  machine.CreateTargetData(),
+		astComments: map[string]*ast.CommentGroup{},
 	}
 
 	c.ctx = llvm.NewContext()
@@ -251,12 +252,6 @@ func CompileProgram(lprogram *loader.Program, machine llvm.TargetMachine, config
 	c.program.Build()
 	c.runtimePkg = c.program.ImportedPackage("runtime").Pkg
 
-	// Run a simple dead code elimination pass.
-	functions, err := c.simpleDCE(lprogram)
-	if err != nil {
-		return llvm.Module{}, []error{err}
-	}
-
 	// Initialize debug information.
 	if c.Debug {
 		c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
@@ -268,27 +263,22 @@ func CompileProgram(lprogram *loader.Program, machine llvm.TargetMachine, config
 		})
 	}
 
-	c.loadASTComments(lprogram)
+	for _, pkg := range lprogram.Sorted() {
+		c.loadASTComments(pkg)
+	}
 
 	// Predeclare the runtime.alloc function, which is used by the wordpack
 	// functionality.
 	c.getFunction(c.program.ImportedPackage("runtime").Members["alloc"].(*ssa.Function))
 
-	// Add definitions to declarations.
+	// Define all functions.
 	var initFuncs []llvm.Value
 	irbuilder := c.ctx.NewBuilder()
 	defer irbuilder.Dispose()
-	for _, f := range functions {
-		if f.Synthetic == "package initializer" {
-			initFuncs = append(initFuncs, c.getFunction(f))
-		}
-		if f.Blocks == nil {
-			continue // external function
-		}
-
-		// Create the function definition.
-		b := newBuilder(c, irbuilder, f)
-		b.createFunction()
+	for _, pkg := range lprogram.Sorted() {
+		ssaPkg := c.program.Package(pkg.Pkg)
+		c.createPackage(irbuilder, ssaPkg)
+		initFuncs = append(initFuncs, c.getFunction(ssaPkg.Members["init"].(*ssa.Function)))
 	}
 
 	// After all packages are imported, add a synthetic initializer function
@@ -341,38 +331,10 @@ func CompilePackage(moduleName string, pkg *loader.Package, machine llvm.TargetM
 	ssaPkg := pkg.LoadSSA()
 	ssaPkg.Build()
 
-	// Sort by position, so that the order of the functions in the IR matches
-	// the order of functions in the source file. This is useful for testing,
-	// for example.
-	var members []string
-	for name := range ssaPkg.Members {
-		members = append(members, name)
-	}
-	sort.Slice(members, func(i, j int) bool {
-		iPos := ssaPkg.Members[members[i]].Pos()
-		jPos := ssaPkg.Members[members[j]].Pos()
-		if i == j {
-			// Cannot sort by pos, so do it by name.
-			return members[i] < members[j]
-		}
-		return iPos < jPos
-	})
-
-	// Define all functions.
+	// Compile all functions, methods, and global variables in this package.
 	irbuilder := c.ctx.NewBuilder()
 	defer irbuilder.Dispose()
-	for _, name := range members {
-		member := ssaPkg.Members[name]
-		switch member := member.(type) {
-		case *ssa.Function:
-			if member.Blocks == nil {
-				continue // external function
-			}
-			// Create the function definition.
-			b := newBuilder(c, irbuilder, member)
-			b.createFunction()
-		}
-	}
+	c.createPackage(irbuilder, ssaPkg)
 
 	return c.mod, nil
 }
@@ -759,6 +721,83 @@ func (c *compilerContext) getDIFile(filename string) llvm.Metadata {
 	return c.difiles[filename]
 }
 
+// createPackage builds the LLVM IR for all types, methods, and global variables
+// in the given package.
+func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package) {
+	// Sort by position, so that the order of the functions in the IR matches
+	// the order of functions in the source file. This is useful for testing,
+	// for example.
+	var members []string
+	for name := range pkg.Members {
+		members = append(members, name)
+	}
+	sort.Slice(members, func(i, j int) bool {
+		iPos := pkg.Members[members[i]].Pos()
+		jPos := pkg.Members[members[j]].Pos()
+		if i == j {
+			// Cannot sort by pos, so do it by name.
+			return members[i] < members[j]
+		}
+		return iPos < jPos
+	})
+
+	// Define all functions.
+	for _, name := range members {
+		member := pkg.Members[name]
+		switch member := member.(type) {
+		case *ssa.Function:
+			if member.Blocks == nil {
+				continue // external function
+			}
+			// Create the function definition.
+			b := newBuilder(c, irbuilder, member)
+			b.createFunction()
+		case *ssa.Type:
+			if types.IsInterface(member.Type()) {
+				// Interfaces don't have concrete methods.
+				continue
+			}
+
+			// Named type. We should make sure all methods are created.
+			// This includes both functions with pointer receivers and those
+			// without.
+			methods := getAllMethods(pkg.Prog, member.Type())
+			methods = append(methods, getAllMethods(pkg.Prog, types.NewPointer(member.Type()))...)
+			for _, method := range methods {
+				// Parse this method.
+				fn := pkg.Prog.MethodValue(method)
+				if fn.Blocks == nil {
+					continue // external function
+				}
+				if member.Type().String() != member.String() {
+					// This is a member on a type alias. Do not build such a
+					// function.
+					continue
+				}
+				if fn.Synthetic != "" && fn.Synthetic != "package initializer" {
+					// This function is a kind of wrapper function (created by
+					// the ssa package, not appearing in the source code) that
+					// is created by the getFunction method as needed.
+					// Therefore, don't build it here to avoid "function
+					// redeclared" errors.
+					continue
+				}
+				// Create the function definition.
+				b := newBuilder(c, irbuilder, fn)
+				b.createFunction()
+			}
+		case *ssa.Global:
+			// Global variable.
+			info := c.getGlobalInfo(member)
+			if !info.extern {
+				global := c.getGlobal(member)
+				global.SetInitializer(llvm.ConstNull(global.Type().ElementType()))
+				global.SetLinkage(llvm.InternalLinkage)
+			}
+		}
+	}
+}
+
 // createFunction builds the LLVM IR implementation for this function. The
 // function must not yet be defined, otherwise this function will create a
 // diagnostic.
@@ -767,7 +806,7 @@ func (b *builder) createFunction() {
 		fmt.Printf("\nfunc %s:\n", b.fn)
 	}
 	if !b.llvmFn.IsDeclaration() {
-		errValue := b.fn.Name() + " redeclared in this program"
+		errValue := b.llvmFn.Name() + " redeclared in this program"
 		fnPos := getPosition(b.llvmFn)
 		if fnPos.IsValid() {
 			errValue += "\n\tprevious declaration at " + fnPos.String()
@@ -947,6 +986,12 @@ func (b *builder) createFunction() {
 			b.SetInsertPointBefore(insertPoint)
 			b.trackValue(phi.llvm)
 		}
+	}
+
+	// Create anonymous functions (closures etc.).
+	for _, sub := range b.fn.AnonFuncs {
+		b := newBuilder(b.compilerContext, b.Builder, sub)
+		b.createFunction()
 	}
 }
 
