@@ -4,14 +4,18 @@
 package builder
 
 import (
+	"crypto/sha512"
 	"debug/elf"
 	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/types"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -38,6 +42,26 @@ type BuildResult struct {
 	MainDir string
 }
 
+// packageAction is the struct that is serialized to JSON and hashed, to work as
+// a cache key of compiled packages. It should contain all the information that
+// goes into a compiled package to avoid using stale data.
+//
+// Right now it's still important to include a hash of every import, because a
+// dependency might have a public constant that this package uses and thus this
+// package will need to be recompiled if that constant changes. In the future,
+// the type data should be serialized to disk which can then be used as cache
+// key, avoiding the need for recompiling all dependencies when only the
+// implementation of an imported package changes.
+type packageAction struct {
+	ImportPath      string
+	CompilerVersion int // compiler.Version
+	LLVMVersion     string
+	Config          *compiler.Config
+	CFlags          []string
+	FileHashes      map[string]string // hash of every file that's part of the package
+	Imports         map[string]string // map from imported package to action ID hash
+}
+
 // Build performs a single package to executable Go build. It takes in a package
 // name, an output path, and set of compile options and from that it manages the
 // whole compilation process.
@@ -45,6 +69,13 @@ type BuildResult struct {
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
 func Build(pkgName, outpath string, config *compileopts.Config, action func(BuildResult) error) error {
+	// Create a temporary directory for intermediary files.
+	dir, err := ioutil.TempDir("", "tinygo")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+
 	compilerConfig := &compiler.Config{
 		Triple:          config.Triple(),
 		CPU:             config.CPU(),
@@ -87,23 +118,200 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Makefile target.
 	var jobs []*compileJob
 
-	// Add job to compile and optimize all Go files at once.
-	// TODO: parallelize this.
+	// Create the *ssa.Program. This does not yet build the entire SSA of the
+	// program so it's pretty fast and doesn't need to be parallelized.
+	program := lprogram.LoadSSA()
+
+	// Add jobs to compile each package.
+	// Packages that have a cache hit will not be compiled again.
+	var packageJobs []*compileJob
+	packageBitcodePaths := make(map[string]string)
+	packageActionIDs := make(map[string]string)
+	for _, pkg := range lprogram.Sorted() {
+		pkg := pkg // necessary to avoid a race condition
+
+		// Create a cache key: a hash from the action ID below that contains all
+		// the parameters for the build.
+		actionID := packageAction{
+			ImportPath:      pkg.ImportPath,
+			CompilerVersion: compiler.Version,
+			LLVMVersion:     llvm.Version,
+			Config:          compilerConfig,
+			CFlags:          pkg.CFlags,
+			FileHashes:      make(map[string]string, len(pkg.FileHashes)),
+			Imports:         make(map[string]string, len(pkg.Pkg.Imports())),
+		}
+		for filePath, hash := range pkg.FileHashes {
+			actionID.FileHashes[filePath] = hex.EncodeToString(hash)
+		}
+		for _, imported := range pkg.Pkg.Imports() {
+			hash, ok := packageActionIDs[imported.Path()]
+			if !ok {
+				return fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
+			}
+			actionID.Imports[imported.Path()] = hash
+		}
+		buf, err := json.Marshal(actionID)
+		if err != nil {
+			panic(err) // shouldn't happen
+		}
+		hash := sha512.Sum512_224(buf)
+		packageActionIDs[pkg.ImportPath] = hex.EncodeToString(hash[:])
+
+		// Determine the path of the bitcode file (which is a serialized version
+		// of a LLVM module).
+		cacheDir := goenv.Get("GOCACHE")
+		if cacheDir == "off" {
+			// Use temporary build directory instead, effectively disabling the
+			// build cache.
+			cacheDir = dir
+		}
+		bitcodePath := filepath.Join(cacheDir, "pkg-"+hex.EncodeToString(hash[:])+".bc")
+		packageBitcodePaths[pkg.ImportPath] = bitcodePath
+
+		// Check whether this package has been compiled before, and if so don't
+		// compile it again.
+		if _, err := os.Stat(bitcodePath); err == nil {
+			// Already cached, don't recreate this package.
+			continue
+		}
+
+		// The package has not yet been compiled, so create a job to do so.
+		job := &compileJob{
+			description: "compile package " + pkg.ImportPath,
+			run: func() error {
+				// Compile AST to IR. The compiler.CompilePackage function will
+				// build the SSA as needed.
+				mod, errs := compiler.CompilePackage(pkg.ImportPath, pkg, program.Package(pkg.Pkg), machine, compilerConfig, config.DumpSSA())
+				if errs != nil {
+					return newMultiError(errs)
+				}
+				if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
+					return errors.New("verification error after compiling package " + pkg.ImportPath)
+				}
+
+				// Serialize the LLVM module as a bitcode file.
+				// Write to a temporary path that is renamed to the destination
+				// file to avoid race conditions with other TinyGo invocatiosn
+				// that might also be compiling this package at the same time.
+				f, err := ioutil.TempFile(filepath.Dir(bitcodePath), filepath.Base(bitcodePath))
+				if err != nil {
+					return err
+				}
+				if runtime.GOOS == "windows" {
+					// Work around a problem on Windows.
+					// For some reason, WriteBitcodeToFile causes TinyGo to
+					// exit with the following message:
+					//   LLVM ERROR: IO failure on output stream: Bad file descriptor
+					buf := llvm.WriteBitcodeToMemoryBuffer(mod)
+					defer buf.Dispose()
+					_, err = f.Write(buf.Bytes())
+				} else {
+					// Otherwise, write bitcode directly to the file (probably
+					// faster).
+					err = llvm.WriteBitcodeToFile(mod, f)
+				}
+				if err != nil {
+					// WriteBitcodeToFile doesn't produce a useful error on its
+					// own, so create a somewhat useful error message here.
+					return fmt.Errorf("failed to write bitcode for package %s to file %s", pkg.ImportPath, bitcodePath)
+				}
+				err = f.Close()
+				if err != nil {
+					return err
+				}
+				return os.Rename(f.Name(), bitcodePath)
+			},
+		}
+		jobs = append(jobs, job)
+		packageJobs = append(packageJobs, job)
+	}
+
+	// Add job that links and optimizes all packages together.
 	var mod llvm.Module
 	var stackSizeLoads []string
 	programJob := &compileJob{
-		description: "compile Go files",
-		run: func() (err error) {
-			mod, err = compileWholeProgram(pkgName, config, compilerConfig, lprogram, machine)
-			if err != nil {
-				return
+		description:  "link+optimize packages (LTO)",
+		dependencies: packageJobs,
+		run: func() error {
+			// Load and link all the bitcode files. This does not yet optimize
+			// anything, it only links the bitcode files together.
+			ctx := llvm.NewContext()
+			mod = ctx.NewModule("")
+			for _, pkg := range lprogram.Sorted() {
+				pkgMod, err := ctx.ParseBitcodeFile(packageBitcodePaths[pkg.ImportPath])
+				if err != nil {
+					return fmt.Errorf("failed to load bitcode file: %w", err)
+				}
+				err = llvm.LinkModules(mod, pkgMod)
+				if err != nil {
+					return fmt.Errorf("failed to link module: %w", err)
+				}
 			}
+
+			// Create runtime.initAll function that calls the runtime
+			// initializer of each package.
+			llvmInitFn := mod.NamedFunction("runtime.initAll")
+			llvmInitFn.SetLinkage(llvm.InternalLinkage)
+			llvmInitFn.SetUnnamedAddr(true)
+			llvmInitFn.Param(0).SetName("context")
+			llvmInitFn.Param(1).SetName("parentHandle")
+			block := mod.Context().AddBasicBlock(llvmInitFn, "entry")
+			irbuilder := mod.Context().NewBuilder()
+			defer irbuilder.Dispose()
+			irbuilder.SetInsertPointAtEnd(block)
+			i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
+			for _, pkg := range lprogram.Sorted() {
+				pkgInit := mod.NamedFunction(pkg.Pkg.Path() + ".init")
+				if pkgInit.IsNil() {
+					panic("init not found for " + pkg.Pkg.Path())
+				}
+				irbuilder.CreateCall(pkgInit, []llvm.Value{llvm.Undef(i8ptrType), llvm.Undef(i8ptrType)}, "")
+			}
+			irbuilder.CreateRetVoid()
+
+			// After linking, functions should (as far as possible) be set to
+			// private linkage or internal linkage. The compiler package marks
+			// non-exported functions by setting the visibility to hidden or
+			// (for thunks) to linkonce_odr linkage. Change the linkage here to
+			// internal to benefit much more from interprocedural optimizations.
+			for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+				if fn.Visibility() == llvm.HiddenVisibility {
+					fn.SetVisibility(llvm.DefaultVisibility)
+					fn.SetLinkage(llvm.InternalLinkage)
+				} else if fn.Linkage() == llvm.LinkOnceODRLinkage {
+					fn.SetLinkage(llvm.InternalLinkage)
+				}
+			}
+
+			// Do the same for globals.
+			for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+				if global.Visibility() == llvm.HiddenVisibility {
+					global.SetVisibility(llvm.DefaultVisibility)
+					global.SetLinkage(llvm.InternalLinkage)
+				} else if global.Linkage() == llvm.LinkOnceODRLinkage {
+					global.SetLinkage(llvm.InternalLinkage)
+				}
+			}
+
+			if config.Options.PrintIR {
+				fmt.Println("; Generated LLVM IR:")
+				fmt.Println(mod.String())
+			}
+
+			// Run all optimization passes, which are much more effective now
+			// that the optimizer can see the whole program at once.
+			err := optimizeProgram(mod, config)
+			if err != nil {
+				return err
+			}
+
 			// Make sure stack sizes are loaded from a separate section so they can be
 			// modified after linking.
 			if config.AutomaticStackSize() {
 				stackSizeLoads = transform.CreateStackSizeLoads(mod, config)
 			}
-			return
+			return nil
 		},
 	}
 	jobs = append(jobs, programJob)
@@ -139,13 +347,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Act as a compiler driver, as we need to produce a complete executable.
 	// First add all jobs necessary to build this object file, then afterwards
 	// run all jobs in parallel as far as possible.
-
-	// Create a temporary directory for intermediary files.
-	dir, err := ioutil.TempDir("", "tinygo")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(dir)
 
 	// Add job to write the output object file.
 	objfile := filepath.Join(dir, "main.o")
@@ -366,29 +567,16 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	})
 }
 
-// compileWholeProgram compiles the entire *loader.Program to a LLVM module and
-// applies most necessary optimizations and transformations.
-func compileWholeProgram(pkgName string, config *compileopts.Config, compilerConfig *compiler.Config, lprogram *loader.Program, machine llvm.TargetMachine) (llvm.Module, error) {
-	// Compile AST to IR.
-	mod, errs := compiler.CompileProgram(lprogram, machine, compilerConfig, config.DumpSSA())
-	if errs != nil {
-		return mod, newMultiError(errs)
-	}
-
-	if config.Options.PrintIR {
-		fmt.Println("; Generated LLVM IR:")
-		fmt.Println(mod.String())
-	}
-	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
-		return mod, errors.New("verification error after IR construction")
-	}
-
+// optimizeProgram runs a series of optimizations and transformations that are
+// needed to convert a program to its final form. Some transformations are not
+// optional and must be run as the compiler expects them to run.
+func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	err := interp.Run(mod, config.DumpSSA())
 	if err != nil {
-		return mod, err
+		return err
 	}
 	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
-		return mod, errors.New("verification error after interpreting runtime.initAll")
+		return errors.New("verification error after interpreting runtime.initAll")
 	}
 
 	if config.GOOS() != "darwin" {
@@ -403,13 +591,13 @@ func compileWholeProgram(pkgName string, config *compileopts.Config, compilerCon
 	if config.WasmAbi() == "js" {
 		err := transform.ExternalInt64AsPtr(mod)
 		if err != nil {
-			return mod, err
+			return err
 		}
 	}
 
 	// Optimization levels here are roughly the same as Clang, but probably not
 	// exactly.
-	errs = nil
+	var errs []error
 	switch config.Options.Opt {
 	case "none", "0":
 		errs = transform.Optimize(mod, config, 0, 0, 0) // -O0
@@ -422,13 +610,13 @@ func compileWholeProgram(pkgName string, config *compileopts.Config, compilerCon
 	case "z":
 		errs = transform.Optimize(mod, config, 2, 2, 5) // -Oz, default
 	default:
-		errs = []error{errors.New("unknown optimization level: -opt=" + config.Options.Opt)}
+		return errors.New("unknown optimization level: -opt=" + config.Options.Opt)
 	}
 	if len(errs) > 0 {
-		return mod, newMultiError(errs)
+		return newMultiError(errs)
 	}
 	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
-		return mod, errors.New("verification failure after LLVM optimization passes")
+		return errors.New("verification failure after LLVM optimization passes")
 	}
 
 	// LLVM 11 by default tries to emit tail calls (even with the target feature
@@ -442,7 +630,7 @@ func compileWholeProgram(pkgName string, config *compileopts.Config, compilerCon
 		transform.DisableTailCalls(mod)
 	}
 
-	return mod, nil
+	return nil
 }
 
 // functionStackSizes keeps stack size information about a single function

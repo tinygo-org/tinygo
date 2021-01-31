@@ -173,11 +173,12 @@ func (p *lowerInterfacesPass) run() error {
 			// Only the name of the global is relevant, the object itself is
 			// discarded afterwards.
 			name := global.Name()
-			t := &typeInfo{
-				name:     name,
-				typecode: global,
+			if _, ok := p.types[name]; !ok {
+				p.types[name] = &typeInfo{
+					name:     name,
+					typecode: global,
+				}
 			}
-			p.types[name] = t
 		case typeInInterfacePtr:
 			// Count per type how often it is put in an interface. Also, collect
 			// all methods this type has (if it is named).
@@ -185,7 +186,15 @@ func (p *lowerInterfacesPass) run() error {
 			initializer := global.Initializer()
 			typecode := llvm.ConstExtractValue(initializer, []uint32{0})
 			methodSet := llvm.ConstExtractValue(initializer, []uint32{1})
-			t := p.types[typecode.Name()]
+			typecodeName := typecode.Name()
+			t := p.types[typecodeName]
+			if t == nil {
+				t = &typeInfo{
+					name:     typecodeName,
+					typecode: typecode,
+				}
+				p.types[typecodeName] = t
+			}
 			p.addTypeMethods(t, methodSet)
 
 			// Count the number of MakeInterface instructions, for sorting the

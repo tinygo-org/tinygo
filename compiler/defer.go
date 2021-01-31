@@ -352,7 +352,7 @@ func (b *builder) createRunDefers() {
 
 			// Get the real defer struct type and cast to it.
 			valueTypes := []llvm.Type{b.uintptrType, llvm.PointerType(b.getLLVMRuntimeType("_defer"), 0)}
-			for _, param := range callback.Params {
+			for _, param := range getParams(callback.Signature) {
 				valueTypes = append(valueTypes, b.getLLVMType(param.Type()))
 			}
 			deferFrameType := b.ctx.StructType(valueTypes, false)
@@ -361,7 +361,7 @@ func (b *builder) createRunDefers() {
 			// Extract the params from the struct.
 			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-			for i := range callback.Params {
+			for i := range getParams(callback.Signature) {
 				gep := b.CreateInBoundsGEP(deferFramePtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i+2), false)}, "gep")
 				forwardParam := b.CreateLoad(gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
