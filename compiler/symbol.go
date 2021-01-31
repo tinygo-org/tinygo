@@ -172,6 +172,21 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 		}
 	}
 
+	// Synthetic functions are functions that do not appear in the source code,
+	// they are artificially constructed. Usually they are wrapper functions
+	// that are not referenced anywhere except in a SSA call instruction so
+	// should be created right away.
+	// The exception is the package initializer, which does appear in the
+	// *ssa.Package members and so shouldn't be created here.
+	if fn.Synthetic != "" && fn.Synthetic != "package initializer" {
+		irbuilder := c.ctx.NewBuilder()
+		b := newBuilder(c, irbuilder, fn)
+		b.createFunction()
+		irbuilder.Dispose()
+		llvmFn.SetLinkage(llvm.InternalLinkage)
+		llvmFn.SetUnnamedAddr(true)
+	}
+
 	return llvmFn
 }
 
@@ -289,25 +304,22 @@ type globalInfo struct {
 
 // loadASTComments loads comments on globals from the AST, for use later in the
 // program. In particular, they are required for //go:extern pragmas on globals.
-func (c *compilerContext) loadASTComments(lprogram *loader.Program) {
-	c.astComments = map[string]*ast.CommentGroup{}
-	for _, pkgInfo := range lprogram.Sorted() {
-		for _, file := range pkgInfo.Files {
-			for _, decl := range file.Decls {
-				switch decl := decl.(type) {
-				case *ast.GenDecl:
-					switch decl.Tok {
-					case token.VAR:
-						if len(decl.Specs) != 1 {
-							continue
-						}
-						for _, spec := range decl.Specs {
-							switch spec := spec.(type) {
-							case *ast.ValueSpec: // decl.Tok == token.VAR
-								for _, name := range spec.Names {
-									id := pkgInfo.Pkg.Path() + "." + name.Name
-									c.astComments[id] = decl.Doc
-								}
+func (c *compilerContext) loadASTComments(pkg *loader.Package) {
+	for _, file := range pkg.Files {
+		for _, decl := range file.Decls {
+			switch decl := decl.(type) {
+			case *ast.GenDecl:
+				switch decl.Tok {
+				case token.VAR:
+					if len(decl.Specs) != 1 {
+						continue
+					}
+					for _, spec := range decl.Specs {
+						switch spec := spec.(type) {
+						case *ast.ValueSpec: // decl.Tok == token.VAR
+							for _, name := range spec.Names {
+								id := pkg.Pkg.Path() + "." + name.Name
+								c.astComments[id] = decl.Doc
 							}
 						}
 					}
@@ -326,10 +338,6 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 		typ := g.Type().(*types.Pointer).Elem()
 		llvmType := c.getLLVMType(typ)
 		llvmGlobal = llvm.AddGlobal(c.mod, llvmType, info.linkName)
-		if !info.extern {
-			llvmGlobal.SetInitializer(llvm.ConstNull(llvmType))
-			llvmGlobal.SetLinkage(llvm.InternalLinkage)
-		}
 
 		// Set alignment from the //go:align comment.
 		var alignInBits uint32
@@ -347,8 +355,6 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 
 		if c.Debug && !info.extern {
 			// Add debug info.
-			// TODO: this should be done for every global in the program, not just
-			// the ones that are referenced from some code.
 			pos := c.program.Fset.Position(g.Pos())
 			diglobal := c.dibuilder.CreateGlobalVariableExpression(c.difiles[pos.Filename], llvm.DIGlobalVariableExpression{
 				Name:        g.RelString(nil),
