@@ -20,6 +20,11 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// Version of the compiler pacakge. Must be incremented each time the compiler
+// package changes in a way that affects the generated LLVM module.
+// This version is independent of the TinyGo version number.
+const Version = 1
+
 func init() {
 	llvm.InitializeAllTargets()
 	llvm.InitializeAllTargetMCs()
@@ -242,15 +247,14 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 	}
 }
 
-// CompileProgram compiles the given package path or .go file path. Return an
-// error when this fails (in any stage). If successful it returns the LLVM
-// module. If not, one or more errors will be returned.
-func CompileProgram(lprogram *loader.Program, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
-	c := newCompilerContext("", machine, config, dumpSSA)
+// CompilePackage compiles a single package to a LLVM module.
+func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
+	c := newCompilerContext(moduleName, machine, config, dumpSSA)
+	c.runtimePkg = ssaPkg.Prog.ImportedPackage("runtime").Pkg
+	c.program = ssaPkg.Prog
 
-	c.program = lprogram.LoadSSA()
-	c.program.Build()
-	c.runtimePkg = c.program.ImportedPackage("runtime").Pkg
+	// Convert AST to SSA.
+	ssaPkg.Build()
 
 	// Initialize debug information.
 	if c.Debug {
@@ -263,43 +267,17 @@ func CompileProgram(lprogram *loader.Program, machine llvm.TargetMachine, config
 		})
 	}
 
-	for _, pkg := range lprogram.Sorted() {
-		c.loadASTComments(pkg)
-	}
+	// Load comments such as //go:extern on globals.
+	c.loadASTComments(pkg)
 
 	// Predeclare the runtime.alloc function, which is used by the wordpack
 	// functionality.
 	c.getFunction(c.program.ImportedPackage("runtime").Members["alloc"].(*ssa.Function))
 
-	// Define all functions.
-	var initFuncs []llvm.Value
+	// Compile all functions, methods, and global variables in this package.
 	irbuilder := c.ctx.NewBuilder()
 	defer irbuilder.Dispose()
-	for _, pkg := range lprogram.Sorted() {
-		ssaPkg := c.program.Package(pkg.Pkg)
-		c.createPackage(irbuilder, ssaPkg)
-		initFuncs = append(initFuncs, c.getFunction(ssaPkg.Members["init"].(*ssa.Function)))
-	}
-
-	// After all packages are imported, add a synthetic initializer function
-	// that calls the initializer of each package.
-	initFn := c.program.ImportedPackage("runtime").Members["initAll"].(*ssa.Function)
-	llvmInitFn := c.getFunction(initFn)
-	llvmInitFn.SetLinkage(llvm.InternalLinkage)
-	llvmInitFn.SetUnnamedAddr(true)
-	if c.Debug {
-		difunc := c.attachDebugInfo(initFn)
-		pos := c.program.Fset.Position(initFn.Pos())
-		irbuilder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
-	}
-	llvmInitFn.Param(0).SetName("context")
-	llvmInitFn.Param(1).SetName("parentHandle")
-	block := c.ctx.AddBasicBlock(llvmInitFn, "entry")
-	irbuilder.SetInsertPointAtEnd(block)
-	for _, fn := range initFuncs {
-		irbuilder.CreateCall(fn, []llvm.Value{llvm.Undef(c.i8ptrType), llvm.Undef(c.i8ptrType)}, "")
-	}
-	irbuilder.CreateRetVoid()
+	c.createPackage(irbuilder, ssaPkg)
 
 	// see: https://reviews.llvm.org/D18355
 	if c.Debug {
@@ -319,22 +297,6 @@ func CompileProgram(lprogram *loader.Program, machine llvm.TargetMachine, config
 		)
 		c.dibuilder.Finalize()
 	}
-
-	return c.mod, c.diagnostics
-}
-
-// CompilePackage compiles a single package to a LLVM module.
-func CompilePackage(moduleName string, pkg *loader.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
-	c := newCompilerContext(moduleName, machine, config, dumpSSA)
-
-	// Build SSA from AST.
-	ssaPkg := pkg.LoadSSA()
-	ssaPkg.Build()
-
-	// Compile all functions, methods, and global variables in this package.
-	irbuilder := c.ctx.NewBuilder()
-	defer irbuilder.Dispose()
-	c.createPackage(irbuilder, ssaPkg)
 
 	return c.mod, nil
 }
@@ -682,8 +644,9 @@ func (c *compilerContext) attachDebugInfo(f *ssa.Function) llvm.Metadata {
 // debug info is added to the function.
 func (c *compilerContext) attachDebugInfoRaw(f *ssa.Function, llvmFn llvm.Value, suffix, filename string, line int) llvm.Metadata {
 	// Debug info for this function.
-	diparams := make([]llvm.Metadata, 0, len(f.Params))
-	for _, param := range f.Params {
+	params := getParams(f.Signature)
+	diparams := make([]llvm.Metadata, 0, len(params))
+	for _, param := range params {
 		diparams = append(diparams, c.getDIType(param.Type()))
 	}
 	diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
@@ -792,7 +755,7 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			if !info.extern {
 				global := c.getGlobal(member)
 				global.SetInitializer(llvm.ConstNull(global.Type().ElementType()))
-				global.SetLinkage(llvm.InternalLinkage)
+				global.SetVisibility(llvm.HiddenVisibility)
 			}
 		}
 	}
@@ -815,7 +778,7 @@ func (b *builder) createFunction() {
 		return
 	}
 	if !b.info.exported {
-		b.llvmFn.SetLinkage(llvm.InternalLinkage)
+		b.llvmFn.SetVisibility(llvm.HiddenVisibility)
 		b.llvmFn.SetUnnamedAddr(true)
 	}
 

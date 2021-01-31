@@ -37,7 +37,7 @@ func (c *compilerContext) createFuncValue(builder llvm.Builder, funcPtr, context
 			funcValueWithSignatureGlobal = llvm.AddGlobal(c.mod, funcValueWithSignatureType, funcValueWithSignatureGlobalName)
 			funcValueWithSignatureGlobal.SetInitializer(funcValueWithSignature)
 			funcValueWithSignatureGlobal.SetGlobalConstant(true)
-			funcValueWithSignatureGlobal.SetLinkage(llvm.InternalLinkage)
+			funcValueWithSignatureGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
 		}
 		funcValueScalar = llvm.ConstPtrToInt(funcValueWithSignatureGlobal, c.uintptrType)
 	default:

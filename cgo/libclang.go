@@ -4,6 +4,7 @@ package cgo
 // modification. It does not touch the AST itself.
 
 import (
+	"crypto/sha512"
 	"fmt"
 	"go/ast"
 	"go/scanner"
@@ -56,6 +57,7 @@ unsigned tinygo_clang_Cursor_isBitField(GoCXCursor c);
 int tinygo_clang_globals_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
 int tinygo_clang_struct_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
 int tinygo_clang_enum_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
+void tinygo_clang_inclusion_visitor(CXFile included_file, CXSourceLocation *inclusion_stack, unsigned include_len, CXClientData client_data);
 */
 import "C"
 
@@ -114,6 +116,7 @@ func (p *cgoPackage) parseFragment(fragment string, cflags []string, posFilename
 	}
 	defer C.clang_disposeTranslationUnit(unit)
 
+	// Report parser and type errors.
 	if numDiagnostics := int(C.clang_getNumDiagnostics(unit)); numDiagnostics != 0 {
 		addDiagnostic := func(diagnostic C.CXDiagnostic) {
 			spelling := getString(C.clang_getDiagnosticSpelling(diagnostic))
@@ -134,10 +137,36 @@ func (p *cgoPackage) parseFragment(fragment string, cflags []string, posFilename
 		}
 	}
 
+	// Extract information required by CGo.
 	ref := storedRefs.Put(p)
 	defer storedRefs.Remove(ref)
 	cursor := C.tinygo_clang_getTranslationUnitCursor(unit)
 	C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_globals_visitor), C.CXClientData(ref))
+
+	// Determine files read during CGo processing, for caching.
+	inclusionCallback := func(includedFile C.CXFile) {
+		// Get full file path.
+		path := getString(C.clang_getFileName(includedFile))
+
+		// Get contents of file (that should be in-memory).
+		size := C.size_t(0)
+		rawData := C.clang_getFileContents(unit, includedFile, &size)
+		if rawData == nil {
+			// Sanity check. This should (hopefully) never trigger.
+			panic("libclang: file contents was not loaded")
+		}
+		data := (*[1 << 24]byte)(unsafe.Pointer(rawData))[:size]
+
+		// Hash the contents if it isn't hashed yet.
+		if _, ok := p.visitedFiles[path]; !ok {
+			// already stored
+			sum := sha512.Sum512_224(data)
+			p.visitedFiles[path] = sum[:]
+		}
+	}
+	inclusionCallbackRef := storedRefs.Put(inclusionCallback)
+	defer storedRefs.Remove(inclusionCallbackRef)
+	C.clang_getInclusions(unit, C.CXInclusionVisitor(C.tinygo_clang_inclusion_visitor), C.CXClientData(inclusionCallbackRef))
 }
 
 //export tinygo_clang_globals_visitor
@@ -771,4 +800,10 @@ func tinygo_clang_enum_visitor(c, parent C.GoCXCursor, client_data C.CXClientDat
 		pos:  pos,
 	}
 	return C.CXChildVisit_Continue
+}
+
+//export tinygo_clang_inclusion_visitor
+func tinygo_clang_inclusion_visitor(includedFile C.CXFile, inclusionStack *C.CXSourceLocation, includeLen C.unsigned, clientData C.CXClientData) {
+	callback := storedRefs.Get(unsafe.Pointer(clientData)).(func(C.CXFile))
+	callback(includedFile)
 }

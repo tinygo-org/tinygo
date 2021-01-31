@@ -31,7 +31,7 @@ func (b *builder) createMakeInterface(val llvm.Value, typ types.Type, pos token.
 		itfConcreteTypeGlobal = llvm.AddGlobal(b.mod, typeInInterface, "typeInInterface:"+itfTypeCodeGlobal.Name())
 		itfConcreteTypeGlobal.SetInitializer(llvm.ConstNamedStruct(typeInInterface, []llvm.Value{itfTypeCodeGlobal, itfMethodSetGlobal}))
 		itfConcreteTypeGlobal.SetGlobalConstant(true)
-		itfConcreteTypeGlobal.SetLinkage(llvm.PrivateLinkage)
+		itfConcreteTypeGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
 	}
 	itfTypeCode := b.CreatePtrToInt(itfConcreteTypeGlobal, b.uintptrType, "")
 	itf := llvm.Undef(b.getLLVMRuntimeType("_interface"))
@@ -80,7 +80,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				globalValue = llvm.ConstInsertValue(globalValue, lengthValue, []uint32{1})
 			}
 			global.SetInitializer(globalValue)
-			global.SetLinkage(llvm.PrivateLinkage)
+			global.SetLinkage(llvm.LinkOnceODRLinkage)
 		}
 		global.SetGlobalConstant(true)
 	}
@@ -264,7 +264,7 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 	global = llvm.AddGlobal(c.mod, arrayType, typ.String()+"$methodset")
 	global.SetInitializer(value)
 	global.SetGlobalConstant(true)
-	global.SetLinkage(llvm.PrivateLinkage)
+	global.SetLinkage(llvm.LinkOnceODRLinkage)
 	return llvm.ConstGEP(global, []llvm.Value{zero, zero})
 }
 
@@ -295,7 +295,7 @@ func (c *compilerContext) getInterfaceMethodSet(typ types.Type) llvm.Value {
 	global = llvm.AddGlobal(c.mod, value.Type(), name+"$interface")
 	global.SetInitializer(value)
 	global.SetGlobalConstant(true)
-	global.SetLinkage(llvm.PrivateLinkage)
+	global.SetLinkage(llvm.LinkOnceODRLinkage)
 	return llvm.ConstGEP(global, []llvm.Value{zero, zero})
 }
 
@@ -445,7 +445,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llv
 	}
 
 	// Get the expanded receiver type.
-	receiverType := c.getLLVMType(fn.Params[0].Type())
+	receiverType := c.getLLVMType(fn.Signature.Recv().Type())
 	var expandedReceiverType []llvm.Type
 	for _, info := range expandFormalParamType(receiverType, "", nil) {
 		expandedReceiverType = append(expandedReceiverType, info.llvmType)
@@ -467,7 +467,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llv
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
 	wrapper.LastParam().SetName("parentHandle")
 
-	wrapper.SetLinkage(llvm.InternalLinkage)
+	wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
 	wrapper.SetUnnamedAddr(true)
 
 	// Create a new builder just to create this wrapper.
