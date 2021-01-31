@@ -17,7 +17,7 @@ func InitADC() {
 }
 
 // Configure configures an ADC pin to be able to read analog data.
-func (a ADC) Configure() {
+func (a ADC) Configure(ADCConfig) {
 	return // no pin specific setup on nrf52 machine.
 }
 
