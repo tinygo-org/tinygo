@@ -220,7 +220,7 @@ type I2CConfig struct {
 }
 
 // Configure is intended to setup the I2C interface.
-func (i2c I2C) Configure(config I2CConfig) {
+func (i2c I2C) Configure(config I2CConfig) error {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
@@ -254,6 +254,8 @@ func (i2c I2C) Configure(config I2CConfig) {
 
 	i2c.Bus.ENABLE.Set(nrf.TWI_ENABLE_ENABLE_Enabled)
 	i2c.setPins(config.SCL, config.SDA)
+
+	return nil
 }
 
 // Tx does a single I2C transaction at the specified address.

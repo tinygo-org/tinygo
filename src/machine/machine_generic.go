@@ -115,8 +115,9 @@ type I2CConfig struct {
 }
 
 // Configure is intended to setup the I2C interface.
-func (i2c I2C) Configure(config I2CConfig) {
+func (i2c I2C) Configure(config I2CConfig) error {
 	i2cConfigure(i2c.Bus, config.SCL, config.SDA)
+	return nil
 }
 
 // Tx does a single I2C transaction at the specified address.
