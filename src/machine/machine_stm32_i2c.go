@@ -142,7 +142,7 @@ type I2CConfig struct {
 }
 
 // Configure is intended to setup the STM32 I2C interface.
-func (i2c I2C) Configure(config I2CConfig) {
+func (i2c I2C) Configure(config I2CConfig) error {
 
 	// The following is the required sequence in controller mode.
 	// 1. Program the peripheral input clock in I2C_CR2 Register in order to
@@ -188,6 +188,8 @@ func (i2c I2C) Configure(config I2CConfig) {
 
 	// enable I2C interface
 	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_PE)
+
+	return nil
 }
 
 func (i2c I2C) Tx(addr uint16, w, r []byte) error {
