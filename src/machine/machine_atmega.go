@@ -9,6 +9,13 @@ import (
 	"unsafe"
 )
 
+// I2C on AVR.
+type I2C struct {
+}
+
+// I2C0 is the only I2C interface on most AVRs.
+var I2C0 = I2C{}
+
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
 	Frequency uint32
