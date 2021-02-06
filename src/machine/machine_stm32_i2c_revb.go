@@ -46,7 +46,7 @@ type I2CConfig struct {
 	SDA Pin
 }
 
-func (i2c I2C) Configure(config I2CConfig) error {
+func (i2c *I2C) Configure(config I2CConfig) error {
 	// disable I2C interface before any configuration changes
 	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_PE)
 
@@ -81,7 +81,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 	return nil
 }
 
-func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 	if len(w) > 0 {
 		if err := i2c.controllerTransmit(addr, w); nil != err {
 			return err
@@ -97,12 +97,12 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	return nil
 }
 
-func (i2c I2C) configurePins(config I2CConfig) {
+func (i2c *I2C) configurePins(config I2CConfig) {
 	config.SCL.ConfigureAltFunc(PinConfig{Mode: PinModeI2CSCL}, i2c.AltFuncSelector)
 	config.SDA.ConfigureAltFunc(PinConfig{Mode: PinModeI2CSDA}, i2c.AltFuncSelector)
 }
 
-func (i2c I2C) controllerTransmit(addr uint16, w []byte) error {
+func (i2c *I2C) controllerTransmit(addr uint16, w []byte) error {
 	start := ticks()
 
 	if !i2c.waitOnFlagUntilTimeout(flagBUSY, false, start) {
@@ -161,7 +161,7 @@ func (i2c I2C) controllerTransmit(addr uint16, w []byte) error {
 	return nil
 }
 
-func (i2c I2C) controllerReceive(addr uint16, r []byte) error {
+func (i2c *I2C) controllerReceive(addr uint16, r []byte) error {
 	start := ticks()
 
 	if !i2c.waitOnFlagUntilTimeout(flagBUSY, false, start) {
@@ -220,7 +220,7 @@ func (i2c I2C) controllerReceive(addr uint16, r []byte) error {
 	return nil
 }
 
-func (i2c I2C) waitOnFlagUntilTimeout(flag uint32, set bool, startTicks int64) bool {
+func (i2c *I2C) waitOnFlagUntilTimeout(flag uint32, set bool, startTicks int64) bool {
 	for i2c.hasFlag(flag) != set {
 		if (ticks() - startTicks) > TIMEOUT_TICKS {
 			return false
@@ -229,7 +229,7 @@ func (i2c I2C) waitOnFlagUntilTimeout(flag uint32, set bool, startTicks int64) b
 	return true
 }
 
-func (i2c I2C) waitOnRXNEFlagUntilTimeout(startTicks int64) bool {
+func (i2c *I2C) waitOnRXNEFlagUntilTimeout(startTicks int64) bool {
 	for !i2c.hasFlag(flagRXNE) {
 		if i2c.isAcknowledgeFailed(startTicks) {
 			return false
@@ -249,7 +249,7 @@ func (i2c I2C) waitOnRXNEFlagUntilTimeout(startTicks int64) bool {
 	return true
 }
 
-func (i2c I2C) waitOnTXISFlagUntilTimeout(startTicks int64) bool {
+func (i2c *I2C) waitOnTXISFlagUntilTimeout(startTicks int64) bool {
 	for !i2c.hasFlag(flagTXIS) {
 		if i2c.isAcknowledgeFailed(startTicks) {
 			return false
@@ -263,7 +263,7 @@ func (i2c I2C) waitOnTXISFlagUntilTimeout(startTicks int64) bool {
 	return true
 }
 
-func (i2c I2C) waitOnStopFlagUntilTimeout(startTicks int64) bool {
+func (i2c *I2C) waitOnStopFlagUntilTimeout(startTicks int64) bool {
 	for !i2c.hasFlag(flagSTOPF) {
 		if i2c.isAcknowledgeFailed(startTicks) {
 			return false
@@ -277,7 +277,7 @@ func (i2c I2C) waitOnStopFlagUntilTimeout(startTicks int64) bool {
 	return true
 }
 
-func (i2c I2C) isAcknowledgeFailed(startTicks int64) bool {
+func (i2c *I2C) isAcknowledgeFailed(startTicks int64) bool {
 	if i2c.hasFlag(flagAF) {
 		// Wait until STOP Flag is reset
 		// AutoEnd should be initiate after AF
@@ -298,7 +298,7 @@ func (i2c I2C) isAcknowledgeFailed(startTicks int64) bool {
 	return false
 }
 
-func (i2c I2C) flushTXDR() {
+func (i2c *I2C) flushTXDR() {
 	// If a pending TXIS flag is set, write a dummy data in TXDR to clear it
 	if i2c.hasFlag(flagTXIS) {
 		i2c.Bus.TXDR.Set(0)
@@ -310,7 +310,7 @@ func (i2c I2C) flushTXDR() {
 	}
 }
 
-func (i2c I2C) resetCR2() {
+func (i2c *I2C) resetCR2() {
 	i2c.Bus.CR2.ClearBits(stm32.I2C_CR2_SADD_Msk |
 		stm32.I2C_CR2_HEAD10R_Msk |
 		stm32.I2C_CR2_NBYTES_Msk |
@@ -318,7 +318,7 @@ func (i2c I2C) resetCR2() {
 		stm32.I2C_CR2_RD_WRN_Msk)
 }
 
-func (i2c I2C) transferConfig(addr uint16, size uint8, mode uint32, request uint32) {
+func (i2c *I2C) transferConfig(addr uint16, size uint8, mode uint32, request uint32) {
 	mask := uint32(stm32.I2C_CR2_SADD_Msk |
 		stm32.I2C_CR2_NBYTES_Msk |
 		stm32.I2C_CR2_RELOAD_Msk |
@@ -334,11 +334,11 @@ func (i2c I2C) transferConfig(addr uint16, size uint8, mode uint32, request uint
 	i2c.Bus.CR2.ReplaceBits(value, mask, 0)
 }
 
-func (i2c I2C) hasFlag(flag uint32) bool {
+func (i2c *I2C) hasFlag(flag uint32) bool {
 	return i2c.Bus.ISR.HasBits(flag)
 }
 
-func (i2c I2C) clearFlag(flag uint32) {
+func (i2c *I2C) clearFlag(flag uint32) {
 	if flag == stm32.I2C_ISR_TXE {
 		i2c.Bus.ISR.SetBits(flag)
 	} else {

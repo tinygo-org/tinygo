@@ -6,7 +6,7 @@ package machine
 
 var (
 	SPI0  = SPI{0}
-	I2C0  = I2C{0}
+	I2C0  = &I2C{0}
 	UART0 = UART{0}
 )
 
@@ -115,13 +115,13 @@ type I2CConfig struct {
 }
 
 // Configure is intended to setup the I2C interface.
-func (i2c I2C) Configure(config I2CConfig) error {
+func (i2c *I2C) Configure(config I2CConfig) error {
 	i2cConfigure(i2c.Bus, config.SCL, config.SDA)
 	return nil
 }
 
 // Tx does a single I2C transaction at the specified address.
-func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 	i2cTransfer(i2c.Bus, &w[0], len(w), &r[0], len(r))
 	// TODO: do something with the returned error code.
 	return nil

@@ -74,7 +74,7 @@ const (
 )
 
 var (
-	I2C0 = I2C{
+	I2C0 = &I2C{
 		Bus:             stm32.I2C1,
 		AltFuncSelector: AF4_I2C1_2_3,
 	}

@@ -40,11 +40,11 @@ var (
 
 // I2C on the Grand Central M4
 var (
-	I2C0 = I2C{
+	I2C0 = &I2C{
 		Bus:    sam.SERCOM3_I2CM,
 		SERCOM: 3,
 	}
-	I2C1 = I2C{
+	I2C1 = &I2C{
 		Bus:    sam.SERCOM6_I2CM,
 		SERCOM: 6,
 	}

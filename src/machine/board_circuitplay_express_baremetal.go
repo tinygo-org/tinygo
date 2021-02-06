@@ -23,12 +23,12 @@ func init() {
 // I2C on the Circuit Playground Express.
 var (
 	// external device
-	I2C0 = I2C{
+	I2C0 = &I2C{
 		Bus:    sam.SERCOM5_I2CM,
 		SERCOM: 5,
 	}
 	// internal device
-	I2C1 = I2C{
+	I2C1 = &I2C{
 		Bus:    sam.SERCOM1_I2CM,
 		SERCOM: 1,
 	}

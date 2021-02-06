@@ -14,7 +14,7 @@ type I2C struct {
 }
 
 // I2C0 is the only I2C interface on most AVRs.
-var I2C0 = I2C{}
+var I2C0 *I2C = nil
 
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
@@ -22,7 +22,7 @@ type I2CConfig struct {
 }
 
 // Configure is intended to setup the I2C interface.
-func (i2c I2C) Configure(config I2CConfig) error {
+func (i2c *I2C) Configure(config I2CConfig) error {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
@@ -49,7 +49,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 // Tx does a single I2C transaction at the specified address.
 // It clocks out the given address, writes the bytes in w, reads back len(r)
 // bytes and stores them in r, and generates a stop condition on the bus.
-func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 	if len(w) != 0 {
 		i2c.start(uint8(addr), true) // start transmission for writing
 		for _, b := range w {
@@ -70,7 +70,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 }
 
 // start starts an I2C communication session.
-func (i2c I2C) start(address uint8, write bool) {
+func (i2c *I2C) start(address uint8, write bool) {
 	// Clear TWI interrupt flag, put start condition on SDA, and enable TWI.
 	avr.TWCR.Set((avr.TWCR_TWINT | avr.TWCR_TWSTA | avr.TWCR_TWEN))
 
@@ -87,7 +87,7 @@ func (i2c I2C) start(address uint8, write bool) {
 }
 
 // stop ends an I2C communication session.
-func (i2c I2C) stop() {
+func (i2c *I2C) stop() {
 	// Send stop condition.
 	avr.TWCR.Set(avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWSTO)
 
@@ -97,7 +97,7 @@ func (i2c I2C) stop() {
 }
 
 // writeByte writes a single byte to the I2C bus.
-func (i2c I2C) writeByte(data byte) {
+func (i2c *I2C) writeByte(data byte) {
 	// Write data to register.
 	avr.TWDR.Set(data)
 
@@ -110,7 +110,7 @@ func (i2c I2C) writeByte(data byte) {
 }
 
 // readByte reads a single byte from the I2C bus.
-func (i2c I2C) readByte() byte {
+func (i2c *I2C) readByte() byte {
 	// Clear TWI interrupt flag and enable TWI.
 	avr.TWCR.Set(avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWEA)
 

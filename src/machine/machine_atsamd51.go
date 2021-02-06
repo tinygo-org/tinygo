@@ -1104,7 +1104,7 @@ const (
 const i2cTimeout = 1000
 
 // Configure is intended to setup the I2C interface.
-func (i2c I2C) Configure(config I2CConfig) error {
+func (i2c *I2C) Configure(config I2CConfig) error {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
@@ -1163,7 +1163,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 }
 
 // SetBaudRate sets the communication speed for the I2C.
-func (i2c I2C) SetBaudRate(br uint32) {
+func (i2c *I2C) SetBaudRate(br uint32) {
 	// Synchronous arithmetic baudrate, via Adafruit SAMD51 implementation:
 	// sercom->I2CM.BAUD.bit.BAUD = SERCOM_FREQ_REF / ( 2 * baudrate) - 1 ;
 	baud := SERCOM_FREQ_REF/(2*br) - 1
@@ -1173,7 +1173,7 @@ func (i2c I2C) SetBaudRate(br uint32) {
 // Tx does a single I2C transaction at the specified address.
 // It clocks out the given address, writes the bytes in w, reads back len(r)
 // bytes and stores them in r, and generates a stop condition on the bus.
-func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 	var err error
 	if len(w) != 0 {
 		// send start/address for write
@@ -1250,7 +1250,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 }
 
 // WriteByte writes a single byte to the I2C bus.
-func (i2c I2C) WriteByte(data byte) error {
+func (i2c *I2C) WriteByte(data byte) error {
 	// Send data byte
 	i2c.Bus.DATA.Set(data)
 
@@ -1275,7 +1275,7 @@ func (i2c I2C) WriteByte(data byte) error {
 }
 
 // sendAddress sends the address and start signal
-func (i2c I2C) sendAddress(address uint16, write bool) error {
+func (i2c *I2C) sendAddress(address uint16, write bool) error {
 	data := (address << 1)
 	if !write {
 		data |= 1 // set read flag
@@ -1295,7 +1295,7 @@ func (i2c I2C) sendAddress(address uint16, write bool) error {
 	return nil
 }
 
-func (i2c I2C) signalStop() error {
+func (i2c *I2C) signalStop() error {
 	i2c.Bus.CTRLB.SetBits(wireCmdStop << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Stop command
 	timeout := i2cTimeout
 	for i2c.Bus.SYNCBUSY.HasBits(sam.SERCOM_I2CM_SYNCBUSY_SYSOP) {
@@ -1307,7 +1307,7 @@ func (i2c I2C) signalStop() error {
 	return nil
 }
 
-func (i2c I2C) signalRead() error {
+func (i2c *I2C) signalRead() error {
 	i2c.Bus.CTRLB.SetBits(wireCmdRead << sam.SERCOM_I2CM_CTRLB_CMD_Pos) // Read command
 	timeout := i2cTimeout
 	for i2c.Bus.SYNCBUSY.HasBits(sam.SERCOM_I2CM_SYNCBUSY_SYSOP) {
@@ -1319,7 +1319,7 @@ func (i2c I2C) signalRead() error {
 	return nil
 }
 
-func (i2c I2C) readByte() byte {
+func (i2c *I2C) readByte() byte {
 	for !i2c.Bus.INTFLAG.HasBits(sam.SERCOM_I2CM_INTFLAG_SB) {
 	}
 	return byte(i2c.Bus.DATA.Get())
