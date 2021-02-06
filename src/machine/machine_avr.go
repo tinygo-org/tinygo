@@ -141,10 +141,3 @@ func (a ADC) Get() uint16 {
 
 	return uint16(avr.ADCL.Get()) | uint16(avr.ADCH.Get())<<8
 }
-
-// I2C on AVR.
-type I2C struct {
-}
-
-// I2C0 is the only I2C interface on most AVRs.
-var I2C0 = I2C{}
