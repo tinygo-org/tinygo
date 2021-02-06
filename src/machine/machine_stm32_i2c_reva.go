@@ -29,7 +29,7 @@ const (
 	flagMSL     = 0x00100001
 )
 
-func (i2c I2C) hasFlag(flag uint32) bool {
+func (i2c *I2C) hasFlag(flag uint32) bool {
 	const mask = 0x0000FFFF
 	if uint8(flag>>16) == 1 {
 		return i2c.Bus.SR1.HasBits(flag & mask)
@@ -38,18 +38,18 @@ func (i2c I2C) hasFlag(flag uint32) bool {
 	}
 }
 
-func (i2c I2C) clearFlag(flag uint32) {
+func (i2c *I2C) clearFlag(flag uint32) {
 	const mask = 0x0000FFFF
 	i2c.Bus.SR1.Set(^(flag & mask))
 }
 
 // clearFlagADDR reads both status registers to clear any pending ADDR flags.
-func (i2c I2C) clearFlagADDR() {
+func (i2c *I2C) clearFlagADDR() {
 	i2c.Bus.SR1.Get()
 	i2c.Bus.SR2.Get()
 }
 
-func (i2c I2C) waitForFlag(flag uint32, set bool) bool {
+func (i2c *I2C) waitForFlag(flag uint32, set bool) bool {
 	const tryMax = 10000
 	hasFlag := false
 	for i := 0; !hasFlag && i < tryMax; i++ {
@@ -58,7 +58,7 @@ func (i2c I2C) waitForFlag(flag uint32, set bool) bool {
 	return hasFlag
 }
 
-func (i2c I2C) waitForFlagOrError(flag uint32, set bool) bool {
+func (i2c *I2C) waitForFlagOrError(flag uint32, set bool) bool {
 	const tryMax = 10000
 	hasFlag := false
 	for i := 0; !hasFlag && i < tryMax; i++ {
@@ -107,7 +107,7 @@ type I2CConfig struct {
 }
 
 // Configure is intended to setup the STM32 I2C interface.
-func (i2c I2C) Configure(config I2CConfig) error {
+func (i2c *I2C) Configure(config I2CConfig) error {
 
 	// The following is the required sequence in controller mode.
 	// 1. Program the peripheral input clock in I2C_CR2 Register in order to
@@ -157,7 +157,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 	return nil
 }
 
-func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 
 	if err := i2c.controllerTransmit(addr, w); nil != err {
 		return err
@@ -172,7 +172,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	return nil
 }
 
-func (i2c I2C) controllerTransmit(addr uint16, w []byte) error {
+func (i2c *I2C) controllerTransmit(addr uint16, w []byte) error {
 
 	if !i2c.waitForFlag(flagBUSY, false) {
 		return errI2CBusReadyTimeout
@@ -224,7 +224,7 @@ func (i2c I2C) controllerTransmit(addr uint16, w []byte) error {
 	return nil
 }
 
-func (i2c I2C) controllerRequestWrite(addr uint16, option transferOption) error {
+func (i2c *I2C) controllerRequestWrite(addr uint16, option transferOption) error {
 
 	if frameFirstAndLast == option || frameFirst == option || frameNoOption == option {
 		// generate start condition
@@ -250,7 +250,7 @@ func (i2c I2C) controllerRequestWrite(addr uint16, option transferOption) error 
 	return nil
 }
 
-func (i2c I2C) controllerReceive(addr uint16, r []byte) error {
+func (i2c *I2C) controllerReceive(addr uint16, r []byte) error {
 
 	if !i2c.waitForFlag(flagBUSY, false) {
 		return errI2CBusReadyTimeout
@@ -400,7 +400,7 @@ func (i2c I2C) controllerReceive(addr uint16, r []byte) error {
 	return nil
 }
 
-func (i2c I2C) controllerRequestRead(addr uint16, option transferOption) error {
+func (i2c *I2C) controllerRequestRead(addr uint16, option transferOption) error {
 
 	// enable ACK
 	i2c.Bus.CR1.SetBits(stm32.I2C_CR1_ACK)

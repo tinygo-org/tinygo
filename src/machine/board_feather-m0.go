@@ -75,7 +75,7 @@ const (
 
 // I2C on the Feather M0.
 var (
-	I2C0 = I2C{
+	I2C0 = &I2C{
 		Bus:    sam.SERCOM3_I2CM,
 		SERCOM: 3,
 	}

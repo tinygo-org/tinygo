@@ -5,6 +5,7 @@ package machine
 import (
 	"device/sifive"
 	"runtime/interrupt"
+	"unsafe"
 )
 
 func CPUFrequency() uint32 {
@@ -185,8 +186,12 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 
 // I2C on the FE310-G002.
 type I2C struct {
-	Bus *sifive.I2C_Type
+	Bus sifive.I2C_Type
 }
+
+var (
+	I2C0 = (*I2C)(unsafe.Pointer(sifive.I2C0))
+)
 
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
@@ -196,7 +201,7 @@ type I2CConfig struct {
 }
 
 // Configure is intended to setup the I2C interface.
-func (i2c I2C) Configure(config I2CConfig) error {
+func (i2c *I2C) Configure(config I2CConfig) error {
 	var i2cClockFrequency uint32 = 32000000
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
@@ -228,7 +233,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 // Tx does a single I2C transaction at the specified address.
 // It clocks out the given address, writes the bytes in w, reads back len(r)
 // bytes and stores them in r, and generates a stop condition on the bus.
-func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 	var err error
 	if len(w) != 0 {
 		// send start/address for write
@@ -276,7 +281,7 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 }
 
 // Writes a single byte to the I2C bus.
-func (i2c I2C) writeByte(data byte) error {
+func (i2c *I2C) writeByte(data byte) error {
 	// Send data byte
 	i2c.Bus.TXR_RXR.Set(uint32(data))
 
@@ -295,7 +300,7 @@ func (i2c I2C) writeByte(data byte) error {
 }
 
 // Reads a single byte from the I2C bus.
-func (i2c I2C) readByte() byte {
+func (i2c *I2C) readByte() byte {
 	i2c.Bus.CR_SR.Set(sifive.I2C_CR_RD)
 
 	// wait until transmission complete
@@ -306,7 +311,7 @@ func (i2c I2C) readByte() byte {
 }
 
 // Sends the address and start signal.
-func (i2c I2C) sendAddress(address uint16, write bool) error {
+func (i2c *I2C) sendAddress(address uint16, write bool) error {
 	data := (address << 1)
 	if !write {
 		data |= 1 // set read flag in transmit register

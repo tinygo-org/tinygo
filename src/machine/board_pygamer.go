@@ -99,7 +99,7 @@ const (
 
 // I2C on the PyGamer.
 var (
-	I2C0 = I2C{
+	I2C0 = &I2C{
 		Bus:    sam.SERCOM2_I2CM,
 		SERCOM: 2,
 	}

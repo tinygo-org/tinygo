@@ -7,6 +7,7 @@ import (
 	"device/riscv"
 	"errors"
 	"runtime/interrupt"
+	"unsafe"
 )
 
 func CPUFrequency() uint32 {
@@ -493,8 +494,14 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 
 // I2C on the K210.
 type I2C struct {
-	Bus *kendryte.I2C_Type
+	Bus kendryte.I2C_Type
 }
+
+var (
+	I2C0 = (*I2C)(unsafe.Pointer(kendryte.I2C0))
+	I2C1 = (*I2C)(unsafe.Pointer(kendryte.I2C1))
+	I2C2 = (*I2C)(unsafe.Pointer(kendryte.I2C2))
+)
 
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
@@ -504,7 +511,7 @@ type I2CConfig struct {
 }
 
 // Configure is intended to setup the I2C interface.
-func (i2c I2C) Configure(config I2CConfig) error {
+func (i2c *I2C) Configure(config I2CConfig) error {
 
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
@@ -518,7 +525,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 	// Enable APB0 clock.
 	kendryte.SYSCTL.CLK_EN_CENT.SetBits(kendryte.SYSCTL_CLK_EN_CENT_APB0_CLK_EN)
 
-	switch i2c.Bus {
+	switch &i2c.Bus {
 	case kendryte.I2C0:
 		// Initialize I2C0 clock.
 		kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_I2C0_CLK_EN)
@@ -567,7 +574,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 // Tx does a single I2C transaction at the specified address.
 // It clocks out the given address, writes the bytes in w, reads back len(r)
 // bytes and stores them in r, and generates a stop condition on the bus.
-func (i2c I2C) Tx(addr uint16, w, r []byte) error {
+func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 	// Set peripheral address.
 	i2c.Bus.TAR.Set(uint32(addr))
 	// Enable controller.

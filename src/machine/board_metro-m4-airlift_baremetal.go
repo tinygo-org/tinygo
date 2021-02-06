@@ -28,7 +28,7 @@ func init() {
 
 // I2C on the Metro M4.
 var (
-	I2C0 = I2C{
+	I2C0 = &I2C{
 		Bus:    sam.SERCOM5_I2CM,
 		SERCOM: 5,
 	}

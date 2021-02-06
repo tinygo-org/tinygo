@@ -29,12 +29,12 @@ func init() {
 
 // I2C on the Wio Terminal
 var (
-	I2C0 = I2C{
+	I2C0 = &I2C{
 		Bus:    sam.SERCOM4_I2CM,
 		SERCOM: 4,
 	}
 
-	I2C1 = I2C{
+	I2C1 = &I2C{
 		Bus:    sam.SERCOM4_I2CM,
 		SERCOM: 4,
 	}

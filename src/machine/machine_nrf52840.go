@@ -72,7 +72,7 @@ func (uart UART) setPins(tx, rx Pin) {
 	nrf.UART0.PSEL.RXD.Set(uint32(rx))
 }
 
-func (i2c I2C) setPins(scl, sda Pin) {
+func (i2c *I2C) setPins(scl, sda Pin) {
 	i2c.Bus.PSEL.SCL.Set(uint32(scl))
 	i2c.Bus.PSEL.SDA.Set(uint32(sda))
 }

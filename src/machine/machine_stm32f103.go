@@ -201,7 +201,7 @@ func (spi SPI) configurePins(config SPIConfig) {
 // Since the first interface is named I2C1, both I2C0 and I2C1 refer to I2C1.
 // TODO: implement I2C2.
 var (
-	I2C1 = I2C{Bus: stm32.I2C1}
+	I2C1 = (*I2C)(unsafe.Pointer(stm32.I2C1))
 	I2C0 = I2C1
 )
 
@@ -209,7 +209,7 @@ type I2C struct {
 	Bus *stm32.I2C_Type
 }
 
-func (i2c I2C) configurePins(config I2CConfig) {
+func (i2c *I2C) configurePins(config I2CConfig) {
 	if config.SDA == PB9 {
 		// use alternate I2C1 pins PB8/PB9 via AFIO mapping
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_AFIOEN)
@@ -220,7 +220,7 @@ func (i2c I2C) configurePins(config I2CConfig) {
 	config.SCL.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltOpenDrain})
 }
 
-func (i2c I2C) getFreqRange(config I2CConfig) uint32 {
+func (i2c *I2C) getFreqRange(config I2CConfig) uint32 {
 	// pclk1 clock speed is main frequency divided by PCLK1 prescaler (div 2)
 	pclk1 := CPUFrequency() / 2
 
@@ -229,7 +229,7 @@ func (i2c I2C) getFreqRange(config I2CConfig) uint32 {
 	return pclk1 / 1000000
 }
 
-func (i2c I2C) getRiseTime(config I2CConfig) uint32 {
+func (i2c *I2C) getRiseTime(config I2CConfig) uint32 {
 	// These bits must be programmed with the maximum SCL rise time given in the
 	// I2C bus specification, incremented by 1.
 	// For instance: in Sm mode, the maximum allowed SCL rise time is 1000 ns.
@@ -245,7 +245,7 @@ func (i2c I2C) getRiseTime(config I2CConfig) uint32 {
 	return (freqRange + 1) << stm32.I2C_TRISE_TRISE_Pos
 }
 
-func (i2c I2C) getSpeed(config I2CConfig) uint32 {
+func (i2c *I2C) getSpeed(config I2CConfig) uint32 {
 	ccr := func(pclk uint32, freq uint32, coeff uint32) uint32 {
 		return (((pclk - 1) / (freq * coeff)) + 1) & stm32.I2C_CCR_CCR_Msk
 	}

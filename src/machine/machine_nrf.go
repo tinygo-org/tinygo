@@ -6,6 +6,7 @@ import (
 	"device/nrf"
 	"errors"
 	"runtime/interrupt"
+	"unsafe"
 )
 
 var (
@@ -203,13 +204,13 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 
 // I2C on the NRF.
 type I2C struct {
-	Bus *nrf.TWI_Type
+	Bus nrf.TWI_Type
 }
 
 // There are 2 I2C interfaces on the NRF.
 var (
-	I2C0 = I2C{Bus: nrf.TWI0}
-	I2C1 = I2C{Bus: nrf.TWI1}
+	I2C0 = (*I2C)(unsafe.Pointer(nrf.TWI0))
+	I2C1 = (*I2C)(unsafe.Pointer(nrf.TWI1))
 )
 
 // I2CConfig is used to store config info for I2C.
@@ -220,7 +221,7 @@ type I2CConfig struct {
 }
 
 // Configure is intended to setup the I2C interface.
-func (i2c I2C) Configure(config I2CConfig) error {
+func (i2c *I2C) Configure(config I2CConfig) error {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
@@ -261,7 +262,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 // Tx does a single I2C transaction at the specified address.
 // It clocks out the given address, writes the bytes in w, reads back len(r)
 // bytes and stores them in r, and generates a stop condition on the bus.
-func (i2c I2C) Tx(addr uint16, w, r []byte) (err error) {
+func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 	i2c.Bus.ADDRESS.Set(uint32(addr))
 
 	if len(w) != 0 {
@@ -299,7 +300,7 @@ cleanUp:
 // signalStop sends a stop signal when writing or tells the I2C peripheral that
 // it must generate a stop condition after the next character is retrieved when
 // reading.
-func (i2c I2C) signalStop() {
+func (i2c *I2C) signalStop() {
 	i2c.Bus.TASKS_STOP.Set(1)
 	for i2c.Bus.EVENTS_STOPPED.Get() == 0 {
 	}
@@ -307,7 +308,7 @@ func (i2c I2C) signalStop() {
 }
 
 // writeByte writes a single byte to the I2C bus.
-func (i2c I2C) writeByte(data byte) error {
+func (i2c *I2C) writeByte(data byte) error {
 	i2c.Bus.TXD.Set(uint32(data))
 	for i2c.Bus.EVENTS_TXDSENT.Get() == 0 {
 		if e := i2c.Bus.EVENTS_ERROR.Get(); e != 0 {
@@ -320,7 +321,7 @@ func (i2c I2C) writeByte(data byte) error {
 }
 
 // readByte reads a single byte from the I2C bus.
-func (i2c I2C) readByte() (byte, error) {
+func (i2c *I2C) readByte() (byte, error) {
 	for i2c.Bus.EVENTS_RXDREADY.Get() == 0 {
 		if e := i2c.Bus.EVENTS_ERROR.Get(); e != 0 {
 			i2c.Bus.EVENTS_ERROR.Set(0)

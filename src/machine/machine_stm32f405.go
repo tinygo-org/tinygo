@@ -116,12 +116,12 @@ type I2C struct {
 	AltFuncSelector uint8
 }
 
-func (i2c I2C) configurePins(config I2CConfig) {
+func (i2c *I2C) configurePins(config I2CConfig) {
 	config.SCL.ConfigureAltFunc(PinConfig{Mode: PinModeI2CSCL}, i2c.AltFuncSelector)
 	config.SDA.ConfigureAltFunc(PinConfig{Mode: PinModeI2CSDA}, i2c.AltFuncSelector)
 }
 
-func (i2c I2C) getFreqRange(config I2CConfig) uint32 {
+func (i2c *I2C) getFreqRange(config I2CConfig) uint32 {
 	// all I2C interfaces are on APB1 (42 MHz)
 	clock := CPUFrequency() / 4
 	// convert to MHz
@@ -139,7 +139,7 @@ func (i2c I2C) getFreqRange(config I2CConfig) uint32 {
 	return clock << stm32.I2C_CR2_FREQ_Pos
 }
 
-func (i2c I2C) getRiseTime(config I2CConfig) uint32 {
+func (i2c *I2C) getRiseTime(config I2CConfig) uint32 {
 	// These bits must be programmed with the maximum SCL rise time given in the
 	// I2C bus specification, incremented by 1.
 	// For instance: in Sm mode, the maximum allowed SCL rise time is 1000 ns.
@@ -155,7 +155,7 @@ func (i2c I2C) getRiseTime(config I2CConfig) uint32 {
 	return (freqRange + 1) << stm32.I2C_TRISE_TRISE_Pos
 }
 
-func (i2c I2C) getSpeed(config I2CConfig) uint32 {
+func (i2c *I2C) getSpeed(config I2CConfig) uint32 {
 	ccr := func(pclk uint32, freq uint32, coeff uint32) uint32 {
 		return (((pclk - 1) / (freq * coeff)) + 1) & stm32.I2C_CCR_CCR_Msk
 	}
