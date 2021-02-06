@@ -223,7 +223,7 @@ type I2CConfig struct {
 func (i2c I2C) Configure(config I2CConfig) {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
-		config.Frequency = TWI_FREQ_100KHZ
+		config.Frequency = 100e3 // default to 100kHz
 	}
 	// Default I2C pins if not set.
 	if config.SDA == 0 && config.SCL == 0 {
@@ -246,9 +246,19 @@ func (i2c I2C) Configure(config I2CConfig) {
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
 		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos))
 
-	if config.Frequency == TWI_FREQ_400KHZ {
+	// It is _probably_ possible to use different (custom) frequencies, with a
+	// formula approximately as follows:
+	//     (freq * (0xffffffff / 16000000)) & 0xffffc0000
+	// But this isn't specified in the datasheet and higher frequencies might
+	// need different GPIO settings:
+	// https://devzone.nordicsemi.com/f/nordic-q-a/49263/twi-master-scl-frequency-400khz
+	// https://devzone.nordicsemi.com/f/nordic-q-a/60503/how-to-configure-i2c-frequency-other-than-100khz-250khz-and-400khz
+	switch {
+	case config.Frequency >= 400e3: // 400kHz
 		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K400)
-	} else {
+	case config.Frequency >= 250e3: // 250kHz
+		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K250)
+	default: // 100kHz
 		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K100)
 	}
 

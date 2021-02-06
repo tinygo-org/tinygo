@@ -16,7 +16,7 @@ type I2CConfig struct {
 func (i2c I2C) Configure(config I2CConfig) {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
-		config.Frequency = TWI_FREQ_100KHZ
+		config.Frequency = 100e3 // default to 100kHz
 	}
 
 	// Activate internal pullups for twi.

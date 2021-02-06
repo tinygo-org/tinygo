@@ -507,7 +507,7 @@ type I2CConfig struct {
 func (i2c I2C) Configure(config I2CConfig) error {
 
 	if config.Frequency == 0 {
-		config.Frequency = TWI_FREQ_100KHZ
+		config.Frequency = 100e3 // default to 100kHz
 	}
 
 	if config.SDA == 0 && config.SCL == 0 {
