@@ -34,6 +34,14 @@ int doCallback(int a, int b, binop_t callback) {
 	return callback(a, b);
 }
 
+int variadic0() {
+	return 1;
+}
+
+int variadic2(int x, int y, ...) {
+	return x * y;
+}
+
 void store(int value, int *ptr) {
 	*ptr = value;
 }

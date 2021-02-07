@@ -12,6 +12,8 @@ defined char: 99
 25: 25
 callback 1: 50
 callback 2: 600
+variadic0: 1
+variadic2: 15
 bool: true true
 float: +3.100000e+000
 double: +3.200000e+000

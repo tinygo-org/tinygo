@@ -36,6 +36,10 @@ func main() {
 	cb = C.binop_t(C.mul)
 	println("callback 2:", C.doCallback(20, 30, cb))
 
+	// variadic functions
+	println("variadic0:", C.variadic0())
+	println("variadic2:", C.variadic2(3, 5))
+
 	// equivalent types
 	var goInt8 int8 = 5
 	var _ C.int8_t = goInt8
