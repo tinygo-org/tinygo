@@ -54,9 +54,10 @@ type constantInfo struct {
 // functionInfo stores some information about a CGo function found by libclang
 // and declared in the AST.
 type functionInfo struct {
-	args    []paramInfo
-	results *ast.FieldList
-	pos     token.Pos
+	args     []paramInfo
+	results  *ast.FieldList
+	pos      token.Pos
+	variadic bool
 }
 
 // paramInfo is a parameter of a CGo function (see functionInfo).
@@ -483,6 +484,16 @@ func (p *cgoPackage) addFuncDecls() {
 				},
 				Results: fn.results,
 			},
+		}
+		if fn.variadic {
+			decl.Doc = &ast.CommentGroup{
+				List: []*ast.Comment{
+					&ast.Comment{
+						Slash: fn.pos,
+						Text:  "//go:variadic",
+					},
+				},
+			}
 		}
 		obj.Decl = decl
 		for i, arg := range fn.args {

@@ -25,6 +25,7 @@ type functionInfo struct {
 	linkName string     // go:linkname, go:export
 	exported bool       // go:export, CGo
 	nobounds bool       // go:nobounds
+	variadic bool       // go:variadic (CGo only)
 	inline   inlineType // go:inline
 }
 
@@ -88,8 +89,23 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 		paramTypes = append(paramTypes, info.llvmType)
 	}
 
-	fnType := llvm.FunctionType(retType, paramTypes, false)
+	fnType := llvm.FunctionType(retType, paramTypes, info.variadic)
 	llvmFn = llvm.AddFunction(c.mod, info.linkName, fnType)
+	if strings.HasPrefix(c.Triple, "wasm") {
+		// C functions without prototypes like this:
+		//   void foo();
+		// are actually variadic functions. However, it appears that it has been
+		// decided in WebAssembly that such prototype-less functions are not
+		// allowed in WebAssembly.
+		// In C, this can only happen when there are zero parameters, hence this
+		// check here. For more information:
+		// https://reviews.llvm.org/D48443
+		// https://github.com/WebAssembly/tool-conventions/issues/16
+		if info.variadic && len(fn.Params) == 0 {
+			attr := c.ctx.CreateStringAttribute("no-prototype", "")
+			llvmFn.AddFunctionAttr(attr)
+		}
+	}
 
 	dereferenceableOrNullKind := llvm.AttributeKindID("dereferenceable_or_null")
 	for i, info := range paramInfos {
@@ -162,10 +178,9 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 	} else {
 		// Pick the default linkName.
 		info.linkName = f.RelString(nil)
-		// Check for //go: pragmas, which may change the link name (among
-		// others).
-		info.parsePragmas(f)
 	}
+	// Check for //go: pragmas, which may change the link name (among others).
+	info.parsePragmas(f)
 	return info
 }
 
@@ -222,6 +237,16 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 				// that import unsafe.
 				if hasUnsafeImport(f.Pkg.Pkg) {
 					info.nobounds = true
+				}
+			case "//go:variadic":
+				// The //go:variadic pragma is emitted by the CGo preprocessing
+				// pass for C variadic functions. This includes both explicit
+				// (with ...) and implicit (no parameters in signature)
+				// functions.
+				if strings.HasPrefix(f.Name(), "C.") {
+					// This prefix cannot naturally be created, it must have
+					// been created as a result of CGo preprocessing.
+					info.variadic = true
 				}
 			}
 		}

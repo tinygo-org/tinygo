@@ -152,12 +152,10 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 			return C.CXChildVisit_Continue
 		}
 		cursorType := C.tinygo_clang_getCursorType(c)
-		if C.clang_isFunctionTypeVariadic(cursorType) != 0 {
-			return C.CXChildVisit_Continue // not supported
-		}
 		numArgs := int(C.tinygo_clang_Cursor_getNumArguments(c))
 		fn := &functionInfo{
-			pos: pos,
+			pos:      pos,
+			variadic: C.clang_isFunctionTypeVariadic(cursorType) != 0,
 		}
 		p.functions[name] = fn
 		for i := 0; i < numArgs; i++ {
