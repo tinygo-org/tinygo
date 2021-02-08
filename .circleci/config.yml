@@ -80,12 +80,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-v3
+            - wasi-libc-sysroot-v4
       - run:
           name: "Build wasi-libc"
           command: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-v3
+          key: wasi-libc-sysroot-v4
           paths:
             - lib/wasi-libc/sysroot
   test-linux:
@@ -108,10 +108,10 @@ commands:
       - run: go install -tags=llvm<<parameters.llvm>> .
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-systemclang-v2
+            - wasi-libc-sysroot-systemclang-v3
       - run: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-systemclang-v2
+          key: wasi-libc-sysroot-systemclang-v3
           paths:
             - lib/wasi-libc/sysroot
       - run: go test -v -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./compiler ./interp ./transform .
@@ -153,7 +153,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-11-linux-v1-assert
+            - llvm-build-11-linux-v2-assert
       - run:
           name: "Build LLVM"
           command: |
@@ -168,7 +168,7 @@ commands:
               make ASSERT=1 llvm-build
             fi
       - save_cache:
-          key: llvm-build-11-linux-v1-assert
+          key: llvm-build-11-linux-v2-assert
           paths:
             llvm-build
       - run: make ASSERT=1
@@ -211,7 +211,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-11-linux-v1-noassert
+            - llvm-build-11-linux-v2-noassert
       - run:
           name: "Build LLVM"
           command: |
@@ -226,7 +226,7 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-11-linux-v1-noassert
+          key: llvm-build-11-linux-v2-noassert
           paths:
             llvm-build
       - build-wasi-libc
@@ -290,7 +290,7 @@ commands:
             - llvm-project
       - restore_cache:
           keys:
-            - llvm-build-11-macos-v1
+            - llvm-build-11-macos-v2
       - run:
           name: "Build LLVM"
           command: |
@@ -302,17 +302,17 @@ commands:
               make llvm-build
             fi
       - save_cache:
-          key: llvm-build-11-macos-v1
+          key: llvm-build-11-macos-v2
           paths:
             llvm-build
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-macos-v2
+            - wasi-libc-sysroot-macos-v3
       - run:
           name: "Build wasi-libc"
           command: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-macos-v2
+          key: wasi-libc-sysroot-macos-v3
           paths:
             - lib/wasi-libc/sysroot
       - run:
