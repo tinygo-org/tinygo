@@ -32,7 +32,7 @@ jobs:
     - task: CacheBeta@0
       displayName: Cache LLVM build
       inputs:
-        key: llvm-build-11-windows-v3
+        key: llvm-build-11-windows-v4
         path: llvm-build
     - task: Bash@3
       displayName: Build LLVM
@@ -56,7 +56,7 @@ jobs:
     - task: CacheBeta@0
       displayName: Cache wasi-libc sysroot
       inputs:
-        key: wasi-libc-sysroot-v3
+        key: wasi-libc-sysroot-v4
         path: lib/wasi-libc/sysroot
     - task: Bash@3
       displayName: Build wasi-libc
