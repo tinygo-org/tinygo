@@ -126,3 +126,13 @@ func (p Pin) getPortMask() (*volatile.Register8, uint8) {
 		return avr.PORTA, 255
 	}
 }
+
+// SPI configuration
+var SPI0 = SPI{
+	spcr: avr.SPCR,
+	spdr: avr.SPDR,
+	spsr: avr.SPSR,
+	sck:  PB1,
+	sdo:  PB2,
+	sdi:  PB3,
+	cs:   PB0}

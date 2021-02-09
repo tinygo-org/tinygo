@@ -1,4 +1,4 @@
-// +build avr,atmega328p
+// +build avr,atmega328pb
 
 package machine
 
@@ -7,7 +7,7 @@ import (
 	"runtime/volatile"
 )
 
-const irq_USART0_RX = avr.IRQ_USART_RX
+const irq_USART0_RX = avr.IRQ_USART0_RX
 
 // getPortMask returns the PORTx register and mask for the pin.
 func (p Pin) getPortMask() (*volatile.Register8, uint8) {
@@ -91,10 +91,19 @@ func (pwm PWM) Set(value uint16) {
 
 // SPI configuration
 var SPI0 = SPI{
-	spcr: avr.SPCR,
-	spdr: avr.SPDR,
-	spsr: avr.SPSR,
+	spcr: avr.SPCR0,
+	spdr: avr.SPDR0,
+	spsr: avr.SPSR0,
 	sck:  PB5,
 	sdo:  PB3,
 	sdi:  PB4,
 	cs:   PB2}
+
+var SPI1 = SPI{
+	spcr: avr.SPCR1,
+	spdr: avr.SPDR1,
+	spsr: avr.SPSR1,
+	sck:  PC1,
+	sdo:  PE3,
+	sdi:  PC0,
+	cs:   PE2}
