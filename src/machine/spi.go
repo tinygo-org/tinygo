@@ -1,4 +1,4 @@
-// +build !baremetal sam stm32,!stm32f7x2 fe310 k210
+// +build !baremetal sam stm32,!stm32f7x2 fe310 k210 atmega
 
 package machine
 
@@ -13,7 +13,8 @@ const (
 )
 
 var (
-	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")
+	ErrTxInvalidSliceSize      = errors.New("SPI write and read slices must be same size")
+	errSPIInvalidMachineConfig = errors.New("SPI port was not configured properly by the machine")
 )
 
 // Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read

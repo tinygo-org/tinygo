@@ -5,6 +5,8 @@ package machine
 import (
 	"device/avr"
 	"runtime/interrupt"
+	"runtime/volatile"
+	"unsafe"
 )
 
 // I2CConfig is used to store config info for I2C.
@@ -156,4 +158,109 @@ func (uart UART) WriteByte(c byte) error {
 	}
 	avr.UDR0.Set(c) // send char
 	return nil
+}
+
+// SPIConfig is used to store config info for SPI.
+type SPIConfig struct {
+	Frequency uint32
+	LSBFirst  bool
+	Mode      uint8
+}
+
+// SPI is for the Serial Peripheral Interface
+// Data is taken from http://ww1.microchip.com/downloads/en/DeviceDoc/ATmega48A-PA-88A-PA-168A-PA-328-P-DS-DS40002061A.pdf page 169 and following
+type SPI struct {
+	// The registers for the SPIx port set by the chip
+	spcr *volatile.Register8
+	spdr *volatile.Register8
+	spsr *volatile.Register8
+
+	// The io pins for the SPIx port set by the chip
+	sck Pin
+	sdi Pin
+	sdo Pin
+	cs  Pin
+}
+
+// Configure is intended to setup the SPI interface.
+func (s SPI) Configure(config SPIConfig) error {
+
+	// This is only here to help catch a bug with the configuration
+	// where a machine missed a value.
+	if s.spcr == (*volatile.Register8)(unsafe.Pointer(uintptr(0))) ||
+		s.spsr == (*volatile.Register8)(unsafe.Pointer(uintptr(0))) ||
+		s.spdr == (*volatile.Register8)(unsafe.Pointer(uintptr(0))) ||
+		s.sck == 0 || s.sdi == 0 || s.sdo == 0 || s.cs == 0 {
+		return errSPIInvalidMachineConfig
+	}
+
+	// Make the defaults meaningful
+	if config.Frequency == 0 {
+		config.Frequency = 4000000
+	}
+
+	// Default all port configuration bits to 0 for simplicity
+	s.spcr.Set(0)
+	s.spsr.Set(0)
+
+	// Setup pins output configuration
+	s.sck.Configure(PinConfig{Mode: PinOutput})
+	s.sdi.Configure(PinConfig{Mode: PinInput})
+	s.sdo.Configure(PinConfig{Mode: PinOutput})
+
+	// Prevent CS glitches if the pin is enabled Low (0, default)
+	s.cs.High()
+	// If the CS pin is not configured as output the SPI port operates in
+	// slave mode.
+	s.cs.Configure(PinConfig{Mode: PinOutput})
+
+	frequencyDivider := CPUFrequency() / config.Frequency
+
+	switch {
+	case frequencyDivider >= 128:
+		s.spcr.SetBits(avr.SPCR_SPR0 | avr.SPCR_SPR1)
+	case frequencyDivider >= 64:
+		s.spcr.SetBits(avr.SPCR_SPR1)
+	case frequencyDivider >= 32:
+		s.spcr.SetBits(avr.SPCR_SPR1)
+		s.spsr.SetBits(avr.SPSR_SPI2X)
+	case frequencyDivider >= 16:
+		s.spcr.SetBits(avr.SPCR_SPR0)
+	case frequencyDivider >= 8:
+		s.spcr.SetBits(avr.SPCR_SPR0)
+		s.spsr.SetBits(avr.SPSR_SPI2X)
+	case frequencyDivider >= 4:
+		// The clock is already set to all 0's.
+	default: // defaults to fastest which is /2
+		s.spsr.SetBits(avr.SPSR_SPI2X)
+	}
+
+	switch config.Mode {
+	case Mode1:
+		s.spcr.SetBits(avr.SPCR_CPHA)
+	case Mode2:
+		s.spcr.SetBits(avr.SPCR_CPOL)
+	case Mode3:
+		s.spcr.SetBits(avr.SPCR_CPHA | avr.SPCR_CPOL)
+	default: // default is mode 0
+	}
+
+	if config.LSBFirst {
+		s.spcr.SetBits(avr.SPCR_DORD)
+	}
+
+	// enable SPI, set controller, set clock rate
+	s.spcr.SetBits(avr.SPCR_SPE | avr.SPCR_MSTR)
+
+	return nil
+}
+
+// Transfer writes the byte into the register and returns the read content
+func (s SPI) Transfer(b byte) (byte, error) {
+	s.spdr.Set(uint8(b))
+
+	for !s.spsr.HasBits(avr.SPSR_SPIF) {
+	}
+
+	return byte(s.spdr.Get()), nil
 }
