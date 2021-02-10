@@ -171,7 +171,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
 	if config.Target.RTLib == "compiler-rt" {
-		path, job, err := CompilerRT.load(config.Triple(), dir)
+		path, job, err := CompilerRT.load(config.Triple(), config.CPU(), dir)
 		if err != nil {
 			return err
 		}
@@ -187,7 +187,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 
 	// Add libc dependency if needed.
 	if config.Target.Libc == "picolibc" {
-		path, job, err := Picolibc.load(config.Triple(), dir)
+		path, job, err := Picolibc.load(config.Triple(), config.CPU(), dir)
 		if err != nil {
 			return err
 		}
