@@ -30,10 +30,7 @@ func cacheTimestamp(paths []string) (time.Time, error) {
 // Try to load a given file from the cache. Return "", nil if no cached file can
 // be found (or the file is stale), return the absolute path if there is a cache
 // and return an error on I/O errors.
-//
-// TODO: the configKey is currently ignored. It is supposed to be used as extra
-// data for the cache key, like the compiler version and arguments.
-func cacheLoad(name, configKey string, sourceFiles []string) (string, error) {
+func cacheLoad(name string, sourceFiles []string) (string, error) {
 	cachepath := filepath.Join(goenv.Get("GOCACHE"), name)
 	cacheStat, err := os.Stat(cachepath)
 	if os.IsNotExist(err) {
@@ -58,9 +55,7 @@ func cacheLoad(name, configKey string, sourceFiles []string) (string, error) {
 
 // Store the file located at tmppath in the cache with the given name. The
 // tmppath may or may not be gone afterwards.
-//
-// Note: the configKey is ignored, see cacheLoad.
-func cacheStore(tmppath, name, configKey string, sourceFiles []string) (string, error) {
+func cacheStore(tmppath, name string, sourceFiles []string) (string, error) {
 	// get the last modified time
 	if len(sourceFiles) == 0 {
 		panic("cache: no source files")
