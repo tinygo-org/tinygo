@@ -9,6 +9,7 @@
 		"-mcpu=esp8266"
 	],
 	"rtlib": "compiler-rt",
+	"libc": "picolibc",
 	"linkerscript": "targets/esp8266.ld",
 	"extra-files": [
 		"src/device/esp/esp8266.S",
