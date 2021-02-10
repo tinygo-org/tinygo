@@ -391,11 +391,11 @@ jobs:
 workflows:
   test-all:
     jobs:
-      - test-llvm9-go111
-      - test-llvm10-go112
-      - test-llvm10-go113
-      - test-llvm10-go114
-      - test-llvm11-go115
-      - build-linux
-      - build-macos
-      - assert-test-linux
+      #- test-llvm9-go111
+      #- test-llvm10-go112
+      #- test-llvm10-go113
+      #- test-llvm10-go114
+      #- test-llvm11-go115
+      #- build-linux
+      #- build-macos
+      #- assert-test-linux
