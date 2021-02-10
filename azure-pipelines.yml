@@ -24,11 +24,7 @@ jobs:
       displayName: Download LLVM source
       inputs:
         targetType: inline
-        script: |
-          make llvm-source
-          # Workaround for bad symlinks:
-          # https://github.com/microsoft/azure-pipelines-tasks/issues/13418
-          rm -f llvm-project/libcxx/test/std/input.output/filesystems/Inputs/static_test_env/bad_symlink
+        script: make llvm-source
     - task: CacheBeta@0
       displayName: Cache LLVM build
       inputs:
