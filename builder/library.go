@@ -71,7 +71,7 @@ func (l *Library) load(target, tmpdir string) (path string, job *compileJob, err
 	outfile := l.name + "-" + target + ".a"
 
 	// Try to fetch this library from the cache.
-	if path, err := cacheLoad(outfile, commands["clang"][0], l.sourcePaths(target)); path != "" || err != nil {
+	if path, err := cacheLoad(outfile, l.sourcePaths(target)); path != "" || err != nil {
 		// Cache hit.
 		return path, nil, err
 	}
@@ -112,7 +112,7 @@ func (l *Library) load(target, tmpdir string) (path string, job *compileJob, err
 				return err
 			}
 			// Store this archive in the cache.
-			_, err = cacheStore(arpath, outfile, commands["clang"][0], l.sourcePaths(target))
+			_, err = cacheStore(arpath, outfile, l.sourcePaths(target))
 			return err
 		},
 	}
