@@ -110,6 +110,12 @@ func runJobs(jobs []*compileJob) error {
 			fmt.Println("## finished:", job.description, "(time "+job.duration.String()+")")
 		}
 		if job.err != nil {
+			// Wait for running jobs to finish.
+			for numRunningJobs != 0 {
+				<-doneChan
+				numRunningJobs--
+			}
+			// Return error of first failing job.
 			return job.err
 		}
 	}
