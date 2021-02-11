@@ -3,11 +3,14 @@
 	"build-tags": ["avr", "baremetal", "linux", "arm"],
 	"goos": "linux",
 	"goarch": "arm",
-	"compiler": "avr-gcc",
+	"compiler": "clang",
 	"gc": "conservative",
 	"linker": "avr-gcc",
 	"scheduler": "none",
 	"default-stack-size": 256,
+	"cflags": [
+		"--target=avr-unknown-unknown"
+	],
 	"ldflags": [
 		"-T", "targets/avr.ld",
 		"-Wl,--gc-sections"
