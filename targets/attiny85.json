@@ -1,0 +1,16 @@
+{
+	"inherits": ["avr"],
+	"cpu": "attiny85",
+	"build-tags": ["attiny85", "attiny", "avr2", "avr25"],
+	"cflags": [
+		"-mmcu=attiny85"
+	],
+	"ldflags": [
+		"-mmcu=avr25"
+	],
+	"linkerscript": "src/device/avr/attiny85.ld",
+	"extra-files": [
+		"targets/avr.S",
+		"src/device/avr/attiny85.s"
+	]
+}

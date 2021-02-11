@@ -1,19 +1,9 @@
 {
-	"inherits": ["avr"],
-	"cpu": "attiny85",
-	"build-tags": ["digispark", "attiny85", "attiny", "avr2", "avr25"],
-	"cflags": [
-		"-mmcu=attiny85"
-	],
+	"inherits": ["attiny85"],
+	"build-tags": ["digispark"],
 	"ldflags": [
-		"-mmcu=avr25",
 		"-Wl,--defsym=_bootloader_size=2180",
 		"-Wl,--defsym=_stack_size=128"
-	],
-	"linkerscript": "src/device/avr/attiny85.ld",
-	"extra-files": [
-		"targets/avr.S",
-		"src/device/avr/attiny85.s"
 	],
 	"flash-command": "micronucleus --run {hex}",
 	"emulator": ["simavr", "-m", "attiny85", "-f", "16000000"]
