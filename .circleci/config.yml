@@ -22,12 +22,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-14-v1
+            - llvm-source-14-v2
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-14-v1
+          key: llvm-source-14-v2
           paths:
             - llvm-project/clang/lib/Headers
             - llvm-project/clang/include

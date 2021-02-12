@@ -40,7 +40,6 @@ var genericBuiltins = []string{
 	"divdf3.c",
 	"divdi3.c",
 	"divmoddi4.c",
-	"divmodsi4.c",
 	"divsc3.c",
 	"divsf3.c",
 	"divsi3.c",
@@ -127,7 +126,6 @@ var genericBuiltins = []string{
 	"ucmpti2.c",
 	"udivdi3.c",
 	"udivmoddi4.c",
-	"udivmodsi4.c",
 	"udivmodti4.c",
 	"udivsi3.c",
 	"udivti3.c",
@@ -154,6 +152,14 @@ var aeabiBuiltins = []string{
 	"arm/aeabi_memset.S",
 	"arm/aeabi_uidivmod.S",
 	"arm/aeabi_uldivmod.S",
+
+	// These two are not technically EABI builtins but are used by them and only
+	// seem to be used on ARM. LLVM seems to use __divsi3 and __modsi3 on most
+	// other architectures.
+	// Most importantly, they have a different calling convention on AVR so
+	// should not be used on AVR.
+	"divmodsi4.c",
+	"udivmodsi4.c",
 }
 
 // CompilerRT is a library with symbols required by programs compiled with LLVM.
