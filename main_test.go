@@ -182,11 +182,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			// Not all tests are currently supported on AVR.
 			// Skip the ones that aren't.
 			switch name {
-			case "atomic.go":
-				// Requires GCC 11.2.0 or above for interface comparison.
-				// https://github.com/gcc-mirror/gcc/commit/f30dd607669212de135dec1f1d8a93b8954c327c
-				continue
-
 			case "reflect.go":
 				// Reflect tests do not work due to type code issues.
 				continue
@@ -203,20 +198,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// Reflect size calculation crashes.
 				continue
 
-			case "binop.go":
-				// Interface comparison results are inverted.
-				continue
-
 			case "channel.go":
 				// Freezes after recv from closed channel.
 				continue
 
-			case "float.go", "math.go", "print.go":
-				// Stuck in runtime.printfloat64.
-				continue
-
-			case "interface.go":
-				// Several comparison tests fail.
+			case "math.go":
+				// Stuck somewhere, not sure what's happening.
 				continue
 
 			case "cgo/":
