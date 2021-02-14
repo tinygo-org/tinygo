@@ -91,20 +91,6 @@ const (
 	frameNoOption     = 0xFFFF0000
 )
 
-type i2cDirection bool
-
-const (
-	directionWrite i2cDirection = false
-	directionRead  i2cDirection = true
-)
-
-func (dir i2cDirection) shift7Bit(addr uint16) uint32 {
-	if addr <<= 1; dir == directionRead {
-		addr |= 1
-	}
-	return uint32(addr) & 0xFF
-}
-
 // I2C fast mode (Fm) duty cycle
 const (
 	DutyCycle2    = 0
@@ -169,7 +155,7 @@ func (i2c I2C) Configure(config I2CConfig) {
 }
 
 func (i2c I2C) Tx(addr uint16, w, r []byte) error {
-	// a := address7Bit(addr)
+
 	if err := i2c.controllerTransmit(addr, w); nil != err {
 		return err
 	}
@@ -181,13 +167,13 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 
 func (i2c I2C) controllerTransmit(addr uint16, w []byte) error {
 
+	if !i2c.waitForFlag(flagBUSY, false) {
+		return errI2CBusReadyTimeout
+	}
+
 	// ensure peripheral is enabled
 	if !i2c.Bus.CR1.HasBits(stm32.I2C_CR1_PE) {
 		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_PE)
-	}
-
-	if !i2c.waitForFlag(flagBUSY, false) {
-		return errI2CBusReadyTimeout
 	}
 
 	// disable POS
@@ -252,7 +238,7 @@ func (i2c I2C) controllerRequestWrite(addr uint16, option transferOption) error 
 	}
 
 	// send peripheral address
-	i2c.Bus.DR.Set(directionWrite.shift7Bit(addr))
+	i2c.Bus.DR.Set(uint32(addr) << 1)
 
 	// wait for address ACK from peripheral
 	if !i2c.waitForFlagOrError(flagADDR, true) {
@@ -264,13 +250,13 @@ func (i2c I2C) controllerRequestWrite(addr uint16, option transferOption) error 
 
 func (i2c I2C) controllerReceive(addr uint16, r []byte) error {
 
+	if !i2c.waitForFlag(flagBUSY, false) {
+		return errI2CBusReadyTimeout
+	}
+
 	// ensure peripheral is enabled
 	if !i2c.Bus.CR1.HasBits(stm32.I2C_CR1_PE) {
 		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_PE)
-	}
-
-	if !i2c.waitForFlag(flagBUSY, false) {
-		return errI2CBusReadyTimeout
 	}
 
 	// disable POS
@@ -436,7 +422,7 @@ func (i2c I2C) controllerRequestRead(addr uint16, option transferOption) error {
 	}
 
 	// send peripheral address
-	i2c.Bus.DR.Set(directionRead.shift7Bit(addr))
+	i2c.Bus.DR.Set(uint32(addr)<<1 | 1)
 
 	// wait for address ACK from peripheral
 	if !i2c.waitForFlagOrError(flagADDR, true) {
