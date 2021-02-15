@@ -4,10 +4,10 @@
 //     testdata/errors.go:13:23: unexpected token )
 
 // Type checking errors after CGo processing:
-//     testdata/errors.go:102: 2 << 10 (untyped int constant 2048) overflows uint8
+//     testdata/errors.go:102: cannot use 2 << 10 (untyped int constant 2048) as uint8 value in variable declaration (overflows)
 //     testdata/errors.go:105: unknown field z in struct literal
 //     testdata/errors.go:108: undeclared name: C.SOME_CONST_1
-//     testdata/errors.go:110: C.SOME_CONST_3 (untyped int constant 1234) overflows byte
+//     testdata/errors.go:110: cannot use C.SOME_CONST_3 (untyped int constant 1234) as byte value in variable declaration (overflows)
 
 package main
 
