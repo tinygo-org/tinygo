@@ -91,42 +91,6 @@ const (
 	frameNoOption     = 0xFFFF0000
 )
 
-// addressable represents a type that can provide fully-formatted I2C peripheral
-// addresses for both read operations and write operations.
-type addressable interface {
-	toRead() uint32
-	toWrite() uint32
-	bitSize() uint8
-}
-
-// address7Bit and address10Bit stores the unshifted original I2C peripheral address
-// in an unsigned integral data type and implements the addressable interface
-// to reformat addresses as required for read/write operations.
-//   TODO:
-//    add 10-bit address support
-type (
-	address7Bit uint8
-	//address10Bit uint16
-)
-
-func (sa address7Bit) toRead() uint32 {
-	return uint32(((uint8(sa) << 1) | 1) & 0xFF)
-}
-func (sa address7Bit) toWrite() uint32 {
-	return uint32((uint8(sa) << 1) & 0xFF)
-}
-func (sa address7Bit) bitSize() uint8 { return 7 } // 7-bit addresses
-
-//func (sa address10Bit) toRead() uint32  {}
-//func (sa address10Bit) toWrite() uint32 {}
-//func (sa address10Bit) bitSize() uint8  { return 10 } // 10-bit addresses
-
-func readAddress7Bit(addr uint8) uint32  { return address7Bit(addr).toRead() }
-func writeAddress7Bit(addr uint8) uint32 { return address7Bit(addr).toWrite() }
-
-//func readAddress10Bit(addr uint16) uint32  { return address10Bit(addr).toRead() }
-//func writeAddress10Bit(addr uint16) uint32 { return address10Bit(addr).toWrite() }
-
 // I2C fast mode (Fm) duty cycle
 const (
 	DutyCycle2    = 0
@@ -193,17 +157,17 @@ func (i2c I2C) Configure(config I2CConfig) error {
 }
 
 func (i2c I2C) Tx(addr uint16, w, r []byte) error {
-	a := address7Bit(addr)
-	if err := i2c.controllerTransmit(a, w); nil != err {
+
+	if err := i2c.controllerTransmit(addr, w); nil != err {
 		return err
 	}
-	if err := i2c.controllerReceive(a, r); nil != err {
+	if err := i2c.controllerReceive(addr, r); nil != err {
 		return err
 	}
 	return nil
 }
 
-func (i2c I2C) controllerTransmit(addr addressable, w []byte) error {
+func (i2c I2C) controllerTransmit(addr uint16, w []byte) error {
 
 	if !i2c.waitForFlag(flagBUSY, false) {
 		return errI2CBusReadyTimeout
@@ -260,7 +224,7 @@ func (i2c I2C) controllerTransmit(addr addressable, w []byte) error {
 	return nil
 }
 
-func (i2c I2C) controllerRequestWrite(addr addressable, option transferOption) error {
+func (i2c I2C) controllerRequestWrite(addr uint16, option transferOption) error {
 
 	if frameFirstAndLast == option || frameFirst == option || frameNoOption == option {
 		// generate start condition
@@ -276,13 +240,7 @@ func (i2c I2C) controllerRequestWrite(addr addressable, option transferOption) e
 	}
 
 	// send peripheral address
-	switch addr.bitSize() {
-	case 7: // 7-bit peripheral address
-		i2c.Bus.DR.Set(addr.toWrite())
-
-	case 10: // 10-bit peripheral address
-		// TODO
-	}
+	i2c.Bus.DR.Set(uint32(addr) << 1)
 
 	// wait for address ACK from peripheral
 	if !i2c.waitForFlagOrError(flagADDR, true) {
@@ -292,7 +250,7 @@ func (i2c I2C) controllerRequestWrite(addr addressable, option transferOption) e
 	return nil
 }
 
-func (i2c I2C) controllerReceive(addr addressable, r []byte) error {
+func (i2c I2C) controllerReceive(addr uint16, r []byte) error {
 
 	if !i2c.waitForFlag(flagBUSY, false) {
 		return errI2CBusReadyTimeout
@@ -447,7 +405,7 @@ func (i2c I2C) controllerReceive(addr addressable, r []byte) error {
 	return nil
 }
 
-func (i2c I2C) controllerRequestRead(addr addressable, option transferOption) error {
+func (i2c I2C) controllerRequestRead(addr uint16, option transferOption) error {
 
 	// enable ACK
 	i2c.Bus.CR1.SetBits(stm32.I2C_CR1_ACK)
@@ -466,13 +424,7 @@ func (i2c I2C) controllerRequestRead(addr addressable, option transferOption) er
 	}
 
 	// send peripheral address
-	switch addr.bitSize() {
-	case 7: // 7-bit peripheral address
-		i2c.Bus.DR.Set(addr.toRead())
-
-	case 10: // 10-bit peripheral address
-		// TODO
-	}
+	i2c.Bus.DR.Set(uint32(addr)<<1 | 1)
 
 	// wait for address ACK from peripheral
 	if !i2c.waitForFlagOrError(flagADDR, true) {
