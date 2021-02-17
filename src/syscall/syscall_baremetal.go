@@ -1,4 +1,4 @@
-// +build baremetal wasi
+// +build baremetal
 
 package syscall
 
