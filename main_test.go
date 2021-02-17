@@ -58,6 +58,9 @@ func TestCompiler(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Run("Host", func(t *testing.T) {
 			runPlatTests("", matches, t)
+			if runtime.GOOS == "darwin" {
+				runTest("testdata/libc/env.go", "", t, []string{"ENV1=VALUE1", "ENV2=VALUE2"}...)
+			}
 		})
 	}
 
@@ -104,6 +107,7 @@ func TestCompiler(t *testing.T) {
 
 		t.Run("WASI", func(t *testing.T) {
 			runPlatTests("wasi", matches, t)
+			runTest("testdata/libc/env.go", "wasi", t, []string{"ENV1=VALUE1", "ENV2=VALUE2"}...)
 		})
 	}
 }
@@ -113,7 +117,6 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 
 	for _, path := range matches {
 		path := path // redefine to avoid race condition
-
 		t.Run(filepath.Base(path), func(t *testing.T) {
 			t.Parallel()
 			runTest(path, target, t)
@@ -133,7 +136,7 @@ func runBuild(src, out string, opts *compileopts.Options) error {
 	return Build(src, out, opts)
 }
 
-func runTest(path, target string, t *testing.T) {
+func runTest(path, target string, t *testing.T, environmentVars ...string) {
 	// Get the expected output for this test.
 	txtpath := path[:len(path)-3] + ".txt"
 	if path[len(path)-1] == os.PathSeparator {
@@ -182,6 +185,7 @@ func runTest(path, target string, t *testing.T) {
 	ranTooLong := false
 	if target == "" {
 		cmd = exec.Command(binary)
+		cmd.Env = append(cmd.Env, environmentVars...)
 	} else {
 		spec, err := compileopts.LoadTarget(target)
 		if err != nil {
@@ -192,6 +196,14 @@ func runTest(path, target string, t *testing.T) {
 		} else {
 			args := append(spec.Emulator[1:], binary)
 			cmd = exec.Command(spec.Emulator[0], args...)
+		}
+
+		if len(spec.Emulator) != 0 && spec.Emulator[0] == "wasmtime" {
+			for _, v := range environmentVars {
+				cmd.Args = append(cmd.Args, "--env", v)
+			}
+		} else {
+			cmd.Env = append(cmd.Env, environmentVars...)
 		}
 	}
 	stdout := &bytes.Buffer{}

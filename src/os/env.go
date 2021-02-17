@@ -1,9 +1,14 @@
 package os
 
+import (
+	"syscall"
+)
+
 func Getenv(key string) string {
-	return ""
+	v, _ := syscall.Getenv(key)
+	return v
 }
 
 func LookupEnv(key string) (string, bool) {
-	return "", false
+	return syscall.Getenv(key)
 }
