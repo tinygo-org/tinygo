@@ -1734,17 +1734,19 @@ func (pwm PWM) getMux() PinMode {
 
 // USBCDC is the USB CDC aka serial over USB interface on the SAMD21.
 type USBCDC struct {
-	Buffer  *RingBuffer
-	TxIdx   volatile.Register8
-	waitTxc bool
-	sent    bool
+	Buffer            *RingBuffer
+	TxIdx             volatile.Register8
+	waitTxc           bool
+	waitTxcRetryCount uint8
+	sent              bool
 }
 
 const (
-	usbcdcTxSizeMask uint8 = 0x3F
-	usbcdcTxBankMask uint8 = ^usbcdcTxSizeMask
-	usbcdcTxBank1st  uint8 = 0x00
-	usbcdcTxBank2nd  uint8 = usbcdcTxSizeMask + 1
+	usbcdcTxSizeMask          uint8 = 0x3F
+	usbcdcTxBankMask          uint8 = ^usbcdcTxSizeMask
+	usbcdcTxBank1st           uint8 = 0x00
+	usbcdcTxBank2nd           uint8 = usbcdcTxSizeMask + 1
+	usbcdcTxMaxRetriesAllowed uint8 = 5
 )
 
 // Flush flushes buffered data.
@@ -1760,6 +1762,7 @@ func (usbcdc *USBCDC) Flush() error {
 				return nil
 			}
 			usbcdc.waitTxc = true
+			usbcdc.waitTxcRetryCount = 0
 
 			// set the data
 			usbEndpointDescriptors[usb_CDC_ENDPOINT_IN].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN][bk]))))
@@ -1805,6 +1808,14 @@ func (usbcdc *USBCDC) WriteByte(c byte) error {
 			interrupt.Restore(mask)
 
 			if ok {
+				break
+			} else if usbcdcTxMaxRetriesAllowed < UART0.waitTxcRetryCount {
+				mask := interrupt.Disable()
+				UART0.waitTxc = false
+				UART0.waitTxcRetryCount = 0
+				usbcdc.TxIdx.Set(0)
+				usbLineInfo.lineState = 0
+				interrupt.Restore(mask)
 				break
 			} else {
 				mask := interrupt.Disable()
@@ -2034,6 +2045,10 @@ func handleUSBIRQ(interrupt.Interrupt) {
 					UART0.waitTxc = false
 				}
 			}
+		}
+
+		if i == usb_CDC_ENDPOINT_IN && UART0.waitTxc {
+			UART0.waitTxcRetryCount++
 		}
 	}
 
