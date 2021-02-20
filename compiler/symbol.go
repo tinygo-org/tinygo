@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+  "fmt"
+
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -165,6 +167,14 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 
 	return llvmFn
 }
+
+
+// TODO (torch2424): 
+// Ayke said: 
+// Actually, functions are never renamed
+// The name you're looking for is stored in functionInfo.linkName, which is determined here:
+// `getFunctionInfo`
+// Right below it is parsePragmas, which is where the //go: pragmas are parsed.
 
 // getFunctionInfo returns information about a function that is not directly
 // present in *ssa.Function, such as the link name and whether it should be

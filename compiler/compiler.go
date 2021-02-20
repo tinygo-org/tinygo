@@ -283,7 +283,7 @@ func CompileProgram(lprogram *loader.Program, machine llvm.TargetMachine, config
 			initFuncs = append(initFuncs, c.getFunction(f))
 		}
 		if f.Blocks == nil {
-      fmt.Printf("External Function: %v \n\n%#v\n\n%#v\n\n", f, f, f.targets);
+      // fmt.Printf("External Function: %v \n\n%#v\n\n%#v\n\n", f, f, f.targets);
 			continue // external function
 		}
 
