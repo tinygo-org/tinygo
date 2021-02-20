@@ -408,7 +408,7 @@
 
 					// func valueInstanceOf(v ref, t ref) bool
 					"syscall/js.valueInstanceOf": (v_addr, t_addr) => {
- 						return loadValue(v_attr) instanceof loadValue(t_addr);
+ 						return loadValue(v_addr) instanceof loadValue(t_addr);
 					},
 
 					// func copyBytesToGo(dst []byte, src ref) (int, bool)
