@@ -550,7 +550,22 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			ptr, err := operands[0].asPointer(r)
 			if err != nil {
-				return nil, mem, r.errorAt(inst, err)
+				if err != errIntegerAsPointer {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				// GEP on fixed pointer value (for example, memory-mapped I/O).
+				ptrValue := operands[0].Uint() + offset
+				switch operands[0].len(r) {
+				case 8:
+					locals[inst.localIndex] = literalValue{uint64(ptrValue)}
+				case 4:
+					locals[inst.localIndex] = literalValue{uint32(ptrValue)}
+				case 2:
+					locals[inst.localIndex] = literalValue{uint16(ptrValue)}
+				default:
+					panic("pointer operand is not of a known pointer size")
+				}
+				continue
 			}
 			ptr = ptr.addOffset(uint32(offset))
 			locals[inst.localIndex] = ptr

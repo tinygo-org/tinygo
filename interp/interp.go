@@ -102,7 +102,7 @@ func Run(mod llvm.Module, debug bool) error {
 		if callErr != nil {
 			if isRecoverableError(callErr.Err) {
 				if r.debug {
-					fmt.Fprintln(os.Stderr, "not interpretring", r.pkgName, "because of error:", callErr.Err)
+					fmt.Fprintln(os.Stderr, "not interpreting", r.pkgName, "because of error:", callErr.Error())
 				}
 				mem.revert()
 				continue
