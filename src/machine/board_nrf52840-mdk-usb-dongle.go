@@ -19,8 +19,8 @@ const (
 
 // UART pins
 const (
-	UART_TX_PIN Pin = 20
-	UART_RX_PIN Pin = 19
+	UART_TX_PIN Pin = NoPin
+	UART_RX_PIN Pin = NoPin
 )
 
 // UART0 is the USB device
