@@ -1,4 +1,4 @@
-// +build stm32,!stm32f103,!stm32f407,!stm32f7x2,!stm32l5x2,!stm32l0
+// +build stm32,!stm32f103,!stm32f7x2,!stm32l5x2,!stm32l0
 
 package machine
 
@@ -151,7 +151,7 @@ func (i2c I2C) Configure(config I2CConfig) error {
 	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_ENGC | stm32.I2C_CR1_NOSTRETCH)
 
 	// enable I2C interface
-	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_PE)
+	i2c.Bus.CR1.SetBits(stm32.I2C_CR1_PE)
 
 	return nil
 }
@@ -161,9 +161,13 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	if err := i2c.controllerTransmit(addr, w); nil != err {
 		return err
 	}
-	if err := i2c.controllerReceive(addr, r); nil != err {
-		return err
+
+	if len(r) > 0 {
+		if err := i2c.controllerReceive(addr, r); nil != err {
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -171,11 +175,6 @@ func (i2c I2C) controllerTransmit(addr uint16, w []byte) error {
 
 	if !i2c.waitForFlag(flagBUSY, false) {
 		return errI2CBusReadyTimeout
-	}
-
-	// ensure peripheral is enabled
-	if !i2c.Bus.CR1.HasBits(stm32.I2C_CR1_PE) {
-		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_PE)
 	}
 
 	// disable POS
@@ -254,11 +253,6 @@ func (i2c I2C) controllerReceive(addr uint16, r []byte) error {
 
 	if !i2c.waitForFlag(flagBUSY, false) {
 		return errI2CBusReadyTimeout
-	}
-
-	// ensure peripheral is enabled
-	if !i2c.Bus.CR1.HasBits(stm32.I2C_CR1_PE) {
-		i2c.Bus.CR1.SetBits(stm32.I2C_CR1_PE)
 	}
 
 	// disable POS
