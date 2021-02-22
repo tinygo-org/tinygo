@@ -348,7 +348,7 @@ func (v literalValue) clone() value {
 }
 
 func (v literalValue) asPointer(r *runner) (pointerValue, error) {
-	return pointerValue{}, errLiteralToPointer
+	return pointerValue{}, errIntegerAsPointer
 }
 
 func (v literalValue) asRawValue(r *runner) rawValue {
@@ -949,7 +949,7 @@ func (v rawValue) clone() value {
 func (v rawValue) asPointer(r *runner) (pointerValue, error) {
 	if v.buf[0] <= 255 {
 		// Probably a null pointer or memory-mapped I/O.
-		return pointerValue{}, errExpectedPointer
+		return pointerValue{}, errIntegerAsPointer
 	}
 	return pointerValue{v.buf[0]}, nil
 }

@@ -11,19 +11,17 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-var errLiteralToPointer = errors.New("interp: trying to convert literal value to pointer")
-
 // These errors are expected during normal execution and can be recovered from
 // by running the affected function at runtime instead of compile time.
 var (
-	errExpectedPointer        = errors.New("interp: trying to use an integer as a pointer (memory-mapped I/O?)")
+	errIntegerAsPointer       = errors.New("interp: trying to use an integer as a pointer (memory-mapped I/O?)")
 	errUnsupportedInst        = errors.New("interp: unsupported instruction")
 	errUnsupportedRuntimeInst = errors.New("interp: unsupported instruction (to be emitted at runtime)")
 	errMapAlreadyCreated      = errors.New("interp: map already created")
 )
 
 func isRecoverableError(err error) bool {
-	return err == errExpectedPointer || err == errUnsupportedInst || err == errUnsupportedRuntimeInst || err == errMapAlreadyCreated
+	return err == errIntegerAsPointer || err == errUnsupportedInst || err == errUnsupportedRuntimeInst || err == errMapAlreadyCreated
 }
 
 // ErrorLine is one line in a traceback. The position may be missing.
