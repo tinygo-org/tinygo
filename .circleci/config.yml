@@ -132,6 +132,7 @@ commands:
       - run:
           name: "Install apt dependencies"
           command: |
+            sudo apt-get update
             sudo apt-get install \
                 gcc-arm-linux-gnueabihf \
                 libc6-dev-armel-cross \
@@ -190,6 +191,7 @@ commands:
       - run:
           name: "Install apt dependencies"
           command: |
+            sudo apt-get update
             sudo apt-get install \
                 gcc-arm-linux-gnueabihf \
                 libc6-dev-armel-cross \
