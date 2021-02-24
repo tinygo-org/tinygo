@@ -1,10 +1,10 @@
-// +build nrf52840_mdk
+// +build nrf52840_mdk_usb_dongle
 
 package machine
 
 const HasLowFrequencyCrystal = true
 
-// LEDs on the nrf52840-mdk (nRF52840 dev board)
+// LEDs on the nrf52840-mdk-usb-dongle
 const (
 	LED       Pin = LED_GREEN
 	LED_GREEN Pin = 22
@@ -12,10 +12,15 @@ const (
 	LED_BLUE  Pin = 24
 )
 
+// RESET/USR button, depending on value of PSELRESET UICR register
+const (
+	BUTTON Pin = 18
+)
+
 // UART pins
 const (
-	UART_TX_PIN Pin = 20
-	UART_RX_PIN Pin = 19
+	UART_TX_PIN Pin = NoPin
+	UART_RX_PIN Pin = NoPin
 )
 
 // UART0 is the USB device
@@ -38,7 +43,7 @@ const (
 
 // USB CDC identifiers
 const (
-	usb_STRING_PRODUCT      = "Makerdiary nRF52840 MDK"
+	usb_STRING_PRODUCT      = "Makerdiary nRF52840 MDK USB Dongle"
 	usb_STRING_MANUFACTURER = "Makerdiary"
 )
 
