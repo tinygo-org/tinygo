@@ -216,8 +216,18 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 			case "//go:export":
 				if len(parts) != 2 {
 					continue
-				}
+				}  
+
 				info.linkName = parts[1]
+
+        if info.linkName == "write" {
+          // TODO: torch2424
+          info.linkName = "yo";
+        }
+
+        // TODO: torch2424
+        fmt.Printf("torch2424 go:export \n\n%+v\n\n", info); 
+
 				info.exported = true
 			case "//go:wasm-module":
 				// Alternative comment for setting the import module.
