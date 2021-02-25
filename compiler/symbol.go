@@ -24,7 +24,8 @@ import (
 // present.
 type functionInfo struct {
 	module   string     // go:wasm-module
-	linkName string     // go:linkname, go:export
+  importName string   // go:linkname, go:export - The name the developer assigns
+	linkName string     // go:linkname, go:export - The name that we map for the particular module -> importName
 	exported bool       // go:export, CGo
 	nobounds bool       // go:nobounds
 	variadic bool       // go:variadic (CGo only)
@@ -153,8 +154,13 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 	if info.exported {
 		// Set the wasm-import-module attribute if the function's module is set.
 		if info.module != "" {
+
+      // We need to add the wasm-import-module and the wasm-import-name
 			wasmImportModuleAttr := c.ctx.CreateStringAttribute("wasm-import-module", info.module)
 			llvmFn.AddFunctionAttr(wasmImportModuleAttr)
+
+      wasmImportNameAttr := c.ctx.CreateStringAttribute("wasm-import-name", info.importName)
+      llvmFn.AddFunctionAttr(wasmImportNameAttr)
 		}
 		nocaptureKind := llvm.AttributeKindID("nocapture")
 		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
@@ -218,15 +224,14 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 					continue
 				}  
 
-				info.linkName = parts[1]
+        // Set the wasmimport name and the llvm link name
+				info.importName = parts[1];
 
-        if info.linkName == "write" {
-          // TODO: torch2424
-          info.linkName = "yo";
+        if info.importName == "_start" {
+          info.linkName = info.importName;
+        } else {
+          info.linkName = fmt.Sprintf("wasm_import_%s_%s", info.module, info.importName);
         }
-
-        // TODO: torch2424
-        fmt.Printf("torch2424 go:export \n\n%+v\n\n", info); 
 
 				info.exported = true
 			case "//go:wasm-module":
