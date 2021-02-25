@@ -58,7 +58,7 @@ func (usbcdc *USBCDC) Flush() error {
 				usbcdc.TxIdx.Set(usbcdcTxBank1st)
 			}
 
-			UART0.sent = true
+			USB.sent = true
 		}
 	}
 	return nil
@@ -72,10 +72,10 @@ func (usbcdc USBCDC) WriteByte(c byte) error {
 		for {
 			mask := interrupt.Disable()
 
-			idx := UART0.TxIdx.Get()
+			idx := USB.TxIdx.Get()
 			if (idx & usbcdcTxSizeMask) < usbcdcTxSizeMask {
 				udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN][idx] = c
-				UART0.TxIdx.Set(idx + 1)
+				USB.TxIdx.Set(idx + 1)
 				ok = true
 			}
 
@@ -83,24 +83,24 @@ func (usbcdc USBCDC) WriteByte(c byte) error {
 
 			if ok {
 				break
-			} else if usbcdcTxMaxRetriesAllowed < UART0.waitTxcRetryCount {
+			} else if usbcdcTxMaxRetriesAllowed < USB.waitTxcRetryCount {
 				mask := interrupt.Disable()
-				UART0.waitTxc = false
-				UART0.waitTxcRetryCount = 0
-				UART0.TxIdx.Set(0)
+				USB.waitTxc = false
+				USB.waitTxcRetryCount = 0
+				USB.TxIdx.Set(0)
 				usbLineInfo.lineState = 0
 				interrupt.Restore(mask)
 				break
 			} else {
 				mask := interrupt.Disable()
-				if UART0.sent {
-					if UART0.waitTxc {
+				if USB.sent {
+					if USB.waitTxc {
 						if !easyDMABusy.HasBits(1) {
-							UART0.waitTxc = false
-							UART0.Flush()
+							USB.waitTxc = false
+							USB.Flush()
 						}
 					} else {
-						UART0.Flush()
+						USB.Flush()
 					}
 				}
 				interrupt.Restore(mask)
@@ -198,7 +198,7 @@ func (usbcdc *USBCDC) Configure(config UARTConfig) {
 func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 	if nrf.USBD.EVENTS_SOF.Get() == 1 {
 		nrf.USBD.EVENTS_SOF.Set(0)
-		UART0.Flush()
+		USB.Flush()
 	}
 
 	// USBD ready event
@@ -291,7 +291,7 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 					}
 				case usb_CDC_ENDPOINT_IN: //, usb_CDC_ENDPOINT_ACM:
 					if inDataDone {
-						UART0.waitTxc = false
+						USB.waitTxc = false
 						exitCriticalSection()
 					}
 				}
