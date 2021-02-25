@@ -4,13 +4,12 @@ package compiler
 // pragmas, determines the link name, etc.
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
 	"strconv"
 	"strings"
-
-  "fmt"
 
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
@@ -155,12 +154,12 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 		// Set the wasm-import-module attribute if the function's module is set.
 		if info.module != "" {
 
-      // We need to add the wasm-import-module and the wasm-import-name
+			// We need to add the wasm-import-module and the wasm-import-name
 			wasmImportModuleAttr := c.ctx.CreateStringAttribute("wasm-import-module", info.module)
 			llvmFn.AddFunctionAttr(wasmImportModuleAttr)
 
-      wasmImportNameAttr := c.ctx.CreateStringAttribute("wasm-import-name", info.importName)
-      llvmFn.AddFunctionAttr(wasmImportNameAttr)
+			wasmImportNameAttr := c.ctx.CreateStringAttribute("wasm-import-name", info.importName)
+			llvmFn.AddFunctionAttr(wasmImportNameAttr)
 		}
 		nocaptureKind := llvm.AttributeKindID("nocapture")
 		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
@@ -214,16 +213,16 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 			case "//go:export":
 				if len(parts) != 2 {
 					continue
-				}  
+				}
 
-        // Set the wasmimport name and the llvm link name
-				info.importName = parts[1];
+				// Set the wasmimport name and the llvm link name
+				info.importName = parts[1]
 
-        if info.module == ""  {
-          info.linkName = info.importName;
-        } else {
-          info.linkName = fmt.Sprintf("tinygo_wasm_import_%s_%s", info.module, info.importName);
-        }
+				if info.module == "" {
+					info.linkName = info.importName
+				} else {
+					info.linkName = fmt.Sprintf("tinygo_wasm_import_%s_%s", info.module, info.importName)
+				}
 
 				info.exported = true
 			case "//go:wasm-module":
