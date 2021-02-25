@@ -227,10 +227,10 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
         // Set the wasmimport name and the llvm link name
 				info.importName = parts[1];
 
-        if info.importName == "_start" {
+        if info.module == ""  {
           info.linkName = info.importName;
         } else {
-          info.linkName = fmt.Sprintf("wasm_import_%s_%s", info.module, info.importName);
+          info.linkName = fmt.Sprintf("tinygo_wasm_import_%s_%s", info.module, info.importName);
         }
 
 				info.exported = true
