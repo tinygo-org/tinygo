@@ -22,13 +22,13 @@ import (
 // The linkName value contains a valid link name, even if //go:linkname is not
 // present.
 type functionInfo struct {
-	module   string     // go:wasm-module
-  importName string   // go:linkname, go:export - The name the developer assigns
-	linkName string     // go:linkname, go:export - The name that we map for the particular module -> importName
-	exported bool       // go:export, CGo
-	nobounds bool       // go:nobounds
-	variadic bool       // go:variadic (CGo only)
-	inline   inlineType // go:inline
+	module     string     // go:wasm-module
+	importName string     // go:linkname, go:export - The name the developer assigns
+	linkName   string     // go:linkname, go:export - The name that we map for the particular module -> importName
+	exported   bool       // go:export, CGo
+	nobounds   bool       // go:nobounds
+	variadic   bool       // go:variadic (CGo only)
+	inline     inlineType // go:inline
 }
 
 type inlineType int
