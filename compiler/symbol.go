@@ -271,7 +271,6 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 				info.linkName = importName
 			} else {
 				// WebAssembly import
-				// info.linkName = fmt.Sprintf("tinygo_wasm_import_%s_%s", info.module, info.importName)
 				info.importName = importName
 			}
 		}
