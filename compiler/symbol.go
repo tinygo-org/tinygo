@@ -4,7 +4,7 @@ package compiler
 // pragmas, determines the link name, etc.
 
 import (
-	"fmt"
+  "fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -158,8 +158,11 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 			wasmImportModuleAttr := c.ctx.CreateStringAttribute("wasm-import-module", info.module)
 			llvmFn.AddFunctionAttr(wasmImportModuleAttr)
 
-			wasmImportNameAttr := c.ctx.CreateStringAttribute("wasm-import-name", info.importName)
-			llvmFn.AddFunctionAttr(wasmImportNameAttr)
+      // Add the Wasm Import Name, if we are a named wasm import
+      if info.importName != "" {
+        wasmImportNameAttr := c.ctx.CreateStringAttribute("wasm-import-name", info.importName)
+        llvmFn.AddFunctionAttr(wasmImportNameAttr)
+      }
 		}
 		nocaptureKind := llvm.AttributeKindID("nocapture")
 		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
@@ -188,6 +191,7 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 	}
 	// Check for //go: pragmas, which may change the link name (among others).
 	info.parsePragmas(f)
+  fmt.Println(info);
 	return info
 }
 
@@ -198,6 +202,10 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 		return
 	}
 	if decl, ok := f.Syntax().(*ast.FuncDecl); ok && decl.Doc != nil {
+
+    // Our importName for a wasm module (if we are compiling to wasm), or llvm link name
+    var importName string = ""
+
 		for _, comment := range decl.Doc.List {
 			text := comment.Text
 			if strings.HasPrefix(text, "//export ") {
@@ -215,14 +223,10 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 					continue
 				}
 
-				// Set the wasmimport name and the llvm link name
-				info.importName = parts[1]
+        importName = parts[1]
 
-				if info.module == "" {
-					info.linkName = info.importName
-				} else {
-					info.linkName = fmt.Sprintf("tinygo_wasm_import_%s_%s", info.module, info.importName)
-				}
+        fmt.Println("Uiiiii", importName);
+
 
 				info.exported = true
 			case "//go:wasm-module":
@@ -265,8 +269,28 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 					info.variadic = true
 				}
 			}
+
+      fmt.Println("Yooo", info.module, info.linkName, info.importName);
+
+
+      // TODO: torch2424 Why is this not working?!?! unexpected signal during runtime execution
+      // Set the importName for our exported function
+      if info.module == "" {
+        info.linkName = importName
+      } else {
+        // WebAssembly import
+        info.importName = importName
+      }
+
+
 		}
+
+    fmt.Println("TTTTggghhhh");
+
+
 	}
+
+  
 }
 
 // globalInfo contains some information about a specific global. By default,
