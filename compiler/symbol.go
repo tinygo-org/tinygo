@@ -4,7 +4,6 @@ package compiler
 // pragmas, determines the link name, etc.
 
 import (
-  "fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -191,7 +190,6 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 	}
 	// Check for //go: pragmas, which may change the link name (among others).
 	info.parsePragmas(f)
-  fmt.Println(info);
 	return info
 }
 
@@ -224,10 +222,6 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 				}
 
         importName = parts[1]
-
-        fmt.Println("Uiiiii", importName);
-
-
 				info.exported = true
 			case "//go:wasm-module":
 				// Alternative comment for setting the import module.
@@ -269,28 +263,20 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 					info.variadic = true
 				}
 			}
+		}
 
-      fmt.Println("Yooo", info.module, info.linkName, info.importName);
-
-
-      // TODO: torch2424 Why is this not working?!?! unexpected signal during runtime execution
-      // Set the importName for our exported function
+    // Set the importName for our exported function if we have one
+    if importName != "" {
       if info.module == "" {
         info.linkName = importName
       } else {
         // WebAssembly import
+        // info.linkName = fmt.Sprintf("tinygo_wasm_import_%s_%s", info.module, info.importName)
         info.importName = importName
       }
-
-
-		}
-
-    fmt.Println("TTTTggghhhh");
-
+    }
 
 	}
-
-  
 }
 
 // globalInfo contains some information about a specific global. By default,
