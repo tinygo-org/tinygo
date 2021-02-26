@@ -157,11 +157,11 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 			wasmImportModuleAttr := c.ctx.CreateStringAttribute("wasm-import-module", info.module)
 			llvmFn.AddFunctionAttr(wasmImportModuleAttr)
 
-      // Add the Wasm Import Name, if we are a named wasm import
-      if info.importName != "" {
-        wasmImportNameAttr := c.ctx.CreateStringAttribute("wasm-import-name", info.importName)
-        llvmFn.AddFunctionAttr(wasmImportNameAttr)
-      }
+			// Add the Wasm Import Name, if we are a named wasm import
+			if info.importName != "" {
+				wasmImportNameAttr := c.ctx.CreateStringAttribute("wasm-import-name", info.importName)
+				llvmFn.AddFunctionAttr(wasmImportNameAttr)
+			}
 		}
 		nocaptureKind := llvm.AttributeKindID("nocapture")
 		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
@@ -201,8 +201,8 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 	}
 	if decl, ok := f.Syntax().(*ast.FuncDecl); ok && decl.Doc != nil {
 
-    // Our importName for a wasm module (if we are compiling to wasm), or llvm link name
-    var importName string = ""
+		// Our importName for a wasm module (if we are compiling to wasm), or llvm link name
+		var importName string = ""
 
 		for _, comment := range decl.Doc.List {
 			text := comment.Text
@@ -221,7 +221,7 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 					continue
 				}
 
-        importName = parts[1]
+				importName = parts[1]
 				info.exported = true
 			case "//go:wasm-module":
 				// Alternative comment for setting the import module.
@@ -265,16 +265,16 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 			}
 		}
 
-    // Set the importName for our exported function if we have one
-    if importName != "" {
-      if info.module == "" {
-        info.linkName = importName
-      } else {
-        // WebAssembly import
-        // info.linkName = fmt.Sprintf("tinygo_wasm_import_%s_%s", info.module, info.importName)
-        info.importName = importName
-      }
-    }
+		// Set the importName for our exported function if we have one
+		if importName != "" {
+			if info.module == "" {
+				info.linkName = importName
+			} else {
+				// WebAssembly import
+				// info.linkName = fmt.Sprintf("tinygo_wasm_import_%s_%s", info.module, info.importName)
+				info.importName = importName
+			}
+		}
 
 	}
 }
