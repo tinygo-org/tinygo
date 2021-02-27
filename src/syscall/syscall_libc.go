@@ -13,7 +13,12 @@ type sliceHeader struct {
 }
 
 func Close(fd int) (err error) {
-	return ENOSYS // TODO
+	n := libc_close(int32(fd))
+
+	if n < 0 {
+		return getErrno()
+	}
+	return nil
 }
 
 func Write(fd int, p []byte) (n int, err error) {
@@ -26,7 +31,12 @@ func Write(fd int, p []byte) (n int, err error) {
 }
 
 func Read(fd int, p []byte) (n int, err error) {
-	return 0, ENOSYS // TODO
+	buf, count := splitSlice(p)
+	n = libc_read(int32(fd), buf, uint(count))
+	if n < 0 {
+		err = getErrno()
+	}
+	return
 }
 
 func Seek(fd int, offset int64, whence int) (off int64, err error) {
@@ -34,7 +44,16 @@ func Seek(fd int, offset int64, whence int) (off int64, err error) {
 }
 
 func Open(path string, mode int, perm uint32) (fd int, err error) {
-	return 0, ENOSYS // TODO
+	buf, count := splitSlice([]byte(path))
+	cstr := libc_strndup(buf, count)
+	defer libc_free(cstr)
+	fd = libc_open(cstr, mode, perm)
+	if fd < 0 {
+		err = getErrno()
+		return -1, err
+	}
+
+	return fd, nil
 }
 
 func Mkdir(path string, mode uint32) (err error) {
@@ -76,10 +95,28 @@ func splitSlice(p []byte) (buf *byte, len uintptr) {
 	return slice.buf, slice.len
 }
 
+// int open(const char *path, int oflag, int perm)
+//export open
+func libc_open(path *byte, oflag int, perm uint32) int
+
+// int close(int fd)
+//export close
+func libc_close(fd int32) int
+
 // ssize_t write(int fd, const void *buf, size_t count)
 //export write
 func libc_write(fd int32, buf *byte, count uint) int
 
+// ssize_t read(int fd, void *buf, size_t nbyte);
+//export read
+func libc_read(fd int32, buf *byte, count uint) int
+
 // char *getenv(const char *name);
 //export getenv
 func libc_getenv(name *byte) *byte
+
+//export free
+func libc_free(buf *byte)
+
+//export strndup
+func libc_strndup(buf *byte, size uintptr) *byte
