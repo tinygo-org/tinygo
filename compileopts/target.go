@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -42,7 +43,7 @@ type TargetSpec struct {
 	ExtraFiles       []string `json:"extra-files"`
 	Emulator         []string `json:"emulator" override:"copy"` // inherited Emulator must not be append
 	FlashCommand     string   `json:"flash-command"`
-	GDB              string   `json:"gdb"`
+	GDB              []string `json:"gdb"`
 	PortReset        string   `json:"flash-1200-bps-reset"`
 	FlashMethod      string   `json:"flash-method"`
 	FlashVolume      string   `json:"msd-volume-name"`
@@ -240,7 +241,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		Compiler:  "clang",
 		Linker:    "cc",
 		CFlags:    []string{"--target=" + triple},
-		GDB:       "gdb",
+		GDB:       []string{"gdb"},
 		PortReset: "false",
 	}
 	if goos == "darwin" {
@@ -253,7 +254,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	}
 	if goarch != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.
-		spec.GDB = "gdb-multiarch"
+		spec.GDB = []string{"gdb-multiarch"}
 		if goarch == "arm" && goos == "linux" {
 			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/arm-linux-gnueabihf")
 			spec.Linker = "arm-linux-gnueabihf-gcc"
@@ -270,4 +271,18 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		}
 	}
 	return &spec, nil
+}
+
+// LookupGDB looks up a gdb executable.
+func (spec *TargetSpec) LookupGDB() (string, error) {
+	if len(spec.GDB) == 0 {
+		return "", errors.New("gdb not configured in the target specification")
+	}
+	for _, d := range spec.GDB {
+		_, err := exec.LookPath(d)
+		if err == nil {
+			return d, nil
+		}
+	}
+	return "", errors.New("no gdb found configured in the target specification (" + strings.Join(spec.GDB, ", ") + ")")
 }

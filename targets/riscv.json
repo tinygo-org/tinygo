@@ -21,5 +21,5 @@
 		"src/runtime/gc_riscv.S",
 		"src/device/riscv/handleinterrupt.S"
 	],
-	"gdb": "riscv64-unknown-elf-gdb"
+	"gdb": ["riscv64-unknown-elf-gdb"]
 }

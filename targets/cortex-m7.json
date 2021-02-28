@@ -4,6 +4,5 @@
 	"cflags": [
 		"--target=armv7em-none-eabi",
 		"-Qunused-arguments"
-	],
-	"gdb": "arm-none-eabi-gdb"
+	]
 }
