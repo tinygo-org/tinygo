@@ -4,10 +4,15 @@ package main
 
 import (
 	"os/exec"
+	"syscall"
+
+	"golang.org/x/sys/windows"
 )
 
 // setCommandAsDaemon makes sure this command does not receive signals sent to
-// the parent. It is unimplemented on Windows.
+// the parent.
 func setCommandAsDaemon(daemon *exec.Cmd) {
-	// Not implemented.
+	daemon.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: windows.DETACHED_PROCESS,
+	}
 }
