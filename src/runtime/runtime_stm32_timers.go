@@ -103,9 +103,9 @@ func initTickTimer(ti *timerInfo) {
 }
 
 func handleTick(interrupt.Interrupt) {
-	if stm32.TIM7.SR.HasBits(stm32.TIM_SR_UIF) {
+	if tickTimer.Device.SR.HasBits(stm32.TIM_SR_UIF) {
 		// clear the update flag
-		stm32.TIM7.SR.ClearBits(stm32.TIM_SR_UIF)
+		tickTimer.Device.SR.ClearBits(stm32.TIM_SR_UIF)
 
 		// increment tick count
 		tickCount.Set(tickCount.Get() + 1)
