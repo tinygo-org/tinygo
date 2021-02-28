@@ -1,4 +1,4 @@
-// +build stm32
+// +build stm32,!stm32l0
 
 package runtime
 
