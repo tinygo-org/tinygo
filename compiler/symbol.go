@@ -21,12 +21,13 @@ import (
 // The linkName value contains a valid link name, even if //go:linkname is not
 // present.
 type functionInfo struct {
-	module   string     // go:wasm-module
-	linkName string     // go:linkname, go:export
-	exported bool       // go:export, CGo
-	nobounds bool       // go:nobounds
-	variadic bool       // go:variadic (CGo only)
-	inline   inlineType // go:inline
+	module     string     // go:wasm-module
+	importName string     // go:linkname, go:export - The name the developer assigns
+	linkName   string     // go:linkname, go:export - The name that we map for the particular module -> importName
+	exported   bool       // go:export, CGo
+	nobounds   bool       // go:nobounds
+	variadic   bool       // go:variadic (CGo only)
+	inline     inlineType // go:inline
 }
 
 type inlineType int
@@ -151,8 +152,16 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 	if info.exported {
 		// Set the wasm-import-module attribute if the function's module is set.
 		if info.module != "" {
+
+			// We need to add the wasm-import-module and the wasm-import-name
 			wasmImportModuleAttr := c.ctx.CreateStringAttribute("wasm-import-module", info.module)
 			llvmFn.AddFunctionAttr(wasmImportModuleAttr)
+
+			// Add the Wasm Import Name, if we are a named wasm import
+			if info.importName != "" {
+				wasmImportNameAttr := c.ctx.CreateStringAttribute("wasm-import-name", info.importName)
+				llvmFn.AddFunctionAttr(wasmImportNameAttr)
+			}
 		}
 		nocaptureKind := llvm.AttributeKindID("nocapture")
 		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
@@ -191,6 +200,10 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 		return
 	}
 	if decl, ok := f.Syntax().(*ast.FuncDecl); ok && decl.Doc != nil {
+
+		// Our importName for a wasm module (if we are compiling to wasm), or llvm link name
+		var importName string
+
 		for _, comment := range decl.Doc.List {
 			text := comment.Text
 			if strings.HasPrefix(text, "//export ") {
@@ -207,7 +220,8 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 				if len(parts) != 2 {
 					continue
 				}
-				info.linkName = parts[1]
+
+				importName = parts[1]
 				info.exported = true
 			case "//go:wasm-module":
 				// Alternative comment for setting the import module.
@@ -250,6 +264,17 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 				}
 			}
 		}
+
+		// Set the importName for our exported function if we have one
+		if importName != "" {
+			if info.module == "" {
+				info.linkName = importName
+			} else {
+				// WebAssembly import
+				info.importName = importName
+			}
+		}
+
 	}
 }
 
