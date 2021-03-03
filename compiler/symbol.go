@@ -202,7 +202,7 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 	if decl, ok := f.Syntax().(*ast.FuncDecl); ok && decl.Doc != nil {
 
 		// Our importName for a wasm module (if we are compiling to wasm), or llvm link name
-		var importName string = ""
+		var importName string
 
 		for _, comment := range decl.Doc.List {
 			text := comment.Text
