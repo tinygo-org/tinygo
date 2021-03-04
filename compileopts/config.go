@@ -165,7 +165,7 @@ func (c *Config) AutomaticStackSize() bool {
 func (c *Config) CFlags() []string {
 	cflags := append([]string{}, c.Options.CFlags...)
 	for _, flag := range c.Target.CFlags {
-		cflags = append(cflags, strings.Replace(flag, "{root}", goenv.Get("TINYGOROOT"), -1))
+		cflags = append(cflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
 	}
 	if c.Target.Libc == "picolibc" {
 		root := goenv.Get("TINYGOROOT")
@@ -186,7 +186,7 @@ func (c *Config) LDFlags() []string {
 	// Merge and adjust LDFlags.
 	ldflags := append([]string{}, c.Options.LDFlags...)
 	for _, flag := range c.Target.LDFlags {
-		ldflags = append(ldflags, strings.Replace(flag, "{root}", root, -1))
+		ldflags = append(ldflags, strings.ReplaceAll(flag, "{root}", root))
 	}
 	ldflags = append(ldflags, "-L", root)
 	if c.Target.LinkerScript != "" {

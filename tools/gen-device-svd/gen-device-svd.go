@@ -135,7 +135,7 @@ type Bitfield struct {
 
 func formatText(text string) string {
 	text = regexp.MustCompile(`[ \t\n]+`).ReplaceAllString(text, " ") // Collapse whitespace (like in HTML)
-	text = strings.Replace(text, "\\n ", "\n", -1)
+	text = strings.ReplaceAll(text, "\\n ", "\n")
 	text = strings.TrimSpace(text)
 	return text
 }
@@ -273,9 +273,9 @@ func readSVD(path, sourceURL string) (*Device, error) {
 			p.Registers = append(p.Registers, parseRegister(regName, register, baseAddress, "")...)
 		}
 		for _, cluster := range periphEl.Clusters {
-			clusterName := strings.Replace(cluster.Name, "[%s]", "", -1)
+			clusterName := strings.ReplaceAll(cluster.Name, "[%s]", "")
 			if cluster.DimIndex != nil {
-				clusterName = strings.Replace(clusterName, "%s", "", -1)
+				clusterName = strings.ReplaceAll(clusterName, "%s", "")
 			}
 			clusterPrefix := clusterName + "_"
 			clusterOffset, err := strconv.ParseUint(cluster.AddressOffset, 0, 32)
@@ -292,7 +292,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 					}
 					// handle sub-clusters of registers
 					for _, subClusterEl := range cluster.Clusters {
-						subclusterName := strings.Replace(subClusterEl.Name, "[%s]", "", -1)
+						subclusterName := strings.ReplaceAll(subClusterEl.Name, "[%s]", "")
 						subclusterPrefix := subclusterName + "_"
 						subclusterOffset, err := strconv.ParseUint(subClusterEl.AddressOffset, 0, 32)
 						if err != nil {
@@ -414,7 +414,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 	// Properly format the license block, with comments.
 	licenseBlock := ""
 	if text := formatText(device.LicenseText); text != "" {
-		licenseBlock = "//     " + strings.Replace(text, "\n", "\n//     ", -1)
+		licenseBlock = "//     " + strings.ReplaceAll(text, "\n", "\n//     ")
 		licenseBlock = regexp.MustCompile(`\s+\n`).ReplaceAllString(licenseBlock, "\n")
 	}
 
@@ -595,7 +595,7 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			if err != nil {
 				if enumBitSpecifier.MatchString(enumEl.Value) {
 					// NXP SVDs use the form #xx1x, #x0xx, etc for values
-					enumValue, err = strconv.ParseUint(strings.Replace(enumEl.Value[1:], "x", "0", -1), 2, 32)
+					enumValue, err = strconv.ParseUint(strings.ReplaceAll(enumEl.Value[1:], "x", "0"), 2, 32)
 					if err != nil {
 						panic(err)
 					}
@@ -656,7 +656,7 @@ func NewRegister(element *SVDRegister, baseAddress uint64) *Register {
 }
 
 func (r *Register) name() string {
-	return strings.Replace(r.element.Name, "[%s]", "", -1)
+	return strings.ReplaceAll(r.element.Name, "[%s]", "")
 }
 
 func (r *Register) description() string {
@@ -765,7 +765,7 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 			for i, j := range reg.dimIndex() {
 				regAddress := reg.address() + (uint64(i) * dimIncrement)
 				results = append(results, &PeripheralField{
-					Name:        strings.ToUpper(strings.Replace(reg.name(), "%s", j, -1)),
+					Name:        strings.ToUpper(strings.ReplaceAll(reg.name(), "%s", j)),
 					Address:     regAddress,
 					Description: reg.description(),
 					Array:       -1,
@@ -773,7 +773,7 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 				})
 			}
 			// set first result bitfield
-			shortName := strings.ToUpper(strings.Replace(strings.Replace(reg.name(), "_%s", "", -1), "%s", "", -1))
+			shortName := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(reg.name(), "_%s", ""), "%s", ""))
 			results[0].Bitfields = parseBitfields(groupName, shortName, regEl.Fields, bitfieldPrefix)
 			return results
 		}
