@@ -186,7 +186,9 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	}
 
 	// Add libc dependency if needed.
-	if config.Target.Libc == "picolibc" {
+	root := goenv.Get("TINYGOROOT")
+	switch config.Target.Libc {
+	case "picolibc":
 		path, job, err := Picolibc.load(config.Triple(), config.CPU(), dir)
 		if err != nil {
 			return err
@@ -198,12 +200,21 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			linkerDependencies = append(linkerDependencies, job)
 		}
 		ldflags = append(ldflags, path)
+	case "wasi-libc":
+		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
+		}
+		ldflags = append(ldflags, path)
+	case "":
+		// no library specified, so nothing to do
+	default:
+		return fmt.Errorf("unknown libc: %s", config.Target.Libc)
 	}
 
 	// Add jobs to compile extra files. These files are in C or assembly and
 	// contain things like the interrupt vector table and low level operations
 	// such as stack switching.
-	root := goenv.Get("TINYGOROOT")
 	for i, path := range config.ExtraFiles() {
 		abspath := filepath.Join(root, path)
 		outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
