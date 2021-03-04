@@ -1,3 +1,93 @@
+0.17.0
+
+---
+* **command line**
+  - switch to LLVM 11 for static builds
+  - support gdb debugging with AVR
+  - add support for additional openocd commands
+  - add `-x` flag to print commands
+  - use LLVM 11 by default when linking LLVM dynamically
+  - update go-llvm to use LLVM 11 on macOS
+  - bump go.bug.st/serial to version 1.1.2
+  - do not build LLVM with libxml to work around a bugo on macOS
+  - add support for Go 1.16
+  - support gdb daemonization on Windows
+  - remove support for LLVM 9, to fix CI
+  - kill OpenOCD if it does not exit with a regular quit signal
+  - support `-ocd-output` on Windows
+* **compiler**
+  - `builder`: parallelize most of the build
+  - `builder`: remove unused cacheKey parameter
+  - `builder`: add -mcpu flag while building libraries
+  - `builder`: wait for running jobs to finish
+  - `cgo`: add support for variadic functions
+  - `compiler`: fix undefined behavior in wordpack
+  - `compiler`: fix incorrect "exported function" panic
+  - `compiler`: fix non-int integer constants (fixing a crash)
+  - `compiler`: refactor and add tests
+  - `compiler`: emit a nil check when slicing an array pointer
+  - `compiler`: saturate float-to-int conversions
+  - `compiler`: test float to int conversions and fix upper-bound calculation
+  - `compiler`: support all kinds of deferred builtins
+  - `compiler`: remove ir package
+  - `compiler`: remove unnecessary main.main call workaround
+  - `compiler`: move the setting of attributes to getFunction
+  - `compiler`: create runtime types lazily when needed
+  - `compiler`: move settings to a separate Config struct
+  - `compiler`: work around an ARM backend bug in LLVM
+  - `interp`: rewrite entire package
+  - `interp`: fix alignment of untyped globals
+  - `loader`: use name "main" for the main package
+  - `loader`: support imports from vendor directories
+  - `stacksize`: add support for DW_CFA_offset_extended
+  - `transform`: show better error message in coroutines lowering
+* **standard library**
+  - `machine`: accept configuration struct for ADC parameters
+  - `machine`: make I2C.Configure signature consistent
+  - `reflect`: implement PtrTo
+  - `runtime`: refactor to simplify stack switching
+  - `runtime`: put metadata at the top end of the heap
+* **targets**
+  - `atsam`: add a length check to findPinPadMapping
+  - `atsam`: improve USBCDC
+  - `atsam`: avoid infinite loop when USBCDC is disconnected
+  - `avr`: add SPI support for Atmega based chips
+  - `avr`: use Clang for compiling C and assembly files
+  - `esp32`: implement task based scheduler
+  - `esp32`: enable the FPU
+  - `esp8266`: implement task based scheduler
+  - `esp`: add compiler-rt library
+  - `esp`: add picolibc
+  - `nrf`: refactor code a bit to reduce duplication
+  - `nrf`: use SPIM peripheral instead of the legacy SPI peripheral
+  - `nrf`: update nrfx submodule to latest commit
+  - `nrf52840`: ensure that USB CDC interface is only initialized once
+  - `nrf52840`: improve USBCDC
+  - `stm32`: use stm32-rs SVDs which are of much higher quality
+  - `stm32`: harmonization of UART logic
+  - `stm32`: replace I2C addressable interface with simpler type
+  - `stm32`: fix i2c and add stm32f407 i2c
+  - `stm32`: revert change that adds support for channels in interrupts
+  - `wasm`: implement a growable heap
+  - `wasm`: fix typo in wasm_exec.js, syscall/js.valueLoadString()
+  - `wasm`: Namespaced Wasm Imports so they don't conflict across modules, or reserved LLVM IR
+  - `wasi`: support env variables based on libc
+  - `wasi`: specify wasi-libc in a different way, to improve error message
+* **boards**
+  - `matrixportal-m4`: add support for board Adafruit Matrix Portal M4
+  - `mkr1000`: add this board
+  - `nucleo-f722ze`: add this board
+  - `clue`: correct volume name and add alias for release version of Adafruit Clue board
+  - `p1am-100`: add support for the P1AM-100 (similar to Arduino MKR)
+  - `microbit-v2`: add initial support based on work done by @alankrantas thank you!
+  - `lgt92`: support for STM32L0 MCUs and Dragino LGT92 device
+  - `nicenano`: nice!nano board support
+  - `circuitplay-bluefruit`: correct internal I2C pin mapping
+  - `clue`: correct for lack of low frequency crystal
+  - `digispark`: split off attiny85 target
+  - `nucleo-l552ze`: implementation with CLOCK, LED, and UART
+  - `nrf52840-mdk-usb-dongle`: add this board
+
 0.16.0
 ---
 
