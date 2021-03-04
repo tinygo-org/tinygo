@@ -23,7 +23,7 @@ different guide:
 LLVM, Clang and LLD are quite light on dependencies, requiring only standard
 build tools to be built. Go is of course necessary to build TinyGo itself.
 
-  * Go (1.11+)
+  * Go (1.13+)
   * Standard build tools (gcc/clang)
   * git
   * CMake
@@ -42,11 +42,6 @@ the git repository). Then, inside the directory, download the LLVM source:
 You can also store LLVM outside of the TinyGo root directory by setting the
 `LLVM_BUILDDIR`, `CLANG_SRC` and `LLD_SRC` make variables, but that is not
 covered by this guide.
-
-TinyGo uses Go modules, so if you clone TinyGo inside your GOPATH (and are using
-Go below 1.13), make sure that Go modules are enabled:
-
-    export GO111MODULE=on
 
 ## Build LLVM, Clang, LLD
 

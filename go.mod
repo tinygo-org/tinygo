@@ -1,6 +1,6 @@
 module github.com/tinygo-org/tinygo
 
-go 1.11
+go 1.13
 
 require (
 	github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2
