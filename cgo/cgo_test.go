@@ -24,7 +24,7 @@ var flagUpdate = flag.Bool("update", false, "Update images based on test output.
 // normalizeResult normalizes Go source code that comes out of tests across
 // platforms and Go versions.
 func normalizeResult(result string) string {
-	actual := strings.Replace(result, "\r\n", "\n", -1)
+	actual := strings.ReplaceAll(result, "\r\n", "\n")
 
 	// Make sure all functions are wrapped, even those that would otherwise be
 	// single-line functions. This is necessary because Go 1.14 changed the way
@@ -113,7 +113,7 @@ func TestCGo(t *testing.T) {
 			if err != nil {
 				t.Fatalf("could not read expected output: %v", err)
 			}
-			expected := strings.Replace(string(expectedBytes), "\r\n", "\n", -1)
+			expected := strings.ReplaceAll(string(expectedBytes), "\r\n", "\n")
 
 			// Check whether the output is as expected.
 			if expected != actual {
@@ -154,7 +154,7 @@ func formatDiagnostic(err error) string {
 	msg := err.Error()
 	if runtime.GOOS == "windows" {
 		// Fix Windows path slashes.
-		msg = strings.Replace(msg, "testdata\\", "testdata/", -1)
+		msg = strings.ReplaceAll(msg, "testdata\\", "testdata/")
 	}
 	return "//     " + msg + "\n"
 }

@@ -266,7 +266,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			// Create the command.
 			flashCmd := config.Target.FlashCommand
 			fileToken := "{" + fileExt[1:] + "}"
-			flashCmd = strings.Replace(flashCmd, fileToken, result.Binary, -1)
+			flashCmd = strings.ReplaceAll(flashCmd, fileToken, result.Binary)
 
 			if port == "" && strings.Contains(flashCmd, "{port}") {
 				var err error
@@ -276,7 +276,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 				}
 			}
 
-			flashCmd = strings.Replace(flashCmd, "{port}", port, -1)
+			flashCmd = strings.ReplaceAll(flashCmd, "{port}", port)
 
 			// Execute the command.
 			var cmd *exec.Cmd
