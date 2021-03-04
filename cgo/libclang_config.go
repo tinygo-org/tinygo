@@ -1,5 +1,5 @@
 // +build !byollvm
-// +build !llvm10,!llvm9
+// +build !llvm10
 
 package cgo
 
