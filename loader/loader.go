@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/tinygo-org/tinygo/cgo"
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -110,10 +109,7 @@ func Load(config *compileopts.Config, inputPkgs []string, clangHeaders string, t
 	err = cmd.Run()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-				os.Exit(status.ExitStatus())
-			}
-			os.Exit(1)
+			os.Exit(exitErr.ExitCode())
 		}
 		return nil, fmt.Errorf("failed to run `go list`: %s", err)
 	}
