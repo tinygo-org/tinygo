@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -464,8 +465,15 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			}
 			defer func() {
 				daemon.Process.Signal(os.Interrupt)
-				// Maybe we should send a .Kill() after x seconds?
+				var stopped uint32
+				go func() {
+					time.Sleep(time.Millisecond * 100)
+					if atomic.LoadUint32(&stopped) == 0 {
+						daemon.Process.Kill()
+					}
+				}()
 				daemon.Wait()
+				atomic.StoreUint32(&stopped, 1)
 			}()
 		}
 
