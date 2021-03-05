@@ -12,7 +12,7 @@ type __wasi_iovec_t struct {
 	bufLen uint
 }
 
-//go:wasm-module wasi_unstable
+//go:wasm-module wasi_snapshot_preview1
 //export fd_write
 func fd_write(id uint32, iovs *__wasi_iovec_t, iovs_len uint, nwritten *uint) (errno uint)
 

@@ -58,13 +58,13 @@ func ticks() timeUnit {
 	return timeUnit(nano)
 }
 
-// Implementations of wasi_unstable APIs
+// Implementations of wasi_snapshot_preview1 APIs
 
-//go:wasm-module wasi_unstable
+//go:wasm-module wasi_snapshot_preview1
 //export clock_time_get
 func clock_time_get(clockid uint32, precision uint64, time *int64) (errno uint16)
 
-//go:wasm-module wasi_unstable
+//go:wasm-module wasi_snapshot_preview1
 //export poll_oneoff
 func poll_oneoff(in *__wasi_subscription_t, out *__wasi_event_t, nsubscriptions uint32, nevents *uint32) (errno uint16)
 
