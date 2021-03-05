@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mattn/go-colorable"
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -392,7 +393,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			if ocdOutput {
 				// Make it clear which output is from the daemon.
 				w := &ColorWriter{
-					Out:    os.Stderr,
+					Out:    colorable.NewColorableStderr(),
 					Prefix: "openocd: ",
 					Color:  TermColorYellow,
 				}
@@ -407,7 +408,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			if ocdOutput {
 				// Make it clear which output is from the daemon.
 				w := &ColorWriter{
-					Out:    os.Stderr,
+					Out:    colorable.NewColorableStderr(),
 					Prefix: "jlink: ",
 					Color:  TermColorYellow,
 				}
