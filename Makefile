@@ -391,6 +391,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build             -o test.nro -target=nintendoswitch      examples/serial
 	@$(MD5SUM) test.nro
+	$(TINYGO) build -size short -o test.hex -target=pca10040 -opt=0     ./testdata/stdlib.go
+	@$(MD5SUM) test.hex
 
 wasmtest:
 	$(GO) test ./tests/wasm

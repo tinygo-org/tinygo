@@ -111,6 +111,12 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		if len(errs) > 0 {
 			return errs
 		}
+
+		// Clean up some leftover symbols of the previous transformations.
+		goPasses := llvm.NewPassManager()
+		defer goPasses.Dispose()
+		goPasses.AddGlobalDCEPass()
+		goPasses.Run(mod)
 	}
 
 	// Lower async implementations.
