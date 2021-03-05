@@ -411,15 +411,8 @@ func compileWholeProgram(pkgName string, config *compileopts.Config, compilerCon
 	// exactly.
 	errs = nil
 	switch config.Options.Opt {
-	/*
-		Currently, turning optimizations off causes compile failures.
-		We rely on the optimizer removing some dead symbols.
-		Avoid providing an option that does not work right now.
-		In the future once everything has been fixed we can re-enable this.
-
-		case "none", "0":
-			errs = transform.Optimize(mod, config, 0, 0, 0) // -O0
-	*/
+	case "none", "0":
+		errs = transform.Optimize(mod, config, 0, 0, 0) // -O0
 	case "1":
 		errs = transform.Optimize(mod, config, 1, 0, 0) // -O1
 	case "2":
