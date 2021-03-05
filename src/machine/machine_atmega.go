@@ -114,6 +114,12 @@ func (i2c I2C) readByte() byte {
 	return byte(avr.TWDR.Get())
 }
 
+// UART
+var (
+	// UART0 is the hardware serial port on the AVR.
+	UART0 = UART{Buffer: NewRingBuffer()}
+)
+
 // UART on the AVR.
 type UART struct {
 	Buffer *RingBuffer

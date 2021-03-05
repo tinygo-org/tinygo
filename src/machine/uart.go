@@ -1,4 +1,4 @@
-// +build avr esp nrf sam sifive stm32 k210 nxp
+// +build atmega esp nrf sam sifive stm32 k210 nxp
 
 package machine
 
