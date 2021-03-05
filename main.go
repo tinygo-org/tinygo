@@ -25,6 +25,7 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
+	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 
 	"go.bug.st/serial"
@@ -774,6 +775,15 @@ func printCompilerError(logln func(...interface{}), err error) {
 				logln(line.Pos.String() + ":")
 				line.Inst.Dump()
 				logln()
+			}
+		}
+	case transform.CoroutinesError:
+		logln(err.Pos.String() + ": " + err.Msg)
+		logln("\ntraceback:")
+		for _, line := range err.Traceback {
+			logln(line.Name)
+			if line.Position.IsValid() {
+				logln("\t" + line.Position.String())
 			}
 		}
 	case loader.Errors:
