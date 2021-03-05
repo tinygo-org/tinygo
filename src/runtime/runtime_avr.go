@@ -4,7 +4,6 @@ package runtime
 
 import (
 	"device/avr"
-	"machine"
 	"unsafe"
 )
 
@@ -57,14 +56,6 @@ func postinit() {
 
 func init() {
 	initUART()
-}
-
-func initUART() {
-	machine.UART0.Configure(machine.UARTConfig{})
-}
-
-func putchar(c byte) {
-	machine.UART0.WriteByte(c)
 }
 
 const asyncScheduler = false

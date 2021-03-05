@@ -148,9 +148,3 @@ type I2C struct {
 
 // I2C0 is the only I2C interface on most AVRs.
 var I2C0 = I2C{}
-
-// UART
-var (
-	// UART0 is the hardware serial port on the AVR.
-	UART0 = UART{Buffer: NewRingBuffer()}
-)
