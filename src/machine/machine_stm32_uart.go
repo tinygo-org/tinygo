@@ -13,10 +13,11 @@ import (
 
 // UART representation
 type UART struct {
-	Buffer          *RingBuffer
-	Bus             *stm32.USART_Type
-	Interrupt       interrupt.Interrupt
-	AltFuncSelector uint8
+	Buffer            *RingBuffer
+	Bus               *stm32.USART_Type
+	Interrupt         interrupt.Interrupt
+	TxAltFuncSelector uint8
+	RxAltFuncSelector uint8
 
 	// Registers specific to the chip
 	rxReg       *volatile.Register32

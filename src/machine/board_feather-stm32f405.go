@@ -120,19 +120,22 @@ const (
 
 var (
 	UART1 = UART{
-		Buffer:          NewRingBuffer(),
-		Bus:             stm32.USART3,
-		AltFuncSelector: AF7_USART1_2_3,
+		Buffer:            NewRingBuffer(),
+		Bus:               stm32.USART3,
+		TxAltFuncSelector: AF7_USART1_2_3,
+		RxAltFuncSelector: AF7_USART1_2_3,
 	}
 	UART2 = UART{
-		Buffer:          NewRingBuffer(),
-		Bus:             stm32.USART6,
-		AltFuncSelector: AF8_USART4_5_6,
+		Buffer:            NewRingBuffer(),
+		Bus:               stm32.USART6,
+		TxAltFuncSelector: AF8_USART4_5_6,
+		RxAltFuncSelector: AF8_USART4_5_6,
 	}
 	UART3 = UART{
-		Buffer:          NewRingBuffer(),
-		Bus:             stm32.USART1,
-		AltFuncSelector: AF7_USART1_2_3,
+		Buffer:            NewRingBuffer(),
+		Bus:               stm32.USART1,
+		TxAltFuncSelector: AF7_USART1_2_3,
+		RxAltFuncSelector: AF7_USART1_2_3,
 	}
 	UART0 = UART1
 )
