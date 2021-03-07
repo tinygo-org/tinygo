@@ -15,6 +15,10 @@ type UART struct {
 	Buffer    *RingBuffer
 	Interrupt interrupt.Interrupt
 
+	// txBuffer should be allocated globally (such as when UART is created) to
+	// prevent it being reclaimed or cleaned up prematurely.
+	txBuffer *RingBuffer
+
 	// these hold the input selector ("daisy chain") values that select which pins
 	// are connected to the LPUART device, and should be defined where the UART
 	// instance is declared. see the godoc comments on type muxSelect for more
@@ -31,7 +35,6 @@ type UART struct {
 	configured   bool
 	msbFirst     bool
 	transmitting volatile.Register32
-	txBuffer     *RingBuffer
 }
 
 func (uart *UART) isTransmitting() bool { return uart.transmitting.Get() != 0 }
@@ -197,9 +200,6 @@ func (uart *UART) Sync() error {
 
 // WriteByte writes a single byte of data to the UART interface.
 func (uart *UART) WriteByte(c byte) error {
-	if nil == uart.txBuffer {
-		uart.txBuffer = NewRingBuffer()
-	}
 	uart.startTransmitting()
 	for !uart.txBuffer.Put(c) {
 	}
