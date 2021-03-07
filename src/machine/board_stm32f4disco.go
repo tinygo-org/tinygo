@@ -28,9 +28,10 @@ const (
 
 var (
 	UART0 = UART{
-		Buffer:          NewRingBuffer(),
-		Bus:             stm32.USART2,
-		AltFuncSelector: AF7_USART1_2_3,
+		Buffer:            NewRingBuffer(),
+		Bus:               stm32.USART2,
+		TxAltFuncSelector: AF7_USART1_2_3,
+		RxAltFuncSelector: AF7_USART1_2_3,
 	}
 	UART1 = &UART0
 )

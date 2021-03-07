@@ -22,8 +22,8 @@ func (uart *UART) configurePins(config UARTConfig) {
 	}
 
 	// enable the alternate functions on the TX and RX pins
-	config.TX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTTX}, uart.AltFuncSelector)
-	config.RX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTRX}, uart.AltFuncSelector)
+	config.TX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTTX}, uart.TxAltFuncSelector)
+	config.RX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTRX}, uart.RxAltFuncSelector)
 }
 
 // UART baudrate calc based on the bus and clockspeed
