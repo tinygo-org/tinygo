@@ -13,3 +13,11 @@ func TestOptimizeStringToBytes(t *testing.T) {
 		OptimizeStringToBytes(mod)
 	})
 }
+
+func TestOptimizeStringEqual(t *testing.T) {
+	t.Parallel()
+	testTransform(t, "testdata/stringequal", func(mod llvm.Module) {
+		// Run optimization pass.
+		OptimizeStringEqual(mod)
+	})
+}
