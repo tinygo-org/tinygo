@@ -1,5 +1,7 @@
 package transform
 
+// This file implements several small optimizations of runtime calls.
+
 import (
 	"tinygo.org/x/go-llvm"
 )
@@ -52,6 +54,34 @@ func OptimizeStringToBytes(mod llvm.Module) {
 			// Call to runtime.stringToBytes can be eliminated: both the input
 			// and the output is constant.
 			call.EraseFromParentAsInstruction()
+		}
+	}
+}
+
+// OptimizeStringEqual transforms runtime.stringEqual(...) calls into simple
+// integer comparisons if at least one of the sides of the comparison is zero.
+// Ths converts str == "" into len(str) == 0 and "" == "" into false.
+func OptimizeStringEqual(mod llvm.Module) {
+	stringEqual := mod.NamedFunction("runtime.stringEqual")
+	if stringEqual.IsNil() {
+		// nothing to optimize
+		return
+	}
+
+	builder := mod.Context().NewBuilder()
+	defer builder.Dispose()
+
+	for _, call := range getUses(stringEqual) {
+		str1len := call.Operand(1)
+		str2len := call.Operand(3)
+
+		zero := llvm.ConstInt(str1len.Type(), 0, false)
+		if str1len == zero || str2len == zero {
+			builder.SetInsertPointBefore(call)
+			icmp := builder.CreateICmp(llvm.IntEQ, str1len, str2len, "")
+			call.ReplaceAllUsesWith(icmp)
+			call.EraseFromParentAsInstruction()
+			continue
 		}
 	}
 }

@@ -97,6 +97,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		// Run TinyGo-specific interprocedural optimizations.
 		OptimizeAllocs(mod)
 		OptimizeStringToBytes(mod)
+		OptimizeStringEqual(mod)
 
 	} else {
 		// Must be run at any optimization level.
