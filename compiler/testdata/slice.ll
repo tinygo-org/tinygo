@@ -40,38 +40,14 @@ declare void @runtime.lookupPanic(i8*, i8*)
 define hidden { i32*, i32, i32 } @main.sliceAppendValues(i32* %ints.data, i32 %ints.len, i32 %ints.cap, i8* %context, i8* %parentHandle) unnamed_addr {
 entry:
   %varargs = call i8* @runtime.alloc(i32 12, i8* undef, i8* null)
-  br i1 false, label %gep.throw, label %gep.next
-
-gep.throw:                                        ; preds = %entry
-  unreachable
-
-gep.next:                                         ; preds = %entry
   %0 = bitcast i8* %varargs to i32*
   store i32 1, i32* %0, align 4
-  br i1 false, label %gep.throw1, label %gep.next2
-
-gep.throw1:                                       ; preds = %gep.next
-  unreachable
-
-gep.next2:                                        ; preds = %gep.next
   %1 = getelementptr inbounds i8, i8* %varargs, i32 4
   %2 = bitcast i8* %1 to i32*
   store i32 2, i32* %2, align 4
-  br i1 false, label %gep.throw3, label %gep.next4
-
-gep.throw3:                                       ; preds = %gep.next2
-  unreachable
-
-gep.next4:                                        ; preds = %gep.next2
   %3 = getelementptr inbounds i8, i8* %varargs, i32 8
   %4 = bitcast i8* %3 to i32*
   store i32 3, i32* %4, align 4
-  br i1 false, label %slice.throw, label %slice.next
-
-slice.throw:                                      ; preds = %gep.next4
-  unreachable
-
-slice.next:                                       ; preds = %gep.next4
   %append.srcPtr = bitcast i32* %ints.data to i8*
   %append.new = call { i8*, i32, i32 } @runtime.sliceAppend(i8* %append.srcPtr, i8* nonnull %varargs, i32 %ints.len, i32 %ints.cap, i32 3, i32 4, i8* undef, i8* null)
   %append.newPtr = extractvalue { i8*, i32, i32 } %append.new, 0
@@ -83,8 +59,6 @@ slice.next:                                       ; preds = %gep.next4
   %7 = insertvalue { i32*, i32, i32 } %6, i32 %append.newCap, 2
   ret { i32*, i32, i32 } %7
 }
-
-declare void @runtime.nilPanic(i8*, i8*)
 
 declare { i8*, i32, i32 } @runtime.sliceAppend(i8*, i8*, i32, i32, i32, i32, i8*, i8*)
 

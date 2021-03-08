@@ -159,6 +159,9 @@ func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix str
 	}
 
 	switch inst := inst.(type) {
+	case *ssa.Alloc:
+		// An alloc is never nil.
+		return
 	case *ssa.IndexAddr:
 		// This pointer is the result of an index operation into a slice or
 		// array. Such slices/arrays are already bounds checked so the pointer
