@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 53 microcontroller boards are currently supported:
+The following 55 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
@@ -60,6 +60,7 @@ The following 53 microcontroller boards are currently supported:
 * [Adafruit PyBadge](https://www.adafruit.com/product/4200)
 * [Adafruit PyGamer](https://www.adafruit.com/product/4242)
 * [Adafruit PyPortal](https://www.adafruit.com/product/4116)
+* [Adafruit QT Py](https://www.adafruit.com/product/4600)
 * [Adafruit Trinket M0](https://www.adafruit.com/product/3500)
 * [Arduino Mega 2560](https://store.arduino.cc/arduino-mega-2560-rev3)
 * [Arduino MKR1000](https://store.arduino.cc/arduino-mkr1000-wifi)
@@ -87,6 +88,7 @@ The following 53 microcontroller boards are currently supported:
 * [Phytec reel board](https://www.phytec.eu/product-eu/internet-of-things/reelboard/)
 * [PineTime DevKit](https://www.pine64.org/pinetime/)
 * [PJRC Teensy 3.6](https://www.pjrc.com/store/teensy36.html)
+* [PJRC Teensy 4.0](https://www.pjrc.com/store/teensy40.html)
 * [ProductivityOpen P1AM-100](https://facts-engineering.github.io/modules/P1AM-100/P1AM-100.html)
 * [Seeed Wio Terminal](https://www.seeedstudio.com/Wio-Terminal-p-4509.html)
 * [Seeed Seeeduino XIAO](https://www.seeedstudio.com/Seeeduino-XIAO-Arduino-Microcontroller-SAMD21-Cortex-M0+-p-4426.html)
