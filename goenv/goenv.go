@@ -228,7 +228,7 @@ func isCachedGoroot(goroot string) (bool, string) {
 	}
 	for _, f := range info {
 		if mode, ok := cacheEntry[f.Name()]; ok {
-			if mode != f.Mode().Type() {
+			if mode != f.Mode()&os.ModeType {
 				return false, ""
 			}
 			// Remove the verified entry
