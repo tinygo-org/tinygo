@@ -4,7 +4,6 @@ package goenv
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"os/user"
@@ -215,11 +214,11 @@ func isCachedGoroot(goroot string) (bool, string) {
 	// As these are encountered, they are deleted from the map. If, after
 	// reading all entries in the given path, this map has zero remaining
 	// elements, then we have a cached GOROOT.
-	cacheEntry := map[string]fs.FileMode{
-		"src": fs.ModeDir,
-		"bin": fs.ModeSymlink,
-		"lib": fs.ModeSymlink,
-		"pkg": fs.ModeSymlink,
+	cacheEntry := map[string]os.FileMode{
+		"src": os.ModeDir,
+		"bin": os.ModeSymlink,
+		"lib": os.ModeSymlink,
+		"pkg": os.ModeSymlink,
 	}
 
 	entry, _ := os.ReadDir(goroot)
@@ -230,7 +229,7 @@ func isCachedGoroot(goroot string) (bool, string) {
 			}
 			// Remove the verified entry
 			delete(cacheEntry, e.Name())
-			if mode&fs.ModeSymlink == 0 {
+			if mode&os.ModeSymlink == 0 {
 				continue
 			}
 			// Entry is a symlink, get the physical GOROOT to which it points
