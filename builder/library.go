@@ -42,30 +42,28 @@ func (l *Library) sourcePaths(target string) []string {
 // The resulting file is stored in the provided tmpdir, which is expected to be
 // removed after the Load call.
 func (l *Library) Load(target, tmpdir string) (path string, err error) {
-	path, job, err := l.load(target, "", tmpdir)
+	job, err := l.load(target, "", tmpdir)
 	if err != nil {
 		return "", err
 	}
-	if job != nil {
-		jobs := append([]*compileJob{job}, job.dependencies...)
-		err = runJobs(jobs)
-	}
-	return path, err
+	jobs := append([]*compileJob{job}, job.dependencies...)
+	err = runJobs(jobs)
+	return job.result, err
 }
 
-// load returns a path to the library file for the given target, loading it from
-// cache if possible. It will return a non-zero compiler job if the library
-// wasn't cached, this job (and its dependencies) must be run before the library
-// path is valid.
+// load returns a compile job to build this library file for the given target
+// and CPU. It may return a dummy compileJob if the library build is already
+// cached. The path is stored as job.result but is only valid if the job and
+// job.dependencies have been run.
 // The provided tmpdir will be used to store intermediary files and possibly the
 // output archive file, it is expected to be removed after use.
-func (l *Library) load(target, cpu, tmpdir string) (path string, job *compileJob, err error) {
+func (l *Library) load(target, cpu, tmpdir string) (job *compileJob, err error) {
 	// Try to load a precompiled library.
 	precompiledPath := filepath.Join(goenv.Get("TINYGOROOT"), "pkg", target, l.name+".a")
 	if _, err := os.Stat(precompiledPath); err == nil {
 		// Found a precompiled library for this OS/architecture. Return the path
 		// directly.
-		return precompiledPath, nil, nil
+		return dummyCompileJob(precompiledPath), nil
 	}
 
 	var outfile string
@@ -78,7 +76,7 @@ func (l *Library) load(target, cpu, tmpdir string) (path string, job *compileJob
 	// Try to fetch this library from the cache.
 	if path, err := cacheLoad(outfile, l.sourcePaths(target)); path != "" || err != nil {
 		// Cache hit.
-		return path, nil, err
+		return dummyCompileJob(path), nil
 	}
 	// Cache miss, build it now.
 
@@ -86,7 +84,7 @@ func (l *Library) load(target, cpu, tmpdir string) (path string, job *compileJob
 	dir := filepath.Join(tmpdir, "build-lib-"+l.name)
 	err = os.Mkdir(dir, 0777)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	// Precalculate the flags to the compiler invocation.
@@ -113,7 +111,8 @@ func (l *Library) load(target, cpu, tmpdir string) (path string, job *compileJob
 	arpath := filepath.Join(dir, l.name+".a")
 	job = &compileJob{
 		description: "ar " + l.name + ".a",
-		run: func() error {
+		result:      arpath,
+		run: func(*compileJob) error {
 			// Create an archive of all object files.
 			err := makeArchive(arpath, objs)
 			if err != nil {
@@ -133,7 +132,7 @@ func (l *Library) load(target, cpu, tmpdir string) (path string, job *compileJob
 		objs = append(objs, objpath)
 		job.dependencies = append(job.dependencies, &compileJob{
 			description: "compile " + srcpath,
-			run: func() error {
+			run: func(*compileJob) error {
 				var compileArgs []string
 				compileArgs = append(compileArgs, args...)
 				compileArgs = append(compileArgs, "-o", objpath, srcpath)
@@ -146,5 +145,5 @@ func (l *Library) load(target, cpu, tmpdir string) (path string, job *compileJob
 		})
 	}
 
-	return arpath, job, nil
+	return job, nil
 }

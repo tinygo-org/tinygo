@@ -179,7 +179,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		// The package has not yet been compiled, so create a job to do so.
 		job := &compileJob{
 			description: "compile package " + pkg.ImportPath,
-			run: func() error {
+			run: func(*compileJob) error {
 				// Compile AST to IR. The compiler.CompilePackage function will
 				// build the SSA as needed.
 				mod, errs := compiler.CompilePackage(pkg.ImportPath, pkg, program.Package(pkg.Pkg), machine, compilerConfig, config.DumpSSA())
@@ -233,7 +233,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	programJob := &compileJob{
 		description:  "link+optimize packages (LTO)",
 		dependencies: packageJobs,
-		run: func() error {
+		run: func(*compileJob) error {
 			// Load and link all the bitcode files. This does not yet optimize
 			// anything, it only links the bitcode files together.
 			ctx := llvm.NewContext()
@@ -353,7 +353,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	outputObjectFileJob := &compileJob{
 		description:  "generate output file",
 		dependencies: []*compileJob{programJob},
-		run: func() error {
+		result:       objfile,
+		run: func(*compileJob) error {
 			llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
 			if err != nil {
 				return err
@@ -367,40 +368,32 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	linkerDependencies := []*compileJob{outputObjectFileJob}
 	executable := filepath.Join(dir, "main")
 	tmppath := executable // final file
-	ldflags := append(config.LDFlags(), "-o", executable, objfile)
+	ldflags := append(config.LDFlags(), "-o", executable)
 
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
 	if config.Target.RTLib == "compiler-rt" {
-		path, job, err := CompilerRT.load(config.Triple(), config.CPU(), dir)
+		job, err := CompilerRT.load(config.Triple(), config.CPU(), dir)
 		if err != nil {
 			return err
 		}
-		if job != nil {
-			// The library was not loaded from cache so needs to be compiled
-			// (and then stored in the cache).
-			jobs = append(jobs, job.dependencies...)
-			jobs = append(jobs, job)
-			linkerDependencies = append(linkerDependencies, job)
-		}
-		ldflags = append(ldflags, path)
+		jobs = append(jobs, job.dependencies...)
+		jobs = append(jobs, job)
+		linkerDependencies = append(linkerDependencies, job)
 	}
 
 	// Add libc dependency if needed.
 	root := goenv.Get("TINYGOROOT")
 	switch config.Target.Libc {
 	case "picolibc":
-		path, job, err := Picolibc.load(config.Triple(), config.CPU(), dir)
+		job, err := Picolibc.load(config.Triple(), config.CPU(), dir)
 		if err != nil {
 			return err
 		}
-		if job != nil {
-			// The library needs to be compiled (cache miss).
-			jobs = append(jobs, job.dependencies...)
-			jobs = append(jobs, job)
-			linkerDependencies = append(linkerDependencies, job)
-		}
-		ldflags = append(ldflags, path)
+		// The library needs to be compiled (cache miss).
+		jobs = append(jobs, job.dependencies...)
+		jobs = append(jobs, job)
+		linkerDependencies = append(linkerDependencies, job)
 	case "wasi-libc":
 		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
 		if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -421,7 +414,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
 		job := &compileJob{
 			description: "compile extra file " + path,
-			run: func() error {
+			result:      outpath,
+			run: func(*compileJob) error {
 				err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, abspath)...)
 				if err != nil {
 					return &commandError{"failed to build", path, err}
@@ -431,7 +425,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		}
 		jobs = append(jobs, job)
 		linkerDependencies = append(linkerDependencies, job)
-		ldflags = append(ldflags, outpath)
 	}
 
 	// Add jobs to compile C files in all packages. This is part of CGo.
@@ -443,7 +436,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"."+strconv.Itoa(j)+"-"+filepath.Base(file)+".o")
 			job := &compileJob{
 				description: "compile CGo file " + file,
-				run: func() error {
+				result:      outpath,
+				run: func(*compileJob) error {
 					err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, file)...)
 					if err != nil {
 						return &commandError{"failed to build", file, err}
@@ -453,7 +447,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			}
 			jobs = append(jobs, job)
 			linkerDependencies = append(linkerDependencies, job)
-			ldflags = append(ldflags, outpath)
 		}
 	}
 
@@ -468,7 +461,13 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	jobs = append(jobs, &compileJob{
 		description:  "link",
 		dependencies: linkerDependencies,
-		run: func() error {
+		run: func(job *compileJob) error {
+			for _, dependency := range job.dependencies {
+				if dependency.result == "" {
+					return errors.New("dependency without result: " + dependency.description)
+				}
+				ldflags = append(ldflags, dependency.result)
+			}
 			err = link(config.Target.Linker, ldflags...)
 			if err != nil {
 				return &commandError{"failed to link", executable, err}
