@@ -4,6 +4,7 @@ package goenv
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/user"
@@ -221,19 +222,22 @@ func isCachedGoroot(goroot string) (bool, string) {
 		"pkg": os.ModeSymlink,
 	}
 
-	entry, _ := os.ReadDir(goroot)
-	for _, e := range entry {
-		if mode, ok := cacheEntry[e.Name()]; ok {
-			if mode != e.Type() {
+	info, err := ioutil.ReadDir(goroot)
+	if err != nil {
+		return false, ""
+	}
+	for _, f := range info {
+		if mode, ok := cacheEntry[f.Name()]; ok {
+			if mode != f.Mode().Type() {
 				return false, ""
 			}
 			// Remove the verified entry
-			delete(cacheEntry, e.Name())
+			delete(cacheEntry, f.Name())
 			if mode&os.ModeSymlink == 0 {
 				continue
 			}
 			// Entry is a symlink, get the physical GOROOT to which it points
-			root, err := os.Readlink(filepath.Join(goroot, e.Name()))
+			root, err := os.Readlink(filepath.Join(goroot, f.Name()))
 			if err != nil {
 				return false, ""
 			}
