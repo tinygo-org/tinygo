@@ -27,10 +27,21 @@ const (
 type compileJob struct {
 	description  string // description, only used for logging
 	dependencies []*compileJob
-	run          func() error
+	result       string // result (path)
+	run          func(*compileJob) (err error)
 	state        jobState
 	err          error         // error if finished
 	duration     time.Duration // how long it took to run this job (only set after finishing)
+}
+
+// dummyCompileJob returns a new *compileJob that produces an output without
+// doing anything. This can be useful where a *compileJob producing an output is
+// expected but nothing needs to be done, for example for a load from a cache.
+func dummyCompileJob(result string) *compileJob {
+	return &compileJob{
+		description: "<dummy>",
+		result:      result,
+	}
 }
 
 // readyToRun returns whether this job is ready to run: it is itself not yet
@@ -150,9 +161,11 @@ func nextJob(jobs []*compileJob) *compileJob {
 func jobWorker(workerChan, doneChan chan *compileJob) {
 	for job := range workerChan {
 		start := time.Now()
-		err := job.run()
-		if err != nil {
-			job.err = err
+		if job.run != nil {
+			err := job.run(job)
+			if err != nil {
+				job.err = err
+			}
 		}
 		job.duration = time.Since(start)
 		doneChan <- job
