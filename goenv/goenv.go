@@ -4,6 +4,7 @@ package goenv
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"os/user"
@@ -142,9 +143,14 @@ func getHomeDir() string {
 // getGoroot returns an appropriate GOROOT from various sources. If it can't be
 // found, it returns an empty string.
 func getGoroot() string {
+	// An explicitly set GOROOT always has preference.
 	goroot := os.Getenv("GOROOT")
 	if goroot != "" {
-		// An explicitly set GOROOT always has preference.
+		// If environmental GOROOT points to a TinyGo cache, use the physical path
+		// the cache points into.
+		if isCache, phyGoroot := isCachedGoroot(goroot); isCache {
+			return phyGoroot
+		}
 		return goroot
 	}
 
@@ -194,4 +200,61 @@ func getGoroot() string {
 func isGoroot(goroot string) bool {
 	_, err := os.Stat(filepath.Join(goroot, "src", "runtime", "internal", "sys", "zversion.go"))
 	return err == nil
+}
+
+// isCachedGoroot checks whether the given path looks like a cached GOROOT.
+// If it does appear to be a cached GOROOT, it returns true and the physical
+// path to which the cache is linked. Otherwise, false and the empty string
+// are returned.
+func isCachedGoroot(goroot string) (bool, string) {
+
+	// The physical GOROOT path to which the cache is linked.
+	var phyGoroot string
+
+	// Name and type of directory entries indicative of a cached GOROOT.
+	// As these are encountered, they are deleted from the map. If, after
+	// reading all entries in the given path, this map has zero remaining
+	// elements, then we have a cached GOROOT.
+	cacheEntry := map[string]fs.FileMode{
+		"src": fs.ModeDir,
+		"bin": fs.ModeSymlink,
+		"lib": fs.ModeSymlink,
+		"pkg": fs.ModeSymlink,
+	}
+
+	entry, _ := os.ReadDir(goroot)
+	for _, e := range entry {
+		if mode, ok := cacheEntry[e.Name()]; ok {
+			if mode != e.Type() {
+				return false, ""
+			}
+			// Remove the verified entry
+			delete(cacheEntry, e.Name())
+			if mode&fs.ModeSymlink == 0 {
+				continue
+			}
+			// Entry is a symlink, get the physical GOROOT to which it points
+			root, err := os.Readlink(filepath.Join(goroot, e.Name()))
+			if err != nil {
+				return false, ""
+			}
+			// Assume parent directory of the symlink destination is GOROOT
+			root = filepath.Dir(root)
+			if phyGoroot == "" {
+				// Keep first symlink encountered
+				phyGoroot = root
+			} else if phyGoroot != root {
+				// Destination GOROOT doesn't match all previously discovered
+				return false, ""
+			}
+		}
+	}
+
+	if len(cacheEntry) == 0 {
+		// All expected directory entries were found, and all symlinks were
+		// pointing to subdirectories of the same exact parent directory.
+		return true, phyGoroot
+	}
+
+	return false, ""
 }
