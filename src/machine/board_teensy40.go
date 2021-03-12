@@ -136,6 +136,7 @@ const (
 )
 
 var (
+	UART0 = &UART1 // alias UART0 to UART1
 	UART1 = UART{
 		Bus:      nxp.LPUART6,
 		Buffer:   NewRingBuffer(),
