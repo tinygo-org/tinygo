@@ -93,7 +93,7 @@ func copyFile(src, dst string) error {
 // executeCommand is a simple wrapper to exec.Cmd
 func executeCommand(options *compileopts.Options, name string, arg ...string) *exec.Cmd {
 	if options.PrintCommands {
-		fmt.Printf("%s %s\n ", name, strings.Join(arg, " "))
+		fmt.Printf("%s %s\n", name, strings.Join(arg, " "))
 	}
 	return exec.Command(name, arg...)
 }
