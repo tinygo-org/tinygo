@@ -382,14 +382,14 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 
 	// Do CGo processing.
 	if len(p.CgoFiles) != 0 {
-		var cflags []string
-		cflags = append(cflags, p.program.config.CFlags()...)
-		cflags = append(cflags, "-I"+p.Dir)
+		var initialCFlags []string
+		initialCFlags = append(initialCFlags, p.program.config.CFlags()...)
+		initialCFlags = append(initialCFlags, "-I"+p.Dir)
 		if p.program.clangHeaders != "" {
-			cflags = append(cflags, "-Xclang", "-internal-isystem", "-Xclang", p.program.clangHeaders)
+			initialCFlags = append(initialCFlags, "-Xclang", "-internal-isystem", "-Xclang", p.program.clangHeaders)
 		}
-		p.CFlags = cflags
-		generated, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.program.fset, cflags)
+		generated, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.program.fset, initialCFlags)
+		p.CFlags = append(initialCFlags, cflags...)
 		for path, hash := range accessedFiles {
 			p.FileHashes[path] = hash
 		}

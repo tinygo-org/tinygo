@@ -58,4 +58,5 @@ option G: 12
 option 2A: 20
 option 3A: 21
 enum width matches: true
+CFLAGS value: 17
 copied string: foobar

@@ -65,7 +65,7 @@ func TestCGo(t *testing.T) {
 			}
 
 			// Process the AST with CGo.
-			cgoAST, _, _, cgoErrors := Process([]*ast.File{f}, "testdata", fset, cflags)
+			cgoAST, _, _, _, cgoErrors := Process([]*ast.File{f}, "testdata", fset, cflags)
 
 			// Check the AST for type errors.
 			var typecheckErrors []error

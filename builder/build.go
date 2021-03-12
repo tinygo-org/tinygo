@@ -438,13 +438,15 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// TODO: do this as part of building the package to be able to link the
 	// bitcode files together.
 	for i, pkg := range lprogram.Sorted() {
+		pkg := pkg
 		for j, filename := range pkg.CFiles {
 			file := filepath.Join(pkg.Dir, filename)
 			outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"."+strconv.Itoa(j)+"-"+filepath.Base(file)+".o")
 			job := &compileJob{
 				description: "compile CGo file " + file,
 				run: func() error {
-					err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, file)...)
+					cflags := append([]string{"-c", "-o", outpath, file}, pkg.CFlags...)
+					err := runCCompiler(config.Target.Compiler, cflags...)
 					if err != nil {
 						return &commandError{"failed to build", file, err}
 					}
