@@ -41,7 +41,8 @@ type cgoPackage struct {
 	elaboratedTypes map[string]*elaboratedTypeInfo
 	enums           map[string]enumInfo
 	anonStructNum   int
-	ldflags         []string
+	cflags          []string // CFlags from #cgo lines
+	ldflags         []string // LDFlags from #cgo lines
 	visitedFiles    map[string][]byte
 }
 
@@ -157,10 +158,10 @@ typedef unsigned long long  _Cgo_ulonglong;
 // Process extracts `import "C"` statements from the AST, parses the comment
 // with libclang, and modifies the AST to use this information. It returns a
 // newly created *ast.File that should be added to the list of to-be-parsed
-// files, the LDFLAGS for this package, and a map of file hashes of the accessed
-// C header files. If there is one or more error, it returns these in the
-// []error slice but still modifies the AST.
-func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string) (*ast.File, []string, map[string][]byte, []error) {
+// files, the CFLAGS and LDFLAGS found in #cgo lines, and a map of file hashes
+// of the accessed C header files. If there is one or more error, it returns
+// these in the []error slice but still modifies the AST.
+func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string) (*ast.File, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
 		dir:             dir,
 		fset:            fset,
@@ -175,11 +176,6 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 		visitedFiles:    map[string][]byte{},
 	}
 
-	// Disable _FORTIFY_SOURCE as it causes problems on macOS.
-	// Note that it is only disabled for memcpy (etc) calls made from Go, which
-	// have better alternatives anyway.
-	cflags = append(cflags, "-D_FORTIFY_SOURCE=0")
-
 	// Add a new location for the following file.
 	generatedTokenPos := p.fset.AddFile(dir+"/!cgo.go", -1, 0)
 	generatedTokenPos.SetLines([]int{0})
@@ -188,7 +184,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Find the absolute path for this package.
 	packagePath, err := filepath.Abs(fset.File(files[0].Pos()).Name())
 	if err != nil {
-		return nil, nil, nil, []error{
+		return nil, nil, nil, nil, []error{
 			scanner.Error{
 				Pos: fset.Position(files[0].Pos()),
 				Msg: "cgo: cannot find absolute path: " + err.Error(), // TODO: wrap this error
@@ -363,7 +359,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 						continue
 					}
 					makePathsAbsolute(flags, packagePath)
-					cflags = append(cflags, flags...)
+					p.cflags = append(p.cflags, flags...)
 				case "LDFLAGS":
 					flags, err := shlex.Split(value)
 					if err != nil {
@@ -386,6 +382,13 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 		}
 	}
 
+	// Define CFlags that will be used while parsing the package.
+	// Disable _FORTIFY_SOURCE as it causes problems on macOS.
+	// Note that it is only disabled for memcpy (etc) calls made from Go, which
+	// have better alternatives anyway.
+	cflagsForCGo := append([]string{"-D_FORTIFY_SOURCE=0"}, cflags...)
+	cflagsForCGo = append(cflagsForCGo, p.cflags...)
+
 	// Process all CGo imports.
 	for _, genDecl := range statements {
 		cgoComment := genDecl.Doc.Text()
@@ -395,7 +398,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 			pos = genDecl.Doc.Pos()
 		}
 		position := fset.PositionFor(pos, true)
-		p.parseFragment(cgoComment+cgoTypes, cflags, position.Filename, position.Line)
+		p.parseFragment(cgoComment+cgoTypes, cflagsForCGo, position.Filename, position.Line)
 	}
 
 	// Declare functions found by libclang.
@@ -430,7 +433,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
-	return p.generated, p.ldflags, p.visitedFiles, p.errors
+	return p.generated, p.cflags, p.ldflags, p.visitedFiles, p.errors
 }
 
 // makePathsAbsolute converts some common path compiler flags (-I, -L) from

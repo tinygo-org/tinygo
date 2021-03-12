@@ -5,6 +5,7 @@ int fortytwo(void);
 #include "main.h"
 int mul(int, int);
 #include <string.h>
+#cgo CFLAGS: -DSOME_CONSTANT=17
 */
 import "C"
 
@@ -117,6 +118,9 @@ func main() {
 
 	// Check that enums are considered the same width in C and CGo.
 	println("enum width matches:", unsafe.Sizeof(C.option2_t(0)) == uintptr(C.smallEnumWidth))
+
+	// Check whether CFLAGS are correctly passed on to compiled C files.
+	println("CFLAGS value:", C.cflagsConstant)
 
 	// libc: test whether C functions work at all.
 	buf1 := []byte("foobar\x00")

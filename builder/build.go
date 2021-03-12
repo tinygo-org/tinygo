@@ -430,7 +430,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		job := &compileJob{
 			description: "compile extra file " + path,
 			run: func(job *compileJob) error {
-				result, err := compileAndCacheCFile(abspath, dir, config)
+				result, err := compileAndCacheCFile(abspath, dir, config.CFlags(), config)
 				job.result = result
 				return err
 			},
@@ -443,12 +443,13 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// TODO: do this as part of building the package to be able to link the
 	// bitcode files together.
 	for _, pkg := range lprogram.Sorted() {
+		pkg := pkg
 		for _, filename := range pkg.CFiles {
 			abspath := filepath.Join(pkg.Dir, filename)
 			job := &compileJob{
 				description: "compile CGo file " + abspath,
 				run: func(job *compileJob) error {
-					result, err := compileAndCacheCFile(abspath, dir, config)
+					result, err := compileAndCacheCFile(abspath, dir, pkg.CFlags, config)
 					job.result = result
 					return err
 				},
