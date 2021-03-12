@@ -124,6 +124,9 @@ func compileAndCacheCFile(abspath, tmpdir string, config *compileopts.Config) (s
 	flags := config.CFlags()
 	flags = append(flags, "-MD", "-MV", "-MTdeps", "-MF", depTmpFile.Name()) // autogenerate dependencies
 	flags = append(flags, "-c", "-o", objTmpFile.Name(), abspath)
+	if config.Options.PrintCommands {
+		fmt.Printf("%s %s\n", config.Target.Compiler, strings.Join(flags, " "))
+	}
 	err = runCCompiler(config.Target.Compiler, flags...)
 	if err != nil {
 		return "", &commandError{"failed to build", abspath, err}
