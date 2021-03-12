@@ -139,6 +139,8 @@ extern bitfield_t globalBitfield;
 
 extern int smallEnumWidth;
 
+extern int cflagsConstant;
+
 // test duplicate definitions
 int add(int a, int b);
 extern int global;

@@ -20,6 +20,8 @@ int globalUnionSize = sizeof(globalUnion);
 option_t globalOption = optionG;
 bitfield_t globalBitfield = {244, 15, 1, 2, 47, 5};
 
+int cflagsConstant = SOME_CONSTANT;
+
 int smallEnumWidth = sizeof(option2_t);
 
 int fortytwo() {
