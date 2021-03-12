@@ -174,11 +174,13 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	spi.Bus.TXDATA.Set(uint32(w))
 
 	// wait until receive has data
-	for spi.Bus.RXDATA.HasBits(sifive.QSPI_RXDATA_EMPTY) {
+	data := spi.Bus.RXDATA.Get()
+	for data&sifive.QSPI_RXDATA_EMPTY > 0 {
+		data = spi.Bus.RXDATA.Get()
 	}
 
 	// return data
-	return byte(spi.Bus.RXDATA.Get() & sifive.QSPI_RXDATA_DATA_Msk), nil
+	return byte(data), nil
 }
 
 // I2C on the FE310-G002.
