@@ -17,7 +17,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -409,18 +408,14 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add jobs to compile extra files. These files are in C or assembly and
 	// contain things like the interrupt vector table and low level operations
 	// such as stack switching.
-	for i, path := range config.ExtraFiles() {
+	for _, path := range config.ExtraFiles() {
 		abspath := filepath.Join(root, path)
-		outpath := filepath.Join(dir, "extra-"+strconv.Itoa(i)+"-"+filepath.Base(path)+".o")
 		job := &compileJob{
 			description: "compile extra file " + path,
-			result:      outpath,
-			run: func(*compileJob) error {
-				err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, abspath)...)
-				if err != nil {
-					return &commandError{"failed to build", path, err}
-				}
-				return nil
+			run: func(job *compileJob) error {
+				result, err := compileAndCacheCFile(abspath, dir, config)
+				job.result = result
+				return err
 			},
 		}
 		jobs = append(jobs, job)
@@ -430,19 +425,15 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add jobs to compile C files in all packages. This is part of CGo.
 	// TODO: do this as part of building the package to be able to link the
 	// bitcode files together.
-	for i, pkg := range lprogram.Sorted() {
-		for j, filename := range pkg.CFiles {
-			file := filepath.Join(pkg.Dir, filename)
-			outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"."+strconv.Itoa(j)+"-"+filepath.Base(file)+".o")
+	for _, pkg := range lprogram.Sorted() {
+		for _, filename := range pkg.CFiles {
+			abspath := filepath.Join(pkg.Dir, filename)
 			job := &compileJob{
-				description: "compile CGo file " + file,
-				result:      outpath,
-				run: func(*compileJob) error {
-					err := runCCompiler(config.Target.Compiler, append(config.CFlags(), "-c", "-o", outpath, file)...)
-					if err != nil {
-						return &commandError{"failed to build", file, err}
-					}
-					return nil
+				description: "compile CGo file " + abspath,
+				run: func(job *compileJob) error {
+					result, err := compileAndCacheCFile(abspath, dir, config)
+					job.result = result
+					return err
 				},
 			}
 			jobs = append(jobs, job)
