@@ -6,7 +6,6 @@ package machine
 
 import (
 	"device/stm32"
-	"runtime/interrupt"
 	"unsafe"
 )
 
@@ -189,14 +188,6 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 
 //---------- UART related types and code
 
-// UART representation
-type UART struct {
-	Buffer          *RingBuffer
-	Bus             *stm32.USART_Type
-	Interrupt       interrupt.Interrupt
-	AltFuncSelector uint8
-}
-
 // Configure the UART.
 func (uart UART) configurePins(config UARTConfig) {
 	// enable the alternate functions on the TX and RX pins
@@ -220,6 +211,14 @@ func (uart UART) getBaudRateDivisor(baudRate uint32) uint32 {
 	}
 
 	return rate
+}
+
+// Register names vary by ST processor, these are for STM L0 family
+func (uart *UART) setRegisters() {
+	uart.rxReg = &uart.Bus.RDR
+	uart.txReg = &uart.Bus.TDR
+	uart.statusReg = &uart.Bus.ISR
+	uart.txEmptyFlag = stm32.USART_ISR_TXE
 }
 
 //---------- SPI related types and code
