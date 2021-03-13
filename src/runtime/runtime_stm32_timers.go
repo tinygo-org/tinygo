@@ -1,4 +1,4 @@
-// +build stm32,!stm32l0
+// +build stm32
 
 package runtime
 
@@ -16,6 +16,9 @@ package runtime
 //   TICK_TIMER_FREQ  The frequency the clock feeding the sleep timer is set to (e.g. 84MHz)
 //   SLEEP_TIMER_IRQ  Which timer to use for sleeping (e.g. stm32.IRQ_TIM3)
 //   SLEEP_TIMER_FREQ The frequency the clock feeding the sleep timer is set to (e.g. 84MHz)
+//
+// The type alias `arrtype` should be defined to either uint32 or uint16 depending on the
+// size of that register in the MCU's TIM_Type structure
 
 import (
 	"device/stm32"
@@ -82,7 +85,7 @@ func initTickTimer(ti *timerInfo) {
 	}
 
 	ti.Device.PSC.Set(psc - 1)
-	ti.Device.ARR.Set(period - 1)
+	ti.Device.ARR.Set(arrtype(period - 1))
 
 	// Auto-repeat
 	ti.Device.EGR.SetBits(stm32.TIM_EGR_UG)
@@ -175,7 +178,7 @@ func timerSleep(ns int64) {
 
 	// Set the desired duration and enable
 	sleepTimer.Device.PSC.Set(uint32(psc) - 1)
-	sleepTimer.Device.ARR.Set(uint32(period) - 1)
+	sleepTimer.Device.ARR.Set(arrtype(period) - 1)
 	sleepTimer.Device.CR1.SetBits(stm32.TIM_CR1_CEN)
 
 	// Wait till either the timer or some other event wakes

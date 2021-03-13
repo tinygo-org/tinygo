@@ -40,6 +40,8 @@ const (
 	SLEEP_TIMER_FREQ = 84000000 // 84 MHz
 )
 
+type arrtype = uint32
+
 const asyncScheduler = false
 
 func init() {

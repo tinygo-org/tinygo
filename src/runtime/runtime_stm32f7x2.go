@@ -39,6 +39,8 @@ const (
 	TICK_TIMER_FREQ  = 54000000 // 54 MHz (2x APB1)
 )
 
+type arrtype = uint32
+
 const asyncScheduler = false
 
 func init() {

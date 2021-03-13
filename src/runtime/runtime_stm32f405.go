@@ -78,6 +78,8 @@ const (
 	TICK_TIMER_FREQ  = PCLK1_FREQ_HZ * 2
 )
 
+type arrtype = uint32
+
 const asyncScheduler = false
 
 func init() {
