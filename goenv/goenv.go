@@ -4,7 +4,6 @@ package goenv
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/user"
@@ -146,12 +145,8 @@ func getGoroot() string {
 	// An explicitly set GOROOT always has preference.
 	goroot := os.Getenv("GOROOT")
 	if goroot != "" {
-		// If environmental GOROOT points to a TinyGo cache, use the physical path
-		// the cache points into.
-		if isCache, phyGoroot := isCachedGoroot(goroot); isCache {
-			return phyGoroot
-		}
-		return goroot
+		// Convert to the standard GOROOT being referenced, if it's a TinyGo cache.
+		return getStandardGoroot(goroot)
 	}
 
 	// Check for the location of the 'go' binary and base GOROOT on that.
@@ -202,62 +197,20 @@ func isGoroot(goroot string) bool {
 	return err == nil
 }
 
-// isCachedGoroot checks whether the given path looks like a cached GOROOT.
-// If it does appear to be a cached GOROOT, it returns true and the physical
-// path to which the cache is linked. Otherwise, false and the empty string
-// are returned.
-func isCachedGoroot(goroot string) (bool, string) {
-
-	// The physical GOROOT path to which the cache is linked.
-	var phyGoroot string
-
-	// Name and type of directory entries indicative of a cached GOROOT.
-	// As these are encountered, they are deleted from the map. If, after
-	// reading all entries in the given path, this map has zero remaining
-	// elements, then we have a cached GOROOT.
-	cacheEntry := map[string]os.FileMode{
-		"src": os.ModeDir,
-		"bin": os.ModeSymlink,
-		"lib": os.ModeSymlink,
-		"pkg": os.ModeSymlink,
+// getStandardGoroot returns the physical path to a real, standard Go GOROOT
+// implied by the given path.
+// If the given path appears to be a TinyGo cached GOROOT, it returns the path
+// referenced by symlinks contained in the cache. Otherwise, it returns the
+// given path as-is.
+func getStandardGoroot(path string) string {
+	// Check if the "bin" subdirectory of our given GOROOT is a symlink, and then
+	// return the _parent_ directory of its destination.
+	if dest, err := os.Readlink(filepath.Join(path, "bin")); nil == err {
+		// Clean the destination to remove any trailing slashes, so that
+		// filepath.Dir will always return the parent.
+		//   (because both "/foo" and "/foo/" are valid symlink destinations,
+		//   but filepath.Dir would return "/" and "/foo", respectively)
+		return filepath.Dir(filepath.Clean(dest))
 	}
-
-	info, err := ioutil.ReadDir(goroot)
-	if err != nil {
-		return false, ""
-	}
-	for _, f := range info {
-		if mode, ok := cacheEntry[f.Name()]; ok {
-			if mode != f.Mode()&os.ModeType {
-				return false, ""
-			}
-			// Remove the verified entry
-			delete(cacheEntry, f.Name())
-			if mode&os.ModeSymlink == 0 {
-				continue
-			}
-			// Entry is a symlink, get the physical GOROOT to which it points
-			root, err := os.Readlink(filepath.Join(goroot, f.Name()))
-			if err != nil {
-				return false, ""
-			}
-			// Assume parent directory of the symlink destination is GOROOT
-			root = filepath.Dir(root)
-			if phyGoroot == "" {
-				// Keep first symlink encountered
-				phyGoroot = root
-			} else if phyGoroot != root {
-				// Destination GOROOT doesn't match all previously discovered
-				return false, ""
-			}
-		}
-	}
-
-	if len(cacheEntry) == 0 {
-		// All expected directory entries were found, and all symlinks were
-		// pointing to subdirectories of the same exact parent directory.
-		return true, phyGoroot
-	}
-
-	return false, ""
+	return path
 }
