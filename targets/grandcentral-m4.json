@@ -5,7 +5,5 @@
     "flash-method": "msd",
     "msd-volume-name": "GCM4BOOT",
     "msd-firmware-name": "firmware.uf2",
-    "openocd-transport": "swd",
-    "openocd-interface": "jlink",
-    "openocd-target": "atsame5x"
+    "openocd-interface": "jlink"
 }

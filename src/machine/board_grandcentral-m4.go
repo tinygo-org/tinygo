@@ -221,8 +221,7 @@ const (
 
 // Other peripheral constants
 const (
-	RESET_MAGIC_VALUE      = 0xF01669EF // Used to reset into bootloader
-	EXTERNAL_FLASH_DEVICES = "GD25Q16C" // QSPI
+	RESET_MAGIC_VALUE = 0xF01669EF // Used to reset into bootloader
 )
 
 // USB CDC pins
