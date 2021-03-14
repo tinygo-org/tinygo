@@ -547,8 +547,8 @@ func newUSBSetup(data []byte) usbSetup {
 	u.bRequest = uint8(data[1])
 	u.wValueL = uint8(data[2])
 	u.wValueH = uint8(data[3])
-	u.wIndex = uint16(data[4]) | uint16(data[5]<<8)
-	u.wLength = uint16(data[6]) | uint16(data[7]<<8)
+	u.wIndex = uint16(data[4]) | (uint16(data[5]) << 8)
+	u.wLength = uint16(data[6]) | (uint16(data[7]) << 8)
 	return u
 }
 
