@@ -107,7 +107,10 @@ fmt-check:
 	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
 
 
-gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-stm32 gen-device-kendryte gen-device-nxp
+gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp
+ifneq ($(STM32), 0)
+gen-device: gen-device-stm32
+endif
 
 gen-device-avr:
 	@if [ ! -e lib/avr/README.md ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
@@ -257,8 +260,6 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10031            examples/blinky1
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=bluepill            examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=reelboard           examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=reelboard           examples/blinky2
@@ -278,14 +279,6 @@ smoketest:
 	$(TINYGO) build -size short -o test.hex -target=trinket-m0          examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/blinky1
-	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=stm32f4disco        examples/blinky1
-	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=stm32f4disco        examples/blinky2
-	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=stm32f4disco-1      examples/blinky1
-	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=feather-stm32f405   examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-bluefruit examples/blinky1
 	@$(MD5SUM) test.hex
@@ -311,11 +304,7 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=particle-xenon      examples/blinky1
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=nucleo-f103rb       examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pinetime-devkit0    examples/blinky1
-	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=lgt92    examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=x9pro               examples/blinky1
 	@$(MD5SUM) test.hex
@@ -343,12 +332,6 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=teensy36            examples/blinky1
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=nucleo-f722ze       examples/blinky1
-	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=nucleo-l552ze       examples/blinky1
-	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=nucleo-l432kc       examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=p1am-100            examples/blinky1
 	@$(MD5SUM) test.hex
 	# test pwm
@@ -360,6 +343,28 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pyportal            examples/pwm
 	@$(MD5SUM) test.hex
+ifneq ($(STM32), 0)
+	$(TINYGO) build -size short -o test.hex -target=bluepill            examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=feather-stm32f405   examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=lgt92               examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=nucleo-f103rb       examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=nucleo-f722ze       examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=nucleo-l432kc       examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=nucleo-l552ze       examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=stm32f4disco        examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=stm32f4disco        examples/blinky2
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=stm32f4disco-1      examples/blinky1
+	@$(MD5SUM) test.hex
+endif
 ifneq ($(AVR), 0)
 	$(TINYGO) build -size short -o test.hex -target=atmega1284p         examples/serial
 	@$(MD5SUM) test.hex
