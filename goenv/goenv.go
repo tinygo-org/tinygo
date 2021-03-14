@@ -142,10 +142,11 @@ func getHomeDir() string {
 // getGoroot returns an appropriate GOROOT from various sources. If it can't be
 // found, it returns an empty string.
 func getGoroot() string {
+	// An explicitly set GOROOT always has preference.
 	goroot := os.Getenv("GOROOT")
 	if goroot != "" {
-		// An explicitly set GOROOT always has preference.
-		return goroot
+		// Convert to the standard GOROOT being referenced, if it's a TinyGo cache.
+		return getStandardGoroot(goroot)
 	}
 
 	// Check for the location of the 'go' binary and base GOROOT on that.
@@ -194,4 +195,22 @@ func getGoroot() string {
 func isGoroot(goroot string) bool {
 	_, err := os.Stat(filepath.Join(goroot, "src", "runtime", "internal", "sys", "zversion.go"))
 	return err == nil
+}
+
+// getStandardGoroot returns the physical path to a real, standard Go GOROOT
+// implied by the given path.
+// If the given path appears to be a TinyGo cached GOROOT, it returns the path
+// referenced by symlinks contained in the cache. Otherwise, it returns the
+// given path as-is.
+func getStandardGoroot(path string) string {
+	// Check if the "bin" subdirectory of our given GOROOT is a symlink, and then
+	// return the _parent_ directory of its destination.
+	if dest, err := os.Readlink(filepath.Join(path, "bin")); nil == err {
+		// Clean the destination to remove any trailing slashes, so that
+		// filepath.Dir will always return the parent.
+		//   (because both "/foo" and "/foo/" are valid symlink destinations,
+		//   but filepath.Dir would return "/" and "/foo", respectively)
+		return filepath.Dir(filepath.Clean(dest))
+	}
+	return path
 }
