@@ -8,6 +8,7 @@
 package machine
 
 import (
+	"device"
 	"device/arm"
 	"device/sam"
 	"errors"
@@ -1289,21 +1290,43 @@ var (
 // 		spi.Tx(nil, rx)
 //
 func (spi SPI) Tx(w, r []byte) error {
-	switch {
-	case w == nil:
-		// read only, so write zero and read a result.
-		spi.rx(r)
-	case r == nil:
-		// write only
-		spi.tx(w)
+	if spi.Bus.BAUD.Get() == 0x00 {
+		// When the SPI Freq is 24MHz, special processing is performed to improve the speed.
 
-	default:
-		// write/read
-		if len(w) != len(r) {
-			return ErrTxInvalidSliceSize
+		switch {
+		case w == nil:
+			// read only, so write zero and read a result.
+			spi.rx(r)
+		case r == nil:
+			// write only
+			spi.tx24mhz(w)
+
+		default:
+			// write/read
+			if len(w) != len(r) {
+				return ErrTxInvalidSliceSize
+			}
+
+			spi.txrx24mhz(w, r)
 		}
 
-		spi.txrx(w, r)
+	} else {
+		switch {
+		case w == nil:
+			// read only, so write zero and read a result.
+			spi.rx(r)
+		case r == nil:
+			// write only
+			spi.tx(w)
+
+		default:
+			// write/read
+			if len(w) != len(r) {
+				return ErrTxInvalidSliceSize
+			}
+
+			spi.txrx(w, r)
+		}
 	}
 
 	return nil
@@ -1349,6 +1372,48 @@ func (spi SPI) txrx(tx, rx []byte) {
 		spi.Bus.DATA.Set(uint32(tx[i]))
 		for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_RXC) {
 		}
+		rx[i-1] = byte(spi.Bus.DATA.Get())
+	}
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_RXC) {
+	}
+	rx[len(rx)-1] = byte(spi.Bus.DATA.Get())
+}
+
+// tx24mhz is a special tx/rx function for CPU Clock 48 Mhz and SPI Freq 24 Mhz
+func (spi SPI) tx24mhz(tx []byte) {
+	spi.Bus.DATA.Set(uint32(tx[0]))
+	device.Asm("nop")
+	device.Asm("nop")
+	device.Asm("nop")
+	device.Asm("nop")
+	device.Asm("nop")
+	device.Asm("nop")
+
+	for i := 1; i < len(tx); i++ {
+		spi.Bus.DATA.Set(uint32(tx[i]))
+		device.Asm("nop")
+		device.Asm("nop")
+		spi.Bus.DATA.Get()
+	}
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_RXC) {
+	}
+	spi.Bus.DATA.Get()
+}
+
+// txrx24mhz is a special tx/rx function for CPU Clock 48 Mhz and SPI Freq 24 Mhz
+func (spi SPI) txrx24mhz(tx, rx []byte) {
+	spi.Bus.DATA.Set(uint32(tx[0]))
+	device.Asm("nop")
+	device.Asm("nop")
+	device.Asm("nop")
+	device.Asm("nop")
+	device.Asm("nop")
+	device.Asm("nop")
+
+	for i := 1; i < len(rx); i++ {
+		spi.Bus.DATA.Set(uint32(tx[i]))
+		device.Asm("nop")
+		device.Asm("nop")
 		rx[i-1] = byte(spi.Bus.DATA.Get())
 	}
 	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_RXC) {
