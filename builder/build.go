@@ -44,7 +44,7 @@ type BuildResult struct {
 //
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
-func Build(pkgName, outpath string, config *compileopts.Config, action func(BuildResult) error) error {
+func Build(pkgName, outpath string, config *compileopts.Config, preAction func() error, action func(BuildResult) error) error {
 	compilerConfig := &compiler.Config{
 		Triple:          config.Triple(),
 		CPU:             config.CPU(),
@@ -86,6 +86,14 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// This is somewhat like an in-memory Makefile with each job being a
 	// Makefile target.
 	var jobs []*compileJob
+
+	if preAction != nil {
+		// Add job to preAction.
+		jobs = append(jobs, &compileJob{
+			description: "preAction",
+			run:         preAction,
+		})
+	}
 
 	// Add job to compile and optimize all Go files at once.
 	// TODO: parallelize this.
