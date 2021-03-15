@@ -265,6 +265,19 @@ func main() {
 		println("type assertion failed (but should succeed)")
 	}
 
+	// Test type that is not referenced at all: not when creating the
+	// reflect.Value (except through the field) and not with a type assert.
+	// Previously this would result in a type assert failure because the Int()
+	// method wasn't picked up.
+	v = reflect.ValueOf(struct {
+		X totallyUnreferencedType
+	}{})
+	if v.Field(0).Interface().(interface {
+		Int() int
+	}).Int() != 42 {
+		println("could not call method on totally unreferenced type")
+	}
+
 	if reflect.TypeOf(new(myint)) != reflect.PtrTo(reflect.TypeOf(myint(0))) {
 		println("PtrTo failed for type myint")
 	}
@@ -362,6 +375,12 @@ func assertSize(ok bool, typ string) {
 }
 
 type unreferencedType int
+
+type totallyUnreferencedType int
+
+func (totallyUnreferencedType) Int() int {
+	return 42
+}
 
 func TestStructTag() {
 	type S struct {

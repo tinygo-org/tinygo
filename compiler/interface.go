@@ -24,16 +24,7 @@ import (
 func (b *builder) createMakeInterface(val llvm.Value, typ types.Type, pos token.Pos) llvm.Value {
 	itfValue := b.emitPointerPack([]llvm.Value{val})
 	itfTypeCodeGlobal := b.getTypeCode(typ)
-	itfMethodSetGlobal := b.getTypeMethodSet(typ)
-	itfConcreteTypeGlobal := b.mod.NamedGlobal("typeInInterface:" + itfTypeCodeGlobal.Name())
-	if itfConcreteTypeGlobal.IsNil() {
-		typeInInterface := b.getLLVMRuntimeType("typeInInterface")
-		itfConcreteTypeGlobal = llvm.AddGlobal(b.mod, typeInInterface, "typeInInterface:"+itfTypeCodeGlobal.Name())
-		itfConcreteTypeGlobal.SetInitializer(llvm.ConstNamedStruct(typeInInterface, []llvm.Value{itfTypeCodeGlobal, itfMethodSetGlobal}))
-		itfConcreteTypeGlobal.SetGlobalConstant(true)
-		itfConcreteTypeGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
-	}
-	itfTypeCode := b.CreatePtrToInt(itfConcreteTypeGlobal, b.uintptrType, "")
+	itfTypeCode := b.CreatePtrToInt(itfTypeCodeGlobal, b.uintptrType, "")
 	itf := llvm.Undef(b.getLLVMRuntimeType("_interface"))
 	itf = b.CreateInsertValue(itf, itfTypeCode, 0, "")
 	itf = b.CreateInsertValue(itf, itfValue, 1, "")
@@ -54,6 +45,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		// reflect lowering simpler.
 		var references llvm.Value
 		var length int64
+		var methodSet llvm.Value
 		switch typ := typ.(type) {
 		case *types.Named:
 			references = c.getTypeCode(typ.Underlying())
@@ -71,13 +63,21 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			structGlobal := c.makeStructTypeFields(typ)
 			references = llvm.ConstBitCast(structGlobal, global.Type())
 		}
-		if !references.IsNil() {
+		if _, ok := typ.Underlying().(*types.Interface); !ok {
+			methodSet = c.getTypeMethodSet(typ)
+		}
+		if !references.IsNil() || length != 0 || !methodSet.IsNil() {
 			// Set the 'references' field of the runtime.typecodeID struct.
 			globalValue := llvm.ConstNull(global.Type().ElementType())
-			globalValue = llvm.ConstInsertValue(globalValue, references, []uint32{0})
+			if !references.IsNil() {
+				globalValue = llvm.ConstInsertValue(globalValue, references, []uint32{0})
+			}
 			if length != 0 {
 				lengthValue := llvm.ConstInt(c.uintptrType, uint64(length), false)
 				globalValue = llvm.ConstInsertValue(globalValue, lengthValue, []uint32{1})
+			}
+			if !methodSet.IsNil() {
+				globalValue = llvm.ConstInsertValue(globalValue, methodSet, []uint32{2})
 			}
 			global.SetInitializer(globalValue)
 			global.SetLinkage(llvm.LinkOnceODRLinkage)
