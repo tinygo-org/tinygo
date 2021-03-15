@@ -107,6 +107,8 @@ type typecodeID struct {
 
 	// The array length, for array types.
 	length uintptr
+
+	methodSet *interfaceMethodInfo // nil or a GEP of an array
 }
 
 // structField is used by the compiler to pass information to the interface
@@ -116,15 +118,6 @@ type structField struct {
 	name     *uint8      // pointer to char array
 	tag      *uint8      // pointer to char array, or nil
 	embedded bool
-}
-
-// Pseudo type used before interface lowering. By using a struct instead of a
-// function call, this is simpler to reason about during init interpretation
-// than a function call. Also, by keeping the method set around it is easier to
-// implement interfaceImplements in the interp package.
-type typeInInterface struct {
-	typecode  *typecodeID          // element type, underlying type, or reference to struct fields
-	methodSet *interfaceMethodInfo // nil or a GEP of an array
 }
 
 // Pseudo function call used during a type assert. It is used during interface

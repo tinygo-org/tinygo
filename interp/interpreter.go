@@ -286,11 +286,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if r.debug {
 					fmt.Fprintln(os.Stderr, indent+"typeassert:", operands[1:])
 				}
-				typeInInterfacePtr, err := operands[1].asPointer(r)
-				if err != nil {
-					return nil, mem, r.errorAt(inst, err)
-				}
-				actualType, err := mem.load(typeInInterfacePtr, r.pointerSize).asPointer(r)
+				actualType, err := operands[1].asPointer(r)
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
@@ -310,11 +306,11 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 
 				// Load various values for the interface implements check below.
-				typeInInterfacePtr, err := operands[1].asPointer(r)
+				typecodePtr, err := operands[1].asPointer(r)
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
-				methodSetPtr, err := mem.load(typeInInterfacePtr.addOffset(r.pointerSize), r.pointerSize).asPointer(r)
+				methodSetPtr, err := mem.load(typecodePtr.addOffset(r.pointerSize*2), r.pointerSize).asPointer(r)
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}

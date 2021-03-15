@@ -46,6 +46,7 @@ import (
 // any method in particular.
 type signatureInfo struct {
 	name       string
+	global     llvm.Value
 	methods    []*methodInfo
 	interfaces []*interfaceInfo
 }
@@ -73,13 +74,12 @@ type methodInfo struct {
 // typeInfo describes a single concrete Go type, which can be a basic or a named
 // type. If it is a named type, it may have methods.
 type typeInfo struct {
-	name                string
-	typecode            llvm.Value
-	methodSet           llvm.Value
-	num                 uint64 // the type number after lowering
-	countMakeInterfaces int    // how often this type is used in an interface
-	countTypeAsserts    int    // how often a type assert happens on this method
-	methods             []*methodInfo
+	name             string
+	typecode         llvm.Value
+	methodSet        llvm.Value
+	num              uint64 // the type number after lowering
+	countTypeAsserts int    // how often a type assert happens on this method
+	methods          []*methodInfo
 }
 
 // getMethod looks up the method on this type with the given signature and
@@ -104,9 +104,6 @@ func (t typeInfoSlice) Less(i, j int) bool {
 	if t[i].countTypeAsserts != t[j].countTypeAsserts {
 		return t[i].countTypeAsserts < t[j].countTypeAsserts
 	}
-	if t[i].countMakeInterfaces != t[j].countMakeInterfaces {
-		return t[i].countMakeInterfaces < t[j].countMakeInterfaces
-	}
 	return t[i].name < t[j].name
 }
 func (t typeInfoSlice) Swap(i, j int) { t[i], t[j] = t[j], t[i] }
@@ -115,6 +112,7 @@ func (t typeInfoSlice) Swap(i, j int) { t[i], t[j] = t[j], t[i] }
 // methods it has.
 type interfaceInfo struct {
 	name        string                        // name with $interface suffix
+	methodSet   llvm.Value                    // global which this interfaceInfo describes
 	signatures  []*signatureInfo              // method set
 	types       typeInfoSlice                 // types this interface implements
 	assertFunc  llvm.Value                    // runtime.interfaceImplements replacement
@@ -163,9 +161,9 @@ func LowerInterfaces(mod llvm.Module) error {
 // run runs the pass itself.
 func (p *lowerInterfacesPass) run() error {
 	// Collect all type codes.
-	typecodeIDPtr := llvm.PointerType(p.mod.GetTypeByName("runtime.typecodeID"), 0)
-	typeInInterfacePtr := llvm.PointerType(p.mod.GetTypeByName("runtime.typeInInterface"), 0)
-	var typesInInterfaces []llvm.Value
+	typecodeID := p.mod.GetTypeByName("runtime.typecodeID")
+	typecodeIDPtr := llvm.PointerType(typecodeID, 0)
+	var typecodeIDs []llvm.Value
 	for global := p.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
 		switch global.Type() {
 		case typecodeIDPtr:
@@ -174,32 +172,19 @@ func (p *lowerInterfacesPass) run() error {
 			// discarded afterwards.
 			name := global.Name()
 			if _, ok := p.types[name]; !ok {
-				p.types[name] = &typeInfo{
+				typecodeIDs = append(typecodeIDs, global)
+				t := &typeInfo{
 					name:     name,
 					typecode: global,
 				}
-			}
-		case typeInInterfacePtr:
-			// Count per type how often it is put in an interface. Also, collect
-			// all methods this type has (if it is named).
-			typesInInterfaces = append(typesInInterfaces, global)
-			initializer := global.Initializer()
-			typecode := llvm.ConstExtractValue(initializer, []uint32{0})
-			methodSet := llvm.ConstExtractValue(initializer, []uint32{1})
-			typecodeName := typecode.Name()
-			t := p.types[typecodeName]
-			if t == nil {
-				t = &typeInfo{
-					name:     typecodeName,
-					typecode: typecode,
+				p.types[name] = t
+				initializer := global.Initializer()
+				if initializer.IsNil() {
+					continue
 				}
-				p.types[typecodeName] = t
+				methodSet := llvm.ConstExtractValue(initializer, []uint32{2})
+				p.addTypeMethods(t, methodSet)
 			}
-			p.addTypeMethods(t, methodSet)
-
-			// Count the number of MakeInterface instructions, for sorting the
-			// typecodes later.
-			t.countMakeInterfaces += len(getUses(global))
 		}
 	}
 
@@ -363,18 +348,30 @@ func (p *lowerInterfacesPass) run() error {
 	// Assign a type code for each type.
 	assignTypeCodes(p.mod, typeSlice)
 
-	// Replace each use of a runtime.typeInInterface with the constant type
+	// Replace each use of a ptrtoint runtime.typecodeID with the constant type
 	// code.
-	for _, global := range typesInInterfaces {
+	for _, global := range typecodeIDs {
 		for _, use := range getUses(global) {
-			t := p.types[llvm.ConstExtractValue(global.Initializer(), []uint32{0}).Name()]
+			if use.IsAConstantExpr().IsNil() {
+				continue
+			}
+			t := p.types[global.Name()]
 			typecode := llvm.ConstInt(p.uintptrType, t.num, false)
+			switch use.Opcode() {
+			case llvm.PtrToInt:
+				// Already of the correct type.
+			case llvm.BitCast:
+				// Could happen when stored in an interface (which is of type
+				// i8*).
+				typecode = llvm.ConstIntToPtr(typecode, use.Type())
+			default:
+				panic("unexpected constant expression")
+			}
 			use.ReplaceAllUsesWith(typecode)
 		}
 	}
 
-	// Replace each type assert with an actual type comparison or (if the type
-	// assert is impossible) the constant false.
+	// Replace each type assert with an actual type comparison.
 	for _, use := range typeAssertUses {
 		actualType := use.Operand(0)
 		assertedTypeGlobal := use.Operand(1)
@@ -405,20 +402,36 @@ func (p *lowerInterfacesPass) run() error {
 		}
 	}
 
-	// Remove stray runtime.typeInInterface globals. Required for the following
-	// cleanup.
-	for _, global := range typesInInterfaces {
-		global.EraseFromParentAsGlobal()
-	}
-
-	// Remove method sets of types. Unnecessary, but cleans up the IR for
-	// inspection.
+	// Remove most objects created for interface and reflect lowering.
+	// Unnecessary, but cleans up the IR for inspection and testing.
+	zeroTypeCode := llvm.ConstNull(typecodeID)
 	for _, typ := range p.types {
+		// Only some typecodes have an initializer.
+		initializer := typ.typecode.Initializer()
+		if !initializer.IsNil() {
+			references := llvm.ConstExtractValue(initializer, []uint32{0})
+			typ.typecode.SetInitializer(zeroTypeCode)
+			if !references.IsAConstantExpr().IsNil() && references.Opcode() == llvm.BitCast {
+				// Structs have a 'references' field that is not a typecode but
+				// a pointer to a runtime.structField array and therefore a
+				// bitcast. This global should be erased separately, otherwise
+				// typecode objects cannot be erased.
+				structFields := references.Operand(0)
+				structFields.EraseFromParentAsGlobal()
+			}
+		}
+
 		if !typ.methodSet.IsNil() {
 			typ.methodSet.EraseFromParentAsGlobal()
 			typ.methodSet = llvm.Value{}
 		}
 	}
+	for _, itf := range p.interfaces {
+		// Remove method sets of interfaces.
+		itf.methodSet.EraseFromParentAsGlobal()
+		itf.methodSet = llvm.Value{}
+	}
+
 	return nil
 }
 
@@ -437,9 +450,10 @@ func (p *lowerInterfacesPass) addTypeMethods(t *typeInfo, methodSet llvm.Value) 
 	set := methodSet.Initializer() // get value from global
 	for i := 0; i < set.Type().ArrayLength(); i++ {
 		methodData := llvm.ConstExtractValue(set, []uint32{uint32(i)})
-		signatureName := llvm.ConstExtractValue(methodData, []uint32{0}).Name()
+		signatureGlobal := llvm.ConstExtractValue(methodData, []uint32{0})
+		signatureName := signatureGlobal.Name()
 		function := llvm.ConstExtractValue(methodData, []uint32{1}).Operand(0)
-		signature := p.getSignature(signatureName)
+		signature := p.getSignature(signatureName, signatureGlobal)
 		method := &methodInfo{
 			function:      function,
 			signatureInfo: signature,
@@ -454,13 +468,15 @@ func (p *lowerInterfacesPass) addTypeMethods(t *typeInfo, methodSet llvm.Value) 
 func (p *lowerInterfacesPass) addInterface(methodSet llvm.Value) {
 	name := methodSet.Name()
 	t := &interfaceInfo{
-		name: name,
+		name:      name,
+		methodSet: methodSet,
 	}
 	p.interfaces[name] = t
 	methodSet = methodSet.Initializer() // get global value from getelementptr
 	for i := 0; i < methodSet.Type().ArrayLength(); i++ {
-		signatureName := llvm.ConstExtractValue(methodSet, []uint32{uint32(i)}).Name()
-		signature := p.getSignature(signatureName)
+		signatureGlobal := llvm.ConstExtractValue(methodSet, []uint32{uint32(i)})
+		signatureName := signatureGlobal.Name()
+		signature := p.getSignature(signatureName, signatureGlobal)
 		signature.interfaces = append(signature.interfaces, t)
 		t.signatures = append(t.signatures, signature)
 	}
@@ -468,10 +484,11 @@ func (p *lowerInterfacesPass) addInterface(methodSet llvm.Value) {
 
 // getSignature returns a new *signatureInfo, creating it if it doesn't already
 // exist.
-func (p *lowerInterfacesPass) getSignature(name string) *signatureInfo {
+func (p *lowerInterfacesPass) getSignature(name string, global llvm.Value) *signatureInfo {
 	if _, ok := p.signatures[name]; !ok {
 		p.signatures[name] = &signatureInfo{
-			name: name,
+			name:   name,
+			global: global,
 		}
 	}
 	return p.signatures[name]

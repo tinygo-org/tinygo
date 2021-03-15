@@ -11,7 +11,7 @@ import (
 type rawState uint8
 
 //export llvm.coro.resume
-func (s *rawState) resume()
+func coroResume(*rawState)
 
 type state struct{ *rawState }
 
@@ -20,7 +20,7 @@ func noopState() *rawState
 
 // Resume the task until it pauses or completes.
 func (t *Task) Resume() {
-	t.state.resume()
+	coroResume(t.state.rawState)
 }
 
 // setState is used by the compiler to set the state of the function at the beginning of a function call.

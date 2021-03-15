@@ -1048,7 +1048,7 @@ func (v rawValue) rawLLVMValue(mem *memoryView) llvm.Value {
 				// There are some special pointer types that should be used as a
 				// ptrtoint, so that they can be used in certain optimizations.
 				name := elementType.StructName()
-				if name == "runtime.typeInInterface" || name == "runtime.funcValueWithSignature" {
+				if name == "runtime.typecodeID" || name == "runtime.funcValueWithSignature" {
 					uintptrType := ctx.IntType(int(mem.r.pointerSize) * 8)
 					field = llvm.ConstPtrToInt(field, uintptrType)
 				}
