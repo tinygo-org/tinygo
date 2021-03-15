@@ -10,6 +10,7 @@ package machine
 import (
 	"device/arm"
 	"device/sam"
+	"errors"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
@@ -1263,6 +1264,96 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 
 	// return data
 	return byte(spi.Bus.DATA.Get()), nil
+}
+
+var (
+	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")
+)
+
+// Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
+// interface, there must always be the same number of bytes written as bytes read.
+// The Tx method knows about this, and offers a few different ways of calling it.
+//
+// This form sends the bytes in tx buffer, putting the resulting bytes read into the rx buffer.
+// Note that the tx and rx buffers must be the same size:
+//
+// 		spi.Tx(tx, rx)
+//
+// This form sends the tx buffer, ignoring the result. Useful for sending "commands" that return zeros
+// until all the bytes in the command packet have been received:
+//
+// 		spi.Tx(tx, nil)
+//
+// This form sends zeros, putting the result into the rx buffer. Good for reading a "result packet":
+//
+// 		spi.Tx(nil, rx)
+//
+func (spi SPI) Tx(w, r []byte) error {
+	switch {
+	case w == nil:
+		// read only, so write zero and read a result.
+		spi.rx(r)
+	case r == nil:
+		// write only
+		spi.tx(w)
+
+	default:
+		// write/read
+		if len(w) != len(r) {
+			return ErrTxInvalidSliceSize
+		}
+
+		spi.txrx(w, r)
+	}
+
+	return nil
+}
+
+func (spi SPI) tx(tx []byte) {
+	for i := 0; i < len(tx); i++ {
+		for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_DRE) {
+		}
+		spi.Bus.DATA.Set(uint32(tx[i]))
+	}
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_TXC) {
+	}
+
+	// read to clear RXC register
+	for spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_RXC) {
+		spi.Bus.DATA.Get()
+	}
+}
+
+func (spi SPI) rx(rx []byte) {
+	spi.Bus.DATA.Set(0)
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_DRE) {
+	}
+
+	for i := 1; i < len(rx); i++ {
+		spi.Bus.DATA.Set(0)
+		for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_RXC) {
+		}
+		rx[i-1] = byte(spi.Bus.DATA.Get())
+	}
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_RXC) {
+	}
+	rx[len(rx)-1] = byte(spi.Bus.DATA.Get())
+}
+
+func (spi SPI) txrx(tx, rx []byte) {
+	spi.Bus.DATA.Set(uint32(tx[0]))
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_DRE) {
+	}
+
+	for i := 1; i < len(rx); i++ {
+		spi.Bus.DATA.Set(uint32(tx[i]))
+		for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_RXC) {
+		}
+		rx[i-1] = byte(spi.Bus.DATA.Get())
+	}
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_RXC) {
+	}
+	rx[len(rx)-1] = byte(spi.Bus.DATA.Get())
 }
 
 // PWM
