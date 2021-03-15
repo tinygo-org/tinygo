@@ -247,8 +247,8 @@
 
 			const timeOrigin = Date.now() - performance.now();
 			this.importObject = {
-				wasi_unstable: {
-					// https://github.com/bytecodealliance/wasmtime/blob/master/docs/WASI-api.md#__wasi_fd_write
+				wasi_snapshot_preview1: {
+					// https://github.com/WebAssembly/WASI/blob/main/phases/snapshot/docs.md#fd_write
 					fd_write: function(fd, iovs_ptr, iovs_len, nwritten_ptr) {
 						let nwritten = 0;
 						if (fd == 1) {

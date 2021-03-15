@@ -35,7 +35,6 @@ var (
 		u: __wasi_subscription_u_t{
 			tag: __wasi_eventtype_t_clock,
 			u: __wasi_subscription_clock_t{
-				userData:  0,
 				id:        0,
 				timeout:   0,
 				precision: timePrecisionNanoseconds,
@@ -48,23 +47,23 @@ var (
 )
 
 func sleepTicks(d timeUnit) {
-	sleepTicksSubscription.u.u.timeout = int64(d)
+	sleepTicksSubscription.u.u.timeout = uint64(d)
 	poll_oneoff(&sleepTicksSubscription, &sleepTicksResult, 1, &sleepTicksNEvents)
 }
 
 func ticks() timeUnit {
-	var nano int64
+	var nano uint64
 	clock_time_get(0, timePrecisionNanoseconds, &nano)
 	return timeUnit(nano)
 }
 
 // Implementations of wasi_unstable APIs
 
-//go:wasm-module wasi_unstable
+//go:wasm-module wasi_snapshot_preview1
 //export clock_time_get
-func clock_time_get(clockid uint32, precision uint64, time *int64) (errno uint16)
+func clock_time_get(clockid uint32, precision uint64, time *uint64) (errno uint16)
 
-//go:wasm-module wasi_unstable
+//go:wasm-module wasi_snapshot_preview1
 //export poll_oneoff
 func poll_oneoff(in *__wasi_subscription_t, out *__wasi_event_t, nsubscriptions uint32, nevents *uint32) (errno uint16)
 
@@ -77,7 +76,7 @@ const (
 )
 
 type (
-	// https://github.com/wasmerio/wasmer/blob/1.0.0-alpha3/lib/wasi/src/syscalls/types.rs#L584-L588
+	// https://github.com/WebAssembly/WASI/blob/main/phases/snapshot/docs.md#-subscription-record
 	__wasi_subscription_t struct {
 		userData uint64
 		u        __wasi_subscription_u_t
@@ -90,18 +89,17 @@ type (
 		u __wasi_subscription_clock_t
 	}
 
-	// https://github.com/wasmerio/wasmer/blob/1.0.0-alpha3/lib/wasi/src/syscalls/types.rs#L711-L718
+	// https://github.com/WebAssembly/WASI/blob/main/phases/snapshot/docs.md#-subscription_clock-record
 	__wasi_subscription_clock_t struct {
-		userData  uint64
 		id        uint32
-		timeout   int64
-		precision int64
+		timeout   uint64
+		precision uint64
 		flags     uint16
 	}
 )
 
 type (
-	// https://github.com/wasmerio/wasmer/blob/1.0.0-alpha3/lib/wasi/src/syscalls/types.rs#L191-L198
+	// https://github.com/WebAssembly/WASI/blob/main/phases/snapshot/docs.md#-event-record
 	__wasi_event_t struct {
 		userData  uint64
 		errno     uint16
