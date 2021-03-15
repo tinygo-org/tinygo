@@ -28,6 +28,7 @@ import (
 	"tinygo.org/x/go-llvm"
 
 	"go.bug.st/serial"
+	"go.bug.st/serial/enumerator"
 )
 
 var (
@@ -240,15 +241,12 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	return builder.Build(pkgName, fileExt, config, func(result builder.BuildResult) error {
 		// do we need port reset to put MCU into bootloader mode?
 		if config.Target.PortReset == "true" && flashMethod != "openocd" {
-			if port == "" {
-				var err error
-				port, err = getDefaultPort()
-				if err != nil {
-					return err
-				}
+			port, err := getDefaultPort(strings.FieldsFunc(port, func(c rune) bool { return c == ',' }))
+			if err != nil {
+				return err
 			}
 
-			err := touchSerialPortAt1200bps(port)
+			err = touchSerialPortAt1200bps(port)
 			if err != nil {
 				return &commandError{"failed to reset port", result.Binary, err}
 			}
@@ -264,9 +262,9 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			fileToken := "{" + fileExt[1:] + "}"
 			flashCmd = strings.ReplaceAll(flashCmd, fileToken, result.Binary)
 
-			if port == "" && strings.Contains(flashCmd, "{port}") {
+			if strings.Contains(flashCmd, "{port}") {
 				var err error
-				port, err = getDefaultPort()
+				port, err = getDefaultPort(strings.FieldsFunc(port, func(c rune) bool { return c == ',' }))
 				if err != nil {
 					return err
 				}
@@ -665,41 +663,66 @@ func windowsFindUSBDrive(volume string, options *compileopts.Options) (string, e
 }
 
 // getDefaultPort returns the default serial port depending on the operating system.
-func getDefaultPort() (port string, err error) {
-	var portPath string
+func getDefaultPort(portCandidates []string) (port string, err error) {
+	if len(portCandidates) == 1 {
+		return portCandidates[0], nil
+	}
+
+	var ports []string
 	switch runtime.GOOS {
-	case "darwin":
-		portPath = "/dev/cu.usb*"
-	case "linux":
-		portPath = "/dev/ttyACM*"
 	case "freebsd":
-		portPath = "/dev/cuaU*"
-	case "windows":
-		ports, err := serial.GetPortsList()
+		ports, err = filepath.Glob("/dev/cuaU*")
+	case "darwin", "linux", "windows":
+		var portsList []*enumerator.PortDetails
+		portsList, err = enumerator.GetDetailedPortsList()
 		if err != nil {
 			return "", err
 		}
 
-		if len(ports) == 0 {
-			return "", errors.New("no serial ports available")
-		} else if len(ports) > 1 {
-			return "", errors.New("multiple serial ports available - use -port flag")
+		for _, p := range portsList {
+			ports = append(ports, p.Name)
 		}
 
-		return ports[0], nil
+		if ports == nil || len(ports) == 0 {
+			// fallback
+			switch runtime.GOOS {
+			case "darwin":
+				ports, err = filepath.Glob("/dev/cu.usb*")
+			case "linux":
+				ports, err = filepath.Glob("/dev/ttyACM*")
+			case "windows":
+				ports, err = serial.GetPortsList()
+			}
+		}
 	default:
 		return "", errors.New("unable to search for a default USB device to be flashed on this OS")
 	}
 
-	d, err := filepath.Glob(portPath)
 	if err != nil {
 		return "", err
-	}
-	if d == nil {
+	} else if ports == nil {
 		return "", errors.New("unable to locate a serial port")
+	} else if len(ports) == 0 {
+		return "", errors.New("no serial ports available")
 	}
 
-	return d[0], nil
+	if len(portCandidates) == 0 {
+		if len(ports) == 1 {
+			return ports[0], nil
+		} else {
+			return "", errors.New("multiple serial ports available - use -port flag, available ports are " + strings.Join(ports, ", "))
+		}
+	}
+
+	for _, ps := range portCandidates {
+		for _, p := range ports {
+			if p == ps {
+				return p, nil
+			}
+		}
+	}
+
+	return "", errors.New("port you specified '" + strings.Join(portCandidates, ",") + "' does not exist, available ports are " + strings.Join(ports, ", "))
 }
 
 func usage() {
@@ -834,7 +857,7 @@ func main() {
 	printCommands := flag.Bool("x", false, "Print commands")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
-	port := flag.String("port", "", "flash port")
+	port := flag.String("port", "", "flash port (can specify multiple candidates separated by commas)")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
