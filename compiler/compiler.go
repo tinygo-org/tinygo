@@ -1312,11 +1312,6 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			// probably something else. Continue as usual.
 		case name == "runtime/interrupt.New":
 			return b.createInterruptGlobal(instr)
-		case name == "runtime/persistence.NewRAM":
-			err := b.createRAMAllocation(instr)
-			if err != nil {
-				return llvm.Value{}, err
-			}
 		}
 
 		callee = b.getFunction(fn)

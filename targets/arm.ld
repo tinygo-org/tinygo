@@ -35,11 +35,9 @@ SECTIONS
     .persist (NOLOAD) :
     {
         . = ALIGN(4);
-        _spersist = .;
         *(.persist)
         *(.persist.*)
         . = ALIGN(4);
-        _epersist = .;
     } >RAM
 
     /* Start address (in flash) of .data, used by startup code. */
@@ -80,7 +78,3 @@ _heap_start = _ebss;
 _heap_end = ORIGIN(RAM) + LENGTH(RAM);
 _globals_start = _sdata;
 _globals_end = _ebss;
-
-/* For the RAM persistence module. */
-_persist_start = _spersist;
-_persist_end = _epersist;
