@@ -37,6 +37,7 @@ type TargetSpec struct {
 	AutoStackSize    *bool    `json:"automatic-stack-size"` // Determine stack size automatically at compile time.
 	DefaultStackSize uint64   `json:"default-stack-size"`   // Default stack size if the size couldn't be determined at compile time.
 	CFlags           []string `json:"cflags"`
+	CXXFlags         []string `json:"cxxflags"`
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
 	ExtraFiles       []string `json:"extra-files"`
@@ -240,6 +241,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		Compiler:  "clang",
 		Linker:    "cc",
 		CFlags:    []string{"--target=" + triple},
+		CXXFlags:  []string{"--target=" + triple},
 		GDB:       "gdb",
 		PortReset: "false",
 	}

@@ -1,4 +1,6 @@
 fortytwo: 42
+fortythree: 43
+other: 18
 add: 8
 myint: 3 5
 myint size: 2

@@ -58,6 +58,7 @@ type packageAction struct {
 	LLVMVersion     string
 	Config          *compiler.Config
 	CFlags          []string
+	CXXFlags        []string
 	FileHashes      map[string]string // hash of every file that's part of the package
 	Imports         map[string]string // map from imported package to action ID hash
 }
@@ -138,6 +139,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			LLVMVersion:     llvm.Version,
 			Config:          compilerConfig,
 			CFlags:          pkg.CFlags,
+			CXXFlags:        pkg.CXXFlags,
 			FileHashes:      make(map[string]string, len(pkg.FileHashes)),
 			Imports:         make(map[string]string, len(pkg.Pkg.Imports())),
 		}
@@ -447,6 +449,25 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				run: func() error {
 					cflags := append([]string{"-c", "-o", outpath, file}, pkg.CFlags...)
 					err := runCCompiler(config.Target.Compiler, cflags...)
+					if err != nil {
+						return &commandError{"failed to build", file, err}
+					}
+					return nil
+				},
+			}
+			jobs = append(jobs, job)
+			linkerDependencies = append(linkerDependencies, job)
+			ldflags = append(ldflags, outpath)
+		}
+
+		for j, filename := range pkg.CXXFiles {
+			file := filepath.Join(pkg.Dir, filename)
+			outpath := filepath.Join(dir, "pkg"+strconv.Itoa(i)+"."+strconv.Itoa(j)+"-"+filepath.Base(file)+".o")
+			job := &compileJob{
+				description: "compile CGo file " + file,
+				run: func() error {
+					cxxflags := append([]string{"-c", "-o", outpath, file}, pkg.CXXFlags...)
+					err := runCCompiler(config.Target.Compiler, cxxflags...)
 					if err != nil {
 						return &commandError{"failed to build", file, err}
 					}

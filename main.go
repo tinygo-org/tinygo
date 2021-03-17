@@ -836,6 +836,7 @@ func main() {
 	port := flag.String("port", "", "flash port")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	cFlags := flag.String("cflags", "", "additional cflags for compiler")
+	cxxFlags := flag.String("cxxflags", "", "additional cxxflags for compiler")
 	ldFlags := flag.String("ldflags", "", "additional ldflags for linker")
 	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
 
@@ -886,6 +887,10 @@ func main() {
 
 	if *cFlags != "" {
 		options.CFlags = strings.Split(*cFlags, " ")
+	}
+
+	if *cxxFlags != "" {
+		options.CXXFlags = strings.Split(*cxxFlags, " ")
 	}
 
 	if *ldFlags != "" {

@@ -42,6 +42,7 @@ type cgoPackage struct {
 	enums           map[string]enumInfo
 	anonStructNum   int
 	cflags          []string // CFlags from #cgo lines
+	cxxflags        []string // CXXFlags from #cgo lines
 	ldflags         []string // LDFlags from #cgo lines
 	visitedFiles    map[string][]byte
 }
@@ -161,7 +162,7 @@ typedef unsigned long long  _Cgo_ulonglong;
 // files, the CFLAGS and LDFLAGS found in #cgo lines, and a map of file hashes
 // of the accessed C header files. If there is one or more error, it returns
 // these in the []error slice but still modifies the AST.
-func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string) (*ast.File, []string, []string, map[string][]byte, []error) {
+func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string, cxxflags []string) (*ast.File, []string, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
 		dir:             dir,
 		fset:            fset,
@@ -184,7 +185,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Find the absolute path for this package.
 	packagePath, err := filepath.Abs(fset.File(files[0].Pos()).Name())
 	if err != nil {
-		return nil, nil, nil, nil, []error{
+		return nil, nil, nil, nil, nil, []error{
 			scanner.Error{
 				Pos: fset.Position(files[0].Pos()),
 				Msg: "cgo: cannot find absolute path: " + err.Error(), // TODO: wrap this error
@@ -360,6 +361,19 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 					}
 					makePathsAbsolute(flags, packagePath)
 					p.cflags = append(p.cflags, flags...)
+				case "CXXFLAGS":
+					flags, err := shlex.Split(value)
+					if err != nil {
+						// TODO: find the exact location where the error happened.
+						p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon+1], "failed to parse flags in #cgo line: "+err.Error())
+						continue
+					}
+					if err := checkCompilerFlags(name, flags); err != nil {
+						p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon+1], err.Error())
+						continue
+					}
+					makePathsAbsolute(flags, packagePath)
+					p.cxxflags = append(p.cxxflags, flags...)
 				case "LDFLAGS":
 					flags, err := shlex.Split(value)
 					if err != nil {
@@ -433,7 +447,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
-	return p.generated, p.cflags, p.ldflags, p.visitedFiles, p.errors
+	return p.generated, p.cflags, p.cxxflags, p.ldflags, p.visitedFiles, p.errors
 }
 
 // makePathsAbsolute converts some common path compiler flags (-I, -L) from

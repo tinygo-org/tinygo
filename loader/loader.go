@@ -51,6 +51,7 @@ type PackageJSON struct {
 	GoFiles  []string
 	CgoFiles []string
 	CFiles   []string
+	CXXFiles []string
 
 	// Dependency information
 	Imports   []string
@@ -72,6 +73,7 @@ type Package struct {
 	Files      []*ast.File
 	FileHashes map[string][]byte
 	CFlags     []string // CFlags used during CGo preprocessing (only set if CGo is used)
+	CXXFlags   []string
 	Pkg        *types.Package
 	info       types.Info
 }
@@ -388,8 +390,16 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		if p.program.clangHeaders != "" {
 			initialCFlags = append(initialCFlags, "-Xclang", "-internal-isystem", "-Xclang", p.program.clangHeaders)
 		}
-		generated, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.program.fset, initialCFlags)
+		var initialCXXFlags []string
+		initialCXXFlags = append(initialCXXFlags, p.program.config.CXXFlags()...)
+		initialCXXFlags = append(initialCXXFlags, "-I"+p.Dir)
+		if p.program.clangHeaders != "" {
+			initialCXXFlags = append(initialCXXFlags, "-Xclang", "-internal-isystem", "-Xclang", p.program.clangHeaders)
+		}
+		generated, cflags, cxxflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.program.fset, initialCFlags, initialCXXFlags)
 		p.CFlags = append(initialCFlags, cflags...)
+		p.CXXFlags = append(initialCXXFlags, cxxflags...)
+
 		for path, hash := range accessedFiles {
 			p.FileHashes[path] = hash
 		}

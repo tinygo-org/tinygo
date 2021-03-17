@@ -178,6 +178,28 @@ func (c *Config) CFlags() []string {
 	return cflags
 }
 
+// CXXFlags returns the flags to pass to the C++ compiler. This is necessary for CGo
+// preprocessing.
+func (c *Config) CXXFlags() []string {
+	cxxflags := append([]string{}, c.Options.CXXFlags...)
+	// We include target CFlags as default.
+	for _, flag := range c.Target.CFlags {
+		cxxflags = append(cxxflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
+	}
+	for _, flag := range c.Target.CXXFlags {
+		cxxflags = append(cxxflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
+	}
+	if c.Target.Libc == "picolibc" {
+		root := goenv.Get("TINYGOROOT")
+		cxxflags = append(cxxflags, "-nostdlibinc", "-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "picolibc", "newlib", "libc", "include"))
+		cxxflags = append(cxxflags, "-I"+filepath.Join(root, "lib/picolibc-include"))
+	}
+	if c.Debug() {
+		cxxflags = append(cxxflags, "-g")
+	}
+	return cxxflags
+}
+
 // LDFlags returns the flags to pass to the linker. A few more flags are needed
 // (like the one for the compiler runtime), but this represents the majority of
 // the flags.

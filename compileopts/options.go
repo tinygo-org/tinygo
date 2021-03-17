@@ -28,6 +28,7 @@ type Options struct {
 	PrintSizes    string
 	PrintStacks   bool
 	CFlags        []string
+	CXXFlags      []string
 	LDFlags       []string
 	Tags          string
 	WasmAbi       string

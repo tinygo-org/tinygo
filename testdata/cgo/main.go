@@ -2,10 +2,13 @@ package main
 
 /*
 int fortytwo(void);
+int fortythree(void);
+int other(void);
 #include "main.h"
 int mul(int, int);
 #include <string.h>
 #cgo CFLAGS: -DSOME_CONSTANT=17
+#cgo CXXFLAGS: -DOTHER_CONSTANT=18
 */
 import "C"
 
@@ -15,6 +18,8 @@ import "unsafe"
 
 func main() {
 	println("fortytwo:", C.fortytwo())
+	println("fortythree:", C.fortythree())
+	println("other:", C.other())
 	println("add:", C.add(C.int(3), 5))
 	var x C.myint = 3
 	println("myint:", x, C.myint(5))
