@@ -57,7 +57,7 @@ SECTIONS
         *(.persist)
         *(.persist.*)
         . = ALIGN(4);
-    } >DRAM
+    } >RAM
 
     /DISCARD/ :
     {
