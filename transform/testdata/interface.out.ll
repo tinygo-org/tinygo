@@ -5,6 +5,8 @@ target triple = "armv7m-none-eabi"
 %runtime.interfaceMethodInfo = type { i8*, i32 }
 
 @"reflect/types.type:basic:uint8" = external constant %runtime.typecodeID
+@"reflect/types.type:basic:uint8$id" = external constant i8
+@"reflect/types.type:basic:int16$id" = external constant i8
 @"reflect/types.type:basic:int" = external constant %runtime.typecodeID
 @"func NeverImplementedMethod()" = external constant i8
 @"func Double() int" = external constant i8
@@ -12,11 +14,13 @@ target triple = "armv7m-none-eabi"
 
 declare i1 @runtime.interfaceImplements(i32, i8**)
 
-declare i1 @runtime.typeAssert(i32, %runtime.typecodeID*)
+declare i1 @runtime.typeAssert(i32, i8*)
 
 declare i32 @runtime.interfaceMethod(i32, i8**, i8*)
 
 declare void @runtime.printuint8(i8)
+
+declare void @runtime.printint16(i16)
 
 declare void @runtime.printint32(i32)
 
@@ -63,6 +67,15 @@ typeswitch.byte:                                  ; preds = %typeswitch.notDoubl
   ret void
 
 typeswitch.notByte:                               ; preds = %typeswitch.notDoubler
+  br i1 false, label %typeswitch.int16, label %typeswitch.notInt16
+
+typeswitch.int16:                                 ; preds = %typeswitch.notByte
+  %int16 = ptrtoint i8* %value to i16
+  call void @runtime.printint16(i16 %int16)
+  call void @runtime.printnl()
+  ret void
+
+typeswitch.notInt16:                              ; preds = %typeswitch.notByte
   ret void
 }
 

@@ -124,7 +124,7 @@ type structField struct {
 // lowering, to assign the lowest type numbers to the types with the most type
 // asserts. Also, it is replaced with const false if this type assert can never
 // happen.
-func typeAssert(actualType uintptr, assertedType *typecodeID) bool
+func typeAssert(actualType uintptr, assertedType *uint8) bool
 
 // Pseudo function call that returns whether a given type implements all methods
 // of the given interface.

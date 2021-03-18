@@ -286,16 +286,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if r.debug {
 					fmt.Fprintln(os.Stderr, indent+"typeassert:", operands[1:])
 				}
-				actualType, err := operands[1].asPointer(r)
-				if err != nil {
-					return nil, mem, r.errorAt(inst, err)
-				}
-				assertedType, err := operands[2].asPointer(r)
-				if err != nil {
-					return nil, mem, r.errorAt(inst, err)
-				}
-				result := assertedType.asRawValue(r).equal(actualType.asRawValue(r))
-				if result {
+				assertedType := operands[2].toLLVMValue(inst.llvmInst.Operand(1).Type(), &mem)
+				actualTypePtrToInt := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem)
+				actualType := actualTypePtrToInt.Operand(0)
+				if actualType.Name()+"$id" == assertedType.Name() {
 					locals[inst.localIndex] = literalValue{uint8(1)}
 				} else {
 					locals[inst.localIndex] = literalValue{uint8(0)}
