@@ -23,6 +23,17 @@ SECTIONS
         _stack_top = .;
     } >RAM
 
+    /* Persistent RAM that is not re-initialized on reset.  PRAM is either
+     * a specific area of RAM which is powered during low-power states, or
+     * will be an alias for main system RAM on devices without such support. */
+    .persist (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.persist)
+        *(.persist.*)
+        . = ALIGN(4);
+    } >PRAM
+
     _sidata = LOADADDR(.data);
 
     .data :

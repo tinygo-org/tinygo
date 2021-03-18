@@ -5,6 +5,9 @@ MEMORY
     RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 0x20000
 }
 
+# Allocate 'Persistent RAM' from regular RAM (some chips have specific PRAM)
+REGION_ALIAS("PRAM", RAM);
+
 _stack_size = 4K;
 
 INCLUDE "targets/arm.ld"

@@ -46,6 +46,15 @@ SECTIONS
         _ebss = ABSOLUTE(.);
     } >DRAM
 
+    /* Persistent RAM emulated using normal RAM. */
+    .persist (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.persist)
+        *(.persist.*)
+        . = ALIGN(4);
+    } >DRAM
+
     /* Constant literals and code. Loaded into IRAM for now. Eventually, most
      * code should be executed directly from flash.
      * Note that literals must be before code for the l32r instruction to work.

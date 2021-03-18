@@ -5,6 +5,9 @@ MEMORY
     RAM (xrw)       : ORIGIN = 0x20000000 + 0x000039c0,  LENGTH = 64K  - 0x000039c0
 }
 
+# Allocate 'Persistent RAM' from regular RAM (some chips have specific PRAM)
+REGION_ALIAS("PRAM", RAM);
+
 _stack_size = 4K;
 
 /* This value is needed by the Nordic SoftDevice. */

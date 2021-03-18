@@ -50,6 +50,15 @@ SECTIONS
         _ebss = .;         /* used by startup code */
     } >RAM
 
+    /* Persistent RAM emulated using normal RAM. */
+    .persist (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.persist)
+        *(.persist.*)
+        . = ALIGN(4);
+    } >DRAM
+
     /DISCARD/ :
     {
         *(.eh_frame)       /* causes 'no memory region specified' error in lld */
