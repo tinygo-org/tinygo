@@ -6,6 +6,7 @@
 package os
 
 import (
+	"io"
 	"syscall"
 )
 
@@ -76,7 +77,7 @@ func Create(name string) (*File, error) {
 // read and any error encountered. At end of file, Read returns 0, io.EOF.
 func (f *File) Read(b []byte) (n int, err error) {
 	n, err = f.handle.Read(b)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		err = &PathError{"read", f.name, err}
 	}
 	return
@@ -155,58 +156,16 @@ func (e *PathError) Error() string {
 	return e.Op + " " + e.Path + ": " + e.Err.Error()
 }
 
-type FileMode uint32
-
-// Mode constants, copied from the mainline Go source
-// https://github.com/golang/go/blob/4ce6a8e89668b87dce67e2f55802903d6eb9110a/src/os/types.go#L35-L63
 const (
-	// The single letters are the abbreviations used by the String method's formatting.
-	ModeDir        FileMode = 1 << (32 - 1 - iota) // d: is a directory
-	ModeAppend                                     // a: append-only
-	ModeExclusive                                  // l: exclusive use
-	ModeTemporary                                  // T: temporary file; Plan 9 only
-	ModeSymlink                                    // L: symbolic link
-	ModeDevice                                     // D: device file
-	ModeNamedPipe                                  // p: named pipe (FIFO)
-	ModeSocket                                     // S: Unix domain socket
-	ModeSetuid                                     // u: setuid
-	ModeSetgid                                     // g: setgid
-	ModeCharDevice                                 // c: Unix character device, when ModeDevice is set
-	ModeSticky                                     // t: sticky
-	ModeIrregular                                  // ?: non-regular file; nothing else is known about this file
-
-	// Mask for the type bits. For regular files, none will be set.
-	ModeType = ModeDir | ModeSymlink | ModeNamedPipe | ModeSocket | ModeDevice | ModeCharDevice | ModeIrregular
-
-	ModePerm FileMode = 0777 // Unix permission bits
+	O_RDONLY int = syscall.O_RDONLY
+	O_WRONLY int = syscall.O_WRONLY
+	O_RDWR   int = syscall.O_RDWR
+	O_APPEND int = syscall.O_APPEND
+	O_CREATE int = syscall.O_CREAT
+	O_EXCL   int = syscall.O_EXCL
+	O_SYNC   int = syscall.O_SYNC
+	O_TRUNC  int = syscall.O_TRUNC
 )
-
-// IsDir is a stub, always returning false
-func (m FileMode) IsDir() bool {
-	return false
-}
-
-// Stub constants
-const (
-	O_RDONLY int = 1
-	O_WRONLY int = 2
-	O_RDWR   int = 4
-	O_APPEND int = 8
-	O_CREATE int = 16
-	O_EXCL   int = 32
-	O_SYNC   int = 64
-	O_TRUNC  int = 128
-)
-
-// A FileInfo describes a file and is returned by Stat and Lstat.
-type FileInfo interface {
-	Name() string   // base name of the file
-	Size() int64    // length in bytes for regular files; system-dependent for others
-	Mode() FileMode // file mode bits
-	// TODO ModTime() time.Time // modification time
-	IsDir() bool      // abbreviation for Mode().IsDir()
-	Sys() interface{} // underlying data source (can return nil)
-}
 
 // Stat is a stub, not yet implemented
 func Stat(name string) (FileInfo, error) {
@@ -231,16 +190,6 @@ func Readlink(name string) (string, error) {
 // TempDir is a stub (for now), always returning the string "/tmp"
 func TempDir() string {
 	return "/tmp"
-}
-
-// IsExist is a stub (for now), always returning false
-func IsExist(err error) bool {
-	return false
-}
-
-// IsNotExist is a stub (for now), always returning false
-func IsNotExist(err error) bool {
-	return false
 }
 
 // Getpid is a stub (for now), always returning 1

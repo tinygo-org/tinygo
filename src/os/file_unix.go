@@ -1,8 +1,9 @@
-// +build darwin linux,!baremetal,!wasi freebsd,!baremetal
+// +build darwin linux,!baremetal freebsd,!baremetal
 
 package os
 
 import (
+	"io"
 	"syscall"
 )
 
@@ -77,6 +78,9 @@ type unixFileHandle uintptr
 func (f unixFileHandle) Read(b []byte) (n int, err error) {
 	n, err = syscall.Read(int(f), b)
 	err = handleSyscallError(err)
+	if n == 0 && err == nil {
+		err = io.EOF
+	}
 	return
 }
 

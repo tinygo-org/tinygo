@@ -1,4 +1,4 @@
-// +build baremetal wasm
+// +build baremetal wasm,!wasi
 
 package os
 

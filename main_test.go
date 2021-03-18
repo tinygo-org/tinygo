@@ -59,7 +59,10 @@ func TestCompiler(t *testing.T) {
 		t.Run("Host", func(t *testing.T) {
 			runPlatTests("", matches, t)
 			if runtime.GOOS == "darwin" {
-				runTest("testdata/libc/env.go", "", t, []string{"ENV1=VALUE1", "ENV2=VALUE2"}...)
+				runTest("testdata/libc/filesystem.go", "", t,
+					nil, nil)
+				runTest("testdata/libc/env.go", "", t,
+					[]string{"ENV1=VALUE1", "ENV2=VALUE2"}, nil)
 			}
 		})
 	}
@@ -107,7 +110,9 @@ func TestCompiler(t *testing.T) {
 
 		t.Run("WASI", func(t *testing.T) {
 			runPlatTests("wasi", matches, t)
-			runTest("testdata/libc/env.go", "wasi", t, []string{"ENV1=VALUE1", "ENV2=VALUE2"}...)
+			runTest("testdata/libc/env.go", "wasi", t,
+				[]string{"--env", "ENV1=VALUE1", "--env", "ENV2=VALUE2"}, nil)
+			runTest("testdata/libc/filesystem.go", "wasi", t, nil, []string{"--dir=."})
 		})
 	}
 }
@@ -119,7 +124,7 @@ func runPlatTests(target string, matches []string, t *testing.T) {
 		path := path // redefine to avoid race condition
 		t.Run(filepath.Base(path), func(t *testing.T) {
 			t.Parallel()
-			runTest(path, target, t)
+			runTest(path, target, t, nil, nil)
 		})
 	}
 }
@@ -136,7 +141,7 @@ func runBuild(src, out string, opts *compileopts.Options) error {
 	return Build(src, out, opts)
 }
 
-func runTest(path, target string, t *testing.T, environmentVars ...string) {
+func runTest(path, target string, t *testing.T, environmentVars []string, additionalArgs []string) {
 	// Get the expected output for this test.
 	txtpath := path[:len(path)-3] + ".txt"
 	if path[len(path)-1] == os.PathSeparator {
@@ -195,7 +200,7 @@ func runTest(path, target string, t *testing.T, environmentVars ...string) {
 			cmd = exec.Command(binary)
 		} else {
 			args := append(spec.Emulator[1:], binary)
-			cmd = exec.Command(spec.Emulator[0], args...)
+			cmd = exec.Command(spec.Emulator[0], append(args, additionalArgs...)...)
 		}
 
 		if len(spec.Emulator) != 0 && spec.Emulator[0] == "wasmtime" {
