@@ -5,6 +5,8 @@ target triple = "armv7m-none-eabi"
 %runtime.interfaceMethodInfo = type { i8*, i32 }
 
 @"reflect/types.type:basic:uint8" = external constant %runtime.typecodeID
+@"reflect/types.type:basic:uint8$id" = external constant i8
+@"reflect/types.type:basic:int16$id" = external constant i8
 @"reflect/types.type:basic:int" = external constant %runtime.typecodeID
 @"func NeverImplementedMethod()" = external constant i8
 @"Unmatched$interface" = private constant [1 x i8*] [i8* @"func NeverImplementedMethod()"]
@@ -14,9 +16,10 @@ target triple = "armv7m-none-eabi"
 @"reflect/types.type:named:Number" = private constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i32 0, %runtime.interfaceMethodInfo* getelementptr inbounds ([1 x %runtime.interfaceMethodInfo], [1 x %runtime.interfaceMethodInfo]* @"Number$methodset", i32 0, i32 0) }
 
 declare i1 @runtime.interfaceImplements(i32, i8**)
-declare i1 @runtime.typeAssert(i32, %runtime.typecodeID*)
+declare i1 @runtime.typeAssert(i32, i8*)
 declare i32 @runtime.interfaceMethod(i32, i8**, i8*)
 declare void @runtime.printuint8(i8)
+declare void @runtime.printint16(i16)
 declare void @runtime.printint32(i32)
 declare void @runtime.printptr(i32)
 declare void @runtime.printnl()
@@ -52,7 +55,7 @@ typeswitch.Doubler:
   ret void
 
 typeswitch.notDoubler:
-  %isByte = call i1 @runtime.typeAssert(i32 %typecode, %runtime.typecodeID* nonnull @"reflect/types.type:basic:uint8")
+  %isByte = call i1 @runtime.typeAssert(i32 %typecode, i8* nonnull @"reflect/types.type:basic:uint8$id")
   br i1 %isByte, label %typeswitch.byte, label %typeswitch.notByte
 
 typeswitch.byte:
@@ -62,6 +65,17 @@ typeswitch.byte:
   ret void
 
 typeswitch.notByte:
+  ; this is a type assert that always fails
+  %isInt16 = call i1 @runtime.typeAssert(i32 %typecode, i8* nonnull @"reflect/types.type:basic:int16$id")
+  br i1 %isInt16, label %typeswitch.int16, label %typeswitch.notInt16
+
+typeswitch.int16:
+  %int16 = ptrtoint i8* %value to i16
+  call void @runtime.printint16(i16 %int16)
+  call void @runtime.printnl()
+  ret void
+
+typeswitch.notInt16:
   ret void
 }
 

@@ -194,8 +194,11 @@ func (p *lowerInterfacesPass) run() error {
 	typeAssertUses := getUses(typeAssert)
 	for _, use := range typeAssertUses {
 		typecode := use.Operand(1)
-		name := typecode.Name()
-		p.types[name].countTypeAsserts++
+		name := typecode.Name()            // name with $id suffix
+		name = name[:len(name)-len("$id")] // remove $id suffix
+		if t, ok := p.types[name]; ok {
+			t.countTypeAsserts++
+		}
 	}
 
 	// Find all interface method calls.
@@ -371,13 +374,27 @@ func (p *lowerInterfacesPass) run() error {
 		}
 	}
 
-	// Replace each type assert with an actual type comparison.
+	// Replace each type assert with an actual type comparison or (if the type
+	// assert is impossible) the constant false.
+	llvmFalse := llvm.ConstInt(p.ctx.Int1Type(), 0, false)
 	for _, use := range typeAssertUses {
 		actualType := use.Operand(0)
-		assertedTypeGlobal := use.Operand(1)
-		p.builder.SetInsertPointBefore(use)
-		commaOk := p.builder.CreateICmp(llvm.IntEQ, llvm.ConstPtrToInt(assertedTypeGlobal, p.uintptrType), actualType, "typeassert.ok")
-		use.ReplaceAllUsesWith(commaOk)
+		name := use.Operand(1).Name()      // name with $id suffix
+		name = name[:len(name)-len("$id")] // remove $id suffix
+		if t, ok := p.types[name]; ok {
+			// The type exists in the program, so lower to a regular integer
+			// comparison.
+			p.builder.SetInsertPointBefore(use)
+			commaOk := p.builder.CreateICmp(llvm.IntEQ, llvm.ConstPtrToInt(t.typecode, p.uintptrType), actualType, "typeassert.ok")
+			use.ReplaceAllUsesWith(commaOk)
+		} else {
+			// The type does not exist in the program, so lower to a constant
+			// false. This is trivially further optimized.
+			// TODO: eventually it'll be necessary to handle reflect.PtrTo and
+			// reflect.New calls which create new types not present in the
+			// original program.
+			use.ReplaceAllUsesWith(llvmFalse)
+		}
 		use.EraseFromParentAsInstruction()
 	}
 
