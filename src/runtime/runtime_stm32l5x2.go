@@ -3,31 +3,8 @@
 package runtime
 
 import (
-	"device/arm"
 	"device/stm32"
 	"machine"
-	"runtime/interrupt"
-	"runtime/volatile"
-)
-
-func init() {
-	initCLK()
-	initTIM15()
-	machine.UART0.Configure(machine.UARTConfig{})
-	initTIM16()
-}
-
-func putchar(c byte) {
-	machine.UART0.WriteByte(c)
-}
-
-const (
-	HSE_STARTUP_TIMEOUT = 0x0500
-	PLL_M               = 1
-	PLL_N               = 55
-	PLL_P               = 7 // RCC_PLLP_DIV7
-	PLL_Q               = 2 // RCC_PLLQ_DIV2
-	PLL_R               = 2 // RCC_PLLR_DIV2
 )
 
 /*
@@ -40,6 +17,55 @@ const (
    | APB2(PCLK2) | 110mhz    |
    +-------------+-----------+
 */
+const (
+	HSE_STARTUP_TIMEOUT = 0x0500
+	PLL_M               = 1
+	PLL_N               = 55
+	PLL_P               = 7 // RCC_PLLP_DIV7
+	PLL_Q               = 2 // RCC_PLLQ_DIV2
+	PLL_R               = 2 // RCC_PLLR_DIV2
+)
+
+/*
+   timer settings used for tick and sleep.
+
+   note: TICK_TIMER_FREQ and SLEEP_TIMER_FREQ are controlled by PLL / clock
+   settings above, so must be kept in sync if the clock settings are changed.
+*/
+const (
+	TICK_RATE        = 1000 // 1 KHz
+	SLEEP_TIMER_IRQ  = stm32.IRQ_TIM15
+	SLEEP_TIMER_FREQ = 110000000 // 110 MHz
+	TICK_TIMER_IRQ   = stm32.IRQ_TIM16
+	TICK_TIMER_FREQ  = 110000000 // 110 MHz
+)
+
+type arrtype = uint32
+
+const asyncScheduler = false
+
+func init() {
+	initCLK()
+
+	initSleepTimer(&timerInfo{
+		EnableRegister: &stm32.RCC.APB2ENR,
+		EnableFlag:     stm32.RCC_APB2ENR_TIM15EN,
+		Device:         stm32.TIM15,
+	})
+
+	machine.UART0.Configure(machine.UARTConfig{})
+
+	initTickTimer(&timerInfo{
+		EnableRegister: &stm32.RCC.APB2ENR,
+		EnableFlag:     stm32.RCC_APB2ENR_TIM16EN,
+		Device:         stm32.TIM16,
+	})
+}
+
+func putchar(c byte) {
+	machine.UART0.WriteByte(c)
+}
+
 func initCLK() {
 
 	// PWR_CLK_ENABLE
@@ -136,108 +162,4 @@ func initOsc() {
 	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_PLLRDY) {
 	}
 
-}
-
-var (
-	// tick in milliseconds
-	tickCount timeUnit
-)
-
-var timerWakeup volatile.Register8
-
-func ticksToNanoseconds(ticks timeUnit) int64 {
-	return int64(ticks) * 1000
-}
-
-func nanosecondsToTicks(ns int64) timeUnit {
-	return timeUnit(ns / 1000)
-}
-
-// Enable the TIM15 clock.(sleep count)
-func initTIM15() {
-	stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_TIM15EN)
-
-	intr := interrupt.New(stm32.IRQ_TIM15, handleTIM15)
-	intr.SetPriority(0xc3)
-	intr.Enable()
-}
-
-// Enable the TIM16 clock.(tick count)
-func initTIM16() {
-	stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_TIM16EN)
-
-	// CK_INT = APB1 = 110mhz
-	stm32.TIM16.PSC.Set(110000000/10000 - 1) // 110mhz to 10khz(0.1ms)
-	stm32.TIM16.ARR.Set(10 - 1)              // interrupt per 1ms
-
-	// Enable the hardware interrupt.
-	stm32.TIM16.DIER.SetBits(stm32.TIM_DIER_UIE)
-
-	// Enable the timer.
-	stm32.TIM16.CR1.SetBits(stm32.TIM_CR1_CEN)
-
-	intr := interrupt.New(stm32.IRQ_TIM16, handleTIM16)
-	intr.SetPriority(0xc1)
-	intr.Enable()
-}
-
-const asyncScheduler = false
-
-// sleepTicks should sleep for specific number of microseconds.
-func sleepTicks(d timeUnit) {
-	timerSleep(uint32(d))
-}
-
-// number of ticks (microseconds) since start.
-func ticks() timeUnit {
-	// milliseconds to microseconds
-	return tickCount * 1000
-}
-
-// ticks are in microseconds
-func timerSleep(ticks uint32) {
-	timerWakeup.Set(0)
-
-	// CK_INT = APB1 = 110mhz
-	// prescale counter down from 110mhz to 10khz aka 0.1 ms frequency.
-	stm32.TIM15.PSC.Set(110000000/10000 - 1)
-
-	// set duty aka duration
-	arr := (ticks / 100) - 1 // convert from microseconds to 0.1 ms
-	if arr == 0 {
-		arr = 1 // avoid blocking
-	}
-	stm32.TIM15.ARR.Set(arr)
-
-	// Enable the hardware interrupt.
-	stm32.TIM15.DIER.SetBits(stm32.TIM_DIER_UIE)
-
-	// Enable the timer.
-	stm32.TIM15.CR1.SetBits(stm32.TIM_CR1_CEN)
-
-	// wait till timer wakes up
-	for timerWakeup.Get() == 0 {
-		arm.Asm("wfi")
-	}
-}
-
-func handleTIM15(interrupt.Interrupt) {
-	if stm32.TIM15.SR.HasBits(stm32.TIM_SR_UIF) {
-		// Disable the timer.
-		stm32.TIM15.CR1.ClearBits(stm32.TIM_CR1_CEN)
-
-		// clear the update flag
-		stm32.TIM15.SR.ClearBits(stm32.TIM_SR_UIF)
-
-		// timer was triggered
-		timerWakeup.Set(1)
-	}
-}
-
-func handleTIM16(interrupt.Interrupt) {
-	if stm32.TIM16.SR.HasBits(stm32.TIM_SR_UIF) {
-		// clear the update flag
-		stm32.TIM16.SR.ClearBits(stm32.TIM_SR_UIF)
-		tickCount++
-	}
 }

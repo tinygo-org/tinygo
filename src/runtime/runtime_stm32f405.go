@@ -3,19 +3,9 @@
 package runtime
 
 import (
-	"device/arm"
 	"device/stm32"
 	"machine"
-	"runtime/interrupt"
-	"runtime/volatile"
 )
-
-func init() {
-	initOSC() // configure oscillators
-	initCLK() // configure CPU, AHB, and APB bus clocks
-	initTIM() // configure timers
-	initCOM() // configure serial comm interfaces
-}
 
 const (
 	// +----------------------+
@@ -73,6 +63,43 @@ const (
 	// instruction cache, data cache, and prefetch
 	FLASH_OPTIONS = stm32.FLASH_ACR_ICEN | stm32.FLASH_ACR_DCEN | stm32.FLASH_ACR_PRFTEN
 )
+
+/*
+   timer settings used for tick and sleep.
+
+   note: TICK_TIMER_FREQ and SLEEP_TIMER_FREQ are controlled by PLL / clock
+   settings above, so must be kept in sync if the clock settings are changed.
+*/
+const (
+	TICK_RATE        = 1000 // 1 KHz
+	SLEEP_TIMER_IRQ  = stm32.IRQ_TIM3
+	SLEEP_TIMER_FREQ = PCLK1_FREQ_HZ * 2
+	TICK_TIMER_IRQ   = stm32.IRQ_TIM7
+	TICK_TIMER_FREQ  = PCLK1_FREQ_HZ * 2
+)
+
+type arrtype = uint32
+
+const asyncScheduler = false
+
+func init() {
+	initOSC() // configure oscillators
+	initCLK()
+
+	initSleepTimer(&timerInfo{
+		EnableRegister: &stm32.RCC.APB1ENR,
+		EnableFlag:     stm32.RCC_APB1ENR_TIM3EN,
+		Device:         stm32.TIM3,
+	})
+
+	initCOM()
+
+	initTickTimer(&timerInfo{
+		EnableRegister: &stm32.RCC.APB1ENR,
+		EnableFlag:     stm32.RCC_APB1ENR_TIM7EN,
+		Device:         stm32.TIM7,
+	})
+}
 
 func initOSC() {
 	// enable voltage regulator
@@ -154,92 +181,9 @@ func initCLK() {
 	stm32.RCC.AHB1ENR.SetBits(CLK_CCM_RAM)
 }
 
-func initTIM() {
-	// enable sleep counter (TIM3)
-	stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_TIM3EN)
-
-	tim3 := interrupt.New(stm32.IRQ_TIM3, handleTIM3)
-	tim3.SetPriority(0xC3)
-	tim3.Enable()
-
-	// enable tick counter (TIM7)
-	stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_TIM7EN)
-
-	stm32.TIM7.PSC.Set((PCLK1_FREQ_HZ*2)/10000 - 1) // 84mhz to 10khz(0.1ms)
-	stm32.TIM7.ARR.Set(10 - 1)                      // interrupt per 1ms
-
-	stm32.TIM7.DIER.SetBits(stm32.TIM_DIER_UIE) // enable interrupt
-	stm32.TIM7.CR1.SetBits(stm32.TIM_CR1_CEN)   // enable timer
-
-	tim7 := interrupt.New(stm32.IRQ_TIM7, handleTIM7)
-	tim7.SetPriority(0xC1)
-	tim7.Enable()
-}
-
 func initCOM() {
 	if machine.NUM_UART_INTERFACES > 0 {
 		machine.UART0.Configure(machine.UARTConfig{})
-	}
-}
-
-var (
-	// tick in milliseconds
-	tickCount   timeUnit
-	timerWakeup volatile.Register8
-)
-
-const asyncScheduler = false
-
-func ticksToNanoseconds(ticks timeUnit) int64 {
-	return int64(ticks) * 1000
-}
-
-func nanosecondsToTicks(ns int64) timeUnit {
-	return timeUnit(ns / 1000)
-}
-
-// sleepTicks should sleep for specific number of microseconds.
-func sleepTicks(d timeUnit) {
-	timerSleep(uint32(d))
-}
-
-// number of ticks (microseconds) since start.
-func ticks() timeUnit {
-	return tickCount * 1000 // milliseconds to microseconds
-}
-
-// ticks are in microseconds
-func timerSleep(ticks uint32) {
-	timerWakeup.Set(0)
-
-	stm32.TIM3.PSC.Set((PCLK1_FREQ_HZ*2)/10000 - 1) // 8399
-	arr := (ticks / 100) - 1                        // microseconds to 0.1 ms
-	if arr == 0 {
-		arr = 1 // avoid blocking
-	}
-	stm32.TIM3.ARR.Set(arr)
-
-	stm32.TIM3.DIER.SetBits(stm32.TIM_DIER_UIE) // enable interrupt
-	stm32.TIM3.CR1.SetBits(stm32.TIM_CR1_CEN)   // enable the timer
-
-	// wait for timer
-	for timerWakeup.Get() == 0 {
-		arm.Asm("wfi")
-	}
-}
-
-func handleTIM3(interrupt.Interrupt) {
-	if stm32.TIM3.SR.HasBits(stm32.TIM_SR_UIF) {
-		stm32.TIM3.CR1.ClearBits(stm32.TIM_CR1_CEN) // disable the timer
-		stm32.TIM3.SR.ClearBits(stm32.TIM_SR_UIF)   // clear the update flag
-		timerWakeup.Set(1)                          // flag timer ISR
-	}
-}
-
-func handleTIM7(interrupt.Interrupt) {
-	if stm32.TIM7.SR.HasBits(stm32.TIM_SR_UIF) {
-		stm32.TIM7.SR.ClearBits(stm32.TIM_SR_UIF) // clear the update flag
-		tickCount++
 	}
 }
 
