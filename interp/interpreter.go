@@ -155,11 +155,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// which case this call won't even get to this point but will
 				// already be emitted in initAll.
 				continue
-			case callFn.name == "(reflect.Type).Elem" || strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" || callFn.name == "runtime.hashmapGet":
+			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" || callFn.name == "runtime.hashmapGet":
 				// These functions should be run at runtime. Specifically:
-				//   * (reflect.Type).Elem is a special function. It should
-				//     eventually be interpreted, but fall back to a runtime call
-				//     for now.
 				//   * Print and panic functions are best emitted directly without
 				//     interpreting them, otherwise we get a ton of putchar (etc.)
 				//     calls.
@@ -280,6 +277,38 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				copy(dstBuf.buf[dst.offset():dst.offset()+nBytes], srcBuf.buf[src.offset():])
 				dstObj.buffer = dstBuf
 				mem.put(dst.index(), dstObj)
+			case callFn.name == "(reflect.Type).Elem":
+				if r.debug {
+					fmt.Fprintln(os.Stderr, indent+"call (reflect.rawType).elem:", operands[1:])
+				}
+				// Extract the type code global from the first parameter.
+				typecodeID := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem).Operand(0)
+
+				// Get the type class.
+				// See also: getClassAndValueFromTypeCode in transform/reflect.go.
+				typecodeName := typecodeID.Name()
+				const prefix = "reflect/types.type:"
+				if !strings.HasPrefix(typecodeName, prefix) {
+					panic("unexpected typecode name: " + typecodeName)
+				}
+				id := typecodeName[len(prefix):]
+				class := id[:strings.IndexByte(id, ':')]
+				value := id[len(class)+1:]
+				if class == "named" {
+					// Get the underlying type.
+					class = value[:strings.IndexByte(value, ':')]
+					value = value[len(class)+1:]
+				}
+
+				// Elem() is only valid for certain type classes.
+				switch class {
+				case "chan", "pointer", "slice", "array":
+					elementType := llvm.ConstExtractValue(typecodeID.Initializer(), []uint32{0})
+					uintptrType := r.mod.Context().IntType(int(mem.r.pointerSize) * 8)
+					locals[inst.localIndex] = r.getValue(llvm.ConstPtrToInt(elementType, uintptrType))
+				default:
+					return nil, mem, r.errorAt(inst, fmt.Errorf("(reflect.Type).Elem() called on %s type", class))
+				}
 			case callFn.name == "runtime.typeAssert":
 				// This function must be implemented manually as it is normally
 				// implemented by the interface lowering pass.
