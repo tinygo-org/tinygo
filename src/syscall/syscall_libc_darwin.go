@@ -1,3 +1,5 @@
+// +build darwin
+
 package syscall
 
 // This file defines errno and constants to match the darwin libsystem ABI.
@@ -22,10 +24,25 @@ func getErrno() Errno {
 	return Errno(uintptr(*errptr))
 }
 
+func (e Errno) Is(target error) bool {
+	switch target.Error() {
+	case "permission denied":
+		return e == EACCES || e == EPERM
+	case "file already exists":
+		return e == EEXIST
+	case "file does not exist":
+		return e == ENOENT
+	}
+	return false
+}
+
 const (
+	EPERM       Errno = 0x1
 	ENOENT      Errno = 0x2
+	EACCES      Errno = 0xd
 	EEXIST      Errno = 0x11
 	EINTR       Errno = 0x4
+	ENOTDIR     Errno = 0x14
 	EMFILE      Errno = 0x18
 	EAGAIN      Errno = 0x23
 	ETIMEDOUT   Errno = 0x3c

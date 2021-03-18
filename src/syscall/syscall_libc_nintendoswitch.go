@@ -2,8 +2,6 @@
 
 package syscall
 
-import "errors"
-
 // A Signal is a number describing a process signal.
 // It implements the os.Signal interface.
 type Signal int
@@ -32,7 +30,6 @@ const (
 	O_RDWR   = 2
 
 	O_CREAT  = 0100
-	O_CREATE = O_CREAT
 	O_TRUNC  = 01000
 	O_APPEND = 02000
 	O_EXCL   = 0200
@@ -41,8 +38,9 @@ const (
 	O_CLOEXEC = 0
 )
 
-var dummyError = errors.New("unknown syscall error")
+//go:extern errno
+var libcErrno uintptr
 
 func getErrno() error {
-	return dummyError
+	return Errno(libcErrno)
 }
