@@ -368,6 +368,39 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 				// If assertOk is still 1, the assertion succeeded.
 				locals[inst.localIndex] = literalValue{assertOk}
+			case callFn.name == "runtime.interfaceMethod":
+				// This builtin returns the function (which may be a thunk) to
+				// invoke a method on an interface. It does not call the method.
+				if r.debug {
+					fmt.Fprintln(os.Stderr, indent+"interface method:", operands[1:])
+				}
+
+				// Load the first param, which is the type code (ptrtoint of the
+				// type code global).
+				typecodeID := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem).Operand(0).Initializer()
+
+				// Load the method set, which is part of the typecodeID object.
+				methodSet := llvm.ConstExtractValue(typecodeID, []uint32{2}).Operand(0).Initializer()
+
+				// We don't need to load the interface method set.
+
+				// Load the signature of the to-be-called function.
+				signature := inst.llvmInst.Operand(2)
+
+				// Iterate through all methods, looking for the one method that
+				// should be returned.
+				numMethods := methodSet.Type().ArrayLength()
+				var method llvm.Value
+				for i := 0; i < numMethods; i++ {
+					methodSignature := llvm.ConstExtractValue(methodSet, []uint32{uint32(i), 0})
+					if methodSignature == signature {
+						method = llvm.ConstExtractValue(methodSet, []uint32{uint32(i), 1}).Operand(0)
+					}
+				}
+				if method.IsNil() {
+					return nil, mem, r.errorAt(inst, errors.New("could not find method: "+signature.Name()))
+				}
+				locals[inst.localIndex] = r.getValue(method)
 			case callFn.name == "runtime.hashmapMake":
 				// Create a new map.
 				hashmapPointerType := inst.llvmInst.Type()
