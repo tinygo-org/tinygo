@@ -54,16 +54,18 @@ var (
 
 	// Console UART (LPUSART1)
 	UART0 = UART{
-		Buffer:          NewRingBuffer(),
-		Bus:             stm32.LPUART1,
-		AltFuncSelector: 6,
+		Buffer:            NewRingBuffer(),
+		Bus:               stm32.LPUART1,
+		TxAltFuncSelector: 6,
+		RxAltFuncSelector: 6,
 	}
 
 	// Gps UART
 	UART1 = UART{
-		Buffer:          NewRingBuffer(),
-		Bus:             stm32.USART1,
-		AltFuncSelector: 0,
+		Buffer:            NewRingBuffer(),
+		Bus:               stm32.USART1,
+		TxAltFuncSelector: 0,
+		RxAltFuncSelector: 0,
 	}
 
 	// SPI
