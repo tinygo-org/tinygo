@@ -220,7 +220,7 @@ type I2CConfig struct {
 func (i2c I2C) Configure(config I2CConfig) error {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
-		config.Frequency = TWI_FREQ_100KHZ
+		config.Frequency = 100e3 // 100kHz
 	}
 
 	// enable clock for I2C
@@ -253,22 +253,8 @@ func (i2c I2C) Configure(config I2CConfig) error {
 	pclk1Mhz := pclk1 / 1000000
 	i2c.Bus.CR2.SetBits(pclk1Mhz)
 
-	switch config.Frequency {
-	case TWI_FREQ_100KHZ:
-		// Normal mode speed calculation
-		ccr := pclk1 / (config.Frequency * 2)
-		i2c.Bus.CCR.Set(ccr)
-
-		// duty cycle 2
-		i2c.Bus.CCR.ClearBits(stm32.I2C_CCR_DUTY)
-
-		// frequency standard mode
-		i2c.Bus.CCR.ClearBits(stm32.I2C_CCR_F_S)
-
-		// Set Maximum Rise Time for standard mode
-		i2c.Bus.TRISE.Set(pclk1Mhz)
-
-	case TWI_FREQ_400KHZ:
+	switch {
+	case config.Frequency >= 400e3: // 400kHz
 		// Fast mode speed calculation
 		ccr := pclk1 / (config.Frequency * 3)
 		i2c.Bus.CCR.Set(ccr)
@@ -281,6 +267,19 @@ func (i2c I2C) Configure(config I2CConfig) error {
 
 		// Set Maximum Rise Time for fast mode
 		i2c.Bus.TRISE.Set(((pclk1Mhz * 300) / 1000))
+	default:
+		// Normal mode speed calculation
+		ccr := pclk1 / (config.Frequency * 2)
+		i2c.Bus.CCR.Set(ccr)
+
+		// duty cycle 2
+		i2c.Bus.CCR.ClearBits(stm32.I2C_CCR_DUTY)
+
+		// frequency standard mode
+		i2c.Bus.CCR.ClearBits(stm32.I2C_CCR_F_S)
+
+		// Set Maximum Rise Time for standard mode
+		i2c.Bus.TRISE.Set(pclk1Mhz)
 	}
 
 	// re-enable the selected I2C peripheral
