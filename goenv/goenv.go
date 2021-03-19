@@ -171,8 +171,9 @@ func getGoroot() string {
 	switch runtime.GOOS {
 	case "linux":
 		candidates = []string{
-			"/usr/local/go", // manually installed
-			"/usr/lib/go",   // from the distribution
+			"/usr/local/go",     // manually installed
+			"/usr/lib/go",       // from the distribution
+			"/snap/go/current/", // installed using snap
 		}
 	case "darwin":
 		candidates = []string{
