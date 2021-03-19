@@ -4,7 +4,6 @@ import (
 	"flag"
 	"go/types"
 	"io/ioutil"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,6 +19,19 @@ var flagUpdate = flag.Bool("update", false, "update tests based on test output")
 // Basic tests for the compiler. Build some Go files and compare the output with
 // the expected LLVM IR for regression testing.
 func TestCompiler(t *testing.T) {
+	// Check LLVM version.
+	llvmMajor, err := strconv.Atoi(strings.SplitN(llvm.Version, ".", 2)[0])
+	if err != nil {
+		t.Fatal("could not parse LLVM version:", llvm.Version)
+	}
+	if llvmMajor < 11 {
+		// It is likely this version needs to be bumped in the future.
+		// The goal is to at least test the LLVM version that's used by default
+		// in TinyGo and (if possible without too many workarounds) also some
+		// previous versions.
+		t.Skip("compiler tests require LLVM 11 or above, got LLVM ", llvm.Version)
+	}
+
 	target, err := compileopts.LoadTarget("i686--linux")
 	if err != nil {
 		t.Fatal("failed to load target:", err)
@@ -109,8 +121,6 @@ func TestCompiler(t *testing.T) {
 	}
 }
 
-var alignRegexp = regexp.MustCompile(", align [0-9]+$")
-
 // fuzzyEqualIR returns true if the two LLVM IR strings passed in are roughly
 // equal. That means, only relevant lines are compared (excluding comments
 // etc.).
@@ -122,15 +132,6 @@ func fuzzyEqualIR(s1, s2 string) bool {
 	}
 	for i, line1 := range lines1 {
 		line2 := lines2[i]
-		match1 := alignRegexp.MatchString(line1)
-		match2 := alignRegexp.MatchString(line2)
-		if match1 != match2 {
-			// Only one of the lines has the align keyword. Remove it.
-			// This is a change to make the test work in both LLVM 10 and LLVM
-			// 11 (LLVM 11 appears to automatically add alignment everywhere).
-			line1 = alignRegexp.ReplaceAllString(line1, "")
-			line2 = alignRegexp.ReplaceAllString(line2, "")
-		}
 		if line1 != line2 {
 			return false
 		}
@@ -144,12 +145,6 @@ func fuzzyEqualIR(s1, s2 string) bool {
 // stripped out.
 func filterIrrelevantIRLines(lines []string) []string {
 	var out []string
-	llvmVersion, err := strconv.Atoi(strings.Split(llvm.Version, ".")[0])
-	if err != nil {
-		// Note: this should never happen and if it does, it will always happen
-		// for a particular build because llvm.Version is a constant.
-		panic(err)
-	}
 	for _, line := range lines {
 		line = strings.Split(line, ";")[0]    // strip out comments/info
 		line = strings.TrimRight(line, "\r ") // drop '\r' on Windows and remove trailing spaces from comments
@@ -157,15 +152,6 @@ func filterIrrelevantIRLines(lines []string) []string {
 			continue
 		}
 		if strings.HasPrefix(line, "source_filename = ") {
-			continue
-		}
-		if llvmVersion < 10 && strings.HasPrefix(line, "attributes ") {
-			// Ignore attribute groups. These may change between LLVM versions.
-			// Right now test outputs are for LLVM 10.
-			continue
-		}
-		if llvmVersion < 10 && strings.HasPrefix(line, "target datalayout ") {
-			// Ignore the target layout. This may change between LLVM versions.
 			continue
 		}
 		out = append(out, line)
