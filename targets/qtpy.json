@@ -3,6 +3,6 @@
     "build-tags": ["qtpy"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "msd-volume-name": "QTPYBOOT",
+    "msd-volume-name": "QTPY_BOOT",
     "msd-firmware-name": "firmware.uf2"
 }
