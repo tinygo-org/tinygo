@@ -23,7 +23,7 @@ import (
 // Version of the compiler pacakge. Must be incremented each time the compiler
 // package changes in a way that affects the generated LLVM module.
 // This version is independent of the TinyGo version number.
-const Version = 1
+const Version = 2 // last change: adding wasm-export-name attribute
 
 func init() {
 	llvm.InitializeAllTargets()
@@ -780,6 +780,12 @@ func (b *builder) createFunction() {
 	if !b.info.exported {
 		b.llvmFn.SetVisibility(llvm.HiddenVisibility)
 		b.llvmFn.SetUnnamedAddr(true)
+	}
+	if b.info.exported && strings.HasPrefix(b.Triple, "wasm") {
+		// Set the exported name. This is necessary for WebAssembly because
+		// otherwise the function is not exported.
+		functionAttr := b.ctx.CreateStringAttribute("wasm-export-name", b.info.linkName)
+		b.llvmFn.AddFunctionAttr(functionAttr)
 	}
 
 	// Some functions have a pragma controlling the inlining level.
