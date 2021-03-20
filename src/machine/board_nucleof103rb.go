@@ -120,6 +120,6 @@ const (
 
 // I2C pins
 const (
-	SCL_PIN = PB6
-	SDA_PIN = PB7
+	I2C0_SCL_PIN = PB6
+	I2C0_SDA_PIN = PB7
 )
