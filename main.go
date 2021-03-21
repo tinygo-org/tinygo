@@ -105,7 +105,7 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 		return err
 	}
 
-	return builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
+	return builder.Build(pkgName, outpath, config, nil, func(result builder.BuildResult) error {
 		if err := os.Rename(result.Binary, outpath); err != nil {
 			// Moving failed. Do a file copy.
 			inf, err := os.Open(result.Binary)
@@ -141,7 +141,7 @@ func Test(pkgName string, options *compileopts.Options, testCompileOnly bool, ou
 		return err
 	}
 
-	return builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
+	return builder.Build(pkgName, outpath, config, nil, func(result builder.BuildResult) error {
 		if testCompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
 			if outpath == "" {
@@ -237,7 +237,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		return errors.New("unknown flash method: " + flashMethod)
 	}
 
-	return builder.Build(pkgName, fileExt, config, func(result builder.BuildResult) error {
+	return builder.Build(pkgName, fileExt, config, func() error {
 		// do we need port reset to put MCU into bootloader mode?
 		if config.Target.PortReset == "true" && flashMethod != "openocd" {
 			if port == "" {
@@ -250,12 +250,14 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 
 			err := touchSerialPortAt1200bps(port)
 			if err != nil {
-				return &commandError{"failed to reset port", result.Binary, err}
+				return &commandError{"failed to reset port", "", err}
 			}
 			// give the target MCU a chance to restart into bootloader
 			time.Sleep(3 * time.Second)
 		}
+		return nil
 
+	}, func(result builder.BuildResult) error {
 		// this flashing method copies the binary data to a Mass Storage Device (msd)
 		switch flashMethod {
 		case "", "command":
@@ -348,7 +350,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		return errors.New("gdb not configured in the target specification")
 	}
 
-	return builder.Build(pkgName, "", config, func(result builder.BuildResult) error {
+	return builder.Build(pkgName, "", config, nil, func(result builder.BuildResult) error {
 		// Find a good way to run GDB.
 		gdbInterface, openocdInterface := config.Programmer()
 		switch gdbInterface {
@@ -512,7 +514,7 @@ func Run(pkgName string, options *compileopts.Options) error {
 		return err
 	}
 
-	return builder.Build(pkgName, ".elf", config, func(result builder.BuildResult) error {
+	return builder.Build(pkgName, ".elf", config, nil, func(result builder.BuildResult) error {
 		if len(config.Target.Emulator) == 0 {
 			// Run directly.
 			cmd := executeCommand(config.Options, result.Binary)
