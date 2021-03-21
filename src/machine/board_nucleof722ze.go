@@ -54,6 +54,15 @@ const (
 
 // I2C pins
 const (
-	SCL_PIN = PB6
-	SDA_PIN = PB7
+	I2C0_SCL_PIN = PB8
+	I2C0_SDA_PIN = PB9
+)
+
+var (
+	// I2C1 is documented, alias to I2C0 as well
+	I2C1 = &I2C{
+		Bus:             stm32.I2C1,
+		AltFuncSelector: 4,
+	}
+	I2C0 = I2C1
 )
