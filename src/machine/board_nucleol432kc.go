@@ -22,8 +22,9 @@ const (
 
 // I2C pins
 const (
-	// PB6 and PB7 are mapped to CN4 pin 7 and CN4 pin 8 respectively with the
-	// default solder bridge settings
+	// With default solder bridge settings:
+	//    PB6 / Arduino D5 / CN3 Pin 8 is SCL
+	//    PB7 / Arduino D4 / CN3 Pin 7 is SDA
 	I2C0_SCL_PIN = PB6
 	I2C0_SDA_PIN = PB7
 )
@@ -39,6 +40,15 @@ var (
 		RxAltFuncSelector: 3,
 	}
 	UART1 = &UART0
+)
+
+var (
+	// I2C1 is documented, alias to I2C0 as well
+	I2C1 = &I2C{
+		Bus:             stm32.I2C1,
+		AltFuncSelector: 4,
+	}
+	I2C0 = I2C1
 )
 
 func init() {

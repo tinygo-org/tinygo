@@ -39,3 +39,13 @@ func (uart *UART) setRegisters() {
 	uart.statusReg = &uart.Bus.ISR
 	uart.txEmptyFlag = stm32.USART_ISR_TXE
 }
+
+//---------- I2C related code
+
+// Gets the value for TIMINGR register
+func (i2c I2C) getFreqRange() uint32 {
+	// This is a 'magic' value calculated by STM32CubeMX
+	// for 110MHz PCLK1.
+	// TODO: Do calculations based on PCLK1
+	return 0x40505681
+}

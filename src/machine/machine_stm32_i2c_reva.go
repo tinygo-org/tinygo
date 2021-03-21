@@ -1,8 +1,9 @@
-// +build stm32,!stm32f7x2,!stm32l5x2,!stm32l0,!stm32l4x2
+// +build stm32f4 stm32f1
 
 package machine
 
-// Peripheral abstraction layer for I2C on the stm32 family
+// I2C implementation for 'older' STM32 MCUs, including the F1 and F4 series
+// of MCUs.
 
 import (
 	"device/stm32"

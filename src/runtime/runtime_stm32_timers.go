@@ -56,6 +56,7 @@ func nanosecondsToTicks(ns int64) timeUnit {
 }
 
 // number of ticks (microseconds) since start.
+//go:linkname ticks runtime.ticks
 func ticks() timeUnit {
 	return timeUnit(tickCount.Get())
 }
