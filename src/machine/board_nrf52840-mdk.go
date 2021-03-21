@@ -39,7 +39,7 @@ const (
 // USB CDC identifiers
 const (
 	usb_STRING_PRODUCT      = "Makerdiary nRF52840 MDK"
-	usb_STRING_MANUFACTURER = "Makerdiary"
+	usb_STRING_MANUFACTURER = "Nordic Semiconductor ASA"
 )
 
 var (

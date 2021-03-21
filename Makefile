@@ -267,6 +267,10 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10056            examples/blinky2
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pca10059            examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pca10059            examples/blinky2
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0        examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m0          examples/blinky1
@@ -395,6 +399,7 @@ endif
 	@$(MD5SUM) test.nro
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -opt=0     ./testdata/stdlib.go
 	@$(MD5SUM) test.hex
+
 
 wasmtest:
 	$(GO) test ./tests/wasm
