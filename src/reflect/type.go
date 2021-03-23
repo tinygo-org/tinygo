@@ -609,23 +609,23 @@ func (t rawType) FieldAlign() int {
 	return t.Align()
 }
 
-// AssignableTo returns whether a value of type u can be assigned to a variable
-// of type t.
+// AssignableTo returns whether a value of type t can be assigned to a variable
+// of type u.
 func (t rawType) AssignableTo(u Type) bool {
 	if t == u.(rawType) {
 		return true
 	}
-	if t.Kind() == Interface {
-		panic("reflect: unimplemented: assigning to interface of different type")
+	if u.Kind() == Interface {
+		panic("reflect: unimplemented: AssignableTo with interface")
 	}
 	return false
 }
 
 func (t rawType) Implements(u Type) bool {
-	if t.Kind() != Interface {
+	if u.Kind() != Interface {
 		panic("reflect: non-interface type passed to Type.Implements")
 	}
-	return u.AssignableTo(t)
+	return t.AssignableTo(u)
 }
 
 // Comparable returns whether values of this type can be compared to each other.
