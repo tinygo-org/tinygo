@@ -65,7 +65,7 @@ func (usbcdc *USBCDC) Flush() error {
 }
 
 // WriteByte writes a byte of data to the USB CDC interface.
-func (usbcdc USBCDC) WriteByte(c byte) error {
+func (usbcdc *USBCDC) WriteByte(c byte) error {
 	// Supposedly to handle problem with Windows USB serial ports?
 	if usbLineInfo.lineState > 0 {
 		ok := false
@@ -199,6 +199,7 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 	if nrf.USBD.EVENTS_SOF.Get() == 1 {
 		nrf.USBD.EVENTS_SOF.Set(0)
 		USB.Flush()
+		// if you want to blink LED showing traffic, this would be the place...
 	}
 
 	// USBD ready event

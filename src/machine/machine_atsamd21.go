@@ -1646,6 +1646,7 @@ func (usbcdc *USBCDC) Flush() error {
 
 			if usbcdc.waitTxc {
 				// waiting for the next flush(), because the transmission is not complete
+				usbcdc.waitTxcRetryCount++
 				return nil
 			}
 			usbcdc.waitTxc = true
@@ -1700,7 +1701,7 @@ func (usbcdc *USBCDC) WriteByte(c byte) error {
 				mask := interrupt.Disable()
 				UART0.waitTxc = false
 				UART0.waitTxcRetryCount = 0
-				usbcdc.TxIdx.Set(0)
+				UART0.TxIdx.Set(0)
 				usbLineInfo.lineState = 0
 				interrupt.Restore(mask)
 				break
@@ -1868,6 +1869,7 @@ func handleUSB(intr interrupt.Interrupt) {
 
 	// Start of frame
 	if (flags & sam.USB_DEVICE_INTFLAG_SOF) > 0 {
+		UART0.Flush()
 		// if you want to blink LED showing traffic, this would be the place...
 	}
 
@@ -1931,13 +1933,7 @@ func handleUSB(intr interrupt.Interrupt) {
 				}
 			}
 		}
-
-		if i == usb_CDC_ENDPOINT_IN && UART0.waitTxc {
-			UART0.waitTxcRetryCount++
-		}
 	}
-
-	UART0.Flush()
 }
 
 func initEndpoint(ep, config uint32) {
