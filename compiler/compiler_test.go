@@ -61,6 +61,7 @@ func TestCompiler(t *testing.T) {
 		"slice.go",
 		"string.go",
 		"float.go",
+		"interface.go",
 	}
 
 	for _, testCase := range tests {
