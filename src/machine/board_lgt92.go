@@ -41,13 +41,17 @@ const (
 	// LORA RFM95 Radio
 	RFM95_DIO0_PIN = PC13
 
-	//TinyGo UART is MCU LPUSART1
+	// TinyGo UART is MCU LPUSART1
 	UART_RX_PIN = PA13
 	UART_TX_PIN = PA14
 
-	//TinyGo UART1 is MCU USART1
+	// TinyGo UART1 is MCU USART1
 	UART1_RX_PIN = PB6
 	UART1_TX_PIN = PB7
+
+	// MPU9250 Nine-Axis (Gyro + Accelerometer + Compass)
+	I2C0_SCL_PIN = PA9
+	I2C0_SDA_PIN = PA10
 )
 
 var (
@@ -67,6 +71,13 @@ var (
 		TxAltFuncSelector: 0,
 		RxAltFuncSelector: 0,
 	}
+
+	// MPU9250 Nine-Axis (Gyro + Accelerometer + Compass)
+	I2C1 = &I2C{
+		Bus:             stm32.I2C1,
+		AltFuncSelector: 6,
+	}
+	I2C0 = I2C1
 
 	// SPI
 	SPI0 = SPI{
