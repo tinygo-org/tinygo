@@ -299,7 +299,10 @@ func showValue(rv reflect.Value, indent string) {
 	}
 	print(indent+"reflect type: ", rt.Kind().String())
 	if rv.CanSet() {
-		print(" settable=", rv.CanSet())
+		print(" settable=true")
+	}
+	if rv.CanAddr() {
+		print(" addrable=true")
 	}
 	if !rt.Comparable() {
 		print(" comparable=false")
