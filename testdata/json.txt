@@ -1,0 +1,4 @@
+int: 3
+float64: 3.14
+string: "foo"
+slice of strings: ["foo","bar"]

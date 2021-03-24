@@ -74,6 +74,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		// Run Go-specific optimization passes.
 		OptimizeMaps(mod)
 		OptimizeStringToBytes(mod)
+		OptimizeReflectImplements(mod)
 		OptimizeAllocs(mod)
 		err := LowerInterfaces(mod)
 		if err != nil {

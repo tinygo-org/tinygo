@@ -62,6 +62,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			// Take a pointer to the typecodeID of the first field (if it exists).
 			structGlobal := c.makeStructTypeFields(typ)
 			references = llvm.ConstBitCast(structGlobal, global.Type())
+		case *types.Interface:
+			methodSetGlobal := c.getInterfaceMethodSet(typ)
+			references = llvm.ConstBitCast(methodSetGlobal, global.Type())
 		}
 		if _, ok := typ.Underlying().(*types.Interface); !ok {
 			methodSet = c.getTypeMethodSet(typ)
