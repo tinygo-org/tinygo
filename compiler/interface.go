@@ -186,7 +186,7 @@ func getTypeCodeName(t types.Type) string {
 	case *types.Interface:
 		methods := make([]string, t.NumMethods())
 		for i := 0; i < t.NumMethods(); i++ {
-			methods[i] = getTypeCodeName(t.Method(i).Type())
+			methods[i] = t.Method(i).Name() + ":" + getTypeCodeName(t.Method(i).Type())
 		}
 		return "interface:" + "{" + strings.Join(methods, ",") + "}"
 	case *types.Map:

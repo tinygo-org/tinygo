@@ -11,9 +11,10 @@ target triple = "i686--linux"
 @"reflect/types.type:basic:int" = linkonce_odr constant %runtime.typecodeID zeroinitializer
 @"reflect/types.type:pointer:basic:int" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i32 0, %runtime.interfaceMethodInfo* null }
 @"reflect/types.type:pointer:named:error" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:named:error", i32 0, %runtime.interfaceMethodInfo* null }
-@"reflect/types.type:named:error" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:interface:{func:{}{basic:string}}", i32 0, %runtime.interfaceMethodInfo* null }
-@"reflect/types.type:interface:{func:{}{basic:string}}" = external constant %runtime.typecodeID
-@"reflect/types.type:pointer:interface:{func:{}{basic:string}}" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:interface:{func:{}{basic:string}}", i32 0, %runtime.interfaceMethodInfo* null }
+@"reflect/types.type:named:error" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:interface:{Error:func:{}{basic:string}}", i32 0, %runtime.interfaceMethodInfo* null }
+@"reflect/types.type:interface:{Error:func:{}{basic:string}}" = external constant %runtime.typecodeID
+@"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:interface:{String:func:{}{basic:string}}", i32 0, %runtime.interfaceMethodInfo* null }
+@"reflect/types.type:interface:{String:func:{}{basic:string}}" = external constant %runtime.typecodeID
 @"reflect/types.type:basic:int$id" = external constant i8
 @"func Error() string" = external constant i8
 @"error$interface" = linkonce_odr constant [1 x i8*] [i8* @"func Error() string"]
@@ -44,7 +45,7 @@ entry:
 
 define hidden %runtime._interface @main.anonymousInterfaceType(i8* %context, i8* %parentHandle) unnamed_addr {
 entry:
-  ret %runtime._interface { i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:pointer:interface:{func:{}{basic:string}}" to i32), i8* null }
+  ret %runtime._interface { i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}" to i32), i8* null }
 }
 
 define hidden i1 @main.isInt(i32 %itf.typecode, i8* %itf.value, i8* %context, i8* %parentHandle) unnamed_addr {
