@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"reflect"
 	"unsafe"
 )
@@ -26,6 +27,14 @@ type (
 		next *linkedList `description:"chain"`
 		foo  int
 	}
+)
+
+var (
+	errorValue   = errors.New("test error")
+	errorType    = reflect.TypeOf((*error)(nil)).Elem()
+	stringerType = reflect.TypeOf((*interface {
+		String() string
+	})(nil)).Elem()
 )
 
 func main() {
@@ -283,6 +292,13 @@ func main() {
 	}
 	if reflect.TypeOf(new(myslice)) != reflect.PtrTo(reflect.TypeOf(make(myslice, 0))) {
 		println("PtrTo failed for type myslice")
+	}
+
+	if reflect.TypeOf(errorValue).Implements(errorType) != true {
+		println("errorValue.Implements(errorType) was false, expected true")
+	}
+	if reflect.TypeOf(errorValue).Implements(stringerType) != false {
+		println("errorValue.Implements(errorType) was true, expected false")
 	}
 
 	println("\nstruct tags")

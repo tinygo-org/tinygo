@@ -428,7 +428,7 @@ func (p *lowerInterfacesPass) run() error {
 		if !initializer.IsNil() {
 			references := llvm.ConstExtractValue(initializer, []uint32{0})
 			typ.typecode.SetInitializer(zeroTypeCode)
-			if !references.IsAConstantExpr().IsNil() && references.Opcode() == llvm.BitCast {
+			if strings.HasPrefix(typ.name, "reflect/types.type:struct:") {
 				// Structs have a 'references' field that is not a typecode but
 				// a pointer to a runtime.structField array and therefore a
 				// bitcast. This global should be erased separately, otherwise

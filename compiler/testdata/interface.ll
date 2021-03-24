@@ -12,14 +12,15 @@ target triple = "i686--linux"
 @"reflect/types.type:pointer:basic:int" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i32 0, %runtime.interfaceMethodInfo* null }
 @"reflect/types.type:pointer:named:error" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:named:error", i32 0, %runtime.interfaceMethodInfo* null }
 @"reflect/types.type:named:error" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:interface:{Error:func:{}{basic:string}}", i32 0, %runtime.interfaceMethodInfo* null }
-@"reflect/types.type:interface:{Error:func:{}{basic:string}}" = external constant %runtime.typecodeID
-@"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:interface:{String:func:{}{basic:string}}", i32 0, %runtime.interfaceMethodInfo* null }
-@"reflect/types.type:interface:{String:func:{}{basic:string}}" = external constant %runtime.typecodeID
-@"reflect/types.type:basic:int$id" = external constant i8
+@"reflect/types.type:interface:{Error:func:{}{basic:string}}" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* bitcast ([1 x i8*]* @"reflect/types.interface:interface{Error() string}$interface" to %runtime.typecodeID*), i32 0, %runtime.interfaceMethodInfo* null }
 @"func Error() string" = external constant i8
-@"error$interface" = linkonce_odr constant [1 x i8*] [i8* @"func Error() string"]
+@"reflect/types.interface:interface{Error() string}$interface" = linkonce_odr constant [1 x i8*] [i8* @"func Error() string"]
+@"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:interface:{String:func:{}{basic:string}}", i32 0, %runtime.interfaceMethodInfo* null }
+@"reflect/types.type:interface:{String:func:{}{basic:string}}" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* bitcast ([1 x i8*]* @"reflect/types.interface:interface{String() string}$interface" to %runtime.typecodeID*), i32 0, %runtime.interfaceMethodInfo* null }
 @"func String() string" = external constant i8
 @"reflect/types.interface:interface{String() string}$interface" = linkonce_odr constant [1 x i8*] [i8* @"func String() string"]
+@"reflect/types.type:basic:int$id" = external constant i8
+@"error$interface" = linkonce_odr constant [1 x i8*] [i8* @"func Error() string"]
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 

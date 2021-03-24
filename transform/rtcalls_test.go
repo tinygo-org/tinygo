@@ -21,3 +21,11 @@ func TestOptimizeStringEqual(t *testing.T) {
 		OptimizeStringEqual(mod)
 	})
 }
+
+func TestOptimizeReflectImplements(t *testing.T) {
+	t.Parallel()
+	testTransform(t, "testdata/reflect-implements", func(mod llvm.Module) {
+		// Run optimization pass.
+		OptimizeReflectImplements(mod)
+	})
+}
