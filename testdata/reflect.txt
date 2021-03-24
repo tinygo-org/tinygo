@@ -72,63 +72,63 @@ reflect type: chan
 reflect type: ptr
   pointer: true int
   nil: false
-  reflect type: int settable=true
+  reflect type: int settable=true addrable=true
     int: 0
 reflect type: ptr
   pointer: true interface
   nil: false
-  reflect type: interface settable=true
+  reflect type: interface settable=true addrable=true
     interface
     nil: true
 reflect type: ptr
   pointer: true int
   nil: false
-  reflect type: int settable=true
+  reflect type: int settable=true addrable=true
     int: 42
 reflect type: ptr
   pointer: true int
   nil: false
-  reflect type: int settable=true
+  reflect type: int settable=true addrable=true
     int: 0
 reflect type: slice comparable=false
   slice: uint8 3 3
   pointer: true
   nil: false
   indexing: 0
-  reflect type: uint8 settable=true
+  reflect type: uint8 settable=true addrable=true
     uint: 1
   indexing: 1
-  reflect type: uint8 settable=true
+  reflect type: uint8 settable=true addrable=true
     uint: 2
   indexing: 2
-  reflect type: uint8 settable=true
+  reflect type: uint8 settable=true addrable=true
     uint: 3
 reflect type: slice comparable=false
   slice: uint8 2 5
   pointer: true
   nil: false
   indexing: 0
-  reflect type: uint8 settable=true
+  reflect type: uint8 settable=true addrable=true
     uint: 0
   indexing: 1
-  reflect type: uint8 settable=true
+  reflect type: uint8 settable=true addrable=true
     uint: 0
 reflect type: slice comparable=false
   slice: int32 2 2
   pointer: true
   nil: false
   indexing: 0
-  reflect type: int32 settable=true
+  reflect type: int32 settable=true addrable=true
     int: 3
   indexing: 1
-  reflect type: int32 settable=true
+  reflect type: int32 settable=true addrable=true
     int: 5
 reflect type: slice comparable=false
   slice: string 2 2
   pointer: true
   nil: false
   indexing: 0
-  reflect type: string settable=true
+  reflect type: string settable=true addrable=true
     string: xyz 3
     reflect type: uint8
       uint: 120
@@ -137,7 +137,7 @@ reflect type: slice comparable=false
     reflect type: uint8
       uint: 122
   indexing: 1
-  reflect type: string settable=true
+  reflect type: string settable=true addrable=true
     string: Z 1
     reflect type: uint8
       uint: 90
@@ -154,53 +154,53 @@ reflect type: slice comparable=false
   pointer: true
   nil: false
   indexing: 0
-  reflect type: float32 settable=true
+  reflect type: float32 settable=true addrable=true
     float: +1.000000e+000
   indexing: 1
-  reflect type: float32 settable=true
+  reflect type: float32 settable=true addrable=true
     float: +1.320000e+000
 reflect type: slice comparable=false
   slice: float64 2 2
   pointer: true
   nil: false
   indexing: 0
-  reflect type: float64 settable=true
+  reflect type: float64 settable=true addrable=true
     float: +1.000000e+000
   indexing: 1
-  reflect type: float64 settable=true
+  reflect type: float64 settable=true addrable=true
     float: +1.640000e+000
 reflect type: slice comparable=false
   slice: complex64 2 2
   pointer: true
   nil: false
   indexing: 0
-  reflect type: complex64 settable=true
+  reflect type: complex64 settable=true addrable=true
     complex: (+1.000000e+000+0.000000e+000i)
   indexing: 1
-  reflect type: complex64 settable=true
+  reflect type: complex64 settable=true addrable=true
     complex: (+1.640000e+000+3.000000e-001i)
 reflect type: slice comparable=false
   slice: complex128 2 2
   pointer: true
   nil: false
   indexing: 0
-  reflect type: complex128 settable=true
+  reflect type: complex128 settable=true addrable=true
     complex: (+1.000000e+000+0.000000e+000i)
   indexing: 1
-  reflect type: complex128 settable=true
+  reflect type: complex128 settable=true addrable=true
     complex: (+1.128000e+000+4.000000e-001i)
 reflect type: slice comparable=false
   slice: uint8 3 3
   pointer: true
   nil: false
   indexing: 0
-  reflect type: uint8 settable=true
+  reflect type: uint8 settable=true addrable=true
     uint: 5
   indexing: 1
-  reflect type: uint8 settable=true
+  reflect type: uint8 settable=true addrable=true
     uint: 3
   indexing: 2
-  reflect type: uint8 settable=true
+  reflect type: uint8 settable=true addrable=true
     uint: 11
 reflect type: array
   array: 3 int64 24
@@ -290,10 +290,10 @@ reflect type: struct comparable=false
     pointer: true
     nil: false
     indexing: 0
-    reflect type: uint8
+    reflect type: uint8 addrable=true
       uint: 71
     indexing: 1
-    reflect type: uint8
+    reflect type: uint8 addrable=true
       uint: 111
   field: 4 Buf
   tag: 
@@ -303,23 +303,23 @@ reflect type: struct comparable=false
     pointer: true
     nil: false
     indexing: 0
-    reflect type: uint8 settable=true
+    reflect type: uint8 settable=true addrable=true
       uint: 88
 reflect type: ptr
   pointer: true struct
   nil: false
-  reflect type: struct settable=true
+  reflect type: struct settable=true addrable=true
     struct: 2
     field: 0 next
     tag: description:"chain"
     embedded: false
-    reflect type: ptr
+    reflect type: ptr addrable=true
       pointer: false struct
       nil: true
     field: 1 foo
     tag: 
     embedded: false
-    reflect type: int
+    reflect type: int addrable=true
       int: 42
 
 sizes:

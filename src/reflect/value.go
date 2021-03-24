@@ -156,7 +156,7 @@ func (v Value) CanInterface() bool {
 }
 
 func (v Value) CanAddr() bool {
-	panic("unimplemented: (reflect.Value).CanAddr()")
+	return v.flags&(valueFlagIndirect) == valueFlagIndirect
 }
 
 func (v Value) Addr() Value {
