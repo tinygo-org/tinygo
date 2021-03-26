@@ -238,8 +238,9 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		GOARCH:    goarch,
 		BuildTags: []string{goos, goarch},
 		Compiler:  "clang",
-		Linker:    "cc",
 		CFlags:    []string{"--target=" + triple},
+		Linker:    "clang",
+		LDFlags:   []string{"--target=" + triple, "-fuse-ld=lld"},
 		GDB:       "gdb",
 		PortReset: "false",
 	}
@@ -256,17 +257,11 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		spec.GDB = "gdb-multiarch"
 		if goarch == "arm" && goos == "linux" {
 			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/arm-linux-gnueabihf")
-			spec.Linker = "arm-linux-gnueabihf-gcc"
 			spec.Emulator = []string{"qemu-arm", "-L", "/usr/arm-linux-gnueabihf"}
 		}
 		if goarch == "arm64" && goos == "linux" {
 			spec.CFlags = append(spec.CFlags, "--sysroot=/usr/aarch64-linux-gnu")
-			spec.Linker = "aarch64-linux-gnu-gcc"
 			spec.Emulator = []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"}
-		}
-		if goarch == "386" && runtime.GOARCH == "amd64" {
-			spec.CFlags = append(spec.CFlags, "-m32")
-			spec.LDFlags = append(spec.LDFlags, "-m32")
 		}
 	}
 	return &spec, nil
