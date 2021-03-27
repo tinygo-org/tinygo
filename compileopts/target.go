@@ -229,7 +229,13 @@ func LoadTarget(target string) (*TargetSpec, error) {
 	}
 }
 
+// WindowsBuildNotSupportedErr is being thrown, when goos is windows and no target has been specified.
+var WindowsBuildNotSupportedErr = errors.New("Building Windows binaries is currently not supported. Try specifying a different target")
+
 func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
+	if goos == "windows" {
+		return nil, WindowsBuildNotSupportedErr
+	}
 	// No target spec available. Use the default one, useful on most systems
 	// with a regular OS.
 	spec := TargetSpec{
