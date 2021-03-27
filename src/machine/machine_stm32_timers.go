@@ -1,6 +1,6 @@
 // +build stm32
 
-package runtime
+package machine
 
 // This file implements a common implementation of implementing 'ticks' and 'sleep' for STM32 devices. The
 // implementation uses two 'basic' timers, so should be compatible with a broad range of STM32 MCUs.
@@ -47,23 +47,13 @@ var (
 	sleepTimer *timerInfo
 )
 
-func ticksToNanoseconds(ticks timeUnit) int64 {
-	return int64(ticks) * TICKS_PER_NS
-}
-
-func nanosecondsToTicks(ns int64) timeUnit {
-	return timeUnit(ns / TICKS_PER_NS)
-}
-
-// number of ticks (microseconds) since start.
-//go:linkname ticks runtime.ticks
-func ticks() timeUnit {
-	return timeUnit(tickCount.Get())
-}
-
 //
 // --  Ticks  ---
 //
+
+func Ticks() uint64 {
+	return tickCount.Get()
+}
 
 // Enable the timer used to count ticks
 func initTickTimer(ti *timerInfo) {
@@ -120,25 +110,6 @@ func handleTick(interrupt.Interrupt) {
 //  ---  Sleep  ---
 //
 
-func sleepTicks(d timeUnit) {
-	// If there is a scheduler, we sleep until any kind of CPU event up to
-	// a maximum of the requested sleep duration.
-	//
-	// The scheduler will call again if there is nothing to do and a further
-	// sleep is required.
-	if hasScheduler {
-		timerSleep(ticksToNanoseconds(d))
-		return
-	}
-
-	// There's no scheduler, so we sleep until at least the requested number
-	// of ticks has passed.
-	end := ticks() + d
-	for ticks() < end {
-		timerSleep(ticksToNanoseconds(d))
-	}
-}
-
 // Enable the Sleep clock
 func initSleepTimer(ti *timerInfo) {
 	sleepTimer = ti
@@ -157,7 +128,7 @@ func initSleepTimer(ti *timerInfo) {
 }
 
 // timerSleep sleeps for 'at most' ns nanoseconds, but possibly less.
-func timerSleep(ns int64) {
+func TimerSleep(ns int64) {
 	// Calculate initial pre-scale value.
 	// delay (in ns) and clock freq are both large values, so do the nanosecs
 	// conversion (divide by 1G) by pre-dividing each by 1000 to avoid overflow

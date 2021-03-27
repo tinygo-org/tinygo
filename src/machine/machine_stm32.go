@@ -2,6 +2,10 @@
 
 package machine
 
+import (
+	"device/arm"
+)
+
 // Peripheral abstraction layer for the stm32.
 
 const (
@@ -52,4 +56,9 @@ func (p Pin) Get() bool {
 	pin := uint8(p) % 16
 	val := port.IDR.Get() & (1 << pin)
 	return (val > 0)
+}
+
+// Wait for interrupt or event
+func waitForEvents() {
+	arm.Asm("wfe")
 }

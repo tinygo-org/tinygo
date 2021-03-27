@@ -7,9 +7,6 @@ import (
 	"unsafe"
 )
 
-//go:linkname ticks runtime.ticks
-func ticks() int64
-
 // I2C implementation for 'newer' STM32 MCUs, including the F7, L5 and L4
 // series of MCUs.
 //
@@ -103,7 +100,7 @@ func (i2c *I2C) configurePins(config I2CConfig) {
 }
 
 func (i2c *I2C) controllerTransmit(addr uint16, w []byte) error {
-	start := ticks()
+	start := Ticks()
 
 	if !i2c.waitOnFlagUntilTimeout(flagBUSY, false, start) {
 		return errI2CBusReadyTimeout
@@ -162,7 +159,7 @@ func (i2c *I2C) controllerTransmit(addr uint16, w []byte) error {
 }
 
 func (i2c *I2C) controllerReceive(addr uint16, r []byte) error {
-	start := ticks()
+	start := Ticks()
 
 	if !i2c.waitOnFlagUntilTimeout(flagBUSY, false, start) {
 		return errI2CBusReadyTimeout
@@ -220,16 +217,16 @@ func (i2c *I2C) controllerReceive(addr uint16, r []byte) error {
 	return nil
 }
 
-func (i2c *I2C) waitOnFlagUntilTimeout(flag uint32, set bool, startTicks int64) bool {
+func (i2c *I2C) waitOnFlagUntilTimeout(flag uint32, set bool, startTicks uint64) bool {
 	for i2c.hasFlag(flag) != set {
-		if (ticks() - startTicks) > TIMEOUT_TICKS {
+		if (Ticks() - startTicks) > TIMEOUT_TICKS {
 			return false
 		}
 	}
 	return true
 }
 
-func (i2c *I2C) waitOnRXNEFlagUntilTimeout(startTicks int64) bool {
+func (i2c *I2C) waitOnRXNEFlagUntilTimeout(startTicks uint64) bool {
 	for !i2c.hasFlag(flagRXNE) {
 		if i2c.isAcknowledgeFailed(startTicks) {
 			return false
@@ -241,7 +238,7 @@ func (i2c *I2C) waitOnRXNEFlagUntilTimeout(startTicks int64) bool {
 			return false
 		}
 
-		if (ticks() - startTicks) > TIMEOUT_TICKS {
+		if (Ticks() - startTicks) > TIMEOUT_TICKS {
 			return false
 		}
 	}
@@ -249,13 +246,13 @@ func (i2c *I2C) waitOnRXNEFlagUntilTimeout(startTicks int64) bool {
 	return true
 }
 
-func (i2c *I2C) waitOnTXISFlagUntilTimeout(startTicks int64) bool {
+func (i2c *I2C) waitOnTXISFlagUntilTimeout(startTicks uint64) bool {
 	for !i2c.hasFlag(flagTXIS) {
 		if i2c.isAcknowledgeFailed(startTicks) {
 			return false
 		}
 
-		if (ticks() - startTicks) > TIMEOUT_TICKS {
+		if (Ticks() - startTicks) > TIMEOUT_TICKS {
 			return false
 		}
 	}
@@ -263,13 +260,13 @@ func (i2c *I2C) waitOnTXISFlagUntilTimeout(startTicks int64) bool {
 	return true
 }
 
-func (i2c *I2C) waitOnStopFlagUntilTimeout(startTicks int64) bool {
+func (i2c *I2C) waitOnStopFlagUntilTimeout(startTicks uint64) bool {
 	for !i2c.hasFlag(flagSTOPF) {
 		if i2c.isAcknowledgeFailed(startTicks) {
 			return false
 		}
 
-		if (ticks() - startTicks) > TIMEOUT_TICKS {
+		if (Ticks() - startTicks) > TIMEOUT_TICKS {
 			return false
 		}
 	}
@@ -277,12 +274,12 @@ func (i2c *I2C) waitOnStopFlagUntilTimeout(startTicks int64) bool {
 	return true
 }
 
-func (i2c *I2C) isAcknowledgeFailed(startTicks int64) bool {
+func (i2c *I2C) isAcknowledgeFailed(startTicks uint64) bool {
 	if i2c.hasFlag(flagAF) {
 		// Wait until STOP Flag is reset
 		// AutoEnd should be initiate after AF
 		for !i2c.hasFlag(flagSTOPF) {
-			if (ticks() - startTicks) > TIMEOUT_TICKS {
+			if (Ticks() - startTicks) > TIMEOUT_TICKS {
 				return true
 			}
 		}
