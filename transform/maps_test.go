@@ -18,6 +18,7 @@ func TestOptimizeMaps(t *testing.T) {
 		pm := llvm.NewPassManager()
 		defer pm.Dispose()
 		pm.AddDeadStoreEliminationPass()
+		pm.AddAggressiveDCEPass()
 		pm.Run(mod)
 	})
 }

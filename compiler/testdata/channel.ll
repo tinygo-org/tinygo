@@ -34,12 +34,12 @@ entry:
   ret void
 }
 
-; Function Attrs: argmemonly nounwind willreturn
+; Function Attrs: argmemonly nofree nosync nounwind willreturn
 declare void @llvm.lifetime.start.p0i8(i64 immarg, i8* nocapture) #1
 
 declare void @runtime.chanSend(%runtime.channel* dereferenceable_or_null(32), i8*, %runtime.channelBlockedList* dereferenceable_or_null(24), i8*, i8*)
 
-; Function Attrs: argmemonly nounwind willreturn
+; Function Attrs: argmemonly nofree nosync nounwind willreturn
 declare void @llvm.lifetime.end.p0i8(i64 immarg, i8* nocapture) #1
 
 ; Function Attrs: nounwind
@@ -119,4 +119,4 @@ select.body:                                      ; preds = %select.next
 declare { i32, i1 } @runtime.tryChanSelect(i8*, %runtime.chanSelectState*, i32, i32, i8*, i8*)
 
 attributes #0 = { nounwind }
-attributes #1 = { argmemonly nounwind willreturn }
+attributes #1 = { argmemonly nofree nosync nounwind willreturn }

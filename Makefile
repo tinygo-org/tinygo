@@ -59,18 +59,13 @@ ifeq ($(OS),Windows_NT)
 
     BINARYEN_OPTION += -DCMAKE_EXE_LINKER_FLAGS='-static-libgcc -static-libstdc++'
 
-    LIBCLANG_NAME = libclang
-
 else ifeq ($(shell uname -s),Darwin)
     MD5SUM = md5
-    LIBCLANG_NAME = clang
 else ifeq ($(shell uname -s),FreeBSD)
     MD5SUM = md5
-    LIBCLANG_NAME = clang
     START_GROUP = -Wl,--start-group
     END_GROUP = -Wl,--end-group
 else
-    LIBCLANG_NAME = clang
     START_GROUP = -Wl,--start-group
     END_GROUP = -Wl,--end-group
 endif
@@ -86,19 +81,22 @@ LLD_LIBS = $(START_GROUP) $(addprefix -l,$(LLD_LIB_NAMES)) $(END_GROUP)
 # Other libraries that are needed to link TinyGo.
 EXTRA_LIB_NAMES = LLVMInterpreter
 
+# All libraries to be built and linked with the tinygo binary (lib/lib*.a).
+LIB_NAMES = clang $(CLANG_LIB_NAMES) $(LLD_LIB_NAMES) $(EXTRA_LIB_NAMES)
+
 # These build targets appear to be the only ones necessary to build all TinyGo
 # dependencies. Only building a subset significantly speeds up rebuilding LLVM.
 # The Makefile rules convert a name like lldELF to lib/liblldELF.a to match the
 # library path (for ninja).
 # This list also includes a few tools that are necessary as part of the full
 # TinyGo build.
-NINJA_BUILD_TARGETS = clang llvm-config llvm-ar llvm-nm $(addprefix lib/lib,$(addsuffix .a,$(LIBCLANG_NAME) $(CLANG_LIB_NAMES) $(LLD_LIB_NAMES) $(EXTRA_LIB_NAMES)))
+NINJA_BUILD_TARGETS = clang llvm-config llvm-ar llvm-nm $(addprefix lib/lib,$(addsuffix .a,$(LIB_NAMES)))
 
 # For static linking.
 ifneq ("$(wildcard $(LLVM_BUILDDIR)/bin/llvm-config*)","")
     CGO_CPPFLAGS+=$(shell $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(LLVM_BUILDDIR))/tools/clang/include -I$(abspath $(CLANG_SRC))/include -I$(abspath $(LLD_SRC))/include
     CGO_CXXFLAGS=-std=c++14
-    CGO_LDFLAGS+=$(abspath $(LLVM_BUILDDIR))/lib/lib$(LIBCLANG_NAME).a -L$(abspath $(LLVM_BUILDDIR)/lib) $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
+    CGO_LDFLAGS+=-L$(abspath $(LLVM_BUILDDIR)/lib) -lclang $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
 endif
 
 
@@ -162,7 +160,7 @@ gen-device-rp: build/gen-device-svd
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/llvm:
-	git clone -b xtensa_release_11.0.0 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b xtensa_release_12.0.1 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/llvm
 
 # Configure LLVM.
