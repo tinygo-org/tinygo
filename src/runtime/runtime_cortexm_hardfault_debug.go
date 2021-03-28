@@ -36,7 +36,7 @@ func handleHardFault(sp *interruptStack) {
 	if fault.Mem().WhileUnstackingException() {
 		print(" while unstacking exception")
 	}
-	if fault.Mem().WileStackingException() {
+	if fault.Mem().WhileStackingException() {
 		print(" while stacking exception")
 	}
 	if fault.Mem().DuringFPLazyStatePres() {
@@ -162,13 +162,13 @@ func (fs MemFaultStatus) WhileUnstackingException() bool {
 	return fs&arm.SCB_CFSR_MUNSTKERR != 0
 }
 
-// WileStackingException: stacking for an exception entry has caused one or more
+// WhileStackingException: stacking for an exception entry has caused one or more
 // access violations
 //
 // "When this bit is 1, the SP is still adjusted but the values in the context
 // area on the stack might be incorrect. The processor has not written a fault
 // address to the MMAR."
-func (fs MemFaultStatus) WileStackingException() bool {
+func (fs MemFaultStatus) WhileStackingException() bool {
 	return fs&arm.SCB_CFSR_MSTKERR != 0
 }
 

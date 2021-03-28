@@ -142,7 +142,7 @@ func timerSleep(cycles uint32) bool {
 	nxp.PIT.TIMER[pitSleepTimer].TCTRL.Set(nxp.PIT_TIMER_TCTRL_TIE)     // enable interrupts
 	nxp.PIT.TIMER[pitSleepTimer].TCTRL.SetBits(nxp.PIT_TIMER_TCTRL_TEN) // start timer
 	for {
-		//arm.Asm("wfi") // TODO: causes hardfault! why?
+		waitForEvents()
 		if pitActive.Get() == 0 {
 			return true
 		}
