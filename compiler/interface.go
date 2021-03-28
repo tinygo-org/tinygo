@@ -456,7 +456,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llv
 	// Get the expanded receiver type.
 	receiverType := c.getLLVMType(fn.Signature.Recv().Type())
 	var expandedReceiverType []llvm.Type
-	for _, info := range expandFormalParamType(receiverType, "", nil) {
+	for _, info := range c.expandFormalParamType(receiverType, "", nil) {
 		expandedReceiverType = append(expandedReceiverType, info.llvmType)
 	}
 
