@@ -7,6 +7,7 @@
 package nxp
 
 import (
+	"device/arm"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -377,30 +378,6 @@ func (clk Clock) setCcm(value uint32) {
 	}
 }
 
-func setSysPfd(value ...uint32) {
-	for i, val := range value {
-		pfd528 := CCM_ANALOG.PFD_528.Get() &
-			^((CCM_ANALOG_PFD_528_PFD0_CLKGATE_Msk | CCM_ANALOG_PFD_528_PFD0_FRAC_Msk) << (8 * uint32(i)))
-		frac := (val << CCM_ANALOG_PFD_528_PFD0_FRAC_Pos) & CCM_ANALOG_PFD_528_PFD0_FRAC_Msk
-		// disable the clock output first
-		CCM_ANALOG.PFD_528.Set(pfd528 | (CCM_ANALOG_PFD_528_PFD0_CLKGATE_Msk << (8 * uint32(i))))
-		// set the new value and enable output
-		CCM_ANALOG.PFD_528.Set(pfd528 | (frac << (8 * uint32(i))))
-	}
-}
-
-func setUsb1Pfd(value ...uint32) {
-	for i, val := range value {
-		pfd480 := CCM_ANALOG.PFD_480.Get() &
-			^((CCM_ANALOG_PFD_480_PFD0_CLKGATE_Msk | CCM_ANALOG_PFD_480_PFD0_FRAC_Msk) << (8 * uint32(i)))
-		frac := (val << CCM_ANALOG_PFD_480_PFD0_FRAC_Pos) & CCM_ANALOG_PFD_480_PFD0_FRAC_Msk
-		// disable the clock output first
-		CCM_ANALOG.PFD_480.Set(pfd480 | (CCM_ANALOG_PFD_480_PFD0_CLKGATE_Msk << (8 * uint32(i))))
-		// set the new value and enable output
-		CCM_ANALOG.PFD_480.Set(pfd480 | (frac << (8 * uint32(i))))
-	}
-}
-
 // PLL configuration for ARM
 type ClockConfigArmPll struct {
 	LoopDivider uint32 // PLL loop divider. Valid range for divider value: 54-108. Fout=Fin*LoopDivider/2.
@@ -471,59 +448,178 @@ func (cfg ClockConfigSysPll) Configure(pfd ...uint32) {
 	setSysPfd(pfd...)
 }
 
-// PLL configuration for USB
-type ClockConfigUsbPll struct {
-	Instance    uint8 // USB PLL number (1 or 2)
-	LoopDivider uint8 // PLL loop divider: 0 - Fout=Fref*20, 1 - Fout=Fref*22
-	Src         uint8 // Pll clock source, reference _clock_pll_clk_src
+func setSysPfd(value ...uint32) {
+	for i, val := range value {
+		pfd528 := CCM_ANALOG.PFD_528.Get() &
+			^((CCM_ANALOG_PFD_528_PFD0_CLKGATE_Msk | CCM_ANALOG_PFD_528_PFD0_FRAC_Msk) << (8 * uint32(i)))
+		frac := (val << CCM_ANALOG_PFD_528_PFD0_FRAC_Pos) & CCM_ANALOG_PFD_528_PFD0_FRAC_Msk
+		// disable the clock output first
+		CCM_ANALOG.PFD_528.Set(pfd528 | (CCM_ANALOG_PFD_528_PFD0_CLKGATE_Msk << (8 * uint32(i))))
+		// set the new value and enable output
+		CCM_ANALOG.PFD_528.Set(pfd528 | (frac << (8 * uint32(i))))
+	}
 }
 
-func (cfg ClockConfigUsbPll) Configure(pfd ...uint32) {
+// PHY configuration for USB HS
+type ClockConfigUsbPhy struct {
+	Instance  uint8  // USB PHY number (1 or 2)
+	XtalFreq  uint32 // External reference clock frequency (Hz)
+	DCal      uint32 // Decode to trim nominal 17.78mA current source
+	TxCal45DP uint32 // Decode to trim nominal 45-Ohm series Rp on USB D+
+	TxCal45DM uint32 // Decode to trim nominal 45-Ohm series Rp on USB D-
+	PllConfig ClockConfigUsbPll
+}
 
+// Configure initializes the USB HS (480 Mbit/s) PHY and PLL clocks, including
+// the USB +3V regulator (PMU), for use as either USB host or device.
+func (cfg ClockConfigUsbPhy) Configure() {
+
+	var (
+		usb           *USB_Type
+		phy           *USBPHY_Type
+		chrgDetectReg *volatile.Register32
+		chrgDetectMsk uint32
+	)
+
+	// Select appropriate peripherals based on receiver Instance
 	switch cfg.Instance {
 	case 1:
-
-		// bypass PLL first
-		src := (uint32(cfg.Src) << CCM_ANALOG_PLL_USB1_BYPASS_CLK_SRC_Pos) & CCM_ANALOG_PLL_USB1_BYPASS_CLK_SRC_Msk
-		CCM_ANALOG.PLL_USB1.Set(
-			(CCM_ANALOG.PLL_USB1.Get() & ^uint32(CCM_ANALOG_PLL_USB1_BYPASS_CLK_SRC_Msk)) |
-				CCM_ANALOG_PLL_USB1_BYPASS_Msk | src)
-
-		sel := uint32((cfg.LoopDivider << CCM_ANALOG_PLL_USB1_DIV_SELECT_Pos) & CCM_ANALOG_PLL_USB1_DIV_SELECT_Msk)
-		CCM_ANALOG.PLL_USB1_SET.Set(
-			(CCM_ANALOG.PLL_USB1.Get() & ^uint32(CCM_ANALOG_PLL_USB1_DIV_SELECT_Msk)) |
-				CCM_ANALOG_PLL_USB1_ENABLE_Msk | CCM_ANALOG_PLL_USB1_POWER_Msk |
-				CCM_ANALOG_PLL_USB1_EN_USB_CLKS_Msk | sel)
-
-		for !CCM_ANALOG.PLL_USB1.HasBits(CCM_ANALOG_PLL_USB1_LOCK_Msk) {
-		}
-
-		// disable bypass
-		CCM_ANALOG.PLL_USB1_CLR.Set(CCM_ANALOG_PLL_USB1_BYPASS_Msk)
-
-		// update PFDs after update
-		setUsb1Pfd(pfd...)
-
+		usb = USB1    // Select USB1 HS PHY/PLL
+		phy = USBPHY1 //
+		chrgDetectReg = &USB_ANALOG.USB1_CHRG_DETECT_SET
+		chrgDetectMsk = USB_ANALOG_USB1_CHRG_DETECT_SET_CHK_CHRG_B |
+			USB_ANALOG_USB1_CHRG_DETECT_SET_EN_B
 	case 2:
-		// bypass PLL first
-		src := (uint32(cfg.Src) << CCM_ANALOG_PLL_USB2_BYPASS_CLK_SRC_Pos) & CCM_ANALOG_PLL_USB2_BYPASS_CLK_SRC_Msk
-		CCM_ANALOG.PLL_USB2.Set(
-			(CCM_ANALOG.PLL_USB2.Get() & ^uint32(CCM_ANALOG_PLL_USB2_BYPASS_CLK_SRC_Msk)) |
-				CCM_ANALOG_PLL_USB2_BYPASS_Msk | src)
+		usb = USB2    // Select USB2 HS PHY/PLL
+		phy = USBPHY2 //
+		chrgDetectReg = &USB_ANALOG.USB2_CHRG_DETECT_SET
+		chrgDetectMsk = USB_ANALOG_USB2_CHRG_DETECT_SET_CHK_CHRG_B |
+			USB_ANALOG_USB2_CHRG_DETECT_SET_EN_B
+	default:
+		panic("nxp: invalid USB PHY")
+	}
 
-		sel := uint32((cfg.LoopDivider << CCM_ANALOG_PLL_USB2_DIV_SELECT_Pos) & CCM_ANALOG_PLL_USB2_DIV_SELECT_Msk)
-		CCM_ANALOG.PLL_USB2.Set(
-			(CCM_ANALOG.PLL_USB2.Get() & ^uint32(CCM_ANALOG_PLL_USB2_DIV_SELECT_Msk)) |
-				CCM_ANALOG_PLL_USB2_ENABLE_Msk | CCM_ANALOG_PLL_USB2_POWER_Msk |
-				CCM_ANALOG_PLL_USB2_EN_USB_CLKS_Msk | sel)
+	// Configure and enable USB PLL clocks
+	cfg.PllConfig.Configure()
 
-		for !CCM_ANALOG.PLL_USB2.HasBits(CCM_ANALOG_PLL_USB2_LOCK_Msk) {
+	// Release PHY from reset
+	phy.CTRL.ClearBits(USBPHY_CTRL_SFTRST)
+	phy.CTRL.ClearBits(USBPHY_CTRL_CLKGATE)
+
+	// Enable power to USB PHY
+	phy.PWD.Set(0)
+	phy.CTRL.SetBits(USBPHY_CTRL_ENAUTOCLR_PHY_PWD | USBPHY_CTRL_ENAUTOCLR_CLKGATE |
+		// enable support for low-speed device connection, direct and indirect (hub)
+		USBPHY_CTRL_ENUTMILEVEL2 | USBPHY_CTRL_ENUTMILEVEL3)
+
+	// Enable USB HS clocks gate
+	ClockIpUsbOh3.Enable(true)
+	// Reset USB peripheral
+	usb.USBCMD.SetBits(USB_USBCMD_RST)
+
+	// Add a delay after RST to ensure there is a USB D+ pullup sequence
+	nopDelay(400000)
+
+	// Enable USB LDO
+	PMU.REG_3P0.Set((PMU.REG_3P0.Get() & ^uint32(PMU_REG_3P0_OUTPUT_TRG_Msk)) |
+		(0x17 << PMU_REG_3P0_OUTPUT_TRG_Pos) | PMU_REG_3P0_ENABLE_LINREG)
+
+	// check whether we are connected to USB charger
+	chrgDetectReg.Set(chrgDetectMsk)
+
+	// Decode to trim nominal 17.78mA source for HS TX on USB D+/D-
+	phy.TX.Set((phy.TX.Get() &
+		^uint32(USBPHY_TX_D_CAL_Msk|USBPHY_TX_TXCAL45DN_Msk|USBPHY_TX_TXCAL45DP_Msk)) |
+		((cfg.DCal << USBPHY_TX_D_CAL_Pos) & USBPHY_TX_D_CAL_Msk) |
+		((cfg.TxCal45DM << USBPHY_TX_TXCAL45DN_Pos) & USBPHY_TX_TXCAL45DN_Msk) |
+		((cfg.TxCal45DP << USBPHY_TX_TXCAL45DP_Pos) & USBPHY_TX_TXCAL45DP_Msk))
+}
+
+// PLL configuration for USB
+type ClockConfigUsbPll struct {
+	Instance    uint8    // USB PLL number (1 or 2)
+	LoopDivider uint8    // PLL loop divider (0 [Fout=Fref*20] or 1 [Fout=Fref*22])
+	Src         uint8    // PLL bypass clock source (0 [OSC24M] or 1 [CLK1_P & CLK1_N])
+	Pfd         []uint32 // Phase fractional divisors (len=4, or nil for boot default)
+}
+
+func (cfg ClockConfigUsbPll) Configure() {
+	// select USB peripheral registers based on receiver's Instance
+	switch cfg.Instance {
+	case 1: // USB1 PLL
+		if CCM_ANALOG.PLL_USB1.HasBits(CCM_ANALOG_PLL_USB1_ENABLE) {
+			// PLL already configured, enable USB clocks
+			CCM_ANALOG.PLL_USB1.SetBits(CCM_ANALOG_PLL_USB1_EN_USB_CLKS)
+		} else {
+			// bypass PLL first
+			src := (uint32(cfg.Src) << CCM_ANALOG_PLL_USB1_BYPASS_CLK_SRC_Pos) &
+				CCM_ANALOG_PLL_USB1_BYPASS_CLK_SRC_Msk
+			CCM_ANALOG.PLL_USB1.Set(
+				(CCM_ANALOG.PLL_USB1.Get() & ^uint32(CCM_ANALOG_PLL_USB1_BYPASS_CLK_SRC_Msk)) |
+					CCM_ANALOG_PLL_USB1_BYPASS | src)
+			// reconfigure PLL
+			sel := (uint32(cfg.LoopDivider) << CCM_ANALOG_PLL_USB1_DIV_SELECT_Pos) &
+				CCM_ANALOG_PLL_USB1_DIV_SELECT_Msk
+			CCM_ANALOG.PLL_USB1.Set(
+				(CCM_ANALOG.PLL_USB1.Get() & ^uint32(CCM_ANALOG_PLL_USB1_DIV_SELECT_Msk)) |
+					CCM_ANALOG_PLL_USB1_ENABLE | CCM_ANALOG_PLL_USB1_POWER |
+					CCM_ANALOG_PLL_USB1_EN_USB_CLKS | sel)
+			for !CCM_ANALOG.PLL_USB1.HasBits(CCM_ANALOG_PLL_USB1_LOCK) {
+			}
+			// disable bypass
+			CCM_ANALOG.PLL_USB1.ClearBits(CCM_ANALOG_PLL_USB1_BYPASS)
+
+			// update PFDs (if provided)
+			if nil != cfg.Pfd {
+				setUsb1Pfd(cfg.Pfd...)
+			}
 		}
-
-		// disable bypass
-		CCM_ANALOG.PLL_USB2.ClearBits(CCM_ANALOG_PLL_USB2_BYPASS_Msk)
+	case 2: // USB2 PLL
+		if CCM_ANALOG.PLL_USB2.HasBits(CCM_ANALOG_PLL_USB2_ENABLE) {
+			// PLL already configured, enable USB clocks
+			CCM_ANALOG.PLL_USB2.SetBits(CCM_ANALOG_PLL_USB2_EN_USB_CLKS)
+		} else {
+			// bypass PLL first
+			src := (uint32(cfg.Src) << CCM_ANALOG_PLL_USB2_BYPASS_CLK_SRC_Pos) &
+				CCM_ANALOG_PLL_USB2_BYPASS_CLK_SRC_Msk
+			CCM_ANALOG.PLL_USB2.Set(
+				(CCM_ANALOG.PLL_USB2.Get() & ^uint32(CCM_ANALOG_PLL_USB2_BYPASS_CLK_SRC_Msk)) |
+					CCM_ANALOG_PLL_USB2_BYPASS | src)
+			// reconfigure PLL
+			sel := (uint32(cfg.LoopDivider) << CCM_ANALOG_PLL_USB2_DIV_SELECT_Pos) &
+				CCM_ANALOG_PLL_USB2_DIV_SELECT_Msk
+			CCM_ANALOG.PLL_USB2.Set(
+				(CCM_ANALOG.PLL_USB2.Get() & ^uint32(CCM_ANALOG_PLL_USB2_DIV_SELECT_Msk)) |
+					CCM_ANALOG_PLL_USB2_ENABLE | CCM_ANALOG_PLL_USB2_POWER |
+					CCM_ANALOG_PLL_USB2_EN_USB_CLKS | sel)
+			for !CCM_ANALOG.PLL_USB2.HasBits(CCM_ANALOG_PLL_USB2_LOCK) {
+			}
+			// disable bypass
+			CCM_ANALOG.PLL_USB2.ClearBits(CCM_ANALOG_PLL_USB2_BYPASS)
+		}
 
 	default:
 		panic("nxp: invalid USB PLL")
+	}
+}
+
+func setUsb1Pfd(value ...uint32) {
+	for i, val := range value {
+		pfd480 := CCM_ANALOG.PFD_480.Get() &
+			^((CCM_ANALOG_PFD_480_PFD0_CLKGATE_Msk | CCM_ANALOG_PFD_480_PFD0_FRAC_Msk) << (8 * uint32(i)))
+		frac := (val << CCM_ANALOG_PFD_480_PFD0_FRAC_Pos) & CCM_ANALOG_PFD_480_PFD0_FRAC_Msk
+		// disable the clock output first
+		CCM_ANALOG.PFD_480.Set(pfd480 | (CCM_ANALOG_PFD_480_PFD0_CLKGATE_Msk << (8 * uint32(i))))
+		// set the new value and enable output
+		CCM_ANALOG.PFD_480.Set(pfd480 | (frac << (8 * uint32(i))))
+	}
+}
+
+// We cannot use the sleep timer from this context (import cycle), but we need
+// an approximate method to spin CPU cycles for short periods of time.
+// go:inline
+func nopDelay(cycles uint32) {
+	for i := uint32(0); i < cycles; i++ {
+		arm.Asm(`nop`)
 	}
 }

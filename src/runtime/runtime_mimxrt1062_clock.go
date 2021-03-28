@@ -35,15 +35,31 @@ var (
 		Denominator: 1, // 30-bit DENOM of fractional loop divider
 		Src:         0, // bypass clock source, 0=OSC24M, 1=CLK1_P & CLK1_N
 	}
-	Usb1PllConfig = nxp.ClockConfigUsbPll{
-		Instance:    1, // USB PLL instance
-		LoopDivider: 0, // PLL loop divider, Fout=Fin*20
-		Src:         0, // bypass clock source, 0=OSC24M, 1=CLK1_P & CLK1_N
+	Usb1PhyConfig = nxp.ClockConfigUsbPhy{
+		Instance:  1,        // USB PHY number (1 or 2)
+		XtalFreq:  OSC_FREQ, // External reference clock frequency (Hz)
+		DCal:      0xC,      // Decode to trim nominal 17.78mA current source
+		TxCal45DP: 0x6,      // Decode to trim nominal 45-Ohm series Rp on USB D+
+		TxCal45DM: 0x6,      // Decode to trim nominal 45-Ohm series Rp on USB D-
+		PllConfig: nxp.ClockConfigUsbPll{
+			Instance:    1,   // USB PLL number (1 or 2)
+			LoopDivider: 0,   // PLL loop divider (0 [Fout=Fref*20] or 1 [Fout=Fref*22])
+			Src:         0,   // PLL bypass clock source (0 [OSC24M] or 1 [CLK1_P & CLK1_N])
+			Pfd:         nil, // Phase fractional divisors (len=4, or nil for boot default)
+		},
 	}
-	Usb2PllConfig = nxp.ClockConfigUsbPll{
-		Instance:    2, // USB PLL instance
-		LoopDivider: 0, // PLL loop divider, Fout=Fin*20
-		Src:         0, // bypass clock source, 0=OSC24M, 1=CLK1_P & CLK1_N
+	Usb2PhyConfig = nxp.ClockConfigUsbPhy{
+		Instance:  2,        // USB PHY number (1 or 2)
+		XtalFreq:  OSC_FREQ, // External reference clock frequency (Hz)
+		DCal:      0xC,      // Decode to trim the nominal 17.78mA current source
+		TxCal45DP: 0x6,      // Decode to trim the nominal 45-Ohm series Rp on USB D+
+		TxCal45DM: 0x6,      // Decode to trim the nominal 45-Ohm series Rp on USB D-
+		PllConfig: nxp.ClockConfigUsbPll{
+			Instance:    2,   // USB PLL number (1 or 2)
+			LoopDivider: 0,   // PLL loop divider (0 [Fout=Fref*20] or 1 [Fout=Fref*22])
+			Src:         0,   // PLL bypass clock source (0 [OSC24M] or 1 [CLK1_P & CLK1_N])
+			Pfd:         nil, // Phase fractional divisors (len=4, or nil for boot default)
+		},
 	}
 )
 
@@ -85,7 +101,7 @@ func initClocks() {
 
 	// set VDD_SOC to 1.275V, necessary to config AHB to 600 MHz
 	nxp.DCDC.REG3.Set((nxp.DCDC.REG3.Get() & ^uint32(nxp.DCDC_REG3_TRG_Msk)) |
-		((13 << nxp.DCDC_REG3_TRG_Pos) & nxp.DCDC_REG3_TRG_Msk))
+		((0x13 << nxp.DCDC_REG3_TRG_Pos) & nxp.DCDC_REG3_TRG_Msk))
 
 	// wait until DCDC_STS_DC_OK bit is asserted
 	for !nxp.DCDC.REG0.HasBits(nxp.DCDC_REG0_STS_DC_OK_Msk) {
@@ -104,6 +120,8 @@ func initClocks() {
 	nxp.DivIpArm.Div(1)        // divide ARM_PODF (DIV2)
 	nxp.DivIpPeriphClk2.Div(0) // divide PERIPH_CLK2_PODF (DIV1)
 
+	nxp.ClockIpUsbOh3.Enable(false) // disable USB
+
 	nxp.ClockIpGpt1.Enable(false)  // disable GPT/PIT
 	nxp.ClockIpGpt1S.Enable(false) //
 	nxp.ClockIpGpt2.Enable(false)  //
@@ -111,6 +129,11 @@ func initClocks() {
 	nxp.ClockIpPit.Enable(false)   //
 
 	nxp.DivIpPerclk.Div(0) // divide PERCLK_PODF (DIV1)
+
+	nxp.ClockIpGpio1.Enable(false) // disable GPIO
+	nxp.ClockIpGpio2.Enable(false) //
+	nxp.ClockIpGpio3.Enable(false) //
+	nxp.ClockIpGpio4.Enable(false) //
 
 	nxp.ClockIpUsdhc1.Enable(false) // disable USDHC1
 	nxp.DivIpUsdhc1.Div(1)          // divide USDHC1_PODF (DIV2)
@@ -120,9 +143,9 @@ func initClocks() {
 	nxp.MuxIpUsdhc2.Mux(1)          // USDHC2 select PLL2_PFD0
 
 	nxp.ClockIpSemc.Enable(false) // disable SEMC
-	nxp.DivIpSemc.Div(1)          // divide SEMC_PODF (DIV2)
+	nxp.DivIpSemc.Div(7)          // divide SEMC_PODF (DIV8)
 	nxp.MuxIpSemcAlt.Mux(0)       // SEMC_ALT select PLL2_PFD2
-	nxp.MuxIpSemc.Mux(1)          // SEMC select SEMC_ALT
+	nxp.MuxIpSemc.Mux(0)          // SEMC select PERIPH_CLK
 
 	if false {
 		// TODO: external flash is on this bus, configured via DCD block
@@ -191,7 +214,7 @@ func initClocks() {
 	nxp.ClockIpLcdPixel.Enable(false) // disable LCDIF
 	nxp.DivIpLcdifPre.Div(1)          // divide LCDIF_PRED (DIV2)
 	nxp.DivIpLcdif.Div(3)             // divide LCDIF_CLK_PODF (DIV4)
-	nxp.MuxIpLcdifPre.Mux(5)          // LCDIF_PRE select PLL3_PFD1
+	nxp.MuxIpLcdifPre.Mux(4)          // LCDIF_PRE select PLL2_PFD1
 
 	nxp.ClockIpSpdif.Enable(false) // disable SPDIF
 	nxp.DivIpSpdif0Pre.Div(1)      // divide SPDIF0_CLK_PRED (DIV2)
@@ -209,43 +232,43 @@ func initClocks() {
 
 	nxp.MuxIpPll3Sw.Mux(0) // PLL3_SW select PLL3_MAIN
 
+	// Disable Audio/Video/Ethernet PLLs
+	nxp.CCM_ANALOG.PLL_AUDIO.Set(nxp.CCM_ANALOG_PLL_AUDIO_POWERDOWN_Msk)
+	nxp.CCM_ANALOG.PLL_VIDEO.Set(nxp.CCM_ANALOG_PLL_VIDEO_POWERDOWN_Msk)
+	nxp.CCM_ANALOG.PLL_ENET.Set(nxp.CCM_ANALOG_PLL_ENET_POWERDOWN_Msk)
+
 	ArmPllConfig.Configure() // init ARM PLL
 	// SYS PLL (PLL2) @ 528 MHz
 	//   PFD0 = 396    MHz -> USDHC1/USDHC2(DIV2)=198 MHz
 	//   PFD1 = 594    MHz -> (currently unused)
-	//   PFD2 = 327.72 MHz -> SEMC(DIV2)=163.86 MHz, FlexSPI/FlexSPI2=327.72 MHz
-	//   PFD3 = 454.73 MHz -> (currently unused)
+	//   PFD2 = 327.72 MHz -> FlexSPI/FlexSPI2=327.72 MHz
+	//   PFD3 = 594    MHz -> (currently unused)
 	SysPllConfig.Configure(24, 16, 29, 16) // init SYS PLL and PFDs
 
-	// USB1 PLL (PLL3) @ 480 MHz
-	//   PFD0 -> (currently unused)
-	//   PFD1 -> (currently unused)
-	//   PFD2 -> (currently unused)
-	//   PFD3 -> (currently unused)
-	Usb1PllConfig.Configure() // init USB1 PLL and PFDs
-	Usb2PllConfig.Configure() // init USB2 PLL
+	Usb1PhyConfig.Configure() // init USB1 HS PHY/PLL
+	Usb2PhyConfig.Configure() // init USB2 HS PHY/PLL
 
 	nxp.MuxIpPrePeriph.Mux(3)  // PRE_PERIPH select ARM_PLL
 	nxp.MuxIpPeriph.Mux(0)     // PERIPH select PRE_PERIPH
 	nxp.MuxIpPeriphClk2.Mux(1) // PERIPH_CLK2 select OSC
 	nxp.MuxIpPerclk.Mux(1)     // PERCLK select OSC
 
-	// set LVDS1 clock source
+	// set LVDS1 clock source (ARM_PLL)
 	nxp.CCM_ANALOG.MISC1.Set((nxp.CCM_ANALOG.MISC1.Get() & ^uint32(nxp.CCM_ANALOG_MISC1_LVDS1_CLK_SEL_Msk)) |
 		((0 << nxp.CCM_ANALOG_MISC1_LVDS1_CLK_SEL_Pos) & nxp.CCM_ANALOG_MISC1_LVDS1_CLK_SEL_Msk))
 
-	// set CLOCK_OUT1 divider
+	// set CLOCK_OUT1 divider (DIV1)
 	nxp.CCM.CCOSR.Set((nxp.CCM.CCOSR.Get() & ^uint32(nxp.CCM_CCOSR_CLKO1_DIV_Msk)) |
 		((0 << nxp.CCM_CCOSR_CLKO1_DIV_Pos) & nxp.CCM_CCOSR_CLKO1_DIV_Msk))
-	// set CLOCK_OUT1 source
+	// set CLOCK_OUT1 source (PLL2/DIV2)
 	nxp.CCM.CCOSR.Set((nxp.CCM.CCOSR.Get() & ^uint32(nxp.CCM_CCOSR_CLKO1_SEL_Msk)) |
 		((1 << nxp.CCM_CCOSR_CLKO1_SEL_Pos) & nxp.CCM_CCOSR_CLKO1_SEL_Msk))
-	// set CLOCK_OUT2 divider
+	// set CLOCK_OUT2 divider (DIV1)
 	nxp.CCM.CCOSR.Set((nxp.CCM.CCOSR.Get() & ^uint32(nxp.CCM_CCOSR_CLKO2_DIV_Msk)) |
 		((0 << nxp.CCM_CCOSR_CLKO2_DIV_Pos) & nxp.CCM_CCOSR_CLKO2_DIV_Msk))
-	// set CLOCK_OUT2 source
+	// set CLOCK_OUT2 source (SPDIF0)
 	nxp.CCM.CCOSR.Set((nxp.CCM.CCOSR.Get() & ^uint32(nxp.CCM_CCOSR_CLKO2_SEL_Msk)) |
-		((18 << nxp.CCM_CCOSR_CLKO2_SEL_Pos) & nxp.CCM_CCOSR_CLKO2_SEL_Msk))
+		((29 << nxp.CCM_CCOSR_CLKO2_SEL_Pos) & nxp.CCM_CCOSR_CLKO2_SEL_Msk))
 
 	nxp.CCM.CCOSR.ClearBits(nxp.CCM_CCOSR_CLK_OUT_SEL_Msk) // set CLK_OUT1 drives CLK_OUT
 	nxp.CCM.CCOSR.SetBits(nxp.CCM_CCOSR_CLKO1_EN_Msk)      // enable CLK_OUT1
@@ -253,15 +276,10 @@ func initClocks() {
 
 	nxp.ClockIpIomuxcGpr.Enable(false) // disable IOMUXC_GPR
 	nxp.ClockIpIomuxc.Enable(false)    // disable IOMUXC
-	// set GPT1 High frequency reference clock source
+	// set GPT1 High frequency reference clock source (PERCLK)
 	nxp.IOMUXC_GPR.GPR5.ClearBits(nxp.IOMUXC_GPR_GPR5_VREF_1M_CLK_GPT1_Msk)
-	// set GPT2 High frequency reference clock source
+	// set GPT2 High frequency reference clock source (PERCLK)
 	nxp.IOMUXC_GPR.GPR5.ClearBits(nxp.IOMUXC_GPR_GPR5_VREF_1M_CLK_GPT2_Msk)
-
-	nxp.ClockIpGpio1.Enable(false) // disable GPIO
-	nxp.ClockIpGpio2.Enable(false) //
-	nxp.ClockIpGpio3.Enable(false) //
-	nxp.ClockIpGpio4.Enable(false) //
 }
 
 func enableTimerClocks() {

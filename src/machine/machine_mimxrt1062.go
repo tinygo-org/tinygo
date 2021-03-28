@@ -11,6 +11,7 @@ import (
 
 // Peripheral abstraction layer for the MIMXRT1062
 
+//go:inline
 func CPUFrequency() uint32 {
 	return 600000000
 }
