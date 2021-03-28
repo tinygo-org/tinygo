@@ -55,21 +55,21 @@ const (
 
 // Analog pins
 const (
-	//  = Pin  // Dig | [Pad]      {ADC1/ADC2}
-	A0  = PA18 // D14 | [AD_B1_02] {  7 / 7  }
-	A1  = PA19 // D15 | [AD_B1_03] {  8 / 8  }
-	A2  = PA23 // D16 | [AD_B1_07] { 12 / 12 }
-	A3  = PA22 // D17 | [AD_B1_06] { 11 / 11 }
-	A4  = PA17 // D18 | [AD_B1_01] {  6 / 6  }
-	A5  = PA16 // D19 | [AD_B1_00] {  5 / 5  }
-	A6  = PA26 // D20 | [AD_B1_10] { 15 / 15 }
-	A7  = PA27 // D21 | [AD_B1_11] {  0 / 0  }
-	A8  = PA24 // D22 | [AD_B1_08] { 13 / 13 }
-	A9  = PA25 // D23 | [AD_B1_09] { 14 / 14 }
-	A10 = PA12 // D24 | [AD_B0_12] {  1 / -  }
-	A11 = PA13 // D25 | [AD_B0_13] {  2 / -  }
-	A12 = PA30 // D26 | [AD_B1_14] {  - / 3  }
-	A13 = PA31 // D27 | [AD_B1_15] {  - / 4  }
+	//  = Pin  // Dig [Pad]      {ADC1/ADC2}
+	A0  = PA18 // D14 [AD_B1_02] {  7 / 7  }
+	A1  = PA19 // D15 [AD_B1_03] {  8 / 8  }
+	A2  = PA23 // D16 [AD_B1_07] { 12 / 12 }
+	A3  = PA22 // D17 [AD_B1_06] { 11 / 11 }
+	A4  = PA17 // D18 [AD_B1_01] {  6 / 6  }
+	A5  = PA16 // D19 [AD_B1_00] {  5 / 5  }
+	A6  = PA26 // D20 [AD_B1_10] { 15 / 15 }
+	A7  = PA27 // D21 [AD_B1_11] {  0 / 0  }
+	A8  = PA24 // D22 [AD_B1_08] { 13 / 13 }
+	A9  = PA25 // D23 [AD_B1_09] { 14 / 14 }
+	A10 = PA12 // D24 [AD_B0_12] {  1 / -  }
+	A11 = PA13 // D25 [AD_B0_13] {  2 / -  }
+	A12 = PA30 // D26 [AD_B1_14] {  - / 3  }
+	A13 = PA31 // D27 [AD_B1_15] {  - / 4  }
 )
 
 // Default peripheral pins
@@ -103,6 +103,18 @@ func init() {
 	_UART6.Interrupt = interrupt.New(nxp.IRQ_LPUART1, _UART6.handleInterrupt)
 	_UART7.Interrupt = interrupt.New(nxp.IRQ_LPUART7, _UART7.handleInterrupt)
 }
+
+// #=====================================================#
+// |                        USB                          |
+// #=====================================================#
+var (
+	// USBCDC is a legacy class being retained here as temporary wrapper.
+	// See godoc comments on type USBCDC struct definition for details.
+	USBCDC0 = USBCDC{
+		port: 0, // USB_OTG1 (Micro-B port on Teensy 4.0)
+		buff: NewRingBuffer(),
+	}
+)
 
 // #=====================================================#
 // |                        UART                         |
