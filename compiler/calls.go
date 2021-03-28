@@ -58,10 +58,10 @@ func (b *builder) createCall(fn llvm.Value, args []llvm.Value, name string) llvm
 
 // Expand an argument type to a list that can be used in a function call
 // parameter list.
-func expandFormalParamType(t llvm.Type, name string, goType types.Type) []paramInfo {
+func (c *compilerContext) expandFormalParamType(t llvm.Type, name string, goType types.Type) []paramInfo {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
-		fieldInfos := flattenAggregateType(t, name, goType)
+		fieldInfos := c.flattenAggregateType(t, name, goType)
 		if len(fieldInfos) <= maxFieldsPerParam {
 			return fieldInfos
 		} else {
@@ -105,7 +105,7 @@ func (b *builder) expandFormalParamOffsets(t llvm.Type) []uint64 {
 func (b *builder) expandFormalParam(v llvm.Value) []llvm.Value {
 	switch v.Type().TypeKind() {
 	case llvm.StructTypeKind:
-		fieldInfos := flattenAggregateType(v.Type(), "", nil)
+		fieldInfos := b.flattenAggregateType(v.Type(), "", nil)
 		if len(fieldInfos) <= maxFieldsPerParam {
 			fields := b.flattenAggregate(v)
 			if len(fields) != len(fieldInfos) {
@@ -124,12 +124,15 @@ func (b *builder) expandFormalParam(v llvm.Value) []llvm.Value {
 
 // Try to flatten a struct type to a list of types. Returns a 1-element slice
 // with the passed in type if this is not possible.
-func flattenAggregateType(t llvm.Type, name string, goType types.Type) []paramInfo {
+func (c *compilerContext) flattenAggregateType(t llvm.Type, name string, goType types.Type) []paramInfo {
 	typeFlags := getTypeFlags(goType)
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
-		paramInfos := make([]paramInfo, 0, t.StructElementTypesCount())
+		var paramInfos []paramInfo
 		for i, subfield := range t.StructElementTypes() {
+			if c.targetData.TypeAllocSize(subfield) == 0 {
+				continue
+			}
 			suffix := strconv.Itoa(i)
 			if goType != nil {
 				// Try to come up with a good suffix for this struct field,
@@ -152,7 +155,7 @@ func flattenAggregateType(t llvm.Type, name string, goType types.Type) []paramIn
 					suffix = []string{"context", "funcptr"}[i]
 				}
 			}
-			subInfos := flattenAggregateType(subfield, name+"."+suffix, extractSubfield(goType, i))
+			subInfos := c.flattenAggregateType(subfield, name+"."+suffix, extractSubfield(goType, i))
 			for i := range subInfos {
 				subInfos[i].flags |= typeFlags
 			}
@@ -218,8 +221,11 @@ func extractSubfield(t types.Type, field int) types.Type {
 func (c *compilerContext) flattenAggregateTypeOffsets(t llvm.Type) []uint64 {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
-		fields := make([]uint64, 0, t.StructElementTypesCount())
+		var fields []uint64
 		for fieldIndex, field := range t.StructElementTypes() {
+			if c.targetData.TypeAllocSize(field) == 0 {
+				continue
+			}
 			suboffsets := c.flattenAggregateTypeOffsets(field)
 			offset := c.targetData.ElementOffset(t, fieldIndex)
 			for i := range suboffsets {
@@ -238,8 +244,11 @@ func (c *compilerContext) flattenAggregateTypeOffsets(t llvm.Type) []uint64 {
 func (b *builder) flattenAggregate(v llvm.Value) []llvm.Value {
 	switch v.Type().TypeKind() {
 	case llvm.StructTypeKind:
-		fields := make([]llvm.Value, 0, v.Type().StructElementTypesCount())
-		for i := range v.Type().StructElementTypes() {
+		var fields []llvm.Value
+		for i, field := range v.Type().StructElementTypes() {
+			if b.targetData.TypeAllocSize(field) == 0 {
+				continue
+			}
 			subfield := b.CreateExtractValue(v, i, "")
 			subfields := b.flattenAggregate(subfield)
 			fields = append(fields, subfields...)
@@ -266,10 +275,13 @@ func (b *builder) collapseFormalParam(t llvm.Type, fields []llvm.Value) llvm.Val
 func (b *builder) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value) (llvm.Value, []llvm.Value) {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
-		flattened := flattenAggregateType(t, "", nil)
+		flattened := b.flattenAggregateType(t, "", nil)
 		if len(flattened) <= maxFieldsPerParam {
 			value := llvm.ConstNull(t)
 			for i, subtyp := range t.StructElementTypes() {
+				if b.targetData.TypeAllocSize(subtyp) == 0 {
+					continue
+				}
 				structField, remaining := b.collapseFormalParamInternal(subtyp, fields)
 				fields = remaining
 				value = b.CreateInsertValue(value, structField, i, "")

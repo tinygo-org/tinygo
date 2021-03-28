@@ -74,6 +74,14 @@ func main() {
 	//Test deferred builtins
 	testDeferBuiltinClose()
 	testDeferBuiltinDelete()
+
+	// Check for issue 1304.
+	// There are two fields in this struct, one of which is zero-length so the
+	// other covers the entire struct. This led to a verification error for
+	// debug info, which used DW_OP_LLVM_fragment for a field that practically
+	// covered the entire variable.
+	var x issue1304
+	x.call()
 }
 
 func runFunc(f func(int), arg int) {
@@ -210,4 +218,13 @@ func foo(bar *Bar) error {
 	defer c.Close()
 
 	return nil
+}
+
+type issue1304 struct {
+	a [0]int // zero-length field
+	b int    // field 'b' covers entire struct
+}
+
+func (x issue1304) call() {
+	// nothing to do
 }

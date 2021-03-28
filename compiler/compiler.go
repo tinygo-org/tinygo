@@ -23,7 +23,7 @@ import (
 // Version of the compiler pacakge. Must be incremented each time the compiler
 // package changes in a way that affects the generated LLVM module.
 // This version is independent of the TinyGo version number.
-const Version = 5 // last change: add method set to interface types
+const Version = 6 // last change: fix issue 1304
 
 func init() {
 	llvm.InitializeAllTargets()
@@ -829,7 +829,7 @@ func (b *builder) createFunction() {
 	for _, param := range b.fn.Params {
 		llvmType := b.getLLVMType(param.Type())
 		fields := make([]llvm.Value, 0, 1)
-		for _, info := range expandFormalParamType(llvmType, param.Name(), param.Type()) {
+		for _, info := range b.expandFormalParamType(llvmType, param.Name(), param.Type()) {
 			param := b.llvmFn.Param(llvmParamIndex)
 			param.SetName(info.name)
 			fields = append(fields, param)
