@@ -22,12 +22,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-11-v2
+            - llvm-source-12-v1
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-11-v2
+          key: llvm-source-12-v1
           paths:
             - llvm-project/clang/lib/Headers
             - llvm-project/clang/include
@@ -118,12 +118,12 @@ commands:
             - go-cache-macos-v3-{{ checksum "go.mod" }}
       - restore_cache:
           keys:
-            - llvm-source-11-macos-v3
+            - llvm-source-12-macos-v1
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-11-macos-v3
+          key: llvm-source-12-macos-v1
           paths:
             - llvm-project/clang/lib/Headers
             - llvm-project/clang/include
@@ -131,7 +131,7 @@ commands:
             - llvm-project/llvm/include
       - restore_cache:
           keys:
-            - llvm-build-11-macos-v5
+            - llvm-build-12-macos-v1
       - run:
           name: "Build LLVM"
           command: |
@@ -145,7 +145,7 @@ commands:
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
             fi
       - save_cache:
-          key: llvm-build-11-macos-v5
+          key: llvm-build-12-macos-v1
           paths:
             llvm-build
       - restore_cache:
@@ -205,12 +205,12 @@ jobs:
     steps:
       - test-linux:
           llvm: "11"
-  test-llvm11-go116:
+  test-llvm12-go116:
     docker:
       - image: circleci/golang:1.16-buster
     steps:
       - test-linux:
-          llvm: "11"
+          llvm: "12"
   build-macos:
     macos:
       xcode: "11.1.0" # macOS 10.14
@@ -223,5 +223,5 @@ workflows:
   test-all:
     jobs:
       - test-llvm11-go115
-      - test-llvm11-go116
+      - test-llvm12-go116
       - build-macos

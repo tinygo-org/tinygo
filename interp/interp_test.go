@@ -71,6 +71,7 @@ func runTest(t *testing.T, pathPrefix string) {
 	defer pm.Dispose()
 	pm.AddGlobalOptimizerPass()
 	pm.AddDeadStoreEliminationPass()
+	pm.AddAggressiveDCEPass()
 	pm.Run(mod)
 
 	// Read the expected output IR.

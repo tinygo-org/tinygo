@@ -12,9 +12,11 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/goenv"
+	"tinygo.org/x/go-llvm"
 )
 
 // Target specification for a given target. Used for bare metal targets.
@@ -279,6 +281,12 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	} else if goos == "windows" {
 		spec.Linker = "ld.lld"
 		spec.Libc = "mingw-w64"
+		// Note: using a medium code model, low image base and no ASLR
+		// because Go doesn't really need those features. ASLR patches
+		// around issues for unsafe languages like C/C++ that are not
+		// normally present in Go (without explicitly opting in).
+		// For more discussion:
+		// https://groups.google.com/g/Golang-nuts/c/Jd9tlNc6jUE/m/Zo-7zIP_m3MJ?pli=1
 		spec.LDFlags = append(spec.LDFlags,
 			"-m", "i386pep",
 			"-Bdynamic",
@@ -286,6 +294,12 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			"--gc-sections",
 			"--no-insert-timestamp",
 		)
+		llvmMajor, _ := strconv.Atoi(strings.Split(llvm.Version, ".")[0])
+		if llvmMajor >= 12 {
+			// This flag was added in LLVM 12. At the same time, LLVM 12
+			// switched the default from --dynamicbase to --no-dynamicbase.
+			spec.LDFlags = append(spec.LDFlags, "--no-dynamicbase")
+		}
 	} else {
 		spec.LDFlags = append(spec.LDFlags, "-no-pie", "-Wl,--gc-sections") // WARNING: clang < 5.0 requires -nopie
 	}

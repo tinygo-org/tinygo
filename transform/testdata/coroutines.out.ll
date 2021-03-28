@@ -301,13 +301,13 @@ declare i8* @llvm.coro.free(token, i8* nocapture readonly) #0
 ; Function Attrs: nounwind
 declare token @llvm.coro.save(i8*) #2
 
-; Function Attrs: argmemonly nounwind willreturn
+; Function Attrs: argmemonly nofree nosync nounwind willreturn
 declare void @llvm.lifetime.start.p0i8(i64 immarg, i8* nocapture) #3
 
-; Function Attrs: argmemonly nounwind willreturn
+; Function Attrs: argmemonly nofree nosync nounwind willreturn
 declare void @llvm.lifetime.end.p0i8(i64 immarg, i8* nocapture) #3
 
 attributes #0 = { argmemonly nounwind readonly }
 attributes #1 = { nounwind readnone }
 attributes #2 = { nounwind }
-attributes #3 = { argmemonly nounwind willreturn }
+attributes #3 = { argmemonly nofree nosync nounwind willreturn }

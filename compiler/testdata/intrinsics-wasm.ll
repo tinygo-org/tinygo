@@ -18,7 +18,7 @@ entry:
   ret double %0
 }
 
-; Function Attrs: nounwind readnone speculatable willreturn
+; Function Attrs: nofree nosync nounwind readnone speculatable willreturn
 declare double @llvm.sqrt.f64(double) #1
 
 ; Function Attrs: nounwind
@@ -28,8 +28,8 @@ entry:
   ret double %0
 }
 
-; Function Attrs: nounwind readnone speculatable willreturn
+; Function Attrs: nofree nosync nounwind readnone speculatable willreturn
 declare double @llvm.trunc.f64(double) #1
 
 attributes #0 = { nounwind }
-attributes #1 = { nounwind readnone speculatable willreturn }
+attributes #1 = { nofree nosync nounwind readnone speculatable willreturn }
