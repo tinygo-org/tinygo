@@ -72,3 +72,5 @@ tinygo.org/x/go-llvm v0.0.0-20210308112806-9ef958b6bed4 h1:CMUHxVTb+UuUePuMf8vkW
 tinygo.org/x/go-llvm v0.0.0-20210308112806-9ef958b6bed4/go.mod h1:fv1F0BSNpxMfCL0zF3M4OPFbgYHnhtB6ST0HvUtu/LE=
 tinygo.org/x/go-llvm v0.0.0-20210325115028-e7b85195e81c h1:vn9IPshzYmzZis10UEVrsIBRv9FpykADw6M3/tHHROg=
 tinygo.org/x/go-llvm v0.0.0-20210325115028-e7b85195e81c/go.mod h1:fv1F0BSNpxMfCL0zF3M4OPFbgYHnhtB6ST0HvUtu/LE=
+tinygo.org/x/go-llvm v0.0.0-20210907125547-fd2d62ea06be h1:syIpWbi/yESuoyijF2nhRdgX4422sNfmij+o73B3+vU=
+tinygo.org/x/go-llvm v0.0.0-20210907125547-fd2d62ea06be/go.mod h1:fv1F0BSNpxMfCL0zF3M4OPFbgYHnhtB6ST0HvUtu/LE=
