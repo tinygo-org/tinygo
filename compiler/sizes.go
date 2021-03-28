@@ -150,6 +150,9 @@ func (s *stdSizes) Sizeof(T types.Type) int64 {
 		return s.PtrSize * 2
 	case *types.Pointer:
 		return s.PtrSize
+	case *types.Signature:
+		// Func values in TinyGo are two words in size.
+		return s.PtrSize * 2
 	default:
 		panic("unknown type: " + t.String())
 	}

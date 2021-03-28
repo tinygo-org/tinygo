@@ -148,6 +148,7 @@ func main() {
 	assertSize(reflect.TypeOf(uintptr(0)).Size() == unsafe.Sizeof(uintptr(0)), "uintptr")
 	assertSize(reflect.TypeOf("").Size() == unsafe.Sizeof(""), "string")
 	assertSize(reflect.TypeOf(new(int)).Size() == unsafe.Sizeof(new(int)), "*int")
+	assertSize(reflect.TypeOf(zeroFunc).Size() == unsafe.Sizeof(zeroFunc), "func()")
 
 	// SetBool
 	rv := reflect.ValueOf(new(bool)).Elem()

@@ -533,13 +533,16 @@ func (t rawType) Size() uintptr {
 	case Complex128:
 		return 16
 	case String:
-		return unsafe.Sizeof(StringHeader{})
+		return unsafe.Sizeof("")
 	case UnsafePointer, Chan, Map, Ptr:
 		return unsafe.Sizeof(uintptr(0))
 	case Slice:
-		return unsafe.Sizeof(SliceHeader{})
+		return unsafe.Sizeof([]int{})
 	case Interface:
 		return unsafe.Sizeof(interface{}(nil))
+	case Func:
+		var f func()
+		return unsafe.Sizeof(f)
 	case Array:
 		return t.elem().Size() * uintptr(t.Len())
 	case Struct:
@@ -579,13 +582,16 @@ func (t rawType) Align() int {
 	case Complex128:
 		return int(unsafe.Alignof(complex128(0)))
 	case String:
-		return int(unsafe.Alignof(StringHeader{}))
+		return int(unsafe.Alignof(""))
 	case UnsafePointer, Chan, Map, Ptr:
 		return int(unsafe.Alignof(uintptr(0)))
 	case Slice:
-		return int(unsafe.Alignof(SliceHeader{}))
+		return int(unsafe.Alignof([]int(nil)))
 	case Interface:
 		return int(unsafe.Alignof(interface{}(nil)))
+	case Func:
+		var f func()
+		return int(unsafe.Alignof(f))
 	case Struct:
 		numField := t.NumField()
 		alignment := 1
