@@ -282,7 +282,11 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					fmt.Fprintln(os.Stderr, indent+"call (reflect.rawType).elem:", operands[1:])
 				}
 				// Extract the type code global from the first parameter.
-				typecodeID := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem).Operand(0)
+				typecodeIDPtrToInt, err := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				typecodeID := typecodeIDPtrToInt.Operand(0)
 
 				// Get the type class.
 				// See also: getClassAndValueFromTypeCode in transform/reflect.go.
@@ -315,8 +319,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if r.debug {
 					fmt.Fprintln(os.Stderr, indent+"typeassert:", operands[1:])
 				}
-				assertedType := operands[2].toLLVMValue(inst.llvmInst.Operand(1).Type(), &mem)
-				actualTypePtrToInt := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem)
+				assertedType, err := operands[2].toLLVMValue(inst.llvmInst.Operand(1).Type(), &mem)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				actualTypePtrToInt, err := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
 				actualType := actualTypePtrToInt.Operand(0)
 				if actualType.Name()+"$id" == assertedType.Name() {
 					locals[inst.localIndex] = literalValue{uint8(1)}
@@ -377,7 +387,11 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 
 				// Load the first param, which is the type code (ptrtoint of the
 				// type code global).
-				typecodeID := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem).Operand(0).Initializer()
+				typecodeIDPtrToInt, err := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				typecodeID := typecodeIDPtrToInt.Operand(0).Initializer()
 
 				// Load the method set, which is part of the typecodeID object.
 				methodSet := llvm.ConstExtractValue(typecodeID, []uint32{2}).Operand(0).Initializer()
@@ -888,7 +902,11 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 	for i := 0; i < numOperands; i++ {
 		operand := inst.llvmInst.Operand(i)
 		if !operand.IsAInstruction().IsNil() || !operand.IsAArgument().IsNil() {
-			operand = locals[fn.locals[operand]].toLLVMValue(operand.Type(), mem)
+			var err error
+			operand, err = locals[fn.locals[operand]].toLLVMValue(operand.Type(), mem)
+			if err != nil {
+				return r.errorAt(inst, err)
+			}
 		}
 		operands[i] = operand
 	}

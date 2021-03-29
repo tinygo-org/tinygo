@@ -314,7 +314,7 @@ type value interface {
 	asRawValue(*runner) rawValue
 	Uint() uint64
 	Int() int64
-	toLLVMValue(llvm.Type, *memoryView) llvm.Value
+	toLLVMValue(llvm.Type, *memoryView) (llvm.Value, error)
 	String() string
 }
 
@@ -405,25 +405,25 @@ func (v literalValue) Int() int64 {
 	}
 }
 
-func (v literalValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Value {
+func (v literalValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, error) {
 	switch llvmType.TypeKind() {
 	case llvm.IntegerTypeKind:
 		switch value := v.value.(type) {
 		case uint64:
-			return llvm.ConstInt(llvmType, value, false)
+			return llvm.ConstInt(llvmType, value, false), nil
 		case uint32:
-			return llvm.ConstInt(llvmType, uint64(value), false)
+			return llvm.ConstInt(llvmType, uint64(value), false), nil
 		case uint16:
-			return llvm.ConstInt(llvmType, uint64(value), false)
+			return llvm.ConstInt(llvmType, uint64(value), false), nil
 		case uint8:
-			return llvm.ConstInt(llvmType, uint64(value), false)
+			return llvm.ConstInt(llvmType, uint64(value), false), nil
 		default:
-			panic("inpterp: unknown literal type")
+			return llvm.Value{}, errors.New("interp: unknown literal type")
 		}
 	case llvm.DoubleTypeKind:
-		return llvm.ConstFloat(llvmType, math.Float64frombits(v.value.(uint64)))
+		return llvm.ConstFloat(llvmType, math.Float64frombits(v.value.(uint64))), nil
 	case llvm.FloatTypeKind:
-		return llvm.ConstFloat(llvmType, float64(math.Float32frombits(v.value.(uint32))))
+		return llvm.ConstFloat(llvmType, float64(math.Float32frombits(v.value.(uint32)))), nil
 	default:
 		return v.asRawValue(mem.r).toLLVMValue(llvmType, mem)
 	}
@@ -507,7 +507,7 @@ func (v pointerValue) llvmValue(mem *memoryView) llvm.Value {
 // toLLVMValue returns the LLVM value for this pointer, which may be a GEP or
 // bitcast. The llvm.Type parameter is optional, if omitted the pointer type may
 // be different than expected.
-func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Value {
+func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, error) {
 	// Obtain the llvmValue, creating it if it doesn't exist yet.
 	llvmValue := v.llvmValue(mem)
 	if llvmValue.IsNil() {
@@ -518,7 +518,10 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Valu
 		if obj.llvmType.IsNil() {
 			// Create an initializer without knowing the global type.
 			// This is probably the result of a runtime.alloc call.
-			initializer := obj.buffer.asRawValue(mem.r).rawLLVMValue(mem)
+			initializer, err := obj.buffer.asRawValue(mem.r).rawLLVMValue(mem)
+			if err != nil {
+				return llvm.Value{}, err
+			}
 			globalType := initializer.Type()
 			llvmValue = llvm.AddGlobal(mem.r.mod, globalType, obj.globalName)
 			llvmValue.SetInitializer(initializer)
@@ -537,9 +540,12 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Valu
 			// Set the initializer for the global. Do this after creation to avoid
 			// infinite recursion between creating the global and creating the
 			// contents of the global (if the global contains itself).
-			initializer := obj.buffer.toLLVMValue(globalType, mem)
+			initializer, err := obj.buffer.toLLVMValue(globalType, mem)
+			if err != nil {
+				return llvm.Value{}, err
+			}
 			if checks && initializer.Type() != globalType {
-				panic("allocated value does not match allocated type")
+				return llvm.Value{}, errors.New("interp: allocated value does not match allocated type")
 			}
 			llvmValue.SetInitializer(initializer)
 		}
@@ -552,7 +558,7 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Valu
 	}
 
 	if llvmType.IsNil() {
-		return llvmValue
+		return llvmValue, nil
 	}
 
 	if llvmType.TypeKind() != llvm.PointerTypeKind {
@@ -564,7 +570,7 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Valu
 		// This can be worked around by simply converting to a raw value,
 		// rawValue knows how to create such structs.
 		if v.offset() != 0 {
-			panic("offset set without known pointer type")
+			return llvm.Value{}, errors.New("interp: offset set without known pointer type")
 		}
 		return v.asRawValue(mem.r).toLLVMValue(llvmType, mem)
 	}
@@ -575,14 +581,14 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Valu
 		if v.offset() != 0 {
 			// This should never happen, if offset is non-zero, the types
 			// shouldn't match.
-			panic("offset set while there is no way to convert the type")
+			return llvm.Value{}, errors.New("interp: offset set while there is no way to convert the type")
 		}
-		return llvmValue
+		return llvmValue, nil
 	}
 
 	if v.offset() == 0 {
 		// Offset is zero, so we can just bitcast to get a correct pointer.
-		return llvm.ConstBitCast(llvmValue, llvmType)
+		return llvm.ConstBitCast(llvmValue, llvmType), nil
 	}
 
 	// We need to make a constant GEP for pointer arithmetic.
@@ -606,11 +612,11 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Valu
 			offset -= int64(mem.r.targetData.ElementOffset(objectElementType, element))
 			objectElementType = objectElementType.StructElementTypes()[element]
 		default:
-			panic("pointer index with something other than a struct or array?")
+			return llvm.Value{}, errors.New("interp: pointer index with something other than a struct or array?")
 		}
 	}
 	if offset < 0 {
-		panic("offset has somehow gone negative, this should be impossible")
+		return llvm.Value{}, errors.New("interp: offset has somehow gone negative, this should be impossible")
 	}
 
 	// Finally do the gep, using the above computed indices.
@@ -618,9 +624,9 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Valu
 	// the bits of the pointer are now correct, just not the type).
 	gep := llvm.ConstInBoundsGEP(llvmValue, indices)
 	if gep.Type() != llvmType {
-		return llvm.ConstBitCast(gep, llvmType)
+		return llvm.ConstBitCast(gep, llvmType), nil
 	}
-	return gep
+	return gep, nil
 }
 
 // mapValue implements a Go map which is created at compile time and stored as a
@@ -713,7 +719,11 @@ func (b *mapBucket) create(ctx llvm.Context, nextBucket llvm.Value, mem *memoryV
 	// Create data for keys.
 	var keyValues []llvm.Value
 	for _, key := range b.keys {
-		keyValues = append(keyValues, key.rawLLVMValue(mem))
+		keyValue, err := key.rawLLVMValue(mem)
+		if err != nil {
+			panic(err)
+		}
+		keyValues = append(keyValues, keyValue)
 	}
 	if len(b.keys) < 8 {
 		keyValues = append(keyValues, llvm.ConstNull(llvm.ArrayType(int8Type, int(b.m.keySize)*(8-len(b.keys)))))
@@ -726,7 +736,11 @@ func (b *mapBucket) create(ctx llvm.Context, nextBucket llvm.Value, mem *memoryV
 	// Create data for values.
 	var valueValues []llvm.Value
 	for _, value := range b.values {
-		valueValues = append(valueValues, value.rawLLVMValue(mem))
+		v, err := value.rawLLVMValue(mem)
+		if err != nil {
+			panic(err)
+		}
+		valueValues = append(valueValues, v)
 	}
 	if len(b.values) < 8 {
 		valueValues = append(valueValues, llvm.ConstNull(llvm.ArrayType(int8Type, int(b.m.valueSize)*(8-len(b.values)))))
@@ -750,9 +764,9 @@ func (b *mapBucket) create(ctx llvm.Context, nextBucket llvm.Value, mem *memoryV
 	return bucket
 }
 
-func (v *mapValue) toLLVMValue(hashmapType llvm.Type, mem *memoryView) llvm.Value {
+func (v *mapValue) toLLVMValue(hashmapType llvm.Type, mem *memoryView) (llvm.Value, error) {
 	if !v.hashmap.IsNil() {
-		return v.hashmap
+		return v.hashmap, nil
 	}
 
 	// Create a slice of buckets with all the keys and values in the hashmap.
@@ -772,12 +786,12 @@ func (v *mapValue) toLLVMValue(hashmapType llvm.Type, mem *memoryView) llvm.Valu
 			copy(keyValue.buf[v.keySize/2:], literalValue{key.size}.asRawValue(v.r).buf)
 		case rawValue:
 			if key.hasPointer() {
-				panic("todo: map key with pointer")
+				return llvm.Value{}, errors.New("interp: todo: map key with pointer")
 			}
 			data = key.buf
 			keyValue = key
 		default:
-			panic("unknown map key type")
+			return llvm.Value{}, errors.New("interp: unknown map key type")
 		}
 		buf := make([]byte, len(data))
 		for i, p := range data {
@@ -821,7 +835,7 @@ func (v *mapValue) toLLVMValue(hashmapType llvm.Type, mem *memoryView) llvm.Valu
 	})
 
 	v.hashmap = hashmap
-	return v.hashmap
+	return v.hashmap, nil
 }
 
 // putString does a map assign operation, assuming that the map is of type
@@ -1018,7 +1032,7 @@ func (v rawValue) equal(rhs rawValue) bool {
 // goes. The resulting value does not have a specified type, but it will be the
 // same size and have the same bytes if it was created with a provided LLVM type
 // (through toLLVMValue).
-func (v rawValue) rawLLVMValue(mem *memoryView) llvm.Value {
+func (v rawValue) rawLLVMValue(mem *memoryView) (llvm.Value, error) {
 	var structFields []llvm.Value
 	ctx := mem.r.mod.Context()
 	int8Type := ctx.Int8Type()
@@ -1042,7 +1056,10 @@ func (v rawValue) rawLLVMValue(mem *memoryView) llvm.Value {
 	for i := uint32(0); i < uint32(len(v.buf)); {
 		if v.buf[i] > 255 {
 			addBytes()
-			field := pointerValue{v.buf[i]}.toLLVMValue(llvm.Type{}, mem)
+			field, err := pointerValue{v.buf[i]}.toLLVMValue(llvm.Type{}, mem)
+			if err != nil {
+				return llvm.Value{}, err
+			}
 			elementType := field.Type().ElementType()
 			if elementType.TypeKind() == llvm.StructTypeKind {
 				// There are some special pointer types that should be used as a
@@ -1065,12 +1082,12 @@ func (v rawValue) rawLLVMValue(mem *memoryView) llvm.Value {
 
 	// Return the created data.
 	if len(structFields) == 1 {
-		return structFields[0]
+		return structFields[0], nil
 	}
-	return ctx.ConstStruct(structFields, false)
+	return ctx.ConstStruct(structFields, false), nil
 }
 
-func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Value {
+func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, error) {
 	isZero := true
 	for _, p := range v.buf {
 		if p != 0 {
@@ -1079,7 +1096,7 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Value {
 		}
 	}
 	if isZero {
-		return llvm.ConstNull(llvmType)
+		return llvm.ConstNull(llvmType), nil
 	}
 	switch llvmType.TypeKind() {
 	case llvm.IntegerTypeKind:
@@ -1088,7 +1105,11 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Value {
 			if err != nil {
 				panic(err)
 			}
-			return llvm.ConstPtrToInt(ptr.toLLVMValue(llvm.Type{}, mem), llvmType)
+			v, err := ptr.toLLVMValue(llvm.Type{}, mem)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+			return llvm.ConstPtrToInt(v, llvmType), nil
 		}
 		var n uint64
 		switch llvmType.IntTypeWidth() {
@@ -1108,7 +1129,7 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Value {
 		default:
 			panic("unknown integer size")
 		}
-		return llvm.ConstInt(llvmType, n, false)
+		return llvm.ConstInt(llvmType, n, false), nil
 	case llvm.StructTypeKind:
 		fieldTypes := llvmType.StructElementTypes()
 		fields := make([]llvm.Value, len(fieldTypes))
@@ -1117,12 +1138,16 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Value {
 			field := rawValue{
 				buf: v.buf[offset:],
 			}
-			fields[i] = field.toLLVMValue(fieldType, mem)
+			var err error
+			fields[i], err = field.toLLVMValue(fieldType, mem)
+			if err != nil {
+				return llvm.Value{}, err
+			}
 		}
 		if llvmType.StructName() != "" {
-			return llvm.ConstNamedStruct(llvmType, fields)
+			return llvm.ConstNamedStruct(llvmType, fields), nil
 		}
-		return llvmType.Context().ConstStruct(fields, false)
+		return llvmType.Context().ConstStruct(fields, false), nil
 	case llvm.ArrayTypeKind:
 		numElements := llvmType.ArrayLength()
 		childType := llvmType.ElementType()
@@ -1133,27 +1158,34 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Value {
 			field := rawValue{
 				buf: v.buf[offset:],
 			}
-			fields[i] = field.toLLVMValue(childType, mem)
+			var err error
+			fields[i], err = field.toLLVMValue(childType, mem)
+			if err != nil {
+				return llvm.Value{}, err
+			}
 			if checks && fields[i].Type() != childType {
 				panic("child type doesn't match")
 			}
 		}
-		return llvm.ConstArray(childType, fields)
+		return llvm.ConstArray(childType, fields), nil
 	case llvm.PointerTypeKind:
 		if v.buf[0] > 255 {
 			// This is a regular pointer.
-			llvmValue := pointerValue{v.buf[0]}.toLLVMValue(llvm.Type{}, mem)
+			llvmValue, err := pointerValue{v.buf[0]}.toLLVMValue(llvm.Type{}, mem)
+			if err != nil {
+				return llvm.Value{}, err
+			}
 			if llvmValue.Type() != llvmType {
 				llvmValue = llvm.ConstBitCast(llvmValue, llvmType)
 			}
-			return llvmValue
+			return llvmValue, nil
 		}
 		// This is either a null pointer or a raw pointer for memory-mapped I/O
 		// (such as 0xe000ed00).
 		ptr := rawValue{v.buf[:mem.r.pointerSize]}.Uint()
 		if ptr == 0 {
 			// Null pointer.
-			return llvm.ConstNull(llvmType)
+			return llvm.ConstNull(llvmType), nil
 		}
 		var ptrValue llvm.Value // the underlying int
 		switch mem.r.pointerSize {
@@ -1164,19 +1196,19 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Value {
 		case 2:
 			ptrValue = llvm.ConstInt(llvmType.Context().Int16Type(), ptr, false)
 		default:
-			panic("unknown pointer size")
+			return llvm.Value{}, errors.New("interp: unknown pointer size")
 		}
-		return llvm.ConstIntToPtr(ptrValue, llvmType)
+		return llvm.ConstIntToPtr(ptrValue, llvmType), nil
 	case llvm.DoubleTypeKind:
 		b := rawValue{v.buf[:8]}.Uint()
 		f := math.Float64frombits(b)
-		return llvm.ConstFloat(llvmType, f)
+		return llvm.ConstFloat(llvmType, f), nil
 	case llvm.FloatTypeKind:
 		b := uint32(rawValue{v.buf[:4]}.Uint())
 		f := math.Float32frombits(b)
-		return llvm.ConstFloat(llvmType, float64(f))
+		return llvm.ConstFloat(llvmType, float64(f)), nil
 	default:
-		panic("todo: raw value to LLVM value: " + llvmType.String())
+		return llvm.Value{}, errors.New("interp: todo: raw value to LLVM value: " + llvmType.String())
 	}
 }
 
@@ -1365,8 +1397,8 @@ func (v localValue) Int() int64 {
 	panic("interp: localValue.Int")
 }
 
-func (v localValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) llvm.Value {
-	return v.value
+func (v localValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, error) {
+	return v.value, nil
 }
 
 func (r *runner) getValue(llvmValue llvm.Value) value {
