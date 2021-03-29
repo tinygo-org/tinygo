@@ -259,12 +259,17 @@ func (mv *memoryView) put(index uint32, obj object) {
 	mv.objects[index] = obj
 }
 
-// Load the value behind the given pointer.
+// Load the value behind the given pointer. Returns nil if the pointer points to
+// an external global.
 func (mv *memoryView) load(p pointerValue, size uint32) value {
 	if checks && mv.hasExternalStore(p) {
 		panic("interp: load from object with external store")
 	}
 	obj := mv.get(p.index())
+	if obj.buffer == nil {
+		// External global, return nil.
+		return nil
+	}
 	if p.offset() == 0 && size == obj.size {
 		return obj.buffer.clone()
 	}
@@ -280,12 +285,17 @@ func (mv *memoryView) load(p pointerValue, size uint32) value {
 
 // Store to the value behind the given pointer. This overwrites the value in the
 // memory view, so that the changed value is discarded when the memory view is
-// reverted.
-func (mv *memoryView) store(v value, p pointerValue) {
+// reverted. Returns true on success, false if the object to store to is
+// external.
+func (mv *memoryView) store(v value, p pointerValue) bool {
 	if checks && mv.hasExternalLoadOrStore(p) {
 		panic("interp: store to object with external load/store")
 	}
 	obj := mv.get(p.index())
+	if obj.buffer == nil {
+		// External global, return false (for a failure).
+		return false
+	}
 	if checks && p.offset()+v.len(mv.r) > obj.size {
 		panic("interp: store out of bounds")
 	}
@@ -301,6 +311,7 @@ func (mv *memoryView) store(v value, p pointerValue) {
 		}
 	}
 	mv.put(p.index(), obj)
+	return true // success
 }
 
 // value is some sort of value, comparable to a LLVM constant. It can be
@@ -1104,6 +1115,12 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 			ptr, err := v.asPointer(mem.r)
 			if err != nil {
 				panic(err)
+			}
+			if checks && mem.r.targetData.TypeAllocSize(llvmType) != mem.r.targetData.TypeAllocSize(mem.r.i8ptrType) {
+				// Probably trying to serialize a pointer to a byte array,
+				// perhaps as a result of rawLLVMValue() in a previous interp
+				// run.
+				return llvm.Value{}, errInvalidPtrToIntSize
 			}
 			v, err := ptr.toLLVMValue(llvm.Type{}, mem)
 			if err != nil {

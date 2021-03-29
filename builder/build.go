@@ -55,6 +55,7 @@ type BuildResult struct {
 type packageAction struct {
 	ImportPath      string
 	CompilerVersion int // compiler.Version
+	InterpVersion   int // interp.Version
 	LLVMVersion     string
 	Config          *compiler.Config
 	CFlags          []string
@@ -135,6 +136,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		actionID := packageAction{
 			ImportPath:      pkg.ImportPath,
 			CompilerVersion: compiler.Version,
+			InterpVersion:   interp.Version,
 			LLVMVersion:     llvm.Version,
 			Config:          compilerConfig,
 			CFlags:          pkg.CFlags,
@@ -188,6 +190,21 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				}
 				if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 					return errors.New("verification error after compiling package " + pkg.ImportPath)
+				}
+
+				// Try to interpret package initializers at compile time.
+				// It may only be possible to do this partially, in which case
+				// it is completed after all IR files are linked.
+				pkgInit := mod.NamedFunction(pkg.Pkg.Path() + ".init")
+				if pkgInit.IsNil() {
+					panic("init not found for " + pkg.Pkg.Path())
+				}
+				err := interp.RunFunc(pkgInit, config.DumpSSA())
+				if err != nil {
+					return err
+				}
+				if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
+					return errors.New("verification error after interpreting " + pkgInit.Name())
 				}
 
 				// Serialize the LLVM module as a bitcode file.
@@ -575,8 +592,17 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	if err != nil {
 		return err
 	}
-	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
-		return errors.New("verification error after interpreting runtime.initAll")
+	if config.VerifyIR() {
+		// Only verify if we really need it.
+		// The IR has already been verified before writing the bitcode to disk
+		// and the interp function above doesn't need to do a lot as most of the
+		// package initializers have already run. Additionally, verifying this
+		// linked IR is _expensive_ because dead code hasn't been removed yet,
+		// easily costing a few hundred milliseconds. Therefore, only do it when
+		// specifically requested.
+		if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
+			return errors.New("verification error after interpreting runtime.initAll")
+		}
 	}
 
 	if config.GOOS() != "darwin" {
