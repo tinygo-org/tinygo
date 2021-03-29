@@ -11,6 +11,12 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// Version of the interp package. It must be incremented whenever the interp
+// package is changed in a way that affects the output so that cached package
+// builds will be invalidated.
+// This version is independent of the TinyGo version number.
+const Version = 1
+
 // Enable extra checks, which should be disabled by default.
 // This may help track down bugs by adding a few more sanity checks.
 const checks = true
@@ -32,9 +38,7 @@ type runner struct {
 	callsExecuted uint64
 }
 
-// Run evaluates runtime.initAll function as much as possible at compile time.
-// Set debug to true if it should print output while running.
-func Run(mod llvm.Module, debug bool) error {
+func newRunner(mod llvm.Module, debug bool) *runner {
 	r := runner{
 		mod:           mod,
 		targetData:    llvm.NewTargetData(mod.DataLayout()),
@@ -47,6 +51,13 @@ func Run(mod llvm.Module, debug bool) error {
 	r.pointerSize = uint32(r.targetData.PointerSize())
 	r.i8ptrType = llvm.PointerType(mod.Context().Int8Type(), 0)
 	r.maxAlign = r.targetData.PrefTypeAlignment(r.i8ptrType) // assume pointers are maximally aligned (this is not always the case)
+	return &r
+}
+
+// Run evaluates runtime.initAll function as much as possible at compile time.
+// Set debug to true if it should print output while running.
+func Run(mod llvm.Module, debug bool) error {
+	r := newRunner(mod, debug)
 
 	initAll := mod.NamedFunction("runtime.initAll")
 	bb := initAll.EntryBasicBlock()
@@ -117,7 +128,104 @@ func Run(mod llvm.Module, debug bool) error {
 	r.pkgName = ""
 
 	// Update all global variables in the LLVM module.
-	mem := memoryView{r: &r}
+	mem := memoryView{r: r}
+	for _, obj := range r.objects {
+		if obj.llvmGlobal.IsNil() {
+			continue
+		}
+		if obj.buffer == nil {
+			continue
+		}
+		initializer, err := obj.buffer.toLLVMValue(obj.llvmGlobal.Type().ElementType(), &mem)
+		if err == errInvalidPtrToIntSize {
+			// This can happen when a previous interp run did not have the
+			// correct LLVM type for a global and made something up. In that
+			// case, some fields could be written out as a series of (null)
+			// bytes even though they actually contain a pointer value.
+			// As a fallback, use asRawValue to get something of the correct
+			// memory layout.
+			initializer, err := obj.buffer.asRawValue(r).rawLLVMValue(&mem)
+			if err != nil {
+				return err
+			}
+			initializerType := initializer.Type()
+			newGlobal := llvm.AddGlobal(mod, initializerType, obj.llvmGlobal.Name()+".tmp")
+			newGlobal.SetInitializer(initializer)
+			newGlobal.SetLinkage(obj.llvmGlobal.Linkage())
+			newGlobal.SetAlignment(obj.llvmGlobal.Alignment())
+			// TODO: copy debug info, unnamed_addr, ...
+			bitcast := llvm.ConstBitCast(newGlobal, obj.llvmGlobal.Type())
+			obj.llvmGlobal.ReplaceAllUsesWith(bitcast)
+			name := obj.llvmGlobal.Name()
+			obj.llvmGlobal.EraseFromParentAsGlobal()
+			newGlobal.SetName(name)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if checks && initializer.Type() != obj.llvmGlobal.Type().ElementType() {
+			panic("initializer type mismatch")
+		}
+		obj.llvmGlobal.SetInitializer(initializer)
+	}
+
+	return nil
+}
+
+// RunFunc evaluates a single package initializer at compile time.
+// Set debug to true if it should print output while running.
+func RunFunc(fn llvm.Value, debug bool) error {
+	// Create and initialize *runner object.
+	mod := fn.GlobalParent()
+	r := newRunner(mod, debug)
+	initName := fn.Name()
+	if !strings.HasSuffix(initName, ".init") {
+		return errorAt(fn, "interp: unexpected function name (expected *.init)")
+	}
+	r.pkgName = initName[:len(initName)-len(".init")]
+
+	// Create new function with the interp result.
+	newFn := llvm.AddFunction(mod, fn.Name()+".tmp", fn.Type().ElementType())
+	newFn.SetLinkage(fn.Linkage())
+	newFn.SetVisibility(fn.Visibility())
+	entry := mod.Context().AddBasicBlock(newFn, "entry")
+
+	// Create a builder, to insert instructions that could not be evaluated at
+	// compile time.
+	r.builder = mod.Context().NewBuilder()
+	defer r.builder.Dispose()
+	r.builder.SetInsertPointAtEnd(entry)
+
+	// Copy debug information.
+	subprogram := fn.Subprogram()
+	if !subprogram.IsNil() {
+		newFn.SetSubprogram(subprogram)
+		r.builder.SetCurrentDebugLocation(subprogram.SubprogramLine(), 0, subprogram, llvm.Metadata{})
+	}
+
+	// Run the initializer, filling the .init.tmp function.
+	if r.debug {
+		fmt.Fprintln(os.Stderr, "interp:", fn.Name())
+	}
+	_, pkgMem, callErr := r.run(r.getFunction(fn), nil, nil, "    ")
+	if callErr != nil {
+		if isRecoverableError(callErr.Err) {
+			// Could not finish, but could recover from it.
+			if r.debug {
+				fmt.Fprintln(os.Stderr, "not interpreting", r.pkgName, "because of error:", callErr.Error())
+			}
+			newFn.EraseFromParentAsFunction()
+			return nil
+		}
+		return callErr
+	}
+	for index, obj := range pkgMem.objects {
+		r.objects[index] = obj
+	}
+
+	// Update globals with values determined while running the initializer above.
+	mem := memoryView{r: r}
 	for _, obj := range r.objects {
 		if obj.llvmGlobal.IsNil() {
 			continue
@@ -134,6 +242,14 @@ func Run(mod llvm.Module, debug bool) error {
 		}
 		obj.llvmGlobal.SetInitializer(initializer)
 	}
+
+	// Finalize: remove the old init function and replace it with the new
+	// (.init.tmp) function.
+	r.builder.CreateRetVoid()
+	fnName := fn.Name()
+	fn.ReplaceAllUsesWith(newFn)
+	fn.EraseFromParentAsFunction()
+	newFn.SetName(fnName)
 
 	return nil
 }

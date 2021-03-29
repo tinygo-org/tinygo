@@ -20,6 +20,11 @@ var (
 	errMapAlreadyCreated      = errors.New("interp: map already created")
 )
 
+// This is one of the errors that can be returned from toLLVMValue when the
+// passed type does not fit the data to serialize. It is recoverable by
+// serializing without a type (using rawValue.rawLLVMValue).
+var errInvalidPtrToIntSize = errors.New("interp: ptrtoint integer size does not equal pointer size")
+
 func isRecoverableError(err error) bool {
 	return err == errIntegerAsPointer || err == errUnsupportedInst || err == errUnsupportedRuntimeInst || err == errMapAlreadyCreated
 }

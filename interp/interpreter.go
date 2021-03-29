@@ -548,6 +548,13 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				continue
 			}
 			result := mem.load(ptr, uint32(size))
+			if result == nil {
+				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				if err != nil {
+					return nil, mem, err
+				}
+				continue
+			}
 			if r.debug {
 				fmt.Fprintln(os.Stderr, indent+"load:", ptr, "->", result)
 			}
@@ -570,7 +577,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if r.debug {
 				fmt.Fprintln(os.Stderr, indent+"store:", val, ptr)
 			}
-			mem.store(val, ptr)
+			ok := mem.store(val, ptr)
+			if !ok {
+				// Could not store the value, do it at runtime.
+				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				if err != nil {
+					return nil, mem, err
+				}
+			}
 		case llvm.Alloca:
 			// Alloca normally allocates some stack memory. In the interpreter,
 			// it allocates a global instead.
