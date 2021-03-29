@@ -125,7 +125,10 @@ func Run(mod llvm.Module, debug bool) error {
 		if obj.buffer == nil {
 			continue
 		}
-		initializer := obj.buffer.toLLVMValue(obj.llvmGlobal.Type().ElementType(), &mem)
+		initializer, err := obj.buffer.toLLVMValue(obj.llvmGlobal.Type().ElementType(), &mem)
+		if err != nil {
+			return err
+		}
 		if checks && initializer.Type() != obj.llvmGlobal.Type().ElementType() {
 			panic("initializer type mismatch")
 		}
