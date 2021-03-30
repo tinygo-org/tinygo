@@ -715,11 +715,11 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 		member := pkg.Members[name]
 		switch member := member.(type) {
 		case *ssa.Function:
+			// Create the function definition.
+			b := newBuilder(c, irbuilder, member)
 			if member.Blocks == nil {
 				continue // external function
 			}
-			// Create the function definition.
-			b := newBuilder(c, irbuilder, member)
 			b.createFunction()
 		case *ssa.Type:
 			if types.IsInterface(member.Type()) {
@@ -758,8 +758,8 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 		case *ssa.Global:
 			// Global variable.
 			info := c.getGlobalInfo(member)
+			global := c.getGlobal(member)
 			if !info.extern {
-				global := c.getGlobal(member)
 				global.SetInitializer(llvm.ConstNull(global.Type().ElementType()))
 				global.SetVisibility(llvm.HiddenVisibility)
 			}
