@@ -6,6 +6,9 @@ target triple = "wasm32--wasi"
 @extern_global = external global [0 x i8], align 1
 @main.alignedGlobal = hidden global [4 x i32] zeroinitializer, align 32
 @main.alignedGlobal16 = hidden global [4 x i32] zeroinitializer, align 16
+@main.globalInSection = hidden global i32 0, section ".special_global_section", align 4
+@undefinedGlobalNotInSection = external global i32, align 4
+@main.multipleGlobalPragmas = hidden global i32 0, section ".global_section", align 1024
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 
@@ -38,6 +41,19 @@ entry:
   ret void
 }
 
+define hidden void @main.functionInSection(i8* %context, i8* %parentHandle) unnamed_addr section ".special_function_section" {
+entry:
+  ret void
+}
+
+define void @exportedFunctionInSection() #3 section ".special_function_section" {
+entry:
+  ret void
+}
+
+declare void @main.undefinedFunctionNotInSection(i8*, i8*)
+
 attributes #0 = { "wasm-export-name"="extern_func" }
 attributes #1 = { inlinehint }
 attributes #2 = { noinline }
+attributes #3 = { "wasm-export-name"="exportedFunctionInSection" }

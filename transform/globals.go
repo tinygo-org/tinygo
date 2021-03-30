@@ -11,7 +11,7 @@ import "tinygo.org/x/go-llvm"
 func ApplyFunctionSections(mod llvm.Module) {
 	llvmFn := mod.FirstFunction()
 	for !llvmFn.IsNil() {
-		if !llvmFn.IsDeclaration() {
+		if !llvmFn.IsDeclaration() && llvmFn.Section() == "" {
 			name := llvmFn.Name()
 			llvmFn.SetSection(".text." + name)
 		}
