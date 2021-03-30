@@ -756,6 +756,9 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			if !info.extern {
 				global.SetInitializer(llvm.ConstNull(global.Type().ElementType()))
 				global.SetVisibility(llvm.HiddenVisibility)
+				if info.section != "" {
+					global.SetSection(info.section)
+				}
 			}
 		}
 	}
@@ -780,6 +783,9 @@ func (b *builder) createFunction() {
 	if !b.info.exported {
 		b.llvmFn.SetVisibility(llvm.HiddenVisibility)
 		b.llvmFn.SetUnnamedAddr(true)
+	}
+	if b.info.section != "" {
+		b.llvmFn.SetSection(b.info.section)
 	}
 	if b.info.exported && strings.HasPrefix(b.Triple, "wasm") {
 		// Set the exported name. This is necessary for WebAssembly because
