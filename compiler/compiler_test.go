@@ -62,6 +62,7 @@ func TestCompiler(t *testing.T) {
 		"string.go",
 		"float.go",
 		"interface.go",
+		"pragma.go",
 	}
 
 	for _, testCase := range tests {
