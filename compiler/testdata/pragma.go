@@ -39,3 +39,28 @@ func inlineFunc() {
 //go:noinline
 func noinlineFunc() {
 }
+
+// This function should have the specified section.
+//go:section .special_function_section
+func functionInSection() {
+}
+
+//export exportedFunctionInSection
+//go:section .special_function_section
+func exportedFunctionInSection() {
+}
+
+// This function should not: it's only a declaration and not a definition.
+//go:section .special_function_section
+func undefinedFunctionNotInSection()
+
+//go:section .special_global_section
+var globalInSection uint32
+
+//go:section .special_global_section
+//go:extern undefinedGlobalNotInSection
+var undefinedGlobalNotInSection uint32
+
+//go:align 1024
+//go:section .global_section
+var multipleGlobalPragmas uint32
