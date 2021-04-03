@@ -238,6 +238,9 @@ func (c *Config) BinaryFormat(ext string) string {
 		// More information:
 		// https://github.com/Microsoft/uf2
 		return "uf2"
+	case ".zip":
+		// Nordic's proprietary DFU update package build by nrfutil
+		return "nrf-dfu"
 	default:
 		// Use the ELF format for unrecognized file formats.
 		return "elf"

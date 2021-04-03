@@ -210,27 +210,38 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	var fileExt string
 
 	flashMethod, _ := config.Programmer()
+	var fileToken string
+
 	switch flashMethod {
 	case "command", "":
 		switch {
 		case strings.Contains(config.Target.FlashCommand, "{hex}"):
 			fileExt = ".hex"
+			fileToken = "{hex}"
 		case strings.Contains(config.Target.FlashCommand, "{elf}"):
 			fileExt = ".elf"
+			fileToken = "{elf}"
 		case strings.Contains(config.Target.FlashCommand, "{bin}"):
 			fileExt = ".bin"
+			fileToken = "{bin}"
 		case strings.Contains(config.Target.FlashCommand, "{uf2}"):
 			fileExt = ".uf2"
+			fileToken = "{uf2}"
+		case strings.Contains(config.Target.FlashCommand, "{nrf-dfu}"):
+			fileExt = ".zip"
+			fileToken = "{nrf-dfu}"
 		default:
-			return errors.New("invalid target file - did you forget the {hex} token in the 'flash-command' section?")
+			return errors.New("invalid target file - did you forget one of the {hex|elf|bin|uf2|nrf-dfu} tokens in the 'flash-command' section?")
 		}
 	case "msd":
 		if config.Target.FlashFilename == "" {
 			return errors.New("invalid target file: flash-method was set to \"msd\" but no msd-firmware-name was set")
 		}
 		fileExt = filepath.Ext(config.Target.FlashFilename)
+		fileToken = "{" + fileExt + "}"
 	case "openocd":
 		fileExt = ".hex"
+		fileToken = "{" + fileExt + "}"
 	case "native":
 		return errors.New("unknown flash method \"native\" - did you miss a -target flag?")
 	default:
@@ -261,7 +272,6 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		case "", "command":
 			// Create the command.
 			flashCmd := config.Target.FlashCommand
-			fileToken := "{" + fileExt[1:] + "}"
 			flashCmd = strings.ReplaceAll(flashCmd, fileToken, result.Binary)
 
 			if port == "" && strings.Contains(flashCmd, "{port}") {
