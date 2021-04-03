@@ -558,6 +558,18 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		if err != nil {
 			return err
 		}
+	case "zip":
+		// special format for nrfutil for Nordic chips
+		tmphexpath := filepath.Join(dir, "main.hex")
+		err := objcopy(executable, tmphexpath, "hex")
+		if err != nil {
+			return err
+		}
+		tmppath = filepath.Join(dir, "main"+outext)
+		err = makeDFUFirmareImage(config.Options, tmphexpath, tmppath)
+		if err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 	}
