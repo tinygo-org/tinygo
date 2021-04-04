@@ -703,6 +703,20 @@ func (p *lowerInterfacesPass) createInterfaceMethodFunc(itf *interfaceInfo, sign
 			// function.
 			receiver = p.builder.CreateBitCast(receiver, function.FirstParam().Type(), "")
 		}
+
+		// Check whether the called function has the same signature as would be
+		// expected from the parameters. This can happen in rare cases when
+		// named struct types are renamed after merging multiple LLVM modules.
+		paramTypes := []llvm.Type{receiver.Type()}
+		for _, param := range params {
+			paramTypes = append(paramTypes, param.Type())
+		}
+		calledFunctionType := function.Type()
+		sig := llvm.PointerType(llvm.FunctionType(calledFunctionType.ElementType().ReturnType(), paramTypes, false), calledFunctionType.PointerAddressSpace())
+		if sig != function.Type() {
+			function = p.builder.CreateBitCast(function, sig, "")
+		}
+
 		retval := p.builder.CreateCall(function, append([]llvm.Value{receiver}, params...), "")
 		if retval.Type().TypeKind() == llvm.VoidTypeKind {
 			p.builder.CreateRetVoid()
