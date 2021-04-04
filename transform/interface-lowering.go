@@ -133,6 +133,7 @@ func (itf *interfaceInfo) id() string {
 // should be seen as a regular function call (see LowerInterfaces).
 type lowerInterfacesPass struct {
 	mod         llvm.Module
+	sizeLevel   int // LLVM optimization size level, 1 means -opt=s and 2 means -opt=z
 	builder     llvm.Builder
 	ctx         llvm.Context
 	uintptrType llvm.Type
@@ -145,9 +146,10 @@ type lowerInterfacesPass struct {
 // emitted by the compiler as higher-level intrinsics. They need some lowering
 // before LLVM can work on them. This is done so that a few cleanup passes can
 // run before assigning the final type codes.
-func LowerInterfaces(mod llvm.Module) error {
+func LowerInterfaces(mod llvm.Module, sizeLevel int) error {
 	p := &lowerInterfacesPass{
 		mod:         mod,
+		sizeLevel:   sizeLevel,
 		builder:     mod.Context().NewBuilder(),
 		ctx:         mod.Context(),
 		uintptrType: mod.Context().IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8),
@@ -594,6 +596,9 @@ func (p *lowerInterfacesPass) createInterfaceImplementsFunc(itf *interfaceInfo) 
 	fn := itf.assertFunc
 	fn.SetLinkage(llvm.InternalLinkage)
 	fn.SetUnnamedAddr(true)
+	if p.sizeLevel >= 2 {
+		fn.AddFunctionAttr(p.ctx.CreateEnumAttribute(llvm.AttributeKindID("optsize"), 0))
+	}
 
 	// TODO: debug info
 
@@ -653,6 +658,9 @@ func (p *lowerInterfacesPass) createInterfaceMethodFunc(itf *interfaceInfo, sign
 	fn := itf.methodFuncs[signature]
 	fn.SetLinkage(llvm.InternalLinkage)
 	fn.SetUnnamedAddr(true)
+	if p.sizeLevel >= 2 {
+		fn.AddFunctionAttr(p.ctx.CreateEnumAttribute(llvm.AttributeKindID("optsize"), 0))
+	}
 
 	// TODO: debug info
 
