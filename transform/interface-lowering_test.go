@@ -9,7 +9,7 @@ import (
 func TestInterfaceLowering(t *testing.T) {
 	t.Parallel()
 	testTransform(t, "testdata/interface", func(mod llvm.Module) {
-		err := LowerInterfaces(mod)
+		err := LowerInterfaces(mod, 0)
 		if err != nil {
 			t.Error(err)
 		}

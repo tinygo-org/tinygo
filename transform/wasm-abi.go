@@ -73,6 +73,10 @@ func ExternalInt64AsPtr(mod llvm.Module) error {
 		fn.SetName(name + "$i64wrap")
 		externalFnType := llvm.FunctionType(returnType, paramTypes, fnType.IsFunctionVarArg())
 		externalFn := llvm.AddFunction(mod, name, externalFnType)
+		optsize := fn.GetEnumFunctionAttribute(llvm.AttributeKindID("optsize"))
+		if !optsize.IsNil() {
+			fn.AddFunctionAttr(optsize)
+		}
 
 		if fn.IsDeclaration() {
 			// Just a declaration: the definition doesn't exist on the Go side

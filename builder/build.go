@@ -60,6 +60,7 @@ type packageAction struct {
 	CFlags          []string
 	FileHashes      map[string]string // hash of every file that's part of the package
 	Imports         map[string]string // map from imported package to action ID hash
+	SizeLevel       int               // LLVM optimization for size level (0-2)
 }
 
 // Build performs a single package to executable Go build. It takes in a package
@@ -127,6 +128,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	var packageJobs []*compileJob
 	packageBitcodePaths := make(map[string]string)
 	packageActionIDs := make(map[string]string)
+	_, sizeLevel, _ := config.OptLevels()
 	for _, pkg := range lprogram.Sorted() {
 		pkg := pkg // necessary to avoid a race condition
 
@@ -141,6 +143,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			CFlags:          pkg.CFlags,
 			FileHashes:      make(map[string]string, len(pkg.FileHashes)),
 			Imports:         make(map[string]string, len(pkg.Pkg.Imports())),
+			SizeLevel:       sizeLevel,
 		}
 		for filePath, hash := range pkg.FileHashes {
 			actionID.FileHashes[filePath] = hex.EncodeToString(hash)
@@ -204,6 +207,16 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				}
 				if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 					return errors.New("verification error after interpreting " + pkgInit.Name())
+				}
+
+				if sizeLevel >= 2 {
+					// Set the "optsize" attribute to make slightly smaller
+					// binaries at the cost of some performance.
+					kind := llvm.AttributeKindID("optsize")
+					attr := mod.Context().CreateEnumAttribute(kind, 0)
+					for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+						fn.AddFunctionAttr(attr)
+					}
 				}
 
 				// Serialize the LLVM module as a bitcode file.
@@ -617,21 +630,8 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 
 	// Optimization levels here are roughly the same as Clang, but probably not
 	// exactly.
-	var errs []error
-	switch config.Options.Opt {
-	case "none", "0":
-		errs = transform.Optimize(mod, config, 0, 0, 0) // -O0
-	case "1":
-		errs = transform.Optimize(mod, config, 1, 0, 0) // -O1
-	case "2":
-		errs = transform.Optimize(mod, config, 2, 0, 225) // -O2
-	case "s":
-		errs = transform.Optimize(mod, config, 2, 1, 225) // -Os
-	case "z":
-		errs = transform.Optimize(mod, config, 2, 2, 5) // -Oz, default
-	default:
-		return errors.New("unknown optimization level: -opt=" + config.Options.Opt)
-	}
+	optLevel, sizeLevel, inlinerThreshold := config.OptLevels()
+	errs := transform.Optimize(mod, config, optLevel, sizeLevel, inlinerThreshold)
 	if len(errs) > 0 {
 		return newMultiError(errs)
 	}
