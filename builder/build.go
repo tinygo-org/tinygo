@@ -60,6 +60,7 @@ type packageAction struct {
 	CFlags          []string
 	FileHashes      map[string]string // hash of every file that's part of the package
 	Imports         map[string]string // map from imported package to action ID hash
+	OptLevel        int               // LLVM optimization level (0-3)
 	SizeLevel       int               // LLVM optimization for size level (0-2)
 }
 
@@ -128,7 +129,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	var packageJobs []*compileJob
 	packageBitcodePaths := make(map[string]string)
 	packageActionIDs := make(map[string]string)
-	_, sizeLevel, _ := config.OptLevels()
+	optLevel, sizeLevel, _ := config.OptLevels()
 	for _, pkg := range lprogram.Sorted() {
 		pkg := pkg // necessary to avoid a race condition
 
@@ -143,6 +144,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			CFlags:          pkg.CFlags,
 			FileHashes:      make(map[string]string, len(pkg.FileHashes)),
 			Imports:         make(map[string]string, len(pkg.Pkg.Imports())),
+			OptLevel:        optLevel,
 			SizeLevel:       sizeLevel,
 		}
 		for filePath, hash := range pkg.FileHashes {
@@ -218,6 +220,28 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 						fn.AddFunctionAttr(attr)
 					}
 				}
+
+				// Run function passes for each function in the module.
+				// These passes are intended to be run on each function right
+				// after they're created to reduce IR size (and maybe also for
+				// cache locality to improve performance), but for now they're
+				// run here for each function in turn. Maybe this can be
+				// improved in the future.
+				builder := llvm.NewPassManagerBuilder()
+				defer builder.Dispose()
+				builder.SetOptLevel(optLevel)
+				builder.SetSizeLevel(sizeLevel)
+				funcPasses := llvm.NewFunctionPassManagerForModule(mod)
+				defer funcPasses.Dispose()
+				builder.PopulateFunc(funcPasses)
+				funcPasses.InitializeFunc()
+				for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+					if fn.IsDeclaration() {
+						continue
+					}
+					funcPasses.RunFunc(fn)
+				}
+				funcPasses.FinalizeFunc()
 
 				// Serialize the LLVM module as a bitcode file.
 				// Write to a temporary path that is renamed to the destination

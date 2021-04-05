@@ -50,16 +50,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		}
 	}
 
-	// Run function passes for each function.
-	funcPasses := llvm.NewFunctionPassManagerForModule(mod)
-	defer funcPasses.Dispose()
-	builder.PopulateFunc(funcPasses)
-	funcPasses.InitializeFunc()
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-		funcPasses.RunFunc(fn)
-	}
-	funcPasses.FinalizeFunc()
-
 	if optLevel > 0 {
 		// Run some preparatory passes for the Go optimizer.
 		goPasses := llvm.NewPassManager()
@@ -164,6 +154,10 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 
 	// Run function passes again, because without it, llvm.coro.size.i32()
 	// doesn't get lowered.
+	funcPasses := llvm.NewFunctionPassManagerForModule(mod)
+	defer funcPasses.Dispose()
+	builder.PopulateFunc(funcPasses)
+	funcPasses.InitializeFunc()
 	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
 		funcPasses.RunFunc(fn)
 	}
