@@ -328,7 +328,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					return nil, mem, r.errorAt(inst, err)
 				}
 				actualType := actualTypePtrToInt.Operand(0)
-				if actualType.Name()+"$id" == assertedType.Name() {
+				if strings.TrimPrefix(actualType.Name(), "reflect/types.type:") == strings.TrimPrefix(assertedType.Name(), "reflect/types.typeid:") {
 					locals[inst.localIndex] = literalValue{uint8(1)}
 				} else {
 					locals[inst.localIndex] = literalValue{uint8(0)}

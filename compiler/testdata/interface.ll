@@ -19,7 +19,7 @@ target triple = "i686--linux"
 @"reflect/types.type:interface:{String:func:{}{basic:string}}" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* bitcast ([1 x i8*]* @"reflect/types.interface:interface{String() string}$interface" to %runtime.typecodeID*), i32 0, %runtime.interfaceMethodInfo* null }
 @"func String() string" = external constant i8
 @"reflect/types.interface:interface{String() string}$interface" = linkonce_odr constant [1 x i8*] [i8* @"func String() string"]
-@"reflect/types.type:basic:int$id" = external constant i8
+@"reflect/types.typeid:basic:int" = external constant i8
 @"error$interface" = linkonce_odr constant [1 x i8*] [i8* @"func Error() string"]
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
@@ -51,7 +51,7 @@ entry:
 
 define hidden i1 @main.isInt(i32 %itf.typecode, i8* %itf.value, i8* %context, i8* %parentHandle) unnamed_addr {
 entry:
-  %typecode = call i1 @runtime.typeAssert(i32 %itf.typecode, i8* nonnull @"reflect/types.type:basic:int$id", i8* undef, i8* null)
+  %typecode = call i1 @runtime.typeAssert(i32 %itf.typecode, i8* nonnull @"reflect/types.typeid:basic:int", i8* undef, i8* null)
   br i1 %typecode, label %typeassert.ok, label %typeassert.next
 
 typeassert.ok:                                    ; preds = %entry

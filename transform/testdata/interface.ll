@@ -5,8 +5,8 @@ target triple = "armv7m-none-eabi"
 %runtime.interfaceMethodInfo = type { i8*, i32 }
 
 @"reflect/types.type:basic:uint8" = external constant %runtime.typecodeID
-@"reflect/types.type:basic:uint8$id" = external constant i8
-@"reflect/types.type:basic:int16$id" = external constant i8
+@"reflect/types.typeid:basic:uint8" = external constant i8
+@"reflect/types.typeid:basic:int16" = external constant i8
 @"reflect/types.type:basic:int" = external constant %runtime.typecodeID
 @"func NeverImplementedMethod()" = external constant i8
 @"Unmatched$interface" = private constant [1 x i8*] [i8* @"func NeverImplementedMethod()"]
@@ -55,7 +55,7 @@ typeswitch.Doubler:
   ret void
 
 typeswitch.notDoubler:
-  %isByte = call i1 @runtime.typeAssert(i32 %typecode, i8* nonnull @"reflect/types.type:basic:uint8$id")
+  %isByte = call i1 @runtime.typeAssert(i32 %typecode, i8* nonnull @"reflect/types.typeid:basic:uint8")
   br i1 %isByte, label %typeswitch.byte, label %typeswitch.notByte
 
 typeswitch.byte:
@@ -66,7 +66,7 @@ typeswitch.byte:
 
 typeswitch.notByte:
   ; this is a type assert that always fails
-  %isInt16 = call i1 @runtime.typeAssert(i32 %typecode, i8* nonnull @"reflect/types.type:basic:int16$id")
+  %isInt16 = call i1 @runtime.typeAssert(i32 %typecode, i8* nonnull @"reflect/types.typeid:basic:int16")
   br i1 %isInt16, label %typeswitch.int16, label %typeswitch.notInt16
 
 typeswitch.int16:
