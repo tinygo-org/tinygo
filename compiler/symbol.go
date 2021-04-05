@@ -355,16 +355,18 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 
 		// Set alignment from the //go:align comment.
 		var alignInBits uint32
-		if info.align < 0 || info.align&(info.align-1) != 0 {
+		alignment := c.targetData.ABITypeAlignment(llvmType)
+		if info.align > alignment {
+			alignment = info.align
+		}
+		if alignment <= 0 || alignment&(alignment-1) != 0 {
 			// Check for power-of-two (or 0).
 			// See: https://stackoverflow.com/a/108360
 			c.addError(g.Pos(), "global variable alignment must be a positive power of two")
 		} else {
 			// Set the alignment only when it is a power of two.
-			alignInBits = uint32(info.align) ^ uint32(info.align-1)
-			if info.align > c.targetData.ABITypeAlignment(llvmType) {
-				llvmGlobal.SetAlignment(info.align)
-			}
+			alignInBits = uint32(alignment) ^ uint32(alignment-1)
+			llvmGlobal.SetAlignment(alignment)
 		}
 
 		if c.Debug && !info.extern {

@@ -2258,14 +2258,20 @@ func (b *builder) createConst(prefix string, expr *ssa.Const) llvm.Value {
 		} else if typ.Info()&types.IsString != 0 {
 			str := constant.StringVal(expr.Value)
 			strLen := llvm.ConstInt(b.uintptrType, uint64(len(str)), false)
-			objname := prefix + "$string"
-			global := llvm.AddGlobal(b.mod, llvm.ArrayType(b.ctx.Int8Type(), len(str)), objname)
-			global.SetInitializer(b.ctx.ConstString(str, false))
-			global.SetLinkage(llvm.InternalLinkage)
-			global.SetGlobalConstant(true)
-			global.SetUnnamedAddr(true)
-			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-			strPtr := b.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
+			var strPtr llvm.Value
+			if str != "" {
+				objname := prefix + "$string"
+				global := llvm.AddGlobal(b.mod, llvm.ArrayType(b.ctx.Int8Type(), len(str)), objname)
+				global.SetInitializer(b.ctx.ConstString(str, false))
+				global.SetLinkage(llvm.InternalLinkage)
+				global.SetGlobalConstant(true)
+				global.SetUnnamedAddr(true)
+				global.SetAlignment(1)
+				zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+				strPtr = b.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
+			} else {
+				strPtr = llvm.ConstNull(b.i8ptrType)
+			}
 			strObj := llvm.ConstNamedStruct(b.getLLVMRuntimeType("_string"), []llvm.Value{strPtr, strLen})
 			return strObj
 		} else if typ.Kind() == types.UnsafePointer {
