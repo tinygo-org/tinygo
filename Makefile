@@ -374,6 +374,8 @@ ifneq ($(AVR), 0)
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino -scheduler=tasks  examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=arduino-mega1280             examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-nano        examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=digispark           examples/blinky1
