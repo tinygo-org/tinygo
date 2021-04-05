@@ -25,6 +25,8 @@ entry:
   store i16 5, i16* @main.exposedValue1
   call void @modifyExternal(i32* bitcast (void ()* @willModifyGlobal to i32*))
   store i16 7, i16* @main.exposedValue2
+  call void @runtime.printint64(i64 6)
+  call void @runtime.printint64(i64 -1)
   ret void
 }
 
@@ -43,4 +45,25 @@ define void @willModifyGlobal() {
 entry:
   store i16 8, i16* @main.exposedValue2
   ret void
+}
+
+define i64 @testSwitch(i64 %val) local_unnamed_addr {
+entry:
+  switch i64 %val, label %otherwise [
+    i64 0, label %zero
+    i64 1, label %one
+    i64 2, label %two
+  ]
+
+zero:                                             ; preds = %entry
+  ret i64 5
+
+one:                                              ; preds = %entry
+  ret i64 6
+
+two:                                              ; preds = %entry
+  ret i64 7
+
+otherwise:                                        ; preds = %entry
+  ret i64 -1
 }

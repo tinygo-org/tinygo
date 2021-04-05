@@ -65,6 +65,12 @@ entry:
   call void @modifyExternal(i32* bitcast (void ()* @willModifyGlobal to i32*))
   store i16 7, i16* @main.exposedValue2
 
+  ; Test switch statement.
+  %switch1 = call i64 @testSwitch(i64 1) ; 1 returns 6
+  %switch2 = call i64 @testSwitch(i64 9) ; 9 returns the default value -1
+  call void @runtime.printint64(i64 %switch1)
+  call void @runtime.printint64(i64 %switch2)
+
   ret void
 }
 
@@ -86,4 +92,23 @@ define void @willModifyGlobal() {
 entry:
   store i16 8, i16* @main.exposedValue2
   ret void
+}
+
+define i64 @testSwitch(i64 %val) {
+entry:
+  ; Test switch statement.
+  switch i64 %val, label %otherwise [ i64 0, label %zero
+                                      i64 1, label %one
+                                      i64 2, label %two ]
+zero:
+  ret i64 5
+
+one:
+  ret i64 6
+
+two:
+  ret i64 7
+
+otherwise:
+  ret i64 -1
 }

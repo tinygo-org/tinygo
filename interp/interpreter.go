@@ -103,7 +103,24 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			default:
 				panic("unknown operands length")
 			}
-			break // continue with next block
+		case llvm.Switch:
+			// Switch statement: [value, defaultLabel, case0, label0, case1, label1, ...]
+			value := operands[0].Uint()
+			targetLabel := operands[1].Uint() // default label
+			// Do a lazy switch by iterating over all cases.
+			for i := 2; i < len(operands); i += 2 {
+				if value == operands[i].Uint() {
+					targetLabel = operands[i+1].Uint()
+					break
+				}
+			}
+			lastBB = currentBB
+			currentBB = int(targetLabel)
+			bb = fn.blocks[currentBB]
+			instIndex = -1 // start at 0 the next cycle
+			if r.debug {
+				fmt.Fprintln(os.Stderr, indent+"switch", operands, "->", currentBB)
+			}
 		case llvm.PHI:
 			var result value
 			for i := 0; i < len(inst.operands); i += 2 {

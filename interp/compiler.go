@@ -135,6 +135,15 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 				default:
 					panic("unknown number of operands")
 				}
+			case llvm.Switch:
+				// A switch is an array of (value, label) pairs, of which the
+				// first one indicates the to-switch value and the default
+				// label.
+				numOperands := llvmInst.OperandsCount()
+				for i := 0; i < numOperands; i += 2 {
+					inst.operands = append(inst.operands, r.getValue(llvmInst.Operand(i)))
+					inst.operands = append(inst.operands, literalValue{uint32(blockIndices[llvmInst.Operand(i+1)])})
+				}
 			case llvm.PHI:
 				inst.name = llvmInst.Name()
 				incomingCount := inst.llvmInst.IncomingCount()
