@@ -66,7 +66,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		defer goPasses.Dispose()
 		goPasses.AddGlobalDCEPass()
 		goPasses.AddGlobalOptimizerPass()
-		goPasses.AddConstantPropagationPass()
+		goPasses.AddIPSCCPPass()
 		goPasses.AddAggressiveDCEPass()
 		goPasses.AddFunctionAttrsPass()
 		goPasses.Run(mod)
