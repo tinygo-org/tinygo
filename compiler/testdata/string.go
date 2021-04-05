@@ -1,5 +1,13 @@
 package main
 
+func someString() string {
+	return "foo"
+}
+
+func zeroLengthString() string {
+	return ""
+}
+
 func stringLen(s string) int {
 	return len(s)
 }
