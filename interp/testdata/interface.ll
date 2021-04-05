@@ -6,7 +6,7 @@ target triple = "x86_64--linux"
 
 @main.v1 = global i1 0
 @"reflect/types.type:named:main.foo" = private constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i64 0, %runtime.interfaceMethodInfo* null }
-@"reflect/types.type:named:main.foo$id" = external constant i8
+@"reflect/types.typeid:named:main.foo" = external constant i8
 @"reflect/types.type:basic:int" = external constant %runtime.typecodeID
 
 
@@ -21,7 +21,7 @@ entry:
 define internal void @main.init() unnamed_addr {
 entry:
   ; Test type asserts.
-  %typecode = call i1 @runtime.typeAssert(i64 ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:main.foo" to i64), i8* @"reflect/types.type:named:main.foo$id", i8* undef, i8* null)
+  %typecode = call i1 @runtime.typeAssert(i64 ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:main.foo" to i64), i8* @"reflect/types.typeid:named:main.foo", i8* undef, i8* null)
   store i1 %typecode, i1* @main.v1
   ret void
 }

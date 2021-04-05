@@ -5,8 +5,8 @@ target triple = "armv7m-none-eabi"
 %runtime.interfaceMethodInfo = type { i8*, i32 }
 
 @"reflect/types.type:basic:uint8" = external constant %runtime.typecodeID
-@"reflect/types.type:basic:uint8$id" = external constant i8
-@"reflect/types.type:basic:int16$id" = external constant i8
+@"reflect/types.typeid:basic:uint8" = external constant i8
+@"reflect/types.typeid:basic:int16" = external constant i8
 @"reflect/types.type:basic:int" = external constant %runtime.typecodeID
 @"func NeverImplementedMethod()" = external constant i8
 @"func Double() int" = external constant i8
@@ -93,14 +93,14 @@ define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %parentHandle) {
 define internal i32 @"(Doubler).Double"(i8* %0, i8* %1, i32 %actualType, i8* %parentHandle) unnamed_addr {
 entry:
   switch i32 %actualType, label %default [
-    i32 68, label %"reflect/types.type:named:Number"
+    i32 68, label %"named:Number"
   ]
 
 default:                                          ; preds = %entry
   call void @runtime.nilPanic(i8* undef, i8* undef)
   unreachable
 
-"reflect/types.type:named:Number":                ; preds = %entry
+"named:Number":                                   ; preds = %entry
   %2 = call i32 @"(Number).Double$invoke"(i8* %0, i8* %1)
   ret i32 %2
 }

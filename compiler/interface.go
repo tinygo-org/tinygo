@@ -341,7 +341,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 		commaOk = b.createRuntimeCall("interfaceImplements", []llvm.Value{actualTypeNum, methodSet}, "")
 
 	} else {
-		globalName := "reflect/types.type:" + getTypeCodeName(expr.AssertedType) + "$id"
+		globalName := "reflect/types.typeid:" + getTypeCodeName(expr.AssertedType)
 		assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
 		if assertedTypeCodeGlobal.IsNil() {
 			// Create a new typecode global.
