@@ -28,8 +28,6 @@ type Options struct {
 	Debug         bool
 	PrintSizes    string
 	PrintStacks   bool
-	CFlags        []string
-	LDFlags       []string
 	Tags          string
 	WasmAbi       string
 	TestConfig    TestConfig
