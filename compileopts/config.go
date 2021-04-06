@@ -184,7 +184,7 @@ func (c *Config) AutomaticStackSize() bool {
 // CFlags returns the flags to pass to the C compiler. This is necessary for CGo
 // preprocessing.
 func (c *Config) CFlags() []string {
-	cflags := append([]string{}, c.Options.CFlags...)
+	var cflags []string
 	for _, flag := range c.Target.CFlags {
 		cflags = append(cflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
 	}
@@ -205,7 +205,7 @@ func (c *Config) CFlags() []string {
 func (c *Config) LDFlags() []string {
 	root := goenv.Get("TINYGOROOT")
 	// Merge and adjust LDFlags.
-	ldflags := append([]string{}, c.Options.LDFlags...)
+	var ldflags []string
 	for _, flag := range c.Target.LDFlags {
 		ldflags = append(ldflags, strings.ReplaceAll(flag, "{root}", root))
 	}
