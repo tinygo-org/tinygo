@@ -172,7 +172,11 @@ commands:
           key: llvm-build-11-linux-v2-assert
           paths:
             llvm-build
-      - run: make ASSERT=1
+      - run: |
+          # Note: -p=2 limits parallelism to two jobs at a time, which is
+          # necessary to keep memory consumption down and avoid OOM (for a
+          # 2CPU/4GB executor).
+          GOFLAGS="-p=2" make ASSERT=1
       - build-wasi-libc
       - run:
           name: "Test TinyGo"
