@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -29,41 +28,43 @@ const TESTDATA = "testdata"
 var testTarget = flag.String("target", "", "override test target")
 
 func TestCompiler(t *testing.T) {
-	matches, err := filepath.Glob(filepath.Join(TESTDATA, "*.go"))
-	if err != nil {
-		t.Fatal("could not read test files:", err)
+	tests := []string{
+		"alias.go",
+		"atomic.go",
+		"binop.go",
+		"calls.go",
+		"cgo/",
+		"channel.go",
+		"coroutines.go",
+		"float.go",
+		"gc.go",
+		"init.go",
+		"init_multi.go",
+		"interface.go",
+		"json.go",
+		"map.go",
+		"math.go",
+		"print.go",
+		"reflect.go",
+		"slice.go",
+		"sort.go",
+		"stdlib.go",
+		"string.go",
+		"structs.go",
+		"zeroalloc.go",
 	}
-
-	dirMatches, err := filepath.Glob(filepath.Join(TESTDATA, "*", "main.go"))
-	if err != nil {
-		t.Fatal("could not read test packages:", err)
-	}
-	if len(matches) == 0 || len(dirMatches) == 0 {
-		t.Fatal("no test files found")
-	}
-	for _, m := range dirMatches {
-		matches = append(matches, filepath.Dir(m)+string(filepath.Separator))
-	}
-
-	sort.Strings(matches)
 
 	if *testTarget != "" {
 		// This makes it possible to run one specific test (instead of all),
 		// which is especially useful to quickly check whether some changes
 		// affect a particular target architecture.
-		runPlatTests(*testTarget, matches, t)
+		runPlatTests(*testTarget, tests, t)
 		return
 	}
 
 	if runtime.GOOS != "windows" {
 		t.Run("Host", func(t *testing.T) {
-			runPlatTests("", matches, t)
-			if runtime.GOOS == "darwin" {
-				runTest("testdata/libc/filesystem.go", "", t,
-					nil, nil)
-				runTest("testdata/libc/env.go", "", t,
-					[]string{"ENV1=VALUE1", "ENV2=VALUE2"}, nil)
-			}
+			runPlatTests("", tests, t)
 		})
 	}
 
@@ -72,26 +73,26 @@ func TestCompiler(t *testing.T) {
 	}
 
 	t.Run("EmulatedCortexM3", func(t *testing.T) {
-		runPlatTests("cortex-m-qemu", matches, t)
+		runPlatTests("cortex-m-qemu", tests, t)
 	})
 
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 		// Note: running only on Windows and macOS because Linux (as of 2020)
 		// usually has an outdated QEMU version that doesn't support RISC-V yet.
 		t.Run("EmulatedRISCV", func(t *testing.T) {
-			runPlatTests("riscv-qemu", matches, t)
+			runPlatTests("riscv-qemu", tests, t)
 		})
 	}
 
 	if runtime.GOOS == "linux" {
 		t.Run("X86Linux", func(t *testing.T) {
-			runPlatTests("i386--linux-gnu", matches, t)
+			runPlatTests("i386--linux-gnu", tests, t)
 		})
 		t.Run("ARMLinux", func(t *testing.T) {
-			runPlatTests("arm--linux-gnueabihf", matches, t)
+			runPlatTests("arm--linux-gnueabihf", tests, t)
 		})
 		t.Run("ARM64Linux", func(t *testing.T) {
-			runPlatTests("aarch64--linux-gnu", matches, t)
+			runPlatTests("aarch64--linux-gnu", tests, t)
 		})
 		goVersion, err := goenv.GorootVersionString(goenv.Get("GOROOT"))
 		if err != nil {
@@ -104,27 +105,34 @@ func TestCompiler(t *testing.T) {
 			// below that are also not supported but still seem to pass, so
 			// include them in the tests for now.
 			t.Run("WebAssembly", func(t *testing.T) {
-				runPlatTests("wasm", matches, t)
+				runPlatTests("wasm", tests, t)
 			})
 		}
 
 		t.Run("WASI", func(t *testing.T) {
-			runPlatTests("wasi", matches, t)
-			runTest("testdata/libc/env.go", "wasi", t,
-				[]string{"--env", "ENV1=VALUE1", "--env", "ENV2=VALUE2"}, nil)
-			runTest("testdata/libc/filesystem.go", "wasi", t, nil, []string{"--dir=."})
+			runPlatTests("wasi", tests, t)
 		})
 	}
 }
 
-func runPlatTests(target string, matches []string, t *testing.T) {
+func runPlatTests(target string, tests []string, t *testing.T) {
 	t.Parallel()
 
-	for _, path := range matches {
-		path := path // redefine to avoid race condition
-		t.Run(filepath.Base(path), func(t *testing.T) {
+	for _, name := range tests {
+		name := name // redefine to avoid race condition
+		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			runTest(path, target, t, nil, nil)
+			runTest(name, target, t, nil)
+		})
+	}
+	if target == "wasi" || target == "" && runtime.GOOS == "darwin" {
+		t.Run("filesystem.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("filesystem.go", target, t, nil)
+		})
+		t.Run("env.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("env.go", target, t, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
 		})
 	}
 }
@@ -141,10 +149,13 @@ func runBuild(src, out string, opts *compileopts.Options) error {
 	return Build(src, out, opts)
 }
 
-func runTest(path, target string, t *testing.T, environmentVars []string, additionalArgs []string) {
+func runTest(name, target string, t *testing.T, environmentVars []string) {
+	// Note: not using filepath.Join as it strips the path separator at the end
+	// of the path.
+	path := TESTDATA + "/" + name
 	// Get the expected output for this test.
 	txtpath := path[:len(path)-3] + ".txt"
-	if path[len(path)-1] == os.PathSeparator {
+	if path[len(path)-1] == '/' {
 		txtpath = path + "out.txt"
 	}
 	expected, err := ioutil.ReadFile(txtpath)
@@ -200,13 +211,15 @@ func runTest(path, target string, t *testing.T, environmentVars []string, additi
 			cmd = exec.Command(binary)
 		} else {
 			args := append(spec.Emulator[1:], binary)
-			cmd = exec.Command(spec.Emulator[0], append(args, additionalArgs...)...)
+			cmd = exec.Command(spec.Emulator[0], args...)
 		}
 
 		if len(spec.Emulator) != 0 && spec.Emulator[0] == "wasmtime" {
 			for _, v := range environmentVars {
 				cmd.Args = append(cmd.Args, "--env", v)
 			}
+			// Allow reading from the current directory.
+			cmd.Args = append(cmd.Args, "--dir=.")
 		} else {
 			cmd.Env = append(cmd.Env, environmentVars...)
 		}

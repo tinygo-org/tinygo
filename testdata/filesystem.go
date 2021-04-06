@@ -11,7 +11,7 @@ func main() {
 		panic("should be non exist error")
 	}
 
-	f, err := os.Open("testdata/libc/filesystem.txt")
+	f, err := os.Open("testdata/filesystem.txt")
 	if err != nil {
 		panic(err)
 	}
