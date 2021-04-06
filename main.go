@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/shlex"
 	"github.com/mattn/go-colorable"
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -835,6 +836,52 @@ func handleCompilerError(err error) {
 	}
 }
 
+// This is a special type for the -X flag to parse the pkgpath.Var=stringVal
+// format. It has to be a special type to allow multiple variables to be defined
+// this way.
+type globalValuesFlag map[string]map[string]string
+
+func (m globalValuesFlag) String() string {
+	return "pkgpath.Var=value"
+}
+
+func (m globalValuesFlag) Set(value string) error {
+	equalsIndex := strings.IndexByte(value, '=')
+	if equalsIndex < 0 {
+		return errors.New("expected format pkgpath.Var=value")
+	}
+	pathAndName := value[:equalsIndex]
+	pointIndex := strings.LastIndexByte(pathAndName, '.')
+	if pointIndex < 0 {
+		return errors.New("expected format pkgpath.Var=value")
+	}
+	path := pathAndName[:pointIndex]
+	name := pathAndName[pointIndex+1:]
+	stringValue := value[equalsIndex+1:]
+	if m[path] == nil {
+		m[path] = make(map[string]string)
+	}
+	m[path][name] = stringValue
+	return nil
+}
+
+// parseGoLinkFlag parses the -ldflags parameter. Its primary purpose right now
+// is the -X flag, for setting the value of global string variables.
+func parseGoLinkFlag(flagsString string) (map[string]map[string]string, error) {
+	set := flag.NewFlagSet("link", flag.ExitOnError)
+	globalVarValues := make(globalValuesFlag)
+	set.Var(globalVarValues, "X", "Set the value of the string variable to the given value.")
+	flags, err := shlex.Split(flagsString)
+	if err != nil {
+		return nil, err
+	}
+	err = set.Parse(flags)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]map[string]string(globalVarValues), nil
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
@@ -859,6 +906,7 @@ func main() {
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "", "flash port (can specify multiple candidates separated by commas)")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
+	ldflags := flag.String("ldflags", "", "Go link tool compatible ldflags")
 	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
 
 	var flagJSON, flagDeps *bool
@@ -888,6 +936,11 @@ func main() {
 	}
 
 	flag.CommandLine.Parse(os.Args[2:])
+	globalVarValues, err := parseGoLinkFlag(*ldflags)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	options := &compileopts.Options{
 		Target:        *target,
 		Opt:           *opt,
@@ -902,13 +955,14 @@ func main() {
 		PrintStacks:   *printStacks,
 		PrintCommands: *printCommands,
 		Tags:          *tags,
+		GlobalValues:  globalVarValues,
 		WasmAbi:       *wasmAbi,
 		Programmer:    *programmer,
 	}
 
 	os.Setenv("CC", "clang -target="+*target)
 
-	err := options.Verify()
+	err = options.Verify()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		usage()
