@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-//go:persist
+//go:section .persist
 var buffer [32]byte
 
 func main() {
