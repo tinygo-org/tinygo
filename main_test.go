@@ -138,6 +138,18 @@ func TestCompiler(t *testing.T) {
 				Opt: "0",
 			}, nil)
 		})
+
+		t.Run("ldflags", func(t *testing.T) {
+			t.Parallel()
+			runTestWithConfig("ldflags.go", "", t, &compileopts.Options{
+				Opt: "z",
+				GlobalValues: map[string]map[string]string{
+					"main": {
+						"someGlobal": "foobar",
+					},
+				},
+			}, nil)
+		})
 	})
 }
 

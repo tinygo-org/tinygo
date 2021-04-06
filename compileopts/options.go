@@ -30,6 +30,7 @@ type Options struct {
 	PrintStacks   bool
 	Tags          string
 	WasmAbi       string
+	GlobalValues  map[string]map[string]string // map[pkgpath]map[varname]value
 	TestConfig    TestConfig
 	Programmer    string
 }
