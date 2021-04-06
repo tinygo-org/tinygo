@@ -113,6 +113,32 @@ func TestCompiler(t *testing.T) {
 			runPlatTests("wasi", tests, t)
 		})
 	}
+
+	// Test a few build options.
+	t.Run("build-options", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			// These tests assume a host that is supported by TinyGo.
+			t.Skip("can't test build options on Windows")
+		}
+		t.Parallel()
+
+		// Test with few optimizations enabled (no inlining, etc).
+		t.Run("opt=1", func(t *testing.T) {
+			t.Parallel()
+			runTestWithConfig("stdlib.go", "", t, &compileopts.Options{
+				Opt: "1",
+			}, nil)
+		})
+
+		// Test with only the bare minimum of optimizations enabled.
+		// TODO: fix this for stdlib.go, which currently fails.
+		t.Run("opt=0", func(t *testing.T) {
+			t.Parallel()
+			runTestWithConfig("print.go", "", t, &compileopts.Options{
+				Opt: "0",
+			}, nil)
+		})
+	})
 }
 
 func runPlatTests(target string, tests []string, t *testing.T) {
@@ -150,6 +176,21 @@ func runBuild(src, out string, opts *compileopts.Options) error {
 }
 
 func runTest(name, target string, t *testing.T, environmentVars []string) {
+	options := &compileopts.Options{
+		Target:     target,
+		Opt:        "z",
+		PrintIR:    false,
+		DumpSSA:    false,
+		VerifyIR:   true,
+		Debug:      true,
+		PrintSizes: "",
+		WasmAbi:    "",
+	}
+	runTestWithConfig(name, target, t, options, environmentVars)
+}
+
+func runTestWithConfig(name, target string, t *testing.T, options *compileopts.Options, environmentVars []string) {
+	// Get the expected output for this test.
 	// Note: not using filepath.Join as it strips the path separator at the end
 	// of the path.
 	path := TESTDATA + "/" + name
@@ -176,19 +217,8 @@ func runTest(name, target string, t *testing.T, environmentVars []string) {
 	}()
 
 	// Build the test binary.
-	config := &compileopts.Options{
-		Target:     target,
-		Opt:        "z",
-		PrintIR:    false,
-		DumpSSA:    false,
-		VerifyIR:   true,
-		Debug:      true,
-		PrintSizes: "",
-		WasmAbi:    "",
-	}
-
 	binary := filepath.Join(tmpdir, "test")
-	err = runBuild("./"+path, binary, config)
+	err = runBuild("./"+path, binary, options)
 	if err != nil {
 		printCompilerError(t.Log, err)
 		t.Fail()
