@@ -12,5 +12,5 @@ require (
 	go.bug.st/serial v1.1.2
 	golang.org/x/sys v0.0.0-20210113181707-4bcb84eeeb78
 	golang.org/x/tools v0.0.0-20200216192241-b320d3a0f5a2
-	tinygo.org/x/go-llvm v0.0.0-20210308112806-9ef958b6bed4
+	tinygo.org/x/go-llvm v0.0.0-20210325115028-e7b85195e81c
 )
