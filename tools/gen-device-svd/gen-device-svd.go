@@ -5,6 +5,8 @@ import (
 	"encoding/xml"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,6 +15,10 @@ import (
 	"strings"
 	"text/template"
 	"unicode"
+
+	"github.com/tinygo-org/tinygo/builder"
+	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 var validName = regexp.MustCompile("^[a-zA-Z0-9_]+$")
@@ -1164,7 +1170,7 @@ Default_Handler:
 	return w.Flush()
 }
 
-func generate(indir, outdir, sourceURL, interruptSystem string) error {
+func generate(indir, outdir, sourceURL, interruptSystem string, onlyUsed bool) error {
 	if _, err := os.Stat(indir); os.IsNotExist(err) {
 		fmt.Fprintln(os.Stderr, "cannot find input directory:", indir)
 		os.Exit(1)
@@ -1177,7 +1183,14 @@ func generate(indir, outdir, sourceURL, interruptSystem string) error {
 		os.Exit(1)
 	}
 	sort.Strings(infiles)
+
+	targets := tinygoTargets()
 	for _, infile := range infiles {
+		if onlyUsed {
+			if !targets[strings.ToLower(strings.TrimSuffix(filepath.Base(infile), filepath.Ext(infile)))] {
+				continue
+			}
+		}
 		fmt.Println(infile)
 		device, err := readSVD(infile, sourceURL)
 		if err != nil {
@@ -1202,9 +1215,59 @@ func generate(indir, outdir, sourceURL, interruptSystem string) error {
 	return nil
 }
 
+func tinygoTargets() map[string]bool {
+	names := []string{}
+
+	dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
+	entries, err := ioutil.ReadDir(dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "could not list targets:", err)
+		os.Exit(1)
+		return nil
+	}
+	for _, entry := range entries {
+		if !entry.Mode().IsRegular() || !strings.HasSuffix(entry.Name(), ".json") {
+			// Only inspect JSON files.
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		spec, err := compileopts.LoadTarget(path)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "could not list target:", err)
+			os.Exit(1)
+			return nil
+		}
+		if spec.FlashMethod == "" && spec.FlashCommand == "" && spec.Emulator == nil {
+			// This doesn't look like a regular target file, but rather like
+			// a parent target (such as targets/cortex-m.json).
+			continue
+		}
+		name := entry.Name()
+		name = name[:len(name)-5]
+		names = append(names, name)
+	}
+
+	tags := map[string]bool{}
+	for _, tgt := range names {
+		options := &compileopts.Options{
+			Target: tgt,
+		}
+		config, err := builder.NewConfig(options)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, tag := range config.BuildTags() {
+			tags[tag] = true
+		}
+	}
+
+	return tags
+}
+
 func main() {
 	sourceURL := flag.String("source", "<unknown>", "source SVD file")
 	interruptSystem := flag.String("interrupts", "hardware", "interrupt system in use (software, hardware)")
+	onlyUsed := flag.Bool("only-used", false, "generate only what is defined in target")
 	flag.Parse()
 	if flag.NArg() != 2 {
 		fmt.Fprintln(os.Stderr, "provide exactly two arguments: input directory (with .svd files) and output directory for generated files")
@@ -1213,7 +1276,7 @@ func main() {
 	}
 	indir := flag.Arg(0)
 	outdir := flag.Arg(1)
-	err := generate(indir, outdir, *sourceURL, *interruptSystem)
+	err := generate(indir, outdir, *sourceURL, *interruptSystem, *onlyUsed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
