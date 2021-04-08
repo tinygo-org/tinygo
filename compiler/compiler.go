@@ -298,7 +298,7 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 		c.dibuilder.Finalize()
 	}
 
-	return c.mod, nil
+	return c.mod, c.diagnostics
 }
 
 // getLLVMRuntimeType obtains a named type from the runtime package and returns
