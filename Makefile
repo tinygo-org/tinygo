@@ -36,7 +36,7 @@ else
     LLVM_OPTION += '-DLLVM_ENABLE_ASSERTIONS=OFF'
 endif
 
-.PHONY: all tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-nxp gen-device-avr
+.PHONY: all tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-nxp gen-device-avr gen-device-rp
 
 LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines coverage debuginfodwarf executionengine frontendopenmp instrumentation interpreter ipo irreader linker lto mc mcjit objcarcopts option profiledata scalaropts support target
 
@@ -107,7 +107,7 @@ fmt-check:
 	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
 
 
-gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp
+gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp gen-device-rp
 ifneq ($(STM32), 0)
 gen-device: gen-device-stm32
 endif
@@ -150,6 +150,9 @@ gen-device-stm32: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/tinygo-org/stm32-svd lib/stm32-svd/svd src/device/stm32/
 	GO111MODULE=off $(GO) fmt ./src/device/stm32
 
+gen-device-rp: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/RaspberryPi lib/cmsis-svd/data/RaspberryPi/ src/device/rp/
+	GO111MODULE=off $(GO) fmt ./src/device/rp
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/llvm:
@@ -350,6 +353,8 @@ smoketest:
 	$(TINYGO) build -size short -o test.hex -target=feather-m4-can      examples/caninterrupt
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-nano33      examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pico       			examples/blinky1
 	@$(MD5SUM) test.hex
 	# test pwm
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0        examples/pwm
