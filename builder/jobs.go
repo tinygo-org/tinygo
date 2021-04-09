@@ -65,12 +65,29 @@ func (job *compileJob) readyToRun() bool {
 	return true
 }
 
-// runJobs runs all the jobs indicated in the jobs slice and returns the error
-// of the first job that fails to run.
-// It runs all jobs in the order of the slice, as long as all dependencies have
-// already run. Therefore, if some jobs are preferred to run before others, they
-// should be ordered as such in this slice.
-func runJobs(jobs []*compileJob) error {
+// runJobs runs the indicated job and all its dependencies. For every job, all
+// the dependencies are run first. It returns the error of the first job that
+// fails.
+// It runs all jobs in the order of the dependencies slice, depth-first.
+// Therefore, if some jobs are preferred to run before others, they should be
+// ordered as such in the job dependencies.
+func runJobs(job *compileJob) error {
+	// Create a slice of jobs to run, where all dependencies are run in order.
+	jobs := []*compileJob{}
+	addedJobs := map[*compileJob]struct{}{}
+	var addJobs func(*compileJob)
+	addJobs = func(job *compileJob) {
+		if _, ok := addedJobs[job]; ok {
+			return
+		}
+		for _, dep := range job.dependencies {
+			addJobs(dep)
+		}
+		jobs = append(jobs, job)
+		addedJobs[job] = struct{}{}
+	}
+	addJobs(job)
+
 	// Create channels to communicate with the workers.
 	doneChan := make(chan *compileJob)
 	workerChan := make(chan *compileJob)

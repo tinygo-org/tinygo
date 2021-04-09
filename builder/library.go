@@ -46,15 +46,14 @@ func (l *Library) Load(target, tmpdir string) (path string, err error) {
 	if err != nil {
 		return "", err
 	}
-	jobs := append([]*compileJob{job}, job.dependencies...)
-	err = runJobs(jobs)
+	err = runJobs(job)
 	return job.result, err
 }
 
 // load returns a compile job to build this library file for the given target
 // and CPU. It may return a dummy compileJob if the library build is already
-// cached. The path is stored as job.result but is only valid if the job and
-// job.dependencies have been run.
+// cached. The path is stored as job.result but is only valid after the job has
+// been run.
 // The provided tmpdir will be used to store intermediary files and possibly the
 // output archive file, it is expected to be removed after use.
 func (l *Library) load(target, cpu, tmpdir string) (job *compileJob, err error) {
