@@ -124,11 +124,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		return err
 	}
 
-	// The slice of jobs that orchestrates most of the build.
-	// This is somewhat like an in-memory Makefile with each job being a
-	// Makefile target.
-	var jobs []*compileJob
-
 	// Create the *ssa.Program. This does not yet build the entire SSA of the
 	// program so it's pretty fast and doesn't need to be parallelized.
 	program := lprogram.LoadSSA()
@@ -311,7 +306,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				return os.Rename(f.Name(), bitcodePath)
 			},
 		}
-		jobs = append(jobs, job)
 		packageJobs = append(packageJobs, job)
 	}
 
@@ -402,14 +396,13 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			return nil
 		},
 	}
-	jobs = append(jobs, programJob)
 
 	// Check whether we only need to create an object file.
 	// If so, we don't need to link anything and will be finished quickly.
 	outext := filepath.Ext(outpath)
 	if outext == ".o" || outext == ".bc" || outext == ".ll" {
 		// Run jobs to produce the LLVM module.
-		err := runJobs(jobs)
+		err := runJobs(programJob)
 		if err != nil {
 			return err
 		}
@@ -450,7 +443,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			return ioutil.WriteFile(objfile, llvmBuf.Bytes(), 0666)
 		},
 	}
-	jobs = append(jobs, outputObjectFileJob)
 
 	// Prepare link command.
 	linkerDependencies := []*compileJob{outputObjectFileJob}
@@ -465,8 +457,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		if err != nil {
 			return err
 		}
-		jobs = append(jobs, job.dependencies...)
-		jobs = append(jobs, job)
 		linkerDependencies = append(linkerDependencies, job)
 	}
 
@@ -484,7 +474,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				return err
 			},
 		}
-		jobs = append(jobs, job)
 		linkerDependencies = append(linkerDependencies, job)
 	}
 
@@ -503,7 +492,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 					return err
 				},
 			}
-			jobs = append(jobs, job)
 			linkerDependencies = append(linkerDependencies, job)
 		}
 	}
@@ -521,9 +509,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		if err != nil {
 			return err
 		}
-		// The library needs to be compiled (cache miss).
-		jobs = append(jobs, job.dependencies...)
-		jobs = append(jobs, job)
 		linkerDependencies = append(linkerDependencies, job)
 	case "wasi-libc":
 		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
@@ -531,7 +516,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
 		}
 		job := dummyCompileJob(path)
-		jobs = append(jobs, job)
 		linkerDependencies = append(linkerDependencies, job)
 	case "":
 		// no library specified, so nothing to do
@@ -574,7 +558,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 
 	// Create a linker job, which links all object files together and does some
 	// extra stuff that can only be done after linking.
-	jobs = append(jobs, &compileJob{
+	linkJob := &compileJob{
 		description:  "link",
 		dependencies: linkerDependencies,
 		run: func(job *compileJob) error {
@@ -647,12 +631,12 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 
 			return nil
 		},
-	})
+	}
 
 	// Run all jobs to compile and link the program.
 	// Do this now (instead of after elf-to-hex and similar conversions) as it
 	// is simpler and cannot be parallelized.
-	err = runJobs(jobs)
+	err = runJobs(linkJob)
 	if err != nil {
 		return err
 	}
