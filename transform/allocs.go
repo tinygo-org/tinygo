@@ -43,6 +43,18 @@ func OptimizeAllocs(mod llvm.Module) {
 			continue
 		}
 
+		if size == 0 {
+			// If the size is 0, the pointer is allowed to alias other
+			// zero-sized pointers. Use the pointer to the global that would
+			// also be returned by runtime.alloc.
+			zeroSizedAlloc := mod.NamedGlobal("runtime.zeroSizedAlloc")
+			if !zeroSizedAlloc.IsNil() {
+				heapalloc.ReplaceAllUsesWith(zeroSizedAlloc)
+				heapalloc.EraseFromParentAsInstruction()
+			}
+			continue
+		}
+
 		// In general the pattern is:
 		//     %0 = call i8* @runtime.alloc(i32 %size)
 		//     %1 = bitcast i8* %0 to type*

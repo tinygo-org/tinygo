@@ -1,6 +1,8 @@
 target datalayout = "e-m:e-p:32:32-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "armv7m-none-eabi"
 
+@runtime.zeroSizedAlloc = internal global i8 0, align 1
+
 declare nonnull i8* @runtime.alloc(i32)
 
 define void @testInt() {
@@ -63,6 +65,12 @@ loop:                                             ; preds = %loop, %entry
   br i1 %1, label %loop, label %end
 
 end:                                              ; preds = %loop
+  ret void
+}
+
+define void @testZeroSizedAlloc() {
+  %1 = bitcast i8* @runtime.zeroSizedAlloc to i32*
+  %2 = call i32* @noescapeIntPtr(i32* %1)
   ret void
 }
 
