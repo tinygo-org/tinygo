@@ -11,6 +11,9 @@ MEMORY
     RAM (xrw)       : ORIGIN = 0x80100000, LENGTH = 0x100000
 }
 
+# Allocate 'Persistent RAM' from regular RAM (some chips have specific PRAM)
+REGION_ALIAS("PRAM", RAM);
+
 _stack_size = 2K;
 
 INCLUDE "targets/riscv.ld"

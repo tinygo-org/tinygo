@@ -9,6 +9,9 @@ MEMORY
     RAM (rwx)       : ORIGIN = 0x1FFF0000, LENGTH = 256K
 }
 
+# Allocate 'Persistent RAM' from regular RAM (some chips have specific PRAM)
+REGION_ALIAS("PRAM", RAM);
+
 _stack_size = 2K;
 
 /* define output sections */

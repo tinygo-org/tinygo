@@ -709,11 +709,11 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 		member := pkg.Members[name]
 		switch member := member.(type) {
 		case *ssa.Function:
+			// Create the function definition.
+			b := newBuilder(c, irbuilder, member)
 			if member.Blocks == nil {
 				continue // external function
 			}
-			// Create the function definition.
-			b := newBuilder(c, irbuilder, member)
 			b.createFunction()
 		case *ssa.Type:
 			if types.IsInterface(member.Type()) {
@@ -752,10 +752,13 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 		case *ssa.Global:
 			// Global variable.
 			info := c.getGlobalInfo(member)
+			global := c.getGlobal(member)
 			if !info.extern {
-				global := c.getGlobal(member)
 				global.SetInitializer(llvm.ConstNull(global.Type().ElementType()))
 				global.SetVisibility(llvm.HiddenVisibility)
+				if info.section != "" {
+					global.SetSection(info.section)
+				}
 			}
 		}
 	}
@@ -780,6 +783,9 @@ func (b *builder) createFunction() {
 	if !b.info.exported {
 		b.llvmFn.SetVisibility(llvm.HiddenVisibility)
 		b.llvmFn.SetUnnamedAddr(true)
+	}
+	if b.info.section != "" {
+		b.llvmFn.SetSection(b.info.section)
 	}
 	if b.info.exported && strings.HasPrefix(b.Triple, "wasm") {
 		// Set the exported name. This is necessary for WebAssembly because

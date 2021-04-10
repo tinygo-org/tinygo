@@ -14,6 +14,9 @@ MEMORY
 
     /* Instruction RAM. */
     IRAM  (x)  : ORIGIN = 0x40080000, LENGTH = 128K /* Internal SRAM 0 */
+
+    /* Persistent RAM.  Data storage across low-power states */
+    PRAM  (rw) : ORIGIN = 0x3FF80000, LENGTH = 8K /* RTC FAST Memory */
 }
 
 /* The entry point. It is set in the image flashed to the chip, so must be
@@ -45,6 +48,15 @@ SECTIONS
         _stack_top = .;
     } >DRAM
 
+    /* Persistent RAM that is not re-initialized on wake-from-sleep. */
+    .persist (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.persist)
+        *(.persist.*)
+        . = ALIGN(4);
+    } >PRAM
+    
     /* Constant global variables.
      * They are loaded in DRAM for ease of use. Eventually they should be stored
      * in flash and loaded directly from there but they're kept in RAM to make
