@@ -1,6 +1,8 @@
 target datalayout = "e-m:e-p:32:32-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "armv7m-none-eabi"
 
+@runtime.zeroSizedAlloc = internal global i8 0, align 1
+
 declare nonnull i8* @runtime.alloc(i32)
 
 ; Test allocating a single int (i32) that should be allocated on the stack.
@@ -65,6 +67,14 @@ loop:
   %3 = icmp eq i32* null, %2
   br i1 %3, label %loop, label %end
 end:
+  ret void
+}
+
+; Test a zero-sized allocation.
+define void @testZeroSizedAlloc() {
+  %1 = call i8* @runtime.alloc(i32 0)
+  %2 = bitcast i8* %1 to i32*
+  %3 = call i32* @noescapeIntPtr(i32* %2)
   ret void
 }
 
