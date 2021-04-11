@@ -182,3 +182,67 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_TIM1EN)
 	}
 }
+
+//---------- SPI related types and code
+
+// SPI on the STM32Fxxx using MODER / alternate function pins
+type SPI struct {
+	Bus             *stm32.SPI_Type
+	AltFuncSelector uint8
+}
+
+func (spi SPI) config8Bits() {
+	// Set rx threshold to 8-bits, so RXNE flag is set for 1 byte
+	// (common STM32 SPI implementation does 8-bit transfers only)
+	spi.Bus.CR2.SetBits(stm32.SPI_CR2_FRXTH)
+}
+
+// Set baud rate for SPI
+func (spi SPI) getBaudRate(config SPIConfig) uint32 {
+	var conf uint32
+
+	// Default
+	if config.Frequency == 0 {
+		config.Frequency = 4e6
+	}
+
+	localFrequency := config.Frequency
+
+	// set frequency dependent on PCLK prescaler. Since these are rather weird
+	// speeds due to the CPU freqency, pick a range up to that frquency for
+	// clients to use more human-understandable numbers, e.g. nearest 100KHz
+
+	// These are based on 80MHz peripheral clock frquency
+	switch {
+	case localFrequency < 312500:
+		conf = stm32.SPI_CR1_BR_Div256
+	case localFrequency < 625000:
+		conf = stm32.SPI_CR1_BR_Div128
+	case localFrequency < 1250000:
+		conf = stm32.SPI_CR1_BR_Div64
+	case localFrequency < 2500000:
+		conf = stm32.SPI_CR1_BR_Div32
+	case localFrequency < 5000000:
+		conf = stm32.SPI_CR1_BR_Div16
+	case localFrequency < 10000000:
+		conf = stm32.SPI_CR1_BR_Div8
+		// NOTE: many SPI components won't operate reliably (or at all) above 10MHz
+		// Check the datasheet of the part
+	case localFrequency < 20000000:
+		conf = stm32.SPI_CR1_BR_Div4
+	case localFrequency < 40000000:
+		conf = stm32.SPI_CR1_BR_Div2
+	default:
+		// None of the specific baudrates were selected; choose the lowest speed
+		conf = stm32.SPI_CR1_BR_Div256
+	}
+
+	return conf << stm32.SPI_CR1_BR_Pos
+}
+
+// Configure SPI pins for input output and clock
+func (spi SPI) configurePins(config SPIConfig) {
+	config.SCK.ConfigureAltFunc(PinConfig{Mode: PinModeSPICLK}, spi.AltFuncSelector)
+	config.SDO.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDO}, spi.AltFuncSelector)
+	config.SDI.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDI}, spi.AltFuncSelector)
+}

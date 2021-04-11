@@ -184,6 +184,10 @@ type SPI struct {
 	AltFuncSelector uint8
 }
 
+func (spi SPI) config8Bits() {
+	// no-op on this series
+}
+
 // Set baud rate for SPI
 func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 	var conf uint32
