@@ -46,6 +46,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		var references llvm.Value
 		var length int64
 		var methodSet llvm.Value
+		var ptrTo llvm.Value
 		switch typ := typ.(type) {
 		case *types.Named:
 			references = c.getTypeCode(typ.Underlying())
@@ -69,22 +70,25 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		if _, ok := typ.Underlying().(*types.Interface); !ok {
 			methodSet = c.getTypeMethodSet(typ)
 		}
-		if !references.IsNil() || length != 0 || !methodSet.IsNil() {
-			// Set the 'references' field of the runtime.typecodeID struct.
-			globalValue := llvm.ConstNull(global.Type().ElementType())
-			if !references.IsNil() {
-				globalValue = llvm.ConstInsertValue(globalValue, references, []uint32{0})
-			}
-			if length != 0 {
-				lengthValue := llvm.ConstInt(c.uintptrType, uint64(length), false)
-				globalValue = llvm.ConstInsertValue(globalValue, lengthValue, []uint32{1})
-			}
-			if !methodSet.IsNil() {
-				globalValue = llvm.ConstInsertValue(globalValue, methodSet, []uint32{2})
-			}
-			global.SetInitializer(globalValue)
-			global.SetLinkage(llvm.LinkOnceODRLinkage)
+		if _, ok := typ.Underlying().(*types.Pointer); !ok {
+			ptrTo = c.getTypeCode(types.NewPointer(typ))
 		}
+		globalValue := llvm.ConstNull(global.Type().ElementType())
+		if !references.IsNil() {
+			globalValue = llvm.ConstInsertValue(globalValue, references, []uint32{0})
+		}
+		if length != 0 {
+			lengthValue := llvm.ConstInt(c.uintptrType, uint64(length), false)
+			globalValue = llvm.ConstInsertValue(globalValue, lengthValue, []uint32{1})
+		}
+		if !methodSet.IsNil() {
+			globalValue = llvm.ConstInsertValue(globalValue, methodSet, []uint32{2})
+		}
+		if !ptrTo.IsNil() {
+			globalValue = llvm.ConstInsertValue(globalValue, ptrTo, []uint32{3})
+		}
+		global.SetInitializer(globalValue)
+		global.SetLinkage(llvm.LinkOnceODRLinkage)
 		global.SetGlobalConstant(true)
 	}
 	return global

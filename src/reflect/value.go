@@ -724,8 +724,14 @@ func Zero(typ Type) Value {
 	panic("unimplemented: reflect.Zero()")
 }
 
+// New is the reflect equivalent of the new(T) keyword, returning a pointer to a
+// new value of the given type.
 func New(typ Type) Value {
-	panic("unimplemented: reflect.New()")
+	return Value{
+		typecode: PtrTo(typ).(rawType),
+		value:    alloc(typ.Size()),
+		flags:    valueFlagExported,
+	}
 }
 
 type funcHeader struct {
@@ -755,6 +761,9 @@ func (e *ValueError) Error() string {
 // Calls to this function are converted to LLVM intrinsic calls such as
 // llvm.memcpy.p0i8.p0i8.i32().
 func memcpy(dst, src unsafe.Pointer, size uintptr)
+
+//go:linkname alloc runtime.alloc
+func alloc(size uintptr) unsafe.Pointer
 
 // Copy copies the contents of src into dst until either
 // dst has been filled or src has been exhausted.

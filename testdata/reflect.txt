@@ -321,6 +321,31 @@ reflect type: ptr
     embedded: false
     reflect type: int addrable=true
       int: 42
+reflect type: ptr
+  pointer: true int8
+  nil: false
+  reflect type: int8 settable=true addrable=true
+    int: 5
+reflect type: ptr
+  pointer: true int16
+  nil: false
+  reflect type: int16 settable=true addrable=true
+    int: -800
+reflect type: ptr
+  pointer: true int32
+  nil: false
+  reflect type: int32 settable=true addrable=true
+    int: 100000000
+reflect type: ptr
+  pointer: true int64
+  nil: false
+  reflect type: int64 settable=true addrable=true
+    int: -1000000000000
+reflect type: ptr
+  pointer: true complex128
+  nil: false
+  reflect type: complex128 settable=true addrable=true
+    complex: (-8.000000e+000-2.000000e+006i)
 
 sizes:
 int8 1 8
