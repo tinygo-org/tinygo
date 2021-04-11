@@ -54,7 +54,7 @@ func (d FramebufDisplay) Size() (x, y int16) {
 }
 
 func (d FramebufDisplay) SetPixel(x, y int16, c color.RGBA) {
-	d.port[y][x].Set(uint16(c.R)&0x1f | uint16(c.G)&0x1f<<5 | uint16(c.B)&0x1f<<10)
+	d.port[y][x].Set((uint16(c.R) >> 3) | ((uint16(c.G) >> 3) << 5) | ((uint16(c.B) >> 3) << 10))
 }
 
 func (d FramebufDisplay) Display() error {
