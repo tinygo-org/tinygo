@@ -112,6 +112,11 @@ type typecodeID struct {
 	length uintptr
 
 	methodSet *interfaceMethodInfo // nil or a GEP of an array
+
+	// The type that's a pointer to this type, nil if it is already a pointer.
+	// Keeping the type struct alive here is important so that values from
+	// reflect.New (which uses reflect.PtrTo) can be used in type asserts etc.
+	ptrTo *typecodeID
 }
 
 // structField is used by the compiler to pass information to the interface

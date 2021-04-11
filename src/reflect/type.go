@@ -322,6 +322,9 @@ func TypeOf(i interface{}) Type {
 }
 
 func PtrTo(t Type) Type {
+	if t.Kind() == Ptr {
+		panic("reflect: cannot make **T type")
+	}
 	ptrType := t.(rawType)<<5 | 5 // 0b0101 == 5
 	if ptrType>>5 != t {
 		panic("reflect: PtrTo type does not fit")

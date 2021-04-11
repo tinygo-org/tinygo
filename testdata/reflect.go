@@ -124,6 +124,21 @@ func main() {
 		showValue(reflect.ValueOf(v), "")
 	}
 
+	// Test reflect.New().
+	newInt8 := reflect.New(reflect.TypeOf(int8(0)))
+	newInt8.Elem().SetInt(5)
+	newInt16 := reflect.New(reflect.TypeOf(int16(0)))
+	newInt16.Elem().SetInt(-800)
+	newInt32 := reflect.New(reflect.TypeOf(int32(0)))
+	newInt32.Elem().SetInt(1e8)
+	newInt64 := reflect.New(reflect.TypeOf(int64(0)))
+	newInt64.Elem().SetInt(-1e12)
+	newComplex128 := reflect.New(reflect.TypeOf(0 + 0i))
+	newComplex128.Elem().SetComplex(-8 - 20e5i)
+	for _, val := range []reflect.Value{newInt8, newInt16, newInt32, newInt64, newComplex128} {
+		showValue(val, "")
+	}
+
 	// test sizes
 	println("\nsizes:")
 	for _, tc := range []struct {
