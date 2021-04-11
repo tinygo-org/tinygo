@@ -1,18 +1,7 @@
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
 target triple = "wasm32-unknown-unknown-wasm"
 
-%runtime.typecodeID = type { %runtime.typecodeID*, i32 }
-%runtime.funcValueWithSignature = type { i32, %runtime.typecodeID* }
-
-@"reflect/types.type:func:{basic:uint8}{}" = external constant %runtime.typecodeID
-@"reflect/types.type:func:{basic:int}{}" = external constant %runtime.typecodeID
-@"reflect/types.type:func:{}{basic:uint32}" = external constant %runtime.typecodeID
-@"func1Uint8$withSignature" = constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i8, i8*, i8*)* @func1Uint8 to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:uint8}{}" }
-@"func2Uint8$withSignature" = constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i8, i8*, i8*)* @func2Uint8 to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:uint8}{}" }
-@"main$withSignature" = constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i32, i8*, i8*)* @"main$1" to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:int}{}" }
-@"main$2$withSignature" = constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i32, i8*, i8*)* @"main$2" to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:int}{}" }
-
-declare i32 @runtime.getFuncPtr(i8*, i32, %runtime.typecodeID*, i8*, i8*)
+declare i32 @runtime.getFuncPtr(i8*, i32, i8*, i8*, i8*)
 
 declare void @"internal/task.start"(i32, i8*, i32, i8*, i8*)
 

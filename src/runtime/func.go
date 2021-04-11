@@ -16,13 +16,13 @@ type funcValue struct {
 
 // funcValueWithSignature is used before the func lowering pass.
 type funcValueWithSignature struct {
-	funcPtr   uintptr     // ptrtoint of the actual function pointer
-	signature *typecodeID // pointer to identify this signature (the value is undef)
+	funcPtr   uintptr // ptrtoint of the actual function pointer
+	signature *uint8  // external *i8 with a name identifying the function signature
 }
 
 // getFuncPtr is a dummy function that may be used if the func lowering pass is
 // not used. It is generally too slow but may be a useful fallback to debug the
 // func lowering pass.
-func getFuncPtr(val funcValue, signature *typecodeID) uintptr {
+func getFuncPtr(val funcValue, signature *uint8) uintptr {
 	return (*funcValueWithSignature)(unsafe.Pointer(val.id)).funcPtr
 }

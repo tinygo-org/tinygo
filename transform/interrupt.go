@@ -132,11 +132,11 @@ func LowerInterrupts(mod llvm.Module, sizeLevel int) []error {
 				errs = append(errs, errorAt(global, "internal error: expected a global for func lowering"))
 				continue
 			}
-			initializer := global.Initializer()
-			if initializer.Type() != mod.GetTypeByName("runtime.funcValueWithSignature") {
-				errs = append(errs, errorAt(global, "internal error: func lowering global has unexpected type"))
+			if !strings.HasSuffix(global.Name(), "$withSignature") {
+				errs = append(errs, errorAt(global, "internal error: func lowering global has unexpected name: "+global.Name()))
 				continue
 			}
+			initializer := global.Initializer()
 			ptrtoint := llvm.ConstExtractValue(initializer, []uint32{0})
 			if ptrtoint.IsAConstantExpr().IsNil() || ptrtoint.Opcode() != llvm.PtrToInt {
 				errs = append(errs, errorAt(global, "internal error: func lowering global has unexpected func ptr type"))

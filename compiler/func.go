@@ -25,14 +25,13 @@ func (c *compilerContext) createFuncValue(builder llvm.Builder, funcPtr, context
 		// Closure is: {context, function pointer}
 		funcValueScalar = funcPtr
 	case "switch":
-		sigGlobal := c.getTypeCode(sig)
 		funcValueWithSignatureGlobalName := funcPtr.Name() + "$withSignature"
 		funcValueWithSignatureGlobal := c.mod.NamedGlobal(funcValueWithSignatureGlobalName)
 		if funcValueWithSignatureGlobal.IsNil() {
 			funcValueWithSignatureType := c.getLLVMRuntimeType("funcValueWithSignature")
 			funcValueWithSignature := llvm.ConstNamedStruct(funcValueWithSignatureType, []llvm.Value{
 				llvm.ConstPtrToInt(funcPtr, c.uintptrType),
-				sigGlobal,
+				c.getFuncSignatureID(sig),
 			})
 			funcValueWithSignatureGlobal = llvm.AddGlobal(c.mod, funcValueWithSignatureType, funcValueWithSignatureGlobalName)
 			funcValueWithSignatureGlobal.SetInitializer(funcValueWithSignature)
@@ -48,6 +47,19 @@ func (c *compilerContext) createFuncValue(builder llvm.Builder, funcPtr, context
 	funcValue = builder.CreateInsertValue(funcValue, context, 0, "")
 	funcValue = builder.CreateInsertValue(funcValue, funcValueScalar, 1, "")
 	return funcValue
+}
+
+// getFuncSignatureID returns a new external global for a given signature. This
+// global reference is not real, it is only used during func lowering to assign
+// signature types to functions and will then be removed.
+func (c *compilerContext) getFuncSignatureID(sig *types.Signature) llvm.Value {
+	sigGlobalName := "reflect/types.funcid:" + getTypeCodeName(sig)
+	sigGlobal := c.mod.NamedGlobal(sigGlobalName)
+	if sigGlobal.IsNil() {
+		sigGlobal = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), sigGlobalName)
+		sigGlobal.SetGlobalConstant(true)
+	}
+	return sigGlobal
 }
 
 // extractFuncScalar returns some scalar that can be used in comparisons. It is
@@ -71,7 +83,7 @@ func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (f
 		funcPtr = b.CreateExtractValue(funcValue, 1, "")
 	case "switch":
 		llvmSig := b.getRawFuncType(sig)
-		sigGlobal := b.getTypeCode(sig)
+		sigGlobal := b.getFuncSignatureID(sig)
 		funcPtr = b.createRuntimeCall("getFuncPtr", []llvm.Value{funcValue, sigGlobal}, "")
 		funcPtr = b.CreateIntToPtr(funcPtr, llvmSig, "")
 	default:
