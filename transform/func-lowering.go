@@ -53,15 +53,14 @@ func LowerFuncValues(mod llvm.Module) {
 	uintptrType := ctx.IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8)
 
 	// Find all func values used in the program with their signatures.
-	funcValueWithSignaturePtr := llvm.PointerType(mod.GetTypeByName("runtime.funcValueWithSignature"), 0)
 	signatures := map[string]*funcSignatureInfo{}
 	for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
 		var sig, funcVal llvm.Value
 		switch {
-		case global.Type() == funcValueWithSignaturePtr:
+		case strings.HasSuffix(global.Name(), "$withSignature"):
 			sig = llvm.ConstExtractValue(global.Initializer(), []uint32{1})
 			funcVal = global
-		case strings.HasPrefix(global.Name(), "reflect/types.type:func:{"):
+		case strings.HasPrefix(global.Name(), "reflect/types.funcid:func:{"):
 			sig = global
 		default:
 			continue
@@ -196,6 +195,12 @@ func LowerFuncValues(mod llvm.Module) {
 			}
 			getFuncPtrCall.EraseFromParentAsInstruction()
 		}
+
+		// Clean up all globals used before func lowering.
+		for _, obj := range info.funcValueWithSignatures {
+			obj.EraseFromParentAsGlobal()
+		}
+		info.sig.EraseFromParentAsGlobal()
 	}
 }
 

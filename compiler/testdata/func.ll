@@ -3,12 +3,10 @@ source_filename = "func.go"
 target datalayout = "e-m:e-p:32:32-p270:32:32-p271:32:32-p272:64:64-f64:32:64-f80:32-n8:16:32-S128"
 target triple = "i686--linux"
 
-%runtime.typecodeID = type { %runtime.typecodeID*, i32, %runtime.interfaceMethodInfo* }
-%runtime.interfaceMethodInfo = type { i8*, i32 }
-%runtime.funcValueWithSignature = type { i32, %runtime.typecodeID* }
+%runtime.funcValueWithSignature = type { i32, i8* }
 
-@"reflect/types.type:func:{basic:int}{}" = linkonce_odr constant %runtime.typecodeID zeroinitializer
-@"main.someFunc$withSignature" = linkonce_odr constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i32, i8*, i8*)* @main.someFunc to i32), %runtime.typecodeID* @"reflect/types.type:func:{basic:int}{}" }
+@"reflect/types.funcid:func:{basic:int}{}" = external constant i8
+@"main.someFunc$withSignature" = linkonce_odr constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i32, i8*, i8*)* @main.someFunc to i32), i8* @"reflect/types.funcid:func:{basic:int}{}" }
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 
@@ -19,7 +17,7 @@ entry:
 
 define hidden void @main.foo(i8* %callback.context, i32 %callback.funcptr, i8* %context, i8* %parentHandle) unnamed_addr {
 entry:
-  %0 = call i32 @runtime.getFuncPtr(i8* %callback.context, i32 %callback.funcptr, %runtime.typecodeID* nonnull @"reflect/types.type:func:{basic:int}{}", i8* undef, i8* null)
+  %0 = call i32 @runtime.getFuncPtr(i8* %callback.context, i32 %callback.funcptr, i8* nonnull @"reflect/types.funcid:func:{basic:int}{}", i8* undef, i8* null)
   %1 = icmp eq i32 %0, 0
   br i1 %1, label %fpcall.throw, label %fpcall.next
 
@@ -33,7 +31,7 @@ fpcall.next:                                      ; preds = %entry
   ret void
 }
 
-declare i32 @runtime.getFuncPtr(i8*, i32, %runtime.typecodeID* dereferenceable_or_null(12), i8*, i8*)
+declare i32 @runtime.getFuncPtr(i8*, i32, i8* dereferenceable_or_null(1), i8*, i8*)
 
 declare void @runtime.nilPanic(i8*, i8*)
 
