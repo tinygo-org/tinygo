@@ -1,4 +1,4 @@
-// +build stm32,!stm32f7x2,!stm32l5x2,!stm32l4x2
+// +build stm32,!stm32f7x2,!stm32l5x2
 
 package machine
 
@@ -6,6 +6,7 @@ package machine
 
 import (
 	"device/stm32"
+	"runtime/volatile"
 	"unsafe"
 )
 
@@ -86,7 +87,12 @@ func (spi SPI) Configure(config SPIConfig) {
 
 	// now set the configuration
 	spi.Bus.CR1.Set(conf)
-	spi.Bus.CR2.SetBits((conf & stm32.SPI_CR1_SSM_Msk) >> 16)
+
+	// Series-specific configuration to set 8-bit transfer mode
+	spi.config8Bits()
+
+	// enable SPI
+	spi.Bus.CR1.SetBits(stm32.SPI_CR1_SPE)
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
@@ -103,8 +109,10 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	// 5. Wait until TXE=1 and then wait until BSY=0 before disabling the SPI.
 
 	// put output word (8-bit) in data register (DR), which is parallel-loaded
-	// into shift register, and shifted out on MOSI.
-	spi.Bus.DR.Set(uint32(w))
+	// into shift register, and shifted out on MOSI.  Some series have 16-bit
+	// register but writes must be strictly 8-bit to output a byte.  Writing
+	// 16-bits indicates a packed transfer (2 bytes).
+	(*volatile.Register8)(unsafe.Pointer(&spi.Bus.DR.Reg)).Set(w)
 
 	// wait for SPI bus receive buffer not empty bit (RXNE) to be set.
 	// warning: blocks forever until this condition is met.

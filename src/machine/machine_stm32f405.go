@@ -67,6 +67,10 @@ type SPI struct {
 	AltFuncSelector uint8
 }
 
+func (spi SPI) config8Bits() {
+	// no-op on this series
+}
+
 func (spi SPI) configurePins(config SPIConfig) {
 	config.SCK.ConfigureAltFunc(PinConfig{Mode: PinModeSPICLK}, spi.AltFuncSelector)
 	config.SDO.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDO}, spi.AltFuncSelector)
