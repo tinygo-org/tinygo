@@ -78,29 +78,6 @@ func initDCI(port int) (dci, status) {
 
 func (dc *deviceController) init() status {
 
-	dc.bus.BURSTSIZE.Set(0x0404)
-
-	// if dc.phy.PWD.HasBits((nxp.USBPHY_PWD_RXPWDRX | nxp.USBPHY_PWD_RXPWDDIFF |
-	// 	nxp.USBPHY_PWD_RXPWD1PT1 | nxp.USBPHY_PWD_RXPWDENV |
-	// 	nxp.USBPHY_PWD_TXPWDV2I | nxp.USBPHY_PWD_TXPWDIBIAS |
-	// 	nxp.USBPHY_PWD_TXPWDFS)) ||
-	// 	dc.bus.USBMODE.HasBits(nxp.USB_USBMODE_CM_Msk) {
-	// 	// reset controller if it was already enabled
-	// 	dc.phy.CTRL_SET.Set(nxp.USBPHY_CTRL_SFTRST)
-	// 	dc.bus.USBCMD.SetBits(nxp.USB_USBCMD_RST)
-	// 	for dc.bus.USBCMD.HasBits(nxp.USB_USBCMD_RST) {
-	// 	}
-	// 	// clear interrupts
-	// 	m := arm.DisableInterrupts()
-	// 	switch dc.port {
-	// 	case 0:
-	// 		arm.EnableInterrupts(m & ^uintptr(nxp.IRQ_USB_OTG1))
-	// 	case 1:
-	// 		arm.EnableInterrupts(m & ^uintptr(nxp.IRQ_USB_OTG2))
-	// 	}
-	// 	dc.phy.CTRL_CLR.Set(nxp.USBPHY_CTRL_SFTRST)
-	// }
-
 	// reset the controller
 	dc.phy.CTRL_SET.Set(nxp.USBPHY_CTRL_SFTRST)
 	dc.bus.USBCMD.SetBits(nxp.USB_USBCMD_RST)
@@ -126,7 +103,7 @@ func (dc *deviceController) init() status {
 	dc.bus.USBMODE.SetBits(nxp.USB_USBMODE_SLOM_Msk) // disable setup lockout
 	dc.bus.USBMODE.ClearBits(nxp.USB_USBMODE_ES_Msk) // use little-endianness
 
-	// configure ENDPOINTLISTADDR
+	// TODO: configure ENDPOINTLISTADDR
 
 	// enable interrupts
 	dc.bus.USBINTR.Set(
@@ -144,11 +121,14 @@ func (dc *deviceController) init() status {
 
 func (dc *deviceController) enable(enable bool) status {
 
-	dc.irq.SetPriority(dciInterruptPriority)
-	dc.irq.Enable()
-
-	dc.bus.USBCMD.SetBits(nxp.USB_USBCMD_RS)
-
+	if enable {
+		dc.irq.SetPriority(dciInterruptPriority)
+		dc.irq.Enable()
+		dc.bus.USBCMD.SetBits(nxp.USB_USBCMD_RS)
+	} else {
+		dc.bus.USBCMD.ClearBits(nxp.USB_USBCMD_RS)
+		dc.irq.Disable()
+	}
 	return statusOK
 }
 
