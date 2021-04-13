@@ -38,7 +38,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -406,55 +405,6 @@ func (p *lowerInterfacesPass) getSignature(name string, global llvm.Value) *sign
 		}
 	}
 	return p.signatures[name]
-}
-
-// replaceInvokeWithCall replaces a runtime.interfaceMethod + inttoptr with a
-// concrete method. This can be done when only one type implements the
-// interface.
-func (p *lowerInterfacesPass) replaceInvokeWithCall(use llvm.Value, typ *typeInfo, signature *signatureInfo) error {
-	inttoptrs := getUses(use)
-	if len(inttoptrs) != 1 || inttoptrs[0].IsAIntToPtrInst().IsNil() {
-		return errorAt(use, "internal error: expected exactly one inttoptr use of runtime.interfaceMethod")
-	}
-	inttoptr := inttoptrs[0]
-	function := typ.getMethod(signature).function
-	if inttoptr.Type() == function.Type() {
-		// Easy case: the types are the same. Simply replace the inttoptr
-		// result (which is directly called) with the actual function.
-		inttoptr.ReplaceAllUsesWith(function)
-	} else {
-		// Harder case: the type is not actually the same. Go through each call
-		// (of which there should be only one), extract the receiver params for
-		// this call and replace the call with a direct call to the target
-		// function.
-		for _, call := range getUses(inttoptr) {
-			if call.IsACallInst().IsNil() || call.CalledValue() != inttoptr {
-				return errorAt(call, "internal error: expected the inttoptr to be called as a method, this is not a method call")
-			}
-			operands := make([]llvm.Value, call.OperandsCount()-1)
-			for i := range operands {
-				operands[i] = call.Operand(i)
-			}
-			paramTypes := function.Type().ElementType().ParamTypes()
-			receiverParamTypes := paramTypes[:len(paramTypes)-(len(operands)-1)]
-			methodParamTypes := paramTypes[len(paramTypes)-(len(operands)-1):]
-			for i, methodParamType := range methodParamTypes {
-				if methodParamType != operands[i+1].Type() {
-					return errorAt(call, "internal error: expected method call param type and function param type to be the same")
-				}
-			}
-			p.builder.SetInsertPointBefore(call)
-			receiverParams := llvmutil.EmitPointerUnpack(p.builder, p.mod, operands[0], receiverParamTypes)
-			result := p.builder.CreateCall(function, append(receiverParams, operands[1:]...), "")
-			if result.Type().TypeKind() != llvm.VoidTypeKind {
-				call.ReplaceAllUsesWith(result)
-			}
-			call.EraseFromParentAsInstruction()
-		}
-	}
-	inttoptr.EraseFromParentAsInstruction()
-	use.EraseFromParentAsInstruction()
-	return nil
 }
 
 // getInterfaceImplementsFunc returns a function that checks whether a given
