@@ -55,9 +55,11 @@ const (
 	gpioPullMask     = 0x3
 
 	// OSPEED bitfields.
-	gpioOutputSpeedHigh = 2
-	gpioOutputSpeedLow  = 0
-	gpioOutputSpeedMask = 0x3
+	gpioOutputSpeedVeryHigh = 3
+	gpioOutputSpeedHigh     = 2
+	gpioOutputSpeedMedium   = 1
+	gpioOutputSpeedLow      = 0
+	gpioOutputSpeedMask     = 0x3
 )
 
 // Configure this pin with the given configuration
@@ -120,7 +122,7 @@ func (p Pin) ConfigureAltFunc(config PinConfig, altFunc uint8) {
 	// SPI
 	case PinModeSPICLK:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
-		port.OSPEEDR.ReplaceBits(gpioOutputSpeedLow, gpioOutputSpeedMask, pos)
+		port.OSPEEDR.ReplaceBits(gpioOutputSpeedHigh, gpioOutputSpeedMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 		p.SetAltFunc(altFunc)
 	case PinModeSPISDO:
