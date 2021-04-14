@@ -5,11 +5,6 @@ package machine
 // The micro:bit does not have a 32kHz crystal on board.
 const HasLowFrequencyCrystal = false
 
-const (
-	LED  = P13
-	LED1 = LED
-)
-
 // Buttons on the micro:bit v2 (A and B)
 const (
 	BUTTON  Pin = BUTTONA
