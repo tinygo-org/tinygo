@@ -31,7 +31,6 @@ type TargetSpec struct {
 	BuildTags        []string `json:"build-tags"`
 	GC               string   `json:"gc"`
 	Scheduler        string   `json:"scheduler"`
-	Compiler         string   `json:"compiler"`
 	Linker           string   `json:"linker"`
 	RTLib            string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
 	Libc             string   `json:"libc"`
@@ -244,7 +243,6 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		GOOS:      goos,
 		GOARCH:    goarch,
 		BuildTags: []string{goos, goarch},
-		Compiler:  "clang",
 		Linker:    "cc",
 		CFlags:    []string{"--target=" + triple},
 		GDB:       []string{"gdb"},

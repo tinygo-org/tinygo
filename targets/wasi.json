@@ -3,7 +3,6 @@
 	"build-tags":    ["wasm", "wasi"],
 	"goos":          "linux",
 	"goarch":        "arm",
-	"compiler":      "clang",
 	"linker":        "wasm-ld",
 	"libc":          "wasi-libc",
 	"cflags": [

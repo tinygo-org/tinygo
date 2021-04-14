@@ -494,7 +494,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		job := &compileJob{
 			description: "compile extra file " + path,
 			run: func(job *compileJob) error {
-				result, err := compileAndCacheCFile(abspath, dir, config.CFlags(), config)
+				result, err := compileAndCacheCFile(abspath, dir, config.CFlags(), config.Options.PrintCommands)
 				job.result = result
 				return err
 			},
@@ -513,7 +513,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			job := &compileJob{
 				description: "compile CGo file " + abspath,
 				run: func(job *compileJob) error {
-					result, err := compileAndCacheCFile(abspath, dir, pkg.CFlags, config)
+					result, err := compileAndCacheCFile(abspath, dir, pkg.CFlags, config.Options.PrintCommands)
 					job.result = result
 					return err
 				},

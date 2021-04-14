@@ -17,7 +17,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 	"tinygo.org/x/go-llvm"
 )
@@ -57,7 +56,7 @@ import (
 //   depfile but without invalidating its name. For this reason, the depfile is
 //   written on each new compilation (even when it seems unnecessary). However, it
 //   could in rare cases lead to a stale file fetched from the cache.
-func compileAndCacheCFile(abspath, tmpdir string, cflags []string, config *compileopts.Config) (string, error) {
+func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands bool) (string, error) {
 	// Hash input file.
 	fileHash, err := hashFile(abspath)
 	if err != nil {
@@ -68,14 +67,12 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, config *compi
 	buf, err := json.Marshal(struct {
 		Path        string
 		Hash        string
-		Compiler    string
 		Flags       []string
 		LLVMVersion string
 	}{
 		Path:        abspath,
 		Hash:        fileHash,
-		Compiler:    config.Target.Compiler,
-		Flags:       config.CFlags(),
+		Flags:       cflags,
 		LLVMVersion: llvm.Version,
 	})
 	if err != nil {
@@ -131,10 +128,10 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, config *compi
 		// flags (for the assembler) is a compiler error.
 		flags = append(flags, "-Qunused-arguments")
 	}
-	if config.Options.PrintCommands {
-		fmt.Printf("%s %s\n", config.Target.Compiler, strings.Join(flags, " "))
+	if printCommands {
+		fmt.Printf("clang %s\n", strings.Join(flags, " "))
 	}
-	err = runCCompiler(config.Target.Compiler, flags...)
+	err = runCCompiler(flags...)
 	if err != nil {
 		return "", &commandError{"failed to build", abspath, err}
 	}
