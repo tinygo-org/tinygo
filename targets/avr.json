@@ -3,7 +3,6 @@
 	"build-tags": ["avr", "baremetal", "linux", "arm"],
 	"goos": "linux",
 	"goarch": "arm",
-	"compiler": "clang",
 	"gc": "conservative",
 	"linker": "avr-gcc",
 	"scheduler": "none",

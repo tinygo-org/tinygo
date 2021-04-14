@@ -4,7 +4,6 @@
 	"build-tags": ["gameboyadvance", "arm7tdmi", "baremetal", "linux", "arm"],
 	"goos": "linux",
 	"goarch": "arm",
-	"compiler": "clang",
 	"linker": "ld.lld",
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",

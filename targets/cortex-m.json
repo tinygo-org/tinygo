@@ -2,7 +2,6 @@
 	"build-tags": ["cortexm", "baremetal", "linux", "arm"],
 	"goos": "linux",
 	"goarch": "arm",
-	"compiler": "clang",
 	"gc": "conservative",
 	"scheduler": "tasks",
 	"linker": "ld.lld",

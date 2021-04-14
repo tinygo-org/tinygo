@@ -136,7 +136,7 @@ func (l *Library) load(target, cpu, tmpdir string) (job *compileJob, err error) 
 				var compileArgs []string
 				compileArgs = append(compileArgs, args...)
 				compileArgs = append(compileArgs, "-o", objpath, srcpath)
-				err := runCCompiler("clang", compileArgs...)
+				err := runCCompiler(compileArgs...)
 				if err != nil {
 					return &commandError{"failed to build", srcpath, err}
 				}

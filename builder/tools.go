@@ -9,8 +9,8 @@ import (
 )
 
 // runCCompiler invokes a C compiler with the given arguments.
-func runCCompiler(command string, flags ...string) error {
-	if hasBuiltinTools && command == "clang" {
+func runCCompiler(flags ...string) error {
+	if hasBuiltinTools {
 		// Compile this with the internal Clang compiler.
 		headerPath := getClangHeaderPath(goenv.Get("TINYGOROOT"))
 		if headerPath == "" {
@@ -23,17 +23,8 @@ func runCCompiler(command string, flags ...string) error {
 		return cmd.Run()
 	}
 
-	// Running some other compiler. Maybe it has been defined in the
-	// commands map (unlikely).
-	if cmdNames, ok := commands[command]; ok {
-		return execCommand(cmdNames, flags...)
-	}
-
-	// Alternatively, run the compiler directly.
-	cmd := exec.Command(command, flags...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	// Compile this with an external invocation of the Clang compiler.
+	return execCommand(commands["clang"], flags...)
 }
 
 // link invokes a linker with the given name and flags.

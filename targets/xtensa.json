@@ -5,7 +5,6 @@
 	"build-tags": ["xtensa", "baremetal", "linux", "arm"],
 	"gc": "conservative",
 	"scheduler": "none",
-	"compiler": "clang",
 	"cflags": [
 		"--target=xtensa",
 		"-Oz",
