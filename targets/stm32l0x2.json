@@ -1,15 +1,11 @@
 {
     "inherits": [
-        "cortex-m"
+        "cortex-m0plus"
     ],
-    "llvm-target": "armv6m-none-eabi",
     "build-tags": [
         "stm32l0",
         "stm32l0x2",
         "stm32"
-    ],
-    "cflags": [
-        "--target=armv6m-none-eabi"
     ],
     "extra-files": [
         "src/device/stm32/stm32l0x2.s"
