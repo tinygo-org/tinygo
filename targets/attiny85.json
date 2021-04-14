@@ -4,8 +4,7 @@
 	"build-tags": ["attiny85", "attiny", "avr2", "avr25"],
 	"cflags": [
 		"-mmcu=attiny85",
-		"-D__AVR_ARCH__=25",
-		"-Qunused-arguments"
+		"-D__AVR_ARCH__=25"
 	],
 	"ldflags": [
 		"-mmcu=avr25"

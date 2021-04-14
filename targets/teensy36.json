@@ -5,7 +5,6 @@
 	"build-tags": ["teensy36", "teensy", "mk66f18", "nxp"],
 	"cflags": [
 		"--target=armv7em-none-eabi",
-		"-Qunused-arguments",
 		"-mfloat-abi=hard",
 		"-mfpu=fpv4-sp-d16"
 	],

@@ -15,7 +15,6 @@
     "-mcpu=cortex-a57",
     "-fPIE",
     "-Werror",
-    "-Qunused-arguments",
     "-fshort-enums",
     "-fomit-frame-pointer",
     "-fno-exceptions", "-fno-unwind-tables",

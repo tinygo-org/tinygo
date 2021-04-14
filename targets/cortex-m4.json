@@ -3,7 +3,6 @@
 	"llvm-target": "armv7em-none-eabi",
 	"cflags": [
 		"--target=armv7em-none-eabi",
-		"-mfloat-abi=soft",
-		"-Qunused-arguments"
+		"-mfloat-abi=soft"
 	]
 }

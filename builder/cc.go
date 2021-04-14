@@ -124,6 +124,13 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, config *compi
 	flags := append([]string{}, cflags...)                                   // copy cflags
 	flags = append(flags, "-MD", "-MV", "-MTdeps", "-MF", depTmpFile.Name()) // autogenerate dependencies
 	flags = append(flags, "-c", "-o", objTmpFile.Name(), abspath)
+	if strings.ToLower(filepath.Ext(abspath)) == ".s" {
+		// If this is an assembly file (.s or .S, lowercase or uppercase), then
+		// we'll need to add -Qunused-arguments because many parameters are
+		// relevant to C, not assembly. And with -Werror, having meaningless
+		// flags (for the assembler) is a compiler error.
+		flags = append(flags, "-Qunused-arguments")
+	}
 	if config.Options.PrintCommands {
 		fmt.Printf("%s %s\n", config.Target.Compiler, strings.Join(flags, " "))
 	}

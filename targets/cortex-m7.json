@@ -2,7 +2,6 @@
 	"inherits": ["cortex-m"],
 	"llvm-target": "armv7em-none-eabi",
 	"cflags": [
-		"--target=armv7em-none-eabi",
-		"-Qunused-arguments"
+		"--target=armv7em-none-eabi"
 	]
 }

@@ -9,7 +9,8 @@
 	"scheduler": "none",
 	"default-stack-size": 256,
 	"cflags": [
-		"--target=avr-unknown-unknown"
+		"--target=avr-unknown-unknown",
+		"-Werror"
 	],
 	"ldflags": [
 		"-T", "targets/avr.ld",

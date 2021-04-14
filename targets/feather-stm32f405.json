@@ -3,9 +3,6 @@
   "build-tags": ["feather_stm32f405", "stm32f405", "stm32f4", "stm32"],
   "automatic-stack-size": false,
   "default-stack-size": 1024,
-  "cflags": [
-    "-Qunused-arguments"
-  ],
   "linkerscript": "targets/stm32f405.ld",
   "extra-files": [
     "src/device/stm32/stm32f405.s"

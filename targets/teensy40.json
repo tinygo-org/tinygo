@@ -7,7 +7,6 @@
   "default-stack-size": 4096,
   "cflags": [
     "--target=armv7em-none-eabi",
-    "-Qunused-arguments",
     "-mfloat-abi=soft"
   ],
   "linkerscript": "targets/mimxrt1062-teensy40.ld",
