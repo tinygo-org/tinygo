@@ -3,8 +3,7 @@
   "llvm-target": "armv7m-none-eabi",
   "build-tags": ["nucleof103rb", "stm32f103", "stm32f1","stm32"],
   "cflags": [
-    "--target=armv7m-none-eabi",
-    "-Qunused-arguments"
+    "--target=armv7m-none-eabi"
   ],
   "linkerscript": "targets/stm32f103rb.ld",
   "extra-files": [

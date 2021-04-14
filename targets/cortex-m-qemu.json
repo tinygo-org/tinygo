@@ -3,8 +3,7 @@
 	"llvm-target": "armv7m-none-eabi",
 	"build-tags": ["qemu", "lm3s6965"],
 	"cflags": [
-		"--target=armv7m-none-eabi",
-		"-Qunused-arguments"
+		"--target=armv7m-none-eabi"
 	],
 	"linkerscript": "targets/lm3s6965.ld",
 	"extra-files": [

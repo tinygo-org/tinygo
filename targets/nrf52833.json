@@ -2,7 +2,6 @@
 	"inherits": ["cortex-m4"],
 	"build-tags": ["nrf52833", "nrf"],
 	"cflags": [
-		"-Qunused-arguments",
 		"-DNRF52833_XXAA",
 		"-I{root}/lib/CMSIS/CMSIS/Include",
 		"-I{root}/lib/nrfx/mdk"

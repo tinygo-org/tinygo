@@ -4,7 +4,6 @@
 	"build-tags": ["nrf51822", "nrf51", "nrf"],
 	"cflags": [
 		"--target=armv6m-none-eabi",
-		"-Qunused-arguments",
 		"-DNRF51",
 		"-I{root}/lib/CMSIS/CMSIS/Include",
 		"-I{root}/lib/nrfx/mdk"
