@@ -276,6 +276,15 @@
 						mem().setUint32(nwritten_ptr, nwritten, true);
 						return 0;
 					},
+					"proc_exit": (code) => {
+						if (global.process) {
+							// Node.js
+							process.exit(code);
+						} else {
+							// Can't exit in a browser.
+							throw 'trying to exit with code ' + code;
+						}
+					},
 				},
 				env: {
 					// func ticks() float64
@@ -287,17 +296,6 @@
 					"runtime.sleepTicks": (timeout) => {
 						// Do not sleep, only reactivate scheduler after the given timeout.
 						setTimeout(this._inst.exports.go_scheduler, timeout);
-					},
-
-					// func Exit(code int)
-					"syscall.Exit": (code) => {
-						if (global.process) {
-							// Node.js
-							process.exit(code);
-						} else {
-							// Can't exit in a browser.
-							throw 'trying to exit with code ' + code;
-						}
 					},
 
 					// func finalizeRef(v ref)
