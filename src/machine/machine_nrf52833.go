@@ -83,7 +83,8 @@ func (i2c *I2C) setPins(scl, sda Pin) {
 
 // PWM
 var (
-	pwmChannelPins     = [4]uint32{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF}
-	pwms               = [4]*nrf.PWM_Type{nrf.PWM0, nrf.PWM1, nrf.PWM2, nrf.PWM3}
-	pwmChannelSequence [4]uint16
+	PWM0 = &PWM{PWM: nrf.PWM0}
+	PWM1 = &PWM{PWM: nrf.PWM1}
+	PWM2 = &PWM{PWM: nrf.PWM2}
+	PWM3 = &PWM{PWM: nrf.PWM3}
 )
