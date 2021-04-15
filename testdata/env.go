@@ -5,10 +5,10 @@ import (
 )
 
 func main() {
-	println(os.Getenv("ENV1"))
+	println("ENV1:", os.Getenv("ENV1"))
 	v, ok := os.LookupEnv("ENV2")
 	if !ok {
-		panic("ENV2 not found")
+		println("ENV2 not found")
 	}
-	println(v)
+	println("ENV2:", v)
 }

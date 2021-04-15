@@ -62,6 +62,40 @@ func runMain() {
 	run()
 }
 
+//go:extern environ
+var environ *unsafe.Pointer
+
+//export strlen
+func strlen(ptr unsafe.Pointer) uintptr
+
+//go:linkname syscall_runtime_envs syscall.runtime_envs
+func syscall_runtime_envs() []string {
+	// Count how many environment variables there are.
+	env := environ
+	numEnvs := 0
+	for *env != nil {
+		numEnvs++
+		env = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(env)) + unsafe.Sizeof(environ)))
+	}
+
+	// Create a string slice of all environment variables.
+	// This requires just a single heap allocation.
+	env = environ
+	envs := make([]string, 0, numEnvs)
+	for *env != nil {
+		ptr := *env
+		length := strlen(ptr)
+		s := _string{
+			ptr:    (*byte)(ptr),
+			length: length,
+		}
+		envs = append(envs, *(*string)(unsafe.Pointer(&s)))
+		env = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(env)) + unsafe.Sizeof(environ)))
+	}
+
+	return envs
+}
+
 func putchar(c byte) {
 	_putchar(int(c))
 }

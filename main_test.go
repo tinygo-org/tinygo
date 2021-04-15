@@ -163,7 +163,7 @@ func runPlatTests(target string, tests []string, t *testing.T) {
 			runTest(name, target, t, nil)
 		})
 	}
-	if target == "wasi" || target == "" && runtime.GOOS == "darwin" {
+	if target == "wasi" || target == "" {
 		t.Run("filesystem.go", func(t *testing.T) {
 			t.Parallel()
 			runTest("filesystem.go", target, t, nil)
