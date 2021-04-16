@@ -127,7 +127,7 @@ func TestCompiler(t *testing.T) {
 			t.Parallel()
 			runTestWithConfig("stdlib.go", "", t, &compileopts.Options{
 				Opt: "1",
-			}, nil)
+			}, nil, nil)
 		})
 
 		// Test with only the bare minimum of optimizations enabled.
@@ -136,7 +136,7 @@ func TestCompiler(t *testing.T) {
 			t.Parallel()
 			runTestWithConfig("print.go", "", t, &compileopts.Options{
 				Opt: "0",
-			}, nil)
+			}, nil, nil)
 		})
 
 		t.Run("ldflags", func(t *testing.T) {
@@ -148,7 +148,7 @@ func TestCompiler(t *testing.T) {
 						"someGlobal": "foobar",
 					},
 				},
-			}, nil)
+			}, nil, nil)
 		})
 	})
 }
@@ -160,17 +160,17 @@ func runPlatTests(target string, tests []string, t *testing.T) {
 		name := name // redefine to avoid race condition
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			runTest(name, target, t, nil)
+			runTest(name, target, t, nil, nil)
 		})
 	}
 	if target == "wasi" || target == "" {
 		t.Run("filesystem.go", func(t *testing.T) {
 			t.Parallel()
-			runTest("filesystem.go", target, t, nil)
+			runTest("filesystem.go", target, t, nil, nil)
 		})
 		t.Run("env.go", func(t *testing.T) {
 			t.Parallel()
-			runTest("env.go", target, t, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
+			runTest("env.go", target, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
 		})
 	}
 }
@@ -187,7 +187,7 @@ func runBuild(src, out string, opts *compileopts.Options) error {
 	return Build(src, out, opts)
 }
 
-func runTest(name, target string, t *testing.T, environmentVars []string) {
+func runTest(name, target string, t *testing.T, cmdArgs, environmentVars []string) {
 	options := &compileopts.Options{
 		Target:     target,
 		Opt:        "z",
@@ -198,10 +198,10 @@ func runTest(name, target string, t *testing.T, environmentVars []string) {
 		PrintSizes: "",
 		WasmAbi:    "",
 	}
-	runTestWithConfig(name, target, t, options, environmentVars)
+	runTestWithConfig(name, target, t, options, cmdArgs, environmentVars)
 }
 
-func runTestWithConfig(name, target string, t *testing.T, options *compileopts.Options, environmentVars []string) {
+func runTestWithConfig(name, target string, t *testing.T, options *compileopts.Options, cmdArgs, environmentVars []string) {
 	// Get the expected output for this test.
 	// Note: not using filepath.Join as it strips the path separator at the end
 	// of the path.
@@ -244,6 +244,7 @@ func runTestWithConfig(name, target string, t *testing.T, options *compileopts.O
 	if target == "" {
 		cmd = exec.Command(binary)
 		cmd.Env = append(cmd.Env, environmentVars...)
+		cmd.Args = append(cmd.Args, cmdArgs...)
 	} else {
 		spec, err := compileopts.LoadTarget(target)
 		if err != nil {
@@ -257,11 +258,12 @@ func runTestWithConfig(name, target string, t *testing.T, options *compileopts.O
 		}
 
 		if len(spec.Emulator) != 0 && spec.Emulator[0] == "wasmtime" {
+			// Allow reading from the current directory.
+			cmd.Args = append(cmd.Args, "--dir=.")
 			for _, v := range environmentVars {
 				cmd.Args = append(cmd.Args, "--env", v)
 			}
-			// Allow reading from the current directory.
-			cmd.Args = append(cmd.Args, "--dir=.")
+			cmd.Args = append(cmd.Args, cmdArgs...)
 		} else {
 			cmd.Env = append(cmd.Env, environmentVars...)
 		}

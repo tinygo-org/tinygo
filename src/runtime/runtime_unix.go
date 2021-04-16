@@ -43,8 +43,33 @@ func postinit() {}
 
 // Entry point for Go. Initialize all packages and call main.main().
 //export main
-func main() int {
+func main(argc int32, argv *unsafe.Pointer) int {
 	preinit()
+
+	// Make args global big enough so that it can store all command line
+	// arguments. Unfortunately this has to be done with some magic as the heap
+	// is not yet initialized.
+	argsSlice := (*struct {
+		ptr unsafe.Pointer
+		len uintptr
+		cap uintptr
+	})(unsafe.Pointer(&args))
+	argsSlice.ptr = malloc(uintptr(argc) * (unsafe.Sizeof(uintptr(0))) * 3)
+	argsSlice.len = 0
+	argsSlice.cap = uintptr(argc)
+
+	// Initialize command line parameters.
+	for *argv != nil {
+		// Convert the C string to a Go string.
+		length := strlen(*argv)
+		argString := _string{
+			length: length,
+			ptr:    (*byte)(*argv),
+		}
+		args = append(args, *(*string)(unsafe.Pointer(&argString)))
+		// This is the Go equivalent of "argc++" in C.
+		argv = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(argv)) + unsafe.Sizeof(argv)))
+	}
 
 	// Obtain the initial stack pointer right before calling the run() function.
 	// The run function has been moved to a separate (non-inlined) function so
@@ -64,9 +89,6 @@ func runMain() {
 
 //go:extern environ
 var environ *unsafe.Pointer
-
-//export strlen
-func strlen(ptr unsafe.Pointer) uintptr
 
 //go:linkname syscall_runtime_envs syscall.runtime_envs
 func syscall_runtime_envs() []string {
