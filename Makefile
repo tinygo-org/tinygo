@@ -201,6 +201,8 @@ tinygo-test:
 	$(TINYGO) test math/cmplx
 	$(TINYGO) test text/scanner
 	$(TINYGO) test unicode/utf8
+	# until "test testing" passes
+	cd tests/tinygotest && $(TINYGO) test benchmark_test.go
 
 .PHONY: smoketest
 smoketest:
