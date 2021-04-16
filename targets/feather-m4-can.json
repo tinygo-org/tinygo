@@ -1,0 +1,8 @@
+{
+    "inherits": ["atsame51j19a"],
+    "build-tags": ["feather_m4_can"],
+    "flash-1200-bps-reset": "true",
+    "flash-method": "msd",
+    "msd-volume-name": "FTHRCANBOOT",
+    "msd-firmware-name": "firmware.uf2"
+}
