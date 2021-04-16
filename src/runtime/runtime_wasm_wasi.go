@@ -21,6 +21,33 @@ func _start() {
 	run()
 }
 
+// Read the command line arguments from WASI.
+// For example, they can be passed to a program with wasmtime like this:
+//
+//     wasmtime ./program.wasm arg1 arg2
+func init() {
+	// Read the number of args (argc) and the buffer size required to store all
+	// these args (argv).
+	var argc, argv_buf_size uint32
+	args_sizes_get(&argc, &argv_buf_size)
+
+	// Obtain the command line arguments
+	argsSlice := make([]unsafe.Pointer, argc)
+	buf := make([]byte, argv_buf_size)
+	args_get(&argsSlice[0], unsafe.Pointer(&buf[0]))
+
+	// Convert the array of C strings to an array of Go strings.
+	args = make([]string, argc)
+	for i, cstr := range argsSlice {
+		length := strlen(cstr)
+		argString := _string{
+			length: length,
+			ptr:    (*byte)(cstr),
+		}
+		args[i] = *(*string)(unsafe.Pointer(&argString))
+	}
+}
+
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	return int64(ticks)
 }
@@ -62,7 +89,15 @@ func ticks() timeUnit {
 	return timeUnit(nano)
 }
 
-// Implementations of wasi_unstable APIs
+// Implementations of WASI APIs
+
+//go:wasm-module wasi_snapshot_preview1
+//export args_get
+func args_get(argv *unsafe.Pointer, argv_buf unsafe.Pointer) (errno uint16)
+
+//go:wasm-module wasi_snapshot_preview1
+//export args_sizes_get
+func args_sizes_get(argc *uint32, argv_buf_size *uint32) (errno uint16)
 
 //go:wasm-module wasi_snapshot_preview1
 //export clock_time_get

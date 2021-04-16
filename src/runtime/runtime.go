@@ -23,7 +23,9 @@ func GOROOT() string {
 	return "/usr/local/go"
 }
 
-// TODO: fill with real args.
+// This is the default set of arguments, if nothing else has been set.
+// This may be overriden by modifying this global at runtime init (for example,
+// on Linux where there are real command line arguments).
 var args = []string{"/proc/self/exe"}
 
 //go:linkname os_runtime_args os.runtime_args
@@ -46,6 +48,9 @@ func memmove(dst, src unsafe.Pointer, size uintptr)
 // Calls to this function are converted to LLVM intrinsic calls such as
 // llvm.memset.p0i8.i32(ptr, 0, size, false).
 func memzero(ptr unsafe.Pointer, size uintptr)
+
+//export strlen
+func strlen(ptr unsafe.Pointer) uintptr
 
 // Compare two same-size buffers for equality.
 func memequal(x, y unsafe.Pointer, n uintptr) bool {
