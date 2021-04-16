@@ -4,8 +4,8 @@ package machine
 
 import (
 	"device/avr"
-	"runtime/volatile"
 	"runtime/interrupt"
+	"runtime/volatile"
 )
 
 const irq_USART0_RX = avr.IRQ_USART0_RX
@@ -200,7 +200,6 @@ func (pwm PWM) Configure(config PWMConfig) error {
 			// optimized away) the period has less chance of overflowing.
 			top = config.Period * (uint64(CPUFrequency()) / 1000000) / 1000
 		}
-
 
 		// The ideal PWM period may be larger than would fit in the PWM counter,
 		// which is 16 bits (see maxTop). Therefore, try to make the PWM clock
