@@ -207,6 +207,8 @@ TEST_PACKAGES = \
 .PHONY: tinygo-test
 tinygo-test:
 	$(TINYGO) test $(TEST_PACKAGES)
+	# until "test testing" passes
+	cd tests/tinygotest && $(TINYGO) test benchmark_test.go
 
 .PHONY: smoketest
 smoketest:
