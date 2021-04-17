@@ -905,6 +905,7 @@ func main() {
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
 	printCommands := flag.Bool("x", false, "Print commands")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
+	ocdCommandsString := flag.String("ocd-commands", "", "OpenOCD commands, overriding target spec (can specify multiple separated by commas)")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "", "flash port (can specify multiple candidates separated by commas)")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
@@ -943,6 +944,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+
 	var printAllocs *regexp.Regexp
 	if *printAllocsString != "" {
 		printAllocs, err = regexp.Compile(*printAllocsString)
@@ -951,24 +953,31 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	var ocdCommands []string
+	if *ocdCommandsString != "" {
+		ocdCommands = strings.Split(*ocdCommandsString, ",")
+	}
+
 	options := &compileopts.Options{
-		Target:        *target,
-		Opt:           *opt,
-		GC:            *gc,
-		PanicStrategy: *panicStrategy,
-		Scheduler:     *scheduler,
-		PrintIR:       *printIR,
-		DumpSSA:       *dumpSSA,
-		VerifyIR:      *verifyIR,
-		Debug:         !*nodebug,
-		PrintSizes:    *printSize,
-		PrintStacks:   *printStacks,
-		PrintAllocs:   printAllocs,
-		PrintCommands: *printCommands,
-		Tags:          *tags,
-		GlobalValues:  globalVarValues,
-		WasmAbi:       *wasmAbi,
-		Programmer:    *programmer,
+		Target:          *target,
+		Opt:             *opt,
+		GC:              *gc,
+		PanicStrategy:   *panicStrategy,
+		Scheduler:       *scheduler,
+		PrintIR:         *printIR,
+		DumpSSA:         *dumpSSA,
+		VerifyIR:        *verifyIR,
+		Debug:           !*nodebug,
+		PrintSizes:      *printSize,
+		PrintStacks:     *printStacks,
+		PrintAllocs:     printAllocs,
+		PrintCommands:   *printCommands,
+		Tags:            *tags,
+		GlobalValues:    globalVarValues,
+		WasmAbi:         *wasmAbi,
+		Programmer:      *programmer,
+		OpenOCDCommands: ocdCommands,
 	}
 
 	os.Setenv("CC", "clang -target="+*target)

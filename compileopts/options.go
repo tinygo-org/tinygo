@@ -17,24 +17,25 @@ var (
 // Options contains extra options to give to the compiler. These options are
 // usually passed from the command line.
 type Options struct {
-	Target        string
-	Opt           string
-	GC            string
-	PanicStrategy string
-	Scheduler     string
-	PrintIR       bool
-	DumpSSA       bool
-	VerifyIR      bool
-	PrintCommands bool
-	Debug         bool
-	PrintSizes    string
-	PrintAllocs   *regexp.Regexp // regexp string
-	PrintStacks   bool
-	Tags          string
-	WasmAbi       string
-	GlobalValues  map[string]map[string]string // map[pkgpath]map[varname]value
-	TestConfig    TestConfig
-	Programmer    string
+	Target          string
+	Opt             string
+	GC              string
+	PanicStrategy   string
+	Scheduler       string
+	PrintIR         bool
+	DumpSSA         bool
+	VerifyIR        bool
+	PrintCommands   bool
+	Debug           bool
+	PrintSizes      string
+	PrintAllocs     *regexp.Regexp // regexp string
+	PrintStacks     bool
+	Tags            string
+	WasmAbi         string
+	GlobalValues    map[string]map[string]string // map[pkgpath]map[varname]value
+	TestConfig      TestConfig
+	Programmer      string
+	OpenOCDCommands []string
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.
