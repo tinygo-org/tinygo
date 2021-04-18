@@ -68,14 +68,17 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-11-v1
+            - llvm-source-11-v2
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-11-v1
+          key: llvm-source-11-v2
           paths:
-            - llvm-project
+            - llvm-project/clang/lib/Headers
+            - llvm-project/clang/include
+            - llvm-project/lld/include
+            - llvm-project/llvm/include
   build-wasi-libc:
     steps:
       - restore_cache:
@@ -160,6 +163,9 @@ commands:
           command: |
             if [ ! -f llvm-build/lib/liblldELF.a ]
             then
+              # fetch LLVM source
+              rm -rf llvm-project
+              make llvm-source
               # install dependencies
               sudo apt-get install cmake ninja-build
               # hack ninja to use less jobs
@@ -224,6 +230,9 @@ commands:
           command: |
             if [ ! -f llvm-build/lib/liblldELF.a ]
             then
+              # fetch LLVM source
+              rm -rf llvm-project
+              make llvm-source
               # install dependencies
               sudo apt-get install cmake ninja-build
               # hack ninja to use less jobs
@@ -287,14 +296,17 @@ commands:
             - go-cache-macos-v2-{{ checksum "go.mod" }}
       - restore_cache:
           keys:
-            - llvm-source-11-macos-v1
+            - llvm-source-11-macos-v2
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-11-macos-v1
+          key: llvm-source-11-macos-v2
           paths:
-            - llvm-project
+            - llvm-project/clang/lib/Headers
+            - llvm-project/clang/include
+            - llvm-project/lld/include
+            - llvm-project/llvm/include
       - restore_cache:
           keys:
             - llvm-build-11-macos-v2
@@ -303,6 +315,9 @@ commands:
           command: |
             if [ ! -f llvm-build/lib/liblldELF.a ]
             then
+              # fetch LLVM source
+              rm -rf llvm-project
+              make llvm-source
               # install dependencies
               HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
               # build!
