@@ -343,7 +343,11 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=atsame54-xpro       examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=atsame54-xpro       examples/can
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m4-can      examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=feather-m4-can      examples/caninterrupt
 	@$(MD5SUM) test.hex
 	# test pwm
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0        examples/pwm

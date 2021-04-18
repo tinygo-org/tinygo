@@ -328,3 +328,14 @@ var (
 		SERCOM: 6,
 	}
 )
+
+// CAN on the SAM E54 Xplained Pro
+var (
+	CAN0 = CAN{
+		Bus: sam.CAN0,
+	}
+
+	CAN1 = CAN{
+		Bus: sam.CAN1,
+	}
+)
