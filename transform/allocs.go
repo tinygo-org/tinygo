@@ -6,6 +6,10 @@ package transform
 // interprocedural escape analysis.
 
 import (
+	"fmt"
+	"go/token"
+	"regexp"
+
 	"tinygo.org/x/go-llvm"
 )
 
@@ -20,7 +24,10 @@ const maxStackAlloc = 256
 // whenever possible. It relies on the LLVM 'nocapture' flag for interprocedural
 // escape analysis, and within a function looks whether an allocation can escape
 // to the heap.
-func OptimizeAllocs(mod llvm.Module) {
+// If printAllocs is non-nil, it indicates the regexp of functions for which a
+// heap allocation explanation should be printed (why the object can't be stack
+// allocated).
+func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(token.Position, string)) {
 	allocator := mod.NamedFunction("runtime.alloc")
 	if allocator.IsNil() {
 		// nothing to optimize
@@ -32,14 +39,21 @@ func OptimizeAllocs(mod llvm.Module) {
 	builder := mod.Context().NewBuilder()
 
 	for _, heapalloc := range getUses(allocator) {
+		logAllocs := printAllocs != nil && printAllocs.MatchString(heapalloc.InstructionParent().Parent().Name())
 		if heapalloc.Operand(0).IsAConstant().IsNil() {
 			// Do not allocate variable length arrays on the stack.
+			if logAllocs {
+				logAlloc(logger, heapalloc, "size is not constant")
+			}
 			continue
 		}
 
 		size := heapalloc.Operand(0).ZExtValue()
 		if size > maxStackAlloc {
 			// The maximum size for a stack allocation.
+			if logAllocs {
+				logAlloc(logger, heapalloc, fmt.Sprintf("object size %d exceeds maximum stack allocation size %d", size, maxStackAlloc))
+			}
 			continue
 		}
 
@@ -68,7 +82,15 @@ func OptimizeAllocs(mod llvm.Module) {
 			bitcast = uses[0]
 		}
 
-		if mayEscape(bitcast) {
+		if at := valueEscapesAt(bitcast); !at.IsNil() {
+			if logAllocs {
+				atPos := getPosition(at)
+				msg := "escapes at unknown line"
+				if atPos.Line != 0 {
+					msg = fmt.Sprintf("escapes at line %d", atPos.Line)
+				}
+				logAlloc(logger, heapalloc, msg)
+			}
 			continue
 		}
 		// The pointer value does not escape.
@@ -97,9 +119,9 @@ func OptimizeAllocs(mod llvm.Module) {
 	}
 }
 
-// mayEscape returns whether the value might escape. It returns true if it might
-// escape, and false if it definitely doesn't. The value must be an instruction.
-func mayEscape(value llvm.Value) bool {
+// valueEscapesAt returns the instruction where the given value may escape and a
+// nil llvm.Value if it definitely doesn't. The value must be an instruction.
+func valueEscapesAt(value llvm.Value) llvm.Value {
 	uses := getUses(value)
 	for _, use := range uses {
 		if use.IsAInstruction().IsNil() {
@@ -107,13 +129,13 @@ func mayEscape(value llvm.Value) bool {
 		}
 		switch use.InstructionOpcode() {
 		case llvm.GetElementPtr:
-			if mayEscape(use) {
-				return true
+			if at := valueEscapesAt(use); !at.IsNil() {
+				return at
 			}
 		case llvm.BitCast:
 			// A bitcast escapes if the casted-to value escapes.
-			if mayEscape(use) {
-				return true
+			if at := valueEscapesAt(use); !at.IsNil() {
+				return at
 			}
 		case llvm.Load:
 			// Load does not escape.
@@ -121,21 +143,27 @@ func mayEscape(value llvm.Value) bool {
 			// Store only escapes when the value is stored to, not when the
 			// value is stored into another value.
 			if use.Operand(0) == value {
-				return true
+				return use
 			}
 		case llvm.Call:
 			if !hasFlag(use, value, "nocapture") {
-				return true
+				return use
 			}
 		case llvm.ICmp:
 			// Comparing pointers don't let the pointer escape.
 			// This is often a compiler-inserted nil check.
 		default:
 			// Unknown instruction, might escape.
-			return true
+			return use
 		}
 	}
 
 	// Checked all uses, and none let the pointer value escape.
-	return false
+	return llvm.Value{}
+}
+
+// logAlloc prints a message to stderr explaining why the given object had to be
+// allocated on the heap.
+func logAlloc(logger func(token.Position, string), allocCall llvm.Value, reason string) {
+	logger(getPosition(allocCall), "object allocated on the heap: "+reason)
 }

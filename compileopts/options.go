@@ -2,6 +2,7 @@ package compileopts
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -27,6 +28,7 @@ type Options struct {
 	PrintCommands bool
 	Debug         bool
 	PrintSizes    string
+	PrintAllocs   *regexp.Regexp // regexp string
 	PrintStacks   bool
 	Tags          string
 	WasmAbi       string
