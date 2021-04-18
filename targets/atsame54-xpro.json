@@ -2,5 +2,6 @@
     "inherits": ["atsame54p20a"],
     "build-tags": ["atsame54_xpro"],
     "flash-method": "openocd",
-    "openocd-interface": "cmsis-dap"
+    "openocd-interface": "cmsis-dap",
+    "default-stack-size": 4096
 }

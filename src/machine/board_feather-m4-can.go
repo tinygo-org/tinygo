@@ -125,7 +125,7 @@ func init() {
 	D7.High()
 }
 
-// I2C on the Feather M4.
+// I2C on the Feather M4 CAN.
 var (
 	I2C0 = &I2C{
 		Bus:    sam.SERCOM2_I2CM,
@@ -133,10 +133,21 @@ var (
 	}
 )
 
-// SPI on the Feather M4.
+// SPI on the Feather M4 CAN.
 var (
 	SPI0 = SPI{
 		Bus:    sam.SERCOM1_SPIM,
 		SERCOM: 1,
+	}
+)
+
+// CAN on the Feather M4 CAN.
+var (
+	CAN0 = CAN{
+		Bus: sam.CAN0,
+	}
+
+	CAN1 = CAN{
+		Bus: sam.CAN1,
 	}
 )
