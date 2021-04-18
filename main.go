@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -901,6 +902,7 @@ func main() {
 	target := flag.String("target", "", "LLVM target | .json file with TargetSpec")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
+	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
 	printCommands := flag.Bool("x", false, "Print commands")
 	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
@@ -941,6 +943,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	var printAllocs *regexp.Regexp
+	if *printAllocsString != "" {
+		printAllocs, err = regexp.Compile(*printAllocsString)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
 	options := &compileopts.Options{
 		Target:        *target,
 		Opt:           *opt,
@@ -953,6 +963,7 @@ func main() {
 		Debug:         !*nodebug,
 		PrintSizes:    *printSize,
 		PrintStacks:   *printStacks,
+		PrintAllocs:   printAllocs,
 		PrintCommands: *printCommands,
 		Tags:          *tags,
 		GlobalValues:  globalVarValues,
