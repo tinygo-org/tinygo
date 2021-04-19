@@ -192,3 +192,25 @@ func lsU8(u uint16) uint8 { return uint8(u) }
 func cycles(microsec, cpuFreqHz uint32) uint32 {
 	return uint32((uint64(microsec) * uint64(cpuFreqHz)) / 1000000)
 }
+
+//go:inline
+func unpackEndpoint(address uint8) (number, direction uint8) {
+	return (address & descEndptAddrNumberMsk) >> descEndptAddrNumberPos,
+		(address & descEndptAddrDirectionMsk) >> descEndptAddrDirectionPos
+}
+
+//go:inline
+func rxEndpoint(number uint8) uint8 {
+	return (number & descEndptAddrNumberMsk) | descEndptAddrDirectionOut
+}
+
+//go:inline
+func txEndpoint(number uint8) uint8 {
+	return (number & descEndptAddrNumberMsk) | descEndptAddrDirectionIn
+}
+
+//go:inline
+func endpointIndex(address uint8) uint8 {
+	return ((address & descEndptAddrNumberMsk) << 1) |
+		((address & descEndptAddrDirectionMsk) >> descEndptAddrDirectionPos)
+}
