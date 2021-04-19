@@ -43,8 +43,8 @@ func NewDeviceDescriptor(class, subClass, proto, packetSize0 uint8, vid, pid, ve
 }
 
 // Bytes returns DeviceDescriptor data
-func (d DeviceDescriptor) Bytes() []byte {
-	b := make([]byte, deviceDescriptorSize)
+func (d DeviceDescriptor) Bytes() [deviceDescriptorSize]byte {
+	var b [deviceDescriptorSize]byte
 	b[0] = byte(d.bLength)
 	b[1] = byte(d.bDescriptorType)
 	b[2] = byte(d.bcdUSB)
@@ -91,8 +91,8 @@ func NewConfigDescriptor(totalLength uint16, interfaces uint8) ConfigDescriptor 
 }
 
 // Bytes returns ConfigDescriptor data.
-func (d ConfigDescriptor) Bytes() []byte {
-	b := make([]byte, configDescriptorSize)
+func (d ConfigDescriptor) Bytes() [configDescriptorSize]byte {
+	var b [configDescriptorSize]byte
 	b[0] = byte(d.bLength)
 	b[1] = byte(d.bDescriptorType)
 	b[2] = byte(d.wTotalLength)
@@ -131,8 +131,8 @@ func NewInterfaceDescriptor(n, numEndpoints, class, subClass, protocol uint8) In
 }
 
 // Bytes returns InterfaceDescriptor data.
-func (d InterfaceDescriptor) Bytes() []byte {
-	b := make([]byte, interfaceDescriptorSize)
+func (d InterfaceDescriptor) Bytes() [interfaceDescriptorSize]byte {
+	var b [interfaceDescriptorSize]byte
 	b[0] = byte(d.bLength)
 	b[1] = byte(d.bDescriptorType)
 	b[2] = byte(d.bInterfaceNumber)
@@ -167,8 +167,8 @@ func NewEndpointDescriptor(addr, attr uint8, packetSize uint16, interval uint8) 
 }
 
 // Bytes returns EndpointDescriptor data.
-func (d EndpointDescriptor) Bytes() []byte {
-	b := make([]byte, endpointDescriptorSize)
+func (d EndpointDescriptor) Bytes() [endpointDescriptorSize]byte {
+	var b [endpointDescriptorSize]byte
 	b[0] = byte(d.bLength)
 	b[1] = byte(d.bDescriptorType)
 	b[2] = byte(d.bEndpointAddress)
@@ -205,8 +205,8 @@ func NewIADDescriptor(firstInterface, count, class, subClass, protocol uint8) IA
 }
 
 // Bytes returns IADDescriptor data.
-func (d IADDescriptor) Bytes() []byte {
-	b := make([]byte, iadDescriptorSize)
+func (d IADDescriptor) Bytes() [iadDescriptorSize]byte {
+	var b [iadDescriptorSize]byte
 	b[0] = byte(d.bLength)
 	b[1] = byte(d.bDescriptorType)
 	b[2] = byte(d.bFirstInterface)
@@ -235,8 +235,8 @@ func NewCDCCSInterfaceDescriptor(subtype, d0, d1 uint8) CDCCSInterfaceDescriptor
 }
 
 // Bytes returns CDCCSInterfaceDescriptor data.
-func (d CDCCSInterfaceDescriptor) Bytes() []byte {
-	b := make([]byte, cdcCSInterfaceDescriptorSize)
+func (d CDCCSInterfaceDescriptor) Bytes() [cdcCSInterfaceDescriptorSize]byte {
+	var b [cdcCSInterfaceDescriptorSize]byte
 	b[0] = byte(d.len)
 	b[1] = byte(d.dtype)
 	b[2] = byte(d.subtype)
@@ -262,8 +262,8 @@ func NewCMFunctionalDescriptor(subtype, d0, d1 uint8) CMFunctionalDescriptor {
 }
 
 // Bytes returns the CMFunctionalDescriptor data.
-func (d CMFunctionalDescriptor) Bytes() []byte {
-	b := make([]byte, cmFunctionalDescriptorSize)
+func (d CMFunctionalDescriptor) Bytes() [cmFunctionalDescriptorSize]byte {
+	var b [cmFunctionalDescriptorSize]byte
 	b[0] = byte(d.bFunctionLength)
 	b[1] = byte(d.bDescriptorType)
 	b[2] = byte(d.bDescriptorSubtype)
@@ -288,8 +288,8 @@ func NewACMFunctionalDescriptor(subtype, d0 uint8) ACMFunctionalDescriptor {
 }
 
 // Bytes returns the ACMFunctionalDescriptor data.
-func (d ACMFunctionalDescriptor) Bytes() []byte {
-	b := make([]byte, acmFunctionalDescriptorSize)
+func (d ACMFunctionalDescriptor) Bytes() [acmFunctionalDescriptorSize]byte {
+	var b [acmFunctionalDescriptorSize]byte
 	b[0] = byte(d.len)
 	b[1] = byte(d.dtype)
 	b[2] = byte(d.subtype)
@@ -351,19 +351,51 @@ const cdcSize = iadDescriptorSize +
 	endpointDescriptorSize
 
 // Bytes returns CDCDescriptor data.
-func (d CDCDescriptor) Bytes() []byte {
-	var buf []byte
-	buf = append(buf, d.iad.Bytes()...)
-	buf = append(buf, d.cif.Bytes()...)
-	buf = append(buf, d.header.Bytes()...)
-	buf = append(buf, d.controlManagement.Bytes()...)
-	buf = append(buf, d.functionalDescriptor.Bytes()...)
-	buf = append(buf, d.callManagement.Bytes()...)
-	buf = append(buf, d.cifin.Bytes()...)
-	buf = append(buf, d.dif.Bytes()...)
-	buf = append(buf, d.out.Bytes()...)
-	buf = append(buf, d.in.Bytes()...)
-	return buf
+func (d CDCDescriptor) Bytes() [cdcSize]byte {
+	var b [cdcSize]byte
+	offset := 0
+
+	iad := d.iad.Bytes()
+	copy(b[offset:], iad[:])
+	offset += len(iad)
+
+	cif := d.cif.Bytes()
+	copy(b[offset:], cif[:])
+	offset += len(cif)
+
+	header := d.header.Bytes()
+	copy(b[offset:], header[:])
+	offset += len(header)
+
+	controlManagement := d.controlManagement.Bytes()
+	copy(b[offset:], controlManagement[:])
+	offset += len(controlManagement)
+
+	functionalDescriptor := d.functionalDescriptor.Bytes()
+	copy(b[offset:], functionalDescriptor[:])
+	offset += len(functionalDescriptor)
+
+	callManagement := d.callManagement.Bytes()
+	copy(b[offset:], callManagement[:])
+	offset += len(callManagement)
+
+	cifin := d.cifin.Bytes()
+	copy(b[offset:], cifin[:])
+	offset += len(cifin)
+
+	dif := d.dif.Bytes()
+	copy(b[offset:], dif[:])
+	offset += len(dif)
+
+	out := d.out.Bytes()
+	copy(b[offset:], out[:])
+	offset += len(out)
+
+	in := d.in.Bytes()
+	copy(b[offset:], in[:])
+	offset += len(in)
+
+	return b
 }
 
 // MSCDescriptor is not used yet.
@@ -633,7 +665,8 @@ func sendDescriptor(setup usbSetup) {
 		if setup.wLength < deviceDescriptorSize {
 			l = int(setup.wLength)
 		}
-		sendUSBPacket(0, dd.Bytes()[:l])
+		buf := dd.Bytes()
+		sendUSBPacket(0, buf[:l])
 		return
 
 	case usb_STRING_DESCRIPTOR_TYPE:
@@ -669,7 +702,8 @@ func sendConfiguration(setup usbSetup) {
 	if setup.wLength == 9 {
 		sz := uint16(configDescriptorSize + cdcSize)
 		config := NewConfigDescriptor(sz, 2)
-		sendUSBPacket(0, config.Bytes())
+		configBuf := config.Bytes()
+		sendUSBPacket(0, configBuf[:])
 	} else {
 		iad := NewIADDescriptor(0, 2, usb_CDC_COMMUNICATION_INTERFACE_CLASS, usb_CDC_ABSTRACT_CONTROL_MODEL, 0)
 
@@ -705,10 +739,12 @@ func sendConfiguration(setup usbSetup) {
 		sz := uint16(configDescriptorSize + cdcSize)
 		config := NewConfigDescriptor(sz, 2)
 
-		buf := make([]byte, 0, sz)
-		buf = append(buf, config.Bytes()...)
-		buf = append(buf, cdc.Bytes()...)
+		configBuf := config.Bytes()
+		cdcBuf := cdc.Bytes()
+		var buf [configDescriptorSize + cdcSize]byte
+		copy(buf[0:], configBuf[:])
+		copy(buf[configDescriptorSize:], cdcBuf[:])
 
-		sendUSBPacket(0, buf)
+		sendUSBPacket(0, buf[:])
 	}
 }
