@@ -252,3 +252,84 @@ func enableDcache(enable bool) {
 		}
 	}
 }
+
+
+// FlushDcache flushes data from cache to memory
+//
+// Normally FlushDcache is used when metadata written to memory will be used by
+// a DMA or a bus-controller peripheral. Any data in the cache is written to
+// memory. A copy remains in the cache, so this is typically used with special
+// fields you will want to quickly access in the future. For data transmission,
+// use FlushDeleteDcache.
+//go:inline
+func FlushDcache(addr, size uintptr) {
+	location := addr & 0xFFFFFFE0
+	endAddr := addr + size
+	arm.AsmFull(`
+		dsb 0xF
+	`, nil)
+	for {
+		SystemControl.DCCMVAC.Set(uint32(location))
+		location += 32
+		if location >= endAddr {
+			break
+		}
+	}
+	arm.AsmFull(`
+		dsb 0xF
+		isb 0xF
+	`, nil)
+}
+
+// DeleteDcache deletes data from the cache, without touching memory.
+//
+// Normally DeleteDcache is used before receiving data via DMA or from
+// bus-controller peripherals which write to memory. You want to delete anything
+// the cache may have stored, so your next read is certain to access the
+// physical memory.
+//go:inline
+func DeleteDcache(addr, size uintptr) {
+	location := addr & 0xFFFFFFE0
+	endAddr := addr + size
+	arm.AsmFull(`
+		dsb 0xF
+	`, nil)
+	for {
+		SystemControl.DCIMVAC.Set(uint32(location))
+		location += 32
+		if location >= endAddr {
+			break
+		}
+	}
+	arm.AsmFull(`
+		dsb 0xF
+		isb 0xF
+	`, nil)
+}
+
+// FlushDeleteDcache flushes data from cache to memory, and delete it from the
+// cache
+//
+// Normally FlushDeleteDcache is used when transmitting data via DMA or
+// bus-controller peripherals which read from memory. You want any cached data
+// written to memory, and then removed from the cache, because you no longer
+// need to access the data after transmission.
+//go:inline
+func FlushDeleteDcache(addr, size uintptr) {
+	location := addr & 0xFFFFFFE0
+	endAddr := addr + size
+	arm.AsmFull(`
+		dsb 0xF
+	`, nil)
+	for {
+		SystemControl.DCCIMVAC.Set(uint32(location))
+		location += 32
+		if location >= endAddr {
+			break
+		}
+	}
+	arm.AsmFull(`
+		dsb 0xF
+		isb 0xF
+	`, nil)
+}

@@ -2,7 +2,7 @@
 
 package usb2
 
-// Implementation of USB host controller interface (hci) for NXP iMXRT1062.
+// Implementation of USB host controller driver (hcd) for NXP iMXRT1062.
 
 import (
 	"device/arm"
@@ -11,18 +11,19 @@ import (
 	"runtime/volatile"
 )
 
-// hciCount defines the number of USB cores to configure for host mode. It is
+// hcdCount defines the number of USB cores to configure for host mode. It is
 // computed as the sum of all declared host configuration descriptors.
-const hciCount = 0
+const hcdCount = 0
 
-// hciInterruptPriority defines the priority for all USB host interrupts.
-const hciInterruptPriority = 3
+// hcdInterruptPriority defines the priority for all USB host interrupts.
+const hcdInterruptPriority = 3
 
-// hostController implements USB host controller interface (hci).
+// hostController implements USB host controller driver (hcd) interface.
 type hostController struct {
-	core *core // Parent USB core this instance is attached to
-	port int   // USB port index
-	id   int   // hostControllerInstance index
+	core  *core // Parent USB core this instance is attached to
+	port  int   // USB port index
+	class class // USB host class
+	id    int   // hostControllerInstance index
 
 	bus *nxp.USB_Type
 	phy *nxp.USBPHY_Type
@@ -34,14 +35,14 @@ type hostController struct {
 
 // hostControllerInstance provides statically-allocated instances of each USB
 // host controller configured on this platform.
-var hostControllerInstance [hciCount]hostController
+var hostControllerInstance [hcdCount]hostController
 
-// initHCI initializes and assigns a free host controller instance to the given
+// initHCD initializes and assigns a free host controller instance to the given
 // USB port. Returns the initialized host controller or nil if no free host
 // controller instances remain.
-func initHCI(port int) (hci, status) {
-	if 0 == hciCount {
-		return nil, statusInvalidArgument // must have defined host descriptors
+func initHCD(port int, class class) (hcd, status) {
+	if 0 == hcdCount {
+		return nil, statusInvalid // must have defined host controllers
 	}
 	// Return the first instance whose assigned core is currently nil.
 	for i := range hostControllerInstance {
@@ -82,7 +83,7 @@ func (hc *hostController) init() status {
 
 func (hc *hostController) enable(enable bool) status {
 
-	hc.irq.SetPriority(hciInterruptPriority)
+	hc.irq.SetPriority(hcdInterruptPriority)
 	hc.irq.Enable()
 
 	return statusOK
