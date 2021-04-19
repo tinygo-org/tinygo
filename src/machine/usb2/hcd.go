@@ -1,6 +1,6 @@
 package usb2
 
-type dci interface {
+type hcd interface {
 	init() status
 	enable(enable bool) status
 	critical(enter bool) status
