@@ -1,5 +1,7 @@
 package main
 
+import "sort"
+
 var testmap1 = map[string]int{"data": 3}
 var testmap2 = map[string]int{
 	"one":    1,
@@ -112,7 +114,13 @@ func main() {
 func readMap(m map[string]int, key string) {
 	println("map length:", len(m))
 	println("map read:", key, "=", m[key])
-	for k, v := range m {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := m[k]
 		println(" ", k, "=", v)
 	}
 }
