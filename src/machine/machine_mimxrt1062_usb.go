@@ -1,10 +1,5 @@
 // +build mimxrt1062
 
-// Compatibility wrapper for legacy type USBCDC, which provides USB CDC-ACM
-// device class emulation for serial UART communication.
-// This functionality is being replaced by a platform-agnostic type usb.UART in
-// package "machine/usb".
-
 package machine
 
 import (
@@ -18,7 +13,6 @@ import (
 // be removed and usb.UART should be used directly instead.
 type USBCDC struct {
 	port uint8
-	buff *RingBuffer
 	uart usb2.UART
 }
 
@@ -26,4 +20,30 @@ type USBCDC struct {
 // UART configuration. This provides compatibility with machine.UART.
 func (cdc *USBCDC) Configure(config UARTConfig) {
 	cdc.uart.Configure(usb2.UARTConfig{BaudRate: config.BaudRate})
+}
+
+// Buffered returns the number of bytes currently stored in the RX buffer.
+func (cdc USBCDC) Buffered() int {
+	return cdc.uart.Buffered()
+}
+
+// ReadByte reads a single byte from the RX buffer.
+// If there is no data in the buffer, returns an error.
+func (cdc USBCDC) ReadByte() (byte, error) {
+	return cdc.uart.ReadByte()
+}
+
+// Read from the RX buffer.
+func (cdc USBCDC) Read(data []byte) (n int, err error) {
+	return cdc.uart.Read(data)
+}
+
+// WriteByte writes a single byte of data to the UART interface.
+func (cdc USBCDC) WriteByte(c byte) error {
+	return cdc.uart.WriteByte(c)
+}
+
+// Write data to the UART.
+func (cdc USBCDC) Write(data []byte) (n int, err error) {
+	return cdc.uart.Write(data)
 }

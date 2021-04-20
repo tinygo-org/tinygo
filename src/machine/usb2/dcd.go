@@ -3,6 +3,7 @@ package usb2
 import "unsafe"
 
 type dcd interface {
+	class() class
 	init() status
 	enable(enable bool) status
 	critical(enter bool) status

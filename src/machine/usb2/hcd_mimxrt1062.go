@@ -20,10 +20,10 @@ const hcdInterruptPriority = 3
 
 // hostController implements USB host controller driver (hcd) interface.
 type hostController struct {
-	core  *core // Parent USB core this instance is attached to
-	port  int   // USB port index
-	class class // USB host class
-	id    int   // hostControllerInstance index
+	core *core // Parent USB core this instance is attached to
+	port int   // USB port index
+	cc   class // USB host class
+	id   int   // hostControllerInstance index
 
 	bus *nxp.USB_Type
 	phy *nxp.USBPHY_Type
@@ -50,6 +50,7 @@ func initHCD(port int, class class) (hcd, status) {
 			// Initialize host controller.
 			hostControllerInstance[i].core = &coreInstance[port]
 			hostControllerInstance[i].port = port
+			hostControllerInstance[i].cc = class
 			hostControllerInstance[i].id = i
 			switch port {
 			case 0:
@@ -75,6 +76,8 @@ func initHCD(port int, class class) (hcd, status) {
 	}
 	return nil, statusBusy // No free host controller instances available.
 }
+
+func (hc *hostController) class() class { return hc.cc }
 
 func (hc *hostController) init() status {
 
