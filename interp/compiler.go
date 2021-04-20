@@ -25,6 +25,7 @@ type function struct {
 // basicBlock represents a LLVM basic block and contains a slice of
 // instructions. The last instruction must be a terminator instruction.
 type basicBlock struct {
+	phiNodes     []instruction
 	instructions []instruction
 }
 
@@ -346,7 +347,13 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 				// This error is handled when actually trying to interpret this
 				// instruction (to not trigger on code that won't be executed).
 			}
-			bb.instructions = append(bb.instructions, inst)
+			if inst.opcode == llvm.PHI {
+				// PHI nodes need to be treated specially, see the comment in
+				// interpreter.go for an explanation.
+				bb.phiNodes = append(bb.phiNodes, inst)
+			} else {
+				bb.instructions = append(bb.instructions, inst)
+			}
 		}
 	}
 	return fn

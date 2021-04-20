@@ -33,6 +33,50 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 	lastBB := -1 // last basic block is undefined, only defined after a branch
 	var operands []value
 	for instIndex := 0; instIndex < len(bb.instructions); instIndex++ {
+		if instIndex == 0 {
+			// This is the start of a new basic block.
+			// There may be PHI nodes that need to be resolved. Resolve all PHI
+			// nodes before continuing with regular instructions.
+			// PHI nodes need to be treated specially because they can have a
+			// mutual dependency:
+			//   for.loop:
+			//     %a = phi i8 [ 1, %entry ], [ %b, %for.loop ]
+			//     %b = phi i8 [ 3, %entry ], [ %a, %for.loop ]
+			// If these PHI nodes are processed like a regular instruction, %a
+			// and %b are both 3 on the second iteration of the loop because %b
+			// loads the value of %a from the second iteration, while it should
+			// load the value from the previous iteration. The correct behavior
+			// is that these two values swap each others place on each
+			// iteration.
+			var phiValues []value
+			var phiIndices []int
+			for _, inst := range bb.phiNodes {
+				var result value
+				for i := 0; i < len(inst.operands); i += 2 {
+					if int(inst.operands[i].(literalValue).value.(uint32)) == lastBB {
+						incoming := inst.operands[i+1]
+						if local, ok := incoming.(localValue); ok {
+							result = locals[fn.locals[local.value]]
+						} else {
+							result = incoming
+						}
+						break
+					}
+				}
+				if r.debug {
+					fmt.Fprintln(os.Stderr, indent+"phi", inst.operands, "->", result)
+				}
+				if result == nil {
+					panic("could not find PHI input")
+				}
+				phiValues = append(phiValues, result)
+				phiIndices = append(phiIndices, inst.localIndex)
+			}
+			for i, value := range phiValues {
+				locals[phiIndices[i]] = value
+			}
+		}
+
 		inst := bb.instructions[instIndex]
 		operands = operands[:0]
 		isRuntimeInst := false
@@ -121,26 +165,6 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if r.debug {
 				fmt.Fprintln(os.Stderr, indent+"switch", operands, "->", currentBB)
 			}
-		case llvm.PHI:
-			var result value
-			for i := 0; i < len(inst.operands); i += 2 {
-				if int(inst.operands[i].(literalValue).value.(uint32)) == lastBB {
-					incoming := inst.operands[i+1]
-					if local, ok := incoming.(localValue); ok {
-						result = locals[fn.locals[local.value]]
-					} else {
-						result = incoming
-					}
-					break
-				}
-			}
-			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"phi", inst.operands, "->", result)
-			}
-			if result == nil {
-				panic("could not find PHI input")
-			}
-			locals[inst.localIndex] = result
 		case llvm.Select:
 			// Select is much like a ternary operator: it picks a result from
 			// the second and third operand based on the boolean first operand.
