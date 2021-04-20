@@ -2298,7 +2298,7 @@ func handleStandardSetup(setup usbSetup) bool {
 func cdcSetup(setup usbSetup) bool {
 	if setup.bmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
 		if setup.bRequest == usb_CDC_GET_LINE_CODING {
-			b := make([]byte, 7)
+			var b [cdcLineInfoSize]byte
 			b[0] = byte(usbLineInfo.dwDTERate)
 			b[1] = byte(usbLineInfo.dwDTERate >> 8)
 			b[2] = byte(usbLineInfo.dwDTERate >> 16)
@@ -2307,14 +2307,18 @@ func cdcSetup(setup usbSetup) bool {
 			b[5] = byte(usbLineInfo.bParityType)
 			b[6] = byte(usbLineInfo.bDataBits)
 
-			sendUSBPacket(0, b)
+			sendUSBPacket(0, b[:])
 			return true
 		}
 	}
 
 	if setup.bmRequestType == usb_REQUEST_HOSTTODEVICE_CLASS_INTERFACE {
 		if setup.bRequest == usb_CDC_SET_LINE_CODING {
-			b := receiveUSBControlPacket()
+			b, err := receiveUSBControlPacket()
+			if err != nil {
+				return false
+			}
+
 			usbLineInfo.dwDTERate = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
 			usbLineInfo.bCharFormat = b[4]
 			usbLineInfo.bParityType = b[5]
@@ -2361,7 +2365,9 @@ func sendUSBPacket(ep uint32, data []byte) {
 	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.SetBits(uint32((len(data) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask) << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos))
 }
 
-func receiveUSBControlPacket() []byte {
+func receiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
+	var b [cdcLineInfoSize]byte
+
 	// address
 	usbEndpointDescriptors[0].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[0]))))
 
@@ -2376,7 +2382,7 @@ func receiveUSBControlPacket() []byte {
 	for (getEPSTATUS(0) & sam.USB_DEVICE_EPSTATUS_BK0RDY) == 0 {
 		timeout--
 		if timeout == 0 {
-			return []byte{}
+			return b, errUSBCDCReadTimeout
 		}
 	}
 
@@ -2385,7 +2391,7 @@ func receiveUSBControlPacket() []byte {
 	for (getEPINTFLAG(0) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) == 0 {
 		timeout--
 		if timeout == 0 {
-			return []byte{}
+			return b, errUSBCDCReadTimeout
 		}
 	}
 
@@ -2393,10 +2399,13 @@ func receiveUSBControlPacket() []byte {
 	bytesread := uint32((usbEndpointDescriptors[0].DeviceDescBank[0].PCKSIZE.Get() >>
 		usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)
 
-	data := make([]byte, bytesread)
-	copy(data, udd_ep_out_cache_buffer[0][:])
+	if bytesread != cdcLineInfoSize {
+		return b, errUSBCDCBytesRead
+	}
 
-	return data
+	copy(b[:7], udd_ep_out_cache_buffer[0][:7])
+
+	return b, nil
 }
 
 func handleEndpoint(ep uint32) {

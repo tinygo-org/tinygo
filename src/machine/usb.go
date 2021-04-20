@@ -12,6 +12,8 @@ const deviceDescriptorSize = 18
 var (
 	errUSBCDCBufferEmpty      = errors.New("USB-CDC buffer empty")
 	errUSBCDCWriteByteTimeout = errors.New("USB-CDC write byte timeout")
+	errUSBCDCReadTimeout      = errors.New("USB-CDC read timeout")
+	errUSBCDCBytesRead        = errors.New("USB-CDC invalid number of bytes read")
 )
 
 // DeviceDescriptor implements the USB standard device descriptor.
@@ -404,6 +406,8 @@ type MSCDescriptor struct {
 	in  EndpointDescriptor
 	out EndpointDescriptor
 }
+
+const cdcLineInfoSize = 7
 
 type cdcLineInfo struct {
 	dwDTERate   uint32
