@@ -7,13 +7,14 @@ const descCPUFrequencyHz = 600000000
 
 // General USB device identification constants.
 const (
-	descVendorID  = 0x16C0
-	descProductID = 0x0483
-	descReleaseID = 0x0101
+	descCommonVendorID  = 0x16C0
+	descCommonProductID = 0x0483
+	descCommonReleaseID = 0x0101 // BCD (1.1)
 
-	descManufacturer = "NXP Semiconductors"
-	descProduct      = "TinyGo USB"
-	descSerialNumber = "0000000000"
+	descCommonLanguage     = descLanguageEnglish
+	descCommonManufacturer = "NXP Semiconductors"
+	descCommonProduct      = "TinyGo USB"
+	descCommonSerialNumber = "1"
 )
 
 // Constants for USB CDC-ACM device classes.
@@ -30,6 +31,9 @@ const (
 	descCDCACMCxCount = 8
 
 	descCDCACMMaxPower = 50 // 100 mA
+
+	descCDCACMTxTimeoutMs = 120 // millisec
+	descCDCACMTxSyncUs    = 75  // microsec
 
 	descCDCACMStatusPacketSize = 16
 	descCDCACMDataRxPacketSize = descCDCACMDataRxHSPacketSize // high-speed
@@ -117,14 +121,13 @@ var descCDCACM0RDIdx [descCDCACMRDCount]uint16
 var descCDCACM0RDQue [descCDCACMRDCount + 1]uint16
 
 type descCDCACMClass struct {
-	locstr *[descCDCACMLanguageCount]descLocalStrings // string descriptors
-	device *[descLengthDevice]uint8                   // device descriptor
-	qualif *[descLengthQualification]uint8            // device qualification descriptor
-	config *[descCDCACMConfigSize]uint8               // configuration descriptor
+	locale *[descCDCACMLanguageCount]descStringLanguage // string descriptors
+	device *[descLengthDevice]uint8                     // device descriptor
+	qualif *[descLengthQualification]uint8              // device qualification descriptor
+	config *[descCDCACMConfigSize]uint8                 // configuration descriptor
 
-	coding *[descCDCACMCodingSize]uint8 // UART line coding
-	cticks int64
-	rtsdtr uint8
+	lineCoding *descCDCACMLineCoding // UART line coding active state
+	// lineActive int64                 // time since last UART DTR/RTS
 
 	qh *[descCDCACMQHCount]dcdEndpoint // endpoint queue heads
 
@@ -144,6 +147,7 @@ type descCDCACMClass struct {
 
 	txHead uint8
 	txFree uint16
+	txPrev bool
 
 	rxHead uint8
 	rxTail uint8
@@ -157,14 +161,15 @@ type descCDCACMClass struct {
 // descCDCACM holds the configuration, endpoint, and transfer descriptors, along
 // with the buffers and control states, for all of the CDC-ACM (single) device
 // class configurations, ordered by configuration index (offset by -1).
+//go:align 32
 var descCDCACM = [descCDCACMCount]descCDCACMClass{
 	{
-		locstr: &descCDCACM0String,
+		locale: &descCDCACM0String,
 		device: &descCDCACM0Device,
 		qualif: &descCDCACM0Qualif,
 		config: &descCDCACM0Config,
 
-		coding: &descCDCACM0Coding,
+		lineCoding: &descCDCACM0LineCoding,
 
 		qh: &descCDCACM0QH,
 

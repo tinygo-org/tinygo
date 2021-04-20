@@ -110,9 +110,8 @@ func init() {
 var (
 	// USBCDC is a legacy class being retained here as temporary wrapper.
 	// See godoc comments on type USBCDC struct definition for details.
-	USBCDC0 = USBCDC{
-		port: 0, // USB_OTG1 (Micro-B port on Teensy 4.0)
-		buff: NewRingBuffer(),
+	UART0 = USBCDC{
+		port: 0, // USB_OTG1 (Micro-B port on Teensy 4.0/4.1)
 	}
 )
 

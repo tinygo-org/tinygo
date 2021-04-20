@@ -123,13 +123,12 @@ func initUART() {
 }
 
 func initUSB() {
-	machine.USBCDC0.Configure(machine.UARTConfig{})
+	machine.UART0.Configure(machine.UARTConfig{})
 }
 
 func putchar(c byte) {
-	// ** TESTING: print byte to both serial UART interfaces **
-	//machine.USBCDC0.WriteByte(c) // print to USB UART
-	machine.UART1.WriteByte(c) // print to hardware UART
+	machine.UART0.WriteByte(c) // print to USB UART
+	// machine.UART1.WriteByte(c) // print to hardware UART
 }
 
 func exit(code int) {
