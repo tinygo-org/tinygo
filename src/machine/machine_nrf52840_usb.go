@@ -445,7 +445,7 @@ func handleStandardSetup(setup usbSetup) bool {
 func cdcSetup(setup usbSetup) bool {
 	if setup.bmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
 		if setup.bRequest == usb_CDC_GET_LINE_CODING {
-			b := make([]byte, 7)
+			var b [cdcLineInfoSize]byte
 			b[0] = byte(usbLineInfo.dwDTERate)
 			b[1] = byte(usbLineInfo.dwDTERate >> 8)
 			b[2] = byte(usbLineInfo.dwDTERate >> 16)
@@ -454,7 +454,7 @@ func cdcSetup(setup usbSetup) bool {
 			b[5] = byte(usbLineInfo.bParityType)
 			b[6] = byte(usbLineInfo.bDataBits)
 
-			sendUSBPacket(0, b)
+			sendUSBPacket(0, b[:])
 			return true
 		}
 	}
