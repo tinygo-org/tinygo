@@ -48,6 +48,13 @@ func (cl class) mode() int {
 	}
 }
 
+// equals returns true if and only if all fields of the given class are equal to
+// those of the receiver cl.
+//go:inline
+func (cl class) equals(class class) bool {
+	return cl.id == class.id && cl.config == class.config
+}
+
 // CoreCount defines the total number of USB cores to configure in device or
 // host mode.
 const CoreCount = dcdCount + hcdCount
@@ -79,7 +86,25 @@ func initCore(port int, class class) (*core, status) {
 	if port < 0 || port >= CoreCount || 0 == class.config {
 		return nil, statusInvalid
 	}
+
 	if modeIdle != coreInstance[port].mode {
+		// Check if requested port is already configured as requested class. If so,
+		// just return a reference to the existing core instead of an error.
+		// For instance, this will allow TinyGo examples that try to reconfigure the
+		// USB (CDC-ACM) UART port (which is already configured by the runtime) to
+		// continue without error.
+		if coreInstance[port].mode == class.mode() {
+			switch class.mode() {
+			case modeDevice:
+				if coreInstance[port].dc.class().equals(class) {
+					return &coreInstance[port], statusOK
+				}
+			case modeHost:
+				if coreInstance[port].hc.class().equals(class) {
+					return &coreInstance[port], statusOK
+				}
+			}
+		}
 		return nil, statusBusy
 	}
 

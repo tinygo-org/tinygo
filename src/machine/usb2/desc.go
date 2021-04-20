@@ -4,12 +4,6 @@ const descUSBSpecVersion = uint16(0x0200) // USB 2.0
 
 const descLanguageEnglish = uint16(0x0409)
 
-type descIndexStrings [4][64]uint8
-type descLocalStrings struct {
-	language uint16
-	index    descIndexStrings // UTF-16, 32-character maximum length
-}
-
 // USB constants defined per specification.
 const (
 
@@ -335,55 +329,27 @@ const (
 	descCDCACMConfigAttrInterrupt   = descCDCACMConfigAttr | descEndptAttrSyncTypeSync
 )
 
-// descCDCACM0String holds the default string descriptors for CDC-ACM[0], i.e.,
-// configuration index 1.
-var descCDCACM0String = [descCDCACMLanguageCount]descLocalStrings{
-	{
-		language: descLanguageEnglish,
-		index: descIndexStrings{
-			{ // 0: language string
-				4,
-				descTypeString,
-				lsU8(descLanguageEnglish),
-				msU8(descLanguageEnglish),
-			},
-			{ // 1: manufacturer
-				uint8(2 + 2*len(descManufacturer)),
-				descTypeString,
-			},
-			{ // 2: product
-				uint8(2 + 2*len(descProduct)),
-				descTypeString,
-			},
-			{ // 3: serial number
-				uint8(2 + 2*len(descSerialNumber)),
-				descTypeString,
-			},
-		},
-	},
-}
-
 // descCDCACM0Device holds the default device descriptor for CDC-ACM[0], i.e.,
 // configuration index 1.
 var descCDCACM0Device = [descLengthDevice]uint8{
-	descLengthDevice,         // Size of this descriptor in bytes
-	descTypeDevice,           // Descriptor Type
-	lsU8(descUSBSpecVersion), // USB Specification Release Number in BCD (low)
-	msU8(descUSBSpecVersion), // USB Specification Release Number in BCD (high)
-	descCDCTypeComm,          // Class code (assigned by the USB-IF).
-	descCDCSubNone,           // Subclass code (assigned by the USB-IF).
-	descCDCProtoNone,         // Protocol code (assigned by the USB-IF).
-	descEndptMaxPktSize,      // Maximum packet size for endpoint zero (8, 16, 32, or 64)
-	lsU8(descVendorID),       // Vendor ID (low) (assigned by the USB-IF)
-	msU8(descVendorID),       // Vendor ID (high) (assigned by the USB-IF)
-	lsU8(descProductID),      // Product ID (low) (assigned by the manufacturer)
-	msU8(descProductID),      // Product ID (high) (assigned by the manufacturer)
-	lsU8(descReleaseID),      // Device release number in BCD (low)
-	msU8(descReleaseID),      // Device release number in BCD (high)
-	1,                        // Index of string descriptor describing manufacturer
-	2,                        // Index of string descriptor describing product
-	3,                        // Index of string descriptor describing the device's serial number
-	descCDCACMCount,          // Number of possible configurations
+	descLengthDevice,          // Size of this descriptor in bytes
+	descTypeDevice,            // Descriptor Type
+	lsU8(descUSBSpecVersion),  // USB Specification Release Number in BCD (low)
+	msU8(descUSBSpecVersion),  // USB Specification Release Number in BCD (high)
+	descCDCTypeComm,           // Class code (assigned by the USB-IF).
+	descCDCSubNone,            // Subclass code (assigned by the USB-IF).
+	descCDCProtoNone,          // Protocol code (assigned by the USB-IF).
+	descEndptMaxPktSize,       // Maximum packet size for endpoint zero (8, 16, 32, or 64)
+	lsU8(descCommonVendorID),  // Vendor ID (low) (assigned by the USB-IF)
+	msU8(descCommonVendorID),  // Vendor ID (high) (assigned by the USB-IF)
+	lsU8(descCommonProductID), // Product ID (low) (assigned by the manufacturer)
+	msU8(descCommonProductID), // Product ID (high) (assigned by the manufacturer)
+	lsU8(descCommonReleaseID), // Device release number in BCD (low)
+	msU8(descCommonReleaseID), // Device release number in BCD (high)
+	1,                         // Index of string descriptor describing manufacturer
+	2,                         // Index of string descriptor describing product
+	3,                         // Index of string descriptor describing the device's serial number
+	descCDCACMCount,           // Number of possible configurations
 }
 
 // descCDCACM0Qualif holds the default device qualification descriptor for
@@ -497,24 +463,24 @@ var descCDCACM0Config = [descCDCACMConfigSize]uint8{
 // descCDCACMCodingSize defines the length of a CDC-ACM UART line coding buffer.
 const descCDCACMCodingSize = 7
 
-// descCDCACM0Coding holds the default UART line coding for CDC-ACM[0], i.e.,
-// configuration index 1.
-var descCDCACM0Coding [descCDCACMCodingSize]uint8
+// descCDCACM0LineCoding holds the default UART line coding for CDC-ACM[0],
+// i.e., configuration index 1.
+var descCDCACM0LineCoding descCDCACMLineCoding
 
 type descCDCACMLineCoding struct {
 	baud     uint32
 	stopBits uint8
 	parity   uint8
 	numBits  uint8
-	dtr      bool
-	rts      bool
+	rtsdtr   uint8
 }
 
 func (lc *descCDCACMLineCoding) parse(buffer []uint8) bool {
 	if len(buffer) < descCDCACMCodingSize {
 		return false
 	}
-	lc.baud = packU32(buffer)
+	_ = copy(buffer[:], buffer)
+	lc.baud = packU32(buffer[:])
 	lc.stopBits = buffer[4]
 	if 0 == lc.stopBits {
 		lc.stopBits = 1
@@ -522,4 +488,50 @@ func (lc *descCDCACMLineCoding) parse(buffer []uint8) bool {
 	lc.parity = buffer[5]
 	lc.numBits = buffer[6]
 	return true
+}
+
+const (
+	descStringIndexCount = 4  // Language, Manufacturer, Product, Serial Number
+	descStringSize       = 64 // (64-2)/2 = 31 chars each (UTF-16 code points)
+	// The maximum allowable string descriptor size is 255, or (255-2)/2 = 126
+	// available UTF-16 code points. Considering we are allocating this storage at
+	// compile-time, it seems like an awful waste of space (255*4 = ~1 KiB) just
+	// to store four strings, which, in all likelihood, will not be modified by
+	// anyone other than TinyGo devs; 64*4 = 256 B (i.e., 31 UTF-16 code points
+	// for each string) seems a good compromise.
+)
+
+type (
+	// descString is the actual byte array used to hold string descriptors. The
+	// first two bytes are a USB-specified header (0=length, 1=type), and the
+	// remaining bytes are UTF-16 code points, ordered low byte-first. If you just
+	// want to use UTF-8 (or even ASCII), you still need to reserve 2 bytes for
+	// each symbol, but you can set all of their high bytes 0.
+	descString [descStringSize]uint8
+	// descStringIndex defines an indexed collection of string descriptors for a
+	// given language.
+	descStringIndex [descStringIndexCount]descString
+	// descStringLanguage contains a language code and an indexed collection of
+	// string descriptors encoded in that language.
+	descStringLanguage struct {
+		language   uint16
+		descriptor descStringIndex
+	}
+)
+
+// descCDCACM0String holds the default string descriptors for CDC-ACM[0], i.e.,
+// configuration index 1.
+var descCDCACM0String = [descCDCACMLanguageCount]descStringLanguage{
+	{ // US English string descriptors
+		language: descLanguageEnglish,
+		descriptor: descStringIndex{
+			{ // Language (index 0)
+				4,
+				descTypeString,
+				lsU8(descLanguageEnglish),
+				msU8(descLanguageEnglish),
+			},
+			// Actual string descriptors (index > 0) are copied into here at runtime!
+		},
+	},
 }

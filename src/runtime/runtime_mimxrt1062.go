@@ -124,7 +124,7 @@ func initUART() {
 }
 
 func initUSB() {
-	machine.USBCDC0.Configure(machine.UARTConfig{})
+	machine.UART0.Configure(machine.UARTConfig{})
 }
 
 func putchar(c byte) {

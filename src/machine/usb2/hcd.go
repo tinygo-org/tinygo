@@ -1,6 +1,7 @@
 package usb2
 
 type hcd interface {
+	class() class
 	init() status
 	enable(enable bool) status
 	critical(enter bool) status
