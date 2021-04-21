@@ -1,6 +1,6 @@
 // +build mimxrt1062
 
-package usb2
+package usb
 
 // Implementation of USB device controller interface (dcd) for NXP iMXRT1062.
 

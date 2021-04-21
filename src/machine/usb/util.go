@@ -1,4 +1,4 @@
-package usb2
+package usb
 
 // leU64 returns a slice containing 8 bytes from the given uint64 u.
 //

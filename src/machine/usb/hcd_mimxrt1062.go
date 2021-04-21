@@ -1,6 +1,6 @@
 // +build mimxrt1062
 
-package usb2
+package usb
 
 // Implementation of USB host controller driver (hcd) for NXP iMXRT1062.
 
