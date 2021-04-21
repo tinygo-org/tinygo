@@ -1,6 +1,6 @@
 // +build arm
 
-package usb2
+package usb
 
 import "device/arm"
 

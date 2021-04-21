@@ -1,4 +1,4 @@
-package usb2
+package usb
 
 const descUSBSpecVersion = uint16(0x0200) // USB 2.0
 
