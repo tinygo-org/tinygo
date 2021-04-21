@@ -1,6 +1,6 @@
 // +build mimxrt1062
 
-package usb2
+package usb
 
 // descCPUFrequencyHz defines the target CPU frequency (Hz).
 const descCPUFrequencyHz = 600000000
