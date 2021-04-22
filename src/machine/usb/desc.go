@@ -475,21 +475,6 @@ type descCDCACMLineCoding struct {
 	rtsdtr   uint8
 }
 
-func (lc *descCDCACMLineCoding) parse(buffer []uint8) bool {
-	if len(buffer) < descCDCACMCodingSize {
-		return false
-	}
-	_ = copy(buffer[:], buffer)
-	lc.baud = packU32(buffer[:])
-	lc.stopBits = buffer[4]
-	if 0 == lc.stopBits {
-		lc.stopBits = 1
-	}
-	lc.parity = buffer[5]
-	lc.numBits = buffer[6]
-	return true
-}
-
 const (
 	descStringIndexCount = 4  // Language, Manufacturer, Product, Serial Number
 	descStringSize       = 64 // (64-2)/2 = 31 chars each (UTF-16 code points)

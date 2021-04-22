@@ -56,20 +56,20 @@ func initHCD(port int, class class) (hcd, status) {
 			case 0:
 				hostControllerInstance[i].bus = nxp.USB1
 				hostControllerInstance[i].phy = nxp.USBPHY1
-				hostControllerInstance[i].irq =
-					interrupt.New(nxp.IRQ_USB_OTG1,
-						func(interrupt.Interrupt) {
-							coreInstance[0].hc.interrupt()
-						})
+				//hostControllerInstance[i].irq =
+				//	interrupt.New(nxp.IRQ_USB_OTG1,
+				//		func(interrupt.Interrupt) {
+				//			coreInstance[0].hc.interrupt()
+				//		})
 
 			case 1:
 				hostControllerInstance[i].bus = nxp.USB2
 				hostControllerInstance[i].phy = nxp.USBPHY2
-				hostControllerInstance[i].irq =
-					interrupt.New(nxp.IRQ_USB_OTG2,
-						func(interrupt.Interrupt) {
-							//coreInstance[1].hc.interrupt()
-						})
+				//hostControllerInstance[i].irq =
+				//	interrupt.New(nxp.IRQ_USB_OTG2,
+				//		func(interrupt.Interrupt) {
+				//			//coreInstance[1].hc.interrupt()
+				//		})
 			}
 			return &hostControllerInstance[i], statusOK
 		}

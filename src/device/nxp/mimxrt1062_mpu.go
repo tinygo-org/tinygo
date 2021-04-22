@@ -278,7 +278,6 @@ func enableDcache(enable bool) {
 	}
 }
 
-
 // FlushDcache flushes data from cache to memory
 //
 // Normally FlushDcache is used when metadata written to memory will be used by

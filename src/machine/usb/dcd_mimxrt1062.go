@@ -658,16 +658,72 @@ func (dc *deviceController) control(setup dcdSetup) {
 	dc.bus.ENDPTCTRL0.Set(0x00010001)
 }
 
-// controlTransfers returns the data and ackowledgement transfer descriptors for
-// the control endpoint (i.e., endpoint 0).
-//go:inline
-func (dc *deviceController) controlTransfers() (dat, ack *dcdTransfer) {
-	// control endpoint is device class-specific
-	switch dc.cc.id {
-	case classDeviceCDCACM:
-		return descCDCACM[dc.cc.config-1].cd, descCDCACM[dc.cc.config-1].ad
+// controlComplete handles the setup completion of control endpoint 0.
+func (dc *deviceController) controlComplete() {
+
+	// First, switch on the type of request (standard, class, or vendor)
+	switch dc.setup.bmRequestType & descRequestTypeTypeMsk {
+
+	// === CLASS REQUEST ===
+	case descRequestTypeTypeClass:
+
+		// Switch on the recepient and direction of the request
+		switch dc.setup.bmRequestType &
+			(descRequestTypeRecipientMsk | descRequestTypeDirMsk) {
+
+		// --- INTERFACE Rx (OUT) ---
+		case descRequestTypeRecipientInterface | descRequestTypeDirOut:
+
+			// Identify which request was received
+			switch dc.setup.bRequest {
+
+			// CDC | SET LINE CODING (0x20):
+			case descCDCRequestSetLineCoding:
+
+				// Respond based on our device class configuration
+				switch dc.cc.id {
+
+				// CDC-ACM (single)
+				case classDeviceCDCACM:
+					acm := &descCDCACM[dc.cc.config-1]
+
+					// Determine interface destination of the notification
+					switch dc.setup.wIndex {
+
+					// Control/status interface:
+					case descCDCACMInterfaceCtrl:
+
+						acm.lineCoding.baud = packU32(acm.cx[:])
+						acm.lineCoding.stopBits = acm.cx[4]
+						if 0 == acm.lineCoding.stopBits {
+							acm.lineCoding.stopBits = 1
+						}
+						acm.lineCoding.parity = acm.cx[5]
+						acm.lineCoding.numBits = acm.cx[6]
+
+						if 134 == acm.lineCoding.baud {
+							dc.enableSofInterrupts(true, descCDCACMInterfaceCount)
+							dc.rebootTimer = 80
+						}
+
+					default:
+						// Unhandled device interface
+					}
+
+				default:
+					// Unhandled device class
+				}
+
+			default:
+				// Unhandled request
+			}
+
+		default:
+			// Unhandled recepient or direction
+		}
+
 	default:
-		return nil, nil
+		// Unhandled request type
 	}
 }
 
@@ -782,6 +838,19 @@ func (dc *deviceController) controlDescriptor(setup dcdSetup) {
 
 }
 
+// controlTransfers returns the data and ackowledgement transfer descriptors for
+// the control endpoint (i.e., endpoint 0).
+//go:inline
+func (dc *deviceController) controlTransfers() (dat, ack *dcdTransfer) {
+	// control endpoint is device class-specific
+	switch dc.cc.id {
+	case classDeviceCDCACM:
+		return descCDCACM[dc.cc.config-1].cd, descCDCACM[dc.cc.config-1].ad
+	default:
+		return nil, nil
+	}
+}
+
 // controlReceive receives (Rx, OUT) data on control endpoint 0.
 func (dc *deviceController) controlReceive(
 	data uintptr, size uint32, notify bool) {
@@ -855,68 +924,6 @@ func (dc *deviceController) controlTransmit(
 	dc.bus.ENDPTPRIME.SetBits(rm)
 	if notify {
 		dc.controlNotify = rm
-	}
-}
-
-// controlComplete handles the setup completion of control endpoint 0.
-func (dc *deviceController) controlComplete() {
-
-	// First, switch on the type of request (standard, class, or vendor)
-	switch dc.setup.bmRequestType & descRequestTypeTypeMsk {
-
-	// === CLASS REQUEST ===
-	case descRequestTypeTypeClass:
-
-		// Switch on the recepient and direction of the request
-		switch dc.setup.bmRequestType &
-			(descRequestTypeRecipientMsk | descRequestTypeDirMsk) {
-
-		// --- INTERFACE Rx (OUT) ---
-		case descRequestTypeRecipientInterface | descRequestTypeDirOut:
-
-			// Identify which request was received
-			switch dc.setup.bRequest {
-
-			// CDC | SET LINE CODING (0x20):
-			case descCDCRequestSetLineCoding:
-
-				// Respond based on our device class configuration
-				switch dc.cc.id {
-
-				// CDC-ACM (single)
-				case classDeviceCDCACM:
-					acm := &descCDCACM[dc.cc.config-1]
-
-					// Determine interface destination of the notification
-					switch dc.setup.wIndex {
-
-					// Control/status interface:
-					case descCDCACMInterfaceCtrl:
-						if acm.lineCoding.parse(acm.cx[:]) {
-							if 134 == acm.lineCoding.baud {
-								dc.enableSofInterrupts(true, descCDCACMInterfaceCount)
-								dc.rebootTimer = 80
-							}
-						}
-
-					default:
-						// Unhandled device interface
-					}
-
-				default:
-					// Unhandled device class
-				}
-
-			default:
-				// Unhandled request
-			}
-
-		default:
-			// Unhandled recepient or direction
-		}
-
-	default:
-		// Unhandled request type
 	}
 }
 
