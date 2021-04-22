@@ -22,6 +22,13 @@ func main() {
 
 	s4 := make([]byte, 300) // OUT: object allocated on the heap: object size 300 exceeds maximum stack allocation size 256
 	readByteSlice(s4)
+
+	s5 := make([]int, 4) // OUT: object allocated on the heap: escapes at line 27
+	s5 = append(s5, 5)
+
+	s6 := make([]int, 3)
+	s7 := []int{1, 2, 3}
+	copySlice(s6, s7)
 }
 
 func derefInt(x *int) int {
@@ -45,3 +52,7 @@ func returnIntSlice(s []int) []int {
 }
 
 func getUnknownNumber() int
+
+func copySlice(out, in []int) {
+	copy(out, in)
+}

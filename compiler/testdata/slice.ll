@@ -60,7 +60,7 @@ entry:
   ret { i32*, i32, i32 } %7
 }
 
-declare { i8*, i32, i32 } @runtime.sliceAppend(i8*, i8*, i32, i32, i32, i32, i8*, i8*)
+declare { i8*, i32, i32 } @runtime.sliceAppend(i8*, i8* nocapture readonly, i32, i32, i32, i32, i8*, i8*)
 
 define hidden { i32*, i32, i32 } @main.sliceAppendSlice(i32* %ints.data, i32 %ints.len, i32 %ints.cap, i32* %added.data, i32 %added.len, i32 %added.cap, i8* %context, i8* %parentHandle) unnamed_addr {
 entry:
@@ -85,4 +85,4 @@ entry:
   ret i32 %copy.n
 }
 
-declare i32 @runtime.sliceCopy(i8*, i8*, i32, i32, i32, i8*, i8*)
+declare i32 @runtime.sliceCopy(i8* nocapture writeonly, i8* nocapture readonly, i32, i32, i32, i8*, i8*)
