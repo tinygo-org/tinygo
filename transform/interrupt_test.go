@@ -1,8 +1,9 @@
-package transform
+package transform_test
 
 import (
 	"testing"
 
+	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -11,7 +12,7 @@ func TestInterruptLowering(t *testing.T) {
 	for _, subtest := range []string{"avr", "cortexm"} {
 		t.Run(subtest, func(t *testing.T) {
 			testTransform(t, "testdata/interrupt-"+subtest, func(mod llvm.Module) {
-				errs := LowerInterrupts(mod, 0)
+				errs := transform.LowerInterrupts(mod, 0)
 				if len(errs) != 0 {
 					t.Fail()
 					for _, err := range errs {
