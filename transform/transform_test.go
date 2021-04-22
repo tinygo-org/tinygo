@@ -1,4 +1,4 @@
-package transform
+package transform_test
 
 // This file defines some helper functions for testing transforms.
 
