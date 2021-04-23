@@ -75,7 +75,6 @@ func initSystem() {
 	nxp.SIM.SCGC3.Set(nxp.SIM_SCGC3_ADC1 | nxp.SIM_SCGC3_FTM2 | nxp.SIM_SCGC3_FTM3)
 	nxp.SIM.SCGC5.Set(0x00043F82) // clocks active to all GPIO
 	nxp.SIM.SCGC6.Set(nxp.SIM_SCGC6_RTC | nxp.SIM_SCGC6_FTM0 | nxp.SIM_SCGC6_FTM1 | nxp.SIM_SCGC6_ADC0 | nxp.SIM_SCGC6_FTF)
-	nxp.SystemControl.CPACR.Set(0x00F00000)
 	nxp.LMEM.PCCCR.Set(0x85000003)
 
 	// release I/O pins hold, if we woke up from VLLS mode

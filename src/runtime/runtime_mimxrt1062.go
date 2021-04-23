@@ -102,11 +102,6 @@ func initSystem() {
 
 func initPeripherals() {
 
-	// enable FPU - set CP10, CP11 full access
-	nxp.SystemControl.CPACR.SetBits(
-		((nxp.SCB_CPACR_CP10_CP10_3 << nxp.SCB_CPACR_CP10_Pos) & nxp.SCB_CPACR_CP10_Msk) |
-			((nxp.SCB_CPACR_CP11_CP11_3 << nxp.SCB_CPACR_CP11_Pos) & nxp.SCB_CPACR_CP11_Msk))
-
 	enableTimerClocks() // activate GPT/PIT clock gates
 	initSysTick()       // enable SysTick
 	initRTC()           // enable real-time clock

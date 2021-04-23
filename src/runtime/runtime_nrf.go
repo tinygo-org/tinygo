@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	"device/arm"
 	"device/nrf"
 	"machine"
 	"runtime/interrupt"
@@ -18,6 +19,9 @@ func postinit() {}
 
 //export Reset_Handler
 func main() {
+	if nrf.FPUPresent {
+		arm.SCB.CPACR.Set(0) // disable FPU if it is enabled
+	}
 	systemInit()
 	preinit()
 	run()
