@@ -26,12 +26,21 @@ type SCB_Type struct {
 	SHPR2 volatile.Register32 // 0xD1C: System Handler Priority Register 2
 	SHPR3 volatile.Register32 // 0xD20: System Handler Priority Register 3
 	// the following are only applicable for Cortex-M3/M33/M4/M7
-	SHCSR volatile.Register32 // 0xD24: System Handler Control and State Register
-	CFSR  volatile.Register32 // 0xD28: Configurable Fault Status Register
-	HFSR  volatile.Register32 // 0xD2C: HardFault Status Register
-	DFSR  volatile.Register32 // 0xD30: Debug Fault Status Register
-	MMFAR volatile.Register32 // 0xD34: MemManage Fault Address Register
-	BFAR  volatile.Register32 // 0xD38: BusFault Address Register
+	SHCSR volatile.Register32    // 0xD24: System Handler Control and State Register
+	CFSR  volatile.Register32    // 0xD28: Configurable Fault Status Register
+	HFSR  volatile.Register32    // 0xD2C: HardFault Status Register
+	DFSR  volatile.Register32    // 0xD30: Debug Fault Status Register
+	MMFAR volatile.Register32    // 0xD34: MemManage Fault Address Register
+	BFAR  volatile.Register32    // 0xD38: BusFault Address Register
+	AFSR  volatile.Register32    // 0xD3C: Auxiliary Fault Status Register
+	PFR   [2]volatile.Register32 // 0xD40: Processor Feature Register
+	DFR   volatile.Register32    // 0xD48: Debug Feature Register
+	ADR   volatile.Register32    // 0xD4C: Auxiliary Feature Register
+	MMFR  [4]volatile.Register32 // 0xD50: Memory Model Feature Register
+	ISAR  [5]volatile.Register32 // 0xD60: Instruction Set Attributes Register
+	_     [5]uint32              // reserved
+	CPACR volatile.Register32    // 0xD88: Coprocessor Access Control Register
+
 }
 
 var SCB = (*SCB_Type)(unsafe.Pointer(uintptr(SCB_BASE)))

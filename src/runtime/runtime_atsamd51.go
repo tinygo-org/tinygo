@@ -16,6 +16,7 @@ func postinit() {}
 
 //export Reset_Handler
 func main() {
+	arm.SCB.CPACR.Set(0) // disable FPU if it is enabled
 	preinit()
 	run()
 	abort()
