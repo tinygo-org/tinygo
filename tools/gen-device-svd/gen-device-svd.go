@@ -19,10 +19,15 @@ var validName = regexp.MustCompile("^[a-zA-Z0-9_]+$")
 var enumBitSpecifier = regexp.MustCompile("^#[x01]+$")
 
 type SVDFile struct {
-	XMLName     xml.Name        `xml:"device"`
-	Name        string          `xml:"name"`
-	Description string          `xml:"description"`
-	LicenseText string          `xml:"licenseText"`
+	XMLName     xml.Name `xml:"device"`
+	Name        string   `xml:"name"`
+	Description string   `xml:"description"`
+	LicenseText string   `xml:"licenseText"`
+	CPU         *struct {
+		Name         string `xml:"name"`
+		FPUPresent   bool   `xml:"fpuPresent"`
+		NVICPrioBits int    `xml:"nvicPrioBits"`
+	} `xml:"cpu"`
 	Peripherals []SVDPeripheral `xml:"peripherals>peripheral"`
 }
 
@@ -95,6 +100,11 @@ type Metadata struct {
 	NameLower        string
 	Description      string
 	LicenseBlock     string
+
+	HasCPUInfo   bool // set if the following fields are populated
+	CPUName      string
+	FPUPresent   bool
+	NVICPrioBits int
 }
 
 type Interrupt struct {
@@ -418,15 +428,22 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		licenseBlock = regexp.MustCompile(`\s+\n`).ReplaceAllString(licenseBlock, "\n")
 	}
 
+	metadata := &Metadata{
+		File:             filepath.Base(path),
+		DescriptorSource: sourceURL,
+		Name:             device.Name,
+		NameLower:        strings.ToLower(device.Name),
+		Description:      strings.TrimSpace(device.Description),
+		LicenseBlock:     licenseBlock,
+	}
+	if device.CPU != nil {
+		metadata.HasCPUInfo = true
+		metadata.CPUName = device.CPU.Name
+		metadata.FPUPresent = device.CPU.FPUPresent
+		metadata.NVICPrioBits = device.CPU.NVICPrioBits
+	}
 	return &Device{
-		Metadata: &Metadata{
-			File:             filepath.Base(path),
-			DescriptorSource: sourceURL,
-			Name:             device.Name,
-			NameLower:        strings.ToLower(device.Name),
-			Description:      strings.TrimSpace(device.Description),
-			LicenseBlock:     licenseBlock,
-		},
+		Metadata:    metadata,
 		Interrupts:  interruptList,
 		Peripherals: peripheralsList,
 	}, nil
@@ -833,7 +850,12 @@ import (
 
 // Some information about this device.
 const (
-	DEVICE	 = "{{.device.Metadata.Name}}"
+	Device       = "{{.device.Metadata.Name}}"
+{{- if .device.Metadata.HasCPUInfo }}
+	CPU          = "{{.device.Metadata.CPUName}}"
+	FPUPresent   = {{.device.Metadata.FPUPresent}}
+	NVICPrioBits = {{.device.Metadata.NVICPrioBits}}
+{{- end }}
 )
 
 // Interrupt numbers.

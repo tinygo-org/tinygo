@@ -24,10 +24,10 @@ func waitForEvents() {
 	if enabled != 0 {
 		// Now pick the appropriate SVCall number. Hopefully they won't change
 		// in the future with a different SoftDevice version.
-		if nrf.DEVICE == "nrf51" {
+		if nrf.Device == "nrf51" {
 			// sd_app_evt_wait: SOC_SVC_BASE_NOT_AVAILABLE + 29
 			arm.SVCall0(0x2B + 29)
-		} else if nrf.DEVICE == "nrf52" || nrf.DEVICE == "nrf52840" || nrf.DEVICE == "nrf52833" {
+		} else if nrf.Device == "nrf52" || nrf.Device == "nrf52840" || nrf.Device == "nrf52833" {
 			// sd_app_evt_wait: SOC_SVC_BASE_NOT_AVAILABLE + 21
 			arm.SVCall0(0x2C + 21)
 		} else {
