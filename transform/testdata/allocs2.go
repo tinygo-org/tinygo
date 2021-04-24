@@ -24,11 +24,24 @@ func main() {
 	readByteSlice(s4)
 
 	s5 := make([]int, 4) // OUT: object allocated on the heap: escapes at line 27
-	s5 = append(s5, 5)
+	_ = append(s5, 5)
 
 	s6 := make([]int, 3)
 	s7 := []int{1, 2, 3}
 	copySlice(s6, s7)
+
+	c1 := getComplex128() // OUT: object allocated on the heap: escapes at line 34
+	useInterface(c1)
+
+	n3 := 5 // OUT: object allocated on the heap: escapes at line 39
+	func() int {
+		return n3
+	}()
+
+	callVariadic(3, 5, 8) // OUT: object allocated on the heap: escapes at line 41
+
+	s8 := []int{3, 5, 8} // OUT: object allocated on the heap: escapes at line 44
+	callVariadic(s8...)
 }
 
 func derefInt(x *int) int {
@@ -56,3 +69,9 @@ func getUnknownNumber() int
 func copySlice(out, in []int) {
 	copy(out, in)
 }
+
+func getComplex128() complex128
+
+func useInterface(interface{})
+
+func callVariadic(...int)
