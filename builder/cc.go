@@ -167,10 +167,7 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands
 	if err != nil {
 		return "", err
 	}
-	err = os.Rename(f.Name(), depfileCachePath)
-	if err != nil {
-		return "", err
-	}
+	os.Rename(f.Name(), depfileCachePath)
 
 	// Move temporary object file to final location.
 	outpath, err := makeCFileCachePath(dependencySlice, depfileNameHash)
