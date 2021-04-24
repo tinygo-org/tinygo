@@ -119,7 +119,7 @@ commands:
             - lib/wasi-libc/sysroot
       - run: go test -v -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./compiler ./interp ./transform .
       - run: make gen-device -j4
-      - run: make smoketest XTENSA=0
+      - run: make smoketest XTENSA=0 RUN_SMOKETEST_JOBS=4
       - run: make tinygo-test
       - run: make wasmtest
       - save_cache:
@@ -195,7 +195,7 @@ commands:
             - ~/.cache/go-build
             - /go/pkg/mod
       - run: make gen-device -j4
-      - run: make smoketest TINYGO=build/tinygo
+      - run: make smoketest TINYGO=build/tinygo RUN_SMOKETEST_JOBS=4
   build-linux:
     steps:
       - checkout
@@ -278,7 +278,7 @@ commands:
             tar -C ~/lib -xf /tmp/tinygo.linux-amd64.tar.gz
             ln -s ~/lib/tinygo/bin/tinygo /go/bin/tinygo
             tinygo version
-      - run: make smoketest
+      - run: make smoketest RUN_SMOKETEST_JOBS=4
   build-macos:
     steps:
       - checkout
@@ -357,7 +357,7 @@ commands:
             tar -C /usr/local/opt -xf /tmp/tinygo.darwin-amd64.tar.gz
             ln -s /usr/local/opt/tinygo/bin/tinygo /usr/local/bin/tinygo
             tinygo version
-      - run: make smoketest AVR=0
+      - run: make smoketest AVR=0 RUN_SMOKETEST_JOBS=4
       - save_cache:
           key: go-cache-macos-v3-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
