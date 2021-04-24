@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/sago35/ochan"
@@ -20,7 +21,15 @@ import (
 )
 
 func main() {
-	threads := flag.Int("threads", runtime.NumCPU(), "threads of make smoketest")
+	threads := runtime.NumCPU()
+	if j, ok := os.LookupEnv(`RUN_SMOKETEST_JOBS`); ok {
+		n, err := strconv.ParseInt(j, 0, 0)
+		if err == nil {
+			threads = int(n)
+		}
+	}
+
+	flag.IntVar(&threads, "threads", threads, "threads of make smoketest")
 	flag.Parse()
 
 	if len(os.Args) < 2 {
@@ -33,7 +42,7 @@ func main() {
 		log.Fatalf(err.Error())
 	}
 
-	err = run(commands, *threads)
+	err = run(commands, threads)
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
