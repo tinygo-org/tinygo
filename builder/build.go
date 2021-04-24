@@ -300,7 +300,13 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				if err != nil {
 					return err
 				}
-				return os.Rename(f.Name(), bitcodePath)
+
+				// Rename may fail if another process is trying to write to
+				// the same file.  However, in this case, the failure is
+				// acceptable because the result of the other process can be
+				// used.
+				os.Rename(f.Name(), bitcodePath)
+				return nil
 			},
 		}
 		jobs = append(jobs, job)
