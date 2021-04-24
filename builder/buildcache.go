@@ -84,7 +84,7 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	defer inf.Close()
-	outpath := dst + ".tmp"
+	outpath := src + ".tmp"
 	outf, err := os.Create(outpath)
 	if err != nil {
 		return err
@@ -101,5 +101,10 @@ func copyFile(src, dst string) error {
 		return err
 	}
 
-	return os.Rename(dst+".tmp", dst)
+	// Rename may fail if another process is trying to write to
+	// the same file.  However, in this case, the failure is
+	// acceptable because the result of the other process can be
+	// used.
+	os.Rename(outpath, dst)
+	return nil
 }
