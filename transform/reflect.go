@@ -31,6 +31,7 @@ import (
 	"encoding/binary"
 	"go/ast"
 	"math/big"
+	"sort"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
@@ -122,14 +123,45 @@ type typeCodeAssignmentState struct {
 	needsNamedNonBasicTypesSidetable bool
 }
 
-// assignTypeCodes is used to assign a type code to each type in the program
+// LowerReflect is used to assign a type code to each type in the program
 // that is ever stored in an interface. It tries to use the smallest possible
 // numbers to make the code that works with interfaces as small as possible.
-func assignTypeCodes(mod llvm.Module, typeSlice typeInfoSlice) {
+func LowerReflect(mod llvm.Module) {
 	// if reflect were not used, we could skip generating the sidetable
 	// this does not help in practice, and is difficult to do correctly
 
+	// Obtain slice of all types in the program.
+	type typeInfo struct {
+		typecode llvm.Value
+		name     string
+		numUses  int
+	}
+	var types []*typeInfo
+	for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+		if strings.HasPrefix(global.Name(), "reflect/types.type:") {
+			types = append(types, &typeInfo{
+				typecode: global,
+				name:     global.Name(),
+				numUses:  len(getUses(global)),
+			})
+		}
+	}
+
+	// Sort the slice in a way that often used types are assigned a type code
+	// first.
+	sort.Slice(types, func(i, j int) bool {
+		if types[i].numUses != types[j].numUses {
+			return types[i].numUses < types[j].numUses
+		}
+		// It would make more sense to compare the name in the other direction,
+		// but for some reason that increases binary size. Could be a fluke, but
+		// could also have some good reason (and possibly hint at a small
+		// optimization).
+		return types[i].name > types[j].name
+	})
+
 	// Assign typecodes the way the reflect package expects.
+	uintptrType := mod.Context().IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8)
 	state := typeCodeAssignmentState{
 		fallbackIndex:                    1,
 		uintptrLen:                       llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8,
@@ -143,7 +175,7 @@ func assignTypeCodes(mod llvm.Module, typeSlice typeInfoSlice) {
 		needsStructNamesSidetable:        len(getUses(mod.NamedGlobal("reflect.structNamesSidetable"))) != 0,
 		needsArrayTypesSidetable:         len(getUses(mod.NamedGlobal("reflect.arrayTypesSidetable"))) != 0,
 	}
-	for _, t := range typeSlice {
+	for _, t := range types {
 		num := state.getTypeCodeNum(t.typecode)
 		if num.BitLen() > state.uintptrLen || !num.IsUint64() {
 			// TODO: support this in some way, using a side table for example.
@@ -152,7 +184,25 @@ func assignTypeCodes(mod llvm.Module, typeSlice typeInfoSlice) {
 			// AVR).
 			panic("compiler: could not store type code number inside interface type code")
 		}
-		t.num = num.Uint64()
+
+		// Replace each use of the type code global with the constant type code.
+		for _, use := range getUses(t.typecode) {
+			if use.IsAConstantExpr().IsNil() {
+				continue
+			}
+			typecode := llvm.ConstInt(uintptrType, num.Uint64(), false)
+			switch use.Opcode() {
+			case llvm.PtrToInt:
+				// Already of the correct type.
+			case llvm.BitCast:
+				// Could happen when stored in an interface (which is of type
+				// i8*).
+				typecode = llvm.ConstIntToPtr(typecode, use.Type())
+			default:
+				panic("unexpected constant expression")
+			}
+			use.ReplaceAllUsesWith(typecode)
+		}
 	}
 
 	// Only create this sidetable when it is necessary.
@@ -179,6 +229,23 @@ func assignTypeCodes(mod llvm.Module, typeSlice typeInfoSlice) {
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 		global.SetGlobalConstant(true)
+	}
+
+	// Remove most objects created for interface and reflect lowering.
+	// They would normally be removed anyway in later passes, but not always.
+	// It also cleans up the IR for testing.
+	for _, typ := range types {
+		initializer := typ.typecode.Initializer()
+		references := llvm.ConstExtractValue(initializer, []uint32{0})
+		typ.typecode.SetInitializer(llvm.ConstNull(initializer.Type()))
+		if strings.HasPrefix(typ.name, "reflect/types.type:struct:") {
+			// Structs have a 'references' field that is not a typecode but
+			// a pointer to a runtime.structField array and therefore a
+			// bitcast. This global should be erased separately, otherwise
+			// typecode objects cannot be erased.
+			structFields := references.Operand(0)
+			structFields.EraseFromParentAsGlobal()
+		}
 	}
 }
 

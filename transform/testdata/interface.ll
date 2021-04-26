@@ -4,10 +4,10 @@ target triple = "armv7m-none-eabi"
 %runtime.typecodeID = type { %runtime.typecodeID*, i32, %runtime.interfaceMethodInfo* }
 %runtime.interfaceMethodInfo = type { i8*, i32 }
 
-@"reflect/types.type:basic:uint8" = external constant %runtime.typecodeID
+@"reflect/types.type:basic:uint8" = private constant %runtime.typecodeID zeroinitializer
 @"reflect/types.typeid:basic:uint8" = external constant i8
 @"reflect/types.typeid:basic:int16" = external constant i8
-@"reflect/types.type:basic:int" = external constant %runtime.typecodeID
+@"reflect/types.type:basic:int" = private constant %runtime.typecodeID zeroinitializer
 @"func NeverImplementedMethod()" = external constant i8
 @"Unmatched$interface" = private constant [1 x i8*] [i8* @"func NeverImplementedMethod()"]
 @"func Double() int" = external constant i8
