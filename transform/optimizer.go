@@ -63,7 +63,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		goPasses.AddFunctionAttrsPass()
 		goPasses.Run(mod)
 
-		// Run Go-specific optimization passes.
+		// Run TinyGo-specific optimization passes.
 		OptimizeMaps(mod)
 		OptimizeStringToBytes(mod)
 		OptimizeReflectImplements(mod)
@@ -88,6 +88,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		goPasses.Run(mod)
 
 		// Run TinyGo-specific interprocedural optimizations.
+		LowerReflect(mod)
 		OptimizeAllocs(mod, config.Options.PrintAllocs, func(pos token.Position, msg string) {
 			fmt.Fprintln(os.Stderr, pos.String()+": "+msg)
 		})
@@ -100,6 +101,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		if err != nil {
 			return []error{err}
 		}
+		LowerReflect(mod)
 		if config.FuncImplementation() == "switch" {
 			LowerFuncValues(mod)
 		}

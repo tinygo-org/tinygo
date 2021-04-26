@@ -2,7 +2,6 @@ package transform_test
 
 import (
 	"go/token"
-	"go/types"
 	"io/ioutil"
 	"path/filepath"
 	"regexp"
@@ -11,9 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tinygo-org/tinygo/compileopts"
-	"github.com/tinygo-org/tinygo/compiler"
-	"github.com/tinygo-org/tinygo/loader"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
@@ -39,52 +35,7 @@ func (out allocsTestOutput) String() string {
 func TestAllocs2(t *testing.T) {
 	t.Parallel()
 
-	target, err := compileopts.LoadTarget("i686--linux")
-	if err != nil {
-		t.Fatal("failed to load target:", err)
-	}
-	config := &compileopts.Config{
-		Options: &compileopts.Options{},
-		Target:  target,
-	}
-	compilerConfig := &compiler.Config{
-		Triple:             config.Triple(),
-		GOOS:               config.GOOS(),
-		GOARCH:             config.GOARCH(),
-		CodeModel:          config.CodeModel(),
-		RelocationModel:    config.RelocationModel(),
-		Scheduler:          config.Scheduler(),
-		FuncImplementation: config.FuncImplementation(),
-		AutomaticStackSize: config.AutomaticStackSize(),
-		Debug:              true,
-	}
-	machine, err := compiler.NewTargetMachine(compilerConfig)
-	if err != nil {
-		t.Fatal("failed to create target machine:", err)
-	}
-
-	// Load entire program AST into memory.
-	lprogram, err := loader.Load(config, []string{"./testdata/allocs2.go"}, config.ClangHeaders, types.Config{
-		Sizes: compiler.Sizes(machine),
-	})
-	if err != nil {
-		t.Fatal("failed to create target machine:", err)
-	}
-	err = lprogram.Parse()
-	if err != nil {
-		t.Fatal("could not parse", err)
-	}
-
-	// Compile AST to IR.
-	program := lprogram.LoadSSA()
-	pkg := lprogram.MainPkg()
-	mod, errs := compiler.CompilePackage("allocs2.go", pkg, program.Package(pkg.Pkg), machine, compilerConfig, false)
-	if errs != nil {
-		for _, err := range errs {
-			t.Error(err)
-		}
-		return
-	}
+	mod := compileGoFileForTesting(t, "./testdata/allocs2.go")
 
 	// Run functionattrs pass, which is necessary for escape analysis.
 	pm := llvm.NewPassManager()

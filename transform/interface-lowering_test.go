@@ -14,5 +14,10 @@ func TestInterfaceLowering(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
+
+		pm := llvm.NewPassManager()
+		defer pm.Dispose()
+		pm.AddGlobalDCEPass()
+		pm.Run(mod)
 	})
 }

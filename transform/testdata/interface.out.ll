@@ -4,19 +4,9 @@ target triple = "armv7m-none-eabi"
 %runtime.typecodeID = type { %runtime.typecodeID*, i32, %runtime.interfaceMethodInfo* }
 %runtime.interfaceMethodInfo = type { i8*, i32 }
 
-@"reflect/types.type:basic:uint8" = external constant %runtime.typecodeID
-@"reflect/types.typeid:basic:uint8" = external constant i8
-@"reflect/types.typeid:basic:int16" = external constant i8
-@"reflect/types.type:basic:int" = external constant %runtime.typecodeID
-@"func NeverImplementedMethod()" = external constant i8
-@"func Double() int" = external constant i8
-@"reflect/types.type:named:Number" = private constant %runtime.typecodeID zeroinitializer
-
-declare i1 @runtime.interfaceImplements(i32, i8**)
-
-declare i1 @runtime.typeAssert(i32, i8*)
-
-declare i32 @runtime.interfaceMethod(i32, i8**, i8*)
+@"reflect/types.type:basic:uint8" = private constant %runtime.typecodeID zeroinitializer
+@"reflect/types.type:basic:int" = private constant %runtime.typecodeID zeroinitializer
+@"reflect/types.type:named:Number" = private constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i32 0, %runtime.interfaceMethodInfo* null }
 
 declare void @runtime.printuint8(i8)
 
@@ -31,9 +21,9 @@ declare void @runtime.printnl()
 declare void @runtime.nilPanic(i8*, i8*)
 
 define void @printInterfaces() {
-  call void @printInterface(i32 4, i8* inttoptr (i32 5 to i8*))
-  call void @printInterface(i32 16, i8* inttoptr (i8 120 to i8*))
-  call void @printInterface(i32 68, i8* inttoptr (i32 3 to i8*))
+  call void @printInterface(i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:basic:int" to i32), i8* inttoptr (i32 5 to i8*))
+  call void @printInterface(i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:basic:uint8" to i32), i8* inttoptr (i8 120 to i8*))
+  call void @printInterface(i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:Number" to i32), i8* inttoptr (i32 3 to i8*))
   ret void
 }
 
@@ -57,7 +47,7 @@ typeswitch.Doubler:                               ; preds = %typeswitch.notUnmat
   ret void
 
 typeswitch.notDoubler:                            ; preds = %typeswitch.notUnmatched
-  %typeassert.ok2 = icmp eq i32 16, %typecode
+  %typeassert.ok2 = icmp eq i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:basic:uint8" to i32), %typecode
   br i1 %typeassert.ok2, label %typeswitch.byte, label %typeswitch.notByte
 
 typeswitch.byte:                                  ; preds = %typeswitch.notDoubler
@@ -92,40 +82,34 @@ define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %parentHandle) {
 
 define internal i32 @"(Doubler).Double"(i8* %0, i8* %1, i32 %actualType, i8* %parentHandle) unnamed_addr {
 entry:
-  switch i32 %actualType, label %default [
-    i32 68, label %"named:Number"
-  ]
-
-default:                                          ; preds = %entry
-  call void @runtime.nilPanic(i8* undef, i8* undef)
-  unreachable
+  %"named:Number.icmp" = icmp eq i32 %actualType, ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:Number" to i32)
+  br i1 %"named:Number.icmp", label %"named:Number", label %"named:Number.next"
 
 "named:Number":                                   ; preds = %entry
   %2 = call i32 @"(Number).Double$invoke"(i8* %0, i8* %1)
   ret i32 %2
+
+"named:Number.next":                              ; preds = %entry
+  call void @runtime.nilPanic(i8* undef, i8* undef)
+  unreachable
 }
 
 define internal i1 @"Doubler$typeassert"(i32 %actualType) unnamed_addr {
 entry:
-  switch i32 %actualType, label %else [
-    i32 68, label %then
-  ]
+  %"named:Number.icmp" = icmp eq i32 %actualType, ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:Number" to i32)
+  br i1 %"named:Number.icmp", label %then, label %"named:Number.next"
 
 then:                                             ; preds = %entry
   ret i1 true
 
-else:                                             ; preds = %entry
+"named:Number.next":                              ; preds = %entry
   ret i1 false
 }
 
 define internal i1 @"Unmatched$typeassert"(i32 %actualType) unnamed_addr {
 entry:
-  switch i32 %actualType, label %else [
-  ]
+  ret i1 false
 
 then:                                             ; No predecessors!
   ret i1 true
-
-else:                                             ; preds = %entry
-  ret i1 false
 }

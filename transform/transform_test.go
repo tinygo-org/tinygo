@@ -4,13 +4,19 @@ package transform_test
 
 import (
 	"flag"
+	"go/token"
+	"go/types"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/compiler"
+	"github.com/tinygo-org/tinygo/loader"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -127,4 +133,87 @@ func filterIrrelevantIRLines(lines []string) []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+// compileGoFileForTesting compiles the given Go file to run tests against.
+// Only the given Go file is compiled (no dependencies) and no optimizations are
+// run.
+// If there are any errors, they are reported via the *testing.T instance.
+func compileGoFileForTesting(t *testing.T, filename string) llvm.Module {
+	target, err := compileopts.LoadTarget("i686--linux")
+	if err != nil {
+		t.Fatal("failed to load target:", err)
+	}
+	config := &compileopts.Config{
+		Options: &compileopts.Options{},
+		Target:  target,
+	}
+	compilerConfig := &compiler.Config{
+		Triple:             config.Triple(),
+		GOOS:               config.GOOS(),
+		GOARCH:             config.GOARCH(),
+		CodeModel:          config.CodeModel(),
+		RelocationModel:    config.RelocationModel(),
+		Scheduler:          config.Scheduler(),
+		FuncImplementation: config.FuncImplementation(),
+		AutomaticStackSize: config.AutomaticStackSize(),
+		Debug:              true,
+	}
+	machine, err := compiler.NewTargetMachine(compilerConfig)
+	if err != nil {
+		t.Fatal("failed to create target machine:", err)
+	}
+
+	// Load entire program AST into memory.
+	lprogram, err := loader.Load(config, []string{filename}, config.ClangHeaders, types.Config{
+		Sizes: compiler.Sizes(machine),
+	})
+	if err != nil {
+		t.Fatal("failed to create target machine:", err)
+	}
+	err = lprogram.Parse()
+	if err != nil {
+		t.Fatal("could not parse", err)
+	}
+
+	// Compile AST to IR.
+	program := lprogram.LoadSSA()
+	pkg := lprogram.MainPkg()
+	mod, errs := compiler.CompilePackage(filename, pkg, program.Package(pkg.Pkg), machine, compilerConfig, false)
+	if errs != nil {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		t.FailNow()
+	}
+	return mod
+}
+
+// getPosition returns the position information for the given value, as far as
+// it is available.
+func getPosition(val llvm.Value) token.Position {
+	if !val.IsAInstruction().IsNil() {
+		loc := val.InstructionDebugLoc()
+		if loc.IsNil() {
+			return token.Position{}
+		}
+		file := loc.LocationScope().ScopeFile()
+		return token.Position{
+			Filename: filepath.Join(file.FileDirectory(), file.FileFilename()),
+			Line:     int(loc.LocationLine()),
+			Column:   int(loc.LocationColumn()),
+		}
+	} else if !val.IsAFunction().IsNil() {
+		loc := val.Subprogram()
+		if loc.IsNil() {
+			return token.Position{}
+		}
+		file := loc.ScopeFile()
+		return token.Position{
+			Filename: filepath.Join(file.FileDirectory(), file.FileFilename()),
+			Line:     int(loc.SubprogramLine()),
+		}
+	} else {
+		return token.Position{}
+	}
 }
