@@ -2,59 +2,6 @@ package usb
 
 // Hardware abstraction for USB ports configured as either host or device.
 
-import "unsafe"
-
-func init() {
-	if unsafe.Sizeof(uintptr(0)) > 4 {
-		panic("USB is only supported on 32-bit systems")
-	}
-}
-
-// core represents the core of a USB port configured as either host or device.
-type core struct {
-	port int
-	mode int
-	dc   dcd
-	hc   hcd
-}
-
-// Constant definitions for USB core operating modes.
-const (
-	modeIdle   = 0
-	modeDevice = 1
-	modeHost   = 2
-)
-
-// class represents the type of a host/device and its class configuration index.
-// The first valid configuration index is 1. Index 0 is reserved and invalid.
-type class struct {
-	id     int
-	config int
-}
-
-// Constant definitions for all host/device classes.
-const (
-	classDeviceCDCACM = 0 // The only currently-supported class (CDC-ACM)
-)
-
-// mode returns the USB core operating mode of the receiver class cl.
-//go:inline
-func (cl class) mode() int {
-	switch cl.id {
-	case classDeviceCDCACM:
-		return modeDevice
-	default:
-		return modeIdle
-	}
-}
-
-// equals returns true if and only if all fields of the given class are equal to
-// those of the receiver cl.
-//go:inline
-func (cl class) equals(class class) bool {
-	return cl.id == class.id && cl.config == class.config
-}
-
 // CoreCount defines the total number of USB cores to configure in device or
 // host mode.
 const CoreCount = dcdCount + hcdCount
@@ -63,25 +10,28 @@ const CoreCount = dcdCount + hcdCount
 // configured on this platform.
 var coreInstance [CoreCount]core
 
-// status represents the return code of a subroutine.
-type status uint8
+// core represents the core of a USB port configured as either host or device.
+type core struct {
+	port int
+	mode int
+	dc   *dcd
+	hc   *hcd
+}
 
-// Constant definitions for all status codes used within the package.
+// Constant definitions for USB core operating modes.
 const (
-	statusOK      status = iota // Success
-	statusBusy                  // Busy
-	statusRetry                 // Retry
-	statusInvalid               // Invalid argument
+	modeIdle   = 0 // USB port has not been configured
+	modeDevice = 1
+	modeHost   = 2
 )
-
-// ok returns true if and only if the receiver st equals statusOK.
-//go:inline
-func (st status) ok() bool { return statusOK == st }
 
 // initCore initializes a free USB core with given operating mode on the USB
 // port at given index, if available. Returns a reference to the initialized
 // core or nil if the core is unavailable.
 func initCore(port int, class class) (*core, status) {
+
+	iv := disableInterrupts()
+	defer enableInterrupts(iv)
 
 	if port < 0 || port >= CoreCount || 0 == class.config {
 		return nil, statusInvalid
@@ -90,9 +40,10 @@ func initCore(port int, class class) (*core, status) {
 	if modeIdle != coreInstance[port].mode {
 		// Check if requested port is already configured as requested class. If so,
 		// just return a reference to the existing core instead of an error.
-		// For instance, this will allow TinyGo examples that try to reconfigure the
-		// USB (CDC-ACM) UART port (which is already configured by the runtime) to
-		// continue without error.
+		//
+		// This will allow, for instance, TinyGo examples that try to reconfigure
+		// the USB (CDC-ACM) UART port (which is already configured by the runtime)
+		// to continue without error.
 		if coreInstance[port].mode == class.mode() {
 			switch class.mode() {
 			case modeDevice:
@@ -122,12 +73,7 @@ func initCore(port int, class class) (*core, status) {
 		coreInstance[port].port = port
 		coreInstance[port].mode = modeDevice
 		coreInstance[port].dc = dc
-		// Enable interrupts and enter runtime
-		if st = dc.enable(true); !st.ok() {
-			coreInstance[port].mode = modeIdle
-			coreInstance[port].dc = nil
-			return nil, st
-		}
+		dc.enable(true) // Enable interrupts and enter runtime
 
 	case modeHost:
 		// Allocate a free host controller and install interrupts
@@ -142,12 +88,7 @@ func initCore(port int, class class) (*core, status) {
 		coreInstance[port].port = port
 		coreInstance[port].mode = modeHost
 		coreInstance[port].hc = hc
-		// Enable interrupts and enter runtime
-		if st = hc.enable(true); !st.ok() {
-			coreInstance[port].mode = modeIdle
-			coreInstance[port].hc = nil
-			return nil, st
-		}
+		hc.enable(true) // Enable interrupts and enter runtime
 
 	default:
 		return nil, statusInvalid
@@ -155,3 +96,47 @@ func initCore(port int, class class) (*core, status) {
 
 	return &coreInstance[port], statusOK
 }
+
+// class represents the type of a host/device and its class configuration index.
+// The first valid configuration index is 1. Index 0 is reserved and invalid.
+type class struct {
+	id     int
+	config int
+}
+
+// Enumerated constants for all host/device class configurations.
+const (
+	classDeviceCDCACM = 0 // The only currently-supported class (CDC-ACM)
+)
+
+// mode returns the USB core operating mode of the receiver class c.
+//go:inline
+func (c class) mode() int {
+	switch c.id {
+	case classDeviceCDCACM:
+		return modeDevice
+	default:
+		return modeIdle
+	}
+}
+
+// equals returns true if and only if all fields of the given class are equal to
+// those of the receiver c.
+//go:inline
+func (c class) equals(class class) bool {
+	return c.id == class.id && c.config == class.config
+}
+
+// status represents the return code of a subroutine.
+type status uint8
+
+// Constant definitions for all status codes used within the package.
+const (
+	statusOK      status = iota // Success
+	statusBusy                  // Busy
+	statusInvalid               // Invalid argument
+)
+
+// ok returns true if and only if the receiver st equals statusOK.
+//go:inline
+func (s status) ok() bool { return statusOK == s }
