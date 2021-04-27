@@ -135,6 +135,28 @@ const (
 	descDeviceCapExtAttrBESLPos = 2
 )
 
+const (
+	// Attributes of all endpoint descriptor configurations.
+	descEndptConfigAttr = descConfigAttrD7Msk | // Bit 7: reserved (1)
+		(1 << descConfigAttrSelfPoweredPos) | // Bit 6: self-powered
+		(0 << descConfigAttrRemoteWakeupPos) | // Bit 5: remote wakeup
+		0 // Bits 0-4: reserved (0)
+
+	descEndptConfigAttrRxPos = 0
+	descEndptConfigAttrTxPos = 16
+	descEndptConfigAttrRxMsk = (descEndptConfigAttr | descEndptAttrSyncTypeMsk) << descEndptConfigAttrRxPos
+	descEndptConfigAttrTxMsk = (descEndptConfigAttr | descEndptAttrSyncTypeMsk) << descEndptConfigAttrTxPos
+
+	descEndptConfigAttrRxUnused      = 0x02 << descEndptConfigAttrRxPos
+	descEndptConfigAttrTxUnused      = 0x02 << descEndptConfigAttrTxPos
+	descEndptConfigAttrRxIsochronous = (descEndptAttrSyncTypeAsync | descEndptConfigAttr) << descEndptConfigAttrRxPos
+	descEndptConfigAttrTxIsochronous = (descEndptAttrSyncTypeAsync | descEndptConfigAttr) << descEndptConfigAttrTxPos
+	descEndptConfigAttrRxBulk        = (descEndptAttrSyncTypeAdaptive | descEndptConfigAttr) << descEndptConfigAttrRxPos
+	descEndptConfigAttrTxBulk        = (descEndptAttrSyncTypeAdaptive | descEndptConfigAttr) << descEndptConfigAttrTxPos
+	descEndptConfigAttrRxInterrupt   = (descEndptAttrSyncTypeSync | descEndptConfigAttr) << descEndptConfigAttrRxPos
+	descEndptConfigAttrTxInterrupt   = (descEndptAttrSyncTypeSync | descEndptConfigAttr) << descEndptConfigAttrTxPos
+)
+
 // USB CDC constants defined per specification.
 const (
 
@@ -282,53 +304,6 @@ const (
 	descCDCUARTStateOverrun    = 0x40 // UART state OVERRUN
 )
 
-// Common configuration constants for the USB CDC-ACM (single) device class.
-const (
-	// String descriptor languages
-	descCDCACMLanguageCount = 1
-	// Interfaces for all CDC-ACM configurations.
-	descCDCACMInterfaceCount = 2
-	descCDCACMInterfaceCtrl  = 0
-	descCDCACMInterfaceData  = 1
-	// Endpoints for all CDC-ACM configurations.
-	descCDCACMEndpointCount  = 4
-	descCDCACMEndpointStatus = 2 // Communication/control interrupt input
-	descCDCACMEndpointDataRx = 3 // Bulk data output
-	descCDCACMEndpointDataTx = 4 // Bulk data input
-	// Endpoint configuration attributes for all CDC-ACM configurations.
-	descCDCACMConfigAttrStatus = (descCDCACMConfigAttrUnused << descCDCACMConfigAttrRxPos) |
-		(descCDCACMConfigAttrInterrupt << descCDCACMConfigAttrTxPos)
-	descCDCACMConfigAttrDataRx = (descCDCACMConfigAttrBulk << descCDCACMConfigAttrRxPos) |
-		(descCDCACMConfigAttrUnused << descCDCACMConfigAttrTxPos)
-	descCDCACMConfigAttrDataTx = (descCDCACMConfigAttrUnused << descCDCACMConfigAttrRxPos) |
-		(descCDCACMConfigAttrBulk << descCDCACMConfigAttrTxPos)
-
-	// Size of all CDC-ACM configuration descriptors.
-	descCDCACMConfigSize = uint16(
-		descLengthConfigure + // configuration
-			descLengthInterface + // communication/control interface
-			descCDCFuncLengthHeader + // CDC header
-			descCDCFuncLengthCallManagement + // CDC call management
-			descCDCFuncLengthAbstractControl + // CDC abstract control
-			descCDCFuncLengthUnion + // CDC union
-			descLengthEndpoint + // communication/control input endpoint
-			descLengthInterface + // data interface
-			descLengthEndpoint + // data input endpoint
-			descLengthEndpoint) // data output endpoint
-	// Attributes of all CDC-ACM configuration descriptors.
-	descCDCACMConfigAttr = descConfigAttrD7Msk | // Bit 7: reserved (1)
-		(1 << descConfigAttrSelfPoweredPos) | // Bit 6: self-powered
-		(0 << descConfigAttrRemoteWakeupPos) | // Bit 5: remote wakeup
-		0 // Bits 0-4: reserved (0)
-
-	descCDCACMConfigAttrRxPos       = 0
-	descCDCACMConfigAttrTxPos       = 16
-	descCDCACMConfigAttrUnused      = 0x02 // TBD: what is this?
-	descCDCACMConfigAttrIsochronous = descCDCACMConfigAttr | descEndptAttrSyncTypeAsync
-	descCDCACMConfigAttrBulk        = descCDCACMConfigAttr | descEndptAttrSyncTypeAdaptive
-	descCDCACMConfigAttrInterrupt   = descCDCACMConfigAttr | descEndptAttrSyncTypeSync
-)
-
 // descCDCACM0Device holds the default device descriptor for CDC-ACM[0], i.e.,
 // configuration index 1.
 var descCDCACM0Device = [descLengthDevice]uint8{
@@ -367,6 +342,21 @@ var descCDCACM0Qualif = [descLengthQualification]uint8{
 	0,                        // Reserved
 }
 
+const (
+	// Size of all CDC-ACM configuration descriptors.
+	descCDCACMConfigSize = uint16(
+		descLengthConfigure + // configuration
+			descLengthInterface + // communication/control interface
+			descCDCFuncLengthHeader + // CDC header
+			descCDCFuncLengthCallManagement + // CDC call management
+			descCDCFuncLengthAbstractControl + // CDC abstract control
+			descCDCFuncLengthUnion + // CDC union
+			descLengthEndpoint + // communication/control input endpoint
+			descLengthInterface + // data interface
+			descLengthEndpoint + // data input endpoint
+			descLengthEndpoint) // data output endpoint
+)
+
 // descCDCACM0Config holds the default configuration descriptors for CDC-ACM[0],
 // i.e., configuration index 1.
 var descCDCACM0Config = [descCDCACMConfigSize]uint8{
@@ -377,7 +367,7 @@ var descCDCACM0Config = [descCDCACMConfigSize]uint8{
 	descCDCACMInterfaceCount,   // Number of interfaces supported by this configuration
 	1,                          // Value to use to select this configuration (1 = CDC-ACM[0])
 	0,                          // Index of string descriptor describing this configuration
-	descCDCACMConfigAttr,       // Configuration attributes
+	descEndptConfigAttr,        // Configuration attributes
 	descCDCACMMaxPower,         // Max power consumption when fully-operational (2 mA units)
 
 	// Communication/Control Interface Descriptor
@@ -460,32 +450,6 @@ var descCDCACM0Config = [descCDCACMConfigSize]uint8{
 	0,                                // Polling Interval
 }
 
-// descCDCACMCodingSize defines the length of a CDC-ACM UART line coding buffer.
-const descCDCACMCodingSize = 7
-
-// descCDCACM0LineCoding holds the default UART line coding for CDC-ACM[0],
-// i.e., configuration index 1.
-var descCDCACM0LineCoding descCDCACMLineCoding
-
-type descCDCACMLineCoding struct {
-	baud     uint32
-	stopBits uint8
-	parity   uint8
-	numBits  uint8
-	rtsdtr   uint8
-}
-
-const (
-	descStringIndexCount = 4  // Language, Manufacturer, Product, Serial Number
-	descStringSize       = 64 // (64-2)/2 = 31 chars each (UTF-16 code points)
-	// The maximum allowable string descriptor size is 255, or (255-2)/2 = 126
-	// available UTF-16 code points. Considering we are allocating this storage at
-	// compile-time, it seems like an awful waste of space (255*4 = ~1 KiB) just
-	// to store four strings, which, in all likelihood, will not be modified by
-	// anyone other than TinyGo devs; 64*4 = 256 B (i.e., 31 UTF-16 code points
-	// for each string) seems a good compromise.
-)
-
 type (
 	// descString is the actual byte array used to hold string descriptors. The
 	// first two bytes are a USB-specified header (0=length, 1=type), and the
@@ -504,19 +468,93 @@ type (
 	}
 )
 
+const (
+	descStringIndexCount = 4  // Language, Manufacturer, Product, Serial Number
+	descStringSize       = 64 // (64-2)/2 = 31 chars each (UTF-16 code points)
+	// The maximum allowable string descriptor size is 255, or (255-2)/2 = 126
+	// available UTF-16 code points. Considering we are allocating this storage at
+	// compile-time, it seems like an awful waste of space (255*4 = ~1 KiB) just
+	// to store four strings, which, in all likelihood, will not be modified by
+	// anyone other than TinyGo devs; 64*4 = 256 B (i.e., 31 UTF-16 code points
+	// for each string) seems a good compromise.
+)
+
 // descCDCACM0String holds the default string descriptors for CDC-ACM[0], i.e.,
 // configuration index 1.
 var descCDCACM0String = [descCDCACMLanguageCount]descStringLanguage{
-	{ // US English string descriptors
+
+	{ // [0x0409] US English
 		language: descLanguageEnglish,
 		descriptor: descStringIndex{
-			{ // Language (index 0)
+			{ /* [0] Language */
 				4,
 				descTypeString,
 				lsU8(descLanguageEnglish),
 				msU8(descLanguageEnglish),
 			},
 			// Actual string descriptors (index > 0) are copied into here at runtime!
+			// This allows for application- or even user-defined string descriptors.
+			{ /* [1] Manufacturer */ },
+			{ /* [2] Product */ },
+			{ /* [3] Serial Number */ },
 		},
+	},
+}
+
+// descCDCACMCodingSize defines the length of a CDC-ACM UART line coding buffer.
+const descCDCACMCodingSize = 7
+
+// descCDCACMLineCoding represents an emulated UART's line configuration.
+type descCDCACMLineCoding struct {
+	baud     uint32
+	stopBits uint8
+	parity   uint8
+	numBits  uint8
+}
+
+// Common configuration constants for the USB CDC-ACM (single) device class.
+const (
+	// String descriptor languages available
+	descCDCACMLanguageCount = 1
+
+	// Interfaces for all CDC-ACM configurations.
+	descCDCACMInterfaceCount = 2
+	descCDCACMInterfaceCtrl  = 0
+	descCDCACMInterfaceData  = 1
+
+	// Endpoints for all CDC-ACM configurations.
+	descCDCACMEndpointCount  = 4
+	descCDCACMEndpointStatus = 2 // Communication/control interrupt input
+	descCDCACMEndpointDataRx = 3 // Bulk data output
+	descCDCACMEndpointDataTx = 4 // Bulk data input
+
+	// Endpoint configuration attributes for all CDC-ACM configurations.
+	descCDCACMConfigAttrStatus = descEndptConfigAttrRxUnused | descEndptConfigAttrTxInterrupt
+	descCDCACMConfigAttrDataRx = descEndptConfigAttrRxBulk | descEndptConfigAttrTxUnused
+	descCDCACMConfigAttrDataTx = descEndptConfigAttrRxUnused | descEndptConfigAttrTxBulk
+)
+
+// descCDCACMClass holds references to all descriptors, buffers, and control
+// structures for the USB CDC-ACM (single) device class.
+type descCDCACMClass struct {
+	*descCDCACMClassData // Target-defined, class-specific data
+
+	locale *[descCDCACMLanguageCount]descStringLanguage // string descriptors
+	device *[descLengthDevice]uint8                     // device descriptor
+	qualif *[descLengthQualification]uint8              // device qualification descriptor
+	config *[descCDCACMConfigSize]uint8                 // configuration descriptor
+}
+
+// descCDCACM holds statically-allocated instances for each of the CDC-ACM
+// (single) device class configurations, ordered by index (offset by -1).
+var descCDCACM = [descCDCACMCount]descCDCACMClass{
+
+	{ // CDC-ACM (single) class configuration index 1
+		descCDCACMClassData: &descCDCACMData[0],
+
+		locale: &descCDCACM0String,
+		device: &descCDCACM0Device,
+		qualif: &descCDCACM0Qualif,
+		config: &descCDCACM0Config,
 	},
 }

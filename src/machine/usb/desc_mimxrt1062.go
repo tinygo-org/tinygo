@@ -69,33 +69,39 @@ const (
 //   so the Device Controller can readily respond to incoming requests without
 //   having to traverse a linked list.
 //go:align 4096
-var descCDCACM0QH [descCDCACMQHCount]dcdEndpoint
+var descCDCACM0QH [descCDCACMQHCount]dhwEndpoint
 
 // descCDCACM0CD is the transfer descriptor for data messages transmitted or
 // received on the status/control endpoint 0 for the default CDC-ACM (single)
 // device class configuration (index 1).
 //go:align 32
-var descCDCACM0CD dcdTransfer
+var descCDCACM0CD dhwTransfer
 
 // descCDCACM0AD is the transfer descriptor for ackowledgement (ACK) messages
 // transmitted or received on the status/control endpoint 0 for the default
 // CDC-ACM (single) device class configuration (index 1).
 //go:align 32
-var descCDCACM0AD dcdTransfer
+var descCDCACM0AD dhwTransfer
 
 // descCDCACM0RD is an array of transfer descriptors for Rx (OUT) transfers,
 // which describe to the device controller the location and quantity of data
 // being received for a given transfer, for the default CDC-ACM (single) device
 // class configuration (index 1).
 //go:align 32
-var descCDCACM0RD [descCDCACMRDCount]dcdTransfer
+var descCDCACM0RD [descCDCACMRDCount]dhwTransfer
 
 // descCDCACM0TD is an array of transfer descriptors for Tx (IN) transfers,
 // which describe to the device controller the location and quantity of data
 // being transmitted for a given transfer, for the default CDC-ACM (single)
 // device class configuration (index 1).
 //go:align 32
-var descCDCACM0TD [descCDCACMTDCount]dcdTransfer
+var descCDCACM0TD [descCDCACMTDCount]dhwTransfer
+
+// descCDCACM0LineCoding holds the emulated UART line coding for the default
+// CDC-ACM (single) device class configuration (index 1).
+// i.e., configuration index 1.
+//go:align 32
+var descCDCACM0LC descCDCACMLineCoding
 
 // descCDCACM0Cx is the buffer for control/status data received on endpoint 0 of
 // the default CDC-ACM (single) device class configuration (index 1).
@@ -120,21 +126,22 @@ var descCDCACM0RDNum [descCDCACMRDCount]uint16
 var descCDCACM0RDIdx [descCDCACMRDCount]uint16
 var descCDCACM0RDQue [descCDCACMRDCount + 1]uint16
 
-type descCDCACMClass struct {
-	locale *[descCDCACMLanguageCount]descStringLanguage // string descriptors
-	device *[descLengthDevice]uint8                     // device descriptor
-	qualif *[descLengthQualification]uint8              // device qualification descriptor
-	config *[descCDCACMConfigSize]uint8                 // configuration descriptor
+// descCDCACM holds the buffers and control states for all of the CDC-ACM
+// (single) device class configurations, ordered by index (offset by -1), for
+// iMXRT1062 targets only.
+//
+// Instances of this type (elements of descCDCACMData) are embedded in elements
+// of the common/target-agnostic CDC-ACM class configurations (descCDCACM).
+// Methods defined on this type implement target-specific functionality, and
+// some of these methods are required by the common device controller driver.
+// Thus, this type functions as an additional hardware abstraction layer.
+type descCDCACMClassData struct {
+	qh *[descCDCACMQHCount]dhwEndpoint // endpoint queue heads
 
-	lineCoding *descCDCACMLineCoding // UART line coding active state
-	// lineActive int64                 // time since last UART DTR/RTS
-
-	qh *[descCDCACMQHCount]dcdEndpoint // endpoint queue heads
-
-	cd *dcdTransfer                    // control endpoint 0 Rx/Tx data transfer descriptor
-	ad *dcdTransfer                    // control endpoint 0 Rx/Tx ACK transfer descriptor
-	rd *[descCDCACMRDCount]dcdTransfer // bulk data endpoint Rx (OUT) transfer descriptors
-	td *[descCDCACMTDCount]dcdTransfer // bulk data endpoint Tx (IN) transfer descriptors
+	cd *dhwTransfer                    // control endpoint 0 Rx/Tx data transfer descriptor
+	ad *dhwTransfer                    // control endpoint 0 Rx/Tx ACK transfer descriptor
+	rd *[descCDCACMRDCount]dhwTransfer // bulk data endpoint Rx (OUT) transfer descriptors
+	td *[descCDCACMTDCount]dhwTransfer // bulk data endpoint Tx (IN) transfer descriptors
 
 	cx *[descCDCACMCxCount]uint8    // control endpoint 0 Rx/Tx transfer buffer
 	rx *[descCDCACMRxCount]uint8    // bulk data endpoint Rx (OUT) transfer buffer
@@ -156,21 +163,18 @@ type descCDCACMClass struct {
 	rxCount *[descCDCACMRDCount]uint16
 	rxIndex *[descCDCACMRDCount]uint16
 	rxQueue *[descCDCACMRDCount + 1]uint16
+
+	_ [2]uint8
 }
 
-// descCDCACM holds the configuration, endpoint, and transfer descriptors, along
-// with the buffers and control states, for all of the CDC-ACM (single) device
-// class configurations, ordered by configuration index (offset by -1).
+// descCDCACMData holds statically-allocated instances for each of the target-
+// specific (iMXRT1062) CDC-ACM (single) device class configurations' control
+// and data structures, ordered by configuration index (offset by -1). Each
+// element is embedded in a corresponding element of descCDCACM.
 //go:align 32
-var descCDCACM = [descCDCACMCount]descCDCACMClass{
-	{
-		locale: &descCDCACM0String,
-		device: &descCDCACM0Device,
-		qualif: &descCDCACM0Qualif,
-		config: &descCDCACM0Config,
+var descCDCACMData = [descCDCACMCount]descCDCACMClassData{
 
-		lineCoding: &descCDCACM0LineCoding,
-
+	{ // CDC-ACM (single) class configuration index 1 data
 		qh: &descCDCACM0QH,
 
 		cd: &descCDCACM0CD,
