@@ -36,6 +36,7 @@ type Options struct {
 	TestConfig      TestConfig
 	Programmer      string
 	OpenOCDCommands []string
+	LLVMFeatures    string
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.

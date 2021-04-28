@@ -337,6 +337,10 @@ func (c *Config) WasmAbi() string {
 	return c.Target.WasmAbi
 }
 
+func (c *Config) LLVMFeatures() string {
+	return c.Options.LLVMFeatures
+}
+
 type TestConfig struct {
 	CompileTestBinary bool
 	// TODO: Filter the test functions to run, include verbose flag, etc
