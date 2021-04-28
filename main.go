@@ -911,6 +911,7 @@ func main() {
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	ldflags := flag.String("ldflags", "", "Go link tool compatible ldflags")
 	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
+	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
 
 	var flagJSON, flagDeps *bool
 	if command == "help" || command == "list" {
@@ -978,6 +979,7 @@ func main() {
 		WasmAbi:         *wasmAbi,
 		Programmer:      *programmer,
 		OpenOCDCommands: ocdCommands,
+		LLVMFeatures:    *llvmFeatures,
 	}
 
 	os.Setenv("CC", "clang -target="+*target)
