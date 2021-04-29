@@ -73,10 +73,10 @@ func LowerInterrupts(mod llvm.Module, sizeLevel int) []error {
 	// Create a function type with the signature of an interrupt handler.
 	fnType := llvm.FunctionType(ctx.VoidType(), nil, false)
 
-	// Collect a slice of interrupt handle objects. The fact that they still
+	// Collect a map of interrupt handle objects. The fact that they still
 	// exist in the IR indicates that they could not be optimized away,
 	// therefore we need to make real interrupt handlers for them.
-	var handlers []llvm.Value
+	handleMap := map[int][]llvm.Value{}
 	handleType := mod.GetTypeByName("runtime/interrupt.handle")
 	if !handleType.IsNil() {
 		handlePtrType := llvm.PointerType(handleType, 0)
@@ -84,14 +84,48 @@ func LowerInterrupts(mod llvm.Module, sizeLevel int) []error {
 			if global.Type() != handlePtrType {
 				continue
 			}
-			handlers = append(handlers, global)
+
+			// Get the interrupt number from the initializer
+			initializer := global.Initializer()
+			num := int(llvm.ConstExtractValue(initializer, []uint32{1, 0}).SExtValue())
+			pkg := packageFromInterruptHandle(global)
+
+			handles, exists := handleMap[num]
+
+			// If there is an existing interrupt handler, ensure it is in the same package
+			// as the new one.  This is to prevent any assumptions in code that a single
+			// compiler pass can see all packages to chain interrupt handlers. When packages are
+			// compiled to separate object files, the linker should spot the duplicate symbols
+			// for the wrapper function, failing the build.
+			if exists && packageFromInterruptHandle(handles[0]) != pkg {
+				errs = append(errs, errorAt(global,
+					fmt.Sprintf("handlers for interrupt %d (%s) in multiple packages: %s and %s",
+						num, handlerNames[int64(num)], pkg, packageFromInterruptHandle(handles[0]))))
+				continue
+			}
+
+			handleMap[num] = append(handles, global)
 		}
 	}
 
-	// Iterate over all handler objects, replacing their ptrtoint uses with a
+	// Output interrupts in numerical order for reproducible builds (Go map
+	// intentionally randomizes iteration order of maps).
+	interrupts := make([]int, 0, len(handleMap))
+	for k := range handleMap {
+		interrupts = append(interrupts, k)
+	}
+	sort.Ints(interrupts)
+
+	// Iterate over all handle objects, replacing their ptrtoint uses with a
 	// real interrupt ID and creating an interrupt handler for them.
-	for _, global := range handlers {
-		initializer := global.Initializer()
+	for _, interrupt := range interrupts {
+		handles := handleMap[interrupt]
+
+		// There is always at least one handler for each interrupt number.  We
+		// arbitrarily take the first handler to attach any errors to.
+		first := handles[0]
+
+		initializer := first.Initializer()
 		num := llvm.ConstExtractValue(initializer, []uint32{1, 0})
 		name := handlerNames[num.SExtValue()]
 
@@ -111,42 +145,9 @@ func LowerInterrupts(mod llvm.Module, sizeLevel int) []error {
 					name = "runtime/interrupt.interruptHandler" + strconv.FormatInt(num.SExtValue(), 10)
 				}
 			} else {
-				errs = append(errs, errorAt(global, fmt.Sprintf("cannot find interrupt name for number %d", num.SExtValue())))
+				errs = append(errs, errorAt(first, fmt.Sprintf("cannot find interrupt name for number %d", num.SExtValue())))
 				continue
 			}
-		}
-
-		// Extract the func value.
-		handlerContext := llvm.ConstExtractValue(initializer, []uint32{0, 0})
-		handlerFuncPtr := llvm.ConstExtractValue(initializer, []uint32{0, 1})
-		if !handlerContext.IsConstant() || !handlerFuncPtr.IsConstant() {
-			// This should have been checked already in the compiler.
-			errs = append(errs, errorAt(global, "func value must be constant"))
-			continue
-		}
-		if !handlerFuncPtr.IsAConstantExpr().IsNil() && handlerFuncPtr.Opcode() == llvm.PtrToInt {
-			// This is a ptrtoint: the IR was created for func lowering using a
-			// switch statement.
-			global := handlerFuncPtr.Operand(0)
-			if global.IsAGlobalValue().IsNil() {
-				errs = append(errs, errorAt(global, "internal error: expected a global for func lowering"))
-				continue
-			}
-			if !strings.HasSuffix(global.Name(), "$withSignature") {
-				errs = append(errs, errorAt(global, "internal error: func lowering global has unexpected name: "+global.Name()))
-				continue
-			}
-			initializer := global.Initializer()
-			ptrtoint := llvm.ConstExtractValue(initializer, []uint32{0})
-			if ptrtoint.IsAConstantExpr().IsNil() || ptrtoint.Opcode() != llvm.PtrToInt {
-				errs = append(errs, errorAt(global, "internal error: func lowering global has unexpected func ptr type"))
-				continue
-			}
-			handlerFuncPtr = ptrtoint.Operand(0)
-		}
-		if handlerFuncPtr.Type().TypeKind() != llvm.PointerTypeKind || handlerFuncPtr.Type().ElementType().TypeKind() != llvm.FunctionTypeKind {
-			errs = append(errs, errorAt(global, "internal error: unexpected LLVM types in func value"))
-			continue
 		}
 
 		// Check for an existing interrupt handler, and report it as an error if
@@ -157,25 +158,15 @@ func LowerInterrupts(mod llvm.Module, sizeLevel int) []error {
 		} else if fn.Type().ElementType() != fnType {
 			// Don't bother with a precise error message (listing the previsous
 			// location) because this should not normally happen anyway.
-			errs = append(errs, errorAt(global, name+" redeclared with a different signature"))
+			errs = append(errs, errorAt(first, name+" redeclared with a different signature"))
 			continue
 		} else if !fn.IsDeclaration() {
-			// Interrupt handler was already defined. Check the first
-			// instruction (which should be a call) whether this handler would
-			// be identical anyway.
-			firstInst := fn.FirstBasicBlock().FirstInstruction()
-			if !firstInst.IsACallInst().IsNil() && firstInst.OperandsCount() == 4 && firstInst.CalledValue() == handlerFuncPtr && firstInst.Operand(0) == num && firstInst.Operand(1) == handlerContext {
-				// Already defined and apparently identical, so assume this is
-				// fine.
-				continue
-			}
-
 			errValue := name + " redeclared in this program"
 			fnPos := getPosition(fn)
 			if fnPos.IsValid() {
 				errValue += "\n\tprevious declaration at " + fnPos.String()
 			}
-			errs = append(errs, errorAt(global, errValue))
+			errs = append(errs, errorAt(first, errValue))
 			continue
 		}
 
@@ -204,30 +195,70 @@ func LowerInterrupts(mod llvm.Module, sizeLevel int) []error {
 			fn.SetFunctionCallConv(85) // CallingConv::AVR_SIGNAL
 		}
 
-		// Fill the function declaration with the forwarding call.
-		// In practice, the called function will often be inlined which avoids
-		// the extra indirection.
-		builder.CreateCall(handlerFuncPtr, []llvm.Value{num, handlerContext, nullptr}, "")
-		builder.CreateRetVoid()
-
-		// Replace all ptrtoint uses of the global with the interrupt constant.
-		// That can only now be safely done after the interrupt handler has been
-		// created, doing it before the interrupt handler is created might
-		// result in this interrupt handler being optimized away entirely.
-		for _, user := range getUses(global) {
-			if user.IsAConstantExpr().IsNil() || user.Opcode() != llvm.PtrToInt {
-				errs = append(errs, errorAt(global, "internal error: expected a ptrtoint"))
+		// For each handle (i.e. each call to interrupt.New), check the usage,
+		// output a call to the actual handler function and clean-up the handle
+		// that is no longer needed.
+		for _, handler := range handles {
+			// Extract the func value.
+			initializer := handler.Initializer()
+			handlerContext := llvm.ConstExtractValue(initializer, []uint32{0, 0})
+			handlerFuncPtr := llvm.ConstExtractValue(initializer, []uint32{0, 1})
+			if !handlerContext.IsConstant() || !handlerFuncPtr.IsConstant() {
+				// This should have been checked already in the compiler.
+				errs = append(errs, errorAt(handler, "func value must be constant"))
 				continue
 			}
-			user.ReplaceAllUsesWith(num)
+			if !handlerFuncPtr.IsAConstantExpr().IsNil() && handlerFuncPtr.Opcode() == llvm.PtrToInt {
+				// This is a ptrtoint: the IR was created for func lowering using a
+				// switch statement.
+				global := handlerFuncPtr.Operand(0)
+				if global.IsAGlobalValue().IsNil() {
+					errs = append(errs, errorAt(global, "internal error: expected a global for func lowering"))
+					continue
+				}
+				if !strings.HasSuffix(global.Name(), "$withSignature") {
+					errs = append(errs, errorAt(global, "internal error: func lowering global has unexpected name: "+global.Name()))
+					continue
+				}
+				initializer := global.Initializer()
+				ptrtoint := llvm.ConstExtractValue(initializer, []uint32{0})
+				if ptrtoint.IsAConstantExpr().IsNil() || ptrtoint.Opcode() != llvm.PtrToInt {
+					errs = append(errs, errorAt(global, "internal error: func lowering global has unexpected func ptr type"))
+					continue
+				}
+				handlerFuncPtr = ptrtoint.Operand(0)
+			}
+			if handlerFuncPtr.Type().TypeKind() != llvm.PointerTypeKind || handlerFuncPtr.Type().ElementType().TypeKind() != llvm.FunctionTypeKind {
+				errs = append(errs, errorAt(handler, "internal error: unexpected LLVM types in func value"))
+				continue
+			}
+
+			// Fill the function declaration with the forwarding call.
+			// In practice, the called function will often be inlined which avoids
+			// the extra indirection.
+			builder.CreateCall(handlerFuncPtr, []llvm.Value{num, handlerContext, nullptr}, "")
+
+			// Replace all ptrtoint uses of the global with the interrupt constant.
+			// That can only now be safely done after the interrupt handler has been
+			// created, doing it before the interrupt handler is created might
+			// result in this interrupt handler being optimized away entirely.
+			for _, user := range getUses(handler) {
+				if user.IsAConstantExpr().IsNil() || user.Opcode() != llvm.PtrToInt {
+					errs = append(errs, errorAt(handler, "internal error: expected a ptrtoint"))
+					continue
+				}
+				user.ReplaceAllUsesWith(num)
+			}
+
+			// The runtime/interrput.handle struct can finally be removed.
+			// It would probably be eliminated anyway by a globaldce pass but it's
+			// better to do it now to be sure.
+			handler.EraseFromParentAsGlobal()
 		}
 
-		// The runtime/interrput.handle struct can finally be removed.
-		// It would probably be eliminated anyway by a globaldce pass but it's
-		// better to do it now to be sure.
-		global.EraseFromParentAsGlobal()
+		// The wrapper function has no return value
+		builder.CreateRetVoid()
 	}
-
 	// Create a dispatcher function that calls the appropriate interrupt handler
 	// for each interrupt ID. This is used in the case of software vectoring.
 	// The function looks like this:
@@ -293,4 +324,8 @@ func LowerInterrupts(mod llvm.Module, sizeLevel int) []error {
 	}
 
 	return errs
+}
+
+func packageFromInterruptHandle(handle llvm.Value) string {
+	return strings.Split(handle.Name(), "$")[0]
 }

@@ -41,10 +41,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	// type are lowered in the interrupt lowering pass.
 	globalType := b.program.ImportedPackage("runtime/interrupt").Type("handle").Type()
 	globalLLVMType := b.getLLVMType(globalType)
-	globalName := "runtime/interrupt.$interrupt" + strconv.FormatInt(id.Int64(), 10)
-	if global := b.mod.NamedGlobal(globalName); !global.IsNil() {
-		return llvm.Value{}, b.makeError(instr.Pos(), "interrupt redeclared in this program")
-	}
+	globalName := b.fn.Package().Pkg.Path() + "$interrupt" + strconv.FormatInt(id.Int64(), 10)
 	global := llvm.AddGlobal(b.mod, globalLLVMType, globalName)
 	global.SetVisibility(llvm.HiddenVisibility)
 	global.SetGlobalConstant(true)
