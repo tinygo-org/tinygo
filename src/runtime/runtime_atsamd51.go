@@ -1,4 +1,4 @@
-// +build sam,atsamd51
+// +build sam,atsamd51 sam,atsame5x
 
 package runtime
 

@@ -1,4 +1,4 @@
-// +build sam,atsamd51
+// +build sam,atsamd51 sam,atsame5x
 
 // Peripheral abstraction layer for the atsamd51.
 //
@@ -44,6 +44,9 @@ const (
 	PinTCCF          PinMode = PinTimerAlt
 	PinTCCG          PinMode = PinTCCPDEC
 	PinInputPulldown PinMode = 18
+	PinCAN           PinMode = 19
+	PinCAN0          PinMode = PinSDHC
+	PinCAN1          PinMode = PinCom
 )
 
 type PinChange uint8
@@ -627,6 +630,18 @@ func (p Pin) Configure(config PinConfig) {
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_GROUP_PINCFG_PMUXEN | sam.PORT_GROUP_PINCFG_DRVSTR)
+	case PinSDHC:
+		if p&1 > 0 {
+			// odd pin, so save the even pins
+			val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXE_Msk
+			p.setPMux(val | (uint8(PinSDHC) << sam.PORT_GROUP_PMUX_PMUXO_Pos))
+		} else {
+			// even pin, so save the odd pins
+			val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXO_Msk
+			p.setPMux(val | (uint8(PinSDHC) << sam.PORT_GROUP_PMUX_PMUXE_Pos))
+		}
+		// enable port config
+		p.setPinCfg(sam.PORT_GROUP_PINCFG_PMUXEN)
 	}
 }
 
