@@ -204,14 +204,22 @@ func (spi SPI) configurePins(config SPIConfig) {
 // There are 2 I2C interfaces on the STM32F103xx.
 // Since the first interface is named I2C1, both I2C0 and I2C1 refer to I2C1.
 // TODO: implement I2C2.
+
+/*
 var (
 	I2C1 = (*I2C)(unsafe.Pointer(stm32.I2C1))
 	I2C0 = I2C1
 )
+*/
 
 type I2C struct {
 	Bus *stm32.I2C_Type
 }
+
+var (
+	I2C1 = &I2C{Bus: stm32.I2C1}
+	I2C0 = I2C1
+)
 
 func (i2c *I2C) configurePins(config I2CConfig) {
 	if config.SDA == PB9 {
