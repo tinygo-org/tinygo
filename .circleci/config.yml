@@ -294,16 +294,16 @@ commands:
           variant: "macos"
       - restore_cache:
           keys:
-            - go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
-            - go-cache-macos-v2-{{ checksum "go.mod" }}
+            - go-cache-macos-v3-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-macos-v3-{{ checksum "go.mod" }}
       - restore_cache:
           keys:
-            - llvm-source-11-macos-v2
+            - llvm-source-11-macos-v3
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-11-macos-v2
+          key: llvm-source-11-macos-v3
           paths:
             - llvm-project/clang/lib/Headers
             - llvm-project/clang/include
@@ -311,7 +311,7 @@ commands:
             - llvm-project/llvm/include
       - restore_cache:
           keys:
-            - llvm-build-11-macos-v3
+            - llvm-build-11-macos-v4
       - run:
           name: "Build LLVM"
           command: |
@@ -327,17 +327,17 @@ commands:
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
             fi
       - save_cache:
-          key: llvm-build-11-macos-v3
+          key: llvm-build-11-macos-v4
           paths:
             llvm-build
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-macos-v3
+            - wasi-libc-sysroot-macos-v4
       - run:
           name: "Build wasi-libc"
           command: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-macos-v3
+          key: wasi-libc-sysroot-macos-v4
           paths:
             - lib/wasi-libc/sysroot
       - run:
@@ -359,7 +359,7 @@ commands:
             tinygo version
       - run: make smoketest AVR=0
       - save_cache:
-          key: go-cache-macos-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
+          key: go-cache-macos-v3-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
             - /go/pkg/mod
@@ -401,7 +401,7 @@ jobs:
       - build-linux
   build-macos:
     macos:
-      xcode: "10.1.0"
+      xcode: "11.1.0" # macOS 10.14
     steps:
       - build-macos
 

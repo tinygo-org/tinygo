@@ -249,6 +249,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		PortReset: "false",
 	}
 	if goos == "darwin" {
+		spec.CFlags = append(spec.CFlags, "-isysroot", "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk")
 		spec.LDFlags = append(spec.LDFlags, "-Wl,-dead_strip")
 	} else {
 		spec.LDFlags = append(spec.LDFlags, "-no-pie", "-Wl,--gc-sections") // WARNING: clang < 5.0 requires -nopie
