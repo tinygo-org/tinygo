@@ -7,6 +7,7 @@ target triple = "x86_64--linux"
 @main.exportedValue = global [1 x i16*] [i16* @main.exposedValue1]
 @main.exposedValue1 = global i16 0
 @main.exposedValue2 = local_unnamed_addr global i16 0
+@main.insertedValue = local_unnamed_addr global { i8, i32, { float, { i64, i16 } } } zeroinitializer
 
 declare void @runtime.printint64(i64) unnamed_addr
 
@@ -27,6 +28,17 @@ entry:
   store i16 7, i16* @main.exposedValue2
   call void @runtime.printint64(i64 6)
   call void @runtime.printint64(i64 -1)
+  %agg = call { i8, i32, { float, { i64, i16 } } } @nestedStruct()
+  %elt.agg = extractvalue { i8, i32, { float, { i64, i16 } } } %agg, 2
+  %elt.agg1 = extractvalue { float, { i64, i16 } } %elt.agg, 1
+  %elt = extractvalue { i64, i16 } %elt.agg1, 0
+  call void @runtime.printint64(i64 %elt)
+  %agg2.agg0 = extractvalue { i8, i32, { float, { i64, i16 } } } %agg, 2
+  %agg2.agg1 = extractvalue { float, { i64, i16 } } %agg2.agg0, 1
+  %agg2.insertvalue2 = insertvalue { i64, i16 } %agg2.agg1, i64 5, 0
+  %agg2.insertvalue1 = insertvalue { float, { i64, i16 } } %agg2.agg0, { i64, i16 } %agg2.insertvalue2, 1
+  %agg2.insertvalue0 = insertvalue { i8, i32, { float, { i64, i16 } } } %agg, { float, { i64, i16 } } %agg2.insertvalue1, 2
+  store { i8, i32, { float, { i64, i16 } } } %agg2.insertvalue0, { i8, i32, { float, { i64, i16 } } }* @main.insertedValue
   ret void
 }
 
@@ -67,3 +79,5 @@ two:                                              ; preds = %entry
 otherwise:                                        ; preds = %entry
   ret i64 -1
 }
+
+declare { i8, i32, { float, { i64, i16 } } } @nestedStruct() local_unnamed_addr

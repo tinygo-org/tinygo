@@ -8,6 +8,7 @@ target triple = "x86_64--linux"
 @main.exportedValue = global [1 x i16*] [i16* @main.exposedValue1]
 @main.exposedValue1 = global i16 0
 @main.exposedValue2 = global i16 0
+@main.insertedValue = global {i8, i32, {float, {i64, i16}}} zeroinitializer
 
 declare void @runtime.printint64(i64) unnamed_addr
 
@@ -71,6 +72,13 @@ entry:
   call void @runtime.printint64(i64 %switch1)
   call void @runtime.printint64(i64 %switch2)
 
+  ; Test extractvalue/insertvalue with multiple operands.
+  %agg = call {i8, i32, {float, {i64, i16}}} @nestedStruct()
+  %elt = extractvalue {i8, i32, {float, {i64, i16}}} %agg, 2, 1, 0
+  call void @runtime.printint64(i64 %elt)
+  %agg2 = insertvalue {i8, i32, {float, {i64, i16}}} %agg, i64 5, 2, 1, 0
+  store {i8, i32, {float, {i64, i16}}} %agg2, {i8, i32, {float, {i64, i16}}}* @main.insertedValue
+
   ret void
 }
 
@@ -112,3 +120,5 @@ two:
 otherwise:
   ret i64 -1
 }
+
+declare {i8, i32, {float, {i64, i16}}} @nestedStruct()

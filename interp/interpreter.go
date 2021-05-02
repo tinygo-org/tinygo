@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -930,16 +931,31 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		result = r.builder.CreateBitCast(operands[0], inst.llvmInst.Type(), inst.name)
 	case llvm.ExtractValue:
 		indices := inst.llvmInst.Indices()
-		if len(indices) != 1 {
-			panic("expected exactly one index")
+		// Note: the Go LLVM API doesn't support multiple indices, so simulate
+		// this operation with some extra extractvalue instructions. Hopefully
+		// this is optimized to a single instruction.
+		agg := operands[0]
+		for i := 0; i < len(indices)-1; i++ {
+			agg = r.builder.CreateExtractValue(agg, int(indices[i]), inst.name+".agg")
 		}
-		result = r.builder.CreateExtractValue(operands[0], int(indices[0]), inst.name)
+		result = r.builder.CreateExtractValue(agg, int(indices[len(indices)-1]), inst.name)
 	case llvm.InsertValue:
 		indices := inst.llvmInst.Indices()
-		if len(indices) != 1 {
-			panic("expected exactly one index")
+		// Similar to extractvalue, we're working around a limitation in the Go
+		// LLVM API here by splitting the insertvalue into multiple instructions
+		// if there is more than one operand.
+		agg := operands[0]
+		aggregates := []llvm.Value{agg}
+		for i := 0; i < len(indices)-1; i++ {
+			agg = r.builder.CreateExtractValue(agg, int(indices[i]), inst.name+".agg"+strconv.Itoa(i))
+			aggregates = append(aggregates, agg)
 		}
-		result = r.builder.CreateInsertValue(operands[0], operands[1], int(indices[0]), inst.name)
+		result = operands[1]
+		for i := len(indices) - 1; i >= 0; i-- {
+			agg := aggregates[i]
+			result = r.builder.CreateInsertValue(agg, result, int(indices[i]), inst.name+".insertvalue"+strconv.Itoa(i))
+		}
+
 	case llvm.Add:
 		result = r.builder.CreateAdd(operands[0], operands[1], inst.name)
 	case llvm.Sub:
