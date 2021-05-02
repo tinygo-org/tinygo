@@ -205,13 +205,6 @@ func (spi SPI) configurePins(config SPIConfig) {
 // Since the first interface is named I2C1, both I2C0 and I2C1 refer to I2C1.
 // TODO: implement I2C2.
 
-/*
-var (
-	I2C1 = (*I2C)(unsafe.Pointer(stm32.I2C1))
-	I2C0 = I2C1
-)
-*/
-
 type I2C struct {
 	Bus *stm32.I2C_Type
 }
