@@ -40,6 +40,8 @@ type dhw struct {
 	sofUsage       uint8
 }
 
+func runBootloader() { arm.Asm(`bkpt #251`) }
+
 // cycleCount uses the ARM debug cycle counter available on iMXRT1062 (enabled
 // in runtime_mimxrt1062_time.go) to return the number of CPU cycles since boot.
 //go:inline
@@ -184,7 +186,9 @@ func (d *dhw) enableSOF(enable bool, iface uint8) {
 			d.bus.USBINTR.SetBits(nxp.USB_USBINTR_SRE)
 		}
 		arm.EnableInterrupts(ivm)
+		d.timerReboot = 80
 	} else {
+		d.timerReboot = 0
 		d.sofUsage &^= 1 << iface
 		if 0 == d.sofUsage {
 			d.bus.USBINTR.ClearBits(nxp.USB_USBINTR_SRE)
@@ -354,33 +358,23 @@ func (d *dhw) interrupt() {
 			d.timerReboot -= 1
 			if 0 == d.timerReboot {
 				d.enableSOF(false, descCDCACMInterfaceCount)
+				runBootloader()
 			}
 		}
 	}
 }
 
-func (d *dhw) controlBusSpeed() uint8 { return d.busSpeed }
+func (d *dhw) speed() uint8 { return d.busSpeed }
 
-func (d *dhw) controlDeviceAddress(addr uint16) {
+func (d *dhw) setDeviceAddress(addr uint16) {
 	d.bus.DEVICEADDR.Set(nxp.USB_DEVICEADDR_USBADRA |
 		((uint32(addr) << nxp.USB_DEVICEADDR_USBADR_Pos) &
 			nxp.USB_DEVICEADDR_USBADR_Msk))
 }
 
-func (d *dhw) controlLineState(coding descCDCACMLineCoding, dtr, rts bool) {
-	// TBD: does the PHY need to handle on iMXRT1062 (e.g., Teensyduino Loader)?
-}
-
-func (d *dhw) controlLineCoding(coding descCDCACMLineCoding) {
-	if 134 == coding.baud {
-		d.enableSOF(true, descCDCACMInterfaceCount)
-	}
-}
-
-// controlStatus transitions transfers on control endpoint 0 into status stage.
-func (d *dhw) controlStatus() {
-	// Not used on iMXRT1062
-}
+// =============================================================================
+//  Control Endpoint 0
+// =============================================================================
 
 // controlStall stalls a transfer on control endpoint 0. To stall a transfer on
 // any other endpoint, use method endpointStall().
@@ -411,7 +405,7 @@ func (d *dhw) controlReceive(
 		} // wait for endpoint finish priming
 	}
 	ad.next = dhwTransferEOL
-	ad.token = 1 << 7
+	ad.token = 1 << 7 // Bit 7: active transfer
 	if notify {
 		ad.token |= 1 << 15
 	}
@@ -424,6 +418,8 @@ func (d *dhw) controlReceive(
 	if notify {
 		d.controlMask = tm
 	}
+	for 0 != d.bus.ENDPTPRIME.Get() {
+	} // wait for endpoint finish priming
 }
 
 // controlTransmit transmits (Tx, IN) data on control endpoint 0.
@@ -449,7 +445,7 @@ func (d *dhw) controlTransmit(
 		} // wait for endpoint finish priming
 	}
 	ad.next = dhwTransferEOL
-	ad.token = 1 << 7
+	ad.token = 1 << 7 // Bit 7: active transfer
 	if notify {
 		ad.token |= 1 << 15
 	}
@@ -462,11 +458,13 @@ func (d *dhw) controlTransmit(
 	if notify {
 		d.controlMask = rm
 	}
+	for 0 != d.bus.ENDPTPRIME.Get() {
+	} // wait for endpoint finish priming
 }
 
-// dhwEndpointSize defines the size (bytes) of a structure containing a USB
-// standard endpoint.
-const dhwEndpointSize = 64 // bytes
+// =============================================================================
+//  Endpoint Descriptor
+// =============================================================================
 
 // dhwEndpoint defines a USB standard endpoint, used as the general channel of
 // communication between host and device.
@@ -488,6 +486,10 @@ type dhwEndpoint struct {
 	callback func(transfer *dhwTransfer)
 }
 
+// dhwEndpointSize defines the size (bytes) of a structure containing a USB
+// standard endpoint.
+const dhwEndpointSize = 64 // bytes
+
 // endpointQueueHead returns the queue head for the given endpoint address,
 // encoded as direction D and endpoint number N with the 8-bit mask DxxxNNNN.
 //go:inline
@@ -496,6 +498,8 @@ func (d *dhw) endpointQueueHead(endpoint uint8) *dhwEndpoint {
 	switch d.cc.id {
 	case classDeviceCDCACM:
 		return &descCDCACM[d.cc.config-1].qh[endpointIndex(endpoint)]
+	case classDeviceHID:
+		return &descHID[d.cc.config-1].qh[endpointIndex(endpoint)]
 	default:
 		return nil
 	}
@@ -552,17 +556,23 @@ func (d *dhw) endpointStall(endpoint uint8) {
 	)
 }
 
-// func (d *dhw) endpointPrime(mask uint32, transfer *dhwTransfer) {
-// 	d.bus.ENDPTPRIME.Set(mask)
-// }
+func (d *dhw) endpointClearFeature(endpoint uint8) {
+	switch endpoint {
+	case rxEndpoint(endpoint):
+		d.endpointControlRegister(endpoint).ClearBits(nxp.USB_ENDPTCTRL0_RXS)
+	case txEndpoint(endpoint):
+		d.endpointControlRegister(endpoint).ClearBits(nxp.USB_ENDPTCTRL0_TXS)
+	}
+}
 
-// func (d *dhw) endpointPrimed() uint32 {
-// 	return d.bus.ENDPTPRIME.Get()
-// }
-
-// func (d *dhw) endpointUnprime(mask uint32) {
-// 	d.bus.ENDPTCOMPLETE.Set(mask)
-// }
+func (d *dhw) endpointSetFeature(endpoint uint8) {
+	switch endpoint {
+	case rxEndpoint(endpoint):
+		d.endpointControlRegister(endpoint).SetBits(nxp.USB_ENDPTCTRL0_RXS)
+	case txEndpoint(endpoint):
+		d.endpointControlRegister(endpoint).SetBits(nxp.USB_ENDPTCTRL0_TXS)
+	}
+}
 
 // endpointConfigure configures the given bulk data endpoint for transfer.
 func (d *dhw) endpointConfigure(
@@ -603,8 +613,8 @@ func (d *dhw) endpointComplete(endpoint uint8) {
 			ep.first = nil
 			ep.last = nil
 		} else {
-			if 0 != t.token&(1<<7) {
-				// active transfer, new list begins here
+			if 0 != t.token&(1<<7) { // Bit 7: active transfer
+				// new list begins here
 				ep.first = t
 				break
 			} else {
@@ -634,14 +644,22 @@ func (d *dhw) endpointConfigureRx(
 			endpoint > descCDCACMEndpointCount {
 			return
 		}
-		ep := d.endpointQueueHead(rxEndpoint(endpoint))
-		d.endpointConfigure(ep, packetSize, zlp, callback)
-		if nil != callback {
-			d.endpointMask |= (uint32(1) << endpoint) << descEndptConfigAttrRxPos
+
+	// HID
+	case classDeviceHID:
+		if endpoint < descHIDEndpointSerialRx ||
+			endpoint > descHIDEndpointCount {
+			return
 		}
 
 	default:
 		// Unhandled device class
+	}
+
+	ep := d.endpointQueueHead(rxEndpoint(endpoint))
+	d.endpointConfigure(ep, packetSize, zlp, callback)
+	if nil != callback {
+		d.endpointMask |= (uint32(1) << endpoint) << descEndptConfigAttrRxPos
 	}
 }
 
@@ -659,14 +677,22 @@ func (d *dhw) endpointConfigureTx(
 			endpoint > descCDCACMEndpointCount {
 			return
 		}
-		ep := d.endpointQueueHead(txEndpoint(endpoint))
-		d.endpointConfigure(ep, packetSize, zlp, callback)
-		if nil != callback {
-			d.endpointMask |= (uint32(1) << endpoint) << descEndptConfigAttrTxPos
+
+	// HID
+	case classDeviceHID:
+		if endpoint < descHIDEndpointSerialRx ||
+			endpoint > descHIDEndpointCount {
+			return
 		}
 
 	default:
 		// Unhandled device class
+	}
+
+	ep := d.endpointQueueHead(txEndpoint(endpoint))
+	d.endpointConfigure(ep, packetSize, zlp, callback)
+	if nil != callback {
+		d.endpointMask |= (uint32(1) << endpoint) << descEndptConfigAttrTxPos
 	}
 }
 
@@ -682,13 +708,21 @@ func (d *dhw) endpointReceive(endpoint uint8, transfer *dhwTransfer) {
 			endpoint > descCDCACMEndpointCount {
 			return
 		}
-		ep := d.endpointQueueHead(rxEndpoint(endpoint))
-		em := (uint32(1) << endpoint) << descEndptConfigAttrRxPos
-		d.transferSchedule(ep, em, transfer)
+
+	// HID
+	case classDeviceHID:
+		if endpoint < descHIDEndpointSerialRx ||
+			endpoint > descHIDEndpointCount {
+			return
+		}
 
 	default:
 		// Unhandled device class
 	}
+
+	ep := d.endpointQueueHead(rxEndpoint(endpoint))
+	em := (uint32(1) << endpoint) << descEndptConfigAttrRxPos
+	d.transferSchedule(ep, em, transfer)
 }
 
 // endpointTransmit schedules a transmit (Tx, IN) transfer on the given
@@ -704,17 +738,26 @@ func (d *dhw) endpointTransmit(endpoint uint8, transfer *dhwTransfer) {
 			endpoint > descCDCACMEndpointCount {
 			return
 		}
-		ep := d.endpointQueueHead(txEndpoint(endpoint))
-		em := (uint32(1) << endpoint) << descEndptConfigAttrTxPos
-		d.transferSchedule(ep, em, transfer)
+
+	// HID
+	case classDeviceHID:
+		if endpoint < descHIDEndpointSerialRx ||
+			endpoint > descHIDEndpointCount {
+			return
+		}
 
 	default:
 		// Unhandled device class
 	}
+
+	ep := d.endpointQueueHead(txEndpoint(endpoint))
+	em := (uint32(1) << endpoint) << descEndptConfigAttrTxPos
+	d.transferSchedule(ep, em, transfer)
 }
 
-// dhwTransferSize defines the size (bytes) of a USB standard transfer packet.
-const dhwTransferSize = 32 // bytes
+// =============================================================================
+//  Transfer Descriptor
+// =============================================================================
 
 // dhwTransfer describes the size and location of data to be transferred to or
 // from a USB endpoint.
@@ -724,6 +767,9 @@ type dhwTransfer struct {
 	pointer [5]uintptr
 	param   uint32
 }
+
+// dhwTransferSize defines the size (bytes) of a USB standard transfer packet.
+const dhwTransferSize = 32 // bytes
 
 // dhwTransferEOL is a sentinel value used to indicate the final node in a
 // linked list of transfer descriptors.
@@ -744,6 +790,8 @@ func (d *dhw) transferControl() (dat, ack *dhwTransfer) {
 	switch d.cc.id {
 	case classDeviceCDCACM:
 		return descCDCACM[d.cc.config-1].cd, descCDCACM[d.cc.config-1].ad
+	case classDeviceHID:
+		return descHID[d.cc.config-1].cd, descHID[d.cc.config-1].ad
 	default:
 		return nil, nil
 	}
@@ -753,7 +801,9 @@ func (d *dhw) transferPrepare(
 	transfer *dhwTransfer, data *uint8, size uint16, param uint32) {
 
 	transfer.next = dhwTransferEOL
-	transfer.token = (uint32(size) << 16) | (1 << 7)
+
+	// Set 15-bit packet size and transfer active bit 7.
+	transfer.token = (uint32(size&0x7FFF) << 16) | (1 << 7)
 	addr := uintptr(unsafe.Pointer(data))
 	for i := range transfer.pointer {
 		transfer.pointer[i] = addr + uintptr(i)*4096
@@ -794,6 +844,10 @@ endTransfer:
 	arm.EnableInterrupts(ivm)
 }
 
+// =============================================================================
+//  General-Purpose (GP) Timer
+// =============================================================================
+
 func (d *dhw) timerConfigure(timer int, usec uint32, fn func()) {
 	if timer < 0 || timer >= len(d.timerInterrupt) {
 		return
@@ -831,9 +885,15 @@ func (d *dhw) timerStop(timer int) {
 	}
 }
 
+// =============================================================================
+//  [CDC-ACM] Serial UART (Virtual COM Port)
+// =============================================================================
+
 func (d *dhw) uartConfigure() {
+
 	acm := &descCDCACM[d.cc.config-1]
-	switch d.controlBusSpeed() {
+
+	switch d.speed() {
 	case descDeviceSpeedHigh:
 		acm.rxSize = descCDCACMDataRxHSPacketSize
 		acm.txSize = descCDCACMDataTxHSPacketSize
@@ -843,6 +903,7 @@ func (d *dhw) uartConfigure() {
 	}
 	acm.txHead = 0
 	acm.txFree = 0
+	acm.txPrev = false
 	acm.rxHead = 0
 	acm.rxTail = 0
 	acm.rxFree = 0
@@ -855,7 +916,7 @@ func (d *dhw) uartConfigure() {
 		false, descCDCACMConfigAttrDataTx)
 
 	d.endpointConfigureTx(descCDCACMEndpointStatus,
-		acm.cxSize, false, nil)
+		acm.sxSize, false, nil)
 	d.endpointConfigureRx(descCDCACMEndpointDataRx,
 		acm.rxSize, false, d.uartNotify)
 	d.endpointConfigureTx(descCDCACMEndpointDataTx,
@@ -864,6 +925,16 @@ func (d *dhw) uartConfigure() {
 		d.uartReceive(uint8(i))
 	}
 	d.timerConfigure(0, descCDCACMTxSyncUs, d.uartSync)
+}
+
+func (d *dhw) uartSetLineState(dtr, rts bool) {
+	// TBD: does the PHY need to handle on iMXRT1062 (e.g., Teensyduino Loader)?
+}
+
+func (d *dhw) uartSetLineCoding(coding descCDCACMLineCoding) {
+	if 134 == coding.baud {
+		d.enableSOF(true, descCDCACMInterfaceCount)
+	}
 }
 
 func (d *dhw) uartReceive(endpoint uint8) {
@@ -1070,4 +1141,264 @@ func (d *dhw) uartSync() {
 		acm.txHead = 0
 	}
 	acm.txFree = 0
+}
+
+// =============================================================================
+//  [HID] Serial
+// =============================================================================
+
+func (d *dhw) serialConfigure() {
+
+	hid := &descHID[d.cc.config-1]
+
+	switch d.speed() {
+	case descDeviceSpeedHigh:
+		hid.rxSerialSize = descHIDSerialRxHSPacketSize
+		hid.txSerialSize = descHIDSerialTxHSPacketSize
+	default:
+		hid.rxSerialSize = descHIDSerialRxFSPacketSize
+		hid.txSerialSize = descHIDSerialTxFSPacketSize
+	}
+
+	// Rx and Tx are on same endpoint
+	d.endpointEnable(descHIDEndpointSerialRx,
+		false, descHIDConfigAttrSerial)
+
+	d.endpointConfigureRx(descHIDEndpointSerialRx,
+		hid.rxSerialSize, false, d.serialNotify)
+	d.endpointConfigureTx(descHIDEndpointSerialTx,
+		hid.txSerialSize, false, nil)
+	for i := range hid.rdSerial {
+		d.serialReceive(uint8(i))
+	}
+	d.timerConfigure(0, descHIDSerialTxSyncUs, d.serialSync)
+}
+
+func (d *dhw) serialReceive(endpoint uint8) {
+	hid := &descHID[d.cc.config-1]
+	num := uint16(endpoint) & descEndptAddrNumberMsk
+	buf := &hid.rxSerial[num*descHIDSerialRxSize]
+	d.enableInterrupts(false)
+	d.transferPrepare(&hid.rdSerial[num], buf, hid.rxSerialSize, uint32(endpoint))
+	deleteCache(uintptr(unsafe.Pointer(buf)), uintptr(hid.rxSerialSize))
+	d.endpointReceive(descHIDEndpointSerialRx, &hid.rdSerial[num])
+	d.enableInterrupts(true)
+}
+
+func (d *dhw) serialTransmit() {
+	hid := &descHID[d.cc.config-1]
+	xfer := &hid.tdSerial[hid.txSerialHead]
+	buff := &hid.txSerial[uint16(hid.txSerialHead)*descHIDSerialTxSize]
+	d.transferPrepare(xfer, buff, hid.txSerialSize, 0)
+	flushCache(uintptr(unsafe.Pointer(buff)), uintptr(hid.txSerialSize))
+	d.endpointTransmit(descHIDEndpointSerialTx, xfer)
+	hid.txSerialHead += 1
+	if hid.txSerialHead >= descHIDSerialTDCount {
+		hid.txSerialHead = 0
+	}
+}
+
+func (d *dhw) serialNotify(transfer *dhwTransfer) {
+	hid := &descHID[d.cc.config-1]
+	len := hid.rxSerialSize - (uint16(transfer.token>>16) & 0x7FFF)
+	p := transfer.param
+	if len == hid.rxSerialSize && 0 != hid.rxSerial[p*uint32(hid.rxSerialSize)] {
+		// data packet
+		hid.rxSerialIndex[p] = 0
+		h := hid.rxSerialHead + 1
+		if h > descHIDSerialRDCount { // should be >=
+			h = 0
+		}
+		hid.rxSerialQueue[h] = uint16(p)
+		hid.rxSerialHead = h
+		hid.rxSerialFree += len
+	} else {
+		// short packet
+		d.serialReceive(uint8(p))
+	}
+}
+
+// serialFlush discards all buffered input (Rx) data.
+func (d *dhw) serialFlush() {
+	hid := &descHID[d.cc.config-1]
+	tail := hid.rxSerialTail
+	for tail != hid.rxSerialHead {
+		tail += 1
+		if tail > descHIDSerialRDCount {
+			tail = 0
+		}
+		i := hid.rxSerialQueue[tail]
+		d.serialReceive(uint8(i))
+		hid.rxSerialTail = tail
+	}
+}
+
+func (d *dhw) serialSync() {
+	const autoFlushTx = true
+	if !autoFlushTx {
+		return
+	}
+	hid := &descHID[d.cc.config-1]
+	if 0 == hid.txSerialFree {
+		return
+	}
+	xfer := &hid.tdSerial[hid.txSerialHead]
+	buff := &hid.txSerial[uint16(hid.txSerialHead)*descHIDSerialTxSize]
+	size := descHIDSerialTxSize - hid.txSerialFree
+	d.transferPrepare(xfer, buff, size, 0)
+	flushCache(uintptr(unsafe.Pointer(buff)), uintptr(size))
+	d.endpointTransmit(descHIDEndpointSerialTx, xfer)
+	hid.txSerialHead += 1
+	if hid.txSerialHead >= descHIDSerialTDCount {
+		hid.txSerialHead = 0
+	}
+	hid.txSerialFree = 0
+}
+
+// =============================================================================
+//  [HID] Keyboard
+// =============================================================================
+
+func (d *dhw) keyboard() *Keyboard { return descHID[d.cc.config-1].keyboard }
+
+func (d *dhw) keyboardConfigure() {
+
+	hid := &descHID[d.cc.config-1]
+
+	// Initialize keyboard
+	hid.keyboard.configure(d.dcd, hid)
+
+	switch d.speed() {
+	case descDeviceSpeedHigh:
+		hid.txKeyboardSize = descHIDKeyboardTxHSPacketSize
+	default:
+		hid.txKeyboardSize = descHIDKeyboardTxFSPacketSize
+	}
+
+	d.endpointEnable(descHIDEndpointKeyboard,
+		false, descHIDConfigAttrKeyboard)
+	d.endpointEnable(descHIDEndpointMediaKey,
+		false, descHIDConfigAttrMediaKey)
+
+	d.endpointConfigureTx(descHIDEndpointKeyboard,
+		hid.txKeyboardSize, false, nil)
+	d.endpointConfigureTx(descHIDEndpointMediaKey,
+		hid.txKeyboardSize, false, nil)
+}
+
+func (d *dhw) keyboardSendKeys(consumer bool) bool {
+
+	hid := &descHID[d.cc.config-1]
+
+	if !consumer {
+
+		hid.tpKeyboard[0] = hid.keyboard.mod
+		hid.tpKeyboard[1] = 0
+		hid.tpKeyboard[2] = hid.keyboard.key[0]
+		hid.tpKeyboard[3] = hid.keyboard.key[1]
+		hid.tpKeyboard[4] = hid.keyboard.key[2]
+		hid.tpKeyboard[5] = hid.keyboard.key[3]
+		hid.tpKeyboard[6] = hid.keyboard.key[4]
+		hid.tpKeyboard[7] = hid.keyboard.key[5]
+
+		return d.keyboardWrite(descHIDEndpointKeyboard, hid.tpKeyboard[:])
+
+	} else {
+
+		// 44444444 44333333 33332222 22222211 11111111  [ word ]
+		// 98765432 10987654 32109876 54321098 76543210  [ index ]  (right-to-left)
+
+		hid.tpKeyboard[1] = uint8((hid.keyboard.con[1] << 2) | ((hid.keyboard.con[0] >> 8) & 0x03))
+		hid.tpKeyboard[2] = uint8((hid.keyboard.con[2] << 4) | ((hid.keyboard.con[1] >> 6) & 0x0F))
+		hid.tpKeyboard[3] = uint8((hid.keyboard.con[3] << 6) | ((hid.keyboard.con[2] >> 4) & 0x3F))
+		hid.tpKeyboard[4] = uint8(hid.keyboard.con[3] >> 2)
+		hid.tpKeyboard[5] = hid.keyboard.sys[0]
+		hid.tpKeyboard[6] = hid.keyboard.sys[1]
+		hid.tpKeyboard[7] = hid.keyboard.sys[2]
+
+		return d.keyboardWrite(descHIDEndpointMediaKey, hid.tpKeyboard[:])
+
+	}
+}
+
+func (d *dhw) keyboardWrite(endpoint uint8, data []uint8) bool {
+
+	hid := &descHID[d.cc.config-1]
+
+	size := uint16(len(data))
+	xfer := &hid.tdKeyboard[hid.txKeyboardHead]
+	when := ticks()
+	for {
+		if 0 == xfer.token&0x80 {
+			if 0 != xfer.token&0x68 {
+				// TODO: token contains error, how to handle?
+			}
+			hid.txKeyboardPrev = false
+			break
+		}
+		if hid.txKeyboardPrev {
+			return false
+		}
+		if ticks()-when > descHIDKeyboardTxTimeoutMs {
+			// Waited too long, assume host connection dropped
+			hid.txKeyboardPrev = true
+			return false
+		}
+	}
+	// Without this delay, the order packets are transmitted is seriously screwy.
+	udelay(60)
+	buff := hid.txKeyboard[hid.txKeyboardHead*descHIDKeyboardTxSize:]
+	_ = copy(buff, data)
+	d.transferPrepare(xfer, &buff[0], size, 0)
+	flushCache(uintptr(unsafe.Pointer(&buff[0])), descHIDKeyboardTxSize)
+	d.endpointTransmit(endpoint, xfer)
+	hid.txKeyboardHead += 1
+	if hid.txKeyboardHead >= descHIDKeyboardTDCount {
+		hid.txKeyboardHead = 0
+	}
+	return true
+}
+
+// =============================================================================
+//  [HID] Mouse
+// =============================================================================
+
+func (d *dhw) mouseConfigure() {
+
+	hid := &descHID[d.cc.config-1]
+
+	switch d.speed() {
+	case descDeviceSpeedHigh:
+		hid.txMouseSize = descHIDMouseTxHSPacketSize
+	default:
+		hid.txMouseSize = descHIDMouseTxFSPacketSize
+	}
+
+	d.endpointEnable(descHIDEndpointMouse,
+		false, descHIDConfigAttrMouse)
+
+	d.endpointConfigureTx(descHIDEndpointMouse,
+		hid.txMouseSize, false, nil)
+}
+
+// =============================================================================
+//  [HID] Joystick
+// =============================================================================
+
+func (d *dhw) joystickConfigure() {
+
+	hid := &descHID[d.cc.config-1]
+
+	switch d.speed() {
+	case descDeviceSpeedHigh:
+		hid.txJoystickSize = descHIDJoystickTxHSPacketSize
+	default:
+		hid.txJoystickSize = descHIDJoystickTxFSPacketSize
+	}
+
+	d.endpointEnable(descHIDEndpointJoystick,
+		false, descHIDConfigAttrJoystick)
+
+	d.endpointConfigureTx(descHIDEndpointJoystick,
+		hid.txJoystickSize, false, nil)
 }

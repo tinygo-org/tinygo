@@ -11,28 +11,29 @@ var (
 	ErrUARTWriteFailed = errors.New("USB write failure")
 )
 
-type (
-	UARTConfig struct {
-		BaudRate uint32
-	}
+// UART represents a virtual serial (UART) device emulation using the USB
+// CDC-ACM device class driver.
+type UART struct {
+	Port int
+	core *core
+}
 
-	// UART represents a virtual serial (UART) device emulation using the USB
-	// CDC-ACM device class driver.
-	UART struct {
-		port int // USB port (core index, e.g., 0-1)
-		core *core
-	}
-)
+type UARTConfig struct {
+	// Port is the MCU's native USB core number. If in doubt, leave it
+	// uninitialized for default (0).
+	Port int
+}
 
 func (uart *UART) Configure(config UARTConfig) error {
 
-	if uart.port >= CoreCount || uart.port >= dcdCount {
+	if config.Port >= CoreCount || config.Port >= dcdCount {
 		return ErrUARTInvalidPort
 	}
+	uart.Port = config.Port
 
 	// verify we have a free USB port and take ownership of it
 	var st status
-	uart.core, st = initCore(uart.port, class{id: classDeviceCDCACM, config: 1})
+	uart.core, st = initCore(uart.Port, class{id: classDeviceCDCACM, config: 1})
 	if !st.ok() {
 		return ErrUARTInvalidPort
 	}

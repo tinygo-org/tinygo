@@ -6,6 +6,7 @@ import (
 	"device/arm"
 	"device/nxp"
 	"machine"
+	"machine/usb"
 	"math/bits"
 	"unsafe"
 )
@@ -123,12 +124,13 @@ func initUART() {
 }
 
 func initUSB() {
-	machine.UART0.Configure(machine.UARTConfig{})
+	machine.HID0.Configure(usb.HIDConfig{})
+	// machine.UART0.Configure(usb.UARTConfig{})
 }
 
 func putchar(c byte) {
-	machine.UART0.WriteByte(c) // print to USB UART
-	// machine.UART1.WriteByte(c) // print to hardware UART
+	// machine.UART0.WriteByte(c) // print to USB UART
+	machine.UART1.WriteByte(c) // print to hardware UART
 }
 
 func exit(code int) {
