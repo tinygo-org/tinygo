@@ -5,6 +5,7 @@ package machine
 
 import (
 	"device/nxp"
+	"machine/usb"
 	"runtime/interrupt"
 )
 
@@ -109,11 +110,9 @@ func init() {
 // |                        USB                          |
 // #=====================================================#
 var (
-	// USBCDC is a legacy class being retained here as temporary wrapper.
-	// See godoc comments on type USBCDC struct definition for details.
-	UART0 = USBCDC{
-		port: 0, // USB_OTG1 (Micro-B port on Teensy 4.0/4.1)
-	}
+	// UART0 = usb.UART{Port: 0}
+	HID0  = usb.HID{Port: 0}
+	UART0 = &UART1
 )
 
 // #=====================================================#

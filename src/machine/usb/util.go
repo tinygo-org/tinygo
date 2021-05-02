@@ -1,5 +1,8 @@
 package usb
 
+//go:linkname ticks runtime.ticks
+func ticks() int64
+
 // leU64 returns a slice containing 8 bytes from the given uint64 u.
 //
 // The returned bytes have little-endian ordering; that is, the first element
@@ -213,4 +216,56 @@ func txEndpoint(number uint8) uint8 {
 func endpointIndex(address uint8) uint8 {
 	return ((address & descEndptAddrNumberMsk) << 1) |
 		((address & descEndptAddrDirectionMsk) >> descEndptAddrDirectionPos)
+}
+
+// The following buffLo and buffHi are helper methods for slice definitions from
+// potentially zero-length arrays (depending on compile-time constants).
+//
+// For example, if we have an array containing a 5-element buffer for three
+// instances of some device class (15 total elements), partitioned as follows,
+// then we compute the indices for instance 2 as usual:
+//
+//    Index:   01234 56789 ABCDE
+//    Array:  [  1  |  2  |  3  ]
+//
+//       Lo:  (n-1) * size   =>   (2-1) * 5   =>   5
+//       Hi:    (n) * size   =>     (2) * 5   =>   10 (0xA)
+//
+// However, if we have specified (via const definition) that 0 instances of some
+// device class be allocated, then the associated device class buffer arrays
+// will all be zero-length arrays, and the arithmetic to compute the slice
+// indices used above will result in out-of-bounds indices:
+//
+//    Index:
+//    Array:  []
+//
+//       Lo:  (n-1) * size   =>   (2-1) * 5   =>   5           [Error!]
+//       Hi:    (n) * size   =>     (2) * 5   =>   10 (0xA)    [Error!]
+//
+//
+// I couldn't figure out a straight-forward way to resolve these slice indices
+// using only arithmetic, so I've resorted to simple conditionals. If the number
+// of instances for some given class is zero (count=0), defined via compile-time
+// constant, then just use the empty slice range [0:0].
+
+// buffLo returns the starting array slice index for the n'th region of size
+// elements from an array containing count regions of size elements.
+// Regions are specified using a 1-based index (n > 0). Returns 0 if any given
+// argument equals 0.
+func buffLo(n, count, size uint16) uint16 {
+	if 0 == n || 0 == count || 0 == size {
+		return 0
+	}
+	return (n - 1) * size
+}
+
+// buffHi returns the ending array slice index for the n'th region of size
+// elements from an array containing count regions of size elements.
+// Regions are specified using a 1-based index (n > 0). Returns 0 if any given
+// argument equals 0.
+func buffHi(n, count, size uint16) uint16 {
+	if 0 == n || 0 == count || 0 == size {
+		return 0
+	}
+	return n * size
 }
