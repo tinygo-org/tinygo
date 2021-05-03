@@ -1,5 +1,5 @@
 // +build gc.conservative gc.extalloc
-// +build !baremetal
+// +build !baremetal,!wasm
 
 package runtime
 
