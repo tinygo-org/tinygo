@@ -14,6 +14,9 @@ const TargetBits = 32
 //go:extern __heap_base
 var heapStartSymbol [0]byte
 
+//go:extern __global_base
+var globalsStartSymbol [0]byte
+
 //export llvm.wasm.memory.size.i32
 func wasm_memory_size(index int32) int32
 
@@ -21,8 +24,10 @@ func wasm_memory_size(index int32) int32
 func wasm_memory_grow(index int32, delta int32) int32
 
 var (
-	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
-	heapEnd   = uintptr(wasm_memory_size(0) * wasmPageSize)
+	heapStart    = uintptr(unsafe.Pointer(&heapStartSymbol))
+	heapEnd      = uintptr(wasm_memory_size(0) * wasmPageSize)
+	globalsStart = uintptr(unsafe.Pointer(&globalsStartSymbol))
+	globalsEnd   = uintptr(unsafe.Pointer(&heapStartSymbol))
 )
 
 const wasmPageSize = 64 * 1024
