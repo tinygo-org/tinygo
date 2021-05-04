@@ -433,7 +433,18 @@ func (a ADC) Get() uint16 {
 	sam.ADC.CTRLA.ClearBits(sam.ADC_CTRLA_ENABLE)
 	waitADCSync()
 
-	return uint16(val) << 4 // scales from 12 to 16-bit result
+	// scales to 16-bit result
+	switch (sam.ADC.CTRLB.Get() & sam.ADC_CTRLB_RESSEL_Msk) >> sam.ADC_CTRLB_RESSEL_Pos {
+	case sam.ADC_CTRLB_RESSEL_8BIT:
+		val = val << 8
+	case sam.ADC_CTRLB_RESSEL_10BIT:
+		val = val << 6
+	case sam.ADC_CTRLB_RESSEL_16BIT:
+		val = val << 4
+	case sam.ADC_CTRLB_RESSEL_12BIT:
+		val = val << 4
+	}
+	return val
 }
 
 func (a ADC) getADCChannel() uint8 {
