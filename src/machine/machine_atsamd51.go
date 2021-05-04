@@ -863,7 +863,18 @@ func (a ADC) Get() uint16 {
 	for bus.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_ENABLE) {
 	}
 
-	return uint16(val) << 4 // scales from 12 to 16-bit result
+	// scales to 16-bit result
+	switch (bus.CTRLB.Get() & sam.ADC_CTRLB_RESSEL_Msk) >> sam.ADC_CTRLB_RESSEL_Pos {
+	case sam.ADC_CTRLB_RESSEL_8BIT:
+		val = val << 8
+	case sam.ADC_CTRLB_RESSEL_10BIT:
+		val = val << 6
+	case sam.ADC_CTRLB_RESSEL_16BIT:
+		val = val << 4
+	case sam.ADC_CTRLB_RESSEL_12BIT:
+		val = val << 4
+	}
+	return val
 }
 
 func (a ADC) getADCBus() *sam.ADC_Type {
