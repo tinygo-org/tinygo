@@ -33,7 +33,8 @@ type timerInfo struct {
 }
 
 const (
-	TICKS_PER_NS = 1000000000 / TICK_RATE
+	TICKS_PER_NS   = 1000000000 / TICK_RATE
+	TICKS_PER_INTS = 256
 )
 
 var (
@@ -45,6 +46,10 @@ var (
 
 	// The timer used for sleeping
 	sleepTimer *timerInfo
+
+	// timer Prescaler and Auto-reload
+	timerPSC uint32
+	timerARR uint32
 )
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
@@ -58,7 +63,9 @@ func nanosecondsToTicks(ns int64) timeUnit {
 // number of ticks (microseconds) since start.
 //go:linkname ticks runtime.ticks
 func ticks() timeUnit {
-	return timeUnit(tickCount.Get())
+	// compute fine tickCount value with current counter value
+	fine := TICKS_PER_INTS * ((timerARR - tickTimer.Device.CNT.Get()) / timerARR)
+	return timeUnit(tickCount.Get() + uint64(fine))
 }
 
 //
@@ -70,23 +77,24 @@ func initTickTimer(ti *timerInfo) {
 	tickTimer = ti
 	ti.EnableRegister.SetBits(ti.EnableFlag)
 
-	psc := uint32(TICK_TIMER_FREQ / TICK_RATE)
-	period := uint32(1)
+	timerPSC = uint32((TICK_TIMER_FREQ / TICK_RATE) * TICKS_PER_INTS)
+	timerARR = uint32(1)
 
 	// Get the pre-scale into range, with interrupt firing
 	// once per tick.
-	for psc > 0x10000 || period == 1 {
-		psc >>= 1
-		period <<= 1
+	for timerPSC > 0x10000 || timerARR == 1 {
+		timerPSC >>= 1
+		timerARR <<= 1
 	}
+	println("initTickTimer : psc=", timerPSC, ", period:", timerARR)
 
 	// Clamp overflow
-	if period > 0x10000 {
-		period = 0x10000
+	if timerARR > 0x10000 {
+		timerARR = 0x10000
 	}
 
-	ti.Device.PSC.Set(psc - 1)
-	ti.Device.ARR.Set(arrtype(period - 1))
+	ti.Device.PSC.Set(timerPSC - 1)
+	ti.Device.ARR.Set(arrtype(timerARR - 1))
 
 	// Auto-repeat
 	ti.Device.EGR.SetBits(stm32.TIM_EGR_UG)
@@ -111,8 +119,8 @@ func handleTick(interrupt.Interrupt) {
 		// clear the update flag
 		tickTimer.Device.SR.ClearBits(stm32.TIM_SR_UIF)
 
-		// increment tick count
-		tickCount.Set(tickCount.Get() + 1)
+		// increment tick count (coarse value)
+		tickCount.Set(tickCount.Get() + TICKS_PER_INTS)
 	}
 }
 
