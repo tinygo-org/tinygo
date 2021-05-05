@@ -94,8 +94,8 @@ const (
 // I2C on the QT Py M0.
 var (
 	I2C0 = &I2C{
-		Bus:    sam.SERCOM2_I2CM,
-		SERCOM: 2,
+		Bus:    sam.SERCOM1_I2CM,
+		SERCOM: 1,
 	}
 )
 
