@@ -30,6 +30,9 @@ func init() {
 	// these args (argv).
 	var argc, argv_buf_size uint32
 	args_sizes_get(&argc, &argv_buf_size)
+	if argc == 0 {
+		return
+	}
 
 	// Obtain the command line arguments
 	argsSlice := make([]unsafe.Pointer, argc)
