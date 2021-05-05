@@ -55,18 +55,16 @@ func main(argc int32, argv *unsafe.Pointer) int {
 		cap uintptr
 	})(unsafe.Pointer(&args))
 	argsSlice.ptr = malloc(uintptr(argc) * (unsafe.Sizeof(uintptr(0))) * 3)
-	argsSlice.len = 0
+	argsSlice.len = uintptr(argc)
 	argsSlice.cap = uintptr(argc)
 
 	// Initialize command line parameters.
-	for *argv != nil {
+	for i := 0; i < int(argc); i++ {
 		// Convert the C string to a Go string.
 		length := strlen(*argv)
-		argString := _string{
-			length: length,
-			ptr:    (*byte)(*argv),
-		}
-		args = append(args, *(*string)(unsafe.Pointer(&argString)))
+		arg := (*_string)(unsafe.Pointer(&args[i]))
+		arg.length = length
+		arg.ptr = (*byte)(*argv)
 		// This is the Go equivalent of "argc++" in C.
 		argv = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(argv)) + unsafe.Sizeof(argv)))
 	}
