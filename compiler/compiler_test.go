@@ -32,7 +32,7 @@ func TestCompiler(t *testing.T) {
 		t.Skip("compiler tests require LLVM 11 or above, got LLVM ", llvm.Version)
 	}
 
-	target, err := compileopts.LoadTarget("i686--linux")
+	target, err := compileopts.LoadTarget("wasm")
 	if err != nil {
 		t.Fatal("failed to load target:", err)
 	}
