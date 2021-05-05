@@ -16,6 +16,9 @@ func usleep(usec uint) int
 //export malloc
 func malloc(size uintptr) unsafe.Pointer
 
+//export mmap
+func mmap(addr unsafe.Pointer, length, prot, flags, fd int, offset int) unsafe.Pointer
+
 //export abort
 func abort()
 
