@@ -201,6 +201,10 @@ type M struct {
 
 // Run the test suite.
 func (m *M) Run() int {
+	if len(m.Tests) == 0 {
+		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
+	}
+
 	failures := 0
 	for _, test := range m.Tests {
 		t := &T{
@@ -226,7 +230,6 @@ func (m *M) Run() int {
 	}
 
 	if failures > 0 {
-		fmt.Printf("exit status %d\n", failures)
 		fmt.Println("FAIL")
 	} else {
 		fmt.Println("PASS")

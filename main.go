@@ -136,15 +136,17 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 	})
 }
 
-// Test runs the tests in the given package.
-func Test(pkgName string, options *compileopts.Options, testCompileOnly bool, outpath string) error {
+// Test runs the tests in the given package. Returns whether the test passed and
+// possibly an error if the test failed to run.
+func Test(pkgName string, options *compileopts.Options, testCompileOnly bool, outpath string) (bool, error) {
 	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	return builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
+	var passed bool
+	err = builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
 		if testCompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
 			if outpath == "" {
@@ -158,48 +160,78 @@ func Test(pkgName string, options *compileopts.Options, testCompileOnly bool, ou
 			// Do not run the test.
 			return nil
 		}
-		if len(config.Target.Emulator) == 0 {
-			// Run directly.
-			cmd := executeCommand(config.Options, result.Binary)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			cmd.Dir = result.MainDir
-			err := cmd.Run()
-			if err != nil {
-				// Propagate the exit code
-				if err, ok := err.(*exec.ExitError); ok {
-					os.Exit(err.ExitCode())
-				}
-				return &commandError{"failed to run compiled binary", result.Binary, err}
-			}
-			return nil
+
+		// Run the test.
+		start := time.Now()
+		var err error
+		passed, err = runPackageTest(config, result)
+		if err != nil {
+			return err
+		}
+		duration := time.Since(start)
+
+		// Print the result.
+		importPath := strings.TrimSuffix(result.ImportPath, ".test")
+		if passed {
+			fmt.Printf("ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
 		} else {
-			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], result.Binary)
-			cmd := executeCommand(config.Options, config.Target.Emulator[0], args...)
-			buf := &bytes.Buffer{}
-			w := io.MultiWriter(os.Stdout, buf)
-			cmd.Stdout = w
-			cmd.Stderr = os.Stderr
-			err := cmd.Run()
-			if err != nil {
-				if err, ok := err.(*exec.ExitError); !ok || !err.Exited() {
-					// Workaround for QEMU which always exits with an error.
-					return &commandError{"failed to run emulator with", result.Binary, err}
-				}
+			fmt.Printf("FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
+		}
+		return nil
+	})
+	if err, ok := err.(loader.NoTestFilesError); ok {
+		fmt.Printf("?   \t%s\t[no test files]\n", err.ImportPath)
+		// Pretend the test passed - it at least didn't fail.
+		return true, nil
+	}
+	return passed, err
+}
+
+// runPackageTest runs a test binary that was previously built. The return
+// values are whether the test passed and any errors encountered while trying to
+// run the binary.
+func runPackageTest(config *compileopts.Config, result builder.BuildResult) (bool, error) {
+	if len(config.Target.Emulator) == 0 {
+		// Run directly.
+		cmd := executeCommand(config.Options, result.Binary)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Dir = result.MainDir
+		err := cmd.Run()
+		if err != nil {
+			if _, ok := err.(*exec.ExitError); ok {
+				// Binary exited with a non-zero exit code, which means the test
+				// failed.
+				return false, nil
 			}
-			testOutput := string(buf.Bytes())
-			if testOutput == "PASS\n" || strings.HasSuffix(testOutput, "\nPASS\n") {
-				// Test passed.
-				return nil
-			} else {
-				// Test failed, either by ending with the word "FAIL" or with a
-				// panic of some sort.
-				os.Exit(1)
-				return nil // unreachable
+			return false, &commandError{"failed to run compiled binary", result.Binary, err}
+		}
+		return true, nil
+	} else {
+		// Run in an emulator.
+		args := append(config.Target.Emulator[1:], result.Binary)
+		cmd := executeCommand(config.Options, config.Target.Emulator[0], args...)
+		buf := &bytes.Buffer{}
+		w := io.MultiWriter(os.Stdout, buf)
+		cmd.Stdout = w
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
+		if err != nil {
+			if err, ok := err.(*exec.ExitError); !ok || !err.Exited() {
+				// Workaround for QEMU which always exits with an error.
+				return false, &commandError{"failed to run emulator with", result.Binary, err}
 			}
 		}
-	})
+		testOutput := string(buf.Bytes())
+		if testOutput == "PASS\n" || strings.HasSuffix(testOutput, "\nPASS\n") {
+			// Test passed.
+			return true, nil
+		} else {
+			// Test failed, either by ending with the word "FAIL" or with a
+			// panic of some sort.
+			return false, nil
+		}
+	}
 }
 
 // Flash builds and flashes the built binary to the given serial port.
@@ -1072,16 +1104,26 @@ func main() {
 		err := Run(pkgName, options)
 		handleCompilerError(err)
 	case "test":
-		pkgName := "."
-		if flag.NArg() == 1 {
-			pkgName = filepath.ToSlash(flag.Arg(0))
-		} else if flag.NArg() > 1 {
-			fmt.Fprintln(os.Stderr, "test only accepts a single positional argument: package name, but multiple were specified")
-			usage()
+		var pkgNames []string
+		for i := 0; i < flag.NArg(); i++ {
+			pkgNames = append(pkgNames, filepath.ToSlash(flag.Arg(i)))
+		}
+		if len(pkgNames) == 0 {
+			pkgNames = []string{"."}
+		}
+		allTestsPassed := true
+		for _, pkgName := range pkgNames {
+			// TODO: parallelize building the test binaries
+			passed, err := Test(pkgName, options, *testCompileOnlyFlag, outpath)
+			handleCompilerError(err)
+			if !passed {
+				allTestsPassed = false
+			}
+		}
+		if !allTestsPassed {
+			fmt.Println("FAIL")
 			os.Exit(1)
 		}
-		err := Test(pkgName, options, *testCompileOnlyFlag, outpath)
-		handleCompilerError(err)
 	case "targets":
 		dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
 		entries, err := ioutil.ReadDir(dir)
