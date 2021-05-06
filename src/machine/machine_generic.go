@@ -10,8 +10,6 @@ var (
 	UART0 = UART{0}
 )
 
-type PinMode uint8
-
 const (
 	PinInput PinMode = iota
 	PinOutput

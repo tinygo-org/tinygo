@@ -12,8 +12,6 @@ func CPUFrequency() uint32 {
 	return 16000000
 }
 
-type PinMode uint8
-
 const (
 	PinInput PinMode = iota
 	PinOutput

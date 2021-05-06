@@ -10,6 +10,11 @@ var (
 	ErrNoPinChangeChannel = errors.New("machine: no channel available for pin interrupt")
 )
 
+// PinMode sets the direction and pull mode of the pin. For example, PinOutput
+// sets the pin as an output and PinInputPullup sets the pin as an input with a
+// pull-up.
+type PinMode uint8
+
 type PinConfig struct {
 	Mode PinMode
 }

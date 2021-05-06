@@ -20,8 +20,6 @@ func CPUFrequency() uint32 {
 	return 120000000
 }
 
-type PinMode uint8
-
 const (
 	PinAnalog        PinMode = 1
 	PinSERCOM        PinMode = 2

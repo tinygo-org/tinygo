@@ -21,8 +21,6 @@ var (
 	ErrInvalidSPIBus = errors.New("machine: invalid SPI bus")
 )
 
-type PinMode uint8
-
 const (
 	PinOutput PinMode = iota
 	PinInput
