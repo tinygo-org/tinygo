@@ -30,8 +30,6 @@ const (
 // Make it easier to directly write to I/O RAM.
 var ioram = (*[0x400]volatile.Register8)(unsafe.Pointer(uintptr(0x04000000)))
 
-type PinMode uint8
-
 // Set has not been implemented.
 func (p Pin) Set(value bool) {
 	// do nothing

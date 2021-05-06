@@ -8,8 +8,6 @@ import (
 	"unsafe"
 )
 
-type PinMode uint8
-
 const (
 	PinInput PinMode = iota
 	PinInputPullup

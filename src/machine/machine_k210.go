@@ -14,7 +14,6 @@ func CPUFrequency() uint32 {
 	return 390000000
 }
 
-type PinMode uint8
 type fpioaPullMode uint8
 type PinChange uint8
 

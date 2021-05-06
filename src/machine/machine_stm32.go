@@ -17,8 +17,6 @@ const (
 	portJ
 )
 
-type PinMode uint8
-
 // Peripheral operations sequence:
 //  1. Enable the clock to the alternate function.
 //  2. Enable clock to corresponding GPIO
