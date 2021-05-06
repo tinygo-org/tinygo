@@ -39,6 +39,11 @@ type BuildResult struct {
 	// The directory of the main package. This is useful for testing as the test
 	// binary must be run in the directory of the tested package.
 	MainDir string
+
+	// ImportPath is the import path of the main package. This is useful for
+	// correctly printing test results: the import path isn't always the same as
+	// the path listed on the command line.
+	ImportPath string
 }
 
 // packageAction is the struct that is serialized to JSON and hashed, to work as
@@ -637,8 +642,9 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		return fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 	}
 	return action(BuildResult{
-		Binary:  tmppath,
-		MainDir: lprogram.MainPkg().Dir,
+		Binary:     tmppath,
+		MainDir:    lprogram.MainPkg().Dir,
+		ImportPath: lprogram.MainPkg().ImportPath,
 	})
 }
 

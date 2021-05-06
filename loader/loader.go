@@ -210,6 +210,12 @@ func Load(config *compileopts.Config, inputPkgs []string, clangHeaders string, t
 		p.Packages[pkg.ImportPath] = pkg
 	}
 
+	if config.TestConfig.CompileTestBinary && !strings.HasSuffix(p.sorted[len(p.sorted)-1].ImportPath, ".test") {
+		// Trying to compile a test binary but there are no test files in this
+		// package.
+		return p, NoTestFilesError{p.sorted[len(p.sorted)-1].ImportPath}
+	}
+
 	return p, nil
 }
 

@@ -182,25 +182,28 @@ tinygo:
 test: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test -v -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
+TEST_PACKAGES = \
+	container/heap \
+	container/list \
+	container/ring \
+	crypto/des \
+	encoding \
+	encoding/ascii85 \
+	encoding/base32 \
+	encoding/hex \
+	hash/adler32 \
+	hash/fnv \
+	hash/crc64 \
+	math \
+	math/cmplx \
+	text/scanner \
+	unicode/utf8 \
+
 # Test known-working standard library packages.
-# TODO: do this in one command, parallelize, and only show failing tests (no
-# implied -v flag).
+# TODO: parallelize, and only show failing tests (no implied -v flag).
 .PHONY: tinygo-test
 tinygo-test:
-	$(TINYGO) test container/heap
-	$(TINYGO) test container/list
-	$(TINYGO) test container/ring
-	$(TINYGO) test crypto/des
-	$(TINYGO) test encoding/ascii85
-	$(TINYGO) test encoding/base32
-	$(TINYGO) test encoding/hex
-	$(TINYGO) test hash/adler32
-	$(TINYGO) test hash/fnv
-	$(TINYGO) test hash/crc64
-	$(TINYGO) test math
-	$(TINYGO) test math/cmplx
-	$(TINYGO) test text/scanner
-	$(TINYGO) test unicode/utf8
+	$(TINYGO) test $(TEST_PACKAGES)
 
 .PHONY: smoketest
 smoketest:

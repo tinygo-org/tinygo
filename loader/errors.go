@@ -23,3 +23,13 @@ type Error struct {
 func (e Error) Error() string {
 	return e.Err.Error()
 }
+
+// Error returned when loading a *Program for a test binary but no test files
+// are present.
+type NoTestFilesError struct {
+	ImportPath string
+}
+
+func (e NoTestFilesError) Error() string {
+	return "no test files"
+}
