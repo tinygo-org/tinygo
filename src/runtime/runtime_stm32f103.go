@@ -15,7 +15,7 @@ import (
    are changed.
 */
 const (
-	TICK_FREQ             = 32000    // We want 32000 tick per second ...
+	TICK_RATE             = 32000    // We want 32000 tick per second ...
 	TICK_TIMER_INTFREQ    = 1000     // ...but only 1000 timer interrupts per sec
 	TICK_TIMER_CLOCKFREQ  = 72000000 // Timer is fed by 72 MHz clock
 	TICK_TIMER_IRQ        = stm32.IRQ_TIM4

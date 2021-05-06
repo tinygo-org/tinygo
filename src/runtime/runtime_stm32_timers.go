@@ -11,11 +11,11 @@ package runtime
 // Interface
 // ---------
 // For each MCU, the following constants should be defined:
-//   TICK_FREQ           The desired frequency of ticks, e.g. 10000 for 10KHz ticks
-//   TICK_TIMER_INTFREQ  The desired frequency of timer interrupts ex: 1000 for 1Khz interrupts
-//   TICK_TIMER_IRQ      Which timer to use for counting ticks (e.g. stm32.IRQ_TIM7)
+//   TICK_RATE             The desired rate of ticks, e.g. 10000 for 10KHz ticks
+//   TICK_TIMER_INTFREQ    The desired frequency of timer interrupts ex: 1000 for 1Khz interrupts
+//   TICK_TIMER_IRQ        Which timer to use for counting ticks (e.g. stm32.IRQ_TIM7)
 //   TICK_TIMER_CLOCKFREQ  The frequency the clock feeding the sleep timer is set to (e.g. 84MHz)
-//   SLEEP_TIMER_IRQ  Which timer to use for sleeping (e.g. stm32.IRQ_TIM3)
+//   SLEEP_TIMER_IRQ       Which timer to use for sleeping (e.g. stm32.IRQ_TIM3)
 //   SLEEP_TIMER_CLOCKFREQ The frequency the clock feeding the sleep timer is set to (e.g. 84MHz)
 //
 // The type alias `arrtype` should be defined to either uint32 or uint16 depending on the
@@ -23,7 +23,6 @@ package runtime
 
 import (
 	"device/stm32"
-	"machine"
 	"runtime/interrupt"
 	"runtime/volatile"
 )
@@ -35,8 +34,8 @@ type timerInfo struct {
 }
 
 const (
-	TICKS_PER_NS   = 1000000000 / TICK_FREQ
-	TICKS_PER_INTS = TICK_FREQ / TICK_TIMER_INTFREQ
+	TICKS_PER_NS   = 1000000000 / TICK_RATE
+	TICKS_PER_INTS = TICK_RATE / TICK_TIMER_INTFREQ
 )
 
 var (
@@ -81,8 +80,6 @@ func ticks() timeUnit {
 // Enable the timer used to count ticks
 func initTickTimer(ti *timerInfo) {
 
-	machine.PA0.Configure(machine.PinConfig{Mode: machine.PinOutput})
-
 	tickTimer = ti
 	ti.EnableRegister.SetBits(ti.EnableFlag)
 
@@ -95,7 +92,6 @@ func initTickTimer(ti *timerInfo) {
 		timerPSC >>= 1
 		timerARR <<= 1
 	}
-	println("initTickTimer : psc=", timerPSC, ", period:", timerARR)
 
 	// Clamp overflow
 	if timerARR > 0x10000 {
@@ -124,6 +120,7 @@ func initTickTimer(ti *timerInfo) {
 }
 
 func handleTick(interrupt.Interrupt) {
+
 	if tickTimer.Device.SR.HasBits(stm32.TIM_SR_UIF) {
 		// clear the update flag
 		tickTimer.Device.SR.ClearBits(stm32.TIM_SR_UIF)
@@ -214,7 +211,6 @@ func handleSleep(interrupt.Interrupt) {
 }
 
 func disableSleepTimer() {
-	//	println("handleSleep")
 	// Disable and clear the update flag.
 	sleepTimer.Device.CR1.ClearBits(stm32.TIM_CR1_CEN)
 	sleepTimer.Device.SR.ClearBits(stm32.TIM_SR_UIF)
