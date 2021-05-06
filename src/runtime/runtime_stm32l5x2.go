@@ -29,15 +29,16 @@ const (
 /*
    timer settings used for tick and sleep.
 
-   note: TICK_TIMER_FREQ and SLEEP_TIMER_FREQ are controlled by PLL / clock
+   note: TICK_TIMER_CLOCKFREQ and SLEEP_TIMER_CLOCKFREQ are controlled by PLL / clock
    settings above, so must be kept in sync if the clock settings are changed.
 */
 const (
-	TICK_RATE        = 1000 // 1 KHz
-	SLEEP_TIMER_IRQ  = stm32.IRQ_TIM15
-	SLEEP_TIMER_FREQ = 110000000 // 110 MHz
-	TICK_TIMER_IRQ   = stm32.IRQ_TIM16
-	TICK_TIMER_FREQ  = 110000000 // 110 MHz
+	TICK_RATE             = 32000 // 32 KHz
+	TICK_TIMER_INTFREQ    = 1000  // 1kHz
+	SLEEP_TIMER_IRQ       = stm32.IRQ_TIM15
+	SLEEP_TIMER_CLOCKFREQ = 110000000 // 110 MHz
+	TICK_TIMER_IRQ        = stm32.IRQ_TIM16
+	TICK_TIMER_CLOCKFREQ  = 110000000 // 110 MHz
 )
 
 type arrtype = uint32
