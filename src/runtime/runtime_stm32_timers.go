@@ -11,11 +11,12 @@ package runtime
 // Interface
 // ---------
 // For each MCU, the following constants should be defined:
-//   TICK_RATE        The desired frequency of ticks, e.g. 1000 for 1KHz ticks
-//   TICK_TIMER_IRQ   Which timer to use for counting ticks (e.g. stm32.IRQ_TIM7)
-//   TICK_TIMER_FREQ  The frequency the clock feeding the sleep timer is set to (e.g. 84MHz)
+//   TICK_FREQ           The desired frequency of ticks, e.g. 10000 for 10KHz ticks
+//   TICK_TIMER_INTFREQ  The desired frequency of timer interrupts ex: 1000 for 1Khz interrupts
+//   TICK_TIMER_IRQ      Which timer to use for counting ticks (e.g. stm32.IRQ_TIM7)
+//   TICK_TIMER_CLOCKFREQ  The frequency the clock feeding the sleep timer is set to (e.g. 84MHz)
 //   SLEEP_TIMER_IRQ  Which timer to use for sleeping (e.g. stm32.IRQ_TIM3)
-//   SLEEP_TIMER_FREQ The frequency the clock feeding the sleep timer is set to (e.g. 84MHz)
+//   SLEEP_TIMER_CLOCKFREQ The frequency the clock feeding the sleep timer is set to (e.g. 84MHz)
 //
 // The type alias `arrtype` should be defined to either uint32 or uint16 depending on the
 // size of that register in the MCU's TIM_Type structure
@@ -34,8 +35,8 @@ type timerInfo struct {
 }
 
 const (
-	TICKS_PER_NS   = 1000000000 / TICK_RATE
-	TICKS_PER_INTS = TICK_RATE / TICK_INT_RATE
+	TICKS_PER_NS   = 1000000000 / TICK_FREQ
+	TICKS_PER_INTS = TICK_FREQ / TICK_TIMER_INTFREQ
 )
 
 var (
@@ -64,10 +65,13 @@ func nanosecondsToTicks(ns int64) timeUnit {
 // number of ticks (microseconds) since start.
 //go:linkname ticks runtime.ticks
 func ticks() timeUnit {
-	// compute fine tickCount value from timer counter value
+	// Global tickCount variable is updated at every interrupt, but this is a coarse estimation
+	// of elapsed time. (tickCount never includes elapsed time between two interrupts)
+	// In this function, we need a precise value of elapsed time.
+	// This is the reason we complement tickCount with extra time computed from timer's current value.
 	fractionnal := (TICKS_PER_INTS * tickTimer.Device.CNT.Get()) / timerARR
-	fineTicks := tickCount.Get() + uint64(fractionnal)
-	return timeUnit(fineTicks)
+	preciseTickCount := tickCount.Get() + uint64(fractionnal)
+	return timeUnit(preciseTickCount)
 }
 
 //
@@ -83,11 +87,11 @@ func initTickTimer(ti *timerInfo) {
 	ti.EnableRegister.SetBits(ti.EnableFlag)
 
 	// Compute pre-scaler
-	timerPSC = uint32(TICK_TIMER_FREQ / TICK_INT_RATE)
+	timerPSC = uint32(TICK_TIMER_CLOCKFREQ / TICK_TIMER_INTFREQ)
 	timerARR = uint32(1)
 
-	// Get the pre-scale into range, with interrupt firing
-	for timerPSC > 0x10000 || timerARR == 1 {
+	// Find correct prescaler/Counter limit
+	for timerARR < 512 {
 		timerPSC >>= 1
 		timerARR <<= 1
 	}
@@ -134,6 +138,7 @@ func handleTick(interrupt.Interrupt) {
 //
 
 func sleepTicks(d timeUnit) {
+
 	// If there is a scheduler, we sleep until any kind of CPU event up to
 	// a maximum of the requested sleep duration.
 	//
@@ -171,12 +176,11 @@ func initSleepTimer(ti *timerInfo) {
 
 // timerSleep sleeps for 'at most' ns nanoseconds, but possibly less.
 func timerSleep(ns int64) {
-	println("TimerSleep", ns)
 	// Calculate initial pre-scale value.
 	// delay (in ns) and clock freq are both large values, so do the nanosecs
 	// conversion (divide by 1G) by pre-dividing each by 1000 to avoid overflow
 	// in any meaningful time period.
-	psc := ((ns / 1000) * (SLEEP_TIMER_FREQ / 1000)) / 1000
+	psc := ((ns / 1000) * (SLEEP_TIMER_CLOCKFREQ / 1000)) / 1000
 	period := int64(1)
 
 	// Get the pre-scale into range, with interrupt firing
