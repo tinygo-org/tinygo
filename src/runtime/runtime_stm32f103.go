@@ -15,7 +15,8 @@ import (
    are changed.
 */
 const (
-	TICK_RATE        = 1000 // 1 KHz
+	TICK_RATE        = 32000 // 32000 tick per second
+	TICK_INT_RATE    = 1000  // but only 1000 interrupts per sec
 	SLEEP_TIMER_IRQ  = stm32.IRQ_TIM3
 	SLEEP_TIMER_FREQ = 72000000 // 72 MHz
 	TICK_TIMER_IRQ   = stm32.IRQ_TIM4

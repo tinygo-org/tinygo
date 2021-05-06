@@ -22,6 +22,7 @@ package runtime
 
 import (
 	"device/stm32"
+	"machine"
 	"runtime/interrupt"
 	"runtime/volatile"
 )
@@ -34,7 +35,7 @@ type timerInfo struct {
 
 const (
 	TICKS_PER_NS   = 1000000000 / TICK_RATE
-	TICKS_PER_INTS = 256
+	TICKS_PER_INTS = TICK_RATE / TICK_INT_RATE
 )
 
 var (
@@ -63,9 +64,10 @@ func nanosecondsToTicks(ns int64) timeUnit {
 // number of ticks (microseconds) since start.
 //go:linkname ticks runtime.ticks
 func ticks() timeUnit {
-	// compute fine tickCount value with current counter value
-	fine := TICKS_PER_INTS * ((timerARR - tickTimer.Device.CNT.Get()) / timerARR)
-	return timeUnit(tickCount.Get() + uint64(fine))
+	// compute fine tickCount value from timer counter value
+	fractionnal := (TICKS_PER_INTS * tickTimer.Device.CNT.Get()) / timerARR
+	fineTicks := tickCount.Get() + uint64(fractionnal)
+	return timeUnit(fineTicks)
 }
 
 //
@@ -74,14 +76,17 @@ func ticks() timeUnit {
 
 // Enable the timer used to count ticks
 func initTickTimer(ti *timerInfo) {
+
+	machine.PA0.Configure(machine.PinConfig{Mode: machine.PinOutput})
+
 	tickTimer = ti
 	ti.EnableRegister.SetBits(ti.EnableFlag)
 
-	timerPSC = uint32((TICK_TIMER_FREQ / TICK_RATE) * TICKS_PER_INTS)
+	// Compute pre-scaler
+	timerPSC = uint32(TICK_TIMER_FREQ / TICK_INT_RATE)
 	timerARR = uint32(1)
 
 	// Get the pre-scale into range, with interrupt firing
-	// once per tick.
 	for timerPSC > 0x10000 || timerARR == 1 {
 		timerPSC >>= 1
 		timerARR <<= 1
@@ -166,6 +171,7 @@ func initSleepTimer(ti *timerInfo) {
 
 // timerSleep sleeps for 'at most' ns nanoseconds, but possibly less.
 func timerSleep(ns int64) {
+	println("TimerSleep", ns)
 	// Calculate initial pre-scale value.
 	// delay (in ns) and clock freq are both large values, so do the nanosecs
 	// conversion (divide by 1G) by pre-dividing each by 1000 to avoid overflow
@@ -204,6 +210,7 @@ func handleSleep(interrupt.Interrupt) {
 }
 
 func disableSleepTimer() {
+	//	println("handleSleep")
 	// Disable and clear the update flag.
 	sleepTimer.Device.CR1.ClearBits(stm32.TIM_CR1_CEN)
 	sleepTimer.Device.SR.ClearBits(stm32.TIM_SR_UIF)
