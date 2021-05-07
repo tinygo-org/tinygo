@@ -35,7 +35,7 @@ const (
 	PinInputAnalog PinMode = 11
 
 	// for PWM
-	// TBD
+	PinModePWMOutput PinMode = 12
 )
 
 // Define several bitfields that have different names across chip families but
@@ -133,6 +133,13 @@ func (p Pin) ConfigureAltFunc(config PinConfig, altFunc uint8) {
 	case PinModeSPISDI:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
 		port.OSPEEDR.ReplaceBits(gpioOutputSpeedLow, gpioOutputSpeedMask, pos)
+		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
+		p.SetAltFunc(altFunc)
+
+	// PWM
+	case PinModePWMOutput:
+		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
+		port.OSPEEDR.ReplaceBits(gpioOutputSpeedHigh, gpioOutputSpeedMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 		p.SetAltFunc(altFunc)
 	}
