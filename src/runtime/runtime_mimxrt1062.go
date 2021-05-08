@@ -10,8 +10,6 @@ import (
 	"unsafe"
 )
 
-const asyncScheduler = false
-
 //go:extern _svectors
 var _svectors [0]byte
 

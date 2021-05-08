@@ -71,8 +71,6 @@ func ticks() timeUnit {
 	return 0
 }
 
-const asyncScheduler = false
-
 func sleepTicks(d timeUnit) {
 	// TODO
 }

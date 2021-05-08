@@ -59,10 +59,7 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns)
 }
 
-const (
-	asyncScheduler           = false
-	timePrecisionNanoseconds = 1000 // TODO: how can we determine the appropriate `precision`?
-)
+const timePrecisionNanoseconds = 1000 // TODO: how can we determine the appropriate `precision`?
 
 var (
 	sleepTicksSubscription = __wasi_subscription_t{

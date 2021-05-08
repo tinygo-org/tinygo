@@ -89,8 +89,6 @@ func ticks() timeUnit {
 	return currentTime
 }
 
-const asyncScheduler = false
-
 const tickNanos = 3200 // time.Second / (80MHz / 256)
 
 func ticksToNanoseconds(ticks timeUnit) int64 {

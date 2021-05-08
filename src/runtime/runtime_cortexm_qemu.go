@@ -27,8 +27,6 @@ func main() {
 	abort()
 }
 
-const asyncScheduler = false
-
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	return int64(ticks)
 }

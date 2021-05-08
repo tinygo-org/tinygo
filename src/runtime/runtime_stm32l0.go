@@ -13,8 +13,6 @@ const (
 
 type arrtype = uint16
 
-const asyncScheduler = false
-
 func putchar(c byte) {
 	machine.UART0.WriteByte(c)
 }

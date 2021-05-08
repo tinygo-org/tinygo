@@ -123,8 +123,6 @@ func putchar(c byte) {
 	_putchar(int(c))
 }
 
-const asyncScheduler = false
-
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	// The OS API works in nanoseconds so no conversion necessary.
 	return int64(ticks)

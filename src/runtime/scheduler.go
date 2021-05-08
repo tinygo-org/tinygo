@@ -20,6 +20,10 @@ import (
 
 const schedulerDebug = false
 
+// On JavaScript, we can't do a blocking sleep. Instead we have to return and
+// queue a new scheduler invocation using setTimeout.
+const asyncScheduler = GOOS == "js"
+
 var schedulerDone bool
 
 // Queues used by the scheduler.
@@ -138,6 +142,7 @@ func scheduler() {
 		if t == nil {
 			if sleepQueue == nil {
 				if asyncScheduler {
+					// JavaScript is treated specially, see below.
 					return
 				}
 				waitForEvents()
@@ -154,7 +159,8 @@ func scheduler() {
 			if asyncScheduler {
 				// The sleepTicks function above only sets a timeout at which
 				// point the scheduler will be called again. It does not really
-				// sleep.
+				// sleep. So instead of sleeping, we return and expect to be
+				// called again.
 				break
 			}
 			continue
