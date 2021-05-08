@@ -41,8 +41,6 @@ const (
 
 type arrtype = uint32
 
-const asyncScheduler = false
-
 func init() {
 	initCLK()
 

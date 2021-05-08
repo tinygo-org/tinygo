@@ -112,8 +112,6 @@ func putchar(c byte) {
 	machine.UART0.WriteByte(c)
 }
 
-const asyncScheduler = false
-
 var timerWakeup volatile.Register8
 
 func ticks() timeUnit {

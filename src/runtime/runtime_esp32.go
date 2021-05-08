@@ -97,8 +97,6 @@ func ticks() timeUnit {
 	return timeUnit(uint64(esp.TIMG0.T0LO.Get()) | uint64(esp.TIMG0.T0HI.Get())<<32)
 }
 
-const asyncScheduler = false
-
 func nanosecondsToTicks(ns int64) timeUnit {
 	// Calculate the number of ticks from the number of nanoseconds. At a 80MHz
 	// APB clock, that's 25 nanoseconds per tick with a timer prescaler of 2:

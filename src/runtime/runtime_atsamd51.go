@@ -232,8 +232,6 @@ var rtcOverflows volatile.Register32 // number of times the RTC wrapped around
 
 var timerWakeup volatile.Register8
 
-const asyncScheduler = false
-
 // ticksToNanoseconds converts RTC ticks (at 32768Hz) to nanoseconds.
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	// The following calculation is actually the following, but with both sides

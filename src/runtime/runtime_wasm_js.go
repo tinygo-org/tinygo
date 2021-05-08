@@ -40,8 +40,6 @@ func go_scheduler() {
 	scheduler()
 }
 
-const asyncScheduler = true
-
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	// The JavaScript API works in float64 milliseconds, so convert to
 	// nanoseconds first before converting to a timeUnit (which is a float64),

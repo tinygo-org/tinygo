@@ -6,8 +6,6 @@ import "unsafe"
 
 type timeUnit int64
 
-const asyncScheduler = false
-
 const (
 	// Handles
 	infoTypeTotalMemorySize = 6          // Total amount of memory available for process.

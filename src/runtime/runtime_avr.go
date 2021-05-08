@@ -58,8 +58,6 @@ func init() {
 	initUART()
 }
 
-const asyncScheduler = false
-
 const tickNanos = 1024 * 16384 // roughly 16ms in nanoseconds
 
 func ticksToNanoseconds(ticks timeUnit) int64 {

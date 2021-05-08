@@ -67,8 +67,6 @@ func putchar(c byte) {
 	machine.UART0.WriteByte(c)
 }
 
-const asyncScheduler = false
-
 func sleepTicks(d timeUnit) {
 	for d != 0 {
 		ticks := uint32(d) & 0x7fffff // 23 bits (to be on the safe side)

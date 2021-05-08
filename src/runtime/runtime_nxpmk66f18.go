@@ -232,9 +232,6 @@ func putchar(c byte) {
 	machine.PutcharUART(&machine.UART0, c)
 }
 
-// ???
-const asyncScheduler = false
-
 func abort() {
 	println("!!! ABORT !!!")
 
