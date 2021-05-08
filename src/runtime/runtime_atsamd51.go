@@ -206,11 +206,19 @@ func initRTC() {
 	}
 
 	irq := interrupt.New(sam.IRQ_RTC, func(interrupt.Interrupt) {
-		// disable IRQ for CMP0 compare
-		sam.RTC_MODE0.INTFLAG.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
-
-		timerWakeup.Set(1)
+		flags := sam.RTC_MODE0.INTFLAG.Get()
+		if flags&sam.RTC_MODE0_INTENSET_CMP0 != 0 {
+			// The timer (for a sleep) has expired.
+			timerWakeup.Set(1)
+		}
+		if flags&sam.RTC_MODE0_INTENSET_OVF != 0 {
+			// The 32-bit RTC timer has overflowed.
+			rtcOverflows.Set(rtcOverflows.Get() + 1)
+		}
+		// Mark this interrupt has handled for CMP0 and OVF.
+		sam.RTC_MODE0.INTFLAG.Set(sam.RTC_MODE0_INTENSET_CMP0 | sam.RTC_MODE0_INTENSET_OVF)
 	})
+	sam.RTC_MODE0.INTENSET.Set(sam.RTC_MODE0_INTENSET_OVF)
 	irq.SetPriority(0xc0)
 	irq.Enable()
 }
@@ -220,10 +228,7 @@ func waitForSync() {
 	}
 }
 
-var (
-	timestamp        timeUnit // ticks since boottime
-	timerLastCounter uint64
-)
+var rtcOverflows volatile.Register32 // number of times the RTC wrapped around
 
 var timerWakeup volatile.Register8
 
@@ -248,7 +253,6 @@ func nanosecondsToTicks(ns int64) timeUnit {
 // sleepTicks should sleep for d number of microseconds.
 func sleepTicks(d timeUnit) {
 	for d != 0 {
-		ticks() // update timestamp
 		ticks := uint32(d)
 		if !timerSleep(ticks) {
 			return
@@ -257,15 +261,34 @@ func sleepTicks(d timeUnit) {
 	}
 }
 
-// ticks returns number of microseconds since start.
+// ticks returns the elapsed time since reset.
 func ticks() timeUnit {
-	waitForSync()
+	// For some ways of capturing the time atomically, see this thread:
+	// https://www.eevblog.com/forum/microcontrollers/correct-timing-by-timer-overflow-count/msg749617/#msg749617
+	// Here, instead of re-reading the counter register if an overflow has been
+	// detected, we simply try again because that results in smaller code.
+	for {
+		mask := interrupt.Disable()
+		counter := readRTC()
+		overflows := rtcOverflows.Get()
+		hasOverflow := sam.RTC_MODE0.INTFLAG.Get()&sam.RTC_MODE0_INTENSET_OVF != 0
+		interrupt.Restore(mask)
 
-	rtcCounter := uint64(sam.RTC_MODE0.COUNT.Get())
-	offset := (rtcCounter - timerLastCounter) // change since last measurement
-	timerLastCounter = rtcCounter
-	timestamp += timeUnit(offset)
-	return timestamp
+		if hasOverflow {
+			// There was an overflow while trying to capture the timer.
+			// Try again.
+			continue
+		}
+
+		// This is a 32-bit timer, so the number of timer overflows forms the
+		// upper 32 bits of this timer.
+		return timeUnit(overflows)<<32 + timeUnit(counter)
+	}
+}
+
+func readRTC() uint32 {
+	waitForSync()
+	return sam.RTC_MODE0.COUNT.Get()
 }
 
 // ticks are in microseconds
@@ -290,7 +313,7 @@ func timerSleep(ticks uint32) bool {
 	sam.RTC_MODE0.COMP[0].Set(uint32(cnt) + ticks)
 
 	// enable IRQ for CMP0 compare
-	sam.RTC_MODE0.INTENSET.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
+	sam.RTC_MODE0.INTENSET.Set(sam.RTC_MODE0_INTENSET_CMP0)
 
 wait:
 	waitForEvents()
@@ -300,7 +323,7 @@ wait:
 	if hasScheduler {
 		// The interurpt may have awoken a goroutine, so bail out early.
 		// Disable IRQ for CMP0 compare.
-		sam.RTC_MODE0.INTENCLR.SetBits(sam.RTC_MODE0_INTENSET_CMP0)
+		sam.RTC_MODE0.INTENCLR.Set(sam.RTC_MODE0_INTENSET_CMP0)
 		return false
 	} else {
 		// This is running without a scheduler.

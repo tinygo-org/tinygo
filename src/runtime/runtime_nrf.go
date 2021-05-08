@@ -47,10 +47,18 @@ func initLFCLK() {
 func initRTC() {
 	nrf.RTC1.TASKS_START.Set(1)
 	intr := interrupt.New(nrf.IRQ_RTC1, func(intr interrupt.Interrupt) {
-		nrf.RTC1.INTENCLR.Set(nrf.RTC_INTENSET_COMPARE0)
-		nrf.RTC1.EVENTS_COMPARE[0].Set(0)
-		rtc_wakeup.Set(1)
+		if nrf.RTC1.EVENTS_COMPARE[0].Get() != 0 {
+			nrf.RTC1.EVENTS_COMPARE[0].Set(0)
+			nrf.RTC1.INTENCLR.Set(nrf.RTC_INTENSET_COMPARE0)
+			nrf.RTC1.EVENTS_COMPARE[0].Set(0)
+			rtc_wakeup.Set(1)
+		}
+		if nrf.RTC1.EVENTS_OVRFLW.Get() != 0 {
+			nrf.RTC1.EVENTS_OVRFLW.Set(0)
+			rtcOverflows.Set(rtcOverflows.Get() + 1)
+		}
 	})
+	nrf.RTC1.INTENSET.Set(nrf.RTC_INTENSET_OVRFLW)
 	intr.SetPriority(0xc0) // low priority
 	intr.Enable()
 }
@@ -63,17 +71,13 @@ const asyncScheduler = false
 
 func sleepTicks(d timeUnit) {
 	for d != 0 {
-		ticks()                       // update timestamp
 		ticks := uint32(d) & 0x7fffff // 23 bits (to be on the safe side)
 		rtc_sleep(ticks)
 		d -= timeUnit(ticks)
 	}
 }
 
-var (
-	timestamp      timeUnit // nanoseconds since boottime
-	rtcLastCounter uint32   // 24 bits ticks
-)
+var rtcOverflows volatile.Register32 // number of times the RTC wrapped around
 
 // ticksToNanoseconds converts RTC ticks (at 32768Hz) to nanoseconds.
 func ticksToNanoseconds(ticks timeUnit) int64 {
@@ -92,16 +96,29 @@ func nanosecondsToTicks(ns int64) timeUnit {
 }
 
 // Monotonically increasing numer of ticks since start.
-//
-// Note: very long pauses between measurements (more than 8 minutes) may
-// overflow the counter, leading to incorrect results. This might be fixed by
-// handling the overflow event.
 func ticks() timeUnit {
-	rtcCounter := uint32(nrf.RTC1.COUNTER.Get())
-	offset := (rtcCounter - rtcLastCounter) & 0xffffff // change since last measurement
-	rtcLastCounter = rtcCounter
-	timestamp += timeUnit(offset)
-	return timestamp
+	// For some ways of capturing the time atomically, see this thread:
+	// https://www.eevblog.com/forum/microcontrollers/correct-timing-by-timer-overflow-count/msg749617/#msg749617
+	// Here, instead of re-reading the counter register if an overflow has been
+	// detected, we simply try again because that results in (slightly) smaller
+	// code and is perhaps easier to prove correct.
+	for {
+		mask := interrupt.Disable()
+		counter := uint32(nrf.RTC1.COUNTER.Get())
+		overflows := rtcOverflows.Get()
+		hasOverflow := nrf.RTC1.EVENTS_OVRFLW.Get() != 0
+		interrupt.Restore(mask)
+
+		if hasOverflow {
+			// There was an overflow. Try again.
+			continue
+		}
+
+		// The counter is 24 bits in size, so the number of overflows form the
+		// upper 32 bits (together 56 bits, which covers 71493 years at
+		// 32768kHz: I'd argue good enough for most purposes).
+		return timeUnit(overflows)<<24 + timeUnit(counter)
+	}
 }
 
 var rtc_wakeup volatile.Register8
