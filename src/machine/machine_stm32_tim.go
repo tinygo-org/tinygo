@@ -1,4 +1,4 @@
-// +build stm32f4
+// +build stm32f4 stm32l5
 
 package machine
 
@@ -7,6 +7,8 @@ import (
 	"runtime/interrupt"
 	"runtime/volatile"
 )
+
+const PWM_MODE1 = 0x6
 
 type TimerCallback func()
 type ChannelCallback func(channel uint8)
@@ -94,7 +96,7 @@ func (t *TIM) SetMatchInterrupt(channel uint8, callback ChannelCallback) error {
 	t.OCInterrupt = t.registerOCInterrupt()
 
 	// Clear the interrupt flag
-	t.Device.SR.ClearBits(stm32.TIM_SR_CC1IF_Match << channel)
+	t.Device.SR.ClearBits(stm32.TIM_SR_CC1IF << channel)
 
 	// Enable the interrupt
 	t.OCInterrupt.SetPriority(0xc1)
