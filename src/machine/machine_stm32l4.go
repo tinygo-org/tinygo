@@ -4,10 +4,30 @@ package machine
 
 import (
 	"device/stm32"
+	"runtime/interrupt"
+	"runtime/volatile"
 	"unsafe"
 )
 
 // Peripheral abstraction layer for the stm32l4
+
+const (
+	AF0_SYSTEM             = 0
+	AF1_TIM1_2_LPTIM1      = 1
+	AF2_TIM1_2             = 2
+	AF3_USART2             = 3
+	AF4_I2C1_2_3           = 4
+	AF5_SPI1_2             = 5
+	AF6_SPI3               = 6
+	AF7_USART1_2_3         = 7
+	AF8_LPUART1            = 8
+	AF9_CAN1_TSC           = 9
+	AF10_USB_QUADSPI       = 10
+	AF12_COMP1_2_SWPMI1    = 12
+	AF13_SAI1              = 13
+	AF14_TIM2_15_16_LPTIM2 = 14
+	AF15_EVENTOUT          = 15
+)
 
 const (
 	PA0  = portA + 0
@@ -246,3 +266,177 @@ func (spi SPI) configurePins(config SPIConfig) {
 	config.SDO.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDO}, spi.AltFuncSelector)
 	config.SDI.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDI}, spi.AltFuncSelector)
 }
+
+//---------- Timer related code
+
+var (
+	TIM1 = TIM{
+		EnableRegister: &stm32.RCC.APB2ENR,
+		EnableFlag:     stm32.RCC_APB2ENR_TIM1EN,
+		Device:         stm32.TIM1,
+		Channels: [4]TimerChannel{
+			TimerChannel{Pins: []PinFunction{
+				{PA8, AF1_TIM1_2_LPTIM1},
+			}},
+			TimerChannel{Pins: []PinFunction{
+				{PA9, AF1_TIM1_2_LPTIM1},
+			}},
+			TimerChannel{Pins: []PinFunction{
+				{PA10, AF1_TIM1_2_LPTIM1},
+			}},
+			TimerChannel{Pins: []PinFunction{
+				{PA11, AF1_TIM1_2_LPTIM1},
+			}},
+		},
+		busFreq: APB2_TIM_FREQ,
+	}
+
+	TIM2 = TIM{
+		EnableRegister: &stm32.RCC.APB1ENR1,
+		EnableFlag:     stm32.RCC_APB1ENR1_TIM2EN,
+		Device:         stm32.TIM2,
+		Channels: [4]TimerChannel{
+			TimerChannel{Pins: []PinFunction{
+				{PA0, AF1_TIM1_2_LPTIM1},
+				{PA5, AF1_TIM1_2_LPTIM1},
+				{PA15, AF1_TIM1_2_LPTIM1},
+			}},
+			TimerChannel{Pins: []PinFunction{
+				{PA1, AF1_TIM1_2_LPTIM1},
+				{PB3, AF1_TIM1_2_LPTIM1},
+			}},
+			TimerChannel{Pins: []PinFunction{
+				{PA2, AF1_TIM1_2_LPTIM1},
+			}},
+			TimerChannel{Pins: []PinFunction{
+				{PA3, AF1_TIM1_2_LPTIM1},
+			}},
+		},
+		busFreq: APB1_TIM_FREQ,
+	}
+
+	TIM3 = TIM{
+		EnableRegister: &stm32.RCC.APB1ENR1,
+		EnableFlag:     stm32.RCC_APB1ENR1_TIM3EN,
+		Device:         stm32.TIM3,
+		Channels: [4]TimerChannel{
+			TimerChannel{Pins: []PinFunction{}},
+			TimerChannel{Pins: []PinFunction{}},
+			TimerChannel{Pins: []PinFunction{}},
+			TimerChannel{Pins: []PinFunction{}},
+		},
+		busFreq: APB1_TIM_FREQ,
+	}
+
+	TIM6 = TIM{
+		EnableRegister: &stm32.RCC.APB1ENR1,
+		EnableFlag:     stm32.RCC_APB1ENR1_TIM6EN,
+		Device:         stm32.TIM6,
+		Channels: [4]TimerChannel{
+			TimerChannel{Pins: []PinFunction{}},
+			TimerChannel{Pins: []PinFunction{}},
+			TimerChannel{Pins: []PinFunction{}},
+			TimerChannel{Pins: []PinFunction{}},
+		},
+		busFreq: APB1_TIM_FREQ,
+	}
+
+	TIM7 = TIM{
+		EnableRegister: &stm32.RCC.APB1ENR1,
+		EnableFlag:     stm32.RCC_APB1ENR1_TIM7EN,
+		Device:         stm32.TIM7,
+		Channels: [4]TimerChannel{
+			TimerChannel{Pins: []PinFunction{}},
+			TimerChannel{Pins: []PinFunction{}},
+			TimerChannel{Pins: []PinFunction{}},
+			TimerChannel{Pins: []PinFunction{}},
+		},
+		busFreq: APB1_TIM_FREQ,
+	}
+
+	TIM15 = TIM{
+		EnableRegister: &stm32.RCC.APB2ENR,
+		EnableFlag:     stm32.RCC_APB2ENR_TIM15EN,
+		Device:         stm32.TIM15,
+		Channels: [4]TimerChannel{
+			TimerChannel{Pins: []PinFunction{
+				{PA2, AF14_TIM2_15_16_LPTIM2},
+			}},
+			TimerChannel{Pins: []PinFunction{
+				{PA3, AF14_TIM2_15_16_LPTIM2},
+			}},
+			TimerChannel{Pins: []PinFunction{}},
+			TimerChannel{Pins: []PinFunction{}},
+		},
+		busFreq: APB2_TIM_FREQ,
+	}
+
+	TIM16 = TIM{
+		EnableRegister: &stm32.RCC.APB2ENR,
+		EnableFlag:     stm32.RCC_APB2ENR_TIM16EN,
+		Device:         stm32.TIM16,
+		Channels: [4]TimerChannel{
+			TimerChannel{Pins: []PinFunction{
+				{PA6, AF14_TIM2_15_16_LPTIM2},
+			}},
+			TimerChannel{Pins: []PinFunction{}},
+			TimerChannel{Pins: []PinFunction{}},
+			TimerChannel{Pins: []PinFunction{}},
+		},
+		busFreq: APB2_TIM_FREQ,
+	}
+)
+
+func (t *TIM) registerUPInterrupt() interrupt.Interrupt {
+	switch t {
+	case &TIM1:
+		return interrupt.New(stm32.IRQ_TIM1_UP_TIM16, TIM1.handleUPInterrupt)
+	case &TIM2:
+		return interrupt.New(stm32.IRQ_TIM2, TIM2.handleUPInterrupt)
+	case &TIM3:
+		return interrupt.New(stm32.IRQ_TIM3, TIM3.handleUPInterrupt)
+	case &TIM6:
+		return interrupt.New(stm32.IRQ_TIM6_DACUNDER, TIM6.handleUPInterrupt)
+	case &TIM7:
+		return interrupt.New(stm32.IRQ_TIM7, TIM7.handleUPInterrupt)
+	case &TIM15:
+		return interrupt.New(stm32.IRQ_TIM1_BRK_TIM15, TIM15.handleUPInterrupt)
+	case &TIM16:
+		return interrupt.New(stm32.IRQ_TIM1_UP_TIM16, TIM16.handleUPInterrupt)
+	}
+
+	return interrupt.Interrupt{}
+}
+
+func (t *TIM) registerOCInterrupt() interrupt.Interrupt {
+	switch t {
+	case &TIM1:
+		return interrupt.New(stm32.IRQ_TIM1_CC, TIM1.handleUPInterrupt)
+	case &TIM2:
+		return interrupt.New(stm32.IRQ_TIM2, TIM2.handleOCInterrupt)
+	case &TIM3:
+		return interrupt.New(stm32.IRQ_TIM3, TIM3.handleOCInterrupt)
+	case &TIM6:
+		return interrupt.New(stm32.IRQ_TIM6_DACUNDER, TIM6.handleOCInterrupt)
+	case &TIM7:
+		return interrupt.New(stm32.IRQ_TIM7, TIM7.handleOCInterrupt)
+	case &TIM15:
+		return interrupt.New(stm32.IRQ_TIM1_BRK_TIM15, TIM15.handleOCInterrupt)
+	case &TIM16:
+		return interrupt.New(stm32.IRQ_TIM1_UP_TIM16, TIM16.handleOCInterrupt)
+	}
+
+	return interrupt.Interrupt{}
+}
+
+func (t *TIM) enableMainOutput() {
+	// nothing to do - no BDTR register
+}
+
+type arrtype = uint32
+type arrRegType = volatile.Register32
+
+const (
+	ARR_MAX = 0x10000
+	PSC_MAX = 0x10000
+)

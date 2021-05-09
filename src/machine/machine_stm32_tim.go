@@ -1,4 +1,4 @@
-// +build stm32f4 stm32l5 stm32l0
+// +build stm32f4 stm32l5 stm32l0 stm32l4
 
 package machine
 
