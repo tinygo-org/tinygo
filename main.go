@@ -706,7 +706,9 @@ func getDefaultPort(portCandidates []string) (port string, err error) {
 	switch runtime.GOOS {
 	case "freebsd":
 		ports, err = filepath.Glob("/dev/cuaU*")
-	case "darwin", "linux", "windows":
+	case "darwin":
+		ports, err = filepath.Glob("/dev/cu.usb*")
+	case "linux", "windows":
 		var portsList []*enumerator.PortDetails
 		portsList, err = enumerator.GetDetailedPortsList()
 		if err != nil {
@@ -720,8 +722,6 @@ func getDefaultPort(portCandidates []string) (port string, err error) {
 		if ports == nil || len(ports) == 0 {
 			// fallback
 			switch runtime.GOOS {
-			case "darwin":
-				ports, err = filepath.Glob("/dev/cu.usb*")
 			case "linux":
 				ports, err = filepath.Glob("/dev/ttyACM*")
 			case "windows":
