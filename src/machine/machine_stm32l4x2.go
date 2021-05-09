@@ -12,6 +12,12 @@ func CPUFrequency() uint32 {
 	return 80000000
 }
 
+// Internal use: configured speed of the APB1 and APB2 timers, this should be kept
+// in sync with any changes to runtime package which configures the oscillators
+// and clock frequencies
+const APB1_TIM_FREQ = 80e6 // 80MHz
+const APB2_TIM_FREQ = 80e6 // 80MHz
+
 //---------- UART related code
 
 // Configure the UART.
