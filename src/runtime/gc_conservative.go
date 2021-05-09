@@ -410,7 +410,7 @@ func markRoots(start, end uintptr) {
 		}
 	}
 
-	for addr := start; addr < end; addr += unsafe.Alignof(addr) {
+	for addr := start; addr+unsafe.Sizeof(unsafe.Pointer(nil)) <= end; addr += unsafe.Alignof(addr) {
 		root := *(*uintptr)(unsafe.Pointer(addr))
 		markRoot(addr, root)
 	}
