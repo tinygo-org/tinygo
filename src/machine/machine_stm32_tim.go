@@ -1,4 +1,4 @@
-// +build stm32f4 stm32l5 stm32l0 stm32l4 stm32l5 stm32f7
+// +build stm32
 
 package machine
 
@@ -178,7 +178,8 @@ func (t *TIM) Channel(pin Pin) (uint8, error) {
 	for chi, ch := range t.Channels {
 		for _, p := range ch.Pins {
 			if p.Pin == pin {
-				p.Pin.ConfigureAltFunc(PinConfig{Mode: PinModePWMOutput}, p.AltFunc)
+				t.configurePin(uint8(chi), p)
+				//p.Pin.ConfigureAltFunc(PinConfig{Mode: PinModePWMOutput}, p.AltFunc)
 				return uint8(chi), nil
 			}
 		}
