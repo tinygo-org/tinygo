@@ -714,7 +714,9 @@ func getDefaultPort(portCandidates []string) (port string, err error) {
 		}
 
 		for _, p := range portsList {
-			ports = append(ports, p.Name)
+			if p.IsUSB {
+				ports = append(ports, p.Name)
+			}
 		}
 
 		if ports == nil || len(ports) == 0 {
