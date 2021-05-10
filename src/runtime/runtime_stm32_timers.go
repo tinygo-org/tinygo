@@ -48,8 +48,7 @@ var (
 	// The timer used for sleeping
 	sleepTimer *timerInfo
 
-	// timer Prescaler and Auto-reload
-	timerPSC uint32
+	// timer Auto-reload value
 	timerARR uint32
 )
 
@@ -68,8 +67,8 @@ func ticks() timeUnit {
 	// of elapsed time. (tickCount never includes elapsed time between two interrupts)
 	// In this function, we need a precise value of elapsed time.
 	// This is the reason we complement tickCount with extra time computed from timer's current value.
-	fractionnal := (TICKS_PER_INTS * tickTimer.Device.CNT.Get()) / timerARR
-	preciseTickCount := tickCount.Get() + uint64(fractionnal)
+	fractional := (TICKS_PER_INTS * tickTimer.Device.CNT.Get()) / timerARR
+	preciseTickCount := tickCount.Get() + uint64(fractional)
 	return timeUnit(preciseTickCount)
 }
 
@@ -84,20 +83,14 @@ func initTickTimer(ti *timerInfo) {
 	ti.EnableRegister.SetBits(ti.EnableFlag)
 
 	// Compute pre-scaler
-	timerPSC = uint32(TICK_TIMER_CLOCKFREQ / TICK_TIMER_INTFREQ)
+	timerPSC := uint32(TICK_TIMER_CLOCKFREQ / TICK_TIMER_INTFREQ)
 	timerARR = uint32(1)
 
-	// Find correct prescaler/Counter limit
-	for timerARR < 512 {
+	// Increase Auto Reload as much as possible
+	for timerPSC > 1 && timerARR < 0x7FFF {
 		timerPSC >>= 1
 		timerARR <<= 1
 	}
-
-	// Clamp overflow
-	if timerARR > 0x10000 {
-		timerARR = 0x10000
-	}
-
 	ti.Device.PSC.Set(timerPSC - 1)
 	ti.Device.ARR.Set(arrtype(timerARR - 1))
 
