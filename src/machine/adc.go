@@ -9,4 +9,11 @@ type ADCConfig struct {
 	Reference  uint32 // analog reference voltage (AREF) in millivolts
 	Resolution uint32 // number of bits for a single conversion (e.g., 8, 10, 12)
 	Samples    uint32 // number of samples for a single conversion (e.g., 4, 8, 16, 32)
+	Bus        uint8  // bus Number of ADC
 }
+
+const (
+	AdcBusAuto = 0
+	AdcBus0    = 1
+	AdcBus1    = 2
+)
