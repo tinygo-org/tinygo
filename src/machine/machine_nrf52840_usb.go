@@ -58,7 +58,7 @@ func (usbcdc *USBCDC) Flush() error {
 				usbcdc.TxIdx.Set(usbcdcTxBank1st)
 			}
 
-			USB.sent = true
+			usbcdc.sent = true
 		}
 	}
 	return nil
@@ -72,10 +72,10 @@ func (usbcdc *USBCDC) WriteByte(c byte) error {
 		for {
 			mask := interrupt.Disable()
 
-			idx := USB.TxIdx.Get()
+			idx := usbcdc.TxIdx.Get()
 			if (idx & usbcdcTxSizeMask) < usbcdcTxSizeMask {
 				udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN][idx] = c
-				USB.TxIdx.Set(idx + 1)
+				usbcdc.TxIdx.Set(idx + 1)
 				ok = true
 			}
 
@@ -83,24 +83,24 @@ func (usbcdc *USBCDC) WriteByte(c byte) error {
 
 			if ok {
 				break
-			} else if usbcdcTxMaxRetriesAllowed < USB.waitTxcRetryCount {
+			} else if usbcdcTxMaxRetriesAllowed < usbcdc.waitTxcRetryCount {
 				mask := interrupt.Disable()
-				USB.waitTxc = false
-				USB.waitTxcRetryCount = 0
-				USB.TxIdx.Set(0)
+				usbcdc.waitTxc = false
+				usbcdc.waitTxcRetryCount = 0
+				usbcdc.TxIdx.Set(0)
 				usbLineInfo.lineState = 0
 				interrupt.Restore(mask)
 				break
 			} else {
 				mask := interrupt.Disable()
-				if USB.sent {
-					if USB.waitTxc {
+				if usbcdc.sent {
+					if usbcdc.waitTxc {
 						if !easyDMABusy.HasBits(1) {
-							USB.waitTxc = false
-							USB.Flush()
+							usbcdc.waitTxc = false
+							usbcdc.Flush()
 						}
 					} else {
-						USB.Flush()
+						usbcdc.Flush()
 					}
 				}
 				interrupt.Restore(mask)
@@ -111,16 +111,17 @@ func (usbcdc *USBCDC) WriteByte(c byte) error {
 	return nil
 }
 
-func (usbcdc USBCDC) DTR() bool {
+func (usbcdc *USBCDC) DTR() bool {
 	return (usbLineInfo.lineState & usb_CDC_LINESTATE_DTR) > 0
 }
 
-func (usbcdc USBCDC) RTS() bool {
+func (usbcdc *USBCDC) RTS() bool {
 	return (usbLineInfo.lineState & usb_CDC_LINESTATE_RTS) > 0
 }
 
 var (
-	USB = USBCDC{Buffer: NewRingBuffer()}
+	USB  = &_USB
+	_USB = USBCDC{Buffer: NewRingBuffer()}
 
 	usbEndpointDescriptors [8]usbDeviceDescriptor
 
@@ -174,7 +175,7 @@ func (usbcdc *USBCDC) Configure(config UARTConfig) {
 	// that it is possible to print to the console from a BLE interrupt. You
 	// shouldn't generally do that but it is useful for debugging and panic
 	// logging.
-	usbcdc.interrupt = interrupt.New(nrf.IRQ_USBD, USB.handleInterrupt)
+	usbcdc.interrupt = interrupt.New(nrf.IRQ_USBD, _USB.handleInterrupt)
 	usbcdc.interrupt.SetPriority(0x40) // interrupt priority 2 (lower number means more important)
 	usbcdc.interrupt.Enable()
 
@@ -198,7 +199,7 @@ func (usbcdc *USBCDC) Configure(config UARTConfig) {
 func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 	if nrf.USBD.EVENTS_SOF.Get() == 1 {
 		nrf.USBD.EVENTS_SOF.Set(0)
-		USB.Flush()
+		usbcdc.Flush()
 		// if you want to blink LED showing traffic, this would be the place...
 	}
 
@@ -292,7 +293,7 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 					}
 				case usb_CDC_ENDPOINT_IN: //, usb_CDC_ENDPOINT_ACM:
 					if inDataDone {
-						USB.waitTxc = false
+						usbcdc.waitTxc = false
 						exitCriticalSection()
 					}
 				}
@@ -496,7 +497,7 @@ func sendUSBPacket(ep uint32, data []byte) {
 	)
 }
 
-func (usbcdc USBCDC) handleEndpoint(ep uint32) {
+func (usbcdc *USBCDC) handleEndpoint(ep uint32) {
 	// get data
 	count := int(nrf.USBD.EPOUT[ep].AMOUNT.Get())
 
