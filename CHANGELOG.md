@@ -1,3 +1,125 @@
+0.18.0
+---
+
+* **command line**
+  - drop support for Go 1.11 and 1.12
+  - throw an error when no target is specified on Windows
+  - improve error messages in `getDefaultPort()`, support for multiple ports
+  - remove `-cflags` and `-ldflags` flags
+  - implement `-ldflags="-X ..."`
+  - add `-print-allocs` flag that lets you print all heap allocations
+  - openocd commands in tinygo command line
+  - add `-llvm-features` parameter
+  - match `go test` output
+  - discover USB ports only, this will ignore f.ex. bluetooth
+  - use physicmal path instead of cached GOROOT in function getGoroot
+  - add goroot for snap installs
+* **compiler**
+  - `builder`: add support for `-opt=0`
+  - `builder`, `compiler`: compile and cache packages in parallel
+  - `builder`: run interp per package
+  - `builder`: cache C and assembly file outputs
+  - `builder`: add support for `-x` flag to print commands
+  - `builder`: add optsize attribute while building the package
+  - `builder`: run function passes per package
+  - `builder`: hard code Clang compiler
+  - `compiler`: do not use `llvm.GlobalContext()`
+  - `compiler`: remove SimpleDCE pass
+  - `compiler`: do not emit nil checks for `*ssa.Alloc` instructions
+  - `compiler`: merge `runtime.typecodeID` and runtime.typeInInterface
+  - `compiler`: do not check for impossible type asserts
+  - `compiler`: fix use of global context: `llvm.Int32Type()`
+  - `compiler`: add interface IR test
+  - `compiler`: fix lack of method name in interface matching
+  - `compiler`: fix "fragment covers entire variable" bug
+  - `compiler`: optimize string literals and globals
+  - `compiler`: decouple func lowering from interface type codes
+  - `compiler`: add function attributes to some runtime calls
+  - `compiler`: improve position information in error messages
+  - `cgo`: add support for CFLAGS in .c files
+  - `interp`: support GEP on fixed (MMIO) addresses
+  - `interp`: handle `(reflect.Type).Elem()`
+  - `interp`: add support for runtime.interfaceMethod
+  - `interp`: make toLLVMValue return an error instead of panicking
+  - `interp`: add support for switch statement
+  - `interp`: fix phi instruction
+  - `interp`: remove map support
+  - `interp`: support extractvalue/insertvalue with multiple operands
+  - `transform`: optimize string comparisons against ""
+  - `transform`: optimize `reflect.Type` `Implements()` method
+  - `transform`: fix bug in interface lowering when signatures are renamed
+  - `transform`: don't rely on struct name of `runtime.typecodeID`
+  - `transform`: use IPSCCP pass instead of the constant propagation pass
+  - `transform`: fix func lowering assertion failure
+  - `transform`: do not lower zero-sized alloc to alloca
+  - `transform`: split interface and reflect lowering
+* **standard library**
+  - `runtime`: add dummy debug package
+  - `machine`: fix data shift/mask in newUSBSetup
+  - `machine`: make `machine.I2C0` and similar objects pointers
+  - `machine`: unify usbcdc code
+  - `machine`: refactor PWM support
+  - `machine`: avoid heap allocations in USB code
+  - `reflect`: let `reflect.Type` be of interface type
+  - `reflect`: implement a number of stub functions
+  - `reflect`: check for access in the `Interface` method call
+  - `reflect`: fix `AssignableTo` and `Implements` methods
+  - `reflect`: implement `Value.CanAddr`
+  - `reflect`: implement `Sizeof` and `Alignof` for func values
+  - `reflect`: implement `New` function
+  - `runtime`: implement command line arguments in hosted environments
+  - `runtime`: implement environment variables for Linux
+  - `runtime`: improve timers on nrf, and samd chips
+* **targets**
+  - all: use -Qunused-arguments only for assembly files
+  - `atmega1280`: add PWM support
+  - `attiny`: remove dummy UART
+  - `atsamd21`: improve SPI
+  - `atsamd51`: fix PWM support in atsamd51p20
+  - `atsamd5x`: improve SPI
+  - `atsamd51`, `atsame5x`: unify samd51 and same5x
+  - `atsamd51`, `atsamd21`: fix `ADC.Get()` value at 8bit and 10bit
+  - `atsame5x`: add support for CAN
+  - `avr`: remove I2C stubs from attiny support
+  - `cortexm`: check for `arm-none-eabi-gdb` and `gdb-multiarch` commands
+  - `cortexm`: add `__isr_vector` symbol
+  - `cortexm`: disable FPU on Cortex-M4
+  - `cortexm`: clean up Cortex-M target files
+  - `fe310`: fix SPI read
+  - `gameboy-advance`: Fix RGBA color interpretation
+  - `nrf52833`: add PWM support
+  - `stm32l0`: use unified UART logic
+  - `stm32`: move f103 (bluepill) to common i2c code
+  - `stm32`: separate altfunc selection for UART Tx/Rx
+  - `stm32`: i2c implementation for F7, L5 and L4 MCUs
+  - `stm32`: make SPI CLK fast to fix data issue
+  - `stm32`: support SPI on L4 series
+  - `unix`: avoid possible heap allocation with `-opt=0`
+  - `unix`: use conservative GC by default
+  - `unix`: use the tasks scheduler instead of coroutines
+  - `wasi`: upgrade WASI version to wasi_snapshot_preview1
+  - `wasi`: darwin: support basic file io based on libc
+  - `wasm`: only export explicitly exported functions
+  - `wasm`: use WASI ABI for exit function
+  - `wasm`: scan globals conservatively
+* **boards**
+  - `arduino-mega1280`: add support for the Arduino Mega 1280
+  - `arduino-nano-new`: Add Arduino Nano w/ New Bootloader target
+  - `atsame54-xpro`: add initial support this board
+  - `feather-m4-can`: add initial support for this board
+  - `grandcentral-m4`: add board support for Adafruit Grand Central M4 (SAMD51)
+  - `lgt92`: update to new UART structure
+  - `microbit`: remove LED constant
+  - `microbit-v2`: add support for S113 SoftDevice
+  - `nucleol432`: add support for this board
+  - `nucleo-l031k6`: add this board
+  - `pca10059`: initial support for this board
+  - `qtpy`: fix msd-volume-name
+  - `qtpy`: fix i2c setting
+  - `teensy40`: move txBuffer allocation to UART declaration
+  - `teensy40`: add UART0 as alias for UART1
+
+
 0.17.0
 
 ---
