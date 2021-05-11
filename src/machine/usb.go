@@ -604,7 +604,7 @@ func newUSBSetup(data []byte) usbSetup {
 //
 
 // Read from the RX buffer.
-func (usbcdc USBCDC) Read(data []byte) (n int, err error) {
+func (usbcdc *USBCDC) Read(data []byte) (n int, err error) {
 	// check if RX buffer is empty
 	size := usbcdc.Buffered()
 	if size == 0 {
@@ -626,7 +626,7 @@ func (usbcdc USBCDC) Read(data []byte) (n int, err error) {
 }
 
 // Write data to the USBCDC.
-func (usbcdc USBCDC) Write(data []byte) (n int, err error) {
+func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
 	for _, v := range data {
 		usbcdc.WriteByte(v)
 	}
@@ -635,7 +635,7 @@ func (usbcdc USBCDC) Write(data []byte) (n int, err error) {
 
 // ReadByte reads a single byte from the RX buffer.
 // If there is no data in the buffer, returns an error.
-func (usbcdc USBCDC) ReadByte() (byte, error) {
+func (usbcdc *USBCDC) ReadByte() (byte, error) {
 	// check if RX buffer is empty
 	buf, ok := usbcdc.Buffer.Get()
 	if !ok {
@@ -645,13 +645,13 @@ func (usbcdc USBCDC) ReadByte() (byte, error) {
 }
 
 // Buffered returns the number of bytes currently stored in the RX buffer.
-func (usbcdc USBCDC) Buffered() int {
+func (usbcdc *USBCDC) Buffered() int {
 	return int(usbcdc.Buffer.Used())
 }
 
 // Receive handles adding data to the UART's data buffer.
 // Usually called by the IRQ handler for a machine.
-func (usbcdc USBCDC) Receive(data byte) {
+func (usbcdc *USBCDC) Receive(data byte) {
 	usbcdc.Buffer.Put(data)
 }
 

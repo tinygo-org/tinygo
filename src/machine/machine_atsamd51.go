@@ -952,7 +952,7 @@ type UART struct {
 
 var (
 	// UART0 is actually a USB CDC interface.
-	UART0 = USBCDC{Buffer: NewRingBuffer()}
+	UART0 = &USBCDC{Buffer: NewRingBuffer()}
 )
 
 const (
@@ -1994,7 +1994,7 @@ func (usbcdc *USBCDC) Flush() error {
 
 			// send data by setting bank ready
 			setEPSTATUSSET(usb_CDC_ENDPOINT_IN, sam.USB_DEVICE_ENDPOINT_EPSTATUSSET_BK1RDY)
-			UART0.sent = true
+			usbcdc.sent = true
 		}
 	}
 	return nil
@@ -2008,10 +2008,10 @@ func (usbcdc *USBCDC) WriteByte(c byte) error {
 		for {
 			mask := interrupt.Disable()
 
-			idx := UART0.TxIdx.Get()
+			idx := usbcdc.TxIdx.Get()
 			if (idx & usbcdcTxSizeMask) < usbcdcTxSizeMask {
 				udd_ep_in_cache_buffer[usb_CDC_ENDPOINT_IN][idx] = c
-				UART0.TxIdx.Set(idx + 1)
+				usbcdc.TxIdx.Set(idx + 1)
 				ok = true
 			}
 
@@ -2019,26 +2019,26 @@ func (usbcdc *USBCDC) WriteByte(c byte) error {
 
 			if ok {
 				break
-			} else if usbcdcTxMaxRetriesAllowed < UART0.waitTxcRetryCount {
+			} else if usbcdcTxMaxRetriesAllowed < usbcdc.waitTxcRetryCount {
 				mask := interrupt.Disable()
-				UART0.waitTxc = false
-				UART0.waitTxcRetryCount = 0
-				UART0.TxIdx.Set(0)
+				usbcdc.waitTxc = false
+				usbcdc.waitTxcRetryCount = 0
+				usbcdc.TxIdx.Set(0)
 				usbLineInfo.lineState = 0
 				interrupt.Restore(mask)
 				break
 			} else {
 				mask := interrupt.Disable()
-				if UART0.sent {
-					if UART0.waitTxc {
+				if usbcdc.sent {
+					if usbcdc.waitTxc {
 						if (getEPINTFLAG(usb_CDC_ENDPOINT_IN) & sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT1) != 0 {
 							setEPSTATUSCLR(usb_CDC_ENDPOINT_IN, sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_BK1RDY)
 							setEPINTFLAG(usb_CDC_ENDPOINT_IN, sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT1)
-							UART0.waitTxc = false
-							UART0.Flush()
+							usbcdc.waitTxc = false
+							usbcdc.Flush()
 						}
 					} else {
-						UART0.Flush()
+						usbcdc.Flush()
 					}
 				}
 				interrupt.Restore(mask)
@@ -2049,11 +2049,11 @@ func (usbcdc *USBCDC) WriteByte(c byte) error {
 	return nil
 }
 
-func (usbcdc USBCDC) DTR() bool {
+func (usbcdc *USBCDC) DTR() bool {
 	return (usbLineInfo.lineState & usb_CDC_LINESTATE_DTR) > 0
 }
 
-func (usbcdc USBCDC) RTS() bool {
+func (usbcdc *USBCDC) RTS() bool {
 	return (usbLineInfo.lineState & usb_CDC_LINESTATE_RTS) > 0
 }
 
@@ -2088,7 +2088,7 @@ var (
 )
 
 // Configure the USB CDC interface. The config is here for compatibility with the UART interface.
-func (usbcdc USBCDC) Configure(config UARTConfig) {
+func (usbcdc *USBCDC) Configure(config UARTConfig) {
 	// reset USB interface
 	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_SWRST)
 	for sam.USB_DEVICE.SYNCBUSY.HasBits(sam.USB_DEVICE_SYNCBUSY_SWRST) ||
