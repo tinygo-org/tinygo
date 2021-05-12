@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 57 microcontroller boards are currently supported:
+The following 62 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
@@ -53,6 +53,7 @@ The following 57 microcontroller boards are currently supported:
 * [Adafruit Feather M4 CAN](https://www.adafruit.com/product/4759)
 * [Adafruit Feather nRF52840 Express](https://www.adafruit.com/product/4062)
 * [Adafruit Feather STM32F405 Express](https://www.adafruit.com/product/4382)
+* [Adafruit Grand Central M4](https://www.adafruit.com/product/4064)
 * [Adafruit ItsyBitsy M0](https://www.adafruit.com/product/3727)
 * [Adafruit ItsyBitsy M4](https://www.adafruit.com/product/3800)
 * [Adafruit ItsyBitsy nRF52840](https://www.adafruit.com/product/4481)
@@ -63,6 +64,7 @@ The following 57 microcontroller boards are currently supported:
 * [Adafruit PyPortal](https://www.adafruit.com/product/4116)
 * [Adafruit QT Py](https://www.adafruit.com/product/4600)
 * [Adafruit Trinket M0](https://www.adafruit.com/product/3500)
+* [Arduino Mega 1280](https://www.arduino.cc/en/Main/arduinoBoardMega/)
 * [Arduino Mega 2560](https://store.arduino.cc/arduino-mega-2560-rev3)
 * [Arduino MKR1000](https://store.arduino.cc/arduino-mkr1000-wifi)
 * [Arduino Nano](https://store.arduino.cc/arduino-nano)
@@ -84,6 +86,7 @@ The following 57 microcontroller boards are currently supported:
 * [Nordic Semiconductor PCA10031](https://www.nordicsemi.com/eng/Products/nRF51-Dongle)
 * [Nordic Semiconductor PCA10040](https://www.nordicsemi.com/eng/Products/Bluetooth-low-energy/nRF52-DK)
 * [Nordic Semiconductor PCA10056](https://www.nordicsemi.com/Software-and-Tools/Development-Kits/nRF52840-DK)
+* [Nordic Semiconductor pca10059](https://www.nordicsemi.com/Software-and-tools/Development-Kits/nRF52840-Dongle)
 * [Particle Argon](https://docs.particle.io/datasheets/wi-fi/argon-datasheet/)
 * [Particle Boron](https://docs.particle.io/datasheets/cellular/boron-datasheet/)
 * [Particle Xenon](https://docs.particle.io/datasheets/discontinued/xenon-datasheet/)
@@ -98,6 +101,8 @@ The following 57 microcontroller boards are currently supported:
 * [SiFIve HiFive1](https://www.sifive.com/boards/hifive1)
 * [ST Micro "Nucleo" F103RB](https://www.st.com/en/evaluation-tools/nucleo-f103rb.html)
 * [ST Micro "Nucleo" F722ZE](https://www.st.com/en/evaluation-tools/nucleo-f722ze.html)
+* [ST Micro "Nucleo" L031K6](https://www.st.com/ja/evaluation-tools/nucleo-l031k6.html)
+* [ST Micro "Nucleo" L432KC](https://www.st.com/ja/evaluation-tools/nucleo-l432kc.html)
 * [ST Micro "Nucleo" L552ZE](https://www.st.com/en/evaluation-tools/nucleo-l552ze-q.html)
 * [ST Micro STM32F103XX "Bluepill"](https://stm32-base.org/boards/STM32F103C8T6-Blue-Pill)
 * [ST Micro STM32F407 "Discovery"](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
