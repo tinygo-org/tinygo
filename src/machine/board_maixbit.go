@@ -52,6 +52,8 @@ const (
 	LED_BLUE  = D14
 )
 
+var Serial = UART0
+
 // Default pins for UARTHS.
 const (
 	UART_TX_PIN = D5

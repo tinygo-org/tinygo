@@ -20,6 +20,8 @@ const (
 // Onboard blue LED (on the AI-Thinker module).
 const LED = D4
 
+var Serial = UART0
+
 // SPI pins
 const (
 	SPI0_SCK_PIN = D5

@@ -15,6 +15,8 @@ const (
 	BUTTON = PB31
 )
 
+var Serial = USB
+
 const (
 	// https://ww1.microchip.com/downloads/en/DeviceDoc/70005321A.pdf
 
@@ -152,7 +154,7 @@ const (
 	PIN_USB_ID      = PC19
 )
 
-// UART0 aka USBCDC pins
+// USBCDC pins
 const (
 	USBCDC_DM_PIN = PA24
 	USBCDC_DP_PIN = PA25

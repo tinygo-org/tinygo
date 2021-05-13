@@ -51,7 +51,7 @@ func init() {
 		Device:         stm32.TIM15,
 	})
 
-	machine.UART0.Configure(machine.UARTConfig{})
+	machine.Serial.Configure(machine.UARTConfig{})
 
 	initTickTimer(&timerInfo{
 		EnableRegister: &stm32.RCC.APB2ENR,
@@ -61,7 +61,7 @@ func init() {
 }
 
 func putchar(c byte) {
-	machine.UART0.WriteByte(c)
+	machine.Serial.WriteByte(c)
 }
 
 func initCLK() {

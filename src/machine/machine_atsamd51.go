@@ -951,8 +951,8 @@ type UART struct {
 }
 
 var (
-	// UART0 is actually a USB CDC interface.
-	UART0 = &USBCDC{Buffer: NewRingBuffer()}
+	// USB is a USB CDC interface.
+	USB = &USBCDC{Buffer: NewRingBuffer()}
 )
 
 const (
@@ -2193,7 +2193,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 
 	// Start of frame
 	if (flags & sam.USB_DEVICE_INTFLAG_SOF) > 0 {
-		UART0.Flush()
+		USB.Flush()
 		// if you want to blink LED showing traffic, this would be the place...
 	}
 
@@ -2253,7 +2253,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 				setEPINTFLAG(i, sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT1)
 
 				if i == usb_CDC_ENDPOINT_IN {
-					UART0.waitTxc = false
+					USB.waitTxc = false
 				}
 			}
 		}
@@ -2567,7 +2567,7 @@ func handleEndpoint(ep uint32) {
 
 	// move to ring buffer
 	for i := 0; i < count; i++ {
-		UART0.Receive(byte((udd_ep_out_cache_buffer[ep][i] & 0xFF)))
+		USB.Receive(byte((udd_ep_out_cache_buffer[ep][i] & 0xFF)))
 	}
 
 	// set byte count to zero

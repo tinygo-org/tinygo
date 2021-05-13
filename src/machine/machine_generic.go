@@ -8,6 +8,7 @@ var (
 	SPI0  = SPI{0}
 	I2C0  = &I2C{0}
 	UART0 = &UART{0}
+	USB   = &UART{100}
 )
 
 const (

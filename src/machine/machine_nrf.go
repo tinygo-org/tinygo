@@ -138,8 +138,8 @@ type UART struct {
 // UART
 var (
 	// UART0 is the hardware UART on the NRF SoC.
-	_NRF_UART0 = UART{Buffer: NewRingBuffer()}
-	NRF_UART0  = &_NRF_UART0
+	_UART0 = UART{Buffer: NewRingBuffer()}
+	UART0  = &_UART0
 )
 
 // Configure the UART.
@@ -165,7 +165,7 @@ func (uart *UART) Configure(config UARTConfig) {
 	nrf.UART0.INTENSET.Set(nrf.UART_INTENSET_RXDRDY_Msk)
 
 	// Enable RX IRQ.
-	intr := interrupt.New(nrf.IRQ_UART0, _NRF_UART0.handleInterrupt)
+	intr := interrupt.New(nrf.IRQ_UART0, _UART0.handleInterrupt)
 	intr.SetPriority(0xc0) // low priority
 	intr.Enable()
 }

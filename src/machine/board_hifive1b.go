@@ -35,6 +35,8 @@ const (
 	LED_BLUE  = P21
 )
 
+var Serial = UART0
+
 const (
 	// TODO: figure out the pin numbers for these.
 	UART_TX_PIN = D1

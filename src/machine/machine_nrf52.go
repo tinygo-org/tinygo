@@ -42,10 +42,6 @@ const (
 	P0_31 Pin = 31
 )
 
-var (
-	UART0 = NRF_UART0
-)
-
 // Get peripheral and pin number for this GPIO pin.
 func (p Pin) getPortPin() (*nrf.GPIO_Type, uint32) {
 	return nrf.P0, uint32(p)

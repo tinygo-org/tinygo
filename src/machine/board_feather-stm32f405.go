@@ -140,7 +140,7 @@ var (
 		TxAltFuncSelector: AF7_USART1_2_3,
 		RxAltFuncSelector: AF7_USART1_2_3,
 	}
-	UART0 = UART1
+	Serial = UART1
 )
 
 func initUART() {

@@ -8,11 +8,11 @@ import (
 )
 
 func initUART() {
-	machine.UART0.Configure(machine.UARTConfig{})
+	machine.Serial.Configure(machine.UARTConfig{})
 }
 
 func putchar(c byte) {
-	machine.UART0.WriteByte(c)
+	machine.Serial.WriteByte(c)
 }
 
 // Sleep for a given period. The period is defined by the WDT peripheral, and is

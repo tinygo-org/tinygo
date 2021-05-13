@@ -66,7 +66,7 @@ const (
 	BASE_ENABLE_PIN       Pin = PB09
 )
 
-// UART0 aka USBCDC pins
+// USBCDC pins
 const (
 	USBCDC_DM_PIN          Pin = PA24
 	USBCDC_DP_PIN          Pin = PA25

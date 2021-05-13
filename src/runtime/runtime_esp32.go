@@ -14,7 +14,7 @@ type timeUnit int64
 var currentTime timeUnit
 
 func putchar(c byte) {
-	machine.UART0.WriteByte(c)
+	machine.Serial.WriteByte(c)
 }
 
 func postinit() {}
@@ -53,7 +53,7 @@ func main() {
 	preinit()
 
 	// Initialize UART.
-	machine.UART0.Configure(machine.UARTConfig{})
+	machine.Serial.Configure(machine.UARTConfig{})
 
 	// Configure timer 0 in timer group 0, for timekeeping.
 	//   EN:       Enable the timer.

@@ -54,9 +54,9 @@ const (
 	UART_TX_PIN = P0_08
 )
 
-// UART0 is the USB device
+// Serial is the USB device
 var (
-	UART0 = USB
+	Serial = USB
 )
 
 // I2C pins

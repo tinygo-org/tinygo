@@ -136,7 +136,7 @@ const (
 )
 
 var (
-	UART0  = UART1 // alias UART0 to UART1
+	Serial = UART1
 	UART1  = &_UART1
 	_UART1 = UART{
 		Bus:      nxp.LPUART6,

@@ -93,11 +93,11 @@ func initPeripherals() {
 	sifive.RTC.RTCCFG.Set(sifive.RTC_RTCCFG_ENALWAYS)
 
 	// Configure the UART.
-	machine.UART0.Configure(machine.UARTConfig{})
+	machine.Serial.Configure(machine.UARTConfig{})
 }
 
 func putchar(c byte) {
-	machine.UART0.WriteByte(c)
+	machine.Serial.WriteByte(c)
 }
 
 var timerWakeup volatile.Register8

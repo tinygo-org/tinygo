@@ -121,6 +121,9 @@ func (i2c *I2C) readByte() byte {
 	return byte(avr.TWDR.Get())
 }
 
+// Always use UART0 as the serial output.
+var Serial = UART0
+
 // UART
 var (
 	// UART0 is the hardware serial port on the AVR.

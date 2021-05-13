@@ -54,6 +54,8 @@ const (
 	I2C0_SDA_PIN = PA10
 )
 
+var Serial = UART0
+
 var (
 
 	// Console UART (LPUSART1)
