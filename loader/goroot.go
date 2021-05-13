@@ -208,6 +208,7 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"internal/reflectlite/": false,
 		"internal/task/":        false,
 		"machine/":              false,
+		"net/":                  true,
 		"os/":                   true,
 		"reflect/":              false,
 		"runtime/":              false,
