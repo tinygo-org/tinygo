@@ -27,19 +27,19 @@ const (
 )
 
 var (
-	UART0  = &_UART0
-	_UART0 = UART{
+	UART1  = &_UART1
+	_UART1 = UART{
 		Buffer:            NewRingBuffer(),
 		Bus:               stm32.USART2,
 		TxAltFuncSelector: AF7_USART1_2_3,
 		RxAltFuncSelector: AF7_USART1_2_3,
 	}
-	UART1 = UART0
+	Serial = UART1
 )
 
 // set up RX IRQ handler. Follow similar pattern for other UARTx instances
 func init() {
-	UART0.Interrupt = interrupt.New(stm32.IRQ_USART2, _UART0.handleInterrupt)
+	UART1.Interrupt = interrupt.New(stm32.IRQ_USART2, _UART1.handleInterrupt)
 }
 
 // SPI pins

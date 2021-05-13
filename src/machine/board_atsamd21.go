@@ -74,3 +74,5 @@ const (
 	PB30 Pin = 62
 	PB31 Pin = 63
 )
+
+var Serial = USB

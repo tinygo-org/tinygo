@@ -30,11 +30,11 @@ func init() {
 	initADCClock()
 
 	// connect to USB CDC interface
-	machine.UART0.Configure(machine.UARTConfig{})
+	machine.Serial.Configure(machine.UARTConfig{})
 }
 
 func putchar(c byte) {
-	machine.UART0.WriteByte(c)
+	machine.Serial.WriteByte(c)
 }
 
 func initClocks() {

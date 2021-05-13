@@ -33,7 +33,7 @@ func init() {
 		Device:         stm32.TIM3,
 	})
 
-	machine.UART0.Configure(machine.UARTConfig{})
+	machine.Serial.Configure(machine.UARTConfig{})
 
 	initTickTimer(&timerInfo{
 		EnableRegister: &stm32.RCC.APB1ENR,
@@ -43,7 +43,7 @@ func init() {
 }
 
 func putchar(c byte) {
-	machine.UART0.WriteByte(c)
+	machine.Serial.WriteByte(c)
 }
 
 // initCLK sets clock to 72MHz using HSE 8MHz crystal w/ PLL X 9 (8MHz x 9 = 72MHz).

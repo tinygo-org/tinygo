@@ -66,7 +66,9 @@ const (
 	BUTTON_B_MASK      = 128
 )
 
-// UART0 aka USBCDC pins
+var Serial = USB
+
+// USBCDC pins
 const (
 	USBCDC_DM_PIN = PA24
 	USBCDC_DP_PIN = PA25

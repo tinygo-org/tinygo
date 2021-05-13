@@ -65,15 +65,14 @@ const (
 var (
 	// USART2 is the hardware serial port connected to the onboard ST-LINK
 	// debugger to be exposed as virtual COM port over USB on Nucleo boards.
-	// Both UART0 and UART1 refer to USART2.
-	UART0  = &_UART0
-	_UART0 = UART{
+	UART1  = &_UART1
+	_UART1 = UART{
 		Buffer:            NewRingBuffer(),
 		Bus:               stm32.USART2,
 		TxAltFuncSelector: 7,
 		RxAltFuncSelector: 3,
 	}
-	UART1 = UART0
+	Serial = UART1
 
 	// I2C1 is documented, alias to I2C0 as well
 	I2C1 = &I2C{
@@ -91,5 +90,5 @@ var (
 )
 
 func init() {
-	UART0.Interrupt = interrupt.New(stm32.IRQ_USART2, _UART0.handleInterrupt)
+	UART1.Interrupt = interrupt.New(stm32.IRQ_USART2, _UART1.handleInterrupt)
 }

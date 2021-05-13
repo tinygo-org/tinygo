@@ -29,7 +29,7 @@ func main() {
 }
 
 func init() {
-	machine.UART0.Configure(machine.UARTConfig{})
+	machine.Serial.Configure(machine.UARTConfig{})
 	initLFCLK()
 	initRTC()
 }
@@ -64,7 +64,7 @@ func initRTC() {
 }
 
 func putchar(c byte) {
-	machine.UART0.WriteByte(c)
+	machine.Serial.WriteByte(c)
 }
 
 func sleepTicks(d timeUnit) {

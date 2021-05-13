@@ -17,6 +17,8 @@ const (
 	LED3 = LCD_BACKLIGHT_LOW
 )
 
+var Serial = UART0
+
 // UART pins for PineTime. Note that RX is set to NoPin as RXD is not listed in
 // the PineTime schematic 1.0:
 // http://files.pine64.org/doc/PineTime/PineTime%20Port%20Assignment%20rev1.0.pdf

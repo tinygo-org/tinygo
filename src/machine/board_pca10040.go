@@ -23,6 +23,8 @@ const (
 	BUTTON4 Pin = 16
 )
 
+var Serial = UART0
+
 // UART pins for NRF52840-DK
 const (
 	UART_TX_PIN Pin = 6

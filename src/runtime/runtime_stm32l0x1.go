@@ -34,7 +34,7 @@ func init() {
 		Device:         stm32.TIM22,
 	})
 
-	machine.UART0.Configure(machine.UARTConfig{})
+	machine.Serial.Configure(machine.UARTConfig{})
 
 	initTickTimer(&timerInfo{
 		EnableRegister: &stm32.RCC.APB2ENR,

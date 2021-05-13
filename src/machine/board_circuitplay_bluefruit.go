@@ -56,10 +56,7 @@ const (
 	UART_RX_PIN = P0_30 // PORTB
 )
 
-// UART0 is the USB device
-var (
-	UART0 = USB
-)
+var Serial = USB
 
 // I2C pins
 const (

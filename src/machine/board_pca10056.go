@@ -22,6 +22,8 @@ const (
 	BUTTON4 Pin = 25
 )
 
+var Serial = UART0
+
 // UART pins
 const (
 	UART_TX_PIN Pin = 6

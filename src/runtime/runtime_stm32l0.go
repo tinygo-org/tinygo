@@ -14,7 +14,7 @@ const (
 type arrtype = uint16
 
 func putchar(c byte) {
-	machine.UART0.WriteByte(c)
+	machine.Serial.WriteByte(c)
 }
 
 func initCLK() {
