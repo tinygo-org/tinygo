@@ -229,7 +229,7 @@ func initInternal() {
 func postinit() {}
 
 func putchar(c byte) {
-	machine.PutcharUART(&machine.UART0, c)
+	machine.PutcharUART(machine.UART0, c)
 }
 
 func abort() {
@@ -256,9 +256,9 @@ func abort() {
 		// keep polling some communication while in fault
 		// mode, so we don't completely die.
 		// machine.PollUSB(&machine.USB0)
-		machine.PollUART(&machine.UART0)
-		machine.PollUART(&machine.UART1)
-		machine.PollUART(&machine.UART2)
+		machine.PollUART(machine.UART0)
+		machine.PollUART(machine.UART1)
+		machine.PollUART(machine.UART2)
 	}
 }
 

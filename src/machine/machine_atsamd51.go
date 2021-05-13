@@ -961,7 +961,7 @@ const (
 )
 
 // Configure the UART.
-func (uart UART) Configure(config UARTConfig) error {
+func (uart *UART) Configure(config UARTConfig) error {
 	// Default baud rate to 115200.
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
@@ -1064,7 +1064,7 @@ func (uart UART) Configure(config UARTConfig) error {
 }
 
 // SetBaudRate sets the communication speed for the UART.
-func (uart UART) SetBaudRate(br uint32) {
+func (uart *UART) SetBaudRate(br uint32) {
 	// Asynchronous fractional mode (Table 24-2 in datasheet)
 	//   BAUD = fref / (sampleRateValue * fbaud)
 	// (multiply by 8, to calculate fractional piece)
@@ -1078,7 +1078,7 @@ func (uart UART) SetBaudRate(br uint32) {
 }
 
 // WriteByte writes a byte of data to the UART.
-func (uart UART) WriteByte(c byte) error {
+func (uart *UART) WriteByte(c byte) error {
 	// wait until ready to receive
 	for !uart.Bus.INTFLAG.HasBits(sam.SERCOM_USART_INT_INTFLAG_DRE) {
 	}

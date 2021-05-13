@@ -140,7 +140,8 @@ func (p Pin) PortMaskClear() (*uint32, uint32) {
 }
 
 // UART0 is a hardware UART that supports both TX and RX.
-var UART0 = UART{Buffer: NewRingBuffer()}
+var UART0 = &_UART0
+var _UART0 = UART{Buffer: NewRingBuffer()}
 
 type UART struct {
 	Buffer *RingBuffer
@@ -148,7 +149,7 @@ type UART struct {
 
 // Configure the UART baud rate. TX and RX pins are fixed by the hardware so
 // cannot be modified and will be ignored.
-func (uart UART) Configure(config UARTConfig) {
+func (uart *UART) Configure(config UARTConfig) {
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
@@ -157,7 +158,7 @@ func (uart UART) Configure(config UARTConfig) {
 
 // WriteByte writes a single byte to the output buffer. Note that the hardware
 // includes a buffer of 128 bytes which will be used first.
-func (uart UART) WriteByte(c byte) error {
+func (uart *UART) WriteByte(c byte) error {
 	for (esp.UART0.UART_STATUS.Get()>>16)&0xff >= 128 {
 		// Wait until the TX buffer has room.
 	}

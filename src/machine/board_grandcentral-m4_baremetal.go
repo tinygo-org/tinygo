@@ -8,30 +8,34 @@ import (
 )
 
 func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM0_2, UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM4_2, UART2.handleInterrupt)
-	UART3.Interrupt = interrupt.New(sam.IRQ_SERCOM1_2, UART3.handleInterrupt)
-	UART4.Interrupt = interrupt.New(sam.IRQ_SERCOM5_2, UART4.handleInterrupt)
+	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM0_2, _UART1.handleInterrupt)
+	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM4_2, _UART2.handleInterrupt)
+	UART3.Interrupt = interrupt.New(sam.IRQ_SERCOM1_2, _UART3.handleInterrupt)
+	UART4.Interrupt = interrupt.New(sam.IRQ_SERCOM5_2, _UART4.handleInterrupt)
 }
 
 // UART on the Grand Central M4
 var (
-	UART1 = UART{
+	UART1  = &_UART1
+	_UART1 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM0_USART_INT,
 		SERCOM: 0,
 	}
-	UART2 = UART{
+	UART2  = &_UART2
+	_UART2 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM4_USART_INT,
 		SERCOM: 4,
 	}
-	UART3 = UART{
+	UART3  = &_UART3
+	_UART3 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM1_USART_INT,
 		SERCOM: 1,
 	}
-	UART4 = UART{
+	UART4  = &_UART4
+	_UART4 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM5_USART_INT,
 		SERCOM: 5,

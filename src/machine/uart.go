@@ -27,7 +27,7 @@ type UARTConfig struct {
 //
 
 // Read from the RX buffer.
-func (uart UART) Read(data []byte) (n int, err error) {
+func (uart *UART) Read(data []byte) (n int, err error) {
 	// check if RX buffer is empty
 	size := uart.Buffered()
 	if size == 0 {
@@ -49,7 +49,7 @@ func (uart UART) Read(data []byte) (n int, err error) {
 }
 
 // Write data to the UART.
-func (uart UART) Write(data []byte) (n int, err error) {
+func (uart *UART) Write(data []byte) (n int, err error) {
 	for _, v := range data {
 		uart.WriteByte(v)
 	}
@@ -58,7 +58,7 @@ func (uart UART) Write(data []byte) (n int, err error) {
 
 // ReadByte reads a single byte from the RX buffer.
 // If there is no data in the buffer, returns an error.
-func (uart UART) ReadByte() (byte, error) {
+func (uart *UART) ReadByte() (byte, error) {
 	// check if RX buffer is empty
 	buf, ok := uart.Buffer.Get()
 	if !ok {
@@ -68,12 +68,12 @@ func (uart UART) ReadByte() (byte, error) {
 }
 
 // Buffered returns the number of bytes currently stored in the RX buffer.
-func (uart UART) Buffered() int {
+func (uart *UART) Buffered() int {
 	return int(uart.Buffer.Used())
 }
 
 // Receive handles adding data to the UART's data buffer.
 // Usually called by the IRQ handler for a machine.
-func (uart UART) Receive(data byte) {
+func (uart *UART) Receive(data byte) {
 	uart.Buffer.Put(data)
 }

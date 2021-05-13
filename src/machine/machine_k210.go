@@ -338,10 +338,11 @@ type UART struct {
 }
 
 var (
-	UART0 = UART{Bus: kendryte.UARTHS, Buffer: NewRingBuffer()}
+	UART0  = &_UART0
+	_UART0 = UART{Bus: kendryte.UARTHS, Buffer: NewRingBuffer()}
 )
 
-func (uart UART) Configure(config UARTConfig) {
+func (uart *UART) Configure(config UARTConfig) {
 
 	// Use default baudrate  if not set.
 	if config.BaudRate == 0 {
@@ -366,7 +367,7 @@ func (uart UART) Configure(config UARTConfig) {
 	// Enable interrupts on receive.
 	uart.Bus.IE.Set(kendryte.UARTHS_IE_RXWM)
 
-	intr := interrupt.New(kendryte.IRQ_UARTHS, UART0.handleInterrupt)
+	intr := interrupt.New(kendryte.IRQ_UARTHS, _UART0.handleInterrupt)
 	intr.SetPriority(5)
 	intr.Enable()
 }
@@ -383,7 +384,7 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	uart.Receive(c)
 }
 
-func (uart UART) WriteByte(c byte) {
+func (uart *UART) WriteByte(c byte) {
 	for uart.Bus.TXDATA.Get()&kendryte.UARTHS_TXDATA_FULL != 0 {
 	}
 

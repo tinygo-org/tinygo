@@ -9,7 +9,8 @@ import (
 
 // UART1 on the Arduino Nano 33 connects to the onboard NINA-W102 WiFi chip.
 var (
-	UART1 = UART{
+	UART1  = &_UART1
+	_UART1 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM3_USART,
 		SERCOM: 3,
@@ -18,7 +19,8 @@ var (
 
 // UART2 on the Arduino Nano 33 connects to the normal TX/RX pins.
 var (
-	UART2 = UART{
+	UART2  = &_UART2
+	_UART2 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM5_USART,
 		SERCOM: 5,
@@ -26,8 +28,8 @@ var (
 )
 
 func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM3, UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM5, UART2.handleInterrupt)
+	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM3, _UART1.handleInterrupt)
+	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM5, _UART2.handleInterrupt)
 }
 
 // I2C on the Arduino Nano 33.

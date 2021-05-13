@@ -101,18 +101,25 @@ type UART struct {
 	Interrupt    interrupt.Interrupt
 }
 
-var UART0 = UART{UART_Type: nxp.UART0, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART0, DefaultRX: defaultUART0RX, DefaultTX: defaultUART0TX}
-var UART1 = UART{UART_Type: nxp.UART1, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART1, DefaultRX: defaultUART1RX, DefaultTX: defaultUART1TX}
-var UART2 = UART{UART_Type: nxp.UART2, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART2, DefaultRX: defaultUART2RX, DefaultTX: defaultUART2TX}
-var UART3 = UART{UART_Type: nxp.UART3, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART3, DefaultRX: defaultUART3RX, DefaultTX: defaultUART3TX}
-var UART4 = UART{UART_Type: nxp.UART4, SCGC: &nxp.SIM.SCGC1, SCGCMask: nxp.SIM_SCGC1_UART4, DefaultRX: defaultUART4RX, DefaultTX: defaultUART4TX}
+var (
+	UART0  = &_UART0
+	UART1  = &_UART1
+	UART2  = &_UART2
+	UART3  = &_UART3
+	UART4  = &_UART4
+	_UART0 = UART{UART_Type: nxp.UART0, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART0, DefaultRX: defaultUART0RX, DefaultTX: defaultUART0TX}
+	_UART1 = UART{UART_Type: nxp.UART1, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART1, DefaultRX: defaultUART1RX, DefaultTX: defaultUART1TX}
+	_UART2 = UART{UART_Type: nxp.UART2, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART2, DefaultRX: defaultUART2RX, DefaultTX: defaultUART2TX}
+	_UART3 = UART{UART_Type: nxp.UART3, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART3, DefaultRX: defaultUART3RX, DefaultTX: defaultUART3TX}
+	_UART4 = UART{UART_Type: nxp.UART4, SCGC: &nxp.SIM.SCGC1, SCGCMask: nxp.SIM_SCGC1_UART4, DefaultRX: defaultUART4RX, DefaultTX: defaultUART4TX}
+)
 
 func init() {
-	UART0.Interrupt = interrupt.New(nxp.IRQ_UART0_RX_TX, UART0.handleStatusInterrupt)
-	UART1.Interrupt = interrupt.New(nxp.IRQ_UART1_RX_TX, UART1.handleStatusInterrupt)
-	UART2.Interrupt = interrupt.New(nxp.IRQ_UART2_RX_TX, UART2.handleStatusInterrupt)
-	UART3.Interrupt = interrupt.New(nxp.IRQ_UART3_RX_TX, UART3.handleStatusInterrupt)
-	UART4.Interrupt = interrupt.New(nxp.IRQ_UART4_RX_TX, UART4.handleStatusInterrupt)
+	UART0.Interrupt = interrupt.New(nxp.IRQ_UART0_RX_TX, _UART0.handleStatusInterrupt)
+	UART1.Interrupt = interrupt.New(nxp.IRQ_UART1_RX_TX, _UART1.handleStatusInterrupt)
+	UART2.Interrupt = interrupt.New(nxp.IRQ_UART2_RX_TX, _UART2.handleStatusInterrupt)
+	UART3.Interrupt = interrupt.New(nxp.IRQ_UART3_RX_TX, _UART3.handleStatusInterrupt)
+	UART4.Interrupt = interrupt.New(nxp.IRQ_UART4_RX_TX, _UART4.handleStatusInterrupt)
 }
 
 // Configure the UART.

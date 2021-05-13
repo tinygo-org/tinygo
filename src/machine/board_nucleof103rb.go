@@ -100,15 +100,16 @@ var (
 	// USART2 is the hardware serial port connected to the onboard ST-LINK
 	// debugger to be exposed as virtual COM port over USB on Nucleo boards.
 	// Both UART0 and UART1 refer to USART2.
-	UART0 = UART{
+	UART0  = &_UART0
+	_UART0 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    stm32.USART2,
 	}
-	UART2 = &UART0
+	UART2 = UART0
 )
 
 func init() {
-	UART0.Interrupt = interrupt.New(stm32.IRQ_USART2, UART0.handleInterrupt)
+	UART0.Interrupt = interrupt.New(stm32.IRQ_USART2, _UART0.handleInterrupt)
 }
 
 // SPI pins

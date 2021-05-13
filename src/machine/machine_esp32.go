@@ -252,9 +252,12 @@ func (p Pin) mux() *volatile.Register32 {
 }
 
 var (
-	UART0 = UART{Bus: esp.UART0, Buffer: NewRingBuffer()}
-	UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer()}
-	UART2 = UART{Bus: esp.UART2, Buffer: NewRingBuffer()}
+	UART0  = &_UART0
+	_UART0 = UART{Bus: esp.UART0, Buffer: NewRingBuffer()}
+	UART1  = &_UART1
+	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer()}
+	UART2  = &_UART2
+	_UART2 = UART{Bus: esp.UART2, Buffer: NewRingBuffer()}
 )
 
 type UART struct {
@@ -262,14 +265,14 @@ type UART struct {
 	Buffer *RingBuffer
 }
 
-func (uart UART) Configure(config UARTConfig) {
+func (uart *UART) Configure(config UARTConfig) {
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
 	uart.Bus.CLKDIV.Set(peripheralClock / config.BaudRate)
 }
 
-func (uart UART) WriteByte(b byte) error {
+func (uart *UART) WriteByte(b byte) error {
 	for (uart.Bus.STATUS.Get()>>16)&0xff >= 128 {
 		// Read UART_TXFIFO_CNT from the status register, which indicates how
 		// many bytes there are in the transmit buffer. Wait until there are

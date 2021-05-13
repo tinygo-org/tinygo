@@ -8,7 +8,8 @@ import (
 )
 
 var (
-	UART1 = UART{
+	UART1  = &_UART1
+	_UART1 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM4_USART_INT,
 		SERCOM: 4,
@@ -16,7 +17,7 @@ var (
 )
 
 func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM4_2, UART1.handleInterrupt)
+	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM4_2, _UART1.handleInterrupt)
 }
 
 // I2C on the PyPortal.

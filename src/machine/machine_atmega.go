@@ -124,7 +124,8 @@ func (i2c *I2C) readByte() byte {
 // UART
 var (
 	// UART0 is the hardware serial port on the AVR.
-	UART0 = UART{Buffer: NewRingBuffer()}
+	UART0  = &_UART0
+	_UART0 = UART{Buffer: NewRingBuffer()}
 )
 
 // UART on the AVR.
@@ -133,7 +134,7 @@ type UART struct {
 }
 
 // Configure the UART on the AVR. Defaults to 9600 baud on Arduino.
-func (uart UART) Configure(config UARTConfig) {
+func (uart *UART) Configure(config UARTConfig) {
 	if config.BaudRate == 0 {
 		config.BaudRate = 9600
 	}
@@ -165,7 +166,7 @@ func (uart UART) Configure(config UARTConfig) {
 }
 
 // WriteByte writes a byte of data to the UART.
-func (uart UART) WriteByte(c byte) error {
+func (uart *UART) WriteByte(c byte) error {
 	// Wait until UART buffer is not busy.
 	for !avr.UCSR0A.HasBits(avr.UCSR0A_UDRE0) {
 	}

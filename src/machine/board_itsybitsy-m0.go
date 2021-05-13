@@ -56,7 +56,8 @@ const (
 
 // UART1 on the ItsyBitsy M0.
 var (
-	UART1 = UART{
+	UART1  = &_UART1
+	_UART1 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM1_USART,
 		SERCOM: 1,
@@ -64,7 +65,7 @@ var (
 )
 
 func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1, UART1.handleInterrupt)
+	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1, _UART1.handleInterrupt)
 }
 
 // I2C pins
