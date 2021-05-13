@@ -9,13 +9,15 @@ import (
 
 // UART on the MatrixPortal M4
 var (
-	UART1 = UART{
+	UART1  = &_UART1
+	_UART1 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM1_USART_INT,
 		SERCOM: 1,
 	}
 
-	UART2 = UART{
+	UART2  = &_UART2
+	_UART2 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM4_USART_INT,
 		SERCOM: 4,
@@ -23,8 +25,8 @@ var (
 )
 
 func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1_1, UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM4_1, UART2.handleInterrupt)
+	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1_1, _UART1.handleInterrupt)
+	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM4_1, _UART2.handleInterrupt)
 }
 
 // I2C on the MatrixPortal M4

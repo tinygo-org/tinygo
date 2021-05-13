@@ -32,13 +32,14 @@ var (
 	// LPUART1 is the hardware serial port connected to the onboard ST-LINK
 	// debugger to be exposed as virtual COM port over USB on Nucleo boards.
 	// Both UART0 and UART1 refer to LPUART1.
-	UART0 = UART{
+	UART0  = &_UART0
+	_UART0 = UART{
 		Buffer:            NewRingBuffer(),
 		Bus:               stm32.LPUART1,
 		TxAltFuncSelector: UART_ALT_FN,
 		RxAltFuncSelector: UART_ALT_FN,
 	}
-	UART1 = &UART0
+	UART1 = UART0
 )
 
 const (
@@ -56,5 +57,5 @@ var (
 )
 
 func init() {
-	UART0.Interrupt = interrupt.New(stm32.IRQ_LPUART1, UART0.handleInterrupt)
+	UART0.Interrupt = interrupt.New(stm32.IRQ_LPUART1, _UART0.handleInterrupt)
 }

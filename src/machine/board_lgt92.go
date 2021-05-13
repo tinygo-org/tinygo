@@ -57,7 +57,8 @@ const (
 var (
 
 	// Console UART (LPUSART1)
-	UART0 = UART{
+	UART0  = &_UART0
+	_UART0 = UART{
 		Buffer:            NewRingBuffer(),
 		Bus:               stm32.LPUART1,
 		TxAltFuncSelector: 6,
@@ -65,7 +66,8 @@ var (
 	}
 
 	// Gps UART
-	UART1 = UART{
+	UART1  = &_UART1
+	_UART1 = UART{
 		Buffer:            NewRingBuffer(),
 		Bus:               stm32.USART1,
 		TxAltFuncSelector: 0,
@@ -88,6 +90,6 @@ var (
 
 func init() {
 	// Enable UARTs Interrupts
-	UART0.Interrupt = interrupt.New(stm32.IRQ_AES_RNG_LPUART1, UART0.handleInterrupt)
-	UART1.Interrupt = interrupt.New(stm32.IRQ_USART1, UART1.handleInterrupt)
+	UART0.Interrupt = interrupt.New(stm32.IRQ_AES_RNG_LPUART1, _UART0.handleInterrupt)
+	UART1.Interrupt = interrupt.New(stm32.IRQ_USART1, _UART1.handleInterrupt)
 }

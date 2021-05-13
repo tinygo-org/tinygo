@@ -90,13 +90,13 @@ const (
 
 func init() {
 	// register any interrupt handlers for this board's peripherals
-	UART1.Interrupt = interrupt.New(nxp.IRQ_LPUART6, UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(nxp.IRQ_LPUART4, UART2.handleInterrupt)
-	UART3.Interrupt = interrupt.New(nxp.IRQ_LPUART2, UART3.handleInterrupt)
-	UART4.Interrupt = interrupt.New(nxp.IRQ_LPUART3, UART4.handleInterrupt)
-	UART5.Interrupt = interrupt.New(nxp.IRQ_LPUART8, UART5.handleInterrupt)
-	UART6.Interrupt = interrupt.New(nxp.IRQ_LPUART1, UART6.handleInterrupt)
-	UART7.Interrupt = interrupt.New(nxp.IRQ_LPUART7, UART7.handleInterrupt)
+	UART1.Interrupt = interrupt.New(nxp.IRQ_LPUART6, _UART1.handleInterrupt)
+	UART2.Interrupt = interrupt.New(nxp.IRQ_LPUART4, _UART2.handleInterrupt)
+	UART3.Interrupt = interrupt.New(nxp.IRQ_LPUART2, _UART3.handleInterrupt)
+	UART4.Interrupt = interrupt.New(nxp.IRQ_LPUART3, _UART4.handleInterrupt)
+	UART5.Interrupt = interrupt.New(nxp.IRQ_LPUART8, _UART5.handleInterrupt)
+	UART6.Interrupt = interrupt.New(nxp.IRQ_LPUART1, _UART6.handleInterrupt)
+	UART7.Interrupt = interrupt.New(nxp.IRQ_LPUART7, _UART7.handleInterrupt)
 }
 
 // #=====================================================#
@@ -136,8 +136,9 @@ const (
 )
 
 var (
-	UART0 = &UART1 // alias UART0 to UART1
-	UART1 = UART{
+	UART0  = UART1 // alias UART0 to UART1
+	UART1  = &_UART1
+	_UART1 = UART{
 		Bus:      nxp.LPUART6,
 		Buffer:   NewRingBuffer(),
 		txBuffer: NewRingBuffer(),
@@ -150,7 +151,8 @@ var (
 			sel: &nxp.IOMUXC.LPUART6_TX_SELECT_INPUT,
 		},
 	}
-	UART2 = UART{
+	UART2  = &_UART2
+	_UART2 = UART{
 		Bus:      nxp.LPUART4,
 		Buffer:   NewRingBuffer(),
 		txBuffer: NewRingBuffer(),
@@ -163,7 +165,8 @@ var (
 			sel: &nxp.IOMUXC.LPUART4_TX_SELECT_INPUT,
 		},
 	}
-	UART3 = UART{
+	UART3  = &_UART3
+	_UART3 = UART{
 		Bus:      nxp.LPUART2,
 		Buffer:   NewRingBuffer(),
 		txBuffer: NewRingBuffer(),
@@ -176,7 +179,8 @@ var (
 			sel: &nxp.IOMUXC.LPUART2_TX_SELECT_INPUT,
 		},
 	}
-	UART4 = UART{
+	UART4  = &_UART4
+	_UART4 = UART{
 		Bus:      nxp.LPUART3,
 		Buffer:   NewRingBuffer(),
 		txBuffer: NewRingBuffer(),
@@ -189,7 +193,8 @@ var (
 			sel: &nxp.IOMUXC.LPUART3_TX_SELECT_INPUT,
 		},
 	}
-	UART5 = UART{
+	UART5  = &_UART5
+	_UART5 = UART{
 		Bus:      nxp.LPUART8,
 		Buffer:   NewRingBuffer(),
 		txBuffer: NewRingBuffer(),
@@ -202,7 +207,8 @@ var (
 			sel: &nxp.IOMUXC.LPUART8_TX_SELECT_INPUT,
 		},
 	}
-	UART6 = UART{
+	UART6  = &_UART6
+	_UART6 = UART{
 		Bus:      nxp.LPUART1,
 		Buffer:   NewRingBuffer(),
 		txBuffer: NewRingBuffer(),
@@ -210,7 +216,8 @@ var (
 		//   RX: D24 (PA12 [AD_B0_12])
 		//   TX: D25 (PA13 [AD_B0_13])
 	}
-	UART7 = UART{
+	UART7  = &_UART7
+	_UART7 = UART{
 		Bus:      nxp.LPUART7,
 		Buffer:   NewRingBuffer(),
 		txBuffer: NewRingBuffer(),

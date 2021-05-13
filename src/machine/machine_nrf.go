@@ -137,12 +137,13 @@ type UART struct {
 
 // UART
 var (
-	// NRF_UART0 is the hardware UART on the NRF SoC.
-	NRF_UART0 = UART{Buffer: NewRingBuffer()}
+	// UART0 is the hardware UART on the NRF SoC.
+	_NRF_UART0 = UART{Buffer: NewRingBuffer()}
+	NRF_UART0  = &_NRF_UART0
 )
 
 // Configure the UART.
-func (uart UART) Configure(config UARTConfig) {
+func (uart *UART) Configure(config UARTConfig) {
 	// Default baud rate to 115200.
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
@@ -164,13 +165,13 @@ func (uart UART) Configure(config UARTConfig) {
 	nrf.UART0.INTENSET.Set(nrf.UART_INTENSET_RXDRDY_Msk)
 
 	// Enable RX IRQ.
-	intr := interrupt.New(nrf.IRQ_UART0, NRF_UART0.handleInterrupt)
+	intr := interrupt.New(nrf.IRQ_UART0, _NRF_UART0.handleInterrupt)
 	intr.SetPriority(0xc0) // low priority
 	intr.Enable()
 }
 
 // SetBaudRate sets the communication speed for the UART.
-func (uart UART) SetBaudRate(br uint32) {
+func (uart *UART) SetBaudRate(br uint32) {
 	// Magic: calculate 'baudrate' register from the input number.
 	// Every value listed in the datasheet will be converted to the
 	// correct register value, except for 192600. I suspect the value
@@ -185,7 +186,7 @@ func (uart UART) SetBaudRate(br uint32) {
 }
 
 // WriteByte writes a byte of data to the UART.
-func (uart UART) WriteByte(c byte) error {
+func (uart *UART) WriteByte(c byte) error {
 	nrf.UART0.EVENTS_TXDRDY.Set(0)
 	nrf.UART0.TXD.Set(uint32(c))
 	for nrf.UART0.EVENTS_TXDRDY.Get() == 0 {

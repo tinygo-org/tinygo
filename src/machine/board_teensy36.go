@@ -80,11 +80,11 @@ const (
 )
 
 var (
-	TeensyUART1 = &UART0
-	TeensyUART2 = &UART1
-	TeensyUART3 = &UART2
-	TeensyUART4 = &UART3
-	TeensyUART5 = &UART4
+	TeensyUART1 = UART0
+	TeensyUART2 = UART1
+	TeensyUART3 = UART2
+	TeensyUART4 = UART3
+	TeensyUART5 = UART4
 )
 
 const (

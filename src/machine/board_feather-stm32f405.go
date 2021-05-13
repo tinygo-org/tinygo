@@ -119,19 +119,22 @@ const (
 )
 
 var (
-	UART1 = UART{
+	UART1  = &_UART1
+	_UART1 = UART{
 		Buffer:            NewRingBuffer(),
 		Bus:               stm32.USART3,
 		TxAltFuncSelector: AF7_USART1_2_3,
 		RxAltFuncSelector: AF7_USART1_2_3,
 	}
-	UART2 = UART{
+	UART2  = &_UART2
+	_UART2 = UART{
 		Buffer:            NewRingBuffer(),
 		Bus:               stm32.USART6,
 		TxAltFuncSelector: AF8_USART4_5_6,
 		RxAltFuncSelector: AF8_USART4_5_6,
 	}
-	UART3 = UART{
+	UART3  = &_UART3
+	_UART3 = UART{
 		Buffer:            NewRingBuffer(),
 		Bus:               stm32.USART1,
 		TxAltFuncSelector: AF7_USART1_2_3,
@@ -141,9 +144,9 @@ var (
 )
 
 func initUART() {
-	UART1.Interrupt = interrupt.New(stm32.IRQ_USART3, UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(stm32.IRQ_USART6, UART2.handleInterrupt)
-	UART3.Interrupt = interrupt.New(stm32.IRQ_USART1, UART3.handleInterrupt)
+	UART1.Interrupt = interrupt.New(stm32.IRQ_USART3, _UART1.handleInterrupt)
+	UART2.Interrupt = interrupt.New(stm32.IRQ_USART6, _UART2.handleInterrupt)
+	UART3.Interrupt = interrupt.New(stm32.IRQ_USART1, _UART3.handleInterrupt)
 }
 
 // -- SPI ----------------------------------------------------------------------

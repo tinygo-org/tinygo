@@ -67,7 +67,7 @@ func (p Pin) getPortPin() (*nrf.GPIO_Type, uint32) {
 	}
 }
 
-func (uart UART) setPins(tx, rx Pin) {
+func (uart *UART) setPins(tx, rx Pin) {
 	nrf.UART0.PSEL.TXD.Set(uint32(tx))
 	nrf.UART0.PSEL.RXD.Set(uint32(rx))
 }

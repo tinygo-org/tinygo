@@ -7,7 +7,7 @@ package machine
 var (
 	SPI0  = SPI{0}
 	I2C0  = &I2C{0}
-	UART0 = UART{0}
+	UART0 = &UART{0}
 )
 
 const (
@@ -124,34 +124,34 @@ type UARTConfig struct {
 }
 
 // Configure the UART.
-func (uart UART) Configure(config UARTConfig) {
+func (uart *UART) Configure(config UARTConfig) {
 	uartConfigure(uart.Bus, config.TX, config.RX)
 }
 
 // Read from the UART.
-func (uart UART) Read(data []byte) (n int, err error) {
+func (uart *UART) Read(data []byte) (n int, err error) {
 	return uartRead(uart.Bus, &data[0], len(data)), nil
 }
 
 // Write to the UART.
-func (uart UART) Write(data []byte) (n int, err error) {
+func (uart *UART) Write(data []byte) (n int, err error) {
 	return uartWrite(uart.Bus, &data[0], len(data)), nil
 }
 
 // Buffered returns the number of bytes currently stored in the RX buffer.
-func (uart UART) Buffered() int {
+func (uart *UART) Buffered() int {
 	return 0
 }
 
 // ReadByte reads a single byte from the UART.
-func (uart UART) ReadByte() (byte, error) {
+func (uart *UART) ReadByte() (byte, error) {
 	var b byte
 	uartRead(uart.Bus, &b, 1)
 	return b, nil
 }
 
 // WriteByte writes a single byte to the UART.
-func (uart UART) WriteByte(b byte) error {
+func (uart *UART) WriteByte(b byte) error {
 	uartWrite(uart.Bus, &b, 1)
 	return nil
 }

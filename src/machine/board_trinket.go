@@ -47,7 +47,8 @@ const (
 
 // UART1 on the Trinket M0.
 var (
-	UART1 = UART{
+	UART1  = &_UART1
+	_UART1 = UART{
 		Buffer: NewRingBuffer(),
 		Bus:    sam.SERCOM0_USART,
 		SERCOM: 0,
@@ -55,7 +56,7 @@ var (
 )
 
 func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM0, UART1.handleInterrupt)
+	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM0, _UART1.handleInterrupt)
 }
 
 // SPI pins

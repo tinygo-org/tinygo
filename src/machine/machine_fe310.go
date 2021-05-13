@@ -56,17 +56,18 @@ type UART struct {
 }
 
 var (
-	UART0 = UART{Bus: sifive.UART0, Buffer: NewRingBuffer()}
+	UART0  = &_UART0
+	_UART0 = UART{Bus: sifive.UART0, Buffer: NewRingBuffer()}
 )
 
-func (uart UART) Configure(config UARTConfig) {
+func (uart *UART) Configure(config UARTConfig) {
 	// Assuming a 16Mhz Crystal (which is Y1 on the HiFive1), the divisor for a
 	// 115200 baud rate is 138.
 	sifive.UART0.DIV.Set(138)
 	sifive.UART0.TXCTRL.Set(sifive.UART_TXCTRL_ENABLE)
 	sifive.UART0.RXCTRL.Set(sifive.UART_RXCTRL_ENABLE)
 	sifive.UART0.IE.Set(sifive.UART_IE_RXWM) // enable the receive interrupt (only)
-	intr := interrupt.New(sifive.IRQ_UART0, UART0.handleInterrupt)
+	intr := interrupt.New(sifive.IRQ_UART0, _UART0.handleInterrupt)
 	intr.SetPriority(5)
 	intr.Enable()
 }
@@ -83,7 +84,7 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	uart.Receive(c)
 }
 
-func (uart UART) WriteByte(c byte) {
+func (uart *UART) WriteByte(c byte) {
 	for sifive.UART0.TXDATA.Get()&sifive.UART_TXDATA_FULL != 0 {
 	}
 

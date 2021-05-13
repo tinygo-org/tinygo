@@ -144,14 +144,14 @@ func (p Pin) enableClock() {
 //---------- UART related types and code
 
 // Configure the UART.
-func (uart UART) configurePins(config UARTConfig) {
+func (uart *UART) configurePins(config UARTConfig) {
 	// enable the alternate functions on the TX and RX pins
 	config.TX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTTX}, uart.TxAltFuncSelector)
 	config.RX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTRX}, uart.RxAltFuncSelector)
 }
 
 // UART baudrate calc based on the bus and clockspeed
-func (uart UART) getBaudRateDivisor(baudRate uint32) uint32 {
+func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
 	var clock, rate uint32
 	switch uart.Bus {
 	case stm32.LPUART1:
