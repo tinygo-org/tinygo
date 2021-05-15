@@ -50,38 +50,14 @@ const (
 	RCC_PLL_SYSCLK = stm32.RCC_PLLCFGR_PLLREN
 )
 
-/*
-   timer settings used for tick and sleep.
-
-   note: TICK_TIMER_FREQ and SLEEP_TIMER_FREQ are controlled by PLL / clock
-   settings above, so must be kept in sync if the clock settings are changed.
-*/
-const (
-	TICK_RATE        = 1000 // 1 KHz
-	TICK_TIMER_IRQ   = stm32.IRQ_TIM1_UP_TIM16
-	TICK_TIMER_FREQ  = 80000000 // 80 MHz
-	SLEEP_TIMER_IRQ  = stm32.IRQ_TIM1_BRK_TIM15
-	SLEEP_TIMER_FREQ = 80000000 // 84 MHz
-)
-
 type arrtype = uint32
 
 func init() {
 	initCLK()
 
-	initSleepTimer(&timerInfo{
-		EnableRegister: &stm32.RCC.APB2ENR,
-		EnableFlag:     stm32.RCC_APB2ENR_TIM15EN,
-		Device:         stm32.TIM15,
-	})
-
 	machine.Serial.Configure(machine.UARTConfig{})
 
-	initTickTimer(&timerInfo{
-		EnableRegister: &stm32.RCC.APB2ENR,
-		EnableFlag:     stm32.RCC_APB2ENR_TIM16EN,
-		Device:         stm32.TIM16,
-	})
+	initTickTimer(&machine.TIM15)
 }
 
 func putchar(c byte) {
