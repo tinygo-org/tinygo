@@ -31,19 +31,9 @@ type arrtype = uint32
 func init() {
 	initCLK()
 
-	initSleepTimer(&timerInfo{
-		EnableRegister: &stm32.RCC.APB2ENR,
-		EnableFlag:     stm32.RCC_APB2ENR_TIM15EN,
-		Device:         stm32.TIM15,
-	})
-
 	machine.Serial.Configure(machine.UARTConfig{})
 
-	initTickTimer(&timerInfo{
-		EnableRegister: &stm32.RCC.APB2ENR,
-		EnableFlag:     stm32.RCC_APB2ENR_TIM16EN,
-		Device:         stm32.TIM16,
-	})
+	initTickTimer(&machine.TIM16)
 }
 
 func putchar(c byte) {
