@@ -5,7 +5,7 @@ target triple = "armv7m-none-eabi"
 
 %runtime.channel = type { i32, i32, i8, %runtime.channelBlockedList*, i32, i32, i32, i8* }
 %runtime.channelBlockedList = type { %runtime.channelBlockedList*, %"internal/task.Task"*, %runtime.chanSelectState*, { %runtime.channelBlockedList*, i32, i32 } }
-%"internal/task.Task" = type { %"internal/task.Task"*, i8*, i32, %"internal/task.state" }
+%"internal/task.Task" = type { %"internal/task.Task"*, i8*, i64, %"internal/task.state" }
 %"internal/task.state" = type { i32, i32* }
 %runtime.chanSelectState = type { %runtime.channel*, i8* }
 
