@@ -28,7 +28,7 @@ jobs:
     - task: CacheBeta@0
       displayName: Cache LLVM build
       inputs:
-        key: llvm-build-11-windows-v4
+        key: llvm-build-11-windows-v5
         path: llvm-build
     - task: Bash@3
       displayName: Build LLVM
