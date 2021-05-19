@@ -178,6 +178,9 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) {
 		default:
 			panic("interp: unknown constant expression")
 		}
+	} else if !llvmValue.IsAInlineAsm().IsNil() {
+		// Inline assembly can modify globals but only exported globals. Let's
+		// hope the author knows what they're doing.
 	} else {
 		llvmType := llvmValue.Type()
 		switch llvmType.TypeKind() {
