@@ -66,6 +66,9 @@ entry:
   call void @modifyExternal(i32* bitcast (void ()* @willModifyGlobal to i32*))
   store i16 7, i16* @main.exposedValue2
 
+  ; Test that inline assembly is ignored.
+  call void @modifyExternal(i32* bitcast (void ()* @hasInlineAsm to i32*))
+
   ; Test switch statement.
   %switch1 = call i64 @testSwitch(i64 1) ; 1 returns 6
   %switch2 = call i64 @testSwitch(i64 9) ; 9 returns the default value -1
@@ -99,6 +102,15 @@ declare void @modifyExternal(i32*)
 define void @willModifyGlobal() {
 entry:
   store i16 8, i16* @main.exposedValue2
+  ret void
+}
+
+; Inline assembly should be ignored in the interp package. While it is possible
+; to modify other globals that way, usually that's not the case and there is no
+; real way to check.
+define void @hasInlineAsm() {
+entry:
+  call void asm sideeffect "", ""()
   ret void
 }
 

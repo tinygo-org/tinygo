@@ -26,6 +26,7 @@ entry:
   store i16 5, i16* @main.exposedValue1
   call void @modifyExternal(i32* bitcast (void ()* @willModifyGlobal to i32*))
   store i16 7, i16* @main.exposedValue2
+  call void @modifyExternal(i32* bitcast (void ()* @hasInlineAsm to i32*))
   call void @runtime.printint64(i64 6)
   call void @runtime.printint64(i64 -1)
   %agg = call { i8, i32, { float, { i64, i16 } } } @nestedStruct()
@@ -56,6 +57,12 @@ declare void @modifyExternal(i32*) local_unnamed_addr
 define void @willModifyGlobal() {
 entry:
   store i16 8, i16* @main.exposedValue2
+  ret void
+}
+
+define void @hasInlineAsm() {
+entry:
+  call void asm sideeffect "", ""()
   ret void
 }
 
