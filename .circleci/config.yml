@@ -157,7 +157,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-11-linux-v3-assert
+            - llvm-build-11-linux-v4-assert
       - run:
           name: "Build LLVM"
           command: |
@@ -176,7 +176,7 @@ commands:
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
             fi
       - save_cache:
-          key: llvm-build-11-linux-v3-assert
+          key: llvm-build-11-linux-v4-assert
           paths:
             llvm-build
       - run: make ASSERT=1
@@ -225,7 +225,7 @@ commands:
       - llvm-source-linux
       - restore_cache:
           keys:
-            - llvm-build-11-linux-v3-noassert
+            - llvm-build-11-linux-v4-noassert
       - run:
           name: "Build LLVM"
           command: |
@@ -244,7 +244,7 @@ commands:
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
             fi
       - save_cache:
-          key: llvm-build-11-linux-v3-noassert
+          key: llvm-build-11-linux-v4-noassert
           paths:
             llvm-build
       - build-wasi-libc
@@ -311,7 +311,7 @@ commands:
             - llvm-project/llvm/include
       - restore_cache:
           keys:
-            - llvm-build-11-macos-v4
+            - llvm-build-11-macos-v5
       - run:
           name: "Build LLVM"
           command: |
@@ -327,7 +327,7 @@ commands:
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
             fi
       - save_cache:
-          key: llvm-build-11-macos-v4
+          key: llvm-build-11-macos-v5
           paths:
             llvm-build
       - restore_cache:
