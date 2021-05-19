@@ -434,7 +434,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		case "native":
 			// Run GDB directly.
 		case "openocd":
-			gdbCommands = append(gdbCommands, "target remote :3333", "monitor halt", "load", "monitor reset halt")
+			gdbCommands = append(gdbCommands, "target extended-remote :3333", "monitor halt", "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
 			args, err := config.OpenOCDConfiguration()
@@ -453,7 +453,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				daemon.Stderr = w
 			}
 		case "jlink":
-			gdbCommands = append(gdbCommands, "target remote :2331", "load", "monitor reset halt")
+			gdbCommands = append(gdbCommands, "target extended-remote :2331", "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
 			daemon = executeCommand(config.Options, "JLinkGDBServer", "-device", config.Target.JLinkDevice)
@@ -468,7 +468,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				daemon.Stderr = w
 			}
 		case "qemu":
-			gdbCommands = append(gdbCommands, "target remote :1234")
+			gdbCommands = append(gdbCommands, "target extended-remote :1234")
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary, "-s", "-S")
@@ -476,7 +476,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "qemu-user":
-			gdbCommands = append(gdbCommands, "target remote :1234")
+			gdbCommands = append(gdbCommands, "target extended-remote :1234")
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], "-g", "1234", result.Binary)
@@ -484,7 +484,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "mgba":
-			gdbCommands = append(gdbCommands, "target remote :2345")
+			gdbCommands = append(gdbCommands, "target extended-remote :2345")
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary, "-g")
@@ -492,7 +492,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "simavr":
-			gdbCommands = append(gdbCommands, "target remote :1234")
+			gdbCommands = append(gdbCommands, "target extended-remote :1234")
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], "-g", result.Binary)
