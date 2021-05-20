@@ -11,14 +11,30 @@ import (
 	"strings"
 )
 
+var prefixParseFns map[token.Token]func(*tokenizer) (ast.Expr, *scanner.Error)
+
+func init() {
+	// This must be done in an init function to avoid an initialization order
+	// failure.
+	prefixParseFns = map[token.Token]func(*tokenizer) (ast.Expr, *scanner.Error){
+		token.IDENT:  parseIdent,
+		token.INT:    parseBasicLit,
+		token.FLOAT:  parseBasicLit,
+		token.STRING: parseBasicLit,
+		token.CHAR:   parseBasicLit,
+		token.LPAREN: parseParenExpr,
+	}
+}
+
 // parseConst parses the given string as a C constant.
 func parseConst(pos token.Pos, fset *token.FileSet, value string) (ast.Expr, *scanner.Error) {
 	t := newTokenizer(pos, fset, value)
 	expr, err := parseConstExpr(t)
+	t.Next()
 	if t.token != token.EOF {
 		return nil, &scanner.Error{
 			Pos: t.fset.Position(t.pos),
-			Msg: "unexpected token " + t.token.String(),
+			Msg: "unexpected token " + t.token.String() + ", expected end of expression",
 		}
 	}
 	return expr, err
@@ -26,50 +42,55 @@ func parseConst(pos token.Pos, fset *token.FileSet, value string) (ast.Expr, *sc
 
 // parseConstExpr parses a stream of C tokens to a Go expression.
 func parseConstExpr(t *tokenizer) (ast.Expr, *scanner.Error) {
-	switch t.token {
-	case token.LPAREN:
-		lparen := t.pos
-		t.Next()
-		x, err := parseConstExpr(t)
-		if err != nil {
-			return nil, err
-		}
-		if t.token != token.RPAREN {
-			return nil, unexpectedToken(t, token.RPAREN)
-		}
-		expr := &ast.ParenExpr{
-			Lparen: lparen,
-			X:      x,
-			Rparen: t.pos,
-		}
-		t.Next()
-		return expr, nil
-	case token.INT, token.FLOAT, token.STRING, token.CHAR:
-		expr := &ast.BasicLit{
-			ValuePos: t.pos,
-			Kind:     t.token,
-			Value:    t.value,
-		}
-		t.Next()
-		return expr, nil
-	case token.IDENT:
-		expr := &ast.Ident{
-			NamePos: t.pos,
-			Name:    "C." + t.value,
-		}
-		t.Next()
-		return expr, nil
-	case token.EOF:
+	if t.token == token.EOF {
 		return nil, &scanner.Error{
 			Pos: t.fset.Position(t.pos),
 			Msg: "empty constant",
 		}
-	default:
+	}
+	prefix := prefixParseFns[t.token]
+	if prefix == nil {
 		return nil, &scanner.Error{
 			Pos: t.fset.Position(t.pos),
 			Msg: fmt.Sprintf("unexpected token %s", t.token),
 		}
 	}
+	leftExpr, err := prefix(t)
+	return leftExpr, err
+}
+
+func parseIdent(t *tokenizer) (ast.Expr, *scanner.Error) {
+	return &ast.Ident{
+		NamePos: t.pos,
+		Name:    "C." + t.value,
+	}, nil
+}
+
+func parseBasicLit(t *tokenizer) (ast.Expr, *scanner.Error) {
+	return &ast.BasicLit{
+		ValuePos: t.pos,
+		Kind:     t.token,
+		Value:    t.value,
+	}, nil
+}
+
+func parseParenExpr(t *tokenizer) (ast.Expr, *scanner.Error) {
+	lparen := t.pos
+	t.Next()
+	x, err := parseConstExpr(t)
+	if err != nil {
+		return nil, err
+	}
+	t.Next()
+	if t.token != token.RPAREN {
+		return nil, unexpectedToken(t, token.RPAREN)
+	}
+	expr := &ast.ParenExpr{
+		Lparen: lparen,
+		X:      x,
+		Rparen: t.pos,
+	}
+	return expr, nil
 }
 
 // unexpectedToken returns an error of the form "unexpected token FOO, expected
