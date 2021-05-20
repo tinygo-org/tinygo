@@ -11,7 +11,23 @@ import (
 	"strings"
 )
 
-var prefixParseFns map[token.Token]func(*tokenizer) (ast.Expr, *scanner.Error)
+var (
+	prefixParseFns map[token.Token]func(*tokenizer) (ast.Expr, *scanner.Error)
+	precedences    = map[token.Token]int{
+		token.ADD: precedenceAdd,
+		token.SUB: precedenceAdd,
+		token.MUL: precedenceMul,
+		token.QUO: precedenceMul,
+		token.REM: precedenceMul,
+	}
+)
+
+const (
+	precedenceLowest = iota + 1
+	precedenceAdd
+	precedenceMul
+	precedencePrefix
+)
 
 func init() {
 	// This must be done in an init function to avoid an initialization order
@@ -29,108 +45,138 @@ func init() {
 // parseConst parses the given string as a C constant.
 func parseConst(pos token.Pos, fset *token.FileSet, value string) (ast.Expr, *scanner.Error) {
 	t := newTokenizer(pos, fset, value)
-	expr, err := parseConstExpr(t)
+	expr, err := parseConstExpr(t, precedenceLowest)
 	t.Next()
-	if t.token != token.EOF {
+	if t.curToken != token.EOF {
 		return nil, &scanner.Error{
-			Pos: t.fset.Position(t.pos),
-			Msg: "unexpected token " + t.token.String() + ", expected end of expression",
+			Pos: t.fset.Position(t.curPos),
+			Msg: "unexpected token " + t.curToken.String() + ", expected end of expression",
 		}
 	}
 	return expr, err
 }
 
 // parseConstExpr parses a stream of C tokens to a Go expression.
-func parseConstExpr(t *tokenizer) (ast.Expr, *scanner.Error) {
-	if t.token == token.EOF {
+func parseConstExpr(t *tokenizer, precedence int) (ast.Expr, *scanner.Error) {
+	if t.curToken == token.EOF {
 		return nil, &scanner.Error{
-			Pos: t.fset.Position(t.pos),
+			Pos: t.fset.Position(t.curPos),
 			Msg: "empty constant",
 		}
 	}
-	prefix := prefixParseFns[t.token]
+	prefix := prefixParseFns[t.curToken]
 	if prefix == nil {
 		return nil, &scanner.Error{
-			Pos: t.fset.Position(t.pos),
-			Msg: fmt.Sprintf("unexpected token %s", t.token),
+			Pos: t.fset.Position(t.curPos),
+			Msg: fmt.Sprintf("unexpected token %s", t.curToken),
 		}
 	}
 	leftExpr, err := prefix(t)
+
+	for t.peekToken != token.EOF && precedence < precedences[t.peekToken] {
+		switch t.peekToken {
+		case token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
+			t.Next()
+			leftExpr, err = parseBinaryExpr(t, leftExpr)
+		}
+	}
+
 	return leftExpr, err
 }
 
 func parseIdent(t *tokenizer) (ast.Expr, *scanner.Error) {
 	return &ast.Ident{
-		NamePos: t.pos,
-		Name:    "C." + t.value,
+		NamePos: t.curPos,
+		Name:    "C." + t.curValue,
 	}, nil
 }
 
 func parseBasicLit(t *tokenizer) (ast.Expr, *scanner.Error) {
 	return &ast.BasicLit{
-		ValuePos: t.pos,
-		Kind:     t.token,
-		Value:    t.value,
+		ValuePos: t.curPos,
+		Kind:     t.curToken,
+		Value:    t.curValue,
 	}, nil
 }
 
 func parseParenExpr(t *tokenizer) (ast.Expr, *scanner.Error) {
-	lparen := t.pos
+	lparen := t.curPos
 	t.Next()
-	x, err := parseConstExpr(t)
+	x, err := parseConstExpr(t, precedenceLowest)
 	if err != nil {
 		return nil, err
 	}
 	t.Next()
-	if t.token != token.RPAREN {
+	if t.curToken != token.RPAREN {
 		return nil, unexpectedToken(t, token.RPAREN)
 	}
 	expr := &ast.ParenExpr{
 		Lparen: lparen,
 		X:      x,
-		Rparen: t.pos,
+		Rparen: t.curPos,
 	}
 	return expr, nil
+}
+
+func parseBinaryExpr(t *tokenizer, left ast.Expr) (ast.Expr, *scanner.Error) {
+	expression := &ast.BinaryExpr{
+		X:     left,
+		Op:    t.curToken,
+		OpPos: t.curPos,
+	}
+	precedence := precedences[t.curToken]
+	t.Next()
+	right, err := parseConstExpr(t, precedence)
+	expression.Y = right
+	return expression, err
 }
 
 // unexpectedToken returns an error of the form "unexpected token FOO, expected
 // BAR".
 func unexpectedToken(t *tokenizer, expected token.Token) *scanner.Error {
 	return &scanner.Error{
-		Pos: t.fset.Position(t.pos),
-		Msg: fmt.Sprintf("unexpected token %s, expected %s", t.token, expected),
+		Pos: t.fset.Position(t.curPos),
+		Msg: fmt.Sprintf("unexpected token %s, expected %s", t.curToken, expected),
 	}
 }
 
 // tokenizer reads C source code and converts it to Go tokens.
 type tokenizer struct {
-	pos   token.Pos
-	fset  *token.FileSet
-	token token.Token
-	value string
-	buf   string
+	curPos, peekPos     token.Pos
+	fset                *token.FileSet
+	curToken, peekToken token.Token
+	curValue, peekValue string
+	buf                 string
 }
 
 // newTokenizer initializes a new tokenizer, positioned at the first token in
 // the string.
 func newTokenizer(start token.Pos, fset *token.FileSet, buf string) *tokenizer {
 	t := &tokenizer{
-		pos:   start,
-		fset:  fset,
-		buf:   buf,
-		token: token.ILLEGAL,
+		peekPos:   start,
+		fset:      fset,
+		buf:       buf,
+		peekToken: token.ILLEGAL,
 	}
-	t.Next() // Parse the first token.
+	// Parse the first two tokens (cur and peek).
+	t.Next()
+	t.Next()
 	return t
 }
 
 // Next consumes the next token in the stream. There is no return value, read
 // the next token from the pos, token and value properties.
 func (t *tokenizer) Next() {
-	t.pos += token.Pos(len(t.value))
+	// The previous peek is now the current token.
+	t.curPos = t.peekPos
+	t.curToken = t.peekToken
+	t.curValue = t.peekValue
+
+	// Parse the next peek token.
+	t.peekPos += token.Pos(len(t.curValue))
 	for {
 		if len(t.buf) == 0 {
-			t.token = token.EOF
+			t.peekToken = token.EOF
 			return
 		}
 		c := t.buf[0]
@@ -139,17 +185,28 @@ func (t *tokenizer) Next() {
 			// Skip whitespace.
 			// Based on this source, not sure whether it represents C whitespace:
 			// https://en.cppreference.com/w/cpp/string/byte/isspace
-			t.pos++
+			t.peekPos++
 			t.buf = t.buf[1:]
-		case c == '(' || c == ')':
+		case c == '(' || c == ')' || c == '+' || c == '-' || c == '*' || c == '/' || c == '%':
 			// Single-character tokens.
+			// TODO: ++ (increment) and -- (decrement) operators.
 			switch c {
 			case '(':
-				t.token = token.LPAREN
+				t.peekToken = token.LPAREN
 			case ')':
-				t.token = token.RPAREN
+				t.peekToken = token.RPAREN
+			case '+':
+				t.peekToken = token.ADD
+			case '-':
+				t.peekToken = token.SUB
+			case '*':
+				t.peekToken = token.MUL
+			case '/':
+				t.peekToken = token.QUO
+			case '%':
+				t.peekToken = token.REM
 			}
-			t.value = t.buf[:1]
+			t.peekValue = t.buf[:1]
 			t.buf = t.buf[1:]
 			return
 		case c >= '0' && c <= '9':
@@ -167,17 +224,17 @@ func (t *tokenizer) Next() {
 					break
 				}
 			}
-			t.value = t.buf[:tokenLen]
+			t.peekValue = t.buf[:tokenLen]
 			t.buf = t.buf[tokenLen:]
 			if hasDot {
 				// Integer constants are more complicated than this but this is
 				// a close approximation.
 				// https://en.cppreference.com/w/cpp/language/integer_literal
-				t.token = token.FLOAT
-				t.value = strings.TrimRight(t.value, "f")
+				t.peekToken = token.FLOAT
+				t.peekValue = strings.TrimRight(t.peekValue, "f")
 			} else {
-				t.token = token.INT
-				t.value = strings.TrimRight(t.value, "uUlL")
+				t.peekToken = token.INT
+				t.peekValue = strings.TrimRight(t.peekValue, "uUlL")
 			}
 			return
 		case c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c == '_':
@@ -191,9 +248,9 @@ func (t *tokenizer) Next() {
 					break
 				}
 			}
-			t.value = t.buf[:tokenLen]
+			t.peekValue = t.buf[:tokenLen]
 			t.buf = t.buf[tokenLen:]
-			t.token = token.IDENT
+			t.peekToken = token.IDENT
 			return
 		case c == '"':
 			// String constant. Find the first '"' character that is not
@@ -209,8 +266,8 @@ func (t *tokenizer) Next() {
 					escape = c == '\\'
 				}
 			}
-			t.token = token.STRING
-			t.value = t.buf[:tokenLen]
+			t.peekToken = token.STRING
+			t.peekValue = t.buf[:tokenLen]
 			t.buf = t.buf[tokenLen:]
 			return
 		case c == '\'':
@@ -227,12 +284,12 @@ func (t *tokenizer) Next() {
 					escape = c == '\\'
 				}
 			}
-			t.token = token.CHAR
-			t.value = t.buf[:tokenLen]
+			t.peekToken = token.CHAR
+			t.peekValue = t.buf[:tokenLen]
 			t.buf = t.buf[tokenLen:]
 			return
 		default:
-			t.token = token.ILLEGAL
+			t.peekToken = token.ILLEGAL
 			return
 		}
 	}
