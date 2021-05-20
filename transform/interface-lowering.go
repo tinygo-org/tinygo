@@ -532,7 +532,7 @@ func (p *lowerInterfacesPass) getInterfaceMethodFunc(itf *interfaceInfo, signatu
 			paramTypes = append(paramTypes, param.Type())
 		}
 		calledFunctionType := function.Type()
-		sig := llvm.PointerType(llvm.FunctionType(calledFunctionType.ElementType().ReturnType(), paramTypes, false), calledFunctionType.PointerAddressSpace())
+		sig := llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), calledFunctionType.PointerAddressSpace())
 		if sig != function.Type() {
 			function = p.builder.CreateBitCast(function, sig, "")
 		}
