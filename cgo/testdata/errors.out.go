@@ -1,7 +1,7 @@
 // CGo errors:
 //     testdata/errors.go:4:2: warning: some warning
 //     testdata/errors.go:11:9: error: unknown type name 'someType'
-//     testdata/errors.go:13:23: unexpected token )
+//     testdata/errors.go:13:23: unexpected token ), expected end of expression
 
 // Type checking errors after CGo processing:
 //     testdata/errors.go:102: cannot use 2 << 10 (untyped int constant 2048) as uint8 value in variable declaration (overflows)

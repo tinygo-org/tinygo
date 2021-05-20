@@ -31,6 +31,19 @@ func TestParseConst(t *testing.T) {
 		{`0b10`, `0b10`},
 		{`0x1234_5678`, `0x1234_5678`},
 		{`5 5`, `error: 1:3: unexpected token INT, expected end of expression`}, // test for a bugfix
+		// Binary operators.
+		{`5+5`, `5 + 5`},
+		{`5-5`, `5 - 5`},
+		{`5*5`, `5 * 5`},
+		{`5/5`, `5 / 5`},
+		{`5%5`, `5 % 5`},
+		{`(5/5)`, `(5 / 5)`},
+		{`1 - 2`, `1 - 2`},
+		{`1 - 2 + 3`, `1 - 2 + 3`},
+		{`1 - 2 * 3`, `1 - 2*3`},
+		{`(1 - 2) * 3`, `(1 - 2) * 3`},
+		{`1 * 2 - 3`, `1*2 - 3`},
+		{`1 * (2 - 3)`, `1 * (2 - 3)`},
 	} {
 		fset := token.NewFileSet()
 		startPos := fset.AddFile("", -1, 1000).Pos(0)
