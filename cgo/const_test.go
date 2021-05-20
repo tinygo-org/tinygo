@@ -44,6 +44,10 @@ func TestParseConst(t *testing.T) {
 		{`(1 - 2) * 3`, `(1 - 2) * 3`},
 		{`1 * 2 - 3`, `1*2 - 3`},
 		{`1 * (2 - 3)`, `1 * (2 - 3)`},
+		// Unary operators.
+		{`-5`, `-5`},
+		{`-5-2`, `-5 - 2`},
+		{`5 - - 2`, `5 - -2`},
 	} {
 		fset := token.NewFileSet()
 		startPos := fset.AddFile("", -1, 1000).Pos(0)

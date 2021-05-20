@@ -39,6 +39,7 @@ func init() {
 		token.STRING: parseBasicLit,
 		token.CHAR:   parseBasicLit,
 		token.LPAREN: parseParenExpr,
+		token.SUB:    parseUnaryExpr,
 	}
 }
 
@@ -128,6 +129,17 @@ func parseBinaryExpr(t *tokenizer, left ast.Expr) (ast.Expr, *scanner.Error) {
 	t.Next()
 	right, err := parseConstExpr(t, precedence)
 	expression.Y = right
+	return expression, err
+}
+
+func parseUnaryExpr(t *tokenizer) (ast.Expr, *scanner.Error) {
+	expression := &ast.UnaryExpr{
+		OpPos: t.curPos,
+		Op:    t.curToken,
+	}
+	t.Next()
+	x, err := parseConstExpr(t, precedencePrefix)
+	expression.X = x
 	return expression, err
 }
 

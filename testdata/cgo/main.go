@@ -6,6 +6,7 @@ int fortytwo(void);
 int mul(int, int);
 #include <string.h>
 #cgo CFLAGS: -DSOME_CONSTANT=17
+#define someDefine -5 + 2 * 7
 */
 import "C"
 
@@ -26,6 +27,7 @@ func main() {
 	println("defined floats:", C.CONST_FLOAT, C.CONST_FLOAT2)
 	println("defined string:", C.CONST_STRING)
 	println("defined char:", C.CONST_CHAR)
+	println("defined expr:", C.someDefine)
 	var ptr C.intPointer
 	var n C.int = 15
 	ptr = C.intPointer(&n)
