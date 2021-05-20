@@ -209,6 +209,7 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"internal/task/":        false,
 		"machine/":              false,
 		"net/":                  true,
+		"net/http/":             true,
 		"os/":                   true,
 		"reflect/":              false,
 		"runtime/":              false,
