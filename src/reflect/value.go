@@ -780,6 +780,9 @@ func memcpy(dst, src unsafe.Pointer, size uintptr)
 //go:linkname alloc runtime.alloc
 func alloc(size uintptr) unsafe.Pointer
 
+//go:linkname sliceAppend runtime.sliceAppend
+func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintptr, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr)
+
 // Copy copies the contents of src into dst until either
 // dst has been filled or src has been exhausted.
 func Copy(dst, src Value) int {
@@ -790,6 +793,34 @@ func Copy(dst, src Value) int {
 // As in Go, each x's value must be assignable to the slice's element type.
 func Append(s Value, x ...Value) Value {
 	panic("unimplemented: reflect.Append()")
+}
+
+// AppendSlice appends a slice t to a slice s and returns the resulting slice.
+// The slices s and t must have the same element type.
+func AppendSlice(s, t Value) Value {
+	if s.typecode.Kind() != Slice || t.typecode.Kind() != Slice || s.typecode != t.typecode {
+		// Not a very helpful error message, but shortened to just one error to
+		// keep code size down.
+		panic("reflect.AppendSlice: invalid types")
+	}
+	if !s.isExported() || !t.isExported() {
+		// One of the sides was not exported, so can't access the data.
+		panic("reflect.AppendSlice: unexported")
+	}
+	sSlice := (*sliceHeader)(s.value)
+	tSlice := (*sliceHeader)(t.value)
+	elemSize := s.typecode.elem().Size()
+	ptr, len, cap := sliceAppend(sSlice.data, tSlice.data, sSlice.len, sSlice.cap, tSlice.len, elemSize)
+	result := &sliceHeader{
+		data: ptr,
+		len:  len,
+		cap:  cap,
+	}
+	return Value{
+		typecode: s.typecode,
+		value:    unsafe.Pointer(result),
+		flags:    valueFlagExported,
+	}
 }
 
 func (v Value) SetMapIndex(key, elem Value) {

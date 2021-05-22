@@ -280,6 +280,8 @@ func main() {
 		panic("slice was changed while setting part of it")
 	}
 
+	testAppendSlice()
+
 	// Test types that are created in reflect and never created elsewhere in a
 	// value-to-interface conversion.
 	v := reflect.ValueOf(new(unreferencedType))
@@ -409,6 +411,45 @@ func assertSize(ok bool, typ string) {
 	}
 }
 
+// Test whether appending to a slice is equivalent between reflect and native
+// slice append.
+func testAppendSlice() {
+	for i := 0; i < 100; i++ {
+		dst := makeRandomSlice(i)
+		src := makeRandomSlice(i)
+		result1 := append(dst, src...)
+		result2 := reflect.AppendSlice(reflect.ValueOf(dst), reflect.ValueOf(src)).Interface().([]uint32)
+		if !sliceEqual(result1, result2) {
+			println("slice: mismatch after runtime.SliceAppend with", len(dst), cap(dst), len(src), cap(src))
+		}
+	}
+}
+
+func makeRandomSlice(max int) []uint32 {
+	cap := randuint32() % uint32(max+1)
+	len := randuint32() % (cap + 1)
+	s := make([]uint32, len, cap)
+	for i := uint32(0); i < len; i++ {
+		s[i] = randuint32()
+	}
+	return s
+}
+
+func sliceEqual(s1, s2 []uint32) bool {
+	if len(s1) != len(s2) {
+		return false
+	}
+	for i, val := range s1 {
+		if s2[i] != val {
+			return false
+		}
+	}
+	// Note: can't compare cap because the Go implementation has a different
+	// behavior between the built-in append function and
+	// reflect.AppendSlice.
+	return true
+}
+
 type unreferencedType int
 
 type totallyUnreferencedType int
@@ -426,4 +467,19 @@ func TestStructTag() {
 	st := reflect.TypeOf(s)
 	field := st.Field(0)
 	println(field.Tag.Get("color"), field.Tag.Get("species"))
+}
+
+var xorshift32State uint32 = 1
+
+func xorshift32(x uint32) uint32 {
+	// Algorithm "xor" from p. 4 of Marsaglia, "Xorshift RNGs"
+	x ^= x << 13
+	x ^= x >> 17
+	x ^= x << 5
+	return x
+}
+
+func randuint32() uint32 {
+	xorshift32State = xorshift32(xorshift32State)
+	return xorshift32State
 }
