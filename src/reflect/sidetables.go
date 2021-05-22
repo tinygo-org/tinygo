@@ -25,9 +25,9 @@ var arrayTypesSidetable byte
 // table.
 func readStringSidetable(table unsafe.Pointer, index uintptr) string {
 	nameLen, namePtr := readVarint(unsafe.Pointer(uintptr(table) + index))
-	return *(*string)(unsafe.Pointer(&StringHeader{
-		Data: uintptr(namePtr),
-		Len:  nameLen,
+	return *(*string)(unsafe.Pointer(&stringHeader{
+		data: namePtr,
+		len:  nameLen,
 	}))
 }
 

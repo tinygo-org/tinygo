@@ -24,15 +24,15 @@ func Swapper(slice interface{}) func(i, j int) {
 	typ := v.typecode.Elem()
 	size := typ.Size()
 
-	header := (*SliceHeader)(v.value)
+	header := (*sliceHeader)(v.value)
 	tmp := unsafe.Pointer(&make([]byte, size)[0])
 
 	return func(i, j int) {
-		if uint(i) >= uint(header.Len) || uint(j) >= uint(header.Len) {
+		if uint(i) >= uint(header.len) || uint(j) >= uint(header.len) {
 			panic("reflect: slice index out of range")
 		}
-		val1 := unsafe.Pointer(header.Data + uintptr(i)*size)
-		val2 := unsafe.Pointer(header.Data + uintptr(j)*size)
+		val1 := unsafe.Pointer(uintptr(header.data) + uintptr(i)*size)
+		val2 := unsafe.Pointer(uintptr(header.data) + uintptr(j)*size)
 		memcpy(tmp, val1, size)
 		memcpy(val1, val2, size)
 		memcpy(val2, tmp, size)

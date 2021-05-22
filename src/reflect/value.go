@@ -114,8 +114,8 @@ func (v Value) IsNil() bool {
 		if v.value == nil {
 			return true
 		}
-		slice := (*SliceHeader)(v.value)
-		return slice.Data == 0
+		slice := (*sliceHeader)(v.value)
+		return slice.data == nil
 	case Interface:
 		if v.value == nil {
 			return true
@@ -137,8 +137,8 @@ func (v Value) Pointer() uintptr {
 		}
 		return uintptr(v.value)
 	case Slice:
-		slice := (*SliceHeader)(v.value)
-		return slice.Data
+		slice := (*sliceHeader)(v.value)
+		return uintptr(slice.data)
 	case Func:
 		panic("unimplemented: (reflect.Value).Pointer()")
 	default: // not implemented: Func
@@ -345,9 +345,9 @@ func (v Value) Len() int {
 	case Map:
 		return maplen(v.value)
 	case Slice:
-		return int((*SliceHeader)(v.value).Len)
+		return int((*sliceHeader)(v.value).len)
 	case String:
-		return int((*StringHeader)(v.value).Len)
+		return int((*stringHeader)(v.value).len)
 	default:
 		panic(&ValueError{"Len"})
 	}
@@ -365,7 +365,7 @@ func (v Value) Cap() int {
 	case Chan:
 		return chancap(v.value)
 	case Slice:
-		return int((*SliceHeader)(v.value).Cap)
+		return int((*sliceHeader)(v.value).cap)
 	default:
 		panic(&ValueError{"Cap"})
 	}
@@ -462,28 +462,28 @@ func (v Value) Index(i int) Value {
 	switch v.Kind() {
 	case Slice:
 		// Extract an element from the slice.
-		slice := *(*SliceHeader)(v.value)
-		if uint(i) >= uint(slice.Len) {
+		slice := *(*sliceHeader)(v.value)
+		if uint(i) >= uint(slice.len) {
 			panic("reflect: slice index out of range")
 		}
 		elem := Value{
 			typecode: v.typecode.elem(),
 			flags:    v.flags | valueFlagIndirect,
 		}
-		addr := uintptr(slice.Data) + elem.typecode.Size()*uintptr(i) // pointer to new value
+		addr := uintptr(slice.data) + elem.typecode.Size()*uintptr(i) // pointer to new value
 		elem.value = unsafe.Pointer(addr)
 		return elem
 	case String:
 		// Extract a character from a string.
 		// A string is never stored directly in the interface, but always as a
 		// pointer to the string value.
-		s := *(*StringHeader)(v.value)
-		if uint(i) >= uint(s.Len) {
+		s := *(*stringHeader)(v.value)
+		if uint(i) >= uint(s.len) {
 			panic("reflect: string index out of range")
 		}
 		return Value{
 			typecode: Uint8.basicType(),
-			value:    unsafe.Pointer(uintptr(*(*uint8)(unsafe.Pointer(s.Data + uintptr(i))))),
+			value:    unsafe.Pointer(uintptr(*(*uint8)(unsafe.Pointer(uintptr(s.data) + uintptr(i))))),
 		}
 	case Array:
 		// Extract an element from the array.
@@ -745,9 +745,24 @@ type SliceHeader struct {
 	Cap  uintptr
 }
 
+// Slice header that matches the underlying structure. Used for when we switch
+// to a precise GC, which needs to know exactly where pointers live.
+type sliceHeader struct {
+	data unsafe.Pointer
+	len  uintptr
+	cap  uintptr
+}
+
 type StringHeader struct {
 	Data uintptr
 	Len  uintptr
+}
+
+// Like sliceHeader, this type is used internally to make sure pointer and
+// non-pointer fields match those of actual strings.
+type stringHeader struct {
+	data unsafe.Pointer
+	len  uintptr
 }
 
 type ValueError struct {
