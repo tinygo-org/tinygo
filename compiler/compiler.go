@@ -994,6 +994,8 @@ func getPos(val posser) token.Pos {
 	switch val := val.(type) {
 	case *ssa.MakeInterface:
 		return getPos(val.X)
+	case *ssa.MakeClosure:
+		return val.Fn.(*ssa.Function).Pos()
 	case *ssa.Return:
 		syntax := val.Parent().Syntax()
 		if syntax != nil {
