@@ -1048,52 +1048,8 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 	case *ssa.Defer:
 		b.createDefer(instr)
 	case *ssa.Go:
-		// Get all function parameters to pass to the goroutine.
-		var params []llvm.Value
-		for _, param := range instr.Call.Args {
-			params = append(params, b.getValue(param))
-		}
-
 		// Start a new goroutine.
-		if callee := instr.Call.StaticCallee(); callee != nil {
-			// Static callee is known. This makes it easier to start a new
-			// goroutine.
-			var context llvm.Value
-			switch value := instr.Call.Value.(type) {
-			case *ssa.Function:
-				// Goroutine call is regular function call. No context is necessary.
-				context = llvm.Undef(b.i8ptrType)
-			case *ssa.MakeClosure:
-				// A goroutine call on a func value, but the callee is trivial to find. For
-				// example: immediately applied functions.
-				funcValue := b.getValue(value)
-				context = b.extractFuncContext(funcValue)
-			default:
-				panic("StaticCallee returned an unexpected value")
-			}
-			params = append(params, context) // context parameter
-			b.createGoInstruction(b.getFunction(callee), params, "", callee.Pos())
-		} else if !instr.Call.IsInvoke() {
-			// This is a function pointer.
-			// At the moment, two extra params are passed to the newly started
-			// goroutine:
-			//   * The function context, for closures.
-			//   * The function pointer (for tasks).
-			funcPtr, context := b.decodeFuncValue(b.getValue(instr.Call.Value), instr.Call.Value.Type().Underlying().(*types.Signature))
-			params = append(params, context) // context parameter
-			switch b.Scheduler {
-			case "none", "coroutines":
-				// There are no additional parameters needed for the goroutine start operation.
-			case "tasks":
-				// Add the function pointer as a parameter to start the goroutine.
-				params = append(params, funcPtr)
-			default:
-				panic("unknown scheduler type")
-			}
-			b.createGoInstruction(funcPtr, params, b.fn.RelString(nil), instr.Pos())
-		} else {
-			b.addError(instr.Pos(), "todo: go on interface call")
-		}
+		b.createGo(instr)
 	case *ssa.If:
 		cond := b.getValue(instr.Cond)
 		block := instr.Block()

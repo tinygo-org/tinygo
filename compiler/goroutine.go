@@ -5,25 +5,70 @@ package compiler
 
 import (
 	"go/token"
+	"go/types"
 
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
-// createGoInstruction starts a new goroutine with the provided function pointer
-// and parameters.
-// In general, you should pass all regular parameters plus the context parameter.
-// There is one exception: the task-based scheduler needs to have the function
-// pointer passed in as a parameter too in addition to the context.
-//
-// Because a go statement doesn't return anything, return undef.
-func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value, prefix string, pos token.Pos) llvm.Value {
+// createGo emits code to start a new goroutine.
+func (b *builder) createGo(instr *ssa.Go) {
+	// Get all function parameters to pass to the goroutine.
+	var params []llvm.Value
+	for _, param := range instr.Call.Args {
+		params = append(params, b.getValue(param))
+	}
+
+	var prefix string
+	var funcPtr llvm.Value
+	if callee := instr.Call.StaticCallee(); callee != nil {
+		// Static callee is known. This makes it easier to start a new
+		// goroutine.
+		var context llvm.Value
+		switch value := instr.Call.Value.(type) {
+		case *ssa.Function:
+			// Goroutine call is regular function call. No context is necessary.
+			context = llvm.Undef(b.i8ptrType)
+		case *ssa.MakeClosure:
+			// A goroutine call on a func value, but the callee is trivial to find. For
+			// example: immediately applied functions.
+			funcValue := b.getValue(value)
+			context = b.extractFuncContext(funcValue)
+		default:
+			panic("StaticCallee returned an unexpected value")
+		}
+		params = append(params, context) // context parameter
+		funcPtr = b.getFunction(callee)
+	} else if !instr.Call.IsInvoke() {
+		// This is a function pointer.
+		// At the moment, two extra params are passed to the newly started
+		// goroutine:
+		//   * The function context, for closures.
+		//   * The function pointer (for tasks).
+		var context llvm.Value
+		funcPtr, context = b.decodeFuncValue(b.getValue(instr.Call.Value), instr.Call.Value.Type().Underlying().(*types.Signature))
+		params = append(params, context) // context parameter
+		switch b.Scheduler {
+		case "none", "coroutines":
+			// There are no additional parameters needed for the goroutine start operation.
+		case "tasks":
+			// Add the function pointer as a parameter to start the goroutine.
+			params = append(params, funcPtr)
+		default:
+			panic("unknown scheduler type")
+		}
+		prefix = b.fn.RelString(nil)
+	} else {
+		b.addError(instr.Pos(), "todo: go on interface call")
+		return
+	}
+
 	paramBundle := b.emitPointerPack(params)
 	var callee, stackSize llvm.Value
 	switch b.Scheduler {
 	case "none", "tasks":
-		callee = b.createGoroutineStartWrapper(funcPtr, prefix, pos)
+		callee = b.createGoroutineStartWrapper(funcPtr, prefix, instr.Pos())
 		if b.AutomaticStackSize {
 			// The stack size is not known until after linking. Call a dummy
 			// function that will be replaced with a load from a special ELF
@@ -35,7 +80,7 @@ func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value, p
 			// The stack size is fixed at compile time. By emitting it here as a
 			// constant, it can be optimized.
 			if b.Scheduler == "tasks" && b.DefaultStackSize == 0 {
-				b.addError(pos, "default stack size for goroutines is not set")
+				b.addError(instr.Pos(), "default stack size for goroutines is not set")
 			}
 			stackSize = llvm.ConstInt(b.uintptrType, b.DefaultStackSize, false)
 		}
@@ -49,7 +94,6 @@ func (b *builder) createGoInstruction(funcPtr llvm.Value, params []llvm.Value, p
 	}
 	start := b.getFunction(b.program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
 	b.createCall(start, []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.i8ptrType), llvm.ConstPointerNull(b.i8ptrType)}, "")
-	return llvm.Undef(funcPtr.Type().ElementType().ReturnType())
 }
 
 // createGoroutineStartWrapper creates a wrapper for the task-based
