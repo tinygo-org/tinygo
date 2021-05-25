@@ -62,22 +62,12 @@ entry:
 
 define hidden void @"main.closureFunctionGoroutine$1"(i32 %x, i8* %context, i8* %parentHandle) unnamed_addr {
 entry:
-  %0 = icmp eq i8* %context, null
-  br i1 %0, label %store.throw, label %store.next
-
-store.throw:                                      ; preds = %entry
-  call void @runtime.nilPanic(i8* undef, i8* null)
-  unreachable
-
-store.next:                                       ; preds = %entry
   %unpack.ptr = bitcast i8* %context to i32*
   store i32 7, i32* %unpack.ptr, align 4
   ret void
 }
 
 declare void @runtime.printint32(i32, i8*, i8*)
-
-declare void @runtime.nilPanic(i8*, i8*)
 
 define hidden void @main.funcGoroutine(i8* %fn.context, i32 %fn.funcptr, i8* %context, i8* %parentHandle) unnamed_addr {
 entry:

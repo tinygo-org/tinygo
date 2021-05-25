@@ -33,7 +33,7 @@ func main() {
 	c1 := getComplex128() // OUT: object allocated on the heap: escapes at line 34
 	useInterface(c1)
 
-	n3 := 5 // OUT: object allocated on the heap: escapes at line 39
+	n3 := 5
 	func() int {
 		return n3
 	}()
@@ -42,6 +42,13 @@ func main() {
 
 	s8 := []int{3, 5, 8} // OUT: object allocated on the heap: escapes at line 44
 	callVariadic(s8...)
+
+	n4 := 3 // OUT: object allocated on the heap: escapes at line 48
+	n5 := 7 // OUT: object allocated on the heap: escapes at line 48
+	func() {
+		n4 = n5
+	}()
+	println(n4, n5)
 }
 
 func derefInt(x *int) int {
