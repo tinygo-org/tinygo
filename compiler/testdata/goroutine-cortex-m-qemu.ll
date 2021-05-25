@@ -9,9 +9,6 @@ target triple = "armv7m-none-eabi"
 %"internal/task.state" = type { i32, i32* }
 %runtime.chanSelectState = type { %runtime.channel*, i8* }
 
-@"main.regularFunctionGoroutine$pack" = private unnamed_addr constant { i32, i8* } { i32 5, i8* undef }
-@"main.inlineFunctionGoroutine$pack" = private unnamed_addr constant { i32, i8* } { i32 5, i8* undef }
-
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 
 define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr {
@@ -22,7 +19,7 @@ entry:
 define hidden void @main.regularFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr {
 entry:
   %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"main.regularFunction$gowrapper" to i32), i8* undef, i8* undef)
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.regularFunction$gowrapper" to i32), i8* bitcast ({ i32, i8* }* @"main.regularFunctionGoroutine$pack" to i8*), i32 %stacksize, i8* undef, i8* null)
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.regularFunction$gowrapper" to i32), i8* nonnull inttoptr (i32 5 to i8*), i32 %stacksize, i8* undef, i8* null)
   ret void
 }
 
@@ -30,12 +27,8 @@ declare void @main.regularFunction(i32, i8*, i8*)
 
 define linkonce_odr void @"main.regularFunction$gowrapper"(i8* %0) unnamed_addr #0 {
 entry:
-  %1 = bitcast i8* %0 to i32*
-  %2 = load i32, i32* %1, align 4
-  %3 = getelementptr inbounds i8, i8* %0, i32 4
-  %4 = bitcast i8* %3 to i8**
-  %5 = load i8*, i8** %4, align 4
-  call void @main.regularFunction(i32 %2, i8* %5, i8* undef)
+  %unpack.int = ptrtoint i8* %0 to i32
+  call void @main.regularFunction(i32 %unpack.int, i8* undef, i8* undef)
   ret void
 }
 
@@ -46,7 +39,7 @@ declare void @"internal/task.start"(i32, i8*, i32, i8*, i8*)
 define hidden void @main.inlineFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr {
 entry:
   %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"main.inlineFunctionGoroutine$1$gowrapper" to i32), i8* undef, i8* undef)
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.inlineFunctionGoroutine$1$gowrapper" to i32), i8* bitcast ({ i32, i8* }* @"main.inlineFunctionGoroutine$pack" to i8*), i32 %stacksize, i8* undef, i8* null)
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.inlineFunctionGoroutine$1$gowrapper" to i32), i8* nonnull inttoptr (i32 5 to i8*), i32 %stacksize, i8* undef, i8* null)
   ret void
 }
 
@@ -57,12 +50,8 @@ entry:
 
 define linkonce_odr void @"main.inlineFunctionGoroutine$1$gowrapper"(i8* %0) unnamed_addr #1 {
 entry:
-  %1 = bitcast i8* %0 to i32*
-  %2 = load i32, i32* %1, align 4
-  %3 = getelementptr inbounds i8, i8* %0, i32 4
-  %4 = bitcast i8* %3 to i8**
-  %5 = load i8*, i8** %4, align 4
-  call void @"main.inlineFunctionGoroutine$1"(i32 %2, i8* %5, i8* undef)
+  %unpack.int = ptrtoint i8* %0 to i32
+  call void @"main.inlineFunctionGoroutine$1"(i32 %unpack.int, i8* undef, i8* undef)
   ret void
 }
 

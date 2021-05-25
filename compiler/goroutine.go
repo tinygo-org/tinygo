@@ -22,6 +22,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 
 	var prefix string
 	var funcPtr llvm.Value
+	hasContext := false
 	if callee := instr.Call.StaticCallee(); callee != nil {
 		// Static callee is known. This makes it easier to start a new
 		// goroutine.
@@ -29,7 +30,11 @@ func (b *builder) createGo(instr *ssa.Go) {
 		switch value := instr.Call.Value.(type) {
 		case *ssa.Function:
 			// Goroutine call is regular function call. No context is necessary.
-			context = llvm.Undef(b.i8ptrType)
+			if b.Scheduler == "coroutines" {
+				// The context parameter is assumed to be always present in the
+				// coroutines scheduler.
+				context = llvm.Undef(b.i8ptrType)
+			}
 		case *ssa.MakeClosure:
 			// A goroutine call on a func value, but the callee is trivial to find. For
 			// example: immediately applied functions.
@@ -38,7 +43,10 @@ func (b *builder) createGo(instr *ssa.Go) {
 		default:
 			panic("StaticCallee returned an unexpected value")
 		}
-		params = append(params, context) // context parameter
+		if !context.IsNil() {
+			params = append(params, context) // context parameter
+			hasContext = true
+		}
 		funcPtr = b.getFunction(callee)
 	} else if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
 		// We cheat. None of the builtins do any long or blocking operation, so
@@ -80,6 +88,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 		var context llvm.Value
 		funcPtr, context = b.decodeFuncValue(b.getValue(instr.Call.Value), instr.Call.Value.Type().Underlying().(*types.Signature))
 		params = append(params, context) // context parameter
+		hasContext = true
 		switch b.Scheduler {
 		case "none", "coroutines":
 			// There are no additional parameters needed for the goroutine start operation.
@@ -99,7 +108,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 	var callee, stackSize llvm.Value
 	switch b.Scheduler {
 	case "none", "tasks":
-		callee = b.createGoroutineStartWrapper(funcPtr, prefix, instr.Pos())
+		callee = b.createGoroutineStartWrapper(funcPtr, prefix, hasContext, instr.Pos())
 		if b.AutomaticStackSize {
 			// The stack size is not known until after linking. Call a dummy
 			// function that will be replaced with a load from a special ELF
@@ -145,7 +154,12 @@ func (b *builder) createGo(instr *ssa.Go) {
 // allows a single (pointer) argument to the newly started goroutine. Also, it
 // ignores the return value because newly started goroutines do not have a
 // return value.
-func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix string, pos token.Pos) llvm.Value {
+//
+// The hasContext parameter indicates whether the context parameter (the second
+// to last parameter of the function) is used for this wrapper. If hasContext is
+// false, the parameter bundle is assumed to have no context parameter and undef
+// is passed instead.
+func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix string, hasContext bool, pos token.Pos) llvm.Value {
 	var wrapper llvm.Value
 
 	builder := c.ctx.NewBuilder()
@@ -192,8 +206,15 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 
 		// Create the list of params for the call.
 		paramTypes := fn.Type().ElementType().ParamTypes()
-		params := llvmutil.EmitPointerUnpack(builder, c.mod, wrapper.Param(0), paramTypes[:len(paramTypes)-1])
-		params = append(params, llvm.Undef(c.i8ptrType))
+		paramTypes = paramTypes[:len(paramTypes)-1] // strip parentHandle parameter
+		if !hasContext {
+			paramTypes = paramTypes[:len(paramTypes)-1] // strip context parameter
+		}
+		params := llvmutil.EmitPointerUnpack(builder, c.mod, wrapper.Param(0), paramTypes)
+		if !hasContext {
+			params = append(params, llvm.Undef(c.i8ptrType)) // add dummy context parameter
+		}
+		params = append(params, llvm.Undef(c.i8ptrType)) // add dummy parentHandle parameter
 
 		// Create the call.
 		builder.CreateCall(fn, params, "")
@@ -255,8 +276,11 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		// Get the function pointer.
 		fnPtr := params[len(params)-1]
 
-		// Ignore the last param, which isn't used anymore.
-		// TODO: avoid this extra "parent handle" parameter in most functions.
+		// The last parameter in the packed object has somewhat of a dual role.
+		// Inside the parameter bundle it's the function pointer, stored right
+		// after the context pointer. But in the IR call instruction, it's the
+		// parentHandle function that's always undef outside of the coroutines
+		// scheduler. Thus, make the parameter undef here.
 		params[len(params)-1] = llvm.Undef(c.i8ptrType)
 
 		// Create the call.
