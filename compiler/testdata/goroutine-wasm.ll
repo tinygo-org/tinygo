@@ -4,6 +4,11 @@ target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
 target triple = "wasm32--wasi"
 
 %runtime.funcValueWithSignature = type { i32, i8* }
+%runtime.channel = type { i32, i32, i8, %runtime.channelBlockedList*, i32, i32, i32, i8* }
+%runtime.channelBlockedList = type { %runtime.channelBlockedList*, %"internal/task.Task"*, %runtime.chanSelectState*, { %runtime.channelBlockedList*, i32, i32 } }
+%"internal/task.Task" = type { %"internal/task.Task"*, i8*, i32, %"internal/task.state" }
+%"internal/task.state" = type { i8* }
+%runtime.chanSelectState = type { %runtime.channel*, i8* }
 
 @"main.regularFunctionGoroutine$pack" = private unnamed_addr constant { i32, i8* } { i32 5, i8* undef }
 @"main.inlineFunctionGoroutine$pack" = private unnamed_addr constant { i32, i8* } { i32 5, i8* undef }
@@ -88,3 +93,24 @@ entry:
 }
 
 declare i32 @runtime.getFuncPtr(i8*, i32, i8* dereferenceable_or_null(1), i8*, i8*)
+
+define hidden void @main.recoverBuiltinGoroutine(i8* %context, i8* %parentHandle) unnamed_addr {
+entry:
+  ret void
+}
+
+define hidden void @main.copyBuiltinGoroutine(i8* %dst.data, i32 %dst.len, i32 %dst.cap, i8* %src.data, i32 %src.len, i32 %src.cap, i8* %context, i8* %parentHandle) unnamed_addr {
+entry:
+  %copy.n = call i32 @runtime.sliceCopy(i8* %dst.data, i8* %src.data, i32 %dst.len, i32 %src.len, i32 1, i8* undef, i8* null)
+  ret void
+}
+
+declare i32 @runtime.sliceCopy(i8* nocapture writeonly, i8* nocapture readonly, i32, i32, i32, i8*, i8*)
+
+define hidden void @main.closeBuiltinGoroutine(%runtime.channel* dereferenceable_or_null(32) %ch, i8* %context, i8* %parentHandle) unnamed_addr {
+entry:
+  call void @runtime.chanClose(%runtime.channel* %ch, i8* undef, i8* null)
+  ret void
+}
+
+declare void @runtime.chanClose(%runtime.channel* dereferenceable_or_null(32), i8*, i8*)

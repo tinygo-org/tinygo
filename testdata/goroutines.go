@@ -73,6 +73,8 @@ func main() {
 
 	time.Sleep(2 * time.Millisecond)
 
+	testGoOnBuiltins()
+
 	testCond()
 }
 
@@ -129,6 +131,31 @@ func (i *myPrinter) Print() {
 type simpleFunc func()
 
 func emptyFunc() {
+}
+
+func testGoOnBuiltins() {
+	// Test copy builtin (there is no non-racy practical use of this).
+	go copy(make([]int, 8), []int{2, 5, 8, 4})
+
+	// Test recover builtin (no-op).
+	go recover()
+
+	// Test close builtin.
+	ch := make(chan int)
+	go close(ch)
+	n, ok := <-ch
+	if n != 0 || ok != false {
+		println("error: expected closed channel to return 0, false")
+	}
+
+	// Test delete builtin.
+	m := map[string]int{"foo": 3}
+	go delete(m, "foo")
+	time.Sleep(time.Millisecond)
+	v, ok := m["foo"]
+	if v != 0 || ok != false {
+		println("error: expected deleted map entry to be 0, false")
+	}
 }
 
 func testCond() {

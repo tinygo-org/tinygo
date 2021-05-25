@@ -40,6 +40,37 @@ func (b *builder) createGo(instr *ssa.Go) {
 		}
 		params = append(params, context) // context parameter
 		funcPtr = b.getFunction(callee)
+	} else if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
+		// We cheat. None of the builtins do any long or blocking operation, so
+		// we might as well run these builtins right away without the program
+		// noticing the difference.
+		// Possible exceptions:
+		//   - copy: this is a possibly long operation, but not a blocking
+		//     operation. Semantically it makes no difference to run it right
+		//     away (not in a goroutine). However, in practice it makes no sense
+		//     to run copy in a goroutine as there is no way to (safely) know
+		//     when it is finished.
+		//   - panic: the error message would appear in the parent goroutine.
+		//     But because `go panic("err")` would halt the program anyway
+		//     (there is no recover), panicking right away would give the same
+		//     behavior as creating a goroutine, switching the scheduler to that
+		//     goroutine, and panicking there. So this optimization seems
+		//     correct.
+		//   - recover: because it runs in a new goroutine, it is never a
+		//     deferred function. Thus this is a no-op.
+		if builtin.Name() == "recover" {
+			// This is a no-op, even in a deferred function:
+			//   go recover()
+			return
+		}
+		var argTypes []types.Type
+		var argValues []llvm.Value
+		for _, arg := range instr.Call.Args {
+			argTypes = append(argTypes, arg.Type())
+			argValues = append(argValues, b.getValue(arg))
+		}
+		b.createBuiltin(argTypes, argValues, builtin.Name(), instr.Pos())
+		return
 	} else if !instr.Call.IsInvoke() {
 		// This is a function pointer.
 		// At the moment, two extra params are passed to the newly started

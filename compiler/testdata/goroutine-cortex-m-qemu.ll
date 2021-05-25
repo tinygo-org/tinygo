@@ -3,6 +3,12 @@ source_filename = "goroutine.go"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "armv7m-none-eabi"
 
+%runtime.channel = type { i32, i32, i8, %runtime.channelBlockedList*, i32, i32, i32, i8* }
+%runtime.channelBlockedList = type { %runtime.channelBlockedList*, %"internal/task.Task"*, %runtime.chanSelectState*, { %runtime.channelBlockedList*, i32, i32 } }
+%"internal/task.Task" = type { %"internal/task.Task"*, i8*, i32, %"internal/task.state" }
+%"internal/task.state" = type { i32, i32* }
+%runtime.chanSelectState = type { %runtime.channel*, i8* }
+
 @"main.regularFunctionGoroutine$pack" = private unnamed_addr constant { i32, i8* } { i32 5, i8* undef }
 @"main.inlineFunctionGoroutine$pack" = private unnamed_addr constant { i32, i8* } { i32 5, i8* undef }
 
@@ -137,6 +143,27 @@ entry:
   call void %8(i32 %2, i8* %5, i8* undef)
   ret void
 }
+
+define hidden void @main.recoverBuiltinGoroutine(i8* %context, i8* %parentHandle) unnamed_addr {
+entry:
+  ret void
+}
+
+define hidden void @main.copyBuiltinGoroutine(i8* %dst.data, i32 %dst.len, i32 %dst.cap, i8* %src.data, i32 %src.len, i32 %src.cap, i8* %context, i8* %parentHandle) unnamed_addr {
+entry:
+  %copy.n = call i32 @runtime.sliceCopy(i8* %dst.data, i8* %src.data, i32 %dst.len, i32 %src.len, i32 1, i8* undef, i8* null)
+  ret void
+}
+
+declare i32 @runtime.sliceCopy(i8* nocapture writeonly, i8* nocapture readonly, i32, i32, i32, i8*, i8*)
+
+define hidden void @main.closeBuiltinGoroutine(%runtime.channel* dereferenceable_or_null(32) %ch, i8* %context, i8* %parentHandle) unnamed_addr {
+entry:
+  call void @runtime.chanClose(%runtime.channel* %ch, i8* undef, i8* null)
+  ret void
+}
+
+declare void @runtime.chanClose(%runtime.channel* dereferenceable_or_null(32), i8*, i8*)
 
 attributes #0 = { "tinygo-gowrapper"="main.regularFunction" }
 attributes #1 = { "tinygo-gowrapper"="main.inlineFunctionGoroutine$1" }
