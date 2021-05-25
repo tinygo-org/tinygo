@@ -19,6 +19,8 @@ var flagUpdate = flag.Bool("update", false, "update tests based on test output")
 // Basic tests for the compiler. Build some Go files and compare the output with
 // the expected LLVM IR for regression testing.
 func TestCompiler(t *testing.T) {
+	t.Parallel()
+
 	// Check LLVM version.
 	llvmMajor, err := strconv.Atoi(strings.SplitN(llvm.Version, ".", 2)[0])
 	if err != nil {
@@ -32,43 +34,55 @@ func TestCompiler(t *testing.T) {
 		t.Skip("compiler tests require LLVM 11 or above, got LLVM ", llvm.Version)
 	}
 
-	target, err := compileopts.LoadTarget("wasm")
-	if err != nil {
-		t.Fatal("failed to load target:", err)
-	}
-	config := &compileopts.Config{
-		Options: &compileopts.Options{},
-		Target:  target,
-	}
-	compilerConfig := &Config{
-		Triple:             config.Triple(),
-		GOOS:               config.GOOS(),
-		GOARCH:             config.GOARCH(),
-		CodeModel:          config.CodeModel(),
-		RelocationModel:    config.RelocationModel(),
-		Scheduler:          config.Scheduler(),
-		FuncImplementation: config.FuncImplementation(),
-		AutomaticStackSize: config.AutomaticStackSize(),
-	}
-	machine, err := NewTargetMachine(compilerConfig)
-	if err != nil {
-		t.Fatal("failed to create target machine:", err)
+	tests := []struct {
+		file   string
+		target string
+	}{
+		{"basic.go", ""},
+		{"pointer.go", ""},
+		{"slice.go", ""},
+		{"string.go", ""},
+		{"float.go", ""},
+		{"interface.go", ""},
+		{"func.go", ""},
+		{"goroutine.go", "wasm"},
+		{"goroutine.go", "cortex-m-qemu"},
 	}
 
-	tests := []string{
-		"basic.go",
-		"pointer.go",
-		"slice.go",
-		"string.go",
-		"float.go",
-		"interface.go",
-		"func.go",
-	}
+	for _, tc := range tests {
+		name := tc.file
+		targetString := "wasm"
+		if tc.target != "" {
+			targetString = tc.target
+			name = tc.file + "-" + tc.target
+		}
 
-	for _, testCase := range tests {
-		t.Run(testCase, func(t *testing.T) {
+		t.Run(name, func(t *testing.T) {
+			target, err := compileopts.LoadTarget(targetString)
+			if err != nil {
+				t.Fatal("failed to load target:", err)
+			}
+			config := &compileopts.Config{
+				Options: &compileopts.Options{},
+				Target:  target,
+			}
+			compilerConfig := &Config{
+				Triple:             config.Triple(),
+				GOOS:               config.GOOS(),
+				GOARCH:             config.GOARCH(),
+				CodeModel:          config.CodeModel(),
+				RelocationModel:    config.RelocationModel(),
+				Scheduler:          config.Scheduler(),
+				FuncImplementation: config.FuncImplementation(),
+				AutomaticStackSize: config.AutomaticStackSize(),
+			}
+			machine, err := NewTargetMachine(compilerConfig)
+			if err != nil {
+				t.Fatal("failed to create target machine:", err)
+			}
+
 			// Load entire program AST into memory.
-			lprogram, err := loader.Load(config, []string{"./testdata/" + testCase}, config.ClangHeaders, types.Config{
+			lprogram, err := loader.Load(config, []string{"./testdata/" + tc.file}, config.ClangHeaders, types.Config{
 				Sizes: Sizes(machine),
 			})
 			if err != nil {
@@ -76,13 +90,13 @@ func TestCompiler(t *testing.T) {
 			}
 			err = lprogram.Parse()
 			if err != nil {
-				t.Fatalf("could not parse test case %s: %s", testCase, err)
+				t.Fatalf("could not parse test case %s: %s", tc.file, err)
 			}
 
 			// Compile AST to IR.
 			program := lprogram.LoadSSA()
 			pkg := lprogram.MainPkg()
-			mod, errs := CompilePackage(testCase, pkg, program.Package(pkg.Pkg), machine, compilerConfig, false)
+			mod, errs := CompilePackage(tc.file, pkg, program.Package(pkg.Pkg), machine, compilerConfig, false)
 			if errs != nil {
 				for _, err := range errs {
 					t.Error(err)
@@ -105,18 +119,22 @@ func TestCompiler(t *testing.T) {
 			}
 			funcPasses.FinalizeFunc()
 
-			outfile := "./testdata/" + testCase[:len(testCase)-3] + ".ll"
+			outFilePrefix := tc.file[:len(tc.file)-3]
+			if tc.target != "" {
+				outFilePrefix += "-" + tc.target
+			}
+			outPath := "./testdata/" + outFilePrefix + ".ll"
 
 			// Update test if needed. Do not check the result.
 			if *flagUpdate {
-				err := ioutil.WriteFile(outfile, []byte(mod.String()), 0666)
+				err := ioutil.WriteFile(outPath, []byte(mod.String()), 0666)
 				if err != nil {
 					t.Error("failed to write updated output file:", err)
 				}
 				return
 			}
 
-			expected, err := ioutil.ReadFile(outfile)
+			expected, err := ioutil.ReadFile(outPath)
 			if err != nil {
 				t.Fatal("failed to read golden file:", err)
 			}
