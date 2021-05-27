@@ -1,9 +1,9 @@
 // Hand created file. DO NOT DELETE.
-// Type definitions, fields, and constants associated with the external
-// interrupt (EXTI) peripheral of the STM32H7x7 family of dual-core MCUs.
+// Type definitions, fields, and constants associated with the EXTI peripheral
+// of the STM32H7x7 family of dual-core MCUs.
 // These definitions are applicable to both the Cortex-M7 and Cortex-M4 cores.
 
-// +build stm32h7x7_cm4 stm32h7x7_cm7
+// +build stm32h7x7
 
 package stm32
 

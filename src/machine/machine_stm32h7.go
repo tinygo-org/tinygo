@@ -16,6 +16,21 @@ import (
 	"unsafe"
 )
 
+const (
+	Core0  = 0x3 << stm32.HSEM_HSEM_CR_MASTERID_Pos // CPU1: AHB bus controller 0
+	Core1  = 0x1 << stm32.HSEM_HSEM_CR_MASTERID_Pos // CPU2: AHB bus controller 1
+	CoreID = coreID
+)
+
+const (
+	SemRNG stm32.HSEM_ID_Type = iota
+	SemPKA
+	SemFLASH
+	SemRCC
+	SemSTOP
+	SemGPIO
+)
+
 const PinsPerPort = 16
 
 const (
@@ -358,15 +373,21 @@ func (p Pin) Configure(config PinConfig) {
 	case pinModeModeOutput, pinModeModeAltFunc:
 		// configure output speed
 		speed := uint32((config.Mode >> pinModeSpeedPos) & pinModeSpeedMsk)
-		bus.GPIO_OSPEEDR.ReplaceBits(speed, uint32(pinModeSpeedMsk), 2*bit)
 		// configure output type
 		otype := uint32((config.Mode >> pinModeOTypePos) & pinModeOTypeMsk)
+		for !SemGPIO.Lock(CoreID) {
+		} // wait until we have exclusive access to GPIO
+		bus.GPIO_OSPEEDR.ReplaceBits(speed, uint32(pinModeSpeedMsk), 2*bit)
 		bus.GPIO_OTYPER.ReplaceBits(otype, uint32(pinModeOTypeMsk), bit)
+		SemGPIO.Unlock(CoreID)
 	}
 
 	// configure pull-up/down resistor
 	pupd := uint32((config.Mode >> pinModePupdPos) & pinModePupdMsk)
+	for !SemGPIO.Lock(CoreID) {
+	} // wait until we have exclusive access to GPIO
 	bus.GPIO_PUPDR.ReplaceBits(pupd, uint32(pinModePupdMsk), 2*bit)
+	SemGPIO.Unlock(CoreID)
 
 	switch config.Mode & (pinModeModeMsk << pinModeModePos) {
 	// alternate function mode bit set
@@ -379,12 +400,18 @@ func (p Pin) Configure(config PinConfig) {
 			reg = &bus.GPIO_AFRH // AFRH register used for pins 8-15
 		}
 		altf := uint32((config.Mode >> pinModeAltFuncPos) & pinModeAltFuncMsk)
+		for !SemGPIO.Lock(CoreID) {
+		} // wait until we have exclusive access to GPIO
 		reg.ReplaceBits(altf, uint32(pinModeAltFuncMsk), 4*(pos%8))
+		SemGPIO.Unlock(CoreID)
 	}
 
 	// configure IO direction mode
 	mode := uint32((config.Mode >> pinModeModePos) & pinModeModeMsk)
+	for !SemGPIO.Lock(CoreID) {
+	} // wait until we have exclusive access to GPIO
 	bus.GPIO_MODER.ReplaceBits(mode, uint32(pinModeModeMsk), 2*bit)
+	SemGPIO.Unlock(CoreID)
 }
 
 func (p Pin) Toggle() {
@@ -392,11 +419,14 @@ func (p Pin) Toggle() {
 }
 
 func (p Pin) Set(high bool) {
+	for !SemGPIO.Lock(CoreID) {
+	} // wait until we have exclusive access to GPIO
 	if high {
 		p.Bus().GPIO_BSRR.Set(1 << p.Bit())
 	} else {
 		p.Bus().GPIO_BSRR.Set(1 << (p.Bit() + 16))
 	}
+	SemGPIO.Unlock(CoreID)
 }
 
 func (p Pin) Get() bool {

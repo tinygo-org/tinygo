@@ -2,5 +2,4 @@
 
 package machine
 
-// cpuCore defines the Cortex-M7 core as CPU0.
-const cpuCore = 0
+const coreID = Core0

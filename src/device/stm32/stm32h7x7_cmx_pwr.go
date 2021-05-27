@@ -3,7 +3,7 @@
 // the STM32H7x7 family of dual-core MCUs.
 // These definitions are applicable to both the Cortex-M7 and Cortex-M4 cores.
 
-// +build stm32h7x7_cm4 stm32h7x7_cm7
+// +build stm32h7x7
 
 package stm32
 
@@ -28,42 +28,63 @@ var (
 	PWR_CPU2CR = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(PWR)) + 0x014)))
 )
 
-const PWR_FLAG_SETTING_DELAY = 1000 // 1 second
+const pwrFlagTimeoutMs = 1000 // 1 second
 
-type PWR_FLAG uint8
+func SetPowerSupply(supplySource, voltageScale uint32) bool {
 
-const (
-	PWR_FLAG_STOP       PWR_FLAG = 0x01
-	PWR_FLAG_SB_D1      PWR_FLAG = 0x02
-	PWR_FLAG_SB_D2      PWR_FLAG = 0x03
-	PWR_FLAG_SB         PWR_FLAG = 0x04
-	PWR_FLAG_CPU1_HOLD  PWR_FLAG = 0x05
-	PWR_FLAG_CPU2_HOLD  PWR_FLAG = 0x06
-	PWR_FLAG2_STOP      PWR_FLAG = 0x07
-	PWR_FLAG2_SB_D1     PWR_FLAG = 0x08
-	PWR_FLAG2_SB_D2     PWR_FLAG = 0x09
-	PWR_FLAG2_SB        PWR_FLAG = 0x0A
-	PWR_FLAG_PVDO       PWR_FLAG = 0x0B
-	PWR_FLAG_AVDO       PWR_FLAG = 0x0C
-	PWR_FLAG_ACTVOSRDY  PWR_FLAG = 0x0D
-	PWR_FLAG_ACTVOS     PWR_FLAG = 0x0E
-	PWR_FLAG_BRR        PWR_FLAG = 0x0F
-	PWR_FLAG_VOSRDY     PWR_FLAG = 0x10
-	PWR_FLAG_SMPSEXTRDY PWR_FLAG = 0x11
-	PWR_FLAG_MMCVDO     PWR_FLAG = 0x12
-	PWR_FLAG_USB33RDY   PWR_FLAG = 0x13
-	PWR_FLAG_TEMPH      PWR_FLAG = 0x14
-	PWR_FLAG_TEMPL      PWR_FLAG = 0x15
-	PWR_FLAG_VBATH      PWR_FLAG = 0x16
-	PWR_FLAG_VBATL      PWR_FLAG = 0x17
+	if (PWR_PWR_CR3_SDEN | PWR_PWR_CR3_LDOEN) != (PWR.PWR_CR3.Get() & (PWR_PWR_CR3_SDEN | PWR_PWR_CR3_LDOEN | PWR_PWR_CR3_BYPASS)) {
+		// Check supply configuration
+		if supplySource != (PWR.PWR_CR3.Get() & PWR_SUPPLY_CONFIG_Msk) {
+			// Supply configuration update locked, can't apply a new supply config
+			return false
+		} else {
+			// Supply configuration update locked, but new supply configuration
+			// matches old supply configuration; nothing to do.
+			return true
+		}
+	}
 
-	PWR_FLAG_WKUP1 PWR_FLAG = PWR_PWR_WKUPCR_WKUPC1_Msk
-	PWR_FLAG_WKUP2 PWR_FLAG = PWR_PWR_WKUPCR_WKUPC2_Msk
-	PWR_FLAG_WKUP3 PWR_FLAG = PWR_PWR_WKUPCR_WKUPC3_Msk
-	PWR_FLAG_WKUP4 PWR_FLAG = PWR_PWR_WKUPCR_WKUPC4_Msk
-	PWR_FLAG_WKUP5 PWR_FLAG = PWR_PWR_WKUPCR_WKUPC5_Msk
-	PWR_FLAG_WKUP6 PWR_FLAG = PWR_PWR_WKUPCR_WKUPC6_Msk
-)
+	// Set the power supply configuration
+	PWR.PWR_CR3.ReplaceBits(supplySource, PWR_SUPPLY_CONFIG_Msk, 0)
+
+	// Wait until voltage level flag is set
+	start := ticks()
+	for !PWR_FLAG_ACTVOSRDY.Get() {
+		if ticks()-start > pwrFlagTimeoutMs {
+			return false // timeout
+		}
+	}
+
+	/* When the SMPS supplies external circuits verify that SDEXTRDY flag is set */
+	if (supplySource == PWR_SMPS_1V8_SUPPLIES_EXT_AND_LDO) ||
+		(supplySource == PWR_SMPS_2V5_SUPPLIES_EXT_AND_LDO) ||
+		(supplySource == PWR_SMPS_1V8_SUPPLIES_EXT) ||
+		(supplySource == PWR_SMPS_2V5_SUPPLIES_EXT) {
+
+		// Wait till SMPS external supply ready flag is set
+		start = ticks()
+		for !PWR_FLAG_SMPSEXTRDY.Get() {
+			if ticks()-start > pwrFlagTimeoutMs {
+				return false // timeout
+			}
+		}
+	}
+
+	switch voltageScale {
+	case PWR_REGULATOR_VOLTAGE_SCALE0:
+		// Configure the voltage scaling 1
+		PWR.PWR_D3CR.ReplaceBits(PWR_REGULATOR_VOLTAGE_SCALE1, PWR_PWR_D3CR_VOS_Msk, 0)
+		// Enable the PWR overdrive
+		SYSCFG_PWRCR.SetBits(SYSCFG_PWRCR_ODEN)
+	default:
+		// Disable the PWR overdrive
+		SYSCFG_PWRCR.ClearBits(SYSCFG_PWRCR_ODEN)
+		// Configure the voltage scaling x
+		PWR.PWR_D3CR.ReplaceBits(voltageScale, PWR_PWR_D3CR_VOS_Msk, 0)
+	}
+
+	return true
+}
 
 const (
 	PWR_LDO_SUPPLY = PWR_PWR_CR3_LDOEN // Core domains are suppplied from the LDO
@@ -78,7 +99,7 @@ const (
 
 	PWR_EXTERNAL_SOURCE_SUPPLY = PWR_PWR_CR3_BYPASS // The SMPS disabled and the LDO Bypass. The Core domains are supplied from an external source
 
-	PWR_SUPPLY_CONFIG_MASK = (PWR_PWR_CR3_SDLEVEL_Msk | PWR_PWR_CR3_SDEXTHP | PWR_PWR_CR3_SDEN | PWR_PWR_CR3_LDOEN | PWR_PWR_CR3_BYPASS)
+	PWR_SUPPLY_CONFIG_Msk = (PWR_PWR_CR3_SDLEVEL_Msk | PWR_PWR_CR3_SDEXTHP | PWR_PWR_CR3_SDEN | PWR_PWR_CR3_LDOEN | PWR_PWR_CR3_BYPASS)
 
 	PWR_REGULATOR_VOLTAGE_SCALE0 = 0
 	PWR_REGULATOR_VOLTAGE_SCALE1 = PWR_PWR_D3CR_VOS_1 | PWR_PWR_D3CR_VOS_0
@@ -117,63 +138,42 @@ const (
 	PWR_PWR_WKUPCR_WKUPC1     = PWR_PWR_WKUPCR_WKUPC1_Msk        // Clear Wakeup Pin Flag 1
 )
 
-func (pwr *PWR_Type) Configure(supplySource, voltageScale uint32) bool {
+type PWR_FLAG_Type uint8
 
-	if (PWR_PWR_CR3_SDEN | PWR_PWR_CR3_LDOEN) != (pwr.PWR_CR3.Get() & (PWR_PWR_CR3_SDEN | PWR_PWR_CR3_LDOEN | PWR_PWR_CR3_BYPASS)) {
-		// Check supply configuration
-		if supplySource != (pwr.PWR_CR3.Get() & PWR_SUPPLY_CONFIG_MASK) {
-			// Supply configuration update locked, can't apply a new supply config
-			return false
-		} else {
-			// Supply configuration update locked, but new supply configuration
-			// matches old supply configuration; nothing to do.
-			return true
-		}
-	}
+const (
+	PWR_FLAG_STOP       PWR_FLAG_Type = 0x01
+	PWR_FLAG_SB_D1      PWR_FLAG_Type = 0x02
+	PWR_FLAG_SB_D2      PWR_FLAG_Type = 0x03
+	PWR_FLAG_SB         PWR_FLAG_Type = 0x04
+	PWR_FLAG_CPU1_HOLD  PWR_FLAG_Type = 0x05
+	PWR_FLAG_CPU2_HOLD  PWR_FLAG_Type = 0x06
+	PWR_FLAG2_STOP      PWR_FLAG_Type = 0x07
+	PWR_FLAG2_SB_D1     PWR_FLAG_Type = 0x08
+	PWR_FLAG2_SB_D2     PWR_FLAG_Type = 0x09
+	PWR_FLAG2_SB        PWR_FLAG_Type = 0x0A
+	PWR_FLAG_PVDO       PWR_FLAG_Type = 0x0B
+	PWR_FLAG_AVDO       PWR_FLAG_Type = 0x0C
+	PWR_FLAG_ACTVOSRDY  PWR_FLAG_Type = 0x0D
+	PWR_FLAG_ACTVOS     PWR_FLAG_Type = 0x0E
+	PWR_FLAG_BRR        PWR_FLAG_Type = 0x0F
+	PWR_FLAG_VOSRDY     PWR_FLAG_Type = 0x10
+	PWR_FLAG_SMPSEXTRDY PWR_FLAG_Type = 0x11
+	PWR_FLAG_MMCVDO     PWR_FLAG_Type = 0x12
+	PWR_FLAG_USB33RDY   PWR_FLAG_Type = 0x13
+	PWR_FLAG_TEMPH      PWR_FLAG_Type = 0x14
+	PWR_FLAG_TEMPL      PWR_FLAG_Type = 0x15
+	PWR_FLAG_VBATH      PWR_FLAG_Type = 0x16
+	PWR_FLAG_VBATL      PWR_FLAG_Type = 0x17
 
-	// Set the power supply configuration
-	pwr.PWR_CR3.ReplaceBits(supplySource, PWR_SUPPLY_CONFIG_MASK, 0)
+	PWR_FLAG_WKUP1 PWR_FLAG_Type = PWR_PWR_WKUPCR_WKUPC1_Msk
+	PWR_FLAG_WKUP2 PWR_FLAG_Type = PWR_PWR_WKUPCR_WKUPC2_Msk
+	PWR_FLAG_WKUP3 PWR_FLAG_Type = PWR_PWR_WKUPCR_WKUPC3_Msk
+	PWR_FLAG_WKUP4 PWR_FLAG_Type = PWR_PWR_WKUPCR_WKUPC4_Msk
+	PWR_FLAG_WKUP5 PWR_FLAG_Type = PWR_PWR_WKUPCR_WKUPC5_Msk
+	PWR_FLAG_WKUP6 PWR_FLAG_Type = PWR_PWR_WKUPCR_WKUPC6_Msk
+)
 
-	// Wait until voltage level flag is set
-	start := ticks()
-	for !PWR_FLAG_ACTVOSRDY.Get() {
-		if ticks()-start > PWR_FLAG_SETTING_DELAY {
-			return false // timeout
-		}
-	}
-
-	/* When the SMPS supplies external circuits verify that SDEXTRDY flag is set */
-	if (supplySource == PWR_SMPS_1V8_SUPPLIES_EXT_AND_LDO) ||
-		(supplySource == PWR_SMPS_2V5_SUPPLIES_EXT_AND_LDO) ||
-		(supplySource == PWR_SMPS_1V8_SUPPLIES_EXT) ||
-		(supplySource == PWR_SMPS_2V5_SUPPLIES_EXT) {
-
-		// Wait till SMPS external supply ready flag is set
-		start = ticks()
-		for !PWR_FLAG_SMPSEXTRDY.Get() {
-			if ticks()-start > PWR_FLAG_SETTING_DELAY {
-				return false // timeout
-			}
-		}
-	}
-
-	switch voltageScale {
-	case PWR_REGULATOR_VOLTAGE_SCALE0:
-		// Configure the voltage scaling 1
-		pwr.PWR_D3CR.ReplaceBits(PWR_REGULATOR_VOLTAGE_SCALE1, PWR_PWR_D3CR_VOS_Msk, 0)
-		// Enable the PWR overdrive
-		SYSCFG_PWRCR.SetBits(SYSCFG_PWRCR_ODEN)
-	default:
-		// Disable the PWR overdrive
-		SYSCFG_PWRCR.ClearBits(SYSCFG_PWRCR_ODEN)
-		// Configure the voltage scaling x
-		pwr.PWR_D3CR.ReplaceBits(voltageScale, PWR_PWR_D3CR_VOS_Msk, 0)
-	}
-
-	return true
-}
-
-func (f PWR_FLAG) Get() bool {
+func (f PWR_FLAG_Type) Get() bool {
 	switch f {
 	case PWR_FLAG_PVDO:
 		return PWR_PWR_CSR1_PVDO_Msk == (PWR.PWR_CSR1.Get() & PWR_PWR_CSR1_PVDO_Msk)

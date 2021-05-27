@@ -13,6 +13,111 @@ import (
 	"unsafe"
 )
 
+// SCB registers that were not automatically exported in the target SVD.
+var (
+	SCB_SHCSR   = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(SCB)) + 0x024))) // Offset: 0x024 (R/W)  System Handler Control and State Register
+	SCB_CCSIDR  = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(SCB)) + 0x080))) // Offset: 0x080 (R/ )  Cache Size ID Register
+	SCB_CSSELR  = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(SCB)) + 0x084))) // Offset: 0x084 (R/W)  Cache Size Selection Register
+	SCB_ICIALLU = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(SCB)) + 0x250))) // Offset: 0x250 ( /W)  I-Cache Invalidate All to PoU
+	SCB_DCISW   = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(SCB)) + 0x260))) // Offset: 0x260 ( /W)  D-Cache Invalidate by Set-way
+	SCB_DCCISW  = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(SCB)) + 0x274))) // Offset: 0x274 ( /W)  D-Cache Clean and Invalidate by Set-way
+)
+
+func EnableICache(enable bool) {
+	if enable == SCB.CCR.HasBits(SCB_CCR_ICACHEEN_Msk) {
+		return
+	}
+	if enable {
+		arm.AsmFull(`
+			dsb 0xF
+			isb 0xF
+		`, nil)
+		SCB_ICIALLU.Set(0)
+		arm.AsmFull(`
+			dsb 0xF
+			isb 0xF
+		`, nil)
+		SCB.CCR.SetBits(SCB_CCR_ICACHEEN_Msk)
+		arm.AsmFull(`
+			dsb 0xF
+			isb 0xF
+		`, nil)
+	} else {
+		arm.AsmFull(`
+			dsb 0xF
+			isb 0xF
+		`, nil)
+		SCB.CCR.ClearBits(SCB_CCR_ICACHEEN_Msk)
+		SCB_ICIALLU.Set(0)
+		arm.AsmFull(`
+			dsb 0xF
+			isb 0xF
+		`, nil)
+	}
+}
+
+var (
+	scbDcci volatile.Register32
+	scbSets volatile.Register32
+	scbWays volatile.Register32
+)
+
+func EnableDCache(enable bool) {
+	if enable == SCB.CCR.HasBits(SCB_CCR_DCACHEEN_Msk) {
+		return
+	}
+	if enable {
+		SCB_CSSELR.Set(0)
+		arm.AsmFull(`
+			dsb 0xF
+		`, nil)
+		scbDcci.Set(SCB_CCSIDR.Get())
+		scbSets.Set((scbDcci.Get() & SCB_DCCISW_NUMSETS_Msk) >> SCB_DCCISW_NUMSETS_Pos)
+		for scbSets.Get() != 0 {
+			scbWays.Set((scbDcci.Get() & SCB_DCCISW_ASSOC_Msk) >> SCB_DCCISW_ASSOC_Pos)
+			for scbWays.Get() != 0 {
+				SCB_DCISW.Set(((scbSets.Get() << SCB_DCISW_SET_Pos) & SCB_DCISW_SET_Msk) |
+					((scbWays.Get() << SCB_DCISW_WAY_Pos) & SCB_DCISW_WAY_Msk))
+				scbWays.Set(scbWays.Get() - 1)
+			}
+			scbSets.Set(scbSets.Get() - 1)
+		}
+		arm.AsmFull(`
+			dsb 0xF
+		`, nil)
+		SCB.CCR.SetBits(SCB_CCR_DCACHEEN_Msk)
+		arm.AsmFull(`
+			dsb 0xF
+			isb 0xF
+		`, nil)
+	} else {
+		var ()
+		SCB_CSSELR.Set(0)
+		arm.AsmFull(`
+			dsb 0xF
+		`, nil)
+		SCB.CCR.ClearBits(SCB_CCR_DCACHEEN_Msk)
+		arm.AsmFull(`
+			dsb 0xF
+		`, nil)
+		scbDcci.Set(SCB_CCSIDR.Get())
+		scbSets.Set((scbDcci.Get() & SCB_DCCISW_NUMSETS_Msk) >> SCB_DCCISW_NUMSETS_Pos)
+		for scbSets.Get() != 0 {
+			scbWays.Set((scbDcci.Get() & SCB_DCCISW_ASSOC_Msk) >> SCB_DCCISW_ASSOC_Pos)
+			for scbWays.Get() != 0 {
+				SCB_DCCISW.Set(((scbSets.Get() << SCB_DCCISW_SET_Pos) & SCB_DCCISW_SET_Msk) |
+					((scbWays.Get() << SCB_DCCISW_WAY_Pos) & SCB_DCCISW_WAY_Msk))
+				scbWays.Set(scbWays.Get() - 1)
+			}
+			scbSets.Set(scbSets.Get() - 1)
+		}
+		arm.AsmFull(`
+			dsb 0xF
+			isb 0xF
+		`, nil)
+	}
+}
+
 const (
 	SCB_CCR_ICACHEEN_Pos = 17                          // SCB CCR: IC Position
 	SCB_CCR_ICACHEEN_Msk = (1 << SCB_CCR_ICACHEEN_Pos) // SCB CCR: IC Mask
@@ -62,113 +167,3 @@ const (
 	SCB_SHCSR_MEMFAULTACT_Pos    = 0                                 // SCB SHCSR: MEMFAULTACT Position
 	SCB_SHCSR_MEMFAULTACT_Msk    = 1 << SCB_SHCSR_MEMFAULTACT_Pos    // SCB SHCSR: MEMFAULTACT Mask
 )
-
-var (
-	// Offset: 0x080 (R/ )  Cache Size ID Register
-	SCB_CCSIDR = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(SCB)) + 0x080)))
-	// Offset: 0x084 (R/W)  Cache Size Selection Register
-	SCB_CSSELR = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(SCB)) + 0x084)))
-	// Offset: 0x250 ( /W)  I-Cache Invalidate All to PoU
-	SCB_ICIALLU = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(SCB)) + 0x250)))
-	// Offset: 0x260 ( /W)  D-Cache Invalidate by Set-way
-	SCB_DCISW = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(SCB)) + 0x260)))
-	// Offset: 0x274 ( /W)  D-Cache Clean and Invalidate by Set-way
-	SCB_DCCISW = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(SCB)) + 0x274)))
-	// Offset: 0x024 (R/W)  System Handler Control and State Register
-	SCB_SHCSR = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(SCB)) + 0x024)))
-)
-
-func (scb *SCB_Type) EnableICache(enable bool) {
-	if enable == scb.CCR.HasBits(SCB_CCR_ICACHEEN_Msk) {
-		return
-	}
-	if enable {
-		arm.AsmFull(`
-			dsb 0xF
-			isb 0xF
-		`, nil)
-		SCB_ICIALLU.Set(0)
-		arm.AsmFull(`
-			dsb 0xF
-			isb 0xF
-		`, nil)
-		scb.CCR.SetBits(SCB_CCR_ICACHEEN_Msk)
-		arm.AsmFull(`
-			dsb 0xF
-			isb 0xF
-		`, nil)
-	} else {
-		arm.AsmFull(`
-			dsb 0xF
-			isb 0xF
-		`, nil)
-		scb.CCR.ClearBits(SCB_CCR_ICACHEEN_Msk)
-		SCB_ICIALLU.Set(0)
-		arm.AsmFull(`
-			dsb 0xF
-			isb 0xF
-		`, nil)
-	}
-}
-
-var (
-	scbDcci volatile.Register32
-	scbSets volatile.Register32
-	scbWays volatile.Register32
-)
-
-func (scb *SCB_Type) EnableDCache(enable bool) {
-	if enable == scb.CCR.HasBits(SCB_CCR_DCACHEEN_Msk) {
-		return
-	}
-	if enable {
-		SCB_CSSELR.Set(0)
-		arm.AsmFull(`
-			dsb 0xF
-		`, nil)
-		scbDcci.Set(SCB_CCSIDR.Get())
-		scbSets.Set((scbDcci.Get() & SCB_DCCISW_NUMSETS_Msk) >> SCB_DCCISW_NUMSETS_Pos)
-		for scbSets.Get() != 0 {
-			scbWays.Set((scbDcci.Get() & SCB_DCCISW_ASSOC_Msk) >> SCB_DCCISW_ASSOC_Pos)
-			for scbWays.Get() != 0 {
-				SCB_DCISW.Set(((scbSets.Get() << SCB_DCISW_SET_Pos) & SCB_DCISW_SET_Msk) |
-					((scbWays.Get() << SCB_DCISW_WAY_Pos) & SCB_DCISW_WAY_Msk))
-				scbWays.Set(scbWays.Get() - 1)
-			}
-			scbSets.Set(scbSets.Get() - 1)
-		}
-		arm.AsmFull(`
-			dsb 0xF
-		`, nil)
-		scb.CCR.SetBits(SCB_CCR_DCACHEEN_Msk)
-		arm.AsmFull(`
-			dsb 0xF
-			isb 0xF
-		`, nil)
-	} else {
-		var ()
-		SCB_CSSELR.Set(0)
-		arm.AsmFull(`
-			dsb 0xF
-		`, nil)
-		scb.CCR.ClearBits(SCB_CCR_DCACHEEN_Msk)
-		arm.AsmFull(`
-			dsb 0xF
-		`, nil)
-		scbDcci.Set(SCB_CCSIDR.Get())
-		scbSets.Set((scbDcci.Get() & SCB_DCCISW_NUMSETS_Msk) >> SCB_DCCISW_NUMSETS_Pos)
-		for scbSets.Get() != 0 {
-			scbWays.Set((scbDcci.Get() & SCB_DCCISW_ASSOC_Msk) >> SCB_DCCISW_ASSOC_Pos)
-			for scbWays.Get() != 0 {
-				SCB_DCCISW.Set(((scbSets.Get() << SCB_DCCISW_SET_Pos) & SCB_DCCISW_SET_Msk) |
-					((scbWays.Get() << SCB_DCCISW_WAY_Pos) & SCB_DCCISW_WAY_Msk))
-				scbWays.Set(scbWays.Get() - 1)
-			}
-			scbSets.Set(scbSets.Get() - 1)
-		}
-		arm.AsmFull(`
-			dsb 0xF
-			isb 0xF
-		`, nil)
-	}
-}

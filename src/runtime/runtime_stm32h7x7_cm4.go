@@ -9,16 +9,8 @@ import (
 	"unsafe"
 )
 
-//go:extern _svectors
-var _svectors [0]uint8
-
-//go:extern _evectors
-var _evectors [0]uint8
-
-//go:extern _svtor
-var _svtor [0]uint8 // vectors location in RAM
-
 func initCore() {
+
 	// Nothing to do:
 	//   - Core registers initialization is handled by M7 core.
 }
@@ -27,13 +19,14 @@ func initVectors() {
 
 	// Initialize VTOR with vectors in flash
 	vtor := uintptr(unsafe.Pointer(&_svectors))
-	stm32.SCB.VTOR.Set(uint32(vtor))
+	arm.SCB.VTOR.Set(uint32(vtor))
 
 	// TODO: copy vectors to SRAM? I don't believe the M4 core can access any of
 	//       the TCM regions, so VTOR cannot point to ITCM/DTCM.
 }
 
 func initMemory() {
+
 	// Nothing to do:
 	//   - MPU disabled on both cores for now
 	//   - Cache features are only available on Cortex-M7 (and M33) core.
@@ -43,12 +36,13 @@ func initSync() {
 
 	// SEVONPEND enabled so that an interrupt coming from the CPU(n) interrupt
 	// signal is detectable by the CPU after a WFI/WFE instruction.
-	stm32.SCB.SCR.SetBits(stm32.SCB_SCR_SEVEONPEND)
+	arm.SCB.SCR.SetBits(arm.SCB_SCR_SEVONPEND)
 
+	// Enable hardware semaphore (HSEM) clock
 	_ = machine.EnableClock(unsafe.Pointer(stm32.HSEM), true)
 
 	// Enable FLASH access from D2 power domain
-	_ = machine.Allocate(unsafe.Pointer(stm32.FLASH), stm32.RCC_CORE2)
+	_ = stm32.Allocate(unsafe.Pointer(stm32.FLASH), stm32.RCC_CORE2)
 
 	// Verify we are booting with the M4 core clock gated by the M7 core.
 	// We should always enter this block, unless the bootloader option bytes are
@@ -58,23 +52,23 @@ func initSync() {
 	if !stm32.IsBootM4() {
 
 		// Activate HSEM notification for M4 core
-		stm32.HSEM_CORE2.IER.SetBits(1 << hsemSTOP)
+		stm32.HSEM_CORE2.IER.SetBits(1 << machine.SemSTOP)
 
 		// Put M4 core in deep-sleep mode, waiting for M7 core to complete system
 		// initialization.
 		stm32.PWR.PWR_CR1.ClearBits(stm32.PWR_PWR_CR1_LPDS)
 		stm32.PWR_CPU1CR.ClearBits(stm32.PWR_PWR_CPUCR_PDDS_D2)
 		stm32.PWR_CPU2CR.ClearBits(stm32.PWR_PWR_CPUCR_PDDS_D2)
-		stm32.SCB.SCR.SetBits(stm32.SCB_SCR_SLEEPDEEP_Msk)
+		arm.SCB.SCR.SetBits(arm.SCB_SCR_SLEEPDEEP_Msk)
 		arm.AsmFull(`
 			dsb 0xF
 			isb 0xF
 			wfe
 		`, nil)
 
-		stm32.SCB.SCR.ClearBits(stm32.SCB_SCR_SLEEPDEEP_Msk)
-		stm32.HSEM_CORE2.IER.ClearBits(1 << hsemSTOP)
-		stm32.HSEM_CORE2.ICR.Set(1 << hsemSTOP)
+		arm.SCB.SCR.ClearBits(arm.SCB_SCR_SLEEPDEEP_Msk)
+		stm32.HSEM_CORE2.IER.ClearBits(1 << machine.SemSTOP)
+		stm32.HSEM_CORE2.ICR.Set(1 << machine.SemSTOP)
 	}
 }
 
@@ -88,6 +82,7 @@ func initAccel() {
 }
 
 func initCoreClocks() {
+
 	// Nothing to do:
 	//   - Core clocks initialization is handled by M7 core.
 }
@@ -115,6 +110,6 @@ func initCoreSysTick(clk stm32.RCC_CLK_Type) {
 		arm.SYST_CSR_TICKINT_Msk | arm.SYST_CSR_ENABLE_Msk)
 
 	// set SysTick and PendSV priority to 32
-	stm32.SCB.SHPR3.Set((0x20 << stm32.SCB_SHPR3_PRI_15_Pos) |
-		(0x20 << stm32.SCB_SHPR3_PRI_14_Pos))
+	arm.SCB.SHPR3.Set((0x20 << arm.SCB_SHPR3_PRI_15_Pos) |
+		(0x20 << arm.SCB_SHPR3_PRI_14_Pos))
 }

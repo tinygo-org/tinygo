@@ -9,10 +9,6 @@
 
 package machine
 
-// CPU identifies the current operating core of the dual-core MCU.
-// The Cortex-M7 is core 0, and the Cortex-M4 is core 1.
-const CPU = cpuCore
-
 // GPIO Pins
 const (
 	D0  = PH15

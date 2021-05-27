@@ -3,7 +3,7 @@
 // of the STM32H7x7 family of dual-core MCUs.
 // These definitions are applicable to both the Cortex-M7 and Cortex-M4 cores.
 
-// +build stm32h7x7_cm4 stm32h7x7_cm7
+// +build stm32h7x7
 
 package stm32
 
@@ -411,10 +411,3 @@ const (
 	FLASH_ECC_FA_FAIL_ECC_ADDR_Msk = 0x7FFF << FLASH_ECC_FA_FAIL_ECC_ADDR_Pos // 0x00007FFF
 	FLASH_ECC_FA_FAIL_ECC_ADDR     = FLASH_ECC_FA_FAIL_ECC_ADDR_Msk           // ECC error address
 )
-
-// SetLatency sets the number of CPU wait states (0-15) for flash accesses.
-func (f *FLASH_Type) SetLatency(latency uint32) {
-	FLASH.ACR.ReplaceBits(latency, FLASH_ACR_LATENCY_Msk, 0)
-	for latency != FLASH.ACR.Get()&FLASH_ACR_LATENCY_Msk {
-	} // block until register reflects requested latency
-}

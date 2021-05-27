@@ -5,43 +5,10 @@ package runtime
 // This file implements the common types and operations available when running
 // in either the Cortex-M7 or Cortex-M4 context.
 
-// +-------------+-----------+
-// |   SYSCLK    |  480 MHz  |  <-  M7 CPU, M7 SysTick
-// |   AHBCLK    |  240 MHz  |  <-  M4 CPU, M4 SysTick, AXI Periphs
-// |  APB1CLK    |  120 MHz  |  <-  APB1 Periphs
-// |  APB1CLK(*) |  240 MHz  |  <-  APB1 xTIMs
-// |  APB2CLK    |  120 MHz  |  <-  APB2 Periphs
-// |  APB2CLK(*) |  240 MHz  |  <-  APB2 xTIMs
-// |  APB3CLK    |  120 MHz  |  <-  APB3 Periphs
-// |  APB4CLK    |  120 MHz  |  <-  APB4 Periphs, APB4 xTIMs
-// |  AHB4CLK    |  240 MHz  |  <-  AHB4 Periphs
-// +-------------+-----------+
-
-// +---------+----------+
-// |    HSE  |  25 MHz  | High-speed, External
-// |    LSE  |  32 kHz  | Low-speed, External
-// |    HSI  |  64 MHz  | High-speed Internal
-// |    CSI  |   4 MHz  | Low-power, Internal
-// |    LSI  |  32 kHz  | Low-speed, Internal
-// +---------+----------+
-// |  HSI48  |  48 MHz  |  <-  USB PHY
-// +---------+----------+
-
 import (
 	"device/stm32"
 	"runtime/volatile"
 	"unsafe"
-)
-
-type hsemID uint8
-
-const (
-	hsemRNG hsemID = iota
-	hsemPKA
-	hsemFLASH
-	hsemRCC
-	hsemSTOP
-	hsemGPIO
 )
 
 func initSystem() {
@@ -69,7 +36,7 @@ func initClocks() {
 
 	// Initialize SysTick with timebase out of reset -- needed for supporting
 	// timeout functionality when adjusting core clock frequencies below.
-	initSysTick(stm32.RCC.ClockFreq())
+	initSysTick(stm32.ClockFreq())
 
 	// Configure core clocks to final frequency:
 	//   Cortex-M7: 480 MHz

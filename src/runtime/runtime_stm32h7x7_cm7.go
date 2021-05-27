@@ -9,15 +9,6 @@ import (
 	"unsafe"
 )
 
-//go:extern _svectors
-var _svectors [0]uint8
-
-//go:extern _evectors
-var _evectors [0]uint8
-
-//go:extern _svtor
-var _svtor [0]uint8 // vectors location in RAM
-
 func initCore() {
 
 	// Increasing CPU frequency
@@ -55,7 +46,7 @@ func initCore() {
 	stm32.EXTI_CORE2.EMR3.SetBits(0x4000)
 
 	// Check if STM32H7 revision prior to revision B
-	if stm32.DBG.MCURevision() < stm32.DBG_MCU_REVISION_B {
+	if stm32.MCURevision() < stm32.DBGMCU_MCU_REVISION_B {
 		// Change the switch matrix read issuing capability to 1 for the AXI SRAM
 		// target (Target 7)
 		((*volatile.Register32)(unsafe.Pointer(uintptr(0x51008108)))).Set(1)
@@ -69,6 +60,7 @@ func initCore() {
 }
 
 func initVectors() {
+
 	if false {
 		// Initialize VTOR with vectors in flash
 		src := unsafe.Pointer(&_svectors)
@@ -92,12 +84,12 @@ func initMemory() {
 	// Disable MPU (for now). See the comment above the call to initSystem()
 	// within runtime.main(), which outlines the steps required to enable support
 	// for the MPU (...if its even desired or necessary?).
-	_ = stm32.MPU.Enable(false)
+	_ = stm32.EnableMPU(false)
 
 	// Enable CPU instruction cache (I-CACHE)
-	stm32.SCB.EnableICache(true)
+	stm32.EnableICache(true)
 	// Enable CPU data cache (D-CACHE)
-	stm32.SCB.EnableDCache(true)
+	stm32.EnableDCache(true)
 }
 
 func initSync() {
@@ -106,18 +98,19 @@ func initSync() {
 	// signal is detectable by the CPU after a WFI/WFE instruction.
 	stm32.SCB.SCR.SetBits(stm32.SCB_SCR_SEVEONPEND)
 
+	// Enable hardware semaphore (HSEM) clock
 	_ = machine.EnableClock(unsafe.Pointer(stm32.HSEM), true)
 }
 
 func initAccel() {
+
 	// TBD: Configure ART on Cortex-M7 core? Currently enabled by Cortex-M4 core.
 }
 
 func initCoreClocks() {
 
-	// First enable SYSCFG and GPIO peripheral clocks
+	// First enable SYSCFG clock
 	_ = machine.EnableClock(unsafe.Pointer(stm32.SYSCFG), true)
-	// _ = enableGPIO()
 
 	initLowSpeedCrystal(lseDriveLow)
 
@@ -144,12 +137,13 @@ const (
 )
 
 func initLowSpeedCrystal(drive uint32) {
+
 	if !stm32.RCC.BDCR.HasBits(stm32.RCC_BDCR_LSERDY) {
 		// LSE is in the backup domain (DBP) and write access is denied to DBP after
 		// reset, so we first have to enable write access for DBP before configuring.
 		stm32.PWR.PWR_CR1.SetBits(stm32.PWR_PWR_CR1_DBP)
 		if (lseDriveMedLow <= drive && drive <= lseDriveMedHigh) &&
-			stm32.DBG.MCURevision() <= stm32.DBG_MCU_REVISION_Y {
+			stm32.MCURevision() <= stm32.DBGMCU_MCU_REVISION_Y {
 			drive = ^drive & stm32.RCC_BDCR_LSEDRV_Msk
 		}
 		stm32.RCC.BDCR.ReplaceBits(drive, stm32.RCC_BDCR_LSEDRV_Msk, 0)
@@ -161,10 +155,11 @@ func initCoreFreq(bypass, lowSpeed bool) (stm32.RCC_CLK_Type, bool) {
 	// First need to change SYSCLK source to CSI before modifying the main PLL
 	if stm32.RCC_PLL_SRC_HSE == (stm32.RCC.PLLCKSELR.Get()&
 		stm32.RCC_PLLCKSELR_PLLSRC_Msk)>>stm32.RCC_PLLCKSELR_PLLSRC_Pos {
-		if !stm32.RCC.ConfigCLK(stm32.RCC_CLK_CFG_Type{
+		config := stm32.RCC_CLK_CFG_Type{
 			CLK:    stm32.RCC_CLK_SYSCLK,
 			SYSSrc: stm32.RCC_SYS_SRC_CSI,
-		}, stm32.FLASH_ACR_LATENCY_1WS) {
+		}
+		if !config.Set(stm32.FLASH_ACR_LATENCY_1WS) {
 			return stm32.RCC_CLK_Type{}, false
 		}
 	}
@@ -180,7 +175,7 @@ func initCoreFreq(bypass, lowSpeed bool) (stm32.RCC_CLK_Type, bool) {
 	if lowSpeed {
 		scale = stm32.PWR_REGULATOR_VOLTAGE_SCALE3
 	}
-	if !stm32.PWR.Configure(stm32.PWR_SMPS_1V8_SUPPLIES_LDO, scale) {
+	if !stm32.SetPowerSupply(stm32.PWR_SMPS_1V8_SUPPLIES_LDO, scale) {
 		return stm32.RCC_CLK_Type{}, false
 	}
 
@@ -216,7 +211,7 @@ func initCoreFreq(bypass, lowSpeed bool) (stm32.RCC_CLK_Type, bool) {
 		osc.PLL1.Div.N = 40
 	}
 
-	if !stm32.RCC.ConfigOSC(osc) {
+	if !osc.Set() {
 		return stm32.RCC_CLK_Type{}, false
 	}
 
@@ -225,26 +220,27 @@ func initCoreFreq(bypass, lowSpeed bool) (stm32.RCC_CLK_Type, bool) {
 		latency = stm32.FLASH_ACR_LATENCY_0WS
 	}
 
-	if !stm32.RCC.ConfigCLK(
-		stm32.RCC_CLK_CFG_Type{
-			CLK: stm32.RCC_CLK_SYSCLK | stm32.RCC_CLK_HCLK |
-				stm32.RCC_CLK_PCLK1 | stm32.RCC_CLK_PCLK2 |
-				stm32.RCC_CLK_D1PCLK1 | stm32.RCC_CLK_D3PCLK1,
-			SYSSrc:  stm32.RCC_SYS_SRC_PLL1,
-			SYSDiv:  stm32.RCC_D1CFGR_D1CPRE_DIV1,
-			AHBDiv:  stm32.RCC_D1CFGR_HPRE_DIV2,
-			APB1Div: stm32.RCC_D2CFGR_D2PPRE1_DIV2,
-			APB2Div: stm32.RCC_D2CFGR_D2PPRE2_DIV2,
-			APB3Div: stm32.RCC_D1CFGR_D1PPRE_DIV2,
-			APB4Div: stm32.RCC_D3CFGR_D3PPRE_DIV2,
-		}, latency) {
+	config := stm32.RCC_CLK_CFG_Type{
+		CLK: stm32.RCC_CLK_SYSCLK | stm32.RCC_CLK_HCLK |
+			stm32.RCC_CLK_PCLK1 | stm32.RCC_CLK_PCLK2 |
+			stm32.RCC_CLK_D1PCLK1 | stm32.RCC_CLK_D3PCLK1,
+		SYSSrc:  stm32.RCC_SYS_SRC_PLL1,
+		SYSDiv:  stm32.RCC_D1CFGR_D1CPRE_DIV1,
+		AHBDiv:  stm32.RCC_D1CFGR_HPRE_DIV2,
+		APB1Div: stm32.RCC_D2CFGR_D2PPRE1_DIV2,
+		APB2Div: stm32.RCC_D2CFGR_D2PPRE2_DIV2,
+		APB3Div: stm32.RCC_D1CFGR_D1PPRE_DIV2,
+		APB4Div: stm32.RCC_D3CFGR_D3PPRE_DIV2,
+	}
+
+	if !config.Set(latency) {
 		return stm32.RCC_CLK_Type{}, false
 	}
 
 	// TODO: enable USB regulator, VBUS detection
 
 	// Return the clock frequencies derived from the active core configuration.
-	return stm32.RCC.ClockFreq(), true
+	return stm32.ClockFreq(), true
 }
 
 // Do not use directly -- call initSysTick instead, which also initializes the
