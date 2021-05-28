@@ -10,7 +10,7 @@
     "stm32"
   ],
   "linkerscript":
-    "targets/stm32h7x7-cm7.ld",
+    "targets/stm32h7x5-cm7.ld",
   "extra-files": [
     "src/device/stm32/stm32h7x5_cm7.s"
   ],
