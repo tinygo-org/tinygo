@@ -1,11 +1,11 @@
 MEMORY
 {
-  FLASH   (rx) : ORIGIN = 0x08040000, LENGTH = 1024K /* M7 code + bootloader */
-  ITCM   (rwx) : ORIGIN = 0x00000000, LENGTH =   64K /* M7 VTOR/ISRs */
-  DTCM   (rwx) : ORIGIN = 0x20000000, LENGTH =  128K /* M7 stack/heap */
-  SRAMD1 (rwx) : ORIGIN = 0x24000000, LENGTH =  512K /* M7 globals */
-  SRAMD2 (rwx) : ORIGIN = 0x30000000, LENGTH =  288K /* M4 stack/heap/globals */
-  SRAMD3 (rwx) : ORIGIN = 0x38000000, LENGTH =   64K /* M7+M4 shared */
+  FLASH   (rx) : ORIGIN = 0x08040000, LENGTH = 768K /* M7 code + bootloader */
+  ITCM   (rwx) : ORIGIN = 0x00000000, LENGTH =  64K /* M7 VTOR/ISRs */
+  DTCM   (rwx) : ORIGIN = 0x20000000, LENGTH = 128K /* M7 stack/heap */
+  SRAMD1 (rwx) : ORIGIN = 0x24000000, LENGTH = 512K /* M7 globals */
+  SRAMD2 (rwx) : ORIGIN = 0x30000000, LENGTH = 288K /* M4 stack/heap/globals */
+  SRAMD3 (rwx) : ORIGIN = 0x38000000, LENGTH =  64K /* M7+M4 shared */
 }
 
 ENTRY(Reset_Handler);
