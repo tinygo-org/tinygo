@@ -4,15 +4,15 @@
   ],
   "build-tags": [
     "portenta_h7",
-    "stm32h7x7_cm4",
-    "stm32h7x7",
+    "stm32h7x5_cm4",
+    "stm32h7x5",
     "stm32h7",
     "stm32"
   ],
   "linkerscript":
     "targets/stm32h7x7-cm4.ld",
   "extra-files": [
-    "src/device/stm32/stm32h7x7_cm4.s"
+    "src/device/stm32/stm32h7x5_cm4.s"
   ],
   "flash-command":
     "dfu-util --wait --device=0x2341:0x035B --alt=0 --download={bin} --dfuse-address=0x08100000:leave"

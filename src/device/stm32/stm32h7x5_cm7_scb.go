@@ -1,9 +1,9 @@
 // Hand created file. DO NOT DELETE.
 // Type definitions, fields, and constants associated with the SCB peripheral of
-// the STM32H7x7 family of dual-core MCUs.
+// the STM32H7x5 family of dual-core MCUs.
 // These definitions are applicable to the Cortex-M7 core only.
 
-// +build stm32h7x7_cm7
+// +build stm32h7x5_cm7
 
 package stm32
 
@@ -24,7 +24,7 @@ var (
 )
 
 func EnableICache(enable bool) {
-	if enable == SCB.CCR.HasBits(SCB_CCR_ICACHEEN_Msk) {
+	if enable == arm.SCB.CCR.HasBits(SCB_CCR_ICACHEEN_Msk) {
 		return
 	}
 	if enable {
@@ -37,7 +37,7 @@ func EnableICache(enable bool) {
 			dsb 0xF
 			isb 0xF
 		`, nil)
-		SCB.CCR.SetBits(SCB_CCR_ICACHEEN_Msk)
+		arm.SCB.CCR.SetBits(SCB_CCR_ICACHEEN_Msk)
 		arm.AsmFull(`
 			dsb 0xF
 			isb 0xF
@@ -47,7 +47,7 @@ func EnableICache(enable bool) {
 			dsb 0xF
 			isb 0xF
 		`, nil)
-		SCB.CCR.ClearBits(SCB_CCR_ICACHEEN_Msk)
+		arm.SCB.CCR.ClearBits(SCB_CCR_ICACHEEN_Msk)
 		SCB_ICIALLU.Set(0)
 		arm.AsmFull(`
 			dsb 0xF
@@ -63,7 +63,7 @@ var (
 )
 
 func EnableDCache(enable bool) {
-	if enable == SCB.CCR.HasBits(SCB_CCR_DCACHEEN_Msk) {
+	if enable == arm.SCB.CCR.HasBits(SCB_CCR_DCACHEEN_Msk) {
 		return
 	}
 	if enable {
@@ -85,7 +85,7 @@ func EnableDCache(enable bool) {
 		arm.AsmFull(`
 			dsb 0xF
 		`, nil)
-		SCB.CCR.SetBits(SCB_CCR_DCACHEEN_Msk)
+		arm.SCB.CCR.SetBits(SCB_CCR_DCACHEEN_Msk)
 		arm.AsmFull(`
 			dsb 0xF
 			isb 0xF
@@ -96,7 +96,7 @@ func EnableDCache(enable bool) {
 		arm.AsmFull(`
 			dsb 0xF
 		`, nil)
-		SCB.CCR.ClearBits(SCB_CCR_DCACHEEN_Msk)
+		arm.SCB.CCR.ClearBits(SCB_CCR_DCACHEEN_Msk)
 		arm.AsmFull(`
 			dsb 0xF
 		`, nil)

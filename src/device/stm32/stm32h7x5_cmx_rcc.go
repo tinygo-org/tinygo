@@ -1,9 +1,9 @@
 // Hand created file. DO NOT DELETE.
 // Type definitions, fields, and constants associated with the RCC peripheral of
-// the STM32H7x7 family of dual-core MCUs.
+// the STM32H7x5 family of dual-core MCUs.
 // These definitions are applicable to both the Cortex-M7 and Cortex-M4 cores.
 
-// +build stm32h7x7
+// +build stm32h7x5
 
 package stm32
 
@@ -307,139 +307,6 @@ const (
 )
 
 const (
-	RCC_D1CFGR_HPRE_DIV1       = 0                                 // AHB3 Clock not divided
-	RCC_D1CFGR_HPRE_DIV2_Pos   = 3                                 // //
-	RCC_D1CFGR_HPRE_DIV2_Msk   = 0x1 << RCC_D1CFGR_HPRE_DIV2_Pos   // 0x00000008
-	RCC_D1CFGR_HPRE_DIV2       = RCC_D1CFGR_HPRE_DIV2_Msk          // AHB3 Clock divided by 2
-	RCC_D1CFGR_HPRE_DIV4_Pos   = 0                                 //
-	RCC_D1CFGR_HPRE_DIV4_Msk   = 0x9 << RCC_D1CFGR_HPRE_DIV4_Pos   // 0x00000009
-	RCC_D1CFGR_HPRE_DIV4       = RCC_D1CFGR_HPRE_DIV4_Msk          // AHB3 Clock divided by 4
-	RCC_D1CFGR_HPRE_DIV8_Pos   = 1                                 //
-	RCC_D1CFGR_HPRE_DIV8_Msk   = 0x5 << RCC_D1CFGR_HPRE_DIV8_Pos   // 0x0000000A
-	RCC_D1CFGR_HPRE_DIV8       = RCC_D1CFGR_HPRE_DIV8_Msk          // AHB3 Clock divided by 8
-	RCC_D1CFGR_HPRE_DIV16_Pos  = 0                                 //
-	RCC_D1CFGR_HPRE_DIV16_Msk  = 0xB << RCC_D1CFGR_HPRE_DIV16_Pos  // 0x0000000B
-	RCC_D1CFGR_HPRE_DIV16      = RCC_D1CFGR_HPRE_DIV16_Msk         // AHB3 Clock divided by 16
-	RCC_D1CFGR_HPRE_DIV64_Pos  = 2                                 //
-	RCC_D1CFGR_HPRE_DIV64_Msk  = 0x3 << RCC_D1CFGR_HPRE_DIV64_Pos  // 0x0000000C
-	RCC_D1CFGR_HPRE_DIV64      = RCC_D1CFGR_HPRE_DIV64_Msk         // AHB3 Clock divided by 64
-	RCC_D1CFGR_HPRE_DIV128_Pos = 0                                 //
-	RCC_D1CFGR_HPRE_DIV128_Msk = 0xD << RCC_D1CFGR_HPRE_DIV128_Pos // 0x0000000D
-	RCC_D1CFGR_HPRE_DIV128     = RCC_D1CFGR_HPRE_DIV128_Msk        // AHB3 Clock divided by 128
-	RCC_D1CFGR_HPRE_DIV256_Pos = 1                                 //
-	RCC_D1CFGR_HPRE_DIV256_Msk = 0x7 << RCC_D1CFGR_HPRE_DIV256_Pos // 0x0000000E
-	RCC_D1CFGR_HPRE_DIV256     = RCC_D1CFGR_HPRE_DIV256_Msk        // AHB3 Clock divided by 256
-	RCC_D1CFGR_HPRE_DIV512_Pos = 0                                 //
-	RCC_D1CFGR_HPRE_DIV512_Msk = 0xF << RCC_D1CFGR_HPRE_DIV512_Pos // 0x0000000F
-	RCC_D1CFGR_HPRE_DIV512     = RCC_D1CFGR_HPRE_DIV512_Msk        // AHB3 Clock divided by 512
-
-	RCC_D1CFGR_D1PPRE_DIV1      = 0                                  // APB3 clock not divided
-	RCC_D1CFGR_D1PPRE_DIV2_Pos  = 6                                  //
-	RCC_D1CFGR_D1PPRE_DIV2_Msk  = 0x1 << RCC_D1CFGR_D1PPRE_DIV2_Pos  // 0x00000040
-	RCC_D1CFGR_D1PPRE_DIV2      = RCC_D1CFGR_D1PPRE_DIV2_Msk         // APB3 clock divided by 2
-	RCC_D1CFGR_D1PPRE_DIV4_Pos  = 4                                  //
-	RCC_D1CFGR_D1PPRE_DIV4_Msk  = 0x5 << RCC_D1CFGR_D1PPRE_DIV4_Pos  // 0x00000050
-	RCC_D1CFGR_D1PPRE_DIV4      = RCC_D1CFGR_D1PPRE_DIV4_Msk         // APB3 clock divided by 4
-	RCC_D1CFGR_D1PPRE_DIV8_Pos  = 5                                  //
-	RCC_D1CFGR_D1PPRE_DIV8_Msk  = 0x3 << RCC_D1CFGR_D1PPRE_DIV8_Pos  // 0x00000060
-	RCC_D1CFGR_D1PPRE_DIV8      = RCC_D1CFGR_D1PPRE_DIV8_Msk         // APB3 clock divided by 8
-	RCC_D1CFGR_D1PPRE_DIV16_Pos = 4                                  //
-	RCC_D1CFGR_D1PPRE_DIV16_Msk = 0x7 << RCC_D1CFGR_D1PPRE_DIV16_Pos // 0x00000070
-	RCC_D1CFGR_D1PPRE_DIV16     = RCC_D1CFGR_D1PPRE_DIV16_Msk        // APB3 clock divided by 16
-
-	RCC_D1CFGR_D1CPRE_DIV1       = 0                                   // Domain 1 Core clock not divided
-	RCC_D1CFGR_D1CPRE_DIV2_Pos   = 11                                  //
-	RCC_D1CFGR_D1CPRE_DIV2_Msk   = 0x1 << RCC_D1CFGR_D1CPRE_DIV2_Pos   // 0x00000800
-	RCC_D1CFGR_D1CPRE_DIV2       = RCC_D1CFGR_D1CPRE_DIV2_Msk          // Domain 1 Core clock divided by 2
-	RCC_D1CFGR_D1CPRE_DIV4_Pos   = 8                                   //
-	RCC_D1CFGR_D1CPRE_DIV4_Msk   = 0x9 << RCC_D1CFGR_D1CPRE_DIV4_Pos   // 0x00000900
-	RCC_D1CFGR_D1CPRE_DIV4       = RCC_D1CFGR_D1CPRE_DIV4_Msk          // Domain 1 Core clock divided by 4
-	RCC_D1CFGR_D1CPRE_DIV8_Pos   = 9                                   //
-	RCC_D1CFGR_D1CPRE_DIV8_Msk   = 0x5 << RCC_D1CFGR_D1CPRE_DIV8_Pos   // 0x00000A00
-	RCC_D1CFGR_D1CPRE_DIV8       = RCC_D1CFGR_D1CPRE_DIV8_Msk          // Domain 1 Core clock divided by 8
-	RCC_D1CFGR_D1CPRE_DIV16_Pos  = 8                                   //
-	RCC_D1CFGR_D1CPRE_DIV16_Msk  = 0xB << RCC_D1CFGR_D1CPRE_DIV16_Pos  // 0x00000B00
-	RCC_D1CFGR_D1CPRE_DIV16      = RCC_D1CFGR_D1CPRE_DIV16_Msk         // Domain 1 Core clock divided by 16
-	RCC_D1CFGR_D1CPRE_DIV64_Pos  = 10                                  //
-	RCC_D1CFGR_D1CPRE_DIV64_Msk  = 0x3 << RCC_D1CFGR_D1CPRE_DIV64_Pos  // 0x00000C00
-	RCC_D1CFGR_D1CPRE_DIV64      = RCC_D1CFGR_D1CPRE_DIV64_Msk         // Domain 1 Core clock divided by 64
-	RCC_D1CFGR_D1CPRE_DIV128_Pos = 8                                   //
-	RCC_D1CFGR_D1CPRE_DIV128_Msk = 0xD << RCC_D1CFGR_D1CPRE_DIV128_Pos // 0x00000D00
-	RCC_D1CFGR_D1CPRE_DIV128     = RCC_D1CFGR_D1CPRE_DIV128_Msk        // Domain 1 Core clock divided by 128
-	RCC_D1CFGR_D1CPRE_DIV256_Pos = 9                                   //
-	RCC_D1CFGR_D1CPRE_DIV256_Msk = 0x7 << RCC_D1CFGR_D1CPRE_DIV256_Pos // 0x00000E00
-	RCC_D1CFGR_D1CPRE_DIV256     = RCC_D1CFGR_D1CPRE_DIV256_Msk        // Domain 1 Core clock divided by 256
-	RCC_D1CFGR_D1CPRE_DIV512_Pos = 8                                   //
-	RCC_D1CFGR_D1CPRE_DIV512_Msk = 0xF << RCC_D1CFGR_D1CPRE_DIV512_Pos // 0x00000F00
-	RCC_D1CFGR_D1CPRE_DIV512     = RCC_D1CFGR_D1CPRE_DIV512_Msk        // Domain 1 Core clock divided by 512
-
-	RCC_D2CFGR_D2PPRE1_DIV1      = 0                                   // APB1 clock not divided
-	RCC_D2CFGR_D2PPRE1_DIV2_Pos  = 6                                   //
-	RCC_D2CFGR_D2PPRE1_DIV2_Msk  = 0x1 << RCC_D2CFGR_D2PPRE1_DIV2_Pos  // 0x00000040
-	RCC_D2CFGR_D2PPRE1_DIV2      = RCC_D2CFGR_D2PPRE1_DIV2_Msk         // APB1 clock divided by 2
-	RCC_D2CFGR_D2PPRE1_DIV4_Pos  = 4                                   //
-	RCC_D2CFGR_D2PPRE1_DIV4_Msk  = 0x5 << RCC_D2CFGR_D2PPRE1_DIV4_Pos  // 0x00000050
-	RCC_D2CFGR_D2PPRE1_DIV4      = RCC_D2CFGR_D2PPRE1_DIV4_Msk         // APB1 clock divided by 4
-	RCC_D2CFGR_D2PPRE1_DIV8_Pos  = 5                                   //
-	RCC_D2CFGR_D2PPRE1_DIV8_Msk  = 0x3 << RCC_D2CFGR_D2PPRE1_DIV8_Pos  // 0x00000060
-	RCC_D2CFGR_D2PPRE1_DIV8      = RCC_D2CFGR_D2PPRE1_DIV8_Msk         // APB1 clock divided by 8
-	RCC_D2CFGR_D2PPRE1_DIV16_Pos = 4                                   //
-	RCC_D2CFGR_D2PPRE1_DIV16_Msk = 0x7 << RCC_D2CFGR_D2PPRE1_DIV16_Pos // 0x00000070
-	RCC_D2CFGR_D2PPRE1_DIV16     = RCC_D2CFGR_D2PPRE1_DIV16_Msk        // APB1 clock divided by 16
-
-	RCC_D2CFGR_D2PPRE2_DIV1      = 0                                   // APB2 clock not divided
-	RCC_D2CFGR_D2PPRE2_DIV2_Pos  = 10                                  //
-	RCC_D2CFGR_D2PPRE2_DIV2_Msk  = 0x1 << RCC_D2CFGR_D2PPRE2_DIV2_Pos  // 0x00000400
-	RCC_D2CFGR_D2PPRE2_DIV2      = RCC_D2CFGR_D2PPRE2_DIV2_Msk         // APB2 clock divided by 2
-	RCC_D2CFGR_D2PPRE2_DIV4_Pos  = 8                                   //
-	RCC_D2CFGR_D2PPRE2_DIV4_Msk  = 0x5 << RCC_D2CFGR_D2PPRE2_DIV4_Pos  // 0x00000500
-	RCC_D2CFGR_D2PPRE2_DIV4      = RCC_D2CFGR_D2PPRE2_DIV4_Msk         // APB2 clock divided by 4
-	RCC_D2CFGR_D2PPRE2_DIV8_Pos  = 9                                   //
-	RCC_D2CFGR_D2PPRE2_DIV8_Msk  = 0x3 << RCC_D2CFGR_D2PPRE2_DIV8_Pos  // 0x00000600
-	RCC_D2CFGR_D2PPRE2_DIV8      = RCC_D2CFGR_D2PPRE2_DIV8_Msk         // APB2 clock divided by 8
-	RCC_D2CFGR_D2PPRE2_DIV16_Pos = 8                                   //
-	RCC_D2CFGR_D2PPRE2_DIV16_Msk = 0x7 << RCC_D2CFGR_D2PPRE2_DIV16_Pos // 0x00000700
-	RCC_D2CFGR_D2PPRE2_DIV16     = RCC_D2CFGR_D2PPRE2_DIV16_Msk        // APB2 clock divided by 16
-
-	// The auto-generated TinyGo source contains bitmasks for the wrong table
-	// (RCC_AHB3ENR), and doesn't have those required for RCC_D3CFGR (which has
-	// been recreated from STM32 HAL SDK below). Need to determine if this is a
-	// bug with the SVD itself or the parser/generator.
-
-	RCC_D3CFGR_D3PPRE_Pos       = 4                                  //
-	RCC_D3CFGR_D3PPRE_Msk       = 0x7 << RCC_D3CFGR_D3PPRE_Pos       // 0x00000070
-	RCC_D3CFGR_D3PPRE           = RCC_D3CFGR_D3PPRE_Msk              // D3PPRE1[2:0] bits (APB4 prescaler)
-	RCC_D3CFGR_D3PPRE_DIV1      = 0x00000000                         // APB4 clock not divided
-	RCC_D3CFGR_D3PPRE_DIV2_Pos  = 6                                  //
-	RCC_D3CFGR_D3PPRE_DIV2_Msk  = 0x1 << RCC_D3CFGR_D3PPRE_DIV2_Pos  // 0x00000040
-	RCC_D3CFGR_D3PPRE_DIV2      = RCC_D3CFGR_D3PPRE_DIV2_Msk         // APB4 clock divided by 2
-	RCC_D3CFGR_D3PPRE_DIV4_Pos  = 4                                  //
-	RCC_D3CFGR_D3PPRE_DIV4_Msk  = 0x5 << RCC_D3CFGR_D3PPRE_DIV4_Pos  // 0x00000050
-	RCC_D3CFGR_D3PPRE_DIV4      = RCC_D3CFGR_D3PPRE_DIV4_Msk         // APB4 clock divided by 4
-	RCC_D3CFGR_D3PPRE_DIV8_Pos  = 5                                  //
-	RCC_D3CFGR_D3PPRE_DIV8_Msk  = 0x3 << RCC_D3CFGR_D3PPRE_DIV8_Pos  // 0x00000060
-	RCC_D3CFGR_D3PPRE_DIV8      = RCC_D3CFGR_D3PPRE_DIV8_Msk         // APB4 clock divided by 8
-	RCC_D3CFGR_D3PPRE_DIV16_Pos = 4                                  //
-	RCC_D3CFGR_D3PPRE_DIV16_Msk = 0x7 << RCC_D3CFGR_D3PPRE_DIV16_Pos // 0x00000070
-	RCC_D3CFGR_D3PPRE_DIV16     = RCC_D3CFGR_D3PPRE_DIV16_Msk        // APB4 clock divided by 16
-)
-
-const (
-	RCC_PLL1DIVR_N1_Pos = 0
-	RCC_PLL1DIVR_N1_Msk = 0x1FF << RCC_PLL1DIVR_N1_Pos // 0x000001FF
-	RCC_PLL1DIVR_N1     = RCC_PLL1DIVR_N1_Msk
-	RCC_PLL1DIVR_P1_Pos = 9
-	RCC_PLL1DIVR_P1_Msk = 0x7F << RCC_PLL1DIVR_P1_Pos // 0x0000FE00
-	RCC_PLL1DIVR_P1     = RCC_PLL1DIVR_P1_Msk
-	RCC_PLL1DIVR_Q1_Pos = 16
-	RCC_PLL1DIVR_Q1_Msk = 0x7F << RCC_PLL1DIVR_Q1_Pos // 0x007F0000
-	RCC_PLL1DIVR_Q1     = RCC_PLL1DIVR_Q1_Msk
-	RCC_PLL1DIVR_R1_Pos = 24
-	RCC_PLL1DIVR_R1_Msk = 0x7F << RCC_PLL1DIVR_R1_Pos // 0x7F000000
-	RCC_PLL1DIVR_R1     = RCC_PLL1DIVR_R1_Msk
-)
-
-const (
 	RCC_PLL1_VCI_RANGE_0 = 0x0 << RCC_PLLCFGR_PLL1RGE_Pos // 0x00000000: Clock range frequency between 1 and 2 MHz
 	RCC_PLL1_VCI_RANGE_1 = 0x1 << RCC_PLLCFGR_PLL1RGE_Pos // 0x00000004: Clock range frequency between 2 and 4 MHz
 	RCC_PLL1_VCI_RANGE_2 = 0x2 << RCC_PLLCFGR_PLL1RGE_Pos // 0x00000008: Clock range frequency between 4 and 8 MHz
@@ -468,6 +335,8 @@ const (
 // Set configures the system oscillators using the receiver oscillator
 // configuration struct.
 func (osc RCC_OSC_CFG_Type) Set() bool {
+
+	const revisionY = 0x1003 // STM32H7 revision Y
 
 	sysSrc, pllSrc :=
 		(RCC.CFGR.Get()&RCC_CFGR_SWS_Msk)>>RCC_CFGR_SWS_Pos,
@@ -525,7 +394,8 @@ func (osc RCC_OSC_CFG_Type) Set() bool {
 				return false // cannot disable HSI while driving SYSCLK
 			} else {
 				// apply HSI calibration factor
-				if MCURevision() <= DBGMCU_MCU_REVISION_Y {
+				if ((DBGMCU.IDC.Get() & DBG_IDC_REV_ID_Msk) >> DBG_IDC_REV_ID_Pos) <=
+					revisionY {
 					if osc.HSITrim == RCC_HSITRIM {
 						RCC.HSICFGR.ReplaceBits(
 							0x20<<RCC_HSITRIM_REV_Y_Pos,
@@ -555,7 +425,8 @@ func (osc RCC_OSC_CFG_Type) Set() bool {
 					}
 				}
 				// apply HSI calibration factor
-				if MCURevision() <= DBGMCU_MCU_REVISION_Y {
+				if ((DBGMCU.IDC.Get() & DBG_IDC_REV_ID_Msk) >> DBG_IDC_REV_ID_Pos) <=
+					revisionY {
 					if osc.HSITrim == RCC_HSITRIM {
 						RCC.HSICFGR.ReplaceBits(
 							0x20<<RCC_HSITRIM_REV_Y_Pos,
@@ -592,7 +463,8 @@ func (osc RCC_OSC_CFG_Type) Set() bool {
 				return false // cannot disable HSI while driving SYSCLK
 			} else {
 				// apply CSI calibration factor
-				if MCURevision() <= DBGMCU_MCU_REVISION_Y {
+				if ((DBGMCU.IDC.Get() & DBG_IDC_REV_ID_Msk) >> DBG_IDC_REV_ID_Pos) <=
+					revisionY {
 					if osc.CSITrim == RCC_CSITRIM {
 						RCC.CSICFGR.ReplaceBits(
 							0x10<<RCC_CSITRIM_REV_Y_Pos,
@@ -622,7 +494,8 @@ func (osc RCC_OSC_CFG_Type) Set() bool {
 					}
 				}
 				// apply CSI calibration factor
-				if MCURevision() <= DBGMCU_MCU_REVISION_Y {
+				if ((DBGMCU.IDC.Get() & DBG_IDC_REV_ID_Msk) >> DBG_IDC_REV_ID_Pos) <=
+					revisionY {
 					if osc.CSITrim == RCC_CSITRIM {
 						RCC.CSICFGR.ReplaceBits(
 							0x10<<RCC_CSITRIM_REV_Y_Pos,
@@ -678,7 +551,7 @@ func (osc RCC_OSC_CFG_Type) Set() bool {
 	if osc.OSC&RCC_OSC_HSI48 == RCC_OSC_HSI48 {
 		if osc.HSI48 != RCC_CR_OSCOFF {
 			// Enable HSI48
-			RCC.CR.SetBits(RCC_CR_RC48ON)
+			RCC.CR.SetBits(RCC_CR_HSI48ON)
 			// Verify HSI48 was enabled
 			start := ticks()
 			for !RCC_FLAG_HSI48RDY.Get() {
@@ -688,7 +561,7 @@ func (osc RCC_OSC_CFG_Type) Set() bool {
 			}
 		} else {
 			// Disable HSI48
-			RCC.CR.ClearBits(RCC_CR_RC48ON)
+			RCC.CR.ClearBits(RCC_CR_HSI48ON)
 			// Verify HSI48 was disabled
 			start := ticks()
 			for RCC_FLAG_HSI48RDY.Get() {
@@ -701,10 +574,10 @@ func (osc RCC_OSC_CFG_Type) Set() bool {
 	// Configure LSE
 	if osc.OSC&RCC_OSC_LSE == RCC_OSC_LSE {
 		// ensure write access to backup domain
-		PWR.PWR_CR1.SetBits(PWR_PWR_CR1_DBP)
+		PWR.CR1.SetBits(PWR_CR1_DBP)
 		// bail out with error condition if write protection can't be removed.
 		start := ticks()
-		for !PWR.PWR_CR1.HasBits(PWR_PWR_CR1_DBP) {
+		for !PWR.CR1.HasBits(PWR_CR1_DBP) {
 			if ticks()-start > rccDBPTimeoutMs {
 				return false
 			}
@@ -845,9 +718,8 @@ func (clk RCC_CLK_CFG_Type) Set(latency uint32) bool {
 		}
 	}
 	if clk.CLK&RCC_CLK_D3PCLK1 == RCC_CLK_D3PCLK1 {
-		// See notes below regarding TinyGo source and MCU table "RCC_D3CFGR".
-		if clk.APB4Div > RCC.D3CFGR.Get()&RCC_D3CFGR_D3PPRE {
-			RCC.D3CFGR.ReplaceBits(clk.APB4Div, RCC_D3CFGR_D3PPRE, 0)
+		if clk.APB4Div > RCC.D3CFGR.Get()&RCC_D3CFGR_D3PPRE_Msk {
+			RCC.D3CFGR.ReplaceBits(clk.APB4Div, RCC_D3CFGR_D3PPRE_Msk, 0)
 		}
 	}
 	if clk.CLK&RCC_CLK_HCLK == RCC_CLK_HCLK {
@@ -908,9 +780,8 @@ func (clk RCC_CLK_CFG_Type) Set(latency uint32) bool {
 		}
 	}
 	if clk.CLK&RCC_CLK_D3PCLK1 == RCC_CLK_D3PCLK1 {
-		// See notes below regarding TinyGo source and MCU table "RCC_D3CFGR".
-		if clk.APB4Div < RCC.D3CFGR.Get()&RCC_D3CFGR_D3PPRE {
-			RCC.D3CFGR.ReplaceBits(clk.APB4Div, RCC_D3CFGR_D3PPRE, 0)
+		if clk.APB4Div < RCC.D3CFGR.Get()&RCC_D3CFGR_D3PPRE_Msk {
+			RCC.D3CFGR.ReplaceBits(clk.APB4Div, RCC_D3CFGR_D3PPRE_Msk, 0)
 		}
 	}
 

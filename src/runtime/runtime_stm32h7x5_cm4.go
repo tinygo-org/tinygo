@@ -1,4 +1,4 @@
-// +build stm32h7x7_cm4
+// +build stm32h7x5_cm4
 
 package runtime
 
@@ -56,9 +56,9 @@ func initSync() {
 
 		// Put M4 core in deep-sleep mode, waiting for M7 core to complete system
 		// initialization.
-		stm32.PWR.PWR_CR1.ClearBits(stm32.PWR_PWR_CR1_LPDS)
-		stm32.PWR_CPU1CR.ClearBits(stm32.PWR_PWR_CPUCR_PDDS_D2)
-		stm32.PWR_CPU2CR.ClearBits(stm32.PWR_PWR_CPUCR_PDDS_D2)
+		stm32.PWR.CR1.ClearBits(stm32.PWR_CR1_LPDS)
+		stm32.PWR_CPU1CR.ClearBits(stm32.PWR_CPUCR_PDDS_D2)
+		stm32.PWR_CPU2CR.ClearBits(stm32.PWR_CPUCR_PDDS_D2)
 		arm.SCB.SCR.SetBits(arm.SCB_SCR_SLEEPDEEP_Msk)
 		arm.AsmFull(`
 			dsb 0xF

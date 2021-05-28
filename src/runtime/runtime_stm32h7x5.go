@@ -1,4 +1,4 @@
-// +build stm32h7x7
+// +build stm32h7x5
 
 package runtime
 

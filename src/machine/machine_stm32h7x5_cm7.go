@@ -1,4 +1,4 @@
-// +build stm32h7x7_cm7
+// +build stm32h7x5_cm7
 
 package machine
 
