@@ -121,7 +121,7 @@ func initCoreClocks() {
 	}
 
 	// Turn off the LED enabled by bootloader
-	machine.LEDG.Configure(machine.PinConfig{Mode: machine.PinOutputPushPull})
+	machine.LEDG.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	machine.LEDG.High()
 
 	stm32.BootM4()
@@ -165,9 +165,7 @@ func initCoreFreq(bypass, lowSpeed bool) (stm32.RCC_CLK_Type, bool) {
 	}
 
 	// Enable oscillator pin
-	machine.PH01.Configure(machine.PinConfig{
-		Mode: machine.PinOutputPushPull | machine.PinPullUp | machine.PinLowSpeed,
-	})
+	machine.PH01.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	machine.PH01.Set(true)
 
 	// Configure main internal regulator voltage for increased CPU frequencies.

@@ -31,8 +31,6 @@ import "device/arm"
 
 type timeUnit int64
 
-const asyncScheduler = false
-
 //go:extern _svectors
 var _svectors [0]uint8
 

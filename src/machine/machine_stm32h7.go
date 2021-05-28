@@ -268,37 +268,39 @@ func (p Pin) Bus() *stm32.GPIO_Type {
 	return nil
 }
 
-type PinMode uint32
+type pinMode uint32
 
 // Constant definitions for the most common pin configurations and alternate
-// functions. Each of these PinMode values are valid and supported
+// functions. Each of these pinMode values are valid and supported
 // configurations (if permitted by the intended GPIO pin).
 const (
-	PinInput           = pinModeModeInput | pinModePupdNoPull
-	PinInputAnalog     = pinModeModeInput | pinModeModeAnalog
-	PinOutput          = PinOutputPushPull
-	PinOutputPushPull  = pinModeModeOutput | pinModeOTypePushPull | pinModePupdNoPull
-	PinOutputOpenDrain = pinModeModeOutput | pinModeOTypeOpenDrain | pinModePupdPullUp
-	PinOutputAnalog    = pinModeModeOutput | pinModeModeAnalog
+	pinInput           = pinModeModeInput | pinModePupdNoPull
+	pinInputPullUp     = pinModeModeInput | pinModePupdPullUp
+	pinInputPullDown   = pinModeModeInput | pinModePupdPullDown
+	pinInputAnalog     = pinModeModeInput | pinModeModeAnalog
+	pinOutput          = pinOutputPushPull
+	pinOutputPushPull  = pinModeModeOutput | pinModeOTypePushPull | pinModePupdNoPull
+	pinOutputOpenDrain = pinModeModeOutput | pinModeOTypeOpenDrain | pinModePupdPullUp
+	pinOutputAnalog    = pinModeModeOutput | pinModeModeAnalog
 )
 
 // Constant definitions for common attributes that can be applied (bitwise-OR)
-// to any PinMode. Of course, not every combination is valid or supported.
+// to any pinMode. Of course, not every combination is valid or supported.
 const (
-	PinFloating      = pinModePupdNoPull
-	PinPullUp        = pinModePupdPullUp
-	PinPullDown      = pinModePupdPullDown
-	PinPushPull      = pinModeOTypePushPull
-	PinOpenDrain     = pinModeOTypeOpenDrain
-	PinLowSpeed      = pinModeSpeedLow
-	PinMediumSpeed   = pinModeSpeedMedium
-	PinHighSpeed     = pinModeSpeedHigh
-	PinVeryHighSpeed = pinModeSpeedVeryHigh
-	PinAltFunc       = pinModeModeAltFunc
-	PinAnalog        = pinModeModeAnalog
+	pinFloating      = pinModePupdNoPull
+	pinPullUp        = pinModePupdPullUp
+	pinPullDown      = pinModePupdPullDown
+	pinPushPull      = pinModeOTypePushPull
+	pinOpenDrain     = pinModeOTypeOpenDrain
+	pinLowSpeed      = pinModeSpeedLow
+	pinMediumSpeed   = pinModeSpeedMedium
+	pinHighSpeed     = pinModeSpeedHigh
+	pinVeryHighSpeed = pinModeSpeedVeryHigh
+	pinAltFunc       = pinModeModeAltFunc
+	pinAnalog        = pinModeModeAnalog
 )
 
-// Internally we encode pin configuration in type PinMode (32-bit) as follows:
+// Internally we encode pin configuration in type pinMode (32-bit) as follows:
 //
 //    Bits:  1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
 //   Field:  - - - - - - - - - - - - C I H_H_H_H A_A_A_A - - S_S P_P O - F_F
@@ -321,60 +323,83 @@ const (
 // configuration with each of the specified attributes. Of course, not every
 // combination is valid or supported.
 const (
-	pinModeModePos     PinMode = 0                   //
-	pinModeModeMsk     PinMode = 0x03                //
-	pinModeModeInput   PinMode = 0 << pinModeModePos //
-	pinModeModeOutput  PinMode = 1 << pinModeModePos //
-	pinModeModeAltFunc PinMode = 2 << pinModeModePos // PA13-PA15, PB04, PB03
-	pinModeModeAnalog  PinMode = 3 << pinModeModePos // Default for all others
+	pinModeModePos     pinMode = 0                   //
+	pinModeModeMsk     pinMode = 0x03                //
+	pinModeModeInput   pinMode = 0 << pinModeModePos //
+	pinModeModeOutput  pinMode = 1 << pinModeModePos //
+	pinModeModeAltFunc pinMode = 2 << pinModeModePos // PA13-PA15, PB04, PB03
+	pinModeModeAnalog  pinMode = 3 << pinModeModePos // Default for all others
 
-	pinModeOTypePos       PinMode = 3
-	pinModeOTypeMsk       PinMode = 0x01
-	pinModeOTypePushPull  PinMode = 0 << pinModeOTypePos
-	pinModeOTypeOpenDrain PinMode = 1 << pinModeOTypePos
+	pinModeOTypePos       pinMode = 3
+	pinModeOTypeMsk       pinMode = 0x01
+	pinModeOTypePushPull  pinMode = 0 << pinModeOTypePos
+	pinModeOTypeOpenDrain pinMode = 1 << pinModeOTypePos
 
-	pinModePupdPos      PinMode = 4
-	pinModePupdMsk      PinMode = 0x03
-	pinModePupdNoPull   PinMode = 0 << pinModePupdPos
-	pinModePupdPullUp   PinMode = 1 << pinModePupdPos
-	pinModePupdPullDown PinMode = 2 << pinModePupdPos
+	pinModePupdPos      pinMode = 4
+	pinModePupdMsk      pinMode = 0x03
+	pinModePupdNoPull   pinMode = 0 << pinModePupdPos
+	pinModePupdPullUp   pinMode = 1 << pinModePupdPos
+	pinModePupdPullDown pinMode = 2 << pinModePupdPos
 
-	pinModeSpeedPos      PinMode = 6                    //
-	pinModeSpeedMsk      PinMode = 0x03                 //
-	pinModeSpeedLow      PinMode = 0 << pinModeSpeedPos // Default for all others
-	pinModeSpeedMedium   PinMode = 1 << pinModeSpeedPos //
-	pinModeSpeedHigh     PinMode = 2 << pinModeSpeedPos //
-	pinModeSpeedVeryHigh PinMode = 3 << pinModeSpeedPos // PA13, PB03
+	pinModeSpeedPos      pinMode = 6                    //
+	pinModeSpeedMsk      pinMode = 0x03                 //
+	pinModeSpeedLow      pinMode = 0 << pinModeSpeedPos // Default for all others
+	pinModeSpeedMedium   pinMode = 1 << pinModeSpeedPos //
+	pinModeSpeedHigh     pinMode = 2 << pinModeSpeedPos //
+	pinModeSpeedVeryHigh pinMode = 3 << pinModeSpeedPos // PA13, PB03
 
-	pinModeAltFuncPos PinMode = 10
-	pinModeAltFuncMsk PinMode = 0x0F
+	pinModeAltFuncPos pinMode = 10
+	pinModeAltFuncMsk pinMode = 0x0F
 
-	pinModeAChanPos PinMode = 14
-	pinModeAChanMsk PinMode = 0x0F
+	pinModeAChanPos pinMode = 14
+	pinModeAChanMsk pinMode = 0x0F
 
-	pinModeInvPos      PinMode = 18
-	pinModeInvMsk      PinMode = 0x01
-	pinModeInvInverted PinMode = 1 << pinModeInvPos
+	pinModeInvPos      pinMode = 18
+	pinModeInvMsk      pinMode = 0x01
+	pinModeInvInverted pinMode = 1 << pinModeInvPos
 
-	pinModeACtrlPos     PinMode = 19
-	pinModeACtrlMsk     PinMode = 0x01
-	pinModeACtrlControl PinMode = 1 << pinModeACtrlPos
+	pinModeACtrlPos     pinMode = 19
+	pinModeACtrlMsk     pinMode = 0x01
+	pinModeACtrlControl pinMode = 1 << pinModeACtrlPos
 )
 
+const (
+	PinOutput PinMode = iota
+	PinInput
+	PinInputFloating
+	PinInputPulldown
+	PinInputPullup
+)
+
+// mode translates the receiver PinMode from the machine package's 8-bit
+// definition to our wider 32-bit type pinMode.
 func (p Pin) Configure(config PinConfig) {
+	switch config.Mode {
+	case PinOutput:
+		p.mode(pinOutput | pinPushPull | pinFloating)
+	case PinInput, PinInputFloating:
+		p.mode(pinInput | pinFloating)
+	case PinInputPulldown:
+		p.mode(pinInput | pinPullDown)
+	case PinInputPullup:
+		p.mode(pinInput | pinPullUp)
+	}
+}
+
+func (p Pin) mode(mode pinMode) {
 
 	bus := p.Bus()
 	bit := uint8(p.Bit())
 
 	_ = EnableClock(unsafe.Pointer(bus), true)
 
-	switch config.Mode & (pinModeModeMsk << pinModeModePos) {
+	switch mode & (pinModeModeMsk << pinModeModePos) {
 	// output or alternate function mode bits set
 	case pinModeModeOutput, pinModeModeAltFunc:
 		// configure output speed
-		speed := uint32((config.Mode >> pinModeSpeedPos) & pinModeSpeedMsk)
+		speed := uint32((mode >> pinModeSpeedPos) & pinModeSpeedMsk)
 		// configure output type
-		otype := uint32((config.Mode >> pinModeOTypePos) & pinModeOTypeMsk)
+		otype := uint32((mode >> pinModeOTypePos) & pinModeOTypeMsk)
 		for !SemGPIO.Lock(CoreID) {
 		} // wait until we have exclusive access to GPIO
 		bus.GPIO_OSPEEDR.ReplaceBits(speed, uint32(pinModeSpeedMsk), 2*bit)
@@ -383,13 +408,13 @@ func (p Pin) Configure(config PinConfig) {
 	}
 
 	// configure pull-up/down resistor
-	pupd := uint32((config.Mode >> pinModePupdPos) & pinModePupdMsk)
+	pupd := uint32((mode >> pinModePupdPos) & pinModePupdMsk)
 	for !SemGPIO.Lock(CoreID) {
 	} // wait until we have exclusive access to GPIO
 	bus.GPIO_PUPDR.ReplaceBits(pupd, uint32(pinModePupdMsk), 2*bit)
 	SemGPIO.Unlock(CoreID)
 
-	switch config.Mode & (pinModeModeMsk << pinModeModePos) {
+	switch mode & (pinModeModeMsk << pinModeModePos) {
 	// alternate function mode bit set
 	case pinModeModeAltFunc:
 		var reg *volatile.Register32
@@ -399,7 +424,7 @@ func (p Pin) Configure(config PinConfig) {
 		} else {
 			reg = &bus.GPIO_AFRH // AFRH register used for pins 8-15
 		}
-		altf := uint32((config.Mode >> pinModeAltFuncPos) & pinModeAltFuncMsk)
+		altf := uint32((mode >> pinModeAltFuncPos) & pinModeAltFuncMsk)
 		for !SemGPIO.Lock(CoreID) {
 		} // wait until we have exclusive access to GPIO
 		reg.ReplaceBits(altf, uint32(pinModeAltFuncMsk), 4*(pos%8))
@@ -407,10 +432,10 @@ func (p Pin) Configure(config PinConfig) {
 	}
 
 	// configure IO direction mode
-	mode := uint32((config.Mode >> pinModeModePos) & pinModeModeMsk)
+	mod := uint32((mode >> pinModeModePos) & pinModeModeMsk)
 	for !SemGPIO.Lock(CoreID) {
 	} // wait until we have exclusive access to GPIO
-	bus.GPIO_MODER.ReplaceBits(mode, uint32(pinModeModeMsk), 2*bit)
+	bus.GPIO_MODER.ReplaceBits(mod, uint32(pinModeModeMsk), 2*bit)
 	SemGPIO.Unlock(CoreID)
 }
 
