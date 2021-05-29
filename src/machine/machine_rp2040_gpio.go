@@ -63,6 +63,9 @@ const (
 
 const (
 	PinOutput PinMode = iota
+	PinInput
+	PinInputPulldown
+	PinInputPullup
 )
 
 // set drives the pin high
@@ -83,12 +86,27 @@ func (p Pin) xor() {
 	rp.SIO.GPIO_OUT_XOR.Set(mask)
 }
 
+// get returns the pin value
+func (p Pin) get() bool {
+	return rp.SIO.GPIO_IN.HasBits(uint32(1) << p)
+}
+
 func (p Pin) ioCtrl() *volatile.Register32 {
 	return &ioBank0.io[p].ctrl
 }
 
 func (p Pin) padCtrl() *volatile.Register32 {
 	return &padsBank0.io[p]
+}
+
+func (p Pin) pullup() {
+	p.padCtrl().SetBits(rp.PADS_BANK0_GPIO0_PUE)
+	p.padCtrl().ClearBits(rp.PADS_BANK0_GPIO0_PDE)
+}
+
+func (p Pin) pulldown() {
+	p.padCtrl().SetBits(rp.PADS_BANK0_GPIO0_PDE)
+	p.padCtrl().ClearBits(rp.PADS_BANK0_GPIO0_PUE)
 }
 
 // setFunc will set pin function to fn.
@@ -108,7 +126,6 @@ func (p Pin) init() {
 	rp.SIO.GPIO_OE_CLR.Set(mask)
 	p.clr()
 	p.setFunc(fnSIO)
-
 }
 
 // Configure configures the gpio pin as per mode.
@@ -118,6 +135,14 @@ func (p Pin) Configure(config PinConfig) {
 	switch config.Mode {
 	case PinOutput:
 		rp.SIO.GPIO_OE_SET.Set(mask)
+	case PinInput:
+		rp.SIO.GPIO_OE_CLR.Set(mask)
+	case PinInputPulldown:
+		rp.SIO.GPIO_OE_CLR.Set(mask)
+		p.pulldown()
+	case PinInputPullup:
+		rp.SIO.GPIO_OE_CLR.Set(mask)
+		p.pullup()
 	}
 }
 
@@ -128,4 +153,9 @@ func (p Pin) Set(value bool) {
 	} else {
 		p.clr()
 	}
+}
+
+// Get reads the pin value.
+func (p Pin) Get() bool {
+	return p.get()
 }
