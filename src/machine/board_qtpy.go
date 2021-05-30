@@ -42,7 +42,8 @@ const (
 )
 
 const (
-	LED = D13
+	NEOPIXELS       = D11
+	NEOPIXELS_POWER = D12
 )
 
 // USBCDC pins
