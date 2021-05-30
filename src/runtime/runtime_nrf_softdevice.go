@@ -10,6 +10,9 @@ import (
 //export sd_app_evt_wait
 func sd_app_evt_wait()
 
+// This is a global variable to avoid a heap allocation in waitForEvents.
+var softdeviceEnabled uint8
+
 func waitForEvents() {
 	// Call into the SoftDevice to sleep. This is necessary here because a
 	// normal wfe will not put the chip in low power mode (it still consumes
@@ -18,10 +21,9 @@ func waitForEvents() {
 
 	// First check whether the SoftDevice is enabled. Unfortunately,
 	// sd_app_evt_wait cannot be called when the SoftDevice is not enabled.
-	var enabled uint8
-	arm.SVCall1(0x12, &enabled) // sd_softdevice_is_enabled
+	arm.SVCall1(0x12, &softdeviceEnabled) // sd_softdevice_is_enabled
 
-	if enabled != 0 {
+	if softdeviceEnabled != 0 {
 		// Now pick the appropriate SVCall number. Hopefully they won't change
 		// in the future with a different SoftDevice version.
 		if nrf.Device == "nrf51" {
