@@ -37,6 +37,11 @@ const (
 	PinOutputModeGPOpenDrain  PinMode = 4  // Output mode general purpose open drain
 	PinOutputModeAltPushPull  PinMode = 8  // Output mode alt. purpose push/pull
 	PinOutputModeAltOpenDrain PinMode = 12 // Output mode alt. purpose open drain
+
+	// Pull-up vs Pull down is not part of the CNF0 / CNF1 bits, but is
+	// controlled by PxODR.  Encoded using the 'spare' bit 5.
+	PinInputPulldown PinMode = PinInputModePullUpDown
+	PinInputPullup   PinMode = PinInputModePullUpDown | 0x10
 )
 
 // Pin constants for all stm32f103 package sizes
@@ -157,6 +162,16 @@ func (p Pin) Configure(config PinConfig) {
 	} else {
 		port.CRH.ReplaceBits(uint32(config.Mode), 0xf, pos)
 	}
+
+	// If configured for input pull-up or pull-down, set ODR
+	// for desired pull-up or pull-down.
+	if (config.Mode & 0xf) == PinInputModePullUpDown {
+		var pullup uint32
+		if config.Mode == PinInputPullup {
+			pullup = 1
+		}
+		port.ODR.ReplaceBits(pullup, 0x1, pin)
+	}
 }
 
 func (p Pin) getPort() *stm32.GPIO_Type {
@@ -213,6 +228,47 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 	} else if bus == unsafe.Pointer(stm32.SPI1) {
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_SPI1EN)
 	}
+}
+
+func (p Pin) registerInterrupt() interrupt.Interrupt {
+	pin := uint8(p) % 16
+
+	switch pin {
+	case 0:
+		return interrupt.New(stm32.IRQ_EXTI0, func(interrupt.Interrupt) { handlePinInterrupt(0) })
+	case 1:
+		return interrupt.New(stm32.IRQ_EXTI1, func(interrupt.Interrupt) { handlePinInterrupt(1) })
+	case 2:
+		return interrupt.New(stm32.IRQ_EXTI2, func(interrupt.Interrupt) { handlePinInterrupt(2) })
+	case 3:
+		return interrupt.New(stm32.IRQ_EXTI3, func(interrupt.Interrupt) { handlePinInterrupt(3) })
+	case 4:
+		return interrupt.New(stm32.IRQ_EXTI4, func(interrupt.Interrupt) { handlePinInterrupt(4) })
+	case 5:
+		return interrupt.New(stm32.IRQ_EXTI9_5, func(interrupt.Interrupt) { handlePinInterrupt(5) })
+	case 6:
+		return interrupt.New(stm32.IRQ_EXTI9_5, func(interrupt.Interrupt) { handlePinInterrupt(6) })
+	case 7:
+		return interrupt.New(stm32.IRQ_EXTI9_5, func(interrupt.Interrupt) { handlePinInterrupt(7) })
+	case 8:
+		return interrupt.New(stm32.IRQ_EXTI9_5, func(interrupt.Interrupt) { handlePinInterrupt(8) })
+	case 9:
+		return interrupt.New(stm32.IRQ_EXTI9_5, func(interrupt.Interrupt) { handlePinInterrupt(9) })
+	case 10:
+		return interrupt.New(stm32.IRQ_EXTI15_10, func(interrupt.Interrupt) { handlePinInterrupt(10) })
+	case 11:
+		return interrupt.New(stm32.IRQ_EXTI15_10, func(interrupt.Interrupt) { handlePinInterrupt(11) })
+	case 12:
+		return interrupt.New(stm32.IRQ_EXTI15_10, func(interrupt.Interrupt) { handlePinInterrupt(12) })
+	case 13:
+		return interrupt.New(stm32.IRQ_EXTI15_10, func(interrupt.Interrupt) { handlePinInterrupt(13) })
+	case 14:
+		return interrupt.New(stm32.IRQ_EXTI15_10, func(interrupt.Interrupt) { handlePinInterrupt(14) })
+	case 15:
+		return interrupt.New(stm32.IRQ_EXTI15_10, func(interrupt.Interrupt) { handlePinInterrupt(15) })
+	}
+
+	return interrupt.Interrupt{}
 }
 
 //---------- UART related code
