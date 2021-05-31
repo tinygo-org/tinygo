@@ -4,5 +4,6 @@
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "PYGAMERBOOT",
-    "msd-firmware-name": "arcade.uf2"
+    "msd-firmware-name": "arcade.uf2",
+    "default-stack-size": 2048
 }

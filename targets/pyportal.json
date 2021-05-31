@@ -4,5 +4,6 @@
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "PORTALBOOT",
-    "msd-firmware-name": "firmware.uf2"
+    "msd-firmware-name": "firmware.uf2",
+    "default-stack-size": 2048
 }
