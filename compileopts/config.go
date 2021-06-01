@@ -55,7 +55,7 @@ func (c *Config) GOARCH() string {
 
 // BuildTags returns the complete list of build tags used during this build.
 func (c *Config) BuildTags() []string {
-	tags := append(c.Target.BuildTags, []string{"tinygo", "gc." + c.GC(), "scheduler." + c.Scheduler()}...)
+	tags := append(c.Target.BuildTags, []string{"tinygo", "gc." + c.GC(), "scheduler." + c.Scheduler(), "serial." + c.Serial()}...)
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
@@ -111,6 +111,18 @@ func (c *Config) Scheduler() string {
 	}
 	// Fall back to coroutines, which are supported everywhere.
 	return "coroutines"
+}
+
+// Serial returns the serial implementation for this build configuration: uart,
+// usb (meaning USB-CDC), or none.
+func (c *Config) Serial() string {
+	if c.Options.Serial != "" {
+		return c.Options.Serial
+	}
+	if c.Target.Serial != "" {
+		return c.Target.Serial
+	}
+	return "none"
 }
 
 // OptLevels returns the optimization level (0-2), size level (0-2), and inliner

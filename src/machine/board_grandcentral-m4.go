@@ -142,8 +142,6 @@ const (
 	WS2812   = NEOPIXEL_PIN
 )
 
-var Serial = USB
-
 // UART pins
 const (
 	UART1_RX_PIN = D0 // (PB25)

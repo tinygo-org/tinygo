@@ -108,7 +108,7 @@ var (
 	}
 )
 
-var Serial = UART0
+var DefaultUART = UART0
 
 func init() {
 	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)

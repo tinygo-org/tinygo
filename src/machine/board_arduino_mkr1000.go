@@ -47,8 +47,6 @@ const (
 	LED = D6
 )
 
-var Serial = USB
-
 // USBCDC pins
 const (
 	USBCDC_DM_PIN Pin = PA24

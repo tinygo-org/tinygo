@@ -1,6 +1,7 @@
 {
     "inherits": ["atsamd51j19a"],
     "build-tags": ["feather_m4"],
+    "serial": "usb",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "FEATHERBOOT",

@@ -68,8 +68,6 @@ const (
 	ADC3 Pin = IO39
 )
 
-var Serial = UART0
-
 // UART0 pins
 const (
 	UART_TX_PIN = IO1
