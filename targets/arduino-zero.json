@@ -1,6 +1,7 @@
 {
     "inherits": ["atsamd21g18a"],
     "build-tags": ["arduino_zero"],
+	"serial": "usb",
     "flash-command": "bossac -i -e -w -v -R -U --port={port} --offset=0x2000 {bin}",
     "flash-1200-bps-reset": "true"
 }

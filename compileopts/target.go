@@ -31,6 +31,7 @@ type TargetSpec struct {
 	BuildTags        []string `json:"build-tags"`
 	GC               string   `json:"gc"`
 	Scheduler        string   `json:"scheduler"`
+	Serial           string   `json:"serial"` // which serial output to use (uart, usb, none)
 	Linker           string   `json:"linker"`
 	RTLib            string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
 	Libc             string   `json:"libc"`

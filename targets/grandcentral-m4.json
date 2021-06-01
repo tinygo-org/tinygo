@@ -1,6 +1,7 @@
 {
     "inherits": ["atsamd51p20a"],
     "build-tags": ["grandcentral_m4"],
+    "serial": "usb",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "GCM4BOOT",

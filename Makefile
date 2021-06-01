@@ -430,6 +430,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -opt=1     examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pca10040 -serial=none examples/echo
+	@$(MD5SUM) test.hex
 	$(TINYGO) build             -o test.nro -target=nintendoswitch      examples/serial
 	@$(MD5SUM) test.nro
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -opt=0     ./testdata/stdlib.go

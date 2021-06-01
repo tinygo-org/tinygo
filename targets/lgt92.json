@@ -5,6 +5,7 @@
 	"build-tags": [
 		"lgt92"
 	],
+	"serial": "uart",
 	"linkerscript": "targets/stm32l072czt6.ld",
 	"flash-method": "openocd",
 	"openocd-interface": "stlink-v2",

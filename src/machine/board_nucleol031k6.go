@@ -76,7 +76,7 @@ var (
 		TxAltFuncSelector: 4,
 		RxAltFuncSelector: 4,
 	}
-	Serial = UART1
+	DefaultUART = UART1
 
 	// I2C1 is documented, alias to I2C0 as well
 	I2C1 = &I2C{

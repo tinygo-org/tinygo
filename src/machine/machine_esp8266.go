@@ -139,6 +139,8 @@ func (p Pin) PortMaskClear() (*uint32, uint32) {
 	return &esp.GPIO.GPIO_OUT_W1TC.Reg, 1 << p
 }
 
+var DefaultUART = UART0
+
 // UART0 is a hardware UART that supports both TX and RX.
 var UART0 = &_UART0
 var _UART0 = UART{Buffer: NewRingBuffer()}

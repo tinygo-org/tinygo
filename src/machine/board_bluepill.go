@@ -17,7 +17,7 @@ const (
 	BUTTON = PA0
 )
 
-var Serial = UART1
+var DefaultUART = UART1
 
 // UART pins
 const (

@@ -2,6 +2,7 @@
     "inherits": ["avr"],
     "cpu": "atmega1280",
     "build-tags": ["atmega1280", "atmega"],
+    "serial": "uart",
     "cflags": [
         "-mmcu=atmega1280"
     ],

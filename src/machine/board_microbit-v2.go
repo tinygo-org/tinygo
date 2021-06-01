@@ -12,7 +12,7 @@ const (
 	BUTTONB Pin = P11
 )
 
-var Serial = UART0
+var DefaultUART = UART0
 
 // UART pins
 const (

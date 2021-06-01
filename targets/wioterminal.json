@@ -1,6 +1,7 @@
 {
     "inherits": ["atsamd51p19a"],
     "build-tags": ["wioterminal"],
+    "serial": "usb",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "Arduino",

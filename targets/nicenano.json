@@ -1,6 +1,7 @@
 {
     "inherits": ["nrf52840"],
     "build-tags": ["nicenano","nrf52840_reset_uf2", "softdevice", "s140v6"],
+    "serial": "usb",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "NICENANO",

@@ -3,6 +3,7 @@
 	"cpu": "esp32",
 	"build-tags": ["esp32", "esp"],
 	"scheduler": "tasks",
+	"serial": "uart",
 	"linker": "xtensa-esp32-elf-ld",
 	"default-stack-size": 2048,
 	"cflags": [

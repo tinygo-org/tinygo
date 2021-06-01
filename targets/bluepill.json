@@ -1,6 +1,7 @@
 {
 	"inherits": ["cortex-m3"],
 	"build-tags": ["bluepill", "stm32f103", "stm32f1", "stm32"],
+	"serial": "uart",
 	"linkerscript": "targets/stm32.ld",
 	"extra-files": [
 		"src/device/stm32/stm32f103.s"

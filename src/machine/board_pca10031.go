@@ -19,7 +19,7 @@ const (
 	LED_BLUE  Pin = 23
 )
 
-var Serial = UART0
+var DefaultUART = UART0
 
 // UART pins
 const (

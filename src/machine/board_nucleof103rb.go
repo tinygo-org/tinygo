@@ -34,7 +34,7 @@ var (
 		Buffer: NewRingBuffer(),
 		Bus:    stm32.USART2,
 	}
-	Serial = UART2
+	DefaultUART = UART2
 )
 
 func init() {
