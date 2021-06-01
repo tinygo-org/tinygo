@@ -20,6 +20,10 @@ const (
 	LED_BLUE    = PD15
 )
 
+const (
+	BUTTON = PA0
+)
+
 // UART pins
 const (
 	UART_TX_PIN = PA2

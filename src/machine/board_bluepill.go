@@ -11,6 +11,12 @@ const (
 	LED = PC13
 )
 
+const (
+	// This board does not have a user button, so
+	// use first GPIO pin by default
+	BUTTON = PA0
+)
+
 var Serial = UART1
 
 // UART pins

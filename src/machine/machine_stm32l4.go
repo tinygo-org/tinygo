@@ -203,6 +203,60 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 	}
 }
 
+func handlePinInterrupt(pin uint8) {
+	if stm32.EXTI.PR1.HasBits(1 << pin) {
+		// Writing 1 to the pending register clears the
+		// pending flag for that bit
+		stm32.EXTI.PR1.Set(1 << pin)
+
+		callback := pinCallbacks[pin]
+		if callback != nil {
+			callback(interruptPins[pin])
+		}
+	}
+}
+
+func (p Pin) registerInterrupt() interrupt.Interrupt {
+	pin := uint8(p) % 16
+
+	switch pin {
+	case 0:
+		return interrupt.New(stm32.IRQ_EXTI0, func(interrupt.Interrupt) { handlePinInterrupt(0) })
+	case 1:
+		return interrupt.New(stm32.IRQ_EXTI1, func(interrupt.Interrupt) { handlePinInterrupt(1) })
+	case 2:
+		return interrupt.New(stm32.IRQ_EXTI2, func(interrupt.Interrupt) { handlePinInterrupt(2) })
+	case 3:
+		return interrupt.New(stm32.IRQ_EXTI3, func(interrupt.Interrupt) { handlePinInterrupt(3) })
+	case 4:
+		return interrupt.New(stm32.IRQ_EXTI4, func(interrupt.Interrupt) { handlePinInterrupt(4) })
+	case 5:
+		return interrupt.New(stm32.IRQ_EXTI9_5, func(interrupt.Interrupt) { handlePinInterrupt(5) })
+	case 6:
+		return interrupt.New(stm32.IRQ_EXTI9_5, func(interrupt.Interrupt) { handlePinInterrupt(6) })
+	case 7:
+		return interrupt.New(stm32.IRQ_EXTI9_5, func(interrupt.Interrupt) { handlePinInterrupt(7) })
+	case 8:
+		return interrupt.New(stm32.IRQ_EXTI9_5, func(interrupt.Interrupt) { handlePinInterrupt(8) })
+	case 9:
+		return interrupt.New(stm32.IRQ_EXTI9_5, func(interrupt.Interrupt) { handlePinInterrupt(9) })
+	case 10:
+		return interrupt.New(stm32.IRQ_EXTI15_10, func(interrupt.Interrupt) { handlePinInterrupt(10) })
+	case 11:
+		return interrupt.New(stm32.IRQ_EXTI15_10, func(interrupt.Interrupt) { handlePinInterrupt(11) })
+	case 12:
+		return interrupt.New(stm32.IRQ_EXTI15_10, func(interrupt.Interrupt) { handlePinInterrupt(12) })
+	case 13:
+		return interrupt.New(stm32.IRQ_EXTI15_10, func(interrupt.Interrupt) { handlePinInterrupt(13) })
+	case 14:
+		return interrupt.New(stm32.IRQ_EXTI15_10, func(interrupt.Interrupt) { handlePinInterrupt(14) })
+	case 15:
+		return interrupt.New(stm32.IRQ_EXTI15_10, func(interrupt.Interrupt) { handlePinInterrupt(15) })
+	}
+
+	return interrupt.Interrupt{}
+}
+
 //---------- SPI related types and code
 
 // SPI on the STM32Fxxx using MODER / alternate function pins

@@ -31,6 +31,13 @@ const (
 // Also, the stm32f1xx series handles things differently from the stm32f0/2/3/4
 
 // ---------- General pin operations ----------
+type PinChange uint8
+
+const (
+	PinRising PinChange = 1 << iota
+	PinFalling
+	PinToggle = PinRising | PinFalling
+)
 
 // Set the pin to high or low.
 // Warning: only use this on an output pin!
