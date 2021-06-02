@@ -840,3 +840,7 @@ func (v Value) FieldByName(name string) Value {
 func MakeMap(typ Type) Value {
 	panic("unimplemented: reflect.MakeMap()")
 }
+
+func (v Value) Call(in []Value) []Value {
+	panic("unimplemented: (reflect.Value).Call()")
+}
