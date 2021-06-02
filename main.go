@@ -95,10 +95,29 @@ func copyFile(src, dst string) error {
 
 // executeCommand is a simple wrapper to exec.Cmd
 func executeCommand(options *compileopts.Options, name string, arg ...string) *exec.Cmd {
-	if options.PrintCommands {
-		fmt.Printf("%s %s\n", name, strings.Join(arg, " "))
+	if options.PrintCommands != nil {
+		options.PrintCommands(name, arg...)
 	}
 	return exec.Command(name, arg...)
+}
+
+// printCommand prints a command to stdout while formatting it like a real
+// command (escaping characters etc). The resulting command should be easy to
+// run directly in a shell, although it is not guaranteed to be a safe shell
+// escape. That's not a problem as the primary use case is printing the command,
+// not running it.
+func printCommand(cmd string, args ...string) {
+	command := append([]string{cmd}, args...)
+	for i, arg := range command {
+		// Source: https://www.oreilly.com/library/view/learning-the-bash/1565923472/ch01s09.html
+		const specialChars = "~`#$&*()\\|[]{};'\"<>?! "
+		if strings.ContainsAny(arg, specialChars) {
+			// See: https://stackoverflow.com/questions/15783701/which-characters-need-to-be-escaped-when-using-bash
+			arg = "'" + strings.ReplaceAll(arg, `'`, `'\''`) + "'"
+			command[i] = arg
+		}
+	}
+	fmt.Fprintln(os.Stderr, strings.Join(command, " "))
 }
 
 // Build compiles and links the given package and writes it to outpath.
@@ -1007,13 +1026,15 @@ func main() {
 		PrintSizes:      *printSize,
 		PrintStacks:     *printStacks,
 		PrintAllocs:     printAllocs,
-		PrintCommands:   *printCommands,
 		Tags:            *tags,
 		GlobalValues:    globalVarValues,
 		WasmAbi:         *wasmAbi,
 		Programmer:      *programmer,
 		OpenOCDCommands: ocdCommands,
 		LLVMFeatures:    *llvmFeatures,
+	}
+	if *printCommands {
+		options.PrintCommands = printCommand
 	}
 
 	os.Setenv("CC", "clang -target="+*target)
