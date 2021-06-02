@@ -343,12 +343,11 @@ func (p *Package) Check() error {
 	checker.Importer = p
 
 	packageName := p.ImportPath
-	if p.Name == "main" {
-		// The main package normally has a different import path, such as
-		// "command-line-arguments" or "./testdata/cgo". Therefore, use the name
-		// "main" in such a case: this package isn't imported from anywhere.
-		// This is safe as it isn't possible to import a package with the name
-		// "main".
+	if p == p.program.MainPkg() {
+		if p.Name != "main" {
+			// Sanity check. Should not ever trigger.
+			panic("expected main package to have name 'main'")
+		}
 		packageName = "main"
 	}
 	typesPkg, err := checker.Check(packageName, p.program.fset, p.Files, &p.info)
