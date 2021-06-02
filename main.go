@@ -314,8 +314,10 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		case "", "command":
 			// Create the command.
 			flashCmd := config.Target.FlashCommand
-			fileToken := "{" + fileExt[1:] + "}"
-			flashCmd = strings.ReplaceAll(flashCmd, fileToken, result.Binary)
+			flashCmdList, err := shlex.Split(flashCmd)
+			if err != nil {
+				return fmt.Errorf("could not parse flash command %#v: %w", flashCmd, err)
+			}
 
 			if strings.Contains(flashCmd, "{port}") {
 				var err error
@@ -325,25 +327,23 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 				}
 			}
 
-			flashCmd = strings.ReplaceAll(flashCmd, "{port}", port)
-
-			// Execute the command.
-			var cmd *exec.Cmd
-			switch runtime.GOOS {
-			case "windows":
-				command := strings.Split(flashCmd, " ")
-				if len(command) < 2 {
-					return errors.New("invalid flash command")
-				}
-				cmd = executeCommand(config.Options, command[0], command[1:]...)
-			default:
-				cmd = executeCommand(config.Options, "/bin/sh", "-c", flashCmd)
+			// Fill in fields in the command template.
+			fileToken := "{" + fileExt[1:] + "}"
+			for i, arg := range flashCmdList {
+				arg = strings.ReplaceAll(arg, fileToken, result.Binary)
+				arg = strings.ReplaceAll(arg, "{port}", port)
+				flashCmdList[i] = arg
 			}
 
+			// Execute the command.
+			if len(flashCmdList) < 2 {
+				return fmt.Errorf("invalid flash command: %#v", flashCmd)
+			}
+			cmd := executeCommand(config.Options, flashCmdList[0], flashCmdList[1:]...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Dir = goenv.Get("TINYGOROOT")
-			err := cmd.Run()
+			err = cmd.Run()
 			if err != nil {
 				return &commandError{"failed to flash", result.Binary, err}
 			}
