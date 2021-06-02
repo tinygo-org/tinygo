@@ -25,7 +25,7 @@ type Options struct {
 	PrintIR         bool
 	DumpSSA         bool
 	VerifyIR        bool
-	PrintCommands   bool
+	PrintCommands   func(cmd string, args ...string)
 	Debug           bool
 	PrintSizes      string
 	PrintAllocs     *regexp.Regexp // regexp string
