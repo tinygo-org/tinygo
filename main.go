@@ -947,10 +947,11 @@ func main() {
 	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
 
-	var flagJSON, flagDeps *bool
+	var flagJSON, flagDeps, flagTest *bool
 	if command == "help" || command == "list" {
 		flagJSON = flag.Bool("json", false, "print data in JSON format")
-		flagDeps = flag.Bool("deps", false, "")
+		flagDeps = flag.Bool("deps", false, "supply -deps flag to go list")
+		flagTest = flag.Bool("test", false, "supply -test flag to go list")
 	}
 	var outpath string
 	if command == "help" || command == "build" || command == "build-library" || command == "test" {
@@ -1199,6 +1200,9 @@ func main() {
 		}
 		if *flagDeps {
 			extraArgs = append(extraArgs, "-deps")
+		}
+		if *flagTest {
+			extraArgs = append(extraArgs, "-test")
 		}
 		cmd, err := loader.List(config, extraArgs, flag.Args())
 		if err != nil {
