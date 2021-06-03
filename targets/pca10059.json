@@ -2,5 +2,6 @@
 	"inherits": ["nrf52840"],
 	"build-tags": ["pca10059"],
 	"linkerscript": "targets/pca10059.ld",
-	"flash-command": "nrfutil pkg generate --hw-version 52 --sd-req 0x0 --application {hex} --application-version 1 /tmp/tinygo_$$.zip && nrfutil dfu usb-serial -pkg /tmp/tinygo_$$.zip -p {port} -b 115200 && rm -f /tmp/tinygo_$$.zip"
+	"binary-format": "nrf-dfu",
+	"flash-command": "nrfutil dfu usb-serial -pkg {zip} -p {port} -b 115200"
 }

@@ -275,6 +275,8 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			fileExt = ".bin"
 		case strings.Contains(config.Target.FlashCommand, "{uf2}"):
 			fileExt = ".uf2"
+		case strings.Contains(config.Target.FlashCommand, "{zip}"):
+			fileExt = ".zip"
 		default:
 			return errors.New("invalid target file - did you forget the {hex} token in the 'flash-command' section?")
 		}
