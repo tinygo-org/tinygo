@@ -254,6 +254,11 @@ func (c *Config) BinaryFormat(ext string) string {
 		// More information:
 		// https://github.com/Microsoft/uf2
 		return "uf2"
+	case ".zip":
+		if c.Target.BinaryFormat != "" {
+			return c.Target.BinaryFormat
+		}
+		return "zip"
 	default:
 		// Use the ELF format for unrecognized file formats.
 		return "elf"
