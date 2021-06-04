@@ -8,11 +8,11 @@ target triple = "armv7m-none-eabi"
 @"reflect/types.typeid:basic:uint8" = external constant i8
 @"reflect/types.typeid:basic:int16" = external constant i8
 @"reflect/types.type:basic:int" = private constant %runtime.typecodeID zeroinitializer
-@"func NeverImplementedMethod()" = external constant i8
-@"Unmatched$interface" = private constant [1 x i8*] [i8* @"func NeverImplementedMethod()"]
-@"func Double() int" = external constant i8
-@"Doubler$interface" = private constant [1 x i8*] [i8* @"func Double() int"]
-@"Number$methodset" = private constant [1 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { i8* @"func Double() int", i32 ptrtoint (i32 (i8*, i8*)* @"(Number).Double$invoke" to i32) }]
+@"reflect/methods.NeverImplementedMethod()" = linkonce_odr constant i8 0
+@"Unmatched$interface" = private constant [1 x i8*] [i8* @"reflect/methods.NeverImplementedMethod()"]
+@"reflect/methods.Double() int" = linkonce_odr constant i8 0
+@"Doubler$interface" = private constant [1 x i8*] [i8* @"reflect/methods.Double() int"]
+@"Number$methodset" = private constant [1 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { i8* @"reflect/methods.Double() int", i32 ptrtoint (i32 (i8*, i8*)* @"(Number).Double$invoke" to i32) }]
 @"reflect/types.type:named:Number" = private constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i32 0, %runtime.interfaceMethodInfo* getelementptr inbounds ([1 x %runtime.interfaceMethodInfo], [1 x %runtime.interfaceMethodInfo]* @"Number$methodset", i32 0, i32 0) }
 
 declare i1 @runtime.interfaceImplements(i32, i8**)
@@ -48,7 +48,7 @@ typeswitch.notUnmatched:
   br i1 %isDoubler, label %typeswitch.Doubler, label %typeswitch.notDoubler
 
 typeswitch.Doubler:
-  %doubler.func = call i32 @runtime.interfaceMethod(i32 %typecode, i8** getelementptr inbounds ([1 x i8*], [1 x i8*]* @"Doubler$interface", i32 0, i32 0), i8* nonnull @"func Double() int")
+  %doubler.func = call i32 @runtime.interfaceMethod(i32 %typecode, i8** getelementptr inbounds ([1 x i8*], [1 x i8*]* @"Doubler$interface", i32 0, i32 0), i8* nonnull @"reflect/methods.Double() int")
   %doubler.func.cast = inttoptr i32 %doubler.func to i32 (i8*, i8*)*
   %doubler.result = call i32 %doubler.func.cast(i8* %value, i8* null)
   call void @runtime.printint32(i32 %doubler.result)

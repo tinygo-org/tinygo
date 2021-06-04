@@ -311,10 +311,21 @@ func (c *compilerContext) getInterfaceMethodSet(typ types.Type) llvm.Value {
 // used during the interface lowering pass.
 func (c *compilerContext) getMethodSignature(method *types.Func) llvm.Value {
 	signature := methodSignature(method)
-	signatureGlobal := c.mod.NamedGlobal("func " + signature)
+	var globalName string
+	if token.IsExported(method.Name()) {
+		globalName = "reflect/methods." + signature
+	} else {
+		globalName = method.Type().(*types.Signature).Recv().Pkg().Path() + ".$methods." + signature
+	}
+	signatureGlobal := c.mod.NamedGlobal(globalName)
 	if signatureGlobal.IsNil() {
-		signatureGlobal = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), "func "+signature)
+		// TODO: put something useful in these globals, such as the method
+		// signature. Useful to one day implement reflect.Value.Method(n).
+		signatureGlobal = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), globalName)
+		signatureGlobal.SetInitializer(llvm.ConstInt(c.ctx.Int8Type(), 0, false))
+		signatureGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
 		signatureGlobal.SetGlobalConstant(true)
+		signatureGlobal.SetAlignment(1)
 	}
 	return signatureGlobal
 }

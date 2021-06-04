@@ -13,15 +13,15 @@ target triple = "wasm32--wasi"
 @"reflect/types.type:pointer:named:error" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:named:error", i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* null }
 @"reflect/types.type:named:error" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:interface:{Error:func:{}{basic:string}}", i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* @"reflect/types.type:pointer:named:error" }
 @"reflect/types.type:interface:{Error:func:{}{basic:string}}" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* bitcast ([1 x i8*]* @"reflect/types.interface:interface{Error() string}$interface" to %runtime.typecodeID*), i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* @"reflect/types.type:pointer:interface:{Error:func:{}{basic:string}}" }
-@"func Error() string" = external constant i8
-@"reflect/types.interface:interface{Error() string}$interface" = linkonce_odr constant [1 x i8*] [i8* @"func Error() string"]
+@"reflect/methods.Error() string" = linkonce_odr constant i8 0, align 1
+@"reflect/types.interface:interface{Error() string}$interface" = linkonce_odr constant [1 x i8*] [i8* @"reflect/methods.Error() string"]
 @"reflect/types.type:pointer:interface:{Error:func:{}{basic:string}}" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:interface:{Error:func:{}{basic:string}}", i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* null }
 @"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:interface:{String:func:{}{basic:string}}", i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* null }
 @"reflect/types.type:interface:{String:func:{}{basic:string}}" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* bitcast ([1 x i8*]* @"reflect/types.interface:interface{String() string}$interface" to %runtime.typecodeID*), i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* @"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}" }
-@"func String() string" = external constant i8
-@"reflect/types.interface:interface{String() string}$interface" = linkonce_odr constant [1 x i8*] [i8* @"func String() string"]
+@"reflect/methods.String() string" = linkonce_odr constant i8 0, align 1
+@"reflect/types.interface:interface{String() string}$interface" = linkonce_odr constant [1 x i8*] [i8* @"reflect/methods.String() string"]
 @"reflect/types.typeid:basic:int" = external constant i8
-@"error$interface" = linkonce_odr constant [1 x i8*] [i8* @"func Error() string"]
+@"error$interface" = linkonce_odr constant [1 x i8*] [i8* @"reflect/methods.Error() string"]
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 
@@ -92,7 +92,7 @@ typeassert.next:                                  ; preds = %typeassert.ok, %ent
 
 define hidden %runtime._string @main.callErrorMethod(i32 %itf.typecode, i8* %itf.value, i8* %context, i8* %parentHandle) unnamed_addr {
 entry:
-  %invoke.func = call i32 @runtime.interfaceMethod(i32 %itf.typecode, i8** getelementptr inbounds ([1 x i8*], [1 x i8*]* @"error$interface", i32 0, i32 0), i8* nonnull @"func Error() string", i8* undef, i8* null)
+  %invoke.func = call i32 @runtime.interfaceMethod(i32 %itf.typecode, i8** getelementptr inbounds ([1 x i8*], [1 x i8*]* @"error$interface", i32 0, i32 0), i8* nonnull @"reflect/methods.Error() string", i8* undef, i8* null)
   %invoke.func.cast = inttoptr i32 %invoke.func to %runtime._string (i8*, i8*, i8*)*
   %0 = call %runtime._string %invoke.func.cast(i8* %itf.value, i8* undef, i8* undef)
   ret %runtime._string %0
