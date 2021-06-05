@@ -38,6 +38,12 @@ const (
 	// Onboard LED
 	LED Pin = GP25
 
+	// Analog pins
+	ADC0 = GP26
+	ADC1 = GP27
+	ADC2 = GP28
+	ADC3 = GP29
+
 	// Onboard crystal oscillator frequency, in MHz.
 	xoscFreq = 12 // MHz
 )
