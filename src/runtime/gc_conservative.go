@@ -51,7 +51,7 @@ const (
 )
 
 var (
-	metadataStart unsafe.Pointer // pointer to the start of the heap
+	metadataStart unsafe.Pointer // pointer to the start of the heap metadata
 	nextAlloc     gcBlock        // the next block that should be tried by the allocator
 	endBlock      gcBlock        // the block just past the end of the available space
 )
