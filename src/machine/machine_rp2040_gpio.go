@@ -66,6 +66,7 @@ const (
 	PinInput
 	PinInputPulldown
 	PinInputPullup
+	PinAnalog
 )
 
 // set drives the pin high
@@ -109,6 +110,11 @@ func (p Pin) pulldown() {
 	p.padCtrl().ClearBits(rp.PADS_BANK0_GPIO0_PUE)
 }
 
+func (p Pin) pulloff() {
+	p.padCtrl().ClearBits(rp.PADS_BANK0_GPIO0_PDE)
+	p.padCtrl().ClearBits(rp.PADS_BANK0_GPIO0_PUE)
+}
+
 // setFunc will set pin function to fn.
 func (p Pin) setFunc(fn pinFunc) {
 	// Set input enable, Clear output disable
@@ -125,7 +131,6 @@ func (p Pin) init() {
 	mask := uint32(1) << p
 	rp.SIO.GPIO_OE_CLR.Set(mask)
 	p.clr()
-	p.setFunc(fnSIO)
 }
 
 // Configure configures the gpio pin as per mode.
@@ -134,15 +139,19 @@ func (p Pin) Configure(config PinConfig) {
 	mask := uint32(1) << p
 	switch config.Mode {
 	case PinOutput:
+		p.setFunc(fnSIO)
 		rp.SIO.GPIO_OE_SET.Set(mask)
 	case PinInput:
-		rp.SIO.GPIO_OE_CLR.Set(mask)
+		p.setFunc(fnSIO)
 	case PinInputPulldown:
-		rp.SIO.GPIO_OE_CLR.Set(mask)
+		p.setFunc(fnSIO)
 		p.pulldown()
 	case PinInputPullup:
-		rp.SIO.GPIO_OE_CLR.Set(mask)
+		p.setFunc(fnSIO)
 		p.pullup()
+	case PinAnalog:
+		p.setFunc(fnNULL)
+		p.pulloff()
 	}
 }
 
