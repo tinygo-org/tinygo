@@ -12,7 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"go/types"
+	"hash/crc32"
 	"io/ioutil"
+	"math/bits"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -566,12 +568,21 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 					return err
 				}
 			}
+
+			// Apply ELF patches
 			if config.AutomaticStackSize() {
 				// Modify the .tinygo_stacksizes section that contains a stack size
 				// for each goroutine.
 				err = modifyStackSizes(executable, stackSizeLoads, stackSizes)
 				if err != nil {
 					return fmt.Errorf("could not modify stack sizes: %w", err)
+				}
+			}
+			if config.RP2040BootPatch() {
+				// Patch the second stage bootloader CRC into the .boot2 section
+				err = patchRP2040BootCRC(executable)
+				if err != nil {
+					return fmt.Errorf("could not patch RP2040 second stage boot loader: %w", err)
 				}
 			}
 
@@ -920,30 +931,7 @@ func determineStackSizes(mod llvm.Module, executable string) ([]string, map[stri
 // stack size information. Before this modification, all stack sizes in the
 // section assume the default stack size (which is relatively big).
 func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map[string]functionStackSize) error {
-	fp, err := os.OpenFile(executable, os.O_RDWR, 0)
-	if err != nil {
-		return err
-	}
-	defer fp.Close()
-
-	elfFile, err := elf.NewFile(fp)
-	if err != nil {
-		return err
-	}
-
-	section := elfFile.Section(".tinygo_stacksizes")
-	if section == nil {
-		return errors.New("could not find .tinygo_stacksizes section")
-	}
-
-	if section.Size != section.FileSize {
-		// Sanity check.
-		return fmt.Errorf("expected .tinygo_stacksizes to have identical size and file size, got %d and %d", section.Size, section.FileSize)
-	}
-
-	// Read all goroutine stack sizes.
-	data := make([]byte, section.Size)
-	_, err = fp.ReadAt(data, int64(section.Offset))
+	data, fileHeader, err := getElfSectionData(executable, ".tinygo_stacksizes")
 	if err != nil {
 		return err
 	}
@@ -972,7 +960,7 @@ func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map
 			stackSize += 4
 
 			// Add stack size used by interrupts.
-			switch elfFile.Machine {
+			switch fileHeader.Machine {
 			case elf.EM_ARM:
 				// On Cortex-M (assumed here), this stack size is 8 words or 32
 				// bytes. This is only to store the registers that the interrupt
@@ -988,13 +976,7 @@ func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map
 		}
 	}
 
-	// Write back the modified stack sizes.
-	_, err = fp.WriteAt(data, int64(section.Offset))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return replaceElfSection(executable, ".tinygo_stacksizes", data)
 }
 
 // printStacks prints the maximum stack depth for functions that are started as
@@ -1025,4 +1007,42 @@ func printStacks(calculatedStacks []string, stackSizes map[string]functionStackS
 			fmt.Printf("%-32s unknown, %s calls a function pointer\n", fn.humanName, fn.missingStackSize)
 		}
 	}
+}
+
+// RP2040 second stage bootloader CRC32 calculation
+//
+// Spec: https://datasheets.raspberrypi.org/rp2040/rp2040-datasheet.pdf
+// Section: 2.8.1.3.1. Checksum
+func patchRP2040BootCRC(executable string) error {
+	bytes, _, err := getElfSectionData(executable, ".boot2")
+	if err != nil {
+		return err
+	}
+
+	if len(bytes) != 256 {
+		return fmt.Errorf("rp2040 .boot2 section must be exactly 256 bytes")
+	}
+
+	// From the 'official' RP2040 checksum script:
+	//
+	//  Our bootrom CRC32 is slightly bass-ackward but it's
+	//  best to work around for now (FIXME)
+	//  100% worth it to save two Thumb instructions
+	revBytes := make([]byte, len(bytes))
+	for i := range bytes {
+		revBytes[i] = bits.Reverse8(bytes[i])
+	}
+
+	// crc32.Update does an initial negate and negates the
+	// result, so to meet RP2040 spec, pass 0x0 as initial
+	// hash and negate returned value.
+	//
+	// Note: checksum is over 252 bytes (256 - 4)
+	hash := bits.Reverse32(crc32.Update(0x0, crc32.IEEETable, revBytes[:252]) ^ 0xFFFFFFFF)
+
+	// Write the CRC to the end of the bootloader.
+	binary.LittleEndian.PutUint32(bytes[252:], hash)
+
+	// Update the .boot2 section to included the CRC
+	return replaceElfSection(executable, ".boot2", bytes)
 }

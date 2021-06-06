@@ -176,6 +176,15 @@ func (c *Config) AutomaticStackSize() bool {
 	return false
 }
 
+// RP2040BootPatch returns whether the RP2040 boot patch should be applied that
+// calculates and patches in the checksum for the 2nd stage bootloader.
+func (c *Config) RP2040BootPatch() bool {
+	if c.Target.RP2040BootPatch != nil {
+		return *c.Target.RP2040BootPatch
+	}
+	return false
+}
+
 // CFlags returns the flags to pass to the C compiler. This is necessary for CGo
 // preprocessing.
 func (c *Config) CFlags() []string {
