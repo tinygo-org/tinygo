@@ -12,7 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"go/types"
+	"hash/crc32"
 	"io/ioutil"
+	"math/bits"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -555,6 +557,33 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				return &commandError{"failed to link", executable, err}
 			}
 
+			// Two pass linking required, analyse the first pass to look for updated parameters
+			// for second stage
+			if len(config.Target.LinkPasses) > 0 {
+				for _, pass := range config.Target.LinkPasses {
+					var flags []string
+					var err error
+
+					switch pass {
+					case "rp2040-boot-sign":
+						flags, err = rp2040Boot2CRC(executable)
+					default:
+						return fmt.Errorf("unrecognized link pass %s", pass)
+					}
+
+					if err != nil {
+						return err
+					}
+
+					ldflags = append(ldflags, flags...)
+				}
+
+				err = link(config.Target.Linker, ldflags...)
+				if err != nil {
+					return &commandError{"failed to link second pass", executable, err}
+				}
+			}
+
 			var calculatedStacks []string
 			var stackSizes map[string]functionStackSize
 			if config.Options.PrintStacks || config.AutomaticStackSize() {
@@ -1013,4 +1042,51 @@ func printStacks(calculatedStacks []string, stackSizes map[string]functionStackS
 			fmt.Printf("%-32s unknown, %s calls a function pointer\n", fn.humanName, fn.missingStackSize)
 		}
 	}
+}
+
+// RP2040 second stage bootloader CRC32 calculation
+//
+// Spec: https://datasheets.raspberrypi.org/rp2040/rp2040-datasheet.pdf
+// Section: 2.8.1.3.1. Checksum
+func rp2040Boot2CRC(executable string) ([]string, error) {
+	f, err := elf.Open(executable)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	for _, section := range f.Sections {
+		if section.Name == ".boot2" {
+			bytes, err := section.Data()
+			if err != nil {
+				return nil, err
+			}
+
+			if len(bytes) != 256 {
+				return nil, fmt.Errorf("rp2040 .boot2 section must be exactly 256 bytes")
+			}
+
+			// From the 'official' RP2040 checksum script:
+			//
+			//  Our bootrom CRC32 is slightly bass-ackward but it's
+			//  best to work around for now (FIXME)
+			//  100% worth it to save two Thumb instructions
+			for i := range bytes {
+				bytes[i] = bits.Reverse8(bytes[i])
+			}
+
+			// crc32.Update does an initial negate and negates the
+			// result, so to meet RP2040 spec, pass 0x0 as initial
+			// hash and negate returned value.
+			//
+			// Note: checksum is over 252 bytes (256 - 4)
+			hash := bits.Reverse32(crc32.Update(0x0, crc32.IEEETable, bytes[:252]) ^ 0xFFFFFFFF)
+
+			// return the checksum as a hex value, relying on linker
+			// to output in LE format.
+			return []string{fmt.Sprintf("--defsym=boot2_checksum=0x%x", hash)}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("RP2040 second stage bootloader segment .boot2 not found")
 }

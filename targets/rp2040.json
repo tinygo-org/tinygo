@@ -1,6 +1,7 @@
 {
     "inherits": ["cortex-m0plus"],
     "build-tags": ["rp2040", "rp"],
+    "link-passes": ["rp2040-boot-sign"],
     "flash-method": "msd",
     "msd-volume-name": "RPI-RP2",
     "msd-firmware-name": "firmware.uf2",

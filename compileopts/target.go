@@ -40,6 +40,7 @@ type TargetSpec struct {
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
 	ExtraFiles       []string `json:"extra-files"`
+	LinkPasses       []string `json:"link-passes"`              // Tasks that should be applied to linker output between passes (implicitly indicates 2-pass linking)
 	Emulator         []string `json:"emulator" override:"copy"` // inherited Emulator must not be append
 	FlashCommand     string   `json:"flash-command"`
 	GDB              []string `json:"gdb"`
