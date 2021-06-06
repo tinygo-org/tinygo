@@ -40,6 +40,7 @@ type TargetSpec struct {
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
 	ExtraFiles       []string `json:"extra-files"`
+	RP2040BootPatch  *bool    `json:"rp2040-boot-patch"`        // Patch RP2040 2nd stage bootloader checksum
 	Emulator         []string `json:"emulator" override:"copy"` // inherited Emulator must not be append
 	FlashCommand     string   `json:"flash-command"`
 	GDB              []string `json:"gdb"`
