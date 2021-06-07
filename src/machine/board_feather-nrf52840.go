@@ -59,6 +59,7 @@ const (
 	LED1     = LED
 	LED2     = D4
 	NEOPIXEL = D8
+	WS2812   = D8
 	BUTTON   = D7
 
 	QSPI_SCK   = D27

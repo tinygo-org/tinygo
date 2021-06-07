@@ -37,7 +37,8 @@ const (
 )
 
 const (
-	LED = D13
+	LED    = D13
+	WS2812 = D40
 )
 
 var Serial = USB

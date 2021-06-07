@@ -38,6 +38,7 @@ const (
 const (
 	LED       = D13
 	NEOPIXELS = D8
+	WS2812    = D8
 
 	BUTTONA = D4
 	BUTTONB = D5
