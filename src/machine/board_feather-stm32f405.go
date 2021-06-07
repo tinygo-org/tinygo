@@ -84,6 +84,7 @@ const (
 	LED_NEOPIXEL = D8
 	LED_BUILTIN  = LED_RED
 	LED          = LED_BUILTIN
+	WS2812       = D8
 )
 
 func initLED() {}

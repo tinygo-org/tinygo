@@ -72,6 +72,7 @@ const (
 	LED1     = LED
 	LED2     = D43
 	NEOPIXEL = D18
+	WS2812   = D18
 
 	BUTTON_LEFT  = D5
 	BUTTON_RIGHT = D11

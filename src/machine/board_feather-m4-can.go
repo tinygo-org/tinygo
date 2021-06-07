@@ -44,6 +44,7 @@ const (
 const (
 	LED       = D13
 	NEOPIXELS = D8
+	WS2812    = D8
 )
 
 var Serial = USB
