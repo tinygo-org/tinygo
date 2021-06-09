@@ -67,6 +67,7 @@ const (
 	PinInputPulldown
 	PinInputPullup
 	PinAnalog
+	PinUART
 )
 
 // set drives the pin high
@@ -152,6 +153,8 @@ func (p Pin) Configure(config PinConfig) {
 	case PinAnalog:
 		p.setFunc(fnNULL)
 		p.pulloff()
+	case PinUART:
+		p.setFunc(fnUART)
 	}
 }
 
