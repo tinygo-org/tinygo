@@ -22,7 +22,7 @@ func InitADC() {
 // Configure configures a ADC pin to be able to be used to read data.
 func (a ADC) Configure(config ADCConfig) {
 	switch a.Pin {
-	case GP26, GP27, GP28, GP29:
+	case ADC0, ADC1, ADC2, ADC3:
 		a.Pin.Configure(PinConfig{Mode: PinAnalog})
 	default:
 		// invalid ADC
@@ -47,13 +47,13 @@ func waitForReady() {
 
 func (a ADC) getADCChannel() uint8 {
 	switch a.Pin {
-	case GP26:
+	case ADC0:
 		return 0
-	case GP27:
+	case ADC1:
 		return 1
-	case GP28:
+	case ADC2:
 		return 2
-	case GP29:
+	case ADC3:
 		return 3
 	default:
 		return 0
