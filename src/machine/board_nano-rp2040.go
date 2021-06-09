@@ -47,12 +47,6 @@ const (
 	LED = GPIO6
 )
 
-// UART1 pins
-const (
-	UART_TX_PIN Pin = GPIO0
-	UART_RX_PIN Pin = GPIO1
-)
-
 // I2C pins
 const (
 	SDA_PIN Pin = GPIO12
