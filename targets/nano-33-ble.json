@@ -1,0 +1,7 @@
+{
+	"inherits": ["nrf52840"],
+	"build-tags": ["nano_33_ble"],
+	"flash-command": "bossac_arduino2 -d -i -e -w -v -R --port={port} {bin}",
+	"flash-1200-bps-reset": "true",
+	"linkerscript": "targets/nano-33-ble.ld"
+}
