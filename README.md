@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 63 microcontroller boards are currently supported:
+The following 67 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
@@ -69,7 +69,10 @@ The following 63 microcontroller boards are currently supported:
 * [Arduino Mega 2560](https://store.arduino.cc/arduino-mega-2560-rev3)
 * [Arduino MKR1000](https://store.arduino.cc/arduino-mkr1000-wifi)
 * [Arduino Nano](https://store.arduino.cc/arduino-nano)
-* [Arduino Nano33 IoT](https://store.arduino.cc/nano-33-iot)
+* [Arduino Nano 33 BLE](https://store.arduino.cc/nano-33-ble)
+* [Arduino Nano 33 BLE Sense](https://store.arduino.cc/nano-33-ble-sense)
+* [Arduino Nano 33 IoT](https://store.arduino.cc/nano-33-iot)
+* [Arduino Nano RP2040 Connect](https://store.arduino.cc/nano-rp2040-connect)
 * [Arduino Uno](https://store.arduino.cc/arduino-uno-rev3)
 * [Arduino Zero](https://store.arduino.cc/usa/arduino-zero)
 * [BBC micro:bit](https://microbit.org/)
@@ -96,6 +99,7 @@ The following 63 microcontroller boards are currently supported:
 * [PJRC Teensy 3.6](https://www.pjrc.com/store/teensy36.html)
 * [PJRC Teensy 4.0](https://www.pjrc.com/store/teensy40.html)
 * [ProductivityOpen P1AM-100](https://facts-engineering.github.io/modules/P1AM-100/P1AM-100.html)
+* [Raspberry Pi Pico](https://www.raspberrypi.org/products/raspberry-pi-pico/)
 * [Seeed Wio Terminal](https://www.seeedstudio.com/Wio-Terminal-p-4509.html)
 * [Seeed Seeeduino XIAO](https://www.seeedstudio.com/Seeeduino-XIAO-Arduino-Microcontroller-SAMD21-Cortex-M0+-p-4426.html)
 * [Seeed Sipeed MAix BiT](https://www.seeedstudio.com/Sipeed-MAix-BiT-for-RISC-V-AI-IoT-p-2872.html)
