@@ -293,6 +293,8 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		fileExt = filepath.Ext(config.Target.FlashFilename)
 	case "openocd":
 		fileExt = ".hex"
+	case "bmp":
+		fileExt = ".elf"
 	case "native":
 		return errors.New("unknown flash method \"native\" - did you miss a -target flag?")
 	default:
@@ -385,6 +387,25 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 				return &commandError{"failed to flash", result.Binary, err}
 			}
 			return nil
+		case "bmp":
+			gdb, err := config.Target.LookupGDB()
+			if err != nil {
+				return err
+			}
+			var bmpGDBPort string
+			bmpGDBPort, _, err = getBMPPorts()
+			if err != nil {
+				return err
+			}
+			args := []string{"-ex", "target extended-remote " + bmpGDBPort, "-ex", "monitor swdp_scan", "-ex", "attach 1", "-ex", "load", filepath.ToSlash(result.Binary)}
+			cmd := executeCommand(config.Options, gdb, args...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err = cmd.Run()
+			if err != nil {
+				return &commandError{"failed to flash", result.Binary, err}
+			}
+			return nil
 		default:
 			return fmt.Errorf("unknown flash method: %s", flashMethod)
 		}
@@ -439,6 +460,13 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		switch gdbInterface {
 		case "native":
 			// Run GDB directly.
+		case "bmp":
+			var bmpGDBPort string
+			bmpGDBPort, _, err = getBMPPorts()
+			if err != nil {
+				return err
+			}
+			gdbCommands = append(gdbCommands, "target extended-remote "+bmpGDBPort, "monitor swdp_scan", "compare-sections", "attach 1", "load")
 		case "openocd":
 			gdbCommands = append(gdbCommands, "target extended-remote :3333", "monitor halt", "load", "monitor reset halt")
 
@@ -844,6 +872,35 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 	}
 
 	return "", errors.New("port you specified '" + strings.Join(portCandidates, ",") + "' does not exist, available ports are " + strings.Join(ports, ", "))
+}
+
+// getBMPPorts returns BlackMagicProbe's serial ports if any
+func getBMPPorts() (gdbPort, uartPort string, err error) {
+	var portsList []*enumerator.PortDetails
+	portsList, err = enumerator.GetDetailedPortsList()
+	if err != nil {
+		return "", "", err
+	}
+	var ports []string
+	for _, p := range portsList {
+		if !p.IsUSB {
+			continue
+		}
+		if p.VID != "" && p.PID != "" {
+			vid, vidErr := strconv.ParseUint(p.VID, 16, 16)
+			pid, pidErr := strconv.ParseUint(p.PID, 16, 16)
+			if vidErr == nil && pidErr == nil && vid == 0x1d50 && pid == 0x6018 {
+				ports = append(ports, p.Name)
+			}
+		}
+	}
+	if len(ports) == 2 {
+		return ports[0], ports[1], nil
+	} else if len(ports) == 0 {
+		return "", "", errors.New("no BMP detected")
+	} else {
+		return "", "", fmt.Errorf("expected 2 BMP serial ports, found %d - did you perhaps connect more than one BMP?", len(ports))
+	}
 }
 
 func usage() {
