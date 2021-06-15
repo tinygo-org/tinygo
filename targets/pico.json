@@ -5,6 +5,6 @@
     "build-tags": ["pico"],
     "linkerscript": "targets/pico.ld",
     "extra-files": [
-        "targets/pico_boot_stage2.S"
+        "targets/pico-boot-stage2.S"
     ]
 }
