@@ -1,4 +1,4 @@
-// +build !baremetal stm32,!stm32f7x2,!stm32l5x2 fe310 k210 atmega
+// +build !baremetal stm32,!stm32f7x2,!stm32l5x2,!stm32h7 fe310 k210 atmega
 
 package machine
 

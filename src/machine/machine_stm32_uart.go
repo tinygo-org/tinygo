@@ -1,4 +1,4 @@
-// +build stm32
+// +build stm32,!stm32h7
 
 package machine
 

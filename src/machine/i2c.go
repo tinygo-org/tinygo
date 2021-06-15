@@ -1,4 +1,4 @@
-// +build atmega nrf sam stm32 fe310 k210
+// +build atmega nrf sam stm32,!stm32h7 fe310 k210
 
 package machine
 
