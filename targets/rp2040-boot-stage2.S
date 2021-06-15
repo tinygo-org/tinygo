@@ -1,11 +1,21 @@
 //
-// Implementation of Pico stage 2 boot loader.  This code is for the Winbond W25Q080
-// (as found in the Pico) from the official Pico SDK.
+// Implementation of RP2040 stage 2 boot loader.  This code is derived from the
+// Winbond W25Q080 implementation (as found in the Pico) in the official Pico SDK.
 //
 // This implementation has been made 'stand-alone' by including necessary code /
 // symbols from the included files in the reference implementation directly into
-// the source.  Care has been taken to preserve ordering and it has been verified
-// the generated binary is byte-for-byte identical to the reference code binary.
+// the source.  It has also been modified to include the conditional logic from
+// the CircuitPython implementation that supports additional flash chips.  The
+// CiruitPython source is here:
+//   https://github.com/adafruit/circuitpython/blob/main/ports/raspberrypi/stage2.c.jinja
+//
+// This file cannot be assembled directly, instead assemble the board-specific file
+// (such as pico-boot-stage2.S) which defines the parameters specific to the flash
+// chip included on that board.
+//
+// Care has been taken to preserve ordering and it has been verified the generated
+// binary is byte-for-byte identical to the reference code binary when assembled for
+// the Pico.
 //
 // Note: the stage 2 boot loader must be 256 bytes in length and have a checksum
 // present.  In TinyGo, the linker script is responsible for allocating 256 bytes
@@ -18,10 +28,6 @@
 // Original Source:
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/boot_stage2/boot2_w25q080.S
 //
-
-// Board Parameters
-#define PICO_FLASH_SPI_CLKDIV 2
-
 
 
 // ----------------------------------------------------------------------------
@@ -59,7 +65,8 @@
 #define CMD_WRITE_ENABLE 0x06
 #define CMD_READ_STATUS 0x05
 #define CMD_READ_STATUS2 0x35
-#define CMD_WRITE_STATUS 0x01
+#define CMD_WRITE_STATUS1 0x01
+#define CMD_WRITE_STATUS2 0x31
 #define SREG_DATA 0x02  // Enable quad-SPI mode
 
 #define XIP_BASE       0x10000000
@@ -123,18 +130,32 @@
 // The bootrom is very conservative with SPI frequency, but here we should be
 // as aggressive as possible.
 
-#ifndef PICO_FLASH_SPI_CLKDIV
-#define PICO_FLASH_SPI_CLKDIV 4
-#endif
+#define PICO_FLASH_SPI_CLKDIV BOARD_PICO_FLASH_SPI_CLKDIV
 #if PICO_FLASH_SPI_CLKDIV & 1
 #error PICO_FLASH_SPI_CLKDIV must be even
 #endif
 
+#if BOARD_QUAD_OK==1
 // Define interface width: single/dual/quad IO
-#define FRAME_FORMAT SSI_CTRLR0_SPI_FRF_VALUE_QUAD
+#define FRAME_FORMAT       SSI_CTRLR0_SPI_FRF_VALUE_QUAD
+#define TRANSACTION_TYPE   SSI_SPI_CTRLR0_TRANS_TYPE_VALUE_2C2A
+// Note that the INST_L field is used to select what XIP data gets pushed into
+// the TX FIFO:
+//      INST_L_0_BITS   {ADDR[23:0],XIP_CMD[7:0]}       Load "mode bits" into XIP_CMD
+//      Anything else   {XIP_CMD[7:0],ADDR[23:0]}       Load SPI command into XIP_CMD
+#define INSTRUCTION_LENGTH SSI_SPI_CTRLR0_INST_L_VALUE_NONE
+#define READ_INSTRUCTION   MODE_CONTINUOUS_READ
+#define ADDR_L             8 // 6 for address, 2 for mode
+#else
+#define FRAME_FORMAT       SSI_CTRLR0_SPI_FRF_VALUE_STD
+#define TRANSACTION_TYPE   SSI_SPI_CTRLR0_TRANS_TYPE_VALUE_1C1A
+#define INSTRUCTION_LENGTH SSI_SPI_CTRLR0_INST_L_VALUE_8B
+#define READ_INSTRUCTION   BOARD_CMD_READ
+#define ADDR_L             6 // * 4 = 24
+#endif
 
-// For W25Q080 this is the "Read data fast quad IO" instruction:
-#define CMD_READ 0xeb
+// The flash-chip specific read isntruction
+#define CMD_READ BOARD_CMD_READ
 
 // "Mode bits" are 8 special bits sent immediately after
 // the address bits in a "Read Data Fast Quad I/O" command sequence. 
@@ -142,13 +163,10 @@
 // next read does not require the 0xeb instruction prefix.
 #define MODE_CONTINUOUS_READ 0xa0
 
-// The number of address + mode bits, divided by 4 (always 4, not function of
-// interface width).
-#define ADDR_L 8
-
 // How many clocks of Hi-Z following the mode bits. For W25Q080, 4 dummy cycles
 // are required.
-#define WAIT_CYCLES 4
+#define WAIT_CYCLES BOARD_WAIT_CYCLES
+
 
 // If defined, we will read status reg, compare to SREG_DATA, and overwrite
 // with our value if the SR doesn't match.
@@ -184,10 +202,14 @@ _stage2_boot:
     ldr r0, [r3, #PADS_QSPI_GPIO_QSPI_SD0_OFFSET]
     movs r1, #PADS_QSPI_GPIO_QSPI_SD0_SCHMITT_BITS
     bics r0, r1
+#if BOARD_QUAD_OK==1
     str r0, [r3, #PADS_QSPI_GPIO_QSPI_SD0_OFFSET]
+#endif
     str r0, [r3, #PADS_QSPI_GPIO_QSPI_SD1_OFFSET]
+#if BOARD_QUAD_OK==1
     str r0, [r3, #PADS_QSPI_GPIO_QSPI_SD2_OFFSET]
     str r0, [r3, #PADS_QSPI_GPIO_QSPI_SD3_OFFSET]
+#endif
 
     ldr r3, =XIP_SSI_BASE
 
@@ -225,9 +247,15 @@ program_sregs:
     str r1, [r3, #SSI_SSIENR_OFFSET]
 
     // Check whether SR needs updating
+#if BOARD_QUAD_OK==1
+# if BOARD_QUAD_ENABLE_STATUS_BYTE==1
+    movs r0, #CMD_READ_STATUS1
+# elif BOARD_QUAD_ENABLE_STATUS_BYTE==2
     movs r0, #CMD_READ_STATUS2
+# endif
+
     bl read_flash_sreg
-    movs r2, #SREG_DATA
+    movs r2, #BOARD_QUAD_ENABLE_BIT_MASK
     cmp r0, r2
     beq skip_sreg_programming
 
@@ -240,17 +268,37 @@ program_sregs:
     ldr r1, [r3, #SSI_DR0_OFFSET]
 
     // Send status write command followed by data bytes
-    movs r1, #CMD_WRITE_STATUS
+# if BOARD_SPLIT_STATUS_WRITE==1
+#  if BOARD_QUAD_ENABLE_STATUS_BYTE==1
+    movs r1, #CMD_WRITE_STATUS1
+#  elif BOARD_QUAD_ENABLE_STATUS_BYTE==2
+    movs r1, #CMD_WRITE_STATUS2
+#  endif
     str r1, [r3, #SSI_DR0_OFFSET]
+    str r2, [r3, #SSI_DR0_OFFSET]
+
+    bl wait_ssi_ready
+    //ldr r1, [r3, #SSI_DR0_OFFSET]
+    ldr r1, [r3, #SSI_DR0_OFFSET]
+    ldr r1, [r3, #SSI_DR0_OFFSET]
+
+# else 
+    movs r1, #CMD_WRITE_STATUS1
+    str r1, [r3, #SSI_DR0_OFFSET]
+#  if BOARD_QUAD_ENABLE_STATUS_BYTE==2
     movs r0, #0
     str r0, [r3, #SSI_DR0_OFFSET]
+#  endif
     str r2, [r3, #SSI_DR0_OFFSET]
 
     bl wait_ssi_ready
     ldr r1, [r3, #SSI_DR0_OFFSET]
     ldr r1, [r3, #SSI_DR0_OFFSET]
+#  if BOARD_QUAD_ENABLE_STATUS_BYTE==2
     ldr r1, [r3, #SSI_DR0_OFFSET]
+#  endif
 
+# endif
     // Poll status register for write completion
 1:
     movs r0, #CMD_READ_STATUS
@@ -258,6 +306,7 @@ program_sregs:
     movs r1, #1
     tst r0, r1
     bne 1b
+#endif
 
 skip_sreg_programming:
 
@@ -286,6 +335,7 @@ dummy_read:
     movs r1, #0x0                    // NDF=0 (single 32b read)
     str r1, [r3, #SSI_CTRLR1_OFFSET]
 
+#if BOARD_QUAD_OK==1
 #define SPI_CTRLR0_ENTER_XIP \
     (ADDR_L << SSI_SPI_CTRLR0_ADDR_L_LSB) |     /* Address + mode bits */ \
     (WAIT_CYCLES << SSI_SPI_CTRLR0_WAIT_CYCLES_LSB) | /* Hi-Z dummy clocks following address + mode */ \
@@ -315,6 +365,7 @@ dummy_read:
 
     movs r1, #0
     str r1, [r3, #SSI_SSIENR_OFFSET]   // Disable SSI (and clear FIFO) to allow further config
+#endif
 
 // Note that the INST_L field is used to select what XIP data gets pushed into
 // the TX FIFO:
@@ -322,13 +373,13 @@ dummy_read:
 //      Anything else   {XIP_CMD[7:0],ADDR[23:0]}       Load SPI command into XIP_CMD
 configure_ssi:
 #define SPI_CTRLR0_XIP \
-    (MODE_CONTINUOUS_READ                      /* Mode bits to keep flash in continuous read mode */ \
+    (READ_INSTRUCTION                          /* Mode bits to keep flash in continuous read mode */ \
         << SSI_SPI_CTRLR0_XIP_CMD_LSB) | \
     (ADDR_L << SSI_SPI_CTRLR0_ADDR_L_LSB) |    /* Total number of address + mode bits */ \
     (WAIT_CYCLES << SSI_SPI_CTRLR0_WAIT_CYCLES_LSB) |    /* Hi-Z dummy clocks following address + mode */ \
-    (SSI_SPI_CTRLR0_INST_L_VALUE_NONE          /* Do not send a command, instead send XIP_CMD as mode bits after address */ \
+    (INSTRUCTION_LENGTH                        /* Do not send a command, instead send XIP_CMD as mode bits after address */ \
         << SSI_SPI_CTRLR0_INST_L_LSB) | \
-    (SSI_SPI_CTRLR0_TRANS_TYPE_VALUE_2C2A      /* Send Address in Quad I/O mode (and Command but that is zero bits long) */ \
+    (TRANSACTION_TYPE                          /* Send Address in Quad I/O mode (and Command but that is zero bits long) */ \
         << SSI_SPI_CTRLR0_TRANS_TYPE_LSB)
 
     ldr r1, =(SPI_CTRLR0_XIP)

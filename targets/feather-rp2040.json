@@ -1,0 +1,10 @@
+{
+    "inherits": [
+        "rp2040"
+    ],
+    "build-tags": ["feather_rp2040"],
+    "linkerscript": "targets/feather-rp2040.ld",
+    "extra-files": [
+        "targets/feather-rp2040-boot-stage2.S"
+    ]
+}
