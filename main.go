@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -296,7 +297,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	return builder.Build(pkgName, fileExt, config, func(result builder.BuildResult) error {
 		// do we need port reset to put MCU into bootloader mode?
 		if config.Target.PortReset == "true" && flashMethod != "openocd" {
-			port, err := getDefaultPort(strings.FieldsFunc(port, func(c rune) bool { return c == ',' }))
+			port, err := getDefaultPort(port, config.Target.SerialPort)
 			if err != nil {
 				return err
 			}
@@ -321,7 +322,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 
 			if strings.Contains(flashCmd, "{port}") {
 				var err error
-				port, err = getDefaultPort(strings.FieldsFunc(port, func(c rune) bool { return c == ',' }))
+				port, err = getDefaultPort(port, config.Target.SerialPort)
 				if err != nil {
 					return err
 				}
@@ -718,7 +719,8 @@ func windowsFindUSBDrive(volume string, options *compileopts.Options) (string, e
 }
 
 // getDefaultPort returns the default serial port depending on the operating system.
-func getDefaultPort(portCandidates []string) (port string, err error) {
+func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err error) {
+	portCandidates := strings.FieldsFunc(portFlag, func(c rune) bool { return c == ',' })
 	if len(portCandidates) == 1 {
 		return portCandidates[0], nil
 	}
@@ -734,13 +736,70 @@ func getDefaultPort(portCandidates []string) (port string, err error) {
 			return "", err
 		}
 
-		for _, p := range portsList {
-			if p.IsUSB {
-				ports = append(ports, p.Name)
+		var preferredPortIDs [][2]uint16
+		for _, s := range usbInterfaces {
+			parts := strings.Split(s, ":")
+			if len(parts) != 3 || (parts[0] != "acm" && parts[0] == "usb") {
+				// acm and usb are the two types of serial ports recognized
+				// under Linux (ttyACM*, ttyUSB*). Other operating systems don't
+				// generally make this distinction. If this is not one of the
+				// given USB devices, don't try to parse the USB IDs.
+				continue
 			}
+			vid, err := strconv.ParseUint(parts[1], 16, 16)
+			if err != nil {
+				return "", fmt.Errorf("could not parse USB vendor ID %q: %w", parts[1], err)
+			}
+			pid, err := strconv.ParseUint(parts[2], 16, 16)
+			if err != nil {
+				return "", fmt.Errorf("could not parse USB product ID %q: %w", parts[1], err)
+			}
+			preferredPortIDs = append(preferredPortIDs, [2]uint16{uint16(vid), uint16(pid)})
 		}
 
-		if ports == nil || len(ports) == 0 {
+		var primaryPorts []string   // ports picked from preferred USB VID/PID
+		var secondaryPorts []string // other ports (as a fallback)
+		for _, p := range portsList {
+			if !p.IsUSB {
+				continue
+			}
+			if p.VID != "" && p.PID != "" {
+				foundPort := false
+				vid, vidErr := strconv.ParseUint(p.VID, 16, 16)
+				pid, pidErr := strconv.ParseUint(p.PID, 16, 16)
+				if vidErr == nil && pidErr == nil {
+					for _, id := range preferredPortIDs {
+						if uint16(vid) == id[0] && uint16(pid) == id[1] {
+							primaryPorts = append(primaryPorts, p.Name)
+							foundPort = true
+							continue
+						}
+					}
+				}
+				if foundPort {
+					continue
+				}
+			}
+
+			secondaryPorts = append(secondaryPorts, p.Name)
+		}
+		if len(primaryPorts) == 1 {
+			// There is exactly one match in the set of preferred ports. Use
+			// this port, even if there may be others available. This allows
+			// flashing a specific board even if there are multiple available.
+			return primaryPorts[0], nil
+		} else if len(primaryPorts) > 1 {
+			// There are multiple preferred ports, probably because more than
+			// one device of the same type are connected (e.g. two Arduino
+			// Unos).
+			ports = primaryPorts
+		} else {
+			// No preferred ports found. Fall back to other serial ports
+			// available in the system.
+			ports = secondaryPorts
+		}
+
+		if len(ports) == 0 {
 			// fallback
 			switch runtime.GOOS {
 			case "darwin":
