@@ -3,6 +3,7 @@
     "build-tags": ["itsybitsy_m4"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
+    "serial-port": ["acm:239a:802b", "acm:239a:002b"],
     "msd-volume-name": "ITSYM4BOOT",
     "msd-firmware-name": "firmware.uf2"
 }

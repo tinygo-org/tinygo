@@ -45,6 +45,7 @@ type TargetSpec struct {
 	FlashCommand     string   `json:"flash-command"`
 	GDB              []string `json:"gdb"`
 	PortReset        string   `json:"flash-1200-bps-reset"`
+	SerialPort       []string `json:"serial-port"` // serial port IDs in the form "acm:vid:pid" or "usb:vid:pid"
 	FlashMethod      string   `json:"flash-method"`
 	FlashVolume      string   `json:"msd-volume-name"`
 	FlashFilename    string   `json:"msd-firmware-name"`
