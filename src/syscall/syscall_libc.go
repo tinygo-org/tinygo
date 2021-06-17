@@ -13,7 +13,7 @@ type sliceHeader struct {
 }
 
 func Close(fd int) (err error) {
-	if libc_close(fd) < 0 {
+	if libc_close(int32(fd)) < 0 {
 		err = getErrno()
 	}
 	return
@@ -21,7 +21,7 @@ func Close(fd int) (err error) {
 
 func Write(fd int, p []byte) (n int, err error) {
 	buf, count := splitSlice(p)
-	n = libc_write(fd, buf, uint(count))
+	n = libc_write(int32(fd), buf, uint(count))
 	if n < 0 {
 		err = getErrno()
 	}
@@ -30,7 +30,7 @@ func Write(fd int, p []byte) (n int, err error) {
 
 func Read(fd int, p []byte) (n int, err error) {
 	buf, count := splitSlice(p)
-	n = libc_read(fd, buf, uint(count))
+	n = libc_read(int32(fd), buf, uint(count))
 	if n < 0 {
 		err = getErrno()
 	}
@@ -43,7 +43,7 @@ func Seek(fd int, offset int64, whence int) (off int64, err error) {
 
 func Open(path string, flag int, mode uint32) (fd int, err error) {
 	data := append([]byte(path), 0)
-	fd = libc_open(&data[0], flag, mode)
+	fd = int(libc_open(&data[0], int32(flag), mode))
 	if fd < 0 {
 		err = getErrno()
 	}
@@ -91,7 +91,7 @@ func splitSlice(p []byte) (buf *byte, len uintptr) {
 
 // ssize_t write(int fd, const void *buf, size_t count)
 //export write
-func libc_write(fd int, buf *byte, count uint) int
+func libc_write(fd int32, buf *byte, count uint) int
 
 // char *getenv(const char *name);
 //export getenv
@@ -99,12 +99,12 @@ func libc_getenv(name *byte) *byte
 
 // ssize_t read(int fd, void *buf, size_t count);
 //export read
-func libc_read(fd int, buf *byte, count uint) int
+func libc_read(fd int32, buf *byte, count uint) int
 
 // int open(const char *pathname, int flags, mode_t mode);
 //export open
-func libc_open(pathname *byte, flags int, mode uint32) int
+func libc_open(pathname *byte, flags int32, mode uint32) int32
 
 // int close(int fd)
 //export close
-func libc_close(fd int) int
+func libc_close(fd int32) int32
