@@ -129,7 +129,7 @@ func Run(mod llvm.Module, debug bool) error {
 
 	// Update all global variables in the LLVM module.
 	mem := memoryView{r: r}
-	for _, obj := range r.objects {
+	for i, obj := range r.objects {
 		if obj.llvmGlobal.IsNil() {
 			continue
 		}
@@ -159,6 +159,12 @@ func Run(mod llvm.Module, debug bool) error {
 			name := obj.llvmGlobal.Name()
 			obj.llvmGlobal.EraseFromParentAsGlobal()
 			newGlobal.SetName(name)
+
+			// Update interp-internal references.
+			delete(r.globals, obj.llvmGlobal)
+			obj.llvmGlobal = newGlobal
+			r.globals[newGlobal] = i
+			r.objects[i] = obj
 			continue
 		}
 		if err != nil {
