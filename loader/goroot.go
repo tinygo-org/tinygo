@@ -2,6 +2,14 @@ package loader
 
 // This file constructs a new temporary GOROOT directory by merging both the
 // standard Go GOROOT and the GOROOT from TinyGo using symlinks.
+//
+// The goal is to replace specific packages from Go with a TinyGo version. It's
+// never a partial replacement, either a package is fully replaced or it is not.
+// This is important because if we did allow to merge packages (e.g. by adding
+// files to a package), it would lead to a dependency on implementation details
+// with all the maintenance burden that results in. Only allowing to replace
+// packages as a whole avoids this as packages are already designed to have a
+// public (backwards-compatible) API.
 
 import (
 	"crypto/sha512"
@@ -139,6 +147,7 @@ func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides 
 		if err != nil {
 			return err
 		}
+		hasTinyGoFiles := false
 		for _, e := range tinygoEntries {
 			if e.IsDir() {
 				// A directory, so merge this thing.
@@ -154,6 +163,7 @@ func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides 
 				if err != nil {
 					return err
 				}
+				hasTinyGoFiles = true
 			}
 		}
 
@@ -164,21 +174,30 @@ func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides 
 			return err
 		}
 		for _, e := range gorootEntries {
-			if !e.IsDir() {
-				// Don't merge in files from Go. Otherwise we'd end up with a
-				// weird syscall package with files from both roots.
-				continue
-			}
-			if _, ok := overrides[path.Join(importPath, e.Name())+"/"]; ok {
-				// Already included above, so don't bother trying to create this
-				// symlink.
-				continue
-			}
-			newname := filepath.Join(tmpgoroot, "src", importPath, e.Name())
-			oldname := filepath.Join(goroot, "src", importPath, e.Name())
-			err := symlink(oldname, newname)
-			if err != nil {
-				return err
+			if e.IsDir() {
+				if _, ok := overrides[path.Join(importPath, e.Name())+"/"]; ok {
+					// Already included above, so don't bother trying to create this
+					// symlink.
+					continue
+				}
+				newname := filepath.Join(tmpgoroot, "src", importPath, e.Name())
+				oldname := filepath.Join(goroot, "src", importPath, e.Name())
+				err := symlink(oldname, newname)
+				if err != nil {
+					return err
+				}
+			} else {
+				// Only merge files from Go if TinyGo does not have any files.
+				// Otherwise we'd end up with a weird mix from both Go
+				// implementations.
+				if !hasTinyGoFiles {
+					newname := filepath.Join(tmpgoroot, "src", importPath, e.Name())
+					oldname := filepath.Join(goroot, "src", importPath, e.Name())
+					err := symlink(oldname, newname)
+					if err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
@@ -201,6 +220,8 @@ func needsSyscallPackage(buildTags []string) bool {
 func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 	paths := map[string]bool{
 		"/":                     true,
+		"crypto/":               true,
+		"crypto/rand/":          false,
 		"device/":               false,
 		"examples/":             false,
 		"internal/":             true,
