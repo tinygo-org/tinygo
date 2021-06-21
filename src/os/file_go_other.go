@@ -44,3 +44,8 @@ const (
 func (m FileMode) IsDir() bool {
 	return false
 }
+
+// IsRegular is a stub, always returning false
+func (m FileMode) IsRegular() bool {
+	return false
+}
