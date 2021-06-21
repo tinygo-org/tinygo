@@ -1,6 +1,6 @@
 {
 	"llvm-target":   "wasm32--wasi",
-	"build-tags":    ["wasm", "wasi"],
+	"build-tags":    ["tinygo.wasm", "wasi"],
 	"goos":          "linux",
 	"goarch":        "arm",
 	"linker":        "wasm-ld",
