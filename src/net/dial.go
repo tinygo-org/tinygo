@@ -8,6 +8,7 @@ import (
 type Dialer struct {
 	Timeout   time.Duration
 	Deadline  time.Time
+	DualStack bool
 	KeepAlive time.Duration
 }
 
