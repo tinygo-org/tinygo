@@ -89,7 +89,7 @@ func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
 	case "conservative", "extalloc":
 		for _, tag := range c.BuildTags() {
-			if tag == "wasm" {
+			if tag == "tinygo.wasm" {
 				return true
 			}
 		}

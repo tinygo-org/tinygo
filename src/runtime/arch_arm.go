@@ -1,4 +1,4 @@
-// +build arm,!baremetal,!wasm arm,arm7tdmi
+// +build arm,!baremetal,!tinygo.wasm arm,arm7tdmi
 
 package runtime
 
