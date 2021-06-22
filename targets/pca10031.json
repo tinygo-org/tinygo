@@ -1,6 +1,5 @@
 {
 	"inherits": ["nrf51"],
 	"build-tags": ["pca10031"],
-	"flash-command": "nrfjprog -f nrf51 --sectorerase --program {hex} --reset",
 	"openocd-interface": "cmsis-dap"
 }

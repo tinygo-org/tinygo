@@ -11,6 +11,7 @@
 		"lib/nrfx/mdk/system_nrf52.c",
 		"src/device/nrf/nrf52.s"
 	],
+	"flash-command": "nrfjprog -f nrf52 --sectorerase --program {hex} --reset",
 	"openocd-transport": "swd",
 	"openocd-target": "nrf51"
 }

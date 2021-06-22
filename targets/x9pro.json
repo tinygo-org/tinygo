@@ -2,7 +2,6 @@
 	"inherits": ["nrf52"],
 	"build-tags": ["x9pro"],
 	"flash-method": "openocd",
-	"flash-command": "nrfjprog -f nrf52 --sectorerase --program {hex} --reset",
 	"openocd-interface": "jlink",
 	"openocd-transport": "swd"
 }
