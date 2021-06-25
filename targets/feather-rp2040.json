@@ -2,6 +2,7 @@
     "inherits": [
         "rp2040"
     ],
+    "serial": "uart",
     "build-tags": ["feather_rp2040"],
     "linkerscript": "targets/feather-rp2040.ld",
     "extra-files": [
