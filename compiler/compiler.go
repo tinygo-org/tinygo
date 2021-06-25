@@ -23,7 +23,7 @@ import (
 // Version of the compiler pacakge. Must be incremented each time the compiler
 // package changes in a way that affects the generated LLVM module.
 // This version is independent of the TinyGo version number.
-const Version = 11 // last change: change method name globals
+const Version = 12 // last change: implement syscall.rawSyscallNoError
 
 func init() {
 	llvm.InitializeAllTargets()
@@ -1310,6 +1310,8 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.emitCSROperation(instr)
 		case strings.HasPrefix(name, "syscall.Syscall"):
 			return b.createSyscall(instr)
+		case strings.HasPrefix(name, "syscall.rawSyscallNoError"):
+			return b.createRawSyscallNoError(instr)
 		case strings.HasPrefix(name, "runtime/volatile.Load"):
 			return b.createVolatileLoad(instr)
 		case strings.HasPrefix(name, "runtime/volatile.Store"):
