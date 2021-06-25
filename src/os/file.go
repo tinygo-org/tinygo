@@ -196,8 +196,3 @@ func Readlink(name string) (string, error) {
 func TempDir() string {
 	return "/tmp"
 }
-
-// Getpid is a stub (for now), always returning 1
-func Getpid() int {
-	return 1
-}
