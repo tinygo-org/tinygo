@@ -9,6 +9,7 @@ import (
 
 // UART on the MatrixPortal M4
 var (
+	Serial = UART1
 	UART1  = &_UART1
 	_UART1 = UART{
 		Buffer: NewRingBuffer(),
