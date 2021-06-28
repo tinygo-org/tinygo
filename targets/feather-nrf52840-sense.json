@@ -4,7 +4,7 @@
     "serial": "usb",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "msd-volume-name": "FTHR840BOOT",
+    "msd-volume-name": "FTHRSNSBOOT",
     "msd-firmware-name": "firmware.uf2",
     "uf2-family-id": "0xADA52840",
     "linkerscript": "targets/circuitplay-bluefruit.ld"
