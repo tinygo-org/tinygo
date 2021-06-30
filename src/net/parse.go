@@ -52,6 +52,18 @@ func xtoi(s string) (n int, i int, ok bool) {
 	return n, i, true
 }
 
+// xtoi2 converts the next two hex digits of s into a byte.
+// If s is longer than 2 bytes then the third byte must be e.
+// If the first two bytes of s are not hex digits or the third byte
+// does not match e, false is returned.
+func xtoi2(s string, e byte) (byte, bool) {
+	if len(s) > 2 && s[2] != e {
+		return 0, false
+	}
+	n, ei, ok := xtoi(s[:2])
+	return byte(n), ok && ei == 2
+}
+
 // Convert unsigned integer to decimal string.
 func uitoa(val uint) string {
 	if val == 0 { // avoid string allocation
