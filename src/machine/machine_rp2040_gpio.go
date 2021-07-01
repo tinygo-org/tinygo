@@ -86,6 +86,8 @@ const (
 	PinPWM
 	PinI2C
 	PinSPI
+	PinPIO0
+	PinPIO1
 )
 
 // set drives the pin high
@@ -194,6 +196,10 @@ func (p Pin) Configure(config PinConfig) {
 		p.setSlew(false)
 	case PinSPI:
 		p.setFunc(fnSPI)
+	case PinPIO0:
+		p.setFunc(fnPIO0)
+	case PinPIO1:
+		p.setFunc(fnPIO1)
 	}
 }
 
