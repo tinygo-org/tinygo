@@ -953,15 +953,19 @@ func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map
 		if fn.stackSizeType == stacksize.Bounded {
 			stackSize := uint32(fn.stackSize)
 
-			// Adding 4 for the stack canary. Even though the size may be
-			// automatically determined, stack overflow checking is still
-			// important as the stack size cannot be determined for all
-			// goroutines.
-			stackSize += 4
-
 			// Add stack size used by interrupts.
 			switch fileHeader.Machine {
 			case elf.EM_ARM:
+				if stackSize%8 != 0 {
+					// If the stack isn't a multiple of 8, it means the leaf
+					// function with the biggest stack depth doesn't have an aligned
+					// stack. If the STKALIGN flag is set (which it is by default)
+					// the interrupt controller will forcibly align the stack before
+					// storing in-use registers. This will thus overwrite one word
+					// past the end of the stack (off-by-one).
+					stackSize += 4
+				}
+
 				// On Cortex-M (assumed here), this stack size is 8 words or 32
 				// bytes. This is only to store the registers that the interrupt
 				// may modify, the interrupt will switch to the interrupt stack
@@ -969,6 +973,14 @@ func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map
 				// Some background:
 				// https://interrupt.memfault.com/blog/cortex-m-rtos-context-switching
 				stackSize += 32
+
+				// Adding 4 for the stack canary, and another 4 to keep the
+				// stack aligned. Even though the size may be automatically
+				// determined, stack overflow checking is still important as the
+				// stack size cannot be determined for all goroutines.
+				stackSize += 8
+			default:
+				return fmt.Errorf("unknown architecture: %s", fileHeader.Machine.String())
 			}
 
 			// Finally write the stack size to the binary.
