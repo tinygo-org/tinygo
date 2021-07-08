@@ -572,6 +572,17 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 	}
 
 	if llvmType.IsNil() {
+		if v.offset() != 0 {
+			// If there is an offset, make sure to use a GEP to index into the
+			// pointer. Because there is no expected type, we use whatever is
+			// most convenient: an *i8 type. It is trivial to index byte-wise.
+			if llvmValue.Type() != mem.r.i8ptrType {
+				llvmValue = llvm.ConstBitCast(llvmValue, mem.r.i8ptrType)
+			}
+			llvmValue = llvm.ConstInBoundsGEP(llvmValue, []llvm.Value{
+				llvm.ConstInt(llvmValue.Type().Context().Int32Type(), uint64(v.offset()), false),
+			})
+		}
 		return llvmValue, nil
 	}
 

@@ -13,6 +13,8 @@ func main() {
 	println("v5:", len(v5), v5 == nil)
 	println("v6:", v6)
 	println("v7:", cap(v7), string(v7))
+	println("v8:", v8)
+	println("v9:", len(v9), v9[0], v9[1], v9[2])
 
 	println(uint8SliceSrc[0])
 	println(uint8SliceDst[0])
@@ -35,6 +37,8 @@ var (
 	v5 = map[string]int{}
 	v6 = float64(v1) < 2.6
 	v7 = []byte("foo")
+	v8 string
+	v9 []int
 
 	uint8SliceSrc = []uint8{3, 100}
 	uint8SliceDst []uint8
@@ -48,4 +52,15 @@ func init() {
 
 	intSliceDst = make([]int16, len(intSliceSrc))
 	copy(intSliceDst, intSliceSrc)
+
+	v8 = sliceString("foobarbaz", 3, 8)
+	v9 = sliceSlice([]int{0, 1, 2, 3, 4, 5}, 2, 5)
+}
+
+func sliceString(s string, start, end int) string {
+	return s[start:end]
+}
+
+func sliceSlice(s []int, start, end int) []int {
+	return s[start:end]
 }
