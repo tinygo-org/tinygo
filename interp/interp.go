@@ -15,7 +15,7 @@ import (
 // package is changed in a way that affects the output so that cached package
 // builds will be invalidated.
 // This version is independent of the TinyGo version number.
-const Version = 1
+const Version = 2 // last change: fix GEP on untyped pointers
 
 // Enable extra checks, which should be disabled by default.
 // This may help track down bugs by adding a few more sanity checks.
