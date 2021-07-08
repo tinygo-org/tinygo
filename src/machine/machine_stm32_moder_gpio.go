@@ -3,7 +3,7 @@
 package machine
 
 import (
-	"device/stm32"
+	"github.com/sago35/device/stm32"
 )
 
 // GPIO for the stm32 families except the stm32f1xx which uses a simpler but

@@ -3,8 +3,8 @@
 package machine
 
 import (
-	"device/kendryte"
-	"device/riscv"
+	"github.com/sago35/device/kendryte"
+	"github.com/sago35/device/riscv"
 	"errors"
 	"runtime/interrupt"
 	"unsafe"

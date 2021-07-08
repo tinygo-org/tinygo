@@ -3,7 +3,7 @@
 package machine
 
 import (
-	"device/avr"
+	"github.com/sago35/device/avr"
 	"runtime/volatile"
 	"unsafe"
 )

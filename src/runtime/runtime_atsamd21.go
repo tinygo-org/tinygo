@@ -3,8 +3,8 @@
 package runtime
 
 import (
-	"device/arm"
-	"device/sam"
+	"github.com/sago35/device/arm"
+	"github.com/sago35/device/sam"
 	"machine"
 	"runtime/interrupt"
 	"runtime/volatile"

@@ -3,7 +3,7 @@
 package runtime
 
 import (
-	"device/stm32"
+	"github.com/sago35/device/stm32"
 	"machine"
 )
 

@@ -3,7 +3,7 @@
 package machine
 
 import (
-	"device/sam"
+	"github.com/sago35/device/sam"
 	"errors"
 	"runtime/interrupt"
 	"unsafe"

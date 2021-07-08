@@ -5,7 +5,7 @@ package machine
 // Peripheral abstraction layer for the stm32l5
 
 import (
-	"device/stm32"
+	"github.com/sago35/device/stm32"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"

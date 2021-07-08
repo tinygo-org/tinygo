@@ -2,7 +2,7 @@
 
 package interrupt
 
-import "device/sifive"
+import "github.com/sago35/device/sifive"
 
 // Enable enables this interrupt. Right after calling this function, the
 // interrupt may be invoked if it was already pending.

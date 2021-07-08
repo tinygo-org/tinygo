@@ -3,7 +3,7 @@
 package machine
 
 import (
-	"device/stm32"
+	"github.com/sago35/device/stm32"
 )
 
 // This variant of the GPIO input interrupt logic is for

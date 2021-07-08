@@ -7,7 +7,7 @@
 //
 package machine
 
-import "device/sam"
+import "github.com/sago35/device/sam"
 
 const HSRAM_SIZE = 0x00040000
 

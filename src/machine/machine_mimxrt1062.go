@@ -3,7 +3,7 @@
 package machine
 
 import (
-	"device/nxp"
+	"github.com/sago35/device/nxp"
 	"math/bits"
 	"runtime/interrupt"
 	"runtime/volatile"

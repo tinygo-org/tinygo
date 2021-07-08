@@ -2,7 +2,7 @@
 
 package machine
 
-import "device/sifive"
+import "github.com/sago35/device/sifive"
 
 // SPI on the HiFive1.
 var (

@@ -3,7 +3,7 @@
 package runtime
 
 import (
-	"device/riscv"
+	"github.com/sago35/device/riscv"
 )
 
 // ticksToNanoseconds converts RTC ticks (at 32768Hz) to nanoseconds.

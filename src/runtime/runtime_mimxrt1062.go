@@ -3,8 +3,8 @@
 package runtime
 
 import (
-	"device/arm"
-	"device/nxp"
+	"github.com/sago35/device/arm"
+	"github.com/sago35/device/nxp"
 	"machine"
 	"math/bits"
 	"unsafe"

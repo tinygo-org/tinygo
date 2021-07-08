@@ -3,7 +3,7 @@
 package runtime
 
 import (
-	"device/sam"
+	"github.com/sago35/device/sam"
 )
 
 func init() {

@@ -3,7 +3,7 @@
 package runtime
 
 import (
-	"device/avr"
+	"github.com/sago35/device/avr"
 )
 
 func initUART() {

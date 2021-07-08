@@ -6,7 +6,7 @@ package machine
 // of MCUs.
 
 import (
-	"device/stm32"
+	"github.com/sago35/device/stm32"
 	"unsafe"
 )
 

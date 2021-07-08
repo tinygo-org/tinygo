@@ -3,7 +3,7 @@
 package machine
 
 import (
-	"device/sifive"
+	"github.com/sago35/device/sifive"
 	"runtime/interrupt"
 	"unsafe"
 )

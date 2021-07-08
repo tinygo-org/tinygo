@@ -1,7 +1,7 @@
 package main
 
 import (
-	"device/sam"
+	"github.com/sago35/device/sam"
 	"fmt"
 	"machine"
 	"time"

@@ -3,7 +3,7 @@
 package machine
 
 import (
-	"device/rp"
+	"github.com/sago35/device/rp"
 	"runtime/volatile"
 	"unsafe"
 )

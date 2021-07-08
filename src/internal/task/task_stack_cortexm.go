@@ -9,7 +9,7 @@ package task
 // space for interrupts.
 
 import (
-	"device/arm"
+	"github.com/sago35/device/arm"
 	"unsafe"
 )
 

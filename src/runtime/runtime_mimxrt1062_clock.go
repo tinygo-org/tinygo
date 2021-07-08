@@ -3,7 +3,7 @@
 package runtime
 
 import (
-	"device/nxp"
+	"github.com/sago35/device/nxp"
 )
 
 // Core clock frequencies (Hz)

@@ -2,7 +2,7 @@
 
 package machine
 
-import "device/sam"
+import "github.com/sago35/device/sam"
 
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef

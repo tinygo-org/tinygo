@@ -3,7 +3,7 @@
 package runtime
 
 import (
-	"device/riscv"
+	"github.com/sago35/device/riscv"
 	"runtime/volatile"
 	"unsafe"
 )

@@ -3,8 +3,8 @@
 package machine
 
 import (
-	"device/arm"
-	"device/nrf"
+	"github.com/sago35/device/arm"
+	"github.com/sago35/device/nrf"
 )
 
 const DFU_MAGIC_SERIAL_ONLY_RESET = 0xb0

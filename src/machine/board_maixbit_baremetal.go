@@ -2,7 +2,7 @@
 
 package machine
 
-import "device/kendryte"
+import "github.com/sago35/device/kendryte"
 
 // SPI on the MAix Bit.
 var (

@@ -2,7 +2,7 @@
 
 package runtime
 
-import "device/riscv"
+import "github.com/sago35/device/riscv"
 
 func getCurrentStackPointer() uintptr {
 	return riscv.AsmFull("mv {}, sp", nil)
