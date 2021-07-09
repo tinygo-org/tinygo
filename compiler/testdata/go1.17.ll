@@ -3,7 +3,7 @@ source_filename = "go1.17.go"
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
 target triple = "wasm32-unknown-wasi"
 
-declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
+declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
 ; Function Attrs: nounwind
 define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {
@@ -46,7 +46,7 @@ declare void @runtime.sliceToArrayPointerPanic(i8*, i8*)
 ; Function Attrs: nounwind
 define hidden [4 x i32]* @main.SliceToArrayConst(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  %makeslice = call i8* @runtime.alloc(i32 24, i8* undef, i8* null) #0
+  %makeslice = call i8* @runtime.alloc(i32 24, i8* null, i8* undef, i8* null) #0
   br i1 false, label %slicetoarray.throw, label %slicetoarray.next
 
 slicetoarray.throw:                               ; preds = %entry

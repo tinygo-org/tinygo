@@ -3,7 +3,7 @@ source_filename = "pointer.go"
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
 target triple = "wasm32-unknown-wasi"
 
-declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
+declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
 ; Function Attrs: nounwind
 define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {

@@ -1524,7 +1524,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				return llvm.Value{}, b.makeError(expr.Pos(), fmt.Sprintf("value is too big (%v bytes)", size))
 			}
 			sizeValue := llvm.ConstInt(b.uintptrType, size, false)
-			buf := b.createRuntimeCall("alloc", []llvm.Value{sizeValue}, expr.Comment)
+			nilPtr := llvm.ConstNull(b.i8ptrType)
+			buf := b.createRuntimeCall("alloc", []llvm.Value{sizeValue, nilPtr}, expr.Comment)
 			buf = b.CreateBitCast(buf, llvm.PointerType(typ, 0), "")
 			return buf, nil
 		} else {
@@ -1736,7 +1737,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, err
 		}
 		sliceSize := b.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
-		slicePtr := b.createRuntimeCall("alloc", []llvm.Value{sliceSize}, "makeslice.buf")
+		nilPtr := llvm.ConstNull(b.i8ptrType)
+		slicePtr := b.createRuntimeCall("alloc", []llvm.Value{sliceSize, nilPtr}, "makeslice.buf")
 		slicePtr = b.CreateBitCast(slicePtr, llvm.PointerType(llvmElemType, 0), "makeslice.array")
 
 		// Extend or truncate if necessary. This is safe as we've already done

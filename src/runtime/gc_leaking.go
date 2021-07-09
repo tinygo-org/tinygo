@@ -13,7 +13,7 @@ import (
 // Ever-incrementing pointer: no memory is freed.
 var heapptr = heapStart
 
-func alloc(size uintptr) unsafe.Pointer {
+func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// TODO: this can be optimized by not casting between pointers and ints so
 	// much. And by using platform-native data types (e.g. *uint8 for 8-bit
 	// systems).

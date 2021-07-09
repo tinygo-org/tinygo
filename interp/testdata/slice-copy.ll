@@ -10,7 +10,7 @@ target triple = "x86_64--linux"
 
 declare i64 @runtime.sliceCopy(i8* %dst, i8* %src, i64 %dstLen, i64 %srcLen, i64 %elemSize) unnamed_addr
 
-declare i8* @runtime.alloc(i64) unnamed_addr
+declare i8* @runtime.alloc(i64, i8*) unnamed_addr
 
 declare void @runtime.printuint8(i8)
 
@@ -52,7 +52,7 @@ entry:
   ;     uint8SliceDst = make([]uint8, len(uint8SliceSrc))
   %uint8SliceSrc = load { i8*, i64, i64 }, { i8*, i64, i64 }* @main.uint8SliceSrc
   %uint8SliceSrc.len = extractvalue { i8*, i64, i64 } %uint8SliceSrc, 1
-  %uint8SliceDst.buf = call i8* @runtime.alloc(i64 %uint8SliceSrc.len)
+  %uint8SliceDst.buf = call i8* @runtime.alloc(i64 %uint8SliceSrc.len, i8* null)
   %0 = insertvalue { i8*, i64, i64 } undef, i8* %uint8SliceDst.buf, 0
   %1 = insertvalue { i8*, i64, i64 } %0, i64 %uint8SliceSrc.len, 1
   %2 = insertvalue { i8*, i64, i64 } %1, i64 %uint8SliceSrc.len, 2
@@ -68,7 +68,7 @@ entry:
   %int16SliceSrc = load { i16*, i64, i64 }, { i16*, i64, i64 }* @main.int16SliceSrc
   %int16SliceSrc.len = extractvalue { i16*, i64, i64 } %int16SliceSrc, 1
   %int16SliceSrc.len.bytes = mul i64 %int16SliceSrc.len, 2
-  %int16SliceDst.buf.raw = call i8* @runtime.alloc(i64 %int16SliceSrc.len.bytes)
+  %int16SliceDst.buf.raw = call i8* @runtime.alloc(i64 %int16SliceSrc.len.bytes, i8* null)
   %int16SliceDst.buf = bitcast i8* %int16SliceDst.buf.raw to i16*
   %3 = insertvalue { i16*, i64, i64 } undef, i16* %int16SliceDst.buf, 0
   %4 = insertvalue { i16*, i64, i64 } %3, i64 %int16SliceSrc.len, 1

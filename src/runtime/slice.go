@@ -27,7 +27,7 @@ func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintp
 			// programs).
 			srcCap *= 2
 		}
-		buf := alloc(srcCap * elemSize)
+		buf := alloc(srcCap*elemSize, nil)
 
 		// Copy the old slice to the new slice.
 		if srcLen != 0 {

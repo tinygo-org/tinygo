@@ -41,6 +41,12 @@ func testTransform(t *testing.T, pathPrefix string, transform func(mod llvm.Modu
 	// Perform the transform.
 	transform(mod)
 
+	// Check for any incorrect IR.
+	err = llvm.VerifyModule(mod, llvm.PrintMessageAction)
+	if err != nil {
+		t.Fatal("IR verification failed")
+	}
+
 	// Get the output from the test and filter some irrelevant lines.
 	actual := mod.String()
 	actual = actual[strings.Index(actual, "\ntarget datalayout = ")+1:]
