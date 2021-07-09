@@ -49,8 +49,11 @@ const (
 
 // I2C pins
 const (
-	SDA_PIN Pin = GPIO12
-	SCL_PIN Pin = GPIO13
+	I2C0_SDA_PIN Pin = GPIO12
+	I2C0_SCL_PIN Pin = GPIO13
+
+	I2C1_SDA_PIN Pin = GPIO18
+	I2C1_SCL_PIN Pin = GPIO19
 )
 
 // SPI pins
