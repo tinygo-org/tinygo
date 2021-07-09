@@ -729,7 +729,7 @@ func Zero(typ Type) Value {
 func New(typ Type) Value {
 	return Value{
 		typecode: PtrTo(typ).(rawType),
-		value:    alloc(typ.Size()),
+		value:    alloc(typ.Size(), nil),
 		flags:    valueFlagExported,
 	}
 }
@@ -778,7 +778,7 @@ func (e *ValueError) Error() string {
 func memcpy(dst, src unsafe.Pointer, size uintptr)
 
 //go:linkname alloc runtime.alloc
-func alloc(size uintptr) unsafe.Pointer
+func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 
 //go:linkname sliceAppend runtime.sliceAppend
 func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintptr, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr)

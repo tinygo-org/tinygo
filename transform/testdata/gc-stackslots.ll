@@ -8,7 +8,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 
 declare void @runtime.trackPointer(i8* nocapture readonly)
 
-declare noalias nonnull i8* @runtime.alloc(i32)
+declare noalias nonnull i8* @runtime.alloc(i32, i8*)
 
 ; Generic function that returns a pointer (that must be tracked).
 define i8* @getPointer() {
@@ -18,7 +18,7 @@ define i8* @getPointer() {
 define i8* @needsStackSlots() {
   ; Tracked pointer. Although, in this case the value is immediately returned
   ; so tracking it is not really necessary.
-  %ptr = call i8* @runtime.alloc(i32 4)
+  %ptr = call i8* @runtime.alloc(i32 4, i8* null)
   call void @runtime.trackPointer(i8* %ptr)
   ; Restoring the stack pointer can happen at this position, before the return.
   ; This avoids issues with tail calls.
@@ -41,7 +41,7 @@ define i8* @needsStackSlots2() {
   call void @runtime.trackPointer(i8* %ptr2)
 
   ; Here is finally the point where an allocation happens.
-  %unused = call i8* @runtime.alloc(i32 4)
+  %unused = call i8* @runtime.alloc(i32 4, i8* null)
   call void @runtime.trackPointer(i8* %unused)
 
   ret i8* %ptr1
@@ -59,7 +59,7 @@ define i8* @fibNext(i8* %x, i8* %y) {
   %x.val = load i8, i8* %x
   %y.val = load i8, i8* %y
   %out.val = add i8 %x.val, %y.val
-  %out.alloc = call i8* @runtime.alloc(i32 1)
+  %out.alloc = call i8* @runtime.alloc(i32 1, i8* null)
   call void @runtime.trackPointer(i8* %out.alloc)
   store i8 %out.val, i8* %out.alloc
   ret i8* %out.alloc
@@ -67,9 +67,9 @@ define i8* @fibNext(i8* %x, i8* %y) {
 
 define i8* @allocLoop() {
 entry:
-  %entry.x = call i8* @runtime.alloc(i32 1)
+  %entry.x = call i8* @runtime.alloc(i32 1, i8* null)
   call void @runtime.trackPointer(i8* %entry.x)
-  %entry.y = call i8* @runtime.alloc(i32 1)
+  %entry.y = call i8* @runtime.alloc(i32 1, i8* null)
   call void @runtime.trackPointer(i8* %entry.y)
   store i8 1, i8* %entry.y
   br label %loop
@@ -95,7 +95,7 @@ define void @testGEPBitcast() {
   %arr = call [32 x i8]* @arrayAlloc()
   %arr.bitcast = getelementptr [32 x i8], [32 x i8]* %arr, i32 0, i32 0
   call void @runtime.trackPointer(i8* %arr.bitcast)
-  %other = call i8* @runtime.alloc(i32 1)
+  %other = call i8* @runtime.alloc(i32 1, i8* null)
   call void @runtime.trackPointer(i8* %other)
   ret void
 }

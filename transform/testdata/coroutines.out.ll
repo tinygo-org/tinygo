@@ -10,7 +10,7 @@ declare void @"internal/task.Pause"(i8*, i8*)
 
 declare void @runtime.scheduler(i8*, i8*)
 
-declare i8* @runtime.alloc(i32, i8*, i8*)
+declare i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
 declare void @runtime.free(i8*, i8*, i8*)
 
@@ -66,7 +66,7 @@ entry:
 define void @ditchTail(i32 %0, i64 %1, i8* %2, i8* %parentHandle) {
 entry:
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
-  %ret.ditch = call i8* @runtime.alloc(i32 4, i8* undef, i8* undef)
+  %ret.ditch = call i8* @runtime.alloc(i32 4, i8* null, i8* undef, i8* undef)
   call void @"(*internal/task.Task).setReturnPtr"(%"internal/task.Task"* %task.current, i8* %ret.ditch, i8* undef, i8* undef)
   %3 = call i32 @delayedValue(i32 %0, i64 %1, i8* undef, i8* %parentHandle)
   ret void
@@ -85,7 +85,7 @@ entry:
   %ret.ptr = call i8* @"(*internal/task.Task).getReturnPtr"(%"internal/task.Task"* %task.current, i8* undef, i8* undef)
   %ret.ptr.bitcast = bitcast i8* %ret.ptr to i32*
   store i32 %0, i32* %ret.ptr.bitcast, align 4
-  %ret.alternate = call i8* @runtime.alloc(i32 4, i8* undef, i8* undef)
+  %ret.alternate = call i8* @runtime.alloc(i32 4, i8* null, i8* undef, i8* undef)
   call void @"(*internal/task.Task).setReturnPtr"(%"internal/task.Task"* %task.current, i8* %ret.alternate, i8* undef, i8* undef)
   %4 = call i32 @delayedValue(i32 %1, i64 %2, i8* undef, i8* %parentHandle)
   ret i32 undef
@@ -96,7 +96,7 @@ entry:
   %call.return = alloca i32, align 4
   %coro.id = call token @llvm.coro.id(i32 0, i8* null, i8* null, i8* null)
   %coro.size = call i32 @llvm.coro.size.i32()
-  %coro.alloc = call i8* @runtime.alloc(i32 %coro.size, i8* undef, i8* undef)
+  %coro.alloc = call i8* @runtime.alloc(i32 %coro.size, i8* null, i8* undef, i8* undef)
   %coro.state = call i8* @llvm.coro.begin(token %coro.id, i8* %coro.alloc)
   %task.current2 = bitcast i8* %parentHandle to %"internal/task.Task"*
   %task.state.parent = call i8* @"(*internal/task.Task).setState"(%"internal/task.Task"* %task.current2, i8* %coro.state, i8* undef, i8* undef)
@@ -143,7 +143,7 @@ entry:
   %a = alloca i8, align 1
   %coro.id = call token @llvm.coro.id(i32 0, i8* null, i8* null, i8* null)
   %coro.size = call i32 @llvm.coro.size.i32()
-  %coro.alloc = call i8* @runtime.alloc(i32 %coro.size, i8* undef, i8* undef)
+  %coro.alloc = call i8* @runtime.alloc(i32 %coro.size, i8* null, i8* undef, i8* undef)
   %coro.state = call i8* @llvm.coro.begin(token %coro.id, i8* %coro.alloc)
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
   %task.state.parent = call i8* @"(*internal/task.Task).setState"(%"internal/task.Task"* %task.current, i8* %coro.state, i8* undef, i8* undef)
@@ -180,7 +180,7 @@ entry:
   %a = alloca i8, align 1
   %coro.id = call token @llvm.coro.id(i32 0, i8* null, i8* null, i8* null)
   %coro.size = call i32 @llvm.coro.size.i32()
-  %coro.alloc = call i8* @runtime.alloc(i32 %coro.size, i8* undef, i8* undef)
+  %coro.alloc = call i8* @runtime.alloc(i32 %coro.size, i8* null, i8* undef, i8* undef)
   %coro.state = call i8* @llvm.coro.begin(token %coro.id, i8* %coro.alloc)
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
   %task.state.parent = call i8* @"(*internal/task.Task).setState"(%"internal/task.Task"* %task.current, i8* %coro.state, i8* undef, i8* undef)
@@ -225,7 +225,7 @@ define i8 @usePtr(i8* %0, i8* %1, i8* %parentHandle) {
 entry:
   %coro.id = call token @llvm.coro.id(i32 0, i8* null, i8* null, i8* null)
   %coro.size = call i32 @llvm.coro.size.i32()
-  %coro.alloc = call i8* @runtime.alloc(i32 %coro.size, i8* undef, i8* undef)
+  %coro.alloc = call i8* @runtime.alloc(i32 %coro.size, i8* null, i8* undef, i8* undef)
   %coro.state = call i8* @llvm.coro.begin(token %coro.id, i8* %coro.alloc)
   %task.current = bitcast i8* %parentHandle to %"internal/task.Task"*
   %task.state.parent = call i8* @"(*internal/task.Task).setState"(%"internal/task.Task"* %task.current, i8* %coro.state, i8* undef, i8* undef)

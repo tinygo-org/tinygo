@@ -69,7 +69,7 @@ func hashmapMake(keySize, valueSize uint8, sizeHint uintptr) *hashmap {
 		bucketBits++
 	}
 	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(keySize)*8 + uintptr(valueSize)*8
-	buckets := alloc(bucketBufSize * (1 << bucketBits))
+	buckets := alloc(bucketBufSize*(1<<bucketBits), nil)
 	return &hashmap{
 		buckets:    buckets,
 		keySize:    keySize,
@@ -157,7 +157,7 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 // value into the bucket, and returns a pointer to this bucket.
 func hashmapInsertIntoNewBucket(m *hashmap, key, value unsafe.Pointer, tophash uint8) *hashmapBucket {
 	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*8
-	bucketBuf := alloc(bucketBufSize)
+	bucketBuf := alloc(bucketBufSize, nil)
 	// Insert into the first slot, which is empty as it has just been allocated.
 	slotKeyOffset := unsafe.Sizeof(hashmapBucket{})
 	slotKey := unsafe.Pointer(uintptr(bucketBuf) + slotKeyOffset)

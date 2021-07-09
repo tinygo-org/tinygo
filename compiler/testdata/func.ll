@@ -8,7 +8,7 @@ target triple = "wasm32-unknown-wasi"
 @"reflect/types.funcid:func:{basic:int}{}" = external constant i8
 @"main.someFunc$withSignature" = linkonce_odr constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i32, i8*, i8*)* @main.someFunc to i32), i8* @"reflect/types.funcid:func:{basic:int}{}" }
 
-declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
+declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
 ; Function Attrs: nounwind
 define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {

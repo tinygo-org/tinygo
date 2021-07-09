@@ -3,7 +3,7 @@ target triple = "armv7m-none-eabi"
 
 @runtime.zeroSizedAlloc = internal global i8 0, align 1
 
-declare nonnull i8* @runtime.alloc(i32)
+declare nonnull i8* @runtime.alloc(i32, i8*)
 
 define void @testInt() {
   %stackalloc.alloca = alloca [1 x i32], align 4
@@ -25,14 +25,14 @@ define i16 @testArray() {
 }
 
 define void @testEscapingCall() {
-  %1 = call i8* @runtime.alloc(i32 4)
+  %1 = call i8* @runtime.alloc(i32 4, i8* null)
   %2 = bitcast i8* %1 to i32*
   %3 = call i32* @escapeIntPtr(i32* %2)
   ret void
 }
 
 define void @testEscapingCall2() {
-  %1 = call i8* @runtime.alloc(i32 4)
+  %1 = call i8* @runtime.alloc(i32 4, i8* null)
   %2 = bitcast i8* %1 to i32*
   %3 = call i32* @escapeIntPtrSometimes(i32* %2, i32* %2)
   ret void
@@ -47,7 +47,7 @@ define void @testNonEscapingCall() {
 }
 
 define i32* @testEscapingReturn() {
-  %1 = call i8* @runtime.alloc(i32 4)
+  %1 = call i8* @runtime.alloc(i32 4, i8* null)
   %2 = bitcast i8* %1 to i32*
   ret i32* %2
 }

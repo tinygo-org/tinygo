@@ -217,7 +217,8 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// This may be hit a variable number of times, so use a heap allocation.
 		size := b.targetData.TypeAllocSize(deferFrameType)
 		sizeValue := llvm.ConstInt(b.uintptrType, size, false)
-		allocCall := b.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "defer.alloc.call")
+		nilPtr := llvm.ConstNull(b.i8ptrType)
+		allocCall := b.createRuntimeCall("alloc", []llvm.Value{sizeValue, nilPtr}, "defer.alloc.call")
 		alloca = b.CreateBitCast(allocCall, llvm.PointerType(deferFrameType, 0), "defer.alloc")
 	}
 	if b.NeedsStackObjects {

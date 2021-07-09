@@ -97,6 +97,7 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, needsStackObjects bo
 		alloc := mod.NamedFunction("runtime.alloc")
 		packedHeapAlloc := builder.CreateCall(alloc, []llvm.Value{
 			sizeValue,
+			llvm.ConstNull(i8ptrType),
 			llvm.Undef(i8ptrType),            // unused context parameter
 			llvm.ConstPointerNull(i8ptrType), // coroutine handle
 		}, "")

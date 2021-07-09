@@ -38,7 +38,7 @@ func growHeap() bool {
 
 //export malloc
 func libc_malloc(size uintptr) unsafe.Pointer {
-	return alloc(size)
+	return alloc(size, nil)
 }
 
 //export free

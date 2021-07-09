@@ -133,7 +133,7 @@ func chanMake(elementSize uintptr, bufSize uintptr) *channel {
 	return &channel{
 		elementSize: elementSize,
 		bufSize:     bufSize,
-		buf:         alloc(elementSize * bufSize),
+		buf:         alloc(elementSize*bufSize, nil),
 	}
 }
 

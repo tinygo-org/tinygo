@@ -70,7 +70,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(tok
 		}
 
 		// In general the pattern is:
-		//     %0 = call i8* @runtime.alloc(i32 %size)
+		//     %0 = call i8* @runtime.alloc(i32 %size, i8* null)
 		//     %1 = bitcast i8* %0 to type*
 		//     (use %1 only)
 		// But the bitcast might sometimes be dropped when allocating an *i8.

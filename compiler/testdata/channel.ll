@@ -9,7 +9,7 @@ target triple = "wasm32-unknown-wasi"
 %"internal/task.state" = type { i8* }
 %runtime.chanSelectState = type { %runtime.channel*, i8* }
 
-declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
+declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
 ; Function Attrs: nounwind
 define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {

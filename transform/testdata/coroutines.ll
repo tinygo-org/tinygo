@@ -9,7 +9,7 @@ declare void @"internal/task.Pause"(i8*, i8*)
 
 declare void @runtime.scheduler(i8*, i8*)
 
-declare i8* @runtime.alloc(i32, i8*, i8*)
+declare i8* @runtime.alloc(i32, i8*, i8*, i8*)
 declare void @runtime.free(i8*, i8*, i8*)
 
 declare %"internal/task.Task"* @"internal/task.Current"(i8*, i8*)
