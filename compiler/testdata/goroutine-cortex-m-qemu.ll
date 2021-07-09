@@ -66,7 +66,7 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.closureFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  %n = call i8* @runtime.alloc(i32 4, i8* null, i8* undef, i8* null) #0
+  %n = call i8* @runtime.alloc(i32 4, i8* nonnull inttoptr (i32 3 to i8*), i8* undef, i8* null) #0
   %0 = bitcast i8* %n to i32*
   store i32 3, i32* %0, align 4
   %1 = call i8* @runtime.alloc(i32 8, i8* null, i8* undef, i8* null) #0
