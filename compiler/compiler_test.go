@@ -54,6 +54,7 @@ func TestCompiler(t *testing.T) {
 		{"channel.go", ""},
 		{"intrinsics.go", "cortex-m-qemu"},
 		{"intrinsics.go", "wasm"},
+		{"gc.go", ""},
 	}
 
 	_, minor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
