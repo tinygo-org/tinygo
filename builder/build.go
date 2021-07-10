@@ -470,33 +470,10 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		linkerDependencies = append(linkerDependencies, job)
 	}
 
-	// Add libc dependency if needed.
-	root := goenv.Get("TINYGOROOT")
-	switch config.Target.Libc {
-	case "picolibc":
-		job, err := Picolibc.load(config.Triple(), config.CPU(), dir)
-		if err != nil {
-			return err
-		}
-		// The library needs to be compiled (cache miss).
-		jobs = append(jobs, job.dependencies...)
-		jobs = append(jobs, job)
-		linkerDependencies = append(linkerDependencies, job)
-	case "wasi-libc":
-		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
-		}
-		ldflags = append(ldflags, path)
-	case "":
-		// no library specified, so nothing to do
-	default:
-		return fmt.Errorf("unknown libc: %s", config.Target.Libc)
-	}
-
 	// Add jobs to compile extra files. These files are in C or assembly and
 	// contain things like the interrupt vector table and low level operations
 	// such as stack switching.
+	root := goenv.Get("TINYGOROOT")
 	for _, path := range config.ExtraFiles() {
 		abspath := filepath.Join(root, path)
 		job := &compileJob{
@@ -535,6 +512,31 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	//     #cgo LDFLAGS: foo
 	if len(lprogram.LDFlags) > 0 {
 		ldflags = append(ldflags, lprogram.LDFlags...)
+	}
+
+	// Add libc dependency if needed.
+	switch config.Target.Libc {
+	case "picolibc":
+		job, err := Picolibc.load(config.Triple(), config.CPU(), dir)
+		if err != nil {
+			return err
+		}
+		// The library needs to be compiled (cache miss).
+		jobs = append(jobs, job.dependencies...)
+		jobs = append(jobs, job)
+		linkerDependencies = append(linkerDependencies, job)
+	case "wasi-libc":
+		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
+		}
+		job := dummyCompileJob(path)
+		jobs = append(jobs, job)
+		linkerDependencies = append(linkerDependencies, job)
+	case "":
+		// no library specified, so nothing to do
+	default:
+		return fmt.Errorf("unknown libc: %s", config.Target.Libc)
 	}
 
 	// Create a linker job, which links all object files together and does some
