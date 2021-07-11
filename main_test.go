@@ -194,7 +194,7 @@ func runTest(name, target string, t *testing.T, cmdArgs, environmentVars []strin
 		PrintIR:    false,
 		DumpSSA:    false,
 		VerifyIR:   true,
-		Debug:      true,
+		EmitDWARF:  true,
 		PrintSizes: "",
 		WasmAbi:    "",
 	}

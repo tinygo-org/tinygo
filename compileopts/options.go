@@ -9,6 +9,7 @@ import (
 var (
 	validGCOptions            = []string{"none", "leaking", "extalloc", "conservative"}
 	validSchedulerOptions     = []string{"none", "tasks", "coroutines"}
+	validDebugOptions         = []string{"auto", "true", "false"}
 	validSerialOptions        = []string{"none", "uart", "usb"}
 	validPrintSizeOptions     = []string{"none", "short", "full"}
 	validPanicStrategyOptions = []string{"print", "trap"}
@@ -28,7 +29,8 @@ type Options struct {
 	DumpSSA         bool
 	VerifyIR        bool
 	PrintCommands   func(cmd string, args ...string)
-	Debug           bool
+	EmitDWARF       bool
+	Debug           string
 	PrintSizes      string
 	PrintAllocs     *regexp.Regexp // regexp string
 	PrintStacks     bool
@@ -68,6 +70,12 @@ func (o *Options) Verify() error {
 				o.Serial,
 				strings.Join(validSerialOptions, ", "))
 		}
+	}
+
+	if !isInArray(validDebugOptions, o.Debug) {
+		return fmt.Errorf(`invalid debug option '%s': valid values are %s`,
+			o.Debug,
+			strings.Join(validDebugOptions, ", "))
 	}
 
 	if o.PrintSizes != "" {

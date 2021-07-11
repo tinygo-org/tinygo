@@ -100,7 +100,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		AutomaticStackSize: config.AutomaticStackSize(),
 		DefaultStackSize:   config.Target.DefaultStackSize,
 		NeedsStackObjects:  config.NeedsStackObjects(),
-		Debug:              config.Debug(),
+		Debug:              config.EmitDWARF(),
 		LLVMFeatures:       config.LLVMFeatures(),
 	}
 
@@ -535,6 +535,41 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	//     #cgo LDFLAGS: foo
 	if len(lprogram.LDFlags) > 0 {
 		ldflags = append(ldflags, lprogram.LDFlags...)
+	}
+
+	// Strip debug information if -debug is true. This is sometimes the default,
+	// such as with WebAssembly targets.
+	if !config.Debug() {
+		for _, tag := range config.BuildTags() {
+			if tag == "baremetal" {
+				// Don't use -debug=false on baremetal targets. It makes no
+				// sense: the debug information isn't flashed to the device
+				// anyway.
+				return fmt.Errorf("stripping debug information is unnecessary for baremetal targets")
+			}
+		}
+		if config.Target.Linker == "wasm-ld" {
+			// Don't just strip debug information, also compress relocations
+			// while we're at it. Relocations can only be compressed when debug
+			// information is stripped.
+			ldflags = append(ldflags, "--strip-debug", "--compress-relocations")
+		} else {
+			switch config.GOOS() {
+			case "linux":
+				// Either real linux or an embedded system (like AVR) that
+				// pretends to be Linux. It's a ELF linker wrapped by GCC in any
+				// case.
+				ldflags = append(ldflags, "-Wl,--strip-debug")
+			case "darwin":
+				// MacOS (darwin) doesn't have a linker flag to strip debug
+				// information. Apple expects you to use the strip command
+				// instead.
+				return errors.New("cannot remove debug information: MacOS doesn't suppor this linker flag")
+			default:
+				// Other OSes may have different flags.
+				return errors.New("cannot remove debug information: unknown OS: " + config.GOOS())
+			}
+		}
 	}
 
 	// Create a linker job, which links all object files together and does some

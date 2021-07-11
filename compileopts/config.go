@@ -209,7 +209,7 @@ func (c *Config) CFlags() []string {
 		cflags = append(cflags, "-nostdlibinc", "-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "picolibc", "newlib", "libc", "include"))
 		cflags = append(cflags, "-I"+filepath.Join(root, "lib/picolibc-include"))
 	}
-	if c.Debug() {
+	if c.EmitDWARF() {
 		cflags = append(cflags, "-g")
 	}
 	return cflags
@@ -250,10 +250,33 @@ func (c *Config) VerifyIR() bool {
 	return c.Options.VerifyIR
 }
 
-// Debug returns whether to add debug symbols to the IR, for debugging with GDB
-// and similar.
+// EmitDWARF returns whether to add debug symbols to the IR, for debugging with
+// GDB and similar.
+func (c *Config) EmitDWARF() bool {
+	return c.Options.EmitDWARF
+}
+
+// Debug returns whether debug (DWARF) information should be retained by the
+// linker. The default varies by target but can be controlled with the -debug
+// command line flag.
 func (c *Config) Debug() bool {
-	return c.Options.Debug
+	switch c.Options.Debug {
+	case "true":
+		return true
+	case "false":
+		return false
+	case "auto":
+		// Emit debug information everywhere by default except on WebAssembly.
+		for _, tag := range c.BuildTags() {
+			if tag == "tinygo.wasm" {
+				return false
+			}
+		}
+		return true
+	default:
+		// This is already checked so shouldn't happen.
+		panic("unknown -debug flag")
+	}
 }
 
 // BinaryFormat returns an appropriate binary format, based on the file
