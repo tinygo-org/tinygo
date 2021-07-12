@@ -182,27 +182,26 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		entry := c.ctx.AddBasicBlock(wrapper, "entry")
 		builder.SetInsertPointAtEnd(entry)
 
-		if c.Debug {
-			pos := c.program.Fset.Position(pos)
-			diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
-				File:       c.getDIFile(pos.Filename),
-				Parameters: nil, // do not show parameters in debugger
-				Flags:      0,   // ?
-			})
-			difunc := c.dibuilder.CreateFunction(c.getDIFile(pos.Filename), llvm.DIFunction{
-				Name:         "<goroutine wrapper>",
-				File:         c.getDIFile(pos.Filename),
-				Line:         pos.Line,
-				Type:         diFuncType,
-				LocalToUnit:  true,
-				IsDefinition: true,
-				ScopeLine:    0,
-				Flags:        llvm.FlagPrototyped,
-				Optimized:    true,
-			})
-			wrapper.SetSubprogram(difunc)
-			builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
-		}
+		// Add debug information.
+		pos := c.program.Fset.Position(pos)
+		diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+			File:       c.getDIFile(pos.Filename),
+			Parameters: nil, // do not show parameters in debugger
+			Flags:      0,   // ?
+		})
+		difunc := c.dibuilder.CreateFunction(c.getDIFile(pos.Filename), llvm.DIFunction{
+			Name:         "<goroutine wrapper>",
+			File:         c.getDIFile(pos.Filename),
+			Line:         pos.Line,
+			Type:         diFuncType,
+			LocalToUnit:  true,
+			IsDefinition: true,
+			ScopeLine:    0,
+			Flags:        llvm.FlagPrototyped,
+			Optimized:    true,
+		})
+		wrapper.SetSubprogram(difunc)
+		builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 
 		// Create the list of params for the call.
 		paramTypes := fn.Type().ElementType().ParamTypes()
@@ -246,27 +245,26 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		entry := c.ctx.AddBasicBlock(wrapper, "entry")
 		builder.SetInsertPointAtEnd(entry)
 
-		if c.Debug {
-			pos := c.program.Fset.Position(pos)
-			diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
-				File:       c.getDIFile(pos.Filename),
-				Parameters: nil, // do not show parameters in debugger
-				Flags:      0,   // ?
-			})
-			difunc := c.dibuilder.CreateFunction(c.getDIFile(pos.Filename), llvm.DIFunction{
-				Name:         "<goroutine wrapper>",
-				File:         c.getDIFile(pos.Filename),
-				Line:         pos.Line,
-				Type:         diFuncType,
-				LocalToUnit:  true,
-				IsDefinition: true,
-				ScopeLine:    0,
-				Flags:        llvm.FlagPrototyped,
-				Optimized:    true,
-			})
-			wrapper.SetSubprogram(difunc)
-			builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
-		}
+		// Add debug information.
+		pos := c.program.Fset.Position(pos)
+		diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+			File:       c.getDIFile(pos.Filename),
+			Parameters: nil, // do not show parameters in debugger
+			Flags:      0,   // ?
+		})
+		difunc := c.dibuilder.CreateFunction(c.getDIFile(pos.Filename), llvm.DIFunction{
+			Name:         "<goroutine wrapper>",
+			File:         c.getDIFile(pos.Filename),
+			Line:         pos.Line,
+			Type:         diFuncType,
+			LocalToUnit:  true,
+			IsDefinition: true,
+			ScopeLine:    0,
+			Flags:        llvm.FlagPrototyped,
+			Optimized:    true,
+		})
+		wrapper.SetSubprogram(difunc)
+		builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 
 		// Get the list of parameters, with the extra parameters at the end.
 		paramTypes := fn.Type().ElementType().ParamTypes()

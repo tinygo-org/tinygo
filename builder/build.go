@@ -100,7 +100,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		AutomaticStackSize: config.AutomaticStackSize(),
 		DefaultStackSize:   config.Target.DefaultStackSize,
 		NeedsStackObjects:  config.NeedsStackObjects(),
-		Debug:              config.EmitDWARF(),
 		LLVMFeatures:       config.LLVMFeatures(),
 	}
 

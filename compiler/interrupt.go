@@ -52,19 +52,17 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	global.SetInitializer(initializer)
 
 	// Add debug info to the interrupt global.
-	if b.Debug {
-		pos := b.program.Fset.Position(instr.Pos())
-		diglobal := b.dibuilder.CreateGlobalVariableExpression(b.getDIFile(pos.Filename), llvm.DIGlobalVariableExpression{
-			Name:        "interrupt" + strconv.FormatInt(id.Int64(), 10),
-			LinkageName: globalName,
-			File:        b.getDIFile(pos.Filename),
-			Line:        pos.Line,
-			Type:        b.getDIType(globalType),
-			Expr:        b.dibuilder.CreateExpression(nil),
-			LocalToUnit: false,
-		})
-		global.AddMetadata(0, diglobal)
-	}
+	pos := b.program.Fset.Position(instr.Pos())
+	diglobal := b.dibuilder.CreateGlobalVariableExpression(b.getDIFile(pos.Filename), llvm.DIGlobalVariableExpression{
+		Name:        "interrupt" + strconv.FormatInt(id.Int64(), 10),
+		LinkageName: globalName,
+		File:        b.getDIFile(pos.Filename),
+		Line:        pos.Line,
+		Type:        b.getDIType(globalType),
+		Expr:        b.dibuilder.CreateExpression(nil),
+		LocalToUnit: false,
+	})
+	global.AddMetadata(0, diglobal)
 
 	// Create the runtime/interrupt.Interrupt type. It is a struct with a single
 	// member of type int.

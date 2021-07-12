@@ -209,9 +209,8 @@ func (c *Config) CFlags() []string {
 		cflags = append(cflags, "-nostdlibinc", "-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "picolibc", "newlib", "libc", "include"))
 		cflags = append(cflags, "-I"+filepath.Join(root, "lib/picolibc-include"))
 	}
-	if c.EmitDWARF() {
-		cflags = append(cflags, "-g")
-	}
+	// Always emit debug information. It is optionally stripped at link time.
+	cflags = append(cflags, "-g")
 	return cflags
 }
 
@@ -248,12 +247,6 @@ func (c *Config) DumpSSA() bool {
 // disabled but enabled during testing.
 func (c *Config) VerifyIR() bool {
 	return c.Options.VerifyIR
-}
-
-// EmitDWARF returns whether to add debug symbols to the IR, for debugging with
-// GDB and similar.
-func (c *Config) EmitDWARF() bool {
-	return c.Options.EmitDWARF
 }
 
 // Debug returns whether debug (DWARF) information should be retained by the

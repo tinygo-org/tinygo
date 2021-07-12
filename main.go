@@ -1020,7 +1020,6 @@ func main() {
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
 	printCommands := flag.Bool("x", false, "Print commands")
 	debug := flag.String("debug", "auto", "remove debug information (auto, true, false)")
-	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
 	ocdCommandsString := flag.String("ocd-commands", "", "OpenOCD commands, overriding target spec (can specify multiple separated by commas)")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "", "flash port (can specify multiple candidates separated by commas)")
@@ -1087,7 +1086,6 @@ func main() {
 		PrintIR:         *printIR,
 		DumpSSA:         *dumpSSA,
 		VerifyIR:        *verifyIR,
-		EmitDWARF:       !*nodebug,
 		Debug:           *debug,
 		PrintSizes:      *printSize,
 		PrintStacks:     *printStacks,
@@ -1175,11 +1173,6 @@ func main() {
 			err := Flash(pkgName, *port, options)
 			handleCompilerError(err)
 		} else {
-			if !options.EmitDWARF {
-				fmt.Fprintln(os.Stderr, "Debug disabled while running gdb?")
-				usage()
-				os.Exit(1)
-			}
 			err := FlashGDB(pkgName, *ocdOutput, options)
 			handleCompilerError(err)
 		}

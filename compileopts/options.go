@@ -29,7 +29,6 @@ type Options struct {
 	DumpSSA         bool
 	VerifyIR        bool
 	PrintCommands   func(cmd string, args ...string)
-	EmitDWARF       bool
 	Debug           string
 	PrintSizes      string
 	PrintAllocs     *regexp.Regexp // regexp string

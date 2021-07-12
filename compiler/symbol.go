@@ -386,7 +386,7 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 			llvmGlobal.SetAlignment(alignment)
 		}
 
-		if c.Debug && !info.extern {
+		if !info.extern {
 			// Add debug info.
 			pos := c.program.Fset.Position(g.Pos())
 			diglobal := c.dibuilder.CreateGlobalVariableExpression(c.difiles[pos.Filename], llvm.DIGlobalVariableExpression{

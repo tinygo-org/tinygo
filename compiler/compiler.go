@@ -58,7 +58,6 @@ type Config struct {
 	AutomaticStackSize bool
 	DefaultStackSize   uint64
 	NeedsStackObjects  bool
-	Debug              bool // Whether to emit debug information in the LLVM module.
 	LLVMFeatures       string
 }
 
@@ -103,9 +102,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 	c.mod = c.ctx.NewModule(moduleName)
 	c.mod.SetTarget(config.Triple)
 	c.mod.SetDataLayout(c.targetData.String())
-	if c.Debug {
-		c.dibuilder = llvm.NewDIBuilder(c.mod)
-	}
+	c.dibuilder = llvm.NewDIBuilder(c.mod)
 
 	c.uintptrType = c.ctx.IntType(c.targetData.PointerSize() * 8)
 	if c.targetData.PointerSize() <= 4 {
@@ -263,15 +260,13 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	ssaPkg.Build()
 
 	// Initialize debug information.
-	if c.Debug {
-		c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
-			Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
-			File:      "<unknown>",
-			Dir:       "",
-			Producer:  "TinyGo",
-			Optimized: true,
-		})
-	}
+	c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
+		Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
+		File:      "<unknown>",
+		Dir:       "",
+		Producer:  "TinyGo",
+		Optimized: true,
+	})
 
 	// Load comments such as //go:extern on globals.
 	c.loadASTComments(pkg)
@@ -286,23 +281,21 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	c.createPackage(irbuilder, ssaPkg)
 
 	// see: https://reviews.llvm.org/D18355
-	if c.Debug {
-		c.mod.AddNamedMetadataOperand("llvm.module.flags",
-			c.ctx.MDNode([]llvm.Metadata{
-				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
-				c.ctx.MDString("Debug Info Version"),
-				llvm.ConstInt(c.ctx.Int32Type(), 3, false).ConstantAsMetadata(), // DWARF version
-			}),
-		)
-		c.mod.AddNamedMetadataOperand("llvm.module.flags",
-			c.ctx.MDNode([]llvm.Metadata{
-				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(),
-				c.ctx.MDString("Dwarf Version"),
-				llvm.ConstInt(c.ctx.Int32Type(), 4, false).ConstantAsMetadata(),
-			}),
-		)
-		c.dibuilder.Finalize()
-	}
+	c.mod.AddNamedMetadataOperand("llvm.module.flags",
+		c.ctx.MDNode([]llvm.Metadata{
+			llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
+			c.ctx.MDString("Debug Info Version"),
+			llvm.ConstInt(c.ctx.Int32Type(), 3, false).ConstantAsMetadata(), // DWARF version
+		}),
+	)
+	c.mod.AddNamedMetadataOperand("llvm.module.flags",
+		c.ctx.MDNode([]llvm.Metadata{
+			llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(),
+			c.ctx.MDString("Dwarf Version"),
+			llvm.ConstInt(c.ctx.Int32Type(), 4, false).ConstantAsMetadata(),
+		}),
+	)
+	c.dibuilder.Finalize()
 
 	return c.mod, c.diagnostics
 }
@@ -812,20 +805,18 @@ func (b *builder) createFunction() {
 		b.llvmFn.AddFunctionAttr(noinline)
 	}
 
-	// Add debug info, if needed.
-	if b.Debug {
-		if b.fn.Synthetic == "package initializer" {
-			// Package initializers have no debug info. Create some fake debug
-			// info to at least have *something*.
-			filename := b.fn.Package().Pkg.Path() + "/<init>"
-			b.difunc = b.attachDebugInfoRaw(b.fn, b.llvmFn, "", filename, 0)
-		} else if b.fn.Syntax() != nil {
-			// Create debug info file if needed.
-			b.difunc = b.attachDebugInfo(b.fn)
-		}
-		pos := b.program.Fset.Position(b.fn.Pos())
-		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
+	// Add debug info.
+	if b.fn.Synthetic == "package initializer" {
+		// Package initializers have no debug info. Create some fake debug
+		// info to at least have *something*.
+		filename := b.fn.Package().Pkg.Path() + "/<init>"
+		b.difunc = b.attachDebugInfoRaw(b.fn, b.llvmFn, "", filename, 0)
+	} else if b.fn.Syntax() != nil {
+		// Create debug info file if needed.
+		b.difunc = b.attachDebugInfo(b.fn)
 	}
+	pos := b.program.Fset.Position(b.fn.Pos())
+	b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
 
 	// Pre-create all basic blocks in the function.
 	for _, block := range b.fn.DomPreorder() {
@@ -850,7 +841,7 @@ func (b *builder) createFunction() {
 		b.locals[param] = b.collapseFormalParam(llvmType, fields)
 
 		// Add debug information to this parameter (if available)
-		if b.Debug && b.fn.Syntax() != nil {
+		if b.fn.Syntax() != nil {
 			dbgParam := b.getLocalVariable(param.Object().(*types.Var))
 			loc := b.GetCurrentDebugLocation()
 			if len(fields) == 1 {
@@ -910,9 +901,6 @@ func (b *builder) createFunction() {
 		b.currentBlock = block
 		for _, instr := range block.Instrs {
 			if instr, ok := instr.(*ssa.DebugRef); ok {
-				if !b.Debug {
-					continue
-				}
 				object := instr.Object()
 				variable, ok := object.(*types.Var)
 				if !ok {
@@ -1029,10 +1017,8 @@ func getPos(val posser) token.Pos {
 // createInstruction builds the LLVM IR equivalent instructions for the
 // particular Go SSA instruction.
 func (b *builder) createInstruction(instr ssa.Instruction) {
-	if b.Debug {
-		pos := b.program.Fset.Position(getPos(instr))
-		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
-	}
+	pos := b.program.Fset.Position(getPos(instr))
+	b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
 
 	switch instr := instr.(type) {
 	case ssa.Value:
