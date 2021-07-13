@@ -1019,7 +1019,7 @@ func main() {
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
 	printCommands := flag.Bool("x", false, "Print commands")
-	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
+	nodebug := flag.Bool("no-debug", false, "strip debug information")
 	ocdCommandsString := flag.String("ocd-commands", "", "OpenOCD commands, overriding target spec (can specify multiple separated by commas)")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "", "flash port (can specify multiple candidates separated by commas)")
