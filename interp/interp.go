@@ -110,17 +110,19 @@ func Run(mod llvm.Module, debug bool) error {
 			fmt.Fprintln(os.Stderr, "call:", fn.Name())
 		}
 		_, mem, callErr := r.run(r.getFunction(fn), nil, nil, "    ")
+		call.EraseFromParentAsInstruction()
 		if callErr != nil {
 			if isRecoverableError(callErr.Err) {
 				if r.debug {
 					fmt.Fprintln(os.Stderr, "not interpreting", r.pkgName, "because of error:", callErr.Error())
 				}
 				mem.revert()
+				i8undef := llvm.Undef(r.i8ptrType)
+				r.builder.CreateCall(fn, []llvm.Value{i8undef, i8undef}, "")
 				continue
 			}
 			return callErr
 		}
-		call.EraseFromParentAsInstruction()
 		for index, obj := range mem.objects {
 			r.objects[index] = obj
 		}
