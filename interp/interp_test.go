@@ -17,6 +17,7 @@ func TestInterp(t *testing.T) {
 		"consteval",
 		"interface",
 		"revert",
+		"alloc",
 	} {
 		name := name // make tc local to this closure
 		t.Run(name, func(t *testing.T) {
