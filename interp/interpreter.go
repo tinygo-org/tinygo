@@ -234,11 +234,15 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// Get the requested memory size to be allocated.
 				size := operands[1].Uint()
 
+				// Get the object layout, if it is available.
+				llvmLayoutType := r.getLLVMTypeFromLayout(operands[2])
+
 				// Create the object.
 				alloc := object{
-					globalName: r.pkgName + "$alloc",
-					buffer:     newRawValue(uint32(size)),
-					size:       uint32(size),
+					globalName:     r.pkgName + "$alloc",
+					llvmLayoutType: llvmLayoutType,
+					buffer:         newRawValue(uint32(size)),
+					size:           uint32(size),
 				}
 				index := len(r.objects)
 				r.objects = append(r.objects, alloc)
