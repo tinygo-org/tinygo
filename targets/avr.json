@@ -3,7 +3,7 @@
 	"build-tags": ["avr", "baremetal", "linux", "arm"],
 	"goos": "linux",
 	"goarch": "arm",
-	"gc": "conservative",
+	"gc": "list",
 	"linker": "avr-gcc",
 	"scheduler": "none",
 	"default-stack-size": 256,

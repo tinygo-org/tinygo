@@ -1,4 +1,4 @@
-// +build gc.conservative gc.extalloc
+// +build gc.conservative gc.extalloc gc.list
 // +build tinygo.wasm
 
 package runtime

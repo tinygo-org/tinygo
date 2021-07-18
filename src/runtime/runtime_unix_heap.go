@@ -1,7 +1,7 @@
 // +build darwin linux,!baremetal,!wasi freebsd,!baremetal
 // +build !nintendoswitch
 
-// +build gc.conservative gc.leaking
+// +build gc.conservative gc.leaking gc.list
 
 package runtime
 
