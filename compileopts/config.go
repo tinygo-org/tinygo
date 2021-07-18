@@ -447,6 +447,26 @@ func (c *Config) WasmAbi() string {
 	return c.Target.WasmAbi
 }
 
+func (c *Config) LLVMFeatures() string {
+	return c.Options.LLVMFeatures
+}
+
+func (c *Config) InterpPackage() bool {
+	switch c.Options.InterpPass {
+	case "all", "package":
+		return true
+	}
+	return false
+}
+
+func (c *Config) InterpProgram() bool {
+	switch c.Options.InterpPass {
+	case "all", "program":
+		return true
+	}
+	return false
+}
+
 type TestConfig struct {
 	CompileTestBinary bool
 	// TODO: Filter the test functions to run, include verbose flag, etc

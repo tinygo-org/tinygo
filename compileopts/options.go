@@ -13,6 +13,7 @@ var (
 	validPrintSizeOptions     = []string{"none", "short", "full"}
 	validPanicStrategyOptions = []string{"print", "trap"}
 	validOptOptions           = []string{"none", "0", "1", "2", "s", "z"}
+	validInterpOptions        = []string{"none", "all", "program", "package"}
 )
 
 // Options contains extra options to give to the compiler. These options are
@@ -23,6 +24,7 @@ type Options struct {
 	GOARCH          string // environment variable
 	Target          string
 	Opt             string
+	InterpPass	string
 	GC              string
 	PanicStrategy   string
 	Scheduler       string
@@ -95,6 +97,12 @@ func (o *Options) Verify() error {
 	if o.Opt != "" {
 		if !isInArray(validOptOptions, o.Opt) {
 			return fmt.Errorf("invalid -opt=%s: valid values are %s", o.Opt, strings.Join(validOptOptions, ", "))
+		}
+	}
+
+	if o.InterpPass != "" {
+		if !isInArray(validInterpOptions, o.InterpPass) {
+			return fmt.Errorf("invalid -interp-pass=%s: valid values are %s", o.InterpPass, strings.Join(validInterpOptions, ", "))
 		}
 	}
 

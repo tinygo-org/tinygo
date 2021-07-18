@@ -304,19 +304,21 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 					newGlobal.SetName(name)
 				}
 
-				// Try to interpret package initializers at compile time.
-				// It may only be possible to do this partially, in which case
-				// it is completed after all IR files are linked.
-				pkgInit := mod.NamedFunction(pkg.Pkg.Path() + ".init")
-				if pkgInit.IsNil() {
-					panic("init not found for " + pkg.Pkg.Path())
-				}
-				err := interp.RunFunc(pkgInit, config.DumpSSA())
-				if err != nil {
-					return err
-				}
-				if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
-					return errors.New("verification error after interpreting " + pkgInit.Name())
+				if config.InterpPackage() {
+					// Try to interpret package initializers at compile time.
+					// It may only be possible to do this partially, in which case
+					// it is completed after all IR files are linked.
+					pkgInit := mod.NamedFunction(pkg.Pkg.Path() + ".init")
+					if pkgInit.IsNil() {
+						panic("init not found for " + pkg.Pkg.Path())
+					}
+					err := interp.RunFunc(pkgInit, config.DumpSSA())
+					if err != nil {
+						return err
+					}
+					if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
+						return errors.New("verification error after interpreting " + pkgInit.Name())
+					}
 				}
 
 				// Run function passes for each function in the module.
@@ -757,9 +759,11 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 // needed to convert a program to its final form. Some transformations are not
 // optional and must be run as the compiler expects them to run.
 func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
-	err := interp.Run(mod, config.DumpSSA())
-	if err != nil {
-		return err
+	if config.InterpProgram() {
+		err := interp.Run(mod, config.DumpSSA())
+		if err != nil {
+			return err
+		}
 	}
 	if config.VerifyIR() {
 		// Only verify if we really need it.
@@ -779,7 +783,7 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	}
 
 	// Insert values from -ldflags="-X ..." into the IR.
-	err = setGlobalValues(mod, config.Options.GlobalValues)
+	err := setGlobalValues(mod, config.Options.GlobalValues)
 	if err != nil {
 		return err
 	}

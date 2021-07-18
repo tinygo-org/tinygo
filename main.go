@@ -1105,6 +1105,7 @@ func main() {
 	command := os.Args[1]
 
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
+	interpPass := flag.String("interp-pass", "all", "interp pass: none, all, package, program")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, extalloc, conservative)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
 	scheduler := flag.String("scheduler", "", "which scheduler to use (none, coroutines, tasks)")
@@ -1184,6 +1185,7 @@ func main() {
 		GOARCH:          goenv.Get("GOARCH"),
 		Target:          *target,
 		Opt:             *opt,
+		InterpPass:      *interpPass,
 		GC:              *gc,
 		PanicStrategy:   *panicStrategy,
 		Scheduler:       *scheduler,
