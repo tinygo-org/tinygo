@@ -453,18 +453,18 @@ func (c *Config) LLVMFeatures() string {
 
 func (c *Config) InterpPackage() bool {
 	switch c.Options.InterpPass {
-	case "all", "package":
-		return true
+	case "none", "program":
+		return false
 	}
-	return false
+	return true
 }
 
 func (c *Config) InterpProgram() bool {
 	switch c.Options.InterpPass {
-	case "all", "program":
-		return true
+	case "none", "package":
+		return false
 	}
-	return false
+	return true
 }
 
 type TestConfig struct {
