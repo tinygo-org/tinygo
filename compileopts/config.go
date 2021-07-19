@@ -451,6 +451,8 @@ func (c *Config) LLVMFeatures() string {
 	return c.Options.LLVMFeatures
 }
 
+// InterpPackage returns whether the interp package should be run per package,
+// according to the -inter-pass flag.
 func (c *Config) InterpPackage() bool {
 	switch c.Options.InterpPass {
 	case "none", "program":
@@ -459,6 +461,8 @@ func (c *Config) InterpPackage() bool {
 	return true
 }
 
+// InterpProgram returns whether the interp package should be run for the program,
+// according to the -inter-pass flag.
 func (c *Config) InterpProgram() bool {
 	switch c.Options.InterpPass {
 	case "none", "package":
