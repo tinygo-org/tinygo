@@ -72,6 +72,7 @@ type packageAction struct {
 	OptLevel         int               // LLVM optimization level (0-3)
 	SizeLevel        int               // LLVM optimization for size level (0-2)
 	UndefinedGlobals []string          // globals that are left as external globals (no initializer)
+	InterpPass       string            // inter-pass flag (none, all, package, program)
 }
 
 // Build performs a single package to executable Go build. It takes in a package
@@ -191,6 +192,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			OptLevel:         optLevel,
 			SizeLevel:        sizeLevel,
 			UndefinedGlobals: undefinedGlobals,
+			InterpPass:       config.Options.InterpPass,
 		}
 		for filePath, hash := range pkg.FileHashes {
 			actionID.FileHashes[filePath] = hex.EncodeToString(hash)
