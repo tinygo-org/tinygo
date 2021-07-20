@@ -331,6 +331,7 @@ type globalInfo struct {
 	extern   bool   // go:extern
 	align    int    // go:align
 	section  string // go:section
+	embeds   string // go:embed
 }
 
 // loadASTComments loads comments on globals from the AST, for use later in the
@@ -448,6 +449,9 @@ func (info *globalInfo) parsePragmas(doc *ast.CommentGroup) {
 			if len(parts) == 2 {
 				info.section = parts[1]
 			}
+		case "//go:embed":
+			raw := strings.TrimPrefix(comment.Text, "//go:embed")
+			info.embeds += " " + raw
 		}
 	}
 }

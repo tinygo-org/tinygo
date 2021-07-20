@@ -8,6 +8,7 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
+	"log"
 	"math/bits"
 	"path/filepath"
 	"sort"
@@ -693,6 +694,7 @@ func (c *compilerContext) getDIFile(filename string) llvm.Metadata {
 // createPackage builds the LLVM IR for all types, methods, and global variables
 // in the given package.
 func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package) {
+	println("called create package:", pkg.Pkg.Name())
 	// Sort by position, so that the order of the functions in the IR matches
 	// the order of functions in the source file. This is useful for testing,
 	// for example.
@@ -758,6 +760,13 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 		case *ssa.Global:
 			// Global variable.
 			info := c.getGlobalInfo(member)
+			if strings.TrimSpace(info.embeds) != "" {
+				embeds, err := parseGoEmbed(info.embeds)
+				if err != nil {
+					log.Fatal(err)
+				}
+				fmt.Printf("file embed found at %v: %v\n", info.linkName, embeds)
+			}
 			global := c.getGlobal(member)
 			if !info.extern {
 				global.SetInitializer(llvm.ConstNull(global.Type().ElementType()))
@@ -766,6 +775,7 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 					global.SetSection(info.section)
 				}
 			}
+
 		}
 	}
 }
