@@ -4,32 +4,38 @@ import (
 	"runtime/volatile"
 )
 
-const bufferSize = 128
+const defaultRingBufferSize = 128
 
 // RingBuffer is ring buffer implementation inspired by post at
 // https://www.embeddedrelated.com/showthread/comp.arch.embedded/77084-1.php
 type RingBuffer struct {
-	rxbuffer [bufferSize]volatile.Register8
-	head     volatile.Register8
-	tail     volatile.Register8
+	rxbuffer []volatile.Register8
+	head     volatile.Register16
+	tail     volatile.Register16
 }
 
 // NewRingBuffer returns a new ring buffer.
-func NewRingBuffer() *RingBuffer {
-	return &RingBuffer{}
+func NewRingBuffer(size ...int) *RingBuffer {
+	sz := defaultRingBufferSize
+	if len(size) > 0 {
+		sz = size[0]
+	}
+	return &RingBuffer{
+		rxbuffer: make([]volatile.Register8, sz),
+	}
 }
 
 // Used returns how many bytes in buffer have been used.
-func (rb *RingBuffer) Used() uint8 {
-	return uint8(rb.head.Get() - rb.tail.Get())
+func (rb *RingBuffer) Used() uint16 {
+	return uint16(rb.head.Get() - rb.tail.Get())
 }
 
 // Put stores a byte in the buffer. If the buffer is already
 // full, the method will return false.
 func (rb *RingBuffer) Put(val byte) bool {
-	if rb.Used() != bufferSize {
+	if rb.Used() != uint16(len(rb.rxbuffer)) {
 		rb.head.Set(rb.head.Get() + 1)
-		rb.rxbuffer[rb.head.Get()%bufferSize].Set(val)
+		rb.rxbuffer[rb.head.Get()%uint16(len(rb.rxbuffer))].Set(val)
 		return true
 	}
 	return false
@@ -40,7 +46,7 @@ func (rb *RingBuffer) Put(val byte) bool {
 func (rb *RingBuffer) Get() (byte, bool) {
 	if rb.Used() != 0 {
 		rb.tail.Set(rb.tail.Get() + 1)
-		return rb.rxbuffer[rb.tail.Get()%bufferSize].Get(), true
+		return rb.rxbuffer[rb.tail.Get()%uint16(len(rb.rxbuffer))].Get(), true
 	}
 	return 0, false
 }
