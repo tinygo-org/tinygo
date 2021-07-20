@@ -50,6 +50,14 @@ func putchar(c byte) {
 	}
 }
 
+//go:linkname now time.now
+func now() (sec int64, nsec int32, mono int64) {
+	mono = nanotime()
+	sec = mono / (1000 * 1000 * 1000)
+	nsec = int32(mono - sec*(1000*1000*1000))
+	return
+}
+
 // Abort executes the wasm 'unreachable' instruction.
 func abort() {
 	trap()
