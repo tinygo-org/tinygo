@@ -25,7 +25,9 @@ commands:
                 qemu-system-arm \
                 qemu-user \
                 gcc-avr \
-                avr-libc
+                avr-libc \
+                cmake \
+                ninja-build
   install-node:
     steps:
       - run:
@@ -49,6 +51,13 @@ commands:
           command: |
             curl https://wasmtime.dev/install.sh -sSf | bash
             sudo ln -s ~/.wasmtime/bin/wasmtime /usr/local/bin/wasmtime
+  install-cmake:
+    steps:
+      - run:
+          name: "Install CMake"
+          command: |
+            wget https://github.com/Kitware/CMake/releases/download/v3.21.4/cmake-3.21.4-linux-x86_64.tar.gz
+            sudo tar --strip-components=1 -C /usr/local -xf cmake-3.21.4-linux-x86_64.tar.gz
   install-xtensa-toolchain:
     parameters:
       variant:
@@ -76,6 +85,39 @@ commands:
             - llvm-project/clang/include
             - llvm-project/lld/include
             - llvm-project/llvm/include
+  hack-ninja-jobs:
+    steps:
+      - run:
+          name: "Hack Ninja to use less jobs"
+          command: |
+            echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
+            chmod +x /go/bin/ninja
+  build-binaryen-linux:
+    steps:
+      - restore_cache:
+          keys:
+            - binaryen-linux-v1
+      - run:
+          name: "Build Binaryen"
+          command: |
+            make binaryen
+      - save_cache:
+          key: binaryen-linux-v1
+          paths:
+            - build/wasm-opt
+  build-binaryen-linux-stretch:
+    steps:
+      - restore_cache:
+          keys:
+            - binaryen-linux-stretch-v1
+      - run:
+          name: "Build Binaryen"
+          command: |
+            CC=$PWD/llvm-build/bin/clang make binaryen
+      - save_cache:
+          key: binaryen-linux-stretch-v1
+          paths:
+            - build/wasm-opt
   build-wasi-libc:
     steps:
       - restore_cache:
@@ -100,6 +142,8 @@ commands:
       - install-node
       - install-chrome
       - install-wasmtime
+      - hack-ninja-jobs
+      - build-binaryen-linux
       - restore_cache:
           keys:
             - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
@@ -141,9 +185,13 @@ commands:
                 qemu-system-arm \
                 qemu-user \
                 gcc-avr \
-                avr-libc
+                avr-libc \
+                ninja-build \
+                python3
       - install-node
       - install-wasmtime
+      - install-cmake
+      - hack-ninja-jobs
       - install-xtensa-toolchain:
           variant: "linux-amd64"
       - restore_cache:
@@ -159,14 +207,9 @@ commands:
           command: |
             if [ ! -f llvm-build/lib/liblldELF.a ]
             then
-              # fetch LLVM source
+              # fetch LLVM source (may only have headers right now)
               rm -rf llvm-project
               make llvm-source
-              # install dependencies
-              sudo apt-get install cmake ninja-build
-              # hack ninja to use less jobs
-              echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
-              chmod +x /go/bin/ninja
               # build!
               make ASSERT=1 llvm-build
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
@@ -175,6 +218,7 @@ commands:
           key: llvm-build-11-linux-v4-assert
           paths:
             llvm-build
+      - build-binaryen-linux-stretch
       - run: make ASSERT=1
       - build-wasi-libc
       - run:
@@ -206,9 +250,13 @@ commands:
                 qemu-system-arm \
                 qemu-user \
                 gcc-avr \
-                avr-libc
+                avr-libc \
+                ninja-build \
+                python3
       - install-node
       - install-wasmtime
+      - install-cmake
+      - hack-ninja-jobs
       - install-xtensa-toolchain:
           variant: "linux-amd64"
       - restore_cache:
@@ -224,14 +272,9 @@ commands:
           command: |
             if [ ! -f llvm-build/lib/liblldELF.a ]
             then
-              # fetch LLVM source
+              # fetch LLVM source (may only have headers right now)
               rm -rf llvm-project
               make llvm-source
-              # install dependencies
-              sudo apt-get install cmake ninja-build
-              # hack ninja to use less jobs
-              echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
-              chmod +x /go/bin/ninja
               # build!
               make llvm-build
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
@@ -240,6 +283,7 @@ commands:
           key: llvm-build-11-linux-v4-noassert
           paths:
             llvm-build
+      - build-binaryen-linux-stretch
       - build-wasi-libc
       - run:
           name: "Test TinyGo"
@@ -283,7 +327,7 @@ commands:
             curl https://dl.google.com/go/go1.17.darwin-amd64.tar.gz -o go1.17.darwin-amd64.tar.gz
             sudo tar -C /usr/local -xzf go1.17.darwin-amd64.tar.gz
             ln -s /usr/local/go/bin/go /usr/local/bin/go
-            HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu cmake ninja
       - install-xtensa-toolchain:
           variant: "macos"
       - restore_cache:
@@ -311,11 +355,9 @@ commands:
           command: |
             if [ ! -f llvm-build/lib/liblldELF.a ]
             then
-              # fetch LLVM source
+              # fetch LLVM source (may only have headers right now)
               rm -rf llvm-project
               make llvm-source
-              # install dependencies
-              HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
               # build!
               make llvm-build
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
@@ -324,6 +366,20 @@ commands:
           key: llvm-build-11-macos-v5
           paths:
             llvm-build
+      - restore_cache:
+          keys:
+            - binaryen-macos-v1
+      - run:
+          name: "Build Binaryen"
+          command: |
+            if [ ! -f build/wasm-opt ]
+            then
+              make binaryen
+            fi
+      - save_cache:
+          key: binaryen-macos-v1
+          paths:
+            - build/wasm-opt
       - restore_cache:
           keys:
             - wasi-libc-sysroot-macos-v4

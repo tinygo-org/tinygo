@@ -125,7 +125,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		if err != nil {
 			return []error{err}
 		}
-	case "tasks":
+	case "tasks", "asyncify":
 		// No transformations necessary.
 	case "none":
 		// Check for any goroutine starts.
@@ -219,7 +219,7 @@ func getFunctionsUsedInTransforms(config *compileopts.Config) []string {
 	case "none":
 	case "coroutines":
 		fnused = append(append([]string{}, fnused...), coroFunctionsUsedInTransforms...)
-	case "tasks":
+	case "tasks", "asyncify":
 		fnused = append(append([]string{}, fnused...), taskFunctionsUsedInTransforms...)
 	default:
 		panic(fmt.Errorf("invalid scheduler %q", config.Scheduler()))

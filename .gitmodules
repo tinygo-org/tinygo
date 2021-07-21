@@ -26,3 +26,6 @@
 [submodule "lib/musl"]
 	path = lib/musl
 	url = git://git.musl-libc.org/musl
+[submodule "lib/binaryen"]
+	path = lib/binaryen
+	url = https://github.com/WebAssembly/binaryen.git

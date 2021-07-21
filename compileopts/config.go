@@ -157,7 +157,7 @@ func (c *Config) OptLevels() (optLevel, sizeLevel int, inlinerThreshold uint) {
 // target.
 func (c *Config) FuncImplementation() string {
 	switch c.Scheduler() {
-	case "tasks":
+	case "tasks", "asyncify":
 		// A func value is implemented as a pair of pointers:
 		//     {context, function pointer}
 		// where the context may be a pointer to a heap-allocated struct

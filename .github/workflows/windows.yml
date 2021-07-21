@@ -20,6 +20,10 @@ jobs:
         run: |
           choco install qemu --version=2020.06.12
           echo "C:\Program Files\QEMU" >> $GITHUB_PATH
+      - name: Install Ninja
+        shell: bash
+        run: |
+          choco install ninja
       - name: Checkout
         uses: actions/checkout@v2
         with:
@@ -50,8 +54,6 @@ jobs:
           # fetch LLVM source
           rm -rf llvm-project
           make llvm-source
-          # install dependencies
-          choco install ninja
           # build!
           make llvm-build
           # Remove unnecessary object files (to reduce cache size).
@@ -65,6 +67,15 @@ jobs:
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
         run: make wasi-libc
+      - name: Cache Binaryen
+        uses: actions/cache@v2
+        id: cache-binaryen
+        with:
+          key: binaryen-v1
+          path: build/binaryen
+      - name: Build Binaryen
+        if: steps.cache-binaryen.outputs.cache-hit != 'true'
+        run: make binaryen
       - name: Test TinyGo
         shell: bash
         run: make test

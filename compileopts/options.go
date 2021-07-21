@@ -8,7 +8,7 @@ import (
 
 var (
 	validGCOptions            = []string{"none", "leaking", "extalloc", "conservative"}
-	validSchedulerOptions     = []string{"none", "tasks", "coroutines"}
+	validSchedulerOptions     = []string{"none", "tasks", "coroutines", "asyncify"}
 	validSerialOptions        = []string{"none", "uart", "usb"}
 	validPrintSizeOptions     = []string{"none", "short", "full"}
 	validPanicStrategyOptions = []string{"print", "trap"}
