@@ -16,9 +16,11 @@ import (
 	"io/ioutil"
 	"math/bits"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/cgo"
@@ -655,6 +657,37 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				err = patchRP2040BootCRC(executable)
 				if err != nil {
 					return fmt.Errorf("could not patch RP2040 second stage boot loader: %w", err)
+				}
+			}
+
+			// Run wasm-opt if necessary.
+			if config.Scheduler() == "asyncify" {
+				var optLevel, shrinkLevel int
+				switch config.Options.Opt {
+				case "none", "0":
+				case "1":
+					optLevel = 1
+				case "2":
+					optLevel = 2
+				case "s":
+					optLevel = 2
+					shrinkLevel = 1
+				case "z":
+					optLevel = 2
+					shrinkLevel = 2
+				default:
+					return fmt.Errorf("unknown opt level: %q", config.Options.Opt)
+				}
+				cmd := exec.Command(goenv.Get("WASMOPT"), "--asyncify", "-g",
+					"--optimize-level", strconv.Itoa(optLevel),
+					"--shrink-level", strconv.Itoa(shrinkLevel),
+					executable, "--output", executable)
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+
+				err := cmd.Run()
+				if err != nil {
+					return fmt.Errorf("wasm-opt failed: %w", err)
 				}
 			}
 

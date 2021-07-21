@@ -5,7 +5,6 @@ target triple = "wasm32-unknown-wasi"
 
 %runtime.typecodeID = type { %runtime.typecodeID*, i32, %runtime.interfaceMethodInfo*, %runtime.typecodeID*, i32 }
 %runtime.interfaceMethodInfo = type { i8*, i32 }
-%runtime.funcValue = type { i8*, i32 }
 %runtime._interface = type { i32, i8* }
 
 @main.scalar1 = hidden global i8* null, align 4
@@ -72,11 +71,11 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden %runtime.funcValue* @main.newFuncValue(i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden { i8*, void ()* }* @main.newFuncValue(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   %new = call i8* @runtime.alloc(i32 8, i8* nonnull inttoptr (i32 197 to i8*), i8* undef, i8* null) #0
-  %0 = bitcast i8* %new to %runtime.funcValue*
-  ret %runtime.funcValue* %0
+  %0 = bitcast i8* %new to { i8*, void ()* }*
+  ret { i8*, void ()* }* %0
 }
 
 ; Function Attrs: nounwind

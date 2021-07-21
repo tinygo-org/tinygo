@@ -6,6 +6,8 @@
 	"goarch":        "arm",
 	"linker":        "wasm-ld",
 	"libc":          "wasi-libc",
+	"scheduler":     "asyncify",
+	"default-stack-size": 8192,
 	"ldflags": [
 		"--allow-undefined",
 		"--stack-first",

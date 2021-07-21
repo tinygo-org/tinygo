@@ -100,7 +100,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 		switch b.Scheduler {
 		case "none", "coroutines":
 			// There are no additional parameters needed for the goroutine start operation.
-		case "tasks":
+		case "tasks", "asyncify":
 			// Add the function pointer as a parameter to start the goroutine.
 			params = append(params, funcPtr)
 		default:
@@ -112,7 +112,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 	paramBundle := b.emitPointerPack(params)
 	var callee, stackSize llvm.Value
 	switch b.Scheduler {
-	case "none", "tasks":
+	case "none", "tasks", "asyncify":
 		callee = b.createGoroutineStartWrapper(funcPtr, prefix, hasContext, instr.Pos())
 		if b.AutomaticStackSize {
 			// The stack size is not known until after linking. Call a dummy
@@ -124,7 +124,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 		} else {
 			// The stack size is fixed at compile time. By emitting it here as a
 			// constant, it can be optimized.
-			if b.Scheduler == "tasks" && b.DefaultStackSize == 0 {
+			if (b.Scheduler == "tasks" || b.Scheduler == "asyncify") && b.DefaultStackSize == 0 {
 				b.addError(instr.Pos(), "default stack size for goroutines is not set")
 			}
 			stackSize = llvm.ConstInt(b.uintptrType, b.DefaultStackSize, false)
@@ -169,6 +169,11 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 
 	builder := c.ctx.NewBuilder()
 	defer builder.Dispose()
+
+	var deadlock llvm.Value
+	if c.Scheduler == "asyncify" {
+		deadlock = c.getFunction(c.program.ImportedPackage("runtime").Members["deadlock"].(*ssa.Function))
+	}
 
 	if !fn.IsAFunction().IsNil() {
 		// See whether this wrapper has already been created. If so, return it.
@@ -224,6 +229,12 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 
 		// Create the call.
 		builder.CreateCall(fn, params, "")
+
+		if c.Scheduler == "asyncify" {
+			builder.CreateCall(deadlock, []llvm.Value{
+				llvm.Undef(c.i8ptrType), llvm.Undef(c.i8ptrType),
+			}, "")
+		}
 
 	} else {
 		// For a function pointer like this:
@@ -292,11 +303,22 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 
 		// Create the call.
 		builder.CreateCall(fnPtr, params, "")
+
+		if c.Scheduler == "asyncify" {
+			builder.CreateCall(deadlock, []llvm.Value{
+				llvm.Undef(c.i8ptrType), llvm.Undef(c.i8ptrType),
+			}, "")
+		}
 	}
 
-	// Finish the function. Every basic block must end in a terminator, and
-	// because goroutines never return a value we can simply return void.
-	builder.CreateRetVoid()
+	if c.Scheduler == "asyncify" {
+		// The goroutine was terminated via deadlock.
+		builder.CreateUnreachable()
+	} else {
+		// Finish the function. Every basic block must end in a terminator, and
+		// because goroutines never return a value we can simply return void.
+		builder.CreateRetVoid()
+	}
 
 	// Return a ptrtoint of the wrapper, not the function itself.
 	return builder.CreatePtrToInt(wrapper, c.uintptrType, "")

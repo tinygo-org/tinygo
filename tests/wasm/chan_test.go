@@ -24,13 +24,12 @@ func TestChan(t *testing.T) {
 	err = chromedp.Run(ctx,
 		chromedp.Navigate(server.URL+"/run?file=chan.wasm"),
 		waitLog(`1
-2
 4
+2
 3
 true`),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 }

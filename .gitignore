@@ -1,4 +1,3 @@
-build
 docs/_build
 src/device/avr/*.go
 src/device/avr/*.ld
