@@ -8,7 +8,6 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
-	"log"
 	"math/bits"
 	"path/filepath"
 	"sort"
@@ -760,13 +759,35 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 		case *ssa.Global:
 			// Global variable.
 			info := c.getGlobalInfo(member)
+			// process go:embed pragmas
+			// TODO: skip this if not Go 1.16 or higher
 			if strings.TrimSpace(info.embeds) != "" {
 				embeds, err := parseGoEmbed(info.embeds)
 				if err != nil {
-					log.Fatal(err)
+					c.addError(member.Pos(), `invalid go:embed pragma: `+err.Error())
+					goto getGlobal
 				}
-				fmt.Printf("file embed found at %v: %v\n", info.linkName, embeds)
+				importsEmbedPkg := false
+				for _, imprt := range pkg.Pkg.Imports() {
+					if imprt.Name() == "embed" {
+						importsEmbedPkg = true
+						break
+					}
+				}
+				if !importsEmbedPkg {
+					// FIXME: technically the "embed" package needs to be imported in every
+					// *source file* that has a //go:embed pragma... that will always be the
+					// case when referencing embed.FS but not necessarily when a go:embed
+					// pragma is added to a string or []byte.  For now, as long as the embed
+					// package is imported in at least one source file, TinyGo will process
+					// any go:embed pragmas in the entire package.
+					c.addError(member.Pos(), `//go:embed only allowed in Go files that import "embed"`)
+					goto getGlobal
+				}
+				fmt.Printf("file embed found at %v (import: %v): %v\n", info.linkName, importsEmbedPkg, embeds)
 			}
+
+		getGlobal:
 			global := c.getGlobal(member)
 			if !info.extern {
 				global.SetInitializer(llvm.ConstNull(global.Type().ElementType()))

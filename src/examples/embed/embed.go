@@ -5,11 +5,12 @@ import (
 	"log"
 )
 
-//go:embed file1.txt file2.txt
-//go:embed file3.txt
+//go:embed file*.txt
+//go:embed index.html styles.css
 var files embed.FS
 
 func main() {
+	println(".....")
 	println(msg)
 	contents, err := files.ReadDir(".")
 	if err != nil {
