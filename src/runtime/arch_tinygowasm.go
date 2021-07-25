@@ -32,9 +32,11 @@ var (
 
 const wasmPageSize = 64 * 1024
 
-// Align on word boundary.
 func align(ptr uintptr) uintptr {
-	return (ptr + 3) &^ 3
+	// Align to 16, which is the alignment of max_align_t:
+	// https://godbolt.org/z/dYqTsWrGq
+	const heapAlign = 16
+	return (ptr + heapAlign - 1) &^ (heapAlign - 1)
 }
 
 func getCurrentStackPointer() uintptr
