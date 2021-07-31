@@ -285,6 +285,10 @@
 							throw 'trying to exit with code ' + code;
 						}
 					},
+					random_get: (bufPtr, bufLen) => {
+						crypto.getRandomValues(loadSlice(bufPtr, bufLen));
+						return 0;
+					},
 				},
 				env: {
 					// func ticks() float64
