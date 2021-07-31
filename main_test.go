@@ -162,7 +162,7 @@ func runPlatTests(target string, tests []string, t *testing.T) {
 			runTest(name, target, t, nil, nil)
 		})
 	}
-	if target == "wasi" || target == "" {
+	if target == "" || target == "wasi" {
 		t.Run("filesystem.go", func(t *testing.T) {
 			t.Parallel()
 			runTest("filesystem.go", target, t, nil, nil)
@@ -170,6 +170,12 @@ func runPlatTests(target string, tests []string, t *testing.T) {
 		t.Run("env.go", func(t *testing.T) {
 			t.Parallel()
 			runTest("env.go", target, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
+		})
+	}
+	if target == "" || target == "wasi" || target == "wasm" {
+		t.Run("rand.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("rand.go", target, t, nil, nil)
 		})
 	}
 }
