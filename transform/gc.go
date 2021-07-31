@@ -246,6 +246,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		}
 
 		// Do a store to the stack object after each new pointer that is created.
+		pointerStores := make(map[llvm.Value]struct{})
 		for i, ptr := range pointers {
 			// Insert the store after the pointer value is created.
 			insertionPoint := llvm.NextInstruction(ptr)
@@ -263,13 +264,44 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 			}, "")
 
 			// Store the pointer into the stack slot.
-			builder.CreateStore(ptr, gep)
+			store := builder.CreateStore(ptr, gep)
+			pointerStores[store] = struct{}{}
 		}
 
 		// Make sure this stack object is popped from the linked list of stack
 		// objects at return.
 		for _, ret := range returns {
-			builder.SetInsertPointBefore(ret)
+			inst := ret
+			// Try to do the popping of the stack object earlier, by inserting
+			// it not right before the return instruction but moving the insert
+			// position up.
+			// This is necessary so that the GC stack slot pass doesn't
+			// interfere with tail calls (in particular, musttail calls).
+			for {
+				prevInst := llvm.PrevInstruction(inst)
+				if prevInst == parent {
+					break
+				}
+				if _, ok := pointerStores[prevInst]; ok {
+					// Pop the stack object after the last store instruction.
+					// This can probably be made more efficient: storing to the
+					// stack chain object and then immediately popping isn't
+					// useful.
+					break
+				}
+				if prevInst.IsNil() {
+					// Start of basic block. Pop the stack object here.
+					break
+				}
+				if !prevInst.IsAPHINode().IsNil() {
+					// Do not insert before a PHI node. PHI nodes must be
+					// grouped at the beginning of a basic block before any
+					// other instruction.
+					break
+				}
+				inst = prevInst
+			}
+			builder.SetInsertPointBefore(inst)
 			builder.CreateStore(parent, stackChainStart)
 		}
 	}
