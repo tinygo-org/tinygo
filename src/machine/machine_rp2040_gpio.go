@@ -82,6 +82,7 @@ const (
 	PinAnalog
 	PinUART
 	PinI2C
+	PinSPI
 )
 
 // set drives the pin high
@@ -186,6 +187,8 @@ func (p Pin) Configure(config PinConfig) {
 		p.pullup()
 		p.setSchmitt(true)
 		p.setSlew(false)
+	case PinSPI:
+		p.setFunc(fnSPI)
 	}
 }
 

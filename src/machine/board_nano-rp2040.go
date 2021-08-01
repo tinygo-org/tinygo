@@ -56,11 +56,16 @@ const (
 	I2C1_SCL_PIN Pin = GPIO19
 )
 
-// SPI pins
+// SPI pins. SPI1 not available on Nano RP2040 Connect.
 const (
 	SPI0_SCK_PIN Pin = GPIO6
 	SPI0_SDO_PIN Pin = GPIO7
 	SPI0_SDI_PIN Pin = GPIO4
+
+	// GPIO22 does not have SPI functionality so we set it to avoid interfering with NINA.
+	SPI1_SCK_PIN Pin = GPIO22
+	SPI1_SDO_PIN Pin = GPIO22
+	SPI1_SDI_PIN Pin = GPIO22
 )
 
 // NINA-W102 Pins

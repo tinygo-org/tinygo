@@ -15,7 +15,7 @@ import (
 // package is changed in a way that affects the output so that cached package
 // builds will be invalidated.
 // This version is independent of the TinyGo version number.
-const Version = 1
+const Version = 2 // last change: fix GEP on untyped pointers
 
 // Enable extra checks, which should be disabled by default.
 // This may help track down bugs by adding a few more sanity checks.
@@ -110,17 +110,26 @@ func Run(mod llvm.Module, debug bool) error {
 			fmt.Fprintln(os.Stderr, "call:", fn.Name())
 		}
 		_, mem, callErr := r.run(r.getFunction(fn), nil, nil, "    ")
+		call.EraseFromParentAsInstruction()
 		if callErr != nil {
 			if isRecoverableError(callErr.Err) {
 				if r.debug {
 					fmt.Fprintln(os.Stderr, "not interpreting", r.pkgName, "because of error:", callErr.Error())
 				}
+				// Remove instructions that were created as part of interpreting
+				// the package.
 				mem.revert()
+				// Create a call to the package initializer (which was
+				// previously deleted).
+				i8undef := llvm.Undef(r.i8ptrType)
+				r.builder.CreateCall(fn, []llvm.Value{i8undef, i8undef}, "")
+				// Make sure that any globals touched by the package
+				// initializer, won't be accessed by later package initializers.
+				r.markExternalLoad(fn)
 				continue
 			}
 			return callErr
 		}
-		call.EraseFromParentAsInstruction()
 		for index, obj := range mem.objects {
 			r.objects[index] = obj
 		}
@@ -269,4 +278,20 @@ func (r *runner) getFunction(llvmFn llvm.Value) *function {
 	fn := r.compileFunction(llvmFn)
 	r.functionCache[llvmFn] = fn
 	return fn
+}
+
+// markExternalLoad marks the given llvmValue as being loaded externally. This
+// is primarily used to mark package initializers that could not be run at
+// compile time. As an example, a package initialize might store to a global
+// variable. Another package initializer might read from the same global
+// variable. By marking this function as being run at runtime, that load
+// instruction will need to be run at runtime instead of at compile time.
+func (r *runner) markExternalLoad(llvmValue llvm.Value) {
+	mem := memoryView{r: r}
+	mem.markExternalLoad(llvmValue)
+	for index, obj := range mem.objects {
+		if obj.marked > r.objects[index].marked {
+			r.objects[index].marked = obj.marked
+		}
+	}
 }

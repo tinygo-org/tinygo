@@ -46,3 +46,20 @@ const (
 	I2C1_SDA_PIN = GP2
 	I2C1_SCL_PIN = GP3
 )
+
+// SPI default pins
+const (
+	// Default Serial Clock Bus 0 for SPI communications
+	SPI0_SCK_PIN = GPIO18
+	// Default Serial Out Bus 0 for SPI communications
+	SPI0_SDO_PIN = GPIO19 // Tx
+	// Default Serial In Bus 0 for SPI communications
+	SPI0_SDI_PIN = GPIO16 // Rx
+
+	// Default Serial Clock Bus 1 for SPI communications
+	SPI1_SCK_PIN = GPIO10
+	// Default Serial Out Bus 1 for SPI communications
+	SPI1_SDO_PIN = GPIO11 // Tx
+	// Default Serial In Bus 1 for SPI communications
+	SPI1_SDI_PIN = GPIO12 // Rx
+)
