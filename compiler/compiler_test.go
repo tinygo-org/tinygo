@@ -45,6 +45,7 @@ func TestCompiler(t *testing.T) {
 		{"float.go", ""},
 		{"interface.go", ""},
 		{"func.go", ""},
+		{"pragma.go", ""},
 		{"goroutine.go", "wasm"},
 		{"goroutine.go", "cortex-m-qemu"},
 	}

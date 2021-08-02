@@ -34,11 +34,6 @@ const (
 	UART_RX_PIN Pin = NoPin
 )
 
-// Serial is the USB device
-var (
-	Serial = USB
-)
-
 // I2C pins (unused)
 const (
 	SDA_PIN = NoPin

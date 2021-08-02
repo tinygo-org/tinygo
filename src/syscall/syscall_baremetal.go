@@ -98,14 +98,8 @@ type ProcAttr struct {
 type SysProcAttr struct {
 }
 
-func Getegid() int                      { return 1 }
-func Geteuid() int                      { return 1 }
-func Getgid() int                       { return 1 }
 func Getgroups() ([]int, error)         { return []int{1}, nil }
-func Getppid() int                      { return 2 }
-func Getpid() int                       { return 3 }
 func Gettimeofday(tv *Timeval) error    { return ENOSYS }
-func Getuid() int                       { return 1 }
 func Kill(pid int, signum Signal) error { return ENOSYS }
 func Sendfile(outfd int, infd int, offset *int64, count int) (written int, err error) {
 	return 0, ENOSYS

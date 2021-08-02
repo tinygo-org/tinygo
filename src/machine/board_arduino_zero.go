@@ -35,8 +35,6 @@ const (
 	LED3 Pin = PB03 // RX LED
 )
 
-var Serial = USB
-
 // ADC pins
 const (
 	AREF Pin = PA03

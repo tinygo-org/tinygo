@@ -251,6 +251,8 @@ func (p Pin) mux() *volatile.Register32 {
 	}
 }
 
+var DefaultUART = UART0
+
 var (
 	UART0  = &_UART0
 	_UART0 = UART{Bus: esp.UART0, Buffer: NewRingBuffer()}

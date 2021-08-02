@@ -72,13 +72,8 @@ const (
 
 // UART0 pins (logical UART1)
 const (
-	UART_RX_PIN = D0
-	UART_TX_PIN = D1
-)
-
-// Serial is the USB device
-var (
-	Serial = USB
+	UART_RX_PIN = D1
+	UART_TX_PIN = D0
 )
 
 // I2C pins
@@ -103,4 +98,8 @@ const (
 var (
 	usb_VID uint16 = 0x239A
 	usb_PID uint16 = 0x802A
+)
+
+var (
+	DefaultUART = UART0
 )

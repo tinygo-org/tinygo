@@ -325,8 +325,6 @@ const (
 	OUTPUT_CTR_3V3 = PC15
 )
 
-var Serial = USB
-
 // USBCDC pins
 const (
 	USBCDC_DM_PIN = PIN_USB_DM

@@ -7,6 +7,8 @@ v4: 0 true
 v5: 0 false
 v6: false
 v7: 3 foo
+v8: barba
+v9: 3 2 3 4
 3
 3
 5

@@ -122,7 +122,7 @@ func (i2c *I2C) readByte() byte {
 }
 
 // Always use UART0 as the serial output.
-var Serial = UART0
+var DefaultUART = UART0
 
 // UART
 var (

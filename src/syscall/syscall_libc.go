@@ -62,10 +62,6 @@ func Kill(pid int, sig Signal) (err error) {
 	return ENOSYS // TODO
 }
 
-func Getpid() (pid int) {
-	panic("unimplemented: getpid") // TODO
-}
-
 func Getenv(key string) (value string, found bool) {
 	data := append([]byte(key), 0)
 	raw := libc_getenv(&data[0])

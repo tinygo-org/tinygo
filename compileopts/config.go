@@ -55,7 +55,7 @@ func (c *Config) GOARCH() string {
 
 // BuildTags returns the complete list of build tags used during this build.
 func (c *Config) BuildTags() []string {
-	tags := append(c.Target.BuildTags, []string{"tinygo", "gc." + c.GC(), "scheduler." + c.Scheduler()}...)
+	tags := append(c.Target.BuildTags, []string{"tinygo", "math_big_pure_go", "gc." + c.GC(), "scheduler." + c.Scheduler(), "serial." + c.Serial()}...)
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
@@ -111,6 +111,18 @@ func (c *Config) Scheduler() string {
 	}
 	// Fall back to coroutines, which are supported everywhere.
 	return "coroutines"
+}
+
+// Serial returns the serial implementation for this build configuration: uart,
+// usb (meaning USB-CDC), or none.
+func (c *Config) Serial() string {
+	if c.Options.Serial != "" {
+		return c.Options.Serial
+	}
+	if c.Target.Serial != "" {
+		return c.Target.Serial
+	}
+	return "none"
 }
 
 // OptLevels returns the optimization level (0-2), size level (0-2), and inliner
@@ -197,9 +209,8 @@ func (c *Config) CFlags() []string {
 		cflags = append(cflags, "-nostdlibinc", "-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "picolibc", "newlib", "libc", "include"))
 		cflags = append(cflags, "-I"+filepath.Join(root, "lib/picolibc-include"))
 	}
-	if c.Debug() {
-		cflags = append(cflags, "-g")
-	}
+	// Always emit debug information. It is optionally stripped at link time.
+	cflags = append(cflags, "-g")
 	return cflags
 }
 
@@ -238,8 +249,9 @@ func (c *Config) VerifyIR() bool {
 	return c.Options.VerifyIR
 }
 
-// Debug returns whether to add debug symbols to the IR, for debugging with GDB
-// and similar.
+// Debug returns whether debug (DWARF) information should be retained by the
+// linker. By default, debug information is retained but it can be removed with
+// the -no-debug flag.
 func (c *Config) Debug() bool {
 	return c.Options.Debug
 }

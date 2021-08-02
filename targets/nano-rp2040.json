@@ -2,9 +2,10 @@
     "inherits": [
         "rp2040"
     ],
+    "serial": "uart",
     "build-tags": ["nano_rp2040"],
     "linkerscript": "targets/pico.ld",
     "extra-files": [
-        "targets/pico_boot_stage2.S"
+        "targets/pico-boot-stage2.S"
     ]
 }

@@ -15,8 +15,6 @@ const (
 	BUTTON = PB31
 )
 
-var Serial = USB
-
 const (
 	// https://ww1.microchip.com/downloads/en/DeviceDoc/70005321A.pdf
 

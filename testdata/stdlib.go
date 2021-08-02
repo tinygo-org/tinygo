@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"syscall"
 )
 
 func main() {
@@ -12,6 +13,14 @@ func main() {
 	fmt.Println("stdin: ", os.Stdin.Name())
 	fmt.Println("stdout:", os.Stdout.Name())
 	fmt.Println("stderr:", os.Stderr.Name())
+
+	// Package syscall, this mostly checks whether the calls don't trigger an error.
+	syscall.Getuid()
+	syscall.Geteuid()
+	syscall.Getgid()
+	syscall.Getegid()
+	syscall.Getpid()
+	syscall.Getppid()
 
 	// package math/rand
 	fmt.Println("pseudorandom number:", rand.Int31())

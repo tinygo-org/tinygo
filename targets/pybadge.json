@@ -1,6 +1,7 @@
 {
     "inherits": ["atsamd51j19a"],
     "build-tags": ["pybadge"],
+    "serial": "usb",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "serial-port": ["acm:239a:8033", "acm:239a:33"],

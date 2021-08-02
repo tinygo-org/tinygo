@@ -17,7 +17,7 @@ const (
 	LED3 = LCD_BACKLIGHT_LOW
 )
 
-var Serial = UART0
+var DefaultUART = UART0
 
 // UART pins for PineTime. Note that RX is set to NoPin as RXD is not listed in
 // the PineTime schematic 1.0:

@@ -24,6 +24,7 @@ type functionInfo struct {
 	module     string     // go:wasm-module
 	importName string     // go:linkname, go:export - The name the developer assigns
 	linkName   string     // go:linkname, go:export - The name that we map for the particular module -> importName
+	section    string     // go:section - object file section name
 	exported   bool       // go:export, CGo
 	nobounds   bool       // go:nobounds
 	variadic   bool       // go:variadic (CGo only)
@@ -270,6 +271,10 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 				if hasUnsafeImport(f.Pkg.Pkg) {
 					info.linkName = parts[2]
 				}
+			case "//go:section":
+				if len(parts) == 2 && hasUnsafeImport(f.Pkg.Pkg) {
+					info.section = parts[1]
+				}
 			case "//go:nobounds":
 				// Skip bounds checking in this function. Useful for some
 				// runtime functions.
@@ -325,6 +330,7 @@ type globalInfo struct {
 	linkName string // go:extern
 	extern   bool   // go:extern
 	align    int    // go:align
+	section  string // go:section
 }
 
 // loadASTComments loads comments on globals from the AST, for use later in the
@@ -437,6 +443,10 @@ func (info *globalInfo) parsePragmas(doc *ast.CommentGroup) {
 			align, err := strconv.Atoi(parts[1])
 			if err == nil {
 				info.align = align
+			}
+		case "//go:section":
+			if len(parts) == 2 {
+				info.section = parts[1]
 			}
 		}
 	}

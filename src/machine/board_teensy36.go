@@ -87,6 +87,8 @@ var (
 	TeensyUART5 = UART4
 )
 
+var DefaultUART = UART0
+
 const (
 	defaultUART0RX = D00
 	defaultUART0TX = D01

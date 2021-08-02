@@ -41,7 +41,7 @@ const (
 
 // UART
 var (
-	Serial = UART0
+	DefaultUART = UART0
 )
 
 const (

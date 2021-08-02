@@ -125,7 +125,7 @@ func TestCompiler(t *testing.T) {
 		// Test with few optimizations enabled (no inlining, etc).
 		t.Run("opt=1", func(t *testing.T) {
 			t.Parallel()
-			runTestWithConfig("stdlib.go", "", t, &compileopts.Options{
+			runTestWithConfig("stdlib.go", "", t, compileopts.Options{
 				Opt: "1",
 			}, nil, nil)
 		})
@@ -134,15 +134,14 @@ func TestCompiler(t *testing.T) {
 		// TODO: fix this for stdlib.go, which currently fails.
 		t.Run("opt=0", func(t *testing.T) {
 			t.Parallel()
-			runTestWithConfig("print.go", "", t, &compileopts.Options{
+			runTestWithConfig("print.go", "", t, compileopts.Options{
 				Opt: "0",
 			}, nil, nil)
 		})
 
 		t.Run("ldflags", func(t *testing.T) {
 			t.Parallel()
-			runTestWithConfig("ldflags.go", "", t, &compileopts.Options{
-				Opt: "z",
+			runTestWithConfig("ldflags.go", "", t, compileopts.Options{
 				GlobalValues: map[string]map[string]string{
 					"main": {
 						"someGlobal": "foobar",
@@ -188,20 +187,20 @@ func runBuild(src, out string, opts *compileopts.Options) error {
 }
 
 func runTest(name, target string, t *testing.T, cmdArgs, environmentVars []string) {
-	options := &compileopts.Options{
-		Target:     target,
-		Opt:        "z",
-		PrintIR:    false,
-		DumpSSA:    false,
-		VerifyIR:   true,
-		Debug:      true,
-		PrintSizes: "",
-		WasmAbi:    "",
+	options := compileopts.Options{
+		Target: target,
 	}
 	runTestWithConfig(name, target, t, options, cmdArgs, environmentVars)
 }
 
-func runTestWithConfig(name, target string, t *testing.T, options *compileopts.Options, cmdArgs, environmentVars []string) {
+func runTestWithConfig(name, target string, t *testing.T, options compileopts.Options, cmdArgs, environmentVars []string) {
+	// Set default config.
+	options.Debug = true
+	options.VerifyIR = true
+	if options.Opt == "" {
+		options.Opt = "z"
+	}
+
 	// Get the expected output for this test.
 	// Note: not using filepath.Join as it strips the path separator at the end
 	// of the path.
@@ -230,7 +229,7 @@ func runTestWithConfig(name, target string, t *testing.T, options *compileopts.O
 
 	// Build the test binary.
 	binary := filepath.Join(tmpdir, "test")
-	err = runBuild("./"+path, binary, options)
+	err = runBuild("./"+path, binary, &options)
 	if err != nil {
 		printCompilerError(t.Log, err)
 		t.Fail()
