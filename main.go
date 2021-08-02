@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -95,10 +96,29 @@ func copyFile(src, dst string) error {
 
 // executeCommand is a simple wrapper to exec.Cmd
 func executeCommand(options *compileopts.Options, name string, arg ...string) *exec.Cmd {
-	if options.PrintCommands {
-		fmt.Printf("%s %s\n", name, strings.Join(arg, " "))
+	if options.PrintCommands != nil {
+		options.PrintCommands(name, arg...)
 	}
 	return exec.Command(name, arg...)
+}
+
+// printCommand prints a command to stdout while formatting it like a real
+// command (escaping characters etc). The resulting command should be easy to
+// run directly in a shell, although it is not guaranteed to be a safe shell
+// escape. That's not a problem as the primary use case is printing the command,
+// not running it.
+func printCommand(cmd string, args ...string) {
+	command := append([]string{cmd}, args...)
+	for i, arg := range command {
+		// Source: https://www.oreilly.com/library/view/learning-the-bash/1565923472/ch01s09.html
+		const specialChars = "~`#$&*()\\|[]{};'\"<>?! "
+		if strings.ContainsAny(arg, specialChars) {
+			// See: https://stackoverflow.com/questions/15783701/which-characters-need-to-be-escaped-when-using-bash
+			arg = "'" + strings.ReplaceAll(arg, `'`, `'\''`) + "'"
+			command[i] = arg
+		}
+	}
+	fmt.Fprintln(os.Stderr, strings.Join(command, " "))
 }
 
 // Build compiles and links the given package and writes it to outpath.
@@ -145,7 +165,7 @@ func Test(pkgName string, options *compileopts.Options, testCompileOnly bool, ou
 		return false, err
 	}
 
-	var passed bool
+	passed := true
 	err = builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
 		if testCompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
@@ -256,6 +276,8 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			fileExt = ".bin"
 		case strings.Contains(config.Target.FlashCommand, "{uf2}"):
 			fileExt = ".uf2"
+		case strings.Contains(config.Target.FlashCommand, "{zip}"):
+			fileExt = ".zip"
 		default:
 			return errors.New("invalid target file - did you forget the {hex} token in the 'flash-command' section?")
 		}
@@ -275,7 +297,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	return builder.Build(pkgName, fileExt, config, func(result builder.BuildResult) error {
 		// do we need port reset to put MCU into bootloader mode?
 		if config.Target.PortReset == "true" && flashMethod != "openocd" {
-			port, err := getDefaultPort(strings.FieldsFunc(port, func(c rune) bool { return c == ',' }))
+			port, err := getDefaultPort(port, config.Target.SerialPort)
 			if err != nil {
 				return err
 			}
@@ -293,36 +315,36 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		case "", "command":
 			// Create the command.
 			flashCmd := config.Target.FlashCommand
-			fileToken := "{" + fileExt[1:] + "}"
-			flashCmd = strings.ReplaceAll(flashCmd, fileToken, result.Binary)
+			flashCmdList, err := shlex.Split(flashCmd)
+			if err != nil {
+				return fmt.Errorf("could not parse flash command %#v: %w", flashCmd, err)
+			}
 
 			if strings.Contains(flashCmd, "{port}") {
 				var err error
-				port, err = getDefaultPort(strings.FieldsFunc(port, func(c rune) bool { return c == ',' }))
+				port, err = getDefaultPort(port, config.Target.SerialPort)
 				if err != nil {
 					return err
 				}
 			}
 
-			flashCmd = strings.ReplaceAll(flashCmd, "{port}", port)
-
-			// Execute the command.
-			var cmd *exec.Cmd
-			switch runtime.GOOS {
-			case "windows":
-				command := strings.Split(flashCmd, " ")
-				if len(command) < 2 {
-					return errors.New("invalid flash command")
-				}
-				cmd = executeCommand(config.Options, command[0], command[1:]...)
-			default:
-				cmd = executeCommand(config.Options, "/bin/sh", "-c", flashCmd)
+			// Fill in fields in the command template.
+			fileToken := "{" + fileExt[1:] + "}"
+			for i, arg := range flashCmdList {
+				arg = strings.ReplaceAll(arg, fileToken, result.Binary)
+				arg = strings.ReplaceAll(arg, "{port}", port)
+				flashCmdList[i] = arg
 			}
 
+			// Execute the command.
+			if len(flashCmdList) < 2 {
+				return fmt.Errorf("invalid flash command: %#v", flashCmd)
+			}
+			cmd := executeCommand(config.Options, flashCmdList[0], flashCmdList[1:]...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Dir = goenv.Get("TINYGOROOT")
-			err := cmd.Run()
+			err = cmd.Run()
 			if err != nil {
 				return &commandError{"failed to flash", result.Binary, err}
 			}
@@ -413,7 +435,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		case "native":
 			// Run GDB directly.
 		case "openocd":
-			gdbCommands = append(gdbCommands, "target remote :3333", "monitor halt", "load", "monitor reset halt")
+			gdbCommands = append(gdbCommands, "target extended-remote :3333", "monitor halt", "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
 			args, err := config.OpenOCDConfiguration()
@@ -432,7 +454,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				daemon.Stderr = w
 			}
 		case "jlink":
-			gdbCommands = append(gdbCommands, "target remote :2331", "load", "monitor reset halt")
+			gdbCommands = append(gdbCommands, "target extended-remote :2331", "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
 			daemon = executeCommand(config.Options, "JLinkGDBServer", "-device", config.Target.JLinkDevice)
@@ -447,7 +469,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				daemon.Stderr = w
 			}
 		case "qemu":
-			gdbCommands = append(gdbCommands, "target remote :1234")
+			gdbCommands = append(gdbCommands, "target extended-remote :1234")
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary, "-s", "-S")
@@ -455,7 +477,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "qemu-user":
-			gdbCommands = append(gdbCommands, "target remote :1234")
+			gdbCommands = append(gdbCommands, "target extended-remote :1234")
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], "-g", "1234", result.Binary)
@@ -463,7 +485,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "mgba":
-			gdbCommands = append(gdbCommands, "target remote :2345")
+			gdbCommands = append(gdbCommands, "target extended-remote :2345")
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary, "-g")
@@ -471,7 +493,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "simavr":
-			gdbCommands = append(gdbCommands, "target remote :1234")
+			gdbCommands = append(gdbCommands, "target extended-remote :1234")
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], "-g", result.Binary)
@@ -697,7 +719,8 @@ func windowsFindUSBDrive(volume string, options *compileopts.Options) (string, e
 }
 
 // getDefaultPort returns the default serial port depending on the operating system.
-func getDefaultPort(portCandidates []string) (port string, err error) {
+func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err error) {
+	portCandidates := strings.FieldsFunc(portFlag, func(c rune) bool { return c == ',' })
 	if len(portCandidates) == 1 {
 		return portCandidates[0], nil
 	}
@@ -713,13 +736,70 @@ func getDefaultPort(portCandidates []string) (port string, err error) {
 			return "", err
 		}
 
-		for _, p := range portsList {
-			if p.IsUSB {
-				ports = append(ports, p.Name)
+		var preferredPortIDs [][2]uint16
+		for _, s := range usbInterfaces {
+			parts := strings.Split(s, ":")
+			if len(parts) != 3 || (parts[0] != "acm" && parts[0] == "usb") {
+				// acm and usb are the two types of serial ports recognized
+				// under Linux (ttyACM*, ttyUSB*). Other operating systems don't
+				// generally make this distinction. If this is not one of the
+				// given USB devices, don't try to parse the USB IDs.
+				continue
 			}
+			vid, err := strconv.ParseUint(parts[1], 16, 16)
+			if err != nil {
+				return "", fmt.Errorf("could not parse USB vendor ID %q: %w", parts[1], err)
+			}
+			pid, err := strconv.ParseUint(parts[2], 16, 16)
+			if err != nil {
+				return "", fmt.Errorf("could not parse USB product ID %q: %w", parts[1], err)
+			}
+			preferredPortIDs = append(preferredPortIDs, [2]uint16{uint16(vid), uint16(pid)})
 		}
 
-		if ports == nil || len(ports) == 0 {
+		var primaryPorts []string   // ports picked from preferred USB VID/PID
+		var secondaryPorts []string // other ports (as a fallback)
+		for _, p := range portsList {
+			if !p.IsUSB {
+				continue
+			}
+			if p.VID != "" && p.PID != "" {
+				foundPort := false
+				vid, vidErr := strconv.ParseUint(p.VID, 16, 16)
+				pid, pidErr := strconv.ParseUint(p.PID, 16, 16)
+				if vidErr == nil && pidErr == nil {
+					for _, id := range preferredPortIDs {
+						if uint16(vid) == id[0] && uint16(pid) == id[1] {
+							primaryPorts = append(primaryPorts, p.Name)
+							foundPort = true
+							continue
+						}
+					}
+				}
+				if foundPort {
+					continue
+				}
+			}
+
+			secondaryPorts = append(secondaryPorts, p.Name)
+		}
+		if len(primaryPorts) == 1 {
+			// There is exactly one match in the set of preferred ports. Use
+			// this port, even if there may be others available. This allows
+			// flashing a specific board even if there are multiple available.
+			return primaryPorts[0], nil
+		} else if len(primaryPorts) > 1 {
+			// There are multiple preferred ports, probably because more than
+			// one device of the same type are connected (e.g. two Arduino
+			// Unos).
+			ports = primaryPorts
+		} else {
+			// No preferred ports found. Fall back to other serial ports
+			// available in the system.
+			ports = secondaryPorts
+		}
+
+		if len(ports) == 0 {
 			// fallback
 			switch runtime.GOOS {
 			case "darwin":
@@ -929,6 +1009,7 @@ func main() {
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, extalloc, conservative)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
 	scheduler := flag.String("scheduler", "", "which scheduler to use (none, coroutines, tasks)")
+	serial := flag.String("serial", "", "which serial output to use (none, uart, usb)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
@@ -938,7 +1019,7 @@ func main() {
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
 	printCommands := flag.Bool("x", false, "Print commands")
-	nodebug := flag.Bool("no-debug", false, "disable DWARF debug symbol generation")
+	nodebug := flag.Bool("no-debug", false, "strip debug information")
 	ocdCommandsString := flag.String("ocd-commands", "", "OpenOCD commands, overriding target spec (can specify multiple separated by commas)")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "", "flash port (can specify multiple candidates separated by commas)")
@@ -947,10 +1028,11 @@ func main() {
 	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
 
-	var flagJSON, flagDeps *bool
+	var flagJSON, flagDeps, flagTest *bool
 	if command == "help" || command == "list" {
 		flagJSON = flag.Bool("json", false, "print data in JSON format")
-		flagDeps = flag.Bool("deps", false, "")
+		flagDeps = flag.Bool("deps", false, "supply -deps flag to go list")
+		flagTest = flag.Bool("test", false, "supply -test flag to go list")
 	}
 	var outpath string
 	if command == "help" || command == "build" || command == "build-library" || command == "test" {
@@ -1000,6 +1082,7 @@ func main() {
 		GC:              *gc,
 		PanicStrategy:   *panicStrategy,
 		Scheduler:       *scheduler,
+		Serial:          *serial,
 		PrintIR:         *printIR,
 		DumpSSA:         *dumpSSA,
 		VerifyIR:        *verifyIR,
@@ -1007,13 +1090,15 @@ func main() {
 		PrintSizes:      *printSize,
 		PrintStacks:     *printStacks,
 		PrintAllocs:     printAllocs,
-		PrintCommands:   *printCommands,
 		Tags:            *tags,
 		GlobalValues:    globalVarValues,
 		WasmAbi:         *wasmAbi,
 		Programmer:      *programmer,
 		OpenOCDCommands: ocdCommands,
 		LLVMFeatures:    *llvmFeatures,
+	}
+	if *printCommands {
+		options.PrintCommands = printCommand
 	}
 
 	os.Setenv("CC", "clang -target="+*target)
@@ -1199,6 +1284,9 @@ func main() {
 		}
 		if *flagDeps {
 			extraArgs = append(extraArgs, "-deps")
+		}
+		if *flagTest {
+			extraArgs = append(extraArgs, "-test")
 		}
 		cmd, err := loader.List(config, extraArgs, flag.Args())
 		if err != nil {

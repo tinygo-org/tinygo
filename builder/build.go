@@ -12,7 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"go/types"
+	"hash/crc32"
 	"io/ioutil"
+	"math/bits"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -98,7 +100,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		AutomaticStackSize: config.AutomaticStackSize(),
 		DefaultStackSize:   config.Target.DefaultStackSize,
 		NeedsStackObjects:  config.NeedsStackObjects(),
-		Debug:              config.Debug(),
+		Debug:              true,
 		LLVMFeatures:       config.LLVMFeatures(),
 	}
 
@@ -468,33 +470,10 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		linkerDependencies = append(linkerDependencies, job)
 	}
 
-	// Add libc dependency if needed.
-	root := goenv.Get("TINYGOROOT")
-	switch config.Target.Libc {
-	case "picolibc":
-		job, err := Picolibc.load(config.Triple(), config.CPU(), dir)
-		if err != nil {
-			return err
-		}
-		// The library needs to be compiled (cache miss).
-		jobs = append(jobs, job.dependencies...)
-		jobs = append(jobs, job)
-		linkerDependencies = append(linkerDependencies, job)
-	case "wasi-libc":
-		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
-		}
-		ldflags = append(ldflags, path)
-	case "":
-		// no library specified, so nothing to do
-	default:
-		return fmt.Errorf("unknown libc: %s", config.Target.Libc)
-	}
-
 	// Add jobs to compile extra files. These files are in C or assembly and
 	// contain things like the interrupt vector table and low level operations
 	// such as stack switching.
+	root := goenv.Get("TINYGOROOT")
 	for _, path := range config.ExtraFiles() {
 		abspath := filepath.Join(root, path)
 		job := &compileJob{
@@ -535,6 +514,64 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		ldflags = append(ldflags, lprogram.LDFlags...)
 	}
 
+	// Add libc dependency if needed.
+	switch config.Target.Libc {
+	case "picolibc":
+		job, err := Picolibc.load(config.Triple(), config.CPU(), dir)
+		if err != nil {
+			return err
+		}
+		// The library needs to be compiled (cache miss).
+		jobs = append(jobs, job.dependencies...)
+		jobs = append(jobs, job)
+		linkerDependencies = append(linkerDependencies, job)
+	case "wasi-libc":
+		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
+		}
+		job := dummyCompileJob(path)
+		jobs = append(jobs, job)
+		linkerDependencies = append(linkerDependencies, job)
+	case "":
+		// no library specified, so nothing to do
+	default:
+		return fmt.Errorf("unknown libc: %s", config.Target.Libc)
+	}
+
+	// Strip debug information with -no-debug.
+	if !config.Debug() {
+		for _, tag := range config.BuildTags() {
+			if tag == "baremetal" {
+				// Don't use -no-debug on baremetal targets. It makes no sense:
+				// the debug information isn't flashed to the device anyway.
+				return fmt.Errorf("stripping debug information is unnecessary for baremetal targets")
+			}
+		}
+		if config.Target.Linker == "wasm-ld" {
+			// Don't just strip debug information, also compress relocations
+			// while we're at it. Relocations can only be compressed when debug
+			// information is stripped.
+			ldflags = append(ldflags, "--strip-debug", "--compress-relocations")
+		} else {
+			switch config.GOOS() {
+			case "linux":
+				// Either real linux or an embedded system (like AVR) that
+				// pretends to be Linux. It's a ELF linker wrapped by GCC in any
+				// case.
+				ldflags = append(ldflags, "-Wl,--strip-debug")
+			case "darwin":
+				// MacOS (darwin) doesn't have a linker flag to strip debug
+				// information. Apple expects you to use the strip command
+				// instead.
+				return errors.New("cannot remove debug information: MacOS doesn't suppor this linker flag")
+			default:
+				// Other OSes may have different flags.
+				return errors.New("cannot remove debug information: unknown OS: " + config.GOOS())
+			}
+		}
+	}
+
 	// Create a linker job, which links all object files together and does some
 	// extra stuff that can only be done after linking.
 	jobs = append(jobs, &compileJob{
@@ -547,8 +584,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				}
 				ldflags = append(ldflags, dependency.result)
 			}
-			if config.Options.PrintCommands {
-				fmt.Printf("%s %s\n", config.Target.Linker, strings.Join(ldflags, " "))
+			if config.Options.PrintCommands != nil {
+				config.Options.PrintCommands(config.Target.Linker, ldflags...)
 			}
 			err = link(config.Target.Linker, ldflags...)
 			if err != nil {
@@ -566,12 +603,21 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 					return err
 				}
 			}
+
+			// Apply ELF patches
 			if config.AutomaticStackSize() {
 				// Modify the .tinygo_stacksizes section that contains a stack size
 				// for each goroutine.
 				err = modifyStackSizes(executable, stackSizeLoads, stackSizes)
 				if err != nil {
 					return fmt.Errorf("could not modify stack sizes: %w", err)
+				}
+			}
+			if config.RP2040BootPatch() {
+				// Patch the second stage bootloader CRC into the .boot2 section
+				err = patchRP2040BootCRC(executable)
+				if err != nil {
+					return fmt.Errorf("could not patch RP2040 second stage boot loader: %w", err)
 				}
 			}
 
@@ -636,6 +682,18 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		// bootloader).
 		tmppath = filepath.Join(dir, "main"+outext)
 		err := makeESPFirmareImage(executable, tmppath, outputBinaryFormat)
+		if err != nil {
+			return err
+		}
+	case "nrf-dfu":
+		// special format for nrfutil for Nordic chips
+		tmphexpath := filepath.Join(dir, "main.hex")
+		err := objcopy(executable, tmphexpath, "hex")
+		if err != nil {
+			return err
+		}
+		tmppath = filepath.Join(dir, "main"+outext)
+		err = makeDFUFirmwareImage(config.Options, tmphexpath, tmppath)
 		if err != nil {
 			return err
 		}
@@ -908,30 +966,7 @@ func determineStackSizes(mod llvm.Module, executable string) ([]string, map[stri
 // stack size information. Before this modification, all stack sizes in the
 // section assume the default stack size (which is relatively big).
 func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map[string]functionStackSize) error {
-	fp, err := os.OpenFile(executable, os.O_RDWR, 0)
-	if err != nil {
-		return err
-	}
-	defer fp.Close()
-
-	elfFile, err := elf.NewFile(fp)
-	if err != nil {
-		return err
-	}
-
-	section := elfFile.Section(".tinygo_stacksizes")
-	if section == nil {
-		return errors.New("could not find .tinygo_stacksizes section")
-	}
-
-	if section.Size != section.FileSize {
-		// Sanity check.
-		return fmt.Errorf("expected .tinygo_stacksizes to have identical size and file size, got %d and %d", section.Size, section.FileSize)
-	}
-
-	// Read all goroutine stack sizes.
-	data := make([]byte, section.Size)
-	_, err = fp.ReadAt(data, int64(section.Offset))
+	data, fileHeader, err := getElfSectionData(executable, ".tinygo_stacksizes")
 	if err != nil {
 		return err
 	}
@@ -953,15 +988,19 @@ func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map
 		if fn.stackSizeType == stacksize.Bounded {
 			stackSize := uint32(fn.stackSize)
 
-			// Adding 4 for the stack canary. Even though the size may be
-			// automatically determined, stack overflow checking is still
-			// important as the stack size cannot be determined for all
-			// goroutines.
-			stackSize += 4
-
 			// Add stack size used by interrupts.
-			switch elfFile.Machine {
+			switch fileHeader.Machine {
 			case elf.EM_ARM:
+				if stackSize%8 != 0 {
+					// If the stack isn't a multiple of 8, it means the leaf
+					// function with the biggest stack depth doesn't have an aligned
+					// stack. If the STKALIGN flag is set (which it is by default)
+					// the interrupt controller will forcibly align the stack before
+					// storing in-use registers. This will thus overwrite one word
+					// past the end of the stack (off-by-one).
+					stackSize += 4
+				}
+
 				// On Cortex-M (assumed here), this stack size is 8 words or 32
 				// bytes. This is only to store the registers that the interrupt
 				// may modify, the interrupt will switch to the interrupt stack
@@ -969,6 +1008,14 @@ func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map
 				// Some background:
 				// https://interrupt.memfault.com/blog/cortex-m-rtos-context-switching
 				stackSize += 32
+
+				// Adding 4 for the stack canary, and another 4 to keep the
+				// stack aligned. Even though the size may be automatically
+				// determined, stack overflow checking is still important as the
+				// stack size cannot be determined for all goroutines.
+				stackSize += 8
+			default:
+				return fmt.Errorf("unknown architecture: %s", fileHeader.Machine.String())
 			}
 
 			// Finally write the stack size to the binary.
@@ -976,13 +1023,7 @@ func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map
 		}
 	}
 
-	// Write back the modified stack sizes.
-	_, err = fp.WriteAt(data, int64(section.Offset))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return replaceElfSection(executable, ".tinygo_stacksizes", data)
 }
 
 // printStacks prints the maximum stack depth for functions that are started as
@@ -1013,4 +1054,42 @@ func printStacks(calculatedStacks []string, stackSizes map[string]functionStackS
 			fmt.Printf("%-32s unknown, %s calls a function pointer\n", fn.humanName, fn.missingStackSize)
 		}
 	}
+}
+
+// RP2040 second stage bootloader CRC32 calculation
+//
+// Spec: https://datasheets.raspberrypi.org/rp2040/rp2040-datasheet.pdf
+// Section: 2.8.1.3.1. Checksum
+func patchRP2040BootCRC(executable string) error {
+	bytes, _, err := getElfSectionData(executable, ".boot2")
+	if err != nil {
+		return err
+	}
+
+	if len(bytes) != 256 {
+		return fmt.Errorf("rp2040 .boot2 section must be exactly 256 bytes")
+	}
+
+	// From the 'official' RP2040 checksum script:
+	//
+	//  Our bootrom CRC32 is slightly bass-ackward but it's
+	//  best to work around for now (FIXME)
+	//  100% worth it to save two Thumb instructions
+	revBytes := make([]byte, len(bytes))
+	for i := range bytes {
+		revBytes[i] = bits.Reverse8(bytes[i])
+	}
+
+	// crc32.Update does an initial negate and negates the
+	// result, so to meet RP2040 spec, pass 0x0 as initial
+	// hash and negate returned value.
+	//
+	// Note: checksum is over 252 bytes (256 - 4)
+	hash := bits.Reverse32(crc32.Update(0x0, crc32.IEEETable, revBytes[:252]) ^ 0xFFFFFFFF)
+
+	// Write the CRC to the end of the bootloader.
+	binary.LittleEndian.PutUint32(bytes[252:], hash)
+
+	// Update the .boot2 section to included the CRC
+	return replaceElfSection(executable, ".boot2", bytes)
 }

@@ -1,6 +1,7 @@
 {
 	"inherits": ["cortex-m4"],
 	"build-tags": ["teensy36", "teensy", "mk66f18", "nxp"],
+	"serial": "uart",
 	"linkerscript": "targets/nxpmk66f18.ld",
 	"extra-files": [
 		"src/device/nxp/mk66f18.s",

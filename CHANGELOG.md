@@ -1,3 +1,69 @@
+0.19.0
+---
+
+* **command line**
+  - don't consider compile-only tests as failing
+  - add -test flag for `tinygo list`
+  - escape commands while printing them with the -x flag
+  - make flash-command portable and safer to use
+  - use `extended-remote` instead of `remote` in GDB
+  - detect specific serial port IDs based on USB vid/pid
+  - add a flag to the command line to select the serial implementation
+* **compiler**
+  - `cgo`: improve constant parser
+  - `compiler`: support chained interrupt handlers
+  - `compiler`: add support for running a builtin in a goroutine
+  - `compiler`: do not emit nil checks for loading closure variables
+  - `compiler`: skip context parameter when starting regular goroutine
+  - `compiler`: refactor method names
+  - `compiler`: add function and global section pragmas
+  - `compiler`: implement `syscall.rawSyscallNoError` in inline assembly
+  - `interp`: ignore inline assembly in markExternal
+  - `interp`: fix a bug in pointer cast workaround
+  - `loader`: fix testing a main package
+* **standard library**
+  - `crypto/rand`: replace this package with a TinyGo version
+  - `machine`: make USBCDC global a pointer
+  - `machine`: make UART objects pointer receivers
+  - `machine`: define Serial as the default output
+  - `net`: add initial support for net.IP
+  - `net`: add more net compatibility
+  - `os`: add stub for os.ReadDir
+  - `os`: add FileMode constants from Go 1.16
+  - `os`: add stubs required for net/http
+  - `os`: implement process related functions
+  - `reflect`: implement AppendSlice
+  - `reflect`: add stubs required for net/http
+  - `runtime`: make task.Data a 64-bit integer to avoid overflow
+  - `runtime`: expose memory stats
+  - `sync`: implement NewCond
+  - `syscall`: fix int type in libc version
+* **targets**
+  - `cortexm`: do not disable interrupts on abort
+  - `cortexm`: bump default stack size to 2048 bytes
+  - `nrf`: avoid heap allocation in waitForEvent
+  - `nrf`: don't trigger a heap allocation in SPI.Transfer
+  - `nrf52840`: add support for flashing with the BOSSA tool
+  - `rp2040`: add support for GPIO input
+  - `rp2040`: add basic support for ADC
+  - `rp2040`: gpio and adc pin definitions
+  - `rp2040`: implement UART
+  - `rp2040`: patch elf to checksum 2nd stage boot
+  - `stm32`: add PWM for most chips
+  - `stm32`: add support for pin interrupts
+  - `stm32f103`: add support for PinInputPullup / PinInputPulldown
+  - `wasi`: remove wasm build tag
+* **boards**
+  - `feather-rp2040`: add support for this board
+  - `feather-nrf52840-sense`: add board definition for this board
+  - `pca10059`: support flashing from Windows
+  - `nano-rp2040`: add this board
+  - `nano-33-ble`: add support for this board
+  - `pico`: add the Raspberry Pi Pico board with the new RP2040 chip
+  - `qtpy`: add pin for neopixels
+  - all: add definition for ws2812 for supported boards
+
+
 0.18.0
 ---
 

@@ -31,6 +31,7 @@ type TargetSpec struct {
 	BuildTags        []string `json:"build-tags"`
 	GC               string   `json:"gc"`
 	Scheduler        string   `json:"scheduler"`
+	Serial           string   `json:"serial"` // which serial output to use (uart, usb, none)
 	Linker           string   `json:"linker"`
 	RTLib            string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
 	Libc             string   `json:"libc"`
@@ -40,10 +41,12 @@ type TargetSpec struct {
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
 	ExtraFiles       []string `json:"extra-files"`
+	RP2040BootPatch  *bool    `json:"rp2040-boot-patch"`        // Patch RP2040 2nd stage bootloader checksum
 	Emulator         []string `json:"emulator" override:"copy"` // inherited Emulator must not be append
 	FlashCommand     string   `json:"flash-command"`
 	GDB              []string `json:"gdb"`
 	PortReset        string   `json:"flash-1200-bps-reset"`
+	SerialPort       []string `json:"serial-port"` // serial port IDs in the form "acm:vid:pid" or "usb:vid:pid"
 	FlashMethod      string   `json:"flash-method"`
 	FlashVolume      string   `json:"msd-volume-name"`
 	FlashFilename    string   `json:"msd-firmware-name"`

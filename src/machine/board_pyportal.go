@@ -68,6 +68,7 @@ const (
 	TFT_WR        = D26
 
 	NEOPIXEL = D2
+	WS2812   = D2
 	SPK_SD   = D50
 )
 
@@ -93,8 +94,6 @@ const (
 const (
 	LED = D13
 )
-
-var Serial = USB
 
 // USBCDC pins
 const (

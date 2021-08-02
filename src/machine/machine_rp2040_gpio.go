@@ -63,6 +63,12 @@ const (
 
 const (
 	PinOutput PinMode = iota
+	PinInput
+	PinInputPulldown
+	PinInputPullup
+	PinAnalog
+	PinUART
+	PinSPI
 )
 
 // set drives the pin high
@@ -83,12 +89,32 @@ func (p Pin) xor() {
 	rp.SIO.GPIO_OUT_XOR.Set(mask)
 }
 
+// get returns the pin value
+func (p Pin) get() bool {
+	return rp.SIO.GPIO_IN.HasBits(uint32(1) << p)
+}
+
 func (p Pin) ioCtrl() *volatile.Register32 {
 	return &ioBank0.io[p].ctrl
 }
 
 func (p Pin) padCtrl() *volatile.Register32 {
 	return &padsBank0.io[p]
+}
+
+func (p Pin) pullup() {
+	p.padCtrl().SetBits(rp.PADS_BANK0_GPIO0_PUE)
+	p.padCtrl().ClearBits(rp.PADS_BANK0_GPIO0_PDE)
+}
+
+func (p Pin) pulldown() {
+	p.padCtrl().SetBits(rp.PADS_BANK0_GPIO0_PDE)
+	p.padCtrl().ClearBits(rp.PADS_BANK0_GPIO0_PUE)
+}
+
+func (p Pin) pulloff() {
+	p.padCtrl().ClearBits(rp.PADS_BANK0_GPIO0_PDE)
+	p.padCtrl().ClearBits(rp.PADS_BANK0_GPIO0_PUE)
 }
 
 // setFunc will set pin function to fn.
@@ -107,8 +133,6 @@ func (p Pin) init() {
 	mask := uint32(1) << p
 	rp.SIO.GPIO_OE_CLR.Set(mask)
 	p.clr()
-	p.setFunc(fnSIO)
-
 }
 
 // Configure configures the gpio pin as per mode.
@@ -117,7 +141,23 @@ func (p Pin) Configure(config PinConfig) {
 	mask := uint32(1) << p
 	switch config.Mode {
 	case PinOutput:
+		p.setFunc(fnSIO)
 		rp.SIO.GPIO_OE_SET.Set(mask)
+	case PinInput:
+		p.setFunc(fnSIO)
+	case PinInputPulldown:
+		p.setFunc(fnSIO)
+		p.pulldown()
+	case PinInputPullup:
+		p.setFunc(fnSIO)
+		p.pullup()
+	case PinAnalog:
+		p.setFunc(fnNULL)
+		p.pulloff()
+	case PinUART:
+		p.setFunc(fnUART)
+	case PinSPI:
+		p.setFunc(fnSPI)
 	}
 }
 
@@ -128,4 +168,9 @@ func (p Pin) Set(value bool) {
 	} else {
 		p.clr()
 	}
+}
+
+// Get reads the pin value.
+func (p Pin) Get() bool {
+	return p.get()
 }

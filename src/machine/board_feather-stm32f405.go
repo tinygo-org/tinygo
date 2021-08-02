@@ -84,6 +84,7 @@ const (
 	LED_NEOPIXEL = D8
 	LED_BUILTIN  = LED_RED
 	LED          = LED_BUILTIN
+	WS2812       = D8
 )
 
 func initLED() {}
@@ -140,7 +141,7 @@ var (
 		TxAltFuncSelector: AF7_USART1_2_3,
 		RxAltFuncSelector: AF7_USART1_2_3,
 	}
-	Serial = UART1
+	DefaultUART = UART1
 )
 
 func initUART() {

@@ -52,7 +52,7 @@ const (
 	LED_BLUE  = D14
 )
 
-var Serial = UART0
+var DefaultUART = UART0
 
 // Default pins for UARTHS.
 const (

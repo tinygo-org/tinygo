@@ -9,6 +9,7 @@ import (
 var (
 	validGCOptions            = []string{"none", "leaking", "extalloc", "conservative"}
 	validSchedulerOptions     = []string{"none", "tasks", "coroutines"}
+	validSerialOptions        = []string{"none", "uart", "usb"}
 	validPrintSizeOptions     = []string{"none", "short", "full"}
 	validPanicStrategyOptions = []string{"print", "trap"}
 	validOptOptions           = []string{"none", "0", "1", "2", "s", "z"}
@@ -22,10 +23,11 @@ type Options struct {
 	GC              string
 	PanicStrategy   string
 	Scheduler       string
+	Serial          string
 	PrintIR         bool
 	DumpSSA         bool
 	VerifyIR        bool
-	PrintCommands   bool
+	PrintCommands   func(cmd string, args ...string)
 	Debug           bool
 	PrintSizes      string
 	PrintAllocs     *regexp.Regexp // regexp string
@@ -56,6 +58,15 @@ func (o *Options) Verify() error {
 			return fmt.Errorf(`invalid scheduler option '%s': valid values are %s`,
 				o.Scheduler,
 				strings.Join(validSchedulerOptions, ", "))
+		}
+	}
+
+	if o.Serial != "" {
+		valid := isInArray(validSerialOptions, o.Serial)
+		if !valid {
+			return fmt.Errorf(`invalid serial option '%s': valid values are %s`,
+				o.Serial,
+				strings.Join(validSerialOptions, ", "))
 		}
 	}
 

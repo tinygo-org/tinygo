@@ -27,4 +27,4 @@ const (
 
 const HasLowFrequencyCrystal = true
 
-var Serial = UART0
+var DefaultUART = UART0

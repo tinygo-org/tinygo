@@ -38,7 +38,7 @@ var (
 		TxAltFuncSelector: UART_ALT_FN,
 		RxAltFuncSelector: UART_ALT_FN,
 	}
-	Serial = UART1
+	DefaultUART = UART1
 )
 
 func init() {

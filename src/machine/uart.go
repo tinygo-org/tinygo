@@ -1,4 +1,4 @@
-// +build atmega esp nrf sam sifive stm32 k210 nxp
+// +build atmega esp nrf sam sifive stm32 k210 nxp rp2040
 
 package machine
 
@@ -6,11 +6,22 @@ import "errors"
 
 var errUARTBufferEmpty = errors.New("UART buffer empty")
 
-type UARTConfig struct {
-	BaudRate uint32
-	TX       Pin
-	RX       Pin
-}
+// UARTParity is the parity setting to be used for UART communication.
+type UARTParity int
+
+const (
+	// ParityNone means to not use any parity checking. This is
+	// the most common setting.
+	ParityNone UARTParity = 0
+
+	// ParityEven means to expect that the total number of 1 bits sent
+	// should be an even number.
+	ParityEven UARTParity = 1
+
+	// ParityOdd means to expect that the total number of 1 bits sent
+	// should be an odd number.
+	ParityOdd UARTParity = 2
+)
 
 // To implement the UART interface for a board, you must declare a concrete type as follows:
 //

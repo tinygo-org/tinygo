@@ -14,6 +14,12 @@ const (
 )
 
 const (
+	// This board does not have a user button, so
+	// use first GPIO pin by default
+	BUTTON = PA0
+)
+
+const (
 	// Arduino Pins
 	A0 = PA0 // ADC_IN0
 	A1 = PA1 // ADC_IN1
@@ -70,7 +76,7 @@ var (
 		TxAltFuncSelector: 4,
 		RxAltFuncSelector: 4,
 	}
-	Serial = UART1
+	DefaultUART = UART1
 
 	// I2C1 is documented, alias to I2C0 as well
 	I2C1 = &I2C{

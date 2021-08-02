@@ -6,7 +6,7 @@ target triple = "wasm32--wasi"
 %runtime.funcValueWithSignature = type { i32, i8* }
 %runtime.channel = type { i32, i32, i8, %runtime.channelBlockedList*, i32, i32, i32, i8* }
 %runtime.channelBlockedList = type { %runtime.channelBlockedList*, %"internal/task.Task"*, %runtime.chanSelectState*, { %runtime.channelBlockedList*, i32, i32 } }
-%"internal/task.Task" = type { %"internal/task.Task"*, i8*, i32, %"internal/task.state" }
+%"internal/task.Task" = type { %"internal/task.Task"*, i8*, i64, %"internal/task.state" }
 %"internal/task.state" = type { i8* }
 %runtime.chanSelectState = type { %runtime.channel*, i8* }
 

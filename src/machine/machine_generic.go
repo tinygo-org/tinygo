@@ -11,6 +11,12 @@ var (
 	USB   = &UART{100}
 )
 
+// The Serial port always points to the default UART in a simulated environment.
+//
+// TODO: perhaps this should be a special serial object that outputs via WASI
+// stdout calls.
+var Serial = UART0
+
 const (
 	PinInput PinMode = iota
 	PinOutput
@@ -116,12 +122,6 @@ func i2cTransfer(bus uint8, w *byte, wlen int, r *byte, rlen int) int
 
 type UART struct {
 	Bus uint8
-}
-
-type UARTConfig struct {
-	BaudRate uint32
-	TX       Pin
-	RX       Pin
 }
 
 // Configure the UART.

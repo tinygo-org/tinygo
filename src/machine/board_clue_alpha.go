@@ -72,6 +72,7 @@ const (
 	LED1     = LED
 	LED2     = D43
 	NEOPIXEL = D18
+	WS2812   = D18
 
 	BUTTON_LEFT  = D5
 	BUTTON_RIGHT = D11
@@ -101,11 +102,6 @@ const (
 const (
 	UART_RX_PIN = D0
 	UART_TX_PIN = D1
-)
-
-// Serial is the USB device
-var (
-	Serial = USB
 )
 
 // I2C pins

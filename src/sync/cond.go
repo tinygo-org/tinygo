@@ -16,6 +16,10 @@ type earlySignal struct {
 	signaled bool
 }
 
+func NewCond(l Locker) *Cond {
+	return &Cond{L: l}
+}
+
 func (c *Cond) trySignal() bool {
 	// Pop a blocked task off of the stack, and schedule it if applicable.
 	t := c.blocked.Pop()

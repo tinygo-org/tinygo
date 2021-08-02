@@ -22,7 +22,7 @@ const (
 	BUTTON4 Pin = 25
 )
 
-var Serial = UART0
+var DefaultUART = UART0
 
 // UART pins
 const (

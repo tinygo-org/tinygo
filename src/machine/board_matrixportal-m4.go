@@ -75,6 +75,7 @@ const (
 const (
 	LED      = D13
 	NEOPIXEL = D4
+	WS2812   = D4
 )
 
 // Button pins

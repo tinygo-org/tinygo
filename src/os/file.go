@@ -116,6 +116,11 @@ func (f *File) Readdirnames(n int) (names []string, err error) {
 	return nil, &PathError{"readdirnames", f.name, ErrNotImplemented}
 }
 
+// Seek is a stub, not yet implemented
+func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
+	return 0, &PathError{"seek", f.name, ErrNotImplemented}
+}
+
 // Stat is a stub, not yet implemented
 func (f *File) Stat() (FileInfo, error) {
 	return nil, &PathError{"stat", f.name, ErrNotImplemented}
@@ -190,9 +195,4 @@ func Readlink(name string) (string, error) {
 // TempDir is a stub (for now), always returning the string "/tmp"
 func TempDir() string {
 	return "/tmp"
-}
-
-// Getpid is a stub (for now), always returning 1
-func Getpid() int {
-	return 1
 }

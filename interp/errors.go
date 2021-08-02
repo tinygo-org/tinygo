@@ -57,6 +57,7 @@ func (r *runner) errorAt(inst instruction, err error) *Error {
 	pos := getPosition(inst.llvmInst)
 	return &Error{
 		ImportPath: r.pkgName,
+		Inst:       inst.llvmInst,
 		Pos:        pos,
 		Err:        err,
 		Traceback:  []ErrorLine{{pos, inst.llvmInst}},

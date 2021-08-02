@@ -38,6 +38,7 @@ const (
 const (
 	LED       = D13
 	NEOPIXELS = D8
+	WS2812    = D8
 
 	BUTTONA = D4
 	BUTTONB = D5
@@ -55,8 +56,6 @@ const (
 	UART_TX_PIN = P0_14 // PORTB
 	UART_RX_PIN = P0_30 // PORTB
 )
-
-var Serial = USB
 
 // I2C pins
 const (

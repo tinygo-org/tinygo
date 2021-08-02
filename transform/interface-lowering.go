@@ -54,10 +54,14 @@ type signatureInfo struct {
 // methodName takes a method name like "func String()" and returns only the
 // name, which is "String" in this case.
 func (s *signatureInfo) methodName() string {
-	if !strings.HasPrefix(s.name, "func ") {
-		panic("signature must start with \"func \"")
+	var methodName string
+	if strings.HasPrefix(s.name, "reflect/methods.") {
+		methodName = s.name[len("reflect/methods."):]
+	} else if idx := strings.LastIndex(s.name, ".$methods."); idx >= 0 {
+		methodName = s.name[idx+len(".$methods."):]
+	} else {
+		panic("could not find method name")
 	}
-	methodName := s.name[len("func "):]
 	if openingParen := strings.IndexByte(methodName, '('); openingParen < 0 {
 		panic("no opening paren in signature name")
 	} else {

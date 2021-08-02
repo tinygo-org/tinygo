@@ -40,6 +40,7 @@ const (
 const (
 	LED       = D13
 	NEOPIXELS = D8
+	WS2812    = D8
 
 	LIGHTSENSOR = A7
 
@@ -65,8 +66,6 @@ const (
 	BUTTON_A_MASK      = 64
 	BUTTON_B_MASK      = 128
 )
-
-var Serial = USB
 
 // USBCDC pins
 const (

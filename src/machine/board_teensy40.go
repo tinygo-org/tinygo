@@ -146,9 +146,9 @@ const (
 )
 
 var (
-	Serial = UART1
-	UART1  = &_UART1
-	_UART1 = UART{
+	DefaultUART = UART1
+	UART1       = &_UART1
+	_UART1      = UART{
 		Bus:      nxp.LPUART6,
 		Buffer:   NewRingBuffer(),
 		txBuffer: NewRingBuffer(),

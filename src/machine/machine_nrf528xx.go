@@ -115,13 +115,14 @@ func (a ADC) Get() uint16 {
 // SPI on the NRF.
 type SPI struct {
 	Bus *nrf.SPIM_Type
+	buf *[1]byte // 1-byte buffer for the Transfer method
 }
 
 // There are 3 SPI interfaces on the NRF528xx.
 var (
-	SPI0 = SPI{Bus: nrf.SPIM0}
-	SPI1 = SPI{Bus: nrf.SPIM1}
-	SPI2 = SPI{Bus: nrf.SPIM2}
+	SPI0 = SPI{Bus: nrf.SPIM0, buf: new([1]byte)}
+	SPI1 = SPI{Bus: nrf.SPIM1, buf: new([1]byte)}
+	SPI2 = SPI{Bus: nrf.SPIM2, buf: new([1]byte)}
 )
 
 // SPIConfig is used to store config info for SPI.
@@ -207,10 +208,10 @@ func (spi SPI) Configure(config SPIConfig) {
 
 // Transfer writes/reads a single byte using the SPI interface.
 func (spi SPI) Transfer(w byte) (byte, error) {
-	var wbuf, rbuf [1]byte
-	wbuf[0] = w
-	err := spi.Tx(wbuf[:], rbuf[:])
-	return rbuf[0], err
+	buf := spi.buf[:]
+	buf[0] = w
+	err := spi.Tx(buf[:], buf[:])
+	return buf[0], err
 }
 
 // Tx handles read/write operation for SPI interface. Since SPI is a syncronous

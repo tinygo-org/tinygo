@@ -1,6 +1,7 @@
 {
 	"inherits": ["nrf52840"],
 	"build-tags": ["reelboard"],
+	"serial": "uart",
 	"flash-method": "msd",
 	"msd-volume-name": "reel-board",
 	"msd-firmware-name": "firmware.hex",

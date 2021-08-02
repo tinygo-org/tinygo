@@ -139,9 +139,8 @@ const (
 	LED_RX   = UART_RX_LED_PIN
 	LED_TX   = UART_TX_LED_PIN
 	NEOPIXEL = NEOPIXEL_PIN
+	WS2812   = NEOPIXEL_PIN
 )
-
-var Serial = USB
 
 // UART pins
 const (

@@ -1,5 +1,5 @@
 // +build gc.conservative gc.extalloc
-// +build wasm
+// +build tinygo.wasm
 
 package runtime
 

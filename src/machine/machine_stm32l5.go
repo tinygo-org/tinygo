@@ -271,6 +271,65 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 	}
 }
 
+func (p Pin) registerInterrupt() interrupt.Interrupt {
+	pin := uint8(p) % 16
+
+	switch pin {
+	case 0:
+		return interrupt.New(stm32.IRQ_EXTI0, func(interrupt.Interrupt) { handlePinInterrupt(0) })
+	case 1:
+		return interrupt.New(stm32.IRQ_EXTI1, func(interrupt.Interrupt) { handlePinInterrupt(1) })
+	case 2:
+		return interrupt.New(stm32.IRQ_EXTI2, func(interrupt.Interrupt) { handlePinInterrupt(2) })
+	case 3:
+		return interrupt.New(stm32.IRQ_EXTI3, func(interrupt.Interrupt) { handlePinInterrupt(3) })
+	case 4:
+		return interrupt.New(stm32.IRQ_EXTI4, func(interrupt.Interrupt) { handlePinInterrupt(4) })
+	case 5:
+		return interrupt.New(stm32.IRQ_EXTI5, func(interrupt.Interrupt) { handlePinInterrupt(5) })
+	case 6:
+		return interrupt.New(stm32.IRQ_EXTI6, func(interrupt.Interrupt) { handlePinInterrupt(6) })
+	case 7:
+		return interrupt.New(stm32.IRQ_EXTI7, func(interrupt.Interrupt) { handlePinInterrupt(7) })
+	case 8:
+		return interrupt.New(stm32.IRQ_EXTI8, func(interrupt.Interrupt) { handlePinInterrupt(8) })
+	case 9:
+		return interrupt.New(stm32.IRQ_EXTI9, func(interrupt.Interrupt) { handlePinInterrupt(9) })
+	case 10:
+		return interrupt.New(stm32.IRQ_EXTI10, func(interrupt.Interrupt) { handlePinInterrupt(10) })
+	case 11:
+		return interrupt.New(stm32.IRQ_EXTI11, func(interrupt.Interrupt) { handlePinInterrupt(11) })
+	case 12:
+		return interrupt.New(stm32.IRQ_EXTI12, func(interrupt.Interrupt) { handlePinInterrupt(12) })
+	case 13:
+		return interrupt.New(stm32.IRQ_EXTI13, func(interrupt.Interrupt) { handlePinInterrupt(13) })
+	case 14:
+		return interrupt.New(stm32.IRQ_EXTI14, func(interrupt.Interrupt) { handlePinInterrupt(14) })
+	case 15:
+		return interrupt.New(stm32.IRQ_EXTI15, func(interrupt.Interrupt) { handlePinInterrupt(15) })
+	}
+
+	return interrupt.Interrupt{}
+}
+
+func handlePinInterrupt(pin uint8) {
+	// The pin abstraction doesn't differentiate pull-up
+	// events from pull-down events, so combine them to
+	// a single call here.
+
+	if stm32.EXTI.RPR1.HasBits(1<<pin) || stm32.EXTI.FPR1.HasBits(1<<pin) {
+		// Writing 1 to the pending register clears the
+		// pending flag for that bit
+		stm32.EXTI.RPR1.Set(1 << pin)
+		stm32.EXTI.FPR1.Set(1 << pin)
+
+		callback := pinCallbacks[pin]
+		if callback != nil {
+			callback(interruptPins[pin])
+		}
+	}
+}
+
 //---------- Timer related code
 
 var (

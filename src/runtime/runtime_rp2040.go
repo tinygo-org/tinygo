@@ -4,6 +4,8 @@ package runtime
 
 import (
 	"device/arm"
+
+	"machine"
 )
 
 // machineTicks is provided by package machine.
@@ -39,6 +41,7 @@ func waitForEvents() {
 }
 
 func putchar(c byte) {
+	machine.Serial.WriteByte(c)
 }
 
 // machineInit is provided by package machine.
@@ -46,6 +49,8 @@ func machineInit()
 
 func init() {
 	machineInit()
+
+	machine.Serial.Configure(machine.UARTConfig{})
 }
 
 func postinit() {}
