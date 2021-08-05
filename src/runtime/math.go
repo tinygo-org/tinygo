@@ -217,7 +217,7 @@ func math_sinh(x float64) float64
 
 //go:linkname math_Sqrt math.Sqrt
 func math_Sqrt(x float64) float64 {
-	if GOARCH == "x86" || GOARCH == "amd64" || GOARCH == "wasm" {
+	if GOARCH == "386" || GOARCH == "amd64" || GOARCH == "wasm" {
 		return llvm_sqrt(x)
 	}
 	return math_sqrt(x)

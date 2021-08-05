@@ -16,6 +16,9 @@ type calleeSavedRegs struct {
 	ebp uintptr
 
 	pc uintptr
+
+	// Pad this struct so that tasks start on a 16-byte aligned stack.
+	_ [3]uintptr
 }
 
 // archInit runs architecture-specific setup for the goroutine startup.

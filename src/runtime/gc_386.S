@@ -13,10 +13,11 @@ tinygo_scanCurrentStack:
     pushl %ebp
 
     // Scan the stack.
+    subl $8, %esp // adjust the stack before the call to maintain 16-byte alignment
     pushl %esp
     calll tinygo_scanstack
 
     // Restore the stack pointer. Registers do not need to be restored as they
     // were only pushed to be discoverable by the GC.
-    addl $20, %esp
+    addl $28, %esp
     retl
