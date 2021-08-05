@@ -79,20 +79,22 @@ type compilerContext struct {
 	pkg              *types.Package
 	packageDir       string // directory for this package
 	runtimePkg       *types.Package
+	goAsmReferences  map[string]string // map from internal name to Go name, such as "math.Sqrt" => "__GoABI0_math.Sqrt"
 }
 
 // newCompilerContext returns a new compiler context ready for use, most
 // importantly with a newly created LLVM context and module.
-func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *Config, dumpSSA bool) *compilerContext {
+func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *Config, goAsmReferences map[string]string, dumpSSA bool) *compilerContext {
 	c := &compilerContext{
-		Config:      config,
-		DumpSSA:     dumpSSA,
-		difiles:     make(map[string]llvm.Metadata),
-		ditypes:     make(map[types.Type]llvm.Metadata),
-		llvmTypes:   make(map[types.Type]llvm.Type),
-		machine:     machine,
-		targetData:  machine.CreateTargetData(),
-		astComments: map[string]*ast.CommentGroup{},
+		Config:          config,
+		DumpSSA:         dumpSSA,
+		difiles:         make(map[string]llvm.Metadata),
+		ditypes:         make(map[types.Type]llvm.Metadata),
+		llvmTypes:       make(map[types.Type]llvm.Type),
+		machine:         machine,
+		targetData:      machine.CreateTargetData(),
+		astComments:     map[string]*ast.CommentGroup{},
+		goAsmReferences: goAsmReferences,
 	}
 
 	c.ctx = llvm.NewContext()
@@ -242,8 +244,8 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 }
 
 // CompilePackage compiles a single package to a LLVM module.
-func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
-	c := newCompilerContext(moduleName, machine, config, dumpSSA)
+func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, goAsmReferences map[string]string, dumpSSA bool) (llvm.Module, []error) {
+	c := newCompilerContext(moduleName, machine, config, goAsmReferences, dumpSSA)
 	c.packageDir = pkg.OriginalDir()
 	c.pkg = pkg.Pkg
 	c.runtimePkg = ssaPkg.Prog.ImportedPackage("runtime").Pkg
@@ -768,9 +770,22 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			// Create the function definition.
 			b := newBuilder(c, irbuilder, member)
 			if member.Blocks == nil {
+				if forwardName, ok := c.goAsmReferences[b.info.linkName]; ok {
+					// The function is defined in a Go assembly file.
+					// Create a wrapper that will call this assembly file using
+					// the appropriate calling convention.
+					b.createGoAsmWrapper(forwardName)
+				}
 				continue // external function
 			}
 			b.createFunction()
+			if forwardName, ok := c.goAsmReferences[b.info.linkName]; ok {
+				// This function is defined in Go, but called from an assembly
+				// function. Create an exported wrapper for this Go function so
+				// that the Go assembly can call this function using the Go ABI.
+				b := newBuilder(c, irbuilder, member)
+				b.createGoAsmExport(forwardName)
+			}
 		case *ssa.Type:
 			if types.IsInterface(member.Type()) {
 				// Interfaces don't have concrete methods.
@@ -816,6 +831,12 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 					global.SetSection(info.section)
 				}
 			}
+			if forwardName, ok := c.goAsmReferences[info.linkName]; ok {
+				// This global variable is accessed from Go assembly.
+				// Add an alias so that the Go assembly can access this global
+				// using the name it will use (prefixed with __GoABI0_).
+				llvm.AddAlias(c.mod, global.Type(), global, forwardName)
+			}
 		}
 	}
 
@@ -837,6 +858,12 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 					continue
 				}
 				b := newBuilder(c, irbuilder, member)
+				if !b.llvmFn.IsDeclaration() {
+					// The function is defined, so no need to create an alias.
+					// This can happen when it is defined in assembly and a
+					// wrapper function has already been crated.
+					continue
+				}
 				b.createAlias(alias)
 			}
 		}
@@ -929,39 +956,8 @@ func (b *builder) createFunction() {
 		alloca.EraseFromParentAsInstruction()
 	}
 
-	// Load function parameters
-	llvmParamIndex := 0
-	for _, param := range b.fn.Params {
-		llvmType := b.getLLVMType(param.Type())
-		fields := make([]llvm.Value, 0, 1)
-		for _, info := range b.expandFormalParamType(llvmType, param.Name(), param.Type()) {
-			param := b.llvmFn.Param(llvmParamIndex)
-			param.SetName(info.name)
-			fields = append(fields, param)
-			llvmParamIndex++
-		}
-		b.locals[param] = b.collapseFormalParam(llvmType, fields)
-
-		// Add debug information to this parameter (if available)
-		if b.Debug && b.fn.Syntax() != nil {
-			dbgParam := b.getLocalVariable(param.Object().(*types.Var))
-			loc := b.GetCurrentDebugLocation()
-			if len(fields) == 1 {
-				expr := b.dibuilder.CreateExpression(nil)
-				b.dibuilder.InsertValueAtEnd(fields[0], dbgParam, expr, loc, entryBlock)
-			} else {
-				fieldOffsets := b.expandFormalParamOffsets(llvmType)
-				for i, field := range fields {
-					expr := b.dibuilder.CreateExpression([]int64{
-						0x1000,                     // DW_OP_LLVM_fragment
-						int64(fieldOffsets[i]) * 8, // offset in bits
-						int64(b.targetData.TypeAllocSize(field.Type())) * 8, // size in bits
-					})
-					b.dibuilder.InsertValueAtEnd(field, dbgParam, expr, loc, entryBlock)
-				}
-			}
-		}
-	}
+	// Load function parameters.
+	b.loadFunctionParams(entryBlock)
 
 	// Load free variables from the context. This is a closure (or bound
 	// method).
@@ -1064,6 +1060,42 @@ func (b *builder) createFunction() {
 	for _, sub := range b.fn.AnonFuncs {
 		b := newBuilder(b.compilerContext, b.Builder, sub)
 		b.createFunction()
+	}
+}
+
+// Load function parameters to make them available for b.getValue.
+func (b *builder) loadFunctionParams(entryBlock llvm.BasicBlock) {
+	llvmParamIndex := 0
+	for _, param := range b.fn.Params {
+		llvmType := b.getLLVMType(param.Type())
+		fields := make([]llvm.Value, 0, 1)
+		for _, info := range b.expandFormalParamType(llvmType, param.Name(), param.Type()) {
+			param := b.llvmFn.Param(llvmParamIndex)
+			param.SetName(info.name)
+			fields = append(fields, param)
+			llvmParamIndex++
+		}
+		b.locals[param] = b.collapseFormalParam(llvmType, fields)
+
+		// Add debug information to this parameter (if available)
+		if b.Debug && b.fn.Syntax() != nil {
+			dbgParam := b.getLocalVariable(param.Object().(*types.Var))
+			loc := b.GetCurrentDebugLocation()
+			if len(fields) == 1 {
+				expr := b.dibuilder.CreateExpression(nil)
+				b.dibuilder.InsertValueAtEnd(fields[0], dbgParam, expr, loc, entryBlock)
+			} else {
+				fieldOffsets := b.expandFormalParamOffsets(llvmType)
+				for i, field := range fields {
+					expr := b.dibuilder.CreateExpression([]int64{
+						0x1000,                     // DW_OP_LLVM_fragment
+						int64(fieldOffsets[i]) * 8, // offset in bits
+						int64(b.targetData.TypeAllocSize(field.Type())) * 8, // size in bits
+					})
+					b.dibuilder.InsertValueAtEnd(field, dbgParam, expr, loc, entryBlock)
+				}
+			}
+		}
 	}
 }
 
