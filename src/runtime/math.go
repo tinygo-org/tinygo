@@ -168,29 +168,13 @@ func math_Log2(x float64) float64 { return math_log2(x) }
 func math_log2(x float64) float64
 
 //go:linkname math_Max math.Max
-func math_Max(x, y float64) float64 {
-	if GOARCH == "arm64" || GOARCH == "wasm" {
-		return llvm_maximum(x, y)
-	}
-	return math_max(x, y)
-}
-
-//export llvm.maximum.f64
-func llvm_maximum(x, y float64) float64
+func math_Max(x, y float64) float64 { return math_max(x, y) }
 
 //go:linkname math_max math.max
 func math_max(x, y float64) float64
 
 //go:linkname math_Min math.Min
-func math_Min(x, y float64) float64 {
-	if GOARCH == "arm64" || GOARCH == "wasm" {
-		return llvm_minimum(x, y)
-	}
-	return math_min(x, y)
-}
-
-//export llvm.minimum.f64
-func llvm_minimum(x, y float64) float64
+func math_Min(x, y float64) float64 { return math_min(x, y) }
 
 //go:linkname math_min math.min
 func math_min(x, y float64) float64
