@@ -190,6 +190,10 @@ TEST_PACKAGES = \
 	container/list \
 	container/ring \
 	crypto/des \
+	crypto/md5 \
+	crypto/sha1 \
+	crypto/sha256 \
+	crypto/sha512 \
 	encoding \
 	encoding/ascii85 \
 	encoding/base32 \

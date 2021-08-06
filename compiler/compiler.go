@@ -23,7 +23,7 @@ import (
 // Version of the compiler pacakge. Must be incremented each time the compiler
 // package changes in a way that affects the generated LLVM module.
 // This version is independent of the TinyGo version number.
-const Version = 14 // last change: add math assembly aliases
+const Version = 15 // last change: add crypto assembly aliases
 
 func init() {
 	llvm.InitializeAllTargets()
