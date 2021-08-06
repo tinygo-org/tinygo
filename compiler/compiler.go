@@ -23,7 +23,7 @@ import (
 // Version of the compiler pacakge. Must be incremented each time the compiler
 // package changes in a way that affects the generated LLVM module.
 // This version is independent of the TinyGo version number.
-const Version = 13 // last change: implement LLVM math builtins in the compiler
+const Version = 14 // last change: add math assembly aliases
 
 func init() {
 	llvm.InitializeAllTargets()
@@ -765,6 +765,29 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 				if info.section != "" {
 					global.SetSection(info.section)
 				}
+			}
+		}
+	}
+
+	// Add forwarding functions for functions that would otherwise be
+	// implemented in assembly.
+	for _, name := range members {
+		member := pkg.Members[name]
+		switch member := member.(type) {
+		case *ssa.Function:
+			if member.Blocks != nil {
+				continue // external function
+			}
+			info := c.getFunctionInfo(member)
+			if aliasName, ok := stdlibAliases[info.linkName]; ok {
+				alias := c.mod.NamedFunction(aliasName)
+				if alias.IsNil() {
+					// Shouldn't happen, but perhaps best to just ignore.
+					// The error will be a link error, if there is an error.
+					continue
+				}
+				b := newBuilder(c, irbuilder, member)
+				b.createAlias(alias)
 			}
 		}
 	}
