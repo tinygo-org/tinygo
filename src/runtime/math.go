@@ -57,7 +57,7 @@ func math_cbrt(x float64) float64
 
 //go:linkname math_Ceil math.Ceil
 func math_Ceil(x float64) float64 {
-	if GOARCH == "arm64" || GOARCH == "wasm" {
+	if GOARCH == "arm64" || GOARCH == "wasm" || GOARCH == "i386" || GOARCH == "amd64" {
 		return llvm_ceil(x)
 	}
 	return math_ceil(x)
@@ -70,10 +70,18 @@ func llvm_ceil(x float64) float64
 func math_ceil(x float64) float64
 
 //go:linkname math_Cos math.Cos
-func math_Cos(x float64) float64 { return math_cos(x) }
+func math_Cos(x float64) float64 {
+	if GOARCH == "arm64" || GOARCH == "wasm" || GOARCH == "i386" || GOARCH == "amd64" {
+		return llvm_cos(x)
+	}
+	return math_cos(x)
+}
 
 //go:linkname math_cos math.cos
 func math_cos(x float64) float64
+
+//export llvm.cos.f64
+func llvm_cos(x float64) float64
 
 //go:linkname math_Cosh math.Cosh
 func math_Cosh(x float64) float64 { return math_cosh(x) }
@@ -113,7 +121,7 @@ func math_exp2(x float64) float64
 
 //go:linkname math_Floor math.Floor
 func math_Floor(x float64) float64 {
-	if GOARCH == "arm64" || GOARCH == "wasm" {
+	if GOARCH == "arm64" || GOARCH == "wasm" || GOARCH == "i386" || GOARCH == "amd64" {
 		return llvm_floor(x)
 	}
 	return math_floor(x)
@@ -169,28 +177,28 @@ func math_log2(x float64) float64
 
 //go:linkname math_Max math.Max
 func math_Max(x, y float64) float64 {
-	if GOARCH == "arm64" || GOARCH == "wasm" {
-		return llvm_maximum(x, y)
-	}
-	return math_max(x, y)
+	/*if GOARCH == "arm64" || GOARCH == "wasm" || GOARCH == "i386" || GOARCH == "amd64" {
+		return llvm_maxnum(x, y)
+	}*/
+	return math_maxnum(x, y)
 }
 
-//export llvm.maximum.f64
-func llvm_maximum(x, y float64) float64
+//export llvm.maxnum.f64
+func llvm_maxnum(x, y float64) float64
 
-//go:linkname math_max math.max
-func math_max(x, y float64) float64
+//go:linkname math_maxnum math.max
+func math_maxnum(x, y float64) float64
 
 //go:linkname math_Min math.Min
 func math_Min(x, y float64) float64 {
-	if GOARCH == "arm64" || GOARCH == "wasm" {
-		return llvm_minimum(x, y)
-	}
+	/*if GOARCH == "arm64" || GOARCH == "wasm" || GOARCH == "i386" || GOARCH == "amd64" {
+		return llvm_minnum(x, y)
+	}*/
 	return math_min(x, y)
 }
 
-//export llvm.minimum.f64
-func llvm_minimum(x, y float64) float64
+//export llvm.minnum.f64
+func llvm_minnum(x, y float64) float64
 
 //go:linkname math_min math.min
 func math_min(x, y float64) float64
@@ -208,7 +216,15 @@ func math_Modf(x float64) (float64, float64) { return math_modf(x) }
 func math_modf(x float64) (float64, float64)
 
 //go:linkname math_Pow math.Pow
-func math_Pow(x, y float64) float64 { return math_pow(x, y) }
+func math_Pow(x, y float64) float64 {
+	if GOARCH == "arm64" || GOARCH == "wasm" || GOARCH == "i386" || GOARCH == "amd64" {
+		return llvm_pow(x, y)
+	}
+	return math_pow(x, y)
+}
+
+//export llvm.pow.f64
+func llvm_pow(x, y float64) float64
 
 //go:linkname math_pow math.pow
 func math_pow(x, y float64) float64
@@ -220,7 +236,15 @@ func math_Remainder(x, y float64) float64 { return math_remainder(x, y) }
 func math_remainder(x, y float64) float64
 
 //go:linkname math_Sin math.Sin
-func math_Sin(x float64) float64 { return math_sin(x) }
+func math_Sin(x float64) float64 {
+	if GOARCH == "arm64" || GOARCH == "wasm" || GOARCH == "i386" || GOARCH == "amd64" {
+		return llvm_sin(x)
+	}
+	return math_sin(x)
+}
+
+//export llvm.sin.f64
+func llvm_sin(x float64) float64
 
 //go:linkname math_sin math.sin
 func math_sin(x float64) float64
@@ -233,7 +257,7 @@ func math_sinh(x float64) float64
 
 //go:linkname math_Sqrt math.Sqrt
 func math_Sqrt(x float64) float64 {
-	if GOARCH == "x86" || GOARCH == "amd64" || GOARCH == "wasm" {
+	if GOARCH == "arm64" || GOARCH == "wasm" || GOARCH == "i386" || GOARCH == "amd64" {
 		return llvm_sqrt(x)
 	}
 	return math_sqrt(x)
@@ -259,7 +283,7 @@ func math_tanh(x float64) float64
 
 //go:linkname math_Trunc math.Trunc
 func math_Trunc(x float64) float64 {
-	if GOARCH == "arm64" || GOARCH == "wasm" {
+	if GOARCH == "arm64" || GOARCH == "wasm" || GOARCH == "i386" || GOARCH == "amd64" {
 		return llvm_trunc(x)
 	}
 	return math_trunc(x)
