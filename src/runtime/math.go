@@ -56,15 +56,7 @@ func math_Cbrt(x float64) float64 { return math_cbrt(x) }
 func math_cbrt(x float64) float64
 
 //go:linkname math_Ceil math.Ceil
-func math_Ceil(x float64) float64 {
-	if GOARCH == "arm64" || GOARCH == "wasm" {
-		return llvm_ceil(x)
-	}
-	return math_ceil(x)
-}
-
-//export llvm.ceil.f64
-func llvm_ceil(x float64) float64
+func math_Ceil(x float64) float64 { return math_ceil(x) }
 
 //go:linkname math_ceil math.ceil
 func math_ceil(x float64) float64
@@ -112,15 +104,7 @@ func math_Exp2(x float64) float64 { return math_exp2(x) }
 func math_exp2(x float64) float64
 
 //go:linkname math_Floor math.Floor
-func math_Floor(x float64) float64 {
-	if GOARCH == "arm64" || GOARCH == "wasm" {
-		return llvm_floor(x)
-	}
-	return math_floor(x)
-}
-
-//export llvm.floor.f64
-func llvm_floor(x float64) float64
+func math_Floor(x float64) float64 { return math_floor(x) }
 
 //go:linkname math_floor math.floor
 func math_floor(x float64) float64
@@ -216,15 +200,7 @@ func math_Sinh(x float64) float64 { return math_sinh(x) }
 func math_sinh(x float64) float64
 
 //go:linkname math_Sqrt math.Sqrt
-func math_Sqrt(x float64) float64 {
-	if GOARCH == "386" || GOARCH == "amd64" || GOARCH == "wasm" {
-		return llvm_sqrt(x)
-	}
-	return math_sqrt(x)
-}
-
-//export llvm.sqrt.f64
-func llvm_sqrt(x float64) float64
+func math_Sqrt(x float64) float64 { return math_sqrt(x) }
 
 //go:linkname math_sqrt math.sqrt
 func math_sqrt(x float64) float64
@@ -242,15 +218,7 @@ func math_Tanh(x float64) float64 { return math_tanh(x) }
 func math_tanh(x float64) float64
 
 //go:linkname math_Trunc math.Trunc
-func math_Trunc(x float64) float64 {
-	if GOARCH == "arm64" || GOARCH == "wasm" {
-		return llvm_trunc(x)
-	}
-	return math_trunc(x)
-}
-
-//export llvm.trunc.f64
-func llvm_trunc(x float64) float64
+func math_Trunc(x float64) float64 { return math_trunc(x) }
 
 //go:linkname math_trunc math.trunc
 func math_trunc(x float64) float64
