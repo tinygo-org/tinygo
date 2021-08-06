@@ -220,8 +220,21 @@ TEST_PACKAGES = \
 # Test known-working standard library packages.
 # TODO: parallelize, and only show failing tests (no implied -v flag).
 .PHONY: tinygo-test
-tinygo-test:
-	$(TINYGO) test $(TEST_PACKAGES)
+tinygo-test: tinygo-test-amd64
+
+# Test all architectures (not just the host architecture).
+.PHONY: tinygo-test-all tinygo-test-386 tinygo-test-arm tinygo-test-arm64 tinygo-test-wasi
+tinygo-test-all: tinygo-test-amd64 tinygo-test-386 tinygo-test-arm tinygo-test-arm64 tinygo-test-wasi
+tinygo-test-amd64:
+	GOARCH=amd64 $(TINYGO) test $(TEST_PACKAGES)
+tinygo-test-386:
+	GOARCH=386 $(TINYGO) test $(TEST_PACKAGES)
+tinygo-test-arm:
+	GOARCH=arm $(TINYGO) test $(TEST_PACKAGES)
+tinygo-test-arm64:
+	GOARCH=arm64 $(TINYGO) test $(TEST_PACKAGES)
+tinygo-test-wasi:
+	$(TINYGO) test -target=wasi $(TEST_PACKAGES)
 
 .PHONY: smoketest
 smoketest:

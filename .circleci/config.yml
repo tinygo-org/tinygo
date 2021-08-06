@@ -286,6 +286,7 @@ commands:
             ln -s ~/lib/tinygo/bin/tinygo /go/bin/tinygo
             tinygo version
       - run: make smoketest
+      - run: make tinygo-test-all
   build-macos:
     steps:
       - checkout
