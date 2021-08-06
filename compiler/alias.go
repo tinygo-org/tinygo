@@ -15,6 +15,13 @@ package compiler
 import "tinygo.org/x/go-llvm"
 
 var stdlibAliases = map[string]string{
+	// crypto packages
+	"crypto/md5.block":         "crypto/md5.blockGeneric",
+	"crypto/sha1.block":        "crypto/sha1.blockGeneric",
+	"crypto/sha1.blockAMD64":   "crypto/sha1.blockGeneric",
+	"crypto/sha256.block":      "crypto/sha256.blockGeneric",
+	"crypto/sha512.blockAMD64": "crypto/sha512.blockGeneric",
+
 	// math package
 	"math.Asin":      "math.asin",
 	"math.Asinh":     "math.asinh",
