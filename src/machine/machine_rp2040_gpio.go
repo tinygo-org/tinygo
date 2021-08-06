@@ -47,14 +47,27 @@ type pinFunc uint8
 // GPIO function selectors
 const (
 	fnJTAG pinFunc = 0
-	fnSPI  pinFunc = 1
+	fnSPI  pinFunc = 1 // Connect one of the internal PL022 SPI peripherals to GPIO
 	fnUART pinFunc = 2
 	fnI2C  pinFunc = 3
-	fnPWM  pinFunc = 4
-	fnSIO  pinFunc = 5
-	fnPIO0 pinFunc = 6
-	fnPIO1 pinFunc = 7
+	// Connect a PWM slice to GPIO. There are eight PWM slices,
+	// each with two outputchannels (A/B). The B pin can also be used as an input,
+	// for frequency and duty cyclemeasurement
+	fnPWM pinFunc = 4
+	// Software control of GPIO, from the single-cycle IO (SIO) block.
+	// The SIO function (F5)must be selected for the processors to drive a GPIO,
+	// but the input is always connected,so software can check the state of GPIOs at any time.
+	fnSIO pinFunc = 5
+	// Connect one of the programmable IO blocks (PIO) to GPIO. PIO can implement a widevariety of interfaces,
+	// and has its own internal pin mapping hardware, allowing flexibleplacement of digital interfaces on bank 0 GPIOs.
+	// The PIO function (F6, F7) must beselected for PIO to drive a GPIO, but the input is always connected,
+	// so the PIOs canalways see the state of all pins.
+	fnPIO0, fnPIO1 pinFunc = 6, 7
+	// General purpose clock inputs/outputs. Can be routed to a number of internal clock domains onRP2040,
+	// e.g. Input: to provide a 1 Hz clock for the RTC, or can be connected to an internalfrequency counter.
+	// e.g. Output: optional integer divide
 	fnGPCK pinFunc = 8
+	// USB power control signals to/from the internal USB controller
 	fnUSB  pinFunc = 9
 	fnNULL pinFunc = 0x1f
 
@@ -68,6 +81,7 @@ const (
 	PinInputPullup
 	PinAnalog
 	PinUART
+	PinI2C
 	PinSPI
 )
 
@@ -91,7 +105,7 @@ func (p Pin) xor() {
 
 // get returns the pin value
 func (p Pin) get() bool {
-	return rp.SIO.GPIO_IN.HasBits(uint32(1) << p)
+	return rp.SIO.GPIO_IN.HasBits(1 << p)
 }
 
 func (p Pin) ioCtrl() *volatile.Register32 {
@@ -115,6 +129,17 @@ func (p Pin) pulldown() {
 func (p Pin) pulloff() {
 	p.padCtrl().ClearBits(rp.PADS_BANK0_GPIO0_PDE)
 	p.padCtrl().ClearBits(rp.PADS_BANK0_GPIO0_PUE)
+}
+
+// setSlew sets pad slew rate control.
+// true sets to fast. false sets to slow.
+func (p Pin) setSlew(sr bool) {
+	p.padCtrl().ReplaceBits(boolToBit(sr)<<rp.PADS_BANK0_GPIO0_SLEWFAST_Pos, rp.PADS_BANK0_GPIO0_SLEWFAST_Msk, 0)
+}
+
+// setSchmitt enables or disables Schmitt trigger.
+func (p Pin) setSchmitt(trigger bool) {
+	p.padCtrl().ReplaceBits(boolToBit(trigger)<<rp.PADS_BANK0_GPIO0_SCHMITT_Pos, rp.PADS_BANK0_GPIO0_SCHMITT_Msk, 0)
 }
 
 // setFunc will set pin function to fn.
@@ -156,6 +181,12 @@ func (p Pin) Configure(config PinConfig) {
 		p.pulloff()
 	case PinUART:
 		p.setFunc(fnUART)
+	case PinI2C:
+		// IO config according to 4.3.1.3 of rp2040 datasheet.
+		p.setFunc(fnI2C)
+		p.pullup()
+		p.setSchmitt(true)
+		p.setSlew(false)
 	case PinSPI:
 		p.setFunc(fnSPI)
 	}
