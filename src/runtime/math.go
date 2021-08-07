@@ -4,7 +4,6 @@ package runtime
 // TODO: use optimized versions if possible.
 
 import (
-	"math"
 	_ "unsafe"
 )
 
@@ -178,59 +177,16 @@ func math_log2(x float64) float64
 
 //go:linkname math_Max math.Max
 func math_Max(x, y float64) float64 {
-	if GOARCH == "arm64" || GOARCH == "wasm" || GOARCH == "i386" || GOARCH == "amd64" {
-		if math.IsInf(x, 1) || math.IsInf(y, 1) {
-			return math.Inf(1)
-		}
-		if math.IsNaN(x) || math.IsNaN(y) {
-			return math.NaN()
-		}
-		// test for zero regardless of sign
-		if y == 0 && x == 0 {
-			// if both are negative zero
-			if math.Signbit(x) && math.Signbit(y) {
-				return x // returns -0.0
-			}
-			return 0
-		}
-		return llvm_maxnum(x, y)
-	}
 	return math_max(x, y)
 }
-
-//export llvm.maxnum.f64
-func llvm_maxnum(x, y float64) float64
 
 //go:linkname math_max math.max
 func math_max(x, y float64) float64
 
 //go:linkname math_Min math.Min
 func math_Min(x, y float64) float64 {
-	if GOARCH == "arm64" || GOARCH == "wasm" || GOARCH == "i386" || GOARCH == "amd64" {
-		if math.IsInf(x, -1) || math.IsInf(y, -1) {
-			return math.Inf(-1)
-		}
-		if math.IsNaN(x) || math.IsNaN(y) {
-			return math.NaN()
-		}
-		// test for zero regardless of sign
-		if y == 0 && x == 0 {
-			// if both are negative zero
-			if math.Signbit(x) {
-				return x // returns -0.0
-			}
-			if math.Signbit(y) {
-				return y // returns -0.0
-			}
-			return 0
-		}
-		return llvm_minnum(x, y)
-	}
 	return math_min(x, y)
 }
-
-//export llvm.minnum.f64
-func llvm_minnum(x, y float64) float64
 
 //go:linkname math_min math.min
 func math_min(x, y float64) float64
