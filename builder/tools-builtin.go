@@ -4,13 +4,18 @@ package builder
 
 import (
 	"errors"
+	"fmt"
+	"os"
+	"sync"
 	"unsafe"
 )
 
 /*
 #cgo CXXFLAGS: -fno-rtti
+#cgo LDFLAGS: -lbinaryen
 #include <stdbool.h>
 #include <stdlib.h>
+#include <binaryen-c.h>
 bool tinygo_clang_driver(int argc, char **argv);
 bool tinygo_link_elf(int argc, char **argv);
 bool tinygo_link_wasm(int argc, char **argv);
@@ -51,4 +56,52 @@ func RunTool(tool string, args ...string) error {
 		return errors.New("failed to run tool: " + tool)
 	}
 	return nil
+}
+
+// wasmOptLock exists because the binaryen C API uses global state.
+// In the future, we can hopefully avoid this by re-execing.
+var wasmOptLock sync.Mutex
+
+func WasmOpt(src, dst string, cfg BinaryenConfig) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("reading source file: %w", err)
+	}
+
+	data, err = wasmOptApply(data, cfg)
+	if err != nil {
+		return fmt.Errorf("running wasm-opt: %w", err)
+	}
+
+	err = os.WriteFile(dst, data, 0666)
+	if err != nil {
+		return fmt.Errorf("writing destination file: %w", err)
+	}
+
+	return nil
+}
+
+func wasmOptApply(src []byte, cfg BinaryenConfig) ([]byte, error) {
+	wasmOptLock.Lock()
+	defer wasmOptLock.Unlock()
+
+	// This doesn't actually seem to do anything?
+	C.BinaryenSetDebugInfo(false)
+
+	mod := C.BinaryenModuleRead((*C.char)(unsafe.Pointer(&src[0])), C.size_t(len(src)))
+	defer C.BinaryenModuleDispose(mod)
+
+	C.BinaryenSetOptimizeLevel(C.int(cfg.OptLevel))
+	C.BinaryenSetShrinkLevel(C.int(cfg.ShrinkLevel))
+	C.BinaryenModuleOptimize(mod)
+	C.BinaryenModuleValidate(mod)
+
+	// TODO: include source map
+	res := C.BinaryenModuleAllocateAndWrite(mod, nil)
+	defer C.free(unsafe.Pointer(res.binary))
+	if res.sourceMap != nil {
+		defer C.free(unsafe.Pointer(res.sourceMap))
+	}
+
+	return C.GoBytes(res.binary, C.int(res.binaryBytes)), nil
 }

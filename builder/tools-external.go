@@ -13,3 +13,7 @@ const hasBuiltinTools = false
 func RunTool(tool string, args ...string) error {
 	return errors.New("cannot run tool: " + tool)
 }
+
+func WasmOpt(src, dst string, cfg BinaryenConfig) error {
+	return wasmOptCmd(src, dst, cfg)
+}

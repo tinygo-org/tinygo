@@ -95,7 +95,9 @@ ifneq ("$(wildcard $(LLVM_BUILDDIR)/bin/llvm-config*)","")
     CGO_CXXFLAGS=-std=c++14
     CGO_LDFLAGS+=$(abspath $(LLVM_BUILDDIR))/lib/lib$(LIBCLANG_NAME).a -L$(abspath $(LLVM_BUILDDIR)/lib) $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
 endif
-
+ifneq ("$(wildcard lib/binaryen/lib/libbinaryen.a)","")
+	CGO_LDFLAGS+=$(abspath lib/binaryen/lib/libbinaryen.a)
+endif
 
 clean:
 	@rm -rf build
@@ -168,6 +170,13 @@ $(LLVM_BUILDDIR)/build.ninja: llvm-source
 $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
 	cd $(LLVM_BUILDDIR); ninja $(NINJA_BUILD_TARGETS)
 
+# Configure binaryen.
+lib/binaryen/build.ninja:
+	cd lib/binaryen; cmake -G Ninja -DBUILD_STATIC_LIB=ON -DBUILD_LLVM_DWARF=OFF .
+
+# Build binaryen.
+lib/binaryen/lib/libbinaryen.a: lib/binaryen/build.ninja
+	ninja -C lib/binaryen lib/libbinaryen.a
 
 # Build wasi-libc sysroot
 .PHONY: wasi-libc

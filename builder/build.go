@@ -621,6 +621,30 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				}
 			}
 
+			// Run wasm-opt if necessary.
+			if config.GOARCH() == "wasm" {
+				var cfg BinaryenConfig
+				switch config.Options.Opt {
+				case "none", "0":
+				case "1":
+					cfg.OptLevel = 1
+				case "2":
+					cfg.OptLevel = 2
+				case "s":
+					cfg.OptLevel = 2
+					cfg.ShrinkLevel = 1
+				case "z":
+					cfg.OptLevel = 2
+					cfg.ShrinkLevel = 2
+				default:
+					return fmt.Errorf("unknown opt level: %q", config.Options.Opt)
+				}
+				err := WasmOpt(executable, executable, cfg)
+				if err != nil {
+					return fmt.Errorf("wasm-opt failed: %w", err)
+				}
+			}
+
 			if config.Options.PrintSizes == "short" || config.Options.PrintSizes == "full" {
 				sizes, err := loadProgramSize(executable)
 				if err != nil {
