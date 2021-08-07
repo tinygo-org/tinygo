@@ -5,7 +5,7 @@ package machine
 // Peripheral abstraction layer for the stm32f405
 
 import (
-	"device/stm32"
+	"github.com/sago35/device/stm32"
 	"math/bits"
 )
 

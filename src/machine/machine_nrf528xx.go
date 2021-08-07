@@ -3,7 +3,7 @@
 package machine
 
 import (
-	"device/nrf"
+	"github.com/sago35/device/nrf"
 	"runtime/volatile"
 	"unsafe"
 )

@@ -9,6 +9,7 @@ require (
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf
 	github.com/marcinbor85/gohex v0.0.0-20200531091804-343a4b548892
 	github.com/mattn/go-colorable v0.1.8
+	github.com/sago35/device v0.0.0-20210708114705-5c2c56419249
 	go.bug.st/serial v1.1.2
 	golang.org/x/sys v0.0.0-20210113181707-4bcb84eeeb78
 	golang.org/x/tools v0.0.0-20200216192241-b320d3a0f5a2

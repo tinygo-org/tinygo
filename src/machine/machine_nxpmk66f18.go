@@ -32,7 +32,7 @@
 package machine
 
 import (
-	"device/nxp"
+	"github.com/sago35/device/nxp"
 	"runtime/volatile"
 	"unsafe"
 )

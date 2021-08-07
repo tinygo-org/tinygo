@@ -2,7 +2,7 @@
 
 package interrupt
 
-import "device"
+import "github.com/sago35/device"
 
 // State represents the previous global interrupt state.
 type State uint8

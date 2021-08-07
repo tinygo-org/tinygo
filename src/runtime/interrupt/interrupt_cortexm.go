@@ -3,7 +3,7 @@
 package interrupt
 
 import (
-	"device/arm"
+	"github.com/sago35/device/arm"
 )
 
 // Enable enables this interrupt. Right after calling this function, the

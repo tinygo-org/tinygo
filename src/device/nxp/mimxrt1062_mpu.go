@@ -7,7 +7,7 @@
 package nxp
 
 import (
-	"device/arm"
+	"github.com/sago35/device/arm"
 	"runtime/volatile"
 	"unsafe"
 )

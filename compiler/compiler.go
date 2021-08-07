@@ -1298,15 +1298,15 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.createMemoryCopyCall(fn, instr.Args)
 		case name == "runtime.memzero":
 			return b.createMemoryZeroCall(instr.Args)
-		case name == "device.Asm" || name == "device/arm.Asm" || name == "device/arm64.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
+		case name == "github.com/sago35/device.Asm" || name == "github.com/sago35/device/arm.Asm" || name == "github.com/sago35/device/arm64.Asm" || name == "github.com/sago35/device/avr.Asm" || name == "github.com/sago35/device/riscv.Asm":
 			return b.createInlineAsm(instr.Args)
-		case name == "device.AsmFull" || name == "device/arm.AsmFull" || name == "device/arm64.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
+		case name == "github.com/sago35/device.AsmFull" || name == "github.com/sago35/device/arm.AsmFull" || name == "github.com/sago35/device/arm64.AsmFull" || name == "github.com/sago35/device/avr.AsmFull" || name == "github.com/sago35/device/riscv.AsmFull":
 			return b.createInlineAsmFull(instr)
-		case strings.HasPrefix(name, "device/arm.SVCall"):
+		case strings.HasPrefix(name, "github.com/sago35/device/arm.SVCall"):
 			return b.emitSVCall(instr.Args)
-		case strings.HasPrefix(name, "device/arm64.SVCall"):
+		case strings.HasPrefix(name, "github.com/sago35/device/arm64.SVCall"):
 			return b.emitSV64Call(instr.Args)
-		case strings.HasPrefix(name, "(device/riscv.CSR)."):
+		case strings.HasPrefix(name, "(github.com/sago35/device/riscv.CSR)."):
 			return b.emitCSROperation(instr)
 		case strings.HasPrefix(name, "syscall.Syscall"):
 			return b.createSyscall(instr)

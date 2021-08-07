@@ -8,8 +8,8 @@
 package machine
 
 import (
-	"device/arm"
-	"device/sam"
+	"github.com/sago35/device/arm"
+	"github.com/sago35/device/sam"
 	"errors"
 	"runtime/interrupt"
 	"runtime/volatile"

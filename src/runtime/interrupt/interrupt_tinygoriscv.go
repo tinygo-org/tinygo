@@ -2,7 +2,7 @@
 
 package interrupt
 
-import "device/riscv"
+import "github.com/sago35/device/riscv"
 
 // State represents the previous global interrupt state.
 type State uintptr

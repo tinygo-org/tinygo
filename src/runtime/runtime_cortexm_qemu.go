@@ -6,7 +6,7 @@ package runtime
 // QEMU.
 
 import (
-	"device/arm"
+	"github.com/sago35/device/arm"
 	"runtime/volatile"
 	"unsafe"
 )

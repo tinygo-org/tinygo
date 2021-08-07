@@ -6,8 +6,8 @@
 package runtime
 
 import (
-	"device/kendryte"
-	"device/riscv"
+	"github.com/sago35/device/kendryte"
+	"github.com/sago35/device/riscv"
 	"machine"
 	"runtime/volatile"
 	"unsafe"

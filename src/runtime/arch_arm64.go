@@ -1,6 +1,6 @@
 package runtime
 
-import "device/arm"
+import "github.com/sago35/device/arm"
 
 const GOARCH = "arm64"
 

@@ -13,7 +13,7 @@ package runtime
 // depending on the size of that register in the MCU's TIM_Type structure.
 
 import (
-	"device/stm32"
+	"github.com/sago35/device/stm32"
 	"machine"
 	"runtime/interrupt"
 	"runtime/volatile"

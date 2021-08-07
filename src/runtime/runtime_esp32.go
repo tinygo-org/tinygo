@@ -3,8 +3,8 @@
 package runtime
 
 import (
-	"device"
-	"device/esp"
+	"github.com/sago35/device"
+	"github.com/sago35/device/esp"
 	"machine"
 	"unsafe"
 )

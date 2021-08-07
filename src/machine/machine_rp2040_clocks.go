@@ -3,8 +3,8 @@
 package machine
 
 import (
-	"device/arm"
-	"device/rp"
+	"github.com/sago35/device/arm"
+	"github.com/sago35/device/rp"
 	"runtime/volatile"
 	"unsafe"
 )

@@ -9,8 +9,8 @@ import (
 	"machine"
 	"unsafe"
 
-	"device/riscv"
-	"device/sifive"
+	"github.com/sago35/device/riscv"
+	"github.com/sago35/device/sifive"
 	"runtime/volatile"
 )
 

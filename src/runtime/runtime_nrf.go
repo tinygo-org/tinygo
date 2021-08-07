@@ -3,8 +3,8 @@
 package runtime
 
 import (
-	"device/arm"
-	"device/nrf"
+	"github.com/sago35/device/arm"
+	"github.com/sago35/device/nrf"
 	"machine"
 	"runtime/interrupt"
 	"runtime/volatile"

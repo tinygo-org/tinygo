@@ -3,8 +3,8 @@
 package interrupt
 
 import (
-	"device/kendryte"
-	"device/riscv"
+	"github.com/sago35/device/kendryte"
+	"github.com/sago35/device/riscv"
 )
 
 // Enable enables this interrupt. Right after calling this function, the

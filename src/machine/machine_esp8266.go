@@ -3,7 +3,7 @@
 package machine
 
 import (
-	"device/esp"
+	"github.com/sago35/device/esp"
 	"runtime/volatile"
 )
 

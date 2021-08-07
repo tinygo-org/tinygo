@@ -1,7 +1,7 @@
 package main
 
 import (
-	"device/arm"
+	"github.com/sago35/device/arm"
 	"machine"
 )
 

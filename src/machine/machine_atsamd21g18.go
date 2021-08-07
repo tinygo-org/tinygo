@@ -8,7 +8,7 @@
 package machine
 
 import (
-	"device/sam"
+	"github.com/sago35/device/sam"
 )
 
 // Return the register and mask to enable a given GPIO pin. This can be used to

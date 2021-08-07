@@ -2,7 +2,7 @@
 
 package runtime
 
-import "device/arm"
+import "github.com/sago35/device/arm"
 
 func waitForEvents() {
 	arm.Asm("wfe")

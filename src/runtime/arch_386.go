@@ -1,6 +1,6 @@
 package runtime
 
-import "device"
+import "github.com/sago35/device"
 
 const GOARCH = "386"
 
