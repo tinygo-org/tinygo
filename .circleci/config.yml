@@ -52,6 +52,13 @@ commands:
           command: |
             curl https://wasmtime.dev/install.sh -sSf | bash
             sudo ln -s ~/.wasmtime/bin/wasmtime /usr/local/bin/wasmtime
+  install-binaryen:
+    steps:
+      - run:
+          name: "Install binaryen"
+          command: |
+            wget https://github.com/WebAssembly/binaryen/releases/download/version_101/binaryen-version_101-x86_64-linux.tar.gz
+            sudo tar -C /usr/local --strip-components=1 binaryen-version_101-x86_64-linux.tar.gz
   install-xtensa-toolchain:
     parameters:
       variant:
@@ -103,6 +110,7 @@ commands:
       - install-node
       - install-chrome
       - install-wasmtime
+      - install-binaryen
       - restore_cache:
           keys:
             - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
@@ -179,6 +187,9 @@ commands:
           key: llvm-build-11-linux-v4-assert
           paths:
             llvm-build
+      - run:
+          name: "Build Binaryen"
+          command: make lib/binaryen/lib/libbinaryen.a
       - run: make ASSERT=1
       - build-wasi-libc
       - run:
@@ -247,6 +258,9 @@ commands:
           key: llvm-build-11-linux-v4-noassert
           paths:
             llvm-build
+      - run:
+          name: "Build Binaryen"
+          command: make lib/binaryen/lib/libbinaryen.a
       - build-wasi-libc
       - run:
           name: "Test TinyGo"
@@ -330,6 +344,9 @@ commands:
           key: llvm-build-11-macos-v5
           paths:
             llvm-build
+      - run:
+          name: "Build Binaryen"
+          command: make lib/binaryen/lib/libbinaryen.a
       - restore_cache:
           keys:
             - wasi-libc-sysroot-macos-v4
