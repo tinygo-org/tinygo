@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package testbench
+package testing_test
 
 import (
 	"testing"
@@ -11,8 +11,8 @@ import (
 var buf = make([]byte, 13579)
 
 func NonASCII(b []byte, i int, offset int) int {
-	for i = offset; i < len(b) + offset; i++ {
-		if b[i % len(b)] >= 0x80 {
+	for i = offset; i < len(b)+offset; i++ {
+		if b[i%len(b)] >= 0x80 {
 			break
 		}
 	}
