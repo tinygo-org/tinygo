@@ -1,4 +1,4 @@
-// +build baremetal
+// +build baremetal js
 
 package syscall
 
@@ -47,8 +47,24 @@ const (
 	O_CLOEXEC = 0
 )
 
+func runtime_envs() []string
+
 func Getenv(key string) (value string, found bool) {
-	return "", false // stub
+	env := runtime_envs()
+	for _, keyval := range env {
+		// Split at '=' character.
+		var k, v string
+		for i := 0; i < len(keyval); i++ {
+			if keyval[i] == '=' {
+				k = keyval[:i]
+				v = keyval[i+1:]
+			}
+		}
+		if k == key {
+			return v, true
+		}
+	}
+	return "", false
 }
 
 func Open(path string, mode int, perm uint32) (fd int, err error) {
