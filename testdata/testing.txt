@@ -1,0 +1,16 @@
+--- FAIL: TestBar
+    log Bar
+    log g
+        h
+        i
+        
+    --- FAIL: TestBar/Bar2
+        log Bar2
+            a
+            b
+            c
+        failed
+        after failed
+    log Bar end
+FAIL
+exitcode: 1

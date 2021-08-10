@@ -10,15 +10,34 @@ package testing
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
-	"io"
 	"os"
+	"strings"
 )
+
+// Testing flags.
+var (
+	flagVerbose bool
+)
+
+var initRan bool
+
+// Init registers testing flags. It has no effect if it has already run.
+func Init() {
+	if initRan {
+		return
+	}
+	initRan = true
+
+	flag.BoolVar(&flagVerbose, "test.v", false, "verbose: print additional output")
+}
 
 // common holds the elements common between T and B and
 // captures common methods such as Errorf.
 type common struct {
-	output io.Writer
+	output bytes.Buffer
+	indent string
 
 	failed   bool   // Test or benchmark has failed.
 	skipped  bool   // Test of benchmark has been skipped.
@@ -53,7 +72,6 @@ var _ TB = (*B)(nil)
 //
 type T struct {
 	common
-	indent string
 }
 
 // Name returns the name of the running test or benchmark.
@@ -85,8 +103,22 @@ func (c *common) FailNow() {
 // log generates the output.
 func (c *common) log(s string) {
 	// This doesn't print the same as in upstream go, but works for now.
-	fmt.Fprintf(c.output, "\t")
-	fmt.Fprintln(c.output, s)
+	if len(s) != 0 && s[len(s)-1] == '\n' {
+		s = s[:len(s)-1]
+	}
+	lines := strings.Split(s, "\n")
+	// First line.
+	c.output.WriteString(c.indent)
+	c.output.WriteString("    ") // 4 spaces
+	c.output.WriteString(lines[0])
+	c.output.WriteByte('\n')
+	// More lines.
+	for _, line := range lines[1:] {
+		c.output.WriteString(c.indent)
+		c.output.WriteString("        ") // 8 spaces
+		c.output.WriteString(line)
+		c.output.WriteByte('\n')
+	}
 }
 
 // Log formats its arguments using default formatting, analogous to Println,
@@ -165,25 +197,30 @@ func (c *common) Helper() {
 func (t *T) Run(name string, f func(t *T)) bool {
 	// Create a subtest.
 	sub := T{
-		indent: t.indent + "    ",
 		common: common{
 			name:   t.name + "/" + name,
-			output: &bytes.Buffer{},
+			indent: t.indent + "    ",
 		},
 	}
 
 	// Run the test.
-	fmt.Printf("=== RUN   %s\n", sub.name)
+	if flagVerbose {
+		fmt.Fprintf(&t.output, "=== RUN   %s\n", sub.name)
+
+	}
 	f(&sub)
 
 	// Process the result (pass or fail).
 	if sub.failed {
 		t.failed = true
-		fmt.Printf(sub.indent+"--- FAIL: %s\n", sub.name)
+		fmt.Fprintf(&t.output, sub.indent+"--- FAIL: %s\n", sub.name)
+		t.output.Write(sub.output.Bytes())
 	} else {
-		fmt.Printf(sub.indent+"--- PASS: %s\n", sub.name)
+		if flagVerbose {
+			fmt.Fprintf(&t.output, sub.indent+"--- PASS: %s\n", sub.name)
+			t.output.Write(sub.output.Bytes())
+		}
 	}
-	fmt.Print(sub.output)
 	return !sub.failed
 }
 
@@ -205,24 +242,32 @@ func (m *M) Run() int {
 		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
 	}
 
+	if !flag.Parsed() {
+		flag.Parse()
+	}
+
 	failures := 0
 	for _, test := range m.Tests {
 		t := &T{
 			common: common{
-				name:   test.Name,
-				output: &bytes.Buffer{},
+				name: test.Name,
 			},
 		}
 
-		fmt.Printf("=== RUN   %s\n", test.Name)
+		if flagVerbose {
+			fmt.Printf("=== RUN   %s\n", test.Name)
+		}
 		test.F(t)
 
 		if t.failed {
 			fmt.Printf("--- FAIL: %s\n", test.Name)
+			os.Stdout.Write(t.output.Bytes())
 		} else {
-			fmt.Printf("--- PASS: %s\n", test.Name)
+			if flagVerbose {
+				fmt.Printf("--- PASS: %s\n", test.Name)
+				os.Stdout.Write(t.output.Bytes())
+			}
 		}
-		fmt.Print(t.output)
 
 		if t.failed {
 			failures++
@@ -242,6 +287,7 @@ func TestMain(m *M) {
 }
 
 func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenchmark, examples []InternalExample) *M {
+	Init()
 	return &M{
 		Tests: tests,
 	}
