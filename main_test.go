@@ -51,6 +51,7 @@ func TestCompiler(t *testing.T) {
 		"stdlib.go",
 		"string.go",
 		"structs.go",
+		"testing.go",
 		"zeroalloc.go",
 	}
 
