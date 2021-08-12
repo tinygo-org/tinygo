@@ -154,7 +154,8 @@ commands:
                 gcc-avr \
                 avr-libc \
                 cmake \
-                ninja-build
+                ninja-build \
+                python3
             sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-8-dev
             # hack ninja to use less jobs
             echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
@@ -225,7 +226,8 @@ commands:
                 gcc-avr \
                 avr-libc \
                 cmake \
-                ninja-build
+                ninja-build \
+                python3
             sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-8-dev
             # hack ninja to use less jobs
             echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
