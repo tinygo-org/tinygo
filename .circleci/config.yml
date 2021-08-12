@@ -152,8 +152,13 @@ commands:
                 qemu-system-arm \
                 qemu-user \
                 gcc-avr \
-                avr-libc
+                avr-libc \
+                cmake \
+                ninja-build
             sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-8-dev
+            # hack ninja to use less jobs
+            echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
+            chmod +x /go/bin/ninja
       - install-node
       - install-wasmtime
       - install-xtensa-toolchain:
@@ -174,11 +179,6 @@ commands:
               # fetch LLVM source
               rm -rf llvm-project
               make llvm-source
-              # install dependencies
-              sudo apt-get install cmake ninja-build
-              # hack ninja to use less jobs
-              echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
-              chmod +x /go/bin/ninja
               # build!
               make ASSERT=1 llvm-build
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
@@ -223,8 +223,13 @@ commands:
                 qemu-system-arm \
                 qemu-user \
                 gcc-avr \
-                avr-libc
+                avr-libc \
+                cmake \
+                ninja-build
             sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-8-dev
+            # hack ninja to use less jobs
+            echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
+            chmod +x /go/bin/ninja
       - install-node
       - install-wasmtime
       - install-xtensa-toolchain:
@@ -245,11 +250,6 @@ commands:
               # fetch LLVM source
               rm -rf llvm-project
               make llvm-source
-              # install dependencies
-              sudo apt-get install cmake ninja-build
-              # hack ninja to use less jobs
-              echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
-              chmod +x /go/bin/ninja
               # build!
               make llvm-build
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;

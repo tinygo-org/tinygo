@@ -12,7 +12,6 @@ import (
 
 /*
 #cgo CXXFLAGS: -fno-rtti
-#cgo LDFLAGS: -lbinaryen
 #include <stdbool.h>
 #include <stdlib.h>
 #include <binaryen-c.h>
