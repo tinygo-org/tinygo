@@ -25,4 +25,4 @@
 	url = https://github.com/tinygo-org/stm32-svd
 [submodule "lib/binaryen"]
 	path = lib/binaryen
-	url = git@github.com:WebAssembly/binaryen.git
+	url = https://github.com/WebAssembly/binaryen

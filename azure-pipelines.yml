@@ -45,6 +45,11 @@ jobs:
             make llvm-build
           fi
     - task: Bash@3
+      displayName: Build Binaryen
+      inputs:
+        targetType: inline
+        script: make lib/binaryen/lib/libbinaryen.a
+    - task: Bash@3
       displayName: Install QEMU
       inputs:
         targetType: inline

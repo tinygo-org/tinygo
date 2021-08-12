@@ -96,6 +96,7 @@ ifneq ("$(wildcard $(LLVM_BUILDDIR)/bin/llvm-config*)","")
     CGO_LDFLAGS+=$(abspath $(LLVM_BUILDDIR))/lib/lib$(LIBCLANG_NAME).a -L$(abspath $(LLVM_BUILDDIR)/lib) $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
 endif
 ifneq ("$(wildcard lib/binaryen/lib/libbinaryen.a)","")
+	CGO_CPPFLAGS+=-I$(abspath lib/binaryen/src/)
 	CGO_LDFLAGS+=$(abspath lib/binaryen/lib/libbinaryen.a)
 endif
 

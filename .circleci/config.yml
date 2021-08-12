@@ -58,7 +58,7 @@ commands:
           name: "Install binaryen"
           command: |
             wget https://github.com/WebAssembly/binaryen/releases/download/version_101/binaryen-version_101-x86_64-linux.tar.gz
-            sudo tar -C /usr/local --strip-components=1 binaryen-version_101-x86_64-linux.tar.gz
+            sudo tar -C /usr/local -xf --strip-components=1 binaryen-version_101-x86_64-linux.tar.gz
   install-xtensa-toolchain:
     parameters:
       variant:
