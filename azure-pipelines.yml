@@ -15,6 +15,17 @@ jobs:
         version: '1.17'
     - checkout: self
       fetchDepth: 1
+    - task: Bash@3
+      displayName: Install Dependencies
+      inputs:
+        targetType: inline
+        script: |
+          # install ninja
+          choco install ninja
+          # hack ninja to use fewer jobs
+          echo -e 'C:\\ProgramData\\Chocolatey\\bin\\ninja -j4 %*' > /usr/bin/ninja.bat
+          # install qemu
+          choco install qemu --version=2020.06.12
     - task: Cache@2
       displayName: Cache LLVM source
       inputs:
@@ -37,11 +48,6 @@ jobs:
         script: |
           if [ ! -f llvm-build/lib/liblldELF.a ]
           then
-            # install dependencies
-            choco install ninja
-            # hack ninja to use fewer jobs
-            echo -e 'C:\\ProgramData\\Chocolatey\\bin\\ninja -j4 %*' > /usr/bin/ninja.bat
-            # build!
             make llvm-build
           fi
     - task: Bash@3
@@ -49,11 +55,6 @@ jobs:
       inputs:
         targetType: inline
         script: make lib/binaryen/lib/libbinaryen.a
-    - task: Bash@3
-      displayName: Install QEMU
-      inputs:
-        targetType: inline
-        script: choco install qemu --version=2020.06.12
     - task: CacheBeta@0
       displayName: Cache wasi-libc sysroot
       inputs:

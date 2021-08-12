@@ -58,7 +58,7 @@ commands:
           name: "Install binaryen"
           command: |
             wget https://github.com/WebAssembly/binaryen/releases/download/version_101/binaryen-version_101-x86_64-linux.tar.gz
-            sudo tar -C /usr/local -xf --strip-components=1 binaryen-version_101-x86_64-linux.tar.gz
+            sudo tar --strip-components=1 -C /usr/local -xf binaryen-version_101-x86_64-linux.tar.gz
   install-xtensa-toolchain:
     parameters:
       variant:
@@ -153,7 +153,7 @@ commands:
                 qemu-user \
                 gcc-avr \
                 avr-libc
-            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-6-dev
+            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-8-dev
       - install-node
       - install-wasmtime
       - install-xtensa-toolchain:
@@ -224,7 +224,7 @@ commands:
                 qemu-user \
                 gcc-avr \
                 avr-libc
-            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-6-dev
+            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-8-dev
       - install-node
       - install-wasmtime
       - install-xtensa-toolchain:
@@ -303,7 +303,7 @@ commands:
             curl https://dl.google.com/go/go1.17.darwin-amd64.tar.gz -o go1.17.darwin-amd64.tar.gz
             sudo tar -C /usr/local -xzf go1.17.darwin-amd64.tar.gz
             ln -s /usr/local/go/bin/go /usr/local/bin/go
-            HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu cmake ninja
       - install-xtensa-toolchain:
           variant: "macos"
       - restore_cache:
@@ -334,8 +334,6 @@ commands:
               # fetch LLVM source
               rm -rf llvm-project
               make llvm-source
-              # install dependencies
-              HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
               # build!
               make llvm-build
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
