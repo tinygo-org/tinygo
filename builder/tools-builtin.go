@@ -5,7 +5,7 @@ package builder
 import (
 	"errors"
 	"fmt"
-	"os"
+	"io/ioutil"
 	"sync"
 	"unsafe"
 )
@@ -62,7 +62,7 @@ func RunTool(tool string, args ...string) error {
 var wasmOptLock sync.Mutex
 
 func WasmOpt(src, dst string, cfg BinaryenConfig) error {
-	data, err := os.ReadFile(src)
+	data, err := ioutil.ReadFile(src)
 	if err != nil {
 		return fmt.Errorf("reading source file: %w", err)
 	}
@@ -72,7 +72,7 @@ func WasmOpt(src, dst string, cfg BinaryenConfig) error {
 		return fmt.Errorf("running wasm-opt: %w", err)
 	}
 
-	err = os.WriteFile(dst, data, 0666)
+	err = ioutil.WriteFile(dst, data, 0666)
 	if err != nil {
 		return fmt.Errorf("writing destination file: %w", err)
 	}
