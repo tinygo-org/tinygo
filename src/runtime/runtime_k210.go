@@ -48,7 +48,7 @@ func main() {
 	preinit()
 	initPeripherals()
 	run()
-	abort()
+	exit(0)
 }
 
 func initPLIC() {

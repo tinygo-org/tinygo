@@ -25,7 +25,7 @@ func main() {
 	systemInit()
 	preinit()
 	run()
-	abort()
+	exit(0)
 }
 
 func init() {

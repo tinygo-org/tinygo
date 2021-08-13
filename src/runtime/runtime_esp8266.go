@@ -51,7 +51,7 @@ func main() {
 	run()
 
 	// Fallback: if main ever returns, hang the CPU.
-	abort()
+	exit(0)
 }
 
 //go:extern _sbss
@@ -104,6 +104,10 @@ func sleepTicks(d timeUnit) {
 	sleepUntil := ticks() + d
 	for ticks() < sleepUntil {
 	}
+}
+
+func exit(code int) {
+	abort()
 }
 
 func abort() {
