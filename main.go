@@ -212,6 +212,7 @@ func Test(pkgName string, options *compileopts.Options, testCompileOnly, testVer
 // values are whether the test passed and any errors encountered while trying to
 // run the binary.
 func runPackageTest(config *compileopts.Config, result builder.BuildResult, testVerbose, testShort bool) (bool, error) {
+	var cmd *exec.Cmd
 	if len(config.Target.Emulator) == 0 {
 		// Run directly.
 		var flags []string
@@ -221,47 +222,26 @@ func runPackageTest(config *compileopts.Config, result builder.BuildResult, test
 		if testShort {
 			flags = append(flags, "-test.short")
 		}
-
-		cmd := executeCommand(config.Options, result.Binary, flags...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		cmd = executeCommand(config.Options, result.Binary, flags...)
 		cmd.Dir = result.MainDir
-		err := cmd.Run()
-		if err != nil {
-			if _, ok := err.(*exec.ExitError); ok {
-				// Binary exited with a non-zero exit code, which means the test
-				// failed.
-				return false, nil
-			}
-			return false, &commandError{"failed to run compiled binary", result.Binary, err}
-		}
-		return true, nil
 	} else {
 		// Run in an emulator.
 		// TODO: pass the -test.v flag if needed.
 		args := append(config.Target.Emulator[1:], result.Binary)
-		cmd := executeCommand(config.Options, config.Target.Emulator[0], args...)
-		buf := &bytes.Buffer{}
-		w := io.MultiWriter(os.Stdout, buf)
-		cmd.Stdout = w
-		cmd.Stderr = os.Stderr
-		err := cmd.Run()
-		if err != nil {
-			if err, ok := err.(*exec.ExitError); !ok || !err.Exited() {
-				// Workaround for QEMU which always exits with an error.
-				return false, &commandError{"failed to run emulator with", result.Binary, err}
-			}
-		}
-		testOutput := string(buf.Bytes())
-		if testOutput == "PASS\n" || strings.HasSuffix(testOutput, "\nPASS\n") {
-			// Test passed.
-			return true, nil
-		} else {
-			// Test failed, either by ending with the word "FAIL" or with a
-			// panic of some sort.
+		cmd = executeCommand(config.Options, config.Target.Emulator[0], args...)
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		if _, ok := err.(*exec.ExitError); ok {
+			// Binary exited with a non-zero exit code, which means the test
+			// failed.
 			return false, nil
 		}
+		return false, &commandError{"failed to run compiled binary", result.Binary, err}
 	}
+	return true, nil
 }
 
 // Flash builds and flashes the built binary to the given serial port.

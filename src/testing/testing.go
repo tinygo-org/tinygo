@@ -285,7 +285,9 @@ func (m *M) Run() int {
 	if failures > 0 {
 		fmt.Println("FAIL")
 	} else {
-		fmt.Println("PASS")
+		if flagVerbose {
+			fmt.Println("PASS")
+		}
 	}
 	return failures
 }
