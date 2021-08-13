@@ -19,7 +19,7 @@ func main() {
 	arm.SCB.CPACR.Set(0) // disable FPU if it is enabled
 	preinit()
 	run()
-	abort()
+	exit(0)
 }
 
 func init() {

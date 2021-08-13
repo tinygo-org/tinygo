@@ -54,7 +54,7 @@ func main() {
 	run()
 
 	// Fallback: if main ever returns, hang the CPU.
-	abort()
+	exit(0)
 }
 
 func abort() {

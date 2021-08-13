@@ -37,7 +37,7 @@ var _ebss [0]byte
 func main() {
 	preinit()
 	run()
-	abort()
+	exit(0)
 }
 
 func preinit() {
@@ -82,6 +82,10 @@ func sleepTicks(d timeUnit) {
 
 func ticks() timeUnit {
 	return currentTime
+}
+
+func exit(code int) {
+	abort()
 }
 
 func abort() {

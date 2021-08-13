@@ -6,6 +6,10 @@ import (
 	"device/arm"
 )
 
+func exit(code int) {
+	abort()
+}
+
 func abort() {
 	// lock up forever
 	for {

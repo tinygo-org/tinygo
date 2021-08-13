@@ -23,8 +23,7 @@ func main() {
 	run()
 
 	// Signal successful exit.
-	arm.SemihostingCall(arm.SemihostingReportException, arm.SemihostingApplicationExit)
-	abort()
+	exit(0)
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
@@ -56,8 +55,16 @@ func waitForEvents() {
 }
 
 func abort() {
-	// Signal an abnormal exit.
-	arm.SemihostingCall(arm.SemihostingReportException, arm.SemihostingRunTimeErrorUnknown)
+	exit(1)
+}
+
+func exit(code int) {
+	// Exit QEMU.
+	if code == 0 {
+		arm.SemihostingCall(arm.SemihostingReportException, arm.SemihostingApplicationExit)
+	} else {
+		arm.SemihostingCall(arm.SemihostingReportException, arm.SemihostingRunTimeErrorUnknown)
+	}
 
 	// Lock up forever (should be unreachable).
 	for {

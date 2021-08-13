@@ -75,6 +75,10 @@ func sleepTicks(d timeUnit) {
 	// TODO
 }
 
+func exit(code int) {
+	abort()
+}
+
 func abort() {
 	// TODO
 	for {

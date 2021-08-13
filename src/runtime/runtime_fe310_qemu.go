@@ -21,6 +21,16 @@ func nanosecondsToTicks(ns int64) timeUnit {
 }
 
 func abort() {
-	// Signal a successful exit.
-	testExit.Set(0x5555)
+	exit(1)
+}
+
+func exit(code int) {
+	if code == 0 {
+		// Signal a successful exit.
+		testExit.Set(0x5555) // FINISHER_PASS
+	} else {
+		// Signal a failure. The exit code is stored in the upper 16 bits of the
+		// 32 bit value.
+		testExit.Set(uint32(code)<<16 | 0x3333) // FINISHER_FAIL
+	}
 }
