@@ -235,6 +235,7 @@ reflect type: struct
   field: 0 error
   tag: 
   embedded: true
+  exported: false
   reflect type: interface
     interface
     nil: true
@@ -243,16 +244,19 @@ reflect type: struct
   field: 0 a
   tag: 
   embedded: false
+  exported: false
   reflect type: uint8
     uint: 42
   field: 1 b
   tag: 
   embedded: false
+  exported: false
   reflect type: int16
     int: 321
   field: 2 c
   tag: 
   embedded: false
+  exported: false
   reflect type: int8
     int: 123
 reflect type: struct comparable=false
@@ -260,31 +264,37 @@ reflect type: struct comparable=false
   field: 0 n
   tag: foo:"bar"
   embedded: false
+  exported: false
   reflect type: int
     int: 5
   field: 1 some
   tag: 
   embedded: false
+  exported: false
   reflect type: struct
     struct: 2
     field: 0 X
     tag: 
     embedded: false
+    exported: true
     reflect type: int16
       int: -5
     field: 1 Y
     tag: 
     embedded: false
+    exported: true
     reflect type: int16
       int: 3
   field: 2 zero
   tag: 
   embedded: false
+  exported: false
   reflect type: struct
     struct: 0
   field: 3 buf
   tag: 
   embedded: false
+  exported: false
   reflect type: slice comparable=false
     slice: uint8 2 2
     pointer: true
@@ -298,6 +308,7 @@ reflect type: struct comparable=false
   field: 4 Buf
   tag: 
   embedded: false
+  exported: true
   reflect type: slice comparable=false
     slice: uint8 1 1
     pointer: true
@@ -313,12 +324,14 @@ reflect type: ptr
     field: 0 next
     tag: description:"chain"
     embedded: false
+    exported: false
     reflect type: ptr addrable=true
       pointer: false struct
       nil: true
     field: 1 foo
     tag: 
     embedded: false
+    exported: false
     reflect type: int addrable=true
       int: 42
 reflect type: ptr
