@@ -398,6 +398,7 @@ func showValue(rv reflect.Value, indent string) {
 			println(indent+"  field:", i, field.Name)
 			println(indent+"  tag:", field.Tag)
 			println(indent+"  embedded:", field.Anonymous)
+			println(indent+"  exported:", field.IsExported())
 			showValue(rv.Field(i), indent+"  ")
 		}
 	default:

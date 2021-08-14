@@ -706,6 +706,11 @@ type StructField struct {
 	Offset    uintptr
 }
 
+// IsExported reports whether the field is exported.
+func (f StructField) IsExported() bool {
+	return f.PkgPath == ""
+}
+
 // rawStructField is the same as StructField but with the Type member replaced
 // with rawType. For internal use only. Avoiding this conversion to the Type
 // interface improves code size in many cases.
