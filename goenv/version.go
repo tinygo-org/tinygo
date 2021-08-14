@@ -48,7 +48,10 @@ func GetGorootVersion(goroot string) (major, minor int, err error) {
 // toolchain for the given GOROOT path. It is usually of the form `go1.x.y` but
 // can have some variations (for beta releases, for example).
 func GorootVersionString(goroot string) (string, error) {
-	if data, err := ioutil.ReadFile(filepath.Join(
+	if data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION")); err == nil {
+		return string(data), nil
+
+	} else if data, err := ioutil.ReadFile(filepath.Join(
 		goroot, "src", "runtime", "internal", "sys", "zversion.go")); err == nil {
 
 		r := regexp.MustCompile("const TheVersion = `(.*)`")
@@ -58,9 +61,6 @@ func GorootVersionString(goroot string) (string, error) {
 		}
 
 		return string(matches[1]), nil
-
-	} else if data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION")); err == nil {
-		return string(data), nil
 
 	} else {
 		return "", err
