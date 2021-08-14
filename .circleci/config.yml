@@ -286,8 +286,8 @@ commands:
       - run:
           name: "Install dependencies"
           command: |
-            curl https://dl.google.com/go/go1.16.darwin-amd64.tar.gz -o go1.16.darwin-amd64.tar.gz
-            sudo tar -C /usr/local -xzf go1.16.darwin-amd64.tar.gz
+            curl https://dl.google.com/go/go1.17.darwin-amd64.tar.gz -o go1.17.darwin-amd64.tar.gz
+            sudo tar -C /usr/local -xzf go1.17.darwin-amd64.tar.gz
             ln -s /usr/local/go/bin/go /usr/local/bin/go
             HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
       - install-xtensa-toolchain:
@@ -379,12 +379,12 @@ jobs:
           llvm: "11"
   assert-test-linux:
     docker:
-      - image: circleci/golang:1.16-stretch
+      - image: circleci/golang:1.17-stretch
     steps:
       - assert-test-linux
   build-linux:
     docker:
-      - image: circleci/golang:1.16-stretch
+      - image: circleci/golang:1.17-stretch
     steps:
       - build-linux
   build-macos:

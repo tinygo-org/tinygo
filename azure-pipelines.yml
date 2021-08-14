@@ -12,7 +12,7 @@ jobs:
   steps:
     - task: GoTool@0
       inputs:
-        version: '1.16'
+        version: '1.17'
     - checkout: self
       fetchDepth: 1
     - task: Cache@2
