@@ -67,6 +67,14 @@ func (v Value) Interface() interface{} {
 // valueInterfaceUnsafe is used by the runtime to hash map keys. It should not
 // be subject to the isExported check.
 func valueInterfaceUnsafe(v Value) interface{} {
+	if v.typecode.Kind() == Interface {
+		// The value itself is an interface. This can happen when getting the
+		// value of a struct field of interface type, like this:
+		//     type T struct {
+		//         X interface{}
+		//     }
+		return *(*interface{})(v.value)
+	}
 	if v.isIndirect() && v.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
 		// Value was indirect but must be put back directly in the interface
 		// value.
