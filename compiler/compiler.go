@@ -1293,6 +1293,38 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 	case "ssa:wrapnilchk":
 		// TODO: do an actual nil check?
 		return argValues[0], nil
+
+	// Builtins from the unsafe package.
+	case "Add": // unsafe.Add
+		// This is basically just a GEP operation.
+		// Note: the pointer is always of type *i8.
+		ptr := argValues[0]
+		len := argValues[1]
+		return b.CreateGEP(ptr, []llvm.Value{len}, ""), nil
+	case "Slice": // unsafe.Slice
+		// This creates a slice from a pointer and a length.
+		// Note that the exception mentioned in the documentation (if the
+		// pointer and length are nil, the slice is also nil) is trivially
+		// already the case.
+		ptr := argValues[0]
+		len := argValues[1]
+		slice := llvm.Undef(b.ctx.StructType([]llvm.Type{
+			ptr.Type(),
+			b.uintptrType,
+			b.uintptrType,
+		}, false))
+		b.createUnsafeSliceCheck(ptr, len, argTypes[1].Underlying().(*types.Basic))
+		if len.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
+			// Too small, zero-extend len.
+			len = b.CreateZExt(len, b.uintptrType, "")
+		} else if len.Type().IntTypeWidth() > b.uintptrType.IntTypeWidth() {
+			// Too big, truncate len.
+			len = b.CreateTrunc(len, b.uintptrType, "")
+		}
+		slice = b.CreateInsertValue(slice, ptr, 0, "")
+		slice = b.CreateInsertValue(slice, len, 1, "")
+		slice = b.CreateInsertValue(slice, len, 2, "")
+		return slice, nil
 	default:
 		return llvm.Value{}, b.makeError(pos, "todo: builtin: "+callName)
 	}
@@ -1928,6 +1960,17 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		default:
 			return llvm.Value{}, b.makeError(expr.Pos(), "unknown slice type: "+typ.String())
 		}
+	case *ssa.SliceToArrayPointer:
+		// Conversion from a slice to an array pointer, as the name clearly
+		// says. This requires a runtime check to make sure the slice is at
+		// least as big as the array.
+		slice := b.getValue(expr.X)
+		sliceLen := b.CreateExtractValue(slice, 1, "")
+		arrayLen := expr.Type().Underlying().(*types.Pointer).Elem().Underlying().(*types.Array).Len()
+		b.createSliceToArrayPointerCheck(sliceLen, arrayLen)
+		ptr := b.CreateExtractValue(slice, 0, "")
+		ptr = b.CreateBitCast(ptr, b.getLLVMType(expr.Type()), "")
+		return ptr, nil
 	case *ssa.TypeAssert:
 		return b.createTypeAssert(expr), nil
 	case *ssa.UnOp:

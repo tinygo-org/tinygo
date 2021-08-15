@@ -20,6 +20,7 @@ import (
 
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 const TESTDATA = "testdata"
@@ -52,6 +53,14 @@ func TestCompiler(t *testing.T) {
 		"structs.go",
 		"testing.go",
 		"zeroalloc.go",
+	}
+
+	_, minor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
+	if err != nil {
+		t.Fatal("could not read version from GOROOT:", err)
+	}
+	if minor >= 17 {
+		tests = append(tests, "go1.17.go")
 	}
 
 	if *testTarget != "" {
