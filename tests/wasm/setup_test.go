@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -47,12 +45,8 @@ func chromectx(timeout time.Duration) (context.Context, context.CancelFunc) {
 	return ctx, cancel
 }
 
-func startServer(t *testing.T) (string, *httptest.Server, func()) {
-	// In Go 1.15, all this can be replaced by t.TempDir()
-	tmpDir, err := ioutil.TempDir("", "wasm_test")
-	if err != nil {
-		t.Fatalf("unable to create temp dir: %v", err)
-	}
+func startServer(t *testing.T) (string, *httptest.Server) {
+	tmpDir := t.TempDir()
 
 	fsh := http.FileServer(http.Dir(tmpDir))
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -124,18 +118,9 @@ if (wasmSupported) {
 
 	server := httptest.NewServer(h)
 	t.Logf("Started server at %q for dir: %s", server.URL, tmpDir)
+	t.Cleanup(server.Close)
 
-	// In Go 1.14+, this can be replaced by t.Cleanup()
-	cleanup := func() {
-		err := os.RemoveAll(tmpDir)
-		if err != nil {
-			t.Error(err)
-		}
-
-		server.Close()
-	}
-
-	return tmpDir, server, cleanup
+	return tmpDir, server
 }
 
 // waitLog blocks until the log output equals the text provided (ignoring whitespace before and after)
