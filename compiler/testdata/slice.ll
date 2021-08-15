@@ -127,7 +127,7 @@ slice.next:                                       ; preds = %entry
 
 define hidden { [3 x i8]*, i32, i32 } @main.makeArraySlice(i32 %len, i8* %context, i8* %parentHandle) unnamed_addr {
 entry:
-  %slice.maxcap = icmp slt i32 %len, 0
+  %slice.maxcap = icmp ugt i32 %len, 1431655765
   br i1 %slice.maxcap, label %slice.throw, label %slice.next
 
 slice.throw:                                      ; preds = %entry
@@ -146,7 +146,7 @@ slice.next:                                       ; preds = %entry
 
 define hidden { i32*, i32, i32 } @main.makeInt32Slice(i32 %len, i8* %context, i8* %parentHandle) unnamed_addr {
 entry:
-  %slice.maxcap = icmp slt i32 %len, 0
+  %slice.maxcap = icmp ugt i32 %len, 1073741823
   br i1 %slice.maxcap, label %slice.throw, label %slice.next
 
 slice.throw:                                      ; preds = %entry
