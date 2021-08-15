@@ -20,7 +20,6 @@ import (
 
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
-	"github.com/tinygo-org/tinygo/goenv"
 )
 
 const TESTDATA = "testdata"
@@ -95,21 +94,9 @@ func TestCompiler(t *testing.T) {
 		t.Run("ARM64Linux", func(t *testing.T) {
 			runPlatTests("aarch64--linux-gnu", tests, t)
 		})
-		goVersion, err := goenv.GorootVersionString(goenv.Get("GOROOT"))
-		if err != nil {
-			t.Error("could not get Go version:", err)
-			return
-		}
-		minorVersion := strings.Split(goVersion, ".")[1]
-		if minorVersion != "13" {
-			// WebAssembly tests fail on Go 1.13, so skip them there. Versions
-			// below that are also not supported but still seem to pass, so
-			// include them in the tests for now.
-			t.Run("WebAssembly", func(t *testing.T) {
-				runPlatTests("wasm", tests, t)
-			})
-		}
-
+		t.Run("WebAssembly", func(t *testing.T) {
+			runPlatTests("wasm", tests, t)
+		})
 		t.Run("WASI", func(t *testing.T) {
 			runPlatTests("wasi", tests, t)
 		})
