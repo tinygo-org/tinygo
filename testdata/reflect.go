@@ -321,6 +321,9 @@ func main() {
 
 	println("\nstruct tags")
 	TestStructTag()
+
+	println("\nv.Interface() method")
+	testInterfaceMethod()
 }
 
 func emptyFunc() {
@@ -468,6 +471,19 @@ func TestStructTag() {
 	st := reflect.TypeOf(s)
 	field := st.Field(0)
 	println(field.Tag.Get("color"), field.Tag.Get("species"))
+}
+
+// Test Interface() call: it should never return an interface itself.
+func testInterfaceMethod() {
+	v := reflect.ValueOf(struct{ X interface{} }{X: 5})
+	println("kind:", v.Field(0).Kind().String())
+	itf := v.Field(0).Interface()
+	switch n := itf.(type) {
+	case int:
+		println("int", n) // correct
+	default:
+		println("something else") // incorrect
+	}
 }
 
 var xorshift32State uint32 = 1

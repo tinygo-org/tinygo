@@ -377,3 +377,7 @@ type assertion succeeded for unreferenced type
 
 struct tags
 blue gopher
+
+v.Interface() method
+kind: interface
+int 5
