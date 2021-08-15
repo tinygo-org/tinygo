@@ -11,8 +11,7 @@ func TestFmt(t *testing.T) {
 
 	t.Parallel()
 
-	wasmTmpDir, server, cleanup := startServer(t)
-	defer cleanup()
+	wasmTmpDir, server := startServer(t)
 
 	err := run("tinygo build -o " + wasmTmpDir + "/fmt.wasm -target wasm testdata/fmt.go")
 	if err != nil {

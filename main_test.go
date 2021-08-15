@@ -210,16 +210,7 @@ func runTestWithConfig(name, target string, t *testing.T, options compileopts.Op
 	}
 
 	// Create a temporary directory for test output files.
-	tmpdir, err := ioutil.TempDir("", "tinygo-test")
-	if err != nil {
-		t.Fatal("could not create temporary directory:", err)
-	}
-	defer func() {
-		rerr := os.RemoveAll(tmpdir)
-		if rerr != nil {
-			t.Errorf("failed to remove temporary directory %q: %s", tmpdir, rerr.Error())
-		}
-	}()
+	tmpdir := t.TempDir()
 
 	// Determine whether we're on a system that supports environment variables
 	// and command line parameters (operating systems, WASI) or not (baremetal,

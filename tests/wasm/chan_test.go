@@ -11,8 +11,7 @@ func TestChan(t *testing.T) {
 
 	t.Parallel()
 
-	wasmTmpDir, server, cleanup := startServer(t)
-	defer cleanup()
+	wasmTmpDir, server := startServer(t)
 
 	err := run("tinygo build -o " + wasmTmpDir + "/chan.wasm -target wasm testdata/chan.go")
 	if err != nil {
