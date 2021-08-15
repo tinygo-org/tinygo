@@ -42,6 +42,18 @@ func slicePanic() {
 	runtimePanic("slice out of range")
 }
 
+// Panic when trying to convert a slice to an array pointer (Go 1.17+) and the
+// slice is shorter than the array.
+func sliceToArrayPointerPanic() {
+	runtimePanic("slice smaller than array")
+}
+
+// Panic when calling unsafe.Slice() (Go 1.17+) with a len that's too large
+// (which includes if the ptr is nil and len is nonzero).
+func unsafeSlicePanic() {
+	runtimePanic("unsafe.Slice: len out of range")
+}
+
 // Panic when trying to create a new channel that is too big.
 func chanMakePanic() {
 	runtimePanic("new channel is too big")

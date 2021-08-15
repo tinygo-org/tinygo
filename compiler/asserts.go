@@ -101,6 +101,55 @@ func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lo
 	b.createRuntimeAssert(outOfBounds, "slice", "slicePanic")
 }
 
+// createSliceToArrayPointerCheck adds a check for slice-to-array pointer
+// conversions. This conversion was added in Go 1.17. For details, see:
+// https://tip.golang.org/ref/spec#Conversions_from_slice_to_array_pointer
+func (b *builder) createSliceToArrayPointerCheck(sliceLen llvm.Value, arrayLen int64) {
+	// From the spec:
+	// > If the length of the slice is less than the length of the array, a
+	// > run-time panic occurs.
+	arrayLenValue := llvm.ConstInt(b.uintptrType, uint64(arrayLen), false)
+	isLess := b.CreateICmp(llvm.IntULT, sliceLen, arrayLenValue, "")
+	b.createRuntimeAssert(isLess, "slicetoarray", "sliceToArrayPointerPanic")
+}
+
+// createUnsafeSliceCheck inserts a runtime check used for unsafe.Slice. This
+// function must panic if the ptr/len parameters are invalid.
+func (b *builder) createUnsafeSliceCheck(ptr, len llvm.Value, lenType *types.Basic) {
+	// From the documentation of unsafe.Slice:
+	//   > At run time, if len is negative, or if ptr is nil and len is not
+	//   > zero, a run-time panic occurs.
+	// However, in practice, it is also necessary to check that the length is
+	// not too big that a GEP wouldn't be possible without wrapping the pointer.
+	// These two checks (non-negative and not too big) can be merged into one
+	// using an unsiged greater than.
+
+	// Make sure the len value is at least as big as a uintptr.
+	if len.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
+		if lenType.Info()&types.IsUnsigned != 0 {
+			len = b.CreateZExt(len, b.uintptrType, "")
+		} else {
+			len = b.CreateSExt(len, b.uintptrType, "")
+		}
+	}
+
+	// Determine the maximum slice size, and therefore the maximum value of the
+	// len parameter.
+	maxSize := b.maxSliceSize(ptr.Type().ElementType())
+	maxSizeValue := llvm.ConstInt(len.Type(), maxSize, false)
+
+	// Do the check. By using unsigned greater than for the length check, signed
+	// negative values are also checked (which are very large numbers when
+	// interpreted as signed values).
+	zero := llvm.ConstInt(len.Type(), 0, false)
+	lenOutOfBounds := b.CreateICmp(llvm.IntUGT, len, maxSizeValue, "")
+	ptrIsNil := b.CreateICmp(llvm.IntEQ, ptr, llvm.ConstNull(ptr.Type()), "")
+	lenIsNotZero := b.CreateICmp(llvm.IntNE, len, zero, "")
+	assert := b.CreateAnd(ptrIsNil, lenIsNotZero, "")
+	assert = b.CreateOr(assert, lenOutOfBounds, "")
+	b.createRuntimeAssert(assert, "unsafe.Slice", "unsafeSlicePanic")
+}
+
 // createChanBoundsCheck creates a bounds check before creating a new channel to
 // check that the value is not too big for runtime.chanMake.
 func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, bufSizeType *types.Basic, pos token.Pos) {
