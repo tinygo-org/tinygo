@@ -18,8 +18,26 @@ type benchTimeFlag struct {
 	d time.Duration
 }
 
-// B is a type passed to Benchmark functions to manage benchmark timing and to
-// specify the number of iterations to run.
+// InternalBenchmark is an internal type but exported because it is cross-package;
+// it is part of the implementation of the "go test" command.
+type InternalBenchmark struct {
+	Name string
+	F    func(b *B)
+}
+
+// B is a type passed to Benchmark functions to manage benchmark
+// timing and to specify the number of iterations to run.
+//
+// A benchmark ends when its Benchmark function returns or calls any of the methods
+// FailNow, Fatal, Fatalf, SkipNow, Skip, or Skipf. Those methods must be called
+// only from the goroutine running the Benchmark function.
+// The other reporting methods, such as the variations of Log and Error,
+// may be called simultaneously from multiple goroutines.
+//
+// Like in tests, benchmark logs are accumulated during execution
+// and dumped to standard output when done. Unlike in tests, benchmark logs
+// are always printed, so as not to hide output whose existence may be
+// affecting benchmark results.
 type B struct {
 	common
 	hasSub    bool          // TODO: should be in common, and atomic
@@ -30,49 +48,6 @@ type B struct {
 	benchTime benchTimeFlag
 	timerOn   bool
 	result    BenchmarkResult
-}
-
-// InternalBenchmark is an internal type but exported because it is cross-package;
-// it is part of the implementation of the "go test" command.
-type InternalBenchmark struct {
-	Name string
-	F    func(b *B)
-}
-
-// BenchmarkResult contains the results of a benchmark run.
-type BenchmarkResult struct {
-	N int           // The number of iterations.
-	T time.Duration // The total time taken.
-}
-
-// NsPerOp returns the "ns/op" metric.
-func (r BenchmarkResult) NsPerOp() int64 {
-	if r.N <= 0 {
-		return 0
-	}
-	return r.T.Nanoseconds() / int64(r.N)
-}
-
-// AllocsPerOp returns the "allocs/op" metric,
-// which is calculated as r.MemAllocs / r.N.
-func (r BenchmarkResult) AllocsPerOp() int64 {
-	return 0 // Dummy version to allow running e.g. golang.org/test/fibo.go
-}
-
-// AllocedBytesPerOp returns the "B/op" metric,
-// which is calculated as r.MemBytes / r.N.
-func (r BenchmarkResult) AllocedBytesPerOp() int64 {
-	return 0 // Dummy version to allow running e.g. golang.org/test/fibo.go
-}
-
-func (b *B) SetBytes(n int64) {
-	panic("testing: unimplemented: B.SetBytes")
-}
-
-// ReportAllocs enables malloc statistics for this benchmark.
-func (b *B) ReportAllocs() {
-	// Dummy version to allow building e.g. golang.org/crypto/...
-	panic("testing: unimplemented: B.ReportAllocs")
 }
 
 // StartTimer starts timing a test. This function is called automatically
@@ -95,13 +70,26 @@ func (b *B) StopTimer() {
 	}
 }
 
-// ResetTimer zeroes the elapsed benchmark time.
-// It does not affect whether the timer is running.
+// ResetTimer zeroes the elapsed benchmark time and memory allocation counters
+// and deletes user-reported metrics.
 func (b *B) ResetTimer() {
 	if b.timerOn {
 		b.start = time.Now()
 	}
 	b.duration = 0
+}
+
+// SetBytes records the number of bytes processed in a single operation.
+// If this is called, the benchmark will report ns/op and MB/s.
+func (b *B) SetBytes(n int64) {
+	panic("testing: unimplemented: B.SetBytes")
+}
+
+// ReportAllocs enables malloc statistics for this benchmark.
+// It is equivalent to setting -test.benchmem, but it only affects the
+// benchmark function that calls ReportAllocs.
+func (b *B) ReportAllocs() {
+	panic("testing: unimplemented: B.ReportAllocs")
 }
 
 // runN runs a single benchmark for the specified number of iterations.
@@ -173,6 +161,32 @@ func (b *B) launch() {
 	b.result = BenchmarkResult{b.N, b.duration}
 }
 
+// BenchmarkResult contains the results of a benchmark run.
+type BenchmarkResult struct {
+	N int           // The number of iterations.
+	T time.Duration // The total time taken.
+}
+
+// NsPerOp returns the "ns/op" metric.
+func (r BenchmarkResult) NsPerOp() int64 {
+	if r.N <= 0 {
+		return 0
+	}
+	return r.T.Nanoseconds() / int64(r.N)
+}
+
+// AllocsPerOp returns the "allocs/op" metric,
+// which is calculated as r.MemAllocs / r.N.
+func (r BenchmarkResult) AllocsPerOp() int64 {
+	return 0 // Dummy version to allow running e.g. golang.org/test/fibo.go
+}
+
+// AllocedBytesPerOp returns the "B/op" metric,
+// which is calculated as r.MemBytes / r.N.
+func (r BenchmarkResult) AllocedBytesPerOp() int64 {
+	return 0 // Dummy version to allow running e.g. golang.org/test/fibo.go
+}
+
 // Run benchmarks f as a subbenchmark with the given name. It reports
 // true if the subbenchmark succeeded.
 //
@@ -190,22 +204,6 @@ func (b *B) Run(name string, f func(b *B)) bool {
 	}
 	b.add(sub.result)
 	return !sub.failed
-}
-
-// Benchmark benchmarks a single function. It is useful for creating
-// custom benchmarks that do not use the "go test" command.
-//
-// If f calls Run, the result will be an estimate of running all its
-// subbenchmarks that don't call Run in sequence in a single benchmark.
-func Benchmark(f func(b *B)) BenchmarkResult {
-	b := &B{
-		benchFunc: f,
-		benchTime: benchTime,
-	}
-	if b.run1() {
-		b.run()
-	}
-	return b.result
 }
 
 // add simulates running benchmarks in sequence in a single iteration. It is
@@ -234,3 +232,20 @@ func (pb *PB) Next() bool {
 func (b *B) RunParallel(body func(*PB)) {
 	return
 }
+
+// Benchmark benchmarks a single function. It is useful for creating
+// custom benchmarks that do not use the "go test" command.
+//
+// If f calls Run, the result will be an estimate of running all its
+// subbenchmarks that don't call Run in sequence in a single benchmark.
+func Benchmark(f func(b *B)) BenchmarkResult {
+	b := &B{
+		benchFunc: f,
+		benchTime: benchTime,
+	}
+	if b.run1() {
+		b.run()
+	}
+	return b.result
+}
+
