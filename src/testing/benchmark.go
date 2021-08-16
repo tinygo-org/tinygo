@@ -7,6 +7,7 @@
 package testing
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -187,6 +188,30 @@ func (r BenchmarkResult) AllocedBytesPerOp() int64 {
 	return 0 // Dummy version to allow running e.g. golang.org/test/fibo.go
 }
 
+func runBenchmarks(benchmarks []InternalBenchmark) bool {
+	if len(benchmarks) == 0 {
+		return true
+	}
+	main := &B{
+		common: common{
+			name: "Main",
+		},
+		benchTime: benchTime,
+		benchFunc: func(b *B) {
+			for _, Benchmark := range benchmarks {
+				if flagVerbose {
+					fmt.Printf("=== RUN   %s\n", Benchmark.Name)
+				}
+				b.Run(Benchmark.Name, Benchmark.F)
+				fmt.Printf("--- Result: %d ns/op\n", b.result.NsPerOp())
+			}
+		},
+	}
+
+	main.runN(1)
+	return true
+}
+
 // Run benchmarks f as a subbenchmark with the given name. It reports
 // true if the subbenchmark succeeded.
 //
@@ -248,4 +273,3 @@ func Benchmark(f func(b *B)) BenchmarkResult {
 	}
 	return b.result
 }
-

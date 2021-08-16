@@ -516,7 +516,7 @@ func TestTest(t *testing.T) {
 				defer out.Close()
 
 				opts := targ.opts
-				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/pass", out, out, &opts, false, false, false, "", "")
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/pass", out, out, &opts, false, false, false, "", "", "")
 				if err != nil {
 					t.Errorf("test error: %v", err)
 				}
@@ -537,7 +537,7 @@ func TestTest(t *testing.T) {
 				defer out.Close()
 
 				opts := targ.opts
-				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/fail", out, out, &opts, false, false, false, "", "")
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/fail", out, out, &opts, false, false, false, "", "", "")
 				if err != nil {
 					t.Errorf("test error: %v", err)
 				}
@@ -564,7 +564,7 @@ func TestTest(t *testing.T) {
 
 				var output bytes.Buffer
 				opts := targ.opts
-				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/nothing", io.MultiWriter(&output, out), out, &opts, false, false, false, "", "")
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/nothing", io.MultiWriter(&output, out), out, &opts, false, false, false, "", "", "")
 				if err != nil {
 					t.Errorf("test error: %v", err)
 				}
@@ -588,7 +588,7 @@ func TestTest(t *testing.T) {
 				defer out.Close()
 
 				opts := targ.opts
-				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/builderr", out, out, &opts, false, false, false, "", "")
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/builderr", out, out, &opts, false, false, false, "", "", "")
 				if err == nil {
 					t.Error("test did not error")
 				}

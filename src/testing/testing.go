@@ -18,9 +18,10 @@ import (
 
 // Testing flags.
 var (
-	flagVerbose   bool
-	flagShort     bool
-	flagRunRegexp string
+	flagVerbose     bool
+	flagShort       bool
+	flagRunRegexp   string
+	flagBenchRegexp string
 )
 
 var initRan bool
@@ -35,6 +36,7 @@ func Init() {
 	flag.BoolVar(&flagVerbose, "test.v", false, "verbose: print additional output")
 	flag.BoolVar(&flagShort, "test.short", false, "short: run smaller test suite to save time")
 	flag.StringVar(&flagRunRegexp, "test.run", "", "run: regexp of tests to run")
+	flag.StringVar(&flagBenchRegexp, "test.bench", "", "run: regexp of benchmarks to run")
 }
 
 // common holds the elements common between T and B and
@@ -243,7 +245,8 @@ type InternalTest struct {
 // M is a test suite.
 type M struct {
 	// tests is a list of the test names to execute
-	Tests []InternalTest
+	Tests      []InternalTest
+	Benchmarks []InternalBenchmark
 
 	deps testDeps
 }
@@ -275,8 +278,33 @@ func (m *M) Run() int {
 
 		m.Tests = filtered
 	}
+	if flagBenchRegexp != "" {
+		var filtered []InternalBenchmark
 
-	if len(m.Tests) == 0 {
+		// pre-test the regexp; we don't want to bother logging one failure for every test name if the regexp is broken
+		if _, err := m.deps.MatchString(flagBenchRegexp, "some-test-name"); err != nil {
+			fmt.Println("testing: invalid regexp for -test.bench:", err.Error())
+			failures++
+		}
+
+		// filter the list of tests before we try to run them
+		for _, test := range m.Benchmarks {
+			// ignore the error; we already tested that the regexp compiles fine above
+			if match, _ := m.deps.MatchString(flagBenchRegexp, test.Name); match {
+				filtered = append(filtered, test)
+			}
+		}
+
+		m.Benchmarks = filtered
+		flagVerbose = true
+		if flagRunRegexp == "" {
+			m.Tests = []InternalTest{}
+		}
+	} else {
+		m.Benchmarks = []InternalBenchmark{}
+	}
+
+	if len(m.Tests) == 0 && len(m.Benchmarks) == 0 {
 		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
 	}
 
@@ -306,6 +334,8 @@ func (m *M) Run() int {
 			failures++
 		}
 	}
+
+	runBenchmarks(m.Benchmarks)
 
 	if failures > 0 {
 		fmt.Println("FAIL")
@@ -358,8 +388,9 @@ type testDeps interface {
 func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenchmark, examples []InternalExample) *M {
 	Init()
 	return &M{
-		Tests: tests,
-		deps:  deps.(testDeps),
+		Tests:      tests,
+		Benchmarks: benchmarks,
+		deps:       deps.(testDeps),
 	}
 }
 
