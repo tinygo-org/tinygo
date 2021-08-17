@@ -1,4 +1,4 @@
-// +build wasm,cosmwasm
+// +build tinygo.wasm,cosmwasm
 
 package runtime
 
@@ -33,8 +33,6 @@ func _start() {
 // putchar() is a no-op. Maybe we add an implementation later.
 // this is needed to link various debug print statements in tinygo
 func putchar(c byte) {}
-
-const asyncScheduler = true
 
 // This function is called by the scheduler.
 // Schedule a call to runtime.scheduler, do not actually sleep.
