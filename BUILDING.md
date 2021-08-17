@@ -23,7 +23,7 @@ different guide:
 LLVM, Clang and LLD are quite light on dependencies, requiring only standard
 build tools to be built. Go is of course necessary to build TinyGo itself.
 
-  * Go (1.13+)
+  * Go (1.15+)
   * Standard build tools (gcc/clang)
   * git
   * CMake

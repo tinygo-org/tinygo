@@ -48,3 +48,57 @@ func (b *builder) createMemoryZeroCall(args []ssa.Value) (llvm.Value, error) {
 	b.CreateCall(llvmFn, params, "")
 	return llvm.Value{}, nil
 }
+
+var mathToLLVMMapping = map[string]string{
+	"math.Sqrt":  "llvm.sqrt.f64",
+	"math.Floor": "llvm.floor.f64",
+	"math.Ceil":  "llvm.ceil.f64",
+	"math.Trunc": "llvm.trunc.f64",
+}
+
+// createMathOp tries to lower the given call as a LLVM math intrinsic, if
+// possible. It returns the call result if possible, and a boolean whether it
+// succeeded. If it doesn't succeed, the architecture doesn't support the given
+// intrinsic.
+func (b *builder) createMathOp(call *ssa.CallCommon) (llvm.Value, bool) {
+	// Check whether this intrinsic is supported on the given GOARCH.
+	// If it is unsupported, this can have two reasons:
+	//
+	//  1. LLVM can expand the intrinsic inline (using float instructions), but
+	//     the result doesn't pass the tests of the math package.
+	//  2. LLVM cannot expand the intrinsic inline, will therefore lower it as a
+	//     libm function call, but the libm function call also fails the math
+	//     package tests.
+	//
+	// Whatever the implementation, it must pass the tests in the math package
+	// so unfortunately only the below intrinsic+architecture combinations are
+	// supported.
+	name := call.StaticCallee().RelString(nil)
+	switch name {
+	case "math.Ceil", "math.Floor", "math.Trunc":
+		if b.GOARCH != "wasm" && b.GOARCH != "arm64" {
+			return llvm.Value{}, false
+		}
+	case "math.Sqrt":
+		if b.GOARCH != "wasm" && b.GOARCH != "amd64" && b.GOARCH != "386" {
+			return llvm.Value{}, false
+		}
+	default:
+		return llvm.Value{}, false // only the above functions are supported.
+	}
+
+	llvmFn := b.mod.NamedFunction(mathToLLVMMapping[name])
+	if llvmFn.IsNil() {
+		// The intrinsic doesn't exist yet, so declare it.
+		// At the moment, all supported intrinsics have the form "double
+		// foo(double %x)" so we can hardcode the signature here.
+		llvmType := llvm.FunctionType(b.ctx.DoubleType(), []llvm.Type{b.ctx.DoubleType()}, false)
+		llvmFn = llvm.AddFunction(b.mod, mathToLLVMMapping[name], llvmType)
+	}
+	// Create a call to the intrinsic.
+	args := make([]llvm.Value, len(call.Args))
+	for i, arg := range call.Args {
+		args[i] = b.getValue(arg)
+	}
+	return b.CreateCall(llvmFn, args, ""), true
+}

@@ -32,9 +32,11 @@ var (
 
 const wasmPageSize = 64 * 1024
 
-// Align on word boundary.
 func align(ptr uintptr) uintptr {
-	return (ptr + 3) &^ 3
+	// Align to 16, which is the alignment of max_align_t:
+	// https://godbolt.org/z/dYqTsWrGq
+	const heapAlign = 16
+	return (ptr + heapAlign - 1) &^ (heapAlign - 1)
 }
 
 func getCurrentStackPointer() uintptr
@@ -54,4 +56,52 @@ func growHeap() bool {
 
 	// Heap has grown successfully.
 	return true
+}
+
+// The below functions override the default allocator of wasi-libc.
+// Most functions are defined but unimplemented to make sure that if there is
+// any code using them, they will get an error instead of (incorrectly) using
+// the wasi-libc dlmalloc heap implementation instead. If they are needed by any
+// program, they can certainly be implemented.
+
+//export malloc
+func libc_malloc(size uintptr) unsafe.Pointer {
+	return alloc(size)
+}
+
+//export free
+func libc_free(ptr unsafe.Pointer) {
+	free(ptr)
+}
+
+//export calloc
+func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
+	// Note: we could be even more correct here and check that nmemb * size
+	// doesn't overflow. However the current implementation should normally work
+	// fine.
+	return alloc(nmemb * size)
+}
+
+//export realloc
+func libc_realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
+	runtimePanic("unimplemented: realloc")
+	return nil
+}
+
+//export posix_memalign
+func libc_posix_memalign(memptr *unsafe.Pointer, alignment, size uintptr) int {
+	runtimePanic("unimplemented: posix_memalign")
+	return 0
+}
+
+//export aligned_alloc
+func libc_aligned_alloc(alignment, bytes uintptr) unsafe.Pointer {
+	runtimePanic("unimplemented: aligned_alloc")
+	return nil
+}
+
+//export malloc_usable_size
+func libc_malloc_usable_size(ptr unsafe.Pointer) uintptr {
+	runtimePanic("unimplemented: malloc_usable_size")
+	return 0
 }

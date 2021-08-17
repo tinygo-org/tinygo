@@ -1,5 +1,3 @@
-// +build go1.14
-
 package wasm
 
 import (
@@ -13,8 +11,7 @@ func TestEvent(t *testing.T) {
 
 	t.Parallel()
 
-	wasmTmpDir, server, cleanup := startServer(t)
-	defer cleanup()
+	wasmTmpDir, server := startServer(t)
 
 	err := run("tinygo build -o " + wasmTmpDir + "/event.wasm -target wasm testdata/event.go")
 	if err != nil {

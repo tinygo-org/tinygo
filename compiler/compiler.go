@@ -23,7 +23,7 @@ import (
 // Version of the compiler pacakge. Must be incremented each time the compiler
 // package changes in a way that affects the generated LLVM module.
 // This version is independent of the TinyGo version number.
-const Version = 12 // last change: implement syscall.rawSyscallNoError
+const Version = 16 // last change: fix max slice size
 
 func init() {
 	llvm.InitializeAllTargets()
@@ -768,6 +768,29 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			}
 		}
 	}
+
+	// Add forwarding functions for functions that would otherwise be
+	// implemented in assembly.
+	for _, name := range members {
+		member := pkg.Members[name]
+		switch member := member.(type) {
+		case *ssa.Function:
+			if member.Blocks != nil {
+				continue // external function
+			}
+			info := c.getFunctionInfo(member)
+			if aliasName, ok := stdlibAliases[info.linkName]; ok {
+				alias := c.mod.NamedFunction(aliasName)
+				if alias.IsNil() {
+					// Shouldn't happen, but perhaps best to just ignore.
+					// The error will be a link error, if there is an error.
+					continue
+				}
+				b := newBuilder(c, irbuilder, member)
+				b.createAlias(alias)
+			}
+		}
+	}
 }
 
 // createFunction builds the LLVM IR implementation for this function. The
@@ -1298,6 +1321,11 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.createMemoryCopyCall(fn, instr.Args)
 		case name == "runtime.memzero":
 			return b.createMemoryZeroCall(instr.Args)
+		case name == "math.Ceil" || name == "math.Floor" || name == "math.Sqrt" || name == "math.Trunc":
+			result, ok := b.createMathOp(instr)
+			if ok {
+				return result, nil
+			}
 		case name == "device.Asm" || name == "device/arm.Asm" || name == "device/arm64.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
 			return b.createInlineAsm(instr.Args)
 		case name == "device.AsmFull" || name == "device/arm.AsmFull" || name == "device/arm64.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
@@ -1409,6 +1437,28 @@ func (b *builder) getValue(expr ssa.Value) llvm.Value {
 			panic("local has not been parsed: " + expr.String())
 		}
 	}
+}
+
+// maxSliceSize determines the maximum size a slice of the given element type
+// can be.
+func (c *compilerContext) maxSliceSize(elementType llvm.Type) uint64 {
+	// Calculate ^uintptr(0), which is the max value that fits in uintptr.
+	maxPointerValue := llvm.ConstNot(llvm.ConstInt(c.uintptrType, 0, false)).ZExtValue()
+	// Calculate (^uint(0))/2, which is the max value that fits in an int.
+	maxIntegerValue := llvm.ConstNot(llvm.ConstInt(c.intType, 0, false)).ZExtValue() / 2
+
+	// Determine the maximum allowed size for a slice. The biggest possible
+	// pointer (starting from 0) would be maxPointerValue*sizeof(elementType) so
+	// divide by the element type to get the real maximum size.
+	maxSize := maxPointerValue / c.targetData.TypeAllocSize(elementType)
+
+	// len(slice) is an int. Make sure the length remains small enough to fit in
+	// an int.
+	if maxSize > maxIntegerValue {
+		maxSize = maxIntegerValue
+	}
+
+	return maxSize
 }
 
 // createExpr translates a Go SSA expression to LLVM IR. This can be zero, one,
@@ -1624,10 +1674,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		elemSize := b.targetData.TypeAllocSize(llvmElemType)
 		elemSizeValue := llvm.ConstInt(b.uintptrType, elemSize, false)
 
-		// Calculate (^uintptr(0)) >> 1, which is the max value that fits in
-		// uintptr if uintptr were signed.
-		maxSize := llvm.ConstLShr(llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)), llvm.ConstInt(b.uintptrType, 1, false))
-		if elemSize > maxSize.ZExtValue() {
+		maxSize := b.maxSliceSize(llvmElemType)
+		if elemSize > maxSize {
 			// This seems to be checked by the typechecker already, but let's
 			// check it again just to be sure.
 			return llvm.Value{}, b.makeError(expr.Pos(), fmt.Sprintf("slice element type is too big (%v bytes)", elemSize))
@@ -1636,7 +1684,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		// Bounds checking.
 		lenType := expr.Len.Type().Underlying().(*types.Basic)
 		capType := expr.Cap.Type().Underlying().(*types.Basic)
-		b.createSliceBoundsCheck(maxSize, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
+		maxSizeValue := llvm.ConstInt(b.uintptrType, maxSize, false)
+		b.createSliceBoundsCheck(maxSizeValue, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
 
 		// Allocate the backing array.
 		sliceCapCast, err := b.createConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
