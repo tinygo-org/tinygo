@@ -49,17 +49,16 @@ func GetGorootVersion(goroot string) (major, minor int, err error) {
 // can have some variations (for beta releases, for example).
 func GorootVersionString(goroot string) (string, error) {
 	if data, err := ioutil.ReadFile(filepath.Join(
-		goroot, "src", "runtime", "internal", "sys", "zversion.go")); err == nil {
+		goroot, "VERSION")); err == nil {
 
 		r := regexp.MustCompile("const TheVersion = `(.*)`")
 		matches := r.FindSubmatch(data)
-		if len(matches) != 2 {
-			return "", errors.New("Invalid go version output:\n" + string(data))
+		if len(matches) == 2 {
+			return string(matches[1]), nil
 		}
+	}
 
-		return string(matches[1]), nil
-
-	} else if data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION")); err == nil {
+	if data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION")); err == nil {
 		return string(data), nil
 
 	} else {
