@@ -53,13 +53,12 @@ func GorootVersionString(goroot string) (string, error) {
 
 		r := regexp.MustCompile("const TheVersion = `(.*)`")
 		matches := r.FindSubmatch(data)
-		if len(matches) != 2 {
-			return "", errors.New("Invalid go version output:\n" + string(data))
+		if len(matches) == 2 {
+			return string(matches[1]), nil
 		}
+	}
 
-		return string(matches[1]), nil
-
-	} else if data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION")); err == nil {
+	if data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION")); err == nil {
 		return string(data), nil
 
 	} else {
