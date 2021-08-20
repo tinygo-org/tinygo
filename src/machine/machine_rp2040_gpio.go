@@ -208,3 +208,84 @@ func (p Pin) Set(value bool) {
 func (p Pin) Get() bool {
 	return p.get()
 }
+
+type PinChange uint8
+
+// Pin change interrupt constants for SetInterrupt.
+const (
+	// Edge rising
+	PinRising PinChange = iota
+	// Edge falling
+	PinFalling
+	PinLevelHigh
+	PinLevelLow
+)
+
+// Sets raspberry pico in dormant state until event is triggered
+// usage:
+//  pin.DormantUntil(machine.PinRising)
+// Taken from https://github.com/raspberrypi/pico-extras/ -> pico/sleep.h
+func Sleep(pin Pin, event PinChange) error {
+	if pin > 31 {
+		return ErrInvalidInputPin
+	}
+	var events uint32
+	switch event {
+	case PinRising:
+		events = rp.IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_HIGH
+	case PinFalling:
+		events = rp.IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_LOW
+	case PinLevelHigh:
+		events = rp.IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_LEVEL_HIGH
+	case PinLevelLow:
+		events = rp.IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_LEVEL_LOW
+	}
+
+	base := &ioBank0.dormantWakeIRQctrl
+	pin.ctrlSetInterrupt(events, true, base) // gpio_set_dormant_irq_enabled
+
+	xosc.Dormant() // Execution stops here until woken up
+
+	// Clear the irq so we can go back to dormant mode again if we want
+	pin.acknowledgeInterrupt(events)
+	return nil
+}
+
+// Clears interrupt flag on a pin
+func (p Pin) acknowledgeInterrupt(events uint32) {
+	ioBank0.intR[p/8].Set(events << 4 * (uint32(p) % 8))
+}
+
+// pico-sdk calls this the _gpio_set_irq_enabled, not to be confused with
+// gpio_set_irq_enabled (no leading underscore).
+func (p Pin) ctrlSetInterrupt(events uint32, enabled bool, base *irqCtrl) {
+	p.acknowledgeInterrupt(events)
+	enReg := &base.intE[p/8]
+	events <<= 4 * (p % 8)
+	if enabled {
+		enReg.SetBits(events)
+	} else {
+		enReg.ClearBits(events)
+	}
+}
+
+// Basic interrupt setting via ioBANK0
+func (p Pin) setInterrupt(events uint32, enabled bool) {
+	// Separate mask/force/status per-core, so check which core called, and
+	// set the relevant IRQ controls.
+	var irqCtlBase *irqCtrl
+	switch CurrentCore() {
+	case 0:
+		irqCtlBase = &ioBank0.proc0IRQctrl
+	case 1:
+		irqCtlBase = &ioBank0.proc1IRQctrl
+	}
+	p.acknowledgeInterrupt(events)
+	enReg := &irqCtlBase.intE[p/8]
+	events <<= 4 * (p % 8)
+	if enabled {
+		enReg.SetBits(events)
+	} else {
+		enReg.ClearBits(events)
+	}
+}
