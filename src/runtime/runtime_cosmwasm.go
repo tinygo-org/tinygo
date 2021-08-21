@@ -35,3 +35,6 @@ func ticks() timeUnit {
 	// placeholder, should never be used
 	return 1234567890
 }
+
+// placeholder
+func putchar(c byte) {}

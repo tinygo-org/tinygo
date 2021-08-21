@@ -55,3 +55,6 @@ func sleepTicks(d timeUnit)
 
 //export runtime.ticks
 func ticks() timeUnit
+
+// placeholder
+func putchar(c byte) {}
