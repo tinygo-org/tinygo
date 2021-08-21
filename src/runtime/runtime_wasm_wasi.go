@@ -1,4 +1,4 @@
-// +build tinygo.wasm,wasi
+// +build tinygo.wasm,wasi,!cosmwasm
 
 package runtime
 
