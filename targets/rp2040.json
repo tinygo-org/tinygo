@@ -9,5 +9,7 @@
     "rp2040-boot-patch": true,
     "extra-files": [
         "src/device/rp/rp2040.s"
-    ]
+    ],
+    "openocd-transport": "swd",
+    "openocd-target": "rp2040"
 }
