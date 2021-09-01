@@ -81,6 +81,7 @@ const (
 	PinInputPullup
 	PinAnalog
 	PinUART
+	PinPWM
 	PinI2C
 	PinSPI
 )
@@ -181,6 +182,8 @@ func (p Pin) Configure(config PinConfig) {
 		p.pulloff()
 	case PinUART:
 		p.setFunc(fnUART)
+	case PinPWM:
+		p.setFunc(fnPWM)
 	case PinI2C:
 		// IO config according to 4.3.1.3 of rp2040 datasheet.
 		p.setFunc(fnI2C)
