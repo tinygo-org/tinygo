@@ -587,7 +587,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				flag = "-ix"
 				path = strings.TrimPrefix(spec, "-")
 			}
-			if info, err := os.Stat(path); err == nil && info.Mode().Type() == 0 {
+			if _, err := os.Stat(path); err == nil {
 				params = append(params, flag, path)
 			}
 		}
