@@ -24,6 +24,10 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 		spec.OpenOCDCommands = options.OpenOCDCommands
 	}
 
+	if options.GDBInitPaths != nil {
+		spec.GDBInitPaths = options.GDBInitPaths
+	}
+
 	goroot := goenv.Get("GOROOT")
 	if goroot == "" {
 		return nil, errors.New("cannot locate $GOROOT, please set it manually")

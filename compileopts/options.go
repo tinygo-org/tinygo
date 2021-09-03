@@ -37,6 +37,7 @@ type Options struct {
 	GlobalValues    map[string]map[string]string // map[pkgpath]map[varname]value
 	TestConfig      TestConfig
 	Programmer      string
+	GDBInitPaths    []string
 	OpenOCDCommands []string
 	LLVMFeatures    string
 }
