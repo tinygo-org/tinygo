@@ -428,11 +428,14 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		licenseBlock = regexp.MustCompile(`\s+\n`).ReplaceAllString(licenseBlock, "\n")
 	}
 
+	// Remove "-" characters from the device name because such characters cannot
+	// be used in build tags. Necessary for the ESP32-C3 for example.
+	nameLower := strings.ReplaceAll(strings.ToLower(device.Name), "-", "")
 	metadata := &Metadata{
 		File:             filepath.Base(path),
 		DescriptorSource: sourceURL,
 		Name:             device.Name,
-		NameLower:        strings.ToLower(device.Name),
+		NameLower:        nameLower,
 		Description:      strings.TrimSpace(device.Description),
 		LicenseBlock:     licenseBlock,
 	}
