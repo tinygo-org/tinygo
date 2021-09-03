@@ -677,7 +677,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		if err != nil {
 			return err
 		}
-	case "esp32", "esp8266":
+	case "esp32", "esp32c3", "esp8266":
 		// Special format for the ESP family of chips (parsed by the ROM
 		// bootloader).
 		tmppath = filepath.Join(dir, "main"+outext)

@@ -124,6 +124,7 @@ build/gen-device-svd: ./tools/gen-device-svd/*.go
 
 gen-device-esp: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Espressif-Community -interrupts=software lib/cmsis-svd/data/Espressif-Community/ src/device/esp/
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Espressif -interrupts=software lib/cmsis-svd/data/Espressif/ src/device/esp/
 	GO111MODULE=off $(GO) fmt ./src/device/esp
 
 gen-device-nrf: build/gen-device-svd
@@ -432,6 +433,8 @@ ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o test.bin -target=nodemcu             examples/blinky1
 	@$(MD5SUM) test.bin
 endif
+	$(TINYGO) build -size short -o test.bin -target=esp32c3           	examples/serial
+	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=hifive1-qemu        examples/serial

@@ -78,11 +78,21 @@ func makeESPFirmareImage(infile, outfile, format string) error {
 	// An added benefit is that we don't need to check for errors all the time.
 	outf := &bytes.Buffer{}
 
+	// Chip IDs. Source:
+	// https://github.com/espressif/esp-idf/blob/v4.3/components/bootloader_support/include/esp_app_format.h#L22
+	chip_id := map[string]uint16{
+		"esp32":   0x0000,
+		"esp32c3": 0x0005,
+	}[format]
+
 	// Image header.
 	switch format {
-	case "esp32":
+	case "esp32", "esp32c3":
 		// Header format:
-		// https://github.com/espressif/esp-idf/blob/8fbb63c2/components/bootloader_support/include/esp_image_format.h#L58
+		// https://github.com/espressif/esp-idf/blob/v4.3/components/bootloader_support/include/esp_app_format.h#L71
+		// Note: not adding a SHA256 hash as the binary is modified by
+		// esptool.py while flashing and therefore the hash won't be valid
+		// anymore.
 		binary.Write(outf, binary.LittleEndian, struct {
 			magic          uint8
 			segment_count  uint8
@@ -91,15 +101,18 @@ func makeESPFirmareImage(infile, outfile, format string) error {
 			entry_addr     uint32
 			wp_pin         uint8
 			spi_pin_drv    [3]uint8
-			reserved       [11]uint8
+			chip_id        uint16
+			min_chip_rev   uint8
+			reserved       [8]uint8
 			hash_appended  bool
 		}{
 			magic:          0xE9,
 			segment_count:  byte(len(segments)),
-			spi_mode:       0, // irrelevant, replaced by esptool when flashing
-			spi_speed_size: 0, // spi_speed, spi_size: replaced by esptool when flashing
+			spi_mode:       2,    // ESP_IMAGE_SPI_MODE_DIO
+			spi_speed_size: 0x1f, // ESP_IMAGE_SPI_SPEED_80M, ESP_IMAGE_FLASH_SIZE_2MB
 			entry_addr:     uint32(inf.Entry),
 			wp_pin:         0xEE, // disable WP pin
+			chip_id:        chip_id,
 			hash_appended:  true, // add a SHA256 hash
 		})
 	case "esp8266":
@@ -142,7 +155,7 @@ func makeESPFirmareImage(infile, outfile, format string) error {
 	outf.Write(make([]byte, 15-outf.Len()%16))
 	outf.WriteByte(checksum)
 
-	if format == "esp32" {
+	if format != "esp8266" {
 		// SHA256 hash (to protect against image corruption, not for security).
 		hash := sha256.Sum256(outf.Bytes())
 		outf.Write(hash[:])
