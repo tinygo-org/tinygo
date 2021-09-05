@@ -91,7 +91,7 @@ const (
 	NINA_CS     Pin = PA14
 	NINA_SCK    Pin = PA15
 	NINA_GPIO0  Pin = PA27
-	NINA_RESETN Pin = PA08
+	NINA_RESETN Pin = PB08
 	NINA_ACK    Pin = PA28
 	NINA_TX     Pin = PA22
 	NINA_RX     Pin = PA23
