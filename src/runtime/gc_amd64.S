@@ -27,3 +27,8 @@ _tinygo_scanCurrentStack:
     // were only pushed to be discoverable by the GC.
     addq $56, %rsp
     retq
+
+#ifdef __MACH__ // Darwin
+// allow these symbols to stripped as dead code
+.subsections_via_symbols
+#endif
