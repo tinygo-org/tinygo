@@ -65,3 +65,7 @@ var (
 		SERCOM: 2,
 	}
 )
+
+var (
+	DefaultUART = UART1
+)
