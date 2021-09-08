@@ -12,7 +12,6 @@ import (
 	"go/types"
 	"io/ioutil"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -25,14 +24,6 @@ var flagUpdate = flag.Bool("update", false, "Update images based on test output.
 // platforms and Go versions.
 func normalizeResult(result string) string {
 	actual := strings.ReplaceAll(result, "\r\n", "\n")
-
-	// Make sure all functions are wrapped, even those that would otherwise be
-	// single-line functions. This is necessary because Go 1.14 changed the way
-	// such functions are wrapped and it's important to have consistent test
-	// results.
-	re := regexp.MustCompile(`func \((.+)\)( .*?) +{ (.+) }`)
-	actual = re.ReplaceAllString(actual, "func ($1)$2 {\n\t$3\n}")
-
 	return actual
 }
 
