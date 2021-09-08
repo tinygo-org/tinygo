@@ -23,7 +23,7 @@ import (
 // Version of the compiler pacakge. Must be incremented each time the compiler
 // package changes in a way that affects the generated LLVM module.
 // This version is independent of the TinyGo version number.
-const Version = 17 // last change: add math.arch* aliases
+const Version = 18 // last change: fix duplicated named structs
 
 func init() {
 	llvm.InitializeAllTargets()
@@ -74,6 +74,7 @@ type compilerContext struct {
 	cu               llvm.Metadata
 	difiles          map[string]llvm.Metadata
 	ditypes          map[types.Type]llvm.Metadata
+	llvmTypes        map[types.Type]llvm.Type
 	machine          llvm.TargetMachine
 	targetData       llvm.TargetData
 	intType          llvm.Type
@@ -94,6 +95,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		DumpSSA:     dumpSSA,
 		difiles:     make(map[string]llvm.Metadata),
 		ditypes:     make(map[types.Type]llvm.Metadata),
+		llvmTypes:   make(map[types.Type]llvm.Type),
 		machine:     machine,
 		targetData:  machine.CreateTargetData(),
 		astComments: map[string]*ast.CommentGroup{},
@@ -315,10 +317,23 @@ func (c *compilerContext) getLLVMRuntimeType(name string) llvm.Type {
 	return c.getLLVMType(typ)
 }
 
-// getLLVMType creates and returns a LLVM type for a Go type. In the case of
-// named struct types (or Go types implemented as named LLVM structs such as
-// strings) it also creates it first if necessary.
+// getLLVMType returns a LLVM type for a Go type. It doesn't recreate already
+// created types. This is somewhat important for performance, but especially
+// important for named struct types (which should only be created once).
 func (c *compilerContext) getLLVMType(goType types.Type) llvm.Type {
+	// Try to load the LLVM type from the cache.
+	if t, ok := c.llvmTypes[goType]; ok {
+		return t
+	}
+	// Not already created, so adding this type to the cache.
+	llvmType := c.makeLLVMType(goType)
+	c.llvmTypes[goType] = llvmType
+	return llvmType
+}
+
+// makeLLVMType creates a LLVM type for a Go type. Don't call this, use
+// getLLVMType instead.
+func (c *compilerContext) makeLLVMType(goType types.Type) llvm.Type {
 	switch typ := goType.(type) {
 	case *types.Array:
 		elemType := c.getLLVMType(typ.Elem())
@@ -367,12 +382,10 @@ func (c *compilerContext) getLLVMType(goType types.Type) llvm.Type {
 			// LLVM. This is because it is otherwise impossible to create
 			// self-referencing types such as linked lists.
 			llvmName := typ.Obj().Pkg().Path() + "." + typ.Obj().Name()
-			llvmType := c.mod.GetTypeByName(llvmName)
-			if llvmType.IsNil() {
-				llvmType = c.ctx.StructCreateNamed(llvmName)
-				underlying := c.getLLVMType(st)
-				llvmType.StructSetBody(underlying.StructElementTypes(), false)
-			}
+			llvmType := c.ctx.StructCreateNamed(llvmName)
+			c.llvmTypes[goType] = llvmType // avoid infinite recursion
+			underlying := c.getLLVMType(st)
+			llvmType.StructSetBody(underlying.StructElementTypes(), false)
 			return llvmType
 		}
 		return c.getLLVMType(typ.Underlying())

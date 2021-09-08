@@ -3,6 +3,9 @@ source_filename = "basic.go"
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
 target triple = "wasm32--wasi"
 
+%main.kv = type { float }
+%main.kv.0 = type { i8 }
+
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 
 define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr {
@@ -97,4 +100,15 @@ entry:
   %6 = insertvalue { float, float } undef, float %2, 0
   %7 = insertvalue { float, float } %6, float %5, 1
   ret { float, float } %7
+}
+
+define hidden void @main.foo(%main.kv* dereferenceable_or_null(4) %a, i8* %context, i8* %parentHandle) unnamed_addr {
+entry:
+  call void @"main.foo$1"(%main.kv.0* null, i8* undef, i8* undef)
+  ret void
+}
+
+define hidden void @"main.foo$1"(%main.kv.0* dereferenceable_or_null(1) %b, i8* %context, i8* %parentHandle) unnamed_addr {
+entry:
+  ret void
 }
