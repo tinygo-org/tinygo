@@ -51,6 +51,7 @@ func TestCompiler(t *testing.T) {
 		{"pragma.go", ""},
 		{"goroutine.go", "wasm"},
 		{"goroutine.go", "cortex-m-qemu"},
+		{"channel.go", ""},
 		{"intrinsics.go", "cortex-m-qemu"},
 		{"intrinsics.go", "wasm"},
 	}
