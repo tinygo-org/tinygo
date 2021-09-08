@@ -140,7 +140,7 @@ func initSystem() {
 
 	// now program the clock dividers
 	// config divisors: 180 MHz core, 60 MHz bus, 25.7 MHz flash, USB = IRC48M
-	nxp.SIM.CLKDIV1.Set((0 << nxp.SIM_CLKDIV1_OUTDIV1_Pos) | (2 << nxp.SIM_CLKDIV1_OUTDIV2_Pos) | (0 << nxp.SIM_CLKDIV1_OUTDIV1_Pos) | (6 << nxp.SIM_CLKDIV1_OUTDIV4_Pos))
+	nxp.SIM.CLKDIV1.Set((0 << nxp.SIM_CLKDIV1_OUTDIV1_Pos) | (2 << nxp.SIM_CLKDIV1_OUTDIV2_Pos) | (0 << nxp.SIM_CLKDIV1_OUTDIV3_Pos) | (6 << nxp.SIM_CLKDIV1_OUTDIV4_Pos))
 	nxp.SIM.CLKDIV2.Set((0 << nxp.SIM_CLKDIV2_USBDIV_Pos))
 
 	// switch to PLL as clock source, FLL input = 16 MHz / 512
