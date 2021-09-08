@@ -93,3 +93,7 @@ var (
 	usb_VID uint16 = 0x239A
 	usb_PID uint16 = 0x8051
 )
+
+var (
+	DefaultUART = UART0
+)

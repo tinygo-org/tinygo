@@ -36,3 +36,7 @@ var (
 	}
 	NINA_SPI = SPI0
 )
+
+var (
+	DefaultUART = UART1
+)

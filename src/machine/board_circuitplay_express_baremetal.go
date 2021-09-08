@@ -47,3 +47,7 @@ var (
 var (
 	I2S0 = I2S{Bus: sam.I2S}
 )
+
+var (
+	DefaultUART = UART1
+)

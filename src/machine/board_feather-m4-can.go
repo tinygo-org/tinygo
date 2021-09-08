@@ -154,3 +154,7 @@ var (
 		Bus: sam.CAN1,
 	}
 )
+
+var (
+	DefaultUART = UART1
+)
