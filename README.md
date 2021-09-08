@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 69 microcontroller boards are currently supported:
+The following 70 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
@@ -102,6 +102,7 @@ The following 69 microcontroller boards are currently supported:
 * [PJRC Teensy 4.0](https://www.pjrc.com/store/teensy40.html)
 * [ProductivityOpen P1AM-100](https://facts-engineering.github.io/modules/P1AM-100/P1AM-100.html)
 * [Raspberry Pi Pico](https://www.raspberrypi.org/products/raspberry-pi-pico/)
+* [Raytac MDBT50Q-RX Dongle (with TinyUF2 bootloader)](https://www.adafruit.com/product/5199)
 * [Seeed Wio Terminal](https://www.seeedstudio.com/Wio-Terminal-p-4509.html)
 * [Seeed Seeeduino XIAO](https://www.seeedstudio.com/Seeeduino-XIAO-Arduino-Microcontroller-SAMD21-Cortex-M0+-p-4426.html)
 * [Seeed Sipeed MAix BiT](https://www.seeedstudio.com/Sipeed-MAix-BiT-for-RISC-V-AI-IoT-p-2872.html)
