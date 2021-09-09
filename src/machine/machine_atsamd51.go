@@ -2167,7 +2167,7 @@ func handlePadCalibration() {
 	sam.USB_DEVICE.PADCAL.SetBits(calibTransP << sam.USB_DEVICE_PADCAL_TRANSP_Pos)
 
 	if calibTrim == 0x7 {
-		calibTransN = 3
+		calibTrim = 3
 	}
 	sam.USB_DEVICE.PADCAL.SetBits(calibTrim << sam.USB_DEVICE_PADCAL_TRIM_Pos)
 }
