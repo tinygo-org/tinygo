@@ -76,6 +76,8 @@ func main() {
 	testGoOnBuiltins()
 
 	testCond()
+
+	testIssue1790()
 }
 
 func acquire(m *sync.Mutex) {
@@ -197,4 +199,14 @@ func testCond() {
 	if !ok {
 		panic("missing queued notification")
 	}
+}
+
+var once sync.Once
+
+// This tests a fix for issue 1790:
+// https://github.com/tinygo-org/tinygo/issues/1790
+func testIssue1790() *int {
+	once.Do(func() {})
+	i := 0
+	return &i
 }

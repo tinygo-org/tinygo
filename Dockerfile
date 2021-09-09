@@ -1,8 +1,8 @@
-# TinyGo base stage installs the most recent Go 1.16.x, LLVM 11 and the TinyGo compiler itself.
-FROM golang:1.16 AS tinygo-base
+# TinyGo base stage installs the most recent Go 1.17.x, LLVM 11 and the TinyGo compiler itself.
+FROM golang:1.17 AS tinygo-base
 
 RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
-    echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-11 main" >> /etc/apt/sources.list && \
+    echo "deb http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-11 main" >> /etc/apt/sources.list && \
     apt-get update && \
     apt-get install -y llvm-11-dev libclang-11-dev lld-11 git
 

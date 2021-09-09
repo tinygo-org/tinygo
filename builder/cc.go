@@ -155,6 +155,10 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands
 
 	// Write dependencies file.
 	f, err := ioutil.TempFile(filepath.Dir(depfileCachePath), depfileName)
+	if err != nil {
+		return "", err
+	}
+
 	buf, err = json.MarshalIndent(dependencySlice, "", "\t")
 	if err != nil {
 		panic(err) // shouldn't happen

@@ -55,3 +55,18 @@ func complexMul(x, y complex64) complex64 {
 }
 
 // TODO: complexDiv (requires runtime call)
+
+// A type 'kv' also exists in function foo. Test that these two types don't
+// conflict with each other.
+type kv struct {
+	v float32
+}
+
+func foo(a *kv) {
+	// Define a new 'kv' type.
+	type kv struct {
+		v byte
+	}
+	// Use this type.
+	func(b *kv) {}(nil)
+}

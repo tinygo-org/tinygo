@@ -49,8 +49,11 @@ const (
 
 // I2C pins
 const (
-	SDA_PIN Pin = GPIO12
-	SCL_PIN Pin = GPIO13
+	I2C0_SDA_PIN Pin = GPIO12
+	I2C0_SCL_PIN Pin = GPIO13
+
+	I2C1_SDA_PIN Pin = GPIO18
+	I2C1_SCL_PIN Pin = GPIO19
 )
 
 // SPI pins. SPI1 not available on Nano RP2040 Connect.
@@ -65,6 +68,10 @@ const (
 	SPI1_SDI_PIN Pin = GPIO22
 )
 
+var (
+	NINA_SPI = SPI1
+)
+
 // NINA-W102 Pins
 const (
 	NINA_SCK Pin = GPIO14
@@ -73,7 +80,7 @@ const (
 
 	NINA_CS     Pin = GPIO9
 	NINA_ACK    Pin = GPIO10
-	NINA_GPIO0  Pin = GPIO0
+	NINA_GPIO0  Pin = GPIO2
 	NINA_RESETN Pin = GPIO3
 
 	NINA_TX Pin = GPIO9

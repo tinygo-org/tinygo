@@ -9,7 +9,7 @@ const TargetBits = 32
 
 // Align on word boundary.
 func align(ptr uintptr) uintptr {
-	return (ptr + 3) &^ 3
+	return (ptr + 15) &^ 15
 }
 
 func getCurrentStackPointer() uintptr {

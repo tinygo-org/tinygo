@@ -72,3 +72,8 @@ tinygo_swapTask:
 
     // Return into the new task, as if tinygo_swapTask was a regular call.
     ret
+
+#ifdef __MACH__ // Darwin
+// allow these symbols to stripped as dead code
+.subsections_via_symbols
+#endif

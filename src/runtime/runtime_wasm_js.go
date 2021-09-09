@@ -15,11 +15,6 @@ func _start() {
 	run()
 }
 
-//go:linkname syscall_runtime_envs syscall.runtime_envs
-func syscall_runtime_envs() []string {
-	return nil
-}
-
 var handleEvent func()
 
 //go:linkname setEventHandler syscall/js.setEventHandler

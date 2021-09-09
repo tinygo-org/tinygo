@@ -9,12 +9,18 @@ import (
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/loader"
 	"tinygo.org/x/go-llvm"
 )
 
 // Pass -update to go test to update the output of the test files.
 var flagUpdate = flag.Bool("update", false, "update tests based on test output")
+
+type testCase struct {
+	file   string
+	target string
+}
 
 // Basic tests for the compiler. Build some Go files and compare the output with
 // the expected LLVM IR for regression testing.
@@ -34,10 +40,7 @@ func TestCompiler(t *testing.T) {
 		t.Skip("compiler tests require LLVM 11 or above, got LLVM ", llvm.Version)
 	}
 
-	tests := []struct {
-		file   string
-		target string
-	}{
+	tests := []testCase{
 		{"basic.go", ""},
 		{"pointer.go", ""},
 		{"slice.go", ""},
@@ -48,6 +51,16 @@ func TestCompiler(t *testing.T) {
 		{"pragma.go", ""},
 		{"goroutine.go", "wasm"},
 		{"goroutine.go", "cortex-m-qemu"},
+		{"intrinsics.go", "cortex-m-qemu"},
+		{"intrinsics.go", "wasm"},
+	}
+
+	_, minor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
+	if err != nil {
+		t.Fatal("could not read Go version:", err)
+	}
+	if minor >= 17 {
+		tests = append(tests, testCase{"go1.17.go", ""})
 	}
 
 	for _, tc := range tests {

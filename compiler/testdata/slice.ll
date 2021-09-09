@@ -86,3 +86,79 @@ entry:
 }
 
 declare i32 @runtime.sliceCopy(i8* nocapture writeonly, i8* nocapture readonly, i32, i32, i32, i8*, i8*)
+
+define hidden { i8*, i32, i32 } @main.makeByteSlice(i32 %len, i8* %context, i8* %parentHandle) unnamed_addr {
+entry:
+  %slice.maxcap = icmp slt i32 %len, 0
+  br i1 %slice.maxcap, label %slice.throw, label %slice.next
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.slicePanic(i8* undef, i8* null)
+  unreachable
+
+slice.next:                                       ; preds = %entry
+  %makeslice.buf = call i8* @runtime.alloc(i32 %len, i8* undef, i8* null)
+  %0 = insertvalue { i8*, i32, i32 } undef, i8* %makeslice.buf, 0
+  %1 = insertvalue { i8*, i32, i32 } %0, i32 %len, 1
+  %2 = insertvalue { i8*, i32, i32 } %1, i32 %len, 2
+  ret { i8*, i32, i32 } %2
+}
+
+declare void @runtime.slicePanic(i8*, i8*)
+
+define hidden { i16*, i32, i32 } @main.makeInt16Slice(i32 %len, i8* %context, i8* %parentHandle) unnamed_addr {
+entry:
+  %slice.maxcap = icmp slt i32 %len, 0
+  br i1 %slice.maxcap, label %slice.throw, label %slice.next
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.slicePanic(i8* undef, i8* null)
+  unreachable
+
+slice.next:                                       ; preds = %entry
+  %makeslice.cap = shl i32 %len, 1
+  %makeslice.buf = call i8* @runtime.alloc(i32 %makeslice.cap, i8* undef, i8* null)
+  %makeslice.array = bitcast i8* %makeslice.buf to i16*
+  %0 = insertvalue { i16*, i32, i32 } undef, i16* %makeslice.array, 0
+  %1 = insertvalue { i16*, i32, i32 } %0, i32 %len, 1
+  %2 = insertvalue { i16*, i32, i32 } %1, i32 %len, 2
+  ret { i16*, i32, i32 } %2
+}
+
+define hidden { [3 x i8]*, i32, i32 } @main.makeArraySlice(i32 %len, i8* %context, i8* %parentHandle) unnamed_addr {
+entry:
+  %slice.maxcap = icmp ugt i32 %len, 1431655765
+  br i1 %slice.maxcap, label %slice.throw, label %slice.next
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.slicePanic(i8* undef, i8* null)
+  unreachable
+
+slice.next:                                       ; preds = %entry
+  %makeslice.cap = mul i32 %len, 3
+  %makeslice.buf = call i8* @runtime.alloc(i32 %makeslice.cap, i8* undef, i8* null)
+  %makeslice.array = bitcast i8* %makeslice.buf to [3 x i8]*
+  %0 = insertvalue { [3 x i8]*, i32, i32 } undef, [3 x i8]* %makeslice.array, 0
+  %1 = insertvalue { [3 x i8]*, i32, i32 } %0, i32 %len, 1
+  %2 = insertvalue { [3 x i8]*, i32, i32 } %1, i32 %len, 2
+  ret { [3 x i8]*, i32, i32 } %2
+}
+
+define hidden { i32*, i32, i32 } @main.makeInt32Slice(i32 %len, i8* %context, i8* %parentHandle) unnamed_addr {
+entry:
+  %slice.maxcap = icmp ugt i32 %len, 1073741823
+  br i1 %slice.maxcap, label %slice.throw, label %slice.next
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.slicePanic(i8* undef, i8* null)
+  unreachable
+
+slice.next:                                       ; preds = %entry
+  %makeslice.cap = shl i32 %len, 2
+  %makeslice.buf = call i8* @runtime.alloc(i32 %makeslice.cap, i8* undef, i8* null)
+  %makeslice.array = bitcast i8* %makeslice.buf to i32*
+  %0 = insertvalue { i32*, i32, i32 } undef, i32* %makeslice.array, 0
+  %1 = insertvalue { i32*, i32, i32 } %0, i32 %len, 1
+  %2 = insertvalue { i32*, i32, i32 } %1, i32 %len, 2
+  ret { i32*, i32, i32 } %2
+}

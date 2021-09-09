@@ -51,7 +51,16 @@ func TestCompiler(t *testing.T) {
 		"stdlib.go",
 		"string.go",
 		"structs.go",
+		"testing.go",
 		"zeroalloc.go",
+	}
+
+	_, minor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
+	if err != nil {
+		t.Fatal("could not read version from GOROOT:", err)
+	}
+	if minor >= 17 {
+		tests = append(tests, "go1.17.go")
 	}
 
 	if *testTarget != "" {
@@ -94,21 +103,9 @@ func TestCompiler(t *testing.T) {
 		t.Run("ARM64Linux", func(t *testing.T) {
 			runPlatTests("aarch64--linux-gnu", tests, t)
 		})
-		goVersion, err := goenv.GorootVersionString(goenv.Get("GOROOT"))
-		if err != nil {
-			t.Error("could not get Go version:", err)
-			return
-		}
-		minorVersion := strings.Split(goVersion, ".")[1]
-		if minorVersion != "13" {
-			// WebAssembly tests fail on Go 1.13, so skip them there. Versions
-			// below that are also not supported but still seem to pass, so
-			// include them in the tests for now.
-			t.Run("WebAssembly", func(t *testing.T) {
-				runPlatTests("wasm", tests, t)
-			})
-		}
-
+		t.Run("WebAssembly", func(t *testing.T) {
+			runPlatTests("wasm", tests, t)
+		})
 		t.Run("WASI", func(t *testing.T) {
 			runPlatTests("wasi", tests, t)
 		})
@@ -162,14 +159,20 @@ func runPlatTests(target string, tests []string, t *testing.T) {
 			runTest(name, target, t, nil, nil)
 		})
 	}
-	if target == "wasi" || target == "" {
+	t.Run("env.go", func(t *testing.T) {
+		t.Parallel()
+		runTest("env.go", target, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
+	})
+	if target == "" || target == "wasi" {
 		t.Run("filesystem.go", func(t *testing.T) {
 			t.Parallel()
 			runTest("filesystem.go", target, t, nil, nil)
 		})
-		t.Run("env.go", func(t *testing.T) {
+	}
+	if target == "" || target == "wasi" || target == "wasm" {
+		t.Run("rand.go", func(t *testing.T) {
 			t.Parallel()
-			runTest("env.go", target, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
+			runTest("rand.go", target, t, nil, nil)
 		})
 	}
 }
@@ -216,16 +219,43 @@ func runTestWithConfig(name, target string, t *testing.T, options compileopts.Op
 	}
 
 	// Create a temporary directory for test output files.
-	tmpdir, err := ioutil.TempDir("", "tinygo-test")
+	tmpdir := t.TempDir()
+
+	// Determine whether we're on a system that supports environment variables
+	// and command line parameters (operating systems, WASI) or not (baremetal,
+	// WebAssembly in the browser). If we're on a system without an environment,
+	// we need to pass command line arguments and environment variables through
+	// global variables (built into the binary directly) instead of the
+	// conventional way.
+	spec, err := compileopts.LoadTarget(target)
 	if err != nil {
-		t.Fatal("could not create temporary directory:", err)
+		t.Fatal("failed to load target spec:", err)
 	}
-	defer func() {
-		rerr := os.RemoveAll(tmpdir)
-		if rerr != nil {
-			t.Errorf("failed to remove temporary directory %q: %s", tmpdir, rerr.Error())
+	needsEnvInVars := spec.GOOS == "js"
+	for _, tag := range spec.BuildTags {
+		if tag == "baremetal" {
+			needsEnvInVars = true
 		}
-	}()
+	}
+	if needsEnvInVars {
+		runtimeGlobals := make(map[string]string)
+		if len(cmdArgs) != 0 {
+			runtimeGlobals["osArgs"] = strings.Join(cmdArgs, "\x00")
+		}
+		if len(environmentVars) != 0 {
+			runtimeGlobals["osEnv"] = strings.Join(environmentVars, "\x00")
+		}
+		if len(runtimeGlobals) != 0 {
+			// This sets the global variables like they would be set with
+			// `-ldflags="-X=runtime.osArgs=first\x00second`.
+			// The runtime package has two variables (osArgs and osEnv) that are
+			// both strings, from which the parameters and environment variables
+			// are read.
+			options.GlobalValues = map[string]map[string]string{
+				"runtime": runtimeGlobals,
+			}
+		}
+	}
 
 	// Build the test binary.
 	binary := filepath.Join(tmpdir, "test")
@@ -236,37 +266,31 @@ func runTestWithConfig(name, target string, t *testing.T, options compileopts.Op
 		return
 	}
 
-	// Run the test.
-	runComplete := make(chan struct{})
+	// Create the test command, taking care of emulators etc.
 	var cmd *exec.Cmd
-	ranTooLong := false
-	if target == "" {
+	if len(spec.Emulator) == 0 {
 		cmd = exec.Command(binary)
-		cmd.Env = append(cmd.Env, environmentVars...)
+	} else {
+		args := append(spec.Emulator[1:], binary)
+		cmd = exec.Command(spec.Emulator[0], args...)
+	}
+	if len(spec.Emulator) != 0 && spec.Emulator[0] == "wasmtime" {
+		// Allow reading from the current directory.
+		cmd.Args = append(cmd.Args, "--dir=.")
+		for _, v := range environmentVars {
+			cmd.Args = append(cmd.Args, "--env", v)
+		}
 		cmd.Args = append(cmd.Args, cmdArgs...)
 	} else {
-		spec, err := compileopts.LoadTarget(target)
-		if err != nil {
-			t.Fatal("failed to load target spec:", err)
-		}
-		if len(spec.Emulator) == 0 {
-			cmd = exec.Command(binary)
-		} else {
-			args := append(spec.Emulator[1:], binary)
-			cmd = exec.Command(spec.Emulator[0], args...)
-		}
-
-		if len(spec.Emulator) != 0 && spec.Emulator[0] == "wasmtime" {
-			// Allow reading from the current directory.
-			cmd.Args = append(cmd.Args, "--dir=.")
-			for _, v := range environmentVars {
-				cmd.Args = append(cmd.Args, "--env", v)
-			}
-			cmd.Args = append(cmd.Args, cmdArgs...)
-		} else {
+		if !needsEnvInVars {
+			cmd.Args = append(cmd.Args, cmdArgs...) // works on qemu-aarch64 etc
 			cmd.Env = append(cmd.Env, environmentVars...)
 		}
 	}
+
+	// Run the test.
+	runComplete := make(chan struct{})
+	ranTooLong := false
 	stdout := &bytes.Buffer{}
 	cmd.Stdout = stdout
 	cmd.Stderr = os.Stderr

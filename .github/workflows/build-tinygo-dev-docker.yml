@@ -1,7 +1,7 @@
 name: CI for tinygo-dev docker container
 on:
   push:
-    branches: [ dev ]
+    branches: [ dev, fix-docker-llvm-build ]
 
 jobs:
   push_to_registry:

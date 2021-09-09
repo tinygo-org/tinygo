@@ -23,7 +23,7 @@ import (
 // Version of the compiler pacakge. Must be incremented each time the compiler
 // package changes in a way that affects the generated LLVM module.
 // This version is independent of the TinyGo version number.
-const Version = 12 // last change: implement syscall.rawSyscallNoError
+const Version = 18 // last change: fix duplicated named structs
 
 func init() {
 	llvm.InitializeAllTargets()
@@ -74,6 +74,7 @@ type compilerContext struct {
 	cu               llvm.Metadata
 	difiles          map[string]llvm.Metadata
 	ditypes          map[types.Type]llvm.Metadata
+	llvmTypes        map[types.Type]llvm.Type
 	machine          llvm.TargetMachine
 	targetData       llvm.TargetData
 	intType          llvm.Type
@@ -94,6 +95,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		DumpSSA:     dumpSSA,
 		difiles:     make(map[string]llvm.Metadata),
 		ditypes:     make(map[types.Type]llvm.Metadata),
+		llvmTypes:   make(map[types.Type]llvm.Type),
 		machine:     machine,
 		targetData:  machine.CreateTargetData(),
 		astComments: map[string]*ast.CommentGroup{},
@@ -315,10 +317,23 @@ func (c *compilerContext) getLLVMRuntimeType(name string) llvm.Type {
 	return c.getLLVMType(typ)
 }
 
-// getLLVMType creates and returns a LLVM type for a Go type. In the case of
-// named struct types (or Go types implemented as named LLVM structs such as
-// strings) it also creates it first if necessary.
+// getLLVMType returns a LLVM type for a Go type. It doesn't recreate already
+// created types. This is somewhat important for performance, but especially
+// important for named struct types (which should only be created once).
 func (c *compilerContext) getLLVMType(goType types.Type) llvm.Type {
+	// Try to load the LLVM type from the cache.
+	if t, ok := c.llvmTypes[goType]; ok {
+		return t
+	}
+	// Not already created, so adding this type to the cache.
+	llvmType := c.makeLLVMType(goType)
+	c.llvmTypes[goType] = llvmType
+	return llvmType
+}
+
+// makeLLVMType creates a LLVM type for a Go type. Don't call this, use
+// getLLVMType instead.
+func (c *compilerContext) makeLLVMType(goType types.Type) llvm.Type {
 	switch typ := goType.(type) {
 	case *types.Array:
 		elemType := c.getLLVMType(typ.Elem())
@@ -367,12 +382,10 @@ func (c *compilerContext) getLLVMType(goType types.Type) llvm.Type {
 			// LLVM. This is because it is otherwise impossible to create
 			// self-referencing types such as linked lists.
 			llvmName := typ.Obj().Pkg().Path() + "." + typ.Obj().Name()
-			llvmType := c.mod.GetTypeByName(llvmName)
-			if llvmType.IsNil() {
-				llvmType = c.ctx.StructCreateNamed(llvmName)
-				underlying := c.getLLVMType(st)
-				llvmType.StructSetBody(underlying.StructElementTypes(), false)
-			}
+			llvmType := c.ctx.StructCreateNamed(llvmName)
+			c.llvmTypes[goType] = llvmType // avoid infinite recursion
+			underlying := c.getLLVMType(st)
+			llvmType.StructSetBody(underlying.StructElementTypes(), false)
 			return llvmType
 		}
 		return c.getLLVMType(typ.Underlying())
@@ -765,6 +778,29 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 				if info.section != "" {
 					global.SetSection(info.section)
 				}
+			}
+		}
+	}
+
+	// Add forwarding functions for functions that would otherwise be
+	// implemented in assembly.
+	for _, name := range members {
+		member := pkg.Members[name]
+		switch member := member.(type) {
+		case *ssa.Function:
+			if member.Blocks != nil {
+				continue // external function
+			}
+			info := c.getFunctionInfo(member)
+			if aliasName, ok := stdlibAliases[info.linkName]; ok {
+				alias := c.mod.NamedFunction(aliasName)
+				if alias.IsNil() {
+					// Shouldn't happen, but perhaps best to just ignore.
+					// The error will be a link error, if there is an error.
+					continue
+				}
+				b := newBuilder(c, irbuilder, member)
+				b.createAlias(alias)
 			}
 		}
 	}
@@ -1270,6 +1306,38 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 	case "ssa:wrapnilchk":
 		// TODO: do an actual nil check?
 		return argValues[0], nil
+
+	// Builtins from the unsafe package.
+	case "Add": // unsafe.Add
+		// This is basically just a GEP operation.
+		// Note: the pointer is always of type *i8.
+		ptr := argValues[0]
+		len := argValues[1]
+		return b.CreateGEP(ptr, []llvm.Value{len}, ""), nil
+	case "Slice": // unsafe.Slice
+		// This creates a slice from a pointer and a length.
+		// Note that the exception mentioned in the documentation (if the
+		// pointer and length are nil, the slice is also nil) is trivially
+		// already the case.
+		ptr := argValues[0]
+		len := argValues[1]
+		slice := llvm.Undef(b.ctx.StructType([]llvm.Type{
+			ptr.Type(),
+			b.uintptrType,
+			b.uintptrType,
+		}, false))
+		b.createUnsafeSliceCheck(ptr, len, argTypes[1].Underlying().(*types.Basic))
+		if len.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
+			// Too small, zero-extend len.
+			len = b.CreateZExt(len, b.uintptrType, "")
+		} else if len.Type().IntTypeWidth() > b.uintptrType.IntTypeWidth() {
+			// Too big, truncate len.
+			len = b.CreateTrunc(len, b.uintptrType, "")
+		}
+		slice = b.CreateInsertValue(slice, ptr, 0, "")
+		slice = b.CreateInsertValue(slice, len, 1, "")
+		slice = b.CreateInsertValue(slice, len, 2, "")
+		return slice, nil
 	default:
 		return llvm.Value{}, b.makeError(pos, "todo: builtin: "+callName)
 	}
@@ -1298,6 +1366,11 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.createMemoryCopyCall(fn, instr.Args)
 		case name == "runtime.memzero":
 			return b.createMemoryZeroCall(instr.Args)
+		case name == "math.Ceil" || name == "math.Floor" || name == "math.Sqrt" || name == "math.Trunc":
+			result, ok := b.createMathOp(instr)
+			if ok {
+				return result, nil
+			}
 		case name == "device.Asm" || name == "device/arm.Asm" || name == "device/arm64.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
 			return b.createInlineAsm(instr.Args)
 		case name == "device.AsmFull" || name == "device/arm.AsmFull" || name == "device/arm64.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
@@ -1409,6 +1482,28 @@ func (b *builder) getValue(expr ssa.Value) llvm.Value {
 			panic("local has not been parsed: " + expr.String())
 		}
 	}
+}
+
+// maxSliceSize determines the maximum size a slice of the given element type
+// can be.
+func (c *compilerContext) maxSliceSize(elementType llvm.Type) uint64 {
+	// Calculate ^uintptr(0), which is the max value that fits in uintptr.
+	maxPointerValue := llvm.ConstNot(llvm.ConstInt(c.uintptrType, 0, false)).ZExtValue()
+	// Calculate (^uint(0))/2, which is the max value that fits in an int.
+	maxIntegerValue := llvm.ConstNot(llvm.ConstInt(c.intType, 0, false)).ZExtValue() / 2
+
+	// Determine the maximum allowed size for a slice. The biggest possible
+	// pointer (starting from 0) would be maxPointerValue*sizeof(elementType) so
+	// divide by the element type to get the real maximum size.
+	maxSize := maxPointerValue / c.targetData.TypeAllocSize(elementType)
+
+	// len(slice) is an int. Make sure the length remains small enough to fit in
+	// an int.
+	if maxSize > maxIntegerValue {
+		maxSize = maxIntegerValue
+	}
+
+	return maxSize
 }
 
 // createExpr translates a Go SSA expression to LLVM IR. This can be zero, one,
@@ -1624,10 +1719,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		elemSize := b.targetData.TypeAllocSize(llvmElemType)
 		elemSizeValue := llvm.ConstInt(b.uintptrType, elemSize, false)
 
-		// Calculate (^uintptr(0)) >> 1, which is the max value that fits in
-		// uintptr if uintptr were signed.
-		maxSize := llvm.ConstLShr(llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)), llvm.ConstInt(b.uintptrType, 1, false))
-		if elemSize > maxSize.ZExtValue() {
+		maxSize := b.maxSliceSize(llvmElemType)
+		if elemSize > maxSize {
 			// This seems to be checked by the typechecker already, but let's
 			// check it again just to be sure.
 			return llvm.Value{}, b.makeError(expr.Pos(), fmt.Sprintf("slice element type is too big (%v bytes)", elemSize))
@@ -1636,7 +1729,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		// Bounds checking.
 		lenType := expr.Len.Type().Underlying().(*types.Basic)
 		capType := expr.Cap.Type().Underlying().(*types.Basic)
-		b.createSliceBoundsCheck(maxSize, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
+		maxSizeValue := llvm.ConstInt(b.uintptrType, maxSize, false)
+		b.createSliceBoundsCheck(maxSizeValue, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
 
 		// Allocate the backing array.
 		sliceCapCast, err := b.createConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
@@ -1879,6 +1973,17 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		default:
 			return llvm.Value{}, b.makeError(expr.Pos(), "unknown slice type: "+typ.String())
 		}
+	case *ssa.SliceToArrayPointer:
+		// Conversion from a slice to an array pointer, as the name clearly
+		// says. This requires a runtime check to make sure the slice is at
+		// least as big as the array.
+		slice := b.getValue(expr.X)
+		sliceLen := b.CreateExtractValue(slice, 1, "")
+		arrayLen := expr.Type().Underlying().(*types.Pointer).Elem().Underlying().(*types.Array).Len()
+		b.createSliceToArrayPointerCheck(sliceLen, arrayLen)
+		ptr := b.CreateExtractValue(slice, 0, "")
+		ptr = b.CreateBitCast(ptr, b.getLLVMType(expr.Type()), "")
+		return ptr, nil
 	case *ssa.TypeAssert:
 		return b.createTypeAssert(expr), nil
 	case *ssa.UnOp:

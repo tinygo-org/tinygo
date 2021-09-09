@@ -9,6 +9,37 @@ const (
 	xoscFreq = 12 // MHz
 )
 
+// GPIO Pins
+const (
+	D4  = GPIO6
+	D5  = GPIO7
+	D6  = GPIO8
+	D9  = GPIO9
+	D10 = GPIO10
+	D11 = GPIO11
+	D12 = GPIO12
+	D13 = GPIO13
+	D24 = GPIO24
+	D25 = GPIO25
+)
+
+// Analog pins
+const (
+	A0 = GPIO26
+	A1 = GPIO27
+	A2 = GPIO28
+	A3 = GPIO29
+)
+
+// I2C Pins.
+const (
+	I2C0_SDA_PIN = GPIO24
+	I2C0_SCL_PIN = GPIO25
+
+	I2C1_SDA_PIN = GPIO2
+	I2C1_SCL_PIN = GPIO3
+)
+
 // SPI default pins
 const (
 	// Default Serial Clock Bus 0 for SPI communications

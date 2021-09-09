@@ -286,8 +286,8 @@ commands:
       - run:
           name: "Install dependencies"
           command: |
-            curl https://dl.google.com/go/go1.16.darwin-amd64.tar.gz -o go1.16.darwin-amd64.tar.gz
-            sudo tar -C /usr/local -xzf go1.16.darwin-amd64.tar.gz
+            curl https://dl.google.com/go/go1.17.darwin-amd64.tar.gz -o go1.17.darwin-amd64.tar.gz
+            sudo tar -C /usr/local -xzf go1.17.darwin-amd64.tar.gz
             ln -s /usr/local/go/bin/go /usr/local/bin/go
             HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
       - install-xtensa-toolchain:
@@ -365,24 +365,12 @@ commands:
             - /go/pkg/mod
 
 jobs:
-  test-llvm10-go113:
-    docker:
-      - image: circleci/golang:1.13-buster
-    steps:
-      - test-linux:
-          llvm: "10"
-  test-llvm10-go114:
-    docker:
-      - image: circleci/golang:1.14-buster
-    steps:
-      - test-linux:
-          llvm: "10"
-  test-llvm11-go115:
+  test-llvm10-go115:
     docker:
       - image: circleci/golang:1.15-buster
     steps:
       - test-linux:
-          llvm: "11"
+          llvm: "10"
   test-llvm11-go116:
     docker:
       - image: circleci/golang:1.16-buster
@@ -391,12 +379,12 @@ jobs:
           llvm: "11"
   assert-test-linux:
     docker:
-      - image: circleci/golang:1.14-stretch
+      - image: circleci/golang:1.17-stretch
     steps:
       - assert-test-linux
   build-linux:
     docker:
-      - image: circleci/golang:1.14-stretch
+      - image: circleci/golang:1.17-stretch
     steps:
       - build-linux
   build-macos:
@@ -410,9 +398,7 @@ jobs:
 workflows:
   test-all:
     jobs:
-      - test-llvm10-go113
-      - test-llvm10-go114
-      - test-llvm11-go115
+      - test-llvm10-go115
       - test-llvm11-go116
       - build-linux
       - build-macos

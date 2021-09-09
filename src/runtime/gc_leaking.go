@@ -52,7 +52,8 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 }
 
 func initHeap() {
-	// Nothing to initialize.
+	// preinit() may have moved heapStart; reset heapptr
+	heapptr = heapStart
 }
 
 // setHeapEnd sets a new (larger) heapEnd pointer.

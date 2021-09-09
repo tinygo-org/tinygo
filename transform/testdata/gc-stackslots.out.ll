@@ -26,6 +26,8 @@ define i8* @needsStackSlots() {
   %4 = getelementptr { %runtime.stackChainObject*, i32, i8* }, { %runtime.stackChainObject*, i32, i8* }* %gc.stackobject, i32 0, i32 2
   store i8* %ptr, i8** %4
   store %runtime.stackChainObject* %1, %runtime.stackChainObject** @runtime.stackChainStart
+  call void @someArbitraryFunction()
+  %val = load i8, i8* @someGlobal
   ret i8* %ptr
 }
 
@@ -73,8 +75,8 @@ define i8* @fibNext(i8* %x, i8* %y) {
   %out.alloc = call i8* @runtime.alloc(i32 1)
   %4 = getelementptr { %runtime.stackChainObject*, i32, i8* }, { %runtime.stackChainObject*, i32, i8* }* %gc.stackobject, i32 0, i32 2
   store i8* %out.alloc, i8** %4
-  store i8 %out.val, i8* %out.alloc
   store %runtime.stackChainObject* %1, %runtime.stackChainObject** @runtime.stackChainStart
+  store i8 %out.val, i8* %out.alloc
   ret i8* %out.alloc
 }
 
@@ -133,5 +135,9 @@ define void @testGEPBitcast() {
   %5 = getelementptr { %runtime.stackChainObject*, i32, i8*, i8* }, { %runtime.stackChainObject*, i32, i8*, i8* }* %gc.stackobject, i32 0, i32 3
   store i8* %other, i8** %5
   store %runtime.stackChainObject* %1, %runtime.stackChainObject** @runtime.stackChainStart
+  ret void
+}
+
+define void @someArbitraryFunction() {
   ret void
 }

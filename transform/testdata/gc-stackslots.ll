@@ -20,6 +20,10 @@ define i8* @needsStackSlots() {
   ; so tracking it is not really necessary.
   %ptr = call i8* @runtime.alloc(i32 4)
   call void @runtime.trackPointer(i8* %ptr)
+  ; Restoring the stack pointer can happen at this position, before the return.
+  ; This avoids issues with tail calls.
+  call void @someArbitraryFunction()
+  %val = load i8, i8* @someGlobal
   ret i8* %ptr
 }
 
@@ -93,5 +97,9 @@ define void @testGEPBitcast() {
   call void @runtime.trackPointer(i8* %arr.bitcast)
   %other = call i8* @runtime.alloc(i32 1)
   call void @runtime.trackPointer(i8* %other)
+  ret void
+}
+
+define void @someArbitraryFunction() {
   ret void
 }
