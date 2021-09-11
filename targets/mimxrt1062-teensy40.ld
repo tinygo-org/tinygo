@@ -8,8 +8,7 @@ MEMORY
 
 ENTRY(Reset_Handler);
 
-_stack_size = 128K;
-_heap_size = 512K;
+_stack_size = 4K;
 
 SECTIONS
 {
