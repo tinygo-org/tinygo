@@ -58,9 +58,9 @@ const (
 	statusReceiveError     = nxp.LPSPI_SR_REF // Receive Error flag (FIFO overrun)
 	statusDataMatch        = nxp.LPSPI_SR_DMF // Data Match flag
 	statusModuleBusy       = nxp.LPSPI_SR_MBF // Module Busy flag
-	statusAll              = nxp.LPSPI_SR_TDF | nxp.LPSPI_SR_RDF | nxp.LPSPI_SR_WCF |
-		nxp.LPSPI_SR_FCF | nxp.LPSPI_SR_TCF | nxp.LPSPI_SR_TEF | nxp.LPSPI_SR_REF |
-		nxp.LPSPI_SR_DMF | nxp.LPSPI_SR_MBF
+	statusAll              = nxp.LPSPI_SR_TDF | nxp.LPSPI_SR_RDF |
+		nxp.LPSPI_SR_WCF | nxp.LPSPI_SR_FCF | nxp.LPSPI_SR_TCF | nxp.LPSPI_SR_TEF |
+		nxp.LPSPI_SR_REF | nxp.LPSPI_SR_DMF | nxp.LPSPI_SR_MBF
 )
 
 var (
