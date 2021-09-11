@@ -2,6 +2,7 @@
 // Type definitions, fields, and constants associated with the MPU peripheral
 // of the NXP MIMXRT1062.
 
+//go:build nxp && mimxrt1062
 // +build nxp,mimxrt1062
 
 package nxp
@@ -216,6 +217,12 @@ func enableIcache(enable bool) {
 	}
 }
 
+var (
+	dcacheCcsidr volatile.Register32
+	dcacheSets   volatile.Register32
+	dcacheWays   volatile.Register32
+)
+
 func enableDcache(enable bool) {
 	if enable != SystemControl.CCR.HasBits(SCB_CCR_DC_Msk) {
 		if enable {
@@ -244,11 +251,6 @@ func enableDcache(enable bool) {
         isb 0xF
       `, nil)
 		} else {
-			var (
-				ccsidr volatile.Register32
-				sets   volatile.Register32
-				ways   volatile.Register32
-			)
 			SystemControl.CSSELR.Set(0)
 			arm.AsmFull(`
         dsb 0xF
@@ -257,17 +259,17 @@ func enableDcache(enable bool) {
 			arm.AsmFull(`
         dsb 0xF
       `, nil)
-			ccsidr.Set(SystemControl.CCSIDR.Get())
-			sets.Set((ccsidr.Get() & SCB_CCSIDR_NUMSETS_Msk) >> SCB_CCSIDR_NUMSETS_Pos)
-			for sets.Get() != 0 {
-				ways.Set((ccsidr.Get() & SCB_CCSIDR_ASSOCIATIVITY_Msk) >> SCB_CCSIDR_ASSOCIATIVITY_Pos)
-				for ways.Get() != 0 {
+			dcacheCcsidr.Set(SystemControl.CCSIDR.Get())
+			dcacheSets.Set((dcacheCcsidr.Get() & SCB_CCSIDR_NUMSETS_Msk) >> SCB_CCSIDR_NUMSETS_Pos)
+			for dcacheSets.Get() != 0 {
+				dcacheWays.Set((dcacheCcsidr.Get() & SCB_CCSIDR_ASSOCIATIVITY_Msk) >> SCB_CCSIDR_ASSOCIATIVITY_Pos)
+				for dcacheWays.Get() != 0 {
 					SystemControl.DCCISW.Set(
-						((sets.Get() << SCB_DCCISW_SET_Pos) & SCB_DCCISW_SET_Msk) |
-							((ways.Get() << SCB_DCCISW_WAY_Pos) & SCB_DCCISW_WAY_Msk))
-					ways.Set(ways.Get() - 1)
+						((dcacheSets.Get() << SCB_DCCISW_SET_Pos) & SCB_DCCISW_SET_Msk) |
+							((dcacheWays.Get() << SCB_DCCISW_WAY_Pos) & SCB_DCCISW_WAY_Msk))
+					dcacheWays.Set(dcacheWays.Get() - 1)
 				}
-				sets.Set(sets.Get() - 1)
+				dcacheSets.Set(dcacheSets.Get() - 1)
 			}
 			arm.AsmFull(`
         dsb 0xF

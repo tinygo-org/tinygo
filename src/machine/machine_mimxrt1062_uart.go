@@ -33,7 +33,6 @@ type UART struct {
 
 	// auxiliary state data used internally
 	configured   bool
-	msbFirst     bool
 	transmitting volatile.Register32
 }
 
@@ -46,6 +45,11 @@ func (uart *UART) resetTransmitting() {
 	uart.Bus.GLOBAL.ClearBits(nxp.LPUART_GLOBAL_RST)
 }
 
+func (uart *UART) usesConfig(c UARTConfig) bool {
+	return uart.configured && uart.baud == c.BaudRate &&
+		uart.rx == c.RX && uart.tx == c.TX
+}
+
 // Configure initializes a UART with the given UARTConfig and other default
 // settings.
 func (uart *UART) Configure(config UARTConfig) {
@@ -56,13 +60,19 @@ func (uart *UART) Configure(config UARTConfig) {
 	if config.BaudRate == 0 {
 		config.BaudRate = defaultUartFreq
 	}
-	uart.baud = config.BaudRate
 
 	// use default UART pins if not specified
 	if config.RX == 0 && config.TX == 0 {
 		config.RX = UART_RX_PIN
 		config.TX = UART_TX_PIN
 	}
+
+	// Do not reconfigure pins and device buffers if duplicate config provided.
+	if uart.usesConfig(config) {
+		return
+	}
+
+	uart.baud = config.BaudRate
 	uart.rx = config.RX
 	uart.tx = config.TX
 
@@ -77,8 +87,37 @@ func (uart *UART) Configure(config UARTConfig) {
 	// reset all internal logic and registers
 	uart.resetTransmitting()
 
+	// disable until we have finished configuring registers
+	uart.Bus.CTRL.Set(0)
+
 	// determine the baud rate and over-sample divisors
 	sbr, osr := uart.getBaudRateDivisor(uart.baud)
+
+	// set the baud rate, over-sample configuration, stop bits
+	baudBits := (((osr - 1) << nxp.LPUART_BAUD_OSR_Pos) & nxp.LPUART_BAUD_OSR_Msk) |
+		((sbr << nxp.LPUART_BAUD_SBR_Pos) & nxp.LPUART_BAUD_SBR_Msk)
+	if osr <= 8 {
+		// if OSR less than or equal to 8, we must enable sampling on both edges
+		baudBits |= nxp.LPUART_BAUD_BOTHEDGE
+	}
+	uart.Bus.BAUD.Set(baudBits)
+	uart.Bus.PINCFG.Set(0) // disable triggers
+
+	// configure watermarks, flush and enable TX/RX FIFOs
+	rxSize, txSize := uart.getFIFOSize()
+	rxWater := rxSize >> 1
+	if rxWater > uint32(nxp.LPUART_FIFO_RXFIFOSIZE_Msk>>nxp.LPUART_FIFO_RXFIFOSIZE_Pos) {
+		rxWater = uint32(nxp.LPUART_FIFO_RXFIFOSIZE_Msk >> nxp.LPUART_FIFO_RXFIFOSIZE_Pos)
+	}
+	txWater := txSize >> 1
+	if txWater > uint32(nxp.LPUART_FIFO_TXFIFOSIZE_Msk>>nxp.LPUART_FIFO_TXFIFOSIZE_Pos) {
+		txWater = uint32(nxp.LPUART_FIFO_TXFIFOSIZE_Msk >> nxp.LPUART_FIFO_TXFIFOSIZE_Pos)
+	}
+	uart.Bus.WATER.Set(
+		((rxWater << nxp.LPUART_WATER_RXWATER_Pos) & nxp.LPUART_WATER_RXWATER_Msk) |
+			((txWater << nxp.LPUART_WATER_TXWATER_Pos) & nxp.LPUART_WATER_TXWATER_Msk))
+	uart.Bus.FIFO.SetBits(nxp.LPUART_FIFO_RXFE | nxp.LPUART_FIFO_TXFE |
+		nxp.LPUART_FIFO_RXFLUSH | nxp.LPUART_FIFO_TXFLUSH)
 
 	// for now we assume some configuration. in particular:
 	//  Data bits         -> 8-bit
@@ -90,71 +129,16 @@ func (uart *UART) Configure(config UARTConfig) {
 	//  RX RTS enabled    -> false
 	//  TX CTS enabled    -> false
 
-	// set the baud rate, over-sample configuration, stop bits
-	baudBits := (((osr - 1) << nxp.LPUART_BAUD_OSR_Pos) & nxp.LPUART_BAUD_OSR_Msk) |
-		((sbr << nxp.LPUART_BAUD_SBR_Pos) & nxp.LPUART_BAUD_SBR_Msk) |
-		((nxp.LPUART_BAUD_SBNS_SBNS_0 << nxp.LPUART_BAUD_SBNS_Pos) & nxp.LPUART_BAUD_SBNS_Msk)
-	if osr <= 8 {
-		// if OSR less than or equal to 8, we must enable sampling on both edges
-		baudBits |= nxp.LPUART_BAUD_BOTHEDGE
-	}
-	uart.Bus.BAUD.Set(baudBits)
-
-	uart.Bus.PINCFG.Set(0) // disable triggers
-
-	// use 8 data bits, disable parity, use 1 idle char, and idle count starts
-	// after start bit
-	ctrlBits := uint32(((nxp.LPUART_CTRL_M_M_0 << nxp.LPUART_CTRL_M_Pos) & nxp.LPUART_CTRL_M_Msk) |
-		((nxp.LPUART_CTRL_PE_PE_0 << nxp.LPUART_CTRL_PE_Pos) & nxp.LPUART_CTRL_PE_Msk) |
-		((nxp.LPUART_CTRL_ILT_ILT_0 << nxp.LPUART_CTRL_ILT_Pos) & nxp.LPUART_CTRL_ILT_Msk) |
-		((nxp.LPUART_CTRL_IDLECFG_IDLECFG_0 << nxp.LPUART_CTRL_IDLECFG_Pos) & nxp.LPUART_CTRL_IDLECFG_Msk))
-	uart.Bus.CTRL.Set(ctrlBits)
-
-	rxSize, txSize := uart.getFIFOSize()
-
-	rxWater := rxSize >> 1
-	if rxWater > uint32(nxp.LPUART_FIFO_RXFIFOSIZE_Msk>>nxp.LPUART_FIFO_RXFIFOSIZE_Pos) {
-		rxWater = uint32(nxp.LPUART_FIFO_RXFIFOSIZE_Msk >> nxp.LPUART_FIFO_RXFIFOSIZE_Pos)
-	}
-
-	txWater := txSize >> 1
-	if txWater > uint32(nxp.LPUART_FIFO_TXFIFOSIZE_Msk>>nxp.LPUART_FIFO_TXFIFOSIZE_Pos) {
-		txWater = uint32(nxp.LPUART_FIFO_TXFIFOSIZE_Msk >> nxp.LPUART_FIFO_TXFIFOSIZE_Pos)
-	}
-
-	uart.Bus.WATER.Set(
-		((rxWater << nxp.LPUART_WATER_RXWATER_Pos) & nxp.LPUART_WATER_RXWATER_Msk) |
-			((txWater << nxp.LPUART_WATER_TXWATER_Pos) & nxp.LPUART_WATER_TXWATER_Msk))
-
-	// enable TX/RX FIFOs
-	uart.Bus.FIFO.SetBits(nxp.LPUART_FIFO_RXFE | nxp.LPUART_FIFO_TXFE)
-
-	// flush TX/RX FIFOs
-	uart.Bus.FIFO.SetBits(nxp.LPUART_FIFO_RXFLUSH | nxp.LPUART_FIFO_TXFLUSH)
-
-	uart.Bus.MODIR.SetBits( // set the CTS configuration/TX CTS source
-		((nxp.LPUART_MODIR_TXCTSC_TXCTSC_0 << nxp.LPUART_MODIR_TXCTSC_Pos) & nxp.LPUART_MODIR_TXCTSC_Msk) |
-			((nxp.LPUART_MODIR_TXCTSSRC_TXCTSSRC_0 << nxp.LPUART_MODIR_TXCTSSRC_Pos) & nxp.LPUART_MODIR_TXCTSSRC_Msk))
+	// enable transmitter, receiver functions
+	uart.Bus.CTRL.Set(nxp.LPUART_CTRL_TE | nxp.LPUART_CTRL_RE |
+		// enable receiver, idle line interrupts
+		nxp.LPUART_CTRL_RIE | nxp.LPUART_CTRL_ILIE)
 
 	// clear all status flags
-	stat := uint32(nxp.LPUART_STAT_RXEDGIF_Msk | nxp.LPUART_STAT_IDLE_Msk | nxp.LPUART_STAT_OR_Msk |
-		nxp.LPUART_STAT_NF_Msk | nxp.LPUART_STAT_FE_Msk | nxp.LPUART_STAT_PF_Msk |
-		nxp.LPUART_STAT_LBKDIF_Msk | nxp.LPUART_STAT_MA1F_Msk | nxp.LPUART_STAT_MA2F_Msk)
+	uart.Bus.STAT.Set(uart.Bus.STAT.Get())
 
-	// set data bits order
-	if uart.msbFirst {
-		stat |= nxp.LPUART_STAT_MSBF
-	} else {
-		stat &^= nxp.LPUART_STAT_MSBF
-	}
-
-	uart.Bus.STAT.SetBits(stat)
-
-	// enable RX/TX functions
-	uart.Bus.CTRL.SetBits(nxp.LPUART_CTRL_TE | nxp.LPUART_CTRL_RE)
-
-	// enable RX IRQ
-	uart.Interrupt.SetPriority(0xc0)
+	// enable RX interrupt
+	uart.Interrupt.SetPriority(0xC0)
 	uart.Interrupt.Enable()
 
 	uart.configured = true
@@ -211,13 +195,13 @@ func (uart *UART) WriteByte(c byte) error {
 // corresponding baud rate divisor (1..8191) that best partition a given baud
 // rate into equal intervals.
 //
-// This is an integral (i.e. non-floating point) port of the logic at the
+// This is an integral (non-floating point) translation of the logic at the
 // beginning of:
 //       void HardwareSerial::begin(uint32_t baud, uint16_t format)
 //         (from Teensyduino: `cores/teensy4/HardwareSerial.cpp`)
 //
-// We don't want to risk using floating point here in the machine package in
-// case it gets called before the FPU or interrupts are ready (e.g., init()).
+// We don't want to use floating point here in case it gets called from an ISR
+// or very early during system init.
 func (uart *UART) getBaudRateDivisor(baudRate uint32) (sbr uint32, osr uint32) {
 	const clock = 24000000 // UART is muxed to 24 MHz OSC
 	err := uint32(0xFFFFFFFF)

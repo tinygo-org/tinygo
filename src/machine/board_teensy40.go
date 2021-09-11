@@ -88,15 +88,20 @@ const (
 	I2C_SCL_PIN = I2C1_SCL_PIN // D19/A5
 )
 
+// Default peripherals
+var (
+	DefaultUART = UART1
+)
+
 func init() {
 	// register any interrupt handlers for this board's peripherals
-	UART1.Interrupt = interrupt.New(nxp.IRQ_LPUART6, _UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(nxp.IRQ_LPUART4, _UART2.handleInterrupt)
-	UART3.Interrupt = interrupt.New(nxp.IRQ_LPUART2, _UART3.handleInterrupt)
-	UART4.Interrupt = interrupt.New(nxp.IRQ_LPUART3, _UART4.handleInterrupt)
-	UART5.Interrupt = interrupt.New(nxp.IRQ_LPUART8, _UART5.handleInterrupt)
-	UART6.Interrupt = interrupt.New(nxp.IRQ_LPUART1, _UART6.handleInterrupt)
-	UART7.Interrupt = interrupt.New(nxp.IRQ_LPUART7, _UART7.handleInterrupt)
+	_UART1.Interrupt = interrupt.New(nxp.IRQ_LPUART6, _UART1.handleInterrupt)
+	_UART2.Interrupt = interrupt.New(nxp.IRQ_LPUART4, _UART2.handleInterrupt)
+	_UART3.Interrupt = interrupt.New(nxp.IRQ_LPUART2, _UART3.handleInterrupt)
+	_UART4.Interrupt = interrupt.New(nxp.IRQ_LPUART3, _UART4.handleInterrupt)
+	_UART5.Interrupt = interrupt.New(nxp.IRQ_LPUART8, _UART5.handleInterrupt)
+	_UART6.Interrupt = interrupt.New(nxp.IRQ_LPUART1, _UART6.handleInterrupt)
+	_UART7.Interrupt = interrupt.New(nxp.IRQ_LPUART7, _UART7.handleInterrupt)
 }
 
 // #=====================================================#
@@ -136,9 +141,8 @@ const (
 )
 
 var (
-	DefaultUART = UART1
-	UART1       = &_UART1
-	_UART1      = UART{
+	UART1  = &_UART1
+	_UART1 = UART{
 		Bus:      nxp.LPUART6,
 		Buffer:   NewRingBuffer(),
 		txBuffer: NewRingBuffer(),
