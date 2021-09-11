@@ -348,7 +348,9 @@ const (
 )
 
 var (
-	I2C1 = I2C{
+	I2C0  = I2C1 // I2C0 is an alias for I2C1 (LPI2C1)
+	I2C1  = &_I2C1
+	_I2C1 = I2C{
 		Bus: nxp.LPI2C1,
 		muxSDA: muxSelect{ // D18 (PA17 [AD_B1_01])
 			mux: nxp.IOMUXC_LPI2C1_SDA_SELECT_INPUT_DAISY_GPIO_AD_B1_01_ALT3,
@@ -359,8 +361,8 @@ var (
 			sel: &nxp.IOMUXC.LPI2C1_SCL_SELECT_INPUT,
 		},
 	}
-
-	I2C2 = I2C{
+	I2C2  = &_I2C2
+	_I2C2 = I2C{
 		Bus: nxp.LPI2C3,
 		muxSDA: muxSelect{ // D17 (PA22 [AD_B1_06])
 			mux: nxp.IOMUXC_LPI2C3_SDA_SELECT_INPUT_DAISY_GPIO_AD_B1_06_ALT1,
@@ -371,8 +373,8 @@ var (
 			sel: &nxp.IOMUXC.LPI2C3_SCL_SELECT_INPUT,
 		},
 	}
-
-	I2C3 = I2C{
+	I2C3  = &_I2C3
+	_I2C3 = I2C{
 		Bus: nxp.LPI2C4,
 		muxSDA: muxSelect{ // D25 (PA13 [AD_B0_13])
 			mux: nxp.IOMUXC_LPI2C4_SDA_SELECT_INPUT_DAISY_GPIO_AD_B0_13_ALT0,
