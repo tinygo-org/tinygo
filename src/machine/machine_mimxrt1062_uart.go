@@ -45,11 +45,6 @@ func (uart *UART) resetTransmitting() {
 	uart.Bus.GLOBAL.ClearBits(nxp.LPUART_GLOBAL_RST)
 }
 
-func (uart *UART) usesConfig(c UARTConfig) bool {
-	return uart.configured && uart.baud == c.BaudRate &&
-		uart.rx == c.RX && uart.tx == c.TX
-}
-
 // Configure initializes a UART with the given UARTConfig and other default
 // settings.
 func (uart *UART) Configure(config UARTConfig) {
@@ -65,11 +60,6 @@ func (uart *UART) Configure(config UARTConfig) {
 	if config.RX == 0 && config.TX == 0 {
 		config.RX = UART_RX_PIN
 		config.TX = UART_TX_PIN
-	}
-
-	// Do not reconfigure pins and device buffers if duplicate config provided.
-	if uart.usesConfig(config) {
-		return
 	}
 
 	uart.baud = config.BaudRate
