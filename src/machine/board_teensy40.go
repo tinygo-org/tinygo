@@ -264,7 +264,9 @@ const (
 )
 
 var (
-	SPI1 = SPI{
+	SPI0  = SPI1 // SPI0 is an alias of SPI1 (LPSPI4)
+	SPI1  = &_SPI1
+	_SPI1 = SPI{
 		Bus: nxp.LPSPI4,
 		muxSDI: muxSelect{ // D12 (PB1 [B0_01])
 			mux: nxp.IOMUXC_LPSPI4_SDI_SELECT_INPUT_DAISY_GPIO_B0_01_ALT3,
@@ -283,8 +285,8 @@ var (
 			sel: &nxp.IOMUXC.LPSPI4_PCS0_SELECT_INPUT,
 		},
 	}
-
-	SPI2 = SPI{
+	SPI2  = &_SPI2
+	_SPI2 = SPI{
 		Bus: nxp.LPSPI3,
 		muxSDI: muxSelect{ // D1 (PA2 [AD_B0_02])
 			mux: nxp.IOMUXC_LPSPI3_SDI_SELECT_INPUT_DAISY_GPIO_AD_B0_02_ALT7,
@@ -303,8 +305,8 @@ var (
 			sel: &nxp.IOMUXC.LPSPI3_PCS0_SELECT_INPUT,
 		},
 	}
-
-	SPI3 = SPI{
+	SPI3  = &_SPI3
+	_SPI3 = SPI{
 		Bus: nxp.LPSPI1,
 		muxSDI: muxSelect{ // D34 (PC15 [SD_B0_03])
 			mux: nxp.IOMUXC_LPSPI1_SDI_SELECT_INPUT_DAISY_GPIO_SD_B0_03_ALT4,
