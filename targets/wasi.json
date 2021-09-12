@@ -6,9 +6,6 @@
 	"goarch":        "arm",
 	"linker":        "wasm-ld",
 	"libc":          "wasi-libc",
-	"cflags": [
-		"--sysroot={root}/lib/wasi-libc/sysroot"
-	],
 	"ldflags": [
 		"--allow-undefined",
 		"--stack-first",
