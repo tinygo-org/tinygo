@@ -204,7 +204,8 @@ func (c *Config) CFlags() []string {
 	for _, flag := range c.Target.CFlags {
 		cflags = append(cflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
 	}
-	if c.Target.Libc == "picolibc" {
+	switch c.Target.Libc {
+	case "picolibc":
 		root := goenv.Get("TINYGOROOT")
 		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")
 		cflags = append(cflags,
@@ -213,6 +214,15 @@ func (c *Config) CFlags() []string {
 			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "tinystdio"),
 		)
 		cflags = append(cflags, "-I"+filepath.Join(root, "lib/picolibc-include"))
+	case "wasi-libc":
+		root := goenv.Get("TINYGOROOT")
+		cflags = append(cflags, "--sysroot="+root+"/lib/wasi-libc/sysroot")
+	case "":
+		// No libc specified, nothing to add.
+	default:
+		// Incorrect configuration. This could be handled in a better way, but
+		// usually this will be found by developers (not by TinyGo users).
+		panic("unknown libc: " + c.Target.Libc)
 	}
 	// Always emit debug information. It is optionally stripped at link time.
 	cflags = append(cflags, "-g")
