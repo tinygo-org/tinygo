@@ -878,13 +878,6 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 	}
 }
 
-// ADCConfig holds optional configuration parameters for ADC initialization.
-// If left unspecified, the defaults are assumed: 10-bit, 4-sample averaging.
-type ADCConfig struct {
-	Resolution uint32 // 8, 10, or 12 (bits)
-	Samples    uint32 // 0, 4, 8, 16, or 32 (0 = hardware averaging disabled)
-}
-
 // maximum ADC value for the currently configured resolution (used for scaling)
 var adcMaximum uint32
 
