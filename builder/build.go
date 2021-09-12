@@ -86,6 +86,30 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	}
 	defer os.RemoveAll(dir)
 
+	// Check for a libc dependency.
+	// As a side effect, this also creates the headers for the given libc, if
+	// the libc needs them.
+	root := goenv.Get("TINYGOROOT")
+	var libcDependencies []*compileJob
+	switch config.Target.Libc {
+	case "picolibc":
+		libcJob, err := Picolibc.load(config, dir)
+		if err != nil {
+			return err
+		}
+		libcDependencies = append(libcDependencies, libcJob)
+	case "wasi-libc":
+		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
+		}
+		libcDependencies = append(libcDependencies, dummyCompileJob(path))
+	case "":
+		// no library specified, so nothing to do
+	default:
+		return fmt.Errorf("unknown libc: %s", config.Target.Libc)
+	}
+
 	optLevel, sizeLevel, _ := config.OptLevels()
 	compilerConfig := &compiler.Config{
 		Triple:          config.Triple(),
@@ -489,7 +513,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
 	if config.Target.RTLib == "compiler-rt" {
-		job, err := CompilerRT.load(config.Triple(), config.CPU(), dir)
+		job, err := CompilerRT.load(config, dir)
 		if err != nil {
 			return err
 		}
@@ -499,7 +523,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add jobs to compile extra files. These files are in C or assembly and
 	// contain things like the interrupt vector table and low level operations
 	// such as stack switching.
-	root := goenv.Get("TINYGOROOT")
 	for _, path := range config.ExtraFiles() {
 		abspath := filepath.Join(root, path)
 		job := &compileJob{
@@ -538,26 +561,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		ldflags = append(ldflags, lprogram.LDFlags...)
 	}
 
-	// Add libc dependency if needed.
-	switch config.Target.Libc {
-	case "picolibc":
-		job, err := Picolibc.load(config.Triple(), config.CPU(), dir)
-		if err != nil {
-			return err
-		}
-		linkerDependencies = append(linkerDependencies, job)
-	case "wasi-libc":
-		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
-		}
-		job := dummyCompileJob(path)
-		linkerDependencies = append(linkerDependencies, job)
-	case "":
-		// no library specified, so nothing to do
-	default:
-		return fmt.Errorf("unknown libc: %s", config.Target.Libc)
-	}
+	// Add libc dependencies, if they exist.
+	linkerDependencies = append(linkerDependencies, libcDependencies...)
 
 	// Strip debug information with -no-debug.
 	if !config.Debug() {

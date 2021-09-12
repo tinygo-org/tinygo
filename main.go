@@ -71,8 +71,8 @@ func moveFile(src, dst string) error {
 	return os.Remove(src)
 }
 
-// copyFile copies the given file from src to dst. It can copy over
-// a possibly already existing file at the destination.
+// copyFile copies the given file or directory from src to dst. It can copy over
+// a possibly already existing file (but not directory) at the destination.
 func copyFile(src, dst string) error {
 	source, err := os.Open(src)
 	if err != nil {
@@ -85,14 +85,32 @@ func copyFile(src, dst string) error {
 		return err
 	}
 
-	destination, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, st.Mode())
-	if err != nil {
+	if st.IsDir() {
+		err := os.Mkdir(dst, st.Mode().Perm())
+		if err != nil {
+			return err
+		}
+		names, err := source.Readdirnames(0)
+		if err != nil {
+			return err
+		}
+		for _, name := range names {
+			err := copyFile(filepath.Join(src, name), filepath.Join(dst, name))
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	} else {
+		destination, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, st.Mode())
+		if err != nil {
+			return err
+		}
+		defer destination.Close()
+
+		_, err = io.Copy(destination, source)
 		return err
 	}
-	defer destination.Close()
-
-	_, err = io.Copy(destination, source)
-	return err
 }
 
 // executeCommand is a simple wrapper to exec.Cmd
@@ -1259,7 +1277,12 @@ func main() {
 			handleCompilerError(err)
 		}
 		defer os.RemoveAll(tmpdir)
-		path, err := lib.Load(*target, tmpdir)
+		config := &compileopts.Config{
+			Target: &compileopts.TargetSpec{
+				Triple: *target,
+			},
+		}
+		path, err := lib.Load(config, tmpdir)
 		handleCompilerError(err)
 		err = copyFile(path, outpath)
 		if err != nil {

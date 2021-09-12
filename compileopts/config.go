@@ -5,6 +5,7 @@ package compileopts
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -197,6 +198,29 @@ func (c *Config) RP2040BootPatch() bool {
 	return false
 }
 
+// LibcPath returns the path to the libc directory. The libc path will be either
+// a precompiled libc shipped with a TinyGo build, or a libc path in the cache
+// directory (which might not yet be built).
+func (c *Config) LibcPath(name string) (path string, precompiled bool) {
+	// Try to load a precompiled library.
+	precompiledDir := filepath.Join(goenv.Get("TINYGOROOT"), "pkg", c.Triple(), name)
+	if _, err := os.Stat(precompiledDir); err == nil {
+		// Found a precompiled library for this OS/architecture. Return the path
+		// directly.
+		return precompiledDir, true
+	}
+
+	// No precompiled library found. Determine the path name that will be used
+	// in the build cache.
+	var outname string
+	if c.CPU() != "" {
+		outname = name + "-" + c.Triple() + "-" + c.CPU()
+	} else {
+		outname = name + "-" + c.Triple()
+	}
+	return filepath.Join(goenv.Get("GOCACHE"), outname), false
+}
+
 // CFlags returns the flags to pass to the C compiler. This is necessary for CGo
 // preprocessing.
 func (c *Config) CFlags() []string {
@@ -208,12 +232,12 @@ func (c *Config) CFlags() []string {
 	case "picolibc":
 		root := goenv.Get("TINYGOROOT")
 		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")
+		path, _ := c.LibcPath("picolibc")
 		cflags = append(cflags,
-			"-nostdlibinc",
+			"--sysroot="+path,
 			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "include"),
 			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "tinystdio"),
 		)
-		cflags = append(cflags, "-I"+filepath.Join(root, "lib/picolibc-include"))
 	case "wasi-libc":
 		root := goenv.Get("TINYGOROOT")
 		cflags = append(cflags, "--sysroot="+root+"/lib/wasi-libc/sysroot")

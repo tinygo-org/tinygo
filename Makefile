@@ -500,17 +500,16 @@ build/release: tinygo gen-device wasi-libc
 	@cp -rp lib/picolibc/newlib/libc/string      build/release/tinygo/lib/picolibc/newlib/libc
 	@cp -rp lib/picolibc/newlib/libc/tinystdio   build/release/tinygo/lib/picolibc/newlib/libc
 	@cp -rp lib/picolibc/newlib/libm/common      build/release/tinygo/lib/picolibc/newlib/libm
-	@cp -rp lib/picolibc-include         build/release/tinygo/lib
 	@cp -rp lib/picolibc-stdio.c         build/release/tinygo/lib
 	@cp -rp lib/wasi-libc/sysroot        build/release/tinygo/lib/wasi-libc/sysroot
 	@cp -rp src                          build/release/tinygo/src
 	@cp -rp targets                      build/release/tinygo/targets
-	./build/tinygo build-library -target=armv6m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv6m-unknown-unknown-eabi/compiler-rt.a compiler-rt
-	./build/tinygo build-library -target=armv7m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv7m-unknown-unknown-eabi/compiler-rt.a compiler-rt
-	./build/tinygo build-library -target=armv7em-unknown-unknown-eabi -o build/release/tinygo/pkg/armv7em-unknown-unknown-eabi/compiler-rt.a compiler-rt
-	./build/tinygo build-library -target=armv6m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv6m-unknown-unknown-eabi/picolibc.a picolibc
-	./build/tinygo build-library -target=armv7m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv7m-unknown-unknown-eabi/picolibc.a picolibc
-	./build/tinygo build-library -target=armv7em-unknown-unknown-eabi -o build/release/tinygo/pkg/armv7em-unknown-unknown-eabi/picolibc.a picolibc
+	./build/tinygo build-library -target=armv6m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv6m-unknown-unknown-eabi/compiler-rt compiler-rt
+	./build/tinygo build-library -target=armv7m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv7m-unknown-unknown-eabi/compiler-rt compiler-rt
+	./build/tinygo build-library -target=armv7em-unknown-unknown-eabi -o build/release/tinygo/pkg/armv7em-unknown-unknown-eabi/compiler-rt compiler-rt
+	./build/tinygo build-library -target=armv6m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv6m-unknown-unknown-eabi/picolibc picolibc
+	./build/tinygo build-library -target=armv7m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv7m-unknown-unknown-eabi/picolibc picolibc
+	./build/tinygo build-library -target=armv7em-unknown-unknown-eabi -o build/release/tinygo/pkg/armv7em-unknown-unknown-eabi/picolibc picolibc
 
 release: build/release
 	tar -czf build/release.tar.gz -C build/release tinygo

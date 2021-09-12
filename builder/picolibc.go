@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"os"
 	"path/filepath"
 
 	"github.com/tinygo-org/tinygo/goenv"
@@ -10,7 +11,14 @@ import (
 // based on newlib.
 var Picolibc = Library{
 	name: "picolibc",
-	cflags: func() []string {
+	makeHeaders: func(includeDir string) error {
+		f, err := os.Create(filepath.Join(includeDir, "picolibc.h"))
+		if err != nil {
+			return err
+		}
+		return f.Close()
+	},
+	cflags: func(headerPath string) []string {
 		picolibcDir := filepath.Join(goenv.Get("TINYGOROOT"), "lib/picolibc/newlib/libc")
 		return []string{
 			"-Werror",
@@ -22,7 +30,7 @@ var Picolibc = Library{
 			"-nostdlibinc",
 			"-Xclang", "-internal-isystem", "-Xclang", picolibcDir + "/include",
 			"-I" + picolibcDir + "/tinystdio",
-			"-I" + goenv.Get("TINYGOROOT") + "/lib/picolibc-include",
+			"-I" + headerPath,
 		}
 	},
 	sourceDir: "lib/picolibc/newlib/libc",

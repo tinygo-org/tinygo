@@ -18,17 +18,12 @@ import (
 // given as a parameter. It is equivalent to the following command:
 //
 //     ar -rcs <archivePath> <objs...>
-func makeArchive(archivePath string, objs []string) error {
+func makeArchive(arfile *os.File, objs []string) error {
 	// Open the archive file.
-	arfile, err := os.Create(archivePath)
-	if err != nil {
-		return err
-	}
-	defer arfile.Close()
 	arwriter := ar.NewWriter(arfile)
-	err = arwriter.WriteGlobalHeader()
+	err := arwriter.WriteGlobalHeader()
 	if err != nil {
-		return &os.PathError{Op: "write ar header", Path: archivePath, Err: err}
+		return &os.PathError{Op: "write ar header", Path: arfile.Name(), Err: err}
 	}
 
 	// Open all object files and read the symbols for the symbol table.
@@ -133,7 +128,7 @@ func makeArchive(archivePath string, objs []string) error {
 			return err
 		}
 		if int64(int32(offset)) != offset {
-			return errors.New("large archives (4GB+) not supported: " + archivePath)
+			return errors.New("large archives (4GB+) not supported: " + arfile.Name())
 		}
 		objfiles[i].archiveOffset = int32(offset)
 
@@ -160,7 +155,7 @@ func makeArchive(archivePath string, objs []string) error {
 			return err
 		}
 		if n != st.Size() {
-			return errors.New("file modified during ar creation: " + archivePath)
+			return errors.New("file modified during ar creation: " + arfile.Name())
 		}
 
 		// File is not needed anymore.

@@ -1,10 +1,12 @@
 package builder
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
@@ -14,7 +16,11 @@ type Library struct {
 	// The library name, such as compiler-rt or picolibc.
 	name string
 
-	cflags func() []string
+	// makeHeaders creates a header include dir for the library
+	makeHeaders func(includeDir string) error
+
+	// cflags returns the C flags specific to this library
+	cflags func(headerPath string) []string
 
 	// The source directory, relative to TINYGOROOT.
 	sourceDir string
@@ -39,15 +45,15 @@ func (l *Library) sourcePaths(target string) []string {
 }
 
 // Load the library archive, possibly generating and caching it if needed.
-// The resulting file is stored in the provided tmpdir, which is expected to be
-// removed after the Load call.
-func (l *Library) Load(target, tmpdir string) (path string, err error) {
-	job, err := l.load(target, "", tmpdir)
+// The resulting directory may be stored in the provided tmpdir, which is
+// expected to be removed after the Load call.
+func (l *Library) Load(config *compileopts.Config, tmpdir string) (dir string, err error) {
+	job, err := l.load(config, tmpdir)
 	if err != nil {
 		return "", err
 	}
 	err = runJobs(job)
-	return job.result, err
+	return filepath.Dir(job.result), err
 }
 
 // load returns a compile job to build this library file for the given target
@@ -56,28 +62,51 @@ func (l *Library) Load(target, tmpdir string) (path string, err error) {
 // been run.
 // The provided tmpdir will be used to store intermediary files and possibly the
 // output archive file, it is expected to be removed after use.
-func (l *Library) load(target, cpu, tmpdir string) (job *compileJob, err error) {
-	// Try to load a precompiled library.
-	precompiledPath := filepath.Join(goenv.Get("TINYGOROOT"), "pkg", target, l.name+".a")
-	if _, err := os.Stat(precompiledPath); err == nil {
+// As a side effect, this call creates the library header files if they didn't
+// exist yet.
+func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJob, err error) {
+	outdir, precompiled := config.LibcPath(l.name)
+	archiveFilePath := filepath.Join(outdir, "lib.a")
+	if precompiled {
 		// Found a precompiled library for this OS/architecture. Return the path
 		// directly.
-		return dummyCompileJob(precompiledPath), nil
-	}
-
-	var outfile string
-	if cpu != "" {
-		outfile = l.name + "-" + target + "-" + cpu + ".a"
-	} else {
-		outfile = l.name + "-" + target + ".a"
+		return dummyCompileJob(archiveFilePath), nil
 	}
 
 	// Try to fetch this library from the cache.
-	if path, err := cacheLoad(outfile, l.sourcePaths(target)); path != "" || err != nil {
-		// Cache hit.
-		return dummyCompileJob(path), nil
+	if _, err := os.Stat(archiveFilePath); err == nil {
+		return dummyCompileJob(archiveFilePath), nil
 	}
 	// Cache miss, build it now.
+
+	// Create the destination directory where the components of this library
+	// (lib.a file, include directory) are placed.
+	outname := filepath.Base(outdir)
+	err = os.MkdirAll(filepath.Join(goenv.Get("GOCACHE"), outname), 0o777)
+	if err != nil {
+		// Could not create directory (and not because it already exists).
+		return nil, err
+	}
+
+	// Make headers if needed.
+	headerPath := filepath.Join(outdir, "include")
+	if l.makeHeaders != nil {
+		if _, err = os.Stat(headerPath); err != nil {
+			temporaryHeaderPath, err := ioutil.TempDir(outdir, "include.tmp*")
+			if err != nil {
+				return nil, err
+			}
+			defer os.RemoveAll(temporaryHeaderPath)
+			err = l.makeHeaders(temporaryHeaderPath)
+			if err != nil {
+				return nil, err
+			}
+			err = os.Rename(temporaryHeaderPath, headerPath)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	remapDir := filepath.Join(os.TempDir(), "tinygo-"+l.name)
 	dir := filepath.Join(tmpdir, "build-lib-"+l.name)
@@ -90,7 +119,9 @@ func (l *Library) load(target, cpu, tmpdir string) (job *compileJob, err error) 
 	// Note: -fdebug-prefix-map is necessary to make the output archive
 	// reproducible. Otherwise the temporary directory is stored in the archive
 	// itself, which varies each run.
-	args := append(l.cflags(), "-c", "-Oz", "-g", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir)
+	target := config.Triple()
+	args := append(l.cflags(headerPath), "-c", "-Oz", "-g", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir)
+	cpu := config.CPU()
 	if cpu != "" {
 		args = append(args, "-mcpu="+cpu)
 	}
@@ -107,19 +138,25 @@ func (l *Library) load(target, cpu, tmpdir string) (job *compileJob, err error) 
 	// Create job to put all the object files in a single archive. This archive
 	// file is the (static) library file.
 	var objs []string
-	arpath := filepath.Join(dir, l.name+".a")
 	job = &compileJob{
-		description: "ar " + l.name + ".a",
-		result:      arpath,
+		description: "ar " + l.name + "/lib.a",
+		result:      filepath.Join(goenv.Get("GOCACHE"), outname, "lib.a"),
 		run: func(*compileJob) error {
 			// Create an archive of all object files.
-			err := makeArchive(arpath, objs)
+			f, err := ioutil.TempFile(outdir, "libc.a.tmp*")
+			if err != nil {
+				return err
+			}
+			err = makeArchive(f, objs)
+			if err != nil {
+				return err
+			}
+			err = f.Close()
 			if err != nil {
 				return err
 			}
 			// Store this archive in the cache.
-			_, err = cacheStore(arpath, outfile, l.sourcePaths(target))
-			return err
+			return os.Rename(f.Name(), archiveFilePath)
 		},
 	}
 
