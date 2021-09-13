@@ -323,6 +323,21 @@ func getParams(sig *types.Signature) []*types.Var {
 	return params
 }
 
+// addStandardAttributes adds the set of attributes that are added to every
+// function emitted by TinyGo (even thunks/wrappers), possibly depending on the
+// architecture.
+func (c *compilerContext) addStandardAttributes(llvmFn llvm.Value) {
+	// TinyGo does not currently raise exceptions, so set the 'nounwind' flag.
+	// This behavior matches Clang when compiling C source files.
+	// It reduces binary size on Linux a little bit on non-x86_64 targets by
+	// eliminating exception tables for these functions.
+	llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nounwind"), 0))
+	if strings.Split(c.Triple, "-")[0] == "x86_64" {
+		// Required by the ABI.
+		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 0))
+	}
+}
+
 // globalInfo contains some information about a specific global. By default,
 // linkName is equal to .RelString(nil) on a global and extern is false, but for
 // some symbols this is different (due to //go:extern for example).
