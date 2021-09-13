@@ -12,48 +12,54 @@ target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 
-define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr {
+; Function Attrs: nounwind
+define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   ret void
 }
 
-define void @extern_func() #0 {
+; Function Attrs: nounwind
+define void @extern_func() #1 {
 entry:
   ret void
 }
 
-define hidden void @somepkg.someFunction1(i8* %context, i8* %parentHandle) unnamed_addr {
+; Function Attrs: nounwind
+define hidden void @somepkg.someFunction1(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   ret void
 }
 
 declare void @somepkg.someFunction2(i8*, i8*)
 
-; Function Attrs: inlinehint
-define hidden void @main.inlineFunc(i8* %context, i8* %parentHandle) unnamed_addr #1 {
+; Function Attrs: inlinehint nounwind
+define hidden void @main.inlineFunc(i8* %context, i8* %parentHandle) unnamed_addr #2 {
 entry:
   ret void
 }
 
-; Function Attrs: noinline
-define hidden void @main.noinlineFunc(i8* %context, i8* %parentHandle) unnamed_addr #2 {
+; Function Attrs: noinline nounwind
+define hidden void @main.noinlineFunc(i8* %context, i8* %parentHandle) unnamed_addr #3 {
 entry:
   ret void
 }
 
-define hidden void @main.functionInSection(i8* %context, i8* %parentHandle) unnamed_addr section ".special_function_section" {
+; Function Attrs: nounwind
+define hidden void @main.functionInSection(i8* %context, i8* %parentHandle) unnamed_addr #0 section ".special_function_section" {
 entry:
   ret void
 }
 
-define void @exportedFunctionInSection() #3 section ".special_function_section" {
+; Function Attrs: nounwind
+define void @exportedFunctionInSection() #4 section ".special_function_section" {
 entry:
   ret void
 }
 
 declare void @main.undefinedFunctionNotInSection(i8*, i8*)
 
-attributes #0 = { "wasm-export-name"="extern_func" }
-attributes #1 = { inlinehint }
-attributes #2 = { noinline }
-attributes #3 = { "wasm-export-name"="exportedFunctionInSection" }
+attributes #0 = { nounwind }
+attributes #1 = { nounwind "wasm-export-name"="extern_func" }
+attributes #2 = { inlinehint nounwind }
+attributes #3 = { noinline nounwind }
+attributes #4 = { nounwind "wasm-export-name"="exportedFunctionInSection" }

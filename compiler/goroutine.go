@@ -176,6 +176,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		// Create the wrapper.
 		wrapperType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.i8ptrType}, false)
 		wrapper = llvm.AddFunction(c.mod, name+"$gowrapper", wrapperType)
+		c.addStandardAttributes(wrapper)
 		wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
 		wrapper.SetUnnamedAddr(true)
 		wrapper.AddAttributeAtIndex(-1, c.ctx.CreateStringAttribute("tinygo-gowrapper", name))
@@ -240,6 +241,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		// Create the wrapper.
 		wrapperType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.i8ptrType}, false)
 		wrapper = llvm.AddFunction(c.mod, prefix+".gowrapper", wrapperType)
+		c.addStandardAttributes(wrapper)
 		wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
 		wrapper.SetUnnamedAddr(true)
 		wrapper.AddAttributeAtIndex(-1, c.ctx.CreateStringAttribute("tinygo-gowrapper", ""))

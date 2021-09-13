@@ -11,24 +11,27 @@ target triple = "armv7m-unknown-unknown-eabi"
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 
-define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr {
+; Function Attrs: nounwind
+define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   ret void
 }
 
-define hidden void @main.regularFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr {
+; Function Attrs: nounwind
+define hidden void @main.regularFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"main.regularFunction$gowrapper" to i32), i8* undef, i8* undef)
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.regularFunction$gowrapper" to i32), i8* nonnull inttoptr (i32 5 to i8*), i32 %stacksize, i8* undef, i8* null)
+  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"main.regularFunction$gowrapper" to i32), i8* undef, i8* undef) #0
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.regularFunction$gowrapper" to i32), i8* nonnull inttoptr (i32 5 to i8*), i32 %stacksize, i8* undef, i8* null) #0
   ret void
 }
 
 declare void @main.regularFunction(i32, i8*, i8*)
 
-define linkonce_odr void @"main.regularFunction$gowrapper"(i8* %0) unnamed_addr #0 {
+; Function Attrs: nounwind
+define linkonce_odr void @"main.regularFunction$gowrapper"(i8* %0) unnamed_addr #1 {
 entry:
   %unpack.int = ptrtoint i8* %0 to i32
-  call void @main.regularFunction(i32 %unpack.int, i8* undef, i8* undef)
+  call void @main.regularFunction(i32 %unpack.int, i8* undef, i8* undef) #0
   ret void
 }
 
@@ -36,51 +39,57 @@ declare i32 @"internal/task.getGoroutineStackSize"(i32, i8*, i8*)
 
 declare void @"internal/task.start"(i32, i8*, i32, i8*, i8*)
 
-define hidden void @main.inlineFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr {
+; Function Attrs: nounwind
+define hidden void @main.inlineFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"main.inlineFunctionGoroutine$1$gowrapper" to i32), i8* undef, i8* undef)
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.inlineFunctionGoroutine$1$gowrapper" to i32), i8* nonnull inttoptr (i32 5 to i8*), i32 %stacksize, i8* undef, i8* null)
+  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"main.inlineFunctionGoroutine$1$gowrapper" to i32), i8* undef, i8* undef) #0
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.inlineFunctionGoroutine$1$gowrapper" to i32), i8* nonnull inttoptr (i32 5 to i8*), i32 %stacksize, i8* undef, i8* null) #0
   ret void
 }
 
-define hidden void @"main.inlineFunctionGoroutine$1"(i32 %x, i8* %context, i8* %parentHandle) unnamed_addr {
+; Function Attrs: nounwind
+define hidden void @"main.inlineFunctionGoroutine$1"(i32 %x, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   ret void
 }
 
-define linkonce_odr void @"main.inlineFunctionGoroutine$1$gowrapper"(i8* %0) unnamed_addr #1 {
+; Function Attrs: nounwind
+define linkonce_odr void @"main.inlineFunctionGoroutine$1$gowrapper"(i8* %0) unnamed_addr #2 {
 entry:
   %unpack.int = ptrtoint i8* %0 to i32
   call void @"main.inlineFunctionGoroutine$1"(i32 %unpack.int, i8* undef, i8* undef)
   ret void
 }
 
-define hidden void @main.closureFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr {
+; Function Attrs: nounwind
+define hidden void @main.closureFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  %n = call i8* @runtime.alloc(i32 4, i8* undef, i8* null)
+  %n = call i8* @runtime.alloc(i32 4, i8* undef, i8* null) #0
   %0 = bitcast i8* %n to i32*
   store i32 3, i32* %0, align 4
-  %1 = call i8* @runtime.alloc(i32 8, i8* undef, i8* null)
+  %1 = call i8* @runtime.alloc(i32 8, i8* undef, i8* null) #0
   %2 = bitcast i8* %1 to i32*
   store i32 5, i32* %2, align 4
   %3 = getelementptr inbounds i8, i8* %1, i32 4
   %4 = bitcast i8* %3 to i8**
   store i8* %n, i8** %4, align 4
-  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"main.closureFunctionGoroutine$1$gowrapper" to i32), i8* undef, i8* undef)
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.closureFunctionGoroutine$1$gowrapper" to i32), i8* nonnull %1, i32 %stacksize, i8* undef, i8* null)
+  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"main.closureFunctionGoroutine$1$gowrapper" to i32), i8* undef, i8* undef) #0
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.closureFunctionGoroutine$1$gowrapper" to i32), i8* nonnull %1, i32 %stacksize, i8* undef, i8* null) #0
   %5 = load i32, i32* %0, align 4
-  call void @runtime.printint32(i32 %5, i8* undef, i8* null)
+  call void @runtime.printint32(i32 %5, i8* undef, i8* null) #0
   ret void
 }
 
-define hidden void @"main.closureFunctionGoroutine$1"(i32 %x, i8* %context, i8* %parentHandle) unnamed_addr {
+; Function Attrs: nounwind
+define hidden void @"main.closureFunctionGoroutine$1"(i32 %x, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   %unpack.ptr = bitcast i8* %context to i32*
   store i32 7, i32* %unpack.ptr, align 4
   ret void
 }
 
-define linkonce_odr void @"main.closureFunctionGoroutine$1$gowrapper"(i8* %0) unnamed_addr #2 {
+; Function Attrs: nounwind
+define linkonce_odr void @"main.closureFunctionGoroutine$1$gowrapper"(i8* %0) unnamed_addr #3 {
 entry:
   %1 = bitcast i8* %0 to i32*
   %2 = load i32, i32* %1, align 4
@@ -93,9 +102,10 @@ entry:
 
 declare void @runtime.printint32(i32, i8*, i8*)
 
-define hidden void @main.funcGoroutine(i8* %fn.context, void (i32, i8*, i8*)* %fn.funcptr, i8* %context, i8* %parentHandle) unnamed_addr {
+; Function Attrs: nounwind
+define hidden void @main.funcGoroutine(i8* %fn.context, void (i32, i8*, i8*)* %fn.funcptr, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  %0 = call i8* @runtime.alloc(i32 12, i8* undef, i8* null)
+  %0 = call i8* @runtime.alloc(i32 12, i8* undef, i8* null) #0
   %1 = bitcast i8* %0 to i32*
   store i32 5, i32* %1, align 4
   %2 = getelementptr inbounds i8, i8* %0, i32 4
@@ -104,12 +114,13 @@ entry:
   %4 = getelementptr inbounds i8, i8* %0, i32 8
   %5 = bitcast i8* %4 to void (i32, i8*, i8*)**
   store void (i32, i8*, i8*)* %fn.funcptr, void (i32, i8*, i8*)** %5, align 4
-  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @main.funcGoroutine.gowrapper to i32), i8* undef, i8* undef)
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @main.funcGoroutine.gowrapper to i32), i8* nonnull %0, i32 %stacksize, i8* undef, i8* null)
+  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @main.funcGoroutine.gowrapper to i32), i8* undef, i8* undef) #0
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @main.funcGoroutine.gowrapper to i32), i8* nonnull %0, i32 %stacksize, i8* undef, i8* null) #0
   ret void
 }
 
-define linkonce_odr void @main.funcGoroutine.gowrapper(i8* %0) unnamed_addr #3 {
+; Function Attrs: nounwind
+define linkonce_odr void @main.funcGoroutine.gowrapper(i8* %0) unnamed_addr #4 {
 entry:
   %1 = bitcast i8* %0 to i32*
   %2 = load i32, i32* %1, align 4
@@ -119,32 +130,36 @@ entry:
   %6 = getelementptr inbounds i8, i8* %0, i32 8
   %7 = bitcast i8* %6 to void (i32, i8*, i8*)**
   %8 = load void (i32, i8*, i8*)*, void (i32, i8*, i8*)** %7, align 4
-  call void %8(i32 %2, i8* %5, i8* undef)
+  call void %8(i32 %2, i8* %5, i8* undef) #0
   ret void
 }
 
-define hidden void @main.recoverBuiltinGoroutine(i8* %context, i8* %parentHandle) unnamed_addr {
+; Function Attrs: nounwind
+define hidden void @main.recoverBuiltinGoroutine(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   ret void
 }
 
-define hidden void @main.copyBuiltinGoroutine(i8* %dst.data, i32 %dst.len, i32 %dst.cap, i8* %src.data, i32 %src.len, i32 %src.cap, i8* %context, i8* %parentHandle) unnamed_addr {
+; Function Attrs: nounwind
+define hidden void @main.copyBuiltinGoroutine(i8* %dst.data, i32 %dst.len, i32 %dst.cap, i8* %src.data, i32 %src.len, i32 %src.cap, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  %copy.n = call i32 @runtime.sliceCopy(i8* %dst.data, i8* %src.data, i32 %dst.len, i32 %src.len, i32 1, i8* undef, i8* null)
+  %copy.n = call i32 @runtime.sliceCopy(i8* %dst.data, i8* %src.data, i32 %dst.len, i32 %src.len, i32 1, i8* undef, i8* null) #0
   ret void
 }
 
 declare i32 @runtime.sliceCopy(i8* nocapture writeonly, i8* nocapture readonly, i32, i32, i32, i8*, i8*)
 
-define hidden void @main.closeBuiltinGoroutine(%runtime.channel* dereferenceable_or_null(32) %ch, i8* %context, i8* %parentHandle) unnamed_addr {
+; Function Attrs: nounwind
+define hidden void @main.closeBuiltinGoroutine(%runtime.channel* dereferenceable_or_null(32) %ch, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  call void @runtime.chanClose(%runtime.channel* %ch, i8* undef, i8* null)
+  call void @runtime.chanClose(%runtime.channel* %ch, i8* undef, i8* null) #0
   ret void
 }
 
 declare void @runtime.chanClose(%runtime.channel* dereferenceable_or_null(32), i8*, i8*)
 
-attributes #0 = { "tinygo-gowrapper"="main.regularFunction" }
-attributes #1 = { "tinygo-gowrapper"="main.inlineFunctionGoroutine$1" }
-attributes #2 = { "tinygo-gowrapper"="main.closureFunctionGoroutine$1" }
-attributes #3 = { "tinygo-gowrapper" }
+attributes #0 = { nounwind }
+attributes #1 = { nounwind "tinygo-gowrapper"="main.regularFunction" }
+attributes #2 = { nounwind "tinygo-gowrapper"="main.inlineFunctionGoroutine$1" }
+attributes #3 = { nounwind "tinygo-gowrapper"="main.closureFunctionGoroutine$1" }
+attributes #4 = { nounwind "tinygo-gowrapper" }

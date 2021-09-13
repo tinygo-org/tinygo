@@ -489,6 +489,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llv
 	paramTypes := append([]llvm.Type{c.i8ptrType}, fnType.ParamTypes()[len(expandedReceiverType):]...)
 	wrapFnType := llvm.FunctionType(fnType.ReturnType(), paramTypes, false)
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
+	c.addStandardAttributes(wrapper)
 	wrapper.LastParam().SetName("parentHandle")
 
 	wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
