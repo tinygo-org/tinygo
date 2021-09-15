@@ -10,6 +10,15 @@ import (
 	"syscall"
 )
 
+// Seek whence values.
+//
+// Deprecated: Use io.SeekStart, io.SeekCurrent, and io.SeekEnd.
+const (
+	SEEK_SET int = io.SeekStart
+	SEEK_CUR int = io.SeekCurrent
+	SEEK_END int = io.SeekEnd
+)
+
 // Mkdir creates a directory. If the operation fails, it will return an error of
 // type *PathError.
 func Mkdir(path string, perm FileMode) error {
