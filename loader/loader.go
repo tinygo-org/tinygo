@@ -386,7 +386,11 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 	}
 
 	// Do CGo processing.
-	if len(p.CgoFiles) != 0 {
+	// This is done when there are any CgoFiles at all. In that case, len(files)
+	// should be non-zero. However, if len(GoFiles) == 0 and len(CgoFiles) == 1
+	// and there is a syntax error in a CGo file, len(files) may be 0. Don't try
+	// to call cgo.Process in that case as it will only cause issues.
+	if len(p.CgoFiles) != 0 && len(files) != 0 {
 		var initialCFlags []string
 		initialCFlags = append(initialCFlags, p.program.config.CFlags()...)
 		initialCFlags = append(initialCFlags, "-I"+p.Dir)
