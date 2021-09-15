@@ -86,9 +86,41 @@ entry:
 }
 
 ; Normal function which should not be transformed.
-define void @doNothing(i8*, i8*) {
+define void @doNothing(i8*, i8* %parentHandle) {
 entry:
   ret void
+}
+
+; Regression test: ensure that a tail call does not destroy the frame while it is still in use.
+; Previously, the tail-call lowering transform would branch to the cleanup block after usePtr.
+; This caused the lifetime of %a to be incorrectly reduced, and allowed the coroutine lowering transform to keep %a on the stack.
+; After a suspend %a would be used, resulting in memory corruption.
+define i8 @coroutineTailRegression(i8*, i8* %parentHandle) {
+entry:
+  %a = alloca i8
+  store i8 5, i8* %a
+  %val = call i8 @usePtr(i8* %a, i8* undef, i8* null)
+  ret i8 %val
+}
+
+; Regression test: ensure that stack allocations alive during a suspend end up on the heap.
+; This used to not be transformed to a coroutine, keeping %a on the stack.
+; After a suspend %a would be used, resulting in memory corruption.
+define i8 @allocaTailRegression(i8*, i8* %parentHandle) {
+entry:
+  %a = alloca i8
+  call void @sleep(i64 1000000, i8* undef, i8* null)
+  store i8 5, i8* %a
+  %val = call i8 @usePtr(i8* %a, i8* undef, i8* null)
+  ret i8 %val
+}
+
+; usePtr uses a pointer after a suspend.
+define i8 @usePtr(i8*, i8*, i8* %parentHandle) {
+entry:
+  call void @sleep(i64 1000000, i8* undef, i8* null)
+  %val = load i8, i8* %0
+  ret i8 %val
 }
 
 ; Goroutine that sleeps and does nothing.

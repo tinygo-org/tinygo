@@ -600,11 +600,11 @@ func (c *coroutineLoweringPass) lowerFuncsPass() {
 			continue
 		}
 
-		if len(fn.normalCalls) == 0 {
-			// No suspend points. Lower without turning it into a coroutine.
+		if len(fn.normalCalls) == 0 && fn.fn.FirstBasicBlock().FirstInstruction().IsAAllocaInst().IsNil() {
+			// No suspend points or stack allocations. Lower without turning it into a coroutine.
 			c.lowerFuncFast(fn)
 		} else {
-			// There are suspend points, so it is necessary to turn this into a coroutine.
+			// There are suspend points or stack allocations, so it is necessary to turn this into a coroutine.
 			c.lowerFuncCoro(fn)
 		}
 	}
@@ -827,6 +827,7 @@ func (c *coroutineLoweringPass) lowerFuncCoro(fn *asyncFunc) {
 	}
 
 	// Lower returns.
+	var postTail llvm.BasicBlock
 	for _, ret := range fn.returns {
 		// Get terminator instruction.
 		terminator := ret.block.LastInstruction()
@@ -886,10 +887,37 @@ func (c *coroutineLoweringPass) lowerFuncCoro(fn *asyncFunc) {
 			call.EraseFromParentAsInstruction()
 		}
 
-		// Replace terminator with branch to cleanup.
+		// Replace terminator with a branch to the exit.
+		var exit llvm.BasicBlock
+		if ret.kind == returnNormal || ret.kind == returnVoid || fn.fn.FirstBasicBlock().FirstInstruction().IsAAllocaInst().IsNil() {
+			// Exit through the cleanup path.
+			exit = cleanup
+		} else {
+			if postTail.IsNil() {
+				// Create a path with a suspend that never reawakens.
+				postTail = c.ctx.AddBasicBlock(fn.fn, "post.tail")
+				c.builder.SetInsertPointAtEnd(postTail)
+				// %coro.save = call token @llvm.coro.save(i8* %coro.state)
+				save := c.builder.CreateCall(c.coroSave, []llvm.Value{coroState}, "coro.save")
+				// %call.suspend = llvm.coro.suspend(token %coro.save, i1 false)
+				// switch i8 %call.suspend, label %suspend [i8 0, label %wakeup
+				//                                          i8 1, label %cleanup]
+				suspendValue := c.builder.CreateCall(c.coroSuspend, []llvm.Value{save, llvm.ConstInt(c.ctx.Int1Type(), 0, false)}, "call.suspend")
+				sw := c.builder.CreateSwitch(suspendValue, suspend, 2)
+				unreachableBlock := c.ctx.AddBasicBlock(fn.fn, "unreachable")
+				sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 0, false), unreachableBlock)
+				sw.AddCase(llvm.ConstInt(c.ctx.Int8Type(), 1, false), cleanup)
+				c.builder.SetInsertPointAtEnd(unreachableBlock)
+				c.builder.CreateUnreachable()
+			}
+
+			// Exit through a permanent suspend.
+			exit = postTail
+		}
+
 		terminator.EraseFromParentAsInstruction()
 		c.builder.SetInsertPointAtEnd(ret.block)
-		c.builder.CreateBr(cleanup)
+		c.builder.CreateBr(exit)
 	}
 
 	// Lower regular calls.
