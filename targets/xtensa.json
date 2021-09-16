@@ -7,7 +7,6 @@
 	"scheduler": "none",
 	"cflags": [
 		"--target=xtensa",
-		"-Oz",
 		"-Werror",
 		"-fshort-enums",
 		"-Wno-macro-redefined",
