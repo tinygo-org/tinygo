@@ -10,7 +10,6 @@
 	"cflags": [
 		"--target=arm4-none-eabi",
 		"-mcpu=arm7tdmi",
-		"-Oz",
 		"-Werror",
 		"-fshort-enums",
 		"-fomit-frame-pointer",

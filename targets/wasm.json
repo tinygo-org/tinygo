@@ -7,8 +7,7 @@
 	"libc":          "wasi-libc",
 	"cflags": [
 		"--target=wasm32--wasi",
-		"--sysroot={root}/lib/wasi-libc/sysroot",
-		"-Oz"
+		"--sysroot={root}/lib/wasi-libc/sysroot"
 	],
 	"ldflags": [
 		"--allow-undefined",

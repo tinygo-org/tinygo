@@ -211,6 +211,8 @@ func (c *Config) CFlags() []string {
 	}
 	// Always emit debug information. It is optionally stripped at link time.
 	cflags = append(cflags, "-g")
+	// Use the same optimization level as TinyGo.
+	cflags = append(cflags, "-O"+c.Options.Opt)
 	return cflags
 }
 
