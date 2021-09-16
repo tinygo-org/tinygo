@@ -384,16 +384,17 @@ func (spi SPI) Configure(config SPIConfig) error {
 	if config.Frequency >= 40e6 {
 		// Delay mode must be set to 0 and SPI_USR_DUMMY_CYCLELEN should be set
 		// to 0 (the default).
+		spi.Bus.USER1.Set(0)
 		userReg |= esp.SPI_USER_USR_DUMMY
 	} else if config.Frequency >= 20e6 {
 		// Nothing to do here, delay mode should be set to 0 according to the
 		// datasheet.
 	} else {
-		// Follow the delay mode as given in table 29 on page 128 of the
+		// Follow the delay mode as given in table 7-3 on page 125 of the
 		// reference manual.
 		// Note that this is only specified for SPI frequency of 10MHz and
 		// below (≤Fapb/8), so 13.3MHz appears to be left unspecified.
-		ctrl2Reg |= delayMode << esp.SPI_CTRL2_MOSI_DELAY_MODE_Pos
+		ctrl2Reg |= delayMode << esp.SPI_CTRL2_MISO_DELAY_MODE_Pos
 	}
 	// Enable full-duplex communication.
 	userReg |= esp.SPI_USER_DOUTDIN
