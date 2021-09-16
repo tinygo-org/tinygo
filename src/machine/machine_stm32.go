@@ -58,3 +58,19 @@ func (p Pin) Get() bool {
 	val := port.IDR.Get() & (1 << pin)
 	return (val > 0)
 }
+
+// PortMaskSet returns the register and mask to enable a given GPIO pin. This
+// can be used to implement bit-banged drivers.
+func (p Pin) PortMaskSet() (*uint32, uint32) {
+	port := p.getPort()
+	pin := uint8(p) % 16
+	return &port.BSRR.Reg, 1 << pin
+}
+
+// PortMaskClear returns the register and mask to disable a given port. This can
+// be used to implement bit-banged drivers.
+func (p Pin) PortMaskClear() (*uint32, uint32) {
+	port := p.getPort()
+	pin := uint8(p) % 16
+	return &port.BSRR.Reg, 1 << (pin + 16)
+}
