@@ -120,22 +120,22 @@ gen-device-avr:
 	@GO111MODULE=off $(GO) fmt ./src/device/avr
 
 build/gen-device-svd: ./tools/gen-device-svd/*.go
-	$(GO) build -o $@ ./tools/gen-device-svd/
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) build -o $@ ./tools/gen-device-svd/
 
 gen-device-esp: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Espressif-Community -interrupts=software lib/cmsis-svd/data/Espressif-Community/ src/device/esp/
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Espressif-Community -only-used -interrupts=software lib/cmsis-svd/data/Espressif-Community/ src/device/esp/
 	GO111MODULE=off $(GO) fmt ./src/device/esp
 
 gen-device-nrf: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk lib/nrfx/mdk/ src/device/nrf/
+	./build/gen-device-svd -source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk -only-used lib/nrfx/mdk/ src/device/nrf/
 	GO111MODULE=off $(GO) fmt ./src/device/nrf
 
 gen-device-nxp: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/NXP lib/cmsis-svd/data/NXP/ src/device/nxp/
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/NXP -only-used lib/cmsis-svd/data/NXP/ src/device/nxp/
 	GO111MODULE=off $(GO) fmt ./src/device/nxp
 
 gen-device-sam: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel lib/cmsis-svd/data/Atmel/ src/device/sam/
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel -only-used lib/cmsis-svd/data/Atmel/ src/device/sam/
 	GO111MODULE=off $(GO) fmt ./src/device/sam
 
 gen-device-sifive: build/gen-device-svd
@@ -143,11 +143,11 @@ gen-device-sifive: build/gen-device-svd
 	GO111MODULE=off $(GO) fmt ./src/device/sifive
 
 gen-device-kendryte: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Kendryte-Community -interrupts=software lib/cmsis-svd/data/Kendryte-Community/ src/device/kendryte/
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Kendryte-Community -only-used -interrupts=software lib/cmsis-svd/data/Kendryte-Community/ src/device/kendryte/
 	GO111MODULE=off $(GO) fmt ./src/device/kendryte
 
 gen-device-stm32: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/tinygo-org/stm32-svd lib/stm32-svd/svd src/device/stm32/
+	./build/gen-device-svd -source=https://github.com/tinygo-org/stm32-svd -only-used lib/stm32-svd/svd src/device/stm32/
 	GO111MODULE=off $(GO) fmt ./src/device/stm32
 
 gen-device-rp: build/gen-device-svd
