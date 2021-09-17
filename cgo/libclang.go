@@ -81,7 +81,7 @@ func (p *cgoPackage) parseFragment(fragment string, cflags []string, posFilename
 	defer C.free(unsafe.Pointer(filenameC))
 
 	// fix up error locations
-	fragment = fmt.Sprintf("# %d %#v\n", posLine+1, posFilename) + fragment
+	fragment = fmt.Sprintf("# %d %#v\n", posLine, posFilename) + fragment
 
 	fragmentC := C.CString(fragment)
 	defer C.free(unsafe.Pointer(fragmentC))

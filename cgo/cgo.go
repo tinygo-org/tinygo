@@ -391,7 +391,10 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 
 	// Process all CGo imports.
 	for _, genDecl := range statements {
-		cgoComment := genDecl.Doc.Text()
+		if genDecl.Doc == nil {
+			continue
+		}
+		cgoComment := getCommentText(genDecl.Doc)
 
 		pos := genDecl.Pos()
 		if genDecl.Doc != nil {
@@ -1401,4 +1404,21 @@ func renameFieldName(fieldList *ast.FieldList, name string) {
 	}
 	renameFieldName(fieldList, "_"+name)
 	ident.Name = "_" + ident.Name
+}
+
+// getCommentText returns the raw text of an *ast.CommentGroup. It is similar to
+// the Text() method but differs in that it doesn't strip anything and tries to
+// keep all offsets correct by adding spaces and newlines where necessary.
+func getCommentText(g *ast.CommentGroup) string {
+	var text string
+	for _, comment := range g.List {
+		c := comment.Text
+		if c[1] == '/' { /* comment */
+			c = "  " + c[2:]
+		} else { // comment
+			c = "  " + c[2:len(c)-2]
+		}
+		text += c + "\n"
+	}
+	return text
 }
