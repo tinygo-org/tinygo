@@ -763,6 +763,27 @@ func (c *coroutineLoweringPass) lowerCallReturn(caller *asyncFunc, call llvm.Val
 // lowerFuncCoro transforms an async function into a coroutine by lowering async operations to `llvm.coro` intrinsics.
 // See https://llvm.org/docs/Coroutines.html for more information on these intrinsics.
 func (c *coroutineLoweringPass) lowerFuncCoro(fn *asyncFunc) {
+	// Ensure that any alloca instructions in the entry block are at the start.
+	// Otherwise, block splitting would result in unintended behavior.
+	{
+		// Skip alloca instructions at the start of the block.
+		inst := fn.fn.FirstBasicBlock().FirstInstruction()
+		for !inst.IsAAllocaInst().IsNil() {
+			inst = llvm.NextInstruction(inst)
+		}
+
+		// Find any other alloca instructions and move them after the other allocas.
+		c.builder.SetInsertPointBefore(inst)
+		for !inst.IsNil() {
+			next := llvm.NextInstruction(inst)
+			if !inst.IsAAllocaInst().IsNil() {
+				inst.RemoveFromParentAsInstruction()
+				c.builder.Insert(inst)
+			}
+			inst = next
+		}
+	}
+
 	returnType := fn.fn.Type().ElementType().ReturnType()
 
 	// Prepare coroutine state.
