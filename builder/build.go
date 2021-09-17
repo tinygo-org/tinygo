@@ -207,6 +207,50 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 					return errors.New("verification error after compiling package " + pkg.ImportPath)
 				}
 
+				// Load bitcode of CGo headers and join the modules together.
+				// This may seem vulnerable to cache problems, but this is not
+				// the case: the Go code that was just compiled already tracks
+				// all C files that are read and hashes them.
+				// These headers could be compiled in parallel but the benefit
+				// is so small that it's probably not worth parallelizing.
+				// Packages are compiled independently anyway.
+				for _, cgoHeader := range pkg.CGoHeaders {
+					// Store the header text in a temporary file.
+					f, err := ioutil.TempFile(dir, "cgosnippet-*.c")
+					if err != nil {
+						return err
+					}
+					_, err = f.Write([]byte(cgoHeader))
+					if err != nil {
+						return err
+					}
+					f.Close()
+
+					// Compile the code (if there is any) to bitcode.
+					flags := append([]string{"-c", "-emit-llvm", "-o", f.Name() + ".bc", f.Name()}, pkg.CFlags...)
+					if config.Options.PrintCommands != nil {
+						config.Options.PrintCommands("clang", flags...)
+					}
+					err = runCCompiler(flags...)
+					if err != nil {
+						return &commandError{"failed to build CGo header", "", err}
+					}
+
+					// Load and link the bitcode.
+					// This makes it possible to optimize the functions defined
+					// in the header together with the Go code. In particular,
+					// this allows inlining. It also ensures there is only one
+					// file per package to cache.
+					headerMod, err := mod.Context().ParseBitcodeFile(f.Name() + ".bc")
+					if err != nil {
+						return fmt.Errorf("failed to load bitcode file: %w", err)
+					}
+					err = llvm.LinkModules(mod, headerMod)
+					if err != nil {
+						return fmt.Errorf("failed to link module: %w", err)
+					}
+				}
+
 				// Erase all globals that are part of the undefinedGlobals list.
 				// This list comes from the -ldflags="-X pkg.foo=val" option.
 				// Instead of setting the value directly in the AST (which would

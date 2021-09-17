@@ -291,14 +291,14 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	if c.Debug {
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
 			c.ctx.MDNode([]llvm.Metadata{
-				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
+				llvm.ConstInt(c.ctx.Int32Type(), 2, false).ConstantAsMetadata(), // Warning on mismatch
 				c.ctx.MDString("Debug Info Version"),
 				llvm.ConstInt(c.ctx.Int32Type(), 3, false).ConstantAsMetadata(), // DWARF version
 			}),
 		)
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
 			c.ctx.MDNode([]llvm.Metadata{
-				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(),
+				llvm.ConstInt(c.ctx.Int32Type(), 7, false).ConstantAsMetadata(), // Max on mismatch
 				c.ctx.MDString("Dwarf Version"),
 				llvm.ConstInt(c.ctx.Int32Type(), 4, false).ConstantAsMetadata(),
 			}),
