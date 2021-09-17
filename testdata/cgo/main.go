@@ -10,6 +10,7 @@ int mul(int, int);
 */
 import "C"
 
+// int headerfunc(int a) { return a + 1; }
 import "C"
 
 import "unsafe"
@@ -42,6 +43,9 @@ func main() {
 	// variadic functions
 	println("variadic0:", C.variadic0())
 	println("variadic2:", C.variadic2(3, 5))
+
+	// functions in the header C snippet
+	println("headerfunc:", C.headerfunc(5))
 
 	// equivalent types
 	var goInt8 int8 = 5

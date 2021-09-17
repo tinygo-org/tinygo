@@ -29,6 +29,7 @@ import (
 type cgoPackage struct {
 	generated       *ast.File
 	generatedPos    token.Pos
+	cgoHeaders      []string
 	errors          []error
 	dir             string
 	fset            *token.FileSet
@@ -158,10 +159,11 @@ typedef unsigned long long  _Cgo_ulonglong;
 // Process extracts `import "C"` statements from the AST, parses the comment
 // with libclang, and modifies the AST to use this information. It returns a
 // newly created *ast.File that should be added to the list of to-be-parsed
-// files, the CFLAGS and LDFLAGS found in #cgo lines, and a map of file hashes
-// of the accessed C header files. If there is one or more error, it returns
-// these in the []error slice but still modifies the AST.
-func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string) (*ast.File, []string, []string, map[string][]byte, []error) {
+// files, the CGo header snippets that should be compiled (for inline
+// functions), the CFLAGS and LDFLAGS found in #cgo lines, and a map of file
+// hashes of the accessed C header files. If there is one or more error, it
+// returns these in the []error slice but still modifies the AST.
+func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string) (*ast.File, []string, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
 		dir:             dir,
 		fset:            fset,
@@ -184,7 +186,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Find the absolute path for this package.
 	packagePath, err := filepath.Abs(fset.File(files[0].Pos()).Name())
 	if err != nil {
-		return nil, nil, nil, nil, []error{
+		return nil, nil, nil, nil, nil, []error{
 			scanner.Error{
 				Pos: fset.Position(files[0].Pos()),
 				Msg: "cgo: cannot find absolute path: " + err.Error(), // TODO: wrap this error
@@ -258,6 +260,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Find `import "C"` statements in the file.
 	var statements []*ast.GenDecl
 	for _, f := range files {
+		var cgoHeader string
 		for i := 0; i < len(f.Decls); i++ {
 			decl := f.Decls[i]
 			genDecl, ok := decl.(*ast.GenDecl)
@@ -284,10 +287,32 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 			// Found a CGo statement.
 			statements = append(statements, genDecl)
 
+			// Store the text of the CGo fragment so it can be compiled. This is
+			// for cases like these, where functions are defined directly in the
+			// header:
+			//     // int add(int a, int b) {
+			//     //   return a + b;
+			//     // }
+			//     import "C"
+			if genDecl.Doc != nil {
+				position := fset.Position(genDecl.Doc.Pos())
+				lines := []string{fmt.Sprintf("# %d %#v\n", position.Line, position.Filename)}
+				for _, line := range strings.Split(getCommentText(genDecl.Doc), "\n") {
+					if strings.HasPrefix(strings.TrimSpace(line), "#cgo") {
+						line = ""
+					}
+					lines = append(lines, line)
+				}
+				fragment := strings.Join(lines, "\n")
+				cgoHeader += fragment
+			}
+
 			// Remove this import declaration.
 			f.Decls = append(f.Decls[:i], f.Decls[i+1:]...)
 			i--
 		}
+
+		p.cgoHeaders = append(p.cgoHeaders, cgoHeader)
 
 		// Print the AST, for debugging.
 		//ast.Print(fset, f)
@@ -436,7 +461,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
-	return p.generated, p.cflags, p.ldflags, p.visitedFiles, p.errors
+	return p.generated, p.cgoHeaders, p.cflags, p.ldflags, p.visitedFiles, p.errors
 }
 
 // makePathsAbsolute converts some common path compiler flags (-I, -L) from
