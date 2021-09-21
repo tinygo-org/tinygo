@@ -177,7 +177,10 @@ func LoadTarget(target string) (*TargetSpec, error) {
 		if llvmarch == "" {
 			llvmarch = goarch
 		}
-		target = llvmarch + "--" + llvmos
+		// Target triples (which actually have four components, but are called
+		// triples for historical reasons) have the form:
+		//   arch-vendor-os-environment
+		target = llvmarch + "-unknown-" + llvmos
 		if goarch == "arm" {
 			target += "-gnueabihf"
 		}
@@ -206,14 +209,6 @@ func LoadTarget(target string) (*TargetSpec, error) {
 		tripleSplit := strings.Split(target, "-")
 		if len(tripleSplit) < 3 {
 			return nil, errors.New("expected a full LLVM target or a custom target in -target flag")
-		}
-		if tripleSplit[0] == "arm" {
-			// LLVM and Clang have a different idea of what "arm" means, so
-			// upgrade to a slightly more modern ARM. In fact, when you pass
-			// --target=arm--linux-gnueabihf to Clang, it will convert that
-			// internally to armv7-unknown-linux-gnueabihf. Changing the
-			// architecture to armv7 will keep things consistent.
-			tripleSplit[0] = "armv7"
 		}
 		goos := tripleSplit[2]
 		if strings.HasPrefix(goos, "darwin") {
@@ -250,7 +245,6 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		Scheduler:        "tasks",
 		Linker:           "cc",
 		DefaultStackSize: 1024 * 64, // 64kB
-		CFlags:           []string{"--target=" + triple},
 		GDB:              []string{"gdb"},
 		PortReset:        "false",
 	}

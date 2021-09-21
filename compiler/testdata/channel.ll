@@ -1,7 +1,7 @@
 ; ModuleID = 'channel.go'
 source_filename = "channel.go"
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
-target triple = "wasm32--wasi"
+target triple = "wasm32-unknown-wasi"
 
 %runtime.channel = type { i32, i32, i8, %runtime.channelBlockedList*, i32, i32, i32, i8* }
 %runtime.channelBlockedList = type { %runtime.channelBlockedList*, %"internal/task.Task"*, %runtime.chanSelectState*, { %runtime.channelBlockedList*, i32, i32 } }

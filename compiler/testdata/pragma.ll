@@ -1,7 +1,7 @@
 ; ModuleID = 'pragma.go'
 source_filename = "pragma.go"
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
-target triple = "wasm32--wasi"
+target triple = "wasm32-unknown-wasi"
 
 @extern_global = external global [0 x i8], align 1
 @main.alignedGlobal = hidden global [4 x i32] zeroinitializer, align 32
