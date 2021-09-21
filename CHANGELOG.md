@@ -1,3 +1,73 @@
+0.20.0
+---
+
+* **command line**
+  - add support for Go 1.17
+  - improve Go version detection
+  - add support for the Black Magic Probe (BMP)
+  - add a flag for creating cpu profiles
+* **compiler**
+  - `builder:` list libraries at the end of the linker command
+  - `builder:` strip debug information at link time instead of at compile time
+  - `builder:` add missing error check for `ioutil.TempFile()`
+  - `builder:` simplify running of jobs
+  - `compiler:` move LLVM math builtin support into the compiler
+  - `compiler:` move math aliases from the runtime to the compiler
+  - `compiler:` add aliases for many hashing packages
+  - `compiler:` add `*ssa.MakeSlice` bounds tests
+  - `compiler:` fix max possible slice
+  - `compiler:` add support for new language features of Go 1.17
+  - `compiler:` fix equally named structs in different scopes
+  - `compiler:` avoid zero-sized alloca in channel operations
+  - `interp:` don't ignore array indices for untyped objects
+  - `interp:` keep reverted package initializers in order
+  - `interp:` fix bug in compiler-time/run-time package initializers
+  - `loader:` fix panic in CGo files with syntax errors
+  - `transform:` improve GC stack slot pass to work around a bug
+* **standard library**
+  - `crypto/rand`: switch to `arc4random_buf`
+  - `math:` fix `math.Max` and `math.Min`
+  - `math/big`: fix undefined symbols error
+  - `net:` add MAC address implementation
+  - `os:` implement `os.Executable`
+  - `os:` add `SEEK_SET`, `SEEK_CUR`, and `SEEK_END`
+  - `reflect:` add StructField.IsExported method
+  - `runtime:` reset heapptr to heapStart after preinit()
+  - `runtime:` add `subsections_via_symbols` to assembly files on darwin
+  - `testing:` add subset implementation of Benchmark
+  - `testing:` test testing package using `tinygo test`
+  - `testing:` add support for the `-test.v` flag
+* **targets**
+  - `386:` bump minimum requirement to the Pentium 4
+  - `arm:` switch to Thumb instruction set on ARM
+  - `atsamd:` fix copy-paste error for atsamd21/51 calibTrim block
+  - `baremetal`,`wasm`: support command line params and environment variables
+  - `cortexm:` fix stack overflow because of unaligned stacks
+  - `esp32c3:` add support for the ESP32-C3 from Espressif
+  - `nrf52840:` fix ram size
+  - `nxpmk66f18:` fix a suspicious bitwise operation
+  - `rp2040:` add SPI support
+  - `rp2040:` add I2C support
+  - `rp2040:` add PWM implementation
+  - `rp2040:` add openocd configuration
+  - `stm32:` add support for PortMask* functions for WS2812 support
+  - `unix:` fix time base for time.Now()
+  - `unix:` check for mmap error and act accordingly
+  - `wasm:` override dlmalloc heap implementation from wasi-libc
+  - `wasm:` align heap to 16 bytes
+  - `wasm:` add support for the crypto/rand package
+* **boards**
+  - add `DefaultUART` to adafruit boards
+  - `arduino-mkrwifi1010:` add board definition for Arduino MKR WiFi 1010
+  - `arduino-mkrwifi1010:` fix pin definition of `NINA_RESETN`
+  - `feather-nrf52:` fix pin definition of uart
+  - `feather-rp2040:` add pin name definition
+  - `gameboy-advance:` fix ROM header
+  - `mdbt50qrx-uf2:` add Raytac MDBT50Q-RX Dongle with TinyUF2
+  - `nano-rp2040:` define `NINA_SPI` and fix wifinina pins
+  - `teensy40:` enable hardware UART reconfiguration, fix receive watermark interrupt
+
+
 0.19.0
 ---
 
