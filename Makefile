@@ -470,9 +470,9 @@ build/release: tinygo gen-device wasi-libc
 	@mkdir -p build/release/tinygo/lib/nrfx
 	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libc
 	@mkdir -p build/release/tinygo/lib/wasi-libc
-	@mkdir -p build/release/tinygo/pkg/armv6m-none-eabi
-	@mkdir -p build/release/tinygo/pkg/armv7m-none-eabi
-	@mkdir -p build/release/tinygo/pkg/armv7em-none-eabi
+	@mkdir -p build/release/tinygo/pkg/armv6m-unknown-unknown-eabi
+	@mkdir -p build/release/tinygo/pkg/armv7m-unknown-unknown-eabi
+	@mkdir -p build/release/tinygo/pkg/armv7em-unknown-unknown-eabi
 	@echo copying source files
 	@cp -p  build/tinygo$(EXE)           build/release/tinygo/bin
 	@cp -p $(abspath $(CLANG_SRC))/lib/Headers/*.h build/release/tinygo/lib/clang/include
@@ -491,12 +491,12 @@ build/release: tinygo gen-device wasi-libc
 	@cp -rp lib/wasi-libc/sysroot        build/release/tinygo/lib/wasi-libc/sysroot
 	@cp -rp src                          build/release/tinygo/src
 	@cp -rp targets                      build/release/tinygo/targets
-	./build/tinygo build-library -target=armv6m-none-eabi  -o build/release/tinygo/pkg/armv6m-none-eabi/compiler-rt.a compiler-rt
-	./build/tinygo build-library -target=armv7m-none-eabi  -o build/release/tinygo/pkg/armv7m-none-eabi/compiler-rt.a compiler-rt
-	./build/tinygo build-library -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/compiler-rt.a compiler-rt
-	./build/tinygo build-library -target=armv6m-none-eabi  -o build/release/tinygo/pkg/armv6m-none-eabi/picolibc.a picolibc
-	./build/tinygo build-library -target=armv7m-none-eabi  -o build/release/tinygo/pkg/armv7m-none-eabi/picolibc.a picolibc
-	./build/tinygo build-library -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/picolibc.a picolibc
+	./build/tinygo build-library -target=armv6m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv6m-unknown-unknown-eabi/compiler-rt.a compiler-rt
+	./build/tinygo build-library -target=armv7m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv7m-unknown-unknown-eabi/compiler-rt.a compiler-rt
+	./build/tinygo build-library -target=armv7em-unknown-unknown-eabi -o build/release/tinygo/pkg/armv7em-unknown-unknown-eabi/compiler-rt.a compiler-rt
+	./build/tinygo build-library -target=armv6m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv6m-unknown-unknown-eabi/picolibc.a picolibc
+	./build/tinygo build-library -target=armv7m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv7m-unknown-unknown-eabi/picolibc.a picolibc
+	./build/tinygo build-library -target=armv7em-unknown-unknown-eabi -o build/release/tinygo/pkg/armv7em-unknown-unknown-eabi/picolibc.a picolibc
 
 release: build/release
 	tar -czf build/release.tar.gz -C build/release tinygo

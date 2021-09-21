@@ -1,5 +1,5 @@
 {
-	"llvm-target": "arm4-none-eabi",
+	"llvm-target": "arm4-unknown-unknown-eabi",
 	"cpu": "arm7tdmi",
 	"build-tags": ["gameboyadvance", "arm7tdmi", "baremetal", "linux", "arm"],
 	"goos": "linux",
@@ -8,7 +8,6 @@
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
 	"cflags": [
-		"--target=arm4-none-eabi",
 		"-mcpu=arm7tdmi",
 		"-Werror",
 		"-fshort-enums",

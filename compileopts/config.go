@@ -21,7 +21,7 @@ type Config struct {
 	TestConfig     TestConfig
 }
 
-// Triple returns the LLVM target triple, like armv6m-none-eabi.
+// Triple returns the LLVM target triple, like armv6m-unknown-unknown-eabi.
 func (c *Config) Triple() string {
 	return c.Target.Triple
 }
@@ -213,6 +213,8 @@ func (c *Config) CFlags() []string {
 	cflags = append(cflags, "-g")
 	// Use the same optimization level as TinyGo.
 	cflags = append(cflags, "-O"+c.Options.Opt)
+	// Set the LLVM target triple.
+	cflags = append(cflags, "--target="+c.Triple())
 	return cflags
 }
 

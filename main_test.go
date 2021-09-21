@@ -95,13 +95,13 @@ func TestCompiler(t *testing.T) {
 
 	if runtime.GOOS == "linux" {
 		t.Run("X86Linux", func(t *testing.T) {
-			runPlatTests("i386--linux-gnu", tests, t)
+			runPlatTests("i386-unknown-linux", tests, t)
 		})
 		t.Run("ARMLinux", func(t *testing.T) {
-			runPlatTests("arm--linux-gnueabihf", tests, t)
+			runPlatTests("armv7-unknown-linux-gnueabihf", tests, t)
 		})
 		t.Run("ARM64Linux", func(t *testing.T) {
-			runPlatTests("aarch64--linux-gnu", tests, t)
+			runPlatTests("aarch64-unknown-linux", tests, t)
 		})
 		t.Run("WebAssembly", func(t *testing.T) {
 			runPlatTests("wasm", tests, t)

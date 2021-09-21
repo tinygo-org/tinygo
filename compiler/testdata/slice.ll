@@ -1,7 +1,7 @@
 ; ModuleID = 'slice.go'
 source_filename = "slice.go"
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
-target triple = "wasm32--wasi"
+target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 

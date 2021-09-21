@@ -1,9 +1,8 @@
 {
 	"inherits": ["cortex-m"],
-	"llvm-target": "armv7em-none-eabi",
+	"llvm-target": "armv7em-unknown-unknown-eabi",
 	"cpu": "cortex-m7",
 	"cflags": [
-		"--target=armv7em-none-eabi",
 		"-mcpu=cortex-m7",
 		"-mfloat-abi=soft"
 	]

@@ -28,7 +28,7 @@ func normalizeResult(result string) string {
 }
 
 func TestCGo(t *testing.T) {
-	var cflags = []string{"--target=armv6m-none-eabi"}
+	var cflags = []string{"--target=armv6m-unknown-unknown-eabi"}
 
 	for _, name := range []string{"basic", "errors", "types", "flags", "const"} {
 		name := name // avoid a race condition
