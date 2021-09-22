@@ -164,11 +164,9 @@ func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, 
 	if bufSize.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
 		if bufSizeType.Info()&types.IsUnsigned != 0 {
 			// Unsigned, so zero-extend to uint type.
-			bufSizeType = types.Typ[types.Uint]
 			bufSize = b.CreateZExt(bufSize, b.intType, "")
 		} else {
 			// Signed, so sign-extend to int type.
-			bufSizeType = types.Typ[types.Int]
 			bufSize = b.CreateSExt(bufSize, b.intType, "")
 		}
 	}

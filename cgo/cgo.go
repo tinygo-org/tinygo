@@ -124,17 +124,17 @@ var cgoAliases = map[string]string{
 // builtinAliases are handled specially because they only exist on the Go side
 // of CGo, not on the CGo side (they're prefixed with "_Cgo_" there).
 var builtinAliases = map[string]struct{}{
-	"char":      struct{}{},
-	"schar":     struct{}{},
-	"uchar":     struct{}{},
-	"short":     struct{}{},
-	"ushort":    struct{}{},
-	"int":       struct{}{},
-	"uint":      struct{}{},
-	"long":      struct{}{},
-	"ulong":     struct{}{},
-	"longlong":  struct{}{},
-	"ulonglong": struct{}{},
+	"char":      {},
+	"schar":     {},
+	"uchar":     {},
+	"short":     {},
+	"ushort":    {},
+	"int":       {},
+	"uint":      {},
+	"long":      {},
+	"ulong":     {},
+	"longlong":  {},
+	"ulonglong": {},
 }
 
 // cgoTypes lists some C types with ambiguous sizes that must be retrieved
@@ -224,7 +224,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 				Specs: []ast.Spec{
 					&ast.ValueSpec{
 						Names: []*ast.Ident{
-							&ast.Ident{
+							{
 								Name: "_",
 								Obj: &ast.Object{
 									Kind: ast.Var,
@@ -494,7 +494,7 @@ func (p *cgoPackage) addFuncDecls() {
 		if fn.variadic {
 			decl.Doc = &ast.CommentGroup{
 				List: []*ast.Comment{
-					&ast.Comment{
+					{
 						Slash: fn.pos,
 						Text:  "//go:variadic",
 					},
@@ -505,7 +505,7 @@ func (p *cgoPackage) addFuncDecls() {
 		for i, arg := range fn.args {
 			args[i] = &ast.Field{
 				Names: []*ast.Ident{
-					&ast.Ident{
+					{
 						NamePos: fn.pos,
 						Name:    arg.name,
 						Obj: &ast.Object{
@@ -553,7 +553,7 @@ func (p *cgoPackage) addFuncPtrDecls() {
 			Name: "C." + name + "$funcaddr",
 		}
 		valueSpec := &ast.ValueSpec{
-			Names: []*ast.Ident{&ast.Ident{
+			Names: []*ast.Ident{{
 				NamePos: fn.pos,
 				Name:    "C." + name + "$funcaddr",
 				Obj:     obj,
@@ -603,7 +603,7 @@ func (p *cgoPackage) addConstDecls() {
 			Name: "C." + name,
 		}
 		valueSpec := &ast.ValueSpec{
-			Names: []*ast.Ident{&ast.Ident{
+			Names: []*ast.Ident{{
 				NamePos: constVal.pos,
 				Name:    "C." + name,
 				Obj:     obj,
@@ -644,7 +644,7 @@ func (p *cgoPackage) addVarDecls() {
 			Name: "C." + name,
 		}
 		valueSpec := &ast.ValueSpec{
-			Names: []*ast.Ident{&ast.Ident{
+			Names: []*ast.Ident{{
 				NamePos: global.pos,
 				Name:    "C." + name,
 				Obj:     obj,
@@ -845,9 +845,9 @@ func (p *cgoPackage) makeUnionField(typ *elaboratedTypeInfo) *ast.StructType {
 		Struct: typ.typeExpr.Struct,
 		Fields: &ast.FieldList{
 			Opening: typ.typeExpr.Fields.Opening,
-			List: []*ast.Field{&ast.Field{
+			List: []*ast.Field{{
 				Names: []*ast.Ident{
-					&ast.Ident{
+					{
 						NamePos: typ.typeExpr.Fields.Opening,
 						Name:    "$union",
 					},
@@ -928,9 +928,9 @@ func (p *cgoPackage) createUnionAccessor(field *ast.Field, typeName string) {
 		Recv: &ast.FieldList{
 			Opening: pos,
 			List: []*ast.Field{
-				&ast.Field{
+				{
 					Names: []*ast.Ident{
-						&ast.Ident{
+						{
 							NamePos: pos,
 							Name:    "union",
 						},
@@ -959,7 +959,7 @@ func (p *cgoPackage) createUnionAccessor(field *ast.Field, typeName string) {
 			},
 			Results: &ast.FieldList{
 				List: []*ast.Field{
-					&ast.Field{
+					{
 						Type: &ast.StarExpr{
 							Star: pos,
 							X:    field.Type,
@@ -1038,9 +1038,9 @@ func (p *cgoPackage) createBitfieldGetter(bitfield bitfieldInfo, typeName string
 		Recv: &ast.FieldList{
 			Opening: bitfield.pos,
 			List: []*ast.Field{
-				&ast.Field{
+				{
 					Names: []*ast.Ident{
-						&ast.Ident{
+						{
 							NamePos: bitfield.pos,
 							Name:    "s",
 							Obj: &ast.Object{
@@ -1074,7 +1074,7 @@ func (p *cgoPackage) createBitfieldGetter(bitfield bitfieldInfo, typeName string
 			},
 			Results: &ast.FieldList{
 				List: []*ast.Field{
-					&ast.Field{
+					{
 						Type: bitfield.field.Type,
 					},
 				},
@@ -1191,9 +1191,9 @@ func (p *cgoPackage) createBitfieldSetter(bitfield bitfieldInfo, typeName string
 		Recv: &ast.FieldList{
 			Opening: bitfield.pos,
 			List: []*ast.Field{
-				&ast.Field{
+				{
 					Names: []*ast.Ident{
-						&ast.Ident{
+						{
 							NamePos: bitfield.pos,
 							Name:    "s",
 							Obj: &ast.Object{
@@ -1224,9 +1224,9 @@ func (p *cgoPackage) createBitfieldSetter(bitfield bitfieldInfo, typeName string
 			Params: &ast.FieldList{
 				Opening: bitfield.pos,
 				List: []*ast.Field{
-					&ast.Field{
+					{
 						Names: []*ast.Ident{
-							&ast.Ident{
+							{
 								NamePos: bitfield.pos,
 								Name:    "value",
 								Obj:     nil,

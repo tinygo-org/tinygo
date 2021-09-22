@@ -203,7 +203,7 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 		if resultType.kind != C.CXType_Void {
 			fn.results = &ast.FieldList{
 				List: []*ast.Field{
-					&ast.Field{
+					{
 						Type: p.makeASTType(resultType, pos),
 					},
 				},
@@ -775,7 +775,7 @@ func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientD
 	}
 	*inBitfield = false
 	field.Names = []*ast.Ident{
-		&ast.Ident{
+		{
 			NamePos: pos,
 			Name:    name,
 			Obj: &ast.Object{
@@ -796,8 +796,12 @@ func tinygo_clang_enum_visitor(c, parent C.GoCXCursor, client_data C.CXClientDat
 	pos := p.getCursorPosition(c)
 	value := C.tinygo_clang_getEnumConstantDeclValue(c)
 	p.constants[name] = constantInfo{
-		expr: &ast.BasicLit{pos, token.INT, strconv.FormatInt(int64(value), 10)},
-		pos:  pos,
+		expr: &ast.BasicLit{
+			ValuePos: pos,
+			Kind:     token.INT,
+			Value:    strconv.FormatInt(int64(value), 10),
+		},
+		pos: pos,
 	}
 	return C.CXChildVisit_Continue
 }

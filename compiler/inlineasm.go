@@ -72,7 +72,7 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 	args := []llvm.Value{}
 	constraints := []string{}
 	hasOutput := false
-	asmString = regexp.MustCompile("\\{\\}").ReplaceAllStringFunc(asmString, func(s string) string {
+	asmString = regexp.MustCompile(`\{\}`).ReplaceAllStringFunc(asmString, func(s string) string {
 		hasOutput = true
 		return "$0"
 	})
@@ -80,7 +80,7 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 		constraints = append(constraints, "=&r")
 		registerNumbers[""] = 0
 	}
-	asmString = regexp.MustCompile("\\{[a-zA-Z]+\\}").ReplaceAllStringFunc(asmString, func(s string) string {
+	asmString = regexp.MustCompile(`\{[a-zA-Z]+\}`).ReplaceAllStringFunc(asmString, func(s string) string {
 		// TODO: skip strings like {r4} etc. that look like ARM push/pop
 		// instructions.
 		name := s[1 : len(s)-1]

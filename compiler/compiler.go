@@ -33,9 +33,6 @@ func init() {
 	llvm.InitializeAllAsmPrinters()
 }
 
-// The TinyGo import path.
-const tinygoPath = "github.com/tinygo-org/tinygo"
-
 // Config is the configuration for the compiler. Most settings should be copied
 // directly from compileopts.Config, it recreated here to decouple the compiler
 // package a bit and because it makes caching easier.
@@ -141,7 +138,6 @@ type builder struct {
 	blockExits        map[*ssa.BasicBlock]llvm.BasicBlock // these are the exit blocks
 	currentBlock      *ssa.BasicBlock
 	phis              []phiNode
-	taskHandle        llvm.Value
 	deferPtr          llvm.Value
 	difunc            llvm.Metadata
 	dilocals          map[*types.Var]llvm.Metadata
@@ -233,10 +229,6 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 	targetData := machine.CreateTargetData()
 	defer targetData.Dispose()
 
-	intPtrType := targetData.IntPtrType()
-	if intPtrType.IntTypeWidth()/8 <= 32 {
-	}
-
 	var intWidth int
 	if targetData.PointerSize() <= 4 {
 		// 8, 16, 32 bits targets
@@ -251,7 +243,7 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 	return &stdSizes{
 		IntSize:  int64(intWidth / 8),
 		PtrSize:  int64(targetData.PointerSize()),
-		MaxAlign: int64(targetData.PrefTypeAlignment(intPtrType)),
+		MaxAlign: int64(targetData.PrefTypeAlignment(targetData.IntPtrType())),
 	}
 }
 
@@ -452,7 +444,7 @@ func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
 			AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
 			ElementType: c.getDIType(typ.Elem()),
 			Subscripts: []llvm.DISubrange{
-				llvm.DISubrange{
+				{
 					Lo:    0,
 					Count: typ.Len(),
 				},
