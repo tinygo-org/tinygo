@@ -33,9 +33,26 @@ func init() {
 	// Enable SAR ADC
 	esp.SYSTEM.PERIP_CLK_EN0.SetBits(esp.SYSTEM_PERIP_CLK_EN0_APB_SARADC_CLK_EN)
 
+	// High-speed ADC
+	esp.SYSTEM.PERIP_CLK_EN0.SetBits(esp.SYSTEM_PERIP_CLK_EN0_ADC2_ARB_CLK_EN)
+
 	// Enable RTC20M_CLK2
 	// Unfortunately, the technical reference document from where the above note is taken
 	// has no information on RTC_CNTL_DIG_CLK20M_EN, nither the SVD have such information.
+	/*
+
+		https://github.com/espressif/esp-idf/blob/5f38b766a83d18f78167d1d0dd8c8427ea1a36cb/components/hal/esp32c3/include/hal/i2c_ll.h#L823
+
+		// rtc_clk needs to switch on.
+		if (src_clk == I2C_SCLK_RTC) {
+			SET_PERI_REG_MASK(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_DIG_CLK8M_EN_M);
+			esp_rom_delay_us(DELAY_RTC_CLK_SWITCH);
+		}
+
+		esp.RTC_CLK_CONF
+
+
+	*/
 	// esp.RTC_CNTL.RTC_CLK_CONF.SetBits( ??? )
 
 }
