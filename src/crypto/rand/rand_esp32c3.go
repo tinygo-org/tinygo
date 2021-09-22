@@ -8,8 +8,11 @@ package rand
 
 import (
 	"device/esp"
+	"device/riscv"
 	"unsafe"
 )
+
+const MHZ = 1000000
 
 func init() {
 	Reader = &reader{}
@@ -58,6 +61,21 @@ func init() {
 }
 
 type reader struct {
+}
+
+func getApbFreqHZ() uint32 {
+	v := esp.RTC_CNTL.RTC_STORE5.Get() & 0xffff
+	v = v << 12
+	v += MHZ / 2
+	r := v % MHZ
+	return v - r
+}
+
+const CSR_CPU_COUNTER riscv.CSR = 0x7e2
+
+func getCpuTickCount() uint32 {
+	count := CSR_CPU_COUNTER.Get()
+	return uint32(count)
 }
 
 func (r *reader) Read(b []byte) (n int, err error) {
