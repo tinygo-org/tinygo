@@ -71,7 +71,16 @@ func (job *compileJob) readyToRun() bool {
 // It runs all jobs in the order of the dependencies slice, depth-first.
 // Therefore, if some jobs are preferred to run before others, they should be
 // ordered as such in the job dependencies.
-func runJobs(job *compileJob) error {
+func runJobs(job *compileJob, parallelism int) error {
+	if parallelism == 0 {
+		// Have a default, if the parallelism isn't set. This is useful for
+		// tests.
+		parallelism = runtime.NumCPU()
+	}
+	if parallelism < 1 {
+		return fmt.Errorf("-p flag must be at least 1, provided -p=%d", parallelism)
+	}
+
 	// Create a slice of jobs to run, where all dependencies are run in order.
 	jobs := []*compileJob{}
 	addedJobs := map[*compileJob]struct{}{}
@@ -94,7 +103,7 @@ func runJobs(job *compileJob) error {
 	defer close(workerChan)
 
 	// Start a number of workers.
-	for i := 0; i < runtime.NumCPU(); i++ {
+	for i := 0; i < parallelism; i++ {
 		if jobRunnerDebug {
 			fmt.Println("## starting worker", i)
 		}
@@ -109,7 +118,7 @@ func runJobs(job *compileJob) error {
 	for {
 		// If there are free workers, try starting a new job (if one is
 		// available). If it succeeds, try again to fill the entire worker pool.
-		if numRunningJobs < runtime.NumCPU() {
+		if numRunningJobs < parallelism {
 			jobToRun := nextJob(jobs)
 			if jobToRun != nil {
 				// Start job.
