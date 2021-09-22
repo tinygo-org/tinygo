@@ -52,7 +52,7 @@ func (l *Library) Load(config *compileopts.Config, tmpdir string) (dir string, e
 	if err != nil {
 		return "", err
 	}
-	err = runJobs(job)
+	err = runJobs(job, config.Options.Parallelism)
 	return filepath.Dir(job.result), err
 }
 

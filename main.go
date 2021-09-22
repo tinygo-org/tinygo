@@ -1118,6 +1118,7 @@ func main() {
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
 	printCommands := flag.Bool("x", false, "Print commands")
+	parallelism := flag.Int("p", runtime.GOMAXPROCS(0), "the number of build jobs that can run in parallel")
 	nodebug := flag.Bool("no-debug", false, "strip debug information")
 	ocdCommandsString := flag.String("ocd-commands", "", "OpenOCD commands, overriding target spec (can specify multiple separated by commas)")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
@@ -1190,6 +1191,7 @@ func main() {
 		PrintIR:         *printIR,
 		DumpSSA:         *dumpSSA,
 		VerifyIR:        *verifyIR,
+		Parallelism:     *parallelism,
 		Debug:           !*nodebug,
 		PrintSizes:      *printSize,
 		PrintStacks:     *printStacks,
@@ -1278,6 +1280,7 @@ func main() {
 		}
 		defer os.RemoveAll(tmpdir)
 		config := &compileopts.Config{
+			Options: options,
 			Target: &compileopts.TargetSpec{
 				Triple: *target,
 			},

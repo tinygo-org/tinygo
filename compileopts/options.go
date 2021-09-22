@@ -31,6 +31,7 @@ type Options struct {
 	DumpSSA         bool
 	VerifyIR        bool
 	PrintCommands   func(cmd string, args ...string)
+	Parallelism     int // -p flag
 	Debug           bool
 	PrintSizes      string
 	PrintAllocs     *regexp.Regexp // regexp string
