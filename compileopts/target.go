@@ -172,7 +172,7 @@ func LoadTarget(target string) (*TargetSpec, error) {
 			"386":   "i386",
 			"amd64": "x86_64",
 			"arm64": "aarch64",
-			"arm":   "thumbv7",
+			"arm":   "armv7",
 		}[goarch]
 		if llvmarch == "" {
 			llvmarch = goarch
