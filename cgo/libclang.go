@@ -72,16 +72,13 @@ var diagnosticSeverity = [...]string{
 	C.CXDiagnostic_Fatal:   "fatal",
 }
 
-func (p *cgoPackage) parseFragment(fragment string, cflags []string, posFilename string, posLine int) {
+func (p *cgoPackage) parseFragment(fragment string, cflags []string, filename string) {
 	index := C.clang_createIndex(0, 0)
 	defer C.clang_disposeIndex(index)
 
 	// pretend to be a .c file
-	filenameC := C.CString(posFilename + "!cgo.c")
+	filenameC := C.CString(filename + "!cgo.c")
 	defer C.free(unsafe.Pointer(filenameC))
-
-	// fix up error locations
-	fragment = fmt.Sprintf("# %d %#v\n", posLine, posFilename) + fragment
 
 	fragmentC := C.CString(fragment)
 	defer C.free(unsafe.Pointer(fragmentC))
@@ -380,7 +377,7 @@ func (p *cgoPackage) addErrorAfter(pos token.Pos, after, msg string) {
 func (p *cgoPackage) addErrorAt(position token.Position, msg string) {
 	if filepath.IsAbs(position.Filename) {
 		// Relative paths for readability, like other Go parser errors.
-		relpath, err := filepath.Rel(p.dir, position.Filename)
+		relpath, err := filepath.Rel(p.currentDir, position.Filename)
 		if err == nil {
 			position.Filename = relpath
 		}

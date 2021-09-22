@@ -13,3 +13,14 @@ type C.uint32_t = uint32
 type C.uint64_t = uint64
 type C.uint8_t = uint8
 type C.uintptr_t = uintptr
+type C.char uint8
+type C.int int32
+type C.long int32
+type C.longlong int64
+type C.schar int8
+type C.short int16
+type C.uchar uint8
+type C.uint uint32
+type C.ulong uint32
+type C.ulonglong uint64
+type C.ushort uint16

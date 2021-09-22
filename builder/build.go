@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/cgo"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -60,6 +61,7 @@ type BuildResult struct {
 // implementation of an imported package changes.
 type packageAction struct {
 	ImportPath       string
+	CGoVersion       int // cgo.Version
 	CompilerVersion  int // compiler.Version
 	InterpVersion    int // interp.Version
 	LLVMVersion      string
@@ -179,6 +181,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		// the parameters for the build.
 		actionID := packageAction{
 			ImportPath:       pkg.ImportPath,
+			CGoVersion:       cgo.Version,
 			CompilerVersion:  compiler.Version,
 			InterpVersion:    interp.Version,
 			LLVMVersion:      llvm.Version,

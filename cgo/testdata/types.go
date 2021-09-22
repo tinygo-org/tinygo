@@ -111,6 +111,10 @@ void variadic2(int x, int y, ...);
 */
 import "C"
 
+// // Test that we can refer from this CGo fragment to the fragment above.
+// typedef myint myint2;
+import "C"
+
 var (
 	// Simple typedefs.
 	_ C.myint
