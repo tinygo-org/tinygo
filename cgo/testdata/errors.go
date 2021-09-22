@@ -19,6 +19,9 @@ typedef someType noType; // undefined type
 // #define SOME_CONST_4 8) // after some empty lines
 import "C"
 
+// #warning another warning
+import "C"
+
 // Make sure that errors for the following lines won't change with future
 // additions to the CGo preamble.
 //line errors.go:100

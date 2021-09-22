@@ -25,13 +25,19 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
+// Version of the cgo package. It must be incremented whenever the cgo package
+// is changed in a way that affects the output so that cached package builds
+// will be invalidated.
+// This version is independent of the TinyGo version number.
+const Version = 1 // last change: run libclang once per Go file
+
 // cgoPackage holds all CGo-related information of a package.
 type cgoPackage struct {
 	generated       *ast.File
 	generatedPos    token.Pos
-	cgoHeaders      []string
 	errors          []error
-	dir             string
+	currentDir      string // current working directory
+	packageDir      string // full path to the package to process
 	fset            *token.FileSet
 	tokenFiles      map[string]*token.File
 	missingSymbols  map[string]struct{}
@@ -165,7 +171,7 @@ typedef unsigned long long  _Cgo_ulonglong;
 // returns these in the []error slice but still modifies the AST.
 func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string) (*ast.File, []string, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
-		dir:             dir,
+		currentDir:      dir,
 		fset:            fset,
 		tokenFiles:      map[string]*token.File{},
 		missingSymbols:  map[string]struct{}{},
@@ -193,7 +199,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 			},
 		}
 	}
-	packagePath = filepath.Dir(packagePath)
+	p.packageDir = filepath.Dir(packagePath)
 
 	// Construct a new in-memory AST for CGo declarations of this package.
 	unsafeImport := &ast.ImportSpec{
@@ -257,9 +263,9 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 		p.missingSymbols["_Cgo_"+name] = struct{}{}
 	}
 
-	// Find `import "C"` statements in the file.
-	var statements []*ast.GenDecl
-	for _, f := range files {
+	// Find `import "C"` C fragments in the file.
+	cgoHeaders := make([]string, len(files)) // combined CGo header fragment for each file
+	for i, f := range files {
 		var cgoHeader string
 		for i := 0; i < len(f.Decls); i++ {
 			decl := f.Decls[i]
@@ -284,127 +290,40 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 				continue
 			}
 
-			// Found a CGo statement.
-			statements = append(statements, genDecl)
-
-			// Store the text of the CGo fragment so it can be compiled. This is
-			// for cases like these, where functions are defined directly in the
-			// header:
-			//     // int add(int a, int b) {
-			//     //   return a + b;
-			//     // }
-			//     import "C"
-			if genDecl.Doc != nil {
-				position := fset.Position(genDecl.Doc.Pos())
-				lines := []string{fmt.Sprintf("# %d %#v\n", position.Line, position.Filename)}
-				for _, line := range strings.Split(getCommentText(genDecl.Doc), "\n") {
-					if strings.HasPrefix(strings.TrimSpace(line), "#cgo") {
-						line = ""
-					}
-					lines = append(lines, line)
-				}
-				fragment := strings.Join(lines, "\n")
-				cgoHeader += fragment
-			}
-
 			// Remove this import declaration.
 			f.Decls = append(f.Decls[:i], f.Decls[i+1:]...)
 			i--
-		}
 
-		p.cgoHeaders = append(p.cgoHeaders, cgoHeader)
-
-		// Print the AST, for debugging.
-		//ast.Print(fset, f)
-	}
-
-	// Find all #cgo lines.
-	for _, genDecl := range statements {
-		if genDecl.Doc == nil {
-			continue
-		}
-		for _, comment := range genDecl.Doc.List {
-			for {
-				// Extract the #cgo line, and replace it with spaces.
-				// Replacing with spaces makes sure that error locations are
-				// still correct, while not interfering with parsing in any way.
-				lineStart := strings.Index(comment.Text, "#cgo ")
-				if lineStart < 0 {
-					break
-				}
-				lineLen := strings.IndexByte(comment.Text[lineStart:], '\n')
-				if lineLen < 0 {
-					lineLen = len(comment.Text) - lineStart
-				}
-				lineEnd := lineStart + lineLen
-				line := comment.Text[lineStart:lineEnd]
-				spaces := make([]byte, len(line))
-				for i := range spaces {
-					spaces[i] = ' '
-				}
-				lenBefore := len(comment.Text)
-				comment.Text = comment.Text[:lineStart] + string(spaces) + comment.Text[lineEnd:]
-				if len(comment.Text) != lenBefore {
-					println(lenBefore, len(comment.Text))
-					panic("length of preamble changed!")
-				}
-
-				// Get the text before the colon in the #cgo directive.
-				colon := strings.IndexByte(line, ':')
-				if colon < 0 {
-					p.addErrorAfter(comment.Slash, comment.Text[:lineStart], "missing colon in #cgo line")
-					continue
-				}
-
-				// Extract the fields before the colon. These fields are a list
-				// of build tags and the C environment variable.
-				fields := strings.Fields(line[4:colon])
-				if len(fields) == 0 {
-					p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon-1], "invalid #cgo line")
-					continue
-				}
-
-				if len(fields) > 1 {
-					p.addErrorAfter(comment.Slash, comment.Text[:lineStart+5], "not implemented: build constraints in #cgo line")
-					continue
-				}
-
-				name := fields[len(fields)-1]
-				value := line[colon+1:]
-				switch name {
-				case "CFLAGS":
-					flags, err := shlex.Split(value)
-					if err != nil {
-						// TODO: find the exact location where the error happened.
-						p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon+1], "failed to parse flags in #cgo line: "+err.Error())
-						continue
-					}
-					if err := checkCompilerFlags(name, flags); err != nil {
-						p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon+1], err.Error())
-						continue
-					}
-					makePathsAbsolute(flags, packagePath)
-					p.cflags = append(p.cflags, flags...)
-				case "LDFLAGS":
-					flags, err := shlex.Split(value)
-					if err != nil {
-						// TODO: find the exact location where the error happened.
-						p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon+1], "failed to parse flags in #cgo line: "+err.Error())
-						continue
-					}
-					if err := checkLinkerFlags(name, flags); err != nil {
-						p.addErrorAfter(comment.Slash, comment.Text[:lineStart+colon+1], err.Error())
-						continue
-					}
-					makePathsAbsolute(flags, packagePath)
-					p.ldflags = append(p.ldflags, flags...)
-				default:
-					startPos := strings.LastIndex(line[4:colon], name) + 4
-					p.addErrorAfter(comment.Slash, comment.Text[:lineStart+startPos], "invalid #cgo line: "+name)
-					continue
-				}
+			if genDecl.Doc == nil {
+				continue
 			}
+
+			// Iterate through all parts of the CGo header. Note that every //
+			// line is a new comment.
+			position := fset.Position(genDecl.Doc.Pos())
+			fragment := fmt.Sprintf("# %d %#v\n", position.Line, position.Filename)
+			for _, comment := range genDecl.Doc.List {
+				// Find all #cgo lines, extract and use their contents, and
+				// replace the lines with spaces (to preserve locations).
+				c := p.parseCGoPreprocessorLines(comment.Text, comment.Slash)
+
+				// Change the comment (which is still in Go syntax, with // and
+				// /* */ ) to a regular string by replacing the start/end
+				// markers of comments with spaces.
+				// It is similar to the Text() method but differs in that it
+				// doesn't strip anything and tries to keep all offsets correct
+				// by adding spaces and newlines where necessary.
+				if c[1] == '/' { /* comment */
+					c = "  " + c[2:]
+				} else { // comment
+					c = "  " + c[2:len(c)-2]
+				}
+				fragment += c + "\n"
+			}
+			cgoHeader += fragment
 		}
+
+		cgoHeaders[i] = cgoHeader
 	}
 
 	// Define CFlags that will be used while parsing the package.
@@ -414,19 +333,9 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	cflagsForCGo := append([]string{"-D_FORTIFY_SOURCE=0"}, cflags...)
 	cflagsForCGo = append(cflagsForCGo, p.cflags...)
 
-	// Process all CGo imports.
-	for _, genDecl := range statements {
-		if genDecl.Doc == nil {
-			continue
-		}
-		cgoComment := getCommentText(genDecl.Doc)
-
-		pos := genDecl.Pos()
-		if genDecl.Doc != nil {
-			pos = genDecl.Doc.Pos()
-		}
-		position := fset.PositionFor(pos, true)
-		p.parseFragment(cgoComment+cgoTypes, cflagsForCGo, position.Filename, position.Line)
+	// Process CGo imports for each file.
+	for i, f := range files {
+		p.parseFragment(cgoHeaders[i]+cgoTypes, cflagsForCGo, filepath.Base(fset.File(f.Pos()).Name()))
 	}
 
 	// Declare functions found by libclang.
@@ -461,18 +370,18 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
-	return p.generated, p.cgoHeaders, p.cflags, p.ldflags, p.visitedFiles, p.errors
+	return p.generated, cgoHeaders, p.cflags, p.ldflags, p.visitedFiles, p.errors
 }
 
 // makePathsAbsolute converts some common path compiler flags (-I, -L) from
 // relative flags into absolute flags, if they are relative. This is necessary
 // because the C compiler is usually not invoked from the package path.
-func makePathsAbsolute(args []string, packagePath string) {
+func (p *cgoPackage) makePathsAbsolute(args []string) {
 	nextIsPath := false
 	for i, arg := range args {
 		if nextIsPath {
 			if !filepath.IsAbs(arg) {
-				args[i] = filepath.Join(packagePath, arg)
+				args[i] = filepath.Join(p.packageDir, arg)
 			}
 		}
 		if arg == "-I" || arg == "-L" {
@@ -482,10 +391,93 @@ func makePathsAbsolute(args []string, packagePath string) {
 		if strings.HasPrefix(arg, "-I") || strings.HasPrefix(arg, "-L") {
 			path := arg[2:]
 			if !filepath.IsAbs(path) {
-				args[i] = arg[:2] + filepath.Join(packagePath, path)
+				args[i] = arg[:2] + filepath.Join(p.packageDir, path)
 			}
 		}
 	}
+}
+
+// parseCGoPreprocessorLines reads #cgo pseudo-preprocessor lines in the source
+// text (import "C" fragment), stores their information such as CFLAGS, and
+// returns the same text but with those #cgo lines replaced by spaces (to keep
+// position offsets the same).
+func (p *cgoPackage) parseCGoPreprocessorLines(text string, pos token.Pos) string {
+	for {
+		// Extract the #cgo line, and replace it with spaces.
+		// Replacing with spaces makes sure that error locations are
+		// still correct, while not interfering with parsing in any way.
+		lineStart := strings.Index(text, "#cgo ")
+		if lineStart < 0 {
+			break
+		}
+		lineLen := strings.IndexByte(text[lineStart:], '\n')
+		if lineLen < 0 {
+			lineLen = len(text) - lineStart
+		}
+		lineEnd := lineStart + lineLen
+		line := text[lineStart:lineEnd]
+		spaces := make([]byte, len(line))
+		for i := range spaces {
+			spaces[i] = ' '
+		}
+		text = text[:lineStart] + string(spaces) + text[lineEnd:]
+
+		// Get the text before the colon in the #cgo directive.
+		colon := strings.IndexByte(line, ':')
+		if colon < 0 {
+			p.addErrorAfter(pos, text[:lineStart], "missing colon in #cgo line")
+			continue
+		}
+
+		// Extract the fields before the colon. These fields are a list
+		// of build tags and the C environment variable.
+		fields := strings.Fields(line[4:colon])
+		if len(fields) == 0 {
+			p.addErrorAfter(pos, text[:lineStart+colon-1], "invalid #cgo line")
+			continue
+		}
+
+		if len(fields) > 1 {
+			p.addErrorAfter(pos, text[:lineStart+5], "not implemented: build constraints in #cgo line")
+			continue
+		}
+
+		name := fields[len(fields)-1]
+		value := line[colon+1:]
+		switch name {
+		case "CFLAGS":
+			flags, err := shlex.Split(value)
+			if err != nil {
+				// TODO: find the exact location where the error happened.
+				p.addErrorAfter(pos, text[:lineStart+colon+1], "failed to parse flags in #cgo line: "+err.Error())
+				continue
+			}
+			if err := checkCompilerFlags(name, flags); err != nil {
+				p.addErrorAfter(pos, text[:lineStart+colon+1], err.Error())
+				continue
+			}
+			p.makePathsAbsolute(flags)
+			p.cflags = append(p.cflags, flags...)
+		case "LDFLAGS":
+			flags, err := shlex.Split(value)
+			if err != nil {
+				// TODO: find the exact location where the error happened.
+				p.addErrorAfter(pos, text[:lineStart+colon+1], "failed to parse flags in #cgo line: "+err.Error())
+				continue
+			}
+			if err := checkLinkerFlags(name, flags); err != nil {
+				p.addErrorAfter(pos, text[:lineStart+colon+1], err.Error())
+				continue
+			}
+			p.makePathsAbsolute(flags)
+			p.ldflags = append(p.ldflags, flags...)
+		default:
+			startPos := strings.LastIndex(line[4:colon], name) + 4
+			p.addErrorAfter(pos, text[:lineStart+startPos], "invalid #cgo line: "+name)
+			continue
+		}
+	}
+	return text
 }
 
 // addFuncDecls adds the C function declarations found by libclang in the
@@ -1429,21 +1421,4 @@ func renameFieldName(fieldList *ast.FieldList, name string) {
 	}
 	renameFieldName(fieldList, "_"+name)
 	ident.Name = "_" + ident.Name
-}
-
-// getCommentText returns the raw text of an *ast.CommentGroup. It is similar to
-// the Text() method but differs in that it doesn't strip anything and tries to
-// keep all offsets correct by adding spaces and newlines where necessary.
-func getCommentText(g *ast.CommentGroup) string {
-	var text string
-	for _, comment := range g.List {
-		c := comment.Text
-		if c[1] == '/' { /* comment */
-			c = "  " + c[2:]
-		} else { // comment
-			c = "  " + c[2:len(c)-2]
-		}
-		text += c + "\n"
-	}
-	return text
 }
