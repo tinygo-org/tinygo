@@ -9,6 +9,7 @@ package rand
 import (
 	"device/esp"
 	"device/riscv"
+	"machine"
 	"unsafe"
 )
 
@@ -61,6 +62,7 @@ func init() {
 }
 
 type reader struct {
+	lastCpuTick uint32
 }
 
 func getApbFreqHZ() uint32 {
@@ -78,13 +80,25 @@ func getCpuTickCount() uint32 {
 	return uint32(count)
 }
 
+func (r *reader) hw_rand() uint32 {
+	minimalCPUTicks := machine.CPUFrequency() / (getApbFreqHZ() / 16)
+	currentCPUTick := getCpuTickCount()
+	result := esp.APB_CTRL.RND_DATA.Get()
+	for (currentCPUTick - r.lastCpuTick) < minimalCPUTicks {
+		currentCPUTick = getCpuTickCount()
+		result ^= esp.APB_CTRL.RND_DATA.Get()
+	}
+	r.lastCpuTick = currentCPUTick
+	return result ^ esp.APB_CTRL.RND_DATA.Get()
+}
+
 func (r *reader) Read(b []byte) (n int, err error) {
 	if len(b) != 0 {
 		for i := 0; i < len(b); {
-			r := esp.APB_CTRL.RND_DATA.Get()
-			a := (*[4]byte)(unsafe.Pointer(&r))[:]
+			nextRandom := r.hw_rand()
+			byteArray := (*[4]byte)(unsafe.Pointer(&nextRandom))[:]
 			for k := 0; k < 4 && i < len(b); {
-				b[i] = a[k]
+				b[i] = byteArray[k]
 				k++
 				i++
 			}
