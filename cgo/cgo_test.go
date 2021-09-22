@@ -96,7 +96,7 @@ func TestCGo(t *testing.T) {
 			if err != nil {
 				t.Errorf("could not write out CGo AST: %v", err)
 			}
-			actual := normalizeResult(string(buf.Bytes()))
+			actual := normalizeResult(buf.String())
 
 			// Read the file with the expected output, to compare against.
 			outfile := filepath.Join("testdata", name+".out.go")

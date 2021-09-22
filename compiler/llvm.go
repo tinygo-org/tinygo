@@ -8,21 +8,6 @@ import (
 // This file contains helper functions for LLVM that are not exposed in the Go
 // bindings.
 
-// Return a list of values (actually, instructions) where this value is used as
-// an operand.
-func getUses(value llvm.Value) []llvm.Value {
-	if value.IsNil() {
-		return nil
-	}
-	var uses []llvm.Value
-	use := value.FirstUse()
-	for !use.IsNil() {
-		uses = append(uses, use.User())
-		use = use.NextUse()
-	}
-	return uses
-}
-
 // createTemporaryAlloca creates a new alloca in the entry block and adds
 // lifetime start information in the IR signalling that the alloca won't be used
 // before this point.

@@ -27,7 +27,7 @@ func makeArchive(archivePath string, objs []string) error {
 	arwriter := ar.NewWriter(arfile)
 	err = arwriter.WriteGlobalHeader()
 	if err != nil {
-		return &os.PathError{"write ar header", archivePath, err}
+		return &os.PathError{Op: "write ar header", Path: archivePath, Err: err}
 	}
 
 	// Open all object files and read the symbols for the symbol table.
