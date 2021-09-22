@@ -161,36 +161,34 @@ func (spec *TargetSpec) resolveInherits() error {
 }
 
 // Load a target specification.
-func LoadTarget(target string) (*TargetSpec, error) {
-	if target == "" {
+func LoadTarget(options *Options) (*TargetSpec, error) {
+	if options.Target == "" {
 		// Configure based on GOOS/GOARCH environment variables (falling back to
 		// runtime.GOOS/runtime.GOARCH), and generate a LLVM target based on it.
-		goos := goenv.Get("GOOS")
-		goarch := goenv.Get("GOARCH")
-		llvmos := goos
+		llvmos := options.GOOS
 		llvmarch := map[string]string{
 			"386":   "i386",
 			"amd64": "x86_64",
 			"arm64": "aarch64",
 			"arm":   "armv7",
-		}[goarch]
+		}[options.GOARCH]
 		if llvmarch == "" {
-			llvmarch = goarch
+			llvmarch = options.GOARCH
 		}
 		// Target triples (which actually have four components, but are called
 		// triples for historical reasons) have the form:
 		//   arch-vendor-os-environment
-		target = llvmarch + "-unknown-" + llvmos
-		if goarch == "arm" {
+		target := llvmarch + "-unknown-" + llvmos
+		if options.GOARCH == "arm" {
 			target += "-gnueabihf"
 		}
-		return defaultTarget(goos, goarch, target)
+		return defaultTarget(options.GOOS, options.GOARCH, target)
 	}
 
 	// See whether there is a target specification for this target (e.g.
 	// Arduino).
 	spec := &TargetSpec{}
-	err := spec.loadFromGivenStr(target)
+	err := spec.loadFromGivenStr(options.Target)
 	if err == nil {
 		// Successfully loaded this target from a built-in .json file. Make sure
 		// it includes all parents as specified in the "inherits" key.
@@ -206,7 +204,7 @@ func LoadTarget(target string) (*TargetSpec, error) {
 	} else {
 		// Load target from given triple, ignore GOOS/GOARCH environment
 		// variables.
-		tripleSplit := strings.Split(target, "-")
+		tripleSplit := strings.Split(options.Target, "-")
 		if len(tripleSplit) < 3 {
 			return nil, errors.New("expected a full LLVM target or a custom target in -target flag")
 		}

@@ -6,12 +6,12 @@ import (
 )
 
 func TestLoadTarget(t *testing.T) {
-	_, err := LoadTarget("arduino")
+	_, err := LoadTarget(&Options{Target: "arduino"})
 	if err != nil {
 		t.Error("LoadTarget test failed:", err)
 	}
 
-	_, err = LoadTarget("notexist")
+	_, err = LoadTarget(&Options{Target: "notexist"})
 	if err == nil {
 		t.Error("LoadTarget should have failed with non existing target")
 	}

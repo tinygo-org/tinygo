@@ -140,7 +140,7 @@ func filterIrrelevantIRLines(lines []string) []string {
 // run.
 // If there are any errors, they are reported via the *testing.T instance.
 func compileGoFileForTesting(t *testing.T, filename string) llvm.Module {
-	target, err := compileopts.LoadTarget("i686--linux")
+	target, err := compileopts.LoadTarget(&compileopts.Options{GOOS: "linux", GOARCH: "386"})
 	if err != nil {
 		t.Fatal("failed to load target:", err)
 	}

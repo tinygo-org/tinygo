@@ -1147,6 +1147,8 @@ func main() {
 	}
 
 	options := &compileopts.Options{
+		GOOS:            goenv.Get("GOOS"),
+		GOARCH:          goenv.Get("GOARCH"),
 		Target:          *target,
 		Opt:             *opt,
 		GC:              *gc,
@@ -1309,7 +1311,7 @@ func main() {
 				continue
 			}
 			path := filepath.Join(dir, entry.Name())
-			spec, err := compileopts.LoadTarget(path)
+			spec, err := compileopts.LoadTarget(&compileopts.Options{Target: path})
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "could not list target:", err)
 				os.Exit(1)
