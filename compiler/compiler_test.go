@@ -73,12 +73,15 @@ func TestCompiler(t *testing.T) {
 		}
 
 		t.Run(name, func(t *testing.T) {
-			target, err := compileopts.LoadTarget(targetString)
+			options := &compileopts.Options{
+				Target: targetString,
+			}
+			target, err := compileopts.LoadTarget(options)
 			if err != nil {
 				t.Fatal("failed to load target:", err)
 			}
 			config := &compileopts.Config{
-				Options: &compileopts.Options{},
+				Options: options,
 				Target:  target,
 			}
 			compilerConfig := &Config{

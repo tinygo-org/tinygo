@@ -16,8 +16,11 @@ var (
 )
 
 // Options contains extra options to give to the compiler. These options are
-// usually passed from the command line.
+// usually passed from the command line, but can also be passed in environment
+// variables for example.
 type Options struct {
+	GOOS            string // environment variable
+	GOARCH          string // environment variable
 	Target          string
 	Opt             string
 	GC              string
