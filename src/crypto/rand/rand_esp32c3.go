@@ -16,7 +16,7 @@ import (
 const MHZ = 1000000
 
 func init() {
-	Reader = &reader{}
+	Reader = &esp32c3RndReader{}
 
 	// When using the random number generator, make sure at least either the SAR ADC,
 	// high-speed ADC1, or RTC20M_CLK2 is enabled. Otherwise, pseudo-random numbers will be returned.
@@ -61,8 +61,9 @@ func init() {
 
 }
 
-type reader struct {
-	lastCpuTick uint32
+type esp32c3RndReader struct {
+	lastCpuTick     uint32
+	minimalCPUTicks uint32
 }
 
 func getApbFreqHZ() uint32 {
@@ -80,11 +81,10 @@ func getCpuTickCount() uint32 {
 	return uint32(count)
 }
 
-func (r *reader) hw_rand() uint32 {
-	minimalCPUTicks := machine.CPUFrequency() / (getApbFreqHZ() / 16)
+func (r *esp32c3RndReader) hw_rand() uint32 {
 	currentCPUTick := getCpuTickCount()
 	result := esp.APB_CTRL.RND_DATA.Get()
-	for (currentCPUTick - r.lastCpuTick) < minimalCPUTicks {
+	for (currentCPUTick - r.lastCpuTick) < r.minimalCPUTicks {
 		currentCPUTick = getCpuTickCount()
 		result ^= esp.APB_CTRL.RND_DATA.Get()
 	}
@@ -92,8 +92,10 @@ func (r *reader) hw_rand() uint32 {
 	return result ^ esp.APB_CTRL.RND_DATA.Get()
 }
 
-func (r *reader) Read(b []byte) (n int, err error) {
+func (r *esp32c3RndReader) Read(b []byte) (n int, err error) {
 	if len(b) != 0 {
+		// update minimalCPUTicks in case the APB frequency has changed
+		r.minimalCPUTicks = 16 * (machine.CPUFrequency() / getApbFreqHZ())
 		for i := 0; i < len(b); {
 			nextRandom := r.hw_rand()
 			byteArray := (*[4]byte)(unsafe.Pointer(&nextRandom))[:]
