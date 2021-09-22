@@ -189,41 +189,16 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 	// Arduino).
 	spec := &TargetSpec{}
 	err := spec.loadFromGivenStr(options.Target)
-	if err == nil {
-		// Successfully loaded this target from a built-in .json file. Make sure
-		// it includes all parents as specified in the "inherits" key.
-		err = spec.resolveInherits()
-		if err != nil {
-			return nil, err
-		}
-		return spec, nil
-	} else if !os.IsNotExist(err) {
-		// Expected a 'file not found' error, got something else. Report it as
-		// an error.
+	if err != nil {
 		return nil, err
-	} else {
-		// Load target from given triple, ignore GOOS/GOARCH environment
-		// variables.
-		tripleSplit := strings.Split(options.Target, "-")
-		if len(tripleSplit) < 3 {
-			return nil, errors.New("expected a full LLVM target or a custom target in -target flag")
-		}
-		goos := tripleSplit[2]
-		if strings.HasPrefix(goos, "darwin") {
-			goos = "darwin"
-		}
-		goarch := map[string]string{ // map from LLVM arch to Go arch
-			"i386":    "386",
-			"i686":    "386",
-			"x86_64":  "amd64",
-			"aarch64": "arm64",
-			"armv7":   "arm",
-		}[tripleSplit[0]]
-		if goarch == "" {
-			goarch = tripleSplit[0]
-		}
-		return defaultTarget(goos, goarch, strings.Join(tripleSplit, "-"))
 	}
+	// Successfully loaded this target from a built-in .json file. Make sure
+	// it includes all parents as specified in the "inherits" key.
+	err = spec.resolveInherits()
+	if err != nil {
+		return nil, err
+	}
+	return spec, nil
 }
 
 // WindowsBuildNotSupportedErr is being thrown, when goos is windows and no target has been specified.

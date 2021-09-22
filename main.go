@@ -1081,7 +1081,7 @@ func main() {
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
 	tags := flag.String("tags", "", "a space-separated list of extra build tags")
-	target := flag.String("target", "", "LLVM target | .json file with TargetSpec")
+	target := flag.String("target", "", "chip/board name or JSON target specification file")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
@@ -1172,8 +1172,6 @@ func main() {
 	if *printCommands {
 		options.PrintCommands = printCommand
 	}
-
-	os.Setenv("CC", "clang -target="+*target)
 
 	err = options.Verify()
 	if err != nil {
