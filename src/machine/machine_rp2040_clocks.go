@@ -14,6 +14,10 @@ const (
 	MHz = 1000000
 )
 
+func CPUFrequency() uint32 {
+	return 125 * MHz
+}
+
 // clockIndex identifies a hardware clock
 type clockIndex uint8
 
