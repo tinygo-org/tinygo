@@ -5,6 +5,7 @@ import (
 	"debug/elf"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -49,7 +50,7 @@ func makeArchive(archivePath string, objs []string) error {
 		// Read the symbols and add them to the symbol table.
 		dbg, err := elf.NewFile(objfile)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to open file %s: %w", objpath, err)
 		}
 		symbols, err := dbg.Symbols()
 		if err != nil {
@@ -61,9 +62,8 @@ func makeArchive(archivePath string, objs []string) error {
 				// Don't include local symbols (STB_LOCAL).
 				continue
 			}
-			if elf.ST_TYPE(symbol.Info) != elf.STT_FUNC {
+			if elf.ST_TYPE(symbol.Info) != elf.STT_FUNC && elf.ST_TYPE(symbol.Info) != elf.STT_OBJECT {
 				// Not a function.
-				// TODO: perhaps globals variables should also be included?
 				continue
 			}
 			// Include in archive.

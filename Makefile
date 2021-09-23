@@ -480,6 +480,7 @@ build/release: tinygo gen-device wasi-libc
 	@mkdir -p build/release/tinygo/lib/compiler-rt/lib
 	@mkdir -p build/release/tinygo/lib/nrfx
 	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libc
+	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libm
 	@mkdir -p build/release/tinygo/lib/wasi-libc
 	@mkdir -p build/release/tinygo/pkg/armv6m-unknown-unknown-eabi
 	@mkdir -p build/release/tinygo/pkg/armv7m-unknown-unknown-eabi
@@ -498,7 +499,9 @@ build/release: tinygo gen-device wasi-libc
 	@cp -rp lib/picolibc/newlib/libc/locale      build/release/tinygo/lib/picolibc/newlib/libc
 	@cp -rp lib/picolibc/newlib/libc/string      build/release/tinygo/lib/picolibc/newlib/libc
 	@cp -rp lib/picolibc/newlib/libc/tinystdio   build/release/tinygo/lib/picolibc/newlib/libc
+	@cp -rp lib/picolibc/newlib/libm/common      build/release/tinygo/lib/picolibc/newlib/libm
 	@cp -rp lib/picolibc-include         build/release/tinygo/lib
+	@cp -rp lib/picolibc-stdio.c         build/release/tinygo/lib
 	@cp -rp lib/wasi-libc/sysroot        build/release/tinygo/lib/wasi-libc/sysroot
 	@cp -rp src                          build/release/tinygo/src
 	@cp -rp targets                      build/release/tinygo/targets
