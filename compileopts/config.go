@@ -206,7 +206,12 @@ func (c *Config) CFlags() []string {
 	}
 	if c.Target.Libc == "picolibc" {
 		root := goenv.Get("TINYGOROOT")
-		cflags = append(cflags, "-nostdlibinc", "-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "picolibc", "newlib", "libc", "include"))
+		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")
+		cflags = append(cflags,
+			"-nostdlibinc",
+			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "include"),
+			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "tinystdio"),
+		)
 		cflags = append(cflags, "-I"+filepath.Join(root, "lib/picolibc-include"))
 	}
 	// Always emit debug information. It is optionally stripped at link time.

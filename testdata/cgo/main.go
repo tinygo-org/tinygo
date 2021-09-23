@@ -1,6 +1,7 @@
 package main
 
 /*
+#include <stdio.h>
 int fortytwo(void);
 #include "main.h"
 int mul(int, int);
@@ -129,6 +130,9 @@ func main() {
 	buf2 := make([]byte, len(buf1))
 	C.strcpy((*C.char)(unsafe.Pointer(&buf2[0])), (*C.char)(unsafe.Pointer(&buf1[0])))
 	println("copied string:", string(buf2[:C.strlen((*C.char)(unsafe.Pointer(&buf2[0])))]))
+
+	// libc: test basic stdio functionality
+	println("SEEK_CUR:", C.SEEK_CUR)
 }
 
 func printUnion(union C.joined_t) C.joined_t {
