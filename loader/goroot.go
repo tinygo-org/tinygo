@@ -220,6 +220,7 @@ func needsSyscallPackage(buildTags []string) bool {
 func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 	paths := map[string]bool{
 		"/":                     true,
+		"compat/":               false,
 		"crypto/":               true,
 		"crypto/rand/":          false,
 		"device/":               false,

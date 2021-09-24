@@ -201,6 +201,9 @@ func (c *Config) RP2040BootPatch() bool {
 // preprocessing.
 func (c *Config) CFlags() []string {
 	var cflags []string
+	// Compatibility CFlags.
+	cflags = append(cflags, "-I"+filepath.Join(goenv.Get("TINYGOROOT"), "src/compat/freertos/include"))
+	// CFlags for the target.
 	for _, flag := range c.Target.CFlags {
 		cflags = append(cflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
 	}
