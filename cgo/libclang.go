@@ -196,7 +196,7 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 			}
 			fn.args = append(fn.args, paramInfo{
 				name:     argName,
-				typeExpr: p.makeASTType(argType, pos),
+				typeExpr: p.makeDecayingASTType(argType, pos),
 			})
 		}
 		resultType := C.tinygo_clang_getCursorResultType(c)
@@ -389,6 +389,41 @@ func (p *cgoPackage) addErrorAt(position token.Position, msg string) {
 		Pos: position,
 		Msg: msg,
 	})
+}
+
+// makeDecayingASTType does the same as makeASTType but takes care of decaying
+// types (arrays in function parameters, etc). It is otherwise identical to
+// makeASTType.
+func (p *cgoPackage) makeDecayingASTType(typ C.CXType, pos token.Pos) ast.Expr {
+	// Strip typedefs, if any.
+	underlyingType := typ
+	if underlyingType.kind == C.CXType_Typedef {
+		c := C.tinygo_clang_getTypeDeclaration(typ)
+		underlyingType = C.tinygo_clang_getTypedefDeclUnderlyingType(c)
+		// TODO: support a chain of typedefs. At the moment, it seems to get
+		// stuck in an endless loop when trying to get to the most underlying
+		// type.
+	}
+	// Check for decaying type. An example would be an array type in a
+	// parameter. This declaration:
+	//   void foo(char buf[6]);
+	// is the same as this one:
+	//   void foo(char *buf);
+	// But this one:
+	//   void bar(char buf[6][4]);
+	// equals this:
+	//   void bar(char *buf[4]);
+	// so not all array dimensions should be stripped, just the first one.
+	// TODO: there are more kinds of decaying types.
+	if underlyingType.kind == C.CXType_ConstantArray {
+		// Apply type decaying.
+		pointeeType := C.clang_getElementType(underlyingType)
+		return &ast.StarExpr{
+			Star: pos,
+			X:    p.makeASTType(pointeeType, pos),
+		}
+	}
+	return p.makeASTType(typ, pos)
 }
 
 // makeASTType return the ast.Expr for the given libclang type. In other words,

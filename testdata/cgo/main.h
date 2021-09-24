@@ -144,3 +144,7 @@ extern int cflagsConstant;
 // test duplicate definitions
 int add(int a, int b);
 extern int global;
+
+// Test array decaying into a pointer.
+typedef int arraydecay_buf3[4][7][2];
+void arraydecay(int buf1[5], int buf2[3][8], arraydecay_buf3 buf3);
