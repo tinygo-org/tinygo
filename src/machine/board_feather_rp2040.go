@@ -38,6 +38,9 @@ const (
 
 	I2C1_SDA_PIN = GPIO2
 	I2C1_SCL_PIN = GPIO3
+
+	SDA_PIN = I2C1_SDA_PIN
+	SCL_PIN = I2C1_SCL_PIN
 )
 
 // SPI default pins
