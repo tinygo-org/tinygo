@@ -46,6 +46,11 @@ func libc_free(ptr unsafe.Pointer) {
 	free(ptr)
 }
 
+//export abort
+func libc_abort() {
+	abort()
+}
+
 //go:linkname syscall_Exit syscall.Exit
 func syscall_Exit(code int) {
 	abort()
