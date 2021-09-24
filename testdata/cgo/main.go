@@ -125,6 +125,12 @@ func main() {
 	// Check whether CFLAGS are correctly passed on to compiled C files.
 	println("CFLAGS value:", C.cflagsConstant)
 
+	// Check array-to-pointer decaying. This signature:
+	//   void arraydecay(int buf1[5], int buf2[3][8], int buf3[4][7][2]);
+	// decays to:
+	//   void arraydecay(int *buf1, int *buf2[8], int *buf3[7][2]);
+	C.arraydecay((*C.int)(nil), (*[8]C.int)(nil), (*[7][2]C.int)(nil))
+
 	// libc: test whether C functions work at all.
 	buf1 := []byte("foobar\x00")
 	buf2 := make([]byte, len(buf1))

@@ -61,3 +61,7 @@ void unionSetData(short f0, short f1, short f2) {
 	globalUnion.data[1] = 8;
 	globalUnion.data[2] = 1;
 }
+
+void arraydecay(int buf1[5], int buf2[3][8], int buf3[4][7][2]) {
+	// Do nothing.
+}
