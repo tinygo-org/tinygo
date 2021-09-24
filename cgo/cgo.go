@@ -447,11 +447,11 @@ func makePathsAbsolute(args []string, packagePath string) {
 				args[i] = filepath.Join(packagePath, arg)
 			}
 		}
-		if arg == "-I" || arg == "-L" {
+		if arg == "-I" || arg == "-L" || arg == "-T" {
 			nextIsPath = true
 			continue
 		}
-		if strings.HasPrefix(arg, "-I") || strings.HasPrefix(arg, "-L") {
+		if strings.HasPrefix(arg, "-I") || strings.HasPrefix(arg, "-L") || strings.HasPrefix(arg, "-T") {
 			path := arg[2:]
 			if !filepath.IsAbs(path) {
 				args[i] = arg[:2] + filepath.Join(packagePath, path)
