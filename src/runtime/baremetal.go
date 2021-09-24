@@ -51,6 +51,11 @@ func libc_abort() {
 	abort()
 }
 
+//export runtime_putchar
+func runtime_putchar(c byte) {
+	putchar(c)
+}
+
 //go:linkname syscall_Exit syscall.Exit
 func syscall_Exit(code int) {
 	abort()

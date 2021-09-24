@@ -139,6 +139,8 @@ func main() {
 
 	// libc: test basic stdio functionality
 	println("SEEK_CUR:", C.SEEK_CUR)
+	putsBuf := []byte("line written using C puts\x00")
+	C.puts((*C.char)(unsafe.Pointer(&putsBuf[0])))
 }
 
 func printUnion(union C.joined_t) C.joined_t {
