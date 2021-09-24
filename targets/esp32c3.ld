@@ -97,6 +97,7 @@ SECTIONS
         _sdata = ABSOLUTE(.);
         *(.sdata)
         *(.data .data.*)
+        *(.dram1 .dram1.*)
         . = ALIGN (4);
         _edata = ABSOLUTE(.);
     } >DRAM
@@ -119,6 +120,10 @@ SECTIONS
     .init : ALIGN(4)
     {
         *(.init)
+        *(.iram1 .iram1.*)
+        *(.wifi0iram .wifi0iram.*)
+        *(.wifirxiram .wifirxiram.*)
+        *(.wifislprxiram .wifislprxiram.*)
     } >IRAM
 
     /* Dummy section to put the IROM segment exactly behind the IRAM segment.
@@ -142,6 +147,7 @@ SECTIONS
     .text : ALIGN(4)
     {
         *(.text .text.*)
+        *(.wifislpiram .wifislpiram.*)
     } >IROM
 
     /DISCARD/ :
