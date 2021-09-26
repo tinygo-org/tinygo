@@ -554,7 +554,7 @@ func (t rawType) Size() uintptr {
 			return 0
 		}
 		lastField := t.rawField(numField - 1)
-		return lastField.Offset + lastField.Type.Size()
+		return align(lastField.Offset+lastField.Type.Size(), uintptr(t.Align()))
 	default:
 		panic("unimplemented: size of type")
 	}
