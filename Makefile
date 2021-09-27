@@ -10,9 +10,9 @@ LLD_SRC ?= $(LLVM_PROJECTDIR)/lld
 
 # Try to autodetect LLVM build tools.
 detect = $(shell command -v $(1) 2> /dev/null && echo $(1))
-CLANG ?= $(word 1,$(abspath $(call detect,llvm-build/bin/clang))$(call detect,clang-11)$(call detect,clang-10)$(call detect,clang))
-LLVM_AR ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-ar))$(call detect,llvm-ar-11)$(call detect,llvm-ar-10)$(call detect,llvm-ar))
-LLVM_NM ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-nm))$(call detect,llvm-nm-11)$(call detect,llvm-nm-10)$(call detect,llvm-nm))
+CLANG ?= $(word 1,$(abspath $(call detect,$(LLVM_BUILDDIR)/bin/clang))$(call detect,clang-11)$(call detect,clang-10)$(call detect,clang))
+LLVM_AR ?= $(word 1,$(abspath $(call detect,$(LLVM_BUILDDIR)/bin/llvm-ar))$(call detect,llvm-ar-11)$(call detect,llvm-ar-10)$(call detect,llvm-ar))
+LLVM_NM ?= $(word 1,$(abspath $(call detect,$(LLVM_BUILDDIR)/bin/llvm-nm))$(call detect,llvm-nm-11)$(call detect,llvm-nm-10)$(call detect,llvm-nm))
 
 # Go binary and GOROOT to select
 GO ?= go
@@ -23,6 +23,9 @@ MD5SUM = md5sum
 
 # tinygo binary for tests
 TINYGO ?= $(word 1,$(call detect,tinygo)$(call detect,build/tinygo))
+
+# Targets for which to build the library
+LIBRARY_TARGETS = armv6m-none-eabi armv7m-none-eabi armv7em-none-eabi
 
 # Use CCACHE for LLVM if possible
 ifneq (, $(shell command -v ccache 2> /dev/null))
@@ -36,7 +39,7 @@ else
     LLVM_OPTION += '-DLLVM_ENABLE_ASSERTIONS=OFF'
 endif
 
-.PHONY: all tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-nxp gen-device-avr gen-device-rp
+.PHONY: all tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt
 
 LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines coverage debuginfodwarf executionengine frontendopenmp instrumentation interpreter ipo irreader linker lto mc mcjit objcarcopts option profiledata scalaropts support target
 
@@ -107,6 +110,7 @@ fmt-check:
 	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
 
 
+.PHONY: gen-device gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp gen-device-rp gen-device-stm32
 gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp gen-device-rp
 ifneq ($(STM32), 0)
 gen-device: gen-device-stm32
@@ -163,11 +167,11 @@ llvm-source: $(LLVM_PROJECTDIR)/llvm
 # Configure LLVM.
 TINYGO_SOURCE_DIR=$(shell pwd)
 $(LLVM_BUILDDIR)/build.ninja: llvm-source
-	mkdir -p $(LLVM_BUILDDIR); cd $(LLVM_BUILDDIR); cmake -G Ninja $(TINYGO_SOURCE_DIR)/$(LLVM_PROJECTDIR)/llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;RISCV;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR;Xtensa" -DCMAKE_BUILD_TYPE=Release -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_ENABLE_OCAMLDOC=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_ENABLE_PROJECTS="clang;lld" -DLLVM_TOOL_CLANG_TOOLS_EXTRA_BUILD=OFF -DCLANG_ENABLE_STATIC_ANALYZER=OFF -DCLANG_ENABLE_ARCMT=OFF $(LLVM_OPTION)
+	cmake -G Ninja -H$(TINYGO_SOURCE_DIR)/$(LLVM_PROJECTDIR)/llvm -B$(LLVM_BUILDDIR) "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;RISCV;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR;Xtensa" -DCMAKE_BUILD_TYPE=Release -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_ENABLE_OCAMLDOC=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_ENABLE_PROJECTS="clang;lld" -DLLVM_TOOL_CLANG_TOOLS_EXTRA_BUILD=OFF -DCLANG_ENABLE_STATIC_ANALYZER=OFF -DCLANG_ENABLE_ARCMT=OFF $(LLVM_OPTION)
 
 # Build LLVM.
 $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
-	cd $(LLVM_BUILDDIR); ninja $(NINJA_BUILD_TARGETS)
+	ninja -C $(LLVM_BUILDDIR) $(NINJA_BUILD_TARGETS)
 
 
 # Build wasi-libc sysroot
@@ -175,7 +179,7 @@ $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
 wasi-libc: lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a
 lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 	@if [ ! -e lib/wasi-libc/Makefile ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
-	cd lib/wasi-libc && make -j4 WASM_CC=$(CLANG) WASM_AR=$(LLVM_AR) WASM_NM=$(LLVM_NM)
+	make -C lib/wasi-libc -j4 WASM_CC=$(CLANG) WASM_AR=$(LLVM_AR) WASM_NM=$(LLVM_NM)
 
 
 # Build the Go compiler.
@@ -462,7 +466,16 @@ endif
 wasmtest:
 	$(GO) test ./tests/wasm
 
-build/release: tinygo gen-device wasi-libc
+build/compiler-rt.%.a: build/tinygo$(EXE)
+	./build/tinygo$(EXE) build-library -target=$* -o $@ compiler-rt
+
+build/picolibc.%.a: build/tinygo$(EXE)
+	./build/tinygo$(EXE) build-library -target=$* -o $@ picolibc
+
+.PHONY: library
+library: $(patsubst %, build/compiler-rt.%.a, $(LIBRARY_TARGETS)) $(patsubst %, build/picolibc.%.a, $(LIBRARY_TARGETS))
+
+build/release: tinygo gen-device library wasi-libc
 	@mkdir -p build/release/tinygo/bin
 	@mkdir -p build/release/tinygo/lib/clang/include
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
@@ -470,9 +483,9 @@ build/release: tinygo gen-device wasi-libc
 	@mkdir -p build/release/tinygo/lib/nrfx
 	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libc
 	@mkdir -p build/release/tinygo/lib/wasi-libc
-	@mkdir -p build/release/tinygo/pkg/armv6m-none-eabi
-	@mkdir -p build/release/tinygo/pkg/armv7m-none-eabi
-	@mkdir -p build/release/tinygo/pkg/armv7em-none-eabi
+	@for target in $(LIBRARY_TARGETS); do \
+	mkdir -p build/release/tinygo/pkg/$${target}; \
+	done
 	@echo copying source files
 	@cp -p  build/tinygo$(EXE)           build/release/tinygo/bin
 	@cp -p $(abspath $(CLANG_SRC))/lib/Headers/*.h build/release/tinygo/lib/clang/include
@@ -491,12 +504,10 @@ build/release: tinygo gen-device wasi-libc
 	@cp -rp lib/wasi-libc/sysroot        build/release/tinygo/lib/wasi-libc/sysroot
 	@cp -rp src                          build/release/tinygo/src
 	@cp -rp targets                      build/release/tinygo/targets
-	./build/tinygo build-library -target=armv6m-none-eabi  -o build/release/tinygo/pkg/armv6m-none-eabi/compiler-rt.a compiler-rt
-	./build/tinygo build-library -target=armv7m-none-eabi  -o build/release/tinygo/pkg/armv7m-none-eabi/compiler-rt.a compiler-rt
-	./build/tinygo build-library -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/compiler-rt.a compiler-rt
-	./build/tinygo build-library -target=armv6m-none-eabi  -o build/release/tinygo/pkg/armv6m-none-eabi/picolibc.a picolibc
-	./build/tinygo build-library -target=armv7m-none-eabi  -o build/release/tinygo/pkg/armv7m-none-eabi/picolibc.a picolibc
-	./build/tinygo build-library -target=armv7em-none-eabi -o build/release/tinygo/pkg/armv7em-none-eabi/picolibc.a picolibc
+	@for target in $(LIBRARY_TARGETS); do \
+	cp -p build/compiler-rt.$${target}.a build/release/tinygo/pkg/$${target}/compiler-rt.a; \
+	cp -p build/picolibc.$${target}.a build/release/tinygo/pkg/$${target}/picolibc.a; \
+	done
 
 release: build/release
 	tar -czf build/release.tar.gz -C build/release tinygo
