@@ -19,6 +19,7 @@ import (
 // Testing flags.
 var (
 	flagVerbose bool
+	flagShort   bool
 )
 
 var initRan bool
@@ -31,6 +32,7 @@ func Init() {
 	initRan = true
 
 	flag.BoolVar(&flagVerbose, "test.v", false, "verbose: print additional output")
+	flag.BoolVar(&flagShort, "test.short", false, "short: run smaller test suite to save time")
 }
 
 // common holds the elements common between T and B and
@@ -280,6 +282,11 @@ func (m *M) Run() int {
 		fmt.Println("PASS")
 	}
 	return failures
+}
+
+// Short reports whether the -test.short flag is set.
+func Short() bool {
+	return flagShort
 }
 
 func TestMain(m *M) {
