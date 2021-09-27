@@ -46,6 +46,14 @@ func libc_free(ptr unsafe.Pointer) {
 	free(ptr)
 }
 
+//export calloc
+func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
+	// Note: we could be even more correct here and check that nmemb * size
+	// doesn't overflow. However the current implementation should normally work
+	// fine.
+	return alloc(nmemb * size)
+}
+
 //export abort
 func libc_abort() {
 	abort()
