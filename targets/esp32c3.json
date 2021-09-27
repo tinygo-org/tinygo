@@ -2,7 +2,6 @@
 	"inherits": ["riscv32"],
 	"features": ["+c", "+m"],
 	"build-tags": ["esp32c3", "esp"],
-	"scheduler": "none",
 	"serial": "uart",
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
