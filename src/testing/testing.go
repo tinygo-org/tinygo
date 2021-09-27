@@ -64,6 +64,7 @@ type TB interface {
 	Skipf(format string, args ...interface{})
 	Skipped() bool
 	Helper()
+	Parallel()
 }
 
 var _ TB = (*T)(nil)
@@ -191,6 +192,11 @@ func (c *common) Skipped() bool {
 
 // Helper is not implemented, it is only provided for compatibility.
 func (c *common) Helper() {
+	// Unimplemented.
+}
+
+// Parallel is not implemented, it is only provided for compatibility.
+func (c *common) Parallel() {
 	// Unimplemented.
 }
 
