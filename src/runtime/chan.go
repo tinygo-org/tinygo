@@ -127,6 +127,10 @@ type channel struct {
 	buf         unsafe.Pointer // pointer to first element of buffer
 }
 
+func chanMakeUnsafePointer(elementSize, bufSize uintptr) unsafe.Pointer {
+	return unsafe.Pointer(chanMake(elementSize, bufSize))
+}
+
 // chanMake creates a new channel with the given element size and buffer length in number of elements.
 // This is a compiler intrinsic.
 func chanMake(elementSize uintptr, bufSize uintptr) *channel {
@@ -495,6 +499,11 @@ func chanSend(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList
 	sender.Ptr = nil
 }
 
+func chanSendUnsafePointer(ch, value unsafe.Pointer) {
+	var blockedlist channelBlockedList
+	chanSend((*channel)(ch), value, &blockedlist)
+}
+
 // chanRecv receives a single value over a channel.
 // It blocks if there is no available value to recieve.
 // The recieved value is copied into the value pointer.
@@ -530,6 +539,11 @@ func chanRecv(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList
 	ok := receiver.Data == 1
 	receiver.Ptr, receiver.Data = nil, 0
 	return ok
+}
+
+func chanRecvUnsafePointer(ch, value unsafe.Pointer) {
+	var blockedlist channelBlockedList
+	chanRecv((*channel)(ch), value, &blockedlist)
 }
 
 // chanClose closes the given channel. If this channel has a receiver or is
