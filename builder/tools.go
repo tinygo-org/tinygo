@@ -24,7 +24,7 @@ func runCCompiler(flags ...string) error {
 	}
 
 	// Compile this with an external invocation of the Clang compiler.
-	return execCommand(commands["clang"], flags...)
+	return execCommand("clang", flags...)
 }
 
 // link invokes a linker with the given name and flags.
@@ -38,8 +38,8 @@ func link(linker string, flags ...string) error {
 	}
 
 	// Fall back to external command.
-	if cmdNames, ok := commands[linker]; ok {
-		return execCommand(cmdNames, flags...)
+	if _, ok := commands[linker]; ok {
+		return execCommand(linker, flags...)
 	}
 
 	cmd := exec.Command(linker, flags...)
