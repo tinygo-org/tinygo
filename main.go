@@ -417,19 +417,25 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	})
 }
 
-// FlashGDB compiles and flashes a program to a microcontroller (just like
-// Flash) but instead of resetting the target, it will drop into a GDB shell.
-// You can then set breakpoints, run the GDB `continue` command to start, hit
-// Ctrl+C to break the running program, etc.
+// Debug compiles and flashes a program to a microcontroller (just like Flash)
+// but instead of resetting the target, it will drop into a debug shell like GDB
+// or LLDB. You can then set breakpoints, run the `continue` command to start,
+// hit Ctrl+C to break the running program, etc.
 //
 // Note: this command is expected to execute just before exiting, as it
 // modifies global state.
-func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) error {
+func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Options) error {
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
 	}
-	gdb, err := config.Target.LookupGDB()
+	var cmdName string
+	switch debugger {
+	case "gdb":
+		cmdName, err = config.Target.LookupGDB()
+	case "lldb":
+		cmdName, err = builder.LookupCommand("lldb")
+	}
 	if err != nil {
 		return err
 	}
@@ -460,6 +466,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		}
 
 		// Run the GDB server, if necessary.
+		port := ""
 		var gdbCommands []string
 		var daemon *exec.Cmd
 		switch gdbInterface {
@@ -471,9 +478,11 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			if err != nil {
 				return err
 			}
-			gdbCommands = append(gdbCommands, "target extended-remote "+bmpGDBPort, "monitor swdp_scan", "compare-sections", "attach 1", "load")
+			port = bmpGDBPort
+			gdbCommands = append(gdbCommands, "monitor swdp_scan", "compare-sections", "attach 1", "load")
 		case "openocd":
-			gdbCommands = append(gdbCommands, "target extended-remote :3333", "monitor halt", "load", "monitor reset halt")
+			port = ":3333"
+			gdbCommands = append(gdbCommands, "monitor halt", "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
 			args, err := config.OpenOCDConfiguration()
@@ -492,7 +501,8 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				daemon.Stderr = w
 			}
 		case "jlink":
-			gdbCommands = append(gdbCommands, "target extended-remote :2331", "load", "monitor reset halt")
+			port = ":2331"
+			gdbCommands = append(gdbCommands, "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
 			daemon = executeCommand(config.Options, "JLinkGDBServer", "-device", config.Target.JLinkDevice)
@@ -507,7 +517,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				daemon.Stderr = w
 			}
 		case "qemu":
-			gdbCommands = append(gdbCommands, "target extended-remote :1234")
+			port = ":1234"
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary, "-s", "-S")
@@ -515,7 +525,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "qemu-user":
-			gdbCommands = append(gdbCommands, "target extended-remote :1234")
+			port = ":1234"
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], "-g", "1234", result.Binary)
@@ -523,7 +533,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "mgba":
-			gdbCommands = append(gdbCommands, "target extended-remote :2345")
+			port = ":2345"
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary, "-g")
@@ -531,7 +541,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "simavr":
-			gdbCommands = append(gdbCommands, "target extended-remote :1234")
+			port = ":1234"
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], "-g", result.Binary)
@@ -576,20 +586,44 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			}
 		}()
 
-		// Construct and execute a gdb command.
+		// Construct and execute a gdb or lldb command.
 		// By default: gdb -ex run <binary>
-		// Exit GDB with Ctrl-D.
+		// Exit the debugger with Ctrl-D.
 		params := []string{result.Binary}
-		for _, cmd := range gdbCommands {
-			params = append(params, "-ex", cmd)
+		switch debugger {
+		case "gdb":
+			if port != "" {
+				params = append(params, "-ex", "target extended-remote "+port)
+			}
+			for _, cmd := range gdbCommands {
+				params = append(params, "-ex", cmd)
+			}
+		case "lldb":
+			params = append(params, "--arch", config.Triple())
+			if port != "" {
+				if strings.HasPrefix(port, ":") {
+					params = append(params, "-o", "gdb-remote "+port[1:])
+				} else {
+					return fmt.Errorf("cannot use LLDB over a gdb-remote that isn't a TCP port: %s", port)
+				}
+			}
+			for _, cmd := range gdbCommands {
+				if strings.HasPrefix(cmd, "monitor ") {
+					params = append(params, "-o", "process plugin packet "+cmd)
+				} else if cmd == "load" {
+					params = append(params, "-o", "target modules load --load --slide 0")
+				} else {
+					return fmt.Errorf("don't know how to convert GDB command %#v to LLDB", cmd)
+				}
+			}
 		}
-		cmd := executeCommand(config.Options, gdb, params...)
+		cmd := executeCommand(config.Options, cmdName, params...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		err := cmd.Run()
 		if err != nil {
-			return &commandError{"failed to run gdb with", result.Binary, err}
+			return &commandError{"failed to run " + cmdName + " with", result.Binary, err}
 		}
 		return nil
 	})
@@ -1251,18 +1285,18 @@ func main() {
 		if err != nil {
 			handleCompilerError(err)
 		}
-	case "flash", "gdb":
+	case "flash", "gdb", "lldb":
 		pkgName := filepath.ToSlash(flag.Arg(0))
 		if command == "flash" {
 			err := Flash(pkgName, *port, options)
 			handleCompilerError(err)
 		} else {
 			if !options.Debug {
-				fmt.Fprintln(os.Stderr, "Debug disabled while running gdb?")
+				fmt.Fprintln(os.Stderr, "Debug disabled while running debugger?")
 				usage()
 				os.Exit(1)
 			}
-			err := FlashGDB(pkgName, *ocdOutput, options)
+			err := Debug(command, pkgName, *ocdOutput, options)
 			handleCompilerError(err)
 		}
 	case "run":
