@@ -6,6 +6,7 @@
 	"gc": "conservative",
 	"scheduler": "none",
 	"cflags": [
+		"--target=xtensa",
 		"-Werror",
 		"-fshort-enums",
 		"-Wno-macro-redefined",
