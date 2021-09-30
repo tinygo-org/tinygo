@@ -12,7 +12,11 @@ package compiler
 // This results in slower than possible implementations, but at least they are
 // usable.
 
-import "tinygo.org/x/go-llvm"
+import (
+	"strings"
+
+	"tinygo.org/x/go-llvm"
+)
 
 var stdlibAliases = map[string]string{
 	// crypto packages
@@ -75,6 +79,20 @@ var stdlibAliases = map[string]string{
 // createAlias implements the function (in the builder) as a call to the alias
 // function.
 func (b *builder) createAlias(alias llvm.Value) {
+	if !b.info.exported {
+		b.llvmFn.SetVisibility(llvm.HiddenVisibility)
+		b.llvmFn.SetUnnamedAddr(true)
+	}
+	if b.info.section != "" {
+		b.llvmFn.SetSection(b.info.section)
+	}
+	if b.info.exported && strings.HasPrefix(b.Triple, "wasm") {
+		// Set the exported name. This is necessary for WebAssembly because
+		// otherwise the function is not exported.
+		functionAttr := b.ctx.CreateStringAttribute("wasm-export-name", b.info.linkName)
+		b.llvmFn.AddFunctionAttr(functionAttr)
+	}
+
 	if b.Debug {
 		if b.fn.Syntax() != nil {
 			// Create debug info file if present.
