@@ -441,6 +441,8 @@ ifneq ($(XTENSA), 0)
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=nodemcu             examples/blinky1
 	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target m5stack-core2       examples/serial
+	@$(MD5SUM) test.bin
 endif
 	$(TINYGO) build -size short -o test.bin -target=esp32c3           	examples/serial
 	@$(MD5SUM) test.bin
