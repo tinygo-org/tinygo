@@ -137,6 +137,7 @@ commands:
           command: |
             sudo apt-get update
             sudo apt-get install \
+                libgnutls30 libssl1.0.2 \
                 gcc-arm-linux-gnueabihf \
                 libc6-dev-armel-cross \
                 gcc-aarch64-linux-gnu \
@@ -205,6 +206,7 @@ commands:
           command: |
             sudo apt-get update
             sudo apt-get install \
+                libgnutls30 libssl1.0.2 \
                 gcc-arm-linux-gnueabihf \
                 libc6-dev-armel-cross \
                 gcc-aarch64-linux-gnu \
