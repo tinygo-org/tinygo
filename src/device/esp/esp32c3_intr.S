@@ -10,8 +10,8 @@
 	.equ panic_from_isr, handleException
 	.equ _global_interrupt_handler, handleInterrupt
 
-    .global handleInterrupt
-    .global handleException
+	.global handleInterrupt
+	.global handleException
 
 .macro save_regs
 	addi sp, sp, -CONTEXT_SIZE
@@ -112,7 +112,7 @@ _vector_table:
 	j _interrupt_handler		/* 24 identical entries, all pointing to the interrupt handler */
 	.endr
 	j _panic_handler			/* Call panic handler for ETS_T1_WDT_INUM interrupt (soc-level panic)*/
-    j _panic_handler			/* Call panic handler for ETS_CACHEERR_INUM interrupt (soc-level panic)*/
+	j _panic_handler			/* Call panic handler for ETS_CACHEERR_INUM interrupt (soc-level panic)*/
 	.rept 5
 	j _interrupt_handler		/* 6 identical entries, all pointing to the interrupt handler */
 	.endr
@@ -172,11 +172,11 @@ _panic_handler:
 	 * depending on whether we have a pseudo excause or not.
 	 * If mcause's highest bit is 1, then an interrupt called this routine,
 	 * so we have a pseudo excause. Else, it is due to a exception, we don't
-         * have an pseudo excause */
+	 * have an pseudo excause */
 	mv a0, sp
 	csrr a1, mcause
 	/* Branches instructions don't accept immediates values, so use t1 to
-         * store our comparator */
+	 * store our comparator */
 	li t0, 0x80000000
 	bgeu a1, t0, _call_panic_handler
 	sw a1,  35*REGSIZE(sp)
@@ -236,28 +236,28 @@ _interrupt_handler:
 	csrrs t0, mstatus, t0
 
 	#ifdef CONFIG_PM_TRACE
-	li      a0, 0       /* = ESP_PM_TRACE_IDLE */
+	li	  a0, 0	   /* = ESP_PM_TRACE_IDLE */
 	#if SOC_CPU_CORES_NUM == 1
-	li      a1, 0       /* No need to check core ID on single core hardware */
+	li	  a1, 0	   /* No need to check core ID on single core hardware */
 	#else
-	csrr    a1, mhartid
+	csrr	a1, mhartid
 	#endif
-	la      t0, esp_pm_trace_exit
-	jalr    t0          /* absolute jump, avoid the 1 MiB range constraint */
+	la	  t0, esp_pm_trace_exit
+	jalr	t0		  /* absolute jump, avoid the 1 MiB range constraint */
 	#endif
 
 	#ifdef CONFIG_PM_ENABLE
-	la      t0, esp_pm_impl_isr_hook
-	jalr    t0          /* absolute jump, avoid the 1 MiB range constraint */
+	la	  t0, esp_pm_impl_isr_hook
+	jalr	t0		  /* absolute jump, avoid the 1 MiB range constraint */
 	#endif
 
 	/* call the C dispatcher */
-	mv      a0, sp		/* argument 1, stack pointer */
-	csrr    a1, mcause	/* argument 2, interrupt number */
+	mv	  a0, sp		/* argument 1, stack pointer */
+	csrr	a1, mcause	/* argument 2, interrupt number */
 	/* mask off the interrupt flag of mcause */
-	li	    t0, 0x7fffffff
-	and     a1, a1, t0
-	jal     _global_interrupt_handler
+	li		t0, 0x7fffffff
+	and	 a1, a1, t0
+	jal	 _global_interrupt_handler
 
 	/* After dispatch c handler, disable interrupt to make freertos make context switch */
 
