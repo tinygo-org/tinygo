@@ -119,8 +119,6 @@ SECTIONS
      */
     .init : ALIGN(4)
     {
-        . = ALIGN (8);
-        *(._vector_table.text)
         *(.init)
         *(.iram1 .iram1.*)
         *(.wifi0iram .wifi0iram.*)
@@ -148,6 +146,9 @@ SECTIONS
      */
     .text : ALIGN(4)
     {
+        . = ALIGN (256);
+        *(.text.exception_vectors)
+        . = ALIGN (4);
         *(.text .text.*)
         *(.wifislpiram .wifislpiram.*)
     } >IROM

@@ -86,23 +86,23 @@
 	csrw	mepc, t0
 .endm
 
-	/* This is the vector table. MTVEC points here.
-	 *
-	 * Use 4-byte intructions here. 1 instruction = 1 entry of the table.
-	 * The CPU jumps to MTVEC (i.e. the first entry) in case of an exception,
-	 * and (MTVEC & 0xfffffffc) + (mcause & 0x7fffffff) * 4, in case of an interrupt.
-	 *
-	 * Note: for our CPU, we need to place this on a 256-byte boundary, as CPU
-	 * only uses the 24 MSBs of the MTVEC, i.e. (MTVEC & 0xffffff00).
-	 */
+/* This is the vector table. MTVEC points here.
+ *
+ * Use 4-byte intructions here. 1 instruction = 1 entry of the table.
+ * The CPU jumps to MTVEC (i.e. the first entry) in case of an exception,
+ * and (MTVEC & 0xfffffffc) + (mcause & 0x7fffffff) * 4, in case of an interrupt.
+ *
+ * Note: for our CPU, we need to place this on a 256-byte boundary, as CPU
+ * only uses the 24 MSBs of the MTVEC, i.e. (MTVEC & 0xffffff00).
+ */
 
-.section ._vector_table.text
-
-	.global _vector_table
-	.type _vector_table,@function
+.section .text.exception_vectors
+.global _vector_table
+.type _vector_table,@function
 _vector_table:
-	.option push
-	.option norvc
+
+    .option push
+    .option norvc
 
 	j _panic_handler			/* exception handler, entry 0 */
 	.rept 24
@@ -114,9 +114,9 @@ _vector_table:
 	j _interrupt_handler		/* 6 identical entries, all pointing to the interrupt handler */
 	.endr
 
-	.option pop
-	.size _vector_table, .-_vector_table
+    .option pop
 
+.size _vector_table, .-_vector_table
 
 	/* Exception handler.*/
 	.type _panic_handler, @function
