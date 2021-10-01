@@ -135,5 +135,6 @@ func handleInterrupt() {
 
 //export handleException
 func handleException(code uint32) {
-	println("*** Exception: code:")
+	println("*** Exception: code:", code)
+	abort()
 }

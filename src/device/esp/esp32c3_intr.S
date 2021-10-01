@@ -1,10 +1,8 @@
 #define REGSIZE 4
-#define SREG sw
-#define LREG lw
-#define SAVE_REGS 32
+#define SAVE_REGS 36
 #define CONTEXT_SIZE (SAVE_REGS * 4)
-
 #define CPU_INT_THRESH (0x600c2000 + 0x194 )
+
 
 	.equ panic_from_exception, handleException
 	.equ panic_from_isr, handleException
@@ -118,67 +116,39 @@ _vector_table:
 
 .size _vector_table, .-_vector_table
 
-	/* Exception handler.*/
-	.type _panic_handler, @function
+
+/* Exception handler */
+.type _panic_handler, @function
 _panic_handler:
-	addi sp, sp, -CONTEXT_SIZE /* allocate space on stack to store necessary registers */
 	/* save general registers */
-	sw   ra,  0*REGSIZE(sp)
-	sw   tp,  1*REGSIZE(sp)
-	sw   t0,  2*REGSIZE(sp)
-	sw   t1,  3*REGSIZE(sp)
-	sw   t2,  4*REGSIZE(sp)
-	sw   s0,  5*REGSIZE(sp)
-	sw   s1,  6*REGSIZE(sp)
-	sw   a0,  7*REGSIZE(sp)
-	sw   a1,  8*REGSIZE(sp)
-	sw   a2,  9*REGSIZE(sp)
-	sw   a3,  10*REGSIZE(sp)
-	sw   a4,  11*REGSIZE(sp)
-	sw   a5,  12*REGSIZE(sp)
-	sw   a6,  13*REGSIZE(sp)
-	sw   a7,  14*REGSIZE(sp)
-	sw   s2,  15*REGSIZE(sp)
-	sw   s3,  16*REGSIZE(sp)
-	sw   s4,  17*REGSIZE(sp)
-	sw   s5,  18*REGSIZE(sp)
-	sw   s6,  19*REGSIZE(sp)
-	sw   s7,  20*REGSIZE(sp)
-	sw   s8,  21*REGSIZE(sp)
-	sw   s9,  22*REGSIZE(sp)
-	sw   s10, 23*REGSIZE(sp)
-	sw   s11, 24*REGSIZE(sp)
-	sw   t3,  25*REGSIZE(sp)
-	sw   t4,  26*REGSIZE(sp)
-	sw   t5,  27*REGSIZE(sp)
-	sw   t6,  28*REGSIZE(sp)
-	addi t0, sp, CONTEXT_SIZE /* restore sp with the value when trap happened */
-	sw t0,  29*REGSIZE(sp)
-	csrr t0, mepc
-	sw t0,  30*REGSIZE(sp)
+	save_regs
+    save_mepc
+
 	csrr t0, mstatus
-	sw t0,  31*REGSIZE(sp)
+	sw t0,  30*REGSIZE(sp)
 	csrr t0, mtvec
-	sw t0,  32*REGSIZE(sp)
+	sw t0,  31*REGSIZE(sp)
 	csrr t0, mtval
-	sw t0,  33*REGSIZE(sp)
+	sw t0,  32*REGSIZE(sp)
 	csrr t0, mhartid
+	sw t0,  33*REGSIZE(sp)
+
+	addi t0, sp, CONTEXT_SIZE /* restore sp with the value when trap happened */
 	sw t0,  34*REGSIZE(sp)
 
 	/* Call panic_from_exception(sp) or panic_from_isr(sp)
-	 * depending on whether we have a pseudo excause or not.
+	 * depending on whether we have a pseudo exception or not.
 	 * If mcause's highest bit is 1, then an interrupt called this routine,
-	 * so we have a pseudo excause. Else, it is due to a exception, we don't
-	 * have an pseudo excause */
-	mv a0, sp
+	 * so we have a pseudo exception. Else, it is due to a exception, we don't
+	 * have an pseudo exception */
+	// ??? why we need it? mv a0, sp
 	csrr a1, mcause
-	/* Branches instructions don't accept immediates values, so use t1 to
-	 * store our comparator */
-	li t0, 0x80000000
+	li t0, 0x80000000 /* Branches instructions don't accept immediate values, so use t0 to store our comparator */
 	bgeu a1, t0, _call_panic_handler
 	sw a1,  35*REGSIZE(sp)
-	/* exception_from_panic never returns */
-	j panic_from_exception
+	/* panic_from_exception never returns */
+	la   t0, panic_from_exception
+	jalr t0 /* absolute jump, avoid the 1 MiB range constraint */
 
 _call_panic_handler:
 	/* Remove highest bit from mcause (a1) register and save it in the
@@ -187,17 +157,19 @@ _call_panic_handler:
 	and a1, a1, t0
 	sw a1, 35*REGSIZE(sp)
 	/* exception_from_isr never returns */
-	j panic_from_isr
-	.size  _panic_handler, .-_panic_handler
+	la   t0, panic_from_isr
+	jalr t0 /* absolute jump, avoid the 1 MiB range constraint */
 
-	/* This is the interrupt handler.
-	 * It saves the registers on the stack,
-	 * prepares for interrupt nesting,
-	 * re-enables the interrupts,
-	 * then jumps to the C dispatcher in interrupt.c.
-	 */
-	.global _interrupt_handler
-	.type _interrupt_handler, @function
+.size  _panic_handler, .-_panic_handler
+
+/* This is the interrupt handler.
+ * It saves the registers on the stack,
+ * prepares for interrupt nesting,
+ * re-enables the interrupts,
+ * then jumps to the C dispatcher in interrupt.c.
+ */
+/*.global _interrupt_handler*/
+.type _interrupt_handler, @function
 _interrupt_handler:
 	/* entry */
 	save_regs
@@ -232,29 +204,13 @@ _interrupt_handler:
 	li t0, 0x8
 	csrrs t0, mstatus, t0
 
-	#ifdef CONFIG_PM_TRACE
-	li	  a0, 0	   /* = ESP_PM_TRACE_IDLE */
-	#if SOC_CPU_CORES_NUM == 1
-	li	  a1, 0	   /* No need to check core ID on single core hardware */
-	#else
-	csrr	a1, mhartid
-	#endif
-	la	  t0, esp_pm_trace_exit
-	jalr	t0		  /* absolute jump, avoid the 1 MiB range constraint */
-	#endif
-
-	#ifdef CONFIG_PM_ENABLE
-	la	  t0, esp_pm_impl_isr_hook
-	jalr	t0		  /* absolute jump, avoid the 1 MiB range constraint */
-	#endif
-
 	/* call the C dispatcher */
 	mv	  a0, sp		/* argument 1, stack pointer */
 	csrr	a1, mcause	/* argument 2, interrupt number */
 	/* mask off the interrupt flag of mcause */
 	li		t0, 0x7fffffff
 	and	 a1, a1, t0
-	jal	 _global_interrupt_handler
+	call	 _global_interrupt_handler
 
 	/* After dispatch c handler, disable interrupt to make freertos make context switch */
 
@@ -283,4 +239,6 @@ _interrupt_handler:
 
 	/* exit, this will also re-enable the interrupts */
 	mret
-	.size  _interrupt_handler, .-_interrupt_handler
+
+.size  _interrupt_handler, .-_interrupt_handler
+
