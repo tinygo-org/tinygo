@@ -10,9 +10,6 @@
 	.equ panic_from_isr, handleException
 	.equ _global_interrupt_handler, handleInterrupt
 
-	.global handleInterrupt
-	.global handleException
-
 .macro save_regs
 	addi sp, sp, -CONTEXT_SIZE
 	sw   ra,  0*REGSIZE(sp)
@@ -99,8 +96,8 @@
 	 * only uses the 24 MSBs of the MTVEC, i.e. (MTVEC & 0xffffff00).
 	 */
 
-	.section .text._vector_table
-	.balign 0x100
+.section ._vector_table.text
+
 	.global _vector_table
 	.type _vector_table,@function
 _vector_table:

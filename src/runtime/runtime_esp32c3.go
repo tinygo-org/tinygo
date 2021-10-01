@@ -79,7 +79,7 @@ func abort() {
 	}
 }
 
-//go:extern handleInterruptASM
+//go:extern _vector_table
 var _vector_table [0]uintptr
 
 func initInterrupt() {
@@ -108,7 +108,7 @@ func handleInterrupt() {
 	cause := riscv.MCAUSE.Get()
 	code := uint32(cause & 0xf)
 	if cause&(1<<31) == 0 {
-		handleException()
+		handleException(code)
 		return
 	}
 
@@ -133,6 +133,7 @@ func handleInterrupt() {
 	// }
 }
 
-func handleException() {
+//export handleException
+func handleException(code uint32) {
 	println("*** Exception: code:")
 }
