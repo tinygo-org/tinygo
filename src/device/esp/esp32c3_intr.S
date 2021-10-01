@@ -6,8 +6,12 @@
 
 #define CPU_INT_THRESH (0x600c2000 + 0x194 )
 
-	.equ panic_from_exception, xt_unhandled_exception
-	.equ panic_from_isr, panicHandler
+	.equ panic_from_exception, handleException
+	.equ panic_from_isr, handleException
+	.equ _global_interrupt_handler, handleInterrupt
+
+    .global handleInterrupt
+    .global handleException
 
 .macro save_regs
 	addi sp, sp, -CONTEXT_SIZE
@@ -85,11 +89,6 @@
 	csrw	mepc, t0
 .endm
 
-	/* .global rtos_int_enter
-	.global rtos_int_exit
-	.global _global_interrupt_handler
-	*/
-
 	/* This is the vector table. MTVEC points here.
 	 *
 	 * Use 4-byte intructions here. 1 instruction = 1 entry of the table.
@@ -99,10 +98,10 @@
 	 * Note: for our CPU, we need to place this on a 256-byte boundary, as CPU
 	 * only uses the 24 MSBs of the MTVEC, i.e. (MTVEC & 0xffffff00).
 	 */
-    .section .exception_vectors.text
-	.balign 0x100
-	.global _vector_table
-	.type _vector_table, @function
+
+    .section .text._vector_table
+    .global _vector_table
+    .type _vector_table,@function
 _vector_table:
 	.option push
 	.option norvc

@@ -108,7 +108,7 @@ func handleInterrupt() {
 	cause := riscv.MCAUSE.Get()
 	code := uint32(cause & 0xf)
 	if cause&(1<<31) == 0 {
-		handleException(code)
+		handleException()
 		return
 	}
 
@@ -133,6 +133,6 @@ func handleInterrupt() {
 	// }
 }
 
-func handleException(code uint32) {
-	println("*** Exception: code:", code)
+func handleException() {
+	println("*** Exception: code:")
 }
