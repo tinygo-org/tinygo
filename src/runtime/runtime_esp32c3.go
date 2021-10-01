@@ -5,6 +5,18 @@ package runtime
 import (
 	"device/esp"
 	"device/riscv"
+	"runtime/volatile"
+	"unsafe"
+)
+
+const (
+	INT_CODE_INSTR_ACCESS_FAULT = 0x1 // PMP Instruction access fault
+	INT_CODE_ILL_INSTR          = 0x2 // Illegal Instruction
+	INT_CODE_BRK                = 0x3 // Hardware Breakpoint/Watchpoint or EBREAK
+	INT_CODE_LOAD_FAULT         = 0x5 // PMP Load access fault
+	INT_CODE_STORE_FAULT        = 0x7 // PMP Store access fault
+	INT_CODE_USR_CALL           = 0x8 // ECALL from U mode
+	INT_CODE_MACH_CALL          = 0xb // ECALL from M mode
 )
 
 // This is the function called on startup after the flash (IROM/DROM) is
@@ -47,6 +59,9 @@ func main() {
 
 	clearbss()
 
+	// Configure interrupt handler
+	initInterrupt()
+
 	// Initialize main system timer used for time.Now.
 	initTimer()
 
@@ -62,4 +77,62 @@ func abort() {
 	for {
 		riscv.Asm("wfi")
 	}
+}
+
+//go:extern handleInterruptASM
+var _vector_table [0]uintptr
+
+func initInterrupt() {
+	mie := riscv.DisableInterrupts()
+
+	// Reset all interrupt source priorities to zero.
+	priReg := &esp.INTERRUPT_CORE0.CPU_INT_PRI_1
+	for i := 0; i < 31; i++ {
+		priReg.Set(0)
+		addr := uintptr(unsafe.Pointer(priReg)) + 4
+		priReg = (*volatile.Register32)(unsafe.Pointer(addr))
+	}
+
+	println("_vector_table:", &_vector_table)
+
+	// Set the interrupt address.
+	// Set MODE field to 1 - a vector base address (only supported by ESP32C3)
+	// Note that this address must be aligned to 256 bytes.
+	riscv.MTVEC.Set((uintptr(unsafe.Pointer(&_vector_table))) | 1)
+
+	riscv.EnableInterrupts(mie)
+}
+
+//export handleInterrupt
+func handleInterrupt() {
+	cause := riscv.MCAUSE.Get()
+	code := uint32(cause & 0xf)
+	if cause&(1<<31) == 0 {
+		handleException(code)
+		return
+	}
+
+	// Topmost bit is set, which means that it is an interrupt.
+	println("INTR: code:", code)
+	// switch code {
+	// case 7: // Machine timer interrupt
+	// 	// Signal timeout.
+	// 	timerWakeup.Set(1)
+	// 	// Disable the timer, to avoid triggering the interrupt right after
+	// 	// this interrupt returns.
+	// 	riscv.MIE.ClearBits(1 << 7) // MTIE bit
+	// case 11: // Machine external interrupt
+	// 	hartId := riscv.MHARTID.Get()
+
+	// 	// Claim this interrupt.
+	// 	id := kendryte.PLIC.TARGETS[hartId].CLAIM.Get()
+	// 	// Call the interrupt handler, if any is registered for this ID.
+	// 	callInterruptHandler(int(id))
+	// 	// Complete this interrupt.
+	// 	kendryte.PLIC.TARGETS[hartId].CLAIM.Set(id)
+	// }
+}
+
+func handleException(code uint32) {
+	println("*** Exception: code:", code)
 }
