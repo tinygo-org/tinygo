@@ -99,9 +99,10 @@
 	 * only uses the 24 MSBs of the MTVEC, i.e. (MTVEC & 0xffffff00).
 	 */
 
-    .section .text._vector_table
-    .global _vector_table
-    .type _vector_table,@function
+	.section .text._vector_table
+	.balign 0x100
+	.global _vector_table
+	.type _vector_table,@function
 _vector_table:
 	.option push
 	.option norvc
