@@ -9,16 +9,6 @@ import (
 	"unsafe"
 )
 
-const (
-	INT_CODE_INSTR_ACCESS_FAULT = 0x1 // PMP Instruction access fault
-	INT_CODE_ILL_INSTR          = 0x2 // Illegal Instruction
-	INT_CODE_BRK                = 0x3 // Hardware Breakpoint/Watchpoint or EBREAK
-	INT_CODE_LOAD_FAULT         = 0x5 // PMP Load access fault
-	INT_CODE_STORE_FAULT        = 0x7 // PMP Store access fault
-	INT_CODE_USR_CALL           = 0x8 // ECALL from U mode
-	INT_CODE_MACH_CALL          = 0xb // ECALL from M mode
-)
-
 // This is the function called on startup after the flash (IROM/DROM) is
 // initialized and the stack pointer has been set.
 //export main
@@ -93,6 +83,9 @@ func initInterrupt() {
 		priReg = (*volatile.Register32)(unsafe.Pointer(addr))
 	}
 
+	// default threshold for interrupts is 5
+	esp.INTERRUPT_CORE0.CPU_INT_THRESH.Set(5)
+
 	println("_vector_table:", &_vector_table)
 
 	// Set the interrupt address.
@@ -101,40 +94,5 @@ func initInterrupt() {
 	riscv.MTVEC.Set((uintptr(unsafe.Pointer(&_vector_table))) | 1)
 
 	riscv.EnableInterrupts(mie)
-}
-
-//export handleInterrupt
-func handleInterrupt() {
-	cause := riscv.MCAUSE.Get()
-	code := uint32(cause & 0xf)
-	if cause&(1<<31) == 0 {
-		handleException(code)
-		return
-	}
-
-	// Topmost bit is set, which means that it is an interrupt.
-	println("INTR: code:", code)
-	// switch code {
-	// case 7: // Machine timer interrupt
-	// 	// Signal timeout.
-	// 	timerWakeup.Set(1)
-	// 	// Disable the timer, to avoid triggering the interrupt right after
-	// 	// this interrupt returns.
-	// 	riscv.MIE.ClearBits(1 << 7) // MTIE bit
-	// case 11: // Machine external interrupt
-	// 	hartId := riscv.MHARTID.Get()
-
-	// 	// Claim this interrupt.
-	// 	id := kendryte.PLIC.TARGETS[hartId].CLAIM.Get()
-	// 	// Call the interrupt handler, if any is registered for this ID.
-	// 	callInterruptHandler(int(id))
-	// 	// Complete this interrupt.
-	// 	kendryte.PLIC.TARGETS[hartId].CLAIM.Set(id)
-	// }
-}
-
-//export handleException
-func handleException(code uint32) {
-	println("*** Exception: code:", code)
-	abort()
+	println("initInterrupt done")
 }

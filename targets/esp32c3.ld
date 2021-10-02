@@ -283,6 +283,8 @@ __umodsi3     = 0x400008c0;
 __unorddf2    = 0x400008c4;
 __unordsf2    = 0x400008c8;
 
+machine.gpio_matrix_in = 0x400005a0;
+
 /* From ESP-IDF:
  * components/esp_rom/esp32c3/ld/esp32c3.rom.newlib.ld
  * These are called during codegen and thus it's a good idea to make them always
