@@ -229,7 +229,9 @@ _interrupt_handler:
 	*/
 
 	/* The next (or current) stack pointer is returned in a0 */
+	/* 
 	mv sp, a0
+	*/
 
 	/* restore the rest of the registers */
 	csrw mcause, s1
