@@ -194,7 +194,7 @@ _interrupt_handler:
 	li t2, 0x7fffffff
 	and t1, s1, t2		/* t1 = mcause & mask */
 	slli t1, t1, 2 		/* t1 = mcause * 4 */
-	li t2, 0x600c2000   /* INTERRUPT_CORE0_CPU_INT_PRI_0_REG */
+	li t2, 0x600c2114   /* INTERRUPT_CORE0_CPU_INT_PRI_0_REG */
 	add t1, t2, t1		/* t1 = INTC_INT_PRIO_REG + 4 * mcause */
 	lw t2, 0(t1)		/* t2 = INTC_INT_PRIO_REG[mcause] */
 	addi t2, t2, 1		/* t2 = t2 +1 */
