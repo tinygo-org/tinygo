@@ -5,8 +5,7 @@ package runtime
 import (
 	"device/esp"
 	"device/riscv"
-	"runtime/volatile"
-	"unsafe"
+	"runtime/interrupt"
 )
 
 // This is the function called on startup after the flash (IROM/DROM) is
@@ -50,7 +49,7 @@ func main() {
 	clearbss()
 
 	// Configure interrupt handler
-	initInterrupt()
+	interrupt.Init()
 
 	// Initialize main system timer used for time.Now.
 	initTimer()
@@ -69,30 +68,38 @@ func abort() {
 	}
 }
 
-//go:extern _vector_table
-var _vector_table [0]uintptr
+//export handleInterrupt
+func handleInterrupt() {
+	cause := riscv.MCAUSE.Get()
+	code := uint32(cause & 0xf)
 
-func initInterrupt() {
-	mie := riscv.DisableInterrupts()
-
-	// Reset all interrupt source priorities to zero.
-	priReg := &esp.INTERRUPT_CORE0.CPU_INT_PRI_1
-	for i := 0; i < 31; i++ {
-		priReg.Set(0)
-		addr := uintptr(unsafe.Pointer(priReg)) + 4
-		priReg = (*volatile.Register32)(unsafe.Pointer(addr))
+	if esp.INTERRUPT_CORE0.CPU_INT_TYPE.Get()&(1<<code) != 0 {
+		// this is edge type interrupt
+		esp.INTERRUPT_CORE0.CPU_INT_CLEAR.SetBits(1 << code)
+		esp.INTERRUPT_CORE0.CPU_INT_CLEAR.ClearBits(1 << code)
+	} else {
+		// this is level type interrupt
+		esp.INTERRUPT_CORE0.CPU_INT_CLEAR.ClearBits(1 << code)
 	}
 
-	// default threshold for interrupts is 5
-	esp.INTERRUPT_CORE0.CPU_INT_THRESH.Set(5)
-
-	println("_vector_table:", &_vector_table)
-
-	// Set the interrupt address.
-	// Set MODE field to 1 - a vector base address (only supported by ESP32C3)
-	// Note that this address must be aligned to 256 bytes.
-	riscv.MTVEC.Set((uintptr(unsafe.Pointer(&_vector_table))) | 1)
-
-	riscv.EnableInterrupts(mie)
-	println("initInterrupt done")
+	if cause&(1<<31) == 0 {
+		handleException(code)
+		return
+	}
+	// Call the interrupt handler, if any is registered for this code.
+	for _, id := range interrupt.IDsForCode(int(code)) {
+		callInterruptHandler(id)
+	}
 }
+
+//export handleException
+func handleException(code uint32) {
+	println("*** Exception: code:", code)
+	for {
+		riscv.Asm("wfi")
+	}
+}
+
+// callInterruptHandler is a compiler-generated function that calls the
+// appropriate interrupt handler for the given interrupt ID.
+func callInterruptHandler(id int)

@@ -20,84 +20,88 @@ const (
 	INT_CODE_MACH_CALL          = 0xb // ECALL from M mode
 )
 
-//export handleInterrupt
-func handleInterrupt() {
-	cause := riscv.MCAUSE.Get()
-	code := uint32(cause & 0xf)
-	println("INTR: cause:", cause, "code:", code)
-	// device.Asm("ebreak")
-	if cause&(1<<31) == 0 {
-		handleException(code)
-		return
+var (
+	interruptMap              map[int][]int = make(map[int][]int, 32)
+	ErrInvalidInterruptNumber               = errors.New("interrupt number is not correct")
+	ErrMissingMapRegister                   = errors.New("interrupt map register is missing")
+)
+
+func (i Interrupt) Enable(intr uint32, mapRegister *volatile.Register32) error {
+	if intr == 0 || intr > 31 {
+		return ErrInvalidInterruptNumber
 	}
-
-	println("INT_RAW:", esp.UART1.INT_RAW.Get(), "", esp.UART1.INT_ST.Get())
-
-	// Topmost bit is set, which means that it is an interrupt.
-	// switch code {
-	// case 7: // Machine timer interrupt
-	// 	// Signal timeout.
-	// 	timerWakeup.Set(1)
-	// 	// Disable the timer, to avoid triggering the interrupt right after
-	// 	// this interrupt returns.
-	// 	riscv.MIE.ClearBits(1 << 7) // MTIE bit
-	// case 11: // Machine external interrupt
-	// 	hartId := riscv.MHARTID.Get()
-
-	// 	// Claim this interrupt.
-	// 	id := kendryte.PLIC.TARGETS[hartId].CLAIM.Get()
-	// 	// Call the interrupt handler, if any is registered for this ID.
-	// 	callInterruptHandler(int(id))
-	// 	// Complete this interrupt.
-	// 	kendryte.PLIC.TARGETS[hartId].CLAIM.Set(id)
-	// }
-}
-
-//export handleException
-func handleException(code uint32) {
-	println("*** Exception: code:", code)
-	// device.Asm("ebreak")
-	for {
-		riscv.Asm("wfi")
+	if mapRegister == nil {
+		return ErrMissingMapRegister
 	}
-}
-
-type interruptFunc func()
-
-var interruptMap = [32]interruptFunc{}
-
-func AddHandler(intr int, mapRegister *volatile.Register32, h interruptFunc) (err error) {
-	println("AddHandler(", intr, ")")
-	if intr == 0 {
-		return errors.New("Interrupt 0 not allowed")
-	}
-
 	mask := riscv.DisableInterrupts()
-	defer func() {
-		riscv.EnableInterrupts(mask)
-		println("AddHandler(", intr, ") done:", err)
-	}()
+	defer riscv.EnableInterrupts(mask)
 
-	if interruptMap[intr] != nil {
-		err = errors.New("Interrupt already in use")
-		return err
-	}
-	interruptMap[intr] = h
+	RegisterCode(int(intr), i.num)
 
 	esp.INTERRUPT_CORE0.CPU_INT_ENABLE.SetBits(1 << intr)
 	esp.INTERRUPT_CORE0.CPU_INT_TYPE.SetBits(1 << intr)
 	// Set threshold to 5
-	priReg := &esp.INTERRUPT_CORE0.CPU_INT_PRI_0
-	addr := uintptr(unsafe.Pointer(priReg)) + uintptr(4*intr)
-	priReg = (*volatile.Register32)(unsafe.Pointer(addr))
-	priReg.Set(5)
-	// map mapRegister to intr
-	mapRegister.Set(uint32(intr))
+	reg := (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.INTERRUPT_CORE0.CPU_INT_PRI_0)) + uintptr(intr)*4)))
+	reg.Set(5)
 
 	esp.INTERRUPT_CORE0.CPU_INT_CLEAR.SetBits(1 << intr)
 	esp.INTERRUPT_CORE0.CPU_INT_CLEAR.ClearBits(1 << intr)
 
-	riscv.Asm("fence")
+	// map mapRegister to intr
+	mapRegister.Set(intr)
 
+	riscv.Asm("fence")
 	return nil
+}
+
+//go:extern _vector_table
+var _vector_table [0]uintptr
+
+func Init() {
+	mie := riscv.DisableInterrupts()
+
+	// Reset all interrupt source priorities to zero.
+	priReg := &esp.INTERRUPT_CORE0.CPU_INT_PRI_1
+	for i := 0; i < 31; i++ {
+		priReg.Set(0)
+		priReg = (*volatile.Register32)(unsafe.Pointer(uintptr(unsafe.Pointer(priReg)) + uintptr(4)))
+	}
+
+	// default threshold for interrupts is 5
+	esp.INTERRUPT_CORE0.CPU_INT_THRESH.Set(5)
+
+	// Set the interrupt address.
+	// Set MODE field to 1 - a vector base address (only supported by ESP32C3)
+	// Note that this address must be aligned to 256 bytes.
+	riscv.MTVEC.Set((uintptr(unsafe.Pointer(&_vector_table))) | 1)
+
+	riscv.EnableInterrupts(mie)
+}
+
+// registerInterruptCode associate interrupt handler id with CPU interrut number
+func RegisterCode(interrupt int, id int) {
+	vector := interruptMap[interrupt]
+	if vector == nil {
+		interruptMap[interrupt] = []int{id}
+		return
+	}
+	// make sure we don't have duplicates
+	for _, i := range vector {
+		if i == id {
+			// already registered
+			return
+		}
+	}
+	interruptMap[interrupt] = append(interruptMap[interrupt], id)
+}
+
+// IDsForCode return registered codes for interrupt
+func IDsForCode(interrupt int) []int {
+	ret := make([]int, 0)
+	if interruptMap[interrupt] != nil {
+		for _, id := range interruptMap[interrupt] {
+			ret = append(ret, id)
+		}
+	}
+	return ret
 }
