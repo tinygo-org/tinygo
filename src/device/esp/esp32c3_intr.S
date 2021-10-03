@@ -182,7 +182,7 @@ _interrupt_handler:
 	call rtos_int_enter
 	*/
 
-	/* Before dispatch c handler, restore interrupt to enable nested intr */
+	/* Save interrupts registers */
 	csrr s1, mcause
 	csrr s2, mstatus
 
@@ -201,6 +201,7 @@ _interrupt_handler:
 	sw t2, 0(t0)		/* CPU_INT_THRESH = t2 */
 	fence
 
+	/* Before dispatch c handler, restore interrupt to enable nested intr */
 	li t0, 0x8
 	csrrs t0, mstatus, t0
 
@@ -214,6 +215,7 @@ _interrupt_handler:
 
 	/* After dispatch c handler, disable interrupt to make freertos make context switch */
 
+	/* Disable interrupts */
 	li t0, 0x8
 	csrrc t0, mstatus, t0
 
