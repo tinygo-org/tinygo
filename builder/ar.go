@@ -31,16 +31,12 @@ func makeArchive(arfile *os.File, objs []string) error {
 		name      string // symbol name
 		fileIndex int    // index into objfiles
 	}{}
-	objfiles := make([]struct {
-		file          *os.File
-		archiveOffset int32
-	}, len(objs))
+	archiveOffsets := make([]int32, len(objs))
 	for i, objpath := range objs {
 		objfile, err := os.Open(objpath)
 		if err != nil {
 			return err
 		}
-		objfiles[i].file = objfile
 
 		// Read the symbols and add them to the symbol table.
 		dbg, err := elf.NewFile(objfile)
@@ -67,6 +63,10 @@ func makeArchive(arfile *os.File, objs []string) error {
 				fileIndex int
 			}{symbol.Name, i})
 		}
+
+		// Close file, to avoid issues with too many open files (especially on
+		// MacOS X).
+		objfile.Close()
 	}
 
 	// Create the symbol table buffer.
@@ -120,7 +120,12 @@ func makeArchive(arfile *os.File, objs []string) error {
 	}
 
 	// Add all object files to the archive.
-	for i, objfile := range objfiles {
+	for i, objpath := range objs {
+		objfile, err := os.Open(objpath)
+		if err != nil {
+			return err
+		}
+
 		// Store the start index, for when we'll update the symbol table with
 		// the correct file start indices.
 		offset, err := arfile.Seek(0, os.SEEK_CUR)
@@ -130,15 +135,15 @@ func makeArchive(arfile *os.File, objs []string) error {
 		if int64(int32(offset)) != offset {
 			return errors.New("large archives (4GB+) not supported: " + arfile.Name())
 		}
-		objfiles[i].archiveOffset = int32(offset)
+		archiveOffsets[i] = int32(offset)
 
 		// Write the file header.
-		st, err := objfile.file.Stat()
+		st, err := objfile.Stat()
 		if err != nil {
 			return err
 		}
 		err = arwriter.WriteHeader(&ar.Header{
-			Name:    filepath.Base(objfile.file.Name()),
+			Name:    filepath.Base(objfile.Name()),
 			ModTime: time.Unix(0, 0),
 			Uid:     0,
 			Gid:     0,
@@ -150,7 +155,7 @@ func makeArchive(arfile *os.File, objs []string) error {
 		}
 
 		// Copy the file contents into the archive.
-		n, err := io.Copy(arwriter, objfile.file)
+		n, err := io.Copy(arwriter, objfile)
 		if err != nil {
 			return err
 		}
@@ -159,13 +164,13 @@ func makeArchive(arfile *os.File, objs []string) error {
 		}
 
 		// File is not needed anymore.
-		objfile.file.Close()
+		objfile.Close()
 	}
 
 	// Create symbol indices.
 	indicesBuf := &bytes.Buffer{}
 	for _, sym := range symbolTable {
-		err = binary.Write(indicesBuf, binary.BigEndian, objfiles[sym.fileIndex].archiveOffset)
+		err = binary.Write(indicesBuf, binary.BigEndian, archiveOffsets[sym.fileIndex])
 		if err != nil {
 			return err
 		}
