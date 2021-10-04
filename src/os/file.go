@@ -196,9 +196,8 @@ func Lstat(name string) (FileInfo, error) {
 	return nil, &PathError{"lstat", name, ErrNotImplemented}
 }
 
-// Getwd is a stub (for now), always returning an empty string
 func Getwd() (string, error) {
-	return "", nil
+	return syscall.Getwd()
 }
 
 // Readlink is a stub (for now), always returning the string it was given

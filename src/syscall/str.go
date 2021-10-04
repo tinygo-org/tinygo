@@ -22,3 +22,13 @@ func uitoa(val uint) string {
 	buf[i] = byte(val + '0')
 	return string(buf[i:])
 }
+
+// clen returns the index of the first NULL byte in n or len(n) if n contains no NULL byte.
+func clen(n []byte) int {
+	for i := 0; i < len(n); i++ {
+		if n[i] == 0 {
+			return i
+		}
+	}
+	return len(n)
+}
