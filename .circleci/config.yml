@@ -253,6 +253,7 @@ commands:
       - run:
           name: "Test TinyGo"
           command: make test
+          no_output_timeout: 20m
       - run:
           name: "Install fpm"
           command: |
