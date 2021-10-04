@@ -583,6 +583,19 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		for _, cmd := range gdbCommands {
 			params = append(params, "-ex", cmd)
 		}
+		for _, spec := range config.Target.GDBInitPaths {
+			var flag, path string
+			if len(spec) > 1 && spec[0] == '+' {
+				flag = "-x"
+				path = strings.TrimPrefix(spec, "+")
+			} else {
+				flag = "-ix"
+				path = strings.TrimPrefix(spec, "-")
+			}
+			if _, err := os.Stat(path); err == nil {
+				params = append(params, flag, path)
+			}
+		}
 		cmd := executeCommand(config.Options, gdb, params...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
@@ -1064,6 +1077,22 @@ func parseGoLinkFlag(flagsString string) (map[string]map[string]string, error) {
 	return map[string]map[string]string(globalVarValues), nil
 }
 
+// stringsFlag implements the flag.Value interface, defining a flag that can be
+// provided multiple times on the command-line. Each instance is appended to a
+// slice of strings.
+type stringsFlag []string
+
+func (f stringsFlag) String() string {
+	return "[" + strings.Join(f, ", ") + "]"
+}
+
+func (f *stringsFlag) Set(s string) error {
+	if f != nil {
+		*f = append(*f, s)
+	}
+	return nil
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
@@ -1071,6 +1100,8 @@ func main() {
 		os.Exit(1)
 	}
 	command := os.Args[1]
+
+	gdbinit := stringsFlag{}
 
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, extalloc, conservative)")
@@ -1089,6 +1120,7 @@ func main() {
 	nodebug := flag.Bool("no-debug", false, "strip debug information")
 	ocdCommandsString := flag.String("ocd-commands", "", "OpenOCD commands, overriding target spec (can specify multiple separated by commas)")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
+	flag.Var(&gdbinit, "gdbinit", "path to GDB init script, use prefix '-'/'+' to exec before/after loading inferior (default before)")
 	port := flag.String("port", "", "flash port (can specify multiple candidates separated by commas)")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	ldflags := flag.String("ldflags", "", "Go link tool compatible ldflags")
@@ -1166,6 +1198,7 @@ func main() {
 		GlobalValues:    globalVarValues,
 		WasmAbi:         *wasmAbi,
 		Programmer:      *programmer,
+		GDBInitPaths:    gdbinit,
 		OpenOCDCommands: ocdCommands,
 		LLVMFeatures:    *llvmFeatures,
 	}

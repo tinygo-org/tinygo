@@ -45,6 +45,7 @@ type TargetSpec struct {
 	Emulator         []string `json:"emulator" override:"copy"` // inherited Emulator must not be append
 	FlashCommand     string   `json:"flash-command"`
 	GDB              []string `json:"gdb"`
+	GDBInitPaths     []string `json:"gdbinit"`
 	PortReset        string   `json:"flash-1200-bps-reset"`
 	SerialPort       []string `json:"serial-port"` // serial port IDs in the form "acm:vid:pid" or "usb:vid:pid"
 	FlashMethod      string   `json:"flash-method"`
