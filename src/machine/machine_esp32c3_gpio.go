@@ -168,7 +168,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	}
 	pinCallbacks[p] = callback
 
-	intr := interrupt.New(MODULE_GPIO, func(i interrupt.Interrupt) {
+	intr := interrupt.New(int(PERIPH_GPIO_MODULE), func(i interrupt.Interrupt) {
 		status := esp.GPIO.STATUS.Get()
 		for i := 0; i < 26; i++ {
 			if (status & (1 << i)) != 0 {
@@ -179,7 +179,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 		// clear interrupt bit
 		esp.GPIO.STATUS_W1TC.SetBits(status)
 	})
-	intr.Enable(InterruptForModule(MODULE_GPIO), MapRegisterForModule(MODULE_GPIO))
+	intr.Enable(PERIPH_GPIO_MODULE.interruptForModule(), PERIPH_GPIO_MODULE.mapRegisterForModule())
 
 	p.enablePinInterrupt(change)
 

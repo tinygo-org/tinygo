@@ -3,258 +3,64 @@
 package machine
 
 import (
-	"device"
 	"device/esp"
 	"device/riscv"
+	"errors"
 	"runtime/interrupt"
+	"runtime/volatile"
+	"unsafe"
 )
 
 const (
-	sclk_freq = 80 * 1000000
-	max_div   = 0xfff // UART divider integer part only has 12 bits
-
-	UART_DATA_5_BITS   = 0x0
-	UART_DATA_6_BITS   = 0x1
-	UART_DATA_7_BITS   = 0x2
-	UART_DATA_8_BITS   = 0x3
-	UART_DATA_BITS_MAX = 0x4
-
-	UART_STOP_BITS_1   = 0x1
-	UART_STOP_BITS_1_5 = 0x2
-	UART_STOP_BITS_2   = 0x3
-	UART_STOP_BITS_MAX = 0x4
-
-	UART_FIFO_LEN             = 128
-	UART_EMPTY_THRESH_DEFAULT = 10
-	UART_FULL_THRESH_DEFAULT  = 120
-)
-
-const (
-	UART_RXFIFO_FULL_INT_ENA      = 1 << iota // This is the enable bit for UART_RXFIFO_FULL_INT_ST register. (R/W)
-	UART_TXFIFO_EMPTY_INT_ENA                 // This is the enable bit for UART_TXFIFO_EMPTY_INT_ST register. (R/W)
-	UART_PARITY_ERR_INT_ENA                   // This is the enable bit for UART_PARITY_ERR_INT_ST register. (R/W)
-	UART_FRM_ERR_INT_ENA                      // This is the enable bit for UART_FRM_ERR_INT_ST register. (R/W)
-	UART_RXFIFO_OVF_INT_ENA                   // This is the enable bit for UART_RXFIFO_OVF_INT_ST register. (R/W)
-	UART_DSR_CHG_INT_ENA                      // This is the enable bit for UART_DSR_CHG_INT_ST register. (R/W)
-	UART_CTS_CHG_INT_ENA                      // This is the enable bit for UART_CTS_CHG_INT_ST register. (R/W)
-	UART_BRK_DET_INT_ENA                      // This is the enable bit for UART_BRK_DET_INT_ST register. (R/W)
-	UART_RXFIFO_TOUT_INT_ENA                  // This is the enable bit for UART_RXFIFO_TOUT_INT_ST register. (R/W)
-	UART_SW_XON_INT_ENA                       // This is the enable bit for UART_SW_XON_INT_ST register. (R/W)
-	UART_SW_XOFF_INT_ENA                      // This is the enable bit for UART_SW_XOFF_INT_ST register. (R/W)
-	UART_GLITCH_DET_INT_ENA                   // This is the enable bit for UART_GLITCH_DET_INT_ST register. (R/W)
-	UART_TX_BRK_DONE_INT_ENA                  // This is the enable bit for UART_TX_BRK_DONE_INT_ST register. (R/W)
-	UART_TX_BRK_IDLE_DONE_INT_ENA             // This is the enable bit for UART_TX_BRK_IDLE_DONE_INT_ST register. (R/W)
-	UART_TX_DONE_INT_ENA                      // This is the enable bit for UART_TX_DONE_INT_ST register. (R/W)
-	UART_RS485_PARITY_ERR_INT_ENA             // This is the enable bit for UART_RS485_PARITY_ERR_INT_ST register. (R/W)
-	UART_RS485_FRM_ERR_INT_ENA                // This is the enable bit for UART_RS485_PARITY_ERR_INT_ST register. (R/W)
-	UART_RS485_CLASH_INT_ENA                  // This is the enable bit for UART_RS485_CLASH_INT_ST register. (R/W)
-	UART_AT_CMD_CHAR_DET_INT_ENA              // This is the enable bit for UART_AT_CMD_CHAR_DET_INT_ST register. (R/W)
-	UART_WAKEUP_INT_ENA                       // This is the enable bit for UART_WAKEUP_INT_ST register. (R/W)
-
+	clk_freq                  = 80 * 1000000
+	uart_empty_thresh_default = 10
 )
 
 var DefaultUART = UART0
+var ErrSamePins = errors.New("machine: same pin used for UART's RX and TX")
+var ErrDataBits = errors.New("machine: invalid data size")
 
 var (
 	UART0  = &_UART0
-	_UART0 = UART{Bus: esp.UART0, Buffer: NewRingBuffer(), module: MODULE_UART0}
+	_UART0 = UART{Bus: esp.UART0, Buffer: NewRingBuffer(), module: PERIPH_UART0_MODULE}
 	UART1  = &_UART1
-	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer(), module: MODULE_UART1}
+	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer(), module: PERIPH_UART1_MODULE}
 )
 
 type UART struct {
-	module int
-	Bus    *esp.UART_Type
-	Buffer *RingBuffer
+	module               Module
+	Bus                  *esp.UART_Type
+	Buffer               *RingBuffer
+	ParityErrorDetected  bool
+	DataErrorDetected    bool
+	DataOverflowDetected bool
 }
 
-// ISR - Interrupt Status Register
-
-// @driver/uart.c
-//
-// esp_err_t uart_driver_install(
-// 	uart_port_t uart_num,
-// 	int rx_buffer_size,
-// 	int tx_buffer_size,
-// 	int event_queue_size,
-// 	QueueHandle_t *uart_queue,
-// 	int intr_alloc_flags)
 func (uart *UART) Configure(config *UARTConfig) error {
-
-	uart.initUART()
-
-	// enable register synchronization by clearing UART_UPDATE_CTRL
-	uart.Bus.ID.ClearBits(esp.UART_ID_REG_UPDATE_Msk)
-	// wait for Core Clock to ready for configuration
-	for uart.Bus.ID.HasBits(esp.UART_ID_REG_UPDATE_Msk) {
-		riscv.Asm("nop")
+	// check configuration parameters
+	if err := uart.verifyConfig(config); err != nil {
+		return err
 	}
 
+	uart.initUART()
 	uart.configure(config)
 
 	// Finish Config process
 	uart.Bus.ID.SetBits(esp.UART_ID_REG_UPDATE)
 
-	uart.enableTransmitter()
-	uart.enableReceiver()
-	uart.setupInterrupt()
-
-	// device.Asm("ebreak")
-
-	// Start TX/RX
-	// - enable TX/RX clock
-	uart.Bus.CLK_CONF.SetBits(esp.UART_CLK_CONF_TX_SCLK_EN_Msk | esp.UART_CLK_CONF_RX_SCLK_EN_Msk)
-
-	// device.Asm("ebreak")
-
 	// Setup GPIO Pins
 	uart.setupPins(config)
+	uart.setupInterrupt()
+	uart.enableTransmitter()
+	uart.enableReceiver()
 
-	// device.Asm("ebreak")
-
+	// Start TX/RX
+	uart.Bus.CLK_CONF.SetBits(esp.UART_CLK_CONF_TX_SCLK_EN_Msk | esp.UART_CLK_CONF_RX_SCLK_EN_Msk)
 	return nil
 }
 
-func (uart *UART) initUART() {
-	// Initialize UARTn
-	uart0 := uart.Bus == esp.UART0
-	// - enable the clock for UART RAM
-	esp.SYSTEM.PERIP_CLK_EN0.SetBits(esp.SYSTEM_PERIP_CLK_EN0_UART_MEM_CLK_EN)
-	// - enable APB_CLK for UARTn
-	// - clear SYSTEM_UARTn_RST
-	if uart0 {
-		esp.SYSTEM.PERIP_CLK_EN0.SetBits(esp.SYSTEM_PERIP_CLK_EN0_UART_CLK_EN)
-		esp.SYSTEM.PERIP_RST_EN0.ClearBits(esp.SYSTEM_PERIP_RST_EN0_UART_RST)
-	} else {
-		esp.SYSTEM.PERIP_CLK_EN0.SetBits(esp.SYSTEM_PERIP_CLK_EN0_UART1_CLK_EN)
-		esp.SYSTEM.PERIP_RST_EN0.ClearBits(esp.SYSTEM_PERIP_RST_EN0_UART1_RST)
-	}
-	// - write 1 to UART_RST_CORE
-	uart.Bus.CLK_CONF.SetBits(esp.UART_CLK_CONF_RST_CORE)
-	// - write 1 to SYSTEM_UARTn_RST
-	// - clear SYSTEM_UARTn_RST
-	if uart0 {
-		esp.SYSTEM.PERIP_RST_EN0.SetBits(esp.SYSTEM_PERIP_RST_EN0_UART_RST)
-		esp.SYSTEM.PERIP_RST_EN0.ClearBits(esp.SYSTEM_PERIP_RST_EN0_UART_RST)
-	} else {
-		esp.SYSTEM.PERIP_RST_EN0.SetBits(esp.SYSTEM_PERIP_RST_EN0_UART1_RST)
-		esp.SYSTEM.PERIP_RST_EN0.ClearBits(esp.SYSTEM_PERIP_RST_EN0_UART1_RST)
-	}
-	// - clear UART_RST_CORE
-	uart.Bus.CLK_CONF.ClearBits(esp.UART_CLK_CONF_RST_CORE)
-}
-
-func (uart *UART) configure(config *UARTConfig) {
-	// Write static registers
-	// - disbale TX/RX clock to make sure the UART transmitter or receiver is not at work
-	uart.Bus.CLK_CONF.ClearBits(esp.UART_CLK_CONF_TX_SCLK_EN_Msk | esp.UART_CLK_CONF_RX_SCLK_EN_Msk)
-	// - Set default clock source (UART_SCLK_APB)
-	// UART_SCLK_SEL UART clock source select. 1: APB_CLK; 2: FOSC_CLK; 3: XTAL_CLK.
-	uart.Bus.CLK_CONF.SetBits(0x1 << esp.UART_CLK_CONF_SCLK_SEL_Pos)
-	// - Set baud rate
-	m := config.BaudRate * 0xfff
-	sclk_div := (sclk_freq + m - 1) / m
-	clk_div := (sclk_freq << 4) / (config.BaudRate * sclk_div)
-	// The baud rate configuration register is divided into an integer part and a fractional part.
-	uart.Bus.CLKDIV.Set(((clk_div >> 4) << esp.UART_CLKDIV_CLKDIV_Pos) & esp.UART_CLKDIV_CLKDIV_Msk)
-	uart.Bus.CLKDIV.Set(((clk_div & 0xf) << esp.UART_CLKDIV_FRAG_Pos) & esp.UART_CLKDIV_FRAG_Msk)
-	uart.Bus.CLK_CONF.SetBits((sclk_div - 1) << esp.UART_CLK_CONF_SCLK_DIV_NUM_Pos)
-	// - Set UART mode.
-	uart.Bus.RS485_CONF.ClearBits(esp.UART_RS485_CONF_RS485_EN_Msk | esp.UART_RS485_CONF_RS485TX_RX_EN_Msk | esp.UART_RS485_CONF_RS485RXBY_TX_EN_Msk)
-	uart.Bus.CONF0.ClearBits(esp.UART_CONF0_IRDA_EN)
-	// - Disable UART parity
-	uart.Bus.CONF0.ClearBits(esp.UART_CONF0_PARITY_EN)
-	// - 8-bit world
-	uart.Bus.CONF0.SetBits(UART_DATA_8_BITS << esp.UART_CONF0_BIT_NUM_Pos)
-	// - 1-bit stop bit
-	uart.Bus.CONF0.SetBits(UART_STOP_BITS_1 << esp.UART_CONF0_SW_DTR_Pos)
-	// - Set tx idle
-	uart.Bus.IDLE_CONF.ClearBits(esp.UART_IDLE_CONF_TX_IDLE_NUM_Msk)
-	// - Disable hw-flow control
-	uart.Bus.CONF0.ClearBits(esp.UART_CONF0_TX_FLOW_EN)
-	uart.Bus.CONF1.ClearBits(esp.UART_CONF1_RX_FLOW_EN)
-
-	// Write other registers
-}
-
-func (uart *UART) enableTransmitter() {
-	uart.Bus.CONF0.SetBits(esp.UART_CONF0_TXFIFO_RST)
-	uart.Bus.CONF0.ClearBits(esp.UART_CONF0_TXFIFO_RST)
-	// TXINFO empty threshold is when txfifo_empty_int interrupt produced after the amount of data in Tx-FIFO is less than this register value.
-	uart.Bus.CONF1.SetBits((UART_EMPTY_THRESH_DEFAULT << esp.UART_CONF1_TXFIFO_EMPTY_THRHD_Pos) & esp.UART_CONF1_TXFIFO_EMPTY_THRHD_Msk)
-	// enable UART_TXFIFO_EMPTY_INT interrupt by setting UART_TXFIFO_EMPTY_INT_ENA
-	uart.Bus.INT_ENA.SetBits(esp.UART_INT_ENA_TXFIFO_EMPTY_INT_ENA)
-}
-
-func (uart *UART) enableReceiver() {
-	uart.Bus.CONF0.SetBits(esp.UART_CONF0_RXFIFO_RST)
-	uart.Bus.CONF0.ClearBits(esp.UART_CONF0_RXFIFO_RST)
-	// configure RXFIFO’s full threshold via UART_RXFIFO_FULL_THRHD
-	uart.Bus.CONF1.SetBits((UART_FULL_THRESH_DEFAULT << esp.UART_CONF1_RXFIFO_FULL_THRHD_Pos) & esp.UART_CONF1_RXFIFO_FULL_THRHD_Msk)
-	// enable UART_RXFIFO_FULL_INT interrupt by setting UART_RXFIFO_FULL_INT_ENA
-	uart.Bus.INT_ENA.SetBits(esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA)
-
-	// detect UART_TXFIFO_FULL_INT and wait until the RXFIFO is full;
-	// • read data from RXFIFO via UART_RXFIFO_RD_BYTE, and obtain the number of bytes received in RXFIFO via UART_RXFIFO_CNT.
-}
-
-func serveInterrupt(i interrupt.Interrupt) {
-	device.Asm("ebreak")
-}
-
-func (uart *UART) setupInterrupt() {
-	// Disable interrupts
-	uart.Bus.INT_ENA.ClearBits(0x0fffff)
-	// Clear the UART interrupt status
-	uart.Bus.INT_CLR.SetBits(0x0fffff)
-	uart.Bus.INT_CLR.ClearBits(0x0fffff)
-
-	if uart.module == MODULE_UART0 {
-		intr := interrupt.New(MODULE_UART0, serveInterrupt)
-		intr.Enable(InterruptForModule(MODULE_UART0), MapRegisterForModule(MODULE_UART0))
-	} else {
-		intr := interrupt.New(MODULE_UART1, serveInterrupt)
-		intr.Enable(InterruptForModule(MODULE_UART1), MapRegisterForModule(MODULE_UART1))
-	}
-
-	// enable all UART interrupts
-	x := uint32(1) << 20
-	x--
-	// to debug
-	x &= ^uint32(UART_TXFIFO_EMPTY_INT_ENA | UART_PARITY_ERR_INT_ENA | UART_TX_BRK_IDLE_DONE_INT_ENA | UART_WAKEUP_INT_ENA)
-	uart.Bus.INT_ENA.Set(x)
-
-	// device.Asm("ebreak")
-
-	// // ETS_UART0_INTR_SOURCE
-	// // ETS_UART1_INTR_SOURCE
-
-	// esp_err_t esp_intr_alloc(int source, int flags, intr_handler_t handler, void *arg, intr_handle_t *ret_handle)
-	// ret = esp_intr_alloc(uart_periph_signal[uart_num].irq, intr_alloc_flags, fn, arg, handle);
-
-	// intr_alloc.c
-
-	//     uart_intr_config_t uart_intr = {
-	//         .intr_enable_mask = UART_INTR_CONFIG_FLAG,
-	//         .rxfifo_full_thresh = UART_FULL_THRESH_DEFAULT,
-	//         .rx_timeout_thresh = UART_TOUT_THRESH_DEFAULT,
-	//         .txfifo_empty_intr_thresh = UART_EMPTY_THRESH_DEFAULT,
-	//     };
-
-	// 	   uart_hal_disable_intr_mask(&(uart_context[uart_num].hal), UART_LL_INTR_MASK);
-	//     uart_hal_clr_intsts_mask(&(uart_context[uart_num].hal), UART_LL_INTR_MASK);
-	//     r = uart_isr_register(uart_num,
-	// 			uart_rx_intr_handler_default,
-	//  		p_uart_obj[uart_num],
-	//  		intr_alloc_flags,
-	// 			&p_uart_obj[uart_num]->intr_handle);
-	//     if (r != ESP_OK) {
-	//         goto err;
-	//     }
-	//     r = uart_intr_config(uart_num, &uart_intr);
-	//     if (r != ESP_OK) {
-	//         goto err;
-	//     }
+func (uart *UART) Good() bool {
+	return !(uart.ParityErrorDetected || uart.DataErrorDetected || uart.DataOverflowDetected)
 }
 
 func (uart *UART) WriteByte(b byte) error {
@@ -264,82 +70,255 @@ func (uart *UART) WriteByte(b byte) error {
 		// less than 128 bytes in this buffer (the default buffer size).
 	}
 
-	// // disable UART_TXFIFO_EMPTY_INT interrupt by clearing UART_TXFIFO_EMPTY_INT_ENA.
-	// uart.Bus.INT_ENA.ClearBits(eps.UART_INT_ENA_TXFIFO_EMPTY_INT_ENA)
-	// // Write data to be sent to UART_RXFIFO_RD_BYTE
-	// // clear UART_TXFIFO_EMPTY_INT interrupt by setting UART_TXFIFO_EMPTY_INT_CLR;
-	// uart.Bus.INT_CLR.SetBits(eps.UART_INT_CLR_TXFIFO_EMPTY_INT_ENA)
-	// // enable UART_TXFIFO_EMPTY_INT interrupt by setting UART_TXFIFO_EMPTY_INT_ENA
-	// uart.Bus.INT_ENA.SetBits(eps.UART_INT_ENA_TXFIFO_EMPTY_INT_ENA)
-
+	// Write data to be sent to UART_RXFIFO_RD_BYTE
 	uart.Bus.FIFO.Set(uint32(b))
 	return nil
 }
 
-func (uart *UART) uartEvent() {
-	device.Asm("ebreak")
-	// println("uart event")
+func (uart *UART) verifyConfig(config *UARTConfig) error {
+
+	if err := isUARTPinValid(config.RX); err != nil {
+		return err
+	}
+	if err := isUARTPinValid(config.TX); err != nil {
+		return err
+	}
+	if config.TX == config.RX {
+		return ErrSamePins
+	}
+
+	if config.DataBits == 0 {
+		config.DataBits = 8
+	} else if config.DataBits < 5 || config.DataBits > 8 {
+		return ErrDataBits
+	}
+	if config.StopBits == UARTStopBits_Default {
+		config.StopBits = UARTStopBits_1
+	}
+
+	return nil
 }
 
-func (uart *UART) onDataReady() {
-	b := uart.Bus.FIFO.Get()
-	uart.Buffer.Put(byte(b))
+func isUARTPinValid(pin Pin) error {
+	if pin < 0 || pin > 21 {
+		return ErrInvalidPinNumber
+	}
+	return nil
+}
+
+func (uart *UART) initUART() {
+	uartClock := uart.module.getClockEnableRegister()
+	uartClockReset := uart.module.getClockResetRegister()
+
+	// To initialize URATn based on technical reference document:
+	// - enable the clock for UART RAM by setting SYSTEM_UART_MEM_CLK_EN to 1 (SYSTEM_CPU_PERI_CLK_EN0_REG)
+	uartClock.SetBits(esp.SYSTEM_PERIP_CLK_EN0_UART_MEM_CLK_EN)
+	// - enable APB_CLK for UARTn by setting SYSTEM_UARTn_CLK_EN to 1 (SYSTEM_PERIP_CLK_EN0_UART1_CLK_EN)
+	uartClock.SetBits(uart.module.getClockBit())
+	// - clear SYSTEM_UARTn_RST (SYSTEM_PERIP_RST_EN0_UART1_RST)
+	uartClockReset.ClearBits(uart.module.getClockBit())
+	// - write 1 to UART_RST_CORE
+	uart.Bus.CLK_CONF.SetBits(esp.UART_CLK_CONF_RST_CORE)
+	// - write 1 to SYSTEM_UARTn_RST (SYSTEM_PERIP_RST_EN0_UART1_RST)
+	// - clear SYSTEM_UARTn_RST (SYSTEM_PERIP_RST_EN0_UART1_RST)
+	uartClockReset.SetBits(uart.module.getClockBit())
+	uartClockReset.ClearBits(uart.module.getClockBit())
+	// - clear UART_RST_CORE
+	uart.Bus.CLK_CONF.ClearBits(esp.UART_CLK_CONF_RST_CORE)
+	// enable register synchronization by clearing UART_UPDATE_CTRL
+	uart.Bus.ID.ClearBits(esp.UART_ID_REG_UPDATE_Msk)
+
+	// enable RTC clock ???
+	esp.RTC_CNTL.RTC_CLK_CONF.SetBits(esp.RTC_CNTL_RTC_CLK_CONF_DIG_CLK8M_EN_Msk)
+
+	// wait for Core Clock to ready for configuration
+	for uart.Bus.ID.HasBits(esp.UART_ID_REG_UPDATE_Msk) {
+		riscv.Asm("nop")
+	}
+}
+
+func (uart *UART) configure(config *UARTConfig) {
+
+	// Write static registers
+	// - disbale TX/RX clock to make sure the UART transmitter or receiver is not at work
+	uart.Bus.CLK_CONF.ClearBits(esp.UART_CLK_CONF_TX_SCLK_EN_Msk | esp.UART_CLK_CONF_RX_SCLK_EN_Msk)
+
+	// To configure URATn communication:
+	// Configure static registers (if any) following Section 20.5.1.2;
+
+	// - Set default clock source (UART_SCLK_APB)
+	// UART_SCLK_SEL UART clock source select. 1: APB_CLK; 2: FOSC_CLK; 3: XTAL_CLK.
+	uart.Bus.CLK_CONF.ReplaceBits(1, esp.UART_CLK_CONF_SCLK_SEL_Msk, esp.UART_CLK_CONF_SCLK_SEL_Pos)
+	// configure divisor of the divider via UART_SCLK_DIV_NUM, UART_SCLK_DIV_A, and UART_SCLK_DIV_B
+	uart.Bus.CLK_CONF.ReplaceBits(0, esp.UART_CLK_CONF_SCLK_DIV_NUM_Msk, esp.UART_CLK_CONF_SCLK_DIV_NUM_Pos)
+	uart.Bus.CLK_CONF.ReplaceBits(0, esp.UART_CLK_CONF_SCLK_DIV_A_Msk, esp.UART_CLK_CONF_SCLK_DIV_A_Pos)
+	uart.Bus.CLK_CONF.ReplaceBits(0, esp.UART_CLK_CONF_SCLK_DIV_B_Msk, esp.UART_CLK_CONF_SCLK_DIV_B_Pos)
+	// configure the baud rate for transmission via UART_CLKDIV and UART_CLKDIV_FRAG
+	// - Set baud rate
+	max_div := uint32((1 << 12) - 1)
+	clk_div := (clk_freq + (max_div * config.BaudRate) - 1) / (max_div * config.BaudRate)
+	div := (clk_freq << 4) / (config.BaudRate * clk_div)
+	// The baud rate configuration register is divided into an integer part and a fractional part.
+	uart.Bus.CLKDIV.ReplaceBits((div >> 4), esp.UART_CLKDIV_CLKDIV_Msk, esp.UART_CLKDIV_CLKDIV_Pos)
+	uart.Bus.CLKDIV.ReplaceBits((div & 0xf), esp.UART_CLKDIV_FRAG_Msk, esp.UART_CLKDIV_FRAG_Pos)
+	// configure data length via UART_BIT_NUM;
+	uart.Bus.CONF0.ReplaceBits(uint32(config.DataBits-5), esp.UART_CONF0_BIT_NUM_Msk, esp.UART_CONF0_BIT_NUM_Pos)
+	// - stop bit
+	uart.Bus.CONF0.ReplaceBits(uint32(config.StopBits), esp.UART_CONF0_STOP_BIT_NUM_Msk, esp.UART_CONF0_STOP_BIT_NUM_Pos)
+	// configure odd or even parity check via UART_PARITY_EN and UART_PARITY;
+	switch config.Parity {
+	case ParityNone:
+		uart.Bus.CONF0.ClearBits(esp.UART_CONF0_PARITY_EN)
+	case ParityEven:
+		uart.Bus.CONF0.SetBits(esp.UART_CONF0_PARITY_EN)
+		uart.Bus.CONF0.ClearBits(esp.UART_CONF0_PARITY)
+	case ParityOdd:
+		uart.Bus.CONF0.SetBits(esp.UART_CONF0_PARITY_EN)
+		uart.Bus.CONF0.SetBits(esp.UART_CONF0_PARITY)
+	}
+	// - Set UART mode.
+	uart.Bus.RS485_CONF.ClearBits(esp.UART_RS485_CONF_RS485_EN_Msk | esp.UART_RS485_CONF_RS485TX_RX_EN_Msk | esp.UART_RS485_CONF_RS485RXBY_TX_EN_Msk)
+	uart.Bus.CONF0.ClearBits(esp.UART_CONF0_IRDA_EN)
+	// - Disable hw-flow control
+	uart.Bus.CONF0.ClearBits(esp.UART_CONF0_TX_FLOW_EN)
+	uart.Bus.CONF1.ClearBits(esp.UART_CONF1_RX_FLOW_EN)
 }
 
 func (uart *UART) setupPins(config *UARTConfig) error {
-
 	config.RX.Configure(PinConfig{Mode: PinInputPullup})
-	// gpio_matrix_in(5, 6, 0)
+	config.TX.Configure(PinConfig{Mode: PinInputPullup})
 
-	// if (rx_io_num >= 0 && !uart_try_set_iomux_pin(uart_num, rx_io_num, SOC_UART_RX_PIN_IDX)) {
-	//     gpio_hal_iomux_func_sel(GPIO_PIN_MUX_REG[rx_io_num], PIN_FUNC_GPIO);
-	//     gpio_set_pull_mode(rx_io_num, GPIO_PULLUP_ONLY);
-	//     gpio_set_direction(rx_io_num, GPIO_MODE_INPUT);
-	// #define SOC_UART_RX_PIN_IDX  (1)
-	// #define UART_PERIPH_SIGNAL(IDX, PIN) (uart_periph_signal[(IDX)].pins[(PIN)].signal)
-	// #define U0RXD_IN_IDX                  6
-	//     esp_rom_gpio_connect_in_signal(rx_io_num, UART_PERIPH_SIGNAL(uart_num, SOC_UART_RX_PIN_IDX), 0);
-	//     esp_rom_gpio_connect_in_signal(5, 6, 0);
-	// }
+	// link TX with signal 9 (technical reference manual 5.10) (this is not interrupt signal!)
+	reg := (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.FUNC0_OUT_SEL_CFG)) + uintptr(config.TX)*4)))
+	reg.Set(9)
 
-	// config.TX.Configure(PinConfig{Mode: PinOutput})
+	// link RX with signal 9 and route signals via GPIO matrix (GPIO_SIGn_IN_SEL 0x40)
+	reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.FUNC0_IN_SEL_CFG)) + uintptr(9)*4)))
+	reg.Set(uint32(config.RX) | 0x40)
 
-	// esp_err_t uart_set_pin(uart_port_t uart_num, int tx_io_num, int rx_io_num, int rts_io_num, int cts_io_num)
-
-	// ESP_RETURN_ON_FALSE((uart_num >= 0), ESP_FAIL, UART_TAG, "uart_num error");
-	// ESP_RETURN_ON_FALSE((uart_num < UART_NUM_MAX), ESP_FAIL, UART_TAG, "uart_num error");
-	// ESP_RETURN_ON_FALSE((tx_io_num < 0 || (GPIO_IS_VALID_OUTPUT_GPIO(tx_io_num))), ESP_FAIL, UART_TAG, "tx_io_num error");
-	// ESP_RETURN_ON_FALSE((rx_io_num < 0 || (GPIO_IS_VALID_GPIO(rx_io_num))), ESP_FAIL, UART_TAG, "rx_io_num error");
-	// ESP_RETURN_ON_FALSE((rts_io_num < 0 || (GPIO_IS_VALID_OUTPUT_GPIO(rts_io_num))), ESP_FAIL, UART_TAG, "rts_io_num error");
-	// ESP_RETURN_ON_FALSE((cts_io_num < 0 || (GPIO_IS_VALID_GPIO(cts_io_num))), ESP_FAIL, UART_TAG, "cts_io_num error");
-
-	// /* In the following statements, if the io_num is negative, no need to configure anything. */
-	// if (tx_io_num >= 0 && !uart_try_set_iomux_pin(uart_num, tx_io_num, SOC_UART_TX_PIN_IDX)) {
-	//     gpio_hal_iomux_func_sel(GPIO_PIN_MUX_REG[tx_io_num], PIN_FUNC_GPIO);
-
-	// static inline void gpio_ll_iomux_func_sel(uint32_t pin_name, uint32_t func)
-	// {
-	// 	if (pin_name == IO_MUX_GPIO18_REG || pin_name == IO_MUX_GPIO19_REG) {
-	// 		CLEAR_PERI_REG_MASK(USB_DEVICE_CONF0_REG, USB_DEVICE_USB_PAD_ENABLE);
-	// 	}
-	// 	PIN_FUNC_SELECT(pin_name, func);
-	// }
-
-	//     gpio_set_level(tx_io_num, 1);
-	//     esp_rom_gpio_connect_out_signal(tx_io_num, UART_PERIPH_SIGNAL(uart_num, SOC_UART_TX_PIN_IDX), 0, 0);
-	// }
-
-	// if (rts_io_num >= 0 && !uart_try_set_iomux_pin(uart_num, rts_io_num, SOC_UART_RTS_PIN_IDX)) {
-	//     gpio_hal_iomux_func_sel(GPIO_PIN_MUX_REG[rts_io_num], PIN_FUNC_GPIO);
-	//     gpio_set_direction(rts_io_num, GPIO_MODE_OUTPUT);
-	//     esp_rom_gpio_connect_out_signal(rts_io_num, UART_PERIPH_SIGNAL(uart_num, SOC_UART_RTS_PIN_IDX), 0, 0);
-	// }
-
-	// if (cts_io_num >= 0  && !uart_try_set_iomux_pin(uart_num, cts_io_num, SOC_UART_CTS_PIN_IDX)) {
-	//     gpio_hal_iomux_func_sel(GPIO_PIN_MUX_REG[cts_io_num], PIN_FUNC_GPIO);
-	//     gpio_set_pull_mode(cts_io_num, GPIO_PULLUP_ONLY);
-	//     gpio_set_direction(cts_io_num, GPIO_MODE_INPUT);
-	//     esp_rom_gpio_connect_in_signal(cts_io_num, UART_PERIPH_SIGNAL(uart_num, SOC_UART_CTS_PIN_IDX), 0);
-	// }
 	return nil
+}
+
+func (uart *UART) setupInterrupt() {
+	// Disable all UART interrupts
+	uart.Bus.INT_ENA.ClearBits(0x0fffff)
+	// Clear the UART interrupt status
+	uart.Bus.INT_CLR.SetBits(0x0fffff)
+	uart.Bus.INT_CLR.ClearBits(0x0fffff)
+	// define interrupt function and map UART to CPU interrupt
+	if uart.module == PERIPH_UART0_MODULE {
+		intr := interrupt.New(int(PERIPH_UART0_MODULE), func(i interrupt.Interrupt) {
+			UART0.serveInterrupt()
+		})
+		intr.Enable(PERIPH_UART0_MODULE.interruptForModule(), PERIPH_UART0_MODULE.mapRegisterForModule())
+	} else {
+		intr := interrupt.New(int(PERIPH_UART1_MODULE), func(i interrupt.Interrupt) {
+			UART1.serveInterrupt()
+		})
+		intr.Enable(PERIPH_UART1_MODULE.interruptForModule(), PERIPH_UART1_MODULE.mapRegisterForModule())
+	}
+}
+
+func (uart *UART) enableTransmitter() {
+	uart.Bus.CONF0.SetBits(esp.UART_CONF0_TXFIFO_RST)
+	uart.Bus.CONF0.ClearBits(esp.UART_CONF0_TXFIFO_RST)
+	// TXINFO empty threshold is when txfifo_empty_int interrupt produced after the amount of data in Tx-FIFO is less than this register value.
+	uart.Bus.CONF1.ReplaceBits(uart_empty_thresh_default, esp.UART_CONF1_TXFIFO_EMPTY_THRHD_Msk, esp.UART_CONF1_TXFIFO_EMPTY_THRHD_Pos)
+	// we are not using interrut on TX since write we are waiting for FIFO to have space.
+	// uart.Bus.INT_ENA.SetBits(esp.UART_INT_ENA_TXFIFO_EMPTY_INT_ENA)
+}
+
+func (uart *UART) enableReceiver() {
+	uart.Bus.CONF0.SetBits(esp.UART_CONF0_RXFIFO_RST)
+	uart.Bus.CONF0.ClearBits(esp.UART_CONF0_RXFIFO_RST)
+	// using value 1 so that we can start populate ring buffer with data as we get it
+	uart.Bus.CONF1.ReplaceBits(1, esp.UART_CONF1_RXFIFO_FULL_THRHD_Msk, esp.UART_CONF1_RXFIFO_FULL_THRHD_Pos)
+	// enable UART_RXFIFO_FULL_INT interrupt by setting UART_RXFIFO_FULL_INT_ENA
+	uart.Bus.INT_ENA.SetBits(esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA |
+		esp.UART_INT_ENA_FRM_ERR_INT_ENA |
+		esp.UART_INT_ENA_PARITY_ERR_INT_ENA |
+		esp.UART_INT_ENA_GLITCH_DET_INT_ENA |
+		esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA)
+}
+
+func (uart *UART) serveInterrupt() {
+	// get interrupt status
+	interrutFlag := uart.Bus.INT_ST.Get()
+	// mask will be used to enable interrupts back
+	mask := uart.Bus.INT_ENA.Get() & interrutFlag
+
+	// Disable UART interrupts
+	uart.Bus.INT_ENA.ClearBits(mask)
+
+	if 0 != interrutFlag&esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA {
+		b := uart.Bus.FIFO.Get()
+		if !uart.Buffer.Put(byte(b & 0xff)) {
+			uart.DataOverflowDetected = true
+		}
+	}
+	if 0 != interrutFlag&esp.UART_INT_ENA_PARITY_ERR_INT_ENA {
+		uart.ParityErrorDetected = true
+	}
+	if 0 != interrutFlag&esp.UART_INT_ENA_FRM_ERR_INT_ENA {
+		uart.DataErrorDetected = true
+	}
+	if 0 != interrutFlag&esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA {
+		uart.DataOverflowDetected = true
+	}
+	if 0 != interrutFlag&esp.UART_INT_ENA_GLITCH_DET_INT_ENA {
+		uart.DataErrorDetected = true
+	}
+	// * Keep all interrupt in case we need them but comment to reduce code size
+	// if 0 != interrutFlag&esp.UART_INT_ENA_TXFIFO_EMPTY_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_TXFIFO_EMPTY_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_DSR_CHG_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_DSR_CHG_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_CTS_CHG_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_CTS_CHG_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_BRK_DET_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_BRK_DET_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_RXFIFO_TOUT_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_RXFIFO_TOUT_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_SW_XON_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_SW_XON_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_SW_XOFF_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_SW_XOFF_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_TX_BRK_DONE_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_TX_BRK_DONE_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_TX_BRK_IDLE_DONE_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_TX_BRK_IDLE_DONE_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_TX_DONE_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_TX_DONE_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_RS485_PARITY_ERR_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_RS485_PARITY_ERR_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_RS485_FRM_ERR_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_RS485_PARITY_ERR_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_RS485_CLASH_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_RS485_CLASH_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_AT_CMD_CHAR_DET_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_AT_CMD_CHAR_DET_INT_ST register. (R/W)")
+	// }
+	// if 0 != interrutFlag&esp.UART_INT_ENA_WAKEUP_INT_ENA {
+	// 	println(" UART", uart.module, ":This is the enable bit for UART_WAKEUP_INT_ST register. (R/W)")
+	// }
+
+	// Clear the UART interrupt status
+	uart.Bus.INT_CLR.SetBits(interrutFlag)
+	// Enable interrupts
+	if mask != 0 {
+		uart.Bus.INT_ENA.SetBits(mask)
+	}
 }
