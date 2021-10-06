@@ -175,13 +175,6 @@ _interrupt_handler:
 	save_regs
 	save_mepc
 
-	/* Before doing anythig preserve the stack pointer */
-	/* It will be saved in current TCB, if needed */
-	/*
-	mv a0, sp
-	call rtos_int_enter
-	*/
-
 	/* Save interrupts registers */
 	csrr s1, mcause
 	csrr s2, mstatus
@@ -223,17 +216,6 @@ _interrupt_handler:
 	li t0, CPU_INT_THRESH
 	sw s3, 0(t0)
 	fence
-
-	/* Yield to the next task is needed: */
-	/* 
-	mv a0, sp
-	call rtos_int_exit
-	*/
-
-	/* The next (or current) stack pointer is returned in a0 */
-	/* 
-	mv sp, a0
-	*/
 
 	/* restore the rest of the registers */
 	csrw mcause, s1
