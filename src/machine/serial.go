@@ -4,15 +4,6 @@ import "errors"
 
 var errNoByte = errors.New("machine: no byte read")
 
-// UARTConfig is a struct with which a UART (or similar object) can be
-// configured. The baud rate is usually respected, but TX and RX may be ignored
-// depending on the chip and the type of object.
-type UARTConfig struct {
-	BaudRate uint32
-	TX       Pin
-	RX       Pin
-}
-
 // NullSerial is a serial version of /dev/null (or null router): it drops
 // everything that is written to it.
 type NullSerial struct {

@@ -8,6 +8,7 @@ var errUARTBufferEmpty = errors.New("UART buffer empty")
 
 // UARTParity is the parity setting to be used for UART communication.
 type UARTParity int
+type UARTStopBits int
 
 const (
 	// ParityNone means to not use any parity checking. This is
@@ -21,7 +22,24 @@ const (
 	// ParityOdd means to expect that the total number of 1 bits sent
 	// should be an odd number.
 	ParityOdd UARTParity = 2
+
+	UARTStopBits_Default UARTStopBits = iota
+	UARTStopBits_1
+	UARTStopBits_1_5
+	UARTStopBits_2
 )
+
+// UARTConfig is a struct with which a UART (or similar object) can be
+// configured. The baud rate is usually respected, but TX and RX may be ignored
+// depending on the chip and the type of object.
+type UARTConfig struct {
+	BaudRate uint32
+	TX       Pin
+	RX       Pin
+	DataBits int
+	StopBits UARTStopBits
+	Parity   UARTParity
+}
 
 // To implement the UART interface for a board, you must declare a concrete type as follows:
 //
