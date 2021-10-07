@@ -116,10 +116,10 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	return i2c.init(config)
 }
 
-// SetBaudrate sets the I2C frequency. It has the side effect of also
+// SetBaudRate sets the I2C frequency. It has the side effect of also
 // enabling the I2C hardware if disabled beforehand.
 //go:inline
-func (i2c *I2C) SetBaudrate(br uint32) error {
+func (i2c *I2C) SetBaudRate(br uint32) error {
 
 	if br == 0 {
 		return ErrInvalidI2CBaudrate
@@ -210,7 +210,7 @@ func (i2c *I2C) init(config I2CConfig) error {
 
 	// Always enable the DREQ signalling -- harmless if DMA isn't listening
 	i2c.Bus.IC_DMA_CR.Set(rp.I2C0_IC_DMA_CR_TDMAE | rp.I2C0_IC_DMA_CR_RDMAE)
-	return i2c.SetBaudrate(config.Frequency)
+	return i2c.SetBaudRate(config.Frequency)
 }
 
 // reset sets I2C register RESET bits in the reset peripheral and then clears them.
