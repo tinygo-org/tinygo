@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -235,6 +236,9 @@ func (p *Program) getOriginalPath(path string) string {
 		}
 		maybeInTinyGoRoot := false
 		for prefix := range pathsToOverride(needsSyscallPackage(p.config.BuildTags())) {
+			if runtime.GOOS == "windows" {
+				prefix = strings.ReplaceAll(prefix, "/", "\\")
+			}
 			if !strings.HasPrefix(relpath, prefix) {
 				continue
 			}
