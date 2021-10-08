@@ -1,5 +1,10 @@
 package runtime
 
+// OnPanic is called during the system panic handling before abort.
+// Note that when this function is called, the program could be in a bad state and
+// heap allocations might be impossible for example.
+var OnPanic func()
+
 // trap is a compiler hint that this function cannot be executed. It is
 // translated into either a trap instruction or a call to abort().
 //export llvm.trap
@@ -10,6 +15,9 @@ func _panic(message interface{}) {
 	printstring("panic: ")
 	printitf(message)
 	printnl()
+	if OnPanic != nil {
+		OnPanic()
+	}
 	abort()
 }
 
@@ -17,6 +25,9 @@ func _panic(message interface{}) {
 func runtimePanic(msg string) {
 	printstring("panic: runtime error: ")
 	println(msg)
+	if OnPanic != nil {
+		OnPanic()
+	}
 	abort()
 }
 
