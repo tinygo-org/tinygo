@@ -148,23 +148,31 @@ func (uart *UART) configure(config *UARTConfig) {
 
 	// - Set default clock source (UART_SCLK_APB)
 	// UART_SCLK_SEL UART clock source select. 1: APB_CLK; 2: FOSC_CLK; 3: XTAL_CLK.
-	uart.Bus.CLK_CONF.ReplaceBits(1, esp.UART_CLK_CONF_SCLK_SEL_Msk, esp.UART_CLK_CONF_SCLK_SEL_Pos)
+	// uart.Bus.CLK_CONF.ReplaceBits(1, esp.UART_CLK_CONF_SCLK_SEL_Msk, esp.UART_CLK_CONF_SCLK_SEL_Pos)
+	uart.Bus.CLK_CONF.ReplaceBits(1<<esp.UART_CLK_CONF_SCLK_SEL_Pos, esp.UART_CLK_CONF_SCLK_SEL_Msk, 0)
 	// configure divisor of the divider via UART_SCLK_DIV_NUM, UART_SCLK_DIV_A, and UART_SCLK_DIV_B
-	uart.Bus.CLK_CONF.ReplaceBits(0, esp.UART_CLK_CONF_SCLK_DIV_NUM_Msk, esp.UART_CLK_CONF_SCLK_DIV_NUM_Pos)
-	uart.Bus.CLK_CONF.ReplaceBits(0, esp.UART_CLK_CONF_SCLK_DIV_A_Msk, esp.UART_CLK_CONF_SCLK_DIV_A_Pos)
-	uart.Bus.CLK_CONF.ReplaceBits(0, esp.UART_CLK_CONF_SCLK_DIV_B_Msk, esp.UART_CLK_CONF_SCLK_DIV_B_Pos)
+	// uart.Bus.CLK_CONF.ReplaceBits(0, esp.UART_CLK_CONF_SCLK_DIV_NUM_Msk, esp.UART_CLK_CONF_SCLK_DIV_NUM_Pos)
+	uart.Bus.CLK_CONF.ReplaceBits(0, esp.UART_CLK_CONF_SCLK_DIV_NUM_Msk, 0)
+	// uart.Bus.CLK_CONF.ReplaceBits(0, esp.UART_CLK_CONF_SCLK_DIV_A_Msk, esp.UART_CLK_CONF_SCLK_DIV_A_Pos)
+	uart.Bus.CLK_CONF.ReplaceBits(0, esp.UART_CLK_CONF_SCLK_DIV_A_Msk, 0)
+	// uart.Bus.CLK_CONF.ReplaceBits(0, esp.UART_CLK_CONF_SCLK_DIV_B_Msk, esp.UART_CLK_CONF_SCLK_DIV_B_Pos)
+	uart.Bus.CLK_CONF.ReplaceBits(0, esp.UART_CLK_CONF_SCLK_DIV_B_Msk, 0)
 	// configure the baud rate for transmission via UART_CLKDIV and UART_CLKDIV_FRAG
 	// - Set baud rate
 	max_div := uint32((1 << 12) - 1)
 	clk_div := (clk_freq + (max_div * config.BaudRate) - 1) / (max_div * config.BaudRate)
 	div := (clk_freq << 4) / (config.BaudRate * clk_div)
 	// The baud rate configuration register is divided into an integer part and a fractional part.
-	uart.Bus.CLKDIV.ReplaceBits((div >> 4), esp.UART_CLKDIV_CLKDIV_Msk, esp.UART_CLKDIV_CLKDIV_Pos)
-	uart.Bus.CLKDIV.ReplaceBits((div & 0xf), esp.UART_CLKDIV_FRAG_Msk, esp.UART_CLKDIV_FRAG_Pos)
+	// uart.Bus.CLKDIV.ReplaceBits((div >> 4), esp.UART_CLKDIV_CLKDIV_Msk, esp.UART_CLKDIV_CLKDIV_Pos)
+	uart.Bus.CLKDIV.ReplaceBits((div>>4)<<esp.UART_CLKDIV_CLKDIV_Pos, esp.UART_CLKDIV_CLKDIV_Msk, 0)
+	// uart.Bus.CLKDIV.ReplaceBits((div & 0xf), esp.UART_CLKDIV_FRAG_Msk, esp.UART_CLKDIV_FRAG_Pos)
+	uart.Bus.CLKDIV.ReplaceBits((div&0xf)<<esp.UART_CLKDIV_FRAG_Pos, esp.UART_CLKDIV_FRAG_Msk, 0)
 	// configure data length via UART_BIT_NUM;
-	uart.Bus.CONF0.ReplaceBits(uint32(config.DataBits-5), esp.UART_CONF0_BIT_NUM_Msk, esp.UART_CONF0_BIT_NUM_Pos)
+	// uart.Bus.CONF0.ReplaceBits(uint32(config.DataBits-5), esp.UART_CONF0_BIT_NUM_Msk, esp.UART_CONF0_BIT_NUM_Pos)
+	uart.Bus.CONF0.ReplaceBits(uint32(config.DataBits-5)<<esp.UART_CONF0_BIT_NUM_Pos, esp.UART_CONF0_BIT_NUM_Msk, 0)
 	// - stop bit
-	uart.Bus.CONF0.ReplaceBits(uint32(config.StopBits), esp.UART_CONF0_STOP_BIT_NUM_Msk, esp.UART_CONF0_STOP_BIT_NUM_Pos)
+	// uart.Bus.CONF0.ReplaceBits(uint32(config.StopBits), esp.UART_CONF0_STOP_BIT_NUM_Msk, esp.UART_CONF0_STOP_BIT_NUM_Pos)
+	uart.Bus.CONF0.ReplaceBits(uint32(config.StopBits)<<esp.UART_CONF0_STOP_BIT_NUM_Pos, esp.UART_CONF0_STOP_BIT_NUM_Msk, 0)
 	// configure odd or even parity check via UART_PARITY_EN and UART_PARITY;
 	switch config.Parity {
 	case ParityNone:
@@ -223,7 +231,8 @@ func (uart *UART) enableTransmitter() {
 	uart.Bus.CONF0.SetBits(esp.UART_CONF0_TXFIFO_RST)
 	uart.Bus.CONF0.ClearBits(esp.UART_CONF0_TXFIFO_RST)
 	// TXINFO empty threshold is when txfifo_empty_int interrupt produced after the amount of data in Tx-FIFO is less than this register value.
-	uart.Bus.CONF1.ReplaceBits(uart_empty_thresh_default, esp.UART_CONF1_TXFIFO_EMPTY_THRHD_Msk, esp.UART_CONF1_TXFIFO_EMPTY_THRHD_Pos)
+	// uart.Bus.CONF1.ReplaceBits(uart_empty_thresh_default, esp.UART_CONF1_TXFIFO_EMPTY_THRHD_Msk, esp.UART_CONF1_TXFIFO_EMPTY_THRHD_Pos)
+	uart.Bus.CONF1.ReplaceBits(uart_empty_thresh_default<<esp.UART_CONF1_TXFIFO_EMPTY_THRHD_Pos, esp.UART_CONF1_TXFIFO_EMPTY_THRHD_Msk, 0)
 	// we are not using interrut on TX since write we are waiting for FIFO to have space.
 	// uart.Bus.INT_ENA.SetBits(esp.UART_INT_ENA_TXFIFO_EMPTY_INT_ENA)
 }
@@ -232,7 +241,8 @@ func (uart *UART) enableReceiver() {
 	uart.Bus.CONF0.SetBits(esp.UART_CONF0_RXFIFO_RST)
 	uart.Bus.CONF0.ClearBits(esp.UART_CONF0_RXFIFO_RST)
 	// using value 1 so that we can start populate ring buffer with data as we get it
-	uart.Bus.CONF1.ReplaceBits(1, esp.UART_CONF1_RXFIFO_FULL_THRHD_Msk, esp.UART_CONF1_RXFIFO_FULL_THRHD_Pos)
+	// uart.Bus.CONF1.ReplaceBits(1, esp.UART_CONF1_RXFIFO_FULL_THRHD_Msk, esp.UART_CONF1_RXFIFO_FULL_THRHD_Pos)
+	uart.Bus.CONF1.ReplaceBits(1<<esp.UART_CONF1_RXFIFO_FULL_THRHD_Pos, esp.UART_CONF1_RXFIFO_FULL_THRHD_Msk, 0)
 	// enable UART_RXFIFO_FULL_INT interrupt by setting UART_RXFIFO_FULL_INT_ENA
 	uart.Bus.INT_ENA.SetBits(esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA |
 		esp.UART_INT_ENA_FRM_ERR_INT_ENA |
