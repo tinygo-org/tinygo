@@ -1,12 +1,8 @@
-#define REGSIZE 4
-#define SAVE_REGS 36
-#define CONTEXT_SIZE (SAVE_REGS * 4)
-#define CPU_INT_THRESH (0x600c2000 + 0x194 )
-
-
-	.equ panic_from_exception, handleException
-	.equ panic_from_isr, handleException
-	.equ _global_interrupt_handler, handleInterrupt
+#define REGSIZE           4
+#define SAVE_REGS         36
+#define CONTEXT_SIZE      (SAVE_REGS * 4)
+#define CPU_INT_THRESH    (0x600c2000 + 0x194)
+#define CPU_INT_PRI_0_REG (0x600c2000 + 0x114)
 
 .macro save_regs
 	addi sp, sp, -CONTEXT_SIZE
@@ -80,8 +76,8 @@
 .endm
 
 .macro restore_mepc
-	lw	t0, 29*REGSIZE(sp)
-	csrw	mepc, t0
+	lw   t0, 29*REGSIZE(sp)
+	csrw mepc, t0
 .endm
 
 /* This is the vector table. MTVEC points here.
@@ -99,20 +95,20 @@
 .type _vector_table,@function
 _vector_table:
 
-    .option push
-    .option norvc
+	.option push
+	.option norvc
 
-	j _panic_handler			/* exception handler, entry 0 */
+	j _panic_handler            /* exception handler, entry 0 */
 	.rept 24
-	j _interrupt_handler		/* 24 identical entries, all pointing to the interrupt handler */
+	j _interrupt_handler        /* 24 identical entries, all pointing to the interrupt handler */
 	.endr
-	j _panic_handler			/* Call panic handler for ETS_T1_WDT_INUM interrupt (soc-level panic)*/
-	j _panic_handler			/* Call panic handler for ETS_CACHEERR_INUM interrupt (soc-level panic)*/
+	j _panic_handler            /* Call panic handler for ETS_T1_WDT_INUM interrupt (soc-level panic)*/
+	j _panic_handler            /* Call panic handler for ETS_CACHEERR_INUM interrupt (soc-level panic)*/
 	.rept 5
-	j _interrupt_handler		/* 6 identical entries, all pointing to the interrupt handler */
+	j _interrupt_handler        /* 6 identical entries, all pointing to the interrupt handler */
 	.endr
 
-    .option pop
+	.option pop
 
 .size _vector_table, .-_vector_table
 
@@ -122,43 +118,43 @@ _vector_table:
 _panic_handler:
 	/* save general registers */
 	save_regs
-    save_mepc
+	save_mepc
 
 	csrr t0, mstatus
-	sw t0,  30*REGSIZE(sp)
+	sw   t0,  30*REGSIZE(sp)
 	csrr t0, mtvec
-	sw t0,  31*REGSIZE(sp)
+	sw   t0,  31*REGSIZE(sp)
 	csrr t0, mtval
-	sw t0,  32*REGSIZE(sp)
+	sw   t0,  32*REGSIZE(sp)
 	csrr t0, mhartid
-	sw t0,  33*REGSIZE(sp)
+	sw   t0,  33*REGSIZE(sp)
 
 	addi t0, sp, CONTEXT_SIZE /* restore sp with the value when trap happened */
-	sw t0,  34*REGSIZE(sp)
+	sw   t0,  34*REGSIZE(sp)
 
-	/* Call panic_from_exception(sp) or panic_from_isr(sp)
+	/* Call handleException(sp) or handleException(sp)
 	 * depending on whether we have a pseudo exception or not.
 	 * If mcause's highest bit is 1, then an interrupt called this routine,
 	 * so we have a pseudo exception. Else, it is due to a exception, we don't
 	 * have an pseudo exception */
 	// ??? why we need it? mv a0, sp
 	csrr a1, mcause
-	li t0, 0x80000000 /* Branches instructions don't accept immediate values, so use t0 to store our comparator */
+	li   t0, 0x80000000 /* Branches instructions don't accept immediate values, so use t0 to store our comparator */
 	bgeu a1, t0, _call_panic_handler
-	sw a1,  35*REGSIZE(sp)
-	/* panic_from_exception never returns */
-	la   t0, panic_from_exception
-	jalr t0 /* absolute jump, avoid the 1 MiB range constraint */
+	sw   a1,  35*REGSIZE(sp)
+	/* handleException never returns */
+	la   t0, handleException
+	jalr t0             /* absolute jump, avoid the 1 MiB range constraint */
 
 _call_panic_handler:
 	/* Remove highest bit from mcause (a1) register and save it in the
 	 * structure */
-	not t0, t0
-	and a1, a1, t0
-	sw a1, 35*REGSIZE(sp)
+	not  t0, t0
+	and  a1, a1, t0
+	sw   a1, 35*REGSIZE(sp)
 	/* exception_from_isr never returns */
-	la   t0, panic_from_isr
-	jalr t0 /* absolute jump, avoid the 1 MiB range constraint */
+	la   t0, handleException
+	jalr t0             /* absolute jump, avoid the 1 MiB range constraint */
 
 .size  _panic_handler, .-_panic_handler
 
@@ -180,41 +176,39 @@ _interrupt_handler:
 	csrr s2, mstatus
 
 	/* Save the interrupt threshold level */
-	li t0, CPU_INT_THRESH
-	lw s3, 0(t0)
+	li   t0, CPU_INT_THRESH
+	lw   s3, 0(t0)
 
 	/* Increase interrupt threshold level */
-	li t2, 0x7fffffff
-	and t1, s1, t2		/* t1 = mcause & mask */
-	slli t1, t1, 2 		/* t1 = mcause * 4 */
-	li t2, 0x600c2114   /* INTERRUPT_CORE0_CPU_INT_PRI_0_REG */
-	add t1, t2, t1		/* t1 = INTC_INT_PRIO_REG + 4 * mcause */
-	lw t2, 0(t1)		/* t2 = INTC_INT_PRIO_REG[mcause] */
-	addi t2, t2, 1		/* t2 = t2 +1 */
-	sw t2, 0(t0)		/* CPU_INT_THRESH = t2 */
+	li   t2, 0x7fffffff
+	and  t1, s1, t2     /* t1 = mcause & mask */
+	slli t1, t1, 2      /* t1 = mcause * 4 */
+	li   t2, CPU_INT_PRI_0_REG
+	add  t1, t2, t1     /* t1 = INTC_INT_PRIO_REG + 4 * mcause */
+	lw   t2, 0(t1)      /* t2 = INTC_INT_PRIO_REG[mcause] */
+	addi t2, t2, 1      /* t2 = t2 +1 */
+	sw   t2, 0(t0)      /* CPU_INT_THRESH = t2 */
 	fence
 
 	/* Before dispatch c handler, restore interrupt to enable nested intr */
-	li t0, 0x8
+	li   t0, 0x8
 	csrrs t0, mstatus, t0
 
-	/* call the C dispatcher */
-	mv	  a0, sp		/* argument 1, stack pointer */
-	csrr	a1, mcause	/* argument 2, interrupt number */
+	/* call the interrupt dispatcher */
+	mv	 a0, sp         /* argument 1, stack pointer */
+	csrr a1, mcause     /* argument 2, interrupt number */
 	/* mask off the interrupt flag of mcause */
-	li		t0, 0x7fffffff
-	and	 a1, a1, t0
-	call	 _global_interrupt_handler
-
-	/* After dispatch c handler, disable interrupt to make freertos make context switch */
+	li   t0, 0x7fffffff
+	and  a1, a1, t0
+	call handleInterrupt
 
 	/* Disable interrupts */
-	li t0, 0x8
+	li   t0, 0x8
 	csrrc t0, mstatus, t0
 
 	/* restore the interrupt threshold level */
-	li t0, CPU_INT_THRESH
-	sw s3, 0(t0)
+	li   t0, CPU_INT_THRESH
+	sw   s3, 0(t0)
 	fence
 
 	/* restore the rest of the registers */
@@ -227,4 +221,3 @@ _interrupt_handler:
 	mret
 
 .size  _interrupt_handler, .-_interrupt_handler
-
