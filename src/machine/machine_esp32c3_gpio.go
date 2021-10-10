@@ -131,9 +131,6 @@ func (p Pin) portMaskClear() (*volatile.Register32, uint32) {
 	return &esp.GPIO.OUT_W1TC, 1 << p
 }
 
-//go:extern void gpio_matrix_in(uint32_t gpio, uint32_t signal_idx, bool inv);
-func gpio_matrix_in(gpio, signla uint32, inv byte)
-
 var (
 	pinCallbacks [26]func(Pin)
 )

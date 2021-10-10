@@ -195,7 +195,7 @@ _interrupt_handler:
 	csrrs t0, mstatus, t0
 
 	/* call the interrupt dispatcher */
-	mv	 a0, sp         /* argument 1, stack pointer */
+	mv   a0, sp         /* argument 1, stack pointer */
 	csrr a1, mcause     /* argument 2, interrupt number */
 	/* mask off the interrupt flag of mcause */
 	li   t0, 0x7fffffff
