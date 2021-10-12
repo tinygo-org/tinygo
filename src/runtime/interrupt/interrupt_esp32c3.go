@@ -11,7 +11,9 @@ import (
 )
 
 const (
-	LEDC HandlerID = iota
+	// Each module of the ESP32C3 uses different interrupt registers.
+	// Below is the list of modules used from machine package to initialize interrupt handler
+	GPIO HandlerID = iota
 	UART0
 	UART1
 	USB
@@ -21,8 +23,8 @@ const (
 	TIMG1
 	UHCI0
 	RMT
-	SPI  //SPI1
-	SPI2 //SPI2
+	SPI1
+	SPI2
 	TWAI
 	RNG
 	WIFI
@@ -38,12 +40,10 @@ const (
 	GDMA
 	SYSTIMER
 	SARADC
-	GPIO
 )
 
 var (
 	ErrInterruptNotImplemented = errors.New("interrupt number is not implemented")
-	ErrMissingMapRegister      = errors.New("interrupt map register is missing")
 )
 
 type HandlerID int
@@ -104,7 +104,6 @@ func getHandlerIDsForInterrupt(interrupt int) []HandlerID {
 		return []HandlerID{UART1}
 	default:
 		return []HandlerID{
-			LEDC,
 			USB,
 			I2C0,
 			I2S1,
@@ -112,8 +111,8 @@ func getHandlerIDsForInterrupt(interrupt int) []HandlerID {
 			TIMG1,
 			UHCI0,
 			RMT,
-			SPI,  //SPI1
-			SPI2, //SPI2
+			SPI1,
+			SPI2,
 			TWAI,
 			RNG,
 			WIFI,
