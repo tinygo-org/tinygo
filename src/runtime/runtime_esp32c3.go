@@ -5,6 +5,7 @@ package runtime
 import (
 	"device/esp"
 	"device/riscv"
+	"runtime/interrupt"
 )
 
 // This is the function called on startup after the flash (IROM/DROM) is
@@ -46,6 +47,9 @@ func main() {
 	esp.SYSTEM.CPU_PER_CONF.Set(esp.SYSTEM_CPU_PER_CONF_CPU_WAIT_MODE_FORCE_ON | esp.SYSTEM_CPU_PER_CONF_PLL_FREQ_SEL | 1<<esp.SYSTEM_CPU_PER_CONF_CPUPERIOD_SEL_Pos)
 
 	clearbss()
+
+	// Configure interrupt handler
+	interrupt.Init()
 
 	// Initialize main system timer used for time.Now.
 	initTimer()
