@@ -5,7 +5,8 @@ package runtime
 import (
 	"device/esp"
 	"device/riscv"
-	"runtime/interrupt"
+	"runtime/volatile"
+	"unsafe"
 )
 
 // This is the function called on startup after the flash (IROM/DROM) is
@@ -49,7 +50,7 @@ func main() {
 	clearbss()
 
 	// Configure interrupt handler
-	interrupt.Init()
+	interruptInit()
 
 	// Initialize main system timer used for time.Now.
 	initTimer()
@@ -67,3 +68,28 @@ func abort() {
 		riscv.Asm("wfi")
 	}
 }
+
+// Init initialize the interrupt controller and called from runtime once.
+func interruptInit() {
+	mie := riscv.DisableInterrupts()
+
+	// Reset all interrupt source priorities to zero.
+	priReg := &esp.INTERRUPT_CORE0.CPU_INT_PRI_1
+	for i := 0; i < 31; i++ {
+		priReg.Set(0)
+		priReg = (*volatile.Register32)(unsafe.Pointer(uintptr(unsafe.Pointer(priReg)) + uintptr(4)))
+	}
+
+	// default threshold for interrupts is 5
+	esp.INTERRUPT_CORE0.CPU_INT_THRESH.Set(5)
+
+	// Set the interrupt address.
+	// Set MODE field to 1 - a vector base address (only supported by ESP32C3)
+	// Note that this address must be aligned to 256 bytes.
+	riscv.MTVEC.Set((uintptr(unsafe.Pointer(&_vector_table))) | 1)
+
+	riscv.EnableInterrupts(mie)
+}
+
+//go:extern _vector_table
+var _vector_table [0]uintptr
