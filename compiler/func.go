@@ -23,7 +23,7 @@ func (c *compilerContext) createFuncValue(builder llvm.Builder, funcPtr, context
 	switch c.FuncImplementation {
 	case "doubleword":
 		// Closure is: {context, function pointer}
-		funcValueScalar = funcPtr
+		funcValueScalar = llvm.ConstBitCast(funcPtr, c.rawVoidFuncType)
 	case "switch":
 		funcValueWithSignatureGlobalName := funcPtr.Name() + "$withSignature"
 		funcValueWithSignatureGlobal := c.mod.NamedGlobal(funcValueWithSignatureGlobalName)
@@ -78,11 +78,11 @@ func (b *builder) extractFuncContext(funcValue llvm.Value) llvm.Value {
 // value. This may be an expensive operation.
 func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcPtr, context llvm.Value) {
 	context = b.CreateExtractValue(funcValue, 0, "")
+	llvmSig := b.getRawFuncType(sig)
 	switch b.FuncImplementation {
 	case "doubleword":
-		funcPtr = b.CreateExtractValue(funcValue, 1, "")
+		funcPtr = b.CreateBitCast(b.CreateExtractValue(funcValue, 1, ""), llvmSig, "")
 	case "switch":
-		llvmSig := b.getRawFuncType(sig)
 		sigGlobal := b.getFuncSignatureID(sig)
 		funcPtr = b.createRuntimeCall("getFuncPtr", []llvm.Value{funcValue, sigGlobal}, "")
 		funcPtr = b.CreateIntToPtr(funcPtr, llvmSig, "")
@@ -96,8 +96,7 @@ func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (f
 func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
 	switch c.FuncImplementation {
 	case "doubleword":
-		rawPtr := c.getRawFuncType(typ)
-		return c.ctx.StructType([]llvm.Type{c.i8ptrType, rawPtr}, false)
+		return c.ctx.StructType([]llvm.Type{c.i8ptrType, c.rawVoidFuncType}, false)
 	case "switch":
 		return c.getLLVMRuntimeType("funcValue")
 	default:

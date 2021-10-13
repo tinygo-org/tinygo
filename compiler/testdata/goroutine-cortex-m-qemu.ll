@@ -103,7 +103,7 @@ entry:
 declare void @runtime.printint32(i32, i8*, i8*)
 
 ; Function Attrs: nounwind
-define hidden void @main.funcGoroutine(i8* %fn.context, void (i32, i8*, i8*)* %fn.funcptr, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden void @main.funcGoroutine(i8* %fn.context, void ()* %fn.funcptr, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   %0 = call i8* @runtime.alloc(i32 12, i8* undef, i8* null) #0
   %1 = bitcast i8* %0 to i32*
@@ -112,8 +112,8 @@ entry:
   %3 = bitcast i8* %2 to i8**
   store i8* %fn.context, i8** %3, align 4
   %4 = getelementptr inbounds i8, i8* %0, i32 8
-  %5 = bitcast i8* %4 to void (i32, i8*, i8*)**
-  store void (i32, i8*, i8*)* %fn.funcptr, void (i32, i8*, i8*)** %5, align 4
+  %5 = bitcast i8* %4 to void ()**
+  store void ()* %fn.funcptr, void ()** %5, align 4
   %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @main.funcGoroutine.gowrapper to i32), i8* undef, i8* undef) #0
   call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @main.funcGoroutine.gowrapper to i32), i8* nonnull %0, i32 %stacksize, i8* undef, i8* null) #0
   ret void

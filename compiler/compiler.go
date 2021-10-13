@@ -23,7 +23,7 @@ import (
 // Version of the compiler pacakge. Must be incremented each time the compiler
 // package changes in a way that affects the generated LLVM module.
 // This version is independent of the TinyGo version number.
-const Version = 22 // last change: check for divide by zero
+const Version = 23 // last change: fix recursive function types
 
 func init() {
 	llvm.InitializeAllTargets()
@@ -76,6 +76,7 @@ type compilerContext struct {
 	targetData       llvm.TargetData
 	intType          llvm.Type
 	i8ptrType        llvm.Type // for convenience
+	rawVoidFuncType  llvm.Type // for convenience
 	funcPtrAddrSpace int
 	uintptrType      llvm.Type
 	program          *ssa.Program
@@ -121,6 +122,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 	dummyFuncType := llvm.FunctionType(c.ctx.VoidType(), nil, false)
 	dummyFunc := llvm.AddFunction(c.mod, "tinygo.dummy", dummyFuncType)
 	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
+	c.rawVoidFuncType = dummyFunc.Type()
 	dummyFunc.EraseFromParentAsFunction()
 
 	return c
