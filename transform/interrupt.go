@@ -66,7 +66,8 @@ func LowerInterrupts(mod llvm.Module, sizeLevel int) []error {
 	softwareVector := make(map[int64]llvm.Value)
 
 	ctx := mod.Context()
-	nullptr := llvm.ConstNull(llvm.PointerType(ctx.Int8Type(), 0))
+	i8ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+	nullptr := llvm.ConstNull(i8ptrType)
 	builder := ctx.NewBuilder()
 	defer builder.Dispose()
 
@@ -236,6 +237,8 @@ func LowerInterrupts(mod llvm.Module, sizeLevel int) []error {
 			// Fill the function declaration with the forwarding call.
 			// In practice, the called function will often be inlined which avoids
 			// the extra indirection.
+			handlerFuncPtrType := llvm.PointerType(llvm.FunctionType(ctx.VoidType(), []llvm.Type{num.Type(), i8ptrType, i8ptrType}, false), handlerFuncPtr.Type().PointerAddressSpace())
+			handlerFuncPtr = llvm.ConstBitCast(handlerFuncPtr, handlerFuncPtrType)
 			builder.CreateCall(handlerFuncPtr, []llvm.Value{num, handlerContext, nullptr}, "")
 
 			// Replace all ptrtoint uses of the global with the interrupt constant.

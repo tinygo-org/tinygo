@@ -228,3 +228,7 @@ type issue1304 struct {
 func (x issue1304) call() {
 	// nothing to do
 }
+
+type recursiveFuncType func(recursiveFuncType)
+
+var recursiveFunction recursiveFuncType
