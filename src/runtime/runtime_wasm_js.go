@@ -6,13 +6,20 @@ import "unsafe"
 
 type timeUnit float64 // time in milliseconds, just like Date.now() in JavaScript
 
+// wasmRunning is used to track whether wasm is currently running to avoid nested scheduling.
+var wasmRunning bool
+
 //export _start
 func _start() {
+	wasmRunning = true
+
 	// These need to be initialized early so that the heap can be initialized.
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
 
 	run()
+
+	wasmRunning = false
 }
 
 var handleEvent func()
@@ -24,15 +31,27 @@ func setEventHandler(fn func()) {
 
 //export resume
 func resume() {
+	prevRunning := wasmRunning
+	wasmRunning = true
 	go func() {
 		handleEvent()
 	}()
-	scheduler()
+	if !prevRunning {
+		// Nothing is currently running, so we can safely invoke the scheduler.
+		scheduler()
+	}
+	wasmRunning = prevRunning
 }
 
 //export go_scheduler
 func go_scheduler() {
+	if wasmRunning {
+		return
+	}
+
+	wasmRunning = true
 	scheduler()
+	wasmRunning = false
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {

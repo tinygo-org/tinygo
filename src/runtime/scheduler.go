@@ -116,9 +116,18 @@ func addSleepTask(t *task.Task, duration timeUnit) {
 	*q = t
 }
 
+var schedulerRunning bool
+
 // Run the scheduler until all tasks have finished.
 func scheduler() {
 	// Main scheduler loop.
+	if schedulerDebug {
+		if schedulerRunning {
+			runtimePanic("nested scheduler")
+		}
+
+		schedulerRunning = true
+	}
 	var now timeUnit
 	for !schedulerDone {
 		scheduleLog("")
@@ -143,7 +152,7 @@ func scheduler() {
 			if sleepQueue == nil {
 				if asyncScheduler {
 					// JavaScript is treated specially, see below.
-					return
+					break
 				}
 				waitForEvents()
 				continue
@@ -169,6 +178,9 @@ func scheduler() {
 		// Run the given task.
 		scheduleLogTask("  run:", t)
 		t.Resume()
+	}
+	if schedulerDebug {
+		schedulerRunning = false
 	}
 }
 
