@@ -3,6 +3,8 @@ target triple = "x86_64--linux"
 
 @intToPtrResult = global i8 0
 @ptrToIntResult = global i8 0
+@someArray = internal global {i16, i8, i8} zeroinitializer
+@someArrayPointer = global i8* zeroinitializer
 
 define void @runtime.initAll() {
   call void @main.init()
@@ -12,6 +14,7 @@ define void @runtime.initAll() {
 define internal void @main.init() {
   call void @testIntToPtr()
   call void @testPtrToInt()
+  call void @testConstGEP()
   ret void
 }
 
@@ -38,5 +41,10 @@ a:
 b:
   ; should be reached
   store i8 2, i8* @ptrToIntResult
+  ret void
+}
+
+define internal void @testConstGEP() {
+  store i8* getelementptr inbounds (i8, i8* bitcast ({i16, i8, i8}* @someArray to i8*), i32 2), i8** @someArrayPointer
   ret void
 }

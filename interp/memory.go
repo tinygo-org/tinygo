@@ -985,12 +985,9 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 		case llvm.GetElementPtr:
 			ptr := llvmValue.Operand(0)
 			index := llvmValue.Operand(1)
-			if checks && index.IsAConstantInt().IsNil() || index.ZExtValue() != 0 {
-				panic("expected first index of const gep to be i32 0")
-			}
 			numOperands := llvmValue.OperandsCount()
 			elementType := ptr.Type().ElementType()
-			totalOffset := uint64(0)
+			totalOffset := r.targetData.TypeAllocSize(elementType) * index.ZExtValue()
 			for i := 2; i < numOperands; i++ {
 				indexValue := llvmValue.Operand(i)
 				if checks && indexValue.IsAConstantInt().IsNil() {
