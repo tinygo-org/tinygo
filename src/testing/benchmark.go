@@ -69,6 +69,12 @@ func (b *B) SetBytes(n int64) {
 	panic("testing: unimplemented: B.SetBytes")
 }
 
+// ReportAllocs enables malloc statistics for this benchmark.
+func (b *B) ReportAllocs() {
+	// Dummy version to allow building e.g. golang.org/crypto/...
+	panic("testing: unimplemented: B.ReportAllocs")
+}
+
 // StartTimer starts timing a test. This function is called automatically
 // before a benchmark starts, but it can also be used to resume timing after
 // a call to StopTimer.
