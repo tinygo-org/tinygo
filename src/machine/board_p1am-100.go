@@ -79,6 +79,9 @@ const (
 	UART_TX_PIN Pin = PB22 // TX: SERCOM5/PAD[2]
 )
 
+// UART1 on the P1AM-100 connects to the normal TX/RX pins.
+var UART1 = &sercomUSART5
+
 // I2C pins
 const (
 	SDA_PIN Pin = PA08 // SDA:  SERCOM0/PAD[0]

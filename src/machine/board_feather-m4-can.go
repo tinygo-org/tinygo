@@ -4,7 +4,6 @@ package machine
 
 import (
 	"device/sam"
-	"runtime/interrupt"
 )
 
 // used to reset into bootloader
@@ -104,25 +103,12 @@ var (
 )
 
 var (
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM5_USART_INT,
-		SERCOM: 5,
-	}
+	UART1 = &sercomUSART5
 
-	UART2  = &_UART2
-	_UART2 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM0_USART_INT,
-		SERCOM: 0,
-	}
+	UART2 = &sercomUSART0
 )
 
 func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM5_2, _UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM0_2, _UART2.handleInterrupt)
-
 	// turn on neopixel
 	D7.Configure(PinConfig{Mode: PinOutput})
 	D7.High()

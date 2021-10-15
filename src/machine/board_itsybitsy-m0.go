@@ -4,7 +4,6 @@ package machine
 
 import (
 	"device/sam"
-	"runtime/interrupt"
 )
 
 // used to reset into bootloader
@@ -56,17 +55,8 @@ const (
 
 // UART1 on the ItsyBitsy M0.
 var (
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM1_USART,
-		SERCOM: 1,
-	}
+	UART1 = &sercomUSART1
 )
-
-func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1, _UART1.handleInterrupt)
-}
 
 // I2C pins
 const (

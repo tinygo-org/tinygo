@@ -8,7 +8,6 @@ package machine
 
 import (
 	"device/sam"
-	"runtime/interrupt"
 )
 
 // used to reset into bootloader
@@ -98,18 +97,7 @@ const (
 )
 
 // UART on the Arduino MKR WiFi 1010.
-var (
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM5_USART,
-		SERCOM: 5,
-	}
-)
-
-func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM5, _UART1.handleInterrupt)
-}
+var UART1 = &sercomUSART5
 
 // I2C on the Arduino MKR WiFi 1010.
 var (

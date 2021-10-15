@@ -165,3 +165,14 @@ func uartRead(bus uint8, buf *byte, bufLen int) int
 
 //export __tinygo_uart_write
 func uartWrite(bus uint8, buf *byte, bufLen int) int
+
+// Some objects used by Atmel SAM D chips (samd21, samd51).
+// Defined here (without build tag) for convenience.
+var (
+	sercomUSART0 = UART{0}
+	sercomUSART1 = UART{1}
+	sercomUSART2 = UART{2}
+	sercomUSART3 = UART{3}
+	sercomUSART4 = UART{4}
+	sercomUSART5 = UART{5}
+)

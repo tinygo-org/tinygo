@@ -9,7 +9,26 @@ package machine
 
 import (
 	"device/sam"
+	"runtime/interrupt"
 )
+
+var (
+	sercomUSART0 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM0_USART, SERCOM: 0}
+	sercomUSART1 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM1_USART, SERCOM: 1}
+	sercomUSART2 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM2_USART, SERCOM: 2}
+	sercomUSART3 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM3_USART, SERCOM: 3}
+	sercomUSART4 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM4_USART, SERCOM: 4}
+	sercomUSART5 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM5_USART, SERCOM: 5}
+)
+
+func init() {
+	sercomUSART0.Interrupt = interrupt.New(sam.IRQ_SERCOM0, sercomUSART0.handleInterrupt)
+	sercomUSART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1, sercomUSART1.handleInterrupt)
+	sercomUSART2.Interrupt = interrupt.New(sam.IRQ_SERCOM2, sercomUSART2.handleInterrupt)
+	sercomUSART3.Interrupt = interrupt.New(sam.IRQ_SERCOM3, sercomUSART3.handleInterrupt)
+	sercomUSART4.Interrupt = interrupt.New(sam.IRQ_SERCOM4, sercomUSART4.handleInterrupt)
+	sercomUSART5.Interrupt = interrupt.New(sam.IRQ_SERCOM5, sercomUSART5.handleInterrupt)
+}
 
 // Return the register and mask to enable a given GPIO pin. This can be used to
 // implement bit-banged drivers.
