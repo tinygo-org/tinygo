@@ -55,7 +55,7 @@ func (c *Config) GOARCH() string {
 
 // BuildTags returns the complete list of build tags used during this build.
 func (c *Config) BuildTags() []string {
-	tags := append(c.Target.BuildTags, []string{"tinygo", "math_big_pure_go", "gc." + c.GC(), "scheduler." + c.Scheduler(), "serial." + c.Serial()}...)
+	tags := append(c.Target.BuildTags, []string{"tinygo", "math_big_pure_go", "purego", "gc." + c.GC(), "scheduler." + c.Scheduler(), "serial." + c.Serial()}...)
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
