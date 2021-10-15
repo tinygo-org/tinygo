@@ -6,10 +6,6 @@
 //
 package machine
 
-import (
-	"device/sam"
-)
-
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0x07738135
 
@@ -110,11 +106,6 @@ var (
 
 	SPI1     = sercomSPIM4
 	NINA_SPI = SPI1
-)
-
-// I2S on the Arduino MKR WiFi 1010.
-var (
-	I2S0 = I2S{Bus: sam.I2S}
 )
 
 // USB CDC identifiers

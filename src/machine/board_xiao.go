@@ -2,10 +2,6 @@
 
 package machine
 
-import (
-	"device/sam"
-)
-
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
 
@@ -88,11 +84,6 @@ const (
 	I2S_SCK_PIN = PA10
 	I2S_SD_PIN  = PA08
 	I2S_WS_PIN  = NoPin // TODO: figure out what this is on Xiao
-)
-
-// I2S on the Xiao
-var (
-	I2S0 = I2S{Bus: sam.I2S}
 )
 
 // USB CDC identifiers

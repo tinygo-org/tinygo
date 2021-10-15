@@ -897,6 +897,8 @@ type I2S struct {
 	Bus *sam.I2S_Type
 }
 
+var I2S0 = I2S{Bus: sam.I2S}
+
 // Configure is used to configure the I2S interface. You must call this
 // before you can use the I2S bus.
 func (i2s I2S) Configure(config I2SConfig) {
