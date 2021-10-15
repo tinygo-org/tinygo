@@ -187,11 +187,14 @@ test: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test -v -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
 TEST_PACKAGES = \
+	compress/bzip2 \
 	container/heap \
 	container/list \
 	container/ring \
 	crypto/des \
+	crypto/dsa \
 	crypto/md5 \
+	crypto/rc4 \
 	crypto/sha1 \
 	crypto/sha256 \
 	crypto/sha512 \
@@ -199,13 +202,19 @@ TEST_PACKAGES = \
 	encoding/ascii85 \
 	encoding/base32 \
 	encoding/hex \
+	hash \
 	hash/adler32 \
 	hash/fnv \
 	hash/crc64 \
+	html \
+	index/suffixarray \
 	math \
 	math/cmplx \
 	testing \
+	testing/iotest \
 	text/scanner \
+	text/scanner \
+	unicode \
 	unicode/utf8 \
 
 # Test known-working standard library packages.
