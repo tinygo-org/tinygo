@@ -67,6 +67,11 @@ const (
 	SCL_PIN = PA13 // SCL: SERCOM2/PAD[1]
 )
 
+// I2C on the ItsyBitsy M4.
+var (
+	I2C0 = sercomI2CM2
+)
+
 // SPI pins
 const (
 	SPI0_SCK_PIN = PA01 // SCK: SERCOM1/PAD[1]

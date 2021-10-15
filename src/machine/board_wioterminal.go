@@ -362,6 +362,12 @@ const (
 	SCL_PIN = SCL0_PIN
 )
 
+// I2C on the Wio Terminal
+var (
+	I2C0 = sercomI2CM4
+	I2C1 = sercomI2CM4
+)
+
 // SPI pins
 const (
 	SPI0_SCK_PIN = SCK // SCK:  SERCOM5/PAD[1]

@@ -202,6 +202,12 @@ const (
 	SCL_PIN = I2C_SCL_PIN //  (required by machine_atsamd51.go)
 )
 
+// I2C on the Grand Central M4
+var (
+	I2C0 = sercomI2CM3
+	I2C1 = sercomI2CM6
+)
+
 // I2S pins
 const (
 	I2S0_SCK_PIN = D14 // (PB16)

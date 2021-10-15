@@ -88,6 +88,11 @@ const (
 	SCL_PIN Pin = PA09 // SCL:  SERCOM0/PAD[1]
 )
 
+// I2C on the P1AM-100.
+var (
+	I2C0 = sercomI2CM0
+)
+
 // SPI pins
 const (
 	SPI0_SCK_PIN Pin = D9  // SCK: SERCOM1/PAD[1]

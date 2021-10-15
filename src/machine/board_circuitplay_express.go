@@ -83,6 +83,12 @@ const (
 	SCL1_PIN = PA01 // I2C1 internal
 )
 
+// I2C on the Circuit Playground Express.
+var (
+	I2C0 = sercomI2CM5 // external device
+	I2C1 = sercomI2CM1 // internal device
+)
+
 // SPI pins (internal flash)
 const (
 	SPI0_SCK_PIN = PA21 // SCK: SERCOM3/PAD[3]

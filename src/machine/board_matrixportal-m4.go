@@ -131,6 +131,11 @@ const (
 	SCL_PIN = I2C_SCL_PIN //
 )
 
+// I2C on the MatrixPortal M4
+var (
+	I2C0 = sercomI2CM5
+)
+
 // ESP32 pins
 const (
 	NINA_ACK    = D31

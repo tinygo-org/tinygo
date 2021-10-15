@@ -6,14 +6,6 @@ import (
 	"device/sam"
 )
 
-// I2C on the P1AM-100.
-var (
-	I2C0 = &I2C{
-		Bus:    sam.SERCOM0_I2CM,
-		SERCOM: 0,
-	}
-)
-
 // SPI on the P1AM-100 is used for Base Controller.
 var (
 	SPI0 = SPI{

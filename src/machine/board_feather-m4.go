@@ -69,6 +69,11 @@ const (
 	SCL_PIN = D21 // SCL: SERCOM2/PAD[1]
 )
 
+// I2C on the Feather M4.
+var (
+	I2C0 = sercomI2CM2
+)
+
 // SPI pins
 const (
 	SPI0_SCK_PIN = D25 // SCK: SERCOM1/PAD[1]

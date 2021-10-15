@@ -254,28 +254,16 @@ var (
 // I2C on the SAM E54 Xplained Pro
 var (
 	// Extension Header EXT1
-	I2C0 = I2C{
-		Bus:    sam.SERCOM3_I2CM,
-		SERCOM: 3,
-	}
+	I2C0 = sercomI2CM3
 
 	// Extension Header EXT2
-	I2C1 = I2C{
-		Bus:    sam.SERCOM7_I2CM,
-		SERCOM: 7,
-	}
+	I2C1 = sercomI2CM7
 
 	// Extension Header EXT3
-	I2C2 = I2C{
-		Bus:    sam.SERCOM7_I2CM,
-		SERCOM: 7,
-	}
+	I2C2 = sercomI2CM7
 
 	// Data Gateway Interface
-	I2C3 = I2C{
-		Bus:    sam.SERCOM7_I2CM,
-		SERCOM: 7,
-	}
+	I2C3 = sercomI2CM7
 )
 
 // SPI on the SAM E54 Xplained Pro
