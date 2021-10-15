@@ -160,6 +160,9 @@ func encodeUTF8(x rune) ([4]byte, uintptr) {
 		b1 := 0xc0 | byte(x>>6)
 		b2 := 0x80 | byte(x&0x3f)
 		return [4]byte{b1, b2, 0, 0}, 2
+	case 0xd800 <= x && x <= 0xdfff:
+		// utf-16 surrogates are replaced with "invalid code point"
+		return [4]byte{0xef, 0xbf, 0xbd, 0}, 3
 	case x <= 0xffff:
 		b1 := 0xe0 | byte(x>>12)
 		b2 := 0x80 | byte((x>>6)&0x3f)
