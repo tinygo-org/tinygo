@@ -390,6 +390,20 @@ const (
 	SPI3_SDI_PIN = SDI3 // SDI: SERCOM7/PAD[2]
 )
 
+// SPI on the Wio Terminal
+var (
+	SPI0 = sercomSPIM5
+
+	// RTL8720D
+	SPI1 = sercomSPIM0
+
+	// SD
+	SPI2 = sercomSPIM6
+
+	// LCD
+	SPI3 = sercomSPIM7
+)
+
 // USB CDC identifiers
 const (
 	usb_STRING_PRODUCT      = "Seeed Wio Terminal"

@@ -2,10 +2,6 @@
 
 package machine
 
-import (
-	"device/sam"
-)
-
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
 
@@ -75,12 +71,7 @@ const (
 )
 
 // SPI on the Feather M0.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM4_SPI,
-		SERCOM: 4,
-	}
-)
+var SPI0 = sercomSPIM4
 
 // I2S pins
 const (

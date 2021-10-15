@@ -135,6 +135,12 @@ const (
 	NINA_SCK = SPI0_SCK_PIN
 )
 
+// SPI on the PyPortal.
+var (
+	SPI0     = sercomSPIM2
+	NINA_SPI = SPI0
+)
+
 // USB CDC identifiers
 const (
 	usb_STRING_PRODUCT      = "Adafruit PyPortal M4"

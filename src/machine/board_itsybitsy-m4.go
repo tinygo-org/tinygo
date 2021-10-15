@@ -79,6 +79,9 @@ const (
 	SPI0_SDI_PIN = PB23 // SDI: SERCOM1/PAD[3]
 )
 
+// SPI on the ItsyBitsy M4.
+var SPI0 = sercomSPIM1
+
 // USB CDC identifiers
 const (
 	usb_STRING_PRODUCT      = "Adafruit ItsyBitsy M4"

@@ -81,12 +81,7 @@ const (
 )
 
 // SPI on the Xiao
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM0_SPI,
-		SERCOM: 0,
-	}
-)
+var SPI0 = sercomSPIM0
 
 // I2S pins
 const (

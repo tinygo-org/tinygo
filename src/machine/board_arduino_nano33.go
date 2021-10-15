@@ -82,6 +82,15 @@ const (
 	SPI0_SDI_PIN Pin = D12 // SDI: SERCOM1/PAD[3]
 )
 
+// SPI on the Arduino Nano 33.
+var SPI0 = sercomSPIM1
+
+// SPI1 is connected to the NINA-W102 chip on the Arduino Nano 33.
+var (
+	SPI1     = sercomSPIM2
+	NINA_SPI = SPI1
+)
+
 // NINA-W102 Pins
 const (
 	NINA_SDO    Pin = PA12

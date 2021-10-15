@@ -77,12 +77,7 @@ const (
 )
 
 // SPI on the ItsyBitsy M0.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM4_SPI,
-		SERCOM: 4,
-	}
-)
+var SPI0 = sercomSPIM4
 
 // "Internal" SPI pins; SPI flash is attached to these on ItsyBitsy M0
 const (
@@ -93,12 +88,7 @@ const (
 )
 
 // "Internal" SPI on Sercom 5
-var (
-	SPI1 = SPI{
-		Bus:    sam.SERCOM5_SPI,
-		SERCOM: 5,
-	}
-)
+var SPI1 = sercomSPIM5
 
 // I2S pins
 const (

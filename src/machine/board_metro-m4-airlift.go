@@ -103,6 +103,15 @@ const (
 	SPI1_SDI_PIN = D13 // SCK:  SERCOM1/PAD[0]
 )
 
+// SPI on the Metro M4.
+var (
+	SPI0     = sercomSPIM2
+	NINA_SPI = SPI0
+)
+
+// SPI1 on the Metro M4 on pins 11,12,13
+var SPI1 = sercomSPIM1
+
 // USB CDC identifiers
 const (
 	usb_STRING_PRODUCT      = "Adafruit Metro M4 Airlift Lite"

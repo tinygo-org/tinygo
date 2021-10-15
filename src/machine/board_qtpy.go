@@ -2,10 +2,6 @@
 
 package machine
 
-import (
-	"device/sam"
-)
-
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
 
@@ -69,12 +65,7 @@ const (
 )
 
 // SPI on the QT Py M0.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM0_SPI,
-		SERCOM: 0,
-	}
-)
+var SPI0 = sercomSPIM0
 
 // I2C pins
 const (
