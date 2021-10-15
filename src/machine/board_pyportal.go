@@ -119,6 +119,11 @@ const (
 	SCL_PIN = PB03 // SCL: SERCOM2/PAD[1]
 )
 
+// I2C on the PyPortal.
+var (
+	I2C0 = sercomI2CM5
+)
+
 // SPI pins
 const (
 	SPI0_SCK_PIN = PA13 // SCK: SERCOM1/PAD[1]

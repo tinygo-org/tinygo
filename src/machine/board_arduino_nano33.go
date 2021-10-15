@@ -70,6 +70,11 @@ const (
 	SCL_PIN Pin = A5 // SCL: SERCOM4/PAD[1]
 )
 
+// I2C on the Arduino Nano 33.
+var (
+	I2C0 = sercomI2CM4
+)
+
 // SPI pins
 const (
 	SPI0_SCK_PIN Pin = D13 // SCK: SERCOM1/PAD[1]

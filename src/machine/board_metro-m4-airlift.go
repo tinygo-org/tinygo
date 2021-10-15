@@ -81,6 +81,11 @@ const (
 	SCL_PIN = PB03 // SCL: SERCOM5/PAD[1]
 )
 
+// I2C on the Metro M4.
+var (
+	I2C0 = sercomI2CM5
+)
+
 // SPI pins
 const (
 	SPI0_SCK_PIN = PA13 // SCK:  SERCOM2/PAD[1]

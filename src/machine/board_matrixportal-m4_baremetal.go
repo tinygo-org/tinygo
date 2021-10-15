@@ -6,14 +6,6 @@ import (
 	"device/sam"
 )
 
-// I2C on the MatrixPortal M4
-var (
-	I2C0 = &I2C{
-		Bus:    sam.SERCOM5_I2CM,
-		SERCOM: 5,
-	}
-)
-
 // SPI on the MatrixPortal M4
 var (
 	SPI0 = SPI{

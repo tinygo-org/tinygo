@@ -101,10 +101,7 @@ var UART1 = &sercomUSART5
 
 // I2C on the Arduino MKR WiFi 1010.
 var (
-	I2C0 = &I2C{
-		Bus:    sam.SERCOM2_I2CM,
-		SERCOM: 2,
-	}
+	I2C0 = sercomI2CM2
 )
 
 // SPI on the Arduino MKR WiFi 1010.
