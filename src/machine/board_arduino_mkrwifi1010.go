@@ -106,15 +106,9 @@ var (
 
 // SPI on the Arduino MKR WiFi 1010.
 var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM1_SPI,
-		SERCOM: 1,
-	}
+	SPI0 = sercomSPIM1
 
-	SPI1 = SPI{
-		Bus:    sam.SERCOM4_SPI,
-		SERCOM: 4,
-	}
+	SPI1     = sercomSPIM4
 	NINA_SPI = SPI1
 )
 

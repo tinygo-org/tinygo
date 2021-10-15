@@ -20,6 +20,15 @@ var (
 	sercomI2CM5 = &I2C{Bus: sam.SERCOM5_I2CM, SERCOM: 5}
 	sercomI2CM6 = &I2C{Bus: sam.SERCOM6_I2CM, SERCOM: 6}
 	sercomI2CM7 = &I2C{Bus: sam.SERCOM7_I2CM, SERCOM: 7}
+
+	sercomSPIM0 = SPI{Bus: sam.SERCOM0_SPIM, SERCOM: 0}
+	sercomSPIM1 = SPI{Bus: sam.SERCOM1_SPIM, SERCOM: 1}
+	sercomSPIM2 = SPI{Bus: sam.SERCOM2_SPIM, SERCOM: 2}
+	sercomSPIM3 = SPI{Bus: sam.SERCOM3_SPIM, SERCOM: 3}
+	sercomSPIM4 = SPI{Bus: sam.SERCOM4_SPIM, SERCOM: 4}
+	sercomSPIM5 = SPI{Bus: sam.SERCOM5_SPIM, SERCOM: 5}
+	sercomSPIM6 = SPI{Bus: sam.SERCOM6_SPIM, SERCOM: 6}
+	sercomSPIM7 = SPI{Bus: sam.SERCOM7_SPIM, SERCOM: 7}
 )
 
 // This chip has five TCC peripherals, which have PWM as one feature.

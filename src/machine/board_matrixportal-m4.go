@@ -152,6 +152,14 @@ const (
 	NINA_SCK = SPI0_SCK_PIN
 )
 
+// SPI on the MatrixPortal M4
+var (
+	SPI0     = sercomSPIM3 // BUG: SDO on SERCOM1!
+	NINA_SPI = SPI0
+
+	SPI1 = sercomSPIM0
+)
+
 // HUB75 pins
 const (
 	HUB75_R1 = D7

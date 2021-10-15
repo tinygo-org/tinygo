@@ -269,28 +269,16 @@ var (
 // SPI on the SAM E54 Xplained Pro
 var (
 	// Extension Header EXT1
-	SPI0 = SPI{
-		Bus:    sam.SERCOM4_SPIM,
-		SERCOM: 4,
-	}
+	SPI0 = sercomSPIM4
 
 	// Extension Header EXT2
-	SPI1 = SPI{
-		Bus:    sam.SERCOM6_SPIM,
-		SERCOM: 6,
-	}
+	SPI1 = sercomSPIM6
 
 	// Extension Header EXT3
-	SPI2 = SPI{
-		Bus:    sam.SERCOM6_SPIM,
-		SERCOM: 6,
-	}
+	SPI2 = sercomSPIM6
 
 	// Data Gateway Interface
-	SPI3 = SPI{
-		Bus:    sam.SERCOM6_SPIM,
-		SERCOM: 6,
-	}
+	SPI3 = sercomSPIM6
 )
 
 // CAN on the SAM E54 Xplained Pro

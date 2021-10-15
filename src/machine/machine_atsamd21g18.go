@@ -26,6 +26,13 @@ var (
 	sercomI2CM3 = &I2C{Bus: sam.SERCOM3_I2CM, SERCOM: 3}
 	sercomI2CM4 = &I2C{Bus: sam.SERCOM4_I2CM, SERCOM: 4}
 	sercomI2CM5 = &I2C{Bus: sam.SERCOM5_I2CM, SERCOM: 5}
+
+	sercomSPIM0 = SPI{Bus: sam.SERCOM0_SPI, SERCOM: 0}
+	sercomSPIM1 = SPI{Bus: sam.SERCOM1_SPI, SERCOM: 1}
+	sercomSPIM2 = SPI{Bus: sam.SERCOM2_SPI, SERCOM: 2}
+	sercomSPIM3 = SPI{Bus: sam.SERCOM3_SPI, SERCOM: 3}
+	sercomSPIM4 = SPI{Bus: sam.SERCOM4_SPI, SERCOM: 4}
+	sercomSPIM5 = SPI{Bus: sam.SERCOM5_SPI, SERCOM: 5}
 )
 
 func init() {

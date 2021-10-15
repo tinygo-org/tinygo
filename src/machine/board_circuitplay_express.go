@@ -96,6 +96,9 @@ const (
 	SPI0_SDI_PIN = PA16 // SDI: SERCOM3/PAD[0]
 )
 
+// SPI on the Circuit Playground Express.
+var SPI0 = sercomSPIM3
+
 // I2S pins
 const (
 	I2S_SCK_PIN = PA10

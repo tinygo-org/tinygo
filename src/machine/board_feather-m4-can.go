@@ -120,12 +120,7 @@ var (
 )
 
 // SPI on the Feather M4 CAN.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM1_SPIM,
-		SERCOM: 1,
-	}
-)
+var SPI0 = sercomSPIM1
 
 // CAN on the Feather M4 CAN.
 var (

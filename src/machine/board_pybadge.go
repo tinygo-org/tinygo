@@ -114,6 +114,12 @@ const (
 	SPI1_SDI_PIN = NoPin
 )
 
+// SPI on the PyBadge.
+var SPI0 = sercomSPIM1
+
+// TFT SPI on the PyBadge.
+var SPI1 = sercomSPIM4
+
 // USB CDC identifiers
 const (
 	usb_STRING_PRODUCT      = "Adafruit pyBadge M4"

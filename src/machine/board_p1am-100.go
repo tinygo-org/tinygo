@@ -109,6 +109,18 @@ const (
 	SDCARD_CD_PIN  Pin = PA27
 )
 
+// SPI on the P1AM-100 is used for Base Controller.
+var (
+	SPI0                = sercomSPIM1
+	BASE_CONTROLLER_SPI = SPI0
+)
+
+// SPI1 is connected to the SD card slot on the P1AM-100
+var (
+	SPI1       = sercomSPIM2
+	SDCARD_SPI = SPI1
+)
+
 // I2S pins
 const (
 	I2S_SCK_PIN Pin = D2

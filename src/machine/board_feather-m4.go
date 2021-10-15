@@ -81,6 +81,9 @@ const (
 	SPI0_SDI_PIN = D23 // SDI: SERCOM1/PAD[2]
 )
 
+// SPI on the Feather M4.
+var SPI0 = sercomSPIM1
+
 // USB CDC identifiers
 const (
 	usb_STRING_PRODUCT      = "Adafruit Feather M4"

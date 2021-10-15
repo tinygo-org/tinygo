@@ -187,6 +187,12 @@ const (
 	SPI_CS_PIN  = SPI0_CS_PIN  //
 )
 
+// SPI on the Grand Central M4
+var (
+	SPI0 = sercomSPIM7
+	SPI1 = sercomSPIM2 // SD card
+)
+
 // I2C pins
 const (
 	I2C0_SDA_PIN = D62 // (PB20), also on D20
