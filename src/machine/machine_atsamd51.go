@@ -951,9 +951,22 @@ type UART struct {
 }
 
 var (
-	// USB is a USB CDC interface.
-	USB = &USBCDC{Buffer: NewRingBuffer()}
+	sercomUSART0 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM0_USART_INT, SERCOM: 0}
+	sercomUSART1 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM1_USART_INT, SERCOM: 1}
+	sercomUSART2 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM2_USART_INT, SERCOM: 2}
+	sercomUSART3 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM3_USART_INT, SERCOM: 3}
+	sercomUSART4 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM4_USART_INT, SERCOM: 4}
+	sercomUSART5 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM5_USART_INT, SERCOM: 5}
 )
+
+func init() {
+	sercomUSART0.Interrupt = interrupt.New(sam.IRQ_SERCOM0_2, sercomUSART0.handleInterrupt)
+	sercomUSART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1_2, sercomUSART1.handleInterrupt)
+	sercomUSART2.Interrupt = interrupt.New(sam.IRQ_SERCOM2_2, sercomUSART2.handleInterrupt)
+	sercomUSART3.Interrupt = interrupt.New(sam.IRQ_SERCOM3_2, sercomUSART3.handleInterrupt)
+	sercomUSART4.Interrupt = interrupt.New(sam.IRQ_SERCOM4_2, sercomUSART4.handleInterrupt)
+	sercomUSART5.Interrupt = interrupt.New(sam.IRQ_SERCOM5_2, sercomUSART5.handleInterrupt)
+}
 
 const (
 	sampleRate16X = 16
@@ -1949,6 +1962,11 @@ type USBCDC struct {
 	waitTxcRetryCount uint8
 	sent              bool
 }
+
+var (
+	// USB is a USB CDC interface.
+	USB = &USBCDC{Buffer: NewRingBuffer()}
+)
 
 const (
 	usbcdcTxSizeMask          uint8 = 0x3F

@@ -343,6 +343,13 @@ const (
 	UART2_RX_PIN = PIN_SERIAL2_RX
 )
 
+var (
+	UART1 = &sercomUSART2
+
+	// RTL8720D
+	UART2 = &sercomUSART1
+)
+
 // I2C pins
 const (
 	SDA0_PIN = PIN_WIRE_SDA // SDA: SERCOM3/PAD[0]

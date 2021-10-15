@@ -4,7 +4,6 @@ package machine
 
 import (
 	"device/sam"
-	"runtime/interrupt"
 )
 
 // Definition for compatibility, but not used
@@ -240,44 +239,17 @@ var (
 // UART on the SAM E54 Xplained Pro
 var (
 	// Extension Header EXT1
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM0_USART_INT,
-		SERCOM: 0,
-	}
+	UART1 = &sercomUSART0
 
 	// Extension Header EXT2
-	UART2  = &_UART2
-	_UART2 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM5_USART_INT,
-		SERCOM: 5,
-	}
+	UART2 = &sercomUSART5
 
 	// Extension Header EXT3
-	UART3  = &_UART3
-	_UART3 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM1_USART_INT,
-		SERCOM: 1,
-	}
+	UART3 = &sercomUSART1
 
 	// EDBG Virtual COM Port
-	UART4  = &_UART4
-	_UART4 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM2_USART_INT,
-		SERCOM: 2,
-	}
+	UART4 = &sercomUSART2
 )
-
-func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM0_2, _UART1.handleInterrupt)
-	UART2.Interrupt = interrupt.New(sam.IRQ_SERCOM5_2, _UART2.handleInterrupt)
-	UART3.Interrupt = interrupt.New(sam.IRQ_SERCOM1_2, _UART3.handleInterrupt)
-	UART4.Interrupt = interrupt.New(sam.IRQ_SERCOM2_2, _UART4.handleInterrupt)
-}
 
 // I2C on the SAM E54 Xplained Pro
 var (

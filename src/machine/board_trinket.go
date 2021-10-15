@@ -4,7 +4,6 @@ package machine
 
 import (
 	"device/sam"
-	"runtime/interrupt"
 )
 
 // used to reset into bootloader
@@ -46,18 +45,7 @@ const (
 )
 
 // UART1 on the Trinket M0.
-var (
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM0_USART,
-		SERCOM: 0,
-	}
-)
-
-func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM0, _UART1.handleInterrupt)
-}
+var UART1 = &sercomUSART0
 
 // SPI pins
 const (

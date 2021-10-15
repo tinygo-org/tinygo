@@ -160,6 +160,16 @@ const (
 	UART_TX_PIN = UART1_TX_PIN //
 )
 
+// UART on the Grand Central M4
+var (
+	UART1 = &sercomUSART0
+	UART2 = &sercomUSART4
+	UART3 = &sercomUSART1
+	UART4 = &sercomUSART5
+
+	DefaultUART = UART1
+)
+
 // SPI pins
 const (
 	SPI0_SCK_PIN = D66 // (PD09), also on D52

@@ -57,6 +57,13 @@ const (
 	UART2_RX_PIN = PA07
 )
 
+var (
+	UART1 = &sercomUSART3
+	UART2 = &sercomUSART0
+
+	DefaultUART = UART1
+)
+
 const (
 	NINA_CS     = PA15
 	NINA_ACK    = PB04

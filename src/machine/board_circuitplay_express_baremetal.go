@@ -4,22 +4,7 @@ package machine
 
 import (
 	"device/sam"
-	"runtime/interrupt"
 )
-
-// UART1 on the Circuit Playground Express.
-var (
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM4_USART,
-		SERCOM: 4,
-	}
-)
-
-func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM4, _UART1.handleInterrupt)
-}
 
 // I2C on the Circuit Playground Express.
 var (
@@ -46,8 +31,4 @@ var (
 // I2S on the Circuit Playground Express.
 var (
 	I2S0 = I2S{Bus: sam.I2S}
-)
-
-var (
-	DefaultUART = UART1
 )

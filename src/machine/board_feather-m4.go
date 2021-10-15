@@ -56,6 +56,13 @@ const (
 	UART2_RX_PIN = A5
 )
 
+var (
+	UART1 = &sercomUSART5
+	UART2 = &sercomUSART0
+
+	DefaultUART = UART1
+)
+
 // I2C pins
 const (
 	SDA_PIN = D22 // SDA: SERCOM2/PAD[0]

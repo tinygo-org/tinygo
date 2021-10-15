@@ -96,6 +96,14 @@ const (
 	UART_TX_PIN = UART1_TX_PIN
 )
 
+// UART on the MatrixPortal M4
+var (
+	UART1 = &sercomUSART1
+	UART2 = &sercomUSART4
+
+	DefaultUART = UART1
+)
+
 // SPI pins
 const (
 	SPI0_SCK_PIN = D34 // SERCOM3[1] (ESP32 SCK)

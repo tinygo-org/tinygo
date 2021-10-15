@@ -504,10 +504,6 @@ type UART struct {
 	Interrupt interrupt.Interrupt
 }
 
-var (
-	USB = &USBCDC{Buffer: NewRingBuffer()}
-)
-
 const (
 	sampleRate16X = 16
 	lsbFirst      = 1
@@ -1742,6 +1738,10 @@ type USBCDC struct {
 	waitTxcRetryCount uint8
 	sent              bool
 }
+
+var (
+	USB = &USBCDC{Buffer: NewRingBuffer()}
+)
 
 const (
 	usbcdcTxSizeMask          uint8 = 0x3F
