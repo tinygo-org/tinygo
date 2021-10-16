@@ -22,7 +22,7 @@
 		"--gc-sections"
 	],
 	"extra-files": [
-		"src/device/arm/cortexm.s",
+		"src/device/arm/cortexm.S",
 		"src/internal/task/task_stack_cortexm.S",
 		"src/runtime/asm_arm.S"
 	],
