@@ -30,6 +30,6 @@
     "targets/nintendoswitch.s",
     "src/internal/task/task_stack_arm64.S",
     "src/runtime/asm_arm64.S",
-    "src/runtime/runtime_nintendoswitch.s"
+    "src/runtime/runtime_nintendoswitch.S"
   ]
 }
