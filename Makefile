@@ -195,7 +195,6 @@ TEST_PACKAGES = \
 	crypto/dsa \
 	crypto/md5 \
 	crypto/rc4 \
-	crypto/sha1 \
 	crypto/sha256 \
 	crypto/sha512 \
 	encoding \
