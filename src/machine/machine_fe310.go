@@ -50,6 +50,22 @@ func (p Pin) Get() bool {
 	return (val > 0)
 }
 
+// Return the register and mask to enable a given GPIO pin. This can be used to
+// implement bit-banged drivers.
+//
+// Warning: only use this on an output pin!
+func (p Pin) PortMaskSet() (*uint32, uint32) {
+	return (*uint32)(unsafe.Pointer(&sifive.GPIO0.PORT)), sifive.GPIO0.PORT.Get() | (1 << uint8(p))
+}
+
+// Return the register and mask to disable a given GPIO pin. This can be used to
+// implement bit-banged drivers.
+//
+// Warning: only use this on an output pin!
+func (p Pin) PortMaskClear() (*uint32, uint32) {
+	return (*uint32)(unsafe.Pointer(&sifive.GPIO0.PORT)), sifive.GPIO0.PORT.Get() &^ (1 << uint8(p))
+}
+
 type UART struct {
 	Bus    *sifive.UART_Type
 	Buffer *RingBuffer
