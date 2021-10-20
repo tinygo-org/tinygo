@@ -159,7 +159,7 @@ func (p Pin) portMaskClear() (*volatile.Register32, uint32) {
 }
 
 // Get returns the current value of a GPIO pin when the pin is configured as an
-// input.
+// input or as an output.
 func (p Pin) Get() bool {
 	if p < 32 {
 		return esp.GPIO.IN.Get()&(1<<p) != 0

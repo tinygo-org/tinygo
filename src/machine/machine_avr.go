@@ -63,7 +63,8 @@ func (p Pin) Configure(config PinConfig) {
 	}
 }
 
-// Get returns the current value of a GPIO pin.
+// Get returns the current value of a GPIO pin when the pin is configured as an
+// input or as an output.
 func (p Pin) Get() bool {
 	port, mask := p.getPortMask()
 	// As noted above, the PINx register is always two registers below the PORTx

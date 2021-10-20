@@ -33,7 +33,8 @@ func (p Pin) Set(high bool) {
 	}
 }
 
-// Get returns the current value of a GPIO pin.
+// Get returns the current value of a GPIO pin when configured as an input or as
+// an output.
 func (p Pin) Get() bool {
 	return (sam.PORT.IN0.Get()>>uint8(p))&1 > 0
 }

@@ -542,7 +542,8 @@ func (p Pin) Set(high bool) {
 	}
 }
 
-// Get returns the current value of a GPIO pin.
+// Get returns the current value of a GPIO pin when configured as an input or as
+// an output.
 func (p Pin) Get() bool {
 	group, pin_in_group := p.getPinGrouping()
 	return (sam.PORT.GROUP[group].IN.Get()>>pin_in_group)&1 > 0
