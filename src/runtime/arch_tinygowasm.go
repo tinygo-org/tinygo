@@ -84,8 +84,19 @@ func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
 
 //export realloc
 func libc_realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
-	runtimePanic("unimplemented: realloc")
-	return nil
+	newMalloc := libc_malloc(size)
+	newMallocPtr := uintptr(newMalloc)
+	oldPtr := uintptr(ptr)
+
+	var i uintptr
+	for i = 0; i < size; i++ {
+		//unsafe.Add() only available for go>=1.17; can be adjusted later
+		//*(*byte)(unsafe.Add(newMalloc,i)) = *(*byte)(unsafe.Add(ptr,i))
+		*(*byte)(unsafe.Pointer(newMallocPtr + i)) = *(*byte)(unsafe.Pointer(oldPtr + i))
+	}
+
+	libc_free(ptr)
+	return newMalloc
 }
 
 //export posix_memalign
