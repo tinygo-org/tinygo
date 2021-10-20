@@ -253,6 +253,19 @@ func (b *builder) createNegativeShiftCheck(shift llvm.Value) {
 	b.createRuntimeAssert(isNegative, "shift", "negativeShiftPanic")
 }
 
+// createDivideByZeroCheck asserts that y is not zero. If it is, a runtime panic
+// will be emitted. This follows the Go specification which says that a divide
+// by zero must cause a run time panic.
+func (b *builder) createDivideByZeroCheck(y llvm.Value) {
+	if b.info.nobounds {
+		return
+	}
+
+	// isZero = y == 0
+	isZero := b.CreateICmp(llvm.IntEQ, y, llvm.ConstInt(y.Type(), 0, false), "")
+	b.createRuntimeAssert(isZero, "divbyzero", "divideByZeroPanic")
+}
+
 // createRuntimeAssert is a common function to create a new branch on an assert
 // bool, calling an assert func if the assert value is true (1).
 func (b *builder) createRuntimeAssert(assert llvm.Value, blockPrefix, assertFunc string) {

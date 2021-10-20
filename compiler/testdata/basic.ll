@@ -29,6 +29,76 @@ entry:
 }
 
 ; Function Attrs: nounwind
+define hidden i32 @main.divInt(i32 %x, i32 %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+entry:
+  %0 = icmp eq i32 %y, 0
+  br i1 %0, label %divbyzero.throw, label %divbyzero.next
+
+divbyzero.throw:                                  ; preds = %entry
+  call void @runtime.divideByZeroPanic(i8* undef, i8* null) #0
+  unreachable
+
+divbyzero.next:                                   ; preds = %entry
+  %1 = icmp eq i32 %y, -1
+  %2 = icmp eq i32 %x, -2147483648
+  %3 = and i1 %1, %2
+  %4 = select i1 %3, i32 1, i32 %y
+  %5 = sdiv i32 %x, %4
+  ret i32 %5
+}
+
+declare void @runtime.divideByZeroPanic(i8*, i8*)
+
+; Function Attrs: nounwind
+define hidden i32 @main.divUint(i32 %x, i32 %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+entry:
+  %0 = icmp eq i32 %y, 0
+  br i1 %0, label %divbyzero.throw, label %divbyzero.next
+
+divbyzero.throw:                                  ; preds = %entry
+  call void @runtime.divideByZeroPanic(i8* undef, i8* null) #0
+  unreachable
+
+divbyzero.next:                                   ; preds = %entry
+  %1 = udiv i32 %x, %y
+  ret i32 %1
+}
+
+; Function Attrs: nounwind
+define hidden i32 @main.remInt(i32 %x, i32 %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+entry:
+  %0 = icmp eq i32 %y, 0
+  br i1 %0, label %divbyzero.throw, label %divbyzero.next
+
+divbyzero.throw:                                  ; preds = %entry
+  call void @runtime.divideByZeroPanic(i8* undef, i8* null) #0
+  unreachable
+
+divbyzero.next:                                   ; preds = %entry
+  %1 = icmp eq i32 %y, -1
+  %2 = icmp eq i32 %x, -2147483648
+  %3 = and i1 %1, %2
+  %4 = select i1 %3, i32 1, i32 %y
+  %5 = srem i32 %x, %4
+  ret i32 %5
+}
+
+; Function Attrs: nounwind
+define hidden i32 @main.remUint(i32 %x, i32 %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+entry:
+  %0 = icmp eq i32 %y, 0
+  br i1 %0, label %divbyzero.throw, label %divbyzero.next
+
+divbyzero.throw:                                  ; preds = %entry
+  call void @runtime.divideByZeroPanic(i8* undef, i8* null) #0
+  unreachable
+
+divbyzero.next:                                   ; preds = %entry
+  %1 = urem i32 %x, %y
+  ret i32 %1
+}
+
+; Function Attrs: nounwind
 define hidden i1 @main.floatEQ(float %x, float %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   %0 = fcmp oeq float %x, %y

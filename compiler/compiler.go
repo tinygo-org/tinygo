@@ -23,7 +23,7 @@ import (
 // Version of the compiler pacakge. Must be incremented each time the compiler
 // package changes in a way that affects the generated LLVM module.
 // This version is independent of the TinyGo version number.
-const Version = 21 // last change: add nounwind attribute
+const Version = 22 // last change: check for divide by zero
 
 func init() {
 	llvm.InitializeAllTargets()
@@ -2005,17 +2005,58 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 				return b.CreateSub(x, y, ""), nil
 			case token.MUL: // *
 				return b.CreateMul(x, y, ""), nil
-			case token.QUO: // /
+			case token.QUO, token.REM: // /, %
+				// Check for a divide by zero. If y is zero, the Go
+				// specification says that a runtime error must be triggered.
+				b.createDivideByZeroCheck(y)
+
 				if signed {
-					return b.CreateSDiv(x, y, ""), nil
+					// Deal with signed division overflow.
+					// The LLVM LangRef says:
+					//
+					//   Overflow also leads to undefined behavior; this is a
+					//   rare case, but can occur, for example, by doing a
+					//   32-bit division of -2147483648 by -1.
+					//
+					// The Go specification however says this about division:
+					//
+					//   The one exception to this rule is that if the dividend
+					//   x is the most negative value for the int type of x, the
+					//   quotient q = x / -1 is equal to x (and r = 0) due to
+					//   two's-complement integer overflow.
+					//
+					// In other words, in the special case that the lowest
+					// possible signed integer is divided by -1, the result of
+					// the division is the same as x (the dividend).
+					// This is implemented by checking for this condition and
+					// changing y to 1 if it occurs, for example for 32-bit
+					// ints:
+					//
+					//   if x == -2147483648 && y == -1 {
+					//       y = 1
+					//   }
+					//
+					// Dividing x by 1 obviously returns x, therefore satisfying
+					// the Go specification without a branch.
+					llvmType := x.Type()
+					minusOne := llvm.ConstSub(llvm.ConstInt(llvmType, 0, false), llvm.ConstInt(llvmType, 1, false))
+					lowestInteger := llvm.ConstInt(x.Type(), 1<<(llvmType.IntTypeWidth()-1), false)
+					yIsMinusOne := b.CreateICmp(llvm.IntEQ, y, minusOne, "")
+					xIsLowestInteger := b.CreateICmp(llvm.IntEQ, x, lowestInteger, "")
+					hasOverflow := b.CreateAnd(yIsMinusOne, xIsLowestInteger, "")
+					y = b.CreateSelect(hasOverflow, llvm.ConstInt(llvmType, 1, true), y, "")
+
+					if op == token.QUO {
+						return b.CreateSDiv(x, y, ""), nil
+					} else {
+						return b.CreateSRem(x, y, ""), nil
+					}
 				} else {
-					return b.CreateUDiv(x, y, ""), nil
-				}
-			case token.REM: // %
-				if signed {
-					return b.CreateSRem(x, y, ""), nil
-				} else {
-					return b.CreateURem(x, y, ""), nil
+					if op == token.QUO {
+						return b.CreateUDiv(x, y, ""), nil
+					} else {
+						return b.CreateURem(x, y, ""), nil
+					}
 				}
 			case token.AND: // &
 				return b.CreateAnd(x, y, ""), nil
