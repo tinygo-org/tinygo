@@ -24,10 +24,10 @@ func wasm_memory_size(index int32) int32
 func wasm_memory_grow(index int32, delta int32) int32
 
 var (
-	heapStart    = uintptr(unsafe.Pointer(&heapStartSymbol))
-	heapEnd      = uintptr(wasm_memory_size(0) * wasmPageSize)
-	globalsStart = uintptr(unsafe.Pointer(&globalsStartSymbol))
-	globalsEnd   = uintptr(unsafe.Pointer(&heapStartSymbol))
+	heapStart       = uintptr(unsafe.Pointer(&heapStartSymbol))
+	heapEnd         = uintptr(wasm_memory_size(0) * wasmPageSize)
+	globalsStart    = uintptr(unsafe.Pointer(&globalsStartSymbol))
+	globalsEnd      = uintptr(unsafe.Pointer(&heapStartSymbol))
 	libcAllocations = make(map[uintptr]uintptr)
 )
 
