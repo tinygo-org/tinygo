@@ -28,6 +28,7 @@ var (
 	heapEnd      = uintptr(wasm_memory_size(0) * wasmPageSize)
 	globalsStart = uintptr(unsafe.Pointer(&globalsStartSymbol))
 	globalsEnd   = uintptr(unsafe.Pointer(&heapStartSymbol))
+	libcAllocations = make(map[uintptr]uintptr)
 )
 
 const wasmPageSize = 64 * 1024
@@ -66,11 +67,14 @@ func growHeap() bool {
 
 //export malloc
 func libc_malloc(size uintptr) unsafe.Pointer {
-	return alloc(size)
+	memPtr := alloc(size)
+	libcAllocations[uintptr(memPtr)] = size
+	return memPtr
 }
 
 //export free
 func libc_free(ptr unsafe.Pointer) {
+	delete(libcAllocations, uintptr(ptr))
 	free(ptr)
 }
 
@@ -79,7 +83,7 @@ func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
 	// Note: we could be even more correct here and check that nmemb * size
 	// doesn't overflow. However the current implementation should normally work
 	// fine.
-	return alloc(nmemb * size)
+	return libc_malloc(nmemb * size)
 }
 
 //export realloc
