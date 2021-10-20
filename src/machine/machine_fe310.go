@@ -9,7 +9,7 @@ import (
 )
 
 func CPUFrequency() uint32 {
-	return 16000000
+	return 320000000 // 320MHz
 }
 
 const (
@@ -61,9 +61,17 @@ var (
 )
 
 func (uart *UART) Configure(config UARTConfig) {
-	// Assuming a 16Mhz Crystal (which is Y1 on the HiFive1), the divisor for a
-	// 115200 baud rate is 138.
-	sifive.UART0.DIV.Set(138)
+	if config.BaudRate == 0 {
+		config.BaudRate = 115200
+	}
+	// The divisor is:
+	//   fbaud = fin / (div + 1)
+	// Restating to get the divisor:
+	//   div = fin / fbaud - 1
+	// But we're using integers, so we should take care of rounding:
+	//   div = (fin + fbaud/2) / fbaud - 1
+	divisor := (CPUFrequency()+config.BaudRate/2)/config.BaudRate - 1
+	sifive.UART0.DIV.Set(divisor)
 	sifive.UART0.TXCTRL.Set(sifive.UART_TXCTRL_ENABLE)
 	sifive.UART0.RXCTRL.Set(sifive.UART_RXCTRL_ENABLE)
 	sifive.UART0.IE.Set(sifive.UART_IE_RXWM) // enable the receive interrupt (only)
