@@ -64,6 +64,11 @@ func negativeShiftPanic() {
 	runtimePanic("negative shift")
 }
 
+// Panic when there is a divide by zero.
+func divideByZeroPanic() {
+	runtimePanic("divide by zero")
+}
+
 func blockingPanic() {
 	runtimePanic("trying to do blocking operation in exported function")
 }
