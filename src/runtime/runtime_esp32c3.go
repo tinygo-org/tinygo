@@ -69,7 +69,7 @@ func abort() {
 	}
 }
 
-// Init initialize the interrupt controller and called from runtime once.
+// interruptInit initialize the interrupt controller and called from runtime once.
 func interruptInit() {
 	mie := riscv.DisableInterrupts()
 
