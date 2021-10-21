@@ -85,6 +85,10 @@ func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
 //export realloc
 func libc_realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
 	newMalloc := libc_malloc(size)
+	if newMalloc == nil || ptr == nil {
+		return newMalloc
+	}
+
 	newMallocPtr := uintptr(newMalloc)
 	oldPtr := uintptr(ptr)
 
