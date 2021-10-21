@@ -68,6 +68,9 @@ func growHeap() bool {
 //export malloc
 func libc_malloc(size uintptr) unsafe.Pointer {
 	memPtr := alloc(size)
+	if memPtr == nil {
+		return memPtr
+	}
 	libcAllocations[uintptr(memPtr)] = size
 	return memPtr
 }
