@@ -156,7 +156,6 @@ func handleInterrupt() {
 	}
 }
 
-//export handleException
 func handleException(mcause uintptr) {
 	// TODO need to get location of actual MEPC from the stack stash created in src/device/riscv/handleinterrupt.S
 	println("*** Exception:     pc:", riscv.MEPC.Get())
