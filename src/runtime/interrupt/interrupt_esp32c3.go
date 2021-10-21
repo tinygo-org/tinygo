@@ -112,7 +112,7 @@ func handleInterrupt() {
 		esp.INTERRUPT_CORE0.CPU_INT_ENABLE.ClearBits(interruptBit)
 
 		// reset pending status interrupt
-		if esp.INTERRUPT_CORE0.CPU_INT_TYPE.Get()&(interruptBit) != 0 {
+		if esp.INTERRUPT_CORE0.CPU_INT_TYPE.Get()&interruptBit != 0 {
 			// this is edge type interrupt
 			esp.INTERRUPT_CORE0.CPU_INT_CLEAR.SetBits(interruptBit)
 			esp.INTERRUPT_CORE0.CPU_INT_CLEAR.ClearBits(interruptBit)
