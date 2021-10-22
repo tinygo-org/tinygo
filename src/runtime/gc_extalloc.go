@@ -630,6 +630,10 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	}
 }
 
+func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
+	runtimePanic("unimplemented: gc_extalloc.realloc")
+}
+
 func free(ptr unsafe.Pointer) {
 	// Currently unimplemented due to bugs in coroutine lowering.
 }

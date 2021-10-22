@@ -341,6 +341,28 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	}
 }
 
+func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
+	if ptr == nil {
+		return alloc(size, nil)
+	}
+
+	ptrAddress := uintptr(ptr)
+	endOfTailAddress := blockFromAddr(ptrAddress).findNext().address()
+
+	// this might be a few bytes longer than the original size of
+	// ptr, because we align to full blocks of size bytesPerBlock
+	oldSize := endOfTailAddress - ptrAddress
+	if size <= oldSize {
+		return ptr
+	}
+
+	newAlloc := alloc(size, nil)
+	memcpy(newAlloc, ptr, oldSize)
+	free(ptr)
+
+	return newAlloc
+}
+
 func free(ptr unsafe.Pointer) {
 	// TODO: free blocks on request, when the compiler knows they're unused.
 }
