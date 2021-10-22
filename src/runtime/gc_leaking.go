@@ -35,6 +35,18 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	return unsafe.Pointer(addr)
 }
 
+func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
+	newAlloc := alloc(size, nil)
+	if ptr == nil {
+		return newAlloc
+	}
+	// according to POSIX everything beyond the previous pointer's
+	// size will have indeterminate values so we can just copy garbage
+	memcpy(newAlloc, ptr, size)
+
+	return newAlloc
+}
+
 func free(ptr unsafe.Pointer) {
 	// Memory is never freed.
 }

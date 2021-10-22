@@ -84,8 +84,7 @@ func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
 
 //export realloc
 func libc_realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
-	runtimePanic("unimplemented: realloc")
-	return nil
+	return realloc(ptr, size)
 }
 
 //export posix_memalign
