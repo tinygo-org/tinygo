@@ -15,6 +15,7 @@
 	"serial-port": ["acm:303a:1001"],
 	"openocd-interface": "esp_usb_jtag",
 	"openocd-target": "esp32c3",
-	"openocd-commands": ["gdb_memory_map disable"]
+ 	"openocd-commands": ["gdb_memory_map disable"],
+ 	"gdb": ["riscv32-esp-elf-gdb"]
 }
 
