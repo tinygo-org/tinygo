@@ -146,6 +146,9 @@ SECTIONS
      */
     .text : ALIGN(4)
     {
+        . = ALIGN (256);
+        *(.text.exception_vectors)
+        . = ALIGN (4);
         *(.text .text.*)
         *(.wifislpiram .wifislpiram.*)
     } >IROM
