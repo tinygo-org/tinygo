@@ -75,6 +75,8 @@ func main() {
 
 	testGoOnBuiltins()
 
+	testGoOnInterface(Foo(0))
+
 	testCond()
 
 	testIssue1790()
@@ -203,10 +205,35 @@ func testCond() {
 
 var once sync.Once
 
+func testGoOnInterface(f Itf) {
+	go f.Nowait()
+	time.Sleep(time.Millisecond)
+	go f.Wait()
+	time.Sleep(time.Millisecond * 2)
+	println("done with 'go on interface'")
+}
+
 // This tests a fix for issue 1790:
 // https://github.com/tinygo-org/tinygo/issues/1790
 func testIssue1790() *int {
 	once.Do(func() {})
 	i := 0
 	return &i
+}
+
+type Itf interface {
+	Nowait()
+	Wait()
+}
+
+type Foo string
+
+func (f Foo) Nowait() {
+	println("called: Foo.Nowait")
+}
+
+func (f Foo) Wait() {
+	println("called: Foo.Wait")
+	time.Sleep(time.Microsecond)
+	println("  ...waited")
 }

@@ -79,7 +79,15 @@ func (b *builder) createGo(instr *ssa.Go) {
 		}
 		b.createBuiltin(argTypes, argValues, builtin.Name(), instr.Pos())
 		return
-	} else if !instr.Call.IsInvoke() {
+	} else if instr.Call.IsInvoke() {
+		// This is a method call on an interface value.
+		itf := b.getValue(instr.Call.Value)
+		itfTypeCode := b.CreateExtractValue(itf, 0, "")
+		itfValue := b.CreateExtractValue(itf, 1, "")
+		funcPtr = b.getInvokeFunction(&instr.Call)
+		params = append([]llvm.Value{itfValue}, params...) // start with receiver
+		params = append(params, itfTypeCode)               // end with typecode
+	} else {
 		// This is a function pointer.
 		// At the moment, two extra params are passed to the newly started
 		// goroutine:
@@ -99,9 +107,6 @@ func (b *builder) createGo(instr *ssa.Go) {
 			panic("unknown scheduler type")
 		}
 		prefix = b.fn.RelString(nil)
-	} else {
-		b.addError(instr.Pos(), "todo: go on interface call")
-		return
 	}
 
 	paramBundle := b.emitPointerPack(params)
