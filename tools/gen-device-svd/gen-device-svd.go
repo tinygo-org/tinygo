@@ -134,10 +134,10 @@ type PeripheralField struct {
 	Registers   []*PeripheralField // contains fields if this is a cluster
 	Array       int
 	ElementSize int
-	Bitfields   []Bitfield
+	Constants   []Constant
 }
 
-type Bitfield struct {
+type Constant struct {
 	Name        string
 	Description string
 	Value       uint64
@@ -509,8 +509,8 @@ func addInterrupt(interrupts map[string]*Interrupt, name, interruptName string, 
 	}
 }
 
-func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPrefix string) []Bitfield {
-	var fields []Bitfield
+func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPrefix string) []Constant {
+	var fields []Constant
 	enumSeen := map[string]int64{}
 	for _, fieldEl := range fieldEls {
 		// Some bitfields (like the STM32H7x7) contain invalid bitfield
@@ -578,18 +578,18 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			}
 		}
 
-		fields = append(fields, Bitfield{
+		fields = append(fields, Constant{
 			Name:        fmt.Sprintf("%s_%s%s_%s_Pos", groupName, bitfieldPrefix, regName, fieldName),
 			Description: fmt.Sprintf("Position of %s field.", fieldName),
 			Value:       uint64(lsb),
 		})
-		fields = append(fields, Bitfield{
+		fields = append(fields, Constant{
 			Name:        fmt.Sprintf("%s_%s%s_%s_Msk", groupName, bitfieldPrefix, regName, fieldName),
 			Description: fmt.Sprintf("Bit mask of %s field.", fieldName),
 			Value:       (0xffffffffffffffff >> (63 - (msb - lsb))) << lsb,
 		})
 		if lsb == msb { // single bit
-			fields = append(fields, Bitfield{
+			fields = append(fields, Constant{
 				Name:        fmt.Sprintf("%s_%s%s_%s", groupName, bitfieldPrefix, regName, fieldName),
 				Description: fmt.Sprintf("Bit %s.", fieldName),
 				Value:       1 << lsb,
@@ -653,7 +653,7 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			}
 			enumSeen[enumName] = int64(enumValue)
 
-			fields = append(fields, Bitfield{
+			fields = append(fields, Constant{
 				Name:        enumName,
 				Description: enumDescription,
 				Value:       enumValue,
@@ -794,7 +794,7 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 			}
 			// set first result bitfield
 			shortName := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(reg.name(), "_%s", ""), "%s", ""))
-			results[0].Bitfields = parseBitfields(groupName, shortName, regEl.Fields, bitfieldPrefix)
+			results[0].Constants = parseBitfields(groupName, shortName, regEl.Fields, bitfieldPrefix)
 			return results
 		}
 	}
@@ -809,7 +809,7 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 		Name:        regName,
 		Address:     reg.address(),
 		Description: reg.description(),
-		Bitfields:   bitfields,
+		Constants:   bitfields,
 		Array:       reg.dim(),
 		ElementSize: reg.size(),
 	}}
@@ -1037,11 +1037,11 @@ var (
 	// Define bitfields.
 	for _, peripheral := range device.Peripherals {
 		if peripheral.Registers == nil {
-			// This peripheral was derived from another peripheral. Bitfields are
+			// This peripheral was derived from another peripheral. Constants are
 			// already defined.
 			continue
 		}
-		fmt.Fprintf(w, "\n// Bitfields for %s", peripheral.Name)
+		fmt.Fprintf(w, "\n// Constants for %s", peripheral.Name)
 		if isMultiline(peripheral.Description) {
 			for _, l := range splitLine(peripheral.Description) {
 				fmt.Fprintf(w, "\n// %s", l)
@@ -1052,14 +1052,14 @@ var (
 
 		fmt.Fprint(w, "\nconst(")
 		for _, register := range peripheral.Registers {
-			if len(register.Bitfields) != 0 {
-				writeGoRegisterBitfields(w, register, register.Name)
+			if len(register.Constants) != 0 {
+				writeGoRegisterConstants(w, register, register.Name)
 			}
 			if register.Registers == nil {
 				continue
 			}
 			for _, subregister := range register.Registers {
-				writeGoRegisterBitfields(w, subregister, register.Name+"."+subregister.Name)
+				writeGoRegisterConstants(w, subregister, register.Name+"."+subregister.Name)
 			}
 		}
 		w.WriteString(")\n")
@@ -1068,7 +1068,7 @@ var (
 	return w.Flush()
 }
 
-func writeGoRegisterBitfields(w *bufio.Writer, register *PeripheralField, name string) {
+func writeGoRegisterConstants(w *bufio.Writer, register *PeripheralField, name string) {
 	w.WriteString("\n\t// " + name)
 	if register.Description != "" {
 		if isMultiline(register.Description) {
@@ -1080,7 +1080,7 @@ func writeGoRegisterBitfields(w *bufio.Writer, register *PeripheralField, name s
 		}
 	}
 	w.WriteByte('\n')
-	for _, bitfield := range register.Bitfields {
+	for _, bitfield := range register.Constants {
 		if bitfield.Description != "" {
 			for _, l := range splitLine(bitfield.Description) {
 				w.WriteString("\t// " + l + "\n")
