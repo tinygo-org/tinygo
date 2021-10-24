@@ -38,6 +38,12 @@ func ExternalInt64AsPtr(mod llvm.Module) error {
 			// coroutine lowering.
 			continue
 		}
+		if !fn.GetStringAttributeAtIndex(-1, "tinygo-methods").IsNil() {
+			// These are internal functions (interface method call, interface
+			// type assert) that will be lowered by the interface lowering pass.
+			// Don't transform them.
+			continue
+		}
 
 		hasInt64 := false
 		paramTypes := []llvm.Type{}

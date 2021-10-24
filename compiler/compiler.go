@@ -1344,9 +1344,9 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 //
 // This is also where compiler intrinsics are implemented.
 func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) {
-	if instr.IsInvoke() {
-		fnCast, args := b.getInvokeCall(instr)
-		return b.createCall(fnCast, args, ""), nil
+	var params []llvm.Value
+	for _, param := range instr.Args {
+		params = append(params, b.getValue(param))
 	}
 
 	// Try to call the function directly for trivially static calls.
@@ -1417,12 +1417,20 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 	} else if call, ok := instr.Value.(*ssa.Builtin); ok {
 		// Builtin function (append, close, delete, etc.).)
 		var argTypes []types.Type
-		var argValues []llvm.Value
 		for _, arg := range instr.Args {
 			argTypes = append(argTypes, arg.Type())
-			argValues = append(argValues, b.getValue(arg))
 		}
-		return b.createBuiltin(argTypes, argValues, call.Name(), instr.Pos())
+		return b.createBuiltin(argTypes, params, call.Name(), instr.Pos())
+	} else if instr.IsInvoke() {
+		// Interface method call (aka invoke call).
+		itf := b.getValue(instr.Value) // interface value (runtime._interface)
+		typecode := b.CreateExtractValue(itf, 0, "invoke.func.typecode")
+		value := b.CreateExtractValue(itf, 1, "invoke.func.value") // receiver
+		// Prefix the params with receiver value and suffix with typecode.
+		params = append([]llvm.Value{value}, params...)
+		params = append(params, typecode)
+		callee = b.getInvokeFunction(instr)
+		context = llvm.Undef(b.i8ptrType)
 	} else {
 		// Function pointer.
 		value := b.getValue(instr.Value)
@@ -1430,11 +1438,6 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		// extract the function pointer and context first from the func value.
 		callee, context = b.decodeFuncValue(value, instr.Value.Type().Underlying().(*types.Signature))
 		b.createNilCheck(instr.Value, callee, "fpcall")
-	}
-
-	var params []llvm.Value
-	for _, param := range instr.Args {
-		params = append(params, b.getValue(param))
 	}
 
 	if !exported {

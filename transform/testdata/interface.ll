@@ -1,7 +1,7 @@
 target datalayout = "e-m:e-p:32:32-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "armv7m-none-eabi"
 
-%runtime.typecodeID = type { %runtime.typecodeID*, i32, %runtime.interfaceMethodInfo* }
+%runtime.typecodeID = type { %runtime.typecodeID*, i32, %runtime.interfaceMethodInfo*, %runtime.typecodeID*, i32 }
 %runtime.interfaceMethodInfo = type { i8*, i32 }
 
 @"reflect/types.type:basic:uint8" = private constant %runtime.typecodeID zeroinitializer
@@ -9,15 +9,11 @@ target triple = "armv7m-none-eabi"
 @"reflect/types.typeid:basic:int16" = external constant i8
 @"reflect/types.type:basic:int" = private constant %runtime.typecodeID zeroinitializer
 @"reflect/methods.NeverImplementedMethod()" = linkonce_odr constant i8 0
-@"Unmatched$interface" = private constant [1 x i8*] [i8* @"reflect/methods.NeverImplementedMethod()"]
 @"reflect/methods.Double() int" = linkonce_odr constant i8 0
-@"Doubler$interface" = private constant [1 x i8*] [i8* @"reflect/methods.Double() int"]
-@"Number$methodset" = private constant [1 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { i8* @"reflect/methods.Double() int", i32 ptrtoint (i32 (i8*, i8*)* @"(Number).Double$invoke" to i32) }]
-@"reflect/types.type:named:Number" = private constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i32 0, %runtime.interfaceMethodInfo* getelementptr inbounds ([1 x %runtime.interfaceMethodInfo], [1 x %runtime.interfaceMethodInfo]* @"Number$methodset", i32 0, i32 0) }
+@"Number$methodset" = private constant [1 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { i8* @"reflect/methods.Double() int", i32 ptrtoint (i32 (i8*, i8*, i8*)* @"(Number).Double$invoke" to i32) }]
+@"reflect/types.type:named:Number" = private constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i32 0, %runtime.interfaceMethodInfo* getelementptr inbounds ([1 x %runtime.interfaceMethodInfo], [1 x %runtime.interfaceMethodInfo]* @"Number$methodset", i32 0, i32 0), %runtime.typecodeID* null, i32 0 }
 
-declare i1 @runtime.interfaceImplements(i32, i8**)
 declare i1 @runtime.typeAssert(i32, i8*)
-declare i32 @runtime.interfaceMethod(i32, i8**, i8*)
 declare void @runtime.printuint8(i8)
 declare void @runtime.printint16(i16)
 declare void @runtime.printint32(i32)
@@ -34,7 +30,7 @@ define void @printInterfaces() {
 }
 
 define void @printInterface(i32 %typecode, i8* %value) {
-  %isUnmatched = call i1 @runtime.interfaceImplements(i32 %typecode, i8** getelementptr inbounds ([1 x i8*], [1 x i8*]* @"Unmatched$interface", i32 0, i32 0))
+  %isUnmatched = call i1 @Unmatched$typeassert(i32 %typecode)
   br i1 %isUnmatched, label %typeswitch.Unmatched, label %typeswitch.notUnmatched
 
 typeswitch.Unmatched:
@@ -44,13 +40,11 @@ typeswitch.Unmatched:
   ret void
 
 typeswitch.notUnmatched:
-  %isDoubler = call i1 @runtime.interfaceImplements(i32 %typecode, i8** getelementptr inbounds ([1 x i8*], [1 x i8*]* @"Doubler$interface", i32 0, i32 0))
+  %isDoubler = call i1 @Doubler$typeassert(i32 %typecode)
   br i1 %isDoubler, label %typeswitch.Doubler, label %typeswitch.notDoubler
 
 typeswitch.Doubler:
-  %doubler.func = call i32 @runtime.interfaceMethod(i32 %typecode, i8** getelementptr inbounds ([1 x i8*], [1 x i8*]* @"Doubler$interface", i32 0, i32 0), i8* nonnull @"reflect/methods.Double() int")
-  %doubler.func.cast = inttoptr i32 %doubler.func to i32 (i8*, i8*)*
-  %doubler.result = call i32 %doubler.func.cast(i8* %value, i8* null)
+  %doubler.result = call i32 @"Doubler.Double$invoke"(i8* %value, i32 %typecode, i8* undef, i8* undef)
   call void @runtime.printint32(i32 %doubler.result)
   ret void
 
@@ -79,13 +73,23 @@ typeswitch.notInt16:
   ret void
 }
 
-define i32 @"(Number).Double"(i32 %receiver, i8* %parentHandle) {
+define i32 @"(Number).Double"(i32 %receiver, i8* %context, i8* %parentHandle) {
   %ret = mul i32 %receiver, 2
   ret i32 %ret
 }
 
-define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %parentHandle) {
+define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %context, i8* %parentHandle) {
   %receiver = ptrtoint i8* %receiverPtr to i32
-  %ret = call i32 @"(Number).Double"(i32 %receiver, i8* null)
+  %ret = call i32 @"(Number).Double"(i32 %receiver, i8* undef, i8* null)
   ret i32 %ret
 }
+
+declare i32 @"Doubler.Double$invoke"(i8* %receiver, i32 %typecode, i8* %context, i8* %parentHandle) #0
+
+declare i1 @Doubler$typeassert(i32 %typecode) #1
+
+declare i1 @Unmatched$typeassert(i32 %typecode) #2
+
+attributes #0 = { "tinygo-invoke"="reflect/methods.Double() int" "tinygo-methods"="reflect/methods.Double() int" }
+attributes #1 = { "tinygo-methods"="reflect/methods.Double() int" }
+attributes #2 = { "tinygo-methods"="reflect/methods.NeverImplementedMethod()" }

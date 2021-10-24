@@ -47,6 +47,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		var length int64
 		var methodSet llvm.Value
 		var ptrTo llvm.Value
+		var typeAssert llvm.Value
 		switch typ := typ.(type) {
 		case *types.Named:
 			references = c.getTypeCode(typ.Underlying())
@@ -69,6 +70,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		}
 		if _, ok := typ.Underlying().(*types.Interface); !ok {
 			methodSet = c.getTypeMethodSet(typ)
+		} else {
+			typeAssert = c.getInterfaceImplementsFunc(typ)
+			typeAssert = llvm.ConstPtrToInt(typeAssert, c.uintptrType)
 		}
 		if _, ok := typ.Underlying().(*types.Pointer); !ok {
 			ptrTo = c.getTypeCode(types.NewPointer(typ))
@@ -86,6 +90,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		}
 		if !ptrTo.IsNil() {
 			globalValue = llvm.ConstInsertValue(globalValue, ptrTo, []uint32{3})
+		}
+		if !typeAssert.IsNil() {
+			globalValue = llvm.ConstInsertValue(globalValue, typeAssert, []uint32{4})
 		}
 		global.SetInitializer(globalValue)
 		global.SetLinkage(llvm.LinkOnceODRLinkage)
@@ -193,7 +200,11 @@ func getTypeCodeName(t types.Type) string {
 	case *types.Interface:
 		methods := make([]string, t.NumMethods())
 		for i := 0; i < t.NumMethods(); i++ {
-			methods[i] = t.Method(i).Name() + ":" + getTypeCodeName(t.Method(i).Type())
+			name := t.Method(i).Name()
+			if !token.IsExported(name) {
+				name = t.Method(i).Pkg().Path() + "." + name
+			}
+			methods[i] = name + ":" + getTypeCodeName(t.Method(i).Type())
 		}
 		return "interface:" + "{" + strings.Join(methods, ",") + "}"
 	case *types.Map:
@@ -306,10 +317,9 @@ func (c *compilerContext) getInterfaceMethodSet(typ types.Type) llvm.Value {
 	return llvm.ConstGEP(global, []llvm.Value{zero, zero})
 }
 
-// getMethodSignature returns a global variable which is a reference to an
-// external *i8 indicating the indicating the signature of this method. It is
-// used during the interface lowering pass.
-func (c *compilerContext) getMethodSignature(method *types.Func) llvm.Value {
+// getMethodSignatureName returns a unique name (that can be used as the name of
+// a global) for the given method.
+func (c *compilerContext) getMethodSignatureName(method *types.Func) string {
 	signature := methodSignature(method)
 	var globalName string
 	if token.IsExported(method.Name()) {
@@ -317,6 +327,14 @@ func (c *compilerContext) getMethodSignature(method *types.Func) llvm.Value {
 	} else {
 		globalName = method.Type().(*types.Signature).Recv().Pkg().Path() + ".$methods." + signature
 	}
+	return globalName
+}
+
+// getMethodSignature returns a global variable which is a reference to an
+// external *i8 indicating the indicating the signature of this method. It is
+// used during the interface lowering pass.
+func (c *compilerContext) getMethodSignature(method *types.Func) llvm.Value {
+	globalName := c.getMethodSignatureName(method)
 	signatureGlobal := c.mod.NamedGlobal(globalName)
 	if signatureGlobal.IsNil() {
 		// TODO: put something useful in these globals, such as the method
@@ -345,15 +363,16 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 	commaOk := llvm.Value{}
 	if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
 		// Type assert on interface type.
-		// This pseudo call will be lowered in the interface lowering pass to a
-		// real call which checks whether the provided typecode is any of the
-		// concrete types that implements this interface.
+		// This is a call to an interface type assert function.
+		// The interface lowering pass will define this function by filling it
+		// with a type switch over all concrete types that implement this
+		// interface, and returning whether it's one of the matched types.
 		// This is very different from how interface asserts are implemented in
 		// the main Go compiler, where the runtime checks whether the type
 		// implements each method of the interface. See:
 		// https://research.swtch.com/interfaces
-		methodSet := b.getInterfaceMethodSet(expr.AssertedType)
-		commaOk = b.createRuntimeCall("interfaceImplements", []llvm.Value{actualTypeNum, methodSet}, "")
+		fn := b.getInterfaceImplementsFunc(expr.AssertedType)
+		commaOk = b.CreateCall(fn, []llvm.Value{actualTypeNum}, "")
 
 	} else {
 		globalName := "reflect/types.typeid:" + getTypeCodeName(expr.AssertedType)
@@ -420,39 +439,50 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 	}
 }
 
-// getInvokePtr creates an interface function pointer lookup for the specified invoke instruction, using a specified typecode.
-func (b *builder) getInvokePtr(instr *ssa.CallCommon, typecode llvm.Value) llvm.Value {
-	llvmFnType := b.getRawFuncType(instr.Method.Type().(*types.Signature))
-	values := []llvm.Value{
-		typecode,
-		b.getInterfaceMethodSet(instr.Value.Type()),
-		b.getMethodSignature(instr.Method),
+// getMethodsString returns a string to be used in the "tinygo-methods" string
+// attribute for interface functions.
+func (c *compilerContext) getMethodsString(itf *types.Interface) string {
+	methods := make([]string, itf.NumMethods())
+	for i := range methods {
+		methods[i] = c.getMethodSignatureName(itf.Method(i))
 	}
-	fn := b.createRuntimeCall("interfaceMethod", values, "invoke.func")
-	return b.CreateIntToPtr(fn, llvmFnType, "invoke.func.cast")
+	return strings.Join(methods, "; ")
 }
 
-// getInvokeCall creates and returns the function pointer and parameters of an
-// interface call.
-func (b *builder) getInvokeCall(instr *ssa.CallCommon) (llvm.Value, []llvm.Value) {
-	// Call an interface method with dynamic dispatch.
-	itf := b.getValue(instr.Value) // interface
-
-	typecode := b.CreateExtractValue(itf, 0, "invoke.typecode")
-	fnCast := b.getInvokePtr(instr, typecode)
-	receiverValue := b.CreateExtractValue(itf, 1, "invoke.func.receiver")
-
-	args := []llvm.Value{receiverValue}
-	for _, arg := range instr.Args {
-		args = append(args, b.getValue(arg))
+// getInterfaceImplementsfunc returns a declared function that works as a type
+// switch. The interface lowering pass will define this function.
+func (c *compilerContext) getInterfaceImplementsFunc(assertedType types.Type) llvm.Value {
+	fnName := getTypeCodeName(assertedType.Underlying()) + ".$typeassert"
+	llvmFn := c.mod.NamedFunction(fnName)
+	if llvmFn.IsNil() {
+		llvmFnType := llvm.FunctionType(c.ctx.Int1Type(), []llvm.Type{c.uintptrType}, false)
+		llvmFn = llvm.AddFunction(c.mod, fnName, llvmFnType)
+		methods := c.getMethodsString(assertedType.Underlying().(*types.Interface))
+		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-methods", methods))
 	}
-	// Add the context parameter. An interface call never takes a context but we
-	// have to supply the parameter anyway.
-	args = append(args, llvm.Undef(b.i8ptrType))
-	// Add the parent goroutine handle.
-	args = append(args, llvm.Undef(b.i8ptrType))
+	return llvmFn
+}
 
-	return fnCast, args
+// getInvokeFunction returns the thunk to call the given interface method. The
+// thunk is declared, not defined: it will be defined by the interface lowering
+// pass.
+func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
+	fnName := getTypeCodeName(instr.Value.Type().Underlying()) + "." + instr.Method.Name() + "$invoke"
+	llvmFn := c.mod.NamedFunction(fnName)
+	if llvmFn.IsNil() {
+		sig := instr.Method.Type().(*types.Signature)
+		var paramTuple []*types.Var
+		for i := 0; i < sig.Params().Len(); i++ {
+			paramTuple = append(paramTuple, sig.Params().At(i))
+		}
+		paramTuple = append(paramTuple, types.NewVar(token.NoPos, nil, "$typecode", types.Typ[types.Uintptr]))
+		llvmFnType := c.getRawFuncType(types.NewSignature(sig.Recv(), types.NewTuple(paramTuple...), sig.Results(), false)).ElementType()
+		llvmFn = llvm.AddFunction(c.mod, fnName, llvmFnType)
+		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-invoke", c.getMethodSignatureName(instr.Method)))
+		methods := c.getMethodsString(instr.Value.Type().Underlying().(*types.Interface))
+		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-methods", methods))
+	}
+	return llvmFn
 }
 
 // getInterfaceInvokeWrapper returns a wrapper for the given method so it can be

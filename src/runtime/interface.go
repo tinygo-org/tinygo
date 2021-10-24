@@ -117,6 +117,10 @@ type typecodeID struct {
 	// Keeping the type struct alive here is important so that values from
 	// reflect.New (which uses reflect.PtrTo) can be used in type asserts etc.
 	ptrTo *typecodeID
+
+	// typeAssert is a ptrtoint of a declared interface assert function.
+	// It only exists to make the rtcalls pass easier.
+	typeAssert uintptr
 }
 
 // structField is used by the compiler to pass information to the interface
@@ -133,11 +137,3 @@ type structField struct {
 // asserts. Also, it is replaced with const false if this type assert can never
 // happen.
 func typeAssert(actualType uintptr, assertedType *uint8) bool
-
-// Pseudo function call that returns whether a given type implements all methods
-// of the given interface.
-func interfaceImplements(typecode uintptr, interfaceMethodSet **uint8) bool
-
-// Pseudo function that returns a function pointer to the method to call.
-// See the interface lowering pass for how this is lowered to a real call.
-func interfaceMethod(typecode uintptr, interfaceMethodSet **uint8, signature *uint8) uintptr
