@@ -109,77 +109,64 @@ func OptimizeReflectImplements(mod llvm.Module) {
 	if implementsSignature.IsNil() {
 		return
 	}
-	interfaceMethod := mod.NamedFunction("runtime.interfaceMethod")
-	if interfaceMethod.IsNil() {
-		return
-	}
-	interfaceImplements := mod.NamedFunction("runtime.interfaceImplements")
-	if interfaceImplements.IsNil() {
-		return
-	}
 
 	builder := mod.Context().NewBuilder()
 	defer builder.Dispose()
 
 	// Get a few useful object for use later.
-	zero := llvm.ConstInt(mod.Context().Int32Type(), 0, false)
 	uintptrType := mod.Context().IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8)
 
-	defer llvm.VerifyModule(mod, llvm.PrintMessageAction)
-
-	for _, use := range getUses(implementsSignature) {
-		if use.IsACallInst().IsNil() {
+	// Look up the (reflect.Value).Implements() method.
+	var implementsFunc llvm.Value
+	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		attr := fn.GetStringAttributeAtIndex(-1, "tinygo-invoke")
+		if attr.IsNil() {
 			continue
 		}
-		if use.CalledValue() != interfaceMethod {
+		if attr.GetStringValue() == "reflect/methods.Implements(reflect.Type) bool" {
+			implementsFunc = fn
+			break
+		}
+	}
+	if implementsFunc.IsNil() {
+		// Doesn't exist in the program, so nothing to do.
+		return
+	}
+
+	for _, call := range getUses(implementsFunc) {
+		if call.IsACallInst().IsNil() {
 			continue
 		}
-		for _, bitcast := range getUses(use) {
-			if !bitcast.IsABitCastInst().IsNil() {
-				continue
-			}
-			for _, call := range getUses(bitcast) {
-				// Try to get the interface method set.
-				interfaceTypeBitCast := call.Operand(2)
-				if interfaceTypeBitCast.IsAConstantExpr().IsNil() || interfaceTypeBitCast.Opcode() != llvm.BitCast {
-					continue
-				}
-				interfaceType := interfaceTypeBitCast.Operand(0)
-				if strings.HasPrefix(interfaceType.Name(), "reflect/types.type:named:") {
-					// Get the underlying type.
-					interfaceType = llvm.ConstExtractValue(interfaceType.Initializer(), []uint32{0})
-				}
-				if !strings.HasPrefix(interfaceType.Name(), "reflect/types.type:interface:") {
-					// This is an error. The Type passed to Implements should be
-					// of interface type. Ignore it here (don't report it), it
-					// will be reported at runtime.
-					continue
-				}
-				if interfaceType.IsAGlobalVariable().IsNil() {
-					// Interface is unknown at compile time. This can't be
-					// optimized.
-					continue
-				}
-				// Get the 'references' field of the runtime.typecodeID, which
-				// is a bitcast of an interface method set.
-				interfaceMethodSet := llvm.ConstExtractValue(interfaceType.Initializer(), []uint32{0}).Operand(0)
+		interfaceTypeBitCast := call.Operand(2)
+		if interfaceTypeBitCast.IsAConstantExpr().IsNil() || interfaceTypeBitCast.Opcode() != llvm.BitCast {
+			// The asserted interface is not constant, so can't optimize this
+			// code.
+			continue
+		}
 
-				builder.SetInsertPointBefore(call)
-				implements := builder.CreateCall(interfaceImplements, []llvm.Value{
-					builder.CreatePtrToInt(call.Operand(0), uintptrType, ""),    // typecode to check
-					llvm.ConstGEP(interfaceMethodSet, []llvm.Value{zero, zero}), // method set to check against
-					llvm.Undef(llvm.PointerType(mod.Context().Int8Type(), 0)),
-					llvm.Undef(llvm.PointerType(mod.Context().Int8Type(), 0)),
-				}, "")
-				call.ReplaceAllUsesWith(implements)
-				call.EraseFromParentAsInstruction()
-			}
-			if !hasUses(bitcast) {
-				bitcast.EraseFromParentAsInstruction()
-			}
+		interfaceType := interfaceTypeBitCast.Operand(0)
+		if strings.HasPrefix(interfaceType.Name(), "reflect/types.type:named:") {
+			// Get the underlying type.
+			interfaceType = llvm.ConstExtractValue(interfaceType.Initializer(), []uint32{0})
 		}
-		if !hasUses(use) {
-			use.EraseFromParentAsInstruction()
+		if !strings.HasPrefix(interfaceType.Name(), "reflect/types.type:interface:") {
+			// This is an error. The Type passed to Implements should be of
+			// interface type. Ignore it here (don't report it), it will be
+			// reported at runtime.
+			continue
 		}
+		if interfaceType.IsAGlobalVariable().IsNil() {
+			// Interface is unknown at compile time. This can't be optimized.
+			continue
+		}
+		typeAssertFunction := llvm.ConstExtractValue(interfaceType.Initializer(), []uint32{4}).Operand(0)
+
+		// Replace Implements call with the type assert call.
+		builder.SetInsertPointBefore(call)
+		implements := builder.CreateCall(typeAssertFunction, []llvm.Value{
+			builder.CreatePtrToInt(call.Operand(0), uintptrType, ""), // typecode to check
+		}, "")
+		call.ReplaceAllUsesWith(implements)
+		call.EraseFromParentAsInstruction()
 	}
 }
