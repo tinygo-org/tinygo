@@ -128,19 +128,28 @@ type Peripheral struct {
 // A PeripheralField is a single field in a peripheral type. It may be a full
 // peripheral or a cluster within a peripheral.
 type PeripheralField struct {
-	Name        string
-	Address     uint64
-	Description string
-	Registers   []*PeripheralField // contains fields if this is a cluster
-	Array       int
-	ElementSize int
-	Bitfields   []Bitfield
+	Name         string
+	Address      uint64
+	Description  string
+	Registers    []*PeripheralField // contains fields if this is a cluster
+	Array        int
+	ElementSize  int
+	Constants    []Constant
+	ShortName    string     // name stripped of "spaced array" suffix
+	Bitfields    []Bitfield // set of bit-fields provided by this
+	HasBitfields bool       // set true when Bitfields was set for a first PeripheralField of "spaced array".
 }
 
-type Bitfield struct {
+type Constant struct {
 	Name        string
 	Description string
 	Value       uint64
+}
+
+type Bitfield struct {
+	Name   string
+	Offset uint32
+	Mask   uint32
 }
 
 func formatText(text string) string {
@@ -332,6 +341,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 								Registers:   subcpRegisters,
 								Array:       subdim,
 								ElementSize: int(subdimIncrement),
+								ShortName:   clusterPrefix + subclusterName,
 							})
 						} else {
 							for _, regEl := range subClusterEl.Registers {
@@ -402,6 +412,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 				Registers:   clusterRegisters,
 				Array:       dim,
 				ElementSize: dimIncrement,
+				ShortName:   clusterName,
 			})
 		}
 		sort.SliceStable(p.Registers, func(i, j int) bool {
@@ -509,8 +520,9 @@ func addInterrupt(interrupts map[string]*Interrupt, name, interruptName string, 
 	}
 }
 
-func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPrefix string) []Bitfield {
-	var fields []Bitfield
+func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPrefix string) ([]Constant, []Bitfield) {
+	var fields []Constant
+	var bitfields []Bitfield
 	enumSeen := map[string]int64{}
 	for _, fieldEl := range fieldEls {
 		// Some bitfields (like the STM32H7x7) contain invalid bitfield
@@ -578,18 +590,23 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			}
 		}
 
-		fields = append(fields, Bitfield{
+		bitfields = append(bitfields, Bitfield{
+			Name:   fieldName,
+			Offset: lsb,
+			Mask:   (0xffffffff >> (31 - (msb - lsb))) << lsb,
+		})
+		fields = append(fields, Constant{
 			Name:        fmt.Sprintf("%s_%s%s_%s_Pos", groupName, bitfieldPrefix, regName, fieldName),
 			Description: fmt.Sprintf("Position of %s field.", fieldName),
 			Value:       uint64(lsb),
 		})
-		fields = append(fields, Bitfield{
+		fields = append(fields, Constant{
 			Name:        fmt.Sprintf("%s_%s%s_%s_Msk", groupName, bitfieldPrefix, regName, fieldName),
 			Description: fmt.Sprintf("Bit mask of %s field.", fieldName),
 			Value:       (0xffffffffffffffff >> (63 - (msb - lsb))) << lsb,
 		})
 		if lsb == msb { // single bit
-			fields = append(fields, Bitfield{
+			fields = append(fields, Constant{
 				Name:        fmt.Sprintf("%s_%s%s_%s", groupName, bitfieldPrefix, regName, fieldName),
 				Description: fmt.Sprintf("Bit %s.", fieldName),
 				Value:       1 << lsb,
@@ -653,14 +670,14 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			}
 			enumSeen[enumName] = int64(enumValue)
 
-			fields = append(fields, Bitfield{
+			fields = append(fields, Constant{
 				Name:        enumName,
 				Description: enumDescription,
 				Value:       enumValue,
 			})
 		}
 	}
-	return fields
+	return fields, bitfields
 }
 
 type Register struct {
@@ -782,6 +799,7 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 			// a "spaced array" of registers, special processing required
 			// we need to generate a separate register for each "element"
 			var results []*PeripheralField
+			shortName := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(reg.name(), "_%s", ""), "%s", ""))
 			for i, j := range reg.dimIndex() {
 				regAddress := reg.address() + (uint64(i) * dimIncrement)
 				results = append(results, &PeripheralField{
@@ -790,11 +808,16 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 					Description: reg.description(),
 					Array:       -1,
 					ElementSize: reg.size(),
+					ShortName:   shortName,
 				})
 			}
 			// set first result bitfield
-			shortName := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(reg.name(), "_%s", ""), "%s", ""))
-			results[0].Bitfields = parseBitfields(groupName, shortName, regEl.Fields, bitfieldPrefix)
+			results[0].Constants, results[0].Bitfields = parseBitfields(groupName, shortName, regEl.Fields, bitfieldPrefix)
+			results[0].HasBitfields = len(results[0].Bitfields) > 0
+			for i := 1; i < len(results); i++ {
+				results[i].Bitfields = results[0].Bitfields
+				results[i].HasBitfields = results[0].HasBitfields
+			}
 			return results
 		}
 	}
@@ -804,14 +827,17 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 	}
 	regName = cleanName(regName)
 
-	bitfields := parseBitfields(groupName, regName, regEl.Fields, bitfieldPrefix)
+	constants, bitfields := parseBitfields(groupName, regName, regEl.Fields, bitfieldPrefix)
 	return []*PeripheralField{&PeripheralField{
-		Name:        regName,
-		Address:     reg.address(),
-		Description: reg.description(),
-		Bitfields:   bitfields,
-		Array:       reg.dim(),
-		ElementSize: reg.size(),
+		Name:         regName,
+		Address:      reg.address(),
+		Description:  reg.description(),
+		Constants:    constants,
+		Array:        reg.dim(),
+		ElementSize:  reg.size(),
+		ShortName:    regName,
+		Bitfields:    bitfields,
+		HasBitfields: len(bitfields) > 0,
 	}}
 }
 
@@ -950,11 +976,20 @@ var (
 		fmt.Fprintf(w, "type %s_Type struct {\n", peripheral.GroupName)
 
 		address := peripheral.BaseAddress
+		type clusterInfo struct {
+			name      string
+			address   uint64
+			size      uint64
+			registers []*PeripheralField
+		}
+		clusters := []clusterInfo{}
 		for _, register := range peripheral.Registers {
 			if register.Registers == nil && address > register.Address {
 				// In Nordic SVD files, these registers are deprecated or
 				// duplicates, so can be ignored.
 				//fmt.Fprintf(os.Stderr, "skip: %s.%s 0x%x - 0x%x %d\n", peripheral.Name, register.name, address, register.address, register.elementSize)
+				// remove bit fields from such register
+				register.Bitfields = nil
 				continue
 			}
 
@@ -986,34 +1021,14 @@ var (
 			lastCluster := false
 			if register.Registers != nil {
 				// This is a cluster, not a register. Create the cluster type.
-				regType = "struct {\n"
+				regType = peripheral.GroupName + "_" + register.Name
+				clusters = append(clusters, clusterInfo{regType, register.Address, uint64(register.ElementSize), register.Registers})
+				regType = regType + "_Type"
 				subaddress := register.Address
 				for _, subregister := range register.Registers {
-					var subregType string
-					switch subregister.ElementSize {
-					case 8:
-						subregType = "volatile.Register64"
-					case 4:
-						subregType = "volatile.Register32"
-					case 2:
-						subregType = "volatile.Register16"
-					case 1:
-						subregType = "volatile.Register8"
-					}
-					if subregType == "" {
-						panic("unknown element size")
-					}
 
-					if subregister.Array != -1 {
-						subregType = fmt.Sprintf("[%d]%s", subregister.Array, subregType)
-					}
 					if subaddress != subregister.Address {
 						bytesNeeded := subregister.Address - subaddress
-						if bytesNeeded == 1 {
-							regType += "\t\t_ byte\n"
-						} else {
-							regType += fmt.Sprintf("\t\t_ [%d]byte\n", bytesNeeded)
-						}
 						subaddress += bytesNeeded
 					}
 					var subregSize uint64
@@ -1023,21 +1038,10 @@ var (
 						subregSize = uint64(subregister.ElementSize)
 					}
 					subaddress += subregSize
-					regType += fmt.Sprintf("\t\t%s %s\n", subregister.Name, subregType)
 				}
-				if register.Array != -1 {
-					if subaddress != register.Address+uint64(register.ElementSize) {
-						bytesNeeded := (register.Address + uint64(register.ElementSize)) - subaddress
-						if bytesNeeded == 1 {
-							regType += "\t_ byte\n"
-						} else {
-							regType += fmt.Sprintf("\t_ [%d]byte\n", bytesNeeded)
-						}
-					}
-				} else {
+				if register.Array == -1 {
 					lastCluster = true
 				}
-				regType += "\t}"
 				address = subaddress
 			}
 
@@ -1056,16 +1060,127 @@ var (
 			}
 		}
 		w.WriteString("}\n")
+
+		for _, register := range peripheral.Registers {
+			regName := register.Name
+			writeGoRegisterBitfieldType(w, register, peripheral.GroupName, regName)
+		}
+
+		// Define clusters
+		for i := 0; i < len(clusters); i++ {
+			cluster := clusters[i]
+			if len(cluster.registers) == 0 {
+				continue
+			}
+
+			fmt.Fprintln(w)
+			fmt.Fprintf(w, "type %s_Type struct {\n", cluster.name)
+
+			address := cluster.address
+
+			for _, register := range cluster.registers {
+				if register.Registers == nil && address > register.Address {
+					// In Nordic SVD files, these registers are deprecated or
+					// duplicates, so can be ignored.
+					//fmt.Fprintf(os.Stderr, "skip: %s.%s 0x%x - 0x%x %d\n", peripheral.Name, register.name, address, register.address, register.elementSize)
+					continue
+				}
+				var regType string
+				switch register.ElementSize {
+				case 8:
+					regType = "volatile.Register64"
+				case 4:
+					regType = "volatile.Register32"
+				case 2:
+					regType = "volatile.Register16"
+				case 1:
+					regType = "volatile.Register8"
+				default:
+					regType = "volatile.Register32"
+				}
+
+				// insert padding, if needed
+				if address < register.Address {
+					bytesNeeded := register.Address - address
+					if bytesNeeded == 1 {
+						w.WriteString("\t_ byte\n")
+					} else {
+						fmt.Fprintf(w, "\t_ [%d]byte\n", bytesNeeded)
+					}
+					address = register.Address
+				}
+
+				lastCluster := false
+				if register.Registers != nil {
+					// This is a cluster, not a register. Create the cluster type.
+					regType = peripheral.GroupName + "_" + register.Name
+					clusters = append(clusters, clusterInfo{regType, register.Address, uint64(register.ElementSize), register.Registers})
+					regType = regType + "_Type"
+
+					subaddress := register.Address
+					for _, subregister := range register.Registers {
+						if subaddress != subregister.Address {
+							bytesNeeded := subregister.Address - subaddress
+							subaddress += bytesNeeded
+						}
+						var subregSize uint64
+						if subregister.Array != -1 {
+							subregSize = uint64(subregister.Array * subregister.ElementSize)
+						} else {
+							subregSize = uint64(subregister.ElementSize)
+						}
+						subaddress += subregSize
+					}
+					if register.Array == -1 {
+						lastCluster = true
+					}
+					address = subaddress
+				}
+
+				if register.Array != -1 {
+					regType = fmt.Sprintf("[%d]%s", register.Array, regType)
+				}
+				fmt.Fprintf(w, "\t%s %s // 0x%X\n", register.Name, regType, register.Address-peripheral.BaseAddress)
+
+				// next address
+				if lastCluster {
+					lastCluster = false
+				} else if register.Array != -1 {
+					address = register.Address + uint64(register.ElementSize*register.Array)
+				} else {
+					address = register.Address + uint64(register.ElementSize)
+				}
+			}
+			// make sure the structure is full
+			if cluster.size > (address - cluster.registers[0].Address) {
+				bytesNeeded := cluster.size - (address - cluster.registers[0].Address)
+				if bytesNeeded == 1 {
+					w.WriteString("\t_ byte\n")
+				} else {
+					fmt.Fprintf(w, "\t_ [%d]byte\n", bytesNeeded)
+				}
+			} else if cluster.size != (address - cluster.registers[0].Address) {
+				println("peripheral:", peripheral.Name, "cluster:", cluster.name, "size:", cluster.size, "struct size:", (address - cluster.registers[0].Address))
+			}
+			w.WriteString("}\n")
+
+			for _, register := range cluster.registers {
+				regName := register.Name
+				if register.Array == -1 {
+					writeGoRegisterBitfieldType(w, register, cluster.name, regName)
+				}
+			}
+		}
 	}
 
 	// Define bitfields.
 	for _, peripheral := range device.Peripherals {
 		if peripheral.Registers == nil {
-			// This peripheral was derived from another peripheral. Bitfields are
+			// This peripheral was derived from another peripheral. Constants are
 			// already defined.
 			continue
 		}
-		fmt.Fprintf(w, "\n// Bitfields for %s", peripheral.Name)
+		fmt.Fprintf(w, "\n// Constants for %s", peripheral.Name)
 		if isMultiline(peripheral.Description) {
 			for _, l := range splitLine(peripheral.Description) {
 				fmt.Fprintf(w, "\n// %s", l)
@@ -1076,14 +1191,14 @@ var (
 
 		fmt.Fprint(w, "\nconst(")
 		for _, register := range peripheral.Registers {
-			if len(register.Bitfields) != 0 {
-				writeGoRegisterBitfields(w, register, register.Name)
+			if len(register.Constants) != 0 {
+				writeGoRegisterConstants(w, register, register.Name)
 			}
 			if register.Registers == nil {
 				continue
 			}
 			for _, subregister := range register.Registers {
-				writeGoRegisterBitfields(w, subregister, register.Name+"."+subregister.Name)
+				writeGoRegisterConstants(w, subregister, register.Name+"."+subregister.Name)
 			}
 		}
 		w.WriteString(")\n")
@@ -1092,7 +1207,7 @@ var (
 	return w.Flush()
 }
 
-func writeGoRegisterBitfields(w *bufio.Writer, register *PeripheralField, name string) {
+func writeGoRegisterConstants(w *bufio.Writer, register *PeripheralField, name string) {
 	w.WriteString("\n\t// " + name)
 	if register.Description != "" {
 		if isMultiline(register.Description) {
@@ -1104,13 +1219,85 @@ func writeGoRegisterBitfields(w *bufio.Writer, register *PeripheralField, name s
 		}
 	}
 	w.WriteByte('\n')
-	for _, bitfield := range register.Bitfields {
+	for _, bitfield := range register.Constants {
 		if bitfield.Description != "" {
 			for _, l := range splitLine(bitfield.Description) {
 				w.WriteString("\t// " + l + "\n")
 			}
 		}
 		fmt.Fprintf(w, "\t%s = 0x%x\n", bitfield.Name, bitfield.Value)
+	}
+}
+
+func writeGoRegisterBitfieldType(w *bufio.Writer, register *PeripheralField, peripheralName, registerName string) {
+	if len(register.Bitfields) == 0 {
+		return
+	}
+	w.WriteString("\n// " + peripheralName + "." + registerName)
+	if register.Description != "" {
+		if isMultiline(register.Description) {
+			for _, l := range splitLine(register.Description) {
+				w.WriteString("\n\t// " + l)
+			}
+		} else {
+			w.WriteString(": " + register.Description)
+		}
+	}
+	w.WriteByte('\n')
+	var bitSize int
+	var maxMask uint32
+	switch register.ElementSize {
+	case 8:
+		bitSize = 64
+		maxMask = 0xffffffff
+		// maxMask = 0xffffffffffffffff // TODO how to handle 64-bit fields
+	case 4:
+		bitSize = 32
+		maxMask = 0xffffffff
+	case 2:
+		bitSize = 16
+		maxMask = 0xffff
+	case 1:
+		bitSize = 8
+		maxMask = 0xff
+	default:
+		bitSize = 32
+		maxMask = 0xffffffff
+	}
+
+	typeName := fmt.Sprintf("%s_Type", peripheralName)
+
+	for _, bitfield := range register.Bitfields {
+		idxArg := ""
+		regAccess := "&o." + registerName + ".Reg"
+		if register.Array != -1 {
+			idxArg = "idx int, "
+			regAccess = "&o." + registerName + "[idx].Reg"
+		}
+		var funcSuffix string
+		if maxMask == bitfield.Mask || registerName == bitfield.Name {
+			funcSuffix = registerName
+		} else {
+			funcSuffix = registerName + "_" + bitfield.Name
+		}
+		fmt.Fprintf(w, "func (o *%s) Set%s(%s value uint%d) {\n", typeName, funcSuffix, idxArg, bitSize)
+		if maxMask == bitfield.Mask {
+			fmt.Fprintf(w, "\tvolatile.StoreUint%d(%s, value)\n", bitSize, regAccess)
+		} else if bitfield.Offset > 0 {
+			fmt.Fprintf(w, "\tvolatile.StoreUint%d(%s, volatile.LoadUint%d(%s)&^(0x%x)|value<<%d)\n", bitSize, regAccess, bitSize, regAccess, bitfield.Mask, bitfield.Offset)
+		} else {
+			fmt.Fprintf(w, "\tvolatile.StoreUint%d(%s, volatile.LoadUint%d(%s)&^(0x%x)|value)\n", bitSize, regAccess, bitSize, regAccess, bitfield.Mask)
+		}
+		w.WriteString("}\n")
+		fmt.Fprintf(w, "func (o *%s) Get%s(%s) uint%d {\n", typeName, funcSuffix, idxArg, bitSize)
+		if maxMask == bitfield.Mask {
+			fmt.Fprintf(w, "\treturn volatile.LoadUint%d(%s)\n", bitSize, regAccess)
+		} else if bitfield.Offset > 0 {
+			fmt.Fprintf(w, "\treturn (volatile.LoadUint%d(%s)&0x%x) >> %d\n", bitSize, regAccess, bitfield.Mask, bitfield.Offset)
+		} else {
+			fmt.Fprintf(w, "\treturn volatile.LoadUint%d(%s)&0x%x\n", bitSize, regAccess, bitfield.Mask)
+		}
+		w.WriteString("}\n")
 	}
 }
 
