@@ -140,7 +140,7 @@ type PeripheralField struct {
 type Bitfield struct {
 	Name        string
 	Description string
-	Value       uint32
+	Value       uint64
 }
 
 func formatText(text string) string {
@@ -581,12 +581,12 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 		fields = append(fields, Bitfield{
 			Name:        fmt.Sprintf("%s_%s%s_%s_Pos", groupName, bitfieldPrefix, regName, fieldName),
 			Description: fmt.Sprintf("Position of %s field.", fieldName),
-			Value:       lsb,
+			Value:       uint64(lsb),
 		})
 		fields = append(fields, Bitfield{
 			Name:        fmt.Sprintf("%s_%s%s_%s_Msk", groupName, bitfieldPrefix, regName, fieldName),
 			Description: fmt.Sprintf("Bit mask of %s field.", fieldName),
-			Value:       (0xffffffff >> (31 - (msb - lsb))) << lsb,
+			Value:       (0xffffffffffffffff >> (63 - (msb - lsb))) << lsb,
 		})
 		if lsb == msb { // single bit
 			fields = append(fields, Bitfield{
@@ -656,7 +656,7 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			fields = append(fields, Bitfield{
 				Name:        enumName,
 				Description: enumDescription,
-				Value:       uint32(enumValue),
+				Value:       enumValue,
 			})
 		}
 	}
