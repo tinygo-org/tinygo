@@ -208,7 +208,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 
 	for _, periphEl := range orderedPeripherals {
 		description := formatText(periphEl.Description)
-		baseAddress, err := strconv.ParseUint(periphEl.BaseAddress, 0, 32)
+		baseAddress, err := strconv.ParseUint(periphEl.BaseAddress, 0, 64)
 		if err != nil {
 			return nil, fmt.Errorf("invalid base address: %w", err)
 		}
@@ -608,14 +608,14 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			var err error
 			if strings.HasPrefix(enumEl.Value, "0b") {
 				val := strings.TrimPrefix(enumEl.Value, "0b")
-				enumValue, err = strconv.ParseUint(val, 2, 32)
+				enumValue, err = strconv.ParseUint(val, 2, 64)
 			} else {
-				enumValue, err = strconv.ParseUint(enumEl.Value, 0, 32)
+				enumValue, err = strconv.ParseUint(enumEl.Value, 0, 64)
 			}
 			if err != nil {
 				if enumBitSpecifier.MatchString(enumEl.Value) {
 					// NXP SVDs use the form #xx1x, #x0xx, etc for values
-					enumValue, err = strconv.ParseUint(strings.ReplaceAll(enumEl.Value[1:], "x", "0"), 2, 32)
+					enumValue, err = strconv.ParseUint(strings.ReplaceAll(enumEl.Value[1:], "x", "0"), 2, 64)
 					if err != nil {
 						panic(err)
 					}
