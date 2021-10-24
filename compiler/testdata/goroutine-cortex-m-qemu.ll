@@ -9,6 +9,8 @@ target triple = "armv7m-unknown-unknown-eabi"
 %"internal/task.state" = type { i32, i32* }
 %runtime.chanSelectState = type { %runtime.channel*, i8* }
 
+@"main.startInterfaceMethod$string" = internal unnamed_addr constant [4 x i8] c"test", align 1
+
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 
 ; Function Attrs: nounwind
@@ -158,8 +160,50 @@ entry:
 
 declare void @runtime.chanClose(%runtime.channel* dereferenceable_or_null(32), i8*, i8*)
 
+; Function Attrs: nounwind
+define hidden void @main.startInterfaceMethod(i32 %itf.typecode, i8* %itf.value, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+entry:
+  %0 = call i8* @runtime.alloc(i32 16, i8* undef, i8* null) #0
+  %1 = bitcast i8* %0 to i8**
+  store i8* %itf.value, i8** %1, align 4
+  %2 = getelementptr inbounds i8, i8* %0, i32 4
+  %.repack = bitcast i8* %2 to i8**
+  store i8* getelementptr inbounds ([4 x i8], [4 x i8]* @"main.startInterfaceMethod$string", i32 0, i32 0), i8** %.repack, align 4
+  %.repack1 = getelementptr inbounds i8, i8* %0, i32 8
+  %3 = bitcast i8* %.repack1 to i32*
+  store i32 4, i32* %3, align 4
+  %4 = getelementptr inbounds i8, i8* %0, i32 12
+  %5 = bitcast i8* %4 to i32*
+  store i32 %itf.typecode, i32* %5, align 4
+  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), i8* undef, i8* undef) #0
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), i8* nonnull %0, i32 %stacksize, i8* undef, i8* null) #0
+  ret void
+}
+
+declare void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(i8*, i8*, i32, i32, i8*, i8*) #5
+
+; Function Attrs: nounwind
+define linkonce_odr void @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper"(i8* %0) unnamed_addr #6 {
+entry:
+  %1 = bitcast i8* %0 to i8**
+  %2 = load i8*, i8** %1, align 4
+  %3 = getelementptr inbounds i8, i8* %0, i32 4
+  %4 = bitcast i8* %3 to i8**
+  %5 = load i8*, i8** %4, align 4
+  %6 = getelementptr inbounds i8, i8* %0, i32 8
+  %7 = bitcast i8* %6 to i32*
+  %8 = load i32, i32* %7, align 4
+  %9 = getelementptr inbounds i8, i8* %0, i32 12
+  %10 = bitcast i8* %9 to i32*
+  %11 = load i32, i32* %10, align 4
+  call void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(i8* %2, i8* %5, i32 %8, i32 %11, i8* undef, i8* undef) #0
+  ret void
+}
+
 attributes #0 = { nounwind }
 attributes #1 = { nounwind "tinygo-gowrapper"="main.regularFunction" }
 attributes #2 = { nounwind "tinygo-gowrapper"="main.inlineFunctionGoroutine$1" }
 attributes #3 = { nounwind "tinygo-gowrapper"="main.closureFunctionGoroutine$1" }
 attributes #4 = { nounwind "tinygo-gowrapper" }
+attributes #5 = { "tinygo-invoke"="reflect/methods.Print(string)" "tinygo-methods"="reflect/methods.Print(string)" }
+attributes #6 = { nounwind "tinygo-gowrapper"="interface:{Print:func:{basic:string}{}}.Print$invoke" }

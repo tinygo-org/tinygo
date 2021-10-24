@@ -41,3 +41,11 @@ func closeBuiltinGoroutine(ch chan int) {
 }
 
 func regularFunction(x int)
+
+type simpleInterface interface {
+	Print(string)
+}
+
+func startInterfaceMethod(itf simpleInterface) {
+	go itf.Print("test")
+}

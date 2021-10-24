@@ -14,6 +14,7 @@ target triple = "wasm32-unknown-wasi"
 @"main.inlineFunctionGoroutine$pack" = private unnamed_addr constant { i32, i8* } { i32 5, i8* undef }
 @"reflect/types.funcid:func:{basic:int}{}" = external constant i8
 @"main.closureFunctionGoroutine$1$withSignature" = linkonce_odr constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i32, i8*, i8*)* @"main.closureFunctionGoroutine$1" to i32), i8* @"reflect/types.funcid:func:{basic:int}{}" }
+@"main.startInterfaceMethod$string" = internal unnamed_addr constant [4 x i8] c"test", align 1
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 
@@ -115,4 +116,26 @@ entry:
 
 declare void @runtime.chanClose(%runtime.channel* dereferenceable_or_null(32), i8*, i8*)
 
+; Function Attrs: nounwind
+define hidden void @main.startInterfaceMethod(i32 %itf.typecode, i8* %itf.value, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+entry:
+  %0 = call i8* @runtime.alloc(i32 16, i8* undef, i8* null) #0
+  %1 = bitcast i8* %0 to i8**
+  store i8* %itf.value, i8** %1, align 4
+  %2 = getelementptr inbounds i8, i8* %0, i32 4
+  %.repack = bitcast i8* %2 to i8**
+  store i8* getelementptr inbounds ([4 x i8], [4 x i8]* @"main.startInterfaceMethod$string", i32 0, i32 0), i8** %.repack, align 4
+  %.repack1 = getelementptr inbounds i8, i8* %0, i32 8
+  %3 = bitcast i8* %.repack1 to i32*
+  store i32 4, i32* %3, align 4
+  %4 = getelementptr inbounds i8, i8* %0, i32 12
+  %5 = bitcast i8* %4 to i32*
+  store i32 %itf.typecode, i32* %5, align 4
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*, i8*, i32, i32, i8*, i8*)* @"interface:{Print:func:{basic:string}{}}.Print$invoke" to i32), i8* nonnull %0, i32 undef, i8* undef, i8* null) #0
+  ret void
+}
+
+declare void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(i8*, i8*, i32, i32, i8*, i8*) #1
+
 attributes #0 = { nounwind }
+attributes #1 = { "tinygo-invoke"="reflect/methods.Print(string)" "tinygo-methods"="reflect/methods.Print(string)" }
