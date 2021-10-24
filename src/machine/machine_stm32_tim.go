@@ -304,13 +304,13 @@ func (t *TIM) handleOCInterrupt(interrupt.Interrupt) {
 func (t *TIM) channelCCR(channel uint8) *arrRegType {
 	switch channel {
 	case 0:
-		return &t.Device.CCR1
+		return t.Device.CCR1.Register()
 	case 1:
-		return &t.Device.CCR2
+		return t.Device.CCR2.Register()
 	case 2:
-		return &t.Device.CCR3
+		return t.Device.CCR3.Register()
 	case 3:
-		return &t.Device.CCR4
+		return t.Device.CCR4.Register()
 	}
 
 	return nil
@@ -319,13 +319,13 @@ func (t *TIM) channelCCR(channel uint8) *arrRegType {
 func (t *TIM) channelCCMR(channel uint8) (reg *volatile.Register32, offset uint8) {
 	switch channel {
 	case 0:
-		return &t.Device.CCMR1_Output, 0
+		return &t.Device.CCMR1_Output.Register32, 0
 	case 1:
-		return &t.Device.CCMR1_Output, 8
+		return &t.Device.CCMR1_Output.Register32, 8
 	case 2:
-		return &t.Device.CCMR2_Output, 0
+		return &t.Device.CCMR2_Output.Register32, 0
 	case 3:
-		return &t.Device.CCMR2_Output, 8
+		return &t.Device.CCMR2_Output.Register32, 8
 	}
 
 	return nil, 0

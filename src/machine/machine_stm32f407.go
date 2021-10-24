@@ -62,9 +62,9 @@ func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
 
 // Register names vary by ST processor, these are for STM F407
 func (uart *UART) setRegisters() {
-	uart.rxReg = &uart.Bus.DR
-	uart.txReg = &uart.Bus.DR
-	uart.statusReg = &uart.Bus.SR
+	uart.rxReg = &uart.Bus.DR.Register32
+	uart.txReg = &uart.Bus.DR.Register32
+	uart.statusReg = &uart.Bus.SR.Register32
 	uart.txEmptyFlag = stm32.USART_SR_TXE
 }
 

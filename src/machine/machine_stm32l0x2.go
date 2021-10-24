@@ -70,7 +70,7 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 
 var (
 	TIM2 = TIM{
-		EnableRegister: &stm32.RCC.APB1ENR,
+		EnableRegister: &stm32.RCC.APB1ENR.Register32,
 		EnableFlag:     stm32.RCC_APB1ENR_TIM2EN,
 		Device:         stm32.TIM2,
 		Channels: [4]TimerChannel{
@@ -100,7 +100,7 @@ var (
 	}
 
 	TIM3 = TIM{
-		EnableRegister: &stm32.RCC.APB1ENR,
+		EnableRegister: &stm32.RCC.APB1ENR.Register32,
 		EnableFlag:     stm32.RCC_APB1ENR_TIM3EN,
 		Device:         stm32.TIM3,
 		Channels: [4]TimerChannel{
@@ -131,7 +131,7 @@ var (
 	}
 
 	TIM6 = TIM{
-		EnableRegister: &stm32.RCC.APB1ENR,
+		EnableRegister: &stm32.RCC.APB1ENR.Register32,
 		EnableFlag:     stm32.RCC_APB1ENR_TIM6EN,
 		Device:         stm32.TIM6,
 		Channels: [4]TimerChannel{
@@ -144,7 +144,7 @@ var (
 	}
 
 	TIM7 = TIM{
-		EnableRegister: &stm32.RCC.APB1ENR,
+		EnableRegister: &stm32.RCC.APB1ENR.Register32,
 		EnableFlag:     stm32.RCC_APB1ENR_TIM7EN,
 		Device:         stm32.TIM7,
 		Channels: [4]TimerChannel{
@@ -157,7 +157,7 @@ var (
 	}
 
 	TIM21 = TIM{
-		EnableRegister: &stm32.RCC.APB2ENR,
+		EnableRegister: &stm32.RCC.APB2ENR.Register32,
 		EnableFlag:     stm32.RCC_APB2ENR_TIM21EN,
 		Device:         stm32.TIM21,
 		Channels: [4]TimerChannel{
@@ -180,7 +180,7 @@ var (
 	}
 
 	TIM22 = TIM{
-		EnableRegister: &stm32.RCC.APB2ENR,
+		EnableRegister: &stm32.RCC.APB2ENR.Register32,
 		EnableFlag:     stm32.RCC_APB2ENR_TIM22EN,
 		Device:         stm32.TIM2,
 		Channels: [4]TimerChannel{

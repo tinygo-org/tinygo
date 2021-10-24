@@ -148,11 +148,11 @@ var (
 		txBuffer: NewRingBuffer(),
 		muxRX: muxSelect{ // D0 (PA3 [AD_B0_03])
 			mux: nxp.IOMUXC_LPUART6_RX_SELECT_INPUT_DAISY_GPIO_AD_B0_03_ALT2,
-			sel: &nxp.IOMUXC.LPUART6_RX_SELECT_INPUT,
+			sel: &nxp.IOMUXC.LPUART6_RX_SELECT_INPUT.Register32,
 		},
 		muxTX: muxSelect{ // D1 (PA2 [AD_B0_02])
 			mux: nxp.IOMUXC_LPUART6_TX_SELECT_INPUT_DAISY_GPIO_AD_B0_02_ALT2,
-			sel: &nxp.IOMUXC.LPUART6_TX_SELECT_INPUT,
+			sel: &nxp.IOMUXC.LPUART6_TX_SELECT_INPUT.Register32,
 		},
 	}
 	UART2  = &_UART2
@@ -162,11 +162,11 @@ var (
 		txBuffer: NewRingBuffer(),
 		muxRX: muxSelect{ // D7 (PB17 [B1_01])
 			mux: nxp.IOMUXC_LPUART4_RX_SELECT_INPUT_DAISY_GPIO_B1_01_ALT2,
-			sel: &nxp.IOMUXC.LPUART4_RX_SELECT_INPUT,
+			sel: &nxp.IOMUXC.LPUART4_RX_SELECT_INPUT.Register32,
 		},
 		muxTX: muxSelect{ // D8 (PB16 [B1_00])
 			mux: nxp.IOMUXC_LPUART4_TX_SELECT_INPUT_DAISY_GPIO_B1_00_ALT2,
-			sel: &nxp.IOMUXC.LPUART4_TX_SELECT_INPUT,
+			sel: &nxp.IOMUXC.LPUART4_TX_SELECT_INPUT.Register32,
 		},
 	}
 	UART3  = &_UART3
@@ -176,11 +176,11 @@ var (
 		txBuffer: NewRingBuffer(),
 		muxRX: muxSelect{ // D15 (PA19 [AD_B1_03])
 			mux: nxp.IOMUXC_LPUART2_RX_SELECT_INPUT_DAISY_GPIO_AD_B1_03_ALT2,
-			sel: &nxp.IOMUXC.LPUART2_RX_SELECT_INPUT,
+			sel: &nxp.IOMUXC.LPUART2_RX_SELECT_INPUT.Register32,
 		},
 		muxTX: muxSelect{ // D14 (PA18 [AD_B1_02])
 			mux: nxp.IOMUXC_LPUART2_TX_SELECT_INPUT_DAISY_GPIO_AD_B1_02_ALT2,
-			sel: &nxp.IOMUXC.LPUART2_TX_SELECT_INPUT,
+			sel: &nxp.IOMUXC.LPUART2_TX_SELECT_INPUT.Register32,
 		},
 	}
 	UART4  = &_UART4
@@ -190,11 +190,11 @@ var (
 		txBuffer: NewRingBuffer(),
 		muxRX: muxSelect{ // D16 (PA23 [AD_B1_07])
 			mux: nxp.IOMUXC_LPUART3_RX_SELECT_INPUT_DAISY_GPIO_AD_B1_07_ALT2,
-			sel: &nxp.IOMUXC.LPUART3_RX_SELECT_INPUT,
+			sel: &nxp.IOMUXC.LPUART3_RX_SELECT_INPUT.Register32,
 		},
 		muxTX: muxSelect{ // D17 (PA22 [AD_B1_06])
 			mux: nxp.IOMUXC_LPUART3_TX_SELECT_INPUT_DAISY_GPIO_AD_B1_06_ALT2,
-			sel: &nxp.IOMUXC.LPUART3_TX_SELECT_INPUT,
+			sel: &nxp.IOMUXC.LPUART3_TX_SELECT_INPUT.Register32,
 		},
 	}
 	UART5  = &_UART5
@@ -204,11 +204,11 @@ var (
 		txBuffer: NewRingBuffer(),
 		muxRX: muxSelect{ // D21 (PA27 [AD_B1_11])
 			mux: nxp.IOMUXC_LPUART8_RX_SELECT_INPUT_DAISY_GPIO_AD_B1_11_ALT2,
-			sel: &nxp.IOMUXC.LPUART8_RX_SELECT_INPUT,
+			sel: &nxp.IOMUXC.LPUART8_RX_SELECT_INPUT.Register32,
 		},
 		muxTX: muxSelect{ // D20 (PA26 [AD_B1_10])
 			mux: nxp.IOMUXC_LPUART8_TX_SELECT_INPUT_DAISY_GPIO_AD_B1_10_ALT2,
-			sel: &nxp.IOMUXC.LPUART8_TX_SELECT_INPUT,
+			sel: &nxp.IOMUXC.LPUART8_TX_SELECT_INPUT.Register32,
 		},
 	}
 	UART6  = &_UART6
@@ -227,11 +227,11 @@ var (
 		txBuffer: NewRingBuffer(),
 		muxRX: muxSelect{ // D28 (PC18 [EMC_32])
 			mux: nxp.IOMUXC_LPUART7_RX_SELECT_INPUT_DAISY_GPIO_EMC_32_ALT2,
-			sel: &nxp.IOMUXC.LPUART7_RX_SELECT_INPUT,
+			sel: &nxp.IOMUXC.LPUART7_RX_SELECT_INPUT.Register32,
 		},
 		muxTX: muxSelect{ // D29 (PD31 [EMC_31])
 			mux: nxp.IOMUXC_LPUART7_TX_SELECT_INPUT_DAISY_GPIO_EMC_31_ALT2,
-			sel: &nxp.IOMUXC.LPUART7_TX_SELECT_INPUT,
+			sel: &nxp.IOMUXC.LPUART7_TX_SELECT_INPUT.Register32,
 		},
 	}
 )

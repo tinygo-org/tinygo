@@ -241,9 +241,9 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 
 	// Configure this pin. Set the 4 bits of the EIC.CONFIGx register to the
 	// sense value (filter bit set to 0, sense bits set to the change value).
-	addr := &sam.EIC.CONFIG0
+	addr := &sam.EIC.CONFIG0.Register32
 	if extint >= 8 {
-		addr = &sam.EIC.CONFIG1
+		addr = &sam.EIC.CONFIG1.Register32
 	}
 	pos := (extint % 8) * 4 // bit position in register
 	addr.ReplaceBits(uint32(change), 0xf, pos)

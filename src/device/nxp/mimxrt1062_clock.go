@@ -337,21 +337,21 @@ const (
 func (clk Clock) getGate() *volatile.Register32 {
 	switch clk >> 8 {
 	case 0:
-		return &CCM.CCGR0
+		return &CCM.CCGR0.Register32
 	case 1:
-		return &CCM.CCGR1
+		return &CCM.CCGR1.Register32
 	case 2:
-		return &CCM.CCGR2
+		return &CCM.CCGR2.Register32
 	case 3:
-		return &CCM.CCGR3
+		return &CCM.CCGR3.Register32
 	case 4:
-		return &CCM.CCGR4
+		return &CCM.CCGR4.Register32
 	case 5:
-		return &CCM.CCGR5
+		return &CCM.CCGR5.Register32
 	case 6:
-		return &CCM.CCGR6
+		return &CCM.CCGR6.Register32
 	case 7:
-		return &CCM.CCGR7
+		return &CCM.CCGR7.Register32
 	default:
 		panic("nxp: invalid clock")
 	}

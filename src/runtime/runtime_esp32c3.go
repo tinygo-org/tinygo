@@ -74,7 +74,7 @@ func interruptInit() {
 	mie := riscv.DisableInterrupts()
 
 	// Reset all interrupt source priorities to zero.
-	priReg := &esp.INTERRUPT_CORE0.CPU_INT_PRI_1
+	priReg := &esp.INTERRUPT_CORE0.CPU_INT_PRI_1.Register32
 	for i := 0; i < 31; i++ {
 		priReg.Set(0)
 		priReg = (*volatile.Register32)(unsafe.Pointer(uintptr(unsafe.Pointer(priReg)) + uintptr(4)))

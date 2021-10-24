@@ -107,11 +107,11 @@ var (
 	UART2  = &_UART2
 	UART3  = &_UART3
 	UART4  = &_UART4
-	_UART0 = UART{UART_Type: nxp.UART0, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART0, DefaultRX: defaultUART0RX, DefaultTX: defaultUART0TX}
-	_UART1 = UART{UART_Type: nxp.UART1, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART1, DefaultRX: defaultUART1RX, DefaultTX: defaultUART1TX}
-	_UART2 = UART{UART_Type: nxp.UART2, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART2, DefaultRX: defaultUART2RX, DefaultTX: defaultUART2TX}
-	_UART3 = UART{UART_Type: nxp.UART3, SCGC: &nxp.SIM.SCGC4, SCGCMask: nxp.SIM_SCGC4_UART3, DefaultRX: defaultUART3RX, DefaultTX: defaultUART3TX}
-	_UART4 = UART{UART_Type: nxp.UART4, SCGC: &nxp.SIM.SCGC1, SCGCMask: nxp.SIM_SCGC1_UART4, DefaultRX: defaultUART4RX, DefaultTX: defaultUART4TX}
+	_UART0 = UART{UART_Type: nxp.UART0, SCGC: &nxp.SIM.SCGC4.Register32, SCGCMask: nxp.SIM_SCGC4_UART0, DefaultRX: defaultUART0RX, DefaultTX: defaultUART0TX}
+	_UART1 = UART{UART_Type: nxp.UART1, SCGC: &nxp.SIM.SCGC4.Register32, SCGCMask: nxp.SIM_SCGC4_UART1, DefaultRX: defaultUART1RX, DefaultTX: defaultUART1TX}
+	_UART2 = UART{UART_Type: nxp.UART2, SCGC: &nxp.SIM.SCGC4.Register32, SCGCMask: nxp.SIM_SCGC4_UART2, DefaultRX: defaultUART2RX, DefaultTX: defaultUART2TX}
+	_UART3 = UART{UART_Type: nxp.UART3, SCGC: &nxp.SIM.SCGC4.Register32, SCGCMask: nxp.SIM_SCGC4_UART3, DefaultRX: defaultUART3RX, DefaultTX: defaultUART3TX}
+	_UART4 = UART{UART_Type: nxp.UART4, SCGC: &nxp.SIM.SCGC1.Register32, SCGCMask: nxp.SIM_SCGC1_UART4, DefaultRX: defaultUART4RX, DefaultTX: defaultUART4TX}
 )
 
 func init() {

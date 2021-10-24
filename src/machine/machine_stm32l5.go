@@ -334,7 +334,7 @@ func handlePinInterrupt(pin uint8) {
 
 var (
 	TIM1 = TIM{
-		EnableRegister: &stm32.RCC.APB2ENR,
+		EnableRegister: &stm32.RCC.APB2ENR.Register32,
 		EnableFlag:     stm32.RCC_APB2ENR_TIM1EN,
 		Device:         stm32.TIM1,
 		Channels: [4]TimerChannel{
@@ -347,7 +347,7 @@ var (
 	}
 
 	TIM2 = TIM{
-		EnableRegister: &stm32.RCC.APB1ENR1,
+		EnableRegister: &stm32.RCC.APB1ENR1.Register32,
 		EnableFlag:     stm32.RCC_APB1ENR1_TIM2EN,
 		Device:         stm32.TIM2,
 		Channels: [4]TimerChannel{
@@ -360,7 +360,7 @@ var (
 	}
 
 	TIM3 = TIM{
-		EnableRegister: &stm32.RCC.APB1ENR1,
+		EnableRegister: &stm32.RCC.APB1ENR1.Register32,
 		EnableFlag:     stm32.RCC_APB1ENR1_TIM3EN,
 		Device:         stm32.TIM3,
 		Channels: [4]TimerChannel{
@@ -373,7 +373,7 @@ var (
 	}
 
 	TIM4 = TIM{
-		EnableRegister: &stm32.RCC.APB1ENR1,
+		EnableRegister: &stm32.RCC.APB1ENR1.Register32,
 		EnableFlag:     stm32.RCC_APB1ENR1_TIM4EN,
 		Device:         stm32.TIM4,
 		Channels: [4]TimerChannel{
@@ -386,7 +386,7 @@ var (
 	}
 
 	TIM5 = TIM{
-		EnableRegister: &stm32.RCC.APB1ENR1,
+		EnableRegister: &stm32.RCC.APB1ENR1.Register32,
 		EnableFlag:     stm32.RCC_APB1ENR1_TIM5EN,
 		Device:         stm32.TIM5,
 		Channels: [4]TimerChannel{
@@ -399,7 +399,7 @@ var (
 	}
 
 	TIM6 = TIM{
-		EnableRegister: &stm32.RCC.APB1ENR1,
+		EnableRegister: &stm32.RCC.APB1ENR1.Register32,
 		EnableFlag:     stm32.RCC_APB1ENR1_TIM6EN,
 		Device:         stm32.TIM6,
 		Channels: [4]TimerChannel{
@@ -412,7 +412,7 @@ var (
 	}
 
 	TIM7 = TIM{
-		EnableRegister: &stm32.RCC.APB1ENR1,
+		EnableRegister: &stm32.RCC.APB1ENR1.Register32,
 		EnableFlag:     stm32.RCC_APB1ENR1_TIM7EN,
 		Device:         stm32.TIM7,
 		Channels: [4]TimerChannel{
@@ -425,7 +425,7 @@ var (
 	}
 
 	TIM8 = TIM{
-		EnableRegister: &stm32.RCC.APB2ENR,
+		EnableRegister: &stm32.RCC.APB2ENR.Register32,
 		EnableFlag:     stm32.RCC_APB2ENR_TIM8EN,
 		Device:         stm32.TIM8,
 		Channels: [4]TimerChannel{
@@ -438,7 +438,7 @@ var (
 	}
 
 	TIM15 = TIM{
-		EnableRegister: &stm32.RCC.APB2ENR,
+		EnableRegister: &stm32.RCC.APB2ENR.Register32,
 		EnableFlag:     stm32.RCC_APB2ENR_TIM15EN,
 		Device:         stm32.TIM15,
 		Channels: [4]TimerChannel{
@@ -451,7 +451,7 @@ var (
 	}
 
 	TIM16 = TIM{
-		EnableRegister: &stm32.RCC.APB2ENR,
+		EnableRegister: &stm32.RCC.APB2ENR.Register32,
 		EnableFlag:     stm32.RCC_APB2ENR_TIM16EN,
 		Device:         stm32.TIM16,
 		Channels: [4]TimerChannel{
@@ -464,7 +464,7 @@ var (
 	}
 
 	TIM17 = TIM{
-		EnableRegister: &stm32.RCC.APB2ENR,
+		EnableRegister: &stm32.RCC.APB2ENR.Register32,
 		EnableFlag:     stm32.RCC_APB2ENR_TIM17EN,
 		Device:         stm32.TIM17,
 		Channels: [4]TimerChannel{

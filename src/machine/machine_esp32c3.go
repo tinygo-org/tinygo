@@ -112,11 +112,11 @@ func (p Pin) PortMaskClear() (*uint32, uint32) {
 }
 
 func (p Pin) portMaskSet() (*volatile.Register32, uint32) {
-	return &esp.GPIO.OUT_W1TS, 1 << p
+	return &esp.GPIO.OUT_W1TS.Register32, 1 << p
 }
 
 func (p Pin) portMaskClear() (*volatile.Register32, uint32) {
-	return &esp.GPIO.OUT_W1TC, 1 << p
+	return &esp.GPIO.OUT_W1TC.Register32, 1 << p
 }
 
 var DefaultUART = UART0
