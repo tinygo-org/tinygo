@@ -1,0 +1,6 @@
+{
+	"inherits": ["nano-33-ble", "nrf52840-s140v7"],
+	"flash-command": "nrfjprog -f nrf52 --sectorerase --program {hex} --reset",
+	"flash-1200-bps-reset": "false",
+	"openocd-interface": "jlink"
+}
