@@ -17,7 +17,6 @@ func _start() {
 	// These need to be initialized early so that the heap can be initialized.
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
-	__wasm_call_ctors()
 	run()
 }
 
@@ -26,6 +25,8 @@ func _start() {
 //
 //     wasmtime ./program.wasm arg1 arg2
 func init() {
+	__wasm_call_ctors()
+
 	// Read the number of args (argc) and the buffer size required to store all
 	// these args (argv).
 	var argc, argv_buf_size uint32
