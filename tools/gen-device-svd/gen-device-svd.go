@@ -522,7 +522,7 @@ func addInterrupt(interrupts map[string]*Interrupt, name, interruptName string, 
 
 func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPrefix string) ([]Constant, []Bitfield) {
 	var fields []Constant
-	var properties []Bitfield
+	var bitfields []Bitfield
 	enumSeen := map[string]int64{}
 	for _, fieldEl := range fieldEls {
 		// Some bitfields (like the STM32H7x7) contain invalid bitfield
@@ -590,7 +590,7 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			}
 		}
 
-		properties = append(properties, Bitfield{
+		bitfields = append(bitfields, Bitfield{
 			Name:   fieldName,
 			Offset: lsb,
 			Mask:   (0xffffffff >> (31 - (msb - lsb))) << lsb,
@@ -677,7 +677,7 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			})
 		}
 	}
-	return fields, properties
+	return fields, bitfields
 }
 
 type Register struct {
@@ -826,7 +826,7 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 	}
 	regName = cleanName(regName)
 
-	bitfields, properties := parseBitfields(groupName, regName, regEl.Fields, bitfieldPrefix)
+	bitfields, bitfields := parseBitfields(groupName, regName, regEl.Fields, bitfieldPrefix)
 	return []*PeripheralField{&PeripheralField{
 		Name:         regName,
 		Address:      reg.address(),
@@ -835,8 +835,8 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 		Array:        reg.dim(),
 		ElementSize:  reg.size(),
 		ShortName:    regName,
-		Bitfields:    properties,
-		HasBitfields: len(properties) > 0,
+		Bitfields:    bitfields,
+		HasBitfields: len(bitfields) > 0,
 	}}
 }
 
@@ -1095,7 +1095,7 @@ var (
 		w.WriteString(")\n")
 	}
 
-	// Define property types
+	// Define bitfield types
 	for _, peripheral := range device.Peripherals {
 		if peripheral.Registers == nil {
 			// This peripheral was derived from another peripheral. Bitfields are
@@ -1189,26 +1189,26 @@ func writeGoRegisterBitfieldType(w *bufio.Writer, register *PeripheralField, gro
 	fmt.Fprintf(w, "type %s struct { volatile.Register%d }\n\n", typeName, bitSize)
 
 	fmt.Fprintf(w, "func (o *%s) Register() *volatile.Register%d {\n\treturn &o.Register%d\n}\n", typeName, bitSize, bitSize)
-	for _, property := range register.Bitfields {
-		fmt.Fprintf(w, "func (o *%s) Set%s(value uint%d) {\n", typeName, property.Name, bitSize)
-		if property.Offset > 0 {
-			fmt.Fprintf(w, "\tvolatile.StoreUint%d(&o.Reg, volatile.LoadUint%d(&o.Reg)&^(0x%x)|value<<%d)\n", bitSize, bitSize, property.Mask, property.Offset)
+	for _, bitfield := range register.Bitfields {
+		fmt.Fprintf(w, "func (o *%s) Set%s(value uint%d) {\n", typeName, bitfield.Name, bitSize)
+		if bitfield.Offset > 0 {
+			fmt.Fprintf(w, "\tvolatile.StoreUint%d(&o.Reg, volatile.LoadUint%d(&o.Reg)&^(0x%x)|value<<%d)\n", bitSize, bitSize, bitfield.Mask, bitfield.Offset)
 		} else {
-			if maxMask == property.Mask {
+			if maxMask == bitfield.Mask {
 				fmt.Fprintf(w, "\tvolatile.StoreUint%d(&o.Reg, value)\n", bitSize)
 			} else {
-				fmt.Fprintf(w, "\tvolatile.StoreUint%d(&o.Reg, volatile.LoadUint%d(&o.Reg)&^(0x%x)|value)\n", bitSize, bitSize, property.Mask)
+				fmt.Fprintf(w, "\tvolatile.StoreUint%d(&o.Reg, volatile.LoadUint%d(&o.Reg)&^(0x%x)|value)\n", bitSize, bitSize, bitfield.Mask)
 			}
 		}
 		w.WriteString("}\n")
-		fmt.Fprintf(w, "func (o *%s) Get%s() uint%d {\n", typeName, property.Name, bitSize)
-		if property.Offset > 0 {
-			fmt.Fprintf(w, "\treturn (volatile.LoadUint%d(&o.Reg)&0x%x) >> %d\n", bitSize, property.Mask, property.Offset)
+		fmt.Fprintf(w, "func (o *%s) Get%s() uint%d {\n", typeName, bitfield.Name, bitSize)
+		if bitfield.Offset > 0 {
+			fmt.Fprintf(w, "\treturn (volatile.LoadUint%d(&o.Reg)&0x%x) >> %d\n", bitSize, bitfield.Mask, bitfield.Offset)
 		} else {
-			if maxMask == property.Mask {
+			if maxMask == bitfield.Mask {
 				fmt.Fprintf(w, "\treturn volatile.LoadUint%d(&o.Reg)\n", bitSize)
 			} else {
-				fmt.Fprintf(w, "\treturn volatile.LoadUint%d(&o.Reg)&0x%x\n", bitSize, property.Mask)
+				fmt.Fprintf(w, "\treturn volatile.LoadUint%d(&o.Reg)&0x%x\n", bitSize, bitfield.Mask)
 			}
 		}
 		w.WriteString("}\n")
