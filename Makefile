@@ -184,7 +184,7 @@ tinygo:
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags byollvm -ldflags="-X main.gitSha1=`git rev-parse --short HEAD`" .
 
 test: wasi-libc
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test -v -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test -v -timeout=20m -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
 TEST_PACKAGES = \
 	compress/bzip2 \

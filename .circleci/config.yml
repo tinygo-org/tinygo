@@ -117,7 +117,10 @@ commands:
           key: wasi-libc-sysroot-systemclang-v3
           paths:
             - lib/wasi-libc/sysroot
-      - run: go test -v -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./compiler ./interp ./transform .
+      - run:
+          name: "Test TinyGo"
+          command: go test -v -timeout=20m -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./compiler ./interp ./transform .
+          no_output_timeout: 20m
       - run: make gen-device -j4
       - run: make smoketest XTENSA=0
       - run: make tinygo-test
@@ -185,6 +188,7 @@ commands:
       - run:
           name: "Test TinyGo"
           command: make ASSERT=1 test
+          no_output_timeout: 20m
           environment:
             # Note: -p=2 limits parallelism to two jobs at a time, which is
             # necessary to keep memory consumption down and avoid OOM (for a
@@ -346,6 +350,7 @@ commands:
       - run:
           name: "Test TinyGo"
           command: make test
+          no_output_timeout: 20m
       - run:
           name: "Build TinyGo release"
           command: |
