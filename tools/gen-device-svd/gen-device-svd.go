@@ -826,12 +826,12 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 	}
 	regName = cleanName(regName)
 
-	bitfields, bitfields := parseBitfields(groupName, regName, regEl.Fields, bitfieldPrefix)
+	constants, bitfields := parseBitfields(groupName, regName, regEl.Fields, bitfieldPrefix)
 	return []*PeripheralField{&PeripheralField{
 		Name:         regName,
 		Address:      reg.address(),
 		Description:  reg.description(),
-		Constants:    bitfields,
+		Constants:    constants,
 		Array:        reg.dim(),
 		ElementSize:  reg.size(),
 		ShortName:    regName,
