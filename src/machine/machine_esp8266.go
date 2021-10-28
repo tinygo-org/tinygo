@@ -52,37 +52,37 @@ func (p Pin) getPad() (uint8, *volatile.Register32) {
 	var reg *volatile.Register32
 	switch pad {
 	case 0:
-		reg = &esp.IO_MUX.IO_MUX_MTDI
+		reg = esp.IO_MUX.IO_MUX_MTDI.Register()
 	case 1:
-		reg = &esp.IO_MUX.IO_MUX_MTCK
+		reg = esp.IO_MUX.IO_MUX_MTCK.Register()
 	case 2:
-		reg = &esp.IO_MUX.IO_MUX_MTMS
+		reg = esp.IO_MUX.IO_MUX_MTMS.Register()
 	case 3:
-		reg = &esp.IO_MUX.IO_MUX_MTDO
+		reg = esp.IO_MUX.IO_MUX_MTDO.Register()
 	case 4:
-		reg = &esp.IO_MUX.IO_MUX_U0RXD
+		reg = esp.IO_MUX.IO_MUX_U0RXD.Register()
 	case 5:
-		reg = &esp.IO_MUX.IO_MUX_U0TXD
+		reg = esp.IO_MUX.IO_MUX_U0TXD.Register()
 	case 6:
-		reg = &esp.IO_MUX.IO_MUX_SD_CLK
+		reg = esp.IO_MUX.IO_MUX_SD_CLK.Register()
 	case 7:
-		reg = &esp.IO_MUX.IO_MUX_SD_DATA0
+		reg = esp.IO_MUX.IO_MUX_SD_DATA0.Register()
 	case 8:
-		reg = &esp.IO_MUX.IO_MUX_SD_DATA1
+		reg = esp.IO_MUX.IO_MUX_SD_DATA1.Register()
 	case 9:
-		reg = &esp.IO_MUX.IO_MUX_SD_DATA2
+		reg = esp.IO_MUX.IO_MUX_SD_DATA2.Register()
 	case 10:
-		reg = &esp.IO_MUX.IO_MUX_SD_DATA3
+		reg = esp.IO_MUX.IO_MUX_SD_DATA3.Register()
 	case 11:
-		reg = &esp.IO_MUX.IO_MUX_SD_CMD
+		reg = esp.IO_MUX.IO_MUX_SD_CMD.Register()
 	case 12:
-		reg = &esp.IO_MUX.IO_MUX_GPIO0
+		reg = esp.IO_MUX.IO_MUX_GPIO0.Register()
 	case 13:
-		reg = &esp.IO_MUX.IO_MUX_GPIO2
+		reg = esp.IO_MUX.IO_MUX_GPIO2.Register()
 	case 14:
-		reg = &esp.IO_MUX.IO_MUX_GPIO4
+		reg = esp.IO_MUX.IO_MUX_GPIO4.Register()
 	case 15:
-		reg = &esp.IO_MUX.IO_MUX_GPIO5
+		reg = esp.IO_MUX.IO_MUX_GPIO5.Register()
 	}
 	return pad, reg
 }
@@ -128,7 +128,7 @@ func (p Pin) Set(value bool) {
 //
 // Warning: only use this on an output pin!
 func (p Pin) PortMaskSet() (*uint32, uint32) {
-	return &esp.GPIO.GPIO_OUT_W1TS.Reg, 1 << p
+	return &esp.GPIO.GPIO_OUT_W1TS.Register().Reg, 1 << p
 }
 
 // Return the register and mask to disable a given GPIO pin. This can be used to
@@ -136,7 +136,7 @@ func (p Pin) PortMaskSet() (*uint32, uint32) {
 //
 // Warning: only use this on an output pin!
 func (p Pin) PortMaskClear() (*uint32, uint32) {
-	return &esp.GPIO.GPIO_OUT_W1TC.Reg, 1 << p
+	return &esp.GPIO.GPIO_OUT_W1TC.Register().Reg, 1 << p
 }
 
 var DefaultUART = UART0

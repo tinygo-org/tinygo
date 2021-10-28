@@ -144,17 +144,17 @@ func (p Pin) PortMaskClear() (*uint32, uint32) {
 
 func (p Pin) portMaskSet() (*volatile.Register32, uint32) {
 	if p < 32 {
-		return &esp.GPIO.OUT_W1TS, 1 << p
+		return esp.GPIO.OUT_W1TS.Register(), 1 << p
 	} else {
-		return &esp.GPIO.OUT1_W1TS, 1 << (p - 32)
+		return esp.GPIO.OUT1_W1TS.Register(), 1 << (p - 32)
 	}
 }
 
 func (p Pin) portMaskClear() (*volatile.Register32, uint32) {
 	if p < 32 {
-		return &esp.GPIO.OUT_W1TC, 1 << p
+		return esp.GPIO.OUT_W1TC.Register(), 1 << p
 	} else {
-		return &esp.GPIO.OUT1_W1TC, 1 << (p - 32)
+		return esp.GPIO.OUT1_W1TC.Register(), 1 << (p - 32)
 	}
 }
 
@@ -175,77 +175,77 @@ func (p Pin) mux() *volatile.Register32 {
 	// I couldn't find it.
 	switch p {
 	case 36:
-		return &esp.IO_MUX.GPIO36
+		return esp.IO_MUX.GPIO36.Register()
 	case 37:
-		return &esp.IO_MUX.GPIO37
+		return esp.IO_MUX.GPIO37.Register()
 	case 38:
-		return &esp.IO_MUX.GPIO38
+		return esp.IO_MUX.GPIO38.Register()
 	case 39:
-		return &esp.IO_MUX.GPIO39
+		return esp.IO_MUX.GPIO39.Register()
 	case 34:
-		return &esp.IO_MUX.GPIO34
+		return esp.IO_MUX.GPIO34.Register()
 	case 35:
-		return &esp.IO_MUX.GPIO35
+		return esp.IO_MUX.GPIO35.Register()
 	case 32:
-		return &esp.IO_MUX.GPIO32
+		return esp.IO_MUX.GPIO32.Register()
 	case 33:
-		return &esp.IO_MUX.GPIO33
+		return esp.IO_MUX.GPIO33.Register()
 	case 25:
-		return &esp.IO_MUX.GPIO25
+		return esp.IO_MUX.GPIO25.Register()
 	case 26:
-		return &esp.IO_MUX.GPIO26
+		return esp.IO_MUX.GPIO26.Register()
 	case 27:
-		return &esp.IO_MUX.GPIO27
+		return esp.IO_MUX.GPIO27.Register()
 	case 14:
-		return &esp.IO_MUX.MTMS
+		return esp.IO_MUX.MTMS.Register()
 	case 12:
-		return &esp.IO_MUX.MTDI
+		return esp.IO_MUX.MTDI.Register()
 	case 13:
-		return &esp.IO_MUX.MTCK
+		return esp.IO_MUX.MTCK.Register()
 	case 15:
-		return &esp.IO_MUX.MTDO
+		return esp.IO_MUX.MTDO.Register()
 	case 2:
-		return &esp.IO_MUX.GPIO2
+		return esp.IO_MUX.GPIO2.Register()
 	case 0:
-		return &esp.IO_MUX.GPIO0
+		return esp.IO_MUX.GPIO0.Register()
 	case 4:
-		return &esp.IO_MUX.GPIO4
+		return esp.IO_MUX.GPIO4.Register()
 	case 16:
-		return &esp.IO_MUX.GPIO16
+		return esp.IO_MUX.GPIO16.Register()
 	case 17:
-		return &esp.IO_MUX.GPIO17
+		return esp.IO_MUX.GPIO17.Register()
 	case 9:
-		return &esp.IO_MUX.SD_DATA2
+		return esp.IO_MUX.SD_DATA2.Register()
 	case 10:
-		return &esp.IO_MUX.SD_DATA3
+		return esp.IO_MUX.SD_DATA3.Register()
 	case 11:
-		return &esp.IO_MUX.SD_CMD
+		return esp.IO_MUX.SD_CMD.Register()
 	case 6:
-		return &esp.IO_MUX.SD_CLK
+		return esp.IO_MUX.SD_CLK.Register()
 	case 7:
-		return &esp.IO_MUX.SD_DATA0
+		return esp.IO_MUX.SD_DATA0.Register()
 	case 8:
-		return &esp.IO_MUX.SD_DATA1
+		return esp.IO_MUX.SD_DATA1.Register()
 	case 5:
-		return &esp.IO_MUX.GPIO5
+		return esp.IO_MUX.GPIO5.Register()
 	case 18:
-		return &esp.IO_MUX.GPIO18
+		return esp.IO_MUX.GPIO18.Register()
 	case 19:
-		return &esp.IO_MUX.GPIO19
+		return esp.IO_MUX.GPIO19.Register()
 	case 20:
-		return &esp.IO_MUX.GPIO20
+		return esp.IO_MUX.GPIO20.Register()
 	case 21:
-		return &esp.IO_MUX.GPIO21
+		return esp.IO_MUX.GPIO21.Register()
 	case 22:
-		return &esp.IO_MUX.GPIO22
+		return esp.IO_MUX.GPIO22.Register()
 	case 3:
-		return &esp.IO_MUX.U0RXD
+		return esp.IO_MUX.U0RXD.Register()
 	case 1:
-		return &esp.IO_MUX.U0TXD
+		return esp.IO_MUX.U0TXD.Register()
 	case 23:
-		return &esp.IO_MUX.GPIO23
+		return esp.IO_MUX.GPIO23.Register()
 	case 24:
-		return &esp.IO_MUX.GPIO24
+		return esp.IO_MUX.GPIO24.Register()
 	default:
 		return nil
 	}
