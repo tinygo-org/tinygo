@@ -10,11 +10,11 @@ target triple = "wasm32-unknown-wasi"
 %"internal/task.state" = type { i8* }
 %runtime.chanSelectState = type { %runtime.channel*, i8* }
 
-@"main.regularFunctionGoroutine$pack" = private unnamed_addr constant { i32, i8* } { i32 5, i8* undef }
-@"main.inlineFunctionGoroutine$pack" = private unnamed_addr constant { i32, i8* } { i32 5, i8* undef }
+@"main$pack" = internal unnamed_addr constant { i32, i8* } { i32 5, i8* undef }
+@"main$pack.1" = internal unnamed_addr constant { i32, i8* } { i32 5, i8* undef }
 @"reflect/types.funcid:func:{basic:int}{}" = external constant i8
 @"main.closureFunctionGoroutine$1$withSignature" = linkonce_odr constant %runtime.funcValueWithSignature { i32 ptrtoint (void (i32, i8*, i8*)* @"main.closureFunctionGoroutine$1" to i32), i8* @"reflect/types.funcid:func:{basic:int}{}" }
-@"main.startInterfaceMethod$string" = internal unnamed_addr constant [4 x i8] c"test", align 1
+@"main$string" = internal unnamed_addr constant [4 x i8] c"test", align 1
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 
@@ -27,7 +27,7 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.regularFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  call void @"internal/task.start"(i32 ptrtoint (void (i32, i8*, i8*)* @main.regularFunction to i32), i8* bitcast ({ i32, i8* }* @"main.regularFunctionGoroutine$pack" to i8*), i32 undef, i8* undef, i8* null) #0
+  call void @"internal/task.start"(i32 ptrtoint (void (i32, i8*, i8*)* @main.regularFunction to i32), i8* bitcast ({ i32, i8* }* @"main$pack" to i8*), i32 undef, i8* undef, i8* null) #0
   ret void
 }
 
@@ -38,7 +38,7 @@ declare void @"internal/task.start"(i32, i8*, i32, i8*, i8*)
 ; Function Attrs: nounwind
 define hidden void @main.inlineFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  call void @"internal/task.start"(i32 ptrtoint (void (i32, i8*, i8*)* @"main.inlineFunctionGoroutine$1" to i32), i8* bitcast ({ i32, i8* }* @"main.inlineFunctionGoroutine$pack" to i8*), i32 undef, i8* undef, i8* null) #0
+  call void @"internal/task.start"(i32 ptrtoint (void (i32, i8*, i8*)* @"main.inlineFunctionGoroutine$1" to i32), i8* bitcast ({ i32, i8* }* @"main$pack.1" to i8*), i32 undef, i8* undef, i8* null) #0
   ret void
 }
 
@@ -124,7 +124,7 @@ entry:
   store i8* %itf.value, i8** %1, align 4
   %2 = getelementptr inbounds i8, i8* %0, i32 4
   %.repack = bitcast i8* %2 to i8**
-  store i8* getelementptr inbounds ([4 x i8], [4 x i8]* @"main.startInterfaceMethod$string", i32 0, i32 0), i8** %.repack, align 4
+  store i8* getelementptr inbounds ([4 x i8], [4 x i8]* @"main$string", i32 0, i32 0), i8** %.repack, align 4
   %.repack1 = getelementptr inbounds i8, i8* %0, i32 8
   %3 = bitcast i8* %.repack1 to i32*
   store i32 4, i32* %3, align 4
