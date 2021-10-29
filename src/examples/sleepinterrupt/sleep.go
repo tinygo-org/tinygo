@@ -18,9 +18,9 @@ func main() {
 	// Set an interrupt on this pin. This sends microcontroller to sleep
 	// until a signal is received on the interrupt pin.
 	interruptPin.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
-	err := interruptPin.DormantUntil(machine.PinRising)
+	err := machine.Sleep(interruptPin, machine.PinRising)
 	if err != nil {
-		println("could not configure pin interrupt:", err.Error())
+		println("was unable to sleep:", err.Error())
 	} else {
 		println("awoken!")
 		led.High()

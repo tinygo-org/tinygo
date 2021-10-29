@@ -1,9 +1,12 @@
+//go:build rp2040
 // +build rp2040
 
 package machine
 
 import (
+	"device/arm"
 	"device/rp"
+	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -213,79 +216,193 @@ type PinChange uint8
 
 // Pin change interrupt constants for SetInterrupt.
 const (
-	// Edge rising
-	PinRising PinChange = iota
+	PinLevelLow PinChange = iota
+	PinLevelHigh
 	// Edge falling
 	PinFalling
-	PinLevelHigh
-	PinLevelLow
+	// Edge rising
+	PinRising
 )
 
-// Sets raspberry pico in dormant state until event is triggered
+// Callbacks to be called for pins configured with SetInterrupt.
+var (
+	pinCallbacks [32]func(Pin)
+	setInt       [2]bool
+)
+
+// SetInterrupt sets an interrupt to be executed when a particular pin changes
+// state. The pin should already be configured as an input, including a pull up
+// or down if no external pull is provided.
+//
+// This call will replace a previously set callback on this pin. You can pass a
+// nil func to unset the pin change interrupt. If you do so, the change
+// parameter is ignored and can be set to any value (such as 0).
+func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
+	if p > 31 || p < 0 {
+		return ErrInvalidInputPin
+	}
+	if callback == nil {
+		// disable current interrupt
+		p.setInterrupt(change, false)
+		pinCallbacks[p] = nil
+		return nil
+	}
+
+	if pinCallbacks[p] != nil {
+		// Callback already configured. Should disable callback by passing a nil callback first.
+		return ErrNoPinChangeChannel
+	}
+	pinCallbacks[p] = callback
+	printIrqReg(defIrq)
+	println("set int")
+	p.setInterrupt(change, true)
+	printIrqReg(defIrq)
+	core := CurrentCore()
+	if setInt[core] {
+		// interrupt has already been set. Exit.
+		println("core set")
+		return nil
+	}
+	var base *irqCtrl
+	var intr interrupt.Interrupt
+	switch core {
+	case 0:
+		base = &ioBank0.proc0IRQctrl
+		intr = interrupt.New(rp.IRQ_SIO_IRQ_PROC0, gpioHandleInterrupt)
+		// arm.NVIC.ICPR[0].Set(1 << rp.IRQ_SIO_IRQ_PROC0)
+	case 1:
+		base = &ioBank0.proc0IRQctrl
+		intr = interrupt.New(rp.IRQ_SIO_IRQ_PROC1, gpioHandleInterrupt)
+	}
+	p.ctrlSetInterrupt(change, true, base)
+	intr.Enable()
+	setInt[core] = true
+	printIrqReg(defIrq)
+	return nil
+}
+
+// gpioHandleInterrupt finds the corresponding pin for the interrupt.
+func gpioHandleInterrupt(intr interrupt.Interrupt) {
+	println("gpioHandle")
+	printIrqReg(defIrq)
+	panic("END") // if program is not ended here rp2040 will call interrupt again when finished, a vicious spin cycle.
+	var i uint
+	var flags uint32
+	var irq *irqCtrl
+	switch CurrentCore() {
+	case 0:
+		irq = &ioBank0.proc0IRQctrl
+	case 1:
+		irq = &ioBank0.proc1IRQctrl
+	}
+	// first acquire which interrupt has been triggered.
+	for i = 0; i < 4; i++ {
+		flags = irq.intS[i].Get()
+		if flags != 0 {
+			break
+		}
+	}
+	if flags == 0 {
+		println("no intr flag found")
+		return
+	}
+	bank := i
+	println("bank", bank)
+	for i = 0; i < 32; i++ {
+		// iterate over bits and execute corresponding pin interrupt.
+		if flags*(1<<i) != 0 {
+			println("found", i)
+			// let it print
+
+			pin := Pin(bank*8 + i/4)
+			pinCallbacks[pin](Pin(pin))
+			pin.acknowledgeInterrupt(1 << i % 4)
+		} else {
+			println("nop", i) //
+		}
+	}
+}
+
+const defIrq = 0
+
+// Prints registers relevant to interrupts. REMOVE BEFORE RELEASE.
+func printIrqReg(i uint) {
+	bnk := &ioBank0.proc0IRQctrl
+	println("inte:", bnk.intE[i].Get())
+	println("ints:", bnk.intS[i].Get())
+	println("intf:", bnk.intF[i].Get())
+	println("intr:", ioBank0.intR[i].Get())
+
+	println("nvic.ispr0:", arm.NVIC.ISPR[0].Get())
+	println("nvic.iser0:", arm.NVIC.ISER[0].Get())
+	println()
+	// Nop instructions so printing can finish if program about to end.
+	arm.Asm("nop")
+	arm.Asm("nop")
+	arm.Asm("nop")
+	arm.Asm("nop")
+}
+
+// Sets raspberry pico in dormant state until interrupt event is triggered
 // usage:
-//  pin.DormantUntil(machine.PinRising)
+//  err := machine.Sleep(interruptPin, machine.PinRising)
+// Above code will cause program to sleep until a high level signal
+// is found on interruptPin. Be sure to configure pin as input beforehand.
 // Taken from https://github.com/raspberrypi/pico-extras/ -> pico/sleep.h
-func Sleep(pin Pin, event PinChange) error {
+func Sleep(pin Pin, change PinChange) error {
 	if pin > 31 {
 		return ErrInvalidInputPin
 	}
-	var events uint32
-	switch event {
-	case PinRising:
-		events = rp.IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_HIGH
-	case PinFalling:
-		events = rp.IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_LOW
-	case PinLevelHigh:
-		events = rp.IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_LEVEL_HIGH
-	case PinLevelLow:
-		events = rp.IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_LEVEL_LOW
-	}
 
 	base := &ioBank0.dormantWakeIRQctrl
-	pin.ctrlSetInterrupt(events, true, base) // gpio_set_dormant_irq_enabled
+	pin.ctrlSetInterrupt(change, true, base) // gpio_set_dormant_irq_enabled
 
 	xosc.Dormant() // Execution stops here until woken up
 
 	// Clear the irq so we can go back to dormant mode again if we want
-	pin.acknowledgeInterrupt(events)
+	pin.acknowledgeInterrupt(change)
 	return nil
 }
 
 // Clears interrupt flag on a pin
-func (p Pin) acknowledgeInterrupt(events uint32) {
-	ioBank0.intR[p/8].Set(events << 4 * (uint32(p) % 8))
+func (p Pin) acknowledgeInterrupt(change PinChange) {
+	ioBank0.intR[p>>3].Set(p.ioIntBit(change))
 }
 
+// ctrlSetInterrupt acknowledges any pending interrupt and enables or disables
+// the interrupt for a given IRQ control bank (IOBANK, DormantIRQ, QSPI).
+//
 // pico-sdk calls this the _gpio_set_irq_enabled, not to be confused with
 // gpio_set_irq_enabled (no leading underscore).
-func (p Pin) ctrlSetInterrupt(events uint32, enabled bool, base *irqCtrl) {
-	p.acknowledgeInterrupt(events)
-	enReg := &base.intE[p/8]
-	events <<= 4 * (p % 8)
+func (p Pin) ctrlSetInterrupt(change PinChange, enabled bool, base *irqCtrl) {
+	p.acknowledgeInterrupt(change)
+	enReg := &base.intE[p>>3]
 	if enabled {
-		enReg.SetBits(events)
+		enReg.SetBits(p.ioIntBit(change))
 	} else {
-		enReg.ClearBits(events)
+		enReg.ClearBits(p.ioIntBit(change))
 	}
 }
 
-// Basic interrupt setting via ioBANK0
-func (p Pin) setInterrupt(events uint32, enabled bool) {
+// Basic interrupt setting via ioBANK0 for GPIO interrupts.
+func (p Pin) setInterrupt(change PinChange, enabled bool) {
 	// Separate mask/force/status per-core, so check which core called, and
 	// set the relevant IRQ controls.
-	var irqCtlBase *irqCtrl
 	switch CurrentCore() {
 	case 0:
-		irqCtlBase = &ioBank0.proc0IRQctrl
+		p.ctrlSetInterrupt(change, enabled, &ioBank0.proc0IRQctrl)
 	case 1:
-		irqCtlBase = &ioBank0.proc1IRQctrl
+		p.ctrlSetInterrupt(change, enabled, &ioBank0.proc1IRQctrl)
 	}
-	p.acknowledgeInterrupt(events)
-	enReg := &irqCtlBase.intE[p/8]
-	events <<= 4 * (p % 8)
-	if enabled {
-		enReg.SetBits(events)
-	} else {
-		enReg.ClearBits(events)
-	}
+}
+
+// events returns the bit representation of the pin change for the rp2040.
+func (change PinChange) events() uint32 {
+	return 1 << change
+}
+
+// intBit is the bit storage form of a PinChange for a given Pin
+// in the IO_BANK0 interrupt registers (page 269 RP2040 Datasheet).
+func (p Pin) ioIntBit(change PinChange) uint32 {
+	return change.events() << (4 * (p % 8))
 }
