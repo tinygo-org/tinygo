@@ -5,7 +5,7 @@ target triple = "wasm32-unknown-wasi"
 
 %runtime._string = type { i8*, i32 }
 
-@"main.someString$string" = internal unnamed_addr constant [3 x i8] c"foo", align 1
+@"main$string" = internal unnamed_addr constant [3 x i8] c"foo", align 1
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
@@ -18,7 +18,7 @@ entry:
 ; Function Attrs: nounwind
 define hidden %runtime._string @main.someString(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  ret %runtime._string { i8* getelementptr inbounds ([3 x i8], [3 x i8]* @"main.someString$string", i32 0, i32 0), i32 3 }
+  ret %runtime._string { i8* getelementptr inbounds ([3 x i8], [3 x i8]* @"main$string", i32 0, i32 0), i32 3 }
 }
 
 ; Function Attrs: nounwind

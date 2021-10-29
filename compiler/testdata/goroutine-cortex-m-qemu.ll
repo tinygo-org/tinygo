@@ -9,7 +9,7 @@ target triple = "armv7m-unknown-unknown-eabi"
 %"internal/task.state" = type { i32, i32* }
 %runtime.chanSelectState = type { %runtime.channel*, i8* }
 
-@"main.startInterfaceMethod$string" = internal unnamed_addr constant [4 x i8] c"test", align 1
+@"main$string" = internal unnamed_addr constant [4 x i8] c"test", align 1
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
@@ -168,7 +168,7 @@ entry:
   store i8* %itf.value, i8** %1, align 4
   %2 = getelementptr inbounds i8, i8* %0, i32 4
   %.repack = bitcast i8* %2 to i8**
-  store i8* getelementptr inbounds ([4 x i8], [4 x i8]* @"main.startInterfaceMethod$string", i32 0, i32 0), i8** %.repack, align 4
+  store i8* getelementptr inbounds ([4 x i8], [4 x i8]* @"main$string", i32 0, i32 0), i8** %.repack, align 4
   %.repack1 = getelementptr inbounds i8, i8* %0, i32 8
   %3 = bitcast i8* %.repack1 to i32*
   store i32 4, i32* %3, align 4

@@ -34,7 +34,7 @@ func (b *builder) emitLifetimeEnd(ptr, size llvm.Value) {
 // bitcasts, or else allocates a value on the heap if it cannot be packed in the
 // pointer value directly. It returns the pointer with the packed data.
 func (b *builder) emitPointerPack(values []llvm.Value) llvm.Value {
-	return llvmutil.EmitPointerPack(b.Builder, b.mod, b.NeedsStackObjects, values)
+	return llvmutil.EmitPointerPack(b.Builder, b.mod, b.pkg.Path(), b.NeedsStackObjects, values)
 }
 
 // emitPointerUnpack extracts a list of values packed using emitPointerPack.

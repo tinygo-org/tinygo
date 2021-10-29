@@ -83,6 +83,7 @@ type compilerContext struct {
 	program          *ssa.Program
 	diagnostics      []error
 	astComments      map[string]*ast.CommentGroup
+	pkg              *types.Package
 	runtimePkg       *types.Package
 }
 
@@ -253,6 +254,7 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 // CompilePackage compiles a single package to a LLVM module.
 func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
 	c := newCompilerContext(moduleName, machine, config, dumpSSA)
+	c.pkg = pkg.Pkg
 	c.runtimePkg = ssaPkg.Prog.ImportedPackage("runtime").Pkg
 	c.program = ssaPkg.Prog
 
@@ -1458,7 +1460,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 func (b *builder) getValue(expr ssa.Value) llvm.Value {
 	switch expr := expr.(type) {
 	case *ssa.Const:
-		return b.createConst(b.info.linkName, expr)
+		return b.createConst(expr)
 	case *ssa.Function:
 		if b.getFunctionInfo(expr).exported {
 			b.addError(expr.Pos(), "cannot use an exported function as value: "+expr.String())
@@ -2411,7 +2413,7 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 }
 
 // createConst creates a LLVM constant value from a Go constant.
-func (b *builder) createConst(prefix string, expr *ssa.Const) llvm.Value {
+func (b *builder) createConst(expr *ssa.Const) llvm.Value {
 	switch typ := expr.Type().Underlying().(type) {
 	case *types.Basic:
 		llvmType := b.getLLVMType(typ)
@@ -2427,7 +2429,7 @@ func (b *builder) createConst(prefix string, expr *ssa.Const) llvm.Value {
 			strLen := llvm.ConstInt(b.uintptrType, uint64(len(str)), false)
 			var strPtr llvm.Value
 			if str != "" {
-				objname := prefix + "$string"
+				objname := b.pkg.Path() + "$string"
 				global := llvm.AddGlobal(b.mod, llvm.ArrayType(b.ctx.Int8Type(), len(str)), objname)
 				global.SetInitializer(b.ctx.ConstString(str, false))
 				global.SetLinkage(llvm.InternalLinkage)
@@ -2457,15 +2459,15 @@ func (b *builder) createConst(prefix string, expr *ssa.Const) llvm.Value {
 			n, _ := constant.Float64Val(expr.Value)
 			return llvm.ConstFloat(llvmType, n)
 		} else if typ.Kind() == types.Complex64 {
-			r := b.createConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]))
-			i := b.createConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]))
+			r := b.createConst(ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]))
+			i := b.createConst(ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]))
 			cplx := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.FloatType(), b.ctx.FloatType()}, false))
 			cplx = b.CreateInsertValue(cplx, r, 0, "")
 			cplx = b.CreateInsertValue(cplx, i, 1, "")
 			return cplx
 		} else if typ.Kind() == types.Complex128 {
-			r := b.createConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
-			i := b.createConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float64]))
+			r := b.createConst(ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
+			i := b.createConst(ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float64]))
 			cplx := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.DoubleType(), b.ctx.DoubleType()}, false))
 			cplx = b.CreateInsertValue(cplx, r, 0, "")
 			cplx = b.CreateInsertValue(cplx, i, 1, "")
