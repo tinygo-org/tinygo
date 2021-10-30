@@ -1,0 +1,10 @@
+# Arduino UNO
+# https://store.arduino.cc/products/arduino-uno-rev3
+inherits: ["atmega328p"]
+build-tags: ["arduino"]
+ldflags:
+- "-Wl,--defsym=_bootloader_size=512"
+- "-Wl,--defsym=_stack_size=512"
+flash-command: "avrdude -c arduino -p atmega328p -P {port} -U flash:w:{hex}:i"
+serial-port: ["acm:2341:0043", "acm:2341:0001", "acm:2a03:0043", "acm:2341:0243"]
+emulator: ["simavr", "-m", "atmega328p", "-f", "16000000"]
