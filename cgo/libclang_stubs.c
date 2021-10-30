@@ -3,7 +3,7 @@
 // are slightly different from the ones defined in libclang.go, but they
 // should be ABI compatible.
 
-#include <clang-c/Index.h> // if this fails, install libclang-10-dev
+#include <clang-c/Index.h> // if this fails, install libclang-11-dev
 
 CXCursor tinygo_clang_getTranslationUnitCursor(CXTranslationUnit tu) {
 	return clang_getTranslationUnitCursor(tu);
