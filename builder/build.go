@@ -649,22 +649,31 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				}
 			}
 
+			// Print code size if requested.
 			if config.Options.PrintSizes == "short" || config.Options.PrintSizes == "full" {
-				sizes, err := loadProgramSize(executable)
+				packagePathMap := make(map[string]string, len(lprogram.Packages))
+				for _, pkg := range lprogram.Sorted() {
+					packagePathMap[pkg.OriginalDir()] = pkg.Pkg.Path()
+				}
+				sizes, err := loadProgramSize(executable, packagePathMap)
 				if err != nil {
 					return err
 				}
 				if config.Options.PrintSizes == "short" {
 					fmt.Printf("   code    data     bss |   flash     ram\n")
-					fmt.Printf("%7d %7d %7d | %7d %7d\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
+					fmt.Printf("%7d %7d %7d | %7d %7d\n", sizes.Code+sizes.ROData, sizes.Data, sizes.BSS, sizes.Flash(), sizes.RAM())
 				} else {
+					if !config.Debug() {
+						fmt.Println("warning: data incomplete, remove the -no-debug flag for more detail")
+					}
 					fmt.Printf("   code  rodata    data     bss |   flash     ram | package\n")
+					fmt.Printf("------------------------------- | --------------- | -------\n")
 					for _, name := range sizes.sortedPackageNames() {
 						pkgSize := sizes.Packages[name]
 						fmt.Printf("%7d %7d %7d %7d | %7d %7d | %s\n", pkgSize.Code, pkgSize.ROData, pkgSize.Data, pkgSize.BSS, pkgSize.Flash(), pkgSize.RAM(), name)
 					}
-					fmt.Printf("%7d %7d %7d %7d | %7d %7d | (sum)\n", sizes.Sum.Code, sizes.Sum.ROData, sizes.Sum.Data, sizes.Sum.BSS, sizes.Sum.Flash(), sizes.Sum.RAM())
-					fmt.Printf("%7d       - %7d %7d | %7d %7d | (all)\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
+					fmt.Printf("------------------------------- | --------------- | -------\n")
+					fmt.Printf("%7d %7d %7d %7d | %7d %7d | total\n", sizes.Code, sizes.ROData, sizes.Data, sizes.BSS, sizes.Code+sizes.ROData+sizes.Data, sizes.Data+sizes.BSS)
 				}
 			}
 
