@@ -522,6 +522,18 @@ func (v pointerValue) llvmValue(mem *memoryView) llvm.Value {
 // bitcast. The llvm.Type parameter is optional, if omitted the pointer type may
 // be different than expected.
 func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, error) {
+	// If a particular LLVM type is requested, cast to it.
+	if !llvmType.IsNil() && llvmType.TypeKind() != llvm.PointerTypeKind {
+		// The LLVM value has (or should have) the same bytes once compiled, but
+		// does not have the right LLVM type. This can happen for example when
+		// storing to a struct with a single pointer field: this pointer may
+		// then become the value even though the pointer should be wrapped in a
+		// struct.
+		// This can be worked around by simply converting to a raw value,
+		// rawValue knows how to create such structs.
+		return v.asRawValue(mem.r).toLLVMValue(llvmType, mem)
+	}
+
 	// Obtain the llvmValue, creating it if it doesn't exist yet.
 	llvmValue := v.llvmValue(mem)
 	if llvmValue.IsNil() {
@@ -571,87 +583,24 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 		llvmValue.SetLinkage(llvm.InternalLinkage)
 	}
 
-	if llvmType.IsNil() {
-		if v.offset() != 0 {
-			// If there is an offset, make sure to use a GEP to index into the
-			// pointer. Because there is no expected type, we use whatever is
-			// most convenient: an *i8 type. It is trivial to index byte-wise.
-			if llvmValue.Type() != mem.r.i8ptrType {
-				llvmValue = llvm.ConstBitCast(llvmValue, mem.r.i8ptrType)
-			}
-			llvmValue = llvm.ConstInBoundsGEP(llvmValue, []llvm.Value{
-				llvm.ConstInt(llvmValue.Type().Context().Int32Type(), uint64(v.offset()), false),
-			})
+	if v.offset() != 0 {
+		// If there is an offset, make sure to use a GEP to index into the
+		// pointer.
+		// Cast to an i8* first (if needed) for easy indexing.
+		if llvmValue.Type() != mem.r.i8ptrType {
+			llvmValue = llvm.ConstBitCast(llvmValue, mem.r.i8ptrType)
 		}
-		return llvmValue, nil
+		llvmValue = llvm.ConstInBoundsGEP(llvmValue, []llvm.Value{
+			llvm.ConstInt(llvmValue.Type().Context().Int32Type(), uint64(v.offset()), false),
+		})
 	}
 
-	if llvmType.TypeKind() != llvm.PointerTypeKind {
-		// The LLVM value has (or should have) the same bytes once compiled, but
-		// does not have the right LLVM type. This can happen for example when
-		// storing to a struct with a single pointer field: this pointer may
-		// then become the value even though the pointer should be wrapped in a
-		// struct.
-		// This can be worked around by simply converting to a raw value,
-		// rawValue knows how to create such structs.
-		if v.offset() != 0 {
-			return llvm.Value{}, errors.New("interp: offset set without known pointer type")
-		}
-		return v.asRawValue(mem.r).toLLVMValue(llvmType, mem)
+	// If a particular LLVM pointer type is requested, cast to it.
+	if !llvmType.IsNil() && llvmType != llvmValue.Type() {
+		llvmValue = llvm.ConstBitCast(llvmValue, llvmType)
 	}
 
-	requestedType := llvmType
-	objectElementType := llvmValue.Type()
-	if requestedType == objectElementType {
-		if v.offset() != 0 {
-			// This should never happen, if offset is non-zero, the types
-			// shouldn't match.
-			return llvm.Value{}, errors.New("interp: offset set while there is no way to convert the type")
-		}
-		return llvmValue, nil
-	}
-
-	if v.offset() == 0 {
-		// Offset is zero, so we can just bitcast to get a correct pointer.
-		return llvm.ConstBitCast(llvmValue, llvmType), nil
-	}
-
-	// We need to make a constant GEP for pointer arithmetic.
-	int32Type := llvmType.Context().Int32Type()
-	indices := []llvm.Value{llvm.ConstInt(int32Type, 0, false)}
-	requestedType = requestedType.ElementType()
-	objectElementType = objectElementType.ElementType()
-	offset := int64(v.offset())
-	for offset > 0 {
-		switch objectElementType.TypeKind() {
-		case llvm.ArrayTypeKind:
-			elementType := objectElementType.ElementType()
-			elementSize := mem.r.targetData.TypeAllocSize(elementType)
-			elementIndex := uint64(offset) / elementSize
-			indices = append(indices, llvm.ConstInt(int32Type, elementIndex, false))
-			offset -= int64(elementIndex * elementSize)
-			objectElementType = elementType
-		case llvm.StructTypeKind:
-			element := mem.r.targetData.ElementContainingOffset(objectElementType, uint64(offset))
-			indices = append(indices, llvm.ConstInt(int32Type, uint64(element), false))
-			offset -= int64(mem.r.targetData.ElementOffset(objectElementType, element))
-			objectElementType = objectElementType.StructElementTypes()[element]
-		default:
-			return llvm.Value{}, errors.New("interp: pointer index with something other than a struct or array?")
-		}
-	}
-	if offset < 0 {
-		return llvm.Value{}, errors.New("interp: offset has somehow gone negative, this should be impossible")
-	}
-
-	// Finally do the gep, using the above computed indices.
-	// If it still doesn't match te requested type, it's possible to bitcast (as
-	// the bits of the pointer are now correct, just not the type).
-	gep := llvm.ConstInBoundsGEP(llvmValue, indices)
-	if gep.Type() != llvmType {
-		return llvm.ConstBitCast(gep, llvmType), nil
-	}
-	return gep, nil
+	return llvmValue, nil
 }
 
 // rawValue is a raw memory buffer that can store either pointers or regular

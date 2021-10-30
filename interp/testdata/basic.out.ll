@@ -21,7 +21,7 @@ entry:
   store i64 %value1, i64* getelementptr inbounds ([4 x i64], [4 x i64]* @main.nonConst1, i32 0, i32 0), align 8
   %value2 = load i64, i64* getelementptr inbounds ([4 x i64], [4 x i64]* @main.nonConst1, i32 0, i32 0), align 8
   store i64 %value2, i64* @main.nonConst2, align 8
-  call void @modifyExternal(i32* getelementptr inbounds ([8 x { i16, i32 }], [8 x { i16, i32 }]* @main.someArray, i32 0, i32 3, i32 1))
+  call void @modifyExternal(i32* bitcast (i8* getelementptr inbounds (i8, i8* bitcast ([8 x { i16, i32 }]* @main.someArray to i8*), i32 28) to i32*))
   call void @modifyExternal(i32* bitcast ([1 x i16*]* @main.exportedValue to i32*))
   store i16 5, i16* @main.exposedValue1, align 2
   call void @modifyExternal(i32* bitcast (void ()* @willModifyGlobal to i32*))
