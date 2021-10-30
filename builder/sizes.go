@@ -84,18 +84,7 @@ func loadProgramSize(path string) (*programSize, error) {
 		if section.Type != elf.SHT_PROGBITS && section.Type != elf.SHT_NOBITS {
 			continue
 		}
-		if section.Name == ".stack" {
-			// HACK: this works around a bug in ld.lld from LLVM 10. The linker
-			// marks sections with no input symbols (such as is the case for the
-			// .stack section) as SHT_PROGBITS instead of SHT_NOBITS. While it
-			// doesn't affect the generated binaries (.hex and .bin), it does
-			// affect the reported size.
-			// https://bugs.llvm.org/show_bug.cgi?id=45336
-			// https://reviews.llvm.org/D76981
-			// It has been merged in master, but it has not (yet) been
-			// backported to the LLVM 10 release branch.
-			sumBSS += section.Size
-		} else if section.Type == elf.SHT_NOBITS {
+		if section.Type == elf.SHT_NOBITS {
 			sumBSS += section.Size
 		} else if section.Flags&elf.SHF_EXECINSTR != 0 {
 			sumCode += section.Size

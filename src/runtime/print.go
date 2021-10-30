@@ -48,16 +48,6 @@ func printint16(n int16) {
 }
 
 func printuint32(n uint32) {
-	if TargetBits == 8 {
-		// AVR-specific workaround on LLVM 10. Should be removed when we switch
-		// to LLVM 11.
-		prevdigits := n / 10
-		if prevdigits != 0 {
-			printuint32(prevdigits)
-		}
-		putchar(byte((n % 10) + '0'))
-		return
-	}
 	printuint64(uint64(n))
 }
 

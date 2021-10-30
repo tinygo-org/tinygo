@@ -373,12 +373,12 @@ commands:
             - /go/pkg/mod
 
 jobs:
-  test-llvm10-go115:
+  test-llvm11-go115:
     docker:
       - image: circleci/golang:1.15-buster
     steps:
       - test-linux:
-          llvm: "10"
+          llvm: "11"
   test-llvm11-go116:
     docker:
       - image: circleci/golang:1.16-buster
@@ -406,7 +406,7 @@ jobs:
 workflows:
   test-all:
     jobs:
-      - test-llvm10-go115
+      - test-llvm11-go115
       - test-llvm11-go116
       - build-linux
       - build-macos

@@ -17,14 +17,14 @@ define void @testUnused() {
 
 define i32 @testReadonly() {
   %map = call %runtime.hashmap* @runtime.hashmapMake(i8 4, i8 4, i32 0)
-  %hashmap.value = alloca i32
-  store i32 42, i32* %hashmap.value
+  %hashmap.value = alloca i32, align 4
+  store i32 42, i32* %hashmap.value, align 4
   %hashmap.value.bitcast = bitcast i32* %hashmap.value to i8*
   call void @runtime.hashmapStringSet(%runtime.hashmap* %map, i8* getelementptr inbounds ([6 x i8], [6 x i8]* @answer, i32 0, i32 0), i32 6, i8* %hashmap.value.bitcast)
-  %hashmap.value2 = alloca i32
+  %hashmap.value2 = alloca i32, align 4
   %hashmap.value2.bitcast = bitcast i32* %hashmap.value2 to i8*
   %commaOk = call i1 @runtime.hashmapStringGet(%runtime.hashmap* %map, i8* getelementptr inbounds ([6 x i8], [6 x i8]* @answer, i32 0, i32 0), i32 6, i8* %hashmap.value2.bitcast)
-  %loadedValue = load i32, i32* %hashmap.value2
+  %loadedValue = load i32, i32* %hashmap.value2, align 4
   ret i32 %loadedValue
 }
 

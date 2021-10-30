@@ -6,21 +6,21 @@ target triple = "armv7m-none-eabi"
 declare nonnull i8* @runtime.alloc(i32)
 
 define void @testInt() {
-  %stackalloc.alloca = alloca [1 x i32]
-  store [1 x i32] zeroinitializer, [1 x i32]* %stackalloc.alloca
+  %stackalloc.alloca = alloca [1 x i32], align 4
+  store [1 x i32] zeroinitializer, [1 x i32]* %stackalloc.alloca, align 4
   %stackalloc = bitcast [1 x i32]* %stackalloc.alloca to i32*
-  store i32 5, i32* %stackalloc
+  store i32 5, i32* %stackalloc, align 4
   ret void
 }
 
 define i16 @testArray() {
-  %stackalloc.alloca = alloca [2 x i32]
-  store [2 x i32] zeroinitializer, [2 x i32]* %stackalloc.alloca
+  %stackalloc.alloca = alloca [2 x i32], align 4
+  store [2 x i32] zeroinitializer, [2 x i32]* %stackalloc.alloca, align 4
   %stackalloc = bitcast [2 x i32]* %stackalloc.alloca to i16*
   %1 = getelementptr i16, i16* %stackalloc, i32 1
-  store i16 5, i16* %1
+  store i16 5, i16* %1, align 2
   %2 = getelementptr i16, i16* %stackalloc, i32 2
-  %3 = load i16, i16* %2
+  %3 = load i16, i16* %2, align 2
   ret i16 %3
 }
 
@@ -39,8 +39,8 @@ define void @testEscapingCall2() {
 }
 
 define void @testNonEscapingCall() {
-  %stackalloc.alloca = alloca [1 x i32]
-  store [1 x i32] zeroinitializer, [1 x i32]* %stackalloc.alloca
+  %stackalloc.alloca = alloca [1 x i32], align 4
+  store [1 x i32] zeroinitializer, [1 x i32]* %stackalloc.alloca, align 4
   %stackalloc = bitcast [1 x i32]* %stackalloc.alloca to i32*
   %1 = call i32* @noescapeIntPtr(i32* %stackalloc)
   ret void
@@ -54,11 +54,11 @@ define i32* @testEscapingReturn() {
 
 define void @testNonEscapingLoop() {
 entry:
-  %stackalloc.alloca = alloca [1 x i32]
+  %stackalloc.alloca = alloca [1 x i32], align 4
   br label %loop
 
 loop:                                             ; preds = %loop, %entry
-  store [1 x i32] zeroinitializer, [1 x i32]* %stackalloc.alloca
+  store [1 x i32] zeroinitializer, [1 x i32]* %stackalloc.alloca, align 4
   %stackalloc = bitcast [1 x i32]* %stackalloc.alloca to i32*
   %0 = call i32* @noescapeIntPtr(i32* %stackalloc)
   %1 = icmp eq i32* null, %0
