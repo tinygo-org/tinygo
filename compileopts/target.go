@@ -1,9 +1,8 @@
 package compileopts
 
-// This file loads a target specification from a JSON file.
+// This file loads a target specification from a YAML file.
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/tinygo-org/tinygo/goenv"
+	"gopkg.in/yaml.v2"
 )
 
 // Target specification for a given target. Used for bare metal targets.
@@ -22,44 +22,44 @@ import (
 // https://doc.rust-lang.org/nightly/nightly-rustc/rustc_target/spec/struct.TargetOptions.html
 // https://github.com/shepmaster/rust-arduino-blink-led-no-core-with-cargo/blob/master/blink/arduino.json
 type TargetSpec struct {
-	Inherits         []string `json:"inherits"`
-	Triple           string   `json:"llvm-target"`
-	CPU              string   `json:"cpu"`
-	Features         []string `json:"features"`
-	GOOS             string   `json:"goos"`
-	GOARCH           string   `json:"goarch"`
-	BuildTags        []string `json:"build-tags"`
-	GC               string   `json:"gc"`
-	Scheduler        string   `json:"scheduler"`
-	Serial           string   `json:"serial"` // which serial output to use (uart, usb, none)
-	Linker           string   `json:"linker"`
-	RTLib            string   `json:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
-	Libc             string   `json:"libc"`
-	AutoStackSize    *bool    `json:"automatic-stack-size"` // Determine stack size automatically at compile time.
-	DefaultStackSize uint64   `json:"default-stack-size"`   // Default stack size if the size couldn't be determined at compile time.
-	CFlags           []string `json:"cflags"`
-	LDFlags          []string `json:"ldflags"`
-	LinkerScript     string   `json:"linkerscript"`
-	ExtraFiles       []string `json:"extra-files"`
-	RP2040BootPatch  *bool    `json:"rp2040-boot-patch"`        // Patch RP2040 2nd stage bootloader checksum
-	Emulator         []string `json:"emulator" override:"copy"` // inherited Emulator must not be append
-	FlashCommand     string   `json:"flash-command"`
-	GDB              []string `json:"gdb"`
-	PortReset        string   `json:"flash-1200-bps-reset"`
-	SerialPort       []string `json:"serial-port"` // serial port IDs in the form "acm:vid:pid" or "usb:vid:pid"
-	FlashMethod      string   `json:"flash-method"`
-	FlashVolume      string   `json:"msd-volume-name"`
-	FlashFilename    string   `json:"msd-firmware-name"`
-	UF2FamilyID      string   `json:"uf2-family-id"`
-	BinaryFormat     string   `json:"binary-format"`
-	OpenOCDInterface string   `json:"openocd-interface"`
-	OpenOCDTarget    string   `json:"openocd-target"`
-	OpenOCDTransport string   `json:"openocd-transport"`
-	OpenOCDCommands  []string `json:"openocd-commands"`
-	JLinkDevice      string   `json:"jlink-device"`
-	CodeModel        string   `json:"code-model"`
-	RelocationModel  string   `json:"relocation-model"`
-	WasmAbi          string   `json:"wasm-abi"`
+	Inherits         []string `yaml:"inherits"`
+	Triple           string   `yaml:"llvm-target"`
+	CPU              string   `yaml:"cpu"`
+	Features         []string `yaml:"features"`
+	GOOS             string   `yaml:"goos"`
+	GOARCH           string   `yaml:"goarch"`
+	BuildTags        []string `yaml:"build-tags"`
+	GC               string   `yaml:"gc"`
+	Scheduler        string   `yaml:"scheduler"`
+	Serial           string   `yaml:"serial"` // which serial output to use (uart, usb, none)
+	Linker           string   `yaml:"linker"`
+	RTLib            string   `yaml:"rtlib"` // compiler runtime library (libgcc, compiler-rt)
+	Libc             string   `yaml:"libc"`
+	AutoStackSize    *bool    `yaml:"automatic-stack-size"` // Determine stack size automatically at compile time.
+	DefaultStackSize uint64   `yaml:"default-stack-size"`   // Default stack size if the size couldn't be determined at compile time.
+	CFlags           []string `yaml:"cflags"`
+	LDFlags          []string `yaml:"ldflags"`
+	LinkerScript     string   `yaml:"linkerscript"`
+	ExtraFiles       []string `yaml:"extra-files"`
+	RP2040BootPatch  *bool    `yaml:"rp2040-boot-patch"`        // Patch RP2040 2nd stage bootloader checksum
+	Emulator         []string `yaml:"emulator" override:"copy"` // inherited Emulator must not be append
+	FlashCommand     string   `yaml:"flash-command"`
+	GDB              []string `yaml:"gdb"`
+	PortReset        string   `yaml:"flash-1200-bps-reset"`
+	SerialPort       []string `yaml:"serial-port"` // serial port IDs in the form "acm:vid:pid" or "usb:vid:pid"
+	FlashMethod      string   `yaml:"flash-method"`
+	FlashVolume      string   `yaml:"msd-volume-name"`
+	FlashFilename    string   `yaml:"msd-firmware-name"`
+	UF2FamilyID      string   `yaml:"uf2-family-id"`
+	BinaryFormat     string   `yaml:"binary-format"`
+	OpenOCDInterface string   `yaml:"openocd-interface"`
+	OpenOCDTarget    string   `yaml:"openocd-target"`
+	OpenOCDTransport string   `yaml:"openocd-transport"`
+	OpenOCDCommands  []string `yaml:"openocd-commands"`
+	JLinkDevice      string   `yaml:"jlink-device"`
+	CodeModel        string   `yaml:"code-model"`
+	RelocationModel  string   `yaml:"relocation-model"`
+	WasmAbi          string   `yaml:"wasm-abi"`
 }
 
 // overrideProperties overrides all properties that are set in child into itself using reflection.
@@ -105,10 +105,10 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 	}
 }
 
-// load reads a target specification from the JSON in the given io.Reader. It
+// load reads a target specification from the YAML in the given io.Reader. It
 // may load more targets specified using the "inherits" property.
 func (spec *TargetSpec) load(r io.Reader) error {
-	err := json.NewDecoder(r).Decode(spec)
+	err := yaml.NewDecoder(r).Decode(spec)
 	if err != nil {
 		return err
 	}
@@ -118,15 +118,15 @@ func (spec *TargetSpec) load(r io.Reader) error {
 
 // loadFromGivenStr loads the TargetSpec from the given string that could be:
 // - targets/ directory inside the compiler sources
-// - a relative or absolute path to custom (project specific) target specification .json file;
+// - a relative or absolute path to custom (project specific) target specification .yaml file;
 //   the Inherits[] could contain the files from target folder (ex. stm32f4disco)
-//   as well as path to custom files (ex. myAwesomeProject.json)
+//   as well as path to custom files (ex. myAwesomeProject.yaml)
 func (spec *TargetSpec) loadFromGivenStr(str string) error {
 	path := ""
-	if strings.HasSuffix(str, ".json") {
+	if strings.HasSuffix(str, ".yaml") {
 		path, _ = filepath.Abs(str)
 	} else {
-		path = filepath.Join(goenv.Get("TINYGOROOT"), "targets", strings.ToLower(str)+".json")
+		path = filepath.Join(goenv.Get("TINYGOROOT"), "targets", strings.ToLower(str)+".yaml")
 	}
 	fp, err := os.Open(path)
 	if err != nil {
@@ -192,7 +192,7 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Successfully loaded this target from a built-in .json file. Make sure
+	// Successfully loaded this target from a built-in .yaml file. Make sure
 	// it includes all parents as specified in the "inherits" key.
 	err = spec.resolveInherits()
 	if err != nil {

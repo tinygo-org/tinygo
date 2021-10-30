@@ -1095,7 +1095,7 @@ func main() {
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
 	tags := flag.String("tags", "", "a space-separated list of extra build tags")
-	target := flag.String("target", "", "chip/board name or JSON target specification file")
+	target := flag.String("target", "", "chip/board name or YAML target specification file")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
@@ -1318,8 +1318,8 @@ func main() {
 			return
 		}
 		for _, entry := range entries {
-			if !entry.Mode().IsRegular() || !strings.HasSuffix(entry.Name(), ".json") {
-				// Only inspect JSON files.
+			if !entry.Mode().IsRegular() || !strings.HasSuffix(entry.Name(), ".yaml") {
+				// Only inspect YAML files.
 				continue
 			}
 			path := filepath.Join(dir, entry.Name())
@@ -1331,7 +1331,7 @@ func main() {
 			}
 			if spec.FlashMethod == "" && spec.FlashCommand == "" && spec.Emulator == nil {
 				// This doesn't look like a regular target file, but rather like
-				// a parent target (such as targets/cortex-m.json).
+				// a parent target (such as targets/cortex-m.yaml).
 				continue
 			}
 			name := entry.Name()
