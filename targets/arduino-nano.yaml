@@ -4,13 +4,11 @@
 # Since 2018, Arduino Nanos and clones are sold with a new bootloader, which
 # requires programming at 115200 baud instead of the 57600 baud.
 # Use this target to flash older boards.
-{
-	"inherits": ["atmega328p"],
-	"build-tags": ["arduino_nano"],
-	"ldflags": [
-		"-Wl,--defsym=_bootloader_size=512",
-		"-Wl,--defsym=_stack_size=512"
-	],
-	"flash-command": "avrdude -c arduino -p atmega328p -b 57600 -P {port} -U flash:w:{hex}:i",
-	"emulator": ["simavr", "-m", "atmega328p", "-f", "16000000"]
-}
+
+inherits: ["atmega328p"]
+build-tags: ["arduino_nano"]
+ldflags:
+- "-Wl,--defsym=_bootloader_size=512"
+- "-Wl,--defsym=_stack_size=512"
+flash-command: "avrdude -c arduino -p atmega328p -b 57600 -P {port} -U flash:w:{hex}:i"
+emulator: ["simavr", "-m", "atmega328p", "-f", "16000000"]

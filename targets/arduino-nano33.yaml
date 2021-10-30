@@ -1,9 +1,8 @@
 # Arduino Nano 33 IoT
 # https://store.arduino.cc/products/arduino-nano-33-iot
-{
-    "inherits": ["atsamd21g18a"],
-    "build-tags": ["arduino_nano33"],
-    "flash-command": "bossac -i -e -w -v -R -U --port={port} --offset=0x2000 {bin}",
-    "serial-port": ["acm:2341:8057", "acm:2341:0057"],
-    "flash-1200-bps-reset": "true"
-}
+
+inherits: ["atsamd21g18a"]
+build-tags: ["arduino_nano33"]
+flash-command: "bossac -i -e -w -v -R -U --port={port} --offset=0x2000 {bin}"
+serial-port: ["acm:2341:8057", "acm:2341:0057"]
+flash-1200-bps-reset: "true"
