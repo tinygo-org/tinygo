@@ -1,9 +1,11 @@
+//go:build rp2040
 // +build rp2040
 
 package machine
 
 import (
 	"device/rp"
+	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -207,4 +209,109 @@ func (p Pin) Set(value bool) {
 // Get reads the pin value.
 func (p Pin) Get() bool {
 	return p.get()
+}
+
+// PinChange represents one or more trigger events that can happen on a given GPIO pin
+// on the RP2040. ORed PinChanges are valid input to most IRQ functions.
+type PinChange uint8
+
+// Pin change interrupt constants for SetInterrupt.
+const (
+	// PinLevelLow triggers whenever pin is at a low (around 0V) logic level.
+	PinLevelLow PinChange = 1 << iota
+	// PinLevelLow triggers whenever pin is at a high (around 3V) logic level.
+	PinLevelHigh
+	// Edge falling
+	PinFalling
+	// Edge rising
+	PinRising
+)
+
+// Callbacks to be called for pins configured with SetInterrupt.
+var (
+	pinCallbacks [2]func(Pin)
+	setInt       [2]bool
+)
+
+// SetInterrupt sets an interrupt to be executed when a particular pin changes
+// state. The pin should already be configured as an input, including a pull up
+// or down if no external pull is provided.
+//
+// This call will replace a previously set callback on this pin. You can pass a
+// nil func to unset the pin change interrupt. If you do so, the change
+// parameter is ignored and can be set to any value (such as 0).
+func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
+	if p > 31 || p < 0 {
+		return ErrInvalidInputPin
+	}
+	core := CurrentCore()
+	if callback == nil {
+		// disable current interrupt
+		p.setInterrupt(change, false)
+		pinCallbacks[core] = nil
+		return nil
+	}
+
+	if pinCallbacks[core] != nil {
+		// Callback already configured. Should disable callback by passing a nil callback first.
+		return ErrNoPinChangeChannel
+	}
+	p.setInterrupt(change, true)
+	pinCallbacks[core] = callback
+
+	if setInt[core] {
+		// interrupt has already been set. Exit.
+		println("core set")
+		return nil
+	}
+	interrupt.New(rp.IRQ_IO_IRQ_BANK0, gpioHandleInterrupt).Enable()
+	irqSet(rp.IRQ_IO_IRQ_BANK0, true)
+	return nil
+}
+
+// gpioHandleInterrupt finds the corresponding pin for the interrupt.
+// C SDK equivalent of gpio_irq_handler
+func gpioHandleInterrupt(intr interrupt.Interrupt) {
+	// panic("END") // if program is not ended here rp2040 will call interrupt again when finished, a vicious spin cycle.
+	core := CurrentCore()
+	callback := pinCallbacks[core]
+	if callback != nil {
+		// TODO fix gpio acquisition (see below)
+		// For now all callbacks get pin 255 (nonexistent).
+		callback(0xff)
+	}
+	var gpio Pin
+	for gpio = 0; gpio < _NUMBANK0_GPIOS; gpio++ {
+		// Acknowledge all GPIO interrupts for now
+		// since we are yet unable to acquire interrupt status
+		gpio.acknowledgeInterrupt(0xff) // TODO fix status get. For now we acknowledge all pending interrupts.
+		// Commented code below from C SDK not working.
+		// statreg := base.intS[gpio>>3]
+		// change := getIntChange(gpio, statreg.Get())
+		// if change != 0 {
+		// 	gpio.acknowledgeInterrupt(change)
+		// 	if callback != nil {
+		// 		callback(gpio)
+		// 		return
+		// 	} else {
+		// 		panic("unset callback in handler")
+		// 	}
+		// }
+	}
+}
+
+// events returns the bit representation of the pin change for the rp2040.
+func (change PinChange) events() uint32 {
+	return uint32(change)
+}
+
+// intBit is the bit storage form of a PinChange for a given Pin
+// in the IO_BANK0 interrupt registers (page 269 RP2040 Datasheet).
+func (p Pin) ioIntBit(change PinChange) uint32 {
+	return change.events() << (4 * (p % 8))
+}
+
+// Acquire interrupt data from a INT status register.
+func getIntChange(p Pin, status uint32) PinChange {
+	return PinChange(status>>(4*(p%8))) & 0xf
 }

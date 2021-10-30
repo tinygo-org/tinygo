@@ -1,3 +1,4 @@
+//go:build rp2040
 // +build rp2040
 
 package machine
@@ -114,3 +115,11 @@ func init() {
 	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
 	UART1.Interrupt = interrupt.New(rp.IRQ_UART1_IRQ, _UART1.handleInterrupt)
 }
+
+// CurrentCore returns the core number the call was made from.
+func CurrentCore() int {
+	return int(rp.SIO.CPUID.Get())
+}
+
+// NumCores returns number of cores available on the device.
+func NumCores() int { return 2 }
