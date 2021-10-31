@@ -383,6 +383,7 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 	parentHandle := fn.LastParam()
 	context := llvm.PrevParam(parentHandle)
 	actualType := llvm.PrevParam(context)
+	returnType := fn.Type().ElementType().ReturnType()
 	context.SetName("context")
 	actualType.SetName("actualType")
 	parentHandle.SetName("parentHandle")
