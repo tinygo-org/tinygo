@@ -467,6 +467,7 @@ endif
 	@$(MD5SUM) test.hex
 ifneq ($(OS),Windows_NT)
 	$(TINYGO) build -o test.elf -gc=leaking -scheduler=none examples/serial
+	$(TINYGO) build -o test.elf                             examples/callcpp
 endif
 
 

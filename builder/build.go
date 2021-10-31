@@ -538,6 +538,21 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			}
 			linkerDependencies = append(linkerDependencies, job)
 		}
+		for _, filename := range pkg.CXXFiles {
+			abspath := filepath.Join(pkg.Dir, filename)
+			flags := make([]string, len(pkg.CFlags)+len(pkg.CXXFlags))
+			copy(flags, pkg.CFlags)
+			copy(flags[len(pkg.CFlags):], pkg.CXXFlags)
+			job := &compileJob{
+				description: "compile CGo C++ file " + abspath,
+				run: func(job *compileJob) error {
+					result, err := compileAndCacheCFile(abspath, dir, flags, config.Options.PrintCommands)
+					job.result = result
+					return err
+				},
+			}
+			linkerDependencies = append(linkerDependencies, job)
+		}
 	}
 
 	// Linker flags from CGo lines:
