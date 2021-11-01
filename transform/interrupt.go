@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -22,7 +23,7 @@ import (
 // simply call the registered handlers. This might seem like it causes extra
 // overhead, but in fact inlining and const propagation will eliminate most if
 // not all of that.
-func LowerInterrupts(mod llvm.Module, sizeLevel int) []error {
+func LowerInterrupts(mod llvm.Module, config *compileopts.Config) []error {
 	var errs []error
 
 	// Discover interrupts. The runtime/interrupt.Register call is a compiler
@@ -174,9 +175,7 @@ func LowerInterrupts(mod llvm.Module, sizeLevel int) []error {
 		// Create the wrapper function which is the actual interrupt handler
 		// that is inserted in the interrupt vector.
 		fn.SetUnnamedAddr(true)
-		if sizeLevel >= 2 {
-			fn.AddFunctionAttr(ctx.CreateEnumAttribute(llvm.AttributeKindID("optsize"), 0))
-		}
+		AddStandardAttributes(fn, config)
 		fn.SetSection(".text." + name)
 		if isSoftwareVectored {
 			fn.SetLinkage(llvm.InternalLinkage)

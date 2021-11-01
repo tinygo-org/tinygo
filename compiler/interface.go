@@ -457,6 +457,7 @@ func (c *compilerContext) getInterfaceImplementsFunc(assertedType types.Type) ll
 	if llvmFn.IsNil() {
 		llvmFnType := llvm.FunctionType(c.ctx.Int1Type(), []llvm.Type{c.uintptrType}, false)
 		llvmFn = llvm.AddFunction(c.mod, fnName, llvmFnType)
+		c.addStandardDeclaredAttributes(llvmFn)
 		methods := c.getMethodsString(assertedType.Underlying().(*types.Interface))
 		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-methods", methods))
 	}
@@ -478,6 +479,7 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 		paramTuple = append(paramTuple, types.NewVar(token.NoPos, nil, "$typecode", types.Typ[types.Uintptr]))
 		llvmFnType := c.getRawFuncType(types.NewSignature(sig.Recv(), types.NewTuple(paramTuple...), sig.Results(), false)).ElementType()
 		llvmFn = llvm.AddFunction(c.mod, fnName, llvmFnType)
+		c.addStandardDeclaredAttributes(llvmFn)
 		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-invoke", c.getMethodSignatureName(instr.Method)))
 		methods := c.getMethodsString(instr.Value.Type().Underlying().(*types.Interface))
 		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-methods", methods))

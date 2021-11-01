@@ -68,12 +68,12 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		OptimizeStringToBytes(mod)
 		OptimizeReflectImplements(mod)
 		OptimizeAllocs(mod, nil, nil)
-		err := LowerInterfaces(mod, sizeLevel)
+		err := LowerInterfaces(mod, config)
 		if err != nil {
 			return []error{err}
 		}
 
-		errs := LowerInterrupts(mod, sizeLevel)
+		errs := LowerInterrupts(mod, config)
 		if len(errs) > 0 {
 			return errs
 		}
@@ -97,7 +97,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 
 	} else {
 		// Must be run at any optimization level.
-		err := LowerInterfaces(mod, sizeLevel)
+		err := LowerInterfaces(mod, config)
 		if err != nil {
 			return []error{err}
 		}
@@ -105,7 +105,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		if config.FuncImplementation() == "switch" {
 			LowerFuncValues(mod)
 		}
-		errs := LowerInterrupts(mod, sizeLevel)
+		errs := LowerInterrupts(mod, config)
 		if len(errs) > 0 {
 			return errs
 		}
