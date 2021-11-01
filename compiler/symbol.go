@@ -327,10 +327,17 @@ func getParams(sig *types.Signature) []*types.Var {
 // addStandardDeclaredAttributes adds attributes that are set for any function,
 // whether declared or defined.
 func (c *compilerContext) addStandardDeclaredAttributes(llvmFn llvm.Value) {
-	if c.SizeLevel >= 2 {
+	if c.SizeLevel >= 1 {
 		// Set the "optsize" attribute to make slightly smaller binaries at the
-		// cost of some performance.
+		// cost of minimal performance loss (-Os in Clang).
 		kind := llvm.AttributeKindID("optsize")
+		attr := c.ctx.CreateEnumAttribute(kind, 0)
+		llvmFn.AddFunctionAttr(attr)
+	}
+	if c.SizeLevel >= 2 {
+		// Set the "minsize" attribute to reduce code size even further,
+		// regardless of performance loss (-Oz in Clang).
+		kind := llvm.AttributeKindID("minsize")
 		attr := c.ctx.CreateEnumAttribute(kind, 0)
 		llvmFn.AddFunctionAttr(attr)
 	}

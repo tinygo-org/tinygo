@@ -180,8 +180,8 @@ func CallGraph(f *elf.File, callsIndirectFunction []string) (map[string][]*CallN
 					// used for getting a function pointer
 					isCall = false
 				case elf.R_ARM_ABS32:
-					// used in the reset vector for pointers
-					isCall = false
+					// when compiling with -Oz (minsize), used for calling
+					isCall = true
 				default:
 					return nil, fmt.Errorf("unknown relocation: %s", relocType)
 				}
