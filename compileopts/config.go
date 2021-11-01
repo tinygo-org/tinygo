@@ -220,6 +220,19 @@ func (c *Config) CFlags() []string {
 	cflags = append(cflags, "-O"+c.Options.Opt)
 	// Set the LLVM target triple.
 	cflags = append(cflags, "--target="+c.Triple())
+	// Set the -mcpu (or similar) flag.
+	if c.Target.CPU != "" {
+		if c.GOARCH() == "amd64" || c.GOARCH() == "386" {
+			// x86 prefers the -march flag (-mcpu is deprecated there).
+			cflags = append(cflags, "-march="+c.Target.CPU)
+		} else if strings.HasPrefix(c.Triple(), "avr") {
+			// AVR MCUs use -mmcu instead of -mcpu.
+			cflags = append(cflags, "-mmcu="+c.Target.CPU)
+		} else {
+			// The rest just uses -mcpu.
+			cflags = append(cflags, "-mcpu="+c.Target.CPU)
+		}
+	}
 	return cflags
 }
 

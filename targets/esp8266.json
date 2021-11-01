@@ -5,9 +5,6 @@
 	"scheduler": "tasks",
 	"linker": "xtensa-esp32-elf-ld",
 	"default-stack-size": 2048,
-	"cflags": [
-		"-mcpu=esp8266"
-	],
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
 	"linkerscript": "targets/esp8266.ld",

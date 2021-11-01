@@ -1,5 +1,6 @@
 {
   "llvm-target": "aarch64",
+  "cpu": "cortex-a57",
   "build-tags": ["nintendoswitch", "arm64"],
   "scheduler": "tasks",
   "goos": "linux",
@@ -9,11 +10,9 @@
   "libc": "picolibc",
   "gc": "conservative",
   "relocation-model": "pic",
-  "cpu": "cortex-a57",
   "default-stack-size": 2048,
   "cflags": [
     "-target", "aarch64-unknown-none",
-    "-mcpu=cortex-a57",
     "-fPIE",
     "-Werror",
     "-fshort-enums",

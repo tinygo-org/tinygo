@@ -221,8 +221,15 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		GDB:              []string{"gdb"},
 		PortReset:        "false",
 	}
-	if goarch == "386" {
+	switch goarch {
+	case "386":
 		spec.CPU = "pentium4"
+	case "amd64":
+		spec.CPU = "x86-64"
+	case "arm":
+		spec.CPU = "generic"
+	case "arm64":
+		spec.CPU = "generic"
 	}
 	if goos == "darwin" {
 		spec.CFlags = append(spec.CFlags, "-isysroot", "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk")

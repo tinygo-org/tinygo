@@ -1,4 +1,5 @@
 {
 	"inherits": ["cortex-m"],
-	"llvm-target": "armv7m-unknown-unknown-eabi"
+	"llvm-target": "armv7m-unknown-unknown-eabi",
+	"cpu": "cortex-m3"
 }

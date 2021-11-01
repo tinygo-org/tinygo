@@ -8,7 +8,6 @@
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
 	"cflags": [
-		"-mcpu=arm7tdmi",
 		"-Werror",
 		"-fshort-enums",
 		"-fomit-frame-pointer",
