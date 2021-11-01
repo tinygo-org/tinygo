@@ -6,9 +6,6 @@
 	"serial": "uart",
 	"linker": "xtensa-esp32-elf-ld",
 	"default-stack-size": 2048,
-	"cflags": [
-		"-mcpu=esp32"
-	],
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
 	"linkerscript": "targets/esp32.ld",

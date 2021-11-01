@@ -3,9 +3,6 @@
     "cpu": "atmega1284p",
     "build-tags": ["atmega1284p", "atmega"],
     "serial": "uart",
-    "cflags": [
-        "-mmcu=atmega1284p"
-    ],
     "ldflags": [
         "-mmcu=avr51",
         "-Wl,--defsym=_bootloader_size=0",

@@ -119,7 +119,7 @@ commands:
             - lib/wasi-libc/sysroot
       - run:
           name: "Test TinyGo"
-          command: go test -v -timeout=20m -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./compiler ./interp ./transform .
+          command: go test -v -timeout=20m -tags=llvm<<parameters.llvm>> ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
           no_output_timeout: 20m
       - run: make gen-device -j4
       - run: make smoketest XTENSA=0

@@ -3,7 +3,6 @@
 	"llvm-target": "armv7em-unknown-unknown-eabi",
 	"cpu": "cortex-m7",
 	"cflags": [
-		"-mcpu=cortex-m7",
 		"-mfloat-abi=soft"
 	]
 }
