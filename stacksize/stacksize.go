@@ -201,7 +201,25 @@ func CallGraph(f *elf.File, callsIndirectFunction []string) (map[string][]*CallN
 	case elf.EM_ARM:
 		knownFrameSizes := map[string]uint64{
 			// implemented with assembly in compiler-rt
+			"__aeabi_idivmod":  3 * 4, // 3 registers on thumb1 but 1 register on thumb2
 			"__aeabi_uidivmod": 3 * 4, // 3 registers on thumb1 but 1 register on thumb2
+			"__aeabi_ldivmod":  2 * 4,
+			"__aeabi_uldivmod": 2 * 4,
+			"__aeabi_memclr":   2 * 4, // 2 registers on thumb1
+			"__aeabi_memset":   2 * 4, // 2 registers on thumb1
+			"__aeabi_memcmp":   2 * 4, // 2 registers on thumb1
+			"__aeabi_memcpy":   2 * 4, // 2 registers on thumb1
+			"__aeabi_memmove":  2 * 4, // 2 registers on thumb1
+			"__aeabi_dcmpeq":   2 * 4,
+			"__aeabi_dcmplt":   2 * 4,
+			"__aeabi_dcmple":   2 * 4,
+			"__aeabi_dcmpge":   2 * 4,
+			"__aeabi_dcmpgt":   2 * 4,
+			"__aeabi_fcmpeq":   2 * 4,
+			"__aeabi_fcmplt":   2 * 4,
+			"__aeabi_fcmple":   2 * 4,
+			"__aeabi_fcmpge":   2 * 4,
+			"__aeabi_fcmpgt":   2 * 4,
 		}
 		for name, size := range knownFrameSizes {
 			if sym, ok := symbolNames[name]; ok {
