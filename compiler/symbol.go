@@ -108,6 +108,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 			llvmFn.AddFunctionAttr(attr)
 		}
 	}
+	c.addStandardDeclaredAttributes(llvmFn)
 
 	dereferenceableOrNullKind := llvm.AttributeKindID("dereferenceable_or_null")
 	for i, info := range paramInfos {
@@ -323,10 +324,23 @@ func getParams(sig *types.Signature) []*types.Var {
 	return params
 }
 
-// addStandardAttributes adds the set of attributes that are added to every
-// function emitted by TinyGo (even thunks/wrappers), possibly depending on the
-// architecture.
-func (c *compilerContext) addStandardAttributes(llvmFn llvm.Value) {
+// addStandardDeclaredAttributes adds attributes that are set for any function,
+// whether declared or defined.
+func (c *compilerContext) addStandardDeclaredAttributes(llvmFn llvm.Value) {
+	if c.SizeLevel >= 2 {
+		// Set the "optsize" attribute to make slightly smaller binaries at the
+		// cost of some performance.
+		kind := llvm.AttributeKindID("optsize")
+		attr := c.ctx.CreateEnumAttribute(kind, 0)
+		llvmFn.AddFunctionAttr(attr)
+	}
+}
+
+// addStandardDefinedAttributes adds the set of attributes that are added to
+// every function defined by TinyGo (even thunks/wrappers), possibly depending
+// on the architecture. It does not set attributes only set for declared
+// functions, use addStandardDeclaredAttributes for this.
+func (c *compilerContext) addStandardDefinedAttributes(llvmFn llvm.Value) {
 	// TinyGo does not currently raise exceptions, so set the 'nounwind' flag.
 	// This behavior matches Clang when compiling C source files.
 	// It reduces binary size on Linux a little bit on non-x86_64 targets by
@@ -336,6 +350,12 @@ func (c *compilerContext) addStandardAttributes(llvmFn llvm.Value) {
 		// Required by the ABI.
 		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 0))
 	}
+}
+
+// addStandardAttribute adds all attributes added to defined functions.
+func (c *compilerContext) addStandardAttributes(llvmFn llvm.Value) {
+	c.addStandardDeclaredAttributes(llvmFn)
+	c.addStandardDefinedAttributes(llvmFn)
 }
 
 // globalInfo contains some information about a specific global. By default,

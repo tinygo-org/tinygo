@@ -86,6 +86,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	}
 	defer os.RemoveAll(dir)
 
+	optLevel, sizeLevel, _ := config.OptLevels()
 	compilerConfig := &compiler.Config{
 		Triple:          config.Triple(),
 		CPU:             config.CPU(),
@@ -94,6 +95,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		GOARCH:          config.GOARCH(),
 		CodeModel:       config.CodeModel(),
 		RelocationModel: config.RelocationModel(),
+		SizeLevel:       sizeLevel,
 
 		Scheduler:          config.Scheduler(),
 		FuncImplementation: config.FuncImplementation(),
@@ -133,7 +135,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	var packageJobs []*compileJob
 	packageBitcodePaths := make(map[string]string)
 	packageActionIDs := make(map[string]string)
-	optLevel, sizeLevel, _ := config.OptLevels()
 	for _, pkg := range lprogram.Sorted() {
 		pkg := pkg // necessary to avoid a race condition
 
@@ -285,16 +286,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 					return errors.New("verification error after interpreting " + pkgInit.Name())
 				}
 
-				if sizeLevel >= 2 {
-					// Set the "optsize" attribute to make slightly smaller
-					// binaries at the cost of some performance.
-					kind := llvm.AttributeKindID("optsize")
-					attr := mod.Context().CreateEnumAttribute(kind, 0)
-					for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-						fn.AddFunctionAttr(attr)
-					}
-				}
-
 				// Run function passes for each function in the module.
 				// These passes are intended to be run on each function right
 				// after they're created to reduce IR size (and maybe also for
@@ -380,6 +371,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			llvmInitFn := mod.NamedFunction("runtime.initAll")
 			llvmInitFn.SetLinkage(llvm.InternalLinkage)
 			llvmInitFn.SetUnnamedAddr(true)
+			transform.AddStandardAttributes(llvmInitFn, config)
 			llvmInitFn.Param(0).SetName("context")
 			llvmInitFn.Param(1).SetName("parentHandle")
 			block := mod.Context().AddBasicBlock(llvmInitFn, "entry")
@@ -772,7 +764,7 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	// stack-allocated values.
 	// Use -wasm-abi=generic to disable this behaviour.
 	if config.WasmAbi() == "js" {
-		err := transform.ExternalInt64AsPtr(mod)
+		err := transform.ExternalInt64AsPtr(mod, config)
 		if err != nil {
 			return err
 		}

@@ -48,6 +48,7 @@ type Config struct {
 	GOARCH          string
 	CodeModel       string
 	RelocationModel string
+	SizeLevel       int
 
 	// Various compiler options that determine how code is generated.
 	Scheduler          string
@@ -816,7 +817,7 @@ func (b *builder) createFunction() {
 		b.addError(b.fn.Pos(), errValue)
 		return
 	}
-	b.addStandardAttributes(b.llvmFn)
+	b.addStandardDefinedAttributes(b.llvmFn)
 	if !b.info.exported {
 		b.llvmFn.SetVisibility(llvm.HiddenVisibility)
 		b.llvmFn.SetUnnamedAddr(true)
