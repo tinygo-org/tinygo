@@ -1,0 +1,108 @@
+name: macOS
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+      - release
+
+jobs:
+  build-macos:
+    name: build-macos
+    runs-on: macos-10.15
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17'
+      - name: Install QEMU
+        shell: bash
+        run: |
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
+      - name: Install Xtensa toolchain
+        shell: bash
+        run: |
+          curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz
+          sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz
+          sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
+          rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Cache LLVM source
+        uses: actions/cache@v2
+        id: cache-llvm-source
+        with:
+          key: llvm-source-13-macos-v1
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Download LLVM source
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        run: make llvm-source
+      - name: Cache LLVM build
+        uses: actions/cache@v2
+        id: cache-llvm-build
+        with:
+          key: llvm-build-13-macos-v2
+          path: llvm-build
+      - name: Build LLVM
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          # fetch LLVM source
+          rm -rf llvm-project
+          make llvm-source
+          # install dependencies
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
+          # build!
+          make llvm-build
+          find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Cache wasi-libc sysroot
+        uses: actions/cache@v2
+        id: cache-wasi-libc
+        with:
+          key: wasi-libc-sysroot-v1
+          path: lib/wasi-libc/sysroot
+      - name: Build wasi-libc
+        if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
+        run: make wasi-libc
+      - name: Cache Binaryen
+        uses: actions/cache@v2
+        id: cache-binaryen
+        with:
+          key: binaryen-macos-v1
+          path: build/wasm-opt
+      - name: Build Binaryen
+        if: steps.cache-binaryen.outputs.cache-hit != 'true'
+        run: |
+          # install dependencies
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
+          # build!
+          make binaryen
+      - name: Test TinyGo
+        shell: bash
+        run: make test GOTESTFLAGS="-v -short"
+      - name: Build TinyGo release tarball
+        run: make release -j3
+      - name: Make release artifact
+        shell: bash
+        run: cp -p build/release.tar.gz build/tinygo.darwin-amd64.tar.gz 
+      - name: Publish release artifact
+        # Note: this release artifact is double-zipped, see:
+        # https://github.com/actions/upload-artifact/issues/39
+        # We can essentially pick one of these:
+        # - have a double-zipped artifact when downloaded from the UI
+        # - have a very slow artifact upload
+        # We're doing the former here, to keep artifact uploads fast.
+        uses: actions/upload-artifact@v2
+        with:
+          name: release-double-zipped
+          path: build/tinygo.darwin-amd64.tar.gz
+      - name: Smoke tests
+        shell: bash
+        run: make smoketest TINYGO=build/tinygo AVR=0
