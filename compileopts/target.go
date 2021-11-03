@@ -165,7 +165,6 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 	if options.Target == "" {
 		// Configure based on GOOS/GOARCH environment variables (falling back to
 		// runtime.GOOS/runtime.GOARCH), and generate a LLVM target based on it.
-		llvmos := options.GOOS
 		llvmarch := map[string]string{
 			"386":   "i386",
 			"amd64": "x86_64",
@@ -174,6 +173,17 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 		}[options.GOARCH]
 		if llvmarch == "" {
 			llvmarch = options.GOARCH
+		}
+		llvmos := options.GOOS
+		if llvmos == "darwin" {
+			// Use macosx* instead of darwin, otherwise darwin/arm64 will refer
+			// to iOS!
+			llvmos = "macosx10.12.0"
+			if llvmarch == "aarch64" {
+				// Looks like Apple prefers to call this architecture ARM64
+				// instead of AArch64.
+				llvmarch = "arm64"
+			}
 		}
 		// Target triples (which actually have four components, but are called
 		// triples for historical reasons) have the form:

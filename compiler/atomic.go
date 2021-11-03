@@ -38,11 +38,10 @@ func (b *builder) createAtomicOp(call *ssa.CallCommon) (llvm.Value, bool) {
 		old := b.getValue(call.Args[1])
 		newVal := b.getValue(call.Args[2])
 		if strings.HasSuffix(name, "64") {
-			arch := strings.Split(b.Triple, "-")[0]
-			if strings.HasPrefix(arch, "arm") && strings.HasSuffix(arch, "m") {
+			if strings.HasPrefix(b.Triple, "thumb") {
 				// Work around a bug in LLVM, at least LLVM 11:
 				// https://reviews.llvm.org/D95891
-				// Check for armv6m, armv7, armv7em, and perhaps others.
+				// Check for thumbv6m, thumbv7, thumbv7em, and perhaps others.
 				// See also: https://gcc.gnu.org/onlinedocs/gcc/_005f_005fsync-Builtins.html
 				compareAndSwap := b.mod.NamedFunction("__sync_val_compare_and_swap_8")
 				if compareAndSwap.IsNil() {

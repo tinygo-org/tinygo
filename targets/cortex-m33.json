@@ -1,6 +1,6 @@
 {
     "inherits": ["cortex-m"],
-    "llvm-target": "armv7m-unknown-unknown-eabi",
+    "llvm-target": "thumbv7m-unknown-unknown-eabi",
     "cflags": [
         "-mfloat-abi=soft"
     ]

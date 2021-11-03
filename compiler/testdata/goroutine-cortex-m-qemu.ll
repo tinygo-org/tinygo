@@ -1,7 +1,7 @@
 ; ModuleID = 'goroutine.go'
 source_filename = "goroutine.go"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
-target triple = "armv7m-unknown-unknown-eabi"
+target triple = "thumbv7m-unknown-unknown-eabi"
 
 %runtime.channel = type { i32, i32, i8, %runtime.channelBlockedList*, i32, i32, i32, i8* }
 %runtime.channelBlockedList = type { %runtime.channelBlockedList*, %"internal/task.Task"*, %runtime.chanSelectState*, { %runtime.channelBlockedList*, i32, i32 } }
