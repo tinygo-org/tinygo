@@ -3,6 +3,7 @@ module github.com/tinygo-org/tinygo
 go 1.15
 
 require (
+	github.com/aykevl/go-wasm v0.0.2-0.20211030161413-11881cb9032d // indirect
 	github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2
 	github.com/chromedp/cdproto v0.0.0-20210113043257-dabd2f2e7693
 	github.com/chromedp/chromedp v0.6.4

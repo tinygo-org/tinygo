@@ -1,9 +1,11 @@
 package builder
 
 import (
+	"bytes"
 	"debug/dwarf"
 	"debug/elf"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,8 +13,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aykevl/go-wasm"
 	"github.com/tinygo-org/tinygo/goenv"
-	"tinygo.org/x/go-llvm"
 )
 
 // programSize contains size statistics per package of a compiled program.
@@ -72,6 +74,25 @@ type addressLine struct {
 	IsVariable bool   // true if this is a variable (or constant), false if it is code
 }
 
+// Sections defined in the input file. This struct defines them in a
+// filetype-agnostic way but roughly follow the ELF types (.text, .data, .bss,
+// etc).
+type memorySection struct {
+	Type    memoryType
+	Address uint64
+	Size    uint64
+}
+
+type memoryType int
+
+const (
+	memoryCode memoryType = iota + 1
+	memoryData
+	memoryROData
+	memoryBSS
+	memoryStack
+)
+
 // Regular expressions to match particular symbol names. These are not stored as
 // DWARF variables because they have no mapping to source code global variables.
 var (
@@ -90,7 +111,7 @@ var (
 // readProgramSizeFromDWARF reads the source location for each line of code and
 // each variable in the program, as far as this is stored in the DWARF debug
 // information.
-func readProgramSizeFromDWARF(data *dwarf.Data) ([]addressLine, error) {
+func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64) ([]addressLine, error) {
 	r := data.Reader()
 	var lines []*dwarf.LineFile
 	var addresses []addressLine
@@ -156,7 +177,7 @@ func readProgramSizeFromDWARF(data *dwarf.Data) ([]addressLine, error) {
 					// The chunk describes the code from prevLineEntry to
 					// lineEntry.
 					line := addressLine{
-						Address: prevLineEntry.Address,
+						Address: prevLineEntry.Address + codeOffset,
 						Length:  lineEntry.Address - prevLineEntry.Address,
 						File:    prevLineEntry.File.Name,
 					}
@@ -225,61 +246,189 @@ func readProgramSizeFromDWARF(data *dwarf.Data) ([]addressLine, error) {
 // size will still have valid summaries but won't have complete size information
 // per package.
 func loadProgramSize(path string, packagePathMap map[string]string) (*programSize, error) {
-	// Open the ELF file.
-	file, err := elf.Open(path)
+	// Open the binary file.
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer f.Close()
 
 	// This stores all chunks of addresses found in the binary.
 	var addresses []addressLine
 
-	// Read DWARF information.
-	// Intentionally ignoring the error here: if DWARF couldn't be loaded, just
-	// don't load symbol information from DWARF metadata.
-	data, _ := file.DWARF()
-	if file.Machine == elf.EM_AVR && strings.Split(llvm.Version, ".")[0] <= "10" {
-		// Hack to work around broken DWARF support for AVR in LLVM 10.
-		// This should be removed once support for LLVM 10 is dropped.
-		data = nil
-	}
-	if data != nil {
-		addresses, err = readProgramSizeFromDWARF(data)
+	// Load the binary file, which could be in a number of file formats.
+	var sections []memorySection
+	if file, err := elf.NewFile(f); err == nil {
+		// Read DWARF information. The error is intentionally ignored.
+		data, _ := file.DWARF()
+		if data != nil {
+			addresses, err = readProgramSizeFromDWARF(data, 0)
+			if err != nil {
+				// However, _do_ report an error here. Something must have gone
+				// wrong while trying to parse DWARF data.
+				return nil, err
+			}
+		}
+
+		// Read the ELF symbols for some more chunks of location information.
+		// Some globals (such as strings) aren't stored in the DWARF debug
+		// information and therefore need to be obtained in a different way.
+		allSymbols, err := file.Symbols()
 		if err != nil {
-			// However, _do_ report an error here. Something must have gone
-			// wrong while trying to parse DWARF data.
 			return nil, err
 		}
-	}
+		for _, symbol := range allSymbols {
+			symType := elf.ST_TYPE(symbol.Info)
+			if symbol.Size == 0 {
+				continue
+			}
+			if symType != elf.STT_FUNC && symType != elf.STT_OBJECT && symType != elf.STT_NOTYPE {
+				continue
+			}
+			section := file.Sections[symbol.Section]
+			if section.Flags&elf.SHF_ALLOC == 0 {
+				continue
+			}
+			if packageSymbolRegexp.MatchString(symbol.Name) || reflectDataRegexp.MatchString(symbol.Name) {
+				addresses = append(addresses, addressLine{
+					Address:    symbol.Value,
+					Length:     symbol.Size,
+					File:       symbol.Name,
+					IsVariable: true,
+				})
+			}
+		}
 
-	// Read the ELF symbols for some more chunks of location information.
-	// Some globals (such as strings) aren't stored in the DWARF debug
-	// information and therefore need to be obtained in a different way.
-	allSymbols, err := file.Symbols()
-	if err != nil {
-		return nil, err
-	}
-	for _, symbol := range allSymbols {
-		symType := elf.ST_TYPE(symbol.Info)
-		if symbol.Size == 0 {
-			continue
+		// Load allocated sections.
+		for _, section := range file.Sections {
+			if section.Flags&elf.SHF_ALLOC == 0 {
+				continue
+			}
+			if section.Type == elf.SHT_NOBITS {
+				if section.Name == ".stack" {
+					// TinyGo emits stack sections on microcontroller using the
+					// ".stack" name.
+					// This is a bit ugly, but I don't think there is a way to
+					// mark the stack section in a linker script.
+					sections = append(sections, memorySection{
+						Address: section.Addr,
+						Size:    section.Size,
+						Type:    memoryStack,
+					})
+				} else {
+					// Regular .bss section.
+					sections = append(sections, memorySection{
+						Address: section.Addr,
+						Size:    section.Size,
+						Type:    memoryBSS,
+					})
+				}
+			} else if section.Type == elf.SHT_PROGBITS && section.Flags&elf.SHF_EXECINSTR != 0 {
+				// .text
+				sections = append(sections, memorySection{
+					Address: section.Addr,
+					Size:    section.Size,
+					Type:    memoryCode,
+				})
+			} else if section.Type == elf.SHT_PROGBITS && section.Flags&elf.SHF_WRITE != 0 {
+				// .data
+				sections = append(sections, memorySection{
+					Address: section.Addr,
+					Size:    section.Size,
+					Type:    memoryData,
+				})
+			} else if section.Type == elf.SHT_PROGBITS {
+				// .rodata
+				sections = append(sections, memorySection{
+					Address: section.Addr,
+					Size:    section.Size,
+					Type:    memoryROData,
+				})
+			}
 		}
-		if symType != elf.STT_FUNC && symType != elf.STT_OBJECT && symType != elf.STT_NOTYPE {
-			continue
+	} else if file, err := wasm.Parse(f); err == nil {
+		// File is in WebAssembly format.
+
+		// Put code at a very high address, so that it won't conflict with the
+		// data in the memory section.
+		const codeOffset = 0x8000_0000_0000_0000
+
+		// Read DWARF information. The error is intentionally ignored.
+		data, err := file.DWARF()
+		if data != nil {
+			addresses, err = readProgramSizeFromDWARF(data, codeOffset)
+			if err != nil {
+				// However, _do_ report an error here. Something must have gone
+				// wrong while trying to parse DWARF data.
+				return nil, err
+			}
 		}
-		section := file.Sections[symbol.Section]
-		if section.Flags&elf.SHF_ALLOC == 0 {
-			continue
+
+		var linearMemorySize uint64
+		for _, section := range file.Sections {
+			switch section := section.(type) {
+			case *wasm.SectionCode:
+				sections = append(sections, memorySection{
+					Address: codeOffset,
+					Size:    uint64(section.Size()),
+					Type:    memoryCode,
+				})
+			case *wasm.SectionMemory:
+				// This value is used when processing *wasm.SectionData (which
+				// always comes after *wasm.SectionMemory).
+				linearMemorySize = uint64(section.Entries[0].Limits.Initial) * 64 * 1024
+			case *wasm.SectionData:
+				// Data sections contain initial values for linear memory.
+				// First load the list of data sections, and sort them by
+				// address for easier processing.
+				var dataSections []memorySection
+				for _, entry := range section.Entries {
+					address, err := wasm.Eval(bytes.NewBuffer(entry.Offset))
+					if err != nil {
+						return nil, fmt.Errorf("could not parse data section address: %w", err)
+					}
+					dataSections = append(dataSections, memorySection{
+						Address: uint64(address[0].(int32)),
+						Size:    uint64(len(entry.Data)),
+						Type:    memoryData,
+					})
+				}
+				sort.Slice(dataSections, func(i, j int) bool {
+					return dataSections[i].Address < dataSections[j].Address
+				})
+
+				// And now add all data sections for linear memory.
+				// Parts that are in the slice of data sections are added as
+				// memoryData, and parts that are not are added as memoryBSS.
+				addr := uint64(0)
+				for _, section := range dataSections {
+					if addr < section.Address {
+						sections = append(sections, memorySection{
+							Address: addr,
+							Size:    section.Address - addr,
+							Type:    memoryBSS,
+						})
+					}
+					if addr > section.Address {
+						// This might be allowed, I'm not sure.
+						// It certainly doesn't make a lot of sense.
+						return nil, fmt.Errorf("overlapping data section")
+					}
+					// addr == section.Address
+					sections = append(sections, section)
+					addr = section.Address + section.Size
+				}
+				if addr < linearMemorySize {
+					sections = append(sections, memorySection{
+						Address: addr,
+						Size:    linearMemorySize - addr,
+						Type:    memoryBSS,
+					})
+				}
+			}
 		}
-		if packageSymbolRegexp.MatchString(symbol.Name) || reflectDataRegexp.MatchString(symbol.Name) {
-			addresses = append(addresses, addressLine{
-				Address:    symbol.Value,
-				Length:     symbol.Size,
-				File:       symbol.Name,
-				IsVariable: true,
-			})
-		}
+	} else {
+		return nil, fmt.Errorf("could not parse file: %w", err)
 	}
 
 	// Sort the slice of address chunks by address, so that we can iterate
@@ -296,31 +445,9 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 	// Now finally determine the binary/RAM size usage per package by going
 	// through each allocated section.
 	sizes := make(map[string]packageSize)
-	for _, section := range file.Sections {
-		if section.Flags&elf.SHF_ALLOC == 0 {
-			continue
-		}
-		if section.Type != elf.SHT_PROGBITS && section.Type != elf.SHT_NOBITS {
-			continue
-		}
-		if section.Name == ".stack" {
-			// This is a bit ugly, but I don't think there is a way to mark the
-			// stack section in a linker script.
-			// We store the C stack as a pseudo-section.
-			sizes["C stack"] = packageSize{
-				BSS: section.Size,
-			}
-			continue
-		}
-		if section.Type == elf.SHT_NOBITS {
-			// .bss
-			readSection(section, addresses, func(path string, size uint64, isVariable bool) {
-				field := sizes[path]
-				field.BSS += size
-				sizes[path] = field
-			}, packagePathMap)
-		} else if section.Type == elf.SHT_PROGBITS && section.Flags&elf.SHF_EXECINSTR != 0 {
-			// .text
+	for _, section := range sections {
+		switch section.Type {
+		case memoryCode:
 			readSection(section, addresses, func(path string, size uint64, isVariable bool) {
 				field := sizes[path]
 				if isVariable {
@@ -330,20 +457,29 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				}
 				sizes[path] = field
 			}, packagePathMap)
-		} else if section.Type == elf.SHT_PROGBITS && section.Flags&elf.SHF_WRITE != 0 {
-			// .data
-			readSection(section, addresses, func(path string, size uint64, isVariable bool) {
-				field := sizes[path]
-				field.Data += size
-				sizes[path] = field
-			}, packagePathMap)
-		} else if section.Type == elf.SHT_PROGBITS {
-			// .rodata
+		case memoryROData:
 			readSection(section, addresses, func(path string, size uint64, isVariable bool) {
 				field := sizes[path]
 				field.ROData += size
 				sizes[path] = field
 			}, packagePathMap)
+		case memoryData:
+			readSection(section, addresses, func(path string, size uint64, isVariable bool) {
+				field := sizes[path]
+				field.Data += size
+				sizes[path] = field
+			}, packagePathMap)
+		case memoryBSS:
+			readSection(section, addresses, func(path string, size uint64, isVariable bool) {
+				field := sizes[path]
+				field.BSS += size
+				sizes[path] = field
+			}, packagePathMap)
+		case memoryStack:
+			// We store the C stack as a pseudo-package.
+			sizes["C stack"] = packageSize{
+				BSS: section.Size,
+			}
 		}
 	}
 
@@ -362,13 +498,13 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 
 // readSection determines for each byte in this section to which package it
 // belongs. It reports this usage through the addSize callback.
-func readSection(section *elf.Section, addresses []addressLine, addSize func(string, uint64, bool), packagePathMap map[string]string) {
+func readSection(section memorySection, addresses []addressLine, addSize func(string, uint64, bool), packagePathMap map[string]string) {
 	// The addr variable tracks at which address we are while going through this
 	// section. We start at the beginning.
-	addr := section.Addr
-	sectionEnd := section.Addr + section.Size
+	addr := section.Address
+	sectionEnd := section.Address + section.Size
 	for _, line := range addresses {
-		if line.Address < section.Addr || line.Address+line.Length >= sectionEnd {
+		if line.Address < section.Address || line.Address+line.Length >= sectionEnd {
 			// Check that this line is entirely within the section.
 			// Don't bother dealing with line entries that cross sections (that
 			// seems rather unlikely anyway).
