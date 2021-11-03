@@ -1,6 +1,6 @@
 {
 	"inherits": ["riscv"],
-	"llvm-target": "riscv32--none",
+	"llvm-target": "riscv32-unknown-none",
 	"build-tags": ["tinygo.riscv32"],
 	"scheduler": "tasks",
 	"default-stack-size": 2048,

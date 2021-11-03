@@ -1,5 +1,5 @@
 {
-	"llvm-target": "arm4-unknown-unknown-eabi",
+	"llvm-target": "armv4t-unknown-unknown-eabi",
 	"cpu": "arm7tdmi",
 	"build-tags": ["gameboyadvance", "arm7tdmi", "baremetal", "linux", "arm"],
 	"goos": "linux",

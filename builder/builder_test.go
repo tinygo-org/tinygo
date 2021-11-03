@@ -107,6 +107,11 @@ func testClangAttributes(t *testing.T, options *compileopts.Options) {
 	}
 	defer mod.Dispose()
 
+	// Check whether the LLVM target matches.
+	if mod.Target() != config.Triple() {
+		t.Errorf("target has LLVM triple %#v but Clang makes it LLVM triple %#v", config.Triple(), mod.Target())
+	}
+
 	// Check the "target-cpu"  string attribute of the add function.
 	add := mod.NamedFunction("add")
 	var cpu string
