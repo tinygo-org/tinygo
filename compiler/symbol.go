@@ -26,6 +26,7 @@ type functionInfo struct {
 	linkName   string     // go:linkname, go:export - The name that we map for the particular module -> importName
 	section    string     // go:section - object file section name
 	exported   bool       // go:export, CGo
+	interrupt  bool       // go:interrupt
 	nobounds   bool       // go:nobounds
 	variadic   bool       // go:variadic (CGo only)
 	inline     inlineType // go:inline
@@ -251,6 +252,10 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 
 				importName = parts[1]
 				info.exported = true
+			case "//go:interrupt":
+				if hasUnsafeImport(f.Pkg.Pkg) {
+					info.interrupt = true
+				}
 			case "//go:wasm-module":
 				// Alternative comment for setting the import module.
 				if len(parts) != 2 {

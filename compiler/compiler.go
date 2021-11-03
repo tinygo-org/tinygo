@@ -846,6 +846,17 @@ func (b *builder) createFunction() {
 		b.llvmFn.AddFunctionAttr(noinline)
 	}
 
+	if b.info.interrupt {
+		// Mark this function as an interrupt.
+		// This is necessary on MCUs that don't push caller saved registers when
+		// entering an interrupt, such as on AVR.
+		if strings.HasPrefix(b.Triple, "avr") {
+			b.llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("signal", ""))
+		} else {
+			b.addError(b.fn.Pos(), "//go:interrupt not supported on this architecture")
+		}
+	}
+
 	// Add debug info, if needed.
 	if b.Debug {
 		if b.fn.Synthetic == "package initializer" {

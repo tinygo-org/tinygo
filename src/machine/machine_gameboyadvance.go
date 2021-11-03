@@ -4,6 +4,7 @@ package machine
 
 import (
 	"image/color"
+	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -11,20 +12,20 @@ import (
 // Interrupt numbers as used on the GameBoy Advance. Register them with
 // runtime/interrupt.New.
 const (
-	IRQ_VBLANK  = 0
-	IRQ_HBLANK  = 1
-	IRQ_VCOUNT  = 2
-	IRQ_TIMER0  = 3
-	IRQ_TIMER1  = 4
-	IRQ_TIMER2  = 5
-	IRQ_TIMER3  = 6
-	IRQ_COM     = 7
-	IRQ_DMA0    = 8
-	IRQ_DMA1    = 9
-	IRQ_DMA2    = 10
-	IRQ_DMA3    = 11
-	IRQ_KEYPAD  = 12
-	IRQ_GAMEPAK = 13
+	IRQ_VBLANK  = interrupt.IRQ_VBLANK
+	IRQ_HBLANK  = interrupt.IRQ_HBLANK
+	IRQ_VCOUNT  = interrupt.IRQ_VCOUNT
+	IRQ_TIMER0  = interrupt.IRQ_TIMER0
+	IRQ_TIMER1  = interrupt.IRQ_TIMER1
+	IRQ_TIMER2  = interrupt.IRQ_TIMER2
+	IRQ_TIMER3  = interrupt.IRQ_TIMER3
+	IRQ_COM     = interrupt.IRQ_COM
+	IRQ_DMA0    = interrupt.IRQ_DMA0
+	IRQ_DMA1    = interrupt.IRQ_DMA1
+	IRQ_DMA2    = interrupt.IRQ_DMA2
+	IRQ_DMA3    = interrupt.IRQ_DMA3
+	IRQ_KEYPAD  = interrupt.IRQ_KEYPAD
+	IRQ_GAMEPAK = interrupt.IRQ_GAMEPAK
 )
 
 // Make it easier to directly write to I/O RAM.

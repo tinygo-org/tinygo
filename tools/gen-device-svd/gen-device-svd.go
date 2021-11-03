@@ -831,6 +831,15 @@ func writeGo(outdir string, device *Device, interruptSystem string) error {
 		}
 	}
 
+	interruptHandlerMap := make(map[string]*Interrupt)
+	var interruptHandlers []*Interrupt
+	for _, intr := range device.Interrupts {
+		if _, ok := interruptHandlerMap[intr.HandlerName]; !ok {
+			interruptHandlerMap[intr.HandlerName] = intr
+			interruptHandlers = append(interruptHandlers, intr)
+		}
+	}
+
 	t := template.Must(template.New("go").Funcs(template.FuncMap{
 		"bytesNeeded": func(i, j uint64) uint64 { return j - i },
 		"isMultiline": isMultiline,
@@ -846,7 +855,6 @@ func writeGo(outdir string, device *Device, interruptSystem string) error {
 package {{.pkgName}}
 
 import (
-{{if eq .interruptSystem "hardware"}}"runtime/interrupt"{{end}}
 	"runtime/volatile"
 	"unsafe"
 )
@@ -876,14 +884,29 @@ const (
 	IRQ_max = {{.interruptMax}} 
 )
 
+// Pseudo function call that is replaced by the compiler with the actual
+// functions registered through interrupt.New.
+//go:linkname callHandlers runtime/interrupt.callHandlers
+func callHandlers(num int)
+
 {{- if eq .interruptSystem "hardware"}}
-// Map interrupt numbers to function names.
-// These aren't real calls, they're removed by the compiler.
-var (
-{{- range .device.Interrupts}}
-	_ = interrupt.Register(IRQ_{{.Name}}, "{{.HandlerName}}")
+{{- range .interruptHandlers}}
+//export {{.HandlerName}}
+func interrupt{{.Name}}() {
+	callHandlers(IRQ_{{.Name}})
+}
 {{- end}}
-)
+{{- end}}
+
+{{- if eq .interruptSystem "software"}}
+func HandleInterrupt(num int) {
+	switch num {
+	{{- range .interruptHandlers}}
+	case IRQ_{{.Name}}:
+		callHandlers(IRQ_{{.Name}})
+	{{- end}}
+	}
+}
 {{- end}}
 
 // Peripherals.
@@ -901,10 +924,11 @@ var (
 
 `))
 	err = t.Execute(w, map[string]interface{}{
-		"device":          device,
-		"pkgName":         filepath.Base(strings.TrimRight(outdir, "/")),
-		"interruptMax":    maxInterruptValue,
-		"interruptSystem": interruptSystem,
+		"device":            device,
+		"pkgName":           filepath.Base(strings.TrimRight(outdir, "/")),
+		"interruptMax":      maxInterruptValue,
+		"interruptSystem":   interruptSystem,
+		"interruptHandlers": interruptHandlers,
 	})
 	if err != nil {
 		return err
