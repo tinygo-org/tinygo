@@ -175,7 +175,7 @@ $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
 wasi-libc: lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a
 lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 	@if [ ! -e lib/wasi-libc/Makefile ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
-	cd lib/wasi-libc && make -j4 WASM_CC=$(CLANG) WASM_AR=$(LLVM_AR) WASM_NM=$(LLVM_NM)
+	cd lib/wasi-libc && make -j4 WASM_CFLAGS="-O2 -g -DNDEBUG" WASM_CC=$(CLANG) WASM_AR=$(LLVM_AR) WASM_NM=$(LLVM_NM)
 
 
 # Build the Go compiler.
