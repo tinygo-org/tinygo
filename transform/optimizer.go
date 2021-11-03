@@ -73,7 +73,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 			return []error{err}
 		}
 
-		errs := LowerInterrupts(mod, config)
+		errs := LowerInterrupts(mod)
 		if len(errs) > 0 {
 			return errs
 		}
@@ -105,7 +105,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		if config.FuncImplementation() == "switch" {
 			LowerFuncValues(mod)
 		}
-		errs := LowerInterrupts(mod, config)
+		errs := LowerInterrupts(mod)
 		if len(errs) > 0 {
 			return errs
 		}

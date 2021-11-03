@@ -65,7 +65,7 @@ func handleInterrupt() {
 			// Claim this interrupt.
 			id := sifive.PLIC.CLAIM.Get()
 			// Call the interrupt handler, if any is registered for this ID.
-			callInterruptHandler(int(id))
+			sifive.HandleInterrupt(int(id))
 			// Complete this interrupt.
 			sifive.PLIC.CLAIM.Set(id)
 		}
@@ -147,7 +147,3 @@ func handleException(code uint) {
 	println()
 	abort()
 }
-
-// callInterruptHandler is a compiler-generated function that calls the
-// appropriate interrupt handler for the given interrupt ID.
-func callInterruptHandler(id int)

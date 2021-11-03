@@ -74,7 +74,7 @@ func handleInterrupt() {
 		riscv.MSTATUS.SetBits(0x8)
 
 		// Call registered interrupt handler(s)
-		callInterruptHandler(int(interruptNumber))
+		esp.HandleInterrupt(int(interruptNumber))
 
 		// disable CPU interrupts
 		riscv.MSTATUS.ClearBits(0x8)
@@ -107,8 +107,3 @@ func handleException(mcause uintptr) {
 		riscv.Asm("wfi")
 	}
 }
-
-// callInterruptHandler is a compiler-generated function that calls the
-// appropriate interrupt handler for the given interrupt ID.
-//go:linkname callInterruptHandler runtime.callInterruptHandler
-func callInterruptHandler(id int)

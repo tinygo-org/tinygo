@@ -78,11 +78,24 @@ func (b *builder) extractFuncContext(funcValue llvm.Value) llvm.Value {
 // value. This may be an expensive operation.
 func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcPtr, context llvm.Value) {
 	context = b.CreateExtractValue(funcValue, 0, "")
-	llvmSig := b.getRawFuncType(sig)
 	switch b.FuncImplementation {
 	case "doubleword":
-		funcPtr = b.CreateBitCast(b.CreateExtractValue(funcValue, 1, ""), llvmSig, "")
+		bitcast := b.CreateExtractValue(funcValue, 1, "")
+		if !bitcast.IsAConstantExpr().IsNil() && bitcast.Opcode() == llvm.BitCast {
+			funcPtr = bitcast.Operand(0)
+			return
+		}
+		llvmSig := b.getRawFuncType(sig)
+		funcPtr = b.CreateBitCast(bitcast, llvmSig, "")
 	case "switch":
+		if !funcValue.IsAConstant().IsNil() {
+			// If this is a constant func value, the underlying function is
+			// known and can be returned directly.
+			funcValueWithSignatureGlobal := llvm.ConstExtractValue(funcValue, []uint32{1}).Operand(0)
+			funcPtr = llvm.ConstExtractValue(funcValueWithSignatureGlobal.Initializer(), []uint32{0}).Operand(0)
+			return
+		}
+		llvmSig := b.getRawFuncType(sig)
 		sigGlobal := b.getFuncSignatureID(sig)
 		funcPtr = b.createRuntimeCall("getFuncPtr", []llvm.Value{funcValue, sigGlobal}, "")
 		funcPtr = b.CreateIntToPtr(funcPtr, llvmSig, "")
