@@ -353,7 +353,7 @@ func (c *Config) Debug() bool {
 }
 
 // BinaryFormat returns an appropriate binary format, based on the file
-// extension and the configured binary format in the target JSON file.
+// extension and the configured binary format in the target JSON or YAML file.
 func (c *Config) BinaryFormat(ext string) string {
 	switch ext {
 	case ".bin", ".gba", ".nro":
@@ -383,7 +383,7 @@ func (c *Config) BinaryFormat(ext string) string {
 }
 
 // Programmer returns the flash method and OpenOCD interface name given a
-// particular configuration. It may either be all configured in the target JSON
+// particular configuration. It may either be all configured in the target JSON or YAML
 // file or be modified using the -programmmer command-line option.
 func (c *Config) Programmer() (method, openocdInterface string) {
 	switch c.Options.Programmer {
@@ -453,7 +453,7 @@ func (c *Config) RelocationModel() string {
 	return "static"
 }
 
-// WasmAbi returns the WASM ABI which is specified in the target JSON file, and
+// WasmAbi returns the WASM ABI which is specified in the target JSON or YAML file, and
 // the value is overridden by `-wasm-abi` flag if it is provided
 func (c *Config) WasmAbi() string {
 	if c.Options.WasmAbi != "" {
