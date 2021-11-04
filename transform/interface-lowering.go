@@ -87,6 +87,8 @@ type lowerInterfacesPass struct {
 	mod         llvm.Module
 	config      *compileopts.Config
 	builder     llvm.Builder
+	dibuilder   *llvm.DIBuilder
+	difiles     map[string]llvm.Metadata
 	ctx         llvm.Context
 	uintptrType llvm.Type
 	types       map[string]*typeInfo
@@ -109,11 +111,28 @@ func LowerInterfaces(mod llvm.Module, config *compileopts.Config) error {
 		signatures:  make(map[string]*signatureInfo),
 		interfaces:  make(map[string]*interfaceInfo),
 	}
+
+	if config.Debug() {
+		p.dibuilder = llvm.NewDIBuilder(mod)
+		defer p.dibuilder.Finalize()
+		p.difiles = make(map[string]llvm.Metadata)
+	}
+
 	return p.run()
 }
 
 // run runs the pass itself.
 func (p *lowerInterfacesPass) run() error {
+	if p.dibuilder != nil {
+		p.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
+			Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
+			File:      "<unknown>",
+			Dir:       "",
+			Producer:  "TinyGo",
+			Optimized: true,
+		})
+	}
+
 	// Collect all type codes.
 	for global := p.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
 		if strings.HasPrefix(global.Name(), "reflect/types.type:") {
@@ -340,7 +359,6 @@ func (p *lowerInterfacesPass) getSignature(name string) *signatureInfo {
 // types by the LLVM simplifycfg pass.
 func (p *lowerInterfacesPass) defineInterfaceImplementsFunc(fn llvm.Value, itf *interfaceInfo) {
 	// Create the function and function signature.
-	// TODO: debug info
 	fn.Param(0).SetName("actualType")
 	fn.SetLinkage(llvm.InternalLinkage)
 	fn.SetUnnamedAddr(true)
@@ -350,6 +368,26 @@ func (p *lowerInterfacesPass) defineInterfaceImplementsFunc(fn llvm.Value, itf *
 	entry := p.ctx.AddBasicBlock(fn, "entry")
 	thenBlock := p.ctx.AddBasicBlock(fn, "then")
 	p.builder.SetInsertPointAtEnd(entry)
+
+	if p.dibuilder != nil {
+		difile := p.getDIFile("<Go interface assert>")
+		diFuncType := p.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+			File: difile,
+		})
+		difunc := p.dibuilder.CreateFunction(difile, llvm.DIFunction{
+			Name:         "(Go interface assert)",
+			File:         difile,
+			Line:         0,
+			Type:         diFuncType,
+			LocalToUnit:  true,
+			IsDefinition: true,
+			ScopeLine:    0,
+			Flags:        llvm.FlagPrototyped,
+			Optimized:    true,
+		})
+		fn.SetSubprogram(difunc)
+		p.builder.SetCurrentDebugLocation(0, 0, difunc, llvm.Metadata{})
+	}
 
 	// Iterate over all possible types.  Each iteration creates a new branch
 	// either to the 'then' block (success) or the .next block, for the next
@@ -390,8 +428,6 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 	fn.SetUnnamedAddr(true)
 	AddStandardAttributes(fn, p.config)
 
-	// TODO: debug info
-
 	// Collect the params that will be passed to the functions to call.
 	// These params exclude the receiver (which may actually consist of multiple
 	// parts).
@@ -407,6 +443,26 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 	// Start chain in the entry block.
 	entry := p.ctx.AddBasicBlock(fn, "entry")
 	p.builder.SetInsertPointAtEnd(entry)
+
+	if p.dibuilder != nil {
+		difile := p.getDIFile("<Go interface method>")
+		diFuncType := p.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+			File: difile,
+		})
+		difunc := p.dibuilder.CreateFunction(difile, llvm.DIFunction{
+			Name:         "(Go interface method)",
+			File:         difile,
+			Line:         0,
+			Type:         diFuncType,
+			LocalToUnit:  true,
+			IsDefinition: true,
+			ScopeLine:    0,
+			Flags:        llvm.FlagPrototyped,
+			Optimized:    true,
+		})
+		fn.SetSubprogram(difunc)
+		p.builder.SetCurrentDebugLocation(0, 0, difunc, llvm.Metadata{})
+	}
 
 	// Define all possible functions that can be called.
 	for _, typ := range itf.types {
@@ -466,4 +522,13 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 		llvm.Undef(llvm.PointerType(p.ctx.Int8Type(), 0)),
 	}, "")
 	p.builder.CreateUnreachable()
+}
+
+func (p *lowerInterfacesPass) getDIFile(file string) llvm.Metadata {
+	difile, ok := p.difiles[file]
+	if !ok {
+		difile = p.dibuilder.CreateFile(file, "")
+		p.difiles[file] = difile
+	}
+	return difile
 }
