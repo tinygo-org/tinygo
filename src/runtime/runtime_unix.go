@@ -7,8 +7,8 @@ import (
 	"unsafe"
 )
 
-//export putchar
-func _putchar(c int) int
+//export write
+func libc_write(fd int32, buf unsafe.Pointer, count uint) int
 
 //export usleep
 func usleep(usec uint) int
@@ -145,7 +145,8 @@ func syscall_runtime_envs() []string {
 }
 
 func putchar(c byte) {
-	_putchar(int(c))
+	buf := [1]byte{c}
+	libc_write(1, unsafe.Pointer(&buf[0]), 1)
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
