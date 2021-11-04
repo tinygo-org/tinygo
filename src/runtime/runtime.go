@@ -23,16 +23,6 @@ func GOROOT() string {
 	return "/usr/local/go"
 }
 
-// This is the default set of arguments, if nothing else has been set.
-// This may be overriden by modifying this global at runtime init (for example,
-// on Linux where there are real command line arguments).
-var args = []string{"/proc/self/exe"}
-
-//go:linkname os_runtime_args os.runtime_args
-func os_runtime_args() []string {
-	return args
-}
-
 // Copy size bytes from src to dst. The memory areas must not overlap.
 // Calls to this function are converted to LLVM intrinsic calls such as
 // llvm.memcpy.p0i8.p0i8.i32(dst, src, size, false).

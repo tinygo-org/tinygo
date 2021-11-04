@@ -74,28 +74,9 @@ func postinit() {}
 func main(argc int32, argv *unsafe.Pointer) int {
 	preinit()
 
-	// Make args global big enough so that it can store all command line
-	// arguments. Unfortunately this has to be done with some magic as the heap
-	// is not yet initialized.
-	argsSlice := (*struct {
-		ptr unsafe.Pointer
-		len uintptr
-		cap uintptr
-	})(unsafe.Pointer(&args))
-	argsSlice.ptr = malloc(uintptr(argc) * (unsafe.Sizeof(uintptr(0))) * 3)
-	argsSlice.len = uintptr(argc)
-	argsSlice.cap = uintptr(argc)
-
-	// Initialize command line parameters.
-	for i := 0; i < int(argc); i++ {
-		// Convert the C string to a Go string.
-		length := strlen(*argv)
-		arg := (*_string)(unsafe.Pointer(&args[i]))
-		arg.length = length
-		arg.ptr = (*byte)(*argv)
-		// This is the Go equivalent of "argc++" in C.
-		argv = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(argv)) + unsafe.Sizeof(argv)))
-	}
+	// Store argc and argv for later use.
+	main_argc = argc
+	main_argv = argv
 
 	// Obtain the initial stack pointer right before calling the run() function.
 	// The run function has been moved to a separate (non-inlined) function so
@@ -105,6 +86,34 @@ func main(argc int32, argv *unsafe.Pointer) int {
 
 	// For libc compatibility.
 	return 0
+}
+
+var (
+	main_argc int32
+	main_argv *unsafe.Pointer
+	args      []string
+)
+
+//go:linkname os_runtime_args os.runtime_args
+func os_runtime_args() []string {
+	if args == nil {
+		// Make args slice big enough so that it can store all command line
+		// arguments.
+		args = make([]string, main_argc)
+
+		// Initialize command line parameters.
+		argv := main_argv
+		for i := 0; i < int(main_argc); i++ {
+			// Convert the C string to a Go string.
+			length := strlen(*argv)
+			arg := (*_string)(unsafe.Pointer(&args[i]))
+			arg.length = length
+			arg.ptr = (*byte)(*argv)
+			// This is the Go equivalent of "argv++" in C.
+			argv = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(argv)) + unsafe.Sizeof(argv)))
+		}
+	}
+	return args
 }
 
 // Must be a separate function to get the correct stack pointer.

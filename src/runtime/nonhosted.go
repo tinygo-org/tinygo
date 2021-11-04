@@ -11,6 +11,14 @@ package runtime
 // The primary use case is `tinygo test`, which takes some parameters (such as
 // -test.v).
 
+// This is the default set of arguments, if nothing else has been set.
+var args = []string{"/proc/self/exe"}
+
+//go:linkname os_runtime_args os.runtime_args
+func os_runtime_args() []string {
+	return args
+}
+
 var env []string
 
 //go:linkname syscall_runtime_envs syscall.runtime_envs
