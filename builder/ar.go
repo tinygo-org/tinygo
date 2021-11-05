@@ -3,6 +3,7 @@ package builder
 import (
 	"bytes"
 	"debug/elf"
+	"debug/pe"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -39,29 +40,42 @@ func makeArchive(arfile *os.File, objs []string) error {
 		}
 
 		// Read the symbols and add them to the symbol table.
-		dbg, err := elf.NewFile(objfile)
-		if err != nil {
-			return fmt.Errorf("failed to open file %s: %w", objpath, err)
-		}
-		symbols, err := dbg.Symbols()
-		if err != nil {
-			return err
-		}
-		for _, symbol := range symbols {
-			bind := elf.ST_BIND(symbol.Info)
-			if bind != elf.STB_GLOBAL && bind != elf.STB_WEAK {
-				// Don't include local symbols (STB_LOCAL).
-				continue
+		if dbg, err := elf.NewFile(objfile); err == nil {
+			symbols, err := dbg.Symbols()
+			if err != nil {
+				return err
 			}
-			if elf.ST_TYPE(symbol.Info) != elf.STT_FUNC && elf.ST_TYPE(symbol.Info) != elf.STT_OBJECT {
-				// Not a function.
-				continue
+			for _, symbol := range symbols {
+				bind := elf.ST_BIND(symbol.Info)
+				if bind != elf.STB_GLOBAL && bind != elf.STB_WEAK {
+					// Don't include local symbols (STB_LOCAL).
+					continue
+				}
+				if elf.ST_TYPE(symbol.Info) != elf.STT_FUNC && elf.ST_TYPE(symbol.Info) != elf.STT_OBJECT {
+					// Not a function.
+					continue
+				}
+				// Include in archive.
+				symbolTable = append(symbolTable, struct {
+					name      string
+					fileIndex int
+				}{symbol.Name, i})
 			}
-			// Include in archive.
-			symbolTable = append(symbolTable, struct {
-				name      string
-				fileIndex int
-			}{symbol.Name, i})
+		} else if dbg, err := pe.NewFile(objfile); err == nil {
+			for _, symbol := range dbg.Symbols {
+				if symbol.StorageClass != 2 {
+					continue
+				}
+				if symbol.SectionNumber == 0 {
+					continue
+				}
+				symbolTable = append(symbolTable, struct {
+					name      string
+					fileIndex int
+				}{symbol.Name, i})
+			}
+		} else {
+			return fmt.Errorf("failed to open file %s as ELF or PE/COFF: %w", objpath, err)
 		}
 
 		// Close file, to avoid issues with too many open files (especially on
@@ -120,11 +134,13 @@ func makeArchive(arfile *os.File, objs []string) error {
 	}
 
 	// Add all object files to the archive.
+	var copyBuf bytes.Buffer
 	for i, objpath := range objs {
 		objfile, err := os.Open(objpath)
 		if err != nil {
 			return err
 		}
+		defer objfile.Close()
 
 		// Store the start index, for when we'll update the symbol table with
 		// the correct file start indices.
@@ -155,12 +171,20 @@ func makeArchive(arfile *os.File, objs []string) error {
 		}
 
 		// Copy the file contents into the archive.
-		n, err := io.Copy(arwriter, objfile)
+		// First load all contents into a buffer, then write it all in one go to
+		// the archive file. This is a bit complicated, but is necessary because
+		// io.Copy can't deal with files that are of an odd size.
+		copyBuf.Reset()
+		n, err := io.Copy(&copyBuf, objfile)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not copy object file into ar file: %w", err)
 		}
 		if n != st.Size() {
 			return errors.New("file modified during ar creation: " + arfile.Name())
+		}
+		_, err = arwriter.Write(copyBuf.Bytes())
+		if err != nil {
+			return fmt.Errorf("could not copy object file into ar file: %w", err)
 		}
 
 		// File is not needed anymore.

@@ -156,12 +156,12 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 // createSyscall emits instructions for the syscall.Syscall* family of
 // functions, depending on the target OS/arch.
 func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
-	syscallResult, err := b.createRawSyscall(call)
-	if err != nil {
-		return syscallResult, err
-	}
 	switch b.GOOS {
 	case "linux", "freebsd":
+		syscallResult, err := b.createRawSyscall(call)
+		if err != nil {
+			return syscallResult, err
+		}
 		// Return values: r0, r1 uintptr, err Errno
 		// Pseudocode:
 		//     var err uintptr
@@ -180,6 +180,10 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		retval = b.CreateInsertValue(retval, errResult, 2, "")
 		return retval, nil
 	case "darwin":
+		syscallResult, err := b.createRawSyscall(call)
+		if err != nil {
+			return syscallResult, err
+		}
 		// Return values: r0, r1 uintptr, err Errno
 		// Pseudocode:
 		//     var err uintptr
@@ -193,6 +197,57 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		retval := llvm.Undef(b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.uintptrType}, false))
 		retval = b.CreateInsertValue(retval, syscallResult, 0, "")
 		retval = b.CreateInsertValue(retval, zero, 1, "")
+		retval = b.CreateInsertValue(retval, errResult, 2, "")
+		return retval, nil
+	case "windows":
+		// On Windows, syscall.Syscall* is basically just a function pointer
+		// call. This is complicated in gc because of stack switching and the
+		// different ABI, but easy in TinyGo: just call the function pointer.
+		// The signature looks like this:
+		//   func Syscall(trap, nargs, a1, a2, a3 uintptr) (r1, r2 uintptr, err Errno)
+
+		// Prepare input values.
+		var paramTypes []llvm.Type
+		var params []llvm.Value
+		for _, val := range call.Args[2:] {
+			param := b.getValue(val)
+			params = append(params, param)
+			paramTypes = append(paramTypes, param.Type())
+		}
+		llvmType := llvm.FunctionType(b.uintptrType, paramTypes, false)
+		fn := b.getValue(call.Args[0])
+		fnPtr := b.CreateIntToPtr(fn, llvm.PointerType(llvmType, 0), "")
+
+		// Prepare some functions that will be called later.
+		setLastError := b.mod.NamedFunction("SetLastError")
+		if setLastError.IsNil() {
+			llvmType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.ctx.Int32Type()}, false)
+			setLastError = llvm.AddFunction(b.mod, "SetLastError", llvmType)
+		}
+		getLastError := b.mod.NamedFunction("GetLastError")
+		if getLastError.IsNil() {
+			llvmType := llvm.FunctionType(b.ctx.Int32Type(), nil, false)
+			getLastError = llvm.AddFunction(b.mod, "GetLastError", llvmType)
+		}
+
+		// Now do the actual call. Pseudocode:
+		//     SetLastError(0)
+		//     r1 = trap(a1, a2, a3, ...)
+		//     err = uintptr(GetLastError())
+		//     return r1, 0, err
+		// Note that SetLastError/GetLastError could be replaced with direct
+		// access to the thread control block, which is probably smaller and
+		// faster. The Go runtime does this in assembly.
+		b.CreateCall(setLastError, []llvm.Value{llvm.ConstNull(b.ctx.Int32Type())}, "")
+		syscallResult := b.CreateCall(fnPtr, params, "")
+		errResult := b.CreateCall(getLastError, nil, "err")
+		if b.uintptrType != b.ctx.Int32Type() {
+			errResult = b.CreateZExt(errResult, b.uintptrType, "err.uintptr")
+		}
+
+		// Return r1, 0, err
+		retval := llvm.ConstNull(b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.uintptrType}, false))
+		retval = b.CreateInsertValue(retval, syscallResult, 0, "")
 		retval = b.CreateInsertValue(retval, errResult, 2, "")
 		return retval, nil
 	default:

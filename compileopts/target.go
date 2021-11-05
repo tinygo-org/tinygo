@@ -206,6 +206,9 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 		if options.GOARCH == "arm" {
 			target += "-gnueabihf"
 		}
+		if options.GOOS == "windows" {
+			target += "-gnu"
+		}
 		return defaultTarget(options.GOOS, options.GOARCH, target)
 	}
 
@@ -230,13 +233,7 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 	return spec, nil
 }
 
-// WindowsBuildNotSupportedErr is being thrown, when goos is windows and no target has been specified.
-var WindowsBuildNotSupportedErr = errors.New("Building Windows binaries is currently not supported. Try specifying a different target")
-
 func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
-	if goos == "windows" {
-		return nil, WindowsBuildNotSupportedErr
-	}
 	// No target spec available. Use the default one, useful on most systems
 	// with a regular OS.
 	spec := TargetSpec{
@@ -279,12 +276,28 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		spec.RTLib = "compiler-rt"
 		spec.Libc = "musl"
 		spec.LDFlags = append(spec.LDFlags, "--gc-sections")
+	} else if goos == "windows" {
+		spec.Linker = "ld.lld"
+		spec.Libc = "mingw-w64"
+		spec.LDFlags = append(spec.LDFlags,
+			"-m", "i386pep",
+			"-Bdynamic",
+			"--image-base", "0x400000",
+			"--gc-sections",
+			"--no-insert-timestamp",
+		)
 	} else {
 		spec.LDFlags = append(spec.LDFlags, "-no-pie", "-Wl,--gc-sections") // WARNING: clang < 5.0 requires -nopie
 	}
 	if goarch != "wasm" {
-		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/gc_"+goarch+".S")
-		spec.ExtraFiles = append(spec.ExtraFiles, "src/internal/task/task_stack_"+goarch+".S")
+		suffix := ""
+		if goos == "windows" {
+			// Windows uses a different calling convention from other operating
+			// systems so we need separate assembly files.
+			suffix = "_windows"
+		}
+		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/gc_"+goarch+suffix+".S")
+		spec.ExtraFiles = append(spec.ExtraFiles, "src/internal/task/task_stack_"+goarch+suffix+".S")
 	}
 	if goarch != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.
@@ -294,6 +307,11 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		}
 		if goarch == "arm64" && goos == "linux" {
 			spec.Emulator = []string{"qemu-aarch64"}
+		}
+	}
+	if goos != runtime.GOOS {
+		if goos == "windows" {
+			spec.Emulator = []string{"wine"}
 		}
 	}
 	return &spec, nil

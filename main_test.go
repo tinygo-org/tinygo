@@ -71,11 +71,9 @@ func TestCompiler(t *testing.T) {
 		return
 	}
 
-	if runtime.GOOS != "windows" {
-		t.Run("Host", func(t *testing.T) {
-			runPlatTests(optionsFromTarget(""), tests, t)
-		})
-	}
+	t.Run("Host", func(t *testing.T) {
+		runPlatTests(optionsFromTarget(""), tests, t)
+	})
 
 	if testing.Short() {
 		return
@@ -113,10 +111,6 @@ func TestCompiler(t *testing.T) {
 
 	// Test a few build options.
 	t.Run("build-options", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			// These tests assume a host that is supported by TinyGo.
-			t.Skip("can't test build options on Windows")
-		}
 		t.Parallel()
 
 		// Test with few optimizations enabled (no inlining, etc).
@@ -290,6 +284,9 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 
 	// Build the test binary.
 	binary := filepath.Join(tmpdir, "test")
+	if spec.GOOS == "windows" {
+		binary += ".exe"
+	}
 	err = runBuild("./"+path, binary, &options)
 	if err != nil {
 		printCompilerError(t.Log, err)
@@ -331,7 +328,13 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	}
 	go func() {
 		// Terminate the process if it runs too long.
-		timer := time.NewTimer(10 * time.Second)
+		maxDuration := 10 * time.Second
+		if runtime.GOOS == "windows" {
+			// For some reason, tests on Windows can take around
+			// 30s to complete. TODO: investigate why and fix this.
+			maxDuration = 40 * time.Second
+		}
+		timer := time.NewTimer(maxDuration)
 		select {
 		case <-runComplete:
 			timer.Stop()
@@ -361,7 +364,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		t.Log("failed to run:", err)
 		fail = true
 	} else if !bytes.Equal(expected, actual) {
-		t.Log("output did not match")
+		t.Logf("output did not match (expected %d bytes, got %d bytes):", len(expected), len(actual))
 		fail = true
 	}
 
