@@ -358,7 +358,7 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 	default:
 		conf |= stm32.SPI_CR1_BR_Div256
 	}
-	return conf
+	return conf << stm32.SPI_CR1_BR_Pos
 }
 
 // Configure SPI pins for input output and clock
