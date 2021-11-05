@@ -273,7 +273,9 @@ func printspace() {
 }
 
 func printnl() {
-	putchar('\r')
+	if baremetal {
+		putchar('\r')
+	}
 	putchar('\n')
 }
 
