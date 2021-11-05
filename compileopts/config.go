@@ -272,6 +272,15 @@ func (c *Config) CFlags() []string {
 	case "wasi-libc":
 		root := goenv.Get("TINYGOROOT")
 		cflags = append(cflags, "--sysroot="+root+"/lib/wasi-libc/sysroot")
+	case "mingw-w64":
+		root := goenv.Get("TINYGOROOT")
+		path, _ := c.LibcPath("mingw-w64")
+		cflags = append(cflags,
+			"--sysroot="+path,
+			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "crt"),
+			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "defaults", "include"),
+			"-D_UCRT",
+		)
 	case "":
 		// No libc specified, nothing to add.
 	default:

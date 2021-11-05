@@ -29,3 +29,6 @@
 [submodule "lib/binaryen"]
 	path = lib/binaryen
 	url = https://github.com/WebAssembly/binaryen.git
+[submodule "lib/mingw-w64"]
+	path = lib/mingw-w64
+	url = https://github.com/mingw-w64/mingw-w64.git

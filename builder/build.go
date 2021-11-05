@@ -115,6 +115,12 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
 		}
 		libcDependencies = append(libcDependencies, dummyCompileJob(path))
+	case "mingw-w64":
+		_, err := MinGW.load(config, dir)
+		if err != nil {
+			return err
+		}
+		libcDependencies = append(libcDependencies, makeMinGWExtraLibs(dir)...)
 	case "":
 		// no library specified, so nothing to do
 	default:
@@ -518,6 +524,9 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Prepare link command.
 	linkerDependencies := []*compileJob{outputObjectFileJob}
 	executable := filepath.Join(dir, "main")
+	if config.GOOS() == "windows" {
+		executable += ".exe"
+	}
 	tmppath := executable // final file
 	ldflags := append(config.LDFlags(), "-o", executable)
 

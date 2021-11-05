@@ -1,17 +1,22 @@
-// +build scheduler.tasks,amd64,!windows
+// +build scheduler.tasks,amd64,windows
 
 package task
+
+// This is almost the same as task_stack_amd64.go, but with the extra rdi and
+// rsi registers saved: Windows has a slightly different calling convention.
 
 import "unsafe"
 
 var systemStack uintptr
 
 // calleeSavedRegs is the list of registers that must be saved and restored when
-// switching between tasks. Also see task_stack_amd64.S that relies on the exact
-// layout of this struct.
+// switching between tasks. Also see task_stack_amd64_windows.S that relies on
+// the exact layout of this struct.
 type calleeSavedRegs struct {
 	rbx uintptr
 	rbp uintptr
+	rdi uintptr
+	rsi uintptr
 	r12 uintptr
 	r13 uintptr
 	r14 uintptr
@@ -29,7 +34,7 @@ func (s *state) archInit(r *calleeSavedRegs, fn uintptr, args unsafe.Pointer) {
 	// These will be popped off of the stack on the first resume of the goroutine.
 
 	// Start the function at tinygo_startTask (defined in
-	// src/internal/task/task_stack_amd64.S). This assembly code calls a
+	// src/internal/task/task_stack_amd64_windows.S). This assembly code calls a
 	// function (passed in r12) with a single argument (passed in r13). After
 	// the function returns, it calls Pause().
 	r.pc = uintptr(unsafe.Pointer(&startTask))

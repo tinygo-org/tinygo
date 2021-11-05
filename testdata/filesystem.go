@@ -33,6 +33,5 @@ func main() {
 		panic(err)
 	}
 
-	print(string(data))
-
+	os.Stdout.Write(data)
 }

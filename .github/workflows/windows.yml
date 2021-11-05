@@ -99,3 +99,5 @@ jobs:
       - name: Smoke tests
         shell: bash
         run: make smoketest TINYGO=build/tinygo AVR=0 XTENSA=0
+      - name: Test stdlib packages
+        run: make tinygo-test
