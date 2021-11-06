@@ -12,8 +12,8 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-// Test whether the Clang generated "target-cpu" attribute matches the CPU
-// property in TinyGo target files.
+// Test whether the Clang generated "target-cpu" and "target-features"
+// attributes match the CPU and Features property in TinyGo target files.
 func TestClangAttributes(t *testing.T) {
 	var targetNames = []string{
 		// Please keep this list sorted!
@@ -112,15 +112,29 @@ func testClangAttributes(t *testing.T, options *compileopts.Options) {
 		t.Errorf("target has LLVM triple %#v but Clang makes it LLVM triple %#v", config.Triple(), mod.Target())
 	}
 
-	// Check the "target-cpu"  string attribute of the add function.
+	// Check the "target-cpu" and "target-features" string attribute of the add
+	// function.
 	add := mod.NamedFunction("add")
-	var cpu string
+	var cpu, features string
 	cpuAttr := add.GetStringAttributeAtIndex(-1, "target-cpu")
+	featuresAttr := add.GetStringAttributeAtIndex(-1, "target-features")
 	if !cpuAttr.IsNil() {
 		cpu = cpuAttr.GetStringValue()
 	}
+	if !featuresAttr.IsNil() {
+		features = featuresAttr.GetStringValue()
+	}
 	if cpu != config.CPU() {
 		t.Errorf("target has CPU %#v but Clang makes it CPU %#v", config.CPU(), cpu)
+	}
+	if features != config.Features() {
+		if llvm.Version != "11.0.0" {
+			// This needs to be removed once we switch to LLVM 12.
+			// LLVM 11.0.0 uses a different "target-features" string than LLVM
+			// 11.1.0 for Thumb targets. The Xtensa fork is still based on LLVM
+			// 11.0.0, so we need to skip this check on that version.
+			t.Errorf("target has LLVM features %#v but Clang makes it %#v", config.Features(), features)
+		}
 	}
 }
 

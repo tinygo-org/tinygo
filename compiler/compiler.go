@@ -43,7 +43,7 @@ type Config struct {
 	// Target and output information.
 	Triple          string
 	CPU             string
-	Features        []string
+	Features        string
 	GOOS            string
 	GOARCH          string
 	CodeModel       string
@@ -57,7 +57,6 @@ type Config struct {
 	DefaultStackSize   uint64
 	NeedsStackObjects  bool
 	Debug              bool // Whether to emit debug information in the LLVM module.
-	LLVMFeatures       string
 }
 
 // compilerContext contains function-independent data that should still be
@@ -189,12 +188,6 @@ func NewTargetMachine(config *Config) (llvm.TargetMachine, error) {
 		return llvm.TargetMachine{}, err
 	}
 
-	feat := config.Features
-	if len(config.LLVMFeatures) > 0 {
-		feat = append(feat, config.LLVMFeatures)
-	}
-	features := strings.Join(feat, ",")
-
 	var codeModel llvm.CodeModel
 	var relocationModel llvm.RelocMode
 
@@ -222,7 +215,7 @@ func NewTargetMachine(config *Config) (llvm.TargetMachine, error) {
 		relocationModel = llvm.RelocDynamicNoPic
 	}
 
-	machine := target.CreateTargetMachine(config.Triple, config.CPU, features, llvm.CodeGenLevelDefault, relocationModel, codeModel)
+	machine := target.CreateTargetMachine(config.Triple, config.CPU, config.Features, llvm.CodeGenLevelDefault, relocationModel, codeModel)
 	return machine, nil
 }
 

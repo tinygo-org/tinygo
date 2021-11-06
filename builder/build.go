@@ -136,7 +136,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		DefaultStackSize:   config.Target.DefaultStackSize,
 		NeedsStackObjects:  config.NeedsStackObjects(),
 		Debug:              true,
-		LLVMFeatures:       config.LLVMFeatures(),
 	}
 
 	// Load the target machine, which is the LLVM object that contains all

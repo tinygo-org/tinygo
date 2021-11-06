@@ -34,10 +34,16 @@ func (c *Config) CPU() string {
 }
 
 // Features returns a list of features this CPU supports. For example, for a
-// RISC-V processor, that could be ["+a", "+c", "+m"]. For many targets, an
-// empty list will be returned.
-func (c *Config) Features() []string {
-	return c.Target.Features
+// RISC-V processor, that could be "+a,+c,+m". For many targets, an empty list
+// will be returned.
+func (c *Config) Features() string {
+	if c.Target.Features == "" {
+		return c.Options.LLVMFeatures
+	}
+	if c.Options.LLVMFeatures == "" {
+		return c.Target.Features
+	}
+	return c.Target.Features + "," + c.Options.LLVMFeatures
 }
 
 // GOOS returns the GOOS of the target. This might not always be the actual OS:
@@ -439,10 +445,6 @@ func (c *Config) WasmAbi() string {
 		return c.Options.WasmAbi
 	}
 	return c.Target.WasmAbi
-}
-
-func (c *Config) LLVMFeatures() string {
-	return c.Options.LLVMFeatures
 }
 
 type TestConfig struct {
