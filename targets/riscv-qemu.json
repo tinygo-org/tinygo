@@ -1,6 +1,6 @@
 {
 	"inherits": ["riscv32"],
-	"features": ["+a", "+c", "+m"],
+	"features": "+a,+c,+m,-relax,-save-restore",
 	"build-tags": ["virt", "qemu"],
 	"linkerscript": "targets/riscv-qemu.ld",
 	"emulator": ["qemu-system-riscv32", "-machine", "virt", "-nographic", "-bios", "none", "-kernel"]

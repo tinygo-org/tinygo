@@ -8,6 +8,7 @@
 	"libc": "picolibc",
 	"cflags": [
 		"-Werror",
+		"-mno-relax",
 		"-fno-exceptions", "-fno-unwind-tables",
 		"-ffunction-sections", "-fdata-sections"
 	],

@@ -1,10 +1,13 @@
 {
 	"inherits": ["riscv32"],
-	"features": ["+c", "+m"],
+	"features": "+c,+m,-relax,-save-restore",
 	"build-tags": ["esp32c3", "esp"],
 	"serial": "uart",
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
+	"cflags": [
+		"-march=rv32imc"
+	],
 	"linkerscript": "targets/esp32c3.ld",
 	"extra-files": [
 		"src/device/esp/esp32c3.S"

@@ -25,7 +25,7 @@ type TargetSpec struct {
 	Inherits         []string `json:"inherits"`
 	Triple           string   `json:"llvm-target"`
 	CPU              string   `json:"cpu"`
-	Features         []string `json:"features"`
+	Features         string   `json:"features"`
 	GOOS             string   `json:"goos"`
 	GOARCH           string   `json:"goarch"`
 	BuildTags        []string `json:"build-tags"`
@@ -234,12 +234,16 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	switch goarch {
 	case "386":
 		spec.CPU = "pentium4"
+		spec.Features = "+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
 	case "amd64":
 		spec.CPU = "x86-64"
+		spec.Features = "+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
 	case "arm":
 		spec.CPU = "generic"
+		spec.Features = "+armv7-a,+dsp,+fp64,+vfp2,+vfp2sp,+vfp3d16,+vfp3d16sp,-thumb-mode"
 	case "arm64":
 		spec.CPU = "generic"
+		spec.Features = "+neon"
 	}
 	if goos == "darwin" {
 		spec.CFlags = append(spec.CFlags, "-isysroot", "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk")
