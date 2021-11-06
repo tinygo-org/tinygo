@@ -94,7 +94,7 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 					dst.Set(src)
 				case "append", "":
 					// or append the field of child to spec
-					dst.Set(reflect.AppendSlice(src, dst))
+					dst.Set(reflect.AppendSlice(dst, src))
 				default:
 					panic("override mode must be 'copy' or 'append' (default). I don't know how to '" + tag + "'.")
 				}
