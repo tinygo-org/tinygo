@@ -6,6 +6,7 @@ import (
 	"device/arm"
 	"device/nxp"
 	"machine"
+	"machine/usb"
 	"math/bits"
 	"unsafe"
 )
@@ -36,7 +37,7 @@ func main() {
 	// initialize cache and MPU
 	initCache()
 
-	// enable SysTick, GPIO, and peripherals
+	// enable SysTick, GPIO, USB, and other peripherals
 	initPeripherals()
 
 	// reenable interrupts
@@ -108,7 +109,8 @@ func initPeripherals() {
 	initPins()        // configure GPIO
 
 	enablePeripheralClocks() // activate peripheral clock gates
-	initUART()               // configure UART (initialized first for debugging)
+	initUSB()                // configure USB CDC-ACM (UART0)
+	initUART()               // configure hardware UART (UART1)
 }
 
 func initPins() {
@@ -123,8 +125,14 @@ func initUART() {
 	machine.UART1.Configure(machine.UARTConfig{})
 }
 
+func initUSB() {
+	machine.HID0.Configure(usb.HIDConfig{})
+	// machine.UART0.Configure(usb.UARTConfig{})
+}
+
 func putchar(c byte) {
-	machine.UART1.WriteByte(c)
+	// machine.UART0.WriteByte(c) // print to USB UART
+	machine.UART1.WriteByte(c) // print to hardware UART
 }
 
 func exit(code int) {
