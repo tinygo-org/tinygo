@@ -346,6 +346,12 @@ func (c *compilerContext) addStandardDeclaredAttributes(llvmFn llvm.Value) {
 		attr := c.ctx.CreateEnumAttribute(kind, 0)
 		llvmFn.AddFunctionAttr(attr)
 	}
+	if c.CPU != "" {
+		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("target-cpu", c.CPU))
+	}
+	if c.Features != "" {
+		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("target-features", c.Features))
+	}
 }
 
 // addStandardDefinedAttributes adds the set of attributes that are added to

@@ -3,7 +3,6 @@ package transform_test
 import (
 	"testing"
 
-	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
@@ -11,7 +10,7 @@ import (
 func TestInterfaceLowering(t *testing.T) {
 	t.Parallel()
 	testTransform(t, "testdata/interface", func(mod llvm.Module) {
-		err := transform.LowerInterfaces(mod, &compileopts.Config{Options: &compileopts.Options{Opt: "2"}})
+		err := transform.LowerInterfaces(mod, defaultTestConfig)
 		if err != nil {
 			t.Error(err)
 		}
