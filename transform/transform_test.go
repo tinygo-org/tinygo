@@ -21,6 +21,11 @@ import (
 
 var update = flag.Bool("update", false, "update transform package tests")
 
+var defaultTestConfig = &compileopts.Config{
+	Target:  &compileopts.TargetSpec{},
+	Options: &compileopts.Options{Opt: "2"},
+}
+
 // testTransform runs a transformation pass on an input file (pathPrefix+".ll")
 // and checks whether it matches the expected output (pathPrefix+".out.ll"). The
 // output is compared with a fuzzy match that ignores some irrelevant lines such

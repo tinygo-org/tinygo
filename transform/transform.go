@@ -21,11 +21,18 @@ import (
 // attributes to a function. For example, it adds optsize when requested from
 // the -opt= compiler flag.
 func AddStandardAttributes(fn llvm.Value, config *compileopts.Config) {
+	ctx := fn.Type().Context()
 	_, sizeLevel, _ := config.OptLevels()
 	if sizeLevel >= 1 {
-		fn.AddFunctionAttr(fn.Type().Context().CreateEnumAttribute(llvm.AttributeKindID("optsize"), 0))
+		fn.AddFunctionAttr(ctx.CreateEnumAttribute(llvm.AttributeKindID("optsize"), 0))
 	}
 	if sizeLevel >= 2 {
-		fn.AddFunctionAttr(fn.Type().Context().CreateEnumAttribute(llvm.AttributeKindID("minsize"), 0))
+		fn.AddFunctionAttr(ctx.CreateEnumAttribute(llvm.AttributeKindID("minsize"), 0))
+	}
+	if config.CPU() != "" {
+		fn.AddFunctionAttr(ctx.CreateStringAttribute("target-cpu", config.CPU()))
+	}
+	if config.Features() != "" {
+		fn.AddFunctionAttr(ctx.CreateStringAttribute("target-features", config.Features()))
 	}
 }
