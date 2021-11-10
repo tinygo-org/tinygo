@@ -107,6 +107,9 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	root := goenv.Get("TINYGOROOT")
 	var libcDependencies []*compileJob
 	switch config.Target.Libc {
+	case "darwin-libSystem":
+		job := makeDarwinLibSystemJob(config, dir)
+		libcDependencies = append(libcDependencies, job)
 	case "musl":
 		job, unlock, err := Musl.load(config, dir)
 		if err != nil {

@@ -272,8 +272,16 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		spec.Features = "+neon"
 	}
 	if goos == "darwin" {
-		spec.CFlags = append(spec.CFlags, "-isysroot", "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk")
-		spec.LDFlags = append(spec.LDFlags, "-Wl,-dead_strip")
+		spec.Linker = "ld.lld"
+		spec.Libc = "darwin-libSystem"
+		arch := strings.Split(triple, "-")[0]
+		platformVersion := strings.TrimPrefix(strings.Split(triple, "-")[2], "macosx")
+		spec.LDFlags = append(spec.LDFlags,
+			"-flavor", "darwinnew",
+			"-dead_strip",
+			"-arch", arch,
+			"-platform_version", "macos", platformVersion, platformVersion,
+		)
 	} else if goos == "linux" {
 		spec.Linker = "ld.lld"
 		spec.RTLib = "compiler-rt"

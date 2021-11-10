@@ -13,6 +13,7 @@ import (
 #include <stdlib.h>
 bool tinygo_clang_driver(int argc, char **argv);
 bool tinygo_link_elf(int argc, char **argv);
+bool tinygo_link_macho(int argc, char **argv);
 bool tinygo_link_mingw(int argc, char **argv);
 bool tinygo_link_wasm(int argc, char **argv);
 */
@@ -26,8 +27,13 @@ const hasBuiltinTools = true
 // linking statically with LLVM (with the byollvm build tag).
 func RunTool(tool string, args ...string) error {
 	linker := "elf"
-	if tool == "ld.lld" && len(args) >= 2 && args[0] == "-m" && args[1] == "i386pep" {
-		linker = "mingw"
+	if tool == "ld.lld" && len(args) >= 2 {
+		if args[0] == "-m" && args[1] == "i386pep" {
+			linker = "mingw"
+		} else if args[0] == "-flavor" {
+			linker = args[1]
+			args = args[2:]
+		}
 	}
 	args = append([]string{"tinygo:" + tool}, args...)
 
@@ -47,6 +53,8 @@ func RunTool(tool string, args ...string) error {
 		ok = C.tinygo_clang_driver(C.int(len(args)), (**C.char)(buf))
 	case "ld.lld":
 		switch linker {
+		case "darwinnew":
+			ok = C.tinygo_link_macho(C.int(len(args)), (**C.char)(buf))
 		case "elf":
 			ok = C.tinygo_link_elf(C.int(len(args)), (**C.char)(buf))
 		case "mingw":

@@ -11,6 +11,11 @@ bool tinygo_link_elf(int argc, char **argv) {
 	return lld::elf::link(args, false, llvm::outs(), llvm::errs());
 }
 
+bool tinygo_link_macho(int argc, char **argv) {
+	std::vector<const char*> args(argv, argv + argc);
+	return lld::macho::link(args, false, llvm::outs(), llvm::errs());
+}
+
 bool tinygo_link_mingw(int argc, char **argv) {
 	std::vector<const char*> args(argv, argv + argc);
 	return lld::mingw::link(args, false, llvm::outs(), llvm::errs());
