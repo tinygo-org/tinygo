@@ -73,6 +73,8 @@ ifeq ($(OS),Windows_NT)
 else ifeq ($(shell uname -s),Darwin)
     MD5SUM = md5
 
+    CGO_LDFLAGS += -lxar
+
     USE_SYSTEM_BINARYEN ?= 1
 
 else ifeq ($(shell uname -s),FreeBSD)
@@ -89,7 +91,7 @@ CLANG_LIB_NAMES = clangAnalysis clangAST clangASTMatchers clangBasic clangCodeGe
 CLANG_LIBS = $(START_GROUP) $(addprefix -l,$(CLANG_LIB_NAMES)) $(END_GROUP) -lstdc++
 
 # Libraries that should be linked in for the statically linked LLD.
-LLD_LIB_NAMES = lldCOFF lldCommon lldCore lldDriver lldELF lldMachO lldMinGW lldReaderWriter lldWasm lldYAML
+LLD_LIB_NAMES = lldCOFF lldCommon lldCore lldDriver lldELF lldMachO2 lldMinGW lldReaderWriter lldWasm lldYAML
 LLD_LIBS = $(START_GROUP) $(addprefix -l,$(LLD_LIB_NAMES)) $(END_GROUP)
 
 # Other libraries that are needed to link TinyGo.
@@ -566,6 +568,7 @@ endif
 	@$(MD5SUM) test.hex
 	GOOS=linux GOARCH=arm $(TINYGO) build -size short -o test.elf       ./testdata/cgo
 	GOOS=windows GOARCH=amd64 $(TINYGO) build -size short -o test.exe   ./testdata/cgo
+	GOOS=darwin GOARCH=amd64 $(TINYGO) build              -o test       ./testdata/cgo
 ifneq ($(OS),Windows_NT)
 	# TODO: this does not yet work on Windows. Somehow, unused functions are
 	# not garbage collected.
@@ -581,6 +584,7 @@ build/release: tinygo gen-device wasi-libc $(if $(filter 1,$(USE_SYSTEM_BINARYEN
 	@mkdir -p build/release/tinygo/lib/clang/include
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
 	@mkdir -p build/release/tinygo/lib/compiler-rt/lib
+	@mkdir -p build/release/tinygo/lib/macos-minimal-sdk
 	@mkdir -p build/release/tinygo/lib/mingw-w64/mingw-w64-crt/lib-common
 	@mkdir -p build/release/tinygo/lib/mingw-w64/mingw-w64-headers/defaults
 	@mkdir -p build/release/tinygo/lib/musl/arch
@@ -604,6 +608,7 @@ endif
 	@cp -rp lib/compiler-rt/lib/builtins build/release/tinygo/lib/compiler-rt/lib
 	@cp -rp lib/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt
 	@cp -rp lib/compiler-rt/README.txt   build/release/tinygo/lib/compiler-rt
+	@cp -rp lib/macos-minimal-sdk/*      build/release/tinygo/lib/macos-minimal-sdk
 	@cp -rp lib/musl/arch/aarch64        build/release/tinygo/lib/musl/arch
 	@cp -rp lib/musl/arch/arm            build/release/tinygo/lib/musl/arch
 	@cp -rp lib/musl/arch/generic        build/release/tinygo/lib/musl/arch

@@ -225,6 +225,11 @@ func (c *Config) CFlags() []string {
 		cflags = append(cflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
 	}
 	switch c.Target.Libc {
+	case "darwin-libSystem":
+		root := goenv.Get("TINYGOROOT")
+		cflags = append(cflags,
+			"--sysroot="+filepath.Join(root, "lib/macos-minimal-sdk/src"),
+		)
 	case "picolibc":
 		root := goenv.Get("TINYGOROOT")
 		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")

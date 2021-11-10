@@ -32,3 +32,6 @@
 [submodule "lib/mingw-w64"]
 	path = lib/mingw-w64
 	url = https://github.com/mingw-w64/mingw-w64.git
+[submodule "lib/macos-minimal-sdk"]
+	path = lib/macos-minimal-sdk
+	url = https://github.com/aykevl/macos-minimal-sdk.git
