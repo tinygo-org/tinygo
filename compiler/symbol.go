@@ -208,14 +208,9 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 // present in *ssa.Function, such as the link name and whether it should be
 // exported.
 func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
-	info := functionInfo{}
-	if strings.HasPrefix(f.Name(), "C.") {
-		// Created by CGo: such a name cannot be created by regular C code.
-		info.linkName = f.Name()[2:]
-		info.exported = true
-	} else {
+	info := functionInfo{
 		// Pick the default linkName.
-		info.linkName = f.RelString(nil)
+		linkName: f.RelString(nil),
 	}
 	// Check for //go: pragmas, which may change the link name (among others).
 	info.parsePragmas(f)
@@ -460,20 +455,14 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 
 // getGlobalInfo returns some information about a specific global.
 func (c *compilerContext) getGlobalInfo(g *ssa.Global) globalInfo {
-	info := globalInfo{}
-	if strings.HasPrefix(g.Name(), "C.") {
-		// Created by CGo: such a name cannot be created by regular C code.
-		info.linkName = g.Name()[2:]
-		info.extern = true
-	} else {
+	info := globalInfo{
 		// Pick the default linkName.
-		info.linkName = g.RelString(nil)
-		// Check for //go: pragmas, which may change the link name (among
-		// others).
-		doc := c.astComments[info.linkName]
-		if doc != nil {
-			info.parsePragmas(doc)
-		}
+		linkName: g.RelString(nil),
+	}
+	// Check for //go: pragmas, which may change the link name (among others).
+	doc := c.astComments[info.linkName]
+	if doc != nil {
+		info.parsePragmas(doc)
 	}
 	return info
 }

@@ -104,10 +104,6 @@ typedef struct {
 	unsigned char e : 3;
 	// Note that C++ allows bitfields bigger than the underlying type.
 } bitfield_t;
-
-// Function signatures.
-void variadic0();
-void variadic2(int x, int y, ...);
 */
 import "C"
 
@@ -170,10 +166,4 @@ func accessUnion() {
 	var union2d C.union2d_t
 	var _ *C.int = union2d.unionfield_i()
 	var _ *[2]float64 = union2d.unionfield_d()
-}
-
-// Test function signatures.
-func accessFunctions() {
-	C.variadic0()
-	C.variadic2(3, 5)
 }

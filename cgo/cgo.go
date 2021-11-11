@@ -496,6 +496,14 @@ func (p *cgoPackage) addFuncDecls() {
 		}
 		args := make([]*ast.Field, len(fn.args))
 		decl := &ast.FuncDecl{
+			Doc: &ast.CommentGroup{
+				List: []*ast.Comment{
+					{
+						Slash: fn.pos - 1,
+						Text:  "//export " + name,
+					},
+				},
+			},
 			Name: &ast.Ident{
 				NamePos: fn.pos,
 				Name:    "C." + name,
@@ -512,14 +520,10 @@ func (p *cgoPackage) addFuncDecls() {
 			},
 		}
 		if fn.variadic {
-			decl.Doc = &ast.CommentGroup{
-				List: []*ast.Comment{
-					{
-						Slash: fn.pos,
-						Text:  "//go:variadic",
-					},
-				},
-			}
+			decl.Doc.List = append(decl.Doc.List, &ast.Comment{
+				Slash: fn.pos - 1,
+				Text:  "//go:variadic",
+			})
 		}
 		obj.Decl = decl
 		for i, arg := range fn.args {
@@ -652,13 +656,21 @@ func (p *cgoPackage) addVarDecls() {
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		global := p.globals[name]
 		gen := &ast.GenDecl{
-			TokPos: token.NoPos,
+			TokPos: global.pos,
 			Tok:    token.VAR,
 			Lparen: token.NoPos,
 			Rparen: token.NoPos,
+			Doc: &ast.CommentGroup{
+				List: []*ast.Comment{
+					{
+						Slash: global.pos - 1,
+						Text:  "//go:extern " + name,
+					},
+				},
+			},
 		}
-		global := p.globals[name]
 		obj := &ast.Object{
 			Kind: ast.Var,
 			Name: "C." + name,

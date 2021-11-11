@@ -2802,9 +2802,8 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			//     var C.add unsafe.Pointer
 			// Instead of a load from the global, create a bitcast of the
 			// function pointer itself.
-			globalName := b.getGlobalInfo(unop.X.(*ssa.Global)).linkName
-			name := globalName[:len(globalName)-len("$funcaddr")]
-			fn := b.getFunction(b.fn.Pkg.Members["C."+name].(*ssa.Function))
+			name := strings.TrimSuffix(unop.X.(*ssa.Global).Name(), "$funcaddr")
+			fn := b.getFunction(b.fn.Pkg.Members[name].(*ssa.Function))
 			if fn.IsNil() {
 				return llvm.Value{}, b.makeError(unop.Pos(), "cgo function not found: "+name)
 			}

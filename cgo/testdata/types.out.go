@@ -4,11 +4,6 @@ import "unsafe"
 
 var _ unsafe.Pointer
 
-func C.variadic0() //go:variadic
-func C.variadic2(x C.int, y C.int) //go:variadic
-var C.variadic0$funcaddr unsafe.Pointer
-var C.variadic2$funcaddr unsafe.Pointer
-
 const C.option2A = 20
 const C.optionA = 0
 const C.optionB = 1
