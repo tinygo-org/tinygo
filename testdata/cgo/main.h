@@ -141,6 +141,8 @@ extern int smallEnumWidth;
 
 extern int cflagsConstant;
 
+extern char globalChars[4];
+
 // test duplicate definitions
 int add(int a, int b);
 extern int global;

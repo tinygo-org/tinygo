@@ -4,6 +4,26 @@ import "unsafe"
 
 var _ unsafe.Pointer
 
+//go:linkname C.CString runtime.cgo_CString
+func C.CString(string) *C.char
+
+//go:linkname C.GoString runtime.cgo_GoString
+func C.GoString(*C.char) string
+
+//go:linkname C.__GoStringN runtime.cgo_GoStringN
+func C.__GoStringN(*C.char, uintptr) string
+
+func C.GoStringN(cstr *C.char, length C.int) string {
+	return C.__GoStringN(cstr, uintptr(length))
+}
+
+//go:linkname C.__GoBytes runtime.cgo_GoBytes
+func C.__GoBytes(unsafe.Pointer, uintptr) []byte
+
+func C.GoBytes(ptr unsafe.Pointer, length C.int) []byte {
+	return C.__GoBytes(ptr, uintptr(length))
+}
+
 type C.int16_t = int16
 type C.int32_t = int32
 type C.int64_t = int64

@@ -233,3 +233,50 @@ func isContinuation(b byte) bool {
 	// Continuation bytes have their topmost bits set to 0b10.
 	return b&0xc0 == 0x80
 }
+
+// Functions used in CGo.
+
+// Convert a Go string to a C string.
+func cgo_CString(s _string) unsafe.Pointer {
+	buf := malloc(s.length + 1)
+	memcpy(buf, unsafe.Pointer(s.ptr), s.length)
+	*(*byte)(unsafe.Pointer(uintptr(buf) + s.length)) = 0 // trailing 0 byte
+	return buf
+}
+
+// Convert a C string to a Go string.
+func cgo_GoString(cstr unsafe.Pointer) _string {
+	if cstr == nil {
+		return _string{}
+	}
+	return makeGoString(cstr, strlen(cstr))
+}
+
+// Convert a C data buffer to a Go string (that possibly contains 0 bytes).
+func cgo_GoStringN(cstr unsafe.Pointer, length uintptr) _string {
+	return makeGoString(cstr, length)
+}
+
+// Make a Go string given a source buffer and a length.
+func makeGoString(cstr unsafe.Pointer, length uintptr) _string {
+	s := _string{
+		length: length,
+	}
+	if s.length != 0 {
+		buf := make([]byte, s.length)
+		s.ptr = &buf[0]
+		memcpy(unsafe.Pointer(s.ptr), cstr, s.length)
+	}
+	return s
+}
+
+// Convert a C data buffer to a Go byte slice.
+func cgo_GoBytes(ptr unsafe.Pointer, length uintptr) []byte {
+	// Note: don't return nil if length is 0, to match the behavior of C.GoBytes
+	// of upstream Go.
+	buf := make([]byte, length)
+	if length != 0 {
+		memcpy(unsafe.Pointer(&buf[0]), ptr, uintptr(length))
+	}
+	return buf
+}

@@ -24,6 +24,8 @@ int cflagsConstant = SOME_CONSTANT;
 
 int smallEnumWidth = sizeof(option2_t);
 
+char globalChars[] = {2, 0, 4, 8};
+
 int fortytwo() {
 	return 42;
 }

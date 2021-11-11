@@ -61,5 +61,12 @@ option 2A: 20
 option 3A: 21
 enum width matches: true
 CFLAGS value: 17
+cstr length: 18
+C.CString: string passed to C
+C.charBuf: 2 0 4 8
+C.CStringN: 4 2 0 4 8
+C.GoString(nil): 
+len(C.GoStringN(nil, 0)): 0
+len(C.GoBytes(nil, 0)): 0
 copied string: foobar
 line written using C puts

@@ -13,9 +13,6 @@ func libc_write(fd int32, buf unsafe.Pointer, count uint) int
 //export usleep
 func usleep(usec uint) int
 
-//export malloc
-func malloc(size uintptr) unsafe.Pointer
-
 // void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 // Note: off_t is defined as int64 because:
 //   - musl (used on Linux) always defines it as int64

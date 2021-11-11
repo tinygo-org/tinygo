@@ -165,10 +165,35 @@ typedef unsigned long long  _Cgo_ulonglong;
 
 // First part of the generated Go file. Written here as Go because that's much
 // easier than constructing the entire AST in memory.
+// The string/bytes functions below implement C.CString etc. To make sure the
+// runtime doesn't need to know the C int type, lengths are converted to uintptr
+// first.
+// These functions will be modified to get a "C." prefix, so the source below
+// doesn't reflect the final AST.
 const generatedGoFilePrefix = `
 import "unsafe"
 
 var _ unsafe.Pointer
+
+//go:linkname C.CString runtime.cgo_CString
+func CString(string) *C.char
+
+//go:linkname C.GoString runtime.cgo_GoString
+func GoString(*C.char) string
+
+//go:linkname C.__GoStringN runtime.cgo_GoStringN
+func __GoStringN(*C.char, uintptr) string
+
+func GoStringN(cstr *C.char, length C.int) string {
+	return C.__GoStringN(cstr, uintptr(length))
+}
+
+//go:linkname C.__GoBytes runtime.cgo_GoBytes
+func __GoBytes(unsafe.Pointer, uintptr) []byte
+
+func GoBytes(ptr unsafe.Pointer, length C.int) []byte {
+	return C.__GoBytes(ptr, uintptr(length))
+}
 `
 
 // Process extracts `import "C"` statements from the AST, parses the comment
@@ -219,6 +244,23 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 		// This is always a bug in the cgo package.
 		panic("unexpected error: " + err.Error())
 	}
+	// If the Comments field is not set to nil, the fmt package will get
+	// confused about where comments should go.
+	p.generated.Comments = nil
+	// Adjust some of the functions in there.
+	for _, decl := range p.generated.Decls {
+		switch decl := decl.(type) {
+		case *ast.FuncDecl:
+			switch decl.Name.Name {
+			case "CString", "GoString", "GoStringN", "__GoStringN", "GoBytes", "__GoBytes":
+				// Adjust the name to have a "C." prefix so it is correctly
+				// resolved.
+				decl.Name.Name = "C." + decl.Name.Name
+			}
+		}
+	}
+	// Patch some types, for example *C.char in C.CString.
+	astutil.Apply(p.generated, p.walker, nil)
 
 	// Find all C.* symbols.
 	for _, f := range files {
