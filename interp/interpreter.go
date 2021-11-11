@@ -941,6 +941,7 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		agg := operands[0]
 		for i := 0; i < len(indices)-1; i++ {
 			agg = r.builder.CreateExtractValue(agg, int(indices[i]), inst.name+".agg")
+			mem.instructions = append(mem.instructions, agg)
 		}
 		result = r.builder.CreateExtractValue(agg, int(indices[len(indices)-1]), inst.name)
 	case llvm.InsertValue:
@@ -953,11 +954,15 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		for i := 0; i < len(indices)-1; i++ {
 			agg = r.builder.CreateExtractValue(agg, int(indices[i]), inst.name+".agg"+strconv.Itoa(i))
 			aggregates = append(aggregates, agg)
+			mem.instructions = append(mem.instructions, agg)
 		}
 		result = operands[1]
 		for i := len(indices) - 1; i >= 0; i-- {
 			agg := aggregates[i]
 			result = r.builder.CreateInsertValue(agg, result, int(indices[i]), inst.name+".insertvalue"+strconv.Itoa(i))
+			if i != 0 { // don't add last result to mem.instructions as it will be done at the end already
+				mem.instructions = append(mem.instructions, result)
+			}
 		}
 
 	case llvm.Add:
