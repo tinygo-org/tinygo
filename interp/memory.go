@@ -41,6 +41,7 @@ type object struct {
 	globalName     string    // name, if not yet created (not guaranteed to be the final name)
 	buffer         value     // buffer with value as given by interp, nil if external
 	size           uint32    // must match buffer.len(), if available
+	constant       bool      // true if this is a constant global
 	marked         uint8     // 0 means unmarked, 1 means external read, 2 means external write
 }
 
@@ -223,7 +224,7 @@ func (mv *memoryView) hasExternalLoadOrStore(v pointerValue) bool {
 // possible for the interpreter to read from the object.
 func (mv *memoryView) hasExternalStore(v pointerValue) bool {
 	obj := mv.get(v.index())
-	return obj.marked >= 2
+	return obj.marked >= 2 && !obj.constant
 }
 
 // get returns an object that can only be read from, as it may return an object
@@ -262,6 +263,9 @@ func (mv *memoryView) put(index uint32, obj object) {
 	}
 	if checks && mv.get(index).buffer.len(mv.r) != obj.buffer.len(mv.r) {
 		panic("put() with a differently-sized object")
+	}
+	if checks && obj.constant {
+		panic("interp: store to a constant")
 	}
 	mv.objects[index] = obj
 }
@@ -1138,6 +1142,7 @@ func (r *runner) getValue(llvmValue llvm.Value) value {
 				obj.size = uint32(r.targetData.TypeAllocSize(llvmValue.Type().ElementType()))
 				if initializer := llvmValue.Initializer(); !initializer.IsNil() {
 					obj.buffer = r.getValue(initializer)
+					obj.constant = llvmValue.IsGlobalConstant()
 				}
 			} else if !llvmValue.IsAFunction().IsNil() {
 				// OK
