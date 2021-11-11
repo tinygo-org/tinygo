@@ -14,6 +14,7 @@ package cgo
 import (
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/scanner"
 	"go/token"
 	"path/filepath"
@@ -162,6 +163,14 @@ typedef long long           _Cgo_longlong;
 typedef unsigned long long  _Cgo_ulonglong;
 `
 
+// First part of the generated Go file. Written here as Go because that's much
+// easier than constructing the entire AST in memory.
+const generatedGoFilePrefix = `
+import "unsafe"
+
+var _ unsafe.Pointer
+`
+
 // Process extracts `import "C"` statements from the AST, parses the comment
 // with libclang, and modifies the AST to use this information. It returns a
 // newly created *ast.File that should be added to the list of to-be-parsed
@@ -202,57 +211,13 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	p.packageDir = filepath.Dir(packagePath)
 
 	// Construct a new in-memory AST for CGo declarations of this package.
-	unsafeImport := &ast.ImportSpec{
-		Path: &ast.BasicLit{
-			ValuePos: p.generatedPos,
-			Kind:     token.STRING,
-			Value:    "\"unsafe\"",
-		},
-		EndPos: p.generatedPos,
-	}
-	p.generated = &ast.File{
-		Package: p.generatedPos,
-		Name: &ast.Ident{
-			NamePos: p.generatedPos,
-			Name:    files[0].Name.Name,
-		},
-		Decls: []ast.Decl{
-			// import "unsafe"
-			&ast.GenDecl{
-				TokPos: p.generatedPos,
-				Tok:    token.IMPORT,
-				Specs: []ast.Spec{
-					unsafeImport,
-				},
-			},
-			// var _ unsafe.Pointer
-			// This avoids type errors when the unsafe package is never used.
-			&ast.GenDecl{
-				Tok: token.VAR,
-				Specs: []ast.Spec{
-					&ast.ValueSpec{
-						Names: []*ast.Ident{
-							{
-								Name: "_",
-								Obj: &ast.Object{
-									Kind: ast.Var,
-									Name: "_",
-								},
-							},
-						},
-						Type: &ast.SelectorExpr{
-							X: &ast.Ident{
-								Name: "unsafe",
-							},
-							Sel: &ast.Ident{
-								Name: "Pointer",
-							},
-						},
-					},
-				},
-			},
-		},
-		Imports: []*ast.ImportSpec{unsafeImport},
+	// The first part is written as Go code that is then parsed, but more code
+	// is added later to the AST to declare functions, globals, etc.
+	goCode := "package " + files[0].Name.Name + "\n\n" + generatedGoFilePrefix
+	p.generated, err = parser.ParseFile(fset, dir+"/!cgo.go", goCode, parser.ParseComments)
+	if err != nil {
+		// This is always a bug in the cgo package.
+		panic("unexpected error: " + err.Error())
 	}
 
 	// Find all C.* symbols.
