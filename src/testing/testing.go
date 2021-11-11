@@ -297,6 +297,11 @@ func Short() bool {
 	return flagShort
 }
 
+// Verbose reports whether the -test.v flag is set.
+func Verbose() bool {
+	return flagVerbose
+}
+
 func TestMain(m *M) {
 	os.Exit(m.Run())
 }
