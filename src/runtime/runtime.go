@@ -42,6 +42,9 @@ func memzero(ptr unsafe.Pointer, size uintptr)
 //export strlen
 func strlen(ptr unsafe.Pointer) uintptr
 
+//export malloc
+func malloc(size uintptr) unsafe.Pointer
+
 // Compare two same-size buffers for equality.
 func memequal(x, y unsafe.Pointer, n uintptr) bool {
 	for i := uintptr(0); i < n; i++ {

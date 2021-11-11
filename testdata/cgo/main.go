@@ -135,6 +135,21 @@ func main() {
 	//   void arraydecay(int *buf1, int *buf2[8], int *buf3[7][2]);
 	C.arraydecay((*C.int)(nil), (*[8]C.int)(nil), (*[7][2]C.int)(nil))
 
+	// Test CGo builtins like C.CString.
+	cstr := C.CString("string passed to C")
+	println("cstr length:", C.strlen(cstr))
+	gostr := C.GoString(cstr)
+	println("C.CString:", gostr)
+	charBuf := C.GoBytes(unsafe.Pointer(&C.globalChars[0]), 4)
+	println("C.charBuf:", charBuf[0], charBuf[1], charBuf[2], charBuf[3])
+	binaryString := C.GoStringN(&C.globalChars[0], 4)
+	println("C.CStringN:", len(binaryString), binaryString[0], binaryString[1], binaryString[2], binaryString[3])
+
+	// Test whether those builtins also work with zero length data.
+	println("C.GoString(nil):", C.GoString(nil))
+	println("len(C.GoStringN(nil, 0)):", len(C.GoStringN(nil, 0)))
+	println("len(C.GoBytes(nil, 0)):", len(C.GoBytes(nil, 0)))
+
 	// libc: test whether C functions work at all.
 	buf1 := []byte("foobar\x00")
 	buf2 := make([]byte, len(buf1))
