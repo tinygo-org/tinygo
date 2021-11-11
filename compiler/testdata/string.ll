@@ -78,4 +78,21 @@ entry:
 
 declare i1 @runtime.stringLess(i8*, i32, i8*, i32, i8*, i8*)
 
+; Function Attrs: nounwind
+define hidden i8 @main.stringLookup(i8* %s.data, i32 %s.len, i8 %x, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+entry:
+  %0 = zext i8 %x to i32
+  %.not = icmp ult i32 %0, %s.len
+  br i1 %.not, label %lookup.next, label %lookup.throw
+
+lookup.throw:                                     ; preds = %entry
+  call void @runtime.lookupPanic(i8* undef, i8* null) #0
+  unreachable
+
+lookup.next:                                      ; preds = %entry
+  %1 = getelementptr inbounds i8, i8* %s.data, i32 %0
+  %2 = load i8, i8* %1, align 1
+  ret i8 %2
+}
+
 attributes #0 = { nounwind }
