@@ -1,4 +1,5 @@
-// +build atmega nrf sam stm32 fe310 k210 rp2040
+//go:build atmega || nrf || sam || (stm32 && !stm32wle5) || fe310 || k210 || rp2040
+// +build atmega nrf sam stm32,!stm32wle5 fe310 k210 rp2040
 
 package machine
 

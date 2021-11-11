@@ -1,0 +1,8 @@
+{
+    "inherits": ["cortex-m4"],
+    "build-tags": ["stm32wle5", "stm32"],
+    "extra-files": [
+      "src/device/stm32/stm32wle5.s"
+    ],
+    "linkerscript": "targets/stm32wle5.ld"
+}

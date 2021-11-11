@@ -1,0 +1,12 @@
+{
+	"inherits": [
+		"stm32wle5"
+	],
+	"build-tags": [
+		"lorae5"
+	],
+	"serial": "uart",
+	"flash-method": "openocd",
+	"openocd-interface": "stlink-v2",
+	"openocd-target": "stm32wlx"
+}
