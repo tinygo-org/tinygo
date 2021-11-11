@@ -528,11 +528,17 @@ func (v Value) Index(i int) Value {
 		if size > unsafe.Sizeof(uintptr(0)) {
 			// The element fits in a pointer, but the array does not.
 			// Load the value from the pointer.
-			addr := uintptr(v.value) + elemSize*uintptr(i) // pointer to new value
+			addr := unsafe.Pointer(uintptr(v.value) + elemSize*uintptr(i)) // pointer to new value
+			value := addr
+			if !v.isIndirect() {
+				// Use a pointer to the value (don't load the value) if the
+				// 'indirect' flag is set.
+				value = unsafe.Pointer(loadValue(addr, elemSize))
+			}
 			return Value{
 				typecode: v.typecode.elem(),
 				flags:    v.flags,
-				value:    unsafe.Pointer(loadValue(unsafe.Pointer(addr), elemSize)),
+				value:    value,
 			}
 		}
 
