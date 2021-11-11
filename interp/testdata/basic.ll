@@ -6,6 +6,7 @@ target triple = "x86_64--linux"
 @main.nonConst2 = global i64 0
 @main.someArray = global [8 x {i16, i32}] zeroinitializer
 @main.exportedValue = global [1 x i16*] [i16* @main.exposedValue1]
+@main.exportedConst = constant i64 42
 @main.exposedValue1 = global i16 0
 @main.exposedValue2 = global i16 0
 @main.insertedValue = global {i8, i32, {float, {i64, i16}}} zeroinitializer
@@ -62,6 +63,11 @@ entry:
   call void @modifyExternal(i32* bitcast ([1 x i16*]* @main.exportedValue to i32*))
   store i16 5, i16* @main.exposedValue1
 
+  ; Test that marking a constant as external still allows loading from it.
+  call void @readExternal(i32* bitcast (i64* @main.exportedConst to i32*))
+  %constLoad = load i64, i64 * @main.exportedConst
+  call void @runtime.printint64(i64 %constLoad)
+
   ; Test that this even propagates through functions.
   call void @modifyExternal(i32* bitcast (void ()* @willModifyGlobal to i32*))
   store i16 7, i16* @main.exposedValue2
@@ -95,6 +101,8 @@ entry:
 declare i64 @someValue()
 
 declare void @modifyExternal(i32*)
+
+declare void @readExternal(i32*)
 
 ; This function will modify an external value. By passing this function as a
 ; function pointer to an external function, @main.exposedValue2 should be

@@ -5,6 +5,7 @@ target triple = "x86_64--linux"
 @main.nonConst2 = local_unnamed_addr global i64 0
 @main.someArray = global [8 x { i16, i32 }] zeroinitializer
 @main.exportedValue = global [1 x i16*] [i16* @main.exposedValue1]
+@main.exportedConst = constant i64 42
 @main.exposedValue1 = global i16 0
 @main.exposedValue2 = local_unnamed_addr global i16 0
 @main.insertedValue = local_unnamed_addr global { i8, i32, { float, { i64, i16 } } } zeroinitializer
@@ -24,6 +25,8 @@ entry:
   call void @modifyExternal(i32* bitcast (i8* getelementptr inbounds (i8, i8* bitcast ([8 x { i16, i32 }]* @main.someArray to i8*), i32 28) to i32*))
   call void @modifyExternal(i32* bitcast ([1 x i16*]* @main.exportedValue to i32*))
   store i16 5, i16* @main.exposedValue1, align 2
+  call void @readExternal(i32* bitcast (i64* @main.exportedConst to i32*))
+  call void @runtime.printint64(i64 42)
   call void @modifyExternal(i32* bitcast (void ()* @willModifyGlobal to i32*))
   store i16 7, i16* @main.exposedValue2, align 2
   call void @modifyExternal(i32* bitcast (void ()* @hasInlineAsm to i32*))
@@ -53,6 +56,8 @@ entry:
 declare i64 @someValue() local_unnamed_addr
 
 declare void @modifyExternal(i32*) local_unnamed_addr
+
+declare void @readExternal(i32*) local_unnamed_addr
 
 define void @willModifyGlobal() {
 entry:
