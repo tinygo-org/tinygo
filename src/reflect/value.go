@@ -400,7 +400,14 @@ func (v Value) Elem() Value {
 			value:    ptr,
 			flags:    v.flags | valueFlagIndirect,
 		}
-	default: // not implemented: Interface
+	case Interface:
+		typecode, value := decomposeInterface(*(*interface{})(v.value))
+		return Value{
+			typecode: typecode,
+			value:    value,
+			flags:    v.flags &^ valueFlagIndirect,
+		}
+	default:
 		panic(&ValueError{"Elem"})
 	}
 }
