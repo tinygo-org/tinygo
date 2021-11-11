@@ -120,6 +120,8 @@ func main() {
 		&linkedList{
 			foo: 42,
 		},
+		// interfaces
+		[]interface{}{3, "str", -4 + 2.5i},
 	} {
 		showValue(reflect.ValueOf(v), "")
 	}
@@ -377,6 +379,9 @@ func showValue(rv reflect.Value, indent string) {
 	case reflect.Interface:
 		println(indent + "  interface")
 		println(indent+"  nil:", rv.IsNil())
+		if !rv.IsNil() {
+			showValue(rv.Elem(), indent+"  ")
+		}
 	case reflect.Map:
 		println(indent + "  map")
 		println(indent+"  nil:", rv.IsNil())
