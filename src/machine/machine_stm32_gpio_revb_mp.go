@@ -1,5 +1,5 @@
-//go:build stm32 && !stm32l4 && !stm32l5 && !stm32wle5
-// +build stm32,!stm32l4,!stm32l5,!stm32wle5
+//go:build stm32wle5
+// +build stm32wle5
 
 package machine
 
@@ -7,9 +7,16 @@ import (
 	"device/stm32"
 )
 
+//
 // This variant of the GPIO input interrupt logic is for
-// chips with a smaller number of interrupt channels
-// (that fits in a single register).
+// multi-core chips with a larger number of interrupt
+// channels (more than fits in a single register).
+//
+// This logic is currently used by the single-core stm32wle5
+// due to a patch in stm32-rs project that has renamed the
+// registers to match the dual-core names.  This renaming is
+// being discussed and may change in future.
+//
 
 //
 // STM32 allows one interrupt source per pin number, with
@@ -43,7 +50,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	enableEXTIConfigRegisters()
 
 	if callback == nil {
-		stm32.EXTI.IMR.ClearBits(1 << pin)
+		stm32.EXTI.C1IMR1.ClearBits(1 << pin)
 		pinCallbacks[pin] = nil
 		return nil
 	}
@@ -65,29 +72,16 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	crReg.ReplaceBits(port, 0xf, shift)
 
 	if (change & PinRising) != 0 {
-		stm32.EXTI.RTSR.SetBits(1 << pin)
+		stm32.EXTI.RTSR1.SetBits(1 << pin)
 	}
 	if (change & PinFalling) != 0 {
-		stm32.EXTI.FTSR.SetBits(1 << pin)
+		stm32.EXTI.FTSR1.SetBits(1 << pin)
 	}
-	stm32.EXTI.IMR.SetBits(1 << pin)
+	stm32.EXTI.C1IMR1.SetBits(1 << pin)
 
 	intr := p.registerInterrupt()
 	intr.SetPriority(0)
 	intr.Enable()
 
 	return nil
-}
-
-func handlePinInterrupt(pin uint8) {
-	if stm32.EXTI.PR.HasBits(1 << pin) {
-		// Writing 1 to the pending register clears the
-		// pending flag for that bit
-		stm32.EXTI.PR.Set(1 << pin)
-
-		callback := pinCallbacks[pin]
-		if callback != nil {
-			callback(interruptPins[pin])
-		}
-	}
 }

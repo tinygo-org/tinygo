@@ -1,5 +1,5 @@
-//go:build stm32 && !stm32f1 && !stm32l5 && !stm32wle5
-// +build stm32,!stm32f1,!stm32l5,!stm32wle5
+//go:build stm32wle5
+// +build stm32wle5
 
 package machine
 
@@ -23,6 +23,5 @@ func getEXTIConfigRegister(pin uint8) *volatile.Register32 {
 }
 
 func enableEXTIConfigRegisters() {
-	// Enable SYSCFG
-	stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_SYSCFGEN)
+	// No registers to enable
 }
