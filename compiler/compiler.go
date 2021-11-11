@@ -1622,10 +1622,14 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		array := b.getValue(expr.X)
 		index := b.getValue(expr.Index)
 
+		// Extend index to at least uintptr size, because getelementptr assumes
+		// index is a signed integer.
+		index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
+
 		// Check bounds.
 		arrayLen := expr.X.Type().Underlying().(*types.Array).Len()
 		arrayLenLLVM := llvm.ConstInt(b.uintptrType, uint64(arrayLen), false)
-		b.createLookupBoundsCheck(arrayLenLLVM, index, expr.Index.Type())
+		b.createLookupBoundsCheck(arrayLenLLVM, index)
 
 		// Can't load directly from array (as index is non-constant), so have to
 		// do it using an alloca+gep+load.
@@ -1666,8 +1670,12 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, b.makeError(expr.Pos(), "todo: indexaddr: "+ptrTyp.String())
 		}
 
+		// Make sure index is at least the size of uintptr becuase getelementptr
+		// assumes index is a signed integer.
+		index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
+
 		// Bounds check.
-		b.createLookupBoundsCheck(buflen, index, expr.Index.Type())
+		b.createLookupBoundsCheck(buflen, index)
 
 		switch expr.X.Type().Underlying().(type) {
 		case *types.Pointer:
@@ -1691,9 +1699,17 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				panic("lookup on non-string?")
 			}
 
+			// Sometimes, the index can be e.g. an uint8 or int8, and we have to
+			// correctly extend that type for two reasons:
+			//  1. The lookup bounds check expects an index of at least uintptr
+			//     size.
+			//  2. getelementptr has signed operands, and therefore s[uint8(x)]
+			//     can be lowered as s[int8(x)]. That would be a bug.
+			index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
+
 			// Bounds check.
 			length := b.CreateExtractValue(value, 1, "len")
-			b.createLookupBoundsCheck(length, index, expr.Index.Type())
+			b.createLookupBoundsCheck(length, index)
 
 			// Lookup byte
 			buf := b.CreateExtractValue(value, 0, "")
@@ -1819,13 +1835,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		if expr.Low != nil {
 			lowType = expr.Low.Type().Underlying().(*types.Basic)
 			low = b.getValue(expr.Low)
-			if low.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
-				if lowType.Info()&types.IsUnsigned != 0 {
-					low = b.CreateZExt(low, b.uintptrType, "")
-				} else {
-					low = b.CreateSExt(low, b.uintptrType, "")
-				}
-			}
+			low = b.extendInteger(low, lowType, b.uintptrType)
 		} else {
 			lowType = types.Typ[types.Uintptr]
 			low = llvm.ConstInt(b.uintptrType, 0, false)
@@ -1834,13 +1844,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		if expr.High != nil {
 			highType = expr.High.Type().Underlying().(*types.Basic)
 			high = b.getValue(expr.High)
-			if high.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
-				if highType.Info()&types.IsUnsigned != 0 {
-					high = b.CreateZExt(high, b.uintptrType, "")
-				} else {
-					high = b.CreateSExt(high, b.uintptrType, "")
-				}
-			}
+			high = b.extendInteger(high, highType, b.uintptrType)
 		} else {
 			highType = types.Typ[types.Uintptr]
 		}
@@ -1848,13 +1852,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		if expr.Max != nil {
 			maxType = expr.Max.Type().Underlying().(*types.Basic)
 			max = b.getValue(expr.Max)
-			if max.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
-				if maxType.Info()&types.IsUnsigned != 0 {
-					max = b.CreateZExt(max, b.uintptrType, "")
-				} else {
-					max = b.CreateSExt(max, b.uintptrType, "")
-				}
-			}
+			max = b.extendInteger(max, maxType, b.uintptrType)
 		} else {
 			maxType = types.Typ[types.Uintptr]
 		}
