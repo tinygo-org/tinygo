@@ -302,6 +302,19 @@ func Verbose() bool {
 	return flagVerbose
 }
 
+// AllocsPerRun returns the average number of allocations during calls to f.
+// Although the return value has type float64, it will always be an integral
+// value.
+//
+// Not implemented.
+func AllocsPerRun(runs int, f func()) (avg float64) {
+	f()
+	for i := 0; i < runs; i++ {
+		f()
+	}
+	return 0
+}
+
 func TestMain(m *M) {
 	os.Exit(m.Run())
 }
