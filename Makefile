@@ -54,7 +54,7 @@ ifeq ($(OS),Windows_NT)
     CGO_LDFLAGS += -static -static-libgcc -static-libstdc++
     CGO_LDFLAGS_EXTRA += -lversion
 
-	BINARYEN_OPTION += -DCMAKE_EXE_LINKER_FLAGS='-static-libgcc -static-libstdc++'
+    BINARYEN_OPTION += -DCMAKE_EXE_LINKER_FLAGS='-static-libgcc -static-libstdc++'
 
     LIBCLANG_NAME = libclang
 
