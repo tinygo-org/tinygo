@@ -8,3 +8,10 @@ package debug
 func SetMaxStack(n int) int {
 	return n
 }
+
+// Stack returns a formatted stack trace of the goroutine that calls it.
+//
+// Not implemented.
+func Stack() []byte {
+	return nil
+}
