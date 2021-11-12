@@ -244,8 +244,18 @@ func runPackageTest(config *compileopts.Config, result builder.BuildResult, test
 		cmd.Dir = result.MainDir
 	} else {
 		// Run in an emulator.
-		// TODO: pass the -test.v flag if needed.
 		args := append(config.Target.Emulator[1:], result.Binary)
+		if config.Target.Emulator[0] == "wasmtime" {
+			// allow reading from current directory: --dir=.
+			// mark end of wasmtime arguments and start of program ones: --
+			args = append(args, "--dir=.", "--")
+			if testVerbose {
+				args = append(args, "-test.v")
+			}
+			if testShort {
+				args = append(args, "-test.short")
+			}
+		}
 		cmd = executeCommand(config.Options, config.Target.Emulator[0], args...)
 	}
 	cmd.Stdout = os.Stdout
