@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-windows:
-    runs-on: windows-2016
+    runs-on: windows-2019
     steps:
       - name: Install Go
         uses: actions/setup-go@v2
