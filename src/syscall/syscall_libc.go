@@ -51,11 +51,30 @@ func Open(path string, flag int, mode uint32) (fd int, err error) {
 }
 
 func Mkdir(path string, mode uint32) (err error) {
-	return ENOSYS // TODO
+	data := cstring(path)
+	fail := int(libc_mkdir(&data[0], mode))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Rmdir(path string) (err error) {
+	data := cstring(path)
+	fail := int(libc_rmdir(&data[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
 }
 
 func Unlink(path string) (err error) {
-	return ENOSYS // TODO
+	data := cstring(path)
+	fail := int(libc_unlink(&data[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
 }
 
 func Kill(pid int, sig Signal) (err error) {
@@ -136,3 +155,15 @@ func libc_mmap(addr unsafe.Pointer, length uintptr, prot, flags, fd int32, offse
 // int mprotect(void *addr, size_t len, int prot);
 //export mprotect
 func libc_mprotect(addr unsafe.Pointer, len uintptr, prot int32) int32
+
+// int mkdir(const char *pathname, mode_t mode);
+//export mkdir
+func libc_mkdir(pathname *byte, mode uint32) int32
+
+// int rmdir(const char *pathname);
+//export rmdir
+func libc_rmdir(pathname *byte) int32
+
+// int unlink(const char *pathname);
+//export unlink
+func libc_unlink(pathname *byte) int32
