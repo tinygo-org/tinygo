@@ -1,0 +1,18 @@
+{
+	"llvm-target":   "wasm32--ic",
+	"build-tags":    ["tinygo.wasm", "ic"],
+	"goos":          "ic",
+	"goarch":        "wasm",
+	"linker":        "wasm-ld",
+	"cflags": [
+		"--target=wasm32--ic",
+		"-Oz"
+	],
+	"ldflags": [
+		"--allow-undefined",
+		"--stack-first",
+		"--no-demangle"
+	],
+	"emulator":      ["dfx"],
+	"wasm-abi":      "generic"
+}
