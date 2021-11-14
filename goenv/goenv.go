@@ -25,6 +25,12 @@ var Keys = []string{
 	"TINYGOROOT",
 }
 
+func init() {
+	if Get("GOARCH") == "arm" {
+		Keys = append(Keys, "GOARM")
+	}
+}
+
 // TINYGOROOT is the path to the final location for checking tinygo files. If
 // unset (by a -X ldflag), then sourceDir() will fallback to the original build
 // directory.
@@ -44,6 +50,20 @@ func Get(name string) string {
 			return dir
 		}
 		return runtime.GOARCH
+	case "GOARM":
+		if goarm := os.Getenv("GOARM"); goarm != "" {
+			return goarm
+		}
+		if goos := Get("GOOS"); goos == "windows" || goos == "android" {
+			// Assume Windows and Android are running on modern CPU cores.
+			// This matches upstream Go.
+			return "7"
+		}
+		// Default to ARMv6 on other devices.
+		// The difference between ARMv5 and ARMv6 is big, much bigger than the
+		// difference between ARMv6 and ARMv7. ARMv6 binaries are much smaller,
+		// especially when floating point instructions are involved.
+		return "6"
 	case "GOROOT":
 		return getGoroot()
 	case "GOPATH":

@@ -5,6 +5,7 @@ package compileopts
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -165,13 +166,26 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 	if options.Target == "" {
 		// Configure based on GOOS/GOARCH environment variables (falling back to
 		// runtime.GOOS/runtime.GOARCH), and generate a LLVM target based on it.
-		llvmarch := map[string]string{
-			"386":   "i386",
-			"amd64": "x86_64",
-			"arm64": "aarch64",
-			"arm":   "armv7",
-		}[options.GOARCH]
-		if llvmarch == "" {
+		var llvmarch string
+		switch options.GOARCH {
+		case "386":
+			llvmarch = "i386"
+		case "amd64":
+			llvmarch = "x86_64"
+		case "arm64":
+			llvmarch = "aarch64"
+		case "arm":
+			switch options.GOARM {
+			case "5":
+				llvmarch = "armv5"
+			case "6":
+				llvmarch = "armv6"
+			case "7":
+				llvmarch = "armv7"
+			default:
+				return nil, fmt.Errorf("invalid GOARM=%s, must be 5, 6, or 7", options.GOARM)
+			}
+		default:
 			llvmarch = options.GOARCH
 		}
 		llvmos := options.GOOS
@@ -245,7 +259,14 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		spec.Features = "+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
 	case "arm":
 		spec.CPU = "generic"
-		spec.Features = "+armv7-a,+dsp,+fp64,+vfp2,+vfp2sp,+vfp3d16,+vfp3d16sp,-thumb-mode"
+		switch strings.Split(triple, "-")[0] {
+		case "armv5":
+			spec.Features = "+armv5t,+strict-align,-thumb-mode"
+		case "armv6":
+			spec.Features = "+armv6,+dsp,+fp64,+strict-align,+vfp2,+vfp2sp,-thumb-mode"
+		case "armv7":
+			spec.Features = "+armv7-a,+dsp,+fp64,+vfp2,+vfp2sp,+vfp3d16,+vfp3d16sp,-thumb-mode"
+		}
 	case "arm64":
 		spec.CPU = "generic"
 		spec.Features = "+neon"
