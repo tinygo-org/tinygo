@@ -21,6 +21,7 @@ var (
 type Options struct {
 	GOOS            string // environment variable
 	GOARCH          string // environment variable
+	GOARM           string // environment variable (only used with GOARCH=arm)
 	Target          string
 	Opt             string
 	GC              string

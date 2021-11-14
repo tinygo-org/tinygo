@@ -95,13 +95,13 @@ func TestCompiler(t *testing.T) {
 
 	if runtime.GOOS == "linux" {
 		t.Run("X86Linux", func(t *testing.T) {
-			runPlatTests(optionsFromOSARCH("linux", "386"), tests, t)
+			runPlatTests(optionsFromOSARCH("linux/386"), tests, t)
 		})
 		t.Run("ARMLinux", func(t *testing.T) {
-			runPlatTests(optionsFromOSARCH("linux", "arm"), tests, t)
+			runPlatTests(optionsFromOSARCH("linux/arm/6"), tests, t)
 		})
 		t.Run("ARM64Linux", func(t *testing.T) {
-			runPlatTests(optionsFromOSARCH("linux", "arm64"), tests, t)
+			runPlatTests(optionsFromOSARCH("linux/arm64"), tests, t)
 		})
 		t.Run("WebAssembly", func(t *testing.T) {
 			runPlatTests(optionsFromTarget("wasm"), tests, t)
@@ -125,6 +125,7 @@ func TestCompiler(t *testing.T) {
 			runTestWithConfig("stdlib.go", t, compileopts.Options{
 				GOOS:   goenv.Get("GOOS"),
 				GOARCH: goenv.Get("GOARCH"),
+				GOARM:  goenv.Get("GOARM"),
 				Opt:    "1",
 			}, nil, nil)
 		})
@@ -136,6 +137,7 @@ func TestCompiler(t *testing.T) {
 			runTestWithConfig("print.go", t, compileopts.Options{
 				GOOS:   goenv.Get("GOOS"),
 				GOARCH: goenv.Get("GOARCH"),
+				GOARM:  goenv.Get("GOARM"),
 				Opt:    "0",
 			}, nil, nil)
 		})
@@ -145,6 +147,7 @@ func TestCompiler(t *testing.T) {
 			runTestWithConfig("ldflags.go", t, compileopts.Options{
 				GOOS:   goenv.Get("GOOS"),
 				GOARCH: goenv.Get("GOARCH"),
+				GOARM:  goenv.Get("GOARM"),
 				GlobalValues: map[string]map[string]string{
 					"main": {
 						"someGlobal": "foobar",
@@ -200,15 +203,24 @@ func optionsFromTarget(target string) compileopts.Options {
 		// GOOS/GOARCH are only used if target == ""
 		GOOS:   goenv.Get("GOOS"),
 		GOARCH: goenv.Get("GOARCH"),
+		GOARM:  goenv.Get("GOARM"),
 		Target: target,
 	}
 }
 
-func optionsFromOSARCH(goos, goarch string) compileopts.Options {
-	return compileopts.Options{
-		GOOS:   goos,
-		GOARCH: goarch,
+// optionsFromOSARCH returns a set of options based on the "osarch" string. This
+// string is in the form of "os/arch/subarch", with the subarch only sometimes
+// being necessary. Examples are "darwin/amd64" or "linux/arm/7".
+func optionsFromOSARCH(osarch string) compileopts.Options {
+	parts := strings.Split(osarch, "/")
+	options := compileopts.Options{
+		GOOS:   parts[0],
+		GOARCH: parts[1],
 	}
+	if options.GOARCH == "arm" {
+		options.GOARM = parts[2]
+	}
+	return options
 }
 
 func runTest(name string, options compileopts.Options, t *testing.T, cmdArgs, environmentVars []string) {

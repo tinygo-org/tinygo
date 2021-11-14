@@ -60,6 +60,12 @@ func (c *Config) GOARCH() string {
 	return c.Target.GOARCH
 }
 
+// GOARM will return the GOARM environment variable given to the compiler when
+// building a program.
+func (c *Config) GOARM() string {
+	return c.Options.GOARM
+}
+
 // BuildTags returns the complete list of build tags used during this build.
 func (c *Config) BuildTags() []string {
 	tags := append(c.Target.BuildTags, []string{"tinygo", "math_big_pure_go", "gc." + c.GC(), "scheduler." + c.Scheduler(), "serial." + c.Serial()}...)
