@@ -93,7 +93,12 @@ func (c *Config) GC() string {
 	if c.Target.GC != "" {
 		return c.Target.GC
 	}
-	return "conservative"
+	for _, t := range c.Target.BuildTags {
+		if t == "baremetal" || t == "tinygo.wasm" {
+			return "conservative"
+		}
+	}
+	return "extalloc"
 }
 
 // NeedsStackObjects returns true if the compiler should insert stack objects

@@ -1,3 +1,4 @@
+//go:build gc.extalloc
 // +build gc.extalloc
 
 package runtime
@@ -358,18 +359,16 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 				}
 			}
 
-			var newList []allocListEntry
 			newListHeader := (*struct {
 				ptr unsafe.Pointer
 				len uintptr
 				cap uintptr
-			})(unsafe.Pointer(&newList))
+			})(unsafe.Pointer(&allocList))
 			newListHeader.ptr = newListPtr
 			newListHeader.len = uintptr(len(oldList))
 			newListHeader.cap = newCap
 
-			copy(newList, oldList)
-			allocList = newList
+			copy(allocList, oldList)
 
 			if cap(oldList) != 0 {
 				free(unsafe.Pointer(&oldList[0]))
