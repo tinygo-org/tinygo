@@ -175,6 +175,8 @@ func IsPathSeparator(c uint8) bool {
 }
 
 // PathError records an error and the operation and file path that caused it.
+// TODO: PathError moved to io/fs in go 1.16 and left an alias in os/errors.go.
+// Do the same once we drop support for go 1.15.
 type PathError struct {
 	Op   string
 	Path string

@@ -223,6 +223,7 @@ TEST_PACKAGES = \
 	math \
 	math/cmplx \
 	net/mail \
+	os \
 	reflect \
 	testing \
 	testing/iotest \
