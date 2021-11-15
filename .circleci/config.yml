@@ -228,44 +228,62 @@ commands:
       - run: make wasmtest
   build-linux:
     steps:
-      - checkout
-      - submodules
       - run:
-          name: "Install apt dependencies"
+          name: "Install apk dependencies"
           command: |
-            sudo apt-get update
-            sudo apt-get install --no-install-recommends \
-                libgnutls30 libssl1.0.2 \
-                ninja-build \
-                python3
-      - install-cmake
-      - hack-ninja-jobs
+            apk add git openssh make g++ gcompat
+      - checkout
+      - run:
+          name: "Install Go"
+          command: |
+            wget https://dl.google.com/go/go1.17.3.linux-amd64.tar.gz
+            tar -C /usr/local -xzf go1.17.3.linux-amd64.tar.gz
+            ln -s /usr/local/go/bin/go /usr/local/bin/go
+      #- submodules
       - restore_cache:
+          name: "Restore Go cache"
           keys:
-            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
-            - go-cache-v2-{{ checksum "go.mod" }}
-      - llvm-source-linux
+            - go-cache-alpine-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
+            - go-cache-alpine-v2-{{ checksum "go.mod" }}
       - restore_cache:
+          name: "Restore llvm-source cache"
           keys:
-            - llvm-build-11-linux-v4-noassert
+            - llvm-source-11-alpine-v2-x0
+      - run:
+          name: "Fetch LLVM source"
+          command: make llvm-source
+      - save_cache:
+          name: "Save llvm-source cache"
+          key: llvm-source-11-alpine-v2-x0
+          paths:
+            - llvm-project
+            #- llvm-project/clang/lib/Headers
+            #- llvm-project/clang/include
+            #- llvm-project/lld/include
+            #- llvm-project/llvm/include
+      - restore_cache:
+          name: "Restore llvm-build cache"
+          keys:
+            - llvm-build-11-alpine-v1-noassert-x0
       - run:
           name: "Build LLVM"
           command: |
             if [ ! -f llvm-build/lib/liblldELF.a ]
             then
               # fetch LLVM source (may only have headers right now)
-              rm -rf llvm-project
-              make llvm-source
+              #rm -rf llvm-project
+              #make llvm-source
+              # install dependencies
+              apk add cmake samurai python3
               # build!
-              make llvm-build
-              find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+              SAMUFLAGS=-j3 make llvm-build
+              #find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
             fi
       - save_cache:
-          key: llvm-build-11-linux-v4-noassert
+          name: "Save llvm-build cache"
+          key: llvm-build-11-alpine-v1-noassert-x0
           paths:
             llvm-build
-      - build-binaryen-linux-stretch
-      - build-wasi-libc
       - run:
           name: "Install fpm"
           command: |
@@ -286,7 +304,8 @@ commands:
       - store_artifacts:
           path: /tmp/tinygo_amd64.deb
       - save_cache:
-          key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
+          name: "Save Go cache"
+          key: go-cache-alpine-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
             - /go/pkg/mod
@@ -431,7 +450,7 @@ jobs:
       - assert-test-linux
   build-linux:
     docker:
-      - image: circleci/golang:1.17-stretch
+      - image: alpine:3.14
     steps:
       - build-linux
   test-linux-build:
@@ -450,11 +469,11 @@ jobs:
 workflows:
   test-all:
     jobs:
-      - test-llvm11-go115
-      - test-llvm11-go116
+      #- test-llvm11-go115
+      #- test-llvm11-go116
       - build-linux
       - test-linux-build:
           requires:
             - build-linux
-      - build-macos
-      - assert-test-linux
+      #- build-macos
+      #- assert-test-linux

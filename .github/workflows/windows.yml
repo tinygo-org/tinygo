@@ -1,7 +1,7 @@
 name: Windows
 
 on:
-  pull_request:
+  #pull_request:
   push:
     branches:
       - dev
