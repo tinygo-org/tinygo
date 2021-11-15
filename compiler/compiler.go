@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"go/types"
 	"math/bits"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -76,6 +77,7 @@ type compilerContext struct {
 	program          *ssa.Program
 	diagnostics      []error
 	astComments      map[string]*ast.CommentGroup
+	embedGlobals     map[string][]*loader.EmbedFile
 	pkg              *types.Package
 	packageDir       string // directory for this package
 	runtimePkg       *types.Package
@@ -250,6 +252,7 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
 	c := newCompilerContext(moduleName, machine, config, dumpSSA)
 	c.packageDir = pkg.OriginalDir()
+	c.embedGlobals = pkg.EmbedGlobals
 	c.pkg = pkg.Pkg
 	c.runtimePkg = ssaPkg.Prog.ImportedPackage("runtime").Pkg
 	c.program = ssaPkg.Prog
@@ -815,7 +818,9 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			// Global variable.
 			info := c.getGlobalInfo(member)
 			global := c.getGlobal(member)
-			if !info.extern {
+			if files, ok := c.embedGlobals[member.Name()]; ok {
+				c.createEmbedGlobal(member, global, files)
+			} else if !info.extern {
 				global.SetInitializer(llvm.ConstNull(global.Type().ElementType()))
 				global.SetVisibility(llvm.HiddenVisibility)
 				if info.section != "" {
@@ -847,6 +852,150 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			}
 		}
 	}
+}
+
+// createEmbedGlobal creates an initializer for a //go:embed global variable.
+func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Value, files []*loader.EmbedFile) {
+	switch typ := member.Type().(*types.Pointer).Elem().Underlying().(type) {
+	case *types.Basic:
+		// String type.
+		if typ.Kind() != types.String {
+			// This is checked at the AST level, so should be unreachable.
+			panic("expected a string type")
+		}
+		if len(files) != 1 {
+			c.addError(member.Pos(), fmt.Sprintf("//go:embed for a string should be given exactly one file, got %d", len(files)))
+			return
+		}
+		strObj := c.getEmbedFileString(files[0])
+		global.SetInitializer(strObj)
+		global.SetVisibility(llvm.HiddenVisibility)
+
+	case *types.Slice:
+		if typ.Elem().Underlying().(*types.Basic).Kind() != types.Byte {
+			// This is checked at the AST level, so should be unreachable.
+			panic("expected a byte slice")
+		}
+		if len(files) != 1 {
+			c.addError(member.Pos(), fmt.Sprintf("//go:embed for a string should be given exactly one file, got %d", len(files)))
+			return
+		}
+		file := files[0]
+		bufferValue := c.ctx.ConstString(string(file.Data), false)
+		bufferGlobal := llvm.AddGlobal(c.mod, bufferValue.Type(), c.pkg.Path()+"$embedslice")
+		bufferGlobal.SetInitializer(bufferValue)
+		bufferGlobal.SetLinkage(llvm.InternalLinkage)
+		bufferGlobal.SetAlignment(1)
+		slicePtr := llvm.ConstInBoundsGEP(bufferGlobal, []llvm.Value{
+			llvm.ConstInt(c.uintptrType, 0, false),
+			llvm.ConstInt(c.uintptrType, 0, false),
+		})
+		sliceLen := llvm.ConstInt(c.uintptrType, file.Size, false)
+		sliceObj := c.ctx.ConstStruct([]llvm.Value{slicePtr, sliceLen, sliceLen}, false)
+		global.SetInitializer(sliceObj)
+		global.SetVisibility(llvm.HiddenVisibility)
+
+	case *types.Struct:
+		// Assume this is an embed.FS struct:
+		// https://cs.opensource.google/go/go/+/refs/tags/go1.18.2:src/embed/embed.go;l=148
+		// It looks like this:
+		//   type FS struct {
+		//       files *file
+		//   }
+
+		// Make a slice of the files, as they will appear in the binary. They
+		// are sorted in a special way to allow for binary searches, see
+		// src/embed/embed.go for details.
+		dirset := map[string]struct{}{}
+		var allFiles []*loader.EmbedFile
+		for _, file := range files {
+			allFiles = append(allFiles, file)
+			dirname := file.Name
+			for {
+				dirname, _ = path.Split(path.Clean(dirname))
+				if dirname == "" {
+					break
+				}
+				if _, ok := dirset[dirname]; ok {
+					break
+				}
+				dirset[dirname] = struct{}{}
+				allFiles = append(allFiles, &loader.EmbedFile{
+					Name: dirname,
+				})
+			}
+		}
+		sort.Slice(allFiles, func(i, j int) bool {
+			dir1, name1 := path.Split(path.Clean(allFiles[i].Name))
+			dir2, name2 := path.Split(path.Clean(allFiles[j].Name))
+			if dir1 != dir2 {
+				return dir1 < dir2
+			}
+			return name1 < name2
+		})
+
+		// Make the backing array for the []files slice. This is a LLVM global.
+		embedFileStructType := c.getLLVMType(typ.Field(0).Type().(*types.Pointer).Elem().(*types.Slice).Elem())
+		var fileStructs []llvm.Value
+		for _, file := range allFiles {
+			fileStruct := llvm.ConstNull(embedFileStructType)
+			name := c.createConst(ssa.NewConst(constant.MakeString(file.Name), types.Typ[types.String]))
+			fileStruct = llvm.ConstInsertValue(fileStruct, name, []uint32{0}) // "name" field
+			if file.Hash != "" {
+				data := c.getEmbedFileString(file)
+				fileStruct = llvm.ConstInsertValue(fileStruct, data, []uint32{1}) // "data" field
+			}
+			fileStructs = append(fileStructs, fileStruct)
+		}
+		sliceDataInitializer := llvm.ConstArray(embedFileStructType, fileStructs)
+		sliceDataGlobal := llvm.AddGlobal(c.mod, sliceDataInitializer.Type(), c.pkg.Path()+"$embedfsfiles")
+		sliceDataGlobal.SetInitializer(sliceDataInitializer)
+		sliceDataGlobal.SetLinkage(llvm.InternalLinkage)
+		sliceDataGlobal.SetGlobalConstant(true)
+		sliceDataGlobal.SetUnnamedAddr(true)
+		sliceDataGlobal.SetAlignment(c.targetData.ABITypeAlignment(sliceDataInitializer.Type()))
+
+		// Create the slice object itself.
+		// Because embed.FS refers to it as *[]embed.file instead of a plain
+		// []embed.file, we have to store this as a global.
+		slicePtr := llvm.ConstInBoundsGEP(sliceDataGlobal, []llvm.Value{
+			llvm.ConstInt(c.uintptrType, 0, false),
+			llvm.ConstInt(c.uintptrType, 0, false),
+		})
+		sliceLen := llvm.ConstInt(c.uintptrType, uint64(len(fileStructs)), false)
+		sliceInitializer := c.ctx.ConstStruct([]llvm.Value{slicePtr, sliceLen, sliceLen}, false)
+		sliceGlobal := llvm.AddGlobal(c.mod, sliceInitializer.Type(), c.pkg.Path()+"$embedfsslice")
+		sliceGlobal.SetInitializer(sliceInitializer)
+		sliceGlobal.SetLinkage(llvm.InternalLinkage)
+		sliceGlobal.SetGlobalConstant(true)
+		sliceGlobal.SetUnnamedAddr(true)
+		sliceGlobal.SetAlignment(c.targetData.ABITypeAlignment(sliceInitializer.Type()))
+
+		// Define the embed.FS struct. It has only one field: the files (as a
+		// *[]embed.file).
+		globalInitializer := llvm.ConstNull(c.getLLVMType(member.Type().(*types.Pointer).Elem()))
+		globalInitializer = llvm.ConstInsertValue(globalInitializer, sliceGlobal, []uint32{0})
+		global.SetInitializer(globalInitializer)
+		global.SetVisibility(llvm.HiddenVisibility)
+		global.SetAlignment(c.targetData.ABITypeAlignment(globalInitializer.Type()))
+	}
+}
+
+// getEmbedFileString returns the (constant) string object with the contents of
+// the given file. This is a llvm.Value of a regular Go string.
+func (c *compilerContext) getEmbedFileString(file *loader.EmbedFile) llvm.Value {
+	dataGlobalName := "embed/file_" + file.Hash
+	dataGlobal := c.mod.NamedGlobal(dataGlobalName)
+	if dataGlobal.IsNil() {
+		dataGlobalType := llvm.ArrayType(c.ctx.Int8Type(), int(file.Size))
+		dataGlobal = llvm.AddGlobal(c.mod, dataGlobalType, dataGlobalName)
+	}
+	strPtr := llvm.ConstInBoundsGEP(dataGlobal, []llvm.Value{
+		llvm.ConstInt(c.uintptrType, 0, false),
+		llvm.ConstInt(c.uintptrType, 0, false),
+	})
+	strLen := llvm.ConstInt(c.uintptrType, file.Size, false)
+	return llvm.ConstNamedStruct(c.getLLVMRuntimeType("_string"), []llvm.Value{strPtr, strLen})
 }
 
 // createFunction builds the LLVM IR implementation for this function. The

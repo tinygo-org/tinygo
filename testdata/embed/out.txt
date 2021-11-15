@@ -1,0 +1,8 @@
+string: hello world!
+bytes: hello world!
+files:
+- a
+- a/b
+- a/b/bar.txt
+- a/b/foo.txt
+- hello.txt
