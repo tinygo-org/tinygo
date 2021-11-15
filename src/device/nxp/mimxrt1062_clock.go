@@ -2,6 +2,7 @@
 // Type definitions, fields, and constants associated with various clocks and
 // peripherals of the NXP MIMXRT1062.
 
+//go:build nxp && mimxrt1062
 // +build nxp,mimxrt1062
 
 package nxp
