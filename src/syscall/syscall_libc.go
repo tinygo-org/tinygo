@@ -42,7 +42,7 @@ func Seek(fd int, offset int64, whence int) (off int64, err error) {
 }
 
 func Open(path string, flag int, mode uint32) (fd int, err error) {
-	data := append([]byte(path), 0)
+	data := cstring(path)
 	fd = int(libc_open(&data[0], int32(flag), mode))
 	if fd < 0 {
 		err = getErrno()
@@ -63,7 +63,7 @@ func Kill(pid int, sig Signal) (err error) {
 }
 
 func Getenv(key string) (value string, found bool) {
-	data := append([]byte(key), 0)
+	data := cstring(key)
 	raw := libc_getenv(&data[0])
 	if raw == nil {
 		return "", false
@@ -94,6 +94,14 @@ func Mprotect(b []byte, prot int) (err error) {
 		err = getErrno()
 	}
 	return
+}
+
+// cstring converts a Go string to a C string.
+func cstring(s string) []byte {
+	data := make([]byte, len(s)+1)
+	copy(data, s)
+	// final byte should be zero from the initial allocation
+	return data
 }
 
 func splitSlice(p []byte) (buf *byte, len uintptr) {
