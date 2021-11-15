@@ -216,6 +216,7 @@ TEST_PACKAGES = \
 	hash/crc64 \
 	html \
 	index/suffixarray \
+	internal/itoa \
 	math \
 	math/cmplx \
 	net/mail \

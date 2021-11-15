@@ -1,5 +1,7 @@
 package syscall
 
+import "internal/itoa"
+
 // Most code here has been copied from the Go sources:
 //   https://github.com/golang/go/blob/go1.12/src/syscall/syscall_js.go
 // It has the following copyright note:
@@ -18,7 +20,7 @@ package syscall
 type Errno uintptr
 
 func (e Errno) Error() string {
-	return "errno " + itoa(int(e))
+	return "errno " + itoa.Itoa(int(e))
 }
 
 func (e Errno) Temporary() bool {
