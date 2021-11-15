@@ -4,6 +4,7 @@
 package builder
 
 import (
+	"crypto/sha256"
 	"crypto/sha512"
 	"debug/elf"
 	"encoding/binary"
@@ -80,6 +81,7 @@ type packageAction struct {
 	Config           *compiler.Config
 	CFlags           []string
 	FileHashes       map[string]string // hash of every file that's part of the package
+	EmbeddedFiles    map[string]string // hash of all the //go:embed files in the package
 	Imports          map[string]string // map from imported package to action ID hash
 	OptLevel         int               // LLVM optimization level (0-3)
 	SizeLevel        int               // LLVM optimization for size level (0-2)
@@ -224,6 +226,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		config.Options.GlobalValues["runtime"]["buildVersion"] = version
 	}
 
+	var embedFileObjects []*compileJob
 	for _, pkg := range lprogram.Sorted() {
 		pkg := pkg // necessary to avoid a race condition
 
@@ -232,6 +235,47 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			undefinedGlobals = append(undefinedGlobals, name)
 		}
 		sort.Strings(undefinedGlobals)
+
+		// Make compile jobs to load files to be embedded in the output binary.
+		var actionIDDependencies []*compileJob
+		allFiles := map[string][]*loader.EmbedFile{}
+		for _, files := range pkg.EmbedGlobals {
+			for _, file := range files {
+				allFiles[file.Name] = append(allFiles[file.Name], file)
+			}
+		}
+		for name, files := range allFiles {
+			name := name
+			files := files
+			job := &compileJob{
+				description: "make object file for " + name,
+				run: func(job *compileJob) error {
+					// Read the file contents in memory.
+					path := filepath.Join(pkg.Dir, name)
+					data, err := os.ReadFile(path)
+					if err != nil {
+						return err
+					}
+
+					// Hash the file.
+					sum := sha256.Sum256(data)
+					hexSum := hex.EncodeToString(sum[:16])
+
+					for _, file := range files {
+						file.Size = uint64(len(data))
+						file.Hash = hexSum
+						if file.NeedsData {
+							file.Data = data
+						}
+					}
+
+					job.result, err = createEmbedObjectFile(string(data), hexSum, name, pkg.OriginalDir(), dir, compilerConfig)
+					return err
+				},
+			}
+			actionIDDependencies = append(actionIDDependencies, job)
+			embedFileObjects = append(embedFileObjects, job)
+		}
 
 		// Action ID jobs need to know the action ID of all the jobs the package
 		// imports.
@@ -242,6 +286,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				return fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
 			}
 			importedPackages = append(importedPackages, job)
+			actionIDDependencies = append(actionIDDependencies, job)
 		}
 
 		// Create a job that will calculate the action ID for a package compile
@@ -249,7 +294,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		// package.
 		packageActionIDJob := &compileJob{
 			description:  "calculate cache key for package " + pkg.ImportPath,
-			dependencies: importedPackages,
+			dependencies: actionIDDependencies,
 			run: func(job *compileJob) error {
 				// Create a cache key: a hash from the action ID below that contains all
 				// the parameters for the build.
@@ -261,6 +306,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 					Config:           compilerConfig,
 					CFlags:           pkg.CFlags,
 					FileHashes:       make(map[string]string, len(pkg.FileHashes)),
+					EmbeddedFiles:    make(map[string]string, len(allFiles)),
 					Imports:          make(map[string]string, len(pkg.Pkg.Imports())),
 					OptLevel:         optLevel,
 					SizeLevel:        sizeLevel,
@@ -268,6 +314,9 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				}
 				for filePath, hash := range pkg.FileHashes {
 					actionID.FileHashes[filePath] = hex.EncodeToString(hash)
+				}
+				for name, files := range allFiles {
+					actionID.EmbeddedFiles[name] = files[0].Hash
 				}
 				for i, imported := range pkg.Pkg.Imports() {
 					actionID.Imports[imported.Path()] = importedPackages[i].result
@@ -657,6 +706,9 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add libc dependencies, if they exist.
 	linkerDependencies = append(linkerDependencies, libcDependencies...)
 
+	// Add embedded files.
+	linkerDependencies = append(linkerDependencies, embedFileObjects...)
+
 	// Strip debug information with -no-debug.
 	if !config.Debug() {
 		for _, tag := range config.BuildTags() {
@@ -907,6 +959,112 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		ModuleRoot: moduleroot,
 		ImportPath: lprogram.MainPkg().ImportPath,
 	})
+}
+
+// createEmbedObjectFile creates a new object file with the given contents, for
+// the embed package.
+func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, compilerConfig *compiler.Config) (string, error) {
+	// TODO: this works for small files, but can be a problem for larger files.
+	// For larger files, it seems more appropriate to generate the object file
+	// manually without going through LLVM.
+	// On the other hand, generating DWARF like we do here can be difficult
+	// without assistance from LLVM.
+
+	// Create new LLVM module just for this file.
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	mod := ctx.NewModule("data")
+	defer mod.Dispose()
+
+	// Create data global.
+	value := ctx.ConstString(data, false)
+	globalName := "embed/file_" + hexSum
+	global := llvm.AddGlobal(mod, value.Type(), globalName)
+	global.SetInitializer(value)
+	global.SetLinkage(llvm.LinkOnceODRLinkage)
+	global.SetGlobalConstant(true)
+	global.SetUnnamedAddr(true)
+	global.SetAlignment(1)
+	if compilerConfig.GOOS != "darwin" {
+		// MachO doesn't support COMDATs, while COFF requires it (to avoid
+		// "duplicate symbol" errors). ELF works either way.
+		// Therefore, only use a COMDAT on non-MachO systems (aka non-MacOS).
+		global.SetComdat(mod.Comdat(globalName))
+	}
+
+	// Add DWARF debug information to this global, so that it is
+	// correctly counted when compiling with the -size= flag.
+	dibuilder := llvm.NewDIBuilder(mod)
+	dibuilder.CreateCompileUnit(llvm.DICompileUnit{
+		Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
+		File:      sourceFile,
+		Dir:       sourceDir,
+		Producer:  "TinyGo",
+		Optimized: false,
+	})
+	ditype := dibuilder.CreateArrayType(llvm.DIArrayType{
+		SizeInBits:  uint64(len(data)) * 8,
+		AlignInBits: 8,
+		ElementType: dibuilder.CreateBasicType(llvm.DIBasicType{
+			Name:       "byte",
+			SizeInBits: 8,
+			Encoding:   llvm.DW_ATE_unsigned_char,
+		}),
+		Subscripts: []llvm.DISubrange{
+			{
+				Lo:    0,
+				Count: int64(len(data)),
+			},
+		},
+	})
+	difile := dibuilder.CreateFile(sourceFile, sourceDir)
+	diglobalexpr := dibuilder.CreateGlobalVariableExpression(difile, llvm.DIGlobalVariableExpression{
+		Name:        globalName,
+		File:        difile,
+		Line:        1,
+		Type:        ditype,
+		Expr:        dibuilder.CreateExpression(nil),
+		AlignInBits: 8,
+	})
+	global.AddMetadata(0, diglobalexpr)
+	mod.AddNamedMetadataOperand("llvm.module.flags",
+		ctx.MDNode([]llvm.Metadata{
+			llvm.ConstInt(ctx.Int32Type(), 2, false).ConstantAsMetadata(), // Warning on mismatch
+			ctx.MDString("Debug Info Version"),
+			llvm.ConstInt(ctx.Int32Type(), 3, false).ConstantAsMetadata(),
+		}),
+	)
+	mod.AddNamedMetadataOperand("llvm.module.flags",
+		ctx.MDNode([]llvm.Metadata{
+			llvm.ConstInt(ctx.Int32Type(), 7, false).ConstantAsMetadata(), // Max on mismatch
+			ctx.MDString("Dwarf Version"),
+			llvm.ConstInt(ctx.Int32Type(), 4, false).ConstantAsMetadata(),
+		}),
+	)
+	dibuilder.Finalize()
+	dibuilder.Destroy()
+
+	// Write this LLVM module out as an object file.
+	machine, err := compiler.NewTargetMachine(compilerConfig)
+	if err != nil {
+		return "", err
+	}
+	defer machine.Dispose()
+	outfile, err := os.CreateTemp(tmpdir, "embed-"+hexSum+"-*.o")
+	if err != nil {
+		return "", err
+	}
+	defer outfile.Close()
+	buf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
+	if err != nil {
+		return "", err
+	}
+	defer buf.Dispose()
+	_, err = outfile.Write(buf.Bytes())
+	if err != nil {
+		return "", err
+	}
+	return outfile.Name(), outfile.Close()
 }
 
 // optimizeProgram runs a series of optimizations and transformations that are

@@ -48,6 +48,7 @@ func TestBuild(t *testing.T) {
 		"calls.go",
 		"cgo/",
 		"channel.go",
+		"embed/",
 		"float.go",
 		"gc.go",
 		"goroutines.go",

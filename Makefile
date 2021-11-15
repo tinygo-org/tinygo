@@ -265,6 +265,7 @@ TEST_PACKAGES_FAST = \
 	crypto/sha256 \
 	crypto/sha512 \
 	debug/macho \
+	embed/internal/embedtest \
 	encoding \
 	encoding/ascii85 \
 	encoding/base32 \
