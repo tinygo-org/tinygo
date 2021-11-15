@@ -1,6 +1,7 @@
 .globaltype __stack_pointer, i32
 
 .global  tinygo_unwind
+.hidden  tinygo_unwind
 .type    tinygo_unwind,@function
 tinygo_unwind: // func (state *stackState) unwind()
     .functype tinygo_unwind (i32) -> ()
@@ -27,6 +28,7 @@ tinygo_unwind: // func (state *stackState) unwind()
     end_function
 
 .global tinygo_launch
+.hidden tinygo_launch
 .type tinygo_launch,@function
 tinygo_launch: // func (state *state) launch()
     .functype tinygo_launch (i32) -> ()
@@ -50,6 +52,7 @@ tinygo_launch: // func (state *state) launch()
     end_function
 
 .global  tinygo_rewind
+.hidden  tinygo_rewind
 .type    tinygo_rewind,@function
 tinygo_rewind: // func (state *state) rewind()
     .functype tinygo_rewind (i32) -> ()
