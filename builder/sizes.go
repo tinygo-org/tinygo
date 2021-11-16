@@ -288,6 +288,13 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 			if symType != elf.STT_FUNC && symType != elf.STT_OBJECT && symType != elf.STT_NOTYPE {
 				continue
 			}
+			if symbol.Section >= elf.SHN_LORESERVE {
+				// Not a regular section, so skip it.
+				// One example is elf.SHN_ABS, which is used for symbols
+				// declared with an absolute value such as the memset function
+				// on the ESP32 which is defined in the mask ROM.
+				continue
+			}
 			section := file.Sections[symbol.Section]
 			if section.Flags&elf.SHF_ALLOC == 0 {
 				continue
