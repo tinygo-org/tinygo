@@ -236,18 +236,10 @@ commands:
             sudo apt-get update
             sudo apt-get install --no-install-recommends \
                 libgnutls30 libssl1.0.2 \
-                qemu-system-arm \
-                qemu-user \
-                gcc-avr \
-                avr-libc \
                 ninja-build \
                 python3
-      - install-node
-      - install-wasmtime
       - install-cmake
       - hack-ninja-jobs
-      - install-xtensa-toolchain:
-          variant: "linux-amd64"
       - restore_cache:
           keys:
             - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
@@ -275,10 +267,6 @@ commands:
       - build-binaryen-linux-stretch
       - build-wasi-libc
       - run:
-          name: "Test TinyGo"
-          command: make test
-          no_output_timeout: 20m
-      - run:
           name: "Install fpm"
           command: |
             sudo apt-get install ruby ruby-dev
@@ -289,6 +277,10 @@ commands:
             make release deb -j3
             cp -p build/release.tar.gz /tmp/tinygo.linux-amd64.tar.gz
             cp -p build/release.deb    /tmp/tinygo_amd64.deb
+      - persist_to_workspace:
+          root: /tmp
+          paths:
+            - tinygo.linux-amd64.tar.gz
       - store_artifacts:
           path: /tmp/tinygo.linux-amd64.tar.gz
       - store_artifacts:
@@ -298,12 +290,27 @@ commands:
           paths:
             - ~/.cache/go-build
             - /go/pkg/mod
+  test-linux-build:
+    # Now run the smoke tests for the generated binary.
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - checkout
+      - run:
+          name: "Install apt dependencies"
+          command: |
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends \
+                gcc-avr \
+                avr-libc
+      - install-xtensa-toolchain:
+          variant: "linux-amd64"
       - run:
           name: "Extract release tarball"
           command: |
             mkdir -p ~/lib
-            tar -C ~/lib -xf /tmp/tinygo.linux-amd64.tar.gz
-            ln -s ~/lib/tinygo/bin/tinygo /go/bin/tinygo
+            tar -C ~/lib -xf /tmp/workspace/tinygo.linux-amd64.tar.gz
+            ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
             tinygo version
       - run: make smoketest
   build-macos:
@@ -427,6 +434,11 @@ jobs:
       - image: circleci/golang:1.17-stretch
     steps:
       - build-linux
+  test-linux-build:
+    docker:
+      - image: cimg/go:1.17
+    steps:
+      - test-linux-build
   build-macos:
     macos:
       xcode: "11.1.0" # macOS 10.14
@@ -441,5 +453,8 @@ workflows:
       - test-llvm11-go115
       - test-llvm11-go116
       - build-linux
+      - test-linux-build:
+          requires:
+            - build-linux
       - build-macos
       - assert-test-linux
