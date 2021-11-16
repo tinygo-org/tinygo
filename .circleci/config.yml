@@ -163,20 +163,17 @@ commands:
           command: |
             sudo apt-get update
             sudo apt-get install --no-install-recommends \
-                libgnutls30 libssl1.0.2 \
                 qemu-system-arm \
+                qemu-system-riscv32 \
                 qemu-user \
                 gcc-avr \
                 avr-libc \
                 ninja-build \
                 python3
       - install-node
-      - install-chrome
       - install-wasmtime
       - install-cmake
       - hack-ninja-jobs
-      - install-xtensa-toolchain:
-          variant: "linux-amd64"
       - restore_cache:
           keys:
             - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
@@ -201,12 +198,7 @@ commands:
           key: llvm-build-11-linux-v4-assert
           paths:
             llvm-build
-      - build-binaryen-linux-stretch
-      - run:
-          name: "Build TinyGo"
-          command: |
-            make ASSERT=1
-            echo 'export PATH=$(pwd)/build:$PATH' >> $BASH_ENV
+      - build-binaryen-linux
       - build-wasi-libc
       - run:
           name: "Test TinyGo"
@@ -217,14 +209,22 @@ commands:
             # necessary to keep memory consumption down and avoid OOM (for a
             # 2CPU/4GB executor).
             GOFLAGS: -p=2
+      - run:
+          name: "Build TinyGo"
+          command: |
+            make ASSERT=1
+            echo 'export PATH=$(pwd)/build:$PATH' >> $BASH_ENV
+      - run: make tinygo-test
       - save_cache:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
             - /go/pkg/mod
+      - install-xtensa-toolchain:
+          variant: "linux-amd64"
       - run: make gen-device -j4
       - run: make smoketest
-      - run: make tinygo-test
+      - install-chrome
       - run: make wasmtest
   build-linux:
     steps:
@@ -323,7 +323,7 @@ commands:
             curl https://dl.google.com/go/go1.17.darwin-amd64.tar.gz -o go1.17.darwin-amd64.tar.gz
             sudo tar -C /usr/local -xzf go1.17.darwin-amd64.tar.gz
             ln -s /usr/local/go/bin/go /usr/local/bin/go
-            HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu cmake ninja
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
       - install-xtensa-toolchain:
           variant: "macos"
       - restore_cache:
@@ -388,7 +388,7 @@ commands:
             - lib/wasi-libc/sysroot
       - run:
           name: "Test TinyGo"
-          command: make test
+          command: make test GOTESTFLAGS="-v -short"
           no_output_timeout: 20m
       - run:
           name: "Build TinyGo release"
@@ -426,7 +426,7 @@ jobs:
           llvm: "11"
   assert-test-linux:
     docker:
-      - image: circleci/golang:1.17-stretch
+      - image: circleci/golang:1.17-buster
     steps:
       - assert-test-linux
   build-linux:
