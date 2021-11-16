@@ -6,28 +6,6 @@ commands:
       - run:
           name: "Pull submodules"
           command: git submodule update --init
-  apt-dependencies:
-    parameters:
-      llvm:
-        type: string
-    steps:
-      - run:
-          name: "Install apt dependencies"
-          command: |
-            echo 'deb https://apt.llvm.org/buster/ llvm-toolchain-buster-<<parameters.llvm>> main' | sudo tee /etc/apt/sources.list.d/llvm.list
-            wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
-            sudo apt-get update
-            sudo apt-get install --no-install-recommends \
-                llvm-<<parameters.llvm>>-dev \
-                clang-<<parameters.llvm>> \
-                libclang-<<parameters.llvm>>-dev \
-                lld-<<parameters.llvm>> \
-                qemu-system-arm \
-                qemu-user \
-                gcc-avr \
-                avr-libc \
-                cmake \
-                ninja-build
   install-node:
     steps:
       - run:
@@ -137,11 +115,21 @@ commands:
     steps:
       - checkout
       - submodules
-      - apt-dependencies:
-          llvm: "<<parameters.llvm>>"
-      - install-node
-      - install-chrome
-      - install-wasmtime
+      - run:
+          name: "Install apt dependencies"
+          command: |
+            echo 'deb https://apt.llvm.org/buster/ llvm-toolchain-buster-<<parameters.llvm>> main' | sudo tee /etc/apt/sources.list.d/llvm.list
+            wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends \
+                llvm-<<parameters.llvm>>-dev \
+                clang-<<parameters.llvm>> \
+                libclang-<<parameters.llvm>>-dev \
+                lld-<<parameters.llvm>> \
+                gcc-avr \
+                avr-libc \
+                cmake \
+                ninja-build
       - hack-ninja-jobs
       - build-binaryen-linux
       - restore_cache:
@@ -158,14 +146,8 @@ commands:
           key: wasi-libc-sysroot-systemclang-v3
           paths:
             - lib/wasi-libc/sysroot
-      - run:
-          name: "Test TinyGo"
-          command: go test -v -timeout=20m -tags=llvm<<parameters.llvm>> ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
-          no_output_timeout: 20m
       - run: make gen-device -j4
       - run: make smoketest XTENSA=0
-      - run: make tinygo-test
-      - run: make wasmtest
       - save_cache:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
@@ -189,6 +171,7 @@ commands:
                 ninja-build \
                 python3
       - install-node
+      - install-chrome
       - install-wasmtime
       - install-cmake
       - hack-ninja-jobs
@@ -219,7 +202,11 @@ commands:
           paths:
             llvm-build
       - build-binaryen-linux-stretch
-      - run: make ASSERT=1
+      - run:
+          name: "Build TinyGo"
+          command: |
+            make ASSERT=1
+            echo 'export PATH=$(pwd)/build:$PATH' >> $BASH_ENV
       - build-wasi-libc
       - run:
           name: "Test TinyGo"
@@ -236,7 +223,9 @@ commands:
             - ~/.cache/go-build
             - /go/pkg/mod
       - run: make gen-device -j4
-      - run: make smoketest TINYGO=build/tinygo
+      - run: make smoketest
+      - run: make tinygo-test
+      - run: make wasmtest
   build-linux:
     steps:
       - checkout
