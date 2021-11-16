@@ -75,40 +75,6 @@ func TestCompiler(t *testing.T) {
 		runPlatTests(optionsFromTarget(""), tests, t)
 	})
 
-	if testing.Short() {
-		return
-	}
-
-	t.Run("EmulatedCortexM3", func(t *testing.T) {
-		runPlatTests(optionsFromTarget("cortex-m-qemu"), tests, t)
-	})
-
-	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-		// Note: running only on Windows and macOS because Linux (as of 2020)
-		// usually has an outdated QEMU version that doesn't support RISC-V yet.
-		t.Run("EmulatedRISCV", func(t *testing.T) {
-			runPlatTests(optionsFromTarget("riscv-qemu"), tests, t)
-		})
-	}
-
-	if runtime.GOOS == "linux" {
-		t.Run("X86Linux", func(t *testing.T) {
-			runPlatTests(optionsFromOSARCH("linux/386"), tests, t)
-		})
-		t.Run("ARMLinux", func(t *testing.T) {
-			runPlatTests(optionsFromOSARCH("linux/arm/6"), tests, t)
-		})
-		t.Run("ARM64Linux", func(t *testing.T) {
-			runPlatTests(optionsFromOSARCH("linux/arm64"), tests, t)
-		})
-		t.Run("WebAssembly", func(t *testing.T) {
-			runPlatTests(optionsFromTarget("wasm"), tests, t)
-		})
-		t.Run("WASI", func(t *testing.T) {
-			runPlatTests(optionsFromTarget("wasi"), tests, t)
-		})
-	}
-
 	// Test a few build options.
 	t.Run("build-options", func(t *testing.T) {
 		t.Parallel()
@@ -150,6 +116,38 @@ func TestCompiler(t *testing.T) {
 			}, nil, nil)
 		})
 	})
+
+	if testing.Short() {
+		// Don't test other targets when the -short flag is used. Only test the
+		// host system.
+		return
+	}
+
+	t.Run("EmulatedCortexM3", func(t *testing.T) {
+		runPlatTests(optionsFromTarget("cortex-m-qemu"), tests, t)
+	})
+
+	t.Run("EmulatedRISCV", func(t *testing.T) {
+		runPlatTests(optionsFromTarget("riscv-qemu"), tests, t)
+	})
+
+	if runtime.GOOS == "linux" {
+		t.Run("X86Linux", func(t *testing.T) {
+			runPlatTests(optionsFromOSARCH("linux/386"), tests, t)
+		})
+		t.Run("ARMLinux", func(t *testing.T) {
+			runPlatTests(optionsFromOSARCH("linux/arm/6"), tests, t)
+		})
+		t.Run("ARM64Linux", func(t *testing.T) {
+			runPlatTests(optionsFromOSARCH("linux/arm64"), tests, t)
+		})
+		t.Run("WebAssembly", func(t *testing.T) {
+			runPlatTests(optionsFromTarget("wasm"), tests, t)
+		})
+		t.Run("WASI", func(t *testing.T) {
+			runPlatTests(optionsFromTarget("wasi"), tests, t)
+		})
+	}
 }
 
 func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {

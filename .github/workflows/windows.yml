@@ -15,11 +15,6 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: '1.17'
-      - name: Install QEMU
-        shell: bash
-        run: |
-          choco install qemu --version=2020.06.12
-          echo "C:\Program Files\QEMU" >> $GITHUB_PATH
       - name: Install Ninja
         shell: bash
         run: |
@@ -78,7 +73,7 @@ jobs:
         run: make binaryen
       - name: Test TinyGo
         shell: bash
-        run: make test
+        run: make test GOTESTFLAGS="-v -short"
       - name: Build TinyGo release tarball
         run: make build/release -j4
       - name: Make release artifact
