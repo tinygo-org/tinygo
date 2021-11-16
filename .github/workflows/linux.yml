@@ -1,0 +1,129 @@
+name: Linux
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+      - release
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    container: alpine:3.14
+    steps:
+      - name: Install apk dependencies
+        # tar: needed for actions/cache@v2
+        # git+openssh: needed for checkout (I think?)
+        # gcompat: needed for go binary
+        run: apk add tar git openssh gcompat make g++
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17'
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Cache LLVM source
+        uses: actions/cache@v2
+        id: cache-llvm-source
+        with:
+          key: llvm-source-11-linux-alpine-v2
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Download LLVM source
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        run: make llvm-source
+      - name: Cache LLVM build
+        uses: actions/cache@v2
+        id: cache-llvm-build
+        with:
+          key: llvm-build-11-linux-alpine-v1
+          path: llvm-build
+      - name: Build LLVM
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        run: |
+          # fetch LLVM source (the existing source only consists of headers)
+          rm -rf llvm-project
+          make llvm-source
+          # install dependencies
+          apk add cmake samurai python3
+          # build!
+          make llvm-build
+          # Remove unnecessary object files (to reduce cache size).
+          find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Cache wasi-libc sysroot
+        uses: actions/cache@v2
+        id: cache-wasi-libc
+        with:
+          key: wasi-libc-sysroot-alpine-linux-v1
+          path: lib/wasi-libc/sysroot
+      - name: Build wasi-libc
+        if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
+        run: make wasi-libc
+      - name: Cache Binaryen
+        uses: actions/cache@v2
+        id: cache-binaryen
+        with:
+          key: binaryen-linux-alpine-v2
+          path: build/wasm-opt
+      - name: Build Binaryen
+        if: steps.cache-binaryen.outputs.cache-hit != 'true'
+        run: |
+          apk add cmake samurai python3
+          make binaryen
+      - name: "Install fpm"
+        run: |
+          apk add ruby ruby-dev ruby-etc
+          gem install --no-document fpm
+      - name: "Build TinyGo release"
+        run: |
+          make release deb -j3
+          cp -p build/release.tar.gz /tmp/tinygo.linux-amd64.tar.gz
+          cp -p build/release.deb    /tmp/tinygo_amd64.deb
+      - name: Publish release artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: release
+          path: |
+            /tmp/tinygo.linux-amd64.tar.gz
+            /tmp/tinygo_amd64.deb
+  test-linux-build:
+    runs-on: ubuntu-latest
+    needs: build-linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17'
+      - name: Download release artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: release
+      - run: ls -l .
+      - name: "Extract release tarball"
+        run: |
+          mkdir -p ~/lib
+          tar -C ~/lib -xf tinygo.linux-amd64.tar.gz
+          ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
+          ldd ~/go/bin/tinygo
+          tinygo version
+      - name: "Install apt dependencies"
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+              gcc-avr \
+              avr-libc
+      - name: "Install Xtensa toolchain"
+        run: |
+          curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
+          sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
+          sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
+          rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
+      - run: make smoketest

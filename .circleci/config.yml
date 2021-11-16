@@ -450,11 +450,11 @@ jobs:
 workflows:
   test-all:
     jobs:
-      - test-llvm11-go115
-      - test-llvm11-go116
-      - build-linux
-      - test-linux-build:
-          requires:
-            - build-linux
-      - build-macos
-      - assert-test-linux
+      #- test-llvm11-go115
+      #- test-llvm11-go116
+      #- build-linux
+      #- test-linux-build:
+      #    requires:
+      #      - build-linux
+      #- build-macos
+      #- assert-test-linux
