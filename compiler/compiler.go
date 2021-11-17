@@ -2276,16 +2276,16 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 			case token.NEQ: // !=
 				result := b.createRuntimeCall("stringEqual", []llvm.Value{x, y}, "")
 				return b.CreateNot(result, ""), nil
-			case token.LSS: // <
+			case token.LSS: // x < y
 				return b.createRuntimeCall("stringLess", []llvm.Value{x, y}, ""), nil
-			case token.LEQ: // <=
+			case token.LEQ: // x <= y becomes NOT (y < x)
 				result := b.createRuntimeCall("stringLess", []llvm.Value{y, x}, "")
 				return b.CreateNot(result, ""), nil
-			case token.GTR: // >
+			case token.GTR: // x > y becomes y < x
+				return b.createRuntimeCall("stringLess", []llvm.Value{y, x}, ""), nil
+			case token.GEQ: // x >= y becomes NOT (x < y)
 				result := b.createRuntimeCall("stringLess", []llvm.Value{x, y}, "")
 				return b.CreateNot(result, ""), nil
-			case token.GEQ: // >=
-				return b.createRuntimeCall("stringLess", []llvm.Value{y, x}, ""), nil
 			default:
 				panic("binop on string: " + op.String())
 			}
