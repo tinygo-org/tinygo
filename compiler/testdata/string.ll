@@ -71,9 +71,8 @@ entry:
 ; Function Attrs: nounwind
 define hidden i1 @main.stringCompareLarger(i8* %s1.data, i32 %s1.len, i8* %s2.data, i32 %s2.len, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  %0 = call i1 @runtime.stringLess(i8* %s1.data, i32 %s1.len, i8* %s2.data, i32 %s2.len, i8* undef, i8* null) #0
-  %1 = xor i1 %0, true
-  ret i1 %1
+  %0 = call i1 @runtime.stringLess(i8* %s2.data, i32 %s2.len, i8* %s1.data, i32 %s1.len, i8* undef, i8* null) #0
+  ret i1 %0
 }
 
 declare i1 @runtime.stringLess(i8*, i32, i8*, i32, i8*, i8*)
