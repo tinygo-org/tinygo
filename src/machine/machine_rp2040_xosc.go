@@ -1,3 +1,4 @@
+//go:build rp2040
 // +build rp2040
 
 package machine
@@ -38,5 +39,16 @@ func (osc *xoscType) init() {
 
 	// Wait for xosc to be stable
 	for !osc.status.HasBits(rp.XOSC_STATUS_STABLE) {
+	}
+}
+
+// Dormant stops internal oscillator.
+// WARNING: This stops the xosc until woken up by an irq
+func (osc *xoscType) Dormant() {
+	const XOSC_DORMANT_VALUE_DORMANT = 0x636f6d61
+	osc.dormant.Set(XOSC_DORMANT_VALUE_DORMANT)
+	// Wait for it to become stable once woken up
+	// while(!(xosc_hw->status & XOSC_STATUS_STABLE_BITS));
+	for osc.status.Get()&rp.XOSC_STATUS_STABLE == 0 {
 	}
 }
