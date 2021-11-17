@@ -24,6 +24,13 @@ func main() {
 	println("ab" < "aa")
 	println("aa" < "ab")
 
+	h := "hello"
+	println("h < h", h < h)
+	println("h <= h", h <= h)
+	println("h == h", h == h)
+	println("h >= h", h >= h)
+	println("h > h", h > h)
+
 	println("array equality")
 	println(a1 == [2]int{1, 2})
 	println(a1 != [2]int{1, 2})
