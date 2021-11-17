@@ -164,7 +164,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		t.Parallel()
 		runTest("env.go", options, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
 	})
-	if options.Target == "wasi" {
+	if options.Target == "wasi" || options.Target == "wasm" {
 		t.Run("alias.go-scheduler-none", func(t *testing.T) {
 			t.Parallel()
 			options := compileopts.Options(options)

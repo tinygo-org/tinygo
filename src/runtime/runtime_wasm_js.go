@@ -29,34 +29,6 @@ func setEventHandler(fn func()) {
 	handleEvent = fn
 }
 
-//export resume
-func resume() {
-	go func() {
-		handleEvent()
-	}()
-
-	if wasmNested {
-		minSched()
-		return
-	}
-
-	wasmNested = true
-	scheduler()
-	wasmNested = false
-}
-
-//export go_scheduler
-func go_scheduler() {
-	if wasmNested {
-		minSched()
-		return
-	}
-
-	wasmNested = true
-	scheduler()
-	wasmNested = false
-}
-
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	// The JavaScript API works in float64 milliseconds, so convert to
 	// nanoseconds first before converting to a timeUnit (which is a float64),
