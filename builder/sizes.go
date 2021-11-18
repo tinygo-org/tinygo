@@ -97,6 +97,17 @@ const (
 	memoryStack
 )
 
+func (t memoryType) String() string {
+	return [...]string{
+		0:            "-",
+		memoryCode:   "code",
+		memoryData:   "data",
+		memoryROData: "rodata",
+		memoryBSS:    "bss",
+		memoryStack:  "stack",
+	}[t]
+}
+
 // Regular expressions to match particular symbol names. These are not stored as
 // DWARF variables because they have no mapping to source code global variables.
 var (
@@ -580,8 +591,11 @@ func readSection(section memorySection, addresses []addressLine, addSize func(st
 	// section. We start at the beginning.
 	addr := section.Address
 	sectionEnd := section.Address + section.Size
+	if sizesDebug {
+		fmt.Printf("%08x..%08x %5d: %s\n", addr, sectionEnd, section.Size, section.Type)
+	}
 	for _, line := range addresses {
-		if line.Address < section.Address || line.Address+line.Length >= sectionEnd {
+		if line.Address < section.Address || line.Address+line.Length > sectionEnd {
 			// Check that this line is entirely within the section.
 			// Don't bother dealing with line entries that cross sections (that
 			// seems rather unlikely anyway).
@@ -592,7 +606,7 @@ func readSection(section memorySection, addresses []addressLine, addSize func(st
 			// previous line entry.
 			addSize("(unknown)", line.Address-addr, false)
 			if sizesDebug {
-				fmt.Printf("%08x..%08x %4d: unknown (gap)\n", addr, line.Address, line.Address-addr)
+				fmt.Printf("%08x..%08x %5d:  unknown (gap)\n", addr, line.Address, line.Address-addr)
 			}
 		}
 		if addr > line.Address+line.Length {
@@ -617,7 +631,7 @@ func readSection(section memorySection, addresses []addressLine, addSize func(st
 		// There is a gap at the end of the section.
 		addSize("(unknown)", sectionEnd-addr, false)
 		if sizesDebug {
-			fmt.Printf("%08x..%08x %4d: unknown (end)\n", addr, sectionEnd, sectionEnd-addr)
+			fmt.Printf("%08x..%08x %5d:  unknown (end)\n", addr, sectionEnd, sectionEnd-addr)
 		}
 	}
 }
