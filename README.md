@@ -1,6 +1,6 @@
 # TinyGo - Go compiler for small places
 
-[![CircleCI](https://circleci.com/gh/tinygo-org/tinygo/tree/dev.svg?style=svg)](https://circleci.com/gh/tinygo-org/tinygo/tree/dev) [![Build Status](https://dev.azure.com/tinygo/tinygo/_apis/build/status/tinygo-CI?branchName=dev)](https://dev.azure.com/tinygo/tinygo/_build/latest?definitionId=1&branchName=dev)
+[![CircleCI](https://circleci.com/gh/tinygo-org/tinygo/tree/dev.svg?style=svg)](https://circleci.com/gh/tinygo-org/tinygo/tree/dev) [![Windows](https://github.com/tinygo-org/tinygo/actions/workflows/windows.yml/badge.svg?branch=dev)](https://github.com/tinygo-org/tinygo/actions/workflows/windows.yml)
 
 TinyGo is a Go compiler intended for use in small places such as microcontrollers, WebAssembly (Wasm), and command-line tools.
 
@@ -142,7 +142,7 @@ should arrive fairly quickly (under 1 min): https://invite.slack.golangbridge.or
 
 Your contributions are welcome!
 
-Please take a look at our [CONTRIBUTING.md](./CONTRIBUTING.md) document for details.
+Please take a look at our [Contributing](https://tinygo.org/docs/guides/contributing/) page on our web site for details.
 
 ## Project Scope
 
