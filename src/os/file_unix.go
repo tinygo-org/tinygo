@@ -1,4 +1,4 @@
-// +build darwin linux,!baremetal freebsd,!baremetal
+// +build darwin linux,!baremetal
 
 package os
 

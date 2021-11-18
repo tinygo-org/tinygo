@@ -157,7 +157,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 // functions, depending on the target OS/arch.
 func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 	switch b.GOOS {
-	case "linux", "freebsd":
+	case "linux":
 		syscallResult, err := b.createRawSyscall(call)
 		if err != nil {
 			return syscallResult, err
