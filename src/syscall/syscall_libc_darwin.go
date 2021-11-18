@@ -78,3 +78,18 @@ const (
 	O_TRUNC  = 0x400
 	O_EXCL   = 0x800
 )
+
+// Source: https://opensource.apple.com/source/xnu/xnu-7195.81.3/bsd/sys/mman.h.auto.html
+const (
+	PROT_NONE  = 0x00 // no permissions
+	PROT_READ  = 0x01 // pages can be read
+	PROT_WRITE = 0x02 // pages can be written
+	PROT_EXEC  = 0x04 // pages can be executed
+
+	MAP_SHARED  = 0x0001 // share changes
+	MAP_PRIVATE = 0x0002 // changes are private
+
+	MAP_FILE      = 0x0000 // map from file (default)
+	MAP_ANON      = 0x1000 // allocated from memory, swap space
+	MAP_ANONYMOUS = MAP_ANON
+)

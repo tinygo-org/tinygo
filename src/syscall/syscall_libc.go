@@ -80,6 +80,22 @@ func Getenv(key string) (value string, found bool) {
 	}
 }
 
+func Mmap(fd int, offset int64, length int, prot int, flags int) (data []byte, err error) {
+	addr := libc_mmap(nil, uintptr(length), int32(prot), int32(flags), int32(fd), uintptr(offset))
+	if addr == unsafe.Pointer(^uintptr(0)) {
+		return nil, getErrno()
+	}
+	return (*[30]byte)(addr)[:length], nil
+}
+
+func Mprotect(b []byte, prot int) (err error) {
+	errCode := libc_mprotect(unsafe.Pointer(&b[0]), uintptr(len(b)), int32(prot))
+	if errCode != 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func splitSlice(p []byte) (buf *byte, len uintptr) {
 	slice := (*sliceHeader)(unsafe.Pointer(&p))
 	return slice.buf, slice.len
@@ -104,3 +120,11 @@ func libc_open(pathname *byte, flags int32, mode uint32) int32
 // int close(int fd)
 //export close
 func libc_close(fd int32) int32
+
+// void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+//export mmap
+func libc_mmap(addr unsafe.Pointer, length uintptr, prot, flags, fd int32, offset uintptr) unsafe.Pointer
+
+// int mprotect(void *addr, size_t len, int prot);
+//export mprotect
+func libc_mprotect(addr unsafe.Pointer, len uintptr, prot int32) int32
