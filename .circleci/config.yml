@@ -404,6 +404,7 @@ commands:
             tar -C /usr/local/opt -xf /tmp/tinygo.darwin-amd64.tar.gz
             ln -s /usr/local/opt/tinygo/bin/tinygo /usr/local/bin/tinygo
             tinygo version
+      - run: make tinygo-test
       - run: make smoketest AVR=0
       - save_cache:
           key: go-cache-macos-v3-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
