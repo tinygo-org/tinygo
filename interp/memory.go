@@ -939,10 +939,17 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 	}
 }
 
-func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
+func llvmToRawValue(llvmValue llvm.Value, r *runner) (rawValue, bool) {
+	size := r.targetData.TypeAllocSize(llvmValue.Type())
+	v := newRawValue(uint32(size))
+	ok := v.set(llvmValue, r)
+	return v, ok
+}
+
+func (v *rawValue) set(llvmValue llvm.Value, r *runner) bool {
 	if llvmValue.IsNull() {
 		// A zero value is common so check that first.
-		return
+		return true
 	}
 	if !llvmValue.IsAGlobalValue().IsNil() {
 		ptrSize := r.pointerSize
@@ -959,7 +966,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 			// All these instructions effectively just reinterprets the bits
 			// (like a bitcast) while no bits change and keeping the same
 			// length, so just read its contents.
-			v.set(llvmValue.Operand(0), r)
+			return v.set(llvmValue.Operand(0), r)
 		case llvm.GetElementPtr:
 			ptr := llvmValue.Operand(0)
 			index := llvmValue.Operand(1)
@@ -995,9 +1002,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				v.buf[i] = ptrValue.pointer
 			}
 		default:
-			llvmValue.Dump()
-			println()
-			panic("unknown constant expr")
+			return false
 		}
 	} else if llvmValue.IsUndef() {
 		// Let undef be zero, by lack of an explicit 'undef' marker.
@@ -1040,7 +1045,10 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				field := rawValue{
 					buf: v.buf[offset:],
 				}
-				field.set(llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)}), r)
+				ok := field.set(llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)}), r)
+				if !ok {
+					return false
+				}
 			}
 		case llvm.ArrayTypeKind:
 			numElements := llvmType.ArrayLength()
@@ -1051,7 +1059,10 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				field := rawValue{
 					buf: v.buf[offset:],
 				}
-				field.set(llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)}), r)
+				ok := field.set(llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)}), r)
+				if !ok {
+					return false
+				}
 			}
 		case llvm.DoubleTypeKind:
 			f, _ := llvmValue.DoubleValue()
@@ -1068,11 +1079,11 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				v.buf[i] = uint64(b)
 			}
 		default:
-			llvmValue.Dump()
-			println()
-			panic("unknown constant")
+			return false
 		}
 	}
+
+	return true
 }
 
 // hasPointer returns true if this raw value contains a pointer somewhere in the
@@ -1171,10 +1182,13 @@ func (r *runner) getValue(llvmValue llvm.Value) value {
 				panic("unknown integer size")
 			}
 		}
-		size := r.targetData.TypeAllocSize(llvmValue.Type())
-		v := newRawValue(uint32(size))
-		v.set(llvmValue, r)
-		return v
+		if v, ok := llvmToRawValue(llvmValue, r); ok {
+			return v
+		}
+
+		// It is possible that the value cannot be cleanly converted to a rawValue.
+		// In this case, pass it through as a localValue.
+		return localValue{llvmValue}
 	} else if !llvmValue.IsAInstruction().IsNil() || !llvmValue.IsAArgument().IsNil() {
 		return localValue{llvmValue}
 	} else if !llvmValue.IsAInlineAsm().IsNil() {
