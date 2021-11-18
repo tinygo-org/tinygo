@@ -1117,7 +1117,7 @@ func main() {
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, extalloc, conservative)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
-	scheduler := flag.String("scheduler", "", "which scheduler to use (none, coroutines, tasks)")
+	scheduler := flag.String("scheduler", "", "which scheduler to use (none, coroutines, tasks, asyncify)")
 	serial := flag.String("serial", "", "which serial output to use (none, uart, usb)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
