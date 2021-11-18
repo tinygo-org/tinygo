@@ -480,7 +480,7 @@ endif
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -opt=0     ./testdata/stdlib.go
 	@$(MD5SUM) test.hex
 	GOOS=linux GOARCH=arm $(TINYGO) build -size short -o test.elf       ./testdata/cgo
-	GOOS=windows GOARCH=amd64 $(TINYGO) build         -o test.exe       ./testdata/cgo
+	GOOS=windows GOARCH=amd64 $(TINYGO) build -size short -o test.exe   ./testdata/cgo
 ifneq ($(OS),Windows_NT)
 	# TODO: this does not yet work on Windows. Somehow, unused functions are
 	# not garbage collected.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"debug/dwarf"
 	"debug/elf"
+	"debug/pe"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -354,6 +355,72 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 					Size:    section.Size,
 					Type:    memoryROData,
 				})
+			}
+		}
+	} else if file, err := pe.NewFile(f); err == nil {
+		// Read DWARF information. The error is intentionally ignored.
+		data, _ := file.DWARF()
+		if data != nil {
+			addresses, err = readProgramSizeFromDWARF(data, 0)
+			if err != nil {
+				// However, _do_ report an error here. Something must have gone
+				// wrong while trying to parse DWARF data.
+				return nil, err
+			}
+		}
+
+		// Read COFF sections.
+		optionalHeader := file.OptionalHeader.(*pe.OptionalHeader64)
+		for _, section := range file.Sections {
+			// For more information:
+			// https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_section_header
+			const (
+				IMAGE_SCN_CNT_CODE             = 0x00000020
+				IMAGE_SCN_CNT_INITIALIZED_DATA = 0x00000040
+				IMAGE_SCN_MEM_DISCARDABLE      = 0x02000000
+				IMAGE_SCN_MEM_READ             = 0x40000000
+				IMAGE_SCN_MEM_WRITE            = 0x80000000
+			)
+			if section.Characteristics&IMAGE_SCN_MEM_DISCARDABLE != 0 {
+				// Debug sections, etc.
+				continue
+			}
+			address := uint64(section.VirtualAddress) + optionalHeader.ImageBase
+			if section.Characteristics&IMAGE_SCN_CNT_CODE != 0 {
+				// .text
+				sections = append(sections, memorySection{
+					Address: address,
+					Size:    uint64(section.VirtualSize),
+					Type:    memoryCode,
+				})
+			} else if section.Characteristics&IMAGE_SCN_CNT_INITIALIZED_DATA != 0 {
+				if section.Characteristics&IMAGE_SCN_MEM_WRITE != 0 {
+					// .data
+					sections = append(sections, memorySection{
+						Address: address,
+						Size:    uint64(section.Size),
+						Type:    memoryData,
+					})
+					if section.Size < section.VirtualSize {
+						// Equivalent of a .bss section.
+						// Note: because of how the PE/COFF format is
+						// structured, not all zero-initialized data is marked
+						// as such. A portion may be at the end of the .data
+						// section and is thus marked as initialized data.
+						sections = append(sections, memorySection{
+							Address: address + uint64(section.Size),
+							Size:    uint64(section.VirtualSize) - uint64(section.Size),
+							Type:    memoryBSS,
+						})
+					}
+				} else if section.Characteristics&IMAGE_SCN_MEM_READ != 0 {
+					// .rdata, .buildid, .pdata
+					sections = append(sections, memorySection{
+						Address: address,
+						Size:    uint64(section.VirtualSize),
+						Type:    memoryROData,
+					})
+				}
 			}
 		}
 	} else if file, err := wasm.Parse(f); err == nil {
