@@ -18,8 +18,9 @@ import (
 
 // Testing flags.
 var (
-	flagVerbose bool
-	flagShort   bool
+	flagVerbose   bool
+	flagShort     bool
+	flagRunRegexp string
 )
 
 var initRan bool
@@ -33,6 +34,7 @@ func Init() {
 
 	flag.BoolVar(&flagVerbose, "test.v", false, "verbose: print additional output")
 	flag.BoolVar(&flagShort, "test.short", false, "short: run smaller test suite to save time")
+	flag.StringVar(&flagRunRegexp, "test.run", "", "run: regexp of tests to run")
 }
 
 // common holds the elements common between T and B and
@@ -242,19 +244,42 @@ type InternalTest struct {
 type M struct {
 	// tests is a list of the test names to execute
 	Tests []InternalTest
+
+	deps testDeps
 }
 
 // Run the test suite.
 func (m *M) Run() int {
-	if len(m.Tests) == 0 {
-		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
-	}
 
 	if !flag.Parsed() {
 		flag.Parse()
 	}
 
 	failures := 0
+	if flagRunRegexp != "" {
+		var filtered []InternalTest
+
+		// pre-test the regexp; we don't want to bother logging one failure for every test name if the regexp is broken
+		if _, err := m.deps.MatchString(flagRunRegexp, "some-test-name"); err != nil {
+			fmt.Println("testing: invalid regexp for -test.run:", err.Error())
+			failures++
+		}
+
+		// filter the list of tests before we try to run them
+		for _, test := range m.Tests {
+			// ignore the error; we already tested that the regexp compiles fine above
+			if match, _ := m.deps.MatchString(flagRunRegexp, test.Name); match {
+				filtered = append(filtered, test)
+			}
+		}
+
+		m.Tests = filtered
+	}
+
+	if len(m.Tests) == 0 {
+		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
+	}
+
 	for _, test := range m.Tests {
 		t := &T{
 			common: common{
@@ -326,10 +351,15 @@ func TestMain(m *M) {
 	os.Exit(m.Run())
 }
 
+type testDeps interface {
+	MatchString(pat, s string) (bool, error)
+}
+
 func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenchmark, examples []InternalExample) *M {
 	Init()
 	return &M{
 		Tests: tests,
+		deps:  deps.(testDeps),
 	}
 }
 
