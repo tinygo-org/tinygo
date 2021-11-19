@@ -262,7 +262,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		case "armv6":
 			spec.Features = "+armv6,+dsp,+fp64,+strict-align,+vfp2,+vfp2sp,-thumb-mode"
 		case "armv7":
-			spec.Features = "+armv7-a,+dsp,+fp64,+vfp2,+vfp2sp,+vfp3d16,+vfp3d16sp,-thumb-mode"
+			spec.Features = "+armv7-a,+d32,+dsp,+fp64,+neon,+vfp2,+vfp2sp,+vfp3,+vfp3d16,+vfp3d16sp,+vfp3sp,-thumb-mode"
 		}
 	case "arm64":
 		spec.CPU = "generic"
