@@ -177,7 +177,7 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
-func Test(pkgName string, options *compileopts.Options, testCompileOnly, testVerbose, testShort bool, outpath string) (bool, error) {
+func Test(pkgName string, options *compileopts.Options, testCompileOnly, testVerbose, testShort bool, testRunRegexp string, outpath string) (bool, error) {
 	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
@@ -203,7 +203,7 @@ func Test(pkgName string, options *compileopts.Options, testCompileOnly, testVer
 		// Run the test.
 		start := time.Now()
 		var err error
-		passed, err = runPackageTest(config, result, testVerbose, testShort)
+		passed, err = runPackageTest(config, result, testVerbose, testShort, testRunRegexp)
 		if err != nil {
 			return err
 		}
@@ -229,7 +229,7 @@ func Test(pkgName string, options *compileopts.Options, testCompileOnly, testVer
 // runPackageTest runs a test binary that was previously built. The return
 // values are whether the test passed and any errors encountered while trying to
 // run the binary.
-func runPackageTest(config *compileopts.Config, result builder.BuildResult, testVerbose, testShort bool) (bool, error) {
+func runPackageTest(config *compileopts.Config, result builder.BuildResult, testVerbose, testShort bool, testRunRegexp string) (bool, error) {
 	var cmd *exec.Cmd
 	if len(config.Target.Emulator) == 0 {
 		// Run directly.
@@ -239,6 +239,9 @@ func runPackageTest(config *compileopts.Config, result builder.BuildResult, test
 		}
 		if testShort {
 			flags = append(flags, "-test.short")
+		}
+		if testRunRegexp != "" {
+			flags = append(flags, "-test.run="+testRunRegexp)
 		}
 		cmd = executeCommand(config.Options, result.Binary, flags...)
 		cmd.Dir = result.MainDir
@@ -254,6 +257,9 @@ func runPackageTest(config *compileopts.Config, result builder.BuildResult, test
 			}
 			if testShort {
 				args = append(args, "-test.short")
+			}
+			if testRunRegexp != "" {
+				args = append(args, "-test.run="+testRunRegexp)
 			}
 		}
 		cmd = executeCommand(config.Options, config.Target.Emulator[0], args...)
@@ -1150,10 +1156,12 @@ func main() {
 		flag.StringVar(&outpath, "o", "", "output filename")
 	}
 	var testCompileOnlyFlag, testVerboseFlag, testShortFlag *bool
+	var testRunRegexp *string
 	if command == "help" || command == "test" {
 		testCompileOnlyFlag = flag.Bool("c", false, "compile the test binary but do not run it")
 		testVerboseFlag = flag.Bool("v", false, "verbose: print additional output")
 		testShortFlag = flag.Bool("short", false, "short: run smaller test suite to save time")
+		testRunRegexp = flag.String("run", "", "run: regexp of tests to run")
 	}
 
 	// Early command processing, before commands are interpreted by the Go flag
@@ -1336,7 +1344,7 @@ func main() {
 		allTestsPassed := true
 		for _, pkgName := range pkgNames {
 			// TODO: parallelize building the test binaries
-			passed, err := Test(pkgName, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, outpath)
+			passed, err := Test(pkgName, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, *testRunRegexp, outpath)
 			handleCompilerError(err)
 			if !passed {
 				allTestsPassed = false

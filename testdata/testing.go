@@ -34,9 +34,13 @@ var benchmarks = []testing.InternalBenchmark{}
 var examples = []testing.InternalExample{}
 
 func main() {
-	m := testing.MainStart(nil, tests, benchmarks, examples)
+	m := testing.MainStart(testdeps{}, tests, benchmarks, examples)
 	exitcode := m.Run()
 	if exitcode != 0 {
 		println("exitcode:", exitcode)
 	}
 }
+
+type testdeps struct{}
+
+func (testdeps) MatchString(pat, str string) (bool, error) { return true, nil }
