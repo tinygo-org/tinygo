@@ -6,29 +6,6 @@ commands:
       - run:
           name: "Pull submodules"
           command: git submodule update --init
-  install-node:
-    steps:
-      - run:
-          name: "Install node.js"
-          command: |
-            wget https://nodejs.org/dist/v10.15.1/node-v10.15.1-linux-x64.tar.xz
-            sudo tar -C /usr/local -xf node-v10.15.1-linux-x64.tar.xz
-            sudo ln -s /usr/local/node-v10.15.1-linux-x64/bin/node /usr/bin/node
-            rm node-v10.15.1-linux-x64.tar.xz
-  install-chrome:
-    steps:
-      - run:
-          name: "Install Chrome"
-          command: |
-            wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-            sudo apt install ./google-chrome-stable_current_amd64.deb
-  install-wasmtime:
-    steps:
-      - run:
-          name: "Install wasmtime"
-          command: |
-            curl https://wasmtime.dev/install.sh -sSf | bash
-            sudo ln -s ~/.wasmtime/bin/wasmtime /usr/local/bin/wasmtime
   install-cmake:
     steps:
       - run:
@@ -154,78 +131,6 @@ commands:
             - ~/.cache/go-build
             - /go/pkg/mod
       - run: make fmt-check
-  assert-test-linux:
-    steps:
-      - checkout
-      - submodules
-      - run:
-          name: "Install apt dependencies"
-          command: |
-            sudo apt-get update
-            sudo apt-get install --no-install-recommends \
-                qemu-system-arm \
-                qemu-system-riscv32 \
-                qemu-user \
-                gcc-avr \
-                avr-libc \
-                ninja-build \
-                python3
-      - install-node
-      - install-wasmtime
-      - install-cmake
-      - hack-ninja-jobs
-      - restore_cache:
-          keys:
-            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
-            - go-cache-v2-{{ checksum "go.mod" }}
-      - llvm-source-linux
-      - restore_cache:
-          keys:
-            - llvm-build-11-linux-v4-assert
-      - run:
-          name: "Build LLVM"
-          command: |
-            if [ ! -f llvm-build/lib/liblldELF.a ]
-            then
-              # fetch LLVM source (may only have headers right now)
-              rm -rf llvm-project
-              make llvm-source
-              # build!
-              make ASSERT=1 llvm-build
-              find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
-            fi
-      - save_cache:
-          key: llvm-build-11-linux-v4-assert
-          paths:
-            llvm-build
-      - build-binaryen-linux
-      - build-wasi-libc
-      - run:
-          name: "Test TinyGo"
-          command: make ASSERT=1 test
-          no_output_timeout: 20m
-          environment:
-            # Note: -p=2 limits parallelism to two jobs at a time, which is
-            # necessary to keep memory consumption down and avoid OOM (for a
-            # 2CPU/4GB executor).
-            GOFLAGS: -p=2
-      - run:
-          name: "Build TinyGo"
-          command: |
-            make ASSERT=1
-            echo 'export PATH=$(pwd)/build:$PATH' >> $BASH_ENV
-      - run: make tinygo-test
-      - save_cache:
-          key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
-          paths:
-            - ~/.cache/go-build
-            - /go/pkg/mod
-      - install-xtensa-toolchain:
-          variant: "linux-amd64"
-      - run: make gen-device -j4
-      - run: make smoketest
-      - install-chrome
-      - run: make wasmtest
   build-linux:
     steps:
       - checkout
@@ -424,11 +329,6 @@ jobs:
     steps:
       - test-linux:
           llvm: "11"
-  assert-test-linux:
-    docker:
-      - image: circleci/golang:1.17-buster
-    steps:
-      - assert-test-linux
   build-linux:
     docker:
       - image: circleci/golang:1.17-stretch
@@ -457,4 +357,3 @@ workflows:
           requires:
             - build-linux
       - build-macos
-      - assert-test-linux
