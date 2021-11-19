@@ -85,7 +85,7 @@ func Mmap(fd int, offset int64, length int, prot int, flags int) (data []byte, e
 	if addr == unsafe.Pointer(^uintptr(0)) {
 		return nil, getErrno()
 	}
-	return (*[30]byte)(addr)[:length], nil
+	return (*[1 << 30]byte)(addr)[:length:length], nil
 }
 
 func Mprotect(b []byte, prot int) (err error) {
