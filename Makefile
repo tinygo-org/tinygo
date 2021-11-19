@@ -178,7 +178,7 @@ $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
 .PHONY: binaryen
 binaryen: build/wasm-opt
 build/wasm-opt:
-	cd lib/binaryen && cmake -G Ninja . -DBUILD_STATIC_LIB=ON $(BINARYEN_OPTION) && ninja
+	cd lib/binaryen && cmake -G Ninja . -DBUILD_STATIC_LIB=ON $(BINARYEN_OPTION) && ninja bin/wasm-opt$(EXE)
 	cp lib/binaryen/bin/wasm-opt build/wasm-opt
 
 # Build wasi-libc sysroot
