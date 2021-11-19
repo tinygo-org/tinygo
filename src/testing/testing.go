@@ -302,6 +302,13 @@ func Verbose() bool {
 	return flagVerbose
 }
 
+// CoverMode reports what the test coverage mode is set to.
+//
+// Test coverage is not supported; this returns the empty string.
+func CoverMode() string {
+	return ""
+}
+
 // AllocsPerRun returns the average number of allocations during calls to f.
 // Although the return value has type float64, it will always be an integral
 // value.
