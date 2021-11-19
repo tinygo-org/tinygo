@@ -1,0 +1,110 @@
+name: Linux
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+      - release
+
+jobs:
+  assert-test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Install apt dependencies
+        run: |
+          sudo apt-get install --no-install-recommends \
+              qemu-system-arm \
+              qemu-system-riscv32 \
+              qemu-user \
+              gcc-avr \
+              avr-libc \
+              ninja-build
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17'
+      - name: Install Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '12'
+      - name: Install wasmtime
+        run: |
+          curl https://wasmtime.dev/install.sh -sSf | bash
+          echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
+      - name: Cache Go
+        uses: actions/cache@v2
+        with:
+          key: go-cache-linux-asserts-v1-${{ hashFiles('go.mod') }}
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+      - name: Cache LLVM source
+        uses: actions/cache@v2
+        id: cache-llvm-source
+        with:
+          key: llvm-source-11-linux-asserts-v1
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Download LLVM source
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        run: make llvm-source
+      - name: Cache LLVM build
+        uses: actions/cache@v2
+        id: cache-llvm-build
+        with:
+          key: llvm-build-11-linux-asserts-v2
+          path: llvm-build
+      - name: Build LLVM
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          # fetch LLVM source
+          rm -rf llvm-project
+          make llvm-source
+          # build!
+          make llvm-build ASSERT=1
+          # Remove unnecessary object files (to reduce cache size).
+          find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Cache Binaryen
+        uses: actions/cache@v2
+        id: cache-binaryen
+        with:
+          key: binaryen-linux-asserts-v1
+          path: build/wasm-opt
+      - name: Build Binaryen
+        if: steps.cache-binaryen.outputs.cache-hit != 'true'
+        run: make binaryen
+      - name: Cache wasi-libc
+        uses: actions/cache@v2
+        id: cache-wasi-libc
+        with:
+          key: wasi-libc-sysroot-linux-asserts-v2
+          path: lib/wasi-libc/sysroot
+      - name: Build wasi-libc
+        if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
+        run: make wasi-libc
+      - name: Test TinyGo
+        run: make ASSERT=1 test
+      - name: Build TinyGo
+        run: |
+          make ASSERT=1
+          echo "$(pwd)/build" >> $GITHUB_PATH
+      - name: Test stdlib packages
+        run: make tinygo-test
+      - name: Install Xtensa toolchain
+        run: |
+          curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
+          sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
+          sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
+          rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
+      - run: make gen-device -j4
+      - run: make smoketest
+      - run: make wasmtest
