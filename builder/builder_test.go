@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -60,7 +61,11 @@ func TestClangAttributes(t *testing.T) {
 		{GOOS: "darwin", GOARCH: "arm64"},
 		{GOOS: "windows", GOARCH: "amd64"},
 	} {
-		t.Run("GOOS="+options.GOOS+",GOARCH="+options.GOARCH, func(t *testing.T) {
+		name := "GOOS=" + options.GOOS + ",GOARCH=" + options.GOARCH
+		if options.GOARCH == "arm" {
+			name += ",GOARM=" + options.GOARM
+		}
+		t.Run(name, func(t *testing.T) {
 			testClangAttributes(t, options)
 		})
 	}
@@ -131,12 +136,12 @@ func testClangAttributes(t *testing.T, options *compileopts.Options) {
 		t.Errorf("target has CPU %#v but Clang makes it CPU %#v", config.CPU(), cpu)
 	}
 	if features != config.Features() {
-		if llvm.Version != "11.0.0" {
-			// This needs to be removed once we switch to LLVM 12.
-			// LLVM 11.0.0 uses a different "target-features" string than LLVM
-			// 11.1.0 for Thumb targets. The Xtensa fork is still based on LLVM
-			// 11.0.0, so we need to skip this check on that version.
-			t.Errorf("target has LLVM features %#v but Clang makes it %#v", config.Features(), features)
+		if hasBuiltinTools || runtime.GOOS != "linux" {
+			// Skip this step when using an external Clang invocation on Linux.
+			// The reason is that Debian has patched Clang in a way that
+			// modifies the LLVM features string, changing lots of FPU/float
+			// related flags. We want to test vanilla Clang, not Debian Clang.
+			t.Errorf("target has LLVM features\n\t%#v\nbut Clang makes it\n\t%#v", config.Features(), features)
 		}
 	}
 }
