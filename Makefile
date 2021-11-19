@@ -176,10 +176,10 @@ $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
 
 # Build Binaryen
 .PHONY: binaryen
-binaryen: build/wasm-opt
-build/wasm-opt:
+binaryen: build/wasm-opt$(EXE)
+build/wasm-opt$(EXE):
 	cd lib/binaryen && cmake -G Ninja . -DBUILD_STATIC_LIB=ON $(BINARYEN_OPTION) && ninja bin/wasm-opt$(EXE)
-	cp lib/binaryen/bin/wasm-opt build/wasm-opt
+	cp lib/binaryen/bin/wasm-opt$(EXE) build/wasm-opt$(EXE)
 
 # Build wasi-libc sysroot
 .PHONY: wasi-libc
