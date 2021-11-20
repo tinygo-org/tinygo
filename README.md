@@ -115,6 +115,7 @@ The following 72 microcontroller boards are currently supported:
 * [ST Micro "Nucleo" L031K6](https://www.st.com/ja/evaluation-tools/nucleo-l031k6.html)
 * [ST Micro "Nucleo" L432KC](https://www.st.com/ja/evaluation-tools/nucleo-l432kc.html)
 * [ST Micro "Nucleo" L552ZE](https://www.st.com/en/evaluation-tools/nucleo-l552ze-q.html)
+* [ST Micro "Nucleo" WL55JC](https://www.st.com/en/evaluation-tools/nucleo-wl55jc.html)
 * [ST Micro STM32F103XX "Bluepill"](https://stm32-base.org/boards/STM32F103C8T6-Blue-Pill)
 * [ST Micro STM32F407 "Discovery"](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
 * [X9 Pro smartwatch](https://github.com/curtpw/nRF5x-device-reverse-engineering/tree/master/X9-nrf52832-activity-tracker/)
