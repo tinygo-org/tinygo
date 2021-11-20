@@ -109,6 +109,18 @@ func (f unixFileHandle) Read(b []byte) (n int, err error) {
 	return
 }
 
+// Pread reads up to len(b) bytes from the File starting at the given absolute offset.
+// It returns the number of bytes read and any error encountered, possibly io.EOF.
+// At end of file, Pread returns 0, io.EOF.
+func (f unixFileHandle) Pread(b []byte, offset int64) (n int, err error) {
+	n, err = syscall.Pread(syscallFd(f), b, offset)
+	err = handleSyscallError(err)
+	if n == 0 && err == nil {
+		err = io.EOF
+	}
+	return
+}
+
 // Write writes len(b) bytes to the File. It returns the number of bytes written
 // and an error, if any. Write returns a non-nil error when n != len(b).
 func (f unixFileHandle) Write(b []byte) (n int, err error) {

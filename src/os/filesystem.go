@@ -46,6 +46,9 @@ type FileHandle interface {
 	// Read reads up to len(b) bytes from the file.
 	Read(b []byte) (n int, err error)
 
+	// Pread reads up to len(b) bytes from the file starting at the given absolute offset
+	Pread(b []byte, offset int64) (n int, err error)
+
 	// Write writes up to len(b) bytes to the file.
 	Write(b []byte) (n int, err error)
 
