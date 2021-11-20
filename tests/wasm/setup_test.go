@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
@@ -18,29 +17,29 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-func run(cmdline string) error {
+func run(t *testing.T, cmdline string) error {
 	args := strings.Fields(cmdline)
-	return runargs(args...)
+	return runargs(t, args...)
 }
 
-func runargs(args ...string) error {
+func runargs(t *testing.T, args ...string) error {
 	cmd := exec.Command(args[0], args[1:]...)
 	b, err := cmd.CombinedOutput()
-	log.Printf("Command: %s; err=%v; full output:\n%s", strings.Join(args, " "), err, b)
+	t.Logf("Command: %s; err=%v; full output:\n%s", strings.Join(args, " "), err, b)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func chromectx(timeout time.Duration) (context.Context, context.CancelFunc) {
+func chromectx() (context.Context, context.CancelFunc) {
 
 	var ctx context.Context
 
 	// looks for locally installed Chrome
 	ctx, _ = chromedp.NewContext(context.Background())
 
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 
 	return ctx, cancel
 }
