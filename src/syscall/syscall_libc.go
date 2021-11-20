@@ -37,6 +37,15 @@ func Read(fd int, p []byte) (n int, err error) {
 	return
 }
 
+func Pread(fd int, p []byte, offset int64) (n int, err error) {
+	buf, count := splitSlice(p)
+	n = libc_pread(int32(fd), buf, uint(count), offset)
+	if n < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Seek(fd int, offset int64, whence int) (off int64, err error) {
 	return 0, ENOSYS // TODO
 }
@@ -168,6 +177,10 @@ func libc_getenv(name *byte) *byte
 // ssize_t read(int fd, void *buf, size_t count);
 //export read
 func libc_read(fd int32, buf *byte, count uint) int
+
+// ssize_t pread(int fd, void *buf, size_t count, off_t offset);
+//export pread
+func libc_pread(fd int32, buf *byte, count uint, offset int64) int
 
 // int open(const char *pathname, int flags, mode_t mode);
 //export open
