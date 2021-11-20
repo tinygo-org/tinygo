@@ -4,21 +4,25 @@ package os_test
 
 import (
 	. "os"
-	"strconv"
 	"testing"
-	"time"
 )
 
-func randomName() string {
-	// fastrand() does not seem available here, so fake it
-	ns := time.Now().Nanosecond()
-	pid := Getpid()
-	return strconv.FormatUint(uint64(ns^pid), 10)
+func randomName(t *testing.T, pattern string) string {
+	f, err := CreateTemp("", "TestMkdir")
+	if err != nil {
+		t.Fatalf("CreateTemp failed: %v", err)
+	}
+	name := f.Name()
+	f.Close()
+	err = Remove(name)
+	if err != nil {
+		t.Fatalf("Remove failed: %v", err)
+	}
+	return name
 }
 
 func TestMkdir(t *testing.T) {
-	dir := "TestMkdir" + randomName()
-	Remove(dir)
+	dir := randomName(t, "TestMkdir")
 	err := Mkdir(dir, 0755)
 	defer Remove(dir)
 	if err != nil {
@@ -49,7 +53,7 @@ func writeFile(t *testing.T, fname string, flag int, text string) string {
 }
 
 func TestRemove(t *testing.T) {
-	f := "TestRemove" + randomName()
+	f := randomName(t, "TestRemove")
 
 	err := Remove(f)
 	if err == nil {
