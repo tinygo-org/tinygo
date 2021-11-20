@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	LED1 = PB5
-	LED  = LED1 // Default LED
+	// We assume a LED is connected on PB5
+	LED = PB5 // Default LED
 )
 
 // SubGhz (SPI3)
@@ -46,6 +46,11 @@ var (
 		RxAltFuncSelector: AF7_USART1_2,
 	}
 	DefaultUART = UART0
+
+	// SPI
+	SPI3 = SPI{
+		Bus: stm32.SPI3,
+	}
 )
 
 func init() {

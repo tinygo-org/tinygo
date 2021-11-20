@@ -1,0 +1,13 @@
+{
+	"inherits": [
+		"stm32wle5"
+	],
+	"build-tags": [
+		"nucleowl55jc"
+	],
+	"serial": "uart",
+	"linkerscript": "targets/stm32wle5.ld",
+	"flash-method": "openocd",
+	"openocd-interface": "stlink",
+	"openocd-target": "stm32wlx"
+}
