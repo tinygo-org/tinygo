@@ -107,8 +107,15 @@ func (f *File) Read(b []byte) (n int, err error) {
 	return
 }
 
-func (f *File) ReadAt(b []byte, off int64) (n int, err error) {
-	return 0, ErrNotImplemented
+// ReadAt reads up to len(b) bytes from the File at the given absolute offset.
+// It returns the number of bytes read and any error encountered, possible io.EOF.
+// At end of file, Read returns 0, io.EOF.
+func (f *File) ReadAt(b []byte, offset int64) (n int, err error) {
+	n, err = f.handle.ReadAt(b, offset)
+	if err != nil && err != io.EOF {
+		err = &PathError{"readat", f.name, err}
+	}
+	return
 }
 
 // Write writes len(b) bytes to the File. It returns the number of bytes written
