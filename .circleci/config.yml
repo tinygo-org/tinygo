@@ -6,13 +6,6 @@ commands:
       - run:
           name: "Pull submodules"
           command: git submodule update --init
-  install-cmake:
-    steps:
-      - run:
-          name: "Install CMake"
-          command: |
-            wget https://github.com/Kitware/CMake/releases/download/v3.21.4/cmake-3.21.4-linux-x86_64.tar.gz
-            sudo tar --strip-components=1 -C /usr/local -xf cmake-3.21.4-linux-x86_64.tar.gz
   install-xtensa-toolchain:
     parameters:
       variant:
@@ -60,31 +53,6 @@ commands:
           key: binaryen-linux-v1
           paths:
             - build/wasm-opt
-  build-binaryen-linux-stretch:
-    steps:
-      - restore_cache:
-          keys:
-            - binaryen-linux-stretch-v1
-      - run:
-          name: "Build Binaryen"
-          command: |
-            CC=$PWD/llvm-build/bin/clang make binaryen
-      - save_cache:
-          key: binaryen-linux-stretch-v1
-          paths:
-            - build/wasm-opt
-  build-wasi-libc:
-    steps:
-      - restore_cache:
-          keys:
-            - wasi-libc-sysroot-v4
-      - run:
-          name: "Build wasi-libc"
-          command: make wasi-libc
-      - save_cache:
-          key: wasi-libc-sysroot-v4
-          paths:
-            - lib/wasi-libc/sysroot
   test-linux:
     parameters:
       llvm:
@@ -131,93 +99,6 @@ commands:
             - ~/.cache/go-build
             - /go/pkg/mod
       - run: make fmt-check
-  build-linux:
-    steps:
-      - checkout
-      - submodules
-      - run:
-          name: "Install apt dependencies"
-          command: |
-            sudo apt-get update
-            sudo apt-get install --no-install-recommends \
-                libgnutls30 libssl1.0.2 \
-                ninja-build \
-                python3
-      - install-cmake
-      - hack-ninja-jobs
-      - restore_cache:
-          keys:
-            - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
-            - go-cache-v2-{{ checksum "go.mod" }}
-      - llvm-source-linux
-      - restore_cache:
-          keys:
-            - llvm-build-11-linux-v4-noassert
-      - run:
-          name: "Build LLVM"
-          command: |
-            if [ ! -f llvm-build/lib/liblldELF.a ]
-            then
-              # fetch LLVM source (may only have headers right now)
-              rm -rf llvm-project
-              make llvm-source
-              # build!
-              make llvm-build
-              find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
-            fi
-      - save_cache:
-          key: llvm-build-11-linux-v4-noassert
-          paths:
-            llvm-build
-      - build-binaryen-linux-stretch
-      - build-wasi-libc
-      - run:
-          name: "Install fpm"
-          command: |
-            sudo apt-get install ruby ruby-dev
-            sudo gem install --no-document fpm
-      - run:
-          name: "Build TinyGo release"
-          command: |
-            make release deb -j3
-            cp -p build/release.tar.gz /tmp/tinygo.linux-amd64.tar.gz
-            cp -p build/release.deb    /tmp/tinygo_amd64.deb
-      - persist_to_workspace:
-          root: /tmp
-          paths:
-            - tinygo.linux-amd64.tar.gz
-      - store_artifacts:
-          path: /tmp/tinygo.linux-amd64.tar.gz
-      - store_artifacts:
-          path: /tmp/tinygo_amd64.deb
-      - save_cache:
-          key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
-          paths:
-            - ~/.cache/go-build
-            - /go/pkg/mod
-  test-linux-build:
-    # Now run the smoke tests for the generated binary.
-    steps:
-      - attach_workspace:
-          at: /tmp/workspace
-      - checkout
-      - run:
-          name: "Install apt dependencies"
-          command: |
-            sudo apt-get update
-            sudo apt-get install --no-install-recommends \
-                gcc-avr \
-                avr-libc
-      - install-xtensa-toolchain:
-          variant: "linux-amd64"
-      - run:
-          name: "Extract release tarball"
-          command: |
-            mkdir -p ~/lib
-            tar -C ~/lib -xf /tmp/workspace/tinygo.linux-amd64.tar.gz
-            ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
-            tinygo version
-      - run: make smoketest
   build-macos:
     steps:
       - checkout
@@ -330,16 +211,6 @@ jobs:
     steps:
       - test-linux:
           llvm: "11"
-  build-linux:
-    docker:
-      - image: circleci/golang:1.17-stretch
-    steps:
-      - build-linux
-  test-linux-build:
-    docker:
-      - image: cimg/go:1.17
-    steps:
-      - test-linux-build
   build-macos:
     macos:
       xcode: "11.1.0" # macOS 10.14
@@ -353,8 +224,4 @@ workflows:
     jobs:
       - test-llvm11-go115
       - test-llvm11-go116
-      - build-linux
-      - test-linux-build:
-          requires:
-            - build-linux
       - build-macos
