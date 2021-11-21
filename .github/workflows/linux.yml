@@ -8,7 +8,130 @@ on:
       - release
 
 jobs:
+  build-linux:
+    # Build Linux binaries, ready for release.
+    # This intentionally uses an older Linux image, so that we compile against
+    # an older glibc version and therefore are compatible with a wide range of
+    # Linux distributions.
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Install apt dependencies
+        run: |
+          sudo apt-get install --no-install-recommends \
+              ninja-build
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17'
+      - name: Cache Go
+        uses: actions/cache@v2
+        with:
+          key: go-cache-linux-v1-${{ hashFiles('go.mod') }}
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+      - name: Cache LLVM source
+        uses: actions/cache@v2
+        id: cache-llvm-source
+        with:
+          key: llvm-source-11-linux-v1
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Download LLVM source
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        run: make llvm-source
+      - name: Cache LLVM build
+        uses: actions/cache@v2
+        id: cache-llvm-build
+        with:
+          key: llvm-build-11-linux-v1
+          path: llvm-build
+      - name: Build LLVM
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        run: |
+          # fetch LLVM source
+          rm -rf llvm-project
+          make llvm-source
+          # build!
+          make llvm-build
+          # Remove unnecessary object files (to reduce cache size).
+          find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Cache Binaryen
+        uses: actions/cache@v2
+        id: cache-binaryen
+        with:
+          key: binaryen-linux-v1
+          path: build/wasm-opt
+      - name: Build Binaryen
+        if: steps.cache-binaryen.outputs.cache-hit != 'true'
+        run: make binaryen
+      - name: Cache wasi-libc
+        uses: actions/cache@v2
+        id: cache-wasi-libc
+        with:
+          key: wasi-libc-sysroot-linux-asserts-v2
+          path: lib/wasi-libc/sysroot
+      - name: Build wasi-libc
+        if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
+        run: make wasi-libc
+      - name: Install fpm
+        run: |
+          sudo apt-get install ruby ruby-dev
+          sudo gem install --no-document fpm
+      - name: Build TinyGo release
+        run: |
+          make release deb -j3
+          cp -p build/release.tar.gz /tmp/tinygo.linux-amd64.tar.gz
+          cp -p build/release.deb    /tmp/tinygo_amd64.deb
+      - name: Publish release artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: release-double-zipped
+          path: |
+            /tmp/tinygo.linux-amd64.tar.gz
+            /tmp/tinygo_amd64.deb
+  test-linux-build:
+    # Test the binaries built in the build-linux job by running the smoke tests.
+    runs-on: ubuntu-latest
+    needs: build-linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17'
+      - name: Download release artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: release-double-zipped
+      - name: Extract release tarball
+        run: |
+          mkdir -p ~/lib
+          tar -C ~/lib -xf tinygo.linux-amd64.tar.gz
+          ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
+      - name: Install apt dependencies
+        run: |
+          sudo apt-get install --no-install-recommends \
+              gcc-avr \
+              avr-libc
+      - name: "Install Xtensa toolchain"
+        run: |
+          curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
+          sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
+          sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
+          rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
+      - run: make smoketest
   assert-test-linux:
+    # Run all tests that can run on Linux, with LLVM assertions enabled to catch
+    # potential bugs.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -64,7 +187,6 @@ jobs:
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
-        shell: bash
         run: |
           # fetch LLVM source
           rm -rf llvm-project
