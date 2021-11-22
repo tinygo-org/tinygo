@@ -1,5 +1,9 @@
 // +build darwin linux,!baremetal
 
+// Portions copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package os
 
 import (
@@ -24,6 +28,14 @@ func Pipe() (r *File, w *File, err error) {
 		name:   "|1",
 	}
 	return
+}
+
+func tempDir() string {
+	dir := Getenv("TMPDIR")
+	if dir == "" {
+		dir = "/tmp"
+	}
+	return dir
 }
 
 // ReadAt reads up to len(b) bytes from the File starting at the given absolute offset.

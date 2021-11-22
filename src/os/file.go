@@ -1,3 +1,7 @@
+// Portions copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Package os implements a subset of the Go "os" package. See
 // https://godoc.org/os for details.
 //
@@ -260,7 +264,14 @@ func Readlink(name string) (string, error) {
 	return name, nil
 }
 
-// TempDir is a stub (for now), always returning the string "/tmp"
+// TempDir returns the default directory to use for temporary files.
+//
+// On Unix systems, it returns $TMPDIR if non-empty, else /tmp.
+// On Windows, it uses GetTempPath, returning the first non-empty
+// value from %TMP%, %TEMP%, %USERPROFILE%, or the Windows directory.
+//
+// The directory is neither guaranteed to exist nor have accessible
+// permissions.
 func TempDir() string {
-	return "/tmp"
+	return tempDir()
 }
