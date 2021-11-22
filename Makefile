@@ -198,33 +198,47 @@ tinygo:
 test: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=20m -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
+# These packages pass `tinygo test` but fail in CI due to cpu or memory requirements
+FAIL_IN_CI = \
+	compress/lzw \
+	regexp/syntax \
+
 TEST_PACKAGES = \
 	compress/bzip2 \
+	compress/flate \
+	compress/zlib \
 	container/heap \
 	container/list \
 	container/ring \
 	crypto/des \
 	crypto/dsa \
+	crypto/elliptic/internal/fiat \
+	crypto/internal/subtle \
 	crypto/md5 \
 	crypto/rc4 \
 	crypto/sha1 \
 	crypto/sha256 \
 	crypto/sha512 \
-	encoding \
+	debug/macho \
 	encoding/ascii85 \
 	encoding/base32 \
+	encoding/csv \
 	encoding/hex \
+	go/scanner \
 	hash \
 	hash/adler32 \
-	hash/fnv \
 	hash/crc64 \
+	hash/fnv \
 	html \
 	index/suffixarray \
 	internal/itoa \
+	internal/profile \
 	math \
 	math/cmplx \
+	net/http/internal/ascii \
 	net/mail \
 	os \
+	path \
 	reflect \
 	testing \
 	testing/iotest \
