@@ -7,6 +7,7 @@ package os
 
 import (
 	"io"
+	"runtime"
 	"syscall"
 )
 
@@ -217,7 +218,27 @@ func Readlink(name string) (string, error) {
 	return name, nil
 }
 
-// TempDir is a stub (for now), always returning the string "/tmp"
+// TempDir returns the default directory to use for temporary files.
+// On Unix systems, it returns $TMPDIR if non-empty, else /tmp.
+// On Windows, it returns the first non-empty value from %TMP%, %TEMP%, or %USERPROFILE%.
+// Everywhere else, it returns /tmp.
+// The directory is neither guaranteed to exist nor have accessible permissions.
 func TempDir() string {
+	var envs []string
+
+	switch runtime.GOOS {
+	case "windows":
+		envs = []string{"TMP", "TEMP", "USERPROFILE"}
+	case "darwin", "linux":
+		envs = []string{"TMPDIR"}
+	}
+
+	for _, e := range envs {
+		s := Getenv(e)
+		if s != "" {
+			return s
+		}
+	}
+
 	return "/tmp"
 }
