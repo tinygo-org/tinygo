@@ -86,6 +86,18 @@ func main() {
 	// check for signed integer overflow
 	println("-2147483648 / -1:", sdiv32(-2147483648, -1))
 	println("-2147483648 % -1:", srem32(-2147483648, -1))
+
+	type foo struct {
+		n   int
+		itf interface{}
+	}
+
+	var a interface{} = foo{3, float32(5)}
+	var b interface{} = foo{3, float32(3)}
+	var b2 interface{} = foo{3, float32(3)}
+	println("interface equality")
+	println("a==b", a == b)
+	println("b==b2", b == b2)
 }
 
 var x = true

@@ -71,3 +71,6 @@ constant number
 0
 -2147483648 / -1: -2147483648
 -2147483648 % -1: 0
+interface equality
+a==b false
+b==b2 true

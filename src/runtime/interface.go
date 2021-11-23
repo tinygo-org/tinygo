@@ -74,6 +74,8 @@ func reflectValueEqual(x, y reflect.Value) bool {
 			}
 		}
 		return true
+	case reflect.Interface:
+		return reflectValueEqual(x.Elem(), y.Elem())
 	default:
 		runtimePanic("comparing un-comparable type")
 		return false // unreachable
