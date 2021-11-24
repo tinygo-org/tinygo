@@ -188,6 +188,10 @@ func (e *PathError) Error() string {
 	return e.Op + " " + e.Path + ": " + e.Err.Error()
 }
 
+func (e *PathError) Unwrap() error {
+	return e.Err
+}
+
 const (
 	O_RDONLY int = syscall.O_RDONLY
 	O_WRONLY int = syscall.O_WRONLY
