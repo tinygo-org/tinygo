@@ -174,6 +174,11 @@ func (f *File) Fd() uintptr {
 	panic("unimplemented: os.file.Fd()")
 }
 
+// Truncate is a stub, not yet implemented
+func (f *File) Truncate(size int64) error {
+	return &PathError{"truncate", f.name, ErrNotImplemented}
+}
+
 const (
 	PathSeparator     = '/' // OS-specific path separator
 	PathListSeparator = ':' // OS-specific path list separator
