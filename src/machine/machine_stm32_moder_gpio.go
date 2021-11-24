@@ -1,3 +1,4 @@
+//go:build stm32 && !stm32f103
 // +build stm32,!stm32f103
 
 package machine
@@ -110,13 +111,13 @@ func (p Pin) ConfigureAltFunc(config PinConfig, altFunc uint8) {
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
 		port.OTYPER.ReplaceBits(stm32.GPIO_OTYPER_OT0_OpenDrain, stm32.GPIO_OTYPER_OT0_Msk, pos/2)
 		port.OSPEEDR.ReplaceBits(gpioOutputSpeedLow, gpioOutputSpeedMask, pos)
-		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
+		port.PUPDR.ReplaceBits(gpioPullUp, gpioPullMask, pos)
 		p.SetAltFunc(altFunc)
 	case PinModeI2CSDA:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
 		port.OTYPER.ReplaceBits(stm32.GPIO_OTYPER_OT0_OpenDrain, stm32.GPIO_OTYPER_OT0_Msk, pos/2)
 		port.OSPEEDR.ReplaceBits(gpioOutputSpeedLow, gpioOutputSpeedMask, pos)
-		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
+		port.PUPDR.ReplaceBits(gpioPullUp, gpioPullMask, pos)
 		p.SetAltFunc(altFunc)
 
 	// SPI
