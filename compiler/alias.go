@@ -86,7 +86,7 @@ func (b *builder) createAlias(alias llvm.Value) {
 		pos := b.program.Fset.Position(b.fn.Pos())
 		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
 	}
-	entryBlock := llvm.AddBasicBlock(b.llvmFn, "entry")
+	entryBlock := b.ctx.AddBasicBlock(b.llvmFn, "entry")
 	b.SetInsertPointAtEnd(entryBlock)
 	if b.llvmFn.Type() != alias.Type() {
 		b.addError(b.fn.Pos(), "alias function should have the same type as aliasee "+alias.Name())
