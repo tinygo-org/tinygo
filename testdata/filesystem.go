@@ -34,4 +34,12 @@ func main() {
 	}
 
 	os.Stdout.Write(data)
+
+	path, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	if path == "" {
+		panic("path is empty")
+	}
 }
