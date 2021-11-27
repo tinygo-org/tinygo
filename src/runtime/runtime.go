@@ -39,6 +39,12 @@ func memmove(dst, src unsafe.Pointer, size uintptr)
 // llvm.memset.p0i8.i32(ptr, 0, size, false).
 func memzero(ptr unsafe.Pointer, size uintptr)
 
+// This intrinsic returns the current stack pointer.
+// It is normally used together with llvm.stackrestore but also works to get the
+// current stack pointer in a platform-independent way.
+//export llvm.stacksave
+func stacksave() unsafe.Pointer
+
 //export strlen
 func strlen(ptr unsafe.Pointer) uintptr
 

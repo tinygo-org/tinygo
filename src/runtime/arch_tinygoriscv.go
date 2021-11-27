@@ -5,7 +5,7 @@ package runtime
 import "device/riscv"
 
 func getCurrentStackPointer() uintptr {
-	return riscv.AsmFull("mv {}, sp", nil)
+	return uintptr(stacksave())
 }
 
 // Documentation:

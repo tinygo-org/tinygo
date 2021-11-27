@@ -2,8 +2,6 @@
 
 package runtime
 
-import "device"
-
 const GOARCH = "arm" // xtensa pretends to be arm
 
 // The bitness of the CPU (e.g. 8, 32, 64).
@@ -15,6 +13,5 @@ func align(ptr uintptr) uintptr {
 }
 
 func getCurrentStackPointer() uintptr {
-	// The stack pointer (sp) is a1.
-	return device.AsmFull("mov {}, sp", nil)
+	return uintptr(stacksave())
 }

@@ -2,8 +2,6 @@
 
 package runtime
 
-import "device/arm"
-
 const GOARCH = "arm"
 
 // The bitness of the CPU (e.g. 8, 32, 64).
@@ -15,5 +13,5 @@ func align(ptr uintptr) uintptr {
 }
 
 func getCurrentStackPointer() uintptr {
-	return arm.AsmFull("mov {}, sp", nil)
+	return uintptr(stacksave())
 }
