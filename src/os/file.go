@@ -47,7 +47,7 @@ func Remove(path string) error {
 	}
 	err := fs.Remove(suffix)
 	if err != nil {
-		return &PathError{"remove", path, err}
+		return err
 	}
 	return nil
 }
