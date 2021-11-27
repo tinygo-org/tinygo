@@ -69,12 +69,3 @@ __vector_WDT:
 
     pop  r16
     reti
-
-; This is necessary for the garbage collector.
-; It returns the stack pointer as an uintptr.
-.section .text.runtime.getCurrentStackPointer
-.global  runtime.getCurrentStackPointer
-runtime.getCurrentStackPointer:
-    in  r24, 0x3d; SPL
-    in  r25, 0x3e; SPH
-    ret

@@ -13,4 +13,6 @@ func align(ptr uintptr) uintptr {
 	return ptr
 }
 
-func getCurrentStackPointer() uintptr
+func getCurrentStackPointer() uintptr {
+	return uintptr(stacksave())
+}
