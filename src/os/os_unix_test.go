@@ -63,9 +63,8 @@ func TestRemove(t *testing.T) {
 				t.Errorf("TestRemove: PathError returned path %q, expected %q", pe.Path, f)
 			}
 		}
-		// TODO: make this pass.
 		if !IsNotExist(err) {
-			t.Logf("TestRemove: TODO: expected IsNotExist(err) true, got false; err %q", err.Error())
+			t.Errorf("TestRemove: expected IsNotExist(err) true, got false; err %q", err.Error())
 		}
 	}
 
