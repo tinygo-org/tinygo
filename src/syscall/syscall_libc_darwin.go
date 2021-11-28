@@ -2,6 +2,10 @@
 
 package syscall
 
+import (
+	"unsafe"
+)
+
 // This file defines errno and constants to match the darwin libsystem ABI.
 // Values have been copied from src/syscall/zerrors_darwin_amd64.go.
 
@@ -97,3 +101,93 @@ const (
 	MAP_ANON      = 0x1000 // allocated from memory, swap space
 	MAP_ANONYMOUS = MAP_ANON
 )
+
+type Timespec struct {
+	Sec  int64
+	Nsec int64
+}
+
+// Go chose Linux's field names for Stat_t, see https://github.com/golang/go/issues/31735
+type Stat_t struct {
+	Dev       int32
+	Mode      uint16
+	Nlink     uint16
+	Ino       uint64
+	Uid       uint32
+	Gid       uint32
+	Rdev      int32
+	Pad_cgo_0 [4]byte
+	Atim      Timespec
+	Mtim      Timespec
+	Ctim      Timespec
+	Btim      Timespec
+	Size      int64
+	Blocks    int64
+	Blksize   int32
+	Flags     uint32
+	Gen       uint32
+	Lspare    int32
+	Qspare    [2]int64
+}
+
+// Source: https://github.com/apple/darwin-xnu/blob/main/bsd/sys/_types/_s_ifmt.h
+const (
+	S_IEXEC  = 0x40
+	S_IFBLK  = 0x6000
+	S_IFCHR  = 0x2000
+	S_IFDIR  = 0x4000
+	S_IFIFO  = 0x1000
+	S_IFLNK  = 0xa000
+	S_IFMT   = 0xf000
+	S_IFREG  = 0x8000
+	S_IFSOCK = 0xc000
+	S_IFWHT  = 0xe000
+	S_IREAD  = 0x100
+	S_IRGRP  = 0x20
+	S_IROTH  = 0x4
+	S_IRUSR  = 0x100
+	S_IRWXG  = 0x38
+	S_IRWXO  = 0x7
+	S_IRWXU  = 0x1c0
+	S_ISGID  = 0x400
+	S_ISTXT  = 0x200
+	S_ISUID  = 0x800
+	S_ISVTX  = 0x200
+	S_IWGRP  = 0x10
+	S_IWOTH  = 0x2
+	S_IWRITE = 0x80
+	S_IWUSR  = 0x80
+	S_IXGRP  = 0x8
+	S_IXOTH  = 0x1
+	S_IXUSR  = 0x40
+)
+
+func Stat(path string, p *Stat_t) (err error) {
+	data := cstring(path)
+	n := libc_stat(&data[0], unsafe.Pointer(p))
+
+	if n < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Lstat(path string, p *Stat_t) (err error) {
+	data := cstring(path)
+	n := libc_lstat(&data[0], unsafe.Pointer(p))
+	if n < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+// The odd $INODE64 suffix is an Apple compatibility feature, see https://assert.cc/posts/darwin_use_64_bit_inode_vs_ctypes/
+// Without it, you get the old, smaller struct stat from mac os 10.2 or so.
+
+// int stat(const char *path, struct stat * buf);
+//export stat$INODE64
+func libc_stat(pathname *byte, ptr unsafe.Pointer) int32
+
+// int lstat(const char *path, struct stat * buf);
+//export lstat$INODE64
+func libc_lstat(pathname *byte, ptr unsafe.Pointer) int32

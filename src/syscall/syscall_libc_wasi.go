@@ -2,6 +2,10 @@
 
 package syscall
 
+import (
+	"unsafe"
+)
+
 // https://github.com/WebAssembly/wasi-libc/blob/main/expected/wasm32-wasi/predefined-macros.txt
 
 type Signal int
@@ -139,3 +143,88 @@ const (
 	EXDEV           Errno = 75 /* Cross-device link */
 	ENOTCAPABLE     Errno = 76 /* Extension: Capabilities insufficient. */
 )
+
+// https://github.com/WebAssembly/wasi-libc/blob/main/libc-bottom-half/headers/public/__struct_timespec.h
+type Timespec struct {
+	Sec  int32
+	Nsec int64
+}
+
+// https://github.com/WebAssembly/wasi-libc/blob/main/libc-bottom-half/headers/public/__struct_stat.h
+// https://github.com/WebAssembly/wasi-libc/blob/main/libc-bottom-half/headers/public/__typedef_ino_t.h
+// etc.
+// Go chose Linux's field names for Stat_t, see https://github.com/golang/go/issues/31735
+type Stat_t struct {
+	Dev       uint64
+	Ino       uint64
+	Nlink     uint64
+	Mode      uint32
+	Uid       uint32
+	Gid       uint32
+	Pad_cgo_0 [4]byte
+	Rdev      uint64
+	Size      int64
+	Blksize   int32
+	Blocks    int64
+
+	Atim   Timespec
+	Mtim   Timespec
+	Ctim   Timespec
+	Qspare [3]int64
+}
+
+// https://github.com/WebAssembly/wasi-libc/blob/main/libc-top-half/musl/include/sys/stat.h
+const (
+	S_IFBLK  = 0x6000
+	S_IFCHR  = 0x2000
+	S_IFDIR  = 0x4000
+	S_IFIFO  = 0x1000
+	S_IFLNK  = 0xa000
+	S_IFMT   = 0xf000
+	S_IFREG  = 0x8000
+	S_IFSOCK = 0xc000
+	S_IREAD  = 0x100
+	S_IRGRP  = 0x20
+	S_IROTH  = 0x4
+	S_IRUSR  = 0x100
+	S_IRWXG  = 0x38
+	S_IRWXO  = 0x7
+	S_IRWXU  = 0x1c0
+	S_ISGID  = 0x400
+	S_ISUID  = 0x800
+	S_ISVTX  = 0x200
+	S_IWGRP  = 0x10
+	S_IWOTH  = 0x2
+	S_IWRITE = 0x80
+	S_IWUSR  = 0x80
+	S_IXGRP  = 0x8
+	S_IXOTH  = 0x1
+	S_IXUSR  = 0x40
+)
+
+func Stat(path string, p *Stat_t) (err error) {
+	data := cstring(path)
+	n := libc_stat(&data[0], unsafe.Pointer(p))
+
+	if n < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Lstat(path string, p *Stat_t) (err error) {
+	data := cstring(path)
+	n := libc_lstat(&data[0], unsafe.Pointer(p))
+	if n < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+// int stat(const char *path, struct stat * buf);
+//export stat
+func libc_stat(pathname *byte, ptr unsafe.Pointer) int32
+
+// int lstat(const char *path, struct stat * buf);
+//export lstat
+func libc_lstat(pathname *byte, ptr unsafe.Pointer) int32

@@ -171,11 +171,6 @@ func (f *File) Stat() (FileInfo, error) {
 	return nil, &PathError{"stat", f.name, ErrNotImplemented}
 }
 
-// Sync is a stub, not yet implemented
-func (f *File) Sync() error {
-	return ErrNotImplemented
-}
-
 func (f *File) SyscallConn() (syscall.RawConn, error) {
 	return nil, ErrNotImplemented
 }
@@ -188,16 +183,6 @@ func (f *File) Fd() uintptr {
 // Truncate is a stub, not yet implemented
 func (f *File) Truncate(size int64) error {
 	return &PathError{"truncate", f.name, ErrNotImplemented}
-}
-
-const (
-	PathSeparator     = '/' // OS-specific path separator
-	PathListSeparator = ':' // OS-specific path list separator
-)
-
-// IsPathSeparator reports whether c is a directory separator character.
-func IsPathSeparator(c uint8) bool {
-	return PathSeparator == c
 }
 
 // PathError records an error and the operation and file path that caused it.
@@ -244,16 +229,6 @@ const (
 	O_SYNC   int = syscall.O_SYNC
 	O_TRUNC  int = syscall.O_TRUNC
 )
-
-// Stat is a stub, not yet implemented
-func Stat(name string) (FileInfo, error) {
-	return nil, &PathError{"stat", name, ErrNotImplemented}
-}
-
-// Lstat is a stub, not yet implemented
-func Lstat(name string) (FileInfo, error) {
-	return nil, &PathError{"lstat", name, ErrNotImplemented}
-}
 
 func Getwd() (string, error) {
 	return syscall.Getwd()
