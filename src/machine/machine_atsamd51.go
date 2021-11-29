@@ -16,6 +16,8 @@ import (
 	"unsafe"
 )
 
+const deviceName = sam.Device
+
 func CPUFrequency() uint32 {
 	return 120000000
 }

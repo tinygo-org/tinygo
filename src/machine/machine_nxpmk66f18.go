@@ -37,6 +37,8 @@ import (
 	"unsafe"
 )
 
+const deviceName = nxp.Device
+
 const (
 	PinInput PinMode = iota
 	PinInputPullUp

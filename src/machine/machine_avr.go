@@ -8,6 +8,8 @@ import (
 	"unsafe"
 )
 
+const deviceName = avr.DEVICE
+
 const (
 	PinInput PinMode = iota
 	PinInputPullup

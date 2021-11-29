@@ -4,6 +4,8 @@ package machine
 
 // Dummy machine package that calls out to external functions.
 
+const deviceName = "generic"
+
 var (
 	UART0 = &UART{0}
 	USB   = &UART{100}

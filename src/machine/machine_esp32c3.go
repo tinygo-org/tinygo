@@ -8,6 +8,8 @@ import (
 	"unsafe"
 )
 
+const deviceName = esp.Device
+
 // CPUFrequency returns the current CPU frequency of the chip.
 // Currently it is a fixed frequency but it may allow changing in the future.
 func CPUFrequency() uint32 {
