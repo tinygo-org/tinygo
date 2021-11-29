@@ -23,6 +23,23 @@ func (b *builder) createTemporaryAlloca(t llvm.Type, name string) (alloca, bitca
 	return llvmutil.CreateTemporaryAlloca(b.Builder, b.mod, t, name)
 }
 
+// insertBasicBlock inserts a new basic block after the current basic block.
+// This is useful when inserting new basic blocks while converting a
+// *ssa.BasicBlock to a llvm.BasicBlock and the LLVM basic block needs some
+// extra blocks.
+// It does not update b.blockExits, this must be done by the caller.
+func (b *builder) insertBasicBlock(name string) llvm.BasicBlock {
+	currentBB := b.Builder.GetInsertBlock()
+	nextBB := llvm.NextBasicBlock(currentBB)
+	if nextBB.IsNil() {
+		// Last basic block in the function, so add one to the end.
+		return b.ctx.AddBasicBlock(b.llvmFn, name)
+	}
+	// Insert a basic block before the next basic block - that is, at the
+	// current insert location.
+	return b.ctx.InsertBasicBlock(nextBB, name)
+}
+
 // emitLifetimeEnd signals the end of an (alloca) lifetime by calling the
 // llvm.lifetime.end intrinsic. It is commonly used together with
 // createTemporaryAlloca.

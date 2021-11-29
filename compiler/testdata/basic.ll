@@ -36,10 +36,6 @@ entry:
   %0 = icmp eq i32 %y, 0
   br i1 %0, label %divbyzero.throw, label %divbyzero.next
 
-divbyzero.throw:                                  ; preds = %entry
-  call void @runtime.divideByZeroPanic(i8* undef) #0
-  unreachable
-
 divbyzero.next:                                   ; preds = %entry
   %1 = icmp eq i32 %y, -1
   %2 = icmp eq i32 %x, -2147483648
@@ -47,6 +43,10 @@ divbyzero.next:                                   ; preds = %entry
   %4 = select i1 %3, i32 1, i32 %y
   %5 = sdiv i32 %x, %4
   ret i32 %5
+
+divbyzero.throw:                                  ; preds = %entry
+  call void @runtime.divideByZeroPanic(i8* undef) #0
+  unreachable
 }
 
 declare void @runtime.divideByZeroPanic(i8*)
@@ -57,13 +57,13 @@ entry:
   %0 = icmp eq i32 %y, 0
   br i1 %0, label %divbyzero.throw, label %divbyzero.next
 
-divbyzero.throw:                                  ; preds = %entry
-  call void @runtime.divideByZeroPanic(i8* undef) #0
-  unreachable
-
 divbyzero.next:                                   ; preds = %entry
   %1 = udiv i32 %x, %y
   ret i32 %1
+
+divbyzero.throw:                                  ; preds = %entry
+  call void @runtime.divideByZeroPanic(i8* undef) #0
+  unreachable
 }
 
 ; Function Attrs: nounwind
@@ -72,10 +72,6 @@ entry:
   %0 = icmp eq i32 %y, 0
   br i1 %0, label %divbyzero.throw, label %divbyzero.next
 
-divbyzero.throw:                                  ; preds = %entry
-  call void @runtime.divideByZeroPanic(i8* undef) #0
-  unreachable
-
 divbyzero.next:                                   ; preds = %entry
   %1 = icmp eq i32 %y, -1
   %2 = icmp eq i32 %x, -2147483648
@@ -83,6 +79,10 @@ divbyzero.next:                                   ; preds = %entry
   %4 = select i1 %3, i32 1, i32 %y
   %5 = srem i32 %x, %4
   ret i32 %5
+
+divbyzero.throw:                                  ; preds = %entry
+  call void @runtime.divideByZeroPanic(i8* undef) #0
+  unreachable
 }
 
 ; Function Attrs: nounwind
@@ -91,13 +91,13 @@ entry:
   %0 = icmp eq i32 %y, 0
   br i1 %0, label %divbyzero.throw, label %divbyzero.next
 
-divbyzero.throw:                                  ; preds = %entry
-  call void @runtime.divideByZeroPanic(i8* undef) #0
-  unreachable
-
 divbyzero.next:                                   ; preds = %entry
   %1 = urem i32 %x, %y
   ret i32 %1
+
+divbyzero.throw:                                  ; preds = %entry
+  call void @runtime.divideByZeroPanic(i8* undef) #0
+  unreachable
 }
 
 ; Function Attrs: nounwind

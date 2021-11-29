@@ -19,14 +19,14 @@ entry:
   %0 = icmp eq void ()* %callback.funcptr, null
   br i1 %0, label %fpcall.throw, label %fpcall.next
 
-fpcall.throw:                                     ; preds = %entry
-  call void @runtime.nilPanic(i8* undef) #0
-  unreachable
-
 fpcall.next:                                      ; preds = %entry
   %1 = bitcast void ()* %callback.funcptr to void (i32, i8*)*
   call void %1(i32 3, i8* %callback.context) #0
   ret void
+
+fpcall.throw:                                     ; preds = %entry
+  call void @runtime.nilPanic(i8* undef) #0
+  unreachable
 }
 
 declare void @runtime.nilPanic(i8*)

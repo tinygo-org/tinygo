@@ -15,6 +15,7 @@ package compiler
 
 import (
 	"go/types"
+	"strconv"
 
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"golang.org/x/tools/go/ssa"
@@ -248,11 +249,11 @@ func (b *builder) createRunDefers() {
 	//         }
 	//     }
 
-	// Create loop.
-	loophead := b.ctx.AddBasicBlock(b.llvmFn, "rundefers.loophead")
-	loop := b.ctx.AddBasicBlock(b.llvmFn, "rundefers.loop")
-	unreachable := b.ctx.AddBasicBlock(b.llvmFn, "rundefers.default")
-	end := b.ctx.AddBasicBlock(b.llvmFn, "rundefers.end")
+	// Create loop, in the order: loophead, loop, callback0, callback1, ..., unreachable, end.
+	end := b.insertBasicBlock("rundefers.end")
+	unreachable := b.ctx.InsertBasicBlock(end, "rundefers.default")
+	loop := b.ctx.InsertBasicBlock(unreachable, "rundefers.loop")
+	loophead := b.ctx.InsertBasicBlock(loop, "rundefers.loophead")
 	b.CreateBr(loophead)
 
 	// Create loop head:
@@ -284,7 +285,7 @@ func (b *builder) createRunDefers() {
 		// Create switch case, for example:
 		//     case 0:
 		//         // run first deferred call
-		block := b.ctx.AddBasicBlock(b.llvmFn, "rundefers.callback")
+		block := b.insertBasicBlock("rundefers.callback" + strconv.Itoa(i))
 		sw.AddCase(llvm.ConstInt(b.uintptrType, uint64(i), false), block)
 		b.SetInsertPointAtEnd(block)
 		switch callback := callback.(type) {
