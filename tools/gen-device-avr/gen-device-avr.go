@@ -213,12 +213,15 @@ func readATDF(path string) (*Device, error) {
 				})
 			}
 
-			if _, ok := allRegisters[regEl.Name]; ok {
-				firstReg := allRegisters[regEl.Name]
-				for i := 0; i < len(firstReg.peripheral.Registers); i++ {
-					if firstReg.peripheral.Registers[i] == firstReg {
-						firstReg.peripheral.Registers = append(firstReg.peripheral.Registers[:i], firstReg.peripheral.Registers[i+1:]...)
-						break
+			if firstReg, ok := allRegisters[regEl.Name]; ok {
+				// merge bit fields with previous register
+				merged := append(firstReg.Bitfields, reg.Bitfields...)
+				firstReg.Bitfields = make([]Bitfield, 0, len(merged))
+				m := make(map[string]interface{})
+				for _, field := range merged {
+					if _, ok := m[field.Name]; !ok {
+						m[field.Name] = nil
+						firstReg.Bitfields = append(firstReg.Bitfields, field)
 					}
 				}
 				continue
@@ -381,10 +384,10 @@ var ({{range .peripherals}}
 						name := fmt.Sprintf("%s%d", bitfield.Name, n)
 						if _, ok := allBits[name]; !ok {
 							fmt.Fprintf(w, "\t%s = 0x%x", name, 1<<i)
-						if len(bitfield.Caption) != 0 {
-							fmt.Fprintf(w, " // %s", bitfield.Caption)
-						}
-						fmt.Fprintf(w, "\n")
+							if len(bitfield.Caption) != 0 {
+								fmt.Fprintf(w, " // %s", bitfield.Caption)
+							}
+							fmt.Fprintf(w, "\n")
 							allBits[name] = nil
 						}
 						n++
