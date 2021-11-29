@@ -9,6 +9,8 @@ import (
 	"unsafe"
 )
 
+const deviceName = esp.Device
+
 const peripheralClock = 80000000 // 80MHz
 
 // CPUFrequency returns the current CPU frequency of the chip.

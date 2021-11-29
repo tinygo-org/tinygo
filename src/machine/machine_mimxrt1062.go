@@ -11,6 +11,8 @@ import (
 
 // Peripheral abstraction layer for the MIMXRT1062
 
+const deviceName = nxp.Device
+
 func CPUFrequency() uint32 {
 	return 600000000
 }

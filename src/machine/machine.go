@@ -10,6 +10,13 @@ var (
 	ErrNoPinChangeChannel = errors.New("machine: no channel available for pin interrupt")
 )
 
+// Device is the running program's chip name, such as "ATSAMD51J19A" or
+// "nrf52840". It is not the same as the CPU name.
+//
+// The constant is some hardcoded default value if the program does not target a
+// particular chip but instead runs in WebAssembly for example.
+const Device = deviceName
+
 // PinMode sets the direction and pull mode of the pin. For example, PinOutput
 // sets the pin as an output and PinInputPullup sets the pin as an input with a
 // pull-up.

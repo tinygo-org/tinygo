@@ -9,6 +9,10 @@ import (
 	"unsafe"
 )
 
+// Not sure what name to pick here. Not using ARM7TDMI because that's the CPU
+// name, not the device name.
+const deviceName = "GBA"
+
 // Interrupt numbers as used on the GameBoy Advance. Register them with
 // runtime/interrupt.New.
 const (

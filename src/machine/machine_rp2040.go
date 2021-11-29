@@ -8,6 +8,8 @@ import (
 	"runtime/interrupt"
 )
 
+const deviceName = rp.Device
+
 const (
 	// GPIO pins
 	GPIO0  Pin = 0

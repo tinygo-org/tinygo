@@ -8,6 +8,8 @@ import (
 	"unsafe"
 )
 
+const deviceName = sifive.Device
+
 func CPUFrequency() uint32 {
 	return 320000000 // 320MHz
 }

@@ -7,6 +7,8 @@ import (
 	"runtime/volatile"
 )
 
+const deviceName = esp.Device
+
 func CPUFrequency() uint32 {
 	return 80000000 // 80MHz
 }

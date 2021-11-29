@@ -10,6 +10,8 @@ import (
 	"unsafe"
 )
 
+const deviceName = kendryte.Device
+
 func CPUFrequency() uint32 {
 	return 390000000
 }

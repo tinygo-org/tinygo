@@ -16,6 +16,8 @@ import (
 	"unsafe"
 )
 
+const deviceName = sam.Device
+
 const (
 	PinAnalog    PinMode = 1
 	PinSERCOM    PinMode = 2
