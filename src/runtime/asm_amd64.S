@@ -28,6 +28,22 @@ _tinygo_scanCurrentStack:
     addq $56, %rsp
     retq
 
+
+#ifdef __ELF__
+.section .text.tinygo_longjmp
+.global tinygo_longjmp
+tinygo_longjmp:
+#else // Darwin
+.global _tinygo_longjmp
+_tinygo_longjmp:
+#endif
+    // Note: the code we jump to assumes rax is non-zero so we have to load it
+    // with some value here.
+    movq $1, %rax
+    movq %rdi, %rsp // jumpSP
+    jmpq *%rsi      // jumpPC
+
+
 #ifdef __MACH__ // Darwin
 // allow these symbols to stripped as dead code
 .subsections_via_symbols

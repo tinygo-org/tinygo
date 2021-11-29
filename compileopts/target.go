@@ -302,7 +302,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			// systems so we need separate assembly files.
 			suffix = "_windows"
 		}
-		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/gc_"+goarch+suffix+".S")
+		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/asm_"+goarch+suffix+".S")
 		spec.ExtraFiles = append(spec.ExtraFiles, "src/internal/task/task_stack_"+goarch+suffix+".S")
 	}
 	if goarch != runtime.GOARCH {

@@ -20,3 +20,12 @@ tinygo_scanCurrentStack:
     // were only pushed to be discoverable by the GC.
     addq $72, %rsp
     retq
+
+.section .text.tinygo_longjmp,"ax"
+.global tinygo_longjmp
+tinygo_longjmp:
+    // Note: the code we jump to assumes rax is non-zero so we have to load it
+    // with some value here.
+    movq $1, %rax
+    movq %rcx, %rsp // jumpSP
+    jmpq *%rdx      // jumpPC

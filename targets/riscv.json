@@ -18,7 +18,7 @@
 	"extra-files": [
 		"src/device/riscv/start.S",
 		"src/internal/task/task_stack_tinygoriscv.S",
-		"src/runtime/gc_riscv.S",
+		"src/runtime/asm_riscv.S",
 		"src/device/riscv/handleinterrupt.S"
 	],
 	"gdb": ["riscv64-unknown-elf-gdb"]

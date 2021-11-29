@@ -40,3 +40,12 @@ tinygo_scanCurrentStack:
 
    // Return to the caller.
    ret
+
+
+.section .text.tinygo_longjmp
+.global tinygo_longjmp
+tinygo_longjmp:
+    // Note: the code we jump to assumes a0 is non-zero, which is already the
+    // case because that's jumpSP (the stack pointer).
+    mv sp, a0 // jumpSP
+    jr a1     // jumpPC

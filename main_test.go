@@ -244,6 +244,13 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("rand.go", options, t, nil, nil)
 		})
 	}
+	if options.Target != "wasi" && options.Target != "wasm" {
+		// The recover() builtin isn't supported yet on WebAssembly and Windows.
+		t.Run("recover.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("recover.go", options, t, nil, nil)
+		})
+	}
 }
 
 func emuCheck(t *testing.T, options compileopts.Options) {

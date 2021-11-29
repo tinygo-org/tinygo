@@ -307,11 +307,14 @@ TEST_PACKAGES_LINUX := \
 	archive/zip \
 	compress/flate \
 	compress/lzw \
+	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \
 	io/fs \
 	io/ioutil \
-	testing/fstest
+	strconv \
+	testing/fstest \
+	text/template/parse
 
 TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
 

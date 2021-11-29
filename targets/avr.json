@@ -17,7 +17,7 @@
 	],
 	"extra-files": [
 		"src/internal/task/task_stack_avr.S",
-		"src/runtime/gc_avr.S"
+		"src/runtime/asm_avr.S"
 	],
 	"gdb": ["avr-gdb"]
 }
