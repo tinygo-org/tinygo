@@ -20,6 +20,22 @@ type Task struct {
 
 	// state is the underlying running state of the task.
 	state state
+
+	// DeferFrame stores a pointer to the (stack allocated) defer frame of the
+	// goroutine that is used for the recover builtin.
+	DeferFrame *DeferFrame
+}
+
+// DeferFrame is a stack allocated object that stores information for the
+// current "defer frame", which is used in functions that use the `defer`
+// keyword.
+// The compiler knows the JumpPC struct offset.
+type DeferFrame struct {
+	JumpSP     unsafe.Pointer // stack pointer to return to
+	JumpPC     unsafe.Pointer // pc to return to
+	Previous   *DeferFrame    // previous recover buffer pointer
+	Panicking  bool           // true iff this defer frame is panicking
+	PanicValue interface{}    // panic value, might be nil for panic(nil) for example
 }
 
 // getGoroutineStackSize is a compiler intrinsic that returns the stack size for

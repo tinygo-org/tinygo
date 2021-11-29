@@ -94,6 +94,7 @@ func TestCompiler(t *testing.T) {
 			}
 			compilerConfig := &Config{
 				Triple:             config.Triple(),
+				Features:           config.Features(),
 				GOOS:               config.GOOS(),
 				GOARCH:             config.GOARCH(),
 				CodeModel:          config.CodeModel(),

@@ -21,3 +21,13 @@ tinygo_scanCurrentStack:
     // were only pushed to be discoverable by the GC.
     addl $28, %esp
     retl
+
+
+.section .text.tinygo_longjmp
+.global tinygo_longjmp
+tinygo_longjmp:
+    // Note: the code we jump to assumes eax is set to a non-zero value if we
+    // jump from here.
+    movl 8(%esp), %eax // jumpPC (stash in volatile register)
+    movl 4(%esp), %esp // jumpSP
+    jmpl *%eax

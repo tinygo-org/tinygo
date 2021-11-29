@@ -24,7 +24,7 @@
 	"extra-files": [
 		"src/device/arm/cortexm.s",
 		"src/internal/task/task_stack_cortexm.S",
-		"src/runtime/gc_arm.S"
+		"src/runtime/asm_arm.S"
 	],
 	"gdb": ["gdb-multiarch", "arm-none-eabi-gdb"]
 }

@@ -107,6 +107,8 @@
   - pkg: blowfish
   - pkg: bn256
   - pkg: cast5
+  - pkg: chacha20
+    skipwasi: true # needs recover
   - pkg: chacha20poly1305
   - pkg: curve25519
   - pkg: ed25519
@@ -129,7 +131,6 @@
   - pkg: tea
   - pkg: twofish
   - pkg: xtea
-  #- pkg: chacha20 # panic: chacha20: SetCounter attempted to rollback counter
   #- pkg: cryptobyte # panic: unimplemented: reflect.OverflowInt()
   #- pkg: salsa20/salsa # panic: runtime error: index out of range
   #- pkg: sha3 # panic: unimplemented: (reflect.Type).NumMethod()
@@ -209,15 +210,27 @@
   tags: noasm appengine
   subdirs:
   - pkg: blas/blas32
+  - pkg: blas/blas64
+    skipwasi: true # needs recover
   - pkg: blas/cblas64
   - pkg: blas/cblas128
+  - pkg: blas/gonum
+    skipwasi: true # needs recover
+  - pkg: cmplxs
+    skipwasi: true # needs recover
   - pkg: cmplxs/cscalar
+  - pkg: diff/fd
+    skipwasi: true # needs recover
   - pkg: dsp/window
+  - pkg: floats
+    skipwasi: true # needs recover
   - pkg: floats/scalar
   - pkg: integrate
   - pkg: integrate/quad
   - pkg: internal/cmplx64
   - pkg: internal/testrand
+  - pkg: interp
+    skipwasi: true # needs recover
   - pkg: lapack/gonum
     skipwasi: true # takes too long
     slow: true
@@ -236,15 +249,9 @@
     slow: true
   - pkg: stat/samplemv
     skipwasi: true # takes too long
-  #- pkg: blas/blas64 # -- TestDasum panic: blas: n < 0
-  #- pkg: blas/gonum # -- panic: blas: n < 0
-  #- pkg: cmplxs # -- TestAdd panic: cmplxs: slice lengths do not match
-  #- pkg: diff/fd # -- panic: fd: slice length mismatch
-  #- pkg: floats # -- panic: floats: destination slice length does not match input
   #- pkg: graph # ld.lld-11:  -- error: undefined symbol: reflect.mapiterkey (among other reflect errors)
   #- pkg: graph/topo # -- Reflect: Same as above
   #- pkg: internal/math32 # -- /usr/local/go/src/testing/quick/quick.go:273:11: fType.NumOut undefined (type reflect.Type has no field or method NumOut)
-  #- pkg: interp # -- panic: interp: input slices have different lengths
   #- pkg: mat # -- panic: mat: row index out of range
   #- pkg: num/dual # TestFormat unexpected result for fmt.Sprintf("%#v", T{Real:1.1, Emag:2.1}): got:"T{Real:1.1, Emag:2.1}", want:"dual.Number{Real:1.1, Emag:2.1}"    unexpected result for fmt.Sprintf("%#v", T{Real:-1.1, Emag:-2.1}): got:"T{Real:-1.1, Emag:-2.1}", want:"dual.Number{Real:-1.1, Emag:-2.1}"
   #- pkg: num/dualcmplx # TestFormat (similar to above)

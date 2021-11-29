@@ -31,3 +31,16 @@ tinygo_scanCurrentStack:
     pop {pc}
     .cfi_endproc
 .size tinygo_scanCurrentStack, .-tinygo_scanCurrentStack
+
+
+.section .text.tinygo_longjmp
+.global tinygo_longjmp
+.type   tinygo_longjmp, %function
+tinygo_longjmp:
+    .cfi_startproc
+    // Note: the code we jump to assumes r0 is set to a non-zero value if we
+    // jump from here (which is conveniently already the case).
+    mov sp, r0 // jumpSP
+    mov pc, r1 // jumpPC
+    .cfi_endproc
+.size tinygo_longjmp, .-tinygo_longjmp

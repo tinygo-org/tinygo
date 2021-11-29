@@ -4,6 +4,9 @@ package task
 
 import "unsafe"
 
+// There is only one goroutine so the task struct can be a global.
+var mainTask Task
+
 //go:linkname runtimePanic runtime.runtimePanic
 func runtimePanic(str string)
 
@@ -12,8 +15,8 @@ func Pause() {
 }
 
 func Current() *Task {
-	runtimePanic("scheduler is disabled")
-	return nil
+	// Return a task struct, which is used for the recover builtin for example.
+	return &mainTask
 }
 
 //go:noinline
