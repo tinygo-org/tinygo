@@ -358,6 +358,7 @@ var ({{range .peripherals}}
 				}
 				fmt.Fprintf(w, "\n")
 			}
+			allBits := map[string]interface{}{}
 			for _, bitfield := range register.Bitfields {
 				if bits.OnesCount(bitfield.Mask) == 1 {
 					fmt.Fprintf(w, "\t%s = 0x%x", bitfield.Name, bitfield.Mask)
@@ -365,19 +366,34 @@ var ({{range .peripherals}}
 						fmt.Fprintf(w, " // %s", bitfield.Caption)
 					}
 					fmt.Fprintf(w, "\n")
+					fmt.Fprintf(w, "\t%s_Msk = 0x%x", bitfield.Name, bitfield.Mask)
+					if len(bitfield.Caption) != 0 {
+						fmt.Fprintf(w, " // %s", bitfield.Caption)
+					}
+					fmt.Fprintf(w, "\n")
+					allBits[bitfield.Name] = nil
 				} else {
 					n := 0
 					for i := uint(0); i < 8; i++ {
 						if (bitfield.Mask>>i)&1 == 0 {
 							continue
 						}
-						fmt.Fprintf(w, "\t%s%d = 0x%x", bitfield.Name, n, 1<<i)
+						name := fmt.Sprintf("%s%d", bitfield.Name, n)
+						if _, ok := allBits[name]; !ok {
+							fmt.Fprintf(w, "\t%s = 0x%x", name, 1<<i)
 						if len(bitfield.Caption) != 0 {
 							fmt.Fprintf(w, " // %s", bitfield.Caption)
 						}
-						n++
 						fmt.Fprintf(w, "\n")
+							allBits[name] = nil
+						}
+						n++
 					}
+					fmt.Fprintf(w, "\t%s_Msk = 0x%x", bitfield.Name, bitfield.Mask)
+					if len(bitfield.Caption) != 0 {
+						fmt.Fprintf(w, " // %s", bitfield.Caption)
+					}
+					fmt.Fprintf(w, "\n")
 				}
 			}
 		}
