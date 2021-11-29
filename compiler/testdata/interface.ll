@@ -70,11 +70,11 @@ entry:
   %typecode = call i1 @runtime.typeAssert(i32 %itf.typecode, i8* nonnull @"reflect/types.typeid:basic:int", i8* undef) #0
   br i1 %typecode, label %typeassert.ok, label %typeassert.next
 
-typeassert.ok:                                    ; preds = %entry
-  br label %typeassert.next
-
 typeassert.next:                                  ; preds = %typeassert.ok, %entry
   ret i1 %typecode
+
+typeassert.ok:                                    ; preds = %entry
+  br label %typeassert.next
 }
 
 declare i1 @runtime.typeAssert(i32, i8* dereferenceable_or_null(1), i8*)
@@ -85,11 +85,11 @@ entry:
   %0 = call i1 @"interface:{Error:func:{}{basic:string}}.$typeassert"(i32 %itf.typecode) #0
   br i1 %0, label %typeassert.ok, label %typeassert.next
 
-typeassert.ok:                                    ; preds = %entry
-  br label %typeassert.next
-
 typeassert.next:                                  ; preds = %typeassert.ok, %entry
   ret i1 %0
+
+typeassert.ok:                                    ; preds = %entry
+  br label %typeassert.next
 }
 
 ; Function Attrs: nounwind
@@ -98,11 +98,11 @@ entry:
   %0 = call i1 @"interface:{String:func:{}{basic:string}}.$typeassert"(i32 %itf.typecode) #0
   br i1 %0, label %typeassert.ok, label %typeassert.next
 
-typeassert.ok:                                    ; preds = %entry
-  br label %typeassert.next
-
 typeassert.next:                                  ; preds = %typeassert.ok, %entry
   ret i1 %0
+
+typeassert.ok:                                    ; preds = %entry
+  br label %typeassert.next
 }
 
 ; Function Attrs: nounwind

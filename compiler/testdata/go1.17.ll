@@ -36,13 +36,13 @@ entry:
   %0 = icmp ult i32 %s.len, 4
   br i1 %0, label %slicetoarray.throw, label %slicetoarray.next
 
-slicetoarray.throw:                               ; preds = %entry
-  call void @runtime.sliceToArrayPointerPanic(i8* undef) #0
-  unreachable
-
 slicetoarray.next:                                ; preds = %entry
   %1 = bitcast i32* %s.data to [4 x i32]*
   ret [4 x i32]* %1
+
+slicetoarray.throw:                               ; preds = %entry
+  call void @runtime.sliceToArrayPointerPanic(i8* undef) #0
+  unreachable
 }
 
 declare void @runtime.sliceToArrayPointerPanic(i8*)
@@ -54,12 +54,12 @@ entry:
   call void @runtime.trackPointer(i8* nonnull %makeslice, i8* undef) #0
   br i1 false, label %slicetoarray.throw, label %slicetoarray.next
 
-slicetoarray.throw:                               ; preds = %entry
-  unreachable
-
 slicetoarray.next:                                ; preds = %entry
   %0 = bitcast i8* %makeslice to [4 x i32]*
   ret [4 x i32]* %0
+
+slicetoarray.throw:                               ; preds = %entry
+  unreachable
 }
 
 ; Function Attrs: nounwind
@@ -72,10 +72,6 @@ entry:
   %4 = or i1 %3, %0
   br i1 %4, label %unsafe.Slice.throw, label %unsafe.Slice.next
 
-unsafe.Slice.throw:                               ; preds = %entry
-  call void @runtime.unsafeSlicePanic(i8* undef) #0
-  unreachable
-
 unsafe.Slice.next:                                ; preds = %entry
   %5 = insertvalue { i32*, i32, i32 } undef, i32* %ptr, 0
   %6 = insertvalue { i32*, i32, i32 } %5, i32 %len, 1
@@ -83,6 +79,10 @@ unsafe.Slice.next:                                ; preds = %entry
   %8 = bitcast i32* %ptr to i8*
   call void @runtime.trackPointer(i8* %8, i8* undef) #0
   ret { i32*, i32, i32 } %7
+
+unsafe.Slice.throw:                               ; preds = %entry
+  call void @runtime.unsafeSlicePanic(i8* undef) #0
+  unreachable
 }
 
 declare void @runtime.unsafeSlicePanic(i8*)
@@ -95,10 +95,6 @@ entry:
   %2 = and i1 %0, %1
   br i1 %2, label %unsafe.Slice.throw, label %unsafe.Slice.next
 
-unsafe.Slice.throw:                               ; preds = %entry
-  call void @runtime.unsafeSlicePanic(i8* undef) #0
-  unreachable
-
 unsafe.Slice.next:                                ; preds = %entry
   %3 = zext i16 %len to i32
   %4 = insertvalue { i8*, i32, i32 } undef, i8* %ptr, 0
@@ -106,6 +102,10 @@ unsafe.Slice.next:                                ; preds = %entry
   %6 = insertvalue { i8*, i32, i32 } %5, i32 %3, 2
   call void @runtime.trackPointer(i8* %ptr, i8* undef) #0
   ret { i8*, i32, i32 } %6
+
+unsafe.Slice.throw:                               ; preds = %entry
+  call void @runtime.unsafeSlicePanic(i8* undef) #0
+  unreachable
 }
 
 ; Function Attrs: nounwind
@@ -118,10 +118,6 @@ entry:
   %4 = or i1 %3, %0
   br i1 %4, label %unsafe.Slice.throw, label %unsafe.Slice.next
 
-unsafe.Slice.throw:                               ; preds = %entry
-  call void @runtime.unsafeSlicePanic(i8* undef) #0
-  unreachable
-
 unsafe.Slice.next:                                ; preds = %entry
   %5 = trunc i64 %len to i32
   %6 = insertvalue { i32*, i32, i32 } undef, i32* %ptr, 0
@@ -130,6 +126,10 @@ unsafe.Slice.next:                                ; preds = %entry
   %9 = bitcast i32* %ptr to i8*
   call void @runtime.trackPointer(i8* %9, i8* undef) #0
   ret { i32*, i32, i32 } %8
+
+unsafe.Slice.throw:                               ; preds = %entry
+  call void @runtime.unsafeSlicePanic(i8* undef) #0
+  unreachable
 }
 
 ; Function Attrs: nounwind
@@ -142,10 +142,6 @@ entry:
   %4 = or i1 %3, %0
   br i1 %4, label %unsafe.Slice.throw, label %unsafe.Slice.next
 
-unsafe.Slice.throw:                               ; preds = %entry
-  call void @runtime.unsafeSlicePanic(i8* undef) #0
-  unreachable
-
 unsafe.Slice.next:                                ; preds = %entry
   %5 = trunc i64 %len to i32
   %6 = insertvalue { i32*, i32, i32 } undef, i32* %ptr, 0
@@ -154,6 +150,10 @@ unsafe.Slice.next:                                ; preds = %entry
   %9 = bitcast i32* %ptr to i8*
   call void @runtime.trackPointer(i8* %9, i8* undef) #0
   ret { i32*, i32, i32 } %8
+
+unsafe.Slice.throw:                               ; preds = %entry
+  call void @runtime.unsafeSlicePanic(i8* undef) #0
+  unreachable
 }
 
 attributes #0 = { nounwind }
