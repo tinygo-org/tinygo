@@ -215,6 +215,7 @@ TEST_PACKAGES = \
 	crypto/sha256 \
 	crypto/sha512 \
 	debug/macho \
+	debug/plan9obj \
 	encoding \
 	encoding/ascii85 \
 	encoding/base32 \
