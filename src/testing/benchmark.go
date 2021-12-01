@@ -218,3 +218,19 @@ func (b *B) add(other BenchmarkResult) {
 	r.N = 1
 	r.T += time.Duration(other.NsPerOp())
 }
+
+// A PB is used by RunParallel for running parallel benchmarks.
+type PB struct {
+}
+
+// Next reports whether there are more iterations to execute.
+func (pb *PB) Next() bool {
+	return false
+}
+
+// RunParallel runs a benchmark in parallel.
+//
+// Not implemented
+func (b *B) RunParallel(body func(*PB)) {
+	return
+}
