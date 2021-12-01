@@ -236,6 +236,7 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"sync/":                 true,
 		"testing/":              true,
 	}
+	mergeCosmwasmPaths(paths) // adds the customizations required for cosmwasm - specifically replacing packages which use floats
 	if needsSyscallPackage {
 		paths["syscall/"] = true // include syscall/js
 	}
