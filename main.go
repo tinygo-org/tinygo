@@ -956,22 +956,39 @@ func getBMPPorts() (gdbPort, uartPort string, err error) {
 	}
 }
 
-func usage() {
-	fmt.Fprintln(os.Stderr, "TinyGo is a Go compiler for small places.")
-	fmt.Fprintln(os.Stderr, "version:", goenv.Version)
-	fmt.Fprintf(os.Stderr, "usage: %s command [-printir] [-target=<target>] -o <output> <input>\n", os.Args[0])
-	fmt.Fprintln(os.Stderr, "\ncommands:")
-	fmt.Fprintln(os.Stderr, "  build: compile packages and dependencies")
-	fmt.Fprintln(os.Stderr, "  run:   compile and run immediately")
-	fmt.Fprintln(os.Stderr, "  test:  test packages")
-	fmt.Fprintln(os.Stderr, "  flash: compile and flash to the device")
-	fmt.Fprintln(os.Stderr, "  gdb:   run/flash and immediately enter GDB")
-	fmt.Fprintln(os.Stderr, "  env:   list environment variables used during build")
-	fmt.Fprintln(os.Stderr, "  list:  run go list using the TinyGo root")
-	fmt.Fprintln(os.Stderr, "  clean: empty cache directory ("+goenv.Get("GOCACHE")+")")
-	fmt.Fprintln(os.Stderr, "  help:  print this help text")
-	fmt.Fprintln(os.Stderr, "\nflags:")
-	flag.PrintDefaults()
+func usage(command string) {
+	version := goenv.Version
+	if strings.HasSuffix(version, "-dev") && gitSha1 != "" {
+		version += "-" + gitSha1
+	}
+
+	switch command {
+	default:
+		fmt.Fprintln(os.Stderr, "TinyGo is a Go compiler for small places.")
+		fmt.Fprintln(os.Stderr, "version:", version)
+		fmt.Fprintf(os.Stderr, "usage: %s <command> [arguments]\n", os.Args[0])
+		fmt.Fprintln(os.Stderr, "\ncommands:")
+		fmt.Fprintln(os.Stderr, "  build:   compile packages and dependencies")
+		fmt.Fprintln(os.Stderr, "  run:     compile and run immediately")
+		fmt.Fprintln(os.Stderr, "  test:    test packages")
+		fmt.Fprintln(os.Stderr, "  flash:   compile and flash to the device")
+		fmt.Fprintln(os.Stderr, "  gdb:     run/flash and immediately enter GDB")
+		fmt.Fprintln(os.Stderr, "  lldb:    run/flash and immediately enter LLDB")
+		fmt.Fprintln(os.Stderr, "  env:     list environment variables used during build")
+		fmt.Fprintln(os.Stderr, "  list:    run go list using the TinyGo root")
+		fmt.Fprintln(os.Stderr, "  clean:   empty cache directory ("+goenv.Get("GOCACHE")+")")
+		fmt.Fprintln(os.Stderr, "  targets: list targets")
+		fmt.Fprintln(os.Stderr, "  info:    show info for specified target")
+		fmt.Fprintln(os.Stderr, "  version: show version")
+		fmt.Fprintln(os.Stderr, "  help:    print this help text")
+
+		if flag.Parsed() {
+			fmt.Fprintln(os.Stderr, "\nflags:")
+			flag.PrintDefaults()
+		}
+
+		fmt.Fprintln(os.Stderr, "\nfor more details, see https://tinygo.org/docs/reference/usage/")
+	}
 }
 
 // try to make the path relative to the current working directory. If any error
@@ -1115,7 +1132,7 @@ func parseGoLinkFlag(flagsString string) (map[string]map[string]string, error) {
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
-		usage()
+		usage("")
 		os.Exit(1)
 	}
 	command := os.Args[1]
@@ -1229,7 +1246,7 @@ func main() {
 	err = options.Verify()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
-		usage()
+		usage(command)
 		os.Exit(1)
 	}
 
@@ -1251,7 +1268,7 @@ func main() {
 	case "build":
 		if outpath == "" {
 			fmt.Fprintln(os.Stderr, "No output filename supplied (-o).")
-			usage()
+			usage(command)
 			os.Exit(1)
 		}
 		pkgName := "."
@@ -1259,7 +1276,7 @@ func main() {
 			pkgName = filepath.ToSlash(flag.Arg(0))
 		} else if flag.NArg() > 1 {
 			fmt.Fprintln(os.Stderr, "build only accepts a single positional argument: package name, but multiple were specified")
-			usage()
+			usage(command)
 			os.Exit(1)
 		}
 		if options.Target == "" && filepath.Ext(outpath) == ".wasm" {
@@ -1272,7 +1289,7 @@ func main() {
 		// Note: this command is only meant to be used while making a release!
 		if outpath == "" {
 			fmt.Fprintln(os.Stderr, "No output filename supplied (-o).")
-			usage()
+			usage(command)
 			os.Exit(1)
 		}
 		if *target == "" {
@@ -1280,7 +1297,7 @@ func main() {
 		}
 		if flag.NArg() != 1 {
 			fmt.Fprintf(os.Stderr, "Build-library only accepts exactly one library name as argument, %d given\n", flag.NArg())
-			usage()
+			usage(command)
 			os.Exit(1)
 		}
 		var lib *builder.Library
@@ -1318,7 +1335,7 @@ func main() {
 		} else {
 			if !options.Debug {
 				fmt.Fprintln(os.Stderr, "Debug disabled while running debugger?")
-				usage()
+				usage(command)
 				os.Exit(1)
 			}
 			err := Debug(command, pkgName, *ocdOutput, options)
@@ -1327,7 +1344,7 @@ func main() {
 	case "run":
 		if flag.NArg() != 1 {
 			fmt.Fprintln(os.Stderr, "No package specified.")
-			usage()
+			usage(command)
 			os.Exit(1)
 		}
 		pkgName := filepath.ToSlash(flag.Arg(0))
@@ -1388,13 +1405,13 @@ func main() {
 			options.Target = flag.Arg(0)
 		} else if flag.NArg() > 1 {
 			fmt.Fprintln(os.Stderr, "only one target name is accepted")
-			usage()
+			usage(command)
 			os.Exit(1)
 		}
 		config, err := builder.NewConfig(options)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			usage()
+			usage(command)
 			os.Exit(1)
 		}
 		config.GoMinorVersion = 0 // this avoids creating the list of Go1.x build tags.
@@ -1419,7 +1436,7 @@ func main() {
 		config, err := builder.NewConfig(options)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			usage()
+			usage(command)
 			os.Exit(1)
 		}
 		var extraArgs []string
@@ -1455,7 +1472,11 @@ func main() {
 			os.Exit(1)
 		}
 	case "help":
-		usage()
+		command := ""
+		if flag.NArg() >= 1 {
+			command = flag.Arg(0)
+		}
+		usage(command)
 	case "version":
 		goversion := "<unknown>"
 		if s, err := goenv.GorootVersionString(goenv.Get("GOROOT")); err == nil {
@@ -1480,7 +1501,7 @@ func main() {
 		}
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown command:", command)
-		usage()
+		usage("")
 		os.Exit(1)
 	}
 }
