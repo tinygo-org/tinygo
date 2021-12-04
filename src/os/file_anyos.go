@@ -27,6 +27,15 @@ const DevNull = "/dev/null"
 // filesystem support.
 const isOS = true
 
+// Chdir changes the current working directory to the named directory.
+// If there is an error, it will be of type *PathError.
+func Chdir(dir string) error {
+	if e := syscall.Chdir(dir); e != nil {
+		return &PathError{Op: "chdir", Path: dir, Err: e}
+	}
+	return nil
+}
+
 // unixFilesystem is an empty handle for a Unix/Linux filesystem. All operations
 // are relative to the current working directory.
 type unixFilesystem struct {

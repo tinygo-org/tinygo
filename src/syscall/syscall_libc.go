@@ -59,6 +59,15 @@ func Open(path string, flag int, mode uint32) (fd int, err error) {
 	return
 }
 
+func Chdir(path string) (err error) {
+	data := cstring(path)
+	fail := int(libc_chdir(&data[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Mkdir(path string, mode uint32) (err error) {
 	data := cstring(path)
 	fail := int(libc_mkdir(&data[0], mode))
@@ -197,6 +206,10 @@ func libc_mmap(addr unsafe.Pointer, length uintptr, prot, flags, fd int32, offse
 // int mprotect(void *addr, size_t len, int prot);
 //export mprotect
 func libc_mprotect(addr unsafe.Pointer, len uintptr, prot int32) int32
+
+// int chdir(const char *pathname, mode_t mode);
+//export chdir
+func libc_chdir(pathname *byte) int32
 
 // int mkdir(const char *pathname, mode_t mode);
 //export mkdir
