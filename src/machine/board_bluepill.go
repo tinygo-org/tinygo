@@ -1,3 +1,4 @@
+//go:build bluepill
 // +build bluepill
 
 package machine
@@ -15,6 +16,20 @@ const (
 	// This board does not have a user button, so
 	// use first GPIO pin by default
 	BUTTON = PA0
+)
+
+// Analog Pins
+const (
+	ADC0 = PA0
+	ADC1 = PA1
+	ADC2 = PA2
+	ADC3 = PA3
+	ADC4 = PA4
+	ADC5 = PA5
+	ADC6 = PA6
+	ADC7 = PA7
+	ADC8 = PB0
+	ADC9 = PB1
 )
 
 var DefaultUART = UART1
