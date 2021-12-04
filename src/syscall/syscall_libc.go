@@ -68,6 +68,15 @@ func Chdir(path string) (err error) {
 	return
 }
 
+func Chmod(path string, mode uint32) (err error) {
+	data := cstring(path)
+	fail := int(libc_chmod(&data[0], mode))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Mkdir(path string, mode uint32) (err error) {
 	data := cstring(path)
 	fail := int(libc_mkdir(&data[0], mode))
@@ -210,6 +219,10 @@ func libc_mprotect(addr unsafe.Pointer, len uintptr, prot int32) int32
 // int chdir(const char *pathname, mode_t mode);
 //export chdir
 func libc_chdir(pathname *byte) int32
+
+// int chmod(const char *pathname, mode_t mode);
+//export chmod
+func libc_chmod(pathname *byte, mode uint32) int32
 
 // int mkdir(const char *pathname, mode_t mode);
 //export mkdir

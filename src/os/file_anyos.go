@@ -1,5 +1,9 @@
 // +build !baremetal,!js
 
+// Portions copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package os
 
 import (
@@ -133,6 +137,48 @@ func (f unixFileHandle) Close() error {
 	return handleSyscallError(syscall.Close(syscallFd(f)))
 }
 
+// Chmod changes the mode of the named file to mode.
+// If the file is a symbolic link, it changes the mode of the link's target.
+// If there is an error, it will be of type *PathError.
+//
+// A different subset of the mode bits are used, depending on the
+// operating system.
+//
+// On Unix, the mode's permission bits, ModeSetuid, ModeSetgid, and
+// ModeSticky are used.
+//
+// On Windows, only the 0200 bit (owner writable) of mode is used; it
+// controls whether the file's read-only attribute is set or cleared.
+// The other bits are currently unused. For compatibility with Go 1.12
+// and earlier, use a non-zero mode. Use mode 0400 for a read-only
+// file and 0600 for a readable+writable file.
+func Chmod(name string, mode FileMode) error {
+	longName := fixLongPath(name)
+	e := ignoringEINTR(func() error {
+		return syscall.Chmod(longName, syscallMode(mode))
+	})
+	if e != nil {
+		return &PathError{Op: "chmod", Path: name, Err: e}
+	}
+	return nil
+}
+
+// ignoringEINTR makes a function call and repeats it if it returns an
+// EINTR error. This appears to be required even though we install all
+// signal handlers with SA_RESTART: see #22838, #38033, #38836, #40846.
+// Also #20400 and #36644 are issues in which a signal handler is
+// installed without setting SA_RESTART. None of these are the common case,
+// but there are enough of them that it seems that we can't avoid
+// an EINTR loop.
+func ignoringEINTR(fn func() error) error {
+	for {
+		err := fn()
+		if err != syscall.EINTR {
+			return err
+		}
+	}
+}
+
 // handleSyscallError converts syscall errors into regular os package errors.
 // The err parameter must be either nil or of type syscall.Errno.
 func handleSyscallError(err error) error {
@@ -147,4 +193,20 @@ func handleSyscallError(err error) error {
 	default:
 		return err
 	}
+}
+
+// syscallMode returns the syscall-specific mode bits from Go's portable mode bits.
+func syscallMode(i FileMode) (o uint32) {
+	o |= uint32(i.Perm())
+	if i&ModeSetuid != 0 {
+		o |= syscall.S_ISUID
+	}
+	if i&ModeSetgid != 0 {
+		o |= syscall.S_ISGID
+	}
+	if i&ModeSticky != 0 {
+		o |= syscall.S_ISVTX
+	}
+	// No mapping for Go's ModeTemporary (plan9 only).
+	return
 }
