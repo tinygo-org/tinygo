@@ -1,3 +1,4 @@
+//go:build sam && atsamd21
 // +build sam,atsamd21
 
 // Peripheral abstraction layer for the atsamd21.
@@ -730,11 +731,12 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 }
 
 // SetBaudRate sets the communication speed for the I2C.
-func (i2c *I2C) SetBaudRate(br uint32) {
+func (i2c *I2C) SetBaudRate(br uint32) error {
 	// Synchronous arithmetic baudrate, via Arduino SAMD implementation:
 	// SystemCoreClock / ( 2 * baudrate) - 5 - (((SystemCoreClock / 1000000) * WIRE_RISE_TIME_NANOSECONDS) / (2 * 1000));
 	baud := CPUFrequency()/(2*br) - 5 - (((CPUFrequency() / 1000000) * riseTimeNanoseconds) / (2 * 1000))
 	i2c.Bus.BAUD.Set(baud)
+	return nil
 }
 
 // Tx does a single I2C transaction at the specified address.
@@ -1247,17 +1249,21 @@ func (spi SPI) Configure(config SPIConfig) error {
 	}
 
 	// Set synch speed for SPI
-	baudRate := CPUFrequency() / (2 * config.Frequency)
-	if baudRate > 0 {
-		baudRate--
-	}
-	spi.Bus.BAUD.Set(uint8(baudRate))
-
+	spi.SetBaudRate(config.Frequency)
 	// Enable SPI port.
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_ENABLE)
 	for spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPI_SYNCBUSY_ENABLE) {
 	}
 
+	return nil
+}
+
+func (spi SPI) SetBaudRate(baud uint32) error {
+	baudRate := CPUFrequency() / (2 * baud)
+	if baudRate > 0 {
+		baudRate--
+	}
+	spi.Bus.BAUD.Set(uint8(baudRate))
 	return nil
 }
 

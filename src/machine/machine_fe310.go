@@ -1,3 +1,4 @@
+//go:build fe310
 // +build fe310
 
 package machine
@@ -148,14 +149,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 	config.SDO.Configure(PinConfig{Mode: PinSPI})
 	config.SDI.Configure(PinConfig{Mode: PinSPI})
 
-	// set default frequency
-	if config.Frequency == 0 {
-		config.Frequency = 4000000 // 4MHz
-	}
-
-	// div = (SPI_CFG(dev)->f_sys / (2 * frequency)) - 1;
-	div := CPUFrequency()/(2*config.Frequency) - 1
-	spi.Bus.DIV.Set(div)
+	spi.SetBaudRate(config.Frequency)
 
 	// set mode
 	switch config.Mode {
@@ -174,7 +168,6 @@ func (spi SPI) Configure(config SPIConfig) error {
 		spi.Bus.MODE.ClearBits(sifive.QSPI_MODE_PHASE)
 		spi.Bus.MODE.ClearBits(sifive.QSPI_MODE_POLARITY)
 	}
-
 	// frame length
 	spi.Bus.FMT.SetBits(8 << sifive.QSPI_FMT_LENGTH_Pos)
 
@@ -188,6 +181,18 @@ func (spi SPI) Configure(config SPIConfig) error {
 		spi.Bus.FMT.ClearBits(sifive.QSPI_FMT_ENDIAN)
 	}
 
+	return nil
+}
+
+func (spi SPI) SetBaudRate(baud uint32) error {
+	// set default frequency
+	if baud == 0 {
+		baud = 4000000 // 4MHz
+	}
+
+	// div = (SPI_CFG(dev)->f_sys / (2 * frequency)) - 1;
+	div := CPUFrequency()/(2*baud) - 1
+	spi.Bus.DIV.Set(div)
 	return nil
 }
 
@@ -228,17 +233,27 @@ type I2CConfig struct {
 
 // Configure is intended to setup the I2C interface.
 func (i2c *I2C) Configure(config I2CConfig) error {
-	var i2cClockFrequency uint32 = 32000000
-	if config.Frequency == 0 {
-		config.Frequency = TWI_FREQ_100KHZ
-	}
-
 	if config.SDA == 0 && config.SCL == 0 {
 		config.SDA = I2C0_SDA_PIN
 		config.SCL = I2C0_SCL_PIN
 	}
 
-	var prescaler = i2cClockFrequency/(5*config.Frequency) - 1
+	i2c.SetBaudRate(config.Frequency)
+	// enable controller
+	i2c.Bus.CTR.SetBits(sifive.I2C_CTR_EN)
+
+	config.SDA.Configure(PinConfig{Mode: PinI2C})
+	config.SCL.Configure(PinConfig{Mode: PinI2C})
+
+	return nil
+}
+
+func (i2c *I2C) SetBaudRate(baud uint32) error {
+	var i2cClockFrequency uint32 = 32000000
+	if baud == 0 {
+		baud = TWI_FREQ_100KHZ
+	}
+	var prescaler = i2cClockFrequency/(5*baud) - 1
 
 	// disable controller before setting the prescale registers
 	i2c.Bus.CTR.ClearBits(sifive.I2C_CTR_EN)
@@ -246,13 +261,6 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	// set prescaler registers
 	i2c.Bus.PRER_LO.Set(uint32(prescaler & 0xff))
 	i2c.Bus.PRER_HI.Set(uint32((prescaler >> 8) & 0xff))
-
-	// enable controller
-	i2c.Bus.CTR.SetBits(sifive.I2C_CTR_EN)
-
-	config.SDA.Configure(PinConfig{Mode: PinI2C})
-	config.SCL.Configure(PinConfig{Mode: PinI2C})
-
 	return nil
 }
 

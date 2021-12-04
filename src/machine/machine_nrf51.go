@@ -1,3 +1,4 @@
+//go:build nrf51
 // +build nrf51
 
 package machine
@@ -47,34 +48,12 @@ type SPIConfig struct {
 }
 
 // Configure is intended to setup the SPI interface.
-func (spi SPI) Configure(config SPIConfig) {
+func (spi SPI) Configure(config SPIConfig) error {
 	// Disable bus to configure it
 	spi.Bus.ENABLE.Set(nrf.SPI_ENABLE_ENABLE_Disabled)
 
 	// set frequency
-	var freq uint32
-
-	if config.Frequency == 0 {
-		config.Frequency = 4000000 // 4MHz
-	}
-
-	switch {
-	case config.Frequency >= 8000000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_M8
-	case config.Frequency >= 4000000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_M4
-	case config.Frequency >= 2000000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_M2
-	case config.Frequency >= 1000000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_M1
-	case config.Frequency >= 500000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_K500
-	case config.Frequency >= 250000:
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_K250
-	default: // below 250kHz, default to the lowest speed available
-		freq = nrf.SPI_FREQUENCY_FREQUENCY_K125
-	}
-	spi.Bus.FREQUENCY.Set(freq)
+	spi.SetBaudRate(config.Frequency)
 
 	var conf uint32
 
@@ -115,6 +94,32 @@ func (spi SPI) Configure(config SPIConfig) {
 
 	// Re-enable bus now that it is configured.
 	spi.Bus.ENABLE.Set(nrf.SPI_ENABLE_ENABLE_Enabled)
+	return nil
+}
+
+func (spi SPI) SetBaudRate(baud uint32) error {
+	var freq uint32
+	if baud == 0 {
+		baud = 4000000 // 4MHz
+	}
+	switch {
+	case baud >= 8000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M8
+	case baud >= 4000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M4
+	case baud >= 2000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M2
+	case baud >= 1000000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_M1
+	case baud >= 500000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K500
+	case baud >= 250000:
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K250
+	default: // below 250kHz, default to the lowest speed available
+		freq = nrf.SPI_FREQUENCY_FREQUENCY_K125
+	}
+	spi.Bus.FREQUENCY.Set(freq)
+	return nil
 }
 
 // Transfer writes/reads a single byte using the SPI interface.

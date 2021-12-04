@@ -10,7 +10,7 @@ import (
 	"unsafe"
 )
 
-type io struct {
+type ioCtrl struct {
 	status volatile.Register32
 	ctrl   volatile.Register32
 }
@@ -22,7 +22,7 @@ type irqCtrl struct {
 }
 
 type ioBank0Type struct {
-	io                 [30]io
+	io                 [30]ioCtrl
 	intR               [4]volatile.Register32
 	proc0IRQctrl       irqCtrl
 	proc1IRQctrl       irqCtrl
