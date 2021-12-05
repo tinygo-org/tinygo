@@ -128,7 +128,7 @@ jobs:
           sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
           sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
           rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
-      - run: make smoketest
+      - run: make smoketest -j2
   assert-test-linux:
     # Run all tests that can run on Linux, with LLVM assertions enabled to catch
     # potential bugs.
@@ -228,5 +228,5 @@ jobs:
           sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
           rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
       - run: make gen-device -j4
-      - run: make smoketest
+      - run: make smoketest -j2
       - run: make wasmtest
