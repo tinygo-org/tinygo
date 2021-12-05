@@ -57,7 +57,7 @@ func initCLK() {
 		((PLL_Q - 1) << stm32.RCC_PLLCFGR_PLLQ_Pos) |
 		((PLL_R - 1) << stm32.RCC_PLLCFGR_PLLR_Pos) |
 		((PLL_P - 1) << stm32.RCC_PLLCFGR_PLLP_Pos) |
-		stm32.RCC_PLLCFGR_PLLSRC_HSE32 | stm32.RCC_PLLCFGR_PLLPEN)
+		stm32.RCC_PLLCFGR_PLLSRC_HSE32 | stm32.RCC_PLLCFGR_PLLPEN | stm32.RCC_PLLCFGR_PLLQEN)
 
 	// Enable PLL
 	stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)
@@ -98,6 +98,7 @@ func initCLK() {
 	stm32.RCC.CFGR.ReplaceBits(stm32.RCC_CFGR_SW_PLLR, stm32.RCC_CFGR_SW_Msk, 0)
 	for (stm32.RCC.CFGR.Get() & stm32.RCC_CFGR_SWS_Msk) != (stm32.RCC_CFGR_SWS_PLLR << stm32.RCC_CFGR_SWS_Pos) {
 	}
+
 }
 
 func putchar(c byte) {
