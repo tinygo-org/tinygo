@@ -247,8 +247,11 @@ TEST_PACKAGES = \
 tinygo-test:
 	$(TINYGO) test $(TEST_PACKAGES)
 
-.PHONY: smoketest
+.PHONY: smoketest smoketest-commands
 smoketest:
+	@go run ./src/cmd/run-smoketest make smoketest-commands
+
+smoketest-commands:
 	$(TINYGO) version
 	# test all examples (except pwm)
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky1
