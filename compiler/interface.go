@@ -31,6 +31,15 @@ func (b *builder) createMakeInterface(val llvm.Value, typ types.Type, pos token.
 	return itf
 }
 
+// extractValueFromInterface extract the value from an interface value
+// (runtime._interface) under the assumption that it is of the type given in
+// llvmType. The behavior is undefied if the interface is nil or llvmType
+// doesn't match the underlying type of the interface.
+func (b *builder) extractValueFromInterface(itf llvm.Value, llvmType llvm.Type) llvm.Value {
+	valuePtr := b.CreateExtractValue(itf, 1, "typeassert.value.ptr")
+	return b.emitPointerUnpack(valuePtr, []llvm.Type{llvmType})[0]
+}
+
 // getTypeCode returns a reference to a type code.
 // It returns a pointer to an external global which should be replaced with the
 // real type in the interface lowering pass.
@@ -416,8 +425,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 	} else {
 		// Type assert on concrete type. Extract the underlying type from
 		// the interface (but only after checking it matches).
-		valuePtr := b.CreateExtractValue(itf, 1, "typeassert.value.ptr")
-		valueOk = b.emitPointerUnpack(valuePtr, []llvm.Type{assertedType})[0]
+		valueOk = b.extractValueFromInterface(itf, assertedType)
 	}
 	b.CreateBr(nextBlock)
 
