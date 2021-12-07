@@ -63,9 +63,11 @@ itfMap["eight"]: 800
 itfMap[[2]int{5, 2}]: 52
 itfMap[true]: 1
 itfMap[8]: 0
+itfMap: found key "eight": 800
 floatMap[42]: 84
 floatMap[43]: 0
 floatMap[42]: 0
+floatMap key, value: +3.140000e+000 6
 structMap[{"tau", 6.28}]: 5
 structMap[{"Tau", 6.28}]: 0
 structMap[{"tau", 3.14}]: 0

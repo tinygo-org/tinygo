@@ -78,15 +78,24 @@ func main() {
 	println("itfMap[true]:", itfMap[true])
 	delete(itfMap, 8)
 	println("itfMap[8]:", itfMap[8])
+	for key, value := range itfMap {
+		if key == "eight" {
+			println("itfMap: found key \"eight\":", value)
+		}
+	}
 
 	// test map with float keys
 	floatMap := map[float32]int{
-		42: 84,
+		42:   84,
+		3.14: 6,
 	}
 	println("floatMap[42]:", floatMap[42])
 	println("floatMap[43]:", floatMap[43])
 	delete(floatMap, 42)
 	println("floatMap[42]:", floatMap[42])
+	for k, v := range floatMap {
+		println("floatMap key, value:", k, v)
+	}
 
 	// test maps with struct keys
 	structMap := map[namedFloat]int{

@@ -171,19 +171,59 @@ func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos tok
 // map. It returns a tuple of {bool, key, value} with the result of the
 // iteration.
 func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llvm.Value) llvm.Value {
-	llvmKeyType := b.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Key())
-	llvmValueType := b.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Elem())
+	// Determine the type of the values to return from the *ssa.Next
+	// instruction. It is returned as {bool, keyType, valueType}.
+	keyType := rangeVal.Type().Underlying().(*types.Map).Key()
+	valueType := rangeVal.Type().Underlying().(*types.Map).Elem()
+	llvmKeyType := b.getLLVMType(keyType)
+	llvmValueType := b.getLLVMType(valueType)
 
-	mapKeyAlloca, mapKeyPtr, mapKeySize := b.createTemporaryAlloca(llvmKeyType, "range.key")
+	// There is a special case in which keys are stored as an interface value
+	// instead of the value they normally are. This happens for non-trivially
+	// comparable types such as float32 or some structs.
+	isKeyStoredAsInterface := false
+	if t, ok := keyType.Underlying().(*types.Basic); ok && t.Info()&types.IsString != 0 {
+		// key is a string
+	} else if hashmapIsBinaryKey(keyType) {
+		// key can be compared with runtime.memequal
+	} else {
+		// The key is stored as an interface value, and may or may not be an
+		// interface type (for example, float32 keys are stored as an interface
+		// value).
+		if _, ok := keyType.Underlying().(*types.Interface); !ok {
+			isKeyStoredAsInterface = true
+		}
+	}
+
+	// Determine the type of the key as stored in the map.
+	llvmStoredKeyType := llvmKeyType
+	if isKeyStoredAsInterface {
+		llvmStoredKeyType = b.getLLVMRuntimeType("_interface")
+	}
+
+	// Extract the key and value from the map.
+	mapKeyAlloca, mapKeyPtr, mapKeySize := b.createTemporaryAlloca(llvmStoredKeyType, "range.key")
 	mapValueAlloca, mapValuePtr, mapValueSize := b.createTemporaryAlloca(llvmValueType, "range.value")
 	ok := b.createRuntimeCall("hashmapNext", []llvm.Value{llvmRangeVal, it, mapKeyPtr, mapValuePtr}, "range.next")
+	mapKey := b.CreateLoad(mapKeyAlloca, "")
+	mapValue := b.CreateLoad(mapValueAlloca, "")
 
-	tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.Int1Type(), llvmKeyType, llvmValueType}, false))
-	tuple = b.CreateInsertValue(tuple, ok, 0, "")
-	tuple = b.CreateInsertValue(tuple, b.CreateLoad(mapKeyAlloca, ""), 1, "")
-	tuple = b.CreateInsertValue(tuple, b.CreateLoad(mapValueAlloca, ""), 2, "")
+	if isKeyStoredAsInterface {
+		// The key is stored as an interface but it isn't of interface type.
+		// Extract the underlying value.
+		mapKey = b.extractValueFromInterface(mapKey, llvmKeyType)
+	}
+
+	// End the lifetimes of the allocas, because we're done with them.
 	b.emitLifetimeEnd(mapKeyPtr, mapKeySize)
 	b.emitLifetimeEnd(mapValuePtr, mapValueSize)
+
+	// Construct the *ssa.Next return value: {ok, mapKey, mapValue}
+	tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.Int1Type(), llvmKeyType, llvmValueType}, false))
+	tuple = b.CreateInsertValue(tuple, ok, 0, "")
+	tuple = b.CreateInsertValue(tuple, mapKey, 1, "")
+	tuple = b.CreateInsertValue(tuple, mapValue, 2, "")
+
 	return tuple
 }
 
