@@ -167,6 +167,26 @@ func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos tok
 	}
 }
 
+// createMapIteratorNext lowers the *ssa.Next instruction for iterating over a
+// map. It returns a tuple of {bool, key, value} with the result of the
+// iteration.
+func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llvm.Value) llvm.Value {
+	llvmKeyType := b.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Key())
+	llvmValueType := b.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Elem())
+
+	mapKeyAlloca, mapKeyPtr, mapKeySize := b.createTemporaryAlloca(llvmKeyType, "range.key")
+	mapValueAlloca, mapValuePtr, mapValueSize := b.createTemporaryAlloca(llvmValueType, "range.value")
+	ok := b.createRuntimeCall("hashmapNext", []llvm.Value{llvmRangeVal, it, mapKeyPtr, mapValuePtr}, "range.next")
+
+	tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.Int1Type(), llvmKeyType, llvmValueType}, false))
+	tuple = b.CreateInsertValue(tuple, ok, 0, "")
+	tuple = b.CreateInsertValue(tuple, b.CreateLoad(mapKeyAlloca, ""), 1, "")
+	tuple = b.CreateInsertValue(tuple, b.CreateLoad(mapValueAlloca, ""), 2, "")
+	b.emitLifetimeEnd(mapKeyPtr, mapKeySize)
+	b.emitLifetimeEnd(mapValuePtr, mapValueSize)
+	return tuple
+}
+
 // Returns true if this key type does not contain strings, interfaces etc., so
 // can be compared with runtime.memequal.
 func hashmapIsBinaryKey(keyType types.Type) bool {
