@@ -95,19 +95,36 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(tok
 		}
 		// The pointer value does not escape.
 
+		// Determine the appropriate alignment of the alloca. The size of the
+		// allocation gives us a hint what the alignment should be.
+		var alignment int
+		if size%2 != 0 {
+			alignment = 1
+		} else if size%4 != 0 {
+			alignment = 2
+		} else if size%8 != 0 {
+			alignment = 4
+		} else {
+			alignment = 8
+		}
+		if pointerAlignment := targetData.ABITypeAlignment(i8ptrType); pointerAlignment < alignment {
+			// Use min(alignment, alignof(void*)) as the alignment.
+			alignment = pointerAlignment
+		}
+
 		// Insert alloca in the entry block. Do it here so that mem2reg can
 		// promote it to a SSA value.
 		fn := bitcast.InstructionParent().Parent()
 		builder.SetInsertPointBefore(fn.EntryBasicBlock().FirstInstruction())
-		alignment := targetData.ABITypeAlignment(i8ptrType)
-		sizeInWords := (size + uint64(alignment) - 1) / uint64(alignment)
-		allocaType := llvm.ArrayType(mod.Context().IntType(alignment*8), int(sizeInWords))
+		allocaType := llvm.ArrayType(mod.Context().Int8Type(), int(size))
 		alloca := builder.CreateAlloca(allocaType, "stackalloc.alloca")
+		alloca.SetAlignment(alignment)
 
 		// Zero the allocation inside the block where the value was originally allocated.
 		zero := llvm.ConstNull(alloca.Type().ElementType())
 		builder.SetInsertPointBefore(bitcast)
-		builder.CreateStore(zero, alloca)
+		store := builder.CreateStore(zero, alloca)
+		store.SetAlignment(alignment)
 
 		// Replace heap alloc bitcast with stack alloc bitcast.
 		stackalloc := builder.CreateBitCast(alloca, bitcast.Type(), "stackalloc")
