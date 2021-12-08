@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 74 microcontroller boards are currently supported:
+The following 75 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
@@ -119,6 +119,7 @@ The following 74 microcontroller boards are currently supported:
 * [ST Micro STM32F103XX "Bluepill"](https://stm32-base.org/boards/STM32F103C8T6-Blue-Pill)
 * [ST Micro STM32F407 "Discovery"](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
 * [X9 Pro smartwatch](https://github.com/curtpw/nRF5x-device-reverse-engineering/tree/master/X9-nrf52832-activity-tracker/)
+* [The Things Industries Generic Node Sensor Edition](https://www.genericnode.com/docs/sensor-edition/)
 
 For more information, see [this list of boards](https://tinygo.org/microcontrollers/). Pull requests for additional support are welcome!
 

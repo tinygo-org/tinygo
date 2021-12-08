@@ -3,7 +3,7 @@
 		"stm32wl5x_cm4"
 	],
 	"build-tags": [
-		"nucleowl55jc"
+		"gnse"
 	],
 	"serial": "uart",
 	"flash-method": "openocd",
