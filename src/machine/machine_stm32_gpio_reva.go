@@ -1,5 +1,5 @@
-//go:build stm32 && !stm32l4 && !stm32l5 && !stm32wle5
-// +build stm32,!stm32l4,!stm32l5,!stm32wle5
+//go:build stm32 && !stm32l4 && !stm32l5 && !stm32wlx
+// +build stm32,!stm32l4,!stm32l5,!stm32wlx
 
 package machine
 

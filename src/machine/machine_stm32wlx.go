@@ -1,5 +1,5 @@
-//go:build stm32wle5
-// +build stm32wle5
+//go:build stm32wlx
+// +build stm32wlx
 
 package machine
 
