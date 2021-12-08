@@ -307,16 +307,24 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 // Hashmap with plain binary data keys (not containing strings etc.).
 
 func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
+	// TODO: detect nil map here and throw a better panic message?
 	hash := hashmapHash(key, uintptr(m.keySize))
 	hashmapSet(m, key, value, hash, memequal)
 }
 
 func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) bool {
+	if m == nil {
+		memzero(value, uintptr(valueSize))
+		return false
+	}
 	hash := hashmapHash(key, uintptr(m.keySize))
 	return hashmapGet(m, key, value, valueSize, hash, memequal)
 }
 
 func hashmapBinaryDelete(m *hashmap, key unsafe.Pointer) {
+	if m == nil {
+		return
+	}
 	hash := hashmapHash(key, uintptr(m.keySize))
 	hashmapDelete(m, key, hash, memequal)
 }

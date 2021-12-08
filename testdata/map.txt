@@ -53,6 +53,7 @@ true false 0
 nilmap: 0
 4
 42
+nilbinmap: 0
 4321
 5555
 itfMap[3]: 0
