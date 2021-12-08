@@ -55,6 +55,10 @@ func main() {
 		println(k) // unreachable
 	}
 
+	var nilbinmap map[uint16]int
+	delete(nilbinmap, 4)
+	println("nilbinmap:", nilbinmap[5])
+
 	arrKey := ArrayKey([4]byte{4, 3, 2, 1})
 	println(testMapArrayKey[arrKey])
 	testMapArrayKey[arrKey] = 5555
