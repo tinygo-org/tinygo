@@ -391,13 +391,13 @@ func hashmapInterfaceHash(itf interface{}) uint32 {
 	case reflect.Array:
 		var hash uint32
 		for i := 0; i < x.Len(); i++ {
-			hash |= hashmapInterfaceHash(valueInterfaceUnsafe(x.Index(i)))
+			hash ^= hashmapInterfaceHash(valueInterfaceUnsafe(x.Index(i)))
 		}
 		return hash
 	case reflect.Struct:
 		var hash uint32
 		for i := 0; i < x.NumField(); i++ {
-			hash |= hashmapInterfaceHash(valueInterfaceUnsafe(x.Field(i)))
+			hash ^= hashmapInterfaceHash(valueInterfaceUnsafe(x.Field(i)))
 		}
 		return hash
 	default:
