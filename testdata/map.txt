@@ -72,3 +72,7 @@ structMap[{"tau", 3.14}]: 0
 structMap[{"tau", 6.28}]: 0
 tested preallocated map
 tested growing of a map
+2
+2
+2
+2
