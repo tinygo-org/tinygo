@@ -257,17 +257,18 @@ func (c *Config) CFlags() []string {
 		path, _ := c.LibcPath("picolibc")
 		cflags = append(cflags,
 			"--sysroot="+path,
-			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "include"),
-			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "tinystdio"),
+			"-isystem", filepath.Join(picolibcDir, "include"),
+			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
 		)
 	case "musl":
 		root := goenv.Get("TINYGOROOT")
 		path, _ := c.LibcPath("musl")
 		arch := MuslArchitecture(c.Triple())
 		cflags = append(cflags,
-			"--sysroot="+path,
-			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "musl", "arch", arch),
-			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "musl", "include"),
+			"-nostdlibinc",
+			"-isystem", filepath.Join(path, "include"),
+			"-isystem", filepath.Join(root, "lib", "musl", "arch", arch),
+			"-isystem", filepath.Join(root, "lib", "musl", "include"),
 		)
 	case "wasi-libc":
 		root := goenv.Get("TINYGOROOT")
@@ -277,8 +278,8 @@ func (c *Config) CFlags() []string {
 		path, _ := c.LibcPath("mingw-w64")
 		cflags = append(cflags,
 			"--sysroot="+path,
-			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "crt"),
-			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "defaults", "include"),
+			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "crt"),
+			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "defaults", "include"),
 			"-D_UCRT",
 		)
 	case "":

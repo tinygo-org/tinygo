@@ -10,9 +10,9 @@ LLD_SRC ?= $(LLVM_PROJECTDIR)/lld
 
 # Try to autodetect LLVM build tools.
 detect = $(shell command -v $(1) 2> /dev/null && echo $(1))
-CLANG ?= $(word 1,$(abspath $(call detect,llvm-build/bin/clang))$(call detect,clang-12)$(call detect,clang-11)$(call detect,clang))
-LLVM_AR ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-ar))$(call detect,llvm-ar-12)$(call detect,llvm-ar-11)$(call detect,llvm-ar))
-LLVM_NM ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-nm))$(call detect,llvm-nm-12)$(call detect,llvm-nm-11)$(call detect,llvm-nm))
+CLANG ?= $(word 1,$(abspath $(call detect,llvm-build/bin/clang))$(call detect,clang-13)$(call detect,clang-12)$(call detect,clang-11)$(call detect,clang))
+LLVM_AR ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-ar))$(call detect,llvm-ar-13)$(call detect,llvm-ar-12)$(call detect,llvm-ar-11)$(call detect,llvm-ar))
+LLVM_NM ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-nm))$(call detect,llvm-nm-13)$(call detect,llvm-nm-12)$(call detect,llvm-nm-11)$(call detect,llvm-nm))
 
 # Go binary and GOROOT to select
 GO ?= go
@@ -159,7 +159,7 @@ gen-device-rp: build/gen-device-svd
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/llvm:
-	git clone -b xtensa_release_12.0.1 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b xtensa_release_13.0.0 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/llvm
 
 # Configure LLVM.

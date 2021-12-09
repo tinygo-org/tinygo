@@ -115,29 +115,26 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
   // Any DebugInfoKind implies GenDwarfForAssembly.
   Opts.GenDwarfForAssembly = Args.hasArg(OPT_debug_info_kind_EQ);
 
-  if (const Arg *A = Args.getLastArg(OPT_compress_debug_sections,
-                                     OPT_compress_debug_sections_EQ)) {
-    if (A->getOption().getID() == OPT_compress_debug_sections) {
-      // TODO: be more clever about the compression type auto-detection
-      Opts.CompressDebugSections = llvm::DebugCompressionType::GNU;
-    } else {
-      Opts.CompressDebugSections =
-          llvm::StringSwitch<llvm::DebugCompressionType>(A->getValue())
-              .Case("none", llvm::DebugCompressionType::None)
-              .Case("zlib", llvm::DebugCompressionType::Z)
-              .Case("zlib-gnu", llvm::DebugCompressionType::GNU)
-              .Default(llvm::DebugCompressionType::None);
-    }
+  if (const Arg *A = Args.getLastArg(OPT_compress_debug_sections_EQ)) {
+    Opts.CompressDebugSections =
+        llvm::StringSwitch<llvm::DebugCompressionType>(A->getValue())
+            .Case("none", llvm::DebugCompressionType::None)
+            .Case("zlib", llvm::DebugCompressionType::Z)
+            .Case("zlib-gnu", llvm::DebugCompressionType::GNU)
+            .Default(llvm::DebugCompressionType::None);
   }
 
   Opts.RelaxELFRelocations = Args.hasArg(OPT_mrelax_relocations);
+  if (auto *DwarfFormatArg = Args.getLastArg(OPT_gdwarf64, OPT_gdwarf32))
+    Opts.Dwarf64 = DwarfFormatArg->getOption().matches(OPT_gdwarf64);
   Opts.DwarfVersion = getLastArgIntValue(Args, OPT_dwarf_version_EQ, 2, Diags);
   Opts.DwarfDebugFlags =
       std::string(Args.getLastArgValue(OPT_dwarf_debug_flags));
   Opts.DwarfDebugProducer =
       std::string(Args.getLastArgValue(OPT_dwarf_debug_producer));
-  Opts.DebugCompilationDir =
-      std::string(Args.getLastArgValue(OPT_fdebug_compilation_dir));
+  if (const Arg *A = Args.getLastArg(options::OPT_ffile_compilation_dir_EQ,
+                                     options::OPT_fdebug_compilation_dir_EQ))
+    Opts.DebugCompilationDir = A->getValue();
   Opts.MainFileName = std::string(Args.getLastArgValue(OPT_main_file_name));
 
   for (const auto &Arg : Args.getAllArgValues(OPT_fdebug_prefix_map_EQ)) {
@@ -219,7 +216,7 @@ getOutputStream(StringRef Path, DiagnosticsEngine &Diags, bool Binary) {
 
   std::error_code EC;
   auto Out = std::make_unique<raw_fd_ostream>(
-      Path, EC, (Binary ? sys::fs::OF_None : sys::fs::OF_Text));
+      Path, EC, (Binary ? sys::fs::OF_None : sys::fs::OF_TextWithCRLF));
   if (EC) {
     Diags.Report(diag::err_fe_unable_to_open_output) << Path << EC.message();
     return nullptr;
@@ -228,7 +225,8 @@ getOutputStream(StringRef Path, DiagnosticsEngine &Diags, bool Binary) {
   return Out;
 }
 
-bool ExecuteAssembler(AssemblerInvocation &Opts, DiagnosticsEngine &Diags) {
+static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
+                                 DiagnosticsEngine &Diags) {
   // Get the target specific parser.
   std::string Error;
   const Target *TheTarget = TargetRegistry::lookupTarget(Opts.Triple, Error);
@@ -236,7 +234,7 @@ bool ExecuteAssembler(AssemblerInvocation &Opts, DiagnosticsEngine &Diags) {
     return Diags.Report(diag::err_target_unknown_triple) << Opts.Triple;
 
   ErrorOr<std::unique_ptr<MemoryBuffer>> Buffer =
-      MemoryBuffer::getFileOrSTDIN(Opts.InputFile);
+      MemoryBuffer::getFileOrSTDIN(Opts.InputFile, /*IsText=*/true);
 
   if (std::error_code EC = Buffer.getError()) {
     Error = EC.message();
@@ -277,11 +275,15 @@ bool ExecuteAssembler(AssemblerInvocation &Opts, DiagnosticsEngine &Diags) {
   if (!Opts.SplitDwarfOutput.empty())
     DwoOS = getOutputStream(Opts.SplitDwarfOutput, Diags, IsBinary);
 
-  // FIXME: This is not pretty. MCContext has a ptr to MCObjectFileInfo and
-  // MCObjectFileInfo needs a MCContext reference in order to initialize itself.
-  std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
+  // Build up the feature string from the target feature list.
+  std::string FS = llvm::join(Opts.Features, ",");
 
-  MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr, &MCOptions);
+  std::unique_ptr<MCSubtargetInfo> STI(
+      TheTarget->createMCSubtargetInfo(Opts.Triple, Opts.CPU, FS));
+  assert(STI && "Unable to create subtarget info!");
+
+  MCContext Ctx(Triple(Opts.Triple), MAI.get(), MRI.get(), STI.get(), &SrcMgr,
+                &MCOptions);
 
   bool PIC = false;
   if (Opts.RelocationModel == "static") {
@@ -294,7 +296,12 @@ bool ExecuteAssembler(AssemblerInvocation &Opts, DiagnosticsEngine &Diags) {
     PIC = false;
   }
 
-  MOFI->InitMCObjectFileInfo(Triple(Opts.Triple), PIC, Ctx);
+  // FIXME: This is not pretty. MCContext has a ptr to MCObjectFileInfo and
+  // MCObjectFileInfo needs a MCContext reference in order to initialize itself.
+  std::unique_ptr<MCObjectFileInfo> MOFI(
+      TheTarget->createMCObjectFileInfo(Ctx, PIC));
+  Ctx.setObjectFileInfo(MOFI.get());
+
   if (Opts.SaveTemporaryLabels)
     Ctx.setAllowTemporaryLabels(false);
   if (Opts.GenDwarfForAssembly)
@@ -316,19 +323,16 @@ bool ExecuteAssembler(AssemblerInvocation &Opts, DiagnosticsEngine &Diags) {
       Ctx.addDebugPrefixMapEntry(KV.first, KV.second);
   if (!Opts.MainFileName.empty())
     Ctx.setMainFileName(StringRef(Opts.MainFileName));
+  Ctx.setDwarfFormat(Opts.Dwarf64 ? dwarf::DWARF64 : dwarf::DWARF32);
   Ctx.setDwarfVersion(Opts.DwarfVersion);
   if (Opts.GenDwarfForAssembly)
     Ctx.setGenDwarfRootFile(Opts.InputFile,
                             SrcMgr.getMemoryBuffer(BufferIndex)->getBuffer());
 
-  // Build up the feature string from the target feature list.
-  std::string FS = llvm::join(Opts.Features, ",");
-
   std::unique_ptr<MCStreamer> Str;
 
   std::unique_ptr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
-  std::unique_ptr<MCSubtargetInfo> STI(
-      TheTarget->createMCSubtargetInfo(Opts.Triple, Opts.CPU, FS));
+  assert(MCII && "Unable to create instruction info!");
 
   raw_pwrite_stream *Out = FDOS.get();
   std::unique_ptr<buffer_ostream> BOS;
@@ -367,6 +371,8 @@ bool ExecuteAssembler(AssemblerInvocation &Opts, DiagnosticsEngine &Diags) {
         TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
     std::unique_ptr<MCAsmBackend> MAB(
         TheTarget->createMCAsmBackend(*STI, *MRI, MCOptions));
+    assert(MAB && "Unable to create asm backend!");
+
     std::unique_ptr<MCObjectWriter> OW =
         DwoOS ? MAB->createDwoObjectWriter(*Out, *DwoOS)
               : MAB->createObjectWriter(*Out);
@@ -381,8 +387,7 @@ bool ExecuteAssembler(AssemblerInvocation &Opts, DiagnosticsEngine &Diags) {
 
   // When -fembed-bitcode is passed to clang_as, a 1-byte marker
   // is emitted in __LLVM,__asm section if the object file is MachO format.
-  if (Opts.EmbedBitcode && Ctx.getObjectFileInfo()->getObjectFileType() ==
-                               MCObjectFileInfo::IsMachO) {
+  if (Opts.EmbedBitcode && Ctx.getObjectFileType() == MCContext::IsMachO) {
     MCSection *AsmLabel = Ctx.getMachOSection(
         "__LLVM", "__asm", MachO::S_REGULAR, 4, SectionKind::getReadOnly());
     Str.get()->SwitchSection(AsmLabel);
@@ -419,12 +424,12 @@ bool ExecuteAssembler(AssemblerInvocation &Opts, DiagnosticsEngine &Diags) {
     Failed = Parser->Run(Opts.NoInitialTextSection);
   }
 
-  // Close Streamer first.
-  // It might have a reference to the output stream.
-  Str.reset();
-  // Close the output stream early.
-  BOS.reset();
-  FDOS.reset();
+  return Failed;
+}
+
+bool ExecuteAssembler(AssemblerInvocation &Opts,
+                             DiagnosticsEngine &Diags) {
+  bool Failed = ExecuteAssemblerImpl(Opts, Diags);
 
   // Delete output file if there were errors.
   if (Failed) {
@@ -472,7 +477,7 @@ int cc1as_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
     return 1;
 
   if (Asm.ShowHelp) {
-    getDriverOptTable().PrintHelp(
+    getDriverOptTable().printHelp(
         llvm::outs(), "clang -cc1as [options] file...",
         "Clang Integrated Assembler",
         /*Include=*/driver::options::CC1AsOption, /*Exclude=*/0,

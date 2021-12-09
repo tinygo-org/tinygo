@@ -59,6 +59,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		goPasses.AddGlobalDCEPass()
 		goPasses.AddGlobalOptimizerPass()
 		goPasses.AddIPSCCPPass()
+		goPasses.AddInstructionCombiningPass() // necessary for OptimizeReflectImplements
 		goPasses.AddAggressiveDCEPass()
 		goPasses.AddFunctionAttrsPass()
 		goPasses.Run(mod)

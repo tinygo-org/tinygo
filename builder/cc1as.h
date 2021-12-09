@@ -39,6 +39,7 @@ struct AssemblerInvocation {
   unsigned SaveTemporaryLabels : 1;
   unsigned GenDwarfForAssembly : 1;
   unsigned RelaxELFRelocations : 1;
+  unsigned Dwarf64 : 1;
   unsigned DwarfVersion;
   std::string DwarfDebugFlags;
   std::string DwarfDebugProducer;
@@ -108,6 +109,7 @@ public:
     FatalWarnings = 0;
     NoWarn = 0;
     IncrementalLinkerCompatible = 0;
+    Dwarf64 = 0;
     DwarfVersion = 0;
     EmbedBitcode = 0;
   }

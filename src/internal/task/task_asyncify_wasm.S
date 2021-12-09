@@ -1,5 +1,14 @@
 .globaltype __stack_pointer, i32
 
+.functype start_unwind (i32) -> ()
+.import_module start_unwind, asyncify
+.functype stop_unwind () -> ()
+.import_module stop_unwind, asyncify
+.functype start_rewind (i32) -> ()
+.import_module start_rewind, asyncify
+.functype stop_rewind () -> ()
+.import_module stop_rewind, asyncify
+
 .global  tinygo_unwind
 .hidden  tinygo_unwind
 .type    tinygo_unwind,@function
@@ -83,15 +92,6 @@ tinygo_rewind: // func (state *state) rewind()
     global.set __stack_pointer // setStackPointer(prev)
     return
     end_function
-
-.functype start_unwind (i32) -> ()
-.import_module start_unwind, asyncify
-.functype stop_unwind () -> ()
-.import_module stop_unwind, asyncify
-.functype start_rewind (i32) -> ()
-.import_module start_rewind, asyncify
-.functype stop_rewind () -> ()
-.import_module stop_rewind, asyncify
 
         .hidden tinygo_rewinding                # @tinygo_rewinding
         .type   tinygo_rewinding,@object

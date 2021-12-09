@@ -22,12 +22,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-12-v1
+            - llvm-source-13-v1
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-12-v1
+          key: llvm-source-13-v1
           paths:
             - llvm-project/clang/lib/Headers
             - llvm-project/clang/include
@@ -118,12 +118,12 @@ commands:
             - go-cache-macos-v3-{{ checksum "go.mod" }}
       - restore_cache:
           keys:
-            - llvm-source-12-macos-v1
+            - llvm-source-13-macos-v1
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-12-macos-v1
+          key: llvm-source-13-macos-v1
           paths:
             - llvm-project/clang/lib/Headers
             - llvm-project/clang/include
@@ -131,7 +131,7 @@ commands:
             - llvm-project/llvm/include
       - restore_cache:
           keys:
-            - llvm-build-12-macos-v1
+            - llvm-build-13-macos-v1
       - run:
           name: "Build LLVM"
           command: |
@@ -145,7 +145,7 @@ commands:
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
             fi
       - save_cache:
-          key: llvm-build-12-macos-v1
+          key: llvm-build-13-macos-v1
           paths:
             llvm-build
       - restore_cache:
