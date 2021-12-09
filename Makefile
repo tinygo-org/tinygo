@@ -234,6 +234,7 @@ TEST_PACKAGES = \
 	os \
 	path \
 	reflect \
+	regexp/syntax \
 	testing \
 	testing/iotest \
 	text/scanner \
