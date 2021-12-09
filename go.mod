@@ -14,5 +14,5 @@ require (
 	go.bug.st/serial v1.1.3
 	golang.org/x/sys v0.0.0-20210510120138-977fb7262007
 	golang.org/x/tools v0.1.6-0.20210813165731-45389f592fe9
-	tinygo.org/x/go-llvm v0.0.0-20211229125312-df8bd725853c
+	tinygo.org/x/go-llvm v0.0.0-20211230181020-1ddc904f6bf6
 )
