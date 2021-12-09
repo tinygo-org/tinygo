@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/gofrs/flock"
-	"github.com/tinygo-org/tinygo/cgo"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -64,9 +63,8 @@ type BuildResult struct {
 // implementation of an imported package changes.
 type packageAction struct {
 	ImportPath       string
-	CGoVersion       int // cgo.Version
-	CompilerVersion  int // compiler.Version
-	InterpVersion    int // interp.Version
+	CompilerBuildID  string
+	TinyGoVersion    string
 	LLVMVersion      string
 	Config           *compiler.Config
 	CFlags           []string
@@ -84,6 +82,13 @@ type packageAction struct {
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
 func Build(pkgName, outpath string, config *compileopts.Config, action func(BuildResult) error) error {
+	// Read the build ID of the tinygo binary.
+	// Used as a cache key for package builds.
+	compilerBuildID, err := ReadBuildID()
+	if err != nil {
+		return err
+	}
+
 	// Create a temporary directory for intermediary files.
 	dir, err := ioutil.TempDir("", "tinygo")
 	if err != nil {
@@ -192,9 +197,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		// the parameters for the build.
 		actionID := packageAction{
 			ImportPath:       pkg.ImportPath,
-			CGoVersion:       cgo.Version,
-			CompilerVersion:  compiler.Version,
-			InterpVersion:    interp.Version,
+			CompilerBuildID:  string(compilerBuildID),
+			TinyGoVersion:    goenv.Version,
 			LLVMVersion:      llvm.Version,
 			Config:           compilerConfig,
 			CFlags:           pkg.CFlags,

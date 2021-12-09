@@ -26,12 +26,6 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
-// Version of the cgo package. It must be incremented whenever the cgo package
-// is changed in a way that affects the output so that cached package builds
-// will be invalidated.
-// This version is independent of the TinyGo version number.
-const Version = 1 // last change: run libclang once per Go file
-
 // cgoPackage holds all CGo-related information of a package.
 type cgoPackage struct {
 	generated       *ast.File

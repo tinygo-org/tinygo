@@ -20,11 +20,6 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-// Version of the compiler pacakge. Must be incremented each time the compiler
-// package changes in a way that affects the generated LLVM module.
-// This version is independent of the TinyGo version number.
-const Version = 25 // last change: add "target-cpu" and "target-features" attributes
-
 func init() {
 	llvm.InitializeAllTargets()
 	llvm.InitializeAllTargetMCs()
