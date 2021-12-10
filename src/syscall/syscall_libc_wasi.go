@@ -212,6 +212,15 @@ func Stat(path string, p *Stat_t) (err error) {
 	return
 }
 
+func Fstat(fd int, p *Stat_t) (err error) {
+	n := libc_fstat(int32(fd), unsafe.Pointer(p))
+
+	if n < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Lstat(path string, p *Stat_t) (err error) {
 	data := cstring(path)
 	n := libc_lstat(&data[0], unsafe.Pointer(p))
@@ -224,6 +233,10 @@ func Lstat(path string, p *Stat_t) (err error) {
 // int stat(const char *path, struct stat * buf);
 //export stat
 func libc_stat(pathname *byte, ptr unsafe.Pointer) int32
+
+// int fstat(fd int, struct stat * buf);
+//export fstat
+func libc_fstat(fd int32, ptr unsafe.Pointer) int32
 
 // int lstat(const char *path, struct stat * buf);
 //export lstat

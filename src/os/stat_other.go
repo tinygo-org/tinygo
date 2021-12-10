@@ -11,6 +11,11 @@ func (f *File) Sync() error {
 	return ErrNotImplemented
 }
 
+// Stat is a stub, not yet implemented
+func (f *File) Stat() (FileInfo, error) {
+	return nil, ErrNotImplemented
+}
+
 // statNolog stats a file with no test logging.
 func statNolog(name string) (FileInfo, error) {
 	return nil, &PathError{Op: "stat", Path: name, Err: ErrNotImplemented}
