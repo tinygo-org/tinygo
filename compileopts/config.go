@@ -453,15 +453,6 @@ func (c *Config) RelocationModel() string {
 	return "static"
 }
 
-// WasmAbi returns the WASM ABI which is specified in the target JSON file, and
-// the value is overridden by `-wasm-abi` flag if it is provided
-func (c *Config) WasmAbi() string {
-	if c.Options.WasmAbi != "" {
-		return c.Options.WasmAbi
-	}
-	return c.Target.WasmAbi
-}
-
 type TestConfig struct {
 	CompileTestBinary bool
 	// TODO: Filter the test functions to run, include verbose flag, etc

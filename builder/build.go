@@ -826,18 +826,6 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 		return err
 	}
 
-	// Browsers cannot handle external functions that have type i64 because it
-	// cannot be represented exactly in JavaScript (JS only has doubles). To
-	// keep functions interoperable, pass int64 types as pointers to
-	// stack-allocated values.
-	// Use -wasm-abi=generic to disable this behaviour.
-	if config.WasmAbi() == "js" {
-		err := transform.ExternalInt64AsPtr(mod, config)
-		if err != nil {
-			return err
-		}
-	}
-
 	// Optimization levels here are roughly the same as Clang, but probably not
 	// exactly.
 	optLevel, sizeLevel, inlinerThreshold := config.OptLevels()

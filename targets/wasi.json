@@ -14,6 +14,5 @@
 		"--export-dynamic",
 		"--no-demangle"
 	],
-	"emulator":      ["wasmtime"],
-	"wasm-abi":      "generic"
+	"emulator":      ["wasmtime"]
 }
