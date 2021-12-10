@@ -1,3 +1,4 @@
+//go:build darwin || (linux && !baremetal)
 // +build darwin linux,!baremetal
 
 // Copyright 2016 The Go Authors. All rights reserved.
@@ -38,5 +39,18 @@ func lstatNolog(name string) (FileInfo, error) {
 		return nil, &PathError{Op: "lstat", Path: name, Err: err}
 	}
 	fillFileStatFromSys(&fs, name)
+	return &fs, nil
+}
+
+// fstatNolog fstats a file handle with no test logging
+func fstatNolog(f *File) (FileInfo, error) {
+	var fs fileStat
+	err := ignoringEINTR(func() error {
+		return syscall.Fstat(int(f.handle.(unixFileHandle)), &fs.sys)
+	})
+	if err != nil {
+		return nil, &PathError{Op: "fstat", Path: f.name, Err: err}
+	}
+	fillFileStatFromSys(&fs, f.name)
 	return &fs, nil
 }

@@ -17,3 +17,7 @@ func Stat(name string) (FileInfo, error) {
 func Lstat(name string) (FileInfo, error) {
 	return lstatNolog(name)
 }
+
+func (f *File) Stat() (FileInfo, error) {
+	return fstatNolog(f)
+}

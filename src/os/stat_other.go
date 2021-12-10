@@ -1,4 +1,5 @@
-//  +build baremetal wasm,!wasi
+//go:build baremetal || (wasm && !wasi)
+// +build baremetal wasm,!wasi
 
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -19,4 +20,9 @@ func statNolog(name string) (FileInfo, error) {
 // lstatNolog lstats a file with no test logging.
 func lstatNolog(name string) (FileInfo, error) {
 	return nil, &PathError{Op: "lstat", Path: name, Err: ErrNotImplemented}
+}
+
+// fstatNolog lstats a file with no test logging.
+func fstatNolog(f *File) (FileInfo, error) {
+	return nil, &PathError{Op: "fstat", Path: f.name, Err: ErrNotImplemented}
 }

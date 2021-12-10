@@ -182,11 +182,6 @@ func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
 	return 0, &PathError{"seek", f.name, ErrNotImplemented}
 }
 
-// Stat is a stub, not yet implemented
-func (f *File) Stat() (FileInfo, error) {
-	return nil, &PathError{"stat", f.name, ErrNotImplemented}
-}
-
 func (f *File) SyscallConn() (syscall.RawConn, error) {
 	return nil, ErrNotImplemented
 }

@@ -87,3 +87,8 @@ func lstatNolog(name string) (FileInfo, error) {
 	attrs |= syscall.FILE_FLAG_OPEN_REPARSE_POINT
 	return stat("Lstat", name, attrs)
 }
+
+// Stat is a stub, not yet implemented
+func fstatNolog(f *File) (FileInfo, error) {
+	return nil, ErrNotImplemented
+}
