@@ -197,6 +197,7 @@ test: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=20m -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
 TEST_PACKAGES = \
+	archive/zip \
 	compress/bzip2 \
 	compress/flate \
 	compress/zlib \
