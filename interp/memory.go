@@ -903,7 +903,14 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 				return llvm.Value{}, err
 			}
 			if llvmValue.Type() != llvmType {
-				llvmValue = llvm.ConstBitCast(llvmValue, llvmType)
+				if llvmValue.Type().PointerAddressSpace() != llvmType.PointerAddressSpace() {
+					// Special case for AVR function pointers.
+					// Because go-llvm doesn't have addrspacecast at the moment,
+					// do it indirectly with a ptrtoint/inttoptr pair.
+					llvmValue = llvm.ConstIntToPtr(llvm.ConstPtrToInt(llvmValue, mem.r.uintptrType), llvmType)
+				} else {
+					llvmValue = llvm.ConstBitCast(llvmValue, llvmType)
+				}
 			}
 			return llvmValue, nil
 		}
