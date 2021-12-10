@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -45,6 +46,40 @@ func TestStatBadDir(t *testing.T) {
 	// TODO: PathError moved to io/fs in go 1.16; fix next line once we drop go 1.15 support.
 	if pe, ok := err.(*PathError); !ok || !IsNotExist(err) || pe.Path != badDir {
 		t.Errorf("Mkdir error = %#v; want PathError for path %q satisifying IsNotExist", err, badDir)
+	}
+}
+
+func equal(name1, name2 string) (r bool) {
+	switch runtime.GOOS {
+	case "windows":
+		r = strings.ToLower(name1) == strings.ToLower(name2)
+	default:
+		r = name1 == name2
+	}
+	return
+}
+
+func TestFstat(t *testing.T) {
+	sfname := "TestFstat"
+	path := TempDir() + "/" + sfname
+	payload := writeFile(t, path, O_CREATE|O_TRUNC|O_RDWR, "Hello")
+	defer Remove(path)
+
+	file, err1 := Open(path)
+	if err1 != nil {
+		t.Fatal("open failed:", err1)
+	}
+	defer file.Close()
+	dir, err2 := file.Stat()
+	if err2 != nil {
+		t.Fatal("fstat failed:", err2)
+	}
+	if !equal(sfname, dir.Name()) {
+		t.Error("name should be ", sfname, "; is", dir.Name())
+	}
+	filesize := len(payload)
+	if dir.Size() != int64(filesize) {
+		t.Error("size should be", filesize, "; is", dir.Size())
 	}
 }
 
