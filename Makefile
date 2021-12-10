@@ -196,10 +196,7 @@ tinygo:
 test: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=20m -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
-TEST_PACKAGES = \
-	compress/bzip2 \
-	compress/flate \
-	compress/zlib \
+TEST_PACKAGES_WASI = \
 	container/heap \
 	container/list \
 	container/ring \
@@ -212,7 +209,6 @@ TEST_PACKAGES = \
 	crypto/sha1 \
 	crypto/sha256 \
 	crypto/sha512 \
-	debug/macho \
 	encoding \
 	encoding/ascii85 \
 	encoding/base32 \
@@ -231,9 +227,7 @@ TEST_PACKAGES = \
 	math/cmplx \
 	net/http/internal/ascii \
 	net/mail \
-	os \
 	path \
-	reflect \
 	testing \
 	testing/iotest \
 	text/scanner \
@@ -241,11 +235,22 @@ TEST_PACKAGES = \
 	unicode/utf16 \
 	unicode/utf8 \
 
+TEST_PACKAGES = \
+	$(TEST_PACKAGES_WASI) \
+	compress/bzip2 \
+	compress/flate \
+	compress/zlib \
+	debug/macho \
+	os \
+	reflect \
+
 # Test known-working standard library packages.
 # TODO: parallelize, and only show failing tests (no implied -v flag).
 .PHONY: tinygo-test
 tinygo-test:
 	$(TINYGO) test $(TEST_PACKAGES)
+tinygo-test-wasi:
+	$(TINYGO) test -target wasi $(TEST_PACKAGES_WASI)
 
 .PHONY: smoketest
 smoketest:
