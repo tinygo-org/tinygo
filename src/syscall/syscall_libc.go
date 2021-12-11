@@ -142,6 +142,15 @@ func Setenv(key, val string) (err error) {
 	return
 }
 
+func Unsetenv(key string) (err error) {
+	keydata := cstring(key)
+	errCode := libc_unsetenv(&keydata[0])
+	if errCode != 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Mmap(fd int, offset int64, length int, prot int, flags int) (data []byte, err error) {
 	addr := libc_mmap(nil, uintptr(length), int32(prot), int32(flags), int32(fd), uintptr(offset))
 	if addr == unsafe.Pointer(^uintptr(0)) {
@@ -205,6 +214,10 @@ func libc_getenv(name *byte) *byte
 // int setenv(const char *name, const char *val, int replace);
 //export setenv
 func libc_setenv(name *byte, val *byte, replace int32) int32
+
+// int unsetenv(const char *name);
+//export unsetenv
+func libc_unsetenv(name *byte) int32
 
 // ssize_t read(int fd, void *buf, size_t count);
 //export read
