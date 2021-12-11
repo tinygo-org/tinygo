@@ -25,6 +25,11 @@ func Unsetenv(key string) error {
 	return nil
 }
 
+// Clearenv deletes all environment variables.
+func Clearenv() {
+	syscall.Clearenv()
+}
+
 func LookupEnv(key string) (string, bool) {
 	return syscall.Getenv(key)
 }

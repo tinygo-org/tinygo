@@ -151,6 +151,17 @@ func Unsetenv(key string) (err error) {
 	return
 }
 
+func Clearenv() {
+	for _, s := range Environ() {
+		for j := 0; j < len(s); j++ {
+			if s[j] == '=' {
+				Unsetenv(s[0:j])
+				break
+			}
+		}
+	}
+}
+
 func Mmap(fd int, offset int64, length int, prot int, flags int) (data []byte, err error) {
 	addr := libc_mmap(nil, uintptr(length), int32(prot), int32(flags), int32(fd), uintptr(offset))
 	if addr == unsafe.Pointer(^uintptr(0)) {
