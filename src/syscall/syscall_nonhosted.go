@@ -72,6 +72,11 @@ func Setenv(key, val string) (err error) {
 	return ENOSYS
 }
 
+func Unsetenv(key string) (err error) {
+	// stub for now
+	return ENOSYS
+}
+
 func Environ() []string {
 	env := runtime_envs()
 	envCopy := make([]string, len(env))

@@ -17,8 +17,12 @@ func Setenv(key, value string) error {
 	return nil
 }
 
-func Unsetenv(_ string) error {
-	return ErrNotImplemented
+func Unsetenv(key string) error {
+	err := syscall.Unsetenv(key)
+	if err != nil {
+		return NewSyscallError("unsetenv", err)
+	}
+	return nil
 }
 
 func LookupEnv(key string) (string, bool) {
