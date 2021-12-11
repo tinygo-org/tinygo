@@ -1,3 +1,4 @@
+//go:build nrf
 // +build nrf
 
 package machine
@@ -332,4 +333,37 @@ func (i2c *I2C) readByte() (byte, error) {
 	}
 	i2c.Bus.EVENTS_RXDREADY.Set(0)
 	return byte(i2c.Bus.RXD.Get()), nil
+}
+
+var rngInitDone = false
+
+const RNG_MAX_READ_RETRIES = 1000
+
+// GetRNG returns 32 bits of cryptographically secure random data
+func GetRNG() (uint32, error) {
+	if !rngInitDone {
+		nrf.RNG.CONFIG.Set(nrf.RNG_CONFIG_DERCEN)
+		nrf.RNG.SHORTS.ClearBits(nrf.RNG_SHORTS_VALRDY_STOP)
+
+		// start RNG
+		nrf.RNG.TASKS_START.Set(1)
+
+		rngInitDone = true
+	}
+	var ret uint32
+	for i := 0; i < 4; i++ {
+		ret = ret << 8
+		cnt := 0
+		for nrf.RNG.EVENTS_VALRDY.Get() == 0 {
+			cnt++
+			if cnt >= RNG_MAX_READ_RETRIES {
+				return 0, ErrTimeoutRNG
+			}
+		}
+
+		ret |= (nrf.RNG.VALUE.Get() & 0xFF)
+		nrf.RNG.EVENTS_VALRDY.Set(0)
+	}
+
+	return ret, nil
 }

@@ -1,5 +1,5 @@
-//go:build stm32wle5 || (sam && atsamd51) || (sam && atsame5x)
-// +build stm32wle5 sam,atsamd51 sam,atsame5x
+//go:build stm32wle5 || (sam && atsamd51) || (sam && atsame5x) || nrf
+// +build stm32wle5 sam,atsamd51 sam,atsame5x nrf
 
 package rand
 
