@@ -339,8 +339,8 @@ var rngInitDone = false
 
 const RNG_MAX_READ_RETRIES = 1000
 
-// GetRNG returns 32 bits of cryptographically secure random data
-func GetRNG() (uint32, error) {
+// getRNG returns 32 bits of cryptographically secure random data
+func getRNG() (uint32, error) {
 	if !rngInitDone {
 		nrf.RNG.CONFIG.Set(nrf.RNG_CONFIG_DERCEN)
 		nrf.RNG.SHORTS.ClearBits(nrf.RNG_SHORTS_VALRDY_STOP)
