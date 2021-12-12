@@ -17,8 +17,7 @@ func localTmp() string {
 }
 
 func newFile(testName string, t *testing.T) (f *File) {
-	// TODO: use CreateTemp when it lands
-	f, err := OpenFile(TempDir()+"/_Go_"+testName, O_RDWR|O_CREATE, 0644)
+	f, err := CreateTemp("", testName)
 	if err != nil {
 		t.Fatalf("TempFile %s: %s", testName, err)
 	}
