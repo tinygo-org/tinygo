@@ -43,16 +43,17 @@ func Init() {
 // common holds the elements common between T and B and
 // captures common methods such as Errorf.
 type common struct {
-	output bytes.Buffer
-	w      io.Writer // either &output, or at top level, os.Stdout
-	indent string
+	output   bytes.Buffer
+	w        io.Writer // either &output, or at top level, os.Stdout
+	indent   string
+	failed   bool     // Test or benchmark has failed.
+	skipped  bool     // Test of benchmark has been skipped.
+	cleanups []func() // optional functions to be called at the end of the test
+	finished bool     // Test function has completed.
 
-	failed   bool   // Test or benchmark has failed.
-	skipped  bool   // Test of benchmark has been skipped.
-	finished bool   // Test function has completed.
-	level    int    // Nesting depth of test or benchmark.
-	name     string // Name of test or benchmark.
-	parent   *common
+	parent *common
+	level  int    // Nesting depth of test or benchmark.
+	name   string // Name of test or benchmark.
 }
 
 // TB is the interface common to T and B.
@@ -208,7 +209,34 @@ func (c *common) Parallel() {
 	// Unimplemented.
 }
 
+// Cleanup registers a function to be called when the test (or subtest) and all its
+// subtests complete. Cleanup functions will be called in last added,
+// first called order.
+func (c *common) Cleanup(f func()) {
+	c.cleanups = append(c.cleanups, f)
+}
+
+// runCleanup is called at the end of the test.
+func (c *common) runCleanup() {
+	for {
+		var cleanup func()
+		if len(c.cleanups) > 0 {
+			last := len(c.cleanups) - 1
+			cleanup = c.cleanups[last]
+			c.cleanups = c.cleanups[:last]
+		}
+		if cleanup == nil {
+			return
+		}
+		cleanup()
+	}
+}
+
 func tRunner(t *T, fn func(t *T)) {
+	defer func() {
+		t.runCleanup()
+	}()
+
 	// Run the test.
 	if flagVerbose {
 		fmt.Fprintf(t.w, "=== RUN   %s\n", t.name)
