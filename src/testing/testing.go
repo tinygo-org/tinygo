@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -43,6 +44,7 @@ func Init() {
 // captures common methods such as Errorf.
 type common struct {
 	output bytes.Buffer
+	w      io.Writer // either &output, or at top level, os.Stdout
 	indent string
 
 	failed   bool   // Test or benchmark has failed.
@@ -50,6 +52,7 @@ type common struct {
 	finished bool   // Test function has completed.
 	level    int    // Nesting depth of test or benchmark.
 	name     string // Name of test or benchmark.
+	parent   *common
 }
 
 // TB is the interface common to T and B.
@@ -205,7 +208,30 @@ func (c *common) Parallel() {
 	// Unimplemented.
 }
 
-// Run runs a subtest of f t called name. It waits until the subtest is finished
+func tRunner(t *T, fn func(t *T)) {
+	// Run the test.
+	if flagVerbose {
+		fmt.Fprintf(t.w, "=== RUN   %s\n", t.name)
+	}
+
+	fn(t)
+
+	// Process the result (pass or fail).
+	if t.failed {
+		if t.parent != nil {
+			t.parent.failed = true
+		}
+		fmt.Fprintf(t.w, t.indent+"--- FAIL: %s\n", t.name)
+		t.w.Write(t.output.Bytes())
+	} else {
+		if flagVerbose {
+			fmt.Fprintf(t.w, t.indent+"--- PASS: %s\n", t.name)
+			t.w.Write(t.output.Bytes())
+		}
+	}
+}
+
+// Run runs f as a subtest of t called name. It waits until the subtest is finished
 // and returns whether the subtest succeeded.
 func (t *T) Run(name string, f func(t *T)) bool {
 	// Create a subtest.
@@ -213,27 +239,12 @@ func (t *T) Run(name string, f func(t *T)) bool {
 		common: common{
 			name:   t.name + "/" + rewrite(name),
 			indent: t.indent + "    ",
+			w:      &t.output,
+			parent: &t.common,
 		},
 	}
 
-	// Run the test.
-	if flagVerbose {
-		fmt.Fprintf(&t.output, "=== RUN   %s\n", sub.name)
-
-	}
-	f(&sub)
-
-	// Process the result (pass or fail).
-	if sub.failed {
-		t.failed = true
-		fmt.Fprintf(&t.output, sub.indent+"--- FAIL: %s\n", sub.name)
-		t.output.Write(sub.output.Bytes())
-	} else {
-		if flagVerbose {
-			fmt.Fprintf(&t.output, sub.indent+"--- PASS: %s\n", sub.name)
-			t.output.Write(sub.output.Bytes())
-		}
-	}
+	tRunner(&sub, f)
 	return !sub.failed
 }
 
@@ -313,23 +324,11 @@ func (m *M) Run() int {
 		t := &T{
 			common: common{
 				name: test.Name,
+				w:    os.Stdout,
 			},
 		}
 
-		if flagVerbose {
-			fmt.Printf("=== RUN   %s\n", test.Name)
-		}
-		test.F(t)
-
-		if t.failed {
-			fmt.Printf("--- FAIL: %s\n", test.Name)
-			os.Stdout.Write(t.output.Bytes())
-		} else {
-			if flagVerbose {
-				fmt.Printf("--- PASS: %s\n", test.Name)
-				os.Stdout.Write(t.output.Bytes())
-			}
-		}
+		tRunner(t, test.F)
 
 		if t.failed {
 			failures++
