@@ -37,11 +37,6 @@ func Mkdir(path string, perm FileMode) error {
 	return nil
 }
 
-// MkdirTemp is a stub, it will always return an error.
-func MkdirTemp(dir, pattern string) (string, error) {
-	return "", &PathError{"mkdirtemp", dir, ErrNotImplemented}
-}
-
 // Remove removes a file or (empty) directory. If the operation fails, it will
 // return an error of type *PathError.
 func Remove(path string) error {
