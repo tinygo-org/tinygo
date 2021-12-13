@@ -1,5 +1,5 @@
-// +build gc.conservative gc.extalloc
-// +build !baremetal,!tinygo.wasm
+//go:build gc.conservative && !baremetal && !tinygo.wasm
+// +build gc.conservative,!baremetal,!tinygo.wasm
 
 package runtime
 
