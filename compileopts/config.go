@@ -85,7 +85,7 @@ func (c *Config) CgoEnabled() bool {
 }
 
 // GC returns the garbage collection strategy in use on this platform. Valid
-// values are "none", "leaking", "extalloc", and "conservative".
+// values are "none", "leaking", and "conservative".
 func (c *Config) GC() string {
 	if c.Options.GC != "" {
 		return c.Options.GC
@@ -100,7 +100,7 @@ func (c *Config) GC() string {
 // that can be traced by the garbage collector.
 func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
-	case "conservative", "extalloc":
+	case "conservative":
 		for _, tag := range c.BuildTags() {
 			if tag == "tinygo.wasm" {
 				return true
