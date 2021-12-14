@@ -17,9 +17,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 	locals := make([]value, len(fn.locals))
 	r.callsExecuted++
 
+	var timeout bool
+
 	if time.Since(r.start) > time.Minute {
 		// Running for more than a minute. This should never happen.
-		return nil, mem, r.errorAt(fn.blocks[0].instructions[0], fmt.Errorf("interp: running for more than a minute, timing out (executed calls: %d)", r.callsExecuted))
+		if r.debug {
+			fmt.Fprintln(os.Stderr, "moving long running function initialization to runtime:", fn.name)
+		}
+		timeout = true
 	}
 
 	// Parameters are considered a kind of local values.
@@ -97,7 +102,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				operands = append(operands, v)
 			}
 		}
-		if isRuntimeInst {
+		if isRuntimeInst || timeout {
 			err := r.runAtRuntime(fn, inst, locals, &mem, indent)
 			if err != nil {
 				return nil, mem, err

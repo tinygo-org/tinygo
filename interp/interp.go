@@ -111,6 +111,7 @@ func Run(mod llvm.Module, debug bool) error {
 		if r.debug {
 			fmt.Fprintln(os.Stderr, "call:", fn.Name())
 		}
+		r.start = time.Now()
 		_, mem, callErr := r.run(r.getFunction(fn), nil, nil, "    ")
 		call.EraseFromParentAsInstruction()
 		if callErr != nil {
@@ -137,6 +138,7 @@ func Run(mod llvm.Module, debug bool) error {
 		}
 	}
 	r.pkgName = ""
+	r.start = time.Now()
 
 	// Update all global variables in the LLVM module.
 	mem := memoryView{r: r}
