@@ -1,5 +1,5 @@
-//go:build stm32wlx
-// +build stm32wlx
+//go:build stm32wlx || (sam && atsamd51) || (sam && atsame5x)
+// +build stm32wlx sam,atsamd51 sam,atsame5x
 
 package rand
 
