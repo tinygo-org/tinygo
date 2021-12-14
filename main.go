@@ -244,7 +244,6 @@ func runPackageTest(config *compileopts.Config, result builder.BuildResult, test
 			flags = append(flags, "-test.run="+testRunRegexp)
 		}
 		cmd = executeCommand(config.Options, result.Binary, flags...)
-		cmd.Dir = result.MainDir
 	} else {
 		// Run in an emulator.
 		args := append(config.Target.Emulator[1:], result.Binary)
@@ -264,6 +263,7 @@ func runPackageTest(config *compileopts.Config, result builder.BuildResult, test
 		}
 		cmd = executeCommand(config.Options, config.Target.Emulator[0], args...)
 	}
+	cmd.Dir = result.MainDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
