@@ -1,3 +1,4 @@
+//go:build stm32l4
 // +build stm32l4
 
 package machine
@@ -494,3 +495,12 @@ const (
 	ARR_MAX = 0x10000
 	PSC_MAX = 0x10000
 )
+
+func initRNG() {
+	stm32.RCC.CRRCR.SetBits(stm32.RCC_CRRCR_HSI48ON)
+	for !stm32.RCC.CRRCR.HasBits(stm32.RCC_CRRCR_HSI48RDY) {
+	}
+
+	stm32.RCC.AHB2ENR.SetBits(stm32.RCC_AHB2ENR_RNGEN)
+	stm32.RNG.CR.SetBits(stm32.RNG_CR_RNGEN)
+}
