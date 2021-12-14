@@ -5,7 +5,8 @@ target triple = "wasm32-unknown-wasi"
 
 %runtime.channel = type { i32, i32, i8, %runtime.channelBlockedList*, i32, i32, i32, i8* }
 %runtime.channelBlockedList = type { %runtime.channelBlockedList*, %"internal/task.Task"*, %runtime.chanSelectState*, { %runtime.channelBlockedList*, i32, i32 } }
-%"internal/task.Task" = type { %"internal/task.Task"*, i8*, i64, %"internal/task.state" }
+%"internal/task.Task" = type { %"internal/task.Task"*, i8*, i64, %"internal/task.gcData", %"internal/task.state" }
+%"internal/task.gcData" = type { i8* }
 %"internal/task.state" = type { i32, i8*, %"internal/task.stackState", i1 }
 %"internal/task.stackState" = type { i32, i32 }
 %runtime.chanSelectState = type { %runtime.channel*, i8* }
