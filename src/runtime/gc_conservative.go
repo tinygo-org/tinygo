@@ -430,7 +430,17 @@ func markRoots(start, end uintptr) {
 		if start >= end {
 			runtimePanic("gc: unexpected range to mark")
 		}
+		if start%unsafe.Alignof(start) != 0 {
+			runtimePanic("gc: unaligned start pointer")
+		}
+		if end%unsafe.Alignof(end) != 0 {
+			runtimePanic("gc: unaligned end pointer")
+		}
 	}
+
+	// Reduce the end bound to avoid reading too far on platforms where pointer alignment is smaller than pointer size.
+	// If the size of the range is 0, then end will be slightly below start after this.
+	end -= unsafe.Sizeof(end) - unsafe.Alignof(end)
 
 	for addr := start; addr < end; addr += unsafe.Alignof(addr) {
 		root := *(*uintptr)(unsafe.Pointer(addr))
