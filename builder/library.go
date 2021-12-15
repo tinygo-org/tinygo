@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -92,7 +93,23 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 			}
 			err = os.Rename(temporaryHeaderPath, headerPath)
 			if err != nil {
-				return nil, err
+				switch {
+				case os.IsExist(err):
+					// Another invocation of TinyGo also seems to have already created the headers.
+
+				case runtime.GOOS == "windows" && os.IsPermission(err):
+					// On Windows, a rename with a destination directory that already
+					// exists does not result in an IsExist error, but rather in an
+					// access denied error. To be sure, check for this case by checking
+					// whether the target directory exists.
+					if _, err := os.Stat(headerPath); err == nil {
+						break
+					}
+					fallthrough
+
+				default:
+					return nil, err
+				}
 			}
 		}
 	}
