@@ -364,7 +364,7 @@ func (t rawType) elem() rawType {
 	}
 }
 
-// stripPrefix removes the "prefix" (the first 5 bytes of the type code) from
+// stripPrefix removes the "prefix" (the low 5 bits of the type code) from
 // the type code. If this is a named type, it will resolve the underlying type
 // (which is the data for this named type). If it is not, the lower bits are
 // simply shifted off.
