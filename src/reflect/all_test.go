@@ -127,7 +127,7 @@ var deepEqualTests = []DeepEqualTest{
 	{&loopy1, &loopy1, true},
 	{&loopy1, &loopy2, true},
 	//{&cycleMap1, &cycleMap2, true},
-	{&cycleMap1, &cycleMap3, false},
+	//{&cycleMap1, &cycleMap3, false},
 }
 
 func TestDeepEqual(t *testing.T) {
