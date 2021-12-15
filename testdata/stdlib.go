@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -28,6 +29,10 @@ func main() {
 	// package strings
 	fmt.Println("strings.IndexByte:", strings.IndexByte("asdf", 'd'))
 	fmt.Println("strings.Replace:", strings.Replace("An example string", " ", "-", -1))
+
+	// package time
+	time.Sleep(time.Millisecond)
+	time.Sleep(-1) // negative sleep should return immediately
 
 	// Exit the program normally.
 	os.Exit(0)
