@@ -13,8 +13,6 @@ import (
 	"unsafe"
 )
 
-var rngInitDone = false
-
 const (
 	AF0_SYSTEM             = 0
 	AF1_TIM1_2_LPTIM1      = 1
@@ -32,10 +30,9 @@ const (
 )
 
 const (
-	SYSCLK               = 48e6
-	APB1_TIM_FREQ        = SYSCLK
-	APB2_TIM_FREQ        = SYSCLK
-	RNG_MAX_READ_RETRIES = 1000
+	SYSCLK        = 48e6
+	APB1_TIM_FREQ = SYSCLK
+	APB2_TIM_FREQ = SYSCLK
 )
 
 func CPUFrequency() uint32 {
@@ -399,23 +396,9 @@ func (t *TIM) enableMainOutput() {
 	t.Device.BDTR.SetBits(stm32.TIM_BDTR_MOE)
 }
 
-// GetRNG returns 32 bits of cryptographically secure random data
-func GetRNG() (uint32, error) {
-
-	if !rngInitDone {
-		stm32.RCC.AHB3ENR.SetBits(stm32.RCC_AHB3ENR_RNGEN)
-		stm32.RNG.CR.SetBits(stm32.RNG_CR_RNGEN)
-		rngInitDone = true
-	}
-	cnt := RNG_MAX_READ_RETRIES
-	for cnt > 0 && !stm32.RNG.SR.HasBits(stm32.RNG_SR_DRDY) {
-		cnt--
-	}
-	if cnt == 0 {
-		return 0, ErrTimeoutRNG
-	}
-	ret := stm32.RNG.DR.Get()
-	return ret, nil
+func initRNG() {
+	stm32.RCC.AHB3ENR.SetBits(stm32.RCC_AHB3ENR_RNGEN)
+	stm32.RNG.CR.SetBits(stm32.RNG_CR_RNGEN)
 }
 
 //----------
