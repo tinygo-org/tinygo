@@ -1,9 +1,14 @@
+//go:build scheduler.none
 // +build scheduler.none
 
 package runtime
 
 //go:linkname sleep time.Sleep
 func sleep(duration int64) {
+	if duration <= 0 {
+		return
+	}
+
 	sleepTicks(nanosecondsToTicks(duration))
 }
 
