@@ -34,22 +34,6 @@ func checkMode(t *testing.T, path string, mode FileMode) {
 	}
 }
 
-func TestChmod(t *testing.T) {
-	f := newFile("TestChmod", t)
-	defer Remove(f.Name())
-	defer f.Close()
-	// Creation mode is read write
-
-	fm := FileMode(0456)
-	if runtime.GOOS == "windows" {
-		fm = FileMode(0444) // read-only file
-	}
-	if err := Chmod(f.Name(), fm); err != nil {
-		t.Fatalf("chmod %s %#o: %s", f.Name(), fm, err)
-	}
-	checkMode(t, f.Name(), fm)
-}
-
 func TestReadAt(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Log("TODO: implement Pread for Windows")
