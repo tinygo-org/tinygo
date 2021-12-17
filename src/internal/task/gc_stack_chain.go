@@ -1,7 +1,5 @@
-//go:build (gc.conservative || gc.extalloc) && tinygo.wasm && !scheduler.coroutines
-// +build gc.conservative gc.extalloc
-// +build tinygo.wasm
-// +build !scheduler.coroutines
+//go:build gc.conservative && tinygo.wasm && !scheduler.coroutines
+// +build gc.conservative,tinygo.wasm,!scheduler.coroutines
 
 package task
 
