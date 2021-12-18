@@ -234,6 +234,7 @@ TEST_PACKAGES = \
 	os \
 	path \
 	reflect \
+	sync \
 	testing \
 	testing/iotest \
 	text/scanner \
