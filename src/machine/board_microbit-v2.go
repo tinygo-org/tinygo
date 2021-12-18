@@ -99,6 +99,14 @@ const (
 	LED_ROW_5 Pin = P0_19
 )
 
+// Peripherals
+const (
+	BUZZER    = P27
+	CAP_TOUCH = P26
+	MIC       = P29
+	MIC_LED   = P28
+)
+
 // USB CDC identifiers
 const (
 	usb_STRING_PRODUCT      = "BBC micro:bit V2"
