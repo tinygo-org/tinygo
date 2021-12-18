@@ -13,6 +13,6 @@
 		"--stack-first",
 		"--no-demangle"
 	],
-	"emulator":      ["node", "targets/wasm_exec.js"],
+	"emulator":      ["node", "{root}/targets/wasm_exec.js"],
 	"wasm-abi":      "js"
 }
