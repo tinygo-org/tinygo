@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gofrs/flock"
 	"github.com/tinygo-org/tinygo/cgo"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
@@ -97,17 +98,19 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	var libcDependencies []*compileJob
 	switch config.Target.Libc {
 	case "musl":
-		job, err := Musl.load(config, dir)
+		job, unlock, err := Musl.load(config, dir)
 		if err != nil {
 			return err
 		}
+		defer unlock()
 		libcDependencies = append(libcDependencies, dummyCompileJob(filepath.Join(filepath.Dir(job.result), "crt1.o")))
 		libcDependencies = append(libcDependencies, job)
 	case "picolibc":
-		libcJob, err := Picolibc.load(config, dir)
+		libcJob, unlock, err := Picolibc.load(config, dir)
 		if err != nil {
 			return err
 		}
+		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "wasi-libc":
 		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
@@ -116,10 +119,11 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		}
 		libcDependencies = append(libcDependencies, dummyCompileJob(path))
 	case "mingw-w64":
-		_, err := MinGW.load(config, dir)
+		_, unlock, err := MinGW.load(config, dir)
 		if err != nil {
 			return err
 		}
+		unlock()
 		libcDependencies = append(libcDependencies, makeMinGWExtraLibs(dir)...)
 	case "":
 		// no library specified, so nothing to do
@@ -228,17 +232,19 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		bitcodePath := filepath.Join(cacheDir, "pkg-"+hex.EncodeToString(hash[:])+".bc")
 		packageBitcodePaths[pkg.ImportPath] = bitcodePath
 
-		// Check whether this package has been compiled before, and if so don't
-		// compile it again.
-		if _, err := os.Stat(bitcodePath); err == nil {
-			// Already cached, don't recreate this package.
-			continue
-		}
-
 		// The package has not yet been compiled, so create a job to do so.
 		job := &compileJob{
 			description: "compile package " + pkg.ImportPath,
 			run: func(*compileJob) error {
+				// Acquire a lock (if supported).
+				unlock := lock(bitcodePath + ".lock")
+				defer unlock()
+
+				if _, err := os.Stat(bitcodePath); err == nil {
+					// Already cached, don't recreate this package.
+					return nil
+				}
+
 				// Compile AST to IR. The compiler.CompilePackage function will
 				// build the SSA as needed.
 				mod, errs := compiler.CompilePackage(pkg.ImportPath, pkg, program.Package(pkg.Pkg), machine, compilerConfig, config.DumpSSA())
@@ -533,10 +539,11 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
 	if config.Target.RTLib == "compiler-rt" {
-		job, err := CompilerRT.load(config, dir)
+		job, unlock, err := CompilerRT.load(config, dir)
 		if err != nil {
 			return err
 		}
+		defer unlock()
 		linkerDependencies = append(linkerDependencies, job)
 	}
 
@@ -1180,4 +1187,17 @@ func patchRP2040BootCRC(executable string) error {
 
 	// Update the .boot2 section to included the CRC
 	return replaceElfSection(executable, ".boot2", bytes)
+}
+
+// lock may acquire a lock at the specified path.
+// It returns a function to release the lock.
+// If flock is not supported, it does nothing.
+func lock(path string) func() {
+	flock := flock.New(path)
+	err := flock.Lock()
+	if err != nil {
+		return func() {}
+	}
+
+	return func() { flock.Close() }
 }
