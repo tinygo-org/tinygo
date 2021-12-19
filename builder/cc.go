@@ -63,6 +63,10 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands
 		return "", err
 	}
 
+	// Acquire a lock (if supported).
+	unlock := lock(filepath.Join(goenv.Get("GOCACHE"), fileHash+".c.lock"))
+	defer unlock()
+
 	// Create cache key for the dependencies file.
 	buf, err := json.Marshal(struct {
 		Path        string
