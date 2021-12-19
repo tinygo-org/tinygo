@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -186,18 +185,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	}
 }
 
-// Due to some problems with LLD, we cannot run links in parallel, or in parallel with compiles.
-// Therefore, we put a lock around builds and run everything else in parallel.
-var buildLock sync.Mutex
-
-// runBuild is a thread-safe wrapper around Build.
-func runBuild(src, out string, opts *compileopts.Options) error {
-	buildLock.Lock()
-	defer buildLock.Unlock()
-
-	return Build(src, out, opts)
-}
-
 func optionsFromTarget(target string) compileopts.Options {
 	return compileopts.Options{
 		// GOOS/GOARCH are only used if target == ""
@@ -293,7 +280,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	if spec.GOOS == "windows" {
 		binary += ".exe"
 	}
-	err = runBuild("./"+path, binary, &options)
+	err = Build("./"+path, binary, &options)
 	if err != nil {
 		printCompilerError(t.Log, err)
 		t.Fail()
