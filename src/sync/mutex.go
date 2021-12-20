@@ -5,8 +5,6 @@ import (
 	_ "unsafe"
 )
 
-// These mutexes assume there is only one thread of operation and cannot be accessed safely from interrupts.
-
 type Mutex struct {
 	locked  bool
 	blocked task.Stack
