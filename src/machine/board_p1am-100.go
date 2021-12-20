@@ -79,10 +79,18 @@ const (
 	UART_TX_PIN Pin = PB22 // TX: SERCOM5/PAD[2]
 )
 
+// UART1 on the P1AM-100 connects to the normal TX/RX pins.
+var UART1 = &sercomUSART5
+
 // I2C pins
 const (
 	SDA_PIN Pin = PA08 // SDA:  SERCOM0/PAD[0]
 	SCL_PIN Pin = PA09 // SCL:  SERCOM0/PAD[1]
+)
+
+// I2C on the P1AM-100.
+var (
+	I2C0 = sercomI2CM0
 )
 
 // SPI pins
@@ -99,6 +107,18 @@ const (
 	SDCARD_SCK_PIN Pin = PA13 // SCK: SERCOM2/PAD[1]
 	SDCARD_SS_PIN  Pin = PA14 // SS: as GPIO
 	SDCARD_CD_PIN  Pin = PA27
+)
+
+// SPI on the P1AM-100 is used for Base Controller.
+var (
+	SPI0                = sercomSPIM1
+	BASE_CONTROLLER_SPI = SPI0
+)
+
+// SPI1 is connected to the SD card slot on the P1AM-100
+var (
+	SPI1       = sercomSPIM2
+	SDCARD_SPI = SPI1
 )
 
 // I2S pins

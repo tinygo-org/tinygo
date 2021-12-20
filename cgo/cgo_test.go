@@ -28,7 +28,7 @@ func normalizeResult(result string) string {
 }
 
 func TestCGo(t *testing.T) {
-	var cflags = []string{"--target=armv6m-none-eabi"}
+	var cflags = []string{"--target=armv6m-unknown-unknown-eabi"}
 
 	for _, name := range []string{"basic", "errors", "types", "flags", "const"} {
 		name := name // avoid a race condition
@@ -56,7 +56,7 @@ func TestCGo(t *testing.T) {
 			}
 
 			// Process the AST with CGo.
-			cgoAST, _, _, _, cgoErrors := Process([]*ast.File{f}, "testdata", fset, cflags)
+			cgoAST, _, _, _, _, cgoErrors := Process([]*ast.File{f}, "testdata", fset, cflags)
 
 			// Check the AST for type errors.
 			var typecheckErrors []error
@@ -96,7 +96,7 @@ func TestCGo(t *testing.T) {
 			if err != nil {
 				t.Errorf("could not write out CGo AST: %v", err)
 			}
-			actual := normalizeResult(string(buf.Bytes()))
+			actual := normalizeResult(buf.String())
 
 			// Read the file with the expected output, to compare against.
 			outfile := filepath.Join("testdata", name+".out.go")

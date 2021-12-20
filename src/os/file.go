@@ -111,6 +111,16 @@ func (f *File) Write(b []byte) (n int, err error) {
 	return
 }
 
+// WriteString is like Write, but writes the contents of string s rather than a
+// slice of bytes.
+func (f *File) WriteString(s string) (n int, err error) {
+	return f.Write([]byte(s))
+}
+
+func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
+	return 0, ErrNotImplemented
+}
+
 // Close closes the File, rendering it unusable for I/O.
 func (f *File) Close() (err error) {
 	err = f.handle.Close()
@@ -196,9 +206,8 @@ func Lstat(name string) (FileInfo, error) {
 	return nil, &PathError{"lstat", name, ErrNotImplemented}
 }
 
-// Getwd is a stub (for now), always returning an empty string
 func Getwd() (string, error) {
-	return "", nil
+	return syscall.Getwd()
 }
 
 // Readlink is a stub (for now), always returning the string it was given

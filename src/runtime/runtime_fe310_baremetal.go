@@ -22,6 +22,10 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns * 64 / 1953125)
 }
 
+func exit(code int) {
+	abort()
+}
+
 func abort() {
 	// lock up forever
 	for {

@@ -43,6 +43,7 @@ const (
 	EEXIST      Errno = 0x11
 	EINTR       Errno = 0x4
 	ENOTDIR     Errno = 0x14
+	EINVAL      Errno = 0x16
 	EMFILE      Errno = 0x18
 	EAGAIN      Errno = 0x23
 	ETIMEDOUT   Errno = 0x3c
@@ -59,6 +60,12 @@ const (
 	SIGTRAP Signal = 0x5
 	SIGQUIT Signal = 0x3
 	SIGTERM Signal = 0xf
+)
+
+const (
+	Stdin  = 0
+	Stdout = 1
+	Stderr = 2
 )
 
 const (

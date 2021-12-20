@@ -51,7 +51,7 @@ func main() {
 	run()
 
 	// Fallback: if main ever returns, hang the CPU.
-	abort()
+	exit(0)
 }
 
 //go:extern _sbss

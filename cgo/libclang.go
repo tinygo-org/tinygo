@@ -16,7 +16,7 @@ import (
 )
 
 /*
-#include <clang-c/Index.h> // if this fails, install libclang-10-dev
+#include <clang-c/Index.h> // if this fails, install libclang-11-dev
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -72,16 +72,13 @@ var diagnosticSeverity = [...]string{
 	C.CXDiagnostic_Fatal:   "fatal",
 }
 
-func (p *cgoPackage) parseFragment(fragment string, cflags []string, posFilename string, posLine int) {
+func (p *cgoPackage) parseFragment(fragment string, cflags []string, filename string) {
 	index := C.clang_createIndex(0, 0)
 	defer C.clang_disposeIndex(index)
 
 	// pretend to be a .c file
-	filenameC := C.CString(posFilename + "!cgo.c")
+	filenameC := C.CString(filename + "!cgo.c")
 	defer C.free(unsafe.Pointer(filenameC))
-
-	// fix up error locations
-	fragment = fmt.Sprintf("# %d %#v\n", posLine+1, posFilename) + fragment
 
 	fragmentC := C.CString(fragment)
 	defer C.free(unsafe.Pointer(fragmentC))
@@ -196,14 +193,14 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 			}
 			fn.args = append(fn.args, paramInfo{
 				name:     argName,
-				typeExpr: p.makeASTType(argType, pos),
+				typeExpr: p.makeDecayingASTType(argType, pos),
 			})
 		}
 		resultType := C.tinygo_clang_getCursorResultType(c)
 		if resultType.kind != C.CXType_Void {
 			fn.results = &ast.FieldList{
 				List: []*ast.Field{
-					&ast.Field{
+					{
 						Type: p.makeASTType(resultType, pos),
 					},
 				},
@@ -380,7 +377,7 @@ func (p *cgoPackage) addErrorAfter(pos token.Pos, after, msg string) {
 func (p *cgoPackage) addErrorAt(position token.Position, msg string) {
 	if filepath.IsAbs(position.Filename) {
 		// Relative paths for readability, like other Go parser errors.
-		relpath, err := filepath.Rel(p.dir, position.Filename)
+		relpath, err := filepath.Rel(p.currentDir, position.Filename)
 		if err == nil {
 			position.Filename = relpath
 		}
@@ -389,6 +386,41 @@ func (p *cgoPackage) addErrorAt(position token.Position, msg string) {
 		Pos: position,
 		Msg: msg,
 	})
+}
+
+// makeDecayingASTType does the same as makeASTType but takes care of decaying
+// types (arrays in function parameters, etc). It is otherwise identical to
+// makeASTType.
+func (p *cgoPackage) makeDecayingASTType(typ C.CXType, pos token.Pos) ast.Expr {
+	// Strip typedefs, if any.
+	underlyingType := typ
+	if underlyingType.kind == C.CXType_Typedef {
+		c := C.tinygo_clang_getTypeDeclaration(typ)
+		underlyingType = C.tinygo_clang_getTypedefDeclUnderlyingType(c)
+		// TODO: support a chain of typedefs. At the moment, it seems to get
+		// stuck in an endless loop when trying to get to the most underlying
+		// type.
+	}
+	// Check for decaying type. An example would be an array type in a
+	// parameter. This declaration:
+	//   void foo(char buf[6]);
+	// is the same as this one:
+	//   void foo(char *buf);
+	// But this one:
+	//   void bar(char buf[6][4]);
+	// equals this:
+	//   void bar(char *buf[4]);
+	// so not all array dimensions should be stripped, just the first one.
+	// TODO: there are more kinds of decaying types.
+	if underlyingType.kind == C.CXType_ConstantArray {
+		// Apply type decaying.
+		pointeeType := C.clang_getElementType(underlyingType)
+		return &ast.StarExpr{
+			Star: pos,
+			X:    p.makeASTType(pointeeType, pos),
+		}
+	}
+	return p.makeASTType(typ, pos)
 }
 
 // makeASTType return the ast.Expr for the given libclang type. In other words,
@@ -775,7 +807,7 @@ func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientD
 	}
 	*inBitfield = false
 	field.Names = []*ast.Ident{
-		&ast.Ident{
+		{
 			NamePos: pos,
 			Name:    name,
 			Obj: &ast.Object{
@@ -796,8 +828,12 @@ func tinygo_clang_enum_visitor(c, parent C.GoCXCursor, client_data C.CXClientDat
 	pos := p.getCursorPosition(c)
 	value := C.tinygo_clang_getEnumConstantDeclValue(c)
 	p.constants[name] = constantInfo{
-		expr: &ast.BasicLit{pos, token.INT, strconv.FormatInt(int64(value), 10)},
-		pos:  pos,
+		expr: &ast.BasicLit{
+			ValuePos: pos,
+			Kind:     token.INT,
+			Value:    strconv.FormatInt(int64(value), 10),
+		},
+		pos: pos,
 	}
 	return C.CXChildVisit_Continue
 }

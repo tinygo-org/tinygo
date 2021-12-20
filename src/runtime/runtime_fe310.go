@@ -42,7 +42,7 @@ func main() {
 	preinit()
 	initPeripherals()
 	run()
-	abort()
+	exit(0)
 }
 
 //go:extern handleInterruptASM
@@ -65,7 +65,7 @@ func handleInterrupt() {
 			// Claim this interrupt.
 			id := sifive.PLIC.CLAIM.Get()
 			// Call the interrupt handler, if any is registered for this ID.
-			callInterruptHandler(int(id))
+			sifive.HandleInterrupt(int(id))
 			// Complete this interrupt.
 			sifive.PLIC.CLAIM.Set(id)
 		}
@@ -79,12 +79,12 @@ func handleInterrupt() {
 
 // initPeripherals configures periperhals the way the runtime expects them.
 func initPeripherals() {
-	// Make sure the HFROSC is on
-	sifive.PRCI.HFROSCCFG.SetBits(sifive.PRCI_HFROSCCFG_ENABLE)
-
-	// Run off 16 MHz Crystal for accuracy.
-	sifive.PRCI.PLLCFG.SetBits(sifive.PRCI_PLLCFG_REFSEL | sifive.PRCI_PLLCFG_BYPASS)
-	sifive.PRCI.PLLCFG.SetBits(sifive.PRCI_PLLCFG_SEL)
+	// Configure PLL to output 320MHz.
+	//   R=2:  divide 16MHz to 8MHz
+	//   F=80: multiply 8MHz by 80 to get 640MHz (80/2-1=39)
+	//   Q=2:  divide 640MHz by 2 to get 320MHz
+	// This makes the main CPU run at 320MHz.
+	sifive.PRCI.PLLCFG.Set(sifive.PRCI_PLLCFG_PLLR_R2<<sifive.PRCI_PLLCFG_PLLR_Pos | 39<<sifive.PRCI_PLLCFG_PLLF_Pos | sifive.PRCI_PLLCFG_PLLQ_Q2<<sifive.PRCI_PLLCFG_PLLQ_Pos | sifive.PRCI_PLLCFG_SEL | sifive.PRCI_PLLCFG_REFSEL)
 
 	// Turn off HFROSC to save power
 	sifive.PRCI.HFROSCCFG.ClearBits(sifive.PRCI_HFROSCCFG_ENABLE)
@@ -147,7 +147,3 @@ func handleException(code uint) {
 	println()
 	abort()
 }
-
-// callInterruptHandler is a compiler-generated function that calls the
-// appropriate interrupt handler for the given interrupt ID.
-func callInterruptHandler(id int)

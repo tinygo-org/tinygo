@@ -343,6 +343,13 @@ const (
 	UART2_RX_PIN = PIN_SERIAL2_RX
 )
 
+var (
+	UART1 = &sercomUSART2
+
+	// RTL8720D
+	UART2 = &sercomUSART1
+)
+
 // I2C pins
 const (
 	SDA0_PIN = PIN_WIRE_SDA // SDA: SERCOM3/PAD[0]
@@ -353,6 +360,12 @@ const (
 
 	SDA_PIN = SDA0_PIN
 	SCL_PIN = SCL0_PIN
+)
+
+// I2C on the Wio Terminal
+var (
+	I2C0 = sercomI2CM4
+	I2C1 = sercomI2CM4
 )
 
 // SPI pins
@@ -375,6 +388,20 @@ const (
 	SPI3_SCK_PIN = SCK3 // SCK:  SERCOM7/PAD[1]
 	SPI3_SDO_PIN = SDO3 // SDO: SERCOM7/PAD[3]
 	SPI3_SDI_PIN = SDI3 // SDI: SERCOM7/PAD[2]
+)
+
+// SPI on the Wio Terminal
+var (
+	SPI0 = sercomSPIM5
+
+	// RTL8720D
+	SPI1 = sercomSPIM0
+
+	// SD
+	SPI2 = sercomSPIM6
+
+	// LCD
+	SPI3 = sercomSPIM7
 )
 
 // USB CDC identifiers

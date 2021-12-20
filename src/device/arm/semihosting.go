@@ -33,28 +33,29 @@ const (
 )
 
 // Special codes for the Angel Semihosting interface.
+// https://www.keil.com/support/man/docs/armcc/armcc_pge1358787050566.htm
 const (
 	// Hardware vector reason codes
-	SemihostingBranchThroughZero = 20000
-	SemihostingUndefinedInstr    = 20001
-	SemihostingSoftwareInterrupt = 20002
-	SemihostingPrefetchAbort     = 20003
-	SemihostingDataAbort         = 20004
-	SemihostingAddressException  = 20005
-	SemihostingIRQ               = 20006
-	SemihostingFIQ               = 20007
+	SemihostingBranchThroughZero = 0x20000
+	SemihostingUndefinedInstr    = 0x20001
+	SemihostingSoftwareInterrupt = 0x20002
+	SemihostingPrefetchAbort     = 0x20003
+	SemihostingDataAbort         = 0x20004
+	SemihostingAddressException  = 0x20005
+	SemihostingIRQ               = 0x20006
+	SemihostingFIQ               = 0x20007
 
 	// Software reason codes
-	SemihostingBreakPoint          = 20020
-	SemihostingWatchPoint          = 20021
-	SemihostingStepComplete        = 20022
-	SemihostingRunTimeErrorUnknown = 20023
-	SemihostingInternalError       = 20024
-	SemihostingUserInterruption    = 20025
-	SemihostingApplicationExit     = 20026
-	SemihostingStackOverflow       = 20027
-	SemihostingDivisionByZero      = 20028
-	SemihostingOSSpecific          = 20029
+	SemihostingBreakPoint          = 0x20020
+	SemihostingWatchPoint          = 0x20021
+	SemihostingStepComplete        = 0x20022
+	SemihostingRunTimeErrorUnknown = 0x20023
+	SemihostingInternalError       = 0x20024
+	SemihostingUserInterruption    = 0x20025
+	SemihostingApplicationExit     = 0x20026
+	SemihostingStackOverflow       = 0x20027
+	SemihostingDivisionByZero      = 0x20028
+	SemihostingOSSpecific          = 0x20029
 )
 
 // Call a semihosting function.

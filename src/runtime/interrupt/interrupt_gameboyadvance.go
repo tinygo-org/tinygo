@@ -7,6 +7,23 @@ import (
 	"unsafe"
 )
 
+const (
+	IRQ_VBLANK  = 0
+	IRQ_HBLANK  = 1
+	IRQ_VCOUNT  = 2
+	IRQ_TIMER0  = 3
+	IRQ_TIMER1  = 4
+	IRQ_TIMER2  = 5
+	IRQ_TIMER3  = 6
+	IRQ_COM     = 7
+	IRQ_DMA0    = 8
+	IRQ_DMA1    = 9
+	IRQ_DMA2    = 10
+	IRQ_DMA3    = 11
+	IRQ_KEYPAD  = 12
+	IRQ_GAMEPAK = 13
+)
+
 var (
 	regInterruptEnable       = (*volatile.Register16)(unsafe.Pointer(uintptr(0x4000200)))
 	regInterruptRequestFlags = (*volatile.Register16)(unsafe.Pointer(uintptr(0x4000202)))
@@ -30,10 +47,44 @@ func handleInterrupt() {
 	}
 }
 
-// callInterruptHandler is a compiler-generated function that calls the
-// appropriate interrupt handler for the given interrupt ID.
-//go:linkname callInterruptHandler runtime.callInterruptHandler
-func callInterruptHandler(id int)
+// Pseudo function call that is replaced by the compiler with the actual
+// functions registered through interrupt.New. If there are none, calls will be
+// replaced with 'unreachablecalls will be replaced with 'unreachable'.
+//go:linkname callHandlers runtime/interrupt.callHandlers
+func callHandlers(num int)
+
+func callInterruptHandler(id int) {
+	switch id {
+	case IRQ_VBLANK:
+		callHandlers(IRQ_VBLANK)
+	case IRQ_HBLANK:
+		callHandlers(IRQ_HBLANK)
+	case IRQ_VCOUNT:
+		callHandlers(IRQ_VCOUNT)
+	case IRQ_TIMER0:
+		callHandlers(IRQ_TIMER0)
+	case IRQ_TIMER1:
+		callHandlers(IRQ_TIMER1)
+	case IRQ_TIMER2:
+		callHandlers(IRQ_TIMER2)
+	case IRQ_TIMER3:
+		callHandlers(IRQ_TIMER3)
+	case IRQ_COM:
+		callHandlers(IRQ_COM)
+	case IRQ_DMA0:
+		callHandlers(IRQ_DMA0)
+	case IRQ_DMA1:
+		callHandlers(IRQ_DMA1)
+	case IRQ_DMA2:
+		callHandlers(IRQ_DMA2)
+	case IRQ_DMA3:
+		callHandlers(IRQ_DMA3)
+	case IRQ_KEYPAD:
+		callHandlers(IRQ_KEYPAD)
+	case IRQ_GAMEPAK:
+		callHandlers(IRQ_GAMEPAK)
+	}
+}
 
 // State represents the previous global interrupt state.
 type State uint8

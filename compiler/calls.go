@@ -63,10 +63,10 @@ func (c *compilerContext) expandFormalParamType(t llvm.Type, name string, goType
 	case llvm.StructTypeKind:
 		fieldInfos := c.flattenAggregateType(t, name, goType)
 		if len(fieldInfos) <= maxFieldsPerParam {
+			// managed to expand this parameter
 			return fieldInfos
-		} else {
-			// failed to lower
 		}
+		// failed to expand this parameter: too many fields
 	}
 	// TODO: split small arrays
 	return []paramInfo{

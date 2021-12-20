@@ -334,6 +334,34 @@ reflect type: ptr
     exported: false
     reflect type: int addrable=true
       int: 42
+reflect type: slice comparable=false
+  slice: interface 3 3
+  pointer: true
+  nil: false
+  indexing: 0
+  reflect type: interface settable=true addrable=true
+    interface
+    nil: false
+    reflect type: int
+      int: 3
+  indexing: 1
+  reflect type: interface settable=true addrable=true
+    interface
+    nil: false
+    reflect type: string
+      string: str 3
+      reflect type: uint8
+        uint: 115
+      reflect type: uint8
+        uint: 116
+      reflect type: uint8
+        uint: 114
+  indexing: 2
+  reflect type: interface settable=true addrable=true
+    interface
+    nil: false
+    reflect type: complex128
+      complex: (-4.000000e+000+2.500000e+000i)
 reflect type: ptr
   pointer: true int8
   nil: false
@@ -377,3 +405,7 @@ type assertion succeeded for unreferenced type
 
 struct tags
 blue gopher
+
+v.Interface() method
+kind: interface
+int 5

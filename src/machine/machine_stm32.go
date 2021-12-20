@@ -51,7 +51,8 @@ func (p Pin) Set(high bool) {
 	}
 }
 
-// Get returns the current value of a GPIO pin.
+// Get returns the current value of a GPIO pin when the pin is configured as an
+// input or as an output.
 func (p Pin) Get() bool {
 	port := p.getPort()
 	pin := uint8(p) % 16

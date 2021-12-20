@@ -5,9 +5,10 @@ MEMORY
     RAM (xrw)       : ORIGIN = 0x20000000 + 0x000039c0, LENGTH = 256K - 0x000039c0
 }
 
-_stack_size = 4K;
+_stack_size = 4K + __softdevice_stack;
 
 /* This value is needed by the Nordic SoftDevice. */
 __app_ram_base = ORIGIN(RAM);
+__softdevice_stack = DEFINED(__softdevice_stack) ? __softdevice_stack : 0;
 
 INCLUDE "targets/arm.ld"

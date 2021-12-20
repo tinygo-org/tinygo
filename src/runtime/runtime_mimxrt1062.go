@@ -43,7 +43,7 @@ func main() {
 	arm.EnableInterrupts(irq)
 
 	run()
-	abort()
+	exit(0)
 }
 
 func getRamSizeConfig(itcmKB, dtcmKB uint32) uint32 {
@@ -125,6 +125,10 @@ func initUART() {
 
 func putchar(c byte) {
 	machine.UART1.WriteByte(c)
+}
+
+func exit(code int) {
+	abort()
 }
 
 func abort() {

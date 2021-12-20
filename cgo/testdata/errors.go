@@ -14,6 +14,12 @@ typedef someType noType; // undefined type
 #define SOME_CONST_2 6) // const not used (so no error)
 #define SOME_CONST_3 1234 // const too large for byte
 */
+//
+//
+// #define SOME_CONST_4 8) // after some empty lines
+import "C"
+
+// #warning another warning
 import "C"
 
 // Make sure that errors for the following lines won't change with future
@@ -30,4 +36,6 @@ var (
 	_ = C.SOME_CONST_1
 
 	_ byte = C.SOME_CONST_3
+
+	_ = C.SOME_CONST_4
 )

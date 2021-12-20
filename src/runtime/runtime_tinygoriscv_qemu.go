@@ -21,7 +21,7 @@ func postinit() {}
 func main() {
 	preinit()
 	run()
-	abort()
+	exit(0)
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
@@ -49,7 +49,7 @@ var (
 	// UART0 output register.
 	stdoutWrite = (*volatile.Register8)(unsafe.Pointer(uintptr(0x10000000)))
 	// SiFive test finisher
-	testFinisher = (*volatile.Register16)(unsafe.Pointer(uintptr(0x100000)))
+	testFinisher = (*volatile.Register32)(unsafe.Pointer(uintptr(0x100000)))
 )
 
 func putchar(c byte) {
@@ -57,8 +57,17 @@ func putchar(c byte) {
 }
 
 func abort() {
+	exit(1)
+}
+
+func exit(code int) {
 	// Make sure the QEMU process exits.
-	testFinisher.Set(0x5555) // FINISHER_PASS
+	if code == 0 {
+		testFinisher.Set(0x5555) // FINISHER_PASS
+	} else {
+		// Exit code is stored in the upper 16 bits of the 32 bit value.
+		testFinisher.Set(uint32(code)<<16 | 0x3333) // FINISHER_FAIL
+	}
 
 	// Lock up forever (as a fallback).
 	for {

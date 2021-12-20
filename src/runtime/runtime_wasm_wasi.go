@@ -17,7 +17,6 @@ func _start() {
 	// These need to be initialized early so that the heap can be initialized.
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
-	__wasm_call_ctors()
 	run()
 }
 
@@ -26,29 +25,39 @@ func _start() {
 //
 //     wasmtime ./program.wasm arg1 arg2
 func init() {
-	// Read the number of args (argc) and the buffer size required to store all
-	// these args (argv).
-	var argc, argv_buf_size uint32
-	args_sizes_get(&argc, &argv_buf_size)
-	if argc == 0 {
-		return
-	}
+	__wasm_call_ctors()
+}
 
-	// Obtain the command line arguments
-	argsSlice := make([]unsafe.Pointer, argc)
-	buf := make([]byte, argv_buf_size)
-	args_get(&argsSlice[0], unsafe.Pointer(&buf[0]))
+var args []string
 
-	// Convert the array of C strings to an array of Go strings.
-	args = make([]string, argc)
-	for i, cstr := range argsSlice {
-		length := strlen(cstr)
-		argString := _string{
-			length: length,
-			ptr:    (*byte)(cstr),
+//go:linkname os_runtime_args os.runtime_args
+func os_runtime_args() []string {
+	if args == nil {
+		// Read the number of args (argc) and the buffer size required to store
+		// all these args (argv).
+		var argc, argv_buf_size uint32
+		args_sizes_get(&argc, &argv_buf_size)
+		if argc == 0 {
+			return nil
 		}
-		args[i] = *(*string)(unsafe.Pointer(&argString))
+
+		// Obtain the command line arguments
+		argsSlice := make([]unsafe.Pointer, argc)
+		buf := make([]byte, argv_buf_size)
+		args_get(&argsSlice[0], unsafe.Pointer(&buf[0]))
+
+		// Convert the array of C strings to an array of Go strings.
+		args = make([]string, argc)
+		for i, cstr := range argsSlice {
+			length := strlen(cstr)
+			argString := _string{
+				length: length,
+				ptr:    (*byte)(cstr),
+			}
+			args[i] = *(*string)(unsafe.Pointer(&argString))
+		}
 	}
+	return args
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {

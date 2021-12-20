@@ -67,63 +67,26 @@ func TestCompiler(t *testing.T) {
 		// This makes it possible to run one specific test (instead of all),
 		// which is especially useful to quickly check whether some changes
 		// affect a particular target architecture.
-		runPlatTests(*testTarget, tests, t)
+		runPlatTests(optionsFromTarget(*testTarget), tests, t)
 		return
 	}
 
-	if runtime.GOOS != "windows" {
-		t.Run("Host", func(t *testing.T) {
-			runPlatTests("", tests, t)
-		})
-	}
-
-	if testing.Short() {
-		return
-	}
-
-	t.Run("EmulatedCortexM3", func(t *testing.T) {
-		runPlatTests("cortex-m-qemu", tests, t)
+	t.Run("Host", func(t *testing.T) {
+		runPlatTests(optionsFromTarget(""), tests, t)
 	})
-
-	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-		// Note: running only on Windows and macOS because Linux (as of 2020)
-		// usually has an outdated QEMU version that doesn't support RISC-V yet.
-		t.Run("EmulatedRISCV", func(t *testing.T) {
-			runPlatTests("riscv-qemu", tests, t)
-		})
-	}
-
-	if runtime.GOOS == "linux" {
-		t.Run("X86Linux", func(t *testing.T) {
-			runPlatTests("i386--linux-gnu", tests, t)
-		})
-		t.Run("ARMLinux", func(t *testing.T) {
-			runPlatTests("arm--linux-gnueabihf", tests, t)
-		})
-		t.Run("ARM64Linux", func(t *testing.T) {
-			runPlatTests("aarch64--linux-gnu", tests, t)
-		})
-		t.Run("WebAssembly", func(t *testing.T) {
-			runPlatTests("wasm", tests, t)
-		})
-		t.Run("WASI", func(t *testing.T) {
-			runPlatTests("wasi", tests, t)
-		})
-	}
 
 	// Test a few build options.
 	t.Run("build-options", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			// These tests assume a host that is supported by TinyGo.
-			t.Skip("can't test build options on Windows")
-		}
 		t.Parallel()
 
 		// Test with few optimizations enabled (no inlining, etc).
 		t.Run("opt=1", func(t *testing.T) {
 			t.Parallel()
-			runTestWithConfig("stdlib.go", "", t, compileopts.Options{
-				Opt: "1",
+			runTestWithConfig("stdlib.go", t, compileopts.Options{
+				GOOS:   goenv.Get("GOOS"),
+				GOARCH: goenv.Get("GOARCH"),
+				GOARM:  goenv.Get("GOARM"),
+				Opt:    "1",
 			}, nil, nil)
 		})
 
@@ -131,14 +94,20 @@ func TestCompiler(t *testing.T) {
 		// TODO: fix this for stdlib.go, which currently fails.
 		t.Run("opt=0", func(t *testing.T) {
 			t.Parallel()
-			runTestWithConfig("print.go", "", t, compileopts.Options{
-				Opt: "0",
+			runTestWithConfig("print.go", t, compileopts.Options{
+				GOOS:   goenv.Get("GOOS"),
+				GOARCH: goenv.Get("GOARCH"),
+				GOARM:  goenv.Get("GOARM"),
+				Opt:    "0",
 			}, nil, nil)
 		})
 
 		t.Run("ldflags", func(t *testing.T) {
 			t.Parallel()
-			runTestWithConfig("ldflags.go", "", t, compileopts.Options{
+			runTestWithConfig("ldflags.go", t, compileopts.Options{
+				GOOS:   goenv.Get("GOOS"),
+				GOARCH: goenv.Get("GOARCH"),
+				GOARM:  goenv.Get("GOARM"),
 				GlobalValues: map[string]map[string]string{
 					"main": {
 						"someGlobal": "foobar",
@@ -147,32 +116,72 @@ func TestCompiler(t *testing.T) {
 			}, nil, nil)
 		})
 	})
+
+	if testing.Short() {
+		// Don't test other targets when the -short flag is used. Only test the
+		// host system.
+		return
+	}
+
+	t.Run("EmulatedCortexM3", func(t *testing.T) {
+		runPlatTests(optionsFromTarget("cortex-m-qemu"), tests, t)
+	})
+
+	t.Run("EmulatedRISCV", func(t *testing.T) {
+		runPlatTests(optionsFromTarget("riscv-qemu"), tests, t)
+	})
+
+	if runtime.GOOS == "linux" {
+		t.Run("X86Linux", func(t *testing.T) {
+			runPlatTests(optionsFromOSARCH("linux/386"), tests, t)
+		})
+		t.Run("ARMLinux", func(t *testing.T) {
+			runPlatTests(optionsFromOSARCH("linux/arm/6"), tests, t)
+		})
+		t.Run("ARM64Linux", func(t *testing.T) {
+			runPlatTests(optionsFromOSARCH("linux/arm64"), tests, t)
+		})
+		t.Run("WebAssembly", func(t *testing.T) {
+			runPlatTests(optionsFromTarget("wasm"), tests, t)
+		})
+		t.Run("WASI", func(t *testing.T) {
+			runPlatTests(optionsFromTarget("wasi"), tests, t)
+		})
+	}
 }
 
-func runPlatTests(target string, tests []string, t *testing.T) {
+func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	t.Parallel()
 
 	for _, name := range tests {
 		name := name // redefine to avoid race condition
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			runTest(name, target, t, nil, nil)
+			runTest(name, options, t, nil, nil)
 		})
 	}
 	t.Run("env.go", func(t *testing.T) {
 		t.Parallel()
-		runTest("env.go", target, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
+		runTest("env.go", options, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
 	})
-	if target == "" || target == "wasi" {
-		t.Run("filesystem.go", func(t *testing.T) {
+	if options.Target == "wasi" || options.Target == "wasm" {
+		t.Run("alias.go-scheduler-none", func(t *testing.T) {
 			t.Parallel()
-			runTest("filesystem.go", target, t, nil, nil)
+			options := compileopts.Options(options)
+			options.Scheduler = "none"
+			runTest("alias.go", options, t, nil, nil)
 		})
 	}
-	if target == "" || target == "wasi" || target == "wasm" {
+	if options.Target == "" || options.Target == "wasi" {
+		t.Run("filesystem.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("filesystem.go", options, t, nil, nil)
+		})
+	}
+	if options.Target == "" || options.Target == "wasi" || options.Target == "wasm" {
 		t.Run("rand.go", func(t *testing.T) {
 			t.Parallel()
-			runTest("rand.go", target, t, nil, nil)
+			runTest("rand.go", options, t, nil, nil)
 		})
 	}
 }
@@ -189,14 +198,36 @@ func runBuild(src, out string, opts *compileopts.Options) error {
 	return Build(src, out, opts)
 }
 
-func runTest(name, target string, t *testing.T, cmdArgs, environmentVars []string) {
-	options := compileopts.Options{
+func optionsFromTarget(target string) compileopts.Options {
+	return compileopts.Options{
+		// GOOS/GOARCH are only used if target == ""
+		GOOS:   goenv.Get("GOOS"),
+		GOARCH: goenv.Get("GOARCH"),
+		GOARM:  goenv.Get("GOARM"),
 		Target: target,
 	}
-	runTestWithConfig(name, target, t, options, cmdArgs, environmentVars)
 }
 
-func runTestWithConfig(name, target string, t *testing.T, options compileopts.Options, cmdArgs, environmentVars []string) {
+// optionsFromOSARCH returns a set of options based on the "osarch" string. This
+// string is in the form of "os/arch/subarch", with the subarch only sometimes
+// being necessary. Examples are "darwin/amd64" or "linux/arm/7".
+func optionsFromOSARCH(osarch string) compileopts.Options {
+	parts := strings.Split(osarch, "/")
+	options := compileopts.Options{
+		GOOS:   parts[0],
+		GOARCH: parts[1],
+	}
+	if options.GOARCH == "arm" {
+		options.GOARM = parts[2]
+	}
+	return options
+}
+
+func runTest(name string, options compileopts.Options, t *testing.T, cmdArgs, environmentVars []string) {
+	runTestWithConfig(name, t, options, cmdArgs, environmentVars)
+}
+
+func runTestWithConfig(name string, t *testing.T, options compileopts.Options, cmdArgs, environmentVars []string) {
 	// Set default config.
 	options.Debug = true
 	options.VerifyIR = true
@@ -227,7 +258,7 @@ func runTestWithConfig(name, target string, t *testing.T, options compileopts.Op
 	// we need to pass command line arguments and environment variables through
 	// global variables (built into the binary directly) instead of the
 	// conventional way.
-	spec, err := compileopts.LoadTarget(target)
+	spec, err := compileopts.LoadTarget(&options)
 	if err != nil {
 		t.Fatal("failed to load target spec:", err)
 	}
@@ -259,6 +290,9 @@ func runTestWithConfig(name, target string, t *testing.T, options compileopts.Op
 
 	// Build the test binary.
 	binary := filepath.Join(tmpdir, "test")
+	if spec.GOOS == "windows" {
+		binary += ".exe"
+	}
 	err = runBuild("./"+path, binary, &options)
 	if err != nil {
 		printCompilerError(t.Log, err)
@@ -300,7 +334,13 @@ func runTestWithConfig(name, target string, t *testing.T, options compileopts.Op
 	}
 	go func() {
 		// Terminate the process if it runs too long.
-		timer := time.NewTimer(10 * time.Second)
+		maxDuration := 10 * time.Second
+		if runtime.GOOS == "windows" {
+			// For some reason, tests on Windows can take around
+			// 30s to complete. TODO: investigate why and fix this.
+			maxDuration = 40 * time.Second
+		}
+		timer := time.NewTimer(maxDuration)
 		select {
 		case <-runComplete:
 			timer.Stop()
@@ -314,9 +354,6 @@ func runTestWithConfig(name, target string, t *testing.T, options compileopts.Op
 		}
 	}()
 	err = cmd.Wait()
-	if _, ok := err.(*exec.ExitError); ok && target != "" {
-		err = nil // workaround for QEMU
-	}
 	close(runComplete)
 
 	if ranTooLong {
@@ -333,7 +370,7 @@ func runTestWithConfig(name, target string, t *testing.T, options compileopts.Op
 		t.Log("failed to run:", err)
 		fail = true
 	} else if !bytes.Equal(expected, actual) {
-		t.Log("output did not match")
+		t.Logf("output did not match (expected %d bytes, got %d bytes):", len(expected), len(actual))
 		fail = true
 	}
 

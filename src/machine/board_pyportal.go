@@ -107,10 +107,21 @@ const (
 	UART_RX_PIN = D0
 )
 
+var (
+	UART1 = &sercomUSART4
+
+	DefaultUART = UART1
+)
+
 // I2C pins
 const (
 	SDA_PIN = PB02 // SDA: SERCOM2/PAD[0]
 	SCL_PIN = PB03 // SCL: SERCOM2/PAD[1]
+)
+
+// I2C on the PyPortal.
+var (
+	I2C0 = sercomI2CM5
 )
 
 // SPI pins
@@ -122,6 +133,12 @@ const (
 	NINA_SDO = SPI0_SDO_PIN
 	NINA_SDI = SPI0_SDI_PIN
 	NINA_SCK = SPI0_SCK_PIN
+)
+
+// SPI on the PyPortal.
+var (
+	SPI0     = sercomSPIM2
+	NINA_SPI = SPI0
 )
 
 // USB CDC identifiers

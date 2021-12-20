@@ -67,6 +67,14 @@ func (v Value) Interface() interface{} {
 // valueInterfaceUnsafe is used by the runtime to hash map keys. It should not
 // be subject to the isExported check.
 func valueInterfaceUnsafe(v Value) interface{} {
+	if v.typecode.Kind() == Interface {
+		// The value itself is an interface. This can happen when getting the
+		// value of a struct field of interface type, like this:
+		//     type T struct {
+		//         X interface{}
+		//     }
+		return *(*interface{})(v.value)
+	}
 	if v.isIndirect() && v.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
 		// Value was indirect but must be put back directly in the interface
 		// value.
@@ -132,10 +140,7 @@ func (v Value) IsNil() bool {
 func (v Value) Pointer() uintptr {
 	switch v.Kind() {
 	case Chan, Map, Ptr, UnsafePointer:
-		if v.isIndirect() {
-			return *(*uintptr)(v.value)
-		}
-		return uintptr(v.value)
+		return uintptr(v.pointer())
 	case Slice:
 		slice := (*sliceHeader)(v.value)
 		return uintptr(slice.data)
@@ -144,6 +149,15 @@ func (v Value) Pointer() uintptr {
 	default: // not implemented: Func
 		panic(&ValueError{"Pointer"})
 	}
+}
+
+// pointer returns the underlying pointer represented by v.
+// v.Kind() must be Ptr, Map, Chan, or UnsafePointer
+func (v Value) pointer() unsafe.Pointer {
+	if v.isIndirect() {
+		return *(*unsafe.Pointer)(v.value)
+	}
+	return v.value
 }
 
 func (v Value) IsValid() bool {
@@ -392,7 +406,14 @@ func (v Value) Elem() Value {
 			value:    ptr,
 			flags:    v.flags | valueFlagIndirect,
 		}
-	default: // not implemented: Interface
+	case Interface:
+		typecode, value := decomposeInterface(*(*interface{})(v.value))
+		return Value{
+			typecode: typecode,
+			value:    value,
+			flags:    v.flags &^ valueFlagIndirect,
+		}
+	default:
 		panic(&ValueError{"Elem"})
 	}
 }
@@ -513,11 +534,17 @@ func (v Value) Index(i int) Value {
 		if size > unsafe.Sizeof(uintptr(0)) {
 			// The element fits in a pointer, but the array does not.
 			// Load the value from the pointer.
-			addr := uintptr(v.value) + elemSize*uintptr(i) // pointer to new value
+			addr := unsafe.Pointer(uintptr(v.value) + elemSize*uintptr(i)) // pointer to new value
+			value := addr
+			if !v.isIndirect() {
+				// Use a pointer to the value (don't load the value) if the
+				// 'indirect' flag is set.
+				value = unsafe.Pointer(loadValue(addr, elemSize))
+			}
 			return Value{
 				typecode: v.typecode.elem(),
 				flags:    v.flags,
-				value:    unsafe.Pointer(loadValue(unsafe.Pointer(addr), elemSize)),
+				value:    value,
 			}
 		}
 
@@ -729,7 +756,7 @@ func Zero(typ Type) Value {
 func New(typ Type) Value {
 	return Value{
 		typecode: PtrTo(typ).(rawType),
-		value:    alloc(typ.Size()),
+		value:    alloc(typ.Size(), nil),
 		flags:    valueFlagExported,
 	}
 }
@@ -778,7 +805,7 @@ func (e *ValueError) Error() string {
 func memcpy(dst, src unsafe.Pointer, size uintptr)
 
 //go:linkname alloc runtime.alloc
-func alloc(size uintptr) unsafe.Pointer
+func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 
 //go:linkname sliceAppend runtime.sliceAppend
 func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintptr, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr)

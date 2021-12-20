@@ -38,7 +38,7 @@ func growHeap() bool {
 
 //export malloc
 func libc_malloc(size uintptr) unsafe.Pointer {
-	return alloc(size)
+	return alloc(size, nil)
 }
 
 //export free
@@ -46,9 +46,14 @@ func libc_free(ptr unsafe.Pointer) {
 	free(ptr)
 }
 
+//export runtime_putchar
+func runtime_putchar(c byte) {
+	putchar(c)
+}
+
 //go:linkname syscall_Exit syscall.Exit
 func syscall_Exit(code int) {
-	abort()
+	exit(code)
 }
 
 const baremetal = true

@@ -234,11 +234,15 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// Get the requested memory size to be allocated.
 				size := operands[1].Uint()
 
+				// Get the object layout, if it is available.
+				llvmLayoutType := r.getLLVMTypeFromLayout(operands[2])
+
 				// Create the object.
 				alloc := object{
-					globalName: r.pkgName + "$alloc",
-					buffer:     newRawValue(uint32(size)),
-					size:       uint32(size),
+					globalName:     r.pkgName + "$alloc",
+					llvmLayoutType: llvmLayoutType,
+					buffer:         newRawValue(uint32(size)),
+					size:           uint32(size),
 				}
 				index := len(r.objects)
 				r.objects = append(r.objects, alloc)
@@ -378,7 +382,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				} else {
 					locals[inst.localIndex] = literalValue{uint8(0)}
 				}
-			case callFn.name == "runtime.interfaceImplements":
+			case strings.HasSuffix(callFn.name, ".$typeassert"):
 				if r.debug {
 					fmt.Fprintln(os.Stderr, indent+"interface assert:", operands[1:])
 				}
@@ -393,11 +397,9 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					return nil, mem, r.errorAt(inst, err)
 				}
 				methodSet := mem.get(methodSetPtr.index()).llvmGlobal.Initializer()
-				interfaceMethodSetPtr, err := operands[2].asPointer(r)
-				if err != nil {
-					return nil, mem, r.errorAt(inst, err)
-				}
-				interfaceMethodSet := mem.get(interfaceMethodSetPtr.index()).llvmGlobal.Initializer()
+				llvmFn := inst.llvmInst.CalledValue()
+				methodSetAttr := llvmFn.GetStringAttributeAtIndex(-1, "tinygo-methods")
+				methodSetString := methodSetAttr.GetStringValue()
 
 				// Make a set of all the methods on the concrete type, for
 				// easier checking in the next step.
@@ -412,8 +414,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// of defined methods calculated above. This is the interface
 				// assert itself.
 				assertOk := uint8(1) // i1 true
-				for i := 0; i < interfaceMethodSet.Type().ArrayLength(); i++ {
-					name := llvm.ConstExtractValue(interfaceMethodSet, []uint32{uint32(i)}).Name()
+				for _, name := range strings.Split(methodSetString, "; ") {
 					if _, ok := concreteTypeMethods[name]; !ok {
 						// There is a method on the interface that is not
 						// implemented by the type. The assertion will fail.
@@ -423,20 +424,20 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 				// If assertOk is still 1, the assertion succeeded.
 				locals[inst.localIndex] = literalValue{assertOk}
-			case callFn.name == "runtime.interfaceMethod":
-				// This builtin returns the function (which may be a thunk) to
-				// invoke a method on an interface. It does not call the method.
+			case strings.HasSuffix(callFn.name, "$invoke"):
+				// This thunk is the interface method dispatcher: it is called
+				// with all regular parameters and a type code. It will then
+				// call the concrete method for it.
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"interface method:", operands[1:])
+					fmt.Fprintln(os.Stderr, indent+"invoke method:", operands[1:])
 				}
 
-				// Load the first param, which is the type code (ptrtoint of the
-				// type code global).
-				typecodeIDPtrToInt, err := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem)
+				// Load the type code of the interface value.
+				typecodeIDBitCast, err := operands[len(operands)-3].toLLVMValue(inst.llvmInst.Operand(len(operands)-4).Type(), &mem)
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
-				typecodeID := typecodeIDPtrToInt.Operand(0).Initializer()
+				typecodeID := typecodeIDBitCast.Operand(0).Initializer()
 
 				// Load the method set, which is part of the typecodeID object.
 				methodSet := llvm.ConstExtractValue(typecodeID, []uint32{2}).Operand(0).Initializer()
@@ -444,7 +445,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// We don't need to load the interface method set.
 
 				// Load the signature of the to-be-called function.
-				signature := inst.llvmInst.Operand(2)
+				llvmFn := inst.llvmInst.CalledValue()
+				invokeAttr := llvmFn.GetStringAttributeAtIndex(-1, "tinygo-invoke")
+				invokeName := invokeAttr.GetStringValue()
+				signature := r.mod.NamedGlobal(invokeName)
 
 				// Iterate through all methods, looking for the one method that
 				// should be returned.
@@ -457,9 +461,13 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					}
 				}
 				if method.IsNil() {
-					return nil, mem, r.errorAt(inst, errors.New("could not find method: "+signature.Name()))
+					return nil, mem, r.errorAt(inst, errors.New("could not find method: "+invokeName))
 				}
-				locals[inst.localIndex] = r.getValue(method)
+
+				// Change the to-be-called function to the underlying method to
+				// be called and fall through to the default case.
+				callFn = r.getFunction(method)
+				fallthrough
 			default:
 				if len(callFn.blocks) == 0 {
 					// Call to a function declaration without a definition
@@ -933,6 +941,7 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		agg := operands[0]
 		for i := 0; i < len(indices)-1; i++ {
 			agg = r.builder.CreateExtractValue(agg, int(indices[i]), inst.name+".agg")
+			mem.instructions = append(mem.instructions, agg)
 		}
 		result = r.builder.CreateExtractValue(agg, int(indices[len(indices)-1]), inst.name)
 	case llvm.InsertValue:
@@ -945,11 +954,15 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		for i := 0; i < len(indices)-1; i++ {
 			agg = r.builder.CreateExtractValue(agg, int(indices[i]), inst.name+".agg"+strconv.Itoa(i))
 			aggregates = append(aggregates, agg)
+			mem.instructions = append(mem.instructions, agg)
 		}
 		result = operands[1]
 		for i := len(indices) - 1; i >= 0; i-- {
 			agg := aggregates[i]
 			result = r.builder.CreateInsertValue(agg, result, int(indices[i]), inst.name+".insertvalue"+strconv.Itoa(i))
+			if i != 0 { // don't add last result to mem.instructions as it will be done at the end already
+				mem.instructions = append(mem.instructions, result)
+			}
 		}
 
 	case llvm.Add:

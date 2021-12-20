@@ -3,32 +3,27 @@ package transform
 // This file provides function to lower interface intrinsics to their final LLVM
 // form, optimizing them in the process.
 //
-// During SSA construction, the following pseudo-calls are created:
+// During SSA construction, the following pseudo-call is created (see
+// src/runtime/interface.go):
 //     runtime.typeAssert(typecode, assertedType)
-//     runtime.interfaceImplements(typecode, interfaceMethodSet)
-//     runtime.interfaceMethod(typecode, interfaceMethodSet, signature)
-// See src/runtime/interface.go for details.
-// These calls are to declared but not defined functions, so the optimizer will
-// leave them alone.
+// Additionally, interface type asserts and interface invoke functions are
+// declared but not defined, so the optimizer will leave them alone.
 //
-// This pass lowers the above functions to their final form:
+// This pass lowers these functions to their final form:
 //
 // typeAssert:
 //     Replaced with an icmp instruction so it can be directly used in a type
 //     switch. This is very easy to optimize for LLVM: it will often translate a
 //     type switch into a regular switch statement.
 //
-// interfaceImplements:
-//     This call is translated into a call that checks whether the underlying
-//     type is one of the types implementing this interface.
+// interface type assert:
+//     These functions are defined by creating a big type switch over all the
+//     concrete types implementing this interface.
 //
-// interfaceMethod:
-//     This call is replaced with a call to a function that calls the
-//     appropriate method depending on the underlying type.
-//     When there is only one type implementing this interface, this call is
-//     translated into a direct call of that method.
-//     When there is no type implementing this interface, this code is marked
-//     unreachable as there is no way such an interface could be constructed.
+// interface invoke:
+//     These functions are defined with a similar type switch, but instead of
+//     checking for the appropriate type, these functions will call the
+//     underlying method instead.
 //
 // Note that this way of implementing interfaces is very different from how the
 // main Go compiler implements them. For more details on how the main Go
@@ -38,7 +33,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"github.com/tinygo-org/tinygo/compileopts"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -46,27 +41,8 @@ import (
 // any method in particular.
 type signatureInfo struct {
 	name       string
-	global     llvm.Value
 	methods    []*methodInfo
 	interfaces []*interfaceInfo
-}
-
-// methodName takes a method name like "func String()" and returns only the
-// name, which is "String" in this case.
-func (s *signatureInfo) methodName() string {
-	var methodName string
-	if strings.HasPrefix(s.name, "reflect/methods.") {
-		methodName = s.name[len("reflect/methods."):]
-	} else if idx := strings.LastIndex(s.name, ".$methods."); idx >= 0 {
-		methodName = s.name[idx+len(".$methods."):]
-	} else {
-		panic("could not find method name")
-	}
-	if openingParen := strings.IndexByte(methodName, '('); openingParen < 0 {
-		panic("no opening paren in signature name")
-	} else {
-		return methodName[:openingParen]
-	}
 }
 
 // methodInfo describes a single method on a concrete type.
@@ -99,21 +75,9 @@ func (t *typeInfo) getMethod(signature *signatureInfo) *methodInfo {
 // interfaceInfo keeps information about a Go interface type, including all
 // methods it has.
 type interfaceInfo struct {
-	name        string                        // name with $interface suffix
-	methodSet   llvm.Value                    // global which this interfaceInfo describes
-	signatures  []*signatureInfo              // method set
-	types       []*typeInfo                   // types this interface implements
-	assertFunc  llvm.Value                    // runtime.interfaceImplements replacement
-	methodFuncs map[*signatureInfo]llvm.Value // runtime.interfaceMethod replacements for each signature
-}
-
-// id removes the $interface suffix from the name and returns the clean
-// interface name including import path.
-func (itf *interfaceInfo) id() string {
-	if !strings.HasSuffix(itf.name, "$interface") {
-		panic("interface type does not have $interface suffix: " + itf.name)
-	}
-	return itf.name[:len(itf.name)-len("$interface")]
+	name       string                    // "tinygo-methods" attribute
+	signatures map[string]*signatureInfo // method set
+	types      []*typeInfo               // types this interface implements
 }
 
 // lowerInterfacesPass keeps state related to the interface lowering pass. The
@@ -121,8 +85,10 @@ func (itf *interfaceInfo) id() string {
 // should be seen as a regular function call (see LowerInterfaces).
 type lowerInterfacesPass struct {
 	mod         llvm.Module
-	sizeLevel   int // LLVM optimization size level, 1 means -opt=s and 2 means -opt=z
+	config      *compileopts.Config
 	builder     llvm.Builder
+	dibuilder   *llvm.DIBuilder
+	difiles     map[string]llvm.Metadata
 	ctx         llvm.Context
 	uintptrType llvm.Type
 	types       map[string]*typeInfo
@@ -134,10 +100,10 @@ type lowerInterfacesPass struct {
 // emitted by the compiler as higher-level intrinsics. They need some lowering
 // before LLVM can work on them. This is done so that a few cleanup passes can
 // run before assigning the final type codes.
-func LowerInterfaces(mod llvm.Module, sizeLevel int) error {
+func LowerInterfaces(mod llvm.Module, config *compileopts.Config) error {
 	p := &lowerInterfacesPass{
 		mod:         mod,
-		sizeLevel:   sizeLevel,
+		config:      config,
 		builder:     mod.Context().NewBuilder(),
 		ctx:         mod.Context(),
 		uintptrType: mod.Context().IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8),
@@ -145,11 +111,28 @@ func LowerInterfaces(mod llvm.Module, sizeLevel int) error {
 		signatures:  make(map[string]*signatureInfo),
 		interfaces:  make(map[string]*interfaceInfo),
 	}
+
+	if config.Debug() {
+		p.dibuilder = llvm.NewDIBuilder(mod)
+		defer p.dibuilder.Finalize()
+		p.difiles = make(map[string]llvm.Metadata)
+	}
+
 	return p.run()
 }
 
 // run runs the pass itself.
 func (p *lowerInterfacesPass) run() error {
+	if p.dibuilder != nil {
+		p.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
+			Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
+			File:      "<unknown>",
+			Dir:       "",
+			Producer:  "TinyGo",
+			Optimized: true,
+		})
+	}
+
 	// Collect all type codes.
 	for global := p.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
 		if strings.HasPrefix(global.Name(), "reflect/types.type:") {
@@ -173,25 +156,26 @@ func (p *lowerInterfacesPass) run() error {
 		}
 	}
 
-	// Find all interface method calls.
-	interfaceMethod := p.mod.NamedFunction("runtime.interfaceMethod")
-	interfaceMethodUses := getUses(interfaceMethod)
-	for _, use := range interfaceMethodUses {
-		methodSet := use.Operand(1).Operand(0)
-		name := methodSet.Name()
-		if _, ok := p.interfaces[name]; !ok {
-			p.addInterface(methodSet)
+	// Find all interface type asserts and interface method thunks.
+	var interfaceAssertFunctions []llvm.Value
+	var interfaceInvokeFunctions []llvm.Value
+	for fn := p.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		methodsAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
+		if methodsAttr.IsNil() {
+			continue
 		}
-	}
-
-	// Find all interface type asserts.
-	interfaceImplements := p.mod.NamedFunction("runtime.interfaceImplements")
-	interfaceImplementsUses := getUses(interfaceImplements)
-	for _, use := range interfaceImplementsUses {
-		methodSet := use.Operand(1).Operand(0)
-		name := methodSet.Name()
-		if _, ok := p.interfaces[name]; !ok {
-			p.addInterface(methodSet)
+		if !hasUses(fn) {
+			// Don't bother defining this function.
+			continue
+		}
+		p.addInterface(methodsAttr.GetStringValue())
+		invokeAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-invoke")
+		if invokeAttr.IsNil() {
+			// Type assert.
+			interfaceAssertFunctions = append(interfaceAssertFunctions, fn)
+		} else {
+			// Interface invoke.
+			interfaceInvokeFunctions = append(interfaceInvokeFunctions, fn)
 		}
 	}
 
@@ -255,63 +239,20 @@ func (p *lowerInterfacesPass) run() error {
 		})
 	}
 
-	// Replace all interface methods with their uses, if possible.
-	for _, use := range interfaceMethodUses {
-		typecode := use.Operand(0)
-		signature := p.signatures[use.Operand(2).Name()]
-
-		methodSet := use.Operand(1).Operand(0) // global variable
-		itf := p.interfaces[methodSet.Name()]
-
-		// Delegate calling the right function to a special wrapper function.
-		inttoptrs := getUses(use)
-		if len(inttoptrs) != 1 || inttoptrs[0].IsAIntToPtrInst().IsNil() {
-			return errorAt(use, "internal error: expected exactly one inttoptr use of runtime.interfaceMethod")
-		}
-		inttoptr := inttoptrs[0]
-		calls := getUses(inttoptr)
-		for _, call := range calls {
-			// Set up parameters for the call. First copy the regular params...
-			params := make([]llvm.Value, call.OperandsCount())
-			paramTypes := make([]llvm.Type, len(params))
-			for i := 0; i < len(params)-1; i++ {
-				params[i] = call.Operand(i)
-				paramTypes[i] = params[i].Type()
-			}
-			// then add the typecode to the end of the list.
-			params[len(params)-1] = typecode
-			paramTypes[len(params)-1] = p.uintptrType
-
-			// Create a function that redirects the call to the destination
-			// call, after selecting the right concrete type.
-			redirector := p.getInterfaceMethodFunc(itf, signature, call.Type(), paramTypes)
-
-			// Replace the old lookup/inttoptr/call with the new call.
-			p.builder.SetInsertPointBefore(call)
-			retval := p.builder.CreateCall(redirector, append(params, llvm.ConstNull(llvm.PointerType(p.ctx.Int8Type(), 0))), "")
-			if retval.Type().TypeKind() != llvm.VoidTypeKind {
-				call.ReplaceAllUsesWith(retval)
-			}
-			call.EraseFromParentAsInstruction()
-		}
-		inttoptr.EraseFromParentAsInstruction()
-		use.EraseFromParentAsInstruction()
+	// Define all interface invoke thunks.
+	for _, fn := range interfaceInvokeFunctions {
+		methodsAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
+		invokeAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-invoke")
+		itf := p.interfaces[methodsAttr.GetStringValue()]
+		signature := itf.signatures[invokeAttr.GetStringValue()]
+		p.defineInterfaceMethodFunc(fn, itf, signature)
 	}
 
-	// Replace all typeasserts on interface types with matches on their concrete
-	// types, if possible.
-	for _, use := range interfaceImplementsUses {
-		actualType := use.Operand(0)
-
-		methodSet := use.Operand(1).Operand(0) // global variable
-		itf := p.interfaces[methodSet.Name()]
-		// Create a function that does a type switch on all available types
-		// that implement this interface.
-		fn := p.getInterfaceImplementsFunc(itf)
-		p.builder.SetInsertPointBefore(use)
-		commaOk := p.builder.CreateCall(fn, []llvm.Value{actualType}, "typeassert.ok")
-		use.ReplaceAllUsesWith(commaOk)
-		use.EraseFromParentAsInstruction()
+	// Define all interface type assert functions.
+	for _, fn := range interfaceAssertFunctions {
+		methodsAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
+		itf := p.interfaces[methodsAttr.GetStringValue()]
+		p.defineInterfaceImplementsFunc(fn, itf)
 	}
 
 	// Replace each type assert with an actual type comparison or (if the type
@@ -338,11 +279,14 @@ func (p *lowerInterfacesPass) run() error {
 	}
 
 	// Remove all method sets, which are now unnecessary and inhibit later
-	// optimizations if they are left in place.
+	// optimizations if they are left in place. Also remove references to the
+	// interface type assert functions just to be sure.
+	zeroUintptr := llvm.ConstNull(p.uintptrType)
 	for _, t := range p.types {
 		initializer := t.typecode.Initializer()
 		methodSet := llvm.ConstExtractValue(initializer, []uint32{2})
 		initializer = llvm.ConstInsertValue(initializer, llvm.ConstNull(methodSet.Type()), []uint32{2})
+		initializer = llvm.ConstInsertValue(initializer, zeroUintptr, []uint32{4})
 		t.typecode.SetInitializer(initializer)
 	}
 
@@ -367,7 +311,7 @@ func (p *lowerInterfacesPass) addTypeMethods(t *typeInfo, methodSet llvm.Value) 
 		signatureGlobal := llvm.ConstExtractValue(methodData, []uint32{0})
 		signatureName := signatureGlobal.Name()
 		function := llvm.ConstExtractValue(methodData, []uint32{1}).Operand(0)
-		signature := p.getSignature(signatureName, signatureGlobal)
+		signature := p.getSignature(signatureName)
 		method := &methodInfo{
 			function:      function,
 			signatureInfo: signature,
@@ -379,113 +323,71 @@ func (p *lowerInterfacesPass) addTypeMethods(t *typeInfo, methodSet llvm.Value) 
 
 // addInterface reads information about an interface, which is the
 // fully-qualified name and the signatures of all methods it has.
-func (p *lowerInterfacesPass) addInterface(methodSet llvm.Value) {
-	name := methodSet.Name()
-	t := &interfaceInfo{
-		name:      name,
-		methodSet: methodSet,
+func (p *lowerInterfacesPass) addInterface(methodsString string) {
+	if _, ok := p.interfaces[methodsString]; ok {
+		return
 	}
-	p.interfaces[name] = t
-	methodSet = methodSet.Initializer() // get global value from getelementptr
-	for i := 0; i < methodSet.Type().ArrayLength(); i++ {
-		signatureGlobal := llvm.ConstExtractValue(methodSet, []uint32{uint32(i)})
-		signatureName := signatureGlobal.Name()
-		signature := p.getSignature(signatureName, signatureGlobal)
+	t := &interfaceInfo{
+		name:       methodsString,
+		signatures: make(map[string]*signatureInfo),
+	}
+	p.interfaces[methodsString] = t
+	for _, method := range strings.Split(methodsString, "; ") {
+		signature := p.getSignature(method)
 		signature.interfaces = append(signature.interfaces, t)
-		t.signatures = append(t.signatures, signature)
+		t.signatures[method] = signature
 	}
 }
 
 // getSignature returns a new *signatureInfo, creating it if it doesn't already
 // exist.
-func (p *lowerInterfacesPass) getSignature(name string, global llvm.Value) *signatureInfo {
+func (p *lowerInterfacesPass) getSignature(name string) *signatureInfo {
 	if _, ok := p.signatures[name]; !ok {
 		p.signatures[name] = &signatureInfo{
-			name:   name,
-			global: global,
+			name: name,
 		}
 	}
 	return p.signatures[name]
 }
 
-// replaceInvokeWithCall replaces a runtime.interfaceMethod + inttoptr with a
-// concrete method. This can be done when only one type implements the
-// interface.
-func (p *lowerInterfacesPass) replaceInvokeWithCall(use llvm.Value, typ *typeInfo, signature *signatureInfo) error {
-	inttoptrs := getUses(use)
-	if len(inttoptrs) != 1 || inttoptrs[0].IsAIntToPtrInst().IsNil() {
-		return errorAt(use, "internal error: expected exactly one inttoptr use of runtime.interfaceMethod")
-	}
-	inttoptr := inttoptrs[0]
-	function := typ.getMethod(signature).function
-	if inttoptr.Type() == function.Type() {
-		// Easy case: the types are the same. Simply replace the inttoptr
-		// result (which is directly called) with the actual function.
-		inttoptr.ReplaceAllUsesWith(function)
-	} else {
-		// Harder case: the type is not actually the same. Go through each call
-		// (of which there should be only one), extract the receiver params for
-		// this call and replace the call with a direct call to the target
-		// function.
-		for _, call := range getUses(inttoptr) {
-			if call.IsACallInst().IsNil() || call.CalledValue() != inttoptr {
-				return errorAt(call, "internal error: expected the inttoptr to be called as a method, this is not a method call")
-			}
-			operands := make([]llvm.Value, call.OperandsCount()-1)
-			for i := range operands {
-				operands[i] = call.Operand(i)
-			}
-			paramTypes := function.Type().ElementType().ParamTypes()
-			receiverParamTypes := paramTypes[:len(paramTypes)-(len(operands)-1)]
-			methodParamTypes := paramTypes[len(paramTypes)-(len(operands)-1):]
-			for i, methodParamType := range methodParamTypes {
-				if methodParamType != operands[i+1].Type() {
-					return errorAt(call, "internal error: expected method call param type and function param type to be the same")
-				}
-			}
-			p.builder.SetInsertPointBefore(call)
-			receiverParams := llvmutil.EmitPointerUnpack(p.builder, p.mod, operands[0], receiverParamTypes)
-			result := p.builder.CreateCall(function, append(receiverParams, operands[1:]...), "")
-			if result.Type().TypeKind() != llvm.VoidTypeKind {
-				call.ReplaceAllUsesWith(result)
-			}
-			call.EraseFromParentAsInstruction()
-		}
-	}
-	inttoptr.EraseFromParentAsInstruction()
-	use.EraseFromParentAsInstruction()
-	return nil
-}
-
-// getInterfaceImplementsFunc returns a function that checks whether a given
-// interface type implements a given interface, by checking all possible types
-// that implement this interface.
+// defineInterfaceImplementsFunc defines the interface type assert function. It
+// checks whether the given interface type (passed as an argument) is one of the
+// types it implements.
 //
 // The type match is implemented using an if/else chain over all possible types.
 // This if/else chain is easily converted to a big switch over all possible
 // types by the LLVM simplifycfg pass.
-func (p *lowerInterfacesPass) getInterfaceImplementsFunc(itf *interfaceInfo) llvm.Value {
-	if !itf.assertFunc.IsNil() {
-		return itf.assertFunc
-	}
-
+func (p *lowerInterfacesPass) defineInterfaceImplementsFunc(fn llvm.Value, itf *interfaceInfo) {
 	// Create the function and function signature.
-	// TODO: debug info
-	fnName := itf.id() + "$typeassert"
-	fnType := llvm.FunctionType(p.ctx.Int1Type(), []llvm.Type{p.uintptrType}, false)
-	fn := llvm.AddFunction(p.mod, fnName, fnType)
-	itf.assertFunc = fn
 	fn.Param(0).SetName("actualType")
 	fn.SetLinkage(llvm.InternalLinkage)
 	fn.SetUnnamedAddr(true)
-	if p.sizeLevel >= 2 {
-		fn.AddFunctionAttr(p.ctx.CreateEnumAttribute(llvm.AttributeKindID("optsize"), 0))
-	}
+	AddStandardAttributes(fn, p.config)
 
 	// Start the if/else chain at the entry block.
 	entry := p.ctx.AddBasicBlock(fn, "entry")
 	thenBlock := p.ctx.AddBasicBlock(fn, "then")
 	p.builder.SetInsertPointAtEnd(entry)
+
+	if p.dibuilder != nil {
+		difile := p.getDIFile("<Go interface assert>")
+		diFuncType := p.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+			File: difile,
+		})
+		difunc := p.dibuilder.CreateFunction(difile, llvm.DIFunction{
+			Name:         "(Go interface assert)",
+			File:         difile,
+			Line:         0,
+			Type:         diFuncType,
+			LocalToUnit:  true,
+			IsDefinition: true,
+			ScopeLine:    0,
+			Flags:        llvm.FlagPrototyped,
+			Optimized:    true,
+		})
+		fn.SetSubprogram(difunc)
+		p.builder.SetCurrentDebugLocation(0, 0, difunc, llvm.Metadata{})
+	}
 
 	// Iterate over all possible types.  Each iteration creates a new branch
 	// either to the 'then' block (success) or the .next block, for the next
@@ -506,55 +408,63 @@ func (p *lowerInterfacesPass) getInterfaceImplementsFunc(itf *interfaceInfo) llv
 	// Fill 'then' block (type assert was successful).
 	p.builder.SetInsertPointAtEnd(thenBlock)
 	p.builder.CreateRet(llvm.ConstInt(p.ctx.Int1Type(), 1, false))
-
-	return itf.assertFunc
 }
 
-// getInterfaceMethodFunc returns a thunk for calling a method on an interface.
+// defineInterfaceMethodFunc defines this thunk by calling the concrete method
+// of the type that implements this interface.
 //
 // Matching the actual type is implemented using an if/else chain over all
 // possible types.  This is later converted to a switch statement by the LLVM
 // simplifycfg pass.
-func (p *lowerInterfacesPass) getInterfaceMethodFunc(itf *interfaceInfo, signature *signatureInfo, returnType llvm.Type, paramTypes []llvm.Type) llvm.Value {
-	if fn, ok := itf.methodFuncs[signature]; ok {
-		// This function has already been created.
-		return fn
-	}
-	if itf.methodFuncs == nil {
-		// initialize the above map
-		itf.methodFuncs = make(map[*signatureInfo]llvm.Value)
-	}
-
-	// Construct the function name, which is of the form:
-	//     (main.Stringer).String
-	fnName := "(" + itf.id() + ")." + signature.methodName()
-	fnType := llvm.FunctionType(returnType, append(paramTypes, llvm.PointerType(p.ctx.Int8Type(), 0)), false)
-	fn := llvm.AddFunction(p.mod, fnName, fnType)
-	llvm.PrevParam(fn.LastParam()).SetName("actualType")
-	fn.LastParam().SetName("parentHandle")
-	itf.methodFuncs[signature] = fn
+func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *interfaceInfo, signature *signatureInfo) {
+	parentHandle := fn.LastParam()
+	context := llvm.PrevParam(parentHandle)
+	actualType := llvm.PrevParam(context)
+	returnType := fn.Type().ElementType().ReturnType()
+	context.SetName("context")
+	actualType.SetName("actualType")
+	parentHandle.SetName("parentHandle")
 	fn.SetLinkage(llvm.InternalLinkage)
 	fn.SetUnnamedAddr(true)
-	if p.sizeLevel >= 2 {
-		fn.AddFunctionAttr(p.ctx.CreateEnumAttribute(llvm.AttributeKindID("optsize"), 0))
-	}
-
-	// TODO: debug info
+	AddStandardAttributes(fn, p.config)
 
 	// Collect the params that will be passed to the functions to call.
 	// These params exclude the receiver (which may actually consist of multiple
 	// parts).
-	params := make([]llvm.Value, fn.ParamsCount()-3)
+	params := make([]llvm.Value, fn.ParamsCount()-4)
 	for i := range params {
 		params[i] = fn.Param(i + 1)
 	}
+	params = append(params,
+		llvm.Undef(llvm.PointerType(p.ctx.Int8Type(), 0)),
+		llvm.Undef(llvm.PointerType(p.ctx.Int8Type(), 0)),
+	)
 
 	// Start chain in the entry block.
 	entry := p.ctx.AddBasicBlock(fn, "entry")
 	p.builder.SetInsertPointAtEnd(entry)
 
+	if p.dibuilder != nil {
+		difile := p.getDIFile("<Go interface method>")
+		diFuncType := p.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+			File: difile,
+		})
+		difunc := p.dibuilder.CreateFunction(difile, llvm.DIFunction{
+			Name:         "(Go interface method)",
+			File:         difile,
+			Line:         0,
+			Type:         diFuncType,
+			LocalToUnit:  true,
+			IsDefinition: true,
+			ScopeLine:    0,
+			Flags:        llvm.FlagPrototyped,
+			Optimized:    true,
+		})
+		fn.SetSubprogram(difunc)
+		p.builder.SetCurrentDebugLocation(0, 0, difunc, llvm.Metadata{})
+	}
+
 	// Define all possible functions that can be called.
-	actualType := llvm.PrevParam(fn.LastParam())
 	for _, typ := range itf.types {
 		// Create type check (if/else).
 		bb := p.ctx.AddBasicBlock(fn, typ.name)
@@ -582,7 +492,7 @@ func (p *lowerInterfacesPass) getInterfaceMethodFunc(itf *interfaceInfo, signatu
 			paramTypes = append(paramTypes, param.Type())
 		}
 		calledFunctionType := function.Type()
-		sig := llvm.PointerType(llvm.FunctionType(calledFunctionType.ElementType().ReturnType(), paramTypes, false), calledFunctionType.PointerAddressSpace())
+		sig := llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), calledFunctionType.PointerAddressSpace())
 		if sig != function.Type() {
 			function = p.builder.CreateBitCast(function, sig, "")
 		}
@@ -612,6 +522,13 @@ func (p *lowerInterfacesPass) getInterfaceMethodFunc(itf *interfaceInfo, signatu
 		llvm.Undef(llvm.PointerType(p.ctx.Int8Type(), 0)),
 	}, "")
 	p.builder.CreateUnreachable()
+}
 
-	return fn
+func (p *lowerInterfacesPass) getDIFile(file string) llvm.Metadata {
+	difile, ok := p.difiles[file]
+	if !ok {
+		difile = p.dibuilder.CreateFile(file, "")
+		p.difiles[file] = difile
+	}
+	return difile
 }

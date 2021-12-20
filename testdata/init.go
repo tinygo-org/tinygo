@@ -44,7 +44,52 @@ var (
 	uint8SliceDst []uint8
 	intSliceSrc   = []int16{5, 123, 1024}
 	intSliceDst   []int16
+
+	someList    *linkedList
+	someBigList *bigLinkedList
 )
+
+type linkedList struct {
+	prev *linkedList
+	next *linkedList
+	v    int // arbitrary value (don't care)
+}
+
+func init() {
+	someList = &linkedList{
+		v: -1,
+	}
+	for i := 0; i < 3; i++ {
+		prev := someList
+		someList = &linkedList{
+			v:    i,
+			prev: prev,
+		}
+		prev.next = someList
+	}
+}
+
+type bigLinkedList struct {
+	prev *bigLinkedList
+	next *bigLinkedList
+	v    int
+	buf  [100]*int
+}
+
+func init() {
+	// Create a circular reference.
+	someBigList = &bigLinkedList{
+		v: -1,
+	}
+	for i := 0; i < 3; i++ {
+		prev := someBigList
+		someBigList = &bigLinkedList{
+			v:    i,
+			prev: prev,
+		}
+		prev.next = someBigList
+	}
+}
 
 func init() {
 	uint8SliceDst = make([]uint8, len(uint8SliceSrc))

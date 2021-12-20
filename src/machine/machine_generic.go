@@ -5,8 +5,6 @@ package machine
 // Dummy machine package that calls out to external functions.
 
 var (
-	SPI0  = SPI{0}
-	I2C0  = &I2C{0}
 	UART0 = &UART{0}
 	USB   = &UART{100}
 )
@@ -165,3 +163,32 @@ func uartRead(bus uint8, buf *byte, bufLen int) int
 
 //export __tinygo_uart_write
 func uartWrite(bus uint8, buf *byte, bufLen int) int
+
+// Some objects used by Atmel SAM D chips (samd21, samd51).
+// Defined here (without build tag) for convenience.
+var (
+	sercomUSART0 = UART{0}
+	sercomUSART1 = UART{1}
+	sercomUSART2 = UART{2}
+	sercomUSART3 = UART{3}
+	sercomUSART4 = UART{4}
+	sercomUSART5 = UART{5}
+
+	sercomI2CM0 = &I2C{0}
+	sercomI2CM1 = &I2C{1}
+	sercomI2CM2 = &I2C{2}
+	sercomI2CM3 = &I2C{3}
+	sercomI2CM4 = &I2C{4}
+	sercomI2CM5 = &I2C{5}
+	sercomI2CM6 = &I2C{6}
+	sercomI2CM7 = &I2C{7}
+
+	sercomSPIM0 = SPI{0}
+	sercomSPIM1 = SPI{1}
+	sercomSPIM2 = SPI{2}
+	sercomSPIM3 = SPI{3}
+	sercomSPIM4 = SPI{4}
+	sercomSPIM5 = SPI{5}
+	sercomSPIM6 = SPI{6}
+	sercomSPIM7 = SPI{7}
+)

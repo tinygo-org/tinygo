@@ -23,7 +23,7 @@ import (
 // Version of the compiler pacakge. Must be incremented each time the compiler
 // package changes in a way that affects the generated LLVM module.
 // This version is independent of the TinyGo version number.
-const Version = 19 // last change: fix channel ops with zero values
+const Version = 25 // last change: add "target-cpu" and "target-features" attributes
 
 func init() {
 	llvm.InitializeAllTargets()
@@ -32,9 +32,6 @@ func init() {
 	llvm.InitializeAllAsmParsers()
 	llvm.InitializeAllAsmPrinters()
 }
-
-// The TinyGo import path.
-const tinygoPath = "github.com/tinygo-org/tinygo"
 
 // Config is the configuration for the compiler. Most settings should be copied
 // directly from compileopts.Config, it recreated here to decouple the compiler
@@ -46,11 +43,12 @@ type Config struct {
 	// Target and output information.
 	Triple          string
 	CPU             string
-	Features        []string
+	Features        string
 	GOOS            string
 	GOARCH          string
 	CodeModel       string
 	RelocationModel string
+	SizeLevel       int
 
 	// Various compiler options that determine how code is generated.
 	Scheduler          string
@@ -59,7 +57,6 @@ type Config struct {
 	DefaultStackSize   uint64
 	NeedsStackObjects  bool
 	Debug              bool // Whether to emit debug information in the LLVM module.
-	LLVMFeatures       string
 }
 
 // compilerContext contains function-independent data that should still be
@@ -79,11 +76,13 @@ type compilerContext struct {
 	targetData       llvm.TargetData
 	intType          llvm.Type
 	i8ptrType        llvm.Type // for convenience
+	rawVoidFuncType  llvm.Type // for convenience
 	funcPtrAddrSpace int
 	uintptrType      llvm.Type
 	program          *ssa.Program
 	diagnostics      []error
 	astComments      map[string]*ast.CommentGroup
+	pkg              *types.Package
 	runtimePkg       *types.Package
 }
 
@@ -124,6 +123,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 	dummyFuncType := llvm.FunctionType(c.ctx.VoidType(), nil, false)
 	dummyFunc := llvm.AddFunction(c.mod, "tinygo.dummy", dummyFuncType)
 	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
+	c.rawVoidFuncType = dummyFunc.Type()
 	dummyFunc.EraseFromParentAsFunction()
 
 	return c
@@ -141,7 +141,6 @@ type builder struct {
 	blockExits        map[*ssa.BasicBlock]llvm.BasicBlock // these are the exit blocks
 	currentBlock      *ssa.BasicBlock
 	phis              []phiNode
-	taskHandle        llvm.Value
 	deferPtr          llvm.Value
 	difunc            llvm.Metadata
 	dilocals          map[*types.Var]llvm.Metadata
@@ -189,12 +188,6 @@ func NewTargetMachine(config *Config) (llvm.TargetMachine, error) {
 		return llvm.TargetMachine{}, err
 	}
 
-	feat := config.Features
-	if len(config.LLVMFeatures) > 0 {
-		feat = append(feat, config.LLVMFeatures)
-	}
-	features := strings.Join(feat, ",")
-
 	var codeModel llvm.CodeModel
 	var relocationModel llvm.RelocMode
 
@@ -222,7 +215,7 @@ func NewTargetMachine(config *Config) (llvm.TargetMachine, error) {
 		relocationModel = llvm.RelocDynamicNoPic
 	}
 
-	machine := target.CreateTargetMachine(config.Triple, config.CPU, features, llvm.CodeGenLevelDefault, relocationModel, codeModel)
+	machine := target.CreateTargetMachine(config.Triple, config.CPU, config.Features, llvm.CodeGenLevelDefault, relocationModel, codeModel)
 	return machine, nil
 }
 
@@ -232,10 +225,6 @@ func NewTargetMachine(config *Config) (llvm.TargetMachine, error) {
 func Sizes(machine llvm.TargetMachine) types.Sizes {
 	targetData := machine.CreateTargetData()
 	defer targetData.Dispose()
-
-	intPtrType := targetData.IntPtrType()
-	if intPtrType.IntTypeWidth()/8 <= 32 {
-	}
 
 	var intWidth int
 	if targetData.PointerSize() <= 4 {
@@ -251,13 +240,14 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 	return &stdSizes{
 		IntSize:  int64(intWidth / 8),
 		PtrSize:  int64(targetData.PointerSize()),
-		MaxAlign: int64(targetData.PrefTypeAlignment(intPtrType)),
+		MaxAlign: int64(targetData.PrefTypeAlignment(targetData.IntPtrType())),
 	}
 }
 
 // CompilePackage compiles a single package to a LLVM module.
 func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
 	c := newCompilerContext(moduleName, machine, config, dumpSSA)
+	c.pkg = pkg.Pkg
 	c.runtimePkg = ssaPkg.Prog.ImportedPackage("runtime").Pkg
 	c.program = ssaPkg.Prog
 
@@ -291,14 +281,14 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	if c.Debug {
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
 			c.ctx.MDNode([]llvm.Metadata{
-				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
+				llvm.ConstInt(c.ctx.Int32Type(), 2, false).ConstantAsMetadata(), // Warning on mismatch
 				c.ctx.MDString("Debug Info Version"),
 				llvm.ConstInt(c.ctx.Int32Type(), 3, false).ConstantAsMetadata(), // DWARF version
 			}),
 		)
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
 			c.ctx.MDNode([]llvm.Metadata{
-				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(),
+				llvm.ConstInt(c.ctx.Int32Type(), 7, false).ConstantAsMetadata(), // Max on mismatch
 				c.ctx.MDString("Dwarf Version"),
 				llvm.ConstInt(c.ctx.Int32Type(), 4, false).ConstantAsMetadata(),
 			}),
@@ -452,7 +442,7 @@ func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
 			AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
 			ElementType: c.getDIType(typ.Elem()),
 			Subscripts: []llvm.DISubrange{
-				llvm.DISubrange{
+				{
 					Lo:    0,
 					Count: typ.Len(),
 				},
@@ -822,6 +812,7 @@ func (b *builder) createFunction() {
 		b.addError(b.fn.Pos(), errValue)
 		return
 	}
+	b.addStandardDefinedAttributes(b.llvmFn)
 	if !b.info.exported {
 		b.llvmFn.SetVisibility(llvm.HiddenVisibility)
 		b.llvmFn.SetUnnamedAddr(true)
@@ -846,6 +837,17 @@ func (b *builder) createFunction() {
 		// Add LLVM attribute to always avoid inlining this function.
 		noinline := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
 		b.llvmFn.AddFunctionAttr(noinline)
+	}
+
+	if b.info.interrupt {
+		// Mark this function as an interrupt.
+		// This is necessary on MCUs that don't push caller saved registers when
+		// entering an interrupt, such as on AVR.
+		if strings.HasPrefix(b.Triple, "avr") {
+			b.llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("signal", ""))
+		} else {
+			b.addError(b.fn.Pos(), "//go:interrupt not supported on this architecture")
+		}
 	}
 
 	// Add debug info, if needed.
@@ -1349,9 +1351,9 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 //
 // This is also where compiler intrinsics are implemented.
 func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) {
-	if instr.IsInvoke() {
-		fnCast, args := b.getInvokeCall(instr)
-		return b.createCall(fnCast, args, ""), nil
+	var params []llvm.Value
+	for _, param := range instr.Args {
+		params = append(params, b.getValue(param))
 	}
 
 	// Try to call the function directly for trivially static calls.
@@ -1422,12 +1424,20 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 	} else if call, ok := instr.Value.(*ssa.Builtin); ok {
 		// Builtin function (append, close, delete, etc.).)
 		var argTypes []types.Type
-		var argValues []llvm.Value
 		for _, arg := range instr.Args {
 			argTypes = append(argTypes, arg.Type())
-			argValues = append(argValues, b.getValue(arg))
 		}
-		return b.createBuiltin(argTypes, argValues, call.Name(), instr.Pos())
+		return b.createBuiltin(argTypes, params, call.Name(), instr.Pos())
+	} else if instr.IsInvoke() {
+		// Interface method call (aka invoke call).
+		itf := b.getValue(instr.Value) // interface value (runtime._interface)
+		typecode := b.CreateExtractValue(itf, 0, "invoke.func.typecode")
+		value := b.CreateExtractValue(itf, 1, "invoke.func.value") // receiver
+		// Prefix the params with receiver value and suffix with typecode.
+		params = append([]llvm.Value{value}, params...)
+		params = append(params, typecode)
+		callee = b.getInvokeFunction(instr)
+		context = llvm.Undef(b.i8ptrType)
 	} else {
 		// Function pointer.
 		value := b.getValue(instr.Value)
@@ -1435,11 +1445,6 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		// extract the function pointer and context first from the func value.
 		callee, context = b.decodeFuncValue(value, instr.Value.Type().Underlying().(*types.Signature))
 		b.createNilCheck(instr.Value, callee, "fpcall")
-	}
-
-	var params []llvm.Value
-	for _, param := range instr.Args {
-		params = append(params, b.getValue(param))
 	}
 
 	if !exported {
@@ -1459,7 +1464,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 func (b *builder) getValue(expr ssa.Value) llvm.Value {
 	switch expr := expr.(type) {
 	case *ssa.Const:
-		return b.createConst(b.info.linkName, expr)
+		return b.createConst(expr)
 	case *ssa.Function:
 		if b.getFunctionInfo(expr).exported {
 			b.addError(expr.Pos(), "cannot use an exported function as value: "+expr.String())
@@ -1526,7 +1531,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				return llvm.Value{}, b.makeError(expr.Pos(), fmt.Sprintf("value is too big (%v bytes)", size))
 			}
 			sizeValue := llvm.ConstInt(b.uintptrType, size, false)
-			buf := b.createRuntimeCall("alloc", []llvm.Value{sizeValue}, expr.Comment)
+			layoutValue := b.createObjectLayout(typ, expr.Pos())
+			buf := b.createRuntimeCall("alloc", []llvm.Value{sizeValue, layoutValue}, expr.Comment)
 			buf = b.CreateBitCast(buf, llvm.PointerType(typ, 0), "")
 			return buf, nil
 		} else {
@@ -1616,10 +1622,14 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		array := b.getValue(expr.X)
 		index := b.getValue(expr.Index)
 
+		// Extend index to at least uintptr size, because getelementptr assumes
+		// index is a signed integer.
+		index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
+
 		// Check bounds.
 		arrayLen := expr.X.Type().Underlying().(*types.Array).Len()
 		arrayLenLLVM := llvm.ConstInt(b.uintptrType, uint64(arrayLen), false)
-		b.createLookupBoundsCheck(arrayLenLLVM, index, expr.Index.Type())
+		b.createLookupBoundsCheck(arrayLenLLVM, index)
 
 		// Can't load directly from array (as index is non-constant), so have to
 		// do it using an alloca+gep+load.
@@ -1660,8 +1670,12 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, b.makeError(expr.Pos(), "todo: indexaddr: "+ptrTyp.String())
 		}
 
+		// Make sure index is at least the size of uintptr becuase getelementptr
+		// assumes index is a signed integer.
+		index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
+
 		// Bounds check.
-		b.createLookupBoundsCheck(buflen, index, expr.Index.Type())
+		b.createLookupBoundsCheck(buflen, index)
 
 		switch expr.X.Type().Underlying().(type) {
 		case *types.Pointer:
@@ -1685,9 +1699,17 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				panic("lookup on non-string?")
 			}
 
+			// Sometimes, the index can be e.g. an uint8 or int8, and we have to
+			// correctly extend that type for two reasons:
+			//  1. The lookup bounds check expects an index of at least uintptr
+			//     size.
+			//  2. getelementptr has signed operands, and therefore s[uint8(x)]
+			//     can be lowered as s[int8(x)]. That would be a bug.
+			index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
+
 			// Bounds check.
 			length := b.CreateExtractValue(value, 1, "len")
-			b.createLookupBoundsCheck(length, index, expr.Index.Type())
+			b.createLookupBoundsCheck(length, index)
 
 			// Lookup byte
 			buf := b.CreateExtractValue(value, 0, "")
@@ -1738,7 +1760,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, err
 		}
 		sliceSize := b.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
-		slicePtr := b.createRuntimeCall("alloc", []llvm.Value{sliceSize}, "makeslice.buf")
+		layoutValue := b.createObjectLayout(llvmElemType, expr.Pos())
+		slicePtr := b.createRuntimeCall("alloc", []llvm.Value{sliceSize, layoutValue}, "makeslice.buf")
 		slicePtr = b.CreateBitCast(slicePtr, llvm.PointerType(llvmElemType, 0), "makeslice.array")
 
 		// Extend or truncate if necessary. This is safe as we've already done
@@ -1812,13 +1835,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		if expr.Low != nil {
 			lowType = expr.Low.Type().Underlying().(*types.Basic)
 			low = b.getValue(expr.Low)
-			if low.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
-				if lowType.Info()&types.IsUnsigned != 0 {
-					low = b.CreateZExt(low, b.uintptrType, "")
-				} else {
-					low = b.CreateSExt(low, b.uintptrType, "")
-				}
-			}
+			low = b.extendInteger(low, lowType, b.uintptrType)
 		} else {
 			lowType = types.Typ[types.Uintptr]
 			low = llvm.ConstInt(b.uintptrType, 0, false)
@@ -1827,13 +1844,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		if expr.High != nil {
 			highType = expr.High.Type().Underlying().(*types.Basic)
 			high = b.getValue(expr.High)
-			if high.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
-				if highType.Info()&types.IsUnsigned != 0 {
-					high = b.CreateZExt(high, b.uintptrType, "")
-				} else {
-					high = b.CreateSExt(high, b.uintptrType, "")
-				}
-			}
+			high = b.extendInteger(high, highType, b.uintptrType)
 		} else {
 			highType = types.Typ[types.Uintptr]
 		}
@@ -1841,13 +1852,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		if expr.Max != nil {
 			maxType = expr.Max.Type().Underlying().(*types.Basic)
 			max = b.getValue(expr.Max)
-			if max.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
-				if maxType.Info()&types.IsUnsigned != 0 {
-					max = b.CreateZExt(max, b.uintptrType, "")
-				} else {
-					max = b.CreateSExt(max, b.uintptrType, "")
-				}
-			}
+			max = b.extendInteger(max, maxType, b.uintptrType)
 		} else {
 			maxType = types.Typ[types.Uintptr]
 		}
@@ -2012,17 +2017,58 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 				return b.CreateSub(x, y, ""), nil
 			case token.MUL: // *
 				return b.CreateMul(x, y, ""), nil
-			case token.QUO: // /
+			case token.QUO, token.REM: // /, %
+				// Check for a divide by zero. If y is zero, the Go
+				// specification says that a runtime error must be triggered.
+				b.createDivideByZeroCheck(y)
+
 				if signed {
-					return b.CreateSDiv(x, y, ""), nil
+					// Deal with signed division overflow.
+					// The LLVM LangRef says:
+					//
+					//   Overflow also leads to undefined behavior; this is a
+					//   rare case, but can occur, for example, by doing a
+					//   32-bit division of -2147483648 by -1.
+					//
+					// The Go specification however says this about division:
+					//
+					//   The one exception to this rule is that if the dividend
+					//   x is the most negative value for the int type of x, the
+					//   quotient q = x / -1 is equal to x (and r = 0) due to
+					//   two's-complement integer overflow.
+					//
+					// In other words, in the special case that the lowest
+					// possible signed integer is divided by -1, the result of
+					// the division is the same as x (the dividend).
+					// This is implemented by checking for this condition and
+					// changing y to 1 if it occurs, for example for 32-bit
+					// ints:
+					//
+					//   if x == -2147483648 && y == -1 {
+					//       y = 1
+					//   }
+					//
+					// Dividing x by 1 obviously returns x, therefore satisfying
+					// the Go specification without a branch.
+					llvmType := x.Type()
+					minusOne := llvm.ConstSub(llvm.ConstInt(llvmType, 0, false), llvm.ConstInt(llvmType, 1, false))
+					lowestInteger := llvm.ConstInt(x.Type(), 1<<(llvmType.IntTypeWidth()-1), false)
+					yIsMinusOne := b.CreateICmp(llvm.IntEQ, y, minusOne, "")
+					xIsLowestInteger := b.CreateICmp(llvm.IntEQ, x, lowestInteger, "")
+					hasOverflow := b.CreateAnd(yIsMinusOne, xIsLowestInteger, "")
+					y = b.CreateSelect(hasOverflow, llvm.ConstInt(llvmType, 1, true), y, "")
+
+					if op == token.QUO {
+						return b.CreateSDiv(x, y, ""), nil
+					} else {
+						return b.CreateSRem(x, y, ""), nil
+					}
 				} else {
-					return b.CreateUDiv(x, y, ""), nil
-				}
-			case token.REM: // %
-				if signed {
-					return b.CreateSRem(x, y, ""), nil
-				} else {
-					return b.CreateURem(x, y, ""), nil
+					if op == token.QUO {
+						return b.CreateUDiv(x, y, ""), nil
+					} else {
+						return b.CreateURem(x, y, ""), nil
+					}
 				}
 			case token.AND: // &
 				return b.CreateAnd(x, y, ""), nil
@@ -2230,16 +2276,16 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 			case token.NEQ: // !=
 				result := b.createRuntimeCall("stringEqual", []llvm.Value{x, y}, "")
 				return b.CreateNot(result, ""), nil
-			case token.LSS: // <
+			case token.LSS: // x < y
 				return b.createRuntimeCall("stringLess", []llvm.Value{x, y}, ""), nil
-			case token.LEQ: // <=
+			case token.LEQ: // x <= y becomes NOT (y < x)
 				result := b.createRuntimeCall("stringLess", []llvm.Value{y, x}, "")
 				return b.CreateNot(result, ""), nil
-			case token.GTR: // >
+			case token.GTR: // x > y becomes y < x
+				return b.createRuntimeCall("stringLess", []llvm.Value{y, x}, ""), nil
+			case token.GEQ: // x >= y becomes NOT (x < y)
 				result := b.createRuntimeCall("stringLess", []llvm.Value{x, y}, "")
 				return b.CreateNot(result, ""), nil
-			case token.GEQ: // >=
-				return b.createRuntimeCall("stringLess", []llvm.Value{y, x}, ""), nil
 			default:
 				panic("binop on string: " + op.String())
 			}
@@ -2369,7 +2415,7 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 }
 
 // createConst creates a LLVM constant value from a Go constant.
-func (b *builder) createConst(prefix string, expr *ssa.Const) llvm.Value {
+func (b *builder) createConst(expr *ssa.Const) llvm.Value {
 	switch typ := expr.Type().Underlying().(type) {
 	case *types.Basic:
 		llvmType := b.getLLVMType(typ)
@@ -2385,7 +2431,7 @@ func (b *builder) createConst(prefix string, expr *ssa.Const) llvm.Value {
 			strLen := llvm.ConstInt(b.uintptrType, uint64(len(str)), false)
 			var strPtr llvm.Value
 			if str != "" {
-				objname := prefix + "$string"
+				objname := b.pkg.Path() + "$string"
 				global := llvm.AddGlobal(b.mod, llvm.ArrayType(b.ctx.Int8Type(), len(str)), objname)
 				global.SetInitializer(b.ctx.ConstString(str, false))
 				global.SetLinkage(llvm.InternalLinkage)
@@ -2415,15 +2461,15 @@ func (b *builder) createConst(prefix string, expr *ssa.Const) llvm.Value {
 			n, _ := constant.Float64Val(expr.Value)
 			return llvm.ConstFloat(llvmType, n)
 		} else if typ.Kind() == types.Complex64 {
-			r := b.createConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]))
-			i := b.createConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]))
+			r := b.createConst(ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]))
+			i := b.createConst(ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]))
 			cplx := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.FloatType(), b.ctx.FloatType()}, false))
 			cplx = b.CreateInsertValue(cplx, r, 0, "")
 			cplx = b.CreateInsertValue(cplx, i, 1, "")
 			return cplx
 		} else if typ.Kind() == types.Complex128 {
-			r := b.createConst(prefix, ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
-			i := b.createConst(prefix, ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float64]))
+			r := b.createConst(ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
+			i := b.createConst(ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float64]))
 			cplx := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.DoubleType(), b.ctx.DoubleType()}, false))
 			cplx = b.CreateInsertValue(cplx, r, 0, "")
 			cplx = b.CreateInsertValue(cplx, i, 1, "")

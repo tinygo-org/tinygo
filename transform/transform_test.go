@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -21,6 +20,11 @@ import (
 )
 
 var update = flag.Bool("update", false, "update transform package tests")
+
+var defaultTestConfig = &compileopts.Config{
+	Target:  &compileopts.TargetSpec{},
+	Options: &compileopts.Options{Opt: "2"},
+}
 
 // testTransform runs a transformation pass on an input file (pathPrefix+".ll")
 // and checks whether it matches the expected output (pathPrefix+".out.ll"). The
@@ -41,6 +45,12 @@ func testTransform(t *testing.T, pathPrefix string, transform func(mod llvm.Modu
 
 	// Perform the transform.
 	transform(mod)
+
+	// Check for any incorrect IR.
+	err = llvm.VerifyModule(mod, llvm.PrintMessageAction)
+	if err != nil {
+		t.Fatal("IR verification failed")
+	}
 
 	// Get the output from the test and filter some irrelevant lines.
 	actual := mod.String()
@@ -67,8 +77,6 @@ func testTransform(t *testing.T, pathPrefix string, transform func(mod llvm.Modu
 	}
 }
 
-var alignRegexp = regexp.MustCompile(", align [0-9]+$")
-
 // fuzzyEqualIR returns true if the two LLVM IR strings passed in are roughly
 // equal. That means, only relevant lines are compared (excluding comments
 // etc.).
@@ -80,15 +88,6 @@ func fuzzyEqualIR(s1, s2 string) bool {
 	}
 	for i, line1 := range lines1 {
 		line2 := lines2[i]
-		match1 := alignRegexp.MatchString(line1)
-		match2 := alignRegexp.MatchString(line2)
-		if match1 != match2 {
-			// Only one of the lines has the align keyword. Remove it.
-			// This is a change to make the test work in both LLVM 10 and LLVM
-			// 11 (LLVM 11 appears to automatically add alignment everywhere).
-			line1 = alignRegexp.ReplaceAllString(line1, "")
-			line2 = alignRegexp.ReplaceAllString(line2, "")
-		}
 		if line1 != line2 {
 			return false
 		}
@@ -117,18 +116,9 @@ func filterIrrelevantIRLines(lines []string) []string {
 		if strings.HasPrefix(line, "source_filename = ") {
 			continue
 		}
-		if llvmVersion < 10 && strings.HasPrefix(line, "attributes ") {
+		if llvmVersion < 11 && strings.HasPrefix(line, "attributes ") {
 			// Ignore attribute groups. These may change between LLVM versions.
-			// Right now test outputs are for LLVM 10.
 			continue
-		}
-		if llvmVersion < 10 && strings.HasPrefix(line, "define ") {
-			// Remove parameter values such as %0 in function definitions. These
-			// were added in LLVM 10 so to get the tests to pass on older
-			// versions, ignore them there (there are other tests that verify
-			// correct behavior).
-			re := regexp.MustCompile(` %[0-9]+(\)|,)`)
-			line = re.ReplaceAllString(line, "$1")
 		}
 		out = append(out, line)
 	}
@@ -140,7 +130,7 @@ func filterIrrelevantIRLines(lines []string) []string {
 // run.
 // If there are any errors, they are reported via the *testing.T instance.
 func compileGoFileForTesting(t *testing.T, filename string) llvm.Module {
-	target, err := compileopts.LoadTarget("i686--linux")
+	target, err := compileopts.LoadTarget(&compileopts.Options{GOOS: "linux", GOARCH: "386"})
 	if err != nil {
 		t.Fatal("failed to load target:", err)
 	}

@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -72,6 +73,7 @@ type Package struct {
 	Files      []*ast.File
 	FileHashes map[string][]byte
 	CFlags     []string // CFlags used during CGo preprocessing (only set if CGo is used)
+	CGoHeaders []string // text above 'import "C"' lines
 	Pkg        *types.Package
 	info       types.Info
 }
@@ -234,6 +236,9 @@ func (p *Program) getOriginalPath(path string) string {
 		}
 		maybeInTinyGoRoot := false
 		for prefix := range pathsToOverride(needsSyscallPackage(p.config.BuildTags())) {
+			if runtime.GOOS == "windows" {
+				prefix = strings.ReplaceAll(prefix, "/", "\\")
+			}
 			if !strings.HasPrefix(relpath, prefix) {
 				continue
 			}
@@ -285,6 +290,12 @@ func (p *Program) Parse() error {
 	}
 
 	return nil
+}
+
+// OriginalDir returns the real directory name. It is the same as p.Dir except
+// that if it is part of the cached GOROOT, its real location is returned.
+func (p *Package) OriginalDir() string {
+	return strings.TrimSuffix(p.program.getOriginalPath(p.Dir+string(os.PathSeparator)), string(os.PathSeparator))
 }
 
 // parseFile is a wrapper around parser.ParseFile.
@@ -397,8 +408,9 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		if p.program.clangHeaders != "" {
 			initialCFlags = append(initialCFlags, "-Xclang", "-internal-isystem", "-Xclang", p.program.clangHeaders)
 		}
-		generated, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.program.fset, initialCFlags)
+		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.program.fset, initialCFlags)
 		p.CFlags = append(initialCFlags, cflags...)
+		p.CGoHeaders = headerCode
 		for path, hash := range accessedFiles {
 			p.FileHashes[path] = hash
 		}

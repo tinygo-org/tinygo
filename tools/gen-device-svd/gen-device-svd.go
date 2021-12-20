@@ -140,7 +140,7 @@ type PeripheralField struct {
 type Bitfield struct {
 	Name        string
 	Description string
-	Value       uint32
+	Value       uint64
 }
 
 func formatText(text string) string {
@@ -208,7 +208,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 
 	for _, periphEl := range orderedPeripherals {
 		description := formatText(periphEl.Description)
-		baseAddress, err := strconv.ParseUint(periphEl.BaseAddress, 0, 32)
+		baseAddress, err := strconv.ParseUint(periphEl.BaseAddress, 0, 64)
 		if err != nil {
 			return nil, fmt.Errorf("invalid base address: %w", err)
 		}
@@ -581,12 +581,12 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 		fields = append(fields, Bitfield{
 			Name:        fmt.Sprintf("%s_%s%s_%s_Pos", groupName, bitfieldPrefix, regName, fieldName),
 			Description: fmt.Sprintf("Position of %s field.", fieldName),
-			Value:       lsb,
+			Value:       uint64(lsb),
 		})
 		fields = append(fields, Bitfield{
 			Name:        fmt.Sprintf("%s_%s%s_%s_Msk", groupName, bitfieldPrefix, regName, fieldName),
 			Description: fmt.Sprintf("Bit mask of %s field.", fieldName),
-			Value:       (0xffffffff >> (31 - (msb - lsb))) << lsb,
+			Value:       (0xffffffffffffffff >> (63 - (msb - lsb))) << lsb,
 		})
 		if lsb == msb { // single bit
 			fields = append(fields, Bitfield{
@@ -608,14 +608,14 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			var err error
 			if strings.HasPrefix(enumEl.Value, "0b") {
 				val := strings.TrimPrefix(enumEl.Value, "0b")
-				enumValue, err = strconv.ParseUint(val, 2, 32)
+				enumValue, err = strconv.ParseUint(val, 2, 64)
 			} else {
-				enumValue, err = strconv.ParseUint(enumEl.Value, 0, 32)
+				enumValue, err = strconv.ParseUint(enumEl.Value, 0, 64)
 			}
 			if err != nil {
 				if enumBitSpecifier.MatchString(enumEl.Value) {
 					// NXP SVDs use the form #xx1x, #x0xx, etc for values
-					enumValue, err = strconv.ParseUint(strings.ReplaceAll(enumEl.Value[1:], "x", "0"), 2, 32)
+					enumValue, err = strconv.ParseUint(strings.ReplaceAll(enumEl.Value[1:], "x", "0"), 2, 64)
 					if err != nil {
 						panic(err)
 					}
@@ -656,7 +656,7 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			fields = append(fields, Bitfield{
 				Name:        enumName,
 				Description: enumDescription,
-				Value:       uint32(enumValue),
+				Value:       enumValue,
 			})
 		}
 	}
@@ -831,6 +831,15 @@ func writeGo(outdir string, device *Device, interruptSystem string) error {
 		}
 	}
 
+	interruptHandlerMap := make(map[string]*Interrupt)
+	var interruptHandlers []*Interrupt
+	for _, intr := range device.Interrupts {
+		if _, ok := interruptHandlerMap[intr.HandlerName]; !ok {
+			interruptHandlerMap[intr.HandlerName] = intr
+			interruptHandlers = append(interruptHandlers, intr)
+		}
+	}
+
 	t := template.Must(template.New("go").Funcs(template.FuncMap{
 		"bytesNeeded": func(i, j uint64) uint64 { return j - i },
 		"isMultiline": isMultiline,
@@ -846,7 +855,6 @@ func writeGo(outdir string, device *Device, interruptSystem string) error {
 package {{.pkgName}}
 
 import (
-{{if eq .interruptSystem "hardware"}}"runtime/interrupt"{{end}}
 	"runtime/volatile"
 	"unsafe"
 )
@@ -876,14 +884,29 @@ const (
 	IRQ_max = {{.interruptMax}} 
 )
 
+// Pseudo function call that is replaced by the compiler with the actual
+// functions registered through interrupt.New.
+//go:linkname callHandlers runtime/interrupt.callHandlers
+func callHandlers(num int)
+
 {{- if eq .interruptSystem "hardware"}}
-// Map interrupt numbers to function names.
-// These aren't real calls, they're removed by the compiler.
-var (
-{{- range .device.Interrupts}}
-	_ = interrupt.Register(IRQ_{{.Name}}, "{{.HandlerName}}")
+{{- range .interruptHandlers}}
+//export {{.HandlerName}}
+func interrupt{{.Name}}() {
+	callHandlers(IRQ_{{.Name}})
+}
 {{- end}}
-)
+{{- end}}
+
+{{- if eq .interruptSystem "software"}}
+func HandleInterrupt(num int) {
+	switch num {
+	{{- range .interruptHandlers}}
+	case IRQ_{{.Name}}:
+		callHandlers(IRQ_{{.Name}})
+	{{- end}}
+	}
+}
 {{- end}}
 
 // Peripherals.
@@ -901,10 +924,11 @@ var (
 
 `))
 	err = t.Execute(w, map[string]interface{}{
-		"device":          device,
-		"pkgName":         filepath.Base(strings.TrimRight(outdir, "/")),
-		"interruptMax":    maxInterruptValue,
-		"interruptSystem": interruptSystem,
+		"device":            device,
+		"pkgName":           filepath.Base(strings.TrimRight(outdir, "/")),
+		"interruptMax":      maxInterruptValue,
+		"interruptSystem":   interruptSystem,
+		"interruptHandlers": interruptHandlers,
 	})
 	if err != nil {
 		return err

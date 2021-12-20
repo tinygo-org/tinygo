@@ -1,3 +1,4 @@
+//go:build rp2040
 // +build rp2040
 
 package machine
@@ -5,12 +6,13 @@ package machine
 import (
 	"device/rp"
 	"errors"
+	"math"
 	"runtime/volatile"
 	"unsafe"
 )
 
 var (
-	ErrPeriodTooBig = errors.New("period outside valid range 1..4e9ns")
+	ErrBadPeriod = errors.New("period outside valid range 8ns..268ms")
 )
 
 const (
@@ -50,8 +52,21 @@ func getPWMGroup(index uintptr) *pwmGroup {
 	return (*pwmGroup)(unsafe.Pointer(uintptr(unsafe.Pointer(rp.PWM)) + 0x14*index))
 }
 
+// Hardware Pulse Width Modulation (PWM) API
 // PWM peripherals available on RP2040. Each peripheral has 2 pins available for
 // a total of 16 available PWM outputs. Some pins may not be available on some boards.
+//
+// The RP2040 PWM block has 8 identical slices. Each slice can drive two PWM output signals, or
+// measure the frequency or duty cycle of an input signal. This gives a total of up to 16 controllable
+// PWM outputs. All 30 GPIOs can be driven by the PWM block
+//
+// The PWM hardware functions by continuously comparing the input value to a free-running counter. This produces a
+// toggling output where the amount of time spent at the high output level is proportional to the input value. The fraction of
+// time spent at the high signal level is known as the duty cycle of the signal.
+//
+// The default behaviour of a PWM slice is to count upward until the wrap value (\ref pwm_config_set_wrap) is reached, and then
+// immediately wrap to 0. PWM slices also offer a phase-correct mode, where the counter starts to count downward after
+// reaching TOP, until it reaches 0 again.
 var (
 	PWM0 = getPWMGroup(0)
 	PWM1 = getPWMGroup(1)
@@ -94,30 +109,23 @@ func (pwm *pwmGroup) peripheral() uint8 {
 	return uint8((uintptr(unsafe.Pointer(pwm)) - uintptr(unsafe.Pointer(rp.PWM))) / 0x14)
 }
 
-// SetPeriod updates the period of this PWM peripheral.
+// SetPeriod updates the period of this PWM peripheral in nanoseconds.
 // To set a particular frequency, use the following formula:
 //
 //     period = 1e9 / frequency
 //
-// If you use a period of 0, a period that works well for LEDs will be picked.
+// Where frequency is in hertz. If you use a period of 0, a period
+// that works well for LEDs will be picked.
 //
-// SetPeriod will not change the prescaler, but also won't change the current
-// value in any of the channels. This means that you may need to update the
-// value for the particular channel.
-//
-// Note that you cannot pick any arbitrary period after the PWM peripheral has
-// been configured. If you want to switch between frequencies, pick the lowest
-// frequency (longest period) once when calling Configure and adjust the
-// frequency here as needed.
+// SetPeriod will try not to modify TOP if possible to reach the target period.
+// If the period is unattainable with current TOP SetPeriod will modify TOP
+// by the bare minimum to reach the target period. It will also enable phase
+// correct to reach periods above 130ms.
 func (p *pwmGroup) SetPeriod(period uint64) error {
-	if period > 0xffff_ffff {
-		return ErrPeriodTooBig
-	}
 	if period == 0 {
 		period = 1e5
 	}
-	p.setPeriod(period)
-	return nil
+	return p.setPeriod(period)
 }
 
 // Top returns the current counter top, for use in duty cycle calculation.
@@ -135,14 +143,14 @@ func (p *pwmGroup) Counter() uint32 {
 	return (p.CTR.Get() & rp.PWM_CH0_CTR_CH0_CTR_Msk) >> rp.PWM_CH0_CTR_CH0_CTR_Pos
 }
 
-// Period returns the used PWM period in nanoseconds. It might deviate slightly
-// from the configured period due to rounding.
+// Period returns the used PWM period in nanoseconds.
 func (p *pwmGroup) Period() uint64 {
-	periodPerCycle := getPeriod()
+	periodPerCycle := cpuPeriod()
 	top := p.getWrap()
 	phc := p.getPhaseCorrect()
 	Int, frac := p.getClockDiv()
-	return uint64((Int + frac/16) * (top + 1) * (phc + 1) * periodPerCycle) // cycles = (TOP+1) * (CSRPHCorrect + 1) * (DIV_INT + DIV_FRAC/16)
+	// Line below can overflow if operations done without care.
+	return (16*uint64(Int) + uint64(frac)) * uint64((top+1)*(phc+1)*periodPerCycle) / 16 // cycles = (TOP+1) * (CSRPHCorrect + 1) * (DIV_INT + DIV_FRAC/16)
 }
 
 // SetInverting sets whether to invert the output of this channel.
@@ -180,6 +188,12 @@ func (p *pwmGroup) SetTop(top uint32) {
 	p.setWrap(uint16(top))
 }
 
+// SetCounter sets counter control register. Max value is 16bit (0xffff).
+// Useful for synchronising two different PWM peripherals.
+func (p *pwmGroup) SetCounter(ctr uint32) {
+	p.CTR.Set(ctr)
+}
+
 // Enable enables or disables PWM peripheral channels.
 func (p *pwmGroup) Enable(enable bool) {
 	p.enable(enable)
@@ -188,29 +202,6 @@ func (p *pwmGroup) Enable(enable bool) {
 // IsEnabled returns true if peripheral is enabled.
 func (p *pwmGroup) IsEnabled() (enabled bool) {
 	return (p.CSR.Get()&rp.PWM_CH0_CSR_EN_Msk)>>rp.PWM_CH0_CSR_EN_Pos != 0
-}
-
-// Hardware Pulse Width Modulation (PWM) API
-//
-// The RP2040 PWM block has 8 identical slices. Each slice can drive two PWM output signals, or
-// measure the frequency or duty cycle of an input signal. This gives a total of up to 16 controllable
-// PWM outputs. All 30 GPIOs can be driven by the PWM block
-//
-// The PWM hardware functions by continuously comparing the input value to a free-running counter. This produces a
-// toggling output where the amount of time spent at the high output level is proportional to the input value. The fraction of
-// time spent at the high signal level is known as the duty cycle of the signal.
-//
-// The default behaviour of a PWM slice is to count upward until the wrap value (\ref pwm_config_set_wrap) is reached, and then
-// immediately wrap to 0. PWM slices also offer a phase-correct mode, where the counter starts to count downward after
-// reaching TOP, until it reaches 0 again.
-type pwms struct {
-	slice pwmGroup
-	hw    *rp.PWM_Type
-}
-
-// Handle to all pwm peripheral registers.
-var _PWM = pwms{
-	hw: rp.PWM,
 }
 
 // Initialise a PWM with settings from a configuration object.
@@ -253,24 +244,53 @@ func (pwm *pwmGroup) setDivMode(mode uint32) {
 	pwm.CSR.ReplaceBits(mode<<rp.PWM_CH0_CSR_DIVMODE_Pos, rp.PWM_CH0_CSR_DIVMODE_Msk, 0)
 }
 
-// setPeriod sets the pwm peripheral period (frequency). Calculates DIV_INT and sets it from following equation:
+// setPeriod sets the pwm peripheral period (frequency). Calculates DIV_INT,DIV_FRAC and sets it from following equation:
 //  cycles = (TOP+1) * (CSRPHCorrect + 1) * (DIV_INT + DIV_FRAC/16)
 // where cycles is amount of clock cycles per PWM period.
-func (pwm *pwmGroup) setPeriod(period uint64) {
-	targetPeriod := uint32(period)
-	periodPerCycle := getPeriod()
-	top := pwm.getWrap()
-	phc := pwm.getPhaseCorrect()
-	_, frac := pwm.getClockDiv()
+func (pwm *pwmGroup) setPeriod(period uint64) error {
+	// This period calculation algorithm consists of
+	// 1. Calculating best-fit prescale at a slightly lower-than-max TOP value
+	// 2. Calculate TOP value to reach target period given the calculated prescale
+	// 3. Apply calculated Prescale from step 1 and calculated Top from step 2
+	const (
+		maxTop = math.MaxUint16
+		// start algorithm at 95% Top. This allows us to undershoot period with prescale.
+		topStart     = 95 * maxTop / 100
+		milliseconds = 1_000_000_000
+		// Maximum Period is 268369920ns on rp2040, given by (16*255+15)*8*(1+0xffff)*(1+1)/16
+		// With no phase shift max period is half of this value.
+		maxPeriod = 268 * milliseconds
+	)
+
+	if period > maxPeriod || period < 8 {
+		return ErrBadPeriod
+	}
+	if period > maxPeriod/2 {
+		pwm.setPhaseCorrect(true) // Must enable Phase correct to reach large periods.
+	}
+
 	// clearing above expression:
-	//  DIV_INT = cycles / ( (TOP+1) * (CSRPHCorrect+1) ) - DIV_FRAC/16
+	//  DIV_INT + DIV_FRAC/16 = cycles / ( (TOP+1) * (CSRPHCorrect+1) )  // DIV_FRAC/16 is always 0 in this equation
 	// where cycles must be converted to time:
 	//  target_period = cycles * period_per_cycle ==> cycles = target_period/period_per_cycle
-	Int := targetPeriod/((1+phc)*periodPerCycle*(1+top)) - frac/16
-	if Int > 0xff {
-		Int = 0xff
+	periodPerCycle := uint64(cpuPeriod())
+	phc := uint64(pwm.getPhaseCorrect())
+	rhs := 16 * period / ((1 + phc) * periodPerCycle * (1 + topStart)) // right-hand-side of equation, scaled so frac is not divided
+	whole := rhs / 16
+	frac := rhs % 16
+	if whole > 0xff {
+		whole = 0xff
 	}
-	pwm.setClockDiv(uint8(Int), 0)
+
+	// Step 2 is acquiring a better top value. Clearing the equation:
+	// TOP =  cycles / ( (DIVINT+DIVFRAC/16) * (CSRPHCorrect+1) ) - 1
+	top := 16*period/((16*whole+frac)*periodPerCycle*(1+phc)) - 1
+	if top > maxTop {
+		top = maxTop
+	}
+	pwm.SetTop(uint32(top))
+	pwm.setClockDiv(uint8(whole), uint8(frac))
+	return nil
 }
 
 // Int is integer value to reduce counting rate by. Must be greater than or equal to 1. DIV_INT is bits 4:11 (8 bits).
@@ -360,9 +380,9 @@ func (pwm *pwmGroup) getPhaseCorrect() (phCorrect uint32) {
 	return (pwm.CSR.Get() & rp.PWM_CH0_CSR_PH_CORRECT_Msk) >> rp.PWM_CH0_CSR_PH_CORRECT_Pos
 }
 
-func (pwm *pwmGroup) getClockDiv() (Int, frac uint32) {
+func (pwm *pwmGroup) getClockDiv() (Int, frac uint8) {
 	div := pwm.DIV.Get()
-	return (div & rp.PWM_CH0_DIV_INT_Msk) >> rp.PWM_CH0_DIV_INT_Pos, (div & rp.PWM_CH0_DIV_FRAC_Msk) >> rp.PWM_CH0_DIV_FRAC_Pos
+	return uint8((div & rp.PWM_CH0_DIV_INT_Msk) >> rp.PWM_CH0_DIV_INT_Pos), uint8((div & rp.PWM_CH0_DIV_FRAC_Msk) >> rp.PWM_CH0_DIV_FRAC_Pos)
 }
 
 // pwmGPIOToSlice Determine the PWM channel that is attached to the specified GPIO.
@@ -375,10 +395,4 @@ func pwmGPIOToSlice(gpio Pin) (slicenum uint8) {
 // Each slice 0 to 7 has two channels, A and B.
 func pwmGPIOToChannel(gpio Pin) (channel uint8) {
 	return uint8(gpio) & 1
-}
-
-// Returns the period of a clock cycle for the raspberry pi pico in nanoseconds.
-func getPeriod() uint32 {
-	const periodIn uint32 = 1e9 / (125 * MHz)
-	return periodIn
 }

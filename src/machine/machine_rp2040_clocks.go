@@ -14,6 +14,16 @@ const (
 	MHz = 1000000
 )
 
+func CPUFrequency() uint32 {
+	return 125 * MHz
+}
+
+// Returns the period of a clock cycle for the raspberry pi pico in nanoseconds.
+// Used in PWM API.
+func cpuPeriod() uint32 {
+	return 1e9 / CPUFrequency()
+}
+
 // clockIndex identifies a hardware clock
 type clockIndex uint8
 

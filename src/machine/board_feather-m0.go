@@ -2,11 +2,6 @@
 
 package machine
 
-import (
-	"device/sam"
-	"runtime/interrupt"
-)
-
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
 
@@ -55,18 +50,7 @@ const (
 )
 
 // UART1 on the Feather M0.
-var (
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM1_USART,
-		SERCOM: 1,
-	}
-)
-
-func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1, _UART1.handleInterrupt)
-}
+var UART1 = &sercomUSART1
 
 // I2C pins
 const (
@@ -76,10 +60,7 @@ const (
 
 // I2C on the Feather M0.
 var (
-	I2C0 = &I2C{
-		Bus:    sam.SERCOM3_I2CM,
-		SERCOM: 3,
-	}
+	I2C0 = sercomI2CM3
 )
 
 // SPI pins
@@ -90,12 +71,7 @@ const (
 )
 
 // SPI on the Feather M0.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM4_SPI,
-		SERCOM: 4,
-	}
-)
+var SPI0 = sercomSPIM4
 
 // I2S pins
 const (

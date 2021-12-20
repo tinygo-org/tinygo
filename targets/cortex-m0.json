@@ -1,7 +1,6 @@
 {
 	"inherits": ["cortex-m"],
-	"llvm-target": "armv6m-none-eabi",
-	"cflags": [
-		"--target=armv6m-none-eabi"
-	]
+	"llvm-target": "thumbv6m-unknown-unknown-eabi",
+	"cpu": "cortex-m0",
+	"features": "+armv6-m,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
 }

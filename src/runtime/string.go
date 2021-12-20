@@ -57,7 +57,7 @@ func stringConcat(x, y _string) _string {
 		return x
 	} else {
 		length := x.length + y.length
-		buf := alloc(length)
+		buf := alloc(length, nil)
 		memcpy(buf, unsafe.Pointer(x.ptr), x.length)
 		memcpy(unsafe.Pointer(uintptr(buf)+x.length), unsafe.Pointer(y.ptr), y.length)
 		return _string{ptr: (*byte)(buf), length: length}
@@ -70,7 +70,7 @@ func stringFromBytes(x struct {
 	len uintptr
 	cap uintptr
 }) _string {
-	buf := alloc(x.len)
+	buf := alloc(x.len, nil)
 	memcpy(buf, unsafe.Pointer(x.ptr), x.len)
 	return _string{ptr: (*byte)(buf), length: x.len}
 }
@@ -81,7 +81,7 @@ func stringToBytes(x _string) (slice struct {
 	len uintptr
 	cap uintptr
 }) {
-	buf := alloc(x.length)
+	buf := alloc(x.length, nil)
 	memcpy(buf, unsafe.Pointer(x.ptr), x.length)
 	slice.ptr = (*byte)(buf)
 	slice.len = x.length
@@ -98,7 +98,7 @@ func stringFromRunes(runeSlice []rune) (s _string) {
 	}
 
 	// Allocate memory for the string.
-	s.ptr = (*byte)(alloc(s.length))
+	s.ptr = (*byte)(alloc(s.length, nil))
 
 	// Encode runes to UTF-8 and store the resulting bytes in the string.
 	index := uintptr(0)
@@ -160,6 +160,9 @@ func encodeUTF8(x rune) ([4]byte, uintptr) {
 		b1 := 0xc0 | byte(x>>6)
 		b2 := 0x80 | byte(x&0x3f)
 		return [4]byte{b1, b2, 0, 0}, 2
+	case 0xd800 <= x && x <= 0xdfff:
+		// utf-16 surrogates are replaced with "invalid code point"
+		return [4]byte{0xef, 0xbf, 0xbd, 0}, 3
 	case x <= 0xffff:
 		b1 := 0xe0 | byte(x>>12)
 		b2 := 0x80 | byte((x>>6)&0x3f)

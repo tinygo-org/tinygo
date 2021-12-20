@@ -49,6 +49,15 @@ func isStringer(itf interface{}) bool {
 	return ok
 }
 
+type fooInterface interface {
+	String() string
+	foo(int) byte
+}
+
+func callFooMethod(itf fooInterface) uint8 {
+	return itf.foo(3)
+}
+
 func callErrorMethod(itf error) string {
 	return itf.Error()
 }

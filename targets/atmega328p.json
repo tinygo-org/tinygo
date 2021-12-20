@@ -3,9 +3,6 @@
 	"cpu": "atmega328p",
 	"build-tags": ["atmega328p", "atmega", "avr5"],
 	"serial": "uart",
-	"cflags": [
-		"-mmcu=atmega328p"
-	],
 	"ldflags": [
 		"-mmcu=avr5"
 	],

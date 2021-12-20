@@ -26,6 +26,7 @@ type functionInfo struct {
 	linkName   string     // go:linkname, go:export - The name that we map for the particular module -> importName
 	section    string     // go:section - object file section name
 	exported   bool       // go:export, CGo
+	interrupt  bool       // go:interrupt
 	nobounds   bool       // go:nobounds
 	variadic   bool       // go:variadic (CGo only)
 	inline     inlineType // go:inline
@@ -108,6 +109,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 			llvmFn.AddFunctionAttr(attr)
 		}
 	}
+	c.addStandardDeclaredAttributes(llvmFn)
 
 	dereferenceableOrNullKind := llvm.AttributeKindID("dereferenceable_or_null")
 	for i, info := range paramInfos {
@@ -250,6 +252,10 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 
 				importName = parts[1]
 				info.exported = true
+			case "//go:interrupt":
+				if hasUnsafeImport(f.Pkg.Pkg) {
+					info.interrupt = true
+				}
 			case "//go:wasm-module":
 				// Alternative comment for setting the import module.
 				if len(parts) != 2 {
@@ -321,6 +327,53 @@ func getParams(sig *types.Signature) []*types.Var {
 		params = append(params, sig.Params().At(i))
 	}
 	return params
+}
+
+// addStandardDeclaredAttributes adds attributes that are set for any function,
+// whether declared or defined.
+func (c *compilerContext) addStandardDeclaredAttributes(llvmFn llvm.Value) {
+	if c.SizeLevel >= 1 {
+		// Set the "optsize" attribute to make slightly smaller binaries at the
+		// cost of minimal performance loss (-Os in Clang).
+		kind := llvm.AttributeKindID("optsize")
+		attr := c.ctx.CreateEnumAttribute(kind, 0)
+		llvmFn.AddFunctionAttr(attr)
+	}
+	if c.SizeLevel >= 2 {
+		// Set the "minsize" attribute to reduce code size even further,
+		// regardless of performance loss (-Oz in Clang).
+		kind := llvm.AttributeKindID("minsize")
+		attr := c.ctx.CreateEnumAttribute(kind, 0)
+		llvmFn.AddFunctionAttr(attr)
+	}
+	if c.CPU != "" {
+		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("target-cpu", c.CPU))
+	}
+	if c.Features != "" {
+		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("target-features", c.Features))
+	}
+}
+
+// addStandardDefinedAttributes adds the set of attributes that are added to
+// every function defined by TinyGo (even thunks/wrappers), possibly depending
+// on the architecture. It does not set attributes only set for declared
+// functions, use addStandardDeclaredAttributes for this.
+func (c *compilerContext) addStandardDefinedAttributes(llvmFn llvm.Value) {
+	// TinyGo does not currently raise exceptions, so set the 'nounwind' flag.
+	// This behavior matches Clang when compiling C source files.
+	// It reduces binary size on Linux a little bit on non-x86_64 targets by
+	// eliminating exception tables for these functions.
+	llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nounwind"), 0))
+	if strings.Split(c.Triple, "-")[0] == "x86_64" {
+		// Required by the ABI.
+		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 0))
+	}
+}
+
+// addStandardAttribute adds all attributes added to defined functions.
+func (c *compilerContext) addStandardAttributes(llvmFn llvm.Value) {
+	c.addStandardDeclaredAttributes(llvmFn)
+	c.addStandardDefinedAttributes(llvmFn)
 }
 
 // globalInfo contains some information about a specific global. By default,

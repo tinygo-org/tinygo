@@ -58,7 +58,7 @@ func main() {
 	initInternal()
 
 	run()
-	abort()
+	exit(0)
 }
 
 func initSystem() {
@@ -230,6 +230,10 @@ func postinit() {}
 
 func putchar(c byte) {
 	machine.PutcharUART(machine.UART0, c)
+}
+
+func exit(code int) {
+	abort()
 }
 
 func abort() {

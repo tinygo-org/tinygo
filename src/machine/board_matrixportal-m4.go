@@ -96,6 +96,14 @@ const (
 	UART_TX_PIN = UART1_TX_PIN
 )
 
+// UART on the MatrixPortal M4
+var (
+	UART1 = &sercomUSART1
+	UART2 = &sercomUSART4
+
+	DefaultUART = UART1
+)
+
 // SPI pins
 const (
 	SPI0_SCK_PIN = D34 // SERCOM3[1] (ESP32 SCK)
@@ -123,6 +131,11 @@ const (
 	SCL_PIN = I2C_SCL_PIN //
 )
 
+// I2C on the MatrixPortal M4
+var (
+	I2C0 = sercomI2CM5
+)
+
 // ESP32 pins
 const (
 	NINA_ACK    = D31
@@ -137,6 +150,14 @@ const (
 	NINA_SDO = SPI0_SDO_PIN
 	NINA_SDI = SPI0_SDI_PIN
 	NINA_SCK = SPI0_SCK_PIN
+)
+
+// SPI on the MatrixPortal M4
+var (
+	SPI0     = sercomSPIM3 // BUG: SDO on SERCOM1!
+	NINA_SPI = SPI0
+
+	SPI1 = sercomSPIM0
 )
 
 // HUB75 pins

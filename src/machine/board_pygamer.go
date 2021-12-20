@@ -2,8 +2,6 @@
 
 package machine
 
-import "device/sam"
-
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
 
@@ -100,10 +98,7 @@ const (
 
 // I2C on the PyGamer.
 var (
-	I2C0 = &I2C{
-		Bus:    sam.SERCOM2_I2CM,
-		SERCOM: 2,
-	}
+	I2C0 = sercomI2CM2
 )
 
 // SPI pins
@@ -114,12 +109,7 @@ const (
 )
 
 // SPI on the PyGamer.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM1_SPIM,
-		SERCOM: 1,
-	}
-)
+var SPI0 = sercomSPIM1
 
 // TFT SPI pins
 const (
@@ -129,12 +119,7 @@ const (
 )
 
 // TFT SPI on the PyGamer.
-var (
-	SPI1 = SPI{
-		Bus:    sam.SERCOM4_SPIM,
-		SERCOM: 4,
-	}
-)
+var SPI1 = sercomSPIM4
 
 // USB CDC identifiers
 const (

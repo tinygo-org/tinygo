@@ -231,6 +231,9 @@ const (
 
 	I2C_SDA_PIN = I2C0_SDA_PIN // default/primary I2C pins
 	I2C_SCL_PIN = I2C0_SCL_PIN //
+
+	SDA_PIN = I2C0_SDA_PIN
+	SCL_PIN = I2C0_SCL_PIN
 )
 
 var (

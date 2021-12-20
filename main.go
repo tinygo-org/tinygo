@@ -71,8 +71,8 @@ func moveFile(src, dst string) error {
 	return os.Remove(src)
 }
 
-// copyFile copies the given file from src to dst. It can copy over
-// a possibly already existing file at the destination.
+// copyFile copies the given file or directory from src to dst. It can copy over
+// a possibly already existing file (but not directory) at the destination.
 func copyFile(src, dst string) error {
 	source, err := os.Open(src)
 	if err != nil {
@@ -85,14 +85,32 @@ func copyFile(src, dst string) error {
 		return err
 	}
 
-	destination, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, st.Mode())
-	if err != nil {
+	if st.IsDir() {
+		err := os.Mkdir(dst, st.Mode().Perm())
+		if err != nil {
+			return err
+		}
+		names, err := source.Readdirnames(0)
+		if err != nil {
+			return err
+		}
+		for _, name := range names {
+			err := copyFile(filepath.Join(src, name), filepath.Join(dst, name))
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	} else {
+		destination, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, st.Mode())
+		if err != nil {
+			return err
+		}
+		defer destination.Close()
+
+		_, err = io.Copy(destination, source)
 		return err
 	}
-	defer destination.Close()
-
-	_, err = io.Copy(destination, source)
-	return err
 }
 
 // executeCommand is a simple wrapper to exec.Cmd
@@ -159,7 +177,7 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
-func Test(pkgName string, options *compileopts.Options, testCompileOnly, testVerbose bool, outpath string) (bool, error) {
+func Test(pkgName string, options *compileopts.Options, testCompileOnly, testVerbose, testShort bool, outpath string) (bool, error) {
 	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
@@ -185,7 +203,7 @@ func Test(pkgName string, options *compileopts.Options, testCompileOnly, testVer
 		// Run the test.
 		start := time.Now()
 		var err error
-		passed, err = runPackageTest(config, result, testVerbose)
+		passed, err = runPackageTest(config, result, testVerbose, testShort)
 		if err != nil {
 			return err
 		}
@@ -211,53 +229,47 @@ func Test(pkgName string, options *compileopts.Options, testCompileOnly, testVer
 // runPackageTest runs a test binary that was previously built. The return
 // values are whether the test passed and any errors encountered while trying to
 // run the binary.
-func runPackageTest(config *compileopts.Config, result builder.BuildResult, testVerbose bool) (bool, error) {
+func runPackageTest(config *compileopts.Config, result builder.BuildResult, testVerbose, testShort bool) (bool, error) {
+	var cmd *exec.Cmd
 	if len(config.Target.Emulator) == 0 {
 		// Run directly.
 		var flags []string
 		if testVerbose {
 			flags = append(flags, "-test.v")
 		}
-		cmd := executeCommand(config.Options, result.Binary, flags...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Dir = result.MainDir
-		err := cmd.Run()
-		if err != nil {
-			if _, ok := err.(*exec.ExitError); ok {
-				// Binary exited with a non-zero exit code, which means the test
-				// failed.
-				return false, nil
-			}
-			return false, &commandError{"failed to run compiled binary", result.Binary, err}
+		if testShort {
+			flags = append(flags, "-test.short")
 		}
-		return true, nil
+		cmd = executeCommand(config.Options, result.Binary, flags...)
+		cmd.Dir = result.MainDir
 	} else {
 		// Run in an emulator.
-		// TODO: pass the -test.v flag if needed.
 		args := append(config.Target.Emulator[1:], result.Binary)
-		cmd := executeCommand(config.Options, config.Target.Emulator[0], args...)
-		buf := &bytes.Buffer{}
-		w := io.MultiWriter(os.Stdout, buf)
-		cmd.Stdout = w
-		cmd.Stderr = os.Stderr
-		err := cmd.Run()
-		if err != nil {
-			if err, ok := err.(*exec.ExitError); !ok || !err.Exited() {
-				// Workaround for QEMU which always exits with an error.
-				return false, &commandError{"failed to run emulator with", result.Binary, err}
+		if config.Target.Emulator[0] == "wasmtime" {
+			// allow reading from current directory: --dir=.
+			// mark end of wasmtime arguments and start of program ones: --
+			args = append(args, "--dir=.", "--")
+			if testVerbose {
+				args = append(args, "-test.v")
+			}
+			if testShort {
+				args = append(args, "-test.short")
 			}
 		}
-		testOutput := string(buf.Bytes())
-		if testOutput == "PASS\n" || strings.HasSuffix(testOutput, "\nPASS\n") {
-			// Test passed.
-			return true, nil
-		} else {
-			// Test failed, either by ending with the word "FAIL" or with a
-			// panic of some sort.
+		cmd = executeCommand(config.Options, config.Target.Emulator[0], args...)
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		if _, ok := err.(*exec.ExitError); ok {
+			// Binary exited with a non-zero exit code, which means the test
+			// failed.
 			return false, nil
 		}
+		return false, &commandError{"failed to run compiled binary", result.Binary, err}
 	}
+	return true, nil
 }
 
 // Flash builds and flashes the built binary to the given serial port.
@@ -413,19 +425,25 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	})
 }
 
-// FlashGDB compiles and flashes a program to a microcontroller (just like
-// Flash) but instead of resetting the target, it will drop into a GDB shell.
-// You can then set breakpoints, run the GDB `continue` command to start, hit
-// Ctrl+C to break the running program, etc.
+// Debug compiles and flashes a program to a microcontroller (just like Flash)
+// but instead of resetting the target, it will drop into a debug shell like GDB
+// or LLDB. You can then set breakpoints, run the `continue` command to start,
+// hit Ctrl+C to break the running program, etc.
 //
 // Note: this command is expected to execute just before exiting, as it
 // modifies global state.
-func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) error {
+func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Options) error {
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
 	}
-	gdb, err := config.Target.LookupGDB()
+	var cmdName string
+	switch debugger {
+	case "gdb":
+		cmdName, err = config.Target.LookupGDB()
+	case "lldb":
+		cmdName, err = builder.LookupCommand("lldb")
+	}
 	if err != nil {
 		return err
 	}
@@ -456,6 +474,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 		}
 
 		// Run the GDB server, if necessary.
+		port := ""
 		var gdbCommands []string
 		var daemon *exec.Cmd
 		switch gdbInterface {
@@ -467,9 +486,11 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			if err != nil {
 				return err
 			}
-			gdbCommands = append(gdbCommands, "target extended-remote "+bmpGDBPort, "monitor swdp_scan", "compare-sections", "attach 1", "load")
+			port = bmpGDBPort
+			gdbCommands = append(gdbCommands, "monitor swdp_scan", "compare-sections", "attach 1", "load")
 		case "openocd":
-			gdbCommands = append(gdbCommands, "target extended-remote :3333", "monitor halt", "load", "monitor reset halt")
+			port = ":3333"
+			gdbCommands = append(gdbCommands, "monitor halt", "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
 			args, err := config.OpenOCDConfiguration()
@@ -488,7 +509,8 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				daemon.Stderr = w
 			}
 		case "jlink":
-			gdbCommands = append(gdbCommands, "target extended-remote :2331", "load", "monitor reset halt")
+			port = ":2331"
+			gdbCommands = append(gdbCommands, "load", "monitor reset halt")
 
 			// We need a separate debugging daemon for on-chip debugging.
 			daemon = executeCommand(config.Options, "JLinkGDBServer", "-device", config.Target.JLinkDevice)
@@ -503,7 +525,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 				daemon.Stderr = w
 			}
 		case "qemu":
-			gdbCommands = append(gdbCommands, "target extended-remote :1234")
+			port = ":1234"
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary, "-s", "-S")
@@ -511,7 +533,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "qemu-user":
-			gdbCommands = append(gdbCommands, "target extended-remote :1234")
+			port = ":1234"
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], "-g", "1234", result.Binary)
@@ -519,7 +541,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "mgba":
-			gdbCommands = append(gdbCommands, "target extended-remote :2345")
+			port = ":2345"
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], result.Binary, "-g")
@@ -527,7 +549,7 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "simavr":
-			gdbCommands = append(gdbCommands, "target extended-remote :1234")
+			port = ":1234"
 
 			// Run in an emulator.
 			args := append(config.Target.Emulator[1:], "-g", result.Binary)
@@ -572,20 +594,44 @@ func FlashGDB(pkgName string, ocdOutput bool, options *compileopts.Options) erro
 			}
 		}()
 
-		// Construct and execute a gdb command.
+		// Construct and execute a gdb or lldb command.
 		// By default: gdb -ex run <binary>
-		// Exit GDB with Ctrl-D.
+		// Exit the debugger with Ctrl-D.
 		params := []string{result.Binary}
-		for _, cmd := range gdbCommands {
-			params = append(params, "-ex", cmd)
+		switch debugger {
+		case "gdb":
+			if port != "" {
+				params = append(params, "-ex", "target extended-remote "+port)
+			}
+			for _, cmd := range gdbCommands {
+				params = append(params, "-ex", cmd)
+			}
+		case "lldb":
+			params = append(params, "--arch", config.Triple())
+			if port != "" {
+				if strings.HasPrefix(port, ":") {
+					params = append(params, "-o", "gdb-remote "+port[1:])
+				} else {
+					return fmt.Errorf("cannot use LLDB over a gdb-remote that isn't a TCP port: %s", port)
+				}
+			}
+			for _, cmd := range gdbCommands {
+				if strings.HasPrefix(cmd, "monitor ") {
+					params = append(params, "-o", "process plugin packet "+cmd)
+				} else if cmd == "load" {
+					params = append(params, "-o", "target modules load --load --slide 0")
+				} else {
+					return fmt.Errorf("don't know how to convert GDB command %#v to LLDB", cmd)
+				}
+			}
 		}
-		cmd := executeCommand(config.Options, gdb, params...)
+		cmd := executeCommand(config.Options, cmdName, params...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		err := cmd.Run()
 		if err != nil {
-			return &commandError{"failed to run gdb with", result.Binary, err}
+			return &commandError{"failed to run " + cmdName + " with", result.Binary, err}
 		}
 		return nil
 	})
@@ -1077,11 +1123,12 @@ func main() {
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
 	tags := flag.String("tags", "", "a space-separated list of extra build tags")
-	target := flag.String("target", "", "LLVM target | .json file with TargetSpec")
+	target := flag.String("target", "", "chip/board name or JSON target specification file")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
 	printCommands := flag.Bool("x", false, "Print commands")
+	parallelism := flag.Int("p", runtime.GOMAXPROCS(0), "the number of build jobs that can run in parallel")
 	nodebug := flag.Bool("no-debug", false, "strip debug information")
 	ocdCommandsString := flag.String("ocd-commands", "", "OpenOCD commands, overriding target spec (can specify multiple separated by commas)")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
@@ -1102,10 +1149,11 @@ func main() {
 	if command == "help" || command == "build" || command == "build-library" || command == "test" {
 		flag.StringVar(&outpath, "o", "", "output filename")
 	}
-	var testCompileOnlyFlag, testVerboseFlag *bool
+	var testCompileOnlyFlag, testVerboseFlag, testShortFlag *bool
 	if command == "help" || command == "test" {
 		testCompileOnlyFlag = flag.Bool("c", false, "compile the test binary but do not run it")
 		testVerboseFlag = flag.Bool("v", false, "verbose: print additional output")
+		testShortFlag = flag.Bool("short", false, "short: run smaller test suite to save time")
 	}
 
 	// Early command processing, before commands are interpreted by the Go flag
@@ -1142,6 +1190,9 @@ func main() {
 	}
 
 	options := &compileopts.Options{
+		GOOS:            goenv.Get("GOOS"),
+		GOARCH:          goenv.Get("GOARCH"),
+		GOARM:           goenv.Get("GOARM"),
 		Target:          *target,
 		Opt:             *opt,
 		GC:              *gc,
@@ -1151,6 +1202,7 @@ func main() {
 		PrintIR:         *printIR,
 		DumpSSA:         *dumpSSA,
 		VerifyIR:        *verifyIR,
+		Parallelism:     *parallelism,
 		Debug:           !*nodebug,
 		PrintSizes:      *printSize,
 		PrintStacks:     *printStacks,
@@ -1165,8 +1217,6 @@ func main() {
 	if *printCommands {
 		options.PrintCommands = printCommand
 	}
-
-	os.Setenv("CC", "clang -target="+*target)
 
 	err = options.Verify()
 	if err != nil {
@@ -1240,24 +1290,30 @@ func main() {
 			handleCompilerError(err)
 		}
 		defer os.RemoveAll(tmpdir)
-		path, err := lib.Load(*target, tmpdir)
+		config := &compileopts.Config{
+			Options: options,
+			Target: &compileopts.TargetSpec{
+				Triple: *target,
+			},
+		}
+		path, err := lib.Load(config, tmpdir)
 		handleCompilerError(err)
 		err = copyFile(path, outpath)
 		if err != nil {
 			handleCompilerError(err)
 		}
-	case "flash", "gdb":
+	case "flash", "gdb", "lldb":
 		pkgName := filepath.ToSlash(flag.Arg(0))
 		if command == "flash" {
 			err := Flash(pkgName, *port, options)
 			handleCompilerError(err)
 		} else {
 			if !options.Debug {
-				fmt.Fprintln(os.Stderr, "Debug disabled while running gdb?")
+				fmt.Fprintln(os.Stderr, "Debug disabled while running debugger?")
 				usage()
 				os.Exit(1)
 			}
-			err := FlashGDB(pkgName, *ocdOutput, options)
+			err := Debug(command, pkgName, *ocdOutput, options)
 			handleCompilerError(err)
 		}
 	case "run":
@@ -1280,7 +1336,7 @@ func main() {
 		allTestsPassed := true
 		for _, pkgName := range pkgNames {
 			// TODO: parallelize building the test binaries
-			passed, err := Test(pkgName, options, *testCompileOnlyFlag, *testVerboseFlag, outpath)
+			passed, err := Test(pkgName, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, outpath)
 			handleCompilerError(err)
 			if !passed {
 				allTestsPassed = false
@@ -1304,7 +1360,7 @@ func main() {
 				continue
 			}
 			path := filepath.Join(dir, entry.Name())
-			spec, err := compileopts.LoadTarget(path)
+			spec, err := compileopts.LoadTarget(&compileopts.Options{Target: path})
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "could not list target:", err)
 				os.Exit(1)
@@ -1346,6 +1402,7 @@ func main() {
 		fmt.Printf("LLVM triple:       %s\n", config.Triple())
 		fmt.Printf("GOOS:              %s\n", config.GOOS())
 		fmt.Printf("GOARCH:            %s\n", config.GOARCH())
+		fmt.Printf("GOARM:             %s\n", config.GOARM())
 		fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
 		fmt.Printf("garbage collector: %s\n", config.GC())
 		fmt.Printf("scheduler:         %s\n", config.Scheduler())

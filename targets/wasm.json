@@ -1,15 +1,13 @@
 {
-	"llvm-target":   "wasm32--wasi",
+	"llvm-target":   "wasm32-unknown-wasi",
+	"cpu":           "generic",
 	"build-tags":    ["tinygo.wasm"],
 	"goos":          "js",
 	"goarch":        "wasm",
 	"linker":        "wasm-ld",
 	"libc":          "wasi-libc",
-	"cflags": [
-		"--target=wasm32--wasi",
-		"--sysroot={root}/lib/wasi-libc/sysroot",
-		"-Oz"
-	],
+	"scheduler":     "asyncify",
+	"default-stack-size": 8192,
 	"ldflags": [
 		"--allow-undefined",
 		"--stack-first",

@@ -3,9 +3,6 @@
     "cpu": "atmega2560",
     "build-tags": ["atmega2560", "atmega"],
     "serial": "uart",
-    "cflags": [
-        "-mmcu=atmega2560"
-    ],
     "ldflags": [
         "-mmcu=avr6",
         "-Wl,--defsym=_stack_size=512"

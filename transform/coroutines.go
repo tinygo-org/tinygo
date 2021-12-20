@@ -627,7 +627,7 @@ func (async *asyncFunc) hasValueStoreReturn() bool {
 func (c *coroutineLoweringPass) heapAlloc(t llvm.Type, name string) llvm.Value {
 	sizeT := c.alloc.FirstParam().Type()
 	size := llvm.ConstInt(sizeT, c.target.TypeAllocSize(t), false)
-	return c.builder.CreateCall(c.alloc, []llvm.Value{size, llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, name)
+	return c.builder.CreateCall(c.alloc, []llvm.Value{size, llvm.ConstNull(c.i8ptr), llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, name)
 }
 
 // lowerFuncFast lowers an async function that has no suspend points.
@@ -798,7 +798,7 @@ func (c *coroutineLoweringPass) lowerFuncCoro(fn *asyncFunc) {
 	// %coro.size = call i32 @llvm.coro.size.i32()
 	coroSize := c.builder.CreateCall(c.coroSize, []llvm.Value{}, "coro.size")
 	// %coro.alloc = call i8* runtime.alloc(i32 %coro.size)
-	coroAlloc := c.builder.CreateCall(c.alloc, []llvm.Value{coroSize, llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, "coro.alloc")
+	coroAlloc := c.builder.CreateCall(c.alloc, []llvm.Value{coroSize, llvm.ConstNull(c.i8ptr), llvm.Undef(c.i8ptr), llvm.Undef(c.i8ptr)}, "coro.alloc")
 	// %coro.state = call noalias i8* @llvm.coro.begin(token %coro.id, i8* %coro.alloc)
 	coroState := c.builder.CreateCall(c.coroBegin, []llvm.Value{coroId, coroAlloc}, "coro.state")
 	c.track(coroState)

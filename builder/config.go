@@ -13,7 +13,7 @@ import (
 // uses the currently active GOPATH (from the goenv package) to determine the Go
 // version to use.
 func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
-	spec, err := compileopts.LoadTarget(options.Target)
+	spec, err := compileopts.LoadTarget(options)
 	if err != nil {
 		return nil, err
 	}

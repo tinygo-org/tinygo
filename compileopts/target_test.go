@@ -1,22 +1,23 @@
 package compileopts
 
 import (
+	"os"
 	"reflect"
 	"testing"
 )
 
 func TestLoadTarget(t *testing.T) {
-	_, err := LoadTarget("arduino")
+	_, err := LoadTarget(&Options{Target: "arduino"})
 	if err != nil {
 		t.Error("LoadTarget test failed:", err)
 	}
 
-	_, err = LoadTarget("notexist")
+	_, err = LoadTarget(&Options{Target: "notexist"})
 	if err == nil {
 		t.Error("LoadTarget should have failed with non existing target")
 	}
 
-	if err.Error() != "expected a full LLVM target or a custom target in -target flag" {
+	if !os.IsNotExist(err) {
 		t.Error("LoadTarget failed for wrong reason:", err)
 	}
 }
@@ -26,7 +27,7 @@ func TestOverrideProperties(t *testing.T) {
 	base := &TargetSpec{
 		GOOS:             "baseGoos",
 		CPU:              "baseCpu",
-		Features:         []string{"bf1", "bf2"},
+		CFlags:           []string{"-base-foo", "-base-bar"},
 		BuildTags:        []string{"bt1", "bt2"},
 		Emulator:         []string{"be1", "be2"},
 		DefaultStackSize: 42,
@@ -36,7 +37,7 @@ func TestOverrideProperties(t *testing.T) {
 	child := &TargetSpec{
 		GOOS:             "",
 		CPU:              "chlidCpu",
-		Features:         []string{"cf1", "cf2"},
+		CFlags:           []string{"-child-foo", "-child-bar"},
 		Emulator:         []string{"ce1", "ce2"},
 		AutoStackSize:    &childAutoStackSize,
 		DefaultStackSize: 64,
@@ -50,8 +51,8 @@ func TestOverrideProperties(t *testing.T) {
 	if base.CPU != "chlidCpu" {
 		t.Errorf("Overriding failed : got %v", base.CPU)
 	}
-	if !reflect.DeepEqual(base.Features, []string{"cf1", "cf2", "bf1", "bf2"}) {
-		t.Errorf("Overriding failed : got %v", base.Features)
+	if !reflect.DeepEqual(base.CFlags, []string{"-base-foo", "-base-bar", "-child-foo", "-child-bar"}) {
+		t.Errorf("Overriding failed : got %v", base.CFlags)
 	}
 	if !reflect.DeepEqual(base.BuildTags, []string{"bt1", "bt2"}) {
 		t.Errorf("Overriding failed : got %v", base.BuildTags)

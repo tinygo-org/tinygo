@@ -57,6 +57,13 @@ const (
 	UART2_RX_PIN = PA07
 )
 
+var (
+	UART1 = &sercomUSART3
+	UART2 = &sercomUSART0
+
+	DefaultUART = UART1
+)
+
 const (
 	NINA_CS     = PA15
 	NINA_ACK    = PB04
@@ -72,6 +79,11 @@ const (
 const (
 	SDA_PIN = PB02 // SDA: SERCOM5/PAD[0]
 	SCL_PIN = PB03 // SCL: SERCOM5/PAD[1]
+)
+
+// I2C on the Metro M4.
+var (
+	I2C0 = sercomI2CM5
 )
 
 // SPI pins
@@ -90,6 +102,15 @@ const (
 	SPI1_SDO_PIN = D11 // SDO: SERCOM1/PAD[3]
 	SPI1_SDI_PIN = D13 // SCK:  SERCOM1/PAD[0]
 )
+
+// SPI on the Metro M4.
+var (
+	SPI0     = sercomSPIM2
+	NINA_SPI = SPI0
+)
+
+// SPI1 on the Metro M4 on pins 11,12,13
+var SPI1 = sercomSPIM1
 
 // USB CDC identifiers
 const (

@@ -48,7 +48,7 @@ func main() {
 	preinit()
 	initPeripherals()
 	run()
-	abort()
+	exit(0)
 }
 
 func initPLIC() {
@@ -85,7 +85,7 @@ func handleInterrupt() {
 			// Claim this interrupt.
 			id := kendryte.PLIC.TARGETS[hartId].CLAIM.Get()
 			// Call the interrupt handler, if any is registered for this ID.
-			callInterruptHandler(int(id))
+			kendryte.HandleInterrupt(int(id))
 			// Complete this interrupt.
 			kendryte.PLIC.TARGETS[hartId].CLAIM.Set(id)
 		}
@@ -153,7 +153,3 @@ func handleException(code uint64) {
 	println()
 	abort()
 }
-
-// callInterruptHandler is a compiler-generated function that calls the
-// appropriate interrupt handler for the given interrupt ID.
-func callInterruptHandler(id int)

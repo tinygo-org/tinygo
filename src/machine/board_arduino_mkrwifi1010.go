@@ -6,11 +6,6 @@
 //
 package machine
 
-import (
-	"device/sam"
-	"runtime/interrupt"
-)
-
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0x07738135
 
@@ -98,44 +93,19 @@ const (
 )
 
 // UART on the Arduino MKR WiFi 1010.
-var (
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM5_USART,
-		SERCOM: 5,
-	}
-)
-
-func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM5, _UART1.handleInterrupt)
-}
+var UART1 = &sercomUSART5
 
 // I2C on the Arduino MKR WiFi 1010.
 var (
-	I2C0 = &I2C{
-		Bus:    sam.SERCOM2_I2CM,
-		SERCOM: 2,
-	}
+	I2C0 = sercomI2CM2
 )
 
 // SPI on the Arduino MKR WiFi 1010.
 var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM1_SPI,
-		SERCOM: 1,
-	}
+	SPI0 = sercomSPIM1
 
-	SPI1 = SPI{
-		Bus:    sam.SERCOM4_SPI,
-		SERCOM: 4,
-	}
+	SPI1     = sercomSPIM4
 	NINA_SPI = SPI1
-)
-
-// I2S on the Arduino MKR WiFi 1010.
-var (
-	I2S0 = I2S{Bus: sam.I2S}
 )
 
 // USB CDC identifiers

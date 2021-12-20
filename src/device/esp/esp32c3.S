@@ -47,3 +47,21 @@ call_start_cpu0:
     // (It appears that the linker relaxes this jump and instead inserts the
     // _start function right after here).
     j _start
+
+.section .text.exception_vectors
+.global _vector_table
+.type _vector_table,@function
+
+_vector_table:
+
+    .option push
+    .option norvc
+
+    .rept 32
+    j handleInterruptASM            /* interrupt handler */
+    .endr
+
+    .option pop
+
+.size _vector_table, .-_vector_table
+

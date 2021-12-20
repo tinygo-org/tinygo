@@ -145,6 +145,9 @@ func Run(mod llvm.Module, debug bool) error {
 		if obj.buffer == nil {
 			continue
 		}
+		if obj.constant {
+			continue // constant buffers can't have been modified
+		}
 		initializer, err := obj.buffer.toLLVMValue(obj.llvmGlobal.Type().ElementType(), &mem)
 		if err == errInvalidPtrToIntSize {
 			// This can happen when a previous interp run did not have the
@@ -247,6 +250,9 @@ func RunFunc(fn llvm.Value, debug bool) error {
 		}
 		if obj.buffer == nil {
 			continue
+		}
+		if obj.constant {
+			continue // constant, so can't have been modified
 		}
 		initializer, err := obj.buffer.toLLVMValue(obj.llvmGlobal.Type().ElementType(), &mem)
 		if err != nil {

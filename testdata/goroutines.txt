@@ -20,3 +20,7 @@ acquired mutex from goroutine
 released mutex from goroutine
 re-acquired mutex
 done
+called: Foo.Nowait
+called: Foo.Wait
+  ...waited
+done with 'go on interface'

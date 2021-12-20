@@ -23,7 +23,7 @@ func (c *compilerContext) createFuncValue(builder llvm.Builder, funcPtr, context
 	switch c.FuncImplementation {
 	case "doubleword":
 		// Closure is: {context, function pointer}
-		funcValueScalar = funcPtr
+		funcValueScalar = llvm.ConstBitCast(funcPtr, c.rawVoidFuncType)
 	case "switch":
 		funcValueWithSignatureGlobalName := funcPtr.Name() + "$withSignature"
 		funcValueWithSignatureGlobal := c.mod.NamedGlobal(funcValueWithSignatureGlobalName)
@@ -80,8 +80,21 @@ func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (f
 	context = b.CreateExtractValue(funcValue, 0, "")
 	switch b.FuncImplementation {
 	case "doubleword":
-		funcPtr = b.CreateExtractValue(funcValue, 1, "")
+		bitcast := b.CreateExtractValue(funcValue, 1, "")
+		if !bitcast.IsAConstantExpr().IsNil() && bitcast.Opcode() == llvm.BitCast {
+			funcPtr = bitcast.Operand(0)
+			return
+		}
+		llvmSig := b.getRawFuncType(sig)
+		funcPtr = b.CreateBitCast(bitcast, llvmSig, "")
 	case "switch":
+		if !funcValue.IsAConstant().IsNil() {
+			// If this is a constant func value, the underlying function is
+			// known and can be returned directly.
+			funcValueWithSignatureGlobal := llvm.ConstExtractValue(funcValue, []uint32{1}).Operand(0)
+			funcPtr = llvm.ConstExtractValue(funcValueWithSignatureGlobal.Initializer(), []uint32{0}).Operand(0)
+			return
+		}
 		llvmSig := b.getRawFuncType(sig)
 		sigGlobal := b.getFuncSignatureID(sig)
 		funcPtr = b.createRuntimeCall("getFuncPtr", []llvm.Value{funcValue, sigGlobal}, "")
@@ -96,8 +109,7 @@ func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (f
 func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
 	switch c.FuncImplementation {
 	case "doubleword":
-		rawPtr := c.getRawFuncType(typ)
-		return c.ctx.StructType([]llvm.Type{c.i8ptrType, rawPtr}, false)
+		return c.ctx.StructType([]llvm.Type{c.i8ptrType, c.rawVoidFuncType}, false)
 	case "switch":
 		return c.getLLVMRuntimeType("funcValue")
 	default:

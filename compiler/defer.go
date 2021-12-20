@@ -217,7 +217,8 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// This may be hit a variable number of times, so use a heap allocation.
 		size := b.targetData.TypeAllocSize(deferFrameType)
 		sizeValue := llvm.ConstInt(b.uintptrType, size, false)
-		allocCall := b.createRuntimeCall("alloc", []llvm.Value{sizeValue}, "defer.alloc.call")
+		nilPtr := llvm.ConstNull(b.i8ptrType)
+		allocCall := b.createRuntimeCall("alloc", []llvm.Value{sizeValue, nilPtr}, "defer.alloc.call")
 		alloca = b.CreateBitCast(allocCall, llvm.PointerType(deferFrameType, 0), "defer.alloc")
 	}
 	if b.NeedsStackObjects {
@@ -331,10 +332,10 @@ func (b *builder) createRunDefers() {
 				//Pass context
 				forwardParams = append(forwardParams, context)
 			} else {
-				// Isolate the typecode.
-				typecode := forwardParams[0]
-				forwardParams = forwardParams[1:]
-				fnPtr = b.getInvokePtr(callback, typecode)
+				// Move typecode from the start to the end of the list of
+				// parameters.
+				forwardParams = append(forwardParams[1:], forwardParams[0])
+				fnPtr = b.getInvokeFunction(callback)
 
 				// Add the context parameter. An interface call cannot also be a
 				// closure but we have to supply the parameter anyway for platforms

@@ -9,7 +9,40 @@ package machine
 
 import (
 	"device/sam"
+	"runtime/interrupt"
 )
+
+var (
+	sercomUSART0 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM0_USART, SERCOM: 0}
+	sercomUSART1 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM1_USART, SERCOM: 1}
+	sercomUSART2 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM2_USART, SERCOM: 2}
+	sercomUSART3 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM3_USART, SERCOM: 3}
+	sercomUSART4 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM4_USART, SERCOM: 4}
+	sercomUSART5 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM5_USART, SERCOM: 5}
+
+	sercomI2CM0 = &I2C{Bus: sam.SERCOM0_I2CM, SERCOM: 0}
+	sercomI2CM1 = &I2C{Bus: sam.SERCOM1_I2CM, SERCOM: 1}
+	sercomI2CM2 = &I2C{Bus: sam.SERCOM2_I2CM, SERCOM: 2}
+	sercomI2CM3 = &I2C{Bus: sam.SERCOM3_I2CM, SERCOM: 3}
+	sercomI2CM4 = &I2C{Bus: sam.SERCOM4_I2CM, SERCOM: 4}
+	sercomI2CM5 = &I2C{Bus: sam.SERCOM5_I2CM, SERCOM: 5}
+
+	sercomSPIM0 = SPI{Bus: sam.SERCOM0_SPI, SERCOM: 0}
+	sercomSPIM1 = SPI{Bus: sam.SERCOM1_SPI, SERCOM: 1}
+	sercomSPIM2 = SPI{Bus: sam.SERCOM2_SPI, SERCOM: 2}
+	sercomSPIM3 = SPI{Bus: sam.SERCOM3_SPI, SERCOM: 3}
+	sercomSPIM4 = SPI{Bus: sam.SERCOM4_SPI, SERCOM: 4}
+	sercomSPIM5 = SPI{Bus: sam.SERCOM5_SPI, SERCOM: 5}
+)
+
+func init() {
+	sercomUSART0.Interrupt = interrupt.New(sam.IRQ_SERCOM0, sercomUSART0.handleInterrupt)
+	sercomUSART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1, sercomUSART1.handleInterrupt)
+	sercomUSART2.Interrupt = interrupt.New(sam.IRQ_SERCOM2, sercomUSART2.handleInterrupt)
+	sercomUSART3.Interrupt = interrupt.New(sam.IRQ_SERCOM3, sercomUSART3.handleInterrupt)
+	sercomUSART4.Interrupt = interrupt.New(sam.IRQ_SERCOM4, sercomUSART4.handleInterrupt)
+	sercomUSART5.Interrupt = interrupt.New(sam.IRQ_SERCOM5, sercomUSART5.handleInterrupt)
+}
 
 // Return the register and mask to enable a given GPIO pin. This can be used to
 // implement bit-banged drivers.
@@ -49,7 +82,8 @@ func (p Pin) Set(high bool) {
 	}
 }
 
-// Get returns the current value of a GPIO pin.
+// Get returns the current value of a GPIO pin when configured as an input or as
+// an output.
 func (p Pin) Get() bool {
 	if p < 32 {
 		return (sam.PORT.IN0.Get()>>uint8(p))&1 > 0

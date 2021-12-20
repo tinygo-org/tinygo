@@ -9,7 +9,7 @@ import (
 )
 
 func CPUFrequency() uint32 {
-	return 16000000
+	return 320000000 // 320MHz
 }
 
 const (
@@ -44,10 +44,27 @@ func (p Pin) Set(high bool) {
 	}
 }
 
-// Get returns the current value of a GPIO pin.
+// Get returns the current value of a GPIO pin when the pin is configured as an
+// input or as an output.
 func (p Pin) Get() bool {
 	val := sifive.GPIO0.VALUE.Get() & (1 << uint8(p))
 	return (val > 0)
+}
+
+// Return the register and mask to enable a given GPIO pin. This can be used to
+// implement bit-banged drivers.
+//
+// Warning: only use this on an output pin!
+func (p Pin) PortMaskSet() (*uint32, uint32) {
+	return (*uint32)(unsafe.Pointer(&sifive.GPIO0.PORT)), sifive.GPIO0.PORT.Get() | (1 << uint8(p))
+}
+
+// Return the register and mask to disable a given GPIO pin. This can be used to
+// implement bit-banged drivers.
+//
+// Warning: only use this on an output pin!
+func (p Pin) PortMaskClear() (*uint32, uint32) {
+	return (*uint32)(unsafe.Pointer(&sifive.GPIO0.PORT)), sifive.GPIO0.PORT.Get() &^ (1 << uint8(p))
 }
 
 type UART struct {
@@ -61,9 +78,17 @@ var (
 )
 
 func (uart *UART) Configure(config UARTConfig) {
-	// Assuming a 16Mhz Crystal (which is Y1 on the HiFive1), the divisor for a
-	// 115200 baud rate is 138.
-	sifive.UART0.DIV.Set(138)
+	if config.BaudRate == 0 {
+		config.BaudRate = 115200
+	}
+	// The divisor is:
+	//   fbaud = fin / (div + 1)
+	// Restating to get the divisor:
+	//   div = fin / fbaud - 1
+	// But we're using integers, so we should take care of rounding:
+	//   div = (fin + fbaud/2) / fbaud - 1
+	divisor := (CPUFrequency()+config.BaudRate/2)/config.BaudRate - 1
+	sifive.UART0.DIV.Set(divisor)
 	sifive.UART0.TXCTRL.Set(sifive.UART_TXCTRL_ENABLE)
 	sifive.UART0.RXCTRL.Set(sifive.UART_RXCTRL_ENABLE)
 	sifive.UART0.IE.Set(sifive.UART_IE_RXWM) // enable the receive interrupt (only)

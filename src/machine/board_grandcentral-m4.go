@@ -160,6 +160,16 @@ const (
 	UART_TX_PIN = UART1_TX_PIN //
 )
 
+// UART on the Grand Central M4
+var (
+	UART1 = &sercomUSART0
+	UART2 = &sercomUSART4
+	UART3 = &sercomUSART1
+	UART4 = &sercomUSART5
+
+	DefaultUART = UART1
+)
+
 // SPI pins
 const (
 	SPI0_SCK_PIN = D66 // (PD09), also on D52
@@ -177,6 +187,12 @@ const (
 	SPI_CS_PIN  = SPI0_CS_PIN  //
 )
 
+// SPI on the Grand Central M4
+var (
+	SPI0 = sercomSPIM7
+	SPI1 = sercomSPIM2 // SD card
+)
+
 // I2C pins
 const (
 	I2C0_SDA_PIN = D62 // (PB20), also on D20
@@ -190,6 +206,12 @@ const (
 
 	SDA_PIN = I2C_SDA_PIN // unconventional pin names
 	SCL_PIN = I2C_SCL_PIN //  (required by machine_atsamd51.go)
+)
+
+// I2C on the Grand Central M4
+var (
+	I2C0 = sercomI2CM3
+	I2C1 = sercomI2CM6
 )
 
 // I2S pins

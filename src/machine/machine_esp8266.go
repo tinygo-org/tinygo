@@ -106,7 +106,7 @@ func (p Pin) Configure(config PinConfig) {
 }
 
 // Get returns the current value of a GPIO pin when the pin is configured as an
-// input.
+// input or as an output.
 func (p Pin) Get() bool {
 	// See this document for details
 	// https://www.espressif.com/sites/default/files/documentation/esp8266-technical_reference_en.pdf

@@ -1,6 +1,7 @@
 package main
 
 /*
+#include <stdio.h>
 int fortytwo(void);
 #include "main.h"
 int mul(int, int);
@@ -10,6 +11,7 @@ int mul(int, int);
 */
 import "C"
 
+// int headerfunc(int a) { return a + 1; }
 import "C"
 
 import "unsafe"
@@ -42,6 +44,9 @@ func main() {
 	// variadic functions
 	println("variadic0:", C.variadic0())
 	println("variadic2:", C.variadic2(3, 5))
+
+	// functions in the header C snippet
+	println("headerfunc:", C.headerfunc(5))
 
 	// equivalent types
 	var goInt8 int8 = 5
@@ -124,11 +129,21 @@ func main() {
 	// Check whether CFLAGS are correctly passed on to compiled C files.
 	println("CFLAGS value:", C.cflagsConstant)
 
+	// Check array-to-pointer decaying. This signature:
+	//   void arraydecay(int buf1[5], int buf2[3][8], int buf3[4][7][2]);
+	// decays to:
+	//   void arraydecay(int *buf1, int *buf2[8], int *buf3[7][2]);
+	C.arraydecay((*C.int)(nil), (*[8]C.int)(nil), (*[7][2]C.int)(nil))
+
 	// libc: test whether C functions work at all.
 	buf1 := []byte("foobar\x00")
 	buf2 := make([]byte, len(buf1))
 	C.strcpy((*C.char)(unsafe.Pointer(&buf2[0])), (*C.char)(unsafe.Pointer(&buf1[0])))
 	println("copied string:", string(buf2[:C.strlen((*C.char)(unsafe.Pointer(&buf2[0])))]))
+
+	// libc: test basic stdio functionality
+	putsBuf := []byte("line written using C puts\x00")
+	C.puts((*C.char)(unsafe.Pointer(&putsBuf[0])))
 }
 
 func printUnion(union C.joined_t) C.joined_t {

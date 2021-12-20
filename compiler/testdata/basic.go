@@ -10,6 +10,22 @@ func equalInt(x, y int) bool {
 	return x == y
 }
 
+func divInt(x, y int) int {
+	return x / y
+}
+
+func divUint(x, y uint) uint {
+	return x / y
+}
+
+func remInt(x, y int) int {
+	return x % y
+}
+
+func remUint(x, y uint) uint {
+	return x % y
+}
+
 func floatEQ(x, y float32) bool {
 	return x == y
 }

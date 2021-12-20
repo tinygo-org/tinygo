@@ -96,6 +96,7 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 //  SDA: 2, 6, 10, 14, 18, 26
 //  SCL: 3, 7, 11, 15, 19, 27
 func (i2c *I2C) Configure(config I2CConfig) error {
+	const defaultBaud uint32 = 100_000 // 100kHz standard mode
 	if config.SCL == 0 {
 		// If config pins are zero valued or clock pin is invalid then we set default values.
 		switch i2c.Bus {
@@ -107,17 +108,25 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 			config.SDA = I2C1_SDA_PIN
 		}
 	}
+	if config.Frequency == 0 {
+		config.Frequency = defaultBaud
+	}
 	config.SDA.Configure(PinConfig{PinI2C})
 	config.SCL.Configure(PinConfig{PinI2C})
 	return i2c.init(config)
 }
 
-// SetBaudrate sets the I2C frequency. It has the side effect of also
+// SetBaudRate sets the I2C frequency. It has the side effect of also
 // enabling the I2C hardware if disabled beforehand.
 //go:inline
-func (i2c *I2C) SetBaudrate(br uint32) error {
-	const freqin uint32 = 125 * MHz
-	// Find smallest prescale value which puts o
+func (i2c *I2C) SetBaudRate(br uint32) error {
+
+	if br == 0 {
+		return ErrInvalidI2CBaudrate
+	}
+
+	// I2C is synchronous design that runs from clk_sys
+	freqin := CPUFrequency()
 
 	// TODO there are some subtleties to I2C timing which we are completely ignoring here
 	period := (freqin + br/2) / br
@@ -201,7 +210,7 @@ func (i2c *I2C) init(config I2CConfig) error {
 
 	// Always enable the DREQ signalling -- harmless if DMA isn't listening
 	i2c.Bus.IC_DMA_CR.Set(rp.I2C0_IC_DMA_CR_TDMAE | rp.I2C0_IC_DMA_CR_RDMAE)
-	return i2c.SetBaudrate(config.Frequency)
+	return i2c.SetBaudRate(config.Frequency)
 }
 
 // reset sets I2C register RESET bits in the reset peripheral and then clears them.

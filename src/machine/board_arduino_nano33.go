@@ -58,10 +58,21 @@ const (
 	UART_RX_PIN Pin = PA23
 )
 
+// UART1 on the Arduino Nano 33 connects to the onboard NINA-W102 WiFi chip.
+var UART1 = &sercomUSART3
+
+// UART2 on the Arduino Nano 33 connects to the normal TX/RX pins.
+var UART2 = &sercomUSART5
+
 // I2C pins
 const (
 	SDA_PIN Pin = A4 // SDA: SERCOM4/PAD[1]
 	SCL_PIN Pin = A5 // SCL: SERCOM4/PAD[1]
+)
+
+// I2C on the Arduino Nano 33.
+var (
+	I2C0 = sercomI2CM4
 )
 
 // SPI pins
@@ -69,6 +80,15 @@ const (
 	SPI0_SCK_PIN Pin = D13 // SCK: SERCOM1/PAD[1]
 	SPI0_SDO_PIN Pin = D11 // SDO: SERCOM1/PAD[0]
 	SPI0_SDI_PIN Pin = D12 // SDI: SERCOM1/PAD[3]
+)
+
+// SPI on the Arduino Nano 33.
+var SPI0 = sercomSPIM1
+
+// SPI1 is connected to the NINA-W102 chip on the Arduino Nano 33.
+var (
+	SPI1     = sercomSPIM2
+	NINA_SPI = SPI1
 )
 
 // NINA-W102 Pins

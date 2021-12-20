@@ -12,7 +12,7 @@ import (
 // bitcasts, or else allocates a value on the heap if it cannot be packed in the
 // pointer value directly. It returns the pointer with the packed data.
 // If the values are all constants, they are be stored in a constant global and deduplicated.
-func EmitPointerPack(builder llvm.Builder, mod llvm.Module, needsStackObjects bool, values []llvm.Value) llvm.Value {
+func EmitPointerPack(builder llvm.Builder, mod llvm.Module, prefix string, needsStackObjects bool, values []llvm.Value) llvm.Value {
 	ctx := mod.Context()
 	targetData := llvm.NewTargetData(mod.DataLayout())
 	i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
@@ -83,12 +83,11 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, needsStackObjects bo
 		if constant {
 			// The data is known at compile time, so store it in a constant global.
 			// The global address is marked as unnamed, which allows LLVM to merge duplicates.
-			funcName := builder.GetInsertBlock().Parent().Name()
-			global := llvm.AddGlobal(mod, packedType, funcName+"$pack")
+			global := llvm.AddGlobal(mod, packedType, prefix+"$pack")
 			global.SetInitializer(ctx.ConstStruct(values, false))
 			global.SetGlobalConstant(true)
 			global.SetUnnamedAddr(true)
-			global.SetLinkage(llvm.PrivateLinkage)
+			global.SetLinkage(llvm.InternalLinkage)
 			return llvm.ConstBitCast(global, i8ptrType)
 		}
 
@@ -97,6 +96,7 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, needsStackObjects bo
 		alloc := mod.NamedFunction("runtime.alloc")
 		packedHeapAlloc := builder.CreateCall(alloc, []llvm.Value{
 			sizeValue,
+			llvm.ConstNull(i8ptrType),
 			llvm.Undef(i8ptrType),            // unused context parameter
 			llvm.ConstPointerNull(i8ptrType), // coroutine handle
 		}, "")

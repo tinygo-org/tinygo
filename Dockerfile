@@ -15,7 +15,7 @@ RUN cd /tinygo/ && \
     git submodule sync && \
     git submodule update --init --recursive --force
 
-COPY ./lib/picolibc-include/* /tinygo/lib/picolibc-include/
+COPY ./lib/picolibc-stdio.c /tinygo/lib/picolibc-stdio.c
 
 RUN cd /tinygo/ && \
     go install /tinygo/
@@ -29,8 +29,9 @@ COPY --from=tinygo-base /tinygo/targets /tinygo/targets
 
 RUN cd /tinygo/ && \
     apt-get update && \
-    apt-get install -y make clang-11 libllvm11 lld-11 && \
-    make wasi-libc
+    apt-get install -y make clang-11 libllvm11 lld-11 cmake ninja-build && \
+    mkdir build && \
+    make wasi-libc binaryen
 
 # tinygo-avr stage installs the needed dependencies to compile TinyGo programs for AVR microcontrollers.
 FROM tinygo-base AS tinygo-avr

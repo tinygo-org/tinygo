@@ -1,13 +1,16 @@
 // CGo errors:
 //     testdata/errors.go:4:2: warning: some warning
 //     testdata/errors.go:11:9: error: unknown type name 'someType'
+//     testdata/errors.go:22:5: warning: another warning
 //     testdata/errors.go:13:23: unexpected token ), expected end of expression
+//     testdata/errors.go:19:26: unexpected token ), expected end of expression
 
 // Type checking errors after CGo processing:
 //     testdata/errors.go:102: cannot use 2 << 10 (untyped int constant 2048) as uint8 value in variable declaration (overflows)
 //     testdata/errors.go:105: unknown field z in struct literal
 //     testdata/errors.go:108: undeclared name: C.SOME_CONST_1
 //     testdata/errors.go:110: cannot use C.SOME_CONST_3 (untyped int constant 1234) as byte value in variable declaration (overflows)
+//     testdata/errors.go:112: undeclared name: C.SOME_CONST_4
 
 package main
 

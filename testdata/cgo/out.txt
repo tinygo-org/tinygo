@@ -15,6 +15,7 @@ callback 1: 50
 callback 2: 600
 variadic0: 1
 variadic2: 15
+headerfunc: 6
 bool: true true
 float: +3.100000e+000
 double: +3.200000e+000
@@ -61,3 +62,4 @@ option 3A: 21
 enum width matches: true
 CFLAGS value: 17
 copied string: foobar
+line written using C puts

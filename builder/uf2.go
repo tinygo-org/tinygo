@@ -141,11 +141,13 @@ func split(input []byte, limit int) [][]byte {
 	var block []byte
 	output := make([][]byte, 0, len(input)/limit+1)
 	for len(input) >= limit {
+		// add all blocks
 		block, input = input[:limit], input[limit:]
 		output = append(output, block)
 	}
 	if len(input) > 0 {
-		output = append(output, input[:len(input)])
+		// add remaining block (that isn't full sized)
+		output = append(output, input)
 	}
 	return output
 }

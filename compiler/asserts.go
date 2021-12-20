@@ -15,22 +15,16 @@ import (
 // createLookupBoundsCheck emits a bounds check before doing a lookup into a
 // slice. This is required by the Go language spec: an index out of bounds must
 // cause a panic.
-func (b *builder) createLookupBoundsCheck(arrayLen, index llvm.Value, indexType types.Type) {
+// The caller should make sure that index is at least as big as arrayLen.
+func (b *builder) createLookupBoundsCheck(arrayLen, index llvm.Value) {
 	if b.info.nobounds {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
 		return
 	}
 
-	if index.Type().IntTypeWidth() < arrayLen.Type().IntTypeWidth() {
-		// Sometimes, the index can be e.g. an uint8 or int8, and we have to
-		// correctly extend that type.
-		if indexType.Underlying().(*types.Basic).Info()&types.IsUnsigned == 0 {
-			index = b.CreateZExt(index, arrayLen.Type(), "")
-		} else {
-			index = b.CreateSExt(index, arrayLen.Type(), "")
-		}
-	} else if index.Type().IntTypeWidth() > arrayLen.Type().IntTypeWidth() {
+	// Extend arrayLen if it's too small.
+	if index.Type().IntTypeWidth() > arrayLen.Type().IntTypeWidth() {
 		// The index is bigger than the array length type, so extend it.
 		arrayLen = b.CreateZExt(arrayLen, index.Type(), "")
 	}
@@ -70,27 +64,9 @@ func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lo
 	}
 
 	// Extend low and high to be the same size as capacity.
-	if low.Type().IntTypeWidth() < capacityType.IntTypeWidth() {
-		if lowType.Info()&types.IsUnsigned != 0 {
-			low = b.CreateZExt(low, capacityType, "")
-		} else {
-			low = b.CreateSExt(low, capacityType, "")
-		}
-	}
-	if high.Type().IntTypeWidth() < capacityType.IntTypeWidth() {
-		if highType.Info()&types.IsUnsigned != 0 {
-			high = b.CreateZExt(high, capacityType, "")
-		} else {
-			high = b.CreateSExt(high, capacityType, "")
-		}
-	}
-	if max.Type().IntTypeWidth() < capacityType.IntTypeWidth() {
-		if maxType.Info()&types.IsUnsigned != 0 {
-			max = b.CreateZExt(max, capacityType, "")
-		} else {
-			max = b.CreateSExt(max, capacityType, "")
-		}
-	}
+	low = b.extendInteger(low, lowType, capacityType)
+	high = b.extendInteger(high, highType, capacityType)
+	max = b.extendInteger(max, maxType, capacityType)
 
 	// Now do the bounds check: low > high || high > capacity
 	outOfBounds1 := b.CreateICmp(llvm.IntUGT, low, high, "slice.lowhigh")
@@ -125,13 +101,7 @@ func (b *builder) createUnsafeSliceCheck(ptr, len llvm.Value, lenType *types.Bas
 	// using an unsiged greater than.
 
 	// Make sure the len value is at least as big as a uintptr.
-	if len.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
-		if lenType.Info()&types.IsUnsigned != 0 {
-			len = b.CreateZExt(len, b.uintptrType, "")
-		} else {
-			len = b.CreateSExt(len, b.uintptrType, "")
-		}
-	}
+	len = b.extendInteger(len, lenType, b.uintptrType)
 
 	// Determine the maximum slice size, and therefore the maximum value of the
 	// len parameter.
@@ -159,19 +129,8 @@ func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, 
 		return
 	}
 
-	// Check whether the bufSize parameter must be cast to a wider integer for
-	// comparison.
-	if bufSize.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
-		if bufSizeType.Info()&types.IsUnsigned != 0 {
-			// Unsigned, so zero-extend to uint type.
-			bufSizeType = types.Typ[types.Uint]
-			bufSize = b.CreateZExt(bufSize, b.intType, "")
-		} else {
-			// Signed, so sign-extend to int type.
-			bufSizeType = types.Typ[types.Int]
-			bufSize = b.CreateSExt(bufSize, b.intType, "")
-		}
-	}
+	// Make sure bufSize is at least as big as maxBufSize (an uintptr).
+	bufSize = b.extendInteger(bufSize, bufSizeType, b.uintptrType)
 
 	// Calculate (^uintptr(0)) >> 1, which is the max value that fits in an
 	// uintptr if uintptrs were signed.
@@ -255,6 +214,19 @@ func (b *builder) createNegativeShiftCheck(shift llvm.Value) {
 	b.createRuntimeAssert(isNegative, "shift", "negativeShiftPanic")
 }
 
+// createDivideByZeroCheck asserts that y is not zero. If it is, a runtime panic
+// will be emitted. This follows the Go specification which says that a divide
+// by zero must cause a run time panic.
+func (b *builder) createDivideByZeroCheck(y llvm.Value) {
+	if b.info.nobounds {
+		return
+	}
+
+	// isZero = y == 0
+	isZero := b.CreateICmp(llvm.IntEQ, y, llvm.ConstInt(y.Type(), 0, false), "")
+	b.createRuntimeAssert(isZero, "divbyzero", "divideByZeroPanic")
+}
+
 // createRuntimeAssert is a common function to create a new branch on an assert
 // bool, calling an assert func if the assert value is true (1).
 func (b *builder) createRuntimeAssert(assert llvm.Value, blockPrefix, assertFunc string) {
@@ -282,4 +254,20 @@ func (b *builder) createRuntimeAssert(assert llvm.Value, blockPrefix, assertFunc
 
 	// Ok: assert didn't trigger so continue normally.
 	b.SetInsertPointAtEnd(nextBlock)
+}
+
+// extendInteger extends the value to at least targetType using a zero or sign
+// extend. The resulting value is not truncated: it may still be bigger than
+// targetType.
+func (b *builder) extendInteger(value llvm.Value, valueType types.Type, targetType llvm.Type) llvm.Value {
+	if value.Type().IntTypeWidth() < targetType.IntTypeWidth() {
+		if valueType.Underlying().(*types.Basic).Info()&types.IsUnsigned != 0 {
+			// Unsigned, so zero-extend to the target type.
+			value = b.CreateZExt(value, targetType, "")
+		} else {
+			// Signed, so sign-extend to the target type.
+			value = b.CreateSExt(value, targetType, "")
+		}
+	}
+	return value
 }

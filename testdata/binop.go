@@ -24,6 +24,13 @@ func main() {
 	println("ab" < "aa")
 	println("aa" < "ab")
 
+	h := "hello"
+	println("h < h", h < h)
+	println("h <= h", h <= h)
+	println("h == h", h == h)
+	println("h >= h", h >= h)
+	println("h > h", h > h)
+
 	println("array equality")
 	println(a1 == [2]int{1, 2})
 	println(a1 != [2]int{1, 2})
@@ -75,6 +82,10 @@ func main() {
 	println("constant number")
 	x := uint32(5)
 	println(uint32(x) / (20e0 / 1))
+
+	// check for signed integer overflow
+	println("-2147483648 / -1:", sdiv32(-2147483648, -1))
+	println("-2147483648 % -1:", srem32(-2147483648, -1))
 }
 
 var x = true
@@ -112,6 +123,14 @@ func shr(x uint, y uint) uint {
 
 func ashr(x int, y uint) int {
 	return x >> y
+}
+
+func sdiv32(x, y int32) int32 {
+	return x / y
+}
+
+func srem32(x, y int32) int32 {
+	return x % y
 }
 
 var shlSimple = shl(2, 1)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -15,7 +16,7 @@ import (
 //
 // This pass can be enabled/disabled with the -wasm-abi flag, and is enabled by
 // default as of december 2019.
-func ExternalInt64AsPtr(mod llvm.Module) error {
+func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 	ctx := mod.Context()
 	builder := ctx.NewBuilder()
 	defer builder.Dispose()
@@ -36,6 +37,12 @@ func ExternalInt64AsPtr(mod llvm.Module) error {
 			// Do not try to modify the signature of internal LLVM functions and
 			// assume that runtime functions are only temporarily exported for
 			// coroutine lowering.
+			continue
+		}
+		if !fn.GetStringAttributeAtIndex(-1, "tinygo-methods").IsNil() {
+			// These are internal functions (interface method call, interface
+			// type assert) that will be lowered by the interface lowering pass.
+			// Don't transform them.
 			continue
 		}
 
@@ -73,10 +80,7 @@ func ExternalInt64AsPtr(mod llvm.Module) error {
 		fn.SetName(name + "$i64wrap")
 		externalFnType := llvm.FunctionType(returnType, paramTypes, fnType.IsFunctionVarArg())
 		externalFn := llvm.AddFunction(mod, name, externalFnType)
-		optsize := fn.GetEnumFunctionAttribute(llvm.AttributeKindID("optsize"))
-		if !optsize.IsNil() {
-			fn.AddFunctionAttr(optsize)
-		}
+		AddStandardAttributes(fn, config)
 
 		if fn.IsDeclaration() {
 			// Just a declaration: the definition doesn't exist on the Go side

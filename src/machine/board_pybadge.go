@@ -84,11 +84,21 @@ const (
 	UART2_RX_PIN = A5
 )
 
+var (
+	UART1 = &sercomUSART5
+	UART2 = &sercomUSART0
+
+	DefaultUART = UART1
+)
+
 // I2C pins
 const (
 	SDA_PIN = PA12 // SDA: SERCOM2/PAD[0]
 	SCL_PIN = PA13 // SCL: SERCOM2/PAD[1]
 )
+
+// I2C on the ItsyBitsy M4.
+var I2C0 = sercomI2CM2
 
 // SPI pins
 const (
@@ -103,6 +113,12 @@ const (
 	SPI1_SDO_PIN = PB15 // SDO: SERCOM4/PAD[3]
 	SPI1_SDI_PIN = NoPin
 )
+
+// SPI on the PyBadge.
+var SPI0 = sercomSPIM1
+
+// TFT SPI on the PyBadge.
+var SPI1 = sercomSPIM4
 
 // USB CDC identifiers
 const (

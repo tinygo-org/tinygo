@@ -8,7 +8,7 @@ import (
 
 var (
 	validGCOptions            = []string{"none", "leaking", "extalloc", "conservative"}
-	validSchedulerOptions     = []string{"none", "tasks", "coroutines"}
+	validSchedulerOptions     = []string{"none", "tasks", "coroutines", "asyncify"}
 	validSerialOptions        = []string{"none", "uart", "usb"}
 	validPrintSizeOptions     = []string{"none", "short", "full"}
 	validPanicStrategyOptions = []string{"print", "trap"}
@@ -16,8 +16,12 @@ var (
 )
 
 // Options contains extra options to give to the compiler. These options are
-// usually passed from the command line.
+// usually passed from the command line, but can also be passed in environment
+// variables for example.
 type Options struct {
+	GOOS            string // environment variable
+	GOARCH          string // environment variable
+	GOARM           string // environment variable (only used with GOARCH=arm)
 	Target          string
 	Opt             string
 	GC              string
@@ -28,6 +32,7 @@ type Options struct {
 	DumpSSA         bool
 	VerifyIR        bool
 	PrintCommands   func(cmd string, args ...string)
+	Parallelism     int // -p flag
 	Debug           bool
 	PrintSizes      string
 	PrintAllocs     *regexp.Regexp // regexp string

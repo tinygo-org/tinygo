@@ -504,10 +504,6 @@ type UART struct {
 	Interrupt interrupt.Interrupt
 }
 
-var (
-	USB = &USBCDC{Buffer: NewRingBuffer()}
-)
-
 const (
 	sampleRate16X = 16
 	lsbFirst      = 1
@@ -900,6 +896,8 @@ func (i2c *I2C) readByte() byte {
 type I2S struct {
 	Bus *sam.I2S_Type
 }
+
+var I2S0 = I2S{Bus: sam.I2S}
 
 // Configure is used to configure the I2S interface. You must call this
 // before you can use the I2S bus.
@@ -1742,6 +1740,10 @@ type USBCDC struct {
 	waitTxcRetryCount uint8
 	sent              bool
 }
+
+var (
+	USB = &USBCDC{Buffer: NewRingBuffer()}
+)
 
 const (
 	usbcdcTxSizeMask          uint8 = 0x3F

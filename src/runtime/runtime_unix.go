@@ -7,8 +7,8 @@ import (
 	"unsafe"
 )
 
-//export putchar
-func _putchar(c int) int
+//export write
+func libc_write(fd int32, buf unsafe.Pointer, count uint) int
 
 //export usleep
 func usleep(usec uint) int
@@ -17,8 +17,11 @@ func usleep(usec uint) int
 func malloc(size uintptr) unsafe.Pointer
 
 // void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+// Note: off_t is defined as int64 because:
+//   - musl (used on Linux) always defines it as int64
+//   - darwin is practically always 64-bit anyway
 //export mmap
-func mmap(addr unsafe.Pointer, length uintptr, prot, flags, fd int, offset int) unsafe.Pointer
+func mmap(addr unsafe.Pointer, length uintptr, prot, flags, fd int, offset int64) unsafe.Pointer
 
 //export abort
 func abort()
@@ -27,16 +30,39 @@ func abort()
 func exit(code int)
 
 //export clock_gettime
-func clock_gettime(clk_id int32, ts *timespec)
+func libc_clock_gettime(clk_id int32, ts *timespec)
+
+//export __clock_gettime64
+func libc_clock_gettime64(clk_id int32, ts *timespec)
+
+// Portable (64-bit) variant of clock_gettime.
+func clock_gettime(clk_id int32, ts *timespec) {
+	if TargetBits == 32 {
+		// This is a 32-bit architecture (386, arm, etc).
+		// We would like to use the 64-bit version of this function so that
+		// binaries will continue to run after Y2038.
+		// For more information:
+		//   - https://musl.libc.org/time64.html
+		//   - https://sourceware.org/glibc/wiki/Y2038ProofnessDesign
+		libc_clock_gettime64(clk_id, ts)
+	} else {
+		// This is a 64-bit architecture (amd64, arm64, etc).
+		// Use the regular variant, because it already fixes the Y2038 problem
+		// by using 64-bit integer types.
+		libc_clock_gettime(clk_id, ts)
+	}
+}
 
 type timeUnit int64
 
-// Note: tv_sec and tv_nsec vary in size by platform. They are 32-bit on 32-bit
-// systems and 64-bit on 64-bit systems (at least on macOS/Linux), so we can
-// simply use the 'int' type which does the same.
+// Note: tv_sec and tv_nsec normally vary in size by platform. However, we're
+// using the time64 variant (see clock_gettime above), so the formats are the
+// same between 32-bit and 64-bit architectures.
+// There is one issue though: on big-endian systems, tv_nsec would be incorrect.
+// But we don't support big-endian systems yet (as of 2021) so this is fine.
 type timespec struct {
-	tv_sec  int // time_t: follows the platform bitness
-	tv_nsec int // long: on Linux and macOS, follows the platform bitness
+	tv_sec  int64 // time_t with time64 support (always 64-bit)
+	tv_nsec int64 // unsigned 64-bit integer on all time64 platforms
 }
 
 var stackTop uintptr
@@ -48,28 +74,9 @@ func postinit() {}
 func main(argc int32, argv *unsafe.Pointer) int {
 	preinit()
 
-	// Make args global big enough so that it can store all command line
-	// arguments. Unfortunately this has to be done with some magic as the heap
-	// is not yet initialized.
-	argsSlice := (*struct {
-		ptr unsafe.Pointer
-		len uintptr
-		cap uintptr
-	})(unsafe.Pointer(&args))
-	argsSlice.ptr = malloc(uintptr(argc) * (unsafe.Sizeof(uintptr(0))) * 3)
-	argsSlice.len = uintptr(argc)
-	argsSlice.cap = uintptr(argc)
-
-	// Initialize command line parameters.
-	for i := 0; i < int(argc); i++ {
-		// Convert the C string to a Go string.
-		length := strlen(*argv)
-		arg := (*_string)(unsafe.Pointer(&args[i]))
-		arg.length = length
-		arg.ptr = (*byte)(*argv)
-		// This is the Go equivalent of "argc++" in C.
-		argv = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(argv)) + unsafe.Sizeof(argv)))
-	}
+	// Store argc and argv for later use.
+	main_argc = argc
+	main_argv = argv
 
 	// Obtain the initial stack pointer right before calling the run() function.
 	// The run function has been moved to a separate (non-inlined) function so
@@ -79,6 +86,34 @@ func main(argc int32, argv *unsafe.Pointer) int {
 
 	// For libc compatibility.
 	return 0
+}
+
+var (
+	main_argc int32
+	main_argv *unsafe.Pointer
+	args      []string
+)
+
+//go:linkname os_runtime_args os.runtime_args
+func os_runtime_args() []string {
+	if args == nil {
+		// Make args slice big enough so that it can store all command line
+		// arguments.
+		args = make([]string, main_argc)
+
+		// Initialize command line parameters.
+		argv := main_argv
+		for i := 0; i < int(main_argc); i++ {
+			// Convert the C string to a Go string.
+			length := strlen(*argv)
+			arg := (*_string)(unsafe.Pointer(&args[i]))
+			arg.length = length
+			arg.ptr = (*byte)(*argv)
+			// This is the Go equivalent of "argv++" in C.
+			argv = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(argv)) + unsafe.Sizeof(argv)))
+		}
+	}
+	return args
 }
 
 // Must be a separate function to get the correct stack pointer.
@@ -119,7 +154,8 @@ func syscall_runtime_envs() []string {
 }
 
 func putchar(c byte) {
-	_putchar(int(c))
+	buf := [1]byte{c}
+	libc_write(1, unsafe.Pointer(&buf[0]), 1)
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {

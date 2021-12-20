@@ -1,4 +1,4 @@
-// +build scheduler.tasks,amd64
+// +build scheduler.tasks,amd64,!windows
 
 package task
 

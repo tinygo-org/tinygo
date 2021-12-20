@@ -67,3 +67,7 @@ func sleepTicks(d timeUnit) {
 		// TODO: suspend the CPU to not burn power here unnecessarily.
 	}
 }
+
+func exit(code int) {
+	abort()
+}

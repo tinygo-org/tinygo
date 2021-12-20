@@ -75,6 +75,9 @@ var stdlibAliases = map[string]string{
 // createAlias implements the function (in the builder) as a call to the alias
 // function.
 func (b *builder) createAlias(alias llvm.Value) {
+	b.llvmFn.SetVisibility(llvm.HiddenVisibility)
+	b.llvmFn.SetUnnamedAddr(true)
+
 	if b.Debug {
 		if b.fn.Syntax() != nil {
 			// Create debug info file if present.

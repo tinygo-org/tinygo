@@ -2,11 +2,6 @@
 
 package machine
 
-import (
-	"device/sam"
-	"runtime/interrupt"
-)
-
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
 
@@ -61,18 +56,7 @@ const (
 )
 
 // UART1 on the Xiao
-var (
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM4_USART,
-		SERCOM: 4,
-	}
-)
-
-func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM4, _UART1.handleInterrupt)
-}
+var UART1 = &sercomUSART4
 
 // I2C pins
 const (
@@ -82,10 +66,7 @@ const (
 
 // I2C on the Xiao
 var (
-	I2C0 = &I2C{
-		Bus:    sam.SERCOM2_I2CM,
-		SERCOM: 2,
-	}
+	I2C0 = sercomI2CM2
 )
 
 // SPI pins
@@ -96,23 +77,13 @@ const (
 )
 
 // SPI on the Xiao
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM0_SPI,
-		SERCOM: 0,
-	}
-)
+var SPI0 = sercomSPIM0
 
 // I2S pins
 const (
 	I2S_SCK_PIN = PA10
 	I2S_SD_PIN  = PA08
 	I2S_WS_PIN  = NoPin // TODO: figure out what this is on Xiao
-)
-
-// I2S on the Xiao
-var (
-	I2S0 = I2S{Bus: sam.I2S}
 )
 
 // USB CDC identifiers

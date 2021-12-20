@@ -19,7 +19,7 @@ func postinit() {}
 func main() {
 	preinit()
 	run()
-	abort()
+	exit(0)
 }
 
 func init() {

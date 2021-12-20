@@ -1,3 +1,97 @@
+0.21.0
+---
+
+* **command line**
+  - drop support for LLVM 10
+  - `build`: drop support for LLVM targets in the -target flag
+  - `build`: fix paths in error messages on Windows
+  - `build`: add -p flag to set parallelism
+  - `lldb`: implement `tinygo lldb` subcommand
+  - `test`: use emulator exit code instead of parsing test output
+  - `test`: pass testing arguments to wasmtime
+* **compiler**
+  - use -opt flag for optimization level in CFlags (-Os, etc)
+  - `builder`: improve accuracy of the -size=full flag
+  - `builder`: hardcode some more frame sizes for __aeabi_* functions
+  - `builder`: add support for -size= flag for WebAssembly
+  - `cgo`: fix line/column reporting in syntax error messages
+  - `cgo`: support function definitions in CGo headers
+  - `cgo`: implement rudimentary C array decaying
+  - `cgo`: add support for stdio in picolibc and wasi-libc
+  - `cgo`: run CGo parser per file, not per CGo fragment
+  - `compiler`: fix unintentionally exported math functions
+  - `compiler`: properly implement div and rem operations
+  - `compiler`: add support for recursive function types
+  - `compiler`: add support for the `go` keyword on interface methods
+  - `compiler`: add minsize attribute for -Oz
+  - `compiler`: add "target-cpu" and "target-features" attributes
+  - `compiler`: fix indices into strings and arrays
+  - `compiler`: fix string compare functions
+  - `interp`: simplify some code to avoid some errors
+  - `interp`: support recursive globals (like linked lists) in globals
+  - `interp`: support constant globals
+  - `interp`: fix reverting of extractvalue/insertvalue with multiple indices
+  - `transform`: work around renamed return type after merging LLVM modules
+* **standard library**
+  - `internal/bytealg`: fix indexing error in Compare()
+  - `machine`: support Pin.Get() function when the pin is configured as output
+  - `net`, `syscall`: Reduce code duplication by switching to internal/itoa.
+  - `os`: don't try to read executable path on baremetal
+  - `os`: implement Getwd
+  - `os`: add File.WriteString and File.WriteAt
+  - `reflect`: fix type.Size() to account for struct padding
+  - `reflect`: don't construct an interface-in-interface value
+  - `reflect`: implement Value.Elem() for interface values
+  - `reflect`: fix Value.Index() in a specific case
+  - `reflect`: add support for DeepEqual
+  - `runtime`: add another set of invalid unicode runes to encodeUTF8()
+  - `runtime`: only initialize os.runtime_args when needed
+  - `runtime`: only use CRLF on baremetal systems for println
+  - `runtime/debug`: stub `debug.SetMaxStack`
+  - `runtime/debug`: stub `debug.Stack`
+  - `testing`: add a stub for t.Parallel()
+  - `testing`: add support for -test.short flag
+  - `testing`: stub B.ReportAllocs()
+  - `testing`: add `testing.Verbose`
+  - `testing`: stub `testing.AllocsPerRun`
+* **targets**
+  - fix gen-device-svd to handle 64-bit values
+  - add CPU and Features property to all targets
+  - match LLVM triple to the one Clang uses
+  - `atsam`: simplify definition of SERCOM UART, I2C and SPI peripherals
+  - `atsam`: move I2S0 to machine file
+  - `esp32`: fix SPI configuration
+  - `esp32c3`: add support for GDB debugging
+  - `esp32c3`: add support for CPU interrupts
+  - `esp32c3`: use tasks scheduler by default
+  - `fe310`: increase CPU frequency from 16MHz to 320MHz
+  - `fe310`: add support for bit banging drivers
+  - `linux`: build static binaries using musl
+  - `linux`: reduce binary size by calling `write` instead of `putchar`
+  - `linux`: add support for GOARM
+  - `riscv`: implement 32-bit atomic operations
+  - `riscv`: align the heap to 16 bytes
+  - `riscv`: switch to tasks-based scheduler
+  - `rp2040`: add CPUFrequency()
+  - `rp2040`: improve I2C baud rate configuration
+  - `rp2040`: add pin interrupt API
+  - `rp2040`: refactor PWM code and fix Period calculation
+  - `stm32f103`: fix SPI
+  - `stm32f103`: make SPI frequency selection more flexible
+  - `qemu`: signal correct exit code to QEMU
+  - `wasi`: run C/C++ constructors at startup
+  - `wasm`: ensure heapptr is aligned
+  - `wasm`: update wasi-libc dependency
+  - `wasm`: wasi: use asyncify
+  - `wasm`: support `-scheduler=none`
+  - `windows`: add support for Windows (amd64 only for now)
+* **boards**
+  - `feather-stm32f405`, `feather-rp2040`: add I2C pin names
+  - `m5stack-core2`: add M5Stack Core2
+  - `nano-33-ble`: SoftDevice s140v7 support
+  - `nano-33-ble`: add constants for more on-board pins
+
+
 0.20.0
 ---
 

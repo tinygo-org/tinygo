@@ -6,29 +6,6 @@ commands:
       - run:
           name: "Pull submodules"
           command: git submodule update --init
-  apt-dependencies:
-    parameters:
-      llvm:
-        type: string
-    steps:
-      - run:
-          name: "Install apt dependencies"
-          command: |
-            echo 'deb https://apt.llvm.org/buster/ llvm-toolchain-buster-<<parameters.llvm>> main' | sudo tee /etc/apt/sources.list.d/llvm.list
-            wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
-            sudo apt-get update
-            sudo apt-get install \
-                llvm-<<parameters.llvm>>-dev \
-                clang-<<parameters.llvm>> \
-                libclang-<<parameters.llvm>>-dev \
-                lld-<<parameters.llvm>> \
-                gcc-arm-linux-gnueabihf \
-                gcc-aarch64-linux-gnu \
-                qemu-system-arm \
-                qemu-user \
-                gcc-avr \
-                avr-libc
-            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-8-dev
   install-node:
     steps:
       - run:
@@ -52,6 +29,13 @@ commands:
           command: |
             curl https://wasmtime.dev/install.sh -sSf | bash
             sudo ln -s ~/.wasmtime/bin/wasmtime /usr/local/bin/wasmtime
+  install-cmake:
+    steps:
+      - run:
+          name: "Install CMake"
+          command: |
+            wget https://github.com/Kitware/CMake/releases/download/v3.21.4/cmake-3.21.4-linux-x86_64.tar.gz
+            sudo tar --strip-components=1 -C /usr/local -xf cmake-3.21.4-linux-x86_64.tar.gz
   install-xtensa-toolchain:
     parameters:
       variant:
@@ -79,6 +63,39 @@ commands:
             - llvm-project/clang/include
             - llvm-project/lld/include
             - llvm-project/llvm/include
+  hack-ninja-jobs:
+    steps:
+      - run:
+          name: "Hack Ninja to use less jobs"
+          command: |
+            echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
+            chmod +x /go/bin/ninja
+  build-binaryen-linux:
+    steps:
+      - restore_cache:
+          keys:
+            - binaryen-linux-v1
+      - run:
+          name: "Build Binaryen"
+          command: |
+            make binaryen
+      - save_cache:
+          key: binaryen-linux-v1
+          paths:
+            - build/wasm-opt
+  build-binaryen-linux-stretch:
+    steps:
+      - restore_cache:
+          keys:
+            - binaryen-linux-stretch-v1
+      - run:
+          name: "Build Binaryen"
+          command: |
+            CC=$PWD/llvm-build/bin/clang make binaryen
+      - save_cache:
+          key: binaryen-linux-stretch-v1
+          paths:
+            - build/wasm-opt
   build-wasi-libc:
     steps:
       - restore_cache:
@@ -98,11 +115,23 @@ commands:
     steps:
       - checkout
       - submodules
-      - apt-dependencies:
-          llvm: "<<parameters.llvm>>"
-      - install-node
-      - install-chrome
-      - install-wasmtime
+      - run:
+          name: "Install apt dependencies"
+          command: |
+            echo 'deb https://apt.llvm.org/buster/ llvm-toolchain-buster-<<parameters.llvm>> main' | sudo tee /etc/apt/sources.list.d/llvm.list
+            wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends \
+                llvm-<<parameters.llvm>>-dev \
+                clang-<<parameters.llvm>> \
+                libclang-<<parameters.llvm>>-dev \
+                lld-<<parameters.llvm>> \
+                gcc-avr \
+                avr-libc \
+                cmake \
+                ninja-build
+      - hack-ninja-jobs
+      - build-binaryen-linux
       - restore_cache:
           keys:
             - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
@@ -117,11 +146,8 @@ commands:
           key: wasi-libc-sysroot-systemclang-v3
           paths:
             - lib/wasi-libc/sysroot
-      - run: go test -v -tags=llvm<<parameters.llvm>> ./cgo ./compileopts ./compiler ./interp ./transform .
       - run: make gen-device -j4
       - run: make smoketest XTENSA=0
-      - run: make tinygo-test
-      - run: make wasmtest
       - save_cache:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
@@ -136,20 +162,18 @@ commands:
           name: "Install apt dependencies"
           command: |
             sudo apt-get update
-            sudo apt-get install \
-                gcc-arm-linux-gnueabihf \
-                libc6-dev-armel-cross \
-                gcc-aarch64-linux-gnu \
-                libc6-dev-arm64-cross \
+            sudo apt-get install --no-install-recommends \
                 qemu-system-arm \
+                qemu-system-riscv32 \
                 qemu-user \
                 gcc-avr \
-                avr-libc
-            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-6-dev
+                avr-libc \
+                ninja-build \
+                python3
       - install-node
       - install-wasmtime
-      - install-xtensa-toolchain:
-          variant: "linux-amd64"
+      - install-cmake
+      - hack-ninja-jobs
       - restore_cache:
           keys:
             - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
@@ -163,14 +187,9 @@ commands:
           command: |
             if [ ! -f llvm-build/lib/liblldELF.a ]
             then
-              # fetch LLVM source
+              # fetch LLVM source (may only have headers right now)
               rm -rf llvm-project
               make llvm-source
-              # install dependencies
-              sudo apt-get install cmake ninja-build
-              # hack ninja to use less jobs
-              echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
-              chmod +x /go/bin/ninja
               # build!
               make ASSERT=1 llvm-build
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
@@ -179,23 +198,34 @@ commands:
           key: llvm-build-11-linux-v4-assert
           paths:
             llvm-build
-      - run: make ASSERT=1
+      - build-binaryen-linux
       - build-wasi-libc
       - run:
           name: "Test TinyGo"
           command: make ASSERT=1 test
+          no_output_timeout: 20m
           environment:
             # Note: -p=2 limits parallelism to two jobs at a time, which is
             # necessary to keep memory consumption down and avoid OOM (for a
             # 2CPU/4GB executor).
             GOFLAGS: -p=2
+      - run:
+          name: "Build TinyGo"
+          command: |
+            make ASSERT=1
+            echo 'export PATH=$(pwd)/build:$PATH' >> $BASH_ENV
+      - run: make tinygo-test
       - save_cache:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
             - ~/.cache/go-build
             - /go/pkg/mod
+      - install-xtensa-toolchain:
+          variant: "linux-amd64"
       - run: make gen-device -j4
-      - run: make smoketest TINYGO=build/tinygo
+      - run: make smoketest
+      - install-chrome
+      - run: make wasmtest
   build-linux:
     steps:
       - checkout
@@ -204,20 +234,12 @@ commands:
           name: "Install apt dependencies"
           command: |
             sudo apt-get update
-            sudo apt-get install \
-                gcc-arm-linux-gnueabihf \
-                libc6-dev-armel-cross \
-                gcc-aarch64-linux-gnu \
-                libc6-dev-arm64-cross \
-                qemu-system-arm \
-                qemu-user \
-                gcc-avr \
-                avr-libc
-            sudo apt-get install --no-install-recommends libc6-dev-i386 lib32gcc-6-dev
-      - install-node
-      - install-wasmtime
-      - install-xtensa-toolchain:
-          variant: "linux-amd64"
+            sudo apt-get install --no-install-recommends \
+                libgnutls30 libssl1.0.2 \
+                ninja-build \
+                python3
+      - install-cmake
+      - hack-ninja-jobs
       - restore_cache:
           keys:
             - go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_PREVIOUS_BUILD_NUM }}
@@ -231,14 +253,9 @@ commands:
           command: |
             if [ ! -f llvm-build/lib/liblldELF.a ]
             then
-              # fetch LLVM source
+              # fetch LLVM source (may only have headers right now)
               rm -rf llvm-project
               make llvm-source
-              # install dependencies
-              sudo apt-get install cmake ninja-build
-              # hack ninja to use less jobs
-              echo -e '#!/bin/sh\n/usr/bin/ninja -j3 "$@"' > /go/bin/ninja
-              chmod +x /go/bin/ninja
               # build!
               make llvm-build
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
@@ -247,10 +264,8 @@ commands:
           key: llvm-build-11-linux-v4-noassert
           paths:
             llvm-build
+      - build-binaryen-linux-stretch
       - build-wasi-libc
-      - run:
-          name: "Test TinyGo"
-          command: make test
       - run:
           name: "Install fpm"
           command: |
@@ -262,6 +277,10 @@ commands:
             make release deb -j3
             cp -p build/release.tar.gz /tmp/tinygo.linux-amd64.tar.gz
             cp -p build/release.deb    /tmp/tinygo_amd64.deb
+      - persist_to_workspace:
+          root: /tmp
+          paths:
+            - tinygo.linux-amd64.tar.gz
       - store_artifacts:
           path: /tmp/tinygo.linux-amd64.tar.gz
       - store_artifacts:
@@ -271,12 +290,27 @@ commands:
           paths:
             - ~/.cache/go-build
             - /go/pkg/mod
+  test-linux-build:
+    # Now run the smoke tests for the generated binary.
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - checkout
+      - run:
+          name: "Install apt dependencies"
+          command: |
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends \
+                gcc-avr \
+                avr-libc
+      - install-xtensa-toolchain:
+          variant: "linux-amd64"
       - run:
           name: "Extract release tarball"
           command: |
             mkdir -p ~/lib
-            tar -C ~/lib -xf /tmp/tinygo.linux-amd64.tar.gz
-            ln -s ~/lib/tinygo/bin/tinygo /go/bin/tinygo
+            tar -C ~/lib -xf /tmp/workspace/tinygo.linux-amd64.tar.gz
+            ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
             tinygo version
       - run: make smoketest
   build-macos:
@@ -289,7 +323,7 @@ commands:
             curl https://dl.google.com/go/go1.17.darwin-amd64.tar.gz -o go1.17.darwin-amd64.tar.gz
             sudo tar -C /usr/local -xzf go1.17.darwin-amd64.tar.gz
             ln -s /usr/local/go/bin/go /usr/local/bin/go
-            HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
       - install-xtensa-toolchain:
           variant: "macos"
       - restore_cache:
@@ -317,11 +351,9 @@ commands:
           command: |
             if [ ! -f llvm-build/lib/liblldELF.a ]
             then
-              # fetch LLVM source
+              # fetch LLVM source (may only have headers right now)
               rm -rf llvm-project
               make llvm-source
-              # install dependencies
-              HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
               # build!
               make llvm-build
               find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
@@ -330,6 +362,20 @@ commands:
           key: llvm-build-11-macos-v5
           paths:
             llvm-build
+      - restore_cache:
+          keys:
+            - binaryen-macos-v1
+      - run:
+          name: "Build Binaryen"
+          command: |
+            if [ ! -f build/wasm-opt ]
+            then
+              make binaryen
+            fi
+      - save_cache:
+          key: binaryen-macos-v1
+          paths:
+            - build/wasm-opt
       - restore_cache:
           keys:
             - wasi-libc-sysroot-macos-v4
@@ -342,7 +388,8 @@ commands:
             - lib/wasi-libc/sysroot
       - run:
           name: "Test TinyGo"
-          command: make test
+          command: make test GOTESTFLAGS="-v -short"
+          no_output_timeout: 20m
       - run:
           name: "Build TinyGo release"
           command: |
@@ -365,12 +412,12 @@ commands:
             - /go/pkg/mod
 
 jobs:
-  test-llvm10-go115:
+  test-llvm11-go115:
     docker:
       - image: circleci/golang:1.15-buster
     steps:
       - test-linux:
-          llvm: "10"
+          llvm: "11"
   test-llvm11-go116:
     docker:
       - image: circleci/golang:1.16-buster
@@ -379,7 +426,7 @@ jobs:
           llvm: "11"
   assert-test-linux:
     docker:
-      - image: circleci/golang:1.17-stretch
+      - image: circleci/golang:1.17-buster
     steps:
       - assert-test-linux
   build-linux:
@@ -387,6 +434,11 @@ jobs:
       - image: circleci/golang:1.17-stretch
     steps:
       - build-linux
+  test-linux-build:
+    docker:
+      - image: cimg/go:1.17
+    steps:
+      - test-linux-build
   build-macos:
     macos:
       xcode: "11.1.0" # macOS 10.14
@@ -398,8 +450,11 @@ jobs:
 workflows:
   test-all:
     jobs:
-      - test-llvm10-go115
+      - test-llvm11-go115
       - test-llvm11-go116
       - build-linux
+      - test-linux-build:
+          requires:
+            - build-linux
       - build-macos
       - assert-test-linux

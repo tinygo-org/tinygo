@@ -36,6 +36,8 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 		// Fall back to a generic error.
 		return llvm.Value{}, b.makeError(instr.Pos(), "interrupt function must be constant")
 	}
+	funcRawPtr, funcContext := b.decodeFuncValue(funcValue, nil)
+	funcPtr := llvm.ConstPtrToInt(funcRawPtr, b.uintptrType)
 
 	// Create a new global of type runtime/interrupt.handle. Globals of this
 	// type are lowered in the interrupt lowering pass.
@@ -47,8 +49,9 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	global.SetGlobalConstant(true)
 	global.SetUnnamedAddr(true)
 	initializer := llvm.ConstNull(globalLLVMType)
-	initializer = llvm.ConstInsertValue(initializer, funcValue, []uint32{0})
-	initializer = llvm.ConstInsertValue(initializer, llvm.ConstInt(b.intType, uint64(id.Int64()), true), []uint32{1, 0})
+	initializer = llvm.ConstInsertValue(initializer, funcContext, []uint32{0})
+	initializer = llvm.ConstInsertValue(initializer, funcPtr, []uint32{1})
+	initializer = llvm.ConstInsertValue(initializer, llvm.ConstInt(b.intType, uint64(id.Int64()), true), []uint32{2, 0})
 	global.SetInitializer(initializer)
 
 	// Add debug info to the interrupt global.

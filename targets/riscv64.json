@@ -1,9 +1,8 @@
 {
 	"inherits": ["riscv"],
-	"llvm-target": "riscv64--none",
+	"llvm-target": "riscv64-unknown-none",
 	"build-tags": ["tinygo.riscv64"],
 	"cflags": [
-		"--target=riscv64--none",
 		"-march=rv64gc",
 		"-mabi=lp64"
 	],

@@ -27,6 +27,9 @@ type (
 		next *linkedList `description:"chain"`
 		foo  int
 	}
+	selfref struct {
+		x *selfref
+	}
 )
 
 var (
@@ -120,6 +123,8 @@ func main() {
 		&linkedList{
 			foo: 42,
 		},
+		// interfaces
+		[]interface{}{3, "str", -4 + 2.5i},
 	} {
 		showValue(reflect.ValueOf(v), "")
 	}
@@ -321,6 +326,46 @@ func main() {
 
 	println("\nstruct tags")
 	TestStructTag()
+
+	println("\nv.Interface() method")
+	testInterfaceMethod()
+
+	// Test reflect.DeepEqual.
+	var selfref1, selfref2 selfref
+	selfref1.x = &selfref1
+	selfref2.x = &selfref2
+	for i, tc := range []struct {
+		v1, v2 interface{}
+		equal  bool
+	}{
+		{int(5), int(5), true},
+		{int(3), int(5), false},
+		{int(5), uint(5), false},
+		{struct {
+			a int
+			b string
+		}{3, "x"}, struct {
+			a int
+			b string
+		}{3, "x"}, true},
+		{struct {
+			a int
+			b string
+		}{3, "x"}, struct {
+			a int
+			b string
+		}{3, "y"}, false},
+		{selfref1, selfref2, true},
+	} {
+		result := reflect.DeepEqual(tc.v1, tc.v2)
+		if result != tc.equal {
+			if tc.equal {
+				println("reflect.DeepEqual() test", i, "not equal while it should be")
+			} else {
+				println("reflect.DeepEqual() test", i, "equal while it should not be")
+			}
+		}
+	}
 }
 
 func emptyFunc() {
@@ -374,6 +419,9 @@ func showValue(rv reflect.Value, indent string) {
 	case reflect.Interface:
 		println(indent + "  interface")
 		println(indent+"  nil:", rv.IsNil())
+		if !rv.IsNil() {
+			showValue(rv.Elem(), indent+"  ")
+		}
 	case reflect.Map:
 		println(indent + "  map")
 		println(indent+"  nil:", rv.IsNil())
@@ -468,6 +516,19 @@ func TestStructTag() {
 	st := reflect.TypeOf(s)
 	field := st.Field(0)
 	println(field.Tag.Get("color"), field.Tag.Get("species"))
+}
+
+// Test Interface() call: it should never return an interface itself.
+func testInterfaceMethod() {
+	v := reflect.ValueOf(struct{ X interface{} }{X: 5})
+	println("kind:", v.Field(0).Kind().String())
+	itf := v.Field(0).Interface()
+	switch n := itf.(type) {
+	case int:
+		println("int", n) // correct
+	default:
+		println("something else") // incorrect
+	}
 }
 
 var xorshift32State uint32 = 1

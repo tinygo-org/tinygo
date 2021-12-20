@@ -11,6 +11,22 @@ import "device/sam"
 
 const HSRAM_SIZE = 0x00040000
 
+var (
+	sercomI2CM0 = &I2C{Bus: sam.SERCOM0_I2CM, SERCOM: 0}
+	sercomI2CM1 = &I2C{Bus: sam.SERCOM1_I2CM, SERCOM: 1}
+	sercomI2CM2 = &I2C{Bus: sam.SERCOM2_I2CM, SERCOM: 2}
+	sercomI2CM3 = &I2C{Bus: sam.SERCOM3_I2CM, SERCOM: 3}
+	sercomI2CM4 = &I2C{Bus: sam.SERCOM4_I2CM, SERCOM: 4}
+	sercomI2CM5 = &I2C{Bus: sam.SERCOM5_I2CM, SERCOM: 5}
+
+	sercomSPIM0 = SPI{Bus: sam.SERCOM0_SPIM, SERCOM: 0}
+	sercomSPIM1 = SPI{Bus: sam.SERCOM1_SPIM, SERCOM: 1}
+	sercomSPIM2 = SPI{Bus: sam.SERCOM2_SPIM, SERCOM: 2}
+	sercomSPIM3 = SPI{Bus: sam.SERCOM3_SPIM, SERCOM: 3}
+	sercomSPIM4 = SPI{Bus: sam.SERCOM4_SPIM, SERCOM: 4}
+	sercomSPIM5 = SPI{Bus: sam.SERCOM5_SPIM, SERCOM: 5}
+)
+
 // This chip has five TCC peripherals, which have PWM as one feature.
 var (
 	TCC0 = (*TCC)(sam.TCC0)

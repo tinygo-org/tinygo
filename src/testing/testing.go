@@ -19,6 +19,7 @@ import (
 // Testing flags.
 var (
 	flagVerbose bool
+	flagShort   bool
 )
 
 var initRan bool
@@ -31,6 +32,7 @@ func Init() {
 	initRan = true
 
 	flag.BoolVar(&flagVerbose, "test.v", false, "verbose: print additional output")
+	flag.BoolVar(&flagShort, "test.short", false, "short: run smaller test suite to save time")
 }
 
 // common holds the elements common between T and B and
@@ -62,6 +64,7 @@ type TB interface {
 	Skipf(format string, args ...interface{})
 	Skipped() bool
 	Helper()
+	Parallel()
 }
 
 var _ TB = (*T)(nil)
@@ -192,6 +195,11 @@ func (c *common) Helper() {
 	// Unimplemented.
 }
 
+// Parallel is not implemented, it is only provided for compatibility.
+func (c *common) Parallel() {
+	// Unimplemented.
+}
+
 // Run runs a subtest of f t called name. It waits until the subtest is finished
 // and returns whether the subtest succeeded.
 func (t *T) Run(name string, f func(t *T)) bool {
@@ -277,9 +285,34 @@ func (m *M) Run() int {
 	if failures > 0 {
 		fmt.Println("FAIL")
 	} else {
-		fmt.Println("PASS")
+		if flagVerbose {
+			fmt.Println("PASS")
+		}
 	}
 	return failures
+}
+
+// Short reports whether the -test.short flag is set.
+func Short() bool {
+	return flagShort
+}
+
+// Verbose reports whether the -test.v flag is set.
+func Verbose() bool {
+	return flagVerbose
+}
+
+// AllocsPerRun returns the average number of allocations during calls to f.
+// Although the return value has type float64, it will always be an integral
+// value.
+//
+// Not implemented.
+func AllocsPerRun(runs int, f func()) (avg float64) {
+	f()
+	for i := 0; i < runs; i++ {
+		f()
+	}
+	return 0
 }
 
 func TestMain(m *M) {

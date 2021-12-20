@@ -2,11 +2,6 @@
 
 package machine
 
-import (
-	"device/sam"
-	"runtime/interrupt"
-)
-
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
 
@@ -56,17 +51,8 @@ const (
 
 // UART1 on the ItsyBitsy M0.
 var (
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM1_USART,
-		SERCOM: 1,
-	}
+	UART1 = &sercomUSART1
 )
-
-func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1, _UART1.handleInterrupt)
-}
 
 // I2C pins
 const (
@@ -76,10 +62,7 @@ const (
 
 // I2C on the ItsyBitsy M0.
 var (
-	I2C0 = &I2C{
-		Bus:    sam.SERCOM3_I2CM,
-		SERCOM: 3,
-	}
+	I2C0 = sercomI2CM3
 )
 
 // SPI pins
@@ -90,12 +73,7 @@ const (
 )
 
 // SPI on the ItsyBitsy M0.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM4_SPI,
-		SERCOM: 4,
-	}
-)
+var SPI0 = sercomSPIM4
 
 // "Internal" SPI pins; SPI flash is attached to these on ItsyBitsy M0
 const (
@@ -106,23 +84,13 @@ const (
 )
 
 // "Internal" SPI on Sercom 5
-var (
-	SPI1 = SPI{
-		Bus:    sam.SERCOM5_SPI,
-		SERCOM: 5,
-	}
-)
+var SPI1 = sercomSPIM5
 
 // I2S pins
 const (
 	I2S_SCK_PIN = PA10
 	I2S_SD_PIN  = PA08
 	I2S_WS_PIN  = NoPin // TODO: figure out what this is on ItsyBitsy M0.
-)
-
-// I2S on the ItsyBitsy M0.
-var (
-	I2S0 = I2S{Bus: sam.I2S}
 )
 
 // USB CDC identifiers

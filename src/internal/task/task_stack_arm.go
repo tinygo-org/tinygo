@@ -1,4 +1,4 @@
-// +build scheduler.tasks,arm,!cortexm,!avr,!xtensa
+// +build scheduler.tasks,arm,!cortexm,!avr,!xtensa,!tinygo.riscv
 
 package task
 

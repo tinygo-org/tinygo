@@ -159,7 +159,7 @@ func (p Pin) portMaskClear() (*volatile.Register32, uint32) {
 }
 
 // Get returns the current value of a GPIO pin when the pin is configured as an
-// input.
+// input or as an output.
 func (p Pin) Get() bool {
 	if p < 32 {
 		return esp.GPIO.IN.Get()&(1<<p) != 0
@@ -318,7 +318,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 	// Configure the SPI clock. This assumes a peripheral clock of 80MHz.
 	var clockReg uint32
-	if config.Frequency >= 40e6 {
+	if config.Frequency > 40e6 {
 		// Don't use a prescaler, but directly connect to the APB clock. This
 		// results in a SPI clock frequency of 40MHz.
 		clockReg |= esp.SPI_CLOCK_CLK_EQU_SYSCLK
@@ -363,37 +363,15 @@ func (spi SPI) Configure(config SPIConfig) error {
 	// (mode), among others.
 	var ctrl2Reg, userReg, pinReg uint32
 	// For mode configuration, see table 29 in the reference manual (page 128).
-	var delayMode uint32
 	switch config.Mode {
 	case 0:
-		delayMode = 2
 	case 1:
-		delayMode = 1
 		userReg |= esp.SPI_USER_CK_OUT_EDGE
 	case 2:
-		delayMode = 1
 		userReg |= esp.SPI_USER_CK_OUT_EDGE
 		pinReg |= esp.SPI_PIN_CK_IDLE_EDGE
 	case 3:
-		delayMode = 2
 		pinReg |= esp.SPI_PIN_CK_IDLE_EDGE
-	}
-	// Extra configuration necessary for correct data input at high frequencies.
-	// This is only necessary when MISO goes through the GPIO matrix (which it
-	// currently does).
-	if config.Frequency >= 40e6 {
-		// Delay mode must be set to 0 and SPI_USR_DUMMY_CYCLELEN should be set
-		// to 0 (the default).
-		userReg |= esp.SPI_USER_USR_DUMMY
-	} else if config.Frequency >= 20e6 {
-		// Nothing to do here, delay mode should be set to 0 according to the
-		// datasheet.
-	} else {
-		// Follow the delay mode as given in table 29 on page 128 of the
-		// reference manual.
-		// Note that this is only specified for SPI frequency of 10MHz and
-		// below (≤Fapb/8), so 13.3MHz appears to be left unspecified.
-		ctrl2Reg |= delayMode << esp.SPI_CTRL2_MOSI_DELAY_MODE_Pos
 	}
 	// Enable full-duplex communication.
 	userReg |= esp.SPI_USER_DOUTDIN

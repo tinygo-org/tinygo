@@ -18,8 +18,9 @@ import (
 var flagUpdate = flag.Bool("update", false, "update tests based on test output")
 
 type testCase struct {
-	file   string
-	target string
+	file      string
+	target    string
+	scheduler string
 }
 
 // Basic tests for the compiler. Build some Go files and compare the output with
@@ -41,19 +42,21 @@ func TestCompiler(t *testing.T) {
 	}
 
 	tests := []testCase{
-		{"basic.go", ""},
-		{"pointer.go", ""},
-		{"slice.go", ""},
-		{"string.go", ""},
-		{"float.go", ""},
-		{"interface.go", ""},
-		{"func.go", ""},
-		{"pragma.go", ""},
-		{"goroutine.go", "wasm"},
-		{"goroutine.go", "cortex-m-qemu"},
-		{"channel.go", ""},
-		{"intrinsics.go", "cortex-m-qemu"},
-		{"intrinsics.go", "wasm"},
+		{"basic.go", "", ""},
+		{"pointer.go", "", ""},
+		{"slice.go", "", ""},
+		{"string.go", "", ""},
+		{"float.go", "", ""},
+		{"interface.go", "", ""},
+		{"func.go", "", "coroutines"},
+		{"pragma.go", "", ""},
+		{"goroutine.go", "wasm", "asyncify"},
+		{"goroutine.go", "wasm", "coroutines"},
+		{"goroutine.go", "cortex-m-qemu", "tasks"},
+		{"channel.go", "", ""},
+		{"intrinsics.go", "cortex-m-qemu", ""},
+		{"intrinsics.go", "wasm", ""},
+		{"gc.go", "", ""},
 	}
 
 	_, minor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
@@ -61,7 +64,7 @@ func TestCompiler(t *testing.T) {
 		t.Fatal("could not read Go version:", err)
 	}
 	if minor >= 17 {
-		tests = append(tests, testCase{"go1.17.go", ""})
+		tests = append(tests, testCase{"go1.17.go", "", ""})
 	}
 
 	for _, tc := range tests {
@@ -69,16 +72,25 @@ func TestCompiler(t *testing.T) {
 		targetString := "wasm"
 		if tc.target != "" {
 			targetString = tc.target
-			name = tc.file + "-" + tc.target
+			name += "-" + tc.target
+		}
+		if tc.scheduler != "" {
+			name += "-" + tc.scheduler
 		}
 
 		t.Run(name, func(t *testing.T) {
-			target, err := compileopts.LoadTarget(targetString)
+			options := &compileopts.Options{
+				Target: targetString,
+			}
+			target, err := compileopts.LoadTarget(options)
 			if err != nil {
 				t.Fatal("failed to load target:", err)
 			}
+			if tc.scheduler != "" {
+				options.Scheduler = tc.scheduler
+			}
 			config := &compileopts.Config{
-				Options: &compileopts.Options{},
+				Options: options,
 				Target:  target,
 			}
 			compilerConfig := &Config{
@@ -90,6 +102,7 @@ func TestCompiler(t *testing.T) {
 				Scheduler:          config.Scheduler(),
 				FuncImplementation: config.FuncImplementation(),
 				AutomaticStackSize: config.AutomaticStackSize(),
+				DefaultStackSize:   config.Target.DefaultStackSize,
 			}
 			machine, err := NewTargetMachine(compilerConfig)
 			if err != nil {
@@ -137,6 +150,9 @@ func TestCompiler(t *testing.T) {
 			outFilePrefix := tc.file[:len(tc.file)-3]
 			if tc.target != "" {
 				outFilePrefix += "-" + tc.target
+			}
+			if tc.scheduler != "" {
+				outFilePrefix += "-" + tc.scheduler
 			}
 			outPath := "./testdata/" + outFilePrefix + ".ll"
 

@@ -10,7 +10,7 @@ import (
 	"unsafe"
 )
 
-func alloc(size uintptr) unsafe.Pointer
+func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 
 func free(ptr unsafe.Pointer) {
 	// Nothing to free when nothing gets allocated.

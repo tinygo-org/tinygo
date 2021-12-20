@@ -23,3 +23,12 @@
 [submodule "lib/stm32-svd"]
 	path = lib/stm32-svd
 	url = https://github.com/tinygo-org/stm32-svd
+[submodule "lib/musl"]
+	path = lib/musl
+	url = git://git.musl-libc.org/musl
+[submodule "lib/binaryen"]
+	path = lib/binaryen
+	url = https://github.com/WebAssembly/binaryen.git
+[submodule "lib/mingw-w64"]
+	path = lib/mingw-w64
+	url = https://github.com/mingw-w64/mingw-w64.git

@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -27,17 +28,21 @@ import (
 // An object is a memory buffer that may be an already existing global or a
 // global created with runtime.alloc or the alloca instruction. If llvmGlobal is
 // set, that's the global for this object, otherwise it needs to be created (if
-// it is still reachable when the package initializer returns).
+// it is still reachable when the package initializer returns). The
+// llvmLayoutType is not necessarily a complete type: it may need to be
+// repeated (for example, for a slice value).
 //
 // Objects are copied in a memory view when they are stored to, to provide the
 // ability to roll back interpreting a function.
 type object struct {
-	llvmGlobal llvm.Value
-	llvmType   llvm.Type // must match llvmGlobal.Type() if both are set, may be unset if llvmGlobal is set
-	globalName string    // name, if not yet created (not guaranteed to be the final name)
-	buffer     value     // buffer with value as given by interp, nil if external
-	size       uint32    // must match buffer.len(), if available
-	marked     uint8     // 0 means unmarked, 1 means external read, 2 means external write
+	llvmGlobal     llvm.Value
+	llvmType       llvm.Type // must match llvmGlobal.Type() if both are set, may be unset if llvmGlobal is set
+	llvmLayoutType llvm.Type // LLVM type based on runtime.alloc layout parameter, if available
+	globalName     string    // name, if not yet created (not guaranteed to be the final name)
+	buffer         value     // buffer with value as given by interp, nil if external
+	size           uint32    // must match buffer.len(), if available
+	constant       bool      // true if this is a constant global
+	marked         uint8     // 0 means unmarked, 1 means external read, 2 means external write
 }
 
 // clone() returns a cloned version of this object, for when an object needs to
@@ -219,7 +224,7 @@ func (mv *memoryView) hasExternalLoadOrStore(v pointerValue) bool {
 // possible for the interpreter to read from the object.
 func (mv *memoryView) hasExternalStore(v pointerValue) bool {
 	obj := mv.get(v.index())
-	return obj.marked >= 2
+	return obj.marked >= 2 && !obj.constant
 }
 
 // get returns an object that can only be read from, as it may return an object
@@ -258,6 +263,9 @@ func (mv *memoryView) put(index uint32, obj object) {
 	}
 	if checks && mv.get(index).buffer.len(mv.r) != obj.buffer.len(mv.r) {
 		panic("put() with a differently-sized object")
+	}
+	if checks && obj.constant {
+		panic("interp: store to a constant")
 	}
 	mv.objects[index] = obj
 }
@@ -522,6 +530,18 @@ func (v pointerValue) llvmValue(mem *memoryView) llvm.Value {
 // bitcast. The llvm.Type parameter is optional, if omitted the pointer type may
 // be different than expected.
 func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, error) {
+	// If a particular LLVM type is requested, cast to it.
+	if !llvmType.IsNil() && llvmType.TypeKind() != llvm.PointerTypeKind {
+		// The LLVM value has (or should have) the same bytes once compiled, but
+		// does not have the right LLVM type. This can happen for example when
+		// storing to a struct with a single pointer field: this pointer may
+		// then become the value even though the pointer should be wrapped in a
+		// struct.
+		// This can be worked around by simply converting to a raw value,
+		// rawValue knows how to create such structs.
+		return v.asRawValue(mem.r).toLLVMValue(llvmType, mem)
+	}
+
 	// Obtain the llvmValue, creating it if it doesn't exist yet.
 	llvmValue := v.llvmValue(mem)
 	if llvmValue.IsNil() {
@@ -529,7 +549,7 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 		// runtime.alloc.
 		// First allocate a new global for this object.
 		obj := mem.get(v.index())
-		if obj.llvmType.IsNil() {
+		if obj.llvmType.IsNil() && obj.llvmLayoutType.IsNil() {
 			// Create an initializer without knowing the global type.
 			// This is probably the result of a runtime.alloc call.
 			initializer, err := obj.buffer.asRawValue(mem.r).rawLLVMValue(mem)
@@ -543,7 +563,23 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 			obj.llvmGlobal = llvmValue
 			mem.put(v.index(), obj)
 		} else {
-			globalType := obj.llvmType.ElementType()
+			// The global type is known, or at least its structure.
+			var globalType llvm.Type
+			if !obj.llvmType.IsNil() {
+				// The exact type is known.
+				globalType = obj.llvmType.ElementType()
+			} else { // !obj.llvmLayoutType.IsNil()
+				// The exact type isn't known, but the object layout is known.
+				globalType = obj.llvmLayoutType
+				// The layout may not span the full size of the global because
+				// of repetition. One example would be make([]string, 5) which
+				// would be 10 words in size but the layout would only be two
+				// words (for the string type).
+				typeSize := mem.r.targetData.TypeAllocSize(globalType)
+				if typeSize != uint64(obj.size) {
+					globalType = llvm.ArrayType(globalType, int(uint64(obj.size)/typeSize))
+				}
+			}
 			if checks && mem.r.targetData.TypeAllocSize(globalType) != uint64(obj.size) {
 				panic("size of the globalType isn't the same as the object size")
 			}
@@ -562,6 +598,11 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 				return llvm.Value{}, errors.New("interp: allocated value does not match allocated type")
 			}
 			llvmValue.SetInitializer(initializer)
+			if obj.llvmType.IsNil() {
+				// The exact type isn't known (only the layout), so use the
+				// alignment that would normally be expected from runtime.alloc.
+				llvmValue.SetAlignment(mem.r.maxAlign)
+			}
 		}
 
 		// It should be included in r.globals because otherwise markExternal
@@ -571,87 +612,24 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 		llvmValue.SetLinkage(llvm.InternalLinkage)
 	}
 
-	if llvmType.IsNil() {
-		if v.offset() != 0 {
-			// If there is an offset, make sure to use a GEP to index into the
-			// pointer. Because there is no expected type, we use whatever is
-			// most convenient: an *i8 type. It is trivial to index byte-wise.
-			if llvmValue.Type() != mem.r.i8ptrType {
-				llvmValue = llvm.ConstBitCast(llvmValue, mem.r.i8ptrType)
-			}
-			llvmValue = llvm.ConstInBoundsGEP(llvmValue, []llvm.Value{
-				llvm.ConstInt(llvmValue.Type().Context().Int32Type(), uint64(v.offset()), false),
-			})
+	if v.offset() != 0 {
+		// If there is an offset, make sure to use a GEP to index into the
+		// pointer.
+		// Cast to an i8* first (if needed) for easy indexing.
+		if llvmValue.Type() != mem.r.i8ptrType {
+			llvmValue = llvm.ConstBitCast(llvmValue, mem.r.i8ptrType)
 		}
-		return llvmValue, nil
+		llvmValue = llvm.ConstInBoundsGEP(llvmValue, []llvm.Value{
+			llvm.ConstInt(llvmValue.Type().Context().Int32Type(), uint64(v.offset()), false),
+		})
 	}
 
-	if llvmType.TypeKind() != llvm.PointerTypeKind {
-		// The LLVM value has (or should have) the same bytes once compiled, but
-		// does not have the right LLVM type. This can happen for example when
-		// storing to a struct with a single pointer field: this pointer may
-		// then become the value even though the pointer should be wrapped in a
-		// struct.
-		// This can be worked around by simply converting to a raw value,
-		// rawValue knows how to create such structs.
-		if v.offset() != 0 {
-			return llvm.Value{}, errors.New("interp: offset set without known pointer type")
-		}
-		return v.asRawValue(mem.r).toLLVMValue(llvmType, mem)
+	// If a particular LLVM pointer type is requested, cast to it.
+	if !llvmType.IsNil() && llvmType != llvmValue.Type() {
+		llvmValue = llvm.ConstBitCast(llvmValue, llvmType)
 	}
 
-	requestedType := llvmType
-	objectElementType := llvmValue.Type()
-	if requestedType == objectElementType {
-		if v.offset() != 0 {
-			// This should never happen, if offset is non-zero, the types
-			// shouldn't match.
-			return llvm.Value{}, errors.New("interp: offset set while there is no way to convert the type")
-		}
-		return llvmValue, nil
-	}
-
-	if v.offset() == 0 {
-		// Offset is zero, so we can just bitcast to get a correct pointer.
-		return llvm.ConstBitCast(llvmValue, llvmType), nil
-	}
-
-	// We need to make a constant GEP for pointer arithmetic.
-	int32Type := llvmType.Context().Int32Type()
-	indices := []llvm.Value{llvm.ConstInt(int32Type, 0, false)}
-	requestedType = requestedType.ElementType()
-	objectElementType = objectElementType.ElementType()
-	offset := int64(v.offset())
-	for offset > 0 {
-		switch objectElementType.TypeKind() {
-		case llvm.ArrayTypeKind:
-			elementType := objectElementType.ElementType()
-			elementSize := mem.r.targetData.TypeAllocSize(elementType)
-			elementIndex := uint64(offset) / elementSize
-			indices = append(indices, llvm.ConstInt(int32Type, elementIndex, false))
-			offset -= int64(elementIndex * elementSize)
-			objectElementType = elementType
-		case llvm.StructTypeKind:
-			element := mem.r.targetData.ElementContainingOffset(objectElementType, uint64(offset))
-			indices = append(indices, llvm.ConstInt(int32Type, uint64(element), false))
-			offset -= int64(mem.r.targetData.ElementOffset(objectElementType, element))
-			objectElementType = objectElementType.StructElementTypes()[element]
-		default:
-			return llvm.Value{}, errors.New("interp: pointer index with something other than a struct or array?")
-		}
-	}
-	if offset < 0 {
-		return llvm.Value{}, errors.New("interp: offset has somehow gone negative, this should be impossible")
-	}
-
-	// Finally do the gep, using the above computed indices.
-	// If it still doesn't match te requested type, it's possible to bitcast (as
-	// the bits of the pointer are now correct, just not the type).
-	gep := llvm.ConstInBoundsGEP(llvmValue, indices)
-	if gep.Type() != llvmType {
-		return llvm.ConstBitCast(gep, llvmType), nil
-	}
-	return gep, nil
+	return llvmValue, nil
 }
 
 // rawValue is a raw memory buffer that can store either pointers or regular
@@ -985,12 +963,9 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 		case llvm.GetElementPtr:
 			ptr := llvmValue.Operand(0)
 			index := llvmValue.Operand(1)
-			if checks && index.IsAConstantInt().IsNil() || index.ZExtValue() != 0 {
-				panic("expected first index of const gep to be i32 0")
-			}
 			numOperands := llvmValue.OperandsCount()
 			elementType := ptr.Type().ElementType()
-			totalOffset := uint64(0)
+			totalOffset := r.targetData.TypeAllocSize(elementType) * index.ZExtValue()
 			for i := 2; i < numOperands; i++ {
 				indexValue := llvmValue.Operand(i)
 				if checks && indexValue.IsAConstantInt().IsNil() {
@@ -1167,6 +1142,7 @@ func (r *runner) getValue(llvmValue llvm.Value) value {
 				obj.size = uint32(r.targetData.TypeAllocSize(llvmValue.Type().ElementType()))
 				if initializer := llvmValue.Initializer(); !initializer.IsNil() {
 					obj.buffer = r.getValue(initializer)
+					obj.constant = llvmValue.IsGlobalConstant()
 				}
 			} else if !llvmValue.IsAFunction().IsNil() {
 				// OK
@@ -1208,4 +1184,109 @@ func (r *runner) getValue(llvmValue llvm.Value) value {
 		println()
 		panic("unknown value")
 	}
+}
+
+// readObjectLayout reads the object layout as it is stored by the compiler. It
+// returns the size in the number of words and the bitmap.
+func (r *runner) readObjectLayout(layoutValue value) (uint64, *big.Int) {
+	pointerSize := layoutValue.len(r)
+	if checks && uint64(pointerSize) != r.targetData.TypeAllocSize(r.i8ptrType) {
+		panic("inconsistent pointer size")
+	}
+
+	// The object layout can be stored in a global variable, directly as an
+	// integer value, or can be nil.
+	ptr, err := layoutValue.asPointer(r)
+	if err == errIntegerAsPointer {
+		// It's an integer, which means it's a small object or unknown.
+		layout := layoutValue.Uint()
+		if layout == 0 {
+			// Nil pointer, which means the layout is unknown.
+			return 0, nil
+		}
+		if layout%2 != 1 {
+			// Sanity check: the least significant bit must be set. This is how
+			// the runtime can separate pointers from integers.
+			panic("unexpected layout")
+		}
+
+		// Determine format of bitfields in the integer.
+		pointerBits := uint64(pointerSize * 8)
+		var sizeFieldBits uint64
+		switch pointerBits {
+		case 16:
+			sizeFieldBits = 4
+		case 32:
+			sizeFieldBits = 5
+		case 64:
+			sizeFieldBits = 6
+		default:
+			panic("unknown pointer size")
+		}
+
+		// Extract fields.
+		objectSizeWords := (layout >> 1) & (1<<sizeFieldBits - 1)
+		bitmap := new(big.Int).SetUint64(layout >> (1 + sizeFieldBits))
+		return objectSizeWords, bitmap
+	}
+
+	// Read the object size in words and the bitmap from the global.
+	buf := r.objects[ptr.index()].buffer.(rawValue)
+	objectSizeWords := rawValue{buf: buf.buf[:r.pointerSize]}.Uint()
+	rawByteValues := buf.buf[r.pointerSize:]
+	rawBytes := make([]byte, len(rawByteValues))
+	for i, v := range rawByteValues {
+		if uint64(byte(v)) != v {
+			panic("found pointer in data array?") // sanity check
+		}
+		rawBytes[i] = byte(v)
+	}
+	bitmap := new(big.Int).SetBytes(rawBytes)
+	return objectSizeWords, bitmap
+}
+
+// getLLVMTypeFromLayout returns the 'layout type', which is an approximation of
+// the real type. Pointers are in the correct location but the actual object may
+// have some additional repetition, for example in the buffer of a slice.
+func (r *runner) getLLVMTypeFromLayout(layoutValue value) llvm.Type {
+	objectSizeWords, bitmap := r.readObjectLayout(layoutValue)
+	if bitmap == nil {
+		// No information available.
+		return llvm.Type{}
+	}
+
+	if bitmap.BitLen() == 0 {
+		// There are no pointers in this object, so treat this as a raw byte
+		// buffer. This is important because objects without pointers may have
+		// lower alignment.
+		return r.mod.Context().Int8Type()
+	}
+
+	// Create the LLVM type.
+	pointerSize := layoutValue.len(r)
+	pointerAlignment := r.targetData.PrefTypeAlignment(r.i8ptrType)
+	var fields []llvm.Type
+	for i := 0; i < int(objectSizeWords); {
+		if bitmap.Bit(i) != 0 {
+			// Pointer field.
+			fields = append(fields, r.i8ptrType)
+			i += int(pointerSize / uint32(pointerAlignment))
+		} else {
+			// Byte/word field.
+			fields = append(fields, r.mod.Context().IntType(pointerAlignment*8))
+			i += 1
+		}
+	}
+	var llvmLayoutType llvm.Type
+	if len(fields) == 1 {
+		llvmLayoutType = fields[0]
+	} else {
+		llvmLayoutType = r.mod.Context().StructType(fields, false)
+	}
+
+	objectSizeBytes := objectSizeWords * uint64(pointerAlignment)
+	if checks && r.targetData.TypeAllocSize(llvmLayoutType) != objectSizeBytes {
+		panic("unexpected size") // sanity check
+	}
+	return llvmLayoutType
 }

@@ -3,12 +3,15 @@
 package goenv
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // Keys is a slice of all available environment variable keys.
@@ -20,6 +23,12 @@ var Keys = []string{
 	"GOCACHE",
 	"CGO_ENABLED",
 	"TINYGOROOT",
+}
+
+func init() {
+	if Get("GOARCH") == "arm" {
+		Keys = append(Keys, "GOARM")
+	}
 }
 
 // TINYGOROOT is the path to the final location for checking tinygo files. If
@@ -41,6 +50,20 @@ func Get(name string) string {
 			return dir
 		}
 		return runtime.GOARCH
+	case "GOARM":
+		if goarm := os.Getenv("GOARM"); goarm != "" {
+			return goarm
+		}
+		if goos := Get("GOOS"); goos == "windows" || goos == "android" {
+			// Assume Windows and Android are running on modern CPU cores.
+			// This matches upstream Go.
+			return "7"
+		}
+		// Default to ARMv6 on other devices.
+		// The difference between ARMv5 and ARMv6 is big, much bigger than the
+		// difference between ARMv6 and ARMv7. ARMv6 binaries are much smaller,
+		// especially when floating point instructions are involved.
+		return "6"
 	case "GOROOT":
 		return getGoroot()
 	case "GOPATH":
@@ -67,9 +90,96 @@ func Get(name string) string {
 		return "1"
 	case "TINYGOROOT":
 		return sourceDir()
+	case "WASMOPT":
+		if path := os.Getenv("WASMOPT"); path != "" {
+			err := wasmOptCheckVersion(path)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "cannot use %q as wasm-opt (from WASMOPT environment variable): %s", path, err.Error())
+				os.Exit(1)
+			}
+
+			return path
+		}
+
+		return findWasmOpt()
 	default:
 		return ""
 	}
+}
+
+// Find wasm-opt, or exit with an error.
+func findWasmOpt() string {
+	tinygoroot := sourceDir()
+	searchPaths := []string{
+		tinygoroot + "/bin/wasm-opt",
+		tinygoroot + "/build/wasm-opt",
+	}
+
+	var paths []string
+	for _, path := range searchPaths {
+		if runtime.GOOS == "windows" {
+			path += ".exe"
+		}
+
+		_, err := os.Stat(path)
+		if err != nil && os.IsNotExist(err) {
+			continue
+		}
+
+		paths = append(paths, path)
+	}
+
+	if path, err := exec.LookPath("wasm-opt"); err == nil {
+		paths = append(paths, path)
+	}
+
+	if len(paths) == 0 {
+		fmt.Fprintln(os.Stderr, "error: could not find wasm-opt, set the WASMOPT environment variable to override")
+		os.Exit(1)
+	}
+
+	errs := make([]error, len(paths))
+	for i, path := range paths {
+		err := wasmOptCheckVersion(path)
+		if err == nil {
+			return path
+		}
+
+		errs[i] = err
+	}
+	fmt.Fprintln(os.Stderr, "no usable wasm-opt found, update or run \"make binaryen\"")
+	for i, path := range paths {
+		fmt.Fprintf(os.Stderr, "\t%s: %s\n", path, errs[i].Error())
+	}
+	os.Exit(1)
+	panic("unreachable")
+}
+
+// wasmOptCheckVersion checks if a copy of wasm-opt is usable.
+func wasmOptCheckVersion(path string) error {
+	cmd := exec.Command(path, "--version")
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+
+	str := buf.String()
+	if strings.Contains(str, "(") {
+		// The git tag may be placed in parentheses after the main version string.
+		str = strings.Split(str, "(")[0]
+	}
+
+	str = strings.TrimSpace(str)
+	var ver uint
+	_, err = fmt.Sscanf(str, "wasm-opt version %d", &ver)
+	if err != nil || ver < 102 {
+		return errors.New("incompatible wasm-opt (need 102 or newer)")
+	}
+
+	return nil
 }
 
 // Return the TINYGOROOT, or exit with an error.

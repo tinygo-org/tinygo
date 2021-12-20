@@ -17,7 +17,7 @@ const (
 	PinInput         PinMode = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) | (nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos)
 	PinInputPullup   PinMode = PinInput | (nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos)
 	PinInputPulldown PinMode = PinInput | (nrf.GPIO_PIN_CNF_PULL_Pulldown << nrf.GPIO_PIN_CNF_PULL_Pos)
-	PinOutput        PinMode = (nrf.GPIO_PIN_CNF_DIR_Output << nrf.GPIO_PIN_CNF_DIR_Pos) | (nrf.GPIO_PIN_CNF_INPUT_Disconnect << nrf.GPIO_PIN_CNF_INPUT_Pos)
+	PinOutput        PinMode = (nrf.GPIO_PIN_CNF_DIR_Output << nrf.GPIO_PIN_CNF_DIR_Pos) | (nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos)
 )
 
 type PinChange uint8
@@ -64,7 +64,8 @@ func (p Pin) PortMaskClear() (*uint32, uint32) {
 	return &port.OUTCLR.Reg, 1 << pin
 }
 
-// Get returns the current value of a GPIO pin.
+// Get returns the current value of a GPIO pin when the pin is configured as an
+// input or as an output.
 func (p Pin) Get() bool {
 	port, pin := p.getPortPin()
 	return (port.IN.Get()>>pin)&1 != 0

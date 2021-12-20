@@ -27,3 +27,8 @@ func stringCompareUnequal(s1, s2 string) bool {
 func stringCompareLarger(s1, s2 string) bool {
 	return s1 > s2
 }
+
+func stringLookup(s string, x uint8) byte {
+	// Test that x is correctly extended to an uint before comparison.
+	return s[x]
+}

@@ -11,7 +11,7 @@ declare void @"internal/task.start"(i32, i8*, i32)
 
 define void @Reset_Handler() {
 entry:
-  %stacksize1 = load i32, i32* getelementptr inbounds ([1 x i32], [1 x i32]* @"internal/task.stackSizes", i32 0, i32 0)
+  %stacksize1 = load i32, i32* getelementptr inbounds ([1 x i32], [1 x i32]* @"internal/task.stackSizes", i32 0, i32 0), align 4
   call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"runtime.run$1$gowrapper" to i32), i8* undef, i32 %stacksize1)
   ret void
 }

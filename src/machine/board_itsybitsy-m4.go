@@ -54,10 +54,22 @@ const (
 	UART2_RX_PIN = D2
 )
 
+var (
+	UART1 = &sercomUSART3
+	UART2 = &sercomUSART0
+
+	DefaultUART = UART1
+)
+
 // I2C pins
 const (
 	SDA_PIN = PA12 // SDA: SERCOM2/PAD[0]
 	SCL_PIN = PA13 // SCL: SERCOM2/PAD[1]
+)
+
+// I2C on the ItsyBitsy M4.
+var (
+	I2C0 = sercomI2CM2
 )
 
 // SPI pins
@@ -66,6 +78,9 @@ const (
 	SPI0_SDO_PIN = PA00 // SDO: SERCOM1/PAD[0]
 	SPI0_SDI_PIN = PB23 // SDI: SERCOM1/PAD[3]
 )
+
+// SPI on the ItsyBitsy M4.
+var SPI0 = sercomSPIM1
 
 // USB CDC identifiers
 const (

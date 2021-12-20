@@ -2,11 +2,6 @@
 
 package machine
 
-import (
-	"device/sam"
-	"runtime/interrupt"
-)
-
 // used to reset into bootloader
 const RESET_MAGIC_VALUE = 0xf01669ef
 
@@ -46,18 +41,7 @@ const (
 )
 
 // UART1 on the Trinket M0.
-var (
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    sam.SERCOM0_USART,
-		SERCOM: 0,
-	}
-)
-
-func init() {
-	UART1.Interrupt = interrupt.New(sam.IRQ_SERCOM0, _UART1.handleInterrupt)
-}
+var UART1 = &sercomUSART0
 
 // SPI pins
 const (
@@ -67,12 +51,7 @@ const (
 )
 
 // SPI on the Trinket M0.
-var (
-	SPI0 = SPI{
-		Bus:    sam.SERCOM0_SPI,
-		SERCOM: 0,
-	}
-)
+var SPI0 = sercomSPIM0
 
 // I2C pins
 const (
@@ -82,10 +61,7 @@ const (
 
 // I2C on the Trinket M0.
 var (
-	I2C0 = &I2C{
-		Bus:    sam.SERCOM2_I2CM,
-		SERCOM: 2,
-	}
+	I2C0 = sercomI2CM2
 )
 
 // I2S pins

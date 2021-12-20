@@ -5,6 +5,7 @@ package compileopts
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -21,7 +22,7 @@ type Config struct {
 	TestConfig     TestConfig
 }
 
-// Triple returns the LLVM target triple, like armv6m-none-eabi.
+// Triple returns the LLVM target triple, like armv6m-unknown-unknown-eabi.
 func (c *Config) Triple() string {
 	return c.Target.Triple
 }
@@ -33,10 +34,16 @@ func (c *Config) CPU() string {
 }
 
 // Features returns a list of features this CPU supports. For example, for a
-// RISC-V processor, that could be ["+a", "+c", "+m"]. For many targets, an
-// empty list will be returned.
-func (c *Config) Features() []string {
-	return c.Target.Features
+// RISC-V processor, that could be "+a,+c,+m". For many targets, an empty list
+// will be returned.
+func (c *Config) Features() string {
+	if c.Target.Features == "" {
+		return c.Options.LLVMFeatures
+	}
+	if c.Options.LLVMFeatures == "" {
+		return c.Target.Features
+	}
+	return c.Target.Features + "," + c.Options.LLVMFeatures
 }
 
 // GOOS returns the GOOS of the target. This might not always be the actual OS:
@@ -51,6 +58,12 @@ func (c *Config) GOOS() string {
 // library so such targets will usually pretend to be linux/arm.
 func (c *Config) GOARCH() string {
 	return c.Target.GOARCH
+}
+
+// GOARM will return the GOARM environment variable given to the compiler when
+// building a program.
+func (c *Config) GOARM() string {
+	return c.Options.GOARM
 }
 
 // BuildTags returns the complete list of build tags used during this build.
@@ -150,7 +163,7 @@ func (c *Config) OptLevels() (optLevel, sizeLevel int, inlinerThreshold uint) {
 // target.
 func (c *Config) FuncImplementation() string {
 	switch c.Scheduler() {
-	case "tasks":
+	case "tasks", "asyncify":
 		// A func value is implemented as a pair of pointers:
 		//     {context, function pointer}
 		// where the context may be a pointer to a heap-allocated struct
@@ -197,6 +210,39 @@ func (c *Config) RP2040BootPatch() bool {
 	return false
 }
 
+// MuslArchitecture returns the architecture name as used in musl libc. It is
+// usually the same as the first part of the LLVM triple, but not always.
+func MuslArchitecture(triple string) string {
+	arch := strings.Split(triple, "-")[0]
+	if strings.HasPrefix(arch, "arm") || strings.HasPrefix(arch, "thumb") {
+		arch = "arm"
+	}
+	return arch
+}
+
+// LibcPath returns the path to the libc directory. The libc path will be either
+// a precompiled libc shipped with a TinyGo build, or a libc path in the cache
+// directory (which might not yet be built).
+func (c *Config) LibcPath(name string) (path string, precompiled bool) {
+	// Try to load a precompiled library.
+	precompiledDir := filepath.Join(goenv.Get("TINYGOROOT"), "pkg", c.Triple(), name)
+	if _, err := os.Stat(precompiledDir); err == nil {
+		// Found a precompiled library for this OS/architecture. Return the path
+		// directly.
+		return precompiledDir, true
+	}
+
+	// No precompiled library found. Determine the path name that will be used
+	// in the build cache.
+	var outname string
+	if c.CPU() != "" {
+		outname = name + "-" + c.Triple() + "-" + c.CPU()
+	} else {
+		outname = name + "-" + c.Triple()
+	}
+	return filepath.Join(goenv.Get("GOCACHE"), outname), false
+}
+
 // CFlags returns the flags to pass to the C compiler. This is necessary for CGo
 // preprocessing.
 func (c *Config) CFlags() []string {
@@ -204,13 +250,63 @@ func (c *Config) CFlags() []string {
 	for _, flag := range c.Target.CFlags {
 		cflags = append(cflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
 	}
-	if c.Target.Libc == "picolibc" {
+	switch c.Target.Libc {
+	case "picolibc":
 		root := goenv.Get("TINYGOROOT")
-		cflags = append(cflags, "-nostdlibinc", "-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "picolibc", "newlib", "libc", "include"))
-		cflags = append(cflags, "-I"+filepath.Join(root, "lib/picolibc-include"))
+		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")
+		path, _ := c.LibcPath("picolibc")
+		cflags = append(cflags,
+			"--sysroot="+path,
+			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "include"),
+			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "tinystdio"),
+		)
+	case "musl":
+		root := goenv.Get("TINYGOROOT")
+		path, _ := c.LibcPath("musl")
+		arch := MuslArchitecture(c.Triple())
+		cflags = append(cflags,
+			"--sysroot="+path,
+			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "musl", "arch", arch),
+			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "musl", "include"),
+		)
+	case "wasi-libc":
+		root := goenv.Get("TINYGOROOT")
+		cflags = append(cflags, "--sysroot="+root+"/lib/wasi-libc/sysroot")
+	case "mingw-w64":
+		root := goenv.Get("TINYGOROOT")
+		path, _ := c.LibcPath("mingw-w64")
+		cflags = append(cflags,
+			"--sysroot="+path,
+			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "crt"),
+			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "defaults", "include"),
+			"-D_UCRT",
+		)
+	case "":
+		// No libc specified, nothing to add.
+	default:
+		// Incorrect configuration. This could be handled in a better way, but
+		// usually this will be found by developers (not by TinyGo users).
+		panic("unknown libc: " + c.Target.Libc)
 	}
 	// Always emit debug information. It is optionally stripped at link time.
 	cflags = append(cflags, "-g")
+	// Use the same optimization level as TinyGo.
+	cflags = append(cflags, "-O"+c.Options.Opt)
+	// Set the LLVM target triple.
+	cflags = append(cflags, "--target="+c.Triple())
+	// Set the -mcpu (or similar) flag.
+	if c.Target.CPU != "" {
+		if c.GOARCH() == "amd64" || c.GOARCH() == "386" {
+			// x86 prefers the -march flag (-mcpu is deprecated there).
+			cflags = append(cflags, "-march="+c.Target.CPU)
+		} else if strings.HasPrefix(c.Triple(), "avr") {
+			// AVR MCUs use -mmcu instead of -mcpu.
+			cflags = append(cflags, "-mmcu="+c.Target.CPU)
+		} else {
+			// The rest just uses -mcpu.
+			cflags = append(cflags, "-mcpu="+c.Target.CPU)
+		}
+	}
 	return cflags
 }
 
@@ -364,10 +460,6 @@ func (c *Config) WasmAbi() string {
 		return c.Options.WasmAbi
 	}
 	return c.Target.WasmAbi
-}
-
-func (c *Config) LLVMFeatures() string {
-	return c.Options.LLVMFeatures
 }
 
 type TestConfig struct {

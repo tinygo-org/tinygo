@@ -16,11 +16,14 @@ import (
 	"io/ioutil"
 	"math/bits"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/cgo"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -60,6 +63,7 @@ type BuildResult struct {
 // implementation of an imported package changes.
 type packageAction struct {
 	ImportPath       string
+	CGoVersion       int // cgo.Version
 	CompilerVersion  int // compiler.Version
 	InterpVersion    int // interp.Version
 	LLVMVersion      string
@@ -86,6 +90,44 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	}
 	defer os.RemoveAll(dir)
 
+	// Check for a libc dependency.
+	// As a side effect, this also creates the headers for the given libc, if
+	// the libc needs them.
+	root := goenv.Get("TINYGOROOT")
+	var libcDependencies []*compileJob
+	switch config.Target.Libc {
+	case "musl":
+		job, err := Musl.load(config, dir)
+		if err != nil {
+			return err
+		}
+		libcDependencies = append(libcDependencies, dummyCompileJob(filepath.Join(filepath.Dir(job.result), "crt1.o")))
+		libcDependencies = append(libcDependencies, job)
+	case "picolibc":
+		libcJob, err := Picolibc.load(config, dir)
+		if err != nil {
+			return err
+		}
+		libcDependencies = append(libcDependencies, libcJob)
+	case "wasi-libc":
+		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
+		}
+		libcDependencies = append(libcDependencies, dummyCompileJob(path))
+	case "mingw-w64":
+		_, err := MinGW.load(config, dir)
+		if err != nil {
+			return err
+		}
+		libcDependencies = append(libcDependencies, makeMinGWExtraLibs(dir)...)
+	case "":
+		// no library specified, so nothing to do
+	default:
+		return fmt.Errorf("unknown libc: %s", config.Target.Libc)
+	}
+
+	optLevel, sizeLevel, _ := config.OptLevels()
 	compilerConfig := &compiler.Config{
 		Triple:          config.Triple(),
 		CPU:             config.CPU(),
@@ -94,6 +136,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		GOARCH:          config.GOARCH(),
 		CodeModel:       config.CodeModel(),
 		RelocationModel: config.RelocationModel(),
+		SizeLevel:       sizeLevel,
 
 		Scheduler:          config.Scheduler(),
 		FuncImplementation: config.FuncImplementation(),
@@ -101,7 +144,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		DefaultStackSize:   config.Target.DefaultStackSize,
 		NeedsStackObjects:  config.NeedsStackObjects(),
 		Debug:              true,
-		LLVMFeatures:       config.LLVMFeatures(),
 	}
 
 	// Load the target machine, which is the LLVM object that contains all
@@ -133,7 +175,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	var packageJobs []*compileJob
 	packageBitcodePaths := make(map[string]string)
 	packageActionIDs := make(map[string]string)
-	optLevel, sizeLevel, _ := config.OptLevels()
 	for _, pkg := range lprogram.Sorted() {
 		pkg := pkg // necessary to avoid a race condition
 
@@ -147,6 +188,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		// the parameters for the build.
 		actionID := packageAction{
 			ImportPath:       pkg.ImportPath,
+			CGoVersion:       cgo.Version,
 			CompilerVersion:  compiler.Version,
 			InterpVersion:    interp.Version,
 			LLVMVersion:      llvm.Version,
@@ -207,6 +249,50 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 					return errors.New("verification error after compiling package " + pkg.ImportPath)
 				}
 
+				// Load bitcode of CGo headers and join the modules together.
+				// This may seem vulnerable to cache problems, but this is not
+				// the case: the Go code that was just compiled already tracks
+				// all C files that are read and hashes them.
+				// These headers could be compiled in parallel but the benefit
+				// is so small that it's probably not worth parallelizing.
+				// Packages are compiled independently anyway.
+				for _, cgoHeader := range pkg.CGoHeaders {
+					// Store the header text in a temporary file.
+					f, err := ioutil.TempFile(dir, "cgosnippet-*.c")
+					if err != nil {
+						return err
+					}
+					_, err = f.Write([]byte(cgoHeader))
+					if err != nil {
+						return err
+					}
+					f.Close()
+
+					// Compile the code (if there is any) to bitcode.
+					flags := append([]string{"-c", "-emit-llvm", "-o", f.Name() + ".bc", f.Name()}, pkg.CFlags...)
+					if config.Options.PrintCommands != nil {
+						config.Options.PrintCommands("clang", flags...)
+					}
+					err = runCCompiler(flags...)
+					if err != nil {
+						return &commandError{"failed to build CGo header", "", err}
+					}
+
+					// Load and link the bitcode.
+					// This makes it possible to optimize the functions defined
+					// in the header together with the Go code. In particular,
+					// this allows inlining. It also ensures there is only one
+					// file per package to cache.
+					headerMod, err := mod.Context().ParseBitcodeFile(f.Name() + ".bc")
+					if err != nil {
+						return fmt.Errorf("failed to load bitcode file: %w", err)
+					}
+					err = llvm.LinkModules(mod, headerMod)
+					if err != nil {
+						return fmt.Errorf("failed to link module: %w", err)
+					}
+				}
+
 				// Erase all globals that are part of the undefinedGlobals list.
 				// This list comes from the -ldflags="-X pkg.foo=val" option.
 				// Instead of setting the value directly in the AST (which would
@@ -239,16 +325,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				}
 				if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 					return errors.New("verification error after interpreting " + pkgInit.Name())
-				}
-
-				if sizeLevel >= 2 {
-					// Set the "optsize" attribute to make slightly smaller
-					// binaries at the cost of some performance.
-					kind := llvm.AttributeKindID("optsize")
-					attr := mod.Context().CreateEnumAttribute(kind, 0)
-					for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-						fn.AddFunctionAttr(attr)
-					}
 				}
 
 				// Run function passes for each function in the module.
@@ -336,6 +412,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			llvmInitFn := mod.NamedFunction("runtime.initAll")
 			llvmInitFn.SetLinkage(llvm.InternalLinkage)
 			llvmInitFn.SetUnnamedAddr(true)
+			transform.AddStandardAttributes(llvmInitFn, config)
 			llvmInitFn.Param(0).SetName("context")
 			llvmInitFn.Param(1).SetName("parentHandle")
 			block := mod.Context().AddBasicBlock(llvmInitFn, "entry")
@@ -402,7 +479,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	outext := filepath.Ext(outpath)
 	if outext == ".o" || outext == ".bc" || outext == ".ll" {
 		// Run jobs to produce the LLVM module.
-		err := runJobs(programJob)
+		err := runJobs(programJob, config.Options.Parallelism)
 		if err != nil {
 			return err
 		}
@@ -447,13 +524,16 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Prepare link command.
 	linkerDependencies := []*compileJob{outputObjectFileJob}
 	executable := filepath.Join(dir, "main")
+	if config.GOOS() == "windows" {
+		executable += ".exe"
+	}
 	tmppath := executable // final file
 	ldflags := append(config.LDFlags(), "-o", executable)
 
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
 	if config.Target.RTLib == "compiler-rt" {
-		job, err := CompilerRT.load(config.Triple(), config.CPU(), dir)
+		job, err := CompilerRT.load(config, dir)
 		if err != nil {
 			return err
 		}
@@ -463,7 +543,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add jobs to compile extra files. These files are in C or assembly and
 	// contain things like the interrupt vector table and low level operations
 	// such as stack switching.
-	root := goenv.Get("TINYGOROOT")
 	for _, path := range config.ExtraFiles() {
 		abspath := filepath.Join(root, path)
 		job := &compileJob{
@@ -502,26 +581,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		ldflags = append(ldflags, lprogram.LDFlags...)
 	}
 
-	// Add libc dependency if needed.
-	switch config.Target.Libc {
-	case "picolibc":
-		job, err := Picolibc.load(config.Triple(), config.CPU(), dir)
-		if err != nil {
-			return err
-		}
-		linkerDependencies = append(linkerDependencies, job)
-	case "wasi-libc":
-		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
-		}
-		job := dummyCompileJob(path)
-		linkerDependencies = append(linkerDependencies, job)
-	case "":
-		// no library specified, so nothing to do
-	default:
-		return fmt.Errorf("unknown libc: %s", config.Target.Libc)
-	}
+	// Add libc dependencies, if they exist.
+	linkerDependencies = append(linkerDependencies, libcDependencies...)
 
 	// Strip debug information with -no-debug.
 	if !config.Debug() {
@@ -537,12 +598,15 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			// while we're at it. Relocations can only be compressed when debug
 			// information is stripped.
 			ldflags = append(ldflags, "--strip-debug", "--compress-relocations")
+		} else if config.Target.Linker == "ld.lld" {
+			// ld.lld is also used on Linux.
+			ldflags = append(ldflags, "--strip-debug")
 		} else {
 			switch config.GOOS() {
 			case "linux":
 				// Either real linux or an embedded system (like AVR) that
 				// pretends to be Linux. It's a ELF linker wrapped by GCC in any
-				// case.
+				// case (not ld.lld - that case is handled above).
 				ldflags = append(ldflags, "-Wl,--strip-debug")
 			case "darwin":
 				// MacOS (darwin) doesn't have a linker flag to strip debug
@@ -605,22 +669,62 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				}
 			}
 
+			// Run wasm-opt if necessary.
+			if config.Scheduler() == "asyncify" {
+				var optLevel, shrinkLevel int
+				switch config.Options.Opt {
+				case "none", "0":
+				case "1":
+					optLevel = 1
+				case "2":
+					optLevel = 2
+				case "s":
+					optLevel = 2
+					shrinkLevel = 1
+				case "z":
+					optLevel = 2
+					shrinkLevel = 2
+				default:
+					return fmt.Errorf("unknown opt level: %q", config.Options.Opt)
+				}
+				cmd := exec.Command(goenv.Get("WASMOPT"), "--asyncify", "-g",
+					"--optimize-level", strconv.Itoa(optLevel),
+					"--shrink-level", strconv.Itoa(shrinkLevel),
+					executable, "--output", executable)
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+
+				err := cmd.Run()
+				if err != nil {
+					return fmt.Errorf("wasm-opt failed: %w", err)
+				}
+			}
+
+			// Print code size if requested.
 			if config.Options.PrintSizes == "short" || config.Options.PrintSizes == "full" {
-				sizes, err := loadProgramSize(executable)
+				packagePathMap := make(map[string]string, len(lprogram.Packages))
+				for _, pkg := range lprogram.Sorted() {
+					packagePathMap[pkg.OriginalDir()] = pkg.Pkg.Path()
+				}
+				sizes, err := loadProgramSize(executable, packagePathMap)
 				if err != nil {
 					return err
 				}
 				if config.Options.PrintSizes == "short" {
 					fmt.Printf("   code    data     bss |   flash     ram\n")
-					fmt.Printf("%7d %7d %7d | %7d %7d\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
+					fmt.Printf("%7d %7d %7d | %7d %7d\n", sizes.Code+sizes.ROData, sizes.Data, sizes.BSS, sizes.Flash(), sizes.RAM())
 				} else {
+					if !config.Debug() {
+						fmt.Println("warning: data incomplete, remove the -no-debug flag for more detail")
+					}
 					fmt.Printf("   code  rodata    data     bss |   flash     ram | package\n")
+					fmt.Printf("------------------------------- | --------------- | -------\n")
 					for _, name := range sizes.sortedPackageNames() {
 						pkgSize := sizes.Packages[name]
 						fmt.Printf("%7d %7d %7d %7d | %7d %7d | %s\n", pkgSize.Code, pkgSize.ROData, pkgSize.Data, pkgSize.BSS, pkgSize.Flash(), pkgSize.RAM(), name)
 					}
-					fmt.Printf("%7d %7d %7d %7d | %7d %7d | (sum)\n", sizes.Sum.Code, sizes.Sum.ROData, sizes.Sum.Data, sizes.Sum.BSS, sizes.Sum.Flash(), sizes.Sum.RAM())
-					fmt.Printf("%7d       - %7d %7d | %7d %7d | (all)\n", sizes.Code, sizes.Data, sizes.BSS, sizes.Code+sizes.Data, sizes.Data+sizes.BSS)
+					fmt.Printf("------------------------------- | --------------- | -------\n")
+					fmt.Printf("%7d %7d %7d %7d | %7d %7d | total\n", sizes.Code, sizes.ROData, sizes.Data, sizes.BSS, sizes.Code+sizes.ROData+sizes.Data, sizes.Data+sizes.BSS)
 				}
 			}
 
@@ -636,7 +740,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Run all jobs to compile and link the program.
 	// Do this now (instead of after elf-to-hex and similar conversions) as it
 	// is simpler and cannot be parallelized.
-	err = runJobs(linkJob)
+	err = runJobs(linkJob, config.Options.Parallelism)
 	if err != nil {
 		return err
 	}
@@ -728,7 +832,7 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	// stack-allocated values.
 	// Use -wasm-abi=generic to disable this behaviour.
 	if config.WasmAbi() == "js" {
-		err := transform.ExternalInt64AsPtr(mod)
+		err := transform.ExternalInt64AsPtr(mod, config)
 		if err != nil {
 			return err
 		}

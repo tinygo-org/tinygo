@@ -10,8 +10,6 @@
 	"automatic-stack-size": true,
 	"default-stack-size": 2048,
 	"cflags": [
-		"-Oz",
-		"-mthumb",
 		"-Werror",
 		"-fshort-enums",
 		"-fomit-frame-pointer",
