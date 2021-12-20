@@ -35,6 +35,7 @@ FROM tinygo-compiler AS tinygo-tools
 
 RUN cd /tinygo/ && \
     make wasi-libc binaryen && \
-    make gen-device -j4
+    make gen-device -j4 && \
+    cp build/* $GOPATH/bin/
 
 CMD ["tinygo"]
