@@ -6,7 +6,7 @@ RUN wget -O- https://apt.llvm.org/llvm-snapshot.gpg.key| apt-key add - && \
     apt-get update && \
     apt-get install -y llvm-11-dev libclang-11-dev lld-11 git
 
-RUN apt-get install -y apt-utils make clang-11
+RUN apt-get install -y apt-utils make cmake clang-11
 
 COPY . /tinygo
 
@@ -17,9 +17,9 @@ RUN cd /tinygo/ && \
     git submodule sync && \
     git submodule update --init --recursive --force
 
-COPY ./lib/picolibc-include/* /tinygo/lib/picolibc-include/
+# COPY ./lib/picolibc-include/* /tinygo/lib/picolibc-include/
 
-RUN cd /tinygo/ && make wasi-libc
+RUN cd /tinygo/ && make wasi-libc binaryen
 
 RUN cd /tinygo/ && \
     go install /tinygo/
