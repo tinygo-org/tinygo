@@ -20,10 +20,9 @@ FROM tinygo-llvm-build AS tinygo-compiler
 
 COPY . /tinygo
 
-# remove submodules directories and re-init them to fix any hard-coded paths
-# after copying the tinygo directory in the previous step.
+# update submodules
 RUN cd /tinygo/ && \
-    rm -rf ./lib/* && \
+    rm -rf ./lib/*/ && \
     git submodule sync && \
     git submodule update --init --recursive --force
 
