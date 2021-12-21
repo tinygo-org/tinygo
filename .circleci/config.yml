@@ -213,7 +213,7 @@ jobs:
           llvm: "12"
   build-macos:
     macos:
-      xcode: "11.1.0" # macOS 10.14
+      xcode: "11.4.1" # macOS 10.15.4
     steps:
       - build-macos
 
