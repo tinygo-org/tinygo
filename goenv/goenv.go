@@ -113,6 +113,7 @@ func findWasmOpt() string {
 	searchPaths := []string{
 		tinygoroot + "/bin/wasm-opt",
 		tinygoroot + "/build/wasm-opt",
+		tinygoroot + "/libexec/wasm-opt", // for Homebrew
 	}
 
 	var paths []string
