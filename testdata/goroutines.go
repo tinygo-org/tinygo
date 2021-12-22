@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+func init() {
+	println("init")
+	go println("goroutine in init")
+	time.Sleep(1 * time.Millisecond)
+}
+
 func main() {
 	println("main 1")
 	go sub()

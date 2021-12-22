@@ -1,3 +1,5 @@
+init
+goroutine in init
 main 1
 sub 1
 main 2

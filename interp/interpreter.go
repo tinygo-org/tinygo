@@ -197,7 +197,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// which case this call won't even get to this point but will
 				// already be emitted in initAll.
 				continue
-			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" || callFn.name == "runtime.hashmapGet" || callFn.name == "os.runtime_args":
+			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" || callFn.name == "runtime.hashmapGet" ||
+				callFn.name == "os.runtime_args" || callFn.name == "internal/task.start" || callFn.name == "internal/task.Current":
 				// These functions should be run at runtime. Specifically:
 				//   * Print and panic functions are best emitted directly without
 				//     interpreting them, otherwise we get a ton of putchar (etc.)
@@ -208,6 +209,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				//   * os.runtime_args reads globals that are initialized outside
 				//     the view of the interp package so it always needs to be run
 				//     at runtime.
+				//   * internal/task.start, internal/task.Current: start and read shcheduler state,
+				//     which is modified elsewhere.
 				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
 				if err != nil {
 					return nil, mem, err
