@@ -17,7 +17,11 @@ const (
 	LED3      = LED_BLUE  // Blue
 	LED       = LED_GREEN // Default
 
-	BUTTON = PB3
+	BUTTON    = PB3
+	BUZZER    = PA15
+	VBATT_ADC = PB2
+	SENSOR_EN = PB12
+	FLASH_EN  = PC13
 
 	// SPI0
 	SPI0_NSS_PIN = PA4
@@ -32,6 +36,22 @@ const (
 	// DEFAULT USART
 	UART_RX_PIN = UART2_RX_PIN
 	UART_TX_PIN = UART2_TX_PIN
+
+	// I2C1 pins
+	// I2C1 is connected to Flash, Accelerometer, Env. Sensor, Crypto Element)
+	I2C1_SCL_PIN  = PA9
+	I2C1_SDA_PIN  = PA10
+	I2C1_ALT_FUNC = 4
+
+	// I2C2 pins
+	// I2C2 is expansion J10 QWIIC Connector
+	I2C2_SCL_PIN  = PA12
+	I2C2_SDA_PIN  = PA11
+	I2C2_ALT_FUNC = 4
+
+	// I2C0 alias for I2C1
+	I2C0_SDA_PIN = I2C1_SDA_PIN
+	I2C0_SCL_PIN = I2C1_SCL_PIN
 )
 
 var (
@@ -45,6 +65,17 @@ var (
 	}
 
 	DefaultUART = UART0
+
+	// I2C Busses
+	I2C1 = &I2C{
+		Bus:             stm32.I2C1,
+		AltFuncSelector: I2C1_ALT_FUNC,
+	}
+	I2C2 = &I2C{
+		Bus:             stm32.I2C2,
+		AltFuncSelector: I2C2_ALT_FUNC,
+	}
+	I2C0 = I2C1
 
 	// SPI
 	SPI3 = SPI{
