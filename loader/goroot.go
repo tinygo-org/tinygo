@@ -14,8 +14,8 @@ package loader
 import (
 	"crypto/sha512"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -23,6 +23,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"sync"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -43,27 +44,21 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 		return "", errors.New("could not determine TINYGOROOT")
 	}
 
-	// Determine the location of the cached GOROOT.
-	version, err := goenv.GorootVersionString(goroot)
+	// Find the overrides needed for the goroot.
+	overrides := pathsToOverride(needsSyscallPackage(config.BuildTags()))
+
+	// Resolve the merge links within the goroot.
+	merge, err := listGorootMergeLinks(goroot, tinygoroot, overrides)
 	if err != nil {
 		return "", err
 	}
-	// This hash is really a cache key, that contains (hopefully) enough
-	// information to make collisions unlikely during development.
-	// By including the Go version and TinyGo version, cache collisions should
-	// not happen outside of development.
-	hash := sha512.New512_256()
-	fmt.Fprintln(hash, goroot)
-	fmt.Fprintln(hash, version)
-	fmt.Fprintln(hash, goenv.Version)
-	fmt.Fprintln(hash, tinygoroot)
-	gorootsHash := hash.Sum(nil)
-	gorootsHashHex := hex.EncodeToString(gorootsHash[:])
-	cachedgorootName := "goroot-" + version + "-" + gorootsHashHex
-	cachedgoroot := filepath.Join(goenv.Get("GOCACHE"), cachedgorootName)
-	if needsSyscallPackage(config.BuildTags()) {
-		cachedgoroot += "-syscall"
+
+	// Hash the merge links to create a cache key.
+	data, err := json.Marshal(merge)
+	if err != nil {
+		return "", err
 	}
+	hash := sha512.Sum512_256(data)
 
 	// Do not try to create the cached GOROOT in parallel, that's only a waste
 	// of I/O bandwidth and thus speed. Instead, use a mutex to make sure only
@@ -74,14 +69,21 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	gorootCreateMutex.Lock()
 	defer gorootCreateMutex.Unlock()
 
+	// Check if the goroot already exists.
+	cachedGorootName := "goroot-" + hex.EncodeToString(hash[:])
+	cachedgoroot := filepath.Join(goenv.Get("GOCACHE"), cachedGorootName)
 	if _, err := os.Stat(cachedgoroot); err == nil {
 		return cachedgoroot, nil
 	}
+
+	// Create the cache directory if it does not already exist.
 	err = os.MkdirAll(goenv.Get("GOCACHE"), 0777)
 	if err != nil {
 		return "", err
 	}
-	tmpgoroot, err := ioutil.TempDir(goenv.Get("GOCACHE"), cachedgorootName+".tmp")
+
+	// Create a temporary directory to construct the goroot within.
+	tmpgoroot, err := ioutil.TempDir(goenv.Get("GOCACHE"), cachedGorootName+".tmp")
 	if err != nil {
 		return "", err
 	}
@@ -90,16 +92,34 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	// (for example, when there was an error).
 	defer os.RemoveAll(tmpgoroot)
 
-	for _, name := range []string{"bin", "lib", "pkg"} {
-		err = symlink(filepath.Join(goroot, name), filepath.Join(tmpgoroot, name))
+	// Create the directory structure.
+	// The directories are created in sorted order so that nested directories are created without extra work.
+	{
+		var dirs []string
+		for dir, merge := range overrides {
+			if merge {
+				dirs = append(dirs, filepath.Join(tmpgoroot, "src", dir))
+			}
+		}
+		sort.Strings(dirs)
+
+		for _, dir := range dirs {
+			err := os.Mkdir(dir, 0777)
+			if err != nil {
+				return "", err
+			}
+		}
+	}
+
+	// Create all symlinks.
+	for dst, src := range merge {
+		err := symlink(src, filepath.Join(tmpgoroot, dst))
 		if err != nil {
 			return "", err
 		}
 	}
-	err = mergeDirectory(goroot, tinygoroot, tmpgoroot, "", pathsToOverride(needsSyscallPackage(config.BuildTags())))
-	if err != nil {
-		return "", err
-	}
+
+	// Rename the new merged gorooot into place.
 	err = os.Rename(tmpgoroot, cachedgoroot)
 	if err != nil {
 		if os.IsExist(err) {
@@ -122,86 +142,71 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	return cachedgoroot, nil
 }
 
-// mergeDirectory merges two roots recursively. The tmpgoroot is the directory
-// that will be created by this call by either symlinking the directory from
-// goroot or tinygoroot, or by creating the directory and merging the contents.
-func mergeDirectory(goroot, tinygoroot, tmpgoroot, importPath string, overrides map[string]bool) error {
-	if mergeSubdirs, ok := overrides[importPath+"/"]; ok {
-		if !mergeSubdirs {
-			// This directory and all subdirectories should come from the TinyGo
-			// root, so simply make a symlink.
-			newname := filepath.Join(tmpgoroot, "src", importPath)
-			oldname := filepath.Join(tinygoroot, "src", importPath)
-			return symlink(oldname, newname)
+// listGorootMergeLinks searches goroot and tinygoroot for all symlinks that must be created within the merged goroot.
+func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) (map[string]string, error) {
+	goSrc := filepath.Join(goroot, "src")
+	tinygoSrc := filepath.Join(tinygoroot, "src")
+	merges := make(map[string]string)
+	for dir, merge := range overrides {
+		if !merge {
+			// Use the TinyGo version.
+			merges[filepath.Join("src", dir)] = filepath.Join(tinygoSrc, dir)
+			continue
 		}
 
-		// Merge subdirectories. Start by making the directory to merge.
-		err := os.Mkdir(filepath.Join(tmpgoroot, "src", importPath), 0777)
+		// Add files from TinyGo.
+		tinygoDir := filepath.Join(tinygoSrc, dir)
+		tinygoEntries, err := ioutil.ReadDir(tinygoDir)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
-		// Symlink all files from TinyGo, and symlink directories from TinyGo
-		// that need to be overridden.
-		tinygoEntries, err := ioutil.ReadDir(filepath.Join(tinygoroot, "src", importPath))
-		if err != nil {
-			return err
-		}
-		hasTinyGoFiles := false
+		var hasTinyGoFiles bool
 		for _, e := range tinygoEntries {
 			if e.IsDir() {
-				// A directory, so merge this thing.
-				err := mergeDirectory(goroot, tinygoroot, tmpgoroot, path.Join(importPath, e.Name()), overrides)
-				if err != nil {
-					return err
-				}
-			} else {
-				// A file, so symlink this.
-				newname := filepath.Join(tmpgoroot, "src", importPath, e.Name())
-				oldname := filepath.Join(tinygoroot, "src", importPath, e.Name())
-				err := symlink(oldname, newname)
-				if err != nil {
-					return err
-				}
-				hasTinyGoFiles = true
+				continue
 			}
+
+			// Link this file.
+			name := e.Name()
+			merges[filepath.Join("src", dir, name)] = filepath.Join(tinygoDir, name)
+
+			hasTinyGoFiles = true
 		}
 
-		// Symlink all directories from $GOROOT that are not part of the TinyGo
+		// Add all directories from $GOROOT that are not part of the TinyGo
 		// overrides.
-		gorootEntries, err := ioutil.ReadDir(filepath.Join(goroot, "src", importPath))
+		goDir := filepath.Join(goSrc, dir)
+		goEntries, err := ioutil.ReadDir(goDir)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		for _, e := range gorootEntries {
-			if e.IsDir() {
-				if _, ok := overrides[path.Join(importPath, e.Name())+"/"]; ok {
-					// Already included above, so don't bother trying to create this
-					// symlink.
-					continue
-				}
-				newname := filepath.Join(tmpgoroot, "src", importPath, e.Name())
-				oldname := filepath.Join(goroot, "src", importPath, e.Name())
-				err := symlink(oldname, newname)
-				if err != nil {
-					return err
-				}
-			} else {
+		for _, e := range goEntries {
+			isDir := e.IsDir()
+			if hasTinyGoFiles && !isDir {
 				// Only merge files from Go if TinyGo does not have any files.
 				// Otherwise we'd end up with a weird mix from both Go
 				// implementations.
-				if !hasTinyGoFiles {
-					newname := filepath.Join(tmpgoroot, "src", importPath, e.Name())
-					oldname := filepath.Join(goroot, "src", importPath, e.Name())
-					err := symlink(oldname, newname)
-					if err != nil {
-						return err
-					}
-				}
+				continue
 			}
+
+			name := e.Name()
+			if _, ok := overrides[path.Join(dir, name)+"/"]; ok {
+				// This entry is overridden by TinyGo.
+				// It has/will be merged elsewhere.
+				continue
+			}
+
+			// Add a link to this entry
+			merges[filepath.Join("src", dir, name)] = filepath.Join(goDir, name)
 		}
 	}
-	return nil
+
+	// Merge the special directories from goroot.
+	for _, dir := range []string{"bin", "lib", "pkg"} {
+		merges[dir] = filepath.Join(goroot, dir)
+	}
+
+	return merges, nil
 }
 
 // needsSyscallPackage returns whether the syscall package should be overriden
@@ -219,7 +224,7 @@ func needsSyscallPackage(buildTags []string) bool {
 // means use the TinyGo version.
 func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 	paths := map[string]bool{
-		"/":                     true,
+		"":                      true,
 		"crypto/":               true,
 		"crypto/rand/":          false,
 		"device/":               false,
