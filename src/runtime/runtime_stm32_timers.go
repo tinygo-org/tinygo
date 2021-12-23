@@ -8,9 +8,6 @@ package runtime
 // periodic interrupts at 100Hz (TICK_INTR_PERIOD_NS).  The PWM counter
 // register is used for fine-grained resolution (down to ~150ns) with an
 // Output Comparator used for fine-grained sleeps.
-//
-// The type alias `arrtype` should be defined to either uint32 or uint16
-// depending on the size of that register in the MCU's TIM_Type structure.
 
 import (
 	"device/stm32"

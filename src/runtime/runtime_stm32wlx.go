@@ -8,8 +8,6 @@ import (
 	"machine"
 )
 
-type arrtype = uint32
-
 const (
 	/* PLL Options RMN0461.p247 */
 	PLL_M = 2

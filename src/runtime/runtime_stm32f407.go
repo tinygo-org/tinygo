@@ -26,8 +26,6 @@ const (
 	PLL_Q = 7 // USB OTS FS, SDIO and RNG Clock = PLL_VCO / PLL_Q
 )
 
-type arrtype = uint32
-
 func init() {
 	initCLK()
 

@@ -11,8 +11,6 @@ const (
 	RCC_SYSCLK_DIV1 = 0 // Needs SVD update (should be stm32.RCC_SYSCLK_DIV1)
 )
 
-type arrtype = uint16
-
 func putchar(c byte) {
 	machine.Serial.WriteByte(c)
 }

@@ -26,8 +26,6 @@ const (
 	PLL_R               = 2 // RCC_PLLR_DIV2
 )
 
-type arrtype = uint32
-
 func init() {
 	initCLK()
 

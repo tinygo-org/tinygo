@@ -25,8 +25,6 @@ const (
 	PLL_Q               = 2
 )
 
-type arrtype = uint32
-
 func init() {
 	initCLK()
 
