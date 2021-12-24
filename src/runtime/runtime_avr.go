@@ -4,14 +4,15 @@ package runtime
 
 import (
 	"device/avr"
+	"machine"
+	"runtime/interrupt"
 	"unsafe"
 )
 
 const BOARD = "arduino"
 
-type timeUnit uint32
-
-var currentTime timeUnit
+// timeUnit in nanoseconds
+type timeUnit int64
 
 // Watchdog timer periods. These can be off by a large margin (hence the jump
 // between 64ms and 125ms which is not an exact double), so don't rely on this
@@ -26,6 +27,10 @@ const (
 	WDT_PERIOD_1S
 	WDT_PERIOD_2S
 )
+
+const timerRecalibrateInterval = 6e7 // 1 minute
+
+var nextTimerRecalibrate timeUnit
 
 //go:extern _sbss
 var _sbss [0]byte
@@ -56,32 +61,49 @@ func postinit() {
 
 func init() {
 	initUART()
+	machine.InitMonotonicTimer()
+	nextTimerRecalibrate = ticks() + timerRecalibrateInterval
 }
 
-const tickNanos = 1024 * 16384 // roughly 16ms in nanoseconds
-
 func ticksToNanoseconds(ticks timeUnit) int64 {
-	return int64(ticks) * tickNanos
+	return int64(ticks)
 }
 
 func nanosecondsToTicks(ns int64) timeUnit {
-	return timeUnit(ns / tickNanos)
+	return timeUnit(ns)
 }
 
-// Sleep this number of ticks of 16ms.
-//
-// TODO: not very accurate. Improve accuracy by calibrating on startup and every
-// once in a while.
+// Sleep this number of ticks of nanoseconds.
 func sleepTicks(d timeUnit) {
-	currentTime += d
-	for d != 0 {
-		sleepWDT(WDT_PERIOD_16MS)
-		d -= 1
+	waitTill := ticks() + d
+	// recalibrate if we have some time (>100ms) and it was a while when we did it last time.
+	if d > 100000 {
+		now := waitTill - d
+		if nextTimerRecalibrate < now {
+			nextTimerRecalibrate = now + timerRecalibrateInterval
+			machine.AdjustMonotonicTimer()
+		}
+	}
+	for {
+		// wait for interrupt
+		avr.Asm("sleep")
+		if waitTill <= ticks() {
+			// done waiting
+			return
+		}
+		if hasScheduler {
+			// The interrupt may have awoken a goroutine, so bail out early.
+			return
+		}
 	}
 }
 
-func ticks() timeUnit {
-	return currentTime
+// ticks return time since start in nanoseconds
+func ticks() (ticks timeUnit) {
+	state := interrupt.Disable()
+	ticks = timeUnit(machine.Ticks)
+	interrupt.Restore(state)
+	return
 }
 
 func exit(code int) {
