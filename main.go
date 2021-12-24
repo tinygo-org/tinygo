@@ -1378,17 +1378,42 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Build and run the tests concurrently, buffering the output.
 		fail := make(chan struct{}, 1)
 		var wg sync.WaitGroup
 		bufs := make([]testOutputBuf, len(pkgNames))
+		for i := range bufs {
+			bufs[i].done = make(chan struct{})
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			// Flush the output one test at a time.
+			// This ensures that outputs from different tests are not mixed together.
+			for i := range bufs {
+				err := bufs[i].flush(os.Stdout, os.Stderr)
+				if err != nil {
+					// There was an error writing to stdout or stderr, so we probbably cannot print this.
+					select {
+					case fail <- struct{}{}:
+					default:
+					}
+				}
+			}
+		}()
+
+		// Build and run the tests concurrently.
+		// This uses an additional semaphore to reduce the memory usage.
+		testSema := make(chan struct{}, cap(options.Semaphore))
 		for i, pkgName := range pkgNames {
 			pkgName := pkgName
 			buf := &bufs[i]
-			buf.done = make(chan struct{})
+			testSema <- struct{}{}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+				defer func() { <-testSema }()
 				defer close(buf.done)
 				stdout := (*testStdout)(buf)
 				stderr := (*testStderr)(buf)
@@ -1405,19 +1430,6 @@ func main() {
 					}
 				}
 			}()
-		}
-
-		// Flush the output one test at a time.
-		// This ensures that outputs from different tests are not mixed together.
-		for i := range bufs {
-			err := bufs[i].flush(os.Stdout, os.Stderr)
-			if err != nil {
-				// There was an error writing to stdout or stderr, so we probbably cannot print this.
-				select {
-				case fail <- struct{}{}:
-				default:
-				}
-			}
 		}
 
 		// Wait for all tests to finish.
