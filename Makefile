@@ -453,6 +453,8 @@ ifneq ($(STM32), 0)
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32f4disco-1      examples/pwm
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=stm32f469disco      examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=lorae5              examples/blinky1
 	@$(MD5SUM) test.hex
 endif
