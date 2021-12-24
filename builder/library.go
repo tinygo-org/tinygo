@@ -43,7 +43,7 @@ func (l *Library) Load(config *compileopts.Config, tmpdir string) (dir string, e
 		return "", err
 	}
 	defer unlock()
-	err = runJobs(job, config.Options.Parallelism)
+	err = runJobs(job, config.Options.Semaphore)
 	return filepath.Dir(job.result), err
 }
 

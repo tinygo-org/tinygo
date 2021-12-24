@@ -53,7 +53,6 @@ func TestCompiler(t *testing.T) {
 		"testing.go",
 		"zeroalloc.go",
 	}
-
 	_, minor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
 	if err != nil {
 		t.Fatal("could not read version from GOROOT:", err)
@@ -62,16 +61,18 @@ func TestCompiler(t *testing.T) {
 		tests = append(tests, "go1.17.go")
 	}
 
+	sema := make(chan struct{}, runtime.NumCPU())
+
 	if *testTarget != "" {
 		// This makes it possible to run one specific test (instead of all),
 		// which is especially useful to quickly check whether some changes
 		// affect a particular target architecture.
-		runPlatTests(optionsFromTarget(*testTarget), tests, t)
+		runPlatTests(optionsFromTarget(*testTarget, sema), tests, t)
 		return
 	}
 
 	t.Run("Host", func(t *testing.T) {
-		runPlatTests(optionsFromTarget(""), tests, t)
+		runPlatTests(optionsFromTarget("", sema), tests, t)
 	})
 
 	// Test a few build options.
@@ -82,10 +83,11 @@ func TestCompiler(t *testing.T) {
 		t.Run("opt=1", func(t *testing.T) {
 			t.Parallel()
 			runTestWithConfig("stdlib.go", t, compileopts.Options{
-				GOOS:   goenv.Get("GOOS"),
-				GOARCH: goenv.Get("GOARCH"),
-				GOARM:  goenv.Get("GOARM"),
-				Opt:    "1",
+				GOOS:      goenv.Get("GOOS"),
+				GOARCH:    goenv.Get("GOARCH"),
+				GOARM:     goenv.Get("GOARM"),
+				Opt:       "1",
+				Semaphore: sema,
 			}, nil, nil)
 		})
 
@@ -94,10 +96,11 @@ func TestCompiler(t *testing.T) {
 		t.Run("opt=0", func(t *testing.T) {
 			t.Parallel()
 			runTestWithConfig("print.go", t, compileopts.Options{
-				GOOS:   goenv.Get("GOOS"),
-				GOARCH: goenv.Get("GOARCH"),
-				GOARM:  goenv.Get("GOARM"),
-				Opt:    "0",
+				GOOS:      goenv.Get("GOOS"),
+				GOARCH:    goenv.Get("GOARCH"),
+				GOARM:     goenv.Get("GOARM"),
+				Opt:       "0",
+				Semaphore: sema,
 			}, nil, nil)
 		})
 
@@ -112,6 +115,7 @@ func TestCompiler(t *testing.T) {
 						"someGlobal": "foobar",
 					},
 				},
+				Semaphore: sema,
 			}, nil, nil)
 		})
 	})
@@ -123,28 +127,28 @@ func TestCompiler(t *testing.T) {
 	}
 
 	t.Run("EmulatedCortexM3", func(t *testing.T) {
-		runPlatTests(optionsFromTarget("cortex-m-qemu"), tests, t)
+		runPlatTests(optionsFromTarget("cortex-m-qemu", sema), tests, t)
 	})
 
 	t.Run("EmulatedRISCV", func(t *testing.T) {
-		runPlatTests(optionsFromTarget("riscv-qemu"), tests, t)
+		runPlatTests(optionsFromTarget("riscv-qemu", sema), tests, t)
 	})
 
 	if runtime.GOOS == "linux" {
 		t.Run("X86Linux", func(t *testing.T) {
-			runPlatTests(optionsFromOSARCH("linux/386"), tests, t)
+			runPlatTests(optionsFromOSARCH("linux/386", sema), tests, t)
 		})
 		t.Run("ARMLinux", func(t *testing.T) {
-			runPlatTests(optionsFromOSARCH("linux/arm/6"), tests, t)
+			runPlatTests(optionsFromOSARCH("linux/arm/6", sema), tests, t)
 		})
 		t.Run("ARM64Linux", func(t *testing.T) {
-			runPlatTests(optionsFromOSARCH("linux/arm64"), tests, t)
+			runPlatTests(optionsFromOSARCH("linux/arm64", sema), tests, t)
 		})
 		t.Run("WebAssembly", func(t *testing.T) {
-			runPlatTests(optionsFromTarget("wasm"), tests, t)
+			runPlatTests(optionsFromTarget("wasm", sema), tests, t)
 		})
 		t.Run("WASI", func(t *testing.T) {
-			runPlatTests(optionsFromTarget("wasi"), tests, t)
+			runPlatTests(optionsFromTarget("wasi", sema), tests, t)
 		})
 	}
 }
@@ -185,24 +189,26 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	}
 }
 
-func optionsFromTarget(target string) compileopts.Options {
+func optionsFromTarget(target string, sema chan struct{}) compileopts.Options {
 	return compileopts.Options{
 		// GOOS/GOARCH are only used if target == ""
-		GOOS:   goenv.Get("GOOS"),
-		GOARCH: goenv.Get("GOARCH"),
-		GOARM:  goenv.Get("GOARM"),
-		Target: target,
+		GOOS:      goenv.Get("GOOS"),
+		GOARCH:    goenv.Get("GOARCH"),
+		GOARM:     goenv.Get("GOARM"),
+		Target:    target,
+		Semaphore: sema,
 	}
 }
 
 // optionsFromOSARCH returns a set of options based on the "osarch" string. This
 // string is in the form of "os/arch/subarch", with the subarch only sometimes
 // being necessary. Examples are "darwin/amd64" or "linux/arm/7".
-func optionsFromOSARCH(osarch string) compileopts.Options {
+func optionsFromOSARCH(osarch string, sema chan struct{}) compileopts.Options {
 	parts := strings.Split(osarch, "/")
 	options := compileopts.Options{
-		GOOS:   parts[0],
-		GOARCH: parts[1],
+		GOOS:      parts[0],
+		GOARCH:    parts[1],
+		Semaphore: sema,
 	}
 	if options.GOARCH == "arm" {
 		options.GOARM = parts[2]
