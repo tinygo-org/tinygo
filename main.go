@@ -1237,7 +1237,7 @@ func main() {
 		PrintIR:         *printIR,
 		DumpSSA:         *dumpSSA,
 		VerifyIR:        *verifyIR,
-		Parallelism:     *parallelism,
+		Semaphore:       make(chan struct{}, *parallelism),
 		Debug:           !*nodebug,
 		PrintSizes:      *printSize,
 		PrintStacks:     *printStacks,

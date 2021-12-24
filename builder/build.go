@@ -489,7 +489,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	outext := filepath.Ext(outpath)
 	if outext == ".o" || outext == ".bc" || outext == ".ll" {
 		// Run jobs to produce the LLVM module.
-		err := runJobs(programJob, config.Options.Parallelism)
+		err := runJobs(programJob, config.Options.Semaphore)
 		if err != nil {
 			return err
 		}
@@ -751,7 +751,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Run all jobs to compile and link the program.
 	// Do this now (instead of after elf-to-hex and similar conversions) as it
 	// is simpler and cannot be parallelized.
-	err = runJobs(linkJob, config.Options.Parallelism)
+	err = runJobs(linkJob, config.Options.Semaphore)
 	if err != nil {
 		return err
 	}
