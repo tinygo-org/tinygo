@@ -116,6 +116,23 @@ const (
 	PF14 = portF + 14
 	PF15 = portF + 15
 
+	PG0  = portG + 0
+	PG1  = portG + 1
+	PG2  = portG + 2
+	PG3  = portG + 3
+	PG4  = portG + 4
+	PG5  = portG + 5
+	PG6  = portG + 6
+	PG7  = portG + 7
+	PG8  = portG + 8
+	PG9  = portG + 9
+	PG10 = portG + 10
+	PG11 = portG + 11
+	PG12 = portG + 12
+	PG13 = portG + 13
+	PG14 = portG + 14
+	PG15 = portG + 15
+
 	PH0  = portH + 0
 	PH1  = portH + 1
 	PH2  = portH + 2
@@ -149,6 +166,23 @@ const (
 	PI13 = portI + 13
 	PI14 = portI + 14
 	PI15 = portI + 15
+
+	PK0  = portK + 0
+	PK1  = portK + 1
+	PK2  = portK + 2
+	PK3  = portK + 3
+	PK4  = portK + 4
+	PK5  = portK + 5
+	PK6  = portK + 6
+	PK7  = portK + 7
+	PK8  = portK + 8
+	PK9  = portK + 9
+	PK10 = portK + 10
+	PK11 = portK + 11
+	PK12 = portK + 12
+	PK13 = portK + 13
+	PK14 = portK + 14
+	PK15 = portK + 15
 )
 
 func (p Pin) getPort() *stm32.GPIO_Type {
@@ -171,6 +205,10 @@ func (p Pin) getPort() *stm32.GPIO_Type {
 		return stm32.GPIOH
 	case 8:
 		return stm32.GPIOI
+	case 9:
+		return stm32.GPIOJ
+	case 10:
+		return stm32.GPIOK
 	default:
 		panic("machine: unknown port")
 	}
@@ -178,26 +216,10 @@ func (p Pin) getPort() *stm32.GPIO_Type {
 
 // enableClock enables the clock for this desired GPIO port.
 func (p Pin) enableClock() {
-	switch p / 16 {
-	case 0:
-		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOAEN)
-	case 1:
-		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOBEN)
-	case 2:
-		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOCEN)
-	case 3:
-		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIODEN)
-	case 4:
-		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOEEN)
-	case 5:
-		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOFEN)
-	case 6:
-		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOGEN)
-	case 7:
-		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOHEN)
-	case 8:
-		stm32.RCC.AHB1ENR.SetBits(stm32.RCC_AHB1ENR_GPIOIEN)
-	default:
+	bit := p / 16
+	if 0 <= bit && bit <= 10 {
+		stm32.RCC.AHB1ENR.SetBits(0b1 << bit)
+	} else {
 		panic("machine: unknown port")
 	}
 }
