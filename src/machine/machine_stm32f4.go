@@ -616,16 +616,6 @@ func initRNG() {
 	stm32.RNG.CR.SetBits(stm32.RNG_CR_RNGEN)
 }
 
-func CPUFrequency() uint32 {
-	return 168000000
-}
-
-// Internal use: configured speed of the APB1 and APB2 timers, this should be kept
-// in sync with any changes to runtime package which configures the oscillators
-// and clock frequencies
-const APB1_TIM_FREQ = 42000000 * 2
-const APB2_TIM_FREQ = 84000000 * 2
-
 // Alternative peripheral pin functions
 const (
 	AF0_SYSTEM                = 0

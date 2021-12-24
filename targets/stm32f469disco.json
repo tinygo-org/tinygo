@@ -1,0 +1,12 @@
+{
+  "inherits": ["cortex-m4"],
+  "build-tags": ["stm32f469disco", "stm32f469", "stm32f4", "stm32"],
+  "serial": "uart",
+  "linkerscript": "targets/stm32f469.ld",
+  "extra-files": [
+    "src/device/stm32/stm32f469.s"
+  ],
+  "flash-method": "openocd",
+  "openocd-interface": "stlink",
+  "openocd-target": "stm32f4x"
+}
