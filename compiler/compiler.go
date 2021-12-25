@@ -716,6 +716,10 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			// Create the function definition.
 			b := newBuilder(c, irbuilder, member)
 			if member.Blocks == nil {
+				if cd, ok := compDefs[b.llvmFn.Name()]; ok {
+					// This is a compiler-defined function.
+					b.fillCompDef(cd)
+				}
 				continue // external function
 			}
 			b.createFunction()

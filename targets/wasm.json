@@ -13,6 +13,7 @@
 		"--stack-first",
 		"--no-demangle"
 	],
+	"rtlib": "compiler-rt",
 	"emulator":      ["node", "{root}/targets/wasm_exec.js"],
 	"wasm-abi":      "js"
 }

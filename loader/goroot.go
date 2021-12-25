@@ -235,6 +235,8 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"internal/task/":        false,
 		"internal/itoa/":        false, // TODO: Remove when we drop support for go 1.16
 		"machine/":              false,
+		"math/":                 true,
+		"math/bits/":            false,
 		"net/":                  true,
 		"os/":                   true,
 		"reflect/":              false,
