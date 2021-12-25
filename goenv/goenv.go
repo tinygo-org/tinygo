@@ -12,10 +12,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // Keys is a slice of all available environment variable keys.
 var Keys = []string{
+	"GO",
 	"GOOS",
 	"GOARCH",
 	"GOROOT",
@@ -39,15 +41,51 @@ var TINYGOROOT string
 // Get returns a single environment variable, possibly calculating it on-demand.
 // The empty string is returned for unknown environment variables.
 func Get(name string) string {
+	entry := cacheLookup(name)
+
+	entry.once.Do(func() {
+		entry.val = get(name)
+	})
+
+	return entry.val
+}
+
+func cacheLookup(name string) *envCacheEntry {
+	envCache.mu.Lock()
+	defer envCache.mu.Unlock()
+
+	entry, ok := envCache.entries[name]
+	if ok {
+		return entry
+	}
+
+	entry = &envCacheEntry{}
+	envCache.entries[name] = entry
+	return entry
+}
+
+var envCache = struct {
+	mu      sync.Mutex
+	entries map[string]*envCacheEntry
+}{entries: make(map[string]*envCacheEntry)}
+
+type envCacheEntry struct {
+	once sync.Once
+	val  string
+}
+
+func get(name string) string {
 	switch name {
+	case "GO":
+		return findGo()
 	case "GOOS":
-		if dir := os.Getenv("GOOS"); dir != "" {
-			return dir
+		if goos := os.Getenv("GOOS"); goos != "" {
+			return goos
 		}
 		return runtime.GOOS
 	case "GOARCH":
-		if dir := os.Getenv("GOARCH"); dir != "" {
-			return dir
+		if goarch := os.Getenv("GOARCH"); goarch != "" {
+			return goarch
 		}
 		return runtime.GOARCH
 	case "GOARM":
@@ -64,16 +102,8 @@ func Get(name string) string {
 		// difference between ARMv6 and ARMv7. ARMv6 binaries are much smaller,
 		// especially when floating point instructions are involved.
 		return "6"
-	case "GOROOT":
-		return getGoroot()
-	case "GOPATH":
-		if dir := os.Getenv("GOPATH"); dir != "" {
-			return dir
-		}
-
-		// fallback
-		home := getHomeDir()
-		return filepath.Join(home, "go")
+	case "GOROOT", "GOPATH":
+		return envFromGo(name)
 	case "GOCACHE":
 		// Get the cache directory, usually ~/.cache/tinygo
 		dir, err := os.UserCacheDir()
@@ -249,79 +279,38 @@ func getHomeDir() string {
 	return u.HomeDir
 }
 
-// getGoroot returns an appropriate GOROOT from various sources. If it can't be
-// found, it returns an empty string.
-func getGoroot() string {
-	// An explicitly set GOROOT always has preference.
-	goroot := os.Getenv("GOROOT")
-	if goroot != "" {
-		// Convert to the standard GOROOT being referenced, if it's a TinyGo cache.
-		return getStandardGoroot(goroot)
+// envFromGo gets the value of a variable by querying Go.
+func envFromGo(name string) string {
+	goCmd := os.Getenv("GO")
+	if goCmd == "" {
+		goCmd = "go"
+	}
+	cmd := exec.Command(goCmd, "env", name)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		return ""
 	}
 
-	// Check for the location of the 'go' binary and base GOROOT on that.
-	binpath, err := exec.LookPath("go")
-	if err == nil {
-		binpath, err = filepath.EvalSymlinks(binpath)
-		if err == nil {
-			goroot := filepath.Dir(filepath.Dir(binpath))
-			if isGoroot(goroot) {
-				return goroot
+	return strings.TrimSpace(out.String())
+}
+
+// findGo searches for the Go command to run.
+func findGo() string {
+	if goCmd := os.Getenv("GO"); goCmd != "" {
+		// If this was `go install`ed, then it will try to override GOROOT internally.
+		// Find the underlying binary.
+		if goroot := Get("GOROOT"); goroot != "" {
+			path := filepath.Join(goroot, "bin", "go")
+			if _, err := os.Stat(path); err == nil {
+				return path
 			}
 		}
+
+		return goCmd
 	}
 
-	// Check what GOROOT was at compile time.
-	if isGoroot(runtime.GOROOT()) {
-		return runtime.GOROOT()
-	}
-
-	// Check for some standard locations, as a last resort.
-	var candidates []string
-	switch runtime.GOOS {
-	case "linux":
-		candidates = []string{
-			"/usr/local/go",     // manually installed
-			"/usr/lib/go",       // from the distribution
-			"/snap/go/current/", // installed using snap
-		}
-	case "darwin":
-		candidates = []string{
-			"/usr/local/go",             // manually installed
-			"/usr/local/opt/go/libexec", // from Homebrew
-		}
-	}
-
-	for _, candidate := range candidates {
-		if isGoroot(candidate) {
-			return candidate
-		}
-	}
-
-	// Can't find GOROOT...
-	return ""
-}
-
-// isGoroot checks whether the given path looks like a GOROOT.
-func isGoroot(goroot string) bool {
-	_, err := os.Stat(filepath.Join(goroot, "src", "runtime", "internal", "sys", "zversion.go"))
-	return err == nil
-}
-
-// getStandardGoroot returns the physical path to a real, standard Go GOROOT
-// implied by the given path.
-// If the given path appears to be a TinyGo cached GOROOT, it returns the path
-// referenced by symlinks contained in the cache. Otherwise, it returns the
-// given path as-is.
-func getStandardGoroot(path string) string {
-	// Check if the "bin" subdirectory of our given GOROOT is a symlink, and then
-	// return the _parent_ directory of its destination.
-	if dest, err := os.Readlink(filepath.Join(path, "bin")); nil == err {
-		// Clean the destination to remove any trailing slashes, so that
-		// filepath.Dir will always return the parent.
-		//   (because both "/foo" and "/foo/" are valid symlink destinations,
-		//   but filepath.Dir would return "/" and "/foo", respectively)
-		return filepath.Dir(filepath.Clean(dest))
-	}
-	return path
+	return "go"
 }
