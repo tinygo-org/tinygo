@@ -1,3 +1,4 @@
+//go:build !go1.16
 // +build !go1.16
 
 package os
@@ -48,4 +49,9 @@ func (m FileMode) IsDir() bool {
 // IsRegular is a stub, always returning false
 func (m FileMode) IsRegular() bool {
 	return false
+}
+
+// Perm is a stub, always returning 0.
+func (m FileMode) Perm() FileMode {
+	return 0
 }
