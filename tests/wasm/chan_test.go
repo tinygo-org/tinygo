@@ -18,14 +18,17 @@ func TestChan(t *testing.T) {
 	ctx, cancel := chromectx()
 	defer cancel()
 
-	err = chromedp.Run(ctx,
-		chromedp.Navigate(server.URL+"/run?file=chan.wasm"),
-		waitLog(`1
+	for i := 0; i < 40; i++ {
+		err = chromedp.Run(ctx,
+			chromedp.Navigate(server.URL+"/run?file=chan.wasm"),
+			waitLog(`1
 4
+2
 3
 true`),
-	)
-	if err != nil {
-		t.Fatal(err)
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }

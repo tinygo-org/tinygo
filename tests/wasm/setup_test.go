@@ -162,7 +162,7 @@ func waitInnerTextMatch(sel string, re *regexp.Regexp) chromedp.QueryAction {
 				return nodes, err
 			}
 			if !re.MatchString(ret) {
-				// log.Printf("found text: %s", ret)
+				log.Printf("found text: [%s]\n", ret)
 				return nodes, errors.New("unexpected value: " + ret)
 			}
 
