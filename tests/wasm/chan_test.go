@@ -22,7 +22,6 @@ func TestChan(t *testing.T) {
 		chromedp.Navigate(server.URL+"/run?file=chan.wasm"),
 		waitLog(`1
 4
-2
 3
 true`),
 	)
