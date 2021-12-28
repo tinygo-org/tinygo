@@ -2,6 +2,9 @@
 
 package machine
 
+// The type alias `arrtype` should be defined to either uint32 or uint16
+// depending on the size of that register in the MCU's TIM_Type structure.
+
 import (
 	"device/stm32"
 	"runtime/interrupt"

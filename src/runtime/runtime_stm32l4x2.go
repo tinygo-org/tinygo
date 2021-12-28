@@ -50,8 +50,6 @@ const (
 	RCC_PLL_SYSCLK = stm32.RCC_PLLCFGR_PLLREN
 )
 
-type arrtype = uint32
-
 func init() {
 	initCLK()
 

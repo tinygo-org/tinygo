@@ -64,8 +64,6 @@ const (
 	FLASH_OPTIONS = stm32.FLASH_ACR_ICEN | stm32.FLASH_ACR_DCEN | stm32.FLASH_ACR_PRFTEN
 )
 
-type arrtype = uint32
-
 func init() {
 	initOSC() // configure oscillators
 	initCLK()
