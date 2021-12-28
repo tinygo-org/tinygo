@@ -15,5 +15,9 @@ var Reader io.Reader
 // Read is a helper function that calls Reader.Read using io.ReadFull.
 // On return, n == len(b) if and only if err == nil.
 func Read(b []byte) (n int, err error) {
+	if Reader == nil {
+		panic("no rng")
+	}
+
 	return io.ReadFull(Reader, b)
 }
