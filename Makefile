@@ -114,11 +114,6 @@ ifeq ($(OS),Windows_NT)
     START_GROUP = -Wl,--start-group
     END_GROUP = -Wl,--end-group
 
-    # LLVM compiled using MinGW on Windows appears to have problems with threads.
-    # Without this flag, linking results in errors like these:
-    #     libLLVMSupport.a(Threading.cpp.obj):Threading.cpp:(.text+0x55): undefined reference to `std::thread::hardware_concurrency()'
-    LLVM_OPTION += -DLLVM_ENABLE_THREADS=OFF -DLLVM_ENABLE_PIC=OFF
-
     CGO_CPPFLAGS += -DCINDEX_NO_EXPORTS
     CGO_LDFLAGS += -static -static-libgcc -static-libstdc++
     CGO_LDFLAGS_EXTRA += -lversion
