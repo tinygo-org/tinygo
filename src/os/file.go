@@ -101,6 +101,7 @@ func Create(name string) (*File, error) {
 // read and any error encountered. At end of file, Read returns 0, io.EOF.
 func (f *File) Read(b []byte) (n int, err error) {
 	n, err = f.handle.Read(b)
+	// TODO: want to always wrap, like upstream, but ReadFile() compares against exactly io.EOF?
 	if err != nil && err != io.EOF {
 		err = &PathError{"read", f.name, err}
 	}
@@ -120,8 +121,11 @@ func (f *File) ReadAt(b []byte, offset int64) (n int, err error) {
 	for len(b) > 0 {
 		m, e := f.handle.ReadAt(b, offset)
 		if e != nil {
-			if err != io.EOF {
-				err = &PathError{"readat", f.name, err}
+			// TODO: want to always wrap, like upstream, but TestReadAtEOF compares against exactly io.EOF?
+			if e != io.EOF {
+				err = &PathError{"readat", f.name, e}
+			} else {
+				err = e
 			}
 			break
 		}
