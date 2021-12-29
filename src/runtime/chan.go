@@ -39,6 +39,10 @@ func chanDebug(ch *channel) {
 	}
 }
 
+// pretendTask is a placeholder used when no scheduler is available.
+// When the operation unblocks, Next gets set.
+var pretendTask task.Task
+
 // channelBlockedList is a list of channel operations on a specific channel which are currently blocked.
 type channelBlockedList struct {
 	// next is a pointer to the next blocked channel operation on the same channel.
@@ -193,8 +197,13 @@ func (ch *channel) resumeRX(ok bool) unsafe.Pointer {
 		b.detach()
 	}
 
-	// push task onto runqueue
-	runqueue.Push(b.t)
+	if hasScheduler {
+		// push task onto runqueue
+		runqueue.Push(b.t)
+	} else {
+		// notify of completion
+		pretendTask.Next = &pretendTask
+	}
 
 	return dst
 }
@@ -220,8 +229,13 @@ func (ch *channel) resumeTX() unsafe.Pointer {
 		b.detach()
 	}
 
-	// push task onto runqueue
-	runqueue.Push(b.t)
+	if hasScheduler {
+		// push task onto runqueue
+		runqueue.Push(b.t)
+	} else {
+		// notify of completion
+		pretendTask.Next = &pretendTask
+	}
 
 	return src
 }
@@ -481,7 +495,12 @@ func chanSend(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList
 	}
 
 	// wait for reciever
-	sender := task.Current()
+	var sender *task.Task
+	if hasScheduler {
+		sender = task.Current()
+	} else {
+		sender = &pretendTask
+	}
 	ch.state = chanStateSend
 	sender.Ptr = value
 	*blockedlist = channelBlockedList{
@@ -491,7 +510,14 @@ func chanSend(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList
 	ch.blocked = blockedlist
 	chanDebug(ch)
 	interrupt.Restore(i)
-	task.Pause()
+	if hasScheduler {
+		task.Pause()
+	} else {
+		for sender.Next == nil {
+			waitForEvents()
+		}
+		sender.Next = nil
+	}
 	sender.Ptr = nil
 }
 
@@ -516,7 +542,12 @@ func chanRecv(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList
 	}
 
 	// wait for a value
-	receiver := task.Current()
+	var receiver *task.Task
+	if hasScheduler {
+		receiver = task.Current()
+	} else {
+		receiver = &pretendTask
+	}
 	ch.state = chanStateRecv
 	receiver.Ptr, receiver.Data = value, 1
 	*blockedlist = channelBlockedList{
@@ -526,7 +557,14 @@ func chanRecv(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList
 	ch.blocked = blockedlist
 	chanDebug(ch)
 	interrupt.Restore(i)
-	task.Pause()
+	if hasScheduler {
+		task.Pause()
+	} else {
+		for receiver.Next == nil {
+			waitForEvents()
+		}
+		receiver.Next = nil
+	}
 	ok := receiver.Data == 1
 	receiver.Ptr, receiver.Data = nil, 0
 	return ok
@@ -581,6 +619,13 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelB
 		return selected, ok
 	}
 
+	var t *task.Task
+	if hasScheduler {
+		t = task.Current()
+	} else {
+		t = &pretendTask
+	}
+
 	// construct blocked operations
 	for i, v := range states {
 		if v.ch == nil {
@@ -592,7 +637,7 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelB
 
 		ops[i] = channelBlockedList{
 			next:         v.ch.blocked,
-			t:            task.Current(),
+			t:            t,
 			s:            &states[i],
 			allSelectOps: ops,
 		}
@@ -626,13 +671,19 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelB
 	}
 
 	// expose rx buffer
-	t := task.Current()
 	t.Ptr = recvbuf
 	t.Data = 1
 
 	// wait for one case to fire
 	interrupt.Restore(istate)
-	task.Pause()
+	if hasScheduler {
+		task.Pause()
+	} else {
+		for t.Next == nil {
+			waitForEvents()
+		}
+		t.Next = nil
+	}
 
 	// figure out which one fired and return the ok value
 	return (uintptr(t.Ptr) - uintptr(unsafe.Pointer(&states[0]))) / unsafe.Sizeof(chanSelectState{}), t.Data != 0
