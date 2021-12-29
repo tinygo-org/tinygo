@@ -15,8 +15,18 @@ FROM tinygo-llvm AS tinygo-llvm-build
 RUN cd /tinygo/ && \
     make llvm-build
 
+# tinygo-xtensa stage installs tools needed for ESP32
+FROM tinygo-llvm-build AS tinygo-xtensa
+
+ARG xtensa_version="1.22.0-80-g6c4433a-5.2.0"
+RUN cd /tmp/ && \
+    wget -q https://dl.espressif.com/dl/xtensa-esp32-elf-linux64-${xtensa_version}.tar.gz && \
+    tar xzf xtensa-esp32-elf-linux64-${xtensa_version}.tar.gz && \
+    cp ./xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/ && \
+    rm -rf /tmp/xtensa*
+
 # tinygo-compiler stage builds the compiler itself
-FROM tinygo-llvm-build AS tinygo-compiler
+FROM tinygo-xtensa AS tinygo-compiler
 
 COPY . /tinygo
 
