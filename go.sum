@@ -72,3 +72,5 @@ gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 tinygo.org/x/go-llvm v0.0.0-20210907125547-fd2d62ea06be h1:syIpWbi/yESuoyijF2nhRdgX4422sNfmij+o73B3+vU=
 tinygo.org/x/go-llvm v0.0.0-20210907125547-fd2d62ea06be/go.mod h1:fv1F0BSNpxMfCL0zF3M4OPFbgYHnhtB6ST0HvUtu/LE=
+tinygo.org/x/go-llvm v0.0.0-20211229125312-df8bd725853c h1:wLTSvRhuNJVvjVfRpPTwS/sftSbzhGbSiuZdjHwRwxg=
+tinygo.org/x/go-llvm v0.0.0-20211229125312-df8bd725853c/go.mod h1:GFbusT2VTA4I+l4j80b17KFK+6whv69Wtny5U+T8RR0=
