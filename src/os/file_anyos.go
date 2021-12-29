@@ -118,7 +118,7 @@ type unixFileHandle uintptr
 func (f unixFileHandle) Read(b []byte) (n int, err error) {
 	n, err = syscall.Read(syscallFd(f), b)
 	err = handleSyscallError(err)
-	if n == 0 && err == nil {
+	if n == 0 && len(b) > 0 && err == nil {
 		err = io.EOF
 	}
 	return

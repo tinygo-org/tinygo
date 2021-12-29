@@ -50,7 +50,7 @@ func tempDir() string {
 func (f unixFileHandle) ReadAt(b []byte, offset int64) (n int, err error) {
 	n, err = syscall.Pread(syscallFd(f), b, offset)
 	err = handleSyscallError(err)
-	if n == 0 && err == nil {
+	if n == 0 && len(b) > 0 && err == nil {
 		err = io.EOF
 	}
 	return
