@@ -719,8 +719,8 @@ func flashUF2UsingMSD(volume, tmppath string, options *compileopts.Options) erro
 	var infoPath string
 	switch runtime.GOOS {
 	case "linux", "freebsd":
-		_, err := os.ReadDir("/run/media")
-		if err != nil {
+		fi, err := os.Stat("/run/media")
+		if err != nil || !fi.IsDir() {
 			infoPath = "/media/*/" + volume + "/INFO_UF2.TXT"
 		} else {
 			infoPath = "/run/media/*/" + volume + "/INFO_UF2.TXT"
@@ -748,11 +748,11 @@ func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) erro
 	var destPath string
 	switch runtime.GOOS {
 	case "linux", "freebsd":
-		_, err := os.ReadDir("/run/media")
-		if err != nil {
-			infoPath = "/media/*/" + volume
+		fi, err := os.Stat("/run/media")
+		if err != nil || !fi.IsDir() {
+			destPath = "/media/*/" + volume
 		} else {
-			infoPath = "/run/media/*/" + volume
+			destPath = "/run/media/*/" + volume
 		}
 	case "darwin":
 		destPath = "/Volumes/" + volume
