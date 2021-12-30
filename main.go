@@ -1631,15 +1631,13 @@ func (out *testStdout) Write(data []byte) (int, error) {
 	defer buf.mu.Unlock()
 
 	// Append the output.
-	var prev []byte
-	if len(buf.output) > 0 && !buf.output[len(buf.output)-1].stderr {
-		prev = buf.output[len(buf.output)-1].data
-		buf.output = buf.output[:len(buf.output)-1]
+	if len(buf.output) == 0 || buf.output[len(buf.output)-1].stderr {
+		buf.output = append(buf.output, outputEntry{
+			stderr: false,
+		})
 	}
-	buf.output = append(buf.output, outputEntry{
-		stderr: false,
-		data:   append(prev, data...),
-	})
+	last := &buf.output[len(buf.output)-1]
+	last.data = append(last.data, data...)
 
 	return len(data), nil
 }
@@ -1664,15 +1662,13 @@ func (out *testStderr) Write(data []byte) (int, error) {
 	defer buf.mu.Unlock()
 
 	// Append the output.
-	var prev []byte
-	if len(buf.output) > 0 && buf.output[len(buf.output)-1].stderr {
-		prev = buf.output[len(buf.output)-1].data
-		buf.output = buf.output[:len(buf.output)-1]
+	if len(buf.output) == 0 || !buf.output[len(buf.output)-1].stderr {
+		buf.output = append(buf.output, outputEntry{
+			stderr: true,
+		})
 	}
-	buf.output = append(buf.output, outputEntry{
-		stderr: true,
-		data:   append(prev, data...),
-	})
+	last := &buf.output[len(buf.output)-1]
+	last.data = append(last.data, data...)
 
 	return len(data), nil
 }
