@@ -72,6 +72,9 @@ func getMakeCommands(args []string) ([]string, error) {
 		if len(fields) == 0 {
 			continue
 		}
+
+		// Remove the field from the bash environment variable set.
+		// ex: GOOS=linux tinygo version
 		ofs := 0
 		for _, f := range fields {
 			spl := strings.SplitN(f, "=", 2)
@@ -113,6 +116,9 @@ func run(commands []string, threads int) error {
 					if err != nil {
 						return err
 					}
+
+					// Remove the field from the bash environment variable set.
+					// ex: GOOS=linux tinygo version
 					ofs := 0
 					for _, f := range fields {
 						spl := strings.SplitN(f, "=", 2)
