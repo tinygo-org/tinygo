@@ -24,7 +24,7 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.regularFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.regularFunction$gowrapper" to i32), i8* nonnull inttoptr (i32 5 to i8*), i32 8192, i8* undef, i8* null) #0
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.regularFunction$gowrapper" to i32), i8* nonnull inttoptr (i32 5 to i8*), i32 16384, i8* undef, i8* null) #0
   ret void
 }
 
@@ -46,7 +46,7 @@ declare void @"internal/task.start"(i32, i8*, i32, i8*, i8*)
 ; Function Attrs: nounwind
 define hidden void @main.inlineFunctionGoroutine(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.inlineFunctionGoroutine$1$gowrapper" to i32), i8* nonnull inttoptr (i32 5 to i8*), i32 8192, i8* undef, i8* null) #0
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.inlineFunctionGoroutine$1$gowrapper" to i32), i8* nonnull inttoptr (i32 5 to i8*), i32 16384, i8* undef, i8* null) #0
   ret void
 }
 
@@ -77,7 +77,7 @@ entry:
   %3 = getelementptr inbounds i8, i8* %1, i32 4
   %4 = bitcast i8* %3 to i8**
   store i8* %n, i8** %4, align 4
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.closureFunctionGoroutine$1$gowrapper" to i32), i8* nonnull %1, i32 8192, i8* undef, i8* null) #0
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.closureFunctionGoroutine$1$gowrapper" to i32), i8* nonnull %1, i32 16384, i8* undef, i8* null) #0
   %5 = load i32, i32* %0, align 4
   call void @runtime.printint32(i32 %5, i8* undef, i8* null) #0
   ret void
@@ -118,7 +118,7 @@ entry:
   %4 = getelementptr inbounds i8, i8* %0, i32 8
   %5 = bitcast i8* %4 to void ()**
   store void ()* %fn.funcptr, void ()** %5, align 4
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @main.funcGoroutine.gowrapper to i32), i8* nonnull %0, i32 8192, i8* undef, i8* null) #0
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @main.funcGoroutine.gowrapper to i32), i8* nonnull %0, i32 16384, i8* undef, i8* null) #0
   ret void
 }
 
@@ -177,7 +177,7 @@ entry:
   %4 = getelementptr inbounds i8, i8* %0, i32 12
   %5 = bitcast i8* %4 to i32*
   store i32 %itf.typecode, i32* %5, align 4
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), i8* nonnull %0, i32 8192, i8* undef, i8* null) #0
+  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), i8* nonnull %0, i32 16384, i8* undef, i8* null) #0
   ret void
 }
 
