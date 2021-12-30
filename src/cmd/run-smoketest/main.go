@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/shlex"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -31,7 +32,7 @@ func main() {
 	flag.IntVar(&threads, "threads", threads, "threads of make smoketest")
 	flag.Parse()
 
-	if len(os.Args) < 2 {
+	if flag.NArg() < 1 {
 		fmt.Printf("usage: %s make smoketest\n", filepath.Base(os.Args[0]))
 		os.Exit(1)
 	}
@@ -64,7 +65,13 @@ func getMakeCommands(args []string) ([]string, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		fields := strings.Fields(line)
+		fields, err := shlex.Split(line)
+		if err != nil {
+			return nil, err
+		}
+		if len(fields) == 0 {
+			continue
+		}
 		ofs := 0
 		for _, f := range fields {
 			spl := strings.SplitN(f, "=", 2)
@@ -102,7 +109,10 @@ func run(commands []string, threads int) error {
 				eg.Go(func() error {
 					var err error
 
-					fields := strings.Fields(command)
+					fields, err := shlex.Split(command)
+					if err != nil {
+						return err
+					}
 					ofs := 0
 					for _, f := range fields {
 						spl := strings.SplitN(f, "=", 2)
@@ -148,7 +158,10 @@ func runCommand(command string, ch chan string) error {
 
 	fmt.Fprintf(&buf, "%s\n", command)
 
-	args := strings.Fields(command)
+	args, err := shlex.Split(command)
+	if err != nil {
+		return err
+	}
 	if runtime.GOOS == `windows` {
 		args[0] = convertToWindowsPath(args[0])
 	}
@@ -157,7 +170,7 @@ func runCommand(command string, ch chan string) error {
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		ch <- buf.String()
 		return err
@@ -172,7 +185,10 @@ func buildAndmd5sum(command string, ch chan string) error {
 
 	fmt.Fprintf(&buf, "%s\n", command)
 
-	args := strings.Fields(command)
+	args, err := shlex.Split(command)
+	if err != nil {
+		return err
+	}
 	envs := []string{}
 
 	ofs := 0
