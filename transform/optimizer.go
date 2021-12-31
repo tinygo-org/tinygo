@@ -29,10 +29,9 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 	if inlinerThreshold != 0 {
 		builder.UseInlinerWithThreshold(inlinerThreshold)
 	}
-	builder.AddCoroutinePassesToExtensionPoints()
 
 	// Make sure these functions are kept in tact during TinyGo transformation passes.
-	for _, name := range getFunctionsUsedInTransforms(config) {
+	for _, name := range functionsUsedInTransforms {
 		fn := mod.NamedFunction(name)
 		if fn.IsNil() {
 			panic(fmt.Errorf("missing core function %q", name))
@@ -118,17 +117,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		goPasses.Run(mod)
 	}
 
-	// Lower async implementations.
-	switch config.Scheduler() {
-	case "coroutines":
-		// Lower async as coroutines.
-		err := LowerCoroutines(mod, config.NeedsStackObjects())
-		if err != nil {
-			return []error{err}
-		}
-	case "tasks", "asyncify":
-		// No transformations necessary.
-	case "none":
+	if config.Scheduler() == "none" {
 		// Check for any goroutine starts.
 		if start := mod.NamedFunction("internal/task.start"); !start.IsNil() && len(getUses(start)) > 0 {
 			errs := []error{}
@@ -137,8 +126,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 			}
 			return errs
 		}
-	default:
-		return []error{errors.New("invalid scheduler")}
 	}
 
 	if config.VerifyIR() {
@@ -151,7 +138,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 	}
 
 	// After TinyGo-specific transforms have finished, undo exporting these functions.
-	for _, name := range getFunctionsUsedInTransforms(config) {
+	for _, name := range functionsUsedInTransforms {
 		fn := mod.NamedFunction(name)
 		if fn.IsNil() || fn.IsDeclaration() {
 			continue
@@ -194,36 +181,4 @@ var functionsUsedInTransforms = []string{
 	"runtime.alloc",
 	"runtime.free",
 	"runtime.nilPanic",
-}
-
-var taskFunctionsUsedInTransforms = []string{}
-
-// These functions need to be preserved in the IR until after the coroutines
-// pass has run.
-var coroFunctionsUsedInTransforms = []string{
-	"internal/task.start",
-	"internal/task.Pause",
-	"internal/task.fake",
-	"internal/task.Current",
-	"internal/task.createTask",
-	"(*internal/task.Task).setState",
-	"(*internal/task.Task).returnTo",
-	"(*internal/task.Task).returnCurrent",
-	"(*internal/task.Task).setReturnPtr",
-	"(*internal/task.Task).getReturnPtr",
-}
-
-// getFunctionsUsedInTransforms gets a list of all special functions that should be preserved during transforms and optimization.
-func getFunctionsUsedInTransforms(config *compileopts.Config) []string {
-	fnused := functionsUsedInTransforms
-	switch config.Scheduler() {
-	case "none":
-	case "coroutines":
-		fnused = append(append([]string{}, fnused...), coroFunctionsUsedInTransforms...)
-	case "tasks", "asyncify":
-		fnused = append(append([]string{}, fnused...), taskFunctionsUsedInTransforms...)
-	default:
-		panic(fmt.Errorf("invalid scheduler %q", config.Scheduler()))
-	}
-	return fnused
 }

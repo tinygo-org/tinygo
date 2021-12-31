@@ -30,7 +30,6 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
-	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 
 	"go.bug.st/serial"
@@ -1100,15 +1099,6 @@ func printCompilerError(logln func(...interface{}), err error) {
 				logln()
 			}
 		}
-	case transform.CoroutinesError:
-		logln(err.Pos.String() + ": " + err.Msg)
-		logln("\ntraceback:")
-		for _, line := range err.Traceback {
-			logln(line.Name)
-			if line.Position.IsValid() {
-				logln("\t" + line.Position.String())
-			}
-		}
 	case loader.Errors:
 		logln("#", err.Pkg.ImportPath)
 		for _, err := range err.Errs {
@@ -1195,7 +1185,7 @@ func main() {
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, conservative)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
-	scheduler := flag.String("scheduler", "", "which scheduler to use (none, coroutines, tasks, asyncify)")
+	scheduler := flag.String("scheduler", "", "which scheduler to use (none, tasks, asyncify)")
 	serial := flag.String("serial", "", "which serial output to use (none, uart, usb)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")

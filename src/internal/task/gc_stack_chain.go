@@ -1,5 +1,5 @@
-//go:build gc.conservative && tinygo.wasm && !scheduler.coroutines
-// +build gc.conservative,tinygo.wasm,!scheduler.coroutines
+//go:build gc.conservative && tinygo.wasm
+// +build gc.conservative,tinygo.wasm
 
 package task
 
