@@ -84,7 +84,6 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 	// closures and bound methods, but should be optimized away when not used.
 	if !info.exported {
 		paramInfos = append(paramInfos, paramInfo{llvmType: c.i8ptrType, name: "context", flags: 0})
-		paramInfos = append(paramInfos, paramInfo{llvmType: c.i8ptrType, name: "parentHandle", flags: 0})
 	}
 
 	var paramTypes []llvm.Type

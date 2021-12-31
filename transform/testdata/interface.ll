@@ -10,7 +10,7 @@ target triple = "armv7m-none-eabi"
 @"reflect/types.type:basic:int" = private constant %runtime.typecodeID zeroinitializer
 @"reflect/methods.NeverImplementedMethod()" = linkonce_odr constant i8 0
 @"reflect/methods.Double() int" = linkonce_odr constant i8 0
-@"Number$methodset" = private constant [1 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { i8* @"reflect/methods.Double() int", i32 ptrtoint (i32 (i8*, i8*, i8*)* @"(Number).Double$invoke" to i32) }]
+@"Number$methodset" = private constant [1 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { i8* @"reflect/methods.Double() int", i32 ptrtoint (i32 (i8*, i8*)* @"(Number).Double$invoke" to i32) }]
 @"reflect/types.type:named:Number" = private constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i32 0, %runtime.interfaceMethodInfo* getelementptr inbounds ([1 x %runtime.interfaceMethodInfo], [1 x %runtime.interfaceMethodInfo]* @"Number$methodset", i32 0, i32 0), %runtime.typecodeID* null, i32 0 }
 
 declare i1 @runtime.typeAssert(i32, i8*)
@@ -19,7 +19,7 @@ declare void @runtime.printint16(i16)
 declare void @runtime.printint32(i32)
 declare void @runtime.printptr(i32)
 declare void @runtime.printnl()
-declare void @runtime.nilPanic(i8*, i8*)
+declare void @runtime.nilPanic(i8*)
 
 define void @printInterfaces() {
   call void @printInterface(i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:basic:int" to i32), i8* inttoptr (i32 5 to i8*))
@@ -44,7 +44,7 @@ typeswitch.notUnmatched:
   br i1 %isDoubler, label %typeswitch.Doubler, label %typeswitch.notDoubler
 
 typeswitch.Doubler:
-  %doubler.result = call i32 @"Doubler.Double$invoke"(i8* %value, i32 %typecode, i8* undef, i8* undef)
+  %doubler.result = call i32 @"Doubler.Double$invoke"(i8* %value, i32 %typecode, i8* undef)
   call void @runtime.printint32(i32 %doubler.result)
   ret void
 
@@ -73,18 +73,18 @@ typeswitch.notInt16:
   ret void
 }
 
-define i32 @"(Number).Double"(i32 %receiver, i8* %context, i8* %parentHandle) {
+define i32 @"(Number).Double"(i32 %receiver, i8* %context) {
   %ret = mul i32 %receiver, 2
   ret i32 %ret
 }
 
-define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %context, i8* %parentHandle) {
+define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %context) {
   %receiver = ptrtoint i8* %receiverPtr to i32
-  %ret = call i32 @"(Number).Double"(i32 %receiver, i8* undef, i8* null)
+  %ret = call i32 @"(Number).Double"(i32 %receiver, i8* undef)
   ret i32 %ret
 }
 
-declare i32 @"Doubler.Double$invoke"(i8* %receiver, i32 %typecode, i8* %context, i8* %parentHandle) #0
+declare i32 @"Doubler.Double$invoke"(i8* %receiver, i32 %typecode, i8* %context) #0
 
 declare i1 @Doubler$typeassert(i32 %typecode) #1
 

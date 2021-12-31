@@ -13,27 +13,27 @@ declare void @externalCall(i64)
 
 define void @runtime.initAll() unnamed_addr {
 entry:
-  call void @baz.init(i8* undef, i8* undef)
-  call void @foo.init(i8* undef, i8* undef)
-  call void @bar.init(i8* undef, i8* undef)
-  call void @main.init(i8* undef, i8* undef)
-  call void @x.init(i8* undef, i8* undef)
-  call void @y.init(i8* undef, i8* undef)
+  call void @baz.init(i8* undef)
+  call void @foo.init(i8* undef)
+  call void @bar.init(i8* undef)
+  call void @main.init(i8* undef)
+  call void @x.init(i8* undef)
+  call void @y.init(i8* undef)
   ret void
 }
 
-define internal void @foo.init(i8* %context, i8* %parentHandle) unnamed_addr {
+define internal void @foo.init(i8* %context) unnamed_addr {
   store i64 5, i64* @foo.knownAtRuntime
   unreachable ; this triggers a revert of @foo.init.
 }
 
-define internal void @bar.init(i8* %context, i8* %parentHandle) unnamed_addr {
+define internal void @bar.init(i8* %context) unnamed_addr {
   %val = load i64, i64* @foo.knownAtRuntime
   store i64 %val, i64* @bar.knownAtRuntime
   ret void
 }
 
-define internal void @baz.init(i8* %context, i8* %parentHandle) unnamed_addr {
+define internal void @baz.init(i8* %context) unnamed_addr {
   ; Test extractvalue/insertvalue with more than one index.
   %val = load [3 x {i64, i32}], [3 x {i64, i32}]* @baz.someGlobal
   %part = extractvalue [3 x {i64, i32}] %val, 0, 1
@@ -41,14 +41,14 @@ define internal void @baz.init(i8* %context, i8* %parentHandle) unnamed_addr {
   unreachable ; trigger revert
 }
 
-define internal void @main.init(i8* %context, i8* %parentHandle) unnamed_addr {
+define internal void @main.init(i8* %context) unnamed_addr {
 entry:
   call void @externalCall(i64 3)
   ret void
 }
 
 
-define internal void @x.init(i8* %context, i8* %parentHandle) unnamed_addr {
+define internal void @x.init(i8* %context) unnamed_addr {
   ; Test atomic and volatile memory accesses.
   store atomic i32 1, i32* @x.atomicNum seq_cst, align 4
   %x = load atomic i32, i32* @x.atomicNum seq_cst, align 4
@@ -58,7 +58,7 @@ define internal void @x.init(i8* %context, i8* %parentHandle) unnamed_addr {
   ret void
 }
 
-define internal void @y.init(i8* %context, i8* %parentHandle) unnamed_addr {
+define internal void @y.init(i8* %context) unnamed_addr {
 entry:
   br label %loop
 

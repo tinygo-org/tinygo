@@ -428,7 +428,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			llvmInitFn.SetUnnamedAddr(true)
 			transform.AddStandardAttributes(llvmInitFn, config)
 			llvmInitFn.Param(0).SetName("context")
-			llvmInitFn.Param(1).SetName("parentHandle")
 			block := mod.Context().AddBasicBlock(llvmInitFn, "entry")
 			irbuilder := mod.Context().NewBuilder()
 			defer irbuilder.Dispose()
@@ -439,7 +438,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				if pkgInit.IsNil() {
 					panic("init not found for " + pkg.Pkg.Path())
 				}
-				irbuilder.CreateCall(pkgInit, []llvm.Value{llvm.Undef(i8ptrType), llvm.Undef(i8ptrType)}, "")
+				irbuilder.CreateCall(pkgInit, []llvm.Value{llvm.Undef(i8ptrType)}, "")
 			}
 			irbuilder.CreateRetVoid()
 

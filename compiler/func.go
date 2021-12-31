@@ -115,7 +115,6 @@ func (c *compilerContext) getRawFuncType(typ *types.Signature) llvm.Type {
 	}
 	// All functions take these parameters at the end.
 	paramTypes = append(paramTypes, c.i8ptrType) // context
-	paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
 
 	// Make a func type out of the signature.
 	return llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), c.funcPtrAddrSpace)
