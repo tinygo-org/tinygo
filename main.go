@@ -233,6 +233,19 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 	return passed, err
 }
 
+func dirsToModuleRoot(maindir, modroot string) []string {
+	var dirs = []string{"."}
+	last := ".."
+	// strip off path elements until we hit the module root
+	// adding `..`, `../..`, `../../..` until we're done
+	for maindir != modroot {
+		dirs = append(dirs, last)
+		last = filepath.Join(last, "..")
+		maindir = filepath.Dir(maindir)
+	}
+	return dirs
+}
+
 // runPackageTest runs a test binary that was previously built. The return
 // values are whether the test passed and any errors encountered while trying to
 // run the binary.
@@ -269,9 +282,12 @@ func runPackageTest(config *compileopts.Config, stdout, stderr io.Writer, result
 			args = append(args, "--dir="+tmpdir, "--env=TMPDIR="+tmpdir)
 			// TODO: add option to not delete temp dir for debugging?
 			defer os.RemoveAll(tmpdir)
-			// allow reading from current directory: --dir=.
+			// allow reading from directories up to module root
+			for _, d := range dirsToModuleRoot(result.MainDir, result.ModuleRoot) {
+				args = append(args, "--dir="+d)
+			}
 			// mark end of wasmtime arguments and start of program ones: --
-			args = append(args, "--dir=.", "--")
+			args = append(args, "--")
 			if testVerbose {
 				args = append(args, "-test.v")
 			}
