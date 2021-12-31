@@ -159,28 +159,6 @@ func (c *Config) OptLevels() (optLevel, sizeLevel int, inlinerThreshold uint) {
 	}
 }
 
-// FuncImplementation picks an appropriate func value implementation for the
-// target.
-func (c *Config) FuncImplementation() string {
-	switch c.Scheduler() {
-	case "tasks", "asyncify":
-		// A func value is implemented as a pair of pointers:
-		//     {context, function pointer}
-		// where the context may be a pointer to a heap-allocated struct
-		// containing the free variables, or it may be undef if the function
-		// being pointed to doesn't need a context. The function pointer is a
-		// regular function pointer.
-		return "doubleword"
-	case "none":
-		// As "doubleword", but with the function pointer replaced by a unique
-		// ID per function signature. Function values are called by using a
-		// switch statement and choosing which function to call.
-		return "switch"
-	default:
-		panic("unknown scheduler type")
-	}
-}
-
 // PanicStrategy returns the panic strategy selected for this target. Valid
 // values are "print" (print the panic value, then exit) or "trap" (issue a trap
 // instruction).

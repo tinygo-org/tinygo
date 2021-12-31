@@ -146,7 +146,6 @@ func compileGoFileForTesting(t *testing.T, filename string) llvm.Module {
 		CodeModel:          config.CodeModel(),
 		RelocationModel:    config.RelocationModel(),
 		Scheduler:          config.Scheduler(),
-		FuncImplementation: config.FuncImplementation(),
 		AutomaticStackSize: config.AutomaticStackSize(),
 		Debug:              true,
 	}
