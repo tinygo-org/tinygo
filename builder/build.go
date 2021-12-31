@@ -45,6 +45,11 @@ type BuildResult struct {
 	// binary must be run in the directory of the tested package.
 	MainDir string
 
+	// The root of the Go module tree.  This is used for running tests in emulator
+	// that restrict file system access to allow them to grant access to the entire
+	// source tree they're likely to need to read testdata from.
+	ModuleRoot string
+
 	// ImportPath is the import path of the main package. This is useful for
 	// correctly printing test results: the import path isn't always the same as
 	// the path listed on the command line.
@@ -799,9 +804,18 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	default:
 		return fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 	}
+
+	// If there's a module root, use that.
+	moduleroot := lprogram.MainPkg().Module.Dir
+	if moduleroot == "" {
+		// if not, just the regular root
+		moduleroot = lprogram.MainPkg().Root
+	}
+
 	return action(BuildResult{
 		Binary:     tmppath,
 		MainDir:    lprogram.MainPkg().Dir,
+		ModuleRoot: moduleroot,
 		ImportPath: lprogram.MainPkg().ImportPath,
 	})
 }

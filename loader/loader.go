@@ -47,6 +47,14 @@ type PackageJSON struct {
 	ImportPath string
 	Name       string
 	ForTest    string
+	Root       string
+	Module     struct {
+		Path      string
+		Main      bool
+		Dir       string
+		GoMod     string
+		GoVersion string
+	}
 
 	// Source files
 	GoFiles  []string
