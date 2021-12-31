@@ -377,13 +377,19 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	var cmd *exec.Cmd
-	if len(spec.Emulator) == 0 {
+
+	// make sure any special vars in the emulator definition are rewritten
+	config := compileopts.Config{Target: spec}
+	emulator := config.Emulator()
+
+	if len(emulator) == 0 {
 		cmd = exec.CommandContext(ctx, binary)
 	} else {
-		args := append(spec.Emulator[1:], binary)
-		cmd = exec.CommandContext(ctx, spec.Emulator[0], args...)
+		args := append(emulator[1:], binary)
+		cmd = exec.CommandContext(ctx, emulator[0], args...)
 	}
-	if len(spec.Emulator) != 0 && spec.Emulator[0] == "wasmtime" {
+
+	if len(emulator) != 0 && emulator[0] == "wasmtime" {
 		// Allow reading from the current directory.
 		cmd.Args = append(cmd.Args, "--dir=.")
 		for _, v := range environmentVars {
@@ -399,7 +405,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 
 	// Run the test.
 	stdout := &bytes.Buffer{}
-	if len(spec.Emulator) != 0 && spec.Emulator[0] == "simavr" {
+	if len(emulator) != 0 && emulator[0] == "simavr" {
 		cmd.Stdout = os.Stderr
 		cmd.Stderr = stdout
 	} else {
@@ -421,7 +427,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	actual := bytes.Replace(stdout.Bytes(), []byte{'\r', '\n'}, []byte{'\n'}, -1)
 	expected = bytes.Replace(expected, []byte{'\r', '\n'}, []byte{'\n'}, -1) // for Windows
 
-	if len(spec.Emulator) != 0 && spec.Emulator[0] == "simavr" {
+	if len(emulator) != 0 && emulator[0] == "simavr" {
 		// Strip simavr log formatting.
 		actual = bytes.Replace(actual, []byte{0x1b, '[', '3', '2', 'm'}, nil, -1)
 		actual = bytes.Replace(actual, []byte{0x1b, '[', '0', 'm'}, nil, -1)
