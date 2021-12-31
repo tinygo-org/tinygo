@@ -967,9 +967,7 @@ func (b *builder) createFunction() {
 	// method).
 	var context llvm.Value
 	if !b.info.exported {
-		parentHandle := b.llvmFn.LastParam()
-		parentHandle.SetName("parentHandle")
-		context = llvm.PrevParam(parentHandle)
+		context = b.llvmFn.LastParam()
 		context.SetName("context")
 	}
 	if len(b.fn.FreeVars) != 0 {
@@ -1505,9 +1503,6 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		// This function takes a context parameter.
 		// Add it to the end of the parameter list.
 		params = append(params, context)
-
-		// Parent coroutine handle.
-		params = append(params, llvm.Undef(b.i8ptrType))
 	}
 
 	return b.createCall(callee, params, ""), nil

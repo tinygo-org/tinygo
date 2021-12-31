@@ -530,7 +530,6 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llv
 	wrapFnType := llvm.FunctionType(fnType.ReturnType(), paramTypes, false)
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
 	c.addStandardAttributes(wrapper)
-	wrapper.LastParam().SetName("parentHandle")
 
 	wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
 	wrapper.SetUnnamedAddr(true)

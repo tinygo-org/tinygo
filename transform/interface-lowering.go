@@ -417,13 +417,11 @@ func (p *lowerInterfacesPass) defineInterfaceImplementsFunc(fn llvm.Value, itf *
 // possible types.  This is later converted to a switch statement by the LLVM
 // simplifycfg pass.
 func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *interfaceInfo, signature *signatureInfo) {
-	parentHandle := fn.LastParam()
-	context := llvm.PrevParam(parentHandle)
+	context := fn.LastParam()
 	actualType := llvm.PrevParam(context)
 	returnType := fn.Type().ElementType().ReturnType()
 	context.SetName("context")
 	actualType.SetName("actualType")
-	parentHandle.SetName("parentHandle")
 	fn.SetLinkage(llvm.InternalLinkage)
 	fn.SetUnnamedAddr(true)
 	AddStandardAttributes(fn, p.config)
@@ -431,12 +429,11 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 	// Collect the params that will be passed to the functions to call.
 	// These params exclude the receiver (which may actually consist of multiple
 	// parts).
-	params := make([]llvm.Value, fn.ParamsCount()-4)
+	params := make([]llvm.Value, fn.ParamsCount()-3)
 	for i := range params {
 		params[i] = fn.Param(i + 1)
 	}
 	params = append(params,
-		llvm.Undef(llvm.PointerType(p.ctx.Int8Type(), 0)),
 		llvm.Undef(llvm.PointerType(p.ctx.Int8Type(), 0)),
 	)
 
@@ -518,7 +515,6 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 	// method on a nil interface.
 	nilPanic := p.mod.NamedFunction("runtime.nilPanic")
 	p.builder.CreateCall(nilPanic, []llvm.Value{
-		llvm.Undef(llvm.PointerType(p.ctx.Int8Type(), 0)),
 		llvm.Undef(llvm.PointerType(p.ctx.Int8Type(), 0)),
 	}, "")
 	p.builder.CreateUnreachable()

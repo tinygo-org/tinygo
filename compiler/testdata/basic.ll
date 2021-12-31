@@ -6,38 +6,38 @@ target triple = "wasm32-unknown-wasi"
 %main.kv = type { float }
 %main.kv.0 = type { i8 }
 
-declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
+declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 
-declare void @runtime.trackPointer(i8* nocapture readonly, i8*, i8*)
+declare void @runtime.trackPointer(i8* nocapture readonly, i8*)
 
 ; Function Attrs: nounwind
-define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden void @main.init(i8* %context) unnamed_addr #0 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.addInt(i32 %x, i32 %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden i32 @main.addInt(i32 %x, i32 %y, i8* %context) unnamed_addr #0 {
 entry:
   %0 = add i32 %x, %y
   ret i32 %0
 }
 
 ; Function Attrs: nounwind
-define hidden i1 @main.equalInt(i32 %x, i32 %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden i1 @main.equalInt(i32 %x, i32 %y, i8* %context) unnamed_addr #0 {
 entry:
   %0 = icmp eq i32 %x, %y
   ret i1 %0
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.divInt(i32 %x, i32 %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden i32 @main.divInt(i32 %x, i32 %y, i8* %context) unnamed_addr #0 {
 entry:
   %0 = icmp eq i32 %y, 0
   br i1 %0, label %divbyzero.throw, label %divbyzero.next
 
 divbyzero.throw:                                  ; preds = %entry
-  call void @runtime.divideByZeroPanic(i8* undef, i8* null) #0
+  call void @runtime.divideByZeroPanic(i8* undef) #0
   unreachable
 
 divbyzero.next:                                   ; preds = %entry
@@ -49,16 +49,16 @@ divbyzero.next:                                   ; preds = %entry
   ret i32 %5
 }
 
-declare void @runtime.divideByZeroPanic(i8*, i8*)
+declare void @runtime.divideByZeroPanic(i8*)
 
 ; Function Attrs: nounwind
-define hidden i32 @main.divUint(i32 %x, i32 %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden i32 @main.divUint(i32 %x, i32 %y, i8* %context) unnamed_addr #0 {
 entry:
   %0 = icmp eq i32 %y, 0
   br i1 %0, label %divbyzero.throw, label %divbyzero.next
 
 divbyzero.throw:                                  ; preds = %entry
-  call void @runtime.divideByZeroPanic(i8* undef, i8* null) #0
+  call void @runtime.divideByZeroPanic(i8* undef) #0
   unreachable
 
 divbyzero.next:                                   ; preds = %entry
@@ -67,13 +67,13 @@ divbyzero.next:                                   ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.remInt(i32 %x, i32 %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden i32 @main.remInt(i32 %x, i32 %y, i8* %context) unnamed_addr #0 {
 entry:
   %0 = icmp eq i32 %y, 0
   br i1 %0, label %divbyzero.throw, label %divbyzero.next
 
 divbyzero.throw:                                  ; preds = %entry
-  call void @runtime.divideByZeroPanic(i8* undef, i8* null) #0
+  call void @runtime.divideByZeroPanic(i8* undef) #0
   unreachable
 
 divbyzero.next:                                   ; preds = %entry
@@ -86,13 +86,13 @@ divbyzero.next:                                   ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.remUint(i32 %x, i32 %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden i32 @main.remUint(i32 %x, i32 %y, i8* %context) unnamed_addr #0 {
 entry:
   %0 = icmp eq i32 %y, 0
   br i1 %0, label %divbyzero.throw, label %divbyzero.next
 
 divbyzero.throw:                                  ; preds = %entry
-  call void @runtime.divideByZeroPanic(i8* undef, i8* null) #0
+  call void @runtime.divideByZeroPanic(i8* undef) #0
   unreachable
 
 divbyzero.next:                                   ; preds = %entry
@@ -101,61 +101,61 @@ divbyzero.next:                                   ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define hidden i1 @main.floatEQ(float %x, float %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden i1 @main.floatEQ(float %x, float %y, i8* %context) unnamed_addr #0 {
 entry:
   %0 = fcmp oeq float %x, %y
   ret i1 %0
 }
 
 ; Function Attrs: nounwind
-define hidden i1 @main.floatNE(float %x, float %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden i1 @main.floatNE(float %x, float %y, i8* %context) unnamed_addr #0 {
 entry:
   %0 = fcmp une float %x, %y
   ret i1 %0
 }
 
 ; Function Attrs: nounwind
-define hidden i1 @main.floatLower(float %x, float %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden i1 @main.floatLower(float %x, float %y, i8* %context) unnamed_addr #0 {
 entry:
   %0 = fcmp olt float %x, %y
   ret i1 %0
 }
 
 ; Function Attrs: nounwind
-define hidden i1 @main.floatLowerEqual(float %x, float %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden i1 @main.floatLowerEqual(float %x, float %y, i8* %context) unnamed_addr #0 {
 entry:
   %0 = fcmp ole float %x, %y
   ret i1 %0
 }
 
 ; Function Attrs: nounwind
-define hidden i1 @main.floatGreater(float %x, float %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden i1 @main.floatGreater(float %x, float %y, i8* %context) unnamed_addr #0 {
 entry:
   %0 = fcmp ogt float %x, %y
   ret i1 %0
 }
 
 ; Function Attrs: nounwind
-define hidden i1 @main.floatGreaterEqual(float %x, float %y, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden i1 @main.floatGreaterEqual(float %x, float %y, i8* %context) unnamed_addr #0 {
 entry:
   %0 = fcmp oge float %x, %y
   ret i1 %0
 }
 
 ; Function Attrs: nounwind
-define hidden float @main.complexReal(float %x.r, float %x.i, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden float @main.complexReal(float %x.r, float %x.i, i8* %context) unnamed_addr #0 {
 entry:
   ret float %x.r
 }
 
 ; Function Attrs: nounwind
-define hidden float @main.complexImag(float %x.r, float %x.i, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden float @main.complexImag(float %x.r, float %x.i, i8* %context) unnamed_addr #0 {
 entry:
   ret float %x.i
 }
 
 ; Function Attrs: nounwind
-define hidden { float, float } @main.complexAdd(float %x.r, float %x.i, float %y.r, float %y.i, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden { float, float } @main.complexAdd(float %x.r, float %x.i, float %y.r, float %y.i, i8* %context) unnamed_addr #0 {
 entry:
   %0 = fadd float %x.r, %y.r
   %1 = fadd float %x.i, %y.i
@@ -165,7 +165,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden { float, float } @main.complexSub(float %x.r, float %x.i, float %y.r, float %y.i, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden { float, float } @main.complexSub(float %x.r, float %x.i, float %y.r, float %y.i, i8* %context) unnamed_addr #0 {
 entry:
   %0 = fsub float %x.r, %y.r
   %1 = fsub float %x.i, %y.i
@@ -175,7 +175,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden { float, float } @main.complexMul(float %x.r, float %x.i, float %y.r, float %y.i, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden { float, float } @main.complexMul(float %x.r, float %x.i, float %y.r, float %y.i, i8* %context) unnamed_addr #0 {
 entry:
   %0 = fmul float %x.r, %y.r
   %1 = fmul float %x.i, %y.i
@@ -189,14 +189,14 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.foo(%main.kv* dereferenceable_or_null(4) %a, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden void @main.foo(%main.kv* dereferenceable_or_null(4) %a, i8* %context) unnamed_addr #0 {
 entry:
-  call void @"main.foo$1"(%main.kv.0* null, i8* undef, i8* undef)
+  call void @"main.foo$1"(%main.kv.0* null, i8* undef)
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @"main.foo$1"(%main.kv.0* dereferenceable_or_null(1) %b, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define hidden void @"main.foo$1"(%main.kv.0* dereferenceable_or_null(1) %b, i8* %context) unnamed_addr #0 {
 entry:
   ret void
 }

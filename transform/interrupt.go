@@ -27,7 +27,6 @@ func LowerInterrupts(mod llvm.Module) []error {
 	var errs []error
 
 	ctx := mod.Context()
-	i8ptrType := llvm.PointerType(ctx.Int8Type(), 0)
 	builder := ctx.NewBuilder()
 	defer builder.Dispose()
 
@@ -95,7 +94,6 @@ func LowerInterrupts(mod llvm.Module) []error {
 				builder.CreateCall(funcPtr, []llvm.Value{
 					num,
 					context,
-					llvm.Undef(i8ptrType),
 				}, "")
 			}
 			call.EraseFromParentAsInstruction()

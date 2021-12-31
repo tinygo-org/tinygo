@@ -444,7 +444,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 
 				// Load the type code of the interface value.
-				typecodeIDBitCast, err := operands[len(operands)-3].toLLVMValue(inst.llvmInst.Operand(len(operands)-4).Type(), &mem)
+				typecodeIDBitCast, err := operands[len(operands)-2].toLLVMValue(inst.llvmInst.Operand(len(operands)-3).Type(), &mem)
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
@@ -492,7 +492,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// Call a function with a definition available. Run it as usual,
 				// possibly trying to recover from it if it failed to execute.
 				if r.debug {
-					argStrings := make([]string, len(operands)-1)
+					argStrings := make([]string, len(operands))
 					for i := range argStrings {
 						argStrings[i] = operands[i+1].String()
 					}

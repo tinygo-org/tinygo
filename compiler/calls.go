@@ -40,8 +40,7 @@ func (b *builder) createRuntimeCall(fnName string, args []llvm.Value, name strin
 	if llvmFn.IsNil() {
 		panic("trying to call non-existent function: " + fn.RelString(nil))
 	}
-	args = append(args, llvm.Undef(b.i8ptrType))            // unused context parameter
-	args = append(args, llvm.ConstPointerNull(b.i8ptrType)) // coroutine handle
+	args = append(args, llvm.Undef(b.i8ptrType)) // unused context parameter
 	return b.createCall(llvmFn, args, name)
 }
 

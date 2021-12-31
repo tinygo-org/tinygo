@@ -13,8 +13,8 @@ declare void @externalCall(i64) local_unnamed_addr
 
 define void @runtime.initAll() unnamed_addr {
 entry:
-  call fastcc void @baz.init(i8* undef, i8* undef)
-  call fastcc void @foo.init(i8* undef, i8* undef)
+  call fastcc void @baz.init(i8* undef)
+  call fastcc void @foo.init(i8* undef)
   %val = load i64, i64* @foo.knownAtRuntime, align 8
   store i64 %val, i64* @bar.knownAtRuntime, align 8
   call void @externalCall(i64 3)
@@ -23,20 +23,20 @@ entry:
   store i32 %x, i32* @x.atomicNum, align 4
   %y = load volatile i32, i32* @x.volatileNum, align 4
   store volatile i32 %y, i32* @x.volatileNum, align 4
-  call fastcc void @y.init(i8* undef, i8* undef)
+  call fastcc void @y.init(i8* undef)
   ret void
 }
 
-define internal fastcc void @foo.init(i8* %context, i8* %parentHandle) unnamed_addr {
+define internal fastcc void @foo.init(i8* %context) unnamed_addr {
   store i64 5, i64* @foo.knownAtRuntime, align 8
   unreachable
 }
 
-define internal fastcc void @baz.init(i8* %context, i8* %parentHandle) unnamed_addr {
+define internal fastcc void @baz.init(i8* %context) unnamed_addr {
   unreachable
 }
 
-define internal fastcc void @y.init(i8* %context, i8* %parentHandle) unnamed_addr {
+define internal fastcc void @y.init(i8* %context) unnamed_addr {
 entry:
   br label %loop
 

@@ -18,7 +18,7 @@ declare void @runtime.printptr(i32)
 
 declare void @runtime.printnl()
 
-declare void @runtime.nilPanic(i8*, i8*)
+declare void @runtime.nilPanic(i8*)
 
 define void @printInterfaces() {
   call void @printInterface(i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:basic:int" to i32), i8* inttoptr (i32 5 to i8*))
@@ -42,7 +42,7 @@ typeswitch.notUnmatched:                          ; preds = %0
   br i1 %isDoubler, label %typeswitch.Doubler, label %typeswitch.notDoubler
 
 typeswitch.Doubler:                               ; preds = %typeswitch.notUnmatched
-  %doubler.result = call i32 @"Doubler.Double$invoke"(i8* %value, i32 %typecode, i8* undef, i8* undef)
+  %doubler.result = call i32 @"Doubler.Double$invoke"(i8* %value, i32 %typecode, i8* undef)
   call void @runtime.printint32(i32 %doubler.result)
   ret void
 
@@ -69,28 +69,28 @@ typeswitch.notInt16:                              ; preds = %typeswitch.notByte
   ret void
 }
 
-define i32 @"(Number).Double"(i32 %receiver, i8* %context, i8* %parentHandle) {
+define i32 @"(Number).Double"(i32 %receiver, i8* %context) {
   %ret = mul i32 %receiver, 2
   ret i32 %ret
 }
 
-define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %context, i8* %parentHandle) {
+define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %context) {
   %receiver = ptrtoint i8* %receiverPtr to i32
-  %ret = call i32 @"(Number).Double"(i32 %receiver, i8* undef, i8* null)
+  %ret = call i32 @"(Number).Double"(i32 %receiver, i8* undef)
   ret i32 %ret
 }
 
-define internal i32 @"Doubler.Double$invoke"(i8* %receiver, i32 %actualType, i8* %context, i8* %parentHandle) unnamed_addr #0 {
+define internal i32 @"Doubler.Double$invoke"(i8* %receiver, i32 %actualType, i8* %context) unnamed_addr #0 {
 entry:
   %"named:Number.icmp" = icmp eq i32 %actualType, ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:Number" to i32)
   br i1 %"named:Number.icmp", label %"named:Number", label %"named:Number.next"
 
 "named:Number":                                   ; preds = %entry
-  %0 = call i32 @"(Number).Double$invoke"(i8* %receiver, i8* undef, i8* undef)
+  %0 = call i32 @"(Number).Double$invoke"(i8* %receiver, i8* undef)
   ret i32 %0
 
 "named:Number.next":                              ; preds = %entry
-  call void @runtime.nilPanic(i8* undef, i8* undef)
+  call void @runtime.nilPanic(i8* undef)
   unreachable
 }
 
