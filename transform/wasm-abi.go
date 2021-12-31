@@ -36,7 +36,7 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 		if strings.HasPrefix(fn.Name(), "llvm.") || strings.HasPrefix(fn.Name(), "runtime.") {
 			// Do not try to modify the signature of internal LLVM functions and
 			// assume that runtime functions are only temporarily exported for
-			// coroutine lowering.
+			// transforms.
 			continue
 		}
 		if !fn.GetStringAttributeAtIndex(-1, "tinygo-methods").IsNil() {

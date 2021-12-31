@@ -114,7 +114,7 @@ func (c *Config) NeedsStackObjects() bool {
 }
 
 // Scheduler returns the scheduler implementation. Valid values are "none",
-//"coroutines" and "tasks".
+// "asyncify" and "tasks".
 func (c *Config) Scheduler() string {
 	if c.Options.Scheduler != "" {
 		return c.Options.Scheduler
@@ -122,8 +122,8 @@ func (c *Config) Scheduler() string {
 	if c.Target.Scheduler != "" {
 		return c.Target.Scheduler
 	}
-	// Fall back to coroutines, which are supported everywhere.
-	return "coroutines"
+	// Fall back to none.
+	return "none"
 }
 
 // Serial returns the serial implementation for this build configuration: uart,
@@ -171,13 +171,10 @@ func (c *Config) FuncImplementation() string {
 		// being pointed to doesn't need a context. The function pointer is a
 		// regular function pointer.
 		return "doubleword"
-	case "none", "coroutines":
+	case "none":
 		// As "doubleword", but with the function pointer replaced by a unique
 		// ID per function signature. Function values are called by using a
 		// switch statement and choosing which function to call.
-		// Pick the switch implementation with the coroutines scheduler, as it
-		// allows the use of blocking inside a function that is used as a func
-		// value.
 		return "switch"
 	default:
 		panic("unknown scheduler type")
