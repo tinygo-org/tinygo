@@ -251,7 +251,8 @@ func dirsToModuleRoot(maindir, modroot string) []string {
 // run the binary.
 func runPackageTest(config *compileopts.Config, stdout, stderr io.Writer, result builder.BuildResult, testVerbose, testShort bool, testRunRegexp string, testBenchRegexp string, testBenchTime string) (bool, error) {
 	var cmd *exec.Cmd
-	if len(config.Target.Emulator) == 0 {
+	emulator := config.Emulator()
+	if len(emulator) == 0 {
 		// Run directly.
 		var flags []string
 		if testVerbose {
@@ -272,8 +273,8 @@ func runPackageTest(config *compileopts.Config, stdout, stderr io.Writer, result
 		cmd = executeCommand(config.Options, result.Binary, flags...)
 	} else {
 		// Run in an emulator.
-		args := append(config.Target.Emulator[1:], result.Binary)
-		if config.Target.Emulator[0] == "wasmtime" {
+		args := append(emulator[1:], result.Binary)
+		if emulator[0] == "wasmtime" {
 			// create a new temp directory just for this run, announce it to os.TempDir() via TMPDIR
 			tmpdir, err := ioutil.TempDir("", "tinygotmp")
 			if err != nil {
@@ -282,10 +283,12 @@ func runPackageTest(config *compileopts.Config, stdout, stderr io.Writer, result
 			args = append(args, "--dir="+tmpdir, "--env=TMPDIR="+tmpdir)
 			// TODO: add option to not delete temp dir for debugging?
 			defer os.RemoveAll(tmpdir)
+
 			// allow reading from directories up to module root
 			for _, d := range dirsToModuleRoot(result.MainDir, result.ModuleRoot) {
 				args = append(args, "--dir="+d)
 			}
+
 			// mark end of wasmtime arguments and start of program ones: --
 			args = append(args, "--")
 			if testVerbose {
@@ -301,7 +304,7 @@ func runPackageTest(config *compileopts.Config, stdout, stderr io.Writer, result
 				args = append(args, "-test.bench="+testBenchRegexp)
 			}
 		}
-		cmd = executeCommand(config.Options, config.Target.Emulator[0], args...)
+		cmd = executeCommand(config.Options, emulator[0], args...)
 	}
 	cmd.Dir = result.MainDir
 	cmd.Stdout = stdout
@@ -499,12 +502,13 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 		gdbInterface, openocdInterface := config.Programmer()
 		switch gdbInterface {
 		case "msd", "command", "":
-			if len(config.Target.Emulator) != 0 {
-				if config.Target.Emulator[0] == "mgba" {
+			emulator := config.Emulator()
+			if len(emulator) != 0 {
+				if emulator[0] == "mgba" {
 					gdbInterface = "mgba"
-				} else if config.Target.Emulator[0] == "simavr" {
+				} else if emulator[0] == "simavr" {
 					gdbInterface = "simavr"
-				} else if strings.HasPrefix(config.Target.Emulator[0], "qemu-system-") {
+				} else if strings.HasPrefix(emulator[0], "qemu-system-") {
 					gdbInterface = "qemu"
 				} else {
 					// Assume QEMU as an emulator.
@@ -572,34 +576,34 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 			}
 		case "qemu":
 			port = ":1234"
-
+			emulator := config.Emulator()
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], result.Binary, "-s", "-S")
-			daemon = executeCommand(config.Options, config.Target.Emulator[0], args...)
+			args := append(emulator[1:], result.Binary, "-s", "-S")
+			daemon = executeCommand(config.Options, emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "qemu-user":
 			port = ":1234"
-
+			emulator := config.Emulator()
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], "-g", "1234", result.Binary)
-			daemon = executeCommand(config.Options, config.Target.Emulator[0], args...)
+			args := append(emulator[1:], "-g", "1234", result.Binary)
+			daemon = executeCommand(config.Options, emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "mgba":
 			port = ":2345"
-
+			emulator := config.Emulator()
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], result.Binary, "-g")
-			daemon = executeCommand(config.Options, config.Target.Emulator[0], args...)
+			args := append(emulator[1:], result.Binary, "-g")
+			daemon = executeCommand(config.Options, emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "simavr":
 			port = ":1234"
-
+			emulator := config.Emulator()
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], "-g", result.Binary)
-			daemon = executeCommand(config.Options, config.Target.Emulator[0], args...)
+			args := append(emulator[1:], "-g", result.Binary)
+			daemon = executeCommand(config.Options, emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "msd":
@@ -694,7 +698,8 @@ func Run(pkgName string, options *compileopts.Options) error {
 	}
 
 	return builder.Build(pkgName, ".elf", config, func(result builder.BuildResult) error {
-		if len(config.Target.Emulator) == 0 {
+		emulator := config.Emulator()
+		if len(emulator) == 0 {
 			// Run directly.
 			cmd := executeCommand(config.Options, result.Binary)
 			cmd.Stdout = os.Stdout
@@ -710,8 +715,8 @@ func Run(pkgName string, options *compileopts.Options) error {
 			return nil
 		} else {
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], result.Binary)
-			cmd := executeCommand(config.Options, config.Target.Emulator[0], args...)
+			args := append(emulator[1:], result.Binary)
+			cmd := executeCommand(config.Options, emulator[0], args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			err := cmd.Run()
