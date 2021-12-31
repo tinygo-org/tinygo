@@ -61,11 +61,6 @@ func newStruct() {
 }
 
 func newFuncValue() *func() {
-	// On some platforms that use runtime.funcValue ("switch" style) function
-	// values, a func value is allocated as having two pointer words while the
-	// struct looks like {unsafe.Pointer; uintptr}. This is so that the interp
-	// package won't get confused, see getPointerBitmap in compiler/llvm.go for
-	// details.
 	return new(func())
 }
 

@@ -78,10 +78,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 			return errs
 		}
 
-		if config.FuncImplementation() == "switch" {
-			LowerFuncValues(mod)
-		}
-
 		// After interfaces are lowered, there are many more opportunities for
 		// interprocedural optimizations. To get them to work, function
 		// attributes have to be updated first.
@@ -102,9 +98,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 			return []error{err}
 		}
 		LowerReflect(mod)
-		if config.FuncImplementation() == "switch" {
-			LowerFuncValues(mod)
-		}
 		errs := LowerInterrupts(mod)
 		if len(errs) > 0 {
 			return errs
