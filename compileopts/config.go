@@ -463,6 +463,15 @@ func (c *Config) WasmAbi() string {
 	return c.Target.WasmAbi
 }
 
+// Emulator returns the emulator target config
+func (c *Config) Emulator() []string {
+	var emulator []string
+	for _, s := range c.Target.Emulator {
+		emulator = append(emulator, strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT")))
+	}
+	return emulator
+}
+
 type TestConfig struct {
 	CompileTestBinary bool
 	// TODO: Filter the test functions to run, include verbose flag, etc

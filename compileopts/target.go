@@ -232,13 +232,6 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 		spec.ExtraFiles = append(spec.ExtraFiles, "src/internal/task/task_asyncify_wasm.S")
 	}
 
-	// TODO(dgryski): handle CFLAGS and LDFLAGS here too?
-	var emu []string
-	for _, s := range spec.Emulator {
-		emu = append(emu, strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT")))
-	}
-	spec.Emulator = emu
-
 	return spec, nil
 }
 
