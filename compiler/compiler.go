@@ -78,6 +78,7 @@ type compilerContext struct {
 	diagnostics      []error
 	astComments      map[string]*ast.CommentGroup
 	pkg              *types.Package
+	packageDir       string // directory for this package
 	runtimePkg       *types.Package
 }
 
@@ -139,6 +140,8 @@ type builder struct {
 	deferPtr          llvm.Value
 	difunc            llvm.Metadata
 	dilocals          map[*types.Var]llvm.Metadata
+	initInlinedAt     llvm.Metadata            // fake inlinedAt position
+	initPseudoFuncs   map[string]llvm.Metadata // fake "inlined" functions for proper init debug locations
 	allDeferFuncs     []interface{}
 	deferFuncs        map[*ssa.Function]int
 	deferInvokeFuncs  map[string]int
@@ -242,6 +245,7 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 // CompilePackage compiles a single package to a LLVM module.
 func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
 	c := newCompilerContext(moduleName, machine, config, dumpSSA)
+	c.packageDir = pkg.OriginalDir()
 	c.pkg = pkg.Pkg
 	c.runtimePkg = ssaPkg.Prog.ImportedPackage("runtime").Pkg
 	c.program = ssaPkg.Prog
@@ -596,6 +600,51 @@ func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
 	}
 }
 
+// setDebugLocation sets the current debug location for the builder.
+func (b *builder) setDebugLocation(pos token.Pos) {
+	if pos == token.NoPos {
+		// No debug information available for this instruction.
+		b.SetCurrentDebugLocation(0, 0, b.difunc, llvm.Metadata{})
+		return
+	}
+
+	position := b.program.Fset.Position(pos)
+	if b.fn.Synthetic == "package initializer" {
+		// Package initializers are treated specially, because while individual
+		// Go SSA instructions have file/line/col information, the parent
+		// function does not. LLVM doesn't store filename information per
+		// instruction, only per function. We work around this difference by
+		// creating a fake DIFunction for each Go file and say that the
+		// instruction really came from that (fake) function but was inlined in
+		// the package initializer function.
+		position := b.program.Fset.Position(pos)
+		name := filepath.Base(position.Filename)
+		difunc, ok := b.initPseudoFuncs[name]
+		if !ok {
+			diFuncType := b.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+				File: b.getDIFile(position.Filename),
+			})
+			difunc = b.dibuilder.CreateFunction(b.getDIFile(position.Filename), llvm.DIFunction{
+				Name:         b.fn.RelString(nil) + "#" + name,
+				File:         b.getDIFile(position.Filename),
+				Line:         0,
+				Type:         diFuncType,
+				LocalToUnit:  true,
+				IsDefinition: true,
+				ScopeLine:    0,
+				Flags:        llvm.FlagPrototyped,
+				Optimized:    true,
+			})
+			b.initPseudoFuncs[name] = difunc
+		}
+		b.SetCurrentDebugLocation(uint(position.Line), uint(position.Column), difunc, b.initInlinedAt)
+		return
+	}
+
+	// Regular debug information.
+	b.SetCurrentDebugLocation(uint(position.Line), uint(position.Column), b.difunc, llvm.Metadata{})
+}
+
 // getLocalVariable returns a debug info entry for a local variable, which may
 // either be a parameter or a regular variable. It will create a new metadata
 // entry if there isn't one for the variable yet.
@@ -848,16 +897,14 @@ func (b *builder) createFunction() {
 	// Add debug info, if needed.
 	if b.Debug {
 		if b.fn.Synthetic == "package initializer" {
-			// Package initializers have no debug info. Create some fake debug
-			// info to at least have *something*.
-			filename := b.fn.Package().Pkg.Path() + "/<init>"
-			b.difunc = b.attachDebugInfoRaw(b.fn, b.llvmFn, "", filename, 0)
+			// Package initializer functions have no debug info. Create some
+			// fake debug info to at least have *something*.
+			b.difunc = b.attachDebugInfoRaw(b.fn, b.llvmFn, "", b.packageDir, 0)
 		} else if b.fn.Syntax() != nil {
 			// Create debug info file if needed.
 			b.difunc = b.attachDebugInfo(b.fn)
 		}
-		pos := b.program.Fset.Position(b.fn.Pos())
-		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
+		b.setDebugLocation(b.fn.Pos())
 	}
 
 	// Pre-create all basic blocks in the function.
@@ -868,6 +915,16 @@ func (b *builder) createFunction() {
 	}
 	entryBlock := b.blockEntries[b.fn.Blocks[0]]
 	b.SetInsertPointAtEnd(entryBlock)
+
+	if b.fn.Synthetic == "package initializer" {
+		b.initPseudoFuncs = make(map[string]llvm.Metadata)
+
+		// Create a fake 'inlined at' metadata node.
+		// See setDebugLocation for details.
+		alloca := b.CreateAlloca(b.uintptrType, "")
+		b.initInlinedAt = alloca.InstructionDebugLoc()
+		alloca.EraseFromParentAsInstruction()
+	}
 
 	// Load function parameters
 	llvmParamIndex := 0
@@ -1063,8 +1120,7 @@ func getPos(val posser) token.Pos {
 // particular Go SSA instruction.
 func (b *builder) createInstruction(instr ssa.Instruction) {
 	if b.Debug {
-		pos := b.program.Fset.Position(getPos(instr))
-		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
+		b.setDebugLocation(getPos(instr))
 	}
 
 	switch instr := instr.(type) {
