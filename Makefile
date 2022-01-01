@@ -228,6 +228,7 @@ TEST_PACKAGES_BASE = \
 	math/cmplx \
 	net/http/internal/ascii \
 	net/mail \
+	os \
 	path \
 	reflect \
 	sync \
@@ -243,7 +244,6 @@ TEST_PACKAGES = \
 	$(TEST_PACKAGES_BASE) \
 	compress/flate \
 	compress/zlib \
-	os \
 
 # Standard library packages that pass tests on wasi
 TEST_PACKAGES_WASI = \

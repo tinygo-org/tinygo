@@ -254,6 +254,14 @@ func runPackageTest(config *compileopts.Config, stdout, stderr io.Writer, result
 		// Run in an emulator.
 		args := append(config.Target.Emulator[1:], result.Binary)
 		if config.Target.Emulator[0] == "wasmtime" {
+			// create a new temp directory just for this run, announce it to os.TempDir() via TMPDIR
+			tmpdir, err := ioutil.TempDir("", "tinygotmp")
+			if err != nil {
+				return false, &commandError{"failed to create temporary directory", "tinygotmp", err}
+			}
+			args = append(args, "--dir="+tmpdir, "--env=TMPDIR="+tmpdir)
+			// TODO: add option to not delete temp dir for debugging?
+			defer os.RemoveAll(tmpdir)
 			// allow reading from current directory: --dir=.
 			// mark end of wasmtime arguments and start of program ones: --
 			args = append(args, "--dir=.", "--")
