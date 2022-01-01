@@ -24,9 +24,16 @@ func TestBar(t *testing.T) {
 	t.Log("log Bar end")
 }
 
+func TestSkip(t *testing.T) {
+	t.Skip("skip")
+
+	panic("test not skipped")
+}
+
 var tests = []testing.InternalTest{
 	{"TestFoo", TestFoo},
 	{"TestBar", TestBar},
+	{"TestSkip", TestSkip},
 }
 
 var benchmarks = []testing.InternalBenchmark{}

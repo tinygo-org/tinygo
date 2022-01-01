@@ -21,5 +21,11 @@ func TestPass(t *testing.T) {
 	t.Log("TestPass passed")
 }
 
+func TestSkip(t *testing.T) {
+	t.Skip("skip this")
+
+	panic("test was not skipped")
+}
+
 func BenchmarkNotImplemented(b *testing.B) {
 }

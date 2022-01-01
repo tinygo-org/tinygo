@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 )
 
@@ -43,10 +44,10 @@ type common struct {
 	output bytes.Buffer
 	indent string
 
-	failed   bool   // Test or benchmark has failed.
-	skipped  bool   // Test of benchmark has been skipped.
-	finished bool   // Test function has completed.
-	name     string // Name of test or benchmark.
+	failed   bool          // Test or benchmark has failed.
+	skipped  bool          // Test of benchmark has been skipped.
+	finished chan struct{} // Closed once test function has completed.
+	name     string        // Name of test or benchmark.
 }
 
 // TB is the interface common to T and B.
@@ -101,8 +102,8 @@ func (c *common) Failed() bool {
 func (c *common) FailNow() {
 	c.Fail()
 
-	c.finished = true
-	c.Error("FailNow is incomplete, requires runtime.Goexit()")
+	close(c.finished)
+	runtime.Goexit()
 }
 
 // log generates the output.
@@ -179,8 +180,8 @@ func (c *common) Skipf(format string, args ...interface{}) {
 // by calling runtime.Goexit.
 func (c *common) SkipNow() {
 	c.skip()
-	c.finished = true
-	c.Error("SkipNow is incomplete, requires runtime.Goexit()")
+	close(c.finished)
+	runtime.Goexit()
 }
 
 func (c *common) skip() {
@@ -208,28 +209,35 @@ func (t *T) Run(name string, f func(t *T)) bool {
 	// Create a subtest.
 	sub := T{
 		common: common{
-			name:   t.name + "/" + name,
-			indent: t.indent + "    ",
+			name:     t.name + "/" + name,
+			indent:   t.indent + "    ",
+			finished: make(chan struct{}),
 		},
 	}
 
 	// Run the test.
 	if flagVerbose {
 		fmt.Fprintf(&t.output, "=== RUN   %s\n", sub.name)
-
 	}
-	f(&sub)
+	go func() {
+		defer func() { close(sub.finished) }()
+
+		f(&sub)
+	}()
+	<-sub.finished
 
 	// Process the result (pass or fail).
 	if sub.failed {
 		t.failed = true
 		fmt.Fprintf(&t.output, sub.indent+"--- FAIL: %s\n", sub.name)
 		t.output.Write(sub.output.Bytes())
-	} else {
-		if flagVerbose {
+	} else if flagVerbose {
+		if sub.skipped {
+			fmt.Fprintf(&t.output, sub.indent+"--- SKIP: %s\n", sub.name)
+		} else {
 			fmt.Fprintf(&t.output, sub.indent+"--- PASS: %s\n", sub.name)
-			t.output.Write(sub.output.Bytes())
 		}
+		t.output.Write(sub.output.Bytes())
 	}
 	return !sub.failed
 }
@@ -283,23 +291,31 @@ func (m *M) Run() int {
 	for _, test := range m.Tests {
 		t := &T{
 			common: common{
-				name: test.Name,
+				name:     test.Name,
+				finished: make(chan struct{}),
 			},
 		}
 
 		if flagVerbose {
 			fmt.Printf("=== RUN   %s\n", test.Name)
 		}
-		test.F(t)
+		go func() {
+			defer func() { close(t.finished) }()
+
+			test.F(t)
+		}()
+		<-t.finished
 
 		if t.failed {
 			fmt.Printf("--- FAIL: %s\n", test.Name)
 			os.Stdout.Write(t.output.Bytes())
-		} else {
-			if flagVerbose {
+		} else if flagVerbose {
+			if t.skipped {
+				fmt.Printf("--- SKIP: %s\n", test.Name)
+			} else {
 				fmt.Printf("--- PASS: %s\n", test.Name)
-				os.Stdout.Write(t.output.Bytes())
 			}
+			os.Stdout.Write(t.output.Bytes())
 		}
 
 		if t.failed {

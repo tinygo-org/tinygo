@@ -181,14 +181,23 @@ func (b *B) launch() {
 func (b *B) Run(name string, f func(b *B)) bool {
 	b.hasSub = true
 	sub := &B{
-		common:    common{name: name},
+		common: common{
+			name:     name,
+			finished: make(chan struct{}),
+		},
 		benchFunc: f,
 		benchTime: b.benchTime,
 	}
-	if sub.run1() {
-		sub.run()
-	}
-	b.add(sub.result)
+	go func() {
+		defer close(sub.finished)
+
+		if sub.run1() {
+			sub.run()
+		}
+
+		b.add(sub.result)
+	}()
+	<-sub.finished
 	return !sub.failed
 }
 
@@ -199,12 +208,22 @@ func (b *B) Run(name string, f func(b *B)) bool {
 // subbenchmarks that don't call Run in sequence in a single benchmark.
 func Benchmark(f func(b *B)) BenchmarkResult {
 	b := &B{
+		common: common{
+			finished: make(chan struct{}),
+		},
 		benchFunc: f,
 		benchTime: benchTime,
 	}
-	if b.run1() {
-		b.run()
-	}
+	go func() {
+		defer close(b.finished)
+
+		if b.run1() {
+			b.run()
+		}
+
+		b.add(b.result)
+	}()
+	<-b.finished
 	return b.result
 }
 
