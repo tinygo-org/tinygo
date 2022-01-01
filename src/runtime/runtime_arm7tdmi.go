@@ -28,8 +28,6 @@ var _sidata [0]byte
 //go:extern _edata
 var _edata [0]byte
 
-func postinit() {}
-
 // Entry point for Go. Initialize all packages and call main.main().
 //export main
 func main() {

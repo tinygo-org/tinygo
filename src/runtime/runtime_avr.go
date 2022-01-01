@@ -42,6 +42,7 @@ var _ebss [0]byte
 //export main
 func main() {
 	preinit()
+	initHardware()
 	run()
 	exit(0)
 }
@@ -55,15 +56,13 @@ func preinit() {
 	}
 }
 
-func postinit() {
-	// Enable interrupts after initialization.
-	avr.Asm("sei")
-}
-
-func init() {
+func initHardware() {
 	initUART()
 	machine.InitMonotonicTimer()
 	nextTimerRecalibrate = ticks() + timerRecalibrateInterval
+
+	// Enable interrupts after initialization.
+	avr.Asm("sei")
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {

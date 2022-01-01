@@ -15,8 +15,6 @@ import (
 
 type timeUnit int64
 
-func postinit() {}
-
 //export main
 func main() {
 
