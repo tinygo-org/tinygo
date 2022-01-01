@@ -23,7 +23,6 @@ func getSystemStackPointer() uintptr {
 func run() {
 	initHeap()
 	initAll()
-	postinit()
 	callMain()
 }
 

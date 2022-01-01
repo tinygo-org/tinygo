@@ -43,8 +43,6 @@ var (
 	totalHeap = uint64(0)
 )
 
-func postinit() {}
-
 func preinit() {
 	// Unsafe to use heap here
 	setupEnv()

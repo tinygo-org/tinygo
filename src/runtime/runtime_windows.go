@@ -41,8 +41,6 @@ func __p___argc() *int32
 //export __p___argv
 func __p___argv() **unsafe.Pointer
 
-func postinit() {}
-
 //export mainCRTStartup
 func mainCRTStartup() int {
 	preinit()

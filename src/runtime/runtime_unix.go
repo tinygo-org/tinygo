@@ -65,8 +65,6 @@ type timespec struct {
 
 var stackTop uintptr
 
-func postinit() {}
-
 // Entry point for Go. Initialize all packages and call main.main().
 //export main
 func main(argc int32, argv *unsafe.Pointer) int {

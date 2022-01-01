@@ -53,8 +53,6 @@ func init() {
 	machine.Serial.Configure(machine.UARTConfig{})
 }
 
-func postinit() {}
-
 //export Reset_Handler
 func main() {
 	preinit()

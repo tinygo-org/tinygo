@@ -171,9 +171,6 @@ func TestCompiler(t *testing.T) {
 			case "float.go", "math.go", "print.go":
 				// Stuck in runtime.printfloat64.
 
-			case "goroutines.go":
-				// The main() never runs.
-
 			case "interface.go":
 				// Several comparison tests fail.
 

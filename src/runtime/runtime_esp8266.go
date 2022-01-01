@@ -23,8 +23,6 @@ func putchar(c byte) {
 //export rom_i2c_writeReg
 func rom_i2c_writeReg(block, host_id, reg_add, data uint8)
 
-func postinit() {}
-
 //export main
 func main() {
 	// Clear .bss section. .data has already been loaded by the ROM bootloader.

@@ -16,8 +16,6 @@ var _svectors [0]byte
 //go:extern _flexram_cfg
 var _flexram_cfg [0]byte
 
-func postinit() {}
-
 //export Reset_Handler
 func main() {
 

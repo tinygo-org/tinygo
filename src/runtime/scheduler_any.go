@@ -22,7 +22,6 @@ func run() {
 	initHeap()
 	go func() {
 		initAll()
-		postinit()
 		callMain()
 		schedulerDone = true
 	}()
