@@ -19,7 +19,7 @@ func randomName() string {
 }
 
 func TestMkdir(t *testing.T) {
-	dir := "TestMkdir" + randomName()
+	dir := TempDir() + "/TestMkdir" + randomName()
 	Remove(dir)
 	err := Mkdir(dir, 0755)
 	defer Remove(dir)
@@ -65,7 +65,7 @@ func writeFile(t *testing.T, fname string, flag int, text string) string {
 }
 
 func TestRemove(t *testing.T) {
-	f := "TestRemove" + randomName()
+	f := TempDir() + "/TestRemove" + randomName()
 
 	err := Remove(f)
 	if err == nil {
