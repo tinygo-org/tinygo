@@ -180,6 +180,9 @@ type SysProcAttr struct {
 func Getgroups() ([]int, error)         { return []int{1}, nil }
 func Gettimeofday(tv *Timeval) error    { return ENOSYS }
 func Kill(pid int, signum Signal) error { return ENOSYS }
+func Pipe2(p []int, flags int) (err error) {
+	return ENOSYS // TODO
+}
 func Sendfile(outfd int, infd int, offset *int64, count int) (written int, err error) {
 	return 0, ENOSYS
 }

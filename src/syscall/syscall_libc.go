@@ -153,10 +153,6 @@ func Kill(pid int, sig Signal) (err error) {
 
 type SysProcAttr struct{}
 
-func Pipe2(p []int, flags int) (err error) {
-	return ENOSYS // TODO
-}
-
 // TODO
 type WaitStatus uint32
 

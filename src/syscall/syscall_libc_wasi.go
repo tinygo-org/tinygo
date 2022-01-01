@@ -292,6 +292,10 @@ func Lstat(path string, p *Stat_t) (err error) {
 	return
 }
 
+func Pipe2(p []int, flags int) (err error) {
+	return ENOSYS // TODO
+}
+
 // int stat(const char *path, struct stat * buf);
 //export stat
 func libc_stat(pathname *byte, ptr unsafe.Pointer) int32
