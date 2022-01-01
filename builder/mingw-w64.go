@@ -26,6 +26,7 @@ var MinGW = Library{
 		_, err = io.Copy(outf, inf)
 		return err
 	},
+	sourceDir: func() string { return "" }, // unused
 	cflags: func(target, headerPath string) []string {
 		// No flags necessary because there are no files to compile.
 		return nil

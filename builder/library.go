@@ -24,8 +24,8 @@ type Library struct {
 	// cflags returns the C flags specific to this library
 	cflags func(target, headerPath string) []string
 
-	// The source directory, relative to TINYGOROOT.
-	sourceDir string
+	// The source directory.
+	sourceDir func() string
 
 	// The source files, relative to sourceDir.
 	librarySources func(target string) []string
@@ -161,6 +161,12 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	if strings.HasPrefix(target, "riscv64-") {
 		args = append(args, "-march=rv64gc", "-mabi=lp64")
 	}
+	if strings.HasPrefix(target, "xtensa") {
+		// Hack to work around an issue in the Xtensa port:
+		// https://github.com/espressif/llvm-project/issues/52
+		// Hopefully this will be fixed soon (LLVM 14).
+		args = append(args, "-D__ELF__")
+	}
 
 	var once sync.Once
 
@@ -195,6 +201,8 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		},
 	}
 
+	sourceDir := l.sourceDir()
+
 	// Create jobs to compile all sources. These jobs are depended upon by the
 	// archive job above, so must be run first.
 	for _, path := range l.librarySources(target) {
@@ -203,7 +211,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		for strings.HasPrefix(cleanpath, "../") {
 			cleanpath = cleanpath[3:]
 		}
-		srcpath := filepath.Join(goenv.Get("TINYGOROOT"), l.sourceDir, path)
+		srcpath := filepath.Join(sourceDir, path)
 		objpath := filepath.Join(dir, cleanpath+".o")
 		os.MkdirAll(filepath.Dir(objpath), 0o777)
 		objs = append(objs, objpath)
@@ -227,7 +235,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	// (It could be done in parallel with creating the ar file, but it probably
 	// won't make much of a difference in speed).
 	if l.crt1Source != "" {
-		srcpath := filepath.Join(goenv.Get("TINYGOROOT"), l.sourceDir, l.crt1Source)
+		srcpath := filepath.Join(sourceDir, l.crt1Source)
 		job.dependencies = append(job.dependencies, &compileJob{
 			description: "compile " + srcpath,
 			run: func(*compileJob) error {

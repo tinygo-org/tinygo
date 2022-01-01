@@ -22,15 +22,16 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-13-v1
+            - llvm-source-13-v3
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-13-v1
+          key: llvm-source-13-v3
           paths:
             - llvm-project/clang/lib/Headers
             - llvm-project/clang/include
+            - llvm-project/compiler-rt
             - llvm-project/lld/include
             - llvm-project/llvm/include
   hack-ninja-jobs:

@@ -38,10 +38,11 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-source
         with:
-          key: llvm-source-13-linux-v1
+          key: llvm-source-13-linux-v2
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
+            llvm-project/compiler-rt
             llvm-project/lld/include
             llvm-project/llvm/include
       - name: Download LLVM source
@@ -179,10 +180,11 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-source
         with:
-          key: llvm-source-13-linux-asserts-v1
+          key: llvm-source-13-linux-asserts-v2
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
+            llvm-project/compiler-rt
             llvm-project/lld/include
             llvm-project/llvm/include
       - name: Download LLVM source

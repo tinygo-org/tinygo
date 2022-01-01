@@ -104,7 +104,7 @@ var Musl = Library{
 			"-fno-stack-protector",
 		}
 	},
-	sourceDir: "lib/musl/src",
+	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/musl/src") },
 	librarySources: func(target string) []string {
 		arch := compileopts.MuslArchitecture(target)
 		globs := []string{
