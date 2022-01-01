@@ -20,6 +20,10 @@ var (
 		y [60]uintptr
 		z *byte
 	}
+	struct4 *struct {
+		x *byte
+		y [61]uintptr
+	}
 
 	slice1 []byte
 	slice2 []*int
@@ -49,6 +53,10 @@ func newStruct() {
 		x *byte
 		y [60]uintptr
 		z *byte
+	})
+	struct4 = new(struct {
+		x *byte
+		y [61]uintptr
 	})
 }
 
