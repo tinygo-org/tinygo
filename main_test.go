@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -72,6 +73,7 @@ func TestCompiler(t *testing.T) {
 	}
 
 	t.Run("Host", func(t *testing.T) {
+		t.Parallel()
 		runPlatTests(optionsFromTarget("", sema), tests, t)
 	})
 
@@ -127,34 +129,107 @@ func TestCompiler(t *testing.T) {
 	}
 
 	t.Run("EmulatedCortexM3", func(t *testing.T) {
+		t.Parallel()
 		runPlatTests(optionsFromTarget("cortex-m-qemu", sema), tests, t)
 	})
 
 	t.Run("EmulatedRISCV", func(t *testing.T) {
+		t.Parallel()
 		runPlatTests(optionsFromTarget("riscv-qemu", sema), tests, t)
+	})
+
+	t.Run("AVR", func(t *testing.T) {
+		// LLVM backend crash:
+		// LIBCLANG FATAL ERROR: Cannot select: t3: i16 = JumpTable<0>
+		// This bug is non-deterministic, and only happens when run concurrently with non-AVR tests.
+		// For this reason, we do not t.Parallel() here.
+
+		var avrTests []string
+		for _, t := range tests {
+			switch t {
+			case "atomic.go":
+				// Not supported due to unaligned atomic accesses.
+
+			case "reflect.go":
+				// Reflect tests do not work due to type code issues.
+
+			case "gc.go":
+				// Does not pass due to high mark false positive rate.
+
+			case "json.go", "stdlib.go", "testing.go":
+				// Breaks interp.
+
+			case "map.go":
+				// Reflect size calculation crashes.
+
+			case "binop.go":
+				// Interface comparison results are inverted.
+
+			case "channel.go":
+				// Freezes after recv from closed channel.
+
+			case "float.go", "math.go", "print.go":
+				// Stuck in runtime.printfloat64.
+
+			case "goroutines.go":
+				// The main() never runs.
+
+			case "interface.go":
+				// Several comparison tests fail.
+
+			case "cgo/":
+				// CGo does not work on AVR.
+
+			default:
+				avrTests = append(avrTests, t)
+			}
+		}
+		opts := optionsFromTarget("atmega1284p", sema)
+		opts.Scheduler = "tasks"
+		runPlatTests(opts, avrTests, t)
 	})
 
 	if runtime.GOOS == "linux" {
 		t.Run("X86Linux", func(t *testing.T) {
+			t.Parallel()
 			runPlatTests(optionsFromOSARCH("linux/386", sema), tests, t)
 		})
 		t.Run("ARMLinux", func(t *testing.T) {
+			t.Parallel()
 			runPlatTests(optionsFromOSARCH("linux/arm/6", sema), tests, t)
 		})
 		t.Run("ARM64Linux", func(t *testing.T) {
+			t.Parallel()
 			runPlatTests(optionsFromOSARCH("linux/arm64", sema), tests, t)
 		})
 		t.Run("WebAssembly", func(t *testing.T) {
+			t.Parallel()
 			runPlatTests(optionsFromTarget("wasm", sema), tests, t)
 		})
 		t.Run("WASI", func(t *testing.T) {
+			t.Parallel()
 			runPlatTests(optionsFromTarget("wasi", sema), tests, t)
 		})
 	}
 }
 
 func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
-	t.Parallel()
+	// Check if the emulator is installed.
+	spec, err := compileopts.LoadTarget(&options)
+	if err != nil {
+		t.Fatal("failed to load target spec:", err)
+	}
+	if len(spec.Emulator) != 0 {
+		_, err := exec.LookPath(spec.Emulator[0])
+		if err != nil {
+			if errors.Is(err, exec.ErrNotFound) {
+				t.Skipf("emulator not installed: %q", spec.Emulator[0])
+			}
+
+			t.Errorf("searching for emulator: %v", err)
+			return
+		}
+	}
 
 	for _, name := range tests {
 		name := name // redefine to avoid race condition
@@ -163,10 +238,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest(name, options, t, nil, nil)
 		})
 	}
-	t.Run("env.go", func(t *testing.T) {
-		t.Parallel()
-		runTest("env.go", options, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
-	})
+	if len(spec.Emulator) == 0 || spec.Emulator[0] != "simavr" {
+		t.Run("env.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("env.go", options, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
+		})
+	}
 	if options.Target == "wasi" || options.Target == "wasm" {
 		t.Run("alias.go-scheduler-none", func(t *testing.T) {
 			t.Parallel()
@@ -319,8 +396,13 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	runComplete := make(chan struct{})
 	ranTooLong := false
 	stdout := &bytes.Buffer{}
-	cmd.Stdout = stdout
-	cmd.Stderr = os.Stderr
+	if len(spec.Emulator) != 0 && spec.Emulator[0] == "simavr" {
+		cmd.Stdout = os.Stderr
+		cmd.Stderr = stdout
+	} else {
+		cmd.Stdout = stdout
+		cmd.Stderr = os.Stderr
+	}
 	err = cmd.Start()
 	if err != nil {
 		t.Fatal("failed to start:", err)
@@ -356,6 +438,13 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	// putchar() prints CRLF, convert it to LF.
 	actual := bytes.Replace(stdout.Bytes(), []byte{'\r', '\n'}, []byte{'\n'}, -1)
 	expected = bytes.Replace(expected, []byte{'\r', '\n'}, []byte{'\n'}, -1) // for Windows
+
+	if len(spec.Emulator) != 0 && spec.Emulator[0] == "simavr" {
+		// Strip simavr log formatting.
+		actual = bytes.Replace(actual, []byte{0x1b, '[', '3', '2', 'm'}, nil, -1)
+		actual = bytes.Replace(actual, []byte{0x1b, '[', '0', 'm'}, nil, -1)
+		actual = bytes.Replace(actual, []byte{'.', '.', '\n'}, []byte{'\n'}, -1)
+	}
 
 	// Check whether the command ran successfully.
 	fail := false

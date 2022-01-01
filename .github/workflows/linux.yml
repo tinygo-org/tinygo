@@ -146,6 +146,7 @@ jobs:
               qemu-user \
               gcc-avr \
               avr-libc \
+              simavr \
               ninja-build
       - name: Install Go
         uses: actions/setup-go@v2
@@ -213,6 +214,7 @@ jobs:
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
         run: make wasi-libc
+      - run: make gen-device -j4
       - name: Test TinyGo
         run: make ASSERT=1 test
       - name: Build TinyGo
@@ -227,6 +229,5 @@ jobs:
           sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
           sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
           rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
-      - run: make gen-device -j4
       - run: make smoketest
       - run: make wasmtest
