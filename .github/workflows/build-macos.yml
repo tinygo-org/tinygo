@@ -35,10 +35,11 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-source
         with:
-          key: llvm-source-13-macos-v1
+          key: llvm-source-13-macos-v2
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
+            llvm-project/compiler-rt
             llvm-project/lld/include
             llvm-project/llvm/include
       - name: Download LLVM source

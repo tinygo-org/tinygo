@@ -1,7 +1,11 @@
 package builder
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 // These are the GENERIC_SOURCES according to CMakeList.txt.
@@ -72,6 +76,7 @@ var genericBuiltins = []string{
 	"floatunsisf.c",
 	"floatuntidf.c",
 	"floatuntisf.c",
+	"fp_mode.c",
 	//"int_util.c",
 	"lshrdi3.c",
 	"lshrti3.c",
@@ -161,7 +166,15 @@ var CompilerRT = Library{
 	cflags: func(target, headerPath string) []string {
 		return []string{"-Werror", "-Wall", "-std=c11", "-nostdlibinc"}
 	},
-	sourceDir: "lib/compiler-rt/lib/builtins",
+	sourceDir: func() string {
+		llvmDir := filepath.Join(goenv.Get("TINYGOROOT"), "llvm-project/compiler-rt/lib/builtins")
+		if _, err := os.Stat(llvmDir); err == nil {
+			// Release build.
+			return llvmDir
+		}
+		// Development build.
+		return filepath.Join(goenv.Get("TINYGOROOT"), "lib/compiler-rt-builtins")
+	},
 	librarySources: func(target string) []string {
 		builtins := append([]string{}, genericBuiltins...) // copy genericBuiltins
 		if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
