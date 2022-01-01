@@ -57,6 +57,12 @@ func (f unixFileHandle) ReadAt(b []byte, offset int64) (n int, err error) {
 	return -1, ErrNotImplemented
 }
 
+// Seek wraps syscall.Seek.
+func (f unixFileHandle) Seek(offset int64, whence int) (int64, error) {
+	newoffset, err := syscall.Seek(syscallFd(f), offset, whence)
+	return newoffset, handleSyscallError(err)
+}
+
 // isWindowsNulName reports whether name is os.DevNull ('NUL') on Windows.
 // True is returned if name is 'NUL' whatever the case.
 func isWindowsNulName(name string) bool {
