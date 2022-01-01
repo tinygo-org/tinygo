@@ -55,3 +55,8 @@ func (f unixFileHandle) ReadAt(b []byte, offset int64) (n int, err error) {
 	}
 	return
 }
+
+func (f *File) seek(offset int64, whence int) (int64, error) {
+	newoffset, err := syscall.Seek(syscallFd(f.handle.(unixFileHandle)), offset, whence)
+	return newoffset, handleSyscallError(err)
+}
