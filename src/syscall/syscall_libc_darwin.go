@@ -246,6 +246,19 @@ func Fdopendir(fd int) (dir uintptr, err error) {
 	return
 }
 
+func Pipe2(fds []int, flags int) (err error) {
+	// Mac only has Pipe, which ignores the flags argument
+	buf := make([]int32, 2)
+	fail := int(libc_pipe(&buf[0]))
+	if fail < 0 {
+		err = getErrno()
+	} else {
+		fds[0] = int(buf[0])
+		fds[1] = int(buf[1])
+	}
+	return
+}
+
 func readdir_r(dir uintptr, entry *Dirent, result **Dirent) (err error) {
 	e1 := libc_readdir_r(unsafe.Pointer(dir), unsafe.Pointer(entry), unsafe.Pointer(result))
 	if e1 != 0 {
@@ -278,3 +291,7 @@ func libc_fstat(fd int32, ptr unsafe.Pointer) int32
 // int lstat(const char *path, struct stat * buf);
 //export lstat$INODE64
 func libc_lstat(pathname *byte, ptr unsafe.Pointer) int32
+
+// int pipe(int32 *fds);
+//export pipe
+func libc_pipe(fds *int32) int32
