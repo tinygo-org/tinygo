@@ -6,9 +6,11 @@ package os_test
 
 import (
 	"io"
+	"io/ioutil"
 	. "os"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -20,7 +22,7 @@ func localTmp() string {
 func newFile(testName string, t *testing.T) (f *File) {
 	f, err := CreateTemp("", testName)
 	if err != nil {
-		t.Fatalf("TempFile %s: %s", testName, err)
+		t.Fatalf("newFile %s: CreateTemp fails with %s", testName, err)
 	}
 	return
 }
@@ -83,6 +85,54 @@ func checkMode(t *testing.T, path string, mode FileMode) {
 	}
 	if dir.Mode()&ModePerm != mode {
 		t.Errorf("Stat %q: mode %#o want %#o", path, dir.Mode(), mode)
+	}
+}
+
+func TestSeek(t *testing.T) {
+	f := newFile("TestSeek", t)
+	if f == nil {
+		t.Fatalf("f is nil")
+		return // TODO: remove
+	}
+	defer Remove(f.Name())
+	defer f.Close()
+
+	const data = "hello, world\n"
+	io.WriteString(f, data)
+
+	type test struct {
+		in     int64
+		whence int
+		out    int64
+	}
+	var tests = []test{
+		{0, io.SeekCurrent, int64(len(data))},
+		{0, io.SeekStart, 0},
+		{5, io.SeekStart, 5},
+		{0, io.SeekEnd, int64(len(data))},
+		{0, io.SeekStart, 0},
+		{-1, io.SeekEnd, int64(len(data)) - 1},
+		{1 << 33, io.SeekStart, 1 << 33},
+		{1 << 33, io.SeekEnd, 1<<33 + int64(len(data))},
+
+		// Issue 21681, Windows 4G-1, etc:
+		{1<<32 - 1, io.SeekStart, 1<<32 - 1},
+		{0, io.SeekCurrent, 1<<32 - 1},
+		{2<<32 - 1, io.SeekStart, 2<<32 - 1},
+		{0, io.SeekCurrent, 2<<32 - 1},
+	}
+	for i, tt := range tests {
+		off, err := f.Seek(tt.in, tt.whence)
+		if off != tt.out || err != nil {
+			if e, ok := err.(*PathError); ok && e.Err == syscall.EINVAL && tt.out > 1<<32 && runtime.GOOS == "linux" {
+				mounts, _ := ioutil.ReadFile("/proc/mounts")
+				if strings.Contains(string(mounts), "reiserfs") {
+					// Reiserfs rejects the big seeks.
+					t.Skipf("skipping test known to fail on reiserfs; https://golang.org/issue/91")
+				}
+			}
+			t.Errorf("#%d: Seek(%v, %v) = %v, %v want %v, nil", i, tt.in, tt.whence, off, err, tt.out)
+		}
 	}
 }
 

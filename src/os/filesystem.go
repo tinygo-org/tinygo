@@ -49,6 +49,9 @@ type FileHandle interface {
 	// ReadAt reads up to len(b) bytes from the file starting at the given absolute offset
 	ReadAt(b []byte, offset int64) (n int, err error)
 
+	// Seek resets the file pointer relative to start, current position, or end
+	Seek(offset int64, whence int) (newoffset int64, err error)
+
 	// Write writes up to len(b) bytes to the file.
 	Write(b []byte) (n int, err error)
 

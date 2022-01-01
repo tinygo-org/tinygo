@@ -46,8 +46,12 @@ func Pread(fd int, p []byte, offset int64) (n int, err error) {
 	return
 }
 
-func Seek(fd int, offset int64, whence int) (off int64, err error) {
-	return 0, ENOSYS // TODO
+func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
+	newoffset = libc_lseek(int32(fd), offset, whence)
+	if newoffset < 0 {
+		err = getErrno()
+	}
+	return
 }
 
 func Open(path string, flag int, mode uint32) (fd int, err error) {
@@ -247,6 +251,10 @@ func libc_read(fd int32, buf *byte, count uint) int
 // ssize_t pread(int fd, void *buf, size_t count, off_t offset);
 //export pread
 func libc_pread(fd int32, buf *byte, count uint, offset int64) int
+
+// ssize_t lseek(int fd, off_t offset, int whence);
+//export lseek
+func libc_lseek(fd int32, offset int64, whence int) int64
 
 // int open(const char *pathname, int flags, mode_t mode);
 //export open
