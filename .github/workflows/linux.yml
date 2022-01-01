@@ -146,6 +146,7 @@ jobs:
               qemu-user \
               gcc-avr \
               avr-libc \
+              simavr \
               ninja-build
       - name: Install Go
         uses: actions/setup-go@v2

@@ -1,3 +1,4 @@
+//go:build avr
 // +build avr
 
 package runtime
@@ -111,7 +112,10 @@ func exit(code int) {
 }
 
 func abort() {
+	// Disable interrupts and go to sleep.
+	// This can never be awoken except for reset, and is recogized as termination by simavr.
+	avr.Asm("cli")
 	for {
-		sleepWDT(WDT_PERIOD_2S)
+		avr.Asm("sleep")
 	}
 }
