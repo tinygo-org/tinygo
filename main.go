@@ -185,7 +185,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		return false, err
 	}
 
-	passed := true
+	passed := false
 	err = builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
 		if testCompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
@@ -198,6 +198,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		}
 		if testCompileOnly {
 			// Do not run the test.
+			passed = true
 			return nil
 		}
 
