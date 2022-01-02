@@ -7,6 +7,7 @@ import (
 	"device/avr"
 	"machine"
 	"runtime/interrupt"
+	"runtime/volatile"
 	"unsafe"
 )
 
@@ -58,7 +59,7 @@ func preinit() {
 
 func initHardware() {
 	initUART()
-	machine.InitMonotonicTimer()
+	initMonotonicTimer()
 	nextTimerRecalibrate = ticks() + timerRecalibrateInterval
 
 	// Enable interrupts after initialization.
@@ -81,7 +82,7 @@ func sleepTicks(d timeUnit) {
 		now := waitTill - d
 		if nextTimerRecalibrate < now {
 			nextTimerRecalibrate = now + timerRecalibrateInterval
-			machine.AdjustMonotonicTimer()
+			adjustMonotonicTimer()
 		}
 	}
 	for {
@@ -98,10 +99,10 @@ func sleepTicks(d timeUnit) {
 	}
 }
 
-// ticks return time since start in nanoseconds
-func ticks() (ticks timeUnit) {
+func ticks() (ticksReturn timeUnit) {
 	state := interrupt.Disable()
-	ticks = timeUnit(machine.Ticks)
+	// use volatile since ticksCount can be changed when running on multi-core boards.
+	ticksReturn = timeUnit(volatile.LoadUint64((*uint64)(unsafe.Pointer(&ticksCount))))
 	interrupt.Restore(state)
 	return
 }
@@ -117,4 +118,81 @@ func abort() {
 	for {
 		avr.Asm("sleep")
 	}
+}
+
+var ticksCount int64        // nanoseconds since start
+var nanosecondsInTick int64 // nanoseconds per each tick
+
+func initMonotonicTimer() {
+	nanosecondsInTick = 0
+	ticksCount = 0
+
+	interrupt.New(avr.IRQ_TIMER0_OVF, func(i interrupt.Interrupt) {
+		// use volatile
+		increment := volatile.LoadUint64((*uint64)(unsafe.Pointer(&nanosecondsInTick)))
+		ticks := volatile.LoadUint64((*uint64)(unsafe.Pointer(&ticksCount)))
+		volatile.StoreUint64((*uint64)(unsafe.Pointer(&ticksCount)), ticks+increment)
+	})
+
+	// initial initialization of the Timer0
+	// - Mask interrupt
+	avr.TIMSK0.ClearBits(avr.TIMSK0_TOIE0 | avr.TIMSK0_OCIE0A | avr.TIMSK0_OCIE0B)
+
+	// - Write new values to TCNT2, OCR2x, and TCCR2x.
+	avr.TCNT0.Set(0)
+	avr.OCR0A.Set(0xff)
+	// - Set mode 3
+	avr.TCCR0A.Set(avr.TCCR0A_WGM00 | avr.TCCR0A_WGM01)
+	// - Set prescaler 1
+	avr.TCCR0B.Set(avr.TCCR0B_CS00)
+
+	adjustMonotonicTimer()
+
+	// - Unmask interrupt
+	avr.TIMSK0.SetBits(avr.TIMSK0_TOIE0)
+}
+
+//go:linkname adjustMonotonicTimer machine.adjustMonotonicTimer
+func adjustMonotonicTimer() {
+	// adjust the nanosecondsInTick using volatile
+	volatile.StoreUint64((*uint64)(unsafe.Pointer(&nanosecondsInTick)), uint64(currentNanosecondsInTick()))
+}
+
+func currentNanosecondsInTick() int64 {
+	// this time depends on clk_IO, prescale, mode and OCR0A
+	// assuming the clock source is CPU clock
+	prescaler := int64(avr.TCCR0B.Get() & 0x7)
+	clock := (int64(1e12) / prescaler) / int64(machine.CPUFrequency())
+	mode := avr.TCCR0A.Get() & 0x7
+
+	/*
+	 Mode WGM02 WGM01 WGM00 Timer/Counter       TOP  Update of  TOV Flag
+	                        Mode of Operation        OCRx at    Set on
+	 0    0     0     0     Normal              0xFF Immediate  MAX
+	 1    0     0     1     PWM, Phase Correct  0xFF TOP        BOTTOM
+	 2    0     1     0     CTC                 OCRA Immediate  MAX
+	 3    0     1     1     Fast PWM            0xFF BOTTOM     MAX
+	 5    1     0     1     PWM, Phase Correct  OCRA TOP        BOTTOM
+	 7    1     1     1     Fast PWM            OCRA BOTTOM     TOP
+	*/
+	switch mode {
+	case 0, 3:
+		// normal & fast PWM
+		// TOV0 Interrupt when moving from MAX (0xff) to 0x00
+		return clock * 256 / 1000
+	case 1:
+		// Phase Correct PWM
+		// TOV0 Interrupt when moving from MAX (0xff) to 0x00
+		return clock * 256 * 2 / 1000
+	case 2, 7:
+		// CTC & fast PWM
+		// TOV0 Interrupt when moving from MAX (OCRA) to 0x00
+		return clock * int64(avr.OCR0A.Get()) / 1000
+	case 5:
+		// Phase Correct PWM
+		// TOV0 Interrupt when moving from MAX (OCRA) to 0x00
+		return clock * int64(avr.OCR0A.Get()) * 2 / 1000
+	}
+
+	return clock / 1000 // for unknown
 }
