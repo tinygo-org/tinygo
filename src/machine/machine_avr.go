@@ -1,10 +1,10 @@
+//go:build avr
 // +build avr
 
 package machine
 
 import (
 	"device/avr"
-	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -144,75 +144,8 @@ func (a ADC) Get() uint16 {
 	return uint16(avr.ADCL.Get()) | uint16(avr.ADCH.Get())<<8
 }
 
-var Ticks int64     // nanoseconds since start
-var tickNanos int64 // nanoseconds per each tick
+// linked from runtime.adjustMonotonicTimer
+func adjustMonotonicTimer()
 
-func InitMonotonicTimer() {
-	tickNanos = 0
-	Ticks = 0
-
-	interrupt.New(avr.IRQ_TIMER0_OVF, func(i interrupt.Interrupt) {
-		Ticks += tickNanos
-	})
-
-	// initial initialization of the Timer0
-	// - Mask interrupt
-	avr.TIMSK0.ClearBits(avr.TIMSK0_TOIE0 | avr.TIMSK0_OCIE0A | avr.TIMSK0_OCIE0B)
-
-	// - Write new values to TCNT2, OCR2x, and TCCR2x.
-	avr.TCNT0.Set(0)
-	avr.OCR0A.Set(0xff)
-	// - Set mode 3
-	avr.TCCR0A.Set(avr.TCCR0A_WGM00 | avr.TCCR0A_WGM01)
-	// - Set prescaler 1
-	avr.TCCR0B.Set(avr.TCCR0B_CS00)
-
-	AdjustMonotonicTimer()
-
-	// - Unmask interrupt
-	avr.TIMSK0.SetBits(avr.TIMSK0_TOIE0)
-}
-
-func AdjustMonotonicTimer() {
-	// adjust the tickNanos
-	tickNanos = currentTickNanos()
-}
-
-func currentTickNanos() int64 {
-	// this time depends on clk_IO, prescale, mode and OCR0A
-	// assuming the clock source is CPU clock
-	prescaler := int64(avr.TCCR0B.Get() & 0x7)
-	clock := (int64(1e12) / prescaler) / int64(CPUFrequency())
-	mode := avr.TCCR0A.Get() & 0x7
-
-	/*
-	 Mode WGM02 WGM01 WGM00 Timer/Counter       TOP  Update of  TOV Flag
-	                        Mode of Operation        OCRx at    Set on
-	 0    0     0     0     Normal              0xFF Immediate  MAX
-	 1    0     0     1     PWM, Phase Correct  0xFF TOP        BOTTOM
-	 2    0     1     0     CTC                 OCRA Immediate  MAX
-	 3    0     1     1     Fast PWM            0xFF BOTTOM     MAX
-	 5    1     0     1     PWM, Phase Correct  OCRA TOP        BOTTOM
-	 7    1     1     1     Fast PWM            OCRA BOTTOM     TOP
-	*/
-	switch mode {
-	case 0, 3:
-		// normal & fast PWM
-		// TOV0 Interrupt when moving from MAX (0xff) to 0x00
-		return clock * 256 / 1000
-	case 1:
-		// Phase Correct PWM
-		// TOV0 Interrupt when moving from MAX (0xff) to 0x00
-		return clock * 256 * 2 / 1000
-	case 2, 7:
-		// CTC & fast PWM
-		// TOV0 Interrupt when moving from MAX (OCRA) to 0x00
-		return clock * int64(avr.OCR0A.Get()) / 1000
-	case 5:
-		// Phase Correct PWM
-		// TOV0 Interrupt when moving from MAX (OCRA) to 0x00
-		return clock * int64(avr.OCR0A.Get()) * 2 / 1000
-	}
-
-	return clock / 1000 // for unknown
-}
+// linked from runtime.initMonotonicTimer
+func initMonotonicTimer()

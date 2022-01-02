@@ -71,7 +71,7 @@ func (pwm PWM) Configure(config PWMConfig) error {
 			avr.TCCR0A.Set(avr.TCCR0A_WGM00 | avr.TCCR0A_WGM01)
 			// monotonic timer is using the same time as PWM:0
 			// we must adust internal settings of monotonic timer when PWM:0 settings changed
-			AdjustMonotonicTimer()
+			adjustMonotonicTimer()
 		} else {
 			avr.TCCR2B.Set(prescaler)
 			// Set the PWM mode to fast PWM (mode = 3).
@@ -400,7 +400,7 @@ func (pwm PWM) Set(channel uint8, value uint32) {
 		}
 		// monotonic timer is using the same time as PWM:0
 		// we must adust internal settings of monotonic timer when PWM:0 settings changed
-		AdjustMonotonicTimer()
+		adjustMonotonicTimer()
 	case 1:
 		mask := interrupt.Disable()
 		switch channel {
