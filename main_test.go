@@ -9,12 +9,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,7 +29,11 @@ const TESTDATA = "testdata"
 
 var testTarget = flag.String("target", "", "override test target")
 
-func TestCompiler(t *testing.T) {
+var sema = make(chan struct{}, runtime.NumCPU())
+
+func TestBuild(t *testing.T) {
+	t.Parallel()
+
 	tests := []string{
 		"alias.go",
 		"atomic.go",
@@ -62,8 +68,6 @@ func TestCompiler(t *testing.T) {
 		tests = append(tests, "go1.17.go")
 	}
 
-	sema := make(chan struct{}, runtime.NumCPU())
-
 	if *testTarget != "" {
 		// This makes it possible to run one specific test (instead of all),
 		// which is especially useful to quickly check whether some changes
@@ -84,41 +88,29 @@ func TestCompiler(t *testing.T) {
 		// Test with few optimizations enabled (no inlining, etc).
 		t.Run("opt=1", func(t *testing.T) {
 			t.Parallel()
-			runTestWithConfig("stdlib.go", t, compileopts.Options{
-				GOOS:      goenv.Get("GOOS"),
-				GOARCH:    goenv.Get("GOARCH"),
-				GOARM:     goenv.Get("GOARM"),
-				Opt:       "1",
-				Semaphore: sema,
-			}, nil, nil)
+			opts := optionsFromTarget("", sema)
+			opts.Opt = "1"
+			runTestWithConfig("stdlib.go", t, opts, nil, nil)
 		})
 
 		// Test with only the bare minimum of optimizations enabled.
 		// TODO: fix this for stdlib.go, which currently fails.
 		t.Run("opt=0", func(t *testing.T) {
 			t.Parallel()
-			runTestWithConfig("print.go", t, compileopts.Options{
-				GOOS:      goenv.Get("GOOS"),
-				GOARCH:    goenv.Get("GOARCH"),
-				GOARM:     goenv.Get("GOARM"),
-				Opt:       "0",
-				Semaphore: sema,
-			}, nil, nil)
+			opts := optionsFromTarget("", sema)
+			opts.Opt = "0"
+			runTestWithConfig("print.go", t, opts, nil, nil)
 		})
 
 		t.Run("ldflags", func(t *testing.T) {
 			t.Parallel()
-			runTestWithConfig("ldflags.go", t, compileopts.Options{
-				GOOS:   goenv.Get("GOOS"),
-				GOARCH: goenv.Get("GOARCH"),
-				GOARM:  goenv.Get("GOARM"),
-				GlobalValues: map[string]map[string]string{
-					"main": {
-						"someGlobal": "foobar",
-					},
+			opts := optionsFromTarget("", sema)
+			opts.GlobalValues = map[string]map[string]string{
+				"main": {
+					"someGlobal": "foobar",
 				},
-				Semaphore: sema,
-			}, nil, nil)
+			}
+			runTestWithConfig("ldflags.go", t, opts, nil, nil)
 		})
 	})
 
@@ -211,21 +203,11 @@ func TestCompiler(t *testing.T) {
 }
 
 func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
-	// Check if the emulator is installed.
+	emuCheck(t, options)
+
 	spec, err := compileopts.LoadTarget(&options)
 	if err != nil {
 		t.Fatal("failed to load target spec:", err)
-	}
-	if len(spec.Emulator) != 0 {
-		_, err := exec.LookPath(spec.Emulator[0])
-		if err != nil {
-			if errors.Is(err, exec.ErrNotFound) {
-				t.Skipf("emulator not installed: %q", spec.Emulator[0])
-			}
-
-			t.Errorf("searching for emulator: %v", err)
-			return
-		}
 	}
 
 	for _, name := range tests {
@@ -263,6 +245,25 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	}
 }
 
+func emuCheck(t *testing.T, options compileopts.Options) {
+	// Check if the emulator is installed.
+	spec, err := compileopts.LoadTarget(&options)
+	if err != nil {
+		t.Fatal("failed to load target spec:", err)
+	}
+	if len(spec.Emulator) != 0 {
+		_, err := exec.LookPath(spec.Emulator[0])
+		if err != nil {
+			if errors.Is(err, exec.ErrNotFound) {
+				t.Skipf("emulator not installed: %q", spec.Emulator[0])
+			}
+
+			t.Errorf("searching for emulator: %v", err)
+			return
+		}
+	}
+}
+
 func optionsFromTarget(target string, sema chan struct{}) compileopts.Options {
 	return compileopts.Options{
 		// GOOS/GOARCH are only used if target == ""
@@ -271,6 +272,9 @@ func optionsFromTarget(target string, sema chan struct{}) compileopts.Options {
 		GOARM:     goenv.Get("GOARM"),
 		Target:    target,
 		Semaphore: sema,
+		Debug:     true,
+		VerifyIR:  true,
+		Opt:       "z",
 	}
 }
 
@@ -283,6 +287,9 @@ func optionsFromOSARCH(osarch string, sema chan struct{}) compileopts.Options {
 		GOOS:      parts[0],
 		GOARCH:    parts[1],
 		Semaphore: sema,
+		Debug:     true,
+		VerifyIR:  true,
+		Opt:       "z",
 	}
 	if options.GOARCH == "arm" {
 		options.GOARM = parts[2]
@@ -295,13 +302,6 @@ func runTest(name string, options compileopts.Options, t *testing.T, cmdArgs, en
 }
 
 func runTestWithConfig(name string, t *testing.T, options compileopts.Options, cmdArgs, environmentVars []string) {
-	// Set default config.
-	options.Debug = true
-	options.VerifyIR = true
-	if options.Opt == "" {
-		options.Opt = "z"
-	}
-
 	// Get the expected output for this test.
 	// Note: not using filepath.Join as it strips the path separator at the end
 	// of the path.
@@ -464,6 +464,156 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		}
 		t.Fail()
 	}
+}
+
+func TestTest(t *testing.T) {
+	t.Parallel()
+
+	type targ struct {
+		name string
+		opts compileopts.Options
+	}
+	targs := []targ{
+		// Host
+		{"Host", optionsFromTarget("", sema)},
+	}
+	if !testing.Short() {
+		if runtime.GOOS == "linux" {
+			targs = append(targs,
+				// Linux
+				targ{"X86Linux", optionsFromOSARCH("linux/386", sema)},
+				targ{"ARMLinux", optionsFromOSARCH("linux/arm/6", sema)},
+				targ{"ARM64Linux", optionsFromOSARCH("linux/arm64", sema)},
+			)
+		}
+
+		targs = append(targs,
+			// QEMU microcontrollers
+			targ{"EmulatedCortexM3", optionsFromTarget("cortex-m-qemu", sema)},
+			targ{"EmulatedRISCV", optionsFromTarget("riscv-qemu", sema)},
+
+			// Node/Wasmtime
+			targ{"WASM", optionsFromTarget("wasm", sema)},
+			targ{"WASI", optionsFromTarget("wasi", sema)},
+		)
+	}
+	for _, targ := range targs {
+		targ := targ
+		t.Run(targ.name, func(t *testing.T) {
+			t.Parallel()
+
+			emuCheck(t, targ.opts)
+
+			t.Run("Pass", func(t *testing.T) {
+				t.Parallel()
+
+				// Test a package which builds and passes normally.
+
+				var wg sync.WaitGroup
+				defer wg.Wait()
+
+				out := ioLogger(t, &wg)
+				defer out.Close()
+
+				opts := targ.opts
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/pass", out, out, &opts, false, false, false, "", "")
+				if err != nil {
+					t.Errorf("test error: %v", err)
+				}
+				if !passed {
+					t.Error("test failed")
+				}
+			})
+
+			t.Run("Fail", func(t *testing.T) {
+				t.Parallel()
+
+				// Test a package which builds fine but fails.
+
+				var wg sync.WaitGroup
+				defer wg.Wait()
+
+				out := ioLogger(t, &wg)
+				defer out.Close()
+
+				opts := targ.opts
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/fail", out, out, &opts, false, false, false, "", "")
+				if err != nil {
+					t.Errorf("test error: %v", err)
+				}
+				if passed {
+					t.Error("test passed")
+				}
+			})
+
+			if targ.name != "Host" {
+				// Emulated tests are somewhat slow, and these do not need to be run across every platform.
+				return
+			}
+
+			t.Run("Nothing", func(t *testing.T) {
+				t.Parallel()
+
+				// Test a package with no test files.
+
+				var wg sync.WaitGroup
+				defer wg.Wait()
+
+				out := ioLogger(t, &wg)
+				defer out.Close()
+
+				var output bytes.Buffer
+				opts := targ.opts
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/nothing", io.MultiWriter(&output, out), out, &opts, false, false, false, "", "")
+				if err != nil {
+					t.Errorf("test error: %v", err)
+				}
+				if !passed {
+					t.Error("test failed")
+				}
+				if !strings.Contains(output.String(), "[no test files]") {
+					t.Error("missing [no test files] in output")
+				}
+			})
+
+			t.Run("BuildErr", func(t *testing.T) {
+				t.Parallel()
+
+				// Test a package which fails to build.
+
+				var wg sync.WaitGroup
+				defer wg.Wait()
+
+				out := ioLogger(t, &wg)
+				defer out.Close()
+
+				opts := targ.opts
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/builderr", out, out, &opts, false, false, false, "", "")
+				if err == nil {
+					t.Error("test did not error")
+				}
+				if passed {
+					t.Error("test passed")
+				}
+			})
+		})
+	}
+}
+
+func ioLogger(t *testing.T, wg *sync.WaitGroup) io.WriteCloser {
+	r, w := io.Pipe()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer r.Close()
+
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			t.Log(scanner.Text())
+		}
+	}()
+
+	return w
 }
 
 // This TestMain is necessary because TinyGo may also be invoked to run certain
