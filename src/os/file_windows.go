@@ -8,11 +8,20 @@
 package os
 
 import (
+	"internal/syscall/windows"
 	"syscall"
 	"unicode/utf16"
 )
 
 type syscallFd = syscall.Handle
+
+func rename(oldname, newname string) error {
+	e := windows.Rename(fixLongPath(oldname), fixLongPath(newname))
+	if e != nil {
+		return &LinkError{"rename", oldname, newname, e}
+	}
+	return nil
+}
 
 func Pipe() (r *File, w *File, err error) {
 	var p [2]syscall.Handle
