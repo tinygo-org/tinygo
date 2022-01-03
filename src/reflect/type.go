@@ -684,7 +684,13 @@ func (t rawType) NumMethod() int {
 }
 
 func (t rawType) Name() string {
-	panic("unimplemented: (reflect.Type).Name()")
+	kind := t.Kind()
+	switch kind {
+	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Float32, Float64, Complex64, Complex128, String:
+		return kind.String()
+	default:
+		return ""
+	}
 }
 
 func (t rawType) Key() Type {
