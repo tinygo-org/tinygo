@@ -40,6 +40,14 @@ func Chdir(dir string) error {
 	return nil
 }
 
+// Rename renames (moves) oldpath to newpath.
+// If newpath already exists and is not a directory, Rename replaces it.
+// OS-specific restrictions may apply when oldpath and newpath are in different directories.
+// If there is an error, it will be of type *LinkError.
+func Rename(oldpath, newpath string) error {
+	return rename(oldpath, newpath)
+}
+
 // unixFilesystem is an empty handle for a Unix/Linux filesystem. All operations
 // are relative to the current working directory.
 type unixFilesystem struct {

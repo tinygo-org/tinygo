@@ -95,6 +95,16 @@ func Rmdir(path string) (err error) {
 	return
 }
 
+func Rename(from, to string) (err error) {
+	fromdata := cstring(from)
+	todata := cstring(to)
+	fail := int(libc_rename(&fromdata[0], &todata[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Unlink(path string) (err error) {
 	data := cstring(path)
 	fail := int(libc_unlink(&data[0]))
@@ -269,6 +279,10 @@ func libc_mkdir(pathname *byte, mode uint32) int32
 // int rmdir(const char *pathname);
 //export rmdir
 func libc_rmdir(pathname *byte) int32
+
+// int rename(const char *from, *to);
+//export rename
+func libc_rename(from, too *byte) int32
 
 // int unlink(const char *pathname);
 //export unlink

@@ -18,6 +18,15 @@ func fixLongPath(path string) string {
 	return path
 }
 
+func rename(oldname, newname string) error {
+	// TODO: import rest of upstream tests, handle fancy cases
+	err := syscall.Rename(oldname, newname)
+	if err != nil {
+		return &LinkError{"rename", oldname, newname, err}
+	}
+	return nil
+}
+
 func Pipe() (r *File, w *File, err error) {
 	var p [2]int
 	err = handleSyscallError(syscall.Pipe2(p[:], syscall.O_CLOEXEC))
