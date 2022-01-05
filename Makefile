@@ -490,6 +490,8 @@ ifneq ($(XTENSA), 0)
 endif
 	$(TINYGO) build -size short -o test.bin -target=esp32c3           	examples/serial
 	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=m5stamp-c3          examples/serial
+	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=hifive1-qemu        examples/serial
