@@ -173,9 +173,7 @@ func TestBuild(t *testing.T) {
 				avrTests = append(avrTests, t)
 			}
 		}
-		opts := optionsFromTarget("atmega1284p", sema)
-		opts.Scheduler = "tasks"
-		runPlatTests(opts, avrTests, t)
+		runPlatTests(optionsFromTarget("simavr", sema), avrTests, t)
 	})
 
 	if runtime.GOOS == "linux" {
