@@ -140,6 +140,7 @@ jobs:
           submodules: true
       - name: Install apt dependencies
         run: |
+          sudo apt-get update
           sudo apt-get install --no-install-recommends \
               qemu-system-arm \
               qemu-system-riscv32 \
