@@ -140,6 +140,8 @@ jobs:
           submodules: true
       - name: Install apt dependencies
         run: |
+          echo "Show cpuinfo; sometimes useful when troubleshooting"
+          cat /proc/cpuinfo
           sudo apt-get update
           sudo apt-get install --no-install-recommends \
               qemu-system-arm \
