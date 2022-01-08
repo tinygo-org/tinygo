@@ -84,6 +84,20 @@ func getClangHeaderPath(TINYGOROOT string) string {
 		}
 	}
 
+	// On Arch Linux, the clang executable is stored in /usr/bin rather than being symlinked from there.
+	// Search directly in /usr/lib for clang.
+	if matches, err := filepath.Glob("/usr/lib/clang/" + llvmMajor + ".*.*"); err == nil {
+		// Check for the highest version first.
+		sort.Strings(matches)
+		for i := len(matches) - 1; i >= 0; i-- {
+			path := filepath.Join(matches[i], "include")
+			_, err := os.Stat(filepath.Join(path, "stdint.h"))
+			if err == nil {
+				return path
+			}
+		}
+	}
+
 	// Could not find it.
 	return ""
 }
