@@ -8,18 +8,9 @@ import (
 )
 
 type (
-	DirEntry = fs.DirEntry
 	FileMode = fs.FileMode
 	FileInfo = fs.FileInfo
 )
-
-func (f *File) ReadDir(n int) ([]DirEntry, error) {
-	return nil, &PathError{"ReadDir", f.name, ErrNotImplemented}
-}
-
-func ReadDir(name string) ([]DirEntry, error) {
-	return nil, &PathError{"ReadDir", name, ErrNotImplemented}
-}
 
 // The followings are copied from Go 1.16 official implementation:
 // https://github.com/golang/go/blob/go1.16/src/os/file.go

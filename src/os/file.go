@@ -24,6 +24,9 @@ const (
 	SEEK_END int = io.SeekEnd
 )
 
+// lstat is overridden in tests.
+var lstat = Lstat
+
 // Mkdir creates a directory. If the operation fails, it will return an error of
 // type *PathError.
 func Mkdir(path string, perm FileMode) error {
@@ -66,12 +69,6 @@ func RemoveAll(path string) error {
 	return ErrNotImplemented
 }
 
-// File represents an open file descriptor.
-type File struct {
-	handle FileHandle
-	name   string
-}
-
 // Name returns the name of the file with which it was opened.
 func (f *File) Name() string {
 	return f.name
@@ -88,7 +85,7 @@ func OpenFile(name string, flag int, perm FileMode) (*File, error) {
 	if err != nil {
 		return nil, &PathError{"open", name, err}
 	}
-	return &File{name: name, handle: handle}, nil
+	return NewFile(handle, name), nil
 }
 
 // Open opens the file named for reading.
@@ -168,16 +165,6 @@ func (f *File) Close() (err error) {
 		err = &PathError{"close", f.name, err}
 	}
 	return
-}
-
-// Readdir is a stub, not yet implemented
-func (f *File) Readdir(n int) ([]FileInfo, error) {
-	return nil, &PathError{"readdir", f.name, ErrNotImplemented}
-}
-
-// Readdirnames is a stub, not yet implemented
-func (f *File) Readdirnames(n int) (names []string, err error) {
-	return nil, &PathError{"readdirnames", f.name, ErrNotImplemented}
 }
 
 // Seek sets the offset for the next Read or Write on file to offset, interpreted

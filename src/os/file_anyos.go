@@ -21,9 +21,9 @@ func init() {
 // Stdin, Stdout, and Stderr are open Files pointing to the standard input,
 // standard output, and standard error file descriptors.
 var (
-	Stdin  = &File{unixFileHandle(syscall.Stdin), "/dev/stdin"}
-	Stdout = &File{unixFileHandle(syscall.Stdout), "/dev/stdout"}
-	Stderr = &File{unixFileHandle(syscall.Stderr), "/dev/stderr"}
+	Stdin  = NewFile(unixFileHandle(syscall.Stdin), "/dev/stdin")
+	Stdout = NewFile(unixFileHandle(syscall.Stdout), "/dev/stdout")
+	Stderr = NewFile(unixFileHandle(syscall.Stderr), "/dev/stderr")
 )
 
 const DevNull = "/dev/null"

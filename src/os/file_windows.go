@@ -33,20 +33,29 @@ func rename(oldname, newname string) error {
 	return nil
 }
 
+type file struct {
+	handle FileHandle
+	name   string
+}
+
+func NewFile(fd FileHandle, name string) *File {
+	return &File{&file{fd, name}}
+}
+
 func Pipe() (r *File, w *File, err error) {
 	var p [2]syscall.Handle
 	e := handleSyscallError(syscall.Pipe(p[:]))
 	if e != nil {
 		return nil, nil, err
 	}
-	r = &File{
-		handle: unixFileHandle(p[0]),
-		name:   "|0",
-	}
-	w = &File{
-		handle: unixFileHandle(p[1]),
-		name:   "|1",
-	}
+	r = NewFile(
+		unixFileHandle(p[0]),
+		"|0",
+	)
+	w = NewFile(
+		unixFileHandle(p[1]),
+		"|1",
+	)
 	return
 }
 

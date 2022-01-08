@@ -9,9 +9,9 @@ import (
 // Stdin, Stdout, and Stderr are open Files pointing to the standard input,
 // standard output, and standard error file descriptors.
 var (
-	Stdin  = &File{stdioFileHandle(0), "/dev/stdin"}
-	Stdout = &File{stdioFileHandle(1), "/dev/stdout"}
-	Stderr = &File{stdioFileHandle(2), "/dev/stderr"}
+	Stdin  = NewFile(stdioFileHandle(0), "/dev/stdin")
+	Stdout = NewFile(stdioFileHandle(1), "/dev/stdout")
+	Stderr = NewFile(stdioFileHandle(2), "/dev/stderr")
 )
 
 // isOS indicates whether we're running on a real operating system with
@@ -21,6 +21,19 @@ const isOS = false
 // stdioFileHandle represents one of stdin, stdout, or stderr depending on the
 // number. It implements the FileHandle interface.
 type stdioFileHandle uint8
+
+// file is the real representation of *File.
+// The extra level of indirection ensures that no clients of os
+// can overwrite this data, which could cause the finalizer
+// to close the wrong file descriptor.
+type file struct {
+	handle FileHandle
+	name   string
+}
+
+func NewFile(fd FileHandle, name string) *File {
+	return &File{&file{fd, name}}
+}
 
 // Read is unsupported on this system.
 func (f stdioFileHandle) Read(b []byte) (n int, err error) {
