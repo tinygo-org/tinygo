@@ -254,8 +254,12 @@ TEST_PACKAGES_WASI = \
 .PHONY: tinygo-test
 tinygo-test:
 	$(TINYGO) test $(TEST_PACKAGES)
+tinygo-bench:
+	$(TINYGO) test -bench . $(TEST_PACKAGES)
 tinygo-test-wasi:
 	$(TINYGO) test -target wasi $(TEST_PACKAGES_WASI)
+tinygo-bench-wasi:
+	$(TINYGO) test -target wasi -bench . $(TEST_PACKAGES_WASI)
 
 .PHONY: smoketest
 smoketest:

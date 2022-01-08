@@ -48,6 +48,7 @@ type common struct {
 	failed   bool   // Test or benchmark has failed.
 	skipped  bool   // Test of benchmark has been skipped.
 	finished bool   // Test function has completed.
+	level    int    // Nesting depth of test or benchmark.
 	name     string // Name of test or benchmark.
 }
 

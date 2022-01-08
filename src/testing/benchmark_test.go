@@ -48,3 +48,8 @@ func TestBenchmark(t *testing.T) {
 		t.Errorf("Expected speedup >= 0.3, got %f", speedup)
 	}
 }
+
+func BenchmarkSub(b *testing.B) {
+	b.Run("Fast", func(b *testing.B) { BenchmarkFastNonASCII(b) })
+	b.Run("Slow", func(b *testing.B) { BenchmarkSlowNonASCII(b) })
+}
