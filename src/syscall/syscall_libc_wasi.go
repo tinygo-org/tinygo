@@ -202,6 +202,31 @@ const (
 	S_IXUSR  = 0x40
 )
 
+// dummy
+const (
+	DT_BLK     = 0x6
+	DT_CHR     = 0x2
+	DT_DIR     = 0x4
+	DT_FIFO    = 0x1
+	DT_LNK     = 0xa
+	DT_REG     = 0x8
+	DT_SOCK    = 0xc
+	DT_UNKNOWN = 0x0
+	DT_WHT     = 0xe
+)
+
+// dummy
+type Dirent struct {
+	Ino    uint64
+	Reclen uint16
+	Type   uint8
+	Name   [1024]int8
+}
+
+func ReadDirent(fd int, buf []byte) (n int, err error) {
+	return -1, ENOSYS
+}
+
 func Stat(path string, p *Stat_t) (err error) {
 	data := cstring(path)
 	n := libc_stat(&data[0], unsafe.Pointer(p))

@@ -19,6 +19,14 @@ func Close(fd int) (err error) {
 	return
 }
 
+func Dup(fd int) (fd2 int, err error) {
+	fd2 = int(libc_dup(int32(fd)))
+	if fd2 < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Write(fd int, p []byte) (n int, err error) {
 	buf, count := splitSlice(p)
 	n = libc_write(int32(fd), buf, uint(count))
@@ -296,6 +304,10 @@ func libc_open(pathname *byte, flags int32, mode uint32) int32
 // int close(int fd)
 //export close
 func libc_close(fd int32) int32
+
+// int dup(int fd)
+//export dup
+func libc_dup(fd int32) int32
 
 // void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 //export mmap

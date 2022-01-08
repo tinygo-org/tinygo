@@ -27,20 +27,28 @@ func rename(oldname, newname string) error {
 	return nil
 }
 
+// file is the real representation of *File.
+// The extra level of indirection ensures that no clients of os
+// can overwrite this data, which could cause the finalizer
+// to close the wrong file descriptor.
+type file struct {
+	handle  FileHandle
+	name    string
+	dirinfo *dirInfo // nil unless directory being read
+}
+
+func NewFile(fd FileHandle, name string) *File {
+	return &File{&file{fd, name, nil}}
+}
+
 func Pipe() (r *File, w *File, err error) {
 	var p [2]int
 	err = handleSyscallError(syscall.Pipe2(p[:], syscall.O_CLOEXEC))
 	if err != nil {
 		return
 	}
-	r = &File{
-		handle: unixFileHandle(p[0]),
-		name:   "|0",
-	}
-	w = &File{
-		handle: unixFileHandle(p[1]),
-		name:   "|1",
-	}
+	r = NewFile(unixFileHandle(p[0]), "|0")
+	w = NewFile(unixFileHandle(p[1]), "|1")
 	return
 }
 
@@ -107,4 +115,42 @@ func (f unixFileHandle) ReadAt(b []byte, offset int64) (n int, err error) {
 func (f unixFileHandle) Seek(offset int64, whence int) (int64, error) {
 	newoffset, err := syscall.Seek(syscallFd(f), offset, whence)
 	return newoffset, handleSyscallError(err)
+}
+
+type unixDirent struct {
+	parent string
+	name   string
+	typ    FileMode
+	info   FileInfo
+}
+
+func (d *unixDirent) Name() string   { return d.name }
+func (d *unixDirent) IsDir() bool    { return d.typ.IsDir() }
+func (d *unixDirent) Type() FileMode { return d.typ }
+
+func (d *unixDirent) Info() (FileInfo, error) {
+	if d.info != nil {
+		return d.info, nil
+	}
+	return lstat(d.parent + "/" + d.name)
+}
+
+func newUnixDirent(parent, name string, typ FileMode) (DirEntry, error) {
+	ude := &unixDirent{
+		parent: parent,
+		name:   name,
+		typ:    typ,
+	}
+	if typ != ^FileMode(0) && !testingForceReadDirLstat {
+		return ude, nil
+	}
+
+	info, err := lstat(parent + "/" + name)
+	if err != nil {
+		return nil, err
+	}
+
+	ude.typ = info.Mode().Type()
+	ude.info = info
+	return ude, nil
 }

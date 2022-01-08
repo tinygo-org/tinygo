@@ -40,6 +40,19 @@ func (e Errno) Is(target error) bool {
 	return false
 }
 
+// Source: upstream zerrors_darwin_amd64.go
+const (
+	DT_BLK     = 0x6
+	DT_CHR     = 0x2
+	DT_DIR     = 0x4
+	DT_FIFO    = 0x1
+	DT_LNK     = 0xa
+	DT_REG     = 0x8
+	DT_SOCK    = 0xc
+	DT_UNKNOWN = 0x0
+	DT_WHT     = 0xe
+)
+
 // Source: https://opensource.apple.com/source/xnu/xnu-7195.81.3/bsd/sys/errno.h.auto.html
 const (
 	EPERM       Errno = 1
@@ -105,6 +118,17 @@ const (
 type Timespec struct {
 	Sec  int64
 	Nsec int64
+}
+
+// Source: upstream ztypes_darwin_amd64.go
+type Dirent struct {
+	Ino       uint64
+	Seekoff   uint64
+	Reclen    uint16
+	Namlen    uint16
+	Type      uint8
+	Name      [1024]int8
+	Pad_cgo_0 [3]byte
 }
 
 // Go chose Linux's field names for Stat_t, see https://github.com/golang/go/issues/31735
@@ -190,8 +214,35 @@ func Lstat(path string, p *Stat_t) (err error) {
 	return
 }
 
-// The odd $INODE64 suffix is an Apple compatibility feature, see https://assert.cc/posts/darwin_use_64_bit_inode_vs_ctypes/
+func Fdopendir(fd int) (dir uintptr, err error) {
+	r0 := libc_fdopendir(int32(fd))
+	dir = uintptr(r0)
+	if dir == 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func readdir_r(dir uintptr, entry *Dirent, result **Dirent) (err error) {
+	e1 := libc_readdir_r(unsafe.Pointer(dir), unsafe.Pointer(entry), unsafe.Pointer(result))
+	if e1 != 0 {
+		err = getErrno()
+	}
+	return
+}
+
+// The odd $INODE64 suffix is an Apple compatibility feature, see
+// https://assert.cc/posts/darwin_use_64_bit_inode_vs_ctypes/
+// and https://github.com/golang/go/issues/35269
 // Without it, you get the old, smaller struct stat from mac os 10.2 or so.
+
+// struct DIR * buf fdopendir(int fd);
+//export fdopendir$INODE64
+func libc_fdopendir(fd int32) unsafe.Pointer
+
+// int readdir_r(struct DIR * buf, struct dirent *entry, struct dirent **result);
+//export readdir_r$INODE64
+func libc_readdir_r(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer) int32
 
 // int stat(const char *path, struct stat * buf);
 //export stat$INODE64
