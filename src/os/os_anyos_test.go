@@ -13,6 +13,17 @@ import (
 	"time"
 )
 
+var dot = []string{
+	"dir.go",
+	"env.go",
+	"errors.go",
+	"file.go",
+	"os_test.go",
+	"types.go",
+	"stat_darwin.go",
+	"stat_linux.go",
+}
+
 func randomName() string {
 	// fastrand() does not seem available here, so fake it
 	ns := time.Now().Nanosecond()
