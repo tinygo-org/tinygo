@@ -101,6 +101,7 @@ var Musl = Library{
 			"-I" + muslDir + "/src/internal",
 			"-I" + headerPath,
 			"-I" + muslDir + "/include",
+			"-fno-stack-protector",
 		}
 	},
 	sourceDir: "lib/musl/src",
