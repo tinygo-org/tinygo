@@ -94,6 +94,16 @@ func (pwm *pwmGroup) Channel(pin Pin) (channel uint8, err error) {
 	return pwmGPIOToChannel(pin), nil
 }
 
+// PWMGroup returns the RP2040 PWM Group for the given pin. If pin does
+// not belong to PWM peripheral ErrInvalidOutputPin error is returned.
+func PWMGroup(pin Pin) (pwm *pwmGroup, err error) {
+	sliceNum, err := PWMPeripheral(pin)
+	if err != nil {
+		return nil, err
+	}
+	return getPWMGroup(uintptr(sliceNum)), nil
+}
+
 // Peripheral returns the RP2040 PWM peripheral which ranges from 0 to 7. Each
 // PWM peripheral has 2 channels, A and B which correspond to 0 and 1 in the program.
 // This number corresponds to the package's PWM0 throughout PWM7 handles
