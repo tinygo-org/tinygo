@@ -117,6 +117,25 @@ const (
 	PE15 = portE + 15
 )
 
+// IRQs are defined here as they vary in the SVDs, but do have consistent mapping
+// to Timer Interrupts.
+const (
+	irq_TIM1_BRK_TIM15     = 24
+	irq_TIM1_UP_TIM16      = 25
+	irq_TIM1_TRG_COM_TIM17 = 26
+	irq_TIM1_CC            = 27
+	irq_TIM2               = 28
+	irq_TIM3               = 29
+	irq_TIM4               = 30
+	irq_TIM5               = 50
+	irq_TIM6               = 54
+	irq_TIM7               = 55
+	irq_TIM8_BRK           = 43
+	irq_TIM8_UP            = 44
+	irq_TIM8_TRG_COM       = 45
+	irq_TIM8_CC            = 46
+)
+
 func (p Pin) getPort() *stm32.GPIO_Type {
 	switch p / 16 {
 	case 0:
@@ -185,8 +204,6 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 		stm32.RCC.APB1ENR1.SetBits(stm32.RCC_APB1ENR1_TIM2EN)
 	case unsafe.Pointer(stm32.LPTIM2): // LPTIM2 clock enable
 		stm32.RCC.APB1ENR2.SetBits(stm32.RCC_APB1ENR2_LPTIM2EN)
-	case unsafe.Pointer(stm32.I2C4): // I2C4 clock enable
-		stm32.RCC.APB1ENR2.SetBits(stm32.RCC_APB1ENR2_I2C4EN)
 	case unsafe.Pointer(stm32.LPUART1): // LPUART1 clock enable
 		stm32.RCC.APB1ENR2.SetBits(stm32.RCC_APB1ENR2_LPUART1EN)
 	case unsafe.Pointer(stm32.TIM16): // TIM16 clock enable
@@ -256,6 +273,29 @@ func (p Pin) registerInterrupt() interrupt.Interrupt {
 	}
 
 	return interrupt.Interrupt{}
+}
+
+//---------- UART related code
+
+// Configure the UART.
+func (uart *UART) configurePins(config UARTConfig) {
+	// enable the alternate functions on the TX and RX pins
+	config.TX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTTX}, uart.TxAltFuncSelector)
+	config.RX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTRX}, uart.RxAltFuncSelector)
+}
+
+// UART baudrate calc based on the bus and clockspeed
+// NOTE: keep this in sync with the runtime/runtime_stm32l5x2.go clock init code
+func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
+	return (CPUFrequency() / baudRate)
+}
+
+// Register names vary by ST processor, these are for STM L5
+func (uart *UART) setRegisters() {
+	uart.rxReg = &uart.Bus.RDR
+	uart.txReg = &uart.Bus.TDR
+	uart.statusReg = &uart.Bus.ISR
+	uart.txEmptyFlag = stm32.USART_ISR_TXE
 }
 
 //---------- SPI related types and code
@@ -445,19 +485,19 @@ var (
 func (t *TIM) registerUPInterrupt() interrupt.Interrupt {
 	switch t {
 	case &TIM1:
-		return interrupt.New(stm32.IRQ_TIM1_UP_TIM16, TIM1.handleUPInterrupt)
+		return interrupt.New(irq_TIM1_UP_TIM16, TIM1.handleUPInterrupt)
 	case &TIM2:
-		return interrupt.New(stm32.IRQ_TIM2, TIM2.handleUPInterrupt)
+		return interrupt.New(irq_TIM2, TIM2.handleUPInterrupt)
 	case &TIM3:
-		return interrupt.New(stm32.IRQ_TIM3, TIM3.handleUPInterrupt)
+		return interrupt.New(irq_TIM3, TIM3.handleUPInterrupt)
 	case &TIM6:
-		return interrupt.New(stm32.IRQ_TIM6_DACUNDER, TIM6.handleUPInterrupt)
+		return interrupt.New(irq_TIM6, TIM6.handleUPInterrupt)
 	case &TIM7:
-		return interrupt.New(stm32.IRQ_TIM7, TIM7.handleUPInterrupt)
+		return interrupt.New(irq_TIM7, TIM7.handleUPInterrupt)
 	case &TIM15:
-		return interrupt.New(stm32.IRQ_TIM1_BRK_TIM15, TIM15.handleUPInterrupt)
+		return interrupt.New(irq_TIM1_BRK_TIM15, TIM15.handleUPInterrupt)
 	case &TIM16:
-		return interrupt.New(stm32.IRQ_TIM1_UP_TIM16, TIM16.handleUPInterrupt)
+		return interrupt.New(irq_TIM1_UP_TIM16, TIM16.handleUPInterrupt)
 	}
 
 	return interrupt.Interrupt{}
@@ -466,19 +506,19 @@ func (t *TIM) registerUPInterrupt() interrupt.Interrupt {
 func (t *TIM) registerOCInterrupt() interrupt.Interrupt {
 	switch t {
 	case &TIM1:
-		return interrupt.New(stm32.IRQ_TIM1_CC, TIM1.handleUPInterrupt)
+		return interrupt.New(irq_TIM1_CC, TIM1.handleUPInterrupt)
 	case &TIM2:
-		return interrupt.New(stm32.IRQ_TIM2, TIM2.handleOCInterrupt)
+		return interrupt.New(irq_TIM2, TIM2.handleOCInterrupt)
 	case &TIM3:
-		return interrupt.New(stm32.IRQ_TIM3, TIM3.handleOCInterrupt)
+		return interrupt.New(irq_TIM3, TIM3.handleOCInterrupt)
 	case &TIM6:
-		return interrupt.New(stm32.IRQ_TIM6_DACUNDER, TIM6.handleOCInterrupt)
+		return interrupt.New(irq_TIM6, TIM6.handleOCInterrupt)
 	case &TIM7:
-		return interrupt.New(stm32.IRQ_TIM7, TIM7.handleOCInterrupt)
+		return interrupt.New(irq_TIM7, TIM7.handleOCInterrupt)
 	case &TIM15:
-		return interrupt.New(stm32.IRQ_TIM1_BRK_TIM15, TIM15.handleOCInterrupt)
+		return interrupt.New(irq_TIM1_BRK_TIM15, TIM15.handleOCInterrupt)
 	case &TIM16:
-		return interrupt.New(stm32.IRQ_TIM1_UP_TIM16, TIM16.handleOCInterrupt)
+		return interrupt.New(irq_TIM1_UP_TIM16, TIM16.handleOCInterrupt)
 	}
 
 	return interrupt.Interrupt{}

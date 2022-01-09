@@ -462,6 +462,8 @@ ifneq ($(STM32), 0)
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=lorae5              examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=swan                examples/blinky1
+	@$(MD5SUM) test.hex
 endif
 ifneq ($(AVR), 0)
 	$(TINYGO) build -size short -o test.hex -target=atmega1284p         examples/serial
