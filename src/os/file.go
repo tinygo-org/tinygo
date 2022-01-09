@@ -64,11 +64,6 @@ func Remove(path string) error {
 	return nil
 }
 
-// RemoveAll is a stub, it is not implemented.
-func RemoveAll(path string) error {
-	return ErrNotImplemented
-}
-
 // Name returns the name of the file with which it was opened.
 func (f *File) Name() string {
 	return f.name
