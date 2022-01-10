@@ -94,9 +94,14 @@ func Load(config *compileopts.Config, inputPkgs []string, clangHeaders string, t
 	if err != nil {
 		return nil, err
 	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, err
+	var wd string
+	if config.Options.Directory != "" {
+		wd = config.Options.Directory
+	} else {
+		wd, err = os.Getwd()
+		if err != nil {
+			return nil, err
+		}
 	}
 	p := &Program{
 		config:       config,

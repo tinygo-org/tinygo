@@ -1,0 +1,273 @@
+# This contains code from https://github.com/dgryski/tinygo-test-corpus
+
+# The MIT License (MIT)
+
+# Copyright (c) 2020 Damian Gryski <damian@gryski.com>
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+- repo: github.com/dgryski/go-bloomindex
+  tags: purego noasm
+- repo: github.com/dgryski/go-arc
+- repo: github.com/dgryski/go-camellia
+- repo: github.com/dgryski/go-change
+- repo: github.com/dgryski/go-chaskey
+  tags: appengine purego noasm
+  skipwasi: true # siphash has build tag issues
+- repo: github.com/dgryski/go-clefia
+- repo: github.com/dgryski/go-clockpro
+- repo: github.com/dgryski/go-cobs
+- repo: github.com/dgryski/go-cuckoof
+  tags: pureno noasm
+- repo: github.com/dgryski/go-discreterand
+- repo: github.com/dgryski/go-expirecache
+- repo: github.com/dgryski/go-factor
+- repo: github.com/dgryski/go-farm
+  tags: purego noasm
+- repo: github.com/dgryski/go-fuzzstr
+- repo: github.com/dgryski/go-hollow
+- repo: github.com/dgryski/go-idea
+- repo: github.com/dgryski/go-interp
+  skipwasi: true # too slow on wasi
+  slow: true
+- repo: github.com/dgryski/go-intpat
+- repo: github.com/dgryski/go-jump
+- repo: github.com/dgryski/go-kcipher2
+- repo: github.com/dgryski/go-ketama
+- repo: github.com/dgryski/go-krcrypt
+- repo: github.com/dgryski/go-linebreak
+- repo: github.com/dgryski/go-linlog
+- repo: github.com/dgryski/go-maglev
+  tags: appengine # for dchest/siphash
+  skipwasi: true
+- repo: github.com/dgryski/go-marvin32
+  tags: purego
+- repo: github.com/dgryski/go-md5crypt
+- repo: github.com/dgryski/go-metro
+  tags: purego noasm
+- repo: github.com/dgryski/go-misty1
+- repo: github.com/dgryski/go-mph
+  tags: purego noasm
+- repo: github.com/dgryski/go-mpchash
+  tags: appengine # for dchest/siphash
+  skipwasi: true
+- repo: github.com/dgryski/go-neeva
+- repo: github.com/dgryski/go-nibz
+- repo: github.com/dgryski/go-nibblesort
+- repo: github.com/dgryski/go-pcgr
+- repo: github.com/dgryski/go-present
+- repo: github.com/dgryski/go-quicklz
+  skipwasi: true # not 32-bit compliant
+- repo: github.com/dgryski/go-radixsort
+- repo: github.com/dgryski/go-rbo
+- repo: github.com/dgryski/go-rc5
+- repo: github.com/dgryski/go-rc6
+- repo: github.com/dgryski/go-s4lru
+- repo: github.com/dgryski/go-sequitur
+- repo: github.com/dgryski/go-sip13
+  tags: purego noasm
+- repo: github.com/dgryski/go-skinny
+- repo: github.com/dgryski/go-skip32
+- repo: github.com/dgryski/go-skipjack
+- repo: github.com/dgryski/go-sparx
+- repo: github.com/dgryski/go-spooky
+- repo: github.com/dgryski/go-spritz
+- repo: github.com/dgryski/go-timewindow
+- repo: github.com/dgryski/go-tinymap
+- repo: github.com/dgryski/go-trigram
+- repo: github.com/dgryski/go-twine
+- repo: github.com/dgryski/go-xoroshiro
+- repo: github.com/dgryski/go-xoshiro
+- repo: github.com/dgryski/go-zlatlong
+- repo: github.com/dgryski/go-postings
+  tags: purego noasm
+- repo: golang.org/x/crypto
+  tags: purego noasm
+  subdirs:
+  - pkg: argon2
+  - pkg: bcrypt
+  - pkg: blake2b
+  - pkg: blake2s
+  - pkg: blowfish
+  - pkg: bn256
+  - pkg: cast5
+  - pkg: chacha20poly1305
+  - pkg: curve25519
+  - pkg: ed25519
+  - pkg: hkdf
+  - pkg: internal/subtle
+  - pkg: md4
+  - pkg: nacl/auth
+  - pkg: nacl/box
+  - pkg: nacl/secretbox
+  - pkg: nacl/sign
+  - pkg: openpgp/armor
+  - pkg: openpgp/elgamal
+  - pkg: openpgp/s2k
+  - pkg: pbkdf2
+  - pkg: pkcs12/internal/rc2
+  - pkg: ripemd160
+  - pkg: salsa20
+  - pkg: scrypt
+  - pkg: ssh/internal/bcrypt_pbkdf
+  - pkg: tea
+  - pkg: twofish
+  - pkg: xtea
+    # chacha20 -- panic: chacha20: SetCounter attempted to rollback counter
+    # cryptobyte -- panic: unimplemented: reflect.OverflowInt()
+    # salsa20/salsa -- panic: runtime error: index out of range
+    # sha3 -- panic: unimplemented: (reflect.Type).NumMethod()
+- repo: github.com/google/shlex
+- repo: github.com/google/btree
+- repo: github.com/google/der-ascii
+  subdirs:
+  - pkg: cmd/ascii2der
+  - pkg: cmd/der2ascii
+  - pkg: internal
+- repo: github.com/google/hilbert
+- repo: github.com/google/go-intervals
+  subdirs:
+    - pkg: intervalset
+    - pkg: timespanset
+      skipwasi: true # needs timezone stuff
+- repo: github.com/google/okay
+- repo: golang.org/x/text
+  subdirs:
+  - pkg: encoding
+  - pkg: encoding/charmap
+  - pkg: encoding/htmlindex
+  - pkg: encoding/ianaindex
+  - pkg: encoding/japanese
+  - pkg: encoding/korean
+  - pkg: encoding/simplifiedchinese
+  - pkg: encoding/traditionalchinese
+  - pkg: encoding/unicode
+  - pkg: encoding/unicode/utf32
+  - pkg: internal/format
+  - pkg: internal/ucd
+  - pkg: internal/tag
+  - pkg: search
+  - pkg: unicode/rangetable
+  - pkg: message/catalog
+    # 'collate/build', # -- panic: (reflect.Value).Interface: unexported
+    # 'feature/plural', # TestSelect, TestOrdinal, TestCardinal fail
+    # 'internal/catmsg', # TestCodec fails
+    # 'internal/gen/bitfield', # panic: unimplemented: (reflect.Type).Name()
+    # 'number', # fails due to printf %T formatting
+- repo: golang.org/x/image
+  tags: noasm
+  subdirs:
+  # - bmp: needs  _time.startTimer
+  - pkg: ccitt
+  - pkg: colornames
+  - pkg: draw
+  - pkg: font
+  - pkg: font/basicfont
+  - pkg: font/opentype
+  - pkg: font/plan9font
+  - pkg: math/fixed
+  - pkg: riff
+  - pkg: webp
+  - pkg: tiff
+- repo: github.com/golang/geo
+  subdirs:
+  - pkg: r1
+  - pkg: r2
+  - pkg: r3
+  - pkg: s1
+    #  's2' -- reflect.DeepEqual() -> MapKeys
+- repo: github.com/golang/groupcache
+  subdirs:
+  - pkg: consistenthash
+  - pkg: lru
+- repo: github.com/armon/go-radix
+- repo: github.com/armon/circbuf
+- repo: github.com/VividCortex/gohistogram
+- repo: github.com/cespare/xxhash
+  tags: appengine
+- repo: gonum.org/v1/gonum
+  tags: noasm
+- repo: gonum.org/v1/gonum
+  tags: noasm appengine
+  subdirs:
+  - pkg: blas/blas32
+  - pkg: blas/cblas64
+  - pkg: blas/cblas128
+  - pkg: cmplxs/cscalar
+  - pkg: dsp/window
+  - pkg: floats/scalar
+  - pkg: integrate
+  - pkg: integrate/quad
+  - pkg: internal/cmplx64
+  - pkg: internal/testrand
+  - pkg: lapack/gonum
+    skipwasi: true # takes too long
+    slow: true
+  - pkg: mathext
+  - pkg: mathext/prng
+  - pkg: optimize/convex/lp
+    skipwasi: true # takes too long
+  - pkg: optimize/functions
+  - pkg: spatial/r2
+  - pkg: spatial/r3
+  - pkg: stat/distmat
+  - pkg: stat/mds
+  - pkg: stat/spatial
+  - pkg: stat/distmv
+    skipwasi: true # takes too long
+    slow: true
+  - pkg: stat/samplemv
+    skipwasi: true # takes too long
+            # 'blas/blas64', # -- TestDasum panic: blas: n < 0
+            # 'blas/gonum', # -- panic: blas: n < 0
+            # 'cmplxs', # -- TestAdd panic: cmplxs: slice lengths do not match
+            # 'diff/fd', # -- panic: fd: slice length mismatch
+            # 'floats', # -- panic: floats: destination slice length does not match input
+            # 'graph', # ld.lld-11:  -- error: undefined symbol: reflect.mapiterkey (among other reflect errors)
+            # 'graph/topo', # -- Reflect: Same as above
+            # 'internal/math32', # -- /usr/local/go/src/testing/quick/quick.go:273:11: fType.NumOut undefined (type reflect.Type has no field or method NumOut)
+            # 'interp', # -- panic: interp: input slices have different lengths
+            # 'mat', # -- panic: mat: row index out of range
+            # 'num/dual', # -- TestFormat unexpected result for fmt.Sprintf("%#v", T{Real:1.1, Emag:2.1}): got:"T{Real:1.1, Emag:2.1}", want:"dual.Number{Real:1.1, Emag:2.1}"    unexpected result for fmt.Sprintf("%#v", T{Real:-1.1, Emag:-2.1}): got:"T{Real:-1.1, Emag:-2.1}", want:"dual.Number{Real:-1.1, Emag:-2.1}"
+            # 'num/dualcmplx', # -- TestFormat (similar to above)
+            # 'num/dualquat', # -- TestFormat (similar to above)
+            # 'num/hyperdual', # -- TestFormat (similar to above)
+            # 'num/quat', # -- TestFormat (similar to above)
+            # 'optimize', # // ld.lld-11: error: undefined symbol: golang.org/x/tools/container/intsets.havePOPCNT error: failed to link ...
+            # 'spatial/barneshut', # -- panic: unimplemented: (reflect.Value).MapKeys()
+            # 'spatial/kdtree', # -- panic: unimplemented: (reflect.Value).MapKeys()
+            # 'spatial/vptree', # -- panic: unimplemented: (reflect.Value).MapKeys()
+            # 'stat', # -- panic: stat: slice length mismatch
+            # 'stat/card', # -- /usr/local/go/src/encoding/gob/decode.go:562:21: MakeMapWithSize not declared by package reflect
+            # 'stat/distuv', # -- panic: distuv: cannot compute Mode for Beta != 0\
+            # 'stat/sampleuv', # -- TestWeightedTimeSeeded requires t.Skip(), otherwise passes
+            # 'unit', # -- All Format tests fail. Similar to `num` subpackages.
+
+- repo: github.com/cloudflare/bm
+- repo: github.com/cloudflare/bn256
+  tags: generic
+# "cloudflare/ahocorasick" -- interp timeout building regexps in test
+# - repo: github.com/google/open-location-code # unfortunately, Go discards the test files
+#   version: master
+#   skipwasi: true # needs file access
+#   subdirs:
+#   - pkg: go
+- repo: github.com/chewxy/math32
+  tags: noasm
+  version: master
