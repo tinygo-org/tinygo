@@ -524,7 +524,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				return nil, mem, r.errorAt(inst, err)
 			}
 			size := operands[1].(literalValue).value.(uint64)
-			if mem.hasExternalStore(ptr) {
+			if inst.llvmInst.IsVolatile() || inst.llvmInst.Ordering() != llvm.AtomicOrderingNotAtomic || mem.hasExternalStore(ptr) {
 				// If there could be an external store (for example, because a
 				// pointer to the object was passed to a function that could not
 				// be interpreted at compile time) then the load must be done at
@@ -554,7 +554,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if err != nil {
 				return nil, mem, r.errorAt(inst, err)
 			}
-			if mem.hasExternalLoadOrStore(ptr) {
+			if inst.llvmInst.IsVolatile() || inst.llvmInst.Ordering() != llvm.AtomicOrderingNotAtomic || mem.hasExternalLoadOrStore(ptr) {
 				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
 				if err != nil {
 					return nil, mem, err
@@ -928,11 +928,17 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
 		}
+		if ordering := inst.llvmInst.Ordering(); ordering != llvm.AtomicOrderingNotAtomic {
+			result.SetOrdering(ordering)
+		}
 	case llvm.Store:
 		mem.markExternalStore(operands[1])
 		result = r.builder.CreateStore(operands[0], operands[1])
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
+		}
+		if ordering := inst.llvmInst.Ordering(); ordering != llvm.AtomicOrderingNotAtomic {
+			result.SetOrdering(ordering)
 		}
 	case llvm.BitCast:
 		result = r.builder.CreateBitCast(operands[0], inst.llvmInst.Type(), inst.name)
