@@ -1514,21 +1514,23 @@ func main() {
 		}
 		if *flagJSON {
 			json, _ := json.MarshalIndent(struct {
-				GOROOT    string   `json:"goroot"`
-				GOOS      string   `json:"goos"`
-				GOARCH    string   `json:"goarch"`
-				GOARM     string   `json:"goarm"`
-				BuildTags []string `json:"build_tags"`
-				GC        string   `json:"garbage_collector"`
-				Scheduler string   `json:"scheduler"`
+				GOROOT     string   `json:"goroot"`
+				GOOS       string   `json:"goos"`
+				GOARCH     string   `json:"goarch"`
+				GOARM      string   `json:"goarm"`
+				BuildTags  []string `json:"build_tags"`
+				GC         string   `json:"garbage_collector"`
+				Scheduler  string   `json:"scheduler"`
+				LLVMTriple string   `json:"llvm_triple"`
 			}{
-				GOROOT:    cachedGOROOT,
-				GOOS:      config.GOOS(),
-				GOARCH:    config.GOARCH(),
-				GOARM:     config.GOARM(),
-				BuildTags: config.BuildTags(),
-				GC:        config.GC(),
-				Scheduler: config.Scheduler(),
+				GOROOT:     cachedGOROOT,
+				GOOS:       config.GOOS(),
+				GOARCH:     config.GOARCH(),
+				GOARM:      config.GOARM(),
+				BuildTags:  config.BuildTags(),
+				GC:         config.GC(),
+				Scheduler:  config.Scheduler(),
+				LLVMTriple: config.Triple(),
 			}, "", "  ")
 			fmt.Println(string(json))
 		} else {
