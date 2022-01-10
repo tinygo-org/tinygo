@@ -211,7 +211,7 @@ func (t *T) Run(name string, f func(t *T)) bool {
 	// Create a subtest.
 	sub := T{
 		common: common{
-			name:   t.name + "/" + name,
+			name:   t.name + "/" + rewrite(name),
 			indent: t.indent + "    ",
 		},
 	}
