@@ -329,7 +329,7 @@ func (b *B) processBench(ctx *benchContext) {
 // least once will not be measured itself and will be called once with N=1.
 func (b *B) Run(name string, f func(b *B)) bool {
 	if b.level > 0 {
-		name = b.name + "/" + name
+		name = b.name + "/" + rewrite(name)
 	}
 	b.hasSub = true
 	sub := &B{
