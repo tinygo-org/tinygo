@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -1193,8 +1194,10 @@ func main() {
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 
 	var flagJSON, flagDeps, flagTest *bool
-	if command == "help" || command == "list" {
+	if command == "help" || command == "list" || command == "info" {
 		flagJSON = flag.Bool("json", false, "print data in JSON format")
+	}
+	if command == "help" || command == "list" {
 		flagDeps = flag.Bool("deps", false, "supply -deps flag to go list")
 		flagTest = flag.Bool("test", false, "supply -test flag to go list")
 	}
@@ -1509,14 +1512,37 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Printf("LLVM triple:       %s\n", config.Triple())
-		fmt.Printf("GOOS:              %s\n", config.GOOS())
-		fmt.Printf("GOARCH:            %s\n", config.GOARCH())
-		fmt.Printf("GOARM:             %s\n", config.GOARM())
-		fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
-		fmt.Printf("garbage collector: %s\n", config.GC())
-		fmt.Printf("scheduler:         %s\n", config.Scheduler())
-		fmt.Printf("cached GOROOT:     %s\n", cachedGOROOT)
+		if *flagJSON {
+			json, _ := json.MarshalIndent(struct {
+				GOROOT     string   `json:"goroot"`
+				GOOS       string   `json:"goos"`
+				GOARCH     string   `json:"goarch"`
+				GOARM      string   `json:"goarm"`
+				BuildTags  []string `json:"build_tags"`
+				GC         string   `json:"garbage_collector"`
+				Scheduler  string   `json:"scheduler"`
+				LLVMTriple string   `json:"llvm_triple"`
+			}{
+				GOROOT:     cachedGOROOT,
+				GOOS:       config.GOOS(),
+				GOARCH:     config.GOARCH(),
+				GOARM:      config.GOARM(),
+				BuildTags:  config.BuildTags(),
+				GC:         config.GC(),
+				Scheduler:  config.Scheduler(),
+				LLVMTriple: config.Triple(),
+			}, "", "  ")
+			fmt.Println(string(json))
+		} else {
+			fmt.Printf("LLVM triple:       %s\n", config.Triple())
+			fmt.Printf("GOOS:              %s\n", config.GOOS())
+			fmt.Printf("GOARCH:            %s\n", config.GOARCH())
+			fmt.Printf("GOARM:             %s\n", config.GOARM())
+			fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
+			fmt.Printf("garbage collector: %s\n", config.GC())
+			fmt.Printf("scheduler:         %s\n", config.Scheduler())
+			fmt.Printf("cached GOROOT:     %s\n", cachedGOROOT)
+		}
 	case "list":
 		config, err := builder.NewConfig(options)
 		if err != nil {
