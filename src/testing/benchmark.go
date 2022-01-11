@@ -7,6 +7,7 @@
 package testing
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"math"
@@ -14,8 +15,13 @@ import (
 	"time"
 )
 
+func initBenchmarkFlags() {
+	matchBenchmarks = flag.String("test.bench", "", "run only benchmarks matching `regexp`")
+}
+
 var (
-	benchTime = benchTimeFlag{d: 1 * time.Second} // changed during test of testing package
+	matchBenchmarks *string
+	benchTime       = benchTimeFlag{d: 1 * time.Second} // changed during test of testing package
 )
 
 type benchTimeFlag struct {
@@ -271,17 +277,27 @@ func prettyPrint(w io.Writer, x float64, unit string) {
 }
 
 type benchContext struct {
+	match *matcher
+
 	maxLen int // The largest recorded benchmark name.
 }
 
-func runBenchmarks(benchmarks []InternalBenchmark) bool {
-	if len(benchmarks) == 0 {
+func runBenchmarks(matchString func(pat, str string) (bool, error), benchmarks []InternalBenchmark) bool {
+	// If no flag was specified, don't run benchmarks.
+	if len(*matchBenchmarks) == 0 {
 		return true
 	}
-	ctx := &benchContext{}
+	ctx := &benchContext{
+		match: newMatcher(matchString, *matchBenchmarks, "-test.bench"),
+	}
+	var bs []InternalBenchmark
 	for _, Benchmark := range benchmarks {
-		if l := len(Benchmark.Name); l > ctx.maxLen {
-			ctx.maxLen = l
+		if _, matched, _ := ctx.match.fullName(nil, Benchmark.Name); matched {
+			bs = append(bs, Benchmark)
+			benchName := Benchmark.Name
+			if l := len(benchName); l > ctx.maxLen {
+				ctx.maxLen = l
+			}
 		}
 	}
 	main := &B{
@@ -290,7 +306,7 @@ func runBenchmarks(benchmarks []InternalBenchmark) bool {
 		},
 		benchTime: benchTime,
 		benchFunc: func(b *B) {
-			for _, Benchmark := range benchmarks {
+			for _, Benchmark := range bs {
 				b.Run(Benchmark.Name, Benchmark.F)
 			}
 		},
@@ -328,18 +344,27 @@ func (b *B) processBench(ctx *benchContext) {
 // A subbenchmark is like any other benchmark. A benchmark that calls Run at
 // least once will not be measured itself and will be called once with N=1.
 func (b *B) Run(name string, f func(b *B)) bool {
-	if b.level > 0 {
-		name = b.name + "/" + rewrite(name)
+	benchName, ok, partial := b.name, true, false
+	if b.context != nil {
+		benchName, ok, partial = b.context.match.fullName(&b.common, name)
+	}
+	if !ok {
+		return true
 	}
 	b.hasSub = true
 	sub := &B{
 		common: common{
-			name:  name,
+			name:  benchName,
 			level: b.level + 1,
 		},
 		benchFunc: f,
 		benchTime: b.benchTime,
 		context:   b.context,
+	}
+	if partial {
+		// Partial name match, like -bench=X/Y matching BenchmarkX.
+		// Only process sub-benchmarks, if any.
+		sub.hasSub = true
 	}
 	if sub.run1() {
 		sub.run()
