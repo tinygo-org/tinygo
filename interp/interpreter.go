@@ -17,10 +17,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 	locals := make([]value, len(fn.locals))
 	r.callsExecuted++
 
-	if time.Since(r.start) > time.Minute {
-		// Running for more than a minute. This should never happen.
-		return nil, mem, r.errorAt(fn.blocks[0].instructions[0], fmt.Errorf("interp: running for more than a minute, timing out (executed calls: %d)", r.callsExecuted))
-	}
+	t0 := time.Since(r.start)
 
 	// Parameters are considered a kind of local values.
 	for i, param := range params {
@@ -106,6 +103,17 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		}
 		switch inst.opcode {
 		case llvm.Ret:
+			t1 := time.Since(r.start)
+			if t1-t0 > time.Second {
+				// Provide some breadcrumbs for user trying to find their slow init functions.
+				fmt.Fprintln(os.Stderr, "interp: slow: startms", int(t0.Milliseconds()), "endms", int(t1.Milliseconds()), "func", fn.name)
+			}
+			const maxInterpSeconds = 90
+			if t0 > maxInterpSeconds*time.Second {
+				// Running for more than maxInterpSeconds seconds. This should never happen.
+				return nil, mem, r.errorAt(fn.blocks[0].instructions[0], fmt.Errorf("interp: running for more than %d seconds, timing out (executed calls: %d)", maxInterpSeconds, r.callsExecuted))
+			}
+
 			if len(operands) != 0 {
 				if r.debug {
 					fmt.Fprintln(os.Stderr, indent+"ret", operands[0])
