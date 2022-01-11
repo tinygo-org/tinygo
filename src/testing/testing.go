@@ -19,10 +19,9 @@ import (
 
 // Testing flags.
 var (
-	flagVerbose     bool
-	flagShort       bool
-	flagRunRegexp   string
-	flagBenchRegexp string
+	flagVerbose   bool
+	flagShort     bool
+	flagRunRegexp string
 )
 
 var initRan bool
@@ -37,7 +36,8 @@ func Init() {
 	flag.BoolVar(&flagVerbose, "test.v", false, "verbose: print additional output")
 	flag.BoolVar(&flagShort, "test.short", false, "short: run smaller test suite to save time")
 	flag.StringVar(&flagRunRegexp, "test.run", "", "run: regexp of tests to run")
-	flag.StringVar(&flagBenchRegexp, "test.bench", "", "run: regexp of benchmarks to run")
+
+	initBenchmarkFlags()
 }
 
 // common holds the elements common between T and B and
@@ -318,31 +318,6 @@ func (m *M) Run() int {
 
 		m.Tests = filtered
 	}
-	if flagBenchRegexp != "" {
-		var filtered []InternalBenchmark
-
-		// pre-test the regexp; we don't want to bother logging one failure for every test name if the regexp is broken
-		if _, err := m.deps.MatchString(flagBenchRegexp, "some-test-name"); err != nil {
-			fmt.Println("testing: invalid regexp for -test.bench:", err.Error())
-			failures++
-		}
-
-		// filter the list of tests before we try to run them
-		for _, test := range m.Benchmarks {
-			// ignore the error; we already tested that the regexp compiles fine above
-			if match, _ := m.deps.MatchString(flagBenchRegexp, test.Name); match {
-				filtered = append(filtered, test)
-			}
-		}
-
-		m.Benchmarks = filtered
-		flagVerbose = true
-		if flagRunRegexp == "" {
-			m.Tests = []InternalTest{}
-		}
-	} else {
-		m.Benchmarks = []InternalBenchmark{}
-	}
 
 	if len(m.Tests) == 0 && len(m.Benchmarks) == 0 {
 		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
@@ -363,9 +338,10 @@ func (m *M) Run() int {
 		}
 	}
 
-	runBenchmarks(m.Benchmarks)
-
-	if failures > 0 {
+	if len(m.Tests) == 0 && *matchBenchmarks == "" {
+		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
+	}
+	if failures > 0 || !runBenchmarks(m.deps.MatchString, m.Benchmarks) {
 		fmt.Println("FAIL")
 	} else {
 		if flagVerbose {
