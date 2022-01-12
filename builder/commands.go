@@ -2,6 +2,7 @@ package builder
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
@@ -25,7 +26,16 @@ func init() {
 	// Add the path to a Homebrew-installed LLVM for ease of use (no need to
 	// manually set $PATH).
 	if runtime.GOOS == "darwin" {
-		prefix := "/usr/local/opt/llvm@" + llvmMajor + "/bin/"
+		var prefix string
+		switch runtime.GOARCH {
+		case "amd64":
+			prefix = "/usr/local/opt/llvm@" + llvmMajor + "/bin/"
+		case "arm64":
+			prefix = "/opt/homebrew/opt/llvm@" + llvmMajor + "/bin/"
+		default:
+			// unknown GOARCH
+			panic(fmt.Sprintf("unknown GOARCH: %s on darwin", runtime.GOARCH))
+		}
 		commands["clang"] = append(commands["clang"], prefix+"clang-"+llvmMajor)
 		commands["ld.lld"] = append(commands["ld.lld"], prefix+"ld.lld")
 		commands["wasm-ld"] = append(commands["wasm-ld"], prefix+"wasm-ld")
