@@ -18,7 +18,7 @@ import (
 //         if set) and xxx contains the type kind number:
 //             0 (0001): Chan
 //             1 (0011): Interface
-//             2 (0101): Ptr
+//             2 (0101): Pointer
 //             3 (0111): Slice
 //             4 (1001): Array
 //             5 (1011): Func
@@ -54,13 +54,16 @@ const (
 	UnsafePointer
 	Chan
 	Interface
-	Ptr
+	Pointer
 	Slice
 	Array
 	Func
 	Map
 	Struct
 )
+
+// Ptr is the old name for the Pointer kind.
+const Ptr = Pointer
 
 func (k Kind) String() string {
 	switch k {
@@ -104,7 +107,7 @@ func (k Kind) String() string {
 		return "chan"
 	case Interface:
 		return "interface"
-	case Ptr:
+	case Pointer:
 		return "ptr"
 	case Slice:
 		return "slice"
@@ -252,7 +255,7 @@ type Type interface {
 	//	Chan: ChanDir, Elem
 	//	Func: In, NumIn, Out, NumOut, IsVariadic.
 	//	Map: Key, Elem
-	//	Ptr: Elem
+	//	Pointer: Elem
 	//	Slice: Elem
 	//	Struct: Field, FieldByIndex, FieldByName, FieldByNameFunc, NumField
 
@@ -280,7 +283,7 @@ type Type interface {
 	IsVariadic() bool
 
 	// Elem returns a type's element type.
-	// It panics if the type's Kind is not Array, Chan, Map, Ptr, or Slice.
+	// It panics if the type's Kind is not Array, Chan, Map, Pointer, or Slice.
 	Elem() Type
 
 	// Field returns a struct type's i'th field.
@@ -350,13 +353,15 @@ func TypeOf(i interface{}) Type {
 	return ValueOf(i).typecode
 }
 
-func PtrTo(t Type) Type {
-	if t.Kind() == Ptr {
+func PtrTo(t Type) Type { return PointerTo(t) }
+
+func PointerTo(t Type) Type {
+	if t.Kind() == Pointer {
 		panic("reflect: cannot make **T type")
 	}
 	ptrType := t.(rawType)<<5 | 5 // 0b0101 == 5
 	if ptrType>>5 != t {
-		panic("reflect: PtrTo type does not fit")
+		panic("reflect: PointerTo type does not fit")
 	}
 	return ptrType
 }
@@ -382,7 +387,7 @@ func (t rawType) Elem() Type {
 
 func (t rawType) elem() rawType {
 	switch t.Kind() {
-	case Chan, Ptr, Slice:
+	case Chan, Pointer, Slice:
 		return t.stripPrefix()
 	case Array:
 		index := t.stripPrefix()
@@ -566,7 +571,7 @@ func (t rawType) Size() uintptr {
 		return 16
 	case String:
 		return unsafe.Sizeof("")
-	case UnsafePointer, Chan, Map, Ptr:
+	case UnsafePointer, Chan, Map, Pointer:
 		return unsafe.Sizeof(uintptr(0))
 	case Slice:
 		return unsafe.Sizeof([]int{})
@@ -615,7 +620,7 @@ func (t rawType) Align() int {
 		return int(unsafe.Alignof(complex128(0)))
 	case String:
 		return int(unsafe.Alignof(""))
-	case UnsafePointer, Chan, Map, Ptr:
+	case UnsafePointer, Chan, Map, Pointer:
 		return int(unsafe.Alignof(uintptr(0)))
 	case Slice:
 		return int(unsafe.Alignof([]int(nil)))
@@ -681,7 +686,7 @@ func (t rawType) Comparable() bool {
 		return true
 	case Interface:
 		return true
-	case Ptr:
+	case Pointer:
 		return true
 	case Slice:
 		return false
