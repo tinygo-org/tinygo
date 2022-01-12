@@ -3,6 +3,7 @@
 package os_test
 
 import (
+	"io/ioutil"
 	. "os"
 	"path/filepath"
 	"runtime"
@@ -19,7 +20,7 @@ func randomName() string {
 }
 
 func TestMkdir(t *testing.T) {
-	dir := "TestMkdir" + randomName()
+	dir := TempDir() + "/TestMkdir" + randomName()
 	Remove(dir)
 	err := Mkdir(dir, 0755)
 	defer Remove(dir)
@@ -35,7 +36,7 @@ func TestMkdir(t *testing.T) {
 
 func TestStatBadDir(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Log("TODO: TestStatBadDir fails on Windows, skipping")
+		t.Log("TODO: TestStatBadDir: IsNotExist fails on Windows, skipping")
 		return
 	}
 	dir := TempDir()
@@ -65,7 +66,7 @@ func writeFile(t *testing.T, fname string, flag int, text string) string {
 }
 
 func TestRemove(t *testing.T) {
-	f := "TestRemove" + randomName()
+	f := TempDir() + "/TestRemove" + randomName()
 
 	err := Remove(f)
 	if err == nil {
@@ -92,5 +93,90 @@ func TestRemove(t *testing.T) {
 	err = Remove(f)
 	if err != nil {
 		t.Fatalf("Remove: %v", err)
+	}
+}
+
+func TestRename(t *testing.T) {
+	// TODO: use t.TempDir()
+	from, to := TempDir()+"/"+"TestRename-from", TempDir()+"/"+"TestRename-to"
+
+	file, err := Create(from)
+	defer Remove(from) // TODO: switch to t.Tempdir, remove this line
+	if err != nil {
+		t.Fatalf("open %q failed: %v", from, err)
+	}
+	defer Remove(to) // TODO: switch to t.Tempdir, remove this line
+	if err = file.Close(); err != nil {
+		t.Errorf("close %q failed: %v", from, err)
+	}
+	err = Rename(from, to)
+	if err != nil {
+		t.Fatalf("rename %q, %q failed: %v", to, from, err)
+	}
+	_, err = Stat(to)
+	if err != nil {
+		t.Errorf("stat %q failed: %v", to, err)
+	}
+}
+
+func TestRenameOverwriteDest(t *testing.T) {
+	from, to := TempDir()+"/"+"TestRenameOverwrite-from", TempDir()+"/"+"TestRenameOverwrite-to"
+
+	toData := []byte("to")
+	fromData := []byte("from")
+
+	err := ioutil.WriteFile(to, toData, 0777)
+	defer Remove(to) // TODO: switch to t.Tempdir, remove this line
+	if err != nil {
+		t.Fatalf("write file %q failed: %v", to, err)
+	}
+
+	err = ioutil.WriteFile(from, fromData, 0777)
+	defer Remove(from) // TODO: switch to t.Tempdir, remove this line
+	if err != nil {
+		t.Fatalf("write file %q failed: %v", from, err)
+	}
+	err = Rename(from, to)
+	if err != nil {
+		t.Fatalf("rename %q, %q failed: %v", to, from, err)
+	}
+
+	_, err = Stat(from)
+	if err == nil {
+		t.Errorf("from file %q still exists", from)
+	}
+	if runtime.GOOS == "windows" {
+		t.Log("TODO: TestRenameOverwriteDest: IsNotExist fails on Windows, skipping")
+	} else if err != nil && !IsNotExist(err) {
+		t.Fatalf("stat from: %v", err)
+	}
+	toFi, err := Stat(to)
+	if err != nil {
+		t.Fatalf("stat %q failed: %v", to, err)
+	}
+	if toFi.Size() != int64(len(fromData)) {
+		t.Errorf(`"to" size = %d; want %d (old "from" size)`, toFi.Size(), len(fromData))
+	}
+}
+
+func TestRenameFailed(t *testing.T) {
+	from, to := TempDir()+"/"+"RenameFailed-from", TempDir()+"/"+"RenameFailed-to"
+
+	err := Rename(from, to)
+	switch err := err.(type) {
+	case *LinkError:
+		if err.Op != "rename" {
+			t.Errorf("rename %q, %q: err.Op: want %q, got %q", from, to, "rename", err.Op)
+		}
+		if err.Old != from {
+			t.Errorf("rename %q, %q: err.Old: want %q, got %q", from, to, from, err.Old)
+		}
+		if err.New != to {
+			t.Errorf("rename %q, %q: err.New: want %q, got %q", from, to, to, err.New)
+		}
+	case nil:
+		t.Errorf("rename %q, %q: expected error, got nil", from, to)
+	default:
+		t.Errorf("rename %q, %q: expected %T, got %T %v", from, to, new(LinkError), err, err)
 	}
 }

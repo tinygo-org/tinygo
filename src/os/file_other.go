@@ -50,6 +50,11 @@ func (f stdioFileHandle) Close() error {
 	return ErrUnsupported
 }
 
+// Seek wraps syscall.Seek.
+func (f stdioFileHandle) Seek(offset int64, whence int) (int64, error) {
+	return -1, ErrUnsupported
+}
+
 //go:linkname putchar runtime.putchar
 func putchar(c byte)
 

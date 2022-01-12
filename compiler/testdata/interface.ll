@@ -1,6 +1,6 @@
 ; ModuleID = 'interface.go'
 source_filename = "interface.go"
-target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
+target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128-ni:1:10:20"
 target triple = "wasm32-unknown-wasi"
 
 %runtime.typecodeID = type { %runtime.typecodeID*, i32, %runtime.interfaceMethodInfo*, %runtime.typecodeID*, i32 }

@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-source
         with:
-          key: llvm-source-12-linux-v1
+          key: llvm-source-13-linux-v1
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -51,7 +51,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-build
         with:
-          key: llvm-build-12-linux-v1
+          key: llvm-build-13-linux-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -140,12 +140,16 @@ jobs:
           submodules: true
       - name: Install apt dependencies
         run: |
+          echo "Show cpuinfo; sometimes useful when troubleshooting"
+          cat /proc/cpuinfo
+          sudo apt-get update
           sudo apt-get install --no-install-recommends \
               qemu-system-arm \
               qemu-system-riscv32 \
               qemu-user \
               gcc-avr \
               avr-libc \
+              simavr \
               ninja-build
       - name: Install Go
         uses: actions/setup-go@v2
@@ -170,7 +174,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-source
         with:
-          key: llvm-source-12-linux-asserts-v1
+          key: llvm-source-13-linux-asserts-v1
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -183,7 +187,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-build
         with:
-          key: llvm-build-12-linux-asserts-v1
+          key: llvm-build-13-linux-asserts-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -213,6 +217,7 @@ jobs:
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
         run: make wasi-libc
+      - run: make gen-device -j4
       - name: Test TinyGo
         run: make ASSERT=1 test
       - name: Build TinyGo
@@ -227,6 +232,5 @@ jobs:
           sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
           sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
           rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
-      - run: make gen-device -j4
       - run: make smoketest
       - run: make wasmtest

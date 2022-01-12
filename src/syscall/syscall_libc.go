@@ -46,8 +46,12 @@ func Pread(fd int, p []byte, offset int64) (n int, err error) {
 	return
 }
 
-func Seek(fd int, offset int64, whence int) (off int64, err error) {
-	return 0, ENOSYS // TODO
+func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
+	newoffset = libc_lseek(int32(fd), offset, whence)
+	if newoffset < 0 {
+		err = getErrno()
+	}
+	return
 }
 
 func Open(path string, flag int, mode uint32) (fd int, err error) {
@@ -89,6 +93,16 @@ func Mkdir(path string, mode uint32) (err error) {
 func Rmdir(path string) (err error) {
 	data := cstring(path)
 	fail := int(libc_rmdir(&data[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Rename(from, to string) (err error) {
+	fromdata := cstring(from)
+	todata := cstring(to)
+	fail := int(libc_rename(&fromdata[0], &todata[0]))
 	if fail < 0 {
 		err = getErrno()
 	}
@@ -238,6 +252,10 @@ func libc_read(fd int32, buf *byte, count uint) int
 //export pread
 func libc_pread(fd int32, buf *byte, count uint, offset int64) int
 
+// ssize_t lseek(int fd, off_t offset, int whence);
+//export lseek
+func libc_lseek(fd int32, offset int64, whence int) int64
+
 // int open(const char *pathname, int flags, mode_t mode);
 //export open
 func libc_open(pathname *byte, flags int32, mode uint32) int32
@@ -269,6 +287,10 @@ func libc_mkdir(pathname *byte, mode uint32) int32
 // int rmdir(const char *pathname);
 //export rmdir
 func libc_rmdir(pathname *byte) int32
+
+// int rename(const char *from, *to);
+//export rename
+func libc_rename(from, too *byte) int32
 
 // int unlink(const char *pathname);
 //export unlink

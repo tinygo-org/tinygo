@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 75 microcontroller boards are currently supported:
+The following 79 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
@@ -81,11 +81,14 @@ The following 75 microcontroller boards are currently supported:
 * [BBC micro:bit v2](https://microbit.org/new-microbit/)
 * [Digispark](http://digistump.com/products/1)
 * [Dragino LoRaWAN GPS Tracker LGT-92](http://www.dragino.com/products/lora-lorawan-end-node/item/142-lgt-92.html)
-* [ESP32](https://www.espressif.com/en/products/socs/esp32)
-* [ESP8266](https://www.espressif.com/en/products/socs/esp8266)
+* [ESP32 - Core board](https://www.espressif.com/en/products/socs/esp32)
+* [ESP32 - mini32](https://www.espressif.com/en/products/socs/esp32)
+* [ESP8266 - d1mini](https://www.espressif.com/en/products/socs/esp8266)
+* [ESP8266 - NodeMCU](https://www.espressif.com/en/products/socs/esp8266)
 * [Game Boy Advance](https://en.wikipedia.org/wiki/Game_Boy_Advance)
 * [M5Stack](https://docs.m5stack.com/en/core/basic)
 * [M5Stack Core2](https://shop.m5stack.com/products/m5stack-core2-esp32-iot-development-kit)
+* [M5Stamp C3](https://docs.m5stack.com/en/core/stamp_c3)
 * [Makerdiary nRF52840-MDK](https://wiki.makerdiary.com/nrf52840-mdk/)
 * [Makerdiary nRF52840-MDK USB Dongle](https://wiki.makerdiary.com/nrf52840-mdk-usb-dongle/)
 * [Microchip SAM E54 Xplained Pro](https://www.microchip.com/developmenttools/productdetails/atsame54-xpro)
@@ -105,11 +108,11 @@ The following 75 microcontroller boards are currently supported:
 * [ProductivityOpen P1AM-100](https://facts-engineering.github.io/modules/P1AM-100/P1AM-100.html)
 * [Raspberry Pi Pico](https://www.raspberrypi.org/products/raspberry-pi-pico/)
 * [Raytac MDBT50Q-RX Dongle (with TinyUF2 bootloader)](https://www.adafruit.com/product/5199)
-* [Seeed Wio Terminal](https://www.seeedstudio.com/Wio-Terminal-p-4509.html)
 * [Seeed Seeeduino XIAO](https://www.seeedstudio.com/Seeeduino-XIAO-Arduino-Microcontroller-SAMD21-Cortex-M0+-p-4426.html)
 * [Seeed LoRa-E5 Development Kit](https://www.seeedstudio.com/LoRa-E5-Dev-Kit-p-4868.html)
 * [Seeed Sipeed MAix BiT](https://www.seeedstudio.com/Sipeed-MAix-BiT-for-RISC-V-AI-IoT-p-2872.html)
-* [SiFIve HiFive1](https://www.sifive.com/boards/hifive1)
+* [Seeed Wio Terminal](https://www.seeedstudio.com/Wio-Terminal-p-4509.html)
+* [SiFIve HiFive1 Rev B](https://www.sifive.com/boards/hifive1)
 * [ST Micro "Nucleo" F103RB](https://www.st.com/en/evaluation-tools/nucleo-f103rb.html)
 * [ST Micro "Nucleo" F722ZE](https://www.st.com/en/evaluation-tools/nucleo-f722ze.html)
 * [ST Micro "Nucleo" L031K6](https://www.st.com/ja/evaluation-tools/nucleo-l031k6.html)
@@ -118,6 +121,7 @@ The following 75 microcontroller boards are currently supported:
 * [ST Micro "Nucleo" WL55JC](https://www.st.com/en/evaluation-tools/nucleo-wl55jc.html)
 * [ST Micro STM32F103XX "Bluepill"](https://stm32-base.org/boards/STM32F103C8T6-Blue-Pill)
 * [ST Micro STM32F407 "Discovery"](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
+* [ST Micro STM32F469 "Discovery"](https://www.st.com/content/st_com/en/products/evaluation-tools/product-evaluation-tools/mcu-mpu-eval-tools/stm32-mcu-mpu-eval-tools/stm32-discovery-kits/32f469idiscovery.html)
 * [X9 Pro smartwatch](https://github.com/curtpw/nRF5x-device-reverse-engineering/tree/master/X9-nrf52832-activity-tracker/)
 * [The Things Industries Generic Node Sensor Edition](https://www.genericnode.com/docs/sensor-edition/)
 
@@ -160,7 +164,6 @@ Goals:
 
 Non-goals:
 
-* Using more than one core.
 * Be efficient while using zillions of goroutines. However, good goroutine support is certainly a goal.
 * Be as fast as `gc`. However, LLVM will probably be better at optimizing certain things so TinyGo might actually turn out to be faster for number crunching.
 * Be able to compile every Go program out there.

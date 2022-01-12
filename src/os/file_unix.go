@@ -18,6 +18,15 @@ func fixLongPath(path string) string {
 	return path
 }
 
+func rename(oldname, newname string) error {
+	// TODO: import rest of upstream tests, handle fancy cases
+	err := syscall.Rename(oldname, newname)
+	if err != nil {
+		return &LinkError{"rename", oldname, newname, err}
+	}
+	return nil
+}
+
 func Pipe() (r *File, w *File, err error) {
 	var p [2]int
 	err = handleSyscallError(syscall.Pipe2(p[:], syscall.O_CLOEXEC))
@@ -50,8 +59,14 @@ func tempDir() string {
 func (f unixFileHandle) ReadAt(b []byte, offset int64) (n int, err error) {
 	n, err = syscall.Pread(syscallFd(f), b, offset)
 	err = handleSyscallError(err)
-	if n == 0 && err == nil {
+	if n == 0 && len(b) > 0 && err == nil {
 		err = io.EOF
 	}
 	return
+}
+
+// Seek wraps syscall.Seek.
+func (f unixFileHandle) Seek(offset int64, whence int) (int64, error) {
+	newoffset, err := syscall.Seek(syscallFd(f), offset, whence)
+	return newoffset, handleSyscallError(err)
 }

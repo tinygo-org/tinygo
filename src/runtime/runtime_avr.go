@@ -1,3 +1,4 @@
+//go:build avr
 // +build avr
 
 package runtime
@@ -41,6 +42,7 @@ var _ebss [0]byte
 //export main
 func main() {
 	preinit()
+	initHardware()
 	run()
 	exit(0)
 }
@@ -54,15 +56,13 @@ func preinit() {
 	}
 }
 
-func postinit() {
-	// Enable interrupts after initialization.
-	avr.Asm("sei")
-}
-
-func init() {
+func initHardware() {
 	initUART()
 	machine.InitMonotonicTimer()
 	nextTimerRecalibrate = ticks() + timerRecalibrateInterval
+
+	// Enable interrupts after initialization.
+	avr.Asm("sei")
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
@@ -111,7 +111,10 @@ func exit(code int) {
 }
 
 func abort() {
+	// Disable interrupts and go to sleep.
+	// This can never be awoken except for reset, and is recogized as termination by simavr.
+	avr.Asm("cli")
 	for {
-		sleepWDT(WDT_PERIOD_2S)
+		avr.Asm("sleep")
 	}
 }

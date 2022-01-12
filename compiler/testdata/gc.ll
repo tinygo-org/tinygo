@@ -1,6 +1,6 @@
 ; ModuleID = 'gc.go'
 source_filename = "gc.go"
-target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
+target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128-ni:1:10:20"
 target triple = "wasm32-unknown-wasi"
 
 %runtime.typecodeID = type { %runtime.typecodeID*, i32, %runtime.interfaceMethodInfo*, %runtime.typecodeID*, i32 }
@@ -17,10 +17,12 @@ target triple = "wasm32-unknown-wasi"
 @main.struct1 = hidden global {}* null, align 4
 @main.struct2 = hidden global { i32, i32 }* null, align 4
 @main.struct3 = hidden global { i8*, [60 x i32], i8* }* null, align 4
+@main.struct4 = hidden global { i8*, [61 x i32] }* null, align 4
 @main.slice1 = hidden global { i8*, i32, i32 } zeroinitializer, align 8
 @main.slice2 = hidden global { i32**, i32, i32 } zeroinitializer, align 8
 @main.slice3 = hidden global { { i8*, i32, i32 }*, i32, i32 } zeroinitializer, align 8
 @"runtime/gc.layout:62-2000000000000001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c" \00\00\00\00\00\00\01" }
+@"runtime/gc.layout:62-0001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c"\00\00\00\00\00\00\00\01" }
 @"reflect/types.type:basic:complex128" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* null, i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* @"reflect/types.type:pointer:basic:complex128", i32 0 }
 @"reflect/types.type:pointer:basic:complex128" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:complex128", i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* null, i32 0 }
 
@@ -67,6 +69,8 @@ entry:
   store i8* %new1, i8** bitcast ({ i32, i32 }** @main.struct2 to i8**), align 4
   %new2 = call i8* @runtime.alloc(i32 248, i8* bitcast ({ i32, [8 x i8] }* @"runtime/gc.layout:62-2000000000000001" to i8*), i8* undef, i8* null) #0
   store i8* %new2, i8** bitcast ({ i8*, [60 x i32], i8* }** @main.struct3 to i8**), align 4
+  %new3 = call i8* @runtime.alloc(i32 248, i8* bitcast ({ i32, [8 x i8] }* @"runtime/gc.layout:62-0001" to i8*), i8* undef, i8* null) #0
+  store i8* %new3, i8** bitcast ({ i8*, [61 x i32] }** @main.struct4 to i8**), align 4
   ret void
 }
 

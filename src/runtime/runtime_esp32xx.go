@@ -14,8 +14,6 @@ func putchar(c byte) {
 	machine.Serial.WriteByte(c)
 }
 
-func postinit() {}
-
 // Initialize .bss: zero-initialized global variables.
 // The .data section has already been loaded by the ROM bootloader.
 func clearbss() {

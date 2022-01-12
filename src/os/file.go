@@ -10,6 +10,7 @@
 package os
 
 import (
+	"errors"
 	"io"
 	"syscall"
 )
@@ -100,20 +101,39 @@ func Create(name string) (*File, error) {
 // read and any error encountered. At end of file, Read returns 0, io.EOF.
 func (f *File) Read(b []byte) (n int, err error) {
 	n, err = f.handle.Read(b)
+	// TODO: want to always wrap, like upstream, but ReadFile() compares against exactly io.EOF?
 	if err != nil && err != io.EOF {
 		err = &PathError{"read", f.name, err}
 	}
 	return
 }
 
+var errNegativeOffset = errors.New("negative offset")
+
 // ReadAt reads up to len(b) bytes from the File at the given absolute offset.
 // It returns the number of bytes read and any error encountered, possible io.EOF.
 // At end of file, Read returns 0, io.EOF.
 func (f *File) ReadAt(b []byte, offset int64) (n int, err error) {
-	n, err = f.handle.ReadAt(b, offset)
-	if err != nil && err != io.EOF {
-		err = &PathError{"readat", f.name, err}
+	if offset < 0 {
+		return 0, &PathError{Op: "readat", Path: f.name, Err: errNegativeOffset}
 	}
+
+	for len(b) > 0 {
+		m, e := f.handle.ReadAt(b, offset)
+		if e != nil {
+			// TODO: want to always wrap, like upstream, but TestReadAtEOF compares against exactly io.EOF?
+			if e != io.EOF {
+				err = &PathError{"readat", f.name, e}
+			} else {
+				err = e
+			}
+			break
+		}
+		n += m
+		b = b[m:]
+		offset += int64(m)
+	}
+
 	return
 }
 
@@ -156,9 +176,17 @@ func (f *File) Readdirnames(n int) (names []string, err error) {
 	return nil, &PathError{"readdirnames", f.name, ErrNotImplemented}
 }
 
-// Seek is a stub, not yet implemented
+// Seek sets the offset for the next Read or Write on file to offset, interpreted
+// according to whence: 0 means relative to the origin of the file, 1 means
+// relative to the current offset, and 2 means relative to the end.
+// It returns the new offset and an error, if any.
+// The behavior of Seek on a file opened with O_APPEND is not specified.
+//
+// If f is a directory, the behavior of Seek varies by operating
+// system; you can seek to the beginning of the directory on Unix-like
+// operating systems, but not on Windows.
 func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
-	return 0, &PathError{"seek", f.name, ErrNotImplemented}
+	return f.handle.Seek(offset, whence)
 }
 
 // Stat is a stub, not yet implemented

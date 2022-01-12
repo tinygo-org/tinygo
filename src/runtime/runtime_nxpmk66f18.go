@@ -226,8 +226,6 @@ func initInternal() {
 	// 	analog_init();
 }
 
-func postinit() {}
-
 func putchar(c byte) {
 	machine.PutcharUART(machine.UART0, c)
 }

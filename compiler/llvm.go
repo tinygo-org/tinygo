@@ -147,7 +147,7 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 
 	// Create the global initializer.
 	bitmapBytes := make([]byte, int(objectSizeWords+7)/8)
-	copy(bitmapBytes, bitmap.Bytes())
+	bitmap.FillBytes(bitmapBytes)
 	var bitmapByteValues []llvm.Value
 	for _, b := range bitmapBytes {
 		bitmapByteValues = append(bitmapByteValues, llvm.ConstInt(c.ctx.Int8Type(), uint64(b), false))

@@ -8,11 +8,20 @@
 package os
 
 import (
+	"internal/syscall/windows"
 	"syscall"
 	"unicode/utf16"
 )
 
 type syscallFd = syscall.Handle
+
+func rename(oldname, newname string) error {
+	e := windows.Rename(fixLongPath(oldname), fixLongPath(newname))
+	if e != nil {
+		return &LinkError{"rename", oldname, newname, e}
+	}
+	return nil
+}
 
 func Pipe() (r *File, w *File, err error) {
 	var p [2]syscall.Handle
@@ -55,6 +64,12 @@ func tempDir() string {
 // TODO: move to file_anyos once ReadAt is implemented for windows
 func (f unixFileHandle) ReadAt(b []byte, offset int64) (n int, err error) {
 	return -1, ErrNotImplemented
+}
+
+// Seek wraps syscall.Seek.
+func (f unixFileHandle) Seek(offset int64, whence int) (int64, error) {
+	newoffset, err := syscall.Seek(syscallFd(f), offset, whence)
+	return newoffset, handleSyscallError(err)
 }
 
 // isWindowsNulName reports whether name is os.DevNull ('NUL') on Windows.

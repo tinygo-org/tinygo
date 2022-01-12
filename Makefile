@@ -11,9 +11,9 @@ LLD_SRC ?= $(LLVM_PROJECTDIR)/lld
 # Try to autodetect LLVM build tools.
 # FIXME(#2438): This doesn't work on darwin now. Homebrew installed llvm is key-only.
 detect = $(shell command -v $(1) 2> /dev/null && echo $(1))
-CLANG ?= $(word 1,$(abspath $(call detect,llvm-build/bin/clang))$(call detect,clang-12)$(call detect,clang-11)$(call detect,clang))
-LLVM_AR ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-ar))$(call detect,llvm-ar-12)$(call detect,llvm-ar-11)$(call detect,llvm-ar))
-LLVM_NM ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-nm))$(call detect,llvm-nm-12)$(call detect,llvm-nm-11)$(call detect,llvm-nm))
+CLANG ?= $(word 1,$(abspath $(call detect,llvm-build/bin/clang))$(call detect,clang-13)$(call detect,clang-12)$(call detect,clang-11)$(call detect,clang))
+LLVM_AR ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-ar))$(call detect,llvm-ar-13)$(call detect,llvm-ar-12)$(call detect,llvm-ar-11)$(call detect,llvm-ar))
+LLVM_NM ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-nm))$(call detect,llvm-nm-13)$(call detect,llvm-nm-12)$(call detect,llvm-nm-11)$(call detect,llvm-nm))
 
 # Go binary and GOROOT to select
 GO ?= go
@@ -160,7 +160,7 @@ gen-device-rp: build/gen-device-svd
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/llvm:
-	git clone -b xtensa_release_12.0.1 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b xtensa_release_13.0.0 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/llvm
 
 # Configure LLVM.
@@ -229,6 +229,7 @@ TEST_PACKAGES_BASE = \
 	math/cmplx \
 	net/http/internal/ascii \
 	net/mail \
+	os \
 	path \
 	reflect \
 	sync \
@@ -244,7 +245,6 @@ TEST_PACKAGES = \
 	$(TEST_PACKAGES_BASE) \
 	compress/flate \
 	compress/zlib \
-	os \
 
 # Standard library packages that pass tests on wasi
 TEST_PACKAGES_WASI = \
@@ -255,8 +255,12 @@ TEST_PACKAGES_WASI = \
 .PHONY: tinygo-test
 tinygo-test:
 	$(TINYGO) test $(TEST_PACKAGES)
+tinygo-bench:
+	$(TINYGO) test -bench . $(TEST_PACKAGES)
 tinygo-test-wasi:
 	$(TINYGO) test -target wasi $(TEST_PACKAGES_WASI)
+tinygo-bench-wasi:
+	$(TINYGO) test -target wasi -bench . $(TEST_PACKAGES_WASI)
 
 .PHONY: smoketest
 smoketest:
@@ -454,6 +458,8 @@ ifneq ($(STM32), 0)
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32f4disco-1      examples/pwm
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=stm32f469disco      examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=lorae5              examples/blinky1
 	@$(MD5SUM) test.hex
 endif
@@ -488,6 +494,8 @@ ifneq ($(XTENSA), 0)
 	@$(MD5SUM) test.bin
 endif
 	$(TINYGO) build -size short -o test.bin -target=esp32c3           	examples/serial
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=m5stamp-c3          examples/serial
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
 	@$(MD5SUM) test.hex
