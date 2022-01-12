@@ -11,12 +11,14 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 )
 
 func initBenchmarkFlags() {
 	matchBenchmarks = flag.String("test.bench", "", "run only benchmarks matching `regexp`")
+	flag.Var(&benchTime, "test.benchtime", "run each benchmark for duration `d`")
 }
 
 var (
@@ -26,6 +28,31 @@ var (
 
 type benchTimeFlag struct {
 	d time.Duration
+	n int
+}
+
+func (f *benchTimeFlag) String() string {
+	if f.n > 0 {
+		return fmt.Sprintf("%dx", f.n)
+	}
+	return time.Duration(f.d).String()
+}
+
+func (f *benchTimeFlag) Set(s string) error {
+	if strings.HasSuffix(s, "x") {
+		n, err := strconv.ParseInt(s[:len(s)-1], 10, 0)
+		if err != nil || n <= 0 {
+			return fmt.Errorf("invalid count")
+		}
+		*f = benchTimeFlag{n: int(n)}
+		return nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil || d <= 0 {
+		return fmt.Errorf("invalid duration")
+	}
+	*f = benchTimeFlag{d: d}
+	return nil
 }
 
 // InternalBenchmark is an internal type but exported because it is cross-package;
@@ -160,32 +187,37 @@ func (b *B) doBench() BenchmarkResult {
 // of benchmark iterations until the benchmark runs for the requested benchtime.
 // run1 must have been called on b.
 func (b *B) launch() {
-	d := b.benchTime.d
-	for n := int64(1); !b.failed && b.duration < d && n < 1e9; {
-		last := n
-		// Predict required iterations.
-		goalns := d.Nanoseconds()
-		prevIters := int64(b.N)
-		prevns := b.duration.Nanoseconds()
-		if prevns <= 0 {
-			// Round up, to avoid div by zero.
-			prevns = 1
+	// Run the benchmark for at least the specified amount of time.
+	if b.benchTime.n > 0 {
+		b.runN(b.benchTime.n)
+	} else {
+		d := b.benchTime.d
+		for n := int64(1); !b.failed && b.duration < d && n < 1e9; {
+			last := n
+			// Predict required iterations.
+			goalns := d.Nanoseconds()
+			prevIters := int64(b.N)
+			prevns := b.duration.Nanoseconds()
+			if prevns <= 0 {
+				// Round up, to avoid div by zero.
+				prevns = 1
+			}
+			// Order of operations matters.
+			// For very fast benchmarks, prevIters ~= prevns.
+			// If you divide first, you get 0 or 1,
+			// which can hide an order of magnitude in execution time.
+			// So multiply first, then divide.
+			n = goalns * prevIters / prevns
+			// Run more iterations than we think we'll need (1.2x).
+			n += n / 5
+			// Don't grow too fast in case we had timing errors previously.
+			n = min(n, 100*last)
+			// Be sure to run at least one more than last time.
+			n = max(n, last+1)
+			// Don't run more than 1e9 times. (This also keeps n in int range on 32 bit platforms.)
+			n = min(n, 1e9)
+			b.runN(int(n))
 		}
-		// Order of operations matters.
-		// For very fast benchmarks, prevIters ~= prevns.
-		// If you divide first, you get 0 or 1,
-		// which can hide an order of magnitude in execution time.
-		// So multiply first, then divide.
-		n = goalns * prevIters / prevns
-		// Run more iterations than we think we'll need (1.2x).
-		n += n / 5
-		// Don't grow too fast in case we had timing errors previously.
-		n = min(n, 100*last)
-		// Be sure to run at least one more than last time.
-		n = max(n, last+1)
-		// Don't run more than 1e9 times. (This also keeps n in int range on 32 bit platforms.)
-		n = min(n, 1e9)
-		b.runN(int(n))
 	}
 	b.result = BenchmarkResult{b.N, b.duration, b.bytes}
 }
