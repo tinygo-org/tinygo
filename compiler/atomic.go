@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"fmt"
 	"strings"
 
 	"golang.org/x/tools/go/ssa"
@@ -16,6 +17,20 @@ func (b *builder) createAtomicOp(call *ssa.CallCommon) (llvm.Value, bool) {
 	case "AddInt32", "AddInt64", "AddUint32", "AddUint64", "AddUintptr":
 		ptr := b.getValue(call.Args[0])
 		val := b.getValue(call.Args[1])
+		if strings.HasPrefix(b.Triple, "avr") {
+			// AtomicRMW does not work on AVR as intended:
+			// - There are some register allocation issues (fixed by https://reviews.llvm.org/D97127 which is not yet in a usable LLVM release)
+			// - The result is the new value instead of the old value
+			vType := val.Type()
+			name := fmt.Sprintf("__sync_fetch_and_add_%d", vType.IntTypeWidth()/8)
+			fn := b.mod.NamedFunction(name)
+			if fn.IsNil() {
+				fn = llvm.AddFunction(b.mod, name, llvm.FunctionType(vType, []llvm.Type{ptr.Type(), vType}, false))
+			}
+			oldVal := b.createCall(fn, []llvm.Value{ptr, val}, "")
+			// Return the new value, not the original value returned.
+			return b.CreateAdd(oldVal, val, ""), true
+		}
 		oldVal := b.CreateAtomicRMW(llvm.AtomicRMWBinOpAdd, ptr, val, llvm.AtomicOrderingSequentiallyConsistent, true)
 		// Return the new value, not the original value returned by atomicrmw.
 		return b.CreateAdd(oldVal, val, ""), true
@@ -73,6 +88,23 @@ func (b *builder) createAtomicOp(call *ssa.CallCommon) (llvm.Value, bool) {
 	case "StoreInt32", "StoreInt64", "StoreUint32", "StoreUint64", "StoreUintptr", "StorePointer":
 		ptr := b.getValue(call.Args[0])
 		val := b.getValue(call.Args[1])
+		if strings.HasPrefix(b.Triple, "avr") {
+			// SelectionDAGBuilder is currently missing the "are unaligned atomics allowed" check for stores.
+			vType := val.Type()
+			isPointer := vType.TypeKind() == llvm.PointerTypeKind
+			if isPointer {
+				// libcalls only supports integers, so cast to an integer.
+				vType = b.uintptrType
+				val = b.CreatePtrToInt(val, vType, "")
+				ptr = b.CreateBitCast(ptr, llvm.PointerType(vType, 0), "")
+			}
+			name := fmt.Sprintf("__atomic_store_%d", vType.IntTypeWidth()/8)
+			fn := b.mod.NamedFunction(name)
+			if fn.IsNil() {
+				fn = llvm.AddFunction(b.mod, name, llvm.FunctionType(vType, []llvm.Type{ptr.Type(), vType, b.uintptrType}, false))
+			}
+			return b.createCall(fn, []llvm.Value{ptr, val, llvm.ConstInt(b.uintptrType, 5, false)}, ""), true
+		}
 		store := b.CreateStore(val, ptr)
 		store.SetOrdering(llvm.AtomicOrderingSequentiallyConsistent)
 		store.SetAlignment(b.targetData.PrefTypeAlignment(val.Type())) // required
