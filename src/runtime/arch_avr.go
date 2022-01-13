@@ -1,6 +1,9 @@
+//go:build avr
 // +build avr
 
 package runtime
+
+import "runtime/interrupt"
 
 const GOARCH = "arm" // avr pretends to be arm
 
@@ -15,4 +18,20 @@ func align(ptr uintptr) uintptr {
 
 func getCurrentStackPointer() uintptr {
 	return uintptr(stacksave())
+}
+
+// The safest thing to do here would just be to disable interrupts for
+// procPin/procUnpin. Note that a global variable is safe in this case, as any
+// access to procPinnedMask will happen with interrupts disabled.
+
+var procPinnedMask interrupt.State
+
+//go:linkname procPin sync/atomic.runtime_procPin
+func procPin() {
+	procPinnedMask = interrupt.Disable()
+}
+
+//go:linkname procUnpin sync/atomic.runtime_procUnpin
+func procUnpin() {
+	interrupt.Restore(procPinnedMask)
 }

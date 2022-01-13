@@ -140,7 +140,8 @@ func TestBuild(t *testing.T) {
 		for _, t := range tests {
 			switch t {
 			case "atomic.go":
-				// Not supported due to unaligned atomic accesses.
+				// Requires GCC 11.2.0 or above for interface comparison.
+				// https://github.com/gcc-mirror/gcc/commit/f30dd607669212de135dec1f1d8a93b8954c327c
 
 			case "reflect.go":
 				// Reflect tests do not work due to type code issues.
