@@ -387,6 +387,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
+				if !actualTypePtrToInt.IsAConstantInt().IsNil() && actualTypePtrToInt.ZExtValue() == 0 {
+					locals[inst.localIndex] = literalValue{uint8(0)}
+					break
+				}
 				actualType := actualTypePtrToInt.Operand(0)
 				if strings.TrimPrefix(actualType.Name(), "reflect/types.type:") == strings.TrimPrefix(assertedType.Name(), "reflect/types.typeid:") {
 					locals[inst.localIndex] = literalValue{uint8(1)}
