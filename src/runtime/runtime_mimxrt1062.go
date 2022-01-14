@@ -125,8 +125,8 @@ func initUART() {
 }
 
 func initUSB() {
-	machine.HID0.Configure(usb.HIDConfig{})
-	// machine.UART0.Configure(usb.UARTConfig{})
+	// machine.HID0.Configure(usb.HIDConfig{})
+	machine.UART0.Configure(usb.UARTConfig{})
 }
 
 func putchar(c byte) {
