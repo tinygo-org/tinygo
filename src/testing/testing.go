@@ -56,6 +56,23 @@ type common struct {
 	name   string // Name of test or benchmark.
 }
 
+// Short reports whether the -test.short flag is set.
+func Short() bool {
+	return flagShort
+}
+
+// CoverMode reports what the test coverage mode is set to.
+//
+// Test coverage is not supported; this returns the empty string.
+func CoverMode() string {
+	return ""
+}
+
+// Verbose reports whether the -test.v flag is set.
+func Verbose() bool {
+	return flagVerbose
+}
+
 // TB is the interface common to T and B.
 type TB interface {
 	Error(args ...interface{})
@@ -204,11 +221,6 @@ func (c *common) Helper() {
 	// Unimplemented.
 }
 
-// Parallel is not implemented, it is only provided for compatibility.
-func (c *common) Parallel() {
-	// Unimplemented.
-}
-
 // Cleanup registers a function to be called when the test (or subtest) and all its
 // subtests complete. Cleanup functions will be called in last added,
 // first called order.
@@ -230,6 +242,17 @@ func (c *common) runCleanup() {
 		}
 		cleanup()
 	}
+}
+
+// Parallel is not implemented, it is only provided for compatibility.
+func (c *common) Parallel() {
+	// Unimplemented.
+}
+
+// InternalTest is a reference to a test that should be called during a test suite run.
+type InternalTest struct {
+	Name string
+	F    func(*T)
 }
 
 func tRunner(t *T, fn func(t *T)) {
@@ -276,12 +299,6 @@ func (t *T) Run(name string, f func(t *T)) bool {
 	return !sub.failed
 }
 
-// InternalTest is a reference to a test that should be called during a test suite run.
-type InternalTest struct {
-	Name string
-	F    func(*T)
-}
-
 // M is a test suite.
 type M struct {
 	// tests is a list of the test names to execute
@@ -289,6 +306,19 @@ type M struct {
 	Benchmarks []InternalBenchmark
 
 	deps testDeps
+}
+
+type testDeps interface {
+	MatchString(pat, str string) (bool, error)
+}
+
+func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenchmark, examples []InternalExample) *M {
+	Init()
+	return &M{
+		Tests:      tests,
+		Benchmarks: benchmarks,
+		deps:       deps.(testDeps),
+	}
 }
 
 // Run the test suite.
@@ -351,23 +381,6 @@ func (m *M) Run() int {
 	return failures
 }
 
-// Short reports whether the -test.short flag is set.
-func Short() bool {
-	return flagShort
-}
-
-// Verbose reports whether the -test.v flag is set.
-func Verbose() bool {
-	return flagVerbose
-}
-
-// CoverMode reports what the test coverage mode is set to.
-//
-// Test coverage is not supported; this returns the empty string.
-func CoverMode() string {
-	return ""
-}
-
 // AllocsPerRun returns the average number of allocations during calls to f.
 // Although the return value has type float64, it will always be an integral
 // value.
@@ -379,23 +392,6 @@ func AllocsPerRun(runs int, f func()) (avg float64) {
 		f()
 	}
 	return 0
-}
-
-func TestMain(m *M) {
-	os.Exit(m.Run())
-}
-
-type testDeps interface {
-	MatchString(pat, s string) (bool, error)
-}
-
-func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenchmark, examples []InternalExample) *M {
-	Init()
-	return &M{
-		Tests:      tests,
-		Benchmarks: benchmarks,
-		deps:       deps.(testDeps),
-	}
 }
 
 type InternalExample struct {
