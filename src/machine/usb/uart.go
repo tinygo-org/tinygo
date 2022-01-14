@@ -14,26 +14,23 @@ var (
 // UART represents a virtual serial (UART) device emulation using the USB
 // CDC-ACM device class driver.
 type UART struct {
+	// Port is the MCU's native USB core number. If in doubt, leave it
+	// uninitialized for default (0).
 	Port int
 	core *core
 }
 
 type UARTConfig struct {
-	// Port is the MCU's native USB core number. If in doubt, leave it
-	// uninitialized for default (0).
-	Port int
+	BusSpeed Speed
 }
 
 func (uart *UART) Configure(config UARTConfig) error {
 
-	if config.Port >= CoreCount || config.Port >= dcdCount {
-		return ErrUARTInvalidPort
-	}
-	uart.Port = config.Port
+	c := class{id: classDeviceCDCACM, config: 1}
 
 	// verify we have a free USB port and take ownership of it
 	var st status
-	uart.core, st = initCore(uart.Port, class{id: classDeviceCDCACM, config: 1})
+	uart.core, st = initCore(uart.Port, config.BusSpeed, c)
 	if !st.ok() {
 		return ErrUARTInvalidPort
 	}

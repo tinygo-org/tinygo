@@ -135,10 +135,27 @@ const (
 	descDeviceCapExtAttrBESLPos = 2
 )
 
+// device returns the enumerated device descriptor value, defined per USB
+// specification, for the receiver Speed s.
+func (s Speed) device() uint32 {
+	switch s {
+	case LowSpeed:
+		return descDeviceSpeedLow
+	case FullSpeed:
+		return descDeviceSpeedFull
+	case HighSpeed:
+		return descDeviceSpeedHigh
+	case SuperSpeed, DualSuperSpeed:
+		return descDeviceSpeedSuper
+	default: // unrecognized Speed defaults to full-speed
+		return descDeviceSpeedFull
+	}
+}
+
 const (
 	// Attributes of all endpoint descriptor configurations.
 	descEndptConfigAttr = descConfigAttrD7Msk | // Bit 7: reserved (1)
-		(1 << descConfigAttrSelfPoweredPos) | // Bit 6: self-powered
+		(0 << descConfigAttrSelfPoweredPos) | // Bit 6: self-powered
 		(0 << descConfigAttrRemoteWakeupPos) | // Bit 5: remote wakeup
 		0 // Bits 0-4: reserved (0)
 
@@ -354,8 +371,8 @@ const (
 			descLengthEndpoint + // Mouse Endpoint Descriptor
 			descLengthInterface + // Serial Interface Descriptor
 			descLengthInterface + // Serial HID Interface Descriptor
-			descLengthEndpoint + // Serial Endpoint Descriptor
-			descLengthEndpoint +
+			descLengthEndpoint + // Serial Tx Endpoint Descriptor
+			descLengthEndpoint + // Serial Rx Endpoint Descriptor
 			descLengthInterface + // Joystick Interface Descriptor
 			descLengthInterface + // Joystick HID Interface Descriptor
 			descLengthEndpoint + // Joystick Endpoint Descriptor
@@ -420,14 +437,16 @@ const (
 	descCDCACMInterfaceCount = 2 // Interfaces for all CDC-ACM configurations.
 	descCDCACMEndpointCount  = 4 // Endpoints for all CDC-ACM configurations.
 
+	descCDCACMEndpointCtrl = 0 // CDC-ACM Control Endpoint 0
+
 	descCDCACMInterfaceCtrl    = 0 // CDC-ACM Control Interface
-	descCDCACMEndpointStatus   = 2 // CDC-ACM Interrupt IN Endpoint
+	descCDCACMEndpointStatus   = 1 // CDC-ACM Interrupt IN Endpoint
 	descCDCACMConfigAttrStatus = descEndptConfigAttrRxUnused | descEndptConfigAttrTxInterrupt
 
 	descCDCACMInterfaceData    = 1 // CDC-ACM Data Interface
-	descCDCACMEndpointDataRx   = 3 // CDC-ACM Bulk Data OUT (Rx) Endpoint
+	descCDCACMEndpointDataRx   = 2 // CDC-ACM Bulk Data OUT (Rx) Endpoint
 	descCDCACMConfigAttrDataRx = descEndptConfigAttrRxBulk | descEndptConfigAttrTxUnused
-	descCDCACMEndpointDataTx   = 4 // CDC-ACM Bulk Data IN (Tx) Endpoint
+	descCDCACMEndpointDataTx   = 3 // CDC-ACM Bulk Data IN (Tx) Endpoint
 	descCDCACMConfigAttrDataTx = descEndptConfigAttrRxUnused | descEndptConfigAttrTxBulk
 )
 
@@ -509,7 +528,7 @@ var descCDCACM = [dcdCount]descCDCACMClass{
 			1,                          // Value to use to select this configuration (1 = CDC-ACM[0])
 			0,                          // Index of string descriptor describing this configuration
 			descEndptConfigAttr,        // Configuration attributes
-			descCDCACMMaxPower,         // Max power consumption when fully-operational (2 mA units)
+			descCDCACMMaxPowerMa >> 1,  // Max power consumption when fully-operational (2 mA units)
 
 			// Communication/Control Interface Descriptor
 			descLengthInterface,       // Descriptor length
@@ -519,7 +538,7 @@ var descCDCACM = [dcdCount]descCDCACMClass{
 			1,                         // Number of endpoints
 			descCDCTypeComm,           // Class code
 			descCDCSubAbstractControl, // Subclass code
-			descCDCProtoNone,          // Protocol code (NOTE: Teensyduino defines this as 1 [AT V.250])
+			descCDCProtoAT250,         // Protocol code (NOTE: Teensyduino & Arduino-Mbed define this as 1 [AT V.250])
 			0,                         // Interface Description String Index
 
 			// CDC Header Functional Descriptor
@@ -599,6 +618,8 @@ const (
 
 	descHIDInterfaceCount = 5 // Interfaces for all HID configurations.
 	descHIDEndpointCount  = 6 // Endpoints for all HID configurations.
+
+	descHIDEndpointCtrl = 0 // HID Control Endpoint 0
 
 	descHIDInterfaceKeyboard  = 0 // HID Keyboard Interface
 	descHIDEndpointKeyboard   = 3 // HID Keyboard IN Endpoint
@@ -701,7 +722,7 @@ var descHID = [dcdCount]descHIDClass{
 			1,                       // Value to use to select this configuration (1 = CDC-ACM[0])
 			0,                       // Index of string descriptor describing this configuration
 			descEndptConfigAttr,     // Configuration attributes
-			descHIDMaxPower,         // Max power consumption when fully-operational (2 mA units)
+			descHIDMaxPowerMa >> 1,  // Max power consumption when fully-operational (2 mA units)
 
 			// [9+9] Keyboard Interface Descriptor
 			descLengthInterface,      // Descriptor length
@@ -896,37 +917,37 @@ var descHIDReportSerial = [...]uint8{
 }
 
 var descHIDReportKeyboard = [...]uint8{
-	0x05, 0x01, // Usage Page (Generic Desktop),
-	0x09, 0x06, // Usage (Keyboard),
-	0xA1, 0x01, // Collection (Application),
-	0x75, 0x01, //   Report Size (1),
-	0x95, 0x08, //   Report Count (8),
-	0x05, 0x07, //   Usage Page (Key Codes),
-	0x19, 0xE0, //   Usage Minimum (224),
-	0x29, 0xE7, //   Usage Maximum (231),
-	0x15, 0x00, //   Logical Minimum (0),
-	0x25, 0x01, //   Logical Maximum (1),
-	0x81, 0x02, //   Input (Data, Variable, Absolute), ; Modifier keys
-	0x95, 0x01, //   Report Count (1),
-	0x75, 0x08, //   Report Size (8),
-	0x81, 0x03, //   Input (Constant),          ; Reserved byte
-	0x95, 0x05, //   Report Count (5),
-	0x75, 0x01, //   Report Size (1),
-	0x05, 0x08, //   Usage Page (LEDs),
-	0x19, 0x01, //   Usage Minimum (1),
-	0x29, 0x05, //   Usage Maximum (5),
-	0x91, 0x02, //   Output (Data, Variable, Absolute), ; LED report
-	0x95, 0x01, //   Report Count (1),
-	0x75, 0x03, //   Report Size (3),
-	0x91, 0x03, //   Output (Constant),         ; LED report padding
-	0x95, 0x06, //   Report Count (6),
-	0x75, 0x08, //   Report Size (8),
-	0x15, 0x00, //   Logical Minimum (0),
-	0x25, 0x7F, //   Logical Maximum(104),
-	0x05, 0x07, //   Usage Page (Key Codes),
-	0x19, 0x00, //   Usage Minimum (0),
-	0x29, 0x7F, //   Usage Maximum (104),
-	0x81, 0x00, //   Input (Data, Array),       ; Normal keys
+	0x05, 0x01, // Usage Page (Generic Desktop)
+	0x09, 0x06, // Usage (Keyboard)
+	0xA1, 0x01, // Collection (Application)
+	0x75, 0x01, //   Report Size (1)
+	0x95, 0x08, //   Report Count (8)
+	0x05, 0x07, //   Usage Page (Key Codes)
+	0x19, 0xE0, //   Usage Minimum (224)
+	0x29, 0xE7, //   Usage Maximum (231)
+	0x15, 0x00, //   Logical Minimum (0)
+	0x25, 0x01, //   Logical Maximum (1)
+	0x81, 0x02, //   Input (Data, Variable, Absolute) [Modifier keys]
+	0x95, 0x01, //   Report Count (1)
+	0x75, 0x08, //   Report Size (8)
+	0x81, 0x03, //   Input (Constant) [Reserved byte]
+	0x95, 0x05, //   Report Count (5)
+	0x75, 0x01, //   Report Size (1)
+	0x05, 0x08, //   Usage Page (LEDs)
+	0x19, 0x01, //   Usage Minimum (1)
+	0x29, 0x05, //   Usage Maximum (5)
+	0x91, 0x02, //   Output (Data, Variable, Absolute) [LED report]
+	0x95, 0x01, //   Report Count (1)
+	0x75, 0x03, //   Report Size (3)
+	0x91, 0x03, //   Output (Constant) [LED report padding]
+	0x95, 0x06, //   Report Count (6)
+	0x75, 0x08, //   Report Size (8)
+	0x15, 0x00, //   Logical Minimum (0)
+	0x25, 0x7F, //   Logical Maximum(104)
+	0x05, 0x07, //   Usage Page (Key Codes)
+	0x19, 0x00, //   Usage Minimum (0)
+	0x29, 0x7F, //   Usage Maximum (104)
+	0x81, 0x00, //   Input (Data, Array) [Normal keys]
 	0xC0, // End Collection
 }
 

@@ -28,12 +28,13 @@ type dhw struct {
 	stat *dhwEndpoint // endpoint 0 Rx ("out" direction)
 	ctrl *dhwEndpoint // endpoint 0 Tx ("in" direction)
 
-	busSpeed uint8 // 0 = full, 1 = low, 2 = high, 4 = super
+	speed Speed
 
 	controlReply [8]uint8
 	controlMask  uint32
 	endpointMask uint32
 	setup        dcdSetup
+	stage        dcdStage
 
 	timerInterrupt [2]func()
 	timerReboot    uint8
@@ -64,7 +65,7 @@ func flushCache(addr, size uintptr) { nxp.FlushDeleteDcache(addr, size) }
 // allocDHW returns a reference to the USB hardware abstraction for the given
 // device controller driver. Should be called only one time and during device
 // controller initialization.
-func allocDHW(port, instance int, dc *dcd) *dhw {
+func allocDHW(port, instance int, speed Speed, dc *dcd) *dhw {
 	switch port {
 	case 0:
 		dhwInstance[instance].dcd = dc
@@ -83,16 +84,22 @@ func allocDHW(port, instance int, dc *dcd) *dhw {
 		dhwInstance[instance].irq =
 			interrupt.New(nxp.IRQ_USB_OTG2,
 				func(interrupt.Interrupt) {
-					//coreInstance[1].dc.interrupt()
+					coreInstance[1].dc.interrupt()
 				})
 	}
+
+	// Both ports default to high-speed (480 Mbit/sec) on Teensy 4.x
+	if 0 == speed {
+		speed = HighSpeed
+	}
+	dhwInstance[instance].speed = speed
 
 	return &dhwInstance[instance]
 }
 
 // init configures the USB port for device mode operation by initializing all
 // endpoint and transfer descriptor data structures, initializing core registers
-// and interrupts, resetting the USB PHY, and enabling power on the bust.
+// and interrupts, resetting the USB PHY, and enabling power on the bus.
 func (d *dhw) init() status {
 
 	// Reset the controller
@@ -315,9 +322,9 @@ func (d *dhw) interrupt() {
 	// DCSuspend bits respectively.
 	if 0 != status&nxp.USB_USBSTS_PCI {
 		if d.bus.PORTSC1.HasBits(nxp.USB_PORTSC1_HSP) {
-			d.busSpeed = descDeviceSpeedHigh // 480 Mbit/sec
+			d.speed = HighSpeed // 480 Mbit/sec
 		} else {
-			d.busSpeed = descDeviceSpeedFull // 12 Mbit/sec
+			d.speed = FullSpeed // 12 Mbit/sec
 		}
 		d.event(dcdEvent{id: dcdEventStatusRun})
 	}
@@ -363,8 +370,6 @@ func (d *dhw) interrupt() {
 		}
 	}
 }
-
-func (d *dhw) speed() uint8 { return d.busSpeed }
 
 func (d *dhw) setDeviceAddress(addr uint16) {
 	d.bus.DEVICEADDR.Set(nxp.USB_DEVICEADDR_USBADRA |
@@ -893,11 +898,13 @@ func (d *dhw) uartConfigure() {
 
 	acm := &descCDCACM[d.cc.config-1]
 
-	switch d.speed() {
-	case descDeviceSpeedHigh:
+	switch d.speed {
+	case HighSpeed, SuperSpeed, DualSuperSpeed:
 		acm.rxSize = descCDCACMDataRxHSPacketSize
 		acm.txSize = descCDCACMDataTxHSPacketSize
 	default:
+		fallthrough
+	case LowSpeed, FullSpeed:
 		acm.rxSize = descCDCACMDataRxFSPacketSize
 		acm.txSize = descCDCACMDataTxFSPacketSize
 	}
@@ -1151,11 +1158,13 @@ func (d *dhw) serialConfigure() {
 
 	hid := &descHID[d.cc.config-1]
 
-	switch d.speed() {
-	case descDeviceSpeedHigh:
+	switch d.speed {
+	case HighSpeed, SuperSpeed, DualSuperSpeed:
 		hid.rxSerialSize = descHIDSerialRxHSPacketSize
 		hid.txSerialSize = descHIDSerialTxHSPacketSize
 	default:
+		fallthrough
+	case LowSpeed, FullSpeed:
 		hid.rxSerialSize = descHIDSerialRxFSPacketSize
 		hid.txSerialSize = descHIDSerialTxFSPacketSize
 	}
@@ -1268,10 +1277,12 @@ func (d *dhw) keyboardConfigure() {
 	// Initialize keyboard
 	hid.keyboard.configure(d.dcd, hid)
 
-	switch d.speed() {
-	case descDeviceSpeedHigh:
+	switch d.speed {
+	case HighSpeed, SuperSpeed, DualSuperSpeed:
 		hid.txKeyboardSize = descHIDKeyboardTxHSPacketSize
 	default:
+		fallthrough
+	case LowSpeed, FullSpeed:
 		hid.txKeyboardSize = descHIDKeyboardTxFSPacketSize
 	}
 
@@ -1367,10 +1378,12 @@ func (d *dhw) mouseConfigure() {
 
 	hid := &descHID[d.cc.config-1]
 
-	switch d.speed() {
-	case descDeviceSpeedHigh:
+	switch d.speed {
+	case HighSpeed, SuperSpeed, DualSuperSpeed:
 		hid.txMouseSize = descHIDMouseTxHSPacketSize
 	default:
+		fallthrough
+	case LowSpeed, FullSpeed:
 		hid.txMouseSize = descHIDMouseTxFSPacketSize
 	}
 
@@ -1389,10 +1402,12 @@ func (d *dhw) joystickConfigure() {
 
 	hid := &descHID[d.cc.config-1]
 
-	switch d.speed() {
-	case descDeviceSpeedHigh:
+	switch d.speed {
+	case HighSpeed, SuperSpeed, DualSuperSpeed:
 		hid.txJoystickSize = descHIDJoystickTxHSPacketSize
 	default:
+		fallthrough
+	case LowSpeed, FullSpeed:
 		hid.txJoystickSize = descHIDJoystickTxFSPacketSize
 	}
 

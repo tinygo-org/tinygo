@@ -9,22 +9,24 @@ import (
 	"runtime/interrupt"
 )
 
-// hcdInterruptPriority defines the priority for all USB host interrupts.
-const hcdInterruptPriority = 3
+// hhwInterruptPriority defines the priority for all USB host interrupts.
+const hhwInterruptPriority = 3
 
-// hcd implements USB host controller driver (hcd) interface.
+// hhw implements USB host controller hardware abstraction interface.
 type hhw struct {
 	*hcd // USB host controller driver
 
 	bus *nxp.USB_Type       // USB core register
 	phy *nxp.USBPHY_Type    // USB PHY register
 	irq interrupt.Interrupt // USB IRQ, only a single interrupt on iMXRT1062
+
+	speed Speed
 }
 
 // allocHHW returns a reference to the USB hardware abstraction for the given
 // host controller driver. Should be called only one time and during host
 // controller initialization.
-func allocHHW(port, instance int, hc *hcd) *hhw {
+func allocHHW(port, instance int, speed Speed, hc *hcd) *hhw {
 	switch port {
 	case 0:
 		hhwInstance[instance].hcd = hc
@@ -36,6 +38,12 @@ func allocHHW(port, instance int, hc *hcd) *hhw {
 		hhwInstance[instance].bus = nxp.USB2
 		hhwInstance[instance].phy = nxp.USBPHY2
 	}
+
+	// Both ports default to high-speed (480 Mbit/sec) on Teensy 4.x
+	if 0 == speed {
+		speed = HighSpeed
+	}
+	hhwInstance[instance].speed = speed
 
 	return &hhwInstance[instance]
 }

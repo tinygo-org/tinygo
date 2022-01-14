@@ -10,14 +10,20 @@ func ticks() int64
 // significant byte.
 //go:inline
 func leU64(u uint64) []uint8 {
+	var b [8]uint8
 	if u == 0 {
 		// skip all processing for the common case (u = 0)
-		return []uint8{0, 0, 0, 0, 0, 0, 0, 0}
+		return b[:]
 	}
-	return []uint8{
-		uint8(u), uint8(u >> 8), uint8(u >> 16), uint8(u >> 24),
-		uint8(u >> 32), uint8(u >> 40), uint8(u >> 48), uint8(u >> 56),
-	}
+	b[0] = uint8(u)
+	b[1] = uint8(u >> 8)
+	b[2] = uint8(u >> 16)
+	b[3] = uint8(u >> 24)
+	b[4] = uint8(u >> 32)
+	b[5] = uint8(u >> 40)
+	b[6] = uint8(u >> 48)
+	b[7] = uint8(u >> 56)
+	return b[:]
 }
 
 // leU32 returns a slice containing 4 bytes from the given uint32 u.
@@ -27,13 +33,16 @@ func leU64(u uint64) []uint8 {
 // significant byte.
 //go:inline
 func leU32(u uint32) []uint8 {
+	var b [4]uint8
 	if u == 0 {
 		// skip all processing for the common case (u = 0)
-		return []uint8{0, 0, 0, 0}
+		return b[:]
 	}
-	return []uint8{
-		uint8(u), uint8(u >> 8), uint8(u >> 16), uint8(u >> 24),
-	}
+	b[0] = uint8(u)
+	b[1] = uint8(u >> 8)
+	b[2] = uint8(u >> 16)
+	b[3] = uint8(u >> 24)
+	return b[:]
 }
 
 // leU16 returns a slice containing 2 bytes from the given uint16 u.
@@ -43,13 +52,14 @@ func leU32(u uint32) []uint8 {
 // significant byte.
 //go:inline
 func leU16(u uint16) []uint8 {
+	var b [2]uint8
 	if u == 0 {
 		// skip all processing for the common case (u = 0)
-		return []uint8{0, 0}
+		return b[:]
 	}
-	return []uint8{
-		uint8(u), uint8(u >> 8),
-	}
+	b[0] = uint8(u)
+	b[1] = uint8(u >> 8)
+	return b[:]
 }
 
 // beU64 returns a slice containing 8 bytes from the given uint64 u.
@@ -59,14 +69,20 @@ func leU16(u uint16) []uint8 {
 // significant byte.
 //go:inline
 func beU64(u uint64) []uint8 {
+	var b [8]uint8
 	if u == 0 {
 		// skip all processing for the common case (u = 0)
-		return []uint8{0, 0, 0, 0, 0, 0, 0, 0}
+		return b[:]
 	}
-	return []uint8{
-		uint8(u >> 56), uint8(u >> 48), uint8(u >> 40), uint8(u >> 32),
-		uint8(u >> 24), uint8(u >> 16), uint8(u >> 8), uint8(u),
-	}
+	b[7] = uint8(u)
+	b[6] = uint8(u >> 8)
+	b[5] = uint8(u >> 16)
+	b[4] = uint8(u >> 24)
+	b[3] = uint8(u >> 32)
+	b[2] = uint8(u >> 40)
+	b[1] = uint8(u >> 48)
+	b[0] = uint8(u >> 56)
+	return b[:]
 }
 
 // beU32 returns a slice containing 4 bytes from the given uint32 u.
@@ -76,13 +92,16 @@ func beU64(u uint64) []uint8 {
 // significant byte.
 //go:inline
 func beU32(u uint32) []uint8 {
+	var b [4]uint8
 	if u == 0 {
 		// skip all processing for the common case (u = 0)
-		return []uint8{0, 0, 0, 0}
+		return b[:]
 	}
-	return []uint8{
-		uint8(u >> 24), uint8(u >> 16), uint8(u >> 8), uint8(u),
-	}
+	b[3] = uint8(u)
+	b[2] = uint8(u >> 8)
+	b[1] = uint8(u >> 16)
+	b[0] = uint8(u >> 24)
+	return b[:]
 }
 
 // beU16 returns a slice containing 2 bytes from the given uint16 u.
@@ -92,13 +111,14 @@ func beU32(u uint32) []uint8 {
 // significant byte.
 //go:inline
 func beU16(u uint16) []uint8 {
+	var b [2]uint8
 	if u == 0 {
 		// skip all processing for the common case (u = 0)
-		return []uint8{0, 0}
+		return b[:]
 	}
-	return []uint8{
-		uint8(u >> 8), uint8(u),
-	}
+	b[1] = uint8(u)
+	b[0] = uint8(u >> 8)
+	return b[:]
 }
 
 // revU64 returns the given uint64 u with bytes in the reverse order.
@@ -216,6 +236,32 @@ func txEndpoint(number uint8) uint8 {
 func endpointIndex(address uint8) uint8 {
 	return ((address & descEndptAddrNumberMsk) << 1) |
 		((address & descEndptAddrDirectionMsk) >> descEndptAddrDirectionPos)
+}
+
+//go:inline
+func indexEndpoint(index uint8) uint8 {
+	return ((index >> 1) & descEndptAddrNumberMsk) |
+		((index & 0x1) << descEndptAddrDirectionPos)
+}
+
+// wrap computes the index into a circular buffer of length mod by walking
+// forward n elements if n is positive, or reverse n elements if n is negative.
+// For example, both wrap(42, 10) and wrap(-308, 10) return 2.
+//go:inline
+func wrap(n, mod int) int {
+	if mod <= 0 || n == mod {
+		return 0
+	}
+	if n < 0 {
+		if -n < mod {
+			return mod + n
+		}
+		return mod - (-n % mod)
+	}
+	if n < mod {
+		return n
+	}
+	return n % mod
 }
 
 // The following buffLo and buffHi are helper methods for slice definitions from

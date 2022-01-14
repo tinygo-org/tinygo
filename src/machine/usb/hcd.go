@@ -1,6 +1,6 @@
 package usb
 
-// Implementation of 32-bit target-agnostic USB host controller driver (hcd).
+// Implementation of target-agnostic USB host controller driver (hcd).
 
 // hcdCount defines the number of USB cores to configure for host mode. It is
 // computed as the sum of all declared host configuration descriptors.
@@ -14,7 +14,7 @@ var hcdInstance [hcdCount]hcd
 // abstraction for ports configured as host on this platform.
 var hhwInstance [hcdCount]hhw
 
-// hcd implements USB host controller driver (hcd) interface.
+// hcd implements a generic USB host controller driver (hcd) for all targets.
 type hcd struct {
 	*hhw // USB hardware abstraction layer
 
@@ -27,7 +27,7 @@ type hcd struct {
 // initHCD initializes and assigns a free host controller instance to the given
 // USB port. Returns the initialized host controller or nil if no free host
 // controller instances remain.
-func initHCD(port int, class class) (*hcd, status) {
+func initHCD(port int, speed Speed, class class) (*hcd, status) {
 	if 0 == hcdCount {
 		return nil, statusInvalid // Must have defined host controllers
 	}
@@ -38,7 +38,7 @@ func initHCD(port int, class class) (*hcd, status) {
 	for i := range hcdInstance {
 		if nil == hcdInstance[i].core {
 			// Initialize host controller.
-			hcdInstance[i].hhw = allocHHW(port, i, &hcdInstance[i])
+			hcdInstance[i].hhw = allocHHW(port, i, speed, &hcdInstance[i])
 			hcdInstance[i].core = &coreInstance[port]
 			hcdInstance[i].port = port
 			hcdInstance[i].cc = class
