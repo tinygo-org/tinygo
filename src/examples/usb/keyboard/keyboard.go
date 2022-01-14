@@ -143,7 +143,7 @@ func main() {
 
 		time.Sleep(5 * time.Second)
 
-		// Open serial connection
+		// Open serial connection (GNU screen)
 		keyboard.Write([]byte("screen /dev/ttyACM0 115200"))
 		time.Sleep(2 * time.Second)
 		keyboard.Press(usb.KeyEnter)
@@ -159,19 +159,23 @@ func main() {
 		keyboard.Press(usb.KeyEnter)
 		time.Sleep(2 * time.Second)
 
-		// Close serial connection
+		// Close serial connection (GNU screen)
 		keyboard.Down(usb.KeyModifierCtrl)
+		// Ctrl-X is the prefix sequence in my GNU screen configuration
 		keyboard.Press(usb.KeyX)
 		keyboard.Up(usb.KeyModifierCtrl)
 		time.Sleep(time.Second)
+		// Backslash (Prefix-\) is the GNU screen command to kill window
 		keyboard.Press(usb.KeyBackslash)
 		time.Sleep(time.Second)
+		// Confirm "Kill window (Y/N)?" prompt
 		keyboard.Press(usb.KeyY)
 		keyboard.Press(usb.KeyEnter)
 		time.Sleep(2 * time.Second)
 
 		// Close terminal
 		keyboard.Down(usb.KeyModifierCtrl)
+		// Ctrl-D exits the shell (sends a resemblance of EOF, I believe?)
 		keyboard.Press(usb.KeyD)
 		keyboard.Up(usb.KeyModifierCtrl)
 

@@ -1,14 +1,13 @@
 package usb
 
-// Implementation of 32-bit target-agnostic USB device controller driver (dcd).
+// Implementation of target-agnostic USB device controller driver (dcd).
+//
+// The types, constants, and methods defined in this unit are applicable to all
+// targets. It was designed to complement the device hardware abstraction (dhw)
+// implemented for each target, providing common/shared functionality and
+// defining a standard interface with which the dhw must adhere.
 
 import "unsafe"
-
-func init() {
-	if unsafe.Sizeof(uintptr(0)) > 4 {
-		panic("USB device controller is only supported on 32-bit systems")
-	}
-}
 
 // dcdCount defines the number of USB cores to configure for device mode. It is
 // computed as the sum of all declared device configuration descriptors.
@@ -22,8 +21,7 @@ var dcdInstance [dcdCount]dcd
 // abstraction for ports configured as device on this platform.
 var dhwInstance [dcdCount]dhw
 
-// dcd implements a generic USB device controller driver (dcd) for 32-bit ARM
-// targets.
+// dcd implements a generic USB device controller driver (dcd) for all targets.
 type dcd struct {
 	*dhw // USB hardware abstraction layer
 
@@ -36,7 +34,7 @@ type dcd struct {
 // initDCD initializes and assigns a free device controller instance to the
 // given USB port. Returns the initialized device controller or nil if no free
 // device controller instances remain.
-func initDCD(port int, class class) (*dcd, status) {
+func initDCD(port int, speed Speed, class class) (*dcd, status) {
 	if 0 == dcdCount {
 		return nil, statusInvalid // Must have defined device controllers
 	}
@@ -51,7 +49,7 @@ func initDCD(port int, class class) (*dcd, status) {
 	for i := range dcdInstance {
 		if nil == dcdInstance[i].core {
 			// Initialize device controller.
-			dcdInstance[i].dhw = allocDHW(port, i, &dcdInstance[i])
+			dcdInstance[i].dhw = allocDHW(port, i, speed, &dcdInstance[i])
 			dcdInstance[i].core = &coreInstance[port]
 			dcdInstance[i].port = port
 			dcdInstance[i].cc = class
@@ -75,6 +73,33 @@ type dcdSetup struct {
 	wValue        uint16
 	wIndex        uint16
 	wLength       uint16
+}
+
+func setupFrom(addr uintptr) dcdSetup {
+	var u uint64
+	for i := uintptr(0); i < 8; i++ {
+		u |= uint64(*(*uint8)(unsafe.Pointer(addr + i))) << (i << 3)
+	}
+	return dcdSetup{
+		bmRequestType: uint8(u & 0xFF),
+		bRequest:      uint8((u & 0xFF00) >> 8),
+		wValue:        uint16((u & 0xFFFF0000) >> 16),
+		wIndex:        uint16((u & 0xFFFF00000000) >> 32),
+		wLength:       uint16((u & 0xFFFF000000000000) >> 48),
+	}
+}
+
+func setup(b []uint8) dcdSetup {
+	if len(b) >= 8 {
+		return dcdSetup{
+			bmRequestType: b[0],
+			bRequest:      b[1],
+			wValue:        packU16(b[2:]),
+			wIndex:        packU16(b[4:]),
+			wLength:       packU16(b[6:]),
+		}
+	}
+	return dcdSetup{}
 }
 
 // pack returns the receiver setup packet encoded as uint64.
@@ -130,10 +155,13 @@ func (d *dcd) event(ev dcdEvent) {
 	case dcdEventStatusError:
 	case dcdEventControlSetup:
 		// On control endpoint 0 setup events, the ev.setup field will be defined
-		switch d.controlSetup(ev.setup) {
+		d.stage = d.controlSetup(ev.setup)
+		switch d.stage {
 		case dcdStageSetup:
-		case dcdStageData:
-		case dcdStageStatus:
+		case dcdStageDataIn:
+		case dcdStageDataOut:
+		case dcdStageStatusIn:
+		case dcdStageStatusOut:
 		case dcdStageStall:
 			d.controlStall()
 		}
@@ -144,15 +172,17 @@ func (d *dcd) event(ev dcdEvent) {
 	}
 }
 
-// dcdStage represents the USB transaction stage of a control request.
+// dcdStage represents the stage of a USB control transfer.
 type dcdStage uint8
 
-// Enumerated constants for all possible USB transaction stages.
+// Enumerated constants for all possible USB control transfer stages.
 const (
-	dcdStageSetup  dcdStage = iota // Indicates no stage transition required
-	dcdStageData                   // IN/OUT data transfer
-	dcdStageStatus                 // Setup request complete
-	dcdStageStall                  // Unhandled or invalid request
+	dcdStageSetup     dcdStage = iota // Indicates no stage transition required
+	dcdStageDataIn                    // IN data transfer
+	dcdStageDataOut                   // OUT data transfer
+	dcdStageStatusIn                  // IN status request
+	dcdStageStatusOut                 // OUT status request
+	dcdStageStall                     // Unhandled or invalid request
 )
 
 // controlSetup handles setup messages on control endpoint 0.
@@ -287,7 +317,7 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 					// Unhandled device class
 				}
 
-				// GET DESCRIPTOR (0x06):
+			// GET HID REPORT (0x01):
 			case descHIDRequestGetReport:
 
 				// Respond based on our device class configuration

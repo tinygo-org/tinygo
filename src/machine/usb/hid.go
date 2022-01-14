@@ -10,27 +10,26 @@ var (
 	ErrHIDReportTransfer = errors.New("failed to transfer HID report")
 )
 
+// HID represents a virtual keyboard/mouse/joystick device (with a serial data
+// Rx/Tx interface) using the USB HID device class driver.
 type HID struct {
+	// Port is the MCU's native USB core number. If in doubt, leave it
+	// uninitialized for default (0).
 	Port int
 	core *core
 }
 
 type HIDConfig struct {
-	// Port is the MCU's native USB core number. If in doubt, leave it
-	// uninitialized for default (0).
-	Port int
+	BusSpeed Speed
 }
 
 func (hid *HID) Configure(config HIDConfig) error {
 
-	if config.Port >= CoreCount || config.Port >= dcdCount {
-		return ErrHIDInvalidPort
-	}
-	hid.Port = config.Port
+	c := class{id: classDeviceHID, config: 1}
 
 	// verify we have a free USB port and take ownership of it
 	var st status
-	hid.core, st = initCore(hid.Port, class{id: classDeviceHID, config: 1})
+	hid.core, st = initCore(hid.Port, config.BusSpeed, c)
 	if !st.ok() {
 		return ErrHIDInvalidPort
 	}

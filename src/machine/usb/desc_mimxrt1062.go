@@ -5,13 +5,18 @@ package usb
 // descCPUFrequencyHz defines the target CPU frequency (Hz).
 const descCPUFrequencyHz = 600000000
 
+// descCoreCount defines the number of USB PHY cores available on this platform,
+// independent of the number of cores which shall be configured as TinyGo USB
+// host/device controller instances.
+const descCoreCount = 2
+
 // descCDCACMCount defines the number of USB cores that may be configured as
 // CDC-ACM (single) devices.
-const descCDCACMCount = 0
+const descCDCACMCount = 1
 
 // descHIDCount defines the number of USB cores that may be configured as a
 // composite (keyboard + mouse + joystick) human interface device (HID).
-const descHIDCount = 1
+const descHIDCount = 0
 
 // General USB device identification constants.
 const (
@@ -27,7 +32,10 @@ const (
 
 // Constants for USB CDC-ACM device classes.
 const (
-	descCDCACMMaxPower = 50 // 100 mA
+
+	// USB bus configuration attributes
+
+	descCDCACMMaxPowerMa = 100 // Maximum current (mA) requested from host
 
 	// CDC-ACM Control Buffers
 
@@ -77,7 +85,10 @@ const (
 
 // Constants for USB HID (keyboard, mouse, joystick) device classes.
 const (
-	descHIDMaxPower = 50 // 100 mA
+
+	// USB bus configuration attributes
+
+	descHIDMaxPowerMa = 100 // Maximum current (mA) requested from host
 
 	// HID Control Buffers
 
@@ -541,7 +552,10 @@ type descHIDClassData struct {
 
 	// HID Device Instances
 
+	//serial *Serial
 	keyboard *Keyboard
+	//mouse *Mouse
+	//joystick *Joystick
 }
 
 // descHIDData holds statically-allocated instances for each of the target-
@@ -599,6 +613,9 @@ var descHIDData = [dcdCount]descHIDClassData{
 
 		// HID Device Instances
 
+		//serial: &descHID0Serial,
 		keyboard: &descHID0Keyboard,
+		//mouse: &descHID0Mouse,
+		//joystick: &descHID0Joystick,
 	},
 }
