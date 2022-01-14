@@ -5,6 +5,8 @@ target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
+declare void @runtime.trackPointer(i8* nocapture readonly, i8*, i8*)
+
 ; Function Attrs: nounwind
 define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
@@ -45,6 +47,7 @@ declare void @runtime.lookupPanic(i8*, i8*)
 define hidden { i32*, i32, i32 } @main.sliceAppendValues(i32* %ints.data, i32 %ints.len, i32 %ints.cap, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   %varargs = call i8* @runtime.alloc(i32 12, i8* nonnull inttoptr (i32 3 to i8*), i8* undef, i8* null) #0
+  call void @runtime.trackPointer(i8* nonnull %varargs, i8* undef, i8* null) #0
   %0 = bitcast i8* %varargs to i32*
   store i32 1, i32* %0, align 4
   %1 = getelementptr inbounds i8, i8* %varargs, i32 4
@@ -62,6 +65,7 @@ entry:
   %5 = insertvalue { i32*, i32, i32 } undef, i32* %append.newBuf, 0
   %6 = insertvalue { i32*, i32, i32 } %5, i32 %append.newLen, 1
   %7 = insertvalue { i32*, i32, i32 } %6, i32 %append.newCap, 2
+  call void @runtime.trackPointer(i8* %append.newPtr, i8* undef, i8* null) #0
   ret { i32*, i32, i32 } %7
 }
 
@@ -80,6 +84,7 @@ entry:
   %0 = insertvalue { i32*, i32, i32 } undef, i32* %append.newBuf, 0
   %1 = insertvalue { i32*, i32, i32 } %0, i32 %append.newLen, 1
   %2 = insertvalue { i32*, i32, i32 } %1, i32 %append.newCap, 2
+  call void @runtime.trackPointer(i8* %append.newPtr, i8* undef, i8* null) #0
   ret { i32*, i32, i32 } %2
 }
 
@@ -109,6 +114,7 @@ slice.next:                                       ; preds = %entry
   %0 = insertvalue { i8*, i32, i32 } undef, i8* %makeslice.buf, 0
   %1 = insertvalue { i8*, i32, i32 } %0, i32 %len, 1
   %2 = insertvalue { i8*, i32, i32 } %1, i32 %len, 2
+  call void @runtime.trackPointer(i8* nonnull %makeslice.buf, i8* undef, i8* null) #0
   ret { i8*, i32, i32 } %2
 }
 
@@ -131,6 +137,7 @@ slice.next:                                       ; preds = %entry
   %0 = insertvalue { i16*, i32, i32 } undef, i16* %makeslice.array, 0
   %1 = insertvalue { i16*, i32, i32 } %0, i32 %len, 1
   %2 = insertvalue { i16*, i32, i32 } %1, i32 %len, 2
+  call void @runtime.trackPointer(i8* nonnull %makeslice.buf, i8* undef, i8* null) #0
   ret { i16*, i32, i32 } %2
 }
 
@@ -151,6 +158,7 @@ slice.next:                                       ; preds = %entry
   %0 = insertvalue { [3 x i8]*, i32, i32 } undef, [3 x i8]* %makeslice.array, 0
   %1 = insertvalue { [3 x i8]*, i32, i32 } %0, i32 %len, 1
   %2 = insertvalue { [3 x i8]*, i32, i32 } %1, i32 %len, 2
+  call void @runtime.trackPointer(i8* nonnull %makeslice.buf, i8* undef, i8* null) #0
   ret { [3 x i8]*, i32, i32 } %2
 }
 
@@ -171,6 +179,7 @@ slice.next:                                       ; preds = %entry
   %0 = insertvalue { i32*, i32, i32 } undef, i32* %makeslice.array, 0
   %1 = insertvalue { i32*, i32, i32 } %0, i32 %len, 1
   %2 = insertvalue { i32*, i32, i32 } %1, i32 %len, 2
+  call void @runtime.trackPointer(i8* nonnull %makeslice.buf, i8* undef, i8* null) #0
   ret { i32*, i32, i32 } %2
 }
 

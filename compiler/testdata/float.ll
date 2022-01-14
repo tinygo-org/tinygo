@@ -5,6 +5,8 @@ target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
+declare void @runtime.trackPointer(i8* nocapture readonly, i8*, i8*)
+
 ; Function Attrs: nounwind
 define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:

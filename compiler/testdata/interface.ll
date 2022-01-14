@@ -24,6 +24,8 @@ target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
+declare void @runtime.trackPointer(i8* nocapture readonly, i8*, i8*)
+
 ; Function Attrs: nounwind
 define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
@@ -33,18 +35,21 @@ entry:
 ; Function Attrs: nounwind
 define hidden %runtime._interface @main.simpleType(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
+  call void @runtime.trackPointer(i8* null, i8* undef, i8* null) #0
   ret %runtime._interface { i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:basic:int" to i32), i8* null }
 }
 
 ; Function Attrs: nounwind
 define hidden %runtime._interface @main.pointerType(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
+  call void @runtime.trackPointer(i8* null, i8* undef, i8* null) #0
   ret %runtime._interface { i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:pointer:basic:int" to i32), i8* null }
 }
 
 ; Function Attrs: nounwind
 define hidden %runtime._interface @main.interfaceType(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
+  call void @runtime.trackPointer(i8* null, i8* undef, i8* null) #0
   ret %runtime._interface { i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:pointer:named:error" to i32), i8* null }
 }
 
@@ -53,6 +58,7 @@ declare i1 @"interface:{Error:func:{}{basic:string}}.$typeassert"(i32) #1
 ; Function Attrs: nounwind
 define hidden %runtime._interface @main.anonymousInterfaceType(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
+  call void @runtime.trackPointer(i8* null, i8* undef, i8* null) #0
   ret %runtime._interface { i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}" to i32), i8* null }
 }
 
@@ -112,6 +118,8 @@ declare i8 @"interface:{String:func:{}{basic:string},main.foo:func:{basic:int}{b
 define hidden %runtime._string @main.callErrorMethod(i32 %itf.typecode, i8* %itf.value, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   %0 = call %runtime._string @"interface:{Error:func:{}{basic:string}}.Error$invoke"(i8* %itf.value, i32 %itf.typecode, i8* undef, i8* undef) #0
+  %1 = extractvalue %runtime._string %0, 0
+  call void @runtime.trackPointer(i8* %1, i8* undef, i8* null) #0
   ret %runtime._string %0
 }
 
