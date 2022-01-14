@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 )
 
 // Testing flags.
@@ -51,9 +52,11 @@ type common struct {
 	cleanups []func() // optional functions to be called at the end of the test
 	finished bool     // Test function has completed.
 
-	parent *common
-	level  int    // Nesting depth of test or benchmark.
-	name   string // Name of test or benchmark.
+	parent   *common
+	level    int       // Nesting depth of test or benchmark.
+	name     string    // Name of test or benchmark.
+	start    time.Time // Time test or benchmark started
+	duration time.Duration
 }
 
 // Short reports whether the -test.short flag is set.
@@ -71,6 +74,11 @@ func CoverMode() string {
 // Verbose reports whether the -test.v flag is set.
 func Verbose() bool {
 	return flagVerbose
+}
+
+// fmtDuration returns a string representing d in the form "87.00s".
+func fmtDuration(d time.Duration) string {
+	return fmt.Sprintf("%.2fs", d.Seconds())
 }
 
 // TB is the interface common to T and B.
@@ -265,21 +273,11 @@ func tRunner(t *T, fn func(t *T)) {
 		fmt.Fprintf(t.w, "=== RUN   %s\n", t.name)
 	}
 
+	t.start = time.Now()
 	fn(t)
+	t.duration += time.Since(t.start) // TODO: capture cleanup time, too.
 
-	// Process the result (pass or fail).
-	if t.failed {
-		if t.parent != nil {
-			t.parent.failed = true
-		}
-		fmt.Fprintf(t.w, t.indent+"--- FAIL: %s\n", t.name)
-		t.w.Write(t.output.Bytes())
-	} else {
-		if flagVerbose {
-			fmt.Fprintf(t.w, t.indent+"--- PASS: %s\n", t.name)
-			t.w.Write(t.output.Bytes())
-		}
-	}
+	t.report() // Report after all subtests have finished.
 }
 
 // Run runs f as a subtest of t called name. It waits until the subtest is finished
@@ -379,6 +377,25 @@ func (m *M) Run() int {
 		}
 	}
 	return failures
+}
+
+func (t *T) report() {
+	dstr := fmtDuration(t.duration)
+	format := t.indent + "--- %s: %s (%s)\n"
+	if t.Failed() {
+		if t.parent != nil {
+			t.parent.failed = true
+		}
+		fmt.Fprintf(t.w, format, "FAIL", t.name, dstr)
+		t.w.Write(t.output.Bytes())
+	} else if flagVerbose {
+		if t.Skipped() {
+			fmt.Fprintf(t.w, format, "SKIP", t.name, dstr)
+		} else {
+			fmt.Fprintf(t.w, format, "PASS", t.name, dstr)
+		}
+		t.w.Write(t.output.Bytes())
+	}
 }
 
 // AllocsPerRun returns the average number of allocations during calls to f.

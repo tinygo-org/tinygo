@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -439,6 +440,11 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		actual = bytes.Replace(actual, []byte{0x1b, '[', '3', '2', 'm'}, nil, -1)
 		actual = bytes.Replace(actual, []byte{0x1b, '[', '0', 'm'}, nil, -1)
 		actual = bytes.Replace(actual, []byte{'.', '.', '\n'}, []byte{'\n'}, -1)
+	}
+	if name == "testing.go" {
+		// Strip actual time.
+		re := regexp.MustCompile(`\([0-9]\.[0-9][0-9]s\)`)
+		actual = re.ReplaceAllLiteral(actual, []byte{'(', '0', '.', '0', '0', 's', ')'})
 	}
 
 	// Check whether the command ran successfully.

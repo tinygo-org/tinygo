@@ -1,10 +1,10 @@
---- FAIL: TestBar
+--- FAIL: TestBar (0.00s)
     log Bar
     log g
         h
         i
         
-    --- FAIL: TestBar/Bar2
+    --- FAIL: TestBar/Bar2 (0.00s)
         log Bar2
             a
             b
