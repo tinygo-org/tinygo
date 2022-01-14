@@ -124,13 +124,13 @@ func initUART() {
 }
 
 func initUSB() {
-	machine.HID0.Configure(usb.HIDConfig{})
-	// machine.UART0.Configure(usb.UARTConfig{})
+	// machine.HID0.Configure(usb.HIDConfig{})
+	machine.UART0.Configure(usb.UARTConfig{})
 }
 
 func putchar(c byte) {
-	// machine.UART0.WriteByte(c) // print to USB UART
-	machine.UART1.WriteByte(c) // print to hardware UART
+	machine.UART0.WriteByte(c) // print to USB UART
+	// machine.UART1.WriteByte(c) // print to hardware UART
 }
 
 func exit(code int) {

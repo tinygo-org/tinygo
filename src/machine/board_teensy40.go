@@ -109,9 +109,9 @@ func init() {
 // |                        USB                          |
 // #=====================================================#
 var (
-	// UART0 = usb.UART{Port: 0}
-	HID0  = usb.HID{Port: 0}
-	UART0 = &UART1
+	UART0 = usb.UART{Port: 0}
+	// HID0  = usb.HID{Port: 0}
+	// UART0 = &UART1
 )
 
 // #=====================================================#
