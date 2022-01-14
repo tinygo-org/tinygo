@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -366,13 +367,20 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		return
 	}
 
+	// Reserve CPU time for the test to run.
+	// This attempts to ensure that the test is not CPU-starved.
+	options.Semaphore <- struct{}{}
+	defer func() { <-options.Semaphore }()
+
 	// Create the test command, taking care of emulators etc.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	var cmd *exec.Cmd
 	if len(spec.Emulator) == 0 {
-		cmd = exec.Command(binary)
+		cmd = exec.CommandContext(ctx, binary)
 	} else {
 		args := append(spec.Emulator[1:], binary)
-		cmd = exec.Command(spec.Emulator[0], args...)
+		cmd = exec.CommandContext(ctx, spec.Emulator[0], args...)
 	}
 	if len(spec.Emulator) != 0 && spec.Emulator[0] == "wasmtime" {
 		// Allow reading from the current directory.
@@ -389,8 +397,6 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	}
 
 	// Run the test.
-	runComplete := make(chan struct{})
-	ranTooLong := false
 	stdout := &bytes.Buffer{}
 	if len(spec.Emulator) != 0 && spec.Emulator[0] == "simavr" {
 		cmd.Stdout = os.Stderr
@@ -403,32 +409,11 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	if err != nil {
 		t.Fatal("failed to start:", err)
 	}
-	go func() {
-		// Terminate the process if it runs too long.
-		maxDuration := 10 * time.Second
-		if runtime.GOOS == "windows" {
-			// For some reason, tests on Windows can take around
-			// 30s to complete. TODO: investigate why and fix this.
-			maxDuration = 40 * time.Second
-		}
-		timer := time.NewTimer(maxDuration)
-		select {
-		case <-runComplete:
-			timer.Stop()
-		case <-timer.C:
-			ranTooLong = true
-			if runtime.GOOS == "windows" {
-				cmd.Process.Signal(os.Kill) // Windows doesn't support SIGINT.
-			} else {
-				cmd.Process.Signal(os.Interrupt)
-			}
-		}
-	}()
 	err = cmd.Wait()
-	close(runComplete)
 
-	if ranTooLong {
+	if cerr := ctx.Err(); cerr == context.DeadlineExceeded {
 		stdout.WriteString("--- test ran too long, terminating...\n")
+		err = cerr
 	}
 
 	// putchar() prints CRLF, convert it to LF.
