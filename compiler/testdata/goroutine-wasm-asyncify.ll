@@ -15,6 +15,8 @@ target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
+declare void @runtime.trackPointer(i8* nocapture readonly, i8*, i8*)
+
 ; Function Attrs: nounwind
 define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
@@ -70,8 +72,12 @@ define hidden void @main.closureFunctionGoroutine(i8* %context, i8* %parentHandl
 entry:
   %n = call i8* @runtime.alloc(i32 4, i8* nonnull inttoptr (i32 3 to i8*), i8* undef, i8* null) #0
   %0 = bitcast i8* %n to i32*
+  call void @runtime.trackPointer(i8* nonnull %n, i8* undef, i8* null) #0
   store i32 3, i32* %0, align 4
+  call void @runtime.trackPointer(i8* nonnull %n, i8* undef, i8* null) #0
+  call void @runtime.trackPointer(i8* bitcast (void (i32, i8*, i8*)* @"main.closureFunctionGoroutine$1" to i8*), i8* undef, i8* null) #0
   %1 = call i8* @runtime.alloc(i32 8, i8* null, i8* undef, i8* null) #0
+  call void @runtime.trackPointer(i8* nonnull %1, i8* undef, i8* null) #0
   %2 = bitcast i8* %1 to i32*
   store i32 5, i32* %2, align 4
   %3 = getelementptr inbounds i8, i8* %1, i32 4
@@ -110,6 +116,7 @@ declare void @runtime.printint32(i32, i8*, i8*)
 define hidden void @main.funcGoroutine(i8* %fn.context, void ()* %fn.funcptr, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   %0 = call i8* @runtime.alloc(i32 12, i8* null, i8* undef, i8* null) #0
+  call void @runtime.trackPointer(i8* nonnull %0, i8* undef, i8* null) #0
   %1 = bitcast i8* %0 to i32*
   store i32 5, i32* %1, align 4
   %2 = getelementptr inbounds i8, i8* %0, i32 4
@@ -166,6 +173,7 @@ declare void @runtime.chanClose(%runtime.channel* dereferenceable_or_null(32), i
 define hidden void @main.startInterfaceMethod(i32 %itf.typecode, i8* %itf.value, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   %0 = call i8* @runtime.alloc(i32 16, i8* null, i8* undef, i8* null) #0
+  call void @runtime.trackPointer(i8* nonnull %0, i8* undef, i8* null) #0
   %1 = bitcast i8* %0 to i8**
   store i8* %itf.value, i8** %1, align 4
   %2 = getelementptr inbounds i8, i8* %0, i32 4

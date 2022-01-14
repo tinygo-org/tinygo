@@ -5,6 +5,8 @@ target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
+declare void @runtime.trackPointer(i8* nocapture readonly, i8*, i8*)
+
 ; Function Attrs: nounwind
 define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
@@ -15,6 +17,7 @@ entry:
 define hidden i8* @main.Add32(i8* %p, i32 %len, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   %0 = getelementptr i8, i8* %p, i32 %len
+  call void @runtime.trackPointer(i8* %0, i8* undef, i8* null) #0
   ret i8* %0
 }
 
@@ -23,6 +26,7 @@ define hidden i8* @main.Add64(i8* %p, i64 %len, i8* %context, i8* %parentHandle)
 entry:
   %0 = trunc i64 %len to i32
   %1 = getelementptr i8, i8* %p, i32 %0
+  call void @runtime.trackPointer(i8* %1, i8* undef, i8* null) #0
   ret i8* %1
 }
 
@@ -47,6 +51,7 @@ declare void @runtime.sliceToArrayPointerPanic(i8*, i8*)
 define hidden [4 x i32]* @main.SliceToArrayConst(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
   %makeslice = call i8* @runtime.alloc(i32 24, i8* nonnull inttoptr (i32 3 to i8*), i8* undef, i8* null) #0
+  call void @runtime.trackPointer(i8* nonnull %makeslice, i8* undef, i8* null) #0
   br i1 false, label %slicetoarray.throw, label %slicetoarray.next
 
 slicetoarray.throw:                               ; preds = %entry
@@ -75,6 +80,8 @@ unsafe.Slice.next:                                ; preds = %entry
   %5 = insertvalue { i32*, i32, i32 } undef, i32* %ptr, 0
   %6 = insertvalue { i32*, i32, i32 } %5, i32 %len, 1
   %7 = insertvalue { i32*, i32, i32 } %6, i32 %len, 2
+  %8 = bitcast i32* %ptr to i8*
+  call void @runtime.trackPointer(i8* %8, i8* undef, i8* null) #0
   ret { i32*, i32, i32 } %7
 }
 
@@ -97,6 +104,7 @@ unsafe.Slice.next:                                ; preds = %entry
   %4 = insertvalue { i8*, i32, i32 } undef, i8* %ptr, 0
   %5 = insertvalue { i8*, i32, i32 } %4, i32 %3, 1
   %6 = insertvalue { i8*, i32, i32 } %5, i32 %3, 2
+  call void @runtime.trackPointer(i8* %ptr, i8* undef, i8* null) #0
   ret { i8*, i32, i32 } %6
 }
 
@@ -119,6 +127,8 @@ unsafe.Slice.next:                                ; preds = %entry
   %6 = insertvalue { i32*, i32, i32 } undef, i32* %ptr, 0
   %7 = insertvalue { i32*, i32, i32 } %6, i32 %5, 1
   %8 = insertvalue { i32*, i32, i32 } %7, i32 %5, 2
+  %9 = bitcast i32* %ptr to i8*
+  call void @runtime.trackPointer(i8* %9, i8* undef, i8* null) #0
   ret { i32*, i32, i32 } %8
 }
 
@@ -141,6 +151,8 @@ unsafe.Slice.next:                                ; preds = %entry
   %6 = insertvalue { i32*, i32, i32 } undef, i32* %ptr, 0
   %7 = insertvalue { i32*, i32, i32 } %6, i32 %5, 1
   %8 = insertvalue { i32*, i32, i32 } %7, i32 %5, 2
+  %9 = bitcast i32* %ptr to i8*
+  call void @runtime.trackPointer(i8* %9, i8* undef, i8* null) #0
   ret { i32*, i32, i32 } %8
 }
 

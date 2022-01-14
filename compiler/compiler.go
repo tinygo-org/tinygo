@@ -270,6 +270,10 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	// Predeclare the runtime.alloc function, which is used by the wordpack
 	// functionality.
 	c.getFunction(c.program.ImportedPackage("runtime").Members["alloc"].(*ssa.Function))
+	if c.NeedsStackObjects {
+		// Predeclare trackPointer, which is used everywhere we use runtime.alloc.
+		c.getFunction(c.program.ImportedPackage("runtime").Members["trackPointer"].(*ssa.Function))
+	}
 
 	// Compile all functions, methods, and global variables in this package.
 	irbuilder := c.ctx.NewBuilder()

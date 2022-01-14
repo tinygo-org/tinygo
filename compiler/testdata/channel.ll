@@ -13,6 +13,8 @@ target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*, i8*)
 
+declare void @runtime.trackPointer(i8* nocapture readonly, i8*, i8*)
+
 ; Function Attrs: nounwind
 define hidden void @main.init(i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
@@ -63,7 +65,10 @@ declare i1 @runtime.chanRecv(%runtime.channel* dereferenceable_or_null(32), i8*,
 ; Function Attrs: nounwind
 define hidden void @main.chanZeroSend(%runtime.channel* dereferenceable_or_null(32) %ch, i8* %context, i8* %parentHandle) unnamed_addr #0 {
 entry:
+  %complit = alloca {}, align 8
   %chan.blockedList = alloca %runtime.channelBlockedList, align 8
+  %0 = bitcast {}* %complit to i8*
+  call void @runtime.trackPointer(i8* nonnull %0, i8* undef, i8* null) #0
   %chan.blockedList.bitcast = bitcast %runtime.channelBlockedList* %chan.blockedList to i8*
   call void @llvm.lifetime.start.p0i8(i64 24, i8* nonnull %chan.blockedList.bitcast)
   call void @runtime.chanSend(%runtime.channel* %ch, i8* null, %runtime.channelBlockedList* nonnull %chan.blockedList, i8* undef, i8* null) #0

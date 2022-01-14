@@ -109,6 +109,7 @@ func TestCompiler(t *testing.T) {
 				FuncImplementation: config.FuncImplementation(),
 				AutomaticStackSize: config.AutomaticStackSize(),
 				DefaultStackSize:   config.Target.DefaultStackSize,
+				NeedsStackObjects:  config.NeedsStackObjects(),
 			}
 			machine, err := NewTargetMachine(compilerConfig)
 			if err != nil {
