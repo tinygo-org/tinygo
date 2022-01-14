@@ -1,3 +1,4 @@
+//go:build !baremetal && !js
 // +build !baremetal,!js
 
 // Portions copyright 2009 The Go Authors. All rights reserved.
@@ -87,33 +88,7 @@ func (fs unixFilesystem) Remove(path string) error {
 }
 
 func (fs unixFilesystem) OpenFile(path string, flag int, perm FileMode) (FileHandle, error) {
-	// Map os package flags to syscall flags.
-	syscallFlag := 0
-	if flag&O_RDONLY != 0 {
-		syscallFlag |= syscall.O_RDONLY
-	}
-	if flag&O_WRONLY != 0 {
-		syscallFlag |= syscall.O_WRONLY
-	}
-	if flag&O_RDWR != 0 {
-		syscallFlag |= syscall.O_RDWR
-	}
-	if flag&O_APPEND != 0 {
-		syscallFlag |= syscall.O_APPEND
-	}
-	if flag&O_CREATE != 0 {
-		syscallFlag |= syscall.O_CREAT
-	}
-	if flag&O_EXCL != 0 {
-		syscallFlag |= syscall.O_EXCL
-	}
-	if flag&O_SYNC != 0 {
-		syscallFlag |= syscall.O_SYNC
-	}
-	if flag&O_TRUNC != 0 {
-		syscallFlag |= syscall.O_TRUNC
-	}
-	fp, err := syscall.Open(path, syscallFlag, uint32(perm))
+	fp, err := syscall.Open(path, flag, uint32(perm))
 	return unixFileHandle(fp), handleSyscallError(err)
 }
 
