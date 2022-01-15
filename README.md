@@ -1,6 +1,6 @@
 # TinyGo - Go compiler for small places
 
-[![CircleCI](https://circleci.com/gh/tinygo-org/tinygo/tree/dev.svg?style=svg)](https://circleci.com/gh/tinygo-org/tinygo/tree/dev) [![Windows](https://github.com/tinygo-org/tinygo/actions/workflows/windows.yml/badge.svg?branch=dev)](https://github.com/tinygo-org/tinygo/actions/workflows/windows.yml)
+[![Linux](https://github.com/tinygo-org/tinygo/actions/workflows/linux.yml/badge.svg?branch=dev)](https://github.com/tinygo-org/tinygo/actions/workflows/linux.yml) [![macOS](https://github.com/tinygo-org/tinygo/actions/workflows/build-macos.yml/badge.svg?branch=dev)](https://github.com/tinygo-org/tinygo/actions/workflows/build-macos.yml) [![Windows](https://github.com/tinygo-org/tinygo/actions/workflows/windows.yml/badge.svg?branch=dev)](https://github.com/tinygo-org/tinygo/actions/workflows/windows.yml) [![CircleCI](https://circleci.com/gh/tinygo-org/tinygo/tree/dev.svg?style=svg)](https://circleci.com/gh/tinygo-org/tinygo/tree/dev)
 
 TinyGo is a Go compiler intended for use in small places such as microcontrollers, WebAssembly (Wasm), and command-line tools.
 
@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 79 microcontroller boards are currently supported:
+The following 80 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
