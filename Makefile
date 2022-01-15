@@ -58,10 +58,13 @@ ifeq ($(OS),Windows_NT)
     CGO_LDFLAGS += -static -static-libgcc -static-libstdc++
     CGO_LDFLAGS_EXTRA += -lversion
 
-    BINARYEN_OPTION += -DCMAKE_EXE_LINKER_FLAGS='-static-libgcc -static-libstdc++'
+    USE_SYSTEM_BINARYEN ?= 1
 
 else ifeq ($(shell uname -s),Darwin)
     MD5SUM = md5
+
+    USE_SYSTEM_BINARYEN ?= 1
+
 else ifeq ($(shell uname -s),FreeBSD)
     MD5SUM = md5
     START_GROUP = -Wl,--start-group
@@ -172,6 +175,7 @@ $(LLVM_BUILDDIR)/build.ninja: llvm-source
 $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
 	cd $(LLVM_BUILDDIR) && ninja $(NINJA_BUILD_TARGETS)
 
+ifneq ($(USE_SYSTEM_BINARYEN),1)
 # Build Binaryen
 .PHONY: binaryen
 binaryen: build/wasm-opt$(EXE)
@@ -179,6 +183,7 @@ build/wasm-opt$(EXE):
 	mkdir -p build
 	cd lib/binaryen && cmake -G Ninja . -DBUILD_STATIC_LIB=ON $(BINARYEN_OPTION) && ninja bin/wasm-opt$(EXE)
 	cp lib/binaryen/bin/wasm-opt$(EXE) build/wasm-opt$(EXE)
+endif
 
 # Build wasi-libc sysroot
 .PHONY: wasi-libc
@@ -532,7 +537,7 @@ endif
 wasmtest:
 	$(GO) test ./tests/wasm
 
-build/release: tinygo gen-device wasi-libc binaryen
+build/release: tinygo gen-device wasi-libc $(if $(filter 1,$(USE_SYSTEM_BINARYEN)),,binaryen)
 	@mkdir -p build/release/tinygo/bin
 	@mkdir -p build/release/tinygo/lib/clang/include
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
@@ -551,7 +556,9 @@ build/release: tinygo gen-device wasi-libc binaryen
 	@mkdir -p build/release/tinygo/pkg/armv7em-unknown-unknown-eabi
 	@echo copying source files
 	@cp -p  build/tinygo$(EXE)           build/release/tinygo/bin
+ifneq ($(USE_SYSTEM_BINARYEN),1)
 	@cp -p  build/wasm-opt$(EXE)         build/release/tinygo/bin
+endif
 	@cp -p $(abspath $(CLANG_SRC))/lib/Headers/*.h build/release/tinygo/lib/clang/include
 	@cp -rp lib/CMSIS/CMSIS/Include      build/release/tinygo/lib/CMSIS/CMSIS
 	@cp -rp lib/CMSIS/README.md          build/release/tinygo/lib/CMSIS

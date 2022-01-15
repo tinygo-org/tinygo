@@ -16,10 +16,10 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: '1.17'
-      - name: Install QEMU
+      - name: Install Dependencies
         shell: bash
         run: |
-          HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu binaryen
       - name: Install Xtensa toolchain
         shell: bash
         run: |
@@ -71,19 +71,6 @@ jobs:
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
         run: make wasi-libc
-      - name: Cache Binaryen
-        uses: actions/cache@v2
-        id: cache-binaryen
-        with:
-          key: binaryen-macos-v1
-          path: build/wasm-opt
-      - name: Build Binaryen
-        if: steps.cache-binaryen.outputs.cache-hit != 'true'
-        run: |
-          # install dependencies
-          HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
-          # build!
-          make binaryen
       - name: Test TinyGo
         shell: bash
         run: make test GOTESTFLAGS="-v -short"
