@@ -198,6 +198,8 @@ test: wasi-libc
 
 TEST_PACKAGES_BASE = \
 	compress/bzip2 \
+	compress/flate \
+	compress/zlib \
 	container/heap \
 	container/list \
 	container/ring \
@@ -242,9 +244,7 @@ TEST_PACKAGES_BASE = \
 
 # Standard library packages that pass tests natively
 TEST_PACKAGES = \
-	$(TEST_PACKAGES_BASE) \
-	compress/flate \
-	compress/zlib \
+	$(TEST_PACKAGES_BASE)
 
 # Standard library packages that pass tests on wasi
 TEST_PACKAGES_WASI = \
