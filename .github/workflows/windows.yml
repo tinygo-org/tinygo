@@ -15,10 +15,11 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: '1.17'
-      - name: Install Ninja
+      - uses: MinoruSekine/setup-scoop@v1
+      - name: Install Dependencies
         shell: bash
         run: |
-          choco install ninja
+          scoop install ninja binaryen
       - name: Checkout
         uses: actions/checkout@v2
         with:
@@ -69,15 +70,6 @@ jobs:
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
         run: make wasi-libc
-      - name: Cache Binaryen
-        uses: actions/cache@v2
-        id: cache-binaryen
-        with:
-          key: binaryen-windows-v2
-          path: build/wasm-opt.exe
-      - name: Build Binaryen
-        if: steps.cache-binaryen.outputs.cache-hit != 'true'
-        run: make binaryen
       - name: Test TinyGo
         shell: bash
         run: make test GOTESTFLAGS="-v -short"
