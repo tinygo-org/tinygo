@@ -201,15 +201,19 @@ tinygo:
 test: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=20m -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
-TEST_PACKAGES_BASE = \
+# Tests that take over a minute in wasi
+TEST_PACKAGES_SLOW = \
 	compress/bzip2 \
 	compress/flate \
+	crypto/dsa \
+	index/suffixarray \
+
+TEST_PACKAGES_BASE = \
 	compress/zlib \
 	container/heap \
 	container/list \
 	container/ring \
 	crypto/des \
-	crypto/dsa \
 	crypto/elliptic/internal/fiat \
 	crypto/internal/subtle \
 	crypto/md5 \
@@ -229,7 +233,6 @@ TEST_PACKAGES_BASE = \
 	hash/crc64 \
 	hash/fnv \
 	html \
-	index/suffixarray \
 	internal/itoa \
 	internal/profile \
 	math \
@@ -259,12 +262,20 @@ TEST_PACKAGES_WASI = \
 # TODO: parallelize, and only show failing tests (no implied -v flag).
 .PHONY: tinygo-test
 tinygo-test:
+	$(TINYGO) test $(TEST_PACKAGES) $(TEST_PACKAGES_SLOW)
+tinygo-test-fast:
 	$(TINYGO) test $(TEST_PACKAGES)
 tinygo-bench:
+	$(TINYGO) test -bench . $(TEST_PACKAGES) $(TEST_PACKAGES_SLOW)
+tinygo-bench-fast:
 	$(TINYGO) test -bench . $(TEST_PACKAGES)
 tinygo-test-wasi:
+	$(TINYGO) test -target wasi $(TEST_PACKAGES_WASI) $(TEST_PACKAGES_SLOW)
+tinygo-test-wasi-fast:
 	$(TINYGO) test -target wasi $(TEST_PACKAGES_WASI)
 tinygo-bench-wasi:
+	$(TINYGO) test -target wasi -bench . $(TEST_PACKAGES_WASI) $(TEST_PACKAGES_SLOW)
+tinygo-bench-wasi-fast:
 	$(TINYGO) test -target wasi -bench . $(TEST_PACKAGES_WASI)
 
 .PHONY: smoketest
