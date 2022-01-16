@@ -38,6 +38,15 @@ func Mkdir(path string, perm FileMode) error {
 	return nil
 }
 
+// Many functions in package syscall return a count of -1 instead of 0.
+// Using fixCount(call()) instead of call() corrects the count.
+func fixCount(n int, err error) (int, error) {
+	if n < 0 {
+		n = 0
+	}
+	return n, err
+}
+
 // Remove removes a file or (empty) directory. If the operation fails, it will
 // return an error of type *PathError.
 func Remove(path string) error {
@@ -50,11 +59,6 @@ func Remove(path string) error {
 		return err
 	}
 	return nil
-}
-
-// Symlink is a stub, it is not implemented.
-func Symlink(oldname, newname string) error {
-	return ErrNotImplemented
 }
 
 // RemoveAll is a stub, it is not implemented.
@@ -255,11 +259,6 @@ const (
 
 func Getwd() (string, error) {
 	return syscall.Getwd()
-}
-
-// Readlink is a stub (for now), always returning the string it was given
-func Readlink(name string) (string, error) {
-	return name, nil
 }
 
 // TempDir returns the default directory to use for temporary files.
