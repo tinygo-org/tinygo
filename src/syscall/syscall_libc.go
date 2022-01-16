@@ -147,6 +147,19 @@ func Getenv(key string) (value string, found bool) {
 }
 
 func Setenv(key, val string) (err error) {
+	if len(key) == 0 {
+		return EINVAL
+	}
+	for i := 0; i < len(key); i++ {
+		if key[i] == '=' || key[i] == 0 {
+			return EINVAL
+		}
+	}
+	for i := 0; i < len(val); i++ {
+		if val[i] == 0 {
+			return EINVAL
+		}
+	}
 	keydata := cstring(key)
 	valdata := cstring(val)
 	errCode := libc_setenv(&keydata[0], &valdata[0], 1)
