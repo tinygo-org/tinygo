@@ -47,6 +47,7 @@ type common struct {
 	output   bytes.Buffer
 	w        io.Writer // either &output, or at top level, os.Stdout
 	indent   string
+	ran      bool     // Test or benchmark (or one of its subtests) was executed.
 	failed   bool     // Test or benchmark has failed.
 	skipped  bool     // Test of benchmark has been skipped.
 	cleanups []func() // optional functions to be called at the end of the test
@@ -278,6 +279,7 @@ func tRunner(t *T, fn func(t *T)) {
 	t.duration += time.Since(t.start) // TODO: capture cleanup time, too.
 
 	t.report() // Report after all subtests have finished.
+	t.ran = true
 }
 
 // Run runs f as a subtest of t called name. It waits until the subtest is finished
@@ -304,6 +306,10 @@ type M struct {
 	Benchmarks []InternalBenchmark
 
 	deps testDeps
+
+	// value to pass to os.Exit, the outer test func main
+	// harness calls os.Exit with this code. See #34129.
+	exitCode int
 }
 
 type testDeps interface {
@@ -319,39 +325,55 @@ func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenc
 	}
 }
 
-// Run the test suite.
-func (m *M) Run() int {
+// Run runs the tests. It returns an exit code to pass to os.Exit.
+func (m *M) Run() (code int) {
+	defer func() {
+		code = m.exitCode
+	}()
 
 	if !flag.Parsed() {
 		flag.Parse()
 	}
 
-	failures := 0
+	testRan, testOk := runTests(m.deps.MatchString, m.Tests)
+	if !testRan && *matchBenchmarks == "" {
+		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
+	}
+	if !testOk || !runBenchmarks(m.deps.MatchString, m.Benchmarks) {
+		fmt.Println("FAIL")
+		m.exitCode = 1
+	} else {
+		if flagVerbose {
+			fmt.Println("PASS")
+		}
+		m.exitCode = 0
+	}
+	return
+}
+
+func runTests(matchString func(pat, str string) (bool, error), tests []InternalTest) (ran, ok bool) {
+	ok = true
 	if flagRunRegexp != "" {
 		var filtered []InternalTest
 
 		// pre-test the regexp; we don't want to bother logging one failure for every test name if the regexp is broken
-		if _, err := m.deps.MatchString(flagRunRegexp, "some-test-name"); err != nil {
+		if _, err := matchString(flagRunRegexp, "some-test-name"); err != nil {
 			fmt.Println("testing: invalid regexp for -test.run:", err.Error())
-			failures++
+			return false, false
 		}
 
 		// filter the list of tests before we try to run them
-		for _, test := range m.Tests {
+		for _, test := range tests {
 			// ignore the error; we already tested that the regexp compiles fine above
-			if match, _ := m.deps.MatchString(flagRunRegexp, test.Name); match {
+			if match, _ := matchString(flagRunRegexp, test.Name); match {
 				filtered = append(filtered, test)
 			}
 		}
 
-		m.Tests = filtered
+		tests = filtered
 	}
 
-	if len(m.Tests) == 0 && len(m.Benchmarks) == 0 {
-		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
-	}
-
-	for _, test := range m.Tests {
+	for _, test := range tests {
 		t := &T{
 			common: common{
 				name: test.Name,
@@ -361,22 +383,10 @@ func (m *M) Run() int {
 
 		tRunner(t, test.F)
 
-		if t.failed {
-			failures++
-		}
+		ok = ok && !t.Failed()
+		ran = ran || t.ran
 	}
-
-	if len(m.Tests) == 0 && *matchBenchmarks == "" {
-		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
-	}
-	if failures > 0 || !runBenchmarks(m.deps.MatchString, m.Benchmarks) {
-		fmt.Println("FAIL")
-	} else {
-		if flagVerbose {
-			fmt.Println("PASS")
-		}
-	}
-	return failures
+	return ran, ok
 }
 
 func (t *T) report() {
