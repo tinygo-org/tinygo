@@ -63,6 +63,16 @@ func Open(path string, flag int, mode uint32) (fd int, err error) {
 	return
 }
 
+func Readlink(path string, p []byte) (n int, err error) {
+	data := cstring(path)
+	buf, count := splitSlice(p)
+	n = libc_readlink(&data[0], buf, uint(count))
+	if n < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Chdir(path string) (err error) {
 	data := cstring(path)
 	fail := int(libc_chdir(&data[0]))
@@ -103,6 +113,16 @@ func Rename(from, to string) (err error) {
 	fromdata := cstring(from)
 	todata := cstring(to)
 	fail := int(libc_rename(&fromdata[0], &todata[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Symlink(from, to string) (err error) {
+	fromdata := cstring(from)
+	todata := cstring(to)
+	fail := int(libc_symlink(&fromdata[0], &todata[0]))
 	if fail < 0 {
 		err = getErrno()
 	}
@@ -290,7 +310,15 @@ func libc_rmdir(pathname *byte) int32
 
 // int rename(const char *from, *to);
 //export rename
-func libc_rename(from, too *byte) int32
+func libc_rename(from, to *byte) int32
+
+// int symlink(const char *from, *to);
+//export symlink
+func libc_symlink(from, to *byte) int32
+
+// ssize_t readlink(const char *path, void *buf, size_t count);
+//export readlink
+func libc_readlink(path *byte, buf *byte, count uint) int
 
 // int unlink(const char *pathname);
 //export unlink

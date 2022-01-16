@@ -96,6 +96,28 @@ func TestRemove(t *testing.T) {
 	}
 }
 
+// chtmpdir changes the working directory to a new temporary directory and
+// provides a cleanup function.
+func chtmpdir(t *testing.T) func() {
+	oldwd, err := Getwd()
+	if err != nil {
+		t.Fatalf("chtmpdir: %v", err)
+	}
+	d, err := MkdirTemp("", "test")
+	if err != nil {
+		t.Fatalf("chtmpdir: %v", err)
+	}
+	if err := Chdir(d); err != nil {
+		t.Fatalf("chtmpdir: %v", err)
+	}
+	return func() {
+		if err := Chdir(oldwd); err != nil {
+			t.Fatalf("chtmpdir: %v", err)
+		}
+		RemoveAll(d)
+	}
+}
+
 func TestRename(t *testing.T) {
 	// TODO: use t.TempDir()
 	from, to := TempDir()+"/"+"TestRename-from", TempDir()+"/"+"TestRename-to"

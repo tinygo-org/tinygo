@@ -15,6 +15,16 @@ import (
 
 type syscallFd = syscall.Handle
 
+// Symlink is a stub, it is not implemented.
+func Symlink(oldname, newname string) error {
+	return ErrNotImplemented
+}
+
+// Readlink is a stub (for now), always returning the string it was given
+func Readlink(name string) (string, error) {
+	return name, nil
+}
+
 func rename(oldname, newname string) error {
 	e := windows.Rename(fixLongPath(oldname), fixLongPath(newname))
 	if e != nil {

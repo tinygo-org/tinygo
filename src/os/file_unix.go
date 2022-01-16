@@ -52,6 +52,44 @@ func tempDir() string {
 	return dir
 }
 
+// Symlink creates newname as a symbolic link to oldname.
+// On Windows, a symlink to a non-existent oldname creates a file symlink;
+// if oldname is later created as a directory the symlink will not work.
+// If there is an error, it will be of type *LinkError.
+func Symlink(oldname, newname string) error {
+	e := ignoringEINTR(func() error {
+		return syscall.Symlink(oldname, newname)
+	})
+	if e != nil {
+		return &LinkError{"symlink", oldname, newname, e}
+	}
+	return nil
+}
+
+// Readlink returns the destination of the named symbolic link.
+// If there is an error, it will be of type *PathError.
+func Readlink(name string) (string, error) {
+	for len := 128; ; len *= 2 {
+		b := make([]byte, len)
+		var (
+			n int
+			e error
+		)
+		for {
+			n, e = fixCount(syscall.Readlink(name, b))
+			if e != syscall.EINTR {
+				break
+			}
+		}
+		if e != nil {
+			return "", &PathError{Op: "readlink", Path: name, Err: e}
+		}
+		if n < len {
+			return string(b[0:n]), nil
+		}
+	}
+}
+
 // ReadAt reads up to len(b) bytes from the File starting at the given absolute offset.
 // It returns the number of bytes read and any error encountered, possibly io.EOF.
 // At end of file, Pread returns 0, io.EOF.
