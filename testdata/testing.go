@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"io"
 	"testing"
 )
@@ -26,14 +27,59 @@ func TestBar(t *testing.T) {
 	t.Log("log Bar end")
 }
 
+func TestAllLowercase(t *testing.T) {
+	names := []string {
+		"alpha",
+		"BETA",
+		"gamma",
+		"DELTA",
+	}
+
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			if 'a' <= name[0] && name[0] <= 'a' {
+				t.Logf("expected lowercase name, and got one, so I'm happy")
+			} else {
+				t.Errorf("expected lowercase name, got %s", name)
+			}
+		})
+	}
+}
+
 var tests = []testing.InternalTest{
 	{"TestFoo", TestFoo},
 	{"TestBar", TestBar},
+	{"TestAllLowercase", TestAllLowercase},
 }
 
 var benchmarks = []testing.InternalBenchmark{}
 
 var examples = []testing.InternalExample{}
+
+// A fake regexp matcher that can only handle two patterns.
+// Inflexible, but saves 50KB of flash and 50KB of RAM per -size full,
+// and lets tests pass on cortex-m3.
+func fakeMatchString(pat, str string) (bool, error) {
+	if pat == ".*" {
+		return true, nil
+	}
+	if pat == "[BD]" {
+		return (str[0] == 'B' || str[0] == 'D'), nil
+	}
+	println("BUG: fakeMatchString does not grok", pat)
+	return false, nil
+}
+
+func main() {
+	testing.Init()
+	flag.Set("test.run", ".*/[BD]")
+	m := testing.MainStart(matchStringOnly(fakeMatchString /*regexp.MatchString*/), tests, benchmarks, examples)
+
+	exitcode := m.Run()
+	if exitcode != 0 {
+		println("exitcode:", exitcode)
+	}
+}
 
 var errMain = errors.New("testing: unexpected use of func Main")
 
@@ -50,11 +96,3 @@ func (f matchStringOnly) ImportPath() string                          { return "
 func (f matchStringOnly) StartTestLog(io.Writer)                      {}
 func (f matchStringOnly) StopTestLog() error                          { return errMain }
 func (f matchStringOnly) SetPanicOnExit0(bool)                        {}
-
-func main() {
-	m := testing.MainStart(matchStringOnly(nil), tests, benchmarks, examples)
-	exitcode := m.Run()
-	if exitcode != 0 {
-		println("exitcode:", exitcode)
-	}
-}

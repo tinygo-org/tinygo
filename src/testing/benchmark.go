@@ -77,9 +77,6 @@ type InternalBenchmark struct {
 // affecting benchmark results.
 type B struct {
 	common
-	hasSub       bool          // TODO: should be in common, and atomic
-	start        time.Time     // TODO: should be in common
-	duration     time.Duration // TODO: should be in common
 	context      *benchContext
 	N            int
 	benchFunc    func(b *B)

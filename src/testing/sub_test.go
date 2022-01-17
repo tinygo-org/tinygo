@@ -32,7 +32,7 @@ func TestRunCleanup(t *T) {
 		t.Errorf("unexpected inner cleanup count; got %d want 1", innerCleanup)
 	}
 	if outerCleanup != 1 {
-		t.Errorf("unexpected outer cleanup count; got %d want 0", outerCleanup)
+		t.Errorf("unexpected outer cleanup count; got %d want 1", outerCleanup) // wrong upstream!
 	}
 }
 
