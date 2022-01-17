@@ -10,7 +10,6 @@ LLD_SRC ?= $(LLVM_PROJECTDIR)/lld
 BREW_PREFIX := $(shell brew --prefix)
 
 # Try to autodetect LLVM build tools.
-# FIXME(#2438): This doesn't work on darwin now. Homebrew installed llvm is key-only.
 detect = $(shell command -v $(1) 2> /dev/null && echo $(1))
 CLANG ?= $(word 1,$(abspath $(call detect,llvm-build/bin/clang))$(call detect,$(BREW_PREFIX)/opt/llvm@13/bin/clang-13)$(call detect,clang-13)$(call detect,$(BREW_PREFIX)/opt/llvm@12/bin/clang-12)$(call detect,clang-12)$(call detect,$(BREW_PREFIX)/opt/llvm@11/bin/clang-11)$(call detect,clang-11)$(call detect,$(BREW_PREFIX)/opt/llvm/bin/clang)$(call detect,clang))
 LLVM_AR ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-ar))$(call detect,$(BREW_PREFIX)/opt/llvm@13/bin/llvm-ar-13)$(call detect,llvm-ar-13)$(call detect,$(BREW_PREFIX)/opt/llvm@12/bin/llvm-ar-12)$(call detect,llvm-ar-12)$(call detect,$(BREW_PREFIX)/opt/llvm@11/bin/llvm-ar-11)$(call detect,llvm-ar-11)$(call detect,$(BREW_PREFIX)/opt/llvm/bin/llvm-ar)$(call detect,llvm-ar))
