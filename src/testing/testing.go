@@ -12,7 +12,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"time"
@@ -45,13 +44,14 @@ func Init() {
 // captures common methods such as Errorf.
 type common struct {
 	output   bytes.Buffer
-	w        io.Writer // either &output, or at top level, os.Stdout
 	indent   string
 	ran      bool     // Test or benchmark (or one of its subtests) was executed.
 	failed   bool     // Test or benchmark has failed.
 	skipped  bool     // Test of benchmark has been skipped.
 	cleanups []func() // optional functions to be called at the end of the test
 	finished bool     // Test function has completed.
+
+	hasSub bool // TODO: should be atomic
 
 	parent   *common
 	level    int       // Nesting depth of test or benchmark.
@@ -75,6 +75,19 @@ func CoverMode() string {
 // Verbose reports whether the -test.v flag is set.
 func Verbose() bool {
 	return flagVerbose
+}
+
+// flushToParent writes c.output to the parent after first writing the header
+// with the given format and arguments.
+func (c *common) flushToParent(testName, format string, args ...interface{}) {
+	if c.parent == nil {
+		// The fake top-level test doesn't want a FAIL or PASS banner.
+		// Not quite sure how this works upstream.
+		c.output.WriteTo(os.Stdout)
+	} else {
+		fmt.Fprintf(&c.parent.output, format, args...)
+		c.output.WriteTo(&c.parent.output)
+	}
 }
 
 // fmtDuration returns a string representing d in the form "87.00s".
@@ -110,11 +123,19 @@ var _ TB = (*B)(nil)
 //
 type T struct {
 	common
+	context *testContext // For running tests and subtests.
 }
 
 // Name returns the name of the running test or benchmark.
 func (c *common) Name() string {
 	return c.name
+}
+
+func (c *common) setRan() {
+	if c.parent != nil {
+		c.parent.setRan()
+	}
+	c.ran = true
 }
 
 // Fail marks the function as having failed but continues execution.
@@ -270,33 +291,55 @@ func tRunner(t *T, fn func(t *T)) {
 	}()
 
 	// Run the test.
-	if flagVerbose {
-		fmt.Fprintf(t.w, "=== RUN   %s\n", t.name)
-	}
-
 	t.start = time.Now()
 	fn(t)
 	t.duration += time.Since(t.start) // TODO: capture cleanup time, too.
 
 	t.report() // Report after all subtests have finished.
-	t.ran = true
+	if t.parent != nil && !t.hasSub {
+		t.setRan()
+	}
 }
 
 // Run runs f as a subtest of t called name. It waits until the subtest is finished
 // and returns whether the subtest succeeded.
 func (t *T) Run(name string, f func(t *T)) bool {
+	t.hasSub = true
+	testName, ok, _ := t.context.match.fullName(&t.common, name)
+	if !ok {
+		return true
+	}
+
 	// Create a subtest.
 	sub := T{
 		common: common{
-			name:   t.name + "/" + rewrite(name),
-			indent: t.indent + "    ",
-			w:      &t.output,
+			name:   testName,
 			parent: &t.common,
+			level:  t.level + 1,
 		},
+		context: t.context,
+	}
+	if t.level > 0 {
+		sub.indent = sub.indent + "    "
+	}
+	if flagVerbose {
+		fmt.Fprintf(&t.output, "=== RUN   %s\n", sub.name)
 	}
 
 	tRunner(&sub, f)
 	return !sub.failed
+}
+
+// testContext holds all fields that are common to all tests. This includes
+// synchronization primitives to run at most *parallel tests.
+type testContext struct {
+	match *matcher
+}
+
+func newTestContext(m *matcher) *testContext {
+	return &testContext{
+		match: m,
+	}
 }
 
 // M is a test suite.
@@ -353,40 +396,20 @@ func (m *M) Run() (code int) {
 
 func runTests(matchString func(pat, str string) (bool, error), tests []InternalTest) (ran, ok bool) {
 	ok = true
-	if flagRunRegexp != "" {
-		var filtered []InternalTest
 
-		// pre-test the regexp; we don't want to bother logging one failure for every test name if the regexp is broken
-		if _, err := matchString(flagRunRegexp, "some-test-name"); err != nil {
-			fmt.Println("testing: invalid regexp for -test.run:", err.Error())
-			return false, false
-		}
+	ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run"))
+	t := &T{
+		context: ctx,
+	}
 
-		// filter the list of tests before we try to run them
+	tRunner(t, func(t *T) {
 		for _, test := range tests {
-			// ignore the error; we already tested that the regexp compiles fine above
-			if match, _ := matchString(flagRunRegexp, test.Name); match {
-				filtered = append(filtered, test)
-			}
+			t.Run(test.Name, test.F)
+			ok = ok && !t.Failed()
 		}
+	})
 
-		tests = filtered
-	}
-
-	for _, test := range tests {
-		t := &T{
-			common: common{
-				name: test.Name,
-				w:    os.Stdout,
-			},
-		}
-
-		tRunner(t, test.F)
-
-		ok = ok && !t.Failed()
-		ran = ran || t.ran
-	}
-	return ran, ok
+	return t.ran, ok
 }
 
 func (t *T) report() {
@@ -396,15 +419,13 @@ func (t *T) report() {
 		if t.parent != nil {
 			t.parent.failed = true
 		}
-		fmt.Fprintf(t.w, format, "FAIL", t.name, dstr)
-		t.w.Write(t.output.Bytes())
+		t.flushToParent(t.name, format, "FAIL", t.name, dstr)
 	} else if flagVerbose {
 		if t.Skipped() {
-			fmt.Fprintf(t.w, format, "SKIP", t.name, dstr)
+			t.flushToParent(t.name, format, "SKIP", t.name, dstr)
 		} else {
-			fmt.Fprintf(t.w, format, "PASS", t.name, dstr)
+			t.flushToParent(t.name, format, "PASS", t.name, dstr)
 		}
-		t.w.Write(t.output.Bytes())
 	}
 }
 

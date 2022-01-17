@@ -12,5 +12,10 @@
         failed
         after failed
     log Bar end
+--- FAIL: TestAllLowercase (0.00s)
+    --- FAIL: TestAllLowercase/BETA (0.00s)
+        expected lowercase name, got BETA
+    --- FAIL: TestAllLowercase/DELTA (0.00s)
+        expected lowercase name, got DELTA
 FAIL
 exitcode: 1
