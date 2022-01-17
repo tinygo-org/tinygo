@@ -1,3 +1,4 @@
+//go:build nrf
 // +build nrf
 
 package machine
@@ -284,7 +285,9 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 				// To trigger stop task when last byte is received, set before resume task.
 				i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_STOP)
 			}
-			i2c.Bus.TASKS_RESUME.Set(1) // re-start transmission for reading
+			if i > 0 {
+				i2c.Bus.TASKS_RESUME.Set(1) // re-start transmission for reading
+			}
 			if r[i], err = i2c.readByte(); err != nil {
 				// goto/break are practically equivalent here,
 				// but goto makes this more easily understandable for maintenance.
