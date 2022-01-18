@@ -15,8 +15,7 @@ func TestFmt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := chromectx()
-	defer cancel()
+	ctx := chromectx(t)
 
 	var log1 string
 	err = chromedp.Run(ctx,
