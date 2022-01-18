@@ -32,16 +32,21 @@ func runargs(t *testing.T, args ...string) error {
 	return nil
 }
 
-func chromectx() (context.Context, context.CancelFunc) {
-
-	var ctx context.Context
-
+func chromectx(t *testing.T) context.Context {
 	// looks for locally installed Chrome
-	ctx, _ = chromedp.NewContext(context.Background())
+	ctx, ccancel := chromedp.NewContext(context.Background(), chromedp.WithErrorf(t.Errorf), chromedp.WithDebugf(t.Logf), chromedp.WithLogf(t.Logf))
+	t.Cleanup(ccancel)
 
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	// Wait for browser to be ready.
+	err := chromedp.Run(ctx)
+	if err != nil {
+		t.Fatalf("failed to start browser: %s", err.Error())
+	}
 
-	return ctx, cancel
+	ctx, tcancel := context.WithTimeout(ctx, 30*time.Second)
+	t.Cleanup(tcancel)
+
+	return ctx
 }
 
 func startServer(t *testing.T) (string, *httptest.Server) {

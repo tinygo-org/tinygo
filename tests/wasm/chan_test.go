@@ -15,8 +15,7 @@ func TestChan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := chromectx()
-	defer cancel()
+	ctx := chromectx(t)
 
 	err = chromedp.Run(ctx,
 		chromedp.Navigate(server.URL+"/run?file=chan.wasm"),
