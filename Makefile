@@ -12,7 +12,7 @@ LLD_SRC ?= $(LLVM_PROJECTDIR)/lld
 # Versions are listed here in descending priority order.
 LLVM_VERSIONS = 13 12 11
 errifempty = $(if $(1),$(1),$(error $(2)))
-detect = $(call errifempty,$(firstword $(foreach p,$(2),$(shell command -v $(p) 2> /dev/null && echo $(abspath $(p))))),failed to locate $(1) at any of: $(2))
+detect = $(shell which $(call errifempty,$(firstword $(foreach p,$(2),$(shell command -v $(p) 2> /dev/null && echo $(p)))),failed to locate $(1) at any of: $(2)))
 toolSearchPathsVersion = $(1)-$(2)
 ifeq ($(shell uname -s),Darwin)
 	# Also explicitly search Brew's copy, which is not in PATH by default.
