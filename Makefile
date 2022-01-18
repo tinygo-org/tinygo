@@ -7,13 +7,23 @@ LLVM_BUILDDIR ?= llvm-build
 LLVM_PROJECTDIR ?= llvm-project
 CLANG_SRC ?= $(LLVM_PROJECTDIR)/clang
 LLD_SRC ?= $(LLVM_PROJECTDIR)/lld
-BREW_PREFIX := $(shell brew --prefix)
 
 # Try to autodetect LLVM build tools.
-detect = $(shell command -v $(1) 2> /dev/null && echo $(1))
-CLANG ?= $(word 1,$(abspath $(call detect,llvm-build/bin/clang))$(call detect,$(BREW_PREFIX)/opt/llvm@13/bin/clang-13)$(call detect,clang-13)$(call detect,$(BREW_PREFIX)/opt/llvm@12/bin/clang-12)$(call detect,clang-12)$(call detect,$(BREW_PREFIX)/opt/llvm@11/bin/clang-11)$(call detect,clang-11)$(call detect,$(BREW_PREFIX)/opt/llvm/bin/clang)$(call detect,clang))
-LLVM_AR ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-ar))$(call detect,$(BREW_PREFIX)/opt/llvm@13/bin/llvm-ar-13)$(call detect,llvm-ar-13)$(call detect,$(BREW_PREFIX)/opt/llvm@12/bin/llvm-ar-12)$(call detect,llvm-ar-12)$(call detect,$(BREW_PREFIX)/opt/llvm@11/bin/llvm-ar-11)$(call detect,llvm-ar-11)$(call detect,$(BREW_PREFIX)/opt/llvm/bin/llvm-ar)$(call detect,llvm-ar))
-LLVM_NM ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-nm))$(call detect,$(BREW_PREFIX)/opt/llvm@13/bin/llvm-nm-13)$(call detect,llvm-nm-13)$(call detect,$(BREW_PREFIX)/opt/llvm@12/bin/llvm-nm-12)$(call detect,llvm-nm-12)$(call detect,$(BREW_PREFIX)/opt/llvm@11/bin/llvm-nm-11)$(call detect,llvm-nm-11)$(call detect,$(BREW_PREFIX)/opt/llvm/bin/llvm-nm)$(call detect,llvm-nm))
+# Versions are listed here in descending priority order.
+LLVM_VERSIONS = 13 12 11
+errifempty = $(if $(1),$(1),$(error $(2)))
+detect = $(call errifempty,$(firstword $(foreach p,$(2),$(shell command -v $(p) 2> /dev/null && echo $(abspath $(p))))),failed to locate $(1) at any of: $(2))
+toolSearchPathsVersion = $(1)-$(2)
+ifeq ($(shell uname -s),Darwin)
+	# Also explicitly search Brew's copy, which is not in PATH by default.
+	BREW_PREFIX := $(shell brew --prefix)
+	toolSearchPathsVersion += $(BREW_PREFIX)/opt/llvm@$(2)/bin/$(1)-$(2) $(BREW_PREFIX)/opt/llvm@$(2)/bin/$(1)
+endif
+# First search for a custom built copy, then move on to explicitly version-tagged binaries, then just see if the tool is in path with its normal name.
+findLLVMTool = $(call detect,$(1),llvm-build/bin/$(1) $(foreach ver,$(LLVM_VERSIONS),$(call toolSearchPathsVersion,$(1),$(ver))) $(1))
+CLANG ?= $(call findLLVMTool,clang)
+LLVM_AR ?= $(call findLLVMTool,llvm-ar)
+LLVM_NM ?= $(call findLLVMTool,llvm-nm)
 
 # Go binary and GOROOT to select
 GO ?= go
@@ -26,7 +36,7 @@ GOTESTFLAGS ?= -v
 MD5SUM = md5sum
 
 # tinygo binary for tests
-TINYGO ?= $(word 1,$(call detect,tinygo)$(call detect,build/tinygo))
+TINYGO ?= $(call detect,tinygo,tinygo build/tinygo)
 
 # Use CCACHE for LLVM if possible
 ifneq (, $(shell command -v ccache 2> /dev/null))
