@@ -85,10 +85,10 @@ commands:
       - run: go install -tags=llvm<<parameters.llvm>> .
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-systemclang-v3
+            - wasi-libc-sysroot-systemclang-v4
       - run: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-systemclang-v3
+          key: wasi-libc-sysroot-systemclang-v4
           paths:
             - lib/wasi-libc/sysroot
       - run: make gen-device -j4
