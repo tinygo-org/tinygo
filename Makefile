@@ -20,7 +20,7 @@ ifeq ($(shell uname -s),Darwin)
 	toolSearchPathsVersion += $(BREW_PREFIX)/opt/llvm@$(2)/bin/$(1)-$(2) $(BREW_PREFIX)/opt/llvm@$(2)/bin/$(1)
 endif
 # First search for a custom built copy, then move on to explicitly version-tagged binaries, then just see if the tool is in path with its normal name.
-findLLVMTool = $(call detect,$(1),llvm-build/bin/$(1) $(foreach ver,$(LLVM_VERSIONS),$(call toolSearchPathsVersion,$(1),$(ver))) $(1))
+findLLVMTool = $(call detect,$(1),$(abspath llvm-build/bin/$(1)) $(foreach ver,$(LLVM_VERSIONS),$(call toolSearchPathsVersion,$(1),$(ver))) $(1))
 CLANG ?= $(call findLLVMTool,clang)
 LLVM_AR ?= $(call findLLVMTool,llvm-ar)
 LLVM_NM ?= $(call findLLVMTool,llvm-nm)
