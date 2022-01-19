@@ -64,7 +64,7 @@ func initDCD(port int, speed Speed, class class) (*dcd, status) {
 func (d *dcd) class() class { return d.cc }
 
 // dcdSetupSize defines the size (bytes) of a USB standard setup packet.
-const dcdSetupSize = 8 // bytes
+const dcdSetupSize = unsafe.Sizeof(dcdSetup{}) // 8 bytes
 
 // dcdSetup contains the USB standard setup packet used to configure a device.
 type dcdSetup struct {
@@ -75,6 +75,8 @@ type dcdSetup struct {
 	wLength       uint16
 }
 
+// setupFrom decodes and returns a USB standard setup packet located at the
+// memory address pointed to by addr.
 func setupFrom(addr uintptr) dcdSetup {
 	var u uint64
 	for i := uintptr(0); i < 8; i++ {
@@ -89,6 +91,8 @@ func setupFrom(addr uintptr) dcdSetup {
 	}
 }
 
+// setup decodes and returns a USB standard setup packet stored in the given
+// byte slice b.
 func setup(b []uint8) dcdSetup {
 	if len(b) >= 8 {
 		return dcdSetup{
@@ -102,7 +106,7 @@ func setup(b []uint8) dcdSetup {
 	return dcdSetup{}
 }
 
-// pack returns the receiver setup packet encoded as uint64.
+// pack returns the receiver USB standard setup packet s encoded as uint64.
 func (s dcdSetup) pack() uint64 {
 	return ((uint64(s.bmRequestType) & 0xFF) << 0) |
 		((uint64(s.bRequest) & 0xFF) << 8) |
@@ -467,7 +471,7 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 
 				// HID
 				case classDeviceHID:
-					if sup.wLength <= descHIDCxCount {
+					if sup.wLength <= descHIDCxSize {
 						d.setup = sup
 						descHID[d.cc.config-1].cx[0] = 0xE9
 						d.controlReceive(
@@ -489,8 +493,6 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 				// HID
 				case classDeviceHID:
 					idleRate := sup.wValue >> 8
-					// TBD: do we need to handle this request? wIndex contains the target
-					// interface of the request.
 					_ = idleRate
 					d.controlReceive(uintptr(0), 0, false)
 					return dcdStageSetup
@@ -519,8 +521,6 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 				case classDeviceHID:
 					reportType := uint8(sup.wValue >> 8)
 					reportID := uint8(sup.wValue)
-					// TBD: do we need to handle this request? wIndex contains the target
-					// interface of the request.
 					_, _ = reportType, reportID
 					d.controlReply[0] = 0
 					d.controlReply[1] = 0
