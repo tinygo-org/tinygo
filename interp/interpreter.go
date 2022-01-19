@@ -108,9 +108,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// Provide some breadcrumbs for user trying to find their slow init functions.
 				fmt.Fprintln(os.Stderr, "interp: slow: startms", int(t0.Milliseconds()), "endms", int(t1.Milliseconds()), "func", fn.name)
 			}
-			const maxInterpSeconds = 90
+			const maxInterpSeconds = 180
 			if t0 > maxInterpSeconds*time.Second {
-				// Running for more than maxInterpSeconds seconds. This should never happen.
+				// Running for more than maxInterpSeconds seconds. This should never happen, but does.
+				// See github.com/tinygo-org/tinygo/issues/2124
 				return nil, mem, r.errorAt(fn.blocks[0].instructions[0], fmt.Errorf("interp: running for more than %d seconds, timing out (executed calls: %d)", maxInterpSeconds, r.callsExecuted))
 			}
 
