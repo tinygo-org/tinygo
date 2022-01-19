@@ -76,7 +76,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-wasi-libc
         with:
-          key: wasi-libc-sysroot-linux-asserts-v2
+          key: wasi-libc-sysroot-linux-asserts-v3
           path: lib/wasi-libc/sysroot
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
@@ -217,7 +217,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-wasi-libc
         with:
-          key: wasi-libc-sysroot-linux-asserts-v2
+          key: wasi-libc-sysroot-linux-asserts-v3
           path: lib/wasi-libc/sysroot
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'

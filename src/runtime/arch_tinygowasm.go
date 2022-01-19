@@ -86,21 +86,3 @@ func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
 func libc_realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
 	return realloc(ptr, size)
 }
-
-//export posix_memalign
-func libc_posix_memalign(memptr *unsafe.Pointer, alignment, size uintptr) int {
-	runtimePanic("unimplemented: posix_memalign")
-	return 0
-}
-
-//export aligned_alloc
-func libc_aligned_alloc(alignment, bytes uintptr) unsafe.Pointer {
-	runtimePanic("unimplemented: aligned_alloc")
-	return nil
-}
-
-//export malloc_usable_size
-func libc_malloc_usable_size(ptr unsafe.Pointer) uintptr {
-	runtimePanic("unimplemented: malloc_usable_size")
-	return 0
-}
