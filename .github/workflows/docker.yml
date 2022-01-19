@@ -1,11 +1,15 @@
-name: CI for tinygo-dev docker container
+# This is the GH action to build and push the tinygo/tinygo-dev Docker image.
+# If you are looking for the tinygo/tinygo "release" Docker image please see
+# https://github.com/tinygo-org/docker
+#
+name: Docker
 on:
   push:
     branches: [ dev, fix-docker-llvm-build ]
 
 jobs:
   push_to_registry:
-    name: Push Docker image to GHCR/Docker Hub
+    name: build-push-dev
     runs-on: ubuntu-latest
     permissions:
       packages: write
