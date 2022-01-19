@@ -262,6 +262,9 @@ TEST_PACKAGES_BASE = \
 
 # Standard library packages that pass tests natively
 TEST_PACKAGES = \
+ifneq ($(OS),Windows_NT)   # archive/zip requires ReadAt, which is not yet supported on windows
+	archive/zip \
+endif
 	$(TEST_PACKAGES_BASE)
 
 # Standard library packages that pass tests on wasi
