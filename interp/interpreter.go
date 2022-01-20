@@ -24,15 +24,39 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		locals[i] = param
 	}
 
+	// Track what blocks have run instructions at runtime.
+	// This is used to prevent unrolling.
+	var runtimeBlocks map[int]struct{}
+
 	// Start with the first basic block and the first instruction.
 	// Branch instructions may modify both bb and instIndex when branching.
 	bb := fn.blocks[0]
 	currentBB := 0
 	lastBB := -1 // last basic block is undefined, only defined after a branch
 	var operands []value
+	startRTInsts := len(mem.instructions)
 	for instIndex := 0; instIndex < len(bb.instructions); instIndex++ {
 		if instIndex == 0 {
 			// This is the start of a new basic block.
+			if len(mem.instructions) != startRTInsts {
+				if _, ok := runtimeBlocks[lastBB]; ok {
+					// This loop has been unrolled.
+					// Avoid doing this, as it can result in a large amount of extra machine code.
+					// This currently uses the branch from the last block, as there is no available information to give a better location.
+					lastBBInsts := fn.blocks[lastBB].instructions
+					return nil, mem, r.errorAt(lastBBInsts[len(lastBBInsts)-1], errLoopUnrolled)
+				}
+
+				// Flag the last block as having run stuff at runtime.
+				if runtimeBlocks == nil {
+					runtimeBlocks = make(map[int]struct{})
+				}
+				runtimeBlocks[lastBB] = struct{}{}
+
+				// Reset the block-start runtime instructions counter.
+				startRTInsts = len(mem.instructions)
+			}
+
 			// There may be PHI nodes that need to be resolved. Resolve all PHI
 			// nodes before continuing with regular instructions.
 			// PHI nodes need to be treated specially because they can have a
