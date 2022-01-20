@@ -51,3 +51,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Trigger Drivers repo build on CircleCI
+        run: |
+          curl --location --request POST 'https://circleci.com/api/v2/project/github/tinygo-org/drivers/pipeline' \
+            --header 'Content-Type: application/json' \
+            -d '{"branch": "dev"}' \
+            -u "${{ secrets.CIRCLECI_API_TOKEN }}"
