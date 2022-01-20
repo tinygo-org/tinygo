@@ -1440,7 +1440,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.emitSV64Call(instr.Args)
 		case strings.HasPrefix(name, "(device/riscv.CSR)."):
 			return b.emitCSROperation(instr)
-		case strings.HasPrefix(name, "syscall.Syscall"):
+		case strings.HasPrefix(name, "syscall.Syscall") || strings.HasPrefix(name, "syscall.RawSyscall"):
 			return b.createSyscall(instr)
 		case strings.HasPrefix(name, "syscall.rawSyscallNoError"):
 			return b.createRawSyscallNoError(instr)
