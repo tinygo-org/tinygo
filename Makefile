@@ -36,7 +36,7 @@ GOTESTFLAGS ?= -v
 MD5SUM = md5sum
 
 # tinygo binary for tests
-TINYGO ?= $(call detect,tinygo,tinygo build/tinygo)
+TINYGO ?= $(call detect,tinygo,tinygo $(CURDIR)/build/tinygo)
 
 # Use CCACHE for LLVM if possible
 ifneq (, $(shell command -v ccache 2> /dev/null))
