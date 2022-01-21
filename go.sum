@@ -92,3 +92,5 @@ tinygo.org/x/go-llvm v0.0.0-20211230181020-1ddc904f6bf6 h1:p9huJkDeMFLOE5A4puIPR
 tinygo.org/x/go-llvm v0.0.0-20211230181020-1ddc904f6bf6/go.mod h1:GFbusT2VTA4I+l4j80b17KFK+6whv69Wtny5U+T8RR0=
 tinygo.org/x/go-llvm v0.0.0-20220119143719-a55dfcdd0c2b h1:1EMJbfrkIe6k5N6DZKFiiivRRid0xKDDkI3HwKBKDkQ=
 tinygo.org/x/go-llvm v0.0.0-20220119143719-a55dfcdd0c2b/go.mod h1:GFbusT2VTA4I+l4j80b17KFK+6whv69Wtny5U+T8RR0=
+tinygo.org/x/go-llvm v0.0.0-20220121152956-4fa2ab2718f3 h1:vQSFy0kNQegAfL/F6iyWQa4bF941Xc1gyJUkGy2m448=
+tinygo.org/x/go-llvm v0.0.0-20220121152956-4fa2ab2718f3/go.mod h1:GFbusT2VTA4I+l4j80b17KFK+6whv69Wtny5U+T8RR0=

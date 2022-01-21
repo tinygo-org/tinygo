@@ -1,5 +1,5 @@
-// +build !byollvm
-// +build !llvm12,!llvm13
+//go:build !byollvm && llvm11
+// +build !byollvm,llvm11
 
 package cgo
 
