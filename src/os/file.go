@@ -180,6 +180,19 @@ func (f *File) Readdirnames(n int) (names []string, err error) {
 	return nil, &PathError{"readdirnames", f.name, ErrNotImplemented}
 }
 
+// Seek sets the offset for the next Read or Write on file to offset, interpreted
+// according to whence: 0 means relative to the origin of the file, 1 means
+// relative to the current offset, and 2 means relative to the end.
+// It returns the new offset and an error, if any.
+// The behavior of Seek on a file opened with O_APPEND is not specified.
+//
+// If f is a directory, the behavior of Seek varies by operating
+// system; you can seek to the beginning of the directory on Unix-like
+// operating systems, but not on Windows.
+func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
+	return f.handle.Seek(offset, whence)
+}
+
 func (f *File) SyscallConn() (syscall.RawConn, error) {
 	return nil, ErrNotImplemented
 }
