@@ -62,10 +62,6 @@ func Pipe() (r *File, w *File, err error) {
 	return nil, nil, ErrNotImplemented
 }
 
-func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
-	return 0, ErrNotImplemented
-}
-
 func Readlink(name string) (string, error) {
 	return "", ErrNotImplemented
 }
