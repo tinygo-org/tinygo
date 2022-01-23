@@ -126,6 +126,23 @@ func (k Kind) basicType() rawType {
 	return rawType(k << 1)
 }
 
+// Method represents a single method.
+type Method struct {
+	// Name is the method name.
+	Name string
+
+	// PkgPath is the package path that qualifies a lower case (unexported)
+	// method name. It is empty for upper case (exported) method names.
+	// The combination of PkgPath and Name uniquely identifies a method
+	// in a method set.
+	// See https://golang.org/ref/spec#Uniqueness_of_identifiers
+	PkgPath string
+
+	Type  Type  // method type
+	Func  Value // func with receiver as first argument
+	Index int   // index for Type.Method
+}
+
 // The following Type type has been copied almost entirely from
 // https://github.com/golang/go/blob/go1.15/src/reflect/type.go#L27-L212.
 // Some methods have been commented out as they haven't yet been implemented.
@@ -173,7 +190,7 @@ type Type interface {
 	//
 	// For an interface type, the returned Method's Type field gives the
 	// method signature, without a receiver, and the Func field is nil.
-	//MethodByName(string) (Method, bool)
+	MethodByName(string) (Method, bool)
 
 	// NumMethod returns the number of exported methods in the type's method set.
 	NumMethod() int
@@ -187,7 +204,7 @@ type Type interface {
 	// If the type was predeclared (string, error) or not defined (*T, struct{},
 	// []int, or A where A is an alias for a non-defined type), the package path
 	// will be the empty string.
-	//PkgPath() string
+	PkgPath() string
 
 	// Size returns the number of bytes needed to store
 	// a value of the given type; it is analogous to unsafe.Sizeof.
@@ -286,7 +303,7 @@ type Type interface {
 	// In returns the type of a function type's i'th input parameter.
 	// It panics if the type's Kind is not Func.
 	// It panics if i is not in the range [0, NumIn()).
-	//In(i int) Type
+	In(i int) Type
 
 	// Key returns a map type's key type.
 	// It panics if the type's Kind is not Map.
@@ -311,7 +328,7 @@ type Type interface {
 	// Out returns the type of a function type's i'th output parameter.
 	// It panics if the type's Kind is not Func.
 	// It panics if i is not in the range [0, NumOut()).
-	//Out(i int) Type
+	Out(i int) Type
 }
 
 // The typecode as used in an interface{}.
@@ -689,6 +706,22 @@ func (t rawType) Name() string {
 
 func (t rawType) Key() Type {
 	panic("unimplemented: (reflect.Type).Key()")
+}
+
+func (t rawType) In(i int) Type {
+	panic("unimplemented: (reflect.Type).In()")
+}
+
+func (t rawType) Out(i int) Type {
+	panic("unimplemented: (reflect.Type).Out()")
+}
+
+func (t rawType) MethodByName(name string) (Method, bool) {
+	panic("unimplemented: (reflect.Type).MethodByName()")
+}
+
+func (t rawType) PkgPath() string {
+	panic("unimplemented: (reflect.Type).PkgPath()")
 }
 
 // A StructField describes a single field in a struct.

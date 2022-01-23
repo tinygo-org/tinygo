@@ -865,3 +865,7 @@ func MakeMap(typ Type) Value {
 func (v Value) Call(in []Value) []Value {
 	panic("unimplemented: (reflect.Value).Call()")
 }
+
+func (v Value) MethodByName(name string) Value {
+	panic("unimplemented: (reflect.Value).MethodByName()")
+}
