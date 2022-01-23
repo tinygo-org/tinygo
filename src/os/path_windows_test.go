@@ -54,7 +54,7 @@ func TestFixLongPath(t *testing.T) {
 // isWine returns true if executing on wine (Wine Is Not an Emulator), which
 // is compatible with windows but does not reproduce all its quirks.
 func isWine() bool {
-	return os.Getenv("WINEUSERNAME") != ""
+	return os.Getenv("WINECONFIGDIR") != ""
 }
 
 func TestMkdirAllExtendedLength(t *testing.T) {
