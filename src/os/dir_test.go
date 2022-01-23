@@ -169,3 +169,13 @@ func TestReadDir(t *testing.T) {
 		t.Fatalf("ReadDir %s: testdata directory not found", dirname)
 	}
 }
+
+// TestReadNonDir is a tinygo regression test to verify that opening a non-directory returns an error.
+// See note re f.Stat() in dir_darwin.go.
+func TestReadNonDir(t *testing.T) {
+	dirname := "read_test.go"
+	_, err := ReadDir(dirname)
+	if err == nil {
+		t.Fatalf("ReadDir %s: error on non-dir expected, none found", dirname)
+	}
+}

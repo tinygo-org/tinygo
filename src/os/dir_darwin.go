@@ -26,6 +26,19 @@ func (d *dirInfo) close() {
 
 func (f *File) readdir(n int, mode readdirMode) (names []string, dirents []DirEntry, infos []FileInfo, err error) {
 	if f.dirinfo == nil {
+		// Begin workaround
+		// Without this test, darwinOpenDir would happily open non-directories, causing trouble in at least Glob().
+		// Upstream doesn't have to check f.Stat; darwin's
+		// fdopendir seems to take care of that when called
+		// normally, perhaps we are bypassing that?
+		sfi, err := f.Stat()
+		if err != nil {
+			return nil, nil, nil, &PathError{Op: "stat", Path: f.name, Err: err}
+		}
+		if !sfi.IsDir() {
+			return nil, nil, nil, &PathError{Op: "readdir", Path: f.name, Err: syscall.ENOTDIR}
+		}
+		// End workaround
 		dir, call, errno := darwinOpenDir(syscallFd(f.handle.(unixFileHandle)))
 		if errno != nil {
 			return nil, nil, nil, &PathError{Op: call, Path: f.name, Err: errno}
