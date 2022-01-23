@@ -833,3 +833,8 @@ func (e *TypeError) Error() string {
 func align(offset uintptr, alignment uintptr) uintptr {
 	return (offset + alignment - 1) &^ (alignment - 1)
 }
+
+func SliceOf(t Type) Type {
+	panic("unimplemented: reflect.SliceOf()")
+}
+
