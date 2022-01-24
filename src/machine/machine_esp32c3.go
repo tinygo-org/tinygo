@@ -95,6 +95,13 @@ func (p Pin) Set(value bool) {
 	}
 }
 
+// Get returns the current value of a GPIO pin when configured as an input or as
+// an output.
+func (p Pin) Get() bool {
+	reg := &esp.GPIO.IN
+	return (reg.Get()>>p)&1 > 0
+}
+
 // Return the register and mask to enable a given GPIO pin. This can be used to
 // implement bit-banged drivers.
 //
