@@ -721,7 +721,8 @@ func (t rawType) MethodByName(name string) (Method, bool) {
 }
 
 func (t rawType) PkgPath() string {
-	panic("unimplemented: (reflect.Type).PkgPath()")
+	// panic("unimplemented: (reflect.Type).PkgPath()")
+	return "<unimplemented>"
 }
 
 // A StructField describes a single field in a struct.
