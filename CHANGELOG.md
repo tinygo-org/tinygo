@@ -1,3 +1,108 @@
+0.22.0
+---
+
+* **command line**
+  - add asyncify to scheduler flag help
+  - support -run for tests
+  - remove FreeBSD target support
+  - add LLVM 12 and LLVM 13 support, use LLVM 13 by default
+  - add support for ARM64 MacOS
+  - improve help
+  - check /run/media as well as /media on Linux for non-debian-based distros
+  - `test`: set cmd.Dir even when running emulators
+  - `info`: add JSON output using the `-json` flag
+* **compiler**
+  - `builder`: fix off-by-one in size calculation
+  - `builder`: handle concurrent library header rename
+  - `builder`: use flock to avoid double-compiles
+  - `builder`: use build ID as cache key
+  - `builder`: add -fno-stack-protector to musl build
+  - `builder`: update clang header search path to look in /usr/lib
+  - `builder`: explicitly disable unwind tables for ARM
+  - `cgo`: add support for `C.CString` and related functions
+  - `compiler`: fix ranging over maps with particular map types
+  - `compiler`: add correct debug location to init instructions
+  - `compiler`: fix emission of large object layouts
+  - `compiler`: work around AVR atomics bugs
+  - `compiler`: predeclare runtime.trackPointer
+  - `interp`: work around AVR function pointers in globals
+  - `interp`: run goroutine starts and checks at runtime
+  - `interp`: always run atomic and volatile loads/stores at runtime
+  - `interp`: bump timeout to 180 seconds
+  - `interp`: handle type assertions on nil interfaces
+  - `loader`: elminate goroot cache inconsistency
+  - `loader`: respect $GOROOT when running `go list`
+  - `transform`: allocate the correct amount of bytes in an alloca
+  - `transform`: remove switched func lowering
+* **standard library**
+  - `crypto/rand`: show error if platform has no rng
+  - `device/*`: add `*_Msk` field for each bit field and avoid duplicates
+  - `device/*`: provide Set/Get for each register field described in the SVD files
+  - `internal/task`: swap stack chain when switching goroutines
+  - `internal/task`: remove `-scheduler=coroutines`
+  - `machine`: add `Device` string constant
+  - `net`: add bare Interface implementation
+  - `net`: add net.Buffers
+  - `os`: stub out support for some features
+  - `os`: obey TMPDIR on unix, TMP on Windows, etc
+  - `os`: implement `ReadAt`, `Mkdir`, `Remove`, `Stat`, `Lstat`, `CreateTemp`, `MkdirAll`, `Chdir`, `Chmod`, `Clearenv`, `Unsetenv`, `Setenv`, `MkdirTemp`, `Rename`, `Seek`, `ExpandEnv`, `Symlink`, `Readlink`
+  - `os`: implement `File.Stat`
+  - `os`: fix `IsNotExist` on nonexistent path
+  - `os`: fix opening files on WASI in read-only mode
+  - `os`: work around lack of `syscall.seek` on 386 and arm
+  - `reflect`: make sure indirect pointers are handled correctly
+  - `runtime`: allow comparing interfaces
+  - `runtime`: use LLVM intrinsic to read the stack pointer
+  - `runtime`: strengthen hashmap hash function for structs and arrays
+  - `runtime`: fix float/complex hashing
+  - `runtime`: fix nil map dereference
+  - `runtime`: add realloc implementation to GCs
+  - `runtime`: handle negative sleep times
+  - `runtime`: correct GC scan bounds
+  - `runtime`: remove extalloc GC
+  - `rumtime`: implement `__sync` libcalls as critical sections for most microcontrollers
+  - `runtime`: add stubs for `Func.FileLine` and `Frame.PC`
+  - `sync`: fix concurrent read-lock on write-locked RWMutex
+  - `sync`: add a package doc
+  - `sync`: add tests
+  - `syscall`: add support for `Mmap` and `Mprotect`
+  - `syscall`: fix array size for mmap slice creation
+  - `syscall`: enable `Getwd` in wasi
+  - `testing`: add a stub for `CoverMode`
+  - `testing`: support -bench option to run benchmarks matching the given pattern.
+  - `testing`: support b.SetBytes(); implement sub-benchmarks.
+  - `testing`: replace spaces with underscores in test/benchmark names, as upstream does
+  - `testing`: implement testing.Cleanup
+  - `testing`: allow filtering subbenchmarks with the `-bench` flag
+  - `testing`: implement `-benchtime` flag
+  - `testing`: print duration
+  - `testing`: allow filtering of subtests using `-run`
+* **targets**
+  - `all`: change LLVM features to match vanilla Clang
+  - `avr`: use interrupt-based timer which is much more accurate
+  - `nrf`: fix races in I2C
+  - `samd51`: implement TRNG for randomness
+  - `stm32`: pull-up on I2C lines
+  - `stm32`: fix timeout for i2c comms
+  - `stm32f4`, `stm32f103`: initial implementation for ADC
+  - `stm32f4`, `stm32f7`, `stm32l0x2`, `stm32l4`, `stm32l5`, `stm32wl`: TRNG implementation in crypto/rand
+  - `stm32wl`: add I2C support
+  - `windows`: add support for the `-size=` flag
+  - `wasm`: add support for `tinygo test`
+  - `wasi`, `wasm`: raise default stack size to 16 KiB
+* **boards**
+  - add M5Stack
+  - add lorae5 (stm32wle) support
+  - add Generic Node Sensor Edition
+  - add STM32F469 Discovery
+  - add M5Stamp C3
+  - add Blues Wireless Swan
+  - `bluepill`: add definitions for ADC pins
+  - `stm32f4disco`: add definitions for ADC pins
+  - `stm32l552ze`: use supported stlink interface
+  - `microbit-v2`: add some pin definitions
+
+
 0.21.0
 ---
 
