@@ -31,7 +31,8 @@ func ReadBuildID() ([]byte, error) {
 			return nil, err
 		}
 		for _, section := range file.Sections {
-			if section.Type != elf.SHT_NOTE || section.Name != ".note.gnu.build-id" {
+			if section.Type != elf.SHT_NOTE ||
+				(section.Name != ".note.gnu.build-id" && section.Name != ".note.go.buildid") {
 				continue
 			}
 			buf := make([]byte, section.Size)
