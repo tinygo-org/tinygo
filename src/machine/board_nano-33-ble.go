@@ -110,7 +110,7 @@ const (
 	APDS_INT = P0_19 // Proximity (APDS9960) interrupt pin
 
 	LSM_PWR = P0_22 // IMU (LSM9DS1) power
-	LSP_PWR = P0_22 // Pressure (LSP22) power
+	LPS_PWR = P0_22 // Pressure (LPS22HB) power
 	HTS_PWR = P0_22 // Humidity (HTS221) power
 
 	MIC_PWR = P0_17 // Microphone (MP34DT06JTR) power
