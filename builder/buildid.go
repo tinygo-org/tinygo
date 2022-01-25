@@ -30,6 +30,7 @@ func ReadBuildID() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		var gnuID, goID []byte
 		for _, section := range file.Sections {
 			if section.Type != elf.SHT_NOTE ||
 				(section.Name != ".note.gnu.build-id" && section.Name != ".note.go.buildid") {
@@ -40,7 +41,16 @@ func ReadBuildID() ([]byte, error) {
 			if uint64(n) != section.Size || err != nil {
 				return nil, fmt.Errorf("could not read build id: %w", err)
 			}
-			return buf, nil
+			if section.Name == ".note.gnu.build-id" {
+				gnuID = buf
+			} else {
+				goID = buf
+			}
+		}
+		if gnuID != nil {
+			return gnuID, nil
+		} else if goID != nil {
+			return goID, nil
 		}
 	case "darwin":
 		// Read the LC_UUID load command, which contains the equivalent of a
