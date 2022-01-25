@@ -1366,11 +1366,13 @@ func main() {
 			handleCompilerError(err)
 		}
 		defer os.RemoveAll(tmpdir)
+		spec, err := compileopts.LoadTarget(options)
+		if err != nil {
+			handleCompilerError(err)
+		}
 		config := &compileopts.Config{
 			Options: options,
-			Target: &compileopts.TargetSpec{
-				Triple: *target,
-			},
+			Target:  spec,
 		}
 		path, err := lib.Load(config, tmpdir)
 		handleCompilerError(err)
