@@ -199,8 +199,13 @@ func MuslArchitecture(triple string) string {
 // a precompiled libc shipped with a TinyGo build, or a libc path in the cache
 // directory (which might not yet be built).
 func (c *Config) LibcPath(name string) (path string, precompiled bool) {
+	archname := c.Triple()
+	if c.CPU() != "" {
+		archname += "-" + c.CPU()
+	}
+
 	// Try to load a precompiled library.
-	precompiledDir := filepath.Join(goenv.Get("TINYGOROOT"), "pkg", c.Triple(), name)
+	precompiledDir := filepath.Join(goenv.Get("TINYGOROOT"), "pkg", archname, name)
 	if _, err := os.Stat(precompiledDir); err == nil {
 		// Found a precompiled library for this OS/architecture. Return the path
 		// directly.
@@ -209,13 +214,7 @@ func (c *Config) LibcPath(name string) (path string, precompiled bool) {
 
 	// No precompiled library found. Determine the path name that will be used
 	// in the build cache.
-	var outname string
-	if c.CPU() != "" {
-		outname = name + "-" + c.Triple() + "-" + c.CPU()
-	} else {
-		outname = name + "-" + c.Triple()
-	}
-	return filepath.Join(goenv.Get("GOCACHE"), outname), false
+	return filepath.Join(goenv.Get("GOCACHE"), name+"-"+archname), false
 }
 
 // CFlags returns the flags to pass to the C compiler. This is necessary for CGo

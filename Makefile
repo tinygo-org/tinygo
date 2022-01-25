@@ -590,9 +590,9 @@ build/release: tinygo gen-device wasi-libc $(if $(filter 1,$(USE_SYSTEM_BINARYEN
 	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libc
 	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libm
 	@mkdir -p build/release/tinygo/lib/wasi-libc
-	@mkdir -p build/release/tinygo/pkg/armv6m-unknown-unknown-eabi
-	@mkdir -p build/release/tinygo/pkg/armv7m-unknown-unknown-eabi
-	@mkdir -p build/release/tinygo/pkg/armv7em-unknown-unknown-eabi
+	@mkdir -p build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0
+	@mkdir -p build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus
+	@mkdir -p build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4
 	@echo copying source files
 	@cp -p  build/tinygo$(EXE)           build/release/tinygo/bin
 ifneq ($(USE_SYSTEM_BINARYEN),1)
@@ -641,12 +641,12 @@ endif
 	@cp -rp lib/wasi-libc/sysroot        build/release/tinygo/lib/wasi-libc/sysroot
 	@cp -rp src                          build/release/tinygo/src
 	@cp -rp targets                      build/release/tinygo/targets
-	./build/tinygo build-library -target=armv6m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv6m-unknown-unknown-eabi/compiler-rt compiler-rt
-	./build/tinygo build-library -target=armv7m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv7m-unknown-unknown-eabi/compiler-rt compiler-rt
-	./build/tinygo build-library -target=armv7em-unknown-unknown-eabi -o build/release/tinygo/pkg/armv7em-unknown-unknown-eabi/compiler-rt compiler-rt
-	./build/tinygo build-library -target=armv6m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv6m-unknown-unknown-eabi/picolibc picolibc
-	./build/tinygo build-library -target=armv7m-unknown-unknown-eabi  -o build/release/tinygo/pkg/armv7m-unknown-unknown-eabi/picolibc picolibc
-	./build/tinygo build-library -target=armv7em-unknown-unknown-eabi -o build/release/tinygo/pkg/armv7em-unknown-unknown-eabi/picolibc picolibc
+	./build/tinygo build-library -target=cortex-m0     -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0/compiler-rt     compiler-rt
+	./build/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/compiler-rt compiler-rt
+	./build/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/compiler-rt    compiler-rt
+	./build/tinygo build-library -target=cortex-m0     -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0/picolibc     picolibc
+	./build/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/picolibc picolibc
+	./build/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/picolibc    picolibc
 
 release: build/release
 	tar -czf build/release.tar.gz -C build/release tinygo
