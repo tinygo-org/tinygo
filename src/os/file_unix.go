@@ -13,6 +13,20 @@ import (
 
 type syscallFd = int
 
+// fixLongPath is a noop on non-Windows platforms.
+func fixLongPath(path string) string {
+	return path
+}
+
+func rename(oldname, newname string) error {
+	// TODO: import rest of upstream tests, handle fancy cases
+	err := syscall.Rename(oldname, newname)
+	if err != nil {
+		return &LinkError{"rename", oldname, newname, err}
+	}
+	return nil
+}
+
 func Pipe() (r *File, w *File, err error) {
 	var p [2]int
 	err = handleSyscallError(syscall.Pipe2(p[:], syscall.O_CLOEXEC))
@@ -38,6 +52,44 @@ func tempDir() string {
 	return dir
 }
 
+// Symlink creates newname as a symbolic link to oldname.
+// On Windows, a symlink to a non-existent oldname creates a file symlink;
+// if oldname is later created as a directory the symlink will not work.
+// If there is an error, it will be of type *LinkError.
+func Symlink(oldname, newname string) error {
+	e := ignoringEINTR(func() error {
+		return syscall.Symlink(oldname, newname)
+	})
+	if e != nil {
+		return &LinkError{"symlink", oldname, newname, e}
+	}
+	return nil
+}
+
+// Readlink returns the destination of the named symbolic link.
+// If there is an error, it will be of type *PathError.
+func Readlink(name string) (string, error) {
+	for len := 128; ; len *= 2 {
+		b := make([]byte, len)
+		var (
+			n int
+			e error
+		)
+		for {
+			n, e = fixCount(syscall.Readlink(name, b))
+			if e != syscall.EINTR {
+				break
+			}
+		}
+		if e != nil {
+			return "", &PathError{Op: "readlink", Path: name, Err: e}
+		}
+		if n < len {
+			return string(b[0:n]), nil
+		}
+	}
+}
+
 // ReadAt reads up to len(b) bytes from the File starting at the given absolute offset.
 // It returns the number of bytes read and any error encountered, possibly io.EOF.
 // At end of file, Pread returns 0, io.EOF.
@@ -45,24 +97,14 @@ func tempDir() string {
 func (f unixFileHandle) ReadAt(b []byte, offset int64) (n int, err error) {
 	n, err = syscall.Pread(syscallFd(f), b, offset)
 	err = handleSyscallError(err)
-	if n == 0 && err == nil {
+	if n == 0 && len(b) > 0 && err == nil {
 		err = io.EOF
 	}
 	return
 }
 
-// ignoringEINTR makes a function call and repeats it if it returns an
-// EINTR error. This appears to be required even though we install all
-// signal handlers with SA_RESTART: see #22838, #38033, #38836, #40846.
-// Also #20400 and #36644 are issues in which a signal handler is
-// installed without setting SA_RESTART. None of these are the common case,
-// but there are enough of them that it seems that we can't avoid
-// an EINTR loop.
-func ignoringEINTR(fn func() error) error {
-	for {
-		err := fn()
-		if err != syscall.EINTR {
-			return err
-		}
-	}
+// Seek wraps syscall.Seek.
+func (f unixFileHandle) Seek(offset int64, whence int) (int64, error) {
+	newoffset, err := syscall.Seek(syscallFd(f), offset, whence)
+	return newoffset, handleSyscallError(err)
 }

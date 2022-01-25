@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+func init() {
+	println("init")
+	go println("goroutine in init")
+	time.Sleep(1 * time.Millisecond)
+}
+
 func main() {
 	println("main 1")
 	go sub()
@@ -14,7 +20,7 @@ func main() {
 	time.Sleep(2 * time.Millisecond)
 	println("main 3")
 
-	// Await a blocking call. This must create a new coroutine.
+	// Await a blocking call.
 	println("wait:")
 	wait()
 	println("end waiting")

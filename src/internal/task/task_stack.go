@@ -1,3 +1,4 @@
+//go:build scheduler.tasks
 // +build scheduler.tasks
 
 package task
@@ -54,7 +55,9 @@ func pause() {
 // This may only be called from the scheduler.
 func (t *Task) Resume() {
 	currentTask = t
+	t.gcData.swap()
 	t.state.resume()
+	t.gcData.swap()
 	currentTask = nil
 }
 

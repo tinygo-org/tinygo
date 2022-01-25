@@ -341,6 +341,28 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	}
 }
 
+func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
+	if ptr == nil {
+		return alloc(size, nil)
+	}
+
+	ptrAddress := uintptr(ptr)
+	endOfTailAddress := blockFromAddr(ptrAddress).findNext().address()
+
+	// this might be a few bytes longer than the original size of
+	// ptr, because we align to full blocks of size bytesPerBlock
+	oldSize := endOfTailAddress - ptrAddress
+	if size <= oldSize {
+		return ptr
+	}
+
+	newAlloc := alloc(size, nil)
+	memcpy(newAlloc, ptr, oldSize)
+	free(ptr)
+
+	return newAlloc
+}
+
 func free(ptr unsafe.Pointer) {
 	// TODO: free blocks on request, when the compiler knows they're unused.
 }
@@ -408,7 +430,17 @@ func markRoots(start, end uintptr) {
 		if start >= end {
 			runtimePanic("gc: unexpected range to mark")
 		}
+		if start%unsafe.Alignof(start) != 0 {
+			runtimePanic("gc: unaligned start pointer")
+		}
+		if end%unsafe.Alignof(end) != 0 {
+			runtimePanic("gc: unaligned end pointer")
+		}
 	}
+
+	// Reduce the end bound to avoid reading too far on platforms where pointer alignment is smaller than pointer size.
+	// If the size of the range is 0, then end will be slightly below start after this.
+	end -= unsafe.Sizeof(end) - unsafe.Alignof(end)
 
 	for addr := start; addr < end; addr += unsafe.Alignof(addr) {
 		root := *(*uintptr)(unsafe.Pointer(addr))

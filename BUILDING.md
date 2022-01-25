@@ -11,12 +11,7 @@ lld so that the binary can be easily moved between systems. It also shows how to
 build a release tarball that includes this binary and all necessary extra files.
 
 **Note**: this documentation describes how to build a statically linked release
-tarball. If you want to develop TinyGo, you will probably want to follow a
-different guide:
-
-  * [Linux](https://tinygo.org/getting-started/linux/#source-install)
-  * [macOS](https://tinygo.org/getting-started/macos/#source-install)
-  * [Windows](https://tinygo.org/getting-started/windows/#source-install)
+tarball. If you want to help with development of TinyGo itself, you should follow the guide located at https://tinygo.org/docs/guides/build/
 
 ## Dependencies
 

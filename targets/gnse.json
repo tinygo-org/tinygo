@@ -1,0 +1,12 @@
+{
+	"inherits": [
+		"stm32wl5x_cm4"
+	],
+	"build-tags": [
+		"gnse"
+	],
+	"serial": "uart",
+	"flash-method": "openocd",
+	"openocd-interface": "stlink",
+	"openocd-target": "stm32wlx"
+}

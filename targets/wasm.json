@@ -7,12 +7,12 @@
 	"linker":        "wasm-ld",
 	"libc":          "wasi-libc",
 	"scheduler":     "asyncify",
-	"default-stack-size": 8192,
+	"default-stack-size": 16384,
 	"ldflags": [
 		"--allow-undefined",
 		"--stack-first",
 		"--no-demangle"
 	],
-	"emulator":      ["node", "targets/wasm_exec.js"],
+	"emulator":      ["node", "{root}/targets/wasm_exec.js"],
 	"wasm-abi":      "js"
 }

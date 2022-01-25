@@ -108,10 +108,7 @@ func (v Value) Kind() Kind {
 func (v Value) IsNil() bool {
 	switch v.Kind() {
 	case Chan, Map, Ptr:
-		if v.isIndirect() {
-			return *(*uintptr)(v.value) == 0
-		}
-		return v.value == nil
+		return v.pointer() == nil
 	case Func:
 		if v.value == nil {
 			return true
@@ -355,9 +352,9 @@ func (v Value) Len() int {
 	case Array:
 		return v.typecode.Len()
 	case Chan:
-		return chanlen(v.value)
+		return chanlen(v.pointer())
 	case Map:
-		return maplen(v.value)
+		return maplen(v.pointer())
 	case Slice:
 		return int((*sliceHeader)(v.value).len)
 	case String:
@@ -377,7 +374,7 @@ func (v Value) Cap() int {
 	case Array:
 		return v.typecode.Len()
 	case Chan:
-		return chancap(v.value)
+		return chancap(v.pointer())
 	case Slice:
 		return int((*sliceHeader)(v.value).cap)
 	default:
@@ -394,10 +391,7 @@ func (v Value) NumField() int {
 func (v Value) Elem() Value {
 	switch v.Kind() {
 	case Ptr:
-		ptr := v.value
-		if v.isIndirect() {
-			ptr = *(*unsafe.Pointer)(ptr)
-		}
+		ptr := v.pointer()
 		if ptr == nil {
 			return Value{}
 		}
@@ -531,8 +525,8 @@ func (v Value) Index(i int) Value {
 			}
 		}
 
-		if size > unsafe.Sizeof(uintptr(0)) {
-			// The element fits in a pointer, but the array does not.
+		if size > unsafe.Sizeof(uintptr(0)) || v.isIndirect() {
+			// The element fits in a pointer, but the array is not stored in the pointer directly.
 			// Load the value from the pointer.
 			addr := unsafe.Pointer(uintptr(v.value) + elemSize*uintptr(i)) // pointer to new value
 			value := addr

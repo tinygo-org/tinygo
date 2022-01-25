@@ -225,6 +225,9 @@ type I2CConfig struct {
 
 // Configure is intended to setup the I2C interface.
 func (i2c *I2C) Configure(config I2CConfig) error {
+
+	i2c.Bus.ENABLE.Set(nrf.TWI_ENABLE_ENABLE_Disabled)
+
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
 		config.Frequency = TWI_FREQ_100KHZ
@@ -252,8 +255,9 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 
 	i2c.SetBaudRate(config.Frequency)
 
-	i2c.Bus.ENABLE.Set(nrf.TWI_ENABLE_ENABLE_Enabled)
 	i2c.setPins(config.SCL, config.SDA)
+
+	i2c.Bus.ENABLE.Set(nrf.TWI_ENABLE_ENABLE_Enabled)
 
 	return nil
 }
@@ -271,16 +275,23 @@ func (i2c *I2C) SetBaudRate(baud uint32) error {
 // It clocks out the given address, writes the bytes in w, reads back len(r)
 // bytes and stores them in r, and generates a stop condition on the bus.
 func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
+
+	// Tricky stop condition.
+	// After reads, the stop condition is generated implicitly with a shortcut.
+	// After writes not followed by reads and in the case of errors, stop must be generated explicitly.
+
 	i2c.Bus.ADDRESS.Set(uint32(addr))
 
 	if len(w) != 0 {
 		i2c.Bus.TASKS_STARTTX.Set(1) // start transmission for writing
 		for _, b := range w {
 			if err = i2c.writeByte(b); err != nil {
-				goto cleanUp
+				i2c.signalStop()
+				return
 			}
 		}
 	}
+
 	if len(r) != 0 {
 		// To trigger suspend task when a byte is received
 		i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND)
@@ -290,24 +301,29 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 				// To trigger stop task when last byte is received, set before resume task.
 				i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_STOP)
 			}
-			i2c.Bus.TASKS_RESUME.Set(1) // re-start transmission for reading
+			if i > 0 {
+				i2c.Bus.TASKS_RESUME.Set(1) // re-start transmission for reading
+			}
 			if r[i], err = i2c.readByte(); err != nil {
-				// goto/break are practically equivalent here,
-				// but goto makes this more easily understandable for maintenance.
-				goto cleanUp
+				i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND_Disabled)
+				i2c.signalStop()
+				return
 			}
 		}
+		i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND_Disabled)
 	}
 
-cleanUp:
-	i2c.signalStop()
-	i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND_Disabled)
+	// Stop explicitly when no reads were executed, stoping unconditionally would be a mistake.
+	// It may execute after I2C peripheral has already been stopped by the shortcut in the read block,
+	// so stop task will trigger first thing in a subsequent transaction, hanging it.
+	if len(r) == 0 {
+		i2c.signalStop()
+	}
+
 	return
 }
 
-// signalStop sends a stop signal when writing or tells the I2C peripheral that
-// it must generate a stop condition after the next character is retrieved when
-// reading.
+// signalStop sends a stop signal to the I2C peripheral and waits for confirmation.
 func (i2c *I2C) signalStop() {
 	i2c.Bus.TASKS_STOP.Set(1)
 	for i2c.Bus.EVENTS_STOPPED.Get() == 0 {
@@ -315,7 +331,7 @@ func (i2c *I2C) signalStop() {
 	i2c.Bus.EVENTS_STOPPED.Set(0)
 }
 
-// writeByte writes a single byte to the I2C bus.
+// writeByte writes a single byte to the I2C bus and waits for confirmation.
 func (i2c *I2C) writeByte(data byte) error {
 	i2c.Bus.TXD.Set(uint32(data))
 	for i2c.Bus.EVENTS_TXDSENT.Get() == 0 {
@@ -328,7 +344,7 @@ func (i2c *I2C) writeByte(data byte) error {
 	return nil
 }
 
-// readByte reads a single byte from the I2C bus.
+// readByte reads a single byte from the I2C bus when it is ready.
 func (i2c *I2C) readByte() (byte, error) {
 	for i2c.Bus.EVENTS_RXDREADY.Get() == 0 {
 		if e := i2c.Bus.EVENTS_ERROR.Get(); e != 0 {

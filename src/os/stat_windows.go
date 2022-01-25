@@ -15,6 +15,34 @@ func (f *File) Sync() error {
 	return ErrNotImplemented
 }
 
+// Stat returns the FileInfo structure describing file.
+// If there is an error, it will be of type *PathError.
+func (file *File) Stat() (FileInfo, error) {
+	if file == nil {
+		return nil, ErrInvalid
+	}
+
+	if isWindowsNulName(file.name) {
+		return &devNullStat, nil
+	}
+
+	ft, err := syscall.GetFileType(syscallFd(file.handle.(unixFileHandle)))
+	if err != nil {
+		return nil, &PathError{Op: "GetFileType", Path: file.name, Err: err}
+	}
+	switch ft {
+	case syscall.FILE_TYPE_PIPE, syscall.FILE_TYPE_CHAR:
+		return &fileStat{name: basename(file.name), filetype: ft}, nil
+	}
+
+	fs, err := newFileStatFromGetFileInformationByHandle(file.name, syscallFd(file.handle.(unixFileHandle)))
+	if err != nil {
+		return nil, err
+	}
+	fs.filetype = ft
+	return fs, err
+}
+
 // stat implements both Stat and Lstat of a file.
 func stat(funcname, name string, createFileAttrs uint32) (FileInfo, error) {
 	if len(name) == 0 {

@@ -104,6 +104,7 @@ func (*stackState) unwind()
 func (t *Task) Resume() {
 	// The current task must be saved and restored because this can nest on WASM with JS.
 	prevTask := currentTask
+	t.gcData.swap()
 	currentTask = t
 	if !t.state.launched {
 		t.state.launch()
@@ -112,6 +113,7 @@ func (t *Task) Resume() {
 		t.state.rewind()
 	}
 	currentTask = prevTask
+	t.gcData.swap()
 	if t.state.asyncifysp > t.state.csp {
 		runtimePanic("stack overflow")
 	}

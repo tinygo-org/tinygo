@@ -56,7 +56,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		}
 		constraints += ",~{rcx},~{r11}"
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
-		target := llvm.InlineAsm(fnType, "syscall", constraints, true, false, llvm.InlineAsmDialectIntel)
+		target := llvm.InlineAsm(fnType, "syscall", constraints, true, false, llvm.InlineAsmDialectIntel, false)
 		return b.CreateCall(target, args, ""), nil
 	case b.GOARCH == "386" && b.GOOS == "linux":
 		// Sources:
@@ -82,7 +82,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 			argTypes = append(argTypes, llvmValue.Type())
 		}
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
-		target := llvm.InlineAsm(fnType, "int 0x80", constraints, true, false, llvm.InlineAsmDialectIntel)
+		target := llvm.InlineAsm(fnType, "int 0x80", constraints, true, false, llvm.InlineAsmDialectIntel, false)
 		return b.CreateCall(target, args, ""), nil
 	case b.GOARCH == "arm" && b.GOOS == "linux":
 		// Implement the EABI system call convention for Linux.
@@ -114,7 +114,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 			constraints += ",~{r" + strconv.Itoa(i) + "}"
 		}
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
-		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0)
+		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0, false)
 		return b.CreateCall(target, args, ""), nil
 	case b.GOARCH == "arm64" && b.GOOS == "linux":
 		// Source: syscall(2) man page.
@@ -146,7 +146,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		}
 		constraints += ",~{x16},~{x17}" // scratch registers
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
-		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0)
+		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0, false)
 		return b.CreateCall(target, args, ""), nil
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+b.GOOS+"/"+b.GOARCH)

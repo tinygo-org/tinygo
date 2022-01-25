@@ -46,14 +46,46 @@ func Pread(fd int, p []byte, offset int64) (n int, err error) {
 	return
 }
 
-func Seek(fd int, offset int64, whence int) (off int64, err error) {
-	return 0, ENOSYS // TODO
+func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
+	newoffset = libc_lseek(int32(fd), offset, whence)
+	if newoffset < 0 {
+		err = getErrno()
+	}
+	return
 }
 
 func Open(path string, flag int, mode uint32) (fd int, err error) {
 	data := cstring(path)
 	fd = int(libc_open(&data[0], int32(flag), mode))
 	if fd < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Readlink(path string, p []byte) (n int, err error) {
+	data := cstring(path)
+	buf, count := splitSlice(p)
+	n = libc_readlink(&data[0], buf, uint(count))
+	if n < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Chdir(path string) (err error) {
+	data := cstring(path)
+	fail := int(libc_chdir(&data[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Chmod(path string, mode uint32) (err error) {
+	data := cstring(path)
+	fail := int(libc_chmod(&data[0], mode))
+	if fail < 0 {
 		err = getErrno()
 	}
 	return
@@ -71,6 +103,26 @@ func Mkdir(path string, mode uint32) (err error) {
 func Rmdir(path string) (err error) {
 	data := cstring(path)
 	fail := int(libc_rmdir(&data[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Rename(from, to string) (err error) {
+	fromdata := cstring(from)
+	todata := cstring(to)
+	fail := int(libc_rename(&fromdata[0], &todata[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Symlink(from, to string) (err error) {
+	fromdata := cstring(from)
+	todata := cstring(to)
+	fail := int(libc_symlink(&fromdata[0], &todata[0]))
 	if fail < 0 {
 		err = getErrno()
 	}
@@ -111,6 +163,49 @@ func Getenv(key string) (value string, found bool) {
 			return string(src), true
 		}
 		ptr += unsafe.Sizeof(byte(0))
+	}
+}
+
+func Setenv(key, val string) (err error) {
+	if len(key) == 0 {
+		return EINVAL
+	}
+	for i := 0; i < len(key); i++ {
+		if key[i] == '=' || key[i] == 0 {
+			return EINVAL
+		}
+	}
+	for i := 0; i < len(val); i++ {
+		if val[i] == 0 {
+			return EINVAL
+		}
+	}
+	keydata := cstring(key)
+	valdata := cstring(val)
+	errCode := libc_setenv(&keydata[0], &valdata[0], 1)
+	if errCode != 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Unsetenv(key string) (err error) {
+	keydata := cstring(key)
+	errCode := libc_unsetenv(&keydata[0])
+	if errCode != 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Clearenv() {
+	for _, s := range Environ() {
+		for j := 0; j < len(s); j++ {
+			if s[j] == '=' {
+				Unsetenv(s[0:j])
+				break
+			}
+		}
 	}
 }
 
@@ -174,6 +269,14 @@ func libc_write(fd int32, buf *byte, count uint) int
 //export getenv
 func libc_getenv(name *byte) *byte
 
+// int setenv(const char *name, const char *val, int replace);
+//export setenv
+func libc_setenv(name *byte, val *byte, replace int32) int32
+
+// int unsetenv(const char *name);
+//export unsetenv
+func libc_unsetenv(name *byte) int32
+
 // ssize_t read(int fd, void *buf, size_t count);
 //export read
 func libc_read(fd int32, buf *byte, count uint) int
@@ -181,6 +284,10 @@ func libc_read(fd int32, buf *byte, count uint) int
 // ssize_t pread(int fd, void *buf, size_t count, off_t offset);
 //export pread
 func libc_pread(fd int32, buf *byte, count uint, offset int64) int
+
+// ssize_t lseek(int fd, off_t offset, int whence);
+//export lseek
+func libc_lseek(fd int32, offset int64, whence int) int64
 
 // int open(const char *pathname, int flags, mode_t mode);
 //export open
@@ -198,6 +305,14 @@ func libc_mmap(addr unsafe.Pointer, length uintptr, prot, flags, fd int32, offse
 //export mprotect
 func libc_mprotect(addr unsafe.Pointer, len uintptr, prot int32) int32
 
+// int chdir(const char *pathname, mode_t mode);
+//export chdir
+func libc_chdir(pathname *byte) int32
+
+// int chmod(const char *pathname, mode_t mode);
+//export chmod
+func libc_chmod(pathname *byte, mode uint32) int32
+
 // int mkdir(const char *pathname, mode_t mode);
 //export mkdir
 func libc_mkdir(pathname *byte, mode uint32) int32
@@ -205,6 +320,18 @@ func libc_mkdir(pathname *byte, mode uint32) int32
 // int rmdir(const char *pathname);
 //export rmdir
 func libc_rmdir(pathname *byte) int32
+
+// int rename(const char *from, *to);
+//export rename
+func libc_rename(from, to *byte) int32
+
+// int symlink(const char *from, *to);
+//export symlink
+func libc_symlink(from, to *byte) int32
+
+// ssize_t readlink(const char *path, void *buf, size_t count);
+//export readlink
+func libc_readlink(path *byte, buf *byte, count uint) int
 
 // int unlink(const char *pathname);
 //export unlink

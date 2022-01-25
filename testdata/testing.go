@@ -3,6 +3,9 @@ package main
 // TODO: also test the verbose version.
 
 import (
+	"errors"
+	"flag"
+	"io"
 	"testing"
 )
 
@@ -24,23 +27,72 @@ func TestBar(t *testing.T) {
 	t.Log("log Bar end")
 }
 
+func TestAllLowercase(t *testing.T) {
+	names := []string {
+		"alpha",
+		"BETA",
+		"gamma",
+		"DELTA",
+	}
+
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			if 'a' <= name[0] && name[0] <= 'a' {
+				t.Logf("expected lowercase name, and got one, so I'm happy")
+			} else {
+				t.Errorf("expected lowercase name, got %s", name)
+			}
+		})
+	}
+}
+
 var tests = []testing.InternalTest{
 	{"TestFoo", TestFoo},
 	{"TestBar", TestBar},
+	{"TestAllLowercase", TestAllLowercase},
 }
 
 var benchmarks = []testing.InternalBenchmark{}
 
 var examples = []testing.InternalExample{}
 
+// A fake regexp matcher that can only handle two patterns.
+// Inflexible, but saves 50KB of flash and 50KB of RAM per -size full,
+// and lets tests pass on cortex-m3.
+func fakeMatchString(pat, str string) (bool, error) {
+	if pat == ".*" {
+		return true, nil
+	}
+	if pat == "[BD]" {
+		return (str[0] == 'B' || str[0] == 'D'), nil
+	}
+	println("BUG: fakeMatchString does not grok", pat)
+	return false, nil
+}
+
 func main() {
-	m := testing.MainStart(testdeps{}, tests, benchmarks, examples)
+	testing.Init()
+	flag.Set("test.run", ".*/[BD]")
+	m := testing.MainStart(matchStringOnly(fakeMatchString /*regexp.MatchString*/), tests, benchmarks, examples)
+
 	exitcode := m.Run()
 	if exitcode != 0 {
 		println("exitcode:", exitcode)
 	}
 }
 
-type testdeps struct{}
+var errMain = errors.New("testing: unexpected use of func Main")
 
-func (testdeps) MatchString(pat, str string) (bool, error) { return true, nil }
+// matchStringOnly is part of upstream, and is used below to provide a dummy deps to pass to MainStart
+// so it can be run with go (tested with go 1.16) to provide a baseline for the regression test.
+// See c56cc9b3b57276.  Unfortunately, testdeps is internal, so we can't just use &testdeps.TestDeps{}.
+type matchStringOnly func(pat, str string) (bool, error)
+
+func (f matchStringOnly) MatchString(pat, str string) (bool, error)   { return f(pat, str) }
+func (f matchStringOnly) StartCPUProfile(w io.Writer) error           { return errMain }
+func (f matchStringOnly) StopCPUProfile()                             {}
+func (f matchStringOnly) WriteProfileTo(string, io.Writer, int) error { return errMain }
+func (f matchStringOnly) ImportPath() string                          { return "" }
+func (f matchStringOnly) StartTestLog(io.Writer)                      {}
+func (f matchStringOnly) StopTestLog() error                          { return errMain }
+func (f matchStringOnly) SetPanicOnExit0(bool)                        {}

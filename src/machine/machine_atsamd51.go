@@ -2751,3 +2751,20 @@ func syncDAC() {
 	for sam.DAC.SYNCBUSY.HasBits(sam.DAC_SYNCBUSY_DATA0) {
 	}
 }
+
+var rngInitDone = false
+
+// GetRNG returns 32 bits of cryptographically secure random data
+func GetRNG() (uint32, error) {
+	if !rngInitDone {
+		// Turn on clock for TRNG
+		sam.MCLK.APBCMASK.SetBits(sam.MCLK_APBCMASK_TRNG_)
+
+		// enable
+		sam.TRNG.CTRLA.Set(sam.TRNG_CTRLA_ENABLE)
+
+		rngInitDone = true
+	}
+	ret := sam.TRNG.DATA.Get()
+	return ret, nil
+}

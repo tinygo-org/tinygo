@@ -1,6 +1,8 @@
 package main
 
-import "sort"
+import (
+	"sort"
+)
 
 var testmap1 = map[string]int{"data": 3}
 var testmap2 = map[string]int{
@@ -55,6 +57,10 @@ func main() {
 		println(k) // unreachable
 	}
 
+	var nilbinmap map[uint16]int
+	delete(nilbinmap, 4)
+	println("nilbinmap:", nilbinmap[5])
+
 	arrKey := ArrayKey([4]byte{4, 3, 2, 1})
 	println(testMapArrayKey[arrKey])
 	testMapArrayKey[arrKey] = 5555
@@ -78,15 +84,24 @@ func main() {
 	println("itfMap[true]:", itfMap[true])
 	delete(itfMap, 8)
 	println("itfMap[8]:", itfMap[8])
+	for key, value := range itfMap {
+		if key == "eight" {
+			println("itfMap: found key \"eight\":", value)
+		}
+	}
 
 	// test map with float keys
 	floatMap := map[float32]int{
-		42: 84,
+		42:   84,
+		3.14: 6,
 	}
 	println("floatMap[42]:", floatMap[42])
 	println("floatMap[43]:", floatMap[43])
 	delete(floatMap, 42)
 	println("floatMap[42]:", floatMap[42])
+	for k, v := range floatMap {
+		println("floatMap key, value:", k, v)
+	}
 
 	// test maps with struct keys
 	structMap := map[namedFloat]int{
@@ -109,6 +124,48 @@ func main() {
 	squares = make(map[int]int, 20)
 	testBigMap(squares, 40)
 	println("tested growing of a map")
+
+	floatcmplx()
+}
+
+func floatcmplx() {
+
+	var zero float64
+	var negz float64 = -zero
+
+	// test that zero and negative zero hash to the same thing
+	m := make(map[float64]int)
+	m[zero]++
+	m[negz]++
+	println(m[negz])
+
+	cmap := make(map[complex128]int)
+
+	var c complex128
+	c = complex(zero, zero)
+	cmap[c]++
+
+	c = complex(negz, negz)
+	cmap[c]++
+
+	c = complex(0, 0)
+	println(cmap[c])
+
+	c = complex(1, negz)
+	cmap[c]++
+
+	c = complex(1, zero)
+	cmap[c]++
+
+	println(cmap[c])
+
+	c = complex(negz, 2)
+	cmap[c]++
+
+	c = complex(zero, 2)
+	cmap[c]++
+
+	println(cmap[c])
 }
 
 func readMap(m map[string]int, key string) {

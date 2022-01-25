@@ -9,6 +9,7 @@ type Frame struct {
 
 	File string
 	Line int
+	PC   uintptr
 }
 
 func CallersFrames(callers []uintptr) *Frames {

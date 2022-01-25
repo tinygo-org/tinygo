@@ -15,20 +15,20 @@ target triple = "i686--linux"
 @"reflect.rawType$methodset" = linkonce_odr constant [20 x %runtime.interfaceMethodInfo] zeroinitializer
 @"reflect/types.type:basic:uintptr" = linkonce_odr constant %runtime.typecodeID zeroinitializer
 
-define i1 @main.isError(i32 %typ.typecode, i8* %typ.value, i8* %context, i8* %parentHandle) {
+define i1 @main.isError(i32 %typ.typecode, i8* %typ.value, i8* %context) {
 entry:
   %0 = ptrtoint i8* %typ.value to i32
   %1 = call i1 @"error.$typeassert"(i32 %0)
   ret i1 %1
 }
 
-define i1 @main.isUnknown(i32 %typ.typecode, i8* %typ.value, i32 %itf.typecode, i8* %itf.value, i8* %context, i8* %parentHandle) {
+define i1 @main.isUnknown(i32 %typ.typecode, i8* %typ.value, i32 %itf.typecode, i8* %itf.value, i8* %context) {
 entry:
-  %result = call i1 @"reflect.Type.Implements$invoke"(i8* %typ.value, i32 %itf.typecode, i8* %itf.value, i32 %typ.typecode, i8* undef, i8* undef)
+  %result = call i1 @"reflect.Type.Implements$invoke"(i8* %typ.value, i32 %itf.typecode, i8* %itf.value, i32 %typ.typecode, i8* undef)
   ret i1 %result
 }
 
-declare i1 @"reflect.Type.Implements$invoke"(i8*, i32, i8*, i32, i8*, i8*) #0
+declare i1 @"reflect.Type.Implements$invoke"(i8*, i32, i8*, i32, i8*) #0
 
 declare i1 @"error.$typeassert"(i32) #1
 

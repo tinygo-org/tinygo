@@ -19,29 +19,8 @@ func (b *builder) createFuncValue(funcPtr, context llvm.Value, sig *types.Signat
 // createFuncValue creates a function value from a raw function pointer with no
 // context.
 func (c *compilerContext) createFuncValue(builder llvm.Builder, funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
-	var funcValueScalar llvm.Value
-	switch c.FuncImplementation {
-	case "doubleword":
-		// Closure is: {context, function pointer}
-		funcValueScalar = llvm.ConstBitCast(funcPtr, c.rawVoidFuncType)
-	case "switch":
-		funcValueWithSignatureGlobalName := funcPtr.Name() + "$withSignature"
-		funcValueWithSignatureGlobal := c.mod.NamedGlobal(funcValueWithSignatureGlobalName)
-		if funcValueWithSignatureGlobal.IsNil() {
-			funcValueWithSignatureType := c.getLLVMRuntimeType("funcValueWithSignature")
-			funcValueWithSignature := llvm.ConstNamedStruct(funcValueWithSignatureType, []llvm.Value{
-				llvm.ConstPtrToInt(funcPtr, c.uintptrType),
-				c.getFuncSignatureID(sig),
-			})
-			funcValueWithSignatureGlobal = llvm.AddGlobal(c.mod, funcValueWithSignatureType, funcValueWithSignatureGlobalName)
-			funcValueWithSignatureGlobal.SetInitializer(funcValueWithSignature)
-			funcValueWithSignatureGlobal.SetGlobalConstant(true)
-			funcValueWithSignatureGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
-		}
-		funcValueScalar = llvm.ConstPtrToInt(funcValueWithSignatureGlobal, c.uintptrType)
-	default:
-		panic("unimplemented func value variant")
-	}
+	// Closure is: {context, function pointer}
+	funcValueScalar := llvm.ConstBitCast(funcPtr, c.rawVoidFuncType)
 	funcValueType := c.getFuncType(sig)
 	funcValue := llvm.Undef(funcValueType)
 	funcValue = builder.CreateInsertValue(funcValue, context, 0, "")
@@ -78,43 +57,19 @@ func (b *builder) extractFuncContext(funcValue llvm.Value) llvm.Value {
 // value. This may be an expensive operation.
 func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcPtr, context llvm.Value) {
 	context = b.CreateExtractValue(funcValue, 0, "")
-	switch b.FuncImplementation {
-	case "doubleword":
-		bitcast := b.CreateExtractValue(funcValue, 1, "")
-		if !bitcast.IsAConstantExpr().IsNil() && bitcast.Opcode() == llvm.BitCast {
-			funcPtr = bitcast.Operand(0)
-			return
-		}
-		llvmSig := b.getRawFuncType(sig)
-		funcPtr = b.CreateBitCast(bitcast, llvmSig, "")
-	case "switch":
-		if !funcValue.IsAConstant().IsNil() {
-			// If this is a constant func value, the underlying function is
-			// known and can be returned directly.
-			funcValueWithSignatureGlobal := llvm.ConstExtractValue(funcValue, []uint32{1}).Operand(0)
-			funcPtr = llvm.ConstExtractValue(funcValueWithSignatureGlobal.Initializer(), []uint32{0}).Operand(0)
-			return
-		}
-		llvmSig := b.getRawFuncType(sig)
-		sigGlobal := b.getFuncSignatureID(sig)
-		funcPtr = b.createRuntimeCall("getFuncPtr", []llvm.Value{funcValue, sigGlobal}, "")
-		funcPtr = b.CreateIntToPtr(funcPtr, llvmSig, "")
-	default:
-		panic("unimplemented func value variant")
+	bitcast := b.CreateExtractValue(funcValue, 1, "")
+	if !bitcast.IsAConstantExpr().IsNil() && bitcast.Opcode() == llvm.BitCast {
+		funcPtr = bitcast.Operand(0)
+		return
 	}
+	llvmSig := b.getRawFuncType(sig)
+	funcPtr = b.CreateBitCast(bitcast, llvmSig, "")
 	return
 }
 
 // getFuncType returns the type of a func value given a signature.
 func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
-	switch c.FuncImplementation {
-	case "doubleword":
-		return c.ctx.StructType([]llvm.Type{c.i8ptrType, c.rawVoidFuncType}, false)
-	case "switch":
-		return c.getLLVMRuntimeType("funcValue")
-	default:
-		panic("unimplemented func value variant")
-	}
+	return c.ctx.StructType([]llvm.Type{c.i8ptrType, c.rawVoidFuncType}, false)
 }
 
 // getRawFuncType returns a LLVM function pointer type for a given signature.
@@ -160,7 +115,6 @@ func (c *compilerContext) getRawFuncType(typ *types.Signature) llvm.Type {
 	}
 	// All functions take these parameters at the end.
 	paramTypes = append(paramTypes, c.i8ptrType) // context
-	paramTypes = append(paramTypes, c.i8ptrType) // parent coroutine
 
 	// Make a func type out of the signature.
 	return llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), c.funcPtrAddrSpace)

@@ -1,4 +1,9 @@
+//go:build !baremetal && !js
 // +build !baremetal,!js
+
+// Portions copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
 package os
 
@@ -26,6 +31,23 @@ const DevNull = "/dev/null"
 // isOS indicates whether we're running on a real operating system with
 // filesystem support.
 const isOS = true
+
+// Chdir changes the current working directory to the named directory.
+// If there is an error, it will be of type *PathError.
+func Chdir(dir string) error {
+	if e := syscall.Chdir(dir); e != nil {
+		return &PathError{Op: "chdir", Path: dir, Err: e}
+	}
+	return nil
+}
+
+// Rename renames (moves) oldpath to newpath.
+// If newpath already exists and is not a directory, Rename replaces it.
+// OS-specific restrictions may apply when oldpath and newpath are in different directories.
+// If there is an error, it will be of type *LinkError.
+func Rename(oldpath, newpath string) error {
+	return rename(oldpath, newpath)
+}
 
 // unixFilesystem is an empty handle for a Unix/Linux filesystem. All operations
 // are relative to the current working directory.
@@ -66,33 +88,7 @@ func (fs unixFilesystem) Remove(path string) error {
 }
 
 func (fs unixFilesystem) OpenFile(path string, flag int, perm FileMode) (FileHandle, error) {
-	// Map os package flags to syscall flags.
-	syscallFlag := 0
-	if flag&O_RDONLY != 0 {
-		syscallFlag |= syscall.O_RDONLY
-	}
-	if flag&O_WRONLY != 0 {
-		syscallFlag |= syscall.O_WRONLY
-	}
-	if flag&O_RDWR != 0 {
-		syscallFlag |= syscall.O_RDWR
-	}
-	if flag&O_APPEND != 0 {
-		syscallFlag |= syscall.O_APPEND
-	}
-	if flag&O_CREATE != 0 {
-		syscallFlag |= syscall.O_CREAT
-	}
-	if flag&O_EXCL != 0 {
-		syscallFlag |= syscall.O_EXCL
-	}
-	if flag&O_SYNC != 0 {
-		syscallFlag |= syscall.O_SYNC
-	}
-	if flag&O_TRUNC != 0 {
-		syscallFlag |= syscall.O_TRUNC
-	}
-	fp, err := syscall.Open(path, syscallFlag, uint32(perm))
+	fp, err := syscall.Open(path, flag, uint32(perm))
 	return unixFileHandle(fp), handleSyscallError(err)
 }
 
@@ -105,7 +101,7 @@ type unixFileHandle uintptr
 func (f unixFileHandle) Read(b []byte) (n int, err error) {
 	n, err = syscall.Read(syscallFd(f), b)
 	err = handleSyscallError(err)
-	if n == 0 && err == nil {
+	if n == 0 && len(b) > 0 && err == nil {
 		err = io.EOF
 	}
 	return
@@ -124,6 +120,48 @@ func (f unixFileHandle) Close() error {
 	return handleSyscallError(syscall.Close(syscallFd(f)))
 }
 
+// Chmod changes the mode of the named file to mode.
+// If the file is a symbolic link, it changes the mode of the link's target.
+// If there is an error, it will be of type *PathError.
+//
+// A different subset of the mode bits are used, depending on the
+// operating system.
+//
+// On Unix, the mode's permission bits, ModeSetuid, ModeSetgid, and
+// ModeSticky are used.
+//
+// On Windows, only the 0200 bit (owner writable) of mode is used; it
+// controls whether the file's read-only attribute is set or cleared.
+// The other bits are currently unused. For compatibility with Go 1.12
+// and earlier, use a non-zero mode. Use mode 0400 for a read-only
+// file and 0600 for a readable+writable file.
+func Chmod(name string, mode FileMode) error {
+	longName := fixLongPath(name)
+	e := ignoringEINTR(func() error {
+		return syscall.Chmod(longName, syscallMode(mode))
+	})
+	if e != nil {
+		return &PathError{Op: "chmod", Path: name, Err: e}
+	}
+	return nil
+}
+
+// ignoringEINTR makes a function call and repeats it if it returns an
+// EINTR error. This appears to be required even though we install all
+// signal handlers with SA_RESTART: see #22838, #38033, #38836, #40846.
+// Also #20400 and #36644 are issues in which a signal handler is
+// installed without setting SA_RESTART. None of these are the common case,
+// but there are enough of them that it seems that we can't avoid
+// an EINTR loop.
+func ignoringEINTR(fn func() error) error {
+	for {
+		err := fn()
+		if err != syscall.EINTR {
+			return err
+		}
+	}
+}
+
 // handleSyscallError converts syscall errors into regular os package errors.
 // The err parameter must be either nil or of type syscall.Errno.
 func handleSyscallError(err error) error {
@@ -138,4 +176,20 @@ func handleSyscallError(err error) error {
 	default:
 		return err
 	}
+}
+
+// syscallMode returns the syscall-specific mode bits from Go's portable mode bits.
+func syscallMode(i FileMode) (o uint32) {
+	o |= uint32(i.Perm())
+	if i&ModeSetuid != 0 {
+		o |= syscall.S_ISUID
+	}
+	if i&ModeSetgid != 0 {
+		o |= syscall.S_ISGID
+	}
+	if i&ModeSticky != 0 {
+		o |= syscall.S_ISVTX
+	}
+	// No mapping for Go's ModeTemporary (plan9 only).
+	return
 }

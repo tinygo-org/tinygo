@@ -3,9 +3,11 @@ package loader
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 // List returns a ready-to-run *exec.Cmd for running the `go list` command with
@@ -24,7 +26,10 @@ func List(config *compileopts.Config, extraArgs, pkgs []string) (*exec.Cmd, erro
 	if config.CgoEnabled() {
 		cgoEnabled = "1"
 	}
-	cmd := exec.Command("go", args...)
+	cmd := exec.Command(filepath.Join(goenv.Get("GOROOT"), "bin", "go"), args...)
 	cmd.Env = append(os.Environ(), "GOROOT="+goroot, "GOOS="+config.GOOS(), "GOARCH="+config.GOARCH(), "CGO_ENABLED="+cgoEnabled)
+	if config.Options.Directory != "" {
+		cmd.Dir = config.Options.Directory
+	}
 	return cmd, nil
 }

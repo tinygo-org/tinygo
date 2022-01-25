@@ -1,4 +1,4 @@
-// +build !baremetal,!wasi,!wasm
+// +build !baremetal,!wasm
 
 // This file assumes there is a libc available that runs on a real operating
 // system.

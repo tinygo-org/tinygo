@@ -28,7 +28,7 @@ var Picolibc = Library{
 			"-DHAVE_ALIAS_ATTRIBUTE",
 			"-DTINY_STDIO",
 			"-nostdlibinc",
-			"-Xclang", "-internal-isystem", "-Xclang", picolibcDir + "/include",
+			"-isystem", picolibcDir + "/include",
 			"-I" + picolibcDir + "/tinystdio",
 			"-I" + headerPath,
 		}

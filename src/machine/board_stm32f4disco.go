@@ -1,3 +1,4 @@
+//go:build stm32f4disco
 // +build stm32f4disco
 
 package machine
@@ -22,6 +23,26 @@ const (
 
 const (
 	BUTTON = PA0
+)
+
+// Analog Pins
+const (
+	ADC0  = PA0
+	ADC1  = PA1
+	ADC2  = PA2
+	ADC3  = PA3
+	ADC4  = PA4
+	ADC5  = PA5
+	ADC6  = PA6
+	ADC7  = PA7
+	ADC8  = PB0
+	ADC9  = PB1
+	ADC10 = PC0
+	ADC11 = PC1
+	ADC12 = PC2
+	ADC13 = PC3
+	ADC14 = PC4
+	ADC15 = PC5
 )
 
 // UART pins

@@ -9,10 +9,21 @@ CLANG_SRC ?= $(LLVM_PROJECTDIR)/clang
 LLD_SRC ?= $(LLVM_PROJECTDIR)/lld
 
 # Try to autodetect LLVM build tools.
-detect = $(shell command -v $(1) 2> /dev/null && echo $(1))
-CLANG ?= $(word 1,$(abspath $(call detect,llvm-build/bin/clang))$(call detect,clang-11)$(call detect,clang))
-LLVM_AR ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-ar))$(call detect,llvm-ar-11)$(call detect,llvm-ar))
-LLVM_NM ?= $(word 1,$(abspath $(call detect,llvm-build/bin/llvm-nm))$(call detect,llvm-nm-11)$(call detect,llvm-nm))
+# Versions are listed here in descending priority order.
+LLVM_VERSIONS = 13 12 11
+errifempty = $(if $(1),$(1),$(error $(2)))
+detect = $(shell which $(call errifempty,$(firstword $(foreach p,$(2),$(shell command -v $(p) 2> /dev/null && echo $(p)))),failed to locate $(1) at any of: $(2)))
+toolSearchPathsVersion = $(1)-$(2)
+ifeq ($(shell uname -s),Darwin)
+	# Also explicitly search Brew's copy, which is not in PATH by default.
+	BREW_PREFIX := $(shell brew --prefix)
+	toolSearchPathsVersion += $(BREW_PREFIX)/opt/llvm@$(2)/bin/$(1)-$(2) $(BREW_PREFIX)/opt/llvm@$(2)/bin/$(1)
+endif
+# First search for a custom built copy, then move on to explicitly version-tagged binaries, then just see if the tool is in path with its normal name.
+findLLVMTool = $(call detect,$(1),$(abspath llvm-build/bin/$(1)) $(foreach ver,$(LLVM_VERSIONS),$(call toolSearchPathsVersion,$(1),$(ver))) $(1))
+CLANG ?= $(call findLLVMTool,clang)
+LLVM_AR ?= $(call findLLVMTool,llvm-ar)
+LLVM_NM ?= $(call findLLVMTool,llvm-nm)
 
 # Go binary and GOROOT to select
 GO ?= go
@@ -25,7 +36,7 @@ GOTESTFLAGS ?= -v
 MD5SUM = md5sum
 
 # tinygo binary for tests
-TINYGO ?= $(word 1,$(call detect,tinygo)$(call detect,build/tinygo))
+TINYGO ?= $(call detect,tinygo,tinygo $(CURDIR)/build/tinygo)
 
 # Use CCACHE for LLVM if possible
 ifneq (, $(shell command -v ccache 2> /dev/null))
@@ -57,10 +68,13 @@ ifeq ($(OS),Windows_NT)
     CGO_LDFLAGS += -static -static-libgcc -static-libstdc++
     CGO_LDFLAGS_EXTRA += -lversion
 
-    BINARYEN_OPTION += -DCMAKE_EXE_LINKER_FLAGS='-static-libgcc -static-libstdc++'
+    USE_SYSTEM_BINARYEN ?= 1
 
 else ifeq ($(shell uname -s),Darwin)
     MD5SUM = md5
+
+    USE_SYSTEM_BINARYEN ?= 1
+
 else ifeq ($(shell uname -s),FreeBSD)
     MD5SUM = md5
     START_GROUP = -Wl,--start-group
@@ -98,7 +112,6 @@ ifneq ("$(wildcard $(LLVM_BUILDDIR)/bin/llvm-config*)","")
     CGO_CXXFLAGS=-std=c++14
     CGO_LDFLAGS+=-L$(abspath $(LLVM_BUILDDIR)/lib) -lclang $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
 endif
-
 
 clean:
 	@rm -rf build
@@ -160,7 +173,7 @@ gen-device-rp: build/gen-device-svd
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/llvm:
-	git clone -b xtensa_release_12.0.1 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b xtensa_release_13.0.0 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/llvm
 
 # Configure LLVM.
@@ -172,6 +185,7 @@ $(LLVM_BUILDDIR)/build.ninja: llvm-source
 $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja
 	cd $(LLVM_BUILDDIR) && ninja $(NINJA_BUILD_TARGETS)
 
+ifneq ($(USE_SYSTEM_BINARYEN),1)
 # Build Binaryen
 .PHONY: binaryen
 binaryen: build/wasm-opt$(EXE)
@@ -179,6 +193,7 @@ build/wasm-opt$(EXE):
 	mkdir -p build
 	cd lib/binaryen && cmake -G Ninja . -DBUILD_STATIC_LIB=ON $(BINARYEN_OPTION) && ninja bin/wasm-opt$(EXE)
 	cp lib/binaryen/bin/wasm-opt$(EXE) build/wasm-opt$(EXE)
+endif
 
 # Build wasi-libc sysroot
 .PHONY: wasi-libc
@@ -196,15 +211,19 @@ tinygo:
 test: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=20m -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
-TEST_PACKAGES = \
+# Tests that take over a minute in wasi
+TEST_PACKAGES_SLOW = \
 	compress/bzip2 \
 	compress/flate \
+	crypto/dsa \
+	index/suffixarray \
+
+TEST_PACKAGES_BASE = \
 	compress/zlib \
 	container/heap \
 	container/list \
 	container/ring \
 	crypto/des \
-	crypto/dsa \
 	crypto/elliptic/internal/fiat \
 	crypto/internal/subtle \
 	crypto/md5 \
@@ -224,7 +243,6 @@ TEST_PACKAGES = \
 	hash/crc64 \
 	hash/fnv \
 	html \
-	index/suffixarray \
 	internal/itoa \
 	internal/profile \
 	math \
@@ -234,6 +252,7 @@ TEST_PACKAGES = \
 	os \
 	path \
 	reflect \
+	sync \
 	testing \
 	testing/iotest \
 	text/scanner \
@@ -241,15 +260,55 @@ TEST_PACKAGES = \
 	unicode/utf16 \
 	unicode/utf8 \
 
+# Standard library packages that pass tests natively
+TEST_PACKAGES := \
+	$(TEST_PACKAGES_BASE)
+
+# archive/zip requires ReadAt, which is not yet supported on windows
+ifneq ($(OS),Windows_NT)
+TEST_PACKAGES := \
+	$(TEST_PACKAGES) \
+	archive/zip
+endif
+
+# Standard library packages that pass tests on wasi
+TEST_PACKAGES_WASI = \
+	$(TEST_PACKAGES_BASE)
+
 # Test known-working standard library packages.
 # TODO: parallelize, and only show failing tests (no implied -v flag).
 .PHONY: tinygo-test
 tinygo-test:
+	$(TINYGO) test $(TEST_PACKAGES) $(TEST_PACKAGES_SLOW)
+tinygo-test-fast:
 	$(TINYGO) test $(TEST_PACKAGES)
+tinygo-bench:
+	$(TINYGO) test -bench . $(TEST_PACKAGES) $(TEST_PACKAGES_SLOW)
+tinygo-bench-fast:
+	$(TINYGO) test -bench . $(TEST_PACKAGES)
+tinygo-test-wasi:
+	$(TINYGO) test -target wasi $(TEST_PACKAGES_WASI) $(TEST_PACKAGES_SLOW)
+tinygo-test-wasi-fast:
+	$(TINYGO) test -target wasi $(TEST_PACKAGES_WASI)
+tinygo-bench-wasi:
+	$(TINYGO) test -target wasi -bench . $(TEST_PACKAGES_WASI) $(TEST_PACKAGES_SLOW)
+tinygo-bench-wasi-fast:
+	$(TINYGO) test -target wasi -bench . $(TEST_PACKAGES_WASI)
+
+# Test external packages in a large corpus.
+test-corpus:
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags byollvm -run TestCorpus . -corpus=testdata/corpus.yaml
+test-corpus-fast:
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags byollvm -run TestCorpus -short . -corpus=testdata/corpus.yaml
+test-corpus-wasi: wasi-libc
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags byollvm -run TestCorpus . -corpus=testdata/corpus.yaml -target=wasi
+
 
 .PHONY: smoketest
 smoketest:
 	$(TINYGO) version
+	# regression test for #2563
+	cd tests/os/smoke && $(TINYGO) test -c -target=pybadge && rm smoke.test
 	# test all examples (except pwm)
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky1
 	@$(MD5SUM) test.hex
@@ -443,7 +502,11 @@ ifneq ($(STM32), 0)
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32f4disco-1      examples/pwm
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=stm32f469disco      examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=lorae5              examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=swan                examples/blinky1
 	@$(MD5SUM) test.hex
 endif
 ifneq ($(AVR), 0)
@@ -478,6 +541,8 @@ ifneq ($(XTENSA), 0)
 endif
 	$(TINYGO) build -size short -o test.bin -target=esp32c3           	examples/serial
 	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=m5stamp-c3          examples/serial
+	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=hifive1-qemu        examples/serial
@@ -511,7 +576,7 @@ endif
 wasmtest:
 	$(GO) test ./tests/wasm
 
-build/release: tinygo gen-device wasi-libc binaryen
+build/release: tinygo gen-device wasi-libc $(if $(filter 1,$(USE_SYSTEM_BINARYEN)),,binaryen)
 	@mkdir -p build/release/tinygo/bin
 	@mkdir -p build/release/tinygo/lib/clang/include
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
@@ -530,7 +595,9 @@ build/release: tinygo gen-device wasi-libc binaryen
 	@mkdir -p build/release/tinygo/pkg/armv7em-unknown-unknown-eabi
 	@echo copying source files
 	@cp -p  build/tinygo$(EXE)           build/release/tinygo/bin
+ifneq ($(USE_SYSTEM_BINARYEN),1)
 	@cp -p  build/wasm-opt$(EXE)         build/release/tinygo/bin
+endif
 	@cp -p $(abspath $(CLANG_SRC))/lib/Headers/*.h build/release/tinygo/lib/clang/include
 	@cp -rp lib/CMSIS/CMSIS/Include      build/release/tinygo/lib/CMSIS/CMSIS
 	@cp -rp lib/CMSIS/README.md          build/release/tinygo/lib/CMSIS

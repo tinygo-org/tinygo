@@ -4,7 +4,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -36,11 +38,12 @@ type Library struct {
 // The resulting directory may be stored in the provided tmpdir, which is
 // expected to be removed after the Load call.
 func (l *Library) Load(config *compileopts.Config, tmpdir string) (dir string, err error) {
-	job, err := l.load(config, tmpdir)
+	job, unlock, err := l.load(config, tmpdir)
 	if err != nil {
 		return "", err
 	}
-	err = runJobs(job, config.Options.Parallelism)
+	defer unlock()
+	err = runJobs(job, config.Options.Semaphore)
 	return filepath.Dir(job.result), err
 }
 
@@ -52,28 +55,38 @@ func (l *Library) Load(config *compileopts.Config, tmpdir string) (dir string, e
 // output archive file, it is expected to be removed after use.
 // As a side effect, this call creates the library header files if they didn't
 // exist yet.
-func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJob, err error) {
+func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJob, abortLock func(), err error) {
 	outdir, precompiled := config.LibcPath(l.name)
 	archiveFilePath := filepath.Join(outdir, "lib.a")
 	if precompiled {
 		// Found a precompiled library for this OS/architecture. Return the path
 		// directly.
-		return dummyCompileJob(archiveFilePath), nil
+		return dummyCompileJob(archiveFilePath), func() {}, nil
 	}
+
+	// Create a lock on the output (if supported).
+	// This is a bit messy, but avoids a deadlock because it is ordered consistently with other library loads within a build.
+	outname := filepath.Base(outdir)
+	unlock := lock(filepath.Join(goenv.Get("GOCACHE"), outname+".lock"))
+	var ok bool
+	defer func() {
+		if !ok {
+			unlock()
+		}
+	}()
 
 	// Try to fetch this library from the cache.
 	if _, err := os.Stat(archiveFilePath); err == nil {
-		return dummyCompileJob(archiveFilePath), nil
+		return dummyCompileJob(archiveFilePath), func() {}, nil
 	}
 	// Cache miss, build it now.
 
 	// Create the destination directory where the components of this library
 	// (lib.a file, include directory) are placed.
-	outname := filepath.Base(outdir)
 	err = os.MkdirAll(filepath.Join(goenv.Get("GOCACHE"), outname), 0o777)
 	if err != nil {
 		// Could not create directory (and not because it already exists).
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Make headers if needed.
@@ -83,16 +96,32 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		if _, err = os.Stat(headerPath); err != nil {
 			temporaryHeaderPath, err := ioutil.TempDir(outdir, "include.tmp*")
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			defer os.RemoveAll(temporaryHeaderPath)
 			err = l.makeHeaders(target, temporaryHeaderPath)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			err = os.Rename(temporaryHeaderPath, headerPath)
 			if err != nil {
-				return nil, err
+				switch {
+				case os.IsExist(err):
+					// Another invocation of TinyGo also seems to have already created the headers.
+
+				case runtime.GOOS == "windows" && os.IsPermission(err):
+					// On Windows, a rename with a destination directory that already
+					// exists does not result in an IsExist error, but rather in an
+					// access denied error. To be sure, check for this case by checking
+					// whether the target directory exists.
+					if _, err := os.Stat(headerPath); err == nil {
+						break
+					}
+					fallthrough
+
+				default:
+					return nil, nil, err
+				}
 			}
 		}
 	}
@@ -101,7 +130,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	dir := filepath.Join(tmpdir, "build-lib-"+l.name)
 	err = os.Mkdir(dir, 0777)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Precalculate the flags to the compiler invocation.
@@ -120,7 +149,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		}
 	}
 	if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
-		args = append(args, "-fshort-enums", "-fomit-frame-pointer", "-mfloat-abi=soft")
+		args = append(args, "-fshort-enums", "-fomit-frame-pointer", "-mfloat-abi=soft", "-fno-unwind-tables")
 	}
 	if strings.HasPrefix(target, "riscv32-") {
 		args = append(args, "-march=rv32imac", "-mabi=ilp32", "-fforce-enable-int128")
@@ -129,6 +158,8 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		args = append(args, "-march=rv64gc", "-mabi=lp64")
 	}
 
+	var once sync.Once
+
 	// Create job to put all the object files in a single archive. This archive
 	// file is the (static) library file.
 	var objs []string
@@ -136,6 +167,8 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		description: "ar " + l.name + "/lib.a",
 		result:      filepath.Join(goenv.Get("GOCACHE"), outname, "lib.a"),
 		run: func(*compileJob) error {
+			defer once.Do(unlock)
+
 			// Create an archive of all object files.
 			f, err := ioutil.TempFile(outdir, "libc.a.tmp*")
 			if err != nil {
@@ -207,5 +240,8 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		})
 	}
 
-	return job, nil
+	ok = true
+	return job, func() {
+		once.Do(unlock)
+	}, nil
 }

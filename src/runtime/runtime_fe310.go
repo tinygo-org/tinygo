@@ -16,8 +16,6 @@ import (
 
 type timeUnit int64
 
-func postinit() {}
-
 //export main
 func main() {
 	// Zero the PLIC enable bits on startup: they are not zeroed at reset.

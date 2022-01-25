@@ -143,6 +143,10 @@ func (p Pin) ConfigureAltFunc(config PinConfig, altFunc uint8) {
 		port.OSPEEDR.ReplaceBits(gpioOutputSpeedHigh, gpioOutputSpeedMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 		p.SetAltFunc(altFunc)
+
+	// ADC
+	case PinInputAnalog:
+		port.MODER.ReplaceBits(gpioModeAnalog, gpioModeMask, pos)
 	}
 }
 

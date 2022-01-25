@@ -1,5 +1,5 @@
-// +build gc.conservative gc.extalloc
-// +build tinygo.wasm
+//go:build gc.conservative && tinygo.wasm
+// +build gc.conservative,tinygo.wasm
 
 package runtime
 
@@ -37,3 +37,9 @@ func markStack() {
 // construction. Calls to it are later replaced with regular stack bookkeeping
 // code.
 func trackPointer(ptr unsafe.Pointer)
+
+// swapStackChain swaps the stack chain.
+// This is called from internal/task when switching goroutines.
+func swapStackChain(dst **stackChainObject) {
+	*dst, stackChainStart = stackChainStart, *dst
+}

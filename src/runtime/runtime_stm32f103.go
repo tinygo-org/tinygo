@@ -7,8 +7,6 @@ import (
 	"machine"
 )
 
-type arrtype = uint32
-
 func init() {
 	initCLK()
 

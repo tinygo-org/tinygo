@@ -20,6 +20,10 @@ var (
 		y [60]uintptr
 		z *byte
 	}
+	struct4 *struct {
+		x *byte
+		y [61]uintptr
+	}
 
 	slice1 []byte
 	slice2 []*int
@@ -50,14 +54,13 @@ func newStruct() {
 		y [60]uintptr
 		z *byte
 	})
+	struct4 = new(struct {
+		x *byte
+		y [61]uintptr
+	})
 }
 
 func newFuncValue() *func() {
-	// On some platforms that use runtime.funcValue ("switch" style) function
-	// values, a func value is allocated as having two pointer words while the
-	// struct looks like {unsafe.Pointer; uintptr}. This is so that the interp
-	// package won't get confused, see getPointerBitmap in compiler/llvm.go for
-	// details.
 	return new(func())
 }
 

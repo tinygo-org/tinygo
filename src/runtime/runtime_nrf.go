@@ -15,8 +15,6 @@ type timeUnit int64
 //go:linkname systemInit SystemInit
 func systemInit()
 
-func postinit() {}
-
 //export Reset_Handler
 func main() {
 	if nrf.FPUPresent {

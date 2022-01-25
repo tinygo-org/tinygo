@@ -47,6 +47,14 @@ type PackageJSON struct {
 	ImportPath string
 	Name       string
 	ForTest    string
+	Root       string
+	Module     struct {
+		Path      string
+		Main      bool
+		Dir       string
+		GoMod     string
+		GoVersion string
+	}
 
 	// Source files
 	GoFiles  []string
@@ -86,9 +94,14 @@ func Load(config *compileopts.Config, inputPkgs []string, clangHeaders string, t
 	if err != nil {
 		return nil, err
 	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, err
+	var wd string
+	if config.Options.Directory != "" {
+		wd = config.Options.Directory
+	} else {
+		wd, err = os.Getwd()
+		if err != nil {
+			return nil, err
+		}
 	}
 	p := &Program{
 		config:       config,
@@ -406,7 +419,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		initialCFlags = append(initialCFlags, p.program.config.CFlags()...)
 		initialCFlags = append(initialCFlags, "-I"+p.Dir)
 		if p.program.clangHeaders != "" {
-			initialCFlags = append(initialCFlags, "-Xclang", "-internal-isystem", "-Xclang", p.program.clangHeaders)
+			initialCFlags = append(initialCFlags, "-isystem", p.program.clangHeaders)
 		}
 		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.program.fset, initialCFlags)
 		p.CFlags = append(initialCFlags, cflags...)

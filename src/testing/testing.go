@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 // Testing flags.
@@ -35,18 +36,63 @@ func Init() {
 	flag.BoolVar(&flagVerbose, "test.v", false, "verbose: print additional output")
 	flag.BoolVar(&flagShort, "test.short", false, "short: run smaller test suite to save time")
 	flag.StringVar(&flagRunRegexp, "test.run", "", "run: regexp of tests to run")
+
+	initBenchmarkFlags()
 }
 
 // common holds the elements common between T and B and
 // captures common methods such as Errorf.
 type common struct {
-	output bytes.Buffer
-	indent string
+	output   bytes.Buffer
+	indent   string
+	ran      bool     // Test or benchmark (or one of its subtests) was executed.
+	failed   bool     // Test or benchmark has failed.
+	skipped  bool     // Test of benchmark has been skipped.
+	cleanups []func() // optional functions to be called at the end of the test
+	finished bool     // Test function has completed.
 
-	failed   bool   // Test or benchmark has failed.
-	skipped  bool   // Test of benchmark has been skipped.
-	finished bool   // Test function has completed.
-	name     string // Name of test or benchmark.
+	hasSub bool // TODO: should be atomic
+
+	parent   *common
+	level    int       // Nesting depth of test or benchmark.
+	name     string    // Name of test or benchmark.
+	start    time.Time // Time test or benchmark started
+	duration time.Duration
+}
+
+// Short reports whether the -test.short flag is set.
+func Short() bool {
+	return flagShort
+}
+
+// CoverMode reports what the test coverage mode is set to.
+//
+// Test coverage is not supported; this returns the empty string.
+func CoverMode() string {
+	return ""
+}
+
+// Verbose reports whether the -test.v flag is set.
+func Verbose() bool {
+	return flagVerbose
+}
+
+// flushToParent writes c.output to the parent after first writing the header
+// with the given format and arguments.
+func (c *common) flushToParent(testName, format string, args ...interface{}) {
+	if c.parent == nil {
+		// The fake top-level test doesn't want a FAIL or PASS banner.
+		// Not quite sure how this works upstream.
+		c.output.WriteTo(os.Stdout)
+	} else {
+		fmt.Fprintf(&c.parent.output, format, args...)
+		c.output.WriteTo(&c.parent.output)
+	}
+}
+
+// fmtDuration returns a string representing d in the form "87.00s".
+func fmtDuration(d time.Duration) string {
+	return fmt.Sprintf("%.2fs", d.Seconds())
 }
 
 // TB is the interface common to T and B.
@@ -77,11 +123,19 @@ var _ TB = (*B)(nil)
 //
 type T struct {
 	common
+	context *testContext // For running tests and subtests.
 }
 
 // Name returns the name of the running test or benchmark.
 func (c *common) Name() string {
 	return c.name
+}
+
+func (c *common) setRan() {
+	if c.parent != nil {
+		c.parent.setRan()
+	}
+	c.ran = true
 }
 
 // Fail marks the function as having failed but continues execution.
@@ -197,41 +251,32 @@ func (c *common) Helper() {
 	// Unimplemented.
 }
 
+// Cleanup registers a function to be called when the test (or subtest) and all its
+// subtests complete. Cleanup functions will be called in last added,
+// first called order.
+func (c *common) Cleanup(f func()) {
+	c.cleanups = append(c.cleanups, f)
+}
+
+// runCleanup is called at the end of the test.
+func (c *common) runCleanup() {
+	for {
+		var cleanup func()
+		if len(c.cleanups) > 0 {
+			last := len(c.cleanups) - 1
+			cleanup = c.cleanups[last]
+			c.cleanups = c.cleanups[:last]
+		}
+		if cleanup == nil {
+			return
+		}
+		cleanup()
+	}
+}
+
 // Parallel is not implemented, it is only provided for compatibility.
 func (c *common) Parallel() {
 	// Unimplemented.
-}
-
-// Run runs a subtest of f t called name. It waits until the subtest is finished
-// and returns whether the subtest succeeded.
-func (t *T) Run(name string, f func(t *T)) bool {
-	// Create a subtest.
-	sub := T{
-		common: common{
-			name:   t.name + "/" + name,
-			indent: t.indent + "    ",
-		},
-	}
-
-	// Run the test.
-	if flagVerbose {
-		fmt.Fprintf(&t.output, "=== RUN   %s\n", sub.name)
-
-	}
-	f(&sub)
-
-	// Process the result (pass or fail).
-	if sub.failed {
-		t.failed = true
-		fmt.Fprintf(&t.output, sub.indent+"--- FAIL: %s\n", sub.name)
-		t.output.Write(sub.output.Bytes())
-	} else {
-		if flagVerbose {
-			fmt.Fprintf(&t.output, sub.indent+"--- PASS: %s\n", sub.name)
-			t.output.Write(sub.output.Bytes())
-		}
-	}
-	return !sub.failed
 }
 
 // InternalTest is a reference to a test that should be called during a test suite run.
@@ -240,98 +285,148 @@ type InternalTest struct {
 	F    func(*T)
 }
 
+func tRunner(t *T, fn func(t *T)) {
+	defer func() {
+		t.runCleanup()
+	}()
+
+	// Run the test.
+	t.start = time.Now()
+	fn(t)
+	t.duration += time.Since(t.start) // TODO: capture cleanup time, too.
+
+	t.report() // Report after all subtests have finished.
+	if t.parent != nil && !t.hasSub {
+		t.setRan()
+	}
+}
+
+// Run runs f as a subtest of t called name. It waits until the subtest is finished
+// and returns whether the subtest succeeded.
+func (t *T) Run(name string, f func(t *T)) bool {
+	t.hasSub = true
+	testName, ok, _ := t.context.match.fullName(&t.common, name)
+	if !ok {
+		return true
+	}
+
+	// Create a subtest.
+	sub := T{
+		common: common{
+			name:   testName,
+			parent: &t.common,
+			level:  t.level + 1,
+		},
+		context: t.context,
+	}
+	if t.level > 0 {
+		sub.indent = sub.indent + "    "
+	}
+	if flagVerbose {
+		fmt.Fprintf(&t.output, "=== RUN   %s\n", sub.name)
+	}
+
+	tRunner(&sub, f)
+	return !sub.failed
+}
+
+// testContext holds all fields that are common to all tests. This includes
+// synchronization primitives to run at most *parallel tests.
+type testContext struct {
+	match *matcher
+}
+
+func newTestContext(m *matcher) *testContext {
+	return &testContext{
+		match: m,
+	}
+}
+
 // M is a test suite.
 type M struct {
 	// tests is a list of the test names to execute
-	Tests []InternalTest
+	Tests      []InternalTest
+	Benchmarks []InternalBenchmark
 
 	deps testDeps
+
+	// value to pass to os.Exit, the outer test func main
+	// harness calls os.Exit with this code. See #34129.
+	exitCode int
 }
 
-// Run the test suite.
-func (m *M) Run() int {
+type testDeps interface {
+	MatchString(pat, str string) (bool, error)
+}
+
+func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenchmark, examples []InternalExample) *M {
+	Init()
+	return &M{
+		Tests:      tests,
+		Benchmarks: benchmarks,
+		deps:       deps.(testDeps),
+	}
+}
+
+// Run runs the tests. It returns an exit code to pass to os.Exit.
+func (m *M) Run() (code int) {
+	defer func() {
+		code = m.exitCode
+	}()
 
 	if !flag.Parsed() {
 		flag.Parse()
 	}
 
-	failures := 0
-	if flagRunRegexp != "" {
-		var filtered []InternalTest
-
-		// pre-test the regexp; we don't want to bother logging one failure for every test name if the regexp is broken
-		if _, err := m.deps.MatchString(flagRunRegexp, "some-test-name"); err != nil {
-			fmt.Println("testing: invalid regexp for -test.run:", err.Error())
-			failures++
-		}
-
-		// filter the list of tests before we try to run them
-		for _, test := range m.Tests {
-			// ignore the error; we already tested that the regexp compiles fine above
-			if match, _ := m.deps.MatchString(flagRunRegexp, test.Name); match {
-				filtered = append(filtered, test)
-			}
-		}
-
-		m.Tests = filtered
-	}
-
-	if len(m.Tests) == 0 {
+	testRan, testOk := runTests(m.deps.MatchString, m.Tests)
+	if !testRan && *matchBenchmarks == "" {
 		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
 	}
-
-	for _, test := range m.Tests {
-		t := &T{
-			common: common{
-				name: test.Name,
-			},
-		}
-
-		if flagVerbose {
-			fmt.Printf("=== RUN   %s\n", test.Name)
-		}
-		test.F(t)
-
-		if t.failed {
-			fmt.Printf("--- FAIL: %s\n", test.Name)
-			os.Stdout.Write(t.output.Bytes())
-		} else {
-			if flagVerbose {
-				fmt.Printf("--- PASS: %s\n", test.Name)
-				os.Stdout.Write(t.output.Bytes())
-			}
-		}
-
-		if t.failed {
-			failures++
-		}
-	}
-
-	if failures > 0 {
+	if !testOk || !runBenchmarks(m.deps.MatchString, m.Benchmarks) {
 		fmt.Println("FAIL")
+		m.exitCode = 1
 	} else {
 		if flagVerbose {
 			fmt.Println("PASS")
 		}
+		m.exitCode = 0
 	}
-	return failures
+	return
 }
 
-// Short reports whether the -test.short flag is set.
-func Short() bool {
-	return flagShort
+func runTests(matchString func(pat, str string) (bool, error), tests []InternalTest) (ran, ok bool) {
+	ok = true
+
+	ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run"))
+	t := &T{
+		context: ctx,
+	}
+
+	tRunner(t, func(t *T) {
+		for _, test := range tests {
+			t.Run(test.Name, test.F)
+			ok = ok && !t.Failed()
+		}
+	})
+
+	return t.ran, ok
 }
 
-// Verbose reports whether the -test.v flag is set.
-func Verbose() bool {
-	return flagVerbose
-}
-
-// CoverMode reports what the test coverage mode is set to.
-//
-// Test coverage is not supported; this returns the empty string.
-func CoverMode() string {
-	return ""
+func (t *T) report() {
+	dstr := fmtDuration(t.duration)
+	format := t.indent + "--- %s: %s (%s)\n"
+	if t.Failed() {
+		if t.parent != nil {
+			t.parent.failed = true
+		}
+		t.flushToParent(t.name, format, "FAIL", t.name, dstr)
+	} else if flagVerbose {
+		if t.Skipped() {
+			t.flushToParent(t.name, format, "SKIP", t.name, dstr)
+		} else {
+			t.flushToParent(t.name, format, "PASS", t.name, dstr)
+		}
+	}
 }
 
 // AllocsPerRun returns the average number of allocations during calls to f.
@@ -345,22 +440,6 @@ func AllocsPerRun(runs int, f func()) (avg float64) {
 		f()
 	}
 	return 0
-}
-
-func TestMain(m *M) {
-	os.Exit(m.Run())
-}
-
-type testDeps interface {
-	MatchString(pat, s string) (bool, error)
-}
-
-func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenchmark, examples []InternalExample) *M {
-	Init()
-	return &M{
-		Tests: tests,
-		deps:  deps.(testDeps),
-	}
 }
 
 type InternalExample struct {

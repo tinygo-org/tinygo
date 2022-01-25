@@ -19,6 +19,7 @@ const (
 	portH
 	portI
 	portJ
+	portK
 )
 
 // Peripheral operations sequence:

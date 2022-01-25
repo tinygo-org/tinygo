@@ -17,10 +17,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 	locals := make([]value, len(fn.locals))
 	r.callsExecuted++
 
-	if time.Since(r.start) > time.Minute {
-		// Running for more than a minute. This should never happen.
-		return nil, mem, r.errorAt(fn.blocks[0].instructions[0], fmt.Errorf("interp: running for more than a minute, timing out (executed calls: %d)", r.callsExecuted))
-	}
+	t0 := time.Since(r.start)
 
 	// Parameters are considered a kind of local values.
 	for i, param := range params {
@@ -106,6 +103,13 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		}
 		switch inst.opcode {
 		case llvm.Ret:
+			const maxInterpSeconds = 180
+			if t0 > maxInterpSeconds*time.Second {
+				// Running for more than maxInterpSeconds seconds. This should never happen, but does.
+				// See github.com/tinygo-org/tinygo/issues/2124
+				return nil, mem, r.errorAt(fn.blocks[0].instructions[0], fmt.Errorf("interp: running for more than %d seconds, timing out (executed calls: %d)", maxInterpSeconds, r.callsExecuted))
+			}
+
 			if len(operands) != 0 {
 				if r.debug {
 					fmt.Fprintln(os.Stderr, indent+"ret", operands[0])
@@ -197,7 +201,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// which case this call won't even get to this point but will
 				// already be emitted in initAll.
 				continue
-			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" || callFn.name == "runtime.hashmapGet" || callFn.name == "os.runtime_args":
+			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" || callFn.name == "runtime.hashmapGet" ||
+				callFn.name == "os.runtime_args" || callFn.name == "internal/task.start" || callFn.name == "internal/task.Current":
 				// These functions should be run at runtime. Specifically:
 				//   * Print and panic functions are best emitted directly without
 				//     interpreting them, otherwise we get a ton of putchar (etc.)
@@ -208,6 +213,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				//   * os.runtime_args reads globals that are initialized outside
 				//     the view of the interp package so it always needs to be run
 				//     at runtime.
+				//   * internal/task.start, internal/task.Current: start and read shcheduler state,
+				//     which is modified elsewhere.
 				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
 				if err != nil {
 					return nil, mem, err
@@ -376,6 +383,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
+				if !actualTypePtrToInt.IsAConstantInt().IsNil() && actualTypePtrToInt.ZExtValue() == 0 {
+					locals[inst.localIndex] = literalValue{uint8(0)}
+					break
+				}
 				actualType := actualTypePtrToInt.Operand(0)
 				if strings.TrimPrefix(actualType.Name(), "reflect/types.type:") == strings.TrimPrefix(assertedType.Name(), "reflect/types.typeid:") {
 					locals[inst.localIndex] = literalValue{uint8(1)}
@@ -433,7 +444,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 
 				// Load the type code of the interface value.
-				typecodeIDBitCast, err := operands[len(operands)-3].toLLVMValue(inst.llvmInst.Operand(len(operands)-4).Type(), &mem)
+				typecodeIDBitCast, err := operands[len(operands)-2].toLLVMValue(inst.llvmInst.Operand(len(operands)-3).Type(), &mem)
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
@@ -481,7 +492,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// Call a function with a definition available. Run it as usual,
 				// possibly trying to recover from it if it failed to execute.
 				if r.debug {
-					argStrings := make([]string, len(operands)-1)
+					argStrings := make([]string, len(operands))
 					for i := range argStrings {
 						argStrings[i] = operands[i+1].String()
 					}
@@ -521,7 +532,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				return nil, mem, r.errorAt(inst, err)
 			}
 			size := operands[1].(literalValue).value.(uint64)
-			if mem.hasExternalStore(ptr) {
+			if inst.llvmInst.IsVolatile() || inst.llvmInst.Ordering() != llvm.AtomicOrderingNotAtomic || mem.hasExternalStore(ptr) {
 				// If there could be an external store (for example, because a
 				// pointer to the object was passed to a function that could not
 				// be interpreted at compile time) then the load must be done at
@@ -551,7 +562,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if err != nil {
 				return nil, mem, r.errorAt(inst, err)
 			}
-			if mem.hasExternalLoadOrStore(ptr) {
+			if inst.llvmInst.IsVolatile() || inst.llvmInst.Ordering() != llvm.AtomicOrderingNotAtomic || mem.hasExternalLoadOrStore(ptr) {
 				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
 				if err != nil {
 					return nil, mem, err
@@ -925,11 +936,17 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
 		}
+		if ordering := inst.llvmInst.Ordering(); ordering != llvm.AtomicOrderingNotAtomic {
+			result.SetOrdering(ordering)
+		}
 	case llvm.Store:
 		mem.markExternalStore(operands[1])
 		result = r.builder.CreateStore(operands[0], operands[1])
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
+		}
+		if ordering := inst.llvmInst.Ordering(); ordering != llvm.AtomicOrderingNotAtomic {
+			result.SetOrdering(ordering)
 		}
 	case llvm.BitCast:
 		result = r.builder.CreateBitCast(operands[0], inst.llvmInst.Type(), inst.name)

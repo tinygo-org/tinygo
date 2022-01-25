@@ -85,7 +85,7 @@ func (c *Config) CgoEnabled() bool {
 }
 
 // GC returns the garbage collection strategy in use on this platform. Valid
-// values are "none", "leaking", "extalloc", and "conservative".
+// values are "none", "leaking", and "conservative".
 func (c *Config) GC() string {
 	if c.Options.GC != "" {
 		return c.Options.GC
@@ -100,7 +100,7 @@ func (c *Config) GC() string {
 // that can be traced by the garbage collector.
 func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
-	case "conservative", "extalloc":
+	case "conservative":
 		for _, tag := range c.BuildTags() {
 			if tag == "tinygo.wasm" {
 				return true
@@ -114,7 +114,7 @@ func (c *Config) NeedsStackObjects() bool {
 }
 
 // Scheduler returns the scheduler implementation. Valid values are "none",
-//"coroutines" and "tasks".
+// "asyncify" and "tasks".
 func (c *Config) Scheduler() string {
 	if c.Options.Scheduler != "" {
 		return c.Options.Scheduler
@@ -122,8 +122,8 @@ func (c *Config) Scheduler() string {
 	if c.Target.Scheduler != "" {
 		return c.Target.Scheduler
 	}
-	// Fall back to coroutines, which are supported everywhere.
-	return "coroutines"
+	// Fall back to none.
+	return "none"
 }
 
 // Serial returns the serial implementation for this build configuration: uart,
@@ -156,31 +156,6 @@ func (c *Config) OptLevels() (optLevel, sizeLevel int, inlinerThreshold uint) {
 		// This is not shown to the user: valid choices are already checked as
 		// part of Options.Verify(). It is here as a sanity check.
 		panic("unknown optimization level: -opt=" + c.Options.Opt)
-	}
-}
-
-// FuncImplementation picks an appropriate func value implementation for the
-// target.
-func (c *Config) FuncImplementation() string {
-	switch c.Scheduler() {
-	case "tasks", "asyncify":
-		// A func value is implemented as a pair of pointers:
-		//     {context, function pointer}
-		// where the context may be a pointer to a heap-allocated struct
-		// containing the free variables, or it may be undef if the function
-		// being pointed to doesn't need a context. The function pointer is a
-		// regular function pointer.
-		return "doubleword"
-	case "none", "coroutines":
-		// As "doubleword", but with the function pointer replaced by a unique
-		// ID per function signature. Function values are called by using a
-		// switch statement and choosing which function to call.
-		// Pick the switch implementation with the coroutines scheduler, as it
-		// allows the use of blocking inside a function that is used as a func
-		// value.
-		return "switch"
-	default:
-		panic("unknown scheduler type")
 	}
 }
 
@@ -257,17 +232,18 @@ func (c *Config) CFlags() []string {
 		path, _ := c.LibcPath("picolibc")
 		cflags = append(cflags,
 			"--sysroot="+path,
-			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "include"),
-			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(picolibcDir, "tinystdio"),
+			"-isystem", filepath.Join(picolibcDir, "include"),
+			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
 		)
 	case "musl":
 		root := goenv.Get("TINYGOROOT")
 		path, _ := c.LibcPath("musl")
 		arch := MuslArchitecture(c.Triple())
 		cflags = append(cflags,
-			"--sysroot="+path,
-			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "musl", "arch", arch),
-			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "musl", "include"),
+			"-nostdlibinc",
+			"-isystem", filepath.Join(path, "include"),
+			"-isystem", filepath.Join(root, "lib", "musl", "arch", arch),
+			"-isystem", filepath.Join(root, "lib", "musl", "include"),
 		)
 	case "wasi-libc":
 		root := goenv.Get("TINYGOROOT")
@@ -277,8 +253,8 @@ func (c *Config) CFlags() []string {
 		path, _ := c.LibcPath("mingw-w64")
 		cflags = append(cflags,
 			"--sysroot="+path,
-			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "crt"),
-			"-Xclang", "-internal-isystem", "-Xclang", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "defaults", "include"),
+			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "crt"),
+			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "defaults", "include"),
 			"-D_UCRT",
 		)
 	case "":
@@ -460,6 +436,15 @@ func (c *Config) WasmAbi() string {
 		return c.Options.WasmAbi
 	}
 	return c.Target.WasmAbi
+}
+
+// Emulator returns the emulator target config
+func (c *Config) Emulator() []string {
+	var emulator []string
+	for _, s := range c.Target.Emulator {
+		emulator = append(emulator, strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT")))
+	}
+	return emulator
 }
 
 type TestConfig struct {

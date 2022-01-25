@@ -1,0 +1,59 @@
+# This is the Github action to build and push the tinygo/tinygo-dev Docker image.
+# If you are looking for the tinygo/tinygo "release" Docker image please see
+# https://github.com/tinygo-org/docker
+#
+name: Docker
+on:
+  push:
+    branches: [ dev, fix-docker-llvm-build ]
+
+jobs:
+  push_to_registry:
+    name: build-push-dev
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: |
+            tinygo/tinygo-dev
+            ghcr.io/${{ github.repository }}/tinygo-dev
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Log in to Github Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Trigger Drivers repo build on CircleCI
+        run: |
+          curl --location --request POST 'https://circleci.com/api/v2/project/github/tinygo-org/drivers/pipeline' \
+            --header 'Content-Type: application/json' \
+            -d '{"branch": "dev"}' \
+            -u "${{ secrets.CIRCLECI_API_TOKEN }}"

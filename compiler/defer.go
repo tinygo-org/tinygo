@@ -343,9 +343,6 @@ func (b *builder) createRunDefers() {
 				forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
 			}
 
-			// Parent coroutine handle.
-			forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
-
 			b.createCall(fnPtr, forwardParams, "")
 
 		case *ssa.Function:
@@ -374,9 +371,6 @@ func (b *builder) createRunDefers() {
 				// Add the context parameter. We know it is ignored by the receiving
 				// function, but we have to pass one anyway.
 				forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
-
-				// Parent coroutine handle.
-				forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
 			}
 
 			// Call real function.
@@ -402,9 +396,6 @@ func (b *builder) createRunDefers() {
 				forwardParam := b.CreateLoad(gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
-
-			// Parent coroutine handle.
-			forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
 
 			// Call deferred function.
 			b.createCall(b.getFunction(fn), forwardParams, "")

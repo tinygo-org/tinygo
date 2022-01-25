@@ -34,6 +34,16 @@ const (
 	// DEFAULT USART
 	UART_TX_PIN = UART1_TX_PIN
 	UART_RX_PIN = UART1_RX_PIN
+
+	// I2C1 pins
+	// I2C1 is connected to Flash, Accelerometer, Env. Sensor, Crypto Element)
+	I2C1_SCL_PIN  = PA9
+	I2C1_SDA_PIN  = PA10
+	I2C1_ALT_FUNC = 4
+
+	// I2C0 alias for I2C1
+	I2C0_SDA_PIN = I2C1_SDA_PIN
+	I2C0_SCL_PIN = I2C1_SCL_PIN
 )
 
 var (
@@ -47,6 +57,13 @@ var (
 	}
 	DefaultUART = UART0
 
+	// I2C Busses
+	I2C1 = &I2C{
+		Bus:             stm32.I2C1,
+		AltFuncSelector: I2C1_ALT_FUNC,
+	}
+
+	I2C0 = I2C1
 	// SPI
 	SPI3 = SPI{
 		Bus: stm32.SPI3,

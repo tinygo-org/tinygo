@@ -4,6 +4,8 @@ import (
 	"unsafe"
 )
 
+//go:generate go run ../../tools/gen-critical-atomics -out ./atomics_critical.go
+
 const Compiler = "tinygo"
 
 // The compiler will fill this with calls to the initialization function of each

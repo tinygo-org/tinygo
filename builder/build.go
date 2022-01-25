@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tinygo-org/tinygo/cgo"
+	"github.com/gofrs/flock"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -45,6 +45,11 @@ type BuildResult struct {
 	// binary must be run in the directory of the tested package.
 	MainDir string
 
+	// The root of the Go module tree.  This is used for running tests in emulator
+	// that restrict file system access to allow them to grant access to the entire
+	// source tree they're likely to need to read testdata from.
+	ModuleRoot string
+
 	// ImportPath is the import path of the main package. This is useful for
 	// correctly printing test results: the import path isn't always the same as
 	// the path listed on the command line.
@@ -63,9 +68,8 @@ type BuildResult struct {
 // implementation of an imported package changes.
 type packageAction struct {
 	ImportPath       string
-	CGoVersion       int // cgo.Version
-	CompilerVersion  int // compiler.Version
-	InterpVersion    int // interp.Version
+	CompilerBuildID  string
+	TinyGoVersion    string
 	LLVMVersion      string
 	Config           *compiler.Config
 	CFlags           []string
@@ -83,6 +87,13 @@ type packageAction struct {
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
 func Build(pkgName, outpath string, config *compileopts.Config, action func(BuildResult) error) error {
+	// Read the build ID of the tinygo binary.
+	// Used as a cache key for package builds.
+	compilerBuildID, err := ReadBuildID()
+	if err != nil {
+		return err
+	}
+
 	// Create a temporary directory for intermediary files.
 	dir, err := ioutil.TempDir("", "tinygo")
 	if err != nil {
@@ -97,17 +108,19 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	var libcDependencies []*compileJob
 	switch config.Target.Libc {
 	case "musl":
-		job, err := Musl.load(config, dir)
+		job, unlock, err := Musl.load(config, dir)
 		if err != nil {
 			return err
 		}
+		defer unlock()
 		libcDependencies = append(libcDependencies, dummyCompileJob(filepath.Join(filepath.Dir(job.result), "crt1.o")))
 		libcDependencies = append(libcDependencies, job)
 	case "picolibc":
-		libcJob, err := Picolibc.load(config, dir)
+		libcJob, unlock, err := Picolibc.load(config, dir)
 		if err != nil {
 			return err
 		}
+		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "wasi-libc":
 		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
@@ -116,10 +129,11 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		}
 		libcDependencies = append(libcDependencies, dummyCompileJob(path))
 	case "mingw-w64":
-		_, err := MinGW.load(config, dir)
+		_, unlock, err := MinGW.load(config, dir)
 		if err != nil {
 			return err
 		}
+		unlock()
 		libcDependencies = append(libcDependencies, makeMinGWExtraLibs(dir)...)
 	case "":
 		// no library specified, so nothing to do
@@ -139,7 +153,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		SizeLevel:       sizeLevel,
 
 		Scheduler:          config.Scheduler(),
-		FuncImplementation: config.FuncImplementation(),
 		AutomaticStackSize: config.AutomaticStackSize(),
 		DefaultStackSize:   config.Target.DefaultStackSize,
 		NeedsStackObjects:  config.NeedsStackObjects(),
@@ -188,9 +201,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		// the parameters for the build.
 		actionID := packageAction{
 			ImportPath:       pkg.ImportPath,
-			CGoVersion:       cgo.Version,
-			CompilerVersion:  compiler.Version,
-			InterpVersion:    interp.Version,
+			CompilerBuildID:  string(compilerBuildID),
+			TinyGoVersion:    goenv.Version,
 			LLVMVersion:      llvm.Version,
 			Config:           compilerConfig,
 			CFlags:           pkg.CFlags,
@@ -228,17 +240,19 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		bitcodePath := filepath.Join(cacheDir, "pkg-"+hex.EncodeToString(hash[:])+".bc")
 		packageBitcodePaths[pkg.ImportPath] = bitcodePath
 
-		// Check whether this package has been compiled before, and if so don't
-		// compile it again.
-		if _, err := os.Stat(bitcodePath); err == nil {
-			// Already cached, don't recreate this package.
-			continue
-		}
-
 		// The package has not yet been compiled, so create a job to do so.
 		job := &compileJob{
 			description: "compile package " + pkg.ImportPath,
 			run: func(*compileJob) error {
+				// Acquire a lock (if supported).
+				unlock := lock(bitcodePath + ".lock")
+				defer unlock()
+
+				if _, err := os.Stat(bitcodePath); err == nil {
+					// Already cached, don't recreate this package.
+					return nil
+				}
+
 				// Compile AST to IR. The compiler.CompilePackage function will
 				// build the SSA as needed.
 				mod, errs := compiler.CompilePackage(pkg.ImportPath, pkg, program.Package(pkg.Pkg), machine, compilerConfig, config.DumpSSA())
@@ -414,7 +428,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			llvmInitFn.SetUnnamedAddr(true)
 			transform.AddStandardAttributes(llvmInitFn, config)
 			llvmInitFn.Param(0).SetName("context")
-			llvmInitFn.Param(1).SetName("parentHandle")
 			block := mod.Context().AddBasicBlock(llvmInitFn, "entry")
 			irbuilder := mod.Context().NewBuilder()
 			defer irbuilder.Dispose()
@@ -425,7 +438,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				if pkgInit.IsNil() {
 					panic("init not found for " + pkg.Pkg.Path())
 				}
-				irbuilder.CreateCall(pkgInit, []llvm.Value{llvm.Undef(i8ptrType), llvm.Undef(i8ptrType)}, "")
+				irbuilder.CreateCall(pkgInit, []llvm.Value{llvm.Undef(i8ptrType)}, "")
 			}
 			irbuilder.CreateRetVoid()
 
@@ -479,7 +492,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	outext := filepath.Ext(outpath)
 	if outext == ".o" || outext == ".bc" || outext == ".ll" {
 		// Run jobs to produce the LLVM module.
-		err := runJobs(programJob, config.Options.Parallelism)
+		err := runJobs(programJob, config.Options.Semaphore)
 		if err != nil {
 			return err
 		}
@@ -533,10 +546,11 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
 	if config.Target.RTLib == "compiler-rt" {
-		job, err := CompilerRT.load(config, dir)
+		job, unlock, err := CompilerRT.load(config, dir)
 		if err != nil {
 			return err
 		}
+		defer unlock()
 		linkerDependencies = append(linkerDependencies, job)
 	}
 
@@ -740,7 +754,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Run all jobs to compile and link the program.
 	// Do this now (instead of after elf-to-hex and similar conversions) as it
 	// is simpler and cannot be parallelized.
-	err = runJobs(linkJob, config.Options.Parallelism)
+	err = runJobs(linkJob, config.Options.Semaphore)
 	if err != nil {
 		return err
 	}
@@ -788,9 +802,18 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	default:
 		return fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 	}
+
+	// If there's a module root, use that.
+	moduleroot := lprogram.MainPkg().Module.Dir
+	if moduleroot == "" {
+		// if not, just the regular root
+		moduleroot = lprogram.MainPkg().Root
+	}
+
 	return action(BuildResult{
 		Binary:     tmppath,
 		MainDir:    lprogram.MainPkg().Dir,
+		ModuleRoot: moduleroot,
 		ImportPath: lprogram.MainPkg().ImportPath,
 	})
 }
@@ -1180,4 +1203,17 @@ func patchRP2040BootCRC(executable string) error {
 
 	// Update the .boot2 section to included the CRC
 	return replaceElfSection(executable, ".boot2", bytes)
+}
+
+// lock may acquire a lock at the specified path.
+// It returns a function to release the lock.
+// If flock is not supported, it does nothing.
+func lock(path string) func() {
+	flock := flock.New(path)
+	err := flock.Lock()
+	if err != nil {
+		return func() {}
+	}
+
+	return func() { flock.Close() }
 }

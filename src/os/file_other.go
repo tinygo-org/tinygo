@@ -50,11 +50,20 @@ func (f stdioFileHandle) Close() error {
 	return ErrUnsupported
 }
 
+// Seek wraps syscall.Seek.
+func (f stdioFileHandle) Seek(offset int64, whence int) (int64, error) {
+	return -1, ErrUnsupported
+}
+
 //go:linkname putchar runtime.putchar
 func putchar(c byte)
 
 func Pipe() (r *File, w *File, err error) {
 	return nil, nil, ErrNotImplemented
+}
+
+func Readlink(name string) (string, error) {
+	return "", ErrNotImplemented
 }
 
 func tempDir() string {

@@ -15,13 +15,13 @@ package runtime
 //     closed:
 //       The channel is closed. Sends will panic, receives will get a zero value
 //       plus optionally the indication that the channel is zero (with the
-//       commao-ok value in the coroutine).
+//       comma-ok value in the task).
 //
 // A send/recv transmission is completed by copying from the data element of the
-// sending coroutine to the data element of the receiving coroutine, and setting
+// sending task to the data element of the receiving task, and setting
 // the 'comma-ok' value to true.
 // A receive operation on a closed channel is completed by zeroing the data
-// element of the receiving coroutine and setting the 'comma-ok' value to false.
+// element of the receiving task and setting the 'comma-ok' value to false.
 
 import (
 	"internal/task"

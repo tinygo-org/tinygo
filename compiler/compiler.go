@@ -20,11 +20,6 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-// Version of the compiler pacakge. Must be incremented each time the compiler
-// package changes in a way that affects the generated LLVM module.
-// This version is independent of the TinyGo version number.
-const Version = 25 // last change: add "target-cpu" and "target-features" attributes
-
 func init() {
 	llvm.InitializeAllTargets()
 	llvm.InitializeAllTargetMCs()
@@ -52,7 +47,6 @@ type Config struct {
 
 	// Various compiler options that determine how code is generated.
 	Scheduler          string
-	FuncImplementation string
 	AutomaticStackSize bool
 	DefaultStackSize   uint64
 	NeedsStackObjects  bool
@@ -83,6 +77,7 @@ type compilerContext struct {
 	diagnostics      []error
 	astComments      map[string]*ast.CommentGroup
 	pkg              *types.Package
+	packageDir       string // directory for this package
 	runtimePkg       *types.Package
 }
 
@@ -144,6 +139,8 @@ type builder struct {
 	deferPtr          llvm.Value
 	difunc            llvm.Metadata
 	dilocals          map[*types.Var]llvm.Metadata
+	initInlinedAt     llvm.Metadata            // fake inlinedAt position
+	initPseudoFuncs   map[string]llvm.Metadata // fake "inlined" functions for proper init debug locations
 	allDeferFuncs     []interface{}
 	deferFuncs        map[*ssa.Function]int
 	deferInvokeFuncs  map[string]int
@@ -247,6 +244,7 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 // CompilePackage compiles a single package to a LLVM module.
 func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
 	c := newCompilerContext(moduleName, machine, config, dumpSSA)
+	c.packageDir = pkg.OriginalDir()
 	c.pkg = pkg.Pkg
 	c.runtimePkg = ssaPkg.Prog.ImportedPackage("runtime").Pkg
 	c.program = ssaPkg.Prog
@@ -271,6 +269,10 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	// Predeclare the runtime.alloc function, which is used by the wordpack
 	// functionality.
 	c.getFunction(c.program.ImportedPackage("runtime").Members["alloc"].(*ssa.Function))
+	if c.NeedsStackObjects {
+		// Predeclare trackPointer, which is used everywhere we use runtime.alloc.
+		c.getFunction(c.program.ImportedPackage("runtime").Members["trackPointer"].(*ssa.Function))
+	}
 
 	// Compile all functions, methods, and global variables in this package.
 	irbuilder := c.ctx.NewBuilder()
@@ -601,6 +603,51 @@ func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
 	}
 }
 
+// setDebugLocation sets the current debug location for the builder.
+func (b *builder) setDebugLocation(pos token.Pos) {
+	if pos == token.NoPos {
+		// No debug information available for this instruction.
+		b.SetCurrentDebugLocation(0, 0, b.difunc, llvm.Metadata{})
+		return
+	}
+
+	position := b.program.Fset.Position(pos)
+	if b.fn.Synthetic == "package initializer" {
+		// Package initializers are treated specially, because while individual
+		// Go SSA instructions have file/line/col information, the parent
+		// function does not. LLVM doesn't store filename information per
+		// instruction, only per function. We work around this difference by
+		// creating a fake DIFunction for each Go file and say that the
+		// instruction really came from that (fake) function but was inlined in
+		// the package initializer function.
+		position := b.program.Fset.Position(pos)
+		name := filepath.Base(position.Filename)
+		difunc, ok := b.initPseudoFuncs[name]
+		if !ok {
+			diFuncType := b.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+				File: b.getDIFile(position.Filename),
+			})
+			difunc = b.dibuilder.CreateFunction(b.getDIFile(position.Filename), llvm.DIFunction{
+				Name:         b.fn.RelString(nil) + "#" + name,
+				File:         b.getDIFile(position.Filename),
+				Line:         0,
+				Type:         diFuncType,
+				LocalToUnit:  true,
+				IsDefinition: true,
+				ScopeLine:    0,
+				Flags:        llvm.FlagPrototyped,
+				Optimized:    true,
+			})
+			b.initPseudoFuncs[name] = difunc
+		}
+		b.SetCurrentDebugLocation(uint(position.Line), uint(position.Column), difunc, b.initInlinedAt)
+		return
+	}
+
+	// Regular debug information.
+	b.SetCurrentDebugLocation(uint(position.Line), uint(position.Column), b.difunc, llvm.Metadata{})
+}
+
 // getLocalVariable returns a debug info entry for a local variable, which may
 // either be a parameter or a regular variable. It will create a new metadata
 // entry if there isn't one for the variable yet.
@@ -853,16 +900,14 @@ func (b *builder) createFunction() {
 	// Add debug info, if needed.
 	if b.Debug {
 		if b.fn.Synthetic == "package initializer" {
-			// Package initializers have no debug info. Create some fake debug
-			// info to at least have *something*.
-			filename := b.fn.Package().Pkg.Path() + "/<init>"
-			b.difunc = b.attachDebugInfoRaw(b.fn, b.llvmFn, "", filename, 0)
+			// Package initializer functions have no debug info. Create some
+			// fake debug info to at least have *something*.
+			b.difunc = b.attachDebugInfoRaw(b.fn, b.llvmFn, "", b.packageDir, 0)
 		} else if b.fn.Syntax() != nil {
 			// Create debug info file if needed.
 			b.difunc = b.attachDebugInfo(b.fn)
 		}
-		pos := b.program.Fset.Position(b.fn.Pos())
-		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
+		b.setDebugLocation(b.fn.Pos())
 	}
 
 	// Pre-create all basic blocks in the function.
@@ -873,6 +918,16 @@ func (b *builder) createFunction() {
 	}
 	entryBlock := b.blockEntries[b.fn.Blocks[0]]
 	b.SetInsertPointAtEnd(entryBlock)
+
+	if b.fn.Synthetic == "package initializer" {
+		b.initPseudoFuncs = make(map[string]llvm.Metadata)
+
+		// Create a fake 'inlined at' metadata node.
+		// See setDebugLocation for details.
+		alloca := b.CreateAlloca(b.uintptrType, "")
+		b.initInlinedAt = alloca.InstructionDebugLoc()
+		alloca.EraseFromParentAsInstruction()
+	}
 
 	// Load function parameters
 	llvmParamIndex := 0
@@ -912,9 +967,7 @@ func (b *builder) createFunction() {
 	// method).
 	var context llvm.Value
 	if !b.info.exported {
-		parentHandle := b.llvmFn.LastParam()
-		parentHandle.SetName("parentHandle")
-		context = llvm.PrevParam(parentHandle)
+		context = b.llvmFn.LastParam()
 		context.SetName("context")
 	}
 	if len(b.fn.FreeVars) != 0 {
@@ -1068,8 +1121,7 @@ func getPos(val posser) token.Pos {
 // particular Go SSA instruction.
 func (b *builder) createInstruction(instr ssa.Instruction) {
 	if b.Debug {
-		pos := b.program.Fset.Position(getPos(instr))
-		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
+		b.setDebugLocation(getPos(instr))
 	}
 
 	switch instr := instr.(type) {
@@ -1451,9 +1503,6 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		// This function takes a context parameter.
 		// Add it to the end of the parameter list.
 		params = append(params, context)
-
-		// Parent coroutine handle.
-		params = append(params, llvm.Undef(b.i8ptrType))
 	}
 
 	return b.createCall(callee, params, ""), nil
@@ -1792,20 +1841,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		if expr.IsString {
 			return b.createRuntimeCall("stringNext", []llvm.Value{llvmRangeVal, it}, "range.next"), nil
 		} else { // map
-			llvmKeyType := b.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Key())
-			llvmValueType := b.getLLVMType(rangeVal.Type().Underlying().(*types.Map).Elem())
-
-			mapKeyAlloca, mapKeyPtr, mapKeySize := b.createTemporaryAlloca(llvmKeyType, "range.key")
-			mapValueAlloca, mapValuePtr, mapValueSize := b.createTemporaryAlloca(llvmValueType, "range.value")
-			ok := b.createRuntimeCall("hashmapNext", []llvm.Value{llvmRangeVal, it, mapKeyPtr, mapValuePtr}, "range.next")
-
-			tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.Int1Type(), llvmKeyType, llvmValueType}, false))
-			tuple = b.CreateInsertValue(tuple, ok, 0, "")
-			tuple = b.CreateInsertValue(tuple, b.CreateLoad(mapKeyAlloca, ""), 1, "")
-			tuple = b.CreateInsertValue(tuple, b.CreateLoad(mapValueAlloca, ""), 2, "")
-			b.emitLifetimeEnd(mapKeyPtr, mapKeySize)
-			b.emitLifetimeEnd(mapValuePtr, mapValueSize)
-			return tuple, nil
+			return b.createMapIteratorNext(rangeVal, llvmRangeVal, it), nil
 		}
 	case *ssa.Phi:
 		phi := b.CreatePHI(b.getLLVMType(expr.Type()), "")

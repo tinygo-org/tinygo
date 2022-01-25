@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -28,7 +30,6 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
-	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 
 	"go.bug.st/serial"
@@ -177,14 +178,14 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
-func Test(pkgName string, options *compileopts.Options, testCompileOnly, testVerbose, testShort bool, testRunRegexp string, outpath string) (bool, error) {
+func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, testCompileOnly, testVerbose, testShort bool, testRunRegexp string, testBenchRegexp string, testBenchTime string, outpath string) (bool, error) {
 	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return false, err
 	}
 
-	passed := true
+	passed := false
 	err = builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
 		if testCompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
@@ -197,13 +198,18 @@ func Test(pkgName string, options *compileopts.Options, testCompileOnly, testVer
 		}
 		if testCompileOnly {
 			// Do not run the test.
+			passed = true
 			return nil
 		}
 
 		// Run the test.
+		config.Options.Semaphore <- struct{}{}
+		defer func() {
+			<-config.Options.Semaphore
+		}()
 		start := time.Now()
 		var err error
-		passed, err = runPackageTest(config, result, testVerbose, testShort, testRunRegexp)
+		passed, err = runPackageTest(config, stdout, stderr, result, testVerbose, testShort, testRunRegexp, testBenchRegexp, testBenchTime)
 		if err != nil {
 			return err
 		}
@@ -212,26 +218,40 @@ func Test(pkgName string, options *compileopts.Options, testCompileOnly, testVer
 		// Print the result.
 		importPath := strings.TrimSuffix(result.ImportPath, ".test")
 		if passed {
-			fmt.Printf("ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
+			fmt.Fprintf(stdout, "ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
 		} else {
-			fmt.Printf("FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
+			fmt.Fprintf(stdout, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
 		}
 		return nil
 	})
 	if err, ok := err.(loader.NoTestFilesError); ok {
-		fmt.Printf("?   \t%s\t[no test files]\n", err.ImportPath)
+		fmt.Fprintf(stdout, "?   \t%s\t[no test files]\n", err.ImportPath)
 		// Pretend the test passed - it at least didn't fail.
 		return true, nil
 	}
 	return passed, err
 }
 
+func dirsToModuleRoot(maindir, modroot string) []string {
+	var dirs = []string{"."}
+	last := ".."
+	// strip off path elements until we hit the module root
+	// adding `..`, `../..`, `../../..` until we're done
+	for maindir != modroot {
+		dirs = append(dirs, last)
+		last = filepath.Join(last, "..")
+		maindir = filepath.Dir(maindir)
+	}
+	return dirs
+}
+
 // runPackageTest runs a test binary that was previously built. The return
 // values are whether the test passed and any errors encountered while trying to
 // run the binary.
-func runPackageTest(config *compileopts.Config, result builder.BuildResult, testVerbose, testShort bool, testRunRegexp string) (bool, error) {
+func runPackageTest(config *compileopts.Config, stdout, stderr io.Writer, result builder.BuildResult, testVerbose, testShort bool, testRunRegexp string, testBenchRegexp string, testBenchTime string) (bool, error) {
 	var cmd *exec.Cmd
-	if len(config.Target.Emulator) == 0 {
+	emulator := config.Emulator()
+	if len(emulator) == 0 {
 		// Run directly.
 		var flags []string
 		if testVerbose {
@@ -243,15 +263,33 @@ func runPackageTest(config *compileopts.Config, result builder.BuildResult, test
 		if testRunRegexp != "" {
 			flags = append(flags, "-test.run="+testRunRegexp)
 		}
+		if testBenchRegexp != "" {
+			flags = append(flags, "-test.bench="+testBenchRegexp)
+		}
+		if testBenchTime != "" {
+			flags = append(flags, "-test.benchtime="+testBenchTime)
+		}
 		cmd = executeCommand(config.Options, result.Binary, flags...)
-		cmd.Dir = result.MainDir
 	} else {
 		// Run in an emulator.
-		args := append(config.Target.Emulator[1:], result.Binary)
-		if config.Target.Emulator[0] == "wasmtime" {
-			// allow reading from current directory: --dir=.
+		args := append(emulator[1:], result.Binary)
+		if emulator[0] == "wasmtime" {
+			// create a new temp directory just for this run, announce it to os.TempDir() via TMPDIR
+			tmpdir, err := ioutil.TempDir("", "tinygotmp")
+			if err != nil {
+				return false, &commandError{"failed to create temporary directory", "tinygotmp", err}
+			}
+			args = append(args, "--dir="+tmpdir, "--env=TMPDIR="+tmpdir)
+			// TODO: add option to not delete temp dir for debugging?
+			defer os.RemoveAll(tmpdir)
+
+			// allow reading from directories up to module root
+			for _, d := range dirsToModuleRoot(result.MainDir, result.ModuleRoot) {
+				args = append(args, "--dir="+d)
+			}
+
 			// mark end of wasmtime arguments and start of program ones: --
-			args = append(args, "--dir=.", "--")
+			args = append(args, "--")
 			if testVerbose {
 				args = append(args, "-test.v")
 			}
@@ -261,11 +299,15 @@ func runPackageTest(config *compileopts.Config, result builder.BuildResult, test
 			if testRunRegexp != "" {
 				args = append(args, "-test.run="+testRunRegexp)
 			}
+			if testBenchRegexp != "" {
+				args = append(args, "-test.bench="+testBenchRegexp)
+			}
 		}
-		cmd = executeCommand(config.Options, config.Target.Emulator[0], args...)
+		cmd = executeCommand(config.Options, emulator[0], args...)
 	}
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Dir = result.MainDir
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 	err := cmd.Run()
 	if err != nil {
 		if _, ok := err.(*exec.ExitError); ok {
@@ -459,12 +501,13 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 		gdbInterface, openocdInterface := config.Programmer()
 		switch gdbInterface {
 		case "msd", "command", "":
-			if len(config.Target.Emulator) != 0 {
-				if config.Target.Emulator[0] == "mgba" {
+			emulator := config.Emulator()
+			if len(emulator) != 0 {
+				if emulator[0] == "mgba" {
 					gdbInterface = "mgba"
-				} else if config.Target.Emulator[0] == "simavr" {
+				} else if emulator[0] == "simavr" {
 					gdbInterface = "simavr"
-				} else if strings.HasPrefix(config.Target.Emulator[0], "qemu-system-") {
+				} else if strings.HasPrefix(emulator[0], "qemu-system-") {
 					gdbInterface = "qemu"
 				} else {
 					// Assume QEMU as an emulator.
@@ -532,34 +575,34 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 			}
 		case "qemu":
 			port = ":1234"
-
+			emulator := config.Emulator()
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], result.Binary, "-s", "-S")
-			daemon = executeCommand(config.Options, config.Target.Emulator[0], args...)
+			args := append(emulator[1:], result.Binary, "-s", "-S")
+			daemon = executeCommand(config.Options, emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "qemu-user":
 			port = ":1234"
-
+			emulator := config.Emulator()
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], "-g", "1234", result.Binary)
-			daemon = executeCommand(config.Options, config.Target.Emulator[0], args...)
+			args := append(emulator[1:], "-g", "1234", result.Binary)
+			daemon = executeCommand(config.Options, emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "mgba":
 			port = ":2345"
-
+			emulator := config.Emulator()
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], result.Binary, "-g")
-			daemon = executeCommand(config.Options, config.Target.Emulator[0], args...)
+			args := append(emulator[1:], result.Binary, "-g")
+			daemon = executeCommand(config.Options, emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "simavr":
 			port = ":1234"
-
+			emulator := config.Emulator()
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], "-g", result.Binary)
-			daemon = executeCommand(config.Options, config.Target.Emulator[0], args...)
+			args := append(emulator[1:], "-g", result.Binary)
+			daemon = executeCommand(config.Options, emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "msd":
@@ -654,7 +697,8 @@ func Run(pkgName string, options *compileopts.Options) error {
 	}
 
 	return builder.Build(pkgName, ".elf", config, func(result builder.BuildResult) error {
-		if len(config.Target.Emulator) == 0 {
+		emulator := config.Emulator()
+		if len(emulator) == 0 {
 			// Run directly.
 			cmd := executeCommand(config.Options, result.Binary)
 			cmd.Stdout = os.Stdout
@@ -670,8 +714,8 @@ func Run(pkgName string, options *compileopts.Options) error {
 			return nil
 		} else {
 			// Run in an emulator.
-			args := append(config.Target.Emulator[1:], result.Binary)
-			cmd := executeCommand(config.Options, config.Target.Emulator[0], args...)
+			args := append(emulator[1:], result.Binary)
+			cmd := executeCommand(config.Options, emulator[0], args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			err := cmd.Run()
@@ -719,7 +763,12 @@ func flashUF2UsingMSD(volume, tmppath string, options *compileopts.Options) erro
 	var infoPath string
 	switch runtime.GOOS {
 	case "linux", "freebsd":
-		infoPath = "/media/*/" + volume + "/INFO_UF2.TXT"
+		fi, err := os.Stat("/run/media")
+		if err != nil || !fi.IsDir() {
+			infoPath = "/media/*/" + volume + "/INFO_UF2.TXT"
+		} else {
+			infoPath = "/run/media/*/" + volume + "/INFO_UF2.TXT"
+		}
 	case "darwin":
 		infoPath = "/Volumes/" + volume + "/INFO_UF2.TXT"
 	case "windows":
@@ -743,7 +792,12 @@ func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) erro
 	var destPath string
 	switch runtime.GOOS {
 	case "linux", "freebsd":
-		destPath = "/media/*/" + volume
+		fi, err := os.Stat("/run/media")
+		if err != nil || !fi.IsDir() {
+			destPath = "/media/*/" + volume
+		} else {
+			destPath = "/run/media/*/" + volume
+		}
 	case "darwin":
 		destPath = "/Volumes/" + volume
 	case "windows":
@@ -1045,15 +1099,6 @@ func printCompilerError(logln func(...interface{}), err error) {
 				logln()
 			}
 		}
-	case transform.CoroutinesError:
-		logln(err.Pos.String() + ": " + err.Msg)
-		logln("\ntraceback:")
-		for _, line := range err.Traceback {
-			logln(line.Name)
-			if line.Position.IsValid() {
-				logln("\t" + line.Position.String())
-			}
-		}
 	case loader.Errors:
 		logln("#", err.Pkg.ImportPath)
 		for _, err := range err.Errs {
@@ -1138,9 +1183,9 @@ func main() {
 	command := os.Args[1]
 
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
-	gc := flag.String("gc", "", "garbage collector to use (none, leaking, extalloc, conservative)")
+	gc := flag.String("gc", "", "garbage collector to use (none, leaking, conservative)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
-	scheduler := flag.String("scheduler", "", "which scheduler to use (none, coroutines, tasks, asyncify)")
+	scheduler := flag.String("scheduler", "", "which scheduler to use (none, tasks, asyncify)")
 	serial := flag.String("serial", "", "which serial output to use (none, uart, usb)")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
@@ -1163,8 +1208,10 @@ func main() {
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 
 	var flagJSON, flagDeps, flagTest *bool
-	if command == "help" || command == "list" {
+	if command == "help" || command == "list" || command == "info" {
 		flagJSON = flag.Bool("json", false, "print data in JSON format")
+	}
+	if command == "help" || command == "list" {
 		flagDeps = flag.Bool("deps", false, "supply -deps flag to go list")
 		flagTest = flag.Bool("test", false, "supply -test flag to go list")
 	}
@@ -1173,12 +1220,16 @@ func main() {
 		flag.StringVar(&outpath, "o", "", "output filename")
 	}
 	var testCompileOnlyFlag, testVerboseFlag, testShortFlag *bool
+	var testBenchRegexp *string
+	var testBenchTime *string
 	var testRunRegexp *string
 	if command == "help" || command == "test" {
 		testCompileOnlyFlag = flag.Bool("c", false, "compile the test binary but do not run it")
 		testVerboseFlag = flag.Bool("v", false, "verbose: print additional output")
 		testShortFlag = flag.Bool("short", false, "short: run smaller test suite to save time")
 		testRunRegexp = flag.String("run", "", "run: regexp of tests to run")
+		testBenchRegexp = flag.String("bench", "", "run: regexp of benchmarks to run")
+		testBenchTime = flag.String("benchtime", "", "run each benchmark for duration `d`")
 	}
 
 	// Early command processing, before commands are interpreted by the Go flag
@@ -1227,7 +1278,7 @@ func main() {
 		PrintIR:         *printIR,
 		DumpSSA:         *dumpSSA,
 		VerifyIR:        *verifyIR,
-		Parallelism:     *parallelism,
+		Semaphore:       make(chan struct{}, *parallelism),
 		Debug:           !*nodebug,
 		PrintSizes:      *printSize,
 		PrintStacks:     *printStacks,
@@ -1358,16 +1409,69 @@ func main() {
 		if len(pkgNames) == 0 {
 			pkgNames = []string{"."}
 		}
-		allTestsPassed := true
-		for _, pkgName := range pkgNames {
-			// TODO: parallelize building the test binaries
-			passed, err := Test(pkgName, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, *testRunRegexp, outpath)
-			handleCompilerError(err)
-			if !passed {
-				allTestsPassed = false
-			}
+		if *testCompileOnlyFlag && len(pkgNames) > 1 {
+			fmt.Println("cannot use -c flag with multiple packages")
+			os.Exit(1)
 		}
-		if !allTestsPassed {
+
+		fail := make(chan struct{}, 1)
+		var wg sync.WaitGroup
+		bufs := make([]testOutputBuf, len(pkgNames))
+		for i := range bufs {
+			bufs[i].done = make(chan struct{})
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			// Flush the output one test at a time.
+			// This ensures that outputs from different tests are not mixed together.
+			for i := range bufs {
+				err := bufs[i].flush(os.Stdout, os.Stderr)
+				if err != nil {
+					// There was an error writing to stdout or stderr, so we probbably cannot print this.
+					select {
+					case fail <- struct{}{}:
+					default:
+					}
+				}
+			}
+		}()
+
+		// Build and run the tests concurrently.
+		// This uses an additional semaphore to reduce the memory usage.
+		testSema := make(chan struct{}, cap(options.Semaphore))
+		for i, pkgName := range pkgNames {
+			pkgName := pkgName
+			buf := &bufs[i]
+			testSema <- struct{}{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer func() { <-testSema }()
+				defer close(buf.done)
+				stdout := (*testStdout)(buf)
+				stderr := (*testStderr)(buf)
+				passed, err := Test(pkgName, stdout, stderr, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, *testRunRegexp, *testBenchRegexp, *testBenchTime, outpath)
+				if err != nil {
+					printCompilerError(func(args ...interface{}) {
+						fmt.Fprintln(stderr, args...)
+					}, err)
+				}
+				if !passed {
+					select {
+					case fail <- struct{}{}:
+					default:
+					}
+				}
+			}()
+		}
+
+		// Wait for all tests to finish.
+		wg.Wait()
+		close(fail)
+		if _, fail := <-fail; fail {
 			fmt.Println("FAIL")
 			os.Exit(1)
 		}
@@ -1424,14 +1528,37 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Printf("LLVM triple:       %s\n", config.Triple())
-		fmt.Printf("GOOS:              %s\n", config.GOOS())
-		fmt.Printf("GOARCH:            %s\n", config.GOARCH())
-		fmt.Printf("GOARM:             %s\n", config.GOARM())
-		fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
-		fmt.Printf("garbage collector: %s\n", config.GC())
-		fmt.Printf("scheduler:         %s\n", config.Scheduler())
-		fmt.Printf("cached GOROOT:     %s\n", cachedGOROOT)
+		if *flagJSON {
+			json, _ := json.MarshalIndent(struct {
+				GOROOT     string   `json:"goroot"`
+				GOOS       string   `json:"goos"`
+				GOARCH     string   `json:"goarch"`
+				GOARM      string   `json:"goarm"`
+				BuildTags  []string `json:"build_tags"`
+				GC         string   `json:"garbage_collector"`
+				Scheduler  string   `json:"scheduler"`
+				LLVMTriple string   `json:"llvm_triple"`
+			}{
+				GOROOT:     cachedGOROOT,
+				GOOS:       config.GOOS(),
+				GOARCH:     config.GOARCH(),
+				GOARM:      config.GOARM(),
+				BuildTags:  config.BuildTags(),
+				GC:         config.GC(),
+				Scheduler:  config.Scheduler(),
+				LLVMTriple: config.Triple(),
+			}, "", "  ")
+			fmt.Println(string(json))
+		} else {
+			fmt.Printf("LLVM triple:       %s\n", config.Triple())
+			fmt.Printf("GOOS:              %s\n", config.GOOS())
+			fmt.Printf("GOARCH:            %s\n", config.GOARCH())
+			fmt.Printf("GOARM:             %s\n", config.GOARM())
+			fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
+			fmt.Printf("garbage collector: %s\n", config.GC())
+			fmt.Printf("scheduler:         %s\n", config.Scheduler())
+			fmt.Printf("cached GOROOT:     %s\n", cachedGOROOT)
+		}
 	case "list":
 		config, err := builder.NewConfig(options)
 		if err != nil {
@@ -1504,4 +1631,118 @@ func main() {
 		usage("")
 		os.Exit(1)
 	}
+}
+
+// testOutputBuf is used to buffer the output of concurrent tests.
+type testOutputBuf struct {
+	mu             sync.Mutex
+	output         []outputEntry
+	stdout, stderr io.Writer
+	outerr, errerr error
+	done           chan struct{}
+}
+
+// flush the output to stdout and stderr.
+// This waits until done is closed.
+func (b *testOutputBuf) flush(stdout, stderr io.Writer) error {
+	b.mu.Lock()
+
+	var err error
+	b.stdout = stdout
+	b.stderr = stderr
+	for _, e := range b.output {
+		var w io.Writer
+		var errDst *error
+		if e.stderr {
+			w = stderr
+			errDst = &b.errerr
+		} else {
+			w = stdout
+			errDst = &b.outerr
+		}
+		if *errDst != nil {
+			continue
+		}
+
+		_, werr := w.Write(e.data)
+		if werr != nil {
+			if err == nil {
+				err = werr
+			}
+			*errDst = err
+		}
+	}
+
+	b.mu.Unlock()
+
+	<-b.done
+
+	return err
+}
+
+// testStdout writes stdout from a test to the output buffer.
+type testStdout testOutputBuf
+
+func (out *testStdout) Write(data []byte) (int, error) {
+	buf := (*testOutputBuf)(out)
+	buf.mu.Lock()
+
+	if buf.stdout != nil {
+		// Write the output directly.
+		err := out.outerr
+		buf.mu.Unlock()
+		if err != nil {
+			return 0, err
+		}
+		return buf.stdout.Write(data)
+	}
+
+	defer buf.mu.Unlock()
+
+	// Append the output.
+	if len(buf.output) == 0 || buf.output[len(buf.output)-1].stderr {
+		buf.output = append(buf.output, outputEntry{
+			stderr: false,
+		})
+	}
+	last := &buf.output[len(buf.output)-1]
+	last.data = append(last.data, data...)
+
+	return len(data), nil
+}
+
+// testStderr writes stderr from a test to the output buffer.
+type testStderr testOutputBuf
+
+func (out *testStderr) Write(data []byte) (int, error) {
+	buf := (*testOutputBuf)(out)
+	buf.mu.Lock()
+
+	if buf.stderr != nil {
+		// Write the output directly.
+		err := out.errerr
+		buf.mu.Unlock()
+		if err != nil {
+			return 0, err
+		}
+		return buf.stderr.Write(data)
+	}
+
+	defer buf.mu.Unlock()
+
+	// Append the output.
+	if len(buf.output) == 0 || !buf.output[len(buf.output)-1].stderr {
+		buf.output = append(buf.output, outputEntry{
+			stderr: true,
+		})
+	}
+	last := &buf.output[len(buf.output)-1]
+	last.data = append(last.data, data...)
+
+	return len(data), nil
+}
+
+type outputEntry struct {
+	stderr bool
+	data   []byte
 }

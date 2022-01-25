@@ -7,6 +7,6 @@
       "src/device/stm32/stm32l552.s"
     ],
     "flash-method": "openocd",
-    "openocd-interface": "stlink-v2-1",
+    "openocd-interface": "stlink",
     "openocd-target": "stm32l5x"
   }

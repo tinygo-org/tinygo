@@ -30,11 +30,6 @@ func (b *builder) createGo(instr *ssa.Go) {
 		switch value := instr.Call.Value.(type) {
 		case *ssa.Function:
 			// Goroutine call is regular function call. No context is necessary.
-			if b.Scheduler == "coroutines" {
-				// The context parameter is assumed to be always present in the
-				// coroutines scheduler.
-				context = llvm.Undef(b.i8ptrType)
-			}
 		case *ssa.MakeClosure:
 			// A goroutine call on a func value, but the callee is trivial to find. For
 			// example: immediately applied functions.
@@ -95,50 +90,31 @@ func (b *builder) createGo(instr *ssa.Go) {
 		//   * The function pointer (for tasks).
 		var context llvm.Value
 		funcPtr, context = b.decodeFuncValue(b.getValue(instr.Call.Value), instr.Call.Value.Type().Underlying().(*types.Signature))
-		params = append(params, context) // context parameter
+		params = append(params, context, funcPtr)
 		hasContext = true
-		switch b.Scheduler {
-		case "none", "coroutines":
-			// There are no additional parameters needed for the goroutine start operation.
-		case "tasks", "asyncify":
-			// Add the function pointer as a parameter to start the goroutine.
-			params = append(params, funcPtr)
-		default:
-			panic("unknown scheduler type")
-		}
 		prefix = b.fn.RelString(nil)
 	}
 
 	paramBundle := b.emitPointerPack(params)
-	var callee, stackSize llvm.Value
-	switch b.Scheduler {
-	case "none", "tasks", "asyncify":
-		callee = b.createGoroutineStartWrapper(funcPtr, prefix, hasContext, instr.Pos())
-		if b.AutomaticStackSize {
-			// The stack size is not known until after linking. Call a dummy
-			// function that will be replaced with a load from a special ELF
-			// section that contains the stack size (and is modified after
-			// linking).
-			stackSizeFn := b.getFunction(b.program.ImportedPackage("internal/task").Members["getGoroutineStackSize"].(*ssa.Function))
-			stackSize = b.createCall(stackSizeFn, []llvm.Value{callee, llvm.Undef(b.i8ptrType), llvm.Undef(b.i8ptrType)}, "stacksize")
-		} else {
-			// The stack size is fixed at compile time. By emitting it here as a
-			// constant, it can be optimized.
-			if (b.Scheduler == "tasks" || b.Scheduler == "asyncify") && b.DefaultStackSize == 0 {
-				b.addError(instr.Pos(), "default stack size for goroutines is not set")
-			}
-			stackSize = llvm.ConstInt(b.uintptrType, b.DefaultStackSize, false)
+	var stackSize llvm.Value
+	callee := b.createGoroutineStartWrapper(funcPtr, prefix, hasContext, instr.Pos())
+	if b.AutomaticStackSize {
+		// The stack size is not known until after linking. Call a dummy
+		// function that will be replaced with a load from a special ELF
+		// section that contains the stack size (and is modified after
+		// linking).
+		stackSizeFn := b.getFunction(b.program.ImportedPackage("internal/task").Members["getGoroutineStackSize"].(*ssa.Function))
+		stackSize = b.createCall(stackSizeFn, []llvm.Value{callee, llvm.Undef(b.i8ptrType)}, "stacksize")
+	} else {
+		// The stack size is fixed at compile time. By emitting it here as a
+		// constant, it can be optimized.
+		if (b.Scheduler == "tasks" || b.Scheduler == "asyncify") && b.DefaultStackSize == 0 {
+			b.addError(instr.Pos(), "default stack size for goroutines is not set")
 		}
-	case "coroutines":
-		callee = b.CreatePtrToInt(funcPtr, b.uintptrType, "")
-		// There is no goroutine stack size: coroutines are used instead of
-		// stacks.
-		stackSize = llvm.Undef(b.uintptrType)
-	default:
-		panic("unreachable")
+		stackSize = llvm.ConstInt(b.uintptrType, b.DefaultStackSize, false)
 	}
 	start := b.getFunction(b.program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
-	b.createCall(start, []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.i8ptrType), llvm.ConstPointerNull(b.i8ptrType)}, "")
+	b.createCall(start, []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.i8ptrType)}, "")
 }
 
 // createGoroutineStartWrapper creates a wrapper for the task-based
@@ -217,7 +193,6 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 
 		// Create the list of params for the call.
 		paramTypes := fn.Type().ElementType().ParamTypes()
-		paramTypes = paramTypes[:len(paramTypes)-1] // strip parentHandle parameter
 		if !hasContext {
 			paramTypes = paramTypes[:len(paramTypes)-1] // strip context parameter
 		}
@@ -225,14 +200,13 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		if !hasContext {
 			params = append(params, llvm.Undef(c.i8ptrType)) // add dummy context parameter
 		}
-		params = append(params, llvm.Undef(c.i8ptrType)) // add dummy parentHandle parameter
 
 		// Create the call.
 		builder.CreateCall(fn, params, "")
 
 		if c.Scheduler == "asyncify" {
 			builder.CreateCall(deadlock, []llvm.Value{
-				llvm.Undef(c.i8ptrType), llvm.Undef(c.i8ptrType),
+				llvm.Undef(c.i8ptrType),
 			}, "")
 		}
 
@@ -288,25 +262,19 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 
 		// Get the list of parameters, with the extra parameters at the end.
 		paramTypes := fn.Type().ElementType().ParamTypes()
-		paramTypes[len(paramTypes)-1] = fn.Type() // the last element is the function pointer
+		paramTypes = append(paramTypes, fn.Type()) // the last element is the function pointer
 		params := llvmutil.EmitPointerUnpack(builder, c.mod, wrapper.Param(0), paramTypes)
 
 		// Get the function pointer.
 		fnPtr := params[len(params)-1]
-
-		// The last parameter in the packed object has somewhat of a dual role.
-		// Inside the parameter bundle it's the function pointer, stored right
-		// after the context pointer. But in the IR call instruction, it's the
-		// parentHandle function that's always undef outside of the coroutines
-		// scheduler. Thus, make the parameter undef here.
-		params[len(params)-1] = llvm.Undef(c.i8ptrType)
+		params = params[:len(params)-1]
 
 		// Create the call.
 		builder.CreateCall(fnPtr, params, "")
 
 		if c.Scheduler == "asyncify" {
 			builder.CreateCall(deadlock, []llvm.Value{
-				llvm.Undef(c.i8ptrType), llvm.Undef(c.i8ptrType),
+				llvm.Undef(c.i8ptrType),
 			}, "")
 		}
 	}

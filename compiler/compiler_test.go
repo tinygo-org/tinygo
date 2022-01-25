@@ -55,10 +55,9 @@ func TestCompiler(t *testing.T) {
 		{"string.go", "", ""},
 		{"float.go", "", ""},
 		{"interface.go", "", ""},
-		{"func.go", "", "coroutines"},
+		{"func.go", "", ""},
 		{"pragma.go", "", ""},
 		{"goroutine.go", "wasm", "asyncify"},
-		{"goroutine.go", "wasm", "coroutines"},
 		{"goroutine.go", "cortex-m-qemu", "tasks"},
 		{"channel.go", "", ""},
 		{"intrinsics.go", "cortex-m-qemu", ""},
@@ -106,9 +105,9 @@ func TestCompiler(t *testing.T) {
 				CodeModel:          config.CodeModel(),
 				RelocationModel:    config.RelocationModel(),
 				Scheduler:          config.Scheduler(),
-				FuncImplementation: config.FuncImplementation(),
 				AutomaticStackSize: config.AutomaticStackSize(),
 				DefaultStackSize:   config.Target.DefaultStackSize,
+				NeedsStackObjects:  config.NeedsStackObjects(),
 			}
 			machine, err := NewTargetMachine(compilerConfig)
 			if err != nil {
@@ -224,7 +223,12 @@ func filterIrrelevantIRLines(lines []string) []string {
 		}
 		if llvmVersion < 12 && strings.HasPrefix(line, "attributes ") {
 			// Ignore attribute groups. These may change between LLVM versions.
-			// Right now test outputs are for LLVM 12.
+			// Right now test outputs are for LLVM 12 and higher.
+			continue
+		}
+		if llvmVersion < 13 && strings.HasPrefix(line, "target datalayout = ") {
+			// The datalayout string may vary betewen LLVM versions.
+			// Right now test outputs are for LLVM 13 and higher.
 			continue
 		}
 		out = append(out, line)

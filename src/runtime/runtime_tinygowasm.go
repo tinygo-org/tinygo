@@ -22,8 +22,6 @@ func fd_write(id uint32, iovs *__wasi_iovec_t, iovs_len uint, nwritten *uint) (e
 //export proc_exit
 func proc_exit(exitcode uint32)
 
-func postinit() {}
-
 const (
 	putcharBufferSize = 120
 	stdout            = 1

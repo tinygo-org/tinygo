@@ -1,10 +1,10 @@
---- FAIL: TestBar
+--- FAIL: TestBar (0.00s)
     log Bar
     log g
         h
         i
         
-    --- FAIL: TestBar/Bar2
+    --- FAIL: TestBar/Bar2 (0.00s)
         log Bar2
             a
             b
@@ -12,5 +12,10 @@
         failed
         after failed
     log Bar end
+--- FAIL: TestAllLowercase (0.00s)
+    --- FAIL: TestAllLowercase/BETA (0.00s)
+        expected lowercase name, got BETA
+    --- FAIL: TestAllLowercase/DELTA (0.00s)
+        expected lowercase name, got DELTA
 FAIL
 exitcode: 1

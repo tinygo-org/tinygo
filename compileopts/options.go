@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	validGCOptions            = []string{"none", "leaking", "extalloc", "conservative"}
-	validSchedulerOptions     = []string{"none", "tasks", "coroutines", "asyncify"}
+	validGCOptions            = []string{"none", "leaking", "conservative"}
+	validSchedulerOptions     = []string{"none", "tasks", "asyncify"}
 	validSerialOptions        = []string{"none", "uart", "usb"}
 	validPrintSizeOptions     = []string{"none", "short", "full"}
 	validPanicStrategyOptions = []string{"print", "trap"}
@@ -32,7 +32,7 @@ type Options struct {
 	DumpSSA         bool
 	VerifyIR        bool
 	PrintCommands   func(cmd string, args ...string)
-	Parallelism     int // -p flag
+	Semaphore       chan struct{} // -p flag controls cap
 	Debug           bool
 	PrintSizes      string
 	PrintAllocs     *regexp.Regexp // regexp string
@@ -44,6 +44,7 @@ type Options struct {
 	Programmer      string
 	OpenOCDCommands []string
 	LLVMFeatures    string
+	Directory       string
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.

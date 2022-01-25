@@ -307,16 +307,24 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 // Hashmap with plain binary data keys (not containing strings etc.).
 
 func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
+	// TODO: detect nil map here and throw a better panic message?
 	hash := hashmapHash(key, uintptr(m.keySize))
 	hashmapSet(m, key, value, hash, memequal)
 }
 
 func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) bool {
+	if m == nil {
+		memzero(value, uintptr(valueSize))
+		return false
+	}
 	hash := hashmapHash(key, uintptr(m.keySize))
 	return hashmapGet(m, key, value, valueSize, hash, memequal)
 }
 
 func hashmapBinaryDelete(m *hashmap, key unsafe.Pointer) {
+	if m == nil {
+		return
+	}
 	hash := hashmapHash(key, uintptr(m.keySize))
 	hashmapDelete(m, key, hash, memequal)
 }
@@ -356,6 +364,24 @@ func hashmapStringDelete(m *hashmap, key string) {
 //go:linkname valueInterfaceUnsafe reflect.valueInterfaceUnsafe
 func valueInterfaceUnsafe(v reflect.Value) interface{}
 
+func hashmapFloat32Hash(ptr unsafe.Pointer) uint32 {
+	f := *(*uint32)(ptr)
+	if f == 0x80000000 {
+		// convert -0 to 0 for hashing
+		f = 0
+	}
+	return hashmapHash(unsafe.Pointer(&f), 4)
+}
+
+func hashmapFloat64Hash(ptr unsafe.Pointer) uint32 {
+	f := *(*uint64)(ptr)
+	if f == 0x8000000000000000 {
+		// convert -0 to 0 for hashing
+		f = 0
+	}
+	return hashmapHash(unsafe.Pointer(&f), 8)
+}
+
 func hashmapInterfaceHash(itf interface{}) uint32 {
 	x := reflect.ValueOf(itf)
 	if x.RawType() == 0 {
@@ -374,13 +400,21 @@ func hashmapInterfaceHash(itf interface{}) uint32 {
 		return hashmapHash(ptr, x.RawType().Size())
 	case reflect.Bool, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return hashmapHash(ptr, x.RawType().Size())
-	case reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128:
+	case reflect.Float32:
 		// It should be possible to just has the contents. However, NaN != NaN
 		// so if you're using lots of NaNs as map keys (you shouldn't) then hash
 		// time may become exponential. To fix that, it would be better to
 		// return a random number instead:
 		// https://research.swtch.com/randhash
-		return hashmapHash(ptr, x.RawType().Size())
+		return hashmapFloat32Hash(ptr)
+	case reflect.Float64:
+		return hashmapFloat64Hash(ptr)
+	case reflect.Complex64:
+		rptr, iptr := ptr, unsafe.Pointer(uintptr(ptr)+4)
+		return hashmapFloat32Hash(rptr) ^ hashmapFloat32Hash(iptr)
+	case reflect.Complex128:
+		rptr, iptr := ptr, unsafe.Pointer(uintptr(ptr)+8)
+		return hashmapFloat64Hash(rptr) ^ hashmapFloat64Hash(iptr)
 	case reflect.String:
 		return hashmapStringHash(x.String())
 	case reflect.Chan, reflect.Ptr, reflect.UnsafePointer:
@@ -391,13 +425,13 @@ func hashmapInterfaceHash(itf interface{}) uint32 {
 	case reflect.Array:
 		var hash uint32
 		for i := 0; i < x.Len(); i++ {
-			hash |= hashmapInterfaceHash(valueInterfaceUnsafe(x.Index(i)))
+			hash ^= hashmapInterfaceHash(valueInterfaceUnsafe(x.Index(i)))
 		}
 		return hash
 	case reflect.Struct:
 		var hash uint32
 		for i := 0; i < x.NumField(); i++ {
-			hash |= hashmapInterfaceHash(valueInterfaceUnsafe(x.Field(i)))
+			hash ^= hashmapInterfaceHash(valueInterfaceUnsafe(x.Field(i)))
 		}
 		return hash
 	default:

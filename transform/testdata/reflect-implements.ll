@@ -22,9 +22,9 @@ target triple = "i686--linux"
 ; The type itself is stored in %typ.value, %typ.typecode just refers to the
 ; type of reflect.Type. This function can be optimized because errorType is
 ; known at compile time (after the interp pass has run).
-define i1 @main.isError(i32 %typ.typecode, i8* %typ.value, i8* %context, i8* %parentHandle) {
+define i1 @main.isError(i32 %typ.typecode, i8* %typ.value, i8* %context) {
 entry:
-  %result = call i1 @"reflect.Type.Implements$invoke"(i8* %typ.value, i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:reflect.rawType" to i32), i8* bitcast (%runtime.typecodeID* @"reflect/types.type:named:error" to i8*), i32 %typ.typecode, i8* undef, i8* undef)
+  %result = call i1 @"reflect.Type.Implements$invoke"(i8* %typ.value, i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:reflect.rawType" to i32), i8* bitcast (%runtime.typecodeID* @"reflect/types.type:named:error" to i8*), i32 %typ.typecode, i8* undef)
   ret i1 %result
 }
 
@@ -33,13 +33,13 @@ entry:
 ; func isUnknown(typ, itf reflect.Type) bool {
 ;   return typ.Implements(itf)
 ; }
-define i1 @main.isUnknown(i32 %typ.typecode, i8* %typ.value, i32 %itf.typecode, i8* %itf.value, i8* %context, i8* %parentHandle) {
+define i1 @main.isUnknown(i32 %typ.typecode, i8* %typ.value, i32 %itf.typecode, i8* %itf.value, i8* %context) {
 entry:
-  %result = call i1 @"reflect.Type.Implements$invoke"(i8* %typ.value, i32 %itf.typecode, i8* %itf.value, i32 %typ.typecode, i8* undef, i8* undef)
+  %result = call i1 @"reflect.Type.Implements$invoke"(i8* %typ.value, i32 %itf.typecode, i8* %itf.value, i32 %typ.typecode, i8* undef)
   ret i1 %result
 }
 
-declare i1 @"reflect.Type.Implements$invoke"(i8*, i32, i8*, i32, i8*, i8*) #0
+declare i1 @"reflect.Type.Implements$invoke"(i8*, i32, i8*, i32, i8*) #0
 declare i1 @"error.$typeassert"(i32) #1
 
 attributes #0 = { "tinygo-invoke"="reflect/methods.Implements(reflect.Type) bool" "tinygo-methods"="reflect/methods.Align() int; reflect/methods.Implements(reflect.Type) bool" }

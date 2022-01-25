@@ -13,8 +13,6 @@ import (
 
 type timeUnit int64
 
-func postinit() {}
-
 //export Reset_Handler
 func main() {
 	preinit()

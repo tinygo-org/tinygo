@@ -15,11 +15,25 @@ func (f *File) Sync() error {
 	return ErrNotImplemented
 }
 
+// Stat returns the FileInfo structure describing file.
+// If there is an error, it will be of type *PathError.
+func (f *File) Stat() (FileInfo, error) {
+	var fs fileStat
+	err := ignoringEINTR(func() error {
+		return syscall.Fstat(int(f.handle.(unixFileHandle)), &fs.sys)
+	})
+	if err != nil {
+		return nil, &PathError{Op: "fstat", Path: f.name, Err: err}
+	}
+	fillFileStatFromSys(&fs, f.name)
+	return &fs, nil
+}
+
 // statNolog stats a file with no test logging.
 func statNolog(name string) (FileInfo, error) {
 	var fs fileStat
 	err := ignoringEINTR(func() error {
-		return syscall.Stat(name, &fs.sys)
+		return handleSyscallError(syscall.Stat(name, &fs.sys))
 	})
 	if err != nil {
 		return nil, &PathError{Op: "stat", Path: name, Err: err}
@@ -32,7 +46,7 @@ func statNolog(name string) (FileInfo, error) {
 func lstatNolog(name string) (FileInfo, error) {
 	var fs fileStat
 	err := ignoringEINTR(func() error {
-		return syscall.Lstat(name, &fs.sys)
+		return handleSyscallError(syscall.Lstat(name, &fs.sys))
 	})
 	if err != nil {
 		return nil, &PathError{Op: "lstat", Path: name, Err: err}

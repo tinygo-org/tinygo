@@ -15,8 +15,6 @@ type timeUnit int64
 
 var timestamp timeUnit
 
-func postinit() {}
-
 //export main
 func main() {
 	preinit()

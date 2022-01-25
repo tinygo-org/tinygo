@@ -51,6 +51,12 @@ func TestFixLongPath(t *testing.T) {
 
 // TODO: bring back upstream version's TestMkdirAllLongPath once os.RemoveAll and t.TempDir implemented
 
+// isWine returns true if executing on wine (Wine Is Not an Emulator), which
+// is compatible with windows but does not reproduce all its quirks.
+func isWine() bool {
+	return os.Getenv("WINEUSERNAME") != ""
+}
+
 func TestMkdirAllExtendedLength(t *testing.T) {
 	// TODO: revert to upstream version once os.RemoveAll and t.TempDir implemented
 	tmpDir := os.TempDir()
@@ -68,6 +74,11 @@ func TestMkdirAllExtendedLength(t *testing.T) {
 		t.Fatalf("MkdirAll(%q) failed: %v", path, err)
 	}
 
+	if isWine() {
+		// TODO: use t.Skip once implemented
+		t.Log("wine: Skipping check for no-dots-for-you quirk in windows extended paths")
+		return
+	}
 	path = path + `.\dir2`
 	if err := os.MkdirAll(path, 0777); err == nil {
 		t.Fatalf("MkdirAll(%q) should have failed, but did not", path)

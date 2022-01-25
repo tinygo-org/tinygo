@@ -6,13 +6,9 @@ package runtime
 // were added to the queue (first-in, first-out). It also contains a sleep queue
 // with sleeping goroutines in order of when they should be re-activated.
 //
-// The scheduler is used both for the coroutine based scheduler and for the task
-// based scheduler (see compiler/goroutine-lowering.go for a description). In
-// both cases, the 'task' type is used to represent one goroutine. In the case
-// of the task based scheduler, it literally is the goroutine itself: a pointer
-// to the bottom of the stack where some important fields are kept. In the case
-// of the coroutine-based scheduler, it is the coroutine pointer (a *i8 in
-// LLVM).
+// The scheduler is used both for the asyncify based scheduler and for the task
+// based scheduler. In both cases, the 'internal/task.Task' type is used to represent one
+// goroutine.
 
 import (
 	"internal/task"

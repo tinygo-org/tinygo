@@ -7,7 +7,7 @@
 	"linker":        "wasm-ld",
 	"libc":          "wasi-libc",
 	"scheduler":     "asyncify",
-	"default-stack-size": 8192,
+	"default-stack-size": 16384,
 	"ldflags": [
 		"--allow-undefined",
 		"--stack-first",
