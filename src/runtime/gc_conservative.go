@@ -14,7 +14,7 @@ package runtime
 // any free space, it will perform a garbage collection cycle and try again. If
 // it still cannot find any free space, it gives up.
 //
-// Every block has some metadata, which is stored at the beginning of the heap.
+// Every block has some metadata, which is stored at the end of the heap.
 // The four states are "free", "head", "tail", and "mark". During normal
 // operation, there are no marked blocks. Every allocated object starts with a
 // "head" and is followed by "tail" blocks. The reason for this distinction is
