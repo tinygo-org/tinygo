@@ -240,7 +240,7 @@ func calculateHeapAddresses() {
 	totalSize := heapEnd - heapStart
 
 	// Allocate some memory to keep 2 bits of information about every block.
-	metadataSize := totalSize / (blocksPerStateByte * bytesPerBlock)
+	metadataSize := (totalSize + blocksPerStateByte*bytesPerBlock) / (1 + blocksPerStateByte*bytesPerBlock)
 	metadataStart = unsafe.Pointer(heapEnd - metadataSize)
 
 	// Use the rest of the available memory as heap.
