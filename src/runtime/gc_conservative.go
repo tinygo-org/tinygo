@@ -143,7 +143,7 @@ func (b gcBlock) findNext() gcBlock {
 // State returns the current block state.
 func (b gcBlock) state() blockState {
 	stateBytePtr := (*uint8)(unsafe.Pointer(uintptr(metadataStart) + uintptr(b/blocksPerStateByte)))
-	return blockState(*stateBytePtr>>((b%blocksPerStateByte)*2)) % 4
+	return blockState(*stateBytePtr>>((b%blocksPerStateByte)*stateBits)) & blockStateMask
 }
 
 // setState sets the current block to the given state, which must contain more
@@ -151,7 +151,7 @@ func (b gcBlock) state() blockState {
 // from head to mark.
 func (b gcBlock) setState(newState blockState) {
 	stateBytePtr := (*uint8)(unsafe.Pointer(uintptr(metadataStart) + uintptr(b/blocksPerStateByte)))
-	*stateBytePtr |= uint8(newState << ((b % blocksPerStateByte) * 2))
+	*stateBytePtr |= uint8(newState << ((b % blocksPerStateByte) * stateBits))
 	if gcAsserts && b.state() != newState {
 		runtimePanic("gc: setState() was not successful")
 	}
@@ -160,7 +160,7 @@ func (b gcBlock) setState(newState blockState) {
 // markFree sets the block state to free, no matter what state it was in before.
 func (b gcBlock) markFree() {
 	stateBytePtr := (*uint8)(unsafe.Pointer(uintptr(metadataStart) + uintptr(b/blocksPerStateByte)))
-	*stateBytePtr &^= uint8(blockStateMask << ((b % blocksPerStateByte) * 2))
+	*stateBytePtr &^= uint8(blockStateMask << ((b % blocksPerStateByte) * stateBits))
 	if gcAsserts && b.state() != blockStateFree {
 		runtimePanic("gc: markFree() was not successful")
 	}
@@ -174,7 +174,7 @@ func (b gcBlock) unmark() {
 	}
 	clearMask := blockStateMask ^ blockStateHead // the bits to clear from the state
 	stateBytePtr := (*uint8)(unsafe.Pointer(uintptr(metadataStart) + uintptr(b/blocksPerStateByte)))
-	*stateBytePtr &^= uint8(clearMask << ((b % blocksPerStateByte) * 2))
+	*stateBytePtr &^= uint8(clearMask << ((b % blocksPerStateByte) * stateBits))
 	if gcAsserts && b.state() != blockStateHead {
 		runtimePanic("gc: unmark() was not successful")
 	}
