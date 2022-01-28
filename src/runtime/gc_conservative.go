@@ -134,7 +134,7 @@ func (b gcBlock) findNext() gcBlock {
 	if b.state() == blockStateHead || b.state() == blockStateMark {
 		b++
 	}
-	for b.state() == blockStateTail {
+	for b.address() < uintptr(metadataStart) && b.state() == blockStateTail {
 		b++
 	}
 	return b
