@@ -278,8 +278,14 @@ func (pwm *pwmGroup) setPeriod(period uint64) error {
 	rhs := 16 * period / ((1 + phc) * periodPerCycle * (1 + topStart)) // right-hand-side of equation, scaled so frac is not divided
 	whole := rhs / 16
 	frac := rhs % 16
-	if whole > 0xff {
+	switch {
+	case whole > 0xff:
 		whole = 0xff
+	case whole == 0:
+		// whole calculation underflowed so setting to minimum
+		// permissible value in DIV_INT register.
+		whole = 1
+		frac = 0
 	}
 
 	// Step 2 is acquiring a better top value. Clearing the equation:
