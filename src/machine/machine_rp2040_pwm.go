@@ -280,6 +280,9 @@ func (pwm *pwmGroup) setPeriod(period uint64) error {
 	frac := rhs % 16
 	if whole > 0xff {
 		whole = 0xff
+	} else if whole == 0 {
+		whole = 1
+		frac = 0
 	}
 
 	// Step 2 is acquiring a better top value. Clearing the equation:
