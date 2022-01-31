@@ -5,11 +5,15 @@ package machine
 
 import (
 	"device/esp"
+	"runtime/interrupt"
 	"runtime/volatile"
+	"sync"
 	"unsafe"
 )
 
 const deviceName = esp.Device
+const maxPin = 22
+const cpuInterruptFromPin = 6
 
 // CPUFrequency returns the current CPU frequency of the chip.
 // Currently it is a fixed frequency but it may allow changing in the future.
@@ -22,6 +26,18 @@ const (
 	PinInput
 	PinInputPullup
 	PinInputPulldown
+)
+
+type PinChange uint8
+
+// Pin change interrupt constants for SetInterrupt.
+const (
+	PinNoInterrupt PinChange = iota
+	PinRising
+	PinFalling
+	PinToggle
+	PinLowLevel
+	PinHighLevel
 )
 
 // Configure this pin with the given configuration.
@@ -84,6 +100,11 @@ func (p Pin) mux() *volatile.Register32 {
 	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.IO_MUX.GPIO0)) + uintptr(p)*4)))
 }
 
+// pin returns the PIN register corresponding to the given GPIO pin.
+func (p Pin) pin() *volatile.Register32 {
+	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.PIN0)) + uintptr(p)*4)))
+}
+
 // Set the pin to high or low.
 // Warning: only use this on an output pin!
 func (p Pin) Set(value bool) {
@@ -127,6 +148,70 @@ func (p Pin) portMaskSet() (*volatile.Register32, uint32) {
 
 func (p Pin) portMaskClear() (*volatile.Register32, uint32) {
 	return &esp.GPIO.OUT_W1TC, 1 << p
+}
+
+// SetInterrupt sets an interrupt to be executed when a particular pin changes
+// state. The pin should already be configured as an input, including a pull up
+// or down if no external pull is provided.
+//
+// You can pass a nil func to unset the pin change interrupt. If you do so,
+// the change parameter is ignored and can be set to any value (such as 0).
+// If the pin is already configured with a callback, you must first unset
+// this pins interrupt before you can set a new callback.
+func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) (err error) {
+	if p >= maxPin {
+		return ErrInvalidInputPin
+	}
+
+	if callback == nil || change == PinNoInterrupt {
+		// Disable this pin interrupt
+		p.pin().ClearBits(esp.GPIO_PIN_PIN_INT_TYPE_Msk | esp.GPIO_PIN_PIN_INT_ENA_Msk)
+
+		if pinCallbacks[p] != nil {
+			pinCallbacks[p] = nil
+		}
+		return nil
+	}
+
+	if pinCallbacks[p] != nil {
+		// The pin was already configured.
+		// To properly re-configure a pin, unset it first and set a new
+		// configuration.
+		return ErrNoPinChangeChannel
+	}
+	pinCallbacks[p] = callback
+
+	onceSetupPinInterrupt.Do(func() {
+		err = setupPinInterrupt()
+	})
+	if err != nil {
+		return err
+	}
+
+	p.pin().Set(
+		(p.pin().Get() & ^uint32(esp.GPIO_PIN_PIN_INT_TYPE_Msk|esp.GPIO_PIN_PIN_INT_ENA_Msk)) |
+			uint32(change)<<esp.GPIO_PIN_PIN_INT_TYPE_Pos | uint32(1)<<esp.GPIO_PIN_PIN_INT_ENA_Pos)
+
+	return nil
+}
+
+var (
+	pinCallbacks          [maxPin]func(Pin)
+	onceSetupPinInterrupt sync.Once
+)
+
+func setupPinInterrupt() error {
+	esp.INTERRUPT_CORE0.GPIO_INTERRUPT_PRO_MAP.Set(cpuInterruptFromPin)
+	return interrupt.New(cpuInterruptFromPin, func(interrupt.Interrupt) {
+		status := esp.GPIO.STATUS.Get()
+		for i, mask := 0, uint32(1); i < maxPin; i, mask = i+1, mask<<1 {
+			if (status&mask) != 0 && pinCallbacks[i] != nil {
+				pinCallbacks[i](Pin(i))
+			}
+		}
+		// clear interrupt bit
+		esp.GPIO.STATUS_W1TC.SetBits(status)
+	}).Enable()
 }
 
 var DefaultUART = UART0
