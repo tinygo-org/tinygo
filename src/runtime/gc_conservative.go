@@ -110,7 +110,11 @@ func (b gcBlock) pointer() unsafe.Pointer {
 
 // Return the address of the start of the allocated object.
 func (b gcBlock) address() uintptr {
-	return heapStart + uintptr(b)*bytesPerBlock
+	addr := heapStart + uintptr(b)*bytesPerBlock
+	if gcAsserts && addr > uintptr(metadataStart) {
+		runtimePanic("gc: block pointing inside metadata")
+	}
+	return addr
 }
 
 // findHead returns the head (first block) of an object, assuming the block
