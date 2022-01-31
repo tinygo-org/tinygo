@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	button = machine.BUTTON
-	led    = machine.LED
+	button          = machine.IO6
+	buttonMode      = machine.PinInputPullup
+	buttonPinChange = machine.PinRising
+	led             = machine.LED
 )
 
 func main() {
