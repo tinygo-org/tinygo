@@ -197,7 +197,7 @@ func GoBytes(ptr unsafe.Pointer, length C.int) []byte {
 // functions), the CFLAGS and LDFLAGS found in #cgo lines, and a map of file
 // hashes of the accessed C header files. If there is one or more error, it
 // returns these in the []error slice but still modifies the AST.
-func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string) (*ast.File, []string, []string, []string, map[string][]byte, []error) {
+func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string, clangHeaders string) (*ast.File, []string, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
 		currentDir:      dir,
 		fset:            fset,
@@ -333,6 +333,9 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// have better alternatives anyway.
 	cflagsForCGo := append([]string{"-D_FORTIFY_SOURCE=0"}, cflags...)
 	cflagsForCGo = append(cflagsForCGo, p.cflags...)
+	if clangHeaders != "" {
+		cflagsForCGo = append(cflagsForCGo, "-isystem", clangHeaders)
+	}
 
 	// Process CGo imports for each file.
 	for i, f := range files {
