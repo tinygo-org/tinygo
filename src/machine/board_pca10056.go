@@ -1,3 +1,4 @@
+//go:build pca10056
 // +build pca10056
 
 package machine

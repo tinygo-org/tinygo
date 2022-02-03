@@ -1,3 +1,4 @@
+//go:build pca10031
 // +build pca10031
 
 // pca10031 is a nrf51 based dongle, intended for use in wireless applications.

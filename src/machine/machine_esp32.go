@@ -1,3 +1,4 @@
+//go:build esp32
 // +build esp32
 
 package machine

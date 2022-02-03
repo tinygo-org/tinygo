@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build go1.16 && !baremetal && !js && !wasi
 // +build go1.16,!baremetal,!js,!wasi
 
 // DirFS tests copied verbatim from upstream os_test.go, and adjusted minimally to fit tinygo.

@@ -1,3 +1,4 @@
+//go:build (sam && atsamd21) || arduino_nano33 || circuitplay_express
 // +build sam,atsamd21 arduino_nano33 circuitplay_express
 
 package machine

@@ -1,3 +1,4 @@
+//go:build k210
 // +build k210
 
 // This file implements target-specific things for the K210 chip as used in the

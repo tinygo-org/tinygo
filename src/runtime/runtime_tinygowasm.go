@@ -1,3 +1,4 @@
+//go:build tinygo.wasm
 // +build tinygo.wasm
 
 package runtime

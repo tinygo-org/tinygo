@@ -1,3 +1,4 @@
+//go:build sam && atsamd51 && atsamd51p20
 // +build sam,atsamd51,atsamd51p20
 
 package runtime

@@ -1,3 +1,4 @@
+//go:build arduino
 // +build arduino
 
 package main

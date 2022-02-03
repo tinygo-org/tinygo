@@ -1,3 +1,4 @@
+//go:build matrixportal_m4
 // +build matrixportal_m4
 
 package machine

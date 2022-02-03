@@ -1,3 +1,4 @@
+//go:build stm32f4 || stm32f1
 // +build stm32f4 stm32f1
 
 package machine

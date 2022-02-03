@@ -1,3 +1,4 @@
+//go:build sam && atsamd51 && atsamd51j20
 // +build sam,atsamd51,atsamd51j20
 
 // Peripheral abstraction layer for the atsamd51.

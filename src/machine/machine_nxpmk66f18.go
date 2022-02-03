@@ -27,6 +27,7 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+//go:build nxp && mk66f18
 // +build nxp,mk66f18
 
 package machine

@@ -1,3 +1,4 @@
+//go:build stm32f405
 // +build stm32f405
 
 package runtime

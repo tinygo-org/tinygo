@@ -1,3 +1,4 @@
+//go:build digispark
 // +build digispark
 
 package machine

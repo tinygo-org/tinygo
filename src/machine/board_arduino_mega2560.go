@@ -1,3 +1,4 @@
+//go:build arduino_mega2560
 // +build arduino_mega2560
 
 package machine

@@ -1,3 +1,4 @@
+//go:build darwin || (linux && !baremetal)
 // +build darwin linux,!baremetal
 
 // Portions copyright 2009 The Go Authors. All rights reserved.

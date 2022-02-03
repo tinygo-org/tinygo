@@ -1,3 +1,4 @@
+//go:build m5stack
 // +build m5stack
 
 package machine

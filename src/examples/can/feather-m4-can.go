@@ -1,3 +1,4 @@
+//go:build feather_m4_can
 // +build feather_m4_can
 
 package main

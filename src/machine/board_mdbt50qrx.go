@@ -1,3 +1,4 @@
+//go:build mdbt50qrx
 // +build mdbt50qrx
 
 package machine

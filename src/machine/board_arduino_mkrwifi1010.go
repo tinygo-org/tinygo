@@ -1,3 +1,4 @@
+//go:build arduino_mkrwifi1010
 // +build arduino_mkrwifi1010
 
 // This contains the pin mappings for the Arduino MKR WiFi 1010 board.

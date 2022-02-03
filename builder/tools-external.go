@@ -1,3 +1,4 @@
+//go:build !byollvm
 // +build !byollvm
 
 package builder

@@ -1,3 +1,4 @@
+//go:build nrf52840
 // +build nrf52840
 
 package machine

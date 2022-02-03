@@ -1,3 +1,4 @@
+//go:build clue_alpha
 // +build clue_alpha
 
 package machine

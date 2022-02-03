@@ -1,3 +1,4 @@
+//go:build gc.none
 // +build gc.none
 
 package runtime

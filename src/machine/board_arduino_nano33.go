@@ -1,3 +1,4 @@
+//go:build arduino_nano33
 // +build arduino_nano33
 
 // This contains the pin mappings for the Arduino Nano33 IoT board.

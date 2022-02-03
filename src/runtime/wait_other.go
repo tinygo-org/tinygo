@@ -1,5 +1,5 @@
-// +build !tinygo.riscv
-// +build !cortexm
+//go:build !tinygo.riscv && !cortexm
+// +build !tinygo.riscv,!cortexm
 
 package runtime
 

@@ -1,3 +1,4 @@
+//go:build microbit_v2
 // +build microbit_v2
 
 package machine

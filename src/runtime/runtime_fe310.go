@@ -1,3 +1,4 @@
+//go:build fe310
 // +build fe310
 
 // This file implements target-specific things for the FE310 chip as used in the

@@ -1,3 +1,4 @@
+//go:build nucleof103rb
 // +build nucleof103rb
 
 package machine

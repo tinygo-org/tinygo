@@ -1,3 +1,4 @@
+//go:build cortexm
 // +build cortexm
 
 package runtime

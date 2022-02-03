@@ -1,3 +1,4 @@
+//go:build nano_rp2040
 // +build nano_rp2040
 
 // This contains the pin mappings for the Arduino Nano RP2040 Connect board.

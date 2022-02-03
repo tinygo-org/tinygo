@@ -1,3 +1,4 @@
+//go:build bluepill
 // +build bluepill
 
 package main
