@@ -418,10 +418,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		var initialCFlags []string
 		initialCFlags = append(initialCFlags, p.program.config.CFlags()...)
 		initialCFlags = append(initialCFlags, "-I"+p.Dir)
-		if p.program.clangHeaders != "" {
-			initialCFlags = append(initialCFlags, "-isystem", p.program.clangHeaders)
-		}
-		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.program.fset, initialCFlags)
+		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.program.fset, initialCFlags, p.program.clangHeaders)
 		p.CFlags = append(initialCFlags, cflags...)
 		p.CGoHeaders = headerCode
 		for path, hash := range accessedFiles {
