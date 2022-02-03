@@ -50,6 +50,29 @@ else
     LLVM_OPTION += '-DLLVM_ENABLE_ASSERTIONS=OFF'
 endif
 
+# Cross compiling support.
+ifneq ($(CROSS),)
+    CC = $(CROSS)-gcc
+    CXX = $(CROSS)-g++
+    LLVM_OPTION += \
+        -DCMAKE_C_COMPILER=$(CC) \
+        -DCMAKE_CXX_COMPILER=$(CXX) \
+        -DLLVM_DEFAULT_TARGET_TRIPLE=$(CROSS) \
+        -DCROSS_TOOLCHAIN_FLAGS_NATIVE="-UCMAKE_C_COMPILER;-UCMAKE_CXX_COMPILER"
+    ifeq ($(CROSS), arm-linux-gnueabihf)
+        # Assume we're building on a Debian-like distro, with QEMU installed.
+        LLVM_CONFIG_PREFIX = qemu-arm -L /usr/arm-linux-gnueabihf/
+        # The CMAKE_SYSTEM_NAME flag triggers cross compilation mode.
+        LLVM_OPTION += \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DLLVM_TARGET_ARCH=ARM
+        GOENVFLAGS = GOARCH=arm CC=$(CC) CXX=$(CXX) CGO_ENABLED=1
+        BINARYEN_OPTION += -DCMAKE_C_COMPILER=$(CC) -DCMAKE_CXX_COMPILER=$(CXX)
+    else
+        $(error Unknown cross compilation target: $(CROSS))
+    endif
+endif
+
 .PHONY: all tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-nxp gen-device-avr gen-device-rp
 
 LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines coverage debuginfodwarf debuginfopdb executionengine frontendopenmp instrumentation interpreter ipo irreader libdriver linker lto mc mcjit objcarcopts option profiledata scalaropts support target windowsmanifest
@@ -110,9 +133,9 @@ NINJA_BUILD_TARGETS = clang llvm-config llvm-ar llvm-nm $(addprefix lib/lib,$(ad
 
 # For static linking.
 ifneq ("$(wildcard $(LLVM_BUILDDIR)/bin/llvm-config*)","")
-    CGO_CPPFLAGS+=$(shell $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(LLVM_BUILDDIR))/tools/clang/include -I$(abspath $(CLANG_SRC))/include -I$(abspath $(LLD_SRC))/include
+    CGO_CPPFLAGS+=$(shell $(LLVM_CONFIG_PREFIX) $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(LLVM_BUILDDIR))/tools/clang/include -I$(abspath $(CLANG_SRC))/include -I$(abspath $(LLD_SRC))/include
     CGO_CXXFLAGS=-std=c++14
-    CGO_LDFLAGS+=-L$(abspath $(LLVM_BUILDDIR)/lib) -lclang $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
+    CGO_LDFLAGS+=-L$(abspath $(LLVM_BUILDDIR)/lib) -lclang $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_CONFIG_PREFIX) $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
 endif
 
 clean:
@@ -208,8 +231,7 @@ lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 # Build the Go compiler.
 tinygo:
 	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  make llvm-source"; echo "  make $(LLVM_BUILDDIR)"; exit 1; fi
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags byollvm -ldflags="-X github.com/tinygo-org/tinygo/goenv.GitSha1=`git rev-parse --short HEAD`" .
-
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GOENVFLAGS) $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags byollvm -ldflags="-X github.com/tinygo-org/tinygo/goenv.GitSha1=`git rev-parse --short HEAD`" .
 test: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=20m -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
@@ -694,12 +716,18 @@ endif
 	./build/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/picolibc picolibc
 	./build/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/picolibc    picolibc
 
-release: build/release
+release:
 	tar -czf build/release.tar.gz -C build/release tinygo
 
-deb: build/release
+DEB_ARCH ?= native
+deb:
 	@mkdir -p build/release-deb/usr/local/bin
 	@mkdir -p build/release-deb/usr/local/lib
 	cp -ar build/release/tinygo build/release-deb/usr/local/lib/tinygo
 	ln -sf ../lib/tinygo/bin/tinygo build/release-deb/usr/local/bin/tinygo
-	fpm -f -s dir -t deb -n tinygo -v $(shell grep "const Version = " goenv/version.go | awk '{print $$NF}') -m '@tinygo-org' --description='TinyGo is a Go compiler for small places.' --license='BSD 3-Clause' --url=https://tinygo.org/ --deb-changelog CHANGELOG.md -p build/release.deb -C ./build/release-deb
+	fpm -f -s dir -t deb -n tinygo -a $(DEB_ARCH) -v $(shell grep "const Version = " goenv/version.go | awk '{print $$NF}') -m '@tinygo-org' --description='TinyGo is a Go compiler for small places.' --license='BSD 3-Clause' --url=https://tinygo.org/ --deb-changelog CHANGELOG.md -p build/release.deb -C ./build/release-deb
+
+ifneq ($(RELEASEONLY), 1)
+release: build/release
+deb: build/release
+endif
