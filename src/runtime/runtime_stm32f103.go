@@ -1,3 +1,4 @@
+//go:build stm32 && stm32f103
 // +build stm32,stm32f103
 
 package runtime

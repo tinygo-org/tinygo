@@ -1,3 +1,4 @@
+//go:build nrf52
 // +build nrf52
 
 package machine

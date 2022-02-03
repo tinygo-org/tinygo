@@ -1,3 +1,4 @@
+//go:build (go1.16 && baremetal) || (go1.16 && js) || (go1.16 && wasi) || (go1.16 && windows)
 // +build go1.16,baremetal go1.16,js go1.16,wasi go1.16,windows
 
 // Copyright 2009 The Go Authors. All rights reserved.

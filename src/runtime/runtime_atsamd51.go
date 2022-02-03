@@ -1,3 +1,4 @@
+//go:build (sam && atsamd51) || (sam && atsame5x)
 // +build sam,atsamd51 sam,atsame5x
 
 package runtime

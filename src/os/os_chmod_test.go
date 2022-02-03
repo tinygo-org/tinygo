@@ -1,3 +1,4 @@
+//go:build !baremetal && !js && !wasi
 // +build !baremetal,!js,!wasi
 
 // Copyright 2009 The Go Authors. All rights reserved.

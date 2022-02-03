@@ -1,3 +1,4 @@
+//go:build feather_nrf52840_sense
 // +build feather_nrf52840_sense
 
 package machine

@@ -1,3 +1,4 @@
+//go:build tinygo.riscv64
 // +build tinygo.riscv64
 
 package runtime

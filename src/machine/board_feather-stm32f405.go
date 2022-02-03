@@ -1,3 +1,4 @@
+//go:build feather_stm32f405
 // +build feather_stm32f405
 
 package machine

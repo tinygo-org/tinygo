@@ -1,3 +1,4 @@
+//go:build xtensa
 // +build xtensa
 
 package interrupt

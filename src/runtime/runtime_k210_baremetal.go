@@ -1,3 +1,4 @@
+//go:build k210 && !qemu
 // +build k210,!qemu
 
 package runtime

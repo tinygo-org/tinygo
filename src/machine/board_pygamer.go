@@ -1,3 +1,4 @@
+//go:build sam && atsamd51 && pygamer
 // +build sam,atsamd51,pygamer
 
 package machine

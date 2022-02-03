@@ -1,3 +1,4 @@
+//go:build nxp && mk66f18 && teensy36
 // +build nxp,mk66f18,teensy36
 
 package machine

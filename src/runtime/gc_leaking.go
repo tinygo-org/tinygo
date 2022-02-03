@@ -1,3 +1,4 @@
+//go:build gc.leaking
 // +build gc.leaking
 
 package runtime

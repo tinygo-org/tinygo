@@ -1,3 +1,4 @@
+//go:build avr && atmega328pb
 // +build avr,atmega328pb
 
 package machine

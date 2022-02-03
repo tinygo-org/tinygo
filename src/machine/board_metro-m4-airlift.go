@@ -1,3 +1,4 @@
+//go:build metro_m4_airlift
 // +build metro_m4_airlift
 
 package machine

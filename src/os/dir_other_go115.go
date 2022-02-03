@@ -1,3 +1,4 @@
+//go:build !go1.16
 // +build !go1.16
 
 // Copyright 2009 The Go Authors. All rights reserved.

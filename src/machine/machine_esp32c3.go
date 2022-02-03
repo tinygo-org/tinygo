@@ -1,3 +1,4 @@
+//go:build esp32c3
 // +build esp32c3
 
 package machine

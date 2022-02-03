@@ -1,3 +1,4 @@
+//go:build pinetime_devkit0
 // +build pinetime_devkit0
 
 package machine

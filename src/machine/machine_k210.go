@@ -1,3 +1,4 @@
+//go:build k210
 // +build k210
 
 package machine

@@ -1,3 +1,4 @@
+//go:build feather_rp2040
 // +build feather_rp2040
 
 package machine

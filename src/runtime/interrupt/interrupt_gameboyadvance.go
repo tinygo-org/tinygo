@@ -1,3 +1,4 @@
+//go:build gameboyadvance
 // +build gameboyadvance
 
 package interrupt

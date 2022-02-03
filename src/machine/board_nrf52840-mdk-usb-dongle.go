@@ -1,3 +1,4 @@
+//go:build nrf52840_mdk_usb_dongle
 // +build nrf52840_mdk_usb_dongle
 
 package machine

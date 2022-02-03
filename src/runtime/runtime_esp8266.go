@@ -1,3 +1,4 @@
+//go:build esp8266
 // +build esp8266
 
 package runtime

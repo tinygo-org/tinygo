@@ -1,3 +1,4 @@
+//go:build x9pro
 // +build x9pro
 
 package machine

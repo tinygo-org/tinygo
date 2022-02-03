@@ -1,3 +1,4 @@
+//go:build nodemcu
 // +build nodemcu
 
 // Pinout for the NodeMCU dev kit.

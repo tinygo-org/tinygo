@@ -1,3 +1,4 @@
+//go:build linux && !baremetal
 // +build linux,!baremetal
 
 // Copyright 2009 The Go Authors. All rights reserved.

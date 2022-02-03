@@ -1,3 +1,4 @@
+//go:build baremetal || js
 // +build baremetal js
 
 package syscall

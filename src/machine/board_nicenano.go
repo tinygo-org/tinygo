@@ -1,3 +1,4 @@
+//go:build nicenano
 // +build nicenano
 
 package machine

@@ -1,3 +1,4 @@
+//go:build arduino_nano
 // +build arduino_nano
 
 package machine

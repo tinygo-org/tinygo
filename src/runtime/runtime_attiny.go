@@ -1,3 +1,4 @@
+//go:build avr && attiny
 // +build avr,attiny
 
 package runtime

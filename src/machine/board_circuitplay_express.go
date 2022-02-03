@@ -1,3 +1,4 @@
+//go:build circuitplay_express
 // +build circuitplay_express
 
 package machine

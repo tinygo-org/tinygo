@@ -1,3 +1,4 @@
+//go:build esp32_coreboard_v2
 // +build esp32_coreboard_v2
 
 package machine

@@ -1,3 +1,4 @@
+//go:build maixbit
 // +build maixbit
 
 package machine

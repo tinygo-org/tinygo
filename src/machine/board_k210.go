@@ -1,3 +1,4 @@
+//go:build maixbit
 // +build maixbit
 
 // Chip datasheet: https://s3.cn-north-1.amazonaws.com.cn/dl.kendryte.com/documents/kendryte_datasheet_20181011163248_en.pdf

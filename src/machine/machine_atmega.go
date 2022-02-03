@@ -1,3 +1,4 @@
+//go:build avr && atmega
 // +build avr,atmega
 
 package machine

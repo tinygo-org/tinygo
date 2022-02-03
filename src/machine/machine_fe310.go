@@ -1,3 +1,4 @@
+//go:build fe310
 // +build fe310
 
 package machine

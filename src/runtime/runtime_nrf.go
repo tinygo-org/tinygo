@@ -1,3 +1,4 @@
+//go:build nrf
 // +build nrf
 
 package runtime

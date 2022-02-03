@@ -1,3 +1,4 @@
+//go:build stm32f4disco
 // +build stm32f4disco
 
 package main

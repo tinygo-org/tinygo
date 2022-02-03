@@ -1,3 +1,4 @@
+//go:build sam && atsamd21 && arduino_zero
 // +build sam,atsamd21,arduino_zero
 
 package machine

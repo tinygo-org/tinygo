@@ -1,3 +1,4 @@
+//go:build baremetal && serial.none
 // +build baremetal,serial.none
 
 package machine

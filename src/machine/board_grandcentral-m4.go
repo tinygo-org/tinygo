@@ -1,3 +1,4 @@
+//go:build grandcentral_m4
 // +build grandcentral_m4
 
 package machine

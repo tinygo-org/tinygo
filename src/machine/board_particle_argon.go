@@ -1,3 +1,4 @@
+//go:build particle_argon
 // +build particle_argon
 
 package machine

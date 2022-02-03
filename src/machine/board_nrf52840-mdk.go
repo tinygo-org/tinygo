@@ -1,3 +1,4 @@
+//go:build nrf52840_mdk
 // +build nrf52840_mdk
 
 package machine

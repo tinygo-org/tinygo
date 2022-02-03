@@ -1,3 +1,4 @@
+//go:build atmega || esp || nrf || sam || sifive || stm32 || k210 || nxp || rp2040
 // +build atmega esp nrf sam sifive stm32 k210 nxp rp2040
 
 package machine

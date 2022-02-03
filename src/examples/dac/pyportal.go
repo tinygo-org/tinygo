@@ -1,3 +1,4 @@
+//go:build pyportal
 // +build pyportal
 
 package main

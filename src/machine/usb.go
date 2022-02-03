@@ -1,3 +1,4 @@
+//go:build sam || nrf52840
 // +build sam nrf52840
 
 package machine

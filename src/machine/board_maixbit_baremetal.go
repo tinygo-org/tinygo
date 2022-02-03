@@ -1,3 +1,4 @@
+//go:build k210 && maixbit
 // +build k210,maixbit
 
 package machine

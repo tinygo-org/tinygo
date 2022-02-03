@@ -1,3 +1,4 @@
+//go:build itsybitsy_nrf52840
 // +build itsybitsy_nrf52840
 
 package machine

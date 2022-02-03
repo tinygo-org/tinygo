@@ -1,3 +1,4 @@
+//go:build sam && atsamd21 && feather_m0
 // +build sam,atsamd21,feather_m0
 
 package machine

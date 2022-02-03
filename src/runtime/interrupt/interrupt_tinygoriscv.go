@@ -1,3 +1,4 @@
+//go:build tinygo.riscv
 // +build tinygo.riscv
 
 package interrupt

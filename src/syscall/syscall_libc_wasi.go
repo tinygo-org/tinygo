@@ -1,3 +1,4 @@
+//go:build wasi
 // +build wasi
 
 package syscall

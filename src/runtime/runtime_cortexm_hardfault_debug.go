@@ -1,3 +1,4 @@
+//go:build cortexm && !atsamd21 && !nrf51
 // +build cortexm,!atsamd21,!nrf51
 
 package runtime

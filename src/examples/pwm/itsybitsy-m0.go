@@ -1,3 +1,4 @@
+//go:build itsybitsy_m0
 // +build itsybitsy_m0
 
 package main

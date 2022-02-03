@@ -1,3 +1,4 @@
+//go:build nucleof722ze
 // +build nucleof722ze
 
 package machine
