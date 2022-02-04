@@ -9,12 +9,21 @@ on:
 
 jobs:
   build-windows:
+    name: build-windows with Go ${{ matrix.go-version }}
     runs-on: windows-2019
+    strategy:
+      matrix:
+        include:
+          - go-version: '1.17'
+            go-stable: true
+          - go-version: '1.18'
+            go-stable: false
     steps:
       - name: Install Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.17'
+          go-version: ${{ matrix.go-version }}
+          stable: ${{ matrix.go-stable }}
       - uses: brechtm/setup-scoop@v2
       - name: Install Dependencies
         shell: bash

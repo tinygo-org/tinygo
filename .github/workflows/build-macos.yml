@@ -9,13 +9,21 @@ on:
 
 jobs:
   build-macos:
-    name: build-macos
+    name: build-macos with Go ${{ matrix.go-version }}
     runs-on: macos-10.15
+    strategy:
+      matrix:
+        include:
+          - go-version: '1.17'
+            go-stable: true
+          - go-version: '1.18'
+            go-stable: false
     steps:
       - name: Install Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.17'
+          go-version: ${{ matrix.go-version }}
+          stable: ${{ matrix.go-stable }}
       - name: Install Dependencies
         shell: bash
         run: |
