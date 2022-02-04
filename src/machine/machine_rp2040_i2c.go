@@ -6,7 +6,7 @@ package machine
 import (
 	"device/rp"
 	"errors"
-	"strconv"
+	"internal/itoa"
 )
 
 // I2C on the RP2040.
@@ -289,7 +289,6 @@ func (i2c *I2C) tx(addr uint8, tx []byte, nostop bool, timeout uint64) (err erro
 		for !i2c.interrupted(rp.I2C0_IC_RAW_INTR_STAT_TX_EMPTY) {
 			if ticks() > deadline {
 				i2c.restartOnNext = nostop
-				println(1)
 				return errI2CWriteTimeout // If there was a timeout, don't attempt to do anything else.
 			}
 		}
@@ -308,7 +307,6 @@ func (i2c *I2C) tx(addr uint8, tx []byte, nostop bool, timeout uint64) (err erro
 			// to take care of the abort.
 			for !i2c.interrupted(rp.I2C0_IC_RAW_INTR_STAT_STOP_DET) {
 				if ticks() > deadline {
-					println(2)
 					i2c.restartOnNext = nostop
 					return errI2CWriteTimeout
 				}
@@ -330,7 +328,7 @@ func (i2c *I2C) tx(addr uint8, tx []byte, nostop bool, timeout uint64) (err erro
 			fallthrough
 		default:
 			// panic("unknown i2c abortReason:" + strconv.Itoa(abortReason)
-			err = makeI2CBuffError(byteCtr)
+			err = makeI2CAbortError(abortReason)
 		}
 	}
 
@@ -396,7 +394,7 @@ func (i2c *I2C) rx(addr uint8, rx []byte, nostop bool, timeout uint64) (err erro
 			err = ErrI2CGeneric
 		default:
 			// undefined abort sequence
-			err = makeI2CBuffError(byteCtr)
+			err = makeI2CAbortError(abortReason)
 		}
 	}
 
@@ -438,15 +436,15 @@ func (i2c *I2C) interrupted(mask uint32) bool {
 	return reg&mask == mask
 }
 
-type i2cBuffError int
+type i2cAbortError uint32
 
-func (b i2cBuffError) Error() string {
-	return "i2c err after addr ack at data " + strconv.Itoa(int(b))
+func (b i2cAbortError) Error() string {
+	return "i2c abort, reason " + itoa.Uitoa(uint(b))
 }
 
 //go:inline
-func makeI2CBuffError(idx int) error {
-	return i2cBuffError(idx)
+func makeI2CAbortError(reason uint32) error {
+	return i2cAbortError(reason)
 }
 
 //go:inline
