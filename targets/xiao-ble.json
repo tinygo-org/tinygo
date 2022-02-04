@@ -1,0 +1,12 @@
+{
+	"inherits": ["nrf52840"],
+	"build-tags": ["xiao_ble", "softdevice", "s140v7"],
+	"serial": "uart",
+	"serial-port": ["acm:2886:8045", "acm:2886:0045"],
+	"flash-method": "msd",
+	"msd-volume-name": "XIAO-SENSE",
+	"msd-firmware-name": "firmware.uf2",
+	"binary-format": "uf2",
+	"uf2-family-id": "0xADA52840",
+	"linkerscript": "targets/xiao-ble.ld"
+}
