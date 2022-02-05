@@ -1,6 +1,6 @@
 {
 	"inherits": ["riscv32"],
-	"features": "+a,+c,+m,-relax,-save-restore",
+	"features": "+a,+c,+m",
 	"build-tags": ["virt", "qemu"],
 	"default-stack-size": 4096,
 	"linkerscript": "targets/riscv-qemu.ld",

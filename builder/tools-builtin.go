@@ -54,7 +54,7 @@ func RunTool(tool string, args ...string) error {
 		ok = C.tinygo_clang_driver(C.int(len(args)), (**C.char)(buf))
 	case "ld.lld":
 		switch linker {
-		case "darwinnew":
+		case "darwin", "darwinnew": // darwinnew is only needed for LLVM 12 and below
 			ok = C.tinygo_link_macho(C.int(len(args)), (**C.char)(buf))
 		case "elf":
 			ok = C.tinygo_link_elf(C.int(len(args)), (**C.char)(buf))

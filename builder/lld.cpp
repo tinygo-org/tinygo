@@ -8,22 +8,22 @@ extern "C" {
 
 bool tinygo_link_elf(int argc, char **argv) {
 	std::vector<const char*> args(argv, argv + argc);
-	return lld::elf::link(args, false, llvm::outs(), llvm::errs());
+	return lld::elf::link(args, llvm::outs(), llvm::errs(), false, false);
 }
 
 bool tinygo_link_macho(int argc, char **argv) {
 	std::vector<const char*> args(argv, argv + argc);
-	return lld::macho::link(args, false, llvm::outs(), llvm::errs());
+	return lld::macho::link(args, llvm::outs(), llvm::errs(), false, false);
 }
 
 bool tinygo_link_mingw(int argc, char **argv) {
 	std::vector<const char*> args(argv, argv + argc);
-	return lld::mingw::link(args, false, llvm::outs(), llvm::errs());
+	return lld::mingw::link(args, llvm::outs(), llvm::errs(), false, false);
 }
 
 bool tinygo_link_wasm(int argc, char **argv) {
 	std::vector<const char*> args(argv, argv + argc);
-	return lld::wasm::link(args, false, llvm::outs(), llvm::errs());
+	return lld::wasm::link(args, llvm::outs(), llvm::errs(), false, false);
 }
 
 } // external "C"

@@ -277,8 +277,12 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		spec.Libc = "darwin-libSystem"
 		arch := strings.Split(triple, "-")[0]
 		platformVersion := strings.TrimPrefix(strings.Split(triple, "-")[2], "macosx")
+		flavor := "darwin"
+		if strings.Split(llvm.Version, ".")[0] < "13" {
+			flavor = "darwinnew" // needed on LLVM 12 and below
+		}
 		spec.LDFlags = append(spec.LDFlags,
-			"-flavor", "darwinnew",
+			"-flavor", flavor,
 			"-dead_strip",
 			"-arch", arch,
 			"-platform_version", "macos", platformVersion, platformVersion,

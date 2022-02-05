@@ -10,7 +10,7 @@ LLD_SRC ?= $(LLVM_PROJECTDIR)/lld
 
 # Try to autodetect LLVM build tools.
 # Versions are listed here in descending priority order.
-LLVM_VERSIONS = 13 12 11
+LLVM_VERSIONS = 14 13 12 11
 errifempty = $(if $(1),$(1),$(error $(2)))
 detect = $(shell which $(call errifempty,$(firstword $(foreach p,$(2),$(shell command -v $(p) 2> /dev/null && echo $(p)))),failed to locate $(1) at any of: $(2)))
 toolSearchPathsVersion = $(1)-$(2)
@@ -91,11 +91,11 @@ CLANG_LIB_NAMES = clangAnalysis clangAST clangASTMatchers clangBasic clangCodeGe
 CLANG_LIBS = $(START_GROUP) $(addprefix -l,$(CLANG_LIB_NAMES)) $(END_GROUP) -lstdc++
 
 # Libraries that should be linked in for the statically linked LLD.
-LLD_LIB_NAMES = lldCOFF lldCommon lldCore lldDriver lldELF lldMachO2 lldMinGW lldReaderWriter lldWasm lldYAML
+LLD_LIB_NAMES = lldCOFF lldCommon lldELF lldMachO lldMinGW lldWasm
 LLD_LIBS = $(START_GROUP) $(addprefix -l,$(LLD_LIB_NAMES)) $(END_GROUP)
 
 # Other libraries that are needed to link TinyGo.
-EXTRA_LIB_NAMES = LLVMInterpreter
+EXTRA_LIB_NAMES = LLVMInterpreter LLVMMCA LLVMX86TargetMCA
 
 # All libraries to be built and linked with the tinygo binary (lib/lib*.a).
 LIB_NAMES = clang $(CLANG_LIB_NAMES) $(LLD_LIB_NAMES) $(EXTRA_LIB_NAMES)
@@ -175,7 +175,7 @@ gen-device-rp: build/gen-device-svd
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/llvm:
-	git clone -b xtensa_release_13.0.0 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b xtensa_release_14.0.0-patched --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/llvm
 
 # Configure LLVM.

@@ -35,7 +35,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-source
         with:
-          key: llvm-source-13-windows-v2
+          key: llvm-source-14-windows-v1
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -49,7 +49,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-build
         with:
-          key: llvm-build-13-windows-v2
+          key: llvm-build-14-windows-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -66,7 +66,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-wasi-libc
         with:
-          key: wasi-libc-sysroot-v2
+          key: wasi-libc-sysroot-v3
           path: lib/wasi-libc/sysroot
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
