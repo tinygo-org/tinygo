@@ -3,6 +3,10 @@
 
 package syscall
 
+import (
+	"internal/itoa"
+)
+
 // A Signal is a number describing a process signal.
 // It implements the os.Signal interface.
 type Signal int
@@ -16,6 +20,20 @@ const (
 	SIGQUIT
 	SIGTERM
 )
+
+func (s Signal) Signal() {}
+
+func (s Signal) String() string {
+	if 0 <= s && int(s) < len(signals) {
+		str := signals[s]
+		if str != "" {
+			return str
+		}
+	}
+	return "signal " + itoa.Itoa(int(s))
+}
+
+var signals = [...]string{}
 
 // File system
 

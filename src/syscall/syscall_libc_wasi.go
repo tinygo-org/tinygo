@@ -4,6 +4,7 @@
 package syscall
 
 import (
+	"internal/itoa"
 	"unsafe"
 )
 
@@ -19,6 +20,20 @@ const (
 	SIGQUIT = 3
 	SIGTERM = 15
 )
+
+func (s Signal) Signal() {}
+
+func (s Signal) String() string {
+	if 0 <= s && int(s) < len(signals) {
+		str := signals[s]
+		if str != "" {
+			return str
+		}
+	}
+	return "signal " + itoa.Itoa(int(s))
+}
+
+var signals = [...]string{}
 
 const (
 	Stdin  = 0
