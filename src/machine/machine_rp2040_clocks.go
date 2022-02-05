@@ -149,16 +149,13 @@ func (clk *clock) configure(src, auxsrc, srcFreq, freq uint32) {
 			// Note XOSC_COUNT is not helpful here because XOSC is not
 			// necessarily running, nor is timer... so, 3 cycles per loop:
 			delayCyc := configuredFreq[clkSys]/configuredFreq[clk.cix] + 1
-			arm.AsmFull(
-				`
-				ldr r0, {cyc}
-				1:
-				subs r0, #1
-				bne 1b 
-             	`,
-				map[string]interface{}{
-					"cyc": &delayCyc,
-				})
+			for delayCyc != 0 {
+				// This could be done more efficiently but TinyGo inline
+				// assembly is not yet capable enough to express that. In the
+				// meantime, this forces at least 3 cycles per loop.
+				delayCyc--
+				arm.Asm("nop\nnop\nnop")
+			}
 		}
 	}
 
