@@ -66,7 +66,6 @@ func TestBuild(t *testing.T) {
 		"stdlib.go",
 		"string.go",
 		"structs.go",
-		"testing.go",
 		"zeroalloc.go",
 	}
 	_, minor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
@@ -75,6 +74,11 @@ func TestBuild(t *testing.T) {
 	}
 	if minor >= 17 {
 		tests = append(tests, "go1.17.go")
+	}
+	if minor >= 18 {
+		tests = append(tests, "testing_go1.18.go")
+	} else {
+		tests = append(tests, "testing_other.go")
 	}
 
 	if *testTarget != "" {
@@ -314,6 +318,8 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	txtpath := path[:len(path)-3] + ".txt"
 	if path[len(path)-1] == '/' {
 		txtpath = path + "out.txt"
+	} else if strings.HasPrefix(name, "testing_") {
+		txtpath = TESTDATA + "/testing.txt"
 	}
 	expected, err := ioutil.ReadFile(txtpath)
 	if err != nil {
