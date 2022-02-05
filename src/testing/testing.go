@@ -430,15 +430,6 @@ type testDeps interface {
 	MatchString(pat, str string) (bool, error)
 }
 
-func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenchmark, examples []InternalExample) *M {
-	Init()
-	return &M{
-		Tests:      tests,
-		Benchmarks: benchmarks,
-		deps:       deps.(testDeps),
-	}
-}
-
 // Run runs the tests. It returns an exit code to pass to os.Exit.
 func (m *M) Run() (code int) {
 	defer func() {

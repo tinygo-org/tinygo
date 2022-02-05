@@ -230,6 +230,7 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"device/":               false,
 		"examples/":             false,
 		"internal/":             true,
+		"internal/fuzz/":        false,
 		"internal/bytealg/":     false,
 		"internal/reflectlite/": false,
 		"internal/task/":        false,
