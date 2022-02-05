@@ -3,6 +3,10 @@
 
 package syscall
 
+import (
+	"internal/itoa"
+)
+
 // Most code here has been copied from the Go sources:
 //   https://github.com/golang/go/blob/go1.12/src/syscall/syscall_js.go
 // It has the following copyright note:
@@ -24,6 +28,20 @@ const (
 	SIGQUIT
 	SIGTERM
 )
+
+func (s Signal) Signal() {}
+
+func (s Signal) String() string {
+	if 0 <= s && int(s) < len(signals) {
+		str := signals[s]
+		if str != "" {
+			return str
+		}
+	}
+	return "signal " + itoa.Itoa(int(s))
+}
+
+var signals = [...]string{}
 
 // File system
 
