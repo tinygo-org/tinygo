@@ -6,6 +6,7 @@ import (
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
+	"tinygo.org/x/go-llvm"
 )
 
 // Create a job that builds a Darwin libSystem.dylib stub library. This library
@@ -38,8 +39,12 @@ func makeDarwinLibSystemJob(config *compileopts.Config, tmpdir string) *compileJ
 
 			// Link object file to dynamic library.
 			platformVersion := strings.TrimPrefix(strings.Split(config.Triple(), "-")[2], "macosx")
+			flavor := "darwin"
+			if strings.Split(llvm.Version, ".")[0] < "13" {
+				flavor = "darwinnew" // needed on LLVM 12 and below
+			}
 			flags = []string{
-				"-flavor", "darwinnew",
+				"-flavor", flavor,
 				"-demangle",
 				"-dynamic",
 				"-dylib",

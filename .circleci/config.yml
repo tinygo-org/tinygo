@@ -22,12 +22,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-13-v3
+            - llvm-source-14-v1
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-13-v3
+          key: llvm-source-14-v1
           paths:
             - llvm-project/clang/lib/Headers
             - llvm-project/clang/include
@@ -86,10 +86,10 @@ commands:
       - run: go install -tags=llvm<<parameters.llvm>> .
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-systemclang-v4
+            - wasi-libc-sysroot-systemclang-v5
       - run: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-systemclang-v4
+          key: wasi-libc-sysroot-systemclang-v5
           paths:
             - lib/wasi-libc/sysroot
       - run: make gen-device -j4
