@@ -764,8 +764,11 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 
 	// UART RX/TX
 	case PinModeUARTRX, PinModeUARTTX:
-		mode := uint32(0x2) // UART is always alternate function 2 on Teensy 4.0
-		// TODO: Teensy 4.1 has a UART (LPUART5) with alternate function 1
+		mode := uint32(0x2) // UART is usually alternate function 2 on Teensy 4.x
+		// Teensy 4.1 has a UART (LPUART5) with alternate function 1
+		if p == PB28 || p == PB29 {
+			mode = 0x1
+		}
 		return mode
 
 	// SPI SDI
