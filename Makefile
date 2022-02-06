@@ -260,10 +260,12 @@ TEST_PACKAGES := \
 	$(TEST_PACKAGES_BASE)
 
 # archive/zip requires ReadAt, which is not yet supported on windows
+# io/fs requires os.ReadDir, which is not yet supported on windows or wasi
 ifneq ($(OS),Windows_NT)
 TEST_PACKAGES := \
 	$(TEST_PACKAGES) \
-	archive/zip
+	archive/zip \
+	io/fs
 endif
 
 # Standard library packages that pass tests on wasi
