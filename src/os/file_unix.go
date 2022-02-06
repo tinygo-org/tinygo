@@ -38,8 +38,8 @@ type file struct {
 	dirinfo *dirInfo // nil unless directory being read
 }
 
-func NewFile(fd FileHandle, name string) *File {
-	return &File{&file{fd, name, nil}}
+func NewFile(fd uintptr, name string) *File {
+	return &File{&file{unixFileHandle(fd), name, nil}}
 }
 
 func Pipe() (r *File, w *File, err error) {
@@ -48,8 +48,8 @@ func Pipe() (r *File, w *File, err error) {
 	if err != nil {
 		return
 	}
-	r = NewFile(unixFileHandle(p[0]), "|0")
-	w = NewFile(unixFileHandle(p[1]), "|1")
+	r = NewFile(uintptr(p[0]), "|0")
+	w = NewFile(uintptr(p[1]), "|1")
 	return
 }
 
