@@ -13,12 +13,12 @@ import (
 type Signal int
 
 const (
-	SIGCHLD = 16
-	SIGINT  = 2
-	SIGKILL = 9
-	SIGTRAP = 5
-	SIGQUIT = 3
-	SIGTERM = 15
+	SIGCHLD Signal = 16
+	SIGINT  Signal = 2
+	SIGKILL Signal = 9
+	SIGTRAP Signal = 5
+	SIGQUIT Signal = 3
+	SIGTERM Signal = 15
 )
 
 func (s Signal) Signal() {}
