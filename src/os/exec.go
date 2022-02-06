@@ -55,3 +55,7 @@ func (p *Process) Wait() (*ProcessState, error) {
 func (p *Process) Kill() error {
 	return ErrNotImplemented
 }
+
+func (p *Process) Signal(sig Signal) error {
+	return ErrNotImplemented
+}
