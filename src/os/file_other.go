@@ -10,9 +10,9 @@ import (
 // Stdin, Stdout, and Stderr are open Files pointing to the standard input,
 // standard output, and standard error file descriptors.
 var (
-	Stdin  = NewFile(stdioFileHandle(0), "/dev/stdin")
-	Stdout = NewFile(stdioFileHandle(1), "/dev/stdout")
-	Stderr = NewFile(stdioFileHandle(2), "/dev/stderr")
+	Stdin  = NewFile(0, "/dev/stdin")
+	Stdout = NewFile(1, "/dev/stdout")
+	Stderr = NewFile(2, "/dev/stderr")
 )
 
 // isOS indicates whether we're running on a real operating system with
@@ -32,8 +32,8 @@ type file struct {
 	name   string
 }
 
-func NewFile(fd FileHandle, name string) *File {
-	return &File{&file{fd, name}}
+func NewFile(fd uintptr, name string) *File {
+	return &File{&file{stdioFileHandle(fd), name}}
 }
 
 // Read is unsupported on this system.

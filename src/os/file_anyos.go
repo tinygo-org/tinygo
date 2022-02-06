@@ -21,9 +21,9 @@ func init() {
 // Stdin, Stdout, and Stderr are open Files pointing to the standard input,
 // standard output, and standard error file descriptors.
 var (
-	Stdin  = NewFile(unixFileHandle(syscall.Stdin), "/dev/stdin")
-	Stdout = NewFile(unixFileHandle(syscall.Stdout), "/dev/stdout")
-	Stderr = NewFile(unixFileHandle(syscall.Stderr), "/dev/stderr")
+	Stdin  = NewFile(uintptr(syscall.Stdin), "/dev/stdin")
+	Stdout = NewFile(uintptr(syscall.Stdout), "/dev/stdout")
+	Stderr = NewFile(uintptr(syscall.Stderr), "/dev/stderr")
 )
 
 const DevNull = "/dev/null"
@@ -87,9 +87,9 @@ func (fs unixFilesystem) Remove(path string) error {
 	return &PathError{Op: "remove", Path: path, Err: e}
 }
 
-func (fs unixFilesystem) OpenFile(path string, flag int, perm FileMode) (FileHandle, error) {
+func (fs unixFilesystem) OpenFile(path string, flag int, perm FileMode) (uintptr, error) {
 	fp, err := syscall.Open(path, flag, uint32(perm))
-	return unixFileHandle(fp), handleSyscallError(err)
+	return uintptr(fp), handleSyscallError(err)
 }
 
 // unixFileHandle is a Unix file pointer with associated methods that implement

@@ -28,7 +28,7 @@ type mountPoint struct {
 // WARNING: this interface is not finalized and may change in a future version.
 type Filesystem interface {
 	// OpenFile opens the named file.
-	OpenFile(name string, flag int, perm FileMode) (FileHandle, error)
+	OpenFile(name string, flag int, perm FileMode) (uintptr, error)
 
 	// Mkdir creates a new directoy with the specified permission (before
 	// umask). Some filesystems may not support directories or permissions.
