@@ -54,6 +54,19 @@ const (
 	D39 = PA29 // [AD_B1_13]:  FLEXSPIA_DATA00  ACMP_OUT01       LPSPI3_SDI           SAI1_TX_DATA00        CSI_DATA04            GPIO1_IO29   USDHC2_DATA5          KPP_COL01             ENET2_1588_EVENT2_IN   FLEXIO3_FLEXIO13
 	D40 = PA20 // [AD_B1_04]:  FLEXSPIB_DATA03  ENET_MDC         LPUART3_CTS_B        SPDIF_SR_CLK          CSI_PIXCLK            GPIO1_IO20   USDHC2_DATA0          KPP_ROW05             GPT2_CAPTURE2          FLEXIO3_FLEXIO04
 	D41 = PA21 // [AD_B1_05]:  FLEXSPIB_DATA02  ENET_MDIO        LPUART3_RTS_B        SPDIF_OUT             CSI_MCLK              GPIO1_IO21   USDHC2_DATA1          KPP_COL05             GPT2_COMPARE1          FLEXIO3_FLEXIO05
+	D42 = PC15 // [SD_B0_03]:  USDHC1_DATA1     FLEXPWM1_PWMB01  LPUART8_RTS_B        XBAR1_INOUT07         LPSPI1_SDI            GPIO3_IO15   ENET2_RDATA00         SEMC_CLK6              ~                      ~
+	D43 = PC14 // [SD_B0_02]:  USDHC1_DATA0     FLEXPWM1_PWMA01  LPUART8_CTS_B        XBAR1_INOUT06         LPSPI1_SDO            GPIO3_IO14   ENET2_RX_ER           SEMC_CLK5              ~                      ~
+	D44 = PC13 // [SD_B0_01]:  USDHC1_CLK       FLEXPWM1_PWMB00  LPI2C3_SDA           XBAR1_INOUT05         LPSPI1_PCS0           GPIO3_IO13   FLEXSPIB_SS1_B        ENET2_TX_CLK          ENET2_REF_CLK2          ~
+	D45 = PC12 // [SD_B0_00]:  USDHC1_CMD       FLEXPWM1_PWMA00  LPI2C3_SCL           XBAR1_INOUT04         LPSPI1_SCK            GPIO3_IO12   FLEXSPIA_SS1_B        ENET2_TX_EN           SEMC_DQS4               ~
+	D46 = PC17 // [SD_B0_05]:  USDHC1_DATA3     FLEXPWM1_PWMB02  LPUART8_RX           XBAR1_INOUT09         FLEXSPIB_DQS          GPIO3_IO17   CCM_CLKO2             ENET2_RX_EN            ~                      ~
+	D47 = PC16 // [SD_B0_04]:  USDHC1_DATA2     FLEXPWM1_PWMA02  LPUART8_TX           XBAR1_INOUT08         FLEXSPIB_SS0_B        GPIO3_IO16   CCM_CLKO1             ENET2_RDATA01          ~                      ~
+	D48 = PD24 // [EMC_24]:    SEMC_CAS         FLEXPWM1_PWMB00  LPUART5_RX           ENET_TX_EN            GPT1_CAPTURE1         GPIO4_IO24   FLEXSPI2_A_SS0_B       ~                     ~                      ~
+	D49 = PD27 // [EMC_27]:    SEMC_CKE         FLEXPWM1_PWMA02  LPUART5_RTS_B        LPSPI1_SCK            FLEXIO1_FLEXIO13      GPIO4_IO27   FLEXSPI2_A_DATA01      ~                     ~                      ~
+	D50 = PD28 // [EMC_28]:    SEMC_WE          FLEXPWM1_PWMB02  LPUART5_CTS_B        LPSPI1_SDO            FLEXIO1_FLEXIO14      GPIO4_IO28   FLEXSPI2_A_DATA02      ~                     ~                      ~
+	D51 = PD22 // [EMC_22]:    SEMC_BA1         FLEXPWM3_PWMB03  LPI2C3_SCL           ENET_TDATA00          QTIMER2_TIMER3        GPIO4_IO22   FLEXSPI2_A_SS1_B       ~                     ~                      ~
+	D52 = PD26 // [EMC_26]:    SEMC_CLK         FLEXPWM1_PWMB01  LPUART6_RX           ENET_RX_ER            FLEXIO1_FLEXIO12      GPIO4_IO26   FLEXSPI2_A_DATA00      ~                     ~                      ~
+	D53 = PD25 // [EMC_25]:    SEMC_RAS         FLEXPWM1_PWMA01  LPUART6_TX           ENET_TX_CLK           ENET_REF_CLK          GPIO4_IO25   FLEXSPI2_A_SCLK        ~                     ~                      ~
+	D54 = PD29 // [EMC_29]:    SEMC_CS0         FLEXPWM3_PWMA00  LPUART6_RTS_B        LPSPI1_SDI            FLEXIO1_FLEXIO15      GPIO4_IO29   FLEXSPI2_A_DATA03      ~                     ~                      ~
 )
 
 // Analog pins
