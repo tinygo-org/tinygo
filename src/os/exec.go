@@ -34,6 +34,13 @@ func (p *ProcessState) Success() bool {
 	return false // TODO
 }
 
+// Sys returns system-dependent exit information about
+// the process. Convert it to the appropriate underlying
+// type, such as syscall.WaitStatus on Unix, to access its contents.
+func (p *ProcessState) Sys() interface{} {
+	return nil // TODO
+}
+
 // ExitCode returns the exit code of the exited process, or -1
 // if the process hasn't exited or was terminated by a signal.
 func (p *ProcessState) ExitCode() int {
