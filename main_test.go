@@ -31,6 +31,13 @@ const TESTDATA = "testdata"
 
 var testTarget = flag.String("target", "", "override test target")
 
+var supportedLinuxArches = map[string]string{
+	"AMD64Linux": "linux/amd64",
+	"X86Linux":   "linux/386",
+	"ARMLinux":   "linux/arm/6",
+	"ARM64Linux": "linux/arm64",
+}
+
 var sema = make(chan struct{}, runtime.NumCPU())
 
 func TestBuild(t *testing.T) {
@@ -180,18 +187,14 @@ func TestBuild(t *testing.T) {
 	})
 
 	if runtime.GOOS == "linux" {
-		t.Run("X86Linux", func(t *testing.T) {
-			t.Parallel()
-			runPlatTests(optionsFromOSARCH("linux/386", sema), tests, t)
-		})
-		t.Run("ARMLinux", func(t *testing.T) {
-			t.Parallel()
-			runPlatTests(optionsFromOSARCH("linux/arm/6", sema), tests, t)
-		})
-		t.Run("ARM64Linux", func(t *testing.T) {
-			t.Parallel()
-			runPlatTests(optionsFromOSARCH("linux/arm64", sema), tests, t)
-		})
+		for name, osArch := range supportedLinuxArches {
+			options := optionsFromOSARCH(osArch, sema)
+			if options.GOARCH != runtime.GOARCH { // Native architecture already run above.
+				t.Run(name, func(t *testing.T) {
+					runPlatTests(options, tests, t)
+				})
+			}
+		}
 		t.Run("WebAssembly", func(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("wasm", sema), tests, t)
@@ -475,12 +478,12 @@ func TestTest(t *testing.T) {
 	}
 	if !testing.Short() {
 		if runtime.GOOS == "linux" {
-			targs = append(targs,
-				// Linux
-				targ{"X86Linux", optionsFromOSARCH("linux/386", sema)},
-				targ{"ARMLinux", optionsFromOSARCH("linux/arm/6", sema)},
-				targ{"ARM64Linux", optionsFromOSARCH("linux/arm64", sema)},
-			)
+			for name, osArch := range supportedLinuxArches {
+				options := optionsFromOSARCH(osArch, sema)
+				if options.GOARCH != runtime.GOARCH { // Native architecture already run above.
+					targs = append(targs, targ{name, options})
+				}
+			}
 		}
 
 		targs = append(targs,
