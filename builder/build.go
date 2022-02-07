@@ -105,6 +105,15 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		defer os.RemoveAll(dir)
 	}
 
+	// Look up the build cache directory, which is used to speed up incremental
+	// builds.
+	cacheDir := goenv.Get("GOCACHE")
+	if cacheDir == "off" {
+		// Use temporary build directory instead, effectively disabling the
+		// build cache.
+		cacheDir = dir
+	}
+
 	// Check for a libc dependency.
 	// As a side effect, this also creates the headers for the given libc, if
 	// the libc needs them.
@@ -238,12 +247,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 
 		// Determine the path of the bitcode file (which is a serialized version
 		// of a LLVM module).
-		cacheDir := goenv.Get("GOCACHE")
-		if cacheDir == "off" {
-			// Use temporary build directory instead, effectively disabling the
-			// build cache.
-			cacheDir = dir
-		}
 		bitcodePath := filepath.Join(cacheDir, "pkg-"+hex.EncodeToString(hash[:])+".bc")
 		packageBitcodePaths[pkg.ImportPath] = bitcodePath
 
@@ -416,7 +419,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			// Load and link all the bitcode files. This does not yet optimize
 			// anything, it only links the bitcode files together.
 			ctx := llvm.NewContext()
-			mod = ctx.NewModule("")
+			mod = ctx.NewModule("main")
 			for _, pkg := range lprogram.Sorted() {
 				pkgMod, err := ctx.ParseBitcodeFile(packageBitcodePaths[pkg.ImportPath])
 				if err != nil {
@@ -512,8 +515,14 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			}
 			return ioutil.WriteFile(outpath, llvmBuf.Bytes(), 0666)
 		case ".bc":
-			data := llvm.WriteBitcodeToMemoryBuffer(mod).Bytes()
-			return ioutil.WriteFile(outpath, data, 0666)
+			var buf llvm.MemoryBuffer
+			if config.UseThinLTO() {
+				buf = llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
+			} else {
+				buf = llvm.WriteBitcodeToMemoryBuffer(mod)
+			}
+			defer buf.Dispose()
+			return ioutil.WriteFile(outpath, buf.Bytes(), 0666)
 		case ".ll":
 			data := []byte(mod.String())
 			return ioutil.WriteFile(outpath, data, 0666)
@@ -533,10 +542,17 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		dependencies: []*compileJob{programJob},
 		result:       objfile,
 		run: func(*compileJob) error {
-			llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
-			if err != nil {
-				return err
+			var llvmBuf llvm.MemoryBuffer
+			if config.UseThinLTO() {
+				llvmBuf = llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
+			} else {
+				var err error
+				llvmBuf, err = machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
+				if err != nil {
+					return err
+				}
 			}
+			defer llvmBuf.Dispose()
 			return ioutil.WriteFile(objfile, llvmBuf.Bytes(), 0666)
 		},
 	}
@@ -569,7 +585,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		job := &compileJob{
 			description: "compile extra file " + path,
 			run: func(job *compileJob) error {
-				result, err := compileAndCacheCFile(abspath, dir, config.CFlags(), config.Options.PrintCommands)
+				result, err := compileAndCacheCFile(abspath, dir, config.CFlags(), config.UseThinLTO(), config.Options.PrintCommands)
 				job.result = result
 				return err
 			},
@@ -587,7 +603,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			job := &compileJob{
 				description: "compile CGo file " + abspath,
 				run: func(job *compileJob) error {
-					result, err := compileAndCacheCFile(abspath, dir, pkg.CFlags, config.Options.PrintCommands)
+					result, err := compileAndCacheCFile(abspath, dir, pkg.CFlags, config.UseThinLTO(), config.Options.PrintCommands)
 					job.result = result
 					return err
 				},
@@ -655,6 +671,24 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			}
 			if config.Options.PrintCommands != nil {
 				config.Options.PrintCommands(config.Target.Linker, ldflags...)
+			}
+			if config.UseThinLTO() {
+				ldflags = append(ldflags,
+					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"),
+					"-plugin-opt=mcpu="+config.CPU(),
+					"-plugin-opt=O"+strconv.Itoa(optLevel),
+					"-plugin-opt=thinlto")
+				if config.CodeModel() != "default" {
+					ldflags = append(ldflags,
+						"-mllvm", "-code-model="+config.CodeModel())
+				}
+				if sizeLevel >= 2 {
+					// Workaround with roughly the same effect as
+					// https://reviews.llvm.org/D119342.
+					// Can hopefully be removed in LLVM 15.
+					ldflags = append(ldflags,
+						"-mllvm", "--rotation-max-header-size=0")
+				}
 			}
 			err = link(config.Target.Linker, ldflags...)
 			if err != nil {
@@ -846,7 +880,7 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 		}
 	}
 
-	if config.GOOS() != "darwin" {
+	if config.GOOS() != "darwin" && !config.UseThinLTO() {
 		transform.ApplyFunctionSections(mod) // -ffunction-sections
 	}
 

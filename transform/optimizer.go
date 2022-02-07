@@ -151,6 +151,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 	funcPasses.FinalizeFunc()
 
 	// Run module passes.
+	// TODO: somehow set the PrepareForThinLTO flag in the pass manager builder.
 	modPasses := llvm.NewPassManager()
 	defer modPasses.Dispose()
 	builder.Populate(modPasses)
