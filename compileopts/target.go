@@ -317,11 +317,20 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	if goarch != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.
 		spec.GDB = []string{"gdb-multiarch"}
-		if goarch == "arm" && goos == "linux" {
-			spec.Emulator = []string{"qemu-arm"}
-		}
-		if goarch == "arm64" && goos == "linux" {
-			spec.Emulator = []string{"qemu-aarch64"}
+		if goos == "linux" {
+			switch goarch {
+			case "386":
+				// amd64 can _usually_ run 32-bit programs, so skip the emulator in that case.
+				if runtime.GOARCH != "amd64" {
+					spec.Emulator = []string{"qemu-i386"}
+				}
+			case "amd64":
+				spec.Emulator = []string{"qemu-x86_64"}
+			case "arm":
+				spec.Emulator = []string{"qemu-arm"}
+			case "arm64":
+				spec.Emulator = []string{"qemu-aarch64"}
+			}
 		}
 	}
 	if goos != runtime.GOOS {
