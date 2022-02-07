@@ -176,6 +176,34 @@ func (c *Config) AutomaticStackSize() bool {
 	return false
 }
 
+// UseThinLTO returns whether ThinLTO should be used for the given target. Some
+// targets (such as wasm) are not yet supported.
+// We should try and remove as many exceptions as possible in the future, so
+// that this optimization can be applied in more places.
+func (c *Config) UseThinLTO() bool {
+	parts := strings.Split(c.Triple(), "-")
+	if parts[0] == "wasm32" {
+		// wasm-ld doesn't seem to support ThinLTO yet.
+		return false
+	}
+	if parts[0] == "avr" || parts[0] == "xtensa" {
+		// These use external (GNU) linkers which might perhaps support ThinLTO
+		// through a plugin, but it's too much hassle to set up.
+		return false
+	}
+	if len(parts) >= 2 && strings.HasPrefix(parts[2], "macos") {
+		// We use an external linker here at the moment.
+		return false
+	}
+	if len(parts) >= 2 && parts[2] == "windows" {
+		// Linker error (undefined runtime.trackedGlobalsBitmap) when linking
+		// for Windows. Disable it for now until that's figured out and fixed.
+		return false
+	}
+	// Other architectures support ThinLTO.
+	return true
+}
+
 // RP2040BootPatch returns whether the RP2040 boot patch should be applied that
 // calculates and patches in the checksum for the 2nd stage bootloader.
 func (c *Config) RP2040BootPatch() bool {
