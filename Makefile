@@ -302,6 +302,8 @@ test-corpus-wasi: wasi-libc
 .PHONY: smoketest
 smoketest:
 	$(TINYGO) version
+	# compile-only platform-independent examples
+	cd tests/text/template/smoke && $(TINYGO) test -c && rm -f smoke.test
 	# regression test for #2563
 	cd tests/os/smoke && $(TINYGO) test -c -target=pybadge && rm smoke.test
 	# test all examples (except pwm)
