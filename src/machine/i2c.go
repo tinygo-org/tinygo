@@ -1,5 +1,5 @@
-//go:build atmega || nrf || sam || stm32 || fe310 || k210 || rp2040
-// +build atmega nrf sam stm32 fe310 k210 rp2040
+//go:build atmega || nrf || sam || stm32 || fe310 || k210 || rp2040 || esp32c3
+// +build atmega nrf sam stm32 fe310 k210 rp2040 esp32c3
 
 package machine
 
