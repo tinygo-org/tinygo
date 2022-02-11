@@ -1571,8 +1571,9 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 	switch expr := expr.(type) {
 	case *ssa.Alloc:
 		typ := b.getLLVMType(expr.Type().Underlying().(*types.Pointer).Elem())
-		if expr.Heap {
-			size := b.targetData.TypeAllocSize(typ)
+		size := b.targetData.TypeAllocSize(typ)
+		// Move all "large" allocations to the heap.  This value is also transform.maxStackAlloc.
+		if expr.Heap || size > 256 {
 			// Calculate ^uintptr(0)
 			maxSize := llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)).ZExtValue()
 			if size > maxSize {

@@ -18,6 +18,7 @@ import (
 // always be heap allocated.
 //
 // TODO: tune this, this is just a random value.
+// This value is also used in the compiler when translating ssa.Alloc nodes.
 const maxStackAlloc = 256
 
 // OptimizeAllocs tries to replace heap allocations with stack allocations
