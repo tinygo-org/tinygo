@@ -7,6 +7,7 @@ import (
 	"device/arm"
 	"device/sam"
 	"machine"
+	"reflect"
 	"runtime/interrupt"
 	"runtime/volatile"
 )
@@ -30,6 +31,9 @@ func init() {
 
 	// connect to USB CDC interface
 	machine.Serial.Configure(machine.UARTConfig{})
+	if reflect.TypeOf(machine.Serial) != reflect.TypeOf(machine.USB) {
+		machine.USB.Configure(machine.UARTConfig{})
+	}
 }
 
 func putchar(c byte) {
