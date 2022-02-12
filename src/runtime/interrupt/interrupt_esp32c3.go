@@ -47,6 +47,45 @@ func (i Interrupt) Enable() error {
 	return nil
 }
 
+// Adding pseudo function calls that is replaced by the compiler with the actual
+// functions registered through interrupt.New.
+//go:linkname callHandlers runtime/interrupt.callHandlers
+func callHandlers(num int)
+
+const (
+	IRQNUM_1 = 1 + iota
+	IRQNUM_2
+	IRQNUM_3
+	IRQNUM_4
+	IRQNUM_5
+	IRQNUM_6
+	IRQNUM_7
+	IRQNUM_8
+	IRQNUM_9
+	IRQNUM_10
+	IRQNUM_11
+	IRQNUM_12
+	IRQNUM_13
+	IRQNUM_14
+	IRQNUM_15
+	IRQNUM_16
+	IRQNUM_17
+	IRQNUM_18
+	IRQNUM_19
+	IRQNUM_20
+	IRQNUM_21
+	IRQNUM_22
+	IRQNUM_23
+	IRQNUM_24
+	IRQNUM_25
+	IRQNUM_26
+	IRQNUM_27
+	IRQNUM_28
+	IRQNUM_29
+	IRQNUM_30
+	IRQNUM_31
+)
+
 //export handleInterrupt
 func handleInterrupt() {
 	mcause := riscv.MCAUSE.Get()
@@ -75,7 +114,70 @@ func handleInterrupt() {
 		riscv.MSTATUS.SetBits(0x8)
 
 		// Call registered interrupt handler(s)
-		esp.HandleInterrupt(int(interruptNumber))
+		switch interruptNumber {
+		// case IRQNUM_1:
+		// 	callHandlers(IRQNUM_1)
+		// case 2:
+		// 	callHandlers(IRQNUM_2)
+		// case 3:
+		// 	callHandlers(IRQNUM_3)
+		// case 4:
+		// 	callHandlers(IRQNUM_4)
+		// case IRQNUM_5:
+		// 	callHandlers(IRQNUM_5)
+		case IRQNUM_6:
+			callHandlers(IRQNUM_6)
+			// case 7:
+			// 	callHandlers(IRQNUM_7)
+			// case 8:
+			// 	callHandlers(IRQNUM_8)
+			// case 9:
+			// 	callHandlers(IRQNUM_9)
+			// case 10:
+			// 	callHandlers(IRQNUM_10)
+			// case 11:
+			// 	callHandlers(IRQNUM_11)
+			// case 12:
+			// 	callHandlers(IRQNUM_12)
+			// case 13:
+			// 	callHandlers(IRQNUM_13)
+			// case 14:
+			// 	callHandlers(IRQNUM_14)
+			// case 15:
+			// 	callHandlers(IRQNUM_15)
+			// case 16:
+			// 	callHandlers(IRQNUM_16)
+			// case 17:
+			// 	callHandlers(IRQNUM_17)
+			// case 18:
+			// 	callHandlers(IRQNUM_18)
+			// case 19:
+			// 	callHandlers(IRQNUM_19)
+			// case 20:
+			// 	callHandlers(IRQNUM_20)
+			// case 21:
+			// 	callHandlers(IRQNUM_21)
+			// case 22:
+			// 	callHandlers(IRQNUM_22)
+			// case 23:
+			// 	callHandlers(IRQNUM_23)
+			// case 24:
+			// 	callHandlers(IRQNUM_24)
+			// case 25:
+			// 	callHandlers(IRQNUM_25)
+			// case 26:
+			// 	callHandlers(IRQNUM_26)
+			// case 27:
+			// 	callHandlers(IRQNUM_27)
+			// case 28:
+			// 	callHandlers(IRQNUM_28)
+			// case 29:
+			// 	callHandlers(IRQNUM_29)
+			// case 30:
+			// 	callHandlers(IRQNUM_30)
+			// case IRQNUM_31:
+			// 	callHandlers(IRQNUM_31)
+		}
 
 		// disable CPU interrupts
 		riscv.MSTATUS.ClearBits(0x8)
