@@ -302,12 +302,12 @@ test-corpus-wasi: wasi-libc
 
 .PHONY: smoketest smoketest-commands
 smoketest:
-	@go run ./tools/run-smoketest make smoketest-commands
-
-smoketest-commands:
 	$(TINYGO) version
 	# regression test for #2563
 	cd tests/os/smoke && $(TINYGO) test -c -target=pybadge && rm smoke.test
+	@go run ./tools/run-smoketest make smoketest-commands
+
+smoketest-commands:
 	# test all examples (except pwm)
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky1
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/adc
