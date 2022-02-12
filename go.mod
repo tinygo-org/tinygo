@@ -12,6 +12,7 @@ require (
 	github.com/marcinbor85/gohex v0.0.0-20200531091804-343a4b548892
 	github.com/mattn/go-colorable v0.1.8
 	go.bug.st/serial v1.1.3
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9
 	golang.org/x/tools v0.1.6-0.20210813165731-45389f592fe9
 	gopkg.in/yaml.v2 v2.4.0
