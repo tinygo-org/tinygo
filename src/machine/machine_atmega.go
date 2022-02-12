@@ -35,15 +35,18 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	// Initialize twi prescaler and bit rate.
 	avr.TWSR.SetBits((avr.TWSR_TWPS0 | avr.TWSR_TWPS1))
 
+	avr.TWBR.Set(uint8(((CPUFrequency() / config.Frequency) - 16) / 2))
+	// Enable twi module.
+	avr.TWCR.Set(avr.TWCR_TWEN)
+	return nil
+}
+
+func (i2c *I2C) SetBaudRate(baud uint32) error {
 	// twi bit rate formula from atmega128 manual pg. 204:
 	// SCL Frequency = CPU Clock Frequency / (16 + (2 * TWBR))
 	// NOTE: TWBR should be 10 or higher for controller mode.
 	// It is 72 for a 16mhz board with 100kHz TWI
-	avr.TWBR.Set(uint8(((CPUFrequency() / config.Frequency) - 16) / 2))
-
-	// Enable twi module.
-	avr.TWCR.Set(avr.TWCR_TWEN)
-
+	avr.TWBR.Set(uint8(((CPUFrequency() / baud) - 16) / 2))
 	return nil
 }
 
@@ -232,8 +235,45 @@ func (s SPI) Configure(config SPIConfig) error {
 	// slave mode.
 	s.cs.Configure(PinConfig{Mode: PinOutput})
 
-	frequencyDivider := CPUFrequency() / config.Frequency
+	s.SetBaudRate(config.Frequency)
 
+	switch config.Mode {
+	case Mode1:
+		s.spcr.SetBits(avr.SPCR_CPHA)
+	case Mode2:
+		s.spcr.SetBits(avr.SPCR_CPOL)
+	case Mode3:
+		s.spcr.SetBits(avr.SPCR_CPHA | avr.SPCR_CPOL)
+	default: // default is mode 0
+	}
+
+	if config.LSBFirst {
+		s.spcr.SetBits(avr.SPCR_DORD)
+	}
+
+	// enable SPI, set controller, set clock rate
+	s.enable()
+
+	return nil
+}
+
+func (s SPI) enable() {
+	// enable SPI, set controller, set clock rate
+	s.spcr.SetBits(avr.SPCR_SPE | avr.SPCR_MSTR)
+}
+
+// Transfer writes the byte into the register and returns the read content
+func (s SPI) Transfer(b byte) (byte, error) {
+	s.spdr.Set(uint8(b))
+
+	for !s.spsr.HasBits(avr.SPSR_SPIF) {
+	}
+
+	return byte(s.spdr.Get()), nil
+}
+
+func (s SPI) SetBaudRate(baud uint32) error {
+	frequencyDivider := CPUFrequency() / baud
 	switch {
 	case frequencyDivider >= 128:
 		s.spcr.SetBits(avr.SPCR_SPR0 | avr.SPCR_SPR1)
@@ -252,33 +292,5 @@ func (s SPI) Configure(config SPIConfig) error {
 	default: // defaults to fastest which is /2
 		s.spsr.SetBits(avr.SPSR_SPI2X)
 	}
-
-	switch config.Mode {
-	case Mode1:
-		s.spcr.SetBits(avr.SPCR_CPHA)
-	case Mode2:
-		s.spcr.SetBits(avr.SPCR_CPOL)
-	case Mode3:
-		s.spcr.SetBits(avr.SPCR_CPHA | avr.SPCR_CPOL)
-	default: // default is mode 0
-	}
-
-	if config.LSBFirst {
-		s.spcr.SetBits(avr.SPCR_DORD)
-	}
-
-	// enable SPI, set controller, set clock rate
-	s.spcr.SetBits(avr.SPCR_SPE | avr.SPCR_MSTR)
-
 	return nil
-}
-
-// Transfer writes the byte into the register and returns the read content
-func (s SPI) Transfer(b byte) (byte, error) {
-	s.spdr.Set(uint8(b))
-
-	for !s.spsr.HasBits(avr.SPSR_SPIF) {
-	}
-
-	return byte(s.spdr.Get()), nil
 }

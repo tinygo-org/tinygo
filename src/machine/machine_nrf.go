@@ -253,16 +253,21 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
 		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos))
 
-	if config.Frequency == TWI_FREQ_400KHZ {
-		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K400)
-	} else {
-		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K100)
-	}
+	i2c.SetBaudRate(config.Frequency)
 
 	i2c.setPins(config.SCL, config.SDA)
 
 	i2c.Bus.ENABLE.Set(nrf.TWI_ENABLE_ENABLE_Enabled)
 
+	return nil
+}
+
+func (i2c *I2C) SetBaudRate(baud uint32) error {
+	if baud == TWI_FREQ_400KHZ {
+		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K400)
+	} else {
+		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K100)
+	}
 	return nil
 }
 

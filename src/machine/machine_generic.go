@@ -58,8 +58,14 @@ type SPIConfig struct {
 	Mode      uint8
 }
 
-func (spi SPI) Configure(config SPIConfig) {
+func (spi SPI) Configure(config SPIConfig) error {
 	spiConfigure(spi.Bus, config.SCK, config.SDO, config.SDI)
+	return nil
+}
+
+// SetBaudRate sets the SPI bus frequency.
+func (spi SPI) SetBaudRate(baud uint32) error {
+	return nil
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
@@ -105,6 +111,11 @@ type I2CConfig struct {
 // Configure is intended to setup the I2C interface.
 func (i2c *I2C) Configure(config I2CConfig) error {
 	i2cConfigure(i2c.Bus, config.SCL, config.SDA)
+	return nil
+}
+
+// SetBaudRate sets the I2C bus frequency.
+func (i2c *I2C) SetBaudRate(baud uint32) error {
 	return nil
 }
 

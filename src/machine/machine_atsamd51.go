@@ -1204,11 +1204,12 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 }
 
 // SetBaudRate sets the communication speed for the I2C.
-func (i2c *I2C) SetBaudRate(br uint32) {
+func (i2c *I2C) SetBaudRate(br uint32) error {
 	// Synchronous arithmetic baudrate, via Adafruit SAMD51 implementation:
 	// sercom->I2CM.BAUD.bit.BAUD = SERCOM_FREQ_REF / ( 2 * baudrate) - 1 ;
 	baud := SERCOM_FREQ_REF/(2*br) - 1
 	i2c.Bus.BAUD.Set(baud)
+	return nil
 }
 
 // Tx does a single I2C transaction at the specified address.
@@ -1429,9 +1430,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 	}
 
 	// Disable SPI port.
-	spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPIM_CTRLA_ENABLE)
-	for spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPIM_SYNCBUSY_ENABLE) {
-	}
+	spi.disable()
 
 	// enable pins
 	config.SCK.Configure(PinConfig{Mode: sckPinMode})
@@ -1483,18 +1482,22 @@ func (spi SPI) Configure(config SPIConfig) error {
 		spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPIM_CTRLA_CPOL)
 	}
 
+	// Enable SPI port.
+	spi.enable()
+	spi.SetBaudRate(config.Frequency)
+	return nil
+}
+
+// SetBaudRate sets SPI bus frequency.
+func (spi SPI) SetBaudRate(baud uint32) error {
+	spi.disable()
 	// Set synch speed for SPI
-	baudRate := SERCOM_FREQ_REF / (2 * config.Frequency)
+	baudRate := SERCOM_FREQ_REF / (2 * baud)
 	if baudRate > 0 {
 		baudRate--
 	}
 	spi.Bus.BAUD.Set(uint8(baudRate))
-
-	// Enable SPI port.
-	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPIM_CTRLA_ENABLE)
-	for spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPIM_SYNCBUSY_ENABLE) {
-	}
-
+	spi.enable()
 	return nil
 }
 
@@ -1509,6 +1512,20 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 
 	// return data
 	return byte(spi.Bus.DATA.Get()), nil
+}
+
+// Enable SPI port.
+func (spi SPI) enable() {
+	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPIM_CTRLA_ENABLE)
+	for spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPIM_SYNCBUSY_ENABLE) {
+	}
+}
+
+// Disable SPI port.
+func (spi SPI) disable() {
+	spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPIM_CTRLA_ENABLE)
+	for spi.Bus.SYNCBUSY.HasBits(sam.SERCOM_SPIM_SYNCBUSY_ENABLE) {
+	}
 }
 
 var (
