@@ -4,7 +4,7 @@
     "serial": "uart",
     "linkerscript": "targets/stm32l4x5.ld",
     "extra-files": [
-      "src/device/stm32/stm32l4x5.s"
+      "src/vendor/tinygo.org/x/device/stm32/stm32l4x5.s"
     ],
     "flash-method": "command",
     "flash-command": "dfu-util --alt 0 --dfuse-address 0x08000000 --download {bin}",

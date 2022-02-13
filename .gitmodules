@@ -20,9 +20,6 @@
 [submodule "lib/picolibc"]
 	path = lib/picolibc
 	url = https://github.com/keith-packard/picolibc.git
-[submodule "lib/stm32-svd"]
-	path = lib/stm32-svd
-	url = https://github.com/tinygo-org/stm32-svd
 [submodule "lib/musl"]
 	path = lib/musl
 	url = git://git.musl-libc.org/musl
@@ -35,3 +32,6 @@
 [submodule "lib/macos-minimal-sdk"]
 	path = lib/macos-minimal-sdk
 	url = https://github.com/aykevl/macos-minimal-sdk.git
+[submodule "src/vendor/tinygo.org/x/device"]
+	path = src/vendor/tinygo.org/x/device
+	url = https://github.com/tinygo-org/device.git

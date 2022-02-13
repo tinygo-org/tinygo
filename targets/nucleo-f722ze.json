@@ -4,7 +4,7 @@
   "serial": "uart",
   "linkerscript": "targets/stm32f7x2zetx.ld",
   "extra-files": [
-    "src/device/stm32/stm32f7x2.s"
+    "src/vendor/tinygo.org/x/device/stm32/stm32f7x2.s"
   ],
   "flash-method": "openocd",
   "openocd-interface": "stlink-v2-1",

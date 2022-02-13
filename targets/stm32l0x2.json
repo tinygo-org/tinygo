@@ -8,6 +8,6 @@
         "stm32"
     ],
     "extra-files": [
-        "src/device/stm32/stm32l0x2.s"
+        "src/vendor/tinygo.org/x/device/stm32/stm32l0x2.s"
     ]
 }

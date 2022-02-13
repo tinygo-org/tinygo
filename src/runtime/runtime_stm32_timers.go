@@ -11,10 +11,10 @@ package runtime
 // Output Comparator used for fine-grained sleeps.
 
 import (
-	"device/stm32"
 	"machine"
 	"runtime/interrupt"
 	"runtime/volatile"
+	"tinygo.org/x/device/stm32"
 )
 
 type timerInfo struct {

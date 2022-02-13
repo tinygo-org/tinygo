@@ -3,7 +3,7 @@
 
 package machine
 
-import "device/stm32"
+import "tinygo.org/x/device/stm32"
 
 const deviceName = stm32.Device
 
