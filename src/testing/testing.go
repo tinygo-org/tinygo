@@ -103,6 +103,7 @@ func fmtDuration(d time.Duration) string {
 
 // TB is the interface common to T and B.
 type TB interface {
+	Cleanup(func())
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
 	Fail()
@@ -110,6 +111,7 @@ type TB interface {
 	Failed() bool
 	Fatal(args ...interface{})
 	Fatalf(format string, args ...interface{})
+	Helper()
 	Log(args ...interface{})
 	Logf(format string, args ...interface{})
 	Name() string
@@ -117,8 +119,7 @@ type TB interface {
 	SkipNow()
 	Skipf(format string, args ...interface{})
 	Skipped() bool
-	Helper()
-	Parallel()
+	TempDir() string
 }
 
 var _ TB = (*T)(nil)
@@ -345,7 +346,7 @@ func (c *common) runCleanup() {
 }
 
 // Parallel is not implemented, it is only provided for compatibility.
-func (c *common) Parallel() {
+func (t *T) Parallel() {
 	// Unimplemented.
 }
 
