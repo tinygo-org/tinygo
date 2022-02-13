@@ -6,8 +6,8 @@ package machine
 // Peripheral abstraction layer for SPI on the stm32 family
 
 import (
-	"device/stm32"
 	"runtime/volatile"
+	"tinygo.org/x/device/stm32"
 	"unsafe"
 )
 
