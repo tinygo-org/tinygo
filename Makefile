@@ -32,9 +32,6 @@ export GOROOT = $(shell $(GO) env GOROOT)
 # Flags to pass to go test.
 GOTESTFLAGS ?= -v
 
-# md5sum binary
-MD5SUM = md5sum
-
 # tinygo binary for tests
 TINYGO ?= $(call detect,tinygo,tinygo $(CURDIR)/build/tinygo)
 
@@ -71,14 +68,11 @@ ifeq ($(OS),Windows_NT)
     USE_SYSTEM_BINARYEN ?= 1
 
 else ifeq ($(shell uname -s),Darwin)
-    MD5SUM = md5
-
     CGO_LDFLAGS += -lxar
 
     USE_SYSTEM_BINARYEN ?= 1
 
 else ifeq ($(shell uname -s),FreeBSD)
-    MD5SUM = md5
     START_GROUP = -Wl,--start-group
     END_GROUP = -Wl,--end-group
 else
@@ -306,268 +300,151 @@ test-corpus-wasi: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags byollvm -run TestCorpus . -corpus=testdata/corpus.yaml -target=wasi
 
 
-.PHONY: smoketest
+.PHONY: smoketest smoketest-commands
 smoketest:
 	$(TINYGO) version
 	# regression test for #2563
 	cd tests/os/smoke && $(TINYGO) test -c -target=pybadge && rm smoke.test
+	@go run ./tools/run-smoketest make smoketest-commands
+
+smoketest-commands:
 	# test all examples (except pwm)
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/adc
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinkm
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/blinky2
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/button
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/button2
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/echo
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/i2s
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/mcp3008
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/memstats
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=microbit            examples/microbit-blink
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/pininterrupt
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/serial
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/systick
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/test
-	@$(MD5SUM) test.hex
 	# test simulated boards on play.tinygo.org
 ifneq ($(WASM), 0)
 	$(TINYGO) build -size short -o test.wasm -tags=arduino              examples/blinky1
-	@$(MD5SUM) test.wasm
 	$(TINYGO) build -size short -o test.wasm -tags=hifive1b             examples/blinky1
-	@$(MD5SUM) test.wasm
 	$(TINYGO) build -size short -o test.wasm -tags=reelboard            examples/blinky1
-	@$(MD5SUM) test.wasm
 	$(TINYGO) build -size short -o test.wasm -tags=pca10040             examples/blinky2
-	@$(MD5SUM) test.wasm
 	$(TINYGO) build -size short -o test.wasm -tags=pca10056             examples/blinky2
-	@$(MD5SUM) test.wasm
 	$(TINYGO) build -size short -o test.wasm -tags=circuitplay_express  examples/blinky1
-	@$(MD5SUM) test.wasm
 endif
 	# test all targets/boards
 	$(TINYGO) build -size short -o test.hex -target=pca10040-s132v6     examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=microbit            examples/echo
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=microbit-s110v8     examples/echo
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=microbit-v2         examples/microbit-blink
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=microbit-v2-s113v7  examples/microbit-blink
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nrf52840-mdk        examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10031            examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=reelboard           examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=reelboard           examples/blinky2
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10056            examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10056            examples/blinky2
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10059            examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10059            examples/blinky2
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0        examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m0          examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=trinket-m0          examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-bluefruit examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/i2s
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=clue-alpha          examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.gba -target=gameboy-advance     examples/gba-display
-	@$(MD5SUM) test.gba
 	$(TINYGO) build -size short -o test.hex -target=grandcentral-m4     examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m4        examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m4          examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pybadge             examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=metro-m4-airlift    examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pyportal            examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=particle-argon      examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=particle-boron      examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=particle-xenon      examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pinetime-devkit0    examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=x9pro               examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10056-s140v7     examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=reelboard-s140v7    examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=wioterminal         examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pygamer             examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=xiao                examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/dac
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pyportal            examples/dac
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-nrf52840  	examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-nrf52840-sense examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-nrf52840  examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=qtpy                examples/serial
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=teensy41            examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=teensy40            examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=teensy36            examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=p1am-100            examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=atsame54-xpro       examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=atsame54-xpro       examples/can
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m4-can      examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m4-can      examples/caninterrupt
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-nano33      examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-mkrwifi1010 examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pico                examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nano-33-ble         examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nano-rp2040         examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-rp2040 		examples/blinky1
-	@$(MD5SUM) test.hex
 	# test pwm
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0        examples/pwm
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m4        examples/pwm
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m4          examples/pwm
-	@$(MD5SUM) test.hex
 ifneq ($(STM32), 0)
 	$(TINYGO) build -size short -o test.hex -target=bluepill            examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-stm32f405   examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=lgt92               examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nucleo-f103rb       examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nucleo-f722ze       examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nucleo-l031k6       examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nucleo-l432kc       examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nucleo-l552ze       examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nucleo-wl55jc       examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32f4disco        examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32f4disco        examples/blinky2
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32f4disco-1      examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32f4disco-1      examples/pwm
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32f469disco      examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=lorae5              examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=swan                examples/blinky1
-	@$(MD5SUM) test.hex
 endif
 ifneq ($(AVR), 0)
 	$(TINYGO) build -size short -o test.hex -target=atmega1284p         examples/serial
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino             examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino             examples/pwm
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino -scheduler=tasks  examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-mega1280    examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-mega1280    examples/pwm
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-nano        examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=digispark           examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=digispark -gc=leaking examples/blinky1
-	@$(MD5SUM) test.hex
 endif
 ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o test.bin -target=esp32-mini32      	examples/blinky1
-	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=nodemcu             examples/blinky1
-	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target m5stack-core2       examples/serial
-	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target m5stack             examples/serial
-	@$(MD5SUM) test.bin
 endif
 	$(TINYGO) build -size short -o test.bin -target=esp32c3           	examples/serial
-	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=m5stamp-c3          examples/serial
-	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=hifive1-qemu        examples/serial
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=maixbit             examples/blinky1
-	@$(MD5SUM) test.hex
 ifneq ($(WASM), 0)
 	$(TINYGO) build -size short -o wasm.wasm -target=wasm               examples/wasm/export
 	$(TINYGO) build -size short -o wasm.wasm -target=wasm               examples/wasm/main
 endif
 	# test various compiler flags
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -gc=none -scheduler=none examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -opt=1     examples/blinky1
-	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -serial=none examples/echo
-	@$(MD5SUM) test.hex
 	$(TINYGO) build             -o test.nro -target=nintendoswitch      examples/serial
-	@$(MD5SUM) test.nro
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -opt=0     ./testdata/stdlib.go
-	@$(MD5SUM) test.hex
 	GOOS=linux GOARCH=arm $(TINYGO) build -size short -o test.elf       ./testdata/cgo
 	GOOS=windows GOARCH=amd64 $(TINYGO) build -size short -o test.exe   ./testdata/cgo
 	GOOS=darwin GOARCH=amd64 $(TINYGO) build              -o test       ./testdata/cgo

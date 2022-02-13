@@ -92,7 +92,7 @@ commands:
           paths:
             - lib/wasi-libc/sysroot
       - run: make gen-device -j4
-      - run: make smoketest XTENSA=0
+      - run: make smoketest XTENSA=0 RUN_SMOKETEST_JOBS=4
       - save_cache:
           key: go-cache-v2-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
           paths:
