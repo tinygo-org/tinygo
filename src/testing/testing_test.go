@@ -119,6 +119,13 @@ func testTempDir(t *testing.T) {
 	if !fi.IsDir() {
 		t.Errorf("dir %q is not a dir", dir)
 	}
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) > 0 {
+		t.Errorf("unexpected %d files in TempDir: %v", len(files), files)
+	}
 
 	glob := filepath.Join(dir, "*.txt")
 	if _, err := filepath.Glob(glob); err != nil {
