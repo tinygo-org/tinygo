@@ -148,6 +148,15 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 		return err
 	}
 
+	if options.PrintJSON {
+		b, err := json.MarshalIndent(config, "", "  ")
+		if err != nil {
+			handleCompilerError(err)
+		}
+		fmt.Printf("%s\n", string(b))
+		return nil
+	}
+
 	return builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
 		if outpath == "" {
 			if strings.HasSuffix(pkgName, ".go") {
@@ -1219,13 +1228,13 @@ func main() {
 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 
-	var flagJSON, flagDeps, flagTest *bool
-	if command == "help" || command == "list" || command == "info" {
-		flagJSON = flag.Bool("json", false, "print data in JSON format")
+	var flagJSON, flagDeps, flagTest bool
+	if command == "help" || command == "list" || command == "info" || command == "build" {
+		flag.BoolVar(&flagJSON, "json", false, "print data in JSON format")
 	}
 	if command == "help" || command == "list" {
-		flagDeps = flag.Bool("deps", false, "supply -deps flag to go list")
-		flagTest = flag.Bool("test", false, "supply -test flag to go list")
+		flag.BoolVar(&flagDeps, "deps", false, "supply -deps flag to go list")
+		flag.BoolVar(&flagTest, "test", false, "supply -test flag to go list")
 	}
 	var outpath string
 	if command == "help" || command == "build" || command == "build-library" || command == "test" {
@@ -1302,6 +1311,7 @@ func main() {
 		Programmer:      *programmer,
 		OpenOCDCommands: ocdCommands,
 		LLVMFeatures:    *llvmFeatures,
+		PrintJSON:       flagJSON,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand
@@ -1538,7 +1548,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		if *flagJSON {
+		if flagJSON {
 			json, _ := json.MarshalIndent(struct {
 				GOROOT     string   `json:"goroot"`
 				GOOS       string   `json:"goos"`
@@ -1577,13 +1587,13 @@ func main() {
 			os.Exit(1)
 		}
 		var extraArgs []string
-		if *flagJSON {
+		if flagJSON {
 			extraArgs = append(extraArgs, "-json")
 		}
-		if *flagDeps {
+		if flagDeps {
 			extraArgs = append(extraArgs, "-deps")
 		}
-		if *flagTest {
+		if flagTest {
 			extraArgs = append(extraArgs, "-test")
 		}
 		cmd, err := loader.List(config, extraArgs, flag.Args())

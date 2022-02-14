@@ -32,8 +32,8 @@ type Options struct {
 	PrintIR         bool
 	DumpSSA         bool
 	VerifyIR        bool
-	PrintCommands   func(cmd string, args ...string)
-	Semaphore       chan struct{} // -p flag controls cap
+	PrintCommands   func(cmd string, args ...string) `json:"-"`
+	Semaphore       chan struct{}                    `json:"-"` // -p flag controls cap
 	Debug           bool
 	PrintSizes      string
 	PrintAllocs     *regexp.Regexp // regexp string
@@ -46,6 +46,7 @@ type Options struct {
 	OpenOCDCommands []string
 	LLVMFeatures    string
 	Directory       string
+	PrintJSON       bool
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.
