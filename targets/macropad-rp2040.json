@@ -1,0 +1,11 @@
+{
+    "inherits": [
+        "rp2040"
+    ],
+    "build-tags": ["macropad_rp2040"],
+    "serial": "none",
+    "linkerscript": "targets/pico.ld",
+    "extra-files": [
+        "targets/pico-boot-stage2.S"
+    ]
+}
