@@ -1,7 +1,12 @@
+#ifdef __MACH__
+.global _tinygo_scanCurrentStack
+_tinygo_scanCurrentStack:
+#else
 .section .text.tinygo_scanCurrentStack
 .global tinygo_scanCurrentStack
 .type tinygo_scanCurrentStack, %function
 tinygo_scanCurrentStack:
+#endif
     // Sources:
     //   * https://developer.arm.com/architectures/learn-the-architecture/armv8-a-instruction-set-architecture/procedure-call-standard
     //   * https://godbolt.org/z/qrvrEh
@@ -16,7 +21,11 @@ tinygo_scanCurrentStack:
 
     // Scan the stack.
     mov     x0, sp
+#ifdef __MACH__
+    bl      _tinygo_scanstack
+#else
     bl      tinygo_scanstack
+#endif
 
     // Restore stack state and return.
     ldp     x29, x30, [sp], #96
