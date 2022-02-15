@@ -1,7 +1,12 @@
+#ifdef __MACH__
+.global  _tinygo_startTask
+_tinygo_startTask:
+#else
 .section .text.tinygo_startTask
 .global  tinygo_startTask
 .type    tinygo_startTask, %function
 tinygo_startTask:
+#endif
     .cfi_startproc
     // Small assembly stub for starting a goroutine. This is already run on the
     // new stack, with the callee-saved registers already loaded.
@@ -23,13 +28,25 @@ tinygo_startTask:
     blr   x19
 
     // After return, exit this goroutine. This is a tail call.
+#ifdef __MACH__
+    b     _tinygo_pause
+#else
     b     tinygo_pause
+#endif
     .cfi_endproc
+#ifndef __MACH__
 .size tinygo_startTask, .-tinygo_startTask
+#endif
 
+
+#ifdef __MACH__
+.global _tinygo_swapTask
+_tinygo_swapTask:
+#else
 .global tinygo_swapTask
 .type tinygo_swapTask, %function
 tinygo_swapTask:
+#endif
     // This function gets the following parameters:
     // x0 = newStack uintptr
     // x1 = oldStack *uintptr
