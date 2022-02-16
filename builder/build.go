@@ -358,7 +358,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				if pkgInit.IsNil() {
 					panic("init not found for " + pkg.Pkg.Path())
 				}
-				err := interp.RunFunc(pkgInit, config.DumpSSA())
+				err := interp.Run(mod, pkgInit)
 				if err != nil {
 					return err
 				}
@@ -878,7 +878,11 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 // needed to convert a program to its final form. Some transformations are not
 // optional and must be run as the compiler expects them to run.
 func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
-	err := interp.Run(mod, config.DumpSSA())
+	init := mod.NamedFunction("runtime.initAll")
+	if init.IsNil() {
+		panic("initAll not found")
+	}
+	err := interp.Run(mod, init)
 	if err != nil {
 		return err
 	}

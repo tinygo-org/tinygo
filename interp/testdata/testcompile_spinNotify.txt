@@ -1,0 +1,6 @@
+fn ccc (ptr(in default, idx i32) %0)->() in default {
+entry: (height: 1)
+	store seq_cst i32 1 to ptr(in default, idx i32) %0
+	br [to ret, φ()]
+ret: (height: 0)
+}

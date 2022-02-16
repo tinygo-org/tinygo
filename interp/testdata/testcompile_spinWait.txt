@@ -1,0 +1,8 @@
+fn ccc (ptr(in default, idx i32) %0)->() in default {
+entry: (height: 1)
+0: (height: 1)
+	i32 %1 = i32 seq_cst load ptr(in default, idx i32) %0
+	switch i1 cast(i32 %1) {i1 false: [to 0, φ()]}
+	br [to ret, φ()]
+ret: (height: 0)
+}

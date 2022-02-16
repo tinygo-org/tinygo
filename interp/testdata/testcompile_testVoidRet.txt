@@ -1,0 +1,5 @@
+fn ccc ()->() in default {
+entry: (height: 0)
+	br [to ret, φ()]
+ret: (height: 0)
+}

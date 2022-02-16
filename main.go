@@ -28,7 +28,6 @@ import (
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
-	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
 	"tinygo.org/x/go-llvm"
 
@@ -1089,21 +1088,21 @@ func printCompilerError(logln func(...interface{}), err error) {
 		for _, scannerErr := range err {
 			printCompilerError(logln, *scannerErr)
 		}
-	case *interp.Error:
-		logln("#", err.ImportPath)
-		logln(err.Error())
-		if !err.Inst.IsNil() {
-			err.Inst.Dump()
+	/*case *interp.Error:
+	logln("#", err.ImportPath)
+	logln(err.Error())
+	if !err.Inst.IsNil() {
+		err.Inst.Dump()
+		logln()
+	}
+	if len(err.Traceback) > 0 {
+		logln("\ntraceback:")
+		for _, line := range err.Traceback {
+			logln(line.Pos.String() + ":")
+			line.Inst.Dump()
 			logln()
 		}
-		if len(err.Traceback) > 0 {
-			logln("\ntraceback:")
-			for _, line := range err.Traceback {
-				logln(line.Pos.String() + ":")
-				line.Inst.Dump()
-				logln()
-			}
-		}
+	}*/
 	case loader.Errors:
 		logln("#", err.Pkg.ImportPath)
 		for _, err := range err.Errs {

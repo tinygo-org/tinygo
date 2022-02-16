@@ -1,0 +1,12 @@
+fn ccc (i32 %0, i32 %1)->(i32 %0) in default {
+entry: (height: 2)
+	br [to 0, φ(i32 0, i32 0)]
+0: (height: 4)
+	i1 %4 = icmp ult i32 %2, i32 %0
+	switch i1 %4 {i1 false: [to ret, φ(i32 %3)]}
+1: (height: 5)
+	i32 %5 = i32 add i32 %3, i32 %1
+	i32 %6 = i32 add i32 %2, i32 1
+	br [to 0, φ(i32 %6, i32 %5)]
+ret: (height: 1)
+}
