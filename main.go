@@ -1187,6 +1187,7 @@ func main() {
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
 	scheduler := flag.String("scheduler", "", "which scheduler to use (none, tasks, asyncify)")
 	serial := flag.String("serial", "", "which serial output to use (none, uart, usb)")
+	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete this directory on exit")
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
@@ -1275,6 +1276,7 @@ func main() {
 		PanicStrategy:   *panicStrategy,
 		Scheduler:       *scheduler,
 		Serial:          *serial,
+		Work:            *work,
 		PrintIR:         *printIR,
 		DumpSSA:         *dumpSSA,
 		VerifyIR:        *verifyIR,
