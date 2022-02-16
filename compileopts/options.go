@@ -28,6 +28,7 @@ type Options struct {
 	PanicStrategy   string
 	Scheduler       string
 	Serial          string
+	Work            bool // -work flag to print temporary build directory
 	PrintIR         bool
 	DumpSSA         bool
 	VerifyIR        bool

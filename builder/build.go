@@ -99,7 +99,11 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(dir)
+	if config.Options.Work {
+		fmt.Printf("WORK=%s\n", dir)
+	} else {
+		defer os.RemoveAll(dir)
+	}
 
 	// Check for a libc dependency.
 	// As a side effect, this also creates the headers for the given libc, if
