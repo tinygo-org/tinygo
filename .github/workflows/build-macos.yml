@@ -76,6 +76,8 @@ jobs:
         run: make test GOTESTFLAGS="-v -short"
       - name: Build TinyGo release tarball
         run: make release -j3
+      - name: Test stdlib packages
+        run: make tinygo-test
       - name: Make release artifact
         shell: bash
         run: cp -p build/release.tar.gz build/tinygo.darwin-amd64.tar.gz 
