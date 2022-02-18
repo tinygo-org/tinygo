@@ -9,6 +9,7 @@ package usb
 import (
 	"device/arm"
 	"device/sam"
+	"math/bits"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
@@ -34,29 +35,9 @@ type dhw struct {
 
 	ep [descMaxEndpoints]dhwEPAddrStatus
 
-	log      [2048][64]byte
-	logCount uint
-
 	setup   dcdSetup
 	stage   dcdStage
 	address uint16
-}
-
-var a uint
-
-func (d *dhw) logEvent(s string) {
-	d.enableInterrupts(false)
-	copy(d.log[d.logCount][:], s)
-	d.logCount++
-	if d.logCount > 20 {
-		d.logReset()
-	}
-	d.enableInterrupts(true)
-}
-
-//go:noinline
-func (d *dhw) logReset() {
-	a = d.logCount
 }
 
 func deleteCache(addr, size uintptr) {}
@@ -86,19 +67,11 @@ func allocDHW(port, instance int, speed Speed, dc *dcd) *dhw {
 	}
 
 	// SAMx51 has only one USB PHY, which is full-speed
-	if 0 == speed {
+	if speed == 0 {
 		speed = FullSpeed
 	}
 	dhwInstance[instance].speed = speed
 	dhwInstance[instance].ready = false
-
-	// initialize the transfer descriptors
-	for i := range dhwInstance[instance].ep {
-		dhwInstance[instance].ep[i][descBankOut].init(
-			&dhwInstance[instance], rxEndpoint(uint8(i)))
-		dhwInstance[instance].ep[i][descBankIn].init(
-			&dhwInstance[instance], txEndpoint(uint8(i)))
-	}
 
 	return &dhwInstance[instance]
 }
@@ -327,12 +300,12 @@ func (d *dhw) interrupt() {
 			sam.USB_DEVICE_ENDPOINT_EPINTFLAG_RXSTP |
 				sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT0)
 
-		d.logEvent("setup received")
-
 		// Parse the SETUP packet immediately, clearing room in the (one and only)
 		// control buffer for the next SETUP packet received.
 		sup := setupFrom(d.controlSetupBuffer())
 		dir := sup.direction()
+
+		// We've copied the SETUP packet elsewhere and are ready to receive another.
 		d.prepareSetup()
 
 		// Although there is only one control buffer, EP0 has two transfer queues:
@@ -350,14 +323,12 @@ func (d *dhw) interrupt() {
 		}
 	}
 
-	// maybe transfer complete
+	epints := d.bus.EPINTSMRY.Get() & ((1 << descMaxEndpoints) - 1)
 
-	epints := d.bus.EPINTSMRY.Get()
+	for epints != 0 {
 
-	for ep := uint8(0); ep < descMaxEndpoints; ep++ {
-		if (epints & (1 << ep)) == 0 {
-			continue
-		}
+		ep := uint8(bits.TrailingZeros16(epints))
+		epints &^= 1 << ep
 
 		intFlag := d.bus.DEVICE_ENDPOINT[ep].EPINTFLAG.Get()
 
@@ -378,22 +349,20 @@ func (d *dhw) interrupt() {
 
 			d.bus.DEVICE_ENDPOINT[ep].EPINTFLAG.Set(
 				sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT1)
-			d.controlStall(false, descDirIn)
 
 			if ep == d.controlEndpoint() {
-				d.logEvent("EP0 Tx packet complete")
+				d.controlStall(false, descDirTx)
 				// check if there is more data to transfer or if we need to notify the
 				// upper-layer device driver of a control transfer completion event.
 				if count == 0 || count < size {
-					d.logEvent("EP0 Tx transfer complete")
 					d.controlTransferComplete(txEndpoint(ep), count, total)
 				} else {
 					d.controlTransferContinue(txEndpoint(ep), count, total)
 				}
-			} else if nil != d.ep[ep][descBankIn].callback {
+			} else if nil != d.ep[ep][descDirTx].callback {
 				// call our device class-specific callback, if defined, on endpoint
 				// data transfer complete events.
-				d.ep[ep][descBankIn].callback(txEndpoint(ep), count)
+				d.ep[ep][descDirTx].callback(txEndpoint(ep), count)
 			}
 		}
 
@@ -412,22 +381,20 @@ func (d *dhw) interrupt() {
 
 			d.bus.DEVICE_ENDPOINT[ep].EPINTFLAG.Set(
 				sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT0)
-			d.controlStall(false, descDirOut)
 
 			if ep == d.controlEndpoint() {
-				d.logEvent("EP0 Rx packet complete")
+				d.controlStall(false, descDirRx)
 				// check if there is more data to transfer or if we need to notify the
 				// upper-layer device driver of a control transfer completion event.
 				if count == 0 || count < size {
-					d.logEvent("EP0 Rx transfer complete")
 					d.controlTransferComplete(rxEndpoint(ep), count, total)
 				} else {
 					d.controlTransferContinue(rxEndpoint(ep), count, total)
 				}
-			} else if nil != d.ep[ep][descBankOut].callback {
+			} else if nil != d.ep[ep][descDirRx].callback {
 				// call our device class-specific callback, if defined, on endpoint
 				// data transfer complete events.
-				d.ep[ep][descBankOut].callback(rxEndpoint(ep), count)
+				d.ep[ep][descDirRx].callback(rxEndpoint(ep), count)
 			}
 		}
 	}
@@ -532,18 +499,17 @@ func (d *dhw) controlStatusStart(endpoint uint8) {
 
 	num, dir := unpackEndpoint(endpoint)
 
+	// Swap direction of the given endpoint Rx->Tx and Tx->Rx
 	switch dir {
-	case descDirOut:
+	case descDirRx:
 		endpoint = txEndpoint(num)
-	case descDirIn:
+	case descDirTx:
 		endpoint = rxEndpoint(num)
 	}
 	d.endpointTransfer(endpoint, 0, 0)
 }
 
 func (d *dhw) controlStatusComplete(endpoint uint8) {
-
-	d.logEvent("setup processing complete")
 
 	if (d.setup.bmRequestType&descRequestTypeTypeMsk == descRequestTypeTypeStandard) &&
 		(d.setup.bmRequestType&(descRequestTypeRecipientMsk|descRequestTypeDirMsk) ==
@@ -564,7 +530,6 @@ func (d *dhw) controlTransferStart(endpoint uint8) {
 
 	// Dequeue the next transfer descriptor available.
 	if xfer, ok := d.ep[num][dir].pendingTransfer(); ok {
-		d.logEvent("setup processing begin")
 		// Update the active transfer descriptor on the corresponding endpoint.
 		d.ep[num][dir].setActiveTransfer(xfer)
 		// Invoke the DCD event handler for SETUP processing, which will enqueue
@@ -593,8 +558,6 @@ func (d *dhw) controlTransferComplete(endpoint uint8, count, total uint32) {
 	setupDir := d.setup.direction()
 	setupAddress := packEndpoint(num, setupDir)
 
-	d.logEvent("setup packet complete")
-
 	// If endpoint direction is opposite the direction in the original SETUP
 	// packet, then this is the end of the STATUS stage, i.e., end of transfer.
 	if dir != setupDir {
@@ -607,7 +570,6 @@ func (d *dhw) controlTransferComplete(endpoint uint8, count, total uint32) {
 		// Start processing any pending control transfers.
 		d.controlTransferStart(setupAddress)
 	} else {
-		d.logEvent("control status phase")
 		// Initiate ZLP transfer in opposite direction.
 		d.controlStatusStart(endpoint)
 	}
@@ -619,7 +581,7 @@ func (d *dhw) controlTransferComplete(endpoint uint8, count, total uint32) {
 func (d *dhw) controlReceive(data uintptr, size uint32, notify bool) {
 	ep := d.controlEndpoint()
 	if size > 0 && data > 0 {
-		if xfer, ok := d.ep[ep][descBankOut].activeTransfer(); ok {
+		if xfer, ok := d.ep[ep][descDirRx].activeTransfer(); ok {
 			next := xfer.packetStart(data, size)
 			d.endpointTransfer(rxEndpoint(ep), data, next)
 		}
@@ -634,7 +596,7 @@ func (d *dhw) controlReceive(data uintptr, size uint32, notify bool) {
 func (d *dhw) controlTransmit(data uintptr, size uint32, notify bool) {
 	ep := d.controlEndpoint()
 	if size > 0 && data > 0 {
-		if xfer, ok := d.ep[ep][descBankIn].activeTransfer(); ok {
+		if xfer, ok := d.ep[ep][descDirTx].activeTransfer(); ok {
 			next := xfer.packetStart(data, size)
 			d.endpointTransfer(txEndpoint(ep), data, next)
 		}
@@ -658,9 +620,9 @@ type dhwTransfer struct {
 
 // dhwTransferDepth defines the size of the dhwEPStatus.xferQueue buffered channel,
 // which affects the number of transfers each endpoint can enqueue for processing.
-// const dhwTransferDepth = 8
+const dhwTransferDepth = 8
 
-type dhwTransferLUT [QueueSize]dhwTransfer
+type dhwTransferLUT [dhwTransferDepth]dhwTransfer
 
 func (t *dhwTransfer) init(endpoint uint8, maxPacketSize uint32) {
 	t.endpoint = endpoint
@@ -741,6 +703,7 @@ type dhwEPStatus struct {
 	callback   func(endpoint uint8, size uint32)
 	flags      volatile.Register8
 	xferActive volatile.Register32
+	xferFIFO   [dhwTransferDepth]uint8
 	xferQueue  Queue
 	xferTable  dhwTransferLUT
 }
@@ -761,7 +724,8 @@ func (s *dhwEPStatus) init(dhw *dhw, endpoint uint8) {
 	s.endpoint = endpoint
 	s.callback = nil
 	s.flags.Set(0)
-	s.xferQueue.Reset()
+	fifo := s.xferFIFO[:]
+	s.xferQueue.Init(&fifo, dhwTransferDepth, QueueFullDiscardLast)
 	mps := dhw.endpointMaxPacketSize(endpoint)
 	for i := range s.xferTable {
 		s.xferTable[i].init(endpoint, mps)
@@ -955,7 +919,6 @@ func (s *dhwEPStatus) scheduleTransfer(data uintptr, size uint32) (ready bool, o
 // returned for both return values.
 func (s *dhwEPStatus) scheduleSetup(setup dcdSetup) (ready bool, ok bool) {
 	var i int
-	s.device.logEvent("setup queued")
 	if i, ok = s.claimSchedule(); ok {
 		defer s.device.enableInterrupts(true)
 		s.xferTable[i].reset()
@@ -1157,13 +1120,17 @@ func (d *dhw) endpointEnable(endpoint uint8, control bool, config uint32) {
 
 		if enum, ok := endpointSizeEncode(descControlPacketSize); ok {
 
+			num := endpointNumber(d.controlEndpoint())
+
+			// Initialize IN and OUT transfer descriptors on control endpoint 0.
+			d.ep[num][descDirRx].init(d, rxEndpoint(num))
+			d.ep[num][descDirTx].init(d, txEndpoint(num))
+
 			// Conigure packet size for control endpoints.
 			out.packetSize.ReplaceBits(enum,
 				USB_DEVICE_PCKSIZE_SIZE_Msk, USB_DEVICE_PCKSIZE_SIZE_Pos)
 			in.packetSize.ReplaceBits(enum,
 				USB_DEVICE_PCKSIZE_SIZE_Msk, USB_DEVICE_PCKSIZE_SIZE_Pos)
-
-			num := endpointNumber(d.controlEndpoint())
 
 			// rxType/txType uses the same rationale as epType (defined below in the
 			// else-branch that handles non-control endpoints).
@@ -1193,10 +1160,14 @@ func (d *dhw) endpointEnable(endpoint uint8, control bool, config uint32) {
 
 		if enum, ok := endpointSizeEncode(d.endpointMaxPacketSize(endpoint)); ok {
 
+			num, dir := unpackEndpoint(endpoint)
+
+			// Initialize transfer descriptors now that the device class configuration
+			// has been defined, which affects maximum packet size.
+			d.ep[num][dir].init(d, endpoint)
+
 			desc.packetSize.ReplaceBits(enum,
 				USB_DEVICE_PCKSIZE_SIZE_Msk, USB_DEVICE_PCKSIZE_SIZE_Pos)
-
-			num := endpointNumber(endpoint)
 
 			// config contains the bmAttributes field per USB standard EP descriptor,
 			// i.e., ctrl=0, iso=1, bulk=2, int=3, which corresponds to the EPCFG
@@ -1217,9 +1188,8 @@ func (d *dhw) endpointEnable(endpoint uint8, control bool, config uint32) {
 					sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_STALLRQ0 |
 						sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_DTGLOUT)
 
-				d.bus.DEVICE_ENDPOINT[num].EPINTENSET.ReplaceBits(
-					sam.USB_DEVICE_ENDPOINT_EPINTENSET_TRCPT0,
-					sam.USB_DEVICE_ENDPOINT_EPINTENSET_TRCPT0_Msk, 0)
+				d.bus.DEVICE_ENDPOINT[num].EPINTENSET.Set(
+					sam.USB_DEVICE_ENDPOINT_EPINTENSET_TRCPT0)
 
 			case txEndpoint(endpoint):
 
@@ -1234,15 +1204,16 @@ func (d *dhw) endpointEnable(endpoint uint8, control bool, config uint32) {
 					sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_STALLRQ1 |
 						sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_DTGLIN)
 
-				d.bus.DEVICE_ENDPOINT[num].EPINTENSET.ReplaceBits(
-					sam.USB_DEVICE_ENDPOINT_EPINTENSET_TRCPT1,
-					sam.USB_DEVICE_ENDPOINT_EPINTENSET_TRCPT1_Msk, 0)
+				d.bus.DEVICE_ENDPOINT[num].EPINTENSET.Set(
+					sam.USB_DEVICE_ENDPOINT_EPINTENSET_TRCPT1)
 			}
 		}
 	}
 }
 
-func (d *dhw) endpointConfigure(endpoint uint8) {
+func (d *dhw) endpointConfigure(endpoint uint8, callback func(endpoint uint8, size uint32)) {
+	num, dir := unpackEndpoint(endpoint)
+	d.ep[num][dir].callback = callback
 }
 
 // endpointStall sets or clears a stall on the given endpoint.
@@ -1299,7 +1270,7 @@ func (d *dhw) endpointTransfer(endpoint uint8, data uintptr, size uint32) {
 
 	switch num, dir := unpackEndpoint(endpoint); dir {
 
-	case descDirOut: // Rx
+	case descDirRx: // OUT
 
 		// overwrite the BYTE_COUNT and MULTI_PACKET_SIZE bitfields only (with 0 and
 		// size, respectively).
@@ -1315,7 +1286,7 @@ func (d *dhw) endpointTransfer(endpoint uint8, data uintptr, size uint32) {
 		d.bus.DEVICE_ENDPOINT[num].EPINTFLAG.SetBits(
 			sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRFAIL0)
 
-	case descDirIn: // Tx
+	case descDirTx: // IN
 
 		// overwrite the BYTE_COUNT and MULTI_PACKET_SIZE bitfields only (with size
 		// and 0, respectively).
@@ -1364,54 +1335,89 @@ func (d *dhw) uartConfigure() {
 	acm := &descCDCACM[d.cc.config-1]
 
 	// SAMx51 only supports USB full-speed (FS) operation
+	acm.sxSize = descCDCACMStatusFSPacketSize
 	acm.rxSize = descCDCACMDataRxFSPacketSize
 	acm.txSize = descCDCACMDataTxFSPacketSize
 
-	d.endpointEnable(descCDCACMEndpointStatus,
+	rq := acm.rx[:]
+	tq := acm.tx[:]
+
+	// Rx gives priority to incoming data, Tx gives priority to outgoing data
+	acm.rq.Init(&rq, descCDCACMRxSize, QueueFullDiscardFirst)
+	acm.tq.Init(&tq, descCDCACMTxSize, QueueFullDiscardLast)
+
+	d.endpointEnable(txEndpoint(descCDCACMEndpointStatus),
 		false, descCDCACMConfigAttrStatus)
-	d.endpointEnable(descCDCACMEndpointDataRx,
+	d.endpointEnable(rxEndpoint(descCDCACMEndpointDataRx),
 		false, descCDCACMConfigAttrDataRx)
-	d.endpointEnable(descCDCACMEndpointDataTx,
+	d.endpointEnable(txEndpoint(descCDCACMEndpointDataTx),
 		false, descCDCACMConfigAttrDataTx)
-	/*
-		d.endpointConfigureTx(descCDCACMEndpointStatus,
-			acm.sxSize, false, nil)
-		d.endpointConfigureRx(descCDCACMEndpointDataRx,
-			acm.rxSize, false, d.uartNotify)
-		d.endpointConfigureTx(descCDCACMEndpointDataTx,
-			acm.txSize, true, nil)
 
-		for i := range acm.rd {
-			d.uartReceive(uint8(i))
+	d.endpointConfigure(txEndpoint(descCDCACMEndpointStatus),
+		nil)
+	d.endpointConfigure(rxEndpoint(descCDCACMEndpointDataRx),
+		d.uartReceiveComplete)
+	d.endpointConfigure(txEndpoint(descCDCACMEndpointDataTx),
+		nil)
+
+	d.uartReceive(descCDCACMEndpointDataRx)
+}
+
+func (d *dhw) uartSetLineState(state uint16) {
+	acm := &descCDCACM[d.cc.config-1]
+	if acm.ls.parse(state) {
+		// TBD: respond to changes in line state?
+	}
+}
+
+func (d *dhw) uartSetLineCoding(coding []uint8) {
+	acm := &descCDCACM[d.cc.config-1]
+	if acm.lc.parse(coding) {
+		switch acm.lc.baud {
+		case 1200:
+			if acm.ls.dataTerminalReady {
+				// reboot CPU
+			}
 		}
-	*/
-	d.timerConfigure(0, descCDCACMTxSyncUs, d.uartSync)
-}
-
-func (d *dhw) uartSetLineState(dtr, rts bool) {
-}
-
-func (d *dhw) uartSetLineCoding(coding descCDCACMLineCoding) {
-	if 134 == coding.baud {
-		d.enableSOF(true, descCDCACMInterfaceCount)
 	}
 }
 
 func (d *dhw) uartReady() bool {
-	acm := &descCDCACM[d.cc.config-1]
-	_ = acm // TODO(ardnew): elaborate stub
-	return false
+	return d.dcd.state() == dcdStateConfigured
 }
 
 func (d *dhw) uartReceive(endpoint uint8) {
 	acm := &descCDCACM[d.cc.config-1]
 	num := uint16(endpoint) & descEndptAddrNumberMsk
-	_, _ = acm, num // TODO(ardnew): elaborate stub
+
+	ready, _ := d.ep[num][descDirRx].scheduleTransfer(
+		uintptr(unsafe.Pointer(&acm.rx[0])), acm.rxSize)
+	if ready {
+		if xfer, ok := d.ep[num][descDirRx].pendingTransfer(); ok {
+			// Update the active transfer descriptor on the corresponding endpoint.
+			d.ep[num][descDirRx].setActiveTransfer(xfer)
+			next := xfer.packetStart(xfer.data, xfer.size)
+			d.endpointTransfer(endpoint, xfer.data, next)
+		}
+	}
 }
 
-func (d *dhw) uartNotify(endpoint uint8, size uint32) {
+func (d *dhw) uartReceiveComplete(endpoint uint8, size uint32) {
 	acm := &descCDCACM[d.cc.config-1]
+	num := uint16(endpoint) & descEndptAddrNumberMsk
 	_ = acm // TODO(ardnew): elaborate stub
+
+	if xfer, ok := d.ep[num][descDirRx].activeTransfer(); ok {
+		for ptr := xfer.data + uintptr(xfer.sent); ptr < xfer.data+uintptr(size); ptr++ {
+			acm.rq.Enq(*(*uint8)(unsafe.Pointer(ptr)))
+		}
+		if data, size := xfer.packetComplete(size); size > 0 {
+			d.endpointTransfer(endpoint, data, size)
+			return
+		}
+	}
+	d.ep[num][descDirRx].setActiveTransfer(nil)
+	d.uartReceive(endpoint)
 }
 
 // uartFlush discards all buffered input (Rx) data.
@@ -1445,7 +1451,7 @@ func (d *dhw) uartRead(data []uint8) int {
 }
 
 func (d *dhw) uartWriteByte(c uint8) bool {
-	return 1 == d.uartWrite([]uint8{c})
+	return d.uartWrite([]uint8{c}) == 1
 }
 
 func (d *dhw) uartWrite(data []uint8) int {

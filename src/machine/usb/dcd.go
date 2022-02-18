@@ -505,11 +505,10 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 				// CDC-ACM (single)
 				case classDeviceCDCACM:
 					// line coding must contain exactly 7 bytes
-					if uint16(descCDCACMCodingSize) == sup.wLength {
-						d.setup = sup
+					if uint16(descCDCACMLineCodingSize) == sup.wLength {
 						d.controlReceive(
 							uintptr(unsafe.Pointer(&descCDCACM[d.cc.config-1].cx[0])),
-							uint32(descCDCACMCodingSize), true)
+							uint32(descCDCACMLineCodingSize), true)
 						// CDC Line Coding packet receipt handling occurs in method
 						// controlComplete().
 						return dcdStageDataOut
@@ -534,7 +533,7 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 					// Control/status interface:
 					case descCDCACMInterfaceCtrl:
 						// DTR is bit 0 (mask 0x01), RTS is bit 1 (mask 0x02)
-						d.uartSetLineState(0 != sup.wValue&0x01, 0 != sup.wValue&0x02)
+						d.uartSetLineState(sup.wValue)
 						d.controlReceive(uintptr(0), 0, false)
 						return dcdStageStatusOut
 
@@ -570,7 +569,6 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 				// HID
 				case classDeviceHID:
 					if sup.wLength <= descHIDSxSize {
-						d.setup = sup
 						descHID[d.cc.config-1].cx[0] = 0xE9
 						d.controlReceive(
 							uintptr(unsafe.Pointer(&descHID[d.cc.config-1].cx[0])),
@@ -687,12 +685,7 @@ func (d *dcd) controlComplete() {
 					case descCDCACMInterfaceCtrl:
 						// Notify PHY to handle triggers like special baud rates, which
 						// signal to reboot into bootloader or begin receiving OTA updates
-						d.uartSetLineCoding(descCDCACMLineCoding{
-							baud:     packU32(acm.cx[:]),
-							stopBits: acm.cx[4],
-							parity:   acm.cx[5],
-							numBits:  acm.cx[6],
-						})
+						d.uartSetLineCoding(acm.cx[:])
 
 					default:
 						// Unhandled device interface

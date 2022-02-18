@@ -1,7 +1,5 @@
 package usb
 
-import "unsafe"
-
 const descUSBSpecVersion = uint16(0x0200) // USB 2.0
 
 const descLanguageEnglish = uint16(0x0409) // (US) English
@@ -140,6 +138,9 @@ const (
 const (
 	descDirOut = descRequestTypeDirOut >> descRequestTypeDirPos
 	descDirIn  = descRequestTypeDirIn >> descRequestTypeDirPos
+
+	descDirRx = descDirOut // "IN" and "OUT" terms are from host's perspective,
+	descDirTx = descDirIn  // which is opposite from USB device. Kinda awkward.
 )
 
 // device returns the enumerated device descriptor value, defined per USB
@@ -429,15 +430,55 @@ const (
 // descEndpointInvalid represents an invalid endpoint address.
 const descEndpointInvalid = ^uint8(descEndptAddrNumberMsk | descEndptAddrDirectionMsk)
 
-// descCDCACMCodingSize defines the length of a CDC-ACM UART line coding buffer.
-const descCDCACMCodingSize = unsafe.Sizeof(descCDCACMLineCoding{})
+// descCDCACMLineCodingSize defines the length of a CDC-ACM UART line coding
+// buffer. Note that the actual buffer may be padded for alignment; but for
+// Rx/Tx transfer purposes, descCDCACMLineCodingSize defines the number of bytes
+// that are transferred following a control SETUP request.
+const descCDCACMLineCodingSize = 7
 
 // descCDCACMLineCoding represents an emulated UART's line configuration.
+//
+// Use descCDCACMLineCodingSize instead of unsafe.Sizeof(descCDCACMLineCoding)
+// in any transfer requests, because the actual struct is padded for alignment.
 type descCDCACMLineCoding struct {
 	baud     uint32
 	stopBits uint8
 	parity   uint8
 	numBits  uint8
+	_        uint8
+}
+
+// parse initializes the receiver descCDCACMLineCoding from the given []uint8 v.
+// Argument v is a Rx transfer buffer, filled following the completion of a
+// control transfer from a CDC SET_LINE_CODING (0x20) request
+func (s *descCDCACMLineCoding) parse(v []uint8) bool {
+	if len(v) >= descCDCACMLineCodingSize {
+		s.baud = packU32(v[:])
+		s.stopBits = v[4]
+		s.parity = v[5]
+		s.numBits = v[6]
+		return true
+	}
+	return false
+}
+
+// descCDCACMLineState represents an emulated UART's line state.
+type descCDCACMLineState struct {
+	// dataTerminalReady indicates if DTE is present or not.
+	// Corresponds to V.24 signal 108/2 and RS-232 signal DTR.
+	dataTerminalReady bool // DTR
+	// requestToSend is the carrier control for half-duplex modems.
+	// Corresponds to V.24 signal 105 and RS-232 signal RTS.
+	requestToSend bool // RTS
+}
+
+// parse initializes the receiver descCDCACMLineState from the given uint16 v.
+// Argument v corresponds to the wValue field in a control SETUP packet, which
+// carries the line state from a CDC SET_CONTROL_LINE_STATE (0x22) request.
+func (s *descCDCACMLineState) parse(v uint16) bool {
+	s.dataTerminalReady = 0 != v&0x1
+	s.requestToSend = 0 != v&0x2
+	return true
 }
 
 // Common configuration constants for the USB CDC-ACM (single) device class.
@@ -464,9 +505,6 @@ const (
 // structures for the USB CDC-ACM (single) device class.
 type descCDCACMClass struct {
 	*descCDCACMClassData // Target-defined, class-specific data
-
-	line descCDCACMLineCoding
-	term struct{ dtr, rts bool }
 
 	locale *[descCDCACMLanguageCount]descStringLanguage // string descriptors
 	device *[descLengthDevice]uint8                     // device descriptor

@@ -38,9 +38,6 @@ const (
 
 	descMaxEndpoints = 8 // SAMx51 maximum number of endpoints
 
-	descBankOut = 0 // descriptor bank 0 holds OUT endpoints
-	descBankIn  = 1 // descriptor bank 1 holds IN endpoints
-
 	descControlPacketSize = 64
 )
 
@@ -69,8 +66,8 @@ const (
 
 	// CDC-ACM Data Buffers
 
-	descCDCACMRxSize = 4 * descCDCACMDataRxPacketSize
-	descCDCACMTxSize = 4 * descCDCACMDataTxPacketSize
+	descCDCACMRxSize = 1 * descCDCACMDataRxPacketSize
+	descCDCACMTxSize = 1 * descCDCACMDataTxPacketSize
 
 	descCDCACMTxTimeoutMs = 120 // millisec
 	descCDCACMTxSyncUs    = 75  // microsec
@@ -221,6 +218,16 @@ var descCDCACM0Rx [descCDCACMRxSize]uint8
 //go:align 32
 var descCDCACM0Tx [descCDCACMTxSize]uint8
 
+// descCDCACM0LC is the emulated UART's line coding configuration for the
+// default CDC-ACM (single) device class configuration (index 1).
+//go:align 32
+var descCDCACM0LC descCDCACMLineCoding
+
+// descCDCACM0LS is the emulated UART's line state for the default CDC-ACM
+// (single) device class configuration (index 1).
+//go:align 32
+var descCDCACM0LS descCDCACMLineState
+
 // descCDCACMClassData holds the buffers and control states for all CDC-ACM
 // (single) device class configurations, ordered by index (offset by -1), for
 // SAMx51 targets only.
@@ -245,9 +252,15 @@ type descCDCACMClassData struct {
 	rx *[descCDCACMRxSize]uint8 // bulk data endpoint Rx (OUT) transfer buffer
 	tx *[descCDCACMTxSize]uint8 // bulk data endpoint Tx (IN) transfer buffer
 
-	sxSize uint16
-	rxSize uint16
-	txSize uint16
+	lc *descCDCACMLineCoding // UART line coding
+	ls *descCDCACMLineState  // UART line state
+
+	rq *Queue
+	tq *Queue
+
+	sxSize uint32
+	rxSize uint32
+	txSize uint32
 }
 
 // descCDCACMData holds statically-allocated instances for each of the target-
@@ -270,6 +283,12 @@ var descCDCACMData = [dcdCount]descCDCACMClassData{
 
 		rx: &descCDCACM0Rx,
 		tx: &descCDCACM0Tx,
+
+		lc: &descCDCACM0LC,
+		ls: &descCDCACM0LS,
+
+		rq: &Queue{},
+		tq: &Queue{},
 
 		sxSize: descCDCACMStatusPacketSize,
 		rxSize: descCDCACMDataRxPacketSize,
