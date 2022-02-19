@@ -1411,8 +1411,8 @@ func main() {
 		if len(pkgNames) == 0 {
 			pkgNames = []string{"."}
 		}
-		if *testCompileOnlyFlag && len(pkgNames) > 1 {
-			fmt.Println("cannot use -c flag with multiple packages")
+		if outpath != "" && len(pkgNames) > 1 {
+			fmt.Println("cannot use -o flag with multiple packages")
 			os.Exit(1)
 		}
 
