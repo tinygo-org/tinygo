@@ -27,7 +27,7 @@ import "C"
 //line errors.go:100
 var (
 	// constant too large
-	_ C.uint8_t = 2 << 10
+	_ C.char = 2 << 10
 
 	// z member does not exist
 	_ C.point_t = C.point_t{z: 3}
