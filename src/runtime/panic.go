@@ -7,16 +7,16 @@ func trap()
 
 // Builtin function panic(msg), used as a compiler intrinsic.
 func _panic(message interface{}) {
-	printstring("panic: ")
-	printitf(message)
-	printnl()
+	//printstring("panic: ")
+	//printitf(message)
+	//printnl()
 	abort()
 }
 
 // Cause a runtime panic, which is (currently) always a string.
 func runtimePanic(msg string) {
-	printstring("panic: runtime error: ")
-	println(msg)
+	//printstring("panic: runtime error: ")
+	//println(msg)
 	abort()
 }
 

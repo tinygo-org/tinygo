@@ -1,3 +1,4 @@
+//go:build tinygo.wasm
 // +build tinygo.wasm
 
 package runtime
@@ -64,7 +65,7 @@ func growHeap() bool {
 // the wasi-libc dlmalloc heap implementation instead. If they are needed by any
 // program, they can certainly be implemented.
 
-//export malloc
+//zexport malloc
 func libc_malloc(size uintptr) unsafe.Pointer {
 	return alloc(size, nil)
 }
@@ -74,7 +75,7 @@ func libc_free(ptr unsafe.Pointer) {
 	free(ptr)
 }
 
-//export calloc
+//zexport calloc
 func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
 	// Note: we could be even more correct here and check that nmemb * size
 	// doesn't overflow. However the current implementation should normally work
@@ -82,24 +83,24 @@ func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
 	return alloc(nmemb*size, nil)
 }
 
-//export realloc
+//zexport realloc
 func libc_realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
 	return realloc(ptr, size)
 }
 
-//export posix_memalign
+//zexport posix_memalign
 func libc_posix_memalign(memptr *unsafe.Pointer, alignment, size uintptr) int {
 	runtimePanic("unimplemented: posix_memalign")
 	return 0
 }
 
-//export aligned_alloc
+//zexport aligned_alloc
 func libc_aligned_alloc(alignment, bytes uintptr) unsafe.Pointer {
 	runtimePanic("unimplemented: aligned_alloc")
 	return nil
 }
 
-//export malloc_usable_size
+//zexport malloc_usable_size
 func libc_malloc_usable_size(ptr unsafe.Pointer) uintptr {
 	runtimePanic("unimplemented: malloc_usable_size")
 	return 0
