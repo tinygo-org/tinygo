@@ -352,6 +352,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 
 	timeoutNS := int64(timeoutMS) * 1000000
 	needAddress := true
+	needRestart := false
 	var readTo []byte
 	for cmdIdx, reg := 0, &esp.I2C.COMD0; cmdIdx < len(cmd); {
 		c := &cmd[cmdIdx]
@@ -383,6 +384,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 			} else {
 				cmdIdx++
 			}
+			needRestart = true
 
 		case i2cCMD_READ:
 			if needAddress {
@@ -391,6 +393,15 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 				esp.I2C.SLAVE_ADDR.Set(uint32(addr))
 				reg.Set(i2cCMD_WRITE | 1)
 				reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
+			}
+			if needRestart {
+				// We need to send RESTART again after i2cCMD_WRITE.
+				reg.Set(i2cCMD_RSTART)
+				reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
+				reg.Set(i2cCMD_WRITE | 1)
+				reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
+				esp.I2C.SetFIFO_DATA_FIFO_RDATA((uint32(addr)&0x7f)<<1 | 1)
+				needRestart = false
 			}
 			count := 32
 			bytes := len(c.data) - c.head
