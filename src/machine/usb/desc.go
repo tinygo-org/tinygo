@@ -1,5 +1,7 @@
 package usb
 
+import "runtime/volatile"
+
 const descUSBSpecVersion = uint16(0x0200) // USB 2.0
 
 const descLanguageEnglish = uint16(0x0409) // (US) English
@@ -481,6 +483,26 @@ func (s *descCDCACMLineState) parse(v uint16) bool {
 	return true
 }
 
+type descCDCACMState uint8
+
+const (
+	descCDCACMStateConfigured descCDCACMState = iota // Received SET_CONFIGURATION class request
+	descCDCACMStateLineState                         // Received SET_LINE_STATE after Configured state
+	descCDCACMStateLineCoding                        // Received SET_LINE_CODING after LineState state
+)
+
+func (s *descCDCACMState) set(state descCDCACMState) {
+	if state > *s {
+		// state must be incremented in-order. Otherwise, reset to initial state.
+		if state == *s+1 {
+			*s = state
+		} else {
+			var init descCDCACMState // Reset to zero-value of type.
+			*s = init
+		}
+	}
+}
+
 // Common configuration constants for the USB CDC-ACM (single) device class.
 const (
 	descCDCACMLanguageCount = 1 // String descriptor languages available
@@ -510,6 +532,14 @@ type descCDCACMClass struct {
 	device *[descLengthDevice]uint8                     // device descriptor
 	qualif *[descLengthQualification]uint8              // device qualification descriptor
 	config *[descCDCACMConfigSize]uint8                 // configuration descriptor
+
+	state volatile.Register8
+}
+
+func (c *descCDCACMClass) setState(state descCDCACMState) {
+	s := descCDCACMState(c.state.Get())
+	s.set(state)
+	c.state.Set(uint8(s))
 }
 
 // descCDCACM holds statically-allocated instances for each of the CDC-ACM

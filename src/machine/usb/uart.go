@@ -6,9 +6,7 @@ import (
 
 var (
 	ErrUARTInvalidPort = errors.New("invalid USB port")
-	ErrUARTInvalidCore = errors.New("invalid USB core")
 	ErrUARTEmptyBuffer = errors.New("USB receive buffer empty")
-	ErrUARTWriteFailed = errors.New("USB write failure")
 )
 
 // UART represents a virtual serial (UART) device emulation using the USB
@@ -43,12 +41,16 @@ func (uart *UART) Ready() bool {
 
 // Buffered returns the number of bytes currently stored in the RX buffer.
 func (uart *UART) Buffered() int {
+	for !uart.Ready() {
+	}
 	return uart.core.dc.uartAvailable()
 }
 
 // ReadByte reads a single byte from the RX buffer.
 // If there is no data in the buffer, returns an error.
 func (uart *UART) ReadByte() (byte, error) {
+	for !uart.Ready() {
+	}
 	n, ok := uart.core.dc.uartReadByte()
 	if !ok {
 		return 0, ErrUARTEmptyBuffer
@@ -58,18 +60,21 @@ func (uart *UART) ReadByte() (byte, error) {
 
 // Read from the RX buffer.
 func (uart *UART) Read(data []byte) (n int, err error) {
-	return uart.core.dc.uartRead(data), nil
+	for !uart.Ready() {
+	}
+	return uart.core.dc.uartRead(data)
 }
 
 // WriteByte writes a single byte of data to the UART interface.
 func (uart *UART) WriteByte(c byte) error {
-	if !uart.core.dc.uartWriteByte(c) {
-		return ErrUARTWriteFailed
+	for !uart.Ready() {
 	}
-	return nil
+	return uart.core.dc.uartWriteByte(c)
 }
 
 // Write data to the UART.
 func (uart *UART) Write(data []byte) (n int, err error) {
-	return uart.core.dc.uartWrite(data), nil
+	for !uart.Ready() {
+	}
+	return uart.core.dc.uartWrite(data)
 }

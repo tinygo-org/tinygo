@@ -21,11 +21,11 @@ type Queue struct {
 }
 
 var (
-	ErrReadBuffer  = errors.New("cannot copy into read buffer")
-	ErrWriteBuffer = errors.New("cannot copy from write buffer")
-	ErrQueueEmpty  = errors.New("data queue empty") // Read Error
-	ErrQueueFull   = errors.New("data queue full")  // Write error
-	ErrQueueNoMode = errors.New("unknown FIFO copy mode")
+	ErrQueueReadZero    = errors.New("copy into zero-length buffer")
+	ErrQueueWriteZero   = errors.New("copy from zero-length buffer")
+	ErrQueueEmpty       = errors.New("buffer empty") // Read underrun
+	ErrQueueFull        = errors.New("buffer full")  // Write overrun
+	ErrQueueDiscardMode = errors.New("unknown discard mode")
 )
 
 // Init initializes the receiver queue's backing data store with the given byte
@@ -117,7 +117,7 @@ func (q *Queue) Read(data []uint8) (int, error) {
 
 	less := uint32(len(data))
 	if less == 0 {
-		return 0, ErrReadBuffer
+		return 0, ErrQueueReadZero
 	} // nothing to copy into
 
 	head := q.head.Get()
@@ -152,7 +152,7 @@ func (q *Queue) Write(data []uint8) (int, error) {
 
 	// Nothing to copy from is an error regardless of mode.
 	if more == 0 {
-		return 0, ErrWriteBuffer
+		return 0, ErrQueueWriteZero
 	}
 
 	switch q.mode {
@@ -167,7 +167,7 @@ func (q *Queue) Write(data []uint8) (int, error) {
 			return 0, ErrQueueFull
 		}
 
-		// xOnly put to unused space.
+		// Only put to unused space.
 		if used+more > q.size.Get() {
 			more = q.size.Get() - used
 		}
@@ -210,11 +210,15 @@ func (q *Queue) Write(data []uint8) (int, error) {
 		// Copy a potentially-limited number of elements from data, depending on the
 		// current length of FIFO.
 		for i := uint32(0); i < more; i++ {
-			(*q.fifo)[tail%q.size.Get()] = data[i]
+			(*q.fifo)[tail%q.size.Get()] = data[from+i]
 			tail++
 		}
+		q.tail.Set(tail)
 
+		return int(more), nil
 	}
+
+	return 0, ErrQueueDiscardMode
 }
 
 // Front returns the next element that would be dequeued from the receiver FIFO

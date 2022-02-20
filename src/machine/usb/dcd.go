@@ -532,8 +532,8 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 
 					// Control/status interface:
 					case descCDCACMInterfaceCtrl:
-						// DTR is bit 0 (mask 0x01), RTS is bit 1 (mask 0x02)
-						d.uartSetLineState(sup.wValue)
+						// CDC Control Line State packet receipt handling occurs in method
+						// controlComplete().
 						d.controlReceive(uintptr(0), 0, false)
 						return dcdStageStatusOut
 
@@ -686,6 +686,31 @@ func (d *dcd) controlComplete() {
 						// Notify PHY to handle triggers like special baud rates, which
 						// signal to reboot into bootloader or begin receiving OTA updates
 						d.uartSetLineCoding(acm.cx[:])
+
+					default:
+						// Unhandled device interface
+					}
+
+				default:
+					// Unhandled device class
+				}
+
+				// CDC | SET CONTROL LINE STATE (0x22):
+			case descCDCRequestSetControlLineState:
+
+				// Respond based on our device class configuration
+				switch d.cc.id {
+
+				// CDC-ACM (single)
+				case classDeviceCDCACM:
+
+					// Determine interface destination of the request
+					switch d.setup.wIndex {
+
+					// Control/status interface:
+					case descCDCACMInterfaceCtrl:
+						// DTR is bit 0 (mask 0x01), RTS is bit 1 (mask 0x02)
+						d.uartSetLineState(d.setup.wValue)
 
 					default:
 						// Unhandled device interface

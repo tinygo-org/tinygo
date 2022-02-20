@@ -1334,17 +1334,19 @@ func (d *dhw) uartConfigure() {
 
 	acm := &descCDCACM[d.cc.config-1]
 
+	acm.setState(descCDCACMStateConfigured)
+
 	// SAMx51 only supports USB full-speed (FS) operation
 	acm.sxSize = descCDCACMStatusFSPacketSize
 	acm.rxSize = descCDCACMDataRxFSPacketSize
 	acm.txSize = descCDCACMDataTxFSPacketSize
 
-	rq := acm.rx[:]
-	tq := acm.tx[:]
+	rq := acm.rxq[:]
+	tq := acm.txq[:]
 
 	// Rx gives priority to incoming data, Tx gives priority to outgoing data
-	acm.rq.Init(&rq, descCDCACMRxSize, QueueFullDiscardFirst)
-	acm.tq.Init(&tq, descCDCACMTxSize, QueueFullDiscardLast)
+	acm.rq.Init(&rq, int(acm.rxSize), QueueFullDiscardFirst)
+	acm.tq.Init(&tq, int(acm.txSize), QueueFullDiscardLast)
 
 	d.endpointEnable(txEndpoint(descCDCACMEndpointStatus),
 		false, descCDCACMConfigAttrStatus)
@@ -1358,13 +1360,14 @@ func (d *dhw) uartConfigure() {
 	d.endpointConfigure(rxEndpoint(descCDCACMEndpointDataRx),
 		d.uartReceiveComplete)
 	d.endpointConfigure(txEndpoint(descCDCACMEndpointDataTx),
-		nil)
+		d.uartTransmitComplete)
 
-	d.uartReceive(descCDCACMEndpointDataRx)
+	d.uartReceiveStart(rxEndpoint(descCDCACMEndpointDataRx))
 }
 
 func (d *dhw) uartSetLineState(state uint16) {
 	acm := &descCDCACM[d.cc.config-1]
+	acm.setState(descCDCACMStateLineState)
 	if acm.ls.parse(state) {
 		// TBD: respond to changes in line state?
 	}
@@ -1372,6 +1375,7 @@ func (d *dhw) uartSetLineState(state uint16) {
 
 func (d *dhw) uartSetLineCoding(coding []uint8) {
 	acm := &descCDCACM[d.cc.config-1]
+	acm.setState(descCDCACMStateLineCoding)
 	if acm.lc.parse(coding) {
 		switch acm.lc.baud {
 		case 1200:
@@ -1383,10 +1387,24 @@ func (d *dhw) uartSetLineCoding(coding []uint8) {
 }
 
 func (d *dhw) uartReady() bool {
-	return d.dcd.state() == dcdStateConfigured
+	acm := &descCDCACM[d.cc.config-1]
+	// Ensure we have received SET_CONFIGURATION class request, and then both
+	// SET_LINE_STATE and SET_LINE_CODING CDC requests (in that order).
+	//
+	// Many USB hosts will send a default SET_LINE_CODING prior to SET_LINE_STATE,
+	// and then another SET_LINE_CODING containing the actual terminal settings.
+	//
+	// We do not want to start UART Rx/Tx transactions until after we have
+	// received the final SET_LINE_CODING with the intended terminal settings.
+	//
+	// The "set" method on type descCDCACMState defines this incremental state
+	// machine, with the UART's current state stored in the volatile.Register8
+	// field "state" of descCDCACMClass.
+	return d.state() == dcdStateConfigured && //acm.ls.dataTerminalReady &&
+		acm.state.Get() == uint8(descCDCACMStateLineCoding)
 }
 
-func (d *dhw) uartReceive(endpoint uint8) {
+func (d *dhw) uartReceiveStart(endpoint uint8) {
 	acm := &descCDCACM[d.cc.config-1]
 	num := uint16(endpoint) & descEndptAddrNumberMsk
 
@@ -1396,8 +1414,7 @@ func (d *dhw) uartReceive(endpoint uint8) {
 		if xfer, ok := d.ep[num][descDirRx].pendingTransfer(); ok {
 			// Update the active transfer descriptor on the corresponding endpoint.
 			d.ep[num][descDirRx].setActiveTransfer(xfer)
-			next := xfer.packetStart(xfer.data, xfer.size)
-			d.endpointTransfer(endpoint, xfer.data, next)
+			d.endpointTransfer(endpoint, xfer.data, xfer.size)
 		}
 	}
 }
@@ -1405,65 +1422,123 @@ func (d *dhw) uartReceive(endpoint uint8) {
 func (d *dhw) uartReceiveComplete(endpoint uint8, size uint32) {
 	acm := &descCDCACM[d.cc.config-1]
 	num := uint16(endpoint) & descEndptAddrNumberMsk
-	_ = acm // TODO(ardnew): elaborate stub
 
 	if xfer, ok := d.ep[num][descDirRx].activeTransfer(); ok {
-		for ptr := xfer.data + uintptr(xfer.sent); ptr < xfer.data+uintptr(size); ptr++ {
+		for ptr := xfer.data; ptr < xfer.data+uintptr(size); ptr++ {
 			acm.rq.Enq(*(*uint8)(unsafe.Pointer(ptr)))
-		}
-		if data, size := xfer.packetComplete(size); size > 0 {
-			d.endpointTransfer(endpoint, data, size)
-			return
 		}
 	}
 	d.ep[num][descDirRx].setActiveTransfer(nil)
-	d.uartReceive(endpoint)
+	d.uartReceiveStart(endpoint)
+}
+
+func (d *dhw) uartTransmitStart(endpoint uint8) {
+	acm := &descCDCACM[d.cc.config-1]
+	num := uint16(endpoint) & descEndptAddrNumberMsk
+
+	// BULK data endpoints can simply use a single time slot in the schedule, and
+	// repeatedly transfer from the same transmit buffer (acm.tx) as soon as the
+	// transaction complete callback has been called for a prior transaction.
+
+	// Do not schedule another transfer if one is already active, or if our Tx
+	// FIFO is currently empty.
+	if d.ep[num][descDirTx].hasActiveTransfer() || acm.tq.Len() == 0 {
+		return
+	}
+
+	if send, err := acm.tq.Read(acm.tx[:]); err == nil && send > 0 {
+		ready, _ := d.ep[num][descDirTx].scheduleTransfer(
+			uintptr(unsafe.Pointer(&acm.tx[0])), uint32(send))
+		if ready {
+			if xfer, ok := d.ep[num][descDirTx].pendingTransfer(); ok {
+				d.ep[num][descDirTx].setActiveTransfer(xfer)
+				d.endpointTransfer(endpoint, xfer.data, xfer.size)
+			}
+		}
+	}
+}
+
+func (d *dhw) uartTransmitComplete(endpoint uint8, size uint32) {
+	acm := &descCDCACM[d.cc.config-1]
+	num := uint16(endpoint) & descEndptAddrNumberMsk
+	if size > 0 && size%acm.txSize == 0 {
+		// Send ZLP if transfer length is a multiple of max packet size.
+		d.endpointTransfer(endpoint, 0, 0)
+	}
+	d.ep[num][descDirTx].setActiveTransfer(nil)
+	d.uartTransmitStart(endpoint)
 }
 
 // uartFlush discards all buffered input (Rx) data.
 func (d *dhw) uartFlush() {
 	acm := &descCDCACM[d.cc.config-1]
-	_ = acm // TODO(ardnew): elaborate stub
+	acm.rq.Reset(int(acm.rxSize))
 }
 
 func (d *dhw) uartAvailable() int {
-	return 0
+	acm := &descCDCACM[d.cc.config-1]
+	return acm.rq.Len()
 }
 
 func (d *dhw) uartPeek() (uint8, bool) {
 	acm := &descCDCACM[d.cc.config-1]
-	_ = acm // TODO(ardnew): elaborate stub
-	return 0, false
+	return acm.rq.Front()
 }
 
 func (d *dhw) uartReadByte() (uint8, bool) {
-	b := []uint8{0}
-	ok := d.uartRead(b) > 0
-	return b[0], ok
-}
-
-func (d *dhw) uartRead(data []uint8) int {
 	acm := &descCDCACM[d.cc.config-1]
-	read := uint16(0)
-	size := uint16(len(data))
-	_, _ = acm, size // TODO(ardnew): elaborate stub
-	return int(read)
+	return acm.rq.Deq()
 }
 
-func (d *dhw) uartWriteByte(c uint8) bool {
-	return d.uartWrite([]uint8{c}) == 1
-}
-
-func (d *dhw) uartWrite(data []uint8) int {
+func (d *dhw) uartRead(data []uint8) (int, error) {
 	acm := &descCDCACM[d.cc.config-1]
-	sent := 0
-	size := len(data)
-	_, _ = acm, size // TODO(ardnew): elaborate stub
-	return sent
+	return acm.rq.Read(data)
 }
 
-func (d *dhw) uartSync() {
+func (d *dhw) uartWriteByte(c uint8) error {
+	_, err := d.uartWrite([]uint8{c})
+	return err
+}
 
+func (d *dhw) uartWrite(data []uint8) (int, error) {
+
+	acm := &descCDCACM[d.cc.config-1]
+	num := uint16(descCDCACMEndpointDataTx) & descEndptAddrNumberMsk
+
+	var sent int
+	var werr error
+	for off := 0; off < len(data); off += int(acm.txSize) {
+
+		cnt := len(data[off:])
+		if cnt > int(acm.txSize) {
+			cnt = int(acm.txSize)
+		}
+
+		// Block until we have room in the Tx FIFO. Space will become available once
+		// the endpoint transaction complete interrupt is raised for the Tx BULK data
+		// endpoint, and then the uartTransmitComplete callback has dequeued data from
+		// the Tx FIFO (acm.tq) into the Tx transmit buffer (acm.tx).
+		for acm.tq.Rem() < cnt {
+		}
+
+		// Add data to Tx FIFO
+		add, err := acm.tq.Write(data[off : off+cnt])
+		if err != nil {
+			werr = err
+			break
+		}
+		sent += add
+
+		if d.ep[num][descDirTx].hasActiveTransfer() {
+			// If there is already a transmit in-progress, wait for its callback to
+			// detect new data in the FIFO and continue the transfer automatically.
+		} else {
+			// Otherwise, initiate a new data transfer.
+			d.uartTransmitStart(txEndpoint(descCDCACMEndpointDataTx))
+		}
+	}
+
+	return sent, werr
 }
 
 // =============================================================================

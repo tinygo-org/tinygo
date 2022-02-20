@@ -66,8 +66,8 @@ const (
 
 	// CDC-ACM Data Buffers
 
-	descCDCACMRxSize = 1 * descCDCACMDataRxPacketSize
-	descCDCACMTxSize = 1 * descCDCACMDataTxPacketSize
+	descCDCACMRxSize = descCDCACMDataRxPacketSize
+	descCDCACMTxSize = descCDCACMDataTxPacketSize
 
 	descCDCACMTxTimeoutMs = 120 // millisec
 	descCDCACMTxSyncUs    = 75  // microsec
@@ -218,6 +218,16 @@ var descCDCACM0Rx [descCDCACMRxSize]uint8
 //go:align 32
 var descCDCACM0Tx [descCDCACMTxSize]uint8
 
+// descCDCACM0Rq is the receive (Rx) transfer buffer for the default CDC-ACM
+// (single) device class configuration (index 1).
+//go:align 32
+var descCDCACM0Rq [descCDCACMRxSize]uint8
+
+// descCDCACM0Tq is the transmit (Tx) transfer buffer for the default CDC-ACM
+// (single) device class configuration (index 1).
+//go:align 32
+var descCDCACM0Tq [descCDCACMTxSize]uint8
+
 // descCDCACM0LC is the emulated UART's line coding configuration for the
 // default CDC-ACM (single) device class configuration (index 1).
 //go:align 32
@@ -252,6 +262,9 @@ type descCDCACMClassData struct {
 	rx *[descCDCACMRxSize]uint8 // bulk data endpoint Rx (OUT) transfer buffer
 	tx *[descCDCACMTxSize]uint8 // bulk data endpoint Tx (IN) transfer buffer
 
+	rxq *[descCDCACMRxSize]uint8
+	txq *[descCDCACMTxSize]uint8
+
 	lc *descCDCACMLineCoding // UART line coding
 	ls *descCDCACMLineState  // UART line state
 
@@ -283,6 +296,9 @@ var descCDCACMData = [dcdCount]descCDCACMClassData{
 
 		rx: &descCDCACM0Rx,
 		tx: &descCDCACM0Tx,
+
+		rxq: &descCDCACM0Rq,
+		txq: &descCDCACM0Tq,
 
 		lc: &descCDCACM0LC,
 		ls: &descCDCACM0LS,
