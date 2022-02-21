@@ -405,6 +405,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 			}
 			count := 32
 			bytes := len(c.data) - c.head
+			// Only last byte in sequence must be sent with ACK set to 1 to indicate end of data.
 			split := bytes <= count
 			if split {
 				bytes--
@@ -412,16 +413,17 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 			if bytes > 32 {
 				bytes = 32
 			}
-			readTo = c.data[c.head : c.head+bytes]
 			reg.Set(i2cCMD_READ | uint32(bytes) | c.ack)
 			reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
 
 			if split {
 				reg.Set(i2cCMD_READ | 1 | c.ack)
 				reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
+				readTo = c.data[c.head : c.head+bytes+1] // read bytes + 1 last byte
 				cmdIdx++
 			} else {
 				reg.Set(i2cCMD_END)
+				readTo = c.data[c.head : c.head+bytes]
 				reg = nil
 			}
 
