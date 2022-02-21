@@ -316,23 +316,17 @@ type i2cCommandType = uint32
 type i2cAck = uint32
 
 const (
-	i2cCMD_RSTART i2cCommandType = 6 << 11
-	i2cCMD_WRITE  i2cCommandType = 1<<11 | 1<<8 // WRITE + ack_check_en
-	i2cCMD_READ   i2cCommandType = 3 << 11
-	i2cCMD_STOP   i2cCommandType = 2 << 11
-	i2cCMD_END    i2cCommandType = 4 << 11
-)
-
-const (
-	i2cAckNone i2cAck = 0
-	i2cAckHigh i2cAck = 0x00000700
-	i2cAckLow  i2cAck = 0x00000100
+	i2cCMD_RSTART   i2cCommandType = 6 << 11
+	i2cCMD_WRITE    i2cCommandType = 1<<11 | 1<<8 // WRITE + ack_check_en
+	i2cCMD_READ     i2cCommandType = 3<<11 | 1<<8 // READ + ack_check_en
+	i2cCMD_READLAST i2cCommandType = 3<<11 | 5<<8 // READ + ack_check_en + NACK
+	i2cCMD_STOP     i2cCommandType = 2 << 11
+	i2cCMD_END      i2cCommandType = 4 << 11
 )
 
 type i2cCommand struct {
 	cmd  i2cCommandType
 	data []byte
-	ack  i2cAck
 	head int
 }
 
@@ -340,7 +334,7 @@ type i2cCommand struct {
 func nanotime() int64
 
 func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
-	const intMask = esp.I2C_INT_CLR_END_DETECT_INT_CLR_Msk | esp.I2C_INT_CLR_TRANS_COMPLETE_INT_CLR_Msk | esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk
+	const intMask = esp.I2C_INT_CLR_END_DETECT_INT_CLR_Msk | esp.I2C_INT_CLR_TRANS_COMPLETE_INT_CLR_Msk | esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk | esp.I2C_INT_STATUS_NACK_INT_ST_Msk
 	esp.I2C.INT_CLR.SetBits(intMask)
 	esp.I2C.INT_ENA.SetBits(intMask)
 	esp.I2C.SetCTR_CONF_UPGATE(1)
@@ -359,7 +353,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 
 		switch c.cmd {
 		case i2cCMD_RSTART:
-			reg.Set(i2cCMD_RSTART | c.ack)
+			reg.Set(i2cCMD_RSTART)
 			reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
 			cmdIdx++
 
@@ -375,7 +369,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 			for ; count > 0 && c.head < len(c.data); count, c.head = count-1, c.head+1 {
 				esp.I2C.SetFIFO_DATA_FIFO_RDATA(uint32(c.data[c.head]))
 			}
-			reg.Set(i2cCMD_WRITE | uint32(32-count) | c.ack)
+			reg.Set(i2cCMD_WRITE | uint32(32-count))
 			reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
 
 			if c.head < len(c.data) {
@@ -413,11 +407,11 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 			if bytes > 32 {
 				bytes = 32
 			}
-			reg.Set(i2cCMD_READ | uint32(bytes) | c.ack)
+			reg.Set(i2cCMD_READ | uint32(bytes))
 			reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
 
 			if split {
-				reg.Set(i2cCMD_READ | 1 | c.ack)
+				reg.Set(i2cCMD_READLAST | 1)
 				reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
 				readTo = c.data[c.head : c.head+bytes+1] // read bytes + 1 last byte
 				cmdIdx++
