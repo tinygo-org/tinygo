@@ -8,6 +8,7 @@ package os
 
 import (
 	"internal/testlog"
+	"strings"
 	"syscall"
 )
 
@@ -137,5 +138,13 @@ func Clearenv() {
 // Environ returns a copy of strings representing the environment,
 // in the form "key=value".
 func Environ() []string {
-	return syscall.Environ()
+	orig := syscall.Environ()
+	single := strings.Join(orig, "")
+	env := make([]string, len(orig))
+	for i, v := range orig {
+		s := single[:len(v)]
+		env[i] = s
+		single = single[len(v):]
+	}
+	return env
 }
