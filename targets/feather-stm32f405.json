@@ -5,7 +5,7 @@
   "automatic-stack-size": false,
   "linkerscript": "targets/stm32f405.ld",
   "extra-files": [
-    "src/vendor/tinygo.org/x/device/stm32/stm32f405.s"
+    "src/device/stm32/stm32f405.s"
   ],
   "flash-method": "command",
   "flash-command": "dfu-util --alt 0 --dfuse-address 0x08000000 --download {bin}",

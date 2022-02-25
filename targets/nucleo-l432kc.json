@@ -4,7 +4,7 @@
     "serial": "uart",
     "linkerscript": "targets/stm32l4x2.ld",
     "extra-files": [
-      "src/vendor/tinygo.org/x/device/stm32/stm32l4x2.s"
+      "src/device/stm32/stm32l4x2.s"
     ],
     "flash-method": "openocd",
     "openocd-interface": "stlink-v2-1",

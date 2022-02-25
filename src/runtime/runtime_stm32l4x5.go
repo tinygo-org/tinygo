@@ -4,7 +4,7 @@
 package runtime
 
 import (
-	"tinygo.org/x/device/stm32"
+	"device/stm32"
 )
 
 /*

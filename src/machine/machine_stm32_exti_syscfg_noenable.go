@@ -4,8 +4,8 @@
 package machine
 
 import (
+	"device/stm32"
 	"runtime/volatile"
-	"tinygo.org/x/device/stm32"
 )
 
 func getEXTIConfigRegister(pin uint8) *volatile.Register32 {

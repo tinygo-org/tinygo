@@ -241,8 +241,6 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"runtime/":              false,
 		"sync/":                 true,
 		"testing/":              true,
-		"vendor/":               true,
-		"vendor/tinygo.org/":    false,
 	}
 	if needsSyscallPackage {
 		paths["syscall/"] = true // include syscall/js
