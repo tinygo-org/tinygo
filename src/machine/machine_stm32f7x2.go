@@ -6,7 +6,7 @@ package machine
 // Peripheral abstraction layer for the stm32f407
 
 import (
-	"tinygo.org/x/device/stm32"
+	"device/stm32"
 )
 
 func CPUFrequency() uint32 {

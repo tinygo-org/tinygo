@@ -126,6 +126,9 @@ fmt-check:
 
 
 gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp gen-device-rp
+ifneq ($(STM32), 0)
+gen-device: gen-device-stm32
+endif
 
 gen-device-avr:
 	@if [ ! -e lib/avr/README.md ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
@@ -161,6 +164,10 @@ gen-device-sifive: build/gen-device-svd
 gen-device-kendryte: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Kendryte-Community -interrupts=software lib/cmsis-svd/data/Kendryte-Community/ src/device/kendryte/
 	GO111MODULE=off $(GO) fmt ./src/device/kendryte
+
+gen-device-stm32: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/tinygo-org/stm32-svd lib/stm32-svd/svd src/device/stm32/
+	GO111MODULE=off $(GO) fmt ./src/device/stm32
 
 gen-device-rp: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/RaspberryPi lib/cmsis-svd/data/RaspberryPi/ src/device/rp/

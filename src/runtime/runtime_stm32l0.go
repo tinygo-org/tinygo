@@ -4,8 +4,8 @@
 package runtime
 
 import (
+	"device/stm32"
 	"machine"
-	"tinygo.org/x/device/stm32"
 )
 
 const (

@@ -3,7 +3,7 @@
 
 package machine
 
-import "tinygo.org/x/device/stm32"
+import "device/stm32"
 
 var rngInitDone = false
 

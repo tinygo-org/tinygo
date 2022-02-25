@@ -11,10 +11,13 @@ src/device/sam/*.go
 src/device/sam/*.s
 src/device/sifive/*.go
 src/device/sifive/*.s
+src/device/stm32/*.go
+src/device/stm32/*.s
 src/device/kendryte/*.go
 src/device/kendryte/*.s
 src/device/rp/*.go
 src/device/rp/*.s
+vendor
 llvm-build
 llvm-project
 build/*
