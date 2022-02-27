@@ -23,8 +23,8 @@ interpreted:
   call void @runtime.printint64(i64 5)
   call void @runtime.printnl()
   %0 = call i64 @someValue()
-  store i64 %0, i64* @main.nonConst2, align 8
   store i64 %0, i64* getelementptr inbounds ([4 x i64], [4 x i64]* @main.nonConst1, i64 0, i64 0), align 16
+  store i64 %0, i64* @main.nonConst2, align 8
   call void @modifyExternal(i32* getelementptr inbounds ([8 x { i16, i32 }], [8 x { i16, i32 }]* @main.someArray, i64 0, i64 3, i32 1))
   call void @modifyExternal(i32* bitcast ([1 x i16*]* @main.exportedValue to i32*))
   store i16 5, i16* @main.exposedValue1, align 2

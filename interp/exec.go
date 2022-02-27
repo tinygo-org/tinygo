@@ -333,7 +333,7 @@ func (s *execState) finishEscape(i int) {
 
 func sortObjects(list []*memObj) {
 	for i := range list {
-		for list[(i-1)/2].id > list[i].id {
+		for list[(i-1)/2].id < list[i].id {
 			list[(i-1)/2], list[i] = list[i], list[(i-1)/2]
 			i = (i - 1) / 2
 		}
@@ -343,18 +343,18 @@ func sortObjects(list []*memObj) {
 		list = list[:len(list)-1]
 		i := 0
 		for {
-			min := i
-			if l := 2*i + 1; l < len(list) && list[l].id < list[min].id {
-				min = l
+			max := i
+			if l := 2*i + 1; l < len(list) && list[l].id > list[max].id {
+				max = l
 			}
-			if r := 2*i + 2; r < len(list) && list[r].id < list[min].id {
-				min = r
+			if r := 2*i + 2; r < len(list) && list[r].id > list[max].id {
+				max = r
 			}
-			if min == i {
+			if max == i {
 				break
 			}
-			list[i], list[min] = list[min], list[i]
-			i = min
+			list[i], list[max] = list[max], list[i]
+			i = max
 		}
 	}
 }
