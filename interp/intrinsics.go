@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"math/bits"
 	"strconv"
+	"strings"
 
 	"tinygo.org/x/go-llvm"
 )
@@ -23,7 +24,14 @@ func parseAsIntrinsic(c *constParser, call callInst) (instruction, error) {
 	switch obj.name {
 	case "runtime.alloc":
 		return parseHeapAlloc(c, call)
+	case "runtime.trackPointer":
+		return nil, nil
 	default:
+		switch {
+		case strings.HasPrefix(obj.name, "llvm.lifetime.start.") || strings.HasPrefix(obj.name, "llvm.lifetime.end.") ||
+			strings.HasPrefix(obj.name, "llvm.dbg."):
+			return nil, nil
+		}
 		return nil, errRuntime
 	}
 }

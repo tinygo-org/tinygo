@@ -426,9 +426,11 @@ func (c *compiler) emitInst(inst llvm.Value) error {
 		default:
 			return err
 		}
-		v := c.b.insertInst(i)
-		if sig.ret != nil {
-			c.ivals[inst] = v
+		if i != nil {
+			v := c.b.insertInst(i)
+			if sig.ret != nil {
+				c.ivals[inst] = v
+			}
 		}
 		return nil
 
