@@ -13,15 +13,15 @@ target triple = "wasm32--wasi"
 @layout3 = global i8* null
 @layout4 = global i8* null
 @bigobj1 = global i8* null
-@interp.alloc.10 = internal global [12 x i8] zeroinitializer, align 8
-@interp.alloc.11 = internal global [7 x i8] zeroinitializer, align 4
-@interp.alloc.12 = internal global [3 x i8] zeroinitializer, align 2
-@interp.alloc.13 = internal global [0 x i8] zeroinitializer
-@interp.alloc.14 = internal global [3 x i8*] zeroinitializer, align 8
-@interp.alloc.15 = internal global [5 x { i8*, [2 x i32] }] zeroinitializer, align 16
-@interp.alloc.16 = internal global { [3 x i8*], [2 x i32], [2 x i8*], [6 x i32], [2 x i8*], [3 x i32], [2 x i8*], [2 x i32], i8*, [2 x i32], i8* } zeroinitializer, align 16
-@interp.alloc.17 = internal global [3 x { [3 x i8*], [2 x i32], [2 x i8*], [6 x i32], [2 x i8*], [3 x i32], [2 x i8*], [2 x i32], i8*, [2 x i32], i8* }] zeroinitializer, align 16
-@interp.alloc.18 = internal global { i8*, [60 x i32], i8* } zeroinitializer, align 16
+@interp.alloc.10 = private global [12 x i8] zeroinitializer, align 8
+@interp.alloc.11 = private global [7 x i8] zeroinitializer, align 4
+@interp.alloc.12 = private global [3 x i8] zeroinitializer, align 2
+@interp.alloc.13 = private global [0 x i8] zeroinitializer
+@interp.alloc.14 = private global [3 x i8*] zeroinitializer, align 8
+@interp.alloc.15 = private global [5 x { i8*, [2 x i32] }] zeroinitializer, align 16
+@interp.alloc.16 = private global { [3 x i8*], [2 x i32], [2 x i8*], [6 x i32], [2 x i8*], [3 x i32], [2 x i8*], [2 x i32], i8*, [2 x i32], i8* } zeroinitializer, align 16
+@interp.alloc.17 = private global [3 x { [3 x i8*], [2 x i32], [2 x i8*], [6 x i32], [2 x i8*], [3 x i32], [2 x i8*], [2 x i32], i8*, [2 x i32], i8* }] zeroinitializer, align 16
+@interp.alloc.18 = private global { i8*, [60 x i32], i8* } zeroinitializer, align 16
 
 declare i8* @runtime.alloc(i32, i8*) unnamed_addr
 

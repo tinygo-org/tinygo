@@ -360,7 +360,7 @@ func (s *execState) finishEscape(i int) {
 	stack := s.escapeStack
 	sortObjects(stack[i:])
 	for ; i < len(stack); i++ {
-		by := s.escapeStack[i]
+		by := stack[i]
 		for _, obj := range by.esc {
 			if obj.escaped {
 				continue

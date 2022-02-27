@@ -9,7 +9,7 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-func (c *constParser) mapGlobals(mod llvm.Module) (uint64, error) {
+func (c *constParser) mapGlobals(mod llvm.Module, forceNoEscape map[llvm.Value]struct{}) (uint64, error) {
 	objs := make(map[llvm.Value]*memObj)
 	var worklist []llvm.Value
 	visited := make(map[llvm.Value]struct{})
@@ -49,6 +49,7 @@ func (c *constParser) mapGlobals(mod llvm.Module) (uint64, error) {
 			}
 		}
 		visited[g] = struct{}{}
+		_, forceNoEscape := forceNoEscape[g]
 		objs[g] = &memObj{
 			ptrTy:      ty.(ptrType),
 			name:       g.Name(),
@@ -56,7 +57,7 @@ func (c *constParser) mapGlobals(mod llvm.Module) (uint64, error) {
 			isExtern:   isExtern,
 			isConst:    g.IsGlobalConstant(),
 			unique:     false, // TODO: check for unnamed_addr.
-			escaped:    !(linkage == llvm.InternalLinkage || linkage == llvm.PrivateLinkage),
+			escaped:    !(forceNoEscape || linkage == llvm.InternalLinkage || linkage == llvm.PrivateLinkage),
 			size:       size,
 			alignScale: uint(bits.TrailingZeros(uint(align))),
 			ty:         ety,
@@ -76,13 +77,14 @@ func (c *constParser) mapGlobals(mod llvm.Module) (uint64, error) {
 		linkage := f.Linkage()
 		worklist = append(worklist, f)
 		visited[f] = struct{}{}
+		_, forceNoEscape := forceNoEscape[f]
 		objs[f] = &memObj{
 			ptrTy:    ty.(ptrType),
 			name:     f.Name(),
 			isFunc:   true,
 			isExtern: f.IsDeclaration(),
 			unique:   false, // TODO: check for unnamed_addr.
-			escaped:  !(linkage == llvm.InternalLinkage || linkage == llvm.PrivateLinkage),
+			escaped:  !(forceNoEscape || linkage == llvm.InternalLinkage || linkage == llvm.PrivateLinkage),
 			llval:    f,
 		}
 	}
@@ -130,6 +132,9 @@ func (c *constParser) mapGlobals(mod llvm.Module) (uint64, error) {
 	for len(worklist) > 0 {
 		v := worklist[len(worklist)-1]
 		worklist = worklist[:len(worklist)-1]
+		if _, ok := forceNoEscape[v]; ok {
+			continue
+		}
 		if obj, ok := objs[v]; ok {
 			if !obj.escaped {
 				if debug {
@@ -154,6 +159,9 @@ func (c *constParser) mapGlobals(mod llvm.Module) (uint64, error) {
 		visited[g] = struct{}{}
 		for i := 0; i < len(worklist); i++ {
 			v := worklist[i]
+			if _, ok := forceNoEscape[v]; ok {
+				continue
+			}
 			for _, u := range used[v] {
 				if _, ok := visited[u]; ok {
 					continue
@@ -608,6 +616,9 @@ func (i *storeInst) runtime(gen *rtGen) error {
 			return err
 		}
 		if ok && i.v.constant() {
+			if debug {
+				println("init store ok", v.String(), "to", to.String())
+			}
 			node, err := obj.init.store(v, to.raw, obj.version)
 			if err != nil {
 				return err
@@ -615,6 +626,9 @@ func (i *storeInst) runtime(gen *rtGen) error {
 			obj.init = node
 			gen.modGlobals[obj] = struct{}{}
 			return nil
+		}
+		if debug {
+			println("cannot init store", v.String(), "to", to.String())
 		}
 		node, err := obj.init.blockInit(to.raw, size, obj.version)
 		if err != nil {

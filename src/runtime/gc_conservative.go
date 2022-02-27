@@ -189,6 +189,8 @@ func (b gcBlock) unmark() {
 // any packages the runtime depends upon may not allocate memory during package
 // initialization.
 func initHeap() {
+	preInitHeap()
+
 	calculateHeapAddresses()
 
 	// Set all block states to 'free'.

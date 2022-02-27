@@ -24,6 +24,19 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 		mod.Dump()
 	}
 
+	// Hacky workaround: main is currently escaped.
+	// Search for the use of this function and unescape anything which runs after this.
+	forceNoEscape := map[llvm.Value]struct{}{
+		fn: {},
+	}
+	if use := fn.FirstUse(); !use.IsNil() {
+		if !use.NextUse().IsNil() {
+			return errors.New("multiple uses of interpreted function")
+		}
+
+		forceNoEscape[use.User().InstructionParent().Parent()] = struct{}{}
+	}
+
 	// Set up execution state.
 	td := llvm.NewTargetData(mod.DataLayout())
 	ctx := mod.Context()
@@ -47,7 +60,7 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 			stackHeight: uint(len(params)),
 		},
 	}
-	nextObjID, err := state.cp.mapGlobals(mod)
+	nextObjID, err := state.cp.mapGlobals(mod, forceNoEscape)
 	if err != nil {
 		if isRuntimeOrRevert(err) {
 			return nil
@@ -100,7 +113,15 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 		}
 		return err
 	}
-	state.escape(fnObj.ptr(0))
+	{
+		start := len(state.escapeStack)
+		for _, obj := range state.cp.globals {
+			if !obj.escaped {
+				state.escapeStack = append(state.escapeStack, obj)
+			}
+		}
+		state.finishEscape(start)
+	}
 	err = state.flushEscaped(llvm.Metadata{})
 	if err != nil {
 		if isRuntimeOrRevert(err) {
@@ -179,6 +200,9 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 		v, err := g.init.load(g.ty, 0)
 		if err != nil {
 			return err
+		}
+		if debug {
+			println("initialize", g.String(), "with", v.String())
 		}
 		gvals[g.llval] = gen.value(g.llval.Type().ElementType(), v)
 	}

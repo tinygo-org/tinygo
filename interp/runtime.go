@@ -118,7 +118,7 @@ func (g *rtGen) objPtr(obj *memObj) llvm.Value {
 			panic(err)
 		}
 		global := llvm.AddGlobal(g.mod, ty, obj.name)
-		global.SetLinkage(llvm.InternalLinkage)
+		global.SetLinkage(llvm.PrivateLinkage)
 		global.SetInitializer(g.value(ty, init))
 		if obj.alignScale != 0 {
 			global.SetAlignment(1 << obj.alignScale)

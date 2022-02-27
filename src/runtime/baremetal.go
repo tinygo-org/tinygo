@@ -23,12 +23,20 @@ var globalsEndSymbol [0]byte
 var stackTopSymbol [0]byte
 
 var (
-	heapStart    = uintptr(unsafe.Pointer(&heapStartSymbol))
-	heapEnd      = uintptr(unsafe.Pointer(&heapEndSymbol))
-	globalsStart = uintptr(unsafe.Pointer(&globalsStartSymbol))
-	globalsEnd   = uintptr(unsafe.Pointer(&globalsEndSymbol))
-	stackTop     = uintptr(unsafe.Pointer(&stackTopSymbol))
+	heapStart    uintptr
+	heapEnd      uintptr
+	globalsStart uintptr
+	globalsEnd   uintptr
+	stackTop     uintptr
 )
+
+func preInitHeap() {
+	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
+	heapEnd = uintptr(unsafe.Pointer(&heapEndSymbol))
+	globalsStart = uintptr(unsafe.Pointer(&globalsStartSymbol))
+	globalsEnd = uintptr(unsafe.Pointer(&globalsEndSymbol))
+	stackTop = uintptr(unsafe.Pointer(&stackTopSymbol))
+}
 
 // growHeap tries to grow the heap size. It returns true if it succeeds, false
 // otherwise.
