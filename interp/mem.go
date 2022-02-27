@@ -269,6 +269,14 @@ func (obj *memObj) compile(c *constParser) error {
 		obj.err = err
 		return err
 	}
+	if sig.noInline {
+		if debug {
+			println("compile blocked by noinline")
+		}
+		obj.sig = sig
+		obj.err = errRuntime
+		return errRuntime
+	}
 	if debug {
 		println("compile", sig.String(), obj.String())
 	}

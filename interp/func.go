@@ -25,7 +25,7 @@ func (c *constParser) parseCallSignature(call llvm.Value) (signature, error) {
 	// That way, we could revert if we located something that we cannot understand.
 
 	// TODO: the bindings only currently allow adding (but not checking) call site attributes.
-	// This is potentially a huge issue if we do not know whether a function is returns_twice.
+	// This is potentially an issue if we do not know whether a call could be returns_twice.
 
 	// Parse arguments.
 	args := make([]sigArg, len(i.args))
@@ -96,6 +96,7 @@ func (c *constParser) parseFuncSignature(fn llvm.Value) (signature, error) {
 		readOnly = false
 		writeOnly = false
 	}
+	noInline := !fn.GetEnumFunctionAttribute(attrNoInline).IsNil()
 
 	return signature{
 		ty:         ty,
@@ -108,6 +109,7 @@ func (c *constParser) parseFuncSignature(fn llvm.Value) (signature, error) {
 		readNone:   readNone,
 		readOnly:   readOnly,
 		writeOnly:  writeOnly,
+		noInline:   noInline,
 	}, nil
 }
 
@@ -181,6 +183,10 @@ type signature struct {
 
 	// writeOnly indicates that this function does not read any memory.
 	writeOnly bool
+
+	// noInline indicates that this function must not be inlined.
+	// This blocks interp from processing it.
+	noInline bool
 }
 
 func (s signature) merge(with signature) (signature, error) {
@@ -214,6 +220,7 @@ func (s signature) merge(with signature) (signature, error) {
 		readOnly = false
 		writeOnly = false
 	}
+	noInline := s.noInline || with.noInline
 	return signature{
 		ty:         s.ty,
 		args:       args,
@@ -225,6 +232,7 @@ func (s signature) merge(with signature) (signature, error) {
 		readNone:   readNone,
 		readOnly:   readOnly,
 		writeOnly:  writeOnly,
+		noInline:   noInline,
 	}, nil
 }
 
@@ -337,4 +345,5 @@ var (
 	attrWriteOnly  = llvm.AttributeKindID("writeonly")
 	attrNoSync     = llvm.AttributeKindID("nosync")
 	attrArgMemOnly = llvm.AttributeKindID("argmemonly")
+	attrNoInline   = llvm.AttributeKindID("noinline")
 )
