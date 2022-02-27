@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"go/token"
+	"math/bits"
 	"path/filepath"
 	"strings"
 
@@ -345,17 +346,24 @@ func (c *compiler) emitInst(inst llvm.Value) error {
 		if err != nil {
 			return err
 		}
-		resTy, err := c.typ(inst.Type())
+		rawResTy := inst.Type()
+		resTy, err := c.typ(rawResTy)
 		if err != nil {
 			return err
 		}
+		align := inst.Alignment()
+		if align == 0 {
+			// Assume ABI type alignment?
+			align = c.td.ABITypeAlignment(rawResTy)
+		}
 		c.ivals[inst] = c.b.insertInst(&loadInst{
-			from:     fromVal,
-			ty:       resTy,
-			volatile: inst.IsVolatile(),
-			order:    inst.Ordering(),
-			rawTy:    from.Type(),
-			dbg:      dbg,
+			from:       fromVal,
+			ty:         resTy,
+			alignScale: uint(bits.TrailingZeros(uint(align))),
+			volatile:   inst.IsVolatile(),
+			order:      inst.Ordering(),
+			rawTy:      from.Type(),
+			dbg:        dbg,
 		})
 		return nil
 
@@ -365,17 +373,25 @@ func (c *compiler) emitInst(inst llvm.Value) error {
 		if err != nil {
 			return err
 		}
-		v, err := c.value(inst.Operand(0))
+		vVal := inst.Operand(0)
+		v, err := c.value(vVal)
 		if err != nil {
 			return err
 		}
+		vt := vVal.Type()
+		align := inst.Alignment()
+		if align == 0 {
+			// Assume ABI type alignment?
+			align = c.td.ABITypeAlignment(vt)
+		}
 		c.b.insertInst(&storeInst{
-			to:       to,
-			v:        v,
-			volatile: inst.IsVolatile(),
-			order:    inst.Ordering(),
-			rawTy:    inst.Operand(0).Type(),
-			dbg:      dbg,
+			to:         to,
+			v:          v,
+			alignScale: uint(bits.TrailingZeros(uint(align))),
+			volatile:   inst.IsVolatile(),
+			order:      inst.Ordering(),
+			rawTy:      vt,
+			dbg:        dbg,
 		})
 		return nil
 

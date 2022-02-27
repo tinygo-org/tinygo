@@ -1,6 +1,9 @@
 package interp
 
 import (
+	"fmt"
+	"math/bits"
+	"strconv"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
@@ -31,19 +34,34 @@ func (c *constParser) mapGlobals(mod llvm.Module) error {
 		}
 		linkage := g.Linkage()
 		worklist = append(worklist, g)
+		align := g.Alignment()
+		if align == 0 {
+			// Assume ABI type alignment?
+			align = c.td.ABITypeAlignment(g.Type().ElementType())
+		}
+		if assert {
+			if align <= 0 {
+				println(g.Name(), align)
+				panic("negative alignment")
+			}
+			if bits.OnesCount(uint(align)) != 1 {
+				panic("align is not a power of 2")
+			}
+		}
 		visited[g] = struct{}{}
 		objs[g] = &memObj{
-			ptrTy:    ty.(ptrType),
-			name:     g.Name(),
-			id:       nextID,
-			isExtern: isExtern,
-			isConst:  g.IsGlobalConstant(),
-			unique:   false, // TODO: check for unnamed_addr.
-			escaped:  !(linkage == llvm.InternalLinkage || linkage == llvm.PrivateLinkage),
-			size:     size,
-			ty:       ety,
-			llval:    g,
-			err:      err,
+			ptrTy:      ty.(ptrType),
+			name:       g.Name(),
+			id:         nextID,
+			isExtern:   isExtern,
+			isConst:    g.IsGlobalConstant(),
+			unique:     false, // TODO: check for unnamed_addr.
+			escaped:    !(linkage == llvm.InternalLinkage || linkage == llvm.PrivateLinkage),
+			size:       size,
+			alignScale: uint(bits.TrailingZeros(uint(align))),
+			ty:         ety,
+			llval:      g,
+			err:        err,
 		}
 		nextID++
 	}
@@ -205,6 +223,9 @@ type memObj struct {
 	// If this is not known, it is set to 0.
 	size uint64
 
+	// alignScale is the minimum alignment of the object (as an exponent of 2).
+	alignScale uint
+
 	// ty is the type of the object (if known)
 	ty typ
 
@@ -352,6 +373,8 @@ type loadInst struct {
 	// ty is the loaded type.
 	ty typ
 
+	alignScale uint
+
 	volatile bool
 
 	order llvm.AtomicOrdering
@@ -399,7 +422,7 @@ func (i *loadInst) exec(state *execState) error {
 				return err
 			}
 		}
-		v = state.rt.insertInst(&loadInst{from, i.ty, i.volatile, i.order, i.rawTy, i.dbg})
+		v = state.rt.insertInst(&loadInst{from, i.ty, i.alignScale, i.volatile, i.order, i.rawTy, i.dbg})
 	default:
 		return err
 	}
@@ -418,6 +441,9 @@ func (i *loadInst) tryLoad(state *execState, from value, size uint64) (value, er
 	obj := p.obj()
 	if obj.isExtern || obj.isFunc || from.raw+size > obj.size || (i.order != llvm.AtomicOrderingNotAtomic && obj.escaped) {
 		return value{}, errRuntime
+	}
+	if ptrAlignScale := uint(bits.TrailingZeros64(from.raw | (1 << obj.alignScale))); ptrAlignScale < i.alignScale {
+		return value{}, errAlign{"load", i.alignScale, ptrAlignScale}
 	}
 	err := obj.parseInit(&state.cp)
 	if err != nil {
@@ -439,6 +465,7 @@ func (i *loadInst) runtime(gen *rtGen) error {
 	if i.order != llvm.AtomicOrderingNotAtomic {
 		v.SetOrdering(i.order)
 	}
+	v.SetAlignment(1 << i.alignScale)
 	gen.applyDebug(v)
 	gen.pushUnpacked(i.ty, v)
 	return nil
@@ -449,7 +476,7 @@ func (i *loadInst) String() string {
 	if i.volatile {
 		volatile = " volatile"
 	}
-	return i.ty.String() + volatile + " " + orderString(i.order) + " load " + i.from.String() + dbgSuffix(i.dbg)
+	return i.ty.String() + volatile + " " + orderString(i.order) + " load " + i.from.String() + " align " + strconv.FormatUint(1<<i.alignScale, 10) + dbgSuffix(i.dbg)
 }
 
 type storeInst struct {
@@ -458,6 +485,8 @@ type storeInst struct {
 
 	// v is the stored value.
 	v value
+
+	alignScale uint
 
 	volatile bool
 
@@ -504,7 +533,7 @@ func (i *storeInst) exec(state *execState) error {
 			return err
 		}
 	}
-	state.rt.insertInst(&storeInst{to, v, i.volatile, i.order, i.rawTy, i.dbg, false})
+	state.rt.insertInst(&storeInst{to, v, i.alignScale, i.volatile, i.order, i.rawTy, i.dbg, false})
 	return nil
 }
 
@@ -522,6 +551,9 @@ func (i *storeInst) tryStore(state *execState, to, v value, size uint64) error {
 	}
 	if obj.isConst {
 		return errUB
+	}
+	if ptrAlignScale := uint(bits.TrailingZeros64(to.raw | (1 << obj.alignScale))); ptrAlignScale < i.alignScale {
+		return errAlign{"store", i.alignScale, ptrAlignScale}
 	}
 	err := obj.parseInit(&state.cp)
 	if err != nil {
@@ -585,6 +617,7 @@ func (i *storeInst) runtime(gen *rtGen) error {
 	if i.order != llvm.AtomicOrderingNotAtomic {
 		store.SetOrdering(i.order)
 	}
+	store.SetAlignment(1 << i.alignScale)
 	gen.applyDebug(store)
 	return nil
 }
@@ -598,7 +631,7 @@ func (i *storeInst) String() string {
 	if i.init {
 		init = "init "
 	}
-	return "store " + init + volatile + orderString(i.order) + " " + i.v.String() + " to " + i.to.String() + dbgSuffix(i.dbg)
+	return "store " + init + volatile + orderString(i.order) + " " + i.v.String() + " to " + i.to.String() + " align " + strconv.FormatUint(1<<i.alignScale, 10) + dbgSuffix(i.dbg)
 }
 
 func orderString(order llvm.AtomicOrdering) string {
@@ -620,4 +653,14 @@ func orderString(order llvm.AtomicOrdering) string {
 	default:
 		return "unknown_order"
 	}
+}
+
+type errAlign struct {
+	accessTy         string
+	accessAlignScale uint
+	ptrAlignScale    uint
+}
+
+func (err errAlign) Error() string {
+	return fmt.Sprintf("insufficient alignment for %s: operation requires %d-byte alignment but got %d-byte alignment", err.accessTy, 1<<err.accessAlignScale, 1<<err.ptrAlignScale)
 }

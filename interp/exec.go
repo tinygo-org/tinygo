@@ -226,11 +226,12 @@ func (l *memLeaf) flush(to *execState, obj *memObj, off, idx, size uint64, versi
 			v = slice(v, i-uint64(start), 8*uint64(size))
 			to.escape(v)
 			to.rt.insertInst(&storeInst{
-				to:    obj.ptr(off + i),
-				v:     v,
-				order: llvm.AtomicOrderingNotAtomic,
-				dbg:   dbg,
-				init:  l.noInit&(((1<<size)-1)<<i) == 0,
+				to:         obj.ptr(off + i),
+				v:          v,
+				alignScale: uint(bits.TrailingZeros64((1 << obj.alignScale) | (off + i))),
+				order:      llvm.AtomicOrderingNotAtomic,
+				dbg:        dbg,
+				init:       l.noInit&(((1<<size)-1)<<i) == 0,
 			})
 		case 0b01:
 			// Store undef.
@@ -239,16 +240,18 @@ func (l *memLeaf) flush(to *execState, obj *memObj, off, idx, size uint64, versi
 				if storeScale > optimalStoreScale {
 					storeScale = optimalStoreScale
 				}
-				if alignScale := bits.TrailingZeros64(off + i); storeScale > alignScale {
+				alignScale := bits.TrailingZeros64((1 << obj.alignScale) | (off + i))
+				if storeScale > alignScale {
 					storeScale = alignScale
 				}
 				storeSize := 1 << storeScale
 				to.rt.insertInst(&storeInst{
-					to:    obj.ptr(off + i),
-					v:     undefValue(iType(8 * storeSize)),
-					order: llvm.AtomicOrderingNotAtomic,
-					dbg:   dbg,
-					init:  l.noInit&(((1<<storeSize)-1)<<i) == 0,
+					to:         obj.ptr(off + i),
+					v:          undefValue(iType(8 * storeSize)),
+					alignScale: uint(alignScale),
+					order:      llvm.AtomicOrderingNotAtomic,
+					dbg:        dbg,
+					init:       l.noInit&(((1<<storeSize)-1)<<i) == 0,
 				})
 				i += uint64(storeSize)
 				size -= uint64(storeSize)
@@ -260,18 +263,20 @@ func (l *memLeaf) flush(to *execState, obj *memObj, off, idx, size uint64, versi
 				if storeScale > optimalStoreScale {
 					storeScale = optimalStoreScale
 				}
-				if alignScale := bits.TrailingZeros64(off + i); storeScale > alignScale {
+				alignScale := bits.TrailingZeros64((1 << obj.alignScale) | (off + i))
+				if storeScale > alignScale {
 					storeScale = alignScale
 				}
 				storeSize := 1 << storeScale
 				var buf [8]byte
 				copy(buf[:], l.data[i:])
 				to.rt.insertInst(&storeInst{
-					to:    obj.ptr(off + i),
-					v:     smallIntValue(iType(8*storeSize), binary.LittleEndian.Uint64(buf[:])),
-					order: llvm.AtomicOrderingNotAtomic,
-					dbg:   dbg,
-					init:  l.noInit&(((1<<storeSize)-1)<<i) == 0,
+					to:         obj.ptr(off + i),
+					v:          smallIntValue(iType(8*storeSize), binary.LittleEndian.Uint64(buf[:])),
+					alignScale: uint(alignScale),
+					order:      llvm.AtomicOrderingNotAtomic,
+					dbg:        dbg,
+					init:       l.noInit&(((1<<storeSize)-1)<<i) == 0,
 				})
 				i += uint64(storeSize)
 				size -= uint64(storeSize)
