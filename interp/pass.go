@@ -25,13 +25,20 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 	}
 
 	// Set up execution state.
+	td := llvm.NewTargetData(mod.DataLayout())
+	ctx := mod.Context()
+	uptr := iType(td.TypeSizeInBits(llvm.PointerType(ctx.Int8Type(), 0)))
 	params := fn.Params()
 	state := execState{
 		cp: constParser{
-			td:     llvm.NewTargetData(mod.DataLayout()),
-			tCache: make(map[llvm.Type]typ),
-			vCache: make(map[llvm.Value]value),
-			fCache: make(map[llvm.Type]fnTyInfo),
+			ctx:      ctx,
+			td:       td,
+			tCache:   make(map[llvm.Type]typ),
+			vCache:   make(map[llvm.Value]value),
+			fCache:   make(map[llvm.Type]fnTyInfo),
+			layouts:  make(map[value]typ),
+			uintptr:  uptr,
+			ptrAlign: uint64(td.ABITypeAlignment(ctx.IntType(int(uptr)))),
 		},
 		stack:       make([]value, minStackSize)[:0],
 		version:     memVersionStart,
@@ -40,13 +47,14 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 			stackHeight: uint(len(params)),
 		},
 	}
-	err := state.cp.mapGlobals(mod)
+	nextObjID, err := state.cp.mapGlobals(mod)
 	if err != nil {
 		if isRuntimeOrRevert(err) {
 			return nil
 		}
 		return err
 	}
+	state.nextObjID = nextObjID
 	for _, g := range state.cp.globals {
 		if g.escaped {
 			state.escapeStack = append(state.escapeStack, g)
@@ -116,9 +124,9 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 	}
 
 	// Emit runtime instructions.
-	ctx := mod.Context()
 	gen := rtGen{
 		ctx:        ctx,
+		mod:        mod,
 		modGlobals: make(map[*memObj]struct{}),
 		ptrs:       make(map[ptkey]llvm.Type),
 		iTypes:     make(map[iType]llvm.Type),
@@ -136,8 +144,14 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 	var ok bool
 	defer func() {
 		if ok {
-			for _, b := range oldBlocks {
-				b.EraseFromParent()
+			for _, c := range oldBlocks {
+				c.AsValue().ReplaceAllUsesWith(b.AsValue())
+				for i := c.FirstInstruction(); !i.IsNil(); i = llvm.NextInstruction(i) {
+					if t := i.Type(); t.TypeKind() != llvm.VoidTypeKind {
+						i.ReplaceAllUsesWith(llvm.Undef(t))
+					}
+				}
+				c.EraseFromParent()
 			}
 		} else {
 			b.EraseFromParent()
@@ -151,6 +165,9 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 		}
 	}
 	for _, inst := range state.rt.instrs {
+		if debug {
+			println("gen rt inst:", inst.String())
+		}
 		err := inst.runtime(&gen)
 		if err != nil {
 			return err

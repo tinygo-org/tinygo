@@ -187,6 +187,7 @@ func (i *callInst) exec(state *execState) error {
 	state.rt.startLabel(revLabel)
 	escStart := len(state.escapeStack)
 	oldFn := state.curFn
+	nextObjID := state.nextObjID
 
 	// Run the function.
 	state.sp = sp
@@ -232,6 +233,7 @@ func (i *callInst) exec(state *execState) error {
 			obj.escaped = false
 		}
 		state.escapeStack = state.escapeStack[:escStart]
+		state.nextObjID = nextObjID
 		return i.execRuntime(state, called, args)
 	default:
 		return err

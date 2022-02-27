@@ -412,12 +412,21 @@ func (c *compiler) emitInst(inst llvm.Value) error {
 			}
 			args = unpack(v, args)
 		}
-		v := c.b.insertInst(&callInst{
+		call := callInst{
 			called: called,
 			args:   args,
 			sig:    sig,
 			dbg:    dbg,
-		})
+		}
+		i, err := parseAsIntrinsic(c.constParser, call)
+		switch err {
+		case nil:
+		case errRuntime:
+			i = &call
+		default:
+			return err
+		}
+		v := c.b.insertInst(i)
 		if sig.ret != nil {
 			c.ivals[inst] = v
 		}

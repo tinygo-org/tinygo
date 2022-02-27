@@ -26,6 +26,9 @@ type execState struct {
 	// nextVersion is the next memory version.
 	nextVersion uint64
 
+	// nextObjID is the ID to use for the next memory object.
+	nextObjID uint64
+
 	// pc is the index of the next instruction to execute.
 	// A pc beyond the end of the function is treated as a return.
 	pc uint
@@ -104,8 +107,9 @@ func (s *execState) invalidate(obj *memObj, dbg llvm.Metadata) error {
 		}
 		if obj.version < s.version {
 			s.oldMem = append(s.oldMem, memSave{
-				obj:  obj,
-				tree: obj.data,
+				obj:     obj,
+				tree:    obj.data,
+				version: obj.version,
 			})
 		}
 		obj.data = data
@@ -167,8 +171,9 @@ func (s *execState) doFlush(obj *memObj, dbg llvm.Metadata) error {
 	version := s.version
 	if obj.version < s.version {
 		s.oldMem = append(s.oldMem, memSave{
-			obj:  obj,
-			tree: obj.data,
+			obj:     obj,
+			tree:    obj.data,
+			version: obj.version,
 		})
 	}
 	if obj.data.hasPending() {

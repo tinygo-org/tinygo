@@ -12,11 +12,15 @@ type parser interface {
 }
 
 type constParser struct {
-	td      llvm.TargetData
-	tCache  map[llvm.Type]typ
-	vCache  map[llvm.Value]value
-	globals map[llvm.Value]*memObj
-	fCache  map[llvm.Type]fnTyInfo
+	ctx      llvm.Context
+	td       llvm.TargetData
+	tCache   map[llvm.Type]typ
+	vCache   map[llvm.Value]value
+	globals  map[llvm.Value]*memObj
+	fCache   map[llvm.Type]fnTyInfo
+	layouts  map[value]typ
+	uintptr  iType
+	ptrAlign uint64
 }
 
 func (p *constParser) value(v llvm.Value) (value, error) {
@@ -102,8 +106,63 @@ func (p *constParser) parseConst(v llvm.Value) (value, error) {
 			return value{}, err
 		}
 		return res, nil
+
+	case !v.IsAConstantArray().IsNil():
+		ty, err := p.parseTyp(v.Type())
+		if err != nil {
+			return value{}, err
+		}
+		arrTy := ty.(arrType)
+		arr := make([]value, arrTy.n)
+		for i := range arr {
+			v, err := p.value(v.Operand(i))
+			if err != nil {
+				return value{}, err
+			}
+			arr[i] = v
+		}
+		return arrayValue(arrTy.of, arr...), nil
+
+	case !v.IsAConstant().IsNil() && v.Type().TypeKind() == llvm.ArrayTypeKind:
+		// Yes. This is entirely different from !v.IsAConstantArray().IsNil().
+		ty, err := p.parseTyp(v.Type())
+		if err != nil {
+			return value{}, err
+		}
+		arrTy := ty.(arrType)
+		arr := make([]value, arrTy.n)
+		for i := range arr {
+			v, err := p.value(llvm.ConstExtractValue(v, []uint32{uint32(i)}))
+			if err != nil {
+				return value{}, err
+			}
+			arr[i] = v
+		}
+		return arrayValue(arrTy.of, arr...), nil
+
+	case !v.IsAConstantStruct().IsNil():
+		ty, err := p.parseTyp(v.Type())
+		if err != nil {
+			return value{}, err
+		}
+		sTy := ty.(*structType)
+		fields := make([]value, len(sTy.fields))
+		for i := range fields {
+			v, err := p.value(v.Operand(i))
+			if err != nil {
+				return value{}, err
+			}
+			fields[i] = v
+		}
+		return structValue(sTy, fields...), nil
 	}
 
+	if debug {
+		println("unable to parse constant:")
+		print("\t")
+		v.Dump()
+		println()
+	}
 	return value{}, todo("parse this constant")
 }
 

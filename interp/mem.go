@@ -9,7 +9,7 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-func (c *constParser) mapGlobals(mod llvm.Module) error {
+func (c *constParser) mapGlobals(mod llvm.Module) (uint64, error) {
 	objs := make(map[llvm.Value]*memObj)
 	var worklist []llvm.Value
 	visited := make(map[llvm.Value]struct{})
@@ -20,7 +20,7 @@ func (c *constParser) mapGlobals(mod llvm.Module) error {
 		ptrTy := g.Type()
 		ty, err := c.typ(ptrTy)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		isExtern := g.IsDeclaration()
@@ -71,7 +71,7 @@ func (c *constParser) mapGlobals(mod llvm.Module) error {
 		ptrTy := f.Type()
 		ty, err := c.typ(ptrTy)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		linkage := f.Linkage()
 		worklist = append(worklist, f)
@@ -181,7 +181,7 @@ func (c *constParser) mapGlobals(mod llvm.Module) error {
 	}
 
 	c.globals = objs
-	return nil
+	return nextID, nil
 }
 
 type memObj struct {
@@ -587,8 +587,9 @@ func (i *storeInst) tryStore(state *execState, to, v value, size uint64) error {
 	}
 	if obj.version < state.version {
 		state.oldMem = append(state.oldMem, memSave{
-			obj:  obj,
-			tree: obj.data,
+			obj:     obj,
+			tree:    obj.data,
+			version: obj.version,
 		})
 	}
 	obj.data = node

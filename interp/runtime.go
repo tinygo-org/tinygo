@@ -4,6 +4,7 @@ import "tinygo.org/x/go-llvm"
 
 type rtGen struct {
 	ctx llvm.Context
+	mod llvm.Module
 
 	modGlobals map[*memObj]struct{}
 
@@ -109,6 +110,21 @@ func (g *rtGen) value(t llvm.Type, v value) llvm.Value {
 func (g *rtGen) objPtr(obj *memObj) llvm.Value {
 	if !obj.llval.IsNil() {
 		return obj.llval
+	}
+	if !obj.stack {
+		ty := g.typ(obj.ty)
+		init, err := obj.init.load(obj.ty, 0)
+		if err != nil {
+			panic(err)
+		}
+		global := llvm.AddGlobal(g.mod, ty, obj.name)
+		global.SetLinkage(llvm.InternalLinkage)
+		global.SetInitializer(g.value(ty, init))
+		if obj.alignScale != 0 {
+			global.SetAlignment(1 << obj.alignScale)
+		}
+		obj.llval = global
+		return global
 	}
 	panic("TODO")
 }

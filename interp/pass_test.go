@@ -18,6 +18,7 @@ func TestPass(t *testing.T) {
 	t.Parallel()
 
 	cases := []string{
+		"alloc",
 		"basic",
 	}
 	for _, c := range cases {

@@ -563,8 +563,9 @@ func (v *structVal) resolve(stack []value, raw uint64) value {
 func (v *structVal) toLLVM(t llvm.Type, gen *rtGen, raw uint64) llvm.Value {
 	isConst := v.constant(raw)
 	fields := make([]llvm.Value, len(v.fields))
+	elemTypes := t.StructElementTypes()
 	for i, v := range v.fields {
-		fields[i] = gen.value(t, v)
+		fields[i] = gen.value(elemTypes[i], v)
 	}
 	if isConst {
 		return llvm.ConstNamedStruct(t, fields)
@@ -656,12 +657,13 @@ func (v *arrVal) resolve(stack []value, raw uint64) value {
 
 func (v *arrVal) toLLVM(t llvm.Type, gen *rtGen, raw uint64) llvm.Value {
 	isConst := v.constant(raw)
+	eTy := t.ElementType()
 	elems := make([]llvm.Value, len(v.elems))
 	for i, v := range v.elems {
-		elems[i] = gen.value(t, v)
+		elems[i] = gen.value(eTy, v)
 	}
 	if isConst {
-		return llvm.ConstArray(t, elems)
+		return llvm.ConstArray(eTy, elems)
 	}
 	agg := llvm.Undef(t)
 	for i, v := range elems {

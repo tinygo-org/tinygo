@@ -30,7 +30,7 @@ func TestCompile(t *testing.T) {
 		vCache: make(map[llvm.Value]value),
 		fCache: make(map[llvm.Type]fnTyInfo),
 	}
-	err = cc.mapGlobals(mod)
+	_, err = cc.mapGlobals(mod)
 	if err != nil {
 		t.Errorf("failed to map globals: %s", err.Error())
 		return
