@@ -263,6 +263,9 @@ func (i *smallIntAddInst) exec(state *execState) error {
 	switch err {
 	case nil:
 	case errRuntime:
+		// Escape inputs.
+		expr.escapeInputs(state)
+
 		// Create a runtime instruction to evaluate the expression.
 		v, err = i.expr.create(&state.rt, i.dbg)
 		if err != nil {
@@ -408,6 +411,9 @@ func (i *smallIntSubInst) exec(state *execState) error {
 	switch err {
 	case nil:
 	case errRuntime:
+		// Escape inputs.
+		expr.escapeInputs(state)
+
 		// Create a runtime instruction to evaluate the expression.
 		v, err = i.expr.create(&state.rt, i.dbg)
 		if err != nil {
@@ -571,6 +577,9 @@ func (i *smallIntMulInst) exec(state *execState) error {
 	switch err {
 	case nil:
 	case errRuntime:
+		// Escape inputs.
+		expr.escapeInputs(state)
+
 		// Create a runtime instruction to evaluate the expression.
 		v, err = i.expr.create(&state.rt, i.dbg)
 		if err != nil {
@@ -726,6 +735,9 @@ func (i *smallUIntDivInst) exec(state *execState) error {
 	switch err {
 	case nil:
 	case errRuntime:
+		// Escape inputs.
+		expr.escapeInputs(state)
+
 		// Create a runtime instruction to evaluate the expression.
 		v, err = i.expr.create(&state.rt, i.dbg)
 		if err != nil {
@@ -806,6 +818,10 @@ func (e binIntExpr) runtime(gen *rtGen, dbg llvm.Metadata, fn func(*llvm.Builder
 	gen.applyDebug(res)
 	gen.stack = append(gen.stack, res)
 	return nil
+}
+
+func (e binIntExpr) escapeInputs(state *execState) {
+	state.escape(e.x, e.y)
 }
 
 type smallIntCmpExpr struct {
@@ -966,6 +982,9 @@ func (i *smallIntCmpInst) exec(state *execState) error {
 	switch err {
 	case nil:
 	case errRuntime:
+		// Escape inputs.
+		state.escape(expr.x, expr.y)
+
 		// Create a runtime instruction to evaluate the expression.
 		v, err = i.expr.create(&state.rt, i.dbg)
 		if err != nil {
@@ -1054,6 +1073,9 @@ func (i *signExtendInst) exec(state *execState) error {
 	switch err {
 	case nil:
 	case errRuntime:
+		// Escape input.
+		state.escape(expr.in)
+
 		// Create a runtime instruction to evaluate the expression.
 		v, err = i.expr.create(&state.rt, i.dbg)
 		if err != nil {
@@ -1368,6 +1390,10 @@ func (i *uglyGEPInst) exec(state *execState) error {
 		}
 	}
 	if !ok {
+		// Escape base input.
+		state.escape(base)
+
+		// Create a runtime gep instruction.
 		v = state.rt.insertInst(&uglyGEPInst{base, off, i.ty, i.dbg})
 	}
 

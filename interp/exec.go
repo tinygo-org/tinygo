@@ -66,6 +66,22 @@ func (s *execState) invalidateEscaped(dbg llvm.Metadata) error {
 
 // invalidate flushes and invalidates the contents of the object.
 func (s *execState) invalidate(obj *memObj, dbg llvm.Metadata) error {
+	if !obj.escaped {
+		start := len(s.escapeStack)
+		for _, obj := range obj.esc {
+			if obj.escaped {
+				continue
+			}
+
+			if debug {
+				println(obj.String(), "escaped by invalidate")
+			}
+
+			obj.escaped = true
+			s.escapeStack = append(s.escapeStack, obj)
+		}
+		s.finishEscape(start)
+	}
 	skip, err := s.flushOrInvalidatePreCheck(obj)
 	if err != nil {
 		return err
@@ -117,9 +133,26 @@ func (s *execState) flushEscaped(dbg llvm.Metadata) error {
 	return nil
 }
 
-// flush the contents of the object.
+// flush the contents of the object in order to observe them.
 // This blocks future modifications to the intializer of the object.
+// It also escapes the contents of the object.
 func (s *execState) flush(obj *memObj, dbg llvm.Metadata) error {
+	if !obj.escaped {
+		start := len(s.escapeStack)
+		for _, obj := range obj.esc {
+			if obj.escaped {
+				continue
+			}
+
+			if debug {
+				println(obj.String(), "escaped by flush")
+			}
+
+			obj.escaped = true
+			s.escapeStack = append(s.escapeStack, obj)
+		}
+		s.finishEscape(start)
+	}
 	skip, err := s.flushOrInvalidatePreCheck(obj)
 	if err != nil {
 		return err
@@ -330,6 +363,7 @@ func (s *execState) finishEscape(i int) {
 			if debug {
 				println("transitive escape of", obj.String(), "by", by.String())
 			}
+			obj.escaped = true
 			stack = append(stack, obj)
 		}
 	}

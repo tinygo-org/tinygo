@@ -399,10 +399,17 @@ func (i *loadInst) exec(state *execState) error {
 	switch err {
 	case nil:
 	case errRuntime:
-		// TODO: deterministic flush ordering
-		aliases := make(map[*memObj]struct{})
-		complete := from.aliases(aliases)
-		for obj := range aliases {
+		m := state.escBuf
+		complete := from.aliases(m)
+		var aliases []*memObj
+		for obj := range m {
+			aliases = append(aliases, obj)
+		}
+		for obj := range m {
+			delete(m, obj)
+		}
+		sortObjects(aliases)
+		for _, obj := range aliases {
 			err := state.flush(obj, i.dbg)
 			if err != nil {
 				return err
@@ -518,10 +525,17 @@ func (i *storeInst) exec(state *execState) error {
 	default:
 		return err
 	}
-	// TODO: deterministic invalidate ordering
-	aliases := make(map[*memObj]struct{})
-	complete := to.aliases(aliases)
-	for obj := range aliases {
+	m := state.escBuf
+	complete := to.aliases(m)
+	var aliases []*memObj
+	for obj := range m {
+		aliases = append(aliases, obj)
+	}
+	for obj := range m {
+		delete(m, obj)
+	}
+	sortObjects(aliases)
+	for _, obj := range aliases {
 		err := state.invalidate(obj, i.dbg)
 		if err != nil {
 			return err
