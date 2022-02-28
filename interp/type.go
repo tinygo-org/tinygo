@@ -239,3 +239,18 @@ func (t arrType) zero() value {
 	}
 	return arrayValue(t.of, elements...)
 }
+
+type metadataType struct{}
+
+var _ typ = metadataType{}
+
+func (t metadataType) String() string {
+	return "metadata"
+}
+func (t metadataType) bytes() uint64 {
+	return 0
+}
+
+func (t metadataType) zero() value {
+	panic("metadata has no zero value")
+}

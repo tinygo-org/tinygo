@@ -155,6 +155,9 @@ func (p *constParser) parseConst(v llvm.Value) (value, error) {
 			fields[i] = v
 		}
 		return structValue(sTy, fields...), nil
+
+	case v.Type().TypeKind() == llvm.MetadataTypeKind:
+		return value{metadataValue(v), 0}, nil
 	}
 
 	if debug {
@@ -240,6 +243,9 @@ func (p *constParser) parseTyp(t llvm.Type) (typ, error) {
 
 	case llvm.VoidTypeKind:
 		return nil, nil
+
+	case llvm.MetadataTypeKind:
+		return metadataType{}, nil
 	}
 
 	return nil, todo("parse type " + t.String())

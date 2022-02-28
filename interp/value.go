@@ -1174,3 +1174,31 @@ func (v runtimeValue) toLLVM(t llvm.Type, gen *rtGen, raw uint64) llvm.Value {
 func (v runtimeValue) aliases(objs map[*memObj]struct{}, raw uint64) bool {
 	return false
 }
+
+type metadataValue llvm.Value
+
+var _ val = metadataValue{}
+
+func (v metadataValue) typ(raw uint64) typ {
+	return metadataType{}
+}
+
+func (v metadataValue) str(raw uint64) string {
+	return "????"
+}
+
+func (v metadataValue) aliases(objs map[*memObj]struct{}, raw uint64) bool {
+	return true
+}
+
+func (v metadataValue) constant(raw uint64) bool {
+	return true
+}
+
+func (v metadataValue) resolve(stack []value, raw uint64) value {
+	return value{v, raw}
+}
+
+func (v metadataValue) toLLVM(t llvm.Type, gen *rtGen, raw uint64) llvm.Value {
+	return llvm.Value(v)
+}

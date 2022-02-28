@@ -117,7 +117,11 @@ func (g *rtGen) objPtr(obj *memObj) llvm.Value {
 		if err != nil {
 			panic(err)
 		}
+		old := g.mod.NamedGlobal(obj.name)
 		global := llvm.AddGlobal(g.mod, ty, obj.name)
+		if !old.IsNil() {
+			panic("collision")
+		}
 		global.SetLinkage(llvm.PrivateLinkage)
 		global.SetInitializer(g.value(ty, init))
 		if obj.alignScale != 0 {
