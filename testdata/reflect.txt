@@ -401,6 +401,8 @@ float32 4 32
 float64 8 64
 complex64 8 64
 complex128 16 128
+offset for int64 matches: true
+offset for complex128 matches: true
 type assertion succeeded for unreferenced type
 
 struct tags
