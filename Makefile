@@ -213,14 +213,15 @@ tinygo:
 test: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=20m -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
-# Tests that take over a minute in wasi
+# Standard library packages that pass tests on darwin, linux, wasi, and windows, but take over a minute in wasi
 TEST_PACKAGES_SLOW = \
 	compress/bzip2 \
 	compress/flate \
 	crypto/dsa \
 	index/suffixarray \
 
-TEST_PACKAGES_BASE = \
+# Standard library packages that pass tests quickly on darwin, linux, wasi, and windows
+TEST_PACKAGES_FAST = \
 	compress/lzw \
 	compress/zlib \
 	container/heap \
@@ -264,47 +265,63 @@ TEST_PACKAGES_BASE = \
 	unicode/utf16 \
 	unicode/utf8 \
 
-# Standard library packages that pass tests natively
-TEST_PACKAGES := \
-	$(TEST_PACKAGES_BASE)
-
-# archive/zip requires ReadAt, which is not yet supported on windows
+# archive/zip requires os.ReadAt, which is not yet supported on windows
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
 # io/fs requires os.ReadDir, which is not yet supported on windows or wasi
 # testing/fstest requires os.ReadDir, which is not yet supported on windows or wasi
-ifneq ($(OS),Windows_NT)
-TEST_PACKAGES := \
-	$(TEST_PACKAGES) \
+
+# Additional standard library packages that pass tests on individual platforms
+TEST_PACKAGES_LINUX := \
 	archive/zip \
 	debug/dwarf \
 	debug/plan9obj \
 	io/fs \
 	testing/fstest
-endif
 
-# Standard library packages that pass tests on wasi
-TEST_PACKAGES_WASI = \
-	$(TEST_PACKAGES_BASE)
+TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
+
+# Report platforms on which each standard library package is known to pass tests
+jointmp := $(shell echo /tmp/join.$$$$)
+report-stdlib-tests-pass:
+	@for t in $(TEST_PACKAGES_DARWIN); do echo "$$t darwin"; done | sort > $(jointmp).darwin
+	@for t in $(TEST_PACKAGES_LINUX); do echo "$$t linux"; done | sort > $(jointmp).linux
+	@for t in $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_SLOW); do echo "$$t darwin linux wasi windows"; done | sort > $(jointmp).portable
+	@join -a1 -a2 $(jointmp).darwin $(jointmp).linux | \
+	join -a1 -a2 - $(jointmp).portable
+	@rm $(jointmp).*
+
+# Standard library packages that pass tests quickly on the current platform
+ifeq ($(shell uname),Darwin)
+TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_DARWIN)
+endif
+ifeq ($(shell uname),Linux)
+TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_LINUX)
+endif
+ifeq ($(OS),Windows_NT)
+TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST)
+endif
 
 # Test known-working standard library packages.
 # TODO: parallelize, and only show failing tests (no implied -v flag).
 .PHONY: tinygo-test
 tinygo-test:
-	$(TINYGO) test $(TEST_PACKAGES) $(TEST_PACKAGES_SLOW)
+	$(TINYGO) test $(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW)
 tinygo-test-fast:
-	$(TINYGO) test $(TEST_PACKAGES)
+	$(TINYGO) test $(TEST_PACKAGES_HOST)
 tinygo-bench:
-	$(TINYGO) test -bench . $(TEST_PACKAGES) $(TEST_PACKAGES_SLOW)
+	$(TINYGO) test -bench . $(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW)
 tinygo-bench-fast:
-	$(TINYGO) test -bench . $(TEST_PACKAGES)
+	$(TINYGO) test -bench . $(TEST_PACKAGES_HOST)
+
+# Same thing, except for wasi rather than the current platform.
 tinygo-test-wasi:
-	$(TINYGO) test -target wasi $(TEST_PACKAGES_WASI) $(TEST_PACKAGES_SLOW)
+	$(TINYGO) test -target wasi $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_SLOW)
 tinygo-test-wasi-fast:
-	$(TINYGO) test -target wasi $(TEST_PACKAGES_WASI)
+	$(TINYGO) test -target wasi $(TEST_PACKAGES_FAST)
 tinygo-bench-wasi:
-	$(TINYGO) test -target wasi -bench . $(TEST_PACKAGES_WASI) $(TEST_PACKAGES_SLOW)
+	$(TINYGO) test -target wasi -bench . $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_SLOW)
 tinygo-bench-wasi-fast:
-	$(TINYGO) test -target wasi -bench . $(TEST_PACKAGES_WASI)
+	$(TINYGO) test -target wasi -bench . $(TEST_PACKAGES_FAST)
 
 # Test external packages in a large corpus.
 test-corpus:
