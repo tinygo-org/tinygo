@@ -234,10 +234,15 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 		panic("unknown pointer size")
 	}
 
+	// Construct a complex128 type because that's likely the type with the
+	// biggest alignment on most/all ABIs.
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	complex128Type := ctx.StructType([]llvm.Type{ctx.DoubleType(), ctx.DoubleType()}, false)
 	return &stdSizes{
 		IntSize:  int64(intWidth / 8),
 		PtrSize:  int64(targetData.PointerSize()),
-		MaxAlign: int64(targetData.PrefTypeAlignment(targetData.IntPtrType())),
+		MaxAlign: int64(targetData.ABITypeAlignment(complex128Type)),
 	}
 }
 

@@ -170,6 +170,19 @@ func main() {
 	assertSize(reflect.TypeOf(new(int)).Size() == unsafe.Sizeof(new(int)), "*int")
 	assertSize(reflect.TypeOf(zeroFunc).Size() == unsafe.Sizeof(zeroFunc), "func()")
 
+	// Test that offset is correctly calculated.
+	// This doesn't just test reflect but also (indirectly) that unsafe.Alignof
+	// works correctly.
+	s := struct {
+		small1 byte
+		big1   int64
+		small2 byte
+		big2   int64
+	}{}
+	st := reflect.TypeOf(s)
+	println("offset for int64 matches:", st.Field(1).Offset-st.Field(0).Offset == uintptr(unsafe.Pointer(&s.big1))-uintptr(unsafe.Pointer(&s.small1)))
+	println("offset for complex128 matches:", st.Field(3).Offset-st.Field(2).Offset == uintptr(unsafe.Pointer(&s.big2))-uintptr(unsafe.Pointer(&s.small2)))
+
 	// SetBool
 	rv := reflect.ValueOf(new(bool)).Elem()
 	rv.SetBool(true)
