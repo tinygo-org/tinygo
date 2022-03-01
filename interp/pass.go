@@ -112,6 +112,9 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 	err = (&callInst{fnObj.ptr(0), args, fnObj.sig, llvm.Metadata{}, true}).exec(&state)
 	if err != nil {
 		if isRuntimeOrRevert(err) {
+			if debug {
+				println("revert pass:", err.Error())
+			}
 			return nil
 		}
 		return err

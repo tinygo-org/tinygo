@@ -261,8 +261,14 @@ func (i *callInst) run(state *execState, called value) error {
 	state.curFn = r
 	for state.pc < uint(len(obj.r.instrs)) {
 		inst := r.instrs[state.pc]
+		var resPack value
 		if debug {
-			println("exec", inst.String())
+			if res := inst.result(); res != nil {
+				resPack, _ = createDecomposedIndices(uint(len(state.locals())), res)
+				println("exec", resPack.String(), "=", inst.String())
+			} else {
+				println("exec", inst.String())
+			}
 		}
 		state.pc++
 		err = inst.exec(state)
@@ -271,6 +277,11 @@ func (i *callInst) run(state *execState, called value) error {
 				err = fmt.Errorf("%w\n\tat %s", err, inst.String())
 			}
 			return err
+		}
+		if debug {
+			if resPack != (value{}) {
+				println("\tresult:", resPack.resolve(state.locals()).String(), "=", inst.String())
+			}
 		}
 	}
 
@@ -332,7 +343,7 @@ func (i *callInst) execRuntime(state *execState, called value, args []value) err
 	for _, a := range sig.args {
 		var v value
 		v, off = createDecomposedIndices(off, a.t)
-		v = v.resolve(i.args)
+		v = v.resolve(args)
 		argEffects := baseEffects
 		if a.noCapture {
 			argEffects &^= escape

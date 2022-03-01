@@ -3,6 +3,8 @@
 
 package runtime
 
+import _ "unsafe"
+
 type timeUnit float64 // time in milliseconds, just like Date.now() in JavaScript
 
 // wasmNested is used to detect scheduler nesting (WASM calls into JS calls back into WASM).
