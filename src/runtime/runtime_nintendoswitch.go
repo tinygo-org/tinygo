@@ -37,17 +37,16 @@ var context uintptr
 var mainThread uintptr
 
 var (
-	heapStart = uintptr(0)
-	heapEnd   = uintptr(0)
-	usedRam   = uint64(0)
-	totalRam  = uint64(0)
-	totalHeap = uint64(0)
+	heapStart uintptr
+	heapEnd   uintptr
+	usedRam   uint64
+	totalRam  uint64
+	totalHeap uint64
 )
 
 func preinit() {
 	// Unsafe to use heap here
 	setupEnv()
-	setupHeap()
 }
 
 // Entry point for Go. Initialize all packages and call main.main().
@@ -169,7 +168,7 @@ func setupEnv() {
 	svcGetInfo(&usedRam, infoTypeUsedMemorySize, currentProcessHandle, 0)
 }
 
-func setupHeap() {
+func preInitHeap() {
 	if heapStart != 0 {
 		if debugInit {
 			print("Heap already overrided by hblauncher")
