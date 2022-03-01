@@ -465,22 +465,3 @@ func (err typeError) Error() string {
 	}
 	return "expected type " + expected + " but got " + got
 }
-
-/*
-type backtrace struct {
-	err   error
-	stack []instruction
-}
-
-func (b backtrace) Error() string {
-	strs := make([]string, len(b.stack))
-	for i, inst := range b.stack {
-		strs[i] = "\tfrom: " + inst.String()
-	}
-	return b.err.Error() + "\n" + strings.Join(strs, "\n")
-}
-
-func (b backtrace) Unwrap() error {
-	return b.err
-}
-*/

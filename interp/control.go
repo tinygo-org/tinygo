@@ -2,6 +2,7 @@ package interp
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -266,6 +267,9 @@ func (i *callInst) run(state *execState, called value) error {
 		state.pc++
 		err = inst.exec(state)
 		if err != nil {
+			if !isRuntimeOrRevert(err) {
+				err = fmt.Errorf("%w\n\tat %s", err, inst.String())
+			}
 			return err
 		}
 	}
