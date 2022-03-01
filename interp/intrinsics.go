@@ -26,6 +26,8 @@ func parseAsIntrinsic(c *constParser, call callInst) (instruction, error) {
 		return parseHeapAlloc(c, call)
 	case "runtime.trackPointer":
 		return nil, nil
+	case "runtime.runtimePanic":
+		return &runtimePanicInst{call.args[0], call.args[1], call.dbg}, nil
 	default:
 		switch {
 		case strings.HasPrefix(obj.name, "llvm.lifetime.start.") || strings.HasPrefix(obj.name, "llvm.lifetime.end.") ||
@@ -245,4 +247,70 @@ func (i *heapAllocInst) exec(state *execState) error {
 	}
 	state.stack = append(state.stack, obj.ptr(0))
 	return nil
+}
+
+type runtimePanicInst struct {
+	base, len value
+	dbg       llvm.Metadata
+}
+
+var _ instruction = (*runtimePanicInst)(nil)
+
+func (i *runtimePanicInst) result() typ {
+	return nil
+}
+
+func (i *runtimePanicInst) exec(state *execState) error {
+	base := i.base.resolve(state.locals())
+	len := i.len.resolve(state.locals())
+	str, err := state.loadDbgString(base, len)
+	if err != nil {
+		println("failed to load panic str", err.Error())
+		return fmt.Errorf("runtime panic (%s, %s)%s", base.String(), len.String(), dbgSuffix(i.dbg))
+	}
+	return fmt.Errorf("runtime panic %q%s", str, dbgSuffix(i.dbg))
+}
+
+func (i *runtimePanicInst) runtime(*rtGen) error {
+	return errors.New("cannot runtime panic at runtime")
+}
+
+func (i *runtimePanicInst) String() string {
+	return fmt.Sprintf("runtime panic %s, %s", i.base.String(), i.len.String())
+}
+
+func (s *execState) loadDbgString(base, len value) (string, error) {
+	p, ok := base.val.(*offPtr)
+	if !ok {
+		return "", errRuntime
+	}
+	_, ok = len.val.(smallInt)
+	if !ok {
+		return "", errRuntime
+	}
+	obj := p.obj()
+	if obj.isExtern || obj.isFunc {
+		return "", errRuntime
+	}
+	err := obj.parseInit(&s.cp)
+	if err != nil {
+		return "", err
+	}
+	if len.raw > 100*1024 || len.raw <= -base.raw {
+		// This does not seem like a great idea.
+		return "", errRuntime
+	}
+	data := make([]byte, len.raw)
+	for i := uint64(0); i < len.raw; i++ {
+		v, err := obj.data.load(i8, base.raw+i)
+		if err != nil {
+			return "", err
+		}
+		_, ok := v.val.(smallInt)
+		if !ok {
+			return "", errRuntime
+		}
+		data[i] = byte(v.raw)
+	}
+	return string(data), nil
 }
