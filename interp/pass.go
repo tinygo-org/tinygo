@@ -34,7 +34,10 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 			return errors.New("multiple uses of interpreted function")
 		}
 
-		forceNoEscape[use.User().InstructionParent().Parent()] = struct{}{}
+		// Exclude any instructions running strictly after the use from escape analysis.
+		for inst := use.User(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+			forceNoEscape[inst] = struct{}{}
+		}
 	}
 
 	// Set up execution state.

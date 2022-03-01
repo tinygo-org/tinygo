@@ -67,10 +67,10 @@ func (c *constParser) parseFuncSignature(fn llvm.Value) (signature, error) {
 	// Parse arguments.
 	args := make([]sigArg, len(i.args))
 	for i, t := range i.args {
-		noCapture := !fn.GetEnumAttributeAtIndex(i, attrNoCapture).IsNil()
-		readNone := !fn.GetEnumAttributeAtIndex(i, attrReadNone).IsNil()
-		readOnly := !fn.GetEnumAttributeAtIndex(i, attrReadOnly).IsNil()
-		writeOnly := !fn.GetEnumAttributeAtIndex(i, attrWriteOnly).IsNil()
+		noCapture := !fn.GetEnumAttributeAtIndex(i+1, attrNoCapture).IsNil()
+		readNone := !fn.GetEnumAttributeAtIndex(i+1, attrReadNone).IsNil()
+		readOnly := !fn.GetEnumAttributeAtIndex(i+1, attrReadOnly).IsNil()
+		writeOnly := !fn.GetEnumAttributeAtIndex(i+1, attrWriteOnly).IsNil()
 		if readOnly && writeOnly {
 			readNone = true
 			readOnly = false
@@ -242,7 +242,7 @@ func (s signature) String() string {
 	for i, a := range s.args {
 		var v value
 		v, inHeight = createDecomposedIndices(inHeight, a.t)
-		args[i] = v.String()
+		args[i] = v.String() + a.attrSuffix()
 	}
 	attrs := ""
 	if s.noSync {
@@ -322,7 +322,11 @@ func (a sigArg) merge(with sigArg) (sigArg, error) {
 }
 
 func (a sigArg) String() string {
-	str := a.t.String()
+	return a.t.String() + a.attrSuffix()
+}
+
+func (a sigArg) attrSuffix() string {
+	var str string
 	if a.noCapture {
 		str += " nocapture"
 	}

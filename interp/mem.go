@@ -11,8 +11,6 @@ import (
 
 func (c *constParser) mapGlobals(mod llvm.Module, forceNoEscape map[llvm.Value]struct{}) (uint64, error) {
 	objs := make(map[llvm.Value]*memObj)
-	var worklist []llvm.Value
-	visited := make(map[llvm.Value]struct{})
 	var nextID uint64
 
 	// List all globals.
@@ -33,7 +31,6 @@ func (c *constParser) mapGlobals(mod llvm.Module, forceNoEscape map[llvm.Value]s
 			}
 		}
 		linkage := g.Linkage()
-		worklist = append(worklist, g)
 		align := g.Alignment()
 		if align == 0 {
 			// Assume ABI type alignment?
@@ -48,7 +45,6 @@ func (c *constParser) mapGlobals(mod llvm.Module, forceNoEscape map[llvm.Value]s
 				panic("align is not a power of 2")
 			}
 		}
-		visited[g] = struct{}{}
 		_, forceNoEscape := forceNoEscape[g]
 		objs[g] = &memObj{
 			ptrTy:      ty.(ptrType),
@@ -75,8 +71,6 @@ func (c *constParser) mapGlobals(mod llvm.Module, forceNoEscape map[llvm.Value]s
 			return 0, err
 		}
 		linkage := f.Linkage()
-		worklist = append(worklist, f)
-		visited[f] = struct{}{}
 		_, forceNoEscape := forceNoEscape[f]
 		objs[f] = &memObj{
 			ptrTy:    ty.(ptrType),
@@ -93,6 +87,12 @@ func (c *constParser) mapGlobals(mod llvm.Module, forceNoEscape map[llvm.Value]s
 	if debug {
 		println("global escape analysis:")
 	}
+	var worklist []llvm.Value
+	visited := make(map[llvm.Value]struct{})
+	for g := range objs {
+		worklist = append(worklist, g)
+		visited[g] = struct{}{}
+	}
 	used := make(map[llvm.Value][]llvm.Value)
 	dedup := make(map[llvm.Value]struct{})
 	for len(worklist) > 0 {
@@ -100,6 +100,9 @@ func (c *constParser) mapGlobals(mod llvm.Module, forceNoEscape map[llvm.Value]s
 		worklist = worklist[:len(worklist)-1]
 		for use := v.FirstUse(); !use.IsNil(); use = use.NextUse() {
 			user := use.User()
+			if _, ok := forceNoEscape[user]; ok {
+				continue
+			}
 			if !user.IsAInstruction().IsNil() {
 				user = user.InstructionParent().Parent()
 			}
@@ -132,9 +135,6 @@ func (c *constParser) mapGlobals(mod llvm.Module, forceNoEscape map[llvm.Value]s
 	for len(worklist) > 0 {
 		v := worklist[len(worklist)-1]
 		worklist = worklist[:len(worklist)-1]
-		if _, ok := forceNoEscape[v]; ok {
-			continue
-		}
 		if obj, ok := objs[v]; ok {
 			if !obj.escaped {
 				if debug {
@@ -155,13 +155,12 @@ func (c *constParser) mapGlobals(mod llvm.Module, forceNoEscape map[llvm.Value]s
 			continue
 		}
 		var esc []*memObj
+		if assert && len(worklist) != 0 {
+			panic("worklist not empty")
+		}
 		worklist = append(worklist, g)
-		visited[g] = struct{}{}
 		for i := 0; i < len(worklist); i++ {
 			v := worklist[i]
-			if _, ok := forceNoEscape[v]; ok {
-				continue
-			}
 			for _, u := range used[v] {
 				if _, ok := visited[u]; ok {
 					continue
@@ -183,6 +182,9 @@ func (c *constParser) mapGlobals(mod llvm.Module, forceNoEscape map[llvm.Value]s
 		}
 		for _, v := range worklist {
 			delete(visited, v)
+		}
+		for _, obj := range esc {
+			delete(visited, obj.llval)
 		}
 		worklist = worklist[:0]
 		obj.esc = esc
@@ -265,6 +267,23 @@ type memObj struct {
 	err error
 }
 
+func (obj *memObj) parseSig(c *constParser) (signature, error) {
+	if !obj.sig.ty.IsNil() {
+		return obj.sig, nil
+	}
+
+	sig, err := c.parseFuncSignature(obj.llval)
+	if err != nil {
+		obj.err = err
+		return signature{}, err
+	}
+	if debug {
+		println("parsed sig for", obj.String(), "as", sig.String())
+	}
+	obj.sig = sig
+	return sig, nil
+}
+
 func (obj *memObj) compile(c *constParser) error {
 	if obj.err != nil {
 		return obj.err
@@ -272,9 +291,8 @@ func (obj *memObj) compile(c *constParser) error {
 	if obj.version != 0 {
 		return nil
 	}
-	sig, err := c.parseFuncSignature(obj.llval)
+	sig, err := obj.parseSig(c)
 	if err != nil {
-		obj.err = err
 		return err
 	}
 	if sig.noInline {
@@ -293,7 +311,6 @@ func (obj *memObj) compile(c *constParser) error {
 		obj.err = err
 		return err
 	}
-	obj.sig = sig
 	obj.r = r
 	obj.version = 1
 	if debug {

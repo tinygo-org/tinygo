@@ -285,116 +285,157 @@ func (i *callInst) execRuntime(state *execState, called value, args []value) err
 	if i.sig.ty.IsNil() {
 		panic("nil sig type")
 	}
-	if p, ok := called.val.(*offPtr); ok && p.isFunc && !p.isExtern {
+	if p, ok := called.val.(*offPtr); ok && p.isFunc {
 		obj := p.obj()
-		err := obj.compile(&state.cp)
+		var err error
+		sig, err = obj.parseSig(&state.cp)
+		var merge signature
 		if err == nil {
-			merge, err := sig.merge(obj.sig)
-			switch {
-			case err == nil:
-				sig = merge
-			case isRuntimeOrRevert(err):
-			default:
-				return err
-			}
+			merge, err = sig.merge(obj.sig)
+		}
+		switch {
+		case err == nil:
+			sig = merge
+		case isRuntimeOrRevert(err):
+		default:
+			return err
 		}
 	}
 
-	// Scan pointer arguments.
-	var toFlush, toInvalidate, toEscape map[*memObj]struct{}
-	if !sig.readNone {
-		toFlush = make(map[*memObj]struct{})
-		toInvalidate = make(map[*memObj]struct{})
-		toEscape = make(map[*memObj]struct{})
-		var off uint
-		for _, a := range sig.args {
-			var v value
-			v, off = createDecomposedIndices(off, a.t)
-			v = v.resolve(i.args)
-			v.aliases(tmp)
-			if !a.noCapture {
-				// Aliased objects may be escaped.
-				for obj := range tmp {
-					toEscape[obj] = struct{}{}
-				}
-			}
-			switch {
-			case a.readNone:
-				// The contents are not observed.
+	// Calculate side effects.
+	type sideEffect uint8
+	const (
+		observe sideEffect = 1 << iota
+		modify
+		escape
+	)
+	var baseEffects sideEffect = observe | modify | escape
+	if sig.readOnly {
+		baseEffects &^= modify
+	}
+	if sig.writeOnly {
+		baseEffects &^= observe
+	}
+	if sig.readNone {
+		baseEffects &^= observe | modify
+	}
+	var escEffects sideEffect
+	if !sig.argMemOnly {
+		escEffects = baseEffects &^ escape
+	}
+	var off uint
+	var sideEffects map[*memObj]sideEffect
+	for _, a := range sig.args {
+		var v value
+		v, off = createDecomposedIndices(off, a.t)
+		v = v.resolve(i.args)
+		argEffects := baseEffects
+		if a.noCapture {
+			argEffects &^= escape
+		}
+		if a.readOnly {
+			argEffects &^= modify
+		}
+		if a.writeOnly {
+			argEffects &^= observe
+		}
+		if a.readNone {
+			argEffects &^= observe | modify
+		}
+		if argEffects == 0 {
+			continue
+		}
+		complete := v.aliases(tmp)
+		if !complete {
+			newEscEffects := (argEffects &^ escape) &^ escEffects
+			if newEscEffects != 0 {
+				for obj, objEffects := range sideEffects {
+					if objEffects&newEscEffects == 0 || !obj.escaped {
+						continue
+					}
 
-			case a.readOnly:
-				// The contents are read but not written to.
-				for obj := range tmp {
-					toFlush[obj] = struct{}{}
+					objEffects &^= newEscEffects
+					if objEffects == 0 {
+						delete(sideEffects, obj)
+					} else {
+						sideEffects[obj] = objEffects
+					}
 				}
+			}
+			escEffects |= newEscEffects
+		}
+		if len(tmp) == 0 {
+			continue
+		}
 
-			default:
-				// Flush and invalidate.
-				for obj := range tmp {
-					toFlush[obj] = struct{}{}
-					toInvalidate[obj] = struct{}{}
+		if sideEffects == nil {
+			sideEffects = make(map[*memObj]sideEffect)
+		}
+		for obj := range tmp {
+			objEffects := argEffects
+			if obj.escaped {
+				objEffects &^= escEffects
+				if objEffects == 0 {
+					continue
 				}
 			}
-			for k := range tmp {
-				delete(tmp, k)
-			}
+			sideEffects[obj] |= objEffects
+		}
+		for obj := range tmp {
+			delete(tmp, obj)
 		}
 	}
 
 	// Escape the called function.
 	state.escape(called)
 
-	// TODO: use deterministic ordering
-
-	if !sig.readNone {
-		// Flush anything which the function may observe or modify.
-		var objs []*memObj
-		for obj := range toInvalidate {
-			objs = append(objs, obj)
-			delete(toFlush, obj)
-		}
-		for obj := range toFlush {
-			objs = append(objs, obj)
-		}
-		sortObjects(objs)
-		for _, obj := range objs {
-			var err error
-			if _, ok := toInvalidate[obj]; ok {
-				err = state.invalidate(obj, i.dbg)
-			} else {
-				err = state.flush(obj, i.dbg)
-			}
-			if err != nil {
-				return err
-			}
-		}
+	// Apply side-effects.
+	dbg := i.dbg
+	var worklist, toEscape []*memObj
+	for obj := range sideEffects {
+		worklist = append(worklist, obj)
+	}
+	sortObjects(worklist)
+	for _, obj := range worklist {
+		objEffects := sideEffects[obj]
 		var err error
-		if sig.readOnly {
-			err = state.flushEscaped(i.dbg)
+		if objEffects&modify != 0 {
+			err = state.invalidate(obj, dbg)
 		} else {
-			err = state.invalidateEscaped(i.dbg)
+			err = state.flush(obj, dbg)
 		}
 		if err != nil {
 			return err
 		}
+		if objEffects&escape != 0 {
+			toEscape = append(toEscape, obj)
+		}
+	}
+	var err error
+	if escEffects&modify == 0 && sig.noSync {
+		err = state.flushEscaped(dbg)
+	} else {
+		err = state.invalidateEscaped(dbg)
+	}
+	if err != nil {
+		return err
+	}
+	for _, obj := range toEscape {
+		if obj.escaped {
+			continue
+		}
+
+		obj.escaped = true
+		if debug {
+			println("capture", obj.String())
+		}
+		state.escapeStack = append(state.escapeStack, obj)
 	}
 
 	// Create a call to the function.
-	v := state.rt.insertInst(&callInst{called, args, sig, i.dbg, false})
+	v := state.rt.insertInst(&callInst{called, args, sig, dbg, false})
 	if sig.ret != nil {
 		state.stack = unpack(v, state.stack)
-	}
-
-	// Escape objects aliased by inputs.
-	{
-		start := len(state.escapeStack)
-		for obj := range toEscape {
-			if obj.escaped {
-				continue
-			}
-			state.escapeStack = append(state.escapeStack, obj)
-		}
-		state.finishEscape(start)
 	}
 
 	return nil

@@ -40,21 +40,21 @@ interpreted:
 }
 
 define internal void @main.init() unnamed_addr {
-  %pointerFree12 = call i8* @runtime.alloc(i32 12, i8* nonnull inttoptr (i32 3 to i8*))
+  %pointerFree12 = call i8* @runtime.alloc(i32 12, i8* inttoptr (i32 3 to i8*))
   store i8* %pointerFree12, i8** @pointerFree12, align 4
-  %pointerFree7 = call i8* @runtime.alloc(i32 7, i8* nonnull inttoptr (i32 3 to i8*))
+  %pointerFree7 = call i8* @runtime.alloc(i32 7, i8* inttoptr (i32 3 to i8*))
   store i8* %pointerFree7, i8** @pointerFree7, align 4
-  %pointerFree3 = call i8* @runtime.alloc(i32 3, i8* nonnull inttoptr (i32 3 to i8*))
+  %pointerFree3 = call i8* @runtime.alloc(i32 3, i8* inttoptr (i32 3 to i8*))
   store i8* %pointerFree3, i8** @pointerFree3, align 4
-  %pointerFree0 = call i8* @runtime.alloc(i32 0, i8* nonnull inttoptr (i32 3 to i8*))
+  %pointerFree0 = call i8* @runtime.alloc(i32 0, i8* inttoptr (i32 3 to i8*))
   store i8* %pointerFree0, i8** @pointerFree0, align 4
-  %layout1 = call i8* @runtime.alloc(i32 12, i8* nonnull inttoptr (i32 67 to i8*))
+  %layout1 = call i8* @runtime.alloc(i32 12, i8* inttoptr (i32 67 to i8*))
   store i8* %layout1, i8** @layout1, align 4
-  %layout2 = call i8* @runtime.alloc(i32 60, i8* nonnull inttoptr (i32 71 to i8*))
+  %layout2 = call i8* @runtime.alloc(i32 60, i8* inttoptr (i32 71 to i8*))
   store i8* %layout2, i8** @layout2, align 4
-  %layout3 = call i8* @runtime.alloc(i32 104, i8* nonnull inttoptr (i32 -1827137035 to i8*))
+  %layout3 = call i8* @runtime.alloc(i32 104, i8* inttoptr (i32 -1827137035 to i8*))
   store i8* %layout3, i8** @layout3, align 4
-  %layout4 = call i8* @runtime.alloc(i32 312, i8* nonnull inttoptr (i32 -1827137035 to i8*))
+  %layout4 = call i8* @runtime.alloc(i32 312, i8* inttoptr (i32 -1827137035 to i8*))
   store i8* %layout4, i8** @layout4, align 4
   %bigobj1 = call i8* @runtime.alloc(i32 248, i8* bitcast ({ i32, [8 x i8] }* @"runtime/gc.layout:62-2000000000000001" to i8*))
   store i8* %bigobj1, i8** @bigobj1, align 4

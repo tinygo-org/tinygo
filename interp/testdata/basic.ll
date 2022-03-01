@@ -15,6 +15,13 @@ declare void @runtime.printint64(i64) unnamed_addr
 
 declare void @runtime.printnl() unnamed_addr
 
+define void @main() local_unnamed_addr {
+entry:
+  call void @runtime.initAll(i8* undef)
+  call void @main.main(i8* undef)
+  ret void
+}
+
 define void @runtime.initAll(i8* %context) unnamed_addr {
 entry:
   call void @runtime.init()
@@ -22,7 +29,7 @@ entry:
   ret void
 }
 
-define void @main() unnamed_addr {
+define internal void @main.main(i8* %context) unnamed_addr {
 entry:
   %0 = load i64, i64* @main.v1
   call void @runtime.printint64(i64 %0)
@@ -37,6 +44,8 @@ entry:
 
 define internal void @main.init() unnamed_addr {
 entry:
+  ; This is a modified version of an old test.
+
   store i64 3, i64* @main.v1
   call void @"main.init#1"()
 
@@ -101,9 +110,9 @@ entry:
 
 declare i64 @someValue()
 
-declare void @modifyExternal(i32*)
+declare void @modifyExternal(i32* nocapture writeonly) argmemonly nosync
 
-declare void @readExternal(i32*)
+declare void @readExternal(i32* nocapture readonly) argmemonly nosync
 
 ; This function will modify an external value. By passing this function as a
 ; function pointer to an external function, @main.exposedValue2 should be

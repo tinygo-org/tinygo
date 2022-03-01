@@ -20,6 +20,7 @@ func TestPass(t *testing.T) {
 	cases := []string{
 		"alloc",
 		"basic",
+		"side",
 	}
 	for _, c := range cases {
 		c := c
@@ -49,15 +50,18 @@ func TestPass(t *testing.T) {
 				t.Errorf("IR verification error: %s", err.Error())
 			}
 
-			// Optimize IR a little.
-			funcPasses := llvm.NewFunctionPassManagerForModule(mod)
-			defer funcPasses.Dispose()
-			funcPasses.AddInstructionCombiningPass()
-			funcPasses.InitializeFunc()
-			for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-				funcPasses.RunFunc(fn)
-			}
-			funcPasses.FinalizeFunc()
+			// This is disabled because it can hide some of the behavior we are testing for.
+			/*
+				// Optimize IR a little.
+				funcPasses := llvm.NewFunctionPassManagerForModule(mod)
+				defer funcPasses.Dispose()
+				funcPasses.AddInstructionCombiningPass()
+				funcPasses.InitializeFunc()
+				for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+					funcPasses.RunFunc(fn)
+				}
+				funcPasses.FinalizeFunc()
+			*/
 
 			out := filepath.Join("testdata", c+".out.ll")
 			if *update {
