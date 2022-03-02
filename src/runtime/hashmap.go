@@ -37,19 +37,6 @@ type hashmapIterator struct {
 	bucketIndex  uint8
 }
 
-// Get FNV-1a hash of this key.
-//
-// https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1a_hash
-func hashmapHash(ptr unsafe.Pointer, n uintptr) uint32 {
-	var result uint32 = 2166136261 // FNV offset basis
-	for i := uintptr(0); i < n; i++ {
-		c := *(*uint8)(unsafe.Pointer(uintptr(ptr) + i))
-		result ^= uint32(c) // XOR with byte
-		result *= 16777619  // FNV prime
-	}
-	return result
-}
-
 // Get the topmost 8 bits of the hash, without using a special value (like 0).
 func hashmapTopHash(hash uint32) uint8 {
 	tophash := uint8(hash >> 24)
@@ -308,7 +295,7 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 
 func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
 	// TODO: detect nil map here and throw a better panic message?
-	hash := hashmapHash(key, uintptr(m.keySize))
+	hash := hash32(key, uintptr(m.keySize))
 	hashmapSet(m, key, value, hash, memequal)
 }
 
@@ -317,7 +304,7 @@ func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) 
 		memzero(value, uintptr(valueSize))
 		return false
 	}
-	hash := hashmapHash(key, uintptr(m.keySize))
+	hash := hash32(key, uintptr(m.keySize))
 	return hashmapGet(m, key, value, valueSize, hash, memequal)
 }
 
@@ -325,7 +312,7 @@ func hashmapBinaryDelete(m *hashmap, key unsafe.Pointer) {
 	if m == nil {
 		return
 	}
-	hash := hashmapHash(key, uintptr(m.keySize))
+	hash := hash32(key, uintptr(m.keySize))
 	hashmapDelete(m, key, hash, memequal)
 }
 
@@ -337,7 +324,7 @@ func hashmapStringEqual(x, y unsafe.Pointer, n uintptr) bool {
 
 func hashmapStringHash(s string) uint32 {
 	_s := (*_string)(unsafe.Pointer(&s))
-	return hashmapHash(unsafe.Pointer(_s.ptr), uintptr(_s.length))
+	return hash32(unsafe.Pointer(_s.ptr), uintptr(_s.length))
 }
 
 func hashmapStringSet(m *hashmap, key string, value unsafe.Pointer) {
@@ -370,7 +357,7 @@ func hashmapFloat32Hash(ptr unsafe.Pointer) uint32 {
 		// convert -0 to 0 for hashing
 		f = 0
 	}
-	return hashmapHash(unsafe.Pointer(&f), 4)
+	return hash32(unsafe.Pointer(&f), 4)
 }
 
 func hashmapFloat64Hash(ptr unsafe.Pointer) uint32 {
@@ -379,7 +366,7 @@ func hashmapFloat64Hash(ptr unsafe.Pointer) uint32 {
 		// convert -0 to 0 for hashing
 		f = 0
 	}
-	return hashmapHash(unsafe.Pointer(&f), 8)
+	return hash32(unsafe.Pointer(&f), 8)
 }
 
 func hashmapInterfaceHash(itf interface{}) uint32 {
@@ -397,9 +384,9 @@ func hashmapInterfaceHash(itf interface{}) uint32 {
 
 	switch x.RawType().Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return hashmapHash(ptr, x.RawType().Size())
+		return hash32(ptr, x.RawType().Size())
 	case reflect.Bool, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return hashmapHash(ptr, x.RawType().Size())
+		return hash32(ptr, x.RawType().Size())
 	case reflect.Float32:
 		// It should be possible to just has the contents. However, NaN != NaN
 		// so if you're using lots of NaNs as map keys (you shouldn't) then hash
@@ -421,7 +408,7 @@ func hashmapInterfaceHash(itf interface{}) uint32 {
 		// It might seem better to just return the pointer, but that won't
 		// result in an evenly distributed hashmap. Instead, hash the pointer
 		// like most other types.
-		return hashmapHash(ptr, x.RawType().Size())
+		return hash32(ptr, x.RawType().Size())
 	case reflect.Array:
 		var hash uint32
 		for i := 0; i < x.Len(); i++ {
