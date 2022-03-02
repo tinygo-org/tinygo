@@ -235,6 +235,14 @@ func Mprotect(b []byte, prot int) (err error) {
 }
 
 func Environ() []string {
+
+	// This function combines all the environment into a single allocation.
+	// While this optimizes for memory usage and garbage collector
+	// overhead, it does run the risk of potentially pinning a "large"
+	// allocation if a user holds onto a single environment variable or
+	// value.  Having each variable be its own allocation would make the
+	// trade-off in the other direction.
+
 	// calculate total memory required
 	var length uintptr
 	var vars int
