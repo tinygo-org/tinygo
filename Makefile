@@ -221,6 +221,7 @@ TEST_PACKAGES_SLOW = \
 	index/suffixarray \
 
 TEST_PACKAGES_BASE = \
+	compress/lzw \
 	compress/zlib \
 	container/heap \
 	container/list \
@@ -249,6 +250,7 @@ TEST_PACKAGES_BASE = \
 	internal/profile \
 	math \
 	math/cmplx \
+	net \
 	net/http/internal/ascii \
 	net/mail \
 	os \
@@ -267,12 +269,15 @@ TEST_PACKAGES := \
 	$(TEST_PACKAGES_BASE)
 
 # archive/zip requires ReadAt, which is not yet supported on windows
+# debug/plan9obj requires os.ReadAt, which is not yet supported on windows
 # io/fs requires os.ReadDir, which is not yet supported on windows or wasi
 # testing/fstest requires os.ReadDir, which is not yet supported on windows or wasi
 ifneq ($(OS),Windows_NT)
 TEST_PACKAGES := \
 	$(TEST_PACKAGES) \
 	archive/zip \
+	debug/dwarf \
+	debug/plan9obj \
 	io/fs \
 	testing/fstest
 endif
