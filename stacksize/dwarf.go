@@ -205,6 +205,10 @@ func (fi *frameInfo) exec(bytecode []byte) ([]frameInfoLine, error) {
 			if err != nil {
 				return nil, err
 			}
+		case 3: // DW_CFA_restore
+			// Restore a register. Used after an outlined function call.
+			// It should be possible to ignore this.
+			// TODO: check that this is not the stack pointer.
 		case 0:
 			switch lowBits {
 			case 0: // DW_CFA_nop
@@ -218,7 +222,22 @@ func (fi *frameInfo) exec(bytecode []byte) ([]frameInfoLine, error) {
 				}
 				fi.loc += uint64(offset) * fi.cie.codeAlignmentFactor
 				entries = append(entries, fi.newLine())
-				// TODO: DW_CFA_advance_loc2 etc
+			case 0x03: // DW_CFA_advance_loc2
+				var offset uint16
+				err := binary.Read(r, binary.LittleEndian, &offset)
+				if err != nil {
+					return nil, err
+				}
+				fi.loc += uint64(offset) * fi.cie.codeAlignmentFactor
+				entries = append(entries, fi.newLine())
+			case 0x04: // DW_CFA_advance_loc4
+				var offset uint32
+				err := binary.Read(r, binary.LittleEndian, &offset)
+				if err != nil {
+					return nil, err
+				}
+				fi.loc += uint64(offset) * fi.cie.codeAlignmentFactor
+				entries = append(entries, fi.newLine())
 			case 0x05: // DW_CFA_offset_extended
 				// Semantics are the same as DW_CFA_offset, but the encoding is
 				// different. Ignore it just like DW_CFA_offset.
@@ -236,6 +255,18 @@ func (fi *frameInfo) exec(bytecode []byte) ([]frameInfoLine, error) {
 				//     .cfi_undefined lr
 				// Ignore this directive.
 				_, err := readULEB128(r)
+				if err != nil {
+					return nil, err
+				}
+			case 0x09: // DW_CFA_register
+				// Copies a register. Emitted by the machine outliner, for example.
+				// It should be possible to ignore this.
+				// TODO: check that the stack pointer is not affected.
+				_, err := readULEB128(r)
+				if err != nil {
+					return nil, err
+				}
+				_, err = readULEB128(r)
 				if err != nil {
 					return nil, err
 				}
