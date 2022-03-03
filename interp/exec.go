@@ -29,6 +29,9 @@ type execState struct {
 	// nextObjID is the ID to use for the next memory object.
 	nextObjID uint64
 
+	// allocaStack is a list of allocas currently on the call stack.
+	allocaStack []*memObj
+
 	// pc is the index of the next instruction to execute.
 	// A pc beyond the end of the function is treated as a return.
 	pc uint

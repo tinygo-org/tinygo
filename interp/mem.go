@@ -1,6 +1,7 @@
 package interp
 
 import (
+	"errors"
 	"fmt"
 	"math/bits"
 	"strconv"
@@ -386,18 +387,76 @@ func (obj *memObj) String() string {
 	return "@" + maybeQuoteName(obj.name)
 }
 
-/*
 type allocaInst struct {
-	// ty is the type of the allocation.
+	// ty is the type of the allocation element.
 	ty typ
 
-	// size is the size of the allocation.
-	size uint64
+	// n is the number of elements.
+	n value
+
+	// ptrTy is the pointer type of the allocation.
+	ptrTy ptrType
+
+	alignScale uint
 
 	// dbg is the source instruction's debug metadata.
 	dbg llvm.Metadata
 }
-*/
+
+func (i *allocaInst) result() typ {
+	return i.ptrTy
+}
+
+func (i *allocaInst) exec(state *execState) error {
+	n := i.n.resolve(state.locals())
+	_, ok := n.val.(smallInt)
+	if !ok {
+		return todo("alloca of unknown size")
+	}
+	elemSize := i.ty.bytes()
+	overflow, size := bits.Mul64(n.raw, elemSize)
+	switch {
+	case overflow != 0 || size&^((1<<i.ptrTy.idxTy().bits())-1) != 0:
+		return errUB
+
+	case size > 1<<32 || n.raw >= 1<<32:
+		return errRevert{errors.New("alloca is too big")}
+	}
+	var ty typ
+	if n.raw == 1 {
+		ty = i.ty
+	} else {
+		ty = array(i.ty, uint32(n.raw))
+	}
+	mem := makeUndefMem(size)
+	id := state.nextObjID
+	state.nextObjID++
+	obj := &memObj{
+		ptrTy:      i.ptrTy,
+		name:       "interp.alloca." + strconv.FormatUint(id, 10),
+		id:         id,
+		unique:     size != 0,
+		size:       size,
+		alignScale: i.alignScale,
+		ty:         ty,
+		dbg:        i.dbg,
+		version:    state.version,
+		init:       mem,
+		data:       mem,
+		stack:      true,
+	}
+	state.stack = append(state.stack, obj.ptr(0))
+	state.allocaStack = append(state.allocaStack, obj)
+	return nil
+}
+
+func (i *allocaInst) runtime(gen *rtGen) error {
+	panic("cannot alloca at runtime")
+}
+
+func (i *allocaInst) String() string {
+	return i.ptrTy.String() + " alloca " + i.n.String() + " of " + i.ty.String() + " align " + strconv.FormatUint(1<<i.alignScale, 10)
+}
 
 type loadInst struct {
 	// from is source pointer.
@@ -636,7 +695,7 @@ func (i *storeInst) runtime(gen *rtGen) error {
 			if debug {
 				println("init store ok", v.String(), "to", to.String())
 			}
-			node, err := obj.init.store(v, to.raw, obj.version)
+			node, err := obj.init.store(v, to.raw, memVersionStart)
 			if err != nil {
 				return err
 			}
@@ -647,7 +706,7 @@ func (i *storeInst) runtime(gen *rtGen) error {
 		if debug {
 			println("cannot init store", v.String(), "to", to.String())
 		}
-		node, err := obj.init.blockInit(to.raw, size, obj.version)
+		node, err := obj.init.blockInit(to.raw, size, memVersionStart)
 		if err != nil {
 			return err
 		}

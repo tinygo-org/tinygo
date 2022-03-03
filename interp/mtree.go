@@ -116,6 +116,23 @@ func init() {
 	undefMemInitTable.init()
 }
 
+// makeUndefMem creates a non-initializable memory tree initialized with undef.
+// This matches the behavior of the 'alloca' instruction.
+func makeUndefMem(size uint64) memTreeNode {
+	return undefNoInitMemInitTable.make(size)
+}
+
+var undefNoInitMemInitTable = memInitTable{
+	leaf: memLeaf{
+		metaLow: ^uint64(0),
+		noInit:  ^uint64(0),
+	},
+}
+
+func init() {
+	undefNoInitMemInitTable.init()
+}
+
 // makeUnknownMem creates a memory tree initialized with "unknown" bytes.
 // Stores to this will not be marked as initializing.
 // This can be used to back a global with contents that cannot be understood.

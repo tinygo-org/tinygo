@@ -267,7 +267,7 @@ func (i *smallIntAddInst) exec(state *execState) error {
 		expr.escapeInputs(state)
 
 		// Create a runtime instruction to evaluate the expression.
-		v, err = i.expr.create(&state.rt, i.dbg)
+		v, err = expr.create(&state.rt, i.dbg)
 		if err != nil {
 			return err
 		}
@@ -415,7 +415,7 @@ func (i *smallIntSubInst) exec(state *execState) error {
 		expr.escapeInputs(state)
 
 		// Create a runtime instruction to evaluate the expression.
-		v, err = i.expr.create(&state.rt, i.dbg)
+		v, err = expr.create(&state.rt, i.dbg)
 		if err != nil {
 			return err
 		}
@@ -581,7 +581,7 @@ func (i *smallIntMulInst) exec(state *execState) error {
 		expr.escapeInputs(state)
 
 		// Create a runtime instruction to evaluate the expression.
-		v, err = i.expr.create(&state.rt, i.dbg)
+		v, err = expr.create(&state.rt, i.dbg)
 		if err != nil {
 			return err
 		}
@@ -739,7 +739,7 @@ func (i *smallUIntDivInst) exec(state *execState) error {
 		expr.escapeInputs(state)
 
 		// Create a runtime instruction to evaluate the expression.
-		v, err = i.expr.create(&state.rt, i.dbg)
+		v, err = expr.create(&state.rt, i.dbg)
 		if err != nil {
 			return err
 		}
@@ -986,7 +986,7 @@ func (i *smallIntCmpInst) exec(state *execState) error {
 		state.escape(expr.x, expr.y)
 
 		// Create a runtime instruction to evaluate the expression.
-		v, err = i.expr.create(&state.rt, i.dbg)
+		v, err = expr.create(&state.rt, i.dbg)
 		if err != nil {
 			return err
 		}
@@ -1077,7 +1077,7 @@ func (i *signExtendInst) exec(state *execState) error {
 		state.escape(expr.in)
 
 		// Create a runtime instruction to evaluate the expression.
-		v, err = i.expr.create(&state.rt, i.dbg)
+		v, err = expr.create(&state.rt, i.dbg)
 		if err != nil {
 			return err
 		}

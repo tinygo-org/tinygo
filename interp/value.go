@@ -444,7 +444,7 @@ type uglyGEP struct {
 }
 
 func (v uglyGEP) constant(raw uint64) bool {
-	return value{v.val, raw}.constant()
+	return v.obj.ptr(0).constant() && value{v.val, raw}.constant()
 }
 
 func (v uglyGEP) typ(raw uint64) typ {

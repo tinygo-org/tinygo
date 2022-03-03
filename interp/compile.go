@@ -449,6 +449,30 @@ func (c *compiler) emitInst(inst llvm.Value) error {
 		}
 		c.ivals[inst] = v
 		return nil
+
+	case llvm.Alloca:
+		t := inst.Type()
+		ptrTy, err := c.typ(t)
+		if err != nil {
+			return err
+		}
+		ty, err := c.typ(t.ElementType())
+		if err != nil {
+			return err
+		}
+		n, err := c.value(inst.Operand(0))
+		if err != nil {
+			return err
+		}
+		alignScale := uint(bits.TrailingZeros(uint(inst.Alignment())))
+		c.ivals[inst] = c.b.insertInst(&allocaInst{
+			ty:         ty,
+			n:          n,
+			ptrTy:      ptrTy.(ptrType),
+			alignScale: alignScale,
+			dbg:        dbg,
+		})
+		return nil
 	}
 
 	return todo("emit instruction with opcode " + opString(op))

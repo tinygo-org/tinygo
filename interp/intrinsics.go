@@ -208,7 +208,7 @@ func (i *heapAllocInst) exec(state *execState) error {
 		return fmt.Errorf("requested size of %d bytes is not a multiple of element %s size %d", size.raw, i.elemTy.String(), elemSize)
 	}
 	if size.raw >= 1<<32 {
-		return fmt.Errorf("allocation of %d bytes is too big", size.raw)
+		return errRevert{fmt.Errorf("allocation of %d bytes is too big", size.raw)}
 	}
 	var n uint32
 	if size.raw != 0 {

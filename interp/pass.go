@@ -2,6 +2,7 @@ package interp
 
 import (
 	"errors"
+	"sync"
 
 	"tinygo.org/x/go-llvm"
 )
@@ -13,12 +14,16 @@ const (
 
 const debug = false
 
+var mu sync.Mutex
+
 func Run(mod llvm.Module, fn llvm.Value) error {
 	if fn.IsNil() {
 		return errors.New("function to run is nil")
 	}
 
 	if debug {
+		mu.Lock()
+		defer mu.Unlock()
 		println("run fn:", fn.Name())
 		println("source:")
 		mod.Dump()
@@ -191,18 +196,13 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 			gen.sTypes[t] = raw
 		}
 	}
-	for _, inst := range state.rt.instrs {
-		if debug {
-			println("gen rt inst:", inst.String())
-		}
-		err := inst.runtime(&gen)
-		if err != nil {
-			return err
-		}
-	}
-	gen.builder.CreateRetVoid()
+	gen.block = b
+	gen.run(state.rt.instrs...)
 	gvals := make(map[llvm.Value]llvm.Value, len(gen.modGlobals))
 	for g := range gen.modGlobals {
+		if g.stack {
+			continue
+		}
 		v, err := g.init.load(g.ty, 0)
 		if err != nil {
 			return err

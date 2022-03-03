@@ -189,6 +189,7 @@ func (i *callInst) exec(state *execState) error {
 	escStart := len(state.escapeStack)
 	oldFn := state.curFn
 	nextObjID := state.nextObjID
+	stackMemStart := len(state.allocaStack)
 
 	// Run the function.
 	state.sp = sp
@@ -205,6 +206,13 @@ func (i *callInst) exec(state *execState) error {
 		if uint(len(state.rt.instrs)) == state.rt.labels[revLabel].start {
 			state.rt.revert(revLabel)
 		}
+		endInst := len(state.rt.instrs)
+		for _, obj := range state.allocaStack[stackMemStart:] {
+			obj.endIdx = uint(endInst)
+			obj.data = obj.init
+			obj.escaped = false
+		}
+		state.allocaStack = state.allocaStack[:stackMemStart]
 		return nil
 	case !i.recursiveRevert && isRuntimeOrRevert(err):
 		if debug {
@@ -235,6 +243,7 @@ func (i *callInst) exec(state *execState) error {
 		}
 		state.escapeStack = state.escapeStack[:escStart]
 		state.nextObjID = nextObjID
+		state.allocaStack = state.allocaStack[:stackMemStart]
 		return i.execRuntime(state, called, args)
 	default:
 		return err

@@ -119,3 +119,8 @@ define void @spinNotify(i32* %on) {
   store atomic i32 1, i32* %on seq_cst, align 4
   ret void
 }
+
+define void @alloca() {
+  %mem = alloca i32, i32 2
+  ret void
+}
