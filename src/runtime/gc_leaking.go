@@ -14,6 +14,9 @@ import (
 // Ever-incrementing pointer: no memory is freed.
 var heapptr = heapStart
 
+// Inlining alloc() speeds things up slightly but bloats the executable by 50%,
+// see https://github.com/tinygo-org/tinygo/issues/2674.  So don't.
+//go:noinline
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// TODO: this can be optimized by not casting between pointers and ints so
 	// much. And by using platform-native data types (e.g. *uint8 for 8-bit
