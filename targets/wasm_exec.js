@@ -424,7 +424,7 @@
 
 						const dst = loadSlice(dest_addr, dest_len);
 						const src = loadValue(source_addr);
-						if (!(src instanceof Uint8Array)) {
+						if (!(src instanceof Uint8Array || src instanceof Uint8ClampedArray)) {
 							mem().setUint8(returned_status_addr, 0); // Return "not ok" status
 							return;
 						}
@@ -443,7 +443,7 @@
 
 						const dst = loadValue(dest_addr);
 						const src = loadSlice(source_addr, source_len);
-						if (!(dst instanceof Uint8Array)) {
+						if (!(dst instanceof Uint8Array || dst instanceof Uint8ClampedArray)) {
 							mem().setUint8(returned_status_addr, 0); // Return "not ok" status
 							return;
 						}
