@@ -34,6 +34,12 @@ func (p *ProcessState) Success() bool {
 	return false // TODO
 }
 
+// ExitCode returns the exit code of the exited process, or -1
+// if the process hasn't exited or was terminated by a signal.
+func (p *ProcessState) ExitCode() int {
+	return -1 // TODO
+}
+
 type Process struct {
 	Pid int
 }
