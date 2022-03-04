@@ -15,6 +15,8 @@ var (
 	Stderr = NewFile(2, "/dev/stderr")
 )
 
+const DevNull = "/dev/null"
+
 // isOS indicates whether we're running on a real operating system with
 // filesystem support.
 const isOS = false

@@ -13,6 +13,8 @@ import (
 	"unicode/utf16"
 )
 
+const DevNull = "NUL"
+
 type syscallFd = syscall.Handle
 
 // Symlink is a stub, it is not implemented.
