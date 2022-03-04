@@ -118,6 +118,10 @@ func (f unixFileHandle) Close() error {
 	return handleSyscallError(syscall.Close(syscallFd(f)))
 }
 
+func (f unixFileHandle) Fd() uintptr {
+	return uintptr(f)
+}
+
 // Chmod changes the mode of the named file to mode.
 // If the file is a symbolic link, it changes the mode of the link's target.
 // If there is an error, it will be of type *PathError.

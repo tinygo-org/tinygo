@@ -179,9 +179,19 @@ func (f *File) SyscallConn() (syscall.RawConn, error) {
 	return nil, ErrNotImplemented
 }
 
+// fd is an internal interface that is used to try a type assertion in order to
+// call the Fd() method of the underlying file handle if it is implemented.
+type fd interface {
+	Fd() uintptr
+}
+
 // Fd returns the file handle referencing the open file.
 func (f *File) Fd() uintptr {
-	panic("unimplemented: os.file.Fd()")
+	handle, ok := f.handle.(fd)
+	if ok {
+		return handle.Fd()
+	}
+	return 0
 }
 
 // Truncate is a stub, not yet implemented
