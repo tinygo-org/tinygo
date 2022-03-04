@@ -68,3 +68,21 @@ func TestChdir(t *testing.T) {
 		t.Errorf("Remove %s: %s", dir, err)
 	}
 }
+
+func TestStandardFd(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Log("TODO: TestFd fails on Windows, skipping")
+		return
+	}
+	if fd := Stdin.Fd(); fd != 0 {
+		t.Errorf("Stdin.Fd() = %d, want 0", fd)
+	}
+
+	if fd := Stdout.Fd(); fd != 1 {
+		t.Errorf("Stdout.Fd() = %d, want 1", fd)
+	}
+
+	if fd := Stderr.Fd(); fd != 2 {
+		t.Errorf("Stderr.Fd() = %d, want 2", fd)
+	}
+}
