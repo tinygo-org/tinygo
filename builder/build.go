@@ -204,6 +204,21 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	var packageJobs []*compileJob
 	packageBitcodePaths := make(map[string]string)
 	packageActionIDs := make(map[string]string)
+
+	if config.Options.GlobalValues["runtime"]["buildVersion"] == "" {
+		version := goenv.Version
+		if strings.HasSuffix(goenv.Version, "-dev") && goenv.GitSha1 != "" {
+			version += "-" + goenv.GitSha1
+		}
+		if config.Options.GlobalValues == nil {
+			config.Options.GlobalValues = make(map[string]map[string]string)
+		}
+		if config.Options.GlobalValues["runtime"] == nil {
+			config.Options.GlobalValues["runtime"] = make(map[string]string)
+		}
+		config.Options.GlobalValues["runtime"]["buildVersion"] = version
+	}
+
 	for _, pkg := range lprogram.Sorted() {
 		pkg := pkg // necessary to avoid a race condition
 
