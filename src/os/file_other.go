@@ -71,6 +71,10 @@ func (f stdioFileHandle) Seek(offset int64, whence int) (int64, error) {
 	return -1, ErrUnsupported
 }
 
+func (f stdioFileHandle) Fd() uintptr {
+	return uintptr(f)
+}
+
 //go:linkname putchar runtime.putchar
 func putchar(c byte)
 
