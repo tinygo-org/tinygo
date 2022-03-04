@@ -1,6 +1,9 @@
 //go:build darwin || (linux && !baremetal)
 // +build darwin linux,!baremetal
 
+// target wasi sets GOOS=linux and thus the +linux build tag,
+// even though it doesn't show up in "tinygo info target -wasi"
+
 // Portions copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -11,6 +14,8 @@ import (
 	"io"
 	"syscall"
 )
+
+const DevNull = "/dev/null"
 
 type syscallFd = int
 
