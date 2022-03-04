@@ -4,7 +4,9 @@
 package os_test
 
 import (
+	"io"
 	. "os"
+	"runtime"
 	"testing"
 )
 
@@ -84,5 +86,31 @@ func TestStandardFd(t *testing.T) {
 
 	if fd := Stderr.Fd(); fd != 2 {
 		t.Errorf("Stderr.Fd() = %d, want 2", fd)
+	}
+}
+
+func TestFd(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Log("TODO: TestFd fails on Windows, skipping")
+		return
+	}
+	f := newFile("TestFd.txt", t)
+	defer Remove(f.Name())
+	defer f.Close()
+
+	const data = "hello, world\n"
+	io.WriteString(f, data)
+
+	fd := NewFile(f.Fd(), "as-fd")
+	defer fd.Close()
+
+	b := make([]byte, 5)
+	n, err := fd.ReadAt(b, 0)
+	if n != 5 && err != nil {
+		t.Errorf("Failed to read 5 bytes from file descriptor: %v", err)
+	}
+
+	if string(b) != data[:5] {
+		t.Errorf("File descriptor contents not equal to file contents.")
 	}
 }
