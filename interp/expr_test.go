@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestEvalSmallAdd(t *testing.T) {
+func TestEvalSmallIntAdd(t *testing.T) {
 	t.Parallel()
 
 	ptrTy := pointer(defaultAddrSpace, i32)
@@ -41,7 +41,7 @@ func TestEvalSmallAdd(t *testing.T) {
 	)
 }
 
-func TestEvalSmallMul(t *testing.T) {
+func TestEvalSmallIntMul(t *testing.T) {
 	t.Parallel()
 
 	testEval(t,
@@ -72,12 +72,192 @@ func TestEvalSmallMul(t *testing.T) {
 		},
 		evalCase{
 			name: "PartialUndef",
-			expr: smallIntMulExpr{binIntExpr{undefValue(i8), smallIntValue(i8, 128), i8}},
+			expr: smallIntMulExpr{binIntExpr{undefValue(i8), smallIntValue(i8, 6), i8}},
 		},
 		evalCase{
 			name:   "ShortUndef",
 			expr:   smallIntMulExpr{binIntExpr{undefValue(i8), smallIntValue(i8, 0), i8}},
 			expect: "i8 0",
+		},
+		evalCase{
+			name:   "AsShift",
+			expr:   smallIntMulExpr{binIntExpr{cast(i16, runtime(i8, 5)), smallIntValue(i16, 256), i16}},
+			expect: "i16 cat(i8 0, i8 %5)",
+		},
+	)
+}
+
+func TestEvalSmallShiftLeft(t *testing.T) {
+	t.Parallel()
+
+	testEval(t,
+		evalCase{
+			name:   "Const",
+			expr:   smallShiftLeftExpr{binIntExpr{smallIntValue(i8, 3), smallIntValue(i8, 2), i8}},
+			expect: "i8 12",
+		},
+		evalCase{
+			name:   "Overflow",
+			expr:   smallShiftLeftExpr{binIntExpr{smallIntValue(i8, 127), smallIntValue(i8, 3), i8}},
+			expect: "i8 -8",
+		},
+		evalCase{
+			name:   "OverShift",
+			expr:   smallShiftLeftExpr{binIntExpr{smallIntValue(i8, 1), smallIntValue(i8, 8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "OverShiftZero",
+			expr:   smallShiftLeftExpr{binIntExpr{smallIntValue(i8, 0), smallIntValue(i8, 8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "Passthrough",
+			expr:   smallShiftLeftExpr{binIntExpr{runtime(i8, 4), smallIntValue(i8, 0), i8}},
+			expect: "i8 %4",
+		},
+		evalCase{
+			name:   "PassthroughUndef",
+			expr:   smallShiftLeftExpr{binIntExpr{undefValue(i8), smallIntValue(i8, 0), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "ShiftUndef",
+			expr:   smallShiftLeftExpr{binIntExpr{undefValue(i8), smallIntValue(i8, 1), i8}},
+			expect: "i8 cat(i1 false, i7 undef)",
+		},
+		evalCase{
+			name:   "ShiftByUndef",
+			expr:   smallShiftLeftExpr{binIntExpr{runtime(i8, 34), undefValue(i8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "ShiftUndefByUndef",
+			expr:   smallShiftLeftExpr{binIntExpr{undefValue(i8), undefValue(i8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "ShiftZero",
+			expr:   smallShiftLeftExpr{binIntExpr{smallIntValue(i32, 0), runtime(i32, 0), i32}},
+			expect: "i32 0",
+		},
+	)
+}
+
+func TestEvalLogicalShiftRight(t *testing.T) {
+	t.Parallel()
+
+	testEval(t,
+		evalCase{
+			name:   "Const",
+			expr:   smallLogicalShiftRightExpr{binIntExpr{smallIntValue(i8, 9), smallIntValue(i8, 2), i8}},
+			expect: "i8 2",
+		},
+		evalCase{
+			name:   "OverShift",
+			expr:   smallLogicalShiftRightExpr{binIntExpr{smallIntValue(i8, 1), smallIntValue(i8, 8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "OverShiftZero",
+			expr:   smallLogicalShiftRightExpr{binIntExpr{smallIntValue(i8, 0), smallIntValue(i8, 8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "Passthrough",
+			expr:   smallLogicalShiftRightExpr{binIntExpr{runtime(i8, 4), smallIntValue(i8, 0), i8}},
+			expect: "i8 %4",
+		},
+		evalCase{
+			name:   "PassthroughUndef",
+			expr:   smallLogicalShiftRightExpr{binIntExpr{undefValue(i8), smallIntValue(i8, 0), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "ShiftUndef",
+			expr:   smallLogicalShiftRightExpr{binIntExpr{undefValue(i8), smallIntValue(i8, 1), i8}},
+			expect: "i8 cast(i7 undef)",
+		},
+		evalCase{
+			name:   "ShiftByUndef",
+			expr:   smallLogicalShiftRightExpr{binIntExpr{runtime(i8, 34), undefValue(i8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "ShiftUndefByUndef",
+			expr:   smallLogicalShiftRightExpr{binIntExpr{undefValue(i8), undefValue(i8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "ShiftZero",
+			expr:   smallLogicalShiftRightExpr{binIntExpr{smallIntValue(i32, 0), runtime(i32, 0), i32}},
+			expect: "i32 0",
+		},
+	)
+}
+
+func TestEvalArithmeticShiftRight(t *testing.T) {
+	t.Parallel()
+
+	testEval(t,
+		evalCase{
+			name:   "ConstPositive",
+			expr:   smallArithmeticShiftRightExpr{binIntExpr{smallIntValue(i8, 9), smallIntValue(i8, 2), i8}},
+			expect: "i8 2",
+		},
+		evalCase{
+			name:   "ConstNegative",
+			expr:   smallArithmeticShiftRightExpr{binIntExpr{smallIntValue(i8, 128), smallIntValue(i8, 2), i8}},
+			expect: "i8 -32",
+		},
+		evalCase{
+			name:   "OverShift",
+			expr:   smallArithmeticShiftRightExpr{binIntExpr{smallIntValue(i8, 1), smallIntValue(i8, 8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "OverShiftZero",
+			expr:   smallArithmeticShiftRightExpr{binIntExpr{smallIntValue(i8, 0), smallIntValue(i8, 8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "OverShiftNegativeOne",
+			expr:   smallArithmeticShiftRightExpr{binIntExpr{smallIntValue(i8, 255), smallIntValue(i8, 8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "Passthrough",
+			expr:   smallArithmeticShiftRightExpr{binIntExpr{runtime(i8, 4), smallIntValue(i8, 0), i8}},
+			expect: "i8 %4",
+		},
+		evalCase{
+			name:   "PassthroughUndef",
+			expr:   smallArithmeticShiftRightExpr{binIntExpr{undefValue(i8), smallIntValue(i8, 0), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name: "ShiftUndef",
+			expr: smallArithmeticShiftRightExpr{binIntExpr{undefValue(i8), smallIntValue(i8, 1), i8}},
+		},
+		evalCase{
+			name:   "ShiftByUndef",
+			expr:   smallArithmeticShiftRightExpr{binIntExpr{runtime(i8, 34), undefValue(i8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "ShiftUndefByUndef",
+			expr:   smallArithmeticShiftRightExpr{binIntExpr{undefValue(i8), undefValue(i8), i8}},
+			expect: "i8 undef",
+		},
+		evalCase{
+			name:   "ShiftZero",
+			expr:   smallArithmeticShiftRightExpr{binIntExpr{smallIntValue(i32, 0), runtime(i32, 0), i32}},
+			expect: "i32 0",
+		},
+		evalCase{
+			name:   "ShiftNegativeOne",
+			expr:   smallArithmeticShiftRightExpr{binIntExpr{smallIntValue(i32, uint64(^uint32(0))), runtime(i32, 0), i32}},
+			expect: "i32 -1",
 		},
 	)
 }

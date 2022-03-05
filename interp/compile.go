@@ -316,7 +316,7 @@ func (c *compiler) emitInst(inst llvm.Value) error {
 	dbg := inst.InstructionDebugLoc()
 	op := inst.InstructionOpcode()
 	switch op {
-	case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.GetElementPtr, llvm.SExt, llvm.ICmp:
+	case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.Shl, llvm.LShr, llvm.AShr, llvm.GetElementPtr, llvm.SExt, llvm.ICmp:
 		expr, err := parseExpr(op, inst, c)
 		if err != nil {
 			return err

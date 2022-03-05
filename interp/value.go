@@ -291,8 +291,13 @@ func cast(to nonAggTyp, v value) value {
 		return cast(to, value{(*offAddr)(val), v.raw})
 
 	case *offAddr:
-		if to == val.obj().ptrTy {
+		obj := val.obj()
+		if to == obj.ptrTy {
 			return value{(*offPtr)(val), v.raw}
+		}
+		if toBits := to.bits(); toBits <= uint64(obj.alignScale) {
+			// This contains only alignment bits.
+			return cast(to, smallIntValue(iType(toBits), v.raw))
 		}
 
 	case undef:
@@ -888,6 +893,12 @@ func slice(in value, off, width uint64) value {
 	case *offPtr:
 		// Normalize as an addr.
 		return slice(value{(*offAddr)(v), in.raw}, off, width)
+
+	case *offAddr:
+		if width+off <= uint64(v.alignScale) {
+			// This contains only alignment bits.
+			return smallIntValue(iType(width), in.raw>>off)
+		}
 
 	case *bitCat:
 		// Filter and slice the concatenated values.

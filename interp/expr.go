@@ -2,6 +2,7 @@ package interp
 
 import (
 	"fmt"
+	"math/bits"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
@@ -17,7 +18,7 @@ type expr interface {
 
 func parseExpr(op llvm.Opcode, expr llvm.Value, parser parser) (expr, error) {
 	switch op {
-	case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv:
+	case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.Shl, llvm.LShr, llvm.AShr:
 		typ, err := parser.typ(expr.Type())
 		if err != nil {
 			return nil, err
@@ -38,6 +39,12 @@ func parseExpr(op llvm.Opcode, expr llvm.Value, parser parser) (expr, error) {
 					return smallIntMulExpr{bin}, nil
 				case llvm.UDiv:
 					return smallUIntDivExpr{bin}, nil
+				case llvm.Shl:
+					return smallShiftLeftExpr{bin}, nil
+				case llvm.LShr:
+					return smallLogicalShiftRightExpr{bin}, nil
+				case llvm.AShr:
+					return smallArithmeticShiftRightExpr{bin}, nil
 				default:
 					panic("missing int bin op")
 				}
@@ -524,6 +531,16 @@ func (e smallIntMulExpr) eval() (value, error) {
 		}
 	}
 
+	// Handle some special cases as shifts.
+	switch {
+	case xKind == num && x&(x-1) == 0:
+		// (1<<c) * y = y << c
+		return smallShiftLeftExpr{binIntExpr{e.y, smallIntValue(e.ty, uint64(bits.TrailingZeros64(x))), e.ty}}.eval()
+	case yKind == num && y&(y-1) == 0:
+		// x * (1<<c) = x << c
+		return smallShiftLeftExpr{binIntExpr{e.x, smallIntValue(e.ty, uint64(bits.TrailingZeros64(y))), e.ty}}.eval()
+	}
+
 	return value{}, errRuntime
 }
 
@@ -755,6 +772,525 @@ func (i *smallUIntDivInst) exec(state *execState) error {
 
 func (i *smallUIntDivInst) runtime(gen *rtGen) error {
 	return i.expr.runtime(gen, i.dbg, (*llvm.Builder).CreateUDiv)
+}
+
+// smallShiftLeftExpr is an expression to bitshift a small integer to the left.
+type smallShiftLeftExpr struct {
+	binIntExpr
+}
+
+func (e smallShiftLeftExpr) eval() (value, error) {
+	if assert {
+		if e.ty > 64 {
+			panic("input too big")
+		}
+		if xTy := e.x.typ(); xTy != e.ty {
+			return value{}, typeError{xTy, e.ty}
+		}
+		if yTy := e.y.typ(); yTy != e.ty {
+			return value{}, typeError{yTy, e.ty}
+		}
+	}
+
+	type kind uint8
+	const (
+		idk kind = iota
+		num
+		whatever
+	)
+
+	var x, y uint64
+	xKind, yKind := idk, idk
+	switch e.x.val.(type) {
+	case smallInt:
+		x, xKind = e.x.raw, num
+	case undef:
+		xKind = whatever
+	}
+	switch e.y.val.(type) {
+	case smallInt:
+		y, yKind = e.y.raw, num
+	case undef:
+		yKind = whatever
+	}
+
+	type kinds struct{ x, y kind }
+	switch (kinds{xKind, yKind}) {
+	case kinds{num, num}:
+		// Evaluate directly.
+		if y >= e.ty.bits() {
+			// Overshifting results in a poison value.
+			return poisonValue(e.ty), nil
+		}
+		return smallIntValue(e.ty, x<<y), nil
+
+	case kinds{num, idk}:
+		if x == 0 {
+			// 0 << y = 0 (for y < width)
+			return smallIntValue(e.ty, 0), nil
+		}
+
+	case kinds{idk, num}:
+		switch {
+		case y == 0:
+			// x << 0 = x.
+			return e.x, nil
+
+		case y >= e.ty.bits():
+			// Overshifting results in a poison value.
+			return poisonValue(e.ty), nil
+
+		default:
+			// Convert this to a truncation and concatenation.
+			return cat([]value{smallIntValue(iType(y), 0), cast(e.ty-iType(y), e.x)}), nil
+		}
+
+	case kinds{num, whatever}, kinds{idk, whatever}, kinds{whatever, whatever}:
+		// Overshifting results in a poison value.
+		return poisonValue(e.ty), nil
+
+	case kinds{whatever, num}:
+		switch {
+		case y == 0:
+			// undef << 0 = undef.
+			return undefValue(e.ty), nil
+
+		case y >= e.ty.bits():
+			// Overshifting results in a poison value.
+			return poisonValue(e.ty), nil
+
+		default:
+			// Convert this to a bit concatenation.
+			return cat([]value{smallIntValue(iType(y), 0), undefValue(e.ty - iType(y))}), nil
+		}
+	}
+	if e.ty == i1 {
+		// This is an extremely silly edge case.
+		return e.x, nil
+	}
+
+	return value{}, errRuntime
+}
+
+func (e smallShiftLeftExpr) resolve(stack []value) (smallShiftLeftExpr, error) {
+	res, err := e.binIntExpr.resolve(stack)
+	if err != nil {
+		return smallShiftLeftExpr{}, err
+	}
+	return smallShiftLeftExpr{res}, nil
+}
+
+func (e smallShiftLeftExpr) String() string {
+	return e.binIntExpr.String("shl")
+}
+
+func (e smallShiftLeftExpr) create(dst *builder, dbg llvm.Metadata) (value, error) {
+	switch v, err := e.eval(); err {
+	case nil:
+		return v, nil
+	case errRuntime:
+		return dst.insertInst(&smallShiftLeftInst{e, dbg}), nil
+	default:
+		return value{}, err
+	}
+}
+
+type smallShiftLeftInst struct {
+	expr smallShiftLeftExpr
+	dbg  llvm.Metadata
+}
+
+func (i *smallShiftLeftInst) result() typ {
+	return i.expr.ty
+}
+
+func (i *smallShiftLeftInst) String() string {
+	return i.expr.String() + dbgSuffix(i.dbg)
+}
+
+func (i *smallShiftLeftInst) exec(state *execState) error {
+	// This would be a great use for generics. . .
+
+	// Resolve the expression.
+	expr, err := i.expr.resolve(state.locals())
+	if err != nil {
+		return err
+	}
+
+	// Evaluate the expression.
+	v, err := expr.eval()
+	switch err {
+	case nil:
+	case errRuntime:
+		// Escape inputs.
+		expr.escapeInputs(state)
+
+		// Create a runtime instruction to evaluate the expression.
+		v, err = expr.create(&state.rt, i.dbg)
+		if err != nil {
+			return err
+		}
+	default:
+		return err
+	}
+
+	// Push the result onto the stack.
+	state.stack = append(state.stack, v)
+
+	return nil
+}
+
+func (i *smallShiftLeftInst) runtime(gen *rtGen) error {
+	return i.expr.runtime(gen, i.dbg, (*llvm.Builder).CreateShl)
+}
+
+// smallLogicalShiftRightExpr is an expression to bitshift a small integer to the right, filling the new leading bits with zeroes.
+type smallLogicalShiftRightExpr struct {
+	binIntExpr
+}
+
+func (e smallLogicalShiftRightExpr) eval() (value, error) {
+	if assert {
+		if e.ty > 64 {
+			panic("input too big")
+		}
+		if xTy := e.x.typ(); xTy != e.ty {
+			return value{}, typeError{xTy, e.ty}
+		}
+		if yTy := e.y.typ(); yTy != e.ty {
+			return value{}, typeError{yTy, e.ty}
+		}
+	}
+
+	type kind uint8
+	const (
+		idk kind = iota
+		num
+		whatever
+	)
+
+	var x, y uint64
+	xKind, yKind := idk, idk
+	switch e.x.val.(type) {
+	case smallInt:
+		x, xKind = e.x.raw, num
+	case undef:
+		xKind = whatever
+	}
+	switch e.y.val.(type) {
+	case smallInt:
+		y, yKind = e.y.raw, num
+	case undef:
+		yKind = whatever
+	}
+
+	type kinds struct{ x, y kind }
+	switch (kinds{xKind, yKind}) {
+	case kinds{num, num}:
+		// Evaluate directly.
+		if y >= e.ty.bits() {
+			// Overshifting results in a poison value.
+			return poisonValue(e.ty), nil
+		}
+		return smallIntValue(e.ty, x>>y), nil
+
+	case kinds{num, idk}:
+		if x == 0 {
+			// 0 >> y = 0 (for y < width)
+			return smallIntValue(e.ty, 0), nil
+		}
+
+	case kinds{idk, num}:
+		switch {
+		case y == 0:
+			// x >> 0 = x.
+			return e.x, nil
+
+		case y >= e.ty.bits():
+			// Overshifting results in a poison value.
+			return poisonValue(e.ty), nil
+
+		default:
+			// Convert this to a bit slice and zero extension.
+			return cast(e.ty, slice(e.x, y, e.ty.bits()-y)), nil
+		}
+
+	case kinds{num, whatever}, kinds{idk, whatever}, kinds{whatever, whatever}:
+		// Overshifting results in a poison value.
+		return poisonValue(e.ty), nil
+
+	case kinds{whatever, num}:
+		switch {
+		case y == 0:
+			// undef >> 0 = undef.
+			return undefValue(e.ty), nil
+
+		case y >= e.ty.bits():
+			// Overshifting results in a poison value.
+			return poisonValue(e.ty), nil
+
+		default:
+			// Convert this to a zero extension of undef.
+			return cast(e.ty, undefValue(e.ty-iType(y))), nil
+		}
+	}
+	if e.ty == i1 {
+		// This is an extremely silly edge case.
+		return e.x, nil
+	}
+
+	return value{}, errRuntime
+}
+
+func (e smallLogicalShiftRightExpr) resolve(stack []value) (smallLogicalShiftRightExpr, error) {
+	res, err := e.binIntExpr.resolve(stack)
+	if err != nil {
+		return smallLogicalShiftRightExpr{}, err
+	}
+	return smallLogicalShiftRightExpr{res}, nil
+}
+
+func (e smallLogicalShiftRightExpr) String() string {
+	return e.binIntExpr.String("lshr")
+}
+
+func (e smallLogicalShiftRightExpr) create(dst *builder, dbg llvm.Metadata) (value, error) {
+	switch v, err := e.eval(); err {
+	case nil:
+		return v, nil
+	case errRuntime:
+		return dst.insertInst(&smallLogicalShiftRightInst{e, dbg}), nil
+	default:
+		return value{}, err
+	}
+}
+
+type smallLogicalShiftRightInst struct {
+	expr smallLogicalShiftRightExpr
+	dbg  llvm.Metadata
+}
+
+func (i *smallLogicalShiftRightInst) result() typ {
+	return i.expr.ty
+}
+
+func (i *smallLogicalShiftRightInst) String() string {
+	return i.expr.String() + dbgSuffix(i.dbg)
+}
+
+func (i *smallLogicalShiftRightInst) exec(state *execState) error {
+	// This would be a great use for generics. . .
+
+	// Resolve the expression.
+	expr, err := i.expr.resolve(state.locals())
+	if err != nil {
+		return err
+	}
+
+	// Evaluate the expression.
+	v, err := expr.eval()
+	switch err {
+	case nil:
+	case errRuntime:
+		// Escape inputs.
+		expr.escapeInputs(state)
+
+		// Create a runtime instruction to evaluate the expression.
+		v, err = expr.create(&state.rt, i.dbg)
+		if err != nil {
+			return err
+		}
+	default:
+		return err
+	}
+
+	// Push the result onto the stack.
+	state.stack = append(state.stack, v)
+
+	return nil
+}
+
+func (i *smallLogicalShiftRightInst) runtime(gen *rtGen) error {
+	return i.expr.runtime(gen, i.dbg, (*llvm.Builder).CreateLShr)
+}
+
+// smallArithmeticShiftRightExpr is an expression to bitshift a small integer to the right, filling the new leading bits with copies of the sign.
+type smallArithmeticShiftRightExpr struct {
+	binIntExpr
+}
+
+func (e smallArithmeticShiftRightExpr) eval() (value, error) {
+	if assert {
+		if e.ty > 64 {
+			panic("input too big")
+		}
+		if xTy := e.x.typ(); xTy != e.ty {
+			return value{}, typeError{xTy, e.ty}
+		}
+		if yTy := e.y.typ(); yTy != e.ty {
+			return value{}, typeError{yTy, e.ty}
+		}
+	}
+
+	type kind uint8
+	const (
+		idk kind = iota
+		num
+		whatever
+	)
+
+	var x, y uint64
+	xKind, yKind := idk, idk
+	switch v := e.x.val.(type) {
+	case castVal:
+		if v.val.typ(e.x.raw).(nonAggTyp).bits() < e.ty.bits() {
+			// The leading bit is 0, so this is equivalent to a logical shift.
+			return smallLogicalShiftRightExpr{e.binIntExpr}.eval()
+		}
+	case *bitCat:
+		parts := *v
+		if t, ok := parts[len(parts)-1].val.(smallInt); ok && parts[len(parts)-1].raw>>(t-1) == 0 {
+			// The leading bit is 0, so this is equivalent to a logical shift.
+			return smallLogicalShiftRightExpr{e.binIntExpr}.eval()
+		}
+	case smallInt:
+		x, xKind = e.x.raw, num
+	case undef:
+		xKind = whatever
+	}
+	switch e.y.val.(type) {
+	case smallInt:
+		y, yKind = e.y.raw, num
+	case undef:
+		yKind = whatever
+	}
+
+	type kinds struct{ x, y kind }
+	switch (kinds{xKind, yKind}) {
+	case kinds{num, num}:
+		// Evaluate directly.
+		if y >= e.ty.bits() {
+			// Overshifting results in a poison value.
+			return poisonValue(e.ty), nil
+		}
+		shift := 64 - e.ty
+		return smallIntValue(e.ty, uint64((int64(x<<shift)>>shift)>>y)), nil
+
+	case kinds{num, idk}:
+		switch x {
+		case 0:
+			// 0 >> y = 0 (for y < width)
+			return smallIntValue(e.ty, 0), nil
+
+		case (1 << e.ty) - 1:
+			// -1 >> y = -1 (for y < width)
+			return smallIntValue(e.ty, ^uint64(0)), nil
+		}
+
+	case kinds{idk, num}:
+		switch {
+		case y == 0:
+			// x >> 0 = x.
+			return e.x, nil
+
+		case y >= e.ty.bits():
+			// Overshifting results in a poison value.
+			return poisonValue(e.ty), nil
+		}
+
+	case kinds{num, whatever}, kinds{idk, whatever}, kinds{whatever, whatever}:
+		// Overshifting results in a poison value.
+		return poisonValue(e.ty), nil
+
+	case kinds{whatever, num}:
+		switch {
+		case y == 0:
+			// undef >> 0 = undef.
+			return undefValue(e.ty), nil
+
+		case y >= e.ty.bits():
+			// Overshifting results in a poison value.
+			return poisonValue(e.ty), nil
+		}
+	}
+	if e.ty == i1 {
+		// This is an extremely silly edge case.
+		return e.x, nil
+	}
+
+	return value{}, errRuntime
+}
+
+func (e smallArithmeticShiftRightExpr) resolve(stack []value) (smallArithmeticShiftRightExpr, error) {
+	res, err := e.binIntExpr.resolve(stack)
+	if err != nil {
+		return smallArithmeticShiftRightExpr{}, err
+	}
+	return smallArithmeticShiftRightExpr{res}, nil
+}
+
+func (e smallArithmeticShiftRightExpr) String() string {
+	return e.binIntExpr.String("ashr")
+}
+
+func (e smallArithmeticShiftRightExpr) create(dst *builder, dbg llvm.Metadata) (value, error) {
+	switch v, err := e.eval(); err {
+	case nil:
+		return v, nil
+	case errRuntime:
+		return dst.insertInst(&smallArithmeticShiftRightInst{e, dbg}), nil
+	default:
+		return value{}, err
+	}
+}
+
+type smallArithmeticShiftRightInst struct {
+	expr smallArithmeticShiftRightExpr
+	dbg  llvm.Metadata
+}
+
+func (i *smallArithmeticShiftRightInst) result() typ {
+	return i.expr.ty
+}
+
+func (i *smallArithmeticShiftRightInst) String() string {
+	return i.expr.String() + dbgSuffix(i.dbg)
+}
+
+func (i *smallArithmeticShiftRightInst) exec(state *execState) error {
+	// This would be a great use for generics. . .
+
+	// Resolve the expression.
+	expr, err := i.expr.resolve(state.locals())
+	if err != nil {
+		return err
+	}
+
+	// Evaluate the expression.
+	v, err := expr.eval()
+	switch err {
+	case nil:
+	case errRuntime:
+		// Escape inputs.
+		expr.escapeInputs(state)
+
+		// Create a runtime instruction to evaluate the expression.
+		v, err = expr.create(&state.rt, i.dbg)
+		if err != nil {
+			return err
+		}
+	default:
+		return err
+	}
+
+	// Push the result onto the stack.
+	state.stack = append(state.stack, v)
+
+	return nil
+}
+
+func (i *smallArithmeticShiftRightInst) runtime(gen *rtGen) error {
+	return i.expr.runtime(gen, i.dbg, (*llvm.Builder).CreateAShr)
 }
 
 func parseBinIntExpr(typ iType, expr llvm.Value, parser parser) (binIntExpr, error) {

@@ -3,11 +3,10 @@ entry: (height: 4)
 	i1 %4 = icmp ult i32 %3, i32 %2
 	switch i1 %4 {i1 false: [to 0, φ()]}
 1: (height: 5)
-	i32 %5 = i32 mul i32 %3, i32 4
-	ptr(in default, idx i32) %6 = ptr(in default, idx i32) uglygep ptr(in default, idx i32) %0, i32 %5
-	i32 %7 = i32 sub i32 %1, i32 %3
-	i32 %8 = i32 sub i32 %2, i32 %3
-	br [to ret, φ(ptr(in default, idx i32) %6, i32 %7, i32 %8)]
+	ptr(in default, idx i32) %5 = ptr(in default, idx i32) uglygep ptr(in default, idx i32) %0, i32 cat(i2 0, i30 cast(i32 %3))
+	i32 %6 = i32 sub i32 %1, i32 %3
+	i32 %7 = i32 sub i32 %2, i32 %3
+	br [to ret, φ(ptr(in default, idx i32) %5, i32 %6, i32 %7)]
 0: (height: 5)
 	call fn ccc ()->() in default, ptr(in default, idx i32) @runtime.slicePanic
 	fail "encountered undefined behavior"

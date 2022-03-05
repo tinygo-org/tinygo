@@ -109,8 +109,9 @@ func TestCast(t *testing.T) {
 
 	ptrTy := pointer(defaultAddrSpace, i32)
 	x := memObj{
-		ptrTy: ptrTy,
-		name:  "x",
+		ptrTy:      ptrTy,
+		name:       "x",
+		alignScale: 2,
 	}
 	testExpressions(t,
 		// Test a no-op cast.
@@ -247,6 +248,14 @@ func TestCast(t *testing.T) {
 			expr:   cast(i8, slice(x.ptr(0), 8, 16)),
 			ty:     i8,
 			expect: "i8 bitslice(i32 @x)[8:16]",
+		},
+
+		// Test truncation of a pointer to below its alignment scale.
+		exprTest{
+			name:   "AlignCheck",
+			expr:   cast(iType(2), x.ptr(2)),
+			ty:     iType(2),
+			expect: "i2 -2",
 		},
 	)
 }
@@ -562,6 +571,11 @@ func TestCat(t *testing.T) {
 func TestSlice(t *testing.T) {
 	t.Parallel()
 
+	x := memObj{
+		ptrTy:      pointer(defaultAddrSpace, i32),
+		name:       "x",
+		alignScale: 2,
+	}
 	testExpressions(t,
 		// Test a no-op slice.
 		exprTest{
@@ -656,6 +670,14 @@ func TestSlice(t *testing.T) {
 				resolve([]value{smallIntValue(i16, (3<<8)|7)}),
 			ty:     i8,
 			expect: "i8 3",
+		},
+
+		// Test slicing of pointer alignment bits.
+		exprTest{
+			name:   "AlignCheck",
+			expr:   slice(x.ptr(2), 1, 1),
+			ty:     iType(1),
+			expect: "i1 true",
 		},
 	)
 }

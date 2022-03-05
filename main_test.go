@@ -196,6 +196,8 @@ func TestBuild(t *testing.T) {
 			}
 		}
 		t.Run("WebAssembly", func(t *testing.T) {
+			//t.Skip("ExternalInt64AsPtr bugs")
+
 			t.Parallel()
 			runPlatTests(optionsFromTarget("wasm", sema), tests, t)
 		})
@@ -218,6 +220,9 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		name := name // redefine to avoid race condition
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
+			/*if name == "reflect.go" || name == "json.go" {
+				t.Skip("AssignableTo with interface")
+			}*/
 			runTest(name, options, t, nil, nil)
 		})
 	}
