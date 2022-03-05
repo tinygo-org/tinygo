@@ -253,3 +253,21 @@ func TestRenameFailed(t *testing.T) {
 		t.Errorf("rename %q, %q: expected %T, got %T %v", from, to, new(LinkError), err, err)
 	}
 }
+
+func TestUserHomeDir(t *testing.T) {
+	dir, err := UserHomeDir()
+	if dir == "" && err == nil {
+		t.Fatal("UserHomeDir returned an empty string but no error")
+	}
+	if err != nil {
+		t.Logf("UserHomeDir failed: %v", err)
+		return
+	}
+	fi, err := Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fi.IsDir() {
+		t.Fatalf("dir %s is not directory; type = %v", dir, fi.Mode())
+	}
+}

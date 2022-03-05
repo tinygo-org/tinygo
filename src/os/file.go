@@ -12,6 +12,7 @@ package os
 import (
 	"errors"
 	"io"
+	"runtime"
 	"syscall"
 )
 
@@ -248,4 +249,30 @@ func Getwd() (string, error) {
 // permissions.
 func TempDir() string {
 	return tempDir()
+}
+
+// UserHomeDir returns the current user's home directory.
+//
+// On Unix, including macOS, it returns the $HOME environment variable.
+// On Windows, it returns %USERPROFILE%.
+// On Plan 9, it returns the $home environment variable.
+func UserHomeDir() (string, error) {
+	env, enverr := "HOME", "$HOME"
+	switch runtime.GOOS {
+	case "windows":
+		env, enverr = "USERPROFILE", "%userprofile%"
+	case "plan9":
+		env, enverr = "home", "$home"
+	}
+	if v := Getenv(env); v != "" {
+		return v, nil
+	}
+	// On some geese the home directory is not always defined.
+	switch runtime.GOOS {
+	case "android":
+		return "/sdcard", nil
+	case "ios":
+		return "/", nil
+	}
+	return "", errors.New(enverr + " is not defined")
 }
