@@ -594,6 +594,11 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			}
 			linkerDependencies = append(linkerDependencies, job)
 		}
+		// Link .syso files.
+		for _, filename := range pkg.SysoFiles {
+			abspath := filepath.Join(pkg.Dir, filename)
+			ldflags = append(ldflags, abspath)
+		}
 	}
 
 	// Linker flags from CGo lines:
