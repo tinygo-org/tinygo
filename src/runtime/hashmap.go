@@ -12,13 +12,22 @@ import (
 
 // The underlying hashmap structure for Go.
 type hashmap struct {
-	next       *hashmap       // hashmap after evacuate (for iterators)
 	buckets    unsafe.Pointer // pointer to array of buckets
 	count      uintptr
 	keySize    uint8 // maybe this can store the key type as well? E.g. keysize == 5 means string?
 	valueSize  uint8
 	bucketBits uint8
+	keyEqual   func(x, y unsafe.Pointer, n uintptr) bool
+	keyHash    func(key unsafe.Pointer, size uintptr) uint32
 }
+
+type hashmapAlgorithm uint8
+
+const (
+	hashmapAlgorithmBinary hashmapAlgorithm = iota
+	hashmapAlgorithmString
+	hashmapAlgorithmInterface
+)
 
 // A hashmap bucket. A bucket is a container of 8 key/value pairs: first the
 // following two entries, then the 8 keys, then the 8 values. This somewhat odd
@@ -32,6 +41,8 @@ type hashmapBucket struct {
 }
 
 type hashmapIterator struct {
+	buckets      unsafe.Pointer
+	numBuckets   uintptr
 	bucketNumber uintptr
 	bucket       *hashmapBucket
 	bucketIndex  uint8
@@ -48,7 +59,7 @@ func hashmapTopHash(hash uint32) uint8 {
 }
 
 // Create a new hashmap with the given keySize and valueSize.
-func hashmapMake(keySize, valueSize uint8, sizeHint uintptr) *hashmap {
+func hashmapMake(keySize, valueSize uint8, sizeHint uintptr, alg uint8) *hashmap {
 	numBuckets := sizeHint / 8
 	bucketBits := uint8(0)
 	for numBuckets != 0 {
@@ -57,12 +68,56 @@ func hashmapMake(keySize, valueSize uint8, sizeHint uintptr) *hashmap {
 	}
 	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(keySize)*8 + uintptr(valueSize)*8
 	buckets := alloc(bucketBufSize*(1<<bucketBits), nil)
+
+	keyHash := hashmapKeyHashAlg(hashmapAlgorithm(alg))
+	keyEqual := hashmapKeyEqualAlg(hashmapAlgorithm(alg))
+
 	return &hashmap{
 		buckets:    buckets,
 		keySize:    keySize,
 		valueSize:  valueSize,
 		bucketBits: bucketBits,
+		keyEqual:   keyEqual,
+		keyHash:    keyHash,
 	}
+}
+
+func hashmapKeyEqualAlg(alg hashmapAlgorithm) func(x, y unsafe.Pointer, n uintptr) bool {
+	switch alg {
+	case hashmapAlgorithmBinary:
+		return memequal
+	case hashmapAlgorithmString:
+		return hashmapStringEqual
+	case hashmapAlgorithmInterface:
+		return hashmapInterfaceEqual
+	default:
+		panic("unknown hashmap equal algorithm")
+	}
+}
+
+func hashmapKeyHashAlg(alg hashmapAlgorithm) func(key unsafe.Pointer, n uintptr) uint32 {
+	switch alg {
+	case hashmapAlgorithmBinary:
+		return hash32
+	case hashmapAlgorithmString:
+		return hashmapStringPtrHash
+	case hashmapAlgorithmInterface:
+		return hashmapInterfacePtrHash
+	default:
+		panic("unknown hashmap hash algorithm")
+	}
+}
+
+func hashmapShouldGrow(m *hashmap) bool {
+	if m.bucketBits == 32 {
+		// can't grow any more
+		return false
+	}
+
+	// "maximum" number of elements is 0.75 * buckets * elements per bucket
+	max := uintptr((3 * ((1 << m.bucketBits) * 8)) / 4)
+
+	return m.count > max
 }
 
 // Return the number of entries in this hashmap, called from the len builtin.
@@ -83,13 +138,17 @@ func hashmapLenUnsafePointer(p unsafe.Pointer) int {
 
 // Set a specified key to a given value. Grow the map if necessary.
 //go:nobounds
-func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint32, keyEqual func(x, y unsafe.Pointer, n uintptr) bool) {
+func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint32) {
 	tophash := hashmapTopHash(hash)
 
 	if m.buckets == nil {
 		// No bucket was allocated yet, do so now.
 		m.buckets = unsafe.Pointer(hashmapInsertIntoNewBucket(m, key, value, tophash))
 		return
+	}
+
+	if hashmapShouldGrow(m) {
+		hashmapGrow(m)
 	}
 
 	numBuckets := uintptr(1) << m.bucketBits
@@ -118,7 +177,7 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 			}
 			if bucket.tophash[i] == tophash {
 				// Could be an existing key that's the same.
-				if keyEqual(key, slotKey, uintptr(m.keySize)) {
+				if m.keyEqual(key, slotKey, uintptr(m.keySize)) {
 					// found same key, replace it
 					memcpy(slotValue, value, uintptr(m.valueSize))
 					return
@@ -158,9 +217,35 @@ func hashmapInsertIntoNewBucket(m *hashmap, key, value unsafe.Pointer, tophash u
 	return bucket
 }
 
+func hashmapGrow(m *hashmap) {
+
+	// clone map as empty
+	n := *m
+	n.count = 0
+
+	// allocate our new buckets twice as big
+	n.bucketBits = m.bucketBits + 1
+	numBuckets := uintptr(1) << n.bucketBits
+	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*8
+	n.buckets = alloc(bucketBufSize*numBuckets, nil)
+
+	// use a hashmap iterator to go through the old map
+	var it hashmapIterator
+
+	var key = alloc(uintptr(m.keySize), nil)
+	var value = alloc(uintptr(m.valueSize), nil)
+
+	for hashmapNext(m, &it, key, value) {
+		h := m.keyHash(key, uintptr(m.keySize))
+		hashmapSet(&n, key, value, h)
+	}
+
+	*m = n
+}
+
 // Get the value of a specified key, or zero the value if not found.
 //go:nobounds
-func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash uint32, keyEqual func(x, y unsafe.Pointer, n uintptr) bool) bool {
+func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash uint32) bool {
 	if m == nil {
 		// Getting a value out of a nil map is valid. From the spec:
 		// > if the map is nil or does not contain such an entry, a[x] is the
@@ -189,7 +274,7 @@ func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash u
 			slotValue := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotValueOffset)
 			if bucket.tophash[i] == tophash {
 				// This could be the key we're looking for.
-				if keyEqual(key, slotKey, uintptr(m.keySize)) {
+				if m.keyEqual(key, slotKey, uintptr(m.keySize)) {
 					// Found the key, copy it.
 					memcpy(value, slotValue, uintptr(m.valueSize))
 					return true
@@ -207,7 +292,7 @@ func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash u
 // Delete a given key from the map. No-op when the key does not exist in the
 // map.
 //go:nobounds
-func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32, keyEqual func(x, y unsafe.Pointer, n uintptr) bool) {
+func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32) {
 	if m == nil {
 		// The delete builtin is defined even when the map is nil. From the spec:
 		// > If the map m is nil or the element m[k] does not exist, delete is a
@@ -233,7 +318,7 @@ func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32, keyEqual func(x,
 			slotKey := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotKeyOffset)
 			if bucket.tophash[i] == tophash {
 				// This could be the key we're looking for.
-				if keyEqual(key, slotKey, uintptr(m.keySize)) {
+				if m.keyEqual(key, slotKey, uintptr(m.keySize)) {
 					// Found the key, delete it.
 					bucket.tophash[i] = 0
 					m.count--
@@ -249,13 +334,16 @@ func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32, keyEqual func(x,
 //go:nobounds
 func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) bool {
 	if m == nil {
-		// Iterating over a nil slice appears to be allowed by the Go spec:
-		// https://groups.google.com/g/golang-nuts/c/gVgVLQU1FFE?pli=1
-		// https://play.golang.org/p/S8jxAMytKDB
+		// From the spec: If the map is nil, the number of iterations is 0.
 		return false
 	}
 
-	numBuckets := uintptr(1) << m.bucketBits
+	if it.buckets == nil {
+		// initialize iterator
+		it.buckets = m.buckets
+		it.numBuckets = uintptr(1) << m.bucketBits
+	}
+
 	for {
 		if it.bucketIndex >= 8 {
 			// end of bucket, move to the next in the chain
@@ -263,12 +351,12 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 			it.bucket = it.bucket.next
 		}
 		if it.bucket == nil {
-			if it.bucketNumber >= numBuckets {
+			if it.bucketNumber >= it.numBuckets {
 				// went through all buckets
 				return false
 			}
 			bucketSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*8
-			bucketAddr := uintptr(m.buckets) + bucketSize*it.bucketNumber
+			bucketAddr := uintptr(it.buckets) + bucketSize*it.bucketNumber
 			it.bucket = (*hashmapBucket)(unsafe.Pointer(bucketAddr))
 			it.bucketNumber++ // next bucket
 		}
@@ -281,11 +369,29 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 		bucketAddr := uintptr(unsafe.Pointer(it.bucket))
 		slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*uintptr(it.bucketIndex)
 		slotKey := unsafe.Pointer(bucketAddr + slotKeyOffset)
-		slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*uintptr(it.bucketIndex)
-		slotValue := unsafe.Pointer(bucketAddr + slotValueOffset)
 		memcpy(key, slotKey, uintptr(m.keySize))
-		memcpy(value, slotValue, uintptr(m.valueSize))
-		it.bucketIndex++
+
+		if it.buckets == m.buckets {
+			// Our view of the buckets is the same as the parent map.
+			// Just copy the value we have
+			slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*uintptr(it.bucketIndex)
+			slotValue := unsafe.Pointer(bucketAddr + slotValueOffset)
+			memcpy(value, slotValue, uintptr(m.valueSize))
+			it.bucketIndex++
+		} else {
+			it.bucketIndex++
+
+			// Our view of the buckets doesn't match the parent map.
+			// Look up the key in the new buckets and return that value if it exists
+			hash := m.keyHash(key, uintptr(m.keySize))
+			ok := hashmapGet(m, key, value, uintptr(m.valueSize), hash)
+			if !ok {
+				// doesn't exist in parent map; try next key
+				continue
+			}
+
+			// All good.
+		}
 
 		return true
 	}
@@ -296,7 +402,7 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
 	// TODO: detect nil map here and throw a better panic message?
 	hash := hash32(key, uintptr(m.keySize))
-	hashmapSet(m, key, value, hash, memequal)
+	hashmapSet(m, key, value, hash)
 }
 
 func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) bool {
@@ -305,7 +411,7 @@ func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) 
 		return false
 	}
 	hash := hash32(key, uintptr(m.keySize))
-	return hashmapGet(m, key, value, valueSize, hash, memequal)
+	return hashmapGet(m, key, value, valueSize, hash)
 }
 
 func hashmapBinaryDelete(m *hashmap, key unsafe.Pointer) {
@@ -313,7 +419,7 @@ func hashmapBinaryDelete(m *hashmap, key unsafe.Pointer) {
 		return
 	}
 	hash := hash32(key, uintptr(m.keySize))
-	hashmapDelete(m, key, hash, memequal)
+	hashmapDelete(m, key, hash)
 }
 
 // Hashmap with string keys (a common case).
@@ -327,19 +433,24 @@ func hashmapStringHash(s string) uint32 {
 	return hash32(unsafe.Pointer(_s.ptr), uintptr(_s.length))
 }
 
+func hashmapStringPtrHash(sptr unsafe.Pointer, size uintptr) uint32 {
+	_s := *(*_string)(sptr)
+	return hash32(unsafe.Pointer(_s.ptr), uintptr(_s.length))
+}
+
 func hashmapStringSet(m *hashmap, key string, value unsafe.Pointer) {
 	hash := hashmapStringHash(key)
-	hashmapSet(m, unsafe.Pointer(&key), value, hash, hashmapStringEqual)
+	hashmapSet(m, unsafe.Pointer(&key), value, hash)
 }
 
 func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer, valueSize uintptr) bool {
 	hash := hashmapStringHash(key)
-	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash, hashmapStringEqual)
+	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash)
 }
 
 func hashmapStringDelete(m *hashmap, key string) {
 	hash := hashmapStringHash(key)
-	hashmapDelete(m, unsafe.Pointer(&key), hash, hashmapStringEqual)
+	hashmapDelete(m, unsafe.Pointer(&key), hash)
 }
 
 // Hashmap with interface keys (for everything else).
@@ -427,21 +538,26 @@ func hashmapInterfaceHash(itf interface{}) uint32 {
 	}
 }
 
+func hashmapInterfacePtrHash(iptr unsafe.Pointer, size uintptr) uint32 {
+	_i := *(*_interface)(iptr)
+	return hashmapInterfaceHash(_i)
+}
+
 func hashmapInterfaceEqual(x, y unsafe.Pointer, n uintptr) bool {
 	return *(*interface{})(x) == *(*interface{})(y)
 }
 
 func hashmapInterfaceSet(m *hashmap, key interface{}, value unsafe.Pointer) {
 	hash := hashmapInterfaceHash(key)
-	hashmapSet(m, unsafe.Pointer(&key), value, hash, hashmapInterfaceEqual)
+	hashmapSet(m, unsafe.Pointer(&key), value, hash)
 }
 
 func hashmapInterfaceGet(m *hashmap, key interface{}, value unsafe.Pointer, valueSize uintptr) bool {
 	hash := hashmapInterfaceHash(key)
-	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash, hashmapInterfaceEqual)
+	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash)
 }
 
 func hashmapInterfaceDelete(m *hashmap, key interface{}) {
 	hash := hashmapInterfaceHash(key)
-	hashmapDelete(m, unsafe.Pointer(&key), hash, hashmapInterfaceEqual)
+	hashmapDelete(m, unsafe.Pointer(&key), hash)
 }
