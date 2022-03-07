@@ -10,6 +10,13 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// constants for hashmap algorithms; must match src/runtime/hashmap.go
+const (
+	hashmapAlgorithmBinary = iota
+	hashmapAlgorithmString
+	hashmapAlgorithmInterface
+)
+
 // createMakeMap creates a new map object (runtime.hashmap) by allocating and
 // initializing an appropriately sized object.
 func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
@@ -17,22 +24,27 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 	keyType := mapType.Key().Underlying()
 	llvmValueType := b.getLLVMType(mapType.Elem().Underlying())
 	var llvmKeyType llvm.Type
+	var alg uint64 // must match values in src/runtime/hashmap.go
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// String keys.
 		llvmKeyType = b.getLLVMType(keyType)
+		alg = hashmapAlgorithmString
 	} else if hashmapIsBinaryKey(keyType) {
 		// Trivially comparable keys.
 		llvmKeyType = b.getLLVMType(keyType)
+		alg = hashmapAlgorithmBinary
 	} else {
 		// All other keys. Implemented as map[interface{}]valueType for ease of
 		// implementation.
 		llvmKeyType = b.getLLVMRuntimeType("_interface")
+		alg = hashmapAlgorithmInterface
 	}
 	keySize := b.targetData.TypeAllocSize(llvmKeyType)
 	valueSize := b.targetData.TypeAllocSize(llvmValueType)
 	llvmKeySize := llvm.ConstInt(b.ctx.Int8Type(), keySize, false)
 	llvmValueSize := llvm.ConstInt(b.ctx.Int8Type(), valueSize, false)
 	sizeHint := llvm.ConstInt(b.uintptrType, 8, false)
+	algEnum := llvm.ConstInt(b.ctx.Int8Type(), alg, false)
 	if expr.Reserve != nil {
 		sizeHint = b.getValue(expr.Reserve)
 		var err error
@@ -41,7 +53,7 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 			return llvm.Value{}, err
 		}
 	}
-	hashmap := b.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize, sizeHint}, "")
+	hashmap := b.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize, sizeHint, algEnum}, "")
 	return hashmap, nil
 }
 
