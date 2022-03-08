@@ -25,6 +25,10 @@ func GOROOT() string {
 	return "/usr/local/go"
 }
 
+func NumCPU() int {
+	return 1
+}
+
 // Copy size bytes from src to dst. The memory areas must not overlap.
 // Calls to this function are converted to LLVM intrinsic calls such as
 // llvm.memcpy.p0i8.p0i8.i32(dst, src, size, false).
