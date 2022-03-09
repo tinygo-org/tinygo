@@ -26,16 +26,16 @@ func xorshift32(x uint32) uint32 {
 // This function is used by hash/maphash.
 func memhash(p unsafe.Pointer, seed, s uintptr) uintptr {
 	if unsafe.Sizeof(uintptr(0)) > 4 {
-		return seed ^ uintptr(hash64(p, s))
+		return uintptr(hash64(p, s, seed))
 	}
-	return seed ^ uintptr(hash32(p, s))
+	return uintptr(hash32(p, s, seed))
 }
 
 // Get FNV-1a hash of the given memory buffer.
 //
 // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1a_hash
-func hash32(ptr unsafe.Pointer, n uintptr) uint32 {
-	var result uint32 = 2166136261 // FNV offset basis
+func hash32(ptr unsafe.Pointer, n uintptr, seed uintptr) uint32 {
+	var result uint32 = 2166136261 ^ uint32(seed) // FNV offset basis
 	for i := uintptr(0); i < n; i++ {
 		c := *(*uint8)(unsafe.Pointer(uintptr(ptr) + i))
 		result ^= uint32(c) // XOR with byte
@@ -45,8 +45,8 @@ func hash32(ptr unsafe.Pointer, n uintptr) uint32 {
 }
 
 // Also a FNV-1a hash.
-func hash64(ptr unsafe.Pointer, n uintptr) uint64 {
-	var result uint64 = 14695981039346656037 // FNV offset basis
+func hash64(ptr unsafe.Pointer, n uintptr, seed uintptr) uint64 {
+	var result uint64 = 14695981039346656037 ^ uint64(seed) // FNV offset basis
 	for i := uintptr(0); i < n; i++ {
 		c := *(*uint8)(unsafe.Pointer(uintptr(ptr) + i))
 		result ^= uint64(c)     // XOR with byte
