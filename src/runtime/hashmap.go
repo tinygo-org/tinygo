@@ -13,12 +13,13 @@ import (
 // The underlying hashmap structure for Go.
 type hashmap struct {
 	buckets    unsafe.Pointer // pointer to array of buckets
+	seed       uintptr
 	count      uintptr
 	keySize    uint8 // maybe this can store the key type as well? E.g. keysize == 5 means string?
 	valueSize  uint8
 	bucketBits uint8
 	keyEqual   func(x, y unsafe.Pointer, n uintptr) bool
-	keyHash    func(key unsafe.Pointer, size uintptr) uint32
+	keyHash    func(key unsafe.Pointer, size, seed uintptr) uint32
 }
 
 type hashmapAlgorithm uint8
@@ -74,6 +75,7 @@ func hashmapMake(keySize, valueSize uint8, sizeHint uintptr, alg uint8) *hashmap
 
 	return &hashmap{
 		buckets:    buckets,
+		seed:       uintptr(fastrand()),
 		keySize:    keySize,
 		valueSize:  valueSize,
 		bucketBits: bucketBits,
@@ -96,7 +98,7 @@ func hashmapKeyEqualAlg(alg hashmapAlgorithm) func(x, y unsafe.Pointer, n uintpt
 	}
 }
 
-func hashmapKeyHashAlg(alg hashmapAlgorithm) func(key unsafe.Pointer, n uintptr) uint32 {
+func hashmapKeyHashAlg(alg hashmapAlgorithm) func(key unsafe.Pointer, n, seed uintptr) uint32 {
 	switch alg {
 	case hashmapAlgorithmBinary:
 		return hash32
@@ -148,11 +150,13 @@ func hashmapLenUnsafePointer(p unsafe.Pointer) int {
 // Set a specified key to a given value. Grow the map if necessary.
 //go:nobounds
 func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint32) {
-	tophash := hashmapTopHash(hash)
-
 	if hashmapShouldGrow(m) {
 		hashmapGrow(m)
+		// seed changed when we grew; rehash key with new seed
+		hash = m.keyHash(key, uintptr(m.keySize), m.seed)
 	}
+
+	tophash := hashmapTopHash(hash)
 
 	numBuckets := uintptr(1) << m.bucketBits
 	bucketNumber := (uintptr(hash) & (numBuckets - 1))
@@ -221,10 +225,10 @@ func hashmapInsertIntoNewBucket(m *hashmap, key, value unsafe.Pointer, tophash u
 }
 
 func hashmapGrow(m *hashmap) {
-
 	// clone map as empty
 	n := *m
 	n.count = 0
+	n.seed = uintptr(fastrand())
 
 	// allocate our new buckets twice as big
 	n.bucketBits = m.bucketBits + 1
@@ -239,7 +243,7 @@ func hashmapGrow(m *hashmap) {
 	var value = alloc(uintptr(m.valueSize), nil)
 
 	for hashmapNext(m, &it, key, value) {
-		h := m.keyHash(key, uintptr(m.keySize))
+		h := n.keyHash(key, uintptr(n.keySize), n.seed)
 		hashmapSet(&n, key, value, h)
 	}
 
@@ -386,7 +390,7 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 
 			// Our view of the buckets doesn't match the parent map.
 			// Look up the key in the new buckets and return that value if it exists
-			hash := m.keyHash(key, uintptr(m.keySize))
+			hash := m.keyHash(key, uintptr(m.keySize), m.seed)
 			ok := hashmapGet(m, key, value, uintptr(m.valueSize), hash)
 			if !ok {
 				// doesn't exist in parent map; try next key
@@ -401,10 +405,9 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 }
 
 // Hashmap with plain binary data keys (not containing strings etc.).
-
 func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
 	// TODO: detect nil map here and throw a better panic message?
-	hash := hash32(key, uintptr(m.keySize))
+	hash := hash32(key, uintptr(m.keySize), m.seed)
 	hashmapSet(m, key, value, hash)
 }
 
@@ -413,7 +416,7 @@ func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) 
 		memzero(value, uintptr(valueSize))
 		return false
 	}
-	hash := hash32(key, uintptr(m.keySize))
+	hash := hash32(key, uintptr(m.keySize), m.seed)
 	return hashmapGet(m, key, value, valueSize, hash)
 }
 
@@ -421,7 +424,7 @@ func hashmapBinaryDelete(m *hashmap, key unsafe.Pointer) {
 	if m == nil {
 		return
 	}
-	hash := hash32(key, uintptr(m.keySize))
+	hash := hash32(key, uintptr(m.keySize), m.seed)
 	hashmapDelete(m, key, hash)
 }
 
@@ -431,28 +434,35 @@ func hashmapStringEqual(x, y unsafe.Pointer, n uintptr) bool {
 	return *(*string)(x) == *(*string)(y)
 }
 
-func hashmapStringHash(s string) uint32 {
+func hashmapStringHash(s string, seed uintptr) uint32 {
 	_s := (*_string)(unsafe.Pointer(&s))
-	return hash32(unsafe.Pointer(_s.ptr), uintptr(_s.length))
+	return hash32(unsafe.Pointer(_s.ptr), uintptr(_s.length), seed)
 }
 
-func hashmapStringPtrHash(sptr unsafe.Pointer, size uintptr) uint32 {
+func hashmapStringPtrHash(sptr unsafe.Pointer, size uintptr, seed uintptr) uint32 {
 	_s := *(*_string)(sptr)
-	return hash32(unsafe.Pointer(_s.ptr), uintptr(_s.length))
+	return hash32(unsafe.Pointer(_s.ptr), uintptr(_s.length), seed)
 }
 
 func hashmapStringSet(m *hashmap, key string, value unsafe.Pointer) {
-	hash := hashmapStringHash(key)
+	hash := hashmapStringHash(key, m.seed)
 	hashmapSet(m, unsafe.Pointer(&key), value, hash)
 }
 
 func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer, valueSize uintptr) bool {
-	hash := hashmapStringHash(key)
+	if m == nil {
+		memzero(value, uintptr(valueSize))
+		return false
+	}
+	hash := hashmapStringHash(key, m.seed)
 	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash)
 }
 
 func hashmapStringDelete(m *hashmap, key string) {
-	hash := hashmapStringHash(key)
+	if m == nil {
+		return
+	}
+	hash := hashmapStringHash(key, m.seed)
 	hashmapDelete(m, unsafe.Pointer(&key), hash)
 }
 
@@ -465,25 +475,25 @@ func hashmapStringDelete(m *hashmap, key string) {
 //go:linkname valueInterfaceUnsafe reflect.valueInterfaceUnsafe
 func valueInterfaceUnsafe(v reflect.Value) interface{}
 
-func hashmapFloat32Hash(ptr unsafe.Pointer) uint32 {
+func hashmapFloat32Hash(ptr unsafe.Pointer, seed uintptr) uint32 {
 	f := *(*uint32)(ptr)
 	if f == 0x80000000 {
 		// convert -0 to 0 for hashing
 		f = 0
 	}
-	return hash32(unsafe.Pointer(&f), 4)
+	return hash32(unsafe.Pointer(&f), 4, seed)
 }
 
-func hashmapFloat64Hash(ptr unsafe.Pointer) uint32 {
+func hashmapFloat64Hash(ptr unsafe.Pointer, seed uintptr) uint32 {
 	f := *(*uint64)(ptr)
 	if f == 0x8000000000000000 {
 		// convert -0 to 0 for hashing
 		f = 0
 	}
-	return hash32(unsafe.Pointer(&f), 8)
+	return hash32(unsafe.Pointer(&f), 8, seed)
 }
 
-func hashmapInterfaceHash(itf interface{}) uint32 {
+func hashmapInterfaceHash(itf interface{}, seed uintptr) uint32 {
 	x := reflect.ValueOf(itf)
 	if x.RawType() == 0 {
 		return 0 // nil interface
@@ -498,41 +508,41 @@ func hashmapInterfaceHash(itf interface{}) uint32 {
 
 	switch x.RawType().Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return hash32(ptr, x.RawType().Size())
+		return hash32(ptr, x.RawType().Size(), seed)
 	case reflect.Bool, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return hash32(ptr, x.RawType().Size())
+		return hash32(ptr, x.RawType().Size(), seed)
 	case reflect.Float32:
 		// It should be possible to just has the contents. However, NaN != NaN
 		// so if you're using lots of NaNs as map keys (you shouldn't) then hash
 		// time may become exponential. To fix that, it would be better to
 		// return a random number instead:
 		// https://research.swtch.com/randhash
-		return hashmapFloat32Hash(ptr)
+		return hashmapFloat32Hash(ptr, seed)
 	case reflect.Float64:
-		return hashmapFloat64Hash(ptr)
+		return hashmapFloat64Hash(ptr, seed)
 	case reflect.Complex64:
 		rptr, iptr := ptr, unsafe.Pointer(uintptr(ptr)+4)
-		return hashmapFloat32Hash(rptr) ^ hashmapFloat32Hash(iptr)
+		return hashmapFloat32Hash(rptr, seed) ^ hashmapFloat32Hash(iptr, seed)
 	case reflect.Complex128:
 		rptr, iptr := ptr, unsafe.Pointer(uintptr(ptr)+8)
-		return hashmapFloat64Hash(rptr) ^ hashmapFloat64Hash(iptr)
+		return hashmapFloat64Hash(rptr, seed) ^ hashmapFloat64Hash(iptr, seed)
 	case reflect.String:
-		return hashmapStringHash(x.String())
+		return hashmapStringHash(x.String(), seed)
 	case reflect.Chan, reflect.Ptr, reflect.UnsafePointer:
 		// It might seem better to just return the pointer, but that won't
 		// result in an evenly distributed hashmap. Instead, hash the pointer
 		// like most other types.
-		return hash32(ptr, x.RawType().Size())
+		return hash32(ptr, x.RawType().Size(), seed)
 	case reflect.Array:
 		var hash uint32
 		for i := 0; i < x.Len(); i++ {
-			hash ^= hashmapInterfaceHash(valueInterfaceUnsafe(x.Index(i)))
+			hash ^= hashmapInterfaceHash(valueInterfaceUnsafe(x.Index(i)), seed)
 		}
 		return hash
 	case reflect.Struct:
 		var hash uint32
 		for i := 0; i < x.NumField(); i++ {
-			hash ^= hashmapInterfaceHash(valueInterfaceUnsafe(x.Field(i)))
+			hash ^= hashmapInterfaceHash(valueInterfaceUnsafe(x.Field(i)), seed)
 		}
 		return hash
 	default:
@@ -541,9 +551,9 @@ func hashmapInterfaceHash(itf interface{}) uint32 {
 	}
 }
 
-func hashmapInterfacePtrHash(iptr unsafe.Pointer, size uintptr) uint32 {
+func hashmapInterfacePtrHash(iptr unsafe.Pointer, size uintptr, seed uintptr) uint32 {
 	_i := *(*_interface)(iptr)
-	return hashmapInterfaceHash(_i)
+	return hashmapInterfaceHash(_i, seed)
 }
 
 func hashmapInterfaceEqual(x, y unsafe.Pointer, n uintptr) bool {
@@ -551,16 +561,23 @@ func hashmapInterfaceEqual(x, y unsafe.Pointer, n uintptr) bool {
 }
 
 func hashmapInterfaceSet(m *hashmap, key interface{}, value unsafe.Pointer) {
-	hash := hashmapInterfaceHash(key)
+	hash := hashmapInterfaceHash(key, m.seed)
 	hashmapSet(m, unsafe.Pointer(&key), value, hash)
 }
 
 func hashmapInterfaceGet(m *hashmap, key interface{}, value unsafe.Pointer, valueSize uintptr) bool {
-	hash := hashmapInterfaceHash(key)
+	if m == nil {
+		memzero(value, uintptr(valueSize))
+		return false
+	}
+	hash := hashmapInterfaceHash(key, m.seed)
 	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash)
 }
 
 func hashmapInterfaceDelete(m *hashmap, key interface{}) {
-	hash := hashmapInterfaceHash(key)
+	if m == nil {
+		return
+	}
+	hash := hashmapInterfaceHash(key, m.seed)
 	hashmapDelete(m, unsafe.Pointer(&key), hash)
 }
