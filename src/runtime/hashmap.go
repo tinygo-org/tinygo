@@ -406,7 +406,9 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 
 // Hashmap with plain binary data keys (not containing strings etc.).
 func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
-	// TODO: detect nil map here and throw a better panic message?
+	if m == nil {
+		nilMapPanic()
+	}
 	hash := hash32(key, uintptr(m.keySize), m.seed)
 	hashmapSet(m, key, value, hash)
 }
@@ -445,6 +447,9 @@ func hashmapStringPtrHash(sptr unsafe.Pointer, size uintptr, seed uintptr) uint3
 }
 
 func hashmapStringSet(m *hashmap, key string, value unsafe.Pointer) {
+	if m == nil {
+		nilMapPanic()
+	}
 	hash := hashmapStringHash(key, m.seed)
 	hashmapSet(m, unsafe.Pointer(&key), value, hash)
 }
@@ -561,6 +566,9 @@ func hashmapInterfaceEqual(x, y unsafe.Pointer, n uintptr) bool {
 }
 
 func hashmapInterfaceSet(m *hashmap, key interface{}, value unsafe.Pointer) {
+	if m == nil {
+		nilMapPanic()
+	}
 	hash := hashmapInterfaceHash(key, m.seed)
 	hashmapSet(m, unsafe.Pointer(&key), value, hash)
 }
