@@ -32,6 +32,11 @@ func nilPanic() {
 	runtimePanic("nil pointer dereference")
 }
 
+// Panic when trying to add an entry to a nil map
+func nilMapPanic() {
+	runtimePanic("assignment to entry in nil map")
+}
+
 // Panic when trying to acces an array or slice out of bounds.
 func lookupPanic() {
 	runtimePanic("index out of range")
