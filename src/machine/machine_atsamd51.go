@@ -1965,6 +1965,7 @@ type USBCDC struct {
 	waitTxc           bool
 	waitTxcRetryCount uint8
 	sent              bool
+	configured        bool
 }
 
 var (
@@ -2149,6 +2150,13 @@ func (usbcdc *USBCDC) Configure(config UARTConfig) {
 	interrupt.New(sam.IRQ_USB_SOF_HSOF, handleUSBIRQ).Enable()
 	interrupt.New(sam.IRQ_USB_TRCPT0, handleUSBIRQ).Enable()
 	interrupt.New(sam.IRQ_USB_TRCPT1, handleUSBIRQ).Enable()
+
+	usbcdc.configured = true
+}
+
+// Configured returns whether usbcdc is configured or not.
+func (usbcdc *USBCDC) Configured() bool {
+	return usbcdc.configured
 }
 
 func handlePadCalibration() {
