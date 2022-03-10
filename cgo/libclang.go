@@ -16,7 +16,7 @@ import (
 )
 
 /*
-#include <clang-c/Index.h> // if this fails, install libclang-11-dev
+#include <clang-c/Index.h> // if this fails, install libclang-13-dev
 #include <stdlib.h>
 #include <stdint.h>
 
