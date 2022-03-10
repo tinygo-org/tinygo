@@ -1746,7 +1746,6 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 	case *ssa.Lookup:
 		value := b.getValue(expr.X)
-		index := b.getValue(expr.Index)
 		switch xType := expr.X.Type().Underlying().(type) {
 		case *types.Basic:
 			// Value type must be a string, which is a basic type.
@@ -1760,6 +1759,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			//     size.
 			//  2. getelementptr has signed operands, and therefore s[uint8(x)]
 			//     can be lowered as s[int8(x)]. That would be a bug.
+
+			index := b.getValue(expr.Index)
 			index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
 
 			// Bounds check.
@@ -1775,6 +1776,40 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			if expr.CommaOk {
 				valueType = valueType.(*types.Tuple).At(0).Type()
 			}
+
+			var index llvm.Value
+			var foundStringByteSliceConversion bool
+			if t, ok := expr.Index.Type().Underlying().(*types.Basic); ok && t.Info()&types.IsString != 0 {
+				if convert, ok := expr.Index.(*ssa.Convert); ok {
+					if slice, ok := convert.X.Type().Underlying().(*types.Slice); ok {
+						if elem, ok := slice.Elem().Underlying().(*types.Basic); ok {
+							if elem.Kind() == types.Byte {
+								foundStringByteSliceConversion = true
+
+								key := b.getValue(convert.X)
+
+								keyBuf := b.CreateExtractValue(key, 0, "map.keyBuf")
+								keyLen := b.CreateExtractValue(key, 1, "map.keyLen")
+
+								// Create the string
+								str := b.ctx.ConstStruct([]llvm.Value{
+									llvm.Undef(b.i8ptrType),
+									llvm.Undef(b.uintptrType),
+								}, false)
+								str = b.CreateInsertValue(str, keyBuf, 0, "")
+								str = b.CreateInsertValue(str, keyLen, 1, "")
+
+								index = str
+							}
+						}
+					}
+				}
+			}
+
+			if !foundStringByteSliceConversion {
+				index = b.getValue(expr.Index)
+			}
+
 			return b.createMapLookup(xType.Key(), valueType, value, index, expr.CommaOk, expr.Pos())
 		default:
 			panic("unknown lookup type: " + expr.String())
