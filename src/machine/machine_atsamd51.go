@@ -1033,6 +1033,9 @@ func (uart *UART) Configure(config UARTConfig) error {
 	uart.Bus.CTRLA.Set((1 << sam.SERCOM_USART_INT_CTRLA_MODE_Pos) |
 		(1 << sam.SERCOM_USART_INT_CTRLA_SAMPR_Pos)) // sample rate of 16x
 
+	// set clock
+	setSERCOMClockGenerator(uart.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK1)
+
 	// Set baud rate
 	uart.SetBaudRate(config.BaudRate)
 
@@ -1124,7 +1127,8 @@ type I2CConfig struct {
 
 const (
 	// SERCOM_FREQ_REF is always reference frequency on SAMD51 regardless of CPU speed.
-	SERCOM_FREQ_REF = 48000000
+	SERCOM_FREQ_REF       = 48000000
+	SERCOM_FREQ_REF_GCLK0 = 120000000
 
 	// Default rise time in nanoseconds, based on 4.7K ohm pull up resistors
 	riseTimeNanoseconds = 125
@@ -1177,6 +1181,9 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	for i2c.Bus.CTRLA.HasBits(sam.SERCOM_I2CM_CTRLA_SWRST) ||
 		i2c.Bus.SYNCBUSY.HasBits(sam.SERCOM_I2CM_SYNCBUSY_SWRST) {
 	}
+
+	// set clock
+	setSERCOMClockGenerator(i2c.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK1)
 
 	// Set i2c controller mode
 	//SERCOM_I2CM_CTRLA_MODE( I2C_MASTER_OPERATION )
@@ -1483,8 +1490,18 @@ func (spi SPI) Configure(config SPIConfig) error {
 		spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPIM_CTRLA_CPOL)
 	}
 
+	// set clock
+	freqRef := uint32(0)
+	if config.Frequency > SERCOM_FREQ_REF/2 {
+		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK0)
+		freqRef = uint32(SERCOM_FREQ_REF_GCLK0)
+	} else {
+		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK1)
+		freqRef = uint32(SERCOM_FREQ_REF)
+	}
+
 	// Set synch speed for SPI
-	baudRate := SERCOM_FREQ_REF / (2 * config.Frequency)
+	baudRate := freqRef / (2 * config.Frequency)
 	if baudRate > 0 {
 		baudRate--
 	}
