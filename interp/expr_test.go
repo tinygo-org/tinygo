@@ -87,6 +87,73 @@ func TestEvalSmallIntMul(t *testing.T) {
 	)
 }
 
+func TestEvalSmallUDiv(t *testing.T) {
+	t.Parallel()
+
+	testEval(t,
+		evalCase{
+			name:   "Const",
+			expr:   smallUIntDivExpr{binIntExpr{smallIntValue(i8, 55), smallIntValue(i8, 7), i8}},
+			expect: "i8 7",
+		},
+		evalCase{
+			name:   "ShortRight",
+			expr:   smallUIntDivExpr{binIntExpr{runtime(i32, 5), smallIntValue(i32, 1), i32}},
+			expect: "i32 %5",
+		},
+		evalCase{
+			name:   "ShortLeft",
+			expr:   smallUIntDivExpr{binIntExpr{smallIntValue(i32, 0), runtime(i32, 7), i32}},
+			expect: "i32 0",
+		},
+		evalCase{
+			name:   "UndefNumeratorShifted",
+			expr:   smallUIntDivExpr{binIntExpr{undefValue(i32), smallIntValue(i32, 8), i32}},
+			expect: "i32 cast(i29 undef)",
+		},
+		evalCase{
+			name: "UndefNumeratorRegression",
+			expr: smallUIntDivExpr{binIntExpr{undefValue(i32), smallIntValue(i32, 3), i32}},
+		},
+	)
+}
+
+func TestEvalSmallSDiv(t *testing.T) {
+	t.Parallel()
+
+	testEval(t,
+		evalCase{
+			name:   "ConstPositivePositive",
+			expr:   smallSIntDivExpr{binIntExpr{smallIntValue(i8, 55), smallIntValue(i8, 7), i8}},
+			expect: "i8 7",
+		},
+		evalCase{
+			name:   "ConstNegativePositive",
+			expr:   smallSIntDivExpr{binIntExpr{smallIntValue(i8, 256-55), smallIntValue(i8, 7), i8}},
+			expect: "i8 -7",
+		},
+		evalCase{
+			name:   "ConstPositiveNegative",
+			expr:   smallSIntDivExpr{binIntExpr{smallIntValue(i8, 55), smallIntValue(i8, 256-7), i8}},
+			expect: "i8 -7",
+		},
+		evalCase{
+			name:   "ShortRight",
+			expr:   smallSIntDivExpr{binIntExpr{runtime(i32, 5), smallIntValue(i32, 1), i32}},
+			expect: "i32 %5",
+		},
+		evalCase{
+			name:   "ShortLeft",
+			expr:   smallSIntDivExpr{binIntExpr{smallIntValue(i32, 0), runtime(i32, 7), i32}},
+			expect: "i32 0",
+		},
+		evalCase{
+			name: "UndefNumeratorRegression",
+			expr: smallSIntDivExpr{binIntExpr{undefValue(i32), smallIntValue(i32, 3), i32}},
+		},
+	)
+}
+
 func TestEvalSmallShiftLeft(t *testing.T) {
 	t.Parallel()
 
