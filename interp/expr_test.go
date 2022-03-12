@@ -262,6 +262,121 @@ func TestEvalArithmeticShiftRight(t *testing.T) {
 	)
 }
 
+func TestEvalSmallOr(t *testing.T) {
+	t.Parallel()
+
+	x := memObj{
+		ptrTy:      pointer(defaultAddrSpace, i32),
+		name:       "x",
+		alignScale: 2,
+	}
+	rVal := runtime(i16, 1)
+	testEval(t,
+		evalCase{
+			name:   "Const",
+			expr:   smallOrExpr{binIntExpr{smallIntValue(i8, 9), smallIntValue(i8, 3), i8}},
+			expect: "i8 11",
+		},
+		evalCase{
+			name:   "Passthrough",
+			expr:   smallOrExpr{binIntExpr{smallIntValue(i8, 0), runtime(i8, 2), i8}},
+			expect: "i8 %2",
+		},
+		evalCase{
+			name:   "Short",
+			expr:   smallOrExpr{binIntExpr{smallIntValue(i8, 255), runtime(i8, 2), i8}},
+			expect: "i8 -1",
+		},
+		evalCase{
+			name: "UndefUnknown",
+			expr: smallOrExpr{binIntExpr{undefValue(i8), runtime(i8, 2), i8}},
+		},
+		evalCase{
+			name:   "AlignUp",
+			expr:   smallOrExpr{binIntExpr{x.addr(1), smallIntValue(i32, 3), i32}},
+			expect: "i32 @x + 0x3",
+		},
+		evalCase{
+			name:   "Merge",
+			expr:   smallOrExpr{binIntExpr{cat([]value{slice(rVal, 0, 8), i8.zero()}), cat([]value{i8.zero(), slice(rVal, 8, 8)}), i16}},
+			expect: "i16 %1",
+		},
+	)
+}
+
+func TestEvalSmallAnd(t *testing.T) {
+	t.Parallel()
+
+	x := memObj{
+		ptrTy:      pointer(defaultAddrSpace, i32),
+		name:       "x",
+		alignScale: 2,
+	}
+	testEval(t,
+		evalCase{
+			name:   "Const",
+			expr:   smallAndExpr{binIntExpr{smallIntValue(i8, 5), smallIntValue(i8, 4), i8}},
+			expect: "i8 4",
+		},
+		evalCase{
+			name:   "Passthrough",
+			expr:   smallAndExpr{binIntExpr{smallIntValue(i8, 255), runtime(i8, 2), i8}},
+			expect: "i8 %2",
+		},
+		evalCase{
+			name:   "Short",
+			expr:   smallAndExpr{binIntExpr{smallIntValue(i8, 0), runtime(i8, 2), i8}},
+			expect: "i8 0",
+		},
+		evalCase{
+			name: "UndefUnknown",
+			expr: smallAndExpr{binIntExpr{undefValue(i8), runtime(i8, 2), i8}},
+		},
+		evalCase{
+			name:   "AlignDown",
+			expr:   smallAndExpr{binIntExpr{x.addr(5), smallIntValue(i32, uint64(^uint32(3))), i32}},
+			expect: "i32 @x + 0x4",
+		},
+	)
+}
+
+func TestEvalXOr(t *testing.T) {
+	t.Parallel()
+
+	x := memObj{
+		ptrTy:      pointer(defaultAddrSpace, i32),
+		name:       "x",
+		alignScale: 3,
+	}
+	testEval(t,
+		evalCase{
+			name:   "Const",
+			expr:   smallXOrExpr{binIntExpr{smallIntValue(i8, 3), smallIntValue(i8, 5), i8}},
+			expect: "i8 6",
+		},
+		evalCase{
+			name:   "PtrNum",
+			expr:   smallXOrExpr{binIntExpr{x.addr(3), smallIntValue(i32, 5), i32}},
+			expect: "i32 @x + 0x6",
+		},
+		evalCase{
+			name:   "PtrPtr",
+			expr:   smallXOrExpr{binIntExpr{x.addr(3), x.addr(5), i32}},
+			expect: "i32 6",
+		},
+		evalCase{
+			name:   "Undef",
+			expr:   smallXOrExpr{binIntExpr{runtime(i32, 1), undefValue(i32), i32}},
+			expect: "i32 undef",
+		},
+		evalCase{
+			name:   "Short",
+			expr:   smallXOrExpr{binIntExpr{runtime(i32, 5), smallIntValue(i32, 0), i32}},
+			expect: "i32 %5",
+		},
+	)
+}
+
 func testEval(t *testing.T, cases ...evalCase) {
 	t.Helper()
 
@@ -291,6 +406,18 @@ func (expr smallIntAddExpr) reverse() expr {
 
 func (expr smallIntMulExpr) reverse() expr {
 	return smallIntMulExpr{binIntExpr{expr.y, expr.x, expr.ty}}
+}
+
+func (expr smallOrExpr) reverse() expr {
+	return smallOrExpr{binIntExpr{expr.y, expr.x, expr.ty}}
+}
+
+func (expr smallAndExpr) reverse() expr {
+	return smallAndExpr{binIntExpr{expr.y, expr.x, expr.ty}}
+}
+
+func (expr smallXOrExpr) reverse() expr {
+	return smallXOrExpr{binIntExpr{expr.y, expr.x, expr.ty}}
 }
 
 func (c evalCase) run(t *testing.T) {

@@ -12,7 +12,7 @@ const (
 	maxStackSize = 1 << 24
 )
 
-const debug = false
+const debug = true
 
 var mu sync.Mutex
 

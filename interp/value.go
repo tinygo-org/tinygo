@@ -295,7 +295,9 @@ func cast(to nonAggTyp, v value) value {
 		if to == obj.ptrTy {
 			return value{(*offPtr)(val), v.raw}
 		}
-		if toBits := to.bits(); toBits <= uint64(obj.alignScale) {
+		toBits := to.bits()
+		v.raw &= (1 << toBits) - 1
+		if toBits <= uint64(obj.alignScale) {
 			// This contains only alignment bits.
 			return cast(to, smallIntValue(iType(toBits), v.raw))
 		}
@@ -899,6 +901,7 @@ func slice(in value, off, width uint64) value {
 			// This contains only alignment bits.
 			return smallIntValue(iType(width), in.raw>>off)
 		}
+		in.raw &= ((1 << width) - 1) << off
 
 	case *bitCat:
 		// Filter and slice the concatenated values.
@@ -995,8 +998,14 @@ func cat(in []value) value {
 		}
 	}
 
+	if len(in) == 1 {
+		// Ideally, we could copy dst so that the initial slice would not allocate and the switch would handle this.
+		// However, this does not work because catAppend calls cast and cast calls cat, so catAppend gets flagged as escaped-to-return but cat does not use this.
+		return in[0]
+	}
+
 	// Combine values.
-	var dst []value
+	dst := make([]value, 2)[:0]
 	for _, v := range in {
 		dst = catAppend(dst, v)
 	}
@@ -1043,15 +1052,42 @@ func catAppend(dst []value, v value) []value {
 			case bitSlice:
 				if prevVal.from == val.from && prev.raw == v.raw && prevVal.off+prevVal.width == val.off {
 					// Merge the slices into a bigger slice.
-					dst[i] = slice(value{val.from, v.raw}, prevVal.off, prevVal.width+val.width)
-					return dst
+					return catAppend(dst[:len(dst)-1], slice(value{val.from, v.raw}, prevVal.off, prevVal.width+val.width))
 				}
 
 			case castVal:
 				if prevVal.val == val.from && prev.raw == v.raw && prevVal.to.bits() == val.off {
 					// Merge the slice with the cast.
-					dst[i] = slice(value{val.from, v.raw}, 0, val.off+val.width)
-					return dst
+					return catAppend(dst[:len(dst)-1], slice(value{val.from, v.raw}, 0, val.off+val.width))
+				}
+			}
+			switch from := val.from.(type) {
+			case *offAddr:
+				// Merge a split address.
+				switch prevVal := prev.val.(type) {
+				case smallInt:
+					if val.off <= uint64(from.obj().alignScale) {
+						prevBits := iType(prevVal).bits()
+						absorbed := val.off
+						if absorbed > prevBits {
+							absorbed = prevBits
+						}
+						dst = dst[:len(dst)-1]
+						if absorbed != prevBits {
+							dst = catAppend(dst, cast(iType(prevBits-absorbed), prev))
+						}
+						return catAppend(dst, slice(from.obj().addr(v.raw|((prev.raw>>(prevBits-absorbed))<<(val.off-absorbed))), val.off-absorbed, val.width+absorbed))
+					}
+
+				case castVal:
+					if prevCastedVal, ok := prevVal.val.(*offAddr); ok && from.obj() == prevCastedVal.obj() && prevVal.to.bits() == val.off {
+						return catAppend(dst[:len(dst)-1], slice(from.obj().addr(v.raw|prev.raw), 0, val.off+val.width))
+					}
+
+				case bitSlice:
+					if prevSlicedVal, ok := prevVal.from.(*offAddr); ok && from.obj() == prevSlicedVal.obj() && prevVal.off+prevVal.width == val.off {
+						return catAppend(dst[:len(dst)-1], slice(from.obj().addr(v.raw|prev.raw), prevVal.off, prevVal.width+val.width))
+					}
 				}
 			}
 		}

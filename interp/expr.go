@@ -18,7 +18,9 @@ type expr interface {
 
 func parseExpr(op llvm.Opcode, expr llvm.Value, parser parser) (expr, error) {
 	switch op {
-	case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.Shl, llvm.LShr, llvm.AShr:
+	case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv,
+		llvm.Shl, llvm.LShr, llvm.AShr,
+		llvm.And, llvm.Or, llvm.Xor:
 		typ, err := parser.typ(expr.Type())
 		if err != nil {
 			return nil, err
@@ -45,6 +47,12 @@ func parseExpr(op llvm.Opcode, expr llvm.Value, parser parser) (expr, error) {
 					return smallLogicalShiftRightExpr{bin}, nil
 				case llvm.AShr:
 					return smallArithmeticShiftRightExpr{bin}, nil
+				case llvm.And:
+					return smallAndExpr{bin}, nil
+				case llvm.Or:
+					return smallOrExpr{bin}, nil
+				case llvm.Xor:
+					return smallXOrExpr{bin}, nil
 				default:
 					panic("missing int bin op")
 				}
@@ -451,10 +459,10 @@ func (e smallIntMulExpr) eval() (value, error) {
 			panic("input too big")
 		}
 		if xTy := e.x.typ(); xTy != e.ty {
-			return value{}, typeError{xTy, e.ty}
+			return value{}, typeError{e.ty, xTy}
 		}
 		if yTy := e.y.typ(); yTy != e.ty {
-			return value{}, typeError{yTy, e.ty}
+			return value{}, typeError{e.ty, yTy}
 		}
 	}
 
@@ -627,10 +635,10 @@ func (e smallUIntDivExpr) eval() (value, error) {
 			panic("input too big")
 		}
 		if xTy := e.x.typ(); xTy != e.ty {
-			return value{}, typeError{xTy, e.ty}
+			return value{}, typeError{e.ty, xTy}
 		}
 		if yTy := e.y.typ(); yTy != e.ty {
-			return value{}, typeError{yTy, e.ty}
+			return value{}, typeError{e.ty, yTy}
 		}
 	}
 
@@ -785,10 +793,10 @@ func (e smallShiftLeftExpr) eval() (value, error) {
 			panic("input too big")
 		}
 		if xTy := e.x.typ(); xTy != e.ty {
-			return value{}, typeError{xTy, e.ty}
+			return value{}, typeError{e.ty, xTy}
 		}
 		if yTy := e.y.typ(); yTy != e.ty {
-			return value{}, typeError{yTy, e.ty}
+			return value{}, typeError{e.ty, yTy}
 		}
 	}
 
@@ -955,10 +963,10 @@ func (e smallLogicalShiftRightExpr) eval() (value, error) {
 			panic("input too big")
 		}
 		if xTy := e.x.typ(); xTy != e.ty {
-			return value{}, typeError{xTy, e.ty}
+			return value{}, typeError{e.ty, xTy}
 		}
 		if yTy := e.y.typ(); yTy != e.ty {
-			return value{}, typeError{yTy, e.ty}
+			return value{}, typeError{e.ty, yTy}
 		}
 	}
 
@@ -1125,10 +1133,10 @@ func (e smallArithmeticShiftRightExpr) eval() (value, error) {
 			panic("input too big")
 		}
 		if xTy := e.x.typ(); xTy != e.ty {
-			return value{}, typeError{xTy, e.ty}
+			return value{}, typeError{e.ty, xTy}
 		}
 		if yTy := e.y.typ(); yTy != e.ty {
-			return value{}, typeError{yTy, e.ty}
+			return value{}, typeError{e.ty, yTy}
 		}
 	}
 
@@ -1291,6 +1299,620 @@ func (i *smallArithmeticShiftRightInst) exec(state *execState) error {
 
 func (i *smallArithmeticShiftRightInst) runtime(gen *rtGen) error {
 	return i.expr.runtime(gen, i.dbg, (*llvm.Builder).CreateAShr)
+}
+
+// smallOrExpr is a bitwise or expression.
+type smallOrExpr struct {
+	binIntExpr
+}
+
+func (e smallOrExpr) eval() (value, error) {
+	if assert {
+		if e.ty > 64 {
+			panic("input too big")
+		}
+		if xTy := e.x.typ(); xTy != e.ty {
+			return value{}, typeError{e.ty, xTy}
+		}
+		if yTy := e.y.typ(); yTy != e.ty {
+			return value{}, typeError{e.ty, yTy}
+		}
+	}
+
+	type kind uint8
+	const (
+		idk kind = iota
+		num
+		ptr
+		whatever
+	)
+
+	var x, y uint64
+	var xObj, yObj *memObj
+	xKind, yKind := idk, idk
+	switch v := e.x.val.(type) {
+	case smallInt:
+		x, xKind = e.x.raw, num
+	case undef:
+		xKind = whatever
+	case *offAddr:
+		x, xObj, xKind = e.x.raw, v.obj(), ptr
+	case *bitCat:
+		return evalCatOr(*v, e.y)
+	case castVal:
+		from := value{v.val, e.x.raw}
+		fromBits := from.typ().(nonAggTyp).bits()
+		toBits := e.ty.bits()
+		if fromBits < toBits {
+			return evalCatOr(bitCat{from, iType(toBits - fromBits).zero()}, e.y)
+		}
+	}
+	switch v := e.y.val.(type) {
+	case smallInt:
+		y, yKind = e.y.raw, num
+	case undef:
+		yKind = whatever
+	case *offAddr:
+		y, yObj, yKind = e.y.raw, v.obj(), ptr
+	case *bitCat:
+		return evalCatOr(*v, e.y)
+	case castVal:
+		from := value{v.val, e.y.raw}
+		fromBits := from.typ().(nonAggTyp).bits()
+		toBits := e.ty.bits()
+		if fromBits < toBits {
+			return evalCatOr(bitCat{from, iType(toBits - fromBits).zero()}, e.x)
+		}
+	}
+
+	type kinds struct{ x, y kind }
+	switch (kinds{xKind, yKind}) {
+	case kinds{num, num}:
+		// Evaluate directly.
+		return smallIntValue(e.ty, x|y), nil
+
+	case kinds{num, ptr}:
+		if uint(bits.Len64(x)) <= yObj.alignScale {
+			// All set bits are alignment bits.
+			return yObj.addr(x | y), nil
+		}
+		fallthrough
+	case kinds{num, idk}, kinds{num, whatever}:
+		// Break the mask into pieces which are concatenated.
+		return evalOrMaskAsCat(e.ty, x, e.y)
+
+	case kinds{ptr, num}:
+		if uint(bits.Len64(y)) <= xObj.alignScale {
+			// All set bits are alignment bits.
+			return xObj.addr(x | y), nil
+		}
+		fallthrough
+	case kinds{idk, num}, kinds{whatever, num}:
+		// Break the mask into pieces which are concatenated.
+		return evalOrMaskAsCat(e.ty, y, e.x)
+
+	case kinds{whatever, whatever}:
+		// undef | undef = undef
+		return undefValue(e.ty), nil
+	}
+
+	return value{}, errRuntime
+}
+
+func evalCatOr(x bitCat, y value) (value, error) {
+	parts := make([]value, 4)[:0]
+	var off uint64
+	for _, xp := range x {
+		width := xp.typ().(nonAggTyp).bits()
+		yp := slice(y, off, width)
+		v, err := smallOrExpr{binIntExpr{cast(iType(width), xp), yp, iType(width)}}.eval()
+		if err != nil {
+			return value{}, err
+		}
+		parts = append(parts, v)
+		off += width
+	}
+	return cat(parts), nil
+}
+
+func evalOrMaskAsCat(ty iType, mask uint64, v value) (value, error) {
+	parts := make([]value, 4)[:0]
+	for i := 0; i < int(ty); {
+		if mask&(1<<i) == 0 {
+			end := bits.TrailingZeros64(mask | (1 << ty))
+			parts = append(parts, slice(v, uint64(i), uint64(end-i)))
+			i = end
+		} else {
+			end := bits.TrailingZeros64((mask ^ (-(1 << i))) | (1 << ty))
+			parts = append(parts, smallIntValue(iType(end-i), ^uint64(0)))
+			mask &^= (1 << end) - (1 << i)
+			i = end
+		}
+	}
+	return cat(parts), nil
+}
+
+func (e smallOrExpr) resolve(stack []value) (smallOrExpr, error) {
+	res, err := e.binIntExpr.resolve(stack)
+	if err != nil {
+		return smallOrExpr{}, err
+	}
+	return smallOrExpr{res}, nil
+}
+
+func (e smallOrExpr) String() string {
+	return e.binIntExpr.String("or")
+}
+
+func (e smallOrExpr) create(dst *builder, dbg llvm.Metadata) (value, error) {
+	switch v, err := e.eval(); err {
+	case nil:
+		return v, nil
+	case errRuntime:
+		return dst.insertInst(&smallOrInst{e, dbg}), nil
+	default:
+		return value{}, err
+	}
+}
+
+type smallOrInst struct {
+	expr smallOrExpr
+	dbg  llvm.Metadata
+}
+
+func (i *smallOrInst) result() typ {
+	return i.expr.ty
+}
+
+func (i *smallOrInst) String() string {
+	return i.expr.String() + dbgSuffix(i.dbg)
+}
+
+func (i *smallOrInst) exec(state *execState) error {
+	// This would be a great use for generics. . .
+
+	// Resolve the expression.
+	expr, err := i.expr.resolve(state.locals())
+	if err != nil {
+		return err
+	}
+
+	// Evaluate the expression.
+	v, err := expr.eval()
+	switch err {
+	case nil:
+	case errRuntime:
+		// Escape inputs.
+		expr.escapeInputs(state)
+
+		// Create a runtime instruction to evaluate the expression.
+		v, err = expr.create(&state.rt, i.dbg)
+		if err != nil {
+			return err
+		}
+	default:
+		return err
+	}
+
+	// Push the result onto the stack.
+	state.stack = append(state.stack, v)
+
+	return nil
+}
+
+func (i *smallOrInst) runtime(gen *rtGen) error {
+	return i.expr.runtime(gen, i.dbg, (*llvm.Builder).CreateOr)
+}
+
+// smallAndExpr is a bitwise and expression.
+type smallAndExpr struct {
+	binIntExpr
+}
+
+func (e smallAndExpr) eval() (value, error) {
+	if assert {
+		if e.ty > 64 {
+			panic("input too big")
+		}
+		if xTy := e.x.typ(); xTy != e.ty {
+			return value{}, typeError{e.ty, xTy}
+		}
+		if yTy := e.y.typ(); yTy != e.ty {
+			return value{}, typeError{e.ty, yTy}
+		}
+	}
+
+	type kind uint8
+	const (
+		idk kind = iota
+		num
+		ptr
+		whatever
+	)
+
+	var x, y uint64
+	var xObj, yObj *memObj
+	xKind, yKind := idk, idk
+	switch v := e.x.val.(type) {
+	case smallInt:
+		x, xKind = e.x.raw, num
+	case undef:
+		xKind = whatever
+	case *offAddr:
+		x, xObj, xKind = e.x.raw, v.obj(), ptr
+	case *bitCat:
+		return evalCatAnd(*v, e.y)
+	case castVal:
+		from := value{v.val, e.x.raw}
+		fromBits := from.typ().(nonAggTyp).bits()
+		toBits := e.ty.bits()
+		if fromBits < toBits {
+			fromIType := iType(fromBits)
+			v, err := smallAndExpr{binIntExpr{cast(fromIType, from), cast(fromIType, e.y), fromIType}}.eval()
+			if err != nil {
+				return value{}, err
+			}
+			return cast(e.ty, v), nil
+		}
+	}
+	switch v := e.y.val.(type) {
+	case smallInt:
+		y, yKind = e.y.raw, num
+	case undef:
+		yKind = whatever
+	case *offAddr:
+		y, yObj, yKind = e.y.raw, v.obj(), ptr
+	case *bitCat:
+		return evalCatAnd(*v, e.y)
+	case castVal:
+		from := value{v.val, e.y.raw}
+		fromBits := from.typ().(nonAggTyp).bits()
+		toBits := e.ty.bits()
+		if fromBits < toBits {
+			fromIType := iType(fromBits)
+			v, err := smallAndExpr{binIntExpr{cast(fromIType, from), cast(fromIType, e.x), fromIType}}.eval()
+			if err != nil {
+				return value{}, err
+			}
+			return cast(e.ty, v), nil
+		}
+	}
+
+	type kinds struct{ x, y kind }
+	switch (kinds{xKind, yKind}) {
+	case kinds{num, num}:
+		// Evaluate directly.
+		return smallIntValue(e.ty, x&y), nil
+
+	case kinds{num, ptr}:
+		if uint(bits.Len64(x^((1<<e.ty)-1))) <= yObj.alignScale {
+			// All cleared bits are alignment bits.
+			return yObj.addr(x & y), nil
+		}
+		fallthrough
+	case kinds{num, idk}, kinds{num, whatever}:
+		// Break the mask into pieces which are concatenated.
+		return evalAndMaskAsCat(e.ty, x, e.y)
+
+	case kinds{ptr, num}:
+		if uint(bits.Len64(y^((1<<e.ty)-1))) <= xObj.alignScale {
+			// All cleared bits are alignment bits.
+			return xObj.addr(x & y), nil
+		}
+		fallthrough
+	case kinds{idk, num}, kinds{whatever, num}:
+		// Break the mask into pieces which are concatenated.
+		return evalAndMaskAsCat(e.ty, y, e.x)
+
+	case kinds{whatever, whatever}:
+		// undef & undef = undef
+		return undefValue(e.ty), nil
+	}
+
+	return value{}, errRuntime
+}
+
+func evalCatAnd(x bitCat, y value) (value, error) {
+	parts := make([]value, 4)[:0]
+	var off uint64
+	for _, xp := range x {
+		width := xp.typ().(nonAggTyp).bits()
+		yp := slice(y, off, width)
+		v, err := smallAndExpr{binIntExpr{cast(iType(width), xp), yp, iType(width)}}.eval()
+		if err != nil {
+			return value{}, err
+		}
+		parts = append(parts, v)
+		off += width
+	}
+	return cat(parts), nil
+}
+
+func evalAndMaskAsCat(ty iType, mask uint64, v value) (value, error) {
+	parts := make([]value, 4)[:0]
+	for i := 0; i < int(ty); {
+		if mask&(1<<i) == 0 {
+			end := bits.TrailingZeros64(mask | (1 << ty))
+			parts = append(parts, iType(end-i).zero())
+			i = end
+		} else {
+			end := bits.TrailingZeros64((mask ^ (-(1 << i))) | (1 << ty))
+			parts = append(parts, slice(v, uint64(i), uint64(end-i)))
+			mask &^= (1 << end) - (1 << i)
+			i = end
+		}
+	}
+	return cat(parts), nil
+}
+
+func (e smallAndExpr) resolve(stack []value) (smallAndExpr, error) {
+	res, err := e.binIntExpr.resolve(stack)
+	if err != nil {
+		return smallAndExpr{}, err
+	}
+	return smallAndExpr{res}, nil
+}
+
+func (e smallAndExpr) String() string {
+	return e.binIntExpr.String("and")
+}
+
+func (e smallAndExpr) create(dst *builder, dbg llvm.Metadata) (value, error) {
+	switch v, err := e.eval(); err {
+	case nil:
+		return v, nil
+	case errRuntime:
+		return dst.insertInst(&smallAndInst{e, dbg}), nil
+	default:
+		return value{}, err
+	}
+}
+
+type smallAndInst struct {
+	expr smallAndExpr
+	dbg  llvm.Metadata
+}
+
+func (i *smallAndInst) result() typ {
+	return i.expr.ty
+}
+
+func (i *smallAndInst) String() string {
+	return i.expr.String() + dbgSuffix(i.dbg)
+}
+
+func (i *smallAndInst) exec(state *execState) error {
+	// This would be a great use for generics. . .
+
+	// Resolve the expression.
+	expr, err := i.expr.resolve(state.locals())
+	if err != nil {
+		return err
+	}
+
+	// Evaluate the expression.
+	v, err := expr.eval()
+	switch err {
+	case nil:
+	case errRuntime:
+		// Escape inputs.
+		expr.escapeInputs(state)
+
+		// Create a runtime instruction to evaluate the expression.
+		v, err = expr.create(&state.rt, i.dbg)
+		if err != nil {
+			return err
+		}
+	default:
+		return err
+	}
+
+	// Push the result onto the stack.
+	state.stack = append(state.stack, v)
+
+	return nil
+}
+
+func (i *smallAndInst) runtime(gen *rtGen) error {
+	return i.expr.runtime(gen, i.dbg, (*llvm.Builder).CreateAnd)
+}
+
+// smallXOrExpr is a bitwise exclusive or expression.
+type smallXOrExpr struct {
+	binIntExpr
+}
+
+func (e smallXOrExpr) eval() (value, error) {
+	if assert {
+		if e.ty > 64 {
+			panic("input too big")
+		}
+		if xTy := e.x.typ(); xTy != e.ty {
+			return value{}, typeError{e.ty, xTy}
+		}
+		if yTy := e.y.typ(); yTy != e.ty {
+			return value{}, typeError{e.ty, yTy}
+		}
+	}
+
+	type kind uint8
+	const (
+		idk kind = iota
+		num
+		ptr
+		whatever
+	)
+
+	var x, y uint64
+	var xObj, yObj *memObj
+	xKind, yKind := idk, idk
+	switch v := e.x.val.(type) {
+	case smallInt:
+		x, xKind = e.x.raw, num
+	case undef:
+		xKind = whatever
+	case *offAddr:
+		x, xObj, xKind = e.x.raw, v.obj(), ptr
+	case *bitCat:
+		return evalCatXOr(*v, e.y)
+	case castVal:
+		from := value{v.val, e.x.raw}
+		fromBits := from.typ().(nonAggTyp).bits()
+		toBits := e.ty.bits()
+		if fromBits < toBits {
+			return evalCatXOr(bitCat{from, iType(toBits - fromBits).zero()}, e.y)
+		}
+	}
+	switch v := e.y.val.(type) {
+	case smallInt:
+		y, yKind = e.y.raw, num
+	case undef:
+		yKind = whatever
+	case *offAddr:
+		y, yObj, yKind = e.y.raw, v.obj(), ptr
+	case *bitCat:
+		return evalCatXOr(*v, e.y)
+	case castVal:
+		from := value{v.val, e.y.raw}
+		fromBits := from.typ().(nonAggTyp).bits()
+		toBits := e.ty.bits()
+		if fromBits < toBits {
+			return evalCatXOr(bitCat{from, iType(toBits - fromBits).zero()}, e.x)
+		}
+	}
+
+	type kinds struct{ x, y kind }
+	switch (kinds{xKind, yKind}) {
+	case kinds{num, num}:
+		// Evaluate directly.
+		return smallIntValue(e.ty, x^y), nil
+
+	case kinds{num, ptr}:
+		if uint(bits.Len64(x)) <= yObj.alignScale {
+			// All modified bits are alignment bits.
+			return yObj.addr(x ^ y), nil
+		}
+
+	case kinds{ptr, num}:
+		if uint(bits.Len64(y)) <= xObj.alignScale {
+			// All modified bits are alignment bits.
+			return xObj.addr(x ^ y), nil
+		}
+
+	case kinds{ptr, ptr}:
+		if xObj == yObj && uint(bits.Len64(x^y)) <= xObj.alignScale {
+			// Handle the xor of two pointers within the same object.
+			// I do not actually know when this would be used?
+			// Plus, it is only possible when the xor of the offsets is contained in the alignment bits.
+			return smallIntValue(e.ty, x^y), nil
+		}
+
+	case kinds{num, idk}:
+		if x == 0 {
+			// 0 ^ y = y
+			return e.y, nil
+		}
+
+	case kinds{idk, num}:
+		if y == 0 {
+			// x ^ 0 = x
+			return e.x, nil
+		}
+	}
+	if xKind == whatever || yKind == whatever {
+		// Undef propogates through xor just like it does through addition.
+		return undefValue(e.ty), nil
+	}
+
+	return value{}, errRuntime
+}
+
+func evalCatXOr(x bitCat, y value) (value, error) {
+	parts := make([]value, 4)[:0]
+	var off uint64
+	for _, xp := range x {
+		width := xp.typ().(nonAggTyp).bits()
+		yp := slice(y, off, width)
+		v, err := smallXOrExpr{binIntExpr{cast(iType(width), xp), yp, iType(width)}}.eval()
+		if err != nil {
+			return value{}, err
+		}
+		parts = append(parts, v)
+		off += width
+	}
+	return cat(parts), nil
+}
+
+func (e smallXOrExpr) resolve(stack []value) (smallXOrExpr, error) {
+	res, err := e.binIntExpr.resolve(stack)
+	if err != nil {
+		return smallXOrExpr{}, err
+	}
+	return smallXOrExpr{res}, nil
+}
+
+func (e smallXOrExpr) String() string {
+	return e.binIntExpr.String("xor")
+}
+
+func (e smallXOrExpr) create(dst *builder, dbg llvm.Metadata) (value, error) {
+	switch v, err := e.eval(); err {
+	case nil:
+		return v, nil
+	case errRuntime:
+		return dst.insertInst(&smallXOrInst{e, dbg}), nil
+	default:
+		return value{}, err
+	}
+}
+
+type smallXOrInst struct {
+	expr smallXOrExpr
+	dbg  llvm.Metadata
+}
+
+func (i *smallXOrInst) result() typ {
+	return i.expr.ty
+}
+
+func (i *smallXOrInst) String() string {
+	return i.expr.String() + dbgSuffix(i.dbg)
+}
+
+func (i *smallXOrInst) exec(state *execState) error {
+	// This would be a great use for generics. . .
+
+	// Resolve the expression.
+	expr, err := i.expr.resolve(state.locals())
+	if err != nil {
+		return err
+	}
+
+	// Evaluate the expression.
+	v, err := expr.eval()
+	switch err {
+	case nil:
+	case errRuntime:
+		// Escape inputs.
+		expr.escapeInputs(state)
+
+		// Create a runtime instruction to evaluate the expression.
+		v, err = expr.create(&state.rt, i.dbg)
+		if err != nil {
+			return err
+		}
+	default:
+		return err
+	}
+
+	// Push the result onto the stack.
+	state.stack = append(state.stack, v)
+
+	return nil
+}
+
+func (i *smallXOrInst) runtime(gen *rtGen) error {
+	return i.expr.runtime(gen, i.dbg, (*llvm.Builder).CreateXor)
 }
 
 func parseBinIntExpr(typ iType, expr llvm.Value, parser parser) (binIntExpr, error) {

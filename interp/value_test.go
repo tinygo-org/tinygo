@@ -445,6 +445,12 @@ func TestCat(t *testing.T) {
 
 	rv1 := runtime(i64, 1)
 	rv2 := cast(i16, runtime(iType(14), 2))
+	ptrTy := pointer(defaultAddrSpace, i32)
+	x := memObj{
+		ptrTy:      ptrTy,
+		name:       "x",
+		alignScale: 2,
+	}
 	testExpressions(t,
 		// Test a single-element concatenation.
 		exprTest{
@@ -526,6 +532,16 @@ func TestCat(t *testing.T) {
 			}),
 			ty:     iType(24),
 			expect: "i24 bitslice(i64 %1)[8:32]",
+		},
+		exprTest{
+			name: "RecombinePtr",
+			expr: cat([]value{
+				smallIntValue(iType(2), 2),
+				slice(x.ptr(5), 2, 14),
+				slice(x.ptr(7), 16, 16),
+			}),
+			ty:     i32,
+			expect: "i32 @x + 0x6",
 		},
 
 		// Test combining nested concatenations.
