@@ -149,6 +149,17 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 	}
 
 	return builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
+		if outpath == "" {
+			if strings.HasSuffix(pkgName, ".go") {
+				// A Go file was specified directly on the command line.
+				// Base the binary name off of it.
+				outpath = filepath.Base(pkgName[:len(pkgName)-3]) + config.DefaultBinaryExtension()
+			} else {
+				// Pick a default output path based on the main directory.
+				outpath = filepath.Base(result.MainDir) + config.DefaultBinaryExtension()
+			}
+		}
+
 		if err := os.Rename(result.Binary, outpath); err != nil {
 			// Moving failed. Do a file copy.
 			inf, err := os.Open(result.Binary)
@@ -1319,11 +1330,6 @@ func main() {
 
 	switch command {
 	case "build":
-		if outpath == "" {
-			fmt.Fprintln(os.Stderr, "No output filename supplied (-o).")
-			usage(command)
-			os.Exit(1)
-		}
 		pkgName := "."
 		if flag.NArg() == 1 {
 			pkgName = filepath.ToSlash(flag.Arg(0))

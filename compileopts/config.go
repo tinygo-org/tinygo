@@ -245,6 +245,29 @@ func (c *Config) LibcPath(name string) (path string, precompiled bool) {
 	return filepath.Join(goenv.Get("GOCACHE"), name+"-"+archname), false
 }
 
+// DefaultBinaryExtension returns the default extension for binaries, such as
+// .exe, .wasm, or no extension (depending on the target).
+func (c *Config) DefaultBinaryExtension() string {
+	parts := strings.Split(c.Triple(), "-")
+	if parts[0] == "wasm32" {
+		// WebAssembly files always have the .wasm file extension.
+		return ".wasm"
+	}
+	if len(parts) >= 3 && parts[2] == "windows" {
+		// Windows uses .exe.
+		return ".exe"
+	}
+	if len(parts) >= 3 && parts[2] == "unknown" {
+		// There appears to be a convention to use the .elf file extension for
+		// ELF files intended for microcontrollers. I'm not aware of the origin
+		// of this, it's just something that is used by many projects.
+		// I think it's a good tradition, so let's keep it.
+		return ".elf"
+	}
+	// Linux, MacOS, etc, don't use a file extension. Use it as a fallback.
+	return ""
+}
+
 // CFlags returns the flags to pass to the C compiler. This is necessary for CGo
 // preprocessing.
 func (c *Config) CFlags() []string {
