@@ -319,7 +319,7 @@ func (c *compiler) emitInst(inst llvm.Value) error {
 	case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv,
 		llvm.Shl, llvm.LShr, llvm.AShr,
 		llvm.And, llvm.Or, llvm.Xor,
-		llvm.GetElementPtr, llvm.SExt, llvm.ICmp:
+		llvm.GetElementPtr, llvm.SExt, llvm.ICmp, llvm.Select:
 		expr, err := parseExpr(op, inst, c)
 		if err != nil {
 			return err

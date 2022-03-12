@@ -143,6 +143,29 @@ func parseExpr(op llvm.Opcode, expr llvm.Value, parser parser) (expr, error) {
 		}
 		return nil, todo("icmp " + ty.String())
 
+	case llvm.Select:
+		cond, err := parser.value(expr.Operand(0))
+		if err != nil {
+			return nil, err
+		}
+		switch t := cond.typ().(type) {
+		case iType:
+			if assert && t != i1 {
+				return nil, typeError{i1, t}
+			}
+			ifv, err := parser.value(expr.Operand(1))
+			if err != nil {
+				return nil, err
+			}
+			elsev, err := parser.value(expr.Operand(2))
+			if err != nil {
+				return nil, err
+			}
+			return selectExpr{cond, ifv, elsev, ifv.typ()}, nil
+		default:
+			return nil, todo("select with condition type " + cond.typ().String())
+		}
+
 	default:
 		return nil, todo("parse expr with op: " + opString(op))
 	}
@@ -2256,6 +2279,101 @@ func (i *signExtendInst) runtime(gen *rtGen) error {
 
 	from := gen.value(gen.iType(i.expr.in.typ().(iType)), i.expr.in)
 	res := gen.builder.CreateSExt(from, gen.iType(i.expr.to), "")
+	gen.applyDebug(res)
+	gen.stack = append(gen.stack, res)
+	return nil
+}
+
+// selectExpr selects one of two values depending on a condition.
+// It is mostly equivalent to a C ternary expression (cond ? ifv : elsev).
+type selectExpr struct {
+	cond       value
+	ifv, elsev value
+	ty         typ
+}
+
+func (e selectExpr) eval() (value, error) {
+	_, ok := e.cond.val.(smallInt)
+	if !ok {
+		return value{}, errRuntime
+	}
+	if e.cond.raw != 0 {
+		return e.ifv, nil
+	} else {
+		return e.elsev, nil
+	}
+}
+
+func (e selectExpr) resolve(stack []value) (selectExpr, error) {
+	return selectExpr{
+		cond:  e.cond.resolve(stack),
+		ifv:   e.ifv.resolve(stack),
+		elsev: e.elsev.resolve(stack),
+		ty:    e.ty,
+	}, nil
+}
+
+func (e selectExpr) String() string {
+	return e.ty.String() + " select " + e.cond.String() + " ? " + e.ifv.String() + " : " + e.elsev.String()
+}
+
+func (e selectExpr) create(dst *builder, dbg llvm.Metadata) (value, error) {
+	return dst.insertInst(&selectInst{e, dbg}), nil
+}
+
+type selectInst struct {
+	expr selectExpr
+	dbg  llvm.Metadata
+}
+
+func (i *selectInst) result() typ {
+	return i.expr.ty
+}
+
+func (i *selectInst) String() string {
+	return i.expr.String() + dbgSuffix(i.dbg)
+}
+
+func (i *selectInst) exec(state *execState) error {
+	// This would be a great use for generics. . .
+
+	// Resolve the expression.
+	expr, err := i.expr.resolve(state.locals())
+	if err != nil {
+		return err
+	}
+
+	// Evaluate the expression.
+	v, err := expr.eval()
+	switch err {
+	case nil:
+	case errRuntime:
+		// Escape input.
+		state.escape(expr.ifv, expr.elsev)
+
+		// Create a runtime instruction to evaluate the expression.
+		v, err = expr.create(&state.rt, i.dbg)
+		if err != nil {
+			return err
+		}
+	default:
+		return err
+	}
+
+	// Push the result onto the stack.
+	state.stack = append(state.stack, v)
+
+	return nil
+}
+
+func (i *selectInst) runtime(gen *rtGen) error {
+	oldDbg := gen.dbg
+	gen.dbg = i.dbg
+	defer func() { gen.dbg = oldDbg }()
+
+	t := gen.typ(i.expr.ty)
+	ifv, elsev := gen.value(t, i.expr.ifv), gen.value(t, i.expr.elsev)
+	res := gen.builder.CreateSelect(gen.value(gen.iType(i1), i.expr.cond), ifv, elsev, "")
 	gen.applyDebug(res)
 	gen.stack = append(gen.stack, res)
 	return nil
