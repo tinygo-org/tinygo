@@ -103,6 +103,10 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 			if err != nil {
 				return nil, nil, err
 			}
+			err = os.Chmod(temporaryHeaderPath, 0o755) // TempDir uses 0o700 by default
+			if err != nil {
+				return nil, nil, err
+			}
 			err = os.Rename(temporaryHeaderPath, headerPath)
 			if err != nil {
 				switch {
@@ -179,6 +183,10 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 				return err
 			}
 			err = f.Close()
+			if err != nil {
+				return err
+			}
+			err = os.Chmod(f.Name(), 0o644) // TempFile uses 0o600 by default
 			if err != nil {
 				return err
 			}
