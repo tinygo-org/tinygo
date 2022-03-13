@@ -57,3 +57,27 @@ jobs:
             --header 'Content-Type: application/json' \
             -d '{"branch": "dev"}' \
             -u "${{ secrets.CIRCLECI_API_TOKEN }}"
+      - name: Trigger Bluetooth repo build on CircleCI
+        run: |
+          curl --location --request POST 'https://circleci.com/api/v2/project/github/tinygo-org/bluetooth/pipeline' \
+            --header 'Content-Type: application/json' \
+            -d '{"branch": "dev"}' \
+            -u "${{ secrets.CIRCLECI_API_TOKEN }}"
+      - name: Trigger TinyFS repo build on CircleCI
+        run: |
+          curl --location --request POST 'https://circleci.com/api/v2/project/github/tinygo-org/tinyfs/pipeline' \
+            --header 'Content-Type: application/json' \
+            -d '{"branch": "dev"}' \
+            -u "${{ secrets.CIRCLECI_API_TOKEN }}"
+      - name: Trigger TinyFont repo build on CircleCI
+        run: |
+          curl --location --request POST 'https://circleci.com/api/v2/project/github/tinygo-org/tinyfont/pipeline' \
+            --header 'Content-Type: application/json' \
+            -d '{"branch": "dev"}' \
+            -u "${{ secrets.CIRCLECI_API_TOKEN }}"
+      - name: Trigger TinyDraw repo build on CircleCI
+        run: |
+          curl --location --request POST 'https://circleci.com/api/v2/project/github/tinygo-org/tinydraw/pipeline' \
+            --header 'Content-Type: application/json' \
+            -d '{"branch": "dev"}' \
+            -u "${{ secrets.CIRCLECI_API_TOKEN }}"
