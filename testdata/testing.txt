@@ -15,7 +15,7 @@
 --- FAIL: TestAllLowercase (0.00s)
     --- FAIL: TestAllLowercase/BETA (0.00s)
         expected lowercase name, got BETA
-    --- FAIL: TestAllLowercase/DELTA (0.00s)
-        expected lowercase name, got DELTA
+    --- FAIL: TestAllLowercase/BELTA (0.00s)
+        expected lowercase name, got BELTA
 FAIL
 exitcode: 1
