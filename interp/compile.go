@@ -502,6 +502,9 @@ func (c *compiler) emitTerminator(kind termKind, inst llvm.Value, from llvm.Basi
 		if err != nil {
 			return err
 		}
+		if _, ok := cond.val.(smallInt); ok {
+			return c.doMkBr(from, to[cond.raw], dbg)
+		}
 		elseEdge, err := c.mkEdge(from, to[0])
 		if err != nil {
 			return err
@@ -517,16 +520,25 @@ func (c *compiler) emitTerminator(kind termKind, inst llvm.Value, from llvm.Basi
 			return todo("switch on a value wider than 64 bits")
 		}
 		if len(to) != 1 {
-			edges := make(map[uint64]brEdge, len(to)-1)
-			for i, to := range to[1:] {
-				j := inst.Operand(2*i + 2).ZExtValue()
-				edge, err := c.mkEdge(from, to)
-				if err != nil {
-					return err
+			if _, ok := v.val.(smallInt); ok {
+				for i, to := range to[1:] {
+					j := inst.Operand(2*i + 2).ZExtValue()
+					if j == v.raw {
+						return c.doMkBr(from, to, dbg)
+					}
 				}
-				edges[j] = edge
+			} else {
+				edges := make(map[uint64]brEdge, len(to)-1)
+				for i, to := range to[1:] {
+					j := inst.Operand(2*i + 2).ZExtValue()
+					edge, err := c.mkEdge(from, to)
+					if err != nil {
+						return err
+					}
+					edges[j] = edge
+				}
+				c.b.insertInst(&switchInst{v, edges, dbg})
 			}
-			c.b.insertInst(&switchInst{v, edges, dbg})
 		}
 		return c.doMkBr(from, to[0], dbg)
 	case termUB:

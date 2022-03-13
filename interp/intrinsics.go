@@ -60,7 +60,7 @@ func (p *constParser) parseLayout(layout value) (typ, error) {
 	case smallInt:
 		if layout.raw == 0 {
 			// Nil pointer, which means the layout is unknown.
-			return nil, todo("unknown allocation layout")
+			return nil, errRuntime
 		}
 		if layout.raw%2 != 1 {
 			// Sanity check: the least significant bit must be set. This is how
