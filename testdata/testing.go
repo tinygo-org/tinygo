@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -32,7 +33,7 @@ func TestAllLowercase(t *testing.T) {
 		"alpha",
 		"BETA",
 		"gamma",
-		"DELTA",
+		"BELTA",
 	}
 
 	for _, name := range names {
@@ -56,23 +57,22 @@ var benchmarks = []testing.InternalBenchmark{}
 
 var examples = []testing.InternalExample{}
 
-// A fake regexp matcher that can only handle two patterns.
+// A fake regexp matcher.
 // Inflexible, but saves 50KB of flash and 50KB of RAM per -size full,
-// and lets tests pass on cortex-m3.
+// and lets tests pass on cortex-m.
+// Must match the one in src/testing/match.go that is substituted on bare-metal platforms,
+// or "make test" will fail there.
 func fakeMatchString(pat, str string) (bool, error) {
 	if pat == ".*" {
 		return true, nil
 	}
-	if pat == "[BD]" {
-		return (str[0] == 'B' || str[0] == 'D'), nil
-	}
-	println("BUG: fakeMatchString does not grok", pat)
-	return false, nil
+	matched := strings.Contains(str, pat)
+	return matched, nil
 }
 
 func main() {
 	testing.Init()
-	flag.Set("test.run", ".*/[BD]")
+	flag.Set("test.run", ".*/B")
 	m := testing.MainStart(matchStringOnly(fakeMatchString /*regexp.MatchString*/), tests, benchmarks, examples)
 
 	exitcode := m.Run()

@@ -26,6 +26,11 @@ type matcher struct {
 var matchMutex sync.Mutex
 
 func newMatcher(matchString func(pat, str string) (bool, error), patterns, name string) *matcher {
+	if isBaremetal {
+		// Probably not enough ram to load regexp, substitute something simpler.
+		matchString = fakeMatchString
+	}
+
 	var filter []string
 	if patterns != "" {
 		filter = splitRegexp(patterns)
@@ -165,4 +170,15 @@ func isSpace(r rune) bool {
 		}
 	}
 	return false
+}
+
+// A fake regexp matcher.
+// Inflexible, but saves 50KB of flash and 50KB of RAM per -size full,
+// and lets tests pass on cortex-m.
+func fakeMatchString(pat, str string) (bool, error) {
+	if pat == ".*" {
+		return true, nil
+	}
+	matched := strings.Contains(str, pat)
+	return matched, nil
 }
