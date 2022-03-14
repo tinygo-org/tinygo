@@ -331,6 +331,10 @@ test-corpus-fast:
 test-corpus-wasi: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags byollvm -run TestCorpus . -corpus=testdata/corpus.yaml -target=wasi
 
+tinygo-baremetal:
+	# Regression tests that run on a baremetal target and don't fit in either main_test.go or smoketest.
+	# regression test for #2666: e.g. encoding/hex must pass on baremetal
+	$(TINYGO) test -target cortex-m-qemu encoding/hex
 
 .PHONY: smoketest
 smoketest:

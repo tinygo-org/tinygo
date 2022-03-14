@@ -239,3 +239,4 @@ jobs:
           rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
       - run: make smoketest
       - run: make wasmtest
+      - run: make tinygo-baremetal
