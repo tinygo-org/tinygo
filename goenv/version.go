@@ -14,6 +14,12 @@ import (
 // Update this value before release of new version of software.
 const Version = "0.23.0-dev"
 
+var (
+	// This variable is set at build time using -ldflags parameters.
+	// See: https://stackoverflow.com/a/11355611
+	GitSha1 string
+)
+
 // GetGorootVersion returns the major and minor version for a given GOROOT path.
 // If the goroot cannot be determined, (0, 0) is returned.
 func GetGorootVersion(goroot string) (major, minor int, err error) {
