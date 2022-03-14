@@ -18,7 +18,3 @@ func NumCgoCall() int {
 func NumGoroutine() int {
 	return 1
 }
-
-func Version() string {
-	return "v0.1.0"
-}
