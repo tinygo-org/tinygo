@@ -492,9 +492,9 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// Call a function with a definition available. Run it as usual,
 				// possibly trying to recover from it if it failed to execute.
 				if r.debug {
-					argStrings := make([]string, len(operands))
-					for i := range argStrings {
-						argStrings[i] = operands[i+1].String()
+					argStrings := make([]string, len(operands)-1)
+					for i, v := range operands[1:] {
+						argStrings[i] = v.String()
 					}
 					fmt.Fprintln(os.Stderr, indent+"call:", callFn.name+"("+strings.Join(argStrings, ", ")+")")
 				}
