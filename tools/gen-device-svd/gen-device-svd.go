@@ -215,6 +215,8 @@ func readSVD(path, sourceURL string) (*Device, error) {
 	// needed.
 	orderedPeripherals := orderPeripherals(device.Peripherals)
 
+	reAdcCommon := regexp.MustCompile(`(?i)ADC_Common`)
+
 	for _, periphEl := range orderedPeripherals {
 		description := formatText(periphEl.Description)
 		baseAddress, err := strconv.ParseUint(periphEl.BaseAddress, 0, 64)
@@ -226,6 +228,18 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		groupName := cleanName(periphEl.GroupName)
 		if groupName == "" {
 			groupName = cleanName(periphEl.Name)
+		}
+
+		if strings.Contains(path, "stm32") {
+			// In STM32 series's svd file, ADC_Common and ADC* has same group name ADC but different peripheral
+			matched := reAdcCommon.Match([]byte(periphEl.Name))
+			if matched {
+				if groupName == "ADC" {
+					groupName = "ADC_Common"
+				}
+				// Fix some group name with wrong case
+				periphEl.Name = "ADC_Common"
+			}
 		}
 
 		for _, interrupt := range periphEl.Interrupts {
