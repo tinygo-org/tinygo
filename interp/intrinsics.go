@@ -28,8 +28,14 @@ func parseAsIntrinsic(c *constParser, call callInst) (instruction, error) {
 		return nil, nil
 	case "runtime.runtimePanic":
 		return &runtimePanicInst{call.args[0], call.args[1], call.dbg}, nil
+	case "memset":
+		return &memSetInst{call.args[0], cast(i8, call.args[1]), call.args[2], call}, nil
 	default:
 		switch {
+		case strings.HasPrefix(obj.name, "llvm.memset."):
+			if call.args[3] == smallIntValue(i1, 0) {
+				return &memSetInst{call.args[0], call.args[1], call.args[2], call}, nil
+			}
 		case strings.HasPrefix(obj.name, "llvm.lifetime.start.") || strings.HasPrefix(obj.name, "llvm.lifetime.end.") ||
 			strings.HasPrefix(obj.name, "llvm.dbg."):
 			return nil, nil
@@ -313,4 +319,79 @@ func (s *execState) loadDbgString(base, len value) (string, error) {
 		data[i] = byte(v.raw)
 	}
 	return string(data), nil
+}
+
+// memSetInst is an instruction to fill a byte range with a specified value.
+type memSetInst struct {
+	// dst is a pointer to the start of the range to be filled.
+	dst value
+
+	// val is the raw byte value to fill the range with.
+	val value
+
+	// len is the length of the range to fill.
+	len value
+
+	// callInst is a raw call to a memory set intrinsic or function.
+	callInst
+}
+
+func (i *memSetInst) exec(state *execState) error {
+	err := i.tryExec(state)
+	if err != nil {
+		return i.callInst.exec(state)
+	}
+	return nil
+}
+
+func (i *memSetInst) tryExec(state *execState) error {
+	locals := state.locals()
+
+	len := i.len.resolve(locals)
+	_, ok := len.val.(smallInt)
+	if !ok {
+		return errRuntime
+	}
+	dst := i.dst.resolve(locals)
+	if len.raw != 0 {
+		ptr, ok := dst.val.(*offPtr)
+		if !ok {
+			return errRuntime
+		}
+		obj := ptr.obj()
+		if len.raw > obj.size || dst.raw > obj.size-len.raw {
+			return errRuntime
+		}
+		if obj.isConst {
+			return errUB
+		}
+		v := i.val.resolve(locals)
+		_, ok = v.val.(smallInt)
+		if !ok {
+			return errRuntime
+		}
+		err := obj.parseInit(&state.cp)
+		if err != nil {
+			return err
+		}
+		node, err := obj.data.memSet(dst.raw, len.raw, byte(v.raw), state.version)
+		if err != nil {
+			return err
+		}
+		if obj.version < state.version {
+			state.oldMem = append(state.oldMem, memSave{
+				obj:     obj,
+				tree:    obj.data,
+				version: obj.version,
+			})
+		}
+		obj.data = node
+		obj.version = state.version
+	}
+	if i.result() != nil {
+		// The C memset function returns the destination argument.
+		// The LLVM memset intrinsics do not.
+		state.stack = append(state.stack, dst)
+	}
+	return nil
 }

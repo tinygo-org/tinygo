@@ -17,14 +17,15 @@ define void @runtime.initAll(i8* %context) unnamed_addr {
 
 define i8 @lookup(i8 %x) {
   %tbl = alloca i8, i32 4
+  call void @llvm.memset.p0i8.i64(i8* %tbl, i8 0, i64 4, i1 false)
   store i8 1, i8* %tbl
   %tbl.1 = getelementptr i8, i8* %tbl, i8 1
   store i8 2, i8* %tbl.1
-  %tbl.2 = getelementptr i8, i8* %tbl, i8 2
-  store i8 3, i8* %tbl.2
   %tbl.3 = getelementptr i8, i8* %tbl, i8 3
   store i8 4, i8* %tbl.3
   %elem = getelementptr i8, i8* %tbl, i8 %x
   %v = load i8, i8* %elem
   ret i8 %v
 }
+
+declare void @llvm.memset.p0i8.i64(i8* nocapture writeonly, i8, i64, i1 immarg) argmemonly nofree nounwind willreturn writeonly

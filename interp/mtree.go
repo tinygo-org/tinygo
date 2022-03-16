@@ -211,6 +211,9 @@ type memTreeNode interface {
 	// fillUndef fills a section of the value with undef.
 	fillUndef(off, size uint64, version uint64) (memTreeNode, error)
 
+	// memSet fills a section with a specified byte value.
+	memSet(off, size uint64, v byte, version uint64) (memTreeNode, error)
+
 	// clobber all values within a range.
 	// After this, the range is placed in an "unknown" state.
 	clobber(off, size uint64, version uint64) (memTreeNode, error)
@@ -429,6 +432,42 @@ func (br *memBranch) doFillUndef(off, size uint64, version uint64) error {
 		}
 		br.anything |= 1 << idx
 		br.pending |= 1 << idx
+		br.sub[idx] = c
+	}
+
+	return nil
+}
+
+func (br *memBranch) memSet(off, size uint64, v byte, version uint64) (memTreeNode, error) {
+	br = br.modify(version)
+	err := br.doMemSet(off, size, v, version)
+	if err != nil {
+		return nil, err
+	}
+	return br, nil
+}
+
+func (br *memBranch) doMemSet(off, size uint64, v byte, version uint64) error {
+	if off+size > 8<<br.shift {
+		return errors.New("memSet out of bounds")
+	}
+
+	end := off + size
+	for i := off; i < end; i = (i | ((1 << br.shift) - 1)) + 1 {
+		// memSet the child.
+		j := end
+		if j > (i|((1<<br.shift)-1))+1 {
+			j = (i | ((1 << br.shift) - 1)) + 1
+		}
+		idx := i >> br.shift
+		c, err := br.sub[idx].memSet(i&((1<<br.shift)-1), j-i, v, version)
+		if err != nil {
+			return err
+		}
+		if c.hasPending() {
+			br.pending |= 1 << idx
+			br.anything |= 1 << idx
+		}
 		br.sub[idx] = c
 	}
 
@@ -803,6 +842,31 @@ func (l *memLeaf) fillUndef(off, size uint64, version uint64) (memTreeNode, erro
 
 	// Fill with undef.
 	l.metaLow |= mask
+
+	return l, nil
+}
+
+func (l *memLeaf) memSet(off, size uint64, v byte, version uint64) (memTreeNode, error) {
+	if off+size > 64 {
+		return nil, errors.New("memSet out of bounds")
+	}
+
+	l = l.modify(version)
+
+	// Clobber the stored range.
+	var mask uint64 = ((1 << size) - 1) << off
+	if err := l.doClobber(mask); err != nil {
+		return nil, err
+	}
+
+	// Set the bytes in the range.
+	toFill := l.data[off:][:size]
+	for i := range toFill {
+		toFill[i] = v
+	}
+	l.metaHigh |= mask
+	l.metaLow |= mask
+	l.pending |= mask
 
 	return l, nil
 }
