@@ -238,7 +238,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 					groupName = "ADC_Common"
 				}
 				// Fix some group name with wrong case
-				periphEl.Name = "ADC_Common"
+				periphEl.Name = reAdcCommon.ReplaceAllString(periphEl.Name, "ADC_Common")
 			}
 		}
 
