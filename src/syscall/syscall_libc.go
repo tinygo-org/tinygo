@@ -226,12 +226,24 @@ func Mmap(fd int, offset int64, length int, prot int, flags int) (data []byte, e
 	return (*[1 << 30]byte)(addr)[:length:length], nil
 }
 
+func Munmap(b []byte) (err error) {
+	errCode := libc_munmap(unsafe.Pointer(&b[0]), uintptr(len(b)))
+	if errCode != 0 {
+		err = getErrno()
+	}
+	return err
+}
+
 func Mprotect(b []byte, prot int) (err error) {
 	errCode := libc_mprotect(unsafe.Pointer(&b[0]), uintptr(len(b)), int32(prot))
 	if errCode != 0 {
 		err = getErrno()
 	}
 	return
+}
+
+func Getpagesize() int {
+	return int(libc_getpagesize())
 }
 
 func Environ() []string {
@@ -343,9 +355,17 @@ func libc_dup(fd int32) int32
 //export mmap
 func libc_mmap(addr unsafe.Pointer, length uintptr, prot, flags, fd int32, offset uintptr) unsafe.Pointer
 
+// int munmap(void *addr, size_t length);
+//export munmap
+func libc_munmap(addr unsafe.Pointer, length uintptr) int32
+
 // int mprotect(void *addr, size_t len, int prot);
 //export mprotect
 func libc_mprotect(addr unsafe.Pointer, len uintptr, prot int32) int32
+
+// int getpagesize();
+//export getpagesize
+func libc_getpagesize() int32
 
 // int chdir(const char *pathname, mode_t mode);
 //export chdir
