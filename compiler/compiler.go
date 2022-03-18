@@ -1233,7 +1233,7 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 	case "cap":
 		value := argValues[0]
 		var llvmCap llvm.Value
-		switch argTypes[0].(type) {
+		switch argTypes[0].Underlying().(type) {
 		case *types.Chan:
 			llvmCap = b.createRuntimeCall("chanCap", []llvm.Value{value}, "cap")
 		case *types.Slice:
