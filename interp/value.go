@@ -643,11 +643,28 @@ func (v *arrVal) typ(raw uint64) typ {
 }
 
 func (v *arrVal) str(raw uint64) string {
+	if v.of == i8 && v.constant(raw) {
+		str := v.asRawStr()
+		if str != "" {
+			return str
+		}
+	}
 	elems := make([]string, len(v.elems))
 	for i, v := range v.elems {
 		elems[i] = v.String()
 	}
 	return "[" + strings.Join(elems, ", ") + "]"
+}
+
+func (v *arrVal) asRawStr() string {
+	data := make([]byte, len(v.elems))
+	for i, e := range v.elems {
+		if e.val != smallInt(i8) {
+			break
+		}
+		data[i] = byte(e.raw)
+	}
+	return strconv.Quote(string(data))
 }
 
 func (v *arrVal) resolve(stack []value, raw uint64) value {

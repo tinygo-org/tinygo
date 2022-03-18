@@ -214,6 +214,13 @@ type memTreeNode interface {
 	// memSet fills a section with a specified byte value.
 	memSet(off, size uint64, v byte, version uint64) (memTreeNode, error)
 
+	// copyTo copies data from this node to the destination node.
+	// This returns the modified destination node.
+	copyTo(dst memTreeNode, dstOff, srcOff, n uint64, version uint64) (memTreeNode, error)
+
+	// copyFrom copies a section of the contents of src to this node.
+	copyFrom(src *memLeaf, dstOff, srcOff, n uint64, version uint64) (memTreeNode, error)
+
 	// clobber all values within a range.
 	// After this, the range is placed in an "unknown" state.
 	clobber(off, size uint64, version uint64) (memTreeNode, error)
@@ -472,6 +479,100 @@ func (br *memBranch) doMemSet(off, size uint64, v byte, version uint64) error {
 	}
 
 	return nil
+}
+
+func (br *memBranch) copyTo(dst memTreeNode, dstOff, srcOff, n uint64, version uint64) (memTreeNode, error) {
+	if srcOff+n > 8<<br.shift {
+		return nil, errors.New("copyTo out of bounds")
+	}
+
+	if dst, ok := dst.(*memBranch); ok && dst.shift > br.shift {
+		if dstOff+n > 8<<dst.shift {
+			return nil, errors.New("copyTo out of bounds")
+		}
+
+		dst = dst.modify(version)
+
+		end := dstOff + n
+		for i := dstOff; i < end; i = (i | ((1 << dst.shift) - 1)) + 1 {
+			j := end
+			if j > (i|((1<<dst.shift)-1))+1 {
+				j = (i | ((1 << dst.shift) - 1)) + 1
+			}
+			idx := i >> dst.shift
+			c, err := br.copyTo(dst.sub[idx], i&((1<<dst.shift)-1), srcOff+(i-dstOff), j-i, version)
+			if err != nil {
+				return nil, err
+			}
+			dst.pending |= 1 << idx
+			dst.anything |= 1 << idx
+			dst.sub[idx] = c
+		}
+
+		return dst, nil
+	}
+
+	end := srcOff + n
+	for i := srcOff; i < end; i = (i | ((1 << br.shift) - 1)) + 1 {
+		j := end
+		if j > (i|((1<<br.shift)-1))+1 {
+			j = (i | ((1 << br.shift) - 1)) + 1
+		}
+		idx := i >> br.shift
+		var err error
+		dst, err = br.sub[idx].copyTo(dst, dstOff+(i-srcOff), i&((1<<br.shift)-1), j-i, version)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return dst, nil
+}
+
+func (br *memBranch) copyFrom(src *memLeaf, dstOff, srcOff, n uint64, version uint64) (memTreeNode, error) {
+	if dstOff+n > 8<<br.shift {
+		return nil, errors.New("copyFrom out of bounds")
+	}
+	if n == 0 {
+		return br, nil
+	}
+
+	br = br.modify(version)
+	if dstOff>>br.shift == (dstOff+n-1)>>br.shift {
+		idx := dstOff >> br.shift
+		c, err := br.sub[idx].copyFrom(src, dstOff&((1<<br.shift)-1), srcOff, n, version)
+		if err != nil {
+			return nil, err
+		}
+		br.anything |= 1 << idx
+		br.pending |= 1 << idx
+		br.sub[idx] = c
+	} else {
+		idx := dstOff >> br.shift
+		n1 := (1 << br.shift) - (dstOff & ((1 << br.shift) - 1))
+		{
+			c, err := br.sub[idx].copyFrom(src, dstOff&((1<<br.shift)-1), srcOff, n1, version)
+			if err != nil {
+				return nil, err
+			}
+			br.anything |= 1 << idx
+			br.pending |= 1 << idx
+			br.sub[idx] = c
+		}
+		idx++
+		n2 := n - n1
+		{
+			c, err := br.sub[idx].copyFrom(src, 0, srcOff+n1, n2, version)
+			if err != nil {
+				return nil, err
+			}
+			br.anything |= 1 << idx
+			br.pending |= 1 << idx
+			br.sub[idx] = c
+		}
+	}
+
+	return br, nil
 }
 
 func (br *memBranch) clobber(off, size uint64, version uint64) (memTreeNode, error) {
@@ -871,6 +972,54 @@ func (l *memLeaf) memSet(off, size uint64, v byte, version uint64) (memTreeNode,
 	return l, nil
 }
 
+func (l *memLeaf) copyTo(dst memTreeNode, dstOff, srcOff, n uint64, version uint64) (memTreeNode, error) {
+	return dst.copyFrom(l, dstOff, srcOff, n, version)
+}
+
+func (l *memLeaf) copyFrom(src *memLeaf, dstOff, srcOff, n uint64, version uint64) (memTreeNode, error) {
+	if dstOff+n > 64 || srcOff+n > 64 {
+		return nil, errors.New("copy out of bounds")
+	}
+
+	// Check that the source data is available.
+	var srcMask uint64 = ((1 << n) - 1) << srcOff
+	if srcMask&^(src.metaHigh|src.metaLow) != 0 {
+		return nil, errRuntime
+	}
+
+	// Clobber the destination range.
+	l = l.modify(version)
+	var dstMask uint64 = ((1 << n) - 1) << dstOff
+	if err := l.doClobber(dstMask); err != nil {
+		return nil, err
+	}
+	if l == src && srcMask&dstMask != 0 {
+		panic("inconsistent state")
+	}
+
+	// Copy raw bytes and undefs.
+	copy(l.data[dstOff:][:n], src.data[srcOff:][:n])
+	l.metaHigh |= ((src.metaLow & srcMask) >> srcOff) << dstOff
+	l.pending |= ((src.metaLow & srcMask) >> srcOff) << dstOff
+	l.metaLow |= ((src.metaLow & srcMask) >> srcOff) << dstOff
+
+	// Copy specials.
+	for spMask := (src.metaHigh &^ src.metaLow) & srcMask; spMask != 0; {
+		i := uint64(bits.TrailingZeros64(spMask))
+		tmp := src.specialStarts & ((1 << (i + 1)) - 1)
+		j := uint64(bits.OnesCount64(tmp)) - 1
+		start := uint64(bits.Len64(tmp)) - 1
+		end := uint64(bits.TrailingZeros64((src.specialStarts | ^spMask) & -(1 << (i + 1))))
+		err := l.storeNonAgg(slice(src.specials[j], 8*(i-start), 8*(end-i)), (i-srcOff)+dstOff, end-i)
+		if err != nil {
+			return nil, err
+		}
+		spMask &= -(1 << end)
+	}
+
+	return l, nil
+}
+
 func (l *memLeaf) clobber(off, size uint64, version uint64) (memTreeNode, error) {
 	if off+size > 64 {
 		return nil, errors.New("clobber out of bounds")
@@ -895,6 +1044,7 @@ func (l *memLeaf) doClobber(mask uint64) error {
 		splits := l.specialStarts | l.metaLow | ^l.metaHigh
 		sp := make([]value, 64)
 		i, j := 0, 0
+		var newStarts uint64
 		for m := oldStarts; m != 0; {
 			// Select the next special from the input.
 			start := bits.TrailingZeros64(m)
@@ -908,8 +1058,9 @@ func (l *memLeaf) doClobber(mask uint64) error {
 			case outMask == 0:
 				// This is completely discarded.
 
-			case outMask == 1<<(end-start):
+			case outMask == (1<<(end-start))-1:
 				// This is passed through as-is.
+				newStarts |= 1 << start
 				sp[j] = v
 				j++
 
@@ -924,13 +1075,13 @@ func (l *memLeaf) doClobber(mask uint64) error {
 					if offBits+widthBits > vBits {
 						widthBits = vBits - offBits
 					}
+					newStarts |= 1 << off
 					sp[j] = slice(v, offBits, widthBits)
 					j++
 				}
 			}
 		}
-		remainingSpecialsMask := (l.metaHigh &^ l.metaLow) &^ mask
-		l.specialStarts = (remainingSpecialsMask &^ (1 << remainingSpecialsMask)) | (oldStarts &^ mask)
+		l.specialStarts = newStarts
 		l.specials = append(oldSp[:0], sp[:j]...)
 	}
 

@@ -22,6 +22,7 @@ func TestPass(t *testing.T) {
 		"basic",
 		"side",
 		"alloca",
+		"intrinsic",
 	}
 	for _, c := range cases {
 		c := c

@@ -30,11 +30,23 @@ func parseAsIntrinsic(c *constParser, call callInst) (instruction, error) {
 		return &runtimePanicInst{call.args[0], call.args[1], call.dbg}, nil
 	case "memset":
 		return &memSetInst{call.args[0], cast(i8, call.args[1]), call.args[2], call}, nil
+	case "memmove":
+		return &memMoveInst{call.args[0], call.args[1], call.args[2], true, call}, nil
+	case "memcpy":
+		return &memMoveInst{call.args[0], call.args[1], call.args[2], false, call}, nil
 	default:
 		switch {
 		case strings.HasPrefix(obj.name, "llvm.memset."):
 			if call.args[3] == smallIntValue(i1, 0) {
 				return &memSetInst{call.args[0], call.args[1], call.args[2], call}, nil
+			}
+		case strings.HasPrefix(obj.name, "llvm.memmove."):
+			if call.args[3] == smallIntValue(i1, 0) {
+				return &memMoveInst{call.args[0], call.args[1], call.args[2], true, call}, nil
+			}
+		case strings.HasPrefix(obj.name, "llvm.memcpy."):
+			if call.args[3] == smallIntValue(i1, 0) {
+				return &memMoveInst{call.args[0], call.args[1], call.args[2], false, call}, nil
 			}
 		case strings.HasPrefix(obj.name, "llvm.lifetime.start.") || strings.HasPrefix(obj.name, "llvm.lifetime.end.") ||
 			strings.HasPrefix(obj.name, "llvm.dbg."):
@@ -339,7 +351,10 @@ type memSetInst struct {
 func (i *memSetInst) exec(state *execState) error {
 	err := i.tryExec(state)
 	if err != nil {
-		return i.callInst.exec(state)
+		if isRuntimeOrRevert(err) {
+			return i.callInst.exec(state)
+		}
+		return err
 	}
 	return nil
 }
@@ -393,5 +408,94 @@ func (i *memSetInst) tryExec(state *execState) error {
 		// The LLVM memset intrinsics do not.
 		state.stack = append(state.stack, dst)
 	}
+	return nil
+}
+
+// memMoveInst is an instruction to move a range of data from one location to another.
+type memMoveInst struct {
+	dst, src value
+	len      value
+
+	allowOverlap bool
+
+	callInst
+}
+
+func (i *memMoveInst) exec(state *execState) error {
+	err := i.tryExec(state)
+	if err != nil {
+		if isRuntimeOrRevert(err) {
+			return i.callInst.exec(state)
+		}
+		return err
+	}
+	return nil
+}
+
+func (i *memMoveInst) tryExec(state *execState) error {
+	locals := state.locals()
+	len := i.len.resolve(locals)
+	if _, ok := len.val.(smallInt); !ok {
+		return errRuntime
+	}
+	if len.raw == 0 {
+		return nil
+	}
+
+	dst := i.dst.resolve(locals)
+	dstPtr, ok := dst.val.(*offPtr)
+	if !ok {
+		return errRuntime
+	}
+	src := i.src.resolve(locals)
+	srcPtr, ok := src.val.(*offPtr)
+	if !ok {
+		return errRuntime
+	}
+
+	dstObj := dstPtr.obj()
+	if err := dstObj.parseInit(&state.cp); err != nil {
+		return err
+	}
+	srcObj := srcPtr.obj()
+	if err := srcObj.parseInit(&state.cp); err != nil {
+		return err
+	}
+	if len.raw > srcObj.size || len.raw > dstObj.size || src.raw > srcObj.size-len.raw || dst.raw > dstObj.size-len.raw {
+		return errRuntime
+	}
+	if dstObj.isConst {
+		return errUB
+	}
+
+	// Verify that the source and destination do not overlap.
+	if !i.allowOverlap && srcObj == dstObj && (src.raw == dst.raw || (src.raw < dst.raw && dst.raw-src.raw < len.raw) || (dst.raw < src.raw && src.raw-dst.raw < len.raw)) {
+		return errUB
+	}
+
+	// Create a new version to force a copy of the destination.
+	version := state.nextVersion
+	state.nextVersion++
+
+	node, err := srcObj.data.copyTo(dstObj.data, dst.raw, src.raw, len.raw, version)
+	if err != nil {
+		return err
+	}
+	if dstObj.version < state.version {
+		state.oldMem = append(state.oldMem, memSave{
+			obj:     dstObj,
+			tree:    dstObj.data,
+			version: dstObj.version,
+		})
+	}
+	dstObj.data = node
+	dstObj.version = state.version
+
+	if i.result() != nil {
+		// The C memcpy/memmove functions return the destination argument.
+		// The LLVM memcpy/memmove intrinsics do not.
+		state.stack = append(state.stack, dst)
+	}
+
 	return nil
 }
