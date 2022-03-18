@@ -59,6 +59,19 @@ const (
 	O_SYNC   = __WASI_FDFLAGS_SYNC
 
 	O_CLOEXEC = 0
+
+	// ../../lib/wasi-libc/sysroot/include/sys/mman.h
+	MAP_FILE      = 0
+	MAP_SHARED    = 0x01
+	MAP_PRIVATE   = 0x02
+	MAP_ANON      = 0x20
+	MAP_ANONYMOUS = MAP_ANON
+
+	// ../../lib/wasi-libc/sysroot/include/sys/mman.h
+	PROT_NONE  = 0
+	PROT_READ  = 1
+	PROT_WRITE = 2
+	PROT_EXEC  = 4
 )
 
 //go:extern errno
