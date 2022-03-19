@@ -9,12 +9,12 @@ func NumCPU() int {
 	return 1
 }
 
-// NumCgoCall returns the number of cgo calls made by the current process.
+// Stub for NumCgoCall, does not return the real value
 func NumCgoCall() int {
 	return 0
 }
 
-// NumGoroutine returns the number of goroutines that currently exist.
+// Stub for NumGoroutine, does not return the real value
 func NumGoroutine() int {
 	return 1
 }
