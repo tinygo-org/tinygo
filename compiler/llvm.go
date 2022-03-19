@@ -88,7 +88,6 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 	// information at all.
 	objectSizeBytes := c.targetData.TypeAllocSize(t)
 	pointerSize := c.targetData.TypeAllocSize(c.i8ptrType)
-	pointerAlignment := c.targetData.PrefTypeAlignment(c.i8ptrType)
 	if objectSizeBytes < pointerSize {
 		// Too small to contain a pointer.
 		layout := (uint64(1) << 1) | 1
@@ -102,6 +101,11 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 		layout := (uint64(1) << 1) | 1
 		return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, layout, false), c.i8ptrType)
 	}
+	return c.createObjectLayout1(pointerSize, objectSizeBytes, bitmap, pos)
+}
+
+func (c *compilerContext) createObjectLayout1(pointerSize, objectSizeBytes uint64, bitmap *big.Int, pos token.Pos) llvm.Value {
+	pointerAlignment := c.targetData.PrefTypeAlignment(c.i8ptrType)
 	if objectSizeBytes%uint64(pointerAlignment) != 0 {
 		// This shouldn't happen except for packed structs, which aren't
 		// currently used.
