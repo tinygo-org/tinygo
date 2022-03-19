@@ -9,16 +9,24 @@ import (
 )
 
 // https://github.com/WebAssembly/wasi-libc/blob/main/expected/wasm32-wasi/predefined-macros.txt
+// disagrees with ../../lib/wasi-libc/libc-top-half/musl/arch/wasm32/bits/signal.h for SIGCHLD?
+// https://github.com/WebAssembly/wasi-libc/issues/271
 
 type Signal int
 
 const (
-	SIGCHLD Signal = 16
 	SIGINT  Signal = 2
-	SIGKILL Signal = 9
-	SIGTRAP Signal = 5
 	SIGQUIT Signal = 3
+	SIGILL  Signal = 4
+	SIGTRAP Signal = 5
+	SIGABRT Signal = 6
+	SIGBUS  Signal = 7
+	SIGFPE  Signal = 8
+	SIGKILL Signal = 9
+	SIGSEGV Signal = 11
+	SIGPIPE Signal = 13
 	SIGTERM Signal = 15
+	SIGCHLD Signal = 17
 )
 
 func (s Signal) Signal() {}
