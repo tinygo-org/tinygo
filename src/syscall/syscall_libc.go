@@ -157,6 +157,19 @@ func Pipe2(p []int, flags int) (err error) {
 	return ENOSYS // TODO
 }
 
+// TODO
+type WaitStatus uint32
+
+func (w WaitStatus) Exited() bool       { return false }
+func (w WaitStatus) ExitStatus() int    { return 0 }
+func (w WaitStatus) Signaled() bool     { return false }
+func (w WaitStatus) Signal() Signal     { return 0 }
+func (w WaitStatus) CoreDump() bool     { return false }
+func (w WaitStatus) Stopped() bool      { return false }
+func (w WaitStatus) Continued() bool    { return false }
+func (w WaitStatus) StopSignal() Signal { return 0 }
+func (w WaitStatus) TrapCause() int     { return 0 }
+
 func Getenv(key string) (value string, found bool) {
 	data := cstring(key)
 	raw := libc_getenv(&data[0])
